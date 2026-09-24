@@ -20,7 +20,7 @@
  * 每一段（Section）内部原本是「手写 `<Button variant="ghost"
  * role="option" aria-selected={selected} onClick={...}>` 循环」——
  * 与 `~/components/ui/toggle-group` 是同一件事的第二份实现：单选分段
- * 控件的「按状态上 `data-[state=on]`、点已在项不改动、点新项切换、
+ * 控件的「按状态上 `data-pressed`、点已在项不改动、点新项切换、
  * 键盘 ←/→ 与 Home/End 在段内游走」全部由 base-ui ToggleGroup 提供。
  * 本件把每段换成一个 `<ToggleGroup value={[section.value]} multiple={false}>`
  * 包住该段的所有子分组行（子分组之间共享一个 `section.value`、跨子分组
@@ -33,7 +33,7 @@
  * `aria-expanded`。
  *
  * `opt.render` 是任意 ReactNode（比例图标 / 清晰度小徽标），`children`
- * 通道原生支持。选中态用 `data-[state=on]:` 属性选择器 + tailwind-merge
+ * 通道原生支持。选中态用 `data-[pressed]:` 属性选择器 + tailwind-merge
  * 表达：`bg-primary/20 text-ink-bright ring-primary/55` 与旧三元一致。
  */
 
@@ -110,10 +110,12 @@ const SECTION_GROUP_CLASS = "flex w-full flex-col items-stretch gap-2";
  *  循环里的两态**逐字对齐**：`min-w-[52px] flex-col gap-1 rounded-md
  *  px-1.5 py-1.5 text-[11px]`；未选 `text-ink-muted hover:bg-subtle
  *  hover:text-ink-bright`；已选 `bg-primary/20 text-ink-bright
- *  ring-primary/55`。base-ui Toggle 的 `data-[state=on]` 取代旧的
- *  `selected` 布尔类拼接。 */
+ *  ring-primary/55`。base-ui Toggle 的选中态属性是 **`data-pressed`**
+ *  （Radix 时代的 `data-[state=on]` 在 base-ui 上永不匹配、会让选中高亮整体
+ *  消失，见 `@base-ui/react/toggle` 的 `ToggleDataAttributes`），由它取代旧
+ *  的 `selected` 布尔类拼接。 */
 const ITEM_CLASS =
-  "nodrag nopan h-auto min-w-[52px] flex-col gap-1 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-[11px] font-normal text-ink-muted hover:bg-subtle hover:text-ink-bright data-[state=on]:bg-primary/20 data-[state=on]:text-ink-bright data-[state=on]:ring-1 data-[state=on]:ring-primary/55 data-[state=on]:hover:bg-primary/20";
+  "nodrag nopan h-auto min-w-[52px] flex-col gap-1 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-[11px] font-normal text-ink-muted hover:bg-subtle hover:text-ink-bright data-[pressed]:bg-primary/20 data-[pressed]:text-ink-bright data-[pressed]:ring-1 data-[pressed]:ring-primary/55 data-[pressed]:hover:bg-primary/20";
 
 export function MultiSegmentPopover({
   triggerContent,

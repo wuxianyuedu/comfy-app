@@ -28,6 +28,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  /* 有几条用例要给元素塞几何（`getBoundingClientRect` / `clientWidth`）——
+   * 那是原型上的 spy，不还原会漏给后面的文件。 */
+  vi.restoreAllMocks();
 });
 
 const SRC = "https://example.test/result.png";
@@ -104,6 +107,28 @@ describe("ImageViewer", () => {
     expect(viewer.mode()).toBe("原始大小");
     fireEvent.doubleClick(viewer.canvas());
     expect(viewer.mode()).toBe("适应窗口");
+  });
+
+  it("适应窗口按**矩形**算倍数（用 clientWidth 会和滚动条互推、逐帧抖动）", () => {
+    /* 模拟「滚动条正占着 15px」：矩形 800×600，而 clientWidth/Height 只有
+     * 785×585。按 client 算会得到 737×553；可那个尺寸又恰好让内容溢出 →
+     * 滚动条出现 → client 再变小 → 重算更小 → 滚动条消失 → …… 每一帧互推
+     * 一次，就是用户看到的「不停抖动、滚动条一来一去」（逐帧重排也让拖拽发卡）。
+     * 矩形是**布局尺寸**、不随滚动条出现与否而变，用它算才收敛到稳定解。 */
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 800, 600),
+    );
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(785);
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(585);
+
+    const viewer = renderViewer();
+    emitLoad(viewer.baseElement, 1600, 1200);
+
+    const img = viewer.baseElement.querySelector("img")!;
+    /* 可用区 768×568（四周各留 16px）：高度是绑定轴 → 倍数 568/1200 = 0.4733，
+     * 1600×1200 落到 757.33×568 → 四舍五入 757×568（用 client 会是 737×553）。 */
+    expect(img.style.width).toBe("757px");
+    expect(img.style.height).toBe("568px");
   });
 
   it("滚轮向上放大、向下缩小（缩放前需要已知自然尺寸）", () => {
