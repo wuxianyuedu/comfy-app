@@ -24,6 +24,10 @@
  */
 
 /** 一次 ComfyUI 会话的退出事实。 */
+import "server-only";
+import fs from "fs";
+import type { PidLookup } from "./proc-detect";
+
 export interface ComfyExitFacts {
   /** 退出码（`exit` / `close` 事件的第一个参数）。 */
   code: number | null;
@@ -128,8 +132,10 @@ export function describeComfyExit(facts: ComfyExitFacts): ComfyExitReport {
 /* ── 保活模式的退出监督 ─────────────────────────────────────────────── */
 
 export interface ComfyExitWatcherDeps {
-  /** 查「跑着 main.py 的进程」的 pid；找不到返回 null。 */
-  findPid: () => Promise<number | null>;
+  /** 查「跑着 main.py 的进程」的 pid；区分「真的查不到」(`failed=false`) 与
+   *  「查询本身失败」(`failed=true`，如 PowerShell 超时)。后者证据不足，
+   *  监督器不得当作「进程消失」。 */
+  findPid: () => Promise<PidLookup>;
   /** 确定退出时回调一次（之后监督器自停）。 */
   onExit: (facts: { pid: number | null; uptimeMs: number | null }) => void;
   /** 用户是否已请求关闭（主动关就不报「莫名退出」）。 */
@@ -185,10 +191,18 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
       stop();
       return;
     }
-    const pid = await deps.findPid().catch(() => null);
+    const lookup = await deps
+      .findPid()
+      .catch(() => ({ pid: null, failed: true }));
     if (stopped) return;
 
-    if (pid === null) {
+    /* 查询失败（PowerShell 超时 / 命令起不来）：证据不足，**不能**当作「进程消失」。
+     * findPidForMainPyDetailed 把「真的查不到」与「查询本身失败」分开；机器忙
+     * （ComfyUI 出图）时进程表查询经常超时，把失败误判成死亡会让用户看到假的
+     * 「进程消失」（保活进程其实还活着）。这一轮既不计入 miss、也不复位已见标记。 */
+    if (lookup.failed) return;
+
+    if (lookup.pid === null) {
       /* 还没第一次见到它 → 可能是「拉起失败」而不是「退出」：那种情况启动等待
        * 循环会自己报错，这里不抢答。 */
       if (startedAt === null) return;
@@ -202,7 +216,7 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
       return;
     }
 
-    seenPid = pid;
+    seenPid = lookup.pid;
     missCount = 0;
     startedAt ??= now();
   };
@@ -261,11 +275,48 @@ export function describeStaleSession(
 }
 
 /**
- * 保活模式「进程消失了」的落盘：判据 + 横幅 + `[exit]` 两行。
+ * 读文件末尾 N 行（按行裁剪），用于把保活进程崩溃前的输出带进面板。
+ *
+ * 保活模式拿不到退出码 / 信号，但 ComfyUI 自己的 stdout / stderr 被重定向到了
+ * 按次命名的文件（见 lifecycle-launch 的 `comfyui-keepalive-*.{out,err}.log`），
+ * 真正的崩溃轨迹（Python traceback / OOM / CUDA 报错）就在那里 —— 监督器只轮询
+ * 进程表、看不到原因，这里把尾部直接带进 runtime 日志，用户不必翻文件。
+ *
+ * 解码容错：Windows 走壳的 CLI 中介（`app.exe --spawn-detached`）时文件是子进程的
+ * 原始字节（通常 UTF-8）；个别回退路径（powershell `Start-Process`）会是 UTF-16LE，
+ * 这里统一识别 BOM 后按对应编码读。
+ */
+function readTailLines(
+  filePath: string,
+  maxLines = 40,
+  maxLineLen = 600,
+): string[] {
+  try {
+    if (!fs.existsSync(filePath)) return [];
+    const buf = fs.readFileSync(filePath);
+    const text =
+      buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe
+        ? buf.subarray(2).toString("utf16le")
+        : buf.toString("utf-8");
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trimEnd())
+      .filter((l) => l.trim().length > 0);
+    return lines
+      .slice(-maxLines)
+      .map((l) => (l.length > maxLineLen ? `${l.slice(0, maxLineLen)}…` : l));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 保活模式「进程消失了」的落盘：判据 + 横幅 + `[exit]` 两行 + 崩溃尾部。
  *
  * 单独抽出来是因为它与 bound 的退出回调**长得像但不等价**：这里 code / signal
  * 都拿不到（进程不是我们的子进程），能给的只有「什么时候没的、活了多久」。
  * 把「拿不到就说拿不到」写在同一个出口里，免得下一处顺手编一个 `code=0`。
+ * 但崩溃前的真实输出在重定向文件里，一并带进面板（见 `keepAliveLogs`）。
  */
 export function reportKeepAliveExit(opts: {
   facts: { pid: number | null; uptimeMs: number | null };
@@ -273,6 +324,9 @@ export function reportKeepAliveExit(opts: {
   appendSessionBanner: (banner: string) => void;
   appendRuntimeLog: (line: string) => void;
   log: (msg: string) => void;
+  /** 本次会话保活拉起时重定向到的 stdout / stderr 文件；传入则把其末尾带进
+   *  `[exit][out]` / `[exit][err]`，让崩溃原因直接出现在面板里（不必翻文件）。 */
+  keepAliveLogs?: { out?: string; err?: string };
 }): ComfyExitReport {
   const report = describeComfyExit({
     code: null,
@@ -286,6 +340,27 @@ export function reportKeepAliveExit(opts: {
   opts.appendRuntimeLog(`[exit] ${report.reason}（${report.detail}）`);
   if (report.advice !== null) {
     opts.appendRuntimeLog(`[exit] ↩ ${report.advice}`);
+  }
+  /* 保活模式拿不到退出码，但崩溃前的真实输出在重定向文件里 —— 进程消失时把
+   * 尾部直接带进面板，用户不必再去翻 `comfyui-keepalive-*.log`。 */
+  const tailFiles: Array<[string, string | undefined]> = [
+    ["err", opts.keepAliveLogs?.err],
+    ["out", opts.keepAliveLogs?.out],
+  ];
+  let headerWritten = false;
+  for (const [kind, file] of tailFiles) {
+    if (!file) continue;
+    const tail = readTailLines(file);
+    if (tail.length === 0) continue;
+    if (!headerWritten) {
+      opts.appendRuntimeLog(
+        "[exit] ComfyUI 最后输出（崩溃 / 退出原因通常在此；完整内容见对应的 comfyui-keepalive-*.log）：",
+      );
+      headerWritten = true;
+    }
+    for (const line of tail) {
+      opts.appendRuntimeLog(`[exit][${kind}] ${line}`);
+    }
   }
   opts.log(`ComfyUI 保活进程已退出：${report.reason}`);
   return report;
