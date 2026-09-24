@@ -94,7 +94,7 @@ export function CanvasContextMenu({
                 <Icon
                   name={meta.icon}
                   size={15}
-                  className="text-violet-700 dark:text-violet-300"
+                  className="text-primary-strong"
                 />
                 <span className="flex flex-col">
                   <span className="font-medium">{meta.label}</span>

@@ -65,7 +65,7 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
         <p className="text-ink-muted mt-1 text-[12px] leading-relaxed">
           自定义工作流可下拉选用你上传的 ComfyUI 工作流
         </p>
-        <p className="mt-1 text-[12px] leading-relaxed text-violet-700 dark:text-violet-300">
+        <p className="text-primary-strong mt-1 text-[12px] leading-relaxed">
           <Icon
             name="sparkles"
             size={12}

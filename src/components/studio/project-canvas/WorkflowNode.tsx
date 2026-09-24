@@ -97,6 +97,14 @@ export interface WorkflowNodeProps {
   onModesChange: (modes: string[], defaultMode: string) => void;
 }
 
+/* 节点序号 chip 文字色——`bg-overlay-accent-surface`（语义底）上的**装饰**
+ * 文字，让 `#1` / `#2` 序号在小胶囊里跳出来。cyan-700/200 是"高对比冷色标签"
+ * 视觉语言，不表示状态、也不表示"信息类"（info 语义会与其他"提示"混淆），
+ * 无对应"identifier"语义 token → 走 §3.6.1 例外块。 */
+// p71-allow:start 节点序号 chip 装饰色——冷色 ID 标签、非状态语义、无匹配 token
+const NODE_SEQ_CHIP_TEXT = "text-cyan-700 dark:text-cyan-200";
+// p71-allow:end
+
 export function WorkflowNode({
   id,
   data: d,
@@ -175,7 +183,7 @@ export function WorkflowNode({
           title={`项目画布节点 Id：${id}`}
         >
           <span
-            className="font-mono text-[10px] font-semibold text-cyan-700 dark:text-cyan-200"
+            className={`font-mono text-[10px] font-semibold ${NODE_SEQ_CHIP_TEXT}`}
             style={{ fontFamily: "var(--font-mono)" }}
           >
             {nodeSeq !== null

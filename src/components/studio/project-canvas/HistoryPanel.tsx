@@ -71,7 +71,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           历史记录
         </h2>
         {activeCount > 0 && (
-          <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-700 dark:text-violet-300">
+          <span className="bg-primary/20 text-primary-strong rounded-full px-2 py-0.5 text-[10px]">
             {activeCount} 进行中
           </span>
         )}
@@ -159,14 +159,14 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
 
       {/* ── Error banner ── */}
       {error && (
-        <div className="mx-4 mb-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-          <span className="min-w-0 flex-1 text-[11px] break-words text-red-700 dark:text-red-300">
+        <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
+          <span className="text-destructive min-w-0 flex-1 text-[11px] break-words">
             {error}
           </span>
           <Button
             variant="ghost"
             onClick={refresh}
-            className="h-auto shrink-0 text-[11px] text-red-700 underline hover:bg-transparent hover:text-red-900 dark:text-red-200 dark:hover:text-red-100"
+            className="text-destructive h-auto shrink-0 text-[11px] underline hover:bg-transparent"
           >
             重试
           </Button>
@@ -317,7 +317,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       )}
                       {task.status === "FAILED" && task.error && (
                         <span
-                          className="min-w-0 truncate text-[10px] text-red-700/80 dark:text-red-400/70"
+                          className="text-destructive/80 min-w-0 truncate text-[10px]"
                           title={task.error}
                         >
                           {task.error}

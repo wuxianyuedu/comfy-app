@@ -64,7 +64,7 @@ export function CanvasPanelToolbar({
             title={item.label}
             className={`group relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 ${
               isActive
-                ? "bg-violet-500/20 text-violet-700 shadow-sm ring-1 shadow-violet-500/10 ring-violet-500/25 dark:text-violet-300"
+                ? "bg-primary/20 text-primary-strong shadow-primary/10 ring-primary/25 shadow-sm ring-1"
                 : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
             }`}
           >
