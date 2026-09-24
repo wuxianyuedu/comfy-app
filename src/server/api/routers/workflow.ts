@@ -240,7 +240,7 @@ export const workflowRouter = createTRPCRouter({
         /* 递归扫描：ComfyUI 自己的 workflows/ 与桌面版的 user/default/workflows
          * 都会分子目录（default/、image/…），用户给一个根就是要「这个目录下的都算」，
          * 只扫一层会把它们全漏掉而界面上只显示「还没有工作流」。 */
-        const { roots, allFiles } = scanLocalWorkflowRoots(localRoots, {
+        const { roots, allFiles } = await scanLocalWorkflowRoots(localRoots, {
           recursive: true,
         });
         localRootsSummary = roots.map((root) => ({
