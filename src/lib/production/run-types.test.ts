@@ -291,3 +291,95 @@ describe("normalizeProductionRun · log", () => {
     expect(normalizeProductionRun({}).log).toEqual([]);
   });
 });
+
+describe("planNextRunAction · 自动评审", () => {
+  const shots = [{ id: "a", rev: 1, hasImage: true, hasClip: false }];
+  const base = { hasScript: true, characterCount: 1, shots };
+
+  it("autoReview 关：图齐直接 render_film（不评审）", () => {
+    expect(
+      planNextRunAction(
+        view(base),
+        run({ status: "running", processedShotRev: { a: 1 } }),
+      ),
+    ).toEqual({ kind: "render_film" });
+  });
+
+  it("autoReview 开 + 未评审（reviewedShotRev 落后）→ review_shots", () => {
+    expect(
+      planNextRunAction(
+        view(base),
+        run({
+          status: "running",
+          autoReview: true,
+          processedShotRev: { a: 1 },
+        }),
+      ),
+    ).toEqual({ kind: "review_shots", shotIds: ["a"] });
+  });
+
+  it("待生图优先于评审：有镜缺图/被改时先 render_images", () => {
+    expect(
+      planNextRunAction(
+        view({ hasScript: true, characterCount: 1, shots }),
+        run({
+          status: "running",
+          autoReview: true,
+          processedShotRev: { a: 0 }, // rev1 > 0 → 该镜需重出图
+        }),
+      ),
+    ).toEqual({ kind: "render_images", shotIds: ["a"] });
+  });
+
+  it("评审已定稿（reviewedShotRev == rev）→ 放行 render_film", () => {
+    expect(
+      planNextRunAction(
+        view(base),
+        run({
+          status: "running",
+          autoReview: true,
+          processedShotRev: { a: 1 },
+          reviewedShotRev: { a: 1 },
+        }),
+      ),
+    ).toEqual({ kind: "render_film" });
+  });
+
+  it("评审后又改过（rev 变新，定稿快照落后）→ 再评审", () => {
+    expect(
+      planNextRunAction(
+        view({
+          hasScript: true,
+          characterCount: 1,
+          shots: [{ id: "a", rev: 2, hasImage: true, hasClip: false }],
+        }),
+        run({
+          status: "running",
+          autoReview: true,
+          processedShotRev: { a: 2 },
+          reviewedShotRev: { a: 1 },
+        }),
+      ),
+    ).toEqual({ kind: "review_shots", shotIds: ["a"] });
+  });
+});
+
+describe("normalizeProductionRun · 自动评审字段", () => {
+  it("autoReview 只认 true；rev 映射只收有限数字", () => {
+    const r = normalizeProductionRun({
+      autoReview: true,
+      reviewedShotRev: { a: 2, b: "x", c: NaN },
+      reviewAttempts: { a: 1 },
+    });
+    expect(r.autoReview).toBe(true);
+    expect(r.reviewedShotRev).toEqual({ a: 2 });
+    expect(r.reviewAttempts).toEqual({ a: 1 });
+  });
+
+  it("缺省 → autoReview false、两映射空", () => {
+    const r = normalizeProductionRun({});
+    expect(r.autoReview).toBe(false);
+    expect(r.reviewedShotRev).toEqual({});
+    expect(r.reviewAttempts).toEqual({});
+  });
+});

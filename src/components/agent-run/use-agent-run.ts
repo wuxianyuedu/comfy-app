@@ -42,6 +42,9 @@ export interface AgentRunController {
   setGoal: (value: string) => void;
   approvalMode: ApprovalMode;
   setApprovalMode: (value: ApprovalMode) => void;
+  /** 生图后自动逐镜评审、不合格自动抽卡重生成（有界重试）。 */
+  autoReview: boolean;
+  setAutoReview: (value: boolean) => void;
   start: () => Promise<void>;
   pause: () => Promise<void>;
   resume: () => Promise<void>;
@@ -59,6 +62,7 @@ export function useAgentRun(): AgentRunController {
   const [error, setError] = useState("");
   const [goal, setGoal] = useState("");
   const [approvalMode, setApprovalMode] = useState<ApprovalMode>("stage");
+  const [autoReview, setAutoReview] = useState(false);
 
   const apply = useCallback((snap: RunSnapshot) => {
     setRun(snap.run);
@@ -124,7 +128,9 @@ export function useAgentRun(): AgentRunController {
     setGoal,
     approvalMode,
     setApprovalMode,
-    start: () => act((id) => startRun(id, { goal, approvalMode })),
+    autoReview,
+    setAutoReview,
+    start: () => act((id) => startRun(id, { goal, approvalMode, autoReview })),
     pause: () => act(pauseRun),
     resume: () => act(resumeRun),
     approve: () => act(approveRun),
