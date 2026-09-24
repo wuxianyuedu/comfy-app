@@ -67,7 +67,7 @@ export function CharacterReviewButton({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-[96px] space-y-3">
+          <div className="flex min-h-[96px] flex-col gap-3">
             {reviewing ? (
               <p className="text-ink-fainter text-sm">正在评审…</p>
             ) : error ? (
@@ -95,7 +95,7 @@ export function CharacterReviewButton({
                   )}
                 </div>
                 {verdict.issues.length > 0 && (
-                  <ul className="text-ink-strong list-disc space-y-1 pl-5 text-sm">
+                  <ul className="text-ink-strong flex list-disc flex-col gap-1 pl-5 text-sm">
                     {verdict.issues.map((issue, index) => (
                       <li key={index}>{issue}</li>
                     ))}
