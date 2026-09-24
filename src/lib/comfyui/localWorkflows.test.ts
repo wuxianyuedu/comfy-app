@@ -137,14 +137,14 @@ describe("scanLocalWorkflowChecksums 的 mtime+size 记忆", () => {
 });
 
 describe("scanLocalWorkflowRoots 只读不写", () => {
-  it("递归扫描只收 .json / .workflow，按名字排序", () => {
+  it("递归扫描只收 .json / .workflow，按名字排序", async () => {
     write("b.json", "{}");
     write("a.workflow", "{}");
     write("notes.txt", "ignored");
     fs.mkdirSync(path.join(dir, "sub"));
     write(path.join("sub", "c.json"), "{}");
 
-    const { roots, allFiles } = scanLocalWorkflowRoots([dir], {
+    const { roots, allFiles } = await scanLocalWorkflowRoots([dir], {
       recursive: true,
     });
     expect(roots).toHaveLength(1);

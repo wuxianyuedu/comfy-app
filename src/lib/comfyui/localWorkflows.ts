@@ -79,33 +79,69 @@ function resolve(p: string): string {
   }
 }
 
+/** 分批并发 stat 的并发上限：既不让几千个请求同时压给文件系统，也不必逐个
+ *  串行等待（串行虽然同样不阻塞事件循环，但总耗时是所有 stat 之和）。 */
+const STAT_PARALLEL = 32;
+
+/** 批量 stat，读不到的位置返回 `null`（权限错误 / 扫描中途消失）。
+ *  与原先同步版的 `catch { continue }` 同语义：单个条目出错不影响整趟扫描。 */
+async function statMany(paths: string[]): Promise<(fs.Stats | null)[]> {
+  const out: (fs.Stats | null)[] = Array.from(
+    { length: paths.length },
+    () => null,
+  );
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    while (cursor < paths.length) {
+      const index = cursor++;
+      const target = paths[index];
+      if (target === undefined) continue;
+      try {
+        out[index] = await fs.promises.stat(target);
+      } catch {
+        /* 单个条目读不到就跳过 —— 不中断整趟扫描 */
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(STAT_PARALLEL, paths.length) }, () =>
+      worker(),
+    ),
+  );
+  return out;
+}
+
 /** 读一个目录，过滤出 `.json` / `.workflow`（忽略大小写），按名字排序。
  *  **从不**抛错 —— 目录缺失 / 不可读时返回 `{exists:false, files:[]}`
  *  （权限错误则带 `error` 文案）。`recursive` 默认为 false（只扫一层）：
  *  ComfyUI 自己的 `workflows/` 目录用 `default/`、`image/` 这类子目录分层，
  *  而我们**确实想**跟着进去 —— 用户给一个根目录，意思通常是
- *  「把我 workflows/ 里的东西都加载进来」。需要时用第二个参数打开递归。 */
-function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
+ *  「把我 workflows/ 里的东西都加载进来」。需要时用第二个参数打开递归。
+ *
+ *  用**异步** fs（`fs.promises`）而不是 `readdirSync` / `statSync`：本函数是
+ *  `workflow.list` 每趟请求都要走的一步，同步版把整棵目录树的扫描时间**整段**
+ *  堵在 Node 事件循环上 —— 根目录挂到 ComfyUI 安装目录时条目量可达数千，
+ *  一次扫描就把同时进来的所有请求一起卡住。异步版不堵事件循环，且改用
+ *  `withFileTypes` 的 `Dirent` 判类型，连「不是 .json/.workflow 的条目」也
+ *  不必 stat（同步版对每个条目都 statSync 一次）。 */
+async function scanRoot(
+  rawDir: string,
+  recursive: boolean,
+): Promise<ScannedRoot> {
   const abs = resolve(rawDir);
   // 闭包里的「这个文件来自根目录 X」标记 —— 每推入一项就盖上，
   // by `visit` so callers can show "📂 <root 短名>" without re-computing
   // 让调用方能在自己那边做前缀匹配。
   const stampRoot = () => ({ rootRawPath: rawDir, rootAbsPath: abs });
-  if (!fs.existsSync(/*turbopackIgnore: true*/ abs)) {
-    return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
-  }
+
+  let rootStat: fs.Stats;
   try {
-    const stat = fs.statSync(/*turbopackIgnore: true*/ abs);
-    if (!stat.isDirectory()) {
-      return {
-        rawPath: rawDir,
-        absPath: abs,
-        exists: true,
-        files: [],
-        error: "配置的路径不是目录（指向的是一个文件）",
-      };
-    }
+    rootStat = await fs.promises.stat(abs);
   } catch (e) {
+    const code = (e as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "ENOENT") {
+      return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
+    }
     // e 为 unknown：`(e as Error)?.message ?? String(e)` 与旧 `e?.message ?? String(e)`
     // 的运行时语义逐字一致（node fs 抛的都是 Error 实例）。
     const msg = (e as Error | undefined)?.message ?? String(e);
@@ -117,12 +153,21 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
       error: `无法访问：${msg}`,
     };
   }
+  if (!rootStat.isDirectory()) {
+    return {
+      rawPath: rawDir,
+      absPath: abs,
+      exists: true,
+      files: [],
+      error: "配置的路径不是目录（指向的是一个文件）",
+    };
+  }
 
   const out: LocalWorkflowFile[] = [];
-  const visit = (dir: string) => {
-    let entries: string[];
+  const visit = async (dir: string): Promise<void> => {
+    let entries: fs.Dirent[];
     try {
-      entries = fs.readdirSync(dir);
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
     } catch {
       out.push({
         absPath: "",
@@ -136,44 +181,38 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
       // （非递归时本来也没别的事；递归时由调用方决定）。
       return;
     }
+
+    /* 先按 `Dirent` 的类型位分流（目录 / 非目标后缀一律不 stat），
+     * 再把这一层的候选文件一次性并发 stat。 */
+    const pending: string[] = [];
     for (const ent of entries) {
-      const fullPath = path.join(dir, ent);
-
-      let st;
-
-      try {
-        st = fs.statSync(fullPath);
-      } catch {
+      const fullPath = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        if (recursive) await visit(fullPath);
         continue;
       }
+      if (!ent.isFile()) continue;
+      if (!/\.(json|workflow)$/i.test(ent.name)) continue;
+      pending.push(fullPath);
+    }
 
-      if (st.isDirectory()) {
-        if (recursive) visit(fullPath);
-
-        continue;
-      }
-
-      if (!st.isFile()) continue;
-
-      if (!/\.(json|workflow)$/i.test(ent)) continue;
-
+    const stats = await statMany(pending);
+    for (let index = 0; index < pending.length; index++) {
+      const st = stats[index];
+      const fullPath = pending[index];
+      if (!st || fullPath === undefined) continue;
       out.push({
         absPath: path.resolve(fullPath),
-
-        name: ent,
-
+        name: path.basename(fullPath),
         rawPath: fullPath,
-
         size: st.size,
-
         mtimeMs: st.mtimeMs,
-
         ...stampRoot(),
       });
     }
   };
   try {
-    visit(abs);
+    await visit(abs);
   } catch (e) {
     const msg = (e as Error | undefined)?.message ?? String(e);
     return {
@@ -194,20 +233,19 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
  *  • 逐根目录的明细（UI 用来显示统计 / 缺失目录 / 错误）；
  *  • 跨所有根目录的 `LocalWorkflowFile` 扁平清单，按绝对路径去重
  *    （用户可以把互相重叠的根目录都列上而不产生重复项）。 */
-export function scanLocalWorkflowRoots(
+export async function scanLocalWorkflowRoots(
   rawPaths: string[],
   opts: { recursive?: boolean } = {},
-): { roots: ScannedRoot[]; allFiles: LocalWorkflowFile[] } {
+): Promise<{ roots: ScannedRoot[]; allFiles: LocalWorkflowFile[] }> {
   const recursive = !!opts.recursive;
   const allFiles: LocalWorkflowFile[] = [];
-  const roots: ScannedRoot[] = [];
-  for (const p of rawPaths) {
-    const trimmed = p.trim();
-
-    if (!trimmed) continue;
-
-    roots.push(scanRoot(trimmed, recursive));
-  }
+  const trimmedPaths = rawPaths
+    .map((raw) => raw.trim())
+    .filter((trimmed) => trimmed.length > 0);
+  /* 目录之间并发：同步版是一个目录一个目录地等，总耗时是所有目录之和。 */
+  const roots = await Promise.all(
+    trimmedPaths.map((trimmed) => scanRoot(trimmed, recursive)),
+  );
 
   /* 「按绝对路径去重、保留首次出现」走 `~/lib/ordered-set` 的 `uniqueBy`
    *（规范 16 §16.2.4.55）—— 收口前是本文件里手写的一遍 Set 循环，
@@ -303,9 +341,9 @@ function rememberChecksum(key: string, memo: ChecksumMemo): void {
  *  任何读错误（权限、文件消失等）都 resolve 成 `null`，
  *  调用方可以跳过它而不必中断整趟扫描。
  *
- *  `size` / `mtimeMs` 由调用方从**同一趟扫描**的 `statSync` 结果传入：扫描器刚
- *  拿过它们，再 `statSync` 一次既多余、也可能与刚才那一次不一致（文件正好在
- *  两次之间被写）。三元组一致即直接复用记忆值，**连文件都不打开**。 */
+ *  `size` / `mtimeMs` 由调用方从**同一趟扫描**的结果传入：扫描器刚拿过它们，
+ *  再 stat 一次既多余、也可能与刚才那一次不一致（文件正好在两次之间被写）。
+ *  三元组一致即直接复用记忆值，**连文件都不打开**。 */
 function checksumOfFile(
   absPath: string,
   size: number,
@@ -347,7 +385,7 @@ export function resetLocalWorkflowChecksumCache(): void {
 export async function scanLocalWorkflowChecksums(
   rawPaths: string[],
 ): Promise<LocalChecksumEntry[]> {
-  const { allFiles } = scanLocalWorkflowRoots(rawPaths);
+  const { allFiles } = await scanLocalWorkflowRoots(rawPaths);
   const out: LocalChecksumEntry[] = [];
   // 并发上限：一次扫 200 个文件不会同时开 200 条流。
   const MAX_PARALLEL = 8;
