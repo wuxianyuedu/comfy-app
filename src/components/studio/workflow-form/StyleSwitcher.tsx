@@ -12,8 +12,8 @@ export function loadGroupStyle(
   workflowId: string | undefined,
   groupId: string,
 ): GroupStyle {
-  /* 非 "preset" 的值（含 null / 坏数据 / 未知档）一律回落 "split" ——
-   * 窄化交给 `parse`（§16.2.4.28）。 */
+  /* 非"preset" 的值（含 null / 坏数据 / 未知档）一律回落"split" ——
+   * 窄化交给`parse`（§16.2.4.28）。 */
   return readStorageJson(
     `${STYLE_PREFIX}:${workflowId ?? "global"}:${groupId}`,
     "split",
@@ -55,9 +55,9 @@ export function StyleSwitcher({
         labels={Object.fromEntries(
           options.map((option) => [option.value, option.label]),
         )}
-        /* 宽档要「占满剩下的宽度」——那是 `fullWidth`，不是 `flex-1`：
-         *  `flex-1` 改的是 flex 项的伸缩，而触发器自身仍是内容宽，
-         *  旁边的兄弟一变长它就被挤回内容宽。 */
+        /* 宽档要「占满剩下的宽度」——那是`fullWidth`，不是`flex-1`：
+         *`flex-1` 改的是 flex 项的伸缩，而触发器自身仍是内容宽，
+         * 旁边的兄弟一变长它就被挤回内容宽。 */
         fullWidth={!narrow}
         className={narrow ? "w-[148px] max-w-full" : ""}
         onChange={(value) => onChange(value as GroupStyle)}
@@ -74,7 +74,7 @@ export function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1">
+    <div className="flex flex-col gap-1">
       <span className="text-ink-muted text-[10px]">{label}</span>
       {children}
     </div>

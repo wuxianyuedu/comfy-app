@@ -286,7 +286,7 @@ export function MaterialLibraryPanel({
       <div className="min-w-0 flex-1 overflow-y-auto px-2 pb-4">
         {loading ? (
           /* Skeleton */
-          <div className="space-y-1 px-2 pt-1">
+          <div className="flex-col gap-1 px-2 pt-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={`skeleton-${i}`}
@@ -313,7 +313,7 @@ export function MaterialLibraryPanel({
                 {searching ? "没有匹配的素材" : "暂无内容"}
               </p>
               {!searching && (
-                <div className="text-ink-fainter mt-4 space-y-2 text-[12px]">
+                <div className="text-ink-fainter mt-4 flex-col gap-2 text-[12px]">
                   <Button
                     variant="ghost"
                     onClick={uploadPicker.open}
@@ -389,7 +389,7 @@ export function MaterialLibraryPanel({
             </div>
           ) : (
             /* 列表视图 */
-            <div className="space-y-0.5">
+            <div className="flex flex-col gap-0.5">
               {items.map((item) => (
                 <div
                   key={item.id}
@@ -421,7 +421,7 @@ export function MaterialLibraryPanel({
                       {item.name}
                     </p>
                     <p className="text-ink-fainter mt-0.5 text-[11px]">
-                      {searching ? `${item.folderName} · ` : ""}
+                      {searching ? `${item.folderName} ·` : ""}
                       {displayValue(fmtBytes(item.size))}
                     </p>
                   </div>
@@ -485,7 +485,7 @@ export function MaterialLibraryPanel({
             ))}
           </div>
         ) : (
-          <div className="space-y-0.5">
+          <div className="flex flex-col gap-0.5">
             {folders.map((folder) => (
               <Button
                 key={folder.id}

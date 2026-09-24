@@ -53,7 +53,7 @@ interface Props {
 export function CharacterPortraitStudio({ character, portrait }: Props) {
   const { session, actions, apiChannels, workflows, onOpenApiSettings } =
     portrait;
-  /* 导入定妆照：隐藏 input + 选完复位收进 `ui/file-picker`。 */
+  /* 导入定妆照：隐藏 input + 选完复位收进`ui/file-picker`。 */
   const importPicker = useFilePicker({
     accept: "image/*",
     onPick: (file) => void actions.importFile(character, file),
@@ -234,7 +234,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
       )}
 
       {focused && (
-        <div className="mt-2 space-y-1">
+        <div className="mt-2 flex flex-col gap-1">
           {busy && (
             <>
               <p className="text-primary text-[11px]">
@@ -242,7 +242,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
               </p>
               <Progress
                 /* 通道不提供进度（远端一次性请求）传 null：base-ui 渲染成不确定
-                   进度条（脉动），不拿 0 装成 4% 的确定性进度。 */
+ 进度条（脉动），不拿 0 装成 4% 的确定性进度。 */
                 value={session.progress}
                 className="bg-elevated h-1 gap-0"
               />
@@ -257,8 +257,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             <Alert
               variant="danger"
               /* 行内错误行：保持原有的紧凑尺寸与「无可见边框」观感 ——
-                 基元只接管「危险色怎么取」（此前写死 bg-red-100 + 深色档
-                 文字，浅底在深色主题下会与文字糊在一起）。 */
+ 基元只接管「危险色怎么取」（此前写死 bg-red-100 + 深色档
+ 文字，浅底在深色主题下会与文字糊在一起）。 */
               className="block rounded-md border-transparent px-2 py-1 text-[11px]"
             >
               {session.error}
@@ -266,10 +266,10 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           )}
           {(session.log.length > 0 || focused) && (
             /* 触发行右侧的「历史」是**另一个动作**（打开历史日志），不是折叠
-             *  开关 —— 它不能放进 `Disclosure` 的 trigger 里：
-             *  基元的 trigger 是 `<button>`，再嵌一个 `<button>` 在 HTML 里非法
-             *  （旧写法靠 `stopPropagation` 掩盖了这一点，React 会报水合错误）。
-             *  故改为「触发开关 + 并列动作」一行排布。 */
+             * 开关 —— 它不能放进`Disclosure` 的 trigger 里：
+             * 基元的 trigger 是`<button>`，再嵌一个`<button>` 在 HTML 里非法
+             * （旧写法靠`stopPropagation` 掩盖了这一点，React 会报水合错误）。
+             * 故改为「触发开关 + 并列动作」一行排布。 */
             <div className="bg-bg/60 rounded-md px-2 py-1">
               <div className="text-primary flex items-center gap-2 text-[10px]">
                 <Disclosure
@@ -281,7 +281,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     session.log.length > 0 ? `（${session.log.length} 条）` : ""
                   }`}
                 >
-                  <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
+                  <ul className="mt-1 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
                     {session.log.map((entry) => (
                       <li
                         key={`${entry.ts}-${entry.text}`}
@@ -323,7 +323,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                       还没有落盘的历史日志。
                     </p>
                   ) : (
-                    <ul className="max-h-40 space-y-0.5 overflow-y-auto">
+                    <ul className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
                       {history.map((entry, i) => (
                         <li
                           key={`${entry.ts}-${i}`}

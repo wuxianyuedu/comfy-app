@@ -1,7 +1,7 @@
 /* CustomNodesSettings 弹窗的小型展示积木。
- *  PortRow / WidgetValueChip 从原来的单文件
- *  CustomNodesSettings.tsx 原样搬来；ManifestSummary / ParseProgressBanner / ParseConsole
- *  / ReportCards 是从主组件 render 里提出来的低耦合 JSX 区块
+ * PortRow / WidgetValueChip 从原来的单文件
+ * CustomNodesSettings.tsx 原样搬来；ManifestSummary / ParseProgressBanner / ParseConsole
+ * / ReportCards 是从主组件 render 里提出来的低耦合 JSX 区块
  *（状态经 props 显式传入）。 */
 
 import type { RefObject } from "react";
@@ -15,9 +15,9 @@ import { ProgressBar } from "~/components/ui/progress-bar";
 import { toPct } from "~/lib/progress";
 
 /** 类型端口区的一行 —— 小彩点 + 大写类型章
- *  + 端口名。ComfyUI 真实节点把圆点放在画布边缘、
- *  把名字 + 类型章放在卡片内部；我们镜像这套几何，
- *  好让每个端口行一眼读出它属于节点哪一侧。 */
+ * + 端口名。ComfyUI 真实节点把圆点放在画布边缘、
+ * 把名字 + 类型章放在卡片内部；我们镜像这套几何，
+ * 好让每个端口行一眼读出它属于节点哪一侧。 */
 export function PortRow({
   side,
   color,
@@ -32,7 +32,7 @@ export function PortRow({
   const isOut = side === "out";
   // ComfyUI 给输出固定用青色调，输入则按类别派生。
   // 输出侧的青色是「类型色」的近亲（见 constants.ts 的豁免登记），与
-  // `workflow-param-mapping-ui` 的 `PARAM_CLASS_COLOR` 同源。
+  //`workflow-param-mapping-ui` 的`PARAM_CLASS_COLOR` 同源。
   const dotColor = isOut ? "#06B6D4" : color;
   return (
     <div
@@ -66,14 +66,14 @@ export function PortRow({
 }
 
 /** 右对齐的章，显示 widget 的默认值，按 widget 类型着色，
- *  好让用户一眼分辨：字符串 / 数字 / 布尔 / 下拉
- *  各有一套截然不同的色系。镜像 ComfyUI 自己节点渲染
- *  逐 widget 取值章的方式。 */
+ * 好让用户一眼分辨：字符串 / 数字 / 布尔 / 下拉
+ * 各有一套截然不同的色系。镜像 ComfyUI 自己节点渲染
+ * 逐 widget 取值章的方式。 */
 
 /** 把 widget 值安全转成展示文本：对象走 JSON，null/undefined 给空串，其余 String。
  *
- *  「空值显示什么」由调用处经 `displayValue` 决定 —— 这里只负责「有值时
- *  怎么成文本」，返回空串即表示「没值」。 */
+ * 「空值显示什么」由调用处经`displayValue` 决定 —— 这里只负责「有值时
+ * 怎么成文本」，返回空串即表示「没值」。 */
 function widgetValueToText(v: unknown): string {
   if (v == null) return "";
   if (typeof v === "object") return JSON.stringify(v);
@@ -139,7 +139,7 @@ export function WidgetValueChip({
 }
 
 /** 「当前清单」单行清单摘要 —— 从主组件
- *  的「nodes」页签 render 原样提出。 */
+ * 的「nodes」页签 render 原样提出。 */
 export function ManifestSummary({
   summary,
 }: {
@@ -157,21 +157,22 @@ export function ManifestSummary({
 }
 
 /** 两阶段解析进度条（扫描 → 哈希）—— 从
- *  主组件的「nodes」页签 render 原样提出。只在 `loading` 且尚无
- *  摘要时渲染（条件由调用方维持）。 */
+ * 主组件的「nodes」页签 render 原样提出。只在`loading` 且尚无
+ * 摘要时渲染（条件由调用方维持）。 */
 export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
   return (
     <div className="border-border bg-bg/50 text-muted-foreground mb-4 rounded-lg border border-dashed px-3 py-3 text-xs">
       {/* 顶行：当前阶段 + 包计数（用户最关心的）。.py 文件数
-          已去掉 —— 用户明说它没用。 */}
+ 已去掉 —— 用户明说它没用。 */}
       <div className="flex items-center gap-2">
         <StatusDot state="busy" sizeClass="size-2" pulse />
         {progress.phase === "hash" && progress.total > 0 ? (
           <span className="text-ink">
-            🔎 正在处理{" "}
+            🔎 正在处理{""}
             <span className="font-mono">
               {progress.done}/{progress.total}
-            </span>{" "}
+            </span>
+            {""}
             个节点包
             {progress.parent && (
               <span
@@ -184,7 +185,8 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
           </span>
         ) : progress.phase === "scan" && progress.discovered > 0 ? (
           <span className="text-ink">
-            📦 已发现 <span className="font-mono">{progress.discovered}</span>{" "}
+            📦 已发现 <span className="font-mono">{progress.discovered}</span>
+            {""}
             个节点包
             <span className="text-muted-foreground ml-2 text-[11px]">
               （总数待定，正在扫描…）
@@ -195,9 +197,9 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
         )}
       </div>
       {/* 进度条：扫描阶段是不确定的（条纹滑动）；哈希阶段是确定的 K/M。
-          `progress.total > 0` 只在文件遍历结束、解析器宣布 M 时才翻真，
-          所以条子能干净地从扫描（不定态）过渡到哈希（确定态）。
-          「总数未知 → 不确定态」的换算收在 `~/lib/progress` 的 `toPct`。 */}
+`progress.total > 0` 只在文件遍历结束、解析器宣布 M 时才翻真，
+ 所以条子能干净地从扫描（不定态）过渡到哈希（确定态）。
+ 「总数未知 → 不确定态」的换算收在`~/lib/progress` 的`toPct`。 */}
       <ProgressBar
         value={
           progress.phase === "hash" && progress.total > 0
@@ -222,8 +224,8 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
 }
 
 /** 实时解析控制台（日志列表）—— 从主组件的
- *  「nodes」页签 render 原样提出。两个滚动 ref 属于主组件的
- *  自动滚动 effect，原样透传。 */
+ * 「nodes」页签 render 原样提出。两个滚动 ref 属于主组件的
+ * 自动滚动 effect，原样透传。 */
 export function ParseConsole({
   logs,
   parsing,
@@ -280,7 +282,7 @@ export function ParseConsole({
 }
 
 /** 按包的报告卡片（「最近解析结果」）—— 从主组件
- *  的「nodes」页签 render 原样提出。 */
+ * 的「nodes」页签 render 原样提出。 */
 export function ReportCards({ report }: { report: ParseReport }) {
   return (
     <div className="mt-2">
@@ -293,7 +295,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
           {report.errorCount ? ` · ${report.errorCount} 个错误` : ""}
         </span>
       </div>
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         {(report.packages ?? []).map((pkg) => {
           const st = STATUS_STYLE[pkg.status] ?? STATUS_STYLE.ok;
           return (
@@ -316,8 +318,8 @@ export function ReportCards({ report }: { report: ParseReport }) {
                     className="text-muted-foreground truncate font-mono text-[11px]"
                     title={pkg.path}
                   >
-                    {/* 绝对路径的**语义在尾部**（哪个目录下的包）—— CSS `truncate`
-                        只留头部，恰好把它切掉，故这里显式取末几段。 */}
+                    {/* 绝对路径的**语义在尾部**（哪个目录下的包）—— CSS`truncate`
+ 只留头部，恰好把它切掉，故这里显式取末几段。 */}
                     {lastSegments(pkg.path, 3)}
                   </div>
                 </div>
@@ -348,7 +350,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                 </div>
               )}
               {pkg.errors?.length > 0 && (
-                <div className="mt-2 space-y-1">
+                <div className="mt-2 flex flex-col gap-1">
                   {pkg.errors.map((er, j) => (
                     <div
                       key={j}

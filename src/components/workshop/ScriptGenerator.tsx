@@ -39,7 +39,7 @@ const PROJECT_TYPES: ProjectType[] = [
 ];
 
 /** 剧本工具：输入灵感/梗概 → 产出完整剧本 markdown，直接写入剧本内容。
- *  拆解与场景维护属于后续阶段（角色卡 / 场景分镜），这里只负责产出与修改剧本。 */
+ * 拆解与场景维护属于后续阶段（角色卡 / 场景分镜），这里只负责产出与修改剧本。 */
 export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
   const [idea, setIdea] = React.useState("");
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
@@ -48,8 +48,8 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
   const [aiError, setAiError] = React.useState("");
   /** AI 生成成功提示（含本次实际使用的 本地/远端 模型） */
   const [aiStatus, setAiStatus] = React.useState("");
-  /** AI 生成独立选择的 本地/远端 模型（下拉值 "local::<m>" / "remote::<m>"；
-   *  空串 = 未手动选择，沿用全局 config 的 provider/model）。 */
+  /** AI 生成独立选择的 本地/远端 模型（下拉值"local::<m>" /"remote::<m>"；
+   * 空串 = 未手动选择，沿用全局 config 的 provider/model）。 */
   const [genSel, setGenSel] = React.useState("");
   const { config, openSettings } = useLLM();
 
@@ -97,7 +97,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-5">
       {/* ── 项目信息（类型 / 基调 / 梗概，供生成时参考）── */}
       <section className="border-border bg-surface rounded-xl border p-4">
         <h3 className="u-title mb-3">项目信息</h3>
@@ -165,7 +165,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             allowTool={false}
           />
         </div>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <Textarea
             value={idea}
             onChange={textHandler(setIdea)}
@@ -224,7 +224,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
           {config && !genSel && (
             <p className="text-muted-foreground text-xs">
               未手动选择模型时，沿用全局配置（当前：
-              {channelProviderLabel(config.provider)} ·{" "}
+              {channelProviderLabel(config.provider)} ·{""}
               {config.model || "未选模型"}）。点上方下拉可切换本次生成的
               本地/远端 模型。
             </p>

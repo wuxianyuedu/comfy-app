@@ -62,7 +62,7 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
             <p className="text-ink-faint mb-2 text-xs font-semibold">
               或打开已有项目
             </p>
-            <ul className="border-border-subtle max-h-56 space-y-1 overflow-y-auto">
+            <ul className="border-border-subtle flex max-h-56 flex-col gap-1 overflow-y-auto">
               {projects.map((project) => {
                 const nodeCount = project.nodes?.length ?? 0;
                 return (

@@ -7,12 +7,12 @@
 // 立一个状态徽标（可选口没落点是常态，不是状态，见 entryStateBadge）。
 //
 // 三件事必须显式：
-//   · **必填 / 可选**（随模式契约，`ModeContract.required`）——「能不能跑」只认
-//     必填口；可选口不必连到工作流，缺的值由工作流图内的默认值兜底；
-//   · **模式可切换**：多模式工作流（文生图 / 图生图…）在这里逐个换模式跑测试，
-//     只测默认模式验不全另一条链路。切模式只改「看/测哪个模式」，不动默认模式；
-//   · 「流程测试」按封装口径真实跑一次生成（提示词 + 尺寸 → ComfyUI），验证它在
-//     工坊里的可用性 —— 与定妆照 / 镜头生图同一条 buildLibraryWorkflowInput 链路。
+// · **必填 / 可选**（随模式契约，`ModeContract.required`）——「能不能跑」只认
+// 必填口；可选口不必连到工作流，缺的值由工作流图内的默认值兜底；
+// · **模式可切换**：多模式工作流（文生图 / 图生图…）在这里逐个换模式跑测试，
+// 只测默认模式验不全另一条链路。切模式只改「看/测哪个模式」，不动默认模式；
+// · 「流程测试」按封装口径真实跑一次生成（提示词 + 尺寸 → ComfyUI），验证它在
+// 工坊里的可用性 —— 与定妆照 / 镜头生图同一条 buildLibraryWorkflowInput 链路。
 
 import { upperToken } from "~/lib/upper-token";
 import React, { useMemo, useState } from "react";
@@ -53,14 +53,14 @@ interface WorkshopEncapsulationPanelProps {
   /** 该工作流可跑的模式码（多于一个时渲染模式下拉）。 */
   modes?: readonly string[];
   /** 切换当前模式（**只改查看 / 测试语境，不落库**）：多模式工作流要能逐个
-   *  模式跑一次流程测试 —— 文生图 / 图生图两条链路的封装口往往不同，只看默认
-   *  模式测不出另一条能不能用。 */
+   * 模式跑一次流程测试 —— 文生图 / 图生图两条链路的封装口往往不同，只看默认
+   * 模式测不出另一条能不能用。 */
   onModeChange?: (mode: string) => void;
 }
 
-/** 契约口状态徽标的形态（配色表；文案由 `entryStateBadge` 按缺口给）。
- *  暗色下背景必须跟着切（`dark:bg-emerald-500/15`）：只切文字色的话是
- *  浅绿字叠在浅绿底上，对比度极低（用户实测「暗色下看不清」）。 */
+/** 契约口状态徽标的形态（配色表；文案由`entryStateBadge` 按缺口给）。
+ * 暗色下背景必须跟着切（`dark:bg-emerald-500/15`）：只切文字色的话是
+ * 浅绿字叠在浅绿底上，对比度极低（用户实测「暗色下看不清」）。 */
 const RESOLVED_BADGE_CLASS =
   "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300";
 const MISSING_REQUIRED_BADGE_CLASS =
@@ -68,18 +68,18 @@ const MISSING_REQUIRED_BADGE_CLASS =
 
 /** 落点状态 → 徽标：**已落点才给徽标**，没落点返回 null。
  *
- *  为什么「没落点」不再单独出一个徽标（ISSUE #720）：那一列里已经有
- *  「必填 / 可选」标签，而它读的正是「没落点会不会挡住运行」这同一份事实
- *  （`ModeContract.required`）——再挂一个「可选 · 未落点」，是把**已经说过的
- *  话**换个说法再说一遍，还占着一列的视觉重量。实测截图里那一行三个胶囊：
- *  `可选` `可选 · 未落点` `负向提示词`，前两个是同义反复。
+ * 为什么「没落点」不再单独出一个徽标（ISSUE #720）：那一列里已经有
+ * 「必填 / 可选」标签，而它读的正是「没落点会不会挡住运行」这同一份事实
+ * （`ModeContract.required`）——再挂一个「可选 · 未落点」，是把**已经说过的
+ * 话**换个说法再说一遍，还占着一列的视觉重量。实测截图里那一行三个胶囊：
+ *`可选``可选 · 未落点``负向提示词`，前两个是同义反复。
  *
- *  留白只有一种例外：**必填口没落点**。那不是复述，是**状态**（缺了它这条
- *  工作流跑不了）——它必须一眼看得出来，且它在「必填」标签上读不出来（必填
- *  口照样可能已经落好点）。所以只保留这一个红色缺口徽标。
+ * 留白只有一种例外：**必填口没落点**。那不是复述，是**状态**（缺了它这条
+ * 工作流跑不了）——它必须一眼看得出来，且它在「必填」标签上读不出来（必填
+ * 口照样可能已经落好点）。所以只保留这一个红色缺口徽标。
  *
- *  琥珀在这里刻意不用：没落点且必填 = 缺件，是问题状态（同「未配置」总览的
- *  红系），不是「待办提示」。 */
+ * 琥珀在这里刻意不用：没落点且必填 = 缺件，是问题状态（同「未配置」总览的
+ * 红系），不是「待办提示」。 */
 function entryStateBadge(entry: EncapsulationEntryStatus): {
   label: string;
   className: string;
@@ -104,12 +104,12 @@ export function WorkshopEncapsulationPanel({
 }: WorkshopEncapsulationPanelProps) {
   /* 模式契约注册表：用户改过的模式用自定义口径，未改过的用内置默认 ——
    * 封装视图与远端适配器、实际生成链路同说一套话。清单本身经
-   * `modeContractEntries` 取，与「画布节点」页签的卡片列**同一份**
+   *`modeContractEntries` 取，与「画布节点」页签的卡片列**同一份**
    * （ISSUE #596：两个页签各读各的，口径就对不上了）。 */
   const { contracts: storedContracts } = useModeContracts();
   /* 该模式生效的契约口清单（含作者自定义的口）。下方三处**同一份**：必备口判据、
-   *  封装状态派生、流程测试组载荷 —— 各取一份会让「界面列出的口」与「测试能填的
-   *  口」走散。 */
+   * 封装状态派生、流程测试组载荷 —— 各取一份会让「界面列出的口」与「测试能填的
+   * 口」走散。 */
   const contractEntries = React.useMemo(
     () => modeContractEntries(mode, storedContracts),
     [mode, storedContracts],
@@ -119,7 +119,7 @@ export function WorkshopEncapsulationPanel({
     [contractEntries],
   );
   /* 必备口来自模式契约（可配置，「模式契约」编辑器里勾选的那个勾）——本页的
-   *  「能不能用」判据读它，不再写死「提示词」。 */
+   * 「能不能用」判据读它，不再写死「提示词」。 */
   const requiredInputs = React.useMemo(
     () =>
       requiredInputsFor({
@@ -142,7 +142,7 @@ export function WorkshopEncapsulationPanel({
   );
 
   /* 流程测试的运行编排（规范 §17.2 第②层）：与画布节点那次运行共用同一份
-   *  运行登记表与日志弹窗，只是带自己的来源标记。视图这里只消费 controller。 */
+   * 运行登记表与日志弹窗，只是带自己的来源标记。视图这里只消费 controller。 */
   const test = useEncapsulationTestRun({
     workflowId,
     workflowName: displayName,
@@ -151,7 +151,7 @@ export function WorkshopEncapsulationPanel({
   });
 
   /* 表单交上来的就是**工坊对外值**本身（口子清单 = 该模式的契约口，见
-   *  `EncapsulationTestForm`），这里不再做第二道字段过滤。 */
+   *`EncapsulationTestForm`），这里不再做第二道字段过滤。 */
   const runTest = (values: WorkshopExposedValues) => {
     if (test.running || !status.ready) return;
     test.run(values);
@@ -169,9 +169,9 @@ export function WorkshopEncapsulationPanel({
   const logViewTaskId = logTaskId ?? latestLogTaskId;
 
   return (
-    <div className="border-border bg-panel-deep mx-auto max-w-2xl space-y-4 rounded-2xl border p-4">
+    <div className="border-border bg-panel-deep mx-auto max-w-2xl flex-col gap-4 rounded-2xl border p-4">
       {/* 封装状态总览。执行日志入口**在本页签这一排**（带 encapsulation-test 来源），
-          与画布节点页签各自独立（ISSUE #611 旧形态：两个页签各写各的）。 */}
+ 与画布节点页签各自独立（ISSUE #611 旧形态：两个页签各写各的）。 */}
       <div className="flex flex-wrap items-center gap-2">
         <WorkflowRunLogButton
           workflowId={workflowId}
@@ -198,7 +198,7 @@ export function WorkshopEncapsulationPanel({
           </span>
         )}
         {/* 多模式工作流：在这里换模式逐个测（文生图 / 图生图的封装口不同，
-         *  只看默认模式测不出另一条能不能用）。只改当前模式，不改默认模式。 */}
+         * 只看默认模式测不出另一条能不能用）。只改当前模式，不改默认模式。 */}
         {modes && modes.length > 1 && onModeChange && (
           <SelectMenu
             value={mode ?? modes[0]!}
@@ -231,16 +231,16 @@ export function WorkshopEncapsulationPanel({
       )}
 
       {/* 工坊对外口一览：每个口 = 工坊控件形态 + 生效落点 */}
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         {status.entries.map((entry) => {
           /* 一行最多两个胶囊：**必填 / 可选**（随模式契约）+ 落点状态。
-           *  「没落点」只有必填口才有状态徽标 —— 可选口没落点就是常态，见
-           *  `entryStateBadge` 的注释（ISSUE #720）。 */
+           * 「没落点」只有必填口才有状态徽标 —— 可选口没落点就是常态，见
+           *`entryStateBadge` 的注释（ISSUE #720）。 */
           const badge = entryStateBadge(entry);
           return (
-            /* 行布局走 `KeyValueRows`（P17）：左侧「键」是一组可变的徽标 +
-                标签 + 口 id，右侧「值」是生效落点。此前这一段是与其它四处
-                「标签 + 值」行**各写一份**的 `flex items-center` 布局。 */
+            /* 行布局走`KeyValueRows`（P17）：左侧「键」是一组可变的徽标 +
+ 标签 + 口 id，右侧「值」是生效落点。此前这一段是与其它四处
+ 「标签 + 值」行**各写一份**的`flex items-center` 布局。 */
             <KeyValueRows
               key={entry.id}
               className="border-border/60 bg-surface rounded-lg border px-3 py-2"
@@ -253,7 +253,7 @@ export function WorkshopEncapsulationPanel({
                   key: (
                     <>
                       {/* 必备 / 可选由**模式契约**判定（`ModeContract.required`），
-                          不是写死的口名 —— 与「能不能跑」的判据同一份事实。 */}
+ 不是写死的口名 —— 与「能不能跑」的判据同一份事实。 */}
                       <span
                         className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
                           entry.required
@@ -273,7 +273,7 @@ export function WorkshopEncapsulationPanel({
                       <span className="text-ink text-[12px] font-medium">
                         {entry.label}
                         {/* 口 id 与中文字面并列：配置 / 日志 / 代码里用的是 id，
-                            而契约口与适配器口是两套 id，只写中文对不上。 */}
+ 而契约口与适配器口是两套 id，只写中文对不上。 */}
                         <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">
                           {entry.id}
                         </span>
@@ -296,10 +296,10 @@ export function WorkshopEncapsulationPanel({
             按工坊口径生成一张图，验证封装可用性
           </span>
         </div>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {/* 输入框由**该模式的契约口清单**逐口渲染 —— 与上方「工坊对外口一览」
-              同一份清单，不看有没有落点（没落点的口照样能填，值落不下去时由
-              工作流图内的默认值兜底）。 */}
+ 同一份清单，不看有没有落点（没落点的口照样能填，值落不下去时由
+ 工作流图内的默认值兜底）。 */}
           <EncapsulationTestForm
             entries={status.entries}
             scene={sceneFromMode(mode)}
@@ -327,7 +327,7 @@ export function WorkshopEncapsulationPanel({
             </p>
           )}
           {test.resultUrl && (
-            <div className="space-y-1">
+            <div className="flex flex-col gap-1">
               <p className="text-primary text-[11px]">
                 流程测试通过 —— {displayName} 在工坊中可用。
               </p>

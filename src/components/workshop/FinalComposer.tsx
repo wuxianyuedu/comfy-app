@@ -141,7 +141,7 @@ export function FinalComposer({
       project: title,
       exportedAt: new Date().toISOString(),
       totalShots: timeline.length,
-      /* 「按一位小数写数」走 `~/lib/number-format`（规范 16 §16.2.4.54）。 */
+      /* 「按一位小数写数」走`~/lib/number-format`（规范 16 §16.2.4.54）。 */
       totalDurationSec: Number(fixed(totalDuration, 1) ?? "0"),
       timeline: timeline.map((entry, i) => ({
         order: i + 1,
@@ -172,7 +172,7 @@ export function FinalComposer({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="flex-col gap-5">
       {/* Summary row */}
       <div className="border-border bg-surface flex flex-wrap items-center gap-3 rounded-2xl border p-4">
         <span className="text-ink text-[13px] font-semibold">成片时间线</span>
@@ -236,7 +236,7 @@ export function FinalComposer({
         <div className="border-border bg-surface rounded-2xl border p-4">
           <div className="text-muted-foreground mb-2 flex items-center justify-between text-[11px]">
             <span>
-              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} /{" "}
+              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} /{""}
               {String(timeline.length).padStart(2, "0")}
             </span>
             <span>{current.shot.sceneHeading}</span>
@@ -272,7 +272,7 @@ export function FinalComposer({
       )}
 
       {/* Timeline list */}
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         {timeline.map((entry, idx) => {
           const shot = entry.shot;
           const active = playing && idx === currentIdx;

@@ -274,9 +274,9 @@ function FilterChip({
 function ModelConfigModal({ onClose }: { onClose: () => void }) {
   const c = useModelFolderConfig();
 
-  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前把遮罩写成
-     一个**兄弟 div** 单独接 `onClick`（与全库其余弹窗的「外层带 onClick +
-     内层 stopPropagation」又是一种写法），Esc 没接、焦点不锁也不归还。 */
+  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前把遮罩写成
+ 一个**兄弟 div** 单独接`onClick`（与全库其余弹窗的「外层带 onClick +
+ 内层 stopPropagation」又是一种写法），Esc 没接、焦点不锁也不归还。 */
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
@@ -391,7 +391,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                         已启用 · {c.enabledRows.length}
                       </h3>
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                       {c.enabledRows.map((row) => (
                         <FolderConfigRow
                           key={row.folder}
@@ -415,7 +415,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                         点「启用」加入扫描列表
                       </p>
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                       {c.availableRows.map((row) => (
                         <FolderConfigRow
                           key={row.folder}

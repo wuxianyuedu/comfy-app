@@ -10,7 +10,7 @@
 //
 // 这里只管**模型适配**（接口级：每个远端模型 × 每个模式）；「模式契约」
 // （模式级：每种模式对外有哪些统一输入 / 输出）是并列的独立入口与独立界面，
-// 见 `mode-contract/ModeContractDialog.tsx` —— 两个入口读写同一份注册表。
+// 见`mode-contract/ModeContractDialog.tsx` —— 两个入口读写同一份注册表。
 
 import React from "react";
 
@@ -42,7 +42,7 @@ function modeLabel(mode: string): string {
 }
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id
- *  （并且契约口与适配器口是两套 id，光看中文「尺寸」分不清 size 还是 aspect-ratio）。 */
+ * （并且契约口与适配器口是两套 id，光看中文「尺寸」分不清 size 还是 aspect-ratio）。 */
 function LabelWithId({ label, id }: { label: string; id: string }) {
   return (
     <>
@@ -84,8 +84,8 @@ export function WorkshopModelAdapterModal({
 
   const availableModes = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative);
 
-  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩 +
-     手写 `onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
+  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
+ 手写`onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
@@ -192,7 +192,7 @@ export function WorkshopModelAdapterModal({
                     </Button>
                   </div>
                   {addModeOpen && (
-                    <div className="border-border bg-bg mt-2 space-y-2 rounded-lg border p-2">
+                    <div className="border-border bg-bg mt-2 flex flex-col gap-2 rounded-lg border p-2">
                       {MODE_GROUPS.map((group) => {
                         const modes = availableModes.filter(
                           (t) => t.category === group.category,
@@ -268,7 +268,7 @@ export function WorkshopModelAdapterModal({
                     <p className="text-muted-foreground mt-2 mb-1 block text-[10px]">
                       输入映射：统一输入类型 → 请求体字段名
                     </p>
-                    <div className="space-y-1.5">
+                    <div className="flex-col gap-1.5">
                       {a.inputs.map((row, i) => (
                         <div
                           key={`${a.mode}-${row.type}-${i}`}

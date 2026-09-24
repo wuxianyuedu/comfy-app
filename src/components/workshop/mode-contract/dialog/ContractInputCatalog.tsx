@@ -2,11 +2,11 @@
 
 // ── 「模式契约」编辑器的参数库（规范 17 §17.2 第③层：只渲染 + 上抛）────────
 // 两块：
-//   ① 全部预制口 —— **完整**一张表，已加入的标出来、没加入的点一下就加。
-//      只列「还剩哪几个没加」会让作者以为「这套系统就支持这几样」（用户口径：
-//      「也要能浏览有全部的参数」）；
-//   ② 自定义口 —— 作者自己声明的口（起名 + 选简单类型），可增可删可改名。
-//      预制口就那么几类，往后想加一个新口不该再改代码。
+// ① 全部预制口 —— **完整**一张表，已加入的标出来、没加入的点一下就加。
+// 只列「还剩哪几个没加」会让作者以为「这套系统就支持这几样」（用户口径：
+// 「也要能浏览有全部的参数」）；
+// ② 自定义口 —— 作者自己声明的口（起名 + 选简单类型），可增可删可改名。
+// 预制口就那么几类，往后想加一个新口不该再改代码。
 //
 // 本组件不持有契约状态：值从 props 来、动作往上抛（与编辑器其余部分同一条分层）。
 
@@ -65,7 +65,7 @@ export function ContractInputCatalog({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="flex-col gap-2">
       <div>
         <p className="text-muted-foreground mb-1 text-[10px]">
           全部可用参数（预制）—— 点未加入的即可添加
@@ -97,7 +97,7 @@ export function ContractInputCatalog({
         <p className="text-muted-foreground mb-1 text-[10px]">
           自定义参数（自己起名 + 选类型）—— 预制的口不够用时加在这里
         </p>
-        <div className="space-y-1">
+        <div className="flex-col gap-1">
           {customInputs.map((def) => (
             <div
               key={def.id}
@@ -105,7 +105,7 @@ export function ContractInputCatalog({
             >
               <Input
                 /* 非受控 + 失焦提交：逐键写回契约会让每次输入都触发一次保存态
-                 *  重置，而空名中途是常态（用户先清空再改名）。 */
+                 * 重置，而空名中途是常态（用户先清空再改名）。 */
                 defaultValue={def.label}
                 onBlur={(event) => {
                   const next = event.currentTarget.value.trim();
@@ -143,8 +143,8 @@ export function ContractInputCatalog({
                 value={draftName}
                 onChange={textHandler(setDraftName)}
                 /* Enter 提交 / Esc 取消走唯一实现（§16.2.4.29）：自己判键会漏掉
-                 *  `preventDefault` 与输入法组字态（中文拼音未上屏时的 Enter
-                 *  是「确认候选」，不是提交）。 */
+                 *`preventDefault` 与输入法组字态（中文拼音未上屏时的 Enter
+                 * 是「确认候选」，不是提交）。 */
                 {...enterCommit({
                   onCommit: () => submitCustom(),
                   onCancel: () => setAdding(false),

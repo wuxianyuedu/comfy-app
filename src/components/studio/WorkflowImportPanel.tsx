@@ -1,10 +1,10 @@
 "use client";
 
 /** 从 WorkflowLibrary 的导入面板 JSX 抽出。
- *  完全受父级控制 —— 所有面板状态住在
- *  useWorkflowImport hook 里并经 `state` 传入，好让
- *  拖放预填路径（handleDroppedFile）能在面板打开前填充同样的
- *  字段。行为不变。
+ * 完全受父级控制 —— 所有面板状态住在
+ * useWorkflowImport hook 里并经`state` 传入，好让
+ * 拖放预填路径（handleDroppedFile）能在面板打开前填充同样的
+ * 字段。行为不变。
  */
 import { useMemo } from "react";
 import { textHandler } from "~/lib/form-props";
@@ -17,7 +17,7 @@ import { useFilePicker } from "~/components/ui/file-picker";
 import type { useWorkflowImport } from "./workflow-library/hooks/use-workflow-import";
 
 /* 导入面板的字段标签档：比设置页小一号（此处是密集的导入表单）。
- * 覆盖 `FormField` 的默认 `text-sm` —— tailwind-merge 同属性后者赢。 */
+ * 覆盖`FormField` 的默认`text-sm` —— tailwind-merge 同属性后者赢。 */
 const IMPORT_LABEL_CLASS = "text-ink-soft mb-1 text-xs font-medium";
 
 type ImportState = ReturnType<typeof useWorkflowImport>;
@@ -56,9 +56,9 @@ export function WorkflowImportPanel({
     onPanelDrop,
   } = state;
 
-  /* 「选择文件」入口：隐藏 input 的持有与触发收进 `ui/file-picker`
-   *  （此前这里自己拿 ref、自己复位 `value`，同一套样板全库 9 份）。
-   *  文件本身仍交给同一个漏斗处理（§17.6.4：ref 留在视图层）。 */
+  /* 「选择文件」入口：隐藏 input 的持有与触发收进`ui/file-picker`
+   * （此前这里自己拿 ref、自己复位`value`，同一套样板全库 9 份）。
+   * 文件本身仍交给同一个漏斗处理（§17.6.4：ref 留在视图层）。 */
   const pickerProps = useMemo(
     () => ({ "aria-label": "选择工作流 JSON 文件" }),
     [],
@@ -162,7 +162,8 @@ export function WorkflowImportPanel({
       {/* 文件入口：与拖入共用同一个漏斗（读文件 → 识别格式 → 预填面板）。 */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <span className="text-ink-muted text-xs">
-          把 ComfyUI 导出的 <code className="font-mono">.json</code>{" "}
+          把 ComfyUI 导出的 <code className="font-mono">.json</code>
+          {""}
           拖到面板任意位置，或
         </span>
         <Button
@@ -181,7 +182,7 @@ export function WorkflowImportPanel({
           value={importJson}
           onChange={textHandler(setImportJson)}
           rows={8}
-          placeholder='{ "last_node_id": 11, "nodes": [{ "id": 11, "type": "KSampler", "pos": [400, 300], "widgets_values": [...] }], "links": [...] }'
+          placeholder='{"last_node_id": 11,"nodes": [{"id": 11,"type":"KSampler","pos": [400, 300],"widgets_values": [...] }],"links": [...] }'
           className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted resize-none font-mono text-xs"
         />
       </div>
@@ -200,7 +201,7 @@ export function WorkflowImportPanel({
       {importWarn.length > 0 && (
         <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/6 p-2 text-xs text-amber-800 dark:text-amber-200">
           <p className="font-medium">导入提示：</p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+          <ul className="mt-1 flex list-disc flex-col gap-0.5 pl-4">
             {importWarn.map((warning, i) => (
               <li key={`warn-${i}`}>{warning}</li>
             ))}

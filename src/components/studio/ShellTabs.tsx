@@ -6,24 +6,24 @@
  * Tauri 主窗口内的页签里，一条可切换、可关闭的页签栏，替代此前会
  * 弹出空白独立窗口的 open_comfyui_window 方案。
  *
- * 两种渲染形态（判据见 `shouldUseTitleBarTabs`）：
- *  - **桌面壳内**：页签搬到窗口**标题行**——主窗口关闭原生装饰，由
- *    `TitleBarTabs` 接管整条标题栏（页签 + 拖拽区 + 最小化/最大化/关闭），
- *    不再额外占用应用内区域（ISSUE #310 / #200）。
- *  - **浏览器 / dev**：窗口由系统浏览器提供，没有原生标题栏可让位，
- *    退回「应用内页签栏」，保留原有行为与观感。
+ * 两种渲染形态（判据见`shouldUseTitleBarTabs`）：
+ * - **桌面壳内**：页签搬到窗口**标题行**——主窗口关闭原生装饰，由
+ *`TitleBarTabs` 接管整条标题栏（页签 + 拖拽区 + 最小化/最大化/关闭），
+ * 不再额外占用应用内区域（ISSUE #310 / #200）。
+ * - **浏览器 / dev**：窗口由系统浏览器提供，没有原生标题栏可让位，
+ * 退回「应用内页签栏」，保留原有行为与观感。
  *
- * 两种形态共用同一个高度量 `TITLE_BAR_HEIGHT_CLASS`（`h-title-bar` ←
- * `--spacing-title-bar`）：全屏视图层按 `top-title-bar` 让位，页签栏高度必须
+ * 两种形态共用同一个高度量`TITLE_BAR_HEIGHT_CLASS`（`h-title-bar` ←
+ *`--spacing-title-bar`）：全屏视图层按`top-title-bar` 让位，页签栏高度必须
  * 与它同源，否则让位量与实际高度对不上（多留空白或盖住一条）。
  *
  * 关键取舍：
- *  - 主应用内容（children）与已打开的 ComfyUI iframe 都**始终挂载**，
- *    用 CSS 显隐切换，而不是条件卸载——这样切页签不会丢 workspace 的
- *    viewMode / 画布编辑态，ComfyUI 页面也不会因卸载而重载。
- *  - 主应用页签（id="main"）不可关闭；ComfyUI 页签可按需关闭。
- *  - 页签状态由 shell-tabs-store 管理（纯状态层），本组件只做渲染与
- *    动作转发，符合规范 17 的四层归属。
+ * - 主应用内容（children）与已打开的 ComfyUI iframe 都**始终挂载**，
+ * 用 CSS 显隐切换，而不是条件卸载——这样切页签不会丢 workspace 的
+ * viewMode / 画布编辑态，ComfyUI 页面也不会因卸载而重载。
+ * - 主应用页签（id="main"）不可关闭；ComfyUI 页签可按需关闭。
+ * - 页签状态由 shell-tabs-store 管理（纯状态层），本组件只做渲染与
+ * 动作转发，符合规范 17 的四层归属。
  *
  * 样式说明：内容区高度为「窗口高 - 页签栏高」，主应用内部用 h-full 布局。
  */
@@ -70,8 +70,8 @@ function TabButton({
       aria-selected={active}
       tabIndex={0}
       onClick={() => onSelect(tab.id)}
-      /* Enter / Space 的键判据走 `~/components/ui/simple-key-handler`
-       *（规范 16 §16.2.4.57）：此前手写 `e.key === " "` 与 `"Enter"` 比，
+      /* Enter / Space 的键判据走`~/components/ui/simple-key-handler`
+       *（规范 16 §16.2.4.57）：此前手写`e.key ===""` 与`"Enter"` 比，
        * 键名靠猜、连发放行（按住空格会连切十几次）。 */
       {...simpleKeyHandler(["Space", "Enter"], () => onSelect(tab.id))}
       className={`group border-border-subtle flex h-full cursor-pointer items-center gap-2 border-r px-4 text-sm transition-colors ${
@@ -146,8 +146,8 @@ function TabBlockedNotice({
   reason: string;
   url?: string | null;
 }) {
-  /* 这一枚「复制地址」的文本就在旁边那行 `<code>` 里印着，失败时用户能直接
-   * 手动选中复制 —— 所以失败**显式静默**（规范 16 §16.2.4.43 的 `"silent"`），
+  /* 这一枚「复制地址」的文本就在旁边那行`<code>` 里印着，失败时用户能直接
+   * 手动选中复制 —— 所以失败**显式静默**（规范 16 §16.2.4.43 的`"silent"`），
    * 而成功亮一下「已复制」，让用户知道点中了。收口前两者都没有：点下去
    * 界面上什么都不变，成没成全靠猜。 */
   const copied = useFlashState();
@@ -157,7 +157,7 @@ function TabBlockedNotice({
   });
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
-      <div className="max-w-xl space-y-3 text-center">
+      <div className="max-w-xl gap-3 text-center">
         <p className="text-ink-bright text-base font-medium">
           无法在此页签中显示 {label}
         </p>
