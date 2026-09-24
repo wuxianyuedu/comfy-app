@@ -125,7 +125,11 @@ export function rowFragments(text: string): RowToken[] {
   return tokenizeRow(text);
 }
 
-/** 语义样式键 → Tailwind className（Design Token 之外的少量终端色，集中在此）。 */
+/** 语义样式键 → Tailwind className（Design Token 之外的少量终端色，集中在此）。
+ *  下面 `red/green/yellow/blue/magenta/cyan` + 各自 bright 变体的 palette 字面量
+ *  代表 **ANSI SGR 终端颜色身份**、不是主题状态色（§3.6.1 文档化例外），没有
+ *  对应语义 token，也不应被 token 化——所以整块走 P71 的 allow 标记。 */
+// p71-allow:start  ANSI SGR 终端 8 色是 §3.6.1 例外：颜色代表 terminal color identity、不是主题状态色
 export const TOKEN_CLASS: Record<AnsiStyleKey, string> = {
   bold: "font-semibold",
   dim: "opacity-60",
@@ -154,6 +158,7 @@ export const TOKEN_CLASS: Record<AnsiStyleKey, string> = {
   "cyan-bg": "bg-cyan-500/20",
   "white-bg": "bg-subtle",
 };
+// p71-allow:end
 
 /* ── 行内文本选区判定（「日志一直在动、选不中想复制的行」的另一半）────── */
 
