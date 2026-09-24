@@ -35,10 +35,10 @@ interface WorkflowLibraryListProps {
   /** 重试拉取（超时提示里的动作）。 */
   onRefresh?: () => void;
   /** 本地工作流目录侧的可读原因（没解析到根 / 根不可访问 / 目录里没有文件）；
-   *  非空时用它替换默认空态文案，说明「为什么是空」。 */
+   * 非空时用它替换默认空态文案，说明「为什么是空」。 */
   localRootsHint?: string | null;
   /** 拖入 JSON 导入：整片列表侧栏就是投放区，这里接管高亮与投放事件
-   *  （与导入面板共用同一个文件漏斗，见 useWorkflowImport）。 */
+   * （与导入面板共用同一个文件漏斗，见 useWorkflowImport）。 */
   dragActive?: boolean;
   onDragOver?: DragEventHandler<HTMLDivElement>;
   onDragEnter?: DragEventHandler<HTMLDivElement>;
@@ -47,7 +47,7 @@ interface WorkflowLibraryListProps {
   /** 文件入口（拖入）失败的可读原因。 */
   fileErr?: string | null;
   /** 单个待载入项的「载入中」标志（按 id 查表）：载入按钮据此禁用并改文案，
-   *  避免重复点击把同一份磁盘文件重复载入。 */
+   * 避免重复点击把同一份磁盘文件重复载入。 */
   pendingLoading?: Record<string, boolean>;
 }
 
@@ -55,9 +55,9 @@ interface WorkflowLibraryListProps {
  * 左侧工作流列表：搜索 + 可滚动条目。选中项高亮，右侧详情面板联动。
  *
  * 三态必须可区分（规范 10.5：空态要说清「为什么是空的」）：
- *   加载中 / 数据没回来 → 进度提示，绝不渲染成「未找到匹配的工作流」；
- *   拉取超时 → 提示「仍在加载」并说明可以做什么，不假装是空库；
- *   确实没有（且未筛选）→ 指引导入或配置本地目录。
+ * 加载中 / 数据没回来 → 进度提示，绝不渲染成「未找到匹配的工作流」；
+ * 拉取超时 → 提示「仍在加载」并说明可以做什么，不假装是空库；
+ * 确实没有（且未筛选）→ 指引导入或配置本地目录。
  */
 export function WorkflowLibraryList({
   workflows,
@@ -90,11 +90,11 @@ export function WorkflowLibraryList({
         "border-border-subtle bg-panel-deep flex h-full w-80 shrink-0 flex-col border-r",
         /* 拖入高亮用 outline：不参与布局，不会让列表在拖拽时抖一下。 */
         dragActive ? "outline-2 -outline-offset-2 outline-cyan-400/60" : "",
-      ].join(" ")}
+      ].join("")}
     >
       {/* 搜索栏。`shrink-0` 必须有：排查过的一个现场是搜索框连同下面的列表一起
-          纵向压缩 —— flex 列容器里 `p-3` 的固定块默认 `flex-shrink: 1`，
-          列表内容一多它就被压，输入框看着像「瘪了」。 */}
+ 纵向压缩 —— flex 列容器里`p-3` 的固定块默认`flex-shrink: 1`，
+ 列表内容一多它就被压，输入框看着像「瘪了」。 */}
       <div className="border-border-subtle shrink-0 border-b p-3">
         <div className="relative">
           <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
@@ -136,10 +136,11 @@ export function WorkflowLibraryList({
             title="工作流列表还没返回"
             description={
               <>
-                应用服务可能在编译或重启。可稍候重试；若持续如此，按{" "}
+                应用服务可能在编译或重启。可稍候重试；若持续如此，按{""}
                 <kbd className="border-border rounded border px-1 font-mono">
                   Ctrl+Shift+L
-                </kbd>{" "}
+                </kbd>
+                {""}
                 打开日志面板查看具体原因。
               </>
             }
@@ -166,7 +167,7 @@ export function WorkflowLibraryList({
             }
           />
         ) : (
-          <ul className="space-y-1">
+          <ul className="flex flex-col gap-1">
             {workflows.map((workflow) => (
               <WorkflowListItem
                 key={workflow.id}
@@ -182,12 +183,12 @@ export function WorkflowLibraryList({
         {pendingRows.length > 0 && (
           <div className="mt-3 mb-3 rounded-xl border border-dashed border-cyan-500/25 bg-cyan-500/[0.04] p-2.5">
             <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-cyan-700 dark:text-cyan-300/80">
-              {/* 状态点走 `ui/status-dot`（全库唯一实现，规范 16 §16.2.4.5）；
-                  `probing` 表达「还没载入、等待中」。 */}
+              {/* 状态点走`ui/status-dot`（全库唯一实现，规范 16 §16.2.4.5）；
+`probing` 表达「还没载入、等待中」。 */}
               <StatusDot state="probing" sizeClass="size-1.5" />
               未载入的本地工作流
             </p>
-            <ul className="space-y-1">
+            <ul className="flex flex-col gap-1">
               {pendingRows.map((pending) => {
                 const loadingPending = !!pendingLoading[pending.id];
                 /* 整行不可点：点击即载入会被误触（只想看看名字 / 选中某一行的
@@ -233,16 +234,16 @@ export function WorkflowLibraryList({
  * 列表项的名称最大显示宽度（px）。
  *
  * 侧栏是固定宽度（`w-80` = 320px，减去内边距与两侧 gap 后约 280px 可用），
- * 而工作流名常来自磁盘文件名 —— `22WorkflowsI2VSVI2_fastfidelityCAIoV88`
+ * 而工作流名常来自磁盘文件名 ——`22WorkflowsI2VSVI2_fastfidelityCAIoV88`
  * 这类可以长到 40+ 字符。名称不设上限时有两种坏法，两种都真发生过：
  *
- *   ① 名称吃掉整行宽度，右侧徽标被挤出侧栏，被根容器的 `overflow-hidden`
- *      裁掉（用户看到的是「徽标不见了」）；
- *   ② 名称在换行点折成两行，行高翻倍，一屏少看好几条。
+ * ① 名称吃掉整行宽度，右侧徽标被挤出侧栏，被根容器的`overflow-hidden`
+ * 裁掉（用户看到的是「徽标不见了」）；
+ * ② 名称在换行点折成两行，行高翻倍，一屏少看好几条。
  *
- * 因此给出显式上限：`truncate` + `max-w-[132px]` 把可截断的那块钉住，
- * 宽度压力由它承担，徽标一律 `shrink-0`（规范 03 §3.8.1：可截断的块要有
- * 贴着实测宽度的下限，按钮/徽标不许被压扁）。完整名称仍在 `title` 里。
+ * 因此给出显式上限：`truncate` +`max-w-[132px]` 把可截断的那块钉住，
+ * 宽度压力由它承担，徽标一律`shrink-0`（规范 03 §3.8.1：可截断的块要有
+ * 贴着实测宽度的下限，按钮/徽标不许被压扁）。完整名称仍在`title` 里。
  */
 const NAME_MAX_WIDTH_CLASS = "max-w-[132px]";
 
@@ -275,7 +276,7 @@ function WorkflowListItem({
           selected
             ? "border-violet-500/40 bg-linear-to-br from-violet-500/15 to-fuchsia-500/10 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.15)]"
             : "bg-subtle hover:border-border hover:bg-subtle border-transparent",
-        ].join(" ")}
+        ].join("")}
       >
         {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
         <div className="flex min-w-0 items-center gap-1.5">
@@ -284,7 +285,7 @@ function WorkflowListItem({
               NAME_MAX_WIDTH_CLASS,
               "shrink truncate text-[12px] leading-tight font-medium",
               isTech ? "text-ink-strong font-mono" : "text-ink-bright",
-            ].join(" ")}
+            ].join("")}
             title={workflow.name}
           >
             {workflow.name}
@@ -298,9 +299,9 @@ function WorkflowListItem({
             </ListBadge>
           )}
           {/* 对外参数：状态收成一枚 1 字标记（✓ / ！），完整说明在 tooltip 里。
-              此前这里是一整块 `对外参数未配置` 文字，与名称争夺同一行宽度，
-              是列表超框的主因。颜色 + 形状都表达「配好了没有」，所以不必靠
-              文字长度来承载（`title` 里给全口径：已配置几个口 / 缺哪些口）。 */}
+ 此前这里是一整块`对外参数未配置` 文字，与名称争夺同一行宽度，
+ 是列表超框的主因。颜色 + 形状都表达「配好了没有」，所以不必靠
+ 文字长度来承载（`title` 里给全口径：已配置几个口 / 缺哪些口）。 */}
           {usable && (
             <ListBadge
               tone={encapsulation.ready ? "success" : "warning"}

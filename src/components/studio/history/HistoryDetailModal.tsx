@@ -28,11 +28,11 @@ interface HistoryDetailModalProps {
   detailId: string | null;
   detail: TaskDetail | null;
   detailLoading: boolean;
-  /** 本任务所用工作流的 IO 定义：参数可读名从它的 `label` 查（任务行里只存了
-   *  pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
+  /** 本任务所用工作流的 IO 定义：参数可读名从它的`label` 查（任务行里只存了
+   * pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
   workflowIO: WorkflowIOMap;
   /** 模式契约注册表（只含用户改过的模式）：工坊参数按「任务模式 + 生效契约」枚举。
-   *  为 null 时回落内置默认契约。 */
+   * 为 null 时回落内置默认契约。 */
   modeContracts?: readonly ModeContract[] | null;
   onClose: () => void;
 }
@@ -66,7 +66,7 @@ export function HistoryDetailModal({
   // 局部 const 让闭包 / IIFE 内的空值窄化在 TS 中稳定成立。
   const current = detail;
   /* 按来源分块：工坊发起的任务多摆一块「工坊参数」（工坊对外值），工作流直接
-   * 发起的任务只有「工作流参数」—— 判据见 `deriveTaskOrigin`。 */
+   * 发起的任务只有「工作流参数」—— 判据见`deriveTaskOrigin`。 */
   const origin = deriveTaskOrigin(current);
   const workshopParams =
     origin === "workshop"
@@ -95,8 +95,8 @@ export function HistoryDetailModal({
         ? "执行时自动捕获的独立快照"
         : "磁盘回退快照";
 
-  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩 +
-     手写 `onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
+  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
+ 手写`onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
@@ -145,16 +145,18 @@ export function HistoryDetailModal({
                     <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-amber-700 dark:text-amber-300">
                       未检测到 ComfyApp
                       助手，浏览器没有弹出「打开外部应用」确认框。
-                      请双击运行项目内{" "}
+                      请双击运行项目内{""}
                       <code className="text-amber-700 dark:text-amber-300">
                         scripts\install-comfyapp-helper.ps1
-                      </code>{" "}
+                      </code>
+                      {""}
                       注册
                       <code className="text-amber-700 dark:text-amber-300">
-                        {" "}
+                        {""}
                         comfyapp://
-                      </code>{" "}
-                      协议（仅本机、无需管理员）， 或直接{" "}
+                      </code>
+                      {""}
+                      协议（仅本机、无需管理员）， 或直接{""}
                       <a
                         href="/api/helper/install"
                         className="underline hover:text-amber-700 dark:text-amber-300"
@@ -221,7 +223,7 @@ export function HistoryDetailModal({
             {detailLoading ? (
               <p className="text-ink-muted text-sm">加载中…</p>
             ) : current ? (
-              <div className="space-y-4">
+              <div className="gap-4">
                 {current.images?.length > 0 ? (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     {current.images.map((img, index) => (
@@ -230,9 +232,9 @@ export function HistoryDetailModal({
                         className="group border-border-subtle relative overflow-hidden rounded-xl border"
                       >
                         {/* 任务详情里的每一张产物都可以点开看大图（原始大小 /
-                            缩放 / 拖拽平移）—— 缩略图是方形的 `object-cover`，
-                            看不到整张图，此前也没有任何放大入口。视频仍按视频
-                            渲染（`ViewableImage` 的查看器只服务图片）。 */}
+ 缩放 / 拖拽平移）—— 缩略图是方形的`object-cover`，
+ 看不到整张图，此前也没有任何放大入口。视频仍按视频
+ 渲染（`ViewableImage` 的查看器只服务图片）。 */}
                         {isVideo(img.localPath) ? (
                           <MediaThumbnail
                             src={img.localPath}
@@ -264,9 +266,9 @@ export function HistoryDetailModal({
                 )}
 
                 {/* 提示词与「生成参数」（种子 / 步数 / CFG）都走下面的参数块：
-                    提示词本来就是工作流的 IO 参数（工坊发起时是「工坊参数」），
-                    种子这类也一样 —— 单独再摆一份只会与参数表重复，而那份卡片
-                    还会把种子从参数表里过滤掉（用户实测：「参数乱糟糟的」）。 */}
+ 提示词本来就是工作流的 IO 参数（工坊发起时是「工坊参数」），
+ 种子这类也一样 —— 单独再摆一份只会与参数表重复，而那份卡片
+ 还会把种子从参数表里过滤掉（用户实测：「参数乱糟糟的」）。 */}
 
                 {current.error && (
                   <div className="rounded-lg bg-red-500/10 p-2.5 text-xs text-red-700 dark:text-red-300">
@@ -275,8 +277,8 @@ export function HistoryDetailModal({
                 )}
 
                 {/* 工坊参数：工坊对外值（提示词 / 反向 / 首尾帧 / 帧数）单独
-                    摆一块 —— 它们不是工作流的 IO 端口，混在同一张表里会让
-                    「哪些是工坊给的、哪些是工作流收的」分不清。 */}
+ 摆一块 —— 它们不是工作流的 IO 端口，混在同一张表里会让
+ 「哪些是工坊给的、哪些是工作流收的」分不清。 */}
                 {workshopParams.length > 0 && (
                   <div>
                     <p className="text-ink-faint mb-1 text-xs font-semibold">
@@ -315,11 +317,11 @@ export function HistoryDetailModal({
                         items={paramRows.map((row) => ({
                           id: row.id,
                           /* 显示工作流 IO 的作者标签（「宽高比」而不是
-                             `aspect_ratio`）；查不到标签时它自己就是 pin 名。 */
+`aspect_ratio`）；查不到标签时它自己就是 pin 名。 */
                           key: row.label,
                           value: kvValueText(row.value),
                           /* 悬停补上原始 pin 名：排查问题 / 对 ComfyUI 报错时
-                             用的是程序名，作者改的名字对不上。 */
+ 用的是程序名，作者改的名字对不上。 */
                           title: `${row.label}（${row.name}）`,
                         }))}
                       />

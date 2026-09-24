@@ -30,7 +30,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：提交失败 / 提前返回的分支
-   * 此前各写一次 `setLoading(false)`，漏一处按钮就永远停在「处理中…」。 */
+   * 此前各写一次`setLoading(false)`，漏一处按钮就永远停在「处理中…」。 */
   const submitBusy = useBusyAction();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -65,22 +65,22 @@ export default function LoginPage() {
         }
 
         /* 读地址栏里的回调目标：`useSearchParams()` 在提交动作里够不到
-         * （它是渲染期契约），这里手上就是一句查询串，走 `~/lib/query-string`
+         * （它是渲染期契约），这里手上就是一句查询串，走`~/lib/query-string`
          * 的读取出口 —— 「键不存在」与「键为空串」分得开，坏转义不抛。 */
         /* 空串 / 全空白都回落默认目标（`callbackUrl=` 是「没指定」而不是
-         * 「跳到首页」）—— 所以先归一，再判空，最后才 `??`。 */
+         * 「跳到首页」）—— 所以先归一，再判空，最后才`??`。 */
         const requested = readQueryParam(
           window.location.search,
           "callbackUrl",
         )?.trim();
-        /* `requested` 为空串 / 全空白时回落默认目标（`callbackUrl=` 是
-         * 「没指定」而不是「跳到首页」）—— 空串归一后走 `??` 读不出差别，
-         * 所以显式用 `||` 的语义写在这一行，并在这里说明理由。 */
+        /*`requested` 为空串 / 全空白时回落默认目标（`callbackUrl=` 是
+         * 「没指定」而不是「跳到首页」）—— 空串归一后走`??` 读不出差别，
+         * 所以显式用`||` 的语义写在这一行，并在这里说明理由。 */
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串与全空白都要回落默认目标
         const callback = requested || "/workspace";
         router.push(callback);
         router.refresh();
-        /* `run` 返回动作的返回值，这里不读；异常不往外抛（见下）。 */
+        /*`run` 返回动作的返回值，这里不读；异常不往外抛（见下）。 */
       })
       .catch(() => {
         setError("网络错误，请稍后重试");
@@ -96,8 +96,8 @@ export default function LoginPage() {
   return (
     <div className="bg-bg relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
       {/* Aurora glows：复用 AuroraGlow 原语（同一个光晕在四处各抄一份，
-          色值还各不相同 —— 见规范 03 §3.6.2）。浅色下 opacity 大幅调低、
-          不用 `mix-blend-screen`（screen 在白底上什么也不显示）。 */}
+ 色值还各不相同 —— 见规范 03 §3.6.2）。浅色下 opacity 大幅调低、
+ 不用`mix-blend-screen`（screen 在白底上什么也不显示）。 */}
       <AuroraGlow
         tone="violet"
         alpha={0.45}
@@ -183,7 +183,7 @@ export default function LoginPage() {
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {mode === "register" && (
             <Field
               label="昵称（可选）"

@@ -22,7 +22,7 @@ import { Button } from "~/components/ui/button";
 interface Props {
   shots: Shot[];
   /** 选定的视频工作流 id：本地通道的唯一可执行来源（内置模板已移除）。
-   *  按封装口径暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
+   * 按封装口径暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
   workflowId: string;
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
@@ -96,8 +96,8 @@ export function VideoStudio({
 
   /** 等一个本地 ComfyUI 任务；SSE 流落定后 resolve。
    *
-   *  与「安全阀」赛跑的那一半交给 `withTimeoutResult`：超时给兜底（不抛），
-   *  `onTimeout` 里退订 —— 放弃等待之后流还挂着才是真问题。 */
+   * 与「安全阀」赛跑的那一半交给`withTimeoutResult`：超时给兜底（不抛），
+   *`onTimeout` 里退订 —— 放弃等待之后流还挂着才是真问题。 */
   function runLocalTask(shotId: string, taskId: string): Promise<void> {
     /* 订阅句柄 —— watchTask 返回前先给一个空实现，settle 路径上一定已赋值。 */
     let close: () => void = noop;
@@ -227,7 +227,7 @@ export function VideoStudio({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <ChannelSwitch
         channel={channel}
         onChannelChange={setChannel}
@@ -249,7 +249,7 @@ export function VideoStudio({
           镜头时长与运动强度会自动带入本阶段。
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {shots.map((shot) => (
             <ShotCard
               key={shot.id}

@@ -4,13 +4,13 @@
  * GlobalStepLogPanel —— 全局执行步骤日志面板
  *
  * 设计决策（Why 弹窗而非底部抽屉）：
- *   1. 底部抽屉会压缩画布可用空间；
- *   2. 与右下 MiniMap、底部状态栏容易重叠。
+ * 1. 底部抽屉会压缩画布可用空间；
+ * 2. 与右下 MiniMap、底部状态栏容易重叠。
  * 故采用「应用日志」同款的居中弹窗。
  *
  * 交互约定：
- *   - 「调试模式」开关仅控制入口按钮显隐；
- *   - 弹窗打开后不受该开关影响，避免操作中突然消失。
+ * - 「调试模式」开关仅控制入口按钮显隐；
+ * - 弹窗打开后不受该开关影响，避免操作中突然消失。
  */
 
 import { formatClock } from "~/lib/time-format";
@@ -46,8 +46,8 @@ import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { displayValue } from "~/lib/display-value";
 
 /** /api/tasks/[id]/stream 的 SSE 帧的运行时形状 —— 只含
- *  本面板消费的字段。`JSON.parse` 产出 `unknown`；下面的守卫
- *  逐个收窄字段后再用。 */
+ * 本面板消费的字段。`JSON.parse` 产出`unknown`；下面的守卫
+ * 逐个收窄字段后再用。 */
 interface SseFrame {
   type?: unknown;
   entry?: unknown;
@@ -73,13 +73,13 @@ const LEVEL_STYLES: Record<Level, string> = {
 
 /** 把「失败原因」补写为一条 error 日志行（横幅之外）。
  *
- *  SSE 的 `state` / `error` 帧只带一个原因字符串、可能不带对应 `log` 帧
- *  （典型：dev server 重启后由 reaper 收口、或 DB 轮询补发的终态）。此前
- *  面板只把这个原因渲染成顶部横幅，用户按「错误 / 警告」筛选或回放时间线时
- *  根本看不到失败原因（ISSUE #378）。
+ * SSE 的`state` /`error` 帧只带一个原因字符串、可能不带对应`log` 帧
+ * （典型：dev server 重启后由 reaper 收口、或 DB 轮询补发的终态）。此前
+ * 面板只把这个原因渲染成顶部横幅，用户按「错误 / 警告」筛选或回放时间线时
+ * 根本看不到失败原因（ISSUE #378）。
  *
- *  纯函数 + 显式 next：去重判断在 updater 之外完成，避免在 setState 的
- *  updater 里做副作用（StrictMode 下 updater 可能被调用两次）。 */
+ * 纯函数 + 显式 next：去重判断在 updater 之外完成，避免在 setState 的
+ * updater 里做副作用（StrictMode 下 updater 可能被调用两次）。 */
 function withFailureLogLine(
   prev: StepLogEntry[],
   reason: string,
@@ -145,8 +145,8 @@ function fmtTime(t: number): string {
 }
 
 /* 执行日志弹窗的宽度档：默认 5xl —— 行是「时刻 + 级别 + 正文」三列，比应用日志
- * 少一列；加宽档统一贴视线两边。写 `w-*` 而不是 `max-w-*` 的理由见
- * `~/components/ui/dialog-width` 的文件头（ISSUE #720）。 */
+ * 少一列；加宽档统一贴视线两边。写`w-*` 而不是`max-w-*` 的理由见
+ *`~/components/ui/dialog-width` 的文件头（ISSUE #720）。 */
 const EXEC_LOG_WIDTH = modalWidth("w-5xl");
 
 export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
@@ -170,8 +170,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const [connected, setConnected] = useState(false);
   /* 过滤改为单选（与应用日志同款交互），默认「全部」。 */
   const [filter, setFilter] = useState<Level | "all">("all");
-  /* 加宽档与它的记忆收在 `~/components/ui/wide-panel`（规范 16 §16.2.4.18）：
-   * 默认档见 `EXEC_LOG_WIDTH`，加宽档贴视线两边 —— 与 `LogPanel` 此前是
+  /* 加宽档与它的记忆收在`~/components/ui/wide-panel`（规范 16 §16.2.4.18）：
+   * 默认档见`EXEC_LOG_WIDTH`，加宽档贴视线两边 —— 与`LogPanel` 此前是
    * 两份同形实现，且都没有持久化。 */
   const panel = useWidePanel("exec-log", EXEC_LOG_WIDTH);
   const [autoscroll, setAutoscroll] = useState(true);
@@ -262,7 +262,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             if (typeof msg.error === "string") {
               setError(msg.error);
               /* 失败原因同时补一条 error 日志行：横幅只在顶部显示，用户
-               *  按「错误 / 警告」筛选或回放时间线时看不到它（ISSUE #378）。 */
+               * 按「错误 / 警告」筛选或回放时间线时看不到它（ISSUE #378）。 */
               if (st === "FAILED" || st === "ERROR" || st === "CANCELLED") {
                 appendFailureLogLine(tid, msg.error, setLogs);
               }
@@ -284,7 +284,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
            * 现场（ISSUE #733）：任务被后端判终态（如 CANCELLED）后，迟到的
            * 「完成」帧仍可能到达；旧实现把它当权威，直接显示「完成」并关流，
            * 用户看到的是一个已经死掉的任务显示成功。反过来，帧里没有
-           * `status` 字段时旧实现还会把它落成 FAILED —— 成功也被显示成失败。
+           *`status` 字段时旧实现还会把它落成 FAILED —— 成功也被显示成失败。
            *
            * 因此这里改为：终态帧只作为**触发器**，去向 DB 要权威结论；DB
            * 读不到时才退回帧内信息。 */
@@ -293,7 +293,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
           es.close();
           esRef.current = null;
           void (async () => {
-            /* 网络层收在 `~/lib/task-cancel-client`（视图零 IO，规范 17）。 */
+            /* 网络层收在`~/lib/task-cancel-client`（视图零 IO，规范 17）。 */
             const snap = await fetchTaskStatus(tid);
             const finalStatus = snap.status;
             const finalError = snap.error;
@@ -325,8 +325,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   }, [taskId]);
 
   /* 20 秒无活动的「卡住」提示：每 10s 检查一次（规范 16 §16.2.4.15）。
-   * `useInterval` 把回调放 ref，所以 `status` / `setLogs` 都是新鲜的；
-   * `ms: taskId ? 10000 : null` 等价于原来「没有 taskId 就不起定时器」。 */
+   *`useInterval` 把回调放 ref，所以`status` /`setLogs` 都是新鲜的；
+   *`ms: taskId ? 10000 : null` 等价于原来「没有 taskId 就不起定时器」。 */
   useInterval(
     () => {
       const idle = Date.now() - lastActivityRef.current;
@@ -355,8 +355,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   );
 
   /* 自动滚到底部：贴底与「用户有没有接管滚动」的判据收在
-   * `ui/use-scroll-follow`（规范 16 §16.2.4.24）—— 收口前这里是手写的
-   * `scrollTop = scrollHeight`，且**用户上滚不会退出跟随**（会被按回底部，
+   *`ui/use-scroll-follow`（规范 16 §16.2.4.24）—— 收口前这里是手写的
+   *`scrollTop = scrollHeight`，且**用户上滚不会退出跟随**（会被按回底部，
    * 读不到上面的步骤）。checkbox 保留为「跟随」的显式开关。 */
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const scroller = useScrollFollow({
@@ -393,14 +393,14 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   if (!debugMode && !open) return null;
 
   /* 弹窗里的行数是一处界面预算，不是「倒数 300 条」这段算式各写一遍 ——
-   * 尾部窗口收在 `~/lib/page-window`（规范 16 §16.2.4.67）。 */
+   * 尾部窗口收在`~/lib/page-window`（规范 16 §16.2.4.67）。 */
   const visibleAll = tailWindow(logs, LOG_MODAL_MAX_ROWS);
   const visible =
     filter === "all"
       ? visibleAll
       : visibleAll.filter((log) => log.level === filter);
   const valErrs = validationErrors ?? [];
-  /* 文案在这里（运行中带实时百分比，是业务信息），配色走 `ui/status-badge`
+  /* 文案在这里（运行中带实时百分比，是业务信息），配色走`ui/status-badge`
    * 的同一份状态 → 语义 token 映射（规范 16 §16.2.4.5）。 */
   const statusLabel =
     status === "SUCCEEDED"
@@ -444,8 +444,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         )}
       </Button>
 
-      {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩 +
-          手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */}
+      {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
+ 手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */}
       <Dialog open={open} onOpenChange={(next) => setOpen(next)}>
         <DialogContent
           showCloseButton={false}
@@ -523,9 +523,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                         <option
                           key={id}
                           value={id}
-                          title={titleParts.join(" · ")}
+                          title={titleParts.join(" ·")}
                         >
-                          {displayParts.join(" · ")}
+                          {displayParts.join(" ·")}
                         </option>
                       );
                     })}
@@ -617,7 +617,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               )}
 
               {!valErrs.length && error && (
-                <div className="mb-2 space-y-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-700/90 dark:text-red-300/90">
+                <div className="mb-2 flex flex-col gap-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-700/90 dark:text-red-300/90">
                   <div className="break-words whitespace-pre-wrap">{error}</div>
                 </div>
               )}

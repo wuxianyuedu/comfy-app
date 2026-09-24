@@ -5,7 +5,7 @@
  *
  * 只维护模型清单：按用途（文本 / 图片 / 视频）分组展示，行内提供
  * 「测试连接」「测试生成」「编辑」「移除」。列表与动作来自 controller，
- * 弹窗交互状态来自 `useRemoteModelDialogs`（第②层），两个弹窗各自成组件。
+ * 弹窗交互状态来自`useRemoteModelDialogs`（第②层），两个弹窗各自成组件。
  */
 
 import type { RemoteModelKind } from "~/lib/llm/types";
@@ -47,13 +47,13 @@ export function LlmRemoteSection({
           </Button>
         </div>
         {entries.length > 0 ? (
-          <div className="space-y-1.5">
+          <div className="flex flex-col gap-1.5">
             {entries.map((entry) => {
               const thisProbe =
                 d.rowProbe?.name === entry.name ? d.rowProbe : null;
               const rowMsg = thisProbe ? thisProbe.msg : null;
               return (
-                <div key={entry.name} className="space-y-1">
+                <div key={entry.name} className="flex-col gap-1">
                   <div className="border-border flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                     <span className="min-w-0 flex-1 truncate">
                       <span className="text-ink">{entry.name}</span>
@@ -133,7 +133,7 @@ export function LlmRemoteSection({
     <>
       <Card title="远程模型（OpenAI 兼容）">
         {/* 模型按用途分组：文本（对话）/ 图片 / 视频；kind 缺省的
-                历史条目按文本模型归组，添加时按组预选用途 */}
+ 历史条目按文本模型归组，添加时按组预选用途 */}
         {remoteModelGroup(
           "chat",
           "文本模型",
@@ -160,12 +160,12 @@ export function LlmRemoteSection({
       </Card>
 
       {/* 「添加 / 编辑模型」弹窗：接口地址 / API Key 可留空回落全局；
-          编辑态密钥「留空不改」，可显式清除。测试连接成功后顺带展示
-          服务端模型清单供点选。 */}
+ 编辑态密钥「留空不改」，可显式清除。测试连接成功后顺带展示
+ 服务端模型清单供点选。 */}
       {d.dialog && <RemoteModelDialog c={c} d={d} dialog={d.dialog} />}
 
       {/* 「实际使用」测试弹窗：按用途真实调用一次（chat / 生图 / 生视频），
-          路径 / 提示词 / 尺寸 / 额外参数均可自定义输入。 */}
+ 路径 / 提示词 / 尺寸 / 额外参数均可自定义输入。 */}
       {d.usageTest && <UsageTestDialog c={c} d={d} usageTest={d.usageTest} />}
     </>
   );

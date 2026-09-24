@@ -5,8 +5,8 @@ import React, { useEffect, useRef } from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 /* 直接引基础件与结果卡（不再经 CanvasNode 目录 barrel）：barrel 会 re-export
- * `CanvasNode`，而 CanvasNode.tsx 又渲染本组件 —— 经 barrel 就成了
- * `CanvasNode → ImageGenerationPanel → index → CanvasNode` 的循环（规范 12.7）。 */
+ *`CanvasNode`，而 CanvasNode.tsx 又渲染本组件 —— 经 barrel 就成了
+ *`CanvasNode → ImageGenerationPanel → index → CanvasNode` 的循环（规范 12.7）。 */
 import { Button } from "~/components/ui/button";
 import { Field, btnCls } from "./CanvasNode/CanvasNodePrimitives";
 import { ResultCard } from "./CanvasNode/ResultCard";
@@ -78,13 +78,13 @@ export function ImageGenerationPanel({
    * 把当前任务交给全局面板，由其统一订阅 SSE、展示日志与结构化校验错误。 */
 
   /* stuck-task cancel affordance —— 按钮的
-   *  「取消中…」态与失败回滚都在 useCancelTask 里（视图零 IO）。 */
+   * 「取消中…」态与失败回滚都在 useCancelTask 里（视图零 IO）。 */
   const { cancelling, cancel: onCancel } = useCancelTask({
     taskId: d.taskId,
     onFailed: (reason) => patchRef.current({ status: "error", error: reason }),
   });
 
-  // 把 `patch` 放在 ref 里，好让取消处理器（由异步
+  // 把`patch` 放在 ref 里，好让取消处理器（由异步
   // 回调触发）总能读到最新的值，而不必被重建。
   const patchRef = useRef(patch);
   // eslint-disable-next-line react-hooks/refs -- 渲染期把最新 props 写入 ref，供异步取消回调读取最新值（刻意模式）
@@ -100,15 +100,15 @@ export function ImageGenerationPanel({
   const isVideo = kind === "video";
   const typeList = isVideo ? VIDEO_WORKFLOW_TYPES : IMAGE_WORKFLOW_TYPES;
   /* 启发式兜底分类 — 早期导入的旧
-   *  工作流 taskType 可能为空或误判，导致「文生图」筛选下混入 I2V
-   *  等其他类型。这里按 wf.name 后缀关键字补一个最可能的类型，留空
-   *  让上层 drop。
+   * 工作流 taskType 可能为空或误判，导致「文生图」筛选下混入 I2V
+   * 等其他类型。这里按 wf.name 后缀关键字补一个最可能的类型，留空
+   * 让上层 drop。
    * 扩 Chinese 关键字（"图生视频"/"文生视频"/
-   *  "视频"）—— 全中文命名（无 I2V/T2V 等英文 marker）也能识别。 */
+   *"视频"）—— 全中文命名（无 I2V/T2V 等英文 marker）也能识别。 */
   const inferTypeByName = (rawName: string): string => {
     const up = upperToken(rawName);
-    // ── VIDEO 类（更具体优先；Chinese "图生视频" 出现在 I2V 之前，
-    //    因为中文 "图生视频" 后面可能不带 "I2V" 字样）
+    // ── VIDEO 类（更具体优先；Chinese"图生视频" 出现在 I2V 之前，
+    // 因为中文"图生视频" 后面可能不带"I2V" 字样）
     if (/图生视频|IMG2VIDEO/.test(rawName)) return "I2V";
     if (/文生视频|TXT2VIDEO/.test(rawName)) return "T2V";
     if (/首尾帧视频|FLFVIDEO|FLF2V|FL2V/.test(up)) return "FLF2V";
@@ -133,8 +133,8 @@ export function ImageGenerationPanel({
     return "";
   };
   /* name 推断优先于 DB。
-   *  此前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
-   *  误判为 T2I 落库；name 现在能正确识别为 I2V，必须以 name 为准避免泄漏。 */
+   * 此前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
+   * 误判为 T2I 落库；name 现在能正确识别为 I2V，必须以 name 为准避免泄漏。 */
   const effectiveTaskType = (w: {
     taskType?: string | null;
     name?: string | null;
@@ -155,7 +155,7 @@ export function ImageGenerationPanel({
   );
   const genTag = d.genModelTag ?? "";
   /* 模型 dropdown 列表只受「类型」影响，不受当前
-   *  已选 genModelTag 影响 —— 否则选了 z-Anime 后下拉只剩一项。 */
+   * 已选 genModelTag 影响 —— 否则选了 z-Anime 后下拉只剩一项。 */
   const typeFilteredWorkflows = wfList.filter(
     (workflow) => effectiveTaskType(workflow) === d.mode,
   );
@@ -164,7 +164,7 @@ export function ImageGenerationPanel({
     genTag ? (workflow.modelTags ?? []).includes(genTag) : true,
   );
   /* 模型 dropdown 按当前选中类型过滤 —
-   *  源必须是 typeFilteredWorkflows（与 genTag 解耦）。 */
+   * 源必须是 typeFilteredWorkflows（与 genTag 解耦）。 */
   const availableModelTags = new Set<string>();
   for (const w of typeFilteredWorkflows) {
     for (const tag of w.modelTags ?? []) {
@@ -180,7 +180,7 @@ export function ImageGenerationPanel({
     seededFor.current = null;
     setWfModes(null);
     /* 切类型时若当前模型标签在新类型下没有工作流
-     *  也清掉，避免 SelectMenu 残留「幽灵选项」。如仍匹配则保留。 */
+     * 也清掉，避免 SelectMenu 残留「幽灵选项」。如仍匹配则保留。 */
     const newTypeWfs = wfList.filter(
       (wfList) => effectiveTaskType(wfList) === code,
     );
@@ -253,7 +253,7 @@ export function ImageGenerationPanel({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       {/* 生成结果预览（image/video 顶部常驻；picture 由节点主体承载，不重复渲染） */}
       {kind !== "picture" && d.resultPath ? (
         <ResultCard
@@ -289,8 +289,8 @@ export function ImageGenerationPanel({
       {typeKnown ? (
         <>
           {/* 步骤 2：模型（按模型标签，与 workflow 筛选同源；空值 = 全部）
-              R-ardot89: 只显示当前 type 下有工作流的模型标签，避免「文生图」
-              下出现 DaSiwaWan22 这种 video 模型。 */}
+ R-ardot89: 只显示当前 type 下有工作流的模型标签，避免「文生图」
+ 下出现 DaSiwaWan22 这种 video 模型。 */}
           <Field label="模型">
             {modelTagOptions.length ? (
               <SelectMenu
@@ -385,14 +385,14 @@ export function ImageGenerationPanel({
                   : "▶ 用此工作流生成"}
             </Button>
             {/* 卡住任务的逃生通道。
-             *  当 runner 的 raw 路径把 `s.active` 占着不放时，
-             *  图片节点曾永远卡在「生成中…」（早前的修复
-             *  堵上了泄漏，但更早的在途任务仍靠
-             *  这个按钮恢复）。调用 POST /api/tasks/{id}/cancel，
-             *  它把 DB 行标为 CANCELLED + 调
-             *  runner.cancelTask() 释放活跃槽位。
-             *  SSE `error` 事件会在约 100ms 内跟上，并经处理
-             *  普通失败的同一条路径把 `d.status` patch 成 "error"。 */}
+             * 当 runner 的 raw 路径把`s.active` 占着不放时，
+             * 图片节点曾永远卡在「生成中…」（早前的修复
+             * 堵上了泄漏，但更早的在途任务仍靠
+             * 这个按钮恢复）。调用 POST /api/tasks/{id}/cancel，
+             * 它把 DB 行标为 CANCELLED + 调
+             * runner.cancelTask() 释放活跃槽位。
+             * SSE`error` 事件会在约 100ms 内跟上，并经处理
+             * 普通失败的同一条路径把`d.status` patch 成"error"。 */}
             {d.status === "running" && d.taskId ? (
               <Button
                 variant="outline"

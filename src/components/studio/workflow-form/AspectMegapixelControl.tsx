@@ -1,22 +1,22 @@
 "use client";
 /* 尺寸组合控件之一：宽高比 + 百万像素 (+ 倍数) 形态（ResolutionSelector 类节点）。
  *
- * 这类节点不暴露 width/height，只暴露 `aspect_ratio`（COMBO，值是形如
- * "16:9 (Widescreen)" 的标签）+ `megapixels`（FLOAT，1 ≈ 1M 总像素），
+ * 这类节点不暴露 width/height，只暴露`aspect_ratio`（COMBO，值是形如
+ *"16:9 (Widescreen)" 的标签）+`megapixels`（FLOAT，1 ≈ 1M 总像素），
  * 有的话再加一个宽高对齐倍数端口。因此没有宽高可推算，弹层把值直接写到这几个
  * widget 上。
  *
  * 「像素」一栏同时给两类档位（用户口径）：
- *   · 「分辨率」（1k/2k/4k）：按场景尺寸表算出宽高，再唯一解地换算成
- *     「百万像素 + 倍数」写下去；
- *   · 「百万像素」（1M/2M/4M）：直接写该档位的总像素量，倍数保持不变。
- * `megapixels` 是 FLOAT（连续量），因此百万像素那一组下面还有一条「自定义」
+ * · 「分辨率」（1k/2k/4k）：按场景尺寸表算出宽高，再唯一解地换算成
+ * 「百万像素 + 倍数」写下去；
+ * · 「百万像素」（1M/2M/4M）：直接写该档位的总像素量，倍数保持不变。
+ *`megapixels` 是 FLOAT（连续量），因此百万像素那一组下面还有一条「自定义」
  * 步进器（`MegapixelStepper`）—— 档位之外能填 2.5 这类任意值。
  *
- * ComfyUI 可达时，精选针脚带 `options`，我们
+ * ComfyUI 可达时，精选针脚带`options`，我们
  * 原样渲染它们（高亮仍有效，因为我们从
  * 每个选项串里解析出比例）。不可达时（存储的 IO 表里缺 type/options）
- * 回落到内置的 `ASPECT_RATIO_LABEL_PRESETS`。 */
+ * 回落到内置的`ASPECT_RATIO_LABEL_PRESETS`。 */
 
 import { useCallback, useMemo, useState } from "react";
 
@@ -89,7 +89,7 @@ export function AspectMegapixelControl({
 
   const rawAspect = values[aspect.ioKey];
   /* 只有基本类型才安全 stringify —— 对象值会渲染成
-   *  "[object Object]" 并破坏下面的预设反检测。 */
+   *"[object Object]" 并破坏下面的预设反检测。 */
   const currentAspect =
     typeof rawAspect === "string"
       ? rawAspect
@@ -145,10 +145,10 @@ export function AspectMegapixelControl({
     [activeAspect, currentAspect],
   );
 
-  /** 写回 `aspect_ratio` 时用的值：选中的 → 节点当前值 → 第一个预设。
+  /** 写回`aspect_ratio` 时用的值：选中的 → 节点当前值 → 第一个预设。
    *
-   *  三个写入口（比例 / 像素 / 倍数 / 自定义百万像素）都要它，各写一遍会分叉
-   *  （任一处漏了末级兜底，用户没选过比例时就会被写成空串，节点静默清空）。 */
+   * 三个写入口（比例 / 像素 / 倍数 / 自定义百万像素）都要它，各写一遍会分叉
+   * （任一处漏了末级兜底，用户没选过比例时就会被写成空串，节点静默清空）。 */
   const aspectValue = useMemo(
     () =>
       activeAspect?.value ??
@@ -158,9 +158,9 @@ export function AspectMegapixelControl({
   );
 
   /* ── 倍数段：像素倍数（对齐网格），跟比例 / 像素并列写进同一个 popover ──
-   *  语义是「宽高像素取该值的倍数」（如 8 → 尺寸是 8 的倍数），不是缩放
-   *  系数。候选项优先用工作流自己的 options，否则给 8/16/32/64
-   *  （与尺寸表配置里的倍数候选同一份）。当前值不在候选里时动态补上。 */
+   * 语义是「宽高像素取该值的倍数」（如 8 → 尺寸是 8 的倍数），不是缩放
+   * 系数。候选项优先用工作流自己的 options，否则给 8/16/32/64
+   * （与尺寸表配置里的倍数候选同一份）。当前值不在候选里时动态补上。 */
   const currentMultiple = useMemo(() => {
     if (!multiple) return DEFAULT_ALIGN_MULTIPLE;
     const raw = values[multiple.ioKey];
@@ -283,7 +283,7 @@ export function AspectMegapixelControl({
           apply(aspectValue, preset.megapixels, preset.multiple);
         },
         /* 百万像素在端口上是 FLOAT（连续量），档位只是常用值 —— 档位之外再给一个
-         *  能填任意值的步进器（挨着「百万像素」那一行渲染）。 */
+         * 能填任意值的步进器（挨着「百万像素」那一行渲染）。 */
         extra: (
           <MegapixelStepper
             value={currentMp}
@@ -344,7 +344,7 @@ export function AspectMegapixelControl({
   }, [mpLabel, scene, activeRatio, table]);
 
   const footer = (
-    <div className="space-y-1.5">
+    <div className="flex flex-col gap-1.5">
       <SizeTableFooter
         scene={scene}
         onOpen={() => setTableOpen(true)}
@@ -360,7 +360,7 @@ export function AspectMegapixelControl({
   );
 
   return (
-    <div className="space-y-2.5">
+    <div className="flex-col gap-2.5">
       <div
         className={
           narrow
@@ -370,11 +370,11 @@ export function AspectMegapixelControl({
       >
         {narrow ? (
           /* 窄版（画布节点 / 库内）：组合控件**右对齐**，左侧腾出来的区域摆这三个
-           *  参数本身 —— 一行一个，端点骑跨卡片左缘，与节点上其他参数行长得一样
-           *  （12px 大端点 + 参数名 + 类型徽章），不是控件框里那排「· 小点 + 名字」。
+           * 参数本身 —— 一行一个，端点骑跨卡片左缘，与节点上其他参数行长得一样
+           * （12px 大端点 + 参数名 + 类型徽章），不是控件框里那排「· 小点 + 名字」。
            *
-           *  这三行各自是一个**真正的落点**（端点 id 即 ioKey）：拖到「百万像素」
-           *  就连到 `megapixels`，不是笼统地落到整块控件上。 */
+           * 这三行各自是一个**真正的落点**（端点 id 即 ioKey）：拖到「百万像素」
+           * 就连到`megapixels`，不是笼统地落到整块控件上。 */
           <>
             <div className="flex min-w-0 flex-1 flex-col gap-0.5 self-center">
               {[aspect, megapixels, multiple]
@@ -383,10 +383,10 @@ export function AspectMegapixelControl({
                   <div
                     key={entry.ioKey}
                     /* 左内边距与节点上其他参数行同款（`pl-[14px]`）：端点圆点
-                     *  12px、圆心骑跨卡片左缘（-6），文字从 14px 起 —— 圆点与
-                     *  参数名之间才留得出 8px 的空隙。此前这里是 `pl-[2px]`，
-                     *  圆点右沿（6px）压过文字起点（2px），名字被圆点盖住
-                     *  （ISSUE #355：「端口圆点和参数名字之间距离太近」）。 */
+                     * 12px、圆心骑跨卡片左缘（-6），文字从 14px 起 —— 圆点与
+                     * 参数名之间才留得出 8px 的空隙。此前这里是`pl-[2px]`，
+                     * 圆点右沿（6px）压过文字起点（2px），名字被圆点盖住
+                     * （ISSUE #355：「端口圆点和参数名字之间距离太近」）。 */
                     className="relative flex h-[22px] items-center gap-1.5 pl-[14px]"
                     /* 行锚点：拖拽重排与 e2e 按它认「这一行是哪一格」。 */
                     data-io-key={entry.ioKey}
@@ -413,7 +413,7 @@ export function AspectMegapixelControl({
                 ))}
             </div>
             {/* 组合控件本体（表头 + 下拉），整块贴右沿：框里不再重复列那三个参数
-                —— 它们已经以真正的参数行形态摆在框外左侧了。 */}
+ —— 它们已经以真正的参数行形态摆在框外左侧了。 */}
             <div
               data-grouped-box
               className="border-accent/30 bg-accent/4 w-fit max-w-full shrink-0 rounded-lg border p-2"

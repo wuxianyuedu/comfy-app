@@ -176,14 +176,14 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       {/* ── Content ── */}
       <div className="min-w-0 flex-1 overflow-y-auto px-2 pb-4">
         {loading ? (
-          <div className="space-y-1 px-2 pt-1">
+          <div className="flex-col gap-1 px-2 pt-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={`skeleton-${i}`}
                 className="flex items-center gap-3 py-2"
               >
                 <Skeleton className="bg-subtle h-10 w-10 shrink-0 rounded-md" />
-                <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="min-w-0 flex-1 flex-col gap-1.5">
                   <Skeleton className="bg-subtle h-3 w-3/4 rounded" />
                   <Skeleton className="bg-subtle h-2 w-1/3 rounded" />
                 </div>
@@ -269,7 +269,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           </div>
         ) : (
           /* 列表视图 */
-          <div className="space-y-0.5">
+          <div className="flex flex-col gap-0.5">
             {tasks.map((task) => {
               const pill = STATUS_PILL[task.status];
               return (

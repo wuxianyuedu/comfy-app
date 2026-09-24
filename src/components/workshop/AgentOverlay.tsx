@@ -52,9 +52,9 @@ export function AgentOverlay({
   const taRef = React.useRef<HTMLTextAreaElement>(null);
 
   /* 对话区跟随底部：贴底与「用户有没有接管滚动」的判据收在
-   * `ui/use-scroll-follow`（规范 16 §16.2.4.24）。收口前这里是手写的
-   * `scrollTop = scrollHeight` —— 用户往上滚读上一句 AI 回复会被立刻按回
-   * 底部（`messages` / `busy` 一变就拉回去），而且**连开关都没有**。
+   *`ui/use-scroll-follow`（规范 16 §16.2.4.24）。收口前这里是手写的
+   *`scrollTop = scrollHeight` —— 用户往上滚读上一句 AI 回复会被立刻按回
+   * 底部（`messages` /`busy` 一变就拉回去），而且**连开关都没有**。
    * 现在上滚即暂停跟随，并给出「回到最新」的可见出口。 */
   const followRef = React.useRef<HTMLDivElement>(null);
   const follow = useScrollFollow({
@@ -102,7 +102,7 @@ export function AgentOverlay({
             <Icon name="loader" size={11} className="inline" />
             工作过程
           </div>
-          <div className="space-y-1">
+          <div className="flex-col gap-1">
             {toolRuns.map((run) => (
               <div key={run.id} className="flex items-center gap-2">
                 <span
@@ -126,13 +126,13 @@ export function AgentOverlay({
       )}
 
       {/* Messages。`relative` 是给「回到最新」的悬浮按钮当定位上下文 ——
-          用户上滚后必须有一个能回到最新的出口（硬规则 4），否则只会觉得
-          「消息不刷新了」。 */}
+ 用户上滚后必须有一个能回到最新的出口（硬规则 4），否则只会觉得
+ 「消息不刷新了」。 */}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div
           ref={followRef}
           onScroll={follow.onScroll}
-          className="flex-1 space-y-3 overflow-y-auto px-4 py-3"
+          className="flex-1 gap-3 overflow-y-auto px-4 py-3"
         >
           {visibleMessages.map((msg) => {
             if (msg.role === "user") {
@@ -215,8 +215,8 @@ export function AgentOverlay({
           ref={taRef}
           value={input}
           onChange={(event) => {
-            /* 这一处要在同一个事件里读 `scrollHeight` 调整高度，所以不能
-             * 直接把 `onChange` 换成适配器 —— 取值本身仍走出口。 */
+            /* 这一处要在同一个事件里读`scrollHeight` 调整高度，所以不能
+             * 直接把`onChange` 换成适配器 —— 取值本身仍走出口。 */
             readTextInput(event, setInput);
             event.target.style.height = "auto";
             event.target.style.height =

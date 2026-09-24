@@ -2,8 +2,8 @@
 
 // ── 「模式契约」编辑器：纯展示视图（规范 17 §17.2 第③层）────────────────
 // 两个入口（工坊 / 工作流库）共用同一份表单：输入口清单 + 输出类别 + 保存。
-// 契约本身（口有哪些、口叫什么）由 `lib/workshop/model-mode-contract` 定义，
-// 展示分组与「已改」判据来自 `mode-contract-config`。
+// 契约本身（口有哪些、口叫什么）由`lib/workshop/model-mode-contract` 定义，
+// 展示分组与「已改」判据来自`mode-contract-config`。
 
 import {
   customInputKindOf,
@@ -113,7 +113,7 @@ export function ModeContractEditorView({
         </div>
 
         {draft && (
-          <div className="border-primary-soft bg-primary-soft/20 space-y-2 rounded-xl border p-3">
+          <div className="border-primary-soft bg-primary-soft/20 flex flex-col gap-2 rounded-xl border p-3">
             <p className="text-ink text-xs font-semibold">
               {contractModeLabel(draft.mode)}（
               <span className="text-muted-foreground/60 font-mono text-[10px]">
@@ -137,7 +137,7 @@ export function ModeContractEditorView({
               64）。选「分辨率」时工坊按场景尺寸表换算成「百万像素 + 倍数」
               再下发，两种写法落到工作流 / 远端接口上的效果一致。
             </p>
-            <div className="space-y-1.5">
+            <div className="flex flex-col gap-1.5">
               {draft.inputs.map((input, i) => {
                 const label = modeContractInputIdLabel(
                   input,
@@ -159,7 +159,7 @@ export function ModeContractEditorView({
                     </span>
                     <span className="flex items-center gap-1">
                       {/* 顺序**就是**工坊对外的参数顺序（序号即数组下标），
-                          所以调序改的是契约本身，不是界面偏好。 */}
+ 所以调序改的是契约本身，不是界面偏好。 */}
                       <span className="flex items-center">
                         <Button
                           variant="ghost"

@@ -2,9 +2,9 @@
 
 // 分镜镜头「AI 评审」弹窗（Phase 8 · P8-1b）。
 //
-// 纯展示 + 交互壳：打开即评审该镜头（走 `useShotReview`），展示「过 / 不过 + 逐条缺陷 + 改进建议」；
+// 纯展示 + 交互壳：打开即评审该镜头（走`useShotReview`），展示「过 / 不过 + 逐条缺陷 + 改进建议」；
 // 不合格时给两个出口 —— 「抽卡」（同提示词换种子重出）与「改提示词重生成」（据评审意见改写提示词）。
-// 浮层用官方 `ui/dialog`（P9 不自绘模态），忙碌/反馈由 hook 里的 useBusyAction + runAsyncAction 兜。
+// 浮层用官方`ui/dialog`（P9 不自绘模态），忙碌/反馈由 hook 里的 useBusyAction + runAsyncAction 兜。
 import { useEffect } from "react";
 
 import {
@@ -61,7 +61,7 @@ export function ShotReviewDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-[96px] space-y-3">
+        <div className="flex min-h-[96px] flex-col gap-3">
           {reviewing ? (
             <p className="text-ink-fainter text-sm">正在评审…</p>
           ) : error ? (
@@ -90,7 +90,7 @@ export function ShotReviewDialog({
               </div>
 
               {verdict.issues.length > 0 && (
-                <ul className="text-ink-strong list-disc space-y-1 pl-5 text-sm">
+                <ul className="text-ink-strong flex list-disc flex-col gap-1 pl-5 text-sm">
                   {verdict.issues.map((issue, index) => (
                     <li key={index}>{issue}</li>
                   ))}

@@ -20,9 +20,9 @@ import type { MissingItem } from "~/components/workshop/stage-config";
 
 /** 「工作流库」里某一类别（图 / 视频）的可选工作流下拉。
  *
- *  按类别分栏：生图阶段只列 image 工作流，视频阶段只列 video 工作流，
- *  避免把 txt2img 混进视频下拉（两类工作流的对外参数口径不同）。
- *  选定后工坊只暴露 提示词 / 尺寸 / 参考图(首帧)，其余参数用工作流默认值。 */
+ * 按类别分栏：生图阶段只列 image 工作流，视频阶段只列 video 工作流，
+ * 避免把 txt2img 混进视频下拉（两类工作流的对外参数口径不同）。
+ * 选定后工坊只暴露 提示词 / 尺寸 / 参考图(首帧)，其余参数用工作流默认值。 */
 function WorkshopWorkflowSelect({
   label,
   placeholder,
@@ -73,7 +73,7 @@ function WorkshopWorkflowSelect({
 interface WorkshopAsideProps {
   missing: MissingItem[];
   /** 工作流库里的可选工作流（ISSUE #145）：本地通道的唯一可执行来源。
-   *  按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
+   * 按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
   workflowOptions: WorkshopWorkflowOption[];
   workflowId: string;
   onWorkflowChange: (value: string) => void;
@@ -116,7 +116,7 @@ export function WorkshopAside({
   ];
 
   return (
-    <aside className="space-y-4">
+    <aside className="flex-col gap-4">
       {/* Missing materials */}
       <div className="border-border bg-surface rounded-2xl border p-4">
         <div className="mb-3 flex items-center gap-2">
@@ -127,7 +127,7 @@ export function WorkshopAside({
             缺失素材 / 下一步
           </span>
         </div>
-        <div className="space-y-2.5">
+        <div className="flex-col gap-2.5">
           {missing.map((item) => (
             <div key={item.label} className="flex items-center gap-3">
               <span
@@ -190,7 +190,7 @@ export function WorkshopAside({
       {/* Resource library */}
       <div className="border-border bg-surface rounded-2xl border p-4">
         <div className="text-ink mb-3 text-[13px] font-semibold">资源库</div>
-        <div className="space-y-3">
+        <div className="gap-3">
           {resourceRows.map(([name, tag]) => (
             <div key={name} className="flex items-center gap-3">
               <span className="bg-elevated grid h-8 w-8 place-items-center rounded-lg">

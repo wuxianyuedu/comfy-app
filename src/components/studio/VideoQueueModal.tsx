@@ -21,9 +21,9 @@ import {
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 /* ── 视频队列弹窗 —— 接了真实的 VIDEO 任务 ──
-  从 /api/tasks 拉取用户的 VIDEO 类型任务（已筛选），显示实时
-  状态（QUEUED / RUNNING / SUCCEEDED / FAILED），每 4s 自动刷新，
-  让用户批量提交新片段，并打开某个片段的结果 / 结果详情。
+ 从 /api/tasks 拉取用户的 VIDEO 类型任务（已筛选），显示实时
+ 状态（QUEUED / RUNNING / SUCCEEDED / FAILED），每 4s 自动刷新，
+ 让用户批量提交新片段，并打开某个片段的结果 / 结果详情。
 */
 
 const STATUS_META: Record<
@@ -85,8 +85,8 @@ export function VideoQueueModal({
   }, [open]);
 
   // 打开时初始加载 + 每 4s 轮询（VIDEO 任务耗时较长）。挂载即先拉一次由
-  // `useInterval` 的 `immediate` 给（规范 16 §16.2.4.15）—— 此前自己要
-  // `setTimeout(…, 0)` 把首次拉取延出 effect 体，现在那一层由 hook 承担。
+  //`useInterval` 的`immediate` 给（规范 16 §16.2.4.15）—— 此前自己要
+  //`setTimeout(…, 0)` 把首次拉取延出 effect 体，现在那一层由 hook 承担。
   useEffect(() => {
     if (!open) return;
     submittedRef.current = false;
@@ -113,8 +113,8 @@ export function VideoQueueModal({
     if (!items.length) return;
     setError("");
     /* 「逐条提交、跳过失败项、只要有一条成功就算成功」是本动作的域语义，
-     * 留在调用处；**失败通道只有一条**（这块行内 `setError`），
-     * 所以 `report` 恒接到它上（规范 16 §16.2.4.30：通道由调用处给）。 */
+     * 留在调用处；**失败通道只有一条**（这块行内`setError`），
+     * 所以`report` 恒接到它上（规范 16 §16.2.4.30：通道由调用处给）。 */
     const result = await submitBusy.run(() =>
       runAsyncAction(
         async () => {
@@ -152,8 +152,8 @@ export function VideoQueueModal({
     (task) => task.status === "RUNNING" || task.status === "QUEUED",
   ).length;
 
-  /* 关闭语义交给 `ui/dialog`：此前这里**既没有点遮罩关闭、也没有 Esc** ——
-     只能用右上角的 ✕ 关掉，键盘用户尤其难退出。 */
+  /* 关闭语义交给`ui/dialog`：此前这里**既没有点遮罩关闭、也没有 Esc** ——
+ 只能用右上角的 ✕ 关掉，键盘用户尤其难退出。 */
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
@@ -222,7 +222,7 @@ export function VideoQueueModal({
           {/* Body */}
           <div className="flex-1 overflow-y-auto p-5">
             {tab === "queue" ? (
-              <div className="space-y-3">
+              <div className="flex-col gap-3">
                 {loading && tasks.length === 0 ? (
                   <p className="text-ink-fainter py-10 text-center text-xs">
                     加载中…
@@ -314,7 +314,7 @@ export function VideoQueueModal({
                 )}
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 {draft.length === 0 ? (
                   <p className="text-ink-fainter py-8 text-center text-xs">
                     暂无待提交分镜。在下方逐个添加提示词（每行一个），或粘贴工坊分镜批量导入。
@@ -412,10 +412,10 @@ export function VideoQueueModal({
 }
 
 /** 「导入 txt/csv」入口：按钮 + 隐藏 input 二合一。
- *  此前这里用 `<input id="vq-import">` + `<label htmlFor="vq-import">` 做
- *  隐式关联 —— 与全库另外 8 个落点（有的用 ref.click()、有的干脆把 input
- *  露在界面上）写法都不同，且成了全仓唯一一处靠 `id` 拼接触发的入口。
- *  现在统一走 `ui/file-picker`。 */
+ * 此前这里用`<input id="vq-import">` +`<label htmlFor="vq-import">` 做
+ * 隐式关联 —— 与全库另外 8 个落点（有的用 ref.click()、有的干脆把 input
+ * 露在界面上）写法都不同，且成了全仓唯一一处靠`id` 拼接触发的入口。
+ * 现在统一走`ui/file-picker`。 */
 function ImportLinesButton({
   onImported,
 }: {
@@ -424,8 +424,8 @@ function ImportLinesButton({
   const toast = useToast();
   const picker = useFilePicker({
     accept: ".txt,.csv",
-    /* 读取统一走 `~/lib/file-io`（§16.2.4.27）：`file.text()` 的失败路径
-     * 此前在这里被 `void ... .then(...)` 整个吞掉 —— 读失败时用户看不到
+    /* 读取统一走`~/lib/file-io`（§16.2.4.27）：`file.text()` 的失败路径
+     * 此前在这里被`void ... .then(...)` 整个吞掉 —— 读失败时用户看不到
      * 任何反馈（`.then` 没有 rejection 分支）。 */
     onPick: (file) => {
       void readFileAsText(file)
