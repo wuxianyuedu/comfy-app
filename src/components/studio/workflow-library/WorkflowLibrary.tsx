@@ -4,6 +4,11 @@ import dynamic from "next/dynamic";
 
 import { Button } from "~/components/ui/button";
 import { PageLoading } from "~/components/ui/page-loading";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "~/components/ui/resizable";
 import { ModelTagManager } from "../ModelTagManager";
 import { DeleteWorkflowModal } from "../DeleteWorkflowModal";
 import { WorkflowImportPanel } from "../WorkflowImportPanel";
@@ -111,58 +116,61 @@ export function WorkflowLibrary({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
-        <WorkflowLibraryList
-          workflows={c.workflows}
-          pendingRows={c.pendingRows}
-          selectedId={c.selectedId}
-          search={c.search}
-          onSearchChange={c.setSearch}
-          onSelect={c.setSelectedId}
-          onLoadPending={(pending) => {
-            void c.handleLoadPending(pending);
-          }}
-          loading={c.loading}
-          stalled={c.loadStalled}
-          onRefresh={c.refresh}
-          localRootsHint={c.localRootsHint}
-          /* 拖入 JSON 导入：整片列表侧栏就是投放区（与导入面板同一漏斗）。 */
-          dragActive={c.importState.listDragActive}
-          onDragOver={c.importState.onListDragOver}
-          onDragEnter={c.importState.onListDragEnter}
-          onDragLeave={c.importState.onListDragLeave}
-          onDrop={c.importState.onListDrop}
-          fileErr={c.importState.dropErr}
-          pendingLoading={c.pendingLoading}
-        />
-        {/* `min-w-0` 必须有：详情面板是弹性项，默认 `min-width: auto` 会让它**不
+      <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
+        <ResizablePanel defaultSize={24} minSize={16} maxSize={45}>
+          <WorkflowLibraryList
+            workflows={c.workflows}
+            pendingRows={c.pendingRows}
+            selectedId={c.selectedId}
+            search={c.search}
+            onSearchChange={c.setSearch}
+            onSelect={c.setSelectedId}
+            onLoadPending={(pending) => {
+              void c.handleLoadPending(pending);
+            }}
+            loading={c.loading}
+            stalled={c.loadStalled}
+            onRefresh={c.refresh}
+            localRootsHint={c.localRootsHint}
+            /* 拖入 JSON 导入：整片列表侧栏就是投放区（与导入面板同一漏斗）。 */
+            dragActive={c.importState.listDragActive}
+            onDragOver={c.importState.onListDragOver}
+            onDragEnter={c.importState.onListDragEnter}
+            onDragLeave={c.importState.onListDragLeave}
+            onDrop={c.importState.onListDrop}
+            fileErr={c.importState.dropErr}
+            pendingLoading={c.pendingLoading}
+          />
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={76} minSize={40}>
+          {/* `min-w-0` 必须有：详情面板是弹性项，默认 `min-width: auto` 会让它**不
             肯窄于内容的最小宽度**（面板里的画布预览、卡片列都不小），于是整行宽度
             超过窗口、右半部分连同头部按钮一起被根容器的 `overflow-hidden` 裁掉
-            ——用户在小屏上「看不到最右侧的内容」就是这个成因。列表是固定宽侧栏，
-            因此让它 `shrink-0`，宽度压力全部由详情面板承担（面板内部自带滚动 /
-            画布平移缩放）。 */}
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <WorkflowLibraryDetail
-            workflow={c.selectedRow}
-            allModelTags={c.modelTags}
-            onPatchModes={c.patchModes}
-            onPatchModelTags={c.patchModelTags}
-            onPatchWorkflowIO={c.patchWorkflowIO}
-            onPatchParamMap={c.patchParamMap}
-            onUse={c.handleUse}
-            onEdit={c.handleEdit}
-            onDelete={c.handleDeleteClick}
-            onDownload={(id, name) => {
-              void c.handleDownload(id, name);
-            }}
-            onResync={(id, name) => {
-              void c.handleResync(id, name);
-            }}
-            isBundleBusy={c.isBundleBusy}
-            isResyncBusy={c.isResyncBusy}
-          />
-        </div>
-      </div>
+            ——用户在小屏上「看不到最右侧的内容」就是这个成因。 */}
+          <div className="h-full min-w-0 overflow-hidden">
+            <WorkflowLibraryDetail
+              workflow={c.selectedRow}
+              allModelTags={c.modelTags}
+              onPatchModes={c.patchModes}
+              onPatchModelTags={c.patchModelTags}
+              onPatchWorkflowIO={c.patchWorkflowIO}
+              onPatchParamMap={c.patchParamMap}
+              onUse={c.handleUse}
+              onEdit={c.handleEdit}
+              onDelete={c.handleDeleteClick}
+              onDownload={(id, name) => {
+                void c.handleDownload(id, name);
+              }}
+              onResync={(id, name) => {
+                void c.handleResync(id, name);
+              }}
+              isBundleBusy={c.isBundleBusy}
+              isResyncBusy={c.isResyncBusy}
+            />
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       <WorkflowCanvasEditor
         workflowId={c.editingId ?? ""}

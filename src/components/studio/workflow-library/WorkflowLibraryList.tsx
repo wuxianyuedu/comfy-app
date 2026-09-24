@@ -87,7 +87,7 @@ export function WorkflowLibraryList({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={[
-        "border-border-subtle bg-panel-deep flex h-full w-80 shrink-0 flex-col border-r",
+        "border-border-subtle bg-panel-deep flex h-full w-full min-w-0 flex-col border-r",
         /* 拖入高亮用 outline：不参与布局，不会让列表在拖拽时抖一下。 */
         dragActive ? "outline-2 -outline-offset-2 outline-cyan-400/60" : "",
       ].join("")}
