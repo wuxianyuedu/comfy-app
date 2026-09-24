@@ -13,6 +13,8 @@ import {
 import type { RecentProject, WorkspaceView } from "~/components/studio";
 import { WorkshopPipeline } from "~/components/workshop/WorkshopPipeline";
 import { ProjectGate } from "~/components/studio/ProjectGate";
+import { ProjectTabBar } from "~/components/studio/ProjectTabBar";
+import { isProjectTab } from "~/components/studio/NavItems";
 import { ShellTabs } from "~/components/studio/ShellTabs";
 import { timeAgo } from "~/lib/time-format";
 import {
@@ -295,13 +297,8 @@ export default function WorkspacePage() {
   // 其它模式切换会反复装卸 console 包装（makeLogger 双重嵌套），是日志观察者
   // 自身报错的结构性诱因（LogProvider Console Error）。
   const renderCenter = () => {
-    // 项目优先闸门：进入画布 / 工坊 / 成片前必须先有一个活跃项目。
-    if (
-      (viewMode === "canvas" ||
-        viewMode === "workshop" ||
-        viewMode === "film") &&
-      !activeProjectId
-    ) {
+    // 项目优先闸门：进入项目界面（画布 / 工坊 / 产出 / 成片）前必须先有一个活跃项目。
+    if (isProjectTab(viewMode) && !activeProjectId) {
       return (
         <ProjectGate
           onEnter={refreshActiveProject}
@@ -369,6 +366,11 @@ export default function WorkspacePage() {
           active={viewMode}
           onSelect={handleNavSelect}
           onOpenSettings={openSettings}
+          projects={recentProjects.map((p) => ({ id: p.id, name: p.name }))}
+          activeProjectId={activeProjectId}
+          onOpenProject={handleOpenCanvasProject}
+          onShowAllProjects={handleShowAllProjects}
+          onNewProject={handleNewProject}
         >
           {viewMode === "home" ? (
             <HomePage
@@ -383,6 +385,17 @@ export default function WorkspacePage() {
             <>
               {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
               <AuroraBackground />
+              {/* 项目界面顶部的切换器：仅在已有一个活跃项目、且当前是项目页签时出现
+                  （无项目时 renderCenter 会先落到 ProjectGate，不必在其上叠一排页签）。 */}
+              {isProjectTab(viewMode) && activeProjectId ? (
+                <ProjectTabBar
+                  active={viewMode}
+                  onSelect={handleNavSelect}
+                  projectName={
+                    recentProjects.find((p) => p.id === activeProjectId)?.name
+                  }
+                />
+              ) : null}
               {renderCenter()}
             </>
           )}
