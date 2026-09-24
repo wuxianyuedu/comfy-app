@@ -1011,6 +1011,30 @@ function stripComments(text) {
 }
 
 /**
+ * 剥掉 `// p71-allow:start …` 与 `// p71-allow:end` 之间的整段（含两行标记）。
+ * 供 P71 使用——§3.6.1 里 palette 字面量本身就是语义（如 ANSI SGR 终端 8 色），
+ * 不该被 token 化。必须在 `stripComments` **之前**调用，否则标记注释会被先抹掉、
+ * 块内的 `dark:` 字面量又会被计回来。
+ */
+function stripP71AllowBlocks(text) {
+  const lines = text.split("\n");
+  const out = [];
+  let inBlock = false;
+  for (const line of lines) {
+    if (inBlock) {
+      if (/\/\/\s*p71-allow:end\b/.test(line)) inBlock = false;
+      continue;
+    }
+    if (/\/\/\s*p71-allow:start\b/.test(line)) {
+      inBlock = true;
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+/**
  * 数「夹取」的处数：`Math.max(` 里包着 `Math.min(`、或反过来。
  *
  * 实现是**配对扫描**而不是一个正则：正则要匹配「嵌套但深度不定」的括号，
@@ -3205,6 +3229,12 @@ const RULES = {
    * 等）。`text-ink-*` / `bg-subtle` / `text-muted-foreground` 这类语义类
    * 不含调色板色名 + 数字档，天然不命中。
    *
+   * 例外块：`// p71-allow:start <一句话理由>` 与 `// p71-allow:end` 之间的
+   * 代码整段不计入 P71。用于 §3.6.1 文档化例外——palette 字面量本身就是
+   * 语义（例如 ANSI SGR 终端 8 色，代表 terminal color identity、不是主题
+   * 状态色），不能被 token 化；用它比留一堆永久基线债更诚实。理由文本
+   * 写短、写具体，别拿它当「随手关掉一条判据」的逃生口。
+   *
    * 棘轮（非硬闸）：2026-09-24 全界面扫网实测视图层 230 处存量，本批折叠
    * log-level 色系统后冻结为 215 处起点、只许降。「精确等值」的状态文字
    * （text-amber-700/red-700 配 dark:）已在本批折叠；其余（状态底色
@@ -3214,7 +3244,7 @@ const RULES = {
     label:
       "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripComments(stripP71AllowBlocks(t));
       return (
         t2.match(
           /dark:(?:bg|text|border|ring|from|to|shadow|fill|stroke|outline|decoration|accent|caret|divide|placeholder|file|space)-\[?[a-z-]*?(?:emerald|green|rose|red|amber|sky|cyan|violet|blue|purple|fuchsia|indigo|teal|lime|orange|yellow)-[0-9]/g,
