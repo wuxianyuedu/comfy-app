@@ -45,6 +45,8 @@ const MAX_TICKS = 240;
 const TICK_MS = 4000;
 const nowIso = () => new Date().toISOString();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** 抽卡用的非负随机种子（JS 安全整数内，与 comfy 前端 seed 量级一致）。 */
+const randomSeed = () => Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
 interface ExecResult {
   ok: boolean;
@@ -250,6 +252,10 @@ async function execImages(
       next.push(shot);
       continue;
     }
+    // 抽卡重生成：这一镜之前已被本 run 处理过（processedShotRev 有记录）、如今因退回/改提示词
+    // 重新纳入 → 给一个新的随机 seed，让同提示词也能换图。首刷（无记录）不注 seed，用工作流
+    // 图内自带的 seed 配置（是否真能换由工作流是否连了「种子」口决定）。
+    const isReroll = run.processedShotRev[shot.id] !== undefined;
     try {
       const path = await synthesizeFirstFrame({
         userId,
@@ -257,6 +263,7 @@ async function execImages(
         prompt: shot.prompt,
         negative: shot.negativePrompt || undefined,
         projectId,
+        ...(isReroll ? { seed: randomSeed() } : {}),
       });
       next.push({ ...shot, imageUrl: path, status: "done" });
     } catch {

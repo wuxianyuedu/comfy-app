@@ -188,6 +188,7 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-megapixels",
       "size-resolution",
       "size-multiple",
+      "seed",
     ]);
   });
 
@@ -229,6 +230,7 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-resolution",
       "size-multiple",
       "duration",
+      "seed",
     ]);
     expect(
       buildParamEntries(videoIO, undefined, { mode: "T2I" }).map(
@@ -243,6 +245,7 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-megapixels",
       "size-resolution",
       "size-multiple",
+      "seed",
     ]);
   });
 
@@ -263,6 +266,7 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-megapixels",
       "size-resolution",
       "size-multiple",
+      "seed",
     ]);
     /* 没有可落点的口如实零候选（未配置）。 */
     expect(byId.get("prompt")!.pins).toEqual([]);
@@ -284,13 +288,14 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
     expect(prompt.label).toBe("提示词");
   });
 
-  it("不传 mode 时退到最保守的一套（提示词 + 尺寸子口）", () => {
+  it("不传 mode 时退到最保守的一套（提示词 + 尺寸子口 + 种子）", () => {
     const ids = buildParamEntries(io)
       .map((entry) => entry.id)
       .sort();
     expect(ids).toEqual([
       "negative",
       "prompt",
+      "seed",
       "size-aspect",
       "size-height",
       "size-megapixels",

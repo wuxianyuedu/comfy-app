@@ -54,6 +54,8 @@ export type ParamClass =
   | "first-frame"
   | "last-frame"
   | "duration"
+  /** 采样种子（INT）：作者连到工作流的 seed / noise_seed 端口才可指定。 */
+  | "seed"
   | "other";
 
 /** 统一「尺寸」在契约里的落点形态 —— 一个对外参数可以落在其中任一类端口上。 */
@@ -140,6 +142,7 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   "first-frame": exposedParamDisplayLabel("first-frame"),
   "last-frame": exposedParamDisplayLabel("last-frame"),
   duration: exposedParamDisplayLabel("duration"),
+  seed: exposedParamDisplayLabel("seed"),
   other: "参数",
 };
 
@@ -219,6 +222,7 @@ export const CLASS_FAMILY: Record<ParamClass, PinFamily | null> = {
   "first-frame": "image",
   "last-frame": "image",
   duration: "number",
+  seed: "number",
   other: null,
 };
 

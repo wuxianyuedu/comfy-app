@@ -23,8 +23,11 @@ export async function synthesizeFirstFrame(opts: {
   negative?: string;
   size?: SizeSpec;
   projectId?: string | null;
+  /** 采样种子：给了就落到工作流的「种子」口上（作者没连这一口则落不下去、用图内 seed）。
+   *  「抽卡重生成」传一个新的随机值，让同提示词也能换图。 */
+  seed?: number;
 }): Promise<string> {
-  const { userId, workflowId, prompt, negative, size, projectId } = opts;
+  const { userId, workflowId, prompt, negative, size, projectId, seed } = opts;
   const { taskId } = await createWorkflowRunTask({
     userId,
     workflowId,
@@ -33,6 +36,7 @@ export async function synthesizeFirstFrame(opts: {
       prompt,
       ...(negative !== undefined ? { negativePrompt: negative } : {}),
       ...(size !== undefined ? { size } : {}),
+      ...(seed !== undefined ? { seed } : {}),
     },
   });
 
