@@ -23,7 +23,7 @@
  */
 
 import { z } from "zod";
-import { isPlainRecord } from "~/lib/is-record";
+import { asRecord, isPlainRecord } from "~/lib/is-record";
 import { comfyBase } from "./client";
 
 /* ── raw JSON 收窄工具（§5.6：外部输入 unknown + 守卫）──────────────────
@@ -402,6 +402,45 @@ function hasControlAfterGenerate(
   return (
     SEED_WIDGET_NAMES.has(name) || options?.control_after_generate === true
   );
+}
+
+/**
+ * 找出 rawJson 里带 seed 控件的节点 id（顶层 `nodes[]`）。
+ *
+ * 用途：服务端「抽卡重生成」要在提交前给采样器节点注一条 `control_after_generate=randomize`
+ * 覆盖，让 comfy-cli 铸一个新随机种子 —— 而覆盖要按 nodeId 定位，故先扫出这些节点。
+ * 只认**顶层** `nodes[]` 上暴露了 seed / noise_seed 控件的节点：ComfyUI 把子图内部采样器的
+ * seed 提升(promote)到 wrapper 时，wrapper 自己的 `inputs[]` 会带一个 seed 控件，命中它即可；
+ * `applyRawOverrides` 会把这条覆盖再折叠进子图内层（见其 pendingByNode 内层同步）。
+ * 判据与 `raw-overrides.ts` 的 seed 控件识别同口径（`SEED_WIDGET_NAMES`，大小写不敏感）。
+ * 纯函数、无 IO。
+ */
+export function findSeedWidgetNodeIds(rawJson: unknown): string[] {
+  const raw = asRecord(rawJson);
+  const nodes = raw && Array.isArray(raw.nodes) ? raw.nodes : [];
+  const ids: string[] = [];
+  for (const item of nodes) {
+    const node = asRecord(item);
+    if (!node) continue;
+    const inputs: unknown[] = Array.isArray(node.inputs) ? node.inputs : [];
+    const hasSeed = inputs.some((inp) => {
+      const rec = asRecord(inp);
+      if (!rec?.widget) return false;
+      const widget = asRecord(rec.widget);
+      const name =
+        typeof widget?.name === "string"
+          ? widget.name
+          : typeof rec.name === "string"
+            ? rec.name
+            : "";
+      return SEED_WIDGET_NAMES.has(name.toLowerCase());
+    });
+    if (!hasSeed) continue;
+    if (typeof node.id === "number" || typeof node.id === "string") {
+      ids.push(String(node.id));
+    }
+  }
+  return ids;
 }
 
 /**
