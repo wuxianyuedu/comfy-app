@@ -22,7 +22,7 @@ import { INLINE_STDERR_MAX, clampText } from "../text-clamp";
 import type { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { resolveEffectiveLaunch } from "./desktop-instance";
-import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
+import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import {
   spawnManaged,
   waitForDetachMediator,
@@ -302,7 +302,11 @@ async function launchKeepAliveMode(
         return null;
       }
       lastProcessCheckAt = now;
-      if (await findPidForMainPy(plan.mainPy)) {
+      /* findPidForMainPyDetailed 区分「查不到」与「查询失败」：机器忙（ComfyUI
+       * 出图）时 PowerShell 进程表查询会超时，那时不应误判成「保活进程已退出」。 */
+      const lookup = await findPidForMainPyDetailed(plan.mainPy);
+      if (lookup.failed) return null;
+      if (lookup.pid) {
         everSeenProcess = true;
         missCount = 0;
         return null;
@@ -330,7 +334,7 @@ async function launchKeepAliveMode(
    * 「旧的那个回来了」。 */
   keepAliveExitWatcher?.stop();
   keepAliveExitWatcher = startComfyExitWatcher({
-    findPid: async () => (await findPidForMainPy(plan.mainPy)) ?? null,
+    findPid: () => findPidForMainPyDetailed(plan.mainPy),
     isStopped: () => st.stopRequested === true,
     onExit: (facts) => {
       const report = reportKeepAliveExit({
@@ -339,6 +343,7 @@ async function launchKeepAliveMode(
         appendSessionBanner: (b) => appendSessionBanner("end", b),
         appendRuntimeLog,
         log: note,
+        keepAliveLogs: { out: kaOutLog, err: kaErrLog },
       });
       host.markSessionEnd(report);
     },
