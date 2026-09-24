@@ -282,9 +282,7 @@ export function WorkflowParamCard({
       {!readOnly && footNote && (
         <div
           className={`px-2 pb-1.5 text-[9.5px] leading-relaxed ${
-            wired
-              ? "text-ink-fainter"
-              : "text-amber-600/90 dark:text-amber-500/80"
+            wired ? "text-ink-fainter" : "text-warning-strong/90"
           }`}
           data-testid={`param-node-hint-${entryId}`}
         >

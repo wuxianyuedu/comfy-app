@@ -31,7 +31,7 @@ export function MessageCenterButton() {
     >
       <Bell size={12} />
       {unread > 0 && (
-        <span className="flex min-w-[14px] items-center justify-center rounded-full bg-violet-500/20 px-1 text-[10px] font-semibold text-violet-700 tabular-nums dark:text-violet-300">
+        <span className="bg-primary/20 text-primary-strong flex min-w-[14px] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums">
           {unread > 99 ? "99+" : unread}
         </span>
       )}

@@ -263,7 +263,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 </span>
               </p>
             ) : detail.sourceOutdated ? (
-              <p className="mt-1 flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
+              <p className="border-warning/30 bg-warning/10 text-warning-strong mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]">
                 <span className="font-semibold">磁盘文件有更新</span>
                 <span className="opacity-80">
                   · 回工作流库点「同步」拉取最新内容
@@ -307,11 +307,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         >
           {debugMode ? "✓ 调试中" : "调试"}
         </Button>
-        {error && (
-          <span className="text-xs text-red-700 dark:text-red-400">
-            {error}
-          </span>
-        )}
+        {error && <span className="text-destructive text-xs">{error}</span>}
         {/* 「编辑 IO」/「预览 IO」在**两层**都可用
          *  —— 根工作流与子图内部都可用。
          *

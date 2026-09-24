@@ -15,6 +15,15 @@ import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
 import { timeAgo } from "~/lib/time-format";
 
+/* 作品/视频项目卡**类别装饰色**——cyan 在这套 UI 里代表"视频/作品"类别
+ * (与 `MaterialLibraryPanel KIND_STYLE.video` 蓝调装饰一脉相承)。是"这一
+ * 类内容"的视觉身份,不是状态、也不是 info(信息态)——两者会互相消解。
+ * §3.6.1 例外块。 */
+// p71-allow:start 视频/作品类别装饰色——与素材库"视频"标签同族,不是状态语义
+const WORKS_CATEGORY_ICON_BG =
+  "bg-cyan-400/12 text-cyan-700 dark:text-cyan-400";
+// p71-allow:end
+
 /**
  * 项目页面（"所有项目"标签）— 仅展示本地画布项目。
  *
@@ -141,7 +150,9 @@ export function WorksGallery({
                       onClick={() => onOpenCanvasProject?.(canvasProject.id)}
                       className="canvasProject-3.5 flex h-auto w-full items-start gap-3 rounded-2xl text-left font-normal"
                     >
-                      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/12 text-cyan-700 dark:text-cyan-400">
+                      <div
+                        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${WORKS_CATEGORY_ICON_BG}`}
+                      >
                         <svg
                           width="16"
                           height="16"
@@ -199,7 +210,9 @@ export function WorksGallery({
           <section>
             <div className="border-border grid min-h-[360px] place-items-center rounded-2xl border border-dashed">
               <div className="text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/12 text-cyan-700 dark:text-cyan-400">
+                <div
+                  className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${WORKS_CATEGORY_ICON_BG}`}
+                >
                   <svg
                     width="22"
                     height="22"

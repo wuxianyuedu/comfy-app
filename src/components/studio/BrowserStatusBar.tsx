@@ -226,10 +226,7 @@ export function BrowserStatusBar() {
     >
       {/* ── 第 1 区：地址栏（固定宽度） ── */}
       <div className="flex w-[170px] shrink-0 items-center gap-1.5">
-        <Lock
-          size={11}
-          className="shrink-0 text-emerald-600 dark:text-emerald-400"
-        />
+        <Lock size={11} className="text-success-strong shrink-0" />
         <span className="text-ink-fainter shrink-0">安全</span>
         <span
           className="text-ink-soft truncate"
@@ -288,7 +285,7 @@ export function BrowserStatusBar() {
         {/* 降级提示 */}
         {degradedNote && (
           <span
-            className="hidden items-center gap-1 text-amber-600/90 sm:flex dark:text-amber-300/80"
+            className="text-warning-strong/90 hidden items-center gap-1 sm:flex"
             title={degradedNote}
           >
             {degradedNote}
@@ -327,7 +324,7 @@ export function BrowserStatusBar() {
         >
           <FileText size={12} />
           {counts.error > 0 && (
-            <span className="rounded-full bg-rose-500/20 px-1 text-[10px] text-rose-600 dark:text-rose-300">
+            <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
               {counts.error}
             </span>
           )}
@@ -336,10 +333,10 @@ export function BrowserStatusBar() {
         <span
           className={`flex items-center gap-1 ${
             devServer.state === "online"
-              ? "text-emerald-600 dark:text-emerald-300"
+              ? "text-success-strong"
               : devServer.state === "starting"
                 ? "text-ink-soft"
-                : "text-rose-600 dark:text-rose-300"
+                : "text-destructive"
           }`}
           title={devServer.title}
           aria-label={devServer.label}

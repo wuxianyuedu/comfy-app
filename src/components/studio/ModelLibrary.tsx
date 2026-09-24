@@ -293,7 +293,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                 <Icon
                   name="foldertree"
                   size={18}
-                  className="text-violet-700 dark:text-violet-400"
+                  className="text-primary-strong"
                 />
                 模型目录配置
               </h2>
@@ -318,22 +318,16 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
           <div className="border-border-subtle flex items-center justify-between gap-3 border-b px-5 py-3">
             <div className="flex items-center gap-3 text-xs">
               {c.comfyReachable ? (
-                <span className="text-emerald-700 dark:text-emerald-400">
+                <span className="text-success-strong">
                   ● ComfyUI 已连接 · 共 {c.totalCount} 个目录
                 </span>
               ) : (
-                <span className="text-amber-700 dark:text-amber-400">
-                  ● ComfyUI 未连接
-                </span>
+                <span className="text-warning-strong">● ComfyUI 未连接</span>
               )}
               <span className="text-ink-muted">
                 · 已启用 {c.enabledRows.length} 个
               </span>
-              {c.err && (
-                <span className="text-rose-700 dark:text-rose-400">
-                  {c.err}
-                </span>
-              )}
+              {c.err && <span className="text-destructive">{c.err}</span>}
             </div>
             <Button
               variant="outline"
@@ -365,7 +359,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                 onCheckedChange={(checked) =>
                   c.setOnlyEnabled(checked === true)
                 }
-                className="border-border-strong bg-surface-2 size-3.5 rounded text-violet-700 focus:ring-violet-400/40 dark:text-violet-400"
+                className="border-border-strong bg-surface-2 text-primary-strong focus:ring-primary/40 size-3.5 rounded"
               />
               仅显示已启用
             </label>

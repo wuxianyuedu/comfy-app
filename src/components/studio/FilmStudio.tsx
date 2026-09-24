@@ -280,7 +280,7 @@ export function FilmStudio() {
                       <div
                         className={`flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] ${
                           isSelected
-                            ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
+                            ? "bg-primary/10 text-primary-strong"
                             : "bg-subtle text-ink-faintest"
                         }`}
                       >
@@ -469,7 +469,7 @@ export function FilmStudio() {
                   className="flex h-6 flex-1 items-center rounded bg-emerald-400/15 px-2.5 ring-1 ring-emerald-400/25 ring-inset"
                   style={{ width: "280px" }}
                 >
-                  <span className="truncate text-[9px] text-cyan-700 dark:text-cyan-400">
+                  <span className="text-info-strong truncate text-[9px]">
                     「城市在晨光中苏醒，镜头缓缓推进…」
                   </span>
                 </div>
@@ -497,7 +497,7 @@ export function FilmStudio() {
                   >
                     <path d="M9 18V5l12-2v13M9 18a3 3 0 01-3-3H3a3 3 0 006 3z" />
                   </svg>
-                  <span className="truncate text-[9px] text-violet-700 dark:text-violet-400">
+                  <span className="text-primary-strong truncate text-[9px]">
                     {c.bgmName ?? "背景音乐 · 氛围感配乐"}
                   </span>
                 </div>
@@ -728,10 +728,10 @@ export function FilmStudio() {
                   const f = event.target.files?.[0];
                   if (f) void c.uploadBgmFile(f);
                 }}
-                className="text-ink-fainter w-full text-[11px] file:mr-2 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1.5 file:text-[11px] file:text-violet-800 dark:text-violet-300 dark:file:text-violet-300"
+                className="text-ink-fainter hover:text-primary-strong file:bg-primary/20 file:text-primary-strong w-full text-[11px] file:mr-2 file:rounded-lg file:border-0 file:px-3 file:py-1.5 file:text-[11px]"
               />
               {c.bgmName && (
-                <p className="mt-1 truncate text-[11px] text-violet-700 dark:text-violet-400">
+                <p className="text-primary-strong mt-1 truncate text-[11px]">
                   已选：{c.bgmName}
                 </p>
               )}
@@ -739,7 +739,7 @@ export function FilmStudio() {
 
             {/* Error display */}
             {c.film?.error && (
-              <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] leading-relaxed text-rose-700 dark:text-rose-400">
+              <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
                 {c.film.error}
                 {c.film.status === "FAILED" &&
                   c.film.shots.some((shot) => shot.status === "SUCCEEDED") && (
@@ -756,7 +756,7 @@ export function FilmStudio() {
 
             {/* FFmpeg warning */}
             {!c.ffmpegAvailable && (
-              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+              <p className="border-warning/30 bg-warning/10 text-warning-strong rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
                 未检测到 ffmpeg，逐镜视频仍可生成，但无法自动拼接成片。
               </p>
             )}

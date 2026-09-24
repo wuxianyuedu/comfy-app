@@ -181,7 +181,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
         {data.title}
       </span>
       {valueStr ? (
-        <span className="shrink-0 font-mono text-[10px] text-amber-700 tabular-nums dark:text-amber-300/90">
+        <span className="text-warning-strong/90 shrink-0 font-mono text-[10px] tabular-nums">
           {valueStr}
         </span>
       ) : null}
