@@ -263,10 +263,18 @@ export interface ComfySessionMark {
  */
 export function describeStaleSession(
   mark: ComfySessionMark | null,
+  /** 这次启动时 ComfyUI 是否还活着 —— 保活模式下用它区分「正常移交」与「真没了」。 */
+  comfyUp = false,
 ): string | null {
   /* `mark?.exited !== null` 同时覆盖「没有标记」（undefined ≠ null）与「已结束」
    * 两种该闭嘴的情况。 */
   if (mark?.exited !== null) return null;
+  /* 保活模式：ComfyUI 本来就要跨过应用退出活着，正常关应用时也不会有人给它补
+   * `exited` —— 于是「有开始没结束」是**常态**，与「应用/系统先没了」在这条判据
+   * 上无法区分。只有当上次那个实例**现在确实不在了**才说明它是真没了，那才值得
+   * 提示；还活着 = 保活移交，闭嘴（否则每次重启都会误报一次「强制关机 / 任务
+   * 管理器结束进程」）。 */
+  if (mark.mode === "keepAlive" && comfyUp) return null;
   return (
     `上一次 ComfyUI 会话（pid=${mark.pid ?? "未知"}，${mark.mode} 模式）` +
     `开始于 ${mark.startedAt}，却没有退出记录 —— 说明应用或系统在它之前就结束了` +

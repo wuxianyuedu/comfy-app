@@ -605,11 +605,15 @@ function markComfySessionEnd(report: ComfyExitReport): void {
 /** 每进程只对一次账（启动尝试可能被 WS 重连反复触发，重复提示是噪音）。 */
 let staleSessionChecked = false;
 
-/** 下次启动时反推「上一次会话为什么没有结局」。 */
-function warnStaleComfySession(note: (msg: string) => void): void {
+/** 下次启动时反推「上一次会话为什么没有结局」。
+ *  @param comfyUp 这次启动时 ComfyUI 是否还活着（保活移交时据此闭嘴）。 */
+function warnStaleComfySession(
+  note: (msg: string) => void,
+  comfyUp: boolean,
+): void {
   if (staleSessionChecked) return;
   staleSessionChecked = true;
-  const stale = describeStaleSession(readSessionMark());
+  const stale = describeStaleSession(readSessionMark(), comfyUp);
   if (stale !== null) note(`⚠ ${stale}`);
 }
 
@@ -668,8 +672,12 @@ export async function ensureComfyUiReady(
   };
 
   /* 对账上一次会话：应用/系统也一起没了时没有任何活着的进程能写日志，只能靠
-   * 标记文件反推（见 COMFY_SESSION_MARK）。 */
-  warnStaleComfySession(note);
+   * 标记文件反推（见 COMFY_SESSION_MARK）。
+   *
+   * 注意位置：这步**必须在探测之后**——保活模式下「有开始没结束」是常态（正常
+   * 关应用时 ComfyUI 故意留活、没人补 exited），只有知道「这次探到的实例还在
+   * 不在」才能区分「保活移交」与「真没了」，否则每次重启都会误报一次（详见
+   * describeStaleSession 的 comfyUp 参数）。 */
 
   // 用户明确要求拉起 → 状态快照必然过期（进程树即将变化），先失效，
   // 让紧随其后的状态查询看到启动后的新事实而不是旧结论。
@@ -692,6 +700,7 @@ export async function ensureComfyUiReady(
 
   // 快路径：已经在运行（探测可能有端口偏移，返回真实 base）
   const upBase = await probeComfyUi();
+  warnStaleComfySession(note, upBase !== null);
   if (upBase) {
     /* 接管：这个实例不是本次会话拉起的（上一会话的保活实例 / 外部启动），
      * `launchKeepAliveMode` 里的退出监督器不会为它启动。不补上的话，它之后真

@@ -285,4 +285,50 @@ describe("describeStaleSession —— 应用自己也一起没了的那一档", 
     ).toBeNull();
     expect(describeStaleSession(null)).toBeNull();
   });
+
+  it("保活模式 + 这次还活着 → 是保活移交，不误报", () => {
+    /* 保活模式正常关应用时 ComfyUI 故意留活，没人给它补 exited ——「有开始没
+     * 结束」是常态，不是「应用/系统先没了」。这次探到它还活着就闭嘴。 */
+    expect(
+      describeStaleSession(
+        {
+          pid: 1234,
+          mode: "keepAlive",
+          startedAt: "2026-09-21T03:00:00.000Z",
+          exited: null,
+        },
+        true,
+      ),
+    ).toBeNull();
+  });
+
+  it("保活模式 + 这次没探到 → 上次那个是真没了，照常提示", () => {
+    expect(
+      describeStaleSession(
+        {
+          pid: 1234,
+          mode: "keepAlive",
+          startedAt: "2026-09-21T03:00:00.000Z",
+          exited: null,
+        },
+        false,
+      ),
+    ).toContain("没有退出记录");
+  });
+
+  it("bound 模式不受「还活着」影响：有开始没结束照样提示", () => {
+    /* bound 模式下 ComfyUI 随应用一起结束，不会跨应用存活 —— 所以「还活着」
+     * 不足以解释「上次没有退出记录」（多半是别的实例），仍要提示。 */
+    expect(
+      describeStaleSession(
+        {
+          pid: 1234,
+          mode: "bound",
+          startedAt: "2026-09-21T03:00:00.000Z",
+          exited: null,
+        },
+        true,
+      ),
+    ).toContain("没有退出记录");
+  });
 });
