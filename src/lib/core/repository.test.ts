@@ -469,6 +469,54 @@ describe("ModelRepository", () => {
     expect((await modelRepository.findAll())[0]!.isAvailable).toBe(false);
   });
 
+  it("upsertScannedMany 批量写入，冲突时按 (fileName,folder) 更新", async () => {
+    await modelRepository.upsertScannedMany([
+      {
+        fileName: "a.safetensors",
+        folder: "checkpoints",
+        name: "A v1",
+        type: "CHECKPOINT",
+        baseModel: "SDXL",
+      },
+      {
+        fileName: "b.safetensors",
+        folder: "checkpoints",
+        name: "B v1",
+        type: "CHECKPOINT",
+        baseModel: "SDXL",
+      },
+    ]);
+    expect(await modelRepository.findAll()).toHaveLength(2);
+
+    await modelRepository.upsertScannedMany([
+      {
+        fileName: "a.safetensors",
+        folder: "checkpoints",
+        name: "A v2",
+        type: "CHECKPOINT",
+        baseModel: "Flux",
+      },
+    ]);
+    const rows = await modelRepository.findAll();
+    expect(rows).toHaveLength(2);
+    const updated = rows.find((row) => row.fileName === "a.safetensors");
+    expect(updated?.name).toBe("A v2");
+    expect(updated?.baseModel).toBe("Flux");
+    expect(updated?.isAvailable).toBe(true);
+  });
+
+  it("upsertScannedMany 跨分片不丢行（超过单条 INSERT 的行数上限）", async () => {
+    const inputs = Array.from({ length: 401 }, (_, index) => ({
+      fileName: `m${index}.safetensors`,
+      folder: "checkpoints",
+      name: `M${index}`,
+      type: "CHECKPOINT",
+      baseModel: "SDXL",
+    }));
+    await modelRepository.upsertScannedMany(inputs);
+    expect(await modelRepository.findAll()).toHaveLength(401);
+  });
+
   it("list 只出可用项，支持 type 与 q（like）筛选、上限 300", async () => {
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     await modelRepository.upsertScanned({
