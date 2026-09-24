@@ -43,16 +43,16 @@ import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 
-/* 与项目画布 GlobalStepLogPanel 同款 level badge 配色。 */
+/* 与项目画布 GlobalStepLogPanel 同款 level badge 配色，走语义 token
+ * （§4.11.1 / P71）：error→destructive、warn→warning、success→success、
+ * progress→primary、info→info。token 内部含深浅两态，不再写 dark:。 */
 type Level = TaskLogEntry["level"];
 const LEVEL_STYLES: Record<Level, string> = {
-  error: "bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/20",
-  warn: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/20",
-  success:
-    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
-  progress:
-    "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/20",
-  info: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
+  error: "bg-destructive/15 text-destructive border-destructive/20",
+  warn: "bg-warning/15 text-warning-strong border-warning/20",
+  success: "bg-success/15 text-success-strong border-success/20",
+  progress: "bg-primary/15 text-primary-strong border-primary/20",
+  info: "bg-info/15 text-info-strong border-info/20",
 };
 function levelLabel(level: Level): string {
   switch (level) {

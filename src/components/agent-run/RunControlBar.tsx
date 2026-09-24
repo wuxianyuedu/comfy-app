@@ -112,7 +112,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
               className="text-ink-fainter flex items-baseline gap-1.5 text-[11px]"
             >
               <span
-                className={step.ok ? "text-emerald-500" : "text-destructive"}
+                className={step.ok ? "text-success-strong" : "text-destructive"}
                 aria-hidden
               >
                 {step.ok ? "✓" : "✗"}

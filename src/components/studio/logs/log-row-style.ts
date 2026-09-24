@@ -25,12 +25,17 @@ export interface RowToken {
   style?: AnsiStyleKey;
 }
 
-/** 日志级别的徽标配色（视图与测试共用同一份表）。两态各自取值。 */
+/** 日志级别的徽标配色（视图与测试共用同一份表）。级别是**状态语义**，
+ *  走项目语义 token（§4.11.1 / P71）：info→`--color-info`、warn→
+ *  `--color-warning`、error→`--color-destructive`（与 `status-badge` 的
+ *  FAILED、`alert` 的 destructive 同源，消除「log 用 rose、全局用
+ *  destructive」的 error 色不一致）；debug 是中性档，走 `subtle` 系。
+ *  token 内部已含深浅两态，不再写 `dark:`。 */
 export const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
-  debug: "bg-gray-500/15 text-ink-muted border-gray-500/20",
-  info: "border-cyan-500/20 bg-cyan-500/15 text-cyan-700 dark:text-cyan-400",
-  warn: "border-amber-500/20 bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  error: "border-rose-500/20 bg-rose-500/15 text-rose-700 dark:text-rose-400",
+  debug: "border-border-strong bg-subtle text-ink-muted",
+  info: "border-info/20 bg-info/15 text-info-strong",
+  warn: "border-warning/20 bg-warning/15 text-warning-strong",
+  error: "border-destructive/20 bg-destructive/15 text-destructive",
 };
 
 /**
@@ -51,12 +56,14 @@ export const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
 export const FILTER_SELECTED_STYLES =
   "bg-primary/12 ring-1 ring-primary/45 font-semibold";
 
-/** 日志级别的正文配色（视图与测试共用同一份表）。两态各自取值。 */
+/** 日志级别的正文配色（视图与测试共用同一份表）。级别是状态语义，走语义
+ *  token（§4.11.1 / P71）：warn→`text-warning-strong`、error→
+ *  `text-destructive`（与徽标同源）；info/debug 本就是 ink 系中性档。 */
 export const LEVEL_TEXT_STYLES: Record<LogLevel, string> = {
   debug: "text-ink-soft",
   info: "text-ink-field",
-  warn: "text-amber-700 dark:text-amber-300",
-  error: "text-rose-700 dark:text-rose-300",
+  warn: "text-warning-strong",
+  error: "text-destructive",
 };
 
 export function hasAnsi(text: string): boolean {
