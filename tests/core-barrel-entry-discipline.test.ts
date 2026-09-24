@@ -43,36 +43,42 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
     ).toBeNull();
   });
 
-  it("转出的每个符号都有消费方（没有消费方的转发等于零消费导出）", () => {
-    const code = stripComments(readFileSync(INDEX, "utf8"));
-    const names = [...code.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)]
-      .flatMap((m) => (m[1] ?? "").split(","))
-      .map((part) =>
-        part
-          .trim()
-          .split(/\s+as\s+/)
-          .pop()
-          ?.trim(),
-      )
-      .filter((n): n is string => Boolean(n));
-    // 正向：当前唯一转出的符号是确实被引用的那个（反向验证扫描器不是空转）
-    expect(names).toContain("SkillSeed");
+  // 全仓 walk + stripComments 的判据：并行跑多份工程时 5s 默认超时会假红
+  // （单独跑 <3s）。给足容忍度，断言本身不变。
+  it(
+    "转出的每个符号都有消费方（没有消费方的转发等于零消费导出）",
+    { timeout: 30_000 },
+    () => {
+      const code = stripComments(readFileSync(INDEX, "utf8"));
+      const names = [...code.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)]
+        .flatMap((m) => (m[1] ?? "").split(","))
+        .map((part) =>
+          part
+            .trim()
+            .split(/\s+as\s+/)
+            .pop()
+            ?.trim(),
+        )
+        .filter((n): n is string => Boolean(n));
+      // 正向：当前唯一转出的符号是确实被引用的那个（反向验证扫描器不是空转）
+      expect(names).toContain("SkillSeed");
 
-    // 反向：扫全仓（含测试 / 脚本），每个转出的符号必须至少有一处引用。
-    const corpus = ["src", "tests", "scripts", "e2e"]
-      .flatMap((dir) => walkAll(join(ROOT, dir)))
-      .filter((f) => f !== INDEX)
-      .map((f) => stripComments(readFileSync(f, "utf8")))
-      .join("\n");
-    const orphaned = names.filter(
-      (n) => !new RegExp(`\\b${n}\\b`).test(corpus),
-    );
-    expect(
-      orphaned,
-      "以下符号被 `core/index.ts` 转出但全仓无人引用 —— 转发它只会制造一条「看起来有用」的出口：\n" +
-        "要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。",
-    ).toEqual([]);
-  });
+      // 反向：扫全仓（含测试 / 脚本），每个转出的符号必须至少有一处引用。
+      const corpus = ["src", "tests", "scripts", "e2e"]
+        .flatMap((dir) => walkAll(join(ROOT, dir)))
+        .filter((f) => f !== INDEX)
+        .map((f) => stripComments(readFileSync(f, "utf8")))
+        .join("\n");
+      const orphaned = names.filter(
+        (n) => !new RegExp(`\\b${n}\\b`).test(corpus),
+      );
+      expect(
+        orphaned,
+        "以下符号被 `core/index.ts` 转出但全仓无人引用 —— 转发它只会制造一条「看起来有用」的出口：\n" +
+          "要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。",
+      ).toEqual([]);
+    },
+  );
 
   it("barrel 与「同层模块从它取用」组合起来不产生环（判据保留在这里的理由）", () => {
     // 这条不是「测代码」，而是把 `export *` 判据的**理由**钉成可执行事实：

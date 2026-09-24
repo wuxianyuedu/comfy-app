@@ -60,15 +60,15 @@ interface SseFrame {
 
 type Level = StepLogEntry["level"];
 
-/* 与应用日志 (LogPanel) 同款 level badge 配色。 */
+/* 与应用日志 (LogPanel) 同款 level badge 配色，走语义 token（§4.11.1 / P71）：
+ * error→destructive、warn→warning、success→success、progress→primary、
+ * info→info。token 内部含深浅两态，不再写 dark:。 */
 const LEVEL_STYLES: Record<Level, string> = {
-  error: "border-rose-500/20 bg-rose-500/15 text-rose-700 dark:text-rose-400",
-  warn: "border-amber-500/20 bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  success:
-    "border-emerald-500/20 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  progress:
-    "border-violet-500/20 bg-violet-500/15 text-violet-700 dark:text-violet-400",
-  info: "border-cyan-500/20 bg-cyan-500/15 text-cyan-700 dark:text-cyan-400",
+  error: "border-destructive/20 bg-destructive/15 text-destructive",
+  warn: "border-warning/20 bg-warning/15 text-warning-strong",
+  success: "border-success/20 bg-success/15 text-success-strong",
+  progress: "border-primary/20 bg-primary/15 text-primary-strong",
+  info: "border-info/20 bg-info/15 text-info-strong",
 };
 
 /** 把「失败原因」补写为一条 error 日志行（横幅之外）。
