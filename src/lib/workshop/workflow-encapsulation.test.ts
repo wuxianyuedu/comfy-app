@@ -826,3 +826,46 @@ describe("视频模式判定", () => {
     expect(modeUsesLastFrame("I2V")).toBe(false);
   });
 });
+
+describe("种子口：连了才落，没连落不下去（实际是否可换由工作流决定）", () => {
+  it("作者把「种子」口连到 seed 行 → values.seed 落到那一行", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "text", seed: "seed" }),
+      mode: "T2I",
+      values: { prompt: "a dog", seed: 999 },
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "3",
+      name: "seed",
+      value: 999,
+    });
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("作者没连「种子」口 → values.seed 落不下去，进 unmatched（用工作流图内 seed）", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "text" }),
+      mode: "T2I",
+      values: { prompt: "a dog", seed: 999 },
+    });
+    expect(res.workflowInputs.some((i) => i.name === "seed")).toBe(false);
+    expect(res.unmatched).toContain("seed");
+  });
+
+  it("exposedValueOf / withExposedValue 对种子口按数字读写；空值清掉", () => {
+    const next = withExposedValue({}, "seed", 123);
+    expect(next.seed).toBe(123);
+    expect(exposedValueOf(next, "seed")).toBe("123");
+    // 字符串数字写回也归一成数字
+    expect(withExposedValue({}, "seed", "456").seed).toBe(456);
+    // 空串 → 清掉该值（回落工作流图内 seed）
+    expect(withExposedValue({ seed: 1 }, "seed", "").seed).toBeUndefined();
+  });
+
+  it("pruneEmpty 保留 seed（含 0 这个有效值），没给则不写", () => {
+    expect(pruneEmptyExposedValues({ seed: 0 }).seed).toBe(0);
+    expect(pruneEmptyExposedValues({}).seed).toBeUndefined();
+  });
+});

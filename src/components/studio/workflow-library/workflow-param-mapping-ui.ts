@@ -23,6 +23,7 @@ export const PARAM_CLASS_LABEL: Record<ParamClass, string> = {
   "first-frame": "首帧",
   "last-frame": "尾帧",
   duration: "时长",
+  seed: "种子",
   other: "参数",
 };
 
@@ -41,6 +42,7 @@ export const PARAM_CLASS_COLOR: Record<ParamClass, string> = {
   "first-frame": "#34d399",
   "last-frame": "#fbbf24",
   duration: "#f472b6",
+  seed: "#fb923c",
   other: "#94a3b8",
 };
 
