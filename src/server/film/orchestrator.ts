@@ -24,6 +24,7 @@ import { normalizeProductionProgress } from "~/lib/production/progress";
 import type { Shot } from "~/lib/workshop/types";
 import { cancelTask } from "~/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
+import { randomSeed } from "~/lib/comfyui/random-seed";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
 import { parseIdeaToScenes } from "~/lib/workshop/script-parser";
 import { sizeSpecDims, toSizeSpec } from "~/lib/media/size-presets";
@@ -420,6 +421,9 @@ export async function syncFilmToProject(
 // 视频这一跳没有内置模板（内置 img2video / txt2video 与 `__PROMPT__` 系列
 // token 替换已移除）：镜头 params 里必须带**工作流库视频工作流 id**。
 // 没有首帧时，用同一份 params 里的**图类工作流 id** 本地合成一张再喂给视频图。
+// 种子口径与 Agent 逐镜生图一致：这条 autopilot 每次自主出图都带一个新的随机
+// seed，且只经「种子」对外参数下发（落作者连的 seed / noise_seed 端口，没连则
+// 进 unmatched、用工作流图内 seed），运行期绝不改写工作流节点。
 async function generateVideoShot(
   userId: string,
   shot: { prompt: string; negative?: string | null; params?: unknown },
@@ -452,6 +456,7 @@ async function generateVideoShot(
       prompt: shot.prompt,
       negative: shot.negative ?? undefined,
       size,
+      seed: randomSeed(),
     });
   }
 
@@ -464,6 +469,7 @@ async function generateVideoShot(
       firstFrame: inputImage,
       frames: (params.frames ?? 81) as number,
       size,
+      seed: randomSeed(),
     },
   });
 
