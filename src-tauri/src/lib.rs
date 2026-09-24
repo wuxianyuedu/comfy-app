@@ -694,7 +694,14 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
       sections.push(format!("─ 启动编排日志（{}）─\n{}", dev_log_name, tail));
     }
   }
-  if let Some(tail) = tail_log_file(&log_dir.join("dev-launcher-stderr.log"), 4 * 1024, 60) {
+  // 这份是追加不轮转的固定名文件，会累积历次启动。壳在每次启动时先往里写会话
+  // 标记，这里只取最后一个标记之后的行，保证面板只显示本次启动的 stderr。
+  if let Some(tail) = tail_log_file_since_marker(
+    &log_dir.join("dev-launcher-stderr.log"),
+    shell_launch::SESSION_START_MARKER,
+    4 * 1024,
+    60,
+  ) {
     if !tail.trim().is_empty() {
       sections.push(format!("─ 错误输出（dev-launcher-stderr.log）─\n{}", tail));
     }
@@ -703,7 +710,14 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   // 不产生此文件）。启动期壳的导航/看门狗/侧车诊断都经 log:: 打到这份文件，
   // 正式版壳脱离 launcher（standalone 双击）崩溃时仍有可查日志。
   let shell_log = std::path::Path::new(&root).join("log").join("shell").join("shell.log");
-  if let Some(tail) = tail_log_file(&shell_log, 8 * 1024, 120) {
+  // 同上：追加不轮转，靠会话标记只取本次启动的壳自持日志（dev 模式下这份文件
+  // 不产生，下面取不到标记会退回空切片，不影响其它段）。
+  if let Some(tail) = tail_log_file_since_marker(
+    &shell_log,
+    shell_launch::SESSION_START_MARKER,
+    8 * 1024,
+    120,
+  ) {
     if !tail.trim().is_empty() {
       sections.push(format!("─ 壳日志（log/shell/shell.log）─\n{}", tail));
     }
