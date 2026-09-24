@@ -44,13 +44,28 @@ type DisplayMode = "grid" | "list";
 
 /* ── Helpers（纯展示：格式化与配色，不含业务规则）──────────── */
 
-/** 分类图标底色：图片/视频/音频/文档各一套，和历史记录面板保持同一语言。 */
+/** 分类图标底色 + 文件夹渐变——两处**装饰色**都属 §3.6.1 文档化例外，
+ *  走 `p71-allow` 例外块而不是硬塞状态语义 token：
+ *    · `KIND_STYLE`：image / video / audio / doc 的**分类识别色**——
+ *      紫=图、蓝=视频、绿=音频是这套 UI 里"素材类型"的视觉语言（与
+ *      历史面板同源），"绿"在这里**不是 success 状态**、是 audio 类型；
+ *      没有对应的"媒体类型"语义 token，硬映射会丢信息（三种归同一 token
+ *      就无法区分），全塞 status-* 更是把分类装饰错当状态色。
+ *    · `FOLDER_ICON_TINT`：文件夹图标黄橙渐变——是"目录容器"的
+ *      通用装饰（与 macOS / 资源管理器的文件夹色一脉相承），与状态无关。
+ *  两处都是"字面量本身即语义"的形态——同 ANSI SGR 终端 8 色的判据。 */
+// p71-allow:start 媒体分类识别色 + 文件夹装饰色——§3.6.1 文档化例外，颜色本身即语义
 const KIND_STYLE: Record<string, string> = {
   image: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
   video: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   audio: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   doc: "bg-subtle text-ink-soft",
 };
+
+/** 文件夹图标块（列表 / 网格两处都用；容器边长/圆角由调用方加）。 */
+const FOLDER_ICON_TINT =
+  "bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-700/90 dark:text-yellow-400/80";
+// p71-allow:end
 
 function KindIcon({ kind }: { kind: string }) {
   if (kind === "image") return <ImageIcon size={18} strokeWidth={1.8} />;
@@ -245,7 +260,7 @@ export function MaterialLibraryPanel({
                 <Button
                   variant="ghost"
                   onClick={() => enterFolder(seg.key)}
-                  className="text-ink-muted h-auto p-0 text-[12px] font-normal hover:bg-transparent hover:text-violet-700 hover:underline dark:text-violet-300 dark:hover:text-violet-700"
+                  className="text-ink-muted hover:text-primary-strong h-auto p-0 text-[12px] font-normal hover:bg-transparent hover:underline"
                 >
                   {seg.label}
                 </Button>
@@ -268,14 +283,14 @@ export function MaterialLibraryPanel({
 
       {/* ── Error banner ── */}
       {error && (
-        <div className="mx-4 mb-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-          <span className="min-w-0 flex-1 text-[11px] break-words text-red-700 dark:text-red-300">
+        <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
+          <span className="text-destructive min-w-0 flex-1 text-[11px] break-words">
             {error}
           </span>
           <Button
             variant="ghost"
             onClick={refresh}
-            className="h-auto shrink-0 p-0 text-[11px] text-red-700 underline hover:bg-transparent hover:text-red-900 dark:text-red-200 dark:hover:text-red-100"
+            className="text-destructive h-auto shrink-0 p-0 text-[11px] underline hover:bg-transparent"
           >
             重试
           </Button>
@@ -317,7 +332,7 @@ export function MaterialLibraryPanel({
                   <Button
                     variant="ghost"
                     onClick={uploadPicker.open}
-                    className="flex h-auto items-center gap-2 font-normal hover:bg-transparent hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-700"
+                    className="hover:text-primary-strong flex h-auto items-center gap-2 font-normal hover:bg-transparent"
                   >
                     <Plus size={14} />
                     点击 + 或右键菜单创建内容
@@ -378,7 +393,7 @@ export function MaterialLibraryPanel({
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => void remove(item)}
-                      className="text-ink-soft rounded bg-black/60 backdrop-blur hover:bg-black/60 hover:text-red-700 dark:text-red-600 dark:hover:text-red-400"
+                      className="text-ink-soft hover:text-destructive rounded bg-black/60 backdrop-blur hover:bg-black/60"
                       title="删除"
                     >
                       <Trash2 size={12} />
@@ -450,7 +465,7 @@ export function MaterialLibraryPanel({
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => void remove(item)}
-                      className="text-ink-muted hover:bg-subtle rounded-md hover:text-red-700 dark:text-red-600 dark:hover:text-red-400"
+                      className="text-ink-muted hover:bg-subtle hover:text-destructive rounded-md"
                       title="删除"
                     >
                       <Trash2 size={13} />
@@ -470,7 +485,9 @@ export function MaterialLibraryPanel({
                 onClick={() => enterFolder(folder.id)}
                 className="border-border-strong bg-subtle hover:bg-surface-2 hover:border-ink-fainter group flex h-auto flex-col items-center gap-2 rounded-lg border py-4 font-normal transition-colors"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-700/90 dark:text-yellow-400/80">
+                <div
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl ${FOLDER_ICON_TINT}`}
+                >
                   <Folder size={22} strokeWidth={1.8} />
                 </div>
                 <span className="text-ink-soft min-w-0 truncate text-center text-[12px]">
@@ -493,7 +510,9 @@ export function MaterialLibraryPanel({
                 onClick={() => enterFolder(folder.id)}
                 className="hover:bg-subtle group flex h-auto w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left font-normal transition-colors"
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-700/90 dark:text-yellow-400/80">
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${FOLDER_ICON_TINT}`}
+                >
                   <Folder size={18} strokeWidth={1.8} />
                 </div>
                 <span className="text-ink-bright min-w-0 flex-1 truncate text-[13px]">

@@ -438,7 +438,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         <FileText size={12} />
         执行日志
         {errorCount > 0 && (
-          <span className="rounded-full bg-rose-500/20 px-1 text-[10px] text-rose-700 dark:text-rose-300">
+          <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
             {errorCount}
           </span>
         )}
@@ -459,10 +459,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             {/* Header */}
             <div className="border-border-strong bg-surface-1 flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
               <div className="flex min-w-0 items-center gap-2">
-                <FileText
-                  size={16}
-                  className="shrink-0 text-violet-700 dark:text-violet-400"
-                />
+                <FileText size={16} className="text-primary-strong shrink-0" />
                 <span className="text-ink-bright truncate text-[15px] font-semibold">
                   执行日志
                 </span>
@@ -493,7 +490,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                     disabled={cancellingFromPanel}
                     title="取消当前查看的任务"
                     data-testid="log-panel-cancel"
-                    className="h-auto rounded-md border border-red-500/30 bg-red-500/8 px-2 py-0.5 text-[10.5px] text-red-700/90 hover:bg-red-500/15 dark:text-red-300/90"
+                    className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 h-auto rounded-md border px-2 py-0.5 text-[10.5px]"
                   >
                     {cancellingFromPanel ? "× 取消中…" : "× 取消"}
                   </Button>
@@ -601,16 +598,16 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
             >
               {valErrs.length > 0 && (
-                <div className="mb-2 rounded border border-red-500/40 bg-red-500/8 p-2">
-                  <div className="mb-1.5 text-[13px] font-semibold text-red-700 dark:text-red-300">
+                <div className="border-destructive/40 bg-destructive/8 mb-2 rounded border p-2">
+                  <div className="text-destructive mb-1.5 text-[13px] font-semibold">
                     ⚠ 工作流验证错误（{valErrs.length}）
                   </div>
                   <ValidationErrorList
                     errors={valErrs.slice(0, 12)}
-                    className="text-red-700/95 dark:text-red-300/90"
+                    className="text-destructive/95"
                   />
                   {valErrs.length > 12 && (
-                    <div className="mt-1 text-[12px] text-red-700 dark:text-red-300/70">
+                    <div className="text-destructive/80 mt-1 text-[12px]">
                       +{valErrs.length - 12} more…
                     </div>
                   )}
@@ -618,7 +615,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               )}
 
               {!valErrs.length && error && (
-                <div className="mb-2 flex flex-col gap-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-700/90 dark:text-red-300/90">
+                <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-[13px]">
                   <div className="break-words whitespace-pre-wrap">{error}</div>
                 </div>
               )}

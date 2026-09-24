@@ -365,7 +365,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                       variant="ghost"
                       size="icon-xs"
                       onClick={deleteSelf}
-                      className="text-ink-muted ml-1 h-auto p-0 hover:bg-transparent hover:text-red-700 dark:text-red-600 dark:hover:text-red-300"
+                      className="text-ink-muted hover:text-destructive ml-1 h-auto p-0 hover:bg-transparent"
                       title="删除节点"
                     >
                       <Icon name="close" size={14} />
