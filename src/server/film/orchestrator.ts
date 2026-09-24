@@ -520,6 +520,10 @@ async function watchFilm(id: string) {
     let done = 0;
     let failed = 0;
 
+    /* 先把「不用再问数据库」的镜头结清（没有 taskId 的、已终态的），剩下的
+     * **一次性**批量取进度：原先是逐镜头 `await findExecutionProgress`，一轮
+     * 就是 2N 次往返（N = 镜头数），跑满 240 轮是上万次查询。 */
+    const awaiting: (typeof shots)[number][] = [];
     for (const shot of shots) {
       if (!shot.taskId) {
         pending++;
@@ -530,7 +534,21 @@ async function watchFilm(id: string) {
         else failed++;
         continue;
       }
-      const task = await taskRepository.findExecutionProgress(shot.taskId);
+      awaiting.push(shot);
+    }
+
+    const taskIds: string[] = [];
+    for (const shot of awaiting) {
+      if (shot.taskId) taskIds.push(shot.taskId);
+    }
+    const progressById = new Map(
+      (await taskRepository.findExecutionProgressMany(taskIds)).map(
+        (row) => [row.id, row] as const,
+      ),
+    );
+
+    for (const shot of awaiting) {
+      const task = shot.taskId ? progressById.get(shot.taskId) : undefined;
       if (!task) {
         pending++;
         continue;
@@ -565,12 +583,17 @@ async function watchFilm(id: string) {
               ((params.fps ?? 16) as number);
       }
 
-      await filmShotRepository.updateFromTask(shot.id, {
-        status: next,
-        progress: task.progress,
-        videoPath: videoPath ?? undefined,
-        duration: duration ?? null,
-      });
+      /* 只在真的变了才写：原先每轮对每个在跑的镜头都无条件 UPDATE，绝大多数
+       * 轮次写进去的是与库里一模一样的值。 */
+      const nextProgress = task.progress ?? 0;
+      if (shot.status !== next || (shot.progress ?? 0) !== nextProgress) {
+        await filmShotRepository.updateFromTask(shot.id, {
+          status: next,
+          progress: nextProgress,
+          videoPath: videoPath ?? undefined,
+          duration: duration ?? null,
+        });
+      }
       if (next === "SUCCEEDED") done++;
       else if (next === "FAILED") failed++;
       else pending++;

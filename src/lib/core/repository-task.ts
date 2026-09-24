@@ -289,6 +289,32 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return rows[0] ?? null;
   }
 
+  /** `findExecutionProgress` 的批量版。
+   *
+   * 成片监看每 4s 一轮、每轮要按镜头取十几个任务的进度，逐个查就是每轮 N 次
+   * 往返（N = 镜头数），跑满 240 轮是上万次查询；批量版一轮只发一条 `IN`。
+   * 这里连 `resultImages` 一起取（成片镜头要从中挑视频路径），避免调用方
+   * 为拿它再查一遍。 */
+  async findExecutionProgressMany(taskIds: string[]): Promise<
+    Array<{
+      id: string;
+      status: string;
+      progress: number;
+      resultImages: unknown;
+    }>
+  > {
+    if (!taskIds.length) return [];
+    return db
+      .select({
+        id: task.id,
+        status: task.status,
+        progress: task.progress,
+        resultImages: task.resultImages,
+      })
+      .from(task)
+      .where(inArray(task.id, taskIds));
+  }
+
   /**
    * 进度回写（顺带把行标成 RUNNING）：**只在非终态行上生效**。
    *
