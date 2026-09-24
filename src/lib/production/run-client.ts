@@ -10,6 +10,7 @@ import {
   type ProductionRun,
   type RunAction,
 } from "~/lib/production/run-types";
+import type { ReviewMode, ReviewVerdict } from "~/lib/production/review-types";
 
 export interface RunSnapshot {
   run: ProductionRun;
@@ -70,4 +71,45 @@ export async function approveRun(projectId: string): Promise<RunSnapshot> {
 export async function cancelRun(projectId: string): Promise<RunSnapshot> {
   const res = await vanillaApi.run.cancel.mutate({ projectId });
   return toSnapshot(res);
+}
+
+/* ── AI 评审（Phase 8 · P8-1b）：文本评审 + 不合格重生成，均走 run.* 端点 ── */
+
+/** 评审一个分镜镜头（文本），返回判定（服务端已落库到 `shot.review`）。 */
+export async function reviewShot(
+  projectId: string,
+  shotId: string,
+): Promise<ReviewVerdict> {
+  const res = await vanillaApi.run.reviewShot.mutate({ projectId, shotId });
+  return res.verdict;
+}
+
+/** 评审一张角色卡（文本），返回判定（服务端已落库到 `character.review`）。 */
+export async function reviewCharacter(
+  projectId: string,
+  characterId: string,
+): Promise<ReviewVerdict> {
+  const res = await vanillaApi.run.reviewCharacter.mutate({
+    projectId,
+    characterId,
+  });
+  return res.verdict;
+}
+
+/**
+ * 评审不合格后的重生成（镜头）：gacha=同提示词换种子重出，reprompt=据评审意见改写提示词再重出。
+ * 服务端把镜头退回（rev 自增）交规划器重新纳入；本函数只负责发起 + 落库，不主动起 run。
+ */
+export async function regenerateShot(
+  projectId: string,
+  shotId: string,
+  mode: ReviewMode,
+  newPrompt?: string,
+): Promise<void> {
+  await vanillaApi.run.regenerateShot.mutate({
+    projectId,
+    shotId,
+    mode,
+    ...(newPrompt !== undefined ? { newPrompt } : {}),
+  });
 }

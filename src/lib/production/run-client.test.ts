@@ -7,6 +7,9 @@ import {
   cancelRun,
   fetchRunStatus,
   pauseRun,
+  regenerateShot,
+  reviewCharacter,
+  reviewShot,
   resumeRun,
   startRun,
 } from "./run-client";
@@ -20,6 +23,9 @@ vi.mock("~/trpc/vanilla", () => ({
       resume: { mutate: vi.fn() },
       approve: { mutate: vi.fn() },
       cancel: { mutate: vi.fn() },
+      reviewShot: { mutate: vi.fn() },
+      reviewCharacter: { mutate: vi.fn() },
+      regenerateShot: { mutate: vi.fn() },
     },
   },
 }));
@@ -30,6 +36,9 @@ const pauseMutate = vi.mocked(vanillaApi.run.pause.mutate);
 const resumeMutate = vi.mocked(vanillaApi.run.resume.mutate);
 const approveMutate = vi.mocked(vanillaApi.run.approve.mutate);
 const cancelMutate = vi.mocked(vanillaApi.run.cancel.mutate);
+const reviewShotMutate = vi.mocked(vanillaApi.run.reviewShot.mutate);
+const reviewCharacterMutate = vi.mocked(vanillaApi.run.reviewCharacter.mutate);
+const regenerateShotMutate = vi.mocked(vanillaApi.run.regenerateShot.mutate);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -88,5 +97,60 @@ describe("run 控制动作", () => {
     expect((await cancelRun("p")).run.status).toBe("paused");
     expect(pauseMutate).toHaveBeenCalledWith({ projectId: "p" });
     expect(cancelMutate).toHaveBeenCalledWith({ projectId: "p" });
+  });
+});
+
+describe("评审 / 重生成封装（P8-1b）", () => {
+  it("reviewShot 透传 projectId+shotId，回 verdict", async () => {
+    const verdict = {
+      pass: false,
+      issues: ["含混"],
+      suggestion: "更具体",
+      scoredAt: "t",
+    };
+    reviewShotMutate.mockResolvedValue({ verdict });
+    const r = await reviewShot("proj_1", "s1");
+    expect(reviewShotMutate).toHaveBeenCalledWith({
+      projectId: "proj_1",
+      shotId: "s1",
+    });
+    expect(r).toEqual(verdict);
+  });
+
+  it("reviewCharacter 透传 projectId+characterId，回 verdict", async () => {
+    const verdict = {
+      pass: true,
+      issues: [],
+      suggestion: "",
+      scoredAt: "t",
+    };
+    reviewCharacterMutate.mockResolvedValue({ verdict });
+    const r = await reviewCharacter("proj_1", "c1");
+    expect(reviewCharacterMutate).toHaveBeenCalledWith({
+      projectId: "proj_1",
+      characterId: "c1",
+    });
+    expect(r.pass).toBe(true);
+  });
+
+  it("regenerateShot(gacha) 不带 newPrompt 时不塞该字段", async () => {
+    regenerateShotMutate.mockResolvedValue({ ok: true });
+    await regenerateShot("proj_1", "s1", "gacha");
+    expect(regenerateShotMutate).toHaveBeenCalledWith({
+      projectId: "proj_1",
+      shotId: "s1",
+      mode: "gacha",
+    });
+  });
+
+  it("regenerateShot(reprompt) 带 newPrompt 时透传", async () => {
+    regenerateShotMutate.mockResolvedValue({ ok: true });
+    await regenerateShot("proj_1", "s1", "reprompt", "改进提示词");
+    expect(regenerateShotMutate).toHaveBeenCalledWith({
+      projectId: "proj_1",
+      shotId: "s1",
+      mode: "reprompt",
+      newPrompt: "改进提示词",
+    });
   });
 });

@@ -79,6 +79,8 @@ export interface FilmStudioController {
   createFromProject: () => Promise<void>;
   /** 退回某镜（清产出 + rev 自增 + 刷新列表），让自主 run 重做该镜。 */
   redoShot: (shotId: string) => Promise<void>;
+  /** 重载项目镜头列表（评审重生成后刷新左栏）。 */
+  reloadProjectShots: () => Promise<void>;
   cancel: () => Promise<void>;
   recompose: () => Promise<void>;
   uploadBgmFile: (file: File) => Promise<void>;
@@ -434,6 +436,7 @@ export function useFilmStudio(): FilmStudioController {
     create,
     createFromProject,
     redoShot,
+    reloadProjectShots,
     cancel,
     recompose,
     uploadBgmFile,
