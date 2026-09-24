@@ -19,6 +19,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNodes } from "@xyflow/react";
+import { nodeSeqOf } from "./node-seq";
 import { FileText, X } from "lucide-react";
 import type { ValidationError } from "~/lib/comfyui/validation";
 import type { StepLogEntry } from "./stepLogCache";
@@ -375,6 +376,10 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   /* 把每个已缓存的 taskId 映射回画布节点短序号 (#1, #2…)。
    * 映射来源：运行开始时 setActiveTaskId(taskId, nodeId) 写进 activeTask，
    * 随后通过 patchStepLogMeta 持久化到 stepLogCache。 */
+  /* `useNodes()` 订阅的是整份节点数组，画布每帧（拖拽 / 平移）都会换引用 →
+   * 这个 useMemo 每帧重算。原先对每个缓存任务各做一次 `findIndex`，是
+   * O(缓存任务数 × 节点数)；改走 `nodeSeqOf` 的按帧记忆映射后，整帧只建
+   * 一次表（O(节点数)），其余是 O(1) 查表。 */
   const nodes = useNodes();
   const nodeSeqByTaskId = useMemo(() => {
     const map = new Map<string, number>();
@@ -382,8 +387,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
       const nodeId =
         getNodeIdByTaskId(cachedId) ?? loadStepLogPanelState(cachedId)?.nodeId;
       if (!nodeId) continue;
-      const idx = nodes.findIndex((node) => node.id === nodeId);
-      if (idx !== -1) map.set(cachedId, idx + 1);
+      const seq = nodeSeqOf(nodes, nodeId);
+      if (seq !== null) map.set(cachedId, seq);
     }
     return map;
   }, [cachedIds, nodes]);
