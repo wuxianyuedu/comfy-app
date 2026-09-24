@@ -158,7 +158,8 @@ export type RunnerState = {
   /** comfy-cli 完整原始输出（按行、不截断）：供前端「查看完整输出」入口按需
    *  拉取。面板的 `[comfy-cli 原始]`/`stdout`/`stderr` 行出于防刷屏做了单行与
    *  行数截断（executor-cli-stream 的 MAX_*），但排障常要看被截掉的完整 JSON
-   *  与完整 traceback，故这里单独以「不截断」方式留存，上限见 RAW_CLI_MAX_LINES。 */
+   *  与完整 traceback，故这里单独以「不截断」方式留存，行数上限见
+   *  RAW_CLI_MAX_LINES，任务数上限见 LOGS_MAX_TASKS。 */
   rawCli: Map<string, string[]>;
 
   lastLogPct: Map<string, number>;
@@ -343,6 +344,35 @@ function callerLoc(): string {
 
 // 保证持续输出时不会把数据库写饿。
 
+/* 内存态按任务留存的缓冲必须有上限（规范 §2.1「列表/日志必须有上限」）。
+ * 两个维度缺一不可：
+ *  - `LOGS_MAX_LINES`：单个任务的行数，超出丢最旧的（保留最新一段）；
+ *  - `LOGS_MAX_TASKS`：同时驻留的任务数，超出按「最久没写过」淘汰。
+ * 只限行数，Map 的键仍随执行过的任务数单调增长；只限任务数，一个失控任务
+ * 照样能把内存撑爆。淘汰不丢数据：日志已由 `persistLogs` 落库，SSE 回放
+ * 读不到内存时会回落 DB 列（见 stream route 的 `replaySrc`）。 */
+export const LOGS_MAX_LINES = 5000;
+
+export const LOGS_MAX_TASKS = 64;
+
+/** 写入并把该任务标记为「最近使用」，再淘汰超出 `maxTasks` 的最久未用项。
+ *  Map 的迭代序是插入序、对已存在的键 `set` 不改变位置 —— 所以标记最近
+ *  使用要 delete 后再 set，淘汰时取迭代器的第一个键即得最旧项。 */
+function touchAndEvict<V>(
+  map: Map<string, V>,
+  taskId: string,
+  value: V,
+  maxTasks: number,
+): void {
+  map.delete(taskId);
+  map.set(taskId, value);
+  while (map.size > maxTasks) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
+}
+
 export function log(taskId: string, level: LogEntry["level"], msg: string) {
   const store = state();
 
@@ -352,7 +382,9 @@ export function log(taskId: string, level: LogEntry["level"], msg: string) {
 
   arr.push(entry);
 
-  store.logs.set(taskId, arr);
+  if (arr.length > LOGS_MAX_LINES) arr.splice(0, arr.length - LOGS_MAX_LINES);
+
+  touchAndEvict(store.logs, taskId, arr, LOGS_MAX_TASKS);
 
   store.emitter.emit(taskId, { type: "log", entry });
 
@@ -545,7 +577,7 @@ export function appendRawCli(taskId: string, line: string): void {
   if (arr.length > RAW_CLI_MAX_LINES) {
     arr.splice(0, arr.length - RAW_CLI_MAX_LINES);
   }
-  store.rawCli.set(taskId, arr);
+  touchAndEvict(store.rawCli, taskId, arr, LOGS_MAX_TASKS);
 }
 
 /** 读取某次执行累积的 comfy-cli 完整原文（无记录返回空数组）。 */
