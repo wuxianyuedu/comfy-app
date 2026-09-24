@@ -188,8 +188,12 @@ describe("advanceRunLoop", () => {
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
     expect(synthesizeFirstFrame).toHaveBeenCalledTimes(1);
-    // 首刷（无 processedShotRev 记录）不注 seed —— 用工作流图内自带的 seed 配置。
-    expect(synthesizeFirstFrame.mock.calls[0]![0]).not.toHaveProperty("seed");
+    // 种子默认随机：首刷也带一个有限数字 seed（工作流没连「种子」口则落不下去、用图内 seed）。
+    const firstSeed = (
+      synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }
+    ).seed;
+    expect(typeof firstSeed).toBe("number");
+    expect(Number.isFinite(firstSeed)).toBe(true);
     const shot = (row!.shots as { imageUrl?: string; status: string }[])[0];
     expect(shot).toMatchObject({
       status: "done",
@@ -200,7 +204,7 @@ describe("advanceRunLoop", () => {
     expect(run.status).toBe("done");
   });
 
-  it("抽卡重生成（rev 比快照新）：出图带一个新的随机 seed", async () => {
+  it("抽卡重生成（rev 比快照新）：出图同样带一个新的随机 seed", async () => {
     await seed(
       {
         scriptMarkdown: "# 剧本",
