@@ -75,22 +75,46 @@ export async function GET(
             });
             lastSent.status = task.status;
             lastSent.progress = task.progress ?? 0;
+            /* 订阅之前任务就已终态：emitter 不会再发 done/error，而轮询那条
+             * 「与上次发出的快照不同才动作」的判据刚被这次回放喂成了恒假 ——
+             * 两条退出路径都到不了，只能在这里收口（日志与终态 state 都已
+             * 回放完毕，此时关闭不丢数据）。 */
+            if (isTerminalTaskStatus(task.status)) cleanup();
           }
         })
         .catch(() => {
           /* 初始回放失败可忽略 — 订阅与轮询随后仍会推送状态 */
         });
 
-      const unsub = subscribe(id, (e: TaskEvent) => {
-        send(e);
-        if (e.type === "done" || e.type === "error") {
-          try {
-            controller.close();
-          } catch {
-            /* SSE 已关闭 —— 忽略 */
-          }
-          unsub();
+      /* 三条退出路径 —— emitter 终态、轮询读到终态、客户端 abort —— 必须收进
+       * 同一个 cleanup：只清其中一条，剩下的那条（最常见的就是 emitter 终态分支）
+       * 会让 3s 的 DB 轮询在流关闭之后继续跑，直到进程退出 —— 客户端早已断连，
+       * 服务端却每 3s 查一次库，看过的任务越多残留越多。
+       * 句柄收在一个可变对象里而不是各自 `let`：cleanup 要能被 subscribe 的回调
+       * 调用，而回调注册时这些句柄还没创建 —— 直接 `const` 引用不到（TDZ），
+       * 这正是原先两个定时器只能声明在回调之后、因而没法被清掉的结构性原因。 */
+      const handles: {
+        unsubscribe?: () => void;
+        heartbeat?: ReturnType<typeof setInterval>;
+        poll?: ReturnType<typeof setInterval>;
+      } = {};
+      let closed = false;
+      const cleanup = () => {
+        if (closed) return;
+        closed = true;
+        if (handles.heartbeat !== undefined) clearInterval(handles.heartbeat);
+        if (handles.poll !== undefined) clearInterval(handles.poll);
+        try {
+          controller.close();
+        } catch {
+          /* 流已经关了 —— 忽略 */
         }
+        handles.unsubscribe?.();
+      };
+
+      handles.unsubscribe = subscribe(id, (e: TaskEvent) => {
+        send(e);
+        if (e.type === "done" || e.type === "error") cleanup();
       });
 
       /* SSE 心跳。若长时间没有字节流动，操作系统 / 负载均衡 / 代理会在看似空闲
@@ -100,12 +124,12 @@ export async function GET(
        * 而实际上什么都没变。SSE 注释行 `: hb\n\n` 对 EventSource 的
        * onmessage 处理器不可见，却能刷新内核的 TCP 空闲计时器。
        * 15s 远小于多数代理的空闲超时（通常 30–60s）。abort 时清除。 */
-      const hbId = setInterval(() => {
+      handles.heartbeat = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
         } catch {
           /* controller 已关闭 —— 清掉定时器并退出 */
-          clearInterval(hbId);
+          if (handles.heartbeat !== undefined) clearInterval(handles.heartbeat);
         }
       }, 15000);
 
@@ -119,7 +143,7 @@ export async function GET(
        * 前端的 d.status 也不会卡住。abort 时关闭；
        * 同时最多只允许一次轮询在途，避免堆积。 */
       let polling = false;
-      const pollId = setInterval(() => {
+      handles.poll = setInterval(() => {
         if (polling) return;
         polling = true;
         taskRepository
@@ -140,16 +164,7 @@ export async function GET(
                 validationErrors: parseValidationErrors(cur.validationErrors),
                 workflowName: cur.workflowName,
               });
-              if (isTerminalTaskStatus(cur.status)) {
-                try {
-                  controller.close();
-                } catch {
-                  /* ignore */
-                }
-                clearInterval(pollId);
-                clearInterval(hbId);
-                unsub();
-              }
+              if (isTerminalTaskStatus(cur.status)) cleanup();
             }
           })
           .catch(() => {
@@ -160,24 +175,7 @@ export async function GET(
           });
       }, 3000);
 
-      req.signal.addEventListener("abort", () => {
-        try {
-          clearInterval(hbId);
-        } catch {
-          /* 定时器已经清过了 —— 忽略 */
-        }
-        try {
-          clearInterval(pollId);
-        } catch {
-          /* 定时器已经清过了 —— 忽略 */
-        }
-        try {
-          controller.close();
-        } catch {
-          /* 流已经关了 —— 忽略 */
-        }
-        unsub();
-      });
+      req.signal.addEventListener("abort", () => cleanup());
     },
   });
 
