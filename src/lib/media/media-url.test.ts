@@ -7,7 +7,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { comfyImageUrl, mediaPreviewUrl } from "./media-url";
+import {
+  comfyImageUrl,
+  mediaPreviewUrl,
+  mediaReferenceFilename,
+} from "./media-url";
 
 describe("comfyImageUrl", () => {
   it("拼出带 type=input 的代理地址", () => {
@@ -63,5 +67,49 @@ describe("mediaPreviewUrl", () => {
     expect(mediaPreviewUrl(undefined)).toBeNull();
     expect(mediaPreviewUrl("")).toBeNull();
     expect(mediaPreviewUrl("  ")).toBeNull();
+  });
+
+  it("ComfyUI 媒体引用对象 {filename,subfolder,type} 也出预览地址（封装节点 IMAGE 输入落值形态）", () => {
+    expect(
+      mediaPreviewUrl({ filename: "a.png", subfolder: "sub", type: "input" }),
+    ).toBe("/api/images?filename=a.png&subfolder=sub&type=input");
+    expect(mediaPreviewUrl({ filename: "a.png" })).toBe(
+      "/api/images?filename=a.png&type=input",
+    );
+  });
+
+  it("ComfyUI IMAGE 值数组 [filename,subfolder,type] 也出预览地址", () => {
+    expect(mediaPreviewUrl(["a.png", "sub", "output"])).toBe(
+      "/api/images?filename=a.png&subfolder=sub&type=output",
+    );
+  });
+
+  it("对象 / 数组里 filename 为空时返回 null（不渲染 [object Object]）", () => {
+    expect(mediaPreviewUrl({ filename: "" })).toBeNull();
+    expect(mediaPreviewUrl([null, "sub"])).toBeNull();
+    expect(mediaPreviewUrl({})).toBeNull();
+  });
+});
+
+describe("mediaReferenceFilename", () => {
+  it("字符串原样取（去空白）", () => {
+    expect(mediaReferenceFilename("a.png")).toBe("a.png");
+    expect(mediaReferenceFilename("  b.png  ")).toBe("b.png");
+  });
+
+  it("对象取 filename 槽", () => {
+    expect(mediaReferenceFilename({ filename: "a.png" })).toBe("a.png");
+    expect(mediaReferenceFilename({ filename: "" })).toBe("");
+  });
+
+  it("数组取第 0 槽", () => {
+    expect(mediaReferenceFilename(["a.png", "sub"])).toBe("a.png");
+  });
+
+  it("其它 / 空引用返回空串（不渲染 [object Object]）", () => {
+    expect(mediaReferenceFilename(null)).toBe("");
+    expect(mediaReferenceFilename(undefined)).toBe("");
+    expect(mediaReferenceFilename(5)).toBe("");
+    expect(mediaReferenceFilename({})).toBe("");
   });
 });

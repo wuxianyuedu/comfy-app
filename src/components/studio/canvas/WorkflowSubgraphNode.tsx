@@ -9,6 +9,8 @@ import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
 import { Z } from "~/lib/shell/overlay-z";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { mediaPreviewUrl } from "~/lib/media/media-url";
 import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
 
 /** COMBO 输入额外携带自己的候选清单（由导入管线盖章；
@@ -474,6 +476,15 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
           {widgetInputs.map(({ inp, label }, i) => {
             const v: unknown = inp.widgetValue;
             const isConn = inp.isConnection === true || inp.isBoundary === true;
+            /* 图片类 widget（IMAGE / MASK / IMAGEUPLOAD）：画布上也要把选中的图
+             *  显示出来 —— 此前这类 widget 只渲染成纯文本值（甚至因为值是 ComfyUI
+             *  的 `{filename,subfolder,type}` 对象 / 数组而显示成 `[object Object]`），
+             *  于是「封装节点选完图在界面上完全看不到」（实测反馈）。这里按类型
+             *  切到缩略图；`mediaPreviewUrl` 同时吃字符串与这两种对象 / 数组形态。 */
+            const isImageType = ["IMAGE", "MASK", "IMAGEUPLOAD"].includes(
+              inp.type ?? "",
+            );
+            const previewUrl = isImageType ? mediaPreviewUrl(v) : null;
             const typeCol = portColor(inp.type);
             const stringText: string = typeof v === "string" ? v : "";
             /* 与 WorkflowNode 保持一致：STRING widget 的判定读服务端盖的
@@ -566,10 +577,22 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         {label}
                       </span>
                     </div>
-                    {inp.type === "COMBO" &&
-                    Array.isArray((inp as ComboInputMeta).comboOptions) &&
-                    ((inp as ComboInputMeta).comboOptions as unknown[]).length >
-                      0 ? (
+                    {isImageType ? (
+                      /* 图片类 widget 在画布上直接渲染缩略图（否则只显示成文本值，
+                       *  且 ComfyUI 把 IMAGE 输入存成 `{filename,subfolder,type}`
+                       *  对象 / 数组时还会显示成 `[object Object]`）—— 封装节点选完图
+                       *  「在界面上完全看不到」（实测反馈）。`src` 为 null 时
+                       *  MediaThumbnail 按 fallback 不渲染任何东西，与「未选图」一致。 */
+                      <MediaThumbnail
+                        src={previewUrl}
+                        alt={label}
+                        fallback="none"
+                        className="border-border-strong bg-canvas-deep mt-0.5 max-h-24 w-full rounded-[5px] border object-contain"
+                      />
+                    ) : inp.type === "COMBO" &&
+                      Array.isArray((inp as ComboInputMeta).comboOptions) &&
+                      ((inp as ComboInputMeta).comboOptions as unknown[])
+                        .length > 0 ? (
                       /* 工作流画布上的 COMBO widget 渲染成只读的
                        *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
                        *  在这里保持禁用（编辑发生在会落盘取值的项目
