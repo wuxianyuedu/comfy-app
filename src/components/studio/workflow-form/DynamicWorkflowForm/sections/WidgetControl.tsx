@@ -19,7 +19,7 @@ import { textHandler } from "~/lib/form-props";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { NumberField } from "~/components/ui/number-field";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
-import { mediaPreviewUrl } from "~/lib/media/media-url";
+import { mediaPreviewUrl, mediaReferenceFilename } from "~/lib/media/media-url";
 import { inputCls } from "../constants";
 
 interface WidgetControlProps {
@@ -170,11 +170,13 @@ export function WidgetControl({
       );
 
     case "image": {
-      const filename = typeof value === "string" ? value.trim() : "";
-      /* 预览地址走 `~/lib/media/media-url` 的出口（§16.2.4.32）：它同时管
-       *  「空引用不拼地址」与「已是以 `/` 开头的应用内路径」两种情况。
-       *  此前这里只有一行文件名文本，选完图**看不到图**（实测反馈）。 */
-      const previewUrl = mediaPreviewUrl(filename);
+      /* 文件名与预览地址都走 `~/lib/media/media-url` 的出口（§16.2.4.32）：
+       *  `value` 可能是字符串文件名、ComfyUI 的 `{filename,subfolder,type}`
+       *  对象或 `[filename,subfolder,type]` 数组（IMAGE 类型输入落值形态）——
+       *  两个助手都吃任意形态，避免对象 / 数组被渲染成 `[object Object]` 或
+       *  空掉（封装节点的 IMAGE 输入选完图「看不到图」，实测反馈）。 */
+      const filename = mediaReferenceFilename(value);
+      const previewUrl = mediaPreviewUrl(value);
       return (
         <div className={compact ? "" : "mt-1"}>
           <Button

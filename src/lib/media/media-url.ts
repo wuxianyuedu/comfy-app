@@ -62,20 +62,76 @@ export function comfyImageUrl(ref: ComfyMediaRef): string | null {
 }
 
 /**
- * 参考图路径 → 预览地址：已经是应用内绝对路径（`/api/generated/...`）的原样
- * 返回，否则按 ComfyUI 的 `input` 文件名走 `/api/images` 代理。
- *
- * 这条判据（「以 `/` 开头 = 已经是可直接使用的路径」）收口前在
- * `ProjectOutputs` 那一处写着，而工作流预览那处**没有**判 ——
- * 于是同一个引用在两个面板里一个能显示、一个 404。
- *
- * 空值同样返回 `null`（与 `comfyImageUrl` 同口径）。
+ * 把**任意形态**的 ComfyUI 媒体引用拍平成「给人看的文件名」：
+ *  - 字符串：原样（去空白）取；
+ *  - `{ filename, subfolder?, type? }`：取 `filename`；
+ *  - `[filename, subfolder?, type?]`（ComfyUI 把 IMAGE 类型输入的默认值 /
+ *    已选值以这两种形态存，而不是裸文件名）：取第 0 槽。
+ * 其它 / 空引用返回 `""`。表单的「已选：…」文本与画布节点缩略图都靠它，
+ * 避免把对象 / 数组渲染成 `[object Object]` 或空掉（实测反馈：封装节点的
+ * IMAGE 输入选完图「看不到图」）。
  */
-export function mediaPreviewUrl(
-  reference: string | null | undefined,
-): string | null {
-  const value = reference?.trim() ?? "";
-  if (value === "") return null;
-  if (value.startsWith("/")) return value;
-  return comfyImageUrl({ filename: value, type: "input" });
+export function mediaReferenceFilename(reference: unknown): string {
+  if (typeof reference === "string") return reference.trim();
+  if (reference == null || typeof reference !== "object") return "";
+  const raw: unknown = Array.isArray(reference)
+    ? (reference as unknown[])[0]
+    : reference;
+  if (raw != null && typeof raw === "object") {
+    const f = (raw as { filename?: unknown }).filename;
+    return typeof f === "string" ? f.trim() : "";
+  }
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+/**
+ * 把 ComfyUI 的媒体引用拼成**可直接渲染**的地址；引用无效时返回 `null`。
+ *
+ * 入参可以是字符串文件名、对象 `{ filename, subfolder?, type? }` 或数组
+ * `[filename, subfolder?, type?]`（ComfyUI 把 IMAGE 类型输入的默认值 / 已选值
+ * 以这两种形态存，而不是裸文件名）。此前只认字符串，于是子图封装节点暴露的
+ * IMAGE 输入选完图既拿不到预览地址、按钮文本也空掉 —— 「看不到图」（实测反馈）。
+ *
+ * 空引用（含空串 / 全空白 / 对象里 filename 为空的）一律返回 `null` —— 交给
+ * `MediaThumbnail` 的 `src`（它本来就接受 `null`），调用处不必再包三元。
+ */
+export function mediaPreviewUrl(reference: unknown): string | null {
+  if (reference == null) return null;
+
+  // 字符串：已渲染过的应用内绝对路径原样返回；否则按 input 文件名走代理。
+  if (typeof reference === "string") {
+    const value = reference.trim();
+    if (value === "") return null;
+    if (value.startsWith("/")) return value;
+    return comfyImageUrl({ filename: value, type: "input" });
+  }
+
+  // 对象 / 数组：拍平成 ComfyMediaRef。
+  if (typeof reference === "object") {
+    const ref = Array.isArray(reference)
+      ? {
+          filename: (reference as unknown[])[0] ?? null,
+          subfolder: (reference as unknown[])[1] ?? null,
+          type: (reference as unknown[])[2] ?? null,
+        }
+      : (reference as {
+          filename?: unknown;
+          subfolder?: unknown;
+          type?: unknown;
+        });
+    const filename =
+      typeof ref.filename === "string" ? ref.filename.trim() : "";
+    if (filename === "") return null;
+    const type =
+      typeof ref.type === "string" && ref.type.trim() !== ""
+        ? ref.type.trim()
+        : "input";
+    const subfolder =
+      typeof ref.subfolder === "string" && ref.subfolder.trim() !== ""
+        ? ref.subfolder.trim()
+        : null;
+    return comfyImageUrl({ filename, subfolder, type });
+  }
+
+  return null;
 }
