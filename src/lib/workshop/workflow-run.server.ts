@@ -17,6 +17,7 @@ import {
 } from "~/lib/core/repository";
 import { enqueue } from "~/lib/comfyui/enqueue";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
+import { findSeedWidgetNodeIds } from "~/lib/comfyui/raw";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import {
@@ -33,6 +34,12 @@ export interface RunWorkflowInput {
   /** 任务归属画布 / 工坊项目。 */
   projectId?: string | null;
   values: WorkshopExposedValues;
+  /**
+   * 抽卡重生成：为 true 时，提交前给图里带 seed 控件的采样器节点各注一条
+   * `control_after_generate="randomize"` 覆盖，让 comfy-cli 铸新随机种子 —— 于是「同提示词重出」
+   * 能真正出不同图（否则图里 seed 固定，重跑得到同一张）。默认 false（首刷等保持图内 seed）。
+   */
+  randomizeSeed?: boolean;
 }
 
 /** 按工作流的默认模式（缺省回退 taskType / modes[0]）组装对外参数。
@@ -71,6 +78,19 @@ export async function createWorkflowRunTask(
     contractIds,
   });
 
+  /* 抽卡重生成：给图里带 seed 控件的采样器节点各注一条 randomize 覆盖，comfy-cli 会铸新种子。
+   * 与作者连线的对外参数并存（那些是业务口，seed 不是口，只能这样按 nodeId 直接注）。 */
+  const overrides = input.randomizeSeed
+    ? [
+        ...workflowInputs,
+        ...findSeedWidgetNodeIds(tpl.rawJson).map((nodeId) => ({
+          nodeId,
+          name: "control_after_generate",
+          value: "randomize",
+        })),
+      ]
+    : workflowInputs;
+
   const params = {
     workflow: tpl.id,
     ...(input.values.prompt !== undefined
@@ -79,7 +99,7 @@ export async function createWorkflowRunTask(
     ...(input.values.negativePrompt !== undefined
       ? { negative: input.values.negativePrompt }
       : {}),
-    ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
+    ...(overrides.length > 0 ? { workflowInputs: overrides } : {}),
   };
 
   const task = await taskRepository.createQueued({
@@ -103,7 +123,7 @@ export async function createWorkflowRunTask(
     taskId: task.id,
     workflowName: tpl.name,
     rawJson: tpl.rawJson,
-    overrides: workflowInputs,
+    overrides,
   });
   return { taskId: task.id, workflowName: tpl.name, taskType: tpl.taskType };
 }
