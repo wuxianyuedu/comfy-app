@@ -226,7 +226,7 @@ export default function LoginPage() {
           />
 
           {error && (
-            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-center text-sm text-red-700 dark:text-red-400">
+            <p className="bg-destructive/10 text-destructive rounded-lg px-3 py-2 text-center text-sm">
               {error}
             </p>
           )}

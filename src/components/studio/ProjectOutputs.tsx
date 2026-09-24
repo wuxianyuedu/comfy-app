@@ -180,7 +180,7 @@ export function ProjectOutputs() {
             <h1 className="font-title text-ink-bright text-xl font-bold">
               {activeProject?.name ?? "未命名项目"}
             </h1>
-            <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300">
+            <span className="bg-primary/15 text-primary-strong rounded-full px-2.5 py-0.5 text-[11px] font-medium">
               {outputs.length} 个产出
             </span>
           </div>
@@ -342,7 +342,7 @@ export function ProjectOutputs() {
                   <h3 className="font-title text-ink-bright text-sm font-bold">
                     产出 #{selected.id.slice(-4)}
                   </h3>
-                  <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                  <span className="bg-primary/15 text-primary-strong rounded-md px-1.5 py-0.5 text-[10px] font-medium">
                     {TYPE_CHIP[selected.type] ?? selected.type}
                   </span>
                 </div>

@@ -20,7 +20,13 @@ import { statusButtonClass } from "../settings-status-row-config";
 
 /* ── 启动日志 ANSI 颜色渲染 ─────────────────────────────────
  * 纯映射：lib/log-ansi 解析出的样式键 → tailwind class，无业务逻辑。
- * 未知样式键回退默认色，保证新增键不会渲染成透明文本。 */
+ * 未知样式键回退默认色，保证新增键不会渲染成透明文本。
+ *
+ * 表内 red/green/yellow/blue/magenta/cyan + 各自 bright 变体 + bg 变体的
+ * palette 字面量代表 **ANSI SGR 终端颜色身份**（terminal color identity）、
+ * 不是主题状态色——与 log-row-style.ts 的 TOKEN_CLASS 同一族。§3.6.1
+ * 文档化例外，走 P71 `// p71-allow` 例外块。 */
+// p71-allow:start  ANSI SGR 终端 8 色 + bright/bg 变体——§3.6.1 例外：颜色代表 terminal color identity、不是主题状态色
 const ANSI_STYLE_CLASS: Record<AnsiStyleKey, string> = {
   bold: "font-bold",
   dim: "opacity-60",
@@ -49,6 +55,7 @@ const ANSI_STYLE_CLASS: Record<AnsiStyleKey, string> = {
   "cyan-bg": "bg-cyan-500/15 dark:bg-cyan-900/60",
   "white-bg": "bg-subtle",
 };
+// p71-allow:end
 
 export function AnsiLogText({ segments }: { segments: AnsiSegment[] }) {
   return (

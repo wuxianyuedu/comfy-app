@@ -188,18 +188,12 @@ export function WorkflowImportPanel({
       </div>
 
       {/* 文件入口（拖入 / 选择）失败的可读原因，与粘贴路径的 importErr 分开两条。 */}
-      {dropErr && (
-        <p className="mt-2 text-xs text-red-700 dark:text-red-400">
-          ⚠ {dropErr}
-        </p>
-      )}
+      {dropErr && <p className="text-destructive mt-2 text-xs">⚠ {dropErr}</p>}
       {importErr && (
-        <p className="mt-2 text-xs text-red-700 dark:text-red-400">
-          {importErr}
-        </p>
+        <p className="text-destructive mt-2 text-xs">{importErr}</p>
       )}
       {importWarn.length > 0 && (
-        <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/6 p-2 text-xs text-amber-800 dark:text-amber-200">
+        <div className="border-warning/30 bg-warning/6 text-warning-strong mt-2 rounded-md border p-2 text-xs">
           <p className="font-medium">导入提示：</p>
           <ul className="mt-1 flex list-disc flex-col gap-0.5 pl-4">
             {importWarn.map((warning, i) => (

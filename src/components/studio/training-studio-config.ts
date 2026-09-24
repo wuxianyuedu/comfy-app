@@ -92,19 +92,19 @@ export const STATUS_META: Record<
   QUEUED: { label: "等待中", cls: "text-ink-soft bg-surface-2" },
   RUNNING: {
     label: "训练中",
-    cls: "text-violet-700 dark:text-violet-300 bg-violet-500/15",
+    cls: "text-primary-strong bg-primary/15",
   },
   DONE: {
     label: "已完成",
-    cls: "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15",
+    cls: "text-success-strong bg-success/15",
   },
   FAILED: {
     label: "失败",
-    cls: "text-red-700 dark:text-red-300 bg-red-500/15",
+    cls: "text-destructive bg-destructive/15",
   },
   CANCELLED: {
     label: "已取消",
-    cls: "text-amber-700 dark:text-amber-300 bg-amber-500/15",
+    cls: "text-warning-strong bg-warning/15",
   },
 };
 

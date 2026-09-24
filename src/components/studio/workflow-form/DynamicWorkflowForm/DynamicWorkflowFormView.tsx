@@ -171,7 +171,7 @@ export function DynamicWorkflowFormView({
       {/* 上传失败的可读出口：ComfyUI 未运行 / 启动超时 / 素材不合规时给出原因，
  用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}
       {uploadError && (
-        <div className="flex items-start justify-between gap-2 rounded-md border border-red-400/30 bg-red-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-red-700 dark:text-red-200">
+        <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-start justify-between gap-2 rounded-md border px-2.5 py-2 text-[11px] leading-relaxed">
           <span className="min-w-0 flex-1">上传失败：{uploadError}</span>
           <Button
             variant="ghost"

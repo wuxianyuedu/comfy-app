@@ -49,6 +49,14 @@ import {
 const FRAGMENT_CACHE = new Map<string, RowToken[]>();
 const FRAGMENT_CACHE_MAX = 5000;
 
+/* 搜索命中 `<mark>` 高亮——琥珀是"荧光笔"的通用视觉语言、不是状态色
+ * (warning-strong 会把「搜索到」误读为「警告」)。没有对应的"命中/高亮"
+ * 语义 token → §3.6.1 例外块。 */
+// p71-allow:start 搜索命中 `<mark>` 高亮——荧光笔装饰色、非状态语义、无匹配 token
+const SEARCH_HIT_CLASS =
+  "rounded-sm bg-amber-400/30 px-0.5 text-amber-900 dark:text-amber-100";
+// p71-allow:end
+
 function fragmentsOf(text: string): RowToken[] {
   const hit = FRAGMENT_CACHE.get(text);
   if (hit) return hit;
@@ -84,10 +92,7 @@ function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
         while (at !== -1) {
           if (at > cursor) parts.push(fragment.text.slice(cursor, at));
           parts.push(
-            <mark
-              key={key++}
-              className="rounded-sm bg-amber-400/30 px-0.5 text-amber-900 dark:text-amber-100"
-            >
+            <mark key={key++} className={SEARCH_HIT_CLASS}>
               {fragment.text.slice(at, at + needle.length)}
             </mark>,
           );

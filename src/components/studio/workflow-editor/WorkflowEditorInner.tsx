@@ -674,9 +674,7 @@ function WorkflowEditorBody({
         className="bg-canvas flex items-center justify-center pb-6"
       >
         <div className="text-center">
-          <p className="text-red-700 dark:text-red-400">
-            {error ?? "未知错误"}
-          </p>
+          <p className="text-destructive">{error ?? "未知错误"}</p>
           <Button
             variant="outline"
             onClick={onClose}

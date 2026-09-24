@@ -229,10 +229,7 @@ export function DebugChainFooter({
           {/* 头部：路径 + 操作按钮 */}
           <div className="border-border-strong flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
             <div className="flex min-w-0 items-center gap-2">
-              <span
-                aria-hidden
-                className="text-[14px] text-amber-700 dark:text-amber-300/90"
-              >
+              <span aria-hidden className="text-warning-strong/90 text-[14px]">
                 ◈
               </span>
               <code
@@ -306,7 +303,7 @@ export function DebugChainFooter({
               />
             )}
             {!sourceBusy.busy && loadError && (
-              <div className="px-4 py-6 text-[12px] text-rose-700 dark:text-rose-300">
+              <div className="text-destructive px-4 py-6 text-[12px]">
                 读取失败：{loadError}
               </div>
             )}

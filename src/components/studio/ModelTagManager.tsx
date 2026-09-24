@@ -9,6 +9,13 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 import { useModelTags, type TagItem } from "./hooks/use-model-tags";
 
+/* 标签图标的**类型装饰色**——fuchsia 是"标签/tag"这套 UI 的既有身份色,
+ * 不是状态、也不与 primary(品牌)/warning(待办) 等语义对应。没有 tag-*
+ * 语义 token → §3.6.1 例外块。 */
+// p71-allow:start 标签图标 fuchsia——"tag 类别"的既有装饰身份色、非状态、无匹配 token
+const TAG_ICON_COLOR = "text-fuchsia-700 dark:text-fuchsia-300";
+// p71-allow:end
+
 interface ModelTagManagerProps {
   /** 初始标签（来自父级缓存的标签库列表）。 */
   initialTags: TagItem[];
@@ -65,10 +72,7 @@ export function ModelTagManager({
         <div className="border-border-strong bg-panel w-full max-w-md rounded-2xl border p-5 shadow-2xl shadow-black/20 dark:shadow-black/50">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-ink-bright flex items-center gap-2 text-base font-semibold">
-              <Icon
-                name="tag"
-                className="h-4 w-4 text-fuchsia-700 dark:text-fuchsia-300"
-              />
+              <Icon name="tag" className={`h-4 w-4 ${TAG_ICON_COLOR}`} />
               模型标签库
             </h3>
             <Button
