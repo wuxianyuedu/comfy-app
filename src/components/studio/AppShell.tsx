@@ -138,9 +138,9 @@ export function AppShell({
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {/* 底部「项目」分组：`mt-auto` 顶到内容区最下（在设置页脚之上）。图标档折叠时
-              整组隐藏 —— 展开式列表在 3rem 图标栏里没有落点，展开侧栏才能选项目。 */}
-          <SidebarGroup className="mt-auto group-data-[collapsible=icon]:hidden">
+          {/* 「项目」分组：紧跟全局项之后（不再 `mt-auto` 顶到视口最下，避免中间一大片空白）。
+              图标档折叠时整组隐藏 —— 展开式列表在 3rem 图标栏里没有落点，展开侧栏才能选项目。 */}
+          <SidebarGroup className="group-data-[collapsible=icon]:hidden">
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
