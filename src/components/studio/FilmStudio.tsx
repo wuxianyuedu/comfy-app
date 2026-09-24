@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { textHandler } from "~/lib/form-props";
-import { Redo2, Undo2 } from "lucide-react";
+import { ClipboardCheck, Redo2, Undo2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -11,6 +11,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Separator } from "~/components/ui/separator";
 import { FormField } from "~/components/ui/form-field";
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { ShotReviewDialog } from "~/components/agent-run/ShotReviewDialog";
 import { useFilmStudio } from "./hooks/use-film-studio";
 import { AuroraGlow } from "~/components/ui/aurora-background";
 import { useToast } from "./ToastProvider";
@@ -61,6 +62,8 @@ export function FilmStudio() {
   const [selectedShotId, setSelectedShotId] = useState<string>("shot-1");
   const [isPlaying, setIsPlaying] = useState(false);
   const [playheadPos] = useState(180); /* px from timeline left */
+  /* 当前要评审的镜头（非空即打开评审弹窗）。评审走 AI 文本质检，不合格可抽卡 / 改提示词重生成。 */
+  const [reviewShot, setReviewShot] = useState<ShotListItem | null>(null);
 
   const selectedShot =
     shots.find((shot) => shot.id === selectedShotId) ?? shots[0];
@@ -313,15 +316,26 @@ export function FilmStudio() {
 
                   {/* 项目镜头才给「退回让 AI 重做」入口（与画布镜头节点同源 requestShotRedo）。 */}
                   {isProjectSource && (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => void c.redoShot(shot.id)}
-                      title="退回让 AI 重做这一镜"
-                      className="text-ink-soft hover:bg-primary/15 mr-1 shrink-0"
-                    >
-                      ↺
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => setReviewShot(shot)}
+                        title="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）"
+                        className="text-ink-soft hover:bg-primary/15 shrink-0"
+                      >
+                        <ClipboardCheck />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => void c.redoShot(shot.id)}
+                        title="退回让 AI 重做这一镜"
+                        className="text-ink-soft hover:bg-primary/15 mr-1 shrink-0"
+                      >
+                        ↺
+                      </Button>
+                    </>
                   )}
                 </div>
               );
@@ -756,6 +770,19 @@ export function FilmStudio() {
           ComfyUI 本地已连接 · Wan I2V 视频模型就绪 · GPU 可用
         </span>
       </footer>
+
+      {/* AI 评审弹窗：镜头行「评审」按钮打开；重生成后刷新左栏镜头列表。 */}
+      {reviewShot && c.activeProjectId && (
+        <ShotReviewDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setReviewShot(null);
+          }}
+          projectId={c.activeProjectId}
+          shot={{ id: reviewShot.id, name: reviewShot.name }}
+          onRegenerated={() => void c.reloadProjectShots()}
+        />
+      )}
     </div>
   );
 }
