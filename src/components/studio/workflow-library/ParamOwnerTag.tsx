@@ -12,7 +12,7 @@ export function ParamOwnerTag({ label }: { label?: string }) {
   if (!label) return null;
   return (
     <span
-      className="shrink-0 rounded-[3px] border border-violet-400/30 bg-violet-500/10 px-1.5 py-px text-[9.5px] font-medium text-violet-700 dark:text-violet-300"
+      className="border-primary/30 bg-primary/10 text-primary-strong shrink-0 rounded-[3px] border px-1.5 py-px text-[9.5px] font-medium"
       title={`该参数是对外参数「${label}」的落点`}
       data-testid="wflib-param-owner"
     >

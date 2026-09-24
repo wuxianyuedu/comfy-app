@@ -202,10 +202,7 @@ export function WorkflowRunLogModal({
           {/* Header */}
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <FileText
-                size={16}
-                className="shrink-0 text-violet-700 dark:text-violet-400"
-              />
+              <FileText size={16} className="text-primary-strong shrink-0" />
               <span className="text-ink truncate text-[15px] font-semibold">
                 执行日志
               </span>
@@ -337,7 +334,7 @@ export function WorkflowRunLogModal({
             className="custom-scrollbar bg-panel-deep/60 flex-1 overflow-y-auto"
           >
             {run?.errorMessage && (
-              <div className="mb-2 flex-col gap-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-700 dark:text-red-300/90">
+              <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-[13px]">
                 <div className="break-words whitespace-pre-wrap">
                   {run.errorMessage}
                 </div>

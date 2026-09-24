@@ -237,7 +237,7 @@ export function EncapsulationTestForm({
       })}
 
       {error && (
-        <p className="rounded-lg bg-red-100 px-3 py-2 text-[11px] text-red-800 dark:text-red-300">
+        <p className="bg-destructive/10 text-destructive rounded-lg px-3 py-2 text-[11px]">
           {error}
         </p>
       )}
