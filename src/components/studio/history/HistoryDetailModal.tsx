@@ -100,6 +100,7 @@ export function HistoryDetailModal({
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
+        aria-label="任务详情"
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
