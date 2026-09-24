@@ -9,7 +9,7 @@
  * 它只读源码文本，只写生成出来的 manifest 与报告。
  */
 import { type NextRequest, NextResponse } from "next/server";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeSlashes } from "~/lib/path-display";
@@ -25,6 +25,7 @@ import { AppError } from "~/lib/core/errors";
 import { isRecord } from "~/lib/is-record";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorDetail } from "~/lib/api-error";
+import { withTimeoutResult } from "~/lib/with-timeout";
 import {
   errorResponse,
   unauthorizedResponse,
@@ -174,38 +175,79 @@ function buildPathMap(
 /* 对一组父目录跑只读的 `discover` 模式并返回子包。
  * 做短暂缓存，因为界面上路径输入一变就会调它。 */
 const discoverCache = new Map<string, { at: number; result: unknown[] }>();
-function runDiscover(parentDirs: readonly unknown[]): unknown[] {
+
+/** 单个 `discover` 进程的最长等待。解析器要扫完父目录再算一遍 hash，
+ *  目录大时能到分钟级 —— 但再久也不能让请求挂到客户端超时，超时即放弃
+ *  （resolve 成 null，调用方换下一个解释器 / 返回空列表）。 */
+const DISCOVER_TIMEOUT_MS = 60_000;
+
+/** 异步跑一次解析器并收集 stdout。
+ *
+ *  **不用 `spawnSync`**：它是同步的，会把整个 Node 事件循环连同所有并发请求
+ *  一起堵住 —— 而这一步正是本路由最慢的一段。启动失败 / 非零退出 / 超时一律
+ *  resolve 成 `null`，由调用方决定换解释器还是放弃。 */
+function spawnCapture(command: string, args: string[]): Promise<string | null> {
+  let killChild: (() => void) | undefined;
+
+  /* 起进程并收集 stdout：启动失败 / 非零退出 / 空输出都 resolve 成 null
+   *（调用方据此换下一个解释器）。 */
+  const collect = new Promise<string | null>((resolve) => {
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(command, args, { cwd: process.cwd(), env: process.env });
+    } catch {
+      // 解释器根本不存在
+      resolve(null);
+      return;
+    }
+
+    /* 超时由 `withTimeoutResult` 判：它赢下赛跑后经 `onTimeout` 把进程杀掉 ——
+     * 否则放弃等待之后进程还在后台占着 CPU 扫目录。 */
+    killChild = () => child.kill();
+
+    let stdout = "";
+    child.stdout?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.on("error", () => resolve(null));
+    child.on("close", (code) =>
+      resolve(code === 0 && stdout.length > 0 ? stdout : null),
+    );
+  });
+
+  return withTimeoutResult(collect, DISCOVER_TIMEOUT_MS, null, {
+    onTimeout: () => killChild?.(),
+  });
+}
+
+async function runDiscover(parentDirs: readonly unknown[]): Promise<unknown[]> {
   const key = parentDirs.join("|");
   const cached = discoverCache.get(key);
   if (cached && Date.now() - cached.at < 5000) return cached.result;
+  // spawn 的 args 需要 string[];原 any 同样把原始值直接交给 Node(非字符串由 Node 校验报错),
+  // 断言只为恢复静态类型,不改运行时取值。
+  const args = [
+    "-u",
+    "scripts/parse_custom_nodes.py",
+    ...parentDirs.flatMap((parentDir) => [
+      "--discover-parent",
+      parentDir as string,
+    ]),
+  ];
   for (const py of ["python3", "python", "py"]) {
+    const stdout = await spawnCapture(py, args);
+    if (stdout === null) continue;
     try {
-      // spawn 的 args 需要 string[];原 any 同样把原始值直接交给 Node(非字符串由 Node 校验报错),
-      // 断言只为恢复静态类型,不改运行时取值。
-      const args = [
-        "-u",
-        "scripts/parse_custom_nodes.py",
-        ...parentDirs.flatMap((parentDir) => [
-          "--discover-parent",
-          parentDir as string,
-        ]),
-      ];
-      const out = spawnSync(/*turbopackIgnore: true*/ py, args, {
-        cwd: process.cwd(),
-        env: process.env,
-        encoding: "utf-8",
-      });
-      if (out.status === 0 && out.stdout) {
-        const parsed: unknown = JSON.parse(out.stdout);
-        const pkgs: unknown[] =
-          isRecord(parsed) && Array.isArray(parsed.packages)
-            ? parsed.packages
-            : [];
-        discoverCache.set(key, { at: Date.now(), result: pkgs });
-        return pkgs;
-      }
+      const parsed: unknown = JSON.parse(stdout);
+      const pkgs: unknown[] =
+        isRecord(parsed) && Array.isArray(parsed.packages)
+          ? parsed.packages
+          : [];
+      discoverCache.set(key, { at: Date.now(), result: pkgs });
+      return pkgs;
     } catch {
-      // 换下一个解释器再试
+      // 输出不是 JSON —— 换下一个解释器再试
     }
   }
   return [];
@@ -687,7 +729,7 @@ export async function POST(req: NextRequest) {
 
   if (action === "discover") {
     const parents: unknown[] = Array.isArray(rec.parents) ? rec.parents : [];
-    const result = runDiscover(parents);
+    const result = await runDiscover(parents);
     return NextResponse.json({ ok: true, packages: result });
   }
 
