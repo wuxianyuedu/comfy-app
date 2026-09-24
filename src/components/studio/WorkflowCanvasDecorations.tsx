@@ -45,23 +45,22 @@ export function CanvasGrid({
    *  也不必穿越 <ReactFlow> 的内部 context 边界。 */
   settings?: CanvasSettings;
 }) {
-  const { minorAlpha, showFineLines } = useStore((state) => {
-    const zoom = state.transform[2];
-    const cellPx = settings.gridGap * zoom;
-    /* 淡入曲线这样取：
-     *  - 缩放 0.30（约 3px 一格）：t = 0 → 不画细线（那时只是噪点）
-     *  - 缩放 0.45（约 4.5px）：t ≈ 0.4 → 可见
-     *  - 缩放 0.60（约 6px）：t ≈ 0.7 → 实了
-     *  - 缩放 0.80 以上：t = 1 → 满透明度
-     * 早先用的是 `(cellPx - 5) / 3`，要到 5px 一格（缩放 0.5）才开始淡入，
-     * 于是对任何正常规模的工作流，fitView 之后的画布在视觉上都是空的。 */
-    const t = clamp((cellPx - 3) / 3, 0, 1);
-    return {
-      minorAlpha: Math.round(t * 10) / 10,
-      /* 淡出的是**细线**，不是整个网格层（见 GRID_FINE_FADE_ZOOM 的说明）。 */
-      showFineLines: zoom > GRID_FINE_FADE_ZOOM,
-    };
-  });
+  /* 只订阅 zoom（标量）而不是在选择器里现拼对象：选择器本体在 store 每次
+   * 更新时都要跑一遍并做 `Object.is` 比较，返回**新对象**时永不相等 —— 平移
+   * 每帧都换 transform，网格层（两层 `<Background>`）就跟着每帧重渲染。
+   * 取到 zoom 之后的计算放在渲染里做即可，它只依赖 props 与 zoom。 */
+  const zoom = useStore((state) => state.transform[2]);
+  const cellPx = settings.gridGap * zoom;
+  /* 淡入曲线这样取：
+   *  - 缩放 0.30（约 3px 一格）：t = 0 → 不画细线（那时只是噪点）
+   *  - 缩放 0.45（约 4.5px）：t ≈ 0.4 → 可见
+   *  - 缩放 0.60（约 6px）：t ≈ 0.7 → 实了
+   *  - 缩放 0.80 以上：t = 1 → 满透明度
+   * 早先用的是 `(cellPx - 5) / 3`，要到 5px 一格（缩放 0.5）才开始淡入，
+   * 于是对任何正常规模的工作流，fitView 之后的画布在视觉上都是空的。 */
+  const minorAlpha = Math.round(clamp((cellPx - 3) / 3, 0, 1) * 10) / 10;
+  /* 淡出的是**细线**，不是整个网格层（见 GRID_FINE_FADE_ZOOM 的说明）。 */
+  const showFineLines = zoom > GRID_FINE_FADE_ZOOM;
   /* 用户主动关网格（画布设置里的「显示网格」）时也要保留底色 —— 关的是格子，
    *  不是画布背景。此前 `!settings.showGrid` 也走 return null，关掉网格后整块
    *  画布与「缩小到极限」是同一种黑屏。 */
