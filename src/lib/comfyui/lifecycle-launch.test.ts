@@ -10,6 +10,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "fs";
+import path from "path";
 
 vi.mock("../app-settings/app-settings.server", () => ({
   getExitPolicy: vi.fn(),
@@ -51,9 +53,12 @@ import {
   getSettingsSync,
 } from "../app-settings/app-settings.server";
 
+import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
+
 import { startComfyExitWatcher } from "./lifecycle-exit";
 import {
   ensureKeepAliveWatchOnAdoption,
+  pruneKeepAliveLogs,
   type LaunchHost,
 } from "./lifecycle-launch";
 
@@ -137,5 +142,65 @@ describe("ensureKeepAliveWatchOnAdoption —— 接管场景补挂保活退出�
 
     arm(fakeHost());
     expect(startComfyExitWatcher).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("pruneKeepAliveLogs —— 按次命名的保活日志只建不删会一直堆积", () => {
+  /* 夹具：造 count 次「拉起」的重定向文件（每次 out+err 两个），
+   * mtime 按 i 递减 —— s00 最新、序号越大越老，排序才有确定结论。 */
+  function seedLaunches(count: number): void {
+    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
+    for (let i = 0; i < count; i += 1) {
+      for (const suffix of [".out.log", ".err.log"]) {
+        const file = path.join(
+          SERVICES_LOG_DIR,
+          `comfyui-keepalive-s${String(i).padStart(2, "0")}${suffix}`,
+        );
+        fs.writeFileSync(file, "x");
+        const at = (Date.now() - i * 60_000) / 1000;
+        fs.utimesSync(file, at, at);
+      }
+    }
+  }
+
+  function keepAliveFiles(): string[] {
+    if (!fs.existsSync(SERVICES_LOG_DIR)) return [];
+    return fs
+      .readdirSync(SERVICES_LOG_DIR)
+      .filter((name) => name.startsWith("comfyui-keepalive-"));
+  }
+
+  beforeEach(() => {
+    for (const name of keepAliveFiles()) {
+      fs.unlinkSync(path.join(SERVICES_LOG_DIR, name));
+    }
+  });
+
+  it("超过保留份数时只留最近 10 次（20 个文件），更老的删掉", () => {
+    seedLaunches(14); // 28 个文件
+    pruneKeepAliveLogs();
+    const left = keepAliveFiles();
+    expect(left).toHaveLength(20);
+    expect(left).toContain("comfyui-keepalive-s00.out.log"); // 最新的留着
+    expect(left).toContain("comfyui-keepalive-s09.err.log");
+    expect(left).not.toContain("comfyui-keepalive-s10.out.log"); // 第 11 次起删掉
+    expect(left).not.toContain("comfyui-keepalive-s13.err.log");
+  });
+
+  it("不足保留份数时一个都不删", () => {
+    seedLaunches(3);
+    pruneKeepAliveLogs();
+    expect(keepAliveFiles()).toHaveLength(6);
+  });
+
+  it("只认 comfyui-keepalive-*，别的日志/标记文件不受影响", () => {
+    seedLaunches(12);
+    const bystander = path.join(SERVICES_LOG_DIR, "comfyui-runtime.log");
+    const mark = path.join(SERVICES_LOG_DIR, "comfyui-last-session.json");
+    fs.writeFileSync(bystander, "log");
+    fs.writeFileSync(mark, "{}");
+    pruneKeepAliveLogs();
+    expect(fs.existsSync(bystander)).toBe(true);
+    expect(fs.existsSync(mark)).toBe(true);
   });
 });

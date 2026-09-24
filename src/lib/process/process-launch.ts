@@ -27,6 +27,7 @@
 import "server-only";
 import { spawn, type ChildProcess } from "child_process";
 import { closeSync, openSync } from "fs";
+import { logger } from "~/lib/core/logger";
 import { withTimeoutResult } from "~/lib/with-timeout";
 
 /** 拉起方式：bound = 随应用进程树一起结束；keepAlive = 脱离进程树保活。 */
@@ -228,6 +229,19 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
       return { error: e instanceof Error ? e.message : String(e) };
     }
   }
+
+  /* 拿不到壳路径 → 只能退回 Start-Process：它只把目标变成孤儿，**逃不出壳的
+   * Job Object**，壳一退出 job 关闭就会把这个「保活」进程连杀，等于保活失效。
+   *
+   * 这条回退设计上是给「那时根本没有 job」的场景用的（如 `pnpm tauri dev`）；
+   * 若在**打包运行**里走到这里，就是壳没有发布 COMFYAPP_SHELL_EXE 的征兆。
+   * 必须留一条可见的警告 —— 否则用户只看到「关了应用 ComfyUI 也没了」，
+   * 日志里却查不到任何原因。 */
+  logger.warn(
+    "[keepAlive] 未拿到 COMFYAPP_SHELL_EXE，退回 powershell Start-Process 中介：" +
+      "目标只能成为孤儿、逃不出壳的 Job Object，本次保活不保证跨应用退出" +
+      "（若这是打包运行，请检查壳是否发布了自身路径）",
+  );
 
   // 退回：powershell Start-Process 孤儿中介。stderr 用 pipe 带出
   // （调用方经 waitForDetachMediator 读），拉起被拒时才有可行动的报错。
