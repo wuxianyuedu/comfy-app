@@ -27,7 +27,7 @@ export function RequiredSummary({
   }, [io, mode]);
   return (
     <span className="ml-2 inline-flex items-center gap-1.5">
-      <span className="rounded border border-red-400/40 bg-red-500/15 px-1.5 py-px font-mono text-[10px] text-red-700 dark:text-red-300">
+      <span className="border-destructive/40 bg-destructive/15 text-destructive rounded border px-1.5 py-px font-mono text-[10px]">
         必填 {counts.required}
       </span>
       <span className="border-border-strong bg-subtle text-ink-soft rounded border px-1.5 py-px font-mono text-[10px]">

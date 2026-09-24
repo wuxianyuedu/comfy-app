@@ -200,7 +200,7 @@ export function HomePage({
                   onClick={() => onNavigate?.(card.id as WorkspaceView)}
                   className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto flex-col items-start gap-2.5 rounded-2xl border p-4 text-left font-normal transition-all hover:shadow-lg hover:shadow-black/5 dark:shadow-black/10"
                 >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-800 transition-colors group-hover:bg-violet-500/15 dark:text-violet-300">
+                  <span className="bg-primary/10 text-primary-strong group-hover:bg-primary/15 flex h-10 w-10 items-center justify-center rounded-xl transition-colors">
                     {card.icon}
                   </span>
                   <div>
@@ -236,10 +236,10 @@ export function HomePage({
                   onClick={onNewProject}
                   className="group border-border bg-surface-1 hover:bg-info/5 flex h-auto flex-col items-center justify-center gap-2.5 rounded-[16px] border border-dashed py-7 font-normal active:scale-[0.98]"
                 >
-                  <div className="flex h-[28px] w-[28px] items-center justify-center rounded-xl text-cyan-700/70 transition-colors group-hover:text-cyan-700 dark:text-cyan-400/60 dark:group-hover:text-cyan-400">
+                  <div className="text-info-strong/70 group-hover:text-info-strong flex h-[28px] w-[28px] items-center justify-center rounded-xl transition-colors">
                     <Plus size={24} strokeWidth={1.6} />
                   </div>
-                  <span className="text-ink-muted text-[12.5px] font-medium transition-colors group-hover:text-cyan-700 dark:text-cyan-500">
+                  <span className="text-ink-muted group-hover:text-info-strong text-[12.5px] font-medium transition-colors">
                     新建画布项目
                   </span>
                 </Button>

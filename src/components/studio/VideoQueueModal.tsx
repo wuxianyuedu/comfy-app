@@ -34,14 +34,14 @@ const STATUS_META: Record<
   RUNNING: {
     icon: "zap",
     label: "生成中",
-    cls: "text-amber-600 dark:text-amber-400",
+    cls: "text-warning-strong",
   },
   SUCCEEDED: {
     icon: "check",
     label: "已完成",
-    cls: "text-emerald-600 dark:text-emerald-400",
+    cls: "text-success-strong",
   },
-  FAILED: { icon: "x", label: "失败", cls: "text-red-600 dark:text-red-400" },
+  FAILED: { icon: "x", label: "失败", cls: "text-destructive" },
   CANCELLED: { icon: "ban", label: "已取消", cls: "text-ink-fainter" },
 };
 
@@ -168,7 +168,7 @@ export function VideoQueueModal({
             <div className="flex items-center gap-3">
               <h3 className="u-title">视频生成队列</h3>
               {runningCount > 0 && (
-                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
+                <span className="bg-warning/15 text-warning-strong rounded-full px-2 py-0.5 text-[11px]">
                   {runningCount} 个进行中
                 </span>
               )}
@@ -257,7 +257,7 @@ export function VideoQueueModal({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="mb-0.5 flex items-center gap-2">
-                            <span className="font-mono text-xs text-violet-700 dark:text-violet-300">
+                            <span className="text-primary-strong font-mono text-xs">
                               V{String(index + 1).padStart(2, "0")}
                             </span>
                             <span
@@ -278,7 +278,7 @@ export function VideoQueueModal({
                           </p>
                           {task.status === "FAILED" && task.error && (
                             <p
-                              className="mt-0.5 truncate text-[10px] text-red-700 dark:text-red-400"
+                              className="text-destructive mt-0.5 truncate text-[10px]"
                               title={task.error}
                             >
                               {task.error}
@@ -298,7 +298,7 @@ export function VideoQueueModal({
                             <a
                               href={task.video}
                               download
-                              className="rounded-md bg-violet-500/20 px-2.5 py-1 text-[11px] text-violet-700 transition-colors hover:bg-violet-500/30 dark:text-violet-300"
+                              className="bg-primary/20 text-primary-strong hover:bg-primary/30 rounded-md px-2.5 py-1 text-[11px] transition-colors"
                             >
                               下载
                             </a>
@@ -309,7 +309,7 @@ export function VideoQueueModal({
                   })
                 )}
                 {error && (
-                  <p className="text-center text-xs text-red-700 dark:text-red-400">
+                  <p className="text-destructive text-center text-xs">
                     {error}
                   </p>
                 )}
@@ -326,7 +326,7 @@ export function VideoQueueModal({
                       key={`draft-${index}`}
                       className="border-border-strong bg-subtle flex items-start gap-2 rounded-xl border p-3"
                     >
-                      <span className="mt-1 font-mono text-xs text-violet-700 dark:text-violet-300">
+                      <span className="text-primary-strong mt-1 font-mono text-xs">
                         V{String(index + 1).padStart(2, "0")}
                       </span>
                       <Textarea
@@ -377,7 +377,7 @@ export function VideoQueueModal({
                 </div>
 
                 {error && (
-                  <p className="text-center text-xs text-red-700 dark:text-red-400">
+                  <p className="text-destructive text-center text-xs">
                     {error}
                   </p>
                 )}

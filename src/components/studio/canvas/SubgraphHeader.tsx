@@ -144,7 +144,7 @@ export function SubgraphHeader({
            *  行内按钮（而不是 28-32px 的独立章观感）。
            *  比收起箭头的 h-5 w-5 大一档，
            *  以标记下钻是子图的*主要*动作。 */
-          className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] text-violet-700 transition-colors hover:bg-violet-500/30 hover:text-white dark:text-violet-200"
+          className="text-primary-strong hover:bg-primary/30 ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] transition-colors hover:text-white"
         >
           <ExternalLink size={12} strokeWidth={2.5} />
         </Button>

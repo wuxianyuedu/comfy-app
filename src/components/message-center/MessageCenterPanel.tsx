@@ -32,18 +32,18 @@ const KIND_META: Record<
 > = {
   update: {
     icon: RefreshCw,
-    tint: "text-violet-700 bg-violet-500/15 dark:text-violet-300",
-    ring: "border-violet-500/25",
+    tint: "text-primary-strong bg-primary/15",
+    ring: "border-primary/25",
   },
   restart: {
     icon: RotateCcw,
-    tint: "text-amber-700 bg-amber-500/15 dark:text-amber-300",
-    ring: "border-amber-500/25",
+    tint: "text-warning-strong bg-warning/15",
+    ring: "border-warning/25",
   },
   info: {
     icon: Bell,
-    tint: "text-cyan-700 bg-cyan-500/15 dark:text-cyan-300",
-    ring: "border-cyan-500/25",
+    tint: "text-info-strong bg-info/15",
+    ring: "border-info/25",
   },
 };
 
@@ -88,12 +88,9 @@ export function MessageCenterPanel() {
       <header className="border-border-strong flex h-12 shrink-0 items-center gap-3 border-b px-4">
         <div className="flex items-center gap-2">
           <span className="relative">
-            <BellRing
-              size={16}
-              className="text-violet-700 dark:text-violet-300"
-            />
+            <BellRing size={16} className="text-primary-strong" />
             {unread > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-violet-500 px-0.5 text-[9px] font-bold text-white">
+              <span className="bg-primary absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-bold text-white">
                 {unread > 99 ? "99+" : unread}
               </span>
             )}
@@ -175,7 +172,7 @@ export function MessageCenterPanel() {
                           {m.title}
                         </h3>
                         {!m.read && (
-                          <span className="rounded-full bg-violet-500/20 px-1.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                          <span className="bg-primary/20 text-primary-strong rounded-full px-1.5 text-[10px] font-medium">
                             新
                           </span>
                         )}

@@ -28,10 +28,8 @@ function EditorCrashFallback({
       zClass={zClass("modal")}
       className="bg-canvas flex items-center justify-center"
     >
-      <div className="w-[min(560px,90vw)] rounded-2xl border border-red-500/25 bg-red-500/5 p-6">
-        <p className="text-sm font-semibold text-red-700 dark:text-red-400">
-          编辑器渲染出错
-        </p>
+      <div className="border-destructive/25 bg-destructive/5 w-[min(560px,90vw)] rounded-2xl border p-6">
+        <p className="text-destructive text-sm font-semibold">编辑器渲染出错</p>
         <p className="text-ink-soft mt-2 text-xs leading-relaxed break-all">
           {error?.message ?? "未知错误（详见控制台 componentStack）"}
         </p>

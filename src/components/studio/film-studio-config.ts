@@ -194,23 +194,23 @@ export const STATUS_BADGE: Record<
 > = {
   IDLE: { bg: "bg-subtle", text: "text-ink-fainter", label: "待处理" },
   QUEUED: {
-    bg: "bg-amber-500/15",
-    text: "text-amber-700 dark:text-amber-300",
+    bg: "bg-info/15",
+    text: "text-info-strong",
     label: "排队中",
   },
   RUNNING: {
-    bg: "bg-violet-500/15",
-    text: "text-violet-700 dark:text-violet-300",
+    bg: "bg-primary/15",
+    text: "text-primary-strong",
     label: "生成中",
   },
   SUCCEEDED: {
-    bg: "bg-emerald-500/15",
-    text: "text-emerald-700 dark:text-emerald-300",
+    bg: "bg-success/15",
+    text: "text-success-strong",
     label: "完成",
   },
   FAILED: {
-    bg: "bg-rose-500/15",
-    text: "text-rose-700 dark:text-rose-300",
+    bg: "bg-destructive/15",
+    text: "text-destructive",
     label: "失败",
   },
 };
