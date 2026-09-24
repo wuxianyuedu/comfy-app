@@ -23,23 +23,12 @@ export async function synthesizeFirstFrame(opts: {
   negative?: string;
   size?: SizeSpec;
   projectId?: string | null;
-  /** 抽卡重生成：true 时提交前注 randomize 覆盖，让 comfy-cli 铸新种子（同提示词也能出不同图）。 */
-  randomizeSeed?: boolean;
 }): Promise<string> {
-  const {
-    userId,
-    workflowId,
-    prompt,
-    negative,
-    size,
-    projectId,
-    randomizeSeed,
-  } = opts;
+  const { userId, workflowId, prompt, negative, size, projectId } = opts;
   const { taskId } = await createWorkflowRunTask({
     userId,
     workflowId,
     projectId: projectId ?? null,
-    randomizeSeed,
     values: {
       prompt,
       ...(negative !== undefined ? { negativePrompt: negative } : {}),

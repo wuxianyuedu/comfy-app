@@ -257,9 +257,6 @@ async function execImages(
         prompt: shot.prompt,
         negative: shot.negativePrompt || undefined,
         projectId,
-        // 自主流水线每次出图都换一个新随机种子：这样「抽卡重生成」（同提示词退回重出）能真正
-        // 出不同图，而不是命中图里固定的 seed 得到同一张。
-        randomizeSeed: true,
       });
       next.push({ ...shot, imageUrl: path, status: "done" });
     } catch {

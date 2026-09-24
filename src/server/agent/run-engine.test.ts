@@ -188,10 +188,6 @@ describe("advanceRunLoop", () => {
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
     expect(synthesizeFirstFrame).toHaveBeenCalledTimes(1);
-    // 自主流水线出图带 randomizeSeed，让「抽卡重生成」同提示词也能换种子出不同图。
-    expect(synthesizeFirstFrame).toHaveBeenCalledWith(
-      expect.objectContaining({ randomizeSeed: true, workflowId: "wf-img" }),
-    );
     const shot = (row!.shots as { imageUrl?: string; status: string }[])[0];
     expect(shot).toMatchObject({
       status: "done",
