@@ -753,8 +753,9 @@ export function WorkflowCanvasNodePreview({
         </div>
       )}
 
-      {/* ── 运行结果图（use 模式或刚跑完时展示） ── */}
-      {resultUrl && (
+      {/* ── 运行结果图（只在「实际使用」页签显示；编辑对外参数是配置界面，
+            不应展示上一次运行的结果图） ── */}
+      {resultUrl && viewMode === "use" && (
         <div className="w-[380px]">
           <p className="text-ink-faint mb-1 text-[11px]">运行结果</p>
           {/* 缩略图盒子只有 380px 宽，看细节得点开通用查看器
