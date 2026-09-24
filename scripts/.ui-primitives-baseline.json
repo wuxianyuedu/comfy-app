@@ -15,7 +15,7 @@
     "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
     "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）"
   },
-  "total": 146,
+  "total": 115,
   "files": {
     "src/components/message-center/MessageCenterButton.tsx": {
       "P71": 1
@@ -124,45 +124,6 @@
     },
     "src/components/studio/WorksGallery.tsx": {
       "P71": 2
-    },
-    "src/components/workshop/AgentOverlay.tsx": {
-      "P71": 1
-    },
-    "src/components/workshop/api-channel-settings-config.ts": {
-      "P71": 2
-    },
-    "src/components/workshop/CharacterDesigner.tsx": {
-      "P71": 1
-    },
-    "src/components/workshop/CharacterPortraitStudio.tsx": {
-      "P71": 5
-    },
-    "src/components/workshop/ExtractModelSelect.tsx": {
-      "P71": 2
-    },
-    "src/components/workshop/ExtractToolbar.tsx": {
-      "P71": 6
-    },
-    "src/components/workshop/FinalComposer.tsx": {
-      "P71": 2
-    },
-    "src/components/workshop/LLMContext.tsx": {
-      "P71": 3
-    },
-    "src/components/workshop/mode-contract/dialog/ModeContractEditorView.tsx": {
-      "P71": 3
-    },
-    "src/components/workshop/ScriptGenerator.tsx": {
-      "P71": 1
-    },
-    "src/components/workshop/StoryboardPlanner.tsx": {
-      "P71": 1
-    },
-    "src/components/workshop/WorkshopModelAdapterModal.tsx": {
-      "P71": 3
-    },
-    "src/components/workshop/WorkshopStageNav.tsx": {
-      "P71": 1
     },
     "src/app/(main)/settings/components/SettingsPrimitives.tsx": {
       "P71": 18

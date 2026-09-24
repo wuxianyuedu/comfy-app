@@ -241,19 +241,19 @@ export function ModeContractEditorView({
               </select>
             </div>
             {!draft.inputs.includes("prompt") && (
-              <p className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-300">
+              <p className="bg-warning/10 text-warning-strong rounded-lg px-2 py-1 text-[11px]">
                 契约里没有「提示词」口 —— 工坊生成的提示词将无处可落，
                 保存后该模式无法被工坊驱动。
               </p>
             )}
             {!controller.hasAnyRequired && (
-              <p className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-300">
+              <p className="bg-warning/10 text-warning-strong rounded-lg px-2 py-1 text-[11px]">
                 一个必备口都没勾 —— 这条模式下任何工作流都会被判为「工坊可用」，
                 缺任何口都不再提示。若你不是有意如此，给承载生成输入的那个口勾上。
               </p>
             )}
             {saved && (
-              <p className="rounded-lg bg-emerald-100 px-2 py-1 text-[11px] text-emerald-800 dark:text-emerald-300">
+              <p className="bg-success/10 text-success-strong rounded-lg px-2 py-1 text-[11px]">
                 已保存 —— 工坊与工作流库读的是同一份注册表，另一处刷新后即生效。
               </p>
             )}

@@ -204,7 +204,7 @@ export function AgentOverlay({
       </div>
 
       {error && (
-        <p className="border-border border-t bg-red-500/10 px-4 py-1.5 text-[11px] text-red-700 dark:text-red-400">
+        <p className="border-border bg-destructive/10 text-destructive border-t px-4 py-1.5 text-[11px]">
           {error}
         </p>
       )}

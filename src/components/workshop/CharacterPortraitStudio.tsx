@@ -211,7 +211,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         </p>
       )}
       {session.channel === "remote" && !remoteReady && (
-        <p className="flex flex-wrap items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400">
+        <p className="text-warning-strong flex flex-wrap items-center gap-1 text-[11px]">
           <Icon name="info" size={11} />
           远端 API 生图未配置 —— 在
           <span className="font-medium">设置 → 模型</span>
@@ -287,9 +287,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                         key={`${entry.ts}-${entry.text}`}
                         className={`text-[10.5px] leading-relaxed ${
                           entry.level === "error"
-                            ? "text-red-700 dark:text-red-400"
+                            ? "text-destructive"
                             : entry.level === "success"
-                              ? "text-emerald-700 dark:text-emerald-400"
+                              ? "text-success-strong"
                               : "text-muted-foreground"
                         }`}
                       >
@@ -329,9 +329,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                           key={`${entry.ts}-${i}`}
                           className={`text-[10.5px] leading-relaxed ${
                             entry.kind === "error"
-                              ? "text-red-700 dark:text-red-400"
+                              ? "text-destructive"
                               : entry.kind === "success"
-                                ? "text-emerald-700 dark:text-emerald-400"
+                                ? "text-success-strong"
                                 : "text-muted-foreground"
                           }`}
                         >

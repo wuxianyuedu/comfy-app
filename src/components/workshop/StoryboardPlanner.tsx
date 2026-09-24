@@ -161,7 +161,7 @@ export function StoryboardPlanner(props: Props) {
         <div
           className={`rounded-lg px-3 py-2 text-xs ${
             aiError
-              ? "bg-red-100 text-red-800 dark:text-red-300"
+              ? "bg-destructive/10 text-destructive"
               : "bg-primary-soft/40 text-primary"
           }`}
         >
