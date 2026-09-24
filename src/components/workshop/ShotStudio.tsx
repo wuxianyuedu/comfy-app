@@ -28,6 +28,7 @@ import {
   type ShotSizeState,
 } from "./shot-size-config";
 import { ShotSizePicker } from "./ShotSizePicker";
+import { SeedAdvancedField } from "./SeedAdvancedField";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
 import { errorMessage } from "~/lib/error-message";
@@ -58,6 +59,18 @@ function noop(): void {
   /* 无操作。 */
 }
 
+/** 解析高级种子的输入框值：空 / 非数字 → 每次一个新的随机 seed（默认随机）；
+ *  有限数字 → 用该固定 seed（pin 住以复现）。 */
+function resolveSeed(raw: string): number {
+  const trimmed = raw.trim();
+  if (trimmed === "")
+    return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+  const n = Number(trimmed);
+  return Number.isFinite(n)
+    ? Math.trunc(n)
+    : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+}
+
 /**
  * 镜头生图 stage：消费「场景分镜」产出的镜头列表（提示词已在上游
  * 自动构建；空的在这里从场景 + 角色卡回填），并在本地 ComfyUI 链或
@@ -76,6 +89,8 @@ export function ShotStudio({
   onNextStage,
 }: Props) {
   const [channel, setChannel] = React.useState<Channel>("local");
+  /** 高级 · 种子输入（空 = 每次自动随机；数字 = pin 住复现）。 */
+  const [seedInput, setSeedInput] = React.useState("");
   /** 全镜头共用的「比例 + 像素 + 对齐」尺寸三段状态（issue #145 需求 3）。
    * 初值取第一条镜头已带的 WxH 参数反解，历史尺寸不丢。 */
   const [shotSize, setShotSize] = React.useState<ShotSizeState>(() =>
@@ -212,6 +227,8 @@ export function ShotStudio({
             prompt: shot.prompt,
             negativePrompt: shot.negativePrompt || undefined,
             size: sizeSpec,
+            // 高级 · 种子：默认随机（留空每次新 seed），填数字则 pin 住（见 resolveSeed）。
+            seed: resolveSeed(seedInput),
           })
         ).input;
 
@@ -300,6 +317,13 @@ export function ShotStudio({
             disabled={batch.busy}
           />
         </div>
+        {channel === "local" && (
+          <SeedAdvancedField
+            value={seedInput}
+            onChange={setSeedInput}
+            disabled={batch.busy}
+          />
+        )}
         <Button
           variant="primary-solid"
           size="xs"
