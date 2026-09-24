@@ -208,7 +208,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             </pre>
           )}
           {aiError && (
-            <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-800 dark:text-red-300">
+            <p className="bg-destructive/10 text-destructive rounded-lg px-3 py-2 text-xs">
               {aiError}
             </p>
           )}

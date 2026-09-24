@@ -312,7 +312,7 @@ function LLMSettingsModal({
               ))}
             </div>
           ) : (
-            <p className="text-muted-foreground rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+            <p className="text-muted-foreground bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
               暂无候选模型 —— 请到「设置」页添加（本地 Ollama 需已拉取模型）。
             </p>
           )}
@@ -321,8 +321,8 @@ function LLMSettingsModal({
             <p
               className={`mt-3 rounded-lg px-3 py-2 text-xs ${
                 msg.kind === "ok"
-                  ? "bg-emerald-100 text-emerald-800 dark:text-emerald-300"
-                  : "bg-red-100 text-red-800 dark:text-red-300"
+                  ? "bg-success/10 text-success-strong"
+                  : "bg-destructive/10 text-destructive"
               }`}
             >
               {msg.text}

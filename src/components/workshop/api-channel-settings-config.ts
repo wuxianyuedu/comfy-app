@@ -42,8 +42,8 @@ export const API_CHANNEL_DEFAULT_PATH: Record<ApiChannelKind, string> = {
 export const API_CHANNEL_SAVE_OK = "已保存。API 通道已可用。";
 export const API_CHANNEL_SAVE_FAIL = "保存失败";
 
-/** 结果提示条配色：成功绿 / 失败红。 */
+/** 结果提示条配色：成功 / 失败各一套（§4.11.1 状态语义 → 语义 token）。 */
 export const API_CHANNEL_MSG_STYLE: Record<"ok" | "err", string> = {
-  ok: "bg-emerald-100 text-emerald-800 dark:text-emerald-300",
-  err: "bg-red-100 text-red-800 dark:text-red-300",
+  ok: "bg-success/15 text-success-strong",
+  err: "bg-destructive/15 text-destructive",
 };
