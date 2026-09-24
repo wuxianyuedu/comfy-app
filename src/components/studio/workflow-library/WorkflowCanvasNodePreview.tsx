@@ -772,7 +772,7 @@ export function WorkflowCanvasNodePreview({
       {/* ── 错误提示（只在「实际使用」页签显示；编辑对外参数是配置界面，
             不应展示上一次运行的执行错误） ── */}
       {phase.kind === "failed" && viewMode === "use" && (
-        <div className="w-[380px] rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-relaxed text-red-700 dark:text-red-300">
+        <div className="border-destructive/20 bg-destructive/8 text-destructive w-[380px] rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
           {phase.message}
         </div>
       )}
@@ -780,7 +780,7 @@ export function WorkflowCanvasNodePreview({
       {/* ── 素材上传提示 ── */}
       {uploadNotice && (
         <div
-          className="w-[380px] rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300"
+          className="border-warning/25 bg-warning/10 text-warning-strong w-[380px] rounded-lg border px-3 py-2 text-[11px] leading-relaxed"
           role="status"
           aria-live="polite"
         >
@@ -799,7 +799,7 @@ export function WorkflowCanvasNodePreview({
         </div>
       )}
       {!running && missingLabels.length > 0 && viewMode === "use" && (
-        <p className="w-[380px] text-[11px] text-amber-700 dark:text-amber-300/80">
+        <p className="text-warning-strong/80 w-[380px] text-[11px]">
           必填参数未填：{missingLabels.join("、")}
         </p>
       )}

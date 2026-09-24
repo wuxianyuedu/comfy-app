@@ -120,7 +120,7 @@ export function DetailHeader({
                       key={code}
                       className={`rounded px-2 py-0.5 text-[11px] ${
                         code === workflow.defaultMode
-                          ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                          ? "bg-primary/15 text-primary-strong"
                           : "text-ink-faint"
                       }`}
                     >
@@ -146,7 +146,7 @@ export function DetailHeader({
             {/* 两列都为空时提前标注，而不是等用户点了「生成」才报错。
                 正常导入不会落到这里：raw 与 api 地位同等，任一列有内容即可执行。 */}
             {!usable && (
-              <span className="rounded bg-red-500/12 px-1.5 py-0.5 text-[10px] text-red-700 dark:text-red-300">
+              <span className="bg-destructive/12 text-destructive rounded px-1.5 py-0.5 text-[10px]">
                 无可执行内容
               </span>
             )}
@@ -155,8 +155,8 @@ export function DetailHeader({
                 className={[
                   "rounded px-1.5 py-0.5 text-[10px]",
                   missing
-                    ? "bg-red-500/12 text-red-700 dark:text-red-300"
-                    : "bg-amber-500/12 text-amber-700 dark:text-amber-300",
+                    ? "bg-destructive/12 text-destructive"
+                    : "bg-warning/12 text-warning-strong",
                 ].join(" ")}
               >
                 {missing ? "磁盘文件已丢失" : "磁盘文件有更新"}

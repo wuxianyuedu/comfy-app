@@ -109,12 +109,12 @@ export function WorkflowLibraryList({
       </div>
 
       {dragActive && (
-        <p className="border-b border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-center text-[11px] text-cyan-700 dark:text-cyan-300">
+        <p className="border-info/30 bg-info/10 text-info-strong border-b px-3 py-1.5 text-center text-[11px]">
           松开即可读取该工作流 JSON
         </p>
       )}
       {fileErr && (
-        <p className="border-b border-red-500/25 bg-red-500/8 px-3 py-1.5 text-[11px] text-red-700 dark:text-red-300">
+        <p className="border-destructive/25 bg-destructive/8 text-destructive border-b px-3 py-1.5 text-[11px]">
           ⚠ {fileErr}
         </p>
       )}
@@ -181,8 +181,8 @@ export function WorkflowLibraryList({
 
         {/* 未载入的本地工作流排在已载入之后 */}
         {pendingRows.length > 0 && (
-          <div className="mt-3 mb-3 rounded-xl border border-dashed border-cyan-500/25 bg-cyan-500/[0.04] p-2.5">
-            <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-cyan-700 dark:text-cyan-300/80">
+          <div className="border-info/25 bg-info/[0.04] mt-3 mb-3 rounded-xl border border-dashed p-2.5">
+            <p className="text-info-strong mb-2 flex items-center gap-1.5 text-[10px] font-medium">
               {/* 状态点走`ui/status-dot`（全库唯一实现，规范 16 §16.2.4.5）；
 `probing` 表达「还没载入、等待中」。 */}
               <StatusDot state="probing" sizeClass="size-1.5" />

@@ -68,11 +68,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         )}
         <div className="mt-3 flex items-center justify-between text-xs">
           <div className="text-muted-foreground flex flex-wrap items-center gap-2">
-            {saveErr && (
-              <span className="text-red-700 dark:text-red-400">
-                ⚠ {saveErr}
-              </span>
-            )}
+            {saveErr && <span className="text-destructive">⚠ {saveErr}</span>}
             {/* 目录总览章 —— 检测到任何子包时显示总数 + 过期数。 */}
             {totalAcrossParents.total > 0 && (
               <>
@@ -192,7 +188,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                           </span>
                         )}
                         {cnt.error > 0 && (
-                          <span className="rounded-full bg-red-500/18 px-1.5 py-0.5 text-red-700 dark:text-red-300">
+                          <span className="bg-destructive/18 text-destructive rounded-full px-1.5 py-0.5">
                             ⚠ {cnt.error}
                           </span>
                         )}

@@ -38,9 +38,9 @@ import {
 } from "./raw-cli-lines";
 
 const TAG_STYLES: Record<string, string> = {
-  原始: "text-cyan-700 dark:text-cyan-400",
-  stdout: "text-slate-600 dark:text-slate-300",
-  stderr: "text-rose-700 dark:text-rose-400",
+  原始: "text-info-strong",
+  stdout: "text-ink-soft",
+  stderr: "text-destructive",
 };
 
 /**
@@ -173,10 +173,7 @@ export function WorkflowRunRawCliModal({
           {/* Header */}
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <FileJson
-                size={16}
-                className="shrink-0 text-violet-700 dark:text-violet-400"
-              />
+              <FileJson size={16} className="text-primary-strong shrink-0" />
               <span className="text-ink truncate text-[15px] font-semibold">
                 comfy-cli 完整输出
               </span>
