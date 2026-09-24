@@ -28,19 +28,19 @@ import {
 } from "./training-studio-config";
 
 /* ── 布局（在 WorkspaceNav 父壳内） ──
-  ┌─────────────────────────────────────────────────────────────┐
-  │ 顶部工具栏：[LoRA 训练工作室] … [后端状态] … [开始训练]     │
-  ├─────────────┬───────────────────────────────┬───────────────┤
-  │ 数据集       │  训练监控                      │  超参数        │
-  │ (300px)      │  · 进度环 + 指标              │  (320px)       │
-  │ · 后端横幅    │  · 紫色进度条                 │  名称/底模/触发 │
-  │ · 上传区      │  · Loss 曲线 SVG             │  类别词/分辨率  │
-  │ · 逐图caption │  · 任务列表                  │  4 滑块 + lr    │
-  │              │                               │  优化器/调度器  │
-  │              │                               │  种子 + 开始    │
-  ├─────────────────────────────────────────────────────────────┤
-  │ 状态栏：● ComfyUI·Kohya 就绪 · 本地算力 · 零授权          │
-  └─────────────────────────────────────────────────────────────┘
+ ┌─────────────────────────────────────────────────────────────┐
+ │ 顶部工具栏：[LoRA 训练工作室] … [后端状态] … [开始训练] │
+ ├─────────────┬───────────────────────────────┬───────────────┤
+ │ 数据集 │ 训练监控 │ 超参数 │
+ │ (300px) │ · 进度环 + 指标 │ (320px) │
+ │ · 后端横幅 │ · 紫色进度条 │ 名称/底模/触发 │
+ │ · 上传区 │ · Loss 曲线 SVG │ 类别词/分辨率 │
+ │ · 逐图caption │ · 任务列表 │ 4 滑块 + lr │
+ │ │ │ 优化器/调度器 │
+ │ │ │ 种子 + 开始 │
+ ├─────────────────────────────────────────────────────────────┤
+ │ 状态栏：● ComfyUI·Kohya 就绪 · 本地算力 · 零授权 │
+ └─────────────────────────────────────────────────────────────┘
 */
 
 const fieldClass =
@@ -69,7 +69,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   /* 数据集选择：拖放区整块可点，命中即开系统文件对话框。多选用
-   * `multiple`，选完之后交给 hook 逐张串行上传。 */
+   *`multiple`，选完之后交给 hook 逐张串行上传。 */
   const datasetPicker = useFilePicker({
     multiple: true,
     accept: "image/*",
@@ -161,14 +161,14 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             </div>
           </div>
 
-          <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          <div className="flex-1 gap-3 overflow-y-auto p-4">
             {/* 后端未配置横幅 */}
             {!c.backendConfigured && (
               <Alert
                 variant="warning"
-                /* 基元默认 `grid` 是给「图标 + 标题 + 正文」这种分行结构用的；
-                  这条横幅是**连续文字流**（正文里夹着内联链接），必须显式
-                   回到 `block`，否则每个文字节点各自成行、排版散架。 */
+                /* 基元默认`grid` 是给「图标 + 标题 + 正文」这种分行结构用的；
+ 这条横幅是**连续文字流**（正文里夹着内联链接），必须显式
+ 回到`block`，否则每个文字节点各自成行、排版散架。 */
                 className="block rounded-lg p-3 text-[11px] leading-relaxed"
               >
                 <AlertTitle className="mb-1 font-semibold">
@@ -222,7 +222,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             </div>
 
             {/* 数据集必填的错误行：挂在上传区下方（这一块没有单一控件，
-                所以不用 `FormField` 的自动关联，只复用它的错误行排版）。 */}
+ 所以不用`FormField` 的自动关联，只复用它的错误行排版）。 */}
             {c.fieldErrors.dataset && (
               <p className="text-danger-strong text-[11px]">
                 {c.fieldErrors.dataset}
@@ -246,7 +246,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                   </Button>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="flex-col gap-1.5">
                   {c.dataset.map((data, i) => (
                     <div
                       key={data.name}
@@ -457,7 +457,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 {c.jobs.map((job) => {
                   const sm = statusMeta(job.status);
                   const logs = job.logs ?? [];
@@ -478,11 +478,11 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                             </span>
                           </div>
                           <p className="text-ink-muted mt-1 text-[11px]">
-                            {job.baseModel} · 触发词{" "}
+                            {job.baseModel} · 触发词{""}
                             <span className="text-primary-strong">
                               {job.triggerWord}
-                            </span>{" "}
-                            · {job.datasetImages?.length ?? 0} 张图 ·{" "}
+                            </span>
+                            {""}· {job.datasetImages?.length ?? 0} 张图 ·{""}
                             {job.steps} 步
                           </p>
                         </div>
@@ -517,7 +517,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                         </div>
                       </div>
                       {/* 取消失败挂在**这一行**（规范 16 §16.2.4.33）：用户点的
-                          是这张卡上的「取消」，原因就写在它旁边。 */}
+ 是这张卡上的「取消」，原因就写在它旁边。 */}
                       {c.errors.get(job.id) && (
                         <p className="text-danger-strong mt-2 text-[11px]">
                           {c.errors.get(job.id)}
@@ -595,7 +595,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             </span>
           </div>
 
-          <div className="flex-1 space-y-3.5 overflow-y-auto p-4">
+          <div className="flex-1 flex-col gap-3.5 overflow-y-auto p-4">
             <FormField
               label="任务名称"
               id="train-name"
@@ -761,7 +761,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
 
             <div>
               {/* 学习率这一行没有单一控件（数字输入 + 快捷档位并排），
-                  标签行只作小标题。 */}
+ 标签行只作小标题。 */}
               <FormField label="学习率" labelClassName={labelClass} />
               <NumberField
                 value={c.form.learningRate}
@@ -819,7 +819,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             </FormField>
 
             {/* 无条目归属的那档（上传 / 创建失败）—— 挂在提交按钮上方。
-                任务取消失败挂在**那一行**（见下方任务列表）。 */}
+ 任务取消失败挂在**那一行**（见下方任务列表）。 */}
             {c.errors.get(null) && (
               <p className="text-danger-strong text-xs">{c.errors.get(null)}</p>
             )}

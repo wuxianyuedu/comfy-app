@@ -72,10 +72,10 @@ interface Props {
   /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
   scriptMarkdown?: string;
   /** 提取会话（busy/progress/日志）已收归工坊 controller，经 props 注入；
-   *  未注入（遗留/独立使用场景）时退化为本组件内的局部会话。 */
+   * 未注入（遗留/独立使用场景）时退化为本组件内的局部会话。 */
   extract?: { session: ExtractSession; actions: ExtractSessionActions };
   /** 定妆照会话与生成通道配置（同样收归 controller，经 props 注入）。
-   *  未注入时不渲染定妆照区块，遗留/独立使用场景不受影响。 */
+   * 未注入时不渲染定妆照区块，遗留/独立使用场景不受影响。 */
   portrait?: CharacterPortraitContext;
 }
 
@@ -100,7 +100,7 @@ function newCharacter(): Character {
   };
 }
 /** 把角色描述字符串拆成下拉选项数组（兼容中/英文逗号、顿号与空白分隔）。
- *  旧项目里保存的角色可能缺新字段（如 temperament），入参按可缺失兜底。 */
+ * 旧项目里保存的角色可能缺新字段（如 temperament），入参按可缺失兜底。 */
 function splitAttr(text: string | undefined | null): string[] {
   return (text ?? "")
     .split(/[、,，，\s]+/)
@@ -137,22 +137,22 @@ export function CharacterDesigner({
   const [genStatus, setGenStatus] = React.useState("");
   /** 一句话生成角色：独立错误信息（不与 AI 润色混用） */
   const [genError, setGenError] = React.useState("");
-  /** 一句话生成角色：独立选择的 本地/远端模型（<下拉值> 为 "local::<m>" 或 "remote::<m>"；
-   *  空串 = 未手动选择，沿用全局 config 的 provider/model）。 */
+  /** 一句话生成角色：独立选择的 本地/远端模型（<下拉值> 为"local::<m>" 或"remote::<m>"；
+   * 空串 = 未手动选择，沿用全局 config 的 provider/model）。 */
   const [genSel, setGenSel] = React.useState("");
-  /* 「哪一条在润色」收在 `useItemAction`（规范 16 §16.2.4.40）：此前是本
-   * 组件自持的 `useState<string | null>`，与历史列表的重试、分镜的润色各写
+  /* 「哪一条在润色」收在`useItemAction`（规范 16 §16.2.4.40）：此前是本
+   * 组件自持的`useState<string | null>`，与历史列表的重试、分镜的润色各写
    * 一份 —— 「同一条能不能重复点」三处都没防。 */
   const aiAction = useItemAction(characters.map((character) => character.id));
   /* 逐条润色的错误挂在**那个角色**上（规范 16 §16.2.4.33）：收口前是一句
-   * `useState("")` —— 润色角色 A 失败后去润色角色 B，A 的提示就被盖掉。
+   *`useState("")` —— 润色角色 A 失败后去润色角色 B，A 的提示就被盖掉。
    * 忙碌位是单值是对的（同一时刻只有一条在忙），那是 P14/P15 那些忙碌位
    * 选择器的形态，不是错误位。 */
   const aiErrors = useItemErrors(characters.map((character) => character.id));
   const { config, openSettings } = useLLM();
 
   /** 一句话生成实际生效的 provider/model 与下拉展示值：
-   *  手动在区块内选择过（genSel 非空）即用它，否则沿用全局 config（换算见 channel-options）。 */
+   * 手动在区块内选择过（genSel 非空）即用它，否则沿用全局 config（换算见 channel-options）。 */
   const genEffective = resolveChannelSelection(genSel, config);
   const genSelectValue = channelSelectionDisplayValue(genSel, config);
 
@@ -287,7 +287,7 @@ export function CharacterDesigner({
       } catch (e: unknown) {
         aiErrors.report(character.id)("err", errorMessage(e, "AI 润色失败"));
       }
-      /* 忙标记由出口的 `finally` 清。 */
+      /* 忙标记由出口的`finally` 清。 */
     });
   }
 
@@ -391,7 +391,7 @@ export function CharacterDesigner({
   async function handleImportFile(file: File) {
     cacheExtractPatch({ busy: true, status: "", error: "" });
     try {
-      /* 读取收在唯一出口里（§16.2.4.27）—— 此前两处各写一遍 `file.text()`，
+      /* 读取收在唯一出口里（§16.2.4.27）—— 此前两处各写一遍`file.text()`，
        * 而「读失败」与「文件为空」在它们那里压成同一个结果。 */
       const text = await readFileAsText(file);
       const trimmed = text.trim();
@@ -423,10 +423,10 @@ export function CharacterDesigner({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex-col gap-4">
       <div className="flex items-center justify-between">
         <h3 className="u-title">
-          角色设计{" "}
+          角色设计{""}
           <span className="text-muted-foreground">({characters.length})</span>
         </h3>
         <div className="flex gap-2">
@@ -485,7 +485,7 @@ export function CharacterDesigner({
         {config && !genSel && (
           <p className="text-muted-foreground mt-2 text-[11px]">
             未手动选择模型时，沿用全局配置（当前：
-            {channelProviderLabel(config.provider)} ·{" "}
+            {channelProviderLabel(config.provider)} ·{""}
             {config.model || "未选模型"}）。点下拉可切换本次生成的 本地/远端
             模型。
           </p>
@@ -559,7 +559,7 @@ export function CharacterDesigner({
           还没有角色。添加角色后会自动生成可送入生图的提示词。
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {characters.map((character, i) => (
             <div
               key={character.id}

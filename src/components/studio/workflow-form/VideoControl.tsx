@@ -44,7 +44,7 @@ function VideoControl({
   workflowId?: string;
   disabled?: boolean;
   /** 画布 / 库内的紧凑版式：控件按内容收窄（`w-fit`），不再占满整行。
-   *  与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
+   * 与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
   narrow?: boolean;
 }) {
   const [style, setStyle] = useState<GroupStyle>(() =>
@@ -62,7 +62,13 @@ function VideoControl({
 
   if (style === "split") {
     return (
-      <div className={narrow ? "w-fit max-w-full space-y-2" : "space-y-2"}>
+      <div
+        className={
+          narrow
+            ? "flex w-fit max-w-full flex-col gap-2"
+            : "flex flex-col gap-2"
+        }
+      >
         <StyleSwitcher
           style={style}
           onChange={onStyle}
@@ -124,8 +130,8 @@ function VideoControl({
         },
       };
     }
-    /* role === "aspect" —— COMBO 比例用自己的选项，否则用
-     *  友好比例预设把浮点比值写回 widget。 */
+    /* role ==="aspect" —— COMBO 比例用自己的选项，否则用
+     * 友好比例预设把浮点比值写回 widget。 */
     if (
       entry.control === "select" &&
       Array.isArray(entry.options) &&
@@ -158,10 +164,14 @@ function VideoControl({
     };
   });
 
-  const summary = sections.map((section) => section.value).join(" · ");
+  const summary = sections.map((section) => section.value).join(" ·");
 
   return (
-    <div className={narrow ? "w-fit max-w-full space-y-2" : "space-y-2"}>
+    <div
+      className={
+        narrow ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"
+      }
+    >
       <StyleSwitcher
         style={style}
         onChange={onStyle}

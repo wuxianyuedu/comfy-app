@@ -27,10 +27,10 @@ import { Textarea } from "~/components/ui/textarea";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
 /** 可滚动 + 编辑区档位的滚动条外观。
- *  外观定义已收进 `globals.css` 的 `.soft-scrollbar` —— 此前这里用一组
- *  任意值变体（`[&::-webkit-scrollbar-thumb]:bg-border-strong!` …）把同一件事
- *  又实现了一份，取值与 `.custom-scrollbar` 各自漂移；判据 P4 现在禁止
- *  视图里再出现 `::-webkit-scrollbar`。 */
+ * 外观定义已收进`globals.css` 的`.soft-scrollbar` —— 此前这里用一组
+ * 任意值变体（`[&::-webkit-scrollbar-thumb]:bg-border-strong!` …）把同一件事
+ * 又实现了一份，取值与`.custom-scrollbar` 各自漂移；判据 P4 现在禁止
+ * 视图里再出现`::-webkit-scrollbar`。 */
 export const SCROLLBAR_VISIBLE_CLASSES = "soft-scrollbar overflow-y-auto";
 
 /* ── Toolbar primitives ── */
@@ -210,7 +210,7 @@ export function OutlineSidebar({
           使用 # / ## / ### 添加标题后，此处自动生成目录。
         </p>
       ) : (
-        <nav className="space-y-1">
+        <nav className="flex flex-col gap-1">
           {outline.map((item, index) => (
             <Button
               key={`${item.line}-${index}`}
@@ -255,14 +255,14 @@ export function EditorBody({
   getSelection: () => { start: number; end: number; text: string };
   onChange: (next: string, start: number, end: number) => void;
 }) {
-  /* Tab 缩进的键动作走 `~/components/ui/simple-key-handler`（规范 16
-   *  §16.2.4.57）：键判别与 `preventDefault` 此前混在同一个 `if` 里，
-   *  看不出「吞掉焦点转移」是谁决定的。
+  /* Tab 缩进的键动作走`~/components/ui/simple-key-handler`（规范 16
+   * §16.2.4.57）：键判别与`preventDefault` 此前混在同一个`if` 里，
+   * 看不出「吞掉焦点转移」是谁决定的。
    *
-   *  它必须**在事件处理器里**调（而不是在 render 时展开成 props）：动作闭包
-   *  要读 `textareaRef.current`，而 render 期读 ref 会被
-   *  `react-hooks/refs` 拦下。因此这里是 `onKeyDown={(event) => …}` ——
-   *  元素上仍然只有一个 `onKeyDown`，键判据仍然只有一处定义。 */
+   * 它必须**在事件处理器里**调（而不是在 render 时展开成 props）：动作闭包
+   * 要读`textareaRef.current`，而 render 期读 ref 会被
+   *`react-hooks/refs` 拦下。因此这里是`onKeyDown={(event) => …}` ——
+   * 元素上仍然只有一个`onKeyDown`，键判据仍然只有一处定义。 */
   return (
     <main className="relative flex min-w-0 flex-1 flex-col">
       {showPreview ? (
@@ -283,11 +283,11 @@ export function EditorBody({
           }}
           onKeyDown={(event) => {
             /* 键判据（哪几个键、要不要 preventDefault、收不收连发）来自出口，
-             *  这里只写「按下 Tab 要为这段文本做什么」—— 而这三件事现在都
-             *  写在同一个地方（`simpleKeyHandler`），不再与动作混在一个 `if` 里。 */
+             * 这里只写「按下 Tab 要为这段文本做什么」—— 而这三件事现在都
+             * 写在同一个地方（`simpleKeyHandler`），不再与动作混在一个`if` 里。 */
             const tabHandler = simpleKeyHandler(["Tab"], () => {
               const { start, end } = getSelection();
-              const nextValue = value.slice(0, start) + "  " + value.slice(end);
+              const nextValue = value.slice(0, start) + "" + value.slice(end);
               emitChange(nextValue);
               pushHistory(nextValue, start + 2, start + 2);
               setTimeout(

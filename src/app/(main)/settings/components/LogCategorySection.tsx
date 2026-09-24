@@ -5,7 +5,7 @@
  *
  * 每一项对应「日志面板」里的一个来源分类（与来源筛选下拉同源）。开关**只控制面板
  * 里是否显示**该类日志——`log/` 下的真实文件照常写入，关掉只是「不想看」，不是
- * 「不记录」。改动经 `useLogCategoryStore` 即时落 localStorage，面板侧已订阅该 store，
+ * 「不记录」。改动经`useLogCategoryStore` 即时落 localStorage，面板侧已订阅该 store，
  * 因此**不重启、不重开面板**即生效（用户例子：「不关注应用服务，把它的开关关掉」）。
  *
  * 视图自持的仅交互态，其余读 category store；开关值从 store 派生，不在此处另存一份。
@@ -42,7 +42,7 @@ export function LogCategorySection() {
         （文件照常记录，仅面板隐藏），按来源筛选时也会跳过被关掉的分类。改动即时生效、
         无需重启，并自动记住。
       </p>
-      <ul className="space-y-1">
+      <ul className="flex flex-col gap-1">
         {LOG_CATEGORY_FILTERS.map((category) => {
           const on = enabled[category] !== false;
           return (

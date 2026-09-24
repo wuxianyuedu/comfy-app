@@ -4,26 +4,26 @@
  * 按浏览器持久化到 localStorage，因此用户的选择（网格透明度、标尺显隐等）
  * 在刷新后仍在，并在打开新工作流时立刻生效。
  *
- *  三件小功能归在这里：
- *    • 网格线的透明度 / 线宽 / 间距
- *     （截图里那种橙 / 深色格线太抢眼了），
- *    • 标尺与小地图的显隐，
- *    • 最大缩放的限幅。
+ * 三件小功能归在这里：
+ * • 网格线的透明度 / 线宽 / 间距
+ * （截图里那种橙 / 深色格线太抢眼了），
+ * • 标尺与小地图的显隐，
+ * • 最大缩放的限幅。
  *
- *  所有设置放在同一个扁平对象里，好让单个 `useCanvasSettings()` hook
- *  一次往返就能改任意子集。渲染出口有两个：
- *    • <CanvasSettingsButton> —— 画布右上角的齿轮图标，
- *      设置偏离默认值时显示一个紫色小点；
- *    • <CanvasSettingsPanel> —— 由该按钮打开的右侧抽屉（宽 340px）。
- *      按 Esc、点遮罩或点 × 都会关闭。
+ * 所有设置放在同一个扁平对象里，好让单个`useCanvasSettings()` hook
+ * 一次往返就能改任意子集。渲染出口有两个：
+ * • <CanvasSettingsButton> —— 画布右上角的齿轮图标，
+ * 设置偏离默认值时显示一个紫色小点；
+ * • <CanvasSettingsPanel> —— 由该按钮打开的右侧抽屉（宽 340px）。
+ * 按 Esc、点遮罩或点 × 都会关闭。
  *
- *  设置由 CanvasGrid / CanvasRulers / ZoomIndicator 经 props 读取
- *（工作流编辑器根组件调一次 `useCanvasSettings()` 再分发）。
- * 这样就避免了任何 React Context 跨越 `<ReactFlow>` 边界 ——
+ * 设置由 CanvasGrid / CanvasRulers / ZoomIndicator 经 props 读取
+ *（工作流编辑器根组件调一次`useCanvasSettings()` 再分发）。
+ * 这样就避免了任何 React Context 跨越`<ReactFlow>` 边界 ——
  * 那会干扰编辑器内部的选择器订阅。
  *
- *  存储键带版本（`v1`），将来改结构时可以迁移，
- *  不会与旧载荷相撞。
+ * 存储键带版本（`v1`），将来改结构时可以迁移，
+ * 不会与旧载荷相撞。
  */
 import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 
@@ -37,17 +37,17 @@ import { Switch } from "~/components/ui/switch";
 export interface CanvasSettings {
   /** 网格 (Grid) */
   /** 0..1，作用于细网格线（默认 10px 那层）。
-   *  会与 CanvasGrid 的缩放淡出曲线相乘，让线在所有缩放档下都可读。 */
+   * 会与 CanvasGrid 的缩放淡出曲线相乘，让线在所有缩放档下都可读。 */
   gridMinorAlpha: number;
   /** 0..1，作用于主参考线（默认每 100px 一条）。 */
   gridMajorAlpha: number;
-  /** 相邻两条细线之间的世界坐标像素。主线恒落在 `gridGap * 10` 处，
-   *  保持用户预期的 1:10 比例。 */
+  /** 相邻两条细线之间的世界坐标像素。主线恒落在`gridGap * 10` 处，
+   * 保持用户预期的 1:10 比例。 */
   gridGap: number;
   gridMinorLineWidth: number;
   gridMajorLineWidth: number;
   /** 为 false 时整层 <Background> 直接返回 null。
-   *  适合需要干净画布的截图流程。 */
+   * 适合需要干净画布的截图流程。 */
   showGrid: boolean;
 
   /** 画布 (Canvas chrome) */
@@ -55,15 +55,15 @@ export interface CanvasSettings {
   showMiniMap: boolean;
 
   /** 缩放 —— 这两项只在下次挂载编辑器时生效，
-   * 因为底层的 `<ReactFlow minZoom/maxZoom>` props 在实例化时只读一次；
-   *  面板上的文案已写明这一点。 */
+   * 因为底层的`<ReactFlow minZoom/maxZoom>` props 在实例化时只读一次；
+   * 面板上的文案已写明这一点。 */
   maxZoom: number;
   minZoom: number;
 
   /** 调试 —— 统一的「调试模式」开关。
-   *  打开时，画布底部会多出一个独立的执行日志面板（GlobalStepLogPanel），
-   *  且每条日志都带上调用方来源（"文件:行"）。
-   *  这是用户要的**一个**总开关 —— 不做按节点的日志开关。 */
+   * 打开时，画布底部会多出一个独立的执行日志面板（GlobalStepLogPanel），
+   * 且每条日志都带上调用方来源（"文件:行"）。
+   * 这是用户要的**一个**总开关 —— 不做按节点的日志开关。 */
   debugMode: boolean;
 }
 
@@ -85,7 +85,7 @@ const STORAGE_KEY = "comfyapp:canvas-settings:v1";
 
 function readSettings(): CanvasSettings {
   /* SSR / 隐私模式 / 坏数据一律回落默认值 —— 三条判据收在
-   * `~/lib/browser-storage`（§16.2.4.28）。 */
+   *`~/lib/browser-storage`（§16.2.4.28）。 */
   return readStorageJson(STORAGE_KEY, DEFAULT_CANVAS_SETTINGS, (raw) => {
     const parsed = JSON.parse(raw) as Partial<CanvasSettings>;
     /* 向前兼容：存储里的未知键忽略，默认值补齐旧载荷留下的空洞。 */
@@ -101,7 +101,7 @@ function writeSettings(s: CanvasSettings): void {
 
 /* 画布偏好的唯一事实源。挂载时从 localStorage 读入；
  * 变更会自动落盘，并经模块级监听器集合（useSyncExternalStore）
- * 广播给**每一个** `useCanvasSettings()` 实例。
+ * 广播给**每一个**`useCanvasSettings()` 实例。
  * 这一点很要紧：设置抽屉与 GlobalStepLogPanel 是两个独立组件 ——
  * 在抽屉里切换「调试模式」必须立刻让面板重渲染，
  * 而不是靠 props 一路穿过 React Flow 边界传下去。 */
@@ -120,7 +120,7 @@ function applySettings(next: CanvasSettings) {
 
 export function useCanvasSettings() {
   /* 先用默认值起步，避免 SSR / 首屏闪一下已保存的状态。
-   * `hydrated` 只在客户端翻转，且经 useSyncExternalStore 实现
+   *`hydrated` 只在客户端翻转，且经 useSyncExternalStore 实现
    *（不在 effect 里 set-state）。 */
   const hydrated = useSyncExternalStore(
     useCallback(() => () => undefined, []),
@@ -166,7 +166,7 @@ export function useDebugMode() {
 
 /* 当且仅当用户改过任何一项、偏离了默认值时为真 ——
  * 用于点亮 ⚙ 按钮旁边那个紫色小点，让用户不必打开面板也知道自己的定制在生效。
- * `debugMode` 被排除在外：它是运行期调试手段，不是视觉定制，
+ *`debugMode` 被排除在外：它是运行期调试手段，不是视觉定制，
  * 不该点亮「你改过设置」这个点。 */
 export function isCustomCanvasSettings(s: CanvasSettings): boolean {
   const keys = (
@@ -194,7 +194,7 @@ export function CanvasSettingsPanel({
   onClose,
 }: PanelProps) {
   /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出
-     标题行与 ProjectSettingsDrawer 是同一件事，此前两边各写一份。 */
+ 标题行与 ProjectSettingsDrawer 是同一件事，此前两边各写一份。 */
   return (
     <Sheet open onOpenChange={(next) => !next && onClose()}>
       <SheetContent
@@ -373,7 +373,7 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
       </span>
       设置
       {/* 紫色小点告诉用户「当前有偏离默认值的偏好」，
-       *  不必先打开面板。它既是状态指示，也算一点点品牌色。 */}
+       * 不必先打开面板。它既是状态指示，也算一点点品牌色。 */}
       {hasOverrides && (
         <span
           aria-hidden
@@ -386,10 +386,10 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
 
 /* ── Top-right 「重新居中」按钮（紧挨 ⚙ 设置上方） ──
  *
- *  为什么需要它：自动聚焦只在「打开工作流 / 进入子工作流」时做一次，之后
- *  作者把节点拖出视野、或用滚轮把画布缩成一团时，没有回到内容处的出口
- *  （与项目画布的「重置布局」不同 —— 那个会改数据，这个只动视口）。
- *  纯视口动作，不写库、不移动任何节点。 */
+ * 为什么需要它：自动聚焦只在「打开工作流 / 进入子工作流」时做一次，之后
+ * 作者把节点拖出视野、或用滚轮把画布缩成一团时，没有回到内容处的出口
+ * （与项目画布的「重置布局」不同 —— 那个会改数据，这个只动视口）。
+ * 纯视口动作，不写库、不移动任何节点。 */
 
 export function CanvasRecenterButton({ onClick }: { onClick: () => void }) {
   return (
@@ -429,7 +429,7 @@ function Section({
           <p className="text-ink-muted mt-0.5 text-[10.5px]">{subtitle}</p>
         )}
       </header>
-      <div className="border-border-strong bg-subtle space-y-2.5 rounded-lg border p-3">
+      <div className="border-border-strong bg-subtle flex flex-col gap-2.5 rounded-lg border p-3">
         {children}
       </div>
     </section>
@@ -493,7 +493,7 @@ function ToggleRow({
         {label}
       </span>
       {/* 与 ProjectCanvasSettings 的 ToggleRow 是同一件事（开关），此前各画
-          一份 —— 现在都走 ui/switch（规范 16 §16.2.3）。 */}
+ 一份 —— 现在都走 ui/switch（规范 16 §16.2.3）。 */}
       <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
     </label>
   );

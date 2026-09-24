@@ -47,7 +47,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           </span>
         </div>
         {savedPaths.length > 0 ? (
-          <div className="space-y-1">
+          <div className="flex flex-col gap-1">
             {savedPaths.map((path) => (
               <div
                 key={path}
@@ -61,7 +61,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         ) : (
           <p className="text-muted-foreground text-xs">
             未找到自定义节点目录 —— 请先在 设置 → 创作后端 中配置 ComfyUI
-            安装路径，目录会自动推导为{" "}
+            安装路径，目录会自动推导为{""}
             <code className="font-mono">&lt;comfyuiPath&gt;/custom_nodes</code>
             。
           </p>
@@ -113,8 +113,8 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
       {loading && !summary && <ParseProgressBanner progress={progress} />}
 
       {/* 按父级分组的可折叠视图。每个顶层目录自成
-          一块；块内的子包可经箭头隐藏 / 显示，
-          好让用户一次专注一棵源码树。 */}
+ 一块；块内的子包可经箭头隐藏 / 显示，
+ 好让用户一次专注一棵源码树。 */}
       <div className="mb-4">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-ink text-sm font-medium">
@@ -137,7 +137,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
             配置 ComfyUI 安装路径后，会自动发现其下的节点包。
           </div>
         )}
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {parentBlocks.map(({ parent, subs, cnt, total }) => {
             const isOpen = parentExpansion.isExpanded(parent);
             const parentParsed =
@@ -148,17 +148,17 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 className="border-border bg-bg rounded-xl border"
               >
                 {/* 父级头 —— 可点击切换。`▸/▾`、`role`、`tabIndex`、
-                    Enter/Space 全交给 `Disclosure`（规范 16 §16.2.4.13）——
-                    此前是自绘的 `role="button"` div，注释里写着「不能用原生
-                    button 因为嵌 button 非法」，而那个嵌进去的按钮正是右侧的
-                    「解析本目录」：改走基元的 `trailing` 后，它不再被嵌在
-                    触发按钮里。面板 = 子包列表（见下方 `subs.map`）。 */}
+ Enter/Space 全交给`Disclosure`（规范 16 §16.2.4.13）——
+ 此前是自绘的`role="button"` div，注释里写着「不能用原生
+ button 因为嵌 button 非法」，而那个嵌进去的按钮正是右侧的
+ 「解析本目录」：改走基元的`trailing` 后，它不再被嵌在
+ 触发按钮里。面板 = 子包列表（见下方`subs.map`）。 */}
                 <Disclosure
                   open={isOpen}
                   onOpenChange={() => parentExpansion.toggle(parent)}
                   marker="caret"
                   /* 整排的排布在 Root 上（`rootClassName`）：触发开关与右侧的
-                   * 「解析本目录」是 Root 的**并列**子元素，Root 不写 `flex`
+                   * 「解析本目录」是 Root 的**并列**子元素，Root 不写`flex`
                    * 它们就各自独占一行（规范 16 §16.2.4.13 迁移口径第 2 条）。 */
                   rootClassName="flex items-center gap-2"
                   className="hover:bg-subtle w-auto flex-1 justify-between gap-2 rounded-xl px-3 py-2.5"
@@ -228,7 +228,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 {isOpen && subs.length > 0 && (
                   <TreeChildren
                     depth={0}
-                    className="border-border bg-surface/50 space-y-1.5 border-t p-2"
+                    className="border-border bg-surface/50 flex flex-col gap-1.5 border-t p-2"
                   >
                     {subs.map(({ sub, saved, state }) => {
                       const preset = ROW_STATE_PRESET[state.kind];
@@ -289,12 +289,12 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                             <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs">
                               {nodesAreLoaded ? (
                                 /* 「节点计数」单元是一个折叠开关：点开看该包
-                                     已加载的节点清单。此前是自绘的
-                                     `role="button"` + `tabIndex` + 手写
-                                     Enter/Space 处理（规范 16 §16.2.4.13）——
-                                     基元把这些语义一次给全。`panelClassName`
-                                     留空：面板是下面那个 rail（由外面的条件渲染
-                                     承担），此处的 `Disclosure` 只接管这一行。 */
+ 已加载的节点清单。此前是自绘的
+`role="button"` +`tabIndex` + 手写
+ Enter/Space 处理（规范 16 §16.2.4.13）——
+ 基元把这些语义一次给全。`panelClassName`
+ 留空：面板是下面那个 rail（由外面的条件渲染
+ 承担），此处的`Disclosure` 只接管这一行。 */
                                 <Disclosure
                                   open={nodeListOpen}
                                   onOpenChange={() =>
@@ -347,14 +347,14 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                             </div>
                           </div>
                           {/* 可展开的 ComfyUI 风节点预览。只在
-                                用户点击计数单元时渲染。
-                                每张卡片都是自己的收起 / 展开目标，好让
-                                一个 146 节点的包仍可扫读。 */}
+ 用户点击计数单元时渲染。
+ 每张卡片都是自己的收起 / 展开目标，好让
+ 一个 146 节点的包仍可扫读。 */}
                           {nodesAreLoaded && nodeListOpen && (
                             <TreeChildren
                               depth={1}
                               railClassName={preset.railCls}
-                              className="space-y-1"
+                              className="flex flex-col gap-1"
                             >
                               {nodeTypeList.length === 0 ? (
                                 <div className="text-muted-foreground text-[10px] italic">

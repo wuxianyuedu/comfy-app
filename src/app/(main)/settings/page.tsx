@@ -4,12 +4,12 @@
  * 设置页容器（规范 17 §17.2 第④层）。
  *
  * 全部 tRPC 查询、草稿状态、Ollama 探测与保存动作搬进
- * `hooks/use-settings-page.ts`，两处裸 `fetch` 搬进 `lib/llm/ollama-client.ts`，
- * JSX 搬进 `SettingsPageView.tsx`。
+ *`hooks/use-settings-page.ts`，两处裸`fetch` 搬进`lib/llm/ollama-client.ts`，
+ * JSX 搬进`SettingsPageView.tsx`。
  *
  * 打开即先渲染「设置外壳（header + 分区导航）+ 内容区三态」，让界面框架秒开；
  * 不再用整屏 loading 挡掉导航，等全部配置就绪。就绪后内容区交回
- * `SettingsPageView`（其自身也复用同一外壳）。
+ *`SettingsPageView`（其自身也复用同一外壳）。
  *
  * 加载失败态复用日志面板的可读报错视图（`SettingsLoadError`，见文件底部）：
  * 完整错误可展开 / 复制，并引导打开日志面板定位（#220）。原生的简单重试视图
@@ -70,13 +70,13 @@ export default function SettingsPage() {
     );
   }
 
-  /* `drafts` 已收窄为非空 —— 视图据此免判空。 */
+  /*`drafts` 已收窄为非空 —— 视图据此免判空。 */
   return <SettingsPageView c={{ ...c, drafts: c.drafts }} />;
 }
 
 /* ── 设置页加载失败降级视图 ──────────────────────────────────────────────
  * 此前只有一行被截断的错误文案，原始报错（如 tRPC 拿到 HTML 的
- * "Unexpected token '<'"）既看不全也没有任何出口，问题无从排查（#220）。
+ *"Unexpected token'<'"）既看不全也没有任何出口，问题无从排查（#220）。
  * 现在：完整错误可展开、可复制；并提示打开日志面板（Ctrl+Shift+L）看
  * 全局错误与启动日志——错误本身也已由 LogProvider 的全局钩子收进面板。
  * 渲染在「设置外壳」内容区：去掉整屏高度，仅居中于内容区，随外壳滚动。 */
@@ -90,7 +90,7 @@ export function SettingsLoadError({
   const [expanded, setExpanded] = useState(false);
   const copied = useFlashState();
   /* 成败都改口（规范 16 §16.2.4.43）：收口前这里是
-   * `if (await copyText(errorText)) copied.flash();` —— 失败时按钮一动不动，
+   *`if (await copyText(errorText)) copied.flash();` —— 失败时按钮一动不动，
    * 用户以为复制到了。 */
   const [copyFailed, setCopyFailed] = useState(false);
   const copyError = useCopyFeedback({
@@ -120,14 +120,14 @@ export function SettingsLoadError({
         >
           {errorText}
         </p>
-        {/* 「完整错误」是一个 disclosure：点它把下面的 `<pre>` 展开 —— 用
-            `Disclosure` 而不是自绘 chevron + 条件渲染（规范 16 §16.2.4.13；
-            自绘那份没有 `aria-expanded` / `aria-controls`）。
-            一排按钮里只有中间那个是折叠开关，其余两个走 `leading` / `trailing`
-            —— 基元的 trigger 是 `<button>`，往它里面塞 `<Button>` 在 HTML 里
-            非法（会触发水合错误）。开关自己的外观经 `className` 给（它本身就是
-            按钮，直接穿 `buttonVariants` 的 outline 档），整排的排布在
-            `rootClassName`，面板靠 `basis-full` 独占一行。 */}
+        {/* 「完整错误」是一个 disclosure：点它把下面的`<pre>` 展开 —— 用
+`Disclosure` 而不是自绘 chevron + 条件渲染（规范 16 §16.2.4.13；
+ 自绘那份没有`aria-expanded` /`aria-controls`）。
+ 一排按钮里只有中间那个是折叠开关，其余两个走`leading` /`trailing`
+ —— 基元的 trigger 是`<button>`，往它里面塞`<Button>` 在 HTML 里
+ 非法（会触发水合错误）。开关自己的外观经`className` 给（它本身就是
+ 按钮，直接穿`buttonVariants` 的 outline 档），整排的排布在
+`rootClassName`，面板靠`basis-full` 独占一行。 */}
         <Disclosure
           open={expanded}
           onOpenChange={setExpanded}
@@ -173,12 +173,13 @@ export function SettingsLoadError({
             {errorText}
           </pre>
         </Disclosure>
-        <div className="text-muted-foreground mt-4 space-y-1 text-xs">
+        <div className="text-muted-foreground mt-4 flex flex-col gap-1 text-xs">
           <p>
-            本次失败已写入日志面板（按{" "}
+            本次失败已写入日志面板（按{""}
             <kbd className="border-border rounded border px-1 font-mono">
               Ctrl+Shift+L
-            </kbd>{" "}
+            </kbd>
+            {""}
             打开，筛选「错误」可快速定位）。
           </p>
           <p>

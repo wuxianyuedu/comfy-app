@@ -27,7 +27,7 @@ function HistoryGroupTaskList({
   items: TaskItem[];
   progressMap: Record<string, number>;
   /** 「这一条在重试吗」的判据由导出它的出口给（规范 16 §16.2.4.40）——
-   *  视图不再自己写 `retryingId === task.id`。 */
+   * 视图不再自己写`retryingId === task.id`。 */
   isRetrying: (id: string) => boolean;
   onOpenDetail: (id: string) => void;
   onCancel: (id: string) => void;
@@ -45,7 +45,7 @@ function HistoryGroupTaskList({
   });
 
   return (
-    <div className="space-y-3" ref={listRef}>
+    <div className="flex flex-col gap-3" ref={listRef}>
       {items.map((task) => (
         <HistoryTaskCard
           key={task.id}
@@ -72,9 +72,9 @@ export function HistoryList({
   onOpenTask?: (id: string) => void;
 }) {
   /* 拿掉 modal「打开完整详情 ↗」按钮后 onOpenTask 变成无用 prop,
-   *  重命名为 _onOpenTask 让 lint 沉默并保留向下兼容（父组件还在传，旧版可以仍然保留这个 prop）。
-   *  用户反馈「在这里点开就显示详情，别在其他界面再显示」—— 历史 modal 是「这里」，
-   *  「其他界面」是 `/create/${id}` 这条独立路由。 */
+   * 重命名为 _onOpenTask 让 lint 沉默并保留向下兼容（父组件还在传，旧版可以仍然保留这个 prop）。
+   * 用户反馈「在这里点开就显示详情，别在其他界面再显示」—— 历史 modal 是「这里」，
+   * 「其他界面」是`/create/${id}` 这条独立路由。 */
   const c = useHistoryList();
 
   return (
@@ -126,7 +126,7 @@ export function HistoryList({
                 size="xs"
                 onClick={() => c.switchFilter(filterOption.key)}
                 className={
-                  "h-auto gap-2 rounded-full px-3 py-1.5 " +
+                  "h-auto gap-2 rounded-full px-3 py-1.5" +
                   (isActive
                     ? "bg-primary-solid text-primary-foreground hover:bg-primary-600 shadow-primary-500/20 shadow-md"
                     : "border-border bg-card text-ink-strong hover:bg-surface-2 border")
@@ -140,12 +140,12 @@ export function HistoryList({
                 <span>{filterOption.label}</span>
                 <span
                   className={
-                    /* 选中态的计数徽标此前写的是 `bg-subtle5 text-white` —— 那个
-                       类**在样式表里不存在**（全库只此一处），背景因此是透明的，
-                       白字直接压在浅色底的胶囊上（「全部 47」的 47 几乎看不见，
-                       用户实测）。改成 pill 自身前景色的半透明底：深浅两套主题
-                       都由语义 token 给出对比度。 */
-                    "rounded-full px-1.5 py-0.5 text-[10px] font-bold " +
+                    /* 选中态的计数徽标此前写的是`bg-subtle5 text-white` —— 那个
+ 类**在样式表里不存在**（全库只此一处），背景因此是透明的，
+ 白字直接压在浅色底的胶囊上（「全部 47」的 47 几乎看不见，
+ 用户实测）。改成 pill 自身前景色的半透明底：深浅两套主题
+ 都由语义 token 给出对比度。 */
+                    "rounded-full px-1.5 py-0.5 text-[10px] font-bold" +
                     (isActive
                       ? "bg-primary-foreground/20 text-primary-foreground"
                       : "bg-surface-2 text-ink-faint")
@@ -170,7 +170,7 @@ export function HistoryList({
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="flex-col gap-6">
             {c.visibleGroups.map((group) => (
               <section key={group.key}>
                 {/* ── 日期分组标题 ── */}

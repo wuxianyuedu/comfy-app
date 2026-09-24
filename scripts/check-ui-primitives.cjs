@@ -3175,6 +3175,22 @@ const RULES = {
       ).length;
     },
   },
+
+  /* ── P70「视图层用 space-y-N / space-x-N」（硬闸，shadcn styling.md）─────
+   * shadcn `styling.md` 明确「No `space-x-N` or `space-y-N`. Use `flex` with
+   * `gap-*`.」`space-y-N` 靠给子元素加 `margin-top`（`:not(:last-child) > *`
+   * 选择器）实现间距，与 flex / grid 的 `gap` 是两套机制——混用会让
+   * 「改间距」要同时找 `space-y-*` 与 `gap-*` 两种写法，且 `space-y-*` 在
+   * 嵌套 flex 容器里会被父级的 `gap` 叠加出非预期间距。
+   * 2026-09-24 一次治理把全库 107 处 `space-y-*` 清零，本条从此是硬闸。 */
+  P70: {
+    label:
+      "视图层用 space-y-* / space-x-*（应使用 flex + gap-*，shadcn styling.md）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      return (t2.match(/space-[xy]-\d/g) || []).length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -3276,6 +3292,9 @@ const HARD_GATE_RULES = new Set([
   "P62",
   "P63",
   "P64",
+  /* P70（shadcn styling.md「No space-x-N / space-y-N」）：2026-09-24 一次治理
+   * 把全库 107 处 space-y-N 清零，从此是硬闸——新增即阻断。 */
+  "P70",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
