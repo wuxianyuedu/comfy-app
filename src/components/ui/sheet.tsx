@@ -51,7 +51,13 @@ function SheetContent({
   showCloseButton?: boolean;
 }) {
   return (
-    <>
+    /* Base UI 的 `Dialog.Popup` **必须有 `Dialog.Portal` 祖先**，这一点与 Radix
+       不同 —— Radix 里 Portal 可省（Popup 直接内联渲染），Base UI 缺了会直接抛
+       `Base UI: <Dialog.Portal> is missing.`，把整个组件树打崩：面板连同右上角
+       关闭按钮一起消失（实测反馈）。`ui/dialog` 的 `DialogContent` 与
+       `ui/fullscreen-dialog` 都包了 Portal，此处此前漏了；渲染还要走 Portal 才
+       不受调用方祖先 `transform` / `backdrop-filter` 的包含块影响。 */
+    <SheetPrimitive.Portal>
       <SheetOverlay />
       <SheetPrimitive.Popup
         data-slot="sheet-content"
@@ -80,7 +86,7 @@ function SheetContent({
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Popup>
-    </>
+    </SheetPrimitive.Portal>
   );
 }
 
