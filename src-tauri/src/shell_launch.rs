@@ -355,16 +355,36 @@ pub const SESSION_START_MARKER: &str = "=== 启动会话开始";
 ///
 /// 放在最前面：后续所有当前启动的日志都落在这行之后，日志面板就能
 /// 从后往前找到它，并只显示它之后的内容。
+///
+/// 同一行标记还会写进 `dev-launcher-stderr.log` 与 `shell.log`——这两份是
+/// 追加不轮转的固定名文件（会累积历次启动），不写标记的话 `get_launch_log`
+/// 只能取尾部，于是「查看日志」里会混进上周 / 上上次启动的 stderr 与壳诊断。
+/// 三份共用同一个标记串，`get_launch_log` 对它们统一按「最后一个标记之后」裁剪。
 pub fn log_session_start(project_root: &str) {
   if project_root.is_empty() {
     return;
   }
   let pid = std::process::id();
-  log_launch_line(
-    project_root,
-    "info",
-    &format!("{SESSION_START_MARKER}（shell_pid: {pid}）"),
-  );
+  let marker = format!("{SESSION_START_MARKER}（shell_pid: {pid}）");
+  // 这份（shell-launch.log）本来就是靠标记裁剪的，见 get_launch_log。
+  log_launch_line(project_root, "info", &marker);
+  // dev-launcher-stderr.log 与 shell.log 是追加不轮转的固定名文件，会累积历次
+  // 启动。和 shell-launch.log 共用同一个标记收口，get_launch_log 才能只取本次
+  // 启动之后的行——否则「查看日志」里会混进旧启动的 stderr 与壳诊断（用户的
+  // 截图里 dev-launcher-stderr.log 还停在 09-20，shell.log 混着 09:58 与本次）。
+  let launcher_dir = std::path::Path::new(project_root)
+    .join("log")
+    .join("launcher");
+  let stderr_log = launcher_dir.join("dev-launcher-stderr.log");
+  let shell_log = std::path::Path::new(project_root)
+    .join("log")
+    .join("shell")
+    .join("shell.log");
+  for p in [stderr_log, shell_log] {
+    if let Err(e) = append_line(&p, &format!("{marker}\n")) {
+      log::warn!("[ComfyAPP] 启动会话标记写入失败（{}）：{e:?}", p.display());
+    }
+  }
 }
 
 /// 追加一行（目录缺失时递归建）。返回 Err 而不是 panic —— 调用方一律只记 WARN。
@@ -1044,8 +1064,9 @@ mod tests {
 
   #[test]
   fn session_start_writes_marker_with_pid() {
-    // 会话标记必须写进 shell-launch.log，并带上 shell_pid，否则日志面板找不到
-    // 本次启动的边界，就会把历史日志一起倒出来。
+    // 会话标记必须写进全部三份固定名日志（shell-launch.log / dev-launcher-stderr.log
+    // / shell.log），并带上 shell_pid，否则日志面板找不到本次启动的边界，就会把
+    // 历史日志一起倒出来（用户的截图里 dev-launcher-stderr.log 还停在 09-20）。
     let tmp = std::env::temp_dir().join(format!(
       "comfyapp-session-marker-{}",
       std::process::id()
@@ -1056,15 +1077,27 @@ mod tests {
 
     log_session_start(root);
 
-    let content = std::fs::read_to_string(launch_log_path(root)).unwrap();
-    assert!(
-      content.contains(SESSION_START_MARKER),
-      "shell-launch.log 里必须有启动会话标记：{content}"
-    );
-    assert!(
-      content.contains("shell_pid:"),
-      "启动会话标记必须带 shell_pid：{content}"
-    );
+    let launcher_dir = std::path::Path::new(root).join("log").join("launcher");
+    let stderr_log = launcher_dir.join("dev-launcher-stderr.log");
+    let shell_log = std::path::Path::new(root)
+      .join("log")
+      .join("shell")
+      .join("shell.log");
+    for (label, path) in [
+      ("shell-launch.log", launch_log_path(root)),
+      ("dev-launcher-stderr.log", stderr_log),
+      ("shell.log", shell_log),
+    ] {
+      let content = std::fs::read_to_string(&path).unwrap_or_default();
+      assert!(
+        content.contains(SESSION_START_MARKER),
+        "{label} 里必须有启动会话标记：{content}"
+      );
+      assert!(
+        content.contains("shell_pid:"),
+        "{label} 的启动会话标记必须带 shell_pid：{content}"
+      );
+    }
 
     let _ = std::fs::remove_dir_all(&tmp);
   }
