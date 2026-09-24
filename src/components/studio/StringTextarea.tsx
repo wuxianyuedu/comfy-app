@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { Textarea } from "~/components/ui/textarea";
 
 export function StringTextarea({
   value,
@@ -27,14 +28,14 @@ export function StringTextarea({
     // `min-h-0`）；不动 textarea 的内联样式，让 CSS 胜出。
   }, [value, hasSize]);
   return (
-    <textarea
+    <Textarea
       ref={ref}
       readOnly
       value={value}
       rows={1}
       onFocus={(event) => event.currentTarget.blur()}
       className={
-        "border-border-strong bg-canvas-deep text-ink-bright block w-full resize-none rounded border px-2 py-1.5 text-[10.5px] leading-snug outline-none" +
+        "border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal block w-full resize-none rounded border px-2 py-1.5 text-[10.5px] leading-snug focus-visible:ring-0" +
         (mono ? " font-mono" : "")
       }
       style={{

@@ -18,6 +18,7 @@ import { Search } from "lucide-react";
 import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { useLogPanel } from "./LogProvider";
 import { FILTER_SELECTED_STYLES } from "./log-row-style";
 import type { LogFilter, LogLevelCounts } from "./log-store";
@@ -123,12 +124,12 @@ export function LogFilterBar({
           size={14}
           className="text-ink-fainter pointer-events-none absolute left-2.5"
         />
-        <input
+        <Input
           type="text"
           value={search}
           onChange={textHandler(setSearch)}
           placeholder="搜索日志（支持命中高亮）..."
-          className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus:border-primary-500/40 h-8 w-full rounded-lg border pr-7 pl-8 text-[13px] outline-none"
+          className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus-visible:border-primary-500/40 focus-visible:ring-primary/30 h-8 rounded-lg pr-7 pl-8 text-[13px]"
         />
         {search && (
           <Button

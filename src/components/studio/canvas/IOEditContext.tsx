@@ -16,6 +16,7 @@
 import React from "react";
 import type { IoRef } from "../workflow-types";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
   WFStoresProvider,
   useIOEditStore,
@@ -131,10 +132,9 @@ export function IoCheckbox({
   const isOut = ioRef.direction === "output";
   const dirLabel = isOut ? "输出" : "输入";
   return (
-    <input
-      type="checkbox"
+    <Checkbox
       checked={checked}
-      onChange={() => io.toggleIO(ioRef)}
+      onCheckedChange={() => io.toggleIO(ioRef)}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
       title={
@@ -142,6 +142,7 @@ export function IoCheckbox({
           ? `已暴露为工作流${dirLabel}`
           : `点击将其暴露为工作流${dirLabel}`
       }
+      className="size-3.5"
       style={{
         width: 13,
         height: 13,

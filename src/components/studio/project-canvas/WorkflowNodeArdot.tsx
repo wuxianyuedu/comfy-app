@@ -32,6 +32,7 @@
 import { upperToken } from "~/lib/upper-token";
 import React from "react";
 import { Button } from "~/components/ui/button";
+import { Textarea } from "~/components/ui/textarea";
 
 /* ── 端口类型色常量表（类型色例外：色值即类型语义，不随主题） ──
  * 与 `lib/comfyui/types.ts` 的 PORT_COLORS 同源；本文件只用到三档前缀，
@@ -144,11 +145,11 @@ function PortRowString({
         </span>
         <PortChip type={type} />
       </div>
-      <textarea
+      <Textarea
         readOnly
         rows={2}
         defaultValue={value}
-        className="bg-canvas-deep text-ink-soft border-border-subtle text-ink-soft mx-[14px] h-[52px] resize-none rounded-md border px-2.5 py-2 text-[11px] leading-relaxed outline-none"
+        className="bg-canvas-deep text-ink-soft border-border-subtle field-sizing-normal mx-[14px] h-[52px] min-h-0 resize-none rounded-md border px-2.5 py-2 text-[11px] leading-relaxed focus-visible:ring-0"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </div>

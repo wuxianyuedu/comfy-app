@@ -23,6 +23,7 @@ import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/page-loading";
 import { useState } from "react";
@@ -180,12 +181,12 @@ export function MaterialLibraryPanel({
       <div className="flex items-center gap-2 px-4 py-3">
         <div className="border-border-strong bg-subtle flex flex-1 items-center gap-2 rounded-lg border px-3 py-2">
           <Search size={14} className="text-ink-muted shrink-0" />
-          <input
+          <Input
             type="text"
             value={search}
             onChange={textHandler(setSearch)}
             placeholder={folder ? "在当前分类搜索" : "搜索全部素材"}
-            className="text-ink-bright placeholder:text-ink-fainter min-w-0 flex-1 bg-transparent text-[12px] outline-none"
+            className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[12px] focus-visible:ring-0"
           />
           {search && (
             <Button

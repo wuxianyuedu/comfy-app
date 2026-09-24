@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { checkedHandler, textHandler } from "~/lib/form-props";
+import { textHandler } from "~/lib/form-props";
 import { Redo2, Undo2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Separator } from "~/components/ui/separator";
 import { FormField } from "~/components/ui/form-field";
 import { ProgressBar } from "~/components/ui/progress-bar";
@@ -693,10 +694,9 @@ export function FilmStudio() {
             {/* Subtitle toggle */}
             <label className="border-border bg-canvas/60 flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5">
               <span className="text-ink-field text-sm">烧录字幕</span>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={c.subtitleOn}
-                onChange={checkedHandler(c.setSubtitleOn)}
+                onCheckedChange={(checked) => c.setSubtitleOn(checked === true)}
                 className="accent-violet-500"
               />
             </label>

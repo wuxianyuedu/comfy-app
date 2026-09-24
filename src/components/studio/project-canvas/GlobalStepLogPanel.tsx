@@ -15,7 +15,7 @@
 
 import { formatClock } from "~/lib/time-format";
 import { LOG_MODAL_MAX_ROWS, tailWindow } from "~/lib/page-window";
-import { checkedHandler } from "~/lib/form-props";
+import { Checkbox } from "~/components/ui/checkbox";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNodes } from "@xyflow/react";
@@ -584,11 +584,10 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 })}
               </div>
               <label className="text-ink-soft flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={autoscroll}
-                  onChange={checkedHandler(setAutoscroll)}
-                  className="h-3.5 w-3.5 cursor-pointer accent-violet-500"
+                  onCheckedChange={(checked) => setAutoscroll(checked === true)}
+                  className="size-3.5 cursor-pointer accent-violet-500"
                 />
                 自动滚动
               </label>
