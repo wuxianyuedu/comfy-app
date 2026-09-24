@@ -114,10 +114,17 @@ export function ImageViewer({
   );
   const scrollerReady = box !== null;
 
+  /* 可视区尺寸取**矩形**（`box.width` / `box.height`）而不是 `clientWidth` /
+   * `clientHeight`：后两者**不含滚动条**，会随「内容是否溢出」而变，于是
+   * 「适应窗口」算出的尺寸 ↔ 滚动条出现/消失 构成正反馈环 —— 按适应尺寸渲染
+   * → 差一点点溢出 → 出现滚动条 → 可视区变小 → 重算更小的适应尺寸 → 滚动条
+   * 消失 → 可视区变大 → …… 用户看到的就是「不停抖动、滚动条一来一去」，逐帧
+   * 重排还让拖拽发卡。矩形是**布局尺寸**，滚动条出现与否都不改它，适应尺寸
+   * 因此是矩形的纯函数，收敛到「无滚动条」这个不动点。 */
   const zoom = useImageZoom({
     naturalSize: natural,
-    viewportWidth: box ? box.clientWidth : null,
-    viewportHeight: box ? box.clientHeight : null,
+    viewportWidth: box ? box.width : null,
+    viewportHeight: box ? box.height : null,
     padding: VIEWPORT_PADDING,
   });
   const naturalWidth = natural?.width ?? null;

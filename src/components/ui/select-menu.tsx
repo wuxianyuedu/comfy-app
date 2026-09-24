@@ -209,9 +209,15 @@ export function SelectMenu({
         <SelectPrimitive.Positioner
           align="start"
           sideOffset={4}
+          /* base-ui Select 的 `alignItemWithTrigger` **默认为 true**：弹层会把
+             「已选项」对齐到触发器上，于是弹层位置随选中项上下移动 —— 选中末尾项
+             时弹层被顶到视口上方、前半截出屏（用户实测）。显式关掉后弹层恒从
+             触发器下方展开，位置与选中项无关。与 `ui/select` 的默认口径一致。 */
+          alignItemWithTrigger={false}
           className="z-popup isolate outline-none"
         >
           <SelectPrimitive.Popup
+            data-align-trigger={false}
             className={cn(CONTENT_BASE)}
             style={{
               width: `min(${effectiveMinWidth}px, 92vw)`,
