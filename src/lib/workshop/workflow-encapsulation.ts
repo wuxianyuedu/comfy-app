@@ -76,6 +76,10 @@ export interface WorkshopExposedValues {
    *  与 `duration` 是同一个「时长」口的两种落点单位：调用方按 fps 折算好再给
    *  （见 VideoStudio 的 framesFor），这里不猜 fps。 */
   frames?: number;
+  /** 采样种子（INT）。落在作者连到「种子」口、指向工作流 seed / noise_seed 端口的
+   *  那一行上。**没连种子口的工作流：这个值落不下去（进 unmatched），仍用其图内
+   *  seed 配置** —— 实际是否可换由工作流决定。「抽卡重生成」= 给一个新的随机 seed。 */
+  seed?: number;
   /** **自定义口**的值（契约口 id → 值，如 `{ "custom-text-1": "水彩" }`）。
    *
    *  预制的几个口各有业务语义（提示词 / 尺寸 / 首帧…），所以各占一个字段；
@@ -228,6 +232,10 @@ function toContractValues(args: {
   const duration = durationValueFor({ io, resolved, values });
   if (duration !== undefined) out.duration = duration;
 
+  /* 种子：调用方（如「抽卡重生成」）给一个 seed 值，落到作者连的「种子」口上；
+   *  作者没连这一口 → applyParamMapping 如实报进 unmatched，工作流用其图内 seed。 */
+  if (values.seed !== undefined) out.seed = values.seed;
+
   /* 自定义口：值已经是「契约口 id → 值」的形状，原样并入 —— 这些 id 只在生效
    *  契约里存在，没有业务语义可翻译（作者起的名字就是全部语义）。落不下去的
    *  口由 `applyParamMapping` 如实报进 unmatched。 */
@@ -261,6 +269,8 @@ export function exposedValueOf(
   if (id === "negative") return values.negativePrompt ?? "";
   if (id === "first-frame") return values.firstFrame ?? "";
   if (id === "last-frame") return values.lastFrame ?? "";
+  if (id === "seed")
+    return values.seed === undefined ? "" : String(values.seed);
   /* 自定义口：值按 id 收在 `custom` 里（界面按文本显示它的当前内容）。 */
   if (exposedCustomKindOf(id)) return String(values.custom?.[id] ?? "");
   const slot = referenceSlotOf(id);
@@ -286,6 +296,19 @@ export function withExposedValue(
   if (id === "negative") return { ...values, negativePrompt: text };
   if (id === "first-frame") return { ...values, firstFrame: text };
   if (id === "last-frame") return { ...values, lastFrame: text };
+  /* 种子是数值口：写数字（空串 / 非数字 → 清掉该值，回落工作流图内 seed）。 */
+  if (id === "seed") {
+    if (typeof next === "number") {
+      return {
+        ...values,
+        seed: Number.isFinite(next) ? Math.trunc(next) : undefined,
+      };
+    }
+    const t = next.trim();
+    if (t === "") return { ...values, seed: undefined };
+    const n = Number(t);
+    return { ...values, seed: Number.isFinite(n) ? Math.trunc(n) : undefined };
+  }
   const slot = referenceSlotOf(id);
   if (slot < 0) return values;
   const refs = [...(values.referenceImages ?? [])];
@@ -320,6 +343,8 @@ export function pruneEmptyExposedValues(
   if (values.size !== undefined) out.size = values.size;
   if (values.duration !== undefined) out.duration = values.duration;
   if (values.frames !== undefined) out.frames = values.frames;
+  /* 种子：数字，`0` 是有效值，不能按假值剪掉；只在给了的时候保留。 */
+  if (values.seed !== undefined) out.seed = values.seed;
   /* 自定义口：空串当「没给」（与上面几条同一口径）；数字原样保留 —— `0` 是
    *  一个有效值，不能按「假值」剪掉。 */
   const custom: Record<string, string | number> = {};

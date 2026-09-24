@@ -64,7 +64,11 @@ export type ExposedParamClass =
   | "first-frame"
   | "last-frame"
   /** 视频：时长（秒）。落在工作流的 duration / length / frames 类端口上。 */
-  | "duration";
+  | "duration"
+  /** 采样种子（INT）。作者把这一口连到工作流的 seed / noise_seed 端口，工坊才能
+   *  按次指定种子（如「抽卡重生成」换种子重出）；**没连这一口的工作流不受影响**
+   *  —— 用其图内自带的 seed 配置，实际是否可换由工作流决定。 */
+  | "seed";
 
 export interface ExposedParamDef {
   cls: ExposedParamClass;
@@ -89,6 +93,7 @@ export const EXPOSED_PARAM_LABEL: Record<ExposedParamClass, string> = {
   "first-frame": "首帧",
   "last-frame": "尾帧",
   duration: "时长",
+  seed: "种子",
 };
 
 /** 各口的**界面展示名** —— 整个仓库的**唯一出处**。
@@ -111,6 +116,7 @@ export const EXPOSED_PARAM_DISPLAY_LABEL: Record<ExposedParamClass, string> = {
   "first-frame": "首帧图片",
   "last-frame": "尾帧图片",
   duration: "时长（秒）",
+  seed: "种子",
 };
 
 /** 内置默认给几张参考图槽 —— 只是默认值，契约编辑器里可以继续加，不设上限。 */
@@ -175,6 +181,13 @@ export function exposedParamsForMode(
       id: "duration",
       label: EXPOSED_PARAM_DISPLAY_LABEL.duration,
     });
+    /* 种子口：作者连到工作流的 seed / noise_seed 端口才生效，没连的工作流用其图内
+     * seed 配置（实际是否可换由工作流决定）。 */
+    out.push({
+      cls: "seed",
+      id: "seed",
+      label: EXPOSED_PARAM_DISPLAY_LABEL.seed,
+    });
     return out;
   }
 
@@ -197,6 +210,13 @@ export function exposedParamsForMode(
     cls: "size",
     id: "size",
     label: EXPOSED_PARAM_DISPLAY_LABEL.size,
+  });
+  /* 种子口：作者连到工作流的 seed / noise_seed 端口才生效，没连的工作流用其图内
+   * seed 配置（实际是否可换由工作流决定）。 */
+  out.push({
+    cls: "seed",
+    id: "seed",
+    label: EXPOSED_PARAM_DISPLAY_LABEL.seed,
   });
   return out;
 }
