@@ -2,12 +2,12 @@
 /* Dimension 组合控件的入口与 W/H 形态（另见 AspectMegapixelControl.tsx）。
  *
  * 两种尺寸类别，同一块控件里都能选：
- *   · 比例 + 分辨率         （1k / 2k / 4k，宽高按场景查「尺寸表」）
- *   · 比例 + 百万像素 + 倍数 （1M / 2M / 4M × 宽高对齐倍数 8/16/32/64）
+ * · 比例 + 分辨率 （1k / 2k / 4k，宽高按场景查「尺寸表」）
+ * · 比例 + 百万像素 + 倍数 （1M / 2M / 4M × 宽高对齐倍数 8/16/32/64）
  * 差别只在于控件把值写到哪些端口上：
- *   · 工作流暴露 width + height  → 由选中的档位算出宽高写回去（本文件）；
- *   · 工作流暴露 aspect_ratio + megapixels (+ multiple) → 直接写这三个值，
- *     选「分辨率」时按尺寸表换算成「百万像素 + 倍数」（AspectMegapixelControl）。
+ * · 工作流暴露 width + height → 由选中的档位算出宽高写回去（本文件）；
+ * · 工作流暴露 aspect_ratio + megapixels (+ multiple) → 直接写这三个值，
+ * 选「分辨率」时按尺寸表换算成「百万像素 + 倍数」（AspectMegapixelControl）。
  *
  * 「像素」大类下分「分辨率」与「百万像素」两个子类；「倍数」只在选中百万像素档
  * 时出现 —— 那一档的宽高由总像素预算与对齐倍数共同决定，分辨率档则由表给定。
@@ -57,8 +57,8 @@ import type { DimensionGroup } from "../workflow-io";
 
 /** 入口：按工作流暴露的范式分发。
  *
- *  分发发生在调用任何 hook **之前**，好让两个子控件各自拥有
- *  自己的 hook 集合（React 不允许条件式 hook）。 */
+ * 分发发生在调用任何 hook **之前**，好让两个子控件各自拥有
+ * 自己的 hook 集合（React 不允许条件式 hook）。 */
 function DimensionControl({
   group,
   values,
@@ -79,7 +79,7 @@ function DimensionControl({
   disabled?: boolean;
   workflowId?: string;
   /** 画布 / 库内的紧凑版式：控件按内容收窄（`w-fit`），不再占满整行。
-   *  与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
+   * 与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
   narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
   /** 多模式作者态：按该模式解析必填。 */
@@ -156,19 +156,19 @@ function DimensionSizeControl({
   );
 
   /** 场景决定 1k/2k/4k 查哪张表（图片 = AI 出图口径，视频 = 行业标准口径）。
-   *  模式码是视频模式（T2V / I2V …）时用视频表。 */
+   * 模式码是视频模式（T2V / I2V …）时用视频表。 */
   const scene = sceneFromMode(mode);
   const { table } = useSizePresetTable();
   const [tableOpen, setTableOpen] = useState(false);
 
   /* 用户钉住的「对齐倍数」，用于百万像素清晰度预设。
-   *  按工作流持久化，这样一个 SDXL 图片工作流的面板
-   *  不会串到 Wan 视频工作流上。
-   *  默认 64（符合用户要求）。 */
+   * 按工作流持久化，这样一个 SDXL 图片工作流的面板
+   * 不会串到 Wan 视频工作流上。
+   * 默认 64（符合用户要求）。 */
   const ALIGN_PREFIX = "comfyapp:wf-align-multiple:v1";
   const [alignMultiple, setAlignMultipleState] = useState<number>(() =>
     /* SSR / 隐私模式 / 坏数据一律回落默认值（§16.2.4.28）。窄化交给
-     * `parse`：此前这里要在本地写一遍 `Number.parseInt` + 归一化。 */
+     *`parse`：此前这里要在本地写一遍`Number.parseInt` + 归一化。 */
     readStorageJson(
       `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
       DEFAULT_ALIGN_MULTIPLE,
@@ -203,13 +203,13 @@ function DimensionSizeControl({
     ).label;
   }, [w0, h0]);
   /* 清晰度预设跨两种类型挑选（"pixel" = 分辨率 1k/2k/4k；
-   *  "megapixel" = 1M/2M/4M），由 `pickClarityPreset` 负责，它镜像了
-   *  应用预设时用的同一张场景表 + 对齐倍数。
+   *"megapixel" = 1M/2M/4M），由`pickClarityPreset` 负责，它镜像了
+   * 应用预设时用的同一张场景表 + 对齐倍数。
    *
-   *  用户显式挑过的清晰度会锁进 `explicitClarity`，好让点过
-   *  例如「4M」之后能扛过下一轮 pickClarityPreset 往返。用户经
-   *  NumberField 手动改 W 或 H 时锁会被清掉，
-   *  这样手打值之后仍是自动检测胜出。 */
+   * 用户显式挑过的清晰度会锁进`explicitClarity`，好让点过
+   * 例如「4M」之后能扛过下一轮 pickClarityPreset 往返。用户经
+   * NumberField 手动改 W 或 H 时锁会被清掉，
+   * 这样手打值之后仍是自动检测胜出。 */
   const derivedClarity = useMemo(
     () => pickClarityPreset(w0, h0, alignMultiple, scene, table).label,
     [w0, h0, alignMultiple, scene, table],
@@ -219,9 +219,9 @@ function DimensionSizeControl({
   const clarityKind = clarityKindOfLabel(clarity);
 
   /* 步进器的值：当前宽高的**实际总像素** —— W/H 形态下「百万像素」本来就是从
-   *  宽高推出来的那个量，所以起点与屏幕上看到的尺寸一致（选 1k 就是它的实际
-   *  0.8M，而不是从 1M 跳一下）。用户改它 → 按同一比例换总像素预算，宽高随之
-   *  吸附到倍数网格。 */
+   * 宽高推出来的那个量，所以起点与屏幕上看到的尺寸一致（选 1k 就是它的实际
+   * 0.8M，而不是从 1M 跳一下）。用户改它 → 按同一比例换总像素预算，宽高随之
+   * 吸附到倍数网格。 */
   const currentMegapixels = useMemo(
     () => megapixelsOf({ width: w0, height: h0 }),
     [w0, h0],
@@ -233,7 +233,7 @@ function DimensionSizeControl({
         DIM_RATIO_PRESETS.find((preset) => preset.label === rLabel) ??
         DIM_RATIO_PRESETS[0];
       /* 含自由百万像素值（`"2.5M"`）：`clarityPresetFor` 认档位表之外的合法值，
-       *  直接用 `DIM_CLARITY_PRESETS.find` 会把用户填的 2.5 悄悄换成 1k。 */
+       * 直接用`DIM_CLARITY_PRESETS.find` 会把用户填的 2.5 悄悄换成 1k。 */
       const cp = clarityPresetFor(cLabel);
       /* 分辨率档查场景表；百万像素档把用户选的倍数带进去吸附宽高。 */
       const { width, height } = dimsForRatio(
@@ -250,11 +250,11 @@ function DimensionSizeControl({
   );
 
   /* 改对齐倍数会把当前 W/H
-   *  重新吸附到新网格，并清掉
-   *  显式清晰度锁，好让弹层重新检测最接近的
-   *  预设（吸附后的尺寸可能已属于另一个
-   *  清晰度桶）。数值 W/H 步进器也跟随这个值，
-   *  让 +/- 按钮与吸附网格保持一致。 */
+   * 重新吸附到新网格，并清掉
+   * 显式清晰度锁，好让弹层重新检测最接近的
+   * 预设（吸附后的尺寸可能已属于另一个
+   * 清晰度桶）。数值 W/H 步进器也跟随这个值，
+   * 让 +/- 按钮与吸附网格保持一致。 */
   const handleAlignChange = useCallback(
     (next: number) => {
       const clamped = normalizeAlignMultiple(next);
@@ -309,7 +309,7 @@ function DimensionSizeControl({
         label: "像素",
         value: clarity,
         /* 子类分组：「分辨率」（1k/2k/4k，查场景表）与「百万像素」（1M/2M/4M，
-         *  总像素预算）各占一行。 */
+         * 总像素预算）各占一行。 */
         options: DIM_CLARITY_PRESETS.map((preset) => ({
           value: preset.label,
           label: preset.label,
@@ -317,8 +317,8 @@ function DimensionSizeControl({
         })),
         onChange: (value) => applyPreset(ratio, value),
         /* 百万像素是连续量：档位之外再给一个能填任意值的步进器（挨着「百万像素」
-         *  那一组渲染）。写出去的 label 与档位同形（"2.5M"），`applyPreset` 经
-         *  `clarityPresetFor` 认出它。 */
+         * 那一组渲染）。写出去的 label 与档位同形（"2.5M"），`applyPreset` 经
+         *`clarityPresetFor` 认出它。 */
         extra: (
           <MegapixelStepper
             value={currentMegapixels}
@@ -355,10 +355,10 @@ function DimensionSizeControl({
   ]);
 
   return (
-    <div className="space-y-2.5">
+    <div className="flex flex-col gap-2.5">
       {/* 比例 + 像素 单段摆在 W/H 上方——既对应「预设 → 推算宽高」的方向，
-          又让下方两个 NumberField 紧挨在一起形成紧凑一行。
-          窄版（画布节点 / 库内）卡按内容收窄：`w-fit` + 上限，长度跟内容走。 */}
+ 又让下方两个 NumberField 紧挨在一起形成紧凑一行。
+ 窄版（画布节点 / 库内）卡按内容收窄：`w-fit` + 上限，长度跟内容走。 */}
       <div
         className={
           narrow
@@ -400,11 +400,11 @@ function DimensionSizeControl({
       </div>
 
       {/* 宽 + 高 —— 始终可见，样式与别的节点参数字段一致
-          （NumberField，两列栅格）。上面一行里挑一个预设
-          会经 applyPreset → setMany 写入真实的 W/H，所以下面的
-          NumberField 会实时更新。步进器 +/- 遵循
-          用户钉住的对齐倍数，好让手动微调 W/H 落在
-          与百万像素清晰度同一张网格上。 */}
+ （NumberField，两列栅格）。上面一行里挑一个预设
+ 会经 applyPreset → setMany 写入真实的 W/H，所以下面的
+ NumberField 会实时更新。步进器 +/- 遵循
+ 用户钉住的对齐倍数，好让手动微调 W/H 落在
+ 与百万像素清晰度同一张网格上。 */}
       {!narrow && (
         <div className="grid grid-cols-2 gap-2">
           <Field label="宽度">

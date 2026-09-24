@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * WorkflowRunRawCliModal — work-flow library "view full comfy-cli output" dialog.
+ * WorkflowRunRawCliModal — work-flow library"view full comfy-cli output" dialog.
  *
- * The execution-log panel folds each `[comfy-cli 原始]` line into one row (and
- * caps how many it keeps by row count), so this dialog is the "get everything"
+ * The execution-log panel folds each`[comfy-cli 原始]` line into one row (and
+ * caps how many it keeps by row count), so this dialog is the"get everything"
  * exit: it fetches the COMPLETE, untruncated comfy-cli stdout/stderr lines for a
  * task from
- * /api/tasks/[id]/raw-cli and renders them: JSON payloads (the `[comfy-cli
- * 原始]` / `stdout` lines) go through the collapsible, syntax-highlighted
+ * /api/tasks/[id]/raw-cli and renders them: JSON payloads (the`[comfy-cli
+ * 原始]` /`stdout` lines) go through the collapsible, syntax-highlighted
  * JsonViewer; everything else is shown as raw text. View-only: the network
  * call lives in lib/comfyui/raw-cli-client (UI/logic separation).
  */
@@ -31,7 +31,7 @@ type ParsedLine =
   | { kind: "text"; tag: string; text: string };
 
 /**
- * 把一行拆成「JSON 载荷」或「原文」：判据与解析都走 `~/lib/log/log-cli-json`
+ * 把一行拆成「JSON 载荷」或「原文」：判据与解析都走`~/lib/log/log-cli-json`
  * 的唯一口径（日志面板的折叠行用的是同一份），两处不会分叉。
  */
 function parseLine(line: string): ParsedLine {
@@ -182,7 +182,7 @@ export function WorkflowRunRawCliModal({
           <div
             ref={scrollerRef}
             onScroll={scroller.onScroll}
-            className="custom-scrollbar bg-panel-deep/60 flex-1 space-y-3 overflow-y-auto p-3"
+            className="custom-scrollbar bg-panel-deep/60 flex-1 gap-3 overflow-y-auto p-3"
           >
             {lines.length === 0 ? (
               <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">

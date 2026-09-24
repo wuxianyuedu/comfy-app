@@ -48,10 +48,10 @@ export function StoryboardPlanner(props: Props) {
   ).length;
 
   return (
-    <div className="space-y-4">
+    <div className="flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="u-title">
-          分镜规划{" "}
+          分镜规划{""}
           <span className="text-muted-foreground">({shots.length})</span>
         </h3>
         <div className="flex gap-2">
@@ -182,7 +182,7 @@ export function StoryboardPlanner(props: Props) {
           暂无分镜。导入剧本后，每个场景会按建议镜头数拆分为多个镜头。
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {shots.map((shot) => (
             <ShotRow
               key={shot.id}

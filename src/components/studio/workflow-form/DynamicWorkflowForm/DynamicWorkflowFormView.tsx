@@ -39,8 +39,8 @@ interface DynamicWorkflowFormViewProps {
   /** IO 编辑态：行内 👁 切换参数在 visibilityMode 模式下的可见性。 */
   visibilityMode?: string | null;
   /** 多模式：当前模式码。传入后 renderRow 按该模式解析 required / seedMode
-   *  （resolveEntryRequired / resolveEntrySeedMode），使行内「必填/可选」与
-   *  seed 递增递减显示的是该模式的覆盖值。不传 = 按条目全局值（兼容旧场景）。 */
+   * （resolveEntryRequired / resolveEntrySeedMode），使行内「必填/可选」与
+   * seed 递增递减显示的是该模式的覆盖值。不传 = 按条目全局值（兼容旧场景）。 */
   mode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
   onReorder?: (
@@ -102,7 +102,7 @@ export function DynamicWorkflowFormView({
 
   const renderRow = (entry: EnrichedWidget, withHandle: boolean) => {
     /* 多模式：行内「必填 / 可选」与 seed「控件后行为」按当前 mode 解析，
-     *  显示模式覆盖值而非条目全局值。mode 为空时 rowEntry === entry（旧行为）。 */
+     * 显示模式覆盖值而非条目全局值。mode 为空时 rowEntry === entry（旧行为）。 */
     const rowEntry: EnrichedWidget =
       mode &&
       (entry.modeOverrides?.[mode]?.required !== undefined ||
@@ -165,11 +165,11 @@ export function DynamicWorkflowFormView({
   };
 
   return (
-    <div className={compact ? "space-y-0" : "space-y-3"}>
+    <div className={compact ? "" : "flex-col gap-3"}>
       <FileInput />
 
       {/* 上传失败的可读出口：ComfyUI 未运行 / 启动超时 / 素材不合规时给出原因，
-          用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}
+ 用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}
       {uploadError && (
         <div className="flex items-start justify-between gap-2 rounded-md border border-red-400/30 bg-red-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-red-700 dark:text-red-200">
           <span className="min-w-0 flex-1">上传失败：{uploadError}</span>
@@ -185,9 +185,9 @@ export function DynamicWorkflowFormView({
       )}
 
       {/* 可编辑参数（compact）：排在端口行之前，让所有输入行都压在输出之上。
-       *  画布节点上去掉段头，避免引入节点稿之外的视觉噪音。 */}
+       * 画布节点上去掉段头，避免引入节点稿之外的视觉噪音。 */}
       {compact && widgetSectionEntries.length > 0 && (
-        <div className="space-y-0">
+        <div className="">
           {widgetSectionEntries.map((entry) => {
             const row = renderRow(entry, true);
             if (!dragHandlers) return row;
@@ -209,16 +209,16 @@ export function DynamicWorkflowFormView({
                 className={`relative ${isDragging ? "opacity-50" : ""}`}
               >
                 {/* 插入指示线画在**实际插入位置**：指针在目标行上半区 = 行顶、
-                 *  下半区 = 行底，与 reorderIO 收到的 position 同源 —— 若整段
-                 *  都画会造成频闪。 */}
+                 * 下半区 = 行底，与 reorderIO 收到的 position 同源 —— 若整段
+                 * 都画会造成频闪。 */}
                 {isDropTarget && (
                   <div
                     className={`z-base pointer-events-none absolute inset-x-0 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)] ${dropPosition === "before" ? "-top-px" : "-bottom-px"}`}
                   />
                 )}
                 {/* 手柄只是视觉提示（真正可拖来自父层的 draggable，且从输入框 /
-                 *  下拉上起手会在 dragstart 里被取消）；它自身 pointer-events-none，
-                 *  点击会落到下面的输入框上。 */}
+                 * 下拉上起手会在 dragstart 里被取消）；它自身 pointer-events-none，
+                 * 点击会落到下面的输入框上。 */}
                 <div
                   className="z-base pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 text-[10px] leading-[6px] text-white/30 select-none"
                   aria-hidden
@@ -233,7 +233,7 @@ export function DynamicWorkflowFormView({
       )}
 
       {/* 组合参数：dimension / video 组用单一下拉切换录入范式，避免
-       *  width/height、时长/画质/比例 散落成多个独立框。 */}
+       * width/height、时长/画质/比例 散落成多个独立框。 */}
       {(groups.dimension ?? groups.video) && (
         <GroupedControls
           dimension={groups.dimension}
@@ -289,7 +289,7 @@ export function DynamicWorkflowFormView({
       )}
 
       {/* 可编辑参数（非 compact）：带段头的双段版本，给 CreatePanel 与
-       *  IO-edit 预览面板用。 */}
+       * IO-edit 预览面板用。 */}
       {!compact && widgetSectionEntries.length > 0 && (
         <>
           <SectionHeader

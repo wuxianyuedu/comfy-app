@@ -95,8 +95,8 @@ export interface WorkflowRunLogModalProps {
 }
 
 /* 弹窗宽度档：默认 5xl（行是「时刻 + 级别 + 正文」，与执行日志同密度）；
- * 加宽档统一贴视线两边。写 `w-*` 而不是 `max-w-*` 的理由见
- * `~/components/ui/dialog-width` 的文件头（ISSUE #720）。 */
+ * 加宽档统一贴视线两边。写`w-*` 而不是`max-w-*` 的理由见
+ *`~/components/ui/dialog-width` 的文件头（ISSUE #720）。 */
 const RUN_LOG_WIDTH = modalWidth("w-5xl");
 
 export function WorkflowRunLogModal({
@@ -147,11 +147,11 @@ export function WorkflowRunLogModal({
   const logs = run?.logs ?? [];
 
   const [filter, setFilter] = useState<Level | "all">("all");
-  /* 加宽档与它的记忆收在 `~/components/ui/wide-panel`（规范 16 §16.2.4.18）。 */
+  /* 加宽档与它的记忆收在`~/components/ui/wide-panel`（规范 16 §16.2.4.18）。 */
   const panel = useWidePanel("wflib-run-log", RUN_LOG_WIDTH);
   const [autoscroll, setAutoscroll] = useState(true);
-  /* 贴底与「用户有没有接管滚动」的判据收在 `ui/use-scroll-follow`
-   *（规范 16 §16.2.4.24）。收口前这里是手写的 `scrollTop = scrollHeight`
+  /* 贴底与「用户有没有接管滚动」的判据收在`ui/use-scroll-follow`
+   *（规范 16 §16.2.4.24）。收口前这里是手写的`scrollTop = scrollHeight`
    * —— 用户上滚读历史会被按回底部，且没有跟随态可显示。 */
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const scroller = useScrollFollow({
@@ -170,14 +170,14 @@ export function WorkflowRunLogModal({
   if (!open) return null;
 
   /* 弹窗里的行数是一处界面预算，不是「倒数 300 条」这段算式各写一遍 ——
-   * 尾部窗口收在 `~/lib/page-window`（规范 16 §16.2.4.67）。 */
+   * 尾部窗口收在`~/lib/page-window`（规范 16 §16.2.4.67）。 */
   const visibleAll = tailWindow(logs, LOG_MODAL_MAX_ROWS);
   const visible =
     filter === "all"
       ? visibleAll
       : visibleAll.filter((l) => l.level === filter);
   const status = run?.status ?? "running";
-  /* 文案在这里，配色走 `ui/status-badge` 的同一份状态 → 语义 token 映射
+  /* 文案在这里，配色走`ui/status-badge` 的同一份状态 → 语义 token 映射
    *（规范 16 §16.2.4.5）。 */
   const statusLabel =
     status === "done" ? "完成" : status === "failed" ? "失败" : `运行中`;
@@ -186,8 +186,8 @@ export function WorkflowRunLogModal({
     void cancel();
   };
 
-  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩 +
-     手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */
+  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
+ 手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
@@ -256,7 +256,7 @@ export function WorkflowRunLogModal({
                 >
                   {runs.map((r) => (
                     <option key={r.taskId} value={r.taskId}>
-                      {r.workflowName} ·{" "}
+                      {r.workflowName} ·{""}
                       {r.status === "done"
                         ? "完成"
                         : r.status === "failed"
@@ -337,7 +337,7 @@ export function WorkflowRunLogModal({
             className="custom-scrollbar bg-panel-deep/60 flex-1 overflow-y-auto"
           >
             {run?.errorMessage && (
-              <div className="mb-2 space-y-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-700 dark:text-red-300/90">
+              <div className="mb-2 flex-col gap-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-700 dark:text-red-300/90">
                 <div className="break-words whitespace-pre-wrap">
                   {run.errorMessage}
                 </div>

@@ -2,9 +2,9 @@
 
 // AI 自主执行 run 的控制条（Phase 6 · P6-3）——画布 / 工坊两处共用的「暂停与审批」操作台。
 //
-// 只做展示 + 把点击上抛给 `useAgentRun`（IO/轮询都在 hook）。按 run.status 呈现不同操作：
-//   未启动=填目标+选审批粒度+启动；执行中=下一步提示+暂停/取消；等待确认=点头继续/暂停/取消；
-//   已暂停=继续/取消；完成/失败/取消=状态+重新开始。复用 Button/Badge/Textarea（不自造原语）。
+// 只做展示 + 把点击上抛给`useAgentRun`（IO/轮询都在 hook）。按 run.status 呈现不同操作：
+// 未启动=填目标+选审批粒度+启动；执行中=下一步提示+暂停/取消；等待确认=点头继续/暂停/取消；
+// 已暂停=继续/取消；完成/失败/取消=状态+重新开始。复用 Button/Badge/Textarea（不自造原语）。
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -102,7 +102,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
       {/* 执行日志：引擎每步一条（最新在上），让「AI 跑到哪、产出了什么」在应用内可见。 */}
       {run.log.length > 0 && (
         <ul
-          className="border-border-subtle bg-canvas/50 max-h-32 space-y-0.5 overflow-y-auto rounded-md border px-2.5 py-1.5"
+          className="border-border-subtle bg-canvas/50 flex max-h-32 flex-col gap-0.5 overflow-y-auto rounded-md border px-2.5 py-1.5"
           aria-label="执行日志"
         >
           {[...run.log].reverse().map((step) => (

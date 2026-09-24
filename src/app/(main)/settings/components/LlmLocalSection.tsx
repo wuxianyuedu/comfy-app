@@ -4,9 +4,9 @@
  * 本地模型（Ollama）分区与任务温度配置（规范 17 §17.2 第③层）。
  *
  * 视图自持两个纯交互态（无副作用、不入库）：
- *   - 「按任务类型配置温度」的展开态；
- *   - 任务温度输入的编辑期缓冲 —— 若直接改受控值，「清空重输」会被推荐值
- *     瞬间顶回；缓冲兜住击键，blur 后丢弃、回落到「覆盖 ?? 推荐」。
+ * - 「按任务类型配置温度」的展开态；
+ * - 任务温度输入的编辑期缓冲 —— 若直接改受控值，「清空重输」会被推荐值
+ * 瞬间顶回；缓冲兜住击键，blur 后丢弃、回落到「覆盖 ?? 推荐」。
  * 其余读写都经 controller（Ollama 状态 / 草稿 / 保存动作）。
  */
 
@@ -112,8 +112,8 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       </div>
 
       {/* Ollama 启动日志：启动期间每秒跟随 log/services/ollama-runtime.log，
-          让「启动中…」不再是黑盒（同 ComfyUI / Drizzle Studio 的用户
-          可见出口）。下拉按「每次启动」切换、可全屏，见 RuntimeLogBox。 */}
+ 让「启动中…」不再是黑盒（同 ComfyUI / Drizzle Studio 的用户
+ 可见出口）。下拉按「每次启动」切换、可全屏，见 RuntimeLogBox。 */}
       <RuntimeLogBox
         fileName="ollama-runtime.log"
         log={c.ollamaLog}
@@ -171,7 +171,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                           : "text-muted-foreground hover:bg-subtle border-border"
                       }`}
                     >
-                      {checked ? "✓ " : ""}
+                      {checked ? "✓" : ""}
                       {model.name}
                     </Button>
                   );
@@ -203,18 +203,18 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       </div>
 
       {/* 按任务类型配置温度 —— 远端调用同样按这套推荐默认取温度，
-          但不在此暴露配置项 */}
+ 但不在此暴露配置项 */}
       <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
-        {/* 折叠开关 + 面板：`▸/▾` 与 `aria-expanded` 都由基元给
-            （规范 16 §16.2.4.13）。基元默认 marker 在标题**左侧**，这里标题
-            在左、marker 在右 —— 用 `flex-row-reverse` 把 marker 换到右侧，
-            标题自身以 `flex-1` 撑开，于是两端对齐的观感不变。 */}
+        {/* 折叠开关 + 面板：`▸/▾` 与`aria-expanded` 都由基元给
+ （规范 16 §16.2.4.13）。基元默认 marker 在标题**左侧**，这里标题
+ 在左、marker 在右 —— 用`flex-row-reverse` 把 marker 换到右侧，
+ 标题自身以`flex-1` 撑开，于是两端对齐的观感不变。 */}
         <Disclosure
           open={showTaskTemps}
           onOpenChange={setShowTaskTemps}
           marker="caret"
           className="text-ink/80 hover:text-ink mb-3 flex-row-reverse items-center justify-between text-sm font-medium"
-          panelClassName="space-y-3"
+          panelClassName="flex-col gap-3"
           trigger={
             <span className="flex-1 text-left">
               按任务类型配置温度
@@ -224,7 +224,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
             </span>
           }
         >
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             {TEMPERATURE_TASKS.map(([key, meta]) => {
               const override = c.drafts.llm.temperatureByTask?.[key];
               const isOverridden = override !== undefined && override !== null;

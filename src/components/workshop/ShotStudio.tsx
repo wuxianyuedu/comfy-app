@@ -77,7 +77,7 @@ export function ShotStudio({
 }: Props) {
   const [channel, setChannel] = React.useState<Channel>("local");
   /** 全镜头共用的「比例 + 像素 + 对齐」尺寸三段状态（issue #145 需求 3）。
-   *  初值取第一条镜头已带的 WxH 参数反解，历史尺寸不丢。 */
+   * 初值取第一条镜头已带的 WxH 参数反解，历史尺寸不丢。 */
   const [shotSize, setShotSize] = React.useState<ShotSizeState>(() =>
     parseShotSize(shots[0]?.params.size ?? undefined),
   );
@@ -145,8 +145,8 @@ export function ShotStudio({
 
   /** 等一个本地 ComfyUI 任务；SSE 流落定后 resolve。
    *
-   *  与「安全阀」赛跑的那一半交给 `withTimeoutResult`：超时给兜底（不抛），
-   *  `onTimeout` 里退订 —— 放弃等待之后流还挂着才是真问题。 */
+   * 与「安全阀」赛跑的那一半交给`withTimeoutResult`：超时给兜底（不抛），
+   *`onTimeout` 里退订 —— 放弃等待之后流还挂着才是真问题。 */
   function runLocalTask(shotId: string, taskId: string): Promise<void> {
     /* 订阅句柄 —— watchTask 返回前先给一个空实现，settle 路径上一定已赋值。 */
     let close: () => void = noop;
@@ -197,7 +197,7 @@ export function ShotStudio({
     patchShot(shot.id, { status: "running" });
     try {
       if (channel === "local") {
-        /* 镜头存的是尺寸表达（老数据可能是 "832x1216"，回读时归一）——
+        /* 镜头存的是尺寸表达（老数据可能是"832x1216"，回读时归一）——
          * 尺寸只表达一次，两种目标形状都由它现算。 */
         const sizeSpec = parseShotSize(
           shot.params.size !== undefined && shot.params.size !== ""
@@ -228,7 +228,7 @@ export function ShotStudio({
               : shotSizeToParam(shotSize),
           mode: "T2I",
           /* 远端通道认「宽高比 + 百万像素」：分辨率档也换算成实际总像素再下发
-           * （透传 "1k" 这类档位名对远端没有意义）。 */
+           * （透传"1k" 这类档位名对远端没有意义）。 */
           ...shotSizeToRelay(shotSize),
         });
         patchShot(shot.id, { status: "done", imageUrl: url });
@@ -251,7 +251,7 @@ export function ShotStudio({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex-col gap-4">
       {/* 通道切换（本地 ComfyUI / 配置的 API） */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-muted-foreground text-xs">生成通道</span>
@@ -291,7 +291,7 @@ export function ShotStudio({
           API 通道设置
         </Button>
         {/* 不用 <label> 包住选择器：它内部会挂尺寸表配置弹窗，弹窗里的输入框
-            会被 label 的点击行为抢焦点（弹窗开着、背后的下拉被一起触发）。 */}
+ 会被 label 的点击行为抢焦点（弹窗开着、背后的下拉被一起触发）。 */}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">尺寸</span>
           <ShotSizePicker
@@ -345,7 +345,7 @@ export function ShotStudio({
           镜头提示词会自动带入本阶段。
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {shots.map((shot) => {
             const p = progress[shot.id] ?? 0;
             const err = errors[shot.id];
@@ -452,7 +452,7 @@ export function ShotStudio({
   );
 }
 
-/* 镜头状态 → 文案。配色走 `ui/status-badge` 的同一份状态 → 语义 token 映射；
+/* 镜头状态 → 文案。配色走`ui/status-badge` 的同一份状态 → 语义 token 映射；
  * 本地化的标签留在本文件（同批把 StoryboardPlanner / VideoStudio 里那两份
  * 逐字相同的副本一并收口，规范 16 §16.2.4.5）。 */
 export const SHOT_STATUS_LABEL: Record<Shot["status"], string> = {

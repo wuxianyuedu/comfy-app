@@ -27,24 +27,24 @@ import {
 } from "./film-studio-config";
 
 /* ── 影片工坊 —— Updream 风视频剪辑器（对齐 Ardot） ─
-  深色主题的**时间线**视频剪辑工坊。
-  对齐 Ardot 设计规范：深色极光（#0a0a0f）+ 紫 #8B5CF6 强调。
-  渲染在 WorkspaceNav 父壳内部（侧栏由外部提供）。
+ 深色主题的**时间线**视频剪辑工坊。
+ 对齐 Ardot 设计规范：深色极光（#0a0a0f）+ 紫 #8B5CF6 强调。
+ 渲染在 WorkspaceNav 父壳内部（侧栏由外部提供）。
 
-  布局（壳内）：
-  ┌──────────────────────────────────────────────────────────┐
-  │ 顶部工具栏：[项目名] [撤销|重做] … [▶] [导出成片]  │
-  ├──────────┬───────────────────────────────┬───────────────┤
-  │ 镜头列表 │  预览画布（16:9）            │  属性面板     │
-  │ (260px)  │  ┌─────────────────────┐     │  (280px)      │
-  │          │  │    ▶ 播放覆盖层       │     │  镜头名称      │
-  │ · 镜头1  │  └─────────────────────┘     │  时长          │
-  │ · 镜头2  │                               │  生成模式      │
-  │ · 镜头3  │  时间线                       │  转场效果      │
-  │ [+ 添加] │  标尺 + 视频/字幕/BGM 轨道     │  提示词        │
-  ├──────────┴───────────────────────────────┴───────────────┤
-  │ 状态栏：● ComfyUI 本地已连接 · GPU 可用              │
-  └──────────────────────────────────────────────────────────┘
+ 布局（壳内）：
+ ┌──────────────────────────────────────────────────────────┐
+ │ 顶部工具栏：[项目名] [撤销|重做] … [▶] [导出成片] │
+ ├──────────┬───────────────────────────────┬───────────────┤
+ │ 镜头列表 │ 预览画布（16:9） │ 属性面板 │
+ │ (260px) │ ┌─────────────────────┐ │ (280px) │
+ │ │ │ ▶ 播放覆盖层 │ │ 镜头名称 │
+ │ · 镜头1 │ └─────────────────────┘ │ 时长 │
+ │ · 镜头2 │ │ 生成模式 │
+ │ · 镜头3 │ 时间线 │ 转场效果 │
+ │ [+ 添加] │ 标尺 + 视频/字幕/BGM 轨道 │ 提示词 │
+ ├──────────┴───────────────────────────────┴───────────────┤
+ │ 状态栏：● ComfyUI 本地已连接 · GPU 可用 │
+ └──────────────────────────────────────────────────────────┘
 */
 
 /**
@@ -252,7 +252,7 @@ export function FilmStudio() {
           </div>
 
           {/* Shot items */}
-          <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
+          <div className="flex-1 flex-col gap-1.5 overflow-y-auto p-2">
             {listShots.map((shot) => {
               const badge = STATUS_BADGE[shot.status];
               const isSelected = shot.id === selectedShotId;
@@ -425,7 +425,7 @@ export function FilmStudio() {
             </div>
 
             {/* Tracks container */}
-            <div className="relative space-y-1">
+            <div className="relative flex flex-col gap-1">
               {/* Playhead */}
               <div
                 className="z-base pointer-events-none absolute bottom-0 w-[2px] bg-red-400/80"
@@ -516,7 +516,7 @@ export function FilmStudio() {
           </div>
 
           {/* Form fields */}
-          <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          <div className="flex-1 flex-col gap-4 overflow-y-auto p-4">
             {/* Shot name */}
             <FormField
               label="镜头名称"
@@ -597,11 +597,11 @@ export function FilmStudio() {
             </FormField>
 
             {/* Divider —— 走 ui/separator（规范 16 §16.2.3）：`<hr>` 自带
-                 UA 样式，改「分隔线长什么样」要同时找 `<hr>` 与 border-t 两种写法。 */}
+ UA 样式，改「分隔线长什么样」要同时找`<hr>` 与 border-t 两种写法。 */}
             <Separator className="bg-border-subtle" />
 
             {/* 镜头来源：统一项目镜头（工坊产出）/ 剧本自动分镜（自由文本）。
-                有活跃项目镜头时默认走项目；无镜头时项目项禁用。 */}
+ 有活跃项目镜头时默认走项目；无镜头时项目项禁用。 */}
             <div
               className="flex items-center gap-1"
               role="group"
@@ -633,7 +633,8 @@ export function FilmStudio() {
 
             {c.shotSource === "project" ? (
               <p className="text-ink-fainter bg-canvas/60 border-border rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
-                将使用当前项目的 {c.projectShotCount}{" "}
+                将使用当前项目的 {c.projectShotCount}
+                {""}
                 个镜头逐镜生成成片（镜头提示词与风格由工坊产出）。
                 如需增删或改镜头，请回到「工坊」调整后再来成片。
               </p>

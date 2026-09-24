@@ -38,7 +38,7 @@ const TYPE_CHIP: Record<string, string> = {
 };
 
 /* 状态文案（配色不走这里 —— 它是叠在缩略图上的角标，颜色由
- * `ui/status-badge` 按同一份状态 → 语义 token 映射给出，见规范 16 §16.2.4.5）。 */
+ *`ui/status-badge` 按同一份状态 → 语义 token 映射给出，见规范 16 §16.2.4.5）。 */
 const STATUS_LABEL: Record<string, string> = {
   SUCCEEDED: "已完成",
   FAILED: "失败",
@@ -133,7 +133,7 @@ export function ProjectOutputs() {
   }, [selected, projectId]);
 
   /* 复制的成败都交给出口（规范 16 §16.2.4.43）：成功亮一下按钮，失败也亮 ——
-   * 此前这里 `if (!ok) return;` 把失败整个吞掉，按钮一动不动，用户以为成了。 */
+   * 此前这里`if (!ok) return;` 把失败整个吞掉，按钮一动不动，用户以为成了。 */
   const [copyFailed, setCopyFailed] = useState(false);
   const copy = useCopyFeedback({
     onSuccess: () => {
@@ -304,7 +304,7 @@ export function ProjectOutputs() {
                   </div>
                   <div className="p-3">
                     <p className="text-ink-soft line-clamp-1 text-xs font-medium">
-                      {TYPE_CHIP[output.type] ?? output.type} ·{" "}
+                      {TYPE_CHIP[output.type] ?? output.type} ·{""}
                       {displayValue(output.seed)}
                     </p>
                     <p className="text-ink-fainter mt-1 text-[11px]">
@@ -319,11 +319,11 @@ export function ProjectOutputs() {
       </div>
 
       {/* ── Metadata drawer ── */}
-      {/* 右侧抽屉走 `ui/sheet`（side="right"）：此前自绘遮罩 div + 手写
-          `onClick` 关闭 + 手搓右锚定面板，Esc 没接、焦点不锁也不归还 ——
-          与设置页两个抽屉（已迁 `ui/sheet`）是同一件事的两套写法。
-          遮罩与面板都由基元 Portal，顶部让出标题行的硬判据（ISSUE #310）
-          收在 `dialogBackdropClass()` 里。 */}
+      {/* 右侧抽屉走`ui/sheet`（side="right"）：此前自绘遮罩 div + 手写
+`onClick` 关闭 + 手搓右锚定面板，Esc 没接、焦点不锁也不归还 ——
+ 与设置页两个抽屉（已迁`ui/sheet`）是同一件事的两套写法。
+ 遮罩与面板都由基元 Portal，顶部让出标题行的硬判据（ISSUE #310）
+ 收在`dialogBackdropClass()` 里。 */}
       <Sheet
         open={selected !== null}
         onOpenChange={(next) => !next && setSelectedId(null)}
@@ -357,7 +357,7 @@ export function ProjectOutputs() {
                 </Button>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              <div className="min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
                 {/* reference images */}
                 <section>
                   <p className="text-ink-soft mb-2 text-xs font-semibold">
@@ -390,7 +390,7 @@ export function ProjectOutputs() {
                 </section>
 
                 {/* prompts */}
-                <section className="space-y-2">
+                <section className="flex flex-col gap-2">
                   <div>
                     <p className="text-ink-soft mb-1 text-xs font-semibold">
                       正向提示词
@@ -416,10 +416,10 @@ export function ProjectOutputs() {
                   <p className="text-ink-soft mb-2 text-xs font-semibold">
                     参数
                   </p>
-                  {/* 「取到没有」由 `displayValue` 定义（P8），行布局由
-                      `KeyValueRows` 定义（P17）—— 此前这一块两件事各写一遍，
-                      值自己怎么成文本（`steps` / `cfg` 是数字、`timeAgo` 已是
-                      字符串）也留在了调用处。 */}
+                  {/* 「取到没有」由`displayValue` 定义（P8），行布局由
+`KeyValueRows` 定义（P17）—— 此前这一块两件事各写一遍，
+ 值自己怎么成文本（`steps` /`cfg` 是数字、`timeAgo` 已是
+ 字符串）也留在了调用处。 */}
                   <KeyValueRows
                     bordered
                     striped
@@ -477,7 +477,7 @@ export function ProjectOutputs() {
                   </Button>
                 </div>
                 <p className="text-ink-fainter mt-2 text-[10.5px]">
-                  文件已保存至{" "}
+                  文件已保存至{""}
                   <span className="text-ink-muted font-mono">
                     public/generated/projects/{projectId}/{selected.id}/
                   </span>
