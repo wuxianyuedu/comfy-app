@@ -11,6 +11,7 @@ import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { comfyImageUrl } from "~/lib/media/media-url";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { Textarea } from "~/components/ui/textarea";
 
 /* 项目画布 · 内容载体节点主体（text / picture / movie）
  * 对齐 Ardot 稿 715394877779066 v2 + icon 迭代（/ -D-v2 / -D-icon）：
@@ -66,9 +67,9 @@ export function ContentAssetBody({
   if (kind === "text") {
     return (
       <div className="relative">
-        <textarea
+        <Textarea
           ref={textareaRef}
-          className="border-border-strong bg-canvas-deep text-ink-bright h-[260px] w-full resize-none rounded-xl border px-3 py-2.5 text-[12px] leading-relaxed transition-colors outline-none focus:border-violet-500/40"
+          className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 h-[260px] w-full resize-none rounded-xl border px-3 py-2.5 text-[12px] leading-relaxed transition-colors focus-visible:border-violet-500/40"
           value={data.content ?? ""}
           placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
           onChange={textHandler((content) => onPatch({ content }))}

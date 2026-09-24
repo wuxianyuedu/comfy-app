@@ -3,9 +3,10 @@
 import { useState, type CSSProperties } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AuroraBackground } from "~/components/ui/aurora-background";
-import { checkedHandler, textHandler } from "~/lib/form-props";
+import { textHandler } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Spinner } from "~/components/ui/page-loading";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
@@ -358,11 +359,12 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               className="border-border bg-subtle text-ink-bright flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
             />
             <label className="text-ink-faint flex shrink-0 cursor-pointer items-center gap-2 text-xs">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={c.onlyEnabled}
-                onChange={checkedHandler(c.setOnlyEnabled)}
-                className="border-border-strong bg-surface-2 h-3.5 w-3.5 rounded text-violet-700 focus:ring-violet-400/40 dark:text-violet-400"
+                onCheckedChange={(checked) =>
+                  c.setOnlyEnabled(checked === true)
+                }
+                className="border-border-strong bg-surface-2 size-3.5 rounded text-violet-700 focus:ring-violet-400/40 dark:text-violet-400"
               />
               仅显示已启用
             </label>
