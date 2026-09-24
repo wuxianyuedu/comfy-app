@@ -13,14 +13,13 @@
  * - 弹窗打开后不受该开关影响，避免操作中突然消失。
  */
 
-import { formatClock } from "~/lib/time-format";
 import { LOG_MODAL_MAX_ROWS, tailWindow } from "~/lib/page-window";
 import { Checkbox } from "~/components/ui/checkbox";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNodes } from "@xyflow/react";
-import { nodeSeqOf } from "./node-seq";
 import { FileText, X } from "lucide-react";
+import { StepLogRow } from "./StepLogRow";
+import { StepLogTaskPicker } from "./StepLogTaskPicker";
 import type { ValidationError } from "~/lib/comfyui/validation";
 import type { StepLogEntry } from "./stepLogCache";
 import {
@@ -60,17 +59,6 @@ interface SseFrame {
 }
 
 type Level = StepLogEntry["level"];
-
-/* 与应用日志 (LogPanel) 同款 level badge 配色，走语义 token（§4.11.1 / P71）：
- * error→destructive、warn→warning、success→success、progress→primary、
- * info→info。token 内部含深浅两态，不再写 dark:。 */
-const LEVEL_STYLES: Record<Level, string> = {
-  error: "border-destructive/20 bg-destructive/15 text-destructive",
-  warn: "border-warning/20 bg-warning/15 text-warning-strong",
-  success: "border-success/20 bg-success/15 text-success-strong",
-  progress: "border-primary/20 bg-primary/15 text-primary-strong",
-  info: "border-info/20 bg-info/15 text-info-strong",
-};
 
 /** 把「失败原因」补写为一条 error 日志行（横幅之外）。
  *
@@ -124,26 +112,6 @@ const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
   { label: "进度", value: "progress" },
   { label: "信息", value: "info" },
 ];
-
-function levelLabel(level: Level): string {
-  switch (level) {
-    case "error":
-      return "ERROR";
-    case "warn":
-      return "WARN";
-    case "success":
-      return "OK";
-    case "progress":
-      return "PROG";
-    default:
-      return "INFO";
-  }
-}
-
-/* 与应用日志同款，带毫秒。 */
-function fmtTime(t: number): string {
-  return formatClock(t, { millis: true });
-}
 
 /* 执行日志弹窗的宽度档：默认 5xl —— 行是「时刻 + 级别 + 正文」三列，比应用日志
  * 少一列；加宽档统一贴视线两边。写`w-*` 而不是`max-w-*` 的理由见
@@ -376,23 +344,6 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   /* 把每个已缓存的 taskId 映射回画布节点短序号 (#1, #2…)。
    * 映射来源：运行开始时 setActiveTaskId(taskId, nodeId) 写进 activeTask，
    * 随后通过 patchStepLogMeta 持久化到 stepLogCache。 */
-  /* `useNodes()` 订阅的是整份节点数组，画布每帧（拖拽 / 平移）都会换引用 →
-   * 这个 useMemo 每帧重算。原先对每个缓存任务各做一次 `findIndex`，是
-   * O(缓存任务数 × 节点数)；改走 `nodeSeqOf` 的按帧记忆映射后，整帧只建
-   * 一次表（O(节点数)），其余是 O(1) 查表。 */
-  const nodes = useNodes();
-  const nodeSeqByTaskId = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const cachedId of cachedIds) {
-      const nodeId =
-        getNodeIdByTaskId(cachedId) ?? loadStepLogPanelState(cachedId)?.nodeId;
-      if (!nodeId) continue;
-      const seq = nodeSeqOf(nodes, nodeId);
-      if (seq !== null) map.set(cachedId, seq);
-    }
-    return map;
-  }, [cachedIds, nodes]);
-
   /* 弹窗已打开时不受 debugMode 开关影响（关闭开关不应让正在查看的日志
    * 瞬间消失）；关闭弹窗后入口按钮与弹窗一起隐藏。 */
   if (!debugMode && !open) return null;
@@ -501,38 +452,11 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   </Button>
                 ) : null}
                 {cachedIds.length > 0 && (
-                  <select
-                    value={taskId ?? ""}
-                    onChange={(event) =>
-                      setViewTaskId(event.target.value || null)
-                    }
-                    className="bg-panel border-border-strong text-ink-soft max-w-[200px] truncate rounded-md border px-1.5 py-0.5 text-[10.5px] outline-none"
-                    title="切换查看的任务"
-                  >
-                    {!taskId && <option value="">（无任务）</option>}
-                    {cachedIds.map((id) => {
-                      const meta = loadStepLogPanelState(id);
-                      const seq = nodeSeqByTaskId.get(id);
-                      const wn = meta?.workflowName?.trim();
-                      const st = meta?.status ?? "?";
-                      const seqLabel = seq ? `#${seq}` : null;
-                      const titleParts = [seqLabel, wn, st, id].filter(Boolean);
-                      const displayParts = [
-                        seqLabel,
-                        wn ?? `task ${id.slice(0, 8)}`,
-                        st,
-                      ].filter(Boolean);
-                      return (
-                        <option
-                          key={id}
-                          value={id}
-                          title={titleParts.join(" ·")}
-                        >
-                          {displayParts.join(" ·")}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  <StepLogTaskPicker
+                    cachedIds={cachedIds}
+                    taskId={taskId}
+                    onSelect={setViewTaskId}
+                  />
                 )}
                 <Button
                   variant="outline"
@@ -636,38 +560,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 </div>
               ) : (
                 <div className="flex flex-col">
-                  {visible.map((log, index) => {
-                    const isClient = log.client === true;
-                    return (
-                      <div
-                        key={`${log.t}:${index}`}
-                        data-testid="log-line"
-                        data-level={log.level}
-                        className="border-border-subtle hover:bg-subtle/60 flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
-                      >
-                        <span className="text-ink-muted shrink-0">
-                          {fmtTime(log.t)}
-                        </span>
-                        <span
-                          className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
-                        >
-                          {levelLabel(log.level)}
-                        </span>
-                        <span
-                          className={`min-w-0 flex-1 break-words whitespace-pre-wrap ${
-                            isClient ? "text-ink-soft italic" : "text-ink-soft"
-                          }`}
-                        >
-                          {log.msg}
-                        </span>
-                        {log.src && (
-                          <span className="text-ink-fainter hover:text-ink-soft max-w-[200px] shrink-0 truncate text-[11px]">
-                            {log.src}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {visible.map((log, index) => (
+                    <StepLogRow key={`${log.t}:${index}`} log={log} />
+                  ))}
                 </div>
               )}
             </div>
