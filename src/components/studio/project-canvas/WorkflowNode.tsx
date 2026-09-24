@@ -56,6 +56,7 @@ import { WorkflowSourceFilterChip } from "./WorkflowSourceFilterChip";
 import { WorkflowModelFilterChip } from "./WorkflowModelFilterChip";
 import { WorkflowPickChip } from "./WorkflowPickChip";
 import { WorkflowModePickChip } from "./WorkflowModePickChip";
+import { nodeSeqOf } from "./node-seq";
 
 /* 共享类型下沉到叶子模块（断环，规范 12.7/18）；按原样 re-export 保住既有导入路径。 */
 export type {
@@ -127,12 +128,11 @@ export function WorkflowNode({
   const meta = NODE_META[d.kind];
 
   /* 右上角显示「短序号」#1/#2…（按画布节点列表顺序）。
-   * useStore 选择器结果不变时不触发重渲染：拖动/选中只改位置不改变 index，
-   * 仅节点增删导致序号变化时才重渲染此节点。完整 id 保留在 title 中。 */
-  const nodeSeq = useStore((state) => {
-    const idx = state.nodes.findIndex((node) => node.id === id);
-    return idx === -1 ? null : idx + 1;
-  });
+   * 选择器结果不变时不触发重渲染：拖动/选中只改位置不改变 index，
+   * 仅节点增删导致序号变化时才重渲染此节点。完整 id 保留在 title 中。
+   * 查表走 `nodeSeqOf`：选择器本体每帧都会执行，逐个 `findIndex` 会退化成
+   * 每帧 O(N²)（详见 node-seq.ts）。 */
+  const nodeSeq = useStore((state) => nodeSeqOf(state.nodes, id));
 
   /* 在所有输入参数下方渲染 outputs row — 用户在
    *  IO-edit 配的 output 在画布节点上要可见。Header (h-8) 不放，回到 Ardot
