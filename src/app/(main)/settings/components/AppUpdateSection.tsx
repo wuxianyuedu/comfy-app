@@ -9,7 +9,7 @@
 
 import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 
 import { Card, StatusButton } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";

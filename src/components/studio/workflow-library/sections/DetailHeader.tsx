@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { SourceTag } from "~/components/ui/source-tag";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { modeLabel } from "../workflow-library-config";

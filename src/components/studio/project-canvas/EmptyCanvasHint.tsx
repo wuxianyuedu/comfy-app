@@ -5,7 +5,7 @@
  *  友好的「右键开始」引导卡（画布确实为空时显示）。
  */
 import { Icon } from "~/components/ui/icon";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 
 interface EmptyCanvasHintProps {
   /** true → 水合覆盖层；false → 空画布引导。 */
