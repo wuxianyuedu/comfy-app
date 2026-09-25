@@ -19,6 +19,7 @@ import {
 import { Alert } from "~/components/ui/alert";
 import { Disclosure } from "~/components/ui/disclosure";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
+import { formatLocalStamp } from "~/lib/time-format";
 import {
   adviseOnError,
   shouldAutoExpandError,
@@ -269,7 +270,7 @@ export function ErrorPanel({
                 if (!t) return null;
                 const dt = new Date(t);
                 if (Number.isNaN(dt.getTime())) return t;
-                return dt.toLocaleString("zh-CN", { hour12: false });
+                return formatLocalStamp(dt);
               })();
               const hasCtx =
                 Boolean(taskId) ||

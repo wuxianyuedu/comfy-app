@@ -57,11 +57,6 @@ export function deriveRowState(
   };
 }
 
-export function nowTimeStr() {
-  const date = new Date();
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
 export function splitPaths(text: string): string[] {
   return text
     .split(/[\n,]/)

@@ -29,6 +29,11 @@ tauri-build = { version = "2.6.3", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
+# 本地时刻：壳自持日志（shell_launch.rs 的 local_timestamp）与 tauri-plugin-log
+# 的行首时间都必须落在**用户所在时区**（本机为北京时间 UTC+8）。chrono 已经作为
+# serde_with → tauri 的传递依赖在 Cargo.lock 里，声明为直接依赖不会给依赖图
+# 新增任何 crate（同一份代码本就在二进制中）。
+chrono = "0.4"
 # tray-icon：系统托盘（「打开主界面」入口 + 显式退出）。应用启动时可能只显示
 # 到任务栏而不抢前台（见 lib.rs 的 show_main_window_without_focus），需要一个
 # 常驻的唤起入口，用户才不会「找不到窗口」。
