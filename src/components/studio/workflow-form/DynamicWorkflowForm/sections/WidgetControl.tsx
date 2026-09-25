@@ -165,7 +165,7 @@ export function WidgetControl({
             }`}
           >
             <span
-              className="absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white transition-all"
+              className="absolute top-0.5 size-2.5 rounded-full bg-white transition-all"
               style={{ left: value ? 14 : 3 }}
             />
           </span>

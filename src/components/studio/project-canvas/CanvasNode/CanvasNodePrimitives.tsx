@@ -166,7 +166,7 @@ export function StatusDot({ status }: { status: CanvasNodeData["status"] }) {
           : "rgba(165,132,255,0.6)";
   return (
     <span
-      className="inline-block h-2.5 w-2.5 rounded-full"
+      className="inline-block size-2.5 rounded-full"
       style={{ background: grad, boxShadow: `0 0 8px ${glow}` }}
     />
   );

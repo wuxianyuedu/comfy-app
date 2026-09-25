@@ -250,7 +250,7 @@ export function VideoQueueModal({
                         key={task.id}
                         className="border-border-strong bg-subtle flex items-center gap-3 rounded-xl border p-3"
                       >
-                        <div className="bg-canvas-deep flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+                        <div className="bg-canvas-deep flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
                           {task.video ? (
                             <MediaThumbnail
                               src={task.video}

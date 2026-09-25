@@ -93,7 +93,7 @@ export function SubgraphHeader({
         </svg>
       </Button>
       <span
-        className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-[9px] font-bold"
+        className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-[9px] font-bold"
         style={{
           background: accent,
           color: "var(--color-canvas)",
