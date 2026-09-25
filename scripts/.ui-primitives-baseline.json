@@ -19,11 +19,11 @@
     "P77": "视图层手写 aria-pressed（2–7 项的选项组应走 ~/components/ui/toggle-group 的 ToggleGroup + ToggleGroupItem；shadcn forms.md）",
     "P79": "视图层无 dark: 前缀的浅色原色板（应走语义 token，shadcn styling.md 原则 4；例外块走 p71-allow 与 P71 共享）"
   },
-  "total": 97,
+  "total": 94,
   "files": {
     "src/components/agent-run/RunControlBar.tsx": {
       "P76": 1,
-      "P78": 2
+      "P78": 1
     },
     "src/components/studio/canvas/WorkflowCanvasSettings.tsx": {
       "P78": 2,
@@ -61,9 +61,6 @@
     },
     "src/components/studio/project-canvas/StepLogTaskPicker.tsx": {
       "P76": 1
-    },
-    "src/components/studio/ProjectCanvasSettings.tsx": {
-      "P78": 1
     },
     "src/components/studio/ProjectOutputs.tsx": {
       "P76": 1,
@@ -133,9 +130,6 @@
     },
     "src/components/workshop/WorkshopStageNav.tsx": {
       "P79": 1
-    },
-    "src/app/(main)/settings/components/ComfyuiSection.tsx": {
-      "P78": 1
     },
     "src/app/(main)/settings/components/LlmLocalSection.tsx": {
       "P76": 1,
