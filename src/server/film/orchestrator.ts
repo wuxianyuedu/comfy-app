@@ -37,9 +37,13 @@ import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
 import type { ProjectType } from "~/lib/workshop/types";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { withTimeoutResult } from "~/lib/with-timeout";
-import { normalizeSlashes } from "~/lib/path-display";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
-import { fixed } from "~/lib/number-format";
+import {
+  buildNormalizeArgs,
+  buildSegmentVf,
+  buildSrtBody,
+  clipPathOf,
+} from "./compose-steps";
 
 export type FilmStatus =
   "PARSING" | "GENERATING" | "COMPOSING" | "DONE" | "FAILED" | "CANCELLED";
@@ -661,10 +665,6 @@ function runFFmpeg(
   );
 }
 
-function escapeFilter(s: string): string {
-  return s.replace(/'/g, "\\'").replace(/:/g, "\\:");
-}
-
 // ── compose ────────────────────────────────────────────────
 export async function composeFilm(id: string) {
   const film = await filmRepository.findById(id);
@@ -709,86 +709,53 @@ export async function composeFilm(id: string) {
   });
 
   try {
-    for (let i = 0; i < shots.length; i++) {
-      const shot = shots[i];
-      const clip = path.join(
-        cwd,
-        "public",
-        shot!.videoPath!.replace(/^\//, ""),
-      );
+    for (const [i, shot] of shots.entries()) {
+      const { videoPath } = shot;
+      if (!videoPath) {
+        // 镜头未出片（videoPath 为空）是真实故障，不是可静默跳过的分支：
+        // 抛明确文案，交给外层 catch 落 markFailed + 面板日志（硬规则 4），
+        // 不再用 `shot.videoPath!` 让脏数据在 path.join 里崩成栈噪声。
+        throw new Error(`镜头 ${i + 1} 缺少视频文件，无法合成`);
+      }
+      const clip = clipPathOf(cwd, videoPath);
       const segOut = path.join(tmpDir, `seg_${i}.mp4`);
-      const dur = shot!.duration ?? film.framesPerShot / fps;
+      const dur = shot.duration ?? film.framesPerShot / fps;
       const fadeOut = Math.max(0, dur - 0.3);
-
-      const vf =
-        `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
-        `pad=${W}:${H}:(${W}-iw)/2:(${H}-ih)/2,setsar=1,` +
-        `fps=${fps},` +
-        `fade=t=in:st=0:d=0.3,fade=t=out:st=${fixed(fadeOut, 2) ?? "0"}:d=0.3`;
+      const vf = buildSegmentVf({ width: W, height: H, fps, fadeOut });
 
       const srtPath = path.join(tmpDir, `seg_${i}.srt`);
       if (film.subtitleOn) {
+        // 空串标题也要回落到 prompt（|| 语义），沿用既有行为。
+        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+        const srtText = (shot.heading || shot.prompt).slice(0, 80);
         await fs.writeFile(
           srtPath,
-          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-          `1\n00:00:00,000 --> 00:00:${String(Math.floor(dur)).padStart(2, "0")},000\n${(shot!.heading || shot!.prompt).slice(0, 80)}\n`,
+          buildSrtBody({ text: srtText, dur }),
           "utf-8",
         );
       }
 
       const tryWithSub = film.subtitleOn;
-      let args: string[] = [
-        "-y",
-        "-i",
-        clip,
-        "-vf",
-        vf +
-          (tryWithSub
-            ? `,subtitles='${escapeFilter(normalizeSlashes(srtPath))}'`
-            : ""),
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k",
-        "-t",
-        /* ffmpeg 的 `-t` 与 fade 时刻按两位小数写（`~/lib/number-format`）。 */
-        fixed(dur, 2) ?? "0",
-        segOut,
-      ];
-      let res = await runFFmpeg(args, tmpDir);
+      let res = await runFFmpeg(
+        buildNormalizeArgs({
+          clip,
+          vf,
+          dur,
+          out: segOut,
+          srtPath: tryWithSub ? srtPath : null,
+        }),
+        tmpDir,
+      );
       if (res.code !== 0 && tryWithSub) {
         await appendFilmLog(
           id,
           "warn",
           `镜头 ${i + 1} 字幕烧录失败，重试（无字幕）`,
         );
-        args = [
-          "-y",
-          "-i",
-          clip,
-          "-vf",
-          vf,
-          "-c:v",
-          "libx264",
-          "-pix_fmt",
-          "yuv420p",
-          "-movflags",
-          "+faststart",
-          "-c:a",
-          "aac",
-          "-b:a",
-          "128k",
-          "-t",
-          fixed(dur, 2) ?? "0",
-          segOut,
-        ];
-        res = await runFFmpeg(args, tmpDir);
+        res = await runFFmpeg(
+          buildNormalizeArgs({ clip, vf, dur, out: segOut, srtPath: null }),
+          tmpDir,
+        );
       }
       if (res.code !== 0) {
         throw new Error(
