@@ -26,9 +26,11 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
  让用户批量提交新片段，并打开某个片段的结果 / 结果详情。
 */
 
+type StatusMeta = { icon: string; label: string; cls: string };
+
 const STATUS_META: Record<
-  string,
-  { icon: string; label: string; cls: string }
+  "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED",
+  StatusMeta
 > = {
   QUEUED: { icon: "hourglass", label: "排队中", cls: "text-ink-muted" },
   RUNNING: {
@@ -44,6 +46,14 @@ const STATUS_META: Record<
   FAILED: { icon: "x", label: "失败", cls: "text-destructive" },
   CANCELLED: { icon: "ban", label: "已取消", cls: "text-ink-fainter" },
 };
+
+/** 按任务状态取展示元数据。`task.status` 是宽字符串（来自后端），这里收口
+ *  「未知状态 → 排队中」这一条兜底判据，返回**非空**，调用点不再各自 `!`。 */
+function statusMetaFor(status: string): StatusMeta {
+  return status in STATUS_META
+    ? STATUS_META[status as keyof typeof STATUS_META]
+    : STATUS_META.QUEUED;
+}
 
 export interface VideoQueueModalProps {
   open: boolean;
@@ -234,7 +244,7 @@ export function VideoQueueModal({
                   </p>
                 ) : (
                   tasks.map((task, index) => {
-                    const meta = STATUS_META[task.status] ?? STATUS_META.QUEUED;
+                    const meta = statusMetaFor(task.status);
                     return (
                       <div
                         key={task.id}
@@ -261,10 +271,10 @@ export function VideoQueueModal({
                               V{String(index + 1).padStart(2, "0")}
                             </span>
                             <span
-                              className={`inline-flex items-center gap-1 text-xs ${meta!.cls}`}
+                              className={`inline-flex items-center gap-1 text-xs ${meta.cls}`}
                             >
-                              <Icon name={meta!.icon} size={13} />
-                              {meta!.label}
+                              <Icon name={meta.icon} size={13} />
+                              {meta.label}
                             </span>
                           </div>
                           <p
