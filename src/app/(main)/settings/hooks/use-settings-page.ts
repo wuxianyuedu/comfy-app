@@ -21,7 +21,9 @@ import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { runAsyncAction } from "~/lib/async-action";
 import { errorMessage, rawErrorDetail } from "~/lib/error-message";
 import { useShellTabs } from "~/lib/shell/shell-tabs-store";
+import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { openComfyTab } from "~/lib/comfy/comfy-tab-client";
+import { shouldUseBrowserTab } from "~/lib/comfy/comfy-embed";
 import { postAppRuntimeLog } from "~/lib/log/log-file-client";
 import { probeRemoteApi } from "~/lib/llm/browser";
 import {
@@ -345,6 +347,37 @@ export function useSettingsPage(): SettingsPageController {
   }, [comfyStopM, comfyStatusQ, showFlash]);
 
   const openComfy = useCallback(async () => {
+    /* 浏览器 / dev 形态：不内嵌、不占应用内页签栏，直接把 ComfyUI 交给新浏览器
+     * 页签。window.open 必须在任何 await 之前同步调用才不被弹窗拦截器拦下，所以
+     * 这条分支放在 refetch 之前，用状态轮询已缓存的 base（浏览器里轮询很勤，基本
+     * 是新鲜的）；拿不到缓存才退回 refetch（冷启动罕见路径）。见 comfy-embed.ts
+     * `shouldUseBrowserTab` 的形态说明。 */
+    if (shouldUseBrowserTab(isDesktopShell())) {
+      const cached = comfyStatusQ.data?.base ?? null;
+      if (cached) {
+        window.open(cached, "_blank", "noopener,noreferrer");
+        showFlash("ok", `已在新浏览器页签打开 ComfyUI（${cached}）`);
+        return;
+      }
+      setComfyOpening(true);
+      try {
+        const fresh = await comfyStatusQ.refetch();
+        const b = fresh.data?.base ?? null;
+        if (!b) {
+          showFlash(
+            "err",
+            "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看",
+          );
+          return;
+        }
+        window.open(b, "_blank", "noopener,noreferrer");
+        showFlash("ok", `已在新浏览器页签打开 ComfyUI（${b}）`);
+      } finally {
+        setComfyOpening(false);
+      }
+      return;
+    }
+
     setComfyOpening(true);
     try {
       /* 点「打开查看」前先要一份新鲜状态：用户此刻的意图就是「打开我在运行的
@@ -357,11 +390,11 @@ export function useSettingsPage(): SettingsPageController {
         await comfyStatusQ.refetch();
         return;
       }
-      /* 打开方式由服务端探测结论决定（ISSUE #310）：目标是**只有多页签**，
+      /* 桌面壳：打开方式由服务端探测结论决定（ISSUE #310）——目标是**只有多页签**、
        * 不弹第二个窗口。正常情况下 ComfyUI 由本应用拉起、启动参数带了
-       * `--enable-cors-header`，跨源不会被 origin-only 中间件拦 403，直接
-       * 内嵌；万一判到不可嵌（外部实例不受本应用参数控制等），页签照常
-       * 打开、里面渲染可读说明 —— 仍留在同一个窗口里，不另开窗口。 */
+       * `--enable-cors-header`，跨源不会被 origin-only 中间件拦 403，直接内嵌；
+       * 万一判到不可嵌（外部实例不受本应用参数控制等），页签照常打开、里面渲染
+       * 可读说明 —— 仍留在同一个窗口里，不另开窗口。 */
       const decision = await openComfyTab(base, window.location.origin);
       // 用稳定 id 打开 ComfyUI 页签：重启后端口偏移（base 变化）时
       // 复用同一页签并刷新地址，而不是叠出重复页签。

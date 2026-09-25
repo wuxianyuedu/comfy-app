@@ -20,6 +20,7 @@ import {
   judgeEmbeddable,
   parseXFrameOptions,
   probeComfyEmbeddable,
+  shouldUseBrowserTab,
 } from "./comfy-embed";
 
 const HOST = "http://127.0.0.1:3100";
@@ -139,6 +140,19 @@ describe("decideComfyTabOpen — 打开方式判决", () => {
    * 「另开窗口」或「交给系统浏览器」。 */
   it("不可嵌 → 仍在页签里给说明（不弹窗、不跳浏览器）", () => {
     expect(decideComfyTabOpen(false)).toBe("blocked");
+  });
+});
+
+describe("shouldUseBrowserTab — 浏览器形态走新浏览器页签", () => {
+  /* 浏览器 / dev 里没有原生标题栏可让位，应用内页签栏是多余的——ComfyUI 交给
+   * 新浏览器页签。注意：消费方（use-settings-page 的 openComfy）必须在任何
+   * await 之前同步调 window.open，否则脱离用户手势被弹窗拦截。 */
+  it("非桌面壳（浏览器 / dev）→ 用浏览器页签", () => {
+    expect(shouldUseBrowserTab(false)).toBe(true);
+  });
+
+  it("桌面壳 → 不用浏览器页签（仍走应用内内嵌页签）", () => {
+    expect(shouldUseBrowserTab(true)).toBe(false);
   });
 });
 

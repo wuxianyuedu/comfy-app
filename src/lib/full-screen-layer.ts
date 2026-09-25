@@ -30,7 +30,7 @@ export const TITLE_BAR_HEIGHT_VAR = "--spacing-title-bar";
 /** 标题行（页签栏）高度的工具类名：`top-title-bar` = `top: var(--spacing-title-bar)`。 */
 export const TITLE_BAR_TOP_CLASS = "top-title-bar";
 
-/** 标题行高度工具类：`h-title-bar`，TitleBarTabs / InAppTabStrip 用。 */
+/** 标题行高度工具类：`h-title-bar`，TitleBarTabs 用（浏览器形态无应用内页签栏）。 */
 export const TITLE_BAR_HEIGHT_CLASS = "h-title-bar";
 
 /**
