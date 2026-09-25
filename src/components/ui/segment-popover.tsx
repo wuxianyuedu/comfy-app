@@ -41,6 +41,7 @@ import React, { useMemo } from "react";
 import { ChevronDown } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { getOrCreate, getOrThrow } from "~/lib/collections";
 import {
   Popover,
   PopoverContent,
@@ -200,17 +201,16 @@ const Section = React.memo(function Section({
     >();
     for (const option of section.options) {
       const key = option.subgroup ?? "_";
-      if (!map.has(key)) {
+      getOrCreate(map, key, () => {
         order.push(key);
-        map.set(key, {
-          key: key,
+        return {
+          key,
           label: option.subgroup,
           options: [] as typeof section.options,
-        });
-      }
-      map.get(key)!.options.push(option);
+        };
+      }).options.push(option);
     }
-    return order.map((key) => map.get(key)!);
+    return order.map((key) => getOrThrow(map, key, "子组桶缺失"));
   }, [section]);
 
   return (

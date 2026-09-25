@@ -4,6 +4,7 @@
 
 import type { FilterKey, SortKey, TaskItem } from "./history-types";
 import { dateBucket } from "./history-utils";
+import { getOrCreate } from "~/lib/collections";
 
 export interface TaskGroup {
   /** 日期桶标题（今天 / 昨天 / yyyy-mm-dd）。 */
@@ -39,9 +40,7 @@ export function countByStatus(tasks: TaskItem[]): Record<string, number> {
 export function groupByDate(tasks: TaskItem[]): TaskGroup[] {
   const bucketMap = new Map<string, TaskItem[]>();
   for (const task of tasks) {
-    const bucket = dateBucket(task.createdAt);
-    if (!bucketMap.has(bucket)) bucketMap.set(bucket, []);
-    bucketMap.get(bucket)!.push(task);
+    getOrCreate(bucketMap, dateBucket(task.createdAt), () => []).push(task);
   }
   return Array.from(bucketMap.entries()).map(([key, items]) => ({
     key,
