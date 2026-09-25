@@ -319,16 +319,19 @@ type FixtureResult = {
 };
 
 describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () => {
-  it("提示词覆盖要写进内层 CLIPTextEncode（不只是 wrapper）", () => {
+  it("提示词覆盖要写进内层 CLIPTextEncode（宿主数组随后被漂移中和清空）", () => {
     const raw = applyRawOverrides(liblibSubgraphFixture(), [
       { nodeId: "76", name: "text", value: "3只小猫在喝山泉" },
     ]) as unknown as FixtureResult;
 
     const wrapper = raw.nodes.find((n) => n.id === 76)!;
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 67)!;
-    expect(wrapper.widgets_values[0]).toBe("3只小猫在喝山泉");
-    // 关键断言：内层节点的值必须同步，否则 comfy-cli 展开子图后仍用旧提示词
+    // 关键断言：内层节点的值必须同步，否则 comfy-cli 展开子图后仍用旧提示词。
     expect(inner.widgets_values[0]).toBe("3只小猫在喝山泉");
+    /* 宿主（wrapper）数组在 `neutralizePromotedHostDrift` 里被就地清空：
+     * comfy-cli 读的是内层，宿主值已折进内层，清掉是为了避开提升控件的槽位
+     * 漂移回写。所以这里断言的是「已中和」，不是「宿主仍保留覆盖值」。 */
+    expect(wrapper.widgets_values.length).toBe(0);
   });
 
   it("seed 覆盖要写进内层 KSampler 的 seed 槽（跳过 control 哨兵）", () => {
@@ -352,10 +355,13 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
 
     const wrapper = raw.nodes.find((n) => n.id === 76)!;
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;
-    const minted = wrapper.widgets_values[6];
+    /* minted 随机种子先写进 wrapper 的 seed 槽、再折进内层 KSampler 的 seed 槽，
+     * 随后 `neutralizePromotedHostDrift` 清空宿主数组。comfy-cli 读内层，所以
+     * 断言内层拿到新种子、宿主已被中和。 */
+    const minted = inner.widgets_values[0];
     expect(typeof minted).toBe("number");
     expect(minted).not.toBe(276260017540259);
-    expect(inner.widgets_values[0]).toBe(minted);
+    expect(wrapper.widgets_values.length).toBe(0);
   });
 
   it("非子图节点不受影响（顶层普通节点仍只改自己）", () => {
