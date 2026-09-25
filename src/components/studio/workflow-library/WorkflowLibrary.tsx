@@ -117,7 +117,9 @@ export function WorkflowLibrary({
       )}
 
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        <ResizablePanel defaultSize={24} minSize={16} maxSize={45}>
+        {/* react-resizable-panels v4：数值 = 像素、字符串 = 百分比。这里必须用
+         * 字符串百分比，否则 v4 把 24/16/45 当像素，列表被夹到 45px（issue #981）。 */}
+        <ResizablePanel defaultSize="24" minSize="16" maxSize="45">
           <WorkflowLibraryList
             workflows={c.workflows}
             pendingRows={c.pendingRows}
@@ -143,7 +145,7 @@ export function WorkflowLibrary({
           />
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={76} minSize={40}>
+        <ResizablePanel defaultSize="76" minSize="40">
           {/* `min-w-0` 必须有：详情面板是弹性项，默认 `min-width: auto` 会让它**不
             肯窄于内容的最小宽度**（面板里的画布预览、卡片列都不小），于是整行宽度
             超过窗口、右半部分连同头部按钮一起被根容器的 `overflow-hidden` 裁掉
