@@ -213,7 +213,7 @@ export function HomePage({
                   onClick={() => onNavigate?.(card.id as WorkspaceView)}
                   className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto flex-col items-start gap-2.5 rounded-2xl border p-4 text-left font-normal transition-all hover:shadow-lg hover:shadow-black/5 dark:shadow-black/10"
                 >
-                  <span className="bg-primary/10 text-primary-strong group-hover:bg-primary/15 flex h-10 w-10 items-center justify-center rounded-xl transition-colors">
+                  <span className="bg-primary/10 text-primary-strong group-hover:bg-primary/15 flex size-10 items-center justify-center rounded-xl transition-colors">
                     {card.icon}
                   </span>
                   <div>
@@ -274,7 +274,7 @@ export function HomePage({
                         >
                           {/* Kind icon */}
                           <div
-                            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors"
+                            className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors"
                             style={{
                               backgroundColor: kindTint(cfg.color, 15),
                               color: cfg.color,
@@ -318,7 +318,7 @@ export function HomePage({
                                       key={ti}
                                       src={thumb}
                                       alt=""
-                                      className="ring-border-strong h-10 w-10 shrink-0 rounded-lg object-cover ring-1"
+                                      className="ring-border-strong size-10 shrink-0 rounded-lg object-cover ring-1"
                                     />
                                   ))}
                               </div>
@@ -341,7 +341,7 @@ export function HomePage({
                           className="border-border bg-surface-1 flex items-start gap-3 rounded-[16px] border p-3.5 opacity-60"
                         >
                           <div
-                            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                            className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl"
                             style={{
                               backgroundColor: kindTint(cfg.color, 12),
                               color: cfg.color,
@@ -352,7 +352,7 @@ export function HomePage({
                           <div className="flex-1">
                             <div className="bg-border-strong h-3.5 w-3/4 rounded" />
                             <div className="bg-border mt-2 h-3 w-1/2 rounded" />
-                            <div className="bg-border mt-2.5 h-10 w-10 rounded-lg" />
+                            <div className="bg-border mt-2.5 size-10 rounded-lg" />
                           </div>
                         </div>
                       );
