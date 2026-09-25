@@ -75,7 +75,7 @@ export function AgentOverlay({
     >
       {/* Header */}
       <div className="border-border flex items-center gap-2 border-b px-4 py-3">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
+        <span className="flex size-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
           <Icon name="bot" size={13} className="text-white" />
         </span>
         <div className="flex-1">

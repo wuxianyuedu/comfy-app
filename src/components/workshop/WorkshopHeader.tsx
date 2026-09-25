@@ -38,7 +38,7 @@ export function WorkshopHeader({
   return (
     <header className="border-border flex h-16 items-center gap-3 border-b px-6">
       <div className="flex flex-1 items-center gap-3">
-        <div className="bg-primary grid h-9 w-9 place-items-center rounded-xl text-base font-bold text-white">
+        <div className="bg-primary grid size-9 place-items-center rounded-xl text-base font-bold text-white">
           工
         </div>
         <div className="flex min-w-0 flex-col leading-tight">
