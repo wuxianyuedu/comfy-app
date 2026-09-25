@@ -189,7 +189,7 @@ export function WorkflowIoPreviewPanel({
       <div className="bg-panel/92 pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 shadow-2xl backdrop-blur-md">
         <div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
+            <span className="size-2 shrink-0 rounded-full bg-sky-400" />
             <span className="text-ink-bright truncate text-[12px] font-semibold">
               IO 预览
             </span>

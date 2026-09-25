@@ -377,7 +377,7 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
       {hasOverrides && (
         <span
           aria-hidden
-          className="ml-1 inline-block h-1.5 w-1.5 translate-y-[-1px] rounded-full bg-violet-400 align-middle shadow-[0_0_6px_rgba(167,139,250,0.7)]"
+          className="ml-1 inline-block size-1.5 translate-y-[-1px] rounded-full bg-violet-400 align-middle shadow-[0_0_6px_rgba(167,139,250,0.7)]"
         />
       )}
     </Button>

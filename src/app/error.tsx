@@ -18,7 +18,7 @@ export default function Error({
 
   return (
     <div className="bg-bg flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
-      <div className="bg-primary/10 text-primary grid h-16 w-16 place-items-center rounded-2xl">
+      <div className="bg-primary/10 text-primary grid size-16 place-items-center rounded-2xl">
         <Icon name="alert" size={28} />
       </div>
       <div>

@@ -283,7 +283,7 @@ export const FlowNode = React.memo(function FlowNode({
             position={Position.Left}
             id="__default_in"
             isConnectable={false}
-            className="!h-2.5 !w-2.5 !border-0"
+            className="!size-2.5 !border-0"
             style={{ left: -5, opacity: 0, pointerEvents: "none" }}
           />
         )}

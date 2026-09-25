@@ -116,7 +116,7 @@ export function FlowNodePinRows({
                   /* 可连接：编辑器里「对外参数节点」的线要落到这一行（端口）。
                    * 连上 / 断开都由映射层负责，工作流图本身不因此改动。 */
                   isConnectable
-                  className="!border-port-surface !h-2.5 !w-2.5 !rounded-full !border"
+                  className="!border-port-surface !size-2.5 !rounded-full !border"
                   style={{
                     left: 5,
                     background: inCol,
