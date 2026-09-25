@@ -514,10 +514,16 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     return () => guard.dispose();
   }, []);
 
+  /* 卸载守卫用 beginStaleRun（规范 16 §16.2.4.34）：本 effect 里三个请求各自
+   * 落地自己的 set，组件若在请求返回前卸载，写状态既白跑也让旧闭包再多活
+   * 一会儿（且并发渲染下还可能与后一轮交叠）。 */
   React.useEffect(() => {
-    fetch("/api/skills")
-      .then((res) => res.json())
-      .then((data: SkillsApiResponse) => {
+    const guard = beginStaleRun();
+    void (async () => {
+      // 技能列表（风格卡）；失败按「没有技能」处理，不打断其余两路。
+      try {
+        const res = await fetch("/api/skills");
+        const data = (await res.json()) as SkillsApiResponse;
         const list: StyleRef[] = (data.skills ?? []).map((skill) => ({
           slug: skill.slug,
           name: skill.name,
@@ -526,15 +532,20 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
           negativePrompt: skill.negativePrompt ?? undefined,
           defaultParams: skill.defaultParams ?? undefined,
         }));
-        setStyles(list);
-      })
-      .catch(() => undefined);
+        guard.commit(() => setStyles(list));
+      } catch {
+        /* 失败就是空列表，界面走各自的空态 */
+      }
+    })();
     // API 直连通道(生图/视频)的脱敏配置视图;失败按未配置处理。
-    void fetchApiChannels().then(setApiChannels);
+    void fetchApiChannels()
+      .then((channels) => guard.commit(() => setApiChannels(channels)))
+      .catch(() => undefined);
     // 工作流库列表：工坊「生成资源」里可选择用哪个工作流生成（ISSUE #145）。
     void fetchWorkshopWorkflows()
-      .then(setWorkflowOptions)
+      .then((workflows) => guard.commit(() => setWorkflowOptions(workflows)))
       .catch(() => undefined);
+    return () => guard.dispose();
   }, []);
 
   /** 提示条自动消失，避免需要用户手动关闭的瞬时噪声。 */
