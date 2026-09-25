@@ -48,17 +48,31 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
-  const value: LLMContextValue = {
-    config,
-    localModels,
-    remoteModels,
-    remoteImageModels,
-    loading,
-    settingsOpen,
-    openSettings: () => setSettingsOpen(true),
-    closeSettings: () => setSettingsOpen(false),
-    refresh,
-  };
+  /* `value` 必须 `useMemo`：Context 的 value 一换引用，所有 `useLLM()` 消费方
+   * 无条件重渲染（它们无法只订阅其中一个字段）。没有 memo 时，本 Provider 的
+   * 任何一次重渲染（含 `settingsOpen` 翻转本身）都会把整棵子树带着跑一遍。 */
+  const value = React.useMemo<LLMContextValue>(
+    () => ({
+      config,
+      localModels,
+      remoteModels,
+      remoteImageModels,
+      loading,
+      settingsOpen,
+      openSettings: () => setSettingsOpen(true),
+      closeSettings: () => setSettingsOpen(false),
+      refresh,
+    }),
+    [
+      config,
+      localModels,
+      remoteModels,
+      remoteImageModels,
+      loading,
+      settingsOpen,
+      refresh,
+    ],
+  );
 
   return (
     <LLMContext.Provider value={value}>
