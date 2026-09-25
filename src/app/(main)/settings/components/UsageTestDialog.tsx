@@ -24,7 +24,7 @@ import type { UsageTestKind } from "~/lib/llm/usage-test-client";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { useFilePicker } from "~/components/ui/file-picker";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";

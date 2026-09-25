@@ -37,7 +37,7 @@ import { Info, TriangleAlert } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { onNextFrame } from "~/lib/next-frame";
 

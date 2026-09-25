@@ -22,7 +22,7 @@ import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Disclosure } from "~/components/ui/disclosure";
 

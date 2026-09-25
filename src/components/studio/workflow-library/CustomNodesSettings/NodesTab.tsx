@@ -3,7 +3,7 @@
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { TreeChildren } from "~/components/ui/tree-rows";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { cn } from "~/lib/utils";
 import { ROW_STATE_PRESET } from "./constants";

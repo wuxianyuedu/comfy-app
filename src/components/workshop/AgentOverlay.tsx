@@ -7,7 +7,7 @@ import React from "react";
 import { readTextInput } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Textarea } from "~/components/ui/textarea";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
