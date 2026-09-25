@@ -97,3 +97,38 @@ export type ParseProgress = {
   parent: string; // current parent path
   msg: string; // latest human-readable sub-message
 };
+
+/** 设置/探测流的一行 ndjson 事件（`/api/custom-nodes` 探测端点发出）。
+ *  按 `type` 判别，消费端 switch 收窄——不再是「全可选字段袋 + 逐字段
+ *  `typeof` 守卫」（那会让拼错的 `type` 静默通过、字段类型全靠运行时判）。
+ *  `phase` 只取上线会出现的三态，不含 UI 初值 `""`。 */
+export type SettingsStreamEvent =
+  | { type: "discover_start"; parents?: string[]; total?: number }
+  | {
+      type: "progress";
+      parent?: string;
+      phase?: "queue" | "scan" | "hash";
+      msg?: string;
+      discovered?: number;
+      total?: number;
+      done?: number;
+    }
+  | {
+      type: "discover_done";
+      parent?: string;
+      packages?: DiscoveredSubpkg[];
+      cached?: boolean;
+    }
+  | {
+      type: "summary";
+      summary?: SettingsResp["summary"];
+      lastReport?: ParseReport | null;
+      byPath?: Record<string, SummaryPkg>;
+    }
+  | { type: "error"; message?: string }
+  | { type: "done" };
+
+/** 解析日志流的一行 ndjson 事件（`/api/custom-nodes` 解析端点发出）。 */
+export type ParseStreamEvent =
+  | { type: "log"; level?: string; msg?: string }
+  | { type: "done"; report?: ParseReport | null; ok?: boolean };
