@@ -23,6 +23,7 @@ import { Copy, FileJson, RefreshCw, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { FieldLabel } from "~/components/ui/field";
 import { JsonViewer } from "~/components/ui/json-viewer";
 import { useInterval } from "~/components/ui/use-interval";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
@@ -248,14 +249,14 @@ export function WorkflowRunRawCliModal({
             <span>
               {copied ? "已复制全部" : "完整、未经截断的 comfy-cli 输出"}
             </span>
-            <label className="flex cursor-pointer items-center gap-1.5 select-none">
+            <FieldLabel className="flex cursor-pointer items-center gap-1.5 select-none">
               <Checkbox
                 checked={autoscroll}
                 onCheckedChange={(c) => setAutoscroll(c === true)}
                 className="cursor-pointer"
               />
               自动滚动
-            </label>
+            </FieldLabel>
           </div>
         </div>
       </DialogContent>
