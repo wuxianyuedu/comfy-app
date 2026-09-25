@@ -10,6 +10,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Separator } from "~/components/ui/separator";
 import { FormField } from "~/components/ui/form-field";
+import { FieldLabel } from "~/components/ui/field";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { ShotReviewDialog } from "~/components/agent-run/ShotReviewDialog";
 import { useFilmStudio } from "./hooks/use-film-studio";
@@ -707,14 +708,14 @@ export function FilmStudio() {
             </FormField>
 
             {/* Subtitle toggle */}
-            <label className="border-border bg-canvas/60 flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5">
+            <FieldLabel className="border-border bg-canvas/60 flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5">
               <span className="text-ink-field text-sm">烧录字幕</span>
               <Checkbox
                 checked={c.subtitleOn}
                 onCheckedChange={(checked) => c.setSubtitleOn(checked === true)}
                 className="accent-violet-500"
               />
-            </label>
+            </FieldLabel>
 
             {/* BGM upload */}
             <div>
