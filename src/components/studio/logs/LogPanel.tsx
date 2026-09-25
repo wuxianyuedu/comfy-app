@@ -702,9 +702,9 @@ export function LogPanel() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  onClick={() => setPage(safePage + 1)}
-                  disabled={safePage >= totalPages}
-                  title="更早的一页"
+                  onClick={() => setPage(safePage - 1)}
+                  disabled={safePage <= 1}
+                  title="更新的一页"
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
                 >
                   <ChevronLeft size={14} />
@@ -750,9 +750,9 @@ export function LogPanel() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  onClick={() => setPage(safePage - 1)}
-                  disabled={safePage <= 1}
-                  title="更新的一页"
+                  onClick={() => setPage(safePage + 1)}
+                  disabled={safePage >= totalPages}
+                  title="更早的一页"
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
                 >
                   <ChevronRight size={14} />
