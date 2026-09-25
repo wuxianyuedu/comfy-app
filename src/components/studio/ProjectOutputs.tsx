@@ -330,6 +330,7 @@ export function ProjectOutputs() {
       >
         <SheetContent
           side="right"
+          aria-label={`产出 #${selected?.id.slice(-4) ?? ""}`}
           showCloseButton={false}
           className="gap-0 p-0"
           panelClassName="bg-node border-border-strong w-[380px] max-w-[90vw]"

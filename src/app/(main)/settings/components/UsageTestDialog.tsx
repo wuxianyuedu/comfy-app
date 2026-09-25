@@ -60,6 +60,7 @@ export function UsageTestDialog({
       {/* 本弹窗自绘关闭按钮（见下方 header）——必须关掉基元的内置那枚，
           否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的 `showCloseButton`）。 */}
       <DialogContent
+        aria-label={`实际调用测试 · ${USAGE_TEST_KIND_LABELS[usageTest.kind]}`}
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-md"

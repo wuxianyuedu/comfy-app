@@ -89,6 +89,7 @@ export function WorkshopModelAdapterModal({
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
+        aria-label="模型适配器"
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"

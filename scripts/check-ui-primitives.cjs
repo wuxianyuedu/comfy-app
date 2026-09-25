@@ -3252,6 +3252,49 @@ const RULES = {
       ).length;
     },
   },
+
+  /* ── P72「模态无可访问名」（硬闸，shadcn composition.md / WCAG 4.1.2）─────
+   * `<DialogContent>` / `<SheetContent>` 打开的模态必须能被读屏器播报"这是
+   * 什么面板"。base-ui（Radix 同）在缺少标题时不会自动补 aria-labelledby，
+   * 用户进入模态只能听到"对话框"、上下文完全丢失。合规写法二选一：
+   *   · 组件树里放 `<DialogTitle>` / `<SheetTitle>`（可以是 sr-only）；
+   *   · 在 `<DialogContent>` / `<SheetContent>` 上直接给 `aria-label` 或
+   *     `aria-labelledby`。
+   * 本仓库形态约定是「自绘 header + 关闭」，多数落点走第二条；两种都放行。
+   *
+   * 判据按**标签块**扫（`<DialogContent` … `</DialogContent>`、
+   * `<SheetContent` … `</SheetContent>`），块内既无对应 Title 组件又无
+   * aria-label/labelledby 即计 1。`ui/` 层通过 EXEMPT_DIRS 短路（基元自身
+   * 是这些标签的实现处、不该被自己扫到）。 */
+  P72: {
+    label:
+      "视图层 <DialogContent>/<SheetContent> 缺可访问名（应加 <DialogTitle>/<SheetTitle> 或 aria-label/aria-labelledby，shadcn composition.md）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      let n = 0;
+      for (const [open, close, nameRe] of [
+        ["<DialogContent", "</DialogContent>", /<DialogTitle\b/],
+        ["<SheetContent", "</SheetContent>", /<SheetTitle\b/],
+      ]) {
+        let cursor = 0;
+        while (true) {
+          const start = t2.indexOf(open, cursor);
+          if (start < 0) break;
+          const end = t2.indexOf(close, start);
+          if (end < 0) {
+            cursor = start + open.length;
+            continue;
+          }
+          const block = t2.slice(start, end);
+          if (!/aria-label\s*=|aria-labelledby\s*=/.test(block) && !nameRe.test(block)) {
+            n++;
+          }
+          cursor = end + close.length;
+        }
+      }
+      return n;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -3356,6 +3399,11 @@ const HARD_GATE_RULES = new Set([
   /* P70（shadcn styling.md「No space-x-N / space-y-N」）：2026-09-24 一次治理
    * 把全库 107 处 space-y-N 清零，从此是硬闸——新增即阻断。 */
   "P70",
+  /* P72（shadcn composition.md「Dialog/Sheet always need a Title」）：
+   * 2026-09-25 一次治理把视图层 9 处真漏清零（8 DialogContent + 1 SheetContent
+   * 既无 Title 组件又无 aria-label），从此是硬闸——新增即阻断。
+   * `ui/` 走 EXEMPT_DIRS 短路，基元自身实现不受本判据影响。 */
+  "P72",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
