@@ -3402,6 +3402,49 @@ const RULES = {
       return (t2.match(/aria-pressed\s*=/g) || []).length;
     },
   },
+
+  /* ── P79「视图层无 dark: 前缀的浅色原色板」（棘轮，shadcn styling.md）──
+   * P71 只管 `dark:` 前缀的调色板（把同一件事在明暗两处各写一遍），P79 补上
+   * **无前缀的浅色版原色板** —— shadcn `styling.md` 原则 4：`Use semantic
+   * colors. bg-primary, text-muted-foreground — never raw values like
+   * bg-blue-500.`
+   *
+   * 项目的 `--color-primary-strong` / `--color-info` / `--color-success-strong`
+   * / `--color-warning-strong` / `--color-destructive` / `--color-subtle`
+   * / `--color-border-strong` 等 token 内部已含浅/深两态（`globals.css`），
+   * 视图里出现 `bg-violet-500/40` / `text-fuchsia-700` / `border-sky-400`
+   * / `ring-emerald-400` / `from-red-*` / `to-amber-*` 这类**具体 palette
+   * 色名 + 数字档位**（无论是否带 `dark:` 前缀）就是绕开语义 token、把主题
+   * 色硬编码。改主题跟不动、深浅两态一致性靠人肉。
+   *
+   * 锚点复用 P71 的调色板色名表 + 前缀集，做两点收窄：
+   *   · **去掉 `dark:` 前缀强制**（这一条就是数无前缀的浅色版）；
+   *   · **再排除掉已经命中 P71 的**（带 `dark:` 的归 P71 管、避免双计）。
+   *
+   * 例外块复用 P71 的 `p71-allow:start … p71-allow:end` —— 同一族账：
+   * palette 字面量本身就是语义（ANSI SGR 8 色 / workshop 域专有装饰色 /
+   * 媒体类型色 / 文件夹黄橙 / 品牌渐变端点 …），不能被 token 化，走同一份
+   * allow 块；一条 `p71-allow` 覆盖两条判据，比再造一个 `p79-allow` 更省
+   * 也更难漏标。
+   *
+   * 走棘轮（非硬闸）：本批上线时实测视图层约 60 处（`studio/**` 35、
+   * `workshop/**` 9、`ui/**` 自研件 12、其它 4），冻结起点、只许降。下一批
+   * 按域分片迁语义 token（与 P71 治理同批节奏）。P79 号回填：填 P78 之后
+   * 下一个可用号（P73/P74/P75/P76/P77 都已用或留）。 */
+  P79: {
+    label:
+      "视图层无 dark: 前缀的浅色原色板（应走语义 token，shadcn styling.md 原则 4；例外块走 p71-allow 与 P71 共享）",
+    count: (t) => {
+      const t2 = stripComments(stripP71AllowBlocks(t));
+      /* 与 P71 同款前缀集 + 色名表，但**不带 `dark:` 前缀**。用 `(?!dark:)`
+       * 前瞻把带前缀的排掉、避免与 P71 双计。 */
+      return (
+        t2.match(
+          /(^|[\s"'`{])(?!dark:)(?:bg|text|border|ring|from|to|shadow|fill|stroke|outline|decoration|accent|caret|divide|placeholder|file)-\[?[a-z-]*?(?:emerald|green|rose|red|amber|sky|cyan|violet|blue|purple|fuchsia|indigo|teal|lime|orange|yellow)-[0-9]/g,
+        ) || []
+      ).length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
