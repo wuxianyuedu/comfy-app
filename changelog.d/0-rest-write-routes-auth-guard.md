@@ -1,0 +1,3 @@
+## Fixed
+
+- **REST 面 9 个路由的假鉴权闸收口为 `requireRequestUser`（安全）**：`/api/llm/ollama-start`（×2）、`ollama-stop`、`llm/test`、`llm/models`、`test-usage`（×2）与 `/api/film/bgm`、`/api/tasks/[id]/stream`、`/api/tasks/[id]/raw-cli` 此前调的是**不受 `loginRequired` 约束**的 `currentServerUser`——其中 6 处 `await` 后直接丢弃返回值（占位形同虚设），2 处 `if (!user?.id)` 判的是永不成立的死分支。开关打开后这些进程级副作用（spawn/kill ollama）、计费探测（消耗 API Key）、上传与任务输出口仍可被匿名调用。现在统一走 `requireRequestUser` + 结构化 401 信封；`loginRequired=false`（默认本机单用户）行为不变。防复发：删除零消费的 `currentServerUser` 入口，REST 面不再提供「总是兜底演示用户」的可误用选项；`loginRequired` 判决由 `requireServerUser` 单点持有（与 tRPC `authedProcedure` 共用，见 #990）。

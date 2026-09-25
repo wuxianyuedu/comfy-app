@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { currentServerUser } from "~/server/auth/request-user";
+import { requireRequestUser } from "~/server/auth/request-user";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 import fs from "node:fs";
 import path from "node:path";
 import { OLLAMA_RUNTIME_LOG } from "~/lib/log/log-paths";
@@ -67,7 +68,7 @@ async function ollamaUp(): Promise<boolean> {
  * 「杀整棵树」的一种，散在路由里就又是一处平台判据。
  */
 export async function POST(_req: NextRequest) {
-  await currentServerUser();
+  if (!(await requireRequestUser())) return unauthorizedResponse();
   if (!(await ollamaUp())) {
     appendOllamaLog("[state] Ollama 未在运行，跳过关闭");
     return NextResponse.json({ ok: true, detail: "Ollama 未在运行" });

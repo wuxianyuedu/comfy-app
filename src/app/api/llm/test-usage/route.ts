@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { currentServerUser } from "~/server/auth/request-user";
+import { requireRequestUser } from "~/server/auth/request-user";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
   SUBMIT_PENDING_DETAIL,
   USAGE_TEST_KINDS,
@@ -30,7 +31,7 @@ export const dynamic = "force-dynamic";
  * 失败一律 200 + `{ ok:false, detail }`，前端按 detail 展示降级文案。
  */
 export async function POST(req: NextRequest) {
-  await currentServerUser();
+  if (!(await requireRequestUser())) return unauthorizedResponse();
 
   /* 读 body / 取条目名 / 解析连接参数与「继续等待」路由同一份实现（§12.12）。 */
   const prologue = await readUsageTestPrologue(req);

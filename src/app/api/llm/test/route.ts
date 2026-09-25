@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { isRecord } from "~/lib/is-record";
-import { currentServerUser } from "~/server/auth/request-user";
+import { requireRequestUser } from "~/server/auth/request-user";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 import { getLLMConfig } from "~/lib/llm/server";
 import { apiErrorDetail } from "~/lib/api-error";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
@@ -21,7 +22,7 @@ const PROBE_TIMEOUT_MS = 6000;
  * 探测失败不是硬错误：一律 200 + { ok, detail }，前端按 detail 展示降级文案。
  */
 export async function POST(req: NextRequest) {
-  await currentServerUser();
+  if (!(await requireRequestUser())) return unauthorizedResponse();
 
   const body: unknown = await req.json().catch(() => ({}));
   const rec = isRecord(body) ? body : {};
