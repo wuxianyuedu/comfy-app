@@ -124,6 +124,7 @@ export type SettingsStreamEvent =
       summary?: SettingsResp["summary"];
       lastReport?: ParseReport | null;
       byPath?: Record<string, SummaryPkg>;
+      settings?: { paths: string[]; localWorkflowPaths: string[] };
     }
   | { type: "error"; message?: string }
   | { type: "done" };
@@ -131,4 +132,12 @@ export type SettingsStreamEvent =
 /** 解析日志流的一行 ndjson 事件（`/api/custom-nodes` 解析端点发出）。 */
 export type ParseStreamEvent =
   | { type: "log"; level?: string; msg?: string }
-  | { type: "done"; report?: ParseReport | null; ok?: boolean };
+  | {
+      type: "done";
+      report?: ParseReport | null;
+      ok?: boolean;
+      /** 解析进程 stderr 摘要（失败诊断用）。 */
+      stderr?: string;
+      /** 解析进程退出码（诊断用）。 */
+      exitCode?: number;
+    };
