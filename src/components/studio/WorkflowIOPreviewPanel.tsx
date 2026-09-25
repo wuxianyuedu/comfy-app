@@ -35,7 +35,7 @@ import { Button } from "~/components/ui/button";
 import { mergeExposedEntry } from "./workflow-editor/io-exposure";
 import type { WorkflowIODropPosition, WorkflowIOParam } from "./workflow-types";
 import { RequiredSummary } from "./RequiredSummary";
-import { getIOEditApi } from "./workflow-editor/WorkflowStores";
+import { useIOEditApi } from "./workflow-editor/WorkflowStores";
 
 /** 模式码 → 中文标签（标准任务类型）；非标准码原样显示，兼容历史自定义值。 */
 function modeLabel(code: string): string {
@@ -61,9 +61,9 @@ export function WorkflowIoPreviewPanel({
   onModesChange,
   onClose,
 }: WorkflowIoPreviewPanelProps) {
-  /* getIOEditApi 内部调 useContext，只能在组件顶层调用（Hook 套 Hook 会被
+  /* useIOEditApi 内部调 useContext，只能在组件顶层调用（Hook 套 Hook 会被
    * React 19 拦下）。context 持有的 StoreApi 按编辑器实例稳定。 */
-  const ioApi = getIOEditApi();
+  const ioApi = useIOEditApi();
 
   /* 当前编辑的模式：始终是工作流模式之一；工作流删掉该模式时回落到
    * defaultMode → 第一个模式。没有模式 = 表单禁用（禁止配置参数）。 */

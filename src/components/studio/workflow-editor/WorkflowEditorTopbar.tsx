@@ -1,6 +1,6 @@
 "use client";
 /* 工作流编辑器顶栏：面包屑、统计、IO 开关、JSON 查看器、重置与保存按钮。
- * IO 相关状态直接读 Zustand IOEditStore（getIOEditApi / useIOEditStore，
+ * IO 相关状态直接读 Zustand IOEditStore（useIOEditApi / useIOEditStore，
  * 与 WorkflowEditorBody 同模式），因此本组件只接收 workflow/view/nav 类 props。 */
 import React, { useCallback } from "react";
 import { ArrowLeft, RotateCw } from "lucide-react";
@@ -9,7 +9,7 @@ import { useToast } from "../ToastProvider";
 import { isNoteType } from "../workflow-utils";
 import { useDebugStore } from "../debug/debug-store";
 import {
-  getIOEditApi,
+  useIOEditApi,
   useIOEditStore,
   selectIoEditMode,
   selectWorkflowIO,
@@ -69,7 +69,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   saving,
   error,
 }: WorkflowEditorTopBarProps) {
-  const ioApi = getIOEditApi();
+  const ioApi = useIOEditApi();
   const workflowIO = useIOEditStore(selectWorkflowIO);
   const ioEditMode = useIOEditStore(selectIoEditMode);
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
