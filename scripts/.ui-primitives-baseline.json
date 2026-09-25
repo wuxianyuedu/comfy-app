@@ -14,39 +14,80 @@
     "P68": "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
     "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
     "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
-    "P76": "视图层裸写 <select>（应使用 ~/components/ui/native-select 的 NativeSelect 或 ~/components/ui/select-menu 的 SelectMenu）"
+    "P76": "视图层裸写 <select>（应使用 ~/components/ui/native-select 的 NativeSelect 或 ~/components/ui/select-menu 的 SelectMenu）",
+    "P78": "视图层裸写 <label>（表单行应走 ~/components/ui/form-field 的 FormField 或 ~/components/ui/field 的 FieldLabel；checkbox/radio 点击区走 ~/components/ui/{checkbox,radio-group} 的 children 语义）"
   },
-  "total": 11,
+  "total": 33,
   "files": {
     "src/components/agent-run/RunControlBar.tsx": {
-      "P76": 1
+      "P76": 1,
+      "P78": 2
+    },
+    "src/components/studio/canvas/WorkflowCanvasSettings.tsx": {
+      "P78": 2
     },
     "src/components/studio/FilmStudio.tsx": {
-      "P76": 2
+      "P76": 2,
+      "P78": 1
     },
     "src/components/studio/history/HistoryList.tsx": {
       "P76": 1
     },
+    "src/components/studio/ModelLibrary.tsx": {
+      "P78": 1
+    },
+    "src/components/studio/project-canvas/GlobalStepLogPanel.tsx": {
+      "P78": 1
+    },
     "src/components/studio/project-canvas/StepLogTaskPicker.tsx": {
       "P76": 1
+    },
+    "src/components/studio/ProjectCanvasSettings.tsx": {
+      "P78": 1
     },
     "src/components/studio/ProjectOutputs.tsx": {
       "P76": 1
     },
+    "src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx": {
+      "P78": 1
+    },
     "src/components/studio/workflow-library/WorkflowRunLogModal.tsx": {
-      "P76": 1
+      "P76": 1,
+      "P78": 1
+    },
+    "src/components/studio/workflow-library/WorkflowRunRawCliModal.tsx": {
+      "P78": 1
+    },
+    "src/components/workshop/AttributeMultiSelect.tsx": {
+      "P78": 1
     },
     "src/components/workshop/mode-contract/dialog/ModeContractEditorView.tsx": {
-      "P76": 1
+      "P76": 1,
+      "P78": 1
+    },
+    "src/components/workshop/VideoStudio.parts.tsx": {
+      "P78": 3
+    },
+    "src/components/workshop/WorkshopAside.tsx": {
+      "P78": 1
     },
     "src/components/workshop/WorkshopModelAdapterModal.tsx": {
       "P76": 1
+    },
+    "src/app/(main)/settings/components/ComfyuiSection.tsx": {
+      "P78": 2
+    },
+    "src/app/(main)/settings/components/ExitSection.tsx": {
+      "P78": 2
     },
     "src/app/(main)/settings/components/LlmLocalSection.tsx": {
       "P76": 1
     },
     "src/app/(main)/settings/components/RuntimeLogBox.tsx": {
       "P76": 1
+    },
+    "src/app/(main)/settings/components/UpdateCheckSection.tsx": {
+      "P78": 1
     }
   }
 }
