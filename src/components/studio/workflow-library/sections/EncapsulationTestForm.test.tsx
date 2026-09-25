@@ -131,4 +131,22 @@ describe("EncapsulationTestForm", () => {
     expect(button.getAttribute("title")).toBe("提示词未落到端口");
     expect(screen.getByPlaceholderText("输入负向提示词")).toBeDisabled();
   });
+
+  it("图片口选完立刻本地预览（上传失败 / ComfyUI 未启动也看得见所选图）", async () => {
+    renderForm(I2V_ENTRIES, {
+      scene: "video",
+      uploadImage: vi.fn(async () => {
+        throw new Error("ComfyUI 未启动");
+      }),
+    });
+    const input =
+      document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).toBeTruthy();
+    const file = new File([new Uint8Array([1, 2, 3])], "f.png", {
+      type: "image/png",
+    });
+    fireEvent.change(input!, { target: { files: [file] } });
+    const img = await screen.findByRole("img", { name: "首帧" });
+    expect(img.getAttribute("src") ?? "").toMatch(/^data:image\/png/);
+  });
 });

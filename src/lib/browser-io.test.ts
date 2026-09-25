@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { copyText, downloadJson, downloadText } from "./browser-io";
+import {
+  copyText,
+  downloadJson,
+  downloadText,
+  readFileAsDataUrl,
+} from "./browser-io";
 
 describe("copyText", () => {
   beforeEach(() => {
@@ -97,6 +102,39 @@ describe("downloadText / downloadJson", () => {
     downloadJson({ a: 1 }, "b.json");
     expect(spy).toHaveBeenCalledWith(JSON.stringify({ a: 1 }, null, 2));
     expect(anchor.download).toBe("b.json");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("readFileAsDataUrl", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("用 FileReader 把文件读成 data URL", async () => {
+    class FakeFileReader {
+      result = "data:image/png;base64,AAAA";
+      error: unknown = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readAsDataURL() {
+        this.onload?.();
+      }
+    }
+    vi.stubGlobal("FileReader", FakeFileReader);
+    await expect(
+      readFileAsDataUrl({ name: "x.png" } as unknown as File),
+    ).resolves.toBe("data:image/png;base64,AAAA");
+  });
+
+  it("无 FileReader 的环境（SSR）直接 reject，不抛未捕获", async () => {
+    vi.stubGlobal("FileReader", undefined);
+    await expect(
+      readFileAsDataUrl({ name: "x.png" } as unknown as File),
+    ).rejects.toThrow();
   });
 
   afterEach(() => {
