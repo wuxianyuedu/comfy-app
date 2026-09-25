@@ -15,23 +15,31 @@
     "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
     "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
     "P76": "视图层裸写 <select>（应使用 ~/components/ui/native-select 的 NativeSelect 或 ~/components/ui/select-menu 的 SelectMenu）",
-    "P78": "视图层裸写 <label>（表单行应走 ~/components/ui/form-field 的 FormField 或 ~/components/ui/field 的 FieldLabel；checkbox/radio 点击区走 ~/components/ui/{checkbox,radio-group} 的 children 语义）"
+    "P78": "视图层裸写 <label>（表单行应走 ~/components/ui/form-field 的 FormField 或 ~/components/ui/field 的 FieldLabel；checkbox/radio 点击区走 ~/components/ui/{checkbox,radio-group} 的 children 语义）",
+    "P77": "视图层手写 aria-pressed（2–7 项的选项组应走 ~/components/ui/toggle-group 的 ToggleGroup + ToggleGroupItem；shadcn forms.md）"
   },
-  "total": 33,
+  "total": 40,
   "files": {
     "src/components/agent-run/RunControlBar.tsx": {
       "P76": 1,
       "P78": 2
+    },
+    "src/components/studio/canvas/RgthreeBodies.tsx": {
+      "P77": 1
     },
     "src/components/studio/canvas/WorkflowCanvasSettings.tsx": {
       "P78": 2
     },
     "src/components/studio/FilmStudio.tsx": {
       "P76": 2,
-      "P78": 1
+      "P78": 1,
+      "P77": 2
     },
     "src/components/studio/history/HistoryList.tsx": {
       "P76": 1
+    },
+    "src/components/studio/logs/LogFilterBar.tsx": {
+      "P77": 1
     },
     "src/components/studio/ModelLibrary.tsx": {
       "P78": 1
@@ -47,6 +55,9 @@
     },
     "src/components/studio/ProjectOutputs.tsx": {
       "P76": 1
+    },
+    "src/components/studio/workflow-form/SizePresetTableModal.tsx": {
+      "P77": 1
     },
     "src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx": {
       "P78": 1
@@ -81,13 +92,17 @@
       "P78": 2
     },
     "src/app/(main)/settings/components/LlmLocalSection.tsx": {
-      "P76": 1
+      "P76": 1,
+      "P77": 1
     },
     "src/app/(main)/settings/components/RuntimeLogBox.tsx": {
       "P76": 1
     },
     "src/app/(main)/settings/components/UpdateCheckSection.tsx": {
       "P78": 1
+    },
+    "src/app/(main)/settings/components/UsageTestDialog.tsx": {
+      "P77": 1
     }
   }
 }

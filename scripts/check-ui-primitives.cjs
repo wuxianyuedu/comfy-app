@@ -3365,6 +3365,43 @@ const RULES = {
       return (t2.match(/<label[\s/>]/g) || []).length;
     },
   },
+
+  /* ── P77「视图层手写 aria-pressed」（棘轮，shadcn forms.md）────────────
+   * shadcn `forms.md`：`Option sets (2–7 choices) use ToggleGroup. Don't
+   * loop Button with manual active state.`
+   *
+   * 项目里 `~/components/ui/toggle-group` 装了（shadcn base-nova 版，内部
+   * 走 Base UI `ToggleGroup` / `ToggleGroupItem`），但视图层里出现
+   * `aria-pressed={cond}` = 这个文件在**手写一份"哪一个是选中"的状态契约**。
+   * `aria-pressed` 是 toggle 语义的 ARIA 硬要求，Base UI 的 `ToggleGroupItem`
+   * 会自己打这一份、并给键盘 / 读屏器 / `data-state="on|off"` 一致的样式；
+   * 手写 `<Button aria-pressed>` 循环少了这一层：读屏器只能听到"按下"但
+   * 拿不到组内互斥关系（`role="group"` 与 `aria-labelledby` 都得手写），
+   * 视觉的 active 态也得每处 `className={\`${cond ? A : B}\`}` 重抄。
+   *
+   * 判据按形态取：视图里出现 `aria-pressed\s*=` 字面量 = 该文件手搓了一份
+   * toggle 状态。`ui/toggle-group.tsx` 是这条账要收口的唯一实现、`ui/` 走
+   * EXEMPT_DIRS 天然豁免；`ui/image-viewer.tsx` 里的两处 `aria-pressed`
+   * 是**项目自定义基元**内部的形态（视图模式切换器），也在豁免范围内、
+   * 视图层不该学它。
+   *
+   * 走棘轮（非硬闸）：本批评据上线时视图层实测约 6 处存量（LogFilterBar /
+   * FilmStudio ×2 / LlmLocalSection / UsageTestDialog / RgthreeBodies），
+   * 冻结起点、只许降。下一批按域分片把每个循环 `<Button aria-pressed>`
+   * 迁到 `<ToggleGroup>` + `<ToggleGroupItem>`，与 P71 / P76 / P78 引入
+   * 节奏一致（先冻结、后治理）。
+   *
+   * P77 号回填：**这条**在 P76（原生 `<select>`）与 P78（裸 `<label>`）
+   * 之间的跳空位、由这一批填上（P73 / P74 / P75 三条 Separator / Alert /
+   * EmptyState 判据的锚点还需打磨、留下批）。 */
+  P77: {
+    label:
+      "视图层手写 aria-pressed（2–7 项的选项组应走 ~/components/ui/toggle-group 的 ToggleGroup + ToggleGroupItem；shadcn forms.md）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      return (t2.match(/aria-pressed\s*=/g) || []).length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
