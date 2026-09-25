@@ -23,6 +23,7 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -238,32 +239,34 @@ function OriginSelect({
           ))}
         </div>
         <div className="p-1">
-          {ORIGIN_LABELS.map((origin) => {
-            const counts = countsByOrigin[origin];
-            return (
-              <SelectItem
-                key={origin}
-                value={origin}
-                className="gap-0 py-1 pr-7 pl-1.5 text-[12px]"
-              >
-                <span className="flex items-center gap-3">
-                  <span className="text-ink-bright w-16 shrink-0">
-                    {ORIGIN_TEXT[origin]}
+          <SelectGroup>
+            {ORIGIN_LABELS.map((origin) => {
+              const counts = countsByOrigin[origin];
+              return (
+                <SelectItem
+                  key={origin}
+                  value={origin}
+                  className="gap-0 py-1 pr-7 pl-1.5 text-[12px]"
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="text-ink-bright w-16 shrink-0">
+                      {ORIGIN_TEXT[origin]}
+                    </span>
+                    {ORIGIN_COLUMNS.map((column) => (
+                      <CountColumn
+                        key={column.key}
+                        label={column.title}
+                        value={counts[column.key]}
+                        tone={column.tone}
+                      />
+                    ))}
                   </span>
-                  {ORIGIN_COLUMNS.map((column) => (
-                    <CountColumn
-                      key={column.key}
-                      label={column.title}
-                      value={counts[column.key]}
-                      tone={column.tone}
-                    />
-                  ))}
-                </span>
-                {/* 纯文本版本，供屏幕阅读器与测试断言（自绘列是视觉产物） */}
-                <span className="sr-only">{optionCountsText(counts)}</span>
-              </SelectItem>
-            );
-          })}
+                  {/* 纯文本版本，供屏幕阅读器与测试断言（自绘列是视觉产物） */}
+                  <span className="sr-only">{optionCountsText(counts)}</span>
+                </SelectItem>
+              );
+            })}
+          </SelectGroup>
         </div>
       </SelectContent>
     </Select>
