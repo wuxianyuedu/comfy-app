@@ -19,16 +19,16 @@
  *
  * ## 为什么没合到 shadcn `Combobox`（P67 §12.18 中间地带 · 已评估保留）
  *
- * 1bfc79c 装了 `~/components/ui/combobox`（基于 cmdk，带搜索），从形状看
- * 与本件「搜索 + 多选」有重叠。实测本件有 **3 条 Combobox 撑不住的复合
- * 语义**，硬合会丢业务判据：
+ * 1bfc79c 装了 `~/components/ui/combobox`（**基于 Base UI Combobox**，带搜索），
+ * 从形状看与本件「搜索 + 多选」有重叠。实测本件有 **3 条 Combobox 撑不住的
+ * 复合语义**，硬合会丢业务判据：
  *
  *   1. **draft / apply 事务**：面板内 `useState<Set<string>>(new Set(modes))`
  *      起一份草稿、只有点「保存」才 `onChange` 回父层；点「取消」直接关
  *      浮层不改动。Combobox 是「即时选中即 `onChange`」的单向流，草稿态
  *      需要在外层再手写一份、并把 Combobox 的多选模式关掉——那时其实
  *      本件已经**不是 Combobox 的复用、而是 Combobox 的二次包装**，收益
- *      抵不上把 cmdk 拉进浮层里做多套状态同步的复杂度。
+ *      抵不上把 Base UI Combobox 拉进浮层里做多套状态同步的复杂度。
  *   2. **`defaultMode` 指针**：`modes` 里额外标一位「哪个是默认」并显示
  *      在 chip 主色上；`draftDefault` 与 draft 一起编辑、保存时若被取消
  *      勾选会回退到 `arr[0]` 保证 `defaultMode ⊆ modes` 约束成立。Combobox
@@ -42,6 +42,9 @@
  * 「确认是这一处独有的业务才就地写」）。文件里的**共性**（浮层定位 /
  * 外点关闭 / Esc）已经吃 base-ui Popover；**独立**的 draft / tab /
  * default 三态是本件的核心、没有对应基元可复用。
+ *
+ * 注：上面这段选型论证与磁盘上 `ui/combobox.tsx` 的实际栈（Base UI）对齐；
+ * 若未来 combobox 换栈（例如退回 cmdk）或本件被拆解，这段需要重新评估。
  */
 
 import { useCallback, useMemo, useState } from "react";
