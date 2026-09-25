@@ -56,26 +56,28 @@ export function CanvasContextMenu({
         className="border-border-strong bg-panel/95 w-52 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 backdrop-blur dark:shadow-black/60"
       >
         {/* ── 测试节点（纯视觉，对齐 Ardot 稿）── */}
-        <DropdownMenuItem
-          data-canvas-node-kind="workflow-ardot"
-          onClick={onPickTest}
-          className="from-primary/15 to-accent/10 text-ink-bright focus:from-primary/25 focus:to-accent/15 flex items-center gap-2 rounded-lg border border-violet-400/30 bg-linear-to-r px-2 py-1.5 text-left text-[12px]"
-        >
-          <span
-            className="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
-            style={{
-              background: "linear-gradient(135deg, #7C5CFC 0%, #FF5CA8 100%)",
-            }}
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            data-canvas-node-kind="workflow-ardot"
+            onClick={onPickTest}
+            className="from-primary/15 to-accent/10 text-ink-bright focus:from-primary/25 focus:to-accent/15 flex items-center gap-2 rounded-lg border border-violet-400/30 bg-linear-to-r px-2 py-1.5 text-left text-[12px]"
           >
-            W
-          </span>
-          <span className="flex flex-col">
-            <span className="font-medium">测试自定义工作流</span>
-            <span className="text-ink-muted text-[10px]">
-              纯视觉 · 对齐 Ardot 稿（无运行时）
+            <span
+              className="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
+              style={{
+                background: "linear-gradient(135deg, #7C5CFC 0%, #FF5CA8 100%)",
+              }}
+            >
+              W
             </span>
-          </span>
-        </DropdownMenuItem>
+            <span className="flex flex-col">
+              <span className="font-medium">测试自定义工作流</span>
+              <span className="text-ink-muted text-[10px]">
+                纯视觉 · 对齐 Ardot 稿（无运行时）
+              </span>
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
 
         <DropdownMenuSeparator className="bg-border-strong" />
         <DropdownMenuGroup>
