@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { currentServerUser } from "~/server/auth/request-user";
+import { requireRequestUser } from "~/server/auth/request-user";
 import { taskRepository } from "~/lib/core/repository";
 import { getLogs, subscribe } from "~/lib/comfyui/enqueue";
 import type { TaskEvent } from "~/lib/comfyui/runner-state";
@@ -17,9 +17,9 @@ export async function GET(
   const id = params.id;
 
   // 原生 Route Handler —— 取代了旧的 `defineRoute` 包装器。
-  // 鉴权契约保持一致（未登录时返回结构化的 401 信封）。
-  const user = await currentServerUser();
-  if (!user?.id) {
+  // 鉴权契约保持一致（`loginRequired` 打开且未登录时返回结构化的 401 信封）。
+  const user = await requireRequestUser();
+  if (!user) {
     return unauthorizedResponse();
   }
 

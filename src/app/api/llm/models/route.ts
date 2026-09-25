@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { isRecord } from "~/lib/is-record";
-import { currentServerUser } from "~/server/auth/request-user";
+import { requireRequestUser } from "~/server/auth/request-user";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 import { describeFetchFailure, getLLMConfig } from "~/lib/llm/server";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
@@ -24,7 +25,7 @@ const PROBE_TIMEOUT_MS = 6000;
  * 展示降级文案而不是让整页报错。
  */
 export async function GET(req: NextRequest) {
-  await currentServerUser();
+  if (!(await requireRequestUser())) return unauthorizedResponse();
 
   const provider =
     req.nextUrl.searchParams.get("provider") === "remote" ? "remote" : "local";
