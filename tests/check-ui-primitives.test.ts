@@ -4602,4 +4602,57 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("studio/P72Multi.tsx");
     expect(output).toMatch(/P72[^\n]*2\s*处|P72Multi\.tsx（2\s*处）/);
   });
+
+  /* ── P76「视图层裸写 <select>」（棘轮）差分回归 ────────────────
+   * 见 scripts/check-ui-primitives.cjs 里 P76 注释：P68 拦住了裸
+   * `<input>` / `<textarea>`、P69 拦住了裸 checkbox/radio；`<select>` 是同族
+   * 漏项。合规出口有两个（`ui/native-select` 的 `<NativeSelect>` 或
+   * `ui/select-menu` 的 `<SelectMenu>`），本判据只按形态数、不管选哪个。 */
+  it("P76 视图层裸 <select> 计入棘轮（相对基线增量 → 阻断）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P76RawSelect.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <select defaultValue='a'>",
+        "      <option value='a'>A</option>",
+        "    </select>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P76");
+    expect(output).toContain("studio/P76RawSelect.tsx");
+  });
+
+  it("P76 `ui/native-select.tsx` 是这条账要收口的唯一出口，走 EXEMPT_DIRS 天然豁免", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/native-select.tsx",
+      [
+        "export function NativeSelect() {",
+        "  return <select data-slot='native-select' />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P76 不误伤同前缀标识符与类名（selectedValue / select-none / onSelect 等）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P76FalsePositive.tsx",
+      [
+        "export function V({ selectedValue, onSelect }: { selectedValue: string; onSelect: (s: string) => void }) {",
+        "  return <div className='select-none' data-value={selectedValue} onClick={() => onSelect('x')}>x</div>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
 });
