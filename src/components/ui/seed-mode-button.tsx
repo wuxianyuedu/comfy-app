@@ -177,7 +177,7 @@ export function SeedModeButton({
            `max-height` 与翻转，这里只给形态）。 */
         className="nodrag nopan border-border-strong bg-card w-[280px] gap-0 overflow-hidden rounded-xl border p-3 shadow-2xl shadow-black/12 dark:shadow-black/60"
       >
-        <div className="space-y-0.5">
+        <div className="flex flex-col gap-0.5">
           <h4 className="text-ink-bright text-[12px] font-semibold">
             控件后行为{" "}
             <span className="text-ink-muted">· CONTROL AFTER GENERATE</span>
@@ -186,7 +186,7 @@ export function SeedModeButton({
             seed / 类似数值 widget 点击数字弹出 4 选 1 切换面板
           </p>
         </div>
-        <div className="mt-2.5 space-y-1">
+        <div className="mt-2.5 flex flex-col gap-1">
           {SEED_MODES.map((item) => {
             const selected = item.value === mode;
             return (

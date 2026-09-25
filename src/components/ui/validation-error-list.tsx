@@ -28,6 +28,7 @@
 // `ui/empty-state.tsx` 的 `page` / `hint` 两档保留自绘。
 
 import type { ValidationError } from "~/lib/comfyui/validation";
+import { cn } from "~/lib/utils";
 
 export function ValidationErrorList({
   errors,
@@ -38,7 +39,7 @@ export function ValidationErrorList({
 }) {
   if (!errors || errors.length === 0) return null;
   return (
-    <ul className={`space-y-1 ${className}`}>
+    <ul className={cn("flex flex-col gap-1", className)}>
       {errors.map((error, index) => (
         <li
           key={`${error.nodeId}-${error.field}-${index}`}
