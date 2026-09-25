@@ -6,6 +6,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DynamicWorkflowForm } from "./index";
 import type { WorkflowIOMap } from "../../workflow-io";
 
+/* 模拟 ComfyUI 未启动：上传直接抛错。用于验证「选完图先出本地预览、不依赖上传成功」。 */
+vi.mock("~/lib/project-canvas/canvas-api", () => ({
+  uploadImageFile: vi.fn(async () => {
+    throw new Error("ComfyUI 未启动");
+  }),
+}));
+
 // vitest globals: false 下 RTL 不会自动 cleanup,需手动注册
 afterEach(cleanup);
 
@@ -88,5 +95,27 @@ describe("DynamicWorkflowForm — 图片上传位（ISSUE #311）", () => {
       name: /上传 choose 1st frame to upload/,
     });
     expect(() => fireEvent.click(button)).not.toThrow();
+  });
+
+  it("选完图立刻本地预览（ComfyUI 未启动、上传失败也看得见所选图）", async () => {
+    renderForm();
+    // 先点「上传」按钮：pickFile 记住 uploadTarget（onFile 只在该格被点过时才处理）。
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /上传 choose 1st frame to upload/,
+      }),
+    );
+    const input =
+      document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).toBeTruthy();
+    const file = new File([new Uint8Array([1, 2, 3])], "shot.png", {
+      type: "image/png",
+    });
+    fireEvent.change(input!, { target: { files: [file] } });
+    // 上传会失败（值不回填），但本地预览（data URL）应立刻出现。
+    const img = await screen.findByRole("img", {
+      name: "choose 1st frame to upload",
+    });
+    expect(img.getAttribute("src") ?? "").toMatch(/^data:image\/png/);
   });
 });

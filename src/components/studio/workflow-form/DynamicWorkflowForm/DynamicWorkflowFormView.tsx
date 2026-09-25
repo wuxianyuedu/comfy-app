@@ -87,6 +87,7 @@ export function DynamicWorkflowFormView({
     uploadError,
     dismissUploadError,
     pickFile,
+    localPreviewUrl,
     set,
     dragHandlers,
     draggingKey,
@@ -130,6 +131,7 @@ export function DynamicWorkflowFormView({
         }
         onValueChange={(next: unknown) => set(entry.ioKey, next)}
         onPickFile={() => pickFile(entry.ioKey)}
+        previewSrc={localPreviewUrl(entry.ioKey)}
         onLabelChange={
           onLabelChange
             ? (label: string) => onLabelChange(entry.ioKey, label)

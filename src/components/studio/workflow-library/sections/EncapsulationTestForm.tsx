@@ -28,6 +28,7 @@ import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
+import { readFileAsDataUrl } from "~/lib/browser-io";
 import { NumberField } from "~/components/ui/number-field";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
@@ -89,6 +90,9 @@ export function EncapsulationTestForm({
   const [numbers, setNumbers] = useState<Record<string, number>>({});
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  /* 图片口的本地预览（entryId → data URL）：选完立刻显示，不依赖 ComfyUI 上传
+   * 成功或是否运行（上传失败 / 未启动时值不落回，但用户选的那张图仍应看得见）。 */
+  const [previews, setPreviews] = useState<Record<string, string>>({});
   const disabled = running || !canRun;
 
   const patchText = (id: string, next: string) =>
@@ -101,6 +105,14 @@ export function EncapsulationTestForm({
       setError("");
       setUploadingId(entryId);
       void (async () => {
+        /* 先就地做一张本地预览：选完立刻显示，不依赖 ComfyUI 是否运行；
+         * 读文件失败不阻断上传（只是没有本地预览）。 */
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
+          setPreviews((prev) => ({ ...prev, [entryId]: dataUrl }));
+        } catch {
+          /* 忽略：下面仍会尝试上传。 */
+        }
         /* 失败通道是这块行内`setError`；成功无提示（输入框自己会显示文件名）。
          * 文案统一走`~/lib/async-action` 的`errorMessage` —— 收口前这里是
          * 自己拼的`e instanceof Error ? e.message : String(e)`（全库另有三处
@@ -210,6 +222,7 @@ export function EncapsulationTestForm({
               key={entry.id}
               entry={entry}
               value={text}
+              previewSrc={previews[entry.id]}
               uploading={uploadingId === entry.id}
               disabled={disabled}
               onPick={pickImage}
@@ -276,12 +289,14 @@ function FieldLabel({ label, unwired }: { label: string; unwired?: boolean }) {
 function ImageField({
   entry,
   value,
+  previewSrc,
   uploading,
   disabled,
   onPick,
 }: {
   entry: EncapsulationEntryStatus;
   value: string;
+  previewSrc?: string;
   uploading: boolean;
   disabled: boolean;
   onPick: (entryId: string, file: File) => void;
@@ -292,9 +307,9 @@ function ImageField({
     [onPick, entryId],
   );
   const picker = useFilePicker({ accept: "image/*", onPick: handlePick });
-  /* 预览地址走`~/lib/media/media-url` 的出口（空引用给 null）。此前这一行
-   * 只有文件名文本，选完图看不到图（实测反馈）。 */
-  const previewUrl = mediaPreviewUrl(value);
+  /* 预览优先用本地 data URL（用户刚选的图，不依赖 ComfyUI）；没有才回退到
+   * 按值算出的 ComfyUI 代理地址（`~/lib/media/media-url` 出口，空引用给 null）。 */
+  const previewUrl = previewSrc ?? mediaPreviewUrl(value);
 
   return (
     <div className="flex-col gap-1">
