@@ -8,6 +8,7 @@
 //
 // 放 src/lib/<domain>-client 层，视图 / hook 不经手 tRPC（对齐 §17）。
 import { vanillaApi } from "~/trpc/vanilla";
+import { errorMessage } from "~/lib/error-message";
 
 export interface RenderFilmInput {
   /** 目标统一项目 id（proj_*）；无活跃项目传 null。 */
@@ -53,7 +54,7 @@ export async function renderProjectFilm(
       detail: id,
     };
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e, "未知错误");
     return { ok: false, summary: "启动成片失败", detail: msg };
   }
 }
