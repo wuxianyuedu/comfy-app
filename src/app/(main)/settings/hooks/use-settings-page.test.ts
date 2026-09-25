@@ -43,6 +43,16 @@ vi.mock("~/lib/llm/ollama-client", () => ({
   startOllama: vi.fn(),
 }));
 
+/* 桌面壳探测：默认 true（壳内），让「打开查看 → 内嵌页签」那组用例继续走原路径。
+ * 浏览器形态用例（新浏览器页签）在 beforeEach 里把它翻成 false。 */
+const { isDesktopShellMock } = vi.hoisted(() => {
+  const impl: () => boolean = () => true;
+  return { isDesktopShellMock: vi.fn(impl) };
+});
+vi.mock("~/lib/shell/desktop-shell-client", () => ({
+  isDesktopShell: isDesktopShellMock,
+}));
+
 // 客户端逻辑层现经 `postAppRuntimeLog`（走 `/api/logs/app-runtime`）把失败补记到
 // app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
 // 测试保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），只 spy `postAppRuntimeLog`
@@ -361,6 +371,7 @@ beforeEach(() => {
   /* 兜底缓存（sessionStorage 快照）跨用例共享同一个 jsdom —— 不清会把上一个
    * 用例的成功配置带进来，让「无兜底 → 整页降级」的用例失去意义。 */
   sessionStorage.clear();
+  isDesktopShellMock.mockReturnValue(true);
   probeMock.mockResolvedValue({ up: true, models: [] });
   startMock.mockResolvedValue(undefined);
   server.use(
@@ -1330,6 +1341,66 @@ describe("打开查看 ComfyUI — 页签形态（ISSUE #310）", () => {
     expect(
       useShellTabs.getState().tabs.find((t) => t.id === "comfyui"),
     ).toBeUndefined();
+    expect(result.current.flash?.text).toContain("先点「启动 ComfyUI」");
+  });
+});
+
+/* ── 浏览器 / dev 形态：「打开查看」走新浏览器页签，不内嵌 ──────────────
+ * 浏览器自带页签栏，应用内不再画假页签栏（见 ShellTabs / shouldUseBrowserTab）。
+ * 断言 window.open 被同步调用、且**不**新增应用内 comfyui 页签。 */
+describe("打开查看 ComfyUI — 浏览器形态走新浏览器页签", () => {
+  beforeEach(() => {
+    isDesktopShellMock.mockReturnValue(false); // 非桌面壳 = 浏览器
+    useShellTabs.setState({
+      tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
+      activeTabId: MAIN_TAB_ID,
+    });
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("运行中 → window.open 新浏览器页签，且不开应用内 comfyui 页签", async () => {
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    behavior.comfyBase = "http://127.0.0.1:8188";
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    // 等状态查询落定，让缓存 base 就绪（浏览器分支优先用缓存、同步开窗）。
+    await waitFor(() =>
+      expect(result.current.comfyStatus?.base).toBe("http://127.0.0.1:8188"),
+    );
+
+    await act(async () => {
+      await result.current.openComfy();
+    });
+
+    expect(openSpy).toHaveBeenCalledWith(
+      "http://127.0.0.1:8188",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    expect(
+      useShellTabs.getState().tabs.find((t) => t.id === "comfyui"),
+    ).toBeUndefined();
+    expect(result.current.flash?.kind).toBe("ok");
+    expect(result.current.flash?.text).toContain("新浏览器页签");
+  });
+
+  it("未运行 → 不开新页签，给可行动提示", async () => {
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    behavior.comfyBase = null;
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.openComfy();
+    });
+
+    expect(openSpy).not.toHaveBeenCalled();
     expect(result.current.flash?.text).toContain("先点「启动 ComfyUI」");
   });
 });
