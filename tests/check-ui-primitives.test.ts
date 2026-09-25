@@ -4460,4 +4460,146 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     // 块外那一处计入、块内那一处被 allow 标记剥掉 → 恰好 1，而不是 2。
     expect(baseline.files["src/components/studio/P71Allow.tsx"]?.P71).toBe(1);
   });
+
+  /* ── P72「模态无可访问名」（硬闸）差分回归 ─────────────────────────
+   * 见 scripts/check-ui-primitives.cjs 里 P72 注释与规范 §16.2.3 /
+   * shadcn composition.md「Dialog/Sheet always need a Title」。
+   * 判据按标签块扫 `<DialogContent>` / `<SheetContent>`，块内既无
+   * 对应 Title 组件又无 aria-label/aria-labelledby 即计 1。 */
+  it("P72 DialogContent 无 Title/aria-label → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72BareDialog.tsx",
+      [
+        "import { Dialog, DialogContent } from '~/components/ui/dialog';",
+        "export function V() {",
+        "  return (",
+        "    <Dialog open>",
+        "      <DialogContent>",
+        "        <h2>模型适配器</h2>",
+        "      </DialogContent>",
+        "    </Dialog>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P72");
+    expect(output).toContain("studio/P72BareDialog.tsx");
+  });
+
+  it("P72 SheetContent 无 SheetTitle/aria-label → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72BareSheet.tsx",
+      [
+        "import { Sheet, SheetContent } from '~/components/ui/sheet';",
+        "export function V() {",
+        "  return (",
+        "    <Sheet open>",
+        "      <SheetContent side='right'>",
+        "        <div>面板</div>",
+        "      </SheetContent>",
+        "    </Sheet>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P72");
+    expect(output).toContain("studio/P72BareSheet.tsx");
+  });
+
+  it("P72 有 DialogTitle 放行（可以是 sr-only）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72WithDialogTitle.tsx",
+      [
+        "import { Dialog, DialogContent, DialogTitle } from '~/components/ui/dialog';",
+        "export function V() {",
+        "  return (",
+        "    <Dialog open>",
+        "      <DialogContent>",
+        "        <DialogTitle className='sr-only'>模型适配器</DialogTitle>",
+        "        <h2 aria-hidden>模型适配器</h2>",
+        "      </DialogContent>",
+        "    </Dialog>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P72 有 aria-label 放行（本仓库自绘 header 的主用写法）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72WithAriaLabel.tsx",
+      [
+        "import { Dialog, DialogContent } from '~/components/ui/dialog';",
+        "export function V() {",
+        "  return (",
+        "    <Dialog open>",
+        "      <DialogContent aria-label='模型选择'>",
+        "        <h3 className='u-title'>模型选择</h3>",
+        "      </DialogContent>",
+        "    </Dialog>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P72 有 aria-labelledby 放行（confirm-dialog 类内联 titleId 的写法）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72WithLabelledBy.tsx",
+      [
+        "import { Dialog, DialogContent } from '~/components/ui/dialog';",
+        "export function V({ titleId }: { titleId: string }) {",
+        "  return (",
+        "    <Dialog open>",
+        "      <DialogContent aria-labelledby={titleId}>",
+        "        <h2 id={titleId}>确认</h2>",
+        "      </DialogContent>",
+        "    </Dialog>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P72 一个文件里多个 DialogContent 各计一次（多模态叠加要逐个补 aria）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72Multi.tsx",
+      [
+        "import { Dialog, DialogContent } from '~/components/ui/dialog';",
+        "export function V() {",
+        "  return (",
+        "    <>",
+        "      <Dialog open><DialogContent><div>a</div></DialogContent></Dialog>",
+        "      <Dialog open><DialogContent aria-label='ok'><div>b</div></DialogContent></Dialog>",
+        "      <Dialog open><DialogContent><div>c</div></DialogContent></Dialog>",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    /* P72 是硬闸：`--update` 会被「未清零」直接拒绝（这是判据应有的表现，
+     * 别拿它当"冻结现状"的通道）。这里只用严格 run() 断言：
+     * ① 阻断；② 输出里点名这一文件；③ 计到 2 处（同文件两段各计一次）。 */
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P72");
+    expect(output).toContain("studio/P72Multi.tsx");
+    expect(output).toMatch(/P72[^\n]*2\s*处|P72Multi\.tsx（2\s*处）/);
+  });
 });

@@ -33,6 +33,7 @@ export function CustomNodesSettings() {
           遮罩 + `onClick` 关闭，Esc 没接、焦点不锁也不归还。 */}
       <Dialog open={ctrl.open} onOpenChange={(next) => ctrl.setOpen(next)}>
         <DialogContent
+          aria-label="导入自定义节点"
           showCloseButton={false}
           className="bg-transparent p-0 ring-0"
           popupClassName="max-w-3xl"
