@@ -70,7 +70,7 @@ export function SubgraphHeader({
         }}
         onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
-        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 h-5 w-5 shrink-0 rounded"
+        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
         style={{ pointerEvents: "auto" }}
       >
         <svg
@@ -144,7 +144,7 @@ export function SubgraphHeader({
            *  行内按钮（而不是 28-32px 的独立章观感）。
            *  比收起箭头的 h-5 w-5 大一档，
            *  以标记下钻是子图的*主要*动作。 */
-          className="text-primary-strong hover:bg-primary/30 ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] transition-colors hover:text-white"
+          className="text-primary-strong hover:bg-primary/30 ml-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded text-[10px] transition-colors hover:text-white"
         >
           <ExternalLink size={12} strokeWidth={2.5} />
         </Button>
