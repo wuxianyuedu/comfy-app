@@ -8,6 +8,7 @@
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { FieldLabel } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
 import { textHandler } from "~/lib/form-props";
 import { formatClock } from "~/lib/time-format";
@@ -155,13 +156,13 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
               ))}
             </select>
           </label>
-          <label className="border-border bg-subtle text-ink-field flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[12px]">
+          <FieldLabel className="border-border bg-subtle text-ink-field flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[12px]">
             <Checkbox
               checked={c.autoReview}
               onCheckedChange={(checked) => c.setAutoReview(checked === true)}
             />
             <span>生图后自动评审</span>
-          </label>
+          </FieldLabel>
           <Button
             type="button"
             size="sm"
