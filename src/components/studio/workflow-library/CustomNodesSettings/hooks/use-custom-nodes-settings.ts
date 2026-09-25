@@ -28,35 +28,11 @@ import type {
   DiscoveredSubpkg,
   ParseProgress,
   ParseReport,
+  ParseStreamEvent,
   SettingsResp,
+  SettingsStreamEvent,
   SummaryPkg,
 } from "../types";
-
-/** 设置/解析进度流的一行 ndjson —— 仅本对话框消费的字段。 */
-interface SettingsStreamEvent {
-  type?: string;
-  parents?: string[];
-  parent?: string;
-  phase?: string;
-  msg?: string;
-  discovered?: number;
-  total?: number;
-  done?: number;
-  packages?: DiscoveredSubpkg[];
-  summary?: SettingsResp["summary"];
-  lastReport?: ParseReport | null;
-  byPath?: Record<string, SummaryPkg>;
-  message?: string;
-}
-
-/** 解析日志流的一行 ndjson。 */
-interface ParseStreamEvent {
-  type?: string;
-  level?: string;
-  msg?: string;
-  report?: ParseReport | null;
-  ok?: boolean;
-}
 
 type RowState = ReturnType<typeof deriveRowState>;
 
@@ -311,24 +287,21 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
             setProgress((progress) => {
               // 用最新事件告知的值。total/done/discovered 仅当事件确实携带时才更新
               // （解析器每个有意义的 tick 都会发）；只带 msg 的事件不会重置计数器。
-              // 空串 parent 须保留上一值（之前是 ||）。
-              const evParent = typeof ev.parent === "string" ? ev.parent : "";
+              // 空串 parent 须保留上一值。
+              const evParent = ev.parent ?? "";
               const next = {
                 ...progress,
                 parent: evParent.length > 0 ? evParent : progress.parent,
               };
-              if (ev.phase === "queue") next.phase = "queue";
-              if (ev.phase === "scan") next.phase = "scan";
-              if (ev.phase === "hash") next.phase = "hash";
+              if (ev.phase) next.phase = ev.phase;
               if (ev.msg) next.msg = ev.msg;
-              if (typeof ev.discovered === "number")
-                next.discovered = ev.discovered;
-              if (typeof ev.total === "number") next.total = ev.total;
-              if (typeof ev.done === "number") next.done = ev.done;
+              if (ev.discovered !== undefined) next.discovered = ev.discovered;
+              if (ev.total !== undefined) next.total = ev.total;
+              if (ev.done !== undefined) next.done = ev.done;
               return next;
             });
           } else if (ev.type === "discover_done") {
-            if (typeof ev.parent === "string") {
+            if (ev.parent !== undefined) {
               discoveredByParent[ev.parent] = ev.packages ?? [];
             }
             // 这里不动包计数器 —— 解析器在 JSON 行之前已发出自己的最终 tick
@@ -344,7 +317,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
             byPath = ev.byPath ?? {};
           } else if (ev.type === "error") {
             const message =
-              typeof ev.message === "string" && ev.message.length > 0
+              ev.message !== undefined && ev.message.length > 0
                 ? ev.message
                 : "未知错误";
             setSaveErr("扫描失败：" + message);
