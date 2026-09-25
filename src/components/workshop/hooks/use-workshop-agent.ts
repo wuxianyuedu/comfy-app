@@ -9,6 +9,7 @@
 // 视图层（AgentOverlay.tsx）只消费本 hook 返回的 controller。
 import React from "react";
 import { runAsyncAction } from "~/lib/async-action";
+import { errorMessage } from "~/lib/error-message";
 import { nextId } from "~/lib/unique-id";
 import { sendAgentMessage } from "~/lib/agent/client";
 import type { AgentMessageLike, AgentChatResponse } from "~/lib/agent/shared";
@@ -139,7 +140,7 @@ export function useWorkshopAgent(
           }),
         } satisfies AgentMessageLike;
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "工具执行失败";
+        const msg = errorMessage(err, "工具执行失败");
         patchToolRun(runId, { status: "error", detail: msg });
         return {
           role: "tool" as const,

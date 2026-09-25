@@ -16,6 +16,7 @@
 import { NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
+import { errorMessage } from "~/lib/error-message";
 import {
   probeComfyUi,
   ensureComfyUiReady,
@@ -65,7 +66,7 @@ export async function POST() {
       { status: 202 },
     );
   } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
+    const detail = errorMessage(e, "启动失败");
     logger.error(`[comfyui-ensure] 启动失败：${detail}`);
     return NextResponse.json(
       { ok: false, pending: false, detail },
