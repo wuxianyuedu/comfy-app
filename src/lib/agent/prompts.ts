@@ -4,6 +4,7 @@
 // 前端解析后逐条执行 —— 这是 TAPD 需求点名的 MVP 方式。
 
 import { isPlainRecord } from "~/lib/is-record";
+import { extractJson } from "~/lib/llm/parse";
 import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 
 /** 把项目状态快照拼成给模型的上下文（供工具决策参考）。 */
@@ -82,33 +83,15 @@ export const AGENT_FALLBACK_SYSTEM_PROMPT = `你是 ComfyAPP 工坊的「创作�
 用户说"帮我做一个关于夏天海边重逢的短片"
 → {"action": "generate_script", "idea": "夏天海边重逢，一对旧友在多年后相遇，温暖治愈的故事"}`;
 
-/** 把模型返回的 JSON 文本归一成指令对象（宽松解析，兼容围栏 / 前后缀文字）。 */
+/** 把模型返回的 JSON 文本归一成指令对象（扫描走全库唯一的 `extractJson`；
+ *  只接受纯对象，数组 / 标量 / 空 / 解析失败一律 → null，不抛）。 */
 export function parseJsonInstruction(
   text: string,
 ): Record<string, unknown> | null {
-  const trimmed = (text ?? "").trim();
-  if (!trimmed) return null;
-  // 去掉 ```json ... ``` 这类代码围栏。
-  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
-  const body = (fence ? fence[1]! : trimmed).trim();
   try {
-    // 只接受纯对象；数组 / 标量 / null 视为不可用。
-    const obj: unknown = JSON.parse(body);
-    return isPlainRecord(obj) ? obj : null;
+    const parsed = extractJson(text);
+    return isPlainRecord(parsed) ? parsed : null;
   } catch {
-    // 前后夹着散文时，尝试从中找出 JSON 对象的子串。
-    const start = body.search(/\{/);
-    const end = body.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      try {
-        const obj: unknown = JSON.parse(body.slice(start, end + 1));
-        return typeof obj === "object" && obj !== null && !Array.isArray(obj)
-          ? (obj as Record<string, unknown>)
-          : null;
-      } catch {
-        return null;
-      }
-    }
     return null;
   }
 }
