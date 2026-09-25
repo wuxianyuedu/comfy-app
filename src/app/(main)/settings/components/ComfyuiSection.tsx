@@ -145,12 +145,12 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
             c.patchSettings({ autoSyncLocalWorkflow: next === true })
           }
         />
-        <label
+        <FieldLabel
           htmlFor="auto-sync-local-workflow"
           className="text-ink/80 text-sm"
         >
           查看本地文件工作流时自动同步最新内容
-        </label>
+        </FieldLabel>
       </div>
       <p className="text-muted-foreground -mt-2 mb-4 text-xs">
         关（默认）：进详情只提示「磁盘文件有更新」，需回工作流库点「同步」按钮才更新，

@@ -19,6 +19,7 @@ import { useDebugStore } from "./debug/debug-store";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
+import { FieldLabel } from "~/components/ui/field";
 
 /* ── 开关（内联，镜像 CanvasSettingsPanel 的 ToggleRow 观感） ── */
 function ToggleRow({
@@ -35,7 +36,7 @@ function ToggleRow({
   tooltip?: string;
 }) {
   return (
-    <label
+    <FieldLabel
       title={tooltip}
       className="border-border-strong bg-subtle hover:border-border-strong flex cursor-pointer items-center justify-between gap-3 rounded-md border px-3 py-2.5 transition-colors"
     >
@@ -51,7 +52,7 @@ function ToggleRow({
           「圆角底 + 绝对定位圆点」的开关，与 WorkflowCanvasSettings 的另一份
           同形实现各自维护 —— 开关是**状态控件**，样式改动应当只发生在一处。 */}
       <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
-    </label>
+    </FieldLabel>
   );
 }
 
