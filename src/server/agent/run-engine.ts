@@ -41,11 +41,11 @@ import type { ProductionStage } from "~/lib/production/progress";
 import { errorMessage } from "~/lib/error-message";
 import type { Character, ProjectType, Shot } from "~/lib/workshop/types";
 import type { Production } from "~/server/db/schema";
+import { sleep } from "~/lib/with-timeout";
 
 const MAX_TICKS = 240;
 const TICK_MS = 4000;
 const nowIso = () => new Date().toISOString();
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface ExecResult {
   ok: boolean;

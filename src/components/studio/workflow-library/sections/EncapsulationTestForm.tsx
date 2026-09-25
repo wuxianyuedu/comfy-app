@@ -28,7 +28,7 @@ import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
-import { readFileAsDataUrl } from "~/lib/browser-io";
+import { readFileAsDataUrl } from "~/lib/file-io";
 import { NumberField } from "~/components/ui/number-field";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
