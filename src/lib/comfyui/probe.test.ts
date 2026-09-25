@@ -32,4 +32,12 @@ describe("probeBaseOnce — 存活探针（连通即存活，#685）", () => {
     );
     expect(await probeBaseOnce("http://127.0.0.1:8188")).toBeNull();
   });
+
+  it("超时可按场景注入（端口扫描给短预算），默认 1500ms 不变", async () => {
+    vi.stubGlobal("fetch", fetchStub(200));
+    const spy = vi.spyOn(AbortSignal, "timeout");
+    await probeBaseOnce("http://127.0.0.1:8188", 300);
+    await probeBaseOnce("http://127.0.0.1:8188");
+    expect(spy.mock.calls.map(([ms]) => ms)).toEqual([300, 1500]);
+  });
 });
