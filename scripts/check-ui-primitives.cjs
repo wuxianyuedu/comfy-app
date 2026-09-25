@@ -866,8 +866,14 @@ const EXEMPT_FILES = {
   ],
   P20: [
     {
-      re: /^src\/components\/ui\//,
-      reason: "ui/ 基元自身实现（`use-hotkey` 就要挂 keydown）。",
+      /* 只放行 `use-hotkey.ts` 本身——它是这条账要收口的唯一出口、必须自己挂
+       * keydown。此前放行整片 `ui/` 让 `json-viewer.tsx` 钻了口子（一直手拼
+       * `window.addEventListener("keydown", onKey)` 而不 import useHotkey），
+       * 2026-09-25 修 `json-viewer` 时同步把豁免面收窄。若后续在其它基元里
+       * 出现"这个基元自身就该挂 keydown"的正当需求，按文件逐个补进来并写明
+       * 理由。 */
+      re: /^src\/components\/ui\/use-hotkey\.ts$/,
+      reason: "`use-hotkey` 自身就是这条账要收口的唯一出口。",
     },
   ],
   P23: [
