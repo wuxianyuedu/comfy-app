@@ -97,7 +97,7 @@ export function WorkflowLibraryList({
  列表内容一多它就被压，输入框看着像「瘪了」。 */}
       <div className="border-border-subtle shrink-0 border-b p-3">
         <div className="relative">
-          <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+          <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
           <Input
             type="text"
             value={search}
@@ -209,7 +209,7 @@ export function WorkflowLibraryList({
                         title={`载入「${pending.name}」`}
                         className="h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[10px] whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <Download className="h-3 w-3" />
+                        <Download className="size-3" />
                         {loadingPending ? "载入中…" : "载入"}
                       </Button>
                     </div>

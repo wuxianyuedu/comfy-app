@@ -82,7 +82,7 @@ export function ModelTagManager({
               className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
               aria-label="关闭"
             >
-              <Icon name="x" className="h-4 w-4" />
+              <Icon name="x" className="size-4" />
             </Button>
           </div>
 

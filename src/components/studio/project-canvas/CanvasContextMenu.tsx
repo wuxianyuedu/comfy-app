@@ -45,7 +45,7 @@ export function CanvasContextMenu({
       <DropdownMenuTrigger
         aria-hidden
         tabIndex={-1}
-        className="pointer-events-none fixed h-0 w-0"
+        className="pointer-events-none fixed size-0"
         style={{ left: x, top: y }}
       />
       <DropdownMenuContent
@@ -63,7 +63,7 @@ export function CanvasContextMenu({
             className="from-primary/15 to-accent/10 text-ink-bright focus:from-primary/25 focus:to-accent/15 flex items-center gap-2 rounded-lg border border-violet-400/30 bg-linear-to-r px-2 py-1.5 text-left text-[12px]"
           >
             <span
-              className="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
+              className="flex size-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
               style={{
                 background: "linear-gradient(135deg, #7C5CFC 0%, #FF5CA8 100%)",
               }}
