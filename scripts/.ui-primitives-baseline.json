@@ -20,7 +20,7 @@
     "P79": "视图层无 dark: 前缀的浅色原色板（应走语义 token，shadcn styling.md 原则 4；例外块走 p71-allow 与 P71 共享）",
     "P80": "视图层 w-N 与 h-N 同值（应换 size-N，shadcn styling.md「Use size-* when width and height are equal」）"
   },
-  "total": 166,
+  "total": 156,
   "files": {
     "src/components/agent-run/RunControlBar.tsx": {
       "P76": 1,
@@ -107,9 +107,6 @@
     "src/components/studio/project-canvas/StepLogTaskPicker.tsx": {
       "P76": 1
     },
-    "src/components/studio/project-canvas/WorkflowModelFilterChip.tsx": {
-      "P80": 2
-    },
     "src/components/studio/project-canvas/WorkflowModePickChip.tsx": {
       "P80": 1
     },
@@ -142,15 +139,9 @@
     "src/components/studio/workflow-form/DynamicWorkflowForm/SectionHeader.tsx": {
       "P80": 1
     },
-    "src/components/studio/workflow-form/DynamicWorkflowForm/sections/IoEndpointsSection.tsx": {
-      "P80": 2
-    },
     "src/components/studio/workflow-form/DynamicWorkflowForm/sections/WidgetControl.tsx": {
       "P79": 3,
       "P80": 1
-    },
-    "src/components/studio/workflow-form/DynamicWorkflowForm/sections/WidgetInputRow.tsx": {
-      "P80": 2
     },
     "src/components/studio/workflow-form/GroupedControls.tsx": {
       "P80": 1
@@ -182,9 +173,6 @@
     },
     "src/components/studio/workflow-library/WorkflowLibraryCanvas.tsx": {
       "P79": 2
-    },
-    "src/components/studio/workflow-library/WorkflowLibraryDetailView.tsx": {
-      "P80": 2
     },
     "src/components/studio/workflow-library/WorkflowLibraryFilters.tsx": {
       "P80": 1
@@ -245,8 +233,7 @@
       "P80": 1
     },
     "src/components/workshop/WorkshopAside.tsx": {
-      "P78": 1,
-      "P80": 2
+      "P78": 1
     },
     "src/components/workshop/WorkshopHeader.tsx": {
       "P80": 1
