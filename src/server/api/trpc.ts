@@ -15,6 +15,7 @@ import { ZodError } from "zod";
 
 import { auth } from "~/server/better-auth";
 import { db } from "~/server/db";
+import { requireServerUser } from "~/lib/auth-server";
 import { userRepository } from "~/lib/core/repository";
 import { checkRateLimit } from "~/server/api/middleware/rate-limit";
 import { logger } from "~/server/lib/logger";
@@ -178,37 +179,30 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);
 
-// 本地单用户模式下的演示用户缓存
-const DEMO_EMAIL = process.env.DEMO_USER_EMAIL ?? "demo@comfy.app";
-let demoUserCache: TRPCUser | null = null;
-
 /**
  * 需要登录（并带演示用户兜底）的 procedure。
  *
- * 保证 ctx.user 不为 null。在本地单用户模式（没有会话）下，
- * 回落到一个惰性创建的演示用户。鉴权语义与其余 REST 路由处理器用的
- * `getServerUser()` 一致。
+ * 保证 ctx.user 不为 null。无会话时的放行与否由 `~/lib/auth-server` 的
+ * `requireServerUser` 一处判决（`app-settings.json` 的 `loginRequired`
+ * 是唯一开关）：
+ *   - false（默认，本机单用户模式）→ 回落演示用户，与 REST 面一致；
+ *   - true → 无会话抛 UNAUTHORIZED，**不再**无条件兜底。
+ *
+ * 此前这里自带一份「无条件兜底 + 整体缓存 demo 用户」的实现，既让
+ * `loginRequired` 开关在 tRPC 面形同虚设（REST 面拦、tRPC 面放——约 200 个
+ * procedure 匿名可用），也复刻了 `auth-server.ts` 点名修掉的「缓存越过
+ * 数据库」缺陷（库行被重建/删除后仍返回不存在的 id）。收口到同一判决后，
+ * 两个 API 面的鉴权语义由 `requireServerUser` 单点持有。
  */
 export const authedProcedure = t.procedure
   .use(timingMiddleware)
   .use(async ({ ctx, next }) => {
-    let user = ctx.user;
+    const user = ctx.user ?? (await requireServerUser(ctx.session));
     if (!user) {
-      // 演示用户兜底
-      if (!demoUserCache) {
-        let demo = await userRepository.findByEmail(DEMO_EMAIL);
-        demo ??= await userRepository.createUser({
-          email: DEMO_EMAIL,
-          name: "体验用户",
-          password: "demo-not-used",
-        });
-        demoUserCache = {
-          id: demo.id,
-          email: demo.email,
-          name: demo.name ?? null,
-        };
-      }
-      user = demoUserCache;
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "需要登录后才能执行该操作",
+      });
     }
     return next({ ctx: { ...ctx, user } });
   });
