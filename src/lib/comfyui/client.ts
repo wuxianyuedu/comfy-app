@@ -129,18 +129,15 @@ function forceIpv4Host(raw: string): string {
 
 /** 探单个端口 —— ComfyUI 应答即返回 true。
  *
+ * 判据走 `probe.ts` 的 `probeBaseOnce` 唯一口径（**连上即存活**，含 GPU OOM
+ * 的 500 应答，#685）——此前这里自己 `return res.ok`，同一实例会「单点探测
+ * 判活、端口扫描判死」，正是 #685 修完又被绕过的形态。
+ *
  * 超时按环回地址给 300ms：真实监听中的 ComfyUI 应答 /system_stats 是毫秒级，
  * 800ms 只会拉长「未运行」场景的空扫（配置端口 +1..+5 共 6 次探测，
  * ComfyUI 未运行时 resolveComfyBase 每次都要付完全部超时）。 */
-async function probePort(host: string, port: number): Promise<boolean> {
-  try {
-    const res = await fetch(`${comfyUiBaseUrl(port)}/system_stats`, {
-      signal: AbortSignal.timeout(300),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+async function probePort(_host: string, port: number): Promise<boolean> {
+  return (await probeBaseOnce(comfyUiBaseUrl(port), 300)) !== null;
 }
 
 /**
