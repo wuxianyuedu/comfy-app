@@ -11,6 +11,7 @@
 import { SettingsCard } from "~/components/ui/settings-card";
 import { StatusButton } from "./SettingsPrimitives";
 import { Checkbox } from "~/components/ui/checkbox";
+import { FieldLabel } from "~/components/ui/field";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function ExitSection({ c }: { c: ReadySettingsPageController }) {
@@ -33,9 +34,12 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
               })
             }
           />
-          <label htmlFor="exit-kill-comfyui" className="text-ink/80 text-sm">
+          <FieldLabel
+            htmlFor="exit-kill-comfyui"
+            className="text-ink/80 text-sm"
+          >
             关闭应用时连带关闭 ComfyUI
-          </label>
+          </FieldLabel>
         </div>
         <p className="text-muted-foreground mt-1.5 text-xs">
           默认不勾选：ComfyUI 脱离进程树保活，退出应用后继续运行，下次
@@ -55,9 +59,12 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
               })
             }
           />
-          <label htmlFor="exit-kill-ollama" className="text-ink/80 text-sm">
+          <FieldLabel
+            htmlFor="exit-kill-ollama"
+            className="text-ink/80 text-sm"
+          >
             关闭应用时连带关闭 Ollama
-          </label>
+          </FieldLabel>
         </div>
         <p className="text-muted-foreground mt-1.5 text-xs">
           语义同上。取消勾选后 Ollama 保活，重启应用可继续复用已加载的

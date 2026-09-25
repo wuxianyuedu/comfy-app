@@ -19,6 +19,7 @@ import {
 
 import { SettingsCard } from "~/components/ui/settings-card";
 import { StatusButton, Field } from "./SettingsPrimitives";
+import { FieldLabel } from "~/components/ui/field";
 import { RuntimeLogBox } from "./RuntimeLogBox";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
@@ -132,9 +133,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
             c.patchSettings({ comfyuiAutoStart: next === true })
           }
         />
-        <label htmlFor="comfyui-autostart" className="text-ink/80 text-sm">
+        <FieldLabel htmlFor="comfyui-autostart" className="text-ink/80 text-sm">
           提交任务时 ComfyUI 未运行则自动启动
-        </label>
+        </FieldLabel>
       </div>
       <div className="mb-4 flex items-center gap-2">
         <Checkbox
