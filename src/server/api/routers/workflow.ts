@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { errorMessage } from "~/lib/error-message";
+import { withTimeout } from "~/lib/with-timeout";
 import { TRPCError } from "@trpc/server";
 import type { WorkflowTemplate } from "~/server/db/schema";
 import { workflowTemplate } from "~/server/db/schema";
@@ -239,10 +240,18 @@ export const workflowRouter = createTRPCRouter({
       if (localRoots.length > 0) {
         /* 递归扫描：ComfyUI 自己的 workflows/ 与桌面版的 user/default/workflows
          * 都会分子目录（default/、image/…），用户给一个根就是要「这个目录下的都算」，
-         * 只扫一层会把它们全漏掉而界面上只显示「还没有工作流」。 */
-        const { roots, allFiles } = await scanLocalWorkflowRoots(localRoots, {
-          recursive: true,
-        });
+         * 只扫一层会把它们全漏掉而界面上只显示「还没有工作流」。
+         *
+         * 加整体超时：某些特殊文件系统（网络驱动器 / WSL 路径 / 云盘占位符）可能
+         * 让 `fs.promises` 长时间挂起而不抛错，导致整个 `workflow.list` 请求一直
+         * 不返回，前端无限转圈。超时后抛 `TimeoutError`，由 tRPC 转成可展示错误，
+         * 用户至少能看到原因并重试。 */
+        const SCAN_TIMEOUT_MS = 30_000;
+        const { roots, allFiles } = await withTimeout(
+          scanLocalWorkflowRoots(localRoots, { recursive: true }),
+          SCAN_TIMEOUT_MS,
+          { label: "扫描本地工作流目录" },
+        );
         localRootsSummary = roots.map((root) => ({
           rawPath: root.rawPath,
           absPath: root.absPath,

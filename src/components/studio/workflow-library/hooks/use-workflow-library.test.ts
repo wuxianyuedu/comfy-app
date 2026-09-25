@@ -30,7 +30,7 @@ import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
 import { api } from "~/trpc/react";
 
 import type { PendingRow, WorkflowRow } from "../workflow-library-config";
-import { useWorkflowLibrary } from "./use-workflow-library";
+import { LIST_STALL_MS, useWorkflowLibrary } from "./use-workflow-library";
 
 const toast = {
   success: vi.fn(),
@@ -57,6 +57,8 @@ interface Behavior {
   updateError?: string;
   /** 非空时 workflow.delete 抛错 —— 覆盖 §17.5.4 的动作错误通道 */
   deleteError?: string;
+  /** workflow.list 延迟多少毫秒才 resolve，模拟后端扫描卡住。 */
+  listDelayMs?: number;
 }
 
 let behavior: Behavior = { workflows: [], localPending: [], tags: [] };
@@ -65,8 +67,13 @@ let listCalls = 0;
 const t = createTestTRPC();
 const mockRouter = t.router({
   workflow: t.router({
-    list: t.procedure.query(() => {
+    list: t.procedure.query(async () => {
       listCalls += 1;
+      if (behavior.listDelayMs && behavior.listDelayMs > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, behavior.listDelayMs),
+        );
+      }
       if (behavior.listError) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -328,5 +335,38 @@ describe("useWorkflowLibrary", () => {
       );
     });
     await waitFor(() => expect(listCalls).toBeGreaterThan(callsBefore));
+  });
+
+  it("首次拉取卡住超过 LIST_STALL_MS 后 loadStalled 变为 true", async () => {
+    // 用 fake timers 模拟后端延迟，避免测试真实等待 8 秒。
+    // 注意：useFakeTimers 会影响 React Query 内部计时器，因此在本用例内启用并在
+    // 结束后还原。
+    vi.useFakeTimers();
+    behavior = {
+      workflows: [],
+      localPending: [],
+      tags: [],
+      listDelayMs: LIST_STALL_MS + 2_000,
+    };
+
+    const { result } = renderHook(() => useWorkflowLibrary(), {
+      wrapper: makeWrapper(),
+    });
+
+    // 初始状态：正在加载，但还没触发 stalled 判定
+    expect(result.current.loading).toBe(true);
+    expect(result.current.loadStalled).toBe(false);
+
+    // 推进到刚好触发 stalled 超时
+    await act(async () => {
+      vi.advanceTimersByTime(LIST_STALL_MS + 50);
+    });
+
+    // 关键点：超过 LIST_STALL_MS 后，必须给用户可操作的「加载较久」出口，
+    // 而不是一直显示 spinner 假装还在正常加载。
+    expect(result.current.loadStalled).toBe(true);
+    expect(result.current.loading).toBe(true);
+
+    vi.useRealTimers();
   });
 });
