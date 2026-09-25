@@ -54,9 +54,11 @@ export interface RecentProject {
  * 色值本身属规范 03 §3.6.1 的**类型色例外**（项目类别色与
  * `lib/project-canvas/canvas-types.ts` 的 `NODE_META.color` 同构），
  * 已在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES` 登记。 */
+type KindConfig = { label: string; color: string; icon: React.ReactNode };
+
 const KIND_CONFIG: Record<
-  string,
-  { label: string; color: string; icon: React.ReactNode }
+  "canvas" | "generation" | "workflow" | "video",
+  KindConfig
 > = {
   canvas: {
     label: "画布",
@@ -79,6 +81,17 @@ const KIND_CONFIG: Record<
     icon: <Video size={14} />,
   },
 };
+
+/** 按项目 kind 取展示配置。`proj.kind` 是宽字符串（旧行可能为空 / 未知），
+ *  故此处收口「未知 / 缺省 → 生成」这一条判据，返回**非空**配置——调用点不再
+ *  各自 `KIND_CONFIG[... ]!`（`Record<string,T>` 的查表在 noUncheckedIndexedAccess
+ *  下恒为 `T|undefined`，逼出一串 `!`）。 */
+function kindConfigOf(kind: string | null | undefined): KindConfig {
+  const key = kind ?? "generation";
+  return key in KIND_CONFIG
+    ? KIND_CONFIG[key as keyof typeof KIND_CONFIG]
+    : KIND_CONFIG.generation;
+}
 
 /** 把类别色按给定透明度档降为背景（`color-mix` 现取，不硬编码透明色）。 */
 function kindTint(color: string, percent: number): string {
@@ -247,9 +260,7 @@ export function HomePage({
                 {/* 最近项目卡片 —— 画布 / 项目风 */}
                 {recentProjects.length > 0
                   ? recentProjects.slice(0, 3).map((proj) => {
-                      const cfg =
-                        KIND_CONFIG[proj.kind ?? "generation"] ??
-                        KIND_CONFIG.generation;
+                      const cfg = kindConfigOf(proj.kind);
                       return (
                         <Button
                           key={proj.id}
@@ -265,11 +276,11 @@ export function HomePage({
                           <div
                             className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors"
                             style={{
-                              backgroundColor: kindTint(cfg!.color, 15),
-                              color: cfg!.color,
+                              backgroundColor: kindTint(cfg.color, 15),
+                              color: cfg.color,
                             }}
                           >
-                            {cfg!.icon}
+                            {cfg.icon}
                           </div>
 
                           {/* Info */}
@@ -281,15 +292,15 @@ export function HomePage({
                               <span
                                 className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 backdrop-blur-sm ring-inset"
                                 style={{
-                                  color: cfg!.color,
-                                  backgroundColor: kindTint(cfg!.color, 15),
+                                  color: cfg.color,
+                                  backgroundColor: kindTint(cfg.color, 15),
                                   ["--tw-ring-color" as string]: kindTint(
-                                    cfg!.color,
+                                    cfg.color,
                                     30,
                                   ),
                                 }}
                               >
-                                {cfg!.label}
+                                {cfg.label}
                               </span>
                             </div>
                             <div className="text-ink-fainter mt-1 flex items-center gap-2 text-[11.5px]">
@@ -323,7 +334,7 @@ export function HomePage({
                         "generation",
                         "workflow",
                       ] as const;
-                      const cfg = KIND_CONFIG[kinds[index - 1]!]!;
+                      const cfg = kindConfigOf(kinds[index - 1]);
                       return (
                         <div
                           key={kinds[index - 1]}
