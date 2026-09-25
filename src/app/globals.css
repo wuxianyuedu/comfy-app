@@ -1064,3 +1064,16 @@ textarea::-webkit-scrollbar {
   stroke-width: 4 !important;
   filter: drop-shadow(0 0 5px rgba(196, 181, 253, 0.95));
 }
+
+/* ── 桌面壳：让 fixed 侧栏从自定义标题行之下开始 ──────────────────────
+ * shadcn `ui/sidebar` 的容器是 `fixed inset-y-0 h-svh`（钉死视口顶）。桌面壳里
+ * ShellTabs 顶部多了一条自定义标题行 TitleBarTabs（高 `--spacing-title-bar`），
+ * 侧栏头部「Comfy-APP」会被压在页签后面（用户实测：壳里左上角被页签遮住一块）。
+ * 壳态（ShellTabs 根打 `data-shell`）下把侧栏容器的 top 让出标题行高度、高度相应
+ * 减去。浏览器 / dev 无标题行（#982 起 ShellTabs 不再渲染应用内页签栏），不打
+ * data-shell，侧栏仍从视口顶起。
+ * 顶层规则（非 @layer）+ 双属性选择器，压过 Tailwind 的 inset-y-0 / h-svh 工具类。 */
+[data-shell] [data-slot="sidebar-container"] {
+  top: var(--spacing-title-bar);
+  height: calc(100svh - var(--spacing-title-bar));
+}
