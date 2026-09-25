@@ -18,7 +18,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Spinner } from "~/components/ui/spinner";
 
-import { Card } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
 
 export function UpdateCheckSection() {
   const updateCheckEnabled = useUpdateCheckStore((s) => s.enabled);
@@ -38,7 +38,7 @@ export function UpdateCheckSection() {
   };
 
   return (
-    <Card title="本地更新检测">
+    <SettingsCard title="本地更新检测">
       <p className="text-muted-foreground mb-4 text-sm">
         桌面壳开着时，本地源码由 dev server 自动热更（无需提示）。仅当
         <strong className="text-ink/80">改完当前窗口不生效、得重启</strong>
@@ -80,6 +80,6 @@ export function UpdateCheckSection() {
             (dirty ? "存在需重启的改动" : "未检测到需重启的改动")}
         </span>
       </div>
-    </Card>
+    </SettingsCard>
   );
 }

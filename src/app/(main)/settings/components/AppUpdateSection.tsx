@@ -11,12 +11,13 @@ import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 
-import { Card, StatusButton } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { StatusButton } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
   return (
-    <Card title="应用更新">
+    <SettingsCard title="应用更新">
       {!c.appUpdate.inShell ? (
         <p className="text-muted-foreground text-sm">
           当前运行在浏览器 / 开发模式，非桌面壳内，无法检测应用更新。
@@ -105,6 +106,6 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
           )}
         </>
       )}
-    </Card>
+    </SettingsCard>
   );
 }

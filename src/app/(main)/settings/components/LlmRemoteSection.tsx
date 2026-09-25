@@ -11,7 +11,7 @@
 import type { RemoteModelKind } from "~/lib/llm/types";
 import { Button } from "~/components/ui/button";
 
-import { Card } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
 import { RemoteModelDialog } from "./RemoteModelDialog";
 import { UsageTestDialog } from "./UsageTestDialog";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
@@ -131,7 +131,7 @@ export function LlmRemoteSection({
 
   return (
     <>
-      <Card title="远程模型（OpenAI 兼容）">
+      <SettingsCard title="远程模型（OpenAI 兼容）">
         {/* 模型按用途分组：文本（对话）/ 图片 / 视频；kind 缺省的
  历史条目按文本模型归组，添加时按组预选用途 */}
         {remoteModelGroup(
@@ -157,7 +157,7 @@ export function LlmRemoteSection({
           /
           视频会消耗额度）。带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。
         </p>
-      </Card>
+      </SettingsCard>
 
       {/* 「添加 / 编辑模型」弹窗：接口地址 / API Key 可留空回落全局；
  编辑态密钥「留空不改」，可显式清除。测试连接成功后顺带展示
