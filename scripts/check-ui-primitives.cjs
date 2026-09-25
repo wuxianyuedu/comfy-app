@@ -3445,6 +3445,54 @@ const RULES = {
       ).length;
     },
   },
+
+  /* ── P80「视图层 w-N 与 h-N 同值应换 size-N」（棘轮，shadcn styling.md）──
+   * shadcn `styling.md` 原则：`Use size-* when width and height are equal.
+   * size-10 not w-10 h-10.` `size-N` 是 `w-N h-N` 的简写、由 tailwind
+   * 内建；同一份 `w-N h-N` 手写会：
+   *   · 让「改尺寸」要动两处、且两处不同步就会漂（`w-8 h-9` 是不是有意
+   *     的还是漏改？机器看不出来）；
+   *   · 与 `rounded-full` / `size-*` 混用时视觉一致性问题（圆点用 size
+   *     表达"这是个圆"，用 w/h 表达的是"两个方向独立设"）。
+   *
+   * JS 正则**支持 backreference**（不像 ripgrep 默认不支持），锚点用两个
+   * 方向都数一次、避免顺序漂移：`w-N ... h-N` 与 `h-N ... w-N`。数字
+   * 支持小数（`w-1.5 h-1.5` 也是同款形态）。
+   *
+   * ⚠️ 只管 className 字符串里的**等值** w/h 对；不等值（`w-8 h-9` 之类）
+   * 是**有意**的宽×高、不算这条账。也不看 style 属性里的 `width: N; height: N`
+   * （那是另一层、动态尺寸常见）。
+   *
+   * `ui/` 走 EXEMPT_DIRS 天然豁免；`ui/avatar.tsx` 里 size-* 变体表本身就是
+   * 这条判据要推荐的写法。视图层实测约 90 处，走棘轮冻结起点。 */
+  P80: {
+    label:
+      "视图层 w-N 与 h-N 同值（应换 size-N，shadcn styling.md「Use size-* when width and height are equal」）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      let n = 0;
+      /* 扫每个 `className="…"` / `className='…'` / `className={\`…\`}` 字符串，
+       * 收集里面出现的 w-N 与 h-N 的数字集，看交集。同字符串里 w-8 与 h-8
+       * 只算一处（`size-8` 是唯一修法）；不同 className 之间相互独立。
+       * 夹在中间的其它 utility（`w-8 rounded-lg h-8`）不影响判定，也不
+       * 会被数字前后有 `.` `/` 之类的分隔符（如 `w-1.5`）误伤。 */
+      const clsRe = /className\s*=\s*(?:"([^"]*)"|'([^']*)'|`\([^`]*`\s*)/g;
+      for (const m of t2.matchAll(clsRe)) {
+        const cls = m[1] ?? m[2] ?? "";
+        if (!cls) continue;
+        const ws = new Set();
+        const hs = new Set();
+        for (const x of cls.matchAll(/\bw-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
+          ws.add(x[1]);
+        }
+        for (const x of cls.matchAll(/\bh-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
+          hs.add(x[1]);
+        }
+        for (const w of ws) if (hs.has(w)) n++;
+      }
+      return n;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
