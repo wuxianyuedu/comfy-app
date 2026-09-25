@@ -19,6 +19,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Spinner } from "~/components/ui/spinner";
 
 import { SettingsCard } from "~/components/ui/settings-card";
+import { FieldLabel } from "~/components/ui/field";
 
 export function UpdateCheckSection() {
   const updateCheckEnabled = useUpdateCheckStore((s) => s.enabled);
@@ -54,12 +55,12 @@ export function UpdateCheckSection() {
             useUpdateCheckStore.getState().setEnabled(next === true)
           }
         />
-        <label
+        <FieldLabel
           htmlFor="local-update-check-enabled"
           className="text-ink/80 text-sm"
         >
           开启运行期「本地更新需重启」检测
-        </label>
+        </FieldLabel>
       </div>
       <div className="border-border bg-surface-1 mb-3 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm">
         <Button
