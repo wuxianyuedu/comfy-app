@@ -31,7 +31,8 @@ import {
   STATUS_TEXT_CLASS,
 } from "../settings-status-row-config";
 
-import { StatusButton, Card, Field } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { StatusButton, Field } from "./SettingsPrimitives";
 import { RuntimeLogBox } from "./RuntimeLogBox";
 
 export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
@@ -50,7 +51,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
     });
 
   return (
-    <Card title="本地模型（Ollama）">
+    <SettingsCard title="本地模型（Ollama）">
       {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
       <Field
         label="Base URL"
@@ -292,6 +293,6 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       <StatusButton onClick={() => void c.saveLlm()} disabled={c.saving}>
         保存 LLM 配置
       </StatusButton>
-    </Card>
+    </SettingsCard>
   );
 }

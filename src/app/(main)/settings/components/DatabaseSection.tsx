@@ -15,7 +15,8 @@ import {
   STATUS_TEXT_CLASS,
 } from "../settings-status-row-config";
 
-import { StatusButton, Card } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { StatusButton } from "./SettingsPrimitives";
 import { RuntimeLogBox } from "./RuntimeLogBox";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
@@ -28,7 +29,7 @@ function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
 
 export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
   return (
-    <Card title="数据库（Drizzle Studio）">
+    <SettingsCard title="数据库（Drizzle Studio）">
       <p className="text-muted-foreground mb-3 text-sm">
         可视化浏览本地 SQLite 数据库（schema / 表数据 / 运行 SQL）。 Drizzle
         Studio 的界面托管在官方远端页面
@@ -101,6 +102,6 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
         drizzle-kit）。双击桌面壳的开发模式可用； 若当前是不可携带完整
         node_modules 的 standalone 打包，启动时会 提示未找到 drizzle-kit。
       </p>
-    </Card>
+    </SettingsCard>
   );
 }

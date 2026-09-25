@@ -79,21 +79,6 @@ export function AnsiLogText({ segments }: { segments: AnsiSegment[] }) {
   );
 }
 
-export function Card({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="border-border-subtle bg-surface-1 dark:bg-surface-1/60 rounded-2xl border p-5 shadow-sm shadow-black/5 backdrop-blur dark:shadow-none dark:shadow-black/2">
-      <h2 className="text-ink mb-4 text-base font-semibold">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
 export function Field({
   label,
   value,

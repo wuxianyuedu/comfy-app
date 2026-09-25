@@ -8,13 +8,14 @@
  * controller 的 `drafts.settings` / `patchSettings` / `savePrefs`。
  */
 
-import { StatusButton, Card } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { StatusButton } from "./SettingsPrimitives";
 import { Checkbox } from "~/components/ui/checkbox";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function ExitSection({ c }: { c: ReadySettingsPageController }) {
   return (
-    <Card title="退出与后台服务">
+    <SettingsCard title="退出与后台服务">
       <p className="text-muted-foreground mb-4 text-sm">
         桌面壳退出时会对应用进程树执行整树强制关闭（被强杀的进程没有清理机会），
         因此这些开关是
@@ -79,6 +80,6 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
           保存偏好
         </StatusButton>
       </div>
-    </Card>
+    </SettingsCard>
   );
 }
