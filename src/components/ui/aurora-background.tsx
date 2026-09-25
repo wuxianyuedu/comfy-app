@@ -31,29 +31,32 @@ export function AuroraBackground({ className = "" }: { className?: string }) {
       aria-hidden
       data-testid="aurora-bg"
       className={`pointer-events-none fixed inset-0 -z-10 overflow-hidden ${className}`}
+      /* 重绘隔离：这层铺满视口、且被几乎每个主页面常驻渲染，`contain` 让它的
+       * 布局与绘制不顺着祖先链扩散到整页 —— 页面内容变化时不必连带重算它。 */
+      style={{ contain: "layout paint" }}
     >
       {/* 极光晕 1：紫罗兰（右上） */}
       <div
         className="absolute top-[-20%] right-[-10%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-60 dark:mix-blend-screen"
         style={{
-          background: `radial-gradient(circle, color-mix(in srgb, var(--color-aurora-violet) 48%, transparent) 0%, transparent 70%)`,
-          filter: "blur(40px)",
+          background: `radial-gradient(circle, color-mix(in srgb, var(--color-aurora-violet) 48%, transparent) 0%, transparent 74%)`,
+          filter: "blur(24px)",
         }}
       />
       {/* 极光晕 2：青蓝（左下） */}
       <div
         className="absolute bottom-[10%] left-[-15%] h-[60%] w-[50%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
         style={{
-          background: `radial-gradient(circle, color-mix(in srgb, var(--color-aurora-cyan) 32%, transparent) 0%, transparent 70%)`,
-          filter: "blur(50px)",
+          background: `radial-gradient(circle, color-mix(in srgb, var(--color-aurora-cyan) 32%, transparent) 0%, transparent 74%)`,
+          filter: "blur(28px)",
         }}
       />
       {/* 极光晕 3：品红（中下，柔光点缀） */}
       <div
         className="absolute bottom-[-10%] left-[20%] h-[40%] w-[35%] rounded-full opacity-5 mix-blend-normal dark:opacity-30 dark:mix-blend-screen"
         style={{
-          background: `radial-gradient(circle, color-mix(in srgb, var(--color-aurora-magenta) 22%, transparent) 0%, transparent 70%)`,
-          filter: "blur(60px)",
+          background: `radial-gradient(circle, color-mix(in srgb, var(--color-aurora-magenta) 22%, transparent) 0%, transparent 74%)`,
+          filter: "blur(32px)",
         }}
       />
     </div>
