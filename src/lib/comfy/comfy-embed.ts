@@ -215,6 +215,26 @@ export function decideComfyTabOpen(embeddable: boolean): ComfyTabTarget {
   return embeddable ? "embed" : "blocked";
 }
 
+/**
+ * 浏览器 / dev 形态下，「打开查看」是否该走**新浏览器页签**（而不是应用内页签）。
+ *
+ * 为什么浏览器里不内嵌进应用页签：应用内页签栏（`ShellTabs` 此前在浏览器形态
+ * 画的兜底条）本质是「没有原生标题栏可让位」时的产物。但浏览器**自带页签栏**——再在应用
+ * 里画一条假页签栏，既占纵向空间、又和浏览器原生页签重复。所以浏览器形态下
+ * ComfyUI 直接交给新浏览器页签，应用内不再长出第二页签。
+ *
+ * 这与 ISSUE #310「点打开查看只出多页签、不弹第二个窗口」不冲突：#310 约束的是
+ * **桌面壳**里不要弹独立窗口；浏览器里「新浏览器页签」正是该环境的原生多页签形态，
+ * 不是「弹第二个窗口」。
+ *
+ * ⚠️ 调用约束：`window.open` 必须在**任何 await 之前**同步调用，否则脱离用户手势
+ * 被浏览器弹窗拦截器拦下。所以本判据要在「打开查看」处理函数的最顶部、refetch
+ * 之前消费（浏览器分支用状态轮询已缓存的 base 同步开窗）。
+ */
+export function shouldUseBrowserTab(isDesktop: boolean): boolean {
+  return !isDesktop;
+}
+
 /* ── 探测（IO 薄层）────────────────────────────────────────────────
  * 判据在上面，这里只负责「取事实」：向 base 发一次 GET（**带 `Origin`**，
  * 模拟 iframe 的跨源请求），读回状态码与 Access-Control-Allow-Origin /

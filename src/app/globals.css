@@ -145,7 +145,7 @@
   --panel-right-width: 360px;
   /* 标题行（页签栏）高度。tailwind v4 只有 --spacing-* 命名空间能生成间距类，
      因此用 `--spacing-title-bar` 得到 top-title-bar / h-title-bar；
-     TitleBarTabs / InAppTabStrip 的高度与全屏视图层的让位都取这一处
+     TitleBarTabs 的高度与全屏视图层的让位都取这一处
      （ISSUE #310 回归）。 */
   --spacing-title-bar: 2.25rem;
 

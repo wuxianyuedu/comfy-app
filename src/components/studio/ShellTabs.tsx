@@ -1,133 +1,47 @@
 "use client";
 
-/* ── ShellTabs · 应用级「页签」容器（窗口顶部一条页签栏 + 内容区）────
+/* ── ShellTabs · 应用级「页签」容器（桌面壳标题行页签 + 内容区）────
  *
- * 设计目标：把「主应用」（workspace）与「内嵌的 ComfyUI」都收进同一个
- * Tauri 主窗口内的页签里，一条可切换、可关闭的页签栏，替代此前会
- * 弹出空白独立窗口的 open_comfyui_window 方案。
+ * 设计目标：在 Tauri 主窗口里把「主应用」（workspace）与「内嵌的 ComfyUI」
+ * 收进同一个窗口的页签，一条可切换、可关闭的页签栏，替代此前会弹出空白独立
+ * 窗口的 open_comfyui_window 方案（ISSUE #310 / #200）。
  *
- * 两种渲染形态（判据见`shouldUseTitleBarTabs`）：
- * - **桌面壳内**：页签搬到窗口**标题行**——主窗口关闭原生装饰，由
- *`TitleBarTabs` 接管整条标题栏（页签 + 拖拽区 + 最小化/最大化/关闭），
- * 不再额外占用应用内区域（ISSUE #310 / #200）。
- * - **浏览器 / dev**：窗口由系统浏览器提供，没有原生标题栏可让位，
- * 退回「应用内页签栏」，保留原有行为与观感。
+ * 两种环境形态（判据见`shouldUseTitleBarTabs`）：
+ * - **桌面壳内**：主窗口关闭原生装饰，由`TitleBarTabs` 接管整条标题栏
+ * （页签 + 拖拽区 + 最小化/最大化/关闭），不再额外占用应用内区域。
+ * - **浏览器 / dev**：**不渲染任何应用内页签栏**。浏览器自带页签栏，再画一条
+ * 假页签栏既占纵向空间又与原生重复；ComfyUI 改由「新浏览器页签」打开
+ * （见 `use-settings-page` 的 openComfy 浏览器分支 + `comfy-embed.ts`
+ * `shouldUseBrowserTab`）。此时 store 里恒只有主应用页签、iframe 区为空，
+ * 本组件只承载 children。
  *
- * 两种形态共用同一个高度量`TITLE_BAR_HEIGHT_CLASS`（`h-title-bar` ←
- *`--spacing-title-bar`）：全屏视图层按`top-title-bar` 让位，页签栏高度必须
- * 与它同源，否则让位量与实际高度对不上（多留空白或盖住一条）。
+ * 标题栏的高度与可点层级由`TitleBarTabs` 自行持有（本组件不再渲染标题行）：
+ * 全屏视图层按标题行高度让位，且标题行须走 chrome 档层级，否则会被整视口遮罩
+ * 压住命中测试（见 launch-and-build §5）。
  *
  * 关键取舍：
  * - 主应用内容（children）与已打开的 ComfyUI iframe 都**始终挂载**，
  * 用 CSS 显隐切换，而不是条件卸载——这样切页签不会丢 workspace 的
  * viewMode / 画布编辑态，ComfyUI 页面也不会因卸载而重载。
- * - 主应用页签（id="main"）不可关闭；ComfyUI 页签可按需关闭。
+ * - 主应用页签（id="main"）不可关闭；ComfyUI 页签（仅桌面壳内存在）可按需关闭。
  * - 页签状态由 shell-tabs-store 管理（纯状态层），本组件只做渲染与
  * 动作转发，符合规范 17 的四层归属。
  *
- * 样式说明：内容区高度为「窗口高 - 页签栏高」，主应用内部用 h-full 布局。
+ * 样式说明：内容区高度为「窗口高 - 页签栏高（桌面壳）/ 全高（浏览器）」，主应用内部用 h-full 布局。
  */
 
 import { useCallback, useSyncExternalStore } from "react";
-import { X } from "lucide-react";
-import {
-  useShellTabs,
-  MAIN_TAB_ID,
-  type ShellTab,
-} from "~/lib/shell/shell-tabs-store";
+import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { shouldUseTitleBarTabs } from "~/lib/shell/title-bar-derive";
-import {
-  TITLE_BAR_CHROME_CLASS,
-  TITLE_BAR_HEIGHT_CLASS,
-} from "~/lib/full-screen-layer";
 import { TitleBarTabs } from "./TitleBarTabs";
 import { Button } from "~/components/ui/button";
-import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
 interface ShellTabsProps {
   /** 主应用页签的内容（即 workspace 整套界面）。 */
   children: React.ReactNode;
-}
-
-/** 单个页签按钮：标题 + 可选关闭按钮（浏览器形态用）。 */
-function TabButton({
-  tab,
-  active,
-  onSelect,
-  onClose,
-}: {
-  tab: ShellTab;
-  active: boolean;
-  onSelect: (id: string) => void;
-  onClose: (id: string) => void;
-}) {
-  return (
-    <div
-      role="tab"
-      aria-selected={active}
-      tabIndex={0}
-      onClick={() => onSelect(tab.id)}
-      /* Enter / Space 的键判据走`~/components/ui/simple-key-handler`
-       *（规范 16 §16.2.4.57）：此前手写`e.key ===""` 与`"Enter"` 比，
-       * 键名靠猜、连发放行（按住空格会连切十几次）。 */
-      {...simpleKeyHandler(["Space", "Enter"], () => onSelect(tab.id))}
-      className={`group border-border-subtle flex h-full cursor-pointer items-center gap-2 border-r px-4 text-sm transition-colors ${
-        active
-          ? "bg-canvas text-ink-bright"
-          : "bg-subtle/60 text-ink-muted hover:bg-subtle hover:text-ink-strong"
-      }`}
-    >
-      <span className="truncate">{tab.label}</span>
-      {tab.closable && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`关闭 ${tab.label}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose(tab.id);
-          }}
-          className="text-ink-fainter hover:bg-subtle hover:text-ink-strong rounded"
-        >
-          <X size={14} />
-        </Button>
-      )}
-    </div>
-  );
-}
-
-/** 应用内页签栏（浏览器 / dev 形态）。 */
-function InAppTabStrip({
-  tabs,
-  activeTabId,
-  onActivate,
-  onClose,
-}: {
-  tabs: ShellTab[];
-  activeTabId: string;
-  onActivate: (id: string) => void;
-  onClose: (id: string) => void;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label="应用页签"
-      className={`flex ${TITLE_BAR_HEIGHT_CLASS} ${TITLE_BAR_CHROME_CLASS} border-border-subtle bg-subtle/40 shrink-0 items-stretch border-b`}
-    >
-      {tabs.map((tab) => (
-        <TabButton
-          key={tab.id}
-          tab={tab}
-          active={tab.id === activeTabId}
-          onSelect={onActivate}
-          onClose={onClose}
-        />
-      ))}
-    </div>
-  );
 }
 
 /**
@@ -216,14 +130,7 @@ export function ShellTabs({ children }: ShellTabsProps) {
           onActivate={activateTab}
           onClose={closeTab}
         />
-      ) : (
-        <InAppTabStrip
-          tabs={tabs}
-          activeTabId={activeTabId}
-          onActivate={activateTab}
-          onClose={closeTab}
-        />
-      )}
+      ) : null}
 
       {/* 内容区：主应用与 ComfyUI 均保持挂载，用 CSS 显隐切换，避免丢态。
        *
