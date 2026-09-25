@@ -186,6 +186,21 @@ const discoverCache = new Map<
   { at: number; result: DiscoveredSubpkg[] }
 >();
 
+/* 缓存容量上限。必须设：键由请求体里的父目录列表拼成（外部可控），而 TTL 只在
+ * 读的时候判 —— 过期的条目本身会一直留在表里，不设界就是无上限增长。 */
+const DISCOVER_CACHE_MAX = 32;
+
+/** 写缓存并把容量压回上限：超出时淘汰最早插入的键（Map 的插入序）。 */
+function rememberDiscover(key: string, result: DiscoveredSubpkg[]): void {
+  discoverCache.delete(key);
+  discoverCache.set(key, { at: Date.now(), result });
+  while (discoverCache.size > DISCOVER_CACHE_MAX) {
+    const oldest = discoverCache.keys().next().value;
+    if (oldest === undefined) break;
+    discoverCache.delete(oldest);
+  }
+}
+
 /** 单个 `discover` 进程的最长等待。解析器要扫完父目录再算一遍 hash，
  *  目录大时能到分钟级 —— 但再久也不能让请求挂到客户端超时，超时即放弃
  *  （resolve 成 null，调用方换下一个解释器 / 返回空列表）。 */
@@ -255,7 +270,7 @@ async function runDiscover(parentDirs: readonly unknown[]): Promise<unknown[]> {
           ? parsed.packages
           : []
       ) as DiscoveredSubpkg[];
-      discoverCache.set(key, { at: Date.now(), result: pkgs });
+      rememberDiscover(key, pkgs);
       return pkgs;
     } catch {
       // 输出不是 JSON —— 换下一个解释器再试
@@ -417,7 +432,7 @@ function runDiscoverStreaming(
               ? parsed.packages
               : []
           ) as DiscoveredSubpkg[];
-          discoverCache.set(parent, { at: Date.now(), result: pkgs });
+          rememberDiscover(parent, pkgs);
           resolved = true;
           send({
             type: "discover_done",
