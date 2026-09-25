@@ -91,7 +91,7 @@ function GroupedControls({
       {!compact && (
         <div className="border-border-strong mt-1 flex items-center gap-2 border-t pt-2.5">
           <span
-            className="h-2 w-2 shrink-0 rounded-full"
+            className="size-2 shrink-0 rounded-full"
             style={{ background: SECTION_ACCENT }}
           />
           <span className="text-ink-muted text-[10px] font-semibold tracking-wider uppercase">

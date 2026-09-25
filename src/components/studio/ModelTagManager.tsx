@@ -188,7 +188,7 @@ export function ModelTagManager({
                         className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
                         aria-label={`删除 ${tag.name}`}
                       >
-                        <Icon name="trash" className="h-3.5 w-3.5" />
+                        <Icon name="trash" className="size-3.5" />
                       </Button>
                     </div>
                   </div>

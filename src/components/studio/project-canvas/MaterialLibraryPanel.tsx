@@ -317,7 +317,7 @@ export function MaterialLibraryPanel({
             /* 空状态：大图标 + 提示文案 + 操作引导 */
             <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
               {/* 文件夹图标 */}
-              <div className="border-border-strong bg-subtle mb-5 flex h-20 w-20 items-center justify-center rounded-2xl border">
+              <div className="border-border-strong bg-subtle mb-5 flex size-20 items-center justify-center rounded-2xl border">
                 <Folder
                   size={40}
                   strokeWidth={1.2}

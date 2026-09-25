@@ -255,7 +255,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                       <MediaThumbnail
                         src={`/api/file/${encodeURIComponent(data.name)}`}
                         alt={data.name}
-                        className="h-9 w-9 shrink-0 rounded object-cover"
+                        className="size-9 shrink-0 rounded object-cover"
                       />
                       <input
                         value={data.caption}

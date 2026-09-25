@@ -278,7 +278,7 @@ export function ProjectOutputs() {
                     )}
 
                     {isVideoOut && (
-                      <span className="ring-border-strong absolute top-1/2 left-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2">
+                      <span className="ring-border-strong absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2">
                         <svg
                           width="24"
                           height="24"

@@ -3605,6 +3605,12 @@ const HARD_GATE_RULES = new Set([
    * 既无 Title 组件又无 aria-label），从此是硬闸——新增即阻断。
    * `ui/` 走 EXEMPT_DIRS 短路，基元自身实现不受本判据影响。 */
   "P72",
+  /* P80（shadcn styling.md「Use size-* when width and height are equal」）：
+   * 引入时视图层实测 91 处，跨 7 批治理 + 一次锚点假阳修 一次性清零
+   * （#1015 #1016 #1017 #1018 #1019 #1022 + 本 PR），升为硬闸。
+   * `size-N` 是 tailwind 内建、与 `w-N h-N` 视觉完全等价、迁移零风险，
+   * 与 P70 同款（space-y/x→gap 也是治理清零后升为硬闸）。 */
+  "P80",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */

@@ -177,7 +177,7 @@ export function WorkflowParamCard({
         }}
       >
         <span
-          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          className="size-1.5 shrink-0 rounded-full"
           style={{
             background: style.color,
             boxShadow: `0 0 6px ${style.color}`,

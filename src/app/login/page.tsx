@@ -120,7 +120,7 @@ export default function LoginPage() {
           href="/"
           className="mb-7 flex items-center justify-center gap-2 font-semibold"
         >
-          <span className="bg-primary grid h-9 w-9 place-items-center rounded-lg text-white">
+          <span className="bg-primary grid size-9 place-items-center rounded-lg text-white">
             <BoltIcon />
           </span>
           <span className="text-ink-bright text-xl tracking-tight">
