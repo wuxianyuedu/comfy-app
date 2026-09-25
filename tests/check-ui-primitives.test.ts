@@ -4811,4 +4811,87 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const { code, output } = run();
     expect(code, output).toBe(0);
   });
+
+  /* ── P79「视图层无 dark: 前缀的浅色原色板」（棘轮）差分回归 ──────
+   * 见 scripts/check-ui-primitives.cjs 里 P79 注释：与 P71 是同一族账的两
+   * 半（P71 数带 `dark:` 的、P79 数不带前缀的浅色版），例外块共用一份
+   * `p71-allow`。锚点用 `(?!dark:)` 前瞻避免与 P71 双计。 */
+  it("P79 视图层 bg-violet-500 无 dark: 前缀 → 计入棘轮", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P79RawPalette.tsx",
+      [
+        "export function V() {",
+        "  return <span className='bg-violet-500 text-fuchsia-700'>x</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P79");
+    expect(output).toContain("studio/P79RawPalette.tsx");
+  });
+
+  it("P79 与 P71 分工：带 dark: 前缀的归 P71 管、不误伤 P79", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P79OnlyDark.tsx",
+      [
+        "export function V() {",
+        "  return <span className='dark:bg-violet-400 dark:text-fuchsia-300'>x</span>;",
+        "}",
+      ].join("\n"),
+    );
+    /* strict run 会拦（P71 数它）、但**不该**是 P79 报的：违规清单里
+     * 只出现 `新增 P71`、不出现 `新增 P79`（脚本头部硬闸说明列表里含
+     * "P79" 字面量、不能用 output.not.toContain("P79") 粗断）。 */
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toMatch(/新增\s+P71/);
+    expect(output).not.toMatch(/新增\s+P79/);
+  });
+
+  it("P79 不误伤语义 token（bg-primary / text-ink-muted / border-border-strong）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P79Semantic.tsx",
+      [
+        "export function V() {",
+        "  return <span className='bg-primary text-ink-muted border-border-strong ring-primary/30'>x</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P79 与 P71 共享 p71-allow 例外块（§3.6.1 ANSI/装饰色一份标记管两条判据）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P79Allow.tsx",
+      [
+        "const PALETTE =",
+        "  // p71-allow:start ANSI SGR 8 色是 §3.6.1 例外",
+        "  { inside: 'bg-red-500 text-emerald-700' },",
+        "  // p71-allow:end",
+        ";",
+        "export const outside = 'bg-amber-500';",
+        "export function V() {",
+        "  return <span className={PALETTE.inside}>{outside}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    /* `--update` 会把当前实测写进基线；断言 files 里 P79 记数**只有 outside
+     * 一处**（`bg-amber-500`），allow 块里的 `bg-red-500 text-emerald-700`
+     * 两处不计——即 `p71-allow` 也管 P79。 */
+    const { code, output } = run(["--update"]);
+    expect(code, output).toBe(0);
+    const baseline = JSON.parse(
+      readFileSync(
+        join(workdir, "scripts", ".ui-primitives-baseline.json"),
+        "utf8",
+      ),
+    ) as { files: Record<string, { P79?: number }> };
+    expect(baseline.files["src/components/studio/P79Allow.tsx"]?.P79).toBe(1);
+  });
 });
