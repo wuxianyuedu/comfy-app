@@ -11,7 +11,7 @@ import React, {
 import { X } from "lucide-react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { nextId } from "~/lib/unique-id";
 
 type ToastKind = "success" | "error" | "info" | "loading";

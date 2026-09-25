@@ -7,7 +7,7 @@ import { textHandler } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
 import { useModelFolderConfig } from "./hooks/use-model-folder-config";

@@ -16,7 +16,7 @@ import { useState } from "react";
 import { useUpdateCheckStore } from "~/components/update-check/update-check-store";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 
 import { Card } from "./SettingsPrimitives";
 
