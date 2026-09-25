@@ -64,6 +64,7 @@ describe("全部参数表（「浏览全部参数」那一块）", () => {
       "negative",
       "size",
       "duration",
+      "seed",
       "reference-image",
       "first-frame",
       "last-frame",

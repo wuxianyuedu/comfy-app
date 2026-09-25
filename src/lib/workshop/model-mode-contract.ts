@@ -235,6 +235,7 @@ export const MODE_CONTRACT_INPUT_TYPES = [
   { type: "negative", label: EXPOSED_PARAM_DISPLAY_LABEL.negative },
   { type: "size", label: EXPOSED_PARAM_DISPLAY_LABEL.size },
   { type: "duration", label: EXPOSED_PARAM_DISPLAY_LABEL.duration },
+  { type: "seed", label: EXPOSED_PARAM_DISPLAY_LABEL.seed },
   {
     type: "reference-image",
     label: EXPOSED_PARAM_DISPLAY_LABEL["reference-image"],
@@ -262,7 +263,7 @@ export function modeContractInputLabel(type: ModeContractInputType): string {
 
 /* ── 自定义输入口 ──
  *
- * 预制口只有七类，作者想多要一个口（`style` / `seed` / 某个接口特有的开关）就得改
+ * 预制口只有八类，作者想多要一个口（`style` / 某个接口特有的开关）就得改
  * 代码 —— 那正是这套注册表要消掉的事。自定义口把「加一个口」变成一次配置：起个名
  *  + 选一个**简单类型**，类型只决定 ① 工坊用什么控件录入；② 它接受哪一族的端口。
  *
@@ -285,7 +286,7 @@ export interface ModeContractCustomInput {
   kind: ModeContractCustomKind;
 }
 
-/** 契约口 id 的完整值域：7 个基础口 +「参考图」第 2 张起带序号
+/** 契约口 id 的完整值域：8 个基础口 +「参考图」第 2 张起带序号
  *  （`reference-image-2`）+ 自定义口（`custom-<类型>-<序号>`）。
  *
  *  与适配器侧的 WorkshopInputType 是**两套 id**，别混用：适配器口按接口请求体
@@ -642,6 +643,7 @@ const CONTRACT_INPUT_TO_ADAPTER: Record<
   "first-frame": [{ type: "first-frame", field: "first_frame" }],
   "last-frame": [{ type: "last-frame", field: "last_frame" }],
   duration: [{ type: "duration", field: "duration" }],
+  seed: [{ type: "seed", field: "seed" }],
 };
 
 export function adapterInputsFromContract(
