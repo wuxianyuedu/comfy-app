@@ -7,6 +7,7 @@
 import { randomUUID } from "node:crypto";
 
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
+import { probeBaseOnce } from "~/lib/comfyui/probe";
 import { safeFileNameSegment } from "~/lib/safe-name";
 import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";
 import { sleep } from "~/lib/with-timeout";
@@ -48,7 +49,12 @@ function loadSettings(): ComfySettings {
   return parsed;
 }
 
-/** 解析 ComfyUI base（含端口探测，落 127.0.0.1 避免 localhost→IPv6 解析失败）。 */
+/** 解析 ComfyUI base（含端口探测，落 127.0.0.1 避免 localhost→IPv6 解析失败）。
+ *
+ * 存活判据走 `~/lib/comfyui/probe` 的 `probeBaseOnce` 唯一口径（**连上即存活**，
+ * 含 GPU OOM 的 500 应答，#685）——此前这里自己 `r.ok`，与设置页的单点探测
+ * 分叉：同一实例一边判活、这边判死。本模块是纯 Node 宿主（MCP），probe.ts
+ * 是零依赖叶子（只有 fetch + 地址拼接），import 安全。 */
 export async function resolveComfyBase(): Promise<string> {
   if (resolvedBase) return resolvedBase;
   const raw = process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
@@ -64,16 +70,9 @@ export async function resolveComfyBase(): Promise<string> {
   }
   for (let offset = 0; offset <= 5; offset++) {
     const base = `http://${host}:${port + offset}`;
-    try {
-      const r = await fetch(`${base}/system_stats`, {
-        signal: AbortSignal.timeout(800),
-      });
-      if (r.ok) {
-        resolvedBase = base;
-        return base;
-      }
-    } catch {
-      /* 继续探测 */
+    if (await probeBaseOnce(base, 800)) {
+      resolvedBase = base;
+      return base;
     }
   }
   resolvedBase = raw;

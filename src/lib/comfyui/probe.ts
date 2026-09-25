@@ -42,15 +42,25 @@ export async function probeComfyAtPort(port: number): Promise<string | null> {
   return probeBaseOnce(comfyUiBaseUrl(port));
 }
 
-/** 对指定地址各发一次 `/system_stats`，通了返回该地址。 */
-export async function probeBaseOnce(base: string): Promise<string | null> {
+/** 对指定地址各发一次 `/system_stats`，通了返回该地址。
+ *
+ *  超时按调用场景注入：单点确认（状态判定、启动等待）用默认 1500ms；
+ *  端口扫描（配置地址 + 就近偏移连发多次）要压低单次超时，否则「未运行」
+ *  场景要付完全部超时之和。判据只有一份——见下。 */
+export async function probeBaseOnce(
+  base: string,
+  timeoutMs = 1500,
+): Promise<string | null> {
   try {
     // 只发一次请求、不写会话缓存。存活判据是「端口有没有人应答」：**连上即存活**——
     // 包括 GPU 显存不足时 `/system_stats` 返回的 HTTP 500（CUDA OOM）。过去用
     // `r.ok` 把「接口异常」当「进程退出」，导致显存爆掉时设置页假报「未运行」
     // （ISSUE #685：用户看到红点、以为 ComfyUI 退出了，实际进程还活着）。
+    // **这条判据是全库唯一口径**：client.ts 的端口扫描与 workshop MCP 通道的
+    // 自扫描都走本函数，不许再各自 `res.ok`（同一实例「单点判活、扫描判死」
+    // 是 #685 修完又被绕过的形态）。
     await fetch(`${base}/system_stats`, {
-      signal: AbortSignal.timeout(1500),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     return base;
   } catch {
