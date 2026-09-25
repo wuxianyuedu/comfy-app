@@ -14,10 +14,13 @@
  *   - `lib/auth-server` 的用例可以喂任意会话形状，不需要 Next 运行时。
  *
  * `app-settings.json` 的 `loginRequired` 是唯一的登录开关（统一配置管理）：
- *   - false（默认，本机单用户模式）：未登录自动回落演示用户，与 tRPC
- *     authedProcedure 的回退一致，不限制「登录才能执行操作」；
- *   - true：无会话返回 null（调用方 401），materials / upload / logs /
- *     llm / custom-nodes / debug 等敏感写入口恢复登录门槛。
+ *   - false（默认，本机单用户模式）：未登录自动回落演示用户，不限制
+ *     「登录才能执行操作」；
+ *   - true：无会话返回 null（调用方 401 / UNAUTHORIZED），materials / upload /
+ *     logs / llm / custom-nodes / debug 等敏感写入口恢复登录门槛。
+ *
+ * tRPC 的 `authedProcedure` 与 REST 的 `requireRequestUser` **共用这里的
+ * `requireServerUser` 单点判决**——两个 API 面不存在第二份兜底实现。
  */
 import { getSettingsSync } from "./app-settings/app-settings.server";
 import { userRepository } from "./core/repository";

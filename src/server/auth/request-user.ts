@@ -28,7 +28,9 @@ import {
 /**
  * 取当前用户：已登录 → 真实用户；未登录 → 演示用户（本机单用户模式）。
  *
- * 演示用户兜底与 tRPC `authedProcedure` 的回退口径一致（见 §1.9）。
+ * 注意：本入口**不受 `loginRequired` 开关约束**（总是兜底）。写副作用 /
+ * 敏感入口应使用下面的 `requireRequestUser`；tRPC 面的对应闸门是
+ * `authedProcedure`，它与 `requireRequestUser` 共用 `requireServerUser` 判决。
  */
 export async function currentServerUser(): Promise<ServerUser> {
   return getServerUser(await readSession());
