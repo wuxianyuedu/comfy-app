@@ -46,13 +46,13 @@ export function WorkflowModelFilterChip({
         {
           value: "all",
           label: "全部模型",
-          prefix: <span className="bg-accent h-1.5 w-1.5 rounded-full" />,
+          prefix: <span className="bg-accent size-1.5 rounded-full" />,
         },
         ...tags.map((tag) => ({
           value: tag.name,
           label: tag.name,
           title: tag.name,
-          prefix: <span className="bg-accent-soft h-1.5 w-1.5 rounded-full" />,
+          prefix: <span className="bg-accent-soft size-1.5 rounded-full" />,
           suffix: (
             <span className="text-ink-muted text-[9px] tabular-nums">
               {tag.count}
