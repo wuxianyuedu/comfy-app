@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
-import { currentServerUser } from "~/server/auth/request-user";
+import { requireRequestUser } from "~/server/auth/request-user";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 import { uniqueStamp } from "~/lib/unique-id";
 import { safeDisplayName } from "~/lib/safe-name";
 import { extOfPath, stemOfPath } from "~/lib/media/mime-ext";
@@ -21,8 +22,7 @@ const ALLOWED_MIME = new Set([
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
-  const user = await currentServerUser();
-  void user;
+  if (!(await requireRequestUser())) return unauthorizedResponse();
   const form = await req.formData().catch(() => null);
   if (!form)
     return NextResponse.json({ error: "表单解析失败" }, { status: 400 });

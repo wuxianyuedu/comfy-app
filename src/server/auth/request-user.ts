@@ -19,26 +19,18 @@ import "server-only";
 
 import { getSession } from "~/server/better-auth/server";
 import {
-  getServerUser,
   requireServerUser,
   type ServerUser,
   type SessionLike,
 } from "~/lib/auth-server";
 
 /**
- * 取当前用户：已登录 → 真实用户；未登录 → 演示用户（本机单用户模式）。
+ * 鉴权闸（REST 面唯一入口）：`app-settings.json` 的 `loginRequired` 打开时，
+ * 无会话返回 null（调用方回 401）；否则回落演示用户。
  *
- * 注意：本入口**不受 `loginRequired` 开关约束**（总是兜底）。写副作用 /
- * 敏感入口应使用下面的 `requireRequestUser`；tRPC 面的对应闸门是
- * `authedProcedure`，它与 `requireRequestUser` 共用 `requireServerUser` 判决。
- */
-export async function currentServerUser(): Promise<ServerUser> {
-  return getServerUser(await readSession());
-}
-
-/**
- * 鉴权闸：`app-settings.json` 的 `loginRequired` 打开时，无会话返回 null
- * （调用方回 401）；否则回落演示用户。
+ * 这里刻意**不提供**「总是兜底演示用户」的第二入口：那等于把 `loginRequired`
+ * 变成可被单个路由误绕过的建议。tRPC 面的对应闸门是 `authedProcedure`，
+ * 它与本函数共用 `requireServerUser` 单点判决。
  */
 export async function requireRequestUser(): Promise<ServerUser | null> {
   return requireServerUser(await readSession());
