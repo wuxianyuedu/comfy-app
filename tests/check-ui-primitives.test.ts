@@ -4894,4 +4894,73 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     ) as { files: Record<string, { P79?: number }> };
     expect(baseline.files["src/components/studio/P79Allow.tsx"]?.P79).toBe(1);
   });
+
+  /* ── P80「视图层 w-N 与 h-N 同值应换 size-N」（棘轮）差分回归 ────
+   * 见 scripts/check-ui-primitives.cjs 里 P80 注释。合规出口是 tailwind 内建
+   * 的 `size-N`（同一份 `w-N h-N` 的简写）。判据按 className 字符串解析、
+   * 交集非空即计一处。 */
+  it("P80 视图层同 className 里 w-8 + h-8 → 计入棘轮（阻断）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P80EqualWH.tsx",
+      [
+        "export function V() {",
+        "  return <div className='w-8 rounded-lg h-8' />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P80");
+    expect(output).toContain("studio/P80EqualWH.tsx");
+  });
+
+  it("P80 只有一侧（w-8 或 h-8）不误伤；不等值（w-8 h-9）也不算这条账", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P80Asymmetric.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        "      <div className='w-8' />",
+        "      <div className='h-8' />",
+        "      <div className='w-8 h-9' />",
+        "      <div className='w-full h-14' />",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P80 两个独立 className 各有一对 w-N h-N → 计 2 处（一处一处治理）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P80TwoSites.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        "      <div className='w-8 h-8 rounded-full' />",
+        "      <div className='h-3 w-3 bg-primary' />",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--update"]);
+    expect(code, output).toBe(0);
+    const baseline = JSON.parse(
+      readFileSync(
+        join(workdir, "scripts", ".ui-primitives-baseline.json"),
+        "utf8",
+      ),
+    ) as { files: Record<string, { P80?: number }> };
+    expect(baseline.files["src/components/studio/P80TwoSites.tsx"]?.P80).toBe(
+      2,
+    );
+  });
 });
