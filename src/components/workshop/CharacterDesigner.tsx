@@ -567,7 +567,7 @@ export function CharacterDesigner({
               className="border-border bg-surface rounded-xl border p-4"
             >
               <div className="mb-3 flex items-center gap-2">
-                <span className="bg-primary-soft text-primary grid h-6 w-6 place-items-center rounded-full text-xs font-semibold">
+                <span className="bg-primary-soft text-primary grid size-6 place-items-center rounded-full text-xs font-semibold">
                   {i + 1}
                 </span>
                 <input

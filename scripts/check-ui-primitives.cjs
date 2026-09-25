@@ -3482,10 +3482,13 @@ const RULES = {
         if (!cls) continue;
         const ws = new Set();
         const hs = new Set();
-        for (const x of cls.matchAll(/\bw-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
+        /* 前面必须是**行首 / 空白 / 引号**（`(^|[^-\w])` + 捕获后续），
+         * 否则会把 `min-h-0` / `max-w-md` 这类带前缀的容器写法误当
+         * 成 `h-0` / `w-md`（JS 正则 `\b` 在 `-h-` 处也算边界）。 */
+        for (const x of cls.matchAll(/(?:^|[^-\w])w-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
           ws.add(x[1]);
         }
-        for (const x of cls.matchAll(/\bh-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
+        for (const x of cls.matchAll(/(?:^|[^-\w])h-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
           hs.add(x[1]);
         }
         for (const w of ws) if (hs.has(w)) n++;

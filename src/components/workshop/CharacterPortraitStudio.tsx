@@ -380,7 +380,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   <MediaThumbnail
                     src={candidate.url}
                     alt={`定妆照候选（${PORTRAIT_SOURCE_LABELS[candidate.source]}）`}
-                    className="h-24 w-24 object-cover"
+                    className="size-24 object-cover"
                   />
                 </Button>
                 <span className="pointer-events-none absolute top-1 left-1 rounded bg-black/60 px-1 text-[9px] text-white">
