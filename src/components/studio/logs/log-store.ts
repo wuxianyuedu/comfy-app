@@ -74,6 +74,12 @@ function welcomeEntry(): LogEntry {
 
 export interface LogStoreState {
   logs: LogEntry[];
+  /**
+   * 因内存上限（`LOG_STORE_MAX`）被折叠掉的更早日志**累计**条数。上限是刻意
+   * 恢复的（见 appendFileLogs：真新行才推进 revision、截断不推进，满足文件早先
+   * 「将来若恢复上限须恢复身份判据」的约束）。面板据此显示「更早 N 条已折叠」。
+   */
+  droppedTotal: number;
   filteredLogs: LogEntry[];
   filter: LogFilter;
   /** 来源筛选（#262：启动日志与应用运行日志混在一屏，需要能分开看）。 */
@@ -257,6 +263,25 @@ export interface LogPanelSlice {
  * {@link applyView} 收口，保证 `header` 切片永远反映的是**写入之后**的状态，
  * 而不是写入前那一份。
  */
+/**
+ * 时间线内存上限（刻意值）。超出即折叠最旧的、`droppedTotal` 累计，面板显示
+ * 「更早 N 条已折叠」。截断发生在 `mergeTimeline` **之后**，所以不影响
+ * 「真新行落板才推进 revision」这条身份判据（见 appendFileLogs 注释）。
+ */
+export const LOG_STORE_MAX = 5000;
+
+/** 把合并后的时间线裁到上限；返回裁后数组与本次被折叠的条数。 */
+function capTimeline(logs: LogEntry[]): {
+  logs: LogEntry[];
+  dropped: number;
+} {
+  if (logs.length <= LOG_STORE_MAX) return { logs, dropped: 0 };
+  return {
+    logs: logs.slice(-LOG_STORE_MAX),
+    dropped: logs.length - LOG_STORE_MAX,
+  };
+}
+
 function derive(
   logs: LogEntry[],
   filter: LogFilter,
@@ -351,6 +376,7 @@ function applyView(derived: ReturnType<typeof derive>, view: LogPanelView) {
 
 export const useLogStore = create<LogStoreState>((set, get) => ({
   logs: typeof window === "undefined" ? [] : [welcomeEntry()],
+  droppedTotal: 0,
   filteredLogs: [],
   filter: "all",
   origin: "all",
@@ -395,16 +421,20 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         time: Date.now(),
       };
       const logs = mergeTimeline(state.logs, [full]);
-      return applyView(
-        derive(
-          logs,
-          state.filter,
-          state.search,
-          state.origin,
-          state.revision + 1,
+      const capped = capTimeline(logs);
+      return {
+        ...applyView(
+          derive(
+            capped.logs,
+            state.filter,
+            state.search,
+            state.origin,
+            state.revision + 1,
+          ),
+          viewOf(state),
         ),
-        viewOf(state),
-      );
+        droppedTotal: state.droppedTotal + capped.dropped,
+      };
     }),
 
   appendFileLogs: (entries) =>
@@ -416,22 +446,25 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       const logs = mergeTimeline(state.logs, fresh);
       /* 全批是重复行（或全被会话起点裁掉）→ 时间线没变，什么都不推进。 */
       if (logs === state.logs) return { logs: state.logs };
-      /* mergeTimeline 返回新数组 ⟺ 至少一条新行真正落板。时间线不设总数上限，
-       * 不存在「产生了新数组、新行却被裁掉」的形态——2000 条环形缓冲的时代，
-       * 截断会把旧行挤出去，必须按条目身份另问一遍「有没有新行」（规范 §7.22.4）；
-       * **将来若恢复内存上限，那条身份判据必须一并恢复**：截断不算新内容落板。
-       * `revision` 只在真落了新行时推进，页脚「有 N 条新的日志」与贴底基线
-       * 才不会被「时间线右移一格」这种形态虚报。 */
-      return applyView(
-        derive(
-          logs,
-          state.filter,
-          state.search,
-          state.origin,
-          state.revision + 1,
+      /* mergeTimeline 返回新数组 ⟺ 至少一条新行真正落板 → 推进 revision。
+       * 内存上限（LOG_STORE_MAX）的截断放在 mergeTimeline **之后**、独立于
+       * revision 判据：revision 只因为「真有新行落板」推进，截断本身不算新内容
+       * 落板（满足文件早先「将来若恢复上限须恢复身份判据」的约束）。被截掉的
+       * 旧行累计进 droppedTotal，面板据此显示「更早 N 条已折叠」。 */
+      const capped = capTimeline(logs);
+      return {
+        ...applyView(
+          derive(
+            capped.logs,
+            state.filter,
+            state.search,
+            state.origin,
+            state.revision + 1,
+          ),
+          viewOf(state),
         ),
-        viewOf(state),
-      );
+        droppedTotal: state.droppedTotal + capped.dropped,
+      };
     }),
 
   /* 会话起点到达得比首次轮询晚时，时间线里可能已经混进了上次运行的行：
@@ -672,6 +705,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         viewBaselineAfter: 0,
         followResetAt: Date.now(),
         anchorId: null,
+        droppedTotal: 0,
       };
     }),
 
