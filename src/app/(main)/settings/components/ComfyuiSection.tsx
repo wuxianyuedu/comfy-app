@@ -17,7 +17,8 @@ import {
   STATUS_TEXT_CLASS,
 } from "../settings-status-row-config";
 
-import { StatusButton, Card, Field } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { StatusButton, Field } from "./SettingsPrimitives";
 import { RuntimeLogBox } from "./RuntimeLogBox";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
@@ -59,7 +60,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
   const desktopManaged = !!c.comfyInstance?.desktopManaged;
 
   return (
-    <Card title="创作后端（ComfyUI）">
+    <SettingsCard title="创作后端（ComfyUI）">
       <Field
         label="ComfyUI 路径（源码根或桌面版实例根）"
         value={c.drafts.settings.comfyuiPath}
@@ -267,6 +268,6 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
       <StatusButton onClick={() => void c.savePrefs()} disabled={c.saving}>
         保存偏好
       </StatusButton>
-    </Card>
+    </SettingsCard>
   );
 }

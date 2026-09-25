@@ -10,12 +10,12 @@ import { Moon, Sun } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 
-import { Card } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
   return (
-    <Card title="外观主题">
+    <SettingsCard title="外观主题">
       <p className="text-muted-foreground mb-4 text-sm">
         选择应用的主题外观：深色（Dark）或浅色（Light）。切换即时生效并自动保存，
         也可通过顶部导航栏的太阳/月亮按钮随时切换。
@@ -67,6 +67,6 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
           );
         })}
       </div>
-    </Card>
+    </SettingsCard>
   );
 }
