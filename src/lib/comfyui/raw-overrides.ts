@@ -22,6 +22,8 @@
 
 import { z } from "zod";
 
+import { randomSeed } from "./random-seed";
+
 /** 任意 JSON 对象的宽松视图（外部输入的中间层窄化用）。 */
 export type JsonRecord = Record<string, unknown>;
 
@@ -189,11 +191,6 @@ function hasSeedControlSlot(node: RawUiNode): boolean {
   /* 只有当 `widgets_values` 比带控件的输入多出一项时，哨兵槽才存在
    *（更早的 ComfyUI 不序列化哨兵，长度相等说明 seed+1 也是真控件）。 */
   return node.widgets_values.length > widgetInputCount(node);
-}
-/** 为「没有控制槽时」的随机化兜底新造一个非负的 ComfyUI 风格 seed
- * （在 JS 安全整数范围内）。 */
-function randomSeed(): number {
-  return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 }
 /** ComfyUI 在子图定义里给合成边界节点用的哨兵 id：`-10` 是输入轨，`-20` 是
  *  输出轨。连线的 origin 是 `-10` 表示「这个内部输入由暴露出来的子图引脚供给」
