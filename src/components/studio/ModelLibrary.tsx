@@ -7,6 +7,7 @@ import { textHandler } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { FieldLabel } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
@@ -353,7 +354,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               placeholder="搜索目录名…"
               className="border-border bg-subtle text-ink-bright flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
             />
-            <label className="text-ink-faint flex shrink-0 cursor-pointer items-center gap-2 text-xs">
+            <FieldLabel className="text-ink-faint flex shrink-0 cursor-pointer items-center gap-2 text-xs">
               <Checkbox
                 checked={c.onlyEnabled}
                 onCheckedChange={(checked) =>
@@ -362,7 +363,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                 className="border-border-strong bg-surface-2 text-primary-strong focus:ring-primary/40 size-3.5 rounded"
               />
               仅显示已启用
-            </label>
+            </FieldLabel>
           </div>
 
           {/* list */}
