@@ -124,6 +124,7 @@ export default defineConfig({
          *   · `app-events` 只有在 jsdom 下才走得到真实分支（`window` 的
          *     存在性判据），用例自带 `@vitest-environment jsdom`。 */
         "src/lib/clamp.ts",
+        "src/lib/collections.ts",
         "src/lib/upper-token.ts",
         "src/lib/app-events.ts",
         /* 本批三条新出口（规范 16 §16.2.4.66 ~ §16.2.4.68）。
@@ -699,6 +700,12 @@ export default defineConfig({
          *   · P61 对面 `~/lib/app-events` —— 带 / 不带载荷、多订阅者、
          *     退订只影响自己、无 `window` 分支都验到。 */
         "src/lib/clamp.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/collections.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

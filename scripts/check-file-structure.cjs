@@ -301,6 +301,11 @@ const DOMAIN_EXEMPT = new Set([
    * `[0,size]`，同一个值在两个面板落进不同区间）。进任何子域都会让其余侧反向
    * 依赖它 —— 与 `progress` / `number-format` / `ordered-set` 同款：顶层单例。 */
   "src/lib/clamp.ts",
+  /* 「取一个分组桶、没有就建」/「按构造必存在的键取值」的唯一出口：`media/materials`
+   *（按文件夹）、`studio/history`（按日期）、`ui/segment-popover`（按子组）与
+   * 任何需要分桶聚合的地方**都在用**，此前各自写 `map.get(k)!.push` 靠非空断言兜
+   * 「刚初始化过」这条隐性契约。进任何子域都会让其余侧反向依赖它 —— 顶层单例。 */
+  "src/lib/collections.ts",
   /* 「把一个可能带空白 / 缺省的外来串归一成大写记号」的唯一出口
    *（ISSUE #672）：视图层（ComfyUI 类型判定、端口配色、模式筛选胶囊）与
    * `src/lib` / `src/server`（模式契约、尺寸场景、状态筛选、端口类型映射）
