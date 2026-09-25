@@ -25,6 +25,7 @@ import { listCachedTaskIds } from "./stepLogCache";
 import { useActiveTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
+import { FieldLabel } from "~/components/ui/field";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { useCancelTask } from "./hooks/use-cancel-task";
@@ -278,14 +279,14 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   );
                 })}
               </div>
-              <label className="text-ink-soft flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
+              <FieldLabel className="text-ink-soft flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
                 <Checkbox
                   checked={autoscroll}
                   onCheckedChange={(checked) => setAutoscroll(checked === true)}
                   className="size-3.5 cursor-pointer accent-violet-500"
                 />
                 自动滚动
-              </label>
+              </FieldLabel>
             </div>
 
             {/* Log body — 与应用日志同款行样式 */}

@@ -39,6 +39,7 @@ import { WorkflowRunRawCliModal } from "./WorkflowRunRawCliModal";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { FieldLabel } from "~/components/ui/field";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
@@ -318,14 +319,14 @@ export function WorkflowRunLogModal({
                 );
               })}
             </div>
-            <label className="text-ink-faint flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
+            <FieldLabel className="text-ink-faint flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
               <Checkbox
                 checked={autoscroll}
                 onCheckedChange={(checked) => setAutoscroll(checked === true)}
                 className="size-3.5 cursor-pointer accent-violet-500"
               />
               自动滚动
-            </label>
+            </FieldLabel>
           </div>
 
           {/* Log body */}
