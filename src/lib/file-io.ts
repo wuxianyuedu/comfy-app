@@ -66,6 +66,13 @@ export async function readFileAsText(file: File): Promise<string> {
  */
 export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise<string>((resolve, reject) => {
+    /* 无 `FileReader` 的环境（SSR / 被替换的宿主）直接拒绝，而不是让
+     * `new FileReader()` 抛 ReferenceError 成为未捕获异常。这条守卫随
+     * 「读进来」能力归位本模块（此前它散在 browser-io 的重名实现里）。 */
+    if (typeof FileReader === "undefined") {
+      reject(new Error("当前环境不支持读取文件"));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result;

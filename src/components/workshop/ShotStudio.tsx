@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { randomSeed } from "~/lib/comfyui/random-seed";
 import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Icon } from "~/components/ui/icon";
@@ -63,12 +64,9 @@ function noop(): void {
  *  有限数字 → 用该固定 seed（pin 住以复现）。 */
 function resolveSeed(raw: string): number {
   const trimmed = raw.trim();
-  if (trimmed === "")
-    return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+  if (trimmed === "") return randomSeed();
   const n = Number(trimmed);
-  return Number.isFinite(n)
-    ? Math.trunc(n)
-    : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+  return Number.isFinite(n) ? Math.trunc(n) : randomSeed();
 }
 
 /**

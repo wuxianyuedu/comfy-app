@@ -26,6 +26,7 @@ import {
   type ComfyExitFacts,
   type ComfyExitReport,
 } from "./lifecycle-exit";
+import { sleep } from "~/lib/with-timeout";
 
 /** 就绪探测：返回可达 base（不可达为 null）。 */
 export type ComfyProbe = () => Promise<string | null>;
@@ -104,11 +105,6 @@ export async function waitForComfyReady(
     await sleep(interval);
   }
   return { ok: false, base: null, detail: opts.timeoutDetail };
-}
-
-/** 可注入的睡眠（默认真 sleep；测试传入立即返回的桩以不等待）。 */
-export function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 /* ── 事件回调（可测的具名纯函数）────────────────────────────────────── */
