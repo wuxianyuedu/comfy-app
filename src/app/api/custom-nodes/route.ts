@@ -23,6 +23,13 @@ import { errorText } from "~/lib/error-message";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { AppError } from "~/lib/core/errors";
 import { isRecord } from "~/lib/is-record";
+import type {
+  DiscoveredSubpkg,
+  ParseReport,
+  ParseStreamEvent,
+  SettingsResp,
+  SettingsStreamEvent,
+} from "~/lib/comfyui/custom-nodes-stream";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorDetail } from "~/lib/api-error";
 import { withTimeoutResult } from "~/lib/with-timeout";
@@ -174,7 +181,10 @@ function buildPathMap(
 
 /* 对一组父目录跑只读的 `discover` 模式并返回子包。
  * 做短暂缓存，因为界面上路径输入一变就会调它。 */
-const discoverCache = new Map<string, { at: number; result: unknown[] }>();
+const discoverCache = new Map<
+  string,
+  { at: number; result: DiscoveredSubpkg[] }
+>();
 
 /** 单个 `discover` 进程的最长等待。解析器要扫完父目录再算一遍 hash，
  *  目录大时能到分钟级 —— 但再久也不能让请求挂到客户端超时，超时即放弃
@@ -240,10 +250,11 @@ async function runDiscover(parentDirs: readonly unknown[]): Promise<unknown[]> {
     if (stdout === null) continue;
     try {
       const parsed: unknown = JSON.parse(stdout);
-      const pkgs: unknown[] =
+      const pkgs = (
         isRecord(parsed) && Array.isArray(parsed.packages)
           ? parsed.packages
-          : [];
+          : []
+      ) as DiscoveredSubpkg[];
       discoverCache.set(key, { at: Date.now(), result: pkgs });
       return pkgs;
     } catch {
@@ -273,7 +284,7 @@ interface DiscoverProgressFields {
 
 function runDiscoverStreaming(
   parent: string,
-  send: (obj: unknown) => void,
+  send: (ev: SettingsStreamEvent) => void,
 ): Promise<unknown[]> {
   const cached = discoverCache.get(parent);
   if (cached && Date.now() - cached.at < 5000) {
@@ -401,10 +412,11 @@ function runDiscoverStreaming(
           const parsed: unknown = finalJson
             ? JSON.parse(finalJson)
             : { packages: [] };
-          const pkgs: unknown[] =
+          const pkgs = (
             isRecord(parsed) && Array.isArray(parsed.packages)
               ? parsed.packages
-              : [];
+              : []
+          ) as DiscoveredSubpkg[];
           discoverCache.set(parent, { at: Date.now(), result: pkgs });
           resolved = true;
           send({
@@ -438,8 +450,8 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const send = (obj: unknown) =>
-        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      const send = (ev: ParseStreamEvent) =>
+        controller.enqueue(encoder.encode(JSON.stringify(ev) + "\n"));
 
       const pyCandidates = ["python3", "python", "py"];
       const args = [
@@ -549,7 +561,7 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
           send({
             type: "done",
             ok: !!report,
-            report,
+            report: report as ParseReport | null,
             stderr: "",
             exitCode: code,
           });
@@ -635,8 +647,8 @@ async function buildGetResponse(): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (obj: unknown) =>
-        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      const send = (ev: SettingsStreamEvent) =>
+        controller.enqueue(encoder.encode(JSON.stringify(ev) + "\n"));
       try {
         send({ type: "discover_start", parents: paths, total: paths.length });
         const discoveredByParent: Record<string, unknown[]> = {};
@@ -655,8 +667,8 @@ async function buildGetResponse(): Promise<Response> {
         // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。
         send({
           type: "summary",
-          summary,
-          lastReport,
+          summary: summary as SettingsResp["summary"],
+          lastReport: lastReport as ParseReport | null,
           byPath,
           settings: { paths, localWorkflowPaths },
         });
