@@ -307,7 +307,7 @@ export function MaterialLibraryPanel({
                 key={`skeleton-${i}`}
                 className="flex items-center gap-3 py-2"
               >
-                <Skeleton className="bg-subtle h-9 w-9 shrink-0 rounded-lg" />
+                <Skeleton className="bg-subtle size-9 shrink-0 rounded-lg" />
                 <Skeleton className="bg-subtle h-3 flex-1 rounded" />
               </div>
             ))}
@@ -417,7 +417,7 @@ export function MaterialLibraryPanel({
                   })}
                 >
                   {item.kind === "image" || item.kind === "video" ? (
-                    <div className="bg-canvas-deep h-9 w-9 shrink-0 overflow-hidden rounded-lg">
+                    <div className="bg-canvas-deep size-9 shrink-0 overflow-hidden rounded-lg">
                       <MediaThumb
                         src={item.url}
                         alt={item.name}
@@ -456,7 +456,7 @@ export function MaterialLibraryPanel({
                       href={item.url}
                       download={item.name}
                       draggable={false}
-                      className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+                      className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
                       title="下载"
                     >
                       <Download size={13} />
