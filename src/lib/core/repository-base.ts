@@ -75,10 +75,12 @@ export interface Repository<T extends Identifiable> {
 export class DrizzleRepository<
   T extends Identifiable,
 > implements Repository<T> {
-  constructor(
-    protected readonly table: AnySQLiteTable,
-    protected readonly idColumn?: AnySQLiteColumn,
-  ) {}
+  protected readonly table: AnySQLiteTable;
+  protected readonly idColumn?: AnySQLiteColumn;
+  constructor(table: AnySQLiteTable, idColumn?: AnySQLiteColumn) {
+    this.table = table;
+    this.idColumn = idColumn;
+  }
 
   private get id() {
     return (this.idColumn ??

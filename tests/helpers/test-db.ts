@@ -229,7 +229,7 @@ function isDateColumn(col: string): boolean {
   return col.endsWith("At") && col !== "sourceMtime" && col !== "sortIndex";
 }
 
-function parseRow(table: string, row: Record<string, unknown>): Row {
+function parseRow(_table: string, row: Record<string, unknown>): Row {
   const out: Row = { ...row };
   for (const [k, v] of Object.entries(out)) {
     if (v != null && jsonColumns.has(k) && typeof v === "string") {
