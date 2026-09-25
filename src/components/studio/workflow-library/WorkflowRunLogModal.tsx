@@ -191,6 +191,7 @@ export function WorkflowRunLogModal({
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
+        aria-label="执行日志"
         data-testid="wflib-log-modal"
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
