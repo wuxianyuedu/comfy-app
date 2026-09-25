@@ -306,7 +306,7 @@ export function ScriptMarkdownEditor({
       {/* Header */}
       <header className="border-border flex h-14 items-center justify-between border-b px-5">
         <div className="flex items-center gap-3">
-          <span className="bg-primary/15 text-primary grid h-8 w-8 place-items-center rounded-lg">
+          <span className="bg-primary/15 text-primary grid size-8 place-items-center rounded-lg">
             <FileText size={16} />
           </span>
           <h2 className="text-ink-bright text-[15px] font-semibold">{title}</h2>

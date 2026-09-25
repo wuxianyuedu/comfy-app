@@ -283,7 +283,7 @@ export function FinalComposer({
                 active ? "ring-primary/40 ring-1" : ""
               }`}
             >
-              <span className="bg-primary-soft text-primary grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold">
+              <span className="bg-primary-soft text-primary grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold">
                 {idx + 1}
               </span>
               <div className="bg-elevated h-14 w-20 shrink-0 overflow-hidden rounded-lg">
