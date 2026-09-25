@@ -182,7 +182,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                 key={`skeleton-${i}`}
                 className="flex items-center gap-3 py-2"
               >
-                <Skeleton className="bg-subtle h-10 w-10 shrink-0 rounded-md" />
+                <Skeleton className="bg-subtle size-10 shrink-0 rounded-md" />
                 <div className="min-w-0 flex-1 flex-col gap-1.5">
                   <Skeleton className="bg-subtle h-3 w-3/4 rounded" />
                   <Skeleton className="bg-subtle h-2 w-1/3 rounded" />
@@ -285,7 +285,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                 >
                   {/* 缩略图 / 类型占位 */}
                   {task.cover ? (
-                    <div className="bg-canvas-deep h-10 w-10 shrink-0 overflow-hidden rounded-md">
+                    <div className="bg-canvas-deep size-10 shrink-0 overflow-hidden rounded-md">
                       <MediaThumbnail
                         src={task.cover}
                         alt={titleOf(task)}
@@ -349,7 +349,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         href={task.cover}
                         download
                         draggable={false}
-                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
                         title="下载"
                       >
                         <Download size={13} />
