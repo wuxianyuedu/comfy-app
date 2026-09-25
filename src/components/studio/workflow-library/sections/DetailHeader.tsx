@@ -173,7 +173,7 @@ export function DetailHeader({
         >
           <ActionButton
             onClick={onUse}
-            icon={<Plus className="h-3.5 w-3.5" />}
+            icon={<Plus className="size-3.5" />}
             label="导入画布"
             title={
               usable
@@ -186,7 +186,7 @@ export function DetailHeader({
           <ModelTagPicker meta={meta} />
           <ActionButton
             onClick={onEdit}
-            icon={<Edit3 className="h-3.5 w-3.5" />}
+            icon={<Edit3 className="size-3.5" />}
             label="编辑"
             title="在工作流编辑器中打开"
           />
@@ -197,7 +197,7 @@ export function DetailHeader({
                 busyResync ? (
                   <Spinner className="size-3.5" />
                 ) : (
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <RefreshCw className="size-3.5" />
                 )
               }
               label={busyResync ? "同步中" : "同步"}
@@ -206,18 +206,18 @@ export function DetailHeader({
           )}
           <ActionButton
             onClick={onOpenSource}
-            icon={<FileJson className="h-3.5 w-3.5" />}
+            icon={<FileJson className="size-3.5" />}
             label="源文件"
           />
           <ActionButton
             onClick={onDownload}
-            icon={<Download className="h-3.5 w-3.5" />}
+            icon={<Download className="size-3.5" />}
             label={busyDownload ? "准备中" : "下载"}
             disabled={busyDownload}
           />
           <ActionButton
             onClick={onDelete}
-            icon={<Trash2 className="h-3.5 w-3.5" />}
+            icon={<Trash2 className="size-3.5" />}
             label="删除"
             variant="danger"
           />
