@@ -122,7 +122,13 @@ export function ShellTabs({ children }: ShellTabsProps) {
   const useTitleBar = shouldUseTitleBarTabs(inShell);
 
   return (
-    <div className="bg-canvas text-ink flex h-screen w-screen flex-col overflow-hidden">
+    <div
+      // 桌面壳里顶部有自定义标题行（TitleBarTabs）；打 data-shell 让全局 CSS 把
+      // fixed 的 shadcn 侧栏容器让出标题行高度（否则侧栏头部「Comfy-APP」被页签
+      // 盖住）。浏览器 / dev 无标题行，不打此属性，侧栏仍从视口顶起。
+      data-shell={useTitleBar ? "" : undefined}
+      className="bg-canvas text-ink flex h-screen w-screen flex-col overflow-hidden"
+    >
       {useTitleBar ? (
         <TitleBarTabs
           tabs={tabs}
