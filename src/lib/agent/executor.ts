@@ -1,7 +1,8 @@
 // ── 工坊 Agent 工具执行器（纯逻辑模块）────────────────────
 // 把 Agent tool_call 映射成对工坊 controller 的实际操作。
 // 本模块不直接持有 React state —— 所有数据读写经 handlers 回调完成。
-import { asRecord } from "~/lib/is-record";
+import { asRecord, isRecord } from "~/lib/is-record";
+import { extractJson, extractJsonArray } from "~/lib/llm/parse";
 import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 import { SUMMARY_MAX, clampText } from "~/lib/text-clamp";
 
@@ -56,21 +57,15 @@ function summarizeArgs(argsJson: string, maxLen = 200): string {
   }
 }
 
-/** 从 LLM 输出文本中解析角色 JSON 数组。 */
+/** 从 LLM 输出文本中解析角色 JSON 数组（扫描走全库唯一的 `extractJsonArray`）。 */
 function parseCharactersFromJson(text: string): Array<{
   name: string;
   appearance?: string;
   costume?: string;
   personality?: string;
 }> {
-  const body = stripFences(text);
-  const start = body.search(/\[/);
-  if (start < 0) return [];
-  const end = body.lastIndexOf("]");
-  if (end <= start) return [];
   try {
-    const arr: unknown = JSON.parse(body.slice(start, end + 1));
-    if (!Array.isArray(arr)) return [];
+    const arr = extractJsonArray(text);
     return arr
       .filter((item) => typeof item === "object" && item !== null)
       .map((item) => {
@@ -89,19 +84,14 @@ function parseCharactersFromJson(text: string): Array<{
   }
 }
 
-/** 从 LLM 输出文本中解析单个角色 JSON。 */
+/** 从 LLM 输出文本中解析单个角色 JSON（扫描走全库唯一的 `extractJson`）。 */
 function parseCharacterFull(
   text: string,
 ): { appearance: string; costume: string; personality: string } | null {
-  const body = stripFences(text);
-  const start = body.search(/\{/);
-  if (start < 0) return null;
-  const end = body.lastIndexOf("}");
-  if (end <= start) return null;
   try {
-    const obj: unknown = JSON.parse(body.slice(start, end + 1));
-    if (typeof obj !== "object" || obj === null) return null;
-    const rec = obj as Record<string, unknown>;
+    const parsed: unknown = extractJson(text);
+    if (!isRecord(parsed)) return null;
+    const rec = parsed;
     return {
       appearance: typeof rec.appearance === "string" ? rec.appearance : "",
       costume: typeof rec.costume === "string" ? rec.costume : "",
@@ -112,21 +102,15 @@ function parseCharacterFull(
   }
 }
 
-/** 从 LLM 输出文本中解析分镜镜头 JSON 数组。 */
+/** 从 LLM 输出文本中解析分镜镜头 JSON 数组（扫描走全库唯一的 `extractJsonArray`）。 */
 function parseShotsFromJson(text: string): Array<{
   sceneHeading: string;
   description: string;
   shotType: string;
   characterNames: string[];
 }> {
-  const body = stripFences(text);
-  const start = body.search(/\[/);
-  if (start < 0) return [];
-  const end = body.lastIndexOf("]");
-  if (end <= start) return [];
   try {
-    const arr: unknown = JSON.parse(body.slice(start, end + 1));
-    if (!Array.isArray(arr)) return [];
+    const arr = extractJsonArray(text);
     return arr
       .filter((item) => typeof item === "object" && item !== null)
       .map((item) => {
@@ -152,12 +136,6 @@ function parseShotsFromJson(text: string): Array<{
   } catch {
     return [];
   }
-}
-
-/** 去掉代码围栏与前后缀文字，返回可 JSON.parse 的文本。 */
-function stripFences(text: string): string {
-  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(text ?? "");
-  return (fence ? fence[1]! : (text ?? "")).trim();
 }
 
 /** 把 agent tool_call 解析成可执行的工具闭包。 */
