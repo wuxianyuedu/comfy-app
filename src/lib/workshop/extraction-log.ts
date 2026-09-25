@@ -28,7 +28,7 @@ export function emptyExtractLog(): ExtractLogEntry[] {
   return [];
 }
 
-/** 时间戳（本地 ISO）。 */
+/** 时间戳（UTC ISO：绝对时刻的规范存储形态，展示层用 formatClock 转本地时刻）。 */
 export function nowTs(): string {
   return new Date().toISOString();
 }

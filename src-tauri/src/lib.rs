@@ -1287,6 +1287,9 @@ fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
   // 壳自持日志到 <项目根>/log/shell/shell.log——standalone 双击无 launcher 重定向，
   // 壳若在 launcher 之外崩溃仍有日志可查（launch-and-build.md §4：按子系统分区）。
   // 插件自带 KeepOne 轮转，避免文件无限增长。
+  // 时区固定 UseLocal：插件的默认策略是 UTC（`DEFAULT_TIMEZONE_STRATEGY`），
+  // 壳 stderr 被 launcher 重定向进 log/launcher/ 后面板直接展示——UTC 会让
+  // 同一份面板里的行与其余本地时钟的行差 8 小时。
   let mut targets = vec![
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
@@ -1300,6 +1303,7 @@ fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
   }
   tauri_plugin_log::Builder::new()
     .level(log::LevelFilter::Info)
+    .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
     .targets(targets)
     .build()
 }
@@ -1307,8 +1311,10 @@ fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
 #[cfg(debug_assertions)]
 fn build_log_plugin(_project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
   // dev 模式：壳日志由 launcher 把 stderr 重定向进 log/launcher/，无需壳自持文件。
+  // 时区同样固定 UseLocal（理由见 release 分支的注释）。
   tauri_plugin_log::Builder::new()
     .level(log::LevelFilter::Info)
+    .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
     .targets([
       tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
       tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),

@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Textarea } from "~/components/ui/textarea";
 import { textHandler } from "~/lib/form-props";
+import { formatClock } from "~/lib/time-format";
 import { useAgentRun, type AgentRunController } from "./use-agent-run";
 import type {
   ApprovalMode,
@@ -71,7 +72,7 @@ const APPROVAL_OPTIONS: { value: ApprovalMode; label: string }[] = [
 function formatStepTime(ts: string): string {
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("zh-CN", { hour12: false });
+  return formatClock(d);
 }
 
 export function RunControlBar() {
