@@ -4655,4 +4655,104 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const { code, output } = run();
     expect(code, output).toBe(0);
   });
+
+  /* ── P78「视图层裸写 <label>」（棘轮）差分回归 ────────────────
+   * 见 scripts/check-ui-primitives.cjs 里 P78 注释：与 P23 是同一族账的两层
+   * （P23 数表单行组合形态、已清零；P78 数任意 <label 起始标签、含无控件的
+   * 孤立 label）。合规出口：FormField / FieldLabel / Base UI Checkbox 的
+   * children。锚点 `<label[\s/>]`，不误伤 labelClassName / label= 同前缀。 */
+  it("P78 视图层裸 <label> 计入棘轮（相对基线增量 → 阻断）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P78RawLabel.tsx",
+      [
+        "export function V() {",
+        "  return <label className='text-xs'>名称</label>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P78");
+    expect(output).toContain("studio/P78RawLabel.tsx");
+  });
+
+  it("P78 ui/label.tsx 与 ui/field.tsx 是这条账要收口的出口，走 EXEMPT_DIRS 天然豁免", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/label.tsx",
+      [
+        "export function Label() {",
+        "  return <label htmlFor='x'>ok</label>;",
+        "}",
+      ].join("\n"),
+    );
+    write(
+      "src/components/ui/field.tsx",
+      [
+        "export function FieldLabel() {",
+        "  return <label htmlFor='y'>ok</label>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P78 不误伤同前缀属性名（labelClassName / label='x' / <labeling），只数 <label 起始标签", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P78FalsePositive.tsx",
+      [
+        "export function V({ labelClassName }: { labelClassName: string }) {",
+        "  return (",
+        "    <div",
+        "      label='text'",
+        "      data-hint='<labeling not real tag'",
+        "    >",
+        "      <span className={labelClassName}>ok</span>",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P78 引入顺带解锁的 --update 逻辑：判据引入 vs 已有规则上升 ─────
+   * 见 scripts/check-ui-primitives.cjs 里 `before && after > before` 的
+   * 分支重构。测试锁：
+   *   · 旧基线里从没出现过的 rule id（新加判据的起点登记）→ `--update` 允许；
+   *   · 旧基线里已经有过的 rule id 上升 → `--update` 必须拒绝。
+   * 步骤：先造一个 P78 现场 → `--update` 登记起点 → 再写第二个 P78 →
+   * 第二次 `--update` 必须拦下（P78 已在基线、从 1 涨到 2 是"已有 rule 上升"）。 */
+  it("--update 允许登记新判据起点、但拦下已有 rule id 的上升", () => {
+    write(
+      "src/components/studio/P78Seed.tsx",
+      [
+        "export function V() {",
+        "  return <label className='text-xs'>seed</label>;",
+        "}",
+      ].join("\n"),
+    );
+    /* 第一次 --update：P78 从未在旧基线出现过、这是判据引入的起点登记，
+     * 允许通过。 */
+    const { code: firstCode, output: firstOut } = run(["--update"]);
+    expect(firstCode, firstOut).toBe(0);
+    /* 再写一个 P78 文件：after=2，基线里的 P78=1 已存在，此时上升就是"已有
+     * rule 上升"、必须拒绝。 */
+    write(
+      "src/components/studio/P78Regress.tsx",
+      [
+        "export function V() {",
+        "  return <label className='text-xs'>regress</label>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code: secondCode, output: secondOut } = run(["--update"]);
+    expect(secondCode, secondOut).not.toBe(0);
+    expect(secondOut).toContain("拒绝放宽基线");
+    expect(secondOut).toContain("P78：1 → 2");
+  });
 });
