@@ -325,26 +325,24 @@ export interface WFStores {
 export const WFStoresContext = createContext<WFStores | null>(null);
 
 /** 取 IOEdit store 的 api —— 供 owner（WorkflowEditorInner）在容器上方直写。
+ *  内部调 useContext，是 hook，只能在组件渲染期调用。
  *  消费方请用 useIOEditStore(selector)。 */
-export function getIOEditApi(): StoreApi<IOEditStore> {
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- 设计如此：仅在组件渲染期间调用
+export function useIOEditApi(): StoreApi<IOEditStore> {
   const ctx = useContext(WFStoresContext);
   if (!ctx)
-    throw new Error("getIOEditApi 必须在 <WFStoresContext.Provider> 内使用");
+    throw new Error("useIOEditApi 必须在 <WFStoresContext.Provider> 内使用");
   return ctx.io;
 }
-export function getRgthreeApi(): StoreApi<RgthreeGroupsStore> {
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- 设计如此：仅在组件渲染期间调用
+export function useRgthreeApi(): StoreApi<RgthreeGroupsStore> {
   const ctx = useContext(WFStoresContext);
   if (!ctx)
-    throw new Error("getRgthreeApi 必须在 <WFStoresContext.Provider> 内使用");
+    throw new Error("useRgthreeApi 必须在 <WFStoresContext.Provider> 内使用");
   return ctx.rgthree;
 }
-export function getViewerApi(): StoreApi<NodeJsonViewerStore> {
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- 设计如此：仅在组件渲染期间调用
+export function useViewerApi(): StoreApi<NodeJsonViewerStore> {
   const ctx = useContext(WFStoresContext);
   if (!ctx)
-    throw new Error("getViewerApi 必须在 <WFStoresContext.Provider> 内使用");
+    throw new Error("useViewerApi 必须在 <WFStoresContext.Provider> 内使用");
   return ctx.viewer;
 }
 
@@ -642,8 +640,8 @@ export function useNodeJsonViewer(): NodeJsonViewerContextValue {
 
 /* ════════════════════════════════════════════════════════════════════════
  *  WFStoresProvider —— 由持有者（WorkflowEditorInner）在组件体内创建 3 个
- *  store 实例并一次性下发。持有者自身用 getIOEditApi()/getRgthreeApi()/
- *  getViewerApi() 直写；渲染子树经 useStore(selector) 订阅。
+ *  store 实例并一次性下发。持有者自身用 useIOEditApi()/useRgthreeApi()/
+ *  useViewerApi() 直写；渲染子树经 useStore(selector) 订阅。
  * ════════════════════════════════════════════════════════════════════════ */
 export function WFStoresProvider({
   stores,
