@@ -101,6 +101,7 @@ export function LogPanel() {
    * 的数——级别按钮与来源下拉共用同一份，两边永远对得上（ISSUE #360）。 */
   const originCounts = countsByOrigin[origin ?? "all"] ?? countsByOrigin.all;
   const revision = useLogPanel((state) => state.revision);
+  const droppedTotal = useLogPanel((state) => state.droppedTotal);
   /* 「用户有没有主动要求回到最新」的生成号：它一变，贴底就升级为「一路追到
    * 最新」（见 log-store 的 followResetAt）。视图不自己去猜这件事，否则
    * store 与视图会各存一份贴底状态，出现「面板说不自动滚动、却仍在滚」。 */
@@ -660,8 +661,9 @@ export function LogPanel() {
           </div>
 
           {/* Footer：分页 + 「回到最新」出口。
-            时间线不设总数上限（能往前翻完整段历史），**同时显示**多少条由
-            每页 ≤ LOG_PAGE_SIZE 兜住，用户不会再被「两千条封顶」挡住视线。 */}
+            时间线有内存上限（LOG_STORE_MAX=5000）：更旧的会被折叠，droppedTotal
+            累计并在下方提示「更早 N 条已折叠」，完整历史仍在磁盘日志文件里。
+            同时显示多少条由每页 ≤ LOG_PAGE_SIZE 兜住。 */}
           <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
             <span className="flex items-center gap-2">
               <span>
@@ -674,6 +676,14 @@ export function LogPanel() {
                   search,
                 )}
               </span>
+              {droppedTotal > 0 && (
+                <span
+                  className="text-ink-fainter shrink-0"
+                  title={`内存时间线已折叠更早的 ${droppedTotal} 条（完整历史见磁盘日志文件）`}
+                >
+                  · 更早 {droppedTotal} 条已折叠
+                </span>
+              )}
               {/* 服务端进程标识：用户报障时能说清「日志来自哪个应用服务进程」，
                 也让面板在服务真重启后能自证（时间线已重置）。 */}
               {bootId && (
