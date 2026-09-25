@@ -51,7 +51,7 @@ export function ModelTagManager({
     setEditingDraft("");
   }, []);
   const commitEdit = useCallback(
-    (id: string, oldName: string) => {
+    (_id: string, oldName: string) => {
       void c.renameTag(oldName, editingDraft).then((ok) => {
         if (ok) cancelEdit();
       });

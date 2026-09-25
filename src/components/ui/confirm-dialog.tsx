@@ -93,6 +93,7 @@ export function ConfirmDialog({
       // 等一帧，好让 portal 挂载的节点已存在。取消函数直接作 effect 清理。
       return onNextFrame(() => confirmRef.current?.focus());
     }
+    return undefined;
   }, [open]);
 
   const accentIcon = icon ?? (danger ? ICON_WARN : ICON_INFO);

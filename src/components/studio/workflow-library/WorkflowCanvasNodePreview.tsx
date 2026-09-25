@@ -228,13 +228,13 @@ export function WorkflowCanvasNodePreview({
       onLog: (taskId, entry) => {
         appendWorkflowRunLog(taskId, entry);
       },
-      onOutput: (taskId, output) => {
+      onOutput: (_taskId, output) => {
         if (output.kind === "image" && output.url) {
           resultUrlRef.current = output.url;
           setResultUrl(output.url);
         }
       },
-      onSettled: (taskId, result) => {
+      onSettled: (_taskId, result) => {
         if (result.ok) {
           setPhase({
             kind: "done",

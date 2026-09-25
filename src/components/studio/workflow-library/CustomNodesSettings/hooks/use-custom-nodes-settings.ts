@@ -184,6 +184,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         console_.scrollTop = Math.max(0, console_.scrollTop + targetTop - 8);
       });
     }
+    return undefined;
   }, [logs, parseBusy.busy, perPkgParsing]);
 
   // 解析开始或结束时，把对话框滚到日志控制台 —— 否则高个子包列表把日志推到折叠线
@@ -194,6 +195,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
+    return undefined;
   }, [parseBusy.busy, perPkgParsing, logs.length]);
   // 单包解析完成时也滚到日志：此刻新 report 追加、reloadFromServer() 重新填充列表。
   useEffect(() => {
@@ -206,6 +208,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
+    return undefined;
   }, [report, parseBusy.busy, perPkgParsing]);
 
   /** 从服务端拉取设置并写入本地 state。首个 await 之前不做同步 setState，因此可直接
