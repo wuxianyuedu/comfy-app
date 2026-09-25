@@ -32,6 +32,8 @@ interface WidgetInputRowProps {
   onSeedModeChange?: (mode: string) => void;
   onValueChange: (value: unknown) => void;
   onPickFile: () => void;
+  /** 该行用户刚选过图时的本地预览地址（data URL）；无则回退到按值算的 ComfyUI 代理地址。 */
+  previewSrc?: string;
   onLabelChange?: (label: string) => void;
   onRequiredChange?: (required: boolean) => void;
   /** IO 编辑态：该参数在当前模式下的可见性（undefined = 不渲染 👁）。 */
@@ -63,6 +65,7 @@ export function WidgetInputRow({
   onSeedModeChange,
   onValueChange,
   onPickFile,
+  previewSrc,
   onLabelChange,
   onRequiredChange,
   visible,
@@ -215,6 +218,7 @@ export function WidgetInputRow({
       onSeedModeChange={onSeedModeChange}
       onValueChange={onValueChange}
       onPickFile={onPickFile}
+      previewSrc={previewSrc}
     />
   );
 

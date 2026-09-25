@@ -35,6 +35,8 @@ interface WidgetControlProps {
   onSeedModeChange?: (mode: string) => void;
   onValueChange: (value: unknown) => void;
   onPickFile: () => void;
+  /** 用户刚选过这张图时的本地预览地址（data URL）；有则优先于按值算的 ComfyUI 代理地址。 */
+  previewSrc?: string;
 }
 
 export function WidgetControl({
@@ -48,6 +50,7 @@ export function WidgetControl({
   onSeedModeChange,
   onValueChange,
   onPickFile,
+  previewSrc,
 }: WidgetControlProps) {
   /* 标记必填但仍为空 → 红框，提醒作者补齐后再发布。 */
   const missingRequired = !!entry.required && !isInputFilled(value);
@@ -176,7 +179,7 @@ export function WidgetControl({
        *  两个助手都吃任意形态，避免对象 / 数组被渲染成 `[object Object]` 或
        *  空掉（封装节点的 IMAGE 输入选完图「看不到图」，实测反馈）。 */
       const filename = mediaReferenceFilename(value);
-      const previewUrl = mediaPreviewUrl(value);
+      const previewUrl = previewSrc ?? mediaPreviewUrl(value);
       return (
         <div className={compact ? "" : "mt-1"}>
           <Button

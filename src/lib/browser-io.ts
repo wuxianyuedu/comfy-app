@@ -83,3 +83,33 @@ export function downloadText(
 export function downloadJson(value: unknown, filename: string): void {
   downloadText(JSON.stringify(value, null, 2), filename);
 }
+
+/**
+ * 把文件读成 data URL（`data:<mime>;base64,…`）。
+ *
+ * 用途：用户上传/选择一张本地图片后，**立刻**就地预览，不必等它上传进 ComfyUI、
+ * 也不依赖 ComfyUI 是否在运行 —— 上传失败或实例未启动时，用户仍看得见自己选的图。
+ * 与 `copyText` / `downloadText` 同属「浏览器侧的一次性能力」，收在这一个出口，
+ * 避免各处再各写一份 `new FileReader()` + onload/onerror。
+ *
+ * 读失败（文件不可读等）时 reject，由调用方决定降级（例如只是没有本地预览，
+ * 不阻断后续上传）。非浏览器环境（无 `FileReader`）直接 reject。
+ */
+export function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (typeof FileReader === "undefined") {
+      reject(new Error("当前环境不支持读取文件"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      // readAsDataURL 正常只会给出 string；非 string（异常/空）按失败处理，
+      // 避免把 ArrayBuffer 走默认 toString 变成 "[object Object]"。
+      if (typeof result === "string") resolve(result);
+      else reject(new Error("读取文件失败"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("读取文件失败"));
+    reader.readAsDataURL(file);
+  });
+}

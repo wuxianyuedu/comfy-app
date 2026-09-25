@@ -9,6 +9,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ComponentType, DragEvent } from "react";
 
 import { uploadImageFile } from "~/lib/project-canvas/canvas-api";
+import { readFileAsDataUrl } from "~/lib/browser-io";
 import {
   filterVisibleInMode,
   inferGroups,
@@ -74,6 +75,9 @@ export interface DynamicWorkflowFormController {
   /** 隐藏图片选择 input 的挂载点（`ui/file-picker`）。 */
   FileInput: ComponentType;
   pickFile: (ioKey: string) => void;
+  /** 用户刚选过这张图时的本地预览地址（data URL）；没有则 undefined，
+   *  由控件回退到按值算出的 ComfyUI 代理地址。让「选完就能看到」不依赖 ComfyUI。 */
+  localPreviewUrl: (ioKey: string) => string | undefined;
   /** 上传失败的可读原因（未运行 / 启动超时…）；下一次选择文件时清空。
    *  视图据此在表单内渲染提示条——上传位本身没有错误区。 */
   uploadError: string | null;
@@ -287,9 +291,23 @@ export function useDynamicWorkflowForm(
    * 出口，用户看到的是「点了没反应 / 图片没进来」（ISSUE #345）。 */
   const [uploadError, setUploadError] = useState<string | null>(null);
   const dismissUploadError = useCallback(() => setUploadError(null), []);
+  /* 本地图片预览（ioKey → data URL）：选完立刻显示，不依赖 ComfyUI 上传成功或
+   * 是否运行。上传失败 / 未启动时值不会回填，但用户选的那张图仍应看得见。 */
+  const [previews, setPreviews] = useState<Record<string, string>>({});
 
   const set = useCallback(
-    (ioKey: string, value: unknown) => onChange({ ...values, [ioKey]: value }),
+    (ioKey: string, value: unknown) => {
+      /* 清空某格 → 撤掉它的本地预览，避免「值已空却还显示旧图」。 */
+      if (value === "" || value == null) {
+        setPreviews((prev) => {
+          if (prev[ioKey] === undefined) return prev;
+          const next = { ...prev };
+          delete next[ioKey];
+          return next;
+        });
+      }
+      onChange({ ...values, [ioKey]: value });
+    },
     [values, onChange],
   );
 
@@ -311,16 +329,25 @@ export function useDynamicWorkflowForm(
 
   const onFile = useCallback(
     async (file: File) => {
-      if (!uploadTarget) return;
+      const target = uploadTarget;
+      if (!target) return;
       setUploading(true);
       setUploadError(null);
+      /* 本地预览：读成 data URL 后存起来，选完立刻显示、不依赖 ComfyUI 是否运行。
+       * **不 await** —— 它是附带效果，读文件的异步不该推迟真正的上传时序；读失败
+       * 也只是没有本地预览，不阻断上传。 */
+      void readFileAsDataUrl(file)
+        .then((dataUrl) =>
+          setPreviews((prev) => ({ ...prev, [target]: dataUrl })),
+        )
+        .catch(() => undefined);
       try {
         /* ComfyUI 未运行 / 正在启动时由客户端自动等就绪后重试；等待期间
          * 把「正在启动…」上抛给调用方（画布节点/库节点有提示条位置）。 */
         const name = await uploadImageFile(file, {
           onProgress: (message) => onUploadProgress?.(message),
         });
-        set(uploadTarget, name);
+        set(target, name);
       } catch (err) {
         const message = errorMessage(err, "上传失败");
         console.error("[DynamicWorkflowForm] upload failed", err);
@@ -332,6 +359,13 @@ export function useDynamicWorkflowForm(
       }
     },
     [uploadTarget, set, onUploadError, onUploadProgress],
+  );
+
+  /* 本地预览地址（仅当用户刚选过这张图时有值）；没有则回退到按值算出的
+   * ComfyUI 代理地址（见 WidgetControl 的 previewSrc ?? mediaPreviewUrl）。 */
+  const localPreviewUrl = useCallback(
+    (ioKey: string): string | undefined => previews[ioKey],
+    [previews],
   );
 
   return {
@@ -349,6 +383,7 @@ export function useDynamicWorkflowForm(
     uploadTarget,
     FileInput: uploadPicker.Input,
     pickFile,
+    localPreviewUrl,
     uploadError,
     dismissUploadError,
     set,
