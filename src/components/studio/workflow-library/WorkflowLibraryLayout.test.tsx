@@ -115,13 +115,19 @@ describe("左右分栏：详情面板能窄于内容最小宽度", () => {
   const ROOT = path.resolve(__dirname);
   const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
 
-  it("详情面板带 min-w-0 + overflow-hidden，列表侧栏固定不缩", () => {
-    /* 少了 `min-w-0`，`flex-1` 的自动最小尺寸会让面板撑破窗口宽度，
-     * 右侧内容被裁 —— 这正是「小屏幕看不到最右侧」的成因。 */
+  it("分栏走 v4 字符串百分比（issue #981 回归），列表填满面板、详情可窄于内容", () => {
     const library = read("WorkflowLibrary.tsx");
-    expect(library).toMatch(/min-w-0 flex-1 overflow-hidden/);
-    /* 宽度压力全给详情面板：列表是固定宽侧栏，不参与收缩（否则两边都变形）。 */
-    expect(read("WorkflowLibraryList.tsx")).toMatch(/w-80 shrink-0 flex-col/);
+    /* react-resizable-panels v4：数值 = 像素、字符串 = 百分比。#981 的 bug 正是
+     * 写成数值（defaultSize={24} → 24px、maxSize={45} → 45px，列表被夹到 45px）。
+     * 这里钉死两件事：① 三处尺寸都是字符串百分比；② 不再残留任何数值形式。 */
+    expect(library).toMatch(/defaultSize="24"\s+minSize="16"\s+maxSize="45"/);
+    expect(library).toMatch(/defaultSize="76"\s+minSize="40"/);
+    expect(library).not.toMatch(/defaultSize=\{\d+\}/);
+    expect(library).not.toMatch(/(?:min|max)Size=\{\d+\}/);
+    /* 详情面板仍可窄于内容最小宽度（小屏不裁右侧）。 */
+    expect(library).toMatch(/min-w-0[^"]*overflow-hidden|overflow-hidden/);
+    /* 列表根填满所属面板（宽度交给 ResizablePanel，不再钉死 w-80）。 */
+    expect(read("WorkflowLibraryList.tsx")).toMatch(/w-full min-w-0 flex-col/);
   });
 
   it("拆分文件确实存在（防止上面的源码断言读到空内容而静默全绿）", () => {
