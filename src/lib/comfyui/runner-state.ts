@@ -230,7 +230,11 @@ export function state(): RunnerState {
   if (!globalThis.comfyRunner) {
     const emitter = new EventEmitter();
 
-    emitter.setMaxListeners(0);
+    /* 监听器上限刻意保持有限 —— **不要用 0**：那是「无限」，会永久关掉
+     * MaxListenersExceededWarning，而它正是这里唯一能自动报出「某个 taskId 的
+     * 订阅没退干净」的信号（每条 SSE 连接靠 `subscribe` 的返回值退订，漏一处就在
+     * 这个单例 emitter 上留一个监听器，进程存活期间不释放）。50 对正常使用足够。 */
+    emitter.setMaxListeners(50);
 
     globalThis.comfyRunner = {
       ws: null,
