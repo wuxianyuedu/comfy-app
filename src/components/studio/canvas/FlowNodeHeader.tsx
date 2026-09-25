@@ -65,7 +65,7 @@ export function FlowNodeHeader({
           onToggleCollapsed();
         }}
         onMouseDown={(event) => event.stopPropagation()}
-        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 h-5 w-5 shrink-0 rounded"
+        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
         style={{ pointerEvents: "auto" }}
       >
         <svg
@@ -88,7 +88,7 @@ export function FlowNodeHeader({
         </svg>
       </Button>
       <span
-        className="inline-block h-2 w-2 shrink-0 rounded-full"
+        className="inline-block size-2 shrink-0 rounded-full"
         style={{
           background: palette.dotBg,
           boxShadow: `0 0 6px ${palette.dotBg}`,
