@@ -17,6 +17,7 @@ import {
   selectShouldPinToLatest,
   isPanelSelfPollingLine,
   LOG_PAGE_SIZE,
+  LOG_STORE_MAX,
   selectFirstPageWindow,
   captureLocation,
   computeOriginCounts,
@@ -77,6 +78,7 @@ function resetStore() {
     autoScroll: true,
     anchorId: null,
     viewBaselineAfter: 0,
+    droppedTotal: 0,
   });
   /* seq 计数器跨用例共享且单调递增，测试之间不重置：条目 id 由它派生，
    * 重置会导致不同用例造出同名条目（时间线去重会误判成重复行）。 */
@@ -544,9 +546,10 @@ describe("setSessionStart 收拢迟到的时间线", () => {
  * 用户要求：面板要能往前翻完整段日志，不再被「面板保留最近 2000 条」截断。
  * 此前 2000 条环形缓冲被应用服务来源的高频行占满时，启动 / 启动器写在启动早期
  * 的行被整批挤出去——用户看到的就是那两个来源恒为空。现在「一次看多少」只由
- * 分页（每页 ≤ LOG_PAGE_SIZE）决定，时间线本身不裁剪。 */
+ * 分页（每页 ≤ LOG_PAGE_SIZE）决定；内存里只在上限（LOG_STORE_MAX=5000，见下方
+ * 「内存上限」用例）之外才折叠最旧的，上限内不裁剪、可往前翻历史。 */
 
-describe("时间线不设总数上限", () => {
+describe("时间线在上限内不裁剪（分页可翻历史）", () => {
   it("批量追加超过旧上限（2000 条）时一条不丢，最旧的还在最前面", () => {
     /* 夹具的 seq 跨用例共享且单调递增：先造 1995 条「旧」的、再造 10 条
      * 「新」的，两批的时间戳与 seq 都天然有序。 */
@@ -2280,5 +2283,54 @@ describe("log store — 服务端进程标识与会话边界", () => {
     const after = useLogStore.getState();
     expect(after.logs).toBe(before.logs);
     expect(after.revision).toBe(before.revision);
+  });
+});
+
+describe("内存上限 LOG_STORE_MAX：时间线折叠更旧行 + droppedTotal 累计", () => {
+  it("超过上限时裁到 LOG_STORE_MAX，最旧 N 条折叠进 droppedTotal", () => {
+    resetStore();
+    const over = LOG_STORE_MAX + 50;
+    const made = Array.from({ length: over }, () => makeEntry());
+    act(() => useLogStore.getState().appendFileLogs(made));
+    const s = useLogStore.getState();
+    expect(s.logs).toHaveLength(LOG_STORE_MAX);
+    expect(s.droppedTotal).toBe(50);
+    const kept = new Set(s.logs.map((e) => e.id));
+    // 最旧的 50 条被折叠，第 51 条起（含最新）保留。
+    expect(kept.has(made[0]!.id)).toBe(false);
+    expect(kept.has(made[49]!.id)).toBe(false);
+    expect(kept.has(made[50]!.id)).toBe(true);
+    expect(kept.has(made[over - 1]!.id)).toBe(true);
+  });
+
+  it("重投当前已保留的时间线（真全重复）：不涨、时间线不变（身份判据）", () => {
+    resetStore();
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs(Array.from({ length: LOG_STORE_MAX + 50 }, makeEntry)),
+    );
+    const before = useLogStore.getState();
+    // 只重投「还留在时间线里」的行——mergeTimeline 全判重复 → 原样返回，
+    // 既不推进 revision 也不再折叠。
+    act(() => useLogStore.getState().appendFileLogs([...before.logs]));
+    const after = useLogStore.getState();
+    expect(after.droppedTotal).toBe(before.droppedTotal);
+    expect(after.logs).toBe(before.logs);
+    expect(after.revision).toBe(before.revision);
+  });
+
+  it("clear() 把 droppedTotal 归零（时间线是全新开始）", () => {
+    resetStore();
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs(
+          Array.from({ length: LOG_STORE_MAX + 10 }, () => makeEntry()),
+        ),
+    );
+    expect(useLogStore.getState().droppedTotal).toBe(10);
+    act(() => useLogStore.getState().clear());
+    expect(useLogStore.getState().droppedTotal).toBe(0);
   });
 });
