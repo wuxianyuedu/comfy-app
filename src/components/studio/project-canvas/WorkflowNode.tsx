@@ -330,4 +330,6 @@ export function WorkflowNode({
   );
 }
 
-export default React.memo(WorkflowNode);
+const MemoizedWorkflowNode = React.memo(WorkflowNode);
+MemoizedWorkflowNode.displayName = "WorkflowNode";
+export default MemoizedWorkflowNode;

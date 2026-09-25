@@ -56,7 +56,7 @@ function executionErrorMessageOf(msg: unknown): unknown {
     : undefined;
 }
 
-/** runner-state 的 `executedWorkflow` 是 `Map<string, any>`（不在本次 8 文件
+/** runner-state 的 `executedWorkflow` 是 `Map<string, unknown>`（不在本次 8 文件
  *  改动范围内）—— 经这里统一收口为 `unknown` 读取；`undefined` 归一为 `null`
  *  与拆分前一致（completeInner 内两者等价）。 */
 function executedWorkflowOf(taskId: string): unknown {

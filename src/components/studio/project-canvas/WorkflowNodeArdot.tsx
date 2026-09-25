@@ -363,4 +363,6 @@ export function WorkflowNodeArdot() {
   );
 }
 
-export default React.memo(WorkflowNodeArdot);
+const MemoizedWorkflowNodeArdot = React.memo(WorkflowNodeArdot);
+MemoizedWorkflowNodeArdot.displayName = "WorkflowNodeArdot";
+export default MemoizedWorkflowNodeArdot;
