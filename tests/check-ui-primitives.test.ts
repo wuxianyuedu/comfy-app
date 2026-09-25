@@ -4755,4 +4755,60 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(secondOut).toContain("拒绝放宽基线");
     expect(secondOut).toContain("P78：1 → 2");
   });
+
+  /* ── P77「视图层手写 aria-pressed」（棘轮）差分回归 ────────────
+   * 见 scripts/check-ui-primitives.cjs 里 P77 注释：合规出口是
+   * `~/components/ui/toggle-group` 的 `<ToggleGroup>` + `<ToggleGroupItem>`
+   * （内部由 Base UI 自动打 `aria-pressed` 与 `data-state`、给键盘导航与
+   * 组内互斥关系带 `role="group"`）。视图里出现 `aria-pressed=` 字面量 =
+   * 该文件在**手写一份"哪一个是选中"的状态契约**。 */
+  it("P77 视图层手写 aria-pressed 计入棘轮（相对基线增量 → 阻断）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P77ManualToggle.tsx",
+      [
+        "import { Button } from '~/components/ui/button';",
+        "export function V({ active, onClick }: { active: boolean; onClick: () => void }) {",
+        "  return (",
+        "    <Button aria-pressed={active} onClick={onClick}>",
+        "      选项",
+        "    </Button>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P77");
+    expect(output).toContain("studio/P77ManualToggle.tsx");
+  });
+
+  it("P77 `ui/toggle-group.tsx` 是这条账要收口的唯一出口，走 EXEMPT_DIRS 天然豁免", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/toggle-group.tsx",
+      [
+        "export function ToggleGroupItem() {",
+        "  return <button aria-pressed={true}>x</button>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P77 无 aria-pressed 的普通 <Button> 不误伤", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P77NoToggle.tsx",
+      [
+        "import { Button } from '~/components/ui/button';",
+        "export function V() {",
+        "  return <Button onClick={() => {}}>纯动作按钮</Button>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
 });
