@@ -13,6 +13,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { lastSegments } from "~/lib/path-display";
+import { formatCompactStamp } from "~/lib/time-format";
 import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";
 import { extractMediaUrl } from "~/lib/workshop/api-channel-shared";
 import { sleep } from "~/lib/with-timeout";
@@ -53,7 +54,9 @@ export async function saveMediaToLocalTemp(
     await fs.mkdir(dir, { recursive: true });
     const fallback = mediaDefaultExt(kind);
     const ext = mediaExtensionFromUrl(url, fallback);
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    // 文件名时间戳走统一入口（本地时刻 + 毫秒：一次生成的多份产物可能落在同
+    // 一秒，只到秒会互相覆盖）。
+    const stamp = formatCompactStamp(new Date(), { millis: true });
     const fileName = `usage-${kind}-${stamp}.${ext}`;
     const dest = path.join(dir, fileName);
     if (isInlineMedia(url)) {

@@ -28,8 +28,10 @@ const LEVELS = {
 };
 /** @typedef {"STEP" | "OK" | "WARN" | "ERROR" | "INFO"} LogLevel */
 
-/** 本地时间戳（YYYY-MM-DD HH:mm:ss.mmm，与 app-runtime 面板可解析的格式一致）。 */
-function localTimestamp(at = new Date()) {
+/** 本地时间戳（YYYY-MM-DD HH:mm:ss.mmm，与 app-runtime 面板可解析的格式一致）。
+ *  本文件内所有时间形态的唯一来源：日志行内容与按次命名的文件名都由它派生，
+ *  因此两侧时钟必然一致（曾出现文件名走 UTC、行内容走本地，同一份日志差 8 小时）。 */
+export function localTimestamp(at = new Date()) {
   /** @param {number} n @param {number} [width] */
   const p = (n, width = 2) => String(n).padStart(width, "0");
   return (
@@ -38,10 +40,10 @@ function localTimestamp(at = new Date()) {
   );
 }
 
-/** 按次命名的运行戳（文件名安全：去掉冒号与点）。 */
-/** @param {Date} [at] @returns {string} */
+/** 按次命名的运行戳（文件名安全：去掉冒号、点与空格）。
+ * @param {Date} [at] @returns {string} */
 export function runStamp(at = new Date()) {
-  return at.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  return localTimestamp(at).replace(/[:. ]/g, "-").slice(0, 19);
 }
 
 /**

@@ -35,6 +35,7 @@ import { checkEnvFile } from "./env-preflight.mjs";
 import {
   archiveRunLog,
   createLogSink,
+  localTimestamp,
   runStamp,
 } from "./launcher-core/log.mjs";
 import {
@@ -293,7 +294,7 @@ export function shellStaleWarning(shellExe, root = ROOT) {
   }
   if (newest <= exeTime) return null;
   return (
-    `正在运行旧版桌面壳（编译于 ${new Date(exeTime).toISOString().slice(5, 16).replace("T", " ")}，源码此后有改动），` +
+    `正在运行旧版桌面壳（编译于 ${localTimestamp(new Date(exeTime)).slice(5, 16)}，源码此后有改动），` +
     "界面可能不是最新逻辑；建议重编：cd src-tauri && cargo build --release --features custom-protocol"
   );
 }
@@ -324,7 +325,7 @@ function appendRuntimeWarning(message, root = ROOT) {
   try {
     const dir = path.join(root, "log", "services");
     fs.mkdirSync(dir, { recursive: true });
-    const ts = new Date().toISOString().replace("T", " ").slice(0, 23);
+    const ts = localTimestamp();
     fs.appendFileSync(
       path.join(dir, "app-runtime.log"),
       `[${ts}] [WARN] [launcher] ${message}\n`,

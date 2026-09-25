@@ -112,7 +112,7 @@ describe("formatLocalStamp（本地时间戳，§16.2.4.50）", () => {
 });
 
 describe("formatCompactStamp（文件名档，§16.2.4.50）", () => {
-  const d = new Date(2026, 8, 5, 8, 5, 3);
+  const d = new Date(2026, 8, 5, 8, 5, 3, 250);
 
   it("YYYYMMDD-HHmmss，无分隔符（可直接进文件名）", () => {
     expect(formatCompactStamp(d)).toBe("20260905-080503");
@@ -120,5 +120,9 @@ describe("formatCompactStamp（文件名档，§16.2.4.50）", () => {
 
   it("不含冒号 —— 冒号在 Windows 路径里非法", () => {
     expect(formatCompactStamp(d)).not.toContain(":");
+  });
+
+  it("millis 档补 -SSS（同一秒内多份产物不互相覆盖）", () => {
+    expect(formatCompactStamp(d, { millis: true })).toBe("20260905-080503-250");
   });
 });

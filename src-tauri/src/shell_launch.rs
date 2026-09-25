@@ -399,44 +399,13 @@ fn append_line(path: &std::path::Path, line: &str) -> std::io::Result<()> {
 
 /// `YYYY-MM-DD HH:MM:SS.mmm` 时间戳（与 Node 侧 `formatLogLine` 的**形态**同形）。
 ///
-/// **是 UTC，不是本地时刻**（函数名保留 `local_` 是为了与 Node 侧对齐，形态
-/// 才是契约）：不引入时间库就得自己拆日期字段，而正确的本地时区换算要读
-/// `TZ` / Windows 注册表 —— 为一行日志引入 chrono / time 不值当。这份日志的
-/// 用途是「按时刻把壳的行与编排器的行排成一条时间线」，两侧各自单调即可；
-/// 编排器那份自带本地时刻，因此跨两份对照时**以编排器那份为准**。
+/// 走 `chrono::Local`：壳与用户同机，时刻必须落在**用户所在时区**（本机北京
+/// 时间 UTC+8），用户才能拿它和墙上的钟对。此前手写的 civil-from-days 只能
+/// 产 UTC 时刻，日志面板里同一份文件的两侧时钟差 8 小时；chrono 已作为
+/// tauri（serde_with）的传递依赖在锁文件里，本地时区读取由它统一负责
+/// （Windows 读注册表动态时区、POSIX 读 TZ / /etc/localtime）。
 fn local_timestamp() -> String {
-  use std::time::{SystemTime, UNIX_EPOCH};
-  let secs = SystemTime::now()
-    .duration_since(UNIX_EPOCH)
-    .map(|d| d.as_secs())
-    .unwrap_or(0);
-  let millis = SystemTime::now()
-    .duration_since(UNIX_EPOCH)
-    .map(|d| d.subsec_millis())
-    .unwrap_or(0);
-  let days = (secs / 86_400) as i64;
-  let secs_of_day = secs % 86_400;
-  let (year, month, day) = civil_from_days(days);
-  format!(
-    "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}.{millis:03}",
-    secs_of_day / 3600,
-    (secs_of_day % 3600) / 60,
-    secs_of_day % 60
-  )
-}
-
-/// 天数（1970-01-01 起）→ (年, 月, 日)。经典 civil-from-days，无依赖。
-fn civil_from_days(days: i64) -> (i64, u32, u32) {
-  let z = days + 719_468;
-  let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-  let doe = (z - era * 146_097) as u64;
-  let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-  let y = yoe as i64 + era * 400;
-  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-  let mp = (5 * doy + 2) / 153;
-  let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
-  let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
-  (if m <= 2 { y + 1 } else { y }, m, d)
+  chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string()
 }
 
 /// 写「壳已接手 / 编排器已拉起」的常驻进度快照（启动窗口期的兜底）。
@@ -993,18 +962,6 @@ mod tests {
       root.join("log").join("launcher").join("shell-launch.log")
     );
     assert_eq!(status_file_path("/proj"), root.join("run").join("launch-status.json"));
-  }
-
-  #[test]
-  fn civil_from_days_matches_known_dates() {
-    // 1970-01-01 是第 0 天；闰年与年末边界各来一条（日期算错的表现是日志行的
-    // 时刻整体错位，而这种错位在「只想看顺序」时是**看不出来**的）。
-    assert_eq!(civil_from_days(0), (1970, 1, 1));
-    assert_eq!(civil_from_days(11_016), (2000, 2, 29));
-    assert_eq!(civil_from_days(20_685), (2026, 8, 20));
-    // 世纪闰年规则（1900 不是闰年、2000 是）：`yoe / 4 - yoe / 100` 这条修正
-    // 写错时的表现就是「某些年份差一天」，日常几乎看不出来。
-    assert_eq!(civil_from_days(-25_567), (1900, 1, 1));
   }
 
   #[test]
