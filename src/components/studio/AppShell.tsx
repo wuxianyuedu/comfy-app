@@ -194,7 +194,10 @@ export function AppShell({
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter>
+        {/* 底部避让全局固定状态栏（BrowserStatusBar 是 fixed bottom-0 h-6 = 24px、
+            横跨整窗）：侧栏由 SidebarProvider 的 min-h-svh 撑满整屏，底部「设置」
+            会被这 24px 盖住。留 pb-6 与主内容 / ScriptMarkdownEditor 同一口径。 */}
+        <SidebarFooter className="pb-6">
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton tooltip="设置" onClick={onOpenSettings}>
