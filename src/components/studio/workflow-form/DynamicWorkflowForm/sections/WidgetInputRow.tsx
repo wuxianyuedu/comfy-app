@@ -100,7 +100,7 @@ export function WidgetInputRow({
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         {onRequiredChange && (
           <span
-            className="h-2 w-2 shrink-0 rounded-full"
+            className="size-2 shrink-0 rounded-full"
             style={{ background: accent }}
           />
         )}
@@ -187,7 +187,7 @@ export function WidgetInputRow({
         )}
         <div className="bg-canvas-deep flex items-center gap-2 rounded-md px-2.5 py-1.5 pr-[14px] pl-[14px]">
           <span
-            className="h-2 w-2 shrink-0 rounded-full"
+            className="size-2 shrink-0 rounded-full"
             style={{ background: accent }}
           />
           <span className="text-ink-soft min-w-0 flex-1 truncate text-[11px]">

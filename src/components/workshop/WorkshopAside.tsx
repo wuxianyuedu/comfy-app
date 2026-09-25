@@ -134,7 +134,7 @@ export function WorkshopAside({
           {missing.map((item) => (
             <div key={item.label} className="flex items-center gap-3">
               <span
-                className="h-2.5 w-2.5 rounded-full"
+                className="size-2.5 rounded-full"
                 style={{ background: item.color }}
               />
               <span className="text-ink flex-1 text-[12.5px]">
@@ -196,7 +196,7 @@ export function WorkshopAside({
         <div className="gap-3">
           {resourceRows.map(([name, tag]) => (
             <div key={name} className="flex items-center gap-3">
-              <span className="bg-elevated grid h-8 w-8 place-items-center rounded-lg">
+              <span className="bg-elevated grid size-8 place-items-center rounded-lg">
                 <Icon name="file" size={14} className="text-muted-foreground" />
               </span>
               <span className="text-ink flex-1 truncate text-[12.5px]">
