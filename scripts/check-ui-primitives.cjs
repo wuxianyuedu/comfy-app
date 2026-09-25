@@ -3301,6 +3301,38 @@ const RULES = {
       return n;
     },
   },
+
+  /* ── P76「视图层裸写 <select>」（棘轮，规范 §16.2.3 / §12.18）───────────
+   * P68 拦住了裸 `<input>` / `<textarea>`、P69 拦住了裸
+   * `<input type=checkbox|radio>`；`<select>` 是同一族里的漏项。
+   * 项目里已有两个合规出口：
+   *   · `~/components/ui/native-select` 的 `<NativeSelect>`（保留原生外观 +
+   *     统一样式与 a11y 契约）
+   *   · `~/components/ui/select-menu` 的 `<SelectMenu>`（Base UI 派，与
+   *     项目里其它富 ReactNode 标签的下拉同一口径）
+   * 视图里出现 `<select` = 这个文件在**第三处**手拼同一件事。
+   *
+   * 判据按形态取（`<select` 标签字面量），只看视图与业务落点：
+   * `ui/native-select.tsx` 是这条账要收口的唯一实现、走 EXEMPT_DIRS 天然豁免。
+   *
+   * 走棘轮（非硬闸）：本批评据上线时视图层实测 13 处存量，冻结起点、
+   * 只许降。下一批按域分片把每个 `<select>` 迁到上述两个出口之一，
+   * 与 P71 的引入节奏一致（先冻结、后治理）。
+   *
+   * P72 / P76 编号跳空是**有意**的：P73 / P74 / P75 预留给 Separator /
+   * Alert / EmptyState 三条同批的判据、下一批落地；本批只做「模态可访问名
+   * （硬闸，#993）」与「原生 select（棘轮，本条）」两条最独立、迁移路径最
+   * 明确的判据。 */
+  P76: {
+    label:
+      "视图层裸写 <select>（应使用 ~/components/ui/native-select 的 NativeSelect 或 ~/components/ui/select-menu 的 SelectMenu）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 只数 `<select` 标签起始形态（后接空白、`>`、`/` 之外的字符），
+       * 不误伤 `selectedValue` / `select-none` 这类同前缀的标识符与类名。 */
+      return (t2.match(/<select[\s/>]/g) || []).length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
