@@ -28,7 +28,10 @@ export function buildCharacterPrompt(c: Character, style?: StyleRef): string {
   return parts.filter(Boolean).join(", ");
 }
 
-export function buildCharacterNegative(c: Character, style?: StyleRef): string {
+export function buildCharacterNegative(
+  _c: Character,
+  style?: StyleRef,
+): string {
   const base = [
     "ugly",
     "deformed",

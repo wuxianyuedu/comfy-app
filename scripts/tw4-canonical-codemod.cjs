@@ -26,10 +26,13 @@ for (const file of process.argv.slice(2)) {
       count++;
       return "-(--" + v + ")";
     })
-    .replace(/(^|[\s"'`])(-[a-z][a-z0-9]*)-\[([0-9][^\]]*)\]/g, (m, pre, util, value) => {
-      count++;
-      return pre + util.slice(1) + "-[-" + value + "]";
-    })
+    .replace(
+      /(^|[\s"'`])(-[a-z][a-z0-9]*)-\[([0-9][^\]]*)\]/g,
+      (_m, pre, util, value) => {
+        count++;
+        return pre + util.slice(1) + "-[-" + value + "]";
+      },
+    )
     .replace(/\bz-\[(\d+)\]/g, (_, n) => {
       count++;
       return "z-" + n;
