@@ -3333,6 +3333,38 @@ const RULES = {
       return (t2.match(/<select[\s/>]/g) || []).length;
     },
   },
+
+  /* ── P78「视图层裸写 <label>」（棘轮，规范 §16.2.4.26 / §12.18）─────────
+   * 与 P23 是同一族账的两层：
+   *   · **P23**（硬闸，视图层已清零）数的是「`<label>` + 控件同文件出现」的
+   *     **表单行组合形态**——15 处已收口到 `~/components/ui/form-field` 的
+   *     `FormField`（内部走 shadcn `ui/field` 的 `FieldLabel`，`htmlFor` 与
+   *     `aria-describedby` 由 FormField 派生）。
+   *   · **P78**（本条，棘轮）数的是**任何** `<label` 起始标签——包含那些
+   *     没配显式控件、只做视觉分组或给 Base UI Checkbox 当点击区的孤立 label。
+   *     这类不该套 `FormField`（它是一行表单），但 shadcn `ui/field` 里的
+   *     `FieldLabel` 或 Base UI `Checkbox` 的 children 才是合规出口——
+   *     裸 `<label>` 缺 `htmlFor` 时点标签不聚焦控件、读屏器把它读成孤立文本。
+   *
+   * 判据按形态取（`<label[\s/>]`），不误伤 `labelClassName` / `label=` 这类
+   * 同前缀属性名（后面接的是标识符字符而不是空白/`>`/`/`）；`ui/` 通过
+   * EXEMPT_DIRS 天然豁免（`ui/label.tsx` 与 `ui/field.tsx` 自身要写 `<label>`）。
+   *
+   * 走棘轮（非硬闸）：本批评据上线时视图层实测 15 处存量，冻结起点、只许降。
+   * 下一批按域分片把每个 `<label>` 迁到 `FieldLabel` / `FormField` /
+   * Base UI `Checkbox`（children 形式），与 P71/P76 引入节奏一致。
+   *
+   * P77 号**故意跳过**：P77 预留给 ToggleGroup 判据（`<Button aria-pressed>`
+   * 循环），锚点需要「同一 map 里出现 aria-pressed」这种跨行组合、下一条
+   * 独立 PR 更稳。 */
+  P78: {
+    label:
+      "视图层裸写 <label>（表单行应走 ~/components/ui/form-field 的 FormField 或 ~/components/ui/field 的 FieldLabel；checkbox/radio 点击区走 ~/components/ui/{checkbox,radio-group} 的 children 语义）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      return (t2.match(/<label[\s/>]/g) || []).length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -3588,11 +3620,38 @@ function main() {
     const before = baseFiles ? total(baseFiles) : 0;
     const after = total(ratchetOnly(now));
     if (before && after > before) {
-      console.error(
-        `[ui-primitives] 拒绝放宽基线：${before} → ${after}（棘轮只许下降）。\n` +
-          "  新增的自实现请先改用 ui/ 基元（<Button> / ui/dialog / page-loading），不要用 --update 掩盖。",
-      );
-      process.exit(1);
+      /* 按 rule id 逐个比较：只有**旧基线里已经有的规则**上升才是「放宽」，
+       * 拒绝；旧基线里没有这条规则、after 是这次新登记的起点，视作
+       * 「判据引入」，允许通过。P71 / P76 / P78 三条棘轮的引入都要走这条路径
+       * （此前用总数一把梭会把正当的规则引入误判成放宽）。 */
+      const prevByRule = {};
+      for (const counts of Object.values(baseFiles ?? {})) {
+        for (const [id, n] of Object.entries(counts)) {
+          prevByRule[id] = (prevByRule[id] ?? 0) + n;
+        }
+      }
+      const nowByRule = {};
+      for (const counts of Object.values(ratchetOnly(now))) {
+        for (const [id, n] of Object.entries(counts)) {
+          nowByRule[id] = (nowByRule[id] ?? 0) + n;
+        }
+      }
+      const regressions = [];
+      for (const [id, afterN] of Object.entries(nowByRule)) {
+        const beforeN = prevByRule[id];
+        if (beforeN !== undefined && afterN > beforeN) {
+          regressions.push(`${id}：${beforeN} → ${afterN}`);
+        }
+      }
+      if (regressions.length) {
+        console.error(
+          `[ui-primitives] 拒绝放宽基线（棘轮只许下降）：\n  ${regressions.join("\n  ")}\n` +
+            "  新增的自实现请先改用 ui/ 基元（<Button> / ui/dialog / page-loading），不要用 --update 掩盖。" +
+            "  （**新加一条判据**不受本条限制：只要旧基线里没有过这个 rule id，`--update` 就会把当前实测登记为起点。）",
+        );
+        process.exit(1);
+      }
+      /* 剩下的差额都来自**新加规则**（旧基线里没有的 rule id），允许登记为起点。 */
     }
     writeBaseline(ratchetOnly(now));
     console.log(
