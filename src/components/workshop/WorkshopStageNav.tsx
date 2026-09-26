@@ -45,7 +45,7 @@ export function WorkshopStageNav({
             <span
               className={`grid h-9 w-9 place-items-center rounded-[11px] text-[15px] font-bold ${
                 ratio >= 1
-                  ? "bg-emerald-500/80 text-white"
+                  ? "bg-success/80 text-white"
                   : active
                     ? "bg-primary text-white"
                     : "bg-elevated text-muted-foreground"

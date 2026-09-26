@@ -324,7 +324,7 @@ export function WorkflowRunLogModal({
               <Checkbox
                 checked={autoscroll}
                 onCheckedChange={(checked) => setAutoscroll(checked === true)}
-                className="size-3.5 cursor-pointer accent-violet-500"
+                className="accent-primary size-3.5 cursor-pointer"
               />
               自动滚动
             </FieldLabel>
