@@ -1,4 +1,3 @@
-import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -21,7 +20,18 @@ import { formatLocalStamp } from "~/lib/time-format";
  * - LEVEL ∈ INFO / WARN / ERROR / DEBUG
  * - ns 为命名空间（如 `trpc`、`generate`、`task`），可省略
  *
- * 服务端使用；面板经 API 读取，不直接碰 DOM。写入失败绝不阻塞业务主流程。
+ * **§18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）**。
+ * 摘掉 `import "server-only"` 后登记进 `tests/lib-node-only-declarations.test.ts`
+ * 的 `PURE_NODE_HOSTS`——上游 log-paths 已在 #1074 摘掉，本模块只依赖 Node 内建
+ * (`node:fs` / `node:path`) + log-paths + time-format，形态与 `kill-process-tree`
+ * 同族；这一步是把 logger 链最后一层地基纯化：`~/lib/core/logger` 静态引本模块，
+ * 只要本模块带 server-only，纯 Node 里 `await import("~/lib/core/logger")` 就会
+ * 因这一层 throw 而 reject、comfyui 各模块（#1053 / #1068 / #1071）的 lazy 兜底
+ * 拿不到 logger、只能走 configureXxx 显式注入。摘掉后整链 logger 都能真加载。
+ *
+ * 「面板/API 侧只读、不直接碰 DOM」这一层分工保留——它是**消费者侧的约定**
+ * （API 路由把这份文件读出去给前端轮询），不是「本模块只能是 Next 专属」的意思；
+ * 写入方（Next server 与未来 executor host）都通过本模块，写入失败绝不阻塞业务。
  */
 
 export type AppLogLevel = "info" | "warn" | "error" | "debug";
