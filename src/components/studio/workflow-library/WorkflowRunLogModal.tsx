@@ -44,7 +44,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { FieldLabel } from "~/components/ui/field";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
-import { useScrollFollow } from "~/components/ui/use-scroll-follow";
+import { VirtualLogList } from "~/components/studio/logs/VirtualLogList";
 
 /* 与项目画布 GlobalStepLogPanel 同款 level badge 配色，走语义 token
  * （§4.11.1 / P71）：error→destructive、warn→warning、success→success、
@@ -156,14 +156,6 @@ export function WorkflowRunLogModal({
   /* 贴底与「用户有没有接管滚动」的判据收在`ui/use-scroll-follow`
    *（规范 16 §16.2.4.24）。收口前这里是手写的`scrollTop = scrollHeight`
    * —— 用户上滚读历史会被按回底部，且没有跟随态可显示。 */
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const scroller = useScrollFollow({
-    containerRef: scrollerRef,
-    watch: `${logs.length}:${filter}:${open}`,
-    following: autoscroll,
-    onFollowingChange: setAutoscroll,
-  });
-
   /* 弹窗取消按钮复用画布同款 hook（视图零 IO）。 */
   const { cancelling, cancel } = useCancelTask({
     taskId: viewTaskId,
@@ -340,55 +332,54 @@ export function WorkflowRunLogModal({
             </FieldLabel>
           </div>
 
-          {/* Log body */}
-          <div
-            ref={scrollerRef}
-            onScroll={scroller.onScroll}
-            className="custom-scrollbar bg-panel-deep/60 flex-1 overflow-y-auto"
-          >
-            {run?.errorMessage && (
-              <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-[13px]">
-                <div className="break-words whitespace-pre-wrap">
-                  {run.errorMessage}
-                </div>
+          {/* Log body — 虚拟滚动（复用 VirtualLogList） */}
+          <VirtualLogList
+            entries={visible}
+            getMessage={(log) => log.msg}
+            renderRow={(log) => (
+              <div
+                data-testid="wflib-modal-log-line"
+                data-level={log.level}
+                className="border-border-subtle hover:bg-card flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
+              >
+                <span className="text-ink-muted shrink-0">
+                  {fmtTime(log.t)}
+                </span>
+                <span
+                  className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
+                >
+                  {levelLabel(log.level)}
+                </span>
+                <span className="text-ink-strong min-w-0 flex-1 break-words whitespace-pre-wrap">
+                  {log.msg}
+                </span>
+                {log.src && (
+                  <span className="text-ink-fainter hover:text-ink-faint max-w-[200px] shrink-0 truncate text-[11px]">
+                    {log.src}
+                  </span>
+                )}
               </div>
             )}
-
-            {visible.length === 0 ? (
+            following={autoscroll}
+            onFollowingChange={setAutoscroll}
+            watch={`${logs.length}:${filter}`}
+            className="bg-panel-deep/60"
+            topSlot={
+              run?.errorMessage ? (
+                <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-[13px]">
+                  <div className="break-words whitespace-pre-wrap">
+                    {run.errorMessage}
+                  </div>
+                </div>
+              ) : null
+            }
+            emptySlot={
               <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
                 <FileText size={32} strokeWidth={1.5} className="opacity-30" />
                 {run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
               </div>
-            ) : (
-              <div className="flex flex-col">
-                {visible.map((log, index) => (
-                  <div
-                    key={`${log.t}:${index}`}
-                    data-testid="wflib-modal-log-line"
-                    data-level={log.level}
-                    className="border-border-subtle hover:bg-card flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
-                  >
-                    <span className="text-ink-muted shrink-0">
-                      {fmtTime(log.t)}
-                    </span>
-                    <span
-                      className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
-                    >
-                      {levelLabel(log.level)}
-                    </span>
-                    <span className="text-ink-strong min-w-0 flex-1 break-words whitespace-pre-wrap">
-                      {log.msg}
-                    </span>
-                    {log.src && (
-                      <span className="text-ink-fainter hover:text-ink-faint max-w-[200px] shrink-0 truncate text-[11px]">
-                        {log.src}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            }
+          />
 
           {/* Footer */}
           <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
