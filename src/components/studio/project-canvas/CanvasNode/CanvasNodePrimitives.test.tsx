@@ -55,7 +55,9 @@ describe("StatusDot", () => {
     const { container } = render(<StatusDot status={status} />);
     const dot = container.firstElementChild as HTMLElement;
     expect(dot.tagName).toBe("SPAN");
-    expect(dot).toHaveClass("rounded-full", "h-2.5", "w-2.5");
+    /* `size-2.5` 而非 `h-2.5 w-2.5`：P80 把「宽高同值」统一成 size-*（硬闸），
+     * 迁移时这份断言没跟着重算。 */
+    expect(dot).toHaveClass("rounded-full", "size-2.5");
     expect(dot).toHaveStyle(DOT_STYLES[status]);
   });
 });
