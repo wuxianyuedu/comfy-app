@@ -82,6 +82,10 @@ const ALLOWED_SCRIPTS = new Set([
   "db-schema-state.mjs",
   "db-push-core.mjs",
   "reap-process.mjs",
+  // ComfyUI 执行器独立宿主（P3 §5 第 2 期 · Phase 2-C）：由 dev-launcher.mjs
+  // 的 spawnExecutorHost 在 COMFY_EXECUTOR=host 灰度下起；桌面包里也要能起来。
+  // 与 standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS 同源，缺一份即红。
+  "executor-host.mjs",
   "lockfile/render-lock-diff.mjs",
   "lockfile/lock-diff.mjs",
   // 编排器的内部分件（逐项登记；与 RUNTIME_SCRIPTS 同源）

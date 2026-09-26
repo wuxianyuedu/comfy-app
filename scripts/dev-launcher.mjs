@@ -934,6 +934,28 @@ export async function run(argv = process.argv.slice(2)) {
   let dev = spawnDevServer(port, args.host, nextOut, nextErr);
   log(`dev server 已启动（PID ${dev.pid}，输出见 ${nextOut}）`, "OK");
 
+  // 6.5) 可选：拉起 ComfyUI 执行器独立宿主（P3 §5 第 2 期 · Phase 2-C）
+  // 默认 `inline` —— Next 里跑 ComfyUI 执行编排；本步 **不 spawn 任何东西**。
+  // `COMFY_EXECUTOR=host` 时把 `scripts/executor-host.mjs` 作为 launcher 的
+  // **又一个受管子进程** 起起来；spawnInGroup 走同一份平台判据（POSIX 自建进程组 /
+  // Windows taskkill 走 `/T`），因此回收、孤儿检测、会话锚点等既有语义一字不改。
+  // Phase 2-B 骨架阶段**不接管 Next 的 inline 路径**（Next 侧仍按 inline 走），
+  // 这一开关只是让 host 能作为独立进程活着 + 被 launcher 收；taskRepository
+  // 注入与流量切换在 Phase 2-A / Phase 3 分别落地。
+  const executorMode = (process.env.COMFY_EXECUTOR ?? "inline").toLowerCase();
+  if (executorMode === "host") {
+    const hostChild = spawnExecutorHost();
+    log(
+      `executor-host 已启动（PID ${hostChild?.pid ?? "?"}，COMFY_EXECUTOR=host 灰度中；inline 路径暂未停用）`,
+      "OK",
+    );
+  } else if (executorMode !== "inline") {
+    log(
+      `COMFY_EXECUTOR="${executorMode}" 不识别，按默认 inline 处理（可选：inline|host）`,
+      "WARN",
+    );
+  }
+
   // 7) 会话锚点：把 PID 与心跳落盘，让「进程被杀后仍能回收」成立
   writeSession(ROOT, {
     launcher_pid: process.pid,
@@ -1282,7 +1304,41 @@ export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
   return child;
 }
 
-/** dev server 提前退出时定性并给出用户可见出口（失败即抛出可行动的报错）。 */
+/** 拉起 `scripts/executor-host.mjs`（P3 §5 第 2 期 · Phase 2-C）。
+ *
+ *  为什么**不**走 pnpm：这不是一个「用户命令」，也没有 workspace 脚本要跑；
+ *  它就是 launcher 拉一个 `.mjs` 起来。直接 `process.execPath` 起当前 Node 二进
+ *  制 + 脚本路径，少一层 corepack/pnpm shim 的探测与启动开销；也避开 Windows 上
+ *  pnpm.cmd shim 的 `.ps1` 分叉（AGENTS 硬规则 12）。
+ *
+ *  为什么 stdio=inherit：Phase 2-B 骨架里 host 只走 appendFileSync 落
+ *  `log/services/executor-host.log`（可通过 COMFYAPP_HOST_LOG 覆盖），stdout/stderr
+ *  都是空的；等 Phase 3 主循环真跑起来再补 stdoutFile/stderrFile 按次命名 + 轮转。
+ *
+ *  为什么不发 COMFYAPP_PORT：host 起 ComfyUI 用的是自己的 lifecycle，与 Next 端
+ *  口不共享；Phase 2-C 骨架不 spawn ComfyUI，也就用不上端口。 */
+export function spawnExecutorHost() {
+  const hostScript = path.join(ROOT, "scripts", "executor-host.mjs");
+  if (!fs.existsSync(hostScript)) {
+    log(
+      `未找到 ${path.relative(ROOT, hostScript)}，跳过 executor-host 拉起（COMFY_EXECUTOR=host 需先合入 Phase 2-B）`,
+      "WARN",
+    );
+    return null;
+  }
+  const child = spawnInGroup({
+    command: process.execPath,
+    args: [hostScript],
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      // 编排器把 boot id 传下去，让 host 日志与 launcher 日志能按同一时间戳串起来。
+      COMFYAPP_HOST_BOOT_ID: runTimestamp,
+    },
+  });
+  spawned.push(child);
+  return child;
+}
 /**
  * `stdoutFile` / `stderrFile` 必须是**本次运行**起 dev server 时用的那两份
  * （`nextOut` / `nextErr`）—— 曾经这里是按文件名重找「最近一份」（`lastNextLog`），
