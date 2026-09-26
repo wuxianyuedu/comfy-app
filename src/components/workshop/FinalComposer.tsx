@@ -2,6 +2,7 @@
 import { clamp } from "~/lib/clamp";
 import React from "react";
 import { Icon } from "~/components/ui/icon";
+import { EmptyState } from "~/components/ui/empty-state";
 import { Button } from "~/components/ui/button";
 import { downloadJson } from "~/lib/browser-io";
 import { fixed } from "~/lib/number-format";
@@ -163,11 +164,11 @@ export function FinalComposer({
 
   if (shots.length === 0) {
     return (
-      <div className="border-border bg-surface rounded-2xl border border-dashed p-8 text-center">
-        <p className="text-muted-foreground text-sm">
-          暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。
-        </p>
-      </div>
+      <EmptyState
+        variant="hint"
+        description="暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。"
+        className="p-8 text-sm"
+      />
     );
   }
 
