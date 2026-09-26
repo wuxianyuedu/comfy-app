@@ -40,6 +40,8 @@
 | M5   | P1   | `runner-state.ts` 的 `settled`/`finalized`/`wsWaitLogged`        | 三个只增 Set 走 `addBounded`（4096 容量兜底）                                                          | #1061 |
 | S10  | P1   | `repository-film.ts` / `repository-lora.ts` 的 `appendLog`       | `logs` JSON 列按尾部窗口 500 行截断（`tailWindow`）                                                    | #1067 |
 | L6   | P1   | `dev-launcher.mjs` + `dev.mjs`                                   | 编排器注入 `COMFYAPP_SKIP_SCHEMA_SYNC=1`，一次启动只跑一份 schema 同步                                 | #1069 |
+| L7   | P1   | `scripts/launcher-core/shell.mjs`                                | `whichCommand` 按 name+PATH+PATHEXT+platform 进程内记忆化 + `clearWhichCommandCache()`                 | #1078 |
+| L8   | P1   | `scripts/launcher-core/procs.mjs:63`                             | netstat 快照按 1s TTL 缓存，三端口探测合并为一次子进程（CIM 批量化仍待做，见 C.4）                     | #1081 |
 
 ## B. 判定修正与例外（📝）
 
@@ -73,8 +75,7 @@ _（全部闭环，见 A 表。）_
 - ⬜ **L3** `src-tauri/src/shell_launch.rs:936-960` —— 注释承诺「命令行廉价预筛」但循环内无预筛，每个 PID 都 `OpenProcess`+读 64KB 环境块。方向：实现进程名/命令行预筛。
 - ⬜ **L4** `public/splash.html:730` + `src-tauri/src/lib.rs:513/545/671-760` —— 启动页日志面板每 800ms 轮询，命令对 4 个日志文件各整文件读入（且日志不轮转）。方向：seek 到尾部读最后 N 字节 + 降频/退避。
 - ⬜ **L5** `src-tauri/src/lib.rs:1418(250ms×480)`、`2110(1s×300)`、`2084(100ms×50)`、`958(500ms×240)`、`475(2s×90)`、`single_instance.rs:442-455(100ms×∞)` —— 6 处固定间隔 sleep 轮询，无退避无统一收口。方向：收敛到统一的「带退避的等待」工具。
-- ⬜ **L7** `scripts/launcher-core/shell.mjs:62-83/200-252` —— `whichCommand` 遍历 PATH×扩展名，每个候选真 `spawnSync(--version)`（10s 超时），单次启动调 4~6 次无记忆化。方向：进程内缓存 + 收敛为一次。
-- ⬜ **L8** `scripts/dev-launcher.mjs:343-345/479-523` + `launcher-core/procs.mjs:63` —— 3 个端口各跑一次 `netstat -ano`（输出相同）；每个待裁定 PID 再 spawn 一次 PowerShell CIM。方向：一次 netstat 复用解析 + 一次批量取命令行。
+- ⬜ **L8b** `scripts/dev-launcher.mjs:415-432` —— 每个待裁定 PID 再 spawn 一次 PowerShell CIM。方向：一次 `Get-CimInstance Win32_Process` 批量取全部 PID 的命令行（netstat 部分已闭环）。
 
 ### C.5 P2（卫生项，随上一批顺手修）
 
