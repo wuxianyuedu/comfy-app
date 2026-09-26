@@ -182,7 +182,7 @@ describe("LogPanel 日志面板", () => {
     const user = userEvent.setup();
 
     expect(screen.queryByText(/事件 0$/)).not.toBeInTheDocument();
-    await user.click(screen.getByTitle("更早的一页"));
+    await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 2 页/)).toBeInTheDocument();
     expect(screen.getByText(/事件 0$/)).toBeInTheDocument();
   }, 20_000);
@@ -203,7 +203,7 @@ describe("LogPanel 日志面板", () => {
     useSmallPage();
     render(<LogPanel />);
     const user = userEvent.setup();
-    await user.click(screen.getByTitle("更早的一页"));
+    await user.click(screen.getByRole("button", { name: "更早的一页" }));
 
     act(() =>
       useLogStore
@@ -526,15 +526,19 @@ describe("LogPanel 日志面板", () => {
     act(() => useLogStore.getState().setOrigin("app"));
     await user.click(levelButton("错误"));
 
-    const footer = screen.getByTitle("去掉来源筛选");
+    const footer = screen.getByTestId("logpanel-origin-chip");
     expect(footer.textContent).toContain("应用服务");
-    expect(screen.getByTitle("去掉级别筛选").textContent).toContain("错误");
+    expect(screen.getByTestId("logpanel-level-chip").textContent).toContain(
+      "错误",
+    );
 
-    /* 点一下来源标签 → 回到全部来源；再点级别标签 → 回到全部级别 */
+    /* 点一下来源标签 → 回到全部来源；再点级别标签 → 回到全部级别。
+     * 「该层筛选已去掉」的表现是枚标签变成禁用（无筛选可去），
+     * 提示文案（`Hint`）也随之不再给出。 */
     await user.click(footer);
-    expect(screen.queryByTitle("去掉来源筛选")).not.toBeInTheDocument();
-    await user.click(screen.getByTitle("去掉级别筛选"));
-    expect(screen.queryByTitle("去掉级别筛选")).not.toBeInTheDocument();
+    expect(screen.getByTestId("logpanel-origin-chip")).toBeDisabled();
+    await user.click(screen.getByTestId("logpanel-level-chip"));
+    expect(screen.getByTestId("logpanel-level-chip")).toBeDisabled();
     /* 该来源行重新出现在时间线里（第 1 页就是全部内容时必然可见） */
     expect(useLogStore.getState().filteredLogs.map((e) => e.message)).toContain(
       "开发服务已就绪",
@@ -652,21 +656,21 @@ describe("LogPanel 日志面板", () => {
 
     /* 用户反馈「日志这里没法翻页」。这条把「来回翻 + 首末页禁用」钉住：
      * 水位的改动不该让 page 被钳回第 1 页（旧实现里两者互相牵连）。 */
-    await user.click(screen.getByTitle("更早的一页"));
+    await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
-    await user.click(screen.getByTitle("更早的一页"));
+    await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 3 \/ 3 页/)).toBeInTheDocument();
-    await user.click(screen.getByTitle("更新的一页"));
+    await user.click(screen.getByRole("button", { name: "更新的一页" }));
     expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
 
     /* 已经是最新一页时「更新的一页」禁用；最早一页时「更早的一页」禁用 */
-    await user.click(screen.getByTitle("更新的一页"));
+    await user.click(screen.getByRole("button", { name: "更新的一页" }));
     expect(screen.getByText(/第 1 \/ 3 页/)).toBeInTheDocument();
-    expect(screen.getByTitle("更新的一页")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "更新的一页" })).toBeDisabled();
 
     /* 翻到历史页后停留期间有新日志：页码不跳、提示出现（用户要的是「我在这看，
      * 别把我拽走」）。 */
-    await user.click(screen.getByTitle("更早的一页"));
+    await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
     act(() =>
       useLogStore

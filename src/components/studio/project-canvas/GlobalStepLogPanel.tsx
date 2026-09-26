@@ -24,6 +24,7 @@ import type { StepLogEntry } from "./stepLogCache";
 import { listCachedTaskIds } from "./stepLogCache";
 import { useActiveTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
+import { Hint } from "~/components/ui/hint";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { FieldLabel } from "~/components/ui/field";
 import { Button } from "~/components/ui/button";
@@ -153,21 +154,22 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   return (
     <>
       {/* 浮动触发按钮 —— 仅调试模式开启时渲染。 */}
-      <Button
-        variant="outline"
-        onClick={() => setOpen(true)}
-        title="打开执行日志"
-        data-testid="step-log-trigger"
-        className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
-      >
-        <FileText data-icon="inline-start" size={12} />
-        执行日志
-        {errorCount > 0 && (
-          <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
-            {errorCount}
-          </span>
-        )}
-      </Button>
+      <Hint label="打开执行日志">
+        <Button
+          variant="outline"
+          onClick={() => setOpen(true)}
+          data-testid="step-log-trigger"
+          className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
+        >
+          <FileText data-icon="inline-start" size={12} />
+          执行日志
+          {errorCount > 0 && (
+            <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
+              {errorCount}
+            </span>
+          )}
+        </Button>
+      </Hint>
 
       {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */}
@@ -209,16 +211,17 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 status !== "SUCCEEDED" &&
                 status !== "FAILED" &&
                 status !== "CANCELLED" ? (
-                  <Button
-                    variant="outline"
-                    onClick={onCancelFromPanel}
-                    disabled={cancellingFromPanel}
-                    title="取消当前查看的任务"
-                    data-testid="log-panel-cancel"
-                    className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 h-auto rounded-md border px-2 py-0.5 text-[10.5px]"
-                  >
-                    {cancellingFromPanel ? "× 取消中…" : "× 取消"}
-                  </Button>
+                  <Hint label="取消当前查看的任务" wrap>
+                    <Button
+                      variant="outline"
+                      onClick={onCancelFromPanel}
+                      disabled={cancellingFromPanel}
+                      data-testid="log-panel-cancel"
+                      className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 h-auto rounded-md border px-2 py-0.5 text-[10.5px]"
+                    >
+                      {cancellingFromPanel ? "× 取消中…" : "× 取消"}
+                    </Button>
+                  </Hint>
                 ) : null}
                 {cachedIds.length > 0 && (
                   <StepLogTaskPicker
@@ -238,14 +241,15 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   panel={panel}
                   className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
                 />
-                <Button
-                  variant="ghost"
-                  onClick={() => setOpen(false)}
-                  title="关闭"
-                  className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
-                >
-                  <X data-icon="inline-start" size={16} />
-                </Button>
+                <Hint label="关闭" accessibleName>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setOpen(false)}
+                    className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
+                  >
+                    <X data-icon="inline-start" size={16} />
+                  </Button>
+                </Hint>
               </div>
             </div>
 
@@ -259,23 +263,26 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       : visibleAll.filter((l) => l.level === option.value)
                           .length;
                   return (
-                    <Button
+                    <Hint
+                      label={`${option.label}（${count} 条）`}
                       key={option.value}
-                      variant="ghost"
-                      onClick={() => setFilter(option.value)}
-                      title={`${option.label}（${count} 条）`}
-                      data-testid={`log-filter-${option.value}`}
-                      className={`h-auto rounded-md px-2.5 py-1 text-[13px] font-normal ${
-                        filter === option.value
-                          ? "bg-surface-2 text-ink-bright"
-                          : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
-                      }`}
                     >
-                      {option.label}
-                      <span className="text-ink-fainter ml-1 text-[11px]">
-                        {count}
-                      </span>
-                    </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setFilter(option.value)}
+                        data-testid={`log-filter-${option.value}`}
+                        className={`h-auto rounded-md px-2.5 py-1 text-[13px] font-normal ${
+                          filter === option.value
+                            ? "bg-surface-2 text-ink-bright"
+                            : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
+                        }`}
+                      >
+                        {option.label}
+                        <span className="text-ink-fainter ml-1 text-[11px]">
+                          {count}
+                        </span>
+                      </Button>
+                    </Hint>
                   );
                 })}
               </div>

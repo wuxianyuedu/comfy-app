@@ -25,6 +25,7 @@ import { textHandler } from "~/lib/form-props";
 import { runAsyncAction } from "~/lib/async-action";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Textarea } from "~/components/ui/textarea";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
@@ -255,14 +256,15 @@ export function EncapsulationTestForm({
         </p>
       )}
       <div className="flex items-center gap-2">
-        <Button
-          onClick={submit}
-          disabled={disabled}
-          title={runDisabledReason}
-          className="h-auto rounded-lg px-3 py-1.5 text-xs font-medium"
-        >
-          {running ? "测试中…" : "执行流程测试"}
-        </Button>
+        <Hint label={runDisabledReason} wrap>
+          <Button
+            onClick={submit}
+            disabled={disabled}
+            className="h-auto rounded-lg px-3 py-1.5 text-xs font-medium"
+          >
+            {running ? "测试中…" : "执行流程测试"}
+          </Button>
+        </Hint>
         <span className="text-muted-foreground text-[11px]">
           会真实调用本机 ComfyUI 生成一张图
         </span>

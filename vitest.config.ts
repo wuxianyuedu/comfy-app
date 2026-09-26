@@ -141,6 +141,9 @@ export default defineConfig({
         "src/components/ui/use-reentrancy-lock.ts",
         "src/components/ui/use-refresh-ticket.ts",
         "src/components/ui/use-busy-action.ts",
+        /* P82 的合规出口（悬停提示收成一处，规范 16 §16.2.3 / §12.18 补地基）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/components/ui/hint.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -882,6 +885,16 @@ export default defineConfig({
           branches: 85,
         },
         "src/components/ui/use-image-zoom.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* P82 出口 `hint.tsx` —— 实测满档：三条判据分支（空 label 不渲染 /
+         * `accessibleName` 补名 / 子元素已有 `aria-label` 不覆盖）各有用例，
+         * 外加「render 接管后 onClick 与 disabled 不丢」「插锚点时提示挂在
+         * 锚点上（禁用按钮的说明仍要弹得出）」两条形态回归。 */
+        "src/components/ui/hint.tsx": {
           lines: 100,
           functions: 100,
           statements: 100,

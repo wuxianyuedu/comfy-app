@@ -14,6 +14,7 @@ import {
   NodeIdChip,
   type IOEditContextValue,
 } from "./IOEditContext";
+import { Hint } from "~/components/ui/hint";
 
 export interface SubgraphHeaderProps {
   title: string;
@@ -58,41 +59,42 @@ export function SubgraphHeader({
        *  不把它当成节点拖拽起点，也免得外层
        *  `onDoubleClick`（下钻）在这里起手的双击
        *  之后被触发。 */}
-      <Button
-        variant="ghost"
-        size="icon-xs"
+      <Hint label={isCollapsed ? "展开" : "折叠"}>
+        <Button
+          variant="ghost"
+          size="icon-xs"
 
-        aria-label={isCollapsed ? "展开子图" : "折叠子图"}
-        title={isCollapsed ? "展开" : "折叠"}
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggle();
-        }}
-        onMouseDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
-        style={{ pointerEvents: "auto" }}
-      >
-        <svg
-          data-icon="inline-start"
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="none"
-          style={{
-            transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
-            transition: "transform 120ms ease",
+          aria-label={isCollapsed ? "展开子图" : "折叠子图"}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle();
           }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
+          style={{ pointerEvents: "auto" }}
         >
-          <path
-            d="M3.5 2 L7 5 L3.5 8"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </Button>
+          <svg
+            data-icon="inline-start"
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            style={{
+              transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
+              transition: "transform 120ms ease",
+            }}
+          >
+            <path
+              d="M3.5 2 L7 5 L3.5 8"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Button>
+      </Hint>
       <span
         className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-[9px] font-bold"
         style={{
@@ -130,25 +132,30 @@ export function SubgraphHeader({
       )}
       <NodeIdChip nodeId={String(nodeId)} variant="subgraph" />
       {onEnter && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={(event) => {
-            event.stopPropagation();
-            onEnter();
-          }}
-          title="展开子工作流"
-          /* 从 h-4 w-4（16×16）提到 h-6 w-6
-           *  （24×24）—— 用户反馈此前这下钻章在
-           *  30px 高的标题行上目标太小。24×24 比
-           *  NODE_TITLE_H 矮 3px，所以仍像一颗
-           *  行内按钮（而不是 28-32px 的独立章观感）。
-           *  比收起箭头的 h-5 w-5 大一档，
-           *  以标记下钻是子图的*主要*动作。 */
-          className="text-primary-strong hover:bg-primary/30 ml-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded text-[10px] transition-colors hover:text-white"
-        >
-          <ExternalLink data-icon="inline-start" size={12} strokeWidth={2.5} />
-        </Button>
+        <Hint label="展开子工作流" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={(event) => {
+              event.stopPropagation();
+              onEnter();
+            }}
+            /* 从 h-4 w-4（16×16）提到 h-6 w-6
+             *  （24×24）—— 用户反馈此前这下钻章在
+             *  30px 高的标题行上目标太小。24×24 比
+             *  NODE_TITLE_H 矮 3px，所以仍像一颗
+             *  行内按钮（而不是 28-32px 的独立章观感）。
+             *  比收起箭头的 h-5 w-5 大一档，
+             *  以标记下钻是子图的*主要*动作。 */
+            className="text-primary-strong hover:bg-primary/30 ml-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded text-[10px] transition-colors hover:text-white"
+          >
+            <ExternalLink
+              data-icon="inline-start"
+              size={12}
+              strokeWidth={2.5}
+            />
+          </Button>
+        </Hint>
       )}
     </div>
   );

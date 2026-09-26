@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { OutlineItem } from "./script-markdown-utils";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Textarea } from "~/components/ui/textarea";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
@@ -37,22 +38,23 @@ export const SCROLLBAR_VISIBLE_CLASSES = "soft-scrollbar overflow-y-auto";
 export function ToolbarButton({
   children,
   onClick,
-  title,
+  hint,
 }: {
   children: ReactNode;
   onClick: () => void;
-  title: string;
+  hint: string;
 }) {
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={onClick}
-      title={title}
-      className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
-    >
-      {children}
-    </Button>
+    <Hint label={hint} accessibleName>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onClick}
+        className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
+      >
+        {children}
+      </Button>
+    </Hint>
   );
 }
 
@@ -89,13 +91,13 @@ export function EditorToolbar({
   return (
     <div className="border-border bg-panel flex items-center gap-1 border-b px-4 py-2">
       <ToolbarGroup>
-        <ToolbarButton onClick={() => insertAtLineStart("#")} title="标题 1">
+        <ToolbarButton onClick={() => insertAtLineStart("#")} hint="标题 1">
           <Heading1 size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => insertAtLineStart("##")} title="标题 2">
+        <ToolbarButton onClick={() => insertAtLineStart("##")} hint="标题 2">
           <Heading2 size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => insertAtLineStart("###")} title="标题 3">
+        <ToolbarButton onClick={() => insertAtLineStart("###")} hint="标题 3">
           <Heading3 size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -105,31 +107,31 @@ export function EditorToolbar({
       <ToolbarGroup>
         <ToolbarButton
           onClick={() => wrapSelection("**", "**", "粗体")}
-          title="粗体"
+          hint="粗体"
         >
           <Bold size={18} />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => wrapSelection("*", "*", "斜体")}
-          title="斜体"
+          hint="斜体"
         >
           <Italic size={18} />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => wrapSelection("__", "__", "下划线")}
-          title="下划线"
+          hint="下划线"
         >
           <Underline size={18} />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => wrapSelection("~~", "~~", "删除线")}
-          title="删除线"
+          hint="删除线"
         >
           <Strikethrough size={18} />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => wrapSelection("`", "`", "代码")}
-          title="行内代码"
+          hint="行内代码"
         >
           <Code size={18} />
         </ToolbarButton>
@@ -138,13 +140,13 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton onClick={() => insertList(false)} title="无序列表">
+        <ToolbarButton onClick={() => insertList(false)} hint="无序列表">
           <List size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => insertList(true)} title="有序列表">
+        <ToolbarButton onClick={() => insertList(true)} hint="有序列表">
           <ListOrdered size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => insertAtLineStart(">")} title="引用">
+        <ToolbarButton onClick={() => insertAtLineStart(">")} hint="引用">
           <Quote size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -152,13 +154,13 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton onClick={insertLink} title="链接">
+        <ToolbarButton onClick={insertLink} hint="链接">
           <Link size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={insertImage} title="图片">
+        <ToolbarButton onClick={insertImage} hint="图片">
           <ImageIcon size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={insertTable} title="表格">
+        <ToolbarButton onClick={insertTable} hint="表格">
           <Table size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -166,12 +168,12 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton onClick={() => restoreHistory(-1)} title="撤销 (Ctrl+Z)">
+        <ToolbarButton onClick={() => restoreHistory(-1)} hint="撤销 (Ctrl+Z)">
           <Undo size={18} />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => restoreHistory(1)}
-          title="重做 (Ctrl+Shift+Z)"
+          hint="重做 (Ctrl+Shift+Z)"
         >
           <Redo size={18} />
         </ToolbarButton>
@@ -216,22 +218,22 @@ export function OutlineSidebar({
       ) : (
         <nav className="flex flex-col gap-1">
           {outline.map((item, index) => (
-            <Button
-              key={`${item.line}-${index}`}
-              variant="ghost"
-              size="xs"
-              onClick={() => onJump(item.line)}
-              className={`hover:bg-subtle hover:text-ink-bright block h-auto w-full truncate rounded-md px-2.5 py-1.5 text-left ${
-                item.level === 1
-                  ? "text-ink-strong font-medium"
-                  : item.level === 2
-                    ? "text-ink-muted pl-5 font-normal"
-                    : "text-ink-faint pl-8 font-normal"
-              }`}
-              title={item.text}
-            >
-              {item.text}
-            </Button>
+            <Hint label={item.text} key={`${item.line}-${index}`}>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => onJump(item.line)}
+                className={`hover:bg-subtle hover:text-ink-bright block h-auto w-full truncate rounded-md px-2.5 py-1.5 text-left ${
+                  item.level === 1
+                    ? "text-ink-strong font-medium"
+                    : item.level === 2
+                      ? "text-ink-muted pl-5 font-normal"
+                      : "text-ink-faint pl-8 font-normal"
+                }`}
+              >
+                {item.text}
+              </Button>
+            </Hint>
           ))}
         </nav>
       )}

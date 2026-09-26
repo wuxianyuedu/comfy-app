@@ -12,6 +12,7 @@ import {
 import type { CanvasSettings } from "./canvas/WorkflowCanvasSettings";
 import { DEFAULT_CANVAS_SETTINGS } from "./canvas/WorkflowCanvasSettings";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { alphaText } from "~/lib/number-format";
 import {
@@ -215,23 +216,26 @@ export function ZoomIndicator({
   }
 
   return (
-    <Button
-      variant="outline"
-      onMouseDown={onScrubStart}
-      onClick={() => {
-        if (justDraggedRef.current) {
-          justDraggedRef.current = false;
-          return;
-        }
-        beginEdit();
-      }}
-      title="点击输入缩放倍数，或按住上下拖动调整"
-      className={`border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg backdrop-blur-sm select-none hover:border-white/25 ${
-        dragging ? "border-primary-400/50 cursor-grabbing" : "cursor-ns-resize"
-      }`}
-    >
-      {pct}%
-    </Button>
+    <Hint label="点击输入缩放倍数，或按住上下拖动调整">
+      <Button
+        variant="outline"
+        onMouseDown={onScrubStart}
+        onClick={() => {
+          if (justDraggedRef.current) {
+            justDraggedRef.current = false;
+            return;
+          }
+          beginEdit();
+        }}
+        className={`border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg backdrop-blur-sm select-none hover:border-white/25 ${
+          dragging
+            ? "border-primary-400/50 cursor-grabbing"
+            : "cursor-ns-resize"
+        }`}
+      >
+        {pct}%
+      </Button>
+    </Hint>
   );
 }
 

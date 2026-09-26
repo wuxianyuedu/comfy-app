@@ -5,6 +5,7 @@ import { textHandler } from "~/lib/form-props";
 import { ClipboardCheck, Redo2, Undo2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -145,59 +146,62 @@ export function FilmStudio() {
         <div className="bg-surface-2 h-5 w-px" />
 
         {/* Undo / Redo */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleUndo}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
-          title="撤销"
-        >
-          <Undo2 data-icon="inline-start" size={16} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleRedo}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
-          title="重做"
-        >
-          <Redo2 data-icon="inline-start" size={16} />
-        </Button>
+        <Hint label="撤销" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleUndo}
+            className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
+          >
+            <Undo2 data-icon="inline-start" size={16} />
+          </Button>
+        </Hint>
+        <Hint label="重做" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleRedo}
+            className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
+          >
+            <Redo2 data-icon="inline-start" size={16} />
+          </Button>
+        </Hint>
 
         {/* Spacer */}
         <div className="flex-1" />
 
         {/* Play button */}
-        <Button
-          variant="primary-solid"
-          size="icon-lg"
-          onClick={handleTogglePlay}
-          className="rounded-xl shadow-sm hover:scale-[1.03]"
-          title={isPlaying ? "暂停" : "播放预览"}
-        >
-          {isPlaying ? (
-            <svg
-              data-icon="inline-start"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <rect x="6" y="4" width="4" height="16" rx="1" />
-              <rect x="14" y="4" width="4" height="16" rx="1" />
-            </svg>
-          ) : (
-            <svg
-              data-icon="inline-start"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          )}
-        </Button>
+        <Hint label={isPlaying ? "暂停" : "播放预览"}>
+          <Button
+            variant="primary-solid"
+            size="icon-lg"
+            onClick={handleTogglePlay}
+            className="rounded-xl shadow-sm hover:scale-[1.03]"
+          >
+            {isPlaying ? (
+              <svg
+                data-icon="inline-start"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <rect x="6" y="4" width="4" height="16" rx="1" />
+                <rect x="14" y="4" width="4" height="16" rx="1" />
+              </svg>
+            ) : (
+              <svg
+                data-icon="inline-start"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
+          </Button>
+        </Hint>
 
         <div className="w-3" />
 
@@ -254,15 +258,16 @@ export function FilmStudio() {
               </span>
             </div>
             {!isProjectSource && (
-              <Button
-                variant="primary"
-                size="icon-xs"
-                onClick={handleAddShot}
-                className="rounded-md"
-                title="新增镜头"
-              >
-                +
-              </Button>
+              <Hint label="新增镜头" accessibleName>
+                <Button
+                  variant="primary"
+                  size="icon-xs"
+                  onClick={handleAddShot}
+                  className="rounded-md"
+                >
+                  +
+                </Button>
+              </Hint>
             )}
           </div>
 
@@ -332,24 +337,29 @@ export function FilmStudio() {
                   {/* 项目镜头才给「退回让 AI 重做」入口（与画布镜头节点同源 requestShotRedo）。 */}
                   {isProjectSource && (
                     <>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => setReviewShot(shot)}
-                        title="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）"
-                        className="text-ink-soft hover:bg-primary/15 shrink-0"
+                      <Hint
+                        label="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）"
+                        accessibleName
                       >
-                        <ClipboardCheck data-icon="inline-start" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => void c.redoShot(shot.id)}
-                        title="退回让 AI 重做这一镜"
-                        className="text-ink-soft hover:bg-primary/15 mr-1 shrink-0"
-                      >
-                        ↺
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => setReviewShot(shot)}
+                          className="text-ink-soft hover:bg-primary/15 shrink-0"
+                        >
+                          <ClipboardCheck data-icon="inline-start" />
+                        </Button>
+                      </Hint>
+                      <Hint label="退回让 AI 重做这一镜" accessibleName>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => void c.redoShot(shot.id)}
+                          className="text-ink-soft hover:bg-primary/15 mr-1 shrink-0"
+                        >
+                          ↺
+                        </Button>
+                      </Hint>
                     </>
                   )}
                 </div>
@@ -368,35 +378,36 @@ export function FilmStudio() {
             </span>
 
             {/* Play overlay */}
-            <Button
-              variant="ghost"
-              onClick={handleTogglePlay}
-              className="border-border-strong flex size-16 items-center justify-center rounded-full border bg-black/45 text-white shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
-              title={isPlaying ? "暂停" : "播放"}
-            >
-              {isPlaying ? (
-                <svg
-                  data-icon="inline-start"
-                  width="28"
-                  height="28"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <rect x="6" y="4" width="4" height="16" rx="1" />
-                  <rect x="14" y="4" width="4" height="16" rx="1" />
-                </svg>
-              ) : (
-                <svg
-                  data-icon="inline-start"
-                  width="28"
-                  height="28"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </Button>
+            <Hint label={isPlaying ? "暂停" : "播放"}>
+              <Button
+                variant="ghost"
+                onClick={handleTogglePlay}
+                className="border-border-strong flex size-16 items-center justify-center rounded-full border bg-black/45 text-white shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
+              >
+                {isPlaying ? (
+                  <svg
+                    data-icon="inline-start"
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <rect x="6" y="4" width="4" height="16" rx="1" />
+                    <rect x="14" y="4" width="4" height="16" rx="1" />
+                  </svg>
+                ) : (
+                  <svg
+                    data-icon="inline-start"
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
+              </Button>
+            </Hint>
 
             {/* 影片进度覆盖层（生成中） */}
             {/* p71-allow:start brand 渐变 · 影片进度条 violet→fuchsia 双色（项目品牌视觉），见 §3.6.1 */}

@@ -3,6 +3,7 @@
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { FieldLegend } from "~/components/ui/field";
+import { Hint } from "~/components/ui/hint";
 import { TreeChildren } from "~/components/ui/tree-rows";
 import { Spinner } from "~/components/ui/spinner";
 import { StatusBadge } from "~/components/ui/status-badge";
@@ -202,23 +203,27 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                     </div>
                   }
                   trailing={
-                    <Button
-                      variant="outline"
-                      onClick={() => void onParseAllParent(parent)}
-                      disabled={
-                        !!parsing ||
-                        total === 0 ||
-                        (parentParsed && cnt.outdated === 0)
-                      }
-                      className="border-border bg-bg text-ink hover:bg-subtle h-auto shrink-0 rounded-lg px-3 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                      title={
+                    <Hint
+                      label={
                         parentParsed && cnt.outdated === 0
                           ? "已加载、无更新"
                           : "重新解析此目录下所有子包"
                       }
+                      wrap
                     >
-                      {parsing ? "…" : "解析本目录"}
-                    </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => void onParseAllParent(parent)}
+                        disabled={
+                          !!parsing ||
+                          total === 0 ||
+                          (parentParsed && cnt.outdated === 0)
+                        }
+                        className="border-border bg-bg text-ink hover:bg-subtle h-auto shrink-0 rounded-lg px-3 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {parsing ? "…" : "解析本目录"}
+                      </Button>
+                    </Hint>
                   }
                 />
                 {/* 子包 —— 仅展开时显示 */}

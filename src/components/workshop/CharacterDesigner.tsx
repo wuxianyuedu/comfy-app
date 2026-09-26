@@ -2,6 +2,7 @@
 import React from "react";
 import { textHandler } from "~/lib/form-props";
 import { Trash } from "lucide-react";
+import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { EmptyState } from "~/components/ui/empty-state";
 import { Icon } from "~/components/ui/icon";
@@ -581,28 +582,29 @@ export function CharacterDesigner({
                   className="text-ink hover:border-border focus:border-primary flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium outline-none"
                   placeholder="角色名"
                 />
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => handleAICard(character)}
-                  disabled={aiAction.isBusy(character.id) || gen.busy}
-                  className="border-primary-soft text-primary hover:bg-primary-soft h-auto rounded-md px-2 py-1"
-                  title="用 LLM 补全外貌/服装/性格"
-                >
-                  {aiAction.isBusy(character.id) ? (
-                    "…"
-                  ) : (
-                    <>
-                      <Icon
-                        data-icon="inline-start"
-                        name="sparkles"
-                        size={12}
-                        className="mr-1 inline align-[-2px]"
-                      />
-                      AI 润色
-                    </>
-                  )}
-                </Button>
+                <Hint label="用 LLM 补全外貌/服装/性格" wrap>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => handleAICard(character)}
+                    disabled={aiAction.isBusy(character.id) || gen.busy}
+                    className="border-primary-soft text-primary hover:bg-primary-soft h-auto rounded-md px-2 py-1"
+                  >
+                    {aiAction.isBusy(character.id) ? (
+                      "…"
+                    ) : (
+                      <>
+                        <Icon
+                          data-icon="inline-start"
+                          name="sparkles"
+                          size={12}
+                          className="mr-1 inline align-[-2px]"
+                        />
+                        AI 润色
+                      </>
+                    )}
+                  </Button>
+                </Hint>
                 <CharacterReviewButton character={character} />
                 <Button
                   variant="ghost"

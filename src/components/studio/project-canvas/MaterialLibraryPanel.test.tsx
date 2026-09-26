@@ -77,7 +77,7 @@ describe("MaterialLibraryPanel", () => {
     mockFetch({ folders: [], items: [] });
     const onClose = vi.fn();
     render(<MaterialLibraryPanel onClose={onClose} />);
-    const closeBtn = await screen.findByTitle("关闭");
+    const closeBtn = await screen.findByRole("button", { name: "关闭" });
     expect(closeBtn).toBeInTheDocument();
   });
 });

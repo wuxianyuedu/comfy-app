@@ -18,6 +18,7 @@ import {
   type Section,
 } from "~/app/(main)/settings/hooks/use-settings-page";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 
 export function SettingsShell({
   section,
@@ -43,16 +44,17 @@ export function SettingsShell({
     <div className={`bg-bg flex flex-col overflow-hidden ${className}`}>
       {/* Header bar */}
       <div className="border-border flex items-center gap-3 border-b px-6 py-4">
-        <Button
-          variant="ghost"
-          size="icon-lg"
-          onClick={onClose ?? (() => router.back())}
-          className="text-muted-foreground hover:text-ink"
-          title="返回"
-          aria-label="返回"
-        >
-          <ArrowLeft data-icon="inline-start" size={18} />
-        </Button>
+        <Hint label="返回">
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            onClick={onClose ?? (() => router.back())}
+            className="text-muted-foreground hover:text-ink"
+            aria-label="返回"
+          >
+            <ArrowLeft data-icon="inline-start" size={18} />
+          </Button>
+        </Hint>
         <h1 className="text-ink text-lg font-semibold">设置</h1>
       </div>
 

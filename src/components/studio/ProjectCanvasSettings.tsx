@@ -16,6 +16,7 @@
  */
 import { useDebugMode } from "./canvas/WorkflowCanvasSettings";
 import { useDebugStore } from "./debug/debug-store";
+import { Hint } from "~/components/ui/hint";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
@@ -136,18 +137,19 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
 /* ── 右上角齿轮按钮（位于居中工具栏右侧） ── */
 export function ProjectSettingsButton({ onClick }: { onClick: () => void }) {
   return (
-    <Button
-      variant="outline"
-      onClick={onClick}
-      title="项目画布设置"
-      aria-label="项目画布设置"
-      data-testid="project-canvas-settings-button"
-      className="border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-canvas-ui pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight shadow-lg backdrop-blur-sm select-none hover:border-white/25"
-    >
-      <span aria-hidden className="mr-1 align-baseline text-[12.5px]">
-        ⚙
-      </span>
-      设置
-    </Button>
+    <Hint label="项目画布设置">
+      <Button
+        variant="outline"
+        onClick={onClick}
+        aria-label="项目画布设置"
+        data-testid="project-canvas-settings-button"
+        className="border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-canvas-ui pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight shadow-lg backdrop-blur-sm select-none hover:border-white/25"
+      >
+        <span aria-hidden className="mr-1 align-baseline text-[12.5px]">
+          ⚙
+        </span>
+        设置
+      </Button>
+    </Hint>
   );
 }

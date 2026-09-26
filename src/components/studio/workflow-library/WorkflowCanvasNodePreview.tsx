@@ -655,7 +655,7 @@ export function WorkflowCanvasNodePreview({
                   label="▶ 用此工作流生成"
                   disabled={true}
                   onClick={run}
-                  title="切换到「实际使用」页签后可执行"
+                  hint="切换到「实际使用」页签后可执行"
                 />
               }
             />
@@ -724,7 +724,7 @@ export function WorkflowCanvasNodePreview({
                 label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
                 disabled={!canRun}
                 onClick={run}
-                title={
+                hint={
                   missingLabels.length > 0
                     ? `必填参数未填：${missingLabels.join("、")}`
                     : undefined
