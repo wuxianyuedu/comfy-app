@@ -78,6 +78,17 @@ const PURE_NODE_HOSTS = [
   // trace() 保持同步，ref 未 ready 时静默 skip——与既有硬约束「诊断通道不得
   // 因磁盘/权限把生成带崩」完全一致，旧行为里写盘失败也是 catch 掉不抛。
   "src/lib/comfyui/trace.ts",
+  // executor-finalize.ts：P3 第 1 期·第三步·收口批。摘掉 server-only 后本模块
+  // **自身**的静态边已解——taskRepository / getView / createAppRuntimeLogger
+  // 三条 server-only 侧依赖全改成「首次调用时 dynamic import + 允许
+  // `configureExecutorFinalize` 注入」。Node 内建 fs/path 值 import 保留。
+  // ⚠️ 但**传递闭包**里 `./client`、`./executor-history`、`./executor-continuation`
+  // 各自还静态引 server-only 侧（logger → app-runtime-log → server-only throw、
+  // client → logger 同链），因此登记进本清单**不是**「现在就能在纯 Node 里
+  // import 本模块」的承诺，只是「标迁移方向 + 消化 scanner 的 unguarded」；
+  // 后续 PR 把 client / executor-history / executor-continuation 拆完后，
+  // 本模块才能真正被纯 Node 宿主加载。
+  "src/lib/comfyui/executor-finalize.ts",
 ];
 
 type Report = {
