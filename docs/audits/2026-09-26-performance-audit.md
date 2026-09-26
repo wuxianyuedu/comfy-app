@@ -7,36 +7,43 @@
 
 ## A. 已闭环（✅）
 
-| 条目 | 级别 | 位置 | 修复 | PR |
-|---|---|---|---|---|
-| S1 | P0 | `src/app/api/tasks/[id]/stream/route.ts:84-94` | SSE `done/error` 分支不清 `hbId`/`pollId` → 三个退出路径统一走幂等 `cleanup()` | #966 |
-| M1 | P0 | `src/lib/comfyui/runner-state.ts:156/249/351-355` | `logs` Map 无上限 → per-task 环形缓冲 + 终态淘汰 | #968 |
-| M2 | P0 | `runner-state.ts:162/251/540-549` | `rawCli` Map 键永不淘汰 → 按任务数 LRU | #968 |
-| L1 | P0 | `scripts/prepare-local-run.ps1:156-158` | `Get-FileHash` 漂移判据恒真（每次双击都全量 install）→ 复用 lockfile 实质 diff | #969 |
-| F1 | P0 | `src/components/studio/project-canvas/WorkflowNode.tsx:124-127` | 每节点 `findIndex` O(N²) → 按帧记忆 Map | #970 |
-| F2a | P0 | `GlobalStepLogPanel.tsx:378` | `useNodes()` 订阅下沉到任务切换器子组件 | #971 |
-| F2b | P0 | `GlobalStepLogPanel.tsx:637-668` | 300 行内联 JSX → `memo` 化 `StepLogRow` | #973 |
-| S2 | P0 | `src/lib/models.ts:86-109` | 串行 N+1 → 并发拉取 + `upsertScannedMany` 批量 upsert | #974 |
-| S3 | P0 | `src/lib/comfyui/localWorkflows.ts` | 同步递归扫盘 → 异步 `fs.promises`（方案更正见 §B） | #977 |
-| S4 | P0 | `src/server/film/orchestrator.ts:510-594` | 成片监看 N+1 → 批量 `IN` + 只在变化时回写 | #978 |
-| S5 | P0 | `src/app/api/custom-nodes/route.ts:193` | 路由内 `spawnSync` → 异步 `spawn` + `withTimeoutResult` | #979 |
-| F3 | P1 | `src/components/studio/WorkflowCanvasDecorations.tsx:48-64` | 选择器拼新对象 → 只订阅标量 zoom | #980 |
-| F5 | P1 | `src/components/ui/aurora-background.tsx` | 高斯核 40/50/60→24/28/32 + `contain` 重绘隔离 | #1027 |
-| F9 | P1 | `src/components/workshop/LLMContext.tsx:51-61` | Context value 现拼 → `useMemo` | #1029 |
-| F10 | P1 | `src/components/workshop/hooks/use-workshop-pipeline.ts:517-538` | 挂载取数无守卫 → `beginStaleRun` | #1029 |
-| M8 | P1 | `src/lib/log/log-ansi.ts:182` | 每行 `new RegExp` → 复用模块级 `SGR_RE` | #1033 |
-| M6 | P1 | `src/app/api/custom-nodes/route.ts:176-204` | `discoverCache` 无淘汰 → `rememberDiscover`（容量 32） | #1033 |
-| M9 | P1 | `src/components/studio/project-canvas/stepLogCache.ts:117-123` | 判重 O(n²) → 尾部窗口 64；单任务日志上限 2000（`tailWindow`） | #1036 |
-| M3 | P1 | `src/lib/comfyui/runner-state.ts:232` | `setMaxListeners(0)`（=无限，静音泄漏告警）→ 50 | #1037 |
+| 条目 | 级别 | 位置                                                             | 修复                                                                                                   | PR    |
+| ---- | ---- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----- |
+| S1   | P0   | `src/app/api/tasks/[id]/stream/route.ts:84-94`                   | SSE `done/error` 分支不清 `hbId`/`pollId` → 三个退出路径统一走幂等 `cleanup()`                         | #966  |
+| M1   | P0   | `src/lib/comfyui/runner-state.ts:156/249/351-355`                | `logs` Map 无上限 → per-task 环形缓冲 + 终态淘汰                                                       | #968  |
+| M2   | P0   | `runner-state.ts:162/251/540-549`                                | `rawCli` Map 键永不淘汰 → 按任务数 LRU                                                                 | #968  |
+| L1   | P0   | `scripts/prepare-local-run.ps1:156-158`                          | `Get-FileHash` 漂移判据恒真（每次双击都全量 install）→ 复用 lockfile 实质 diff                         | #969  |
+| F1   | P0   | `src/components/studio/project-canvas/WorkflowNode.tsx:124-127`  | 每节点 `findIndex` O(N²) → 按帧记忆 Map                                                                | #970  |
+| F2a  | P0   | `GlobalStepLogPanel.tsx:378`                                     | `useNodes()` 订阅下沉到任务切换器子组件                                                                | #971  |
+| F2b  | P0   | `GlobalStepLogPanel.tsx:637-668`                                 | 300 行内联 JSX → `memo` 化 `StepLogRow`                                                                | #973  |
+| S2   | P0   | `src/lib/models.ts:86-109`                                       | 串行 N+1 → 并发拉取 + `upsertScannedMany` 批量 upsert                                                  | #974  |
+| S3   | P0   | `src/lib/comfyui/localWorkflows.ts`                              | 同步递归扫盘 → 异步 `fs.promises`（方案更正见 §B）                                                     | #977  |
+| S4   | P0   | `src/server/film/orchestrator.ts:510-594`                        | 成片监看 N+1 → 批量 `IN` + 只在变化时回写                                                              | #978  |
+| S5   | P0   | `src/app/api/custom-nodes/route.ts:193`                          | 路由内 `spawnSync` → 异步 `spawn` + `withTimeoutResult`                                                | #979  |
+| F3   | P1   | `src/components/studio/WorkflowCanvasDecorations.tsx:48-64`      | 选择器拼新对象 → 只订阅标量 zoom                                                                       | #980  |
+| F5   | P1   | `src/components/ui/aurora-background.tsx`                        | 高斯核 40/50/60→24/28/32 + `contain` 重绘隔离                                                          | #1027 |
+| F9   | P1   | `src/components/workshop/LLMContext.tsx:51-61`                   | Context value 现拼 → `useMemo`                                                                         | #1029 |
+| F10  | P1   | `src/components/workshop/hooks/use-workshop-pipeline.ts:517-538` | 挂载取数无守卫 → `beginStaleRun`                                                                       | #1029 |
+| M8   | P1   | `src/lib/log/log-ansi.ts:182`                                    | 每行 `new RegExp` → 复用模块级 `SGR_RE`                                                                | #1033 |
+| M6   | P1   | `src/app/api/custom-nodes/route.ts:176-204`                      | `discoverCache` 无淘汰 → `rememberDiscover`（容量 32）                                                 | #1033 |
+| M9   | P1   | `src/components/studio/project-canvas/stepLogCache.ts:117-123`   | 判重 O(n²) → 尾部窗口 64；单任务日志上限 2000（`tailWindow`）                                          | #1036 |
+| M3   | P1   | `src/lib/comfyui/runner-state.ts:232`                            | `setMaxListeners(0)`（=无限，静音泄漏告警）→ 50                                                        | #1037 |
+| S7   | P1   | `src/lib/core/repository-task.ts:161-171`                        | `task.list` 排除 `workflowSnapshot`/`logs` 大 JSON 列（`TaskCardRow`）                                 | #1043 |
+| S11  | P1   | `src/server/api/routers/workflow.ts:792-795`                     | 循环 `upsertByName` → `upsertByNames` 批量                                                             | #1044 |
+| M10  | P1   | `src/lib/comfyui/reaper.ts:482`、`executor-scheduler.ts:115`     | 常驻 `setInterval` 加 `unref()`                                                                        | #1048 |
+| M11  | P1   | `src/lib/comfyui/executor-ws.ts:247`                             | 重连句柄存模块级，重复调度先清旧                                                                       | #1048 |
+| S6   | P1   | `src/app/api/tasks/[id]/stream/route.ts:122-161`                 | 轮询换 `findSseSnapshot` 轻量投影，间隔 3s→5s                                                          | #1049 |
+| M4   | P1   | 同上（路由侧）                                                   | 连接死亡（`send` 抛错）即 `cleanup()`，补上 abort 不亮的漏网路径（emitter 侧终态清理由 M3 的告警兜底） | #1049 |
 
 ## B. 判定修正与例外（📝）
 
-| 条目 | 判定 | 依据 |
-|---|---|---|
-| HistoryList（原 F4 之一） | **误报** | `use-history-list.ts` 已有 `PAGE_SIZE` + `visibleGroups` + `loadMore` 分页增量加载 |
-| F8 `WorkflowModePickChip` 订阅 `transform` | **无需改动** | 订阅已下沉到只在弹层打开时挂载的 `PopoverAutoClose`，且该组件 `return null` |
-| S3 修法 | **方案更正** | 「缓存扫描结果」被测试打回：清单里的 `mtimeMs` 是调用方判断磁盘变化的判据（`workflow.ts` 建 `diskMtimeByPath`），缓存会让「只改内容、未改目录 mtime」读到过期值；改异步 fs 才同时保住新鲜度与不阻塞 |
-| F6 raw-cli 弹窗 `key={index}` | **降级暂缓** | 追加场景下 index + 稳定 entry 引用 + `memo` 已够用；根治需给服务端缓冲（`runner-state.appendRawCli` 存裸 `string[]`）加稳定行号，属数据结构改动，收益/成本不划算 |
+| 条目                                       | 判定         | 依据                                                                                                                                                                                                |
+| ------------------------------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HistoryList（原 F4 之一）                  | **误报**     | `use-history-list.ts` 已有 `PAGE_SIZE` + `visibleGroups` + `loadMore` 分页增量加载                                                                                                                  |
+| F8 `WorkflowModePickChip` 订阅 `transform` | **无需改动** | 订阅已下沉到只在弹层打开时挂载的 `PopoverAutoClose`，且该组件 `return null`                                                                                                                         |
+| S3 修法                                    | **方案更正** | 「缓存扫描结果」被测试打回：清单里的 `mtimeMs` 是调用方判断磁盘变化的判据（`workflow.ts` 建 `diskMtimeByPath`），缓存会让「只改内容、未改目录 mtime」读到过期值；改异步 fs 才同时保住新鲜度与不阻塞 |
+| F6 raw-cli 弹窗 `key={index}`              | **降级暂缓** | 追加场景下 index + 稳定 entry 引用 + `memo` 已够用；根治需给服务端缓冲（`runner-state.appendRawCli` 存裸 `string[]`）加稳定行号，属数据结构改动，收益/成本不划算                                    |
+| S9 `project.listByUser` 拉 `nodes`/`edges` | **有意保留** | `canvas-store.hydrateFromServer` 依赖列表里的画布 JSON 与本地对账（跨设备/换端口恢复）；裁列需重新设计「延迟拉取 + 离线合并」语义，属功能改动而非性能修，项目数量级小                               |
 
 ## C. 待整改（⬜）
 
@@ -48,20 +55,13 @@
 
 ### C.2 资源与内存（P1）
 
-- ⬜ **M4** `src/lib/comfyui/enqueue.ts:61-70` + SSE 路由 —— `subscribe` 无连接结束兜底退订；任务终态后无 `removeAllListeners(taskId)`。方向：终态收口强制清订阅（与 S1 的 `cleanup()` 呼应）。
 - ⬜ **M5** `runner-state.ts` 的 `wsWaitLogged`(221/270)、`settled`(188/259)、`finalized`(198/260) —— 三个 Set 只 add（delete 仅重入/收口处各 1 处）。方向：任务终态收口统一清理；注意 `settled`/`finalized` 是「一次性权利」语义，误清会导致重复落库。
 - ⬜ **M7** `src/lib/log/capture-streams.server.ts:86/138/147-148` —— 劫持 `process.stdout.write` 后每条日志 `appendFileSync`，且无 uninstall 出口。方向：内存缓冲 + 定时批量 flush。
-- ⬜ **M10** `src/lib/comfyui/reaper.ts:482`、`executor-scheduler.ts:115/126` —— 模块级 `setInterval` 无 clear、无 `unref()`。方向：加 `unref()`（注意平台/环境判据，这两个是 Node-only 模块）。
-- ⬜ **M11** `src/lib/comfyui/executor-ws.ts:247` —— 重连 `setTimeout` 句柄不保存，主动停止时无法取消。方向：保存句柄并在停止路径 `clearTimeout`。
 
 ### C.3 服务端 / 数据访问（P1）
 
-- ⬜ **S6** `src/app/api/tasks/[id]/stream/route.ts:122-161` —— 每连接 3s `findById` 全行。方向：降频（5~8s）+ `columns` 投影（status/progress/error/validationErrors/workflowName）。
-- ⬜ **S7** `src/lib/core/repository-task.ts:161-171/208-217` —— `findMany/findFirst` 无 `columns` 投影，`task.list` 与详情把 `workflowSnapshot`/`logs`/`params` 大 JSON 全拉回。方向：`columns` 投影 + 消费方逐个核对。
 - ⬜ **S8** `src/server/api/routers/task.ts:53-62` —— `overFetch = min(take*4, 400)` 拉回再内存 filter/slice。方向：服务端 `mediaType` 条件 + 游标分页。
-- ⬜ **S9** `src/lib/core/repository-project.ts:17-23` —— `listByUser` 无 limit 且取 `nodes`/`edges` 画布 JSON。方向：列表只选 id/name/updatedAt，画布 JSON 走 `project.get`。
 - ⬜ **S10** `src/lib/core/repository-film.ts:109-127`、`repository-lora.ts:102-121` —— `appendLog` 读整列→push→整列写回，数组无上限。方向：日志独立表，或环形上限 + 批量/节流写。
-- ⬜ **S11** `src/server/api/routers/workflow.ts:792-795` —— 循环内 `await upsertByName`。方向：批量 upsert（同 S2 手法）。
 
 ### C.4 启动 / 构建 / 桌面壳（P1）
 
