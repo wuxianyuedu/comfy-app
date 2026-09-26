@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { redactSecretShaped } from "~/lib/core/redact-secret";
 import {
   TRACE_MAX_LINE,
@@ -6,6 +9,8 @@ import {
   historyTraceSummary,
   historyOutputKeys,
   queueTraceSummary,
+  trace,
+  configureTraceLogPath,
 } from "./trace";
 
 describe("traceStringify — 任意回执都能落成可读文本", () => {
@@ -140,5 +145,75 @@ describe("TRACE_MAX_LINE", () => {
   it("有显式上限（单行不会把诊断文件写成 MB 级）", () => {
     expect(TRACE_MAX_LINE).toBeGreaterThan(1000);
     expect(TRACE_MAX_LINE).toBeLessThanOrEqual(64 * 1024);
+  });
+});
+
+/** `trace()` + `configureTraceLogPath` 的落盘契约：
+ *  P3 迁移第 1 期·第三步（trace 摘 server-only）之后，落盘路径不再由模块顶层
+ *  静态值 import 决定——dynamic import 是否落地、或 executor host 是否
+ *  `configureTraceLogPath()`，共同决定 `trace()` 是否写盘。测试写在**自己的
+ *  临时目录**里，绝不落到仓库 `log/` （见 MEMORY 的「写日志类用例给自己的临时
+ *  目录」条）。 */
+describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
+  it("configureTraceLogPath 指向可写临时目录后，trace 追加一行、匹配格式", () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), "comfy-trace-"));
+    try {
+      const file = path.join(tmp, "comfyui-trace.log");
+      configureTraceLogPath(file);
+      trace("cli", "t-1", "hello 世界", { extra: "meta" });
+
+      expect(existsSync(file)).toBe(true);
+      const content = readFileSync(file, "utf-8");
+      // 行格式：`[本地时间戳] [INFO] [trace] <channel> [<taskId>] <text>[ metaText]\n`
+      expect(content).toMatch(
+        /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] /,
+      );
+      expect(content).toContain("[INFO] [trace] cli [t-1] hello 世界");
+      expect(content).toContain('"extra":"meta"');
+      expect(content.endsWith("\n")).toBe(true);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("configureTraceLogPath 覆盖生效：第二次写入换目的地、第一份文件不追加", () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), "comfy-trace-"));
+    try {
+      const fileA = path.join(tmp, "a.log");
+      const fileB = path.join(tmp, "b.log");
+      configureTraceLogPath(fileA);
+      trace("ws", "t-a", "first");
+      configureTraceLogPath(fileB);
+      trace("ws", "t-b", "second");
+
+      const a = readFileSync(fileA, "utf-8");
+      const b = readFileSync(fileB, "utf-8");
+      expect(a).toContain("first");
+      expect(a).not.toContain("second");
+      expect(b).toContain("second");
+      expect(b).not.toContain("first");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("路径不可写时 trace 静默 skip（旧契约：诊断通道不得把业务带崩）", () => {
+    // 指向一个不存在的目录树（且父目录不可创建：给一个已经作为文件存在的路径
+    // 当父目录用，`fs.mkdirSync({recursive:true})` 会抛 EEXIST/ENOTDIR）。
+    const tmp = mkdtempSync(path.join(tmpdir(), "comfy-trace-"));
+    try {
+      const blocker = path.join(tmp, "blocker");
+      // 用 `trace()` 自己的写入路径先造出一个**文件**，再让下一次 trace 把它当
+      // 目录用；`fs.mkdirSync(dirname(blocker-file/blocker2), {recursive:true})`
+      // 会撞 ENOTDIR / EEXIST，被外层 `try { } catch { }` 咽下。
+      configureTraceLogPath(blocker);
+      trace("http", "t-ok", "warm"); // 先建 blocker（作为文件）
+      const nested = path.join(blocker, "deeper", "trace.log");
+      configureTraceLogPath(nested);
+      // 不抛、不 crash——契约就是「写不进去就静默」。
+      expect(() => trace("http", "t-skip", "should not throw")).not.toThrow();
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

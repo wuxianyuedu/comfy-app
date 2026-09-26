@@ -70,6 +70,14 @@ const PURE_NODE_HOSTS = [
   "src/lib/comfyui/gpu-vram.ts",
   "src/lib/comfyui/launch-path.ts",
   "src/lib/comfyui/proc-detect.ts",
+  // trace.ts：诊断通道，落盘路径 `COMFYUI_TRACE_LOG` 从 `~/lib/log/log-paths`
+  // （server-only）拿。P3 迁移第 1 期·第三步把它改成**加载即 fire-and-forget 的
+  // 动态 import** 填模块内 ref；同时导出 `configureTraceLogPath(p)`，让未来
+  // executor host 显式注入路径、不必依赖那条 dynamic 边（在纯 Node 下它会撞
+  // log-paths 里的 server-only throw、被 `.catch(() => undefined)` 咽下）。
+  // trace() 保持同步，ref 未 ready 时静默 skip——与既有硬约束「诊断通道不得
+  // 因磁盘/权限把生成带崩」完全一致，旧行为里写盘失败也是 catch 掉不抛。
+  "src/lib/comfyui/trace.ts",
 ];
 
 type Report = {
