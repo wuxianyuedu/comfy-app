@@ -1,7 +1,7 @@
 # P3 §5 第 2 期：ComfyUI 执行器迁出 Next 进程（executor-host.mjs）
 
 - 日期：2026-09-26
-- 状态：**草案**（v1）—— 三个未决问题标注「需评审」，评审通过后升级为「已确认」进入实施期
+- 状态：**v2** —— §11.1 Phase 2-A 详细设计已补，等待 Phase 2-A 实施签字；§3 的 Q1/Q2/Q3 三条仍是「方向已定、细节待评审」
 - 前置：P3 §5 第 1 期已完全收线（#1042/#1045/#1053/#1056/#1060/#1068/#1071/#1074/#1075/#1077/#1080/#1083/#1086/#1090 共 14 PR，整条 ComfyUI 执行链 + lib 层地基都进 §18.4 第三类；host boot 顺序与 inject 接缝已就位）
 - 上游方案：`outputs/p3-executor-process-migration-plan.md`（审计 §2.7 / 架构级）
 - 范围：
@@ -227,6 +227,159 @@ Phase 5 之后再评估：
 
 ---
 
+## 11.1 Phase 2-A 详细设计（回答 §11 结尾的两个开放点）
+
+### 摸底：exec 链用到的 12 个方法
+
+先把范围钉死——**只有 12 个方法在 exec 链里被调用**，且它们**全部用 `.select().from(task)` / `.update(task).set().where()` / `.insert(taskImage).values()`** 的普通 drizzle 语句，**没有一个走 relational query**（`db.query.task.findMany({ with: ... })`）。原 ADR §11 里「545 行 class + 12 个 repository-*.ts 波及」的担心是**多虑**：
+
+| 方法 | 现位置 (`repository-task.ts`) | 现形态 | host 侧用途 |
+|---|---|---|---|
+| `findExecutionMeta(taskId)` | 261 | `.select({ 7 列 }).from(task).where(eq(id)).limit(1)` | executor-finalize 收口时读归属与参数 |
+| `updateProgress(taskId, pct)` | 369 | `.update(task).set({ progress, status:"RUNNING" }).where(and(eq, notIn(TERMINAL))).returning(id)` | executor-ws 进度回写 |
+| `markRunning(taskId, promptId)` | 379 | `.update(task).set({ status, promptId }).where(and(eq, notIn(TERMINAL))).returning(id)` | executor-cli 领任务时 |
+| `finalizeSuccess(taskId, {resultImages, params, workflowSnapshot?})` | 388 | `.update(task).set({ status:"SUCCEEDED", progress:100, finishedAt, ... }).where(eq(id))` | executor-finalize 成功收口 |
+| `finalizeFailure(taskId, error, validationErrors?)` | 411 | `.update(task).set({ status:"FAILED", error, validationErrors:JSON.stringify?, finishedAt }).where(eq)` | executor-finalize / reaper 失败收口 |
+| `cancel(taskId)` | 429 | `.update(task).set({ status:"CANCELLED", finishedAt }).where(eq)` | enqueue 用户取消 |
+| `finalizeFromReaper(taskId, status, error)` | 436 | `.update(task).set({ status, finishedAt, error }).where(eq)` | reaper 孤儿判决后落库 |
+| `findStatusAndPromptById(taskId)` | 447 | `.select({ status, promptId }).from(task).where(eq).limit(1)` | enqueue.cancelTask 前置判 |
+| `replaceLogs(taskId, logs)` | 458 | `.update(task).set({ logs }).where(eq)` + `.catch(→undefined)` | runner-state.persistLogs 落库 |
+| `listStaleQueued(cutoff, take)` | 466 | `.select({ id, createdAt, workflowName }).from(task).where(and(eq QUEUED, isNull(finishedAt), lt(createdAt, cutoff), isNull(promptId))).limit(take)` | reaper 扫 QUEUED 孤儿 |
+| `listStaleRunning(cutoff, take)` | 488 | `.select({ id, promptId, createdAt, workflowName }).from(task).where(and(eq RUNNING, isNull(finishedAt), lt(createdAt), isNotNull(promptId))).limit(take)` | reaper 扫 RUNNING 孤儿 |
+| `createImages(taskId, images[])` | 518 | `.insert(taskImage).values([...])` | executor-finalize 落产物 |
+
+**关键判据**：没有一个用到 `db.query.task.findMany/findFirst`。relational query（`with: { images: ... }` 那套）只在 `findById` / `listByUser` / `findByProject` 里出现，都是 **UI 列表卡与详情页** 的路径，host **完全不需要**。
+
+因此 driver 层的 scope 就是这 12 个方法，不是整个 `TaskRepository` class。
+
+### 决定 1：host 用哪个 sqlite 客户端
+
+**结论：`@libsql/client` 的本地文件模式（`createClient({ url: "file:./db.sqlite" })`），与 Next 侧 `src/server/db.ts` 用同一个包**。理由：
+
+1. **零新依赖**。`@libsql/client` 与 `drizzle-orm/libsql` 已在 `package.json`。引入 Node 22 `node:sqlite`（`DatabaseSync`，被 `db-schema-ready` 用作**只读探针**）会多一套 SQL 语法边界（node:sqlite 目前对某些 PRAGMA / collation 的支持仍在演进），且**无法与 Next 侧共用同一 drizzle schema**——`drizzle-orm/node-sqlite` 适配器是**另一条** API。
+2. **同文件并发访问**：`src/server/db.ts` 头注释已经论证过——libsql 是 async 客户端、与 `better-sqlite3` 的 sync 客户端比不阻塞事件循环。host 是独立进程、自己那侧 libsql 就行。两进程通过 WAL mode 并行读写同一 `db.sqlite`，这是 SQLite 原生支持（`guide-database-backup.md` 里已经写了 WAL 损坏恢复流程，运维侧现成）。
+3. **不用 better-sqlite3**：那条已被 db.ts 明确弃用（"any slow SQL ... pinned the whole Next server event loop"），别再引回来。
+4. **不用 node:sqlite**：那是 `db-schema-ready` 的**只读探针**专用，写路径用它要背 Node 版本兼容（22.5 起才有）；且与 Next 侧的 drizzle adapter 不同、host 与 Next 各自的 schema 集成会漂。
+
+**Phase 2-A 不引入新依赖、不引入新 SQL 方言**。
+
+### 决定 2：relational query → select/where 的映射表
+
+**结论：exec 链的 12 个方法**都**不需要**这个映射（它们本来就是 select/where/update/insert）。真正需要这张表的是**Phase 3-B**（host 侧「按镜头批量取进度」的 `findExecutionProgressMany`）与**Phase 5**（film 侧「按项目列任务带封面」的 `listByUser` / `findByProject` 那三个 relational 查询）——那些**不属于 Phase 2-A 的 scope**。
+
+Phase 2-A 只抽这 12 个方法；等 Phase 3-B 真需要 `findExecutionProgressMany` 时（**它已经在 `repository-task.ts` 里、本来就是 `.select().from(task).where(inArray(id, ids))` 普通查询、不是 relational**）照同一模板补进 impl；等 Phase 5 film 侧需要带 `images` 关联的 `listByUser` 时，再做那张 relational→select/where 的映射。
+
+（这里避免「预先设计一个 Phase 5 才用到的映射表」的 §12.15 陷阱——没有第二个消费者的抽象就抽象得过早。）
+
+### 抽法：新增 impl + `repository-task.ts` delegate（不孪生）
+
+**新文件** `src/lib/core/repository-task-impl.ts`（3rd class 无 server-only）：
+
+```ts
+// 类型只从 schema 拿、不引 lib/db 与 server/db（那是 server-only 链）
+import { task, taskImage } from "~/server/db/schema";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, notInArray } from "drizzle-orm";
+import { TERMINAL_TASK_STATUSES } from "../task-state";
+import type { DrizzleSqliteClient } from "./repository-task-impl-types";
+
+const TERMINAL_STATES: string[] = [...TERMINAL_TASK_STATUSES];
+
+/** 12 个 exec-chain 方法的**唯一实现**；Next 与 host 各用自己的 db 传入。
+ *  `db` 类型用 `ReturnType<typeof drizzle<...>>` 结构最小约束——只依赖 drizzle
+ *  的 select/update/insert 三条 builder，不锁具体 driver。 */
+export function createTaskRepoImpl(db: DrizzleSqliteClient) {
+  return {
+    findExecutionMeta: async (taskId: string) => { /* ... */ },
+    updateProgress: async (taskId: string, pct: number) => { /* ... */ },
+    // 剩下 10 个方法照搬 repository-task.ts 里 261-540 行的 SQL 主体
+  };
+}
+export type TaskRepoImpl = ReturnType<typeof createTaskRepoImpl>;
+```
+
+**修改** `src/lib/core/repository-task.ts`（Next 侧、保留 server-only）：
+
+```ts
+import "server-only";
+import { db } from "~/lib/db";
+import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
+
+// 模块级建一次，`this.xxx()` 与 barrel 消费方拿到的引用形态不变。
+const impl: TaskRepoImpl = createTaskRepoImpl(db);
+
+export class TaskRepository extends DrizzleRepository<Task> {
+  // ... 非 exec 方法（create / listByUser / findById / findByProject /
+  //     findExecutionProgress(Many) / findSseSnapshot / attachImages）留原样
+
+  // 12 个 exec 方法各 delegate 一行；SQL 从 repository-task.ts 整体搬走、不重复
+  findExecutionMeta: TaskRepoImpl["findExecutionMeta"] = (id) => impl.findExecutionMeta(id);
+  updateProgress:    TaskRepoImpl["updateProgress"]    = (id, pct) => impl.updateProgress(id, pct);
+  markRunning:       TaskRepoImpl["markRunning"]       = (id, pid) => impl.markRunning(id, pid);
+  finalizeSuccess:   TaskRepoImpl["finalizeSuccess"]   = (id, d) => impl.finalizeSuccess(id, d);
+  finalizeFailure:   TaskRepoImpl["finalizeFailure"]   = (id, e, v) => impl.finalizeFailure(id, e, v);
+  cancel:            TaskRepoImpl["cancel"]            = (id) => impl.cancel(id);
+  finalizeFromReaper:TaskRepoImpl["finalizeFromReaper"]= (id, s, e) => impl.finalizeFromReaper(id, s, e);
+  findStatusAndPromptById: TaskRepoImpl["findStatusAndPromptById"] = (id) => impl.findStatusAndPromptById(id);
+  replaceLogs:       TaskRepoImpl["replaceLogs"]       = (id, l) => impl.replaceLogs(id, l);
+  listStaleQueued:   TaskRepoImpl["listStaleQueued"]   = (c, t) => impl.listStaleQueued(c, t);
+  listStaleRunning:  TaskRepoImpl["listStaleRunning"]  = (c, t) => impl.listStaleRunning(c, t);
+  createImages:      TaskRepoImpl["createImages"]      = (id, imgs) => impl.createImages(id, imgs);
+}
+
+export const taskRepository = new TaskRepository();
+```
+
+**为什么不孪生**（§12.12 判据：逐行重合 ≥75% **且** 两边 ≥60 行）：SQL 主体只活在 impl 一处；`repository-task.ts` 的 delegate 每一行都是 `(id, ...) => impl.xxx(id, ...)` 的转发，与 impl 里的实际 SQL **不重合**。`check-code-duplication.cjs` 逐行比对时看到的是「一行 method 定义 + 一行方法名 + 一行 return」，与 impl 里十几行的 select/where 结构完全不同形态。
+
+### Phase 2-A 的 host 侧使用
+
+Phase 2-D（host 主循环起）之前，host 骨架（Phase 2-B/2-C）不 inject 任何 taskRepo。到 Phase 2-D 才在 boot 里加：
+
+```js
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
+const url = process.env.DATABASE_URL ?? "file:./db.sqlite";
+const db = drizzle(createClient({ url }));
+const { createTaskRepoImpl } = await import("../src/lib/core/repository-task-impl.ts");
+const hostTaskRepo = createTaskRepoImpl(db);
+configureRunner({ taskRepo: hostTaskRepo, log: hostLog });
+configureExecutorCli({ taskRepo: hostTaskRepo, logger: hostLog, resolveComfyBase: hostResolveBase });
+// 依 §4 boot 顺序填满 6 个 configureXxx
+```
+
+（Phase 2-D 与 Phase 3-B「host 领任务」是同一批 PR 的一部分，见 §7。）
+
+### 单测覆盖（Phase 2-A 独立锁）
+
+**新增** `src/lib/core/repository-task-impl.test.ts`：用**内存 SQLite 真库夹具**（沿用 §18.11 里 `repository.test.ts` 的 `drizzle(createClient({url:":memory:"}))` 那套），12 方法各至少一条正/反用例：
+- `updateProgress` / `markRunning` 的「终态行不生效」判据（compare-and-set 语义）
+- `finalizeSuccess` 有 / 无 `workflowSnapshot` 两分支
+- `finalizeFailure` `validationErrors?` 传值 / undefined 两分支（`JSON.stringify` 只在有值时跑）
+- `listStaleQueued` 的 4 条件 AND（QUEUED + `finishedAt IS NULL` + `createdAt < cutoff` + `promptId IS NULL`）逐个破一条都不返
+- `listStaleRunning` 同族判据 + `isNotNull(promptId)` 与 Queued 版对偶
+- `replaceLogs` 内部 `.catch(→undefined)` 的 swallow 语义（表不存在时不抛）
+
+`repository.test.ts` 保留（`taskRepository.xxx()` 走 delegate 命中同一路径），跑一遍断言无回归。**不**测 `listByUser` / `findById` 那些 relational 方法（它们不属于 Phase 2-A scope）。
+
+### 破坏性面（0）
+
+**外部 API 零变化**：`taskRepository` 单例的方法签名与返回类型完全一致（delegate 的 `TaskRepoImpl["method"]` 从 impl 反推），所有 Next 侧调用点（tRPC routers、api routes、executor-\* 内部）不动一行。`../core/repository` barrel 也不动。
+
+`configureXxx`（runner-state / executor-cli / executor-finalize / executor-ws / enqueue / reaper）的 `taskRepo` 参数类型是**结构化的 Pick**（各自只挑自己用的方法），impl 返回的对象天然满足；不需要为 host 额外改 configureXxx 签名。
+
+### 分 PR 切法（Phase 2-A）
+
+- **2-A-1**：抽 `repository-task-impl.ts` + `repository-task.ts` 改 delegate + 新增 `repository-task-impl.test.ts`（12 方法各一条最小正/反例）。**这一步 Next 侧零行为变化**（delegate 转发同一段 SQL）。跑全量 `pnpm exec vitest run src/lib/core` + `src/lib/comfyui` 证明无回归。
+- **2-A-2**：`tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS` 登记 `src/lib/core/repository-task-impl.ts`（它无 `import "server-only"` 但顶层**没有** Node 内建 value import——只引 `~/server/db/schema`（drizzle 定义、非 Node 内建）+ `drizzle-orm` + `../task-state`；实际**不**会进 `unguarded`，这一条只是给未来「impl 里加 `node:fs` 之类」兜底留位；如果 2-A-1 PR 时 scanner 显示 impl 不进 unguarded，2-A-2 **可以省**、直接并入 2-A-1）。
+
+预期 2-A 只 1 个 PR 就能收；如果 delegate + 测试 + scanner 都在一个改动里干净跑绿，就是**一个 PR**。
+
+---
+
 ## 12. 评审记录
 
 - 2026-09-26：v1 起草。Q1/Q2/Q3 + §10 五个未决点等待评审。
+- 2026-09-26：v2 新增 §11.1 · Phase 2-A 详细设计。回答两个开放点：
+  - **host db 客户端**：`@libsql/client`（与 Next 侧同源、零新依赖、WAL 并行）；**不**引入 `node:sqlite` / `better-sqlite3`。
+  - **relational→select/where 映射**：Phase 2-A scope 内的 12 方法**全部本来就是** select/where/update/insert，**无需**映射；relational 只出现在 UI 列表卡（`listByUser` / `findById`），留到 Phase 5 film 侧真需要时再抽。
+  - 新增 §11.1 · 摸底表 + 决定 1 + 决定 2 + 抽法（impl + delegate、避开 §12.12 孪生）+ 单测覆盖 + 破坏面 0 + 分 PR 切法（预期 1 个 PR）。
