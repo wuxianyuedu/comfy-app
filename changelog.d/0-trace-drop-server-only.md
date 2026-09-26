@@ -1,0 +1,6 @@
+## Changed
+
+- **`trace.ts` 摘 server-only、log-paths 改加载即 fire-and-forget 动态 import（P3 迁移第 1 期·第三步·诊断通道批）**：trace 是 ComfyUI 通信层的原始回执诊断通道，之前的硬约束「写入失败绝不阻塞业务」已经允许「写不进去就静默」，本 PR 把「日志路径尚未 ready」也归到同一条静默路径里。唯一牵出 server-only 侧的静态值 import `import { COMFYUI_TRACE_LOG } from "~/lib/log/log-paths"` 改为：模块顶层 `void import("~/lib/log/log-paths").then((m) => { traceLogPathRef ??= m.COMFYUI_TRACE_LOG }).catch(() => {})` 填一个模块内 `traceLogPathRef: string | null`；同时导出 `configureTraceLogPath(p: string)` 给未来 `scripts/executor-host.mjs`（P3 §5 第 2 期）在 boot 时显式注入路径，不依赖那条 dynamic 边（在纯 Node 下它会撞 log-paths 里的 server-only throw、被 `.catch(() => undefined)` 咽下、ref 保持 null）。
+  - `trace()` 保持**同步**（`fs.appendFileSync` 是 sync 语义），只多一条 `if (!tracePath) return`；这与旧契约「磁盘/权限写不进 → catch 咽下、绝不阻塞业务」完全同构。启动窗口内 trace 若被极早调用（dynamic import 尚未 resolve）会被静默 skip，实测路径解析在 Next 侧 <10ms，落在业务链路（首个 comfy-cli / ws / http 事件）之前。
+  - 摘掉 `import "server-only"` 后本模块因 fs/path 值 import 落进 `unguarded`，按 §18.4 第三类登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`；scanner 现 `unguarded=8`（5 comfyui + 3 pre-existing）全部由登记消化、`libOnlyReachable=0` / `clientReachable=0` 保持。
+  - 验证：`tsc --noEmit` / `eslint --max-warnings 0` / `vitest run src/lib/comfyui` 526/526 全绿（含 `trace.test.ts` 13 例——都是纯函数、不触 trace() 写盘路径）/ `vitest run tests/lib-node-only-declarations.test.ts` 5/5 绿 / `.githooks/pre-commit` 28 步全过。
