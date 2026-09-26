@@ -1017,10 +1017,22 @@ function stripComments(text) {
 }
 
 /**
- * 剥掉 `// p71-allow:start …` 与 `// p71-allow:end` 之间的整段（含两行标记）。
- * 供 P71 使用——§3.6.1 里 palette 字面量本身就是语义（如 ANSI SGR 终端 8 色），
- * 不该被 token 化。必须在 `stripComments` **之前**调用，否则标记注释会被先抹掉、
- * 块内的 `dark:` 字面量又会被计回来。
+ * 剥掉 p71-allow:start … p71-allow:end 之间的整段（含两行标记）。
+ * 供 P71 / P79 使用——§3.6.1 里 palette 字面量本身就是语义（如 ANSI SGR
+ * 终端 8 色 / brand 渐变 / 媒体类型色板 / workshop 域专有装饰色），不该
+ * 被 token 化。**必须在 `stripComments` 之前调用**，否则标记注释会被先
+ * 抹掉、块内的 palette 字面量又会被计回来。
+ *
+ * 支持两种就地声明形态，覆盖 JS 与 JSX 两个上下文：
+ *   · **`// p71-allow:start …`** —— 落在 JS 表达式位（`{cond && (` 之后、
+ *     return 里的 JS 段等）；一行一条标记。
+ *   · **JSX 注释包 `p71-allow:start …`** —— 落在 JSX 兄弟节点位（顶层 JSX
+ *     元素之间），`//` 前缀会被 parse 成 JSX text 破解析、必须走 JSX 注释
+ *     形式（形如：左大括-斜星-空格 p71-allow:start · 空格 斜星大括-右）。
+ * 两形态在剥除阶段等价：只要匹配 `start` / `end` 关键字，前面是 `//` 或
+ * `/*` 起始符都算命中。`p71-allow` 名字保留（P71 先立、P79 与之后可能
+ * 的同族 palette 判据共用一份 allow，别另立 p79-allow 造成"一次标允许 ·
+ * 二次标漏掉"的分裂）。
  */
 function stripP71AllowBlocks(text) {
   const lines = text.split("\n");
@@ -1028,10 +1040,10 @@ function stripP71AllowBlocks(text) {
   let inBlock = false;
   for (const line of lines) {
     if (inBlock) {
-      if (/\/\/\s*p71-allow:end\b/.test(line)) inBlock = false;
+      if (/(?:\/\/|\/\*)\s*p71-allow:end\b/.test(line)) inBlock = false;
       continue;
     }
-    if (/\/\/\s*p71-allow:start\b/.test(line)) {
+    if (/(?:\/\/|\/\*)\s*p71-allow:start\b/.test(line)) {
       inBlock = true;
       continue;
     }
