@@ -9,6 +9,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Separator } from "~/components/ui/separator";
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { FormField } from "~/components/ui/form-field";
 import { FieldLabel } from "~/components/ui/field";
 import { ProgressBar } from "~/components/ui/progress-bar";
@@ -602,35 +603,36 @@ export function FilmStudio() {
             <Separator className="bg-border-subtle" />
 
             {/* 镜头来源：统一项目镜头（工坊产出）/ 剧本自动分镜（自由文本）。
- 有活跃项目镜头时默认走项目；无镜头时项目项禁用。 */}
-            <div
-              className="flex items-center gap-1"
-              role="group"
+ 有活跃项目镜头时默认走项目；无镜头时项目项禁用。P77：走 ui/toggle-group
+ （单选、multiple=false），active 视觉由基元的 `data-[state=on]:bg-muted`
+ 统一持有，不再每处手写 variant=primary/ghost 对。 */}
+            <ToggleGroup
+              multiple={false}
+              value={[c.shotSource]}
+              onValueChange={(vals) => {
+                const next = vals[0];
+                if (typeof next === "string" && next !== c.shotSource) {
+                  c.setShotSource(next as "project" | "script");
+                }
+              }}
               aria-label="镜头来源"
+              className="gap-1"
             >
-              <Button
-                type="button"
-                variant={c.shotSource === "project" ? "primary" : "ghost"}
-                size="xs"
-                aria-pressed={c.shotSource === "project"}
+              <ToggleGroupItem
+                value="project"
                 disabled={!c.activeProjectId || c.projectShotCount === 0}
-                onClick={() => c.setShotSource("project")}
-                className="h-auto flex-1 rounded-lg"
+                className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs"
               >
                 当前项目镜头
                 {c.projectShotCount > 0 ? `（${c.projectShotCount}）` : ""}
-              </Button>
-              <Button
-                type="button"
-                variant={c.shotSource === "script" ? "primary" : "ghost"}
-                size="xs"
-                aria-pressed={c.shotSource === "script"}
-                onClick={() => c.setShotSource("script")}
-                className="h-auto flex-1 rounded-lg"
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="script"
+                className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs"
               >
                 剧本自动分镜
-              </Button>
-            </div>
+              </ToggleGroupItem>
+            </ToggleGroup>
 
             {c.shotSource === "project" ? (
               <p className="text-ink-fainter bg-canvas/60 border-border rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
