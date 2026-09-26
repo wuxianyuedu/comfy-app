@@ -1,5 +1,6 @@
 /**
- * `repository-task-impl.ts` 的 12 个 exec-chain 方法的契约测（P3 §5 Phase 2-A-1）。
+ * `repository-task-impl.ts` 的 13 个 exec-chain 方法的契约测（12 方法主体来自
+ * P3 §5 Phase 2-A-1；`claimNextQueued` 为 Phase 3-A 追加，见下方专组）。
  *
  * 为什么单独一份测试、而不是加进 `repository.test.ts`：impl 是**双宿主共用**的
  * 实现（Next 侧与未来 executor host 都走同一份），它的正确性独立于 `TaskRepository`
@@ -336,5 +337,80 @@ describe("createImages", () => {
       width: 1024,
       height: 512,
     });
+  });
+});
+
+describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词）", () => {
+  /** 建三行 QUEUED：一行显式 host、一行显式 inline、一行 NULL（历史行形态）。 */
+  async function seedThreeOwned(): Promise<{
+    hostId: string;
+    inlineId: string;
+    nullId: string;
+  }> {
+    const base = Date.now() - 10_000;
+    const hostId = await seed({
+      claimedBy: "host",
+      createdAt: new Date(base + 1000),
+    });
+    const inlineId = await seed({
+      claimedBy: "inline",
+      createdAt: new Date(base + 2000),
+    });
+    const nullId = await seed({ createdAt: new Date(base + 3000) });
+    return { hostId, inlineId, nullId };
+  }
+
+  it("host 只领 claimedBy='host' 的行；NULL 与 'inline' 行原样留在 QUEUED", async () => {
+    const { hostId, inlineId, nullId } = await seedThreeOwned();
+    const claimed = await impl.claimNextQueued("host", 10);
+    expect(claimed).toEqual([hostId]);
+    expect(readRow(hostId)).toMatchObject({
+      status: "RUNNING",
+      claimedBy: "host",
+    });
+    expect(readRow(inlineId)?.status).toBe("QUEUED");
+    expect(readRow(nullId)?.status).toBe("QUEUED");
+  });
+
+  it("inline 领 NULL 与 'inline' 两种行，且领取时把 NULL 覆写成显式 'inline'", async () => {
+    const { hostId, inlineId, nullId } = await seedThreeOwned();
+    const claimed = await impl.claimNextQueued("inline", 10);
+    // FIFO：createdAt 升序（inline 行早于 NULL 行）
+    expect(claimed).toEqual([inlineId, nullId]);
+    expect(readRow(inlineId)).toMatchObject({
+      status: "RUNNING",
+      claimedBy: "inline",
+    });
+    expect(readRow(nullId)).toMatchObject({
+      status: "RUNNING",
+      claimedBy: "inline",
+    });
+    expect(readRow(hostId)?.status).toBe("QUEUED");
+  });
+
+  it("take 截断：只领最早的 N 行，剩下的留给下一轮", async () => {
+    const { inlineId, nullId } = await seedThreeOwned();
+    expect(await impl.claimNextQueued("inline", 1)).toEqual([inlineId]);
+    // 第二轮才领到 NULL 行——两次的并集恰是两行、无重叠（单语句原子性的
+    // 可观测面：第一轮领走的行不可能被第二轮再看到）。
+    expect(await impl.claimNextQueued("inline", 10)).toEqual([nullId]);
+  });
+
+  it("非 QUEUED 行不参与领取（RUNNING / SUCCEEDED 各一行都不被碰）", async () => {
+    await seed({ status: "RUNNING", claimedBy: "host" });
+    await seed({ status: "SUCCEEDED", claimedBy: "host" });
+    expect(await impl.claimNextQueued("host", 10)).toHaveLength(0);
+  });
+
+  it("无可领行时返回空数组且零副作用（他方归属的行不动）", async () => {
+    const hostId = await seed({ claimedBy: "host" });
+    // inline 面对「只有 host 行」的队列表：空手而归，且不碰别人的行
+    expect(await impl.claimNextQueued("inline", 10)).toEqual([]);
+    expect(readRow(hostId)).toMatchObject({
+      status: "QUEUED",
+      claimedBy: "host",
+    });
+    // 同一行随后可被正主领走
+    expect(await impl.claimNextQueued("host", 10)).toEqual([hostId]);
   });
 });
