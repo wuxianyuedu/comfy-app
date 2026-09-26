@@ -26,6 +26,7 @@ import {
   type RunnerState,
 } from "./runner-state";
 import { logger } from "~/lib/core/logger";
+import type { TaskClaimMode } from "../core/repository-task-impl";
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·最后一步） ───────────────────────────── */
 
@@ -40,17 +41,43 @@ type TaskRepoForReaper = Pick<
   | "finalizeFromReaper"
 >;
 
-export type ReaperDeps = { taskRepo: TaskRepoForReaper };
+export type ReaperDeps = {
+  taskRepo: TaskRepoForReaper;
+  /** 本进程扫哪一归属片（P3 §5 ADR §6 的灰度互斥）：Next 侧缺省 `'inline'`
+   *  （NULL 归 inline，与全 NULL 的现存行集等价、零行为变化）；executor host
+   *  boot 时注入 `'host'`，只收自己那份孤儿。 */
+  owner: TaskClaimMode;
+};
 let depsOverride: Partial<ReaperDeps> = {};
+
+/** `resolveTaskRepo` 的「未注入」只警告一次：host 在 boot 注入**之前**必然先
+ *  经历模块加载时的一次扫表（`startReaper()` 的模块副作用），那条路走 Next
+ *  barrel 兜底会在 `server-only` 上 throw——这是预期内的跳过（下一轮/注入后
+ *  正常），但真故障（Next 侧 barrel 加载失败）不能静默，所以留一行 warn。 */
+let warnedUnconfigured = false;
 
 /** executor host 在 boot 时注入自带 DB 句柄；Next 侧无需（走 dynamic import 兜底）。 */
 export function configureReaper(next: Partial<ReaperDeps>): void {
   depsOverride = { ...depsOverride, ...next };
 }
 
-async function resolveTaskRepo(): Promise<TaskRepoForReaper> {
+/** 返回 `null` = 「纯 Node 宿主且尚未 configureReaper」——调用方跳过本轮
+ *  （回收幂等、下一轮还会来）。此前这条直连 dynamic import：throw 会变成
+ *  **unhandled rejection**（实测 `scripts/executor-host.mjs` 加载本模块
+ *  即炸两条），既不体面也污染退出路径。 */
+async function resolveTaskRepo(): Promise<TaskRepoForReaper | null> {
   if (depsOverride.taskRepo) return depsOverride.taskRepo;
-  return loadRealTaskRepo();
+  try {
+    return await loadRealTaskRepo();
+  } catch (err) {
+    if (!warnedUnconfigured) {
+      warnedUnconfigured = true;
+      logger.warn(
+        `[comfyui] reaper 未注入 taskRepo 且 Next barrel 不可达（预期于纯 Node 宿主 boot 注入前），本轮跳过：${errorText(err, "loadRealTaskRepo")}`,
+      );
+    }
+    return null;
+  }
 }
 
 /* ── DB 侧的 QUEUED 回收器 ─────────────────────────
@@ -248,9 +275,11 @@ async function comfyHasActiveWorkflow(
 export async function reapStaleQueuedTasks(): Promise<void> {
   // 顶部一次性 resolve：下游 closure 沿用旧名（`taskRepository`），call site 不动。
   const taskRepository = await resolveTaskRepo();
+  if (!taskRepository) return;
+  const owner = depsOverride.owner ?? "inline";
   try {
     const cutoff = new Date(Date.now() - STALE_MS);
-    const stale = await taskRepository.listStaleQueued(cutoff, 20);
+    const stale = await taskRepository.listStaleQueued(cutoff, 20, owner);
     if (stale.length === 0) return;
     const s = state();
     /* 外部证据每个 tick 只探一次（不按行重复请求：20 行 × 2 次请求 = 40 次）。
@@ -356,11 +385,14 @@ export async function reapStaleQueuedTasks(): Promise<void> {
 /** 同上：RUNNING 对账判决矩阵的测试入口。 */
 export async function reapStaleRunningTasks(): Promise<void> {
   const taskRepository = await resolveTaskRepo();
+  if (!taskRepository) return;
+  const owner = depsOverride.owner ?? "inline";
   try {
     const cutoff = new Date(Date.now() - RUNNING_STALE_MS);
     const stale = await taskRepository.listStaleRunning(
       cutoff,
       RUNNING_TICK_CAP,
+      owner,
     );
     if (stale.length === 0) return;
     const base = await resolveComfyBase();
