@@ -27,6 +27,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  clearWhichCommandCache,
   commandInvocation,
   executableExts,
   executableKind,
@@ -49,6 +50,9 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "toolchain-gate-"));
+  // `whichCommand` 现在有进程内记忆化，而本文件的用例会在**同一个 tmp 路径**
+  // 上覆写重造 pnpm 形态 —— 每个用例先清缓存，避免读到上一个用例的旧结论。
+  clearWhichCommandCache();
 });
 
 afterEach(() => {
