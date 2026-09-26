@@ -37,7 +37,10 @@ export function configFingerprint(root) {
   for (const rel of FINGERPRINT_FILES) {
     const full = path.join(root, rel);
     if (!fs.existsSync(full)) continue;
-    const digest = crypto.createHash("sha256").update(fs.readFileSync(full)).digest("hex");
+    const digest = crypto
+      .createHash("sha256")
+      .update(fs.readFileSync(full))
+      .digest("hex");
     files[rel] = digest;
     combined.update(`${rel}\u0000${digest}\u0000`);
   }
@@ -51,7 +54,11 @@ export function configFingerprint(root) {
  * @param {{ hash: string, files: Record<string, string> }} [fingerprint]
  * @returns {{ cleaned: boolean, reason: string }}
  */
-export function syncNextCache(root, env, fingerprint = configFingerprint(root)) {
+export function syncNextCache(
+  root,
+  env,
+  fingerprint = configFingerprint(root),
+) {
   const nextDir = path.join(root, ".next");
   const hashFile = path.join(nextDir, "config-fingerprint");
   const filesFile = path.join(nextDir, "config-fingerprint-files.json");
@@ -82,7 +89,9 @@ export function syncNextCache(root, env, fingerprint = configFingerprint(root)) 
     writeMarks();
     return { cleaned: false, reason: "首次启动：写入初始指纹，执行全量编译" };
   }
-  const saved = fs.existsSync(hashFile) ? fs.readFileSync(hashFile, "utf8").trim() : "";
+  const saved = fs.existsSync(hashFile)
+    ? fs.readFileSync(hashFile, "utf8").trim()
+    : "";
   if (saved === fingerprint.hash) {
     return { cleaned: false, reason: "配置指纹未变，保留缓存" };
   }
@@ -217,16 +226,55 @@ export function pruneTimestampedLogs(dir, prefixes, keep = 5) {
 export function lockfileDrift(root) {
   const repoLock = path.join(root, "pnpm-lock.yaml");
   const modulesLock = path.join(root, "node_modules", ".pnpm", "lock.yaml");
-  if (!fs.existsSync(repoLock)) return { state: "no-lockfile", modulesLock: null };
-  if (!fs.existsSync(modulesLock)) return { state: "no-install", modulesLock: null };
+  if (!fs.existsSync(repoLock))
+    return { state: "no-lockfile", modulesLock: null };
+  if (!fs.existsSync(modulesLock))
+    return { state: "no-install", modulesLock: null };
+
+  /* 全量 diff 的短路缓存：每次启动都要解析两份 ~1.2 万行的 YAML（数百 ms），
+   * 而两份文件的 (size, mtime) 都没变时结论不可能变 —— `pnpm install` 与
+   * `git pull` 都必然触碰文件、mtime 必变，缓存自然失效。 */
+  const repoStamp = stampOf(repoLock);
+  const modulesStamp = stampOf(modulesLock);
+  if (
+    driftCache &&
+    driftCache.repoStamp === repoStamp &&
+    driftCache.modulesStamp === modulesStamp
+  ) {
+    return driftCache.result;
+  }
+
   try {
     const diff = diffLockfiles(
       fs.readFileSync(modulesLock, "utf8"),
       fs.readFileSync(repoLock, "utf8"),
     );
-    return { state: isEmptyDiff(diff) ? "fresh" : "drift", modulesLock, diff };
+    const result = {
+      state: /** @type {"fresh" | "drift"} */ (
+        isEmptyDiff(diff) ? "fresh" : "drift"
+      ),
+      modulesLock,
+      diff,
+    };
+    driftCache = { repoStamp, modulesStamp, result };
+    return result;
   } catch {
     return { state: "no-install", modulesLock: null };
+  }
+}
+
+/** lockfile 漂移判定的短路缓存（键是两份文件的 size+mtime 指纹）。 */
+/** @type {{ repoStamp: string | null, modulesStamp: string | null, result: { state: "fresh" | "no-install" | "no-lockfile" | "drift", modulesLock: string | null, diff?: import("../lockfile/lock-diff.d.mts").LockDiff | null } } | null} */
+let driftCache = null;
+
+/** 文件指纹：size + 毫秒级 mtime（读不到返回 null）。 */
+/** @param {string} file @returns {string | null} */
+function stampOf(file) {
+  try {
+    const st = fs.statSync(file);
+    return `${st.size}:${Math.trunc(st.mtimeMs)}`;
+  } catch {
+    return null;
   }
 }
 
@@ -241,7 +289,8 @@ export function lockfileDrift(root) {
  */
 export function verifyInstall(root) {
   const modules = checkNodeModules(root);
-  if (!modules.healthy) return { ok: false, reason: modules.reasons.join("；") };
+  if (!modules.healthy)
+    return { ok: false, reason: modules.reasons.join("；") };
   const drift = lockfileDrift(root);
   if (drift.state !== "fresh") {
     return {
