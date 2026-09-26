@@ -30,7 +30,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveAppPort } from "./app-port.mjs";
-import { spawnSchemaSync } from "./db-schema-state.mjs";
+import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
 import { checkEnvFile } from "./env-preflight.mjs";
 import {
   archiveRunLog,
@@ -1270,6 +1270,9 @@ export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
       ...process.env,
       COMFYAPP_PORT: String(port),
       PORT: String(port),
+      /* 编排器已起过一份 schema 同步（本文件 950 行附近），通知 dev.mjs
+       * 跳过它自己的那份 —— 否则一次启动两份 drizzle 并发写同一个库。 */
+      [SKIP_SCHEMA_SYNC_ENV]: "1",
       ...extraEnv,
     },
     stdoutFile: outFile,
