@@ -508,14 +508,30 @@ fn strip_ansi(text: &str) -> String {
   out
 }
 
+/// 读文件尾部 `max_bytes` 字节：`seek` 到尾部再读，不整读文件。
+///
+/// 日志追加不轮转、跨运行累积，而启动页面板每 800ms 轮询一次 ——
+/// `std::fs::read` 整文件读入的成本随历史线性变贵。返回
+/// `(字节, 是否发生了截断)`，截断时调用方照旧丢弃不完整的首行。
+fn read_tail_bytes(path: &std::path::Path, max_bytes: usize) -> Option<(Vec<u8>, bool)> {
+  use std::io::{Read, Seek, SeekFrom};
+  let mut file = std::fs::File::open(path).ok()?;
+  let len = file.metadata().ok()?.len() as usize;
+  let truncated = len > max_bytes;
+  let start = if truncated { len - max_bytes } else { 0 };
+  file.seek(SeekFrom::Start(start as u64)).ok()?;
+  let mut buf = Vec::with_capacity(len - start);
+  file.read_to_end(&mut buf).ok()?;
+  Some((buf, truncated))
+}
+
 /// 读取日志文件尾部：max_bytes 截断 + max_lines 限行，去 ANSI，失败返回 None。
 fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> Option<String> {
-  let data = std::fs::read(path).ok()?;
+  let (data, truncated) = read_tail_bytes(path, max_bytes)?;
   if data.is_empty() {
     return Some(String::new());
   }
-  let start = data.len().saturating_sub(max_bytes);
-  let text = String::from_utf8_lossy(&data[start..]);
+  let text = String::from_utf8_lossy(&data);
   let plain = strip_ansi(&text);
   let mut lines: Vec<&str> = plain
     .lines()
@@ -524,7 +540,7 @@ fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> 
     //（PS>TerminatingError(...)），对「执行到哪一步」毫无信息量，直接滤掉
     .filter(|l| !l.starts_with("PS>TerminatingError"))
     .collect();
-  if start > 0 && !lines.is_empty() {
+  if truncated && !lines.is_empty() {
     lines.remove(0); // 丢弃被截断的不完整首行
   }
   if lines.len() > max_lines {
