@@ -6,6 +6,7 @@ import {
 } from "../../../workflow-io";
 import { SectionHeader } from "../SectionHeader";
 import { PIN_ACCENT } from "../constants";
+import { Separator } from "~/components/ui/separator";
 
 interface IoEndpointsSectionProps {
   /** Wire-only inputs (必须连线) — rendered as read-only chips. */
@@ -55,7 +56,7 @@ export function IoEndpointsSection({
         </div>
       )}
       {wireInputs.length > 0 && outputs.length > 0 && showOutputs && (
-        <div className="border-border-strong h-px shrink-0 border-t border-dashed" />
+        <Separator className="border-border-strong h-px shrink-0 border-t border-dashed bg-transparent" />
       )}
       {showOutputs && outputs.length > 0 && (
         <>
@@ -63,7 +64,7 @@ export function IoEndpointsSection({
             <span className="text-ink-muted text-[10px] font-medium">
               输出端点
             </span>
-            <div className="border-border-subtle flex-1 border-t border-dashed" />
+            <Separator className="border-border-subtle h-0 flex-1 border-t border-dashed bg-transparent" />
           </div>
           <div className="flex flex-wrap gap-1.5">
             {outputs.map((output) => (

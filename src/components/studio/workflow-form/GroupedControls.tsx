@@ -25,6 +25,7 @@ import {
 import { DimensionControl } from "./DimensionControl";
 import { VideoControl } from "./VideoControl";
 import { SECTION_ACCENT } from "./DynamicWorkflowForm/constants";
+import { Separator } from "~/components/ui/separator";
 
 function GroupedControls({
   dimension,
@@ -100,7 +101,7 @@ function GroupedControls({
           <span className="bg-surface-2 text-ink-soft rounded-full px-1.5 py-px font-mono text-[10px]">
             {count}
           </span>
-          <div className="border-border-strong flex-1 border-t border-dashed" />
+          <Separator className="border-border-strong h-0 flex-1 border-t border-dashed bg-transparent" />
         </div>
       )}
       <div className="flex-col gap-3">
