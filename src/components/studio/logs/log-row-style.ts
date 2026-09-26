@@ -56,6 +56,19 @@ export const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
 export const FILTER_SELECTED_STYLES =
   "bg-primary/12 ring-1 ring-primary/45 font-semibold";
 
+/**
+ * `ToggleGroupItem` 那一档的选中样式：与上面同一套三层表达（底色 + 描边 + 字重），
+ * 唯一差别是底色要加 `!`。
+ *
+ * 为什么要加：基元 `ui/toggle` 的选中档是 `data-[pressed]:bg-muted`，属性选择器的
+ * 特异性高于裸 utility（`(0,2,0)` vs `(0,1,0)`），不压一层就永远轮到它生效；而
+ * `bg-muted` → `--color-subtle` 在浅色主题下与行头底色 `--color-surface-1` 是同一个
+ * `#f7f8fa` —— 于是「选中」又变回看不见（ISSUE #609 那条用户反馈的原样）。
+ * 描边与字重不参与这场冲突（基元不在 pressed 上设 box-shadow / 字重），照常挂。
+ */
+export const FILTER_SELECTED_ITEM_STYLES =
+  "bg-primary/12! ring-1 ring-primary/45 font-semibold";
+
 /** 日志级别的正文配色（视图与测试共用同一份表）。级别是状态语义，走语义
  *  token（§4.11.1 / P71）：warn→`text-warning-strong`、error→
  *  `text-destructive`（与徽标同源）；info/debug 本就是 ink 系中性档。 */
