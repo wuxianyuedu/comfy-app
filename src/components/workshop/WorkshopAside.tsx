@@ -4,6 +4,7 @@
 
 import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
+import { FieldLabel } from "~/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -41,7 +42,7 @@ function WorkshopWorkflowSelect({
 }) {
   const scoped = options.filter((option) => option.category === category);
   return (
-    <label className="mt-3 block">
+    <FieldLabel className="mt-3 block">
       <span className="text-muted-foreground mb-1 block text-[11px]">
         {label}
       </span>
@@ -69,7 +70,7 @@ function WorkshopWorkflowSelect({
           类工作流（可在工作室的「工作流库」导入）。
         </span>
       )}
-    </label>
+    </FieldLabel>
   );
 }
 
