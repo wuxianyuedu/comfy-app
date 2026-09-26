@@ -110,6 +110,15 @@ const PURE_NODE_HOSTS = [
   // 「浏览器图别引我」的约束不再靠 server-only 兜——由 scanner 的 clientReachable
   // 判据盯（`path` 命中即红），与 `kill-process-tree.ts` 同族。
   "src/lib/log/log-paths.ts",
+  // app-runtime-log.ts：P3 迁移第 1 期·lib 层地基批的第二站。它是 logger
+  // 链最近的一层——`~/lib/core/logger` **静态引**本模块（把 ERROR 级消息镜像
+  // 落到 `log/services/app-runtime.log`，见规范 07 §7.11），只要它带
+  // server-only，`await import("~/lib/core/logger")` 在纯 Node 里就 throw、
+  // 前 3 批 comfyui 各模块（#1053 / #1068 / #1071）的 lazy 兜底接不进去。
+  // 上游 log-paths 已在 #1074 摘（本模块静态引它拿 APP_RUNTIME_LOG 常量），
+  // 本模块自身只有 `node:fs` / `node:path` + `~/lib/time-format` 三条依赖，
+  // 全部纯 Node 可加载，摘 server-only 走 §18.4 第三类登记。
+  "src/lib/log/app-runtime-log.ts",
 ];
 
 type Report = {
