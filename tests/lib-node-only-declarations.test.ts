@@ -119,6 +119,21 @@ const PURE_NODE_HOSTS = [
   // 本模块自身只有 `node:fs` / `node:path` + `~/lib/time-format` 三条依赖，
   // 全部纯 Node 可加载，摘 server-only 走 §18.4 第三类登记。
   "src/lib/log/app-runtime-log.ts",
+  // P3 迁移第 1 期·lib 层地基批·二级叶模块（5 个）：
+  //   · `comfyui/instance-kind`：只依赖 `fs` / `path`。
+  //   · `comfyui/env-python`：`fs` / `os` / `path` + 纯函数 `~/lib/path-display`。
+  //   · `comfyui/lifecycle-exit`：`fs` + `./proc-detect` 的 type-only import。
+  //   · `comfyui/desktop-instance`：`fs` / `os` / `path` + 同批 instance-kind。
+  //   · `shell/open-in-browser`：`child_process` + 纯函数 `~/lib/error-message`。
+  // 全都不引 server-only 侧模块、也不引业务侧的 logger / repository，形态与
+  // `kill-process-tree` / `log-paths` 同族；这一批清完 comfyui 与 shell 目录下
+  // 的**二级叶**，client / status / lifecycle-launch 等**汇聚点**的传递边就能
+  // 自然解（它们静态引的就是这几个）。
+  "src/lib/comfyui/instance-kind.ts",
+  "src/lib/comfyui/env-python.ts",
+  "src/lib/comfyui/lifecycle-exit.ts",
+  "src/lib/comfyui/desktop-instance.ts",
+  "src/lib/shell/open-in-browser.ts",
 ];
 
 type Report = {
