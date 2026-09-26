@@ -20,7 +20,31 @@ import {
 } from "./runner-state";
 import type { Job, TaskEvent, LogEntry } from "./runner-state";
 import { connect, processQueue, cliProcs } from "./executor";
-import { taskRepository } from "../core/repository";
+
+/* ── 依赖注入接缝（P3 §5 第 1 期·最后一步：让 reaper / enqueue 也能被纯
+   Node executor host 加载，不再撞 `../core/repository` 的 server-only throw） ── */
+
+async function loadRealTaskRepo() {
+  return (await import("../core/repository")).taskRepository;
+}
+type TaskRepoForEnqueue = Pick<
+  Awaited<ReturnType<typeof loadRealTaskRepo>>,
+  "findStatusAndPromptById" | "cancel"
+>;
+
+export type EnqueueDeps = { taskRepo: TaskRepoForEnqueue };
+let depsOverride: Partial<EnqueueDeps> = {};
+
+/** executor host 在 boot 时注入自带 DB 句柄；Next 侧无需（走下方 dynamic
+ *  import 兜底）。 */
+export function configureEnqueue(next: Partial<EnqueueDeps>): void {
+  depsOverride = { ...depsOverride, ...next };
+}
+
+async function resolveTaskRepo(): Promise<TaskRepoForEnqueue> {
+  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  return loadRealTaskRepo();
+}
 
 export function enqueue(job: Job) {
   const store = state();
@@ -74,6 +98,10 @@ export function getLogs(taskId: string): LogEntry[] {
 }
 
 export async function cancelTask(taskId: string) {
+  // 顶部一次性 resolve：下游 closure 沿用旧名（`taskRepository`），
+  // call site 不动。拿不到（未注入 + 纯 Node dynamic import 撞 server-only）
+  // → 本函数直接 reject，让 route handler / tRPC caller 感知。
+  const taskRepository = await resolveTaskRepo();
   const store = state();
   // 先把驱动这个任务的 comfy-cli 子进程杀掉，再翻状态。
 

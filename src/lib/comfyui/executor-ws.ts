@@ -12,7 +12,9 @@
  * @module comfyui/executor-ws — WS 连接 / 消息处理 / 看门狗（executor 的通道层）
  */
 import WebSocket from "ws";
-import { taskRepository } from "../core/repository";
+// `../core/repository` 静态值 import 改成 lazy（P3 §5 第 1 期·最后一步）——
+// 本模块只用一个方法 `updateProgress`，其余 server-chain 依赖（logger 与
+// resolveComfyBase via ./client）都是第三类，静态引不再牵 server-only throw。
 import { errorText } from "~/lib/error-message";
 import { fireAndForget } from "~/lib/async-action";
 import { toPct } from "~/lib/progress";
@@ -54,6 +56,29 @@ export { fetchHistoryEntry, traceComfyQueue };
 export type { ComfyHistoryEntry };
 /* 同款兼容出口：`claimSettle` 曾在本模块定义，已下沉到 runner-state（状态叶子）。 */
 export { claimSettle };
+
+/* ── 依赖注入接缝（P3 §5 第 1 期·最后一步：让 executor-ws 也能被纯 Node host 加载） ── */
+
+async function loadRealTaskRepo() {
+  return (await import("../core/repository")).taskRepository;
+}
+type TaskRepoForWs = Pick<
+  Awaited<ReturnType<typeof loadRealTaskRepo>>,
+  "updateProgress"
+>;
+
+export type ExecutorWsDeps = { taskRepo: TaskRepoForWs };
+let depsOverride: Partial<ExecutorWsDeps> = {};
+
+/** executor host 在 boot 时注入自带 DB 句柄；Next 侧无需（走 dynamic import 兜底）。 */
+export function configureExecutorWs(next: Partial<ExecutorWsDeps>): void {
+  depsOverride = { ...depsOverride, ...next };
+}
+
+async function resolveTaskRepo(): Promise<TaskRepoForWs> {
+  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  return loadRealTaskRepo();
+}
 
 /* 自动启动状态提示的防重复标记：仅在 WS 真正打开后复位，
    避免重连循环对同一段启动反复刷「未运行，正在自动启动」。 */
@@ -364,6 +389,7 @@ async function handleMessage(raw: string) {
      *  帧**必须被丢弃**。否则 DB 行会从终态被打回 RUNNING，SSE 的 3s 实情
      *  轮询先看到终态关掉了流，客户端就永远卡在「生成中…」（用户看不到
      *  任何失败出口，只能刷新）。 */
+    const taskRepository = await resolveTaskRepo();
     if (!(await taskRepository.updateProgress(taskId, pct))) {
       log(
         taskId,
