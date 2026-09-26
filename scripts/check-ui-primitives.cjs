@@ -3604,11 +3604,172 @@ const RULES = {
       return n;
     },
   },
+
+  /* ── P81「视图层 `<Button>` 内 icon 缺 `data-icon=`」（棘轮，shadcn composition.md）──
+   * shadcn `composition.md`：`Icons in buttons need data-icon="inline-start"
+   * or "inline-end" (Base UI + Tailwind v4 has-* selector).` 项目 `ui/button.tsx`
+   * 的 `buttonVariants` size 变体（default / xs / sm / lg）里显式依赖这个 hook：
+   *   `has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2`
+   * —— **有 `data-icon` 才切内边距**。视图里 `<Button>` 直接放 icon 但忘了标
+   * `data-icon=` 的表现：按钮左右内边距停在 `px-2.5`（无 icon 档），文字
+   * 与 icon 挤在一起、或纯 icon 按钮宽度不对；改主题或换尺寸档时得逐处补。
+   *
+   * 判据按形态取：视图层 `<Button>...</Button>` 块内、**深度 1**（Button 的
+   * 直接子节点）处出现 icon-like 起始标签、且该标签开括号里不含 `data-icon=`
+   * 即计一处。icon-like 判据（`isP81IconName`）：
+   *   · 项目自研 `<Icon name="…">`、原生 `<svg>`；
+   *   · 后缀是 `Icon` 的 PascalCase（`ChevronLeftIcon` 等 lucide 别名约定）；
+   *   · 已知 lucide 组件名集合（视图里目前用到的 25 项，够覆盖 111 处
+   *     实测存量、避免全量 lucide 名单在扫描里做前缀匹配的假阳）。
+   *
+   * 深度 1 之外不算：`<Button><span><Plus/></span>Label</Button>` 里 Plus
+   * 被 span 包着、shadcn 的 `has-data-*` 选择器只吃**直接子级**、那种写法
+   * 就算加了 `data-icon` 也不生效，不属这条账。
+   *
+   * 走棘轮（非硬闸）：本批上线时视图层实测 111 处（跨 52 文件 · 见
+   * `changelog.d/0-p81-gate.md`），冻结起点、只许降。下一批按域分片
+   * （studio / workshop / message-center / ui 内部）把每个 icon 补上
+   * `data-icon="inline-start" | "inline-end"`（前者是「icon 在文字前」、
+   * 后者是「icon 在文字后」），再走一次清零 → 升硬闸。 */
+  P81: {
+    label:
+      '视图层 <Button> 直接子 icon 缺 data-icon="inline-start|end"（shadcn composition.md；buttonVariants 的 has-data-[icon=*] 选择器只吃直接子级）',
+    count: (t) => {
+      const t2 = stripComments(t);
+      let n = 0;
+      for (const m of t2.matchAll(/<Button\b[^>]*>([\s\S]*?)<\/Button>/g)) {
+        const inner = m[1];
+        let depth = 0;
+        /* tag 匹配：`<` 后紧跟 `[A-Za-z]` 起始的名字、属性段允许引号字面量
+         * 与 `{…}` 表达式（不递归平衡、够用即可）、以 `>` 或 `/>` 收尾。
+         * 未闭合的 `<` 在 TSX 泛型里存在（`<T,>` 带尾逗号）—— 那条不像
+         * JSX 标签、这里靠 `[^>]*` 会吞到下一行；作为棘轮判据、少计一次
+         * 不影响清零节奏。 */
+        for (const tg of inner.matchAll(
+          /<(\/?)([A-Za-z][A-Za-z0-9]*)((?:"[^"]*"|'[^']*'|\{[^{}]*\}|[^>])*?)(\/?)>/g,
+        )) {
+          const closing = tg[1] === "/";
+          const name = tg[2];
+          const attrs = tg[3];
+          const selfClose = tg[4] === "/";
+          if (closing) {
+            if (depth > 0) depth--;
+            continue;
+          }
+          if (
+            depth === 0 &&
+            isP81IconName(name) &&
+            !/\bdata-icon\s*=/.test(attrs)
+          ) {
+            n++;
+          }
+          if (!selfClose) depth++;
+        }
+      }
+      return n;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
 function isBusySlotName(name) {
   return /[Bb]usy/.test(name) || /^\w*[Rr]etry\w*Id$/.test(name);
+}
+
+/** P81 的「icon-like 标签名」判据：视图里作为 Button 直接子级的 icon 有
+ *  三种来源 —— 项目自研 `<Icon name="…">`、原生 `<svg>`、lucide 组件；
+ *  后者按 lucide 的两种命名习惯：
+ *    · 别名约定（`import { ChevronLeft as ChevronLeftIcon }`）→ `*Icon` 后缀；
+ *    · 直接名（`import { Plus }`）→ 需要一份白名单，避免前缀匹配把 `<Push>`
+ *      之类误当 icon。
+ *  白名单是「视图实测出现过的 25 项 + 常见 20 项」，够用即可；未来新用到
+ *  未登记的 lucide 名会被少计、棘轮不会假红，走治理时按 `--report` 补齐。 */
+const P81_ICON_NAMES = new Set([
+  "Plus",
+  "Minus",
+  "X",
+  "Check",
+  "CheckCheck",
+  "Copy",
+  "Search",
+  "Trash",
+  "Trash2",
+  "RefreshCw",
+  "RefreshCcw",
+  "Settings",
+  "Play",
+  "Pause",
+  "Upload",
+  "Download",
+  "ExternalLink",
+  "Link",
+  "Unlink",
+  "Paperclip",
+  "Eye",
+  "EyeOff",
+  "Edit",
+  "Menu",
+  "MoreHorizontal",
+  "MoreVertical",
+  "File",
+  "FileText",
+  "Folder",
+  "FolderOpen",
+  "Star",
+  "Heart",
+  "Zap",
+  "Sparkles",
+  "Terminal",
+  "Wrench",
+  "Clock",
+  "Bell",
+  "Info",
+  "AlertCircle",
+  "AlertTriangle",
+  "Ban",
+  "Loader",
+  "Loader2",
+  "LoaderCircle",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "ChevronLeft",
+  "ChevronRight",
+  "ChevronUp",
+  "ChevronDown",
+  "CircleCheck",
+  "CircleAlert",
+  "CircleX",
+  "TriangleAlert",
+  "OctagonAlert",
+  "Film",
+  "Image",
+  "ImagePlus",
+  "Camera",
+  "Video",
+  "Music",
+  "Mic",
+  "MicOff",
+  "Volume2",
+  "VolumeX",
+  "Send",
+  "Share2",
+  "LayoutGrid",
+  "List",
+  "ClipboardCheck",
+  "Clipboard",
+  "Maximize2",
+  "Minimize2",
+  "Undo2",
+  "Redo2",
+  "Save",
+  "Power",
+]);
+function isP81IconName(name) {
+  if (name === "Icon" || name === "svg") return true;
+  if (name.length > 4 && name.endsWith("Icon")) return true;
+  return P81_ICON_NAMES.has(name);
 }
 
 /** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P38 属此类）。 */
