@@ -458,12 +458,14 @@ function WorkflowLibraryCanvasInner({
           上一版由自绘连线层给出，换 React Flow 后由 `onConnectEnd` 补回来 ——
           「拖了没反应」不许是静默的。 */}
       {flow.dropHint && (
+        // p71-allow:start workshop 域 amber 装饰色 · 拖线未落定的临时提示、非状态色（对齐 §3.6.1 与「amber 是 workshop 域专有」）
         <div
           className="z-canvas-ui pointer-events-none absolute bottom-2 left-2 max-w-[420px] rounded-lg bg-amber-100 px-2.5 py-1.5 text-[11px] text-amber-800 shadow-sm"
           data-testid="wflib-wire-drop-hint"
         >
           没有连上：{flow.dropHint}
         </div>
+        // p71-allow:end
       )}
       {/* 点选一条线后出现的删除条：只断那一条线（而不是卡片头 ↺ 整张清）。
        * 与 Delete / Backspace 删除同一路径（都落到 `disconnect`）。只读时
