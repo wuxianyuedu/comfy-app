@@ -13,7 +13,7 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import type * as appSchema from "~/server/db/schema";
 
 /**
- * 12 个 exec-chain 方法需要的 drizzle 客户端形状。
+ * 13 个 exec-chain 方法需要的 drizzle 客户端形状。
  *
  * 为什么写成 `LibSQLDatabase<typeof appSchema>`：Next 侧 (`src/server/db.ts`)
  * 与未来的 executor host（P3 §5 ADR 附录 §11.1）都用 `@libsql/client` +
@@ -23,7 +23,7 @@ import type * as appSchema from "~/server/db/schema";
  * 「实现层的抽象妥协」，而是「测试基建选型与运行时的差异」，锁在测试文件
  * 里更诚实。
  *
- * 不锁 `.query` relational：本文件服务的 12 方法全部走 `.select/.update/.insert`
+ * 不锁 `.query` relational：本文件服务的 13 方法全部走 `.select/.update/.insert`
  * builder；relational 的三个方法（`findById` / `listByUser` / `findByProject`）
  * 留在 `repository-task.ts`，host 不加载。
  */

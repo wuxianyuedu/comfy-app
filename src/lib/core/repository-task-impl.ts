@@ -1,5 +1,5 @@
 /**
- * `repository-task-impl.ts` — Task 仓储**执行链侧** 12 个方法的实现（工厂）
+ * `repository-task-impl.ts` — Task 仓储**执行链侧** 13 个方法的实现（工厂）
  * ===========================================================================
  *
  * P3 §5 第 1 期·Phase 2-A-1：从 `repository-task.ts` 抽出的 exec 侧 SQL 主体，
@@ -30,7 +30,16 @@
  * `unguarded`；登记 PURE_NODE_HOSTS 只是**给未来**「impl 里若加了 node: 前缀
  * import」留的锚，当前 scanner 视角不严格必要。
  */
-import { and, eq, isNotNull, isNull, lt, notInArray } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notInArray,
+  or,
+} from "drizzle-orm";
 
 import { TERMINAL_TASK_STATUSES } from "../task-state";
 import { task, taskImage } from "~/server/db/schema";
@@ -48,8 +57,13 @@ import type { TaskRepoDb } from "./repository-task-impl-types";
  */
 const TERMINAL_STATES: string[] = [...TERMINAL_TASK_STATUSES];
 
+/** `claimedBy` 列的值域（ADR §6 的两种执行器归属）。提交侧（tRPC `generate`，
+ *  3-B 接线）按 `COMFY_EXECUTOR` env 决定写哪个值；NULL 语义归 inline。 */
+export type TaskClaimMode = "inline" | "host";
+
 /**
- * 12 个 exec-chain 方法的实现工厂。
+ * 13 个 exec-chain 方法的实现工厂（12 个 delegate 自 class + Phase 3-A 新增的
+ * `claimNextQueued`，后者暂不进 class delegate——3-B 的领取循环直接调 impl）。
  *
  * Next 侧：`createTaskRepoImpl(db)`（`repository-task.ts` 模块顶层，`db` 来自
  * `~/lib/db`）；host 侧：`createTaskRepoImpl(drizzle(createClient({url:
@@ -118,6 +132,42 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
         )
         .returning({ id: task.id });
       return updated.length > 0;
+    },
+
+    /**
+     * 队列领取（P3 §5 ADR §6/§7 Phase 3-A）：单语句
+     * `UPDATE ... WHERE id IN (SELECT ... ORDER BY createdAt LIMIT ?) RETURNING id`。
+     *
+     * 原子性由 SQLite「单写语句内子查询同语句求值」保证：inline/host 两个领取方
+     * 各自最多领走互不重叠的行。刻意不用 `db.transaction` + 先 SELECT 后 UPDATE：
+     * 本实现要同时跑在三种宿主（better-sqlite3 同步测试库 / libsql http /
+     * libsql file）上，async 事务回调在同步驱动上于 continuation 之前就 COMMIT，
+     * 原子性静默失效。
+     *
+     * 归属谓词跟 ADR §6：host 只领显式 `'host'` 的行；inline 领 NULL（历史行与
+     * 未带归属的建行）与 `'inline'`。领取时把 `claimedBy` 覆写为 `mode`，NULL
+     * 行由此转为显式归属；3-B 接线时 reaper 分片用同一归属谓词。
+     */
+    async claimNextQueued(
+      mode: TaskClaimMode,
+      take: number,
+    ): Promise<string[]> {
+      const owned =
+        mode === "host"
+          ? eq(task.claimedBy, "host")
+          : or(isNull(task.claimedBy), eq(task.claimedBy, "inline"));
+      const candidates = db
+        .select({ id: task.id })
+        .from(task)
+        .where(and(eq(task.status, "QUEUED"), owned))
+        .orderBy(task.createdAt)
+        .limit(take);
+      const claimed = await db
+        .update(task)
+        .set({ status: "RUNNING", claimedBy: mode })
+        .where(inArray(task.id, candidates))
+        .returning({ id: task.id });
+      return claimed.map((row) => row.id);
     },
 
     /** 成功收口：写 SUCCEEDED + progress=100 + finishedAt；有 workflowSnapshot
