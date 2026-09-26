@@ -72,7 +72,7 @@ export function WidgetControl({
       }
       return (
         <textarea
-          className={`${inputCls} mt-1.5 min-h-[52px] ${missingRequired ? "ring-1 ring-red-400/50" : ""}`}
+          className={`${inputCls} mt-1.5 min-h-[52px] ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
           rows={4}
           value={typeof value === "string" ? value : ""}
           disabled={disabled}
@@ -85,7 +85,7 @@ export function WidgetControl({
     case "text":
       return (
         <input
-          className={`${inputCls} ${compact ? "" : "mt-1"} ${missingRequired ? "border-red-400/50" : ""}`}
+          className={`${inputCls} ${compact ? "" : "mt-1"} ${missingRequired ? "border-destructive/50" : ""}`}
           value={
             typeof value === "string" || typeof value === "number"
               ? String(value)
@@ -220,7 +220,7 @@ export function WidgetControl({
           placeholder={`选择 ${label}${requiredHint}`}
           fullWidth
           className={`${compact ? "" : "mt-1"} ${
-            missingRequired ? "rounded-md ring-1 ring-red-400/50" : ""
+            missingRequired ? "ring-destructive/50 rounded-md ring-1" : ""
           }`}
           popoverMinWidth={compact ? 220 : 260}
         />
