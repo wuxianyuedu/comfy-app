@@ -2,6 +2,7 @@
 import React from "react";
 import { randomSeed } from "~/lib/comfyui/random-seed";
 import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
+import { EmptyState } from "~/components/ui/empty-state";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -387,10 +388,11 @@ export function ShotStudio({
       )}
 
       {shots.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
-          暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 —
-          镜头提示词会自动带入本阶段。
-        </div>
+        <EmptyState
+          variant="hint"
+          description="暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 — 镜头提示词会自动带入本阶段。"
+          className="py-10 text-sm"
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {shots.map((shot) => {
