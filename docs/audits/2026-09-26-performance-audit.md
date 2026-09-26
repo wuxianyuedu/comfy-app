@@ -50,6 +50,7 @@
 | E6   | P2   | `src/app/api/custom-nodes/route.ts:626`                          | manifest 摘要按 size+mtime 指纹缓存，GET 不再整份读盘解析                                              | #1121 |
 | L12  | P2   | `scripts/launcher-core/log.mjs:72`                               | 编排器日志改 16KB/500ms/exit 缓冲落盘（exit 钩子保证归档完整）                                         | #1125 |
 | L9   | P1   | `scripts/dev-launcher.mjs:1024-1089`                             | 就绪等待轮询退避（1s→2s→3s）+ 状态文件每 5 轮写一次；总超时仍为墙钟 deadline                           | #1109 |
+| L8b  | P1   | `scripts/launcher-core/procs.mjs` + `dev-launcher.mjs`           | 端口占用裁定改批量取命令行（一条 CIM / 一条 ps），`cmdlineOf` 契约不变                                 | #1129 |
 
 ## B. 判定修正与例外（📝）
 
@@ -83,7 +84,7 @@ _（全部闭环，见 A 表。）_
 ### C.4 启动 / 构建 / 桌面壳（P1）
 
 - ⬜ **L5** `src-tauri/src/lib.rs:1418(250ms×480)`、`2110(1s×300)`、`2084(100ms×50)`、`958(500ms×240)`、`475(2s×90)`、`single_instance.rs:442-455(100ms×∞)` —— 6 处固定间隔 sleep 轮询，无退避无统一收口。方向：收敛到统一的「带退避的等待」工具。
-- ⬜ **L8b** `scripts/dev-launcher.mjs:415-432` —— 每个待裁定 PID 再 spawn 一次 PowerShell CIM。方向：一次 `Get-CimInstance Win32_Process` 批量取全部 PID 的命令行（netstat 部分已闭环）。
+- _（L8b 已闭环，见 A 表。）_
 
 ### C.5 P2（卫生项，随上一批顺手修）
 
