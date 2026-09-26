@@ -35,6 +35,25 @@ export function isWindows(platform = process.platform) {
   return platform === "win32";
 }
 
+/* 探测结果的进程内记忆化。
+ *
+ * 一份启动编排会对同一个名字调 4~6 次 `whichCommand`（probePnpm × 2、
+ * spawnDevServer、concludeDownstreamExit…），每次都完整扫 PATH × PATHEXT
+ * 并对候选**真起一次进程**（10s 超时）—— Windows 上 pnpm 三种形态同目录并存时，
+ * 一次冷探测就是数秒，纯属重复劳动。
+ *
+ * 键 = name + PATH + PATHEXT + platform：任一不同即不同条目（单测注入的
+ * env / platform 互不串扰）。单次启动内 PATH 与文件布局不会变，缓存恒有效；
+ * **测试里同一个 tmp 路径可能被覆写重造**（如 toolchain-gate 的
+ * `makeWindowsPnpmDir`），那类场景先调 `clearWhichCommandCache()`。 */
+const whichCache = new Map();
+
+/** 丢掉 `whichCommand` 的记忆：PATH 上的文件在本进程存活期间被重建 / 覆写
+ *  的场景（测试、装完依赖再探测）需要显式调用。 */
+export function clearWhichCommandCache() {
+  whichCache.clear();
+}
+
 /**
  * 在 PATH 上解析可执行文件，返回可直接 spawn 的**绝对路径**。
  *
@@ -59,27 +78,37 @@ export function isWindows(platform = process.platform) {
  * @param {WhichCommandOptions} [options]
  * @returns {string | null}
  */
+
 export function whichCommand(
   name,
   { env = process.env, platform = process.platform } = {},
 ) {
+  const key = `${name} ${env.PATH ?? ""} ${env.PATHEXT ?? ""} ${platform}`;
+  const hit = whichCache.get(key);
+  if (hit !== undefined) return hit;
   const dirs = String(env.PATH ?? "")
     .split(path.delimiter)
     .filter(Boolean);
   const exts = executableExts(env, platform);
+  let result = null;
   for (const dir of dirs) {
     for (const ext of exts) {
       const candidate = path.join(dir, name + ext);
       if (!isFile(candidate)) continue;
       const usable = usableCommand(candidate, undefined, { env, platform });
-      if (usable.ok) return candidate;
+      if (usable.ok) {
+        result = candidate;
+        break;
+      }
       // 不可用的候选直接跳过：同目录里往往还并存别的形态（`pnpm` shim 与
       // `pnpm.ps1` / `pnpm.cmd` 是三个文件），继续往后找才有机会选中能跑的。
       // 全都不可用时返回 null（= 按「没找到」处理）—— 比返回一个注定失败、
       // 且会把真实原因掩盖成「未知错误」的路径更有用（Issue #576 的现场）。
     }
+    if (result) break;
   }
-  return null;
+  whichCache.set(key, result);
+  return result;
 }
 
 /**
