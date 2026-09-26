@@ -99,6 +99,17 @@ const PURE_NODE_HOSTS = [
   // 仍静态引 server-only 侧）留在后续 PR 拆完；本登记**不是**「现在能在纯 Node
   // 里 import 本模块」的承诺。
   "src/lib/comfyui/executor-cli.ts",
+  // log-paths.ts：P3 迁移第 1 期·lib 层地基批。摘掉 server-only 后本模块走
+  // §18.4 第三类——只有 `path` 一条 Node 内建值 import、其它全是 `path.join`
+  // 常量。它**是整链 logger 的地基**：`logger` 通过 `app-runtime-log` 静态
+  // 引它、`session-banner.server` / `capture-streams.server` 也引它、
+  // `comfyui/lifecycle` / `comfyui/trace` 也引它——只要 log-paths 带 server-only，
+  // 纯 Node 里 `await import("~/lib/core/logger")` 的 promise 会因这一层的
+  // throw 而 reject、上层 comfyui 各模块的 lazy 兜底接不进去。摘掉之后
+  // 整条 lazy 链能真跑起来（下一步：app-runtime-log 摘 server-only）。
+  // 「浏览器图别引我」的约束不再靠 server-only 兜——由 scanner 的 clientReachable
+  // 判据盯（`path` 命中即红），与 `kill-process-tree.ts` 同族。
+  "src/lib/log/log-paths.ts",
 ];
 
 type Report = {
