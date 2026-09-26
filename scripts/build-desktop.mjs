@@ -27,7 +27,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -179,13 +179,13 @@ for (const launcherFile of RUNTIME_SCRIPTS.filter((name) =>
   );
 }
 
-cpSync(nextOut, staticDir, { recursive: true, dereference: true }); // server.js + 裁剪 node_modules（解引用 symlink，避免 Windows 无开发者权限时 EPERM）
-
-// ── 2.1 §整治：剔除 standalone tracing 误纳入的根项目噪声目录 ──
+// ── 2.1 §整治：噪声目录在**复制前**就排除 ──
 // next.config 的 outputFileTracingExcludes 已从源头排除 src-tauri/python-venv/
-// generated 等，但此处再兜底清理一次（防字段失效或新增大目录），避免任何
-// 整仓库副本被带进 static 进而嵌入 exe。注意：node_modules/.cache 单独清理，
-// 不能整体删除 node_modules（standalone 运行时必需裁剪版）。
+// generated 等，但此处再兜底一次（防字段失效或新增大目录）。清单同时喂给
+// `cpSync` 的 filter：docs / tests / tools / python-venv 这些大目录不再
+// 「先整树拷进 static、再逐个 rmSync 删掉」地白走一遍文件复制。
+// 注意：node_modules/.cache 单独排除，不能整体排除 node_modules（standalone
+// 运行时必需裁剪版）。
 const STATIC_NOISE = new Set([
   ".git",
   ".workbuddy",
@@ -203,6 +203,23 @@ const STATIC_NOISE = new Set([
   "generated",
   "src-tauri",
 ]);
+
+cpSync(nextOut, staticDir, {
+  recursive: true,
+  dereference: true, // server.js + 裁剪 node_modules（解引用 symlink，避免 Windows 无开发者权限时 EPERM）
+  filter: (src) => {
+    const rel = relative(nextOut, src);
+    if (rel === "") return true; // 根目录本身
+    const top = rel.split(/[\\/]/)[0];
+    if (STATIC_NOISE.has(top)) return false;
+    const cacheRel = join("node_modules", ".cache");
+    return rel !== cacheRel && !rel.startsWith(cacheRel + sep);
+  },
+});
+
+/* ── 2.1 §整治：tracing 噪声的 rmSync 兜底 ──
+ * filter 已在复制前挡掉这些目录，此处保留作兜底（清单失效/新增大目录时
+ * 仍然兜得住），命中与否都只是空操作。 */
 for (const name of STATIC_NOISE) {
   const p = join(staticDir, name);
   if (existsSync(p)) {
