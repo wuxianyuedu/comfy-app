@@ -56,28 +56,66 @@ export function runStamp(at = new Date()) {
  * @param {{ file?: string, timestampInFileName?: boolean }} [options]
  * @returns {{ file: string, write: (message: string, level?: LogLevel) => void, close: () => void }}
  */
-export function createLogSink(root, { file, timestampInFileName = false } = {}) {
+export function createLogSink(
+  root,
+  { file, timestampInFileName = false } = {},
+) {
   const dir = path.join(root, "log", LOG_DIRS.launcher);
   fs.mkdirSync(dir, { recursive: true });
-  const target = file ?? path.join(dir, timestampInFileName ? `dev-launcher-${runStamp()}.log` : "dev-launcher.log");
+  const target =
+    file ??
+    path.join(
+      dir,
+      timestampInFileName
+        ? `dev-launcher-${runStamp()}.log`
+        : "dev-launcher.log",
+    );
   try {
     fs.writeFileSync(target, "", "utf8");
   } catch {
     /* 落盘失败不影响启动本身（由失败路径的用户可见出口兜底） */
   }
+
+  /* 缓冲落盘：编排器日志每条一次 `appendFileSync` 是 open/write/close × 每行，
+   * 攒进缓冲、满 16KB / 500ms / 进程 exit 时一次落盘。exit 钩子保证
+   * `archiveRunLog`（进程退出前的归档）读到的文件是完整的；
+   * 崩溃（kill -9）最多丢一份未满缓冲，对启动日志可接受。 */
+  let pending = "";
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let flushTimer = null;
+  const flush = () => {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    if (!pending) return;
+    const text = pending;
+    pending = "";
+    try {
+      fs.appendFileSync(target, text, "utf8");
+    } catch {
+      /* 见上 */
+    }
+  };
+  process.on("exit", flush);
+
   return {
     file: target,
     write(message, level = "INFO") {
       const line = `[${localTimestamp()}] [${LEVELS[level] ?? LEVELS.INFO}] ${message}`;
       process.stdout.write(`${line}\n`);
-      try {
-        fs.appendFileSync(target, `${line}\n`, "utf8");
-      } catch {
-        /* 见上 */
+      pending += `${line}\n`;
+      if (pending.length >= 16 * 1024) {
+        flush();
+        return;
       }
+      flushTimer ??= setTimeout(() => {
+        flushTimer = null;
+        flush();
+      }, 500);
     },
     close() {
-      /* 目前无需释放句柄：追加写每次都开/关文件，避免锁住日志文件 */
+      flush();
     },
   };
 }
