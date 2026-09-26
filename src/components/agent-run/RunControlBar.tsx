@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { FieldLabel } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { textHandler } from "~/lib/form-props";
 import { formatClock } from "~/lib/time-format";
 import { useAgentRun, type AgentRunController } from "./use-agent-run";
@@ -140,22 +141,17 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             placeholder="想拍什么？一句话创意即可（留空则用项目标题）"
             className="border-border bg-subtle text-ink-field max-w-md min-w-[220px] flex-1 resize-none text-[12px]"
           />
-          <label className="flex flex-col gap-1 text-[11px]">
+          <FieldLabel className="flex flex-col gap-1 text-[11px]">
             <span className="text-ink-faint">确认粒度</span>
-            <select
+            <SelectMenu
               value={c.approvalMode}
-              onChange={textHandler((v) =>
-                c.setApprovalMode(v as ApprovalMode),
+              onChange={(v) => c.setApprovalMode(v as ApprovalMode)}
+              options={APPROVAL_OPTIONS.map((o) => o.value)}
+              labels={Object.fromEntries(
+                APPROVAL_OPTIONS.map((o) => [o.value, o.label]),
               )}
-              className="border-border bg-subtle text-ink-field h-9 rounded-lg border px-2 text-[12px]"
-            >
-              {APPROVAL_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
+            />
+          </FieldLabel>
           <FieldLabel className="border-border bg-subtle text-ink-field flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[12px]">
             <Checkbox
               checked={c.autoReview}
