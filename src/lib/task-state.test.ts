@@ -7,10 +7,12 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  TASK_STATUS_LABELS,
   TERMINAL_TASK_STATUSES,
   isActiveTaskStatus,
   isTerminalFailureTaskStatus,
   isTerminalTaskStatus,
+  taskStatusLabel,
 } from "./task-state";
 
 describe("isTerminalTaskStatus", () => {
@@ -49,6 +51,35 @@ describe("isActiveTaskStatus", () => {
   it("与 isTerminalTaskStatus 互补", () => {
     for (const s of [...TERMINAL_TASK_STATUSES, "QUEUED", "RUNNING", null]) {
       expect(isActiveTaskStatus(s)).toBe(!isTerminalTaskStatus(s));
+    }
+  });
+});
+
+describe("taskStatusLabel", () => {
+  it("五个已知状态各给一句中文", () => {
+    expect(taskStatusLabel("QUEUED")).toBe("排队中");
+    expect(taskStatusLabel("RUNNING")).toBe("生成中");
+    expect(taskStatusLabel("SUCCEEDED")).toBe("已完成");
+    expect(taskStatusLabel("FAILED")).toBe("失败");
+    expect(taskStatusLabel("CANCELLED")).toBe("已取消");
+  });
+
+  it("未知值原样回显，不静默转成「未知」把信息吞掉", () => {
+    /* 回显原文的意义是：后端给出一个本文件还不认识的状态时，界面上一眼看得出
+     * 那是「没见过的状态」，而不是「界面自己判成未知」。 */
+    expect(taskStatusLabel("PAUSED_BY_HUMAN")).toBe("PAUSED_BY_HUMAN");
+  });
+
+  it("只有空值才给「未知」", () => {
+    expect(taskStatusLabel(null)).toBe("未知");
+    expect(taskStatusLabel(undefined)).toBe("未知");
+    expect(taskStatusLabel("")).toBe("未知");
+  });
+
+  it("标签表的键覆盖全部终态（别让文案与判据长成两套账）", () => {
+    const labelled = Object.keys(TASK_STATUS_LABELS);
+    for (const terminal of TERMINAL_TASK_STATUSES) {
+      expect(labelled).toContain(terminal);
     }
   });
 });

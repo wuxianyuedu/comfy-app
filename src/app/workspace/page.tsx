@@ -51,6 +51,14 @@ const HistoryList = dynamic(
   () => import("~/components/studio").then((mod) => mod.HistoryList),
   { ssr: false },
 );
+/* 队列与运行：与历史同族（都在看「机器现在在干什么」），只在进入该视图时才拉。 */
+const QueueMonitor = dynamic(
+  () =>
+    import("~/components/studio/queue/QueueMonitor").then(
+      (mod) => mod.QueueMonitor,
+    ),
+  { ssr: false },
+);
 const TrainingStudio = dynamic(
   () => import("~/components/studio").then((mod) => mod.TrainingStudio),
   { ssr: false },
@@ -88,6 +96,7 @@ const WORKSPACE_VIEWS: WorkspaceView[] = [
   "works",
   "workshop",
   "history",
+  "queue",
   "train",
   "film",
   "workflows",
@@ -320,6 +329,9 @@ export default function WorkspacePage() {
 
       case "history":
         return <HistoryList onOpenTask={handleOpenProject} />;
+
+      case "queue":
+        return <QueueMonitor onOpenSettings={openSettings} />;
 
       case "train":
         return <TrainingStudio onOpenSettings={openSettings} />;
