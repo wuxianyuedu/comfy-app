@@ -38,6 +38,8 @@
 | F7   | P1   | `src/components/workshop/ShotStudio.tsx:121-142`                 | 预填 effect 依赖收窄，抽成 `useAutoFillPrompts`（顺带回到 400 行预算内）                               | #1055 |
 | M7   | P1   | `src/lib/log/capture-streams.server.ts:86/138`                   | 转录改 64KB/1s 缓冲批量落盘（FIFO 顺序不变）                                                           | #1058 |
 | M5   | P1   | `runner-state.ts` 的 `settled`/`finalized`/`wsWaitLogged`        | 三个只增 Set 走 `addBounded`（4096 容量兜底）                                                          | #1061 |
+| S10  | P1   | `repository-film.ts` / `repository-lora.ts` 的 `appendLog`       | `logs` JSON 列按尾部窗口 500 行截断（`tailWindow`）                                                    | #1067 |
+| L6   | P1   | `dev-launcher.mjs` + `dev.mjs`                                   | 编排器注入 `COMFYAPP_SKIP_SCHEMA_SYNC=1`，一次启动只跑一份 schema 同步                                 | #1069 |
 
 ## B. 判定修正与例外（📝）
 
@@ -63,7 +65,7 @@ _（M5 / M7 已闭环，见 A 表。）_
 
 ### C.3 服务端 / 数据访问（P1）
 
-- ⬜ **S10** `src/lib/core/repository-film.ts:109-127`、`repository-lora.ts:102-121` —— `appendLog` 读整列→push→整列写回，数组无上限。方向：日志独立表，或环形上限 + 批量/节流写。
+_（全部闭环，见 A 表。）_
 
 ### C.4 启动 / 构建 / 桌面壳（P1）
 
@@ -71,7 +73,6 @@ _（M5 / M7 已闭环，见 A 表。）_
 - ⬜ **L3** `src-tauri/src/shell_launch.rs:936-960` —— 注释承诺「命令行廉价预筛」但循环内无预筛，每个 PID 都 `OpenProcess`+读 64KB 环境块。方向：实现进程名/命令行预筛。
 - ⬜ **L4** `public/splash.html:730` + `src-tauri/src/lib.rs:513/545/671-760` —— 启动页日志面板每 800ms 轮询，命令对 4 个日志文件各整文件读入（且日志不轮转）。方向：seek 到尾部读最后 N 字节 + 降频/退避。
 - ⬜ **L5** `src-tauri/src/lib.rs:1418(250ms×480)`、`2110(1s×300)`、`2084(100ms×50)`、`958(500ms×240)`、`475(2s×90)`、`single_instance.rs:442-455(100ms×∞)` —— 6 处固定间隔 sleep 轮询，无退避无统一收口。方向：收敛到统一的「带退避的等待」工具。
-- ⬜ **L6** `scripts/dev-launcher.mjs:957` + `scripts/dev.mjs:90` —— 同一次启动两份 `spawnSchemaSync`（各 15~30s drizzle）并发写同一 `db.sqlite`。方向：编排器设 `COMFYAPP_SKIP_SCHEMA_SYNC=1` 二选一。
 - ⬜ **L7** `scripts/launcher-core/shell.mjs:62-83/200-252` —— `whichCommand` 遍历 PATH×扩展名，每个候选真 `spawnSync(--version)`（10s 超时），单次启动调 4~6 次无记忆化。方向：进程内缓存 + 收敛为一次。
 - ⬜ **L8** `scripts/dev-launcher.mjs:343-345/479-523` + `launcher-core/procs.mjs:63` —— 3 个端口各跑一次 `netstat -ano`（输出相同）；每个待裁定 PID 再 spawn 一次 PowerShell CIM。方向：一次 netstat 复用解析 + 一次批量取命令行。
 
