@@ -27,6 +27,7 @@ import { useFilePicker } from "~/components/ui/file-picker";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { FormField } from "~/components/ui/form-field";
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { Input } from "~/components/ui/input";
 
 import { FieldImagePreview } from "./SettingsPrimitives";
@@ -275,31 +276,37 @@ function UsageVideoModeQuickPick({
         <p className="text-ink/70 mb-1 text-xs font-medium">
           mode 快捷选择（仍可手改任意值）
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          {VIDEO_MODE_PRESETS.map((m) => {
+        <ToggleGroup
+          multiple={false}
+          value={(() => {
             const modeValue = usageTest.fields.find(
               (f) => f.key === "mode",
             )?.value;
-            const active =
-              modeValue?.trim() === m && !isModeValueBroken(modeValue ?? "");
-            return (
-              <Button
-                key={m}
-                variant="outline"
-                size="xs"
-                aria-pressed={active}
-                onClick={() => d.setVideoMode(m)}
-                className={`h-auto rounded-full px-2.5 py-1 text-[11px] ${
-                  active
-                    ? "bg-primary/15 border-primary text-primary"
-                    : "text-muted-foreground hover:bg-subtle border-border"
-                }`}
-              >
-                {m}
-              </Button>
-            );
-          })}
-        </div>
+            const trimmed = modeValue?.trim();
+            const isBroken = modeValue != null && isModeValueBroken(modeValue);
+            return trimmed &&
+              !isBroken &&
+              VIDEO_MODE_PRESETS.some((p) => p === trimmed)
+              ? [trimmed]
+              : [];
+          })()}
+          onValueChange={(vals) => {
+            const next = vals[0];
+            if (typeof next === "string") d.setVideoMode(next);
+          }}
+          aria-label="视频 mode 快捷选择"
+          className="flex-wrap gap-1.5"
+        >
+          {VIDEO_MODE_PRESETS.map((m) => (
+            <ToggleGroupItem
+              key={m}
+              value={m}
+              className="h-auto rounded-full px-2.5 py-1 text-[11px]"
+            >
+              {m}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
         {usageTest.fields.map((f) => {
           if (f.key !== "mode") return null;
           const hint = VIDEO_MODE_HINT[f.value.trim()];

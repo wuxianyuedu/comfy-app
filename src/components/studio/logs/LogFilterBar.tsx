@@ -18,9 +18,9 @@ import { Search } from "lucide-react";
 import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { Input } from "~/components/ui/input";
 import { useLogPanel } from "./LogProvider";
-import { FILTER_SELECTED_STYLES } from "./log-row-style";
 import type { LogFilter, LogLevelCounts } from "./log-store";
 
 /* 级别色（语义 token，规范 03 §3.6.2）：原实现把 cyan / amber / rose 的四个档位
@@ -86,30 +86,45 @@ export function LogFilterBar({
              第二行（`flex-wrap` 的换行单位就是这个容器）并吃掉整行宽度。
              比「每个按钮各自 min-w 后硬挤」好在：无论多窄，标签都保持可读，
              不会退化成只剩一列竖字。 */}
-      <div className="ml-3 flex min-w-56 flex-1 basis-0 items-center gap-1">
+      <ToggleGroup
+        multiple={false}
+        value={[filter]}
+        onValueChange={(vals) => {
+          const next = vals[0];
+          if (
+            typeof next === "string" &&
+            (next === "all" ||
+              next === "info" ||
+              next === "warn" ||
+              next === "error") &&
+            next !== filter
+          ) {
+            setFilter(next);
+          }
+        }}
+        aria-label="日志级别筛选"
+        className="ml-3 min-w-56 flex-1 basis-0 gap-1"
+      >
         {FILTER_LABELS.map((option) => (
-          <Button
+          <ToggleGroupItem
             key={option.value}
-            variant="ghost"
-            onClick={() => setFilter(option.value)}
-            aria-pressed={filter === option.value}
+            value={option.value}
             /* `min-w-fit` 取的是**内容固有宽度**：`min-w-0` 会让容器压到能
              * 忽略固有宽度、于是「警告」被切成 `警…`（ISSUE #262）。窄窗口下
              * 整组可能横向溢出，交给行头的 `flex-wrap` 接住（折行判据就是
              * 上面容器的 `min-w-56`），而不是靠切字。
-             * 选中态见 log-row-style 的 FILTER_SELECTED_STYLES。 */
-            className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${
-              filter === option.value
-                ? FILTER_SELECTED_STYLES
-                : "hover:bg-subtle"
-            } ${LEVEL_LABEL_STYLES[option.value]}`}
+             * active 视觉走基元 `data-[state=on]:bg-muted`；`LEVEL_LABEL_STYLES`
+             * 保留在 item 的 className 里，因为「info/warn/error 三档文字色」
+             * 是 **level-specific 语义色**（黄=警告、红=错误…）、不是 active
+             * 视觉。P77 二批统一的是 active、不是这个。 */
+            className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${LEVEL_LABEL_STYLES[option.value]}`}
             title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
           >
             <span className="whitespace-nowrap">{option.label}</span>
             <CountChip value={originCounts[option.value]} />
-          </Button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
 
       {/* Search 紧跟在级别按钮之后（不再 `ml-auto`）。
           行头的稀有宽度应当优先给**类别与条数**：搜索框是偶尔才用一次的
