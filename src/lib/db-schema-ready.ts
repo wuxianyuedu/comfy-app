@@ -45,8 +45,16 @@
  *
  * @module lib/db-schema-ready
  */
-import "server-only";
-
+// Section 18.4 form 3 (P3 lib-foundation batch, last-mile for reaper): this
+// module intentionally drops `import "server-only"` and is registered in
+// `tests/lib-node-only-declarations.test.ts` under `PURE_NODE_HOSTS`. It uses
+// `node:sqlite` DatabaseSync (native in Node 22+), `node:path`, and pure
+// `~/lib/shell/tracing-ignore` -- no server-only chain. The ComfyUI reaper
+// imports `isSchemaReady()` statically; without this change, a pure Node
+// executor host (P3 phase 2 `scripts/executor-host.mjs`) loading `reaper`
+// would crash here at the `import "server-only"` throw before ever reaching
+// the probe. Keeping the ASCII-only invariant (see NOTE above and hard rule
+// 16) is unrelated to the declaration form and still holds.
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 
