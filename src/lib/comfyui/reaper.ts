@@ -10,7 +10,11 @@
 
 import { errorText } from "~/lib/error-message";
 import { isSchemaReady } from "~/lib/db-schema-ready";
-import { taskRepository } from "../core/repository";
+// `../core/repository` 静态值 import 已改成 lazy（P3 §5 第 1 期·最后一步：
+// 让整条 reaper 边不再撞 `import "server-only"` throw、纯 Node executor host
+// 加载 reaper 时能干净过）。同 #1053 runner-state / #1068 executor-finalize
+// / #1071 executor-cli / 本 PR enqueue 的模式：`configureReaper({ taskRepo })`
+// + 未注入时首次调用 dynamic import 兜底 Next 侧真单例。
 import { resolveComfyBase } from "./client";
 import { cliProcs } from "./executor-cli";
 import { isComfyStarting } from "./lifecycle";
@@ -22,6 +26,32 @@ import {
   type RunnerState,
 } from "./runner-state";
 import { logger } from "~/lib/core/logger";
+
+/* ── 依赖注入接缝（P3 §5 第 1 期·最后一步） ───────────────────────────── */
+
+async function loadRealTaskRepo() {
+  return (await import("../core/repository")).taskRepository;
+}
+type TaskRepoForReaper = Pick<
+  Awaited<ReturnType<typeof loadRealTaskRepo>>,
+  | "listStaleQueued"
+  | "listStaleRunning"
+  | "finalizeFailure"
+  | "finalizeFromReaper"
+>;
+
+export type ReaperDeps = { taskRepo: TaskRepoForReaper };
+let depsOverride: Partial<ReaperDeps> = {};
+
+/** executor host 在 boot 时注入自带 DB 句柄；Next 侧无需（走 dynamic import 兜底）。 */
+export function configureReaper(next: Partial<ReaperDeps>): void {
+  depsOverride = { ...depsOverride, ...next };
+}
+
+async function resolveTaskRepo(): Promise<TaskRepoForReaper> {
+  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  return loadRealTaskRepo();
+}
 
 /* ── DB 侧的 QUEUED 回收器 ─────────────────────────
  * 症状：dev server 冷重启之后，状态为
@@ -216,6 +246,8 @@ async function comfyHasActiveWorkflow(
 /** 导出以便判决矩阵被直接测试（ISSUE #315）：两条 sweeper 的规则是本模块
  *  唯一的价值，30s 定时器只是它们的调用者。生产调用方不变。 */
 export async function reapStaleQueuedTasks(): Promise<void> {
+  // 顶部一次性 resolve：下游 closure 沿用旧名（`taskRepository`），call site 不动。
+  const taskRepository = await resolveTaskRepo();
   try {
     const cutoff = new Date(Date.now() - STALE_MS);
     const stale = await taskRepository.listStaleQueued(cutoff, 20);
@@ -323,6 +355,7 @@ export async function reapStaleQueuedTasks(): Promise<void> {
  *  判决矩阵见 RUNNING_STALE_MS 上方的文件头注释。 */
 /** 同上：RUNNING 对账判决矩阵的测试入口。 */
 export async function reapStaleRunningTasks(): Promise<void> {
+  const taskRepository = await resolveTaskRepo();
   try {
     const cutoff = new Date(Date.now() - RUNNING_STALE_MS);
     const stale = await taskRepository.listStaleRunning(
