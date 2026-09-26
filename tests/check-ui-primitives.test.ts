@@ -4652,6 +4652,83 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("P73");
   });
 
+  /* ── P75「视图层手搓空态卡」（棘轮）差分回归 ─────────────────
+   * 见 scripts/check-ui-primitives.cjs 里 P75 注释：三重条件（非自闭合 +
+   * border-dashed + rounded-xl/2xl/3xl + 无 cursor-pointer + 无内部
+   * onClick + 有子文本）· 合规出口 `<EmptyState>` / `<Empty>`。 */
+  it("P75 手搓空态卡（border-dashed + rounded-xl + 内含文本）→ 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P75Empty.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <div className=\"border-border text-muted-foreground rounded-xl border border-dashed p-12 text-center\">",
+        "      还没有内容",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P75");
+    expect(output).toContain("studio/P75Empty.tsx");
+  });
+
+  it("P75 有 cursor-pointer 的 dashed「添加占位」不误伤（是交互按钮、不是空态卡）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P75AddTile.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <div className=\"border-dashed rounded-xl cursor-pointer flex flex-col items-center justify-center gap-2.5 py-7\">",
+        "      <span>新建项目</span>",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P75 内含 onClick 的 dashed 卡不误伤（同上是交互卡）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P75Clickable.tsx",
+      [
+        "export function V({ onClick }) {",
+        "  return (",
+        "    <div className=\"border-dashed rounded-xl p-8\" onClick={onClick}>",
+        "      点我新建",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P75 自闭合虚线分隔线不误伤（那是 P73 的账 · 双判据互斥）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P75Divider.tsx",
+      [
+        "export function V() {",
+        "  return <div className=\"border-border flex-1 border-t border-dashed rounded-xl\" />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    /* 自闭合被 P73 拦、P75 不该同时报。 */
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P73");
+    expect(output).not.toMatch(/新增\s+P75/);
+  });
+
   /* ── P76「视图层裸写 <select>」（棘轮）差分回归 ────────────────
    * 见 scripts/check-ui-primitives.cjs 里 P76 注释：P68 拦住了裸
    * `<input>` / `<textarea>`、P69 拦住了裸 checkbox/radio；`<select>` 是同族
