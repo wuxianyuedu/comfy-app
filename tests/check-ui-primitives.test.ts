@@ -805,14 +805,18 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   it("整块可点的开关行（label 包住 Switch）不被 P23 计", () => {
     /* 那是另一种形态 —— 标签与控件**并排**、点哪都切换；
-     * `FormField` 的块级标签行套上去会改掉那条排布（§16.2.4.2 第 9 条）。 */
+     * `FormField` 的块级标签行套上去会改掉那条排布（§16.2.4.2 第 9 条）。
+     * P78 升硬闸后本 fixture 会被 P78（视图层裸 `<label>`）拦下、但不是
+     * P23 拦的：断言只看「P23 没被计」。 */
     seedBaseline();
     write(
       "src/components/studio/SwitchRow.tsx",
       'export function S({ v, on }: { v: boolean; on: (b: boolean) => void }) {\n  return (\n    <label className="flex cursor-pointer items-center justify-between gap-2">\n      <span className="text-ink-soft">显示网格</span>\n      <Switch checked={v} onCheckedChange={on} />\n    </label>\n  );\n}\n',
     );
     const { code, output } = run();
-    expect(code, output).toBe(0);
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P78");
+    expect(output).not.toMatch(/P23\s*→/);
   });
 
   it("使用 FormField 的文件不再被 P23 计（合规者不误伤）", () => {
@@ -4440,15 +4444,17 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       [
         "const ANSI = {",
         "  // p71-allow:start ANSI SGR 终端色是 §3.6.1 例外",
-        '  inside: "text-red-700 dark:text-red-400",',
+        '  inside: "dark:text-red-400",',
         "  // p71-allow:end",
-        '  outside: "text-rose-700 dark:text-rose-400",',
+        '  outside: "dark:text-rose-400",',
         "};",
         "export function V() {",
         "  return <span>{ANSI.inside}{ANSI.outside}</span>;",
         "}",
       ].join("\n"),
     );
+    /* P71 仍是棘轮、`--update` 会把当前实测写进基线；块外那一处计入、
+     * 块内那一处被 allow 标记剥掉 → 恰好 1，而不是 2。 */
     const { code, output } = run(["--update"]);
     expect(code, output).toBe(0);
     const baseline = JSON.parse(
@@ -4607,13 +4613,13 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 见 scripts/check-ui-primitives.cjs 里 P73 注释：合规出口
    * `~/components/ui/separator` 的 `<Separator>`；含子内容的卡片结构边框
    * 不算（那是容器的一部分）。 */
-  it("P73 视图层自闭合 <div className=\"border-t\"> → 阻断", () => {
+  it('P73 视图层自闭合 <div className="border-t"> → 阻断', () => {
     seedBaseline();
     write(
       "src/components/studio/P73Hr.tsx",
       [
         "export function V() {",
-        "  return <div className=\"border-border h-px w-full border-t\" />;",
+        '  return <div className="border-border h-px w-full border-t" />;',
         "}",
       ].join("\n"),
     );
@@ -4629,7 +4635,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       "src/components/studio/P73Footer.tsx",
       [
         "export function V() {",
-        "  return <div className=\"border-border border-t px-4 py-3\">footer 内容</div>;",
+        '  return <div className="border-border border-t px-4 py-3">footer 内容</div>;',
         "}",
       ].join("\n"),
     );
@@ -4643,7 +4649,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       "src/components/studio/P73Vertical.tsx",
       [
         "export function V() {",
-        "  return <div className=\"border-border self-stretch border-l\" />;",
+        '  return <div className="border-border self-stretch border-l" />;',
         "}",
       ].join("\n"),
     );
@@ -4663,7 +4669,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       [
         "export function V() {",
         "  return (",
-        "    <div className=\"border-border text-muted-foreground rounded-xl border border-dashed p-12 text-center\">",
+        '    <div className="border-border text-muted-foreground rounded-xl border border-dashed p-12 text-center">',
         "      还没有内容",
         "    </div>",
         "  );",
@@ -4683,7 +4689,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       [
         "export function V() {",
         "  return (",
-        "    <div className=\"border-dashed rounded-xl cursor-pointer flex flex-col items-center justify-center gap-2.5 py-7\">",
+        '    <div className="border-dashed rounded-xl cursor-pointer flex flex-col items-center justify-center gap-2.5 py-7">',
         "      <span>新建项目</span>",
         "    </div>",
         "  );",
@@ -4701,7 +4707,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       [
         "export function V({ onClick }) {",
         "  return (",
-        "    <div className=\"border-dashed rounded-xl p-8\" onClick={onClick}>",
+        '    <div className="border-dashed rounded-xl p-8" onClick={onClick}>',
         "      点我新建",
         "    </div>",
         "  );",
@@ -4718,7 +4724,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       "src/components/studio/P75Divider.tsx",
       [
         "export function V() {",
-        "  return <div className=\"border-border flex-1 border-t border-dashed rounded-xl\" />;",
+        '  return <div className="border-border flex-1 border-t border-dashed rounded-xl" />;',
         "}",
       ].join("\n"),
     );
@@ -4846,40 +4852,43 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
-  /* ── P78 引入顺带解锁的 --update 逻辑：判据引入 vs 已有规则上升 ─────
+  /* ── 判据引入顺带解锁的 --update 逻辑：判据引入 vs 已有规则上升 ─────
    * 见 scripts/check-ui-primitives.cjs 里 `before && after > before` 的
    * 分支重构。测试锁：
    *   · 旧基线里从没出现过的 rule id（新加判据的起点登记）→ `--update` 允许；
    *   · 旧基线里已经有过的 rule id 上升 → `--update` 必须拒绝。
-   * 步骤：先造一个 P78 现场 → `--update` 登记起点 → 再写第二个 P78 →
-   * 第二次 `--update` 必须拦下（P78 已在基线、从 1 涨到 2 是"已有 rule 上升"）。 */
+   * 步骤：先造一个 P71 现场 → `--update` 登记起点 → 再写第二个 P71 →
+   * 第二次 `--update` 必须拦下（P71 已在基线、从 1 涨到 2 是"已有 rule 上升"）。
+   * P71 保持棘轮（`HARD_GATE_RULES` 不含它）、是这条 `--update` 逻辑最合
+   * 适的载体：P78/P79/P80 都在其他 PR 里升硬闸、走不到"新判据起点登记"这一
+   * 条分支了。 */
   it("--update 允许登记新判据起点、但拦下已有 rule id 的上升", () => {
     write(
-      "src/components/studio/P78Seed.tsx",
+      "src/components/studio/P71Seed.tsx",
       [
         "export function V() {",
-        "  return <label className='text-xs'>seed</label>;",
+        "  return <div className='dark:bg-red-400'>seed</div>;",
         "}",
       ].join("\n"),
     );
-    /* 第一次 --update：P78 从未在旧基线出现过、这是判据引入的起点登记，
+    /* 第一次 --update：P71 从未在旧基线出现过、这是判据引入的起点登记，
      * 允许通过。 */
     const { code: firstCode, output: firstOut } = run(["--update"]);
     expect(firstCode, firstOut).toBe(0);
-    /* 再写一个 P78 文件：after=2，基线里的 P78=1 已存在，此时上升就是"已有
+    /* 再写一个 P71 文件：after=2，基线里的 P71=1 已存在，此时上升就是"已有
      * rule 上升"、必须拒绝。 */
     write(
-      "src/components/studio/P78Regress.tsx",
+      "src/components/studio/P71Regress.tsx",
       [
         "export function V() {",
-        "  return <label className='text-xs'>regress</label>;",
+        "  return <div className='dark:bg-rose-400'>regress</div>;",
         "}",
       ].join("\n"),
     );
     const { code: secondCode, output: secondOut } = run(["--update"]);
     expect(secondCode, secondOut).not.toBe(0);
     expect(secondOut).toContain("拒绝放宽基线");
-    expect(secondOut).toContain("P78：1 → 2");
+    expect(secondOut).toMatch(/P71[^\n]*1 → 2/);
   });
 
   /* ── P77「视图层手写 aria-pressed」（棘轮）差分回归 ────────────
@@ -5007,18 +5016,15 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "}",
       ].join("\n"),
     );
-    /* `--update` 会把当前实测写进基线；断言 files 里 P79 记数**只有 outside
-     * 一处**（`bg-amber-500`），allow 块里的 `bg-red-500 text-emerald-700`
-     * 两处不计——即 `p71-allow` 也管 P79。 */
-    const { code, output } = run(["--update"]);
+    /* P79 是硬闸（#1088 起）、`--update` 会被「未清零」直接拒绝；改用
+     * `--report` 只出清单不判失败、再解析 P79 那一行：allow 块内的两处
+     * `bg-red-500` / `text-emerald-700` 被剥、只有 outside 的 `bg-amber-500`
+     * 计入 → 总数恰好 1、文件数 1。 */
+    const { code, output } = run(["--report"]);
     expect(code, output).toBe(0);
-    const baseline = JSON.parse(
-      readFileSync(
-        join(workdir, "scripts", ".ui-primitives-baseline.json"),
-        "utf8",
-      ),
-    ) as { files: Record<string, { P79?: number }> };
-    expect(baseline.files["src/components/studio/P79Allow.tsx"]?.P79).toBe(1);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P79 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 1 处 \/ 1 文件/);
   });
 
   /* p71-allow 支持 JSX 注释形态（`//` 前缀只能落 JS 表达式位；JSX 顶层兄弟
@@ -5047,20 +5053,16 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "}",
       ].join("\n"),
     );
-    const { code, output } = run(["--update"]);
+    /* P79 是硬闸（#1088 起）、`--update` 会被「未清零」直接拒绝；改用
+     * `--report` 只出清单不判失败。两处 allow 都生效：JSX 注释形态包住
+     * from-violet/to-fuchsia（计 2 处 palette 但被剥）、`//` 形态包住
+     * bg-red-500 与 text-emerald-700（计 2 处、被剥）；allow 之外两处
+     * bg-amber-500 与 bg-sky-500 各计一次 → 总数 2。 */
+    const { code, output } = run(["--report"]);
     expect(code, output).toBe(0);
-    const baseline = JSON.parse(
-      readFileSync(
-        join(workdir, "scripts", ".ui-primitives-baseline.json"),
-        "utf8",
-      ),
-    ) as { files: Record<string, { P79?: number }> };
-    /* 两处 allow 都生效：JSX 注释形态包住 from-violet/to-fuchsia（计 2 处
-     * palette 但被剥）、`//` 形态包住 bg-red-500 与 text-emerald-700（计
-     * 2 处、被剥）；allow 之外两处 bg-amber-500 与 bg-sky-500 各计一次。 */
-    expect(baseline.files["src/components/studio/P79JsxAllow.tsx"]?.P79).toBe(
-      2,
-    );
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P79 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 2 处 \/ 1 文件/);
   });
 
   /* ── P80「视图层 w-N 与 h-N 同值应换 size-N」（棘轮）差分回归 ────
@@ -5119,16 +5121,12 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "}",
       ].join("\n"),
     );
-    const { code, output } = run(["--update"]);
+    /* P80 是硬闸（#1022 起）、`--update` 会被「未清零」直接拒绝；改用
+     * `--report` 只出清单不判失败，P80 那一行总数=2、文件数=1。 */
+    const { code, output } = run(["--report"]);
     expect(code, output).toBe(0);
-    const baseline = JSON.parse(
-      readFileSync(
-        join(workdir, "scripts", ".ui-primitives-baseline.json"),
-        "utf8",
-      ),
-    ) as { files: Record<string, { P80?: number }> };
-    expect(baseline.files["src/components/studio/P80TwoSites.tsx"]?.P80).toBe(
-      2,
-    );
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P80 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 2 处 \/ 1 文件/);
   });
 });
