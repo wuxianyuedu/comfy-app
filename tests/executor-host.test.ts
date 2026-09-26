@@ -1,25 +1,24 @@
 /**
- * `scripts/executor-host.mjs` 骨架的三条最小契约（P3 §5 第 2 期·Phase 2-B）：
- *   1. `--once` 模式：boot 完成后立即 exit 0，日志文件里能看到 boot + 退出两行。
- *   2. 常驻模式 + SIGTERM：进程活着、能收终止信号并落盘；POSIX 走 handler
- *      拿到 exit=0 + shutdown 行；Windows 上 Node 控制台 SIGTERM 语义与 POSIX
- *      不同（`child.kill("SIGTERM")` 实际走 TerminateProcess、handler 不跑），
- *      只断「进程真的终止了 + 之前的 boot/heartbeat 都落了盘」。真正的整树回收
- *      由 `cross-platform-launcher.test.ts` 与 `kill-process-tree.windows.test.ts`
- *      那族覆盖。
- *   3. 日志文件落在 `COMFYAPP_HOST_LOG` 指定的位置（默认 `log/services/executor-host.log`）；
- *      测试全部指到自己 mkdtemp 的临时目录、绝不落到仓库 `log/`。
+ * `scripts/executor-host.mjs` 的两组契约：
+ *   1. **骨架形态**（2-B 三条，未设 `COMFY_EXECUTOR`）：`--once` 起落、常驻 +
+ *      SIGTERM、日志路径——骨架必须**不碰 DB**，这三条钉的就是它的极简性。
+ *      常驻模式的 POSIX 细节：能收终止信号并落盘；Windows 上 Node 控制台
+ *      SIGTERM 语义与 POSIX 不同（`child.kill("SIGTERM")` 实际走
+ *      TerminateProcess、handler 不跑），只断「进程真的终止了 + 之前的
+ *      boot/heartbeat 都落了盘」。真正的整树回收由 `cross-platform-launcher.test.ts`
+ *      与 `kill-process-tree.windows.test.ts` 那族覆盖。
+ *   2. **运行时注入链**（3-B0 两条，`COMFY_EXECUTOR=host`）：golden 跨片不误杀
+ *      （inline 片孤儿在 host Q2 后原样 QUEUED）+ 库不可达时大声退出 1。
+ *   日志文件一律落各用例自己 mkdtemp 的临时目录、绝不落到仓库 `log/`。
  *
- * 反证：把脚本里的 `writeLine` 换成 no-op，用例 1/2/3 都会红。
- *
- * 本 PR **不**测「boot 时按顺序调用 configureXxx」那条链——Phase 2-A（repository driver
- * 抽取）与 Phase 2-C（launcher 集成）都没落地之前，那条链还没有可注入的对象。
- * 骨架先证明「一个纯 Node 进程能起来 + 心跳能落 + 终止时进程真退」。
+ * 反证：把脚本里的 `writeLine` 换成 no-op，用例 1/2/3 都会红；去掉 reaper 的
+ * owner 分片，golden 那条会红（host Q2 数到并试图回收 inline 的行）。
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 
@@ -125,4 +124,101 @@ describe("scripts/executor-host.mjs 骨架", () => {
       /COMFYAPP_HOST_LOG[\s\S]*?"log",\s*"services",\s*"executor-host\.log"/,
     );
   });
+});
+
+/** Phase 3-B0：`COMFY_EXECUTOR=host` 的运行时注入链。与上方骨架契约分组的
+ *  意义——骨架形态（未设 env）必须**一行都不碰 DB**，运行时形态才 tsx 加载
+ *  TS + 注入 reaper(owner=host)/enqueue/trace + Q2 扫自己那片。 */
+describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0）", () => {
+  /** 在临时目录建一份最小 `task` 表库（列取 reaper/领取实际触达的集合），
+   *  种一行 **inline 片**的超时 QUEUED 孤儿。 */
+  function mkDbWithInlineOrphan(dir: string): {
+    dbPath: string;
+    rowId: string;
+  } {
+    const dbPath = path.join(dir, "host.db");
+    const db = new DatabaseSync(dbPath);
+    db.exec(
+      `CREATE TABLE task (
+        id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'QUEUED',
+        promptId TEXT, finishedAt TEXT, createdAt TEXT NOT NULL,
+        workflowName TEXT, claimedBy TEXT
+      )`,
+    );
+    const staleAt = new Date(Date.now() - 120_000)
+      .toISOString()
+      .replace("T", " ")
+      .slice(0, 23);
+    db.prepare(
+      "INSERT INTO task (id,status,createdAt,workflowName) VALUES (?,'QUEUED',?,?)",
+    ).run("inline-orphan-1", staleAt, "w");
+    db.close();
+    return { dbPath, rowId: "inline-orphan-1" };
+  }
+
+  function readTaskRow(dbPath: string, id: string): Record<string, unknown> {
+    const db = new DatabaseSync(dbPath, { readOnly: true });
+    try {
+      return db.prepare("SELECT * FROM task WHERE id=?").get(id) ?? {};
+    } finally {
+      db.close();
+    }
+  }
+
+  it("golden：host boot 的 Q2 只数 host 片——inline 片孤儿原样 QUEUED、零误杀", async () => {
+    const tmp = mkTmp();
+    const logPath = path.join(tmp, "host.log");
+    const { dbPath, rowId } = mkDbWithInlineOrphan(tmp);
+    const { code, stderr } = await new Promise<{
+      code: number | null;
+      stderr: string;
+    }>((resolve) => {
+      const child = spawn(process.execPath, [HOST_SCRIPT, "--once"], {
+        cwd: REPO_ROOT,
+        env: {
+          ...process.env,
+          COMFY_EXECUTOR: "host",
+          DATABASE_URL: `file:${dbPath}`,
+          COMFYAPP_HOST_LOG: logPath,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let err = "";
+      child.stderr.on("data", (b: Buffer) => {
+        err += b.toString("utf8");
+      });
+      child.on("exit", (c) => resolve({ code: c, stderr: err }));
+    });
+    const text = fs.readFileSync(logPath, "utf-8");
+    expect(code, `stderr: ${stderr}\nlog:\n${text}`).toBe(0);
+    expect(text).toContain("mode=runtime");
+    expect(text).toContain("runtime inject-ok");
+    // NULL 归属行不算 host 片：Q2 计数必须为 0……
+    expect(text).toMatch(/q2-scan hostShardQueued=0/);
+    // ……且那行 inline 孤儿在 host boot 前后一字未动（仍 QUEUED、没被 FAIL）。
+    const row = readTaskRow(dbPath, rowId);
+    expect(row.status).toBe("QUEUED");
+    expect(row.claimedBy ?? null).toBeNull();
+  }, 90_000);
+
+  it("失败路径大声死：库不可达（目录不存在）→ 注入链失败 → exit 1 + 日志行，不退化成心跳假活", async () => {
+    const tmp = mkTmp();
+    const logPath = path.join(tmp, "host-fail.log");
+    const missing = path.join(tmp, "no-such-dir", "x.db");
+    const { code } = await new Promise<{ code: number | null }>((resolve) => {
+      const child = spawn(process.execPath, [HOST_SCRIPT, "--once"], {
+        cwd: REPO_ROOT,
+        env: {
+          ...process.env,
+          COMFY_EXECUTOR: "host",
+          DATABASE_URL: `file:${missing}`,
+          COMFYAPP_HOST_LOG: logPath,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      child.on("exit", (c) => resolve({ code: c }));
+    });
+    expect(code).toBe(1);
+    expect(fs.readFileSync(logPath, "utf-8")).toContain("runtime boot FAILED");
+  }, 90_000);
 });

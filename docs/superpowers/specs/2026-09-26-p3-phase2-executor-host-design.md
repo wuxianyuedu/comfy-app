@@ -383,3 +383,26 @@ configureExecutorCli({ taskRepo: hostTaskRepo, logger: hostLog, resolveComfyBase
   - **host db 客户端**：`@libsql/client`（与 Next 侧同源、零新依赖、WAL 并行）；**不**引入 `node:sqlite` / `better-sqlite3`。
   - **relational→select/where 映射**：Phase 2-A scope 内的 12 方法**全部本来就是** select/where/update/insert，**无需**映射；relational 只出现在 UI 列表卡（`listByUser` / `findById`），留到 Phase 5 film 侧真需要时再抽。
   - 新增 §11.1 · 摸底表 + 决定 1 + 决定 2 + 抽法（impl + delegate、避开 §12.12 孪生）+ 单测覆盖 + 破坏面 0 + 分 PR 切法（预期 1 个 PR）。
+
+---
+
+## 13. 实施增补（v3，3-A / 3-B0 落地时的已签修正）
+
+§12 评审记录追加：
+
+- 2026-09-26：v3 记录 3-A 与 3-B0 实施期的四个已签决定与两处形态修正（均经签字，不重开方向）：
+
+**3-A（#1131）**
+
+1. `claimedBy` 索引 = 独立 `task_claimed_by_idx(status, claimedBy)`，不扩 `task_status_finished_idx`（领取谓词与孤儿判决语义分离）。
+2. 原子领取形态：原拍板 `db.transaction`+BEGIN IMMEDIATE，实施查证后改签为**单语句** `UPDATE … WHERE id IN (SELECT … ORDER BY createdAt LIMIT ?) RETURNING id`。两条理由：共享 impl 的同步测试宿主（better-sqlite3）上 async 事务回调会在 continuation 前 COMMIT、原子性静默失效；drizzle-orm 0.45.2 的 libsql session 忽略 `transaction` 的 behavior 配置（源码形参 `_config`），IMMEDIATE 无法表达。**不加 `claimedAt` 列**（领取时刻 ≈ RUNNING 行的 `updatedAt`）。
+3. `claimedBy` 写入时机 = 建行时按 `COMFY_EXECUTOR` 写（§6 灰度并存判据推 (a)）；NULL 天然归 inline，历史行免 backfill。
+4. 3-A scope 收在「列+索引+`claimNextQueued`+契约测+db:push」，不接线。
+
+**3-B0（本 PR）——分派修正：原 §7 的「3-B 接流量」经摸底拆为两步**
+
+- 摸底事实：2-B/2-C 交付的 host 是纯骨架（无 tsx/libsql/configure 调用），§4 启动链一行未接；「3-B host 领 `claimedBy='host'` 行」隐含的前提（§4 boot 链已通）不成立。硬推 = 把地基与接流量挤进一个 PR。
+- 拆法（已签）：**3-B0 = host 运行时地基**（tsx 加载 + libsql file 客户端 + `createTaskRepoImpl` + boot 注入 + Q2 首扫，不领流量）；**3-B1 = 接流量**（tRPC `generate` 写值 + host claim 循环 + runner/executor-cli/executor-finalize/executor-ws 四条 seam 的 host 版 deps）；**3-B 领取模型**（已签）：inline 保持 push 驱动、host 独占 pull+claim；**ComfyUI 进程归属**（已签）：host 沿用 launcher 已起的 ComfyUI，不自 spawn。
+- **reaper 归属分片从 3-B1 提前到 3-B0**（代码事实倒逼，非方向变更）：`reaper.ts` 模块加载即有一次 sweep（`startReaper()` 副作用），而孤儿判决依赖**进程内**内存足迹——host 不分片就会把 inline「QUEUED>30s 尚未进 ComfyUI」的在飞任务误判成孤儿杀掉。落地形态：`listStaleQueued/listStaleRunning` 加 `owner` 参数（缺省 `'inline'`，Next 侧调用签名与行为不变），谓词与领取共用 impl 的单一定义 `ownedBy()`；`configureReaper({ taskRepo, owner: "host" })`；`resolveTaskRepo()` 在未注入且 Next barrel 不可达时**跳过本轮 + 一次性 warn**（修掉 host 加载 reaper 即两条 unhandled rejection 的实测崩溃）。
+- 3-B0 注入面收口：只 inject 已验证可纯 Node 加载且 Q2 需要的三条 seam（reaper/enqueue/trace）；其余四条属 3-B1（缺的是 host 版执行依赖，不是接线）。
+- host 的 `DATABASE_URL` 解析优先级对齐 Next 侧（进程 env → `.env` 回读 → 默认），复用 `scripts/env-preflight.mjs` 的 `parseEnvFile`——launcher 只透传 `process.env`，自定义库路径下不读 `.env` 会让 host 连错库。

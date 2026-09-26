@@ -356,11 +356,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
   replaceLogs: TaskRepoImpl["replaceLogs"] = (taskId, logs) =>
     impl.replaceLogs(taskId, logs);
 
-  listStaleQueued: TaskRepoImpl["listStaleQueued"] = (cutoff, take) =>
-    impl.listStaleQueued(cutoff, take);
+  listStaleQueued: TaskRepoImpl["listStaleQueued"] = (cutoff, take, owner) =>
+    impl.listStaleQueued(cutoff, take, owner);
 
-  listStaleRunning: TaskRepoImpl["listStaleRunning"] = (cutoff, take) =>
-    impl.listStaleRunning(cutoff, take);
+  listStaleRunning: TaskRepoImpl["listStaleRunning"] = (cutoff, take, owner) =>
+    impl.listStaleRunning(cutoff, take, owner);
 
   createImages: TaskRepoImpl["createImages"] = (taskId, images) =>
     impl.createImages(taskId, images);
