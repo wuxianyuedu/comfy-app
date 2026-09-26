@@ -148,8 +148,12 @@ export function AttributeMultiSelect({
               />
             </div>
 
-            {/* 选项（分组） */}
-            <div className="max-h-56 overflow-y-auto px-1 py-1">
+            {/* 选项（分组） · role="option" 要求 listbox 父级 · 允许多选 */}
+            <div
+              role="listbox"
+              aria-multiselectable="true"
+              className="max-h-56 overflow-y-auto px-1 py-1"
+            >
               {visibleGroups.length === 0 ? (
                 <p className="text-muted-foreground px-2 py-2 text-[11px]">
                   未找到匹配项，可在下方添加自定义。
@@ -163,7 +167,7 @@ export function AttributeMultiSelect({
                     {g.options.map((opt) => {
                       const on = selected.has(opt);
                       return (
-                        <label
+                        <div
                           key={opt}
                           role="option"
                           aria-selected={on}
@@ -184,7 +188,7 @@ export function AttributeMultiSelect({
                             {on && <Check size={10} />}
                           </span>
                           <span className="min-w-0 flex-1 truncate">{opt}</span>
-                        </label>
+                        </div>
                       );
                     })}
                   </div>
