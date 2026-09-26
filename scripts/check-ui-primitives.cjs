@@ -3761,6 +3761,19 @@ const HARD_GATE_RULES = new Set([
    * `<div role="option">` + 外层 listbox（错的 ARIA 语义）· 本 PR 无新降。
    * 视图层新增裸 `<label>` 直接阻断、走 FieldLabel/FormField/div role。 */
   "P78",
+  /* P75（shadcn composition.md · 视图层手搓空态卡）：
+   * #1011 引入时视图层实测 12 处，两批治理清零：#1103 workshop 六处
+   * （CharacterDesigner / FinalComposer / ShotStudio / StoryboardPlanner
+   * 两处 / VideoStudio）→ `EmptyState variant="hint"`；本 PR studio /
+   * model 六处（`studio/ModelLibrary.tsx` 两处 · `studio/history/HistoryList.tsx`
+   * · `studio/ProjectOutputs.tsx` · `studio/TrainingStudio.tsx`
+   * · `studio/WorksGallery.tsx` · `model/ModelLibrary.tsx`）→
+   * `EmptyState`（`page` 档为主、`minHeightClass` 与原 `min-h-[N]` 对齐、
+   * `WorksGallery` 的类别装饰色块走已 allow 的 `WORKS_CATEGORY_ICON_BG`
+   * 常量 · 保留视觉身份）。视图层新增手搓「border-dashed + rounded-(xl|2xl|3xl)
+   * + 内文案」的空态卡直接阻断，走 `~/components/ui/empty-state` 的
+   * `<EmptyState>` 或 `~/components/ui/empty` 的 `<Empty>` 基元。 */
+  "P75",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */

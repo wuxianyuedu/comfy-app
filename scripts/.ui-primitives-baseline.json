@@ -13,8 +13,7 @@
     "P67": "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）",
     "P68": "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
     "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
-    "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
-    "P75": "视图层手搓空态卡 `<div className=\"border-dashed rounded-xl/2xl/3xl\">`（应使用 ~/components/ui/empty-state 的 <EmptyState> 或 ~/components/ui/empty 的 <Empty>，shadcn composition.md）"
+    "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）"
   },
   "total": 0,
   "files": {}
