@@ -55,6 +55,7 @@ import {
 import {
   listeningPidsOnPort,
   pidBelongsToRoot,
+  processCommandLines,
   runCapture,
 } from "./launcher-core/procs.mjs";
 import {
@@ -485,10 +486,14 @@ export async function reconcilePort(
       belongsToRoot: pidBelongsToRoot,
       root,
     });
+    /* 命令行一次批量预取：`portOwnershipVerdict` 会对每个占位 PID 各调一次
+     * `cmdlineOf`，Windows 上那是每 PID 一次 PowerShell 冷启动（0.5~1.5s）；
+     * 合并为一条 CIM 查询后回填进 Map，回调只查表（契约不变，仍是逐 PID 取）。 */
+    const commandLines = await processCommandLines(verdict.pids ?? []);
     const decision = await portOwnershipVerdict({
       requestedPort: explicit && p === port ? port : null,
       verdict,
-      cmdlineOf: processCommandLine,
+      cmdlineOf: async (pid) => commandLines.get(pid) ?? "",
       isAppProcess: (_pid, cmdline) => isAppDevServerCmdline(cmdline, root),
     });
     if (decision.ownership === PORT_OWNERSHIP.free) {

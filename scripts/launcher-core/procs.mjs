@@ -158,6 +158,53 @@ async function listeningPidsPosix(port) {
   return pids;
 }
 
+/** 批量取多个 PID 的命令行（键 = PID，取不到的键缺席）。
+ *
+ *  Windows 侧把「每 PID 一次 PowerShell 冷启动」（0.5~1.5s）合并为一次：
+ *  `Get-CimInstance Win32_Process -Filter "ProcessId=a OR ProcessId=b …"`。
+ *  POSIX 用 `ps -o pid=,args= -p a,b,c` 一条命令拿全（ps 本就支持逗号列表）。
+ *  @param {number[]} pids @returns {Promise<Map<number, string>>} */
+export async function processCommandLines(pids) {
+  const out = new Map();
+  if (!pids.length) return out;
+  if (!isWindows()) {
+    const text = await runCapture("ps", [
+      "-o",
+      "pid=,args=",
+      "-p",
+      pids.join(","),
+    ]);
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const cut = trimmed.indexOf(" ");
+      const pid = Number.parseInt(cut > 0 ? trimmed.slice(0, cut) : "", 10);
+      if (Number.isInteger(pid)) out.set(pid, trimmed.slice(cut + 1));
+    }
+    return out;
+  }
+  const filter = pids.map((pid) => `ProcessId=${pid}`).join(" OR ");
+  const text = await runCapture("powershell", [
+    "-NoProfile",
+    "-Command",
+    `(Get-CimInstance Win32_Process -Filter "${filter}") | Select-Object ProcessId, CommandLine | ConvertTo-Json -Compress`,
+  ]);
+  let parsed;
+  try {
+    parsed = JSON.parse(text || "null");
+  } catch {
+    return out;
+  }
+  const rows = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const pid = Number.parseInt(String(row.ProcessId ?? ""), 10);
+    const cmdline = typeof row.CommandLine === "string" ? row.CommandLine : "";
+    if (Number.isInteger(pid) && cmdline) out.set(pid, cmdline);
+  }
+  return out;
+}
+
 /** 某 PID 的工作目录（判「这个进程属不属于本检出」）。
  *  @param {number} pid @returns {Promise<string | null>} */
 export async function processCwd(pid) {
