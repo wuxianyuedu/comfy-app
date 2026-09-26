@@ -2,6 +2,7 @@
 
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
+import { FieldLegend } from "~/components/ui/field";
 import { TreeChildren } from "~/components/ui/tree-rows";
 import { Spinner } from "~/components/ui/spinner";
 import { StatusBadge } from "~/components/ui/status-badge";
@@ -36,9 +37,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
       {/* 节点目录只读展示：由设置的 ComfyUI 路径自动推导，不再支持手动配置 */}
       <section className="border-border bg-bg mb-4 rounded-xl border p-4">
         <div className="mb-2 flex items-center justify-between">
-          <label className="text-ink block text-sm font-medium">
+          <FieldLegend variant="label" className="text-ink text-sm font-medium">
             自定义节点目录
-          </label>
+          </FieldLegend>
           <span
             className="bg-success-strong/18 text-success-strong rounded-full px-1.5 py-0.5 text-[10px] font-medium"
             title="解析器只读取这些目录里的 .py、绝不修改其中任何文件"
