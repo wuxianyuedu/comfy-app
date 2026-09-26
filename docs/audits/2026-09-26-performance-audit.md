@@ -49,6 +49,7 @@
 | L4   | P1   | `src-tauri/src/lib.rs:513` + `public/splash.html:730`            | 日志尾部读取改 seek（不整读文件）；splash 日志轮询 800ms→1500ms                                        | #1117 |
 | E6   | P2   | `src/app/api/custom-nodes/route.ts:626`                          | manifest 摘要按 size+mtime 指纹缓存，GET 不再整份读盘解析                                              | #1121 |
 | L12  | P2   | `scripts/launcher-core/log.mjs:72`                               | 编排器日志改 16KB/500ms/exit 缓冲落盘（exit 钩子保证归档完整）                                         | #1125 |
+| L9   | P1   | `scripts/dev-launcher.mjs:1024-1089`                             | 就绪等待轮询退避（1s→2s→3s）+ 状态文件每 5 轮写一次；总超时仍为墙钟 deadline                           | #1109 |
 
 ## B. 判定修正与例外（📝）
 
@@ -59,6 +60,9 @@
 | S3 修法                                    | **方案更正** | 「缓存扫描结果」被测试打回：清单里的 `mtimeMs` 是调用方判断磁盘变化的判据（`workflow.ts` 建 `diskMtimeByPath`），缓存会让「只改内容、未改目录 mtime」读到过期值；改异步 fs 才同时保住新鲜度与不阻塞 |
 | F6 raw-cli 弹窗 `key={index}`              | **降级暂缓** | 追加场景下 index + 稳定 entry 引用 + `memo` 已够用；根治需给服务端缓冲（`runner-state.appendRawCli` 存裸 `string[]`）加稳定行号，属数据结构改动，收益/成本不划算                                    |
 | S9 `project.listByUser` 拉 `nodes`/`edges` | **有意保留** | `canvas-store.hydrateFromServer` 依赖列表里的画布 JSON 与本地对账（跨设备/换端口恢复）；裁列需重新设计「延迟拉取 + 离线合并」语义，属功能改动而非性能修，项目数量级小                               |
+| L10 `shellStaleWarning` 全量 stat          | **不值得**   | 每次启动仅调用一次、目标树（Rust 源码 + splash 资源）文件数有限，全量 stat 毫秒级；免 stat 的目录级 mtime 会漏掉「编辑已有文件」这一最常见场景、把旧壳误判为新，判据退化                            |
+| L12b Rust 侧日志逐条 open/write/close      | **有意保留** | `append_line` 每条开/关文件与 Node 侧同源——**不持有句柄**：残留进程握住日志文件会锁死下次启动的重定向（历史事故）；BufWriter 常驻句柄会重新引入该风险，壳侧日志频率低，成本可接受                   |
+| L13 `Build-Guard.ps1` 500ms + 三轮 CIM     | **有意保留** | 500ms 是 `taskkill /T /F` 异步生效后的必要复查间隔；三轮 CIM 各对应一个判定点（初始 / 回收后复查 / AutoClose 后复查），正常路径仅首轮 1 次 CIM 即返回 0                                             |
 
 ## C. 待整改（⬜）
 
@@ -86,11 +90,9 @@ _（全部闭环，见 A 表。）_
 - ⬜ **M12** `src/app/api/logs/current/route.ts`（`readdirSync`/多次 `statSync`）、`api/logs/sessions/route.ts`（同步读+解析 4MiB 尾窗）—— 高频轮询路由的同步 IO。**备注**：该路由已是游标增量 + 1MB 尾窗口；异步化 `fs.promises` 需通读会话边界逻辑（log-session-scope）后谨慎做，单独一轮处理。
 - ⬜ **S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询。**暂缓**：该间隔有 ISSUE #339 的收紧依据，且注释称「服务端有进程级快照兜底」—— 需先核实 `status.ts` 的快照链路（与 S14 的「缓存无失效出口」联动评估），避免误改有意行为。
 - ⬜ **S14** `src/lib/comfyui/status.ts:423-444`、`src/server/workshop/comfyui.ts:36-49` —— 进程内缓存永不过期且无失效钩子（正确性风险为主）。
-- ⬜ **L9** `scripts/dev-launcher.mjs:1024-1089` —— 就绪轮询 1s×180 无退避，每轮还写状态文件。
-- ⬜ **L10** `scripts/dev-launcher.mjs:261-318` —— `shellStaleWarning` 递归遍历 Rust 源码树逐文件 `statSync`。
-- _（L11 已闭环，见 A 表。）_
-- ⬜ **L12b** `src-tauri/src/shell_launch.rs:396-397` —— Rust 侧日志每条 `OpenOptions::open` + `write_all`，无 BufWriter（Node 侧 log.mjs 已闭环）。
-- ⬜ **L13** `tools/scripts/Build-Guard.ps1:215-249` —— 固定 500ms 忙等 + 三轮全进程 CIM 查询。
+- _（L9 已闭环，见 A 表。）_
+- _（L10 已判定为不值得（见 B 表）；L11 已闭环，见 A 表。）_
+- _（L12b / L13 已判定为有意保留（见 B 表）。）_
 - ⬜ **L14** `scripts/quality-gate.mjs:229-232`（4 道门禁串行 spawnSync）、`vitest.config.ts`（coverage 列 60+ 路径 + 3 份 reporter、无分片）。
 - ⬜ **L15** `src/app/api/update-check/route.ts:49-67/125-139` —— 前端 30s 轮询，同步递归遍历 `src-tauri` 全树（首轮 4 遍）。方向：目录级粗粒度比对或 `fs.watch`。**备注**：`SKIP_DIRS` 剪枝是手写递归的核心价值（`recursive: true` 的 readdir 无法中途剪枝、会把 `target` 扫进去）；实际开销约几十 ms / 30s（除 target 外仅数百文件），收益与风险不成比例，建议与 L5（Rust 轮询收敛）同轮一起评估。
 - _（E6 已闭环，见 A 表。）_
