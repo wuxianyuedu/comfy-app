@@ -113,7 +113,15 @@ export async function GET(
       };
 
       handles.unsubscribe = subscribe(id, (e: TaskEvent) => {
-        send(e);
+        /* 连接已死时 `send`（controller.enqueue）会抛 —— 此时必须走 cleanup：
+         * abort 事件未必能触发（反向代理缓冲、keep-alive 提前断开都会让
+         * `req.signal` 不亮），这是「订阅与定时器残留」的最后一条漏网路径。 */
+        try {
+          send(e);
+        } catch {
+          cleanup();
+          return;
+        }
         if (e.type === "done" || e.type === "error") cleanup();
       });
 
@@ -138,16 +146,18 @@ export async function GET(
        * 外部导致的状态变化 —— cancelTask()（在此次修复前它只写数据库）、
        * instrumentation.ts 对「僵尸 RUNNING」任务的对账，
        * 或任何其它改 Task.status 的代码路径 —— 都到不了 SSE 订阅方。
-       * 这里每 3s 轮一次：只要数据库里的状态 / 进度与上次发出的快照不同，
+       * 这里每 5s 轮一次：只要数据库里的状态 / 进度与上次发出的快照不同，
        * 就补发一个 `state` 事件，于是即使某条代码路径忘了调 emitter.emit()，
-       * 前端的 d.status 也不会卡住。abort 时关闭；
+       * 前端的 d.status 也不会卡住。轮询走 `findSseSnapshot` 的轻量投影 ——
+       * `findById` 会把 `workflowSnapshot` / `logs` 两个大 JSON 一并拉回，
+       * 而这里只读状态和进度。abort 时关闭；
        * 同时最多只允许一次轮询在途，避免堆积。 */
       let polling = false;
       handles.poll = setInterval(() => {
         if (polling) return;
         polling = true;
         taskRepository
-          .findById(id)
+          .findSseSnapshot(id)
           .then((cur) => {
             if (!cur) return;
             if (
@@ -156,14 +166,21 @@ export async function GET(
             ) {
               lastSent.status = cur.status;
               lastSent.progress = cur.progress ?? 0;
-              send({
-                type: "state",
-                status: cur.status,
-                progress: cur.progress ?? 0,
-                error: cur.error,
-                validationErrors: parseValidationErrors(cur.validationErrors),
-                workflowName: cur.workflowName,
-              });
+              /* 与 emitter 回调同理：`send` 抛错说明流已关闭、连接已死，
+               * 此时清理整套句柄（幂等），否则这一路轮询会空转到进程退出。 */
+              try {
+                send({
+                  type: "state",
+                  status: cur.status,
+                  progress: cur.progress ?? 0,
+                  error: cur.error,
+                  validationErrors: parseValidationErrors(cur.validationErrors),
+                  workflowName: cur.workflowName,
+                });
+              } catch {
+                cleanup();
+                return;
+              }
               if (isTerminalTaskStatus(cur.status)) cleanup();
             }
           })
@@ -173,7 +190,7 @@ export async function GET(
           .finally(() => {
             polling = false;
           });
-      }, 3000);
+      }, 5000);
 
       req.signal.addEventListener("abort", () => cleanup());
     },

@@ -326,6 +326,32 @@ export class TaskRepository extends DrizzleRepository<Task> {
       .where(inArray(task.id, taskIds));
   }
 
+  /** SSE 轮询的轻量快照：只要状态与进度这几个字段。
+   *
+   *  每条 SSE 连接各挂一个轮询、每几秒一次，原先用 `findById` 全行查询 ——
+   *  `workflowSnapshot`（整份工作流 JSON）与 `logs`（全量日志）单行可达数 MB，
+   *  拉回来只为了读状态和进度。 */
+  async findSseSnapshot(id: string): Promise<{
+    status: string;
+    progress: number;
+    error: string | null;
+    validationErrors: string | null;
+    workflowName: string | null;
+  } | null> {
+    const rows = await db
+      .select({
+        status: task.status,
+        progress: task.progress,
+        error: task.error,
+        validationErrors: task.validationErrors,
+        workflowName: task.workflowName,
+      })
+      .from(task)
+      .where(eq(task.id, id))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
   /**
    * 进度回写（顺带把行标成 RUNNING）：**只在非终态行上生效**。
    *
