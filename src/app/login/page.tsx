@@ -185,7 +185,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {mode === "register" && (
-            <Field
+            <LoginFieldRow
               label="昵称（可选）"
               type="text"
               value={name}
@@ -194,7 +194,7 @@ export default function LoginPage() {
               autoComplete="name"
             />
           )}
-          <Field
+          <LoginFieldRow
             label="邮箱"
             type="email"
             value={email}
@@ -202,7 +202,7 @@ export default function LoginPage() {
             placeholder="name@example.com"
             autoComplete="email"
           />
-          <Field
+          <LoginFieldRow
             label="密码"
             type={showPassword ? "text" : "password"}
             value={password}
@@ -296,7 +296,10 @@ export default function LoginPage() {
   );
 }
 
-function Field({
+/* 局部字段行 · 命名 `LoginFieldRow` 而不是 `Field`：避免遮蔽 shadcn
+ * `~/components/ui/field` 的 `Field` 基元（本文件当前只 import FormField ·
+ * 未来若加 Field/FieldLabel 会撞名）。 */
+function LoginFieldRow({
   label,
   type,
   value,
