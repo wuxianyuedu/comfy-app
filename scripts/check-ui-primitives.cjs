@@ -3669,6 +3669,47 @@ const RULES = {
       return n;
     },
   },
+
+  /* ── P82「视图层 `<Button>` 原生 `title=`（应走 `<Tooltip>`）」（棘轮）────
+   * shadcn `composition.md`：`For icon-only or hover-help affordances use
+   * Tooltip, not native title.` 原生 `title=` 的三个短板：
+   *   · 屏幕阅读器多数浏览器只读一次、且不参与 aria 关系（读屏器对 `title`
+   *     的支持在 Chrome / Firefox 长期不一致，Safari 上 VoiceOver 直接忽略）；
+   *   · 显示延迟不可控、移动端不显示；
+   *   · 样式不能主题化（浏览器原生 tooltip 灰底、脱离设计 token 系统）。
+   * 合规出口是 `~/components/ui/tooltip` 的 `<Tooltip>` + `<TooltipTrigger
+   * render={<Button …>}>`（Base UI render prop · 不用 asChild）。
+   *
+   * 判据按形态取：视图层 `<Button[\s>][^>]*>` 开括号里出现 `\btitle\s*=` 即
+   * 计一处；不算 `<ButtonLink>` / `<ToolbarButton>`（项目未立后者、前者是
+   * 独立组件名不匹配 `<Button[\s/>]` 的字符类）。多行 Button 开括号跨 `{}`
+   * 表达式（`title={cond ? a : b}`）也能命中、靠 `[\s\S]*?>` 的贪婪度控制。
+   *
+   * 走棘轮（非硬闸）：本 PR 引入时实测视图层 61 处（跨 40 文件 · 见
+   * `changelog.d/0-p82-gate.md`），冻结起点、只许降。治理批次需要：
+   *   ① `<Button title="x">…</Button>` → `<Tooltip><TooltipTrigger
+   *      render={<Button … />}><x /></TooltipTrigger><TooltipContent>x
+   *      </TooltipContent></Tooltip>`；
+   *   ② 若同族工具条反复出现该形态（SelectedToolbar / 画布节点工具栏等）、
+   *      抽 `ToolbarButton` 或 `<IconButtonWithTooltip>` 做单一出口。
+   * 治理与后续升硬闸另开 PR。 */
+  P82: {
+    label:
+      "视图层 <Button> 用原生 title=（应走 ~/components/ui/tooltip 的 <Tooltip> + <TooltipTrigger render={<Button …/>}>；shadcn composition.md）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* `<Button` 后必须紧跟空白 / `>` / `/`，避免误伤 `<ButtonLink>`。
+       * 属性段用「不含 `>` 的连续字符」的粗锚：多数字面量场景够用；
+       * `onClick={() => a > b}` 里那个 `>` 会让本判据早停、把该 Button
+       * 判为「没 title=」——这种漏计是安全的（棘轮只降不升、少计不假红、
+       * 治理时人工复核覆盖到），比写个手写平衡扫描更省心。 */
+      let n = 0;
+      for (const m of t2.matchAll(/<Button(?=[\s/>])([^>]*)>/g)) {
+        if (/\btitle\s*=/.test(m[1])) n++;
+      }
+      return n;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */

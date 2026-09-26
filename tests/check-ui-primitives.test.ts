@@ -5220,4 +5220,90 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(line ?? output).toMatch(/P81/);
     expect(output).toContain("P81IconSuffix.tsx");
   });
+
+  /* ── P82「视图层 `<Button>` 原生 title=」（棘轮）差分回归 ─────────
+   * 见 scripts/check-ui-primitives.cjs 里 P82 注释：合规出口
+   * `~/components/ui/tooltip` 的 `<Tooltip>` + `<TooltipTrigger
+   * render={<Button …/>}>`（Base UI render prop · 不用 asChild）。
+   * 判据按 `<Button(?=[\s/>])([^>]*)>` 抓开括号、里面命中 `\btitle\s*=`
+   * 即计一处。漏计（`onClick={() => a > b}` 里 `>` 让 `[^>]*` 早停）
+   * 是安全的 · 棘轮只降不升。 */
+  it('P82 视图层 <Button title="x"> 计入棘轮（相对基线增量 → 阻断）', () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82RawTitle.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <Button title="删除">x</Button>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P82");
+    expect(output).toContain("studio/P82RawTitle.tsx");
+  });
+
+  it('P82 多行 <Button\n  title="x"\n> 也计入（跨行属性段仍在开括号里）', () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82Multiline.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <Button",
+        '      variant="ghost"',
+        '      title="删除节点"',
+        "      onClick={onDelete}",
+        "    >",
+        "      ⌫",
+        "    </Button>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P82");
+    expect(output).toContain("studio/P82Multiline.tsx");
+  });
+
+  it("P82 不误伤 <Tooltip render={<Button/>}>（合规出口）与子元素的 title=（那是子 div 的账）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82Ok.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <Tooltip>",
+        "      <TooltipTrigger render={<Button onClick={x}>删除</Button>} />",
+        "      <TooltipContent>删除当前节点</TooltipContent>",
+        "    </Tooltip>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P82 不误伤同前缀组件（<ButtonLink> / <ButtonGroup> 不算 <Button>）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82FalsePositive.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <ButtonLink href="/x" title="返回">',
+        "      返回",
+        "    </ButtonLink>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
 });
