@@ -923,7 +923,14 @@ pub fn find_owned_orchestrator() -> Option<u32> {
     if Process32FirstW(snapshot, &mut entry).is_ok() {
       loop {
         let pid = entry.th32ProcessID;
-        if pid != 0 && pid != self_pid && process_env_is_owned(pid) {
+        // 预筛在此**真正落地**：编排器是 `node.exe` 起的，快照自带 exe 名、
+        // 零成本——非 node 的进程（全系统的绝大多数）连 OpenProcess 都不做，
+        // 省掉逐 PID 的跨进程内存读（每次含一次 64KB 环境块）。
+        if pid != 0
+          && pid != self_pid
+          && is_probable_node_process(&entry.szExeFile)
+          && process_env_is_owned(pid)
+        {
           result = Some(pid);
           break;
         }
@@ -940,6 +947,22 @@ pub fn find_owned_orchestrator() -> Option<u32> {
 #[cfg(not(windows))]
 pub fn find_owned_orchestrator() -> Option<u32> {
   None
+}
+
+/// 廉价预筛：可执行文件名含 `node`（大小写不敏感）才算候选。
+///
+/// 编排器经 `node` / `pnpm`（corepack shim 最终也是 node）起，快照自带的
+/// `szExeFile` 零成本可判；`is_own` 的环境块判据仍是唯一权威——这里只负责
+/// 把绝大多数无关进程挡在 `OpenProcess` 之外。误放行（比如某个恰好叫
+/// node-foo 的进程）没有危害，只是多读一次环境块。
+#[cfg(windows)]
+fn is_probable_node_process(exe_file: &[u16]) -> bool {
+  let len = exe_file
+    .iter()
+    .position(|&c| c == 0)
+    .unwrap_or(exe_file.len());
+  let name = String::from_utf16_lossy(&exe_file[..len]).to_ascii_lowercase();
+  name.contains("node")
 }
 
 
