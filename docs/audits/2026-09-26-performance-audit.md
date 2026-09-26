@@ -43,6 +43,7 @@
 | L7   | P1   | `scripts/launcher-core/shell.mjs`                                | `whichCommand` 按 name+PATH+PATHEXT+platform 进程内记忆化 + `clearWhichCommandCache()`                 | #1078 |
 | L8   | P1   | `scripts/launcher-core/procs.mjs:63`                             | netstat 快照按 1s TTL 缓存，三端口探测合并为一次子进程（CIM 批量化仍待做，见 C.4）                     | #1081 |
 | S12  | P2   | `src/server/db/schema.ts:360`                                    | 连接表补 `wmtt_tag_idx`（按标签找模板不再全扫）                                                        | #1096 |
+| L11  | P2   | `scripts/launcher-core/worktree.mjs:217-231`                     | lockfile 漂移判定按两份文件 size+mtime 指纹短路，跳过全量 YAML 解析                                    | #1099 |
 
 ## B. 判定修正与例外（📝）
 
@@ -81,11 +82,11 @@ _（全部闭环，见 A 表。）_
 ### C.5 P2（卫生项，随上一批顺手修）
 
 - ⬜ **M12** `src/app/api/logs/current/route.ts`（`readdirSync`/多次 `statSync`）、`api/logs/sessions/route.ts`（同步读+解析 4MiB 尾窗）—— 高频轮询路由的同步 IO。
-- ⬜ **S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询（接口要做进程扫描+端口探测）。
+- ⬜ **S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询。**暂缓**：该间隔有 ISSUE #339 的收紧依据，且注释称「服务端有进程级快照兜底」—— 需先核实 `status.ts` 的快照链路（与 S14 的「缓存无失效出口」联动评估），避免误改有意行为。
 - ⬜ **S14** `src/lib/comfyui/status.ts:423-444`、`src/server/workshop/comfyui.ts:36-49` —— 进程内缓存永不过期且无失效钩子（正确性风险为主）。
 - ⬜ **L9** `scripts/dev-launcher.mjs:1024-1089` —— 就绪轮询 1s×180 无退避，每轮还写状态文件。
 - ⬜ **L10** `scripts/dev-launcher.mjs:261-318` —— `shellStaleWarning` 递归遍历 Rust 源码树逐文件 `statSync`。
-- ⬜ **L11** `scripts/launcher-core/worktree.mjs:217-231` —— 每次启动全量解析两份 ~1.2 万行 YAML，无 mtime/size 短路。
+- _（L11 已闭环，见 A 表。）_
 - ⬜ **L12** `scripts/launcher-core/log.mjs:72`、`src-tauri/src/shell_launch.rs:396-397` —— 日志单条 flush / 无 BufWriter。
 - ⬜ **L13** `tools/scripts/Build-Guard.ps1:215-249` —— 固定 500ms 忙等 + 三轮全进程 CIM 查询。
 - ⬜ **L14** `scripts/quality-gate.mjs:229-232`（4 道门禁串行 spawnSync）、`vitest.config.ts`（coverage 列 60+ 路径 + 3 份 reporter、无分片）。
