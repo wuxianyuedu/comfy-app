@@ -58,6 +58,18 @@ const PURE_NODE_HOSTS = [
   //   · 一旦给它补 `server-only`，纯 Node 侧的 import 就是入口 throw——正是
   //     规范 §18.4 「纯 Node 宿主两者都不加」的原型。
   "src/lib/comfyui/runner-state.ts",
+  // P3 迁移第 1 期·第三步（叶模块批）：以下三个都只有 Node 内建 value import
+  // （`child_process` / `fs` / `path`），完全**不引** server-only 侧模块；
+  // 摘掉 server-only 后按第三类登记。语义与 `kill-process-tree.ts` 同族——
+  // 都是「本机进程 / 环境探测」的地基层，本来就该被 Next server 与未来
+  // `scripts/executor-host.mjs` 双宿主加载。
+  //   · `gpu-vram.ts`：nvidia-smi 探测本机显存（供底部状态栏对照）。
+  //   · `launch-path.ts`：从 comfyuiPath 推导「源码根 + Python 解释器」的纯解析。
+  //   · `proc-detect.ts`：`/proc/net/tcp` + `netstat` 查 PID 监听端口，POSIX /
+  //     Windows 各自走本机自带工具，不依赖 lsof。
+  "src/lib/comfyui/gpu-vram.ts",
+  "src/lib/comfyui/launch-path.ts",
+  "src/lib/comfyui/proc-detect.ts",
 ];
 
 type Report = {

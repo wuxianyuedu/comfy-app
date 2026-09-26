@@ -11,7 +11,10 @@
  *   4. 只在本机查询——nvidia-smi 反映的是本机物理 GPU，ComfyUI 指向远端
  *      时该项不适用，返回 null 由调用方隐藏。
  */
-import "server-only";
+// §18.4 三选一：本模块走第三类（纯 Node 宿主），依赖登记在
+// `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
+// 只用 `child_process.execFile` 起本机 nvidia-smi，不引任何 server-only 侧模块；
+// P3 executor host 加入后可被 scripts 侧直接 import。
 import { execFile } from "child_process";
 
 /** nvidia-smi 内存查询的一条结果（MiB → 调用方换算字节）。 */
