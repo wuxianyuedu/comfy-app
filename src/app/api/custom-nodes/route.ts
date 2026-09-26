@@ -106,10 +106,41 @@ function getLocalWorkflowPaths(): string[] {
   return derived ? [derived, ...extra] : extra;
 }
 
+/* manifest 摘要的短路缓存：GET 每次都读 + 解析整份 manifest（自定义节点包一多
+ * 就是几百 KB），而文件只在 parse / 流式解析收尾时被写 —— 按 (size, mtime) 指纹
+ * 缓存，写入后指纹必变、缓存自然失效。 */
+interface ManifestSummary {
+  generatedAt: string | null;
+  totalNodes: number;
+  packages: ManifestPackageSummary[];
+  missingPaths: string[];
+  parseErrors: unknown[];
+  sources: string[];
+}
+
+let manifestSummaryCache: {
+  stamp: string;
+  summary: ManifestSummary | null;
+} | null = null;
+
+/** @returns {string | null} */
+function manifestStamp() {
+  try {
+    const st = fs.statSync(MANIFEST);
+    return `${st.size}:${Math.trunc(st.mtimeMs)}`;
+  } catch {
+    return null;
+  }
+}
+
 /* 汇总磁盘上的 manifest 供界面展示。同时对每个「配了、但还不是叶子包」的父路径
  * 输出探测到的子包，好让界面提示「这个目录下有 N 个子包，可以逐个解析」。
  */
 function readManifestSummary() {
+  const stamp = manifestStamp();
+  if (stamp && manifestSummaryCache?.stamp === stamp) {
+    return manifestSummaryCache.summary;
+  }
   if (!fs.existsSync(MANIFEST)) return null;
   try {
     const parsed: unknown = JSON.parse(fs.readFileSync(MANIFEST, "utf-8"));
@@ -138,7 +169,7 @@ function readManifestSummary() {
       });
     }
     const sources: string[] = jsonField<string[]>(m, "sources", []);
-    return {
+    const summary = {
       generatedAt: jsonField<string | null>(m, "generatedAt", null),
       totalNodes: Object.keys(
         jsonField<Record<string, unknown>>(m, "nodes", {}),
@@ -148,6 +179,9 @@ function readManifestSummary() {
       parseErrors: jsonField<unknown[]>(m, "parseErrors", []),
       sources,
     };
+    // stat 失败（极罕见）时 stamp 为 null：返回结果但不缓存。
+    if (stamp !== null) manifestSummaryCache = { stamp, summary };
+    return summary;
   } catch {
     return null;
   }
