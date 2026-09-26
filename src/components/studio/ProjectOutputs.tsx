@@ -353,7 +353,7 @@ export function ProjectOutputs() {
                   className="text-ink-muted hover:text-ink"
                   aria-label="关闭"
                 >
-                  <X size={16} />
+                  <X data-icon="inline-start" size={16} />
                 </Button>
               </div>
 

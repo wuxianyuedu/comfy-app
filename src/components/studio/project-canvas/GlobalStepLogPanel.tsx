@@ -160,7 +160,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         data-testid="step-log-trigger"
         className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
       >
-        <FileText size={12} />
+        <FileText data-icon="inline-start" size={12} />
         执行日志
         {errorCount > 0 && (
           <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
@@ -244,7 +244,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   title="关闭"
                   className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
                 >
-                  <X size={16} />
+                  <X data-icon="inline-start" size={16} />
                 </Button>
               </div>
             </div>

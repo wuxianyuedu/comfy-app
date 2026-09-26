@@ -120,7 +120,7 @@ export function HistoryDetailModal({
                 className="border-border text-ink-strong hover:border-border-strong hover:text-ink h-auto gap-1.5 rounded-md px-2.5 py-1 text-[11px]"
                 title="在系统文件管理器中打开本次生成的目录（图片 / 视频 / 音频 / workflow.json / manifest.json 都在这里）"
               >
-                <Folder size={12} />
+                <Folder data-icon="inline-start" size={12} />
                 打开目录
               </Button>
               {actions.folderPopover && (
@@ -139,7 +139,7 @@ export function HistoryDetailModal({
                       className="text-ink-muted hover:text-ink-bright"
                       aria-label="关闭"
                     >
-                      <X size={12} />
+                      <X data-icon="inline-start" size={12} />
                     </Button>
                   </div>
                   {actions.folderPopover.helperMissing ? (
@@ -216,7 +216,7 @@ export function HistoryDetailModal({
                 className="text-ink-muted hover:text-ink-bright"
                 aria-label="关闭"
               >
-                <X size={16} />
+                <X data-icon="inline-start" size={16} />
               </Button>
             </div>
           </div>

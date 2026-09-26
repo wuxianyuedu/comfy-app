@@ -174,7 +174,7 @@ export function WorkflowLibraryFilters({
         className="border-border-strong text-ink-strong hover:bg-subtle h-auto shrink-0 gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap"
         title="管理模型标签库"
       >
-        <Icon name="tag" className="size-3.5" />
+        <Icon data-icon="inline-start" name="tag" className="size-3.5" />
         管理模型
       </Button>
     </div>

@@ -193,6 +193,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               ) : (
                 <>
                   <Icon
+                    data-icon="inline-start"
                     name="sparkles"
                     size={13}
                     className="mr-1 inline align-[-2px]"

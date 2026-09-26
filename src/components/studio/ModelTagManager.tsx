@@ -82,7 +82,7 @@ export function ModelTagManager({
               className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
               aria-label="关闭"
             >
-              <Icon name="x" className="size-4" />
+              <Icon data-icon="inline-start" name="x" className="size-4" />
             </Button>
           </div>
 
@@ -188,7 +188,11 @@ export function ModelTagManager({
                         className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
                         aria-label={`删除 ${tag.name}`}
                       >
-                        <Icon name="trash" className="size-3.5" />
+                        <Icon
+                          data-icon="inline-start"
+                          name="trash"
+                          className="size-3.5"
+                        />
                       </Button>
                     </div>
                   </div>

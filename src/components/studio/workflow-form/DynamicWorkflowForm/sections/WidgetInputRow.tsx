@@ -149,7 +149,11 @@ export function WidgetInputRow({
                 : "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
             }`}
           >
-            {visible === false ? <EyeOff size={11} /> : <Eye size={11} />}
+            {visible === false ? (
+              <EyeOff data-icon="inline-start" size={11} />
+            ) : (
+              <Eye data-icon="inline-start" size={11} />
+            )}
           </Button>
         )}
         {typeChip}

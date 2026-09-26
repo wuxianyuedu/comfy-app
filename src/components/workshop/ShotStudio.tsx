@@ -328,7 +328,7 @@ export function ShotStudio({
           onClick={onOpenApiSettings}
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
         >
-          <Icon name="settings" size={12} />
+          <Icon data-icon="inline-start" name="settings" size={12} />
           API 通道设置
         </Button>
         {/* 不用 <label> 包住选择器：它内部会挂尺寸表配置弹窗，弹窗里的输入框

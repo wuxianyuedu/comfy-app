@@ -89,7 +89,7 @@ export function ChannelSwitch({
           onClick={onOpenApiSettings}
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
         >
-          <Icon name="settings" size={12} />
+          <Icon data-icon="inline-start" name="settings" size={12} />
           API 通道设置
         </Button>
         <FieldLabel className="flex items-center gap-2 text-xs">

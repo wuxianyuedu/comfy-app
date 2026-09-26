@@ -51,7 +51,7 @@ export function SettingsShell({
           title="返回"
           aria-label="返回"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft data-icon="inline-start" size={18} />
         </Button>
         <h1 className="text-ink text-lg font-semibold">设置</h1>
       </div>

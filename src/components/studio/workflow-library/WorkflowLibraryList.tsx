@@ -209,7 +209,7 @@ export function WorkflowLibraryList({
                         title={`载入「${pending.name}」`}
                         className="h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[10px] whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <Download className="size-3" />
+                        <Download data-icon="inline-start" className="size-3" />
                         {loadingPending ? "载入中…" : "载入"}
                       </Button>
                     </div>

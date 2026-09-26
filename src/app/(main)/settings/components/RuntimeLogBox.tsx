@@ -79,7 +79,7 @@ export function RuntimeLogBox({
                 aria-label="全屏查看"
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
               >
-                <Maximize2 size={14} />
+                <Maximize2 data-icon="inline-start" size={14} />
               </Button>
             }
           />
@@ -115,7 +115,7 @@ export function RuntimeLogBox({
               aria-label="退出全屏"
               className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
             >
-              <Minimize2 size={16} />
+              <Minimize2 data-icon="inline-start" size={16} />
             </Button>
           }
         />

@@ -368,7 +368,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                       className="text-ink-muted hover:text-destructive ml-1 h-auto p-0 hover:bg-transparent"
                       title="删除节点"
                     >
-                      <Icon name="close" size={14} />
+                      <Icon data-icon="inline-start" name="close" size={14} />
                     </Button>
                   </div>
                 )}

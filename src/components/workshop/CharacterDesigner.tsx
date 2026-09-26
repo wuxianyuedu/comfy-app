@@ -594,6 +594,7 @@ export function CharacterDesigner({
                   ) : (
                     <>
                       <Icon
+                        data-icon="inline-start"
                         name="sparkles"
                         size={12}
                         className="mr-1 inline align-[-2px]"
@@ -610,7 +611,7 @@ export function CharacterDesigner({
                   className="text-muted-foreground hover:text-danger-strong"
                   aria-label="删除角色"
                 >
-                  <Trash size={16} />
+                  <Trash data-icon="inline-start" size={16} />
                 </Button>
               </div>
 

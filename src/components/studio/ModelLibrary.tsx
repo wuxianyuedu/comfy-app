@@ -48,7 +48,7 @@ export function ModelLibrary() {
               onClick={() => c.setConfigOpen(true)}
               className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-2"
             >
-              <Icon name="settings" size={16} />
+              <Icon data-icon="inline-start" name="settings" size={16} />
               模型目录配置
             </Button>
             <input
@@ -92,7 +92,7 @@ export function ModelLibrary() {
                 onClick={() => c.setConfigOpen(true)}
                 className="mt-4 h-auto gap-1.5 rounded-lg px-4 py-2"
               >
-                <Icon name="settings" size={16} />
+                <Icon data-icon="inline-start" name="settings" size={16} />
                 去配置目录
               </Button>
             }
@@ -309,7 +309,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright rounded-lg"
               aria-label="关闭"
             >
-              <Icon name="close" size={18} />
+              <Icon data-icon="inline-start" name="close" size={18} />
             </Button>
           </div>
 
@@ -338,7 +338,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               {c.scanning ? (
                 <Spinner className="size-3.5" />
               ) : (
-                <Icon name="shuffle" size={14} />
+                <Icon data-icon="inline-start" name="shuffle" size={14} />
               )}
               {c.scanning ? "扫描中…" : "重新扫描"}
             </Button>
@@ -494,7 +494,7 @@ function FolderConfigRow({
               onClick={enableFromAvailable}
               className="h-auto gap-1 rounded-lg px-3 py-1.5"
             >
-              <Icon name="plus" size={12} />
+              <Icon data-icon="inline-start" name="plus" size={12} />
               启用
             </Button>
           )}

@@ -119,7 +119,11 @@ export function RequiredChips({
                     : "text-ink-fainter hover:bg-surface-2 hover:text-ink-bright"
                 }`}
               >
-                {visible ? <Eye size={11} /> : <EyeOff size={11} />}
+                {visible ? (
+                  <Eye data-icon="inline-start" size={11} />
+                ) : (
+                  <EyeOff data-icon="inline-start" size={11} />
+                )}
               </Button>
             )}
           </span>

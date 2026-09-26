@@ -100,7 +100,7 @@ export function NumberField({
         className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
         title={`减少 ${step}`}
       >
-        <Minus size={12} strokeWidth={2.5} />
+        <Minus data-icon="inline-start" size={12} strokeWidth={2.5} />
       </Button>
       {/* 数值**左对齐**（ComfyUI 的数值 widget 同款）：居中时同一列里的数字会随
           位数/小数点左右跳动，参数行读起来不齐。 */}
@@ -141,7 +141,7 @@ export function NumberField({
         className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink size-6 shrink-0 rounded-none px-0"
         title={`增加 ${step}`}
       >
-        <Plus size={12} strokeWidth={2.5} />
+        <Plus data-icon="inline-start" size={12} strokeWidth={2.5} />
       </Button>
     </div>
   );

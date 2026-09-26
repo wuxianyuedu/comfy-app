@@ -74,6 +74,7 @@ export function SubgraphHeader({
         style={{ pointerEvents: "auto" }}
       >
         <svg
+          data-icon="inline-start"
           width="10"
           height="10"
           viewBox="0 0 10 10"
@@ -146,7 +147,7 @@ export function SubgraphHeader({
            *  以标记下钻是子图的*主要*动作。 */
           className="text-primary-strong hover:bg-primary/30 ml-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded text-[10px] transition-colors hover:text-white"
         >
-          <ExternalLink size={12} strokeWidth={2.5} />
+          <ExternalLink data-icon="inline-start" size={12} strokeWidth={2.5} />
         </Button>
       )}
     </div>

@@ -176,7 +176,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 className="text-ink-muted hover:text-ink-bright hover:bg-transparent"
                 aria-label="关闭"
               >
-                <X size={14} />
+                <X data-icon="inline-start" size={14} />
               </Button>
             </div>
           );

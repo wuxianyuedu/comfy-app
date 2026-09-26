@@ -215,7 +215,7 @@ export function WorkflowParamCard({
             }
             aria-label="恢复默认"
           >
-            <RotateCcw size={11} />
+            <RotateCcw data-icon="inline-start" size={11} />
           </Button>
         )}
       </div>

@@ -134,7 +134,12 @@ export function LLMSettingsButton() {
       title="LLM 文本生成设置"
       className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm transition-colors"
     >
-      <Icon name="settings" size={14} className="mr-1.5 inline align-[-2px]" />
+      <Icon
+        data-icon="inline-start"
+        name="settings"
+        size={14}
+        className="mr-1.5 inline align-[-2px]"
+      />
       LLM 设置
     </Button>
   );
