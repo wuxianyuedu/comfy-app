@@ -11,7 +11,6 @@
  */
 
 import { useState } from "react";
-import { textHandler } from "~/lib/form-props";
 
 import {
   TEMPERATURE_TASKS,
@@ -32,6 +31,7 @@ import {
 } from "../settings-status-row-config";
 
 import { SettingsCard } from "~/components/ui/settings-card";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { StatusButton, Field } from "./SettingsPrimitives";
 import { RuntimeLogBox } from "./RuntimeLogBox";
 
@@ -131,18 +131,13 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         <div className="mb-3">
           <FormField label="当前模型" id="ollama-current-model">
             {(a11y) => (
-              <select
-                {...a11y}
+              <SelectMenu
                 value={c.drafts.llm.model}
-                onChange={textHandler((model) => c.patchLlm({ model }))}
-                className="border-border text-ink focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-              >
-                {c.ollamaModels.map((model) => (
-                  <option key={model.name} value={model.name}>
-                    {model.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(model: string) => c.patchLlm({ model })}
+                options={c.ollamaModels.map((m) => m.name)}
+                fullWidth
+                {...a11y}
+              />
             )}
           </FormField>
           {c.ollamaModels.length > 1 && (
