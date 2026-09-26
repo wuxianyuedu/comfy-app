@@ -181,7 +181,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
       }`}
     >
       {outcome === "idle" ? (
-        <Copy size={13} />
+        <Copy data-icon="inline-start" size={13} />
       ) : (
         <span className="text-[11px] whitespace-nowrap">
           {outcome === "done" ? "已复制" : "复制失败"}

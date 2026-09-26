@@ -93,7 +93,7 @@ export function AgentOverlay({
           className="text-muted-foreground hover:text-ink"
           aria-label="关闭 Agent"
         >
-          <Icon name="x" size={14} />
+          <Icon data-icon="inline-start" name="x" size={14} />
         </Button>
       </div>
 
@@ -246,7 +246,7 @@ export function AgentOverlay({
           {busy ? (
             <Spinner className="size-3.5" />
           ) : (
-            <Icon name="arrowup" size={14} />
+            <Icon data-icon="inline-start" name="arrowup" size={14} />
           )}
         </Button>
       </div>
@@ -263,7 +263,7 @@ export function AgentFab({ onOpen }: { onOpen: () => void }) {
       className={`shadow-primary-500/20 fixed right-6 bottom-8 ${zClass("popup")} h-auto gap-2 rounded-full px-4 py-2.5 shadow-lg transition-transform hover:scale-105`}
       aria-label="打开创作指挥 Agent"
     >
-      <Icon name="bot" size={15} />
+      <Icon data-icon="inline-start" name="bot" size={15} />
       Agent
     </Button>
   );

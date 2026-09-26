@@ -82,7 +82,7 @@ export function ContentAssetBody({
           className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
           style={{ background: accent }}
         >
-          <Icon name="pen" size={16} />
+          <Icon data-icon="inline-start" name="pen" size={16} />
         </Button>
       </div>
     );
@@ -187,7 +187,7 @@ export function ContentAssetBody({
         className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
         style={{ background: accent }}
       >
-        <Icon name="plus" size={18} />
+        <Icon data-icon="inline-start" name="plus" size={18} />
       </Button>
 
       {/* 多图数量标签（右上角） */}
@@ -231,7 +231,7 @@ export function ContentAssetBody({
             className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-4 right-4 rounded-full hover:text-white"
             title="关闭"
           >
-            <X size={16} />
+            <X data-icon="inline-start" size={16} />
           </Button>
 
           {/* 主图 */}
@@ -261,7 +261,7 @@ export function ContentAssetBody({
                 className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 left-4 -translate-y-1/2 rounded-full hover:text-white"
                 title="上一张"
               >
-                <ChevronLeft size={18} />
+                <ChevronLeft data-icon="inline-start" size={18} />
               </Button>
               <Button
                 variant="ghost"
@@ -276,7 +276,7 @@ export function ContentAssetBody({
                 className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 right-4 -translate-y-1/2 rounded-full hover:text-white"
                 title="下一张"
               >
-                <ChevronRight size={18} />
+                <ChevronRight data-icon="inline-start" size={18} />
               </Button>
               {/* 底部计数 + 缩略条 */}
               <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3">

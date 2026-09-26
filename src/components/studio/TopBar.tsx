@@ -67,7 +67,7 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
           title="全局搜索（⌘K）"
           aria-label="全局搜索"
         >
-          <Search size={16} />
+          <Search data-icon="inline-start" size={16} />
           <span className="hidden md:inline">搜索</span>
           <KbdGroup>
             <Kbd>⌘</Kbd>
@@ -85,7 +85,7 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
                 title="应用菜单"
                 aria-label="应用菜单"
               >
-                <ChevronDown />
+                <ChevronDown data-icon="inline-start" />
               </Button>
             }
           />

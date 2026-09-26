@@ -71,7 +71,7 @@ export function WorkshopHeader({
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 gap-1 rounded-full px-3 py-1.5 text-xs"
           title="为远端模型配置工坊各模式下的输入 / 输出"
         >
-          <Icon name="settings" size={13} />
+          <Icon data-icon="inline-start" name="settings" size={13} />
           模型适配
           {anyChannelConfigured ? " · 已配置" : ""}
         </Button>
@@ -83,7 +83,7 @@ export function WorkshopHeader({
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 gap-1 rounded-full px-3 py-1.5 text-xs"
           title="配置每种模式对外有哪些统一输入 / 输出（本地工作流按它配落点）"
         >
-          <Icon name="settings" size={13} />
+          <Icon data-icon="inline-start" name="settings" size={13} />
           模式契约
         </Button>
         <Button
@@ -93,7 +93,7 @@ export function WorkshopHeader({
           aria-label="账户"
           className="bg-primary/50 rounded-full text-white"
         >
-          <Icon name="user" size={16} />
+          <Icon data-icon="inline-start" name="user" size={16} />
         </Button>
       </div>
     </header>

@@ -164,7 +164,7 @@ export function SettingsLoadError({
                 copyFailed ? copyFailureText("下方展开区") : "复制这段错误文案"
               }
             >
-              <Copy size={13} />
+              <Copy data-icon="inline-start" size={13} />
               {copyFailed ? "复制失败" : copied.on ? "已复制" : "复制"}
             </Button>
           }

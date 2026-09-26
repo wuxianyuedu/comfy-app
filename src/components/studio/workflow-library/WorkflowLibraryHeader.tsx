@@ -81,7 +81,7 @@ export function WorkflowLibraryHeader({
           onClick={onToggleImport}
           className={`${HEADER_ACTION_BTN} btn-gradient shadow-primary-500/20 hover:shadow-primary-500/30 text-white shadow-lg`}
         >
-          <FolderInput size={13} />
+          <FolderInput data-icon="inline-start" size={13} />
           导入工作流
         </Button>
         <ModeContractSettings />

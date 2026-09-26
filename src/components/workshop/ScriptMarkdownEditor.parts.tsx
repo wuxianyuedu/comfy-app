@@ -184,7 +184,11 @@ export function EditorToolbar({
           onClick={onTogglePreview}
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
         >
-          {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+          {showPreview ? (
+            <EyeOff data-icon="inline-start" size={14} />
+          ) : (
+            <Eye data-icon="inline-start" size={14} />
+          )}
           {showPreview ? "返回编辑" : "预览"}
         </Button>
       </div>

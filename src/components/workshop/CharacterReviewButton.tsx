@@ -53,7 +53,7 @@ export function CharacterReviewButton({
         title="AI 评审这张角色卡"
         className="text-ink-soft hover:bg-primary/15"
       >
-        <ClipboardCheck size={16} />
+        <ClipboardCheck data-icon="inline-start" size={16} />
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">

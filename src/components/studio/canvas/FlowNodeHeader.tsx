@@ -69,6 +69,7 @@ export function FlowNodeHeader({
         style={{ pointerEvents: "auto" }}
       >
         <svg
+          data-icon="inline-start"
           width="10"
           height="10"
           viewBox="0 0 10 10"

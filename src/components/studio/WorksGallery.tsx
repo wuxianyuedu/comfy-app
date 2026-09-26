@@ -199,7 +199,7 @@ export function WorksGallery({
                       }}
                       className="text-ink-muted hover:bg-danger/15 hover:text-danger-strong absolute top-2 right-2 h-auto gap-1 rounded-md px-1.5 py-1 text-[11px] opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                     >
-                      <Trash2 size={12} />
+                      <Trash2 data-icon="inline-start" size={12} />
                       <span>删除</span>
                     </Button>
                   </div>

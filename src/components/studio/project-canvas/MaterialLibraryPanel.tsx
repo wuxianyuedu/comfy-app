@@ -135,7 +135,7 @@ export function MaterialLibraryPanel({
           className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
           title="素材保存在 public/generated/materials 下，可直接把文件丢进对应分类目录"
         >
-          <CircleHelp size={14} />
+          <CircleHelp data-icon="inline-start" size={14} />
         </Button>
         {/* 显示密度切换 */}
         <div className="bg-subtle flex items-center gap-0.5 rounded-lg p-0.5">
@@ -146,7 +146,7 @@ export function MaterialLibraryPanel({
             className={`h-auto rounded-md p-1 ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
             title="网格视图"
           >
-            <LayoutGrid size={14} />
+            <LayoutGrid data-icon="inline-start" size={14} />
           </Button>
           <Button
             variant="ghost"
@@ -155,7 +155,7 @@ export function MaterialLibraryPanel({
             className={`h-auto rounded-md p-1 ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
             title="列表视图"
           >
-            <List size={14} />
+            <List data-icon="inline-start" size={14} />
           </Button>
         </div>
         <Button
@@ -165,7 +165,7 @@ export function MaterialLibraryPanel({
           className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
           title="关闭"
         >
-          <X size={14} />
+          <X data-icon="inline-start" size={14} />
         </Button>
       </div>
 
@@ -211,7 +211,7 @@ export function MaterialLibraryPanel({
               className="text-ink-fainter hover:text-ink-soft h-auto shrink-0 p-0 hover:bg-transparent"
               title="清空"
             >
-              <X size={12} strokeWidth={2.5} />
+              <X data-icon="inline-start" size={12} strokeWidth={2.5} />
             </Button>
           )}
         </div>
@@ -231,7 +231,7 @@ export function MaterialLibraryPanel({
           {uploading ? (
             <Spinner className="size-4" />
           ) : (
-            <Plus size={16} strokeWidth={1.8} />
+            <Plus data-icon="inline-start" size={16} strokeWidth={1.8} />
           )}
         </Button>
       </div>
@@ -275,7 +275,7 @@ export function MaterialLibraryPanel({
             onClick={() => enterFolder(null)}
             className="text-ink-muted hover:bg-subtle hover:text-ink-soft ml-auto h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[11px] font-normal"
           >
-            <ChevronLeft size={11} strokeWidth={2.5} />
+            <ChevronLeft data-icon="inline-start" size={11} strokeWidth={2.5} />
             返回
           </Button>
         )}
@@ -334,7 +334,7 @@ export function MaterialLibraryPanel({
                     onClick={uploadPicker.open}
                     className="hover:text-primary-strong flex h-auto items-center gap-2 font-normal hover:bg-transparent"
                   >
-                    <Plus size={14} />
+                    <Plus data-icon="inline-start" size={14} />
                     点击 + 或右键菜单创建内容
                   </Button>
                   <p className="flex items-center gap-2">
@@ -386,7 +386,11 @@ export function MaterialLibraryPanel({
                         className="text-ink-soft rounded bg-black/60 backdrop-blur hover:bg-black/60 hover:text-white"
                         title="加入画布"
                       >
-                        <Plus size={12} strokeWidth={2.5} />
+                        <Plus
+                          data-icon="inline-start"
+                          size={12}
+                          strokeWidth={2.5}
+                        />
                       </Button>
                     )}
                     <Button
@@ -396,7 +400,7 @@ export function MaterialLibraryPanel({
                       className="text-ink-soft hover:text-destructive rounded bg-black/60 backdrop-blur hover:bg-black/60"
                       title="删除"
                     >
-                      <Trash2 size={12} />
+                      <Trash2 data-icon="inline-start" size={12} />
                     </Button>
                   </div>
                 </div>
@@ -449,7 +453,11 @@ export function MaterialLibraryPanel({
                         className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
                         title="加入画布"
                       >
-                        <Plus size={13} strokeWidth={2.5} />
+                        <Plus
+                          data-icon="inline-start"
+                          size={13}
+                          strokeWidth={2.5}
+                        />
                       </Button>
                     )}
                     <a
@@ -468,7 +476,7 @@ export function MaterialLibraryPanel({
                       className="text-ink-muted hover:bg-subtle hover:text-destructive rounded-md"
                       title="删除"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 data-icon="inline-start" size={13} />
                     </Button>
                   </div>
                 </div>
@@ -522,6 +530,7 @@ export function MaterialLibraryPanel({
                   {folder.count > 0 ? folder.count : ""}
                 </span>
                 <ChevronRight
+                  data-icon="inline-start"
                   size={12}
                   strokeWidth={2.5}
                   className="text-ink-fainter group-hover:text-ink-muted shrink-0"

@@ -77,6 +77,7 @@ export function StoryboardPlanner(props: Props) {
             ) : (
               <>
                 <Icon
+                  data-icon="inline-start"
                   name="sparkles"
                   size={13}
                   className="mr-1 inline align-[-2px]"
@@ -100,6 +101,7 @@ export function StoryboardPlanner(props: Props) {
                 ) : (
                   <>
                     <Icon
+                      data-icon="inline-start"
                       name="sparkles"
                       size={13}
                       className="mr-1 inline align-[-2px]"

@@ -100,7 +100,7 @@ export function AttributeMultiSelect({
               className="text-primary/60 hover:text-danger-strong"
               aria-label={`移除 ${v}`}
             >
-              <X size={11} />
+              <X data-icon="inline-start" size={11} />
             </Button>
           </span>
         ))}

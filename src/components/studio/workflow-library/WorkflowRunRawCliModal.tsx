@@ -188,7 +188,7 @@ export function WorkflowRunRawCliModal({
                 title="复制全部"
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
               >
-                <Copy size={15} />
+                <Copy data-icon="inline-start" size={15} />
               </Button>
               <Button
                 variant="ghost"
@@ -197,7 +197,7 @@ export function WorkflowRunRawCliModal({
                 title="刷新"
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
               >
-                <RefreshCw size={15} />
+                <RefreshCw data-icon="inline-start" size={15} />
               </Button>
               <Button
                 variant="ghost"
@@ -206,7 +206,7 @@ export function WorkflowRunRawCliModal({
                 title="关闭"
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
               >
-                <X size={16} />
+                <X data-icon="inline-start" size={16} />
               </Button>
             </div>
           </div>

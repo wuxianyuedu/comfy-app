@@ -322,7 +322,7 @@ export function BrowserStatusBar() {
               : "text-ink-muted hover:bg-subtle hover:text-ink"
           }`}
         >
-          <FileText size={12} />
+          <FileText data-icon="inline-start" size={12} />
           {counts.error > 0 && (
             <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
               {counts.error}

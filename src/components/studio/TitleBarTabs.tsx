@@ -96,7 +96,7 @@ function TitleBarTab({
           }}
           className="text-ink-fainter hover:bg-subtle hover:text-ink-strong rounded"
         >
-          <X size={13} />
+          <X data-icon="inline-start" size={13} />
         </Button>
       )}
     </div>
