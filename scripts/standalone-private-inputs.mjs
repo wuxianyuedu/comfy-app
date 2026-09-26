@@ -116,6 +116,14 @@ export const RUNTIME_SCRIPTS = [
   // `kill_sidecar` 补刀都调它（平台判据只此一份，见 AGENTS 硬规则 3），
   // 连同它 import 的 kill-process-tree 一起缺不了。
   "reap-process.mjs",
+  // ComfyUI 执行器独立宿主（P3 §5 第 2 期 · Phase 2-C）：`dev-launcher.mjs` 的
+  // `spawnExecutorHost()` 在 `COMFY_EXECUTOR=host` 灰度下把它作为受管子进程起
+  // 起来（骨架阶段只走 boot + 心跳 + SIGTERM 三条，Phase 3 才接管任务）。与
+  // launcher 的关系同 `dev-launcher.mjs`——走同一份 spawnInGroup / killProcessTree
+  // 语义，因此必须在 standalone 产物里；桌面包用户想试 host 模式（改 `.env` 的
+  // COMFY_EXECUTOR）时，脚本得随包带出去。清单必须与 check-standalone-contents
+  // 里的 ALLOWED_SCRIPTS 同源（tests/dist-artifact-hygiene.test.ts 核对）。
+  "executor-host.mjs",
   // lockfile 差异：编排器启动前打印「不一致的具体位置」（render-lock-diff），
   // worktree 解析同一份差异对象（lock-diff）—— 两者都是静态 import。
   "lockfile/render-lock-diff.mjs",
