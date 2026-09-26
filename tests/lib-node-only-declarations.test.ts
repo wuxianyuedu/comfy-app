@@ -149,6 +149,19 @@ const PURE_NODE_HOSTS = [
   "src/lib/comfyui/status.ts",
   "src/lib/comfyui/lifecycle-launch.ts",
   "src/lib/process/process-launch.ts",
+  // lifecycle.ts：P3 lib 层地基批·**最后一站**。comfyui 目录里最后一个还带
+  // `import "server-only"` 的重模块。它自身只有一条 Node 内建 value import
+  // （`fs`）+ 一条 type-only `import type { spawn } from "child_process"`
+  // （scanner 忽略 type 形态）；剩下 12 条静态依赖全在前批里逐个纯化了。
+  // 关键解锁：line 561 的 top-level `const COMFY_SESSION_MARK = \`${SERVICES_LOG_DIR}/…\``
+  // 是**加载即求值**——`SERVICES_LOG_DIR` 来自 `~/lib/log/log-paths`，只要
+  // log-paths 带 server-only 本模块就崩；#1074 摘 log-paths 后这条边通了。
+  // 登记进本清单后**整条 comfyui 执行链**（runner-state / enqueue / reaper /
+  // executor-* / client / lifecycle-* / status / trace / gpu-vram / launch-path /
+  // proc-detect / instance-kind / env-python / desktop-instance / open-in-browser /
+  // logger / app-runtime-log / log-paths / process-launch）都进 §18.4 第三类，
+  // P3 §5 第 2 期 `scripts/executor-host.mjs` 起手时的静态边已经扫清。
+  "src/lib/comfyui/lifecycle.ts",
 ];
 
 type Report = {
