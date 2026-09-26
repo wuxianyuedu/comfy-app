@@ -12,8 +12,154 @@
     "P66": "自建「同一时刻只跑一件」的重入闸门（应使用 ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock）",
     "P67": "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）",
     "P68": "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
-    "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）"
+    "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
+    "P82": "视图层 <Button> 用原生 title=（应走 ~/components/ui/tooltip 的 <Tooltip> + <TooltipTrigger render={<Button …/>}>；shadcn composition.md）"
   },
-  "total": 0,
-  "files": {}
+  "total": 78,
+  "files": {
+    "src/components/message-center/MessageCenterButton.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/BrowserStatusBar.tsx": {
+      "P82": 2
+    },
+    "src/components/studio/canvas/CanvasArea.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/canvas/FlowNodeHeader.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/canvas/SubgraphHeader.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/canvas/WorkflowCanvasSettings.tsx": {
+      "P82": 2
+    },
+    "src/components/studio/FilmStudio.tsx": {
+      "P82": 5
+    },
+    "src/components/studio/logs/LogPanel.tsx": {
+      "P82": 3
+    },
+    "src/components/studio/logs/SaveExportButton.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/ModelLibrary.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/project-canvas/CanvasNode/ResultCard.tsx": {
+      "P82": 4
+    },
+    "src/components/studio/project-canvas/CanvasNode/SelectedToolbar.tsx": {
+      "P82": 7
+    },
+    "src/components/studio/project-canvas/GlobalStepLogPanel.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/project-canvas/HistoryPanel.tsx": {
+      "P82": 2
+    },
+    "src/components/studio/project-canvas/ImageGenerationPanel.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/project-canvas/MaterialLibraryPanel.tsx": {
+      "P82": 3
+    },
+    "src/components/studio/ProjectCanvasSettings.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/ProjectOutputs.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/SourceModal.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/TitleBarTabs.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/TopBar.tsx": {
+      "P82": 2
+    },
+    "src/components/studio/VideoQueueModal.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/workflow-editor/WorkflowEditorTopbar.tsx": {
+      "P82": 3
+    },
+    "src/components/studio/workflow-editor/WorkflowParamCard.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/workflow-form/DimensionControlParts.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/workflow-form/DynamicWorkflowForm/sections/WidgetInputRow.tsx": {
+      "P82": 2
+    },
+    "src/components/studio/workflow-form/WorkflowNodeParts.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/workflow-library/sections/DetailControls.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/workflow-library/sections/EncapsulationTestForm.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/workflow-library/WorkflowLibraryFilters.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/workflow-library/WorkflowRunLogButton.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/workflow-library/WorkflowRunLogModal.tsx": {
+      "P82": 2
+    },
+    "src/components/studio/workflow-library/WorkflowRunRawCliModal.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/WorkflowImportPanel.tsx": {
+      "P82": 1
+    },
+    "src/components/studio/WorkflowIOPreviewPanel.tsx": {
+      "P82": 2
+    },
+    "src/components/studio/WorkflowNodeJsonPopover.tsx": {
+      "P82": 1
+    },
+    "src/components/workshop/ExtractToolbar.tsx": {
+      "P82": 1
+    },
+    "src/components/workshop/LLMContext.tsx": {
+      "P82": 1
+    },
+    "src/components/workshop/mode-contract/dialog/ContractInputCatalog.tsx": {
+      "P82": 1
+    },
+    "src/components/workshop/ScriptMarkdownEditor.parts.tsx": {
+      "P82": 1
+    },
+    "src/components/workshop/StoryboardPlanner.parts.tsx": {
+      "P82": 1
+    },
+    "src/components/workshop/StoryboardPlanner.tsx": {
+      "P82": 1
+    },
+    "src/components/workshop/WorkshopHeader.tsx": {
+      "P82": 2
+    },
+    "src/app/(main)/settings/components/LlmLocalSection.tsx": {
+      "P82": 1
+    },
+    "src/app/(main)/settings/components/LlmRemoteSection.tsx": {
+      "P82": 4
+    },
+    "src/app/(main)/settings/components/UsageTestDialog.tsx": {
+      "P82": 1
+    },
+    "src/app/(main)/settings/page.tsx": {
+      "P82": 1
+    }
+  }
 }
