@@ -83,21 +83,23 @@ export function useModelAdapters(): ModelAdaptersController {
     { enabled: selectedModel !== "" },
   );
 
-  // 适配器查询结果 → 本地草稿（渲染期播种，React 19 模式，见 §17.2）。
+  /* 适配器查询结果 → 本地草稿（渲染期播种，React 19 模式，见 §17.2）。
+   * 记账用「本轮选中模型是否已播种过、播种时结果是否已到达」，而不是
+   * `draft.length === 0`——后者在用户把适配器**删空**后恒真，会被反复灌回
+   * （表现为删不掉）；只播种一次也保留了「不覆盖用户编辑」的原意。 */
   const fetched = adaptersQ.data?.adapters;
-  const [prevKey, setPrevKey] = useState<string | null>(null);
-  if (selectedModel && prevKey !== selectedModel) {
-    setPrevKey(selectedModel);
+  const fetchedTag = fetched ? JSON.stringify(fetched) : "";
+  const [seeded, setSeeded] = useState<{ model: string; tag: string } | null>(
+    null,
+  );
+  if (selectedModel && seeded?.model !== selectedModel) {
+    // 切换选中模型：用当前（可能还没回来的）结果播种一次。
+    setSeeded({ model: selectedModel, tag: fetchedTag });
     setDraft(parseRemoteModeAdapters(fetched ?? []));
-  } else if (
-    selectedModel &&
-    prevKey === selectedModel &&
-    fetched &&
-    draft.length === 0 &&
-    parseRemoteModeAdapters(fetched).length > 0
-  ) {
-    // 查询晚于选中：结果到达时草稿仍为空则播种（不覆盖已编辑内容）。
-    setDraft(parseRemoteModeAdapters(fetched));
+  } else if (selectedModel && seeded?.tag === "" && fetchedTag) {
+    // 查询晚于选中到达：首次结果落地时补种一次（之后不再覆盖用户编辑）。
+    setSeeded({ model: selectedModel, tag: fetchedTag });
+    setDraft(parseRemoteModeAdapters(fetched ?? []));
   }
 
   const saveMutation = api.llm.workshopAdaptersSave.useMutation();

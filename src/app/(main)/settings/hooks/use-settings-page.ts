@@ -268,10 +268,12 @@ export function useSettingsPage(): SettingsPageController {
     setSettingsDraft(lastGood.settings);
   }
   /* 快照写回 sessionStorage：跨整页刷新（dev server 重启会让页面重新加载）后
-   * 仍能兜底。只在确有内容时写，避免把空对象盖掉上一份有效快照。 */
-  if (lastGood.llm ?? lastGood.settings) {
-    writeSettingsCache(lastGood);
-  }
+   * 仍能兜底。只在确有内容时写，避免把空对象盖掉上一份有效快照。
+   * 写外部存储是**副作用**，必须留在 effect 里（P2 渲染期副作用）：放在渲染体
+   * 会让每次 render 都写一遍，StrictMode 双渲染下重复写。 */
+  useEffect(() => {
+    if (lastGood.llm ?? lastGood.settings) writeSettingsCache(lastGood);
+  }, [lastGood]);
 
   /* ── Ollama 探测 / 拉起 / 关闭 / 运行时日志（沉在 sub-hook）────────
    * baseUrl 与 provider 从 llmDraft 里取出传入；sub-hook 不碰草稿的编辑与
