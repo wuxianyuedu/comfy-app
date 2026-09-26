@@ -357,7 +357,12 @@ export const workflowModelTagToWorkflowTemplate = sqliteTable(
       .notNull()
       .references(() => workflowTemplate.id, { onDelete: "cascade" }),
   },
-  (t) => [index("wmtt_wt_idx").on(t.workflowTemplate)],
+  (t) => [
+    index("wmtt_wt_idx").on(t.workflowTemplate),
+    /* 反向索引：按标签找它绑定的模板（`templateHasTagIdsWhere` 的 IN 查询），
+     * 没有这侧索引时连接表全扫。 */
+    index("wmtt_tag_idx").on(t.workflowModelTag),
+  ],
 );
 
 export const llmConfig = sqliteTable("llmConfig", {
