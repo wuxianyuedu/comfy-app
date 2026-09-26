@@ -303,7 +303,11 @@ export function useExtractSession(
   }, []);
   const appendLog = React.useCallback(
     (entry: ExtractLogEntry) => {
-      setSession((prev) => ({ ...prev, log: [...prev.log, entry] }));
+      /* 结构化日志只追加不裁剪会随长流程无限增长（P2）；保留最近一段即可。 */
+      setSession((prev) => ({
+        ...prev,
+        log: [...prev.log, entry].slice(-EXTRACT_LOG_MAX_ENTRIES),
+      }));
       if (stage) persistGenerationLogs(stage, [entry]);
     },
     [stage],
@@ -313,6 +317,9 @@ export function useExtractSession(
   }, []);
   return [session, { patch, appendProgress, appendLog, setLog }];
 }
+
+/** 结构化执行日志保留上限（P2：只追加不裁剪会随长流程无限增长）。 */
+const EXTRACT_LOG_MAX_ENTRIES = 2000;
 
 export function useWorkshopPipeline(): WorkshopPipelineController {
   const [tab, setTab] = React.useState<Tab>("script");
