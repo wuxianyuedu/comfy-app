@@ -10,7 +10,8 @@ import { clampPct } from "~/lib/progress";
  * 即可。`pointer-events-none` 确保不会拦截 FAB / 点击上传 / 拖入等交互。
  *
  * 视觉：
- *   - 深色水层从底向上涨（`height: ${pct}%`），700ms 平滑过渡。
+ *   - 深色水层从底向上涨，用 `translateY` 代替 `height` 动画（只触发合成层、
+ *     不引发重排，§2.7），700ms 平滑过渡。
  *   - 水面是一条 6px 振幅的正弦波（SVG path），骑在水的上沿；
  *     CSS keyframe `wf-wave` 让波形水平无限滑动，营造"水面在动"的感觉。
  *   - 百分比用 tabular-nums 大字居中，白色 + 软阴影，永远在水面之上。
@@ -34,11 +35,15 @@ export function WaterFillProgress({
       className={`pointer-events-none absolute inset-0 overflow-hidden rounded-xl ${className}`}
       aria-hidden
     >
-      {/* 水层：从底向上涨。CSS transition 让 progress 跳变时是滑动而不是闪烁。 */}
+      {/* 水层：用 translateY 代替 height 动画（只触发合成层、不引发重排），
+       * 从底向上涨；progress 跳变时是滑动而不是闪烁。整层高度恒为 100%，
+       * 下移到 (100-pct)% 处即只露出底部 pct，水面（顶部 SVG）恰好落在水位线，
+       * 波形不被缩放扭曲。 */}
       <div
-        className="absolute inset-x-0 bottom-0 transition-[height] duration-700 ease-out"
+        className="absolute inset-x-0 top-0 transition-transform duration-700 ease-out"
         style={{
-          height: `${pct}%`,
+          height: "100%",
+          transform: `translateY(${100 - pct}%)`,
           background:
             "linear-gradient(180deg, rgba(18,18,26,0.86) 0%, rgba(24,24,34,0.94) 60%, rgba(30,30,42,0.98) 100%)",
         }}

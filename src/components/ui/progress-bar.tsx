@@ -129,10 +129,10 @@ export function ProgressBar({
           <div
             data-slot="progress-bar-fill"
             className={cn(
-              "bg-primary h-full rounded-full transition-all",
+              "bg-primary h-full rounded-full transition-transform",
               fillClassName,
             )}
-            style={{ width: `${width}%` }}
+            style={{ transform: `translateX(${width - 100}%)` }}
           />
         )}
       </ProgressTrack>
