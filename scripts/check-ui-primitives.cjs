@@ -3347,6 +3347,65 @@ const RULES = {
     },
   },
 
+  /* ── P75「视图层手搓空态卡」（棘轮，shadcn composition.md · Empty 基元）───
+   * `pnpm dlx shadcn@latest add empty` 已装 `~/components/ui/empty.tsx`
+   * （`<Empty>` + `EmptyHeader/Title/Description/Content/Media` 组合）、
+   * 项目自立 `~/components/ui/empty-state.tsx`（`<EmptyState>` · page/error/hint
+   * 三档 · 是官方 Empty 的薄封装 · 补 icon 位与最小高度）。视图层里出现
+   * 「自闭合之外、className 含 border-dashed + rounded-(xl|2xl|3xl)、含子文本、
+   * 无 onClick / cursor-pointer」= 手搓了一张"这里现在是空的"占位卡、该走
+   * `<EmptyState>` 或 `<Empty>` 组合。
+   *
+   * 判据是**三重条件**、少一条都不算：
+   *   ① className 里 `border-dashed` + `rounded-(xl|2xl|3xl)` 双有；
+   *   ② **非自闭合**（自闭合的是 P73 那条虚线、或 flex-1 装饰填充线）；
+   *   ③ className 里**不含** `cursor-pointer`、inner 里**不含** `onClick=`
+   *     （排除"点击添加占位卡"这类合法交互 · HomePage 里"新建项目" dashed
+   *     按钮就是这种）；
+   *   ④ inner trim 后至少 5 字符（排除装饰性空 div）。
+   *
+   * 走棘轮（非硬闸）：本会话摸底命中 12 处（都是清晰"空态卡"· 见
+   * `changelog.d/0-session-final`）· 冻结起点。下一批按域分片把每个
+   * `<div>` 迁到 `<EmptyState variant="page" title="…" description="…" />`
+   * 或 `<Empty>` 组合 · 清零后独立 PR 升硬闸。
+   *
+   * P74 编号跳过：`bg-X/N + text-X-strong` 组合锚点在本仓库**命中 0** ·
+   * 手搓 callout 里同用两件事的模式稀有 · 判据立起来会变"死判据"（无假阳 ·
+   * 也几乎无真命中）· 若将来发现真需要 · 由更精的 AST 扫描器做 · 不塞进
+   * 这条正则棘轮。 */
+  P75: {
+    label:
+      '视图层手搓空态卡 `<div className="border-dashed rounded-xl/2xl/3xl">`（应使用 ~/components/ui/empty-state 的 <EmptyState> 或 ~/components/ui/empty 的 <Empty>，shadcn composition.md）',
+    count: (t) => {
+      const t2 = stripComments(t);
+      let n = 0;
+      /* 扫每个 `<div>` 起始标签 · 三重条件命中才计一次。 */
+      const openRe = /<div\b([^>]*)>/g;
+      for (const open of t2.matchAll(openRe)) {
+        const attrs = open[1];
+        /* 排除自闭合（`/` 结尾 · 那是 P73 虚线的账）。 */
+        if (attrs.trimEnd().endsWith("/")) continue;
+        const cm = attrs.match(/className=["']([^"']+)["']/);
+        if (!cm) continue;
+        const cls = cm[1];
+        if (!/\bborder-dashed\b/.test(cls)) continue;
+        if (!/\brounded-(?:xl|2xl|3xl)\b/.test(cls)) continue;
+        if (/\bcursor-pointer\b/.test(cls)) continue;
+        /* 找匹配的 </div> · 简化：从 open.index 起、扫第一个 </div> ·
+         * 不递归嵌套（视图里"空态卡"极少嵌套同层 div · 简化足够）。 */
+        const after = t2.slice(open.index + open[0].length);
+        const close = after.indexOf("</div>");
+        if (close < 0) continue;
+        const inner = after.slice(0, close);
+        if (/\bonClick=/.test(inner)) continue;
+        /* 装饰性空 div（padding 或 min-h 撑位）不算。 */
+        if (inner.trim().length < 5) continue;
+        n++;
+      }
+      return n;
+    },
+  },
+
   /* ── P76「视图层裸写 <select>」（棘轮，规范 §16.2.3 / §12.18）───────────
    * P68 拦住了裸 `<input>` / `<textarea>`、P69 拦住了裸
    * `<input type=checkbox|radio>`；`<select>` 是同一族里的漏项。
