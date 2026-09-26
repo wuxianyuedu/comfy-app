@@ -797,14 +797,12 @@ export const workflowRouter = createTRPCRouter({
 
       // modelTags：把用户级的全局标签库转成关联集合
       if (modelTags !== undefined) {
-        const tagIds: string[] = [];
-        for (const name of modelTags) {
-          const tag = await workflowModelTagRepository.upsertByName(
-            ctx.user.id,
-            name,
-          );
-          tagIds.push(tag.id);
-        }
+        // 批量 upsert：逐个 `upsertByName` 是每个标签 2~3 次往返，
+        // 标签一多保存工作流就明显变慢（见仓储层的 `upsertByNames`）。
+        const tagIds = await workflowModelTagRepository.upsertByNames(
+          ctx.user.id,
+          modelTags,
+        );
         await workflowTemplateRepository.setModelTags(id, tagIds);
       }
 
