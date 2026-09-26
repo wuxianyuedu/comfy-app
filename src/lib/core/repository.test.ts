@@ -285,6 +285,25 @@ describe("WorkflowModelTagRepository", () => {
     );
   });
 
+  it("upsertByNames 批量补齐缺失标签并按输入顺序返回 id；重复名收敛为同一个", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    const first = await workflowModelTagRepository.upsertByNames("u1", [
+      "风景",
+      "赛博",
+      "风景",
+    ]);
+    expect(first).toHaveLength(3);
+    expect(first[0]).toBe(first[2]);
+
+    const again = await workflowModelTagRepository.upsertByNames("u1", [
+      "风景",
+      "新建",
+    ]);
+    expect(again[0]).toBe(first[0]);
+    expect(again[1]).not.toBe(first[0]);
+    expect(await workflowModelTagRepository.listByUser("u1")).toHaveLength(3);
+  });
+
   it("rename 与 deleteById；listIdsByNames 空数组短路且不误命中他人标签", async () => {
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     seedUser(tdb, { id: "u2", email: "u2@test.dev" });
