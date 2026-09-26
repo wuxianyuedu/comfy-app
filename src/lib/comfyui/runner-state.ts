@@ -351,6 +351,39 @@ export function clearFinalize(taskId: string): void {
   state().finalized.delete(taskId);
 }
 
+/**
+ * runner-state 的**宿主依赖注入接缝**（P3 迁移第 1 期·第二步）。
+ *
+ * 现状：本模块只剩一处真 IO —— `persistLogs` 里的 `taskRepository.replaceLogs`
+ * 加失败分支的 `logger.warn`。未来把执行编排迁到独立 Node 宿主（executor host，
+ * 见 §4 契约「DB 作唯一汇合点」）时，宿主进程自带 DB 句柄与日志通道；这一对
+ * 直连单例引用就是最后卡住「runner-state 能不能被纯 Node 宿主 import」的两颗钉子。
+ *
+ * 本步只做「接缝 + 默认接现状」：`configureRunner(deps?)` 允许覆盖，未覆盖侧
+ * 沿用当前 `taskRepository` / `logger`，**零行为变化**。逐函数替换的更大范围
+ * （enqueue / reaper / executor-* 各自的直连）等 executor host 真出现时再动，
+ * 免得先造一轮无消费者的抽象（§12.15 / §12.18）。
+ *
+ * 类型刻意写成**结构最小**（只 `replaceLogs` / `warn` 两个方法），未来宿主不用
+ * 背整个 `taskRepository` 或 pino 的全部面。
+ */
+export type RunnerDeps = {
+  taskRepo: {
+    replaceLogs(taskId: string, entries: LogEntry[]): Promise<void>;
+  };
+  log: {
+    warn(msg: string): void;
+  };
+};
+
+let deps: RunnerDeps = { taskRepo: taskRepository, log: logger };
+
+/** 覆盖 runner-state 的宿主依赖（executor host 用它注入自带 DB / 日志通道）。
+ *  传 `Partial`：允许只换一侧、另一侧沿用默认。 */
+export function configureRunner(next: Partial<RunnerDeps>): void {
+  deps = { ...deps, ...next };
+}
+
 export async function persistLogs(taskId: string) {
   // 此时防抖写与终结点的 `await persistLogs(taskId)` 调用在竞争。
 
@@ -377,11 +410,11 @@ export async function persistLogs(taskId: string) {
   //     reaper），若这里抛错会让 finalize 链路整段回滚，表现比「一份日志
   //     没落库」严重得多。
   // 日志面板的**内存视图**仍完整（state().logs），只是这一次没持久化；
-  // 真故障通过 logger.warn 落 app-runtime.log 镜像通道，运维看得到。
+  // 真故障通过 log.warn 落 app-runtime.log 镜像通道，运维看得到。
   try {
-    await taskRepository.replaceLogs(taskId, arr);
+    await deps.taskRepo.replaceLogs(taskId, arr);
   } catch (e) {
-    logger.warn(
+    deps.log.warn(
       `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(e, "unknown")}`,
     );
   }
