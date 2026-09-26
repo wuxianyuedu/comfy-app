@@ -205,6 +205,7 @@ export function ProjectOutputs() {
         </div>
 
         {/* ── Cover banner ── */}
+        {/* p71-allow:start brand violet/fuchsia · 封面横幅与项目徽章（非状态色），见 §3.6.1 */}
         <div className="relative mb-6 h-[180px] overflow-hidden rounded-2xl border border-violet-500/20">
           {cover ? (
             <MediaThumbnail
@@ -229,6 +230,7 @@ export function ProjectOutputs() {
             </p>
           </div>
         </div>
+        {/* p71-allow:end */}
 
         {/* ── Output grid ── */}
         {loading ? (
@@ -274,6 +276,7 @@ export function ProjectOutputs() {
                       </div>
                     )}
 
+                    {/* p71-allow:start brand violet/fuchsia · 视频产出播放按钮与类型徽章（非状态色） */}
                     {isVideoOut && (
                       <span className="ring-border-strong absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2">
                         <svg
@@ -292,6 +295,7 @@ export function ProjectOutputs() {
                         视频
                       </span>
                     )}
+                    {/* p71-allow:end */}
                     <StatusBadge
                       status={output.status}
                       label={STATUS_LABEL[output.status] ?? output.status}
