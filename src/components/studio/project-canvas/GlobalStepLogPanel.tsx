@@ -197,7 +197,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <span
                   className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
                     connected
-                      ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]"
+                      ? "bg-success shadow-[0_0_6px_rgba(52,211,153,0.7)]"
                       : "bg-gray-600"
                   }`}
                   title={connected ? "SSE 已连接" : "SSE 未连接"}
@@ -283,7 +283,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <Checkbox
                   checked={autoscroll}
                   onCheckedChange={(checked) => setAutoscroll(checked === true)}
-                  className="size-3.5 cursor-pointer accent-violet-500"
+                  className="accent-primary size-3.5 cursor-pointer"
                 />
                 自动滚动
               </FieldLabel>

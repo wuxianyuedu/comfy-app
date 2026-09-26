@@ -117,7 +117,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                   <span
                     className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
                       selected
-                        ? "border-fuchsia-400/60 bg-fuchsia-500/40"
+                        ? "border-primary/60 bg-primary/40"
                         : "border-border-strong bg-subtle"
                     }`}
                   >
@@ -142,7 +142,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                 },
               })}
               placeholder="新增标签，如 z-image"
-              className="border-border bg-subtle text-ink-bright placeholder:text-ink-muted h-7 min-w-0 flex-1 rounded-md border px-2 text-xs focus:border-fuchsia-400/40 focus:outline-none"
+              className="border-border bg-subtle text-ink-bright placeholder:text-ink-muted focus:border-primary/40 h-7 min-w-0 flex-1 rounded-md border px-2 text-xs focus:outline-none"
             />
           </div>
           <DialogFooter className="mx-0 mb-0 gap-2 rounded-none border-0 bg-transparent p-0 sm:flex-row">
