@@ -83,7 +83,7 @@ _（全部闭环，见 A 表。）_
 
 ### C.5 P2（卫生项，随上一批顺手修）
 
-- ⬜ **M12** `src/app/api/logs/current/route.ts`（`readdirSync`/多次 `statSync`）、`api/logs/sessions/route.ts`（同步读+解析 4MiB 尾窗）—— 高频轮询路由的同步 IO。
+- ⬜ **M12** `src/app/api/logs/current/route.ts`（`readdirSync`/多次 `statSync`）、`api/logs/sessions/route.ts`（同步读+解析 4MiB 尾窗）—— 高频轮询路由的同步 IO。**备注**：该路由已是游标增量 + 1MB 尾窗口；异步化 `fs.promises` 需通读会话边界逻辑（log-session-scope）后谨慎做，单独一轮处理。
 - ⬜ **S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询。**暂缓**：该间隔有 ISSUE #339 的收紧依据，且注释称「服务端有进程级快照兜底」—— 需先核实 `status.ts` 的快照链路（与 S14 的「缓存无失效出口」联动评估），避免误改有意行为。
 - ⬜ **S14** `src/lib/comfyui/status.ts:423-444`、`src/server/workshop/comfyui.ts:36-49` —— 进程内缓存永不过期且无失效钩子（正确性风险为主）。
 - ⬜ **L9** `scripts/dev-launcher.mjs:1024-1089` —— 就绪轮询 1s×180 无退避，每轮还写状态文件。
@@ -92,7 +92,7 @@ _（全部闭环，见 A 表。）_
 - ⬜ **L12b** `src-tauri/src/shell_launch.rs:396-397` —— Rust 侧日志每条 `OpenOptions::open` + `write_all`，无 BufWriter（Node 侧 log.mjs 已闭环）。
 - ⬜ **L13** `tools/scripts/Build-Guard.ps1:215-249` —— 固定 500ms 忙等 + 三轮全进程 CIM 查询。
 - ⬜ **L14** `scripts/quality-gate.mjs:229-232`（4 道门禁串行 spawnSync）、`vitest.config.ts`（coverage 列 60+ 路径 + 3 份 reporter、无分片）。
-- ⬜ **L15** `src/app/api/update-check/route.ts:49-67/125-139` —— 前端 30s 轮询，同步递归遍历 `src-tauri` 全树（首轮 4 遍）。方向：目录级粗粒度比对或 `fs.watch`。
+- ⬜ **L15** `src/app/api/update-check/route.ts:49-67/125-139` —— 前端 30s 轮询，同步递归遍历 `src-tauri` 全树（首轮 4 遍）。方向：目录级粗粒度比对或 `fs.watch`。**备注**：`SKIP_DIRS` 剪枝是手写递归的核心价值（`recursive: true` 的 readdir 无法中途剪枝、会把 `target` 扫进去）；实际开销约几十 ms / 30s（除 target 外仅数百文件），收益与风险不成比例，建议与 L5（Rust 轮询收敛）同轮一起评估。
 - _（E6 已闭环，见 A 表。）_
 
 ## D. 维护说明
