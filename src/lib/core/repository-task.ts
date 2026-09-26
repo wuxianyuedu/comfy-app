@@ -5,7 +5,7 @@
 import "server-only";
 
 import { db } from "~/lib/db";
-import { task, taskImage, type Task } from "~/server/db/schema";
+import { task, taskImage, type Task, type TaskImage } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
 import { TERMINAL_TASK_STATUSES } from "../task-state";
@@ -21,6 +21,11 @@ import {
   isNotNull,
   sql,
 } from "drizzle-orm";
+
+/** 列表卡的行形状：`task.list` 的映射只需要十来个字段，而 `workflowSnapshot`
+ *  （整份工作流 JSON）与 `logs`（全量日志）单行就能到数 MB —— take=60 的列表页
+ *  会把它们整批拉回来、反序列化、然后立刻丢弃。列表查询排除这两列。 */
+export type TaskCardRow = Omit<Task, "workflowSnapshot" | "logs">;
 
 /**
  * SQLite 表达「不限条数，只跳过前 n 条」的写法是 `LIMIT -1 OFFSET n` ——
@@ -118,7 +123,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
       statusList?: string[];
       includeImages: true;
     },
-  ): Promise<TaskWithCover[]>;
+  ): Promise<Array<TaskCardRow & { images: TaskImage[] }>>;
   async listByUser(
     userId: string,
     opts?: {
@@ -138,7 +143,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
       statusList?: string[];
       includeImages?: boolean;
     },
-  ): Promise<Task[] | TaskWithCover[]> {
+  ): Promise<
+    Task[] | TaskWithCover[] | Array<TaskCardRow & { images: TaskImage[] }>
+  > {
     const where = and(
       eq(task.userId, userId),
       opts?.projectId ? eq(task.projectId, opts.projectId) : undefined,
@@ -162,6 +169,10 @@ export class TaskRepository extends DrizzleRepository<Task> {
         where,
         orderBy: [desc(task.createdAt)],
         ...(opts.take !== undefined ? { limit: opts.take } : {}),
+        /* 列表卡只要十来个字段：`workflowSnapshot` 与 `logs` 单行可达数 MB，
+         * take=60 时是几十 MB 的白拉白反序列化（router 只映射卡片字段）。
+         * 详情查询（findByIdWithImages）不受影响，仍取全列。 */
+        columns: { workflowSnapshot: false, logs: false },
         with: {
           images: {
             orderBy: [desc(taskImage.isCover), asc(taskImage.sortIndex)],
