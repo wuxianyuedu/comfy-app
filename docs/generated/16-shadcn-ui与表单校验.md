@@ -385,6 +385,38 @@ node scripts/check-overlay-z.cjs --update   # 治理后收紧基线
 「让位」这条硬规则（`check-title-bar-clearance.cjs`）不被层级改名牵动。
 P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`。
 
+#### 16.2.3.2 验证「是不是基元」时，别只认 `data-slot`
+
+P1~P3 这类判据的**源码侧**由 `check-ui-primitives.cjs` 数（手写 `<button>` /
+自建 portal / 自写 spinner），组件测试里常配一条「渲染出来的每个按钮都带
+`data-slot="button"`」的断言作二次证据。**这条断言的口径不完整**：
+
+`data-slot` 是一个**被谁最后施加就归谁**的属性，而 Base UI 的复合件会在渲染
+路径上重写它 —— 最典型的是 `<TooltipTrigger render={<Button …/>}>`（`ui/hint`
+的 `<Hint>` 就是这个形态，`ui/sidebar` 的折叠态图标按钮从装入起也是）：按钮
+本体仍是 `buttonVariants` 渲染的，但元素上的 `data-slot` 变成
+`tooltip-trigger`。按 `data-slot` 一刀切判，就会把「加了悬停提示」误读成
+「退回手写 `<button>`」——假红一次，而真正想防的东西并没有被防住。
+
+**写法口径（两条，取其一即可）**：
+
+- 判**基元自己的类**：`expect(el.className).toContain("group/button")`
+  （`buttonVariants` 的 base 串），这是任何 `render` 接管都拿不掉的证据；
+- 判**角色集合**：接受 `data-slot` ∈ `{button, tooltip-trigger}`，并对后者补上
+  第一条那种基元类断言。
+
+反面写法是 `expect(el.getAttribute("data-slot")).toBe("button")` 直接等值。
+另外，全库**没有任何样式或门禁按 `[data-slot=button]` 取元素**（`ui/button-group`
+用的是 `button-group` / `select-trigger` 两个别的名字），所以这个接管不影响外观，
+只影响「按 `data-slot` 断言身份」的写法。
+
+同一族坑在 P76 / P80 上也各犯过一次：控件换成 `ui/select-menu`（combobox）后，
+按原生 `<select>` 的 `value` + `<option>` 读的断言全部失效；`h-N w-N` 归一成
+`size-N` 后，`toHaveClass("h-2.5", "w-2.5")` 失效。共同形态是**批次改了结构、
+断言没跟着重算**，而这类用例不在 pre-commit 里（钩子跑 tsc / eslint / 门禁脚本），
+于是红留到 `master` 上、下次谁跑 `pnpm test` 谁再查一遍。改这类断言时**口径不要动**
+（它锁的是「列出时刻·标题」「圆点尺寸统一」这件事），只换读法。
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
