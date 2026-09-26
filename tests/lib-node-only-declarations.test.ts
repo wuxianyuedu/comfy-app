@@ -44,6 +44,20 @@ const PURE_NODE_HOSTS = [
   // 它必须与 Next 侧共用同一份密文实现（`src/server/workshop/llm.ts` 也引它），
   // 因此不能带 server-only（那会让 MCP 宿主直接 throw）。
   "src/lib/llm/secrets.ts",
+  // P3 executor host 迁移第 1 期·第三步：`runner-state.ts` 的 server-only 已摘，
+  // 与 `kill-process-tree.ts` 同族登记为第三类。
+  //   · 顶层 `import { EventEmitter } from "events"` 是**故意保留的值 import**
+  //     —— `state()` 内部构造 emitter 需要它，是执行链的唯一 emitter 归属点；
+  //   · Next server 目前是唯一宿主（route handler / tRPC / instrumentation 都走
+  //     Next 的 react-server 条件），P3 §5 第 2 期的 `scripts/executor-host.mjs`
+  //     会作为第二宿主接入；
+  //   · 真正的 server-only 依赖（`taskRepository` / `logger`）已从静态值 import
+  //     降级为 `resolveDeps()` 里的 `await import(...)` —— scanner 的 parseImports
+  //     不识别 dynamic 形态，因此本模块既不进 `clientReachable`，也不会把
+  //     Next 侧 server-only 依赖暴露成 `libOnlyReachable`；
+  //   · 一旦给它补 `server-only`，纯 Node 侧的 import 就是入口 throw——正是
+  //     规范 §18.4 「纯 Node 宿主两者都不加」的原型。
+  "src/lib/comfyui/runner-state.ts",
 ];
 
 type Report = {
@@ -89,7 +103,9 @@ describe("src/lib 的 Node-only 声明（规范 §18.4）", () => {
     expect(
       hits,
       `以下模块声明为「只能服务端用」却仍被纯模块可达：\n` +
-        hits.map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`).join("\n"),
+        hits
+          .map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`)
+          .join("\n"),
     ).toEqual([]);
   });
 
@@ -99,7 +115,9 @@ describe("src/lib 的 Node-only 声明（规范 §18.4）", () => {
       hits,
       `以下模块被 \`"use client"\` 入口静态引用且顶层 import 了 Node 内建 —— ` +
         `Turbopack 会以 "does not support external modules" 让整页 500：\n` +
-        hits.map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`).join("\n"),
+        hits
+          .map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`)
+          .join("\n"),
     ).toEqual([]);
   });
 

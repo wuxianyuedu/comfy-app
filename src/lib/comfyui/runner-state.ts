@@ -6,24 +6,41 @@
 
 // // 本模块持有那几个子模块共享的**单例运行时状态**与**日志基建**。
 
-// // RunnerState 类型族与不含 IO 的初始化工厂已下沉到 `./runner-state-shape.ts`
+// // RunnerState 类型族与不含 IO 的初始化工厂在 `./runner-state-shape.ts`；
 
-// // （P3 迁移第 1 期，为纯 Node executor host 复用同一形状铺路）；这里保留同名
+// // 宿主依赖（taskRepository / logger）经 `configureRunner` 注入，未注入时首次
 
-// // 再导出，消费方无需改 import 路径。
+// // `persistLogs` lazy 走 Next 侧的动态 import（见下方 `resolveDeps`）。
 
 // // 它**不是**对外 API —— 外部代码请从 enqueue.ts 取公开入口。
+
+// //
+
+// // **§18.4 三选一：本模块走第三类（纯 Node 宿主，不加 server-only / 不加 .server.ts）**。
+
+// // P3 executor host 迁移第 1 期·第三步：整条 ComfyUI 执行链从 Next 专属耦合里解绑。
+
+// // 未来 `scripts/executor-host.mjs`（纯 Node 宿主）与 Next server 双宿主加载本模块；
+
+// // 一旦给它加 `server-only`，纯 Node 侧的 import 就是一句 `throw`——正是硬规则
+
+// // 「纯 Node 宿主两者都不加」的原型（同 `src/lib/process/kill-process-tree.ts`）。
+
+// // 本模块顶层仍有 `import { EventEmitter } from "events"` 这一 Node 内建值 import
+
+// // （state() 内部构造 emitter 用），因此会落进 `unguarded`——由
+
+// // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS` 显式登记。
+
+// //
 
 // // 模块边界见 docs/standards/18-lib层规范.md。
 
 //
 
-import "server-only";
 import { EventEmitter } from "events";
 
-import { logger } from "~/lib/core/logger";
 import { errorText } from "~/lib/error-message";
-import { taskRepository } from "../core/repository";
 import { HISTORY_READ } from "../retry-policy";
 import { lastSegments } from "~/lib/path-display";
 import {
@@ -352,17 +369,22 @@ export function clearFinalize(taskId: string): void {
 }
 
 /**
- * runner-state 的**宿主依赖注入接缝**（P3 迁移第 1 期·第二步）。
+ * runner-state 的**宿主依赖注入接缝**（P3 迁移第 1 期·第二/三步）。
  *
- * 现状：本模块只剩一处真 IO —— `persistLogs` 里的 `taskRepository.replaceLogs`
- * 加失败分支的 `logger.warn`。未来把执行编排迁到独立 Node 宿主（executor host，
- * 见 §4 契约「DB 作唯一汇合点」）时，宿主进程自带 DB 句柄与日志通道；这一对
- * 直连单例引用就是最后卡住「runner-state 能不能被纯 Node 宿主 import」的两颗钉子。
+ * 现状：本模块只剩一处真 IO —— `persistLogs` 里的 `await taskRepository.replaceLogs`
+ * 加失败分支的 `logger.warn`。这两条在**加载时**会牵进 `server-only` 链（repository
+ * 与 logger 各自带 `import "server-only"`），把整个 runner-state 拖回 Next 专属
+ * 上下文；纯 Node 宿主（未来的 `scripts/executor-host.mjs`）动态加载本模块时会撞
+ * `server-only` 的入口 throw。P3 §5 第 3 步「摘 server-only」卡在这两条静态值
+ * import 上。
  *
- * 本步只做「接缝 + 默认接现状」：`configureRunner(deps?)` 允许覆盖，未覆盖侧
- * 沿用当前 `taskRepository` / `logger`，**零行为变化**。逐函数替换的更大范围
- * （enqueue / reaper / executor-* 各自的直连）等 executor host 真出现时再动，
- * 免得先造一轮无消费者的抽象（§12.15 / §12.18）。
+ * 解法：deps 不再**静态初始化**，改为**首次 persistLogs 时 lazy 解析**：
+ *   1. 若外部先 `configureRunner({ taskRepo, log })` 注入了（executor host 走这条），
+ *      `resolveDeps` 直接返回；
+ *   2. 否则 dynamic `import()` 拉 Next 侧的 taskRepository / logger 填默认
+ *      （Next server 走这条；scanner 的 parseImports 只识别静态 import 语句、
+ *      不识别 `import()` 表达式，因此 `libOnlyReachable` 与 `clientReachable`
+ *      两条判据都不会看见这条边）。
  *
  * 类型刻意写成**结构最小**（只 `replaceLogs` / `warn` 两个方法），未来宿主不用
  * 背整个 `taskRepository` 或 pino 的全部面。
@@ -376,12 +398,28 @@ export type RunnerDeps = {
   };
 };
 
-let deps: RunnerDeps = { taskRepo: taskRepository, log: logger };
+let deps: Partial<RunnerDeps> | null = null;
 
 /** 覆盖 runner-state 的宿主依赖（executor host 用它注入自带 DB / 日志通道）。
- *  传 `Partial`：允许只换一侧、另一侧沿用默认。 */
+ *  传 `Partial`：允许只覆盖一侧，另一侧留给 `resolveDeps` 的 lazy 默认填。 */
 export function configureRunner(next: Partial<RunnerDeps>): void {
-  deps = { ...deps, ...next };
+  deps = { ...(deps ?? {}), ...next };
+}
+
+/** `deps` 的两条边分别补齐：
+ *  - 若 `configureRunner` 全给了（两条都在），本函数无副作用地返回。
+ *  - 若只给了一侧（甚至完全没给），剩下那条走 Next 侧的 dynamic import——
+ *    在纯 Node 下这一句会撞 `server-only` throw，这是**故意的**：宿主必须
+ *    先 `configureRunner` 注入自己的 DB / 日志通道，才会走到 persistLogs。
+ *    错误信息里点出「configureRunner」这条契约。 */
+async function resolveDeps(): Promise<RunnerDeps> {
+  const cur: Partial<RunnerDeps> = deps ?? {};
+  const taskRepo: RunnerDeps["taskRepo"] =
+    cur.taskRepo ?? (await import("../core/repository")).taskRepository;
+  const log: RunnerDeps["log"] =
+    cur.log ?? (await import("~/lib/core/logger")).logger;
+  deps = { taskRepo, log };
+  return { taskRepo, log };
 }
 
 export async function persistLogs(taskId: string) {
@@ -411,12 +449,29 @@ export async function persistLogs(taskId: string) {
   //     没落库」严重得多。
   // 日志面板的**内存视图**仍完整（state().logs），只是这一次没持久化；
   // 真故障通过 log.warn 落 app-runtime.log 镜像通道，运维看得到。
+  // resolveDeps 自身也可能抛（executor host 忘记 configureRunner → 动态
+  // import 撞 server-only throw）；这条抛同样进下面的 catch，走 warn 兜底。
   try {
-    await deps.taskRepo.replaceLogs(taskId, arr);
+    const { taskRepo } = await resolveDeps();
+    await taskRepo.replaceLogs(taskId, arr);
   } catch (e) {
-    deps.log.warn(
-      `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(e, "unknown")}`,
-    );
+    const message = `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(
+      e,
+      "unknown",
+    )}`;
+    // 兜底 warn：若 resolveDeps 已经拉起了 log，走注入侧；否则再试一次 dynamic
+    // import。这一句本身在纯 Node + 未 configure 的失败路径下也会抛（server-only），
+    // 但那时上面 catch 里已经没有别的兜底手段可依赖了（logger 都没起来），
+    // 抛回 caller 的 `void persistLogs` 会走 unhandledRejection —— 那种状态下
+    // executor host 的入口就该主动 exit，不靠这里做二次容错。
+    try {
+      const { log } = await resolveDeps();
+      log.warn(message);
+    } catch {
+      // 完全无法落库 + 无法 warn：让 caller 通过 unhandled rejection 感知，
+      // 不吞掉。
+      throw e;
+    }
   }
 }
 
