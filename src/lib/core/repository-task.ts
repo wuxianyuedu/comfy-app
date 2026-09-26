@@ -8,19 +8,8 @@ import { db } from "~/lib/db";
 import { task, taskImage, type Task, type TaskImage } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
-import { TERMINAL_TASK_STATUSES } from "../task-state";
-import {
-  eq,
-  and,
-  inArray,
-  notInArray,
-  desc,
-  asc,
-  lt,
-  isNull,
-  isNotNull,
-  sql,
-} from "drizzle-orm";
+import { eq, and, inArray, desc, asc, sql } from "drizzle-orm";
+import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 
 /** 列表卡的行形状：`task.list` 的映射只需要十来个字段，而 `workflowSnapshot`
  *  （整份工作流 JSON）与 `logs`（全量日志）单行就能到数 MB —— take=60 的列表页
@@ -42,14 +31,12 @@ export type TaskCardRow = Omit<Task, "workflowSnapshot" | "logs">;
  */
 const NO_LIMIT = sql`-1`;
 
-/**
- * 终态集合的 SQL 形态：由 `~/lib/task-state` 的唯一定义摊平而来。
- *
- * 为什么必须摊平：drizzle 的 `where` 是 SQL 表达式，收不下 TS 谓词
- * （`isTerminalTaskStatus`），所以这里必然要有一份数组。但**判据只能有一处
- * 定义**（规范 §12.12）——因此这是派生值，新增状态时改那边即自动生效。
- */
-const TERMINAL_STATES: string[] = [...TERMINAL_TASK_STATUSES];
+/** 12 个 exec-chain 方法的实现来自共享 impl 工厂（P3 §5 Phase 2-A-1）；Next 与
+ *  未来的 executor host 用**同一份 SQL**，只是把 `db` 从各自的 drizzle 客户端
+ *  传进来。设计依据见 P3 §5 ADR 附录 §11.1（`docs/superpowers/specs/` 目录下
+ *  `p3-phase2-executor-host-design.md`）。本 class 下方的 12 个对应方法各
+ *  delegate 一行到 `impl.xxx(...)`。 */
+const impl: TaskRepoImpl = createTaskRepoImpl(db);
 
 /** 把「不限条数」作为 limit 传下去（run-time 是 `sql` 片段，见 NO_LIMIT 注释）。 */
 function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
@@ -258,30 +245,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
     });
   }
 
-  async findExecutionMeta(taskId: string): Promise<{
-    projectId: string | null;
-    params: unknown;
-    prompt: string;
-    negativePrompt: string | null;
-    workflowName: string;
-    referenceImages: unknown;
-    createdAt: Date;
-  } | null> {
-    const rows = await db
-      .select({
-        projectId: task.projectId,
-        params: task.params,
-        prompt: task.prompt,
-        negativePrompt: task.negativePrompt,
-        workflowName: task.workflowName,
-        referenceImages: task.referenceImages,
-        createdAt: task.createdAt,
-      })
-      .from(task)
-      .where(eq(task.id, taskId))
-      .limit(1);
-    return rows[0] ?? null;
-  }
+  /** 12 个 exec-chain 方法 delegate 到共享 impl（P3 §5 Phase 2-A-1）。签名走
+   *  `TaskRepoImpl["method"]` 反推、与 impl 单点绑定；SQL 主体见
+   *  `./repository-task-impl.ts`。 */
+  findExecutionMeta: TaskRepoImpl["findExecutionMeta"] = (taskId) =>
+    impl.findExecutionMeta(taskId);
 
   async findExecutionProgress(taskId: string): Promise<{
     status: string;
@@ -352,194 +320,50 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return rows[0] ?? null;
   }
 
-  /**
-   * 进度回写（顺带把行标成 RUNNING）：**只在非终态行上生效**。
-   *
-   * 为什么必须加 `NOT IN (...)` 这个 where 条件：执行路径是异步的，
-   * ComfyUI 的 WS `progress` 帧与「本任务已被别的路径收口（reaper 判终态 /
-   * 用户取消）」可能交错到达。一条收口之后迟到的进度回写会把 DB 行从
-   * SUCCEEDED / FAILED / CANCELLED **改回 RUNNING**，于是：
-   *   • `/api/tasks/[id]/stream` 的 3s「数据库实情」轮询先看到终态 → 关流；
-   *     之后再看到 RUNNING → 客户端已经关掉的流不会重开，卡片永远停在
-   *     「生成中…」；
-   *   • 终态行还带着 `finishedAt`，与 status 自相矛盾。
-   *
-   * 返回是否真的更新了行（调用方据此判断「本任务是否已被别人收口」）。
-   */
-  async updateProgress(taskId: string, pct: number): Promise<boolean> {
-    const updated = await db
-      .update(task)
-      .set({ progress: pct, status: "RUNNING" })
-      .where(and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)))
-      .returning({ id: task.id });
-    return updated.length > 0;
-  }
+  // 以下 11 个方法各 delegate 一行到 `impl`；SQL 主体与 JSDoc（包括
+  // `updateProgress` / `markRunning` 里 `notInArray(task.status, TERMINAL_STATES)`
+  // 判据的完整解释、`finalizeSuccess` 的 workflowSnapshot 可选写、`finalizeFailure`
+  // 的 validationErrors 归一、`replaceLogs` 的 `.catch(→undefined)` swallow、
+  // reaper 两个 listStale 判据的 4 条件 AND 等等）都在
+  // `./repository-task-impl.ts`。签名通过 `TaskRepoImpl["method"]` 反推、与
+  // impl 单点绑定，避免两处漂移。
+  updateProgress: TaskRepoImpl["updateProgress"] = (taskId, pct) =>
+    impl.updateProgress(taskId, pct);
 
-  /** 记下 promptId 并标 RUNNING（同样只对非终态行生效，理由见 updateProgress）。 */
-  async markRunning(taskId: string, promptId: string): Promise<boolean> {
-    const updated = await db
-      .update(task)
-      .set({ status: "RUNNING", promptId })
-      .where(and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)))
-      .returning({ id: task.id });
-    return updated.length > 0;
-  }
+  markRunning: TaskRepoImpl["markRunning"] = (taskId, promptId) =>
+    impl.markRunning(taskId, promptId);
 
-  async finalizeSuccess(
-    taskId: string,
-    data: {
-      resultImages: unknown;
-      params: unknown;
-      workflowSnapshot?: unknown;
-    },
-  ): Promise<void> {
-    await db
-      .update(task)
-      .set({
-        status: "SUCCEEDED",
-        progress: 100,
-        finishedAt: new Date(),
-        resultImages: data.resultImages,
-        params: data.params,
-        ...(data.workflowSnapshot !== undefined
-          ? { workflowSnapshot: data.workflowSnapshot }
-          : {}),
-      })
-      .where(eq(task.id, taskId));
-  }
+  finalizeSuccess: TaskRepoImpl["finalizeSuccess"] = (taskId, data) =>
+    impl.finalizeSuccess(taskId, data);
 
-  async finalizeFailure(
-    taskId: string,
-    error: string,
-    validationErrors?: unknown[],
-  ): Promise<void> {
-    await db
-      .update(task)
-      .set({
-        status: "FAILED",
-        error,
-        validationErrors: validationErrors?.length
-          ? JSON.stringify(validationErrors)
-          : null,
-        finishedAt: new Date(),
-      })
-      .where(eq(task.id, taskId));
-  }
+  finalizeFailure: TaskRepoImpl["finalizeFailure"] = (
+    taskId,
+    error,
+    validationErrors,
+  ) => impl.finalizeFailure(taskId, error, validationErrors);
 
-  async cancel(taskId: string): Promise<void> {
-    await db
-      .update(task)
-      .set({ status: "CANCELLED", finishedAt: new Date() })
-      .where(eq(task.id, taskId));
-  }
+  cancel: TaskRepoImpl["cancel"] = (taskId) => impl.cancel(taskId);
 
-  async finalizeFromReaper(
-    taskId: string,
-    status: "SUCCEEDED" | "FAILED",
-    error: string | null,
-  ): Promise<void> {
-    await db
-      .update(task)
-      .set({ status, finishedAt: new Date(), error })
-      .where(eq(task.id, taskId));
-  }
+  finalizeFromReaper: TaskRepoImpl["finalizeFromReaper"] = (
+    taskId,
+    status,
+    error,
+  ) => impl.finalizeFromReaper(taskId, status, error);
 
-  async findStatusAndPromptById(
-    taskId: string,
-  ): Promise<{ status: string; promptId: string | null } | null> {
-    const rows = await db
-      .select({ status: task.status, promptId: task.promptId })
-      .from(task)
-      .where(eq(task.id, taskId))
-      .limit(1);
-    return rows[0] ?? null;
-  }
+  findStatusAndPromptById: TaskRepoImpl["findStatusAndPromptById"] = (taskId) =>
+    impl.findStatusAndPromptById(taskId);
 
-  async replaceLogs(taskId: string, logs: unknown[]): Promise<void> {
-    await db
-      .update(task)
-      .set({ logs })
-      .where(eq(task.id, taskId))
-      .catch(() => undefined);
-  }
+  replaceLogs: TaskRepoImpl["replaceLogs"] = (taskId, logs) =>
+    impl.replaceLogs(taskId, logs);
 
-  async listStaleQueued(
-    cutoff: Date,
-    take: number,
-  ): Promise<Array<{ id: string; createdAt: Date; workflowName: string }>> {
-    return db
-      .select({
-        id: task.id,
-        createdAt: task.createdAt,
-        workflowName: task.workflowName,
-      })
-      .from(task)
-      .where(
-        and(
-          eq(task.status, "QUEUED"),
-          isNull(task.finishedAt),
-          lt(task.createdAt, cutoff),
-          isNull(task.promptId),
-        ),
-      )
-      .limit(take);
-  }
+  listStaleQueued: TaskRepoImpl["listStaleQueued"] = (cutoff, take) =>
+    impl.listStaleQueued(cutoff, take);
 
-  async listStaleRunning(
-    cutoff: Date,
-    take: number,
-  ): Promise<
-    Array<{
-      id: string;
-      promptId: string | null;
-      createdAt: Date;
-      workflowName: string;
-    }>
-  > {
-    return db
-      .select({
-        id: task.id,
-        promptId: task.promptId,
-        createdAt: task.createdAt,
-        workflowName: task.workflowName,
-      })
-      .from(task)
-      .where(
-        and(
-          eq(task.status, "RUNNING"),
-          isNull(task.finishedAt),
-          lt(task.createdAt, cutoff),
-          isNotNull(task.promptId),
-        ),
-      )
-      .limit(take);
-  }
+  listStaleRunning: TaskRepoImpl["listStaleRunning"] = (cutoff, take) =>
+    impl.listStaleRunning(cutoff, take);
 
-  async createImages(
-    taskId: string,
-    images: Array<{
-      localPath: string;
-      sortIndex: number;
-      isCover: boolean;
-      mediaType: string;
-      seed: string | null;
-      width?: number | null;
-      height?: number | null;
-    }>,
-  ): Promise<void> {
-    await db.insert(taskImage).values(
-      images.map((im) => ({
-        taskId,
-        localPath: im.localPath,
-        sortIndex: im.sortIndex,
-        isCover: im.isCover,
-        mediaType: im.mediaType,
-        seed: im.seed,
-        width: im.width ?? null,
-        height: im.height ?? null,
-      })),
-    );
-  }
+  createImages: TaskRepoImpl["createImages"] = (taskId, images) =>
+    impl.createImages(taskId, images);
 }
 
 export const taskRepository = new TaskRepository();
