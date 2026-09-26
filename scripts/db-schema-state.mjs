@@ -414,6 +414,16 @@ export function writeSchemaSyncStatus(root, payload) {
 }
 
 /**
+ * 「跳过 schema 同步」的环境变量开关（值 = "1"）。
+ *
+ * 同一次启动里 schema 同步**只该跑一份**：编排器（dev-launcher.mjs）自己会
+ * `spawnSchemaSync`，它拉起的 dev server（dev.mjs）若再跑一次，就是两份
+ * 15~30 秒的 drizzle 并发写同一个 `db.sqlite`。编排器把本变量传给子进程，
+ * dev.mjs 见到即跳过。两边都从本模块 import 这个名字，不会各写各的字符串。
+ */
+export const SKIP_SCHEMA_SYNC_ENV = "COMFYAPP_SKIP_SCHEMA_SYNC";
+
+/**
  * 后台起一次 schema 同步，**不等待**。
  *
  * 为什么不让调用方等：drizzle 一轮约 17 秒、同步一次 15~30 秒。此前是
