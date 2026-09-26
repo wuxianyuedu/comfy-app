@@ -1021,6 +1021,7 @@ export async function run(argv = process.argv.slice(2)) {
   let ready = false;
   /** 最后一次探测的结论：超时出口要靠它讲清「卡在哪一档」（见 §5）。 */
   let lastProbeState = "not-up";
+  let pollCount = 0;
   const readyDeadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < readyDeadline) {
     if (devExited()) break;
@@ -1078,15 +1079,27 @@ export async function run(argv = process.argv.slice(2)) {
         0.6,
         ((READY_TIMEOUT_MS - left * 1000) / READY_TIMEOUT_MS) * 0.6,
       );
-    status(
-      "dev-server-starting",
-      progress,
-      schemaNoticeSent
-        ? `数据库表还没建，正在等待自动建表（还剩 ${left}s）…`
-        : `正在等待本地服务就绪（还剩 ${left}s）…`,
-      { staleShell },
+    /* 状态文件降频：就绪等待期每轮都写 launch-status.json（最多 180 次），
+     * 而进度条以秒为粒度 —— 每 5 轮写一次足够顺滑；就绪 / 出错等关键状态
+     * 变化仍在别处即时写。 */
+    if (pollCount % 5 === 0) {
+      status(
+        "dev-server-starting",
+        progress,
+        schemaNoticeSent
+          ? `数据库表还没建，正在等待自动建表（还剩 ${left}s）…`
+          : `正在等待本地服务就绪（还剩 ${left}s）…`,
+        { staleShell },
+      );
+    }
+    /* 轮询退避：前 10 次每 1s（快速冷启动大多几秒内就绪），之后 2s、30 次
+     * 后 3s —— 冷编译普遍 1~3 分钟，固定 1s 是 180 次探测 + 180 次状态文件
+     * 写的纯浪费；就绪感知延迟只出现在冷启动后段（用户本来就在等编译）。
+     * 总超时是墙钟 deadline（Date.now()），退避不会缩短它。 */
+    pollCount += 1;
+    await new Promise((r) =>
+      setTimeout(r, pollCount < 10 ? 1000 : pollCount < 30 ? 2000 : 3000),
     );
-    await new Promise((r) => setTimeout(r, 1000));
   }
 
   if (devExited()) {
