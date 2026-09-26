@@ -67,7 +67,7 @@ const MAX_ENTRIES = 256;
 /* 单个任务的日志行数上限。面板本来就只显示尾部 300 行（LOG_MODAL_MAX_ROWS），
  * 再往前既看不到、也让每次 `[...prev.logs, entry]` 的拷贝一路变贵 ——
  * 长跑任务（几分钟、上千行）下这点尤其明显。 */
-const MAX_LOGS_PER_TASK = 2000;
+export const MAX_LOGS_PER_TASK = 2000;
 
 /* 去重只比对尾部若干条：日志按时间追加，重复的那条一定紧跟在它自己之后，
  * 全量 `some` 让每条新日志都变成 O(n)，整个流就是 O(n²)。 */

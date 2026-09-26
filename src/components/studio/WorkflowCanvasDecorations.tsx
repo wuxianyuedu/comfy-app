@@ -1,6 +1,6 @@
 "use client";
 /* 拆出来的画布装饰组件 —— 原本在 WorkflowCanvasEditor.tsx 里。 */
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { digitsOnly, textHandler } from "~/lib/form-props";
 import { clamp } from "~/lib/clamp";
 import {
@@ -147,6 +147,21 @@ export function ZoomIndicator({
     moved: boolean;
   } | null>(null);
   const justDraggedRef = useRef(false);
+  // 拖拽缩放期间挂到 window 的监听器；卸载时若拖拽尚未结束（鼠标按住未松手）
+  // 必须移除，否则泄漏到页面生命周期（规范 §8.5 / P7）。
+  const scrubListenersRef = useRef<{
+    onMove: (ev: MouseEvent) => void;
+    onUp: () => void;
+  } | null>(null);
+  useEffect(() => {
+    return () => {
+      const ls = scrubListenersRef.current;
+      if (ls) {
+        window.removeEventListener("mousemove", ls.onMove);
+        window.removeEventListener("mouseup", ls.onUp);
+      }
+    };
+  }, []);
 
   const pct = Math.round(zoom * 100);
 
@@ -185,12 +200,14 @@ export function ZoomIndicator({
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      scrubListenersRef.current = null;
       const st = dragRef.current;
       dragRef.current = null;
       setDragging(false);
       if (st?.moved) justDraggedRef.current = true;
       else if (st) beginEdit();
     };
+    scrubListenersRef.current = { onMove, onUp };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
