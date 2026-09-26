@@ -75,6 +75,19 @@ interface SelectMenuProps {
   disabled?: boolean;
   className?: string;
   /**
+   * a11y 转发口 · 挂在 Trigger（真正可交互的按钮元素）上。
+   * `<FormField>` 的 render prop 会 spread `{ id, "aria-describedby",
+   * "aria-invalid" }` 给控件、`<label htmlFor>` 也靠 `id` 关联；此前调用点
+   * 用原生 `<select>` 天然吃这些属性、迁 SelectMenu 需要显式开这一层。
+   * `title` 也一并转（虽然不推荐用它替代 Tooltip · 存量调用点保留行为）。
+   */
+  id?: string;
+  "aria-label"?: string;
+  "aria-labelledby"?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
+  title?: string;
+  /**
    * 浮层最小宽度（px），默认 480 —— 装饰较丰富的行
    *（圆点 + 名称 + 任务类型 + 本机/在线徽标）在窄触发器里也能舒展；
    *  触发器本身比这个下限宽时，浮层仍会回落到 `--anchor-width`。
@@ -150,6 +163,12 @@ export function SelectMenu({
   autoFitFromOptions = true,
   footer,
   onOpenChange,
+  id,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledby,
+  "aria-describedby": ariaDescribedby,
+  "aria-invalid": ariaInvalid,
+  title,
 }: SelectMenuProps) {
   const effectiveMinWidth = useMemo(() => {
     if (!autoFitFromOptions) return popoverMinWidth;
@@ -191,6 +210,12 @@ export function SelectMenu({
       disabled={disabled}
     >
       <SelectPrimitive.Trigger
+        id={id}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledby}
+        aria-describedby={ariaDescribedby}
+        aria-invalid={ariaInvalid}
+        title={title}
         className={cn(TRIGGER_BASE, fullWidth && "w-full", className)}
       >
         <SelectPrimitive.Value className="flex min-w-0 flex-1 items-center truncate">

@@ -3304,7 +3304,10 @@ const RULES = {
             continue;
           }
           const block = t2.slice(start, end);
-          if (!/aria-label\s*=|aria-labelledby\s*=/.test(block) && !nameRe.test(block)) {
+          if (
+            !/aria-label\s*=|aria-labelledby\s*=/.test(block) &&
+            !nameRe.test(block)
+          ) {
             n++;
           }
           cursor = end + close.length;
@@ -3497,10 +3500,14 @@ const RULES = {
         /* 前面必须是**行首 / 空白 / 引号**（`(^|[^-\w])` + 捕获后续），
          * 否则会把 `min-h-0` / `max-w-md` 这类带前缀的容器写法误当
          * 成 `h-0` / `w-md`（JS 正则 `\b` 在 `-h-` 处也算边界）。 */
-        for (const x of cls.matchAll(/(?:^|[^-\w])w-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
+        for (const x of cls.matchAll(
+          /(?:^|[^-\w])w-(\d+(?:\.\d+)?)(?=\s|$)/g,
+        )) {
           ws.add(x[1]);
         }
-        for (const x of cls.matchAll(/(?:^|[^-\w])h-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
+        for (const x of cls.matchAll(
+          /(?:^|[^-\w])h-(\d+(?:\.\d+)?)(?=\s|$)/g,
+        )) {
           hs.add(x[1]);
         }
         for (const w of ws) if (hs.has(w)) n++;
@@ -3631,6 +3638,14 @@ const HARD_GATE_RULES = new Set([
    * `// p71-allow:start …` 就地声明（P71/P79 共享一份 allow · 见
    * stripP71AllowBlocks）。 */
   "P79",
+  /* P76（shadcn forms.md · 视图层裸 `<select>`）：
+   * #1001 引入时视图层实测 11 处（10 文件），五批治理（#1057 #1059 #1062
+   * #1064 + 本 PR）全部走 `~/components/ui/select-menu` 的 `<SelectMenu>`
+   * 基元清零 → 本 PR 升为硬闸。SelectMenu 已扩 `id` / `aria-*` 转发口、
+   * 支持 `<FormField>` render prop 场景；剩余若确有非走 SelectMenu 不可的
+   * 特殊形态（比如原生 select 的 size= 属性），走 `EXEMPT_FILE_PATTERNS`
+   * 按文件粒度登记 + 说明理由。 */
+  "P76",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
