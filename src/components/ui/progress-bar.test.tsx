@@ -40,7 +40,7 @@ describe("ProgressBar 的确定态", () => {
     const fill = container.querySelector<HTMLElement>(
       '[data-slot="progress-bar-fill"]',
     )!;
-    expect(fill.style.width).toBe("42%");
+    expect(fill.style.transform).toBe("translateX(-58%)");
   });
 
   it("标签与百分比同排；showValue=false 时不显示百分比", () => {
@@ -61,9 +61,9 @@ describe("ProgressBar 的确定态", () => {
     );
     const fill = () =>
       container.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]')!;
-    expect(fill().style.width).toBe("0%");
+    expect(fill().style.transform).toBe("translateX(-100%)");
     rerender(<ProgressBar value={1} minVisible={4} />);
-    expect(fill().style.width).toBe("4%");
+    expect(fill().style.transform).toBe("translateX(-96%)");
   });
 
   it("超量值被夹取到 100（接口给 120 不溢出容器）", () => {
@@ -120,8 +120,8 @@ describe("ProgressBar 的外观可覆盖而不重画轨道", () => {
     expect(visualTrack.className).toContain("bg-elevated");
     expect(visualTrack.className).toContain("h-1");
     expect(fill.className).toContain("bg-linear-to-r");
-    /* 填充仍带基元的过渡与圆角（差异化不该把这两条也顶掉）。 */
-    expect(fill.className).toContain("transition-all");
+    /* 填充仍带基元的过渡（transform）与圆角（差异化不该把这两条也顶掉）。 */
+    expect(fill.className).toContain("transition-transform");
     expect(fill.className).toContain("rounded-full");
   });
 });
