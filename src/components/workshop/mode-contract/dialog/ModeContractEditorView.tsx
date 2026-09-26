@@ -19,6 +19,7 @@ import {
 } from "../mode-contract-config";
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
 import { Button } from "~/components/ui/button";
+import { FieldLabel } from "~/components/ui/field";
 import { Checkbox } from "~/components/ui/checkbox";
 import { ContractInputCatalog } from "./ContractInputCatalog";
 
@@ -182,7 +183,7 @@ export function ModeContractEditorView({
                           ↓
                         </Button>
                       </span>
-                      <label
+                      <FieldLabel
                         className="text-muted-foreground flex cursor-pointer items-center gap-1 text-[10px]"
                         title="必备口：本地工作流缺它的落点时，工坊里驱动不起来"
                       >
@@ -194,7 +195,7 @@ export function ModeContractEditorView({
                           className="size-3"
                         />
                         必备
-                      </label>
+                      </FieldLabel>
                       <Button
                         variant="ghost"
                         size="icon-xs"
