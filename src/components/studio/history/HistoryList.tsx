@@ -6,6 +6,7 @@ import { HistoryDetailModal } from "./HistoryDetailModal";
 import { HistoryTaskCard } from "./HistoryTaskCard";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { EmptyState } from "~/components/ui/empty-state";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { useHistoryList } from "./hooks/use-history-list";
 import { FILTERS, type SortKey, type TaskItem } from "./history-types";
@@ -156,14 +157,11 @@ export function HistoryList({
         {c.loading ? (
           <p className="text-ink-muted text-sm">加载中…</p>
         ) : c.filteredCount === 0 ? (
-          <div className="border-border text-ink-muted grid min-h-[300px] place-items-center rounded-2xl border border-dashed">
-            <div className="text-center">
-              <p className="text-ink-strong text-lg font-medium">
-                {c.empty.title}
-              </p>
-              <p className="mt-1 text-sm">{c.empty.hint}</p>
-            </div>
-          </div>
+          <EmptyState
+            title={c.empty.title}
+            description={c.empty.hint}
+            minHeightClass="min-h-[300px]"
+          />
         ) : (
           <div className="flex-col gap-6">
             {c.visibleGroups.map((group) => (
