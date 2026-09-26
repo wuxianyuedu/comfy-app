@@ -134,6 +134,21 @@ const PURE_NODE_HOSTS = [
   "src/lib/comfyui/lifecycle-exit.ts",
   "src/lib/comfyui/desktop-instance.ts",
   "src/lib/shell/open-in-browser.ts",
+  // P3 迁移第 1 期·lib 层地基批·汇聚点（3 个）：
+  //   · `comfyui/status`：ComfyUI 运行态快照的**四路判据汇聚点**（HTTP 探测 /
+  //     进程表 / 桌面元数据 / 环境反查）。它的静态依赖全部在 comfyui 前 8 批
+  //     与本批前段（instance-kind / env-python / desktop-instance / log-paths /
+  //     app-runtime-log）中纯化了；logger 走 `~/lib/core/logger`（3rd class）。
+  //   · `comfyui/lifecycle-launch`：ComfyUI 拉起路径的**编排**（bound/keepAlive
+  //     两种模式），静态引 process-launch、log-paths、launch-path、proc-detect、
+  //     desktop-instance、lifecycle-exit、logger —— 全 3rd class 或 pure。
+  //     host（`LaunchHost`）注入是它既有的架构（不引 lifecycle.ts 避成环）。
+  //   · `process/process-launch`：与 `kill-process-tree.ts` 同目录同族的
+  //     **spawn 侧**（bound/keepAlive + PowerShell Start-Process 中介）。
+  //     这一批把 lifecycle-launch 的最后一颗钉子拆掉。
+  "src/lib/comfyui/status.ts",
+  "src/lib/comfyui/lifecycle-launch.ts",
+  "src/lib/process/process-launch.ts",
 ];
 
 type Report = {
