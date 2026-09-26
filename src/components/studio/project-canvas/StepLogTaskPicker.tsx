@@ -14,6 +14,7 @@ import { useNodes } from "@xyflow/react";
 import { nodeSeqOf } from "./node-seq";
 import { loadStepLogPanelState } from "./stepLogCache";
 import { getNodeIdByTaskId } from "./activeTask";
+import { SelectMenu } from "~/components/ui/select-menu";
 
 export const StepLogTaskPicker = memo(function StepLogTaskPicker({
   cachedIds,
@@ -40,31 +41,34 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
   }, [cachedIds, nodes]);
 
   return (
-    <select
+    <SelectMenu
       value={taskId ?? ""}
-      onChange={(event) => onSelect(event.target.value || null)}
-      className="bg-panel border-border-strong text-ink-soft max-w-[200px] truncate rounded-md border px-1.5 py-0.5 text-[10.5px] outline-none"
-      title="切换查看的任务"
-    >
-      {!taskId && <option value="">（无任务）</option>}
-      {cachedIds.map((id) => {
-        const meta = loadStepLogPanelState(id);
-        const seq = seqByTaskId.get(id);
-        const wn = meta?.workflowName?.trim();
-        const st = meta?.status ?? "?";
-        const seqLabel = seq ? `#${seq}` : null;
-        const titleParts = [seqLabel, wn, st, id].filter(Boolean);
-        const displayParts = [
-          seqLabel,
-          wn ?? `task ${id.slice(0, 8)}`,
-          st,
-        ].filter(Boolean);
-        return (
-          <option key={id} value={id} title={titleParts.join(" ·")}>
-            {displayParts.join(" ·")}
-          </option>
-        );
-      })}
-    </select>
+      onChange={(v) => onSelect(v || null)}
+      options={cachedIds}
+      labels={Object.fromEntries(
+        cachedIds.map((id) => {
+          const meta = loadStepLogPanelState(id);
+          const seq = seqByTaskId.get(id);
+          const wn = meta?.workflowName?.trim();
+          const st = meta?.status ?? "?";
+          const seqLabel = seq ? `#${seq}` : null;
+          const titleParts = [seqLabel, wn, st, id].filter(Boolean);
+          const displayParts = [
+            seqLabel,
+            wn ?? `task ${id.slice(0, 8)}`,
+            st,
+          ].filter(Boolean);
+          return [
+            id,
+            <span key={id} title={titleParts.join(" ·")}>
+              {displayParts.join(" ·")}
+            </span>,
+          ];
+        }),
+      )}
+      placeholder={taskId ? undefined : "（无任务）"}
+      aria-label="切换查看的任务"
+      className="max-w-[200px] text-[10.5px]"
+    />
   );
 });
