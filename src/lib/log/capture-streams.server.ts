@@ -89,6 +89,42 @@ function safeAppend(filePath: string, text: string): void {
   }
 }
 
+/* ── 转录缓冲 ─────────────────────────────────────────────
+ * 转录挂在 `process.stdout.write` 上，每条 chunk 都过这里：每条一次
+ * `appendFileSync` 等于把 open/write/close 三个系统调用乘上每一行输出 ——
+ * 高频日志（pino、Turbopack 编译进度）下事件循环被大量小写入占满。
+ * 攒进内存缓冲，满 `FLUSH_BYTES` 或到 `FLUSH_INTERVAL_MS` 再一次落盘。
+ * 进程退出时最多丢一份未满的缓冲，对「面板转录」这份用途可以接受；
+ * 顺序不受影响（单缓冲 FIFO，flush 是整段 append）。 */
+const FLUSH_BYTES = 64 * 1024;
+const FLUSH_INTERVAL_MS = 1000;
+
+let buffer = "";
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushBuffer(filePath: string): void {
+  if (flushTimer !== null) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  if (!buffer) return;
+  const text = buffer;
+  buffer = "";
+  safeAppend(filePath, text);
+}
+
+function bufferedAppend(filePath: string, text: string): void {
+  buffer += text;
+  if (buffer.length >= FLUSH_BYTES) {
+    flushBuffer(filePath);
+    return;
+  }
+  flushTimer ??= setTimeout(() => {
+    flushTimer = null;
+    flushBuffer(filePath);
+  }, FLUSH_INTERVAL_MS);
+}
+
 let installed = false;
 
 /**
@@ -135,7 +171,7 @@ export function installStreamCapture(): void {
           typeof chunk === "string"
             ? chunk
             : Buffer.from(chunk).toString("utf-8");
-        safeAppend(filePath, text);
+        bufferedAppend(filePath, text);
       } catch {
         /* 转录失败不吞掉输出本身 */
       }
