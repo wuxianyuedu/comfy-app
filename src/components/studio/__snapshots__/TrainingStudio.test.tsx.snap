@@ -295,9 +295,9 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               data-slot="progress-track"
             >
               <div
-                class="bg-primary h-full rounded-full transition-all bg-linear-to-r from-primary-500 to-info"
+                class="bg-primary h-full rounded-full transition-transform bg-linear-to-r from-primary-500 to-info"
                 data-slot="progress-bar-fill"
-                style="width: 0%;"
+                style="transform: translateX(-100%);"
               />
             </div>
             <span
