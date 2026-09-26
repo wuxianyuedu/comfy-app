@@ -76,7 +76,9 @@ describe("CanvasNode（按 kind 渲染冒烟）", () => {
     expect(screen.getByText(meta.typeChar)).toBeInTheDocument(); // I
     expect(screen.getByText("待开始")).toBeInTheDocument(); // StatusBadge idle
     // 非 content-carrier 节点：头部有删除按钮
-    expect(screen.getByTitle("删除节点")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "删除节点" }),
+    ).toBeInTheDocument();
     // ImageGenerationPanel 三步级联：未选工作流时 CTA 为禁用占位
     expect(screen.getByText("请先选择工作流")).toBeDisabled();
     // 输出端口行（image 专属 footer）
@@ -91,10 +93,14 @@ describe("CanvasNode（按 kind 渲染冒烟）", () => {
     expect(
       screen.getByPlaceholderText("输入要喂给下游生成节点的提示词 / 参考文字…"),
     ).toBeInTheDocument();
-    expect(screen.getByTitle("编辑文本")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "编辑文本" }),
+    ).toBeInTheDocument();
     // 资产节点（text/picture/movie）头部只留 NodeChip
     expect(screen.queryByText("待开始")).not.toBeInTheDocument();
-    expect(screen.queryByTitle("删除节点")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "删除节点" }),
+    ).not.toBeInTheDocument();
   });
 
   it("kind=picture：头部 P/「图片」+ 拖入上传占位 + 左右两个 Handle", () => {
@@ -105,7 +111,9 @@ describe("CanvasNode（按 kind 渲染冒烟）", () => {
     expect(screen.getByText(meta.label)).toBeInTheDocument(); // 图片
     expect(screen.getByText(meta.typeChar)).toBeInTheDocument(); // P
     expect(screen.getByText("拖入上传图片")).toBeInTheDocument();
-    expect(screen.getByTitle("上传图片")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "上传图片" }),
+    ).toBeInTheDocument();
     // 未选中时不展开 ImageGenerationPanel
     expect(screen.queryByText("请先选择工作流")).not.toBeInTheDocument();
     // 左侧 inputImage（target）+ 右侧 output（source）
@@ -127,7 +135,7 @@ describe("CanvasNode（按 kind 渲染冒烟）", () => {
     // 折叠态 teaser 直接展示原始错误串
     expect(screen.getByText("模拟后端崩溃：未知异常")).toBeInTheDocument();
     // 展开 → 「原始错误」<details> 块出现
-    await userEvent.click(screen.getByTitle("展开错误详情"));
+    await userEvent.click(screen.getByRole("button", { name: "展开错误详情" }));
     expect(screen.getByText("原始错误")).toBeInTheDocument();
   });
 });

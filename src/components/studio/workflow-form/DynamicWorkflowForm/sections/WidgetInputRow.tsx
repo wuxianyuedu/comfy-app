@@ -18,6 +18,7 @@ import {
 import { ACCENT } from "../constants";
 import { controlTypeFallback } from "../dynamic-workflow-form-config";
 import { WidgetControl } from "./WidgetControl";
+import { Hint } from "~/components/ui/hint";
 
 interface WidgetInputRowProps {
   entry: EnrichedWidget;
@@ -114,47 +115,53 @@ export function WidgetInputRow({
           避免一进入改名输入态按钮就跑到输入框旁边。 */}
       <span className="flex shrink-0 items-center gap-1.5">
         {onRequiredChange && (
-          <Button
-            variant={entry.required ? "danger" : "ghost"}
-            title={
+          <Hint
+            label={
               entry.required
                 ? "已标记为必填，点击切换为可选"
                 : "点击将其标记为必填"
             }
-            onClick={() => onRequiredChange(!entry.required)}
-            onMouseDown={(event) => event.stopPropagation()}
-            className={`nodrag nopan h-auto shrink-0 rounded px-1.5 py-px text-[10px] font-medium ${
-              entry.required
-                ? ""
-                : "border-border-strong bg-subtle text-ink-muted border"
-            }`}
           >
-            {entry.required ? "必填" : "可选"}
-          </Button>
+            <Button
+              variant={entry.required ? "danger" : "ghost"}
+              onClick={() => onRequiredChange(!entry.required)}
+              onMouseDown={(event) => event.stopPropagation()}
+              className={`nodrag nopan h-auto shrink-0 rounded px-1.5 py-px text-[10px] font-medium ${
+                entry.required
+                  ? ""
+                  : "border-border-strong bg-subtle text-ink-muted border"
+              }`}
+            >
+              {entry.required ? "必填" : "可选"}
+            </Button>
+          </Hint>
         )}
         {trailing}
         {onVisibilityChange && (
-          <Button
-            variant="ghost"
-            title={
+          <Hint
+            label={
               visible === false
                 ? "该参数在当前模式下已隐藏，点击恢复显示"
                 : "点击在当前模式下隐藏此参数"
             }
-            onClick={() => onVisibilityChange(visible === false)}
-            onMouseDown={(event) => event.stopPropagation()}
-            className={`nodrag nopan h-auto shrink-0 rounded p-0.5 ${
-              visible === false
-                ? "text-ink-fainter hover:text-ink-soft"
-                : "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
-            }`}
           >
-            {visible === false ? (
-              <EyeOff data-icon="inline-start" size={11} />
-            ) : (
-              <Eye data-icon="inline-start" size={11} />
-            )}
-          </Button>
+            <Button
+              variant="ghost"
+              onClick={() => onVisibilityChange(visible === false)}
+              onMouseDown={(event) => event.stopPropagation()}
+              className={`nodrag nopan h-auto shrink-0 rounded p-0.5 ${
+                visible === false
+                  ? "text-ink-fainter hover:text-ink-soft"
+                  : "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
+              }`}
+            >
+              {visible === false ? (
+                <EyeOff data-icon="inline-start" size={11} />
+              ) : (
+                <Eye data-icon="inline-start" size={11} />
+              )}
+            </Button>
+          </Hint>
         )}
         {typeChip}
       </span>

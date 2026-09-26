@@ -10,6 +10,7 @@ import {
   type PendingRow,
   type WorkflowRow,
 } from "./workflow-library-config";
+import { Hint } from "~/components/ui/hint";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -202,16 +203,20 @@ export function WorkflowLibraryList({
                       >
                         {pending.name}
                       </span>
-                      <Button
-                        variant="info"
-                        onClick={() => onLoadPending?.(pending)}
-                        disabled={loadingPending}
-                        title={`载入「${pending.name}」`}
-                        className="h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[10px] whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Download data-icon="inline-start" className="size-3" />
-                        {loadingPending ? "载入中…" : "载入"}
-                      </Button>
+                      <Hint label={`载入「${pending.name}」`} wrap>
+                        <Button
+                          variant="info"
+                          onClick={() => onLoadPending?.(pending)}
+                          disabled={loadingPending}
+                          className="h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[10px] whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Download
+                            data-icon="inline-start"
+                            className="size-3"
+                          />
+                          {loadingPending ? "载入中…" : "载入"}
+                        </Button>
+                      </Hint>
                     </div>
                   </li>
                 );

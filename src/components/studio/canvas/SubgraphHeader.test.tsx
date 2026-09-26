@@ -104,13 +104,15 @@ describe("SubgraphHeader", () => {
     renderHeader(
       <SubgraphHeader {...base} onToggle={vi.fn()} onEnter={onEnter} />,
     );
-    await userEvent.click(screen.getByTitle("展开子工作流"));
+    await userEvent.click(screen.getByRole("button", { name: "展开子工作流" }));
     expect(onEnter).toHaveBeenCalledOnce();
   });
 
   it("未传 onEnter 时不渲染钻入按钮", () => {
     renderHeader(<SubgraphHeader {...base} onToggle={vi.fn()} />);
-    expect(screen.queryByTitle("展开子工作流")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "展开子工作流" }),
+    ).not.toBeInTheDocument();
   });
 
   it("io 未传时不渲染 IO checkbox(即使提供了 outputRef)", () => {

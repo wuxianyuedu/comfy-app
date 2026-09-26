@@ -2,6 +2,7 @@
 
 import { upperToken } from "~/lib/upper-token";
 import React, { useEffect, useRef } from "react";
+import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 /* 直接引基础件与结果卡（不再经 CanvasNode 目录 barrel）：barrel 会 re-export
@@ -394,15 +395,16 @@ export function ImageGenerationPanel({
              * SSE`error` 事件会在约 100ms 内跟上，并经处理
              * 普通失败的同一条路径把`d.status` patch 成"error"。 */}
             {d.status === "running" && d.taskId ? (
-              <Button
-                variant="outline"
-                onClick={onCancel}
-                disabled={cancelling}
-                title="强制终止当前任务并释放活动槽位"
-                className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 h-auto rounded border px-2.5 py-1 text-[10.5px]"
-              >
-                {cancelling ? "× 取消中…" : "× 强制取消"}
-              </Button>
+              <Hint label="强制终止当前任务并释放活动槽位" wrap>
+                <Button
+                  variant="outline"
+                  onClick={onCancel}
+                  disabled={cancelling}
+                  className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 h-auto rounded border px-2.5 py-1 text-[10.5px]"
+                >
+                  {cancelling ? "× 取消中…" : "× 强制取消"}
+                </Button>
+              </Hint>
             ) : null}
           </div>
           {/* 执行步骤日志不再在此节点内渲染——

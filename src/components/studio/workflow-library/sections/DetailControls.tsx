@@ -7,6 +7,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 
 export function ActionButton({
   onClick,
@@ -24,20 +25,21 @@ export function ActionButton({
   variant?: "default" | "danger";
 }) {
   return (
-    <Button
-      variant={variant === "danger" ? "danger" : "outline"}
-      onClick={onClick}
-      disabled={disabled}
-      title={title ?? label}
-      className={[
-        "h-auto gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium",
-        variant === "danger"
-          ? "border-destructive/20 disabled:opacity-40"
-          : "border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright disabled:opacity-40",
-      ].join(" ")}
-    >
-      {icon}
-      {label}
-    </Button>
+    <Hint label={title ?? label} wrap>
+      <Button
+        variant={variant === "danger" ? "danger" : "outline"}
+        onClick={onClick}
+        disabled={disabled}
+        className={[
+          "h-auto gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium",
+          variant === "danger"
+            ? "border-destructive/20 disabled:opacity-40"
+            : "border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright disabled:opacity-40",
+        ].join(" ")}
+      >
+        {icon}
+        {label}
+      </Button>
+    </Hint>
   );
 }

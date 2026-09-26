@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { textHandler } from "~/lib/form-props";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -499,15 +500,16 @@ function FolderConfigRow({
             </Button>
           )}
           {row.hasConfig && (
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={remove}
-              className="text-ink-muted hover:bg-surface-2 hover:text-ink-strong h-auto rounded-md px-2 py-1"
-              title="删除配置（不再扫描）"
-            >
-              删除
-            </Button>
+            <Hint label="删除配置（不再扫描）">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={remove}
+                className="text-ink-muted hover:bg-surface-2 hover:text-ink-strong h-auto rounded-md px-2 py-1"
+              >
+                删除
+              </Button>
+            </Hint>
           )}
         </div>
       </div>

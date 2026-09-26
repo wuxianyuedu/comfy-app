@@ -1,5 +1,6 @@
 "use client";
 
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import {
@@ -58,50 +59,54 @@ export function ResultCard({
         </div>
         {/* Edit toolbar */}
         <div className="border-border-strong bg-canvas-deep flex items-center justify-center gap-1 border-b px-2 py-1.5">
-          <Button
-            variant="ghost"
-            title="字号减小"
-            className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-medium"
-          >
-            A-
-          </Button>
-          <Button
-            variant="ghost"
-            title="字号增大"
-            className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-medium"
-          >
-            A+
-          </Button>
+          <Hint label="字号减小" accessibleName>
+            <Button
+              variant="ghost"
+              className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-medium"
+            >
+              A-
+            </Button>
+          </Hint>
+          <Hint label="字号增大" accessibleName>
+            <Button
+              variant="ghost"
+              className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-medium"
+            >
+              A+
+            </Button>
+          </Hint>
           <span className="bg-border-strong mx-1 h-3 w-px" />
-          <Button
-            variant="ghost"
-            title="编辑"
-            className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
-          >
-            <Icon
-              data-icon="inline-start"
-              name="pen"
-              size={11}
-              className="mr-1 inline align-[-1px]"
-            />
-            编辑
-          </Button>
-          <Button
-            variant="ghost"
-            title="下载"
-            onClick={() => {
-              if (text) copyResult(text);
-            }}
-            className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
-          >
-            <Icon
-              data-icon="inline-start"
-              name="download"
-              size={11}
-              className="mr-1 inline align-[-1px]"
-            />
-            下载
-          </Button>
+          <Hint label="编辑">
+            <Button
+              variant="ghost"
+              className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
+            >
+              <Icon
+                data-icon="inline-start"
+                name="pen"
+                size={11}
+                className="mr-1 inline align-[-1px]"
+              />
+              编辑
+            </Button>
+          </Hint>
+          <Hint label="下载">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (text) copyResult(text);
+              }}
+              className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
+            >
+              <Icon
+                data-icon="inline-start"
+                name="download"
+                size={11}
+                className="mr-1 inline align-[-1px]"
+              />
+              下载
+            </Button>
+          </Hint>
         </div>
         <div className="text-ink-bright max-h-56 overflow-auto p-3 text-[12px] leading-relaxed">
           {

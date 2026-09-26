@@ -37,6 +37,7 @@ import {
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
 import { WorkflowRunRawCliModal } from "./WorkflowRunRawCliModal";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -234,16 +235,17 @@ export function WorkflowRunLogModal({
 
             <div className="flex shrink-0 items-center gap-2">
               {viewTaskId && status === "running" && (
-                <Button
-                  variant="danger"
-                  onClick={onCancel}
-                  disabled={cancelling}
-                  title="取消当前查看的任务"
-                  data-testid="wflib-log-cancel"
-                  className="h-auto rounded-md px-2 py-0.5 text-[10.5px]"
-                >
-                  {cancelling ? "× 取消中…" : "× 取消"}
-                </Button>
+                <Hint label="取消当前查看的任务" wrap>
+                  <Button
+                    variant="danger"
+                    onClick={onCancel}
+                    disabled={cancelling}
+                    data-testid="wflib-log-cancel"
+                    className="h-auto rounded-md px-2 py-0.5 text-[10.5px]"
+                  >
+                    {cancelling ? "× 取消中…" : "× 取消"}
+                  </Button>
+                </Hint>
               )}
               {runs.length > 1 && (
                 <SelectMenu
@@ -266,29 +268,34 @@ export function WorkflowRunLogModal({
                   className="max-w-[200px] text-[10.5px]"
                 />
               )}
-              <Button
-                variant="ghost"
-                onClick={() => setRawOpen(true)}
-                disabled={!viewTaskId}
-                title="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）"
-                data-testid="wflib-log-raw"
-                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md px-2 py-0.5 text-[10.5px]"
+              <Hint
+                label="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）"
+                wrap
               >
-                查看完整输出
-              </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setRawOpen(true)}
+                  disabled={!viewTaskId}
+                  data-testid="wflib-log-raw"
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md px-2 py-0.5 text-[10.5px]"
+                >
+                  查看完整输出
+                </Button>
+              </Hint>
               <WidePanelToggle
                 panel={panel}
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
               />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
-                title="关闭"
-                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-              >
-                <X data-icon="inline-start" size={16} />
-              </Button>
+              <Hint label="关闭" accessibleName>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onClose}
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                >
+                  <X data-icon="inline-start" size={16} />
+                </Button>
+              </Hint>
             </div>
           </div>
 
@@ -301,22 +308,25 @@ export function WorkflowRunLogModal({
                     ? visibleAll.length
                     : visibleAll.filter((l) => l.level === option.value).length;
                 return (
-                  <Button
+                  <Hint
+                    label={`${option.label}（${count} 条）`}
                     key={option.value}
-                    variant="ghost"
-                    onClick={() => setFilter(option.value)}
-                    title={`${option.label}（${count} 条）`}
-                    className={`h-auto rounded-md px-2.5 py-1 text-[13px] ${
-                      filter === option.value
-                        ? "bg-surface-2 text-ink"
-                        : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
-                    }`}
                   >
-                    {option.label}
-                    <span className="text-ink-fainter ml-1 text-[11px]">
-                      {count}
-                    </span>
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setFilter(option.value)}
+                      className={`h-auto rounded-md px-2.5 py-1 text-[13px] ${
+                        filter === option.value
+                          ? "bg-surface-2 text-ink"
+                          : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
+                      }`}
+                    >
+                      {option.label}
+                      <span className="text-ink-fainter ml-1 text-[11px]">
+                        {count}
+                      </span>
+                    </Button>
+                  </Hint>
                 );
               })}
             </div>

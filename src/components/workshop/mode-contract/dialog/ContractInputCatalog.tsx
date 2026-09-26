@@ -14,6 +14,7 @@ import { useState } from "react";
 import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import type {
@@ -72,23 +73,27 @@ export function ContractInputCatalog({
         </p>
         <div className="flex flex-wrap gap-1">
           {catalog.map((item) => (
-            <Button
-              key={item.type}
-              variant="outline"
-              size="xs"
-              disabled={item.added}
-              onClick={() => onAddPredefined(item.type)}
-              title={
+            <Hint
+              label={
                 item.added ? "已在当前契约里" : `添加「${item.label}」到契约`
               }
-              className={`h-auto rounded border-dashed px-2 py-0.5 ${
-                item.added
-                  ? "border-border text-muted-foreground/60 cursor-default"
-                  : "border-primary/40 text-primary hover:bg-primary/10"
-              }`}
+              wrap
+              key={item.type}
             >
-              {item.added ? "✓" : "＋"} {item.label}
-            </Button>
+              <Button
+                variant="outline"
+                size="xs"
+                disabled={item.added}
+                onClick={() => onAddPredefined(item.type)}
+                className={`h-auto rounded border-dashed px-2 py-0.5 ${
+                  item.added
+                    ? "border-border text-muted-foreground/60 cursor-default"
+                    : "border-primary/40 text-primary hover:bg-primary/10"
+                }`}
+              >
+                {item.added ? "✓" : "＋"} {item.label}
+              </Button>
+            </Hint>
           ))}
         </div>
       </div>
@@ -154,20 +159,20 @@ export function ContractInputCatalog({
                 className="h-6 w-40 text-[11px]"
               />
               {CUSTOM_INPUT_KINDS.map((item) => (
-                <Button
-                  key={item.kind}
-                  variant="outline"
-                  size="xs"
-                  title={item.hint}
-                  onClick={() => setDraftKind(item.kind)}
-                  className={`h-auto rounded px-2 py-0.5 text-[10px] ${
-                    draftKind === item.kind
-                      ? "border-primary text-primary bg-primary/10"
-                      : "border-border text-muted-foreground"
-                  }`}
-                >
-                  {item.label}
-                </Button>
+                <Hint label={item.hint} key={item.kind}>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setDraftKind(item.kind)}
+                    className={`h-auto rounded px-2 py-0.5 text-[10px] ${
+                      draftKind === item.kind
+                        ? "border-primary text-primary bg-primary/10"
+                        : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </Button>
+                </Hint>
               ))}
               <Button
                 variant="primary-solid"

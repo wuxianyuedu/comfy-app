@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { completeChat } from "~/lib/llm/browser";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import type { LLMConfigView } from "~/lib/llm/types";
 import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
@@ -128,20 +129,21 @@ export function LLMStatusChip() {
 export function LLMSettingsButton() {
   const { openSettings } = useLLM();
   return (
-    <Button
-      variant="outline"
-      onClick={openSettings}
-      title="LLM 文本生成设置"
-      className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm transition-colors"
-    >
-      <Icon
-        data-icon="inline-start"
-        name="settings"
-        size={14}
-        className="mr-1.5 inline align-[-2px]"
-      />
-      LLM 设置
-    </Button>
+    <Hint label="LLM 文本生成设置">
+      <Button
+        variant="outline"
+        onClick={openSettings}
+        className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm transition-colors"
+      >
+        <Icon
+          data-icon="inline-start"
+          name="settings"
+          size={14}
+          className="mr-1.5 inline align-[-2px]"
+        />
+        LLM 设置
+      </Button>
+    </Hint>
   );
 }
 

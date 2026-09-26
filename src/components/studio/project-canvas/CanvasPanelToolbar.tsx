@@ -3,6 +3,7 @@
 import React from "react";
 import { Clock, Folder } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 
 export type CanvasPanelType = "materials" | "history" | null;
 
@@ -57,27 +58,27 @@ export function CanvasPanelToolbar({
       {items.map((item) => {
         const isActive = active === item.id;
         return (
-          <Button
-            key={item.id}
-            variant="ghost"
-            onClick={() => onSelect(isActive ? null : item.id)}
-            title={item.label}
-            className={`group relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 ${
-              isActive
-                ? "bg-primary/20 text-primary-strong shadow-primary/10 ring-primary/25 shadow-sm ring-1"
-                : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
-            }`}
-          >
-            {item.icon}
-            {/* Tooltip —— 悬停或激活时显示在按钮右侧 */}
-            <span
-              className={`border-border-strong bg-panel/95 text-ink-soft pointer-events-none absolute left-full ml-2.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium whitespace-nowrap shadow-xl shadow-black/40 backdrop-blur-sm transition-opacity ${
-                isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          <Hint label={item.label} key={item.id}>
+            <Button
+              variant="ghost"
+              onClick={() => onSelect(isActive ? null : item.id)}
+              className={`group relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 ${
+                isActive
+                  ? "bg-primary/20 text-primary-strong shadow-primary/10 ring-primary/25 shadow-sm ring-1"
+                  : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
               }`}
             >
-              {item.label}
-            </span>
-          </Button>
+              {item.icon}
+              {/* Tooltip —— 悬停或激活时显示在按钮右侧 */}
+              <span
+                className={`border-border-strong bg-panel/95 text-ink-soft pointer-events-none absolute left-full ml-2.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium whitespace-nowrap shadow-xl shadow-black/40 backdrop-blur-sm transition-opacity ${
+                  isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+              >
+                {item.label}
+              </span>
+            </Button>
+          </Hint>
         );
       })}
       {/* 分隔线 */}

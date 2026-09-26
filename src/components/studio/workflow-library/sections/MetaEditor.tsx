@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 
 export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
@@ -66,20 +67,21 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
 
   return (
     <>
-      <Button
-        variant="outline"
-        size="xs"
-        onClick={() => setOpen((value) => !value)}
-        className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink inline-flex h-auto max-w-[260px] gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px]"
-        title={`${label}（点击管理模型标签绑定）`}
-      >
-        <span className="truncate">{label}</span>
-        <span
-          className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+      <Hint label={`${label}（点击管理模型标签绑定）`}>
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={() => setOpen((value) => !value)}
+          className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink inline-flex h-auto max-w-[260px] gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px]"
         >
-          ▾
-        </span>
-      </Button>
+          <span className="truncate">{label}</span>
+          <span
+            className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          >
+            ▾
+          </span>
+        </Button>
+      </Hint>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent

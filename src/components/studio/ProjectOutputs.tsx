@@ -3,6 +3,7 @@
 import { subscribeAppEvent } from "~/lib/app-events";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
@@ -452,21 +453,24 @@ export function ProjectOutputs() {
               {/* footer actions */}
               <div className="border-border-strong border-t p-4">
                 <div className="flex gap-2">
-                  <Button
-                    variant="primary-solid"
-                    size="sm"
-                    onClick={handleCopy}
-                    className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
-                    title={
+                  <Hint
+                    label={
                       copyFailed ? copyFailureText() : "复制元数据到剪贴板"
                     }
                   >
-                    {copyFailed
-                      ? "复制失败"
-                      : copied.on
-                        ? "已复制 ✓"
-                        : "复制元数据"}
-                  </Button>
+                    <Button
+                      variant="primary-solid"
+                      size="sm"
+                      onClick={handleCopy}
+                      className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
+                    >
+                      {copyFailed
+                        ? "复制失败"
+                        : copied.on
+                          ? "已复制 ✓"
+                          : "复制元数据"}
+                    </Button>
+                  </Hint>
                   <Button
                     variant="outline"
                     size="sm"

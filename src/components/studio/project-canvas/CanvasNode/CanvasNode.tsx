@@ -17,6 +17,7 @@ import {
   type CanvasNodeType,
   NODE_META,
 } from "~/lib/project-canvas/canvas-types";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { useWorkflowModes } from "./hooks/use-workflow-modes";
@@ -361,15 +362,16 @@ export const CanvasNode = React.memo(function CanvasNode({
                   <div className="flex shrink-0 items-center gap-1.5">
                     <StatusDot status={d.status} />
                     <StatusBadge status={d.status} />
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={deleteSelf}
-                      className="text-ink-muted hover:text-destructive ml-1 h-auto p-0 hover:bg-transparent"
-                      title="删除节点"
-                    >
-                      <Icon data-icon="inline-start" name="close" size={14} />
-                    </Button>
+                    <Hint label="删除节点" accessibleName>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={deleteSelf}
+                        className="text-ink-muted hover:text-destructive ml-1 h-auto p-0 hover:bg-transparent"
+                      >
+                        <Icon data-icon="inline-start" name="close" size={14} />
+                      </Button>
+                    </Hint>
                   </div>
                 )}
               </div>

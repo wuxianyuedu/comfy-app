@@ -3,6 +3,7 @@
 import { HardDriveDownload } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { useFlashLatch } from "~/components/ui/use-flash-state";
 import { useLogPanel } from "./LogProvider";
 
@@ -36,7 +37,7 @@ export function SaveExportButton({
 }: {
   /** 导出的来源标签（进文件名，服务端有白名单兜底）。 */
   label: string;
-  /** 当前筛选的中文摘要（写进 title，用户知道存下来的是哪一类）。 */
+  /** 当前筛选的中文摘要（写进悬停提示，用户知道存下来的是哪一类）。 */
   scopeLabel: string;
   total: number;
 }) {
@@ -61,18 +62,21 @@ export function SaveExportButton({
 
   return (
     <span className="flex items-center gap-1">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onSave}
-        title={`保存当前筛选的全部日志到本机 log/exports/（${scopeLabel} · ${total} 条）`}
-        aria-label="保存当前筛选的全部日志到本地文件"
-        className={`hover:bg-subtle hover:text-ink rounded-md ${
-          failed ? "text-danger-strong" : "text-ink-muted"
-        }`}
+      <Hint
+        label={`保存当前筛选的全部日志到本机 log/exports/（${scopeLabel} · ${total} 条）`}
       >
-        <HardDriveDownload size={16} />
-      </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onSave}
+          aria-label="保存当前筛选的全部日志到本地文件"
+          className={`hover:bg-subtle hover:text-ink rounded-md ${
+            failed ? "text-danger-strong" : "text-ink-muted"
+          }`}
+        >
+          <HardDriveDownload size={16} />
+        </Button>
+      </Hint>
       {/* 路径就是这次保存的「回执」：没有它，用户只能自己去猜文件在哪。 */}
       {savedPath && (
         <span
