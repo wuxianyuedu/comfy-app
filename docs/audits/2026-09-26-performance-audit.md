@@ -34,6 +34,10 @@
 | M11  | P1   | `src/lib/comfyui/executor-ws.ts:247`                             | 重连句柄存模块级，重复调度先清旧                                                                       | #1048 |
 | S6   | P1   | `src/app/api/tasks/[id]/stream/route.ts:122-161`                 | 轮询换 `findSseSnapshot` 轻量投影，间隔 3s→5s                                                          | #1049 |
 | M4   | P1   | 同上（路由侧）                                                   | 连接死亡（`send` 抛错）即 `cleanup()`，补上 abort 不亮的漏网路径（emitter 侧终态清理由 M3 的告警兜底） | #1049 |
+| S8   | P1   | `src/server/api/routers/task.ts:53-62`                           | media 过滤改迭代补页（扫描上限与旧版对齐 400），不再固定拉 400 行                                      | #1052 |
+| F7   | P1   | `src/components/workshop/ShotStudio.tsx:121-142`                 | 预填 effect 依赖收窄，抽成 `useAutoFillPrompts`（顺带回到 400 行预算内）                               | #1055 |
+| M7   | P1   | `src/lib/log/capture-streams.server.ts:86/138`                   | 转录改 64KB/1s 缓冲批量落盘（FIFO 顺序不变）                                                           | #1058 |
+| M5   | P1   | `runner-state.ts` 的 `settled`/`finalized`/`wsWaitLogged`        | 三个只增 Set 走 `addBounded`（4096 容量兜底）                                                          | #1061 |
 
 ## B. 判定修正与例外（📝）
 
@@ -51,16 +55,14 @@
 
 - ⬜ **F4a** `src/components/studio/ProjectOutputs.tsx:250` —— 产出网格 `outputs.map` 全量渲染（每卡带缩略图）。方向：行级虚拟化（`@tanstack/react-virtual`，范式见 `ModelLibrary.tsx:135`）。
 - ⬜ **F4b** `src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx:141/233/364` —— 节点库三层嵌套全量 `map`（自定义节点包可含数百~上千类型）。方向：展开时才挂载 + 展开组内虚拟化。
-- ⬜ **F7** `src/components/workshop/ShotStudio.tsx:123-144` —— effect 依赖含父级数组（每次渲染新引用），每渲染都 O(N) 扫描 + map。方向：依赖改内容指纹 / 长度，或 `didFillRef` 守卫。
+- _（F7 已闭环，见 A 表。）_
 
 ### C.2 资源与内存（P1）
 
-- ⬜ **M5** `runner-state.ts` 的 `wsWaitLogged`(221/270)、`settled`(188/259)、`finalized`(198/260) —— 三个 Set 只 add（delete 仅重入/收口处各 1 处）。方向：任务终态收口统一清理；注意 `settled`/`finalized` 是「一次性权利」语义，误清会导致重复落库。
-- ⬜ **M7** `src/lib/log/capture-streams.server.ts:86/138/147-148` —— 劫持 `process.stdout.write` 后每条日志 `appendFileSync`，且无 uninstall 出口。方向：内存缓冲 + 定时批量 flush。
+_（M5 / M7 已闭环，见 A 表。）_
 
 ### C.3 服务端 / 数据访问（P1）
 
-- ⬜ **S8** `src/server/api/routers/task.ts:53-62` —— `overFetch = min(take*4, 400)` 拉回再内存 filter/slice。方向：服务端 `mediaType` 条件 + 游标分页。
 - ⬜ **S10** `src/lib/core/repository-film.ts:109-127`、`repository-lora.ts:102-121` —— `appendLog` 读整列→push→整列写回，数组无上限。方向：日志独立表，或环形上限 + 批量/节流写。
 
 ### C.4 启动 / 构建 / 桌面壳（P1）
