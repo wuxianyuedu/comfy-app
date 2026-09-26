@@ -3471,8 +3471,7 @@ const RULES = {
   },
 
   /* ── P77「视图层手写 aria-pressed」（棘轮，shadcn forms.md）────────────
-   * shadcn `forms.md`：`Option sets (2–7 choices) use ToggleGroup. Don't
-   * loop Button with manual active state.`
+   * shadcn `forms.md` 原文：`Option sets (2–7 choices) use ToggleGroup. Don't loop Button with manual active state.`
    *
    * 项目里 `~/components/ui/toggle-group` 装了（shadcn base-nova 版，内部
    * 走 Base UI `ToggleGroup` / `ToggleGroupItem`），但视图层里出现
@@ -3509,9 +3508,7 @@ const RULES = {
 
   /* ── P79「视图层无 dark: 前缀的浅色原色板」（棘轮，shadcn styling.md）──
    * P71 只管 `dark:` 前缀的调色板（把同一件事在明暗两处各写一遍），P79 补上
-   * **无前缀的浅色版原色板** —— shadcn `styling.md` 原则 4：`Use semantic
-   * colors. bg-primary, text-muted-foreground — never raw values like
-   * bg-blue-500.`
+   * **无前缀的浅色版原色板** —— shadcn `styling.md` 原则 4 原文：`Use semantic colors. bg-primary, text-muted-foreground — never raw values like bg-blue-500.`
    *
    * 项目的 `--color-primary-strong` / `--color-info` / `--color-success-strong`
    * / `--color-warning-strong` / `--color-destructive` / `--color-subtle`
