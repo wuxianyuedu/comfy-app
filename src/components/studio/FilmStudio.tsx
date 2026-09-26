@@ -385,6 +385,7 @@ export function FilmStudio() {
             </Button>
 
             {/* 影片进度覆盖层（生成中） */}
+            {/* p71-allow:start brand 渐变 · 影片进度条 violet→fuchsia 双色（项目品牌视觉），见 §3.6.1 */}
             {c.film && running && (
               <div className="absolute right-0 bottom-0 left-0 bg-black/60 px-4 py-2.5 backdrop-blur-sm">
                 <ProgressBar
@@ -400,6 +401,7 @@ export function FilmStudio() {
                 />
               </div>
             )}
+            {/* p71-allow:end */}
 
             {/* 成片播放器（完成后） */}
             {c.film?.status === "DONE" && c.film.finalVideo && (
@@ -430,6 +432,7 @@ export function FilmStudio() {
             {/* Tracks container */}
             <div className="relative flex flex-col gap-1">
               {/* Playhead */}
+              {/* p71-allow:start timeline playhead 红 · 视频剪辑行业的播放头视觉惯例、非错误状态色；走 bg-destructive 会被误读成「这里出错了」 */}
               <div
                 className="z-base pointer-events-none absolute bottom-0 w-[2px] bg-red-400/80"
                 style={{
@@ -440,6 +443,7 @@ export function FilmStudio() {
               >
                 <div className="absolute -top-1 left-[-7px] h-[10px] w-4 rounded-sm bg-red-400/80" />
               </div>
+              {/* p71-allow:end */}
 
               {/* Video track */}
               <div className="bg-subtle flex h-11 items-center gap-2 rounded-md px-2">
@@ -469,7 +473,7 @@ export function FilmStudio() {
                   字幕轨
                 </span>
                 <div
-                  className="flex h-6 flex-1 items-center rounded bg-emerald-400/15 px-2.5 ring-1 ring-emerald-400/25 ring-inset"
+                  className="bg-success/15 ring-success/25 flex h-6 flex-1 items-center rounded px-2.5 ring-1 ring-inset"
                   style={{ width: "280px" }}
                 >
                   <span className="text-info-strong truncate text-[9px]">
@@ -534,7 +538,7 @@ export function FilmStudio() {
                     ),
                   ),
                 )}
-                className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:ring-1"
               />
             </FormField>
 
@@ -563,7 +567,7 @@ export function FilmStudio() {
                     ),
                   )
                 }
-                className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:ring-1"
               />
             </FormField>
 
@@ -712,7 +716,7 @@ export function FilmStudio() {
               <Checkbox
                 checked={c.subtitleOn}
                 onCheckedChange={(checked) => c.setSubtitleOn(checked === true)}
-                className="accent-violet-500"
+                className="accent-primary"
               />
             </FieldLabel>
 
@@ -766,7 +770,7 @@ export function FilmStudio() {
 
       {/* ── Status Bar ──────────────────────────────── */}
       <footer className="border-border-subtle bg-panel-deep/95 z-base relative flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm">
-        <span className="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40" />
+        <span className="bg-success shadow-success/40 inline-block h-[7px] w-[7px] rounded-full shadow-sm" />
         <span className="text-ink-muted text-[11px]">
           ComfyUI 本地已连接 · Wan I2V 视频模型就绪 · GPU 可用
         </span>
