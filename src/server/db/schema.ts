@@ -263,6 +263,11 @@ export const task = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
     finishedAt: dateNull("finishedAt"),
+    /** 执行归属（P3 §5 ADR §6 的 inline/host 互斥列）：'inline' | 'host'，
+     *  NULL 归 inline（历史行与未带归属的建行）。写入时机在提交侧（tRPC generate
+     *  按 COMFY_EXECUTOR 写值），领取侧见 `repository-task-impl.ts` 的
+     *  `claimNextQueued`。 */
+    claimedBy: text("claimedBy"),
   },
   (t) => [
     index("task_user_created_idx").on(t.userId, t.createdAt),
@@ -273,6 +278,10 @@ export const task = sqliteTable(
     index("task_status_finished_idx").on(t.status, t.finishedAt),
     // promptId → task 反查（执行器对账 / history 回捞），此前无索引。
     index("task_prompt_id_idx").on(t.promptId),
+    // 队列领取读路径（claimNextQueued 按 status=QUEUED + claimedBy 归属过滤）。
+    // 与 task_status_finished_idx 分开：那条服务孤儿判决（status, finishedAt），
+    // 本条服务领取谓词（status, claimedBy），语义不同不合并。
+    index("task_claimed_by_idx").on(t.status, t.claimedBy),
   ],
 );
 
