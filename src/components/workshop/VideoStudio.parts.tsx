@@ -4,6 +4,7 @@ import { clamp } from "~/lib/clamp";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
+import { FieldLabel } from "~/components/ui/field";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { SHOT_STATUS_LABEL } from "./ShotStudio";
@@ -91,7 +92,7 @@ export function ChannelSwitch({
           <Icon name="settings" size={12} />
           API 通道设置
         </Button>
-        <label className="flex items-center gap-2 text-xs">
+        <FieldLabel className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">帧率</span>
           <SelectMenu
             className="!bg-subtle !border-border text-xs"
@@ -100,7 +101,7 @@ export function ChannelSwitch({
             options={FPS_OPTIONS}
             placeholder="帧率"
           />
-        </label>
+        </FieldLabel>
         <Button
           variant="primary-solid"
           size="xs"
@@ -240,7 +241,7 @@ export function ShotCard({
             {videoPrompt(shot) || "(提示词为空)"}
           </p>
           <div className="mt-1.5 flex items-center gap-2">
-            <label className="flex items-center gap-1 text-[11px]">
+            <FieldLabel className="flex items-center gap-1 text-[11px]">
               <span className="text-muted-foreground">时长(s)</span>
               <Input
                 type="number"
@@ -258,8 +259,8 @@ export function ShotCard({
                 }
                 className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-0.5 text-[11px]"
               />
-            </label>
-            <label className="flex items-center gap-1 text-[11px]">
+            </FieldLabel>
+            <FieldLabel className="flex items-center gap-1 text-[11px]">
               <span className="text-muted-foreground">运动</span>
               <SelectMenu
                 className="!bg-subtle !border-border text-[11px]"
@@ -269,7 +270,7 @@ export function ShotCard({
                 labels={MOTION_LABELS}
                 placeholder="运动"
               />
-            </label>
+            </FieldLabel>
             <span className="text-faint text-[10px]">
               {framesFor(shot, fps)} 帧
             </span>

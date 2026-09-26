@@ -33,6 +33,7 @@ import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Button } from "~/components/ui/button";
 import { RangeSlider } from "~/components/ui/range-slider";
 import { Switch } from "~/components/ui/switch";
+import { FieldLabel } from "~/components/ui/field";
 
 export interface CanvasSettings {
   /** 网格 (Grid) */
@@ -456,7 +457,7 @@ function SliderRow({
   tooltip?: string;
 }) {
   return (
-    <label className="block">
+    <FieldLabel className="block">
       <div className="mb-1 flex items-baseline justify-between gap-2 text-[11.5px]">
         <span className="text-ink-soft" title={tooltip}>
           {label}
@@ -472,7 +473,7 @@ function SliderRow({
         value={value}
         onChange={onChange}
       />
-    </label>
+    </FieldLabel>
   );
 }
 
@@ -488,13 +489,13 @@ function ToggleRow({
   tooltip?: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-2 text-[11.5px]">
+    <FieldLabel className="flex cursor-pointer items-center justify-between gap-2 text-[11.5px]">
       <span className="text-ink-soft" title={tooltip}>
         {label}
       </span>
       {/* 与 ProjectCanvasSettings 的 ToggleRow 是同一件事（开关），此前各画
  一份 —— 现在都走 ui/switch（规范 16 §16.2.3）。 */}
       <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
-    </label>
+    </FieldLabel>
   );
 }
