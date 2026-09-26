@@ -47,6 +47,7 @@
 | L2   | P1   | `scripts/build-desktop.mjs:182`                                  | 噪声目录复制前由 `cpSync` filter 排除（不再先拷后删）                                                  | #1112 |
 | L3   | P1   | `src-tauri/src/shell_launch.rs:936-960`                          | `find_owned_orchestrator` 落地 exe 名预筛，非 node 进程不再跨进程读环境块                              | #1114 |
 | L4   | P1   | `src-tauri/src/lib.rs:513` + `public/splash.html:730`            | 日志尾部读取改 seek（不整读文件）；splash 日志轮询 800ms→1500ms                                        | #1117 |
+| E6   | P2   | `src/app/api/custom-nodes/route.ts:626`                          | manifest 摘要按 size+mtime 指纹缓存，GET 不再整份读盘解析                                              | #1121 |
 
 ## B. 判定修正与例外（📝）
 
@@ -91,7 +92,7 @@ _（全部闭环，见 A 表。）_
 - ⬜ **L13** `tools/scripts/Build-Guard.ps1:215-249` —— 固定 500ms 忙等 + 三轮全进程 CIM 查询。
 - ⬜ **L14** `scripts/quality-gate.mjs:229-232`（4 道门禁串行 spawnSync）、`vitest.config.ts`（coverage 列 60+ 路径 + 3 份 reporter、无分片）。
 - ⬜ **L15** `src/app/api/update-check/route.ts:49-67/125-139` —— 前端 30s 轮询，同步递归遍历 `src-tauri` 全树（首轮 4 遍）。方向：目录级粗粒度比对或 `fs.watch`。
-- ⬜ **E6** `src/app/api/custom-nodes/route.ts:557-562` —— 每次 GET 重读 + `JSON.parse` manifest/report，无缓存（对比 `runDiscover` 有缓存）。
+- _（E6 已闭环，见 A 表。）_
 
 ## D. 维护说明
 
