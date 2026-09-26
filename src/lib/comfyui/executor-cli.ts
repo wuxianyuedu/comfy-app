@@ -19,17 +19,25 @@
  *
  * @module comfyui/executor-cli — comfy-cli 执行路径（**两种格式统一**）
  */
+// §18.4 三选一：本模块走第三类（纯 Node 宿主），依赖登记在
+// `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
+// 三条 server-only 侧静态值 import（logger / taskRepository / resolveComfyBase）
+// 全改成 lazy：logger 走**加载即 fire-and-forget + module-level ref + 静默
+// skip**（诊断通道），taskRepository / resolveComfyBase 在 `executeViaComfyCli`
+// 顶部一次性 resolve、下游 closure 沿用原名（关键路径，拿不到 → reject）。
+// Node 内建 child_process / fs / path 值 import 保留（本模块 spawn comfy-cli
+// 子进程 + 读写临时工作流文件）。
+// ⚠️ 传递闭包：`./client` 与 `../core/repository` 各自仍静态引 server-only 侧
+// （logger → app-runtime-log → server-only throw、repository 直接 server-only），
+// 登记进 PURE_NODE_HOSTS 是「标方向 + 消化 unguarded」，不是「本模块已能在纯
+// Node 里加载」——那要等 client / repository / app-runtime-log 各自拆完。
 import { errorText } from "~/lib/error-message";
 import { fireAndForget } from "~/lib/async-action";
-import { logger } from "~/lib/core/logger";
 import { tailWindow } from "~/lib/page-window";
-import "server-only";
 import { spawn } from "child_process";
 import type { ChildProcess } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
-import { taskRepository } from "../core/repository";
-import { resolveComfyBase } from "./client";
 import { primaryModelName } from "./executed-model";
 import { state, log, appendRawCli } from "./runner-state";
 import type { Job } from "./runner-state";
@@ -48,6 +56,64 @@ import {
 } from "./raw-overrides";
 import { trace } from "./trace";
 import { COMFYUI_DEFAULT_PORT, LOOPBACK_HOST } from "../endpoints";
+
+/* ── 依赖注入接缝（P3 §5 第 1 期·第三步·执行批） ────────────────────── */
+
+type LoggerLike = { warn(msg: string): void };
+async function loadRealTaskRepo() {
+  return (await import("../core/repository")).taskRepository;
+}
+async function loadRealResolveComfyBase() {
+  return (await import("./client")).resolveComfyBase;
+}
+type TaskRepoForCli = Pick<
+  Awaited<ReturnType<typeof loadRealTaskRepo>>,
+  "markRunning"
+>;
+type ResolveComfyBaseFn = () => Promise<string>;
+
+/** 本模块用到的三条 server-only 侧依赖的最小形状。host（Next 侧无需、executor
+ *  host 必用）通过 `configureExecutorCli` 覆盖任一条；未覆盖的走 lazy 兜底。 */
+export type ExecutorCliDeps = {
+  logger: LoggerLike;
+  taskRepo: TaskRepoForCli;
+  resolveComfyBase: ResolveComfyBaseFn;
+};
+
+let depsOverride: Partial<ExecutorCliDeps> = {};
+
+export function configureExecutorCli(next: Partial<ExecutorCliDeps>): void {
+  depsOverride = { ...depsOverride, ...next };
+}
+
+/** logger 是**诊断通道**：加载即 fire-and-forget 拉 Next 侧真单例；拿不到
+ *  （纯 Node 未 configure、或 logger 内部 dynamic import 撞 server-only throw）
+ *  时 `cliWarn` 静默 skip，与 runner-state / trace 的契约同构。 */
+let _loggerRef: LoggerLike | null = null;
+void import("~/lib/core/logger")
+  .then((m) => {
+    _loggerRef ??= m.logger;
+  })
+  .catch(() => {
+    /* 静默：诊断通道不得把生成带崩 */
+  });
+
+function cliWarn(msg: string): void {
+  (depsOverride.logger ?? _loggerRef)?.warn(msg);
+}
+
+/** taskRepo / resolveComfyBase 是关键路径：拿不到（未注入 + 纯 Node dynamic
+ *  import 撞 server-only）→ 让 `executeViaComfyCli` 的 await 直接 reject，
+ *  caller（executor-scheduler / enqueue）感知。 */
+async function resolveTaskRepo(): Promise<TaskRepoForCli> {
+  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  return loadRealTaskRepo();
+}
+
+async function resolveBaseFn(): Promise<ResolveComfyBaseFn> {
+  if (depsOverride.resolveComfyBase) return depsOverride.resolveComfyBase;
+  return loadRealResolveComfyBase();
+}
 
 // 保持 executor.ts barrel 的 `applyRawOverrides` 导出不变
 //（纯逻辑已抽到 ./raw-overrides，这里仅透传）。
@@ -78,6 +144,12 @@ const CLI_TIMEOUT_MS = 25 * 60 * 1000;
  * 正是 `Bookmark (rgthree)` 让整单校验失败的成因）。 */
 
 export async function executeViaComfyCli(job: Job) {
+  // 关键路径依赖在函数入口 resolve 成同名局部（`taskRepository` /
+  // `resolveComfyBase`）；下游 closure 沿用旧名，call site 一字不动。
+  // 拿不到（未注入 + 纯 Node dynamic import 撞 server-only）→ 本函数直接
+  // reject，让 scheduler / enqueue 感知，符合 P3 迁移的启动契约。
+  const taskRepository = await resolveTaskRepo();
+  const resolveComfyBase = await resolveBaseFn();
   const s = state();
   const { taskId, rawJson, prompt, overrides } = job;
   /* RAW 原件走 UI→API 转换；没有 rawJson 就是 API 图，直接提交。 */
@@ -134,9 +206,7 @@ export async function executeViaComfyCli(job: Job) {
       fireAndForget(
         fail(taskId, "", "工作流没有可执行的节点（可能全部被禁用）"),
         (e) =>
-          logger.warn(
-            `[comfyui] ${errorText(e, `fail(${taskId}) 空图收口异常`)}`,
-          ),
+          cliWarn(`[comfyui] ${errorText(e, `fail(${taskId}) 空图收口异常`)}`),
       );
       return;
     }
@@ -225,7 +295,7 @@ export async function executeViaComfyCli(job: Job) {
     fireAndForget(
       fail(taskId, "", `未找到 comfy-cli Python 解释器：${py}`),
       (e) =>
-        logger.warn(
+        cliWarn(
           `[comfyui] ${errorText(e, `fail(${taskId}) 缺解释器收口异常`)}`,
         ),
     );
@@ -298,9 +368,7 @@ export async function executeViaComfyCli(job: Job) {
     fireAndForget(
       fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）"),
       (e) =>
-        logger.warn(
-          `[comfyui] ${errorText(e, `fail(${taskId}) 看门狗收口异常`)}`,
-        ),
+        cliWarn(`[comfyui] ${errorText(e, `fail(${taskId}) 看门狗收口异常`)}`),
     );
   }, CLI_TIMEOUT_MS);
 
@@ -313,11 +381,11 @@ export async function executeViaComfyCli(job: Job) {
     patched,
     complete: (id, pid) =>
       fireAndForget(complete(id, pid), (e) =>
-        logger.warn(`[comfyui] ${errorText(e, `complete(${id}) 收口异常`)}`),
+        cliWarn(`[comfyui] ${errorText(e, `complete(${id}) 收口异常`)}`),
       ),
     fail: (id, pid, detail, ves) =>
       fireAndForget(fail(id, pid, detail, ves), (e) =>
-        logger.warn(`[comfyui] ${errorText(e, `fail(${id}) 收口异常`)}`),
+        cliWarn(`[comfyui] ${errorText(e, `fail(${id}) 收口异常`)}`),
       ),
     settle: () => {
       if (settled) return false;
@@ -404,7 +472,7 @@ export async function executeViaComfyCli(job: Job) {
         `comfy-cli 异常退出（code=${code}）\n${tail || "(无 stderr)"}`,
       ),
       (e) =>
-        logger.warn(
+        cliWarn(
           `[comfyui] ${errorText(e, `fail(${taskId}) 进程退出收口异常`)}`,
         ),
     );
@@ -420,7 +488,7 @@ export async function executeViaComfyCli(job: Job) {
     fireAndForget(
       fail(taskId, promptId ?? "", errorText(err, "comfy-cli 启动失败")),
       (e) =>
-        logger.warn(
+        cliWarn(
           `[comfyui] ${errorText(e, `fail(${taskId}) 启动失败收口异常`)}`,
         ),
     );

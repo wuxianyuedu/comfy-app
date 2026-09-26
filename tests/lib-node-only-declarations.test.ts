@@ -89,6 +89,16 @@ const PURE_NODE_HOSTS = [
   // 后续 PR 把 client / executor-history / executor-continuation 拆完后，
   // 本模块才能真正被纯 Node 宿主加载。
   "src/lib/comfyui/executor-finalize.ts",
+  // executor-cli.ts：P3 第 1 期·第三步·执行批。摘掉 server-only 后本模块**自身**
+  // 的静态边已解——logger（走加载即 fire-and-forget + `cliWarn` 静默 skip）、
+  // taskRepository / resolveComfyBase（在 `executeViaComfyCli` 顶部一次性
+  // resolve、下游 closure 沿用旧名）三条 lazy + `configureExecutorCli` 注入。
+  // 顶层 Node 内建值 import 有 `child_process` / `fs` / `path`（spawn comfy-cli
+  // 子进程 + 读写临时工作流文件），因此落进 unguarded、按第三类登记。
+  // 与 executor-finalize 同一族：传递闭包（./client / ../core/repository 各自
+  // 仍静态引 server-only 侧）留在后续 PR 拆完；本登记**不是**「现在能在纯 Node
+  // 里 import 本模块」的承诺。
+  "src/lib/comfyui/executor-cli.ts",
 ];
 
 type Report = {
