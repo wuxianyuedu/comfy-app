@@ -1,0 +1,6 @@
+## Changed
+
+- **`db-schema-ready.ts` 摘 server-only（P3 迁移第 1 期·lib 层地基批·reaper 侧最后一颗钉子）**：本模块是 rule 16 的 `comment.language.asciiOnly` 白名单成员（`docs/reference-facts.md` 里登记），文件保持纯 ASCII + 英文注释（`next-code-frame` 会渲染它、多字节高亮偏移会 Rust panic 打死整个 `next build`）——**这条与 §18.4 三选一的形态选择无关**。摘掉 `import "server-only"` 后按第三类登记进 `PURE_NODE_HOSTS`：`node:sqlite` DatabaseSync（Node 22+ 原生） + `node:path` + 纯函数 `~/lib/shell/tracing-ignore`，形态上与 `kill-process-tree` 同族。
+  - **为什么这一步关键**：`reaper` 静态引 `isSchemaReady()`。只要 db-schema-ready 带 server-only，纯 Node executor host 加载 reaper 时**这里**就 throw、跑不到探针。摘掉之后整条 reaper 边通了（下一步给 enqueue / reaper 的 `taskRepository` 静态边做 lazy，那是 P3 第 1 期的最后一步）。
+  - 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。scanner 现 `unguarded=22`（前 21 批 + 本批）全部由登记消化；`libOnlyReachable=0` / `clientReachable=0` 保持。零行为变化（Next 侧照旧）。
+  - 验证：`tsc --noEmit` / `eslint --max-warnings 0` / `vitest run src/lib/comfyui tests/lib-node-only-declarations.test.ts src/lib/db-schema-ready` → **542 passed / 4 skipped / 1 已知 flake**（`db-schema-ready.test.ts` 的「表未就绪时加载 reaper 不读库」用例在 Windows 上因 SQLite 句柄短暂持有导致 `afterEach` 里 `fs.rmSync(tmp, { recursive:true, force:true })` 报 `EPERM` —— `git stash` 独立复现同红，与本 PR 无关；另开小 PR 加 `--retry` 或换 `graceful-fs`）。`.githooks/pre-commit` 28 步全过。

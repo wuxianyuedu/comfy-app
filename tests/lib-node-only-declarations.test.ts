@@ -162,6 +162,16 @@ const PURE_NODE_HOSTS = [
   // logger / app-runtime-log / log-paths / process-launch）都进 §18.4 第三类，
   // P3 §5 第 2 期 `scripts/executor-host.mjs` 起手时的静态边已经扫清。
   "src/lib/comfyui/lifecycle.ts",
+  // db-schema-ready.ts：P3 lib 地基批·**reaper 侧最后一颗钉子**。它是 rule 16
+  // 的 `comment.language.asciiOnly` 白名单成员（`docs/reference-facts.md` 里
+  // 登记），文件本身保持纯 ASCII + 英文注释（`next-code-frame` 会渲染它、
+  // 多字节高亮偏移会 panic）——**这条与 §18.4 三选一的形态选择无关**。
+  // 摘掉 server-only 后按第三类登记：`node:sqlite` DatabaseSync（Node 22+
+  // 原生） + `node:path` + 纯函数 tracingIgnoreArgs；形态上与 kill-process-tree
+  // 同族。reaper 静态引 `isSchemaReady()`——只要本模块带 server-only，纯 Node
+  // executor host 加载 reaper 时**这里**就 throw、跑不到探针；摘掉之后整条
+  // reaper 边通了（下一步给 enqueue / reaper 的 taskRepository 静态边做 lazy）。
+  "src/lib/db-schema-ready.ts",
 ];
 
 type Report = {
