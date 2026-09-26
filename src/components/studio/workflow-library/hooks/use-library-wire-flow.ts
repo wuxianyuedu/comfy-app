@@ -19,7 +19,7 @@
  * `WorkflowCanvasNodePreview` 的 `key={workflow.id}` 同一口径。
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type Connection,
   type Edge,
@@ -136,9 +136,16 @@ export function useLibraryWireFlow({
    * （null = 没落在任何 handle 上、false = 落在 handle 上但被闸门拒了），
    * 据此把原因说清楚，4 秒后自己消失（不只读，可直接重试）。 */
   const [dropHint, setDropHint] = useState<LibraryDropHint>(null);
+  const dropHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (dropHintTimerRef.current) clearTimeout(dropHintTimerRef.current);
+    };
+  }, []);
   const showHint = useCallback((message: string) => {
     setDropHint(message);
-    window.setTimeout(() => setDropHint(null), 4000);
+    if (dropHintTimerRef.current) clearTimeout(dropHintTimerRef.current);
+    dropHintTimerRef.current = setTimeout(() => setDropHint(null), 4000);
   }, []);
 
   /* ── 节点与边（只在挂载时派生一次）──
