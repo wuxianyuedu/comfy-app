@@ -3623,6 +3623,14 @@ const HARD_GATE_RULES = new Set([
    * `size-N` 是 tailwind 内建、与 `w-N h-N` 视觉完全等价、迁移零风险，
    * 与 P70 同款（space-y/x→gap 也是治理清零后升为硬闸）。 */
   "P80",
+  /* P79（shadcn styling.md 原则 4 · 无 dark: 前缀的浅色原色板）：
+   * #1009 引入时视图层实测 67 处，八批治理（#1065 #1066 #1073 #1076
+   * #1079 #1082 #1085 #1087 · 覆盖 38 文件）清零 → 本 PR 升为硬闸。
+   * 路径两条：状态色走 §3.6.2 统一状态映射（bg-success/bg-primary/
+   * bg-destructive/bg-info/bg-warning），brand 双色渐变与域装饰色走
+   * `// p71-allow:start …` 就地声明（P71/P79 共享一份 allow · 见
+   * stripP71AllowBlocks）。 */
+  "P79",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
