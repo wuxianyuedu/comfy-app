@@ -85,7 +85,7 @@ export function HistoryList({
         {/* ── Header ── */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-title text-ink text-xl font-bold">历史记录</h1>
+            <h1 className="font-title u-title-page">历史记录</h1>
             <p className="text-ink-muted mt-1 text-sm">
               所有生成任务与执行日志，按时间倒序排列。
             </p>

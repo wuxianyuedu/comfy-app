@@ -39,9 +39,7 @@ export function QueueMonitorView({
       <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="font-title text-ink text-xl font-bold">
-              队列与运行
-            </h1>
+            <h1 className="font-title u-title-page">队列与运行</h1>
             <p className="text-ink-muted mt-1 text-sm">
               每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。
             </p>

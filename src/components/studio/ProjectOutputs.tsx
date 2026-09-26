@@ -170,7 +170,7 @@ export function ProjectOutputs() {
         {/* ── Header ── */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h1 className="font-title text-ink-bright text-xl font-bold">
+            <h1 className="font-title u-title-page">
               {activeProject?.name ?? "未命名项目"}
             </h1>
             <span className="bg-primary/15 text-primary-strong rounded-full px-2.5 py-0.5 text-[11px] font-medium">

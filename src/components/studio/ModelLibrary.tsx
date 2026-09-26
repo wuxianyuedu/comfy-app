@@ -37,7 +37,7 @@ export function ModelLibrary() {
       <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-title text-ink text-xl font-bold">模型库</h1>
+            <h1 className="font-title u-title-page">模型库</h1>
             <p className="text-ink-muted mt-1 text-sm">
               本机 ComfyUI 可用模型，按扫描目录分类 ——
               每个目录即一种独立的模型类型。

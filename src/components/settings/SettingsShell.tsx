@@ -55,7 +55,7 @@ export function SettingsShell({
             <ArrowLeft data-icon="inline-start" size={18} />
           </Button>
         </Hint>
-        <h1 className="text-ink text-lg font-semibold">设置</h1>
+        <h1 className="u-title-page">设置</h1>
       </div>
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1100px] flex-1 gap-6 px-6 pt-6">
