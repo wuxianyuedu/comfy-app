@@ -42,6 +42,7 @@
 | L6   | P1   | `dev-launcher.mjs` + `dev.mjs`                                   | 编排器注入 `COMFYAPP_SKIP_SCHEMA_SYNC=1`，一次启动只跑一份 schema 同步                                 | #1069 |
 | L7   | P1   | `scripts/launcher-core/shell.mjs`                                | `whichCommand` 按 name+PATH+PATHEXT+platform 进程内记忆化 + `clearWhichCommandCache()`                 | #1078 |
 | L8   | P1   | `scripts/launcher-core/procs.mjs:63`                             | netstat 快照按 1s TTL 缓存，三端口探测合并为一次子进程（CIM 批量化仍待做，见 C.4）                     | #1081 |
+| S12  | P2   | `src/server/db/schema.ts:360`                                    | 连接表补 `wmtt_tag_idx`（按标签找模板不再全扫）                                                        | #1096 |
 
 ## B. 判定修正与例外（📝）
 
@@ -80,7 +81,6 @@ _（全部闭环，见 A 表。）_
 ### C.5 P2（卫生项，随上一批顺手修）
 
 - ⬜ **M12** `src/app/api/logs/current/route.ts`（`readdirSync`/多次 `statSync`）、`api/logs/sessions/route.ts`（同步读+解析 4MiB 尾窗）—— 高频轮询路由的同步 IO。
-- ⬜ **S12** `src/server/db/schema.ts:350-361` —— 连接表缺 `workflowModelTag` 侧索引。
 - ⬜ **S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询（接口要做进程扫描+端口探测）。
 - ⬜ **S14** `src/lib/comfyui/status.ts:423-444`、`src/server/workshop/comfyui.ts:36-49` —— 进程内缓存永不过期且无失效钩子（正确性风险为主）。
 - ⬜ **L9** `scripts/dev-launcher.mjs:1024-1089` —— 就绪轮询 1s×180 无退避，每轮还写状态文件。
