@@ -4453,18 +4453,14 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "}",
       ].join("\n"),
     );
-    /* P71 仍是棘轮、`--update` 会把当前实测写进基线；块外那一处计入、
-     * 块内那一处被 allow 标记剥掉 → 恰好 1，而不是 2。 */
-    const { code, output } = run(["--update"]);
+    /* P71 已升硬闸（本 PR · 与 P79 同批清零）· `--update` 会被「未清零」
+     * 直接拒绝；改用 `--report` 只出清单不判失败。allow 块内那一处被剥、
+     * 块外那一处计入 → 总数恰好 1、文件数 1。 */
+    const { code, output } = run(["--report"]);
     expect(code, output).toBe(0);
-    const baseline = JSON.parse(
-      readFileSync(
-        join(workdir, "scripts", ".ui-primitives-baseline.json"),
-        "utf8",
-      ),
-    ) as { files: Record<string, { P71?: number }> };
-    // 块外那一处计入、块内那一处被 allow 标记剥掉 → 恰好 1，而不是 2。
-    expect(baseline.files["src/components/studio/P71Allow.tsx"]?.P71).toBe(1);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P71 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 1 处 \/ 1 文件/);
   });
 
   /* ── P72「模态无可访问名」（硬闸）差分回归 ─────────────────────────
@@ -4857,38 +4853,37 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 分支重构。测试锁：
    *   · 旧基线里从没出现过的 rule id（新加判据的起点登记）→ `--update` 允许；
    *   · 旧基线里已经有过的 rule id 上升 → `--update` 必须拒绝。
-   * 步骤：先造一个 P71 现场 → `--update` 登记起点 → 再写第二个 P71 →
-   * 第二次 `--update` 必须拦下（P71 已在基线、从 1 涨到 2 是"已有 rule 上升"）。
-   * P71 保持棘轮（`HARD_GATE_RULES` 不含它）、是这条 `--update` 逻辑最合
-   * 适的载体：P78/P79/P80 都在其他 PR 里升硬闸、走不到"新判据起点登记"这一
-   * 条分支了。 */
+   * 步骤：先造一个 P1 现场 → `--update` 登记起点 → 再写第二个 P1 →
+   * 第二次 `--update` 必须拦下（P1 已在基线、从 1 涨到 2 是"已有 rule 上升"）。
+   * 载体挑棘轮里最朴素的 P1（视图层裸 `<button>`）：P71/P78/P79/P80/P81
+   * 都在其他 PR 里升硬闸、走不到「新判据起点登记」这条分支了。 */
   it("--update 允许登记新判据起点、但拦下已有 rule id 的上升", () => {
     write(
-      "src/components/studio/P71Seed.tsx",
+      "src/components/studio/P1Seed.tsx",
       [
         "export function V() {",
-        "  return <div className='dark:bg-red-400'>seed</div>;",
+        '  return <button type="button">seed</button>;',
         "}",
       ].join("\n"),
     );
-    /* 第一次 --update：P71 从未在旧基线出现过、这是判据引入的起点登记，
+    /* 第一次 --update：P1 从未在旧基线出现过、这是判据引入的起点登记，
      * 允许通过。 */
     const { code: firstCode, output: firstOut } = run(["--update"]);
     expect(firstCode, firstOut).toBe(0);
-    /* 再写一个 P71 文件：after=2，基线里的 P71=1 已存在，此时上升就是"已有
+    /* 再写一个 P1 文件：after=2，基线里的 P1=1 已存在，此时上升就是"已有
      * rule 上升"、必须拒绝。 */
     write(
-      "src/components/studio/P71Regress.tsx",
+      "src/components/studio/P1Regress.tsx",
       [
         "export function V() {",
-        "  return <div className='dark:bg-rose-400'>regress</div>;",
+        '  return <button type="button">regress</button>;',
         "}",
       ].join("\n"),
     );
     const { code: secondCode, output: secondOut } = run(["--update"]);
     expect(secondCode, secondOut).not.toBe(0);
     expect(secondOut).toContain("拒绝放宽基线");
-    expect(secondOut).toMatch(/P71[^\n]*1 → 2/);
+    expect(secondOut).toMatch(/P1[^\n]*1 → 2/);
   });
 
   /* ── P77「视图层手写 aria-pressed」（棘轮）差分回归 ────────────
@@ -4977,13 +4972,14 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "}",
       ].join("\n"),
     );
-    /* strict run 会拦（P71 数它）、但**不该**是 P79 报的：违规清单里
-     * 只出现 `新增 P71`、不出现 `新增 P79`（脚本头部硬闸说明列表里含
-     * "P79" 字面量、不能用 output.not.toContain("P79") 粗断）。 */
+    /* P71 / P79 都是硬闸（P71 本 PR 升 · P79 #1088 升）：strict run 会拦、
+     * 但**只该**是 P71 报的（`dark:` 前缀归 P71 管、P79 的 `(?!dark:)`
+     * 前瞻把它排掉了）。硬闸的命中行形态是 `P71 → path（N 处）`、不是
+     * 棘轮的「新增 P71」。 */
     const { code, output } = run();
     expect(code, output).not.toBe(0);
-    expect(output).toMatch(/新增\s+P71/);
-    expect(output).not.toMatch(/新增\s+P79/);
+    expect(output).toMatch(/P71\s*→/);
+    expect(output).not.toMatch(/P79\s*→/);
   });
 
   it("P79 不误伤语义 token（bg-primary / text-ink-muted / border-border-strong）", () => {
