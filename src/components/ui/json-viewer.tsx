@@ -424,7 +424,12 @@ export function JsonViewer({
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               title="上一个 (Shift+Enter)"
             >
-              <Icon name="chevronup" size={14} className="text-ink-muted" />
+              <Icon
+                data-icon="inline-start"
+                name="chevronup"
+                size={14}
+                className="text-ink-muted"
+              />
             </Button>
             <Button
               variant="outline"
@@ -434,7 +439,12 @@ export function JsonViewer({
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               title="下一个 (Enter)"
             >
-              <Icon name="chevrondown" size={14} className="text-ink-muted" />
+              <Icon
+                data-icon="inline-start"
+                name="chevrondown"
+                size={14}
+                className="text-ink-muted"
+              />
             </Button>
             <Button
               variant="outline"
@@ -443,7 +453,12 @@ export function JsonViewer({
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               title="清空 (Esc)"
             >
-              <Icon name="close" size={14} className="text-ink-muted" />
+              <Icon
+                data-icon="inline-start"
+                name="close"
+                size={14}
+                className="text-ink-muted"
+              />
             </Button>
           </>
         )}

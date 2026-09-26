@@ -225,7 +225,7 @@ export function VideoQueueModal({
                 className="text-ink-muted hover:text-ink-soft"
                 aria-label="关闭"
               >
-                <X size={16} />
+                <X data-icon="inline-start" size={16} />
               </Button>
             </div>
           </div>
@@ -361,7 +361,7 @@ export function VideoQueueModal({
                         className="text-ink-muted hover:text-danger-strong mt-1"
                         aria-label="删除"
                       >
-                        <Trash size={14} />
+                        <Trash data-icon="inline-start" size={14} />
                       </Button>
                     </div>
                   ))

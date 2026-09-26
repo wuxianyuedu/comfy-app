@@ -287,7 +287,7 @@ export function WorkflowRunLogModal({
                 title="关闭"
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
               >
-                <X size={16} />
+                <X data-icon="inline-start" size={16} />
               </Button>
             </div>
           </div>

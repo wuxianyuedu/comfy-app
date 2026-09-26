@@ -318,7 +318,7 @@ export function ScriptMarkdownEditor({
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
           aria-label="关闭"
         >
-          <X size={18} />
+          <X data-icon="inline-start" size={18} />
         </Button>
       </header>
 

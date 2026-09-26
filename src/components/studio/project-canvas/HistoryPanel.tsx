@@ -82,7 +82,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
           title="刷新"
         >
-          <RefreshCw size={13} />
+          <RefreshCw data-icon="inline-start" size={13} />
         </Button>
         {/* 显示密度切换 */}
         <div className="bg-subtle flex items-center gap-0.5 rounded-lg p-0.5">
@@ -93,7 +93,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             className={`h-auto rounded-md p-1 ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
             title="网格视图"
           >
-            <LayoutGrid size={14} />
+            <LayoutGrid data-icon="inline-start" size={14} />
           </Button>
           <Button
             variant="ghost"
@@ -102,7 +102,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             className={`h-auto rounded-md p-1 ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
             title="列表视图"
           >
-            <List size={14} />
+            <List data-icon="inline-start" size={14} />
           </Button>
         </div>
         <Button
@@ -112,7 +112,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
           title="关闭"
         >
-          <X size={14} />
+          <X data-icon="inline-start" size={14} />
         </Button>
       </div>
 
@@ -260,7 +260,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/60 backdrop-blur group-hover:flex hover:bg-black/60 hover:text-white"
                       title="加入画布"
                     >
-                      <Plus size={12} strokeWidth={2.5} />
+                      <Plus
+                        data-icon="inline-start"
+                        size={12}
+                        strokeWidth={2.5}
+                      />
                     </Button>
                   )}
                 </div>
@@ -341,7 +345,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
                         title="加入画布"
                       >
-                        <Plus size={13} strokeWidth={2.5} />
+                        <Plus
+                          data-icon="inline-start"
+                          size={13}
+                          strokeWidth={2.5}
+                        />
                       </Button>
                     )}
                     {task.cover && (

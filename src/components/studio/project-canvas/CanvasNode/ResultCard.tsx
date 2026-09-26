@@ -78,7 +78,12 @@ export function ResultCard({
             title="编辑"
             className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
           >
-            <Icon name="pen" size={11} className="mr-1 inline align-[-1px]" />
+            <Icon
+              data-icon="inline-start"
+              name="pen"
+              size={11}
+              className="mr-1 inline align-[-1px]"
+            />
             编辑
           </Button>
           <Button
@@ -90,6 +95,7 @@ export function ResultCard({
             className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
           >
             <Icon
+              data-icon="inline-start"
               name="download"
               size={11}
               className="mr-1 inline align-[-1px]"
@@ -109,7 +115,7 @@ export function ResultCard({
             onClick={onReplace}
             className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex h-auto items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-normal ring-1"
           >
-            <Icon name="refresh" size={11} />
+            <Icon data-icon="inline-start" name="refresh" size={11} />
             替换
           </Button>
         </div>
@@ -159,7 +165,7 @@ export function ResultCard({
           onClick={onReplace}
           className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex h-auto items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-normal ring-1"
         >
-          <Icon name="refresh" size={11} />
+          <Icon data-icon="inline-start" name="refresh" size={11} />
           替换
         </Button>
       </div>

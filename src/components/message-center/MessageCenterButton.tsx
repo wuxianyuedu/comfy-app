@@ -29,7 +29,7 @@ export function MessageCenterButton() {
           : "text-ink-muted hover:bg-subtle hover:text-ink"
       }`}
     >
-      <Bell size={12} />
+      <Bell data-icon="inline-start" size={12} />
       {unread > 0 && (
         <span className="bg-primary/20 text-primary-strong flex min-w-[14px] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums">
           {unread > 99 ? "99+" : unread}

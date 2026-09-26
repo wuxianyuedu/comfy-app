@@ -72,7 +72,11 @@ export function UpdateCheckSection() {
           {checking ? (
             <Spinner className="size-3.5" />
           ) : (
-            <ArrowLeft size={14} className="rotate-90" />
+            <ArrowLeft
+              data-icon="inline-start"
+              size={14}
+              className="rotate-90"
+            />
           )}
           立即检测本地更新
         </Button>

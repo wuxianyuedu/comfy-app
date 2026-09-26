@@ -228,7 +228,7 @@ export function CanvasArea({
               : "border-border-strong bg-panel/85 text-ink-fainter hover:text-ink-strong"
           } backdrop-blur-sm`}
         >
-          <LayoutGrid size={12} />
+          <LayoutGrid data-icon="inline-start" size={12} />
           小地图
         </Button>
       )}

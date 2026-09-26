@@ -554,9 +554,9 @@ export function LogPanel() {
                     复制失败
                   </span>
                 ) : copyOutcome.on ? (
-                  <Check size={16} />
+                  <Check data-icon="inline-start" size={16} />
                 ) : (
-                  <Copy size={16} />
+                  <Copy data-icon="inline-start" size={16} />
                 )}
               </Button>
               <Button
@@ -567,7 +567,7 @@ export function LogPanel() {
                 aria-label="下载当前筛选的全部日志"
                 className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
               >
-                <Download size={16} />
+                <Download data-icon="inline-start" size={16} />
               </Button>
               {/* 服务端落盘版导出（见 SaveExportButton）。 */}
               <SaveExportButton
@@ -582,7 +582,7 @@ export function LogPanel() {
                 title="清空面板"
                 className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
               >
-                <Trash2 size={16} />
+                <Trash2 data-icon="inline-start" size={16} />
               </Button>
               <WidePanelToggle
                 panel={panel}
@@ -595,7 +595,7 @@ export function LogPanel() {
                 title="关闭 (Ctrl+Shift+L)"
                 className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
               >
-                <X size={16} />
+                <X data-icon="inline-start" size={16} />
               </Button>
             </div>
           </div>
@@ -717,7 +717,7 @@ export function LogPanel() {
                   title="更新的一页"
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
                 >
-                  <ChevronLeft size={14} />
+                  <ChevronLeft data-icon="inline-start" size={14} />
                 </Button>
                 {/* 当前正看的是哪一段（来源 / 级别 / 搜索词），点任意一项即去掉
                   那一层筛选。此处用按钮而不是纯文本：页脚是「说出来我在看什么」
@@ -765,7 +765,7 @@ export function LogPanel() {
                   title="更早的一页"
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
                 >
-                  <ChevronRight size={14} />
+                  <ChevronRight data-icon="inline-start" size={14} />
                 </Button>
               </span>
             </span>

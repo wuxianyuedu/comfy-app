@@ -113,7 +113,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           onClick={onClose}
           className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-lg"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft data-icon="inline-start" size={18} />
         </Button>
         <div className="flex flex-col">
           {/* 面包屑：根工作流名 · 子图 1 · 子图 2 …
@@ -214,7 +214,11 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 className="ml-2 h-auto rounded-md px-2 py-0.5 text-[11px]"
                 title="返回上一级"
               >
-                <ArrowLeft size={10} strokeWidth={2.5} />
+                <ArrowLeft
+                  data-icon="inline-start"
+                  size={10}
+                  strokeWidth={2.5}
+                />
                 返回上一级
               </Button>
             )}
@@ -229,7 +233,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               className="ml-1 h-auto rounded-md px-2 py-0.5 text-[11px]"
               title="强制重载（清 sessionStorage + 跳过 server LRU + 重拉数据）"
             >
-              <RotateCw size={10} strokeWidth={2.5} />
+              <RotateCw data-icon="inline-start" size={10} strokeWidth={2.5} />
               强制重载
             </Button>
           </div>

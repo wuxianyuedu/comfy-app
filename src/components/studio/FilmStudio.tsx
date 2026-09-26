@@ -152,7 +152,7 @@ export function FilmStudio() {
           className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
           title="撤销"
         >
-          <Undo2 size={16} />
+          <Undo2 data-icon="inline-start" size={16} />
         </Button>
         <Button
           variant="ghost"
@@ -161,7 +161,7 @@ export function FilmStudio() {
           className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
           title="重做"
         >
-          <Redo2 size={16} />
+          <Redo2 data-icon="inline-start" size={16} />
         </Button>
 
         {/* Spacer */}
@@ -176,12 +176,24 @@ export function FilmStudio() {
           title={isPlaying ? "暂停" : "播放预览"}
         >
           {isPlaying ? (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <svg
+              data-icon="inline-start"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
               <rect x="6" y="4" width="4" height="16" rx="1" />
               <rect x="14" y="4" width="4" height="16" rx="1" />
             </svg>
           ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <svg
+              data-icon="inline-start"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
               <path d="M8 5v14l11-7z" />
             </svg>
           )}
@@ -327,7 +339,7 @@ export function FilmStudio() {
                         title="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）"
                         className="text-ink-soft hover:bg-primary/15 shrink-0"
                       >
-                        <ClipboardCheck />
+                        <ClipboardCheck data-icon="inline-start" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -364,6 +376,7 @@ export function FilmStudio() {
             >
               {isPlaying ? (
                 <svg
+                  data-icon="inline-start"
                   width="28"
                   height="28"
                   viewBox="0 0 24 24"
@@ -374,6 +387,7 @@ export function FilmStudio() {
                 </svg>
               ) : (
                 <svg
+                  data-icon="inline-start"
                   width="28"
                   height="28"
                   viewBox="0 0 24 24"

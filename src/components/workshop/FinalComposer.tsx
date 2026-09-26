@@ -201,6 +201,7 @@ export function FinalComposer({
               className="h-auto rounded-xl px-4 py-2 font-semibold"
             >
               <Icon
+                data-icon="inline-start"
                 name="play"
                 size={13}
                 className="mr-1 inline align-[-2px]"

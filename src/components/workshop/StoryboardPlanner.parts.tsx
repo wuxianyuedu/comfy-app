@@ -84,7 +84,7 @@ export function ShotRow({
           className="text-muted-foreground hover:text-danger-strong ml-auto"
           aria-label="删除镜头"
         >
-          <Trash size={15} />
+          <Trash data-icon="inline-start" size={15} />
         </Button>
       </div>
 

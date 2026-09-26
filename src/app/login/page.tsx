@@ -177,7 +177,7 @@ export default function LoginPage() {
                 className="text-primary/70 hover:text-primary"
                 aria-label="关闭提示"
               >
-                <X size={13} />
+                <X data-icon="inline-start" size={13} />
               </Button>
             </AlertAction>
           </Alert>
@@ -220,7 +220,11 @@ export default function LoginPage() {
                 aria-label={showPassword ? "隐藏密码" : "显示密码"}
                 tabIndex={-1}
               >
-                <Icon name={showPassword ? "eyeoff" : "eye"} size={18} />
+                <Icon
+                  data-icon="inline-start"
+                  name={showPassword ? "eyeoff" : "eye"}
+                  size={18}
+                />
               </Button>
             }
           />
