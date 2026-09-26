@@ -5129,4 +5129,99 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(line, output).toBeDefined();
     expect(line).toMatch(/—— 2 处 \/ 1 文件/);
   });
+
+  /* ── P81「视图层 <Button> 直接子 icon 缺 data-icon」（棘轮）差分回归 ────
+   * 见 scripts/check-ui-primitives.cjs 里 P81 注释与 `isP81IconName` 白名单：
+   * 判据扫 `<Button[\s>][\s\S]*?</Button>` 块、按 tag 深度 1（Button 的
+   * 直接子级）取 icon-like 起始标签（`Icon` / `svg` / 后缀 `Icon` /
+   * lucide 白名单），开括号里没 `data-icon=` 即计一处。合规出口是
+   * `data-icon="inline-start"`（icon 在文字前）或 `"inline-end"`（icon
+   * 在文字后）—— shadcn `buttonVariants` 的 `has-data-[icon=*]` 选择器
+   * 只吃**直接子级**，故深层嵌套不算这条账。 */
+  it("P81 Button 直接子 <Icon name> 无 data-icon → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P81Missing.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <Button>\n      <Icon name="settings" size={16} />\n      去配置\n    </Button>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P81");
+    expect(output).toContain("studio/P81Missing.tsx");
+  });
+
+  it("P81 合规出口：data-icon=inline-start / inline-end 不再计", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P81Ok.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        '      <Button>\n        <Plus data-icon="inline-start" /> 新建\n      </Button>',
+        '      <Button>\n        删除 <Trash2 data-icon="inline-end" />\n      </Button>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P81 深层嵌套（icon 不在 Button 直接子级）不算这条账", () => {
+    /* shadcn 的 `has-data-[icon=*]` 选择器只吃直接子级 —— 那种写法加了
+     * data-icon 也不生效、不属本判据的治理面；判据必须显式**不计**它，
+     * 否则逼下一个人把外层 span 拆掉去迎合机器（业务不该为判据让步）。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P81Nested.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <Button>\n      <span className="flex items-center gap-1">\n        <Plus />\n        Label\n      </span>\n    </Button>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P81 lucide 后缀 Icon 命名（ChevronLeftIcon 等）与项目自研 Icon/svg 一并算 icon-like", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P81IconSuffix.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        "      <Button>",
+        "        <ChevronLeftIcon />",
+        "        Prev",
+        "      </Button>",
+        "      <Button>",
+        '        <svg viewBox="0 0 24 24" />',
+        "        画布",
+        "      </Button>",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    /* 两处：`ChevronLeftIcon` 命中 `*Icon` 后缀、`svg` 是原生内建。 */
+    const line = output
+      .split(/\r?\n/)
+      .find((l) => l.includes("] P81 ") ?? l.includes("P81 →"));
+    expect(line ?? output).toMatch(/P81/);
+    expect(output).toContain("P81IconSuffix.tsx");
+  });
 });
