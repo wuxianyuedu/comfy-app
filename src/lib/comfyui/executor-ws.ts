@@ -235,6 +235,11 @@ function handleWsDrop(ws: WebSocket) {
   scheduleReconnect();
 }
 
+/* 待触发的重连句柄。保存它有两个用途：`handleWsDrop` 幂等防叠加之外，
+ * 在退避窗口内若再次调度（理论上不该发生，但事件双发时可能），先清掉旧的
+ * 就不会排队两个 `connect()`。 */
+let reconnectHandle: ReturnType<typeof setTimeout> | null = null;
+
 function scheduleReconnect() {
   const s = state();
   /* 退避算法走 `~/lib/retry-policy` 的 {@link backoffDelayMs}（指数退避 + 上限，
@@ -244,7 +249,13 @@ function scheduleReconnect() {
     ...WS_RECONNECT,
     attempt: s.reconnectAttempts++,
   });
-  setTimeout(() => void connect(), delay);
+  if (reconnectHandle) clearTimeout(reconnectHandle);
+  reconnectHandle = setTimeout(() => {
+    reconnectHandle = null;
+    fireAndForget(connect(), (err) =>
+      logger.warn(`[comfyui] ${errorText(err, "WS 重连失败")}`),
+    );
+  }, delay);
 }
 
 /**

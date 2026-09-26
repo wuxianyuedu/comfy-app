@@ -480,5 +480,9 @@ function startReaper() {
    *  各自的 catch 暴露出来，本判断只挡「表还没建」。 */
   sweepOnce();
   reaperState.handle = setInterval(sweepOnce, REAPER_MS);
+  /* `unref()`：回收器是常驻后台职责，不该把 Node 事件循环吊住 ——
+   * dev server 关停时能自然退出，而不必等这一轮 30s 间隔走完。
+   * 常驻的 HTTP server 仍持有事件循环，unref 不会让进程提前退出。 */
+  reaperState.handle.unref?.();
 }
 startReaper();
