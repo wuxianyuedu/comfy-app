@@ -10,6 +10,7 @@
  * 空态与截断提示），不锁样式类。
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RuntimeLogController } from "../hooks/use-runtime-log-source";
@@ -68,21 +69,35 @@ describe("RuntimeLogBox", () => {
     expect(screen.queryByLabelText("切换要查看的启动")).toBeNull();
   });
 
-  it("多次启动时下拉按「时刻 · 标题」列出，切换回传会话 id", () => {
+  it("多次启动时下拉按「时刻 · 标题」列出，切换回传会话 id", async () => {
+    const user = userEvent.setup();
     const log = controller({ sessions: twoSessions(), sessionId: "40" });
     renderBox(log);
 
-    const select = screen.getByLabelText("切换要查看的启动");
-    expect(select).toHaveProperty("value", "40");
-    const labels = Array.from(select.querySelectorAll("option")).map(
-      (option) => option.textContent,
-    );
+    /* P76 之后这里不再是原生 `<select>`（裸 `<select>` 已被判据拦下），而是
+     * `ui/select-menu` 的 combobox：当前值在触发器的可见文字里，选项要**点开**
+     * 才存在于 DOM。所以定位从 `value` + `<option>` 改成 combobox 的可见文字 +
+     * 弹层里的 `role="option"` —— 用例锁的口径没变（列出「时刻 · 标题」、切换
+     * 回传会话 id），只是换成新控件的读法。
+     * 选项要点**完整指针序列**（Base UI 的提交挂在指针抬起上，裸
+     * `fireEvent.click` 只发 click、提交不了）。 */
+    const trigger = screen.getByLabelText("切换要查看的启动");
+    expect(trigger.textContent).toContain("10:07:41 · ▶ ComfyUI 启动会话");
+
+    await user.click(trigger);
+    const labels = screen
+      .getAllByRole("option")
+      .map((option) => option.textContent);
     expect(labels).toEqual([
       "10:01:03 · ▶ ComfyUI 启动会话",
       "10:07:41 · ▶ ComfyUI 启动会话",
     ]);
 
-    fireEvent.change(select, { target: { value: "12" } });
+    const first = screen
+      .getAllByRole("option")
+      .find((option) => option.textContent?.startsWith("10:01:03"));
+    if (!first) throw new Error("弹层里没有 10:01:03 那一档会话");
+    await user.click(first);
     expect(log.selectSession).toHaveBeenCalledWith("12");
   });
 
