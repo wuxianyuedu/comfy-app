@@ -3317,6 +3317,36 @@ const RULES = {
     },
   },
 
+  /* ── P73「视图层自闭合 <div className="border-t">」（硬闸，shadcn composition.md）──
+   * shadcn `composition.md`：`Use Separator instead of <hr> or
+   * <div className="border-t">.`
+   *
+   * 视图里出现「**自闭合** `<div>` + className 含 `border-{t|b|l|r}`」=
+   * 用 border 手搓了一条线、该走 `~/components/ui/separator` 的 `<Separator>`。
+   * 与含子内容的卡片结构边框（`<div className="border-t ...">文字…</div>`）
+   * 区分开——那种是"容器边框的一部分"、不是分隔线、不该被算。锚点**必须
+   * 要求自闭合**（`/>` 收尾、无 children）。
+   *
+   * 本会话内一次治理 4 处清零（SectionHeader / GroupedControls /
+   * IoEndpointsSection ×2 · 全是 `flex-1 border-t border-dashed` 类虚线
+   * 填充线 · 迁 `<Separator className="... border-dashed bg-transparent
+   * h-0/h-px" />` 保留原视觉）· 直接进硬闸。 */
+  P73: {
+    label:
+      '视图层自闭合 <div className="border-{t|b|l|r}">（应使用 ~/components/ui/separator 的 <Separator>，shadcn composition.md）',
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 自闭合 div + className 含 border-{t|b|l|r}。用 `[^>]*?/>` 而非
+       * `[^/>]*?/>` 是因为 className 值可能带 `/`（如 `w-1/2`），但 `>`
+       * 是硬边界、不能跨。 */
+      return (
+        t2.match(
+          /<div\b[^>]*?className="[^"]*\bborder-[tblr]\b[^"]*"[^>]*?\/>/g,
+        ) || []
+      ).length;
+    },
+  },
+
   /* ── P76「视图层裸写 <select>」（棘轮，规范 §16.2.3 / §12.18）───────────
    * P68 拦住了裸 `<input>` / `<textarea>`、P69 拦住了裸
    * `<input type=checkbox|radio>`；`<select>` 是同一族里的漏项。
@@ -3624,6 +3654,15 @@ const HARD_GATE_RULES = new Set([
    * 既无 Title 组件又无 aria-label），从此是硬闸——新增即阻断。
    * `ui/` 走 EXEMPT_DIRS 短路，基元自身实现不受本判据影响。 */
   "P72",
+  /* P73（shadcn composition.md「Use Separator instead of <hr> or <div
+   * className="border-t">」）：视图层自闭合 `<div>` + `border-{t|b|l|r}`
+   * 是手搓的分隔线、应走 `~/components/ui/separator` 的 `<Separator>`。
+   * 本会话内一次治理 4 处清零（`SectionHeader.tsx:24` /
+   * `GroupedControls.tsx:103` / `IoEndpointsSection.tsx:58,66` · 全是
+   * `flex-1 border-t border-dashed` 类虚线填充线 · 迁 Separator +
+   * `border-dashed bg-transparent h-0/h-px` 保留原视觉）、直接进硬闸。
+   * 锚点与"只数自闭合 div"的具体形态见 RULES 里 P73 项的注释。 */
+  "P73",
   /* P80（shadcn styling.md「Use size-* when width and height are equal」）：
    * 引入时视图层实测 91 处，跨 7 批治理 + 一次锚点假阳修 一次性清零
    * （#1015 #1016 #1017 #1018 #1019 #1022 + 本 PR），升为硬闸。

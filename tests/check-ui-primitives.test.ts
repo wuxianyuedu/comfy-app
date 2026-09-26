@@ -4603,6 +4603,55 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toMatch(/P72[^\n]*2\s*处|P72Multi\.tsx（2\s*处）/);
   });
 
+  /* ── P73「视图层自闭合 <div> + border-X 是手搓分隔线」（硬闸）差分回归 ──
+   * 见 scripts/check-ui-primitives.cjs 里 P73 注释：合规出口
+   * `~/components/ui/separator` 的 `<Separator>`；含子内容的卡片结构边框
+   * 不算（那是容器的一部分）。 */
+  it("P73 视图层自闭合 <div className=\"border-t\"> → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P73Hr.tsx",
+      [
+        "export function V() {",
+        "  return <div className=\"border-border h-px w-full border-t\" />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P73");
+    expect(output).toContain("studio/P73Hr.tsx");
+  });
+
+  it("P73 含子内容的卡片结构边框不误伤（那不是分隔线）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P73Footer.tsx",
+      [
+        "export function V() {",
+        "  return <div className=\"border-border border-t px-4 py-3\">footer 内容</div>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P73 自闭合 div + border-l 也拦（覆盖 {t|b|l|r} 四变体）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P73Vertical.tsx",
+      [
+        "export function V() {",
+        "  return <div className=\"border-border self-stretch border-l\" />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P73");
+  });
+
   /* ── P76「视图层裸写 <select>」（棘轮）差分回归 ────────────────
    * 见 scripts/check-ui-primitives.cjs 里 P76 注释：P68 拦住了裸
    * `<input>` / `<textarea>`、P69 拦住了裸 checkbox/radio；`<select>` 是同族
