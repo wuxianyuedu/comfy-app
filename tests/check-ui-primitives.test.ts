@@ -5221,14 +5221,15 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("P81IconSuffix.tsx");
   });
 
-  /* ── P82「视图层 `<Button>` 原生 title=」（棘轮）差分回归 ─────────
-   * 见 scripts/check-ui-primitives.cjs 里 P82 注释：合规出口
-   * `~/components/ui/tooltip` 的 `<Tooltip>` + `<TooltipTrigger
-   * render={<Button …/>}>`（Base UI render prop · 不用 asChild）。
-   * 判据按 `<Button(?=[\s/>])([^>]*)>` 抓开括号、里面命中 `\btitle\s*=`
-   * 即计一处。漏计（`onClick={() => a > b}` 里 `>` 让 `[^>]*` 早停）
-   * 是安全的 · 棘轮只降不升。 */
-  it('P82 视图层 <Button title="x"> 计入棘轮（相对基线增量 → 阻断）', () => {
+  /* ── P82「视图层 `<Button>` 原生 title=」（硬闸）差分回归 ─────────
+   * 见 scripts/check-ui-primitives.cjs 里 P82 注释：合规出口是
+   * `~/components/ui/hint` 的 `<Hint label=…>`（`Tooltip` + Base UI
+   * `TooltipTrigger render={…}` 的薄封装）。
+   * 判据取「`<Button` 之后整段属性」，属性段由 `readJsxAttrsPastTag()` 平衡
+   * 扫描。引入时用的是粗锚 `[^>]*`，它会被属性段里箭头函数 / `{a > b}` /
+   * 带引号的值里那个 `>` 截断 —— 粗锚在真实库上数到 78、AST 复数是 157。
+   * 下面的「漏计已闭合」那条就是钉这个：三种曾被漏掉的形态现在都计到。 */
+  it('P82 视图层 <Button title="x"> 直接阻断（硬闸命中行形态）', () => {
     seedBaseline();
     write(
       "src/components/studio/P82RawTitle.tsx",
@@ -5242,7 +5243,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     );
     const { code, output } = run();
     expect(code, output).not.toBe(0);
-    expect(output).toContain("P82");
+    expect(output).toMatch(/P82\s*→/);
     expect(output).toContain("studio/P82RawTitle.tsx");
   });
 
@@ -5266,21 +5267,52 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     );
     const { code, output } = run();
     expect(code, output).not.toBe(0);
-    expect(output).toContain("P82");
+    expect(output).toMatch(/P82\s*→/);
     expect(output).toContain("studio/P82Multiline.tsx");
   });
 
-  it("P82 不误伤 <Tooltip render={<Button/>}>（合规出口）与子元素的 title=（那是子 div 的账）", () => {
+  it("P82 计数不再被属性段里的 > 截断（粗锚曾漏计的三种形态现在全计到）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82ArrowFn.tsx",
+      [
+        "export function V({ count, a, b }: Props) {",
+        "  return (",
+        "    <>",
+        '      <Button onClick={() => a > b} title="箭头函数在前">一</Button>',
+        '      <Button disabled={count > 0} title="表达式里带比较">二</Button>',
+        '      <Button aria-label="a>b" title="引号里带尖括号">三</Button>',
+        '      <Button title="本来就能计到的">四</Button>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    /* 用 --report（只出清单、不判失败）锁计数：粗锚时代这条只有 1，
+     * 平衡扫描后是 4 —— 漏计闭死才是本条能升硬闸的前提。 */
+    const { code, output } = run(["--report"]);
+    expect(code, output).toBe(0);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P82 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 4 处 \/ 1 文件/);
+  });
+
+  it("P82 不误伤 <Hint> 与 <Tooltip render={<Button/>}>（两种合规出口）", () => {
     seedBaseline();
     write(
       "src/components/studio/P82Ok.tsx",
       [
         "export function V() {",
         "  return (",
-        "    <Tooltip>",
-        "      <TooltipTrigger render={<Button onClick={x}>删除</Button>} />",
-        "      <TooltipContent>删除当前节点</TooltipContent>",
-        "    </Tooltip>",
+        "    <>",
+        '      <Hint label="删除当前节点" accessibleName>',
+        "        <Button onClick={x}>⌫</Button>",
+        "      </Hint>",
+        "      <Tooltip>",
+        "        <TooltipTrigger render={<Button onClick={x}>删除</Button>} />",
+        "        <TooltipContent>删除当前节点</TooltipContent>",
+        "      </Tooltip>",
+        "    </>",
         "  );",
         "}",
       ].join("\n"),
