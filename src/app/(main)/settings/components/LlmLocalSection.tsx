@@ -32,6 +32,7 @@ import {
 
 import { SettingsCard } from "~/components/ui/settings-card";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Toggle } from "~/components/ui/toggle";
 import { StatusButton, Field } from "./SettingsPrimitives";
 import { RuntimeLogBox } from "./RuntimeLogBox";
 
@@ -150,26 +151,21 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     model.name === c.drafts.llm.model ||
                     c.drafts.llm.localCandidates.includes(model.name);
                   return (
-                    <Button
+                    <Toggle
                       key={model.name}
-                      variant="ghost"
-                      size="xs"
+                      size="sm"
+                      pressed={checked}
+                      onPressedChange={() => c.toggleExtraModel(model.name)}
                       title={
                         model.name === c.drafts.llm.model
                           ? "当前模型（始终可用）"
                           : "勾选后工坊各阶段可直接切换"
                       }
-                      aria-pressed={checked}
-                      onClick={() => c.toggleExtraModel(model.name)}
-                      className={`h-auto rounded-lg border px-2.5 py-1 text-xs ${
-                        checked
-                          ? "bg-primary/15 text-primary border-primary"
-                          : "text-muted-foreground hover:bg-subtle border-border"
-                      }`}
+                      className="h-auto rounded-lg border px-2.5 py-1 text-xs"
                     >
                       {checked ? "✓" : ""}
                       {model.name}
-                    </Button>
+                    </Toggle>
                   );
                 })}
               </div>

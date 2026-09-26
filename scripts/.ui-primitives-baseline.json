@@ -13,14 +13,8 @@
     "P67": "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）",
     "P68": "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
     "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
-    "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
-    "P78": "视图层裸写 <label>（表单行应走 ~/components/ui/form-field 的 FormField 或 ~/components/ui/field 的 FieldLabel；checkbox/radio 点击区走 ~/components/ui/{checkbox,radio-group} 的 children 语义）",
-    "P77": "视图层手写 aria-pressed（2–7 项的选项组应走 ~/components/ui/toggle-group 的 ToggleGroup + ToggleGroupItem；shadcn forms.md）"
+    "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）"
   },
-  "total": 1,
-  "files": {
-    "src/app/(main)/settings/components/LlmLocalSection.tsx": {
-      "P77": 1
-    }
-  }
+  "total": 0,
+  "files": {}
 }

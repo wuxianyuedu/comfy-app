@@ -3646,6 +3646,23 @@ const HARD_GATE_RULES = new Set([
    * 特殊形态（比如原生 select 的 size= 属性），走 `EXEMPT_FILE_PATTERNS`
    * 按文件粒度登记 + 说明理由。 */
   "P76",
+  /* P77（shadcn forms.md · 视图层手写 `aria-pressed=`）：
+   * #1007 引入时视图层实测 7 处（6 文件），六批治理清零：#1034 RgthreeBodies
+   * 单按钮 `<Button aria-pressed>` → `<Toggle>`；#1051 FilmStudio/
+   * SizePresetTableModal 单选组 → `<ToggleGroup multiple=false>`；#1054
+   * LogFilterBar/UsageTestDialog → `<ToggleGroup>`（broken-value 语义通过
+   * value=[trim()] 保留 · level-specific 色在 item className 里）；本 PR
+   * LlmLocalSection 混合多选 chip（非互斥）→ 每项独立 `<Toggle>`。
+   * 视图层新增手写 `aria-pressed=` 直接阻断、走基元。 */
+  "P77",
+  /* P78（shadcn forms.md · 视图层裸 `<label>`）：
+   * #1006 引入时视图层实测 33 处（22 文件），十批治理清零：#1030 ExitSection
+   * + ComfyuiSection + UpdateCheckSection（htmlFor 独立行）· #1032 三处日志
+   * 面板自动滚动 · #1035/#1038/#1040/#1047 各类字段行 · #1089 WorkshopAside
+   * 字段行 · #1092 AttributeMultiSelect `<label role="option">` 改回
+   * `<div role="option">` + 外层 listbox（错的 ARIA 语义）· 本 PR 无新降。
+   * 视图层新增裸 `<label>` 直接阻断、走 FieldLabel/FormField/div role。 */
+  "P78",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
