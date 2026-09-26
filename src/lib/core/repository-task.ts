@@ -82,6 +82,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
     projectId?: string | null;
     referenceImages?: unknown;
     workflowSnapshot?: unknown;
+    /** 执行归属（P3 §5 ADR §6）：提交侧按 `resolveExecutorClaim()` 显式传
+     *  `'inline'|'host'`；缺省 null 只服务「调用方尚未接入灰度」的兼容路径
+     *  （NULL 语义归 inline 片，领取/回收两侧等价）。 */
+    claimedBy?: "inline" | "host" | null;
+    /** 提交时刻的 RAW 执行载荷（ADR §13-3B1 决定 1）：host 由它重建 Job，
+     *  不经 workflowName 回查模板（模板改/删不影响在队任务）。 */
+    execPayload?: unknown;
   }): Promise<Task> {
     const rows = await db
       .insert(task)
@@ -95,6 +102,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
         projectId: input.projectId ?? null,
         referenceImages: input.referenceImages ?? undefined,
         workflowSnapshot: input.workflowSnapshot ?? undefined,
+        claimedBy: input.claimedBy ?? null,
+        execPayload: input.execPayload ?? null,
         status: "QUEUED",
       })
       .returning();

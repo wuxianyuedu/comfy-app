@@ -1,5 +1,5 @@
 /**
- * `repository-task-impl.ts` — Task 仓储**执行链侧** 13 个方法的实现（工厂）
+ * `repository-task-impl.ts` — Task 仓储**执行链侧** 14 个方法的实现（工厂）
  * ===========================================================================
  *
  * P3 §5 第 1 期·Phase 2-A-1：从 `repository-task.ts` 抽出的 exec 侧 SQL 主体，
@@ -72,8 +72,9 @@ function ownedBy(owner: TaskClaimMode) {
 }
 
 /**
- * 13 个 exec-chain 方法的实现工厂（12 个 delegate 自 class + Phase 3-A 新增的
- * `claimNextQueued`，后者暂不进 class delegate——3-B 的领取循环直接调 impl）。
+ * 14 个 exec-chain 方法的实现工厂（12 个 delegate 自 class + Phase 3-A 新增的
+ * `claimNextQueued` + 3-B1 新增的 `findExecJob`；两者暂不进 class delegate——
+ * 领取循环是 host 独占的 pull，直接调 impl）。
  *
  * Next 侧：`createTaskRepoImpl(db)`（`repository-task.ts` 模块顶层，`db` 来自
  * `~/lib/db`）；host 侧：`createTaskRepoImpl(drizzle(createClient({url:
@@ -174,6 +175,27 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
         .where(inArray(task.id, candidates))
         .returning({ id: task.id });
       return claimed.map((row) => row.id);
+    },
+
+    /** host 领取后重建 Job 的行读（P3 §5 ADR §13-3B1 决定 1）：执行载荷取
+     *  `execPayload`（提交时刻的 RAW 原件）、覆盖项取 `params.workflowInputs`，
+     *  **不经 workflowName 回查模板**——模板被改/删不影响在队任务执行提交时的图。
+     *  找不到行返回 null（行已被回收/删除，调用方跳过并记日志即可）。 */
+    async findExecJob(taskId: string): Promise<{
+      workflowName: string;
+      execPayload: unknown;
+      params: unknown;
+    } | null> {
+      const rows = await db
+        .select({
+          workflowName: task.workflowName,
+          execPayload: task.execPayload,
+          params: task.params,
+        })
+        .from(task)
+        .where(eq(task.id, taskId))
+        .limit(1);
+      return rows[0] ?? null;
     },
 
     /** 成功收口：写 SUCCEEDED + progress=100 + finishedAt；有 workflowSnapshot

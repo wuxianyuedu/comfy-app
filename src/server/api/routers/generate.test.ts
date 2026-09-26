@@ -102,6 +102,10 @@ describe("generate.generate（工作流库工作流）", () => {
     expect(row?.prompt).toBe("a cat");
     expect(row?.negativePrompt).toBe("blur");
     expect(row?.referenceImages).toEqual(["ref.png"]);
+    // 3-B1 决定 4：inline 模式建行也**显式**写 claimedBy（NULL 只服务历史行）
+    expect(row?.claimedBy).toBe("inline");
+    // 执行载荷建行即落库（host 模式共用同一建行形状）
+    expect(row?.execPayload).toEqual(RAW_WF);
     expect(enqueueMock).toHaveBeenCalledTimes(1);
     const job = enqueueMock.mock.calls[0]?.[0] as {
       taskId: string;
@@ -113,6 +117,33 @@ describe("generate.generate（工作流库工作流）", () => {
     expect(job.overrides).toEqual([
       { nodeId: "1", name: "text", value: "a cat" },
     ]);
+  });
+
+  it("host 模式（COMFY_EXECUTOR=host）：建 host 归属行 + 落 execPayload，**不**进程内 enqueue", async () => {
+    process.env.COMFY_EXECUTOR = "host";
+    try {
+      seedWorkflowTemplate(tdb, {
+        id: "wf-host",
+        userId: "user-a",
+        name: "host生图",
+        taskType: "T2I",
+        rawJson: RAW_WF,
+      });
+      const res = await createCaller(makeCtx()).generate({
+        workflow: "wf-host",
+        prompt: "a cat",
+      });
+      // 执行整个让给 host：Next 进程内不许再驱动这一行（双驱动 = ADR §6 的
+      // 双 finalize 事故形态）
+      expect(enqueueMock).not.toHaveBeenCalled();
+      const row = tdb.$tables.tasks.find((t) => t.id === res.taskId);
+      expect(row?.status).toBe("QUEUED");
+      expect(row?.claimedBy).toBe("host");
+      // 载荷随行走：host 不回查模板（模板改/删不影响在队任务）
+      expect(row?.execPayload).toEqual(RAW_WF);
+    } finally {
+      delete process.env.COMFY_EXECUTOR;
+    }
   });
 
   it("工作流不存在 → 抛 Workflow not found（不入队）", async () => {
