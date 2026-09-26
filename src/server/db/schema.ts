@@ -268,6 +268,11 @@ export const task = sqliteTable(
      *  按 COMFY_EXECUTOR 写值），领取侧见 `repository-task-impl.ts` 的
      *  `claimNextQueued`。 */
     claimedBy: text("claimedBy"),
+    /** 提交时刻的执行载荷（RAW 原件，P3 §5 ADR §13-3B1 决定 1）：host 领到行后
+     *  由它重建 Job，不经 `workflowName` 回查模板——模板被改/删也不影响在队任务
+     *  执行「点运行时那一刻」的图。inline 路径不读它（仍走现查的同一份入参），
+     *  但同样写入，保证两种模式下行形态一致、可事后复现。 */
+    execPayload: text("execPayload", { mode: "json" }),
   },
   (t) => [
     index("task_user_created_idx").on(t.userId, t.createdAt),

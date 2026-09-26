@@ -406,3 +406,10 @@ configureExecutorCli({ taskRepo: hostTaskRepo, logger: hostLog, resolveComfyBase
 - **reaper 归属分片从 3-B1 提前到 3-B0**（代码事实倒逼，非方向变更）：`reaper.ts` 模块加载即有一次 sweep（`startReaper()` 副作用），而孤儿判决依赖**进程内**内存足迹——host 不分片就会把 inline「QUEUED>30s 尚未进 ComfyUI」的在飞任务误判成孤儿杀掉。落地形态：`listStaleQueued/listStaleRunning` 加 `owner` 参数（缺省 `'inline'`，Next 侧调用签名与行为不变），谓词与领取共用 impl 的单一定义 `ownedBy()`；`configureReaper({ taskRepo, owner: "host" })`；`resolveTaskRepo()` 在未注入且 Next barrel 不可达时**跳过本轮 + 一次性 warn**（修掉 host 加载 reaper 即两条 unhandled rejection 的实测崩溃）。
 - 3-B0 注入面收口：只 inject 已验证可纯 Node 加载且 Q2 需要的三条 seam（reaper/enqueue/trace）；其余四条属 3-B1（缺的是 host 版执行依赖，不是接线）。
 - host 的 `DATABASE_URL` 解析优先级对齐 Next 侧（进程 env → `.env` 回读 → 默认），复用 `scripts/env-preflight.mjs` 的 `parseEnvFile`——launcher 只透传 `process.env`，自定义库路径下不读 `.env` 会让 host 连错库。
+
+**3-B1（接流量）——实施前已签的四个决定（2026-09-26 追加，签 A/A/A + 打包）**
+
+1. **host 执行载荷来源 = 建行时持久化**（选 A）：`createQueued` 新增 `execPayload` 列落提交时刻的 `tpl.rawJson`，host 领到行后从 `execPayload` 重建 Job。拒「host 现查模板」（模板改/删破坏可复现性）、拒「塞 `workflowSnapshot`」（那是产物复现快照，语义污染）。两处建行入口（tRPC `generate` + 工坊 `workflow-run.server.ts`）同一改动。
+2. **灰度期日志空窗 = 接受、3-C 收口**（选 A）：实测 `src/app/api/tasks/[id]/stream/route.ts` 已有每 5s `findSseSnapshot` DB 轮询转发 `status/progress/error` 差异——host 执行的状态变化本就跨进程可见，唯一缺的是执行中实时 log 流（日志仍经 host `persistLogs` 落 DB 列，下次连接 replay 可见）。拒「log-poll 提前进 3-B1」（PR 变胖），log 进轮询投影属 3-C 自然内容。
+3. **host 侧取消收尾 = 最小版进 3-B1**（选 A）：host tick 检查自己 RUNNING 行的取消/终态 → 本地 `killProcessTree`/丢弃在飞 comfy-cli。现状 `interrupt()` 是 POST 共享 ComfyUI、跨进程仍有效，但 cli 子进程在 host 进程内 Next 摸不到 → 不补会有「取消后还出图」新事故面。ADR 4-B 的完整 `cancelTask` 搬迁照旧留 4-B。
+4. **打包小口径**：inline 建行也显式写 `claimedBy='inline'`（NULL 只服务历史行）；claim 节奏每 tick `take=1` + 2s tick（与 inline 串行并发语义对齐）；claim 后执行抛错走 `finalizeFailure`、不造 RUNNING 僵尸（host 片 reaper 兜底）。host 版 `resolveComfyBase`/`getView`/logger 首选 import 同一份 client.ts/logger（已第三类），前置实测「六 seam 全加载 + getSettingsSync 在 host 读到同一份设置」通过才接线。
