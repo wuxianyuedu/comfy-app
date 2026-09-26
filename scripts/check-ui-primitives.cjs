@@ -3670,47 +3670,70 @@ const RULES = {
     },
   },
 
-  /* ── P82「视图层 `<Button>` 原生 `title=`（应走 `<Tooltip>`）」（棘轮）────
+  /* ── P82「视图层 `<Button>` 原生 `title=`（应走 `<Tooltip>`）」（硬闸）────
    * shadcn `composition.md`：`For icon-only or hover-help affordances use
    * Tooltip, not native title.` 原生 `title=` 的三个短板：
    *   · 屏幕阅读器多数浏览器只读一次、且不参与 aria 关系（读屏器对 `title`
    *     的支持在 Chrome / Firefox 长期不一致，Safari 上 VoiceOver 直接忽略）；
    *   · 显示延迟不可控、移动端不显示；
    *   · 样式不能主题化（浏览器原生 tooltip 灰底、脱离设计 token 系统）。
-   * 合规出口是 `~/components/ui/tooltip` 的 `<Tooltip>` + `<TooltipTrigger
-   * render={<Button …>}>`（Base UI render prop · 不用 asChild）。
+   * 合规出口是 `~/components/ui/hint` 的 `<Hint label=…>`（`Tooltip` +
+   * `<TooltipTrigger render={…} />` 的薄封装 · Base UI render prop · 不用
+   * asChild）；三个 prop 分别挡「条件态提示不出」「图标按钮丢可访问名」
+   * 「禁用按钮弹不出原因」三类场景。
    *
-   * 判据按形态取：视图层 `<Button[\s>][^>]*>` 开括号里出现 `\btitle\s*=` 即
-   * 计一处；不算 `<ButtonLink>` / `<ToolbarButton>`（项目未立后者、前者是
-   * 独立组件名不匹配 `<Button[\s/>]` 的字符类）。多行 Button 开括号跨 `{}`
-   * 表达式（`title={cond ? a : b}`）也能命中、靠 `[\s\S]*?>` 的贪婪度控制。
-   *
-   * 走棘轮（非硬闸）：本 PR 引入时实测视图层 61 处（跨 40 文件 · 见
-   * `changelog.d/0-p82-gate.md`），冻结起点、只许降。治理批次需要：
-   *   ① `<Button title="x">…</Button>` → `<Tooltip><TooltipTrigger
-   *      render={<Button … />}><x /></TooltipTrigger><TooltipContent>x
-   *      </TooltipContent></Tooltip>`；
-   *   ② 若同族工具条反复出现该形态（SelectedToolbar / 画布节点工具栏等）、
-   *      抽 `ToolbarButton` 或 `<IconButtonWithTooltip>` 做单一出口。
-   * 治理与后续升硬闸另开 PR。 */
+   * 判据按形态取：视图层 `<Button` 后紧跟空白 / `>` / `/`（不误伤
+   * `<ButtonLink>`）时，读它的**整个属性段**、里面命中 `\btitle\s*=` 即计一处。
+   * 属性段由 `readJsxAttrsPastTag()` 平衡扫描（`{}` 计深度、引号与模板串内
+   * 不判结构），**不再**用 `[^>]*` 那种粗锚：箭头函数 `onClick={() => …}` 里的
+   * `>` 会让粗锚早停、把该 Button 判成「没 title=」——引入时按粗锚实测 78 处，
+   * 用 TypeScript AST 复扫同一作用域是 157 处（`LogPanel.tsx` 单文件粗锚记 3、
+   * 实有 10）。棘轮阶段漏计不假红，但「清零 + 升硬闸」必须建立在看得见全部
+   * 存量的判据上，所以本条与升硬闸同批改实现。 */
   P82: {
     label:
-      "视图层 <Button> 用原生 title=（应走 ~/components/ui/tooltip 的 <Tooltip> + <TooltipTrigger render={<Button …/>}>；shadcn composition.md）",
+      "视图层 <Button> 用原生 title=（应走 ~/components/ui/hint 的 <Hint label=…>；shadcn composition.md）",
     count: (t) => {
       const t2 = stripComments(t);
-      /* `<Button` 后必须紧跟空白 / `>` / `/`，避免误伤 `<ButtonLink>`。
-       * 属性段用「不含 `>` 的连续字符」的粗锚：多数字面量场景够用；
-       * `onClick={() => a > b}` 里那个 `>` 会让本判据早停、把该 Button
-       * 判为「没 title=」——这种漏计是安全的（棘轮只降不升、少计不假红、
-       * 治理时人工复核覆盖到），比写个手写平衡扫描更省心。 */
       let n = 0;
-      for (const m of t2.matchAll(/<Button(?=[\s/>])([^>]*)>/g)) {
-        if (/\btitle\s*=/.test(m[1])) n++;
+      const re = /<Button(?=[\s/>])/g;
+      let m;
+      while ((m = re.exec(t2)) !== null) {
+        const attrs = readJsxAttrsPastTag(t2, re.lastIndex);
+        if (attrs !== null && /\btitle\s*=/.test(attrs)) n++;
       }
       return n;
     },
   },
 };
+
+/**
+ * 从 JSX 开括号的属性段起点扫到收尾的 `>`，返回中间那段文本（取不到收尾 `>`
+ * 时返回 `null`）。要平衡三件事，少一件就会漏计或误伤：
+ *   · `{…}` 表达式里的 `>` 不算标签收尾（`disabled={a > b}`、`onClick={() => x()}`）；
+ *   · 字符串 / 模板字面量里的 `{` `}` `>` 都不参与结构判断；
+ *   · 嵌套表达式（`{list.map((x) => <b>{x}</b>)}`）靠深度计数吃下。
+ */
+function readJsxAttrsPastTag(src, from) {
+  let depth = 0;
+  let quote = null;
+  for (let i = from; i < src.length; i++) {
+    const ch = src[i];
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "{") depth++;
+    else if (ch === "}") depth = Math.max(0, depth - 1);
+    else if (ch === ">" && depth === 0) return src.slice(from, i);
+  }
+  return null;
+}
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
 function isBusySlotName(name) {
@@ -3990,6 +4013,14 @@ const HARD_GATE_RULES = new Set([
    * `dark:<palette>-N` 直接阻断，走语义 token 或就地 `p71-allow` 声明
    * （ANSI SGR 8 色 / 品牌渐变端点 / 类别装饰色 · P71/P79 共享一份 allow）。 */
   "P71",
+  /* P82（shadcn composition.md · 「悬停说明走 Tooltip、不走原生 title」）：
+   * #1123 引入时按粗锚冻结 78 处，治理那一批（#1135）用 TypeScript AST 复扫
+   * 发现真存量是 157 处 / 69 文件 —— 粗锚 `[^>]*` 会被属性段里箭头函数的 `>`
+   * 截断，`title=` 排在 `onClick={() => …}` 之后的全漏。#1135 一次清零（出口
+   * 抽在 `~/components/ui/hint` 的 `<Hint>`，§12.18 补地基）→ 本 PR 把判据换成
+   * 平衡扫描（`readJsxAttrsPastTag()`）并升为硬闸：**先让判据看得见全部存量，
+   * 再冻结为 0**，顺序反了就会把硬闸建在看不见的存量上。 */
+  "P82",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
