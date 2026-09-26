@@ -26,13 +26,24 @@ import {
  * 搬走文案不等于搬走名字）：
  *   · 有可见文字的按钮**不要**给 `aria-label` —— 名字已由文字给出，另写一份
  *     会撞 WCAG 2.5.3「label in name」；
- *   · 纯图标按钮（`<X />`、`✕`、`⋮` 这类）传 `accessibleName`，由本组件把
- *     `label` 同时写成子元素的 `aria-label`（子元素已自带时不覆盖）。
+ *   · 纯图标按钮（`<X />`、`✕`、`⋮` 这类**不含字母与数字**的字形）传
+ *     `accessibleName`，由本组件把 `label` 同时写成子元素的 `aria-label`
+ *     （子元素已自带时不覆盖）；
+ *   · 带字母或数字的就是**可见文字**（`A-`、`5×`、「错误」），一律不补名 ——
+ *     名字该由文字自己给，另写一份会让读屏念出的与屏幕上看到的不一致
+ *     （WCAG 2.5.3「label in name」，语音控制用户念屏幕上那个词就点不到）。
  *
  * **禁用态按钮**：trigger 落在 `disabled` 元素上时浏览器根本不发指针事件、提示
  * 不会弹（原生 `title` 反而会弹）。传 `wrap` 让提示挂在一层 `inline-flex` 锚点
  * 上，「为什么不能点」就还能说出口；代价是键盘聚焦不再触发提示 —— 与原生
  * `title=` 的既有行为一致，不算退化。
+ *
+ * **一个副作用要说清**：`data-slot` 会被 trigger 接管 —— 被包的 `<Button>` 上
+ * 那个 `data-slot="button"` 变成 `data-slot="tooltip-trigger"`（同一个属性写两遍，
+ * trigger 侧后施加、把它盖掉了）。全库没有任何样式或门禁按 `[data-slot=button]`
+ * 取元素（`ui/button-group` 用的是 `button-group` / `select-trigger` 两个别的
+ * 名字），所以不影响外观；但**按 `data-slot` 断言「这是不是基元按钮」的用例要
+ * 同时接受 `tooltip-trigger`**，别把它当成手写 `<button>` 的残留。
  */
 export interface HintProps {
   /**

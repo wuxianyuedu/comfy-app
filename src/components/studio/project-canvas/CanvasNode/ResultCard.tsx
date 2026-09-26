@@ -59,7 +59,7 @@ export function ResultCard({
         </div>
         {/* Edit toolbar */}
         <div className="border-border-strong bg-canvas-deep flex items-center justify-center gap-1 border-b px-2 py-1.5">
-          <Hint label="字号减小" accessibleName>
+          <Hint label="字号减小">
             <Button
               variant="ghost"
               className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-medium"
@@ -67,7 +67,7 @@ export function ResultCard({
               A-
             </Button>
           </Hint>
-          <Hint label="字号增大" accessibleName>
+          <Hint label="字号增大">
             <Button
               variant="ghost"
               className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-medium"
