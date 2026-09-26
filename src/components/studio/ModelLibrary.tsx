@@ -9,6 +9,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { FieldLabel } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
+import { EmptyState } from "~/components/ui/empty-state";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
 import { useModelFolderConfig } from "./hooks/use-model-folder-config";
@@ -81,14 +82,11 @@ export function ModelLibrary() {
         {c.loading ? (
           <p className="text-ink-muted text-sm">加载中…</p>
         ) : c.filtered.length === 0 ? (
-          <div className="border-border text-ink-muted grid min-h-[300px] place-items-center rounded-2xl border border-dashed">
-            <div className="text-center">
-              <p className="text-ink-strong text-lg font-medium">
-                模型库还没有内容
-              </p>
-              <p className="mt-1 max-w-md text-sm">
-                没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。
-              </p>
+          <EmptyState
+            title="模型库还没有内容"
+            description="没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。"
+            minHeightClass="min-h-[300px]"
+            action={
               <Button
                 variant="primary"
                 onClick={() => c.setConfigOpen(true)}
@@ -97,8 +95,8 @@ export function ModelLibrary() {
                 <Icon name="settings" size={16} />
                 去配置目录
               </Button>
-            </div>
-          </div>
+            }
+          />
         ) : (
           // 紧凑列表 —— 每行是 [类型药丸][文件名][大小]。
           // 旧的卡片栅格（4 列 + 28px 占位图标 + 重复的 fileName）
@@ -371,13 +369,14 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
             {c.loading ? (
               <p className="text-ink-muted text-sm">加载中…</p>
             ) : c.totalCount === 0 ? (
-              <div className="border-border text-ink-muted grid min-h-[160px] place-items-center rounded-xl border border-dashed">
-                <p className="text-sm">
-                  {c.comfyReachable
+              <EmptyState
+                description={
+                  c.comfyReachable
                     ? "ComfyUI 中没有可识别的模型目录。"
-                    : "未连接 ComfyUI；请先启动本地 ComfyUI。"}
-                </p>
-              </div>
+                    : "未连接 ComfyUI；请先启动本地 ComfyUI。"
+                }
+                minHeightClass="min-h-[160px]"
+              />
             ) : (
               <>
                 {c.enabledRows.length > 0 && (

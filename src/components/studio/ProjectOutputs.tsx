@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { EmptyState } from "~/components/ui/empty-state";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -236,14 +237,11 @@ export function ProjectOutputs() {
         {loading ? (
           <p className="text-ink-muted text-sm">加载中…</p>
         ) : outputs.length === 0 ? (
-          <div className="border-border-strong text-ink-muted grid min-h-[280px] place-items-center rounded-2xl border border-dashed">
-            <div className="text-center">
-              <p className="text-ink-soft text-lg font-medium">还没有产出</p>
-              <p className="mt-1 text-sm">
-                在画布里跑一次生成，结果会自动归档到本项目目录。
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            title="还没有产出"
+            description="在画布里跑一次生成，结果会自动归档到本项目目录。"
+            minHeightClass="min-h-[280px]"
+          />
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {outputs.map((output) => {

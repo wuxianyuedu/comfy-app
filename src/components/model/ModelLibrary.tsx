@@ -2,6 +2,7 @@
 
 import { Button } from "~/components/ui/button";
 import { textHandler } from "~/lib/form-props";
+import { EmptyState } from "~/components/ui/empty-state";
 import { Skeleton } from "~/components/ui/skeleton";
 import { ModelCard } from "./ModelCard";
 import { useModelLibrary } from "./hooks/use-model-library";
@@ -67,9 +68,10 @@ export function ModelLibrary() {
           ))}
         </div>
       ) : c.models.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed p-12 text-center">
-          暂无可用的本地模型。请确认 ComfyUI 已启动，然后点击「同步模型」。
-        </div>
+        <EmptyState
+          description="暂无可用的本地模型。请确认 ComfyUI 已启动，然后点击「同步模型」。"
+          className="p-12"
+        />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {c.models.map((model) => (
