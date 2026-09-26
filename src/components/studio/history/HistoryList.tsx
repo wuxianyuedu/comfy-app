@@ -170,7 +170,9 @@ export function HistoryList({
               <section key={group.key}>
                 {/* ── 日期分组标题 ── */}
                 <div className="mb-3 flex items-center gap-3">
+                  {/* p71-allow:start brand 渐变 · 日期分组标题左侧竖条 violet→fuchsia 双色（项目品牌视觉）· §3.6.1 */}
                   <div className="h-4 w-1 rounded-full bg-linear-to-b from-violet-500 to-fuchsia-500" />
+                  {/* p71-allow:end */}
                   <h2 className="text-ink-strong text-sm font-semibold">
                     {group.key}
                   </h2>

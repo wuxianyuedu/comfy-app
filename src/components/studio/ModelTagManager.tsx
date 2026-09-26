@@ -160,7 +160,7 @@ export function ModelTagManager({
                         // 否则两次提交会竞速（例如 Enter + blur 都触发，
                         // 第二个看到一个已重命名的标签而报 404）。
                         onBlur={() => cancelEdit()}
-                        className="bg-canvas-deep text-ink-bright min-w-0 flex-1 rounded-md border border-fuchsia-500/50 px-2 py-0.5 text-sm outline-none focus:border-fuchsia-400"
+                        className="bg-canvas-deep text-ink-bright border-primary/50 focus:border-primary min-w-0 flex-1 rounded-md border px-2 py-0.5 text-sm outline-none"
                       />
                     ) : (
                       <span
