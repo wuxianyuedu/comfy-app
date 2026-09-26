@@ -39,6 +39,7 @@ import { WorkflowRunRawCliModal } from "./WorkflowRunRawCliModal";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { FieldLabel } from "~/components/ui/field";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
@@ -245,25 +246,25 @@ export function WorkflowRunLogModal({
                 </Button>
               )}
               {runs.length > 1 && (
-                <select
+                <SelectMenu
                   value={viewTaskId ?? ""}
-                  onChange={(event) =>
-                    onViewTaskIdChange(event.target.value || null)
-                  }
-                  className="border-border bg-panel text-ink-strong max-w-[200px] truncate rounded-md border px-1.5 py-0.5 text-[10.5px] outline-none"
-                  title="切换查看的任务"
-                >
-                  {runs.map((r) => (
-                    <option key={r.taskId} value={r.taskId}>
-                      {r.workflowName} ·{""}
-                      {r.status === "done"
-                        ? "完成"
-                        : r.status === "failed"
-                          ? "失败"
-                          : "运行中"}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => onViewTaskIdChange(v || null)}
+                  options={runs.map((r) => r.taskId)}
+                  labels={Object.fromEntries(
+                    runs.map((r) => [
+                      r.taskId,
+                      `${r.workflowName} · ${
+                        r.status === "done"
+                          ? "完成"
+                          : r.status === "failed"
+                            ? "失败"
+                            : "运行中"
+                      }`,
+                    ]),
+                  )}
+                  aria-label="切换查看的任务"
+                  className="max-w-[200px] text-[10.5px]"
+                />
               )}
               <Button
                 variant="ghost"
