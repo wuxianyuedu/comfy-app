@@ -26,6 +26,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { useModelAdapters } from "./hooks/use-model-adapters";
 
 const MODE_GROUPS: Array<{
@@ -275,30 +276,30 @@ export function WorkshopModelAdapterModal({
                           key={`${a.mode}-${row.type}-${i}`}
                           className="flex items-center gap-1.5"
                         >
-                          <select
+                          <SelectMenu
                             value={row.type}
-                            onChange={(event) =>
+                            onChange={(value) =>
                               updateAdapter(a.mode, (x) => ({
                                 ...x,
                                 inputs: x.inputs.map((r, j) =>
                                   j === i
                                     ? {
-                                        type: event.target
-                                          .value as WorkshopInputType,
+                                        type: value as WorkshopInputType,
                                         field: r.field,
                                       }
                                     : r,
                                 ),
                               }))
                             }
-                            className="border-border bg-bg text-ink w-44 rounded-lg border px-2 py-1 text-[11px]"
-                          >
-                            {WORKSHOP_INPUT_TYPES.map((t) => (
-                              <option key={t.type} value={t.type}>
-                                {workshopInputLabel(t.type)}（{t.type}）
-                              </option>
-                            ))}
-                          </select>
+                            options={WORKSHOP_INPUT_TYPES.map((t) => t.type)}
+                            labels={Object.fromEntries(
+                              WORKSHOP_INPUT_TYPES.map((t) => [
+                                t.type,
+                                `${workshopInputLabel(t.type)}（${t.type}）`,
+                              ]),
+                            )}
+                            className="w-44 text-[11px]"
+                          />
                           <span className="text-muted-foreground text-[10px]">
                             →
                           </span>
