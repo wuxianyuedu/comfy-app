@@ -3935,6 +3935,13 @@ const HARD_GATE_RULES = new Set([
    * + 内文案」的空态卡直接阻断，走 `~/components/ui/empty-state` 的
    * `<EmptyState>` 或 `~/components/ui/empty` 的 `<Empty>` 基元。 */
   "P75",
+  /* P81（shadcn composition.md · Button 直接子 icon 必带 data-icon）：
+   * #1108 引入时视图层实测 114 处 / 51 文件，#1116 一次治理清零
+   * （脚本按 `<Button…>…</Button>` 块扫直接子级的 icon-like 起始标签、
+   * 注入 `data-icon="inline-start"`，含 `settings/page.tsx` 里
+   * `<Disclosure trailing={…}>` 一处手工兜底）→ 本 PR 升为硬闸。
+   * 深层嵌套（icon 被 span / div 包着）不属本账、判据显式不计。 */
+  "P81",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
