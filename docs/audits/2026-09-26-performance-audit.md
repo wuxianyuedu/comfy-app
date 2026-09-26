@@ -48,6 +48,7 @@
 | L3   | P1   | `src-tauri/src/shell_launch.rs:936-960`                          | `find_owned_orchestrator` 落地 exe 名预筛，非 node 进程不再跨进程读环境块                              | #1114 |
 | L4   | P1   | `src-tauri/src/lib.rs:513` + `public/splash.html:730`            | 日志尾部读取改 seek（不整读文件）；splash 日志轮询 800ms→1500ms                                        | #1117 |
 | E6   | P2   | `src/app/api/custom-nodes/route.ts:626`                          | manifest 摘要按 size+mtime 指纹缓存，GET 不再整份读盘解析                                              | #1121 |
+| L12  | P2   | `scripts/launcher-core/log.mjs:72`                               | 编排器日志改 16KB/500ms/exit 缓冲落盘（exit 钩子保证归档完整）                                         | #1125 |
 
 ## B. 判定修正与例外（📝）
 
@@ -88,7 +89,7 @@ _（全部闭环，见 A 表。）_
 - ⬜ **L9** `scripts/dev-launcher.mjs:1024-1089` —— 就绪轮询 1s×180 无退避，每轮还写状态文件。
 - ⬜ **L10** `scripts/dev-launcher.mjs:261-318` —— `shellStaleWarning` 递归遍历 Rust 源码树逐文件 `statSync`。
 - _（L11 已闭环，见 A 表。）_
-- ⬜ **L12** `scripts/launcher-core/log.mjs:72`、`src-tauri/src/shell_launch.rs:396-397` —— 日志单条 flush / 无 BufWriter。
+- ⬜ **L12b** `src-tauri/src/shell_launch.rs:396-397` —— Rust 侧日志每条 `OpenOptions::open` + `write_all`，无 BufWriter（Node 侧 log.mjs 已闭环）。
 - ⬜ **L13** `tools/scripts/Build-Guard.ps1:215-249` —— 固定 500ms 忙等 + 三轮全进程 CIM 查询。
 - ⬜ **L14** `scripts/quality-gate.mjs:229-232`（4 道门禁串行 spawnSync）、`vitest.config.ts`（coverage 列 60+ 路径 + 3 份 reporter、无分片）。
 - ⬜ **L15** `src/app/api/update-check/route.ts:49-67/125-139` —— 前端 30s 轮询，同步递归遍历 `src-tauri` 全树（首轮 4 遍）。方向：目录级粗粒度比对或 `fs.watch`。
