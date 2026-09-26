@@ -12,9 +12,7 @@
     "P66": "自建「同一时刻只跑一件」的重入闸门（应使用 ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock）",
     "P67": "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）",
     "P68": "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
-    "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
-    "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
-    "P81": "视图层 <Button> 直接子 icon 缺 data-icon=\"inline-start|end\"（shadcn composition.md；buttonVariants 的 has-data-[icon=*] 选择器只吃直接子级）"
+    "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）"
   },
   "total": 0,
   "files": {}

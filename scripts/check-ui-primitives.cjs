@@ -3942,6 +3942,13 @@ const HARD_GATE_RULES = new Set([
    * `<Disclosure trailing={…}>` 一处手工兜底）→ 本 PR 升为硬闸。
    * 深层嵌套（icon 被 span / div 包着）不属本账、判据显式不计。 */
   "P81",
+  /* P71（§4.11.1 · shadcn styling.md「No manual `dark:` color overrides」）：
+   * 2026-09-24 引入时视图层实测 230 处、折叠 log-level 色系统 + P13 首批
+   * 治理降到 215 冻结起点；本会话 #1063~#1088 的 P79 治理批次同时把 P71
+   * 一起按语义 token / `p71-allow` 例外块清零 → 本 PR 升为硬闸。视图层新增
+   * `dark:<palette>-N` 直接阻断，走语义 token 或就地 `p71-allow` 声明
+   * （ANSI SGR 8 色 / 品牌渐变端点 / 类别装饰色 · P71/P79 共享一份 allow）。 */
+  "P71",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
