@@ -9,7 +9,11 @@
 // `netstat -ano -p TCP` 查 PID 的监听端口 —— 两者都不需要额外的第三方二进制，
 // 也不用付两次 PowerShell 的进程启动开销；POSIX 用 ps 查命令行、用
 // /proc/net/tcp + /proc/<pid>/fd 查监听端口（纯 Node 内建，不依赖 lsof）。
-import "server-only";
+//
+// §18.4 三选一：本模块走第三类（纯 Node 宿主），依赖登记在
+// `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
+// 只用 `child_process.execFile` + `fs` 做本机进程/端口探测，与 lifecycle /
+// runner-state 一样属于「未来 executor host 也要能直接 import」的执行链地基。
 import { execFile } from "child_process";
 import { readdirSync, readlinkSync, readFileSync } from "fs";
 
