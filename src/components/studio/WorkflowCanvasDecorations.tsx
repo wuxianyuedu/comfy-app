@@ -209,7 +209,7 @@ export function ZoomIndicator({
           onCancel: () => setEditing(false),
         })}
         title="输入缩放百分比后回车"
-        className="bg-panel text-ink-bright z-base absolute top-3 right-3 h-7 w-16 rounded-md border border-purple-400/60 px-2 text-right text-[11px] font-medium tabular-nums shadow-lg outline-none"
+        className="bg-panel text-ink-bright z-base border-primary/60 absolute top-3 right-3 h-7 w-16 rounded-md border px-2 text-right text-[11px] font-medium tabular-nums shadow-lg outline-none"
       />
     );
   }
