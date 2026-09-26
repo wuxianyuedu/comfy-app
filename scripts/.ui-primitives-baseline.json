@@ -16,25 +16,6 @@
     "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
     "P75": "视图层手搓空态卡 `<div className=\"border-dashed rounded-xl/2xl/3xl\">`（应使用 ~/components/ui/empty-state 的 <EmptyState> 或 ~/components/ui/empty 的 <Empty>，shadcn composition.md）"
   },
-  "total": 6,
-  "files": {
-    "src/components/model/ModelLibrary.tsx": {
-      "P75": 1
-    },
-    "src/components/studio/history/HistoryList.tsx": {
-      "P75": 1
-    },
-    "src/components/studio/ModelLibrary.tsx": {
-      "P75": 1
-    },
-    "src/components/studio/ProjectOutputs.tsx": {
-      "P75": 1
-    },
-    "src/components/studio/TrainingStudio.tsx": {
-      "P75": 1
-    },
-    "src/components/studio/WorksGallery.tsx": {
-      "P75": 1
-    }
-  }
+  "total": 0,
+  "files": {}
 }
