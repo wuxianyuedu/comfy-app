@@ -4895,6 +4895,48 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.files["src/components/studio/P79Allow.tsx"]?.P79).toBe(1);
   });
 
+  /* p71-allow 支持 JSX 注释形态（`//` 前缀只能落 JS 表达式位；JSX 顶层兄弟
+   * 节点位需要 `{/* p71-allow:start *\/}` 形式）。同一段里两形态混合声明，
+   * 两处 allow 之外的 raw palette 才被计入。 */
+  it("p71-allow 同时认 `//` 与 JSX 注释两形态（JSX 顶层位不再无处声明）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P79JsxAllow.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        "      {/* p71-allow:start brand gradient · 项目品牌色 */}",
+        "      <div className='from-violet-500 to-fuchsia-500' />",
+        "      {/* p71-allow:end */}",
+        "      <div className='bg-amber-500'>外</div>",
+        "      {true && (",
+        "        // p71-allow:start ANSI SGR 终端色",
+        "        <div className='bg-red-500 text-emerald-700' />",
+        "        // p71-allow:end",
+        "      )}",
+        "      <div className='bg-sky-500'>外二</div>",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--update"]);
+    expect(code, output).toBe(0);
+    const baseline = JSON.parse(
+      readFileSync(
+        join(workdir, "scripts", ".ui-primitives-baseline.json"),
+        "utf8",
+      ),
+    ) as { files: Record<string, { P79?: number }> };
+    /* 两处 allow 都生效：JSX 注释形态包住 from-violet/to-fuchsia（计 2 处
+     * palette 但被剥）、`//` 形态包住 bg-red-500 与 text-emerald-700（计
+     * 2 处、被剥）；allow 之外两处 bg-amber-500 与 bg-sky-500 各计一次。 */
+    expect(baseline.files["src/components/studio/P79JsxAllow.tsx"]?.P79).toBe(
+      2,
+    );
+  });
+
   /* ── P80「视图层 w-N 与 h-N 同值应换 size-N」（棘轮）差分回归 ────
    * 见 scripts/check-ui-primitives.cjs 里 P80 注释。合规出口是 tailwind 内建
    * 的 `size-N`（同一份 `w-N h-N` 的简写）。判据按 className 字符串解析、
