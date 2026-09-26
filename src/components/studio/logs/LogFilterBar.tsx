@@ -21,6 +21,7 @@ import { Button } from "~/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { Input } from "~/components/ui/input";
 import { useLogPanel } from "./LogProvider";
+import { FILTER_SELECTED_ITEM_STYLES } from "./log-row-style";
 import type { LogFilter, LogLevelCounts } from "./log-store";
 
 /* 级别色（语义 token，规范 03 §3.6.2）：原实现把 cyan / amber / rose 的四个档位
@@ -113,11 +114,16 @@ export function LogFilterBar({
              * 忽略固有宽度、于是「警告」被切成 `警…`（ISSUE #262）。窄窗口下
              * 整组可能横向溢出，交给行头的 `flex-wrap` 接住（折行判据就是
              * 上面容器的 `min-w-56`），而不是靠切字。
-             * active 视觉走基元 `data-[state=on]:bg-muted`；`LEVEL_LABEL_STYLES`
-             * 保留在 item 的 className 里，因为「info/warn/error 三档文字色」
-             * 是 **level-specific 语义色**（黄=警告、红=错误…）、不是 active
-             * 视觉。P77 二批统一的是 active、不是这个。 */
-            className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${LEVEL_LABEL_STYLES[option.value]}`}
+             * **选中态不能只靠基元的 `data-[pressed]:bg-muted`**：它解析到
+             * `--color-subtle`，浅色主题下与行头 `--color-surface-1` 同值，
+             * 「选中的是哪一项」就又看不见了（ISSUE #609）—— 所以选中档显式
+             * 挂 `FILTER_SELECTED_ITEM_STYLES`（底色 + 描边 + 字重三层）。
+             * `LEVEL_LABEL_STYLES` 留在 className 里，因为「info/warn/error
+             * 三档文字色」是 **level-specific 语义色**（黄=警告、红=错误…）、
+             * 不是 active 视觉。P77 二批统一的是 active 的载体、不是这个。 */
+            className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${LEVEL_LABEL_STYLES[option.value]} ${
+              option.value === filter ? FILTER_SELECTED_ITEM_STYLES : ""
+            }`}
             title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
           >
             <span className="whitespace-nowrap">{option.label}</span>
