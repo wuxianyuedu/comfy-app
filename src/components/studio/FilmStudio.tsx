@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { Separator } from "~/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { FormField } from "~/components/ui/form-field";
@@ -662,22 +663,20 @@ export function FilmStudio() {
               label="视频工作流（工作流库）"
               labelClassName="text-ink-faint mb-1.5 text-[11px]"
             >
-              <select
+              <SelectMenu
                 value={c.videoWorkflowId}
-                onChange={textHandler(c.setVideoWorkflowId)}
-                className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
-              >
-                <option value="">
-                  {c.videoWorkflows.length
+                onChange={c.setVideoWorkflowId}
+                options={c.videoWorkflows.map((wf) => wf.id)}
+                labels={Object.fromEntries(
+                  c.videoWorkflows.map((wf) => [wf.id, wf.name]),
+                )}
+                placeholder={
+                  c.videoWorkflows.length
                     ? "选择视频工作流…"
-                    : "工作流库里还没有视频工作流"}
-                </option>
-                {c.videoWorkflows.map((wf) => (
-                  <option key={wf.id} value={wf.id}>
-                    {wf.name}
-                  </option>
-                ))}
-              </select>
+                    : "工作流库里还没有视频工作流"
+                }
+                fullWidth
+              />
               {!c.videoWorkflowId && (
                 <span className="text-ink-fainter mt-1 block text-[10.5px]">
                   没有内置视频工作流可回落 ——
@@ -691,22 +690,20 @@ export function FilmStudio() {
               label="首帧合成工作流（可选，工作流库）"
               labelClassName="text-ink-faint mb-1.5 text-[11px]"
             >
-              <select
+              <SelectMenu
                 value={c.imageWorkflowId}
-                onChange={textHandler(c.setImageWorkflowId)}
-                className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
-              >
-                <option value="">
-                  {c.imageWorkflows.length
+                onChange={c.setImageWorkflowId}
+                options={c.imageWorkflows.map((wf) => wf.id)}
+                labels={Object.fromEntries(
+                  c.imageWorkflows.map((wf) => [wf.id, wf.name]),
+                )}
+                placeholder={
+                  c.imageWorkflows.length
                     ? "不需要 / 未选择"
-                    : "工作流库里还没有图类工作流"}
-                </option>
-                {c.imageWorkflows.map((wf) => (
-                  <option key={wf.id} value={wf.id}>
-                    {wf.name}
-                  </option>
-                ))}
-              </select>
+                    : "工作流库里还没有图类工作流"
+                }
+                fullWidth
+              />
             </FormField>
 
             {/* Subtitle toggle */}
