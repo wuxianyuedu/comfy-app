@@ -19,9 +19,11 @@
  *
  * ## 为什么没合到 shadcn `Combobox`（P67 §12.18 中间地带 · 已评估保留）
  *
- * 1bfc79c 装了 `~/components/ui/combobox`（**基于 Base UI Combobox**，带搜索），
- * 从形状看与本件「搜索 + 多选」有重叠。实测本件有 **3 条 Combobox 撑不住的
- * 复合语义**，硬合会丢业务判据：
+ * 曾装过 `~/components/ui/combobox`（**Base UI 版 Combobox**，带搜索；
+ * 界面层最严格审计 §2.9 判定为"装了但 src 内 0 消费点"的死装件、已
+ * 随本 PR 删除）。从形状看它与本件「搜索 + 多选」有重叠，但本件有
+ * **3 条 Combobox 撑不住的复合语义**、硬合会丢业务判据 —— 这三条与
+ * "磁盘上是否装有 combobox"无关，即便未来重新引入也需要独立评估：
  *
  *   1. **draft / apply 事务**：面板内 `useState<Set<string>>(new Set(modes))`
  *      起一份草稿、只有点「保存」才 `onChange` 回父层；点「取消」直接关
@@ -43,8 +45,9 @@
  * 外点关闭 / Esc）已经吃 base-ui Popover；**独立**的 draft / tab /
  * default 三态是本件的核心、没有对应基元可复用。
  *
- * 注：上面这段选型论证与磁盘上 `ui/combobox.tsx` 的实际栈（Base UI）对齐；
- * 若未来 combobox 换栈（例如退回 cmdk）或本件被拆解，这段需要重新评估。
+ * 注：`ui/combobox.tsx` 已删除；上面这段选型论证不再依赖磁盘上有 combobox
+ * 存在，若未来重新引入 Base UI Combobox（例如给多处搜索型下拉做统一出口）
+ * 或本件被拆解，这段需要重新评估。
  */
 
 import { useCallback, useMemo, useState } from "react";
