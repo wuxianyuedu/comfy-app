@@ -390,3 +390,24 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
     expect(raw.nodes[0]!.widgets_values[0]).toBe("new");
   });
 });
+
+/** `configureExecutorCli` 的接缝 smoke（P3 §5 第 1 期·第三步·执行批）。
+ *  本文件其余用例只测 `applyRawOverrides` 纯逻辑、不加载 executor-cli 本体；
+ *  这里用 dynamic import 只在需要时把 executor-cli 拽进来，避免给上面十几条
+ *  静态测试加加载成本。兼作 `configureExecutorCli` 在 `check-dead-exports`
+ *  眼里的消费方（同目录 `.test.ts` 算数，见 `TEST_CONSUMER_EXT`）。 */
+describe("configureExecutorCli 接缝", () => {
+  it("接受 Partial<ExecutorCliDeps> 且不抛", async () => {
+    const mod = await import("./executor-cli");
+    expect(() =>
+      mod.configureExecutorCli({
+        logger: { warn: () => undefined },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      mod.configureExecutorCli({
+        resolveComfyBase: async () => "http://127.0.0.1:8188",
+      }),
+    ).not.toThrow();
+  });
+});
