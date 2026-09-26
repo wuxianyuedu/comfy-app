@@ -4,6 +4,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
   useRef,
   useMemo,
@@ -76,6 +77,16 @@ const KIND_STYLE: Record<
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  /* 卸载时清掉所有挂起的自动收起定时器：Provider 卸载后这些 setTimeout 仍会
+   * 触发 dismiss → setItems，向已卸载组件 setState（规范 §8.5 / P7）。 */
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      pending.forEach((tm) => clearTimeout(tm));
+      pending.clear();
+    };
+  }, []);
 
   const dismiss = useCallback((id: string) => {
     setItems((prev) => prev.filter((prev) => prev.id !== id));

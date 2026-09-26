@@ -105,6 +105,12 @@ export function WorkflowRunRawCliModal({
   const [loaded, setLoaded] = useState(false);
   const [autoscroll, setAutoscroll] = useState(true);
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   const parsed = useMemo(() => lines.map(parseRawCliLine), [lines]);
@@ -152,7 +158,8 @@ export function WorkflowRunRawCliModal({
   const copy = useCopyFeedback({
     onSuccess: () => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 1500);
     },
     onFailure: "silent",
   });
