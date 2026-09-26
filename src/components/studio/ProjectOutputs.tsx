@@ -1,7 +1,6 @@
 "use client";
 
 import { subscribeAppEvent } from "~/lib/app-events";
-import { textHandler } from "~/lib/form-props";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -9,6 +8,7 @@ import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue } from "~/lib/display-value";
 import { downloadText } from "~/lib/browser-io";
@@ -185,17 +185,14 @@ export function ProjectOutputs() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <select
+            <SelectMenu
               value={projectId}
-              onChange={textHandler(setProjectId)}
-              className="border-border-strong bg-subtle text-ink-soft rounded-lg border px-3 py-2 text-xs outline-none focus:border-violet-500/40"
-            >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id} className="bg-node">
-                  {project.name ?? "未命名项目"}
-                </option>
-              ))}
-            </select>
+              onChange={setProjectId}
+              options={projects.map((p) => p.id)}
+              labels={Object.fromEntries(
+                projects.map((p) => [p.id, p.name ?? "未命名项目"]),
+              )}
+            />
             <Button
               variant="outline"
               size="sm"
