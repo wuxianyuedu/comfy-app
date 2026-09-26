@@ -1,12 +1,12 @@
 "use client";
 
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { textHandler } from "~/lib/form-props";
 
 import { HistoryDetailModal } from "./HistoryDetailModal";
 import { HistoryTaskCard } from "./HistoryTaskCard";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { useHistoryList } from "./hooks/use-history-list";
 import { FILTERS, type SortKey, type TaskItem } from "./history-types";
 
@@ -90,19 +90,14 @@ export function HistoryList({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <select
+            <SelectMenu
               value={c.sort}
-              onChange={textHandler((value) => c.setSort(value as SortKey))}
-              className="border-border bg-subtle text-ink-strong rounded-lg border px-3 py-1.5 text-xs outline-none focus:border-violet-500/40"
+              onChange={(value) => c.setSort(value as SortKey)}
+              options={["newest", "oldest"]}
+              labels={{ newest: "时间倒序", oldest: "时间正序" }}
               aria-label="排序"
-            >
-              <option value="newest" className="bg-node">
-                时间倒序
-              </option>
-              <option value="oldest" className="bg-node">
-                时间正序
-              </option>
-            </select>
+              className="text-xs"
+            />
             <Button
               variant="outline"
               size="xs"
