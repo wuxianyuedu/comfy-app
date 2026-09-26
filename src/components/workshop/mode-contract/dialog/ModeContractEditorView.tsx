@@ -21,6 +21,7 @@ import type { ModeContractEditorController } from "../hooks/use-mode-contract-ed
 import { Button } from "~/components/ui/button";
 import { FieldLabel } from "~/components/ui/field";
 import { Checkbox } from "~/components/ui/checkbox";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { ContractInputCatalog } from "./ContractInputCatalog";
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
@@ -227,19 +228,19 @@ export function ModeContractEditorView({
             />
             <div>
               <p className="text-muted-foreground mb-1 text-[10px]">输出类别</p>
-              <select
+              <SelectMenu
                 value={draft.output}
-                onChange={(event) =>
-                  controller.setOutput(
-                    event.target.value as ModeContract["output"],
-                  )
+                onChange={(value) =>
+                  controller.setOutput(value as ModeContract["output"])
                 }
-                className="border-border bg-bg text-ink rounded-lg border px-2 py-1 text-[11px]"
-              >
-                <option value="image">图片（image）</option>
-                <option value="video">视频（video）</option>
-                <option value="audio">音频（audio）</option>
-              </select>
+                options={["image", "video", "audio"]}
+                labels={{
+                  image: "图片（image）",
+                  video: "视频（video）",
+                  audio: "音频（audio）",
+                }}
+                className="text-[11px]"
+              />
             </div>
             {!draft.inputs.includes("prompt") && (
               <p className="bg-warning/10 text-warning-strong rounded-lg px-2 py-1 text-[11px]">
