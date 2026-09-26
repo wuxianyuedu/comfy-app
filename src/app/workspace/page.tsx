@@ -107,6 +107,9 @@ function writeLastView(view: WorkspaceView): void {
   sessionStorage.setItem(WS_VIEW_KEY, view);
 }
 
+/** 视图历史栈保留上限（P2：只去重不裁剪会无限增长）。 */
+const WORKSPACE_VIEW_HISTORY_MAX = 50;
+
 export default function WorkspacePage() {
   const router = useRouter();
 
@@ -132,7 +135,8 @@ export default function WorkspacePage() {
     setViewHistory((prev) => {
       const last = prev[prev.length - 1];
       if (last === view) return prev; // dedup
-      return [...prev, view];
+      // 历史栈只去重不裁剪会无限增长（P2）；保留最近一段即可，更早的用不到。
+      return [...prev, view].slice(-WORKSPACE_VIEW_HISTORY_MAX);
     });
     setViewMode(view);
     writeLastView(view);

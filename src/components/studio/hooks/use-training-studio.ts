@@ -159,10 +159,13 @@ export function useTrainingStudio(): TrainingStudioController {
       await uploadBusy.run(() =>
         runAsyncAction(
           async () => {
+            const uploaded: DatasetItem[] = [];
             for (const file of list) {
               const name = await uploadDatasetImage(file);
-              setDataset((prev) => [...prev, { name, caption: "" }]);
+              uploaded.push({ name, caption: "" });
             }
+            /* 逐张 setState 会触发 N 次重渲染（P2）；串行上传完成后一次性并入。 */
+            setDataset((prev) => [...prev, ...uploaded]);
           },
           {
             report: errors.report(null),
