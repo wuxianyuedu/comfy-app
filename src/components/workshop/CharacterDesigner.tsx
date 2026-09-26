@@ -3,6 +3,7 @@ import React from "react";
 import { textHandler } from "~/lib/form-props";
 import { Trash } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { EmptyState } from "~/components/ui/empty-state";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { useBusyAction } from "~/components/ui/use-busy-action";
@@ -556,9 +557,11 @@ export function CharacterDesigner({
       />
 
       {characters.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
-          还没有角色。添加角色后会自动生成可送入生图的提示词。
-        </div>
+        <EmptyState
+          variant="hint"
+          description="还没有角色。添加角色后会自动生成可送入生图的提示词。"
+          className="py-10 text-sm"
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {characters.map((character, i) => (

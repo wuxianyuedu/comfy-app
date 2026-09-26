@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "~/components/ui/icon";
+import { EmptyState } from "~/components/ui/empty-state";
 import { Button } from "~/components/ui/button";
 import { ExtractToolbar } from "~/components/workshop/ExtractToolbar";
 import { useStoryboardPlanner, type Props } from "./useStoryboardPlanner";
@@ -151,10 +152,11 @@ export function StoryboardPlanner(props: Props) {
       />
 
       {scenes.length === 0 && (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-6 text-center text-xs">
-          先在「剧本」中创建场景，再点「从剧本导入」或「AI
-          智能拆镜」自动生成分镜。
-        </div>
+        <EmptyState
+          variant="hint"
+          description="先在「剧本」中创建场景，再点「从剧本导入」或「AI 智能拆镜」自动生成分镜。"
+          className="py-6 text-xs"
+        />
       )}
 
       {(aiProgress || aiError) && (
@@ -178,9 +180,11 @@ export function StoryboardPlanner(props: Props) {
       )}
 
       {shots.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
-          暂无分镜。导入剧本后，每个场景会按建议镜头数拆分为多个镜头。
-        </div>
+        <EmptyState
+          variant="hint"
+          description="暂无分镜。导入剧本后，每个场景会按建议镜头数拆分为多个镜头。"
+          className="py-10 text-sm"
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {shots.map((shot) => (
