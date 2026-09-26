@@ -46,6 +46,7 @@
 | L11  | P2   | `scripts/launcher-core/worktree.mjs:217-231`                     | lockfile 漂移判定按两份文件 size+mtime 指纹短路，跳过全量 YAML 解析                                    | #1099 |
 | L2   | P1   | `scripts/build-desktop.mjs:182`                                  | 噪声目录复制前由 `cpSync` filter 排除（不再先拷后删）                                                  | #1112 |
 | L3   | P1   | `src-tauri/src/shell_launch.rs:936-960`                          | `find_owned_orchestrator` 落地 exe 名预筛，非 node 进程不再跨进程读环境块                              | #1114 |
+| L4   | P1   | `src-tauri/src/lib.rs:513` + `public/splash.html:730`            | 日志尾部读取改 seek（不整读文件）；splash 日志轮询 800ms→1500ms                                        | #1117 |
 
 ## B. 判定修正与例外（📝）
 
@@ -75,7 +76,6 @@ _（全部闭环，见 A 表。）_
 
 ### C.4 启动 / 构建 / 桌面壳（P1）
 
-- ⬜ **L4** `public/splash.html:730` + `src-tauri/src/lib.rs:513/545/671-760` —— 启动页日志面板每 800ms 轮询，命令对 4 个日志文件各整文件读入（且日志不轮转）。方向：seek 到尾部读最后 N 字节 + 降频/退避。
 - ⬜ **L5** `src-tauri/src/lib.rs:1418(250ms×480)`、`2110(1s×300)`、`2084(100ms×50)`、`958(500ms×240)`、`475(2s×90)`、`single_instance.rs:442-455(100ms×∞)` —— 6 处固定间隔 sleep 轮询，无退避无统一收口。方向：收敛到统一的「带退避的等待」工具。
 - ⬜ **L8b** `scripts/dev-launcher.mjs:415-432` —— 每个待裁定 PID 再 spawn 一次 PowerShell CIM。方向：一次 `Get-CimInstance Win32_Process` 批量取全部 PID 的命令行（netstat 部分已闭环）。
 
