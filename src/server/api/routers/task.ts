@@ -50,45 +50,59 @@ export const taskRouter = createTRPCRouter({
             .filter(Boolean)
         : undefined;
 
-      const overFetch = input.media
-        ? Math.min(input.take * 4, 400)
-        : input.take;
+      const PAGE = input.take;
+      /* media 过滤的判据（`inferMediaType`）依赖首图扩展名等应用层解析，
+       * 纯 SQL 复刻不了，内存过滤保留；但把原先「固定 ×4（最多 400 行，
+       * 含大 JSON 关联）」改成**迭代补页**——大多数请求第 1 页就凑满，
+       * 不再无条件把 400 行拉回来。扫描行数上限与旧版对齐（400）。 */
+      const MAX_ROUNDS = Math.ceil(400 / PAGE);
 
-      const tasks = await taskRepository.listByUser(ctx.user.id, {
-        projectId: input.projectId ?? undefined,
-        take: overFetch,
-        statusList: statusList ?? undefined,
-        includeImages: true,
-      });
+      const scanOnce = async (skip: number) => {
+        const tasks = await taskRepository.listByUser(ctx.user.id, {
+          projectId: input.projectId ?? undefined,
+          take: PAGE,
+          skip,
+          statusList: statusList ?? undefined,
+          includeImages: true,
+        });
+        return tasks.map((task) => {
+          const p = (task.params ?? {}) as Record<string, unknown>;
+          const checkpoint =
+            typeof p.checkpoint === "string" ? p.checkpoint : null;
+          const cover = task.images[0]?.localPath ?? null;
+          const coverMediaType = task.images[0]?.mediaType ?? null;
+          return {
+            id: task.id,
+            type: task.type,
+            workflowName: task.workflowName,
+            status: task.status,
+            prompt: task.prompt,
+            createdAt: task.createdAt,
+            cover,
+            checkpoint,
+            mediaType: inferMediaType(cover, coverMediaType, task.type),
+            projectId: task.projectId ?? null,
+            progress: task.progress,
+            error: task.error ?? null,
+          };
+        });
+      };
 
-      let list = tasks.map((task) => {
-        const p = (task.params ?? {}) as Record<string, unknown>;
-        const checkpoint =
-          typeof p.checkpoint === "string" ? p.checkpoint : null;
-        const cover = task.images[0]?.localPath ?? null;
-        const coverMediaType = task.images[0]?.mediaType ?? null;
-        return {
-          id: task.id,
-          type: task.type,
-          workflowName: task.workflowName,
-          status: task.status,
-          prompt: task.prompt,
-          createdAt: task.createdAt,
-          cover,
-          checkpoint,
-          mediaType: inferMediaType(cover, coverMediaType, task.type),
-          projectId: task.projectId ?? null,
-          progress: task.progress,
-          error: task.error ?? null,
-        };
-      });
-
-      if (input.media) {
-        list = list.filter((list) => list.mediaType === input.media);
+      if (!input.media) {
+        return { tasks: await scanOnce(0) };
       }
-      if (input.media) list = list.slice(0, input.take);
 
-      return { tasks: list };
+      type Card = Awaited<ReturnType<typeof scanOnce>>[number];
+      const matched: Card[] = [];
+      for (let round = 0; round < MAX_ROUNDS; round += 1) {
+        const page = await scanOnce(round * PAGE);
+        for (const card of page) {
+          if (card.mediaType === input.media) matched.push(card);
+          if (matched.length >= PAGE) break;
+        }
+        if (matched.length >= PAGE || page.length < PAGE) break;
+      }
+      return { tasks: matched };
     }),
 
   /* GET /api/tasks/[id] —— 读 */
