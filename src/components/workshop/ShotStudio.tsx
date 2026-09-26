@@ -69,6 +69,49 @@ function resolveSeed(raw: string): number {
   return Number.isFinite(n) ? Math.trunc(n) : randomSeed();
 }
 
+/** 自动预填：分镜输出 → 图片提示词。
+ *
+ *  从「场景分镜」来的镜头已带构建好的提示词；任何为空的（例如导入的裸镜头）
+ *  从场景 + 角色卡一次性填上；被用户手改过的镜头（`editedRef`）不覆盖。
+ *
+ *  `scenes` / `characters` / `styles` 是父级每次渲染可能重建的数组，走 ref
+ *  读最新值（每次渲染后同步），触发源只留 `shots` —— 否则父级任何一次
+ *  重渲染都会让它跑一遍 O(N) 扫描（`onShotsChange` 是 setState，引用稳定）。 */
+function useAutoFillPrompts(
+  shots: Shot[],
+  inputs: { scenes: Scene[]; characters: Character[]; styles: StyleRef[] },
+  onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>,
+  editedRef: React.RefObject<Set<string>>,
+): void {
+  const inputsRef = React.useRef(inputs);
+  React.useEffect(() => {
+    inputsRef.current = inputs;
+  });
+  React.useEffect(() => {
+    const needsFill = shots.some(
+      (s) => !s.prompt.trim() && !editedRef.current.has(s.id),
+    );
+    if (!needsFill) return;
+    const { scenes, characters, styles } = inputsRef.current;
+    onShotsChange((prev) =>
+      prev.map((shot) => {
+        if (shot.prompt.trim() || editedRef.current.has(shot.id)) return shot;
+        const scene = scenes.find((sc) => sc.id === shot.sceneId);
+        const chars = characters.filter((c) =>
+          shot.characterIds.includes(c.id),
+        );
+        const style = styles.find((st) => st.slug === shot.skillSlug);
+        return {
+          ...shot,
+          prompt: buildShotPrompt(shot, scene, chars, style),
+          negativePrompt:
+            shot.negativePrompt || buildShotNegative(chars, style),
+        };
+      }),
+    );
+  }, [shots, onShotsChange, editedRef]);
+}
+
 /**
  * 镜头生图 stage：消费「场景分镜」产出的镜头列表（提示词已在上游
  * 自动构建；空的在这里从场景 + 角色卡回填），并在本地 ComfyUI 链或
@@ -115,31 +158,13 @@ export function ShotStudio({
     (s) => !s.imageUrl && (s.status === "idle" || s.status === "failed"),
   );
 
-  // ── 自动预填：分镜输出 → 图片提示词 ──────────────────────
-  // 从「场景分镜」来的镜头已带构建好的提示词；任何为空的
-  //（例如导入的裸镜头）从场景 + 角色卡一次性填上。
-  React.useEffect(() => {
-    const needsFill = shots.some(
-      (s) => !s.prompt.trim() && !editedRef.current.has(s.id),
-    );
-    if (!needsFill) return;
-    onShotsChange((prev) =>
-      prev.map((shot) => {
-        if (shot.prompt.trim() || editedRef.current.has(shot.id)) return shot;
-        const scene = scenes.find((sc) => sc.id === shot.sceneId);
-        const chars = characters.filter((c) =>
-          shot.characterIds.includes(c.id),
-        );
-        const style = styles.find((st) => st.slug === shot.skillSlug);
-        return {
-          ...shot,
-          prompt: buildShotPrompt(shot, scene, chars, style),
-          negativePrompt:
-            shot.negativePrompt || buildShotNegative(chars, style),
-        };
-      }),
-    );
-  }, [shots, scenes, characters, styles, onShotsChange]);
+  // ── 自动预填：分镜输出 → 图片提示词（逻辑收在 useAutoFillPrompts）──
+  useAutoFillPrompts(
+    shots,
+    { scenes, characters, styles },
+    onShotsChange,
+    editedRef,
+  );
 
   function patchShot(id: string, p: Partial<Shot>) {
     onShotsChange((prev) =>
