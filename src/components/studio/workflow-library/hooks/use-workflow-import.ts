@@ -10,7 +10,13 @@
  *  **只接受 ComfyUI 的原始工作流格式（RAW）**：API 格式（「导出(API格式)」）不是
  *  本应用支持的导入形态，RAW 转可执行的 API 图由 comfy-cli 在执行时完成。
  */
-import { useCallback, useRef, useState, type DragEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
@@ -89,9 +95,16 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   // 弹出导入面板让用户确认 → 走现有 POST /api/workflows 链路入库。
   // dropErr 是两个入口共用的可见错误出口（4 秒后自隐）。
   const [dropErr, setDropErr] = useState<string | null>(null);
+  const dropErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (dropErrTimerRef.current) clearTimeout(dropErrTimerRef.current);
+    };
+  }, []);
   const showFileError = useCallback((message: string) => {
     setDropErr(message);
-    setTimeout(() => setDropErr(null), 4000);
+    if (dropErrTimerRef.current) clearTimeout(dropErrTimerRef.current);
+    dropErrTimerRef.current = setTimeout(() => setDropErr(null), 4000);
   }, []);
 
   const handleImport = useCallback(async () => {

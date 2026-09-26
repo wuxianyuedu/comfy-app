@@ -34,6 +34,10 @@ import type {
   SummaryPkg,
 } from "../types";
 
+/** 解析控制台日志的内存上限（规范 §2.1）：流式解析可能一次性吐出成百上千行，
+ * 无上限会泄漏内存并让面板重渲染变贵。 */
+const PARSE_LOG_MAX = 2000;
+
 type RowState = ReturnType<typeof deriveRowState>;
 
 export interface ParentBlock {
@@ -136,10 +140,15 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    * `ReferenceError: window is not defined`，`pnpm test` 因此随机非零退出，
    * 而用例层面全绿）。ISSUE #489。 */
   const aliveRef = useRef(true);
+  const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
+      if (progressHideTimerRef.current)
+        clearTimeout(progressHideTimerRef.current);
     };
   }, []);
 
@@ -340,7 +349,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       if (!aliveRef.current) return;
       setLoading(false);
       // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
-      setTimeout(() => {
+      if (progressHideTimerRef.current)
+        clearTimeout(progressHideTimerRef.current);
+      progressHideTimerRef.current = setTimeout(() => {
         if (!aliveRef.current) return;
         setProgress({
           phase: "",
@@ -416,10 +427,12 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         try {
           const obj = JSON.parse(line) as ParseStreamEvent;
           if (obj.type === "log") {
-            setLogs((prev) => [
-              ...prev,
-              { level: obj.level ?? "info", msg: obj.msg ?? "" },
-            ]);
+            setLogs((prev) =>
+              [
+                ...prev,
+                { level: obj.level ?? "info", msg: obj.msg ?? "" },
+              ].slice(-PARSE_LOG_MAX),
+            );
           } else if (obj.type === "done") {
             void onDone(obj.report ?? null, !!obj.ok);
           }
