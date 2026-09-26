@@ -9,9 +9,11 @@
 // 打开失败）。必须用 spawn 命令 + 参数数组，绕开 shell 二次解析。
 // Windows：`start` 是 cmd 内建命令，须以 `cmd /c start "" <url>` 调用；
 // 空标题参数 "" 用于防止 URL 里的 & 被当成 start 的窗口标题。
-
+//
+// §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）——依赖 Node
+// 内建 `child_process` + 纯函数 `~/lib/error-message`，登记进
+// `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import { errorText } from "~/lib/error-message";
-import "server-only";
 import { spawn } from "child_process";
 
 export async function openUrlInBrowser(
