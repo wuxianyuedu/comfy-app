@@ -466,3 +466,27 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
     expect(await impl.claimNextQueued("host", 10)).toEqual([hostId]);
   });
 });
+
+describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
+  it("返回 workflowName / execPayload / params 三列（不回查模板）", async () => {
+    const id = await seed({
+      claimedBy: "host",
+      execPayload: { nodes: [{ id: "1", type: "KSampler" }] },
+      params: { workflowInputs: [{ nodeId: "1", name: "text", value: "x" }] },
+    });
+    const job = await impl.findExecJob(id);
+    expect(job?.workflowName).toBe("w");
+    expect(job?.execPayload).toEqual({
+      nodes: [{ id: "1", type: "KSampler" }] as unknown[],
+    });
+    expect(job?.params).toMatchObject({
+      workflowInputs: [{ nodeId: "1", name: "text", value: "x" }],
+    });
+  });
+
+  it("未知 id 返回 null；execPayload 缺省行为该列回 null（调用方判失败用）", async () => {
+    expect(await impl.findExecJob("nope")).toBeNull();
+    const bare = await seed({});
+    expect((await impl.findExecJob(bare))?.execPayload ?? null).toBeNull();
+  });
+});

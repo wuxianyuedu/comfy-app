@@ -403,13 +403,32 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
   });
 
   it("run() 里以 COMFY_EXECUTOR 门控、默认 inline 不 spawn（Phase 2 只灰度）", () => {
-    // 默认必须是 inline —— 未显式设 env 时不能起 host。
+    // 默认必须是 inline —— 未显式设 env 时不能起 host。3-B1 起判据收进
+    // `resolveComfyExecutorMode()`（进程 env → .env 回读 → "inline"），
+    // 门控本身形状不变：只认 `host`，其它值 warn 后走 inline 分支。
     expect(launcherSrc).toMatch(
-      /process\.env\.COMFY_EXECUTOR\s*\?\?\s*["']inline["']/,
+      /const executorMode = resolveComfyExecutorMode\(\)/,
     );
+    expect(launcherSrc).toMatch(/return raw \|\| ["']inline["']/);
     // 只有 `host` 才 spawn；其它值 warn 后走 inline 分支。
     expect(launcherSrc).toMatch(/executorMode === ["']host["']/);
     expect(launcherSrc).toMatch(/spawnExecutorHost\(\)/);
+  });
+
+  it("3-B1：host 子进程拿到归一化后的 COMFY_EXECUTOR，且 resolver 回读 .env", () => {
+    // 显式回写：`.env` 来源时子进程 process.env 里没有这个 key，不传会造成
+    // 「launcher 认为 host 模式、host 起着骨架」的静默错配。
+    const start = launcherSrc.indexOf("export function spawnExecutorHost(");
+    const body = launcherSrc.slice(start, launcherSrc.indexOf("\n}", start));
+    expect(body).toContain("COMFY_EXECUTOR: resolveComfyExecutorMode()");
+    // resolver 本体必须有 .env 回读（复用 parseEnvFile，不另写一份解析）。
+    const rStart = launcherSrc.indexOf(
+      "export function resolveComfyExecutorMode(",
+    );
+    expect(rStart, "resolveComfyExecutorMode 未定义").toBeGreaterThan(-1);
+    const rBody = launcherSrc.slice(rStart, launcherSrc.indexOf("\n}", rStart));
+    expect(rBody).toContain("parseEnvFile(");
+    expect(rBody).toContain('"COMFY_EXECUTOR"');
   });
 
   it("RUNTIME_SCRIPTS 含 executor-host.mjs（桌面包用户改 .env 才能试 host）", () => {

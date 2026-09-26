@@ -129,7 +129,7 @@ describe("scripts/executor-host.mjs 骨架", () => {
 /** Phase 3-B0：`COMFY_EXECUTOR=host` 的运行时注入链。与上方骨架契约分组的
  *  意义——骨架形态（未设 env）必须**一行都不碰 DB**，运行时形态才 tsx 加载
  *  TS + 注入 reaper(owner=host)/enqueue/trace + Q2 扫自己那片。 */
-describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0）", () => {
+describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", () => {
   /** 在临时目录建一份最小 `task` 表库（列取 reaper/领取实际触达的集合），
    *  种一行 **inline 片**的超时 QUEUED 孤儿。 */
   function mkDbWithInlineOrphan(dir: string): {
@@ -142,7 +142,7 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0）", () => {
       `CREATE TABLE task (
         id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'QUEUED',
         promptId TEXT, finishedAt TEXT, createdAt TEXT NOT NULL,
-        workflowName TEXT, claimedBy TEXT
+        workflowName TEXT, params TEXT, execPayload TEXT, claimedBy TEXT
       )`,
     );
     const staleAt = new Date(Date.now() - 120_000)
@@ -154,6 +154,15 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0）", () => {
     ).run("inline-orphan-1", staleAt, "w");
     db.close();
     return { dbPath, rowId: "inline-orphan-1" };
+  }
+
+  /** 往同一份临时库补一行 host 片的 QUEUED 任务（带执行载荷）。 */
+  function seedHostRow(dbPath: string, id: string): void {
+    const db = new DatabaseSync(dbPath);
+    db.prepare(
+      "INSERT INTO task (id,status,createdAt,workflowName,params,execPayload,claimedBy) VALUES (?,'QUEUED',datetime('now'),?,?,?,?)",
+    ).run(id, "w", "{}", '{"nodes":[{"id":"1"}]}', "host");
+    db.close();
   }
 
   function readTaskRow(dbPath: string, id: string): Record<string, unknown> {
@@ -221,4 +230,54 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0）", () => {
     expect(code).toBe(1);
     expect(fs.readFileSync(logPath, "utf-8")).toContain("runtime boot FAILED");
   }, 90_000);
+
+  /** 用指定 args/env 跑一次 host 子进程，回 exit code（stderr 一并带回防哑）。 */
+  function runHostWith(
+    args: string[],
+    extraEnv: Record<string, string>,
+    logPath: string,
+  ): Promise<{ code: number | null; stderr: string }> {
+    return new Promise((resolve) => {
+      const child = spawn(process.execPath, [HOST_SCRIPT, ...args], {
+        cwd: REPO_ROOT,
+        env: { ...process.env, COMFYAPP_HOST_LOG: logPath, ...extraEnv },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let err = "";
+      child.stderr.on("data", (b: Buffer) => {
+        err += b.toString("utf8");
+      });
+      child.on("exit", (c) => resolve({ code: c, stderr: err }));
+    });
+  }
+
+  it("--claim-once：领走恰好一行 host 行（QUEUED→RUNNING + claim-dispatched），不碰 inline 行", async () => {
+    const tmp = mkTmp();
+    const logPath = path.join(tmp, "claim.log");
+    const { dbPath, rowId } = mkDbWithInlineOrphan(tmp);
+    seedHostRow(dbPath, "host-job-1");
+    const { code, stderr } = await runHostWith(
+      ["--claim-once"],
+      { COMFY_EXECUTOR: "host", DATABASE_URL: `file:${dbPath}` },
+      logPath,
+    );
+    const text = fs.readFileSync(logPath, "utf-8");
+    expect(code, `stderr: ${stderr}\nlog:\n${text}`).toBe(0);
+    expect(text).toContain("claim-dispatched taskId=host-job-1");
+    const claimed = readTaskRow(dbPath, "host-job-1");
+    expect(claimed.status).toBe("RUNNING");
+    expect(claimed.claimedBy).toBe("host");
+    // 领取跨片红线：同库的 inline 孤儿不被这条 tick 动到
+    expect(readTaskRow(dbPath, rowId).status).toBe("QUEUED");
+  }, 90_000);
+
+  it("--claim-once 在无 COMFY_EXECUTOR 的骨架形态被拒 → exit 1（骨架没有可领取的运行时）", async () => {
+    const tmp = mkTmp();
+    const logPath = path.join(tmp, "claim-skel.log");
+    const { code } = await runHostWith(["--claim-once"], {}, logPath);
+    expect(code).toBe(1);
+    expect(fs.readFileSync(logPath, "utf-8")).toContain(
+      "--claim-once 需要 COMFY_EXECUTOR=host",
+    );
+  }, 60_000);
 });
