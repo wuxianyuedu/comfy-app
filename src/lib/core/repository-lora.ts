@@ -8,7 +8,12 @@ import { db } from "~/lib/db";
 import { clampPct } from "~/lib/progress";
 import { loraTrainingJob, type LoraTrainingJob } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
+import { tailWindow } from "~/lib/page-window";
 import { eq, and, desc } from "drizzle-orm";
+
+/** 单个训练任务的日志行数上限（理由同 `repository-film` 的 `appendLog`：
+ *  `logs` 是 JSON 列，读改写整列的成本随条数线性变贵）。 */
+const LOGS_MAX = 500;
 
 export class LoraTrainingJobRepository extends DrizzleRepository<LoraTrainingJob> {
   constructor() {
@@ -116,7 +121,7 @@ export class LoraTrainingJobRepository extends DrizzleRepository<LoraTrainingJob
     arr.push(entry);
     await db
       .update(loraTrainingJob)
-      .set({ logs: arr, updatedAt: new Date() })
+      .set({ logs: tailWindow(arr, LOGS_MAX), updatedAt: new Date() })
       .where(eq(loraTrainingJob.id, jobId));
   }
 
