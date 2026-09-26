@@ -61,6 +61,16 @@ const TERMINAL_STATES: string[] = [...TERMINAL_TASK_STATUSES];
  *  3-B 接线）按 `COMFY_EXECUTOR` env 决定写哪个值；NULL 语义归 inline。 */
 export type TaskClaimMode = "inline" | "host";
 
+/** 归属谓词——领取（`claimNextQueued`）与 reaper 分片（`listStale*` 的 `owner`）
+ *  共用同一条判据：host 只碰显式 `'host'` 的行；inline 碰 NULL（历史行与未带
+ *  归属的建行）与 `'inline'`。两侧共用防的是「领取看得见、回收看不见」这类
+ *  归属漂移：一条行的归属判定必须全局只有一个定义。 */
+function ownedBy(owner: TaskClaimMode) {
+  return owner === "host"
+    ? eq(task.claimedBy, "host")
+    : or(isNull(task.claimedBy), eq(task.claimedBy, "inline"));
+}
+
 /**
  * 13 个 exec-chain 方法的实现工厂（12 个 delegate 自 class + Phase 3-A 新增的
  * `claimNextQueued`，后者暂不进 class delegate——3-B 的领取循环直接调 impl）。
@@ -146,20 +156,16 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
      *
      * 归属谓词跟 ADR §6：host 只领显式 `'host'` 的行；inline 领 NULL（历史行与
      * 未带归属的建行）与 `'inline'`。领取时把 `claimedBy` 覆写为 `mode`，NULL
-     * 行由此转为显式归属；3-B 接线时 reaper 分片用同一归属谓词。
+     * 行由此转为显式归属；reaper 分片（`listStale*` 的 `owner`）用同一归属谓词。
      */
     async claimNextQueued(
       mode: TaskClaimMode,
       take: number,
     ): Promise<string[]> {
-      const owned =
-        mode === "host"
-          ? eq(task.claimedBy, "host")
-          : or(isNull(task.claimedBy), eq(task.claimedBy, "inline"));
       const candidates = db
         .select({ id: task.id })
         .from(task)
-        .where(and(eq(task.status, "QUEUED"), owned))
+        .where(and(eq(task.status, "QUEUED"), ownedBy(mode)))
         .orderBy(task.createdAt)
         .limit(take);
       const claimed = await db
@@ -261,11 +267,15 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
         .catch(() => undefined);
     },
 
-    /** reaper 扫 QUEUED 孤儿：4 条件 AND（QUEUED + `finishedAt IS NULL` +
-     *  `createdAt < cutoff` + `promptId IS NULL`），逐个破一条都不返。 */
+    /** reaper 扫 QUEUED 孤儿：5 条件 AND（QUEUED + `finishedAt IS NULL` +
+     *  `createdAt < cutoff` + `promptId IS NULL` + 归属 `owner` 片），逐个破一
+     *  条都不返。`owner` 缺省 `'inline'`（NULL 归 inline，与现状全 NULL 的行
+     *  集等价）；host 进程注入 `'host'` 后只收自己那份——灰度期两进程并存时
+     *  互相看不见对方的孤儿，防跨片误杀。 */
     async listStaleQueued(
       cutoff: Date,
       take: number,
+      owner: TaskClaimMode = "inline",
     ): Promise<Array<{ id: string; createdAt: Date; workflowName: string }>> {
       return db
         .select({
@@ -280,16 +290,19 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
             isNull(task.finishedAt),
             lt(task.createdAt, cutoff),
             isNull(task.promptId),
+            ownedBy(owner),
           ),
         )
         .limit(take);
     },
 
     /** reaper 扫 RUNNING 孤儿：与 Queued 版对偶，多一条 `promptId IS NOT NULL`
-     *  （带 promptId 的行归 ComfyUI 负责、由 /history 与 /queue 对账）。 */
+     *  （带 promptId 的行归 ComfyUI 负责、由 /history 与 /queue 对账）。归属
+     *  分片同 Queued 版。 */
     async listStaleRunning(
       cutoff: Date,
       take: number,
+      owner: TaskClaimMode = "inline",
     ): Promise<
       Array<{
         id: string;
@@ -312,6 +325,7 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
             isNull(task.finishedAt),
             lt(task.createdAt, cutoff),
             isNotNull(task.promptId),
+            ownedBy(owner),
           ),
         )
         .limit(take);

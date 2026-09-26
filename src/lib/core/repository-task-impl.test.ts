@@ -272,6 +272,30 @@ describe("listStaleQueued（reaper 扫 QUEUED 孤儿：4 条件 AND）", () => {
     await seed({ status: "RUNNING", createdAt: oldDate });
     expect(await impl.listStaleQueued(cutoff, 10)).toHaveLength(0);
   });
+
+  it("归属分片（Phase 3-B0）：host 片只收 'host' 行，NULL/'inline' 行归 inline 片", async () => {
+    const hostOrphan = await seed({
+      status: "QUEUED",
+      createdAt: oldDate,
+      claimedBy: "host",
+    });
+    const inlineOrphan = await seed({ status: "QUEUED", createdAt: oldDate });
+    const explicitInline = await seed({
+      status: "QUEUED",
+      createdAt: oldDate,
+      claimedBy: "inline",
+    });
+    const hostIds = await impl.listStaleQueued(cutoff, 10, "host");
+    expect(hostIds.map((r) => r.id)).toEqual([hostOrphan]);
+    const inlineIds = await impl.listStaleQueued(cutoff, 10, "inline");
+    expect(inlineIds.map((r) => r.id).sort()).toEqual(
+      [inlineOrphan, explicitInline].sort(),
+    );
+    // 缺省第三参 = inline 片（Next 侧不改调用签名时行为与现状等价）
+    expect(
+      (await impl.listStaleQueued(cutoff, 10)).map((r) => r.id).sort(),
+    ).toEqual([inlineOrphan, explicitInline].sort());
+  });
 });
 
 describe("listStaleRunning（reaper 扫 RUNNING 孤儿：4 条件 AND + promptId 非空）", () => {
@@ -295,6 +319,34 @@ describe("listStaleRunning（reaper 扫 RUNNING 孤儿：4 条件 AND + promptId
       promptId: null,
     });
     expect(await impl.listStaleRunning(cutoff, 10)).toHaveLength(0);
+  });
+
+  it("归属分片（Phase 3-B0）：RUNNING 片同样按 claimedBy 切，与领取谓词同一条判据", async () => {
+    const hostOrphan = await seed({
+      status: "RUNNING",
+      createdAt: oldDate,
+      promptId: "pid-h",
+      claimedBy: "host",
+    });
+    const inlineOrphan = await seed({
+      status: "RUNNING",
+      createdAt: oldDate,
+      promptId: "pid-i",
+      claimedBy: "inline",
+    });
+    const nullOrphan = await seed({
+      status: "RUNNING",
+      createdAt: oldDate,
+      promptId: "pid-n",
+    });
+    expect(
+      (await impl.listStaleRunning(cutoff, 10, "host")).map((r) => r.id),
+    ).toEqual([hostOrphan]);
+    expect(
+      (await impl.listStaleRunning(cutoff, 10, "inline"))
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual([inlineOrphan, nullOrphan].sort());
   });
 });
 
