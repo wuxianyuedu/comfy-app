@@ -10,6 +10,7 @@
 // 三行高度，用户看到的是「筛选菜单不是水平排列的」。
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { SelectMenu } from "~/components/ui/select-menu";
 import type { SourceFilter, TypeFilter } from "./workflow-library-config";
@@ -168,15 +169,16 @@ export function WorkflowLibraryFilters({
         }}
       />
 
-      <Button
-        variant="outline"
-        onClick={onManageModels}
-        className="border-border-strong text-ink-strong hover:bg-subtle h-auto shrink-0 gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap"
-        title="管理模型标签库"
-      >
-        <Icon data-icon="inline-start" name="tag" className="size-3.5" />
-        管理模型
-      </Button>
+      <Hint label="管理模型标签库">
+        <Button
+          variant="outline"
+          onClick={onManageModels}
+          className="border-border-strong text-ink-strong hover:bg-subtle h-auto shrink-0 gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap"
+        >
+          <Icon data-icon="inline-start" name="tag" className="size-3.5" />
+          管理模型
+        </Button>
+      </Hint>
     </div>
   );
 }

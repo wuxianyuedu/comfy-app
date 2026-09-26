@@ -45,6 +45,7 @@ import {
 } from "~/lib/shell/window-controls-client";
 import { useStartupForeground } from "./hooks/use-startup-foreground";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
 interface TitleBarTabsProps {
@@ -125,20 +126,21 @@ function WindowButton({
       <X size={15} />
     );
   return (
-    <Button
-      variant="ghost"
-      aria-label={label}
-      title={label}
-      data-no-drag
-      onClick={onClick}
-      className={`text-ink-soft h-full w-11 rounded-none ${
-        danger
-          ? "hover:bg-destructive hover:text-primary-foreground"
-          : "hover:bg-subtle hover:text-ink-bright"
-      }`}
-    >
-      {icon}
-    </Button>
+    <Hint label={label}>
+      <Button
+        variant="ghost"
+        aria-label={label}
+        data-no-drag
+        onClick={onClick}
+        className={`text-ink-soft h-full w-11 rounded-none ${
+          danger
+            ? "hover:bg-destructive hover:text-primary-foreground"
+            : "hover:bg-subtle hover:text-ink-bright"
+        }`}
+      >
+        {icon}
+      </Button>
+    </Hint>
   );
 }
 

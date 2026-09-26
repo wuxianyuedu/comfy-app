@@ -24,6 +24,7 @@ import type { UsageTestKind } from "~/lib/llm/usage-test-client";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { useFilePicker } from "~/components/ui/file-picker";
+import { Hint } from "~/components/ui/hint";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { FormField } from "~/components/ui/form-field";
@@ -178,25 +179,28 @@ export function UsageTestDialog({
                     preset.key,
                   );
                   return (
-                    <Button
-                      key={preset.key}
-                      variant="outline"
-                      size="xs"
-                      onClick={() => d.addPresetField(preset.key)}
-                      title={
+                    <Hint
+                      label={
                         already
                           ? `已有 ${preset.key} 字段行，直接改那行即可`
                           : preset.hint
                       }
-                      className={`h-auto rounded-full px-2 py-1 text-[11px] ${
-                        already
-                          ? "bg-primary/5 border-primary/50 text-primary"
-                          : "text-muted-foreground hover:text-ink border-border"
-                      }`}
+                      key={preset.key}
                     >
-                      ＋ {preset.key}
-                      {already ? " ✓" : ""}
-                    </Button>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => d.addPresetField(preset.key)}
+                        className={`h-auto rounded-full px-2 py-1 text-[11px] ${
+                          already
+                            ? "bg-primary/5 border-primary/50 text-primary"
+                            : "text-muted-foreground hover:text-ink border-border"
+                        }`}
+                      >
+                        ＋ {preset.key}
+                        {already ? " ✓" : ""}
+                      </Button>
+                    </Hint>
                   );
                 })}
               </div>
@@ -419,21 +423,22 @@ function UsageFieldEditor({
                   </span>
                 ) : (
                   <FieldImageButton
-                    title="本地上传一张图片作为该字段的值（自动转 data URL）"
+                    hint="本地上传一张图片作为该字段的值（自动转 data URL）"
                     onPick={(file) => void d.pickFieldImage(i, file)}
                   />
                 )}
                 {!(usageTest.kind === "video" && isMediaField(f.key)) &&
                   f.key !== "mode" && (
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={() => d.patchField(i, { value: "https://" })}
-                      className="text-muted-foreground hover:text-ink h-auto shrink-0 rounded-lg px-2 text-[11px]"
-                      title="填入公网图片地址占位，直接改成你的图片 URL 即可"
-                    >
-                      链接
-                    </Button>
+                    <Hint label="填入公网图片地址占位，直接改成你的图片 URL 即可">
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => d.patchField(i, { value: "https://" })}
+                        className="text-muted-foreground hover:text-ink h-auto shrink-0 rounded-lg px-2 text-[11px]"
+                      >
+                        链接
+                      </Button>
+                    </Hint>
                   )}
                 <Button
                   variant="ghost"
@@ -499,14 +504,15 @@ function UsageTestResultPanel({
               />
             )}
             {result.videoUrl && (
-              <Button
-                variant="link"
-                onClick={() => void c.openExternalUrl(result.videoUrl ?? "")}
-                className="text-primary h-auto items-center gap-1 p-0 text-xs font-medium"
-                title="在系统默认浏览器中打开生成的视频"
-              >
-                打开生成的视频
-              </Button>
+              <Hint label="在系统默认浏览器中打开生成的视频">
+                <Button
+                  variant="link"
+                  onClick={() => void c.openExternalUrl(result.videoUrl ?? "")}
+                  className="text-primary h-auto items-center gap-1 p-0 text-xs font-medium"
+                >
+                  打开生成的视频
+                </Button>
+              </Hint>
             )}
             {result.savedPath && (
               <p
@@ -555,10 +561,10 @@ function UsageTestResultPanel({
  *  隐藏 input —— 此前这里用 `<label>` 包住 `<input type=file>` 让浏览器
  *  隐式关联，写法与全库另外 8 个落点都不同。现在统一走 `ui/file-picker`。 */
 function FieldImageButton({
-  title,
+  hint,
   onPick,
 }: {
-  title: string;
+  hint: string;
   onPick: (file: File) => void;
 }) {
   const picker = useFilePicker({
@@ -567,15 +573,16 @@ function FieldImageButton({
   });
   return (
     <>
-      <Button
-        variant="outline"
-        size="xs"
-        onClick={picker.open}
-        title={title}
-        className="text-muted-foreground hover:text-ink border-border hover:bg-subtle h-auto shrink-0 gap-1 rounded-lg px-2 text-[11px] transition-colors"
-      >
-        上传
-      </Button>
+      <Hint label={hint}>
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={picker.open}
+          className="text-muted-foreground hover:text-ink border-border hover:bg-subtle h-auto shrink-0 gap-1 rounded-lg px-2 text-[11px] transition-colors"
+        >
+          上传
+        </Button>
+      </Hint>
       <picker.Input />
     </>
   );

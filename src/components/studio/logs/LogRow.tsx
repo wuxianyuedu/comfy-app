@@ -20,6 +20,7 @@ import { Copy } from "lucide-react";
 import { formatEntryForClipboard, type LogEntry } from "./log-store";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
+import { Hint } from "~/components/ui/hint";
 import { JsonViewer } from "~/components/ui/json-viewer";
 import {
   copyFailureText,
@@ -152,42 +153,45 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
   const onCopy = () => copy(formatEntryForClipboard(entry));
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      onClick={() => void onCopy()}
-      title={
+    <Hint
+      label={
         outcome === "done"
           ? "已复制本条日志"
           : outcome === "failed"
             ? copyFailureText()
             : "复制本条日志"
       }
-      aria-label="复制本条日志"
-      data-log-copy=""
-      /* 悬停/聚焦才显形：日志是「长时间盯着看」的界面，一个常在的按钮列会
-       * 在每行末尾多出一块常驻色块，把正文的右边界切碎。键盘 Tab 聚焦时同样
-       * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
-      className={`shrink-0 self-center rounded transition-opacity ${
-        outcome === "idle"
-          ? "hover:bg-subtle hover:text-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          : "opacity-100"
-      } ${
-        outcome === "done"
-          ? "text-success-strong"
-          : outcome === "failed"
-            ? "text-danger-strong"
-            : "text-ink-muted"
-      }`}
     >
-      {outcome === "idle" ? (
-        <Copy data-icon="inline-start" size={13} />
-      ) : (
-        <span className="text-[11px] whitespace-nowrap">
-          {outcome === "done" ? "已复制" : "复制失败"}
-        </span>
-      )}
-    </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={() => void onCopy()}
+        aria-label="复制本条日志"
+        data-log-copy=""
+        /* 悬停/聚焦才显形：日志是「长时间盯着看」的界面，一个常在的按钮列会
+         * 在每行末尾多出一块常驻色块，把正文的右边界切碎。键盘 Tab 聚焦时同样
+         * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
+        className={`shrink-0 self-center rounded transition-opacity ${
+          outcome === "idle"
+            ? "hover:bg-subtle hover:text-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            : "opacity-100"
+        } ${
+          outcome === "done"
+            ? "text-success-strong"
+            : outcome === "failed"
+              ? "text-danger-strong"
+              : "text-ink-muted"
+        }`}
+      >
+        {outcome === "idle" ? (
+          <Copy data-icon="inline-start" size={13} />
+        ) : (
+          <span className="text-[11px] whitespace-nowrap">
+            {outcome === "done" ? "已复制" : "复制失败"}
+          </span>
+        )}
+      </Button>
+    </Hint>
   );
 }
 
@@ -274,14 +278,15 @@ export const LogRow = memo(function LogRow({
     </span>
   );
   const locationNode = location ? (
-    <Button
-      variant="ghost"
-      onClick={() => copyLocation(location)}
-      className="text-ink-fainter hover:text-ink-soft h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right text-[11px] font-normal whitespace-nowrap"
-      title={`${location}（点击复制）`}
-    >
-      {location}
-    </Button>
+    <Hint label={`${location}（点击复制）`}>
+      <Button
+        variant="ghost"
+        onClick={() => copyLocation(location)}
+        className="text-ink-fainter hover:text-ink-soft h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right text-[11px] font-normal whitespace-nowrap"
+      >
+        {location}
+      </Button>
+    </Hint>
   ) : null;
   const sourceNode = entry.origin ? (
     <span className="text-ink-fainter shrink-0 text-[11px]">

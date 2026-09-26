@@ -1,5 +1,6 @@
 "use client";
 
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { EmptyState } from "~/components/ui/empty-state";
 import { Button } from "~/components/ui/button";
@@ -88,28 +89,29 @@ export function StoryboardPlanner(props: Props) {
           </Button>
           {shots.length > 0 && (
             <>
-              <Button
-                variant="primary-solid"
-                size="xs"
-                title="用模型把模板提示词润色为更有画面感的生图提示词"
-                onClick={() => void polishAll()}
-                disabled={polishBusyAll || polishAnyBusy || aiBusy}
-                className="h-auto rounded-lg px-3 py-1.5"
-              >
-                {polishBusyAll ? (
-                  "润色中…"
-                ) : (
-                  <>
-                    <Icon
-                      data-icon="inline-start"
-                      name="sparkles"
-                      size={13}
-                      className="mr-1 inline align-[-2px]"
-                    />
-                    AI 润色提示词
-                  </>
-                )}
-              </Button>
+              <Hint label="用模型把模板提示词润色为更有画面感的生图提示词" wrap>
+                <Button
+                  variant="primary-solid"
+                  size="xs"
+                  onClick={() => void polishAll()}
+                  disabled={polishBusyAll || polishAnyBusy || aiBusy}
+                  className="h-auto rounded-lg px-3 py-1.5"
+                >
+                  {polishBusyAll ? (
+                    "润色中…"
+                  ) : (
+                    <>
+                      <Icon
+                        data-icon="inline-start"
+                        name="sparkles"
+                        size={13}
+                        className="mr-1 inline align-[-2px]"
+                      />
+                      AI 润色提示词
+                    </>
+                  )}
+                </Button>
+              </Hint>
               <Button
                 variant="outline"
                 size="xs"

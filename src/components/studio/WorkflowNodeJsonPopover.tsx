@@ -7,6 +7,7 @@
  *  本文件不 import 任何 store / context，只接收 props 渲染。
  * ════════════════════════════════════════════════════════════════════════ */
 import { useMemo, useState } from "react";
+import { Hint } from "~/components/ui/hint";
 import { Popover, PopoverContent } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { useFlashState } from "~/components/ui/use-flash-state";
@@ -261,35 +262,39 @@ export function NodeJsonPopover({
                 {nodeClass}
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => handleCopy(pretty)}
-              title={copyFailed ? copyFailureText() : "复制 JSON 到剪贴板"}
-              style={{
-                background: copied.on ? accentAlpha(15) : "var(--color-subtle)",
-                color: copied.on ? accent : "var(--color-ink)",
-                border: `1px solid ${copied.on ? accentAlpha(40) : "var(--color-border-strong)"}`,
-              }}
-              className="font-normal"
-            >
-              {copyFailed ? "复制失败" : copied.on ? "✓ 已复制" : "⧉ 复制"}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={onDismiss}
-              title="关闭 (Esc)"
-              aria-label="关闭"
-              style={{
-                background: "var(--color-subtle)",
-                border: "1px solid var(--color-border-strong)",
-                color: "var(--color-ink-muted)",
-              }}
-              className="rounded-md text-[14px] leading-none"
-            >
-              ×
-            </Button>
+            <Hint label={copyFailed ? copyFailureText() : "复制 JSON 到剪贴板"}>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => handleCopy(pretty)}
+                style={{
+                  background: copied.on
+                    ? accentAlpha(15)
+                    : "var(--color-subtle)",
+                  color: copied.on ? accent : "var(--color-ink)",
+                  border: `1px solid ${copied.on ? accentAlpha(40) : "var(--color-border-strong)"}`,
+                }}
+                className="font-normal"
+              >
+                {copyFailed ? "复制失败" : copied.on ? "✓ 已复制" : "⧉ 复制"}
+              </Button>
+            </Hint>
+            <Hint label="关闭 (Esc)">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={onDismiss}
+                aria-label="关闭"
+                style={{
+                  background: "var(--color-subtle)",
+                  border: "1px solid var(--color-border-strong)",
+                  color: "var(--color-ink-muted)",
+                }}
+                className="rounded-md text-[14px] leading-none"
+              >
+                ×
+              </Button>
+            </Hint>
           </div>
           <div
             role="tablist"
@@ -305,37 +310,40 @@ export function NodeJsonPopover({
             {(["view", "saved"] as const).map((tab) => {
               const active = tab === tab;
               return (
-                <Button
-                  key={tab}
-                  variant="ghost"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setTab(tab)}
-                  title={
+                <Hint
+                  label={
                     tab === "saved"
                       ? "执行条目：detail.graph[nodeId] —— 从工作流原件派生的节点条目；不含画布元数据"
                       : "RAW 格式：detail.rawJson.nodes[id] —— 与整工作流「查看 JSON」RAW 逐字节一致"
                   }
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11,
-                    padding: "5px 10px",
-                    borderRadius: "6px 6px 0 0",
-                    border: `1px solid ${active ? accentAlpha(33) : "var(--color-border-subtle)"}`,
-                    borderBottom: active
-                      ? `1px solid ${accentAlpha(20)}`
-                      : "1px solid var(--color-border-subtle)",
-                    background: active
-                      ? accentAlpha(13)
-                      : "var(--color-subtle)",
-                    color: active
-                      ? "var(--color-ink)"
-                      : "var(--color-ink-muted)",
-                  }}
-                  className="h-auto font-normal"
+                  key={tab}
                 >
-                  {tab === "saved" ? "执行 · 节点条目" : "RAW · 节点视图"}
-                </Button>
+                  <Button
+                    variant="ghost"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setTab(tab)}
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      padding: "5px 10px",
+                      borderRadius: "6px 6px 0 0",
+                      border: `1px solid ${active ? accentAlpha(33) : "var(--color-border-subtle)"}`,
+                      borderBottom: active
+                        ? `1px solid ${accentAlpha(20)}`
+                        : "1px solid var(--color-border-subtle)",
+                      background: active
+                        ? accentAlpha(13)
+                        : "var(--color-subtle)",
+                      color: active
+                        ? "var(--color-ink)"
+                        : "var(--color-ink-muted)",
+                    }}
+                    className="h-auto font-normal"
+                  >
+                    {tab === "saved" ? "执行 · 节点条目" : "RAW · 节点视图"}
+                  </Button>
+                </Hint>
               );
             })}
           </div>

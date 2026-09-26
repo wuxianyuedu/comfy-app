@@ -11,6 +11,7 @@
 import type { RemoteModelKind } from "~/lib/llm/types";
 import { Button } from "~/components/ui/button";
 
+import { Hint } from "~/components/ui/hint";
 import { SettingsCard } from "~/components/ui/settings-card";
 import { RemoteModelDialog } from "./RemoteModelDialog";
 import { UsageTestDialog } from "./UsageTestDialog";
@@ -68,44 +69,51 @@ export function LlmRemoteSection({
                         </span>
                       )}
                     </span>
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      title="按该条目配置探测接口连通性（不生成、不耗额度）"
-                      disabled={!!thisProbe?.running}
-                      onClick={() => void d.runEntryConnectionTest(entry)}
-                      className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
+                    <Hint
+                      label="按该条目配置探测接口连通性（不生成、不耗额度）"
+                      wrap
                     >
-                      {thisProbe?.running ? "连接测试中…" : "测试连接"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      title="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）"
-                      onClick={() => d.openUsageTest(kind, entry)}
-                      className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
-                    >
-                      测试生成
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      title="编辑接口地址 / 密钥 / 名称"
-                      onClick={() => d.openEditDialog(entry)}
-                      className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
-                    >
-                      编辑
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      title="移除该模型（即时保存）"
-                      aria-label={`移除模型 ${entry.name}`}
-                      onClick={() => void c.removeRemoteModel(entry.name)}
-                      className="text-muted-foreground hover:text-danger-strong"
-                    >
-                      ✕
-                    </Button>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        disabled={!!thisProbe?.running}
+                        onClick={() => void d.runEntryConnectionTest(entry)}
+                        className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
+                      >
+                        {thisProbe?.running ? "连接测试中…" : "测试连接"}
+                      </Button>
+                    </Hint>
+                    <Hint label="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）">
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => d.openUsageTest(kind, entry)}
+                        className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
+                      >
+                        测试生成
+                      </Button>
+                    </Hint>
+                    <Hint label="编辑接口地址 / 密钥 / 名称">
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => d.openEditDialog(entry)}
+                        className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
+                      >
+                        编辑
+                      </Button>
+                    </Hint>
+                    <Hint label="移除该模型（即时保存）">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`移除模型 ${entry.name}`}
+                        onClick={() => void c.removeRemoteModel(entry.name)}
+                        className="text-muted-foreground hover:text-danger-strong"
+                      >
+                        ✕
+                      </Button>
+                    </Hint>
                   </div>
                   {rowMsg && (
                     <div

@@ -13,6 +13,7 @@ import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-client";
+import { Hint } from "~/components/ui/hint";
 
 /** @deprecated 兼容既有 import：通道类型已迁至 ExtractModelSelect */
 export type { ExtractChannel } from "~/components/workshop/ExtractModelSelect";
@@ -129,16 +130,17 @@ export function ExtractToolbar({
           value={channelValue}
           onChange={onChannelValueChange}
         />
-        <Button
-          variant="primary-solid"
-          size="xs"
-          onClick={onExtract}
-          disabled={busy || extractDisabled}
-          title={extractDisabled ? extractDisabledReason : undefined}
-          className="h-auto rounded-lg px-3 py-1.5"
-        >
-          {busy ? "提取中…" : "提取"}
-        </Button>
+        <Hint label={extractDisabled ? extractDisabledReason : undefined} wrap>
+          <Button
+            variant="primary-solid"
+            size="xs"
+            onClick={onExtract}
+            disabled={busy || extractDisabled}
+            className="h-auto rounded-lg px-3 py-1.5"
+          >
+            {busy ? "提取中…" : "提取"}
+          </Button>
+        </Hint>
         <Button
           variant="outline"
           size="xs"

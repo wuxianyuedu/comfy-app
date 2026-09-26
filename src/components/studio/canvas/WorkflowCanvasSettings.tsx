@@ -29,6 +29,7 @@ import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
 import { fixed } from "~/lib/number-format";
+import { Hint } from "~/components/ui/hint";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Button } from "~/components/ui/button";
 import { RangeSlider } from "~/components/ui/range-slider";
@@ -362,26 +363,27 @@ interface ButtonProps {
 
 export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
   return (
-    <Button
-      variant="outline"
-      onClick={onClick}
-      title="画布设置 · 调整格子 / 坐标尺 / 缩略图 等"
-      aria-label="画布设置"
-      className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-base pointer-events-auto absolute top-12 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
-    >
-      <span aria-hidden className="mr-1 align-baseline text-[12px]">
-        ⚙
-      </span>
-      设置
-      {/* 紫色小点告诉用户「当前有偏离默认值的偏好」，
-       * 不必先打开面板。它既是状态指示，也算一点点品牌色。 */}
-      {hasOverrides && (
-        <span
-          aria-hidden
-          className="bg-primary ml-1 inline-block size-1.5 translate-y-[-1px] rounded-full align-middle shadow-[0_0_6px_rgba(167,139,250,0.7)]"
-        />
-      )}
-    </Button>
+    <Hint label="画布设置 · 调整格子 / 坐标尺 / 缩略图 等">
+      <Button
+        variant="outline"
+        onClick={onClick}
+        aria-label="画布设置"
+        className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-base pointer-events-auto absolute top-12 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
+      >
+        <span aria-hidden className="mr-1 align-baseline text-[12px]">
+          ⚙
+        </span>
+        设置
+        {/* 紫色小点告诉用户「当前有偏离默认值的偏好」，
+         * 不必先打开面板。它既是状态指示，也算一点点品牌色。 */}
+        {hasOverrides && (
+          <span
+            aria-hidden
+            className="bg-primary ml-1 inline-block size-1.5 translate-y-[-1px] rounded-full align-middle shadow-[0_0_6px_rgba(167,139,250,0.7)]"
+          />
+        )}
+      </Button>
+    </Hint>
   );
 }
 
@@ -394,18 +396,19 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
 
 export function CanvasRecenterButton({ onClick }: { onClick: () => void }) {
   return (
-    <Button
-      variant="outline"
-      onClick={onClick}
-      title="回到有节点的位置（只移动视口，不改动节点布局）"
-      aria-label="重新居中"
-      className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
-    >
-      <span aria-hidden className="mr-1 align-baseline text-[12px]">
-        🎯
-      </span>
-      居中
-    </Button>
+    <Hint label="回到有节点的位置（只移动视口，不改动节点布局）">
+      <Button
+        variant="outline"
+        onClick={onClick}
+        aria-label="重新居中"
+        className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
+      >
+        <span aria-hidden className="mr-1 align-baseline text-[12px]">
+          🎯
+        </span>
+        居中
+      </Button>
+    </Hint>
   );
 }
 

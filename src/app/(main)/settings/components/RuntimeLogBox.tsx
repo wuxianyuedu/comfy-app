@@ -20,6 +20,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { StatusDot } from "~/components/ui/status-dot";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
@@ -71,16 +72,17 @@ export function RuntimeLogBox({
             follow={follow}
             onFollowChange={setFollow}
             trailing={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setFullscreen(true)}
-                title="全屏查看"
-                aria-label="全屏查看"
-                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-              >
-                <Maximize2 data-icon="inline-start" size={14} />
-              </Button>
+              <Hint label="全屏查看">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setFullscreen(true)}
+                  aria-label="全屏查看"
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                >
+                  <Maximize2 data-icon="inline-start" size={14} />
+                </Button>
+              </Hint>
             }
           />
           <LogBody
@@ -107,16 +109,17 @@ export function RuntimeLogBox({
           follow={follow}
           onFollowChange={setFollow}
           trailing={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setFullscreen(false)}
-              title="退出全屏"
-              aria-label="退出全屏"
-              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-            >
-              <Minimize2 data-icon="inline-start" size={16} />
-            </Button>
+            <Hint label="退出全屏">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setFullscreen(false)}
+                aria-label="退出全屏"
+                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+              >
+                <Minimize2 data-icon="inline-start" size={16} />
+              </Button>
+            </Hint>
           }
         />
         <LogBody

@@ -27,11 +27,12 @@ afterEach(cleanup);
 /** 最小可用的源文件数据：够渲染标题与 JSON 正文。 */
 const DATA = { name: "demo-workflow", source: { nodes: [], last_node_id: 3 } };
 
-/** 弹窗里所有「关闭」控件：自绘 ✕（`title="关闭"`）+ `ui/dialog` 内置那枚。 */
+/** 弹窗里所有「关闭」控件：自绘 ✕（`aria-label="关闭"`，说明文字走 `<Hint>`）
+ *  + `ui/dialog` 内置那枚。 */
 function closeControls(): HTMLElement[] {
   return Array.from(
     document.querySelectorAll<HTMLElement>(
-      '[data-slot="dialog-close"], button[title="关闭"]',
+      '[data-slot="dialog-close"], button[aria-label="关闭"]',
     ),
   );
 }

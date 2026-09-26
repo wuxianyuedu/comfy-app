@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Skeleton } from "~/components/ui/skeleton";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
@@ -75,45 +76,49 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             {activeCount} 进行中
           </span>
         )}
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={refresh}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
-          title="刷新"
-        >
-          <RefreshCw data-icon="inline-start" size={13} />
-        </Button>
+        <Hint label="刷新" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={refresh}
+            className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
+          >
+            <RefreshCw data-icon="inline-start" size={13} />
+          </Button>
+        </Hint>
         {/* 显示密度切换 */}
         <div className="bg-subtle flex items-center gap-0.5 rounded-lg p-0.5">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => setDisplay("grid")}
-            className={`h-auto rounded-md p-1 ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
-            title="网格视图"
-          >
-            <LayoutGrid data-icon="inline-start" size={14} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => setDisplay("list")}
-            className={`h-auto rounded-md p-1 ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
-            title="列表视图"
-          >
-            <List data-icon="inline-start" size={14} />
-          </Button>
+          <Hint label="网格视图" accessibleName>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setDisplay("grid")}
+              className={`h-auto rounded-md p-1 ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
+            >
+              <LayoutGrid data-icon="inline-start" size={14} />
+            </Button>
+          </Hint>
+          <Hint label="列表视图" accessibleName>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setDisplay("list")}
+              className={`h-auto rounded-md p-1 ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
+            >
+              <List data-icon="inline-start" size={14} />
+            </Button>
+          </Hint>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onClose}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
-          title="关闭"
-        >
-          <X data-icon="inline-start" size={14} />
-        </Button>
+        <Hint label="关闭" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onClose}
+            className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
+          >
+            <X data-icon="inline-start" size={14} />
+          </Button>
+        </Hint>
       </div>
 
       {/* ── 作用域切换（仅在有项目时出现）── */}
@@ -247,25 +252,26 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                     {titleOf(task)}
                   </p>
                   {onUse && task.cover && (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() =>
-                        onUse({
-                          id: task.id,
-                          cover: task.cover!,
-                          mediaType: task.mediaType,
-                        })
-                      }
-                      className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/60 backdrop-blur group-hover:flex hover:bg-black/60 hover:text-white"
-                      title="加入画布"
-                    >
-                      <Plus
-                        data-icon="inline-start"
-                        size={12}
-                        strokeWidth={2.5}
-                      />
-                    </Button>
+                    <Hint label="加入画布" accessibleName>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() =>
+                          onUse({
+                            id: task.id,
+                            cover: task.cover!,
+                            mediaType: task.mediaType,
+                          })
+                        }
+                        className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/60 backdrop-blur group-hover:flex hover:bg-black/60 hover:text-white"
+                      >
+                        <Plus
+                          data-icon="inline-start"
+                          size={12}
+                          strokeWidth={2.5}
+                        />
+                      </Button>
+                    </Hint>
                   )}
                 </div>
               );
@@ -332,25 +338,26 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
 
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">
                     {onUse && task.cover && (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() =>
-                          onUse({
-                            id: task.id,
-                            cover: task.cover!,
-                            mediaType: task.mediaType,
-                          })
-                        }
-                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
-                        title="加入画布"
-                      >
-                        <Plus
-                          data-icon="inline-start"
-                          size={13}
-                          strokeWidth={2.5}
-                        />
-                      </Button>
+                      <Hint label="加入画布" accessibleName>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() =>
+                            onUse({
+                              id: task.id,
+                              cover: task.cover!,
+                              mediaType: task.mediaType,
+                            })
+                          }
+                          className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
+                        >
+                          <Plus
+                            data-icon="inline-start"
+                            size={13}
+                            strokeWidth={2.5}
+                          />
+                        </Button>
+                      </Hint>
                     )}
                     {task.cover && (
                       <a

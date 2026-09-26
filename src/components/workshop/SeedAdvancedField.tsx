@@ -8,6 +8,7 @@
 import { Dices } from "lucide-react";
 
 import { Disclosure } from "~/components/ui/disclosure";
+import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { textHandler } from "~/lib/form-props";
@@ -44,18 +45,19 @@ export function SeedAdvancedField({
           placeholder="留空＝每次随机"
           className="border-border bg-bg text-ink h-7 w-36 text-xs"
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          disabled={disabled}
-          onClick={() => onChange("")}
-          className="text-muted-foreground hover:text-ink h-7 gap-1 px-2"
-          title="清空为自动随机"
-        >
-          <Dices size={13} />
-          随机
-        </Button>
+        <Hint label="清空为自动随机" wrap>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={disabled}
+            onClick={() => onChange("")}
+            className="text-muted-foreground hover:text-ink h-7 gap-1 px-2"
+          >
+            <Dices size={13} />
+            随机
+          </Button>
+        </Hint>
       </div>
     </Disclosure>
   );

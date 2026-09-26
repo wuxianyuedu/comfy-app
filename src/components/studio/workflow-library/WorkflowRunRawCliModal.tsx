@@ -24,6 +24,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FieldLabel } from "~/components/ui/field";
+import { Hint } from "~/components/ui/hint";
 import { JsonViewer } from "~/components/ui/json-viewer";
 import { useInterval } from "~/components/ui/use-interval";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
@@ -181,33 +182,36 @@ export function WorkflowRunRawCliModal({
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => copy(lines.join("\n"))}
-                title="复制全部"
-                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-              >
-                <Copy data-icon="inline-start" size={15} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => loadRef.current()}
-                title="刷新"
-                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-              >
-                <RefreshCw data-icon="inline-start" size={15} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
-                title="关闭"
-                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-              >
-                <X data-icon="inline-start" size={16} />
-              </Button>
+              <Hint label="复制全部" accessibleName>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => copy(lines.join("\n"))}
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                >
+                  <Copy data-icon="inline-start" size={15} />
+                </Button>
+              </Hint>
+              <Hint label="刷新" accessibleName>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => loadRef.current()}
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                >
+                  <RefreshCw data-icon="inline-start" size={15} />
+                </Button>
+              </Hint>
+              <Hint label="关闭" accessibleName>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onClose}
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                >
+                  <X data-icon="inline-start" size={16} />
+                </Button>
+              </Hint>
             </div>
           </div>
 

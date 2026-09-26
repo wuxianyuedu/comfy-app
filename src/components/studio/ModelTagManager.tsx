@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { textHandler } from "~/lib/form-props";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
@@ -175,25 +176,29 @@ export function ModelTagManager({
                       <span className="bg-surface-2 text-ink-soft rounded-full px-2 py-0.5 text-[11px] tabular-nums">
                         {tag.count} 个工作流
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => void c.deleteTag(tag.name, tag.count)}
-                        disabled={isEditing}
-                        title={
+                      <Hint
+                        label={
                           tag.count > 0
                             ? `删除「${tag.name}」，会一并解除 ${tag.count} 个工作流的绑定`
                             : `删除「${tag.name}」`
                         }
-                        className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
-                        aria-label={`删除 ${tag.name}`}
+                        wrap
                       >
-                        <Icon
-                          data-icon="inline-start"
-                          name="trash"
-                          className="size-3.5"
-                        />
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => void c.deleteTag(tag.name, tag.count)}
+                          disabled={isEditing}
+                          className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
+                          aria-label={`删除 ${tag.name}`}
+                        >
+                          <Icon
+                            data-icon="inline-start"
+                            name="trash"
+                            className="size-3.5"
+                          />
+                        </Button>
+                      </Hint>
                     </div>
                   </div>
                 </div>

@@ -4783,7 +4783,7 @@ pnpm exec shadcn add <name> --diff src/components/ui/<file>.tsx   # ② 看具�
 | `dropdown-menu.tsx` | 层级走刻度表的 `z-popup`                                                                               | 浮层层级收成一张刻度表（`ee0abfd8`）                                                        | 把 `z-50` 一族换成刻度表档位                                          |
 | `popover.tsx`   | 层级 `z-popup` + 两态化（深底压浅字）                                                                      | 同上；下拉/浮层在两套主题下的对比度（`56ff17a7`）                                            | 加回层级档与对比度类                                                  |
 | `select.tsx`    | 层级 `z-popup` + 下拉归位 / 选中项对比度                                                                   | 同上（`d73e4f4a` / `4ca5fae3`）                                                              | 加回层级档与定位/对比度修正                                           |
-| `tooltip.tsx`   | 层级 `z-popup`                                                                                             | 同上                                                                                        | 把 `z-50` 换成刻度表档位                                              |
+| `tooltip.tsx`   | 层级 `z-popup`；`TooltipProvider` 的 `delay` 默认 **300**                        | 层级同上；`delay` 定档 300 是给 P82 出口 `hint.tsx` 的 78 个调用点留节奏 —— 原生 `title=` 本来就是延迟出现，落在 0 会让划过工具条时浮层连弹（Base UI 给 trigger 的默认值是 600） | 把 `z-50` 换成刻度表档位；`delay` 默认值补回 300      |
 
 > **为什么不干脆"重来一遍、以官方为底"**：实测官方 registry 今天的内容已经与当初
 > 引入的那版不同（例如 `accordion` 今天带文档站自己的 `IconPlaceholder` shim、
