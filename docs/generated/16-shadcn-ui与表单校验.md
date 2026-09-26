@@ -886,7 +886,7 @@ dark:text-emerald-300` 这类写死值）。
 
 | 基元      | 实测                                                                                                                                                                                          | 为什么不是「待接」                                                                                                                                                                                                                                                     |
 | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ui/form` | **全库零 `useForm(` 调用**；`react-hook-form` 只被 `ui/form.tsx` 自己 import；`@hookform/resolvers` 与 `zod` 在 `package.json` 里，但业务侧无人组装 `useForm({ resolver: zodResolver(...) })` | 接它**不是换组件**：`ui/form` 是 RHF 的 `FormProvider` + `FormField` 包装，用上它意味着这个功能的状态与校验改由 RHF 管 —— 那是**数据层设计决定**。✅ **决定已做出：不接**，字段级规则改住 `src/lib/<domain>/*-schema.ts` 的纯函数、集合级留 controller（见 §16.2.4.8） |
+| `ui/form-rhf` | **全库零 `useForm(` 调用**；`react-hook-form` 只被 `ui/form-rhf.tsx` 自己 import；`@hookform/resolvers` 与 `zod` 在 `package.json` 里，但业务侧无人组装 `useForm({ resolver: zodResolver(...) })` | 接它**不是换组件**：`ui/form-rhf` 是 RHF 的 `FormProvider` + `FormField` 包装，用上它意味着这个功能的状态与校验改由 RHF 管 —— 那是**数据层设计决定**。✅ **决定已做出：不接**，字段级规则改住 `src/lib/<domain>/*-schema.ts` 的纯函数、集合级留 controller（见 §16.2.4.8）。**命名订正**：原 `ui/form.tsx` 于 #1099 改名 `ui/form-rhf.tsx` · 与项目自立的 `ui/form-field.tsx` 里同名 `FormField` 薄封装解耦、避免 import 遮蔽 |
 
 顺带澄清一个容易混的命名：`WorkflowFormControls.tsx` / `DynamicWorkflowForm/` 里的
 「Form」指**工作流参数表单**（由 `workflowIO` 动态生成），与 `ui/form`（RHF 族）
@@ -4568,7 +4568,7 @@ pnpm dlx shadcn@latest add dialog form input select
 | `@base-ui/react`             | ✅ 已具备          |
 | `react-hook-form`            | ❌ 缺失            |
 | `@hookform/resolvers`        | ❌ 缺失            |
-| `src/components/ui/form.tsx` | ❌ 未生成          |
+| `src/components/ui/form-rhf.tsx` | ❌ 未生成          |
 
 ### 一次性启用（注意 registry 阻塞）
 
@@ -4576,14 +4576,14 @@ pnpm dlx shadcn@latest add dialog form input select
 
 启用步骤：
 
-1. 确认/配置团队 shadcn registry（或临时用 `shadcn add @shadcn/form`）。生成产物为 **base-nova / base-ui 版** `src/components/ui/form.tsx`——底层 `@base-ui/react` 已导出 `Form`（`onFormSubmit(formValues)`、`validationMode`）与 `Field` 原语，shadcn 的 `form.tsx` 即 RHF `Controller` + base-ui `Field` 的封装。
+1. 确认/配置团队 shadcn registry（或临时用 `shadcn add @shadcn/form`）。生成产物为 **base-nova / base-ui 版** `src/components/ui/form-rhf.tsx`——底层 `@base-ui/react` 已导出 `Form`（`onFormSubmit(formValues)`、`validationMode`）与 `Field` 原语，shadcn 的 `form.tsx` 即 RHF `Controller` + base-ui `Field` 的封装。
 2. 安装运行时依赖（若 `shadcn add` 未自动装）：
    ```bash
    pnpm add react-hook-form @hookform/resolvers
    ```
-3. 校验：`src/components/ui/form.tsx` 存在，且 import 来自 `@base-ui/react`（**非** `@radix-ui/*`）。
+3. 校验：`src/components/ui/form-rhf.tsx` 存在，且 import 来自 `@base-ui/react`（**非** `@radix-ui/*`）。
 
-> 当前状态（2026-09-02，已补齐）：`zod@4` ✅；`react-hook-form@7.87` ✅；`@hookform/resolvers@5.9.1` ✅；`src/components/ui/form.tsx` 已生成（base-ui 兼容：RHF `Controller` + 项目 `Label`，`FormControl` 用 `cloneElement` 透传 `id`/`aria-*`，未引入 radix 依赖）。开箱即用。
+> 当前状态（2026-09-02，已补齐）：`zod@4` ✅；`react-hook-form@7.87` ✅；`@hookform/resolvers@5.9.1` ✅；`src/components/ui/form-rhf.tsx` 已生成（base-ui 兼容：RHF `Controller` + 项目 `Label`，`FormControl` 用 `cloneElement` 透传 `id`/`aria-*`，未引入 radix 依赖）。开箱即用。
 
 ### 最小范式（schema 驱动 + 自动校验）
 
@@ -4599,7 +4599,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "~/components/ui/form";
+} from "~/components/ui/form-rhf";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 
