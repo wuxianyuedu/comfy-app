@@ -3,12 +3,11 @@
 // 从历史上的单文件 `runner.ts` 拆出。本模块持有 API 路由与编排方用的
 // **公开入口**；真正的 WS 执行机制在 executor.ts，孤儿回收在 reaper.ts。
 //
-// reaper 冷启动：import 本模块会以模块副作用的形式带上 `./reaper`，于是任何
-// 会入队 / 订阅的服务端都会启动孤儿清扫（QUEUED/RUNNING 对账）。所有需要
-// enqueue/subscribe/cancelTask 的 API 与编排方都从这里导入 —— 因此删掉旧的
-// `runner.ts` 转发壳也不会让 reaper 掉出启动路径。
+// reaper 的启动不在本模块：孤儿回收现在由宿主**显式**起（Next 侧
+// `src/instrumentation.ts`、host 侧 `scripts/executor-host.mjs`，判据见
+// `tests/reaper-side-effect.test.ts`）。本模块过去以裸副作用 import 顺带把它
+// 起来，那条隐式耦合已随 P3 §5 ADR §14 D3 摘掉。
 
-import "./reaper"; // module side-effect: launch the reaper sweeps
 import { interrupt } from "./client";
 import {
   state,

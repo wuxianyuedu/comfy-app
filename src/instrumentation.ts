@@ -16,6 +16,12 @@ export async function register() {
     await import("./lib/log/capture-streams.server").then((m) =>
       m.installStreamCapture(),
     );
+    /* ComfyUI 孤儿任务回收的**唯一** Next 侧启动点（P3 §5 ADR §14 D3）：
+     * 它过去靠 `enqueue.ts` 的裸副作用 import 顺带起来，那条隐式耦合让
+     * 「谁起 reaper」在模块图上不可见、且被删 import 时会静默失效。
+     * 动态 import 的理由与上面两条相同：本文件在 Edge runtime 也执行，
+     * Node-only 模块不能进 Edge 图。 */
+    await import("./lib/comfyui/reaper").then((m) => m.startReaper());
     await import("./sentry.server.config");
   }
   if (process.env.NEXT_RUNTIME === "edge") {
