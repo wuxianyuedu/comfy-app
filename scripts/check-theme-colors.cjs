@@ -364,17 +364,11 @@ const EXEMPT_TABLES = [
       "子图节点两处类型色：默认端口色三档（#ec4899 / #6b7280 / #7C5CFC）与选中描边（rgba(56,189,248,0.9)）",
   },
   {
-    file: "src/components/studio/canvas/WorkflowCanvasDecorations.tsx",
+    file: "src/components/studio/WorkflowCanvasDecorations.tsx",
     exports: [],
     reason:
       "画布网格线色（148,163,184 + **透明度档由用户设置实时计算**）—— 两条网格线是浮在画布上的装饰，" +
       "浅色下也仍然读得出，判据 2 不成立",
-  },
-  {
-    file: "src/components/studio/WorkflowCanvasDecorations.tsx",
-    exports: [],
-    reason:
-      "同理：项目画布侧的同名装饰组件，与工作流画布共用同一份网格线参数（148,163,184 + 实时透明度档）",
   },
   {
     file: "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx",

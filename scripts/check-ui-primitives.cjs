@@ -4396,7 +4396,7 @@ function main() {
         "  表单行改 ~/components/ui/field 的 <Field>+FieldLabel/FieldDescription/FieldError（或直接用\n" +
         "  ~/components/ui/form-field 的 <FormField>，它已把 ARIA 关联收在一处）。\n" +
         "  ⚠️ 别拿 `components.json` 判断某个基元装没装：它只记 aliases / registries，\n" +
-        "  不记录装过哪些组件；装了没装有争议时看 `src/components/ui/<名字>.tsx` 在不在。\n" +
+        "  不记录装过哪些组件；装了没装有争议时看 src/components/ui/ 目录下有没有同名文件。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);
