@@ -54,8 +54,8 @@
  *     （`mt-1 border-t pt-1`）、不参与滚动。
  *
  * 外部 props 一字未改（`value` / `onChange` / `options` / `labels` /
- * `placeholder` / `disabled` / `className` / `fullWidth` /
- * `popoverMinWidth` / `autoFitFromOptions` / `footer` / `onOpenChange`
+ * `placeholder` / `disabled` / `className` / `fullWidth` 四个常用项 /
+ * `popoverMinWidth` 弹层最小宽 / `autoFitFromOptions` / `footer` / `onOpenChange`
  * 全保留），33 处消费点 0 改动。
  */
 
@@ -74,6 +74,19 @@ interface SelectMenuProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /**
+   * a11y 转发口 · 挂在 Trigger（真正可交互的按钮元素）上。
+   * `<FormField>` 的 render prop 会 spread `{ id, "aria-describedby",
+   * "aria-invalid" }` 给控件、`<label htmlFor>` 也靠 `id` 关联；此前调用点
+   * 用原生 `<select>` 天然吃这些属性、迁 SelectMenu 需要显式开这一层。
+   * `title` 也一并转（虽然不推荐用它替代 Tooltip · 存量调用点保留行为）。
+   */
+  id?: string;
+  "aria-label"?: string;
+  "aria-labelledby"?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
+  title?: string;
   /**
    * 浮层最小宽度（px），默认 480 —— 装饰较丰富的行
    *（圆点 + 名称 + 任务类型 + 本机/在线徽标）在窄触发器里也能舒展；
@@ -133,8 +146,8 @@ const ITEM_BASE =
 
 /** 浮层自动加宽的四条常量口径与 PR 之前一致（详见文件头注释）。 */
 const POPOVER_AUTO_MAX = 720;
-const POPOVER_AUTO_HEADROOM = 56; // 24 px padding + ~32 px for dot / arrow
-const POPOVER_PER_CHAR_PX = 8; // ~8 px per text-[12px] glyph in Inter
+const POPOVER_AUTO_HEADROOM = 56; // 24px 内边距 + 圆点/箭头一行约 32px
+const POPOVER_PER_CHAR_PX = 8; // Inter 字体 text-[12px] 下每个字符约 8px
 const POPOVER_AUTO_MIN = 160;
 
 export function SelectMenu({
@@ -150,6 +163,12 @@ export function SelectMenu({
   autoFitFromOptions = true,
   footer,
   onOpenChange,
+  id,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledby,
+  "aria-describedby": ariaDescribedby,
+  "aria-invalid": ariaInvalid,
+  title,
 }: SelectMenuProps) {
   const effectiveMinWidth = useMemo(() => {
     if (!autoFitFromOptions) return popoverMinWidth;
@@ -191,6 +210,12 @@ export function SelectMenu({
       disabled={disabled}
     >
       <SelectPrimitive.Trigger
+        id={id}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledby}
+        aria-describedby={ariaDescribedby}
+        aria-invalid={ariaInvalid}
+        title={title}
         className={cn(TRIGGER_BASE, fullWidth && "w-full", className)}
       >
         <SelectPrimitive.Value className="flex min-w-0 flex-1 items-center truncate">

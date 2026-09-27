@@ -93,10 +93,27 @@ function seedFactsDoc(modules: string[]): void {
   );
 }
 
+/**
+ * 判据版本从脚本里读，不在测试里另写一份数字 —— 否则每次升版都要同步改两处，
+ * 而「测试里的版本」与「脚本里的版本」谁新谁旧正是这类门禁最容易漂移的地方
+ * （规范 §12.5.4：登记处 > 2 时先问能不能是派生视图）。
+ */
+function currentRuleVersion(): number {
+  const src = readFileSync(SCRIPT, "utf8");
+  const m = /^const RULE_VERSION = (\d+);/m.exec(src);
+  if (!m)
+    throw new Error("脚本里没有 `const RULE_VERSION = N;`，取不到判据版本");
+  return Number(m[1]);
+}
+
 function seedBaseline(files: Record<string, number>, total: number): void {
   writeFileSync(
     join(workdir, "scripts", ".comment-language-baseline.json"),
-    JSON.stringify({ ruleVersion: 2, total, files }, null, 2),
+    JSON.stringify(
+      { ruleVersion: currentRuleVersion(), total, files },
+      null,
+      2,
+    ),
   );
 }
 
@@ -289,7 +306,7 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(r.output).toContain("src/lib/directive-doc.ts");
   });
 
-  it("纯英文注释行（含 URL 行）计入 —— 判定口径是「连续英文单词 ≥ 3 个」", () => {
+  it("纯英文注释行（含 URL 行）计入 —— 判据是「剥掉引用后 ≥3 个英文词，且含虚词构成句子」", () => {
     // 反向锚点：上面那条只证明「噪声不计入」，不证明「英文真的被计入」。
     // 没有这条，一个永远返回 0 的统计器会让上面那条一起变绿（§12.16 同款教训）。
     write(
@@ -302,16 +319,93 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(r.output).toContain("src/lib/url.ts");
   });
 
+  /* ── 「引用行」不计入判定（判据版本 3 新增的第二条腿）─────────────────
+   * 本规则治的是「人读的说明文字用英文写」。中文段落把一批标识符 / 路径 /
+   * 类名折到下一行是常见写法，旧口径（只看词数）会整片误判 —— 仓库实测 21 行
+   * 里 20 行是这一类。真英文散文几乎必然含虚词（表与 JSDoc 结构行豁免同源），
+   * 所以判据改成两条同时成立：剥完引用还剩 ≥3 个英文词 **且** 含虚词/动词。
+   * 下面四条分别钉住这条腿的四个面：清单不计、连字符里的虚词不计、反引号内的
+   * 原文引用不计，而**裸写的英文句子仍然计**（不设这条就等于把门禁改成噪音）。 */
+  it("中文段落里折行的标识符 / 路径清单不计入", () => {
+    write(
+      "src/lib/citation.ts",
+      [
+        "/**",
+        " * 这条判据要看的模块：",
+        " * open-in-browser / use-reentrancy-lock / proc-detect /",
+        " * instance-kind / env-python / desktop-instance / lifecycle-derive",
+        " */",
+        "export const a = 1;",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code, r.output).toBe(0);
+  });
+
+  it("连字符标识符里的 in / on / as 不当成虚词（本条改判据的起因）", () => {
+    // `\bin\b` 会把 `open-in-browser` 拆出 in —— 不整体剥掉连字符标识符，
+    // 一整串纯模块名清单就会被判成「含虚词的英文句子」。
+    write(
+      "src/lib/hyphen.ts",
+      [
+        "// 执行链的静态边清单：",
+        "// open-in-browser / use-element-box / log-paths-on-disk /",
+        "// desktop-instance-as-export / proc-detect",
+        "export const a = 1;",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code, r.output).toBe(0);
+  });
+
+  it("反引号里的上游原文引用不计（引用不是「用英文写说明」）", () => {
+    write(
+      "src/lib/upstream-quote.ts",
+      [
+        "/**",
+        " * shadcn `styling.md` 原则 4 原文：",
+        " * `Use semantic colors. Never write raw values like bg-blue-500.`",
+        " */",
+        "export const a = 1;",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code, r.output).toBe(0);
+  });
+
+  it("剥掉引用后仍是裸写的英文句子 → 照样计入（新豁免不放过散文）", () => {
+    write(
+      "src/lib/prose.ts",
+      [
+        "/**",
+        " * 组合输入参数：",
+        " * and fall back to the defaults when the value cannot be read",
+        " */",
+        "export const a = 1;",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("src/lib/prose.ts");
+  });
+
   it("JSX 注释块（`{/* … */}`）与块注释同判 —— 英文计入、中文不计入", () => {
     // 反向锚点 + 正向用例：早期判据只认行首 `/*` / `//`，JSX 注释**从未被扫描**，
     // 于是那些英文注释既不被统计、也不被拦下（棘轮数字还显示「很干净」）。
+    // fixture 用「含虚词的整句」而不是 `Floating toolbar (center)` 那种纯实词标签：
+    // 后者按版本 3 的口径不再算散文（见上面「引用行不计」那组），这条锚点要验的是
+    // **JSX 注释进不进统计**，不是虚词表的能力边界。
     write(
       "src/components/Widget.tsx",
       [
         "export function Widget() {",
         "  return (",
         "    <div>",
-        "      {/* Floating toolbar (center) */}",
+        "      {/* Floating toolbar rendered in the center */}",
         "      <span />",
         "      {/* 中文说明 */}",
         "    </div>",
@@ -390,7 +484,7 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
       ),
     ) as { files: Record<string, number>; ruleVersion: number };
     expect(baseline.files["src/lib/legacy.ts"]).toBe(1);
-    expect(baseline.ruleVersion).toBe(2);
+    expect(baseline.ruleVersion).toBe(currentRuleVersion());
   });
 });
 

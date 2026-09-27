@@ -9,6 +9,7 @@
 // 视图层（AgentOverlay.tsx）只消费本 hook 返回的 controller。
 import React from "react";
 import { runAsyncAction } from "~/lib/async-action";
+import { errorMessage } from "~/lib/error-message";
 import { nextId } from "~/lib/unique-id";
 import { sendAgentMessage } from "~/lib/agent/client";
 import type { AgentMessageLike, AgentChatResponse } from "~/lib/agent/shared";
@@ -59,6 +60,11 @@ function toolRunId(): string {
   return nextId("tool-run-");
 }
 
+/** Agent 浮层对话与工具运行记录的内存上限（规范 §2.1）：长会话含大量 tool-run，
+ * 数组无限增长会泄漏内存，这里只保留最近若干条（更早的对话对用户已无意义）。 */
+const AGENT_MESSAGE_MAX = 2000;
+const AGENT_TOOLRUN_MAX = 2000;
+
 export function useWorkshopAgent(
   handlers: WorkshopAgentToolHandlers,
 ): WorkshopAgentController {
@@ -82,12 +88,25 @@ export function useWorkshopAgent(
   }, [messages]);
 
   const pushMsg = React.useCallback((msg: AgentPanelMessage) => {
-    setMessages((prev) => [...prev, msg]);
+    setMessages((prev) =>
+      prev.length >= AGENT_MESSAGE_MAX
+        ? prev.slice(-AGENT_MESSAGE_MAX + 1).concat(msg)
+        : prev.concat(msg),
+    );
   }, []);
 
   const pushToolRun = React.useCallback((run: AgentToolRun) => {
-    setToolRuns((prev) => [...prev, run]);
-    setMessages((prev) => [...prev, { id: run.id, role: "tool-run", run }]);
+    setToolRuns((prev) =>
+      prev.length >= AGENT_TOOLRUN_MAX
+        ? prev.slice(-AGENT_TOOLRUN_MAX + 1).concat(run)
+        : prev.concat(run),
+    );
+    setMessages((prev) => {
+      const next = prev.concat({ id: run.id, role: "tool-run", run });
+      return next.length > AGENT_MESSAGE_MAX
+        ? next.slice(-AGENT_MESSAGE_MAX)
+        : next;
+    });
   }, []);
 
   const patchToolRun = React.useCallback(
@@ -139,7 +158,7 @@ export function useWorkshopAgent(
           }),
         } satisfies AgentMessageLike;
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "工具执行失败";
+        const msg = errorMessage(err, "工具执行失败");
         patchToolRun(runId, { status: "error", detail: msg });
         return {
           role: "tool" as const,

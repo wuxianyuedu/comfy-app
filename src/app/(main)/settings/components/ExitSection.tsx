@@ -8,13 +8,15 @@
  * controller 的 `drafts.settings` / `patchSettings` / `savePrefs`。
  */
 
-import { StatusButton, Card } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { StatusButton } from "./SettingsPrimitives";
 import { Checkbox } from "~/components/ui/checkbox";
+import { FieldLabel } from "~/components/ui/field";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function ExitSection({ c }: { c: ReadySettingsPageController }) {
   return (
-    <Card title="退出与后台服务">
+    <SettingsCard title="退出与后台服务">
       <p className="text-muted-foreground mb-4 text-sm">
         桌面壳退出时会对应用进程树执行整树强制关闭（被强杀的进程没有清理机会），
         因此这些开关是
@@ -32,9 +34,12 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
               })
             }
           />
-          <label htmlFor="exit-kill-comfyui" className="text-ink/80 text-sm">
+          <FieldLabel
+            htmlFor="exit-kill-comfyui"
+            className="text-ink/80 text-sm"
+          >
             关闭应用时连带关闭 ComfyUI
-          </label>
+          </FieldLabel>
         </div>
         <p className="text-muted-foreground mt-1.5 text-xs">
           默认不勾选：ComfyUI 脱离进程树保活，退出应用后继续运行，下次
@@ -54,9 +59,12 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
               })
             }
           />
-          <label htmlFor="exit-kill-ollama" className="text-ink/80 text-sm">
+          <FieldLabel
+            htmlFor="exit-kill-ollama"
+            className="text-ink/80 text-sm"
+          >
             关闭应用时连带关闭 Ollama
-          </label>
+          </FieldLabel>
         </div>
         <p className="text-muted-foreground mt-1.5 text-xs">
           语义同上。取消勾选后 Ollama 保活，重启应用可继续复用已加载的
@@ -79,6 +87,6 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
           保存偏好
         </StatusButton>
       </div>
-    </Card>
+    </SettingsCard>
   );
 }

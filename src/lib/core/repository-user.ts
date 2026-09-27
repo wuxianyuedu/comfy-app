@@ -19,7 +19,7 @@ import {
   type LlmConfig,
   type RemoteModel,
 } from "~/server/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { RemoteModelKind } from "~/lib/llm/types";
 
 export class UserRepository {
@@ -234,27 +234,36 @@ export class RemoteModelRepository {
         ),
       );
     }
-    const adaptersByName = new Map(
-      rows.map((r) => [r.name, r.workshopAdapters]),
-    );
-    for (const e of cleaned) {
-      const existing = rows.find((r) => r.name === e.name);
-      const carriedAdapters = adaptersByName.get(e.name) ?? null;
-      if (existing) {
-        await db
-          .update(remoteModel)
-          .set({
+    if (cleaned.length > 0) {
+      /* 单条语句批量 upsert（P2：替代原先循环内逐条 update/insert）。
+       * 以唯一索引 remoteModel_name_uniq 为冲突目标：已存在则更新、不存在则插入；
+       * workshopAdapters 从既有行继承（本接口不覆盖它）。
+       * 不包事务：测试基建跑 better-sqlite3（同步驱动）不接受 async 事务回调，
+       * 且原实现本就非原子，故只批量化、不改原子性语义。 */
+      const adaptersByName = new Map(
+        rows.map((r) => [r.name, r.workshopAdapters]),
+      );
+      await db
+        .insert(remoteModel)
+        .values(
+          cleaned.map((e) => ({
+            name: e.name,
             baseUrl: e.baseUrl,
             apiKey: e.apiKey,
             kind: e.kind,
-            workshopAdapters: carriedAdapters,
-          })
-          .where(eq(remoteModel.id, existing.id));
-      } else {
-        await db
-          .insert(remoteModel)
-          .values({ ...e, workshopAdapters: carriedAdapters });
-      }
+            workshopAdapters: adaptersByName.get(e.name) ?? null,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: remoteModel.name,
+          set: {
+            baseUrl: sql`excluded.baseUrl`,
+            apiKey: sql`excluded.apiKey`,
+            kind: sql`excluded.kind`,
+            workshopAdapters: sql`excluded.workshopAdapters`,
+            updatedAt: new Date(),
+          },
+        });
     }
     return this.list();
   }

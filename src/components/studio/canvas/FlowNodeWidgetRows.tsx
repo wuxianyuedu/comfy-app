@@ -117,7 +117,7 @@ export function FlowNodeWidgetRows({
               position={Position.Left}
               id={k}
               isConnectable
-              className="!h-2.5 !w-2.5 !rounded-full !border"
+              className="!size-2.5 !rounded-full !border"
               style={{
                 left: 5,
                 background: typeCol,

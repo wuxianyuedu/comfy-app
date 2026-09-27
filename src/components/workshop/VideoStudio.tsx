@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
+import { EmptyState } from "~/components/ui/empty-state";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import type { Shot } from "~/lib/workshop/types";
 import {
@@ -255,10 +256,11 @@ export function VideoStudio({
       />
 
       {shots.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
-          暂无镜头数据。请先完成「场景分镜」—
-          镜头时长与运动强度会自动带入本阶段。
-        </div>
+        <EmptyState
+          variant="hint"
+          description="暂无镜头数据。请先完成「场景分镜」— 镜头时长与运动强度会自动带入本阶段。"
+          className="py-10 text-sm"
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {shots.map((shot) => (

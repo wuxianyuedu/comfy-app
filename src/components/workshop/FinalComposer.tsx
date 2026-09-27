@@ -2,6 +2,7 @@
 import { clamp } from "~/lib/clamp";
 import React from "react";
 import { Icon } from "~/components/ui/icon";
+import { EmptyState } from "~/components/ui/empty-state";
 import { Button } from "~/components/ui/button";
 import { downloadJson } from "~/lib/browser-io";
 import { fixed } from "~/lib/number-format";
@@ -163,11 +164,11 @@ export function FinalComposer({
 
   if (shots.length === 0) {
     return (
-      <div className="border-border bg-surface rounded-2xl border border-dashed p-8 text-center">
-        <p className="text-muted-foreground text-sm">
-          暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。
-        </p>
-      </div>
+      <EmptyState
+        variant="hint"
+        description="暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。"
+        className="p-8 text-sm"
+      />
     );
   }
 
@@ -200,6 +201,7 @@ export function FinalComposer({
               className="h-auto rounded-xl px-4 py-2 font-semibold"
             >
               <Icon
+                data-icon="inline-start"
                 name="play"
                 size={13}
                 className="mr-1 inline align-[-2px]"
@@ -218,7 +220,7 @@ export function FinalComposer({
           <Button
             variant="primary-solid"
             onClick={exportPlan}
-            className="shadow-primary-500/20 h-auto rounded-xl px-4 py-2 font-semibold shadow-lg"
+            className="h-auto rounded-xl px-4 py-2 font-semibold"
           >
             导出合成清单
           </Button>
@@ -283,7 +285,7 @@ export function FinalComposer({
                 active ? "ring-primary/40 ring-1" : ""
               }`}
             >
-              <span className="bg-primary-soft text-primary grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold">
+              <span className="bg-primary-soft text-primary grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold">
                 {idx + 1}
               </span>
               <div className="bg-elevated h-14 w-20 shrink-0 overflow-hidden rounded-lg">

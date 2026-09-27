@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { textHandler } from "~/lib/form-props";
 import { Trash, X } from "lucide-react";
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -26,9 +27,11 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
  让用户批量提交新片段，并打开某个片段的结果 / 结果详情。
 */
 
+type StatusMeta = { icon: string; label: string; cls: string };
+
 const STATUS_META: Record<
-  string,
-  { icon: string; label: string; cls: string }
+  "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED",
+  StatusMeta
 > = {
   QUEUED: { icon: "hourglass", label: "排队中", cls: "text-ink-muted" },
   RUNNING: {
@@ -44,6 +47,14 @@ const STATUS_META: Record<
   FAILED: { icon: "x", label: "失败", cls: "text-destructive" },
   CANCELLED: { icon: "ban", label: "已取消", cls: "text-ink-fainter" },
 };
+
+/** 按任务状态取展示元数据。`task.status` 是宽字符串（来自后端），这里收口
+ *  「未知状态 → 排队中」这一条兜底判据，返回**非空**，调用点不再各自 `!`。 */
+function statusMetaFor(status: string): StatusMeta {
+  return status in STATUS_META
+    ? STATUS_META[status as keyof typeof STATUS_META]
+    : STATUS_META.QUEUED;
+}
 
 export interface VideoQueueModalProps {
   open: boolean;
@@ -172,14 +183,15 @@ export function VideoQueueModal({
                   {runningCount} 个进行中
                 </span>
               )}
-              <Button
-                variant="link"
-                onClick={loadTasks}
-                className="text-ink-muted hover:text-primary h-auto p-0 text-[11px]"
-                title="刷新"
-              >
-                ↻ 刷新
-              </Button>
+              <Hint label="刷新">
+                <Button
+                  variant="link"
+                  onClick={loadTasks}
+                  className="text-ink-muted hover:text-primary h-auto p-0 text-[11px]"
+                >
+                  ↻ 刷新
+                </Button>
+              </Hint>
             </div>
             <div className="flex items-center gap-2">
               <div className="bg-subtle flex rounded-lg p-0.5">
@@ -215,7 +227,7 @@ export function VideoQueueModal({
                 className="text-ink-muted hover:text-ink-soft"
                 aria-label="关闭"
               >
-                <X size={16} />
+                <X data-icon="inline-start" size={16} />
               </Button>
             </div>
           </div>
@@ -234,13 +246,13 @@ export function VideoQueueModal({
                   </p>
                 ) : (
                   tasks.map((task, index) => {
-                    const meta = STATUS_META[task.status] ?? STATUS_META.QUEUED;
+                    const meta = statusMetaFor(task.status);
                     return (
                       <div
                         key={task.id}
                         className="border-border-strong bg-subtle flex items-center gap-3 rounded-xl border p-3"
                       >
-                        <div className="bg-canvas-deep flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+                        <div className="bg-canvas-deep flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
                           {task.video ? (
                             <MediaThumbnail
                               src={task.video}
@@ -261,10 +273,10 @@ export function VideoQueueModal({
                               V{String(index + 1).padStart(2, "0")}
                             </span>
                             <span
-                              className={`inline-flex items-center gap-1 text-xs ${meta!.cls}`}
+                              className={`inline-flex items-center gap-1 text-xs ${meta.cls}`}
                             >
-                              <Icon name={meta!.icon} size={13} />
-                              {meta!.label}
+                              <Icon name={meta.icon} size={13} />
+                              {meta.label}
                             </span>
                           </div>
                           <p
@@ -351,7 +363,7 @@ export function VideoQueueModal({
                         className="text-ink-muted hover:text-danger-strong mt-1"
                         aria-label="删除"
                       >
-                        <Trash size={14} />
+                        <Trash data-icon="inline-start" size={14} />
                       </Button>
                     </div>
                   ))

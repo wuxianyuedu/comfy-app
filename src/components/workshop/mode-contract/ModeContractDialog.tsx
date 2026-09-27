@@ -23,6 +23,7 @@ export function ModeContractDialog({ onClose }: { onClose: () => void }) {
           的内置那枚，否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的
           `showCloseButton`）。 */}
       <DialogContent
+        aria-label="模式契约"
         showCloseButton={false}
         className="max-w-3xl bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"

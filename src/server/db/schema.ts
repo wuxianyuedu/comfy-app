@@ -263,6 +263,21 @@ export const task = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
     finishedAt: dateNull("finishedAt"),
+    /** 执行归属（P3 §5 ADR §6 的 inline/host 互斥列）：'inline' | 'host'，
+     *  NULL 归 inline（历史行与未带归属的建行）。写入时机在提交侧（tRPC generate
+     *  按 COMFY_EXECUTOR 写值），领取侧见 `repository-task-impl.ts` 的
+     *  `claimNextQueued`。 */
+    claimedBy: text("claimedBy"),
+    /** 提交时刻的执行载荷（RAW 原件，P3 §5 ADR §13-3B1 决定 1）：host 领到行后
+     *  由它重建 Job，不经 `workflowName` 回查模板——模板被改/删也不影响在队任务
+     *  执行「点运行时那一刻」的图。inline 路径不读它（仍走现查的同一份入参），
+     *  但同样写入，保证两种模式下行形态一致、可事后复现。 */
+    execPayload: text("execPayload", { mode: "json" }),
+    /** 当前执行节点的进度快照（P3 §5 ADR §13-3C 决定 D1）：
+     *  `{ id, label?, value, max }`，由 executor-ws 的 progress 帧写入。
+     *  SSE 改纯 DB 轮询后（D3），画布「当前节点 + 步数」展示在 inline/host
+     *  两模式下走同一契约；无节点信息的进度帧不覆写本列（保留上一个）。 */
+    progressNode: text("progressNode", { mode: "json" }),
   },
   (t) => [
     index("task_user_created_idx").on(t.userId, t.createdAt),
@@ -273,6 +288,10 @@ export const task = sqliteTable(
     index("task_status_finished_idx").on(t.status, t.finishedAt),
     // promptId → task 反查（执行器对账 / history 回捞），此前无索引。
     index("task_prompt_id_idx").on(t.promptId),
+    // 队列领取读路径（claimNextQueued 按 status=QUEUED + claimedBy 归属过滤）。
+    // 与 task_status_finished_idx 分开：那条服务孤儿判决（status, finishedAt），
+    // 本条服务领取谓词（status, claimedBy），语义不同不合并。
+    index("task_claimed_by_idx").on(t.status, t.claimedBy),
   ],
 );
 
@@ -357,7 +376,12 @@ export const workflowModelTagToWorkflowTemplate = sqliteTable(
       .notNull()
       .references(() => workflowTemplate.id, { onDelete: "cascade" }),
   },
-  (t) => [index("wmtt_wt_idx").on(t.workflowTemplate)],
+  (t) => [
+    index("wmtt_wt_idx").on(t.workflowTemplate),
+    /* 反向索引：按标签找它绑定的模板（`templateHasTagIdsWhere` 的 IN 查询），
+     * 没有这侧索引时连接表全扫。 */
+    index("wmtt_tag_idx").on(t.workflowModelTag),
+  ],
 );
 
 export const llmConfig = sqliteTable("llmConfig", {

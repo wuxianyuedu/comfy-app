@@ -5,22 +5,16 @@
 import "server-only";
 
 import { db } from "~/lib/db";
-import { task, taskImage, type Task } from "~/server/db/schema";
+import { task, taskImage, type Task, type TaskImage } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
-import { TERMINAL_TASK_STATUSES } from "../task-state";
-import {
-  eq,
-  and,
-  inArray,
-  notInArray,
-  desc,
-  asc,
-  lt,
-  isNull,
-  isNotNull,
-  sql,
-} from "drizzle-orm";
+import { eq, and, inArray, desc, asc, sql } from "drizzle-orm";
+import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
+
+/** 列表卡的行形状：`task.list` 的映射只需要十来个字段，而 `workflowSnapshot`
+ *  （整份工作流 JSON）与 `logs`（全量日志）单行就能到数 MB —— take=60 的列表页
+ *  会把它们整批拉回来、反序列化、然后立刻丢弃。列表查询排除这两列。 */
+export type TaskCardRow = Omit<Task, "workflowSnapshot" | "logs">;
 
 /**
  * SQLite 表达「不限条数，只跳过前 n 条」的写法是 `LIMIT -1 OFFSET n` ——
@@ -37,14 +31,12 @@ import {
  */
 const NO_LIMIT = sql`-1`;
 
-/**
- * 终态集合的 SQL 形态：由 `~/lib/task-state` 的唯一定义摊平而来。
- *
- * 为什么必须摊平：drizzle 的 `where` 是 SQL 表达式，收不下 TS 谓词
- * （`isTerminalTaskStatus`），所以这里必然要有一份数组。但**判据只能有一处
- * 定义**（规范 §12.12）——因此这是派生值，新增状态时改那边即自动生效。
- */
-const TERMINAL_STATES: string[] = [...TERMINAL_TASK_STATUSES];
+/** 12 个 exec-chain 方法的实现来自共享 impl 工厂（P3 §5 Phase 2-A-1）；Next 与
+ *  未来的 executor host 用**同一份 SQL**，只是把 `db` 从各自的 drizzle 客户端
+ *  传进来。设计依据见 P3 §5 ADR 附录 §11.1（`docs/superpowers/specs/` 目录下
+ *  `p3-phase2-executor-host-design.md`）。本 class 下方的 12 个对应方法各
+ *  delegate 一行到 `impl.xxx(...)`。 */
+const impl: TaskRepoImpl = createTaskRepoImpl(db);
 
 /** 把「不限条数」作为 limit 传下去（run-time 是 `sql` 片段，见 NO_LIMIT 注释）。 */
 function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
@@ -90,6 +82,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
     projectId?: string | null;
     referenceImages?: unknown;
     workflowSnapshot?: unknown;
+    /** 执行归属（P3 §5 ADR §6）：提交侧按 `resolveExecutorClaim()` 显式传
+     *  `'inline'|'host'`；缺省 null 只服务「调用方尚未接入灰度」的兼容路径
+     *  （NULL 语义归 inline 片，领取/回收两侧等价）。 */
+    claimedBy?: "inline" | "host" | null;
+    /** 提交时刻的 RAW 执行载荷（ADR §13-3B1 决定 1）：host 由它重建 Job，
+     *  不经 workflowName 回查模板（模板改/删不影响在队任务）。 */
+    execPayload?: unknown;
   }): Promise<Task> {
     const rows = await db
       .insert(task)
@@ -103,6 +102,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
         projectId: input.projectId ?? null,
         referenceImages: input.referenceImages ?? undefined,
         workflowSnapshot: input.workflowSnapshot ?? undefined,
+        claimedBy: input.claimedBy ?? null,
+        execPayload: input.execPayload ?? null,
         status: "QUEUED",
       })
       .returning();
@@ -118,7 +119,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
       statusList?: string[];
       includeImages: true;
     },
-  ): Promise<TaskWithCover[]>;
+  ): Promise<Array<TaskCardRow & { images: TaskImage[] }>>;
   async listByUser(
     userId: string,
     opts?: {
@@ -138,7 +139,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
       statusList?: string[];
       includeImages?: boolean;
     },
-  ): Promise<Task[] | TaskWithCover[]> {
+  ): Promise<
+    Task[] | TaskWithCover[] | Array<TaskCardRow & { images: TaskImage[] }>
+  > {
     const where = and(
       eq(task.userId, userId),
       opts?.projectId ? eq(task.projectId, opts.projectId) : undefined,
@@ -162,6 +165,10 @@ export class TaskRepository extends DrizzleRepository<Task> {
         where,
         orderBy: [desc(task.createdAt)],
         ...(opts.take !== undefined ? { limit: opts.take } : {}),
+        /* 列表卡只要十来个字段：`workflowSnapshot` 与 `logs` 单行可达数 MB，
+         * take=60 时是几十 MB 的白拉白反序列化（router 只映射卡片字段）。
+         * 详情查询（findByIdWithImages）不受影响，仍取全列。 */
+        columns: { workflowSnapshot: false, logs: false },
         with: {
           images: {
             orderBy: [desc(taskImage.isCover), asc(taskImage.sortIndex)],
@@ -247,30 +254,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
     });
   }
 
-  async findExecutionMeta(taskId: string): Promise<{
-    projectId: string | null;
-    params: unknown;
-    prompt: string;
-    negativePrompt: string | null;
-    workflowName: string;
-    referenceImages: unknown;
-    createdAt: Date;
-  } | null> {
-    const rows = await db
-      .select({
-        projectId: task.projectId,
-        params: task.params,
-        prompt: task.prompt,
-        negativePrompt: task.negativePrompt,
-        workflowName: task.workflowName,
-        referenceImages: task.referenceImages,
-        createdAt: task.createdAt,
-      })
-      .from(task)
-      .where(eq(task.id, taskId))
-      .limit(1);
-    return rows[0] ?? null;
-  }
+  /** 12 个 exec-chain 方法 delegate 到共享 impl（P3 §5 Phase 2-A-1）。签名走
+   *  `TaskRepoImpl["method"]` 反推、与 impl 单点绑定；SQL 主体见
+   *  `./repository-task-impl.ts`。 */
+  findExecutionMeta: TaskRepoImpl["findExecutionMeta"] = (taskId) =>
+    impl.findExecutionMeta(taskId);
 
   async findExecutionProgress(taskId: string): Promise<{
     status: string;
@@ -315,194 +303,87 @@ export class TaskRepository extends DrizzleRepository<Task> {
       .where(inArray(task.id, taskIds));
   }
 
-  /**
-   * 进度回写（顺带把行标成 RUNNING）：**只在非终态行上生效**。
+  /** SSE 轮询的轻量快照：只要状态与进度这几个字段。
    *
-   * 为什么必须加 `NOT IN (...)` 这个 where 条件：执行路径是异步的，
-   * ComfyUI 的 WS `progress` 帧与「本任务已被别的路径收口（reaper 判终态 /
-   * 用户取消）」可能交错到达。一条收口之后迟到的进度回写会把 DB 行从
-   * SUCCEEDED / FAILED / CANCELLED **改回 RUNNING**，于是：
-   *   • `/api/tasks/[id]/stream` 的 3s「数据库实情」轮询先看到终态 → 关流；
-   *     之后再看到 RUNNING → 客户端已经关掉的流不会重开，卡片永远停在
-   *     「生成中…」；
-   *   • 终态行还带着 `finishedAt`，与 status 自相矛盾。
-   *
-   * 返回是否真的更新了行（调用方据此判断「本任务是否已被别人收口」）。
-   */
-  async updateProgress(taskId: string, pct: number): Promise<boolean> {
-    const updated = await db
-      .update(task)
-      .set({ progress: pct, status: "RUNNING" })
-      .where(and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)))
-      .returning({ id: task.id });
-    return updated.length > 0;
-  }
-
-  /** 记下 promptId 并标 RUNNING（同样只对非终态行生效，理由见 updateProgress）。 */
-  async markRunning(taskId: string, promptId: string): Promise<boolean> {
-    const updated = await db
-      .update(task)
-      .set({ status: "RUNNING", promptId })
-      .where(and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)))
-      .returning({ id: task.id });
-    return updated.length > 0;
-  }
-
-  async finalizeSuccess(
-    taskId: string,
-    data: {
-      resultImages: unknown;
-      params: unknown;
-      workflowSnapshot?: unknown;
-    },
-  ): Promise<void> {
-    await db
-      .update(task)
-      .set({
-        status: "SUCCEEDED",
-        progress: 100,
-        finishedAt: new Date(),
-        resultImages: data.resultImages,
-        params: data.params,
-        ...(data.workflowSnapshot !== undefined
-          ? { workflowSnapshot: data.workflowSnapshot }
-          : {}),
-      })
-      .where(eq(task.id, taskId));
-  }
-
-  async finalizeFailure(
-    taskId: string,
-    error: string,
-    validationErrors?: unknown[],
-  ): Promise<void> {
-    await db
-      .update(task)
-      .set({
-        status: "FAILED",
-        error,
-        validationErrors: validationErrors?.length
-          ? JSON.stringify(validationErrors)
-          : null,
-        finishedAt: new Date(),
-      })
-      .where(eq(task.id, taskId));
-  }
-
-  async cancel(taskId: string): Promise<void> {
-    await db
-      .update(task)
-      .set({ status: "CANCELLED", finishedAt: new Date() })
-      .where(eq(task.id, taskId));
-  }
-
-  async finalizeFromReaper(
-    taskId: string,
-    status: "SUCCEEDED" | "FAILED",
-    error: string | null,
-  ): Promise<void> {
-    await db
-      .update(task)
-      .set({ status, finishedAt: new Date(), error })
-      .where(eq(task.id, taskId));
-  }
-
-  async findStatusAndPromptById(
-    taskId: string,
-  ): Promise<{ status: string; promptId: string | null } | null> {
+   *  每条 SSE 连接各挂一个轮询、每几秒一次，原先用 `findById` 全行查询 ——
+   *  `workflowSnapshot`（整份工作流 JSON）与 `logs`（全量日志）单行可达数 MB，
+   *  拉回来只为了读状态和进度。 */
+  async findSseSnapshot(id: string): Promise<{
+    status: string;
+    progress: number;
+    error: string | null;
+    validationErrors: string | null;
+    workflowName: string | null;
+    resultImages: unknown;
+    progressNode: unknown;
+    logs: unknown;
+  } | null> {
     const rows = await db
-      .select({ status: task.status, promptId: task.promptId })
+      .select({
+        status: task.status,
+        progress: task.progress,
+        error: task.error,
+        validationErrors: task.validationErrors,
+        workflowName: task.workflowName,
+        // 终态收口要带产出清单（host 模式没有进程内 done 帧，见 stream 路由）；
+        // 它是路径小数组，不破坏「不拉 workflowSnapshot/logs 大列」的轻投影契约。
+        resultImages: task.resultImages,
+        // 3-C（ADR §13 D1/D2）：SSE 单源化后轮询要读节点进度与日志增量。
+        // 「轻量投影」的边界随之从「不含大列」改为「不含 workflowSnapshot」——
+        // 本机 libsql 异步驱动、单用户个位数活跃流，3s 一次可承受。
+        progressNode: task.progressNode,
+        logs: task.logs,
+      })
       .from(task)
-      .where(eq(task.id, taskId))
+      .where(eq(task.id, id))
       .limit(1);
     return rows[0] ?? null;
   }
 
-  async replaceLogs(taskId: string, logs: unknown[]): Promise<void> {
-    await db
-      .update(task)
-      .set({ logs })
-      .where(eq(task.id, taskId))
-      .catch(() => undefined);
-  }
+  // 以下 11 个方法各 delegate 一行到 `impl`；SQL 主体与 JSDoc（包括
+  // `updateProgress` / `markRunning` 里 `notInArray(task.status, TERMINAL_STATES)`
+  // 判据的完整解释、`finalizeSuccess` 的 workflowSnapshot 可选写、`finalizeFailure`
+  // 的 validationErrors 归一、`replaceLogs` 的 `.catch(→undefined)` swallow、
+  // reaper 两个 listStale 判据的 4 条件 AND 等等）都在
+  // `./repository-task-impl.ts`。签名通过 `TaskRepoImpl["method"]` 反推、与
+  // impl 单点绑定，避免两处漂移。
+  updateProgress: TaskRepoImpl["updateProgress"] = (taskId, pct, node) =>
+    impl.updateProgress(taskId, pct, node);
 
-  async listStaleQueued(
-    cutoff: Date,
-    take: number,
-  ): Promise<Array<{ id: string; createdAt: Date; workflowName: string }>> {
-    return db
-      .select({
-        id: task.id,
-        createdAt: task.createdAt,
-        workflowName: task.workflowName,
-      })
-      .from(task)
-      .where(
-        and(
-          eq(task.status, "QUEUED"),
-          isNull(task.finishedAt),
-          lt(task.createdAt, cutoff),
-          isNull(task.promptId),
-        ),
-      )
-      .limit(take);
-  }
+  markRunning: TaskRepoImpl["markRunning"] = (taskId, promptId) =>
+    impl.markRunning(taskId, promptId);
 
-  async listStaleRunning(
-    cutoff: Date,
-    take: number,
-  ): Promise<
-    Array<{
-      id: string;
-      promptId: string | null;
-      createdAt: Date;
-      workflowName: string;
-    }>
-  > {
-    return db
-      .select({
-        id: task.id,
-        promptId: task.promptId,
-        createdAt: task.createdAt,
-        workflowName: task.workflowName,
-      })
-      .from(task)
-      .where(
-        and(
-          eq(task.status, "RUNNING"),
-          isNull(task.finishedAt),
-          lt(task.createdAt, cutoff),
-          isNotNull(task.promptId),
-        ),
-      )
-      .limit(take);
-  }
+  finalizeSuccess: TaskRepoImpl["finalizeSuccess"] = (taskId, data) =>
+    impl.finalizeSuccess(taskId, data);
 
-  async createImages(
-    taskId: string,
-    images: Array<{
-      localPath: string;
-      sortIndex: number;
-      isCover: boolean;
-      mediaType: string;
-      seed: string | null;
-      width?: number | null;
-      height?: number | null;
-    }>,
-  ): Promise<void> {
-    await db.insert(taskImage).values(
-      images.map((im) => ({
-        taskId,
-        localPath: im.localPath,
-        sortIndex: im.sortIndex,
-        isCover: im.isCover,
-        mediaType: im.mediaType,
-        seed: im.seed,
-        width: im.width ?? null,
-        height: im.height ?? null,
-      })),
-    );
-  }
+  finalizeFailure: TaskRepoImpl["finalizeFailure"] = (
+    taskId,
+    error,
+    validationErrors,
+  ) => impl.finalizeFailure(taskId, error, validationErrors);
+
+  cancel: TaskRepoImpl["cancel"] = (taskId) => impl.cancel(taskId);
+
+  finalizeFromReaper: TaskRepoImpl["finalizeFromReaper"] = (
+    taskId,
+    status,
+    error,
+  ) => impl.finalizeFromReaper(taskId, status, error);
+
+  findStatusAndPromptById: TaskRepoImpl["findStatusAndPromptById"] = (taskId) =>
+    impl.findStatusAndPromptById(taskId);
+
+  replaceLogs: TaskRepoImpl["replaceLogs"] = (taskId, logs) =>
+    impl.replaceLogs(taskId, logs);
+
+  listStaleQueued: TaskRepoImpl["listStaleQueued"] = (cutoff, take, owner) =>
+    impl.listStaleQueued(cutoff, take, owner);
+
+  listStaleRunning: TaskRepoImpl["listStaleRunning"] = (cutoff, take, owner) =>
+    impl.listStaleRunning(cutoff, take, owner);
+
+  createImages: TaskRepoImpl["createImages"] = (taskId, images) =>
+    impl.createImages(taskId, images);
 }
 
 export const taskRepository = new TaskRepository();

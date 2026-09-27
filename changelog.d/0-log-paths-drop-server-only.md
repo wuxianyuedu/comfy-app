@@ -1,0 +1,7 @@
+## Changed
+
+- **`log-paths.ts` 摘 server-only（P3 迁移第 1 期·lib 层地基批）**：`import "server-only"` 去掉、走 §18.4 第三类登记进 `PURE_NODE_HOSTS`。本模块只有一条 Node 内建值 import（`path`）+ 一堆 `path.join` 常量、不引任何 server-only 侧模块，形态与 `src/lib/process/kill-process-tree.ts` 同族。**它是整链 logger 的地基**：`logger` 经 `app-runtime-log` 静态引它，`session-banner.server` / `capture-streams.server` 也引它，`comfyui/lifecycle` / `comfyui/trace` 也引它——只要它带 server-only，纯 Node 里 `await import("~/lib/core/logger")` 的 promise 会因这一层的 throw 而 reject、上层 comfyui 各模块 #1053/#1068/#1071 里的 lazy 兜底接不进去。摘掉之后整条 lazy 链能真跑起来（下一步 PR：`app-runtime-log` 摘 server-only → logger 完全可纯 Node 加载）。
+  - 浏览器图边界的语义变化：从「server-only 兜」改为「scanner 的 `clientReachable` 兜」（`scripts/lib-node-only-scan.mjs` 从全 `src/**` 的 `"use client"` 入口 DFS，遇 Node 内建即红）。这一层 path 命中即红，实测 `clientReachable=0` 保持。
+  - 原文件头一句「`.mjs`（由启动器动态加载 TS 会连带 `server-only` 的 throw 一起崩）」改成描述**新**契约（启动器**刻意不引** log-paths、各留布局字面量，与 server-only 无关），并加一段「§18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）」说明。
+  - Scanner 现 `unguarded=11`（前 7 批 comfyui + 本批 log-paths + 3 pre-existing），全部由 `PURE_NODE_HOSTS` 登记消化；`libOnlyReachable=0` / `clientReachable=0` 保持。零行为变化（Next 侧与 launcher-core / `Log-Common.ps1` 各自的布局表都不动）。
+  - 验证：`tsc --noEmit` / `eslint --max-warnings 0` / `vitest run src/lib/comfyui` 532/532 全绿 / `vitest run src/lib/log` 44/46（**2 条 `capture-streams.server.test.ts` 预存在的 master 假红**：`c026fd78 perf(log): 进程输出转录改缓冲批量落盘` 引入 buffered flush 语义，测试立即 `readCapture` 拿不到内容，与本 PR 无关，独立复现同红；另开 PR 补 flush 或改测试等待）。`.githooks/pre-commit` 28 步全过。

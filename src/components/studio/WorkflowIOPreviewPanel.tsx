@@ -30,12 +30,13 @@ import {
   type WorkflowIOMap,
 } from "~/components/studio/workflow-io";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
+import { Hint } from "~/components/ui/hint";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { Button } from "~/components/ui/button";
 import { mergeExposedEntry } from "./workflow-editor/io-exposure";
 import type { WorkflowIODropPosition, WorkflowIOParam } from "./workflow-types";
 import { RequiredSummary } from "./RequiredSummary";
-import { getIOEditApi } from "./workflow-editor/WorkflowStores";
+import { useIOEditApi } from "./workflow-editor/WorkflowStores";
 
 /** 模式码 → 中文标签（标准任务类型）；非标准码原样显示，兼容历史自定义值。 */
 function modeLabel(code: string): string {
@@ -61,9 +62,9 @@ export function WorkflowIoPreviewPanel({
   onModesChange,
   onClose,
 }: WorkflowIoPreviewPanelProps) {
-  /* getIOEditApi 内部调 useContext，只能在组件顶层调用（Hook 套 Hook 会被
+  /* useIOEditApi 内部调 useContext，只能在组件顶层调用（Hook 套 Hook 会被
    * React 19 拦下）。context 持有的 StoreApi 按编辑器实例稳定。 */
-  const ioApi = getIOEditApi();
+  const ioApi = useIOEditApi();
 
   /* 当前编辑的模式：始终是工作流模式之一；工作流删掉该模式时回落到
    * defaultMode → 第一个模式。没有模式 = 表单禁用（禁止配置参数）。 */
@@ -186,10 +187,11 @@ export function WorkflowIoPreviewPanel({
 
   return (
     <div className="z-canvas-max pointer-events-none absolute top-4 right-4 bottom-4 flex w-[520px] flex-col">
+      {/* p71-allow:start sky · IO 预览面板的 identity 色（这套 UI 里"IO 预览"的既有装饰身份、非状态色、无匹配 token），见 §3.6.1 */}
       <div className="bg-panel/92 pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 shadow-2xl backdrop-blur-md">
         <div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
+            <span className="size-2 shrink-0 rounded-full bg-sky-400" />
             <span className="text-ink-bright truncate text-[12px] font-semibold">
               IO 预览
             </span>
@@ -198,53 +200,62 @@ export function WorkflowIoPreviewPanel({
             </span>
           </div>
           {hasModeOverrides && (
+            <Hint
+              label={`把模式「${modeLabel(effectiveMode ?? "")}」的全部参数恢复到通用默认值`}
+            >
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={resetActiveModeOverrides}
+                className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md px-1.5 py-0.5 text-[11px]"
+              >
+                恢复默认
+              </Button>
+            </Hint>
+          )}
+          <Hint label="关闭预览" accessibleName>
             <Button
               variant="outline"
-              size="xs"
-              onClick={resetActiveModeOverrides}
-              className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md px-1.5 py-0.5 text-[11px]"
-              title={`把模式「${modeLabel(effectiveMode ?? "")}」的全部参数恢复到通用默认值`}
+              size="icon-xs"
+              onClick={onClose}
+              className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md text-[11px]"
             >
-              恢复默认
+              ✕
             </Button>
-          )}
-          <Button
-            variant="outline"
-            size="icon-xs"
-            onClick={onClose}
-            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md text-[11px]"
-            title="关闭预览"
-          >
-            ✕
-          </Button>
+          </Hint>
         </div>
 
         {/* ── 模式页签：来自工作流 modes（与库「类型」同源）＋右侧模式管理 ── */}
         <div className="border-border-strong flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-1.5">
           {modes.map((code) => (
             <span key={code} className="flex shrink-0 items-center gap-0.5">
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setActiveMode(code)}
-                title={code}
-                className={`${tabClass(effectiveMode === code)} h-auto`}
-              >
-                {modeLabel(code)}
-              </Button>
-              {modes.length > 1 && (
+              <Hint label={code}>
                 <Button
                   variant="ghost"
-                  size="icon-xs"
-                  onClick={() => {
-                    const next = modes.filter((m) => m !== code);
-                    onModesChange(next, next[0] ?? "");
-                  }}
-                  className="text-ink-muted hover:text-danger-strong rounded text-[10px]"
-                  title={`从工作流模式中移除「${modeLabel(code)}」`}
+                  size="xs"
+                  onClick={() => setActiveMode(code)}
+                  className={`${tabClass(effectiveMode === code)} h-auto`}
                 >
-                  ×
+                  {modeLabel(code)}
                 </Button>
+              </Hint>
+              {modes.length > 1 && (
+                <Hint
+                  label={`从工作流模式中移除「${modeLabel(code)}」`}
+                  accessibleName
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => {
+                      const next = modes.filter((m) => m !== code);
+                      onModesChange(next, next[0] ?? "");
+                    }}
+                    className="text-ink-muted hover:text-danger-strong rounded text-[10px]"
+                  >
+                    ×
+                  </Button>
+                </Hint>
               )}
             </span>
           ))}
@@ -312,6 +323,7 @@ export function WorkflowIoPreviewPanel({
           <RequiredSummary io={previewIO} mode={effectiveMode} />
         </div>
       </div>
+      {/* p71-allow:end */}
     </div>
   );
 }

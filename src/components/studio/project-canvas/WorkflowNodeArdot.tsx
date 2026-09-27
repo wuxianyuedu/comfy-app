@@ -111,7 +111,7 @@ function PortDot({
   return (
     <span
       aria-hidden
-      className="pointer-events-none absolute h-3 w-3 rounded-full"
+      className="pointer-events-none absolute size-3 rounded-full"
       style={{
         background: color,
         border: `1px solid ${stroke}`,
@@ -222,7 +222,7 @@ export function WorkflowNodeArdot() {
           <div className="flex items-center gap-2.5">
             <span
               aria-label="类型 工作流"
-              className="text-primary flex h-7 w-7 items-center justify-center rounded-[14px] text-[14px] font-bold"
+              className="text-primary flex size-7 items-center justify-center rounded-[14px] text-[14px] font-bold"
               style={{
                 background: "var(--color-node-accent)",
                 fontFamily: "var(--font-sans)",
@@ -238,7 +238,7 @@ export function WorkflowNodeArdot() {
             </span>
           </div>
           <div className="bg-node-accent flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] px-2">
-            <span className="bg-primary h-1.5 w-1.5 rounded-full" />
+            <span className="bg-primary size-1.5 rounded-full" />
             <span
               className="text-ink-soft text-[10px] font-medium"
               style={{ fontFamily: "var(--font-sans)" }}
@@ -261,7 +261,7 @@ export function WorkflowNodeArdot() {
           >
             <span
               aria-hidden
-              className="bg-status-online inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+              className="bg-status-online inline-block size-1.5 shrink-0 rounded-full"
             />
             <span
               className="text-status-online font-semibold"
@@ -363,4 +363,6 @@ export function WorkflowNodeArdot() {
   );
 }
 
-export default React.memo(WorkflowNodeArdot);
+const MemoizedWorkflowNodeArdot = React.memo(WorkflowNodeArdot);
+MemoizedWorkflowNodeArdot.displayName = "WorkflowNodeArdot";
+export default MemoizedWorkflowNodeArdot;

@@ -2,8 +2,10 @@
 
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
+import { FieldLegend } from "~/components/ui/field";
+import { Hint } from "~/components/ui/hint";
 import { TreeChildren } from "~/components/ui/tree-rows";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { cn } from "~/lib/utils";
 import { ROW_STATE_PRESET } from "./constants";
@@ -36,9 +38,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
       {/* 节点目录只读展示：由设置的 ComfyUI 路径自动推导，不再支持手动配置 */}
       <section className="border-border bg-bg mb-4 rounded-xl border p-4">
         <div className="mb-2 flex items-center justify-between">
-          <label className="text-ink block text-sm font-medium">
+          <FieldLegend variant="label" className="text-ink text-sm font-medium">
             自定义节点目录
-          </label>
+          </FieldLegend>
           <span
             className="bg-success-strong/18 text-success-strong rounded-full px-1.5 py-0.5 text-[10px] font-medium"
             title="解析器只读取这些目录里的 .py、绝不修改其中任何文件"
@@ -201,23 +203,27 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                     </div>
                   }
                   trailing={
-                    <Button
-                      variant="outline"
-                      onClick={() => void onParseAllParent(parent)}
-                      disabled={
-                        !!parsing ||
-                        total === 0 ||
-                        (parentParsed && cnt.outdated === 0)
-                      }
-                      className="border-border bg-bg text-ink hover:bg-subtle h-auto shrink-0 rounded-lg px-3 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                      title={
+                    <Hint
+                      label={
                         parentParsed && cnt.outdated === 0
                           ? "已加载、无更新"
                           : "重新解析此目录下所有子包"
                       }
+                      wrap
                     >
-                      {parsing ? "…" : "解析本目录"}
-                    </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => void onParseAllParent(parent)}
+                        disabled={
+                          !!parsing ||
+                          total === 0 ||
+                          (parentParsed && cnt.outdated === 0)
+                        }
+                        className="border-border bg-bg text-ink hover:bg-subtle h-auto shrink-0 rounded-lg px-3 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {parsing ? "…" : "解析本目录"}
+                      </Button>
+                    </Hint>
                   }
                 />
                 {/* 子包 —— 仅展开时显示 */}

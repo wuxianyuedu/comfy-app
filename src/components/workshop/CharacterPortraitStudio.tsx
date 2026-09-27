@@ -9,6 +9,7 @@
 import { formatClock } from "~/lib/time-format";
 import React from "react";
 
+import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -362,27 +363,28 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             const selected = character.portraitUrl === candidate.url;
             return (
               <div key={candidate.url} className="relative">
-                <Button
-                  variant="ghost"
-                  onClick={() => actions.select(character.id, candidate.url)}
-                  title={selected ? "已定为定妆照" : "设为定妆照"}
-                  aria-label={
-                    selected
-                      ? "当前定妆照"
-                      : `把这张（${PORTRAIT_SOURCE_LABELS[candidate.source]}）设为定妆照`
-                  }
-                  className={`block overflow-hidden rounded-lg border-2 transition-colors ${
-                    selected
-                      ? "border-primary"
-                      : "border-border hover:border-primary/60"
-                  }`}
-                >
-                  <MediaThumbnail
-                    src={candidate.url}
-                    alt={`定妆照候选（${PORTRAIT_SOURCE_LABELS[candidate.source]}）`}
-                    className="h-24 w-24 object-cover"
-                  />
-                </Button>
+                <Hint label={selected ? "已定为定妆照" : "设为定妆照"}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => actions.select(character.id, candidate.url)}
+                    aria-label={
+                      selected
+                        ? "当前定妆照"
+                        : `把这张（${PORTRAIT_SOURCE_LABELS[candidate.source]}）设为定妆照`
+                    }
+                    className={`block overflow-hidden rounded-lg border-2 transition-colors ${
+                      selected
+                        ? "border-primary"
+                        : "border-border hover:border-primary/60"
+                    }`}
+                  >
+                    <MediaThumbnail
+                      src={candidate.url}
+                      alt={`定妆照候选（${PORTRAIT_SOURCE_LABELS[candidate.source]}）`}
+                      className="size-24 object-cover"
+                    />
+                  </Button>
+                </Hint>
                 <span className="pointer-events-none absolute top-1 left-1 rounded bg-black/60 px-1 text-[9px] text-white">
                   {PORTRAIT_SOURCE_LABELS[candidate.source]}
                 </span>

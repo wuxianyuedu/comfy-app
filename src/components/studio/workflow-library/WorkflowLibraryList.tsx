@@ -10,10 +10,11 @@ import {
   type PendingRow,
   type WorkflowRow,
 } from "./workflow-library-config";
+import { Hint } from "~/components/ui/hint";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "~/components/ui/source-tag";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -89,7 +90,7 @@ export function WorkflowLibraryList({
       className={[
         "border-border-subtle bg-panel-deep flex h-full w-full min-w-0 flex-col border-r",
         /* 拖入高亮用 outline：不参与布局，不会让列表在拖拽时抖一下。 */
-        dragActive ? "outline-2 -outline-offset-2 outline-cyan-400/60" : "",
+        dragActive ? "outline-info/60 outline-2 -outline-offset-2" : "",
       ].join("")}
     >
       {/* 搜索栏。`shrink-0` 必须有：排查过的一个现场是搜索框连同下面的列表一起
@@ -97,7 +98,7 @@ export function WorkflowLibraryList({
  列表内容一多它就被压，输入框看着像「瘪了」。 */}
       <div className="border-border-subtle shrink-0 border-b p-3">
         <div className="relative">
-          <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+          <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
           <Input
             type="text"
             value={search}
@@ -202,16 +203,20 @@ export function WorkflowLibraryList({
                       >
                         {pending.name}
                       </span>
-                      <Button
-                        variant="info"
-                        onClick={() => onLoadPending?.(pending)}
-                        disabled={loadingPending}
-                        title={`载入「${pending.name}」`}
-                        className="h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[10px] whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Download className="h-3 w-3" />
-                        {loadingPending ? "载入中…" : "载入"}
-                      </Button>
+                      <Hint label={`载入「${pending.name}」`} wrap>
+                        <Button
+                          variant="info"
+                          onClick={() => onLoadPending?.(pending)}
+                          disabled={loadingPending}
+                          className="h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[10px] whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Download
+                            data-icon="inline-start"
+                            className="size-3"
+                          />
+                          {loadingPending ? "载入中…" : "载入"}
+                        </Button>
+                      </Hint>
                     </div>
                   </li>
                 );
@@ -273,9 +278,11 @@ function WorkflowListItem({
         onClick={onClick}
         className={[
           "h-auto w-full min-w-0 rounded-lg border px-2 py-1.5 text-left font-normal hover:bg-transparent",
+          // p71-allow:start brand 渐变 · 选中态 violet→fuchsia 双色（项目品牌视觉 · 与卡片头 logo 呼应）
           selected
             ? "border-violet-500/40 bg-linear-to-br from-violet-500/15 to-fuchsia-500/10 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.15)]"
             : "bg-subtle hover:border-border hover:bg-subtle border-transparent",
+          // p71-allow:end
         ].join("")}
       >
         {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}

@@ -120,7 +120,7 @@ export default function LoginPage() {
           href="/"
           className="mb-7 flex items-center justify-center gap-2 font-semibold"
         >
-          <span className="bg-primary grid h-9 w-9 place-items-center rounded-lg text-white">
+          <span className="bg-primary grid size-9 place-items-center rounded-lg text-white">
             <BoltIcon />
           </span>
           <span className="text-ink-bright text-xl tracking-tight">
@@ -177,7 +177,7 @@ export default function LoginPage() {
                 className="text-primary/70 hover:text-primary"
                 aria-label="关闭提示"
               >
-                <X size={13} />
+                <X data-icon="inline-start" size={13} />
               </Button>
             </AlertAction>
           </Alert>
@@ -185,7 +185,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {mode === "register" && (
-            <Field
+            <LoginFieldRow
               label="昵称（可选）"
               type="text"
               value={name}
@@ -194,7 +194,7 @@ export default function LoginPage() {
               autoComplete="name"
             />
           )}
-          <Field
+          <LoginFieldRow
             label="邮箱"
             type="email"
             value={email}
@@ -202,7 +202,7 @@ export default function LoginPage() {
             placeholder="name@example.com"
             autoComplete="email"
           />
-          <Field
+          <LoginFieldRow
             label="密码"
             type={showPassword ? "text" : "password"}
             value={password}
@@ -220,7 +220,11 @@ export default function LoginPage() {
                 aria-label={showPassword ? "隐藏密码" : "显示密码"}
                 tabIndex={-1}
               >
-                <Icon name={showPassword ? "eyeoff" : "eye"} size={18} />
+                <Icon
+                  data-icon="inline-start"
+                  name={showPassword ? "eyeoff" : "eye"}
+                  size={18}
+                />
               </Button>
             }
           />
@@ -296,7 +300,10 @@ export default function LoginPage() {
   );
 }
 
-function Field({
+/* 局部字段行 · 命名 `LoginFieldRow` 而不是 `Field`：避免遮蔽 shadcn
+ * `~/components/ui/field` 的 `Field` 基元（本文件当前只 import FormField ·
+ * 未来若加 Field/FieldLabel 会撞名）。 */
+function LoginFieldRow({
   label,
   type,
   value,

@@ -8,11 +8,12 @@ import {
   typeDisplay,
   type WorkflowIOMap,
 } from "~/components/studio/workflow-io";
+import { Hint } from "~/components/ui/hint";
 
 /* ── 节点选中时才出现的悬浮工具条 ──
  *  对齐已落地的设计稿：节点上方一枚紧凑胶囊，含 ⌫ 删除（粉）· ⓘ 信息 ·
  *  ● 主题色 · ⛶ 聚焦 · ↶ 撤销 · ⋮ 更多。⌫ 与 ⛶ 已接线，其余是**有意保留的
- *  占位**（只有 title、点击无操作），让界面与设计稿一致、后续可扩展。 */
+ *  占位**（只有悬停提示、点击无操作），让界面与设计稿一致、后续可扩展。 */
 export function SelectedToolbar({
   onDelete,
   onFocusNode,
@@ -27,44 +28,51 @@ export function SelectedToolbar({
     "nodrag nopan text-ink-soft hover:bg-subtle flex h-7 w-7 items-center justify-center rounded-full text-[13px] transition-colors";
   return (
     <div className="nodrag nopan border-border-strong bg-panel border]/95 z-base absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full px-1 py-1 shadow-lg shadow-black/40 backdrop-blur">
-      <Button
-        variant="ghost"
-        title="删除节点 (Delete)"
-        onClick={onDelete}
-        className={`${btn} text-destructive hover:bg-destructive/15`}
-      >
-        ⌫
-      </Button>
-      {onRedo && (
+      <Hint label="删除节点 (Delete)" accessibleName>
         <Button
           variant="ghost"
-          title="退回让 AI 重做这一镜"
-          onClick={onRedo}
-          className={`${btn} hover:bg-primary/15`}
+          onClick={onDelete}
+          className={`${btn} text-destructive hover:bg-destructive/15`}
         >
-          ↺
+          ⌫
         </Button>
+      </Hint>
+      {onRedo && (
+        <Hint label="退回让 AI 重做这一镜" accessibleName>
+          <Button
+            variant="ghost"
+            onClick={onRedo}
+            className={`${btn} hover:bg-primary/15`}
+          >
+            ↺
+          </Button>
+        </Hint>
       )}
-      <Button variant="ghost" title="节点信息" className={btn}>
-        ⓘ
-      </Button>
-      <Button variant="ghost" title="主题色" className={btn}>
-        ●
-      </Button>
-      <Button
-        variant="ghost"
-        title="聚焦此节点"
-        onClick={onFocusNode}
-        className={btn}
-      >
-        ⛶
-      </Button>
-      <Button variant="ghost" title="撤销" className={btn}>
-        ↶
-      </Button>
-      <Button variant="ghost" title="更多" className={btn}>
-        ⋮
-      </Button>
+      <Hint label="节点信息" accessibleName>
+        <Button variant="ghost" className={btn}>
+          ⓘ
+        </Button>
+      </Hint>
+      <Hint label="主题色" accessibleName>
+        <Button variant="ghost" className={btn}>
+          ●
+        </Button>
+      </Hint>
+      <Hint label="聚焦此节点" accessibleName>
+        <Button variant="ghost" onClick={onFocusNode} className={btn}>
+          ⛶
+        </Button>
+      </Hint>
+      <Hint label="撤销" accessibleName>
+        <Button variant="ghost" className={btn}>
+          ↶
+        </Button>
+      </Hint>
+      <Hint label="更多" accessibleName>
+        <Button variant="ghost" className={btn}>
+          ⋮
+        </Button>
+      </Hint>
     </div>
   );
 }

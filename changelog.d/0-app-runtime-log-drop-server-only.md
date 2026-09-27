@@ -1,0 +1,6 @@
+## Changed
+
+- **`app-runtime-log.ts` 摘 server-only（P3 迁移第 1 期·lib 层地基批）**：`~/lib/log/app-runtime-log` 只依赖 Node 内建 (`node:fs` / `node:path`) + `log-paths` + `time-format`——三条都在纯 Node 里可加载（`log-paths` 已 #1074 摘掉）。摘 `import "server-only"` 走 §18.4 第三类登记进 `PURE_NODE_HOSTS`。这一步是打通 **logger 链最后一公里**：`~/lib/core/logger` **静态引**本模块（ERROR 级消息镜像落 `app-runtime.log`，规范 07 §7.11），只要本模块带 server-only，`await import("~/lib/core/logger")` 在纯 Node 里就 throw，前 3 批 comfyui 各模块（#1053 / #1068 / #1071）里 `cliWarn` / `resolveRuntimeLogger` / `resolveDeps` 的 lazy 兜底接不进去——只能靠 `configureXxx` 显式注入。摘掉之后**整链 logger 真加载**（Next server 侧 dynamic import 拿到实单例、executor host 侧不注入也能自己跑）。
+  - 原注释「服务端使用；面板经 API 读取」一句改成描述新契约：面板/API 只读那层是**消费者侧的约定**（API 路由读文件），不是「本模块只能 Next 专属」；写入方（Next server 与未来 executor host）都通过本模块，「写入失败绝不阻塞业务」的旧契约保持不变。
+  - Scanner 现 `unguarded=12`（前 8 批 comfyui + log-paths + 本批 app-runtime-log + 3 pre-existing），全部由 `PURE_NODE_HOSTS` 登记消化；`libOnlyReachable=0` / `clientReachable=0` 保持。零行为变化（Next 侧 logger 静态引本模块仍按原路径加载）。
+  - 验证：`tsc --noEmit` / `eslint --max-warnings 0` / `vitest run src/lib/log src/lib/comfyui tests/lib-node-only-declarations.test.ts` 581/587 通过（**2 条 `capture-streams.server.test.ts` 预存在 master 假红**、`c026fd78 perf(log): 进程输出转录改缓冲批量落盘` 引入 buffered flush、测试立即 `readCapture` 拿不到内容，与本 PR 无关；另开 PR 修 flush 语义或改测试等待）。`.githooks/pre-commit` 28 步全过。

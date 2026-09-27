@@ -14,11 +14,20 @@
  *
  * @module comfyui/executor-finalize — 任务终态收口（成功下载 / 失败落库）
  */
-import "server-only";
+// §18.4 三选一：本模块走第三类（纯 Node 宿主）——依赖登记在
+// `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
+// 三条 server-only 侧的静态值 import（`../core/repository` 的 taskRepository、
+// `./client` 的 getView、`~/lib/log/app-runtime-log` 的 createAppRuntimeLogger）
+// 全改成**首次调用时 dynamic import + 允许 configureExecutorFinalize 显式注入**。
+// 与 runner-state / trace 同族——「静默 vs 抛错」的边界由调用点决定：DB / 拉取
+// 图像是**关键路径**（拿不到 → reject 让 caller 感知），运行时日志是**诊断通道**
+// （拿不到 → 静默 skip，与旧契约「日志挂不上不阻塞收口」同构）。
+// 注意：本模块**自身**的静态边已解，但传递闭包（./client、./executor-history、
+// ./executor-continuation 各自还静态引 server-only 侧）留在后续 PR 拆；登记进
+// PURE_NODE_HOSTS 是"标方向 + 消化 scanner unguarded"，**不是**「现在就能在纯
+// Node 里 import 本模块」的承诺。
 import { promises as fs } from "fs";
 import path from "path";
-import { taskRepository } from "../core/repository";
-import { getView } from "./client";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
 import {
@@ -35,10 +44,72 @@ import {
   claimFinalize,
   claimSettle,
 } from "./runner-state";
-import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
-
-const taskRuntimeLog = createAppRuntimeLogger("task");
 import type { ValidationError } from "./validation";
+
+/* ── 依赖注入接缝（P3 §5 第 1 期·第三步） ─────────────────────────────── */
+
+/** 三条 server-only 侧依赖的最小形状。宿主（Next 或 executor host）通过
+ *  `configureExecutorFinalize` 覆盖任一条；未覆盖的走 dynamic import 兜底。
+ *  类型通过 `Awaited<ReturnType<typeof loadRealTaskRepo>>` 从真实例反推，
+ *  避开 eslint `consistent-type-imports` 对 `typeof import(...)` 型位的禁用。 */
+async function loadRealTaskRepo() {
+  return (await import("../core/repository")).taskRepository;
+}
+type TaskRepoLike = Pick<
+  Awaited<ReturnType<typeof loadRealTaskRepo>>,
+  "findExecutionMeta" | "finalizeSuccess" | "createImages" | "finalizeFailure"
+>;
+type GetViewLike = (
+  filename: string,
+  subfolder: string,
+  type: string,
+) => Promise<Buffer>;
+type RuntimeLoggerLike = {
+  info(msg: string, ctx?: unknown): void;
+  error(msg: string, ctx?: unknown): void;
+};
+export type ExecutorFinalizeDeps = {
+  taskRepo: TaskRepoLike;
+  getView: GetViewLike;
+  runtimeLog: RuntimeLoggerLike;
+};
+
+let depsOverride: Partial<ExecutorFinalizeDeps> = {};
+
+/** 显式注入宿主侧的实现。executor host 需在 boot 时至少提供 `taskRepo` 与
+ *  `getView`（关键路径），`runtimeLog` 缺省则退化为静默 skip。
+ *  Next server 侧不需要调用本函数——首次 getDeps 会走 dynamic import 拿真单例。 */
+export function configureExecutorFinalize(
+  next: Partial<ExecutorFinalizeDeps>,
+): void {
+  depsOverride = { ...depsOverride, ...next };
+}
+
+async function resolveTaskRepo(): Promise<TaskRepoLike> {
+  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  return loadRealTaskRepo();
+}
+
+async function resolveGetView(): Promise<GetViewLike> {
+  if (depsOverride.getView) return depsOverride.getView;
+  return (await import("./client")).getView;
+}
+
+/** runtime log 是**诊断通道**：拿不到（未注入 + 纯 Node dynamic import 撞
+ *  server-only）时静默 skip，与旧契约「日志挂不上不阻塞收口」同构。 */
+let _runtimeLoggerCache: RuntimeLoggerLike | null | undefined;
+async function resolveRuntimeLogger(): Promise<RuntimeLoggerLike | null> {
+  if (depsOverride.runtimeLog) return depsOverride.runtimeLog;
+  if (_runtimeLoggerCache !== undefined) return _runtimeLoggerCache;
+  try {
+    const { createAppRuntimeLogger } =
+      await import("~/lib/log/app-runtime-log");
+    _runtimeLoggerCache = createAppRuntimeLogger("task");
+  } catch {
+    _runtimeLoggerCache = null;
+  }
+  return _runtimeLoggerCache;
+}
 
 /** ComfyUI `status.messages` 条目是 `[type, payload?]` 元组，payload 形状随
  *  版本漂移 —— 只按本层读取的两个位置（`[0]` 类型名 / `[1].exception_message`）
@@ -56,7 +127,7 @@ function executionErrorMessageOf(msg: unknown): unknown {
     : undefined;
 }
 
-/** runner-state 的 `executedWorkflow` 是 `Map<string, any>`（不在本次 8 文件
+/** runner-state 的 `executedWorkflow` 是 `Map<string, unknown>`（不在本次 8 文件
  *  改动范围内）—— 经这里统一收口为 `unknown` 读取；`undefined` 归一为 `null`
  *  与拆分前一致（completeInner 内两者等价）。 */
 function executedWorkflowOf(taskId: string): unknown {
@@ -86,6 +157,14 @@ async function completeInner(
   promptId: string,
   executedWorkflow: unknown = null,
 ) {
+  // 三条依赖在函数入口一次性解析；后续 call site 沿用旧名字（`taskRepository` /
+  // `getView` / `taskRuntimeLog`），改动面小、review 友好。
+  // taskRepository / getView 是关键路径（拿不到 → 抛错让 caller 感知）；
+  // taskRuntimeLog 是诊断通道（可为 null，两个 call site 用 `?.`）。
+  const taskRepository = await resolveTaskRepo();
+  const getView = await resolveGetView();
+  const taskRuntimeLog = await resolveRuntimeLogger();
+
   const s = state();
 
   // 项目级产出：读取任务归属的项目与请求参数，决定磁盘落点 +
@@ -394,7 +473,7 @@ async function completeInner(
   }
 
   await persistLogs(taskId);
-  taskRuntimeLog.info(`任务完成 ${taskId}`, { outputs: saved.length });
+  taskRuntimeLog?.info(`任务完成 ${taskId}`, { outputs: saved.length });
   /* 打一行「总耗时 Xs」：让用户看到整轮跑的墙上时间。startedAt 缺失时退化成一句
    * 通用说明 —— 这只在「上一次服务端生命周期入队、本次重新接管」时才会发生，
    * 极其罕见。 */
@@ -441,6 +520,11 @@ export async function finalizeFailure(
   error: unknown,
   validationErrors?: ValidationError[],
 ) {
+  // 与 completeInner 同一套 lazy 依赖，只取本函数用到的两条（getView 在成功分支
+  // 才用，这里不 resolve）。taskRepository 是关键路径（拿不到 → reject 让 caller
+  // 感知），taskRuntimeLog 是诊断通道（可 null、静默 skip）。
+  const taskRepository = await resolveTaskRepo();
+  const taskRuntimeLog = await resolveRuntimeLogger();
   const s = state();
   const friendly = friendlyError(error) || "任务失败";
   /* 一次性落库锁：同一任务可能被 executor（complete/fail 的异常分支）、
@@ -473,7 +557,7 @@ export async function finalizeFailure(
   );
 
   await persistLogs(taskId);
-  taskRuntimeLog.error(`任务失败 ${taskId}: ${friendly}`);
+  taskRuntimeLog?.error(`任务失败 ${taskId}: ${friendly}`);
   // 清掉本模块给这个任务加的状态，同一个 taskId 再入队时从干净状态开始。
   if (startedAt) s.startedAt.delete(taskId);
   s.lastNodeByTask.delete(taskId);

@@ -16,6 +16,7 @@
  */
 
 import { BANNER_ANSI, stripAnsi } from "./log-ansi";
+import { formatClock } from "~/lib/time-format";
 
 /**
  * 会话正文的保留上限（字符）。取尾部窗口：一次「保活」会话可能累积几个小时
@@ -107,13 +108,6 @@ function firstTimestampMs(text: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-/** 毫秒 → `HH:mm:ss`（本地时区；手写格式化，避免 locale 影响断言）。 */
-function clockOf(tsMs: number): string {
-  const date = new Date(tsMs);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
 /**
  * 会话 → 下拉选项文案：`10:27:51 · ▶ ComfyUI 启动会话`。
  *
@@ -122,7 +116,7 @@ function clockOf(tsMs: number): string {
 export function formatSessionLabel(session: LogSessionMeta): string {
   const title = session.title.trim();
   if (session.startedAt === null) return title || BANNER_FALLBACK_TITLE;
-  const clock = clockOf(session.startedAt);
+  const clock = formatClock(session.startedAt);
   return title ? `${clock} · ${title}` : clock;
 }
 

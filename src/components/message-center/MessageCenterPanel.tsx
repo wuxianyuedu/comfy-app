@@ -113,7 +113,7 @@ export function MessageCenterPanel() {
             disabled={unread === 0}
             className="text-ink-soft hover:bg-subtle hover:text-ink h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-[12px]"
           >
-            <CheckCheck size={14} />
+            <CheckCheck data-icon="inline-start" size={14} />
             全部已读
           </Button>
           <Button
@@ -123,7 +123,7 @@ export function MessageCenterPanel() {
             disabled={messages.length === 0}
             className="text-ink-soft hover:bg-danger/10 hover:text-danger-strong h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-[12px]"
           >
-            <Trash2 size={14} />
+            <Trash2 data-icon="inline-start" size={14} />
             清空
           </Button>
           <Button
@@ -133,7 +133,7 @@ export function MessageCenterPanel() {
             className="text-ink-soft hover:bg-subtle hover:text-ink ml-1 rounded-md"
             aria-label="关闭消息中心"
           >
-            <X size={16} />
+            <X data-icon="inline-start" size={16} />
           </Button>
         </div>
       </header>
@@ -194,7 +194,7 @@ export function MessageCenterPanel() {
                       className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 rounded"
                       aria-label="删除该消息"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 data-icon="inline-start" size={13} />
                     </Button>
                   </div>
                 </li>

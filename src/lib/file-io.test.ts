@@ -118,6 +118,19 @@ describe("readFileAsDataUrl", () => {
     }
   });
 
+  it("无 FileReader 的环境（SSR）reject 而非抛 ReferenceError", async () => {
+    const original = globalThis.FileReader;
+    globalThis.FileReader =
+      undefined as unknown as typeof globalThis.FileReader;
+    try {
+      await expect(readFileAsDataUrl({} as File)).rejects.toThrow(
+        "当前环境不支持读取文件",
+      );
+    } finally {
+      globalThis.FileReader = original;
+    }
+  });
+
   it("readAsText 通道的 reader.onerror 也抛出可展示的中文文案", async () => {
     const original = globalThis.FileReader;
     class FakeReader {

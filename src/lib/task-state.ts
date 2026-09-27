@@ -45,3 +45,30 @@ export function isTerminalFailureTaskStatus(
 export function isActiveTaskStatus(status: string | null | undefined): boolean {
   return !isTerminalTaskStatus(status);
 }
+
+/**
+ * 任务状态 → 中文标签的**唯一出处**。
+ *
+ * 为什么收到这里：同一张表在 studio 下已被抄了四份（`history-utils` 的
+ * `STATUS_STYLE.label`、`VideoQueueModal`、`ProjectOutputs`、`film-studio-config`），
+ * 每份的措辞与兜底各不相同 —— 于是「同一个状态在两个界面叫法不同」在代码上是
+ * 合法状态，只有用户会撞见。新界面不再抄第五份，一律读本出口。
+ *
+ * 本模块只放判据与这张表、不做 IO，客户端与服务端都能引（理由见文件头）。
+ */
+export const TASK_STATUS_LABELS = {
+  QUEUED: "排队中",
+  RUNNING: "生成中",
+  SUCCEEDED: "已完成",
+  FAILED: "失败",
+  CANCELLED: "已取消",
+} as const satisfies Record<string, string>;
+
+/** 读标签；未知状态原样回显（不静默转成「未知」把信息吞掉）。 */
+export function taskStatusLabel(status: string | null | undefined): string {
+  if (status === null || status === undefined || status === "") return "未知";
+  const known: readonly string[] = Object.keys(TASK_STATUS_LABELS);
+  return known.includes(status)
+    ? TASK_STATUS_LABELS[status as keyof typeof TASK_STATUS_LABELS]
+    : status;
+}

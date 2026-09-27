@@ -32,7 +32,14 @@
 //      见 env-python.ts）。
 
 import { errorText } from "~/lib/error-message";
-import "server-only";
+// §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批·汇聚点）。
+// 静态依赖——`~/lib/error-message` / `fs` / `path` /
+// `../app-settings/app-settings.server`（`.server` 后缀、内部无 server-only） /
+// `../endpoints` / `./launch-path` / `./instance-kind` / `./proc-detect` /
+// `~/lib/shell/tracing-ignore` / `./probe` / `./env-python` /
+// `~/lib/core/logger`（经 `app-runtime-log` #1075 + `log-paths` #1074 通链）
+// —— 在前 8 批 comfyui 与 lib 层地基批完成之后**全部**纯 Node 可加载。
+// 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import fs from "fs";
 import path from "path";
 import { getSettingsSync } from "../app-settings/app-settings.server";

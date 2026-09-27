@@ -16,9 +16,11 @@
  */
 import { useDebugMode } from "./canvas/WorkflowCanvasSettings";
 import { useDebugStore } from "./debug/debug-store";
+import { Hint } from "~/components/ui/hint";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
+import { FieldLabel } from "~/components/ui/field";
 
 /* ── 开关（内联，镜像 CanvasSettingsPanel 的 ToggleRow 观感） ── */
 function ToggleRow({
@@ -35,7 +37,7 @@ function ToggleRow({
   tooltip?: string;
 }) {
   return (
-    <label
+    <FieldLabel
       title={tooltip}
       className="border-border-strong bg-subtle hover:border-border-strong flex cursor-pointer items-center justify-between gap-3 rounded-md border px-3 py-2.5 transition-colors"
     >
@@ -51,7 +53,7 @@ function ToggleRow({
           「圆角底 + 绝对定位圆点」的开关，与 WorkflowCanvasSettings 的另一份
           同形实现各自维护 —— 开关是**状态控件**，样式改动应当只发生在一处。 */}
       <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
-    </label>
+    </FieldLabel>
   );
 }
 
@@ -135,18 +137,19 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
 /* ── 右上角齿轮按钮（位于居中工具栏右侧） ── */
 export function ProjectSettingsButton({ onClick }: { onClick: () => void }) {
   return (
-    <Button
-      variant="outline"
-      onClick={onClick}
-      title="项目画布设置"
-      aria-label="项目画布设置"
-      data-testid="project-canvas-settings-button"
-      className="border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-canvas-ui pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight shadow-lg backdrop-blur-sm select-none hover:border-white/25"
-    >
-      <span aria-hidden className="mr-1 align-baseline text-[12.5px]">
-        ⚙
-      </span>
-      设置
-    </Button>
+    <Hint label="项目画布设置">
+      <Button
+        variant="outline"
+        onClick={onClick}
+        aria-label="项目画布设置"
+        data-testid="project-canvas-settings-button"
+        className="border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-canvas-ui pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight shadow-lg backdrop-blur-sm select-none hover:border-white/25"
+      >
+        <span aria-hidden className="mr-1 align-baseline text-[12.5px]">
+          ⚙
+        </span>
+        设置
+      </Button>
+    </Hint>
   );
 }

@@ -165,7 +165,7 @@ export function WorkflowNode({
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-label="类型 工作流"
-            className="text-primary flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold"
+            className="text-primary flex size-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold"
             style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
           >
             W
@@ -330,4 +330,6 @@ export function WorkflowNode({
   );
 }
 
-export default React.memo(WorkflowNode);
+const MemoizedWorkflowNode = React.memo(WorkflowNode);
+MemoizedWorkflowNode.displayName = "WorkflowNode";
+export default MemoizedWorkflowNode;

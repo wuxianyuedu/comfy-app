@@ -30,11 +30,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveAppPort } from "./app-port.mjs";
-import { spawnSchemaSync } from "./db-schema-state.mjs";
-import { checkEnvFile } from "./env-preflight.mjs";
+import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
+import { checkEnvFile, parseEnvFile } from "./env-preflight.mjs";
 import {
   archiveRunLog,
   createLogSink,
+  localTimestamp,
   runStamp,
 } from "./launcher-core/log.mjs";
 import {
@@ -54,6 +55,7 @@ import {
 import {
   listeningPidsOnPort,
   pidBelongsToRoot,
+  processCommandLines,
   runCapture,
 } from "./launcher-core/procs.mjs";
 import {
@@ -293,7 +295,7 @@ export function shellStaleWarning(shellExe, root = ROOT) {
   }
   if (newest <= exeTime) return null;
   return (
-    `正在运行旧版桌面壳（编译于 ${new Date(exeTime).toISOString().slice(5, 16).replace("T", " ")}，源码此后有改动），` +
+    `正在运行旧版桌面壳（编译于 ${localTimestamp(new Date(exeTime)).slice(5, 16)}，源码此后有改动），` +
     "界面可能不是最新逻辑；建议重编：cd src-tauri && cargo build --release --features custom-protocol"
   );
 }
@@ -324,7 +326,7 @@ function appendRuntimeWarning(message, root = ROOT) {
   try {
     const dir = path.join(root, "log", "services");
     fs.mkdirSync(dir, { recursive: true });
-    const ts = new Date().toISOString().replace("T", " ").slice(0, 23);
+    const ts = localTimestamp();
     fs.appendFileSync(
       path.join(dir, "app-runtime.log"),
       `[${ts}] [WARN] [launcher] ${message}\n`,
@@ -484,10 +486,14 @@ export async function reconcilePort(
       belongsToRoot: pidBelongsToRoot,
       root,
     });
+    /* 命令行一次批量预取：`portOwnershipVerdict` 会对每个占位 PID 各调一次
+     * `cmdlineOf`，Windows 上那是每 PID 一次 PowerShell 冷启动（0.5~1.5s）；
+     * 合并为一条 CIM 查询后回填进 Map，回调只查表（契约不变，仍是逐 PID 取）。 */
+    const commandLines = await processCommandLines(verdict.pids ?? []);
     const decision = await portOwnershipVerdict({
       requestedPort: explicit && p === port ? port : null,
       verdict,
-      cmdlineOf: processCommandLine,
+      cmdlineOf: async (pid) => commandLines.get(pid) ?? "",
       isAppProcess: (_pid, cmdline) => isAppDevServerCmdline(cmdline, root),
     });
     if (decision.ownership === PORT_OWNERSHIP.free) {
@@ -933,6 +939,30 @@ export async function run(argv = process.argv.slice(2)) {
   let dev = spawnDevServer(port, args.host, nextOut, nextErr);
   log(`dev server 已启动（PID ${dev.pid}，输出见 ${nextOut}）`, "OK");
 
+  // 6.5) 可选：拉起 ComfyUI 执行器独立宿主（P3 §5 第 2 期 · Phase 2-C）
+  // 默认 `inline` —— Next 里跑 ComfyUI 执行编排；本步 **不 spawn 任何东西**。
+  // `COMFY_EXECUTOR=host` 时把 `scripts/executor-host.mjs` 作为 launcher 的
+  // **又一个受管子进程** 起起来；spawnInGroup 走同一份平台判据（POSIX 自建进程组 /
+  // Windows taskkill 走 `/T`），因此回收、孤儿检测、会话锚点等既有语义一字不改。
+  // 3-B1 起 host 会真正领取 claimedBy='host' 的行；判据与 Next 侧
+  // `resolveExecutorClaim()`（src/lib/comfyui/executor-mode.ts）读同一个 key、
+  // 同一套归一化——这里额外回读 `.env` 是因为纯 Node 不注入 .env，而 Next
+  // server 的 process.env 里有它（@next/env），不回读会造成「Next 写 host 片、
+  // launcher 却不拉 host」的任务停摆组合。
+  const executorMode = resolveComfyExecutorMode();
+  if (executorMode === "host") {
+    const hostChild = spawnExecutorHost();
+    log(
+      `executor-host 已启动（PID ${hostChild?.pid ?? "?"}，COMFY_EXECUTOR=host 灰度中；host 领取 claimedBy='host' 的行）`,
+      "OK",
+    );
+  } else if (executorMode !== "inline") {
+    log(
+      `COMFY_EXECUTOR="${executorMode}" 不识别，按默认 inline 处理（可选：inline|host）`,
+      "WARN",
+    );
+  }
+
   // 7) 会话锚点：把 PID 与心跳落盘，让「进程被杀后仍能回收」成立
   writeSession(ROOT, {
     launcher_pid: process.pid,
@@ -1020,6 +1050,7 @@ export async function run(argv = process.argv.slice(2)) {
   let ready = false;
   /** 最后一次探测的结论：超时出口要靠它讲清「卡在哪一档」（见 §5）。 */
   let lastProbeState = "not-up";
+  let pollCount = 0;
   const readyDeadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < readyDeadline) {
     if (devExited()) break;
@@ -1077,15 +1108,27 @@ export async function run(argv = process.argv.slice(2)) {
         0.6,
         ((READY_TIMEOUT_MS - left * 1000) / READY_TIMEOUT_MS) * 0.6,
       );
-    status(
-      "dev-server-starting",
-      progress,
-      schemaNoticeSent
-        ? `数据库表还没建，正在等待自动建表（还剩 ${left}s）…`
-        : `正在等待本地服务就绪（还剩 ${left}s）…`,
-      { staleShell },
+    /* 状态文件降频：就绪等待期每轮都写 launch-status.json（最多 180 次），
+     * 而进度条以秒为粒度 —— 每 5 轮写一次足够顺滑；就绪 / 出错等关键状态
+     * 变化仍在别处即时写。 */
+    if (pollCount % 5 === 0) {
+      status(
+        "dev-server-starting",
+        progress,
+        schemaNoticeSent
+          ? `数据库表还没建，正在等待自动建表（还剩 ${left}s）…`
+          : `正在等待本地服务就绪（还剩 ${left}s）…`,
+        { staleShell },
+      );
+    }
+    /* 轮询退避：前 10 次每 1s（快速冷启动大多几秒内就绪），之后 2s、30 次
+     * 后 3s —— 冷编译普遍 1~3 分钟，固定 1s 是 180 次探测 + 180 次状态文件
+     * 写的纯浪费；就绪感知延迟只出现在冷启动后段（用户本来就在等编译）。
+     * 总超时是墙钟 deadline（Date.now()），退避不会缩短它。 */
+    pollCount += 1;
+    await new Promise((r) =>
+      setTimeout(r, pollCount < 10 ? 1000 : pollCount < 30 ? 2000 : 3000),
     );
-    await new Promise((r) => setTimeout(r, 1000));
   }
 
   if (devExited()) {
@@ -1269,6 +1312,9 @@ export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
       ...process.env,
       COMFYAPP_PORT: String(port),
       PORT: String(port),
+      /* 编排器已起过一份 schema 同步（本文件 950 行附近），通知 dev.mjs
+       * 跳过它自己的那份 —— 否则一次启动两份 drizzle 并发写同一个库。 */
+      [SKIP_SCHEMA_SYNC_ENV]: "1",
       ...extraEnv,
     },
     stdoutFile: outFile,
@@ -1278,7 +1324,93 @@ export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
   return child;
 }
 
-/** dev server 提前退出时定性并给出用户可见出口（失败即抛出可行动的报错）。 */
+/** 拉起 `scripts/executor-host.mjs`（P3 §5 第 2 期 · Phase 2-C）。
+ *
+ *  为什么**不**走 pnpm：这不是一个「用户命令」，也没有 workspace 脚本要跑；
+ *  它就是 launcher 拉一个 `.mjs` 起来。直接 `process.execPath` 起当前 Node 二进
+ *  制 + 脚本路径，少一层 corepack/pnpm shim 的探测与启动开销；也避开 Windows 上
+ *  pnpm.cmd shim 的 `.ps1` 分叉（AGENTS 硬规则 12）。
+ *
+ *  为什么 stdio=inherit：Phase 2-B 骨架里 host 只走 appendFileSync 落
+ *  `log/services/executor-host.log`（可通过 COMFYAPP_HOST_LOG 覆盖），stdout/stderr
+ *  都是空的；等 Phase 3 主循环真跑起来再补 stdoutFile/stderrFile 按次命名 + 轮转。
+ *
+ *  为什么不发 COMFYAPP_PORT：host 起 ComfyUI 用的是自己的 lifecycle，与 Next 端
+ *  口不共享；Phase 2-C 骨架不 spawn ComfyUI，也就用不上端口。 */
+/** `COMFY_EXECUTOR` 的 launcher 侧解析：进程 env 优先，`.env` 回读兜底
+ *  （纯 Node 不注入 .env；Next 侧 process.env 有 @next/env 灌进去的同名值，
+ *  两侧因此对 shell / .env 两种给法都成立）。归一化规则与
+ *  `src/lib/comfyui/executor-mode.ts` 一致：trim + lowercase，未知值由调用方
+ *  按 inline 处理并 warn。 */
+export function resolveComfyExecutorMode() {
+  let raw = (process.env.COMFY_EXECUTOR ?? "").trim().toLowerCase();
+  if (!raw) {
+    try {
+      const envPath = path.join(ROOT, ".env");
+      if (fs.existsSync(envPath)) {
+        raw = (
+          parseEnvFile(fs.readFileSync(envPath, "utf-8")).get(
+            "COMFY_EXECUTOR",
+          ) ?? ""
+        )
+          .trim()
+          .toLowerCase();
+      }
+    } catch {
+      raw = "";
+    }
+  }
+  return raw || "inline";
+}
+
+export function spawnExecutorHost() {
+  const hostScript = path.join(ROOT, "scripts", "executor-host.mjs");
+  if (!fs.existsSync(hostScript)) {
+    log(
+      `未找到 ${path.relative(ROOT, hostScript)}，跳过 executor-host 拉起（COMFY_EXECUTOR=host 需先合入 Phase 2-B）`,
+      "WARN",
+    );
+    return null;
+  }
+  /* host 的 stdout/stderr 落**按次命名**的文件（与 next dev 的
+   * nextjs-stdout/stderr 同族同处理），不接进本控制台：pino 的中文 warn
+   * 直接进 Windows 控制台会被按 GBK 解码成乱码（文件通道恒 UTF-8），
+   * 且 host 的逐 tick 输出会淹没 launcher 自己的进度行。 */
+  const servicesDir = path.join(ROOT, "log", "services");
+  fs.mkdirSync(servicesDir, { recursive: true });
+  pruneTimestampedLogs(
+    servicesDir,
+    ["executor-host-stdout-", "executor-host-stderr-"],
+    5,
+  );
+  const hostOut = path.join(
+    servicesDir,
+    `executor-host-stdout-${runTimestamp}.log`,
+  );
+  const hostErr = path.join(
+    servicesDir,
+    `executor-host-stderr-${runTimestamp}.log`,
+  );
+  const child = spawnInGroup({
+    command: process.execPath,
+    args: [hostScript],
+    cwd: ROOT,
+    stdoutFile: hostOut,
+    stderrFile: hostErr,
+    env: {
+      ...process.env,
+      /* 显式回写归一化后的值：`.env` 来源时它不在 process.env 里，而 host 自己
+       * 只认 COMFY_EXECUTOR 来决定跑骨架还是运行时链——不传会出现
+       * 「launcher 认为 host 模式、host 起着骨架」的静默错配。 */
+      COMFY_EXECUTOR: resolveComfyExecutorMode(),
+      // 编排器把 boot id 传下去，让 host 日志与 launcher 日志能按同一时间戳串起来。
+      COMFYAPP_HOST_BOOT_ID: runTimestamp,
+    },
+  });
+  spawned.push(child);
+  log(`host 输出通道：${hostOut} / ${hostErr}`, "INFO");
+  return child;
+}
 /**
  * `stdoutFile` / `stderrFile` 必须是**本次运行**起 dev server 时用的那两份
  * （`nextOut` / `nextErr`）—— 曾经这里是按文件名重找「最近一份」（`lastNextLog`），

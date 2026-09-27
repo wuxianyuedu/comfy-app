@@ -9,7 +9,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ComponentType, DragEvent } from "react";
 
 import { uploadImageFile } from "~/lib/project-canvas/canvas-api";
-import { readFileAsDataUrl } from "~/lib/browser-io";
+import { readFileAsDataUrl } from "~/lib/file-io";
 import {
   filterVisibleInMode,
   inferGroups,

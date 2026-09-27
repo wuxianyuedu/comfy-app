@@ -261,7 +261,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
           }}
         >
           <span
-            className="inline-block h-2 w-2 shrink-0 rounded-full"
+            className="inline-block size-2 shrink-0 rounded-full"
             style={{ background: titleText, boxShadow: `0 0 6px ${titleText}` }}
           />
           <span className="truncate" title={data.title}>

@@ -17,6 +17,7 @@ import {
   Video,
   X,
 } from "lucide-react";
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
 import { textHandler } from "~/lib/form-props";
 import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
@@ -25,7 +26,7 @@ import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { useState } from "react";
 
 import {
@@ -129,44 +130,51 @@ export function MaterialLibraryPanel({
         <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">
           素材库
         </h2>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
-          title="素材保存在 public/generated/materials 下，可直接把文件丢进对应分类目录"
+        <Hint
+          label="素材保存在 public/generated/materials 下，可直接把文件丢进对应分类目录"
+          accessibleName
         >
-          <CircleHelp size={14} />
-        </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
+          >
+            <CircleHelp data-icon="inline-start" size={14} />
+          </Button>
+        </Hint>
         {/* 显示密度切换 */}
         <div className="bg-subtle flex items-center gap-0.5 rounded-lg p-0.5">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => setDisplay("grid")}
-            className={`h-auto rounded-md p-1 ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
-            title="网格视图"
-          >
-            <LayoutGrid size={14} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => setDisplay("list")}
-            className={`h-auto rounded-md p-1 ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
-            title="列表视图"
-          >
-            <List size={14} />
-          </Button>
+          <Hint label="网格视图" accessibleName>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setDisplay("grid")}
+              className={`h-auto rounded-md p-1 ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
+            >
+              <LayoutGrid data-icon="inline-start" size={14} />
+            </Button>
+          </Hint>
+          <Hint label="列表视图" accessibleName>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setDisplay("list")}
+              className={`h-auto rounded-md p-1 ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
+            >
+              <List data-icon="inline-start" size={14} />
+            </Button>
+          </Hint>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onClose}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
-          title="关闭"
-        >
-          <X size={14} />
-        </Button>
+        <Hint label="关闭" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onClose}
+            className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
+          >
+            <X data-icon="inline-start" size={14} />
+          </Button>
+        </Hint>
       </div>
 
       {/* ── Tabs ── */}
@@ -204,36 +212,41 @@ export function MaterialLibraryPanel({
             className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[12px] focus-visible:ring-0"
           />
           {search && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setSearch("")}
-              className="text-ink-fainter hover:text-ink-soft h-auto shrink-0 p-0 hover:bg-transparent"
-              title="清空"
-            >
-              <X size={12} strokeWidth={2.5} />
-            </Button>
+            <Hint label="清空" accessibleName>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setSearch("")}
+                className="text-ink-fainter hover:text-ink-soft h-auto shrink-0 p-0 hover:bg-transparent"
+              >
+                <X data-icon="inline-start" size={12} strokeWidth={2.5} />
+              </Button>
+            </Hint>
           )}
         </div>
         <uploadPicker.Input />
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={uploadPicker.open}
-          disabled={uploading}
-          className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
-          title={
+        <Hint
+          label={
             folder
               ? `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」`
               : "上传到「参考素材」"
           }
+          wrap
         >
-          {uploading ? (
-            <Spinner className="size-4" />
-          ) : (
-            <Plus size={16} strokeWidth={1.8} />
-          )}
-        </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={uploadPicker.open}
+            disabled={uploading}
+            className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
+          >
+            {uploading ? (
+              <Spinner className="size-4" />
+            ) : (
+              <Plus data-icon="inline-start" size={16} strokeWidth={1.8} />
+            )}
+          </Button>
+        </Hint>
       </div>
 
       {/* ── Breadcrumb（多级路径，每段独立可点击）── */}
@@ -275,7 +288,7 @@ export function MaterialLibraryPanel({
             onClick={() => enterFolder(null)}
             className="text-ink-muted hover:bg-subtle hover:text-ink-soft ml-auto h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[11px] font-normal"
           >
-            <ChevronLeft size={11} strokeWidth={2.5} />
+            <ChevronLeft data-icon="inline-start" size={11} strokeWidth={2.5} />
             返回
           </Button>
         )}
@@ -307,7 +320,7 @@ export function MaterialLibraryPanel({
                 key={`skeleton-${i}`}
                 className="flex items-center gap-3 py-2"
               >
-                <Skeleton className="bg-subtle h-9 w-9 shrink-0 rounded-lg" />
+                <Skeleton className="bg-subtle size-9 shrink-0 rounded-lg" />
                 <Skeleton className="bg-subtle h-3 flex-1 rounded" />
               </div>
             ))}
@@ -317,7 +330,7 @@ export function MaterialLibraryPanel({
             /* 空状态：大图标 + 提示文案 + 操作引导 */
             <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
               {/* 文件夹图标 */}
-              <div className="border-border-strong bg-subtle mb-5 flex h-20 w-20 items-center justify-center rounded-2xl border">
+              <div className="border-border-strong bg-subtle mb-5 flex size-20 items-center justify-center rounded-2xl border">
                 <Folder
                   size={40}
                   strokeWidth={1.2}
@@ -334,7 +347,7 @@ export function MaterialLibraryPanel({
                     onClick={uploadPicker.open}
                     className="hover:text-primary-strong flex h-auto items-center gap-2 font-normal hover:bg-transparent"
                   >
-                    <Plus size={14} />
+                    <Plus data-icon="inline-start" size={14} />
                     点击 + 或右键菜单创建内容
                   </Button>
                   <p className="flex items-center gap-2">
@@ -379,25 +392,31 @@ export function MaterialLibraryPanel({
                   {/* hover 操作 */}
                   <div className="absolute top-1 right-1 hidden gap-1 group-hover:flex">
                     {onUse && (
+                      <Hint label="加入画布" accessibleName>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => onUse(item)}
+                          className="text-ink-soft rounded bg-black/60 backdrop-blur hover:bg-black/60 hover:text-white"
+                        >
+                          <Plus
+                            data-icon="inline-start"
+                            size={12}
+                            strokeWidth={2.5}
+                          />
+                        </Button>
+                      </Hint>
+                    )}
+                    <Hint label="删除" accessibleName>
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        onClick={() => onUse(item)}
-                        className="text-ink-soft rounded bg-black/60 backdrop-blur hover:bg-black/60 hover:text-white"
-                        title="加入画布"
+                        onClick={() => void remove(item)}
+                        className="text-ink-soft hover:text-destructive rounded bg-black/60 backdrop-blur hover:bg-black/60"
                       >
-                        <Plus size={12} strokeWidth={2.5} />
+                        <Trash2 data-icon="inline-start" size={12} />
                       </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => void remove(item)}
-                      className="text-ink-soft hover:text-destructive rounded bg-black/60 backdrop-blur hover:bg-black/60"
-                      title="删除"
-                    >
-                      <Trash2 size={12} />
-                    </Button>
+                    </Hint>
                   </div>
                 </div>
               ))}
@@ -417,7 +436,7 @@ export function MaterialLibraryPanel({
                   })}
                 >
                   {item.kind === "image" || item.kind === "video" ? (
-                    <div className="bg-canvas-deep h-9 w-9 shrink-0 overflow-hidden rounded-lg">
+                    <div className="bg-canvas-deep size-9 shrink-0 overflow-hidden rounded-lg">
                       <MediaThumb
                         src={item.url}
                         alt={item.name}
@@ -442,34 +461,40 @@ export function MaterialLibraryPanel({
                   </div>
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">
                     {onUse && (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onUse(item)}
-                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
-                        title="加入画布"
-                      >
-                        <Plus size={13} strokeWidth={2.5} />
-                      </Button>
+                      <Hint label="加入画布" accessibleName>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => onUse(item)}
+                          className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
+                        >
+                          <Plus
+                            data-icon="inline-start"
+                            size={13}
+                            strokeWidth={2.5}
+                          />
+                        </Button>
+                      </Hint>
                     )}
                     <a
                       href={item.url}
                       download={item.name}
                       draggable={false}
-                      className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+                      className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
                       title="下载"
                     >
                       <Download size={13} />
                     </a>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => void remove(item)}
-                      className="text-ink-muted hover:bg-subtle hover:text-destructive rounded-md"
-                      title="删除"
-                    >
-                      <Trash2 size={13} />
-                    </Button>
+                    <Hint label="删除" accessibleName>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => void remove(item)}
+                        className="text-ink-muted hover:bg-subtle hover:text-destructive rounded-md"
+                      >
+                        <Trash2 data-icon="inline-start" size={13} />
+                      </Button>
+                    </Hint>
                   </div>
                 </div>
               ))}
@@ -522,6 +547,7 @@ export function MaterialLibraryPanel({
                   {folder.count > 0 ? folder.count : ""}
                 </span>
                 <ChevronRight
+                  data-icon="inline-start"
                   size={12}
                   strokeWidth={2.5}
                   className="text-ink-fainter group-hover:text-ink-muted shrink-0"

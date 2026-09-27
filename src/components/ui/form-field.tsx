@@ -53,7 +53,7 @@ import { cn } from "~/lib/utils";
  * 三件分别换成 `FieldLabel` / `FieldDescription` / `FieldError`，外层
  * `<div>` 换成 `<Field>`（带 `role="group"`、语义更完整）。
  * **外部 API 完全不变**（`label` / `id` / `error` / `hint` / `required`
- * / `children` render-prop / `className` / `labelClassName` /
+ * / `children` render-prop 渲染函数 / `className` / `labelClassName` /
  * `errorClassName`）——调用点零改动。
  *
  * **保留的自绘细节**（`Field` 基元不管这两档）：

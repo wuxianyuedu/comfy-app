@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "~/server/db";
-import { sql } from "drizzle-orm";
+import { pingDatabase } from "~/server/db";
 import { logger } from "~/server/lib/logger";
 import { probeSchemaSync } from "~/lib/db-schema-ready";
 
@@ -29,7 +28,7 @@ const CORS_HEADERS = { "Access-Control-Allow-Origin": "*" };
 export async function GET() {
   const schema = probeSchemaSync();
   try {
-    db.run(sql`select 1`);
+    await pingDatabase();
     if (schema !== "ready") {
       logger.error({ schema }, "health_check_schema_not_ready");
       return NextResponse.json(

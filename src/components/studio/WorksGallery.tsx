@@ -13,6 +13,7 @@ import {
 } from "~/lib/project-canvas/canvas-store";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
+import { EmptyState } from "~/components/ui/empty-state";
 import { timeAgo } from "~/lib/time-format";
 
 /* 作品/视频项目卡**类别装饰色**——cyan 在这套 UI 里代表"视频/作品"类别
@@ -99,7 +100,7 @@ export function WorksGallery({
       <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-title text-ink text-xl font-bold">所有项目</h1>
+            <h1 className="font-title u-title-page">所有项目</h1>
             <p className="text-ink-muted mt-1 text-sm">
               本地画布项目，按时间倒序排列。生成作品请查看「历史记录」。
             </p>
@@ -198,7 +199,7 @@ export function WorksGallery({
                       }}
                       className="text-ink-muted hover:bg-danger/15 hover:text-danger-strong absolute top-2 right-2 h-auto gap-1 rounded-md px-1.5 py-1 text-[11px] opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                     >
-                      <Trash2 size={12} />
+                      <Trash2 data-icon="inline-start" size={12} />
                       <span>删除</span>
                     </Button>
                   </div>
@@ -208,10 +209,13 @@ export function WorksGallery({
           </section>
         ) : (
           <section>
-            <div className="border-border grid min-h-[360px] place-items-center rounded-2xl border border-dashed">
-              <div className="text-center">
-                <div
-                  className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${WORKS_CATEGORY_ICON_BG}`}
+            <EmptyState
+              title="还没有画布项目"
+              description="点击右上角「新建创作」开始你的第一个工作流，或者在工作流库载入模板。"
+              minHeightClass="min-h-[360px]"
+              icon={
+                <span
+                  className={`flex h-14 w-14 items-center justify-center rounded-2xl ${WORKS_CATEGORY_ICON_BG}`}
                 >
                   <svg
                     width="22"
@@ -222,20 +226,15 @@ export function WorksGallery({
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    aria-hidden
                   >
                     <rect x="3" y="3" width="18" height="18" rx="2" />
                     <path d="M3 9h18M9 21V9" />
                     <circle cx="15" cy="15" r="2" />
                   </svg>
-                </div>
-                <p className="text-ink-strong text-lg font-medium">
-                  还没有画布项目
-                </p>
-                <p className="text-ink-muted mt-1 text-sm">
-                  点击右上角「新建创作」开始你的第一个工作流，或者在工作流库载入模板。
-                </p>
-              </div>
-            </div>
+                </span>
+              }
+            />
           </section>
         )}
       </div>

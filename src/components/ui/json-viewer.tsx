@@ -35,6 +35,7 @@ import { textHandler } from "~/lib/form-props";
 import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
 import { onNextFrame } from "~/lib/next-frame";
+import { useHotkey } from "~/components/ui/use-hotkey";
 import {
   copyFailureText,
   useCopyFeedback,
@@ -336,16 +337,12 @@ export function JsonViewer({
     searchRef.current?.focus();
     searchRef.current?.select();
   }, []);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        focusSearch();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [focusSearch]);
+  /* 走仓库唯一出口 `useHotkey`（P20）。此前这里手拼 `window.addEventListener(
+   * "keydown", onKey)` + `metaKey || ctrlKey` 判据——修饰键跨平台是对的，但
+   * **不过滤输入焦点**：用户在别的输入框里打 ⌘F 也会被本组件抢走（本组件
+   * 只是那一处 JSON 气泡的查找）。useHotkey 默认 `filterInput=true` 顺带把
+   * 这个 bug 修了。 */
+  useHotkey({ key: "f", mod: true }, focusSearch);
 
   const nextHit = useCallback(
     (dir: 1 | -1) => {
@@ -427,7 +424,12 @@ export function JsonViewer({
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               title="上一个 (Shift+Enter)"
             >
-              <Icon name="chevronup" size={14} className="text-ink-muted" />
+              <Icon
+                data-icon="inline-start"
+                name="chevronup"
+                size={14}
+                className="text-ink-muted"
+              />
             </Button>
             <Button
               variant="outline"
@@ -437,7 +439,12 @@ export function JsonViewer({
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               title="下一个 (Enter)"
             >
-              <Icon name="chevrondown" size={14} className="text-ink-muted" />
+              <Icon
+                data-icon="inline-start"
+                name="chevrondown"
+                size={14}
+                className="text-ink-muted"
+              />
             </Button>
             <Button
               variant="outline"
@@ -446,7 +453,12 @@ export function JsonViewer({
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               title="清空 (Esc)"
             >
-              <Icon name="close" size={14} className="text-ink-muted" />
+              <Icon
+                data-icon="inline-start"
+                name="close"
+                size={14}
+                className="text-ink-muted"
+              />
             </Button>
           </>
         )}

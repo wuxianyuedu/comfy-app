@@ -6,22 +6,48 @@
 
 // // 本模块持有那几个子模块共享的**单例运行时状态**与**日志基建**。
 
+// // RunnerState 类型族与不含 IO 的初始化工厂在 `./runner-state-shape.ts`；
+
+// // 宿主依赖（taskRepository / logger）经 `configureRunner` 注入，未注入时首次
+
+// // `persistLogs` lazy 走 Next 侧的动态 import（见下方 `resolveDeps`）。
+
 // // 它**不是**对外 API —— 外部代码请从 enqueue.ts 取公开入口。
+
+// //
+
+// // **§18.4 三选一：本模块走第三类（纯 Node 宿主，不加 server-only / 不加 .server.ts）**。
+
+// // P3 executor host 迁移第 1 期·第三步：整条 ComfyUI 执行链从 Next 专属耦合里解绑。
+
+// // 未来 `scripts/executor-host.mjs`（纯 Node 宿主）与 Next server 双宿主加载本模块；
+
+// // 一旦给它加 `server-only`，纯 Node 侧的 import 就是一句 `throw`——正是硬规则
+
+// // 「纯 Node 宿主两者都不加」的原型（同 `src/lib/process/kill-process-tree.ts`）。
+
+// // 本模块顶层仍有 `import { EventEmitter } from "events"` 这一 Node 内建值 import
+
+// // （state() 内部构造 emitter 用），因此会落进 `unguarded`——由
+
+// // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS` 显式登记。
+
+// //
 
 // // 模块边界见 docs/standards/18-lib层规范.md。
 
 //
 
-import "server-only";
 import { EventEmitter } from "events";
 
-import type WebSocket from "ws";
-
-import { logger } from "~/lib/core/logger";
 import { errorText } from "~/lib/error-message";
-import { taskRepository } from "../core/repository";
 import { HISTORY_READ } from "../retry-policy";
 import { lastSegments } from "~/lib/path-display";
+import {
+  createEmptyState,
+  type LogEntry,
+  type RunnerState,
+} from "./runner-state-shape";
 
 export const CLIENT_ID = process.env.COMFY_CLIENT_ID ?? "comfy-app-web";
 
@@ -60,167 +86,16 @@ export const HISTORY_RETRY_DELAY_MS = HISTORY_READ.baseMs;
 
 export const WS_PATHS = ["/api/ws", "/ws"];
 
-export type RawWorkflowOverride = {
-  nodeId: string;
-  name: string;
-  value?: unknown;
-};
-
-export type Job = {
-  taskId: string;
-
-  /** 工作流名（入队方从模板行带上）：执行日志要能独立说出「这次跑的是哪个
-   *  工作流」—— 面板标题是客户端拼的，日志行才是可导出/回放的自包含现场。 */
-  workflowName?: string;
-
-  prompt?: Record<string, unknown>;
-
-  /** /** 原始 UI 格式的 JSON（含子图 wrapper）—— 走 comfy-cli 执行。 */
-
-  rawJson?: unknown;
-
-  /** /** 执行前注入到原始 JSON 里的画布 `workflowInputs`。 */
-
-  overrides?: RawWorkflowOverride[];
-};
-
-export type LogEntry = {
-  t: number; // epoch ms
-
-  level: "info" | "progress" | "warn" | "error" | "success";
-
-  msg: string;
-
-  /** /** 发日志时捕获的调用方位置（"文件:行"）：让调试面板能显示每行日志
-
-   *  来自哪条代码路径。跳过捕获时为空。它作为条目的一部分一并落盘，
-
-   *  因此 SSE 重放也带着它（实现见 log() 与 callerLoc()）。
-
-   *  不捕获时这里为空字符串。 */
-
-  src?: string;
-};
-
-export type TaskEvent =
-  | {
-      type: "progress";
-      progress: number;
-      /** 当前正在执行的 ComfyUI 节点与步数（progress 消息自带；UI 用于节点级进度展示） */
-      node?: { id: string; label?: string; value: number; max: number };
-    }
-  | { type: "done"; images: unknown[] }
-  | { type: "error"; error: string }
-  | { type: "log"; entry: LogEntry }
-
-  /* /* 合成的 "state" 事件：由 cancelTask() / finalizeFailure() 两条路径补发，
-
-   *  它们否则只会更新数据库，不通知 SSE 订阅方。
-
-   *  前端读取的字段与初始 /api/tasks/[id]/stream GET 响应体完全一致，
-
-   *  因此 "state" 事件会触发同一条 patch() 路径，
-
-   *  把「卡在生成中」的 UI 治好。
-
-   *  顺序与 finalizeFailure 保持一致：先 state，后 error。
-
-   *  （取消路径的完整说明见 enqueue.ts 的 cancelTask。） */
-  | {
-      type: "state";
-
-      status: string;
-
-      progress?: number;
-
-      error?: string | null;
-
-      validationErrors?: unknown[] | null;
-    };
-
-export type RunnerState = {
-  ws: WebSocket | null;
-
-  queue: Job[];
-
-  active: number;
-
-  connecting: boolean;
-
-  emitter: EventEmitter;
-
-  promptToTask: Map<string, string>;
-
-  promptByTask: Map<string, Record<string, unknown>>;
-
-  logs: Map<string, LogEntry[]>;
-
-  /** comfy-cli 完整原始输出（按行、不截断）：供前端「查看完整输出」入口按需
-   *  拉取。面板的 `[comfy-cli 原始]`/`stdout`/`stderr` 行出于防刷屏做了单行与
-   *  行数截断（executor-cli-stream 的 MAX_*），但排障常要看被截掉的完整 JSON
-   *  与完整 traceback，故这里单独以「不截断」方式留存，行数上限见
-   *  RAW_CLI_MAX_LINES，任务数上限见 LOGS_MAX_TASKS。 */
-  rawCli: Map<string, string[]>;
-
-  lastLogPct: Map<string, number>;
-
-  /** /** 按节点记录完成情况。ComfyUI 发 `executing` 且 `data.node !== null` 时，
-
-   *  把（节点 id, classType）记在这里；下一条 `executing` 的 node 为 null
-
-   *  到达时，用记录下来的值打出「✔ 节点 X (classType) 完成」。
-
-   *  这样日志面板给用户的是按节点的时间线，而不只是「开始了」的标记。
-
-   *  仅 API 格式路径需要这一对日志；comfy-cli 路径自己会打（见 executor-ws）。
-
-   *  */
-
-  lastNodeByTask: Map<string, { node: string; classType: string; t: number }>;
-
-  /** /** 任务开始时间（epoch 毫秒），用于完成时打「总耗时 Xs」。
-
-   *  在 enqueue() 里写入，在 complete() / fail() / cancelTask() 里清除。
-
-   *  （缺失时说明任务来自上一次服务端生命周期。） */
-
-  startedAt: Map<string, number>;
-
-  settled: Set<string>;
-
-  /** 「终态已落库」标记（与 `settled` 的「终态已认领」区分）。
-   *  同一个 taskId 可能被多条收口路径尝试写终态：正常 executor 路径、
-   *  看门狗超时、reaper 孤儿回收。`settled` 只保证「谁先认领」，但认领失败
-   *  的一方若直接调用 `finalizeFailure`（不走 claim）仍会二次写库，把先写入
-   *  的失败原因覆盖掉——用户就会在「执行日志」（经 SSE 拿到的第一份原因）与
-   *  「应用日志 / DB」（被后写入覆盖的第二份原因）看到互相矛盾的结果。
-   *  这里给「DB 终态写入」单独加一把一次性锁：首个写入者落库，其余直接跳过，
-   *  保证两处永远显示同一个失败原因。 */
-  finalized: Set<string>;
-
-  timers: Map<string, NodeJS.Timeout>;
-
-  reconnectAttempts: number;
-
-  /** 当前使用的 WS 路径下标（连接失败时推进到下一条路径重试）。 */
-
-  wsPathIndex: number;
-
-  /** 本次执行实际提交给 ComfyUI 的工作流 JSON。RAW 载荷存 patched（liblib
-
-   *  subgraph 格式，未展开，含画布覆盖）；API 载荷存 execution-graph 收拾后的图。
-
-   *  任务完成后落盘到 public/generated/.../workflow.json，便于工作流模板后续改动
-
-   *  时仍能完整复现本次生成结果（种子已存 manifest.seed + TaskImage.seed）。 */
-
-  executedWorkflow: Map<string, unknown>;
-
-  /** 已向排队任务写入过「等待 ComfyUI 连接/启动」提示的 taskId 集合。
-   *  防止心跳每 3s 触发 processQueue（WS 未 OPEN 时提前返回）对同一任务反复刷同一行。
-   *  任务真正出队 / WS 打开后清除，以便下次重连窗口能重新提示。 */
-  wsWaitLogged: Set<string>;
-};
+/* 类型族与「不含 IO 的初始化工厂」在 `./runner-state-shape.ts`；这里保留同名
+ * 再导出，让 enqueue / reaper / executor-* / queue-status / SSE 路由等既有消费方
+ * 保持原样的 `from "./runner-state"` 入口（零 import-graph 变化，见 P3 方案第 1 期）。 */
+export type {
+  Job,
+  LogEntry,
+  RawWorkflowOverride,
+  RunnerState,
+  TaskEvent,
+} from "./runner-state-shape";
 
 declare global {
   var comfyRunner: RunnerState | undefined;
@@ -230,46 +105,13 @@ export function state(): RunnerState {
   if (!globalThis.comfyRunner) {
     const emitter = new EventEmitter();
 
-    emitter.setMaxListeners(0);
+    /* 监听器上限刻意保持有限 —— **不要用 0**：那是「无限」，会永久关掉
+     * MaxListenersExceededWarning，而它正是这里唯一能自动报出「某个 taskId 的
+     * 订阅没退干净」的信号（每条 SSE 连接靠 `subscribe` 的返回值退订，漏一处就在
+     * 这个单例 emitter 上留一个监听器，进程存活期间不释放）。50 对正常使用足够。 */
+    emitter.setMaxListeners(50);
 
-    globalThis.comfyRunner = {
-      ws: null,
-
-      queue: [],
-
-      active: 0,
-
-      connecting: false,
-
-      emitter,
-
-      promptToTask: new Map(),
-
-      promptByTask: new Map(),
-
-      logs: new Map(),
-
-      rawCli: new Map(),
-
-      lastLogPct: new Map(),
-
-      lastNodeByTask: new Map(),
-
-      startedAt: new Map(),
-
-      settled: new Set(),
-      finalized: new Set(),
-
-      timers: new Map(),
-
-      reconnectAttempts: 0,
-
-      wsPathIndex: 0,
-
-      executedWorkflow: new Map(),
-
-      wsWaitLogged: new Set(),
-    };
+    globalThis.comfyRunner = createEmptyState(emitter);
   }
 
   return globalThis.comfyRunner;
@@ -526,6 +368,60 @@ export function clearFinalize(taskId: string): void {
   state().finalized.delete(taskId);
 }
 
+/**
+ * runner-state 的**宿主依赖注入接缝**（P3 迁移第 1 期·第二/三步）。
+ *
+ * 现状：本模块只剩一处真 IO —— `persistLogs` 里的 `await taskRepository.replaceLogs`
+ * 加失败分支的 `logger.warn`。这两条在**加载时**会牵进 `server-only` 链（repository
+ * 与 logger 各自带 `import "server-only"`），把整个 runner-state 拖回 Next 专属
+ * 上下文；纯 Node 宿主（未来的 `scripts/executor-host.mjs`）动态加载本模块时会撞
+ * `server-only` 的入口 throw。P3 §5 第 3 步「摘 server-only」卡在这两条静态值
+ * import 上。
+ *
+ * 解法：deps 不再**静态初始化**，改为**首次 persistLogs 时 lazy 解析**：
+ *   1. 若外部先 `configureRunner({ taskRepo, log })` 注入了（executor host 走这条），
+ *      `resolveDeps` 直接返回；
+ *   2. 否则 dynamic `import()` 拉 Next 侧的 taskRepository / logger 填默认
+ *      （Next server 走这条；scanner 的 parseImports 只识别静态 import 语句、
+ *      不识别 `import()` 表达式，因此 `libOnlyReachable` 与 `clientReachable`
+ *      两条判据都不会看见这条边）。
+ *
+ * 类型刻意写成**结构最小**（只 `replaceLogs` / `warn` 两个方法），未来宿主不用
+ * 背整个 `taskRepository` 或 pino 的全部面。
+ */
+export type RunnerDeps = {
+  taskRepo: {
+    replaceLogs(taskId: string, entries: LogEntry[]): Promise<void>;
+  };
+  log: {
+    warn(msg: string): void;
+  };
+};
+
+let deps: Partial<RunnerDeps> | null = null;
+
+/** 覆盖 runner-state 的宿主依赖（executor host 用它注入自带 DB / 日志通道）。
+ *  传 `Partial`：允许只覆盖一侧，另一侧留给 `resolveDeps` 的 lazy 默认填。 */
+export function configureRunner(next: Partial<RunnerDeps>): void {
+  deps = { ...(deps ?? {}), ...next };
+}
+
+/** `deps` 的两条边分别补齐：
+ *  - 若 `configureRunner` 全给了（两条都在），本函数无副作用地返回。
+ *  - 若只给了一侧（甚至完全没给），剩下那条走 Next 侧的 dynamic import——
+ *    在纯 Node 下这一句会撞 `server-only` throw，这是**故意的**：宿主必须
+ *    先 `configureRunner` 注入自己的 DB / 日志通道，才会走到 persistLogs。
+ *    错误信息里点出「configureRunner」这条契约。 */
+async function resolveDeps(): Promise<RunnerDeps> {
+  const cur: Partial<RunnerDeps> = deps ?? {};
+  const taskRepo: RunnerDeps["taskRepo"] =
+    cur.taskRepo ?? (await import("../core/repository")).taskRepository;
+  const log: RunnerDeps["log"] =
+    cur.log ?? (await import("~/lib/core/logger")).logger;
+  deps = { taskRepo, log };
+  return { taskRepo, log };
+}
+
 export async function persistLogs(taskId: string) {
   // 此时防抖写与终结点的 `await persistLogs(taskId)` 调用在竞争。
 
@@ -552,13 +448,30 @@ export async function persistLogs(taskId: string) {
   //     reaper），若这里抛错会让 finalize 链路整段回滚，表现比「一份日志
   //     没落库」严重得多。
   // 日志面板的**内存视图**仍完整（state().logs），只是这一次没持久化；
-  // 真故障通过 logger.warn 落 app-runtime.log 镜像通道，运维看得到。
+  // 真故障通过 log.warn 落 app-runtime.log 镜像通道，运维看得到。
+  // resolveDeps 自身也可能抛（executor host 忘记 configureRunner → 动态
+  // import 撞 server-only throw）；这条抛同样进下面的 catch，走 warn 兜底。
   try {
-    await taskRepository.replaceLogs(taskId, arr);
+    const { taskRepo } = await resolveDeps();
+    await taskRepo.replaceLogs(taskId, arr);
   } catch (e) {
-    logger.warn(
-      `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(e, "unknown")}`,
-    );
+    const message = `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(
+      e,
+      "unknown",
+    )}`;
+    // 兜底 warn：若 resolveDeps 已经拉起了 log，走注入侧；否则再试一次 dynamic
+    // import。这一句本身在纯 Node + 未 configure 的失败路径下也会抛（server-only），
+    // 但那时上面 catch 里已经没有别的兜底手段可依赖了（logger 都没起来），
+    // 抛回 caller 的 `void persistLogs` 会走 unhandledRejection —— 那种状态下
+    // executor host 的入口就该主动 exit，不靠这里做二次容错。
+    try {
+      const { log } = await resolveDeps();
+      log.warn(message);
+    } catch {
+      // 完全无法落库 + 无法 warn：让 caller 通过 unhandled rejection 感知，
+      // 不吞掉。
+      throw e;
+    }
   }
 }
 

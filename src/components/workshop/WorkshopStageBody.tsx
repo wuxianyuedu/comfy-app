@@ -143,7 +143,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     <div className="min-w-0">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-ink text-[17px] font-semibold">{stageTitle}</h2>
+          <h2 className="u-title-stage">{stageTitle}</h2>
           <p className="text-muted-foreground mt-1 text-[12px]">{stageDesc}</p>
         </div>
         <span className="text-muted-foreground bg-subtle shrink-0 rounded-full px-3 py-1 text-[11px]">
@@ -170,11 +170,12 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Script ── */}
       {tab === "script" && (
         <>
+          {/* 品牌渐变每屏只一处：下面「编辑剧本 / 新建剧本」两颗处在互斥分支上，同时只会渲染一个 —— 这个互斥是载荷性的，别在同一段再加第二颗。 */}
           {scriptMarkdown.trim() ? (
             /* ── 已有剧本内容：直接展示 ── */
             <section className="border-border bg-surface rounded-2xl border p-5">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-ink text-[14px] font-semibold">剧本内容</h3>
+                <h3 className="text-ink u-title">剧本内容</h3>
                 <div className="flex items-center gap-2">
                   {scenes.length > 0 && (
                     <span className="text-muted-foreground bg-subtle rounded-lg px-3 py-1 text-[11px]">
@@ -185,7 +186,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                     type="button"
                     variant="ghost"
                     onClick={openScriptEditor}
-                    className="btn-gradient rounded-lg px-4 py-1.5 text-[11px] font-medium text-white shadow-lg shadow-purple-900/20"
+                    className="btn-gradient rounded-lg px-4 py-1.5 text-[11px] font-medium text-white"
                   >
                     编辑剧本
                   </Button>
@@ -204,9 +205,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               <section className="border-border bg-surface rounded-2xl border p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-ink text-[14px] font-semibold">
-                      新建剧本
-                    </h3>
+                    <h3 className="text-ink u-title">新建剧本</h3>
                     <p className="text-muted-foreground mt-1 text-[11.5px]">
                       可直接编写 markdown 剧本，或导入本地 .md / .txt 文件。
                     </p>
@@ -224,7 +223,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                       type="button"
                       variant="ghost"
                       onClick={openScriptEditor}
-                      className="btn-gradient rounded-lg px-4 py-1.5 text-[11px] font-medium text-white shadow-lg shadow-purple-900/20"
+                      className="btn-gradient rounded-lg px-4 py-1.5 text-[11px] font-medium text-white"
                     >
                       新建剧本
                     </Button>
@@ -236,9 +235,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               {/* ── 剧本工具（智能辅助）── */}
               <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-ink text-[14px] font-semibold">
-                    剧本工具
-                  </h3>
+                  <h3 className="text-ink u-title">剧本工具</h3>
                   <LLMStatusChip />
                 </div>
                 <React.Suspense fallback={<StageFallback />}>
@@ -261,9 +258,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
           )}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
-            <h3 className="text-ink mb-3 text-[14px] font-semibold">
-              角色工具
-            </h3>
+            <h3 className="text-ink u-title mb-3">角色工具</h3>
             <React.Suspense fallback={<StageFallback />}>
               <LazyCharacterDesigner
                 characters={characters}
@@ -305,9 +300,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           </div>
 
           <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
-            <h3 className="text-ink mb-3 text-[14px] font-semibold">
-              分镜工具
-            </h3>
+            <h3 className="text-ink u-title mb-3">分镜工具</h3>
             <React.Suspense fallback={<StageFallback />}>
               <LazyStoryboardPlanner
                 scenes={scenes}
@@ -338,7 +331,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           )}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-ink text-[14px] font-semibold">生图工具</h3>
+              <h3 className="text-ink u-title">生图工具</h3>
               <span className="text-muted-foreground bg-subtle rounded-lg px-3 py-1 text-[11px]">
                 图 {imageDoneCount}/{shots.length}
               </span>
@@ -370,7 +363,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           )}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-ink text-[14px] font-semibold">视频工具</h3>
+              <h3 className="text-ink u-title">视频工具</h3>
               <span className="text-muted-foreground bg-subtle rounded-lg px-3 py-1 text-[11px]">
                 片段 {clipDoneCount}/{shots.length}
               </span>

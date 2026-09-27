@@ -35,8 +35,12 @@ import { LOG_ROW_SINGLE } from "./log-virtual";
 
 /* 本文件是 jsdom 里的**重交互**用例（数百行日志的渲染 + 多次 userEvent 点击），
  * 默认 5s 超时在全量并行负载下不够（翻页 / 回到最新等用例各自偶发超时）。
- * 整文件放宽到 20s——只作用于本文件，不影响其它文件的失败速度。 */
-vi.setConfig({ testTimeout: 20_000 });
+ * 45s 的来由：证明「不止 2000 条封顶」必须真塞过 `LOG_PAGE_SIZE`（2000+50 条），
+ * 这类用例在安静机器上实测 16~18s —— 上一档 20s 只剩 10% 余量，与别的套件并发时
+ * 就以「Test timed out in 20000ms」的红收场（不是功能坏，是预算贴地）。这里取观测
+ * 最差值的约 2.5 倍：安静机与负载机都过得去，真死循环也不至于等到天荒地老。
+ * ⚠️ 只作用于本文件；别再给单个用例补显式超时（那会让这一档变成五处要同改的数）。 */
+vi.setConfig({ testTimeout: 45_000 });
 
 function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
   return {
@@ -174,7 +178,7 @@ describe("LogPanel 日志面板", () => {
     expect(screen.getByText(/第 1 \/ 2 页/)).toBeInTheDocument();
     // 最新一页包含时间最近的那条
     expect(screen.getByText(/事件 249/)).toBeInTheDocument();
-  }, 20_000);
+  });
 
   it("翻到更早一页能看到第 1 页没有的日志", async () => {
     seed(LOG_PAGE_SIZE + 50);
@@ -182,10 +186,10 @@ describe("LogPanel 日志面板", () => {
     const user = userEvent.setup();
 
     expect(screen.queryByText(/事件 0$/)).not.toBeInTheDocument();
-    await user.click(screen.getByTitle("更早的一页"));
+    await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 2 页/)).toBeInTheDocument();
     expect(screen.getByText(/事件 0$/)).toBeInTheDocument();
-  }, 20_000);
+  });
 
   it("渲染的行按时刻升序（用户诉求「最基本的时间顺序」）", () => {
     seed(20);
@@ -203,7 +207,7 @@ describe("LogPanel 日志面板", () => {
     useSmallPage();
     render(<LogPanel />);
     const user = userEvent.setup();
-    await user.click(screen.getByTitle("更早的一页"));
+    await user.click(screen.getByRole("button", { name: "更早的一页" }));
 
     act(() =>
       useLogStore
@@ -219,7 +223,7 @@ describe("LogPanel 日志面板", () => {
     expect(
       screen.queryByRole("button", { name: /有 \d+ 条新的日志/ }),
     ).toBeNull();
-  }, 20_000);
+  });
 
   it("按来源筛选能滤掉启动行，只看应用运行日志", async () => {
     act(() =>
@@ -526,15 +530,19 @@ describe("LogPanel 日志面板", () => {
     act(() => useLogStore.getState().setOrigin("app"));
     await user.click(levelButton("错误"));
 
-    const footer = screen.getByTitle("去掉来源筛选");
+    const footer = screen.getByTestId("logpanel-origin-chip");
     expect(footer.textContent).toContain("应用服务");
-    expect(screen.getByTitle("去掉级别筛选").textContent).toContain("错误");
+    expect(screen.getByTestId("logpanel-level-chip").textContent).toContain(
+      "错误",
+    );
 
-    /* 点一下来源标签 → 回到全部来源；再点级别标签 → 回到全部级别 */
+    /* 点一下来源标签 → 回到全部来源；再点级别标签 → 回到全部级别。
+     * 「该层筛选已去掉」的表现是枚标签变成禁用（无筛选可去），
+     * 提示文案（`Hint`）也随之不再给出。 */
     await user.click(footer);
-    expect(screen.queryByTitle("去掉来源筛选")).not.toBeInTheDocument();
-    await user.click(screen.getByTitle("去掉级别筛选"));
-    expect(screen.queryByTitle("去掉级别筛选")).not.toBeInTheDocument();
+    expect(screen.getByTestId("logpanel-origin-chip")).toBeDisabled();
+    await user.click(screen.getByTestId("logpanel-level-chip"));
+    expect(screen.getByTestId("logpanel-level-chip")).toBeDisabled();
     /* 该来源行重新出现在时间线里（第 1 页就是全部内容时必然可见） */
     expect(useLogStore.getState().filteredLogs.map((e) => e.message)).toContain(
       "开发服务已就绪",
@@ -652,21 +660,21 @@ describe("LogPanel 日志面板", () => {
 
     /* 用户反馈「日志这里没法翻页」。这条把「来回翻 + 首末页禁用」钉住：
      * 水位的改动不该让 page 被钳回第 1 页（旧实现里两者互相牵连）。 */
-    await user.click(screen.getByTitle("更早的一页"));
+    await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
-    await user.click(screen.getByTitle("更早的一页"));
+    await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 3 \/ 3 页/)).toBeInTheDocument();
-    await user.click(screen.getByTitle("更新的一页"));
+    await user.click(screen.getByRole("button", { name: "更新的一页" }));
     expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
 
     /* 已经是最新一页时「更新的一页」禁用；最早一页时「更早的一页」禁用 */
-    await user.click(screen.getByTitle("更新的一页"));
+    await user.click(screen.getByRole("button", { name: "更新的一页" }));
     expect(screen.getByText(/第 1 \/ 3 页/)).toBeInTheDocument();
-    expect(screen.getByTitle("更新的一页")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "更新的一页" })).toBeDisabled();
 
     /* 翻到历史页后停留期间有新日志：页码不跳、提示出现（用户要的是「我在这看，
      * 别把我拽走」）。 */
-    await user.click(screen.getByTitle("更早的一页"));
+    await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
     act(() =>
       useLogStore
@@ -682,7 +690,7 @@ describe("LogPanel 日志面板", () => {
     /* 点一下就能回到最新一页 */
     await user.click(screen.getByRole("button", { name: /回到最新/ }));
     expect(screen.getByText(/第 1 \/ 4 页/)).toBeInTheDocument();
-  }, 20_000);
+  });
 
   /* ISSUE #262 六审：「日志多了我想复制报错文本还是复制不了，我刚选中内容就
    * 刷走了，需要每条日志后面加一个复制按钮，可复制日志内容」。
@@ -726,18 +734,26 @@ describe("LogPanel 日志面板", () => {
     /* 选中态此前只有 `bg-subtle`——而浅色主题下它与行头底色（surface-1）是
      * 同一个值 #f7f8fa，于是「选中的是哪一项」在浅色下完全看不出来（ISSUE #609
      * 第 1 条）。判据落在**类**上：底色 + 描边 + 字重三层里至少底色与描边
-     * 都换成了主色调，任何一层单独失效仍读得出选中。 */
+     * 都换成了主色调，任何一层单独失效仍读得出选中。
+     * ⚠️ 这里按**类名 token** 精确比对而不是子串包含：`ui/toggle-group` 会给每个
+     * item 都挂 `data-[pressed]:ring-*` / `data-[pressed]:font-semibold`（规范 16
+     * §16.8），子串判据分不出「裸类」与「带变体前缀的类」，会把未选中项也判成
+     * 「带着这三样」——那是假红，且真正要防的「选中没有区分度」反而被盖住。 */
+    const tokensOf = (el: HTMLElement) => new Set(el.className.split(/\s+/));
     const selected = levelButton("全部");
     expect(selected.getAttribute("aria-pressed")).toBe("true");
-    expect(selected.className).toContain("bg-primary/12");
-    expect(selected.className).toContain("ring-primary/45");
-    expect(selected.className).toContain("font-semibold");
+    const selectedTokens = tokensOf(selected);
+    expect(selectedTokens.has("bg-primary/12!")).toBe(true);
+    expect(selectedTokens.has("ring-primary/45")).toBe(true);
+    expect(selectedTokens.has("font-semibold")).toBe(true);
 
     /* 未选中的按钮不得带这三样（否则「选中」就没有区分度了）。 */
     const unselected = levelButton("警告");
     expect(unselected.getAttribute("aria-pressed")).toBe("false");
-    expect(unselected.className).not.toContain("bg-primary/12");
-    expect(unselected.className).not.toContain("ring-primary/45");
+    const unselectedTokens = tokensOf(unselected);
+    expect(unselectedTokens.has("bg-primary/12!")).toBe(false);
+    expect(unselectedTokens.has("ring-primary/45")).toBe(false);
+    expect(unselectedTokens.has("font-semibold")).toBe(false);
   });
 
   it("复制的是**当前筛选**的全部日志，不是整个面板的行", async () => {

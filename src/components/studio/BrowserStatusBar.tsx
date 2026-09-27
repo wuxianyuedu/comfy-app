@@ -21,6 +21,7 @@ import {
   useComfyQueue,
   type ComfyQueueView,
 } from "./hooks/use-comfy-queue";
+import { Hint } from "~/components/ui/hint";
 import {
   Popover,
   PopoverContent,
@@ -142,14 +143,15 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
   const tone = SCHEMA_TONE_CLASS[notice.tone];
   if (notice.refreshable) {
     return (
-      <Button
-        variant="ghost"
-        className={`h-auto shrink-0 gap-0 rounded px-1 py-0 text-[11px] hover:underline ${tone}`}
-        title={notice.title}
-        onClick={() => window.location.reload()}
-      >
-        {notice.text}
-      </Button>
+      <Hint label={notice.title}>
+        <Button
+          variant="ghost"
+          className={`h-auto shrink-0 gap-0 rounded px-1 py-0 text-[11px] hover:underline ${tone}`}
+          onClick={() => window.location.reload()}
+        >
+          {notice.text}
+        </Button>
+      </Hint>
     );
   }
   return (
@@ -312,23 +314,24 @@ export function BrowserStatusBar() {
 
         <MessageCenterButton />
 
-        <Button
-          variant="ghost"
-          onClick={toggleOpen}
-          title={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`}
-          className={`flex h-auto gap-1 rounded px-1.5 py-0.5 text-[11px] ${
-            isOpen
-              ? "bg-primary/20 text-primary-strong hover:bg-primary/25"
-              : "text-ink-muted hover:bg-subtle hover:text-ink"
-          }`}
-        >
-          <FileText size={12} />
-          {counts.error > 0 && (
-            <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
-              {counts.error}
-            </span>
-          )}
-        </Button>
+        <Hint label={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`}>
+          <Button
+            variant="ghost"
+            onClick={toggleOpen}
+            className={`flex h-auto gap-1 rounded px-1.5 py-0.5 text-[11px] ${
+              isOpen
+                ? "bg-primary/20 text-primary-strong hover:bg-primary/25"
+                : "text-ink-muted hover:bg-subtle hover:text-ink"
+            }`}
+          >
+            <FileText data-icon="inline-start" size={12} />
+            {counts.error > 0 && (
+              <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
+                {counts.error}
+              </span>
+            )}
+          </Button>
+        </Hint>
 
         <span
           className={`flex items-center gap-1 ${

@@ -1,7 +1,10 @@
 // ComfyUI 启动路径解析：从 comfyuiPath 推导「源码根 + Python 解释器」。
 // 与 lifecycle.ts 解耦，保持纯函数（无 spawn / logger 等副作用），可独立单测。
-
-import "server-only";
+//
+// §18.4 三选一：本模块走第三类（纯 Node 宿主），依赖登记在
+// `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。只用 fs / path
+// 做只读探测，不引任何 server-only 侧模块；P3 executor host 加入后可被 scripts
+// 侧直接 import。
 import fs from "fs";
 import path from "path";
 

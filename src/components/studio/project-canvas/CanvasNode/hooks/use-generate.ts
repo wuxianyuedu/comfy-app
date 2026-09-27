@@ -43,22 +43,7 @@ import {
   buildParamEntries,
   parseParamMapping,
 } from "~/lib/workflow/workflow-param-mapping";
-
-/** catch 抛出值（unknown）→ 与旧 `e?.message ?? String(e)` 逐值等价的错误文案：
- *  带 string message 的对象取 message（Error 实例即此路径），其余走 String(v)
- *  等价实现（对象经其 toString → "[object Object]"，null/undefined →
- *  "null"/"undefined"）。旧代码兜底的 `?? "未捕获异常"` 不可达（String 恒返回
- *  非空值），此处一并收敛。 */
-function catchMessage(e: unknown): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  if (typeof e === "string") return e;
-  if (e === null) return "null";
-  if (e === undefined) return "undefined";
-  return (e as { toString(): string }).toString();
-}
+import { errorMessage } from "~/lib/error-message";
 
 export interface UseGenerateArgs {
   id: string;
@@ -328,7 +313,7 @@ export function useGenerate({
       } catch (e: unknown) {
         patch({
           status: "error",
-          error: catchMessage(e),
+          error: errorMessage(e, "生成失败"),
           errorContext: {
             request: payload,
             timestamp: new Date().toISOString(),
@@ -381,7 +366,7 @@ export function useGenerate({
     } catch (e: unknown) {
       patch({
         status: "error",
-        error: catchMessage(e),
+        error: errorMessage(e, "生成失败"),
         errorContext: {
           request: req,
           timestamp: new Date().toISOString(),

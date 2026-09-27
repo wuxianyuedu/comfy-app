@@ -14,10 +14,15 @@
  */
 
 import { copyText, downloadText } from "~/lib/browser-io";
+import { formatCompactStamp } from "~/lib/time-format";
 
-/** 导出文件名（本地时间戳，避免同名互相覆盖）。 */
+/** 导出文件名（本地时间戳，避免同名互相覆盖）。
+ *  时间戳形态走全库唯一出口 `~/lib/time-format` 的 `formatCompactStamp`
+ *  （文件名那一档：本地时区、无非法字符）。此前这里是手搓的
+ *  `toISOString().slice(0,19).replace(/:/g,"-")`——注释写着「本地」但实际是
+ *  UTC，且与面板里显示的日志时刻差了时区。 */
 export function exportFileName(): string {
-  return `comfy-app-logs-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.txt`;
+  return `comfy-app-logs-${formatCompactStamp(new Date())}.txt`;
 }
 
 /**

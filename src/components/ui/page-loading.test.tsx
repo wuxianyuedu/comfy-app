@@ -2,10 +2,12 @@
 /**
  * 加载态基元的形态契约。
  *
- * 本件自 PR-2 起把内部实现下沉到官方 shadcn `~/components/ui/spinner`
- * （`Loader2Icon` + `animate-spin` + `role="status"` + `aria-label`），
- * 由 `~/components/ui/page-loading` 薄 re-export 保持既有 `Spinner`
- * 消费点不破。
+ * 本件断言的是 `~/components/ui/spinner`（官方 shadcn 基元：`Loader2Icon` +
+ * `animate-spin` + `role="status"` + `aria-label="Loading"`）。历史上
+ * `~/components/ui/page-loading` 薄 re-export 过一份 `Spinner`（ISSUE #720
+ * 迁移期为了不打破既有消费点），后续一次性把 15 处 import 全迁到
+ * 直连 ui/spinner 之后，re-export 撤除、本测试也从 `./page-loading` 改到
+ * `./spinner`。文件名保留在这里是历史沿革，断言对象是 ui/spinner 基元本身。
  *
  * **历史 ISSUE #720 的现场**：旧 `Spinner` 是自绘 `<span class="border-2
  * animate-spin rounded-full">`，`<span>` 默认 `display: inline`、`size-*`
@@ -16,19 +18,19 @@
  * 换成 lucide `Loader2Icon`（`<svg>`）之后**这条坑天然不存在**——`<svg>`
  * 是 replaced element、`width` / `height` 直接生效、不依赖调用处的
  * `display`。所以旧的 `inline-block` 断言删掉，改成断言**新契约**：
- *   · `data-slot="spinner"` / `role="status"` / `aria-label="Loading"`
- *     ——a11y 三件套由基元给出；
+ *   · a11y 三件套由基元给出：`data-slot="spinner"` /
+ *     `role="status"` / `aria-label="Loading"`；
  *   · `size-6` 在调用处生效（jsdom 无布局、只能验类名）；
  *   · `animate-spin` 走基元而非调用处自写（P3 判据的合规方向）。
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 
-import { Spinner } from "./page-loading";
+import { Spinner } from "./spinner";
 
 afterEach(cleanup);
 
-describe("Spinner 契约（shadcn 基元薄 re-export）", () => {
+describe("Spinner 契约（shadcn 基元直连）", () => {
   it("渲染为 svg 元素，带 data-slot / role / aria-label 三件 a11y 语义", () => {
     const { container } = render(<Spinner className="size-6" />);
     const spinner = container.querySelector('[data-slot="spinner"]');

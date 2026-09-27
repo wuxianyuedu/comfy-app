@@ -71,12 +71,19 @@ function renderTopBar() {
 }
 
 describe("顶栏按钮全部走 ui/button 基元（ISSUE #672 P1）", () => {
-  it("渲染出的每个按钮都带 data-slot=button（没有手写 <button> 残留）", () => {
+  it("顶栏每个按钮都是 ui/button 基元（没有手写 <button> 残留）", () => {
     const { container } = renderTopBar();
     const buttons = container.querySelectorAll("button");
     expect(buttons.length).toBeGreaterThan(0);
     for (const b of buttons) {
-      expect(b.getAttribute("data-slot")).toBe("button");
+      /* 被 `<Hint>` 包住的按钮，`data-slot` 会被 Base UI 的 trigger 接管成
+       * `tooltip-trigger`（见 `ui/hint` 的说明）。它仍是同一个 `buttonVariants`
+       * 实例渲染出来的 —— 所以这里改判**基元自己的类**在不在，而不是只认
+       * `data-slot="button"`，否则「加了悬停提示」会被误读成「退回手写 button」。 */
+      const slot = b.getAttribute("data-slot");
+      if (slot === "button") continue;
+      expect(slot).toBe("tooltip-trigger");
+      expect(b.className).toContain("group/button");
     }
   });
 

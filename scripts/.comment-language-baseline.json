@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-18",
-  "ruleVersion": 2,
-  "note": "疑似英文注释行计数棘轮(规范 12.4.6,判据版本 2);只许降不许升。白名单见 docs/reference-facts.md 的 comment.language.asciiOnly。",
+  "generatedAt": "2026-09-26",
+  "ruleVersion": 3,
+  "note": "疑似英文注释行计数棘轮(规范 12.4.6,判据版本 3);只许降不许升。白名单见 docs/reference-facts.md 的 comment.language.asciiOnly。",
   "total": 0,
   "files": {}
 }

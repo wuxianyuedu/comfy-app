@@ -16,93 +16,28 @@
 import { LOG_MODAL_MAX_ROWS, tailWindow } from "~/lib/page-window";
 import { Checkbox } from "~/components/ui/checkbox";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FileText, X } from "lucide-react";
 import { StepLogRow } from "./StepLogRow";
 import { StepLogTaskPicker } from "./StepLogTaskPicker";
-import type { ValidationError } from "~/lib/comfyui/validation";
 import type { StepLogEntry } from "./stepLogCache";
-import {
-  appendStepLog,
-  clearStepLogPanelState,
-  listCachedTaskIds,
-  loadStepLogPanelState,
-  patchStepLogMeta,
-  setStepLogValidationErrors,
-} from "./stepLogCache";
-import { useActiveTaskId, getNodeIdByTaskId } from "./activeTask";
-import { isTerminalFailureTaskStatus } from "~/lib/task-state";
-import { fetchTaskStatus } from "~/lib/task-cancel-client";
+import { listCachedTaskIds } from "./stepLogCache";
+import { useActiveTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
+import { Hint } from "~/components/ui/hint";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
+import { FieldLabel } from "~/components/ui/field";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { useCancelTask } from "./hooks/use-cancel-task";
+import { useTaskStepLogStream } from "./hooks/use-task-step-log-stream";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
-import { useInterval } from "~/components/ui/use-interval";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
-import { useScrollFollow } from "~/components/ui/use-scroll-follow";
+import { VirtualLogList } from "~/components/studio/logs/VirtualLogList";
 import { displayValue } from "~/lib/display-value";
 
-/** /api/tasks/[id]/stream 的 SSE 帧的运行时形状 —— 只含
- * 本面板消费的字段。`JSON.parse` 产出`unknown`；下面的守卫
- * 逐个收窄字段后再用。 */
-interface SseFrame {
-  type?: unknown;
-  entry?: unknown;
-  validationErrors?: unknown;
-  status?: unknown;
-  progress?: unknown;
-  error?: unknown;
-  workflowName?: unknown;
-}
-
 type Level = StepLogEntry["level"];
-
-/** 把「失败原因」补写为一条 error 日志行（横幅之外）。
- *
- * SSE 的`state` /`error` 帧只带一个原因字符串、可能不带对应`log` 帧
- * （典型：dev server 重启后由 reaper 收口、或 DB 轮询补发的终态）。此前
- * 面板只把这个原因渲染成顶部横幅，用户按「错误 / 警告」筛选或回放时间线时
- * 根本看不到失败原因（ISSUE #378）。
- *
- * 纯函数 + 显式 next：去重判断在 updater 之外完成，避免在 setState 的
- * updater 里做副作用（StrictMode 下 updater 可能被调用两次）。 */
-function withFailureLogLine(
-  prev: StepLogEntry[],
-  reason: string,
-  now: number,
-): StepLogEntry[] {
-  if (!reason) return prev;
-  const text = `✗ 生成失败：${reason}`;
-  const last = prev[prev.length - 1];
-  /* 末行已是同因错误（服务端自己写过 ✗ 生成失败）→ 不重复追加。 */
-  if (
-    last?.level === "error" &&
-    typeof last.msg === "string" &&
-    last.msg.includes(reason)
-  ) {
-    return prev;
-  }
-  return [...prev, { t: now, level: "error", msg: text, client: true }];
-}
-
-/** 把上面那条日志行同时写进（跨卸载存活的）缓存与组件 state。 */
-function appendFailureLogLine(
-  taskId: string,
-  reason: string,
-  setLogs: React.Dispatch<React.SetStateAction<StepLogEntry[]>>,
-): void {
-  const t = Date.now();
-  appendStepLog(taskId, {
-    t,
-    level: "error",
-    msg: `✗ 生成失败：${reason}`,
-    client: true,
-  });
-  setLogs((prev) => withFailureLogLine(prev, reason, t));
-}
 
 const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
   { label: "全部", value: "all" },
@@ -129,14 +64,6 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const [open, setOpen] = useState(false);
 
   const [viewTaskId, setViewTaskId] = useState<string | null>(null);
-  const [logs, setLogs] = useState<StepLogEntry[]>([]);
-  const [validationErrors, setValidationErrors] = useState<
-    ValidationError[] | null
-  >(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [connected, setConnected] = useState(false);
   /* 过滤改为单选（与应用日志同款交互），默认「全部」。 */
   const [filter, setFilter] = useState<Level | "all">("all");
   /* 加宽档与它的记忆收在`~/components/ui/wide-panel`（规范 16 §16.2.4.18）：
@@ -151,6 +78,19 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     if (activeTaskId && !viewTaskId) setViewTaskId(activeTaskId);
   }, [activeTaskId, viewTaskId]);
 
+  /* 监听该任务的执行日志流：SSE 建连 / 帧解析 / 关流 / 播种 / 空闲卡住检测
+   * 全收在 `hooks/use-task-step-log-stream`，视图零 IO（规范 17 / 硬规则 10）。 */
+  const {
+    logs,
+    validationErrors,
+    status,
+    progress,
+    error,
+    connected,
+    setError,
+    clear,
+  } = useTaskStepLogStream(taskId);
+
   /* 从面板内部取消当前查看的任务。
    * 「取消中…」态与失败文案都在 useCancelTask 里（视图零 IO）。 */
   const { cancelling: cancellingFromPanel, cancel: cancelFromPanel } =
@@ -161,180 +101,10 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     return cancelFromPanel();
   };
 
-  const esRef = useRef<EventSource | null>(null);
-  const taskIdRef = useRef<string | null>(null);
-  const lastStatusRef = useRef<string | null>(null);
-  const lastActivityRef = useRef<number>(Date.now());
-  const loadedForRef = useRef<string | null>(null);
-
-  // 被查看任务一变化就重新从缓存播种。
-  useEffect(() => {
-    if (!taskId) return;
-    if (loadedForRef.current !== taskId) {
-      loadedForRef.current = taskId;
-      const cached = loadStepLogPanelState(taskId);
-      setLogs(cached?.logs ?? []);
-      setValidationErrors(cached?.validationErrors ?? null);
-      setStatus(null);
-      setProgress(0);
-      setError(null);
-      lastStatusRef.current = null;
-      lastActivityRef.current = Date.now();
-    }
-  }, [taskId]);
-
-  // 订阅该任务的 SSE 流。
-  useEffect(() => {
-    if (!taskId) {
-      esRef.current?.close();
-      esRef.current = null;
-      setConnected(false);
-      return;
-    }
-    const tid = taskId;
-    taskIdRef.current = tid;
-    lastActivityRef.current = Date.now();
-
-    const es = new EventSource(`/api/tasks/${tid}/stream`);
-    esRef.current = es;
-    setConnected(false);
-    es.onopen = () => {
-      setConnected(true);
-      lastActivityRef.current = Date.now();
-    };
-    es.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(ev.data as string) as SseFrame;
-        lastActivityRef.current = Date.now();
-        if (msg.type === "log" && msg.entry) {
-          const entry = msg.entry as StepLogEntry;
-          appendStepLog(tid, entry);
-          setLogs((prev) => {
-            if (
-              prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)
-            )
-              return prev;
-            return [...prev, entry];
-          });
-        } else if (msg.type === "state") {
-          if (Array.isArray(msg.validationErrors)) {
-            const ves = msg.validationErrors as ValidationError[];
-            setStepLogValidationErrors(tid, ves);
-            setValidationErrors(ves);
-          }
-          if (typeof msg.status === "string" && msg.status) {
-            const st = String(msg.status);
-            const pct = Number(msg.progress ?? 0);
-            if (lastStatusRef.current !== st) lastStatusRef.current = st;
-            setStatus(st);
-            if (Number.isFinite(pct)) setProgress(pct);
-            if (typeof msg.error === "string") {
-              setError(msg.error);
-              /* 失败原因同时补一条 error 日志行：横幅只在顶部显示，用户
-               * 按「错误 / 警告」筛选或回放时间线时看不到它（ISSUE #378）。 */
-              if (st === "FAILED" || st === "ERROR" || st === "CANCELLED") {
-                appendFailureLogLine(tid, msg.error, setLogs);
-              }
-            }
-          }
-          if (msg.workflowName || msg.status) {
-            patchStepLogMeta(tid, {
-              workflowName:
-                typeof msg.workflowName === "string"
-                  ? msg.workflowName
-                  : undefined,
-              status: typeof msg.status === "string" ? msg.status : undefined,
-              nodeId: getNodeIdByTaskId(tid) ?? undefined,
-            });
-          }
-        } else if (msg.type === "done" || msg.type === "error") {
-          /* 终态帧**不能直接下结论**。
-           *
-           * 现场（ISSUE #733）：任务被后端判终态（如 CANCELLED）后，迟到的
-           * 「完成」帧仍可能到达；旧实现把它当权威，直接显示「完成」并关流，
-           * 用户看到的是一个已经死掉的任务显示成功。反过来，帧里没有
-           *`status` 字段时旧实现还会把它落成 FAILED —— 成功也被显示成失败。
-           *
-           * 因此这里改为：终态帧只作为**触发器**，去向 DB 要权威结论；DB
-           * 读不到时才退回帧内信息。 */
-          const fallback = msg.type === "error" ? "FAILED" : "SUCCEEDED";
-          if (typeof msg.error === "string") setError(msg.error);
-          es.close();
-          esRef.current = null;
-          void (async () => {
-            /* 网络层收在`~/lib/task-cancel-client`（视图零 IO，规范 17）。 */
-            const snap = await fetchTaskStatus(tid);
-            const finalStatus = snap.status;
-            const finalError = snap.error;
-            const st = finalStatus ?? fallback;
-            if (lastStatusRef.current !== st) lastStatusRef.current = st;
-            setStatus(st);
-            const reason =
-              finalError ?? (typeof msg.error === "string" ? msg.error : null);
-            if (reason && isTerminalFailureTaskStatus(st)) {
-              setError(reason);
-              appendFailureLogLine(tid, reason, setLogs);
-            } else if (reason) {
-              setError(reason);
-            }
-          })();
-        }
-      } catch {
-        /* SSE 帧格式错误 —— 忽略 */
-      }
-    };
-    es.onerror = () => {
-      setConnected(false);
-    };
-
-    return () => {
-      es.close();
-      esRef.current = null;
-    };
-  }, [taskId]);
-
-  /* 20 秒无活动的「卡住」提示：每 10s 检查一次（规范 16 §16.2.4.15）。
-   *`useInterval` 把回调放 ref，所以`status` /`setLogs` 都是新鲜的；
-   *`ms: taskId ? 10000 : null` 等价于原来「没有 taskId 就不起定时器」。 */
-  useInterval(
-    () => {
-      const idle = Date.now() - lastActivityRef.current;
-      if (idle > 20000 && status === "RUNNING") {
-        const now = Date.now();
-        setLogs((prev) => {
-          if (
-            prev.length &&
-            prev[prev.length - 1]!.msg.includes("无新日志") &&
-            now - prev[prev.length - 1]!.t < 5000
-          )
-            return prev;
-          return [
-            ...prev,
-            {
-              t: now,
-              level: "warn",
-              msg: "⏳ 已 20s 无新日志，任务可能卡住（详见后端 runner 日志）",
-            },
-          ];
-        });
-        lastActivityRef.current = now;
-      }
-    },
-    { ms: taskId ? 10000 : null, immediate: false },
-  );
-
   /* 自动滚到底部：贴底与「用户有没有接管滚动」的判据收在
    *`ui/use-scroll-follow`（规范 16 §16.2.4.24）—— 收口前这里是手写的
    *`scrollTop = scrollHeight`，且**用户上滚不会退出跟随**（会被按回底部，
    * 读不到上面的步骤）。checkbox 保留为「跟随」的显式开关。 */
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const scroller = useScrollFollow({
-    containerRef: scrollerRef,
-    watch: `${logs.length}:${filter}`,
-    following: autoscroll,
-    onFollowingChange: setAutoscroll,
-  });
-
   const cachedIds = useMemo(
     () => listCachedTaskIds(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -371,34 +141,27 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
   const errorCount = visibleAll.filter((l) => l.level === "error").length;
 
-  const onClear = () => {
-    if (taskId) clearStepLogPanelState(taskId);
-    setLogs([]);
-    setValidationErrors(null);
-    setStatus(null);
-    setProgress(0);
-    setError(null);
-    loadedForRef.current = null;
-  };
+  const onClear = () => clear();
 
   return (
     <>
       {/* 浮动触发按钮 —— 仅调试模式开启时渲染。 */}
-      <Button
-        variant="outline"
-        onClick={() => setOpen(true)}
-        title="打开执行日志"
-        data-testid="step-log-trigger"
-        className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
-      >
-        <FileText size={12} />
-        执行日志
-        {errorCount > 0 && (
-          <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
-            {errorCount}
-          </span>
-        )}
-      </Button>
+      <Hint label="打开执行日志">
+        <Button
+          variant="outline"
+          onClick={() => setOpen(true)}
+          data-testid="step-log-trigger"
+          className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
+        >
+          <FileText data-icon="inline-start" size={12} />
+          执行日志
+          {errorCount > 0 && (
+            <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
+              {errorCount}
+            </span>
+          )}
+        </Button>
+      </Hint>
 
       {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */}
@@ -428,7 +191,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <span
                   className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
                     connected
-                      ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]"
+                      ? "bg-success shadow-[0_0_6px_rgba(52,211,153,0.7)]"
                       : "bg-gray-600"
                   }`}
                   title={connected ? "SSE 已连接" : "SSE 未连接"}
@@ -440,16 +203,17 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 status !== "SUCCEEDED" &&
                 status !== "FAILED" &&
                 status !== "CANCELLED" ? (
-                  <Button
-                    variant="outline"
-                    onClick={onCancelFromPanel}
-                    disabled={cancellingFromPanel}
-                    title="取消当前查看的任务"
-                    data-testid="log-panel-cancel"
-                    className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 h-auto rounded-md border px-2 py-0.5 text-[10.5px]"
-                  >
-                    {cancellingFromPanel ? "× 取消中…" : "× 取消"}
-                  </Button>
+                  <Hint label="取消当前查看的任务" wrap>
+                    <Button
+                      variant="outline"
+                      onClick={onCancelFromPanel}
+                      disabled={cancellingFromPanel}
+                      data-testid="log-panel-cancel"
+                      className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 h-auto rounded-md border px-2 py-0.5 text-[10.5px]"
+                    >
+                      {cancellingFromPanel ? "× 取消中…" : "× 取消"}
+                    </Button>
+                  </Hint>
                 ) : null}
                 {cachedIds.length > 0 && (
                   <StepLogTaskPicker
@@ -469,14 +233,15 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   panel={panel}
                   className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
                 />
-                <Button
-                  variant="ghost"
-                  onClick={() => setOpen(false)}
-                  title="关闭"
-                  className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
-                >
-                  <X size={16} />
-                </Button>
+                <Hint label="关闭" accessibleName>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setOpen(false)}
+                    className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
+                  >
+                    <X data-icon="inline-start" size={16} />
+                  </Button>
+                </Hint>
               </div>
             </div>
 
@@ -490,66 +255,77 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       : visibleAll.filter((l) => l.level === option.value)
                           .length;
                   return (
-                    <Button
+                    <Hint
+                      label={`${option.label}（${count} 条）`}
                       key={option.value}
-                      variant="ghost"
-                      onClick={() => setFilter(option.value)}
-                      title={`${option.label}（${count} 条）`}
-                      data-testid={`log-filter-${option.value}`}
-                      className={`h-auto rounded-md px-2.5 py-1 text-[13px] font-normal ${
-                        filter === option.value
-                          ? "bg-surface-2 text-ink-bright"
-                          : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
-                      }`}
                     >
-                      {option.label}
-                      <span className="text-ink-fainter ml-1 text-[11px]">
-                        {count}
-                      </span>
-                    </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setFilter(option.value)}
+                        data-testid={`log-filter-${option.value}`}
+                        className={`h-auto rounded-md px-2.5 py-1 text-[13px] font-normal ${
+                          filter === option.value
+                            ? "bg-surface-2 text-ink-bright"
+                            : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
+                        }`}
+                      >
+                        {option.label}
+                        <span className="text-ink-fainter ml-1 text-[11px]">
+                          {count}
+                        </span>
+                      </Button>
+                    </Hint>
                   );
                 })}
               </div>
-              <label className="text-ink-soft flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
+              <FieldLabel className="text-ink-soft flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
                 <Checkbox
                   checked={autoscroll}
                   onCheckedChange={(checked) => setAutoscroll(checked === true)}
-                  className="size-3.5 cursor-pointer accent-violet-500"
+                  className="accent-primary size-3.5 cursor-pointer"
                 />
                 自动滚动
-              </label>
+              </FieldLabel>
             </div>
 
-            {/* Log body — 与应用日志同款行样式 */}
-            <div
-              ref={scrollerRef}
-              onScroll={scroller.onScroll}
-              className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
-            >
-              {valErrs.length > 0 && (
-                <div className="border-destructive/40 bg-destructive/8 mb-2 rounded border p-2">
-                  <div className="text-destructive mb-1.5 text-[13px] font-semibold">
-                    ⚠ 工作流验证错误（{valErrs.length}）
-                  </div>
-                  <ValidationErrorList
-                    errors={valErrs.slice(0, 12)}
-                    className="text-destructive/95"
-                  />
-                  {valErrs.length > 12 && (
-                    <div className="text-destructive/80 mt-1 text-[12px]">
-                      +{valErrs.length - 12} more…
+            {/* Log body — 虚拟滚动（复用 VirtualLogList，与应用日志同款行样式） */}
+            <VirtualLogList
+              entries={visible}
+              getMessage={(log) => log.msg}
+              renderRow={(log) => <StepLogRow log={log} />}
+              following={autoscroll}
+              onFollowingChange={setAutoscroll}
+              watch={`${logs.length}:${filter}`}
+              className="bg-canvas-deep/60"
+              topSlot={
+                <>
+                  {valErrs.length > 0 && (
+                    <div className="border-destructive/40 bg-destructive/8 mb-2 rounded border p-2">
+                      <div className="text-destructive mb-1.5 text-[13px] font-semibold">
+                        ⚠ 工作流验证错误（{valErrs.length}）
+                      </div>
+                      <ValidationErrorList
+                        errors={valErrs.slice(0, 12)}
+                        className="text-destructive/95"
+                      />
+                      {valErrs.length > 12 && (
+                        <div className="text-destructive/80 mt-1 text-[12px]">
+                          +{valErrs.length - 12} more…
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {!valErrs.length && error && (
-                <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-[13px]">
-                  <div className="break-words whitespace-pre-wrap">{error}</div>
-                </div>
-              )}
-
-              {visible.length === 0 ? (
+                  {!valErrs.length && error && (
+                    <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-[13px]">
+                      <div className="break-words whitespace-pre-wrap">
+                        {error}
+                      </div>
+                    </div>
+                  )}
+                </>
+              }
+              emptySlot={
                 <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
                   <FileText
                     size={32}
@@ -558,14 +334,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   />
                   {taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
                 </div>
-              ) : (
-                <div className="flex flex-col">
-                  {visible.map((log, index) => (
-                    <StepLogRow key={`${log.t}:${index}`} log={log} />
-                  ))}
-                </div>
-              )}
-            </div>
+              }
+            />
 
             {/* Footer */}
             <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">

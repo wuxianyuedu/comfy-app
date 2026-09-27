@@ -27,11 +27,11 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       <div
         class="flex items-center gap-2"
       >
-        <span
-          class="u-title"
+        <h1
+          class="font-title u-title-page"
         >
           LoRA 训练工作室
-        </span>
+        </h1>
         <span
           class="text-ink-fainter text-xs"
         >
@@ -295,9 +295,9 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               data-slot="progress-track"
             >
               <div
-                class="bg-primary h-full rounded-full transition-all bg-linear-to-r from-primary-500 to-info"
+                class="bg-primary h-full rounded-full transition-transform bg-linear-to-r from-primary-500 to-info"
                 data-slot="progress-bar-fill"
-                style="width: 0%;"
+                style="transform: translateX(-100%);"
               />
             </div>
             <span
@@ -396,13 +396,20 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             训练任务
           </h3>
           <div
-            class="border-border text-ink-muted grid min-h-[160px] place-items-center rounded-2xl border border-dashed"
+            class="w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-balance grid place-items-center rounded-2xl border border-dashed px-4 text-center min-h-[160px] border-border"
+            data-slot="empty"
           >
-            <p
-              class="text-sm"
+            <div
+              class="flex max-w-sm flex-col items-center gap-2"
+              data-slot="empty-header"
             >
-              还没有训练任务。在右侧配置并点击「开始训练」。
-            </p>
+              <div
+                class="[&>a:hover]:text-primary [&>a]:underline [&>a]:underline-offset-4 text-ink-muted mt-1 text-xs leading-relaxed"
+                data-slot="empty-description"
+              >
+                还没有训练任务。在右侧配置并点击「开始训练」。
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -877,6 +884,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 <svg
                   aria-hidden="true"
                   class="lucide lucide-minus"
+                  data-icon="inline-start"
                   fill="none"
                   height="12"
                   stroke="currentColor"
@@ -908,6 +916,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 <svg
                   aria-hidden="true"
                   class="lucide lucide-plus"
+                  data-icon="inline-start"
                   fill="none"
                   height="12"
                   stroke="currentColor"
@@ -1066,6 +1075,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 <svg
                   aria-hidden="true"
                   class="lucide lucide-minus"
+                  data-icon="inline-start"
                   fill="none"
                   height="12"
                   stroke="currentColor"
@@ -1097,6 +1107,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 <svg
                   aria-hidden="true"
                   class="lucide lucide-plus"
+                  data-icon="inline-start"
                   fill="none"
                   height="12"
                   stroke="currentColor"

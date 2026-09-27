@@ -4,25 +4,16 @@
 // 视图层只消费这里返回的 controller，不持有任何业务规则。
 
 import React from "react";
-import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import {
-  buildLibraryWorkflowInput,
+  cancelLocalTask,
   fetchApiChannels,
   fetchTaskSnapshot,
   fetchWorkshopWorkflows,
-  LOCAL_TASK_TIMEOUT_MS,
-  cancelLocalTask,
-  preparePortraitReferences,
-  startLocalGenerate,
-  watchTask,
-  type GenerateInput,
   type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
-import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
-import { withTimeoutResult } from "~/lib/with-timeout";
 import {
   fetchServerDraft,
   pushServerDraft,
@@ -32,6 +23,7 @@ import {
   pushProduction,
 } from "~/lib/production/production-client";
 import { buildProductionPayload } from "~/lib/production/payload";
+import { errorMessage } from "~/lib/error-message";
 import { beginStaleRun } from "~/lib/stale-run";
 import {
   DEFAULT_META,
@@ -63,11 +55,13 @@ import {
   type Tab,
 } from "~/components/workshop/stage-config";
 
-import { parseShotSize } from "~/components/workshop/shot-size-config";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
-import { errorMessage } from "~/lib/error-message";
+import {
+  useWorkshopGeneration,
+  type ShotProgressMap,
+} from "./use-workshop-generation";
 import {
   useCharacterPortrait,
   type PortraitSession,
@@ -137,8 +131,9 @@ type SkillsApiResponse = {
   }>;
 };
 
-/** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别）。 */
-export type ShotProgressMap = Record<string, { pct: number; label?: string }>;
+/* 进度类型随生成逻辑一起住在 `use-workshop-generation`；这里再导出一次，
+   保持主管线的对外类型面不变（消费方仍从本文件取）。 */
+export type { ShotProgressMap };
 
 /** 工坊「从剧本提取」/工具类会话的界面状态。
  *
@@ -315,7 +310,11 @@ export function useExtractSession(
   }, []);
   const appendLog = React.useCallback(
     (entry: ExtractLogEntry) => {
-      setSession((prev) => ({ ...prev, log: [...prev.log, entry] }));
+      /* 结构化日志只追加不裁剪会随长流程无限增长（P2）；保留最近一段即可。 */
+      setSession((prev) => ({
+        ...prev,
+        log: [...prev.log, entry].slice(-EXTRACT_LOG_MAX_ENTRIES),
+      }));
       if (stage) persistGenerationLogs(stage, [entry]);
     },
     [stage],
@@ -325,6 +324,9 @@ export function useExtractSession(
   }, []);
   return [session, { patch, appendProgress, appendLog, setLog }];
 }
+
+/** 结构化执行日志保留上限（P2：只追加不裁剪会随长流程无限增长）。 */
+const EXTRACT_LOG_MAX_ENTRIES = 2000;
 
 export function useWorkshopPipeline(): WorkshopPipelineController {
   const [tab, setTab] = React.useState<Tab>("script");
@@ -351,10 +353,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [videoWorkflowId, setVideoWorkflowId] = React.useState(
     () => loadWorkshopDraftOnce()?.videoWorkflowId ?? "",
   );
-  const [generating, setGenerating] = React.useState(false);
-  const [shotProgress, setShotProgress] = React.useState<ShotProgressMap>({});
   /* 镜头进度的节流闸门（见 `~/components/ui/use-throttled-progress`）。 */
-  const progressGate = React.useRef(createThrottleGate());
   const [rendered, setRendered] = React.useState(false);
   const [apiChannels, setApiChannels] = React.useState<ApiChannelsView | null>(
     null,
@@ -526,10 +525,16 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     return () => guard.dispose();
   }, []);
 
+  /* 卸载守卫用 beginStaleRun（规范 16 §16.2.4.34）：本 effect 里三个请求各自
+   * 落地自己的 set，组件若在请求返回前卸载，写状态既白跑也让旧闭包再多活
+   * 一会儿（且并发渲染下还可能与后一轮交叠）。 */
   React.useEffect(() => {
-    fetch("/api/skills")
-      .then((res) => res.json())
-      .then((data: SkillsApiResponse) => {
+    const guard = beginStaleRun();
+    void (async () => {
+      // 技能列表（风格卡）；失败按「没有技能」处理，不打断其余两路。
+      try {
+        const res = await fetch("/api/skills");
+        const data = (await res.json()) as SkillsApiResponse;
         const list: StyleRef[] = (data.skills ?? []).map((skill) => ({
           slug: skill.slug,
           name: skill.name,
@@ -538,204 +543,41 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
           negativePrompt: skill.negativePrompt ?? undefined,
           defaultParams: skill.defaultParams ?? undefined,
         }));
-        setStyles(list);
-      })
-      .catch(() => undefined);
+        guard.commit(() => setStyles(list));
+      } catch {
+        /* 失败就是空列表，界面走各自的空态 */
+      }
+    })();
     // API 直连通道(生图/视频)的脱敏配置视图;失败按未配置处理。
-    void fetchApiChannels().then(setApiChannels);
+    void fetchApiChannels()
+      .then((channels) => guard.commit(() => setApiChannels(channels)))
+      .catch(() => undefined);
     // 工作流库列表：工坊「生成资源」里可选择用哪个工作流生成（ISSUE #145）。
     void fetchWorkshopWorkflows()
-      .then(setWorkflowOptions)
+      .then((workflows) => guard.commit(() => setWorkflowOptions(workflows)))
       .catch(() => undefined);
+    return () => guard.dispose();
   }, []);
 
   /* 提示条不自动消失：写入 notice 的都是错误 / 门禁 / 「未生效」警告，
    * 4 秒自灭曾让失败原因来不及读（规范 10 §10.3.1 的可见出口要求）。
    * 消除走视图常驻的「关闭」按钮（dismissNotice）；新提示整条替换旧提示。 */
 
-  /**
-   * 分镜阶段的单镜生图(StoryboardPlanner 的 onGenerate 契约不变):
-   * 走与画布一致的本地 ComfyUI 链路(tRPC generate → SSE 任务流),
-   * 结果回写 Shot.imageUrl / status,镜头生图阶段自动继承。
-   */
-  /** 单镜生成请求的封装：本地通道一律走工作流库工作流（内置模板已移除），
-   *  按 ISSUE #145 只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值。
-   *
-   *  尺寸只表达一次（比例 + 分辨率 或 比例 + 百万像素 + 倍数）：整块交给封装层
-   *  （宽高由 size-presets 按场景现算）。没落到任何端口的口随结果以提示文案
-   *  返回 —— 「给了值却没生效」必须让用户知道（规范 10 §10.3.1），不静默丢。 */
-  const buildShotInput = React.useCallback(
-    async (
-      shot: Shot,
-    ): Promise<{ input: GenerateInput; unmatchedWarning: string | null }> => {
-      /* 草稿里存的是尺寸表达（老数据可能是 "832x1216" 字符串，回读时归一）。 */
-      const sizeSpec = parseShotSize(shot.params.size);
-      /* 定妆照 → 参考图（流程 §4 的口径）：镜头相关角色选了定妆照就带上下发，
-       * 落到作者连给参考图口的行上；工作流没连参考图口时进 unmatched，由
-       * 下面的提示条告知。上传失败不拖垮生成，只有失败数需要提示。 */
-      const refs = await preparePortraitReferences(
-        characters,
-        shot.characterIds,
-      );
-      if (refs.failedCount > 0) {
-        setNotice(
-          `${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`,
-        );
-      }
-      const { input, unmatched } = await buildLibraryWorkflowInput(workflowId, {
-        prompt: shot.prompt,
-        negativePrompt: shot.negativePrompt || undefined,
-        size: sizeSpec,
-        ...(refs.files.length > 0 ? { referenceImages: refs.files } : {}),
-      });
-      return { input, unmatchedWarning: describeUnmatchedInputs(unmatched) };
-    },
-    [workflowId, characters],
-  );
+  /* 单镜生图的执行态与编排（generating / shotProgress / buildShotInput /
+   * generateShot）已拆到 `use-workshop-generation` —— 它只服务「跑一次生成」，
+   * 混在主管线里会让「草稿与六段状态」和「高频进度回写」每次改动互相碰到。 */
+  const generation = useWorkshopGeneration({
+    workflowId,
+    characters,
+    setShots,
+    notify: setNotice,
+  });
 
-  /** 观察一个本地任务直到落定，结果回写对应镜头。生图与视频共用这一条观察
-   *  循环（`target` 决定写哪组字段：生图写 imageUrl/status，视频写
-   *  clipUrl/clipStatus）；generateShot / generateClip 的批量循环与「恢复失联
-   *  任务」都走它。回写前核对任务归属 —— 恢复期间用户可能已对同一镜头重新
-   *  发起（换了任务），旧观察不得覆盖新结果。
-   *  30 分钟无响应按失败收尾并退订（与 ShotStudio / VideoStudio 的安全阀
-   *  同口径、同常量）：批量循环永不卡死在一条沉默的流上。 */
-  const watchShotTask = React.useCallback(
-    (
-      shotId: string,
-      taskId: string,
-      target: "image" | "video" = "image",
-    ): Promise<void> => {
-      /* 订阅句柄 —— watchTask 返回前先给一个空实现，超时路径上一定已赋值。 */
-      let close: () => void = () => undefined;
-      /** 回写只认「仍归属本任务」的镜头（生图与视频的归属字段不同）。 */
-      const patchIfOwned = (p: Partial<Shot>) =>
-        setShots((prev) =>
-          prev.map((item) => {
-            if (item.id !== shotId) return item;
-            const owned =
-              target === "video"
-                ? item.clipTaskId === taskId
-                : item.taskId === taskId;
-            return owned ? { ...item, ...p } : item;
-          }),
-        );
-      return withTimeoutResult(
-        new Promise<void>((resolve) => {
-          close = watchTask(taskId, {
-            onProgress: (pct, node) => {
-              /* 高频回调：按条目独立节流（规范 16 §16.2.4.68）。这条的值是
-               * 「百分比 + 当前节点名」的复合体，故只用闸门、不用 hook。 */
-              if (!progressGate.current.allow(shotId)) return;
-              setShotProgress((prev) => ({
-                ...prev,
-                [shotId]: {
-                  pct,
-                  ...(node?.label ? { label: node.label } : {}),
-                },
-              }));
-            },
-            onOutput: (out) => {
-              /* 生图只要图片产物、视频只要视频产物（另一种是别的阶段的）。 */
-              const wanted =
-                target === "video"
-                  ? out.kind !== "image"
-                  : out.kind !== "video";
-              if (!wanted) return;
-              patchIfOwned(
-                target === "video"
-                  ? { clipUrl: out.url }
-                  : { imageUrl: out.url },
-              );
-            },
-            onSettled: (result) => {
-              setShotProgress((prev) => {
-                const next = { ...prev };
-                delete next[shotId];
-                return next;
-              });
-              patchIfOwned(
-                target === "video"
-                  ? { clipStatus: result.ok ? "done" : "failed" }
-                  : { status: result.ok ? "done" : "failed" },
-              );
-              if (!result.ok && result.message) {
-                /* 用户主动取消走的是 CANCELLED 终态：不是故障，文案要分开 ——
-                 * 否则一次正常取消会被报成红色「生成失败」。 */
-                const cancelled = result.message.includes("CANCELLED");
-                setNotice(
-                  cancelled
-                    ? `${target === "video" ? "视频" : "镜头"}任务已取消，可重新生成`
-                    : `${target === "video" ? "视频" : "镜头"}生成失败：${result.message}`,
-                );
-              }
-              resolve();
-            },
-          });
-        }),
-        LOCAL_TASK_TIMEOUT_MS,
-        undefined,
-        {
-          onTimeout: () => {
-            /* 安全阀：超时退订（放弃等待后流还挂着才是真问题），按失败收尾，
-             * 批量循环得以继续下一镜。 */
-            close();
-            setShotProgress((prev) => {
-              const next = { ...prev };
-              delete next[shotId];
-              return next;
-            });
-            patchIfOwned(
-              target === "video"
-                ? { clipStatus: "failed" }
-                : { status: "failed" },
-            );
-            setNotice("任务超时（30 分钟无响应），已按失败收尾");
-          },
-        },
-      );
-    },
-    [],
-  );
-
-  const generateShot = React.useCallback(
-    async (shot: Shot) => {
-      // 本地通道没有内置模板可回落：必须先选好一个工作流库生图工作流。
-      if (!workflowId) {
-        setNotice("请先在右侧「生成资源」选择一个生图工作流（工作流库）");
-        return;
-      }
-      setGenerating(true);
-      setShots((prev) =>
-        prev.map((item) =>
-          item.id === shot.id ? { ...item, status: "running" } : item,
-        ),
-      );
-      try {
-        const { input, unmatchedWarning } = await buildShotInput(shot);
-        /* 未生效的口在发起前提示：生成要跑几十秒到几十分钟，事后说就晚了。 */
-        if (unmatchedWarning) setNotice(unmatchedWarning);
-        const taskId = await startLocalGenerate(input);
-        setShots((prev) =>
-          prev.map((item) =>
-            item.id === shot.id ? { ...item, taskId } : item,
-          ),
-        );
-        await watchShotTask(shot.id, taskId);
-      } catch (err: unknown) {
-        setShots((prev) =>
-          prev.map((item) =>
-            item.id === shot.id ? { ...item, status: "failed" } : item,
-          ),
-        );
-        const message = errorMessage(err, "生成失败");
-        console.error(message);
-        setNotice(message);
-      } finally {
-        setGenerating(false);
-      }
-    },
-    [workflowId, buildShotInput, watchShotTask],
+  /* 镜头目标数从场景表派生（每场景至少算 1 镜，与导入时铺占位镜头的口径同源）；
+   * 场景还没拆出来时它是 0 —— 此时「还差几镜」没有可信答案，清单就不报缺口。 */
+  const shotTarget = scenes.reduce(
+    (sum, scene) => sum + Math.max(1, scene.shotCount),
+    0,
   );
 
   /** 取消一个进行中的本机任务（生图 / 视频通用）。真正把界面收尾的是观察
@@ -834,7 +676,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
           return;
         }
         /* 仍在跑（RUNNING / QUEUED）：重订阅，等 live 的 done 帧回写。 */
-        await watchShotTask(shotId, taskId, target);
+        await generation.watchShotTask(shotId, taskId, target);
       })();
     };
     for (const shot of latestDraftRef.current.shots) {
@@ -858,6 +700,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       characterCount: characters.length,
       sceneCount: scenes.length,
       shotCount: shots.length,
+      shotTarget,
       imageDoneCount,
       clipDoneCount,
     }),
@@ -866,6 +709,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       characters.length,
       scenes.length,
       shots.length,
+      shotTarget,
       imageDoneCount,
       clipDoneCount,
     ],
@@ -960,8 +804,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     clipDoneCount,
     rendered,
 
-    generating,
-    shotProgress,
+    generating: generation.generating,
+    shotProgress: generation.shotProgress,
     isScriptEditorOpen,
     apiSettingsOpen,
     modeContractOpen,
@@ -974,7 +818,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     characterPortrait,
     characterPortraitActions,
 
-    generateShot,
+    generateShot: generation.generateShot,
     cancelShotTask,
     openScriptEditor,
     closeScriptEditor,

@@ -17,6 +17,7 @@ import {
 } from "~/lib/core/repository";
 import { enqueue } from "~/lib/comfyui/enqueue";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
+import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import {
@@ -82,6 +83,7 @@ export async function createWorkflowRunTask(
     ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
   };
 
+  const executorClaim = resolveExecutorClaim();
   const task = await taskRepository.createQueued({
     userId: input.userId,
     type: tpl.taskType,
@@ -90,6 +92,8 @@ export async function createWorkflowRunTask(
     params,
     workflowName: tpl.name,
     projectId: input.projectId ?? null,
+    claimedBy: executorClaim,
+    execPayload: tpl.rawJson,
   });
 
   /* 执行载荷恒为 RAW 原件 —— comfy-cli 按节点类定义做权威 UI→API 转换 +
@@ -99,11 +103,15 @@ export async function createWorkflowRunTask(
   if (!hasExecutableWorkflow(tpl)) {
     throw new Error(`工作流没有可执行内容（rawJson 为空）：${tpl.name}`);
   }
-  enqueue({
-    taskId: task.id,
-    workflowName: tpl.name,
-    rawJson: tpl.rawJson,
-    overrides: workflowInputs,
-  });
+  /* host 模式下不进程内 enqueue：行已落 claimedBy='host'，由 executor host
+   * 领取执行（与 generate 路由同一分叉，P3 §5 ADR §13-3B1）。 */
+  if (executorClaim === "inline") {
+    enqueue({
+      taskId: task.id,
+      workflowName: tpl.name,
+      rawJson: tpl.rawJson,
+      overrides: workflowInputs,
+    });
+  }
   return { taskId: task.id, workflowName: tpl.name, taskType: tpl.taskType };
 }

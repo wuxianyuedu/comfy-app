@@ -324,9 +324,11 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
    *
    * 为什么要有：任务「在 ComfyUI 那边已经生成好了，界面却一直卡在生成中」
    * 这类现场，服务端日志是完整的（一路到「✓ 全部完成」），但**客户端收到
-   * 了哪些帧、为什么还没落定**此前一行都没有 —— 只能靠猜。缺口最典型的一处
-   * 是 `state` 帧的成功终态（SUCCEEDED）当前被静默跳过（只认 FAILED /
-   * CANCELLED / ERROR），它到底有没有到达、到达后被怎么处理，日志里看不出来。
+   * 了哪些帧、为什么还没落定**此前一行都没有 —— 只能靠猜。历史上真实咬过
+   * 一口的缺口就是 `state` 帧的成功终态（SUCCEEDED）曾被静默跳过、只认
+   * done 帧；host 执行（P3 §5 Phase 3-B1）没有进程内 done，该分支已补上
+   * （见下方 state 处理的 SUCCEEDED 分支），诊断日志保留以便再出现别的
+   * 「收到了却没落定」的形态时能直接指认。
    *
    * 这里只记**决策点**（订阅建立 / 收到终态帧 / 落定判定与原因 / 连接中断），
    * 不记心跳与逐帧进度，避免把面板刷屏。日志经 `LogProvider` 的 console
@@ -405,17 +407,31 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
               false,
               typeof err === "string" && err.trim() ? err : `任务 ${st}`,
             );
+          } else if (st === "SUCCEEDED") {
+            /* host 执行的任务没有进程内 done 帧（emitter 在另一个进程）——
+             * 成功收口走这条：终态 state 帧带 DB 的产出清单（与 done 帧的
+             * images 同源同形，见 executor-finalize 的 `saved`）。判定与
+             * done 分支逐字对齐，消费方（onOutput/onSettled）零改动。
+             * 已落定（inline 的 done 先到）时整帧跳过：产出回调不许重发。 */
+            if (settled) return;
+            const outputs = extractSavedOutputs(msg.images);
+            if (outputs.length === 0) {
+              note("收到 state 帧 status=SUCCEEDED 但无产出，按失败落定");
+              settle(false, "任务完成但没有产出文件");
+              return;
+            }
+            note("收到 state 帧 status=SUCCEEDED（host 收口路径），按成功落定");
+            outputs.forEach((out) => h.onOutput?.(out));
+            settle(true);
           } else {
-            /* 关键诊断点：非失败终态（尤其成功终态 SUCCEEDED）**当前被静默
-             *  跳过**、不会触发落定。若现场出现「日志已全部完成但界面一直
-             *  生成中」，这里会如实打出收到了哪个状态、却没落定 ——
-             *  这就是那次卡住的证据。 */
+            /* 非终态（QUEUED/RUNNING）与无 status 的 state 帧只刷进度、
+             * 不落定；同一 status 只记一行诊断，防刷屏。 */
             const stStr = typeof st === "string" ? st : "";
             if (stStr !== lastStateStatus) {
               lastStateStatus = stStr;
               note(
                 stStr
-                  ? `收到 state 帧 status=${stStr}，非失败终态不落定（等待 done 帧）`
+                  ? `收到 state 帧 status=${stStr}，非终态不落定`
                   : "收到无 status 的 state 帧，跳过",
               );
             }

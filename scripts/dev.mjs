@@ -17,9 +17,12 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { APP_PORT_ENV_KEY, resolveAppPortWithSource } from "./app-port.mjs";
-import { spawnSchemaSync } from "./db-schema-state.mjs";
+import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
-import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
+import {
+  echoCommandLine,
+  formatCommandLine,
+} from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -58,7 +61,9 @@ const port = explicit ? parsed : resolved.port;
 // 端口来源一并打印：与壳「两侧读同一处」的判据就是这个值（ISSUE #821）。
 // 只给数字的日志在「dev server 在 3100、壳在等 3809」时归不了因 —— 一眼看不出
 // 是 .env 写的还是路径推出来的，而这两种情况的修法完全不同。
-const sourceLabel = explicit ? "命令行 -p/--port" : PORT_SOURCE_LABEL[resolved.source];
+const sourceLabel = explicit
+  ? "命令行 -p/--port"
+  : PORT_SOURCE_LABEL[resolved.source];
 process.stdout.write(
   `[dev.mjs] COMFYAPP_PORT=${port}${hostname ? ` host=${hostname}` : ""}（来源：${sourceLabel}）\n`,
 );
@@ -68,7 +73,13 @@ process.stdout.write(
 // 这正是壳 3809 / dev server 3100 那类「永远对不上」的来源。不阻断启动（命令行是
 // 权威入口），但必须说出来，否则用户只能看到一个连不上的端口。
 const envPort = Number.parseInt(process.env[APP_PORT_ENV_KEY] ?? "", 10);
-if (explicit && Number.isInteger(envPort) && envPort >= 1 && envPort <= 65535 && envPort !== port) {
+if (
+  explicit &&
+  Number.isInteger(envPort) &&
+  envPort >= 1 &&
+  envPort <= 65535 &&
+  envPort !== port
+) {
   process.stderr.write(
     `[dev.mjs] ⚠ 环境变量 ${APP_PORT_ENV_KEY}=${envPort} 与本次实际监听端口 ${port} 不一致：\n` +
       "[dev.mjs]   命令行的 -p/--port 优先，本次以它为准；但请确认调用方算端口的口径\n" +
@@ -87,12 +98,21 @@ exitIfEnvNotReady(root);
  * 这里**不等它**——drizzle 一轮约 17 秒、同步一次 15~30 秒，等它等于「先同步、
  * 再起 Next」，用户要盯着空窗等半分钟才看到页面。等待时间还给用户，期间由页面
  * 自己说「正在同步，稍候刷新」（`GET /api/schema` + 状态栏）。 */
-const schema = spawnSchemaSync(root);
-if (!schema.started) {
+/* 编排器（dev-launcher.mjs）已经起过一份 schema 同步并把这个变量传进来：
+ * 再跑一次就是两份 15~30s 的 drizzle 并发写同一个 db.sqlite。独立 `pnpm dev`
+ * （没有编排器）时该变量不存在，仍走自己的同步。 */
+if (process.env[SKIP_SCHEMA_SYNC_ENV] === "1") {
   process.stdout.write(
-    `[dev.mjs] ⚠ 无法后台核对数据库结构（${schema.reason ?? "原因未知"}）——` +
-      "必要时手动跑：pnpm db:push\n",
+    "[dev.mjs] 数据库结构同步由启动编排器负责，这里跳过（避免两份 drizzle 并发写同一个库）。\n",
   );
+} else {
+  const schema = spawnSchemaSync(root);
+  if (!schema.started) {
+    process.stdout.write(
+      `[dev.mjs] ⚠ 无法后台核对数据库结构（${schema.reason ?? "原因未知"}）——` +
+        "必要时手动跑：pnpm db:push\n",
+    );
+  }
 }
 
 const nextArgs = ["exec", "next", "dev", "--turbo", "-p", String(port)];

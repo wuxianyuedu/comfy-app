@@ -256,10 +256,14 @@ describe("getConfigForClient", () => {
       {
         name: "tbl-remote",
         baseUrl: "https://t/v1",
-        apiKey: null,
+        // 给客户端的形态里密钥一律被剥掉（顶层与远端条目都是），所以这里不再是
+        // `null`。「本地=字符串 / 远端=对象」这条类型区分与「不外泄密钥」是两件事，
+        // 两条都要看得见。
+        apiKey: undefined,
         kind: "chat",
       },
     ]);
+    expect(out.apiKey).toBeUndefined();
   });
 
   it("远端表里误存的本地 ollama（回环 + 无密钥）折回本地候选字符串", async () => {

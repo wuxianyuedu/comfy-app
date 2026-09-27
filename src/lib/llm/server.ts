@@ -181,7 +181,17 @@ export async function getConfigForClient() {
     );
     extra = [...folded.localNames, ...folded.remoteEntries];
   }
-  return { ...cfg, extraModels: extra };
+  const cfgSafe = { ...cfg };
+  delete (cfgSafe as Partial<LLMConfig>).apiKey;
+  const extraSafe = extra.map((e) =>
+    typeof e === "object" && e !== null ? { ...e, apiKey: undefined } : e,
+  );
+  return {
+    ...cfgSafe,
+    hasApiKey: Boolean(cfg.apiKey),
+    apiKey: undefined,
+    extraModels: extraSafe,
+  };
 }
 
 function headersFor(cfg: LLMConfig): Record<string, string> {

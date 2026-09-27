@@ -149,11 +149,18 @@ export function formatLocalStamp(
  * 与 {@link formatLocalStamp} 的差别是「能不能进文件名」—— 冒号在 Windows
  * 路径里非法，因此导出文件名那一处有自己的形态。收在这里是为了让「导出
  * 文件名长什么样」也只有一处可查。
+ *
+ * `millis` 给「同一秒内可能写多份」的落点（如远端媒体按次落盘：一次生成四张图
+ * 时四次落盘完全可能落在同一秒，只到秒就会互相覆盖）。
  */
-export function formatCompactStamp(value: TimeInput): string {
+export function formatCompactStamp(
+  value: TimeInput,
+  opts: { millis?: boolean } = {},
+): string {
   const d = toDate(value);
   return (
     `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}` +
-    `-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`
+    `-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}` +
+    (opts.millis ? `-${String(d.getMilliseconds()).padStart(3, "0")}` : "")
   );
 }

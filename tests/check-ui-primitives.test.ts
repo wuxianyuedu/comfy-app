@@ -87,6 +87,29 @@ function seedBaseline(): void {
   expect(code, output).toBe(0);
 }
 
+/**
+ * 把 workdir 里那份脚本改成「这几条仍走棘轮」的形态 —— 只把 rule id 从
+ * `HARD_GATE_RULES` 摘掉，判据本身一字不动。
+ *
+ * 为什么要这样造：现网 82 条**全部**是硬闸，而「冻结存量 → 只许降 → --strict
+ * 要求收紧 → --update 拒绝放宽」这套棘轮语义是给**新引入的判据**起步用的。
+ * 不给它造一个执行者，这条路就没有任何测试覆盖，下次真加新判据时它是坏的也没人知道。
+ */
+function demoteToRatchet(...ids: string[]): void {
+  const p = join(workdir, "scripts", "check-ui-primitives.cjs");
+  let src = readFileSync(p, "utf8");
+  for (const id of ids) {
+    const next = src.replace(new RegExp(`\\n[ \\t]*"${id}",[^\\n]*`), "");
+    if (next === src) {
+      throw new Error(
+        `${id} 不在 HARD_GATE_RULES 里 —— 本组用例的前提已变，改测试`,
+      );
+    }
+    src = next;
+  }
+  writeFileSync(p, src);
+}
+
 const BUTTON_VIEW =
   'export function V() {\n  return <button type="button">ok</button>;\n}\n';
 const PORTAL_VIEW =
@@ -194,9 +217,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("P3");
   });
 
-  /* ── P7 / P8：同 P4~P6 的硬闸，口径是「必须为 0」─────────────────────
-   * 这两条与 P1~P3 的棘轮**性质不同**：棘轮允许「先冻结存量再逐批降」，
-   * 而 P7/P8 已经在同批清零，所以基线里没有它们 —— 第一处新增就直接断。 */
+  /* ── P7 / P8：口径是「必须为 0」的硬闸 ──────────────────────────────────
+   * P1~P3 起初是「先冻结存量、逐批降」的计数棘轮，存量清零后与本批一并升为
+   * 硬闸 —— 现在这个文件里没有一条判据允许「基线上调」。 */
   it("视图里自写「隐藏 file input + 手工触发」直接阻断（规范 P7）", () => {
     seedBaseline();
     write("src/components/workshop/F.tsx", FILE_INPUT_VIEW);
@@ -310,6 +333,59 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     ) as { rules: Record<string, string> };
     expect(baseline.rules.P7).toBeUndefined();
     expect(baseline.rules.P8).toBeUndefined();
+  });
+
+  /* ── 12 条 0 值棘轮升为硬闸（P1/P2/P3/P44~P46/P65~P69/P83）──────────────
+   * 升闸的实际收益**不是**「新增会红」—— 棘轮对没在基线里记过账的规则同样红
+   * （`新增 Pn → 文件` 那条分支）。真正的区别在 `--update`：棘轮可以把新增量
+   * 登记成「起点」，硬闸连登记都拒。此前 P44/P45/P46/P65/P66 的段头与规范标题
+   * 都写着「硬闸」而判据其实是棘轮 —— 那 5 处名实不符由本批消掉。 */
+  it("升硬闸的 12 条不进基线，且有存量时 --update 直接拒绝、不写盘", () => {
+    seedBaseline();
+    const baselinePath = join(
+      workdir,
+      "scripts",
+      ".ui-primitives-baseline.json",
+    );
+    const before = readFileSync(baselinePath, "utf8");
+    const rules = (JSON.parse(before) as { rules: Record<string, string> })
+      .rules;
+    for (const id of [
+      "P1",
+      "P2",
+      "P3",
+      "P44",
+      "P45",
+      "P46",
+      "P65",
+      "P66",
+      "P67",
+      "P68",
+      "P69",
+      "P83",
+    ]) {
+      expect(rules[id], `${id} 不该留在棘轮记账里`).toBeUndefined();
+    }
+
+    // 手写 <button>：判据必须数得到（正例），否则「0」只是扫描器瞎了。
+    write("src/components/workshop/Promoted.tsx", BUTTON_VIEW);
+    const updated = run(["--update"]);
+    expect(updated.code).toBe(1);
+    expect(updated.output).toContain("拒绝更新基线");
+    expect(readFileSync(baselinePath, "utf8")).toBe(before);
+    const blocked = run();
+    expect(blocked.code).toBe(1);
+    expect(blocked.output).toContain("P1");
+  });
+
+  it("全部判据都是硬闸：棘轮集为空时基线只剩记账壳，不静默放行", () => {
+    /* 这一条守的是「机制本身还在」：如果哪天 `ratchetOnly` 或 `HARD_GATE_RULES`
+     * 写错，让某条判据既不进硬闸也不进棘轮，它会**两边都不判** —— 静默失效。 */
+    seedBaseline();
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("82 条");
+    expect(output).toContain("0 处命中");
   });
 
   it("视图里自写 ::-webkit-scrollbar 外观直接阻断，不进棘轮（规范 P4）", () => {
@@ -805,14 +881,18 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   it("整块可点的开关行（label 包住 Switch）不被 P23 计", () => {
     /* 那是另一种形态 —— 标签与控件**并排**、点哪都切换；
-     * `FormField` 的块级标签行套上去会改掉那条排布（§16.2.4.2 第 9 条）。 */
+     * `FormField` 的块级标签行套上去会改掉那条排布（§16.2.4.2 第 9 条）。
+     * P78 升硬闸后本 fixture 会被 P78（视图层裸 `<label>`）拦下、但不是
+     * P23 拦的：断言只看「P23 没被计」。 */
     seedBaseline();
     write(
       "src/components/studio/SwitchRow.tsx",
       'export function S({ v, on }: { v: boolean; on: (b: boolean) => void }) {\n  return (\n    <label className="flex cursor-pointer items-center justify-between gap-2">\n      <span className="text-ink-soft">显示网格</span>\n      <Switch checked={v} onCheckedChange={on} />\n    </label>\n  );\n}\n',
     );
     const { code, output } = run();
-    expect(code, output).toBe(0);
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P78");
+    expect(output).not.toMatch(/P23\s*→/);
   });
 
   it("使用 FormField 的文件不再被 P23 计（合规者不误伤）", () => {
@@ -3989,6 +4069,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("棘轮：已登记的存量放行，新增的仍阻断", () => {
+    demoteToRatchet("P1");
     write("src/components/workshop/Known.tsx", BUTTON_VIEW);
     seedBaseline();
     expect(run().code).toBe(0);
@@ -4000,6 +4081,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("棘轮：同一文件处数上升也阻断（只许降不许升）", () => {
+    demoteToRatchet("P1");
     write("src/components/studio/G.tsx", BUTTON_VIEW);
     seedBaseline();
     write("src/components/studio/G.tsx", BUTTON_VIEW + BUTTON_VIEW);
@@ -4009,6 +4091,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("--update 拒绝放宽基线（不得用 --update 掩盖新增）", () => {
+    demoteToRatchet("P1");
     write("src/components/studio/H.tsx", BUTTON_VIEW);
     seedBaseline();
     write("src/components/studio/I.tsx", BUTTON_VIEW);
@@ -4018,6 +4101,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("治理后收紧：--strict 要求执行 --update，收紧后转绿", () => {
+    demoteToRatchet("P1");
     write("src/components/studio/J.tsx", BUTTON_VIEW);
     seedBaseline();
     write("src/components/studio/J.tsx", "export const J = 1;\n");
@@ -4037,10 +4121,24 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("基线文件缺失时给可行动提示而不是静默通过", () => {
+    // 「先有基线」只对棘轮成立：登记着存量才有可比的东西。
+    demoteToRatchet("P1");
     write("src/components/studio/L.tsx", BUTTON_VIEW);
     const { code, output } = run();
     expect(code).toBe(1);
     expect(output).toContain("--update");
+  });
+
+  it("全是硬闸时，缺基线不再成为假前置（照样数得出命中）", () => {
+    /* 反例形态：82 条全升硬闸之后，「基线缺失」如果仍然先决退出，那么删掉基线
+     * 文件就能让门禁只报「先跑 --update」而不去数硬闸 —— 而 `--update` 此时又被
+     * 硬闸拒收，门禁自己把自己锁死。硬闸的判据是「恒为 0」，与基线在不在无关。 */
+    write("src/components/studio/L2.tsx", BUTTON_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P1");
+    expect(output).toContain("src/components/studio/L2.tsx");
+    expect(output).not.toContain("基线文件缺失");
   });
 
   /* ── 注释里的 `<button>` 是说明，不是实现 ────────────────────────────────
@@ -4081,6 +4179,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("写入的基线带 rules 说明与 total（清单不自证失效）", () => {
+    demoteToRatchet("P1", "P2", "P3");
     write("src/components/studio/M.tsx", BUTTON_VIEW);
     seedBaseline();
     const baseline = JSON.parse(
@@ -4100,8 +4199,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 基于 shadcn 已装基元二次封装。范围收窄到 ui/ 是因为视图层的
    * `WorkflowPickChip` / `ShotStatusBadge` 等业务包装消费 ui/ 基元后
    * 用同样的命名不算轮子（见脚本内 UI_ONLY_RULES 的注释）。
-   * Empty / Field 基元当前未装，命中数即棘轮起点，装上并二次封装后
-   * 自动清零。 */
+   * Empty / Field 两条子判据的「基元未装、先冻结起点」前置已经不成立：
+   * `ui/empty.tsx` 与 `ui/field.tsx` 都已装并被业务多处消费，本条现在是硬闸、
+   * 须为 0。（当年那句判断据是「`components.json` 里没有 empty」—— 而那个文件
+   * 只记 aliases / registries，从来不代表装了哪些组件。） */
 
   it("P67 a. Badge 绕开：ui/ 里 `export function X(Badge|Chip|Tag)` 未 import Badge → 阻断", () => {
     seedBaseline();
@@ -4440,24 +4541,1001 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       [
         "const ANSI = {",
         "  // p71-allow:start ANSI SGR 终端色是 §3.6.1 例外",
-        '  inside: "text-red-700 dark:text-red-400",',
+        '  inside: "dark:text-red-400",',
         "  // p71-allow:end",
-        '  outside: "text-rose-700 dark:text-rose-400",',
+        '  outside: "dark:text-rose-400",',
         "};",
         "export function V() {",
         "  return <span>{ANSI.inside}{ANSI.outside}</span>;",
         "}",
       ].join("\n"),
     );
-    const { code, output } = run(["--update"]);
+    /* P71 已升硬闸（本 PR · 与 P79 同批清零）· `--update` 会被「未清零」
+     * 直接拒绝；改用 `--report` 只出清单不判失败。allow 块内那一处被剥、
+     * 块外那一处计入 → 总数恰好 1、文件数 1。 */
+    const { code, output } = run(["--report"]);
     expect(code, output).toBe(0);
-    const baseline = JSON.parse(
-      readFileSync(
-        join(workdir, "scripts", ".ui-primitives-baseline.json"),
-        "utf8",
-      ),
-    ) as { files: Record<string, { P71?: number }> };
-    // 块外那一处计入、块内那一处被 allow 标记剥掉 → 恰好 1，而不是 2。
-    expect(baseline.files["src/components/studio/P71Allow.tsx"]?.P71).toBe(1);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P71 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 1 处 \/ 1 文件/);
+  });
+
+  /* ── P72「模态无可访问名」（硬闸）差分回归 ─────────────────────────
+   * 见 scripts/check-ui-primitives.cjs 里 P72 注释与规范 §16.2.3 /
+   * shadcn composition.md「Dialog/Sheet always need a Title」。
+   * 判据按标签块扫 `<DialogContent>` / `<SheetContent>`，块内既无
+   * 对应 Title 组件又无 aria-label/aria-labelledby 即计 1。 */
+  it("P72 DialogContent 无 Title/aria-label → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72BareDialog.tsx",
+      [
+        "import { Dialog, DialogContent } from '~/components/ui/dialog';",
+        "export function V() {",
+        "  return (",
+        "    <Dialog open>",
+        "      <DialogContent>",
+        "        <h2>模型适配器</h2>",
+        "      </DialogContent>",
+        "    </Dialog>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P72");
+    expect(output).toContain("studio/P72BareDialog.tsx");
+  });
+
+  it("P72 SheetContent 无 SheetTitle/aria-label → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72BareSheet.tsx",
+      [
+        "import { Sheet, SheetContent } from '~/components/ui/sheet';",
+        "export function V() {",
+        "  return (",
+        "    <Sheet open>",
+        "      <SheetContent side='right'>",
+        "        <div>面板</div>",
+        "      </SheetContent>",
+        "    </Sheet>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P72");
+    expect(output).toContain("studio/P72BareSheet.tsx");
+  });
+
+  it("P72 有 DialogTitle 放行（可以是 sr-only）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72WithDialogTitle.tsx",
+      [
+        "import { Dialog, DialogContent, DialogTitle } from '~/components/ui/dialog';",
+        "export function V() {",
+        "  return (",
+        "    <Dialog open>",
+        "      <DialogContent>",
+        "        <DialogTitle className='sr-only'>模型适配器</DialogTitle>",
+        "        <h2 aria-hidden>模型适配器</h2>",
+        "      </DialogContent>",
+        "    </Dialog>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P72 有 aria-label 放行（本仓库自绘 header 的主用写法）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72WithAriaLabel.tsx",
+      [
+        "import { Dialog, DialogContent } from '~/components/ui/dialog';",
+        "export function V() {",
+        "  return (",
+        "    <Dialog open>",
+        "      <DialogContent aria-label='模型选择'>",
+        "        <h3 className='u-title'>模型选择</h3>",
+        "      </DialogContent>",
+        "    </Dialog>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P72 有 aria-labelledby 放行（confirm-dialog 类内联 titleId 的写法）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72WithLabelledBy.tsx",
+      [
+        "import { Dialog, DialogContent } from '~/components/ui/dialog';",
+        "export function V({ titleId }: { titleId: string }) {",
+        "  return (",
+        "    <Dialog open>",
+        "      <DialogContent aria-labelledby={titleId}>",
+        "        <h2 id={titleId}>确认</h2>",
+        "      </DialogContent>",
+        "    </Dialog>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P72 一个文件里多个 DialogContent 各计一次（多模态叠加要逐个补 aria）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P72Multi.tsx",
+      [
+        "import { Dialog, DialogContent } from '~/components/ui/dialog';",
+        "export function V() {",
+        "  return (",
+        "    <>",
+        "      <Dialog open><DialogContent><div>a</div></DialogContent></Dialog>",
+        "      <Dialog open><DialogContent aria-label='ok'><div>b</div></DialogContent></Dialog>",
+        "      <Dialog open><DialogContent><div>c</div></DialogContent></Dialog>",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    /* P72 是硬闸：`--update` 会被「未清零」直接拒绝（这是判据应有的表现，
+     * 别拿它当"冻结现状"的通道）。这里只用严格 run() 断言：
+     * ① 阻断；② 输出里点名这一文件；③ 计到 2 处（同文件两段各计一次）。 */
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P72");
+    expect(output).toContain("studio/P72Multi.tsx");
+    expect(output).toMatch(/P72[^\n]*2\s*处|P72Multi\.tsx（2\s*处）/);
+  });
+
+  /* ── P73「视图层自闭合 <div> + border-X 是手搓分隔线」（硬闸）差分回归 ──
+   * 见 scripts/check-ui-primitives.cjs 里 P73 注释：合规出口
+   * `~/components/ui/separator` 的 `<Separator>`；含子内容的卡片结构边框
+   * 不算（那是容器的一部分）。 */
+  it('P73 视图层自闭合 <div className="border-t"> → 阻断', () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P73Hr.tsx",
+      [
+        "export function V() {",
+        '  return <div className="border-border h-px w-full border-t" />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P73");
+    expect(output).toContain("studio/P73Hr.tsx");
+  });
+
+  it("P73 含子内容的卡片结构边框不误伤（那不是分隔线）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P73Footer.tsx",
+      [
+        "export function V() {",
+        '  return <div className="border-border border-t px-4 py-3">footer 内容</div>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P73 自闭合 div + border-l 也拦（覆盖 {t|b|l|r} 四变体）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P73Vertical.tsx",
+      [
+        "export function V() {",
+        '  return <div className="border-border self-stretch border-l" />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P73");
+  });
+
+  /* ── P75「视图层手搓空态卡」（棘轮）差分回归 ─────────────────
+   * 见 scripts/check-ui-primitives.cjs 里 P75 注释：三重条件（非自闭合 +
+   * border-dashed + rounded-xl/2xl/3xl + 无 cursor-pointer + 无内部
+   * onClick + 有子文本）· 合规出口 `<EmptyState>` / `<Empty>`。 */
+  it("P75 手搓空态卡（border-dashed + rounded-xl + 内含文本）→ 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P75Empty.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <div className="border-border text-muted-foreground rounded-xl border border-dashed p-12 text-center">',
+        "      还没有内容",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P75");
+    expect(output).toContain("studio/P75Empty.tsx");
+  });
+
+  it("P75 有 cursor-pointer 的 dashed「添加占位」不误伤（是交互按钮、不是空态卡）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P75AddTile.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <div className="border-dashed rounded-xl cursor-pointer flex flex-col items-center justify-center gap-2.5 py-7">',
+        "      <span>新建项目</span>",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P75 内含 onClick 的 dashed 卡不误伤（同上是交互卡）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P75Clickable.tsx",
+      [
+        "export function V({ onClick }) {",
+        "  return (",
+        '    <div className="border-dashed rounded-xl p-8" onClick={onClick}>',
+        "      点我新建",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P75 自闭合虚线分隔线不误伤（那是 P73 的账 · 双判据互斥）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P75Divider.tsx",
+      [
+        "export function V() {",
+        '  return <div className="border-border flex-1 border-t border-dashed rounded-xl" />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    /* 自闭合被 P73 拦、P75 不该同时报。 */
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P73");
+    expect(output).not.toMatch(/新增\s+P75/);
+  });
+
+  /* ── P76「视图层裸写 <select>」（棘轮）差分回归 ────────────────
+   * 见 scripts/check-ui-primitives.cjs 里 P76 注释：P68 拦住了裸
+   * `<input>` / `<textarea>`、P69 拦住了裸 checkbox/radio；`<select>` 是同族
+   * 漏项。合规出口有两个（`ui/native-select` 的 `<NativeSelect>` 或
+   * `ui/select-menu` 的 `<SelectMenu>`），本判据只按形态数、不管选哪个。 */
+  it("P76 视图层裸 <select> 计入棘轮（相对基线增量 → 阻断）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P76RawSelect.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <select defaultValue='a'>",
+        "      <option value='a'>A</option>",
+        "    </select>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P76");
+    expect(output).toContain("studio/P76RawSelect.tsx");
+  });
+
+  it("P76 `ui/native-select.tsx` 是这条账要收口的唯一出口，走 EXEMPT_DIRS 天然豁免", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/native-select.tsx",
+      [
+        "export function NativeSelect() {",
+        "  return <select data-slot='native-select' />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P76 不误伤同前缀标识符与类名（selectedValue / select-none / onSelect 等）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P76FalsePositive.tsx",
+      [
+        "export function V({ selectedValue, onSelect }: { selectedValue: string; onSelect: (s: string) => void }) {",
+        "  return <div className='select-none' data-value={selectedValue} onClick={() => onSelect('x')}>x</div>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P78「视图层裸写 <label>」（棘轮）差分回归 ────────────────
+   * 见 scripts/check-ui-primitives.cjs 里 P78 注释：与 P23 是同一族账的两层
+   * （P23 数表单行组合形态、已清零；P78 数任意 <label 起始标签、含无控件的
+   * 孤立 label）。合规出口：FormField / FieldLabel / Base UI Checkbox 的
+   * children。锚点 `<label[\s/>]`，不误伤 labelClassName / label= 同前缀。 */
+  it("P78 视图层裸 <label> 计入棘轮（相对基线增量 → 阻断）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P78RawLabel.tsx",
+      [
+        "export function V() {",
+        "  return <label className='text-xs'>名称</label>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P78");
+    expect(output).toContain("studio/P78RawLabel.tsx");
+  });
+
+  it("P78 ui/label.tsx 与 ui/field.tsx 是这条账要收口的出口，走 EXEMPT_DIRS 天然豁免", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/label.tsx",
+      [
+        "export function Label() {",
+        "  return <label htmlFor='x'>ok</label>;",
+        "}",
+      ].join("\n"),
+    );
+    write(
+      "src/components/ui/field.tsx",
+      [
+        "export function FieldLabel() {",
+        "  return <label htmlFor='y'>ok</label>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P78 不误伤同前缀属性名（labelClassName / label='x' / <labeling），只数 <label 起始标签", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P78FalsePositive.tsx",
+      [
+        "export function V({ labelClassName }: { labelClassName: string }) {",
+        "  return (",
+        "    <div",
+        "      label='text'",
+        "      data-hint='<labeling not real tag'",
+        "    >",
+        "      <span className={labelClassName}>ok</span>",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── 判据引入顺带解锁的 --update 逻辑：判据引入 vs 已有规则上升 ─────
+   * 见 scripts/check-ui-primitives.cjs 里 `before && after > before` 的
+   * 分支重构。测试锁：
+   *   · 旧基线里从没出现过的 rule id（新加判据的起点登记）→ `--update` 允许；
+   *   · 旧基线里已经有过的 rule id 上升 → `--update` 必须拒绝。
+   * 步骤：先造一个 P1 现场 → `--update` 登记起点 → 再写第二个 P1 →
+   * 第二次 `--update` 必须拦下（P1 已在基线、从 1 涨到 2 是"已有 rule 上升"）。
+   * 载体挑棘轮里最朴素的 P1（视图层裸 `<button>`）：P71/P78/P79/P80/P81
+   * 都在其他 PR 里升硬闸、走不到「新判据起点登记」这条分支了。 */
+  it("--update 允许登记新判据起点、但拦下已有 rule id 的上升", () => {
+    demoteToRatchet("P1");
+    write(
+      "src/components/studio/P1Seed.tsx",
+      [
+        "export function V() {",
+        '  return <button type="button">seed</button>;',
+        "}",
+      ].join("\n"),
+    );
+    /* 第一次 --update：P1 从未在旧基线出现过、这是判据引入的起点登记，
+     * 允许通过。 */
+    const { code: firstCode, output: firstOut } = run(["--update"]);
+    expect(firstCode, firstOut).toBe(0);
+    /* 再写一个 P1 文件：after=2，基线里的 P1=1 已存在，此时上升就是"已有
+     * rule 上升"、必须拒绝。 */
+    write(
+      "src/components/studio/P1Regress.tsx",
+      [
+        "export function V() {",
+        '  return <button type="button">regress</button>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code: secondCode, output: secondOut } = run(["--update"]);
+    expect(secondCode, secondOut).not.toBe(0);
+    expect(secondOut).toContain("拒绝放宽基线");
+    expect(secondOut).toMatch(/P1[^\n]*1 → 2/);
+  });
+
+  /* ── P77「视图层手写 aria-pressed」（棘轮）差分回归 ────────────
+   * 见 scripts/check-ui-primitives.cjs 里 P77 注释：合规出口是
+   * `~/components/ui/toggle-group` 的 `<ToggleGroup>` + `<ToggleGroupItem>`
+   * （内部由 Base UI 自动打 `aria-pressed` 与 `data-state`、给键盘导航与
+   * 组内互斥关系带 `role="group"`）。视图里出现 `aria-pressed=` 字面量 =
+   * 该文件在**手写一份"哪一个是选中"的状态契约**。 */
+  it("P77 视图层手写 aria-pressed 计入棘轮（相对基线增量 → 阻断）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P77ManualToggle.tsx",
+      [
+        "import { Button } from '~/components/ui/button';",
+        "export function V({ active, onClick }: { active: boolean; onClick: () => void }) {",
+        "  return (",
+        "    <Button aria-pressed={active} onClick={onClick}>",
+        "      选项",
+        "    </Button>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P77");
+    expect(output).toContain("studio/P77ManualToggle.tsx");
+  });
+
+  it("P77 `ui/toggle-group.tsx` 是这条账要收口的唯一出口，走 EXEMPT_DIRS 天然豁免", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/toggle-group.tsx",
+      [
+        "export function ToggleGroupItem() {",
+        "  return <button aria-pressed={true}>x</button>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P77 无 aria-pressed 的普通 <Button> 不误伤", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P77NoToggle.tsx",
+      [
+        "import { Button } from '~/components/ui/button';",
+        "export function V() {",
+        "  return <Button onClick={() => {}}>纯动作按钮</Button>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P79「视图层无 dark: 前缀的浅色原色板」（棘轮）差分回归 ──────
+   * 见 scripts/check-ui-primitives.cjs 里 P79 注释：与 P71 是同一族账的两
+   * 半（P71 数带 `dark:` 的、P79 数不带前缀的浅色版），例外块共用一份
+   * `p71-allow`。锚点用 `(?!dark:)` 前瞻避免与 P71 双计。 */
+  it("P79 视图层 bg-violet-500 无 dark: 前缀 → 计入棘轮", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P79RawPalette.tsx",
+      [
+        "export function V() {",
+        "  return <span className='bg-violet-500 text-fuchsia-700'>x</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P79");
+    expect(output).toContain("studio/P79RawPalette.tsx");
+  });
+
+  it("P79 与 P71 分工：带 dark: 前缀的归 P71 管、不误伤 P79", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P79OnlyDark.tsx",
+      [
+        "export function V() {",
+        "  return <span className='dark:bg-violet-400 dark:text-fuchsia-300'>x</span>;",
+        "}",
+      ].join("\n"),
+    );
+    /* P71 / P79 都是硬闸（P71 本 PR 升 · P79 #1088 升）：strict run 会拦、
+     * 但**只该**是 P71 报的（`dark:` 前缀归 P71 管、P79 的 `(?!dark:)`
+     * 前瞻把它排掉了）。硬闸的命中行形态是 `P71 → path（N 处）`、不是
+     * 棘轮的「新增 P71」。 */
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toMatch(/P71\s*→/);
+    expect(output).not.toMatch(/P79\s*→/);
+  });
+
+  it("P79 不误伤语义 token（bg-primary / text-ink-muted / border-border-strong）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P79Semantic.tsx",
+      [
+        "export function V() {",
+        "  return <span className='bg-primary text-ink-muted border-border-strong ring-primary/30'>x</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P79 与 P71 共享 p71-allow 例外块（§3.6.1 ANSI/装饰色一份标记管两条判据）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P79Allow.tsx",
+      [
+        "const PALETTE =",
+        "  // p71-allow:start ANSI SGR 8 色是 §3.6.1 例外",
+        "  { inside: 'bg-red-500 text-emerald-700' },",
+        "  // p71-allow:end",
+        ";",
+        "export const outside = 'bg-amber-500';",
+        "export function V() {",
+        "  return <span className={PALETTE.inside}>{outside}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    /* P79 是硬闸（#1088 起）、`--update` 会被「未清零」直接拒绝；改用
+     * `--report` 只出清单不判失败、再解析 P79 那一行：allow 块内的两处
+     * `bg-red-500` / `text-emerald-700` 被剥、只有 outside 的 `bg-amber-500`
+     * 计入 → 总数恰好 1、文件数 1。 */
+    const { code, output } = run(["--report"]);
+    expect(code, output).toBe(0);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P79 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 1 处 \/ 1 文件/);
+  });
+
+  /* p71-allow 支持 JSX 注释形态（`//` 前缀只能落 JS 表达式位；JSX 顶层兄弟
+   * 节点位需要 `{/* p71-allow:start *\/}` 形式）。同一段里两形态混合声明，
+   * 两处 allow 之外的 raw palette 才被计入。 */
+  it("p71-allow 同时认 `//` 与 JSX 注释两形态（JSX 顶层位不再无处声明）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P79JsxAllow.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        "      {/* p71-allow:start brand gradient · 项目品牌色 */}",
+        "      <div className='from-violet-500 to-fuchsia-500' />",
+        "      {/* p71-allow:end */}",
+        "      <div className='bg-amber-500'>外</div>",
+        "      {true && (",
+        "        // p71-allow:start ANSI SGR 终端色",
+        "        <div className='bg-red-500 text-emerald-700' />",
+        "        // p71-allow:end",
+        "      )}",
+        "      <div className='bg-sky-500'>外二</div>",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    /* P79 是硬闸（#1088 起）、`--update` 会被「未清零」直接拒绝；改用
+     * `--report` 只出清单不判失败。两处 allow 都生效：JSX 注释形态包住
+     * from-violet/to-fuchsia（计 2 处 palette 但被剥）、`//` 形态包住
+     * bg-red-500 与 text-emerald-700（计 2 处、被剥）；allow 之外两处
+     * bg-amber-500 与 bg-sky-500 各计一次 → 总数 2。 */
+    const { code, output } = run(["--report"]);
+    expect(code, output).toBe(0);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P79 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 2 处 \/ 1 文件/);
+  });
+
+  /* ── P80「视图层 w-N 与 h-N 同值应换 size-N」（棘轮）差分回归 ────
+   * 见 scripts/check-ui-primitives.cjs 里 P80 注释。合规出口是 tailwind 内建
+   * 的 `size-N`（同一份 `w-N h-N` 的简写）。判据按 className 字符串解析、
+   * 交集非空即计一处。 */
+  it("P80 视图层同 className 里 w-8 + h-8 → 计入棘轮（阻断）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P80EqualWH.tsx",
+      [
+        "export function V() {",
+        "  return <div className='w-8 rounded-lg h-8' />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P80");
+    expect(output).toContain("studio/P80EqualWH.tsx");
+  });
+
+  it("P80 只有一侧（w-8 或 h-8）不误伤；不等值（w-8 h-9）也不算这条账", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P80Asymmetric.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        "      <div className='w-8' />",
+        "      <div className='h-8' />",
+        "      <div className='w-8 h-9' />",
+        "      <div className='w-full h-14' />",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P80 两个独立 className 各有一对 w-N h-N → 计 2 处（一处一处治理）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P80TwoSites.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        "      <div className='w-8 h-8 rounded-full' />",
+        "      <div className='h-3 w-3 bg-primary' />",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    /* P80 是硬闸（#1022 起）、`--update` 会被「未清零」直接拒绝；改用
+     * `--report` 只出清单不判失败，P80 那一行总数=2、文件数=1。 */
+    const { code, output } = run(["--report"]);
+    expect(code, output).toBe(0);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P80 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 2 处 \/ 1 文件/);
+  });
+
+  /* ── P81「视图层 <Button> 直接子 icon 缺 data-icon」（棘轮）差分回归 ────
+   * 见 scripts/check-ui-primitives.cjs 里 P81 注释与 `isP81IconName` 白名单：
+   * 判据扫 `<Button[\s>][\s\S]*?</Button>` 块、按 tag 深度 1（Button 的
+   * 直接子级）取 icon-like 起始标签（`Icon` / `svg` / 后缀 `Icon` /
+   * lucide 白名单），开括号里没 `data-icon=` 即计一处。合规出口是
+   * `data-icon="inline-start"`（icon 在文字前）或 `"inline-end"`（icon
+   * 在文字后）—— shadcn `buttonVariants` 的 `has-data-[icon=*]` 选择器
+   * 只吃**直接子级**，故深层嵌套不算这条账。 */
+  it("P81 Button 直接子 <Icon name> 无 data-icon → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P81Missing.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <Button>\n      <Icon name="settings" size={16} />\n      去配置\n    </Button>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P81");
+    expect(output).toContain("studio/P81Missing.tsx");
+  });
+
+  it("P81 合规出口：data-icon=inline-start / inline-end 不再计", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P81Ok.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        '      <Button>\n        <Plus data-icon="inline-start" /> 新建\n      </Button>',
+        '      <Button>\n        删除 <Trash2 data-icon="inline-end" />\n      </Button>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P81 深层嵌套（icon 不在 Button 直接子级）不算这条账", () => {
+    /* shadcn 的 `has-data-[icon=*]` 选择器只吃直接子级 —— 那种写法加了
+     * data-icon 也不生效、不属本判据的治理面；判据必须显式**不计**它，
+     * 否则逼下一个人把外层 span 拆掉去迎合机器（业务不该为判据让步）。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P81Nested.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <Button>\n      <span className="flex items-center gap-1">\n        <Plus />\n        Label\n      </span>\n    </Button>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P81 lucide 后缀 Icon 命名（ChevronLeftIcon 等）与项目自研 Icon/svg 一并算 icon-like", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P81IconSuffix.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        "      <Button>",
+        "        <ChevronLeftIcon />",
+        "        Prev",
+        "      </Button>",
+        "      <Button>",
+        '        <svg viewBox="0 0 24 24" />',
+        "        画布",
+        "      </Button>",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    /* 两处：`ChevronLeftIcon` 命中 `*Icon` 后缀、`svg` 是原生内建。 */
+    const line = output
+      .split(/\r?\n/)
+      .find((l) => l.includes("] P81 ") ?? l.includes("P81 →"));
+    expect(line ?? output).toMatch(/P81/);
+    expect(output).toContain("P81IconSuffix.tsx");
+  });
+
+  /* ── P82「视图层 `<Button>` 原生 title=」（硬闸）差分回归 ─────────
+   * 见 scripts/check-ui-primitives.cjs 里 P82 注释：合规出口是
+   * `~/components/ui/hint` 的 `<Hint label=…>`（`Tooltip` + Base UI
+   * `TooltipTrigger render={…}` 的薄封装）。
+   * 判据取「`<Button` 之后整段属性」，属性段由 `readJsxAttrsPastTag()` 平衡
+   * 扫描。引入时用的是粗锚 `[^>]*`，它会被属性段里箭头函数 / `{a > b}` /
+   * 带引号的值里那个 `>` 截断 —— 粗锚在真实库上数到 78、AST 复数是 157。
+   * 下面的「漏计已闭合」那条就是钉这个：三种曾被漏掉的形态现在都计到。 */
+  it('P82 视图层 <Button title="x"> 直接阻断（硬闸命中行形态）', () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82RawTitle.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <Button title="删除">x</Button>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toMatch(/P82\s*→/);
+    expect(output).toContain("studio/P82RawTitle.tsx");
+  });
+
+  it('P82 多行 <Button\n  title="x"\n> 也计入（跨行属性段仍在开括号里）', () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82Multiline.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <Button",
+        '      variant="ghost"',
+        '      title="删除节点"',
+        "      onClick={onDelete}",
+        "    >",
+        "      ⌫",
+        "    </Button>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toMatch(/P82\s*→/);
+    expect(output).toContain("studio/P82Multiline.tsx");
+  });
+
+  it("P82 计数不再被属性段里的 > 截断（粗锚曾漏计的三种形态现在全计到）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82ArrowFn.tsx",
+      [
+        "export function V({ count, a, b }: Props) {",
+        "  return (",
+        "    <>",
+        '      <Button onClick={() => a > b} title="箭头函数在前">一</Button>',
+        '      <Button disabled={count > 0} title="表达式里带比较">二</Button>',
+        '      <Button aria-label="a>b" title="引号里带尖括号">三</Button>',
+        '      <Button title="本来就能计到的">四</Button>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    /* 用 --report（只出清单、不判失败）锁计数：粗锚时代这条只有 1，
+     * 平衡扫描后是 4 —— 漏计闭死才是本条能升硬闸的前提。 */
+    const { code, output } = run(["--report"]);
+    expect(code, output).toBe(0);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P82 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 4 处 \/ 1 文件/);
+  });
+
+  it("P82 不误伤 <Hint> 与 <Tooltip render={<Button/>}>（两种合规出口）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82Ok.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        '      <Hint label="删除当前节点" accessibleName>',
+        "        <Button onClick={x}>⌫</Button>",
+        "      </Hint>",
+        "      <Tooltip>",
+        "        <TooltipTrigger render={<Button onClick={x}>删除</Button>} />",
+        "        <TooltipContent>删除当前节点</TooltipContent>",
+        "      </Tooltip>",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P82 不误伤同前缀组件（<ButtonLink> / <ButtonGroup> 不算 <Button>）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82FalsePositive.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <ButtonLink href="/x" title="返回">',
+        "      返回",
+        "    </ButtonLink>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（棘轮）差分回归 ──────
+   * 判据见 scripts/check-ui-primitives.cjs 里 P83 的注释：只管 h1（屏级），
+   * 属性段必须出现 u-title-page / u-title-hero / text-page / text-hero 之一，
+   * 且不得再叠 text-lg / text-[34px] 这类硬写字号。 */
+  it("P83 h1 各屏自写字号 → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P83MissingTier.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <h1 className="font-title text-ink text-xl font-bold">历史记录</h1>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P83");
+    expect(output).toContain("studio/P83MissingTier.tsx");
+  });
+
+  it("P83 已走档但再叠硬写字号 → 仍计（档位给数，调用点不补第二套）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P83DoubleSize.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <h1 className="u-title-page text-[34px]">首页</h1>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P83");
+  });
+
+  it("P83 合规出口：u-title-page / u-title-hero / text-page 都不计", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P83Ok.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        '      <h1 className="font-title u-title-page">模型库</h1>',
+        '      <h1 className="u-title-hero text-center">把创意变成成片</h1>',
+        '      <h1 className="text-page">设置</h1>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P83 数组 / cn(...) 形态的 className 要读得到档位（粗锚会在这里漏计）", () => {
+    /* `className={[...].join("")}` 与 `cn("u-title-page", a > b ? … : …)` 里都有
+     * `>`，用 `[^>]*` 那种粗锚会在表达式中间早停、把这行判成「没有档位要求」，
+     * 于是判据在这里静默失效 —— 属性段必须平衡扫描（同 P82 的教训）。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P83ArrayAttrs.tsx",
+      [
+        "export function V({ n }: { n: number }) {",
+        "  return (",
+        "    <>",
+        '      <h1 className={["u-title-page", n > 1 ? "mt-2" : ""].join(" ")}>列表</h1>',
+        '      <h1 className={cn("u-title-page", n > 1 ? "text-ink" : "text-ink")}>另一屏</h1>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P83 只管屏级标题：h2 / h3 的多档微排版不入本条", () => {
+    /* 区块级标题刻意保留 10.5–14px 的几档，并成一档会压平层次；判据越界就会
+     * 逼下一个人拆掉合理的排版去迎合机器。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P83Sections.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        '      <h2 className="text-sm font-semibold">筛选</h2>',
+        '      <h3 className="text-[10.5px] font-semibold tracking-wider">节点</h3>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
   });
 });

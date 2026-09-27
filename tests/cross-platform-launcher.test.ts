@@ -364,6 +364,80 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 });
 
 /**
+ * Phase 2-C：`scripts/executor-host.mjs` 作为 launcher 的受管子进程。
+ *
+ * 真进程级验证在 `tests/executor-host.test.ts`（Phase 2-B 已合入）——那三条断
+ * 进程能起来、能收 SIGTERM、日志落对地方。这一族**只测接线**：dev-launcher 侧
+ * 的 spawnExecutorHost 必须走同一份 `spawnInGroup`（否则 POSIX 上无进程组、
+ * reapAll 只能单杀 leader 留孤儿，正是 AGENTS 硬规则 3 禁止的形态）、必须把
+ * child 塞进 `spawned` 数组（否则 launcher 收尾时 host 变孤儿）、必须受
+ * `COMFY_EXECUTOR` env 门控且**默认 inline**（Phase 2 是灰度起手，不接管流量）。
+ * 另加一条：`standalone-private-inputs.mjs` 的 `RUNTIME_SCRIPTS` 必须含
+ * `executor-host.mjs`——桌面包用户改 `.env` 试 host 模式时，脚本得随包带出去。
+ */
+describe("Phase 2-C：executor-host 接入 launcher", () => {
+  const launcherSrc = fs.readFileSync(
+    path.join(process.cwd(), "scripts", "dev-launcher.mjs"),
+    "utf8",
+  );
+  const whitelistSrc = fs.readFileSync(
+    path.join(process.cwd(), "scripts", "standalone-private-inputs.mjs"),
+    "utf8",
+  );
+
+  it("spawnExecutorHost 走 spawnInGroup（平台判据不自己摸 process.platform）", () => {
+    // 找到 spawnExecutorHost 函数体的起止，断它内部用了 spawnInGroup
+    const start = launcherSrc.indexOf("export function spawnExecutorHost(");
+    expect(start, "spawnExecutorHost 未定义").toBeGreaterThan(-1);
+    const end = launcherSrc.indexOf("\n}", start);
+    const body = launcherSrc.slice(start, end);
+    expect(body).toContain("spawnInGroup(");
+    // 反向：不能出现 `spawn(` 直接调（那是绕过进程组语义的形态）。
+    expect(body).not.toMatch(/(?<!spawnInGroup\()spawn\(/);
+  });
+
+  it("spawnExecutorHost 把 child push 进 spawned 数组（reapAll 才能覆盖）", () => {
+    const start = launcherSrc.indexOf("export function spawnExecutorHost(");
+    const body = launcherSrc.slice(start, launcherSrc.indexOf("\n}", start));
+    expect(body).toContain("spawned.push(child)");
+  });
+
+  it("run() 里以 COMFY_EXECUTOR 门控、默认 inline 不 spawn（Phase 2 只灰度）", () => {
+    // 默认必须是 inline —— 未显式设 env 时不能起 host。3-B1 起判据收进
+    // `resolveComfyExecutorMode()`（进程 env → .env 回读 → "inline"），
+    // 门控本身形状不变：只认 `host`，其它值 warn 后走 inline 分支。
+    expect(launcherSrc).toMatch(
+      /const executorMode = resolveComfyExecutorMode\(\)/,
+    );
+    expect(launcherSrc).toMatch(/return raw \|\| ["']inline["']/);
+    // 只有 `host` 才 spawn；其它值 warn 后走 inline 分支。
+    expect(launcherSrc).toMatch(/executorMode === ["']host["']/);
+    expect(launcherSrc).toMatch(/spawnExecutorHost\(\)/);
+  });
+
+  it("3-B1：host 子进程拿到归一化后的 COMFY_EXECUTOR，且 resolver 回读 .env", () => {
+    // 显式回写：`.env` 来源时子进程 process.env 里没有这个 key，不传会造成
+    // 「launcher 认为 host 模式、host 起着骨架」的静默错配。
+    const start = launcherSrc.indexOf("export function spawnExecutorHost(");
+    const body = launcherSrc.slice(start, launcherSrc.indexOf("\n}", start));
+    expect(body).toContain("COMFY_EXECUTOR: resolveComfyExecutorMode()");
+    // resolver 本体必须有 .env 回读（复用 parseEnvFile，不另写一份解析）。
+    const rStart = launcherSrc.indexOf(
+      "export function resolveComfyExecutorMode(",
+    );
+    expect(rStart, "resolveComfyExecutorMode 未定义").toBeGreaterThan(-1);
+    const rBody = launcherSrc.slice(rStart, launcherSrc.indexOf("\n}", rStart));
+    expect(rBody).toContain("parseEnvFile(");
+    expect(rBody).toContain('"COMFY_EXECUTOR"');
+  });
+
+  it("RUNTIME_SCRIPTS 含 executor-host.mjs（桌面包用户改 .env 才能试 host）", () => {
+    // 白名单里必须显式列出来；「新增脚本默认不进产物」这条纪律就是靠这个断言守着。
+    expect(whitelistSrc).toMatch(/["']executor-host\.mjs["']/);
+  });
+});
+
+/**
  * 目录迁移的静默失效面：`scripts/**` 用**运行时字符串**加载 `src/lib` 的 TS 模块
  * （纯 Node 靠类型剥离加载，因此路径必须带 `.ts` 后缀），这种说明符不参与 `tsc` /
  * `eslint` 的静态解析，模块换子域时它不会红，只在执行到那一行时抛

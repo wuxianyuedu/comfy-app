@@ -30,9 +30,14 @@ export function runCapture(command, args, timeoutMs = 10_000) {
   // 第一句要问的就是「到底探了什么」，而探测结果本身（空串）看不出来。
   echoCommandLine(command, args);
   return new Promise((resolve) => {
-    execFile(command, args, { timeout: timeoutMs, encoding: "utf8", windowsHide: true }, (err, stdout) => {
-      resolve(err ? "" : String(stdout ?? ""));
-    });
+    execFile(
+      command,
+      args,
+      { timeout: timeoutMs, encoding: "utf8", windowsHide: true },
+      (err, stdout) => {
+        resolve(err ? "" : String(stdout ?? ""));
+      },
+    );
   });
 }
 
@@ -58,15 +63,40 @@ export async function listeningPidsOnPort(port) {
   return [...new Set(raw)].sort((a, b) => a - b);
 }
 
+/* netstat 原始输出的短缓存：`scanPorts` 对相邻三个端口各调一次
+ * `listeningPidsWindows`，而 `netstat -ano -p TCP` 的输出覆盖**全部**端口 ——
+ * 三次调用等于同一份输出跑三遍子进程。1s 内复用同一份快照：探测语义本来就是
+ * 「这一瞬间谁在听」，相邻毫秒级调用间不存在需要区分的状态变化；真正要重新
+ * 看一眼的是下一轮轮询（早已超出 TTL）。并发调用合并为同一次在途探测。 */
+const NETSTAT_SNAPSHOT_TTL_MS = 1000;
+let netstatSnapshot = { at: 0, text: "" };
+let netstatInFlight = null;
+
+/** @returns {Promise<string>} */
+async function netstatTcpSnapshot() {
+  if (Date.now() - netstatSnapshot.at < NETSTAT_SNAPSHOT_TTL_MS) {
+    return netstatSnapshot.text;
+  }
+  netstatInFlight ??= runCapture("netstat", ["-ano", "-p", "TCP"]).then(
+    (text) => {
+      netstatSnapshot = { at: Date.now(), text };
+      netstatInFlight = null;
+      return text;
+    },
+  );
+  return netstatInFlight;
+}
+
 /** @param {number} port @returns {Promise<number[]>} */
 async function listeningPidsWindows(port) {
-  const out = await runCapture("netstat", ["-ano", "-p", "TCP"]);
+  const out = await netstatTcpSnapshot();
   /** @type {number[]} */
   const pids = [];
   for (const line of out.split(/\r?\n/)) {
     // 形如：TCP    127.0.0.1:3311    0.0.0.0:0    LISTENING    12345
     const cols = line.trim().split(/\s+/);
-    if (cols.length < 5 || cols[0] !== "TCP" || cols[3] !== "LISTENING") continue;
+    if (cols.length < 5 || cols[0] !== "TCP" || cols[3] !== "LISTENING")
+      continue;
     if (!cols[1]?.endsWith(`:${port}`)) continue;
     const pid = Number.parseInt(cols[4] ?? "", 10);
     if (Number.isInteger(pid) && pid > 0) pids.push(pid);
@@ -126,6 +156,53 @@ async function listeningPidsPosix(port) {
     }
   }
   return pids;
+}
+
+/** 批量取多个 PID 的命令行（键 = PID，取不到的键缺席）。
+ *
+ *  Windows 侧把「每 PID 一次 PowerShell 冷启动」（0.5~1.5s）合并为一次：
+ *  `Get-CimInstance Win32_Process -Filter "ProcessId=a OR ProcessId=b …"`。
+ *  POSIX 用 `ps -o pid=,args= -p a,b,c` 一条命令拿全（ps 本就支持逗号列表）。
+ *  @param {number[]} pids @returns {Promise<Map<number, string>>} */
+export async function processCommandLines(pids) {
+  const out = new Map();
+  if (!pids.length) return out;
+  if (!isWindows()) {
+    const text = await runCapture("ps", [
+      "-o",
+      "pid=,args=",
+      "-p",
+      pids.join(","),
+    ]);
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const cut = trimmed.indexOf(" ");
+      const pid = Number.parseInt(cut > 0 ? trimmed.slice(0, cut) : "", 10);
+      if (Number.isInteger(pid)) out.set(pid, trimmed.slice(cut + 1));
+    }
+    return out;
+  }
+  const filter = pids.map((pid) => `ProcessId=${pid}`).join(" OR ");
+  const text = await runCapture("powershell", [
+    "-NoProfile",
+    "-Command",
+    `(Get-CimInstance Win32_Process -Filter "${filter}") | Select-Object ProcessId, CommandLine | ConvertTo-Json -Compress`,
+  ]);
+  let parsed;
+  try {
+    parsed = JSON.parse(text || "null");
+  } catch {
+    return out;
+  }
+  const rows = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const pid = Number.parseInt(String(row.ProcessId ?? ""), 10);
+    const cmdline = typeof row.CommandLine === "string" ? row.CommandLine : "";
+    if (Number.isInteger(pid) && cmdline) out.set(pid, cmdline);
+  }
+  return out;
 }
 
 /** 某 PID 的工作目录（判「这个进程属不属于本检出」）。

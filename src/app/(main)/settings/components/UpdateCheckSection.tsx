@@ -16,9 +16,10 @@ import { useState } from "react";
 import { useUpdateCheckStore } from "~/components/update-check/update-check-store";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 
-import { Card } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { FieldLabel } from "~/components/ui/field";
 
 export function UpdateCheckSection() {
   const updateCheckEnabled = useUpdateCheckStore((s) => s.enabled);
@@ -38,7 +39,7 @@ export function UpdateCheckSection() {
   };
 
   return (
-    <Card title="本地更新检测">
+    <SettingsCard title="本地更新检测">
       <p className="text-muted-foreground mb-4 text-sm">
         桌面壳开着时，本地源码由 dev server 自动热更（无需提示）。仅当
         <strong className="text-ink/80">改完当前窗口不生效、得重启</strong>
@@ -54,12 +55,12 @@ export function UpdateCheckSection() {
             useUpdateCheckStore.getState().setEnabled(next === true)
           }
         />
-        <label
+        <FieldLabel
           htmlFor="local-update-check-enabled"
           className="text-ink/80 text-sm"
         >
           开启运行期「本地更新需重启」检测
-        </label>
+        </FieldLabel>
       </div>
       <div className="border-border bg-surface-1 mb-3 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm">
         <Button
@@ -71,7 +72,11 @@ export function UpdateCheckSection() {
           {checking ? (
             <Spinner className="size-3.5" />
           ) : (
-            <ArrowLeft size={14} className="rotate-90" />
+            <ArrowLeft
+              data-icon="inline-start"
+              size={14}
+              className="rotate-90"
+            />
           )}
           立即检测本地更新
         </Button>
@@ -80,6 +85,6 @@ export function UpdateCheckSection() {
             (dirty ? "存在需重启的改动" : "未检测到需重启的改动")}
         </span>
       </div>
-    </Card>
+    </SettingsCard>
   );
 }

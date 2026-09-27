@@ -19,7 +19,7 @@ import {
 import { useLogCategoryStore } from "~/components/studio/logs/log-category-store";
 import { ORIGIN_TEXT } from "~/components/studio/logs/LogPanelOriginSelect";
 
-import { Card } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
 
 /** 给每个分类一句简短说明，帮用户判断「这是不是我想关的那一类」。 */
 const CATEGORY_HINT: Record<LogCategoryFilter, string> = {
@@ -35,7 +35,7 @@ export function LogCategorySection() {
   const setEnabled = useLogCategoryStore((s) => s.setEnabled);
 
   return (
-    <Card title="日志分类开关">
+    <SettingsCard title="日志分类开关">
       <p className="text-muted-foreground mb-4 text-sm">
         关闭某一类，它的日志就
         <strong className="text-ink/80">不在日志面板里显示</strong>
@@ -69,6 +69,6 @@ export function LogCategorySection() {
           );
         })}
       </ul>
-    </Card>
+    </SettingsCard>
   );
 }

@@ -28,8 +28,10 @@ const LEVELS = {
 };
 /** @typedef {"STEP" | "OK" | "WARN" | "ERROR" | "INFO"} LogLevel */
 
-/** 本地时间戳（YYYY-MM-DD HH:mm:ss.mmm，与 app-runtime 面板可解析的格式一致）。 */
-function localTimestamp(at = new Date()) {
+/** 本地时间戳（YYYY-MM-DD HH:mm:ss.mmm，与 app-runtime 面板可解析的格式一致）。
+ *  本文件内所有时间形态的唯一来源：日志行内容与按次命名的文件名都由它派生，
+ *  因此两侧时钟必然一致（曾出现文件名走 UTC、行内容走本地，同一份日志差 8 小时）。 */
+export function localTimestamp(at = new Date()) {
   /** @param {number} n @param {number} [width] */
   const p = (n, width = 2) => String(n).padStart(width, "0");
   return (
@@ -38,10 +40,10 @@ function localTimestamp(at = new Date()) {
   );
 }
 
-/** 按次命名的运行戳（文件名安全：去掉冒号与点）。 */
-/** @param {Date} [at] @returns {string} */
+/** 按次命名的运行戳（文件名安全：去掉冒号、点与空格）。
+ * @param {Date} [at] @returns {string} */
 export function runStamp(at = new Date()) {
-  return at.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  return localTimestamp(at).replace(/[:. ]/g, "-").slice(0, 19);
 }
 
 /**
@@ -54,28 +56,66 @@ export function runStamp(at = new Date()) {
  * @param {{ file?: string, timestampInFileName?: boolean }} [options]
  * @returns {{ file: string, write: (message: string, level?: LogLevel) => void, close: () => void }}
  */
-export function createLogSink(root, { file, timestampInFileName = false } = {}) {
+export function createLogSink(
+  root,
+  { file, timestampInFileName = false } = {},
+) {
   const dir = path.join(root, "log", LOG_DIRS.launcher);
   fs.mkdirSync(dir, { recursive: true });
-  const target = file ?? path.join(dir, timestampInFileName ? `dev-launcher-${runStamp()}.log` : "dev-launcher.log");
+  const target =
+    file ??
+    path.join(
+      dir,
+      timestampInFileName
+        ? `dev-launcher-${runStamp()}.log`
+        : "dev-launcher.log",
+    );
   try {
     fs.writeFileSync(target, "", "utf8");
   } catch {
     /* 落盘失败不影响启动本身（由失败路径的用户可见出口兜底） */
   }
+
+  /* 缓冲落盘：编排器日志每条一次 `appendFileSync` 是 open/write/close × 每行，
+   * 攒进缓冲、满 16KB / 500ms / 进程 exit 时一次落盘。exit 钩子保证
+   * `archiveRunLog`（进程退出前的归档）读到的文件是完整的；
+   * 崩溃（kill -9）最多丢一份未满缓冲，对启动日志可接受。 */
+  let pending = "";
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let flushTimer = null;
+  const flush = () => {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    if (!pending) return;
+    const text = pending;
+    pending = "";
+    try {
+      fs.appendFileSync(target, text, "utf8");
+    } catch {
+      /* 见上 */
+    }
+  };
+  process.on("exit", flush);
+
   return {
     file: target,
     write(message, level = "INFO") {
       const line = `[${localTimestamp()}] [${LEVELS[level] ?? LEVELS.INFO}] ${message}`;
       process.stdout.write(`${line}\n`);
-      try {
-        fs.appendFileSync(target, `${line}\n`, "utf8");
-      } catch {
-        /* 见上 */
+      pending += `${line}\n`;
+      if (pending.length >= 16 * 1024) {
+        flush();
+        return;
       }
+      flushTimer ??= setTimeout(() => {
+        flushTimer = null;
+        flush();
+      }, 500);
     },
     close() {
-      /* 目前无需释放句柄：追加写每次都开/关文件，避免锁住日志文件 */
+      flush();
     },
   };
 }

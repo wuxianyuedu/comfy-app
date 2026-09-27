@@ -14,7 +14,21 @@
 //
 // HMR 安全：启动单飞锁与子进程句柄挂在 globalThis 上，模块重载不会重复拉起。
 
-import "server-only";
+// §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批·最后一站）。
+// 静态依赖全部在 comfyui 前 8 批 + lib 层地基批中纯化：`../app-settings/app-settings.server`
+// （`.server` 后缀、内部只 fs/path/./index）、`./client`、`~/lib/core/logger`
+// （#1075 通链 app-runtime-log → #1074 log-paths）、`~/lib/process/kill-process-tree`
+// （3rd class 原型）、`./launch-path` / `./proc-detect`（#1056）、
+// `~/lib/shell/open-in-browser`（#1077）、`~/lib/with-timeout`、
+// `~/lib/log/log-paths`（#1074）、`~/lib/time-format`、`../retry-policy`、
+// `~/lib/session-banner.server`（`.server` 后缀、内部无 server-only）、
+// `./lifecycle-launch` / `./lifecycle-derive` / `./lifecycle-exit`
+// （#1077 / #1080）、`./trace`（#1060）、`./status`（#1080）。
+// 下面第 561 行的 top-level `const COMFY_SESSION_MARK = \`${SERVICES_LOG_DIR}/…\``
+// 是**加载即求值**——它能否在纯 Node 里成功取决于 `log-paths` 已摘 server-only
+// （#1074）。这条正是 P3 §5 里之前停在 comfyui 边时点出的「lifecycle 卡在
+// log-paths」——本批随 lib 地基批收口。
+// 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import type { spawn } from "child_process";
 import fs from "fs";
 import { getSettingsSync } from "../app-settings/app-settings.server";

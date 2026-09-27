@@ -1,5 +1,6 @@
 "use client";
 import { useMemo } from "react";
+import { Hint } from "~/components/ui/hint";
 import { JsonViewer } from "~/components/ui/json-viewer";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
@@ -88,18 +89,19 @@ export function SourceModal({
               </p>
             </div>
             {/* 唯一的一枚关闭按钮（`DialogContent` 的内置那枚已关掉）。
-                `aria-label` 与 `title` 都给：按钮内容是「✕」这个字形，
-                accessible name 会算成「✕」——读屏器念不出「关闭」。 */}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onClose}
-              className="text-ink-muted hover:text-ink-soft"
-              aria-label="关闭"
-              title="关闭"
-            >
-              ✕
-            </Button>
+                按钮内容是「✕」这个字形，accessible name 会算成「✕」——读屏器
+                念不出「关闭」，所以名字显式给 `aria-label`，说明文字走 `<Hint>`。 */}
+            <Hint label="关闭">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onClose}
+                className="text-ink-muted hover:text-ink-soft"
+                aria-label="关闭"
+              >
+                ✕
+              </Button>
+            </Hint>
           </div>
 
           {/* Actions */}

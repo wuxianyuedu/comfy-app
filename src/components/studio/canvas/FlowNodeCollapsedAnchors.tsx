@@ -96,7 +96,7 @@ export function FlowNodeCollapsedAnchors({
             position={Position.Left}
             id={String(k)}
             isConnectable={false}
-            className="!h-2 !w-2 !rounded-full"
+            className="!size-2 !rounded-full"
             style={{
               left: 0,
               top: `calc(50% + ${offset}px)`,
@@ -118,7 +118,7 @@ export function FlowNodeCollapsedAnchors({
             position={Position.Right}
             id={`out:${name}`}
             isConnectable={false}
-            className="!h-2 !w-2 !rounded-full"
+            className="!size-2 !rounded-full"
             style={{
               right: 0,
               top: `calc(50% + ${offset}px)`,

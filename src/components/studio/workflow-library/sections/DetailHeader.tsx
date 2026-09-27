@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/page-loading";
+import { Hint } from "~/components/ui/hint";
+import { Spinner } from "~/components/ui/spinner";
 import { SourceTag } from "~/components/ui/source-tag";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { modeLabel } from "../workflow-library-config";
@@ -92,25 +93,30 @@ export function DetailHeader({
               对齐」。行高统一到 1 之后，三者都由自己的字号（10px）决定。 */}
           <div className="mt-2 flex flex-wrap items-center gap-2 leading-none">
             <span className="relative">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  if (modes.length > 1) setShowAllModes((value) => !value);
-                }}
-                disabled={modes.length <= 1}
-                title={
+              <Hint
+                label={
                   modes.length > 1
                     ? "该工作流支持多种模式，点击查看全部"
                     : modes[0]
                       ? `${modeLabel(modes[0])}（${modes[0]}）`
                       : undefined
                 }
-                className={`h-auto gap-0 p-0 disabled:opacity-100 ${
-                  modes.length > 1 ? "cursor-pointer" : "cursor-default"
-                }`}
+                accessibleName
+                wrap
               >
-                <TaskTypeChip taskType={workflow.taskType} />
-              </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    if (modes.length > 1) setShowAllModes((value) => !value);
+                  }}
+                  disabled={modes.length <= 1}
+                  className={`h-auto gap-0 p-0 disabled:opacity-100 ${
+                    modes.length > 1 ? "cursor-pointer" : "cursor-default"
+                  }`}
+                >
+                  <TaskTypeChip taskType={workflow.taskType} />
+                </Button>
+              </Hint>
               {showAllModes && modes.length > 1 && (
                 <div
                   className={`border-border bg-panel absolute top-full left-0 ${zClass("popup")} mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border p-1.5 shadow-xl`}
@@ -173,7 +179,7 @@ export function DetailHeader({
         >
           <ActionButton
             onClick={onUse}
-            icon={<Plus className="h-3.5 w-3.5" />}
+            icon={<Plus className="size-3.5" />}
             label="导入画布"
             title={
               usable
@@ -186,7 +192,7 @@ export function DetailHeader({
           <ModelTagPicker meta={meta} />
           <ActionButton
             onClick={onEdit}
-            icon={<Edit3 className="h-3.5 w-3.5" />}
+            icon={<Edit3 className="size-3.5" />}
             label="编辑"
             title="在工作流编辑器中打开"
           />
@@ -197,7 +203,7 @@ export function DetailHeader({
                 busyResync ? (
                   <Spinner className="size-3.5" />
                 ) : (
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <RefreshCw className="size-3.5" />
                 )
               }
               label={busyResync ? "同步中" : "同步"}
@@ -206,18 +212,18 @@ export function DetailHeader({
           )}
           <ActionButton
             onClick={onOpenSource}
-            icon={<FileJson className="h-3.5 w-3.5" />}
+            icon={<FileJson className="size-3.5" />}
             label="源文件"
           />
           <ActionButton
             onClick={onDownload}
-            icon={<Download className="h-3.5 w-3.5" />}
+            icon={<Download className="size-3.5" />}
             label={busyDownload ? "准备中" : "下载"}
             disabled={busyDownload}
           />
           <ActionButton
             onClick={onDelete}
-            icon={<Trash2 className="h-3.5 w-3.5" />}
+            icon={<Trash2 className="size-3.5" />}
             label="删除"
             variant="danger"
           />

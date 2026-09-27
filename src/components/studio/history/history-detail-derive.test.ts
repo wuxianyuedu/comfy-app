@@ -106,6 +106,9 @@ describe("deriveWorkshopParams", () => {
       ],
     });
     const rows = deriveWorkshopParams(detail, "T2I", null, null);
+    /* 清单是四口：`seed` 随「API 通道改远端模型按模式适配器」那一批进内置口径
+     * （`model-mode-contract.ts`），本用例的期望值当时没跟着改。下面按
+     * rows[0..2] 取提示词 / 负向 / 尺寸的断言不受影响 —— 种子排在末尾。 */
     expect(rows.map((r) => r.id)).toEqual([
       "prompt",
       "negative",

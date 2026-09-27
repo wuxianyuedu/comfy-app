@@ -13,20 +13,11 @@
 import React from "react";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
+import { errorMessage } from "~/lib/error-message";
 import {
   uploadImageFile,
   uploadMediaFile,
 } from "~/lib/project-canvas/canvas-api";
-
-/** catch 抛出值（unknown）→ 与旧 `err?.message ?? fallback` 逐值等价的
- *  消息提取：带 string message 的对象取 message（含空串），其余回退。 */
-function errorMessage(err: unknown): string | undefined {
-  if (typeof err === "object" && err !== null && "message" in err) {
-    const m = (err as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return undefined;
-}
 
 export interface UseFileUploadArgs {
   patch: (p: Partial<CanvasNodeData>) => void;
@@ -48,7 +39,7 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
           patch({ [uploadTo.current]: name, upstreamId: undefined }),
         )
         .catch((err: unknown) =>
-          patch({ error: errorMessage(err) ?? "上传失败", status: "error" }),
+          patch({ error: errorMessage(err, "上传失败"), status: "error" }),
         );
     },
   });
@@ -73,7 +64,7 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
           patch({ mediaPath: name, mediaName: f.name, upstreamId: undefined }),
         )
         .catch((err: unknown) =>
-          patch({ error: errorMessage(err) ?? "上传失败", status: "error" }),
+          patch({ error: errorMessage(err, "上传失败"), status: "error" }),
         );
     },
   });
@@ -93,7 +84,7 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
       const { name } = await uploadMediaFile(f);
       patch({ mediaPath: name, mediaName: f.name, upstreamId: undefined });
     } catch (err: unknown) {
-      patch({ error: errorMessage(err) ?? "上传失败", status: "error" });
+      patch({ error: errorMessage(err, "上传失败"), status: "error" });
     }
   };
 

@@ -1,4 +1,3 @@
-import "server-only";
 import path from "path";
 
 /* ── log/ 目录布局的唯一事实来源 ────────────────────────────────────────
@@ -11,9 +10,9 @@ import path from "path";
  * 「唯一」指的是**同一条链路上**：本模块服务应用服务（Next）侧；启动编排
  * （`scripts/launcher-core/log.mjs`，纯 Node 宿主）与 Windows 工具脚本
  * （`tools/scripts/Log-Common.ps1`）各自持有自己那半边的布局表 —— 前者是
- * `.mjs`（由启动器动态加载 TS 会连带 `server-only` 的 throw 一起崩），
- * 后者是 PowerShell（根本读不了 TS）。它们**不是**本模块的消费方，
- * 也不该被本模块「代为声明」。
+ * `.mjs`（启动器**刻意不引**本模块，各留一份布局字面量；不是被 server-only
+ * 挡住——见下方 §18.4 第三类登记），后者是 PowerShell（根本读不了 TS）。
+ * 它们**不是**本模块的消费方，也不该被本模块「代为声明」。
  *
  * 此前这里额外导出了 `TOOLS_LOG_DIR` / `ARCHIVE_LOG_DIR` /
  * `DEV_LAUNCHER_STDOUT_LOG` / `DEV_LAUNCHER_STDERR_LOG` /
@@ -21,6 +20,20 @@ import path from "path";
  * 两套脚本，各自按自己的字面量拼路径。留着它们只会让读代码的人以为「改这里
  * 就能改布局」，实际改了什么也不会发生（§12.15 第二条「保留必须写得出谁在
  * 什么时候会用」，写不出即删）。
+ *
+ * ## §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）
+ *
+ * 本模块只有一条 Node 内建值 import（`path`）+ 一堆 `path.join` 常量，
+ * 不引任何 server-only 侧模块，形态上与 `src/lib/process/kill-process-tree.ts`
+ * 同族。摘掉 `import "server-only"` 后按第三类登记进
+ * `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
+ * 这是 P3 executor host 迁移能往下的**共同地基**：logger / app-runtime-log /
+ * capture-streams / session-banner / comfyui lifecycle / trace 都静态引
+ * `log-paths`；只要它带 server-only，纯 Node 里 `await import("~/lib/core/logger")`
+ * 的 promise 就会因这一层的 throw 而 reject、上层 comfyui 的 lazy 兜底接不进去。
+ * 「浏览器图别引我」这条约束**不由 server-only 兜**——scanner 的 clientReachable
+ * 判据（`scripts/lib-node-only-scan.mjs`）盯着「有 `"use client"` 静态引到时
+ * 顶层是否有 Node 内建」，path 命中即红。
  */
 
 /** 日志根目录（<项目根>/log）。 */

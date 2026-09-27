@@ -235,6 +235,10 @@ export const MODE_CONTRACT_INPUT_TYPES = [
   { type: "negative", label: EXPOSED_PARAM_DISPLAY_LABEL.negative },
   { type: "size", label: EXPOSED_PARAM_DISPLAY_LABEL.size },
   { type: "duration", label: EXPOSED_PARAM_DISPLAY_LABEL.duration },
+  /* 种子口（#942 抽卡纠偏）是内置口：exposedParamsForMode 对每个模式都产它，
+   * 这里不同步认它的话，契约一旦走归一化 / 保存链路，seed 口会被静默过滤掉
+   *（isModeContractInputId 判 false），编辑器里也看不到这一口。 */
+  { type: "seed", label: EXPOSED_PARAM_DISPLAY_LABEL.seed },
   {
     type: "reference-image",
     label: EXPOSED_PARAM_DISPLAY_LABEL["reference-image"],

@@ -122,5 +122,8 @@ function startHeartbeat() {
       logger.warn(`[comfyui] ${errorText(err, "heartbeat processQueue 失败")}`);
     }
   }, HEARTBEAT_MS);
+  /* `unref()`：心跳是常驻后台职责，不该把 Node 事件循环吊住 —— dev server
+   * 关停时能自然退出。常驻的 HTTP server 仍持有事件循环，不会提前退出。 */
+  heartbeatHandle.unref?.();
 }
 startHeartbeat();

@@ -26,7 +26,16 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+/**
+ * 依赖 POSIX 执行语义的用例开关（shebang 能被内核解析、chmod 的 exec 位有效）。
+ * Windows 上 libuv 不解析 shebang、chmodSync 不存执行位，这些用例的 spawn
+ * 探测必然失败 —— 它们是给 POSIX CI（原 .cnb.yml）钉契约的；Windows 侧对应
+ * 行为已由「.CMD 否决 / .ps1 回退」那组不依赖真实 spawn 的用例钉住。
+ */
+const needsPosixExec = it.skipIf(process.platform === "win32");
+
 import {
+  clearWhichCommandCache,
   commandInvocation,
   executableExts,
   executableKind,
@@ -49,6 +58,9 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "toolchain-gate-"));
+  // `whichCommand` 现在有进程内记忆化，而本文件的用例会在**同一个 tmp 路径**
+  // 上覆写重造 pnpm 形态 —— 每个用例先清缓存，避免读到上一个用例的旧结论。
+  clearWhichCommandCache();
 });
 
 afterEach(() => {
@@ -157,7 +169,7 @@ describe("whichCommand 只认「真的能跑」的候选", () => {
     ).toBeNull();
   });
 
-  it("能跑的 shim 会被选中（不会被垫底的 .CMD 抢走）", () => {
+  needsPosixExec("能跑的 shim 会被选中（不会被垫底的 .CMD 抢走）", () => {
     const dir = makeWindowsPnpmDir({ shim: "working", cmd: true });
     expect(whichCommand("pnpm", { env: WIN_ENV(dir), platform: "win32" })).toBe(
       path.join(dir, "pnpm"),
@@ -172,18 +184,25 @@ describe("whichCommand 只认「真的能跑」的候选", () => {
     expect(executableKind(path.join(dir, "pnpm.CMD"))).toBe("batch");
   });
 
-  it("不可执行的候选给出原因（权限位 / 起不来各有其名），供上层拼提示", () => {
-    // 权限位不对（POSIX 上不可执行）→ no-exec-permission
-    const noPerm = path.join(tmp, "pnpm");
-    fs.writeFileSync(noPerm, "#!/bin/sh\necho 1\n");
-    fs.chmodSync(noPerm, 0o644);
-    expect(usableCommand(noPerm).reason).toBe("no-exec-permission");
-    // 权限位正常但真起不来（shebang 指向不存在的解释器）→ 带出 error.code
+  it("不可执行的候选给出原因（起不来 → 带出 error.code），供上层拼提示", () => {
+    // 权限位正常但真起不来（shebang 指向不存在的解释器）→ 带出 error.code。
+    // 平台无关：ENOENT（Windows 起不了无扩展名脚本）与 ENOEXEC / EACCES（POSIX）
+    // 都算「真起了一下的失败」，reason 必须带出具体 code 而不是塌成一句。
     const dir = makeWindowsPnpmDir({ shim: "broken" });
     const result = usableCommand(path.join(dir, "pnpm"));
     expect(result.ok).toBe(false);
     expect(["ENOENT", "EACCES", "ENOEXEC"]).toContain(result.reason);
   });
+
+  needsPosixExec(
+    "不可执行的候选给出原因：权限位不对 → no-exec-permission（exec 位是 POSIX 语义）",
+    () => {
+      const noPerm = path.join(tmp, "pnpm");
+    fs.writeFileSync(noPerm, "#!/bin/sh\necho 1\n");
+      fs.chmodSync(noPerm, 0o644);
+      expect(usableCommand(noPerm).reason).toBe("no-exec-permission");
+    },
+  );
 });
 
 describe("批处理形态不再被当成「可用」（ISSUE #576 第二轮，实测 EINVAL）", () => {
@@ -286,7 +305,7 @@ describe("探测结果区分成因（probePnpm / probeCommand）", () => {
     expect(probe.detail).not.toBe("未知错误");
   });
 
-  it("命令能起但报错退出：reason=exit-nonzero 且带出实际输出", () => {
+  needsPosixExec("命令能起但报错退出：reason=exit-nonzero 且带出实际输出", () => {
     const script = path.join(tmp, "pnpm");
     fs.writeFileSync(
       script,
@@ -300,7 +319,7 @@ describe("探测结果区分成因（probePnpm / probeCommand）", () => {
     expect(probe.detail).toContain("Failed to switch pnpm");
   });
 
-  it("能用时带出解析到的版本号", () => {
+  needsPosixExec("能用时带出解析到的版本号", () => {
     const script = path.join(tmp, "pnpm");
     fs.writeFileSync(script, "#!/bin/sh\necho 12.4.1\n");
     fs.chmodSync(script, 0o755);
@@ -506,21 +525,26 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
     return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
   }
 
-  it("对齐成功：报已对齐（带前后版本号），不留下「你只能自己修」的 WARN", () => {
-    const { status, out } = runSelfCheck(
-      makeAlignableToolchain({ aligns: true }),
-    );
-    expect(status).toBe(0);
-    expect(out).toContain("已对齐");
-    expect(out).toContain("10.34.5");
-    expect(out).toContain(packageManagerVersion(ROOT)!);
-    expect(out).not.toContain("自动对齐未生效");
-  });
+  needsPosixExec(
+    "对齐成功：报已对齐（带前后版本号），不留下「你只能自己修」的 WARN",
+    () => {
+      const { status, out } = runSelfCheck(
+        makeAlignableToolchain({ aligns: true }),
+      );
+      expect(status).toBe(0);
+      expect(out).toContain("已对齐");
+      expect(out).toContain("10.34.5");
+      expect(out).toContain(packageManagerVersion(ROOT)!);
+      expect(out).not.toContain("自动对齐未生效");
+    },
+  );
 
-  it("对齐失败：复核后才 WARN，并给出手动命令（版本号取自 package.json）", () => {
-    const { status, out } = runSelfCheck(
-      makeAlignableToolchain({ aligns: false }),
-    );
+  needsPosixExec(
+    "对齐失败：复核后才 WARN，并给出手动命令（版本号取自 package.json）",
+    () => {
+      const { status, out } = runSelfCheck(
+        makeAlignableToolchain({ aligns: false }),
+      );
     expect(status).toBe(0); // 与启动器一致：版本不一致不阻断
     expect(out).toContain("自动对齐未生效");
     expect(out).toContain(
@@ -528,10 +552,12 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
     );
   });
 
-  it("node_modules 未装时点出下一道门禁，不让「[OK] pnpm 可用」被读成「可以启动了」", () => {
-    const { status, out } = runSelfCheck(
-      makeAlignableToolchain({ aligns: true }),
-    );
+  needsPosixExec(
+    "node_modules 未装时点出下一道门禁，不让「[OK] pnpm 可用」被读成「可以启动了」",
+    () => {
+      const { status, out } = runSelfCheck(
+        makeAlignableToolchain({ aligns: true }),
+      );
     expect(status).toBe(0);
     // 本仓库测试环境两态都可能（CI 装了 / 干净检出没装），只钉「不存在假装没事」：
     // 未装时必须出现 node_modules 的 WARN 与修复动作。
@@ -646,7 +672,7 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     ).toBeNull();
   });
 
-  it("POSIX 上不退化为 pnpm.cmd（判据不按平台分叉）", () => {
+  needsPosixExec("POSIX 上不退化为 pnpm.cmd（判据不按平台分叉）", () => {
     const dir = makeWindowsPnpmDir({ shim: "working" });
     const inv = pnpmInvocation(["dev"], {
       env: { PATH: dir },
