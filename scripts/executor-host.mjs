@@ -225,7 +225,9 @@ async function bootRuntime() {
 
   const { createTaskRepoImpl } =
     await import("../src/lib/core/repository-task-impl.ts");
-  const hostRepo = createTaskRepoImpl(drizzle(client));
+  // owner:"host" 与下方 configureReaper 的 owner 同源：impl 的收口写入现在带
+  // 归属条件（ADR §14 D4），两处不一致会让本进程的收口全部静默 skip。
+  const hostRepo = createTaskRepoImpl(drizzle(client), { owner: "host" });
 
   const { configureReaper, reapStaleQueuedTasks, reapStaleRunningTasks } =
     await import("../src/lib/comfyui/reaper.ts");

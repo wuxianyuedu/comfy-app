@@ -41,7 +41,7 @@ describe("configureEnqueue 接缝", () => {
   it("接受 Partial<EnqueueDeps>、两次调用是合并语义", () => {
     const fakeRepo = {
       findStatusAndPromptById: async () => null,
-      cancel: async () => undefined,
+      cancel: async () => "written" as const,
     };
     expect(() => mod.configureEnqueue({ taskRepo: fakeRepo })).not.toThrow();
     // 再来一次空 Partial：合法、只是没覆盖任何东西。
