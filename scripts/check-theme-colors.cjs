@@ -17,7 +17,12 @@
  *   ② **棘轮层**（`scripts/.theme-color-baseline.json`）：豁免后仍有存量的
  *      未 token 化写死色值，按「文件 → 处数」记账，**只许降不许升** ——
  *      新写的写死色值一律阻断，逐批治理时基线跟着收紧；
- *   ③ **报告层**（`--report`）：只出清单不判失败，供盘点/排批次用。
+ *   ③ **反向两层**（都是硬闸，不进基线）：
+ *      · **死豁免**：登记在表上却一处都不命中的条目 = 负债，会把该文件今后的
+ *        写死色值静默放行，出现即阻断（口径按文件、不按条目，见下方注释）；
+ *      · **幽灵 token**：呈现属性引用了从未定义的 `--color-*` —— 不报错、只是
+ *        颜色消失（`fill` 退黑、`stroke` 退 none），出现即阻断；
+ *   ④ **报告层**（`--report`）：只出清单不判失败，供盘点/排批次用。
  *
  * ⚠️ 豁免必须**显式**：清单里逐条列出「文件 + 该文件里被豁免的顶层标识符 + 理由」，
  * 不做「按目录/按关键字通配」的模糊放行 —— 模糊放行会让真正的漏改混在豁免里
@@ -26,8 +31,9 @@
  *
  * 判定口径：
  *   检查  = 遍历 `src/**`，统计每个文件的写死色值，减去显式豁免；
- *   通过  = 未豁免计数 ≤ 基线（且新增文件/新增处数不得抬高基线）；
- *   失败  = 出现基线外的新增写死色值（退出码 1），并列出行号。
+ *   通过  = 未豁免计数 ≤ 基线（且新增文件/新增处数不得抬高基线），
+ *           且「无死豁免」「无幽灵 token」两条硬闸都过；
+ *   失败  = 出现基线外的新增写死色值 / 死豁免 / 幽灵 token（退出码 1），并列出行号。
  *
  * 用法：
  *   node scripts/check-theme-colors.cjs            # 检查（棘轮：只许降不许升）
@@ -212,27 +218,12 @@ const EXEMPT_TABLES = [
       "端口类型色 / 描边常量（PORT_STROKE、portColorFor、portChipStyle 的**文字色**）：色值即类型语义；chip 的**底色**已两态化（--color-chip-type-*-bg），不在豁免范围",
   },
   {
-    file: "src/components/ui/seed-mode-button.tsx",
-    exports: [],
-    reason: "seed 模式图标的类型配色（内联 SVG fill/stroke），内容色",
-  },
-  {
     file: "src/components/studio/workflow-form/DynamicWorkflowForm/constants.ts",
     exports: ["ACCENT", "SECTION_ACCENT", "PIN_ACCENT"],
     reason:
       "动态表单控件类型色（ACCENT：image/select/int/float… 分组色常量表），" +
       "以及由它派生的段头两档（SECTION_ACCENT / PIN_ACCENT：此前在 " +
       "GroupedControls 与 IoEndpointsSection 各写一份同值字面量）",
-  },
-  {
-    file: "src/components/studio/workflow-library/WorkflowParamCardColumn.tsx",
-    exports: [],
-    reason: "工作流库参数卡端口圆点类型色（与 PORT_COLORS 同源）",
-  },
-  {
-    file: "src/components/studio/workflow-library/CustomNodesSettings/constants.ts",
-    exports: [],
-    reason: "自定义节点状态徽标配色（已加载/目录不存在/解析出错…）常量表",
   },
   {
     file: "src/components/studio/workflow-library/workflow-library-wire-graph.ts",
@@ -440,14 +431,7 @@ const EXEMPT_TABLES = [
  *    叠在画布/媒体之上、必须比承载对象更暗。整条清单的权威副本是
  *    `src/app/globals.css` 的「固定暗色清单」注释块。
  */
-const EXEMPT_FIXED_DARK = [
-  {
-    file: "src/components/studio/workflow-editor/WorkflowEditorInner.tsx",
-    exports: [],
-    reason:
-      "画布底部操作提示气泡 bg-black/60 + 子工作流加载遮罩 bg-black/20（清单条目 1、2）",
-  },
-];
+const EXEMPT_FIXED_DARK = [];
 
 /** 全部豁免落点索引：rel → [entry…]。 */
 const EXEMPT_INDEX = new Map();
@@ -510,6 +494,30 @@ function classifyFile(rel) {
   return { wholeFile, names, lines };
 }
 
+/* ── 幽灵 token：引用了从未定义的 --color-* ─────────────────── */
+
+/**
+ * 呈现属性写 `fill="var(--color-x)"`，而 `--color-x` 全仓没人定义时**什么错都不报**：
+ * `fill` 退成黑色初值、`stroke` 退成 `none` —— 图标变黑块、描边类图形整条消失。
+ * 这比留一处写死色值更糟：写死至少还是设计稿里那个颜色。
+ *
+ * 实测来历：`ui/seed-mode-button.tsx` 的 5 颗 `--color-seed-*` 是在一次目录归并
+ * 里从写死色值改成 `var()` 引用的，`globals.css` 却没补上定义，四个 seed 图标
+ * 从此静默失效。同一件事的另一面是「该文件的主题色豁免不再命中任何东西」——
+ * 死豁免把它暴露了出来，所以两条判据同批补。
+ *
+ * **判据边界**（说清不覆盖什么，别以为这条能抓所有未定义变量）：
+ *   · 只认 `fill` / `stroke` / `stopColor` 一类**呈现属性**上的字符串字面量
+ *     `var(--color-…)`，且**没有兜底值**（`var(--x, #fff)` 不报 —— 取不到也有色）；
+ *   · `style={{}}`、Tailwind 任意值 `text-(--x)`、以及运行期注入的变量
+ *     （`--transform-origin` / `--sidebar-width` 这些由 base-ui 与宿主代码写入的）
+ *     一律不判：实测 Tailwind 裸变量写法 310 处引用里有 43 处「CSS 里查无此名」，
+ *     全部是运行期注入 —— 静态硬判会误报一片，那部分交给 review。
+ */
+const PRESENTATION_VAR_RE =
+  /\b(?:fill|stroke|stopColor|stop-color|flood-color|lighting-color)\s*=\s*["']var\(\s*(--color-[\w-]+)\s*\)["']/g;
+const CSS_VAR_DECL_RE = /^\s*(--color-[\w-]+)\s*:/gm;
+
 /* ── 主流程 ──────────────────────────────────────────────── */
 
 function walk(dir, out = []) {
@@ -531,6 +539,19 @@ const rel = (p) =>
 
 const violations = [];
 const exempted = [];
+const ghosts = [];
+
+/**
+ * 全仓 CSS 里**真实声明过**的 `--color-*`（`@theme` 与 `.dark` 覆盖都算）。
+ * 先去注释再取：被注释掉的那行声明不算定义 —— 幽灵 token 的形态恰恰是
+ * 「引用还在、定义没了」。
+ */
+const declaredColorVars = new Set();
+for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
+  if (!/\.css$/.test(abs)) continue;
+  const css = stripComments(fs.readFileSync(abs, "utf8"));
+  for (const m of css.matchAll(CSS_VAR_DECL_RE)) declaredColorVars.add(m[1]);
+}
 
 for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
   const r = rel(abs);
@@ -570,6 +591,19 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
       text: lines[i].trim(),
     });
   }
+
+  /* 幽灵 token：同一个文件循环里顺手扫，避免第二次遍历 src。 */
+  for (let i = 0; i < codeLines.length; i++) {
+    for (const m of codeLines[i].matchAll(PRESENTATION_VAR_RE)) {
+      if (declaredColorVars.has(m[1])) continue;
+      ghosts.push({
+        file: r,
+        line: i + 1,
+        name: m[1],
+        text: lines[i].trim(),
+      });
+    }
+  }
 }
 
 /* ── 报告 / 棘轮 ────────────────────────────────────────── */
@@ -591,6 +625,50 @@ for (const e of exempted) {
   exemptByFile.set(e.file, (exemptByFile.get(e.file) ?? 0) + e.hits);
 }
 const totalExemptHits = exempted.reduce((n, e) => n + e.hits, 0);
+
+/**
+ * 「整份文件一处可豁免的色值都没有」的豁免项 = 负债，不是保险。
+ *
+ * 这种条目不会报错，只会把该文件**未来的**新增写死色值一并静默放行（整文件豁免的
+ * 粒度尤其危险）。本轮实测清掉 4 条：三个文件的色值只剩在注释里（判据本来就不数
+ * 注释），一个早已 token 化。
+ *
+ * 口径是**按文件**而不是按条目：同一份文件可以有多条豁免（整文件 + 按声明 + 按行），
+ * 命中归到谁头上取决于数组顺序，按条目判会把「被前一条遮蔽」误报成死条目。
+ * 真正危险的是整份文件都没东西可豁免 —— 那个判定与顺序无关。
+ * 文件根本不在扫描面（临时夹具仓库、或路径写错）是另一件事，
+ * 由 `tests/gate-hint-targets-exist.test.ts` 盯着。
+ */
+const filesWithExemptHits = new Set(exempted.map((e) => e.file));
+const unusedExempts = [...EXEMPT_TABLES, ...EXEMPT_FIXED_DARK].filter(
+  (e) =>
+    fs.existsSync(path.join(ROOT, e.file)) && !filesWithExemptHits.has(e.file),
+);
+for (const e of unusedExempts) {
+  console.warn(
+    `[theme-colors] ⚠️ 豁免一处都没命中（负债，删掉它）：${e.file} —— ${e.reason}`,
+  );
+}
+if (unusedExempts.length > 0 && !REPORT_ONLY) {
+  console.error(
+    `[theme-colors] ${unusedExempts.length} 条豁免不再命中任何东西。` +
+      "留着 = 那个文件今后写死色值会被静默放行。请把这几条从 EXEMPT_TABLES /\n" +
+      "  EXEMPT_FIXED_DARK 删掉；色值确实回来了就按 §3.6.1 重新登记并写清新理由。",
+  );
+  process.exit(1);
+}
+
+/* ── 幽灵 token（硬闸，不进基线）──────────────────────────── */
+
+function printGhosts() {
+  if (!ghosts.length) return;
+  console.log(
+    "[theme-colors] 引用了从未定义的 --color-*（呈现属性会静默失效）：",
+  );
+  for (const g of ghosts) {
+    console.log(`  ✗ ${g.file}:${g.line} — ${g.name}｜${g.text}`);
+  }
+}
 
 /** 打印豁免清单（让人一眼看出「哪些是被有意放行的」）。 */
 function printExemptions() {
@@ -631,10 +709,24 @@ const prev =
     : null;
 const baselineFiles = prev?.files ?? null;
 
+/* 幽灵 token 是「引用还在、定义没了」——与写死色值多少处无关，所以单独一条
+ * 硬闸、不进基线；--update 也不许带着它重写基线。 */
+if (ghosts.length > 0 && !REPORT_ONLY) {
+  printGhosts();
+  console.error(
+    `[theme-colors] ${ghosts.length} 处幽灵 token：var(--color-…) 查无定义。` +
+      "SVG 的 fill 会退成黑色、stroke 会退成 none —— 不报错，只是看不见。\n" +
+      "  二选一：在 src/app/globals.css 的 @theme 里补上定义，或把这一行改回写死色值\n" +
+      "  （后者要按 §3.6.1 登记豁免）。边界与不覆盖的形态见 §3.6.1「幽灵 token」一节。",
+  );
+  process.exit(1);
+}
+
 /* ── 模式一：只出报告（盘点） ── */
 if (REPORT_ONLY) {
   printExemptions();
   printViolations();
+  printGhosts();
   console.log("[theme-colors] --report 模式：只出清单，不判失败 ✓");
   process.exit(0);
 }

@@ -30,9 +30,12 @@ export function isSeedLike(e: { name: string; label?: string }): boolean {
  *  纯几何、不依赖字体 —— 用 SVG 画在 36×36 的盒子里，
  *  底色与 WorkflowChipRow 的 chip 一致。
  *
- *  配色（`#FF6B6B` / `#67E89D` / 深底 `#16161C` 等）属**类型色例外**
- *  （规范 03 §3.6.1）：色值即「哪一种 seed 行为」的语义，不是表面色，
- *  已逐条登记在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES`。 */
+ *  配色（固定=红 / 增减=绿 / 骰子=深底亮点）属**类型色例外**（规范 03 §3.6.1）：
+ *  色值即「哪一种 seed 行为」的语义，不是表面色。取值集中在
+ *  `src/app/globals.css` 的 `--color-seed-*` 一组 token（红/绿两档随主题，骰子
+ *  三颗两态同值）—— SVG 的 `fill` / `stroke` 呈现属性直接引用它们，两处必须同名，
+ *  缺一份定义图标会静默变成黑块 + 隐形箭头（门禁 `check-theme-colors.cjs` 的
+ *  「幽灵 token」判据）。 */
 function SeedModeIcon({ value }: { value: string }) {
   // 36x36 的 viewBox，图形约 22x22 居中。
   if (value === "fixed") {

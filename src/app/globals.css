@@ -91,6 +91,20 @@
   --color-overlay-accent-surface: #f1edff; /* 浮层（chip/徽标）强调底 (light default) */
   --color-chip-type-image-bg: #f2eeff; /* 类型 chip 载体底：IMAGE/MASK（紫系，浅色=极浅紫）(light default) */
   --color-chip-type-video-bg: #fff0f6; /* 类型 chip 载体底：VIDEO/AUDIO（品红系，浅色=极浅粉）(light default) */
+  /* seed 模式图标（`ui/seed-mode-button.tsx` 的 `SeedModeIcon`）—— **类型色**：
+     色值本身就是「哪一种控件后行为」的语义（红=固定、绿=增减、骰子=随机），
+     不是表面色。骰子三颗（深底 + 浅点 + 灰描边）是图形自身，两态同值；
+     红/绿两档**必须两态各自取值** —— 图标托在 `bg-node-accent`（浅色=极浅紫）上，
+     原设计稿的 `#FF6B6B` / `#67E89D` 是在深色面板上定的，照抄到浅色就是
+     1.5~2:1 的「看不见但没报错」（同本节上方那一长串「深色值压在浅色上消失」的反例）。
+     另注：这组 token 是被 SVG 呈现属性 `fill=` / `stroke=` 直接引用的，变量缺失时
+     fill 退成黑、stroke 退成 none —— 递增/递减箭头会**整条消失**且没有任何报错
+     （判据见 check-theme-colors.cjs 的「幽灵 token」一节）。 */
+  --color-seed-fixed: #e11d48; /* 固定值（图钉/星形），浅底档 */
+  --color-seed-step: #059669; /* 递增 / 递减（箭头描边），浅底档 */
+  --color-seed-dice-bg: #16161c; /* 随机值（骰子底），两态同值 */
+  --color-seed-dice-stroke: #9a9aad; /* 随机值（骰子描边），两态同值 */
+  --color-seed-dice-pip: #ededf2; /* 随机值（骰面点），两态同值 */
   --color-border-strong: #d6d8dd; /* 强边框/分隔线 (light default) */
   --color-ink-bright: #18181b; /* 主文字 (light default) */
   --color-ink-field: #27272a; /* 输入控件文字 (light default) */
@@ -264,6 +278,9 @@
   --color-overlay-accent-surface: #241f38; /* 浮层（chip/徽标）强调底 */
   --color-chip-type-image-bg: #1e1a2e; /* 类型 chip 载体底：IMAGE/MASK（= 原写死值） */
   --color-chip-type-video-bg: #331a28; /* 类型 chip 载体底：VIDEO/AUDIO（= 原写死值） */
+  /* seed 模式图标的深底档：设计稿原本就是深色面板上的这两颗值（浅底档见 `@theme`）。 */
+  --color-seed-fixed: #ff6b6b; /* 固定值 */
+  --color-seed-step: #67e89d; /* 递增 / 递减 */
   --color-border-strong: #26262e; /* 强边框/分隔线 */
   --color-ink-bright: #ededf2; /* 主文字 */
   --color-ink-field: #e5e7eb; /* 输入控件文字 */
