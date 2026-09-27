@@ -71,7 +71,11 @@ run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
     echo "[pre-commit] affected 解析没给出清单 —— 宁可阻断，也不让 vitest 不带参数跑成全量"
     exit 1
   fi
-  pnpm exec vitest run $files'
+  # `--maxWorkers=4` 只对**钩子里**成立：A(tsc)、B(eslint)、D(25 个判据脚本) 与本组
+  # 并行，vitest 再按 `vitest.config.ts` 的 8 去起 forks 就会抢不过来 —— 现场不是
+  # 用例红，而是 `Failed to start forks worker / Timeout waiting for worker to respond`
+  # （435 条全过、退出码仍非零）。全量 `pnpm test` 仍是配置里的 8，不受这里影响。
+  pnpm exec vitest run --maxWorkers=4 $files'
 
 # ── D：其余静态判据（互不依赖；组内串行以控内存，但整体与 A/B/C 并行）──────
 # 每条命令的规范出处见 scripts/ 对应脚本头部；顺序即执行序，新增判据追加到这里。
