@@ -1,7 +1,7 @@
 // ComfyUI 生命周期管理：探测、按配置路径启动、等待就绪。
 //
 // 背景：任务只有在本进程与 ComfyUI 的 WS 连上后才会出队
-// （processQueue 在 WS 未 OPEN 时直接 return），ComfyUI 不在运行时任务会
+// （领取循环在 WS 未 OPEN 时不领行），ComfyUI 不在运行时任务会
 // 在队列里挂 30 秒后被 reaper 判死。此前用户只能自己去手动启动 ComfyUI。
 //
 // 本模块提供：

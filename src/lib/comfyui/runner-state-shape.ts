@@ -30,6 +30,10 @@ export type Job = {
    *  工作流」—— 面板标题是客户端拼的，日志行才是可导出/回放的自包含现场。 */
   workflowName?: string;
 
+  /** API 格式的图。**当前提交链路里没人写它**（两条入口都只带 `rawJson`，
+   *  载荷是模板的 RAW 原件），于是 `promptByTask` 也只剩读者——见下面的字段说明
+   *  与 ISSUE #1202。留着这一格是因为
+   *  comfy-cli 之外的提交形态（未来若回填 API 图）还要靠它表达形状。 */
   prompt?: Record<string, unknown>;
 
   /** 原始 UI 格式的 JSON（含子图 wrapper）—— 走 comfy-cli 执行。 */
@@ -62,14 +66,23 @@ export type LogEntry = {
 export type RunnerState = {
   ws: WebSocket | null;
 
-  queue: Job[];
-
-  active: number;
+  /** 本进程已领取、尚未收口的任务（P3 §5 ADR §14 D1 的第二刀：取代原来的
+   *  内存队列 `queue` 与计数器 `active`）。
+   *  它是「这一行归本进程在飞」的唯一内存足迹，三处都读它：并发槽位判据
+   *  （`MAX_CONCURRENCY`）、reaper 的进程内认领检查、取消时的归还。
+   *  为什么是 Set 而不是计数：计数答不了「这一条是不是我的」，而孤儿判决要的
+   *  正是后者（旧实现靠 `queue.some(...)` 回答，队列没了就得另找依据）。 */
+  pendingDispatch: Set<string>;
 
   connecting: boolean;
 
   promptToTask: Map<string, string>;
 
+  /** taskId → 本次提交的 API 图，只给 WS 进度帧认「当前节点的 class_type」用。
+   *  写入方随 P3 §5 ADR §14 D1 第二刀消失（`Job.prompt` 在当前链路里永远是空，
+   *  两条提交入口都只带 RAW 原件），所以现在 raw 任务的节点标签会退化成
+   *  「未知节点」——与改前行为一致，不是新缺口。正解是改读同进程已有的
+   *  `executedWorkflow`（comfy-cli 存的就是提交那一刻的图），登记在 ISSUE #1202。 */
   promptByTask: Map<string, Record<string, unknown>>;
 
   logs: Map<string, LogEntry[]>;
@@ -121,8 +134,8 @@ export type RunnerState = {
   executedWorkflow: Map<string, unknown>;
 
   /** 已向排队任务写入过「等待 ComfyUI 连接/启动」提示的 taskId 集合。
-   *  防止心跳每 3s 触发 processQueue（WS 未 OPEN 时提前返回）对同一任务反复刷同一行。
-   *  任务真正出队 / WS 打开后清除，以便下次重连窗口能重新提示。 */
+   *  防止领取循环每 2s 撞一次不就绪、对同一任务反复刷同一行。
+   *  领到该行时不清除（它已经不排队了）；下一轮全新提交是新的 taskId。 */
   wsWaitLogged: Set<string>;
 };
 
@@ -137,8 +150,7 @@ export type RunnerState = {
 export function createEmptyState(): RunnerState {
   return {
     ws: null,
-    queue: [],
-    active: 0,
+    pendingDispatch: new Set(),
     connecting: false,
     promptToTask: new Map(),
     promptByTask: new Map(),

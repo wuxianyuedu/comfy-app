@@ -10,7 +10,7 @@
  *   - {@link finalizeFailure}  真正失败收口（不做 settled 判断）
  *
  * 依赖的通道层（claimSettle / fetchHistoryEntry）在 {@link ./executor-ws}，
- * 队列调度（processQueue）在 {@link ./executor-scheduler}。
+ * 派发（领取 + 提交）在 {@link ./executor-dispatch}。
  *
  * @module comfyui/executor-finalize — 任务终态收口（成功下载 / 失败落库）
  */
@@ -44,6 +44,7 @@ import {
   persistRawCli,
   claimFinalize,
   claimSettle,
+  releaseDispatchSlot,
 } from "./runner-state";
 import type { ValidationError } from "./validation";
 
@@ -415,7 +416,7 @@ async function completeInner(
    *  这类矛盾（反之亦然）。 */
   if (!claimFinalize(taskId)) {
     log(taskId, "warn", "跳过重复收口：终态已由其它路径落库（本次结果：成功）");
-    s.active = Math.max(0, s.active - 1);
+    releaseDispatchSlot(taskId);
     kickQueue();
     return;
   }
@@ -433,7 +434,7 @@ async function completeInner(
       "warn",
       `成功收口未落库（${outcome}）：终态已由别处落定或归属不属于本进程，产物行不补写`,
     );
-    s.active = Math.max(0, s.active - 1);
+    releaseDispatchSlot(taskId);
     kickQueue();
     return;
   }
@@ -508,7 +509,7 @@ async function completeInner(
   s.promptByTask.delete(taskId);
   s.executedWorkflow.delete(taskId);
   s.lastLogPct.delete(taskId);
-  s.active = Math.max(0, s.active - 1);
+  releaseDispatchSlot(taskId);
   kickQueue();
 }
 
@@ -554,7 +555,7 @@ export async function finalizeFailure(
       `跳过重复收口：终态已由其它路径落库（本次原因：${friendly}）`,
     );
     /* 仍需释放活跃槽位并推进队列，否则重复收口会把队列卡死。 */
-    s.active = Math.max(0, s.active - 1);
+    releaseDispatchSlot(taskId);
     kickQueue();
     return;
   }
@@ -599,6 +600,6 @@ export async function finalizeFailure(
   if (promptId) s.promptToTask.delete(promptId);
   s.promptByTask.delete(taskId);
   s.lastLogPct.delete(taskId);
-  s.active = Math.max(0, s.active - 1);
+  releaseDispatchSlot(taskId);
   kickQueue();
 }

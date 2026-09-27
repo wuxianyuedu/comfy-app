@@ -1,12 +1,18 @@
-// 面向外部的入队 API：队列 / 日志 / 取消，服务 ComfyUI 执行器。
+// 面向外部的任务操作入口：日志读取 / 取消，服务 ComfyUI 执行器。
 //
 // 从历史上的单文件 `runner.ts` 拆出。本模块持有 API 路由与编排方用的
 // **公开入口**；真正的 WS 执行机制在 executor.ts，孤儿回收在 reaper.ts。
 //
-// reaper 的启动不在本模块：孤儿回收现在由宿主**显式**起（Next 侧
+// **「把任务交给执行器」不在这个模块了**（P3 §5 ADR §14 D1 的第二刀）：这里曾有
+// 一个 `enqueue()`，把 Job 推进进程内存队列并立即尝试出队——那是与 host 的领取
+// 循环并存的**第二条**派发路径。现在两个宿主都只走 `executor-dispatch.ts` 那一条
+// pull：提交方只写库里的 `QUEUED` 行，谁领由归属分片决定。本模块因此只剩
+// 取消与日志两件事（`cancelTask` 仍是取消的唯一出口，§14 D2）。
+//
+// reaper 的启动也不在本模块：孤儿回收由宿主**显式**起（Next 侧
 // `src/instrumentation.ts`、host 侧 `scripts/executor-host.mjs`，判据见
 // `tests/reaper-side-effect.test.ts`）。本模块过去以裸副作用 import 顺带把它
-// 起来，那条隐式耦合已随 P3 §5 ADR §14 D3 摘掉。
+// 起来，那条隐式耦合已随 §14 D3 摘掉。
 
 import { interrupt } from "./client";
 import { errorText } from "~/lib/error-message";
@@ -16,11 +22,12 @@ import {
   persistLogs,
   persistRawCli,
   claimFinalize,
-  clearFinalize,
-  MAX_CONCURRENCY,
+  isDispatchedHere,
+  releaseDispatchSlot,
 } from "./runner-state";
-import type { Job, LogEntry } from "./runner-state";
-import { connect, processQueue, cliProcs } from "./executor";
+import type { LogEntry } from "./runner-state";
+import { cliProcs } from "./executor";
+import { kickQueue } from "./executor-continuation";
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·最后一步：让 reaper / enqueue 也能被纯
    Node executor host 加载，不再撞 `../core/repository` 的 server-only throw） ── */
@@ -45,42 +52,6 @@ export function configureEnqueue(next: Partial<EnqueueDeps>): void {
 async function resolveTaskRepo(): Promise<TaskRepoForEnqueue> {
   if (depsOverride.taskRepo) return depsOverride.taskRepo;
   return loadRealTaskRepo();
-}
-
-export function enqueue(job: Job) {
-  const store = state();
-
-  store.settled.delete(job.taskId);
-
-  /* 同一 taskId 重跑（重试 / 复用）：清掉上一次的「终态已落库」标记，
-   *  否则新的终态会被一次性锁挡住，任务永远停在旧状态。 */
-  clearFinalize(job.taskId);
-
-  store.queue.push(job);
-
-  if (job.prompt) store.promptByTask.set(job.taskId, job.prompt);
-
-  state().logs.set(job.taskId, []);
-  /* 记下开始时间：完成时能打一行「总耗时 Xs」，客户端日志也能据此显示任务
-   * 已跑多久，方便排查「卡在 RUNNING」。 */
-
-  store.startedAt.set(job.taskId, Date.now());
-
-  log(job.taskId, "info", "任务已加入执行队列");
-  /* 打出队列位置与在跑的并发槽：让用户看出任务是在等前面那个、还是马上就要跑。
-   * 如果用户在点「生成」之前就开着日志面板，这就是他最先看到的一行。 */
-
-  log(
-    job.taskId,
-
-    "info",
-
-    `队列位置：${store.queue.length} / 活跃槽位：${store.active}/${MAX_CONCURRENCY}`,
-  );
-
-  void connect();
-
-  void processQueue();
 }
 
 export function getLogs(taskId: string): LogEntry[] {
@@ -145,14 +116,14 @@ export async function cancelTask(taskId: string) {
 
     store.promptByTask.delete(taskId);
 
-    const hadQueueSlot = store.queue.some((queue) => queue.taskId === taskId);
+    const hadSlot = isDispatchedHere(taskId) || cliProcs.has(taskId);
 
-    if (hadQueueSlot || cliProcs.has(taskId))
-      store.active = Math.max(0, store.active - 1);
+    if (hadSlot) releaseDispatchSlot(taskId);
 
     await persistLogs(taskId);
-
-    if (hadQueueSlot || cliProcs.has(taskId)) void processQueue();
+    /* 归还了槽位就再领一次（同一条 pull）；纯数据库行（本进程没在飞）不动槽、
+     * 也不 kick，免得白跑一次领取。 */
+    if (hadSlot) kickQueue();
 
     return;
   }
@@ -198,16 +169,14 @@ export async function cancelTask(taskId: string) {
   store.startedAt.delete(taskId);
 
   store.lastNodeByTask.delete(taskId);
-  /* 只有确实占着并发槽时才归还它。纯数据库任务（内存里没有对应 job）**不能**
-   * 递减 `s.active`，否则后续 `processQueue` 会短暂以为有空槽，去入队一个并不
-   * 存在的幻影任务。`hadSlot` 的判据是：要么持有 comfy-cli 子进程，要么任务
-   * 正躺在内存队列里。 */
+  /* 只有本进程确实握着这一条在飞时才归还槽位。纯数据库行（用户取消了一条
+   * 排队中、或归另一宿主的任务）**不能**动本进程的记账——否则下一次领取会以为
+   * 有空槽，去领一条其实排在前面的行。判据：要么持有 comfy-cli 子进程，要么
+   * 它在本进程的在飞集合里（§14 D1 第二刀，取代原来的「躺在内存队列里」）。 */
 
-  const inQueue = store.queue.some((queue) => queue.taskId === taskId);
+  const hadSlot = isDispatchedHere(taskId) || cliProcs.has(taskId);
 
-  const hadSlot = inQueue || cliProcs.has(taskId);
-
-  if (hadSlot) store.active = Math.max(0, store.active - 1);
+  if (hadSlot) releaseDispatchSlot(taskId);
   /* 把这个任务还没落盘的防抖日志刷出去：让「用户取消任务」这一行与在途的告警
    * 都先进数据库，再把行标成终态。否则「取消后立刻刷新」会看不到那条取消记录。
    *
@@ -220,5 +189,5 @@ export async function cancelTask(taskId: string) {
    * 所以取消这条收口也写一包原文（P3 §5 ADR §14 D1 的 4-B2）。 */
   await persistRawCli(taskId);
 
-  if (hadSlot) void processQueue();
+  if (hadSlot) kickQueue();
 }

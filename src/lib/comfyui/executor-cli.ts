@@ -104,7 +104,7 @@ function cliWarn(msg: string): void {
 
 /** taskRepo / resolveComfyBase 是关键路径：拿不到（未注入 + 纯 Node dynamic
  *  import 撞 server-only）→ 让 `executeViaComfyCli` 的 await 直接 reject，
- *  caller（executor-scheduler / enqueue）感知。 */
+ *  caller（executor-dispatch）感知。 */
 async function resolveTaskRepo(): Promise<TaskRepoForCli> {
   if (depsOverride.taskRepo) return depsOverride.taskRepo;
   return loadRealTaskRepo();

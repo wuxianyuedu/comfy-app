@@ -1,5 +1,5 @@
 /**
- * `repository-task-impl.ts` 的 15 个 exec-chain 方法的契约测（12 方法主体来自
+ * `repository-task-impl.ts` 的 16 个 exec-chain 方法的契约测（12 方法主体来自
  * P3 §5 Phase 2-A-1；`claimNextQueued` 为 Phase 3-A 追加，见下方专组；
  * `replaceRawCli` / `findRawCli` 为 Phase 4-B2 追加）。
  *

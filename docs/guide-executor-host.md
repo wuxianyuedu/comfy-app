@@ -92,6 +92,22 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 - **进度 / 日志**：执行方（host 或 inline）写库，界面统一走 SSE→DB 短轮询
   （≤3s + 200ms 落库防抖）。曾经「host 任务实时日志静默」的空窗已由 Phase 3-C
   收口，两模式同一契约。
+- **一条派发路径**（Phase 4-B3 起，ADR §14 D1 的第二刀）：提交方只往库里写一行
+  `QUEUED`（带 `claimedBy`），**谁执行由领取决定**——Next 与 host 各自跑同一个
+  `executor-dispatch.ts`，按自己的归属片 `claimNextQueued` 领行再交 comfy-cli。
+  三点可见后果：
+  1. `RUNNING` 只剩一个意思（真的在跑）。此前 Next 侧另有一条内存队列，行被领走
+     后可能还在内存里等槽，状态栏的「排队数」因此恒为 0；现在那条队列没了。
+  2. **就绪前不领行**：ComfyUI 没起来 / WS 没连上时行留在 `QUEUED`，等就绪的下一拍
+     才被领走（提交后那一次即时 kick 通常就够，撞上空窗最多等 2s）。等待期间任务
+     日志里会有一行「⏳ 等待 ComfyUI WebSocket 连接就绪…」。
+  3. 冷启动遗留在 `QUEUED` 的行现在**会被领回来执行**（以前只有 host 那条 pull
+     会救，inline 那条看不见库，只能等回收器判失败）。
+  循环的启动点与 reaper 同形态：**两处显式调用**——Next 侧
+  `src/instrumentation.ts` 的 nodejs 分支、host 侧 `scripts/executor-host.mjs`
+  注入链之后（host 自己的 tick 驱动同一个 `claimAndDispatchOnce`，不再起第二条循环）。
+  判据在 `tests/dispatch-startup-points.test.ts`，行为判据在
+  `src/lib/comfyui/executor-dispatch.test.ts`。
 - **对外只有一条通道 = 数据库那一行**（Phase 4-B1 起）：执行链原先另有一套进程内
   `EventEmitter`（`done` / `error` / `progress` / `log` 帧），它只能在写它的那个进程里
   响，跨宿主必然漏。SSE 单源化之后它已只剩写入、没有读者，因此整体退役；服务端里
@@ -121,8 +137,10 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 
 ## 已知观察项（灰度期）
 
-1. **ComfyUI 懒拉起竞态**：ComfyUI 未运行时，host 与 Next 两侧的执行入口都可能
-   触发「查进程表 → 探测端口 → 懒拉起」；同机同实例下概率很低，灰度观察中。
+1. **ComfyUI 懒拉起**：Phase 4-B3 起，「谁去连 / 谁去拉起 ComfyUI」收在领取循环里
+   （就绪门控不过时 `void connect()`，拉起动作在 `lifecycle` 里单飞），提交方不再
+   直接驱动它。剩下的观察点变成：host 与 Next 两侧各自都会为自己的那片去探测端口
+   ——同机同实例下 `ensureComfyUiReady` 有单飞闩锁，灰度继续观察。
 2. **`[comfy-cli 原始]` 行内 prompt 字段乱码**：python stdout 管道编码问题，
    先于 host 线存在，独立 ISSUE #1164 治理（修向 `PYTHONIOENCODING=utf-8`）。
 3. host 模式下的产物下载 / 封面链路复用 Next 的 `/api/generated` 静态映射，

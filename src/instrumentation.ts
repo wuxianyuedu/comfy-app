@@ -22,6 +22,14 @@ export async function register() {
      * 动态 import 的理由与上面两条相同：本文件在 Edge runtime 也执行，
      * Node-only 模块不能进 Edge 图。 */
     await import("./lib/comfyui/reaper").then((m) => m.startReaper());
+    /* 派发循环的**唯一** Next 侧启动点（P3 §5 ADR §14 D1 第二刀）：Next 也是一
+     * 个执行宿主（owner='inline'），要按库里 `claimedBy` 归自己的那些行去领。
+     * 与 reaper 同形态：不起就没有安全网——提交后那一次即时 kick 若正好撞上
+     * ComfyUI 还没起来，之后就再没人推进它。dev 下本文件懒编译（见
+     * launch-and-build §5 排障表），所以「即时 kick」才是首条路径。 */
+    await import("./lib/comfyui/executor-dispatch").then((m) =>
+      m.startDispatchLoop(),
+    );
     await import("./sentry.server.config");
   }
   if (process.env.NEXT_RUNTIME === "edge") {

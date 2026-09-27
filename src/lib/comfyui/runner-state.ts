@@ -349,6 +349,30 @@ export function clearFinalize(taskId: string): void {
   state().finalized.delete(taskId);
 }
 
+/* ── 在飞记账（P3 §5 ADR §14 D1 的第二刀：内存队列 `queue` + 计数器 `active` 的替身） ──
+ *
+ * 领取成功即 `markDispatched`，收口（成功 / 失败 / 取消 / 被回收）时
+ * `releaseDispatchSlot`。三个读它的地方必须是同一份判据：
+ *   · 并发槽位（`MAX_CONCURRENCY`）——决定这一拍还领不领；
+ *   · reaper 的进程内认领检查——决定这一行是不是孤儿；
+ *   · 取消路径——决定要不要归还槽位。
+ * 用 Set 而不是计数：计数答不了「这一条是不是我的」，而孤儿判决要的正是后者。 */
+
+/** 记下一条「本进程已领走、尚未收口」的任务。 */
+export function markDispatched(taskId: string): void {
+  state().pendingDispatch.add(taskId);
+}
+
+/** 归还槽位（幂等：没记过就是 no-op，重复调用也不会把别人的槽减掉）。 */
+export function releaseDispatchSlot(taskId: string): void {
+  state().pendingDispatch.delete(taskId);
+}
+
+/** 本进程是否正握着这一条在飞（reaper 与取消路径的判据入口）。 */
+export function isDispatchedHere(taskId: string): boolean {
+  return state().pendingDispatch.has(taskId);
+}
+
 /**
  * runner-state 的**宿主依赖注入接缝**（P3 迁移第 1 期·第二/三步）。
  *
