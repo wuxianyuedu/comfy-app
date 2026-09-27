@@ -251,6 +251,15 @@ export const task = sqliteTable(
     workflowName: text("workflowName").notNull(),
     workflowSnapshot: text("workflowSnapshot", { mode: "json" }),
     projectId: text("projectId"),
+    /**
+     * 工坊镜头号：这条任务是为「哪一镜」跑的。只有按镜生成（工坊镜头生图）才有值，
+     * 手动/画布节点级生成为 NULL。
+     *
+     * 旧行**不回填**，且不能回填：提交时的 `params` 里没记镜头，任何按时间或按
+     * 名称的猜测都会把归属写错，而错一次的代价是健康度条从此长期报一个假数。
+     * 因此读侧的口径是「NULL = 归属未知」，**不等于**「这一镜没出过图」。
+     */
+    shotId: text("shotId"),
     referenceImages: text("referenceImages", { mode: "json" }),
     status: text("status").notNull().default("QUEUED"),
     promptId: text("promptId"),
@@ -281,7 +290,10 @@ export const task = sqliteTable(
   },
   (t) => [
     index("task_user_created_idx").on(t.userId, t.createdAt),
-    index("task_project_idx").on(t.projectId),
+    // 归属查询（某项目的哪几镜出过图）走这条复合索引；它的**最左前缀**同时覆盖
+    // 原来只按 projectId 过滤的查询，故不再单列一条 task_project_idx
+    // （与上方 (status, finishedAt) 的处理同一口径）。
+    index("task_project_shot_idx").on(t.projectId, t.shotId),
     // 状态过滤（task.list / reaper 扫陈旧 QUEUED·RUNNING）与按 finishedAt 收敛：
     // 复合 (status, finishedAt) 的最左前缀也覆盖纯 status 过滤。better-sqlite3
     // 同步执行，缺索引时这些过滤退化成全表扫并卡住整个 server 事件循环。
