@@ -309,7 +309,7 @@ export function ScriptMarkdownEditor({
           <span className="bg-primary/15 text-primary grid size-8 place-items-center rounded-lg">
             <FileText size={16} />
           </span>
-          <h2 className="text-ink-bright text-[15px] font-semibold">{title}</h2>
+          <h2 className="text-ink-bright u-title">{title}</h2>
         </div>
         <Button
           variant="ghost"
@@ -376,7 +376,7 @@ export function ScriptMarkdownEditor({
           variant="primary-solid"
           size="xs"
           onClick={onSave}
-          className="shadow-primary-500/20 h-auto rounded-lg px-5 py-2 shadow-lg"
+          className="h-auto rounded-lg px-5 py-2"
         >
           保存
         </Button>

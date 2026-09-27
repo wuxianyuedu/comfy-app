@@ -43,9 +43,7 @@ export function WorkshopHeader({
           工
         </div>
         <div className="flex min-w-0 flex-col leading-tight">
-          <span className="text-ink truncate text-[17px] font-semibold">
-            {title}
-          </span>
+          <h1 className="u-title-page truncate">{title}</h1>
           <span className="text-muted-foreground text-[11px]">
             工坊 · 全链路项目管线
           </span>
