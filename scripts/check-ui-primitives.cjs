@@ -3132,9 +3132,12 @@ const RULES = {
       )
         hits++;
 
-      /* d. Empty 绕开：`export function Empty*` 命名形态。shadcn 的 Empty
-       *    基元当前未装（components.json 里没有 empty），此判据先冻结
-       *    1 处起点 —— 装上并二次封装后自动清零。 */
+      /* d. Empty 绕开：`export function Empty*` 命名形态。`ui/empty.tsx` 已装
+       *    （Empty / EmptyHeader / EmptyTitle / EmptyDescription / EmptyMedia /
+       *    EmptyContent，业务侧已有多处消费），所以这条没有「起点」可言，须为 0。
+       *    ⚠️ 别拿 `components.json` 当安装判据：它只有 aliases / registries 这些
+       *    配置键，**不记录装过哪些组件**（本条原先就以「里面没有 empty」为据把
+       *    判据放软过，那个前提从来不存在）。安装与否看磁盘：`ui/empty.tsx`。 */
       if (
         !/from ["']~\/components\/ui\/empty["']/.test(t2) &&
         /export function Empty\w*\s*\(/.test(t2)
@@ -3142,9 +3145,12 @@ const RULES = {
         hits++;
 
       /* e. Field 绕开：手拼 `<label htmlFor=` 与 `aria-describedby=` 的表单
-       *    行 —— shadcn Field 系（FieldGroup / Field / FieldLabel /
-       *    FieldDescription / FieldError）当前未装。此判据起点会包含：
-       *      · `ui/form-field.tsx`（真轮子，见 outputs 审计报告 A5）；
+       *    行 —— `ui/field.tsx` 已装（Field / FieldSet / FieldGroup / FieldContent /
+       *    FieldTitle / FieldLabel / FieldDescription / FieldError / FieldSeparator /
+       *    FieldLegend），本仓库的薄封装是 `ui/form-field.tsx`，两条都算「用了基元」。
+       *    当年列进起点名单的那两条，现在这样定性：
+       *      · `ui/form-field.tsx`（真轮子，见 outputs 审计报告 A5）—— 它就是被
+       *        本条要替换掉的那一侧，靠 `ui/form-field` 治理批次清零；
        *      · `ui/form.tsx`（shadcn 已装、react-hook-form 集成版，
        *        `FormLabel` 就是 `<Label htmlFor>` + 内部挂 `aria-describedby`）
        *        —— 走 EXEMPT_FILES 显式豁免（它是**已装基元**，不算轮子）。
@@ -4385,8 +4391,12 @@ function main() {
         "  ui/ 层自造组件绕开 shadcn 基元 → 徽章改 ~/components/ui/badge 的 <Badge>（cva 扩 size/tone 而非各写 <span>）、\n" +
         "  进度条改 ~/components/ui/progress 的 <Progress>+ProgressTrack/Indicator/Label/Value、\n" +
         '  滑块改 ~/components/ui/slider 的 <Slider>（原生 <input type="range"> 只接管取材时也要显式说明理由），\n' +
-        "  空态基元未装 → `pnpm dlx shadcn@latest add empty` 后改基于 <Empty> 二次封装，\n" +
-        "  表单行基元未装 → `pnpm dlx shadcn@latest add field` 后改基于 <Field>+FieldLabel/Description/Error 二次封装。\n" +
+        "  空态改 ~/components/ui/empty 的 <Empty>(+EmptyHeader/Title/Description/Media/Content)、\n" +
+        "  已成块的「图标+标题+说明+动作」空态改 ~/components/ui/empty-state 的 <EmptyState>（P75），\n" +
+        "  表单行改 ~/components/ui/field 的 <Field>+FieldLabel/FieldDescription/FieldError（或直接用\n" +
+        "  ~/components/ui/form-field 的 <FormField>，它已把 ARIA 关联收在一处）。\n" +
+        "  ⚠️ 别拿 `components.json` 判断某个基元装没装：它只记 aliases / registries，\n" +
+        "  不记录装过哪些组件；装了没装有争议时看 `src/components/ui/<名字>.tsx` 在不在。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);
