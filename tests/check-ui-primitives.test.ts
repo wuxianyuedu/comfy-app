@@ -4199,8 +4199,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 基于 shadcn 已装基元二次封装。范围收窄到 ui/ 是因为视图层的
    * `WorkflowPickChip` / `ShotStatusBadge` 等业务包装消费 ui/ 基元后
    * 用同样的命名不算轮子（见脚本内 UI_ONLY_RULES 的注释）。
-   * Empty / Field 基元当前未装，命中数即棘轮起点，装上并二次封装后
-   * 自动清零。 */
+   * Empty / Field 两条子判据的「基元未装、先冻结起点」前置已经不成立：
+   * `ui/empty.tsx` 与 `ui/field.tsx` 都已装并被业务多处消费，本条现在是硬闸、
+   * 须为 0。（当年那句判断据是「`components.json` 里没有 empty」—— 而那个文件
+   * 只记 aliases / registries，从来不代表装了哪些组件。） */
 
   it("P67 a. Badge 绕开：ui/ 里 `export function X(Badge|Chip|Tag)` 未 import Badge → 阻断", () => {
     seedBaseline();
