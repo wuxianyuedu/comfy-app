@@ -183,9 +183,13 @@ describe("reaper 模块级副作用", () => {
     mod.resetSchemaReadinessCache();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     cwd.restore();
     vi.unstubAllEnvs();
+    /* 这一组真的打开了 `~/server/db` 的 libsql 连接（指向临时库）。不关的话
+     * Windows 上文件句柄不释放，文件级 afterEach 的 `rmSync` 会 EPERM。 */
+    const { closeDb } = await import("~/server/db");
+    closeDb();
   });
 
   it("表未就绪时加载 reaper 不读库（旧实现在此处抛 no such table）", async () => {

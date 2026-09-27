@@ -38,9 +38,8 @@ import { isComfyStarting } from "./lifecycle";
 import { cliProcs } from "./executor-cli";
 import { cancelPersistLogs, state } from "./runner-state";
 
-/* repository 的方法经 `vi.mocked(obj.method)` 引用会触发
- * @typescript-eslint/unbound-method。这里把「断言用的 mock」集中在一处，
- * 用显式类型标注的取值函数暴露，调用点保持可读。 */
+/* 这里把「断言用的 mock」集中在一处，用显式类型标注的取值函数暴露，
+ * 调用点保持可读（也避开 `vi.mocked(obj.method)` 直取方法的形态）。 */
 type MockedFn = ReturnType<typeof vi.fn>;
 function repoMock(
   name:
@@ -50,8 +49,7 @@ function repoMock(
     | "finalizeFromReaper",
 ): MockedFn {
   // 同上：模块被 vi.mock 后这些属性是 vi.fn()，取值即取 mock 函数本身，
-  // 不涉及 `this`——unbound-method 在此为误报。
-  // eslint-disable-next-line @typescript-eslint/unbound-method
+  // 不涉及 `this`；按名索引取值的写法不触发 unbound-method，无需 disable。
   return vi.mocked(taskRepository)[name];
 }
 /** 上一次跑过的 taskId 集合 —— 清理由它们排下的防抖定时器。 */

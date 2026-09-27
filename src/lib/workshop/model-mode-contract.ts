@@ -235,6 +235,9 @@ export const MODE_CONTRACT_INPUT_TYPES = [
   { type: "negative", label: EXPOSED_PARAM_DISPLAY_LABEL.negative },
   { type: "size", label: EXPOSED_PARAM_DISPLAY_LABEL.size },
   { type: "duration", label: EXPOSED_PARAM_DISPLAY_LABEL.duration },
+  /* 种子口（#942 抽卡纠偏）是内置口：exposedParamsForMode 对每个模式都产它，
+   * 这里不同步认它的话，契约一旦走归一化 / 保存链路，seed 口会被静默过滤掉
+   *（isModeContractInputId 判 false），编辑器里也看不到这一口。 */
   { type: "seed", label: EXPOSED_PARAM_DISPLAY_LABEL.seed },
   {
     type: "reference-image",
@@ -643,6 +646,9 @@ const CONTRACT_INPUT_TO_ADAPTER: Record<
   "first-frame": [{ type: "first-frame", field: "first_frame" }],
   "last-frame": [{ type: "last-frame", field: "last_frame" }],
   duration: [{ type: "duration", field: "duration" }],
+  /* 种子：远端接口的通行字段名就是 seed（WORKSHOP_INPUT_TYPES 里同名声明的
+   * 那一族）。是否真的下发由适配器的 inputs 行决定 —— 这里只保证「契约 →
+   * 适配器」的桥接层不缺行（本表存在的意义就是不让新预制口在这里静默漏）。 */
   seed: [{ type: "seed", field: "seed" }],
 };
 

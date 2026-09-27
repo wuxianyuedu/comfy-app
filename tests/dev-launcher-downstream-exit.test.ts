@@ -22,6 +22,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const LAUNCHER = join(process.cwd(), "scripts", "dev-launcher.mjs");
@@ -35,7 +36,7 @@ function markersFor(stderrText: string): { abandoned: boolean; crashed: boolean 
     mkdirSync(join(dir, "log", "launcher"), { recursive: true });
     writeFileSync(join(dir, "log", "launcher", "dev-launcher-stderr.log"), stderrText);
     const script = `
-      import { readShellMarkers } from ${JSON.stringify(LAUNCHER)};
+      import { readShellMarkers } from ${JSON.stringify(pathToFileURL(LAUNCHER).href)};
       process.stdout.write(JSON.stringify(readShellMarkers(${JSON.stringify(dir)})));
     `;
     const out = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
@@ -51,7 +52,7 @@ function markersFor(stderrText: string): { abandoned: boolean; crashed: boolean 
 /** 直接调 `downstreamExitKind` 判决表（纯函数，无副作用）。 */
 function decide(input: { shellExited: boolean, abandoned: boolean, shellCrashed: boolean }): string {
   const script = `
-    import { downstreamExitKind } from ${JSON.stringify(LAUNCHER)};
+    import { downstreamExitKind } from ${JSON.stringify(pathToFileURL(LAUNCHER).href)};
     process.stdout.write(downstreamExitKind(${JSON.stringify(input)}));
   `;
   const out = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
