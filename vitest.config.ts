@@ -144,6 +144,9 @@ export default defineConfig({
         /* P82 的合规出口（悬停提示收成一处，规范 16 §16.2.3 / §12.18 补地基）。
          * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
         "src/components/ui/hint.tsx",
+        /* `ui/toggle-group` 的选中档三层是本仓库的定制（规范 16 §16.8），
+         * 有用例钉住就得进门槛。同款 **两处同批改**。 */
+        "src/components/ui/toggle-group.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -895,6 +898,15 @@ export default defineConfig({
          * 外加「render 接管后 onClick 与 disabled 不丢」「插锚点时提示挂在
          * 锚点上（禁用按钮的说明仍要弹得出）」两条形态回归。 */
         "src/components/ui/hint.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* `ui/toggle-group` 的三条用例：选中档三层（描边 / 字重 / 抬层）在
+         * `data-[pressed]:*` 上、悬停档保持官方版的 `bg-muted`（两条一起才说明
+         * 「不是靠改悬停解决的」）、`aria-pressed` 仍由基元持有。实测满档。 */
+        "src/components/ui/toggle-group.tsx": {
           lines: 100,
           functions: 100,
           statements: 100,
