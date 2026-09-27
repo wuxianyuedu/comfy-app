@@ -27,11 +27,11 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       <div
         class="flex items-center gap-2"
       >
-        <span
-          class="u-title"
+        <h1
+          class="font-title u-title-page"
         >
           LoRA 训练工作室
-        </span>
+        </h1>
         <span
           class="text-ink-fainter text-xs"
         >

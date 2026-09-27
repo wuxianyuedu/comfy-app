@@ -25,13 +25,13 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
       class="border-border-subtle bg-panel/88 z-base relative flex shrink-0 items-center gap-3 border-b px-4 py-0 backdrop-blur-md"
     >
       <div
-        class="flex items-center gap-2"
+        class="flex min-w-0 items-center gap-2"
       >
-        <span
-          class="u-title"
+        <h1
+          class="font-title u-title-page min-w-0 truncate"
         >
           未命名成片
-        </span>
+        </h1>
         <span
           class="text-ink-fainter text-xs"
         >
