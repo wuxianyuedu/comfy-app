@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // 的兜底哨兵」，用来证明「configureRunner 一覆盖，就走不到它们」。
 const defaultTaskRepoMock = {
   replaceLogs: vi.fn(async () => undefined),
+  replaceRawCli: vi.fn(async () => undefined),
 };
 const defaultLoggerMock = {
   warn: vi.fn(),
@@ -47,7 +48,12 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
   it("configureRunner({ taskRepo }) 之后 persistLogs 走注入侧、不再打默认 taskRepository", async () => {
     const mod = await loadRunnerState();
     const injectedReplace = vi.fn(async () => undefined);
-    mod.configureRunner({ taskRepo: { replaceLogs: injectedReplace } });
+    mod.configureRunner({
+      taskRepo: {
+        replaceLogs: injectedReplace,
+        replaceRawCli: vi.fn(async () => undefined),
+      },
+    });
 
     await mod.persistLogs("t-di-ok");
 
@@ -63,7 +69,10 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
     });
     const injectedWarn = vi.fn();
     mod.configureRunner({
-      taskRepo: { replaceLogs: injectedReplace },
+      taskRepo: {
+        replaceLogs: injectedReplace,
+        replaceRawCli: vi.fn(async () => undefined),
+      },
       log: { warn: injectedWarn },
     });
 
@@ -87,7 +96,12 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
     const mod = await loadRunnerState();
     const injectedReplace = vi.fn(async () => undefined);
     // 只注入 taskRepo；log 一侧留空。
-    mod.configureRunner({ taskRepo: { replaceLogs: injectedReplace } });
+    mod.configureRunner({
+      taskRepo: {
+        replaceLogs: injectedReplace,
+        replaceRawCli: vi.fn(async () => undefined),
+      },
+    });
 
     // 让 taskRepo 抛错，触发 log 分支。
     injectedReplace.mockRejectedValueOnce(new Error("boom"));

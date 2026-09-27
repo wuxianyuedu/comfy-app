@@ -8,7 +8,7 @@ import { db } from "~/lib/db";
 import { task, taskImage, type Task, type TaskImage } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
-import { eq, and, inArray, desc, asc, sql } from "drizzle-orm";
+import { eq, and, inArray, desc, asc, sql, count } from "drizzle-orm";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 
 /** 列表卡的行形状：`task.list` 的映射只需要十来个字段，而 `workflowSnapshot`
@@ -355,7 +355,60 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return rows[0] ?? null;
   }
 
-  // 以下 11 个方法各 delegate 一行到 `impl`；SQL 主体与 JSDoc（包括
+  /** 底部状态栏那一格要的「本应用当前在跑的那个」（P3 §5 ADR §14 D1 的 4-B2）。
+   *
+   *  判据从**执行进程内存**换成库里那行：内存版只看得见自己那一片，host 执行的
+   *  任务在 Next 的状态栏上是一格空白（排队数 0、在跑 null、耗时没有），而串行
+   *  队列里用户最想知道的恰恰是「前面堵几个、当前这个跑了多久」。
+   *  刻意**不带归属条件**：这一格统计的是「本应用」，两片的行都算。
+   *  取最早的一条（`MAX_CONCURRENCY=1` 时最多一条；万一两侧各跑一条，显示的
+   *  就是先开始的那个，与队列语义一致）。
+   *
+   *  `execPayload` 在这里是**有用的列**而不是大字段：状态栏的「主模型」由
+   *  `primaryModelName()` 从提交时刻的图里认（UI/API 两种格式都支持），而库里
+   *  只有这一份是执行侧一定会写的（`workflowSnapshot` 要到成功收口才落）。
+   *  实测本机一条 raw 载荷约 18 KB、状态栏 2s 一轮，本地文件库承受得起；
+   *  仍然不取 `logs` / `workflowSnapshot` 那两个 MB 级的列。
+   *
+   *  `createdAt` 只作 `claimedAt` 的**兜底**：本列是 4-B2 才加的，此前的 RUNNING
+   *  行没有开始时刻，用提交时刻近似总好过让状态栏那一格空着（新写的 RUNNING 行
+   *  一律带 `claimedAt`——领取与 `markRunning` / 首条进度帧都会定格它）。 */
+  async findRunningForStatusBar(): Promise<{
+    id: string;
+    workflowName: string;
+    progress: number;
+    progressNode: unknown;
+    claimedAt: Date | null;
+    createdAt: Date;
+    execPayload: unknown;
+  } | null> {
+    const rows = await db
+      .select({
+        id: task.id,
+        workflowName: task.workflowName,
+        progress: task.progress,
+        progressNode: task.progressNode,
+        claimedAt: task.claimedAt,
+        createdAt: task.createdAt,
+        execPayload: task.execPayload,
+      })
+      .from(task)
+      .where(eq(task.status, "RUNNING"))
+      .orderBy(task.createdAt)
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  /** 本应用排队中的任务数（同样跨归属——见上，这一格答的是「前面还堵几个」）。 */
+  async countQueuedForStatusBar(): Promise<number> {
+    const rows = await db
+      .select({ c: count() })
+      .from(task)
+      .where(eq(task.status, "QUEUED"));
+    return rows[0]?.c ?? 0;
+  }
+
+  // 以下 13 个方法各 delegate 一行到 `impl`；SQL 主体与 JSDoc（包括
   // `updateProgress` / `markRunning` 里 `notInArray(task.status, TERMINAL_STATES)`
   // 判据的完整解释、`finalizeSuccess` 的 workflowSnapshot 可选写、`finalizeFailure`
   // 的 validationErrors 归一、`replaceLogs` 的 `.catch(→undefined)` swallow、
@@ -390,6 +443,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
 
   replaceLogs: TaskRepoImpl["replaceLogs"] = (taskId, logs) =>
     impl.replaceLogs(taskId, logs);
+
+  replaceRawCli: TaskRepoImpl["replaceRawCli"] = (taskId, lines) =>
+    impl.replaceRawCli(taskId, lines);
+
+  findRawCli: TaskRepoImpl["findRawCli"] = (taskId) => impl.findRawCli(taskId);
 
   listStaleQueued: TaskRepoImpl["listStaleQueued"] = (cutoff, take, owner) =>
     impl.listStaleQueued(cutoff, take, owner);
