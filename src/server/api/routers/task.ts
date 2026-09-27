@@ -178,7 +178,11 @@ export const taskRouter = createTRPCRouter({
   /* GET /api/tasks/[id]/workflow —— 读：returns the workflow snapshot */
   workflow: authedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      const owner = await taskRepository.findByIdWithImages(input.id);
+      if (owner?.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
+      }
       const task = await taskRepository.findSnapshotById(input.id);
       if (!task) throw new Error("Task not found");
       const snap = task.workflowSnapshot as {
@@ -204,12 +208,15 @@ export const taskRouter = createTRPCRouter({
       // 磁盘上的图片文件也一并删掉。
       const fsPromises = await import("fs/promises");
       const path = await import("path");
+      const publicRoot = path.resolve(process.cwd(), "public");
       for (const img of task.images) {
-        const full = path.join(
-          process.cwd(),
-          "public",
-          img.localPath.replace(/^\//, ""),
+        const full = path.resolve(
+          publicRoot,
+          img.localPath.replace(/^\/+/, ""),
         );
+        if (full !== publicRoot && !full.startsWith(publicRoot + path.sep)) {
+          continue;
+        }
         fsPromises.unlink(full).catch(() => undefined);
       }
       const dir = path.join(process.cwd(), "public", "generated", input.id);

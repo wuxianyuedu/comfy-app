@@ -102,7 +102,7 @@ export function useLLMConfig(): LLMConfigController {
     const effectiveProvider = effectiveProviderType(
       cfg.provider,
       cfg.baseUrl,
-      !!cfg.apiKey,
+      !!cfg.hasApiKey,
     );
     /* 兜底：当前生效主模型不在候选里时，按生效提供方归入对应组，保证下拉总能选它。
        明确是远端 image/video 类型的主模型不收入文本候选（避免误选到生成任务）。 */
@@ -119,7 +119,7 @@ export function useLLMConfig(): LLMConfigController {
       ...cfg,
       provider: effectiveProvider,
       extraModels: toModelNames(cfg.extraModels),
-      hasApiKey: !!cfg.apiKey,
+      hasApiKey: !!cfg.hasApiKey,
     });
   }
 
@@ -157,13 +157,13 @@ export function useLLMConfigSave(): LLMConfigSaveController {
       const rawExtra: unknown = (cfg as Record<string, unknown>).extraModels;
       return {
         ...cfg,
-        hasApiKey: !!cfg.apiKey,
+        hasApiKey: !!cfg.hasApiKey,
         // 与 useLLMConfig 同口径：本机 ollama 误存成「远端」时，保存后的
         // 视图配置也要按生效提供方展示，否则徽标/页脚闪回「远端」。
         provider: effectiveProviderType(
           cfg.provider as "local" | "remote",
           cfg.baseUrl,
-          !!cfg.apiKey,
+          !!cfg.hasApiKey,
         ),
         extraModels: toModelNames(rawExtra),
         temperatureByTask:
