@@ -663,6 +663,13 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     [workflowId, buildShotInput],
   );
 
+  /* 镜头目标数从场景表派生（每场景至少算 1 镜，与导入时铺占位镜头的口径同源）；
+   * 场景还没拆出来时它是 0 —— 此时「还差几镜」没有可信答案，清单就不报缺口。 */
+  const shotTarget = scenes.reduce(
+    (sum, scene) => sum + Math.max(1, scene.shotCount),
+    0,
+  );
+
   const imageDoneCount = shots.filter((item) => !!item.imageUrl).length;
   const clipDoneCount = shots.filter((item) => !!item.clipUrl).length;
   const scriptReady = !!scriptMarkdown.trim() || scenes.length > 0;
@@ -673,6 +680,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       characterCount: characters.length,
       sceneCount: scenes.length,
       shotCount: shots.length,
+      shotTarget,
       imageDoneCount,
       clipDoneCount,
     }),
@@ -681,6 +689,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       characters.length,
       scenes.length,
       shots.length,
+      shotTarget,
       imageDoneCount,
       clipDoneCount,
     ],
