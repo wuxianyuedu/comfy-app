@@ -255,6 +255,67 @@ describe("幽灵 token（引用了从未定义的 --color-*）", () => {
 });
 
 /**
+ * ③「拼接 token 名」硬闸（规范 03 §3.6.1.1）。
+ *
+ * 这条补的是幽灵 token 判据**唯一看不见的引用形态**：`--color-${x}` 拼出来的名字
+ * 不是字面量，「引用了但没定义」无从比对。它同时踩中第二个坑 —— Tailwind v4 会
+ * tree-shake 掉 `@theme` 里**没被引用**的变量，而它判断「有没有被引用」看的也是
+ * 源码里的**字面名**。实测（把 `globals.css` 真编译一次）：
+ *   · 往 `@theme` 塞一颗谁都不引用的 `--color-zprobe-unused` → 产物里出现 **0 次**；
+ *   · `globals.css` 声明的 111 颗 `--color-*` 里 **24 颗被 shake**，
+ *     而这 24 颗在 `src/**` 里连名字都没出现过（= 被 shake 的全是零引用的，判据成立）；
+ *   · 拼法命中的那一处（`AuroraGlow` 的 `var(--color-aurora-${tone})`）**今天还在渲染**，
+ *     纯属侥幸 —— 那三颗的名字在 `AuroraBackground` 上半段与 `TrainingStudio` 的
+ *     `stroke=` 里恰好被整名写过，是别人替它保住了变量。重构掉那几行，光晕当场失色。
+ */
+describe("拼接 token 名（幽灵判据的补集）", () => {
+  it("模板插值拼出 --color- 名字 → 阻断", () => {
+    const { run } = scanner({
+      "src/components/ui/Composed.tsx":
+        "export const G = ({ tone }: { tone: string }) => {\n" +
+        "  const stop = `color-mix(in srgb, var(--color-aurora-${tone}) 40%, transparent)`;\n" +
+        "  return <div style={{ background: stop }} />;\n" +
+        "};\n",
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("拼出来的");
+    expect(output).toContain("src/components/ui/Composed.tsx:2");
+  });
+
+  it("字符串相加拼名 → 同样阻断", () => {
+    const { run } = scanner({
+      "src/components/ui/Concat.tsx": 'export const n = "--color-" + name;\n',
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("拼出来的");
+  });
+
+  it("整名写成字面量的表 → 通过（规定的修法）", () => {
+    const { run } = scanner({
+      "src/app/globals.css": "@theme {\n  --color-aurora-cyan: #22d3ee;\n}\n",
+      "src/components/ui/Table.tsx":
+        'const MAP = { cyan: "var(--color-aurora-cyan)" } as const;\n' +
+        "export const G = ({ tone }: { tone: keyof typeof MAP }) =>\n" +
+        "  <div style={{ background: `color-mix(in srgb, ${MAP[tone]} 40%, transparent)` }} />;\n",
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  /* 判据只认「名字里有插值或相加」两种形态。反引号里出现 `--color-` 前缀**不判** ——
+   * 那种宽形态会在说明注释里命中上百处散文引用（globals.css 实测 103 处），
+   * 而那些名字恰恰是「没人用、活该被 shake」的正确形态。 */
+  it("注释里提到拼法不算违规（去注释后才判）", () => {
+    const { run } = scanner({
+      "src/components/ui/DocOnly.tsx":
+        "// 别写成 `var(--color-aurora-${tone})`，名字要写全。\nexport const x = 1;\n",
+    });
+    expect(run().ok).toBe(true);
+  });
+});
+
+/**
  * 「存量必须逐条定性」的判据（ISSUE #672 / 规范 03 §3.6.1 末段）。
  *
  * 清完之后棘轮是 **0**，而**零基线本身防不住两件事**：

@@ -17,11 +17,15 @@
  *   ② **棘轮层**（`scripts/.theme-color-baseline.json`）：豁免后仍有存量的
  *      未 token 化写死色值，按「文件 → 处数」记账，**只许降不许升** ——
  *      新写的写死色值一律阻断，逐批治理时基线跟着收紧；
- *   ③ **反向两层**（都是硬闸，不进基线）：
+ *   ③ **反向三层**（都是硬闸，不进基线）：
  *      · **死豁免**：登记在表上却一处都不命中的条目 = 负债，会把该文件今后的
  *        写死色值静默放行，出现即阻断（口径按文件、不按条目，见下方注释）；
  *      · **幽灵 token**：呈现属性引用了从未定义的 `--color-*` —— 不报错、只是
  *        颜色消失（`fill` 退黑、`stroke` 退 none），出现即阻断；
+ *      · **拼接 token 名**：`--color-${x}` / `"--color-" + x` —— 前一条比对不到它，
+ *        而 Tailwind v4 按源码里的**字面名**决定保留哪颗 `@theme` 变量，拼出来的名字
+ *        看不见 → 那颗 token 连产物都进不去（实测无人引用的声明在产物里出现 0 次）。
+ *        实测存量 0，出现即阻断；
  *   ④ **报告层**（`--report`）：只出清单不判失败，供盘点/排批次用。
  *
  * ⚠️ 豁免必须**显式**：清单里逐条列出「文件 + 该文件里被豁免的顶层标识符 + 理由」，
@@ -32,8 +36,9 @@
  * 判定口径：
  *   检查  = 遍历 `src/**`，统计每个文件的写死色值，减去显式豁免；
  *   通过  = 未豁免计数 ≤ 基线（且新增文件/新增处数不得抬高基线），
- *           且「无死豁免」「无幽灵 token」两条硬闸都过；
- *   失败  = 出现基线外的新增写死色值 / 死豁免 / 幽灵 token（退出码 1），并列出行号。
+ *           且「无死豁免」「无幽灵 token」「无拼接 token 名」三条硬闸都过；
+ *   失败  = 出现基线外的新增写死色值 / 死豁免 / 幽灵 token / 拼接 token 名
+ *           （退出码 1），并列出行号。
  *
  * 用法：
  *   node scripts/check-theme-colors.cjs            # 检查（棘轮：只许降不许升）
@@ -518,6 +523,31 @@ const PRESENTATION_VAR_RE =
   /\b(?:fill|stroke|stopColor|stop-color|flood-color|lighting-color)\s*=\s*["']var\(\s*(--color-[\w-]+)\s*\)["']/g;
 const CSS_VAR_DECL_RE = /^\s*(--color-[\w-]+)\s*:/gm;
 
+/**
+ * ③ **拼接出来的 token 名** —— 上面那条幽灵判据唯一看不见的引用形态。
+ *
+ * `var(--color-node-${kind})` / `"--color-" + name` 这类名字不是字面量，
+ * 「引用了但没定义」根本无从比对；更糟的是 Tailwind v4 会 **tree-shake 未被引用的
+ * `@theme` 变量**，而它判断「有没有被引用」靠的是**源码里出现过这个字面名** ——
+ * 拼出来的名字它同样看不见，于是那颗 token 连产物都进不去（实测：往 `@theme` 塞一颗
+ * 谁都不引用的 `--color-zprobe-unused`，编译产物里出现 **0 次**；而 globals.css 声明的
+ * 111 颗里有 24 颗被 shake 掉，这 24 颗在 `src/**` 里连名字都没出现过）。
+ *
+ * 所以规定的写法是**整名写全**：JS 里要按当前主题取色就走
+ * `useCssColorToken("--color-node-mix-base", "#ffffff")` —— 该地基出口内部
+ * `getPropertyValue(name)` 是本仓库唯一合法的间接层（它是出口，不是绕开），
+ * 两个调用点传的都是完整字面名，因此 token 名在源码里可见、既过幽灵判据也不被 shake。
+ *
+ * **只判两种形态**：模板插值出现在 token 名里、或字符串相加拼 token 名。
+ * 实测存量 **0**。刻意**不判**「反引号里出现 `--color-` 前缀」这类宽形态 ——
+ * 那种正则会在 `globals.css` 的说明注释里命中 103 处散文引用，
+ * 全是「这个名字被 shake 是因为没人用」的正确形态（同 §12.18 别造误报机）。
+ */
+const COMPOSED_NAME_RES = [
+  /--color-[a-z0-9-]*\$\{/,
+  /["'`]--color-[a-z0-9-]*["'`]\s*\+/,
+];
+
 /* ── 主流程 ──────────────────────────────────────────────── */
 
 function walk(dir, out = []) {
@@ -540,6 +570,7 @@ const rel = (p) =>
 const violations = [];
 const exempted = [];
 const ghosts = [];
+const composed = [];
 
 /**
  * 全仓 CSS 里**真实声明过**的 `--color-*`（`@theme` 与 `.dark` 覆盖都算）。
@@ -602,6 +633,11 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
         name: m[1],
         text: lines[i].trim(),
       });
+    }
+    /* ③ 拼接 token 名：上面那条判据看不见引用，Tailwind 也看不见 → 会被 shake。
+     * 只看代码行（`codeLines` 已去注释），所以 globals.css 那 103 处散文提及不会命中。 */
+    if (COMPOSED_NAME_RES.some((re) => re.test(codeLines[i]))) {
+      composed.push({ file: r, line: i + 1, text: lines[i].trim() });
     }
   }
 }
@@ -670,6 +706,16 @@ function printGhosts() {
   }
 }
 
+function printComposed() {
+  if (!composed.length) return;
+  console.log(
+    "[theme-colors] token 名是拼出来的（幽灵判据看不见、Tailwind 会 shake 掉它）：",
+  );
+  for (const c of composed) {
+    console.log(`  ✗ ${c.file}:${c.line} ｜${c.text}`);
+  }
+}
+
 /** 打印豁免清单（让人一眼看出「哪些是被有意放行的」）。 */
 function printExemptions() {
   if (!exemptByFile.size) return;
@@ -722,11 +768,26 @@ if (ghosts.length > 0 && !REPORT_ONLY) {
   process.exit(1);
 }
 
+/* ③ 拼接 token 名：同幽灵 token，条数与写死色值无关，硬闸不进基线。 */
+if (composed.length > 0 && !REPORT_ONLY) {
+  printComposed();
+  console.error(
+    `[theme-colors] ${composed.length} 处把 --color-* 的名字拼了出来。` +
+      "两条判据同时失效：幽灵 token 判据比对不到「引用了哪个名字」，\n" +
+      "  而 Tailwind v4 靠源码里出现过的**字面名**决定保留哪颗 @theme 变量 ——\n" +
+      "  拼出来的名字它也看不见，那颗 token 连编译产物都进不去（实测：无人引用的\n" +
+      "  声明在产物里出现 0 次）。改法：把整名写全，JS 取色走\n" +
+      '  useCssColorToken("--color-完整字面名", 兜底)。见 §3.6.1.1。',
+  );
+  process.exit(1);
+}
+
 /* ── 模式一：只出报告（盘点） ── */
 if (REPORT_ONLY) {
   printExemptions();
   printViolations();
   printGhosts();
+  printComposed();
   console.log("[theme-colors] --report 模式：只出清单，不判失败 ✓");
   process.exit(0);
 }
