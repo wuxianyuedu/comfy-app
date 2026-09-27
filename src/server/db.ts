@@ -27,6 +27,7 @@ import path from "node:path";
 import { env } from "~/env";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
+import { sql } from "drizzle-orm";
 import * as schema from "./db/schema";
 
 /** Fallback DB file when `DATABASE_URL` carries no path (relative to CWD).
@@ -81,3 +82,9 @@ const globalForDb = globalThis as unknown as {
 export const db = globalForDb.db ?? drizzle(client, { schema });
 
 if (env.NODE_ENV !== "production") globalForDb.db = db;
+
+/** 探活数据库连通性（health 路由专用，避免路由层直接持 db/orm，§1.10）。
+ *  行为与原路由的 `SELECT 1` 探活一致；路由改调本函数即可。 */
+export function pingDatabase(): void {
+  db.run(sql`select 1`);
+}

@@ -20,8 +20,11 @@ vi.mock("~/lib/db-schema-ready", () => ({
   probeSchemaSync: (): "ready" | "missing" | "unknown" => probeSchemaSync(),
 }));
 
+// 路由不再直连 db/orm（§1.10），改调 `pingDatabase`；mock 需一并给出该出口，
+// 否则 call `undefined` 会落进 catch 而把所有用例都判成 503。
 vi.mock("~/server/db", () => ({
   db: { run: vi.fn() },
+  pingDatabase: vi.fn(),
 }));
 
 vi.mock("~/lib/core/logger", () => ({
