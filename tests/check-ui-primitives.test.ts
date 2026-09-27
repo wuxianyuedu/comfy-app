@@ -5323,10 +5323,14 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 见 scripts/check-ui-primitives.cjs 里 P82 注释：合规出口是
    * `~/components/ui/hint` 的 `<Hint label=…>`（`Tooltip` + Base UI
    * `TooltipTrigger render={…}` 的薄封装）。
-   * 判据取「`<Button` 之后整段属性」，属性段由 `readJsxAttrsPastTag()` 平衡
-   * 扫描。引入时用的是粗锚 `[^>]*`，它会被属性段里箭头函数 / `{a > b}` /
-   * 带引号的值里那个 `>` 截断 —— 粗锚在真实库上数到 78、AST 复数是 157。
-   * 下面的「漏计已闭合」那条就是钉这个：三种曾被漏掉的形态现在都计到。 */
+   * 判据取「`<Button` 之后整段属性」，属性段由 `scanJsxAttrs()` 平衡扫描、
+   * `parseJsxProps()` 整名解析、`classifyTitleValue()` 分档。引入时用的是粗锚
+   * `[^>]*`，它会被属性段里箭头函数 / `{a > b}` / 带引号的值里那个 `>` 截断
+   * —— 粗锚在真实库上数到 78、AST 复数是 157。
+   * 下面除了「漏计已闭合」，还钉住三件从旧实现里修掉的误报/漏报：
+   *   · `data-title=` / `aria-label="title="` 不算原生 title（整名匹配）；
+   *   · `title=""` / `{undefined}` / `{null}` 归 empty、不计违规；
+   *   · `{...props}` 展开归 unknown、单列人工抽查。 */
   it('P82 视图层 <Button title="x"> 直接阻断（硬闸命中行形态）', () => {
     seedBaseline();
     write(
@@ -5386,13 +5390,89 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "}",
       ].join("\n"),
     );
-    /* 用 --report（只出清单、不判失败）锁计数：粗锚时代这条只有 1，
-     * 平衡扫描后是 4 —— 漏计闭死才是本条能升硬闸的前提。 */
+    /* 这四处**都带** title=、且 `title=` 排在 `>` 之后 —— 粗锚时代这条只数到
+     * 1（被 `=>` 的 `>` 截断），平衡扫描后必须数到 4。 */
     const { code, output } = run(["--report"]);
     expect(code, output).toBe(0);
     const line = output.split(/\r?\n/).find((l) => l.includes("] P82 "));
     expect(line, output).toBeDefined();
     expect(line).toMatch(/—— 4 处 \/ 1 文件/);
+  });
+
+  it("P82 data-title= / aria-label=title= 不算原生 title（整名匹配）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82NotTitle.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        /* 三处**都没有**原生 title= —— 旧判据 \btitle\s*= 会误报（`-` 是非词
+         * 字符、`aria-label` 值里含 `title=`），整名匹配后都归 clean、不计违规。 */
+        '      <Button data-title="提示">一</Button>',
+        '      <Button aria-label="title=x">二</Button>',
+        '      <Button mytitle="x">三</Button>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code, output).toBe(0);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P82 "));
+    expect(line).toMatch(/—— 0 处 \/ 0 文件/);
+  });
+
+  it("P82 空值归 empty、动态值归 dynamic，只有动态值计入违规", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82Tiers.tsx",
+      [
+        "export function V({ label }: Props) {",
+        "  return (",
+        "    <>",
+        /* 空值等同没写 → 不计违规（旧判据把这一档也当违规，是误报）。 */
+        '      <Button title="">empty</Button>',
+        "      <Button title={undefined}>empty</Button>",
+        "      <Button title={null}>empty</Button>",
+        /* 动态值是运行时的原生 tooltip → 计违规。 */
+        "      <Button title={label}>dynamic</Button>",
+        /* 干净的一处。 */
+        "      <Button onClick={x}>clean</Button>",
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code, output).toBe(0);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P82 "));
+    expect(line).toMatch(/—— 1 处 \/ 1 文件/);
+    /* 真跑一次门禁：那 1 处 dynamic 要被硬闸拦下。 */
+    const gate = run();
+    expect(gate.code, gate.output).not.toBe(0);
+    expect(gate.output).toMatch(/P82\s*→/);
+  });
+
+  it("P82 {...props} 展开归 unknown，单列人工抽查、不计违规", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82Spread.tsx",
+      [
+        "export function V(props: Props) {",
+        "  return <Button {...props}>x</Button>;",
+        "}",
+      ].join("\n"),
+    );
+    /* unknown 不进硬闸：门禁通过。 */
+    const gate = run();
+    expect(gate.code, gate.output).toBe(0);
+    /* 但 --report 里单列出这条 unknown 通道，人工抽查。 */
+    const { output } = run(["--report"]);
+    const uk = output.split(/\r?\n/).find((l) => l.includes("P82-unknown"));
+    expect(uk, output).toBeDefined();
+    expect(uk).toMatch(/—— 1 处 \/ 1 文件/);
+    expect(output).toContain("studio/P82Spread.tsx");
   });
 
   it("P82 不误伤 <Hint> 与 <Tooltip render={<Button/>}>（两种合规出口）", () => {
@@ -5412,6 +5492,22 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "      </Tooltip>",
         "    </>",
         "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P82 注释里的 <Button title=> 不误报（stripComments 已剥掉）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82Comment.tsx",
+      [
+        "export function V() {",
+        '  /* 说明：不要写 <Button title="原生提示">，改走 <Hint>。 */',
+        '  // 同理：<Button title="另一处"> 也是反例。',
+        "  return <Button onClick={x}>x</Button>;",
         "}",
       ].join("\n"),
     );
