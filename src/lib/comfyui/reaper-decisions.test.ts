@@ -104,7 +104,6 @@ function resetRunnerState() {
    * 原实现这里写的是 `void persistLogs;` —— 只是「引用一下别删 import」，
    * 一个什么都没做的语句，所以定时器一直在跑。 */
   for (const taskId of persistTasks()) cancelPersistLogs(taskId);
-  s.emitter.removeAllListeners();
 }
 
 /* 两条 sweeper 由宿主显式起的循环每 30s 跑一次（ADR §14 D3）。

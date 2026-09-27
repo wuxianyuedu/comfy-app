@@ -1,0 +1,4 @@
+## Removed
+
+- **进程内事件通道整体退役**（P3 §5 第 2 期 · Phase 4-B1，ADR §14 D1）。动手前数了一遍读者：SSE 自 3-C 单源化之后就不再订阅进程内事件，`enqueue.subscribe` 全仓唯一剩下的消费者就是首帧那一处——也就是那 13 处 `emit` 全是空转，而空转比缺代码更坏：它让后来人以为「取消会发一个事件」「成功有一帧 done」，照这条契约给新宿主写代码，必然再长出同一个洞。删的是 `RunnerState.emitter` 字段、`TaskEvent` 类型、`createEmptyState(emitter)` 形参、`enqueue.subscribe`，以及客户端 `generation-client` 里再也收不到的 `done` / `error` / `progress` 三种帧分支（`log` 与 `state` 保留，与流路由实际会发的形态闭环）。对外从此只有一条通道：数据库那一行。回归由新增的 `tests/in-process-event-channel-retired.test.ts` 钉住，含一条「判据本身有效」的反向验证（`not.toMatch` 写错成永远为真时它自己会红）。
+- **`runner-state.ts` 的 `PURE_NODE_HOSTS` 登记**：它此前只因顶层 `import { EventEmitter } from "events"` 才需要登记；emitter 退役后不再顶层引 Node 内建值，按本清单「登记项必须仍然成立（只许变短）」那条撤掉。**「不许带 `server-only`」这条约束一字未动**——带上了 host 的 `bootRuntime()` 注入链会在加载它时直接 throw，理由搬进模块头部。同批把这类「拿正则断言源码形状」用例各自内联的去注释步骤收进 `tests/helpers/strip-comments.ts`（同一件小事此前在四个用例文件里各写一份；本 PR 并进来两处，其余另拆 ISSUE #1192）。

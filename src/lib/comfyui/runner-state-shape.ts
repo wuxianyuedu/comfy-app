@@ -6,17 +6,14 @@
 //   · **不带 `import "server-only"`** —— 它只描述形状；未来的纯 Node executor host
 //     也要能 import 它，一旦加上就把 §18.4 三选一里第三类（纯 Node 宿主）的口子
 //     关死了；
-//   · **不 import 任何 Node 内建值** —— `events` / `ws` 一律 `import type` 引入。
+//   · **不 import 任何 Node 内建值** —— `ws` 一律 `import type` 引入。
 //     扫描器 `scripts/lib-node-only-scan.mjs`（规范 §18.4）的 `parseImports`
 //     对 `type` 前缀的 clause 是**跳过**的，因此本模块既不会落进 `unguarded`
 //     （没声明却引 Node 内建），也不会被 `clientReachable` 抓到（浏览器图引
 //     Node-only 会整页 500）。这是「拆层不影响 import-graph 判定」的关键。
 //
 // 单例（`globalThis.comfyRunner`）与 IO（`persistLogs` / `logger` / `taskRepository`）
-// 都留在 `runner-state.ts`。EventEmitter 由调用方构造并注入到 `createEmptyState`
-// —— 本模块因此连 `events` 的值 import 都不需要。
-
-import type { EventEmitter } from "events";
+// 都留在 `runner-state.ts`。
 
 import type WebSocket from "ws";
 
@@ -56,35 +53,11 @@ export type LogEntry = {
   src?: string;
 };
 
-export type TaskEvent =
-  | {
-      type: "progress";
-      progress: number;
-      /** 当前正在执行的 ComfyUI 节点与步数（progress 消息自带；UI 用于节点级进度展示） */
-      node?: { id: string; label?: string; value: number; max: number };
-    }
-  | { type: "done"; images: unknown[] }
-  | { type: "error"; error: string }
-  | { type: "log"; entry: LogEntry }
-
-  /** 合成的 "state" 事件：由 cancelTask() / finalizeFailure() 两条路径补发，
-   *  它们否则只会更新数据库，不通知 SSE 订阅方。
-   *  前端读取的字段与初始 /api/tasks/[id]/stream GET 响应体完全一致，
-   *  因此 "state" 事件会触发同一条 patch() 路径，
-   *  把「卡在生成中」的 UI 治好。
-   *  顺序与 finalizeFailure 保持一致：先 state，后 error。
-   *  （取消路径的完整说明见 enqueue.ts 的 cancelTask。） */
-  | {
-      type: "state";
-
-      status: string;
-
-      progress?: number;
-
-      error?: string | null;
-
-      validationErrors?: unknown[] | null;
-    };
+/* 曾经这里有一个 `TaskEvent` 联合（progress / done / error / log / state 五种），
+ * 供进程内 EventEmitter 投递、SSE 路由再转成 `data:` 帧。它随 P3 §5 ADR §14 D1
+ * 退役：SSE 自 §13-3C 起只读 DB 行，跨宿主也没有共享的 EventEmitter 可言，
+ * 对外的事件形状因此只剩 `/api/tasks/[id]/stream` 那一种（客户端解析在
+ * `src/lib/workshop/generation-client.ts`）。 */
 
 export type RunnerState = {
   ws: WebSocket | null;
@@ -94,8 +67,6 @@ export type RunnerState = {
   active: number;
 
   connecting: boolean;
-
-  emitter: EventEmitter;
 
   promptToTask: Map<string, string>;
 
@@ -157,19 +128,18 @@ export type RunnerState = {
 
 /** 建一份 RunnerState 的初始值。
  *
- *  `emitter` 由调用方构造并传入 —— 本模块不 import Node 内建的 `events`，把
- *  「谁持有 EventEmitter」留给宿主：Next 进程走 `runner-state.ts` 里的
- *  `state()` 全局单例（并在那里 `setMaxListeners(50)`，注释与理由也留在原处）；
- *  未来的 executor host 可各自持有自己的 emitter。除 emitter 外，本工厂**只**
- *  做纯数据初始化（`new Map` / `new Set` / 空数组 / 0 / false），零副作用、
- *  零 IO，因此搬动它不改变任何执行行为。 */
-export function createEmptyState(emitter: EventEmitter): RunnerState {
+ *  本工厂**只**做纯数据初始化（`new Map` / `new Set` / 空数组 / 0 / false），
+ *  零副作用、零 IO，因此搬动它不改变任何执行行为。
+ *
+ *  这里曾经还有一个 `emitter: EventEmitter` 字段（由宿主构造后传进来）：它是
+ *  进程内事件通道的归属点，随 P3 §5 ADR §14 D1 一并退役——执行进度只经 DB 行
+ *  对外（见 §13-3C 的 SSE 单源化），跨宿主不可能靠一个进程内的 EventEmitter。 */
+export function createEmptyState(): RunnerState {
   return {
     ws: null,
     queue: [],
     active: 0,
     connecting: false,
-    emitter,
     promptToTask: new Map(),
     promptByTask: new Map(),
     logs: new Map(),

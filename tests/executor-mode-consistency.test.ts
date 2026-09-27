@@ -38,6 +38,7 @@ import {
   resolveExecutorMode,
 } from "../scripts/launcher-core/executor-mode.mjs";
 import { RUNTIME_SCRIPTS } from "../scripts/standalone-private-inputs.mjs";
+import { stripComments } from "./helpers/strip-comments";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 
 const ROOT = process.cwd();
@@ -56,12 +57,9 @@ const vectors = (
 const original = process.env[EXECUTOR_ENV_KEY];
 const tmpDirs: string[] = [];
 
-/** 去注释后再比对：下面几条判据针对的是**代码**，而注释里正当会出现
- *  「漏了 `trim()`」这类叙述（解释为什么要收口），拿原文去匹配会自打自。
- *  块注释整段去掉；行注释只去「整行都是注释」的，避免误伤 `http://` 之类字符串。 */
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
-}
+/* 去注释后再比对：判据针对的是**代码**，而注释里正当会出现「漏了 `trim()`」
+ * 这类叙述（解释为什么要收口），拿原文去匹配会自打自。实现全仓只写一次，
+ * 见 `./helpers/strip-comments`（§12.18）。 */
 
 function tempEnvFile(lines: string[]): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "executor-mode-"));

@@ -392,7 +392,7 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
       const msg: unknown = JSON.parse(ev.data);
       if (!isRecord(msg)) return;
       const type: unknown = msg.type;
-      if (type === "progress" || type === "state") {
+      if (type === "state") {
         const p: unknown = msg.progress;
         if (typeof p === "number" && Number.isFinite(p)) {
           // 节点级信息（可选）：progress 消息里带的当前节点 id / 类别名 / 步数
@@ -429,11 +429,11 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
               typeof err === "string" && err.trim() ? err : `任务 ${st}`,
             );
           } else if (st === "SUCCEEDED") {
-            /* host 执行的任务没有进程内 done 帧（emitter 在另一个进程）——
-             * 成功收口走这条：终态 state 帧带 DB 的产出清单（与 done 帧的
-             * images 同源同形，见 executor-finalize 的 `saved`）。判定与
-             * done 分支逐字对齐，消费方（onOutput/onSettled）零改动。
-             * 已落定（inline 的 done 先到）时整帧跳过：产出回调不许重发。 */
+            /*  成功收口走这条：终态 state 帧带 DB 的产出清单（与 TaskImage 同源，
+             * 见 executor-finalize 的 `saved`）。inline 与 host 执行的任务到这里
+             * 完全同形——进程内 done 帧已随 ADR §14 D1 退役，不存在「另一种宿主
+             * 收不到成功」的那半边流量了。
+             * 已落定时整帧跳过：产出回调不许重发（同一终态可能被轮询发两次）。 */
             if (settled) return;
             const outputs = extractSavedOutputs(msg.images);
             if (outputs.length === 0) {
@@ -441,7 +441,7 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
               settle(false, "任务完成但没有产出文件");
               return;
             }
-            note("收到 state 帧 status=SUCCEEDED（host 收口路径），按成功落定");
+            note("收到 state 帧 status=SUCCEEDED，按成功落定");
             outputs.forEach((out) => h.onOutput?.(out));
             settle(true);
           } else {
@@ -465,24 +465,9 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
         if (entry) h.onLog?.(entry);
         return;
       }
-      if (type === "done") {
-        note("收到 done 帧（成功终态）");
-        const outputs = extractSavedOutputs(msg.images);
-        if (outputs.length === 0) {
-          settle(false, "任务完成但没有产出文件");
-          return;
-        }
-        outputs.forEach((out) => h.onOutput?.(out));
-        settle(true);
-        return;
-      }
-      if (type === "error") {
-        const err: unknown = msg.error;
-        note(
-          `收到 error 帧（失败终态）：${typeof err === "string" ? err : "无原因"}`,
-        );
-        settle(false, typeof err === "string" && err ? err : "生成失败");
-      }
+      /*  这里过去还分两条分支收口 `done` / `error` 帧：那是 SSE 直接转发进程内
+       *  EventEmitter 的年代（P3 §5 ADR §13-3C 之前）。流路由现在只发 `log` 与
+       *  `state` 两种帧，终态一律由上面的 status 判回收口，两宿主同形。 */
     } catch {
       /* SSE 帧格式错误 —— 忽略这一条消息 */
     }

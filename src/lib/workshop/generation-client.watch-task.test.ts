@@ -1,10 +1,12 @@
 /**
  * `watchTask` 的落定状态机契约（P3 §5 ADR §13-3B1 手工端到端抓到的缺口）。
  *
- * 钉的行为：**host 执行的任务没有进程内 done 帧**，成功收口必须能靠带
- * `images` 的 `state` 帧（SUCCEEDED）完成——此前该状态被静默跳过，界面卡在
- * 「生成中」、按钮不复位、SSE 重连风暴。同时守住反向：inline 的 done 帧路径
- * 不变、`settled` 标志保证两条路径只落定一次。
+ * 钉的行为：成功收口靠带 `images` 的 `state` 帧（SUCCEEDED）完成——此前该状态
+ * 被静默跳过，界面卡在「生成中」、按钮不复位、SSE 重连风暴。同时守住两条反向：
+ * 终态只落定一次（同一行可能被轮询读到两次）、非终态不落定。
+ *
+ * 进程内 `done` / `error` 帧已随 P3 §5 ADR §14 D1 退役，所以这里不再有「两条
+ * 路径谁先到」的组合：`/api/tasks/[id]/stream` 只发 `log` 与 `state`。
  *
  * 用假 EventSource（本文件唯一的运行时替身）：watchTask 只依赖
  * `new EventSource(url)` + `onmessage/onerror/onclose` 面，不碰其它浏览器 API。
@@ -61,7 +63,7 @@ const IMAGES = [
 ];
 
 describe("watchTask 的终态落定路径", () => {
-  it("state 帧 SUCCEEDED + images：逐条 onOutput、settle(true)、关流（host 收口路径）", () => {
+  it("state 帧 SUCCEEDED + images：逐条 onOutput、settle(true)、关流", () => {
     const { es, handlers } = startWatch();
     es.emit({
       type: "state",
@@ -75,7 +77,7 @@ describe("watchTask 的终态落定路径", () => {
     expect(es.close).toHaveBeenCalled();
   });
 
-  it("state 帧 SUCCEEDED 但无产出：按失败落定（与 done 帧同判据）", () => {
+  it("state 帧 SUCCEEDED 但无产出：按失败落定", () => {
     const { es, handlers } = startWatch();
     es.emit({ type: "state", status: "SUCCEEDED", progress: 100, images: [] });
     expect(handlers.onSettled).toHaveBeenCalledWith({
@@ -93,9 +95,14 @@ describe("watchTask 的终态落定路径", () => {
     expect(es.close).not.toHaveBeenCalled();
   });
 
-  it("inline 的 done 帧路径不变；done 之后到达的 SUCCEEDED state 不二次落定", () => {
+  it("终态被读到两次也只落定一次：产出回调不许重发", () => {
     const { es, handlers } = startWatch();
-    es.emit({ type: "done", images: IMAGES.slice(0, 1) });
+    es.emit({
+      type: "state",
+      status: "SUCCEEDED",
+      progress: 100,
+      images: IMAGES,
+    });
     expect(handlers.onSettled).toHaveBeenCalledTimes(1);
     es.emit({
       type: "state",
@@ -104,7 +111,14 @@ describe("watchTask 的终态落定路径", () => {
       images: IMAGES,
     });
     expect(handlers.onSettled).toHaveBeenCalledTimes(1);
-    expect(handlers.onOutput).toHaveBeenCalledTimes(1);
+    expect(handlers.onOutput).toHaveBeenCalledTimes(IMAGES.length);
+  });
+
+  it("已退役的 done 帧即使从别处冒出来也只是被忽略", () => {
+    const { es, handlers } = startWatch();
+    es.emit({ type: "done", images: IMAGES });
+    expect(handlers.onSettled).not.toHaveBeenCalled();
+    expect(handlers.onOutput).not.toHaveBeenCalled();
   });
 
   it("state 帧 FAILED 带 error：按失败落定并用 DB 原因", () => {

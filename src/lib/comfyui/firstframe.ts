@@ -10,9 +10,10 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import type { SizeSpec } from "~/lib/media/size-presets";
+import { FIRST_FRAME_WAIT, backoffDelayMs } from "~/lib/retry-policy";
+import { isTerminalTaskStatus } from "~/lib/task-state";
+import { taskRepository } from "../core/repository-task";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
-import { withTimeout } from "~/lib/with-timeout";
-import { subscribe } from "./enqueue";
 import { uploadImage } from "./client";
 
 export async function synthesizeFirstFrame(opts: {
@@ -48,30 +49,35 @@ export async function synthesizeFirstFrame(opts: {
   if (!res.name) throw new Error("首帧上传失败");
   return res.name;
 }
-// 成功时以第一张生成图的本地路径 resolve；出错则 reject，超时由 `withTimeout`
-// 统一处理（含「胜出即清定时器」）。
-const FIRST_FRAME_TIMEOUT_MS = 5 * 60 * 1000;
-
-function waitForImage(taskId: string): Promise<string> {
-  return withTimeout(
-    new Promise<string>((resolve, reject) => {
-      /* 订阅要先拿到 `off` 才能在结算时退订 —— 声明在前、赋值在后。 */
-      const off = subscribe(taskId, (event) => {
-        if (event.type === "done") {
-          off();
-          const imgs = (
-            event.images as Array<{ mediaType?: string; localPath?: string }>
-          ).filter((im) => im.mediaType === "image");
-          const first = imgs[0];
-          if (first?.localPath) resolve(first.localPath);
-          else reject(new Error("首帧无图像输出"));
-        } else if (event.type === "error") {
-          off();
-          reject(new Error(event.error));
-        }
-      });
-    }),
-    FIRST_FRAME_TIMEOUT_MS,
-    { message: "首帧生成超时" },
-  );
+// 成功时以第一张生成图的本地路径 resolve；出错/超时 reject。
+//
+// **读库里那一行，而不是订阅进程内事件**（P3 §5 ADR §14 D1 摘掉的第一个进程内
+// 依赖）：emitter 只在写它的那个进程里响，`COMFY_EXECUTOR=host` 下执行的是宿主
+// 进程，Next 这一侧永远等不到 `done` 帧——旧写法的表现是「文生视频」的第一跳
+// 挂满 5min 超时后整条失败。DB 行是两种宿主共同的收口源（SSE 自 3-C 起也走
+// 同一条），所以这里与 `/api/tasks/[id]/stream` 的轮询同形。
+async function waitForImage(taskId: string): Promise<string> {
+  for (let attempt = 0; attempt < FIRST_FRAME_WAIT.maxAttempts; attempt++) {
+    const row = await taskRepository.findExecutionProgress(taskId);
+    /* 行读不到 = 这一跳的任务已被删（用户清了历史）。不静默续等：那样只会
+     * 变成「首帧生成超时」，把一个明确的删除问题伪装成性能问题。 */
+    if (!row) throw new Error("首帧任务已不存在（可能被删除）");
+    if (isTerminalTaskStatus(row.status)) {
+      if (row.status !== "SUCCEEDED") {
+        throw new Error(row.error ?? `首帧生成失败（${row.status}）`);
+      }
+      const outputs =
+        (row.resultImages as Array<{
+          mediaType?: string;
+          localPath?: string;
+        }> | null) ?? [];
+      const first = outputs.find((im) => im.mediaType === "image");
+      if (!first?.localPath) throw new Error("首帧无图像输出");
+      return first.localPath;
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, backoffDelayMs({ ...FIRST_FRAME_WAIT, attempt })),
+    );
+  }
+  throw new Error("首帧生成超时");
 }

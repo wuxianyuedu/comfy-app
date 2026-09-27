@@ -98,6 +98,19 @@ export const OLLAMA_READY = {
   maxAttempts: 20,
 } as const;
 
+/** 首帧（文生视频的第一跳）等库里收口：150 次 × 2s（共 5min）。
+ *
+ *  与 `HISTORY_READ` 同为「固定间隔」而不是指数退避：这一等的对象是**自己刚提交
+ *  的任务**，它一定会走到终态，退避只会让「图早就好了、调用方却很晚才知道」。
+ *  5min 这个包络不是新口径 —— 它就是执行链给单个任务的 `JOB_TIMEOUT_MS`，
+ *  也与本助手改之前的超时一致（改前是 emitter 订阅 + `withTimeout`，见
+ *  `comfyui/firstframe.ts`）。 */
+export const FIRST_FRAME_WAIT = {
+  shape: "fixed",
+  baseMs: 2000,
+  maxAttempts: 150,
+} as const;
+
 /** ComfyUI 停止后的探针：5 次 × 500ms（共 2.5s）—— 等进程树退出。 */
 export const COMFY_STOP_PROBE = {
   shape: "fixed",

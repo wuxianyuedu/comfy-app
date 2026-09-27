@@ -500,7 +500,6 @@ async function completeInner(
     s.startedAt.delete(taskId);
   }
   s.lastNodeByTask.delete(taskId);
-  s.emitter.emit(taskId, { type: "done", images: saved });
   s.promptToTask.delete(promptId);
   s.promptByTask.delete(taskId);
   s.executedWorkflow.delete(taskId);
@@ -588,19 +587,10 @@ export async function finalizeFailure(
    * 既泄漏内存，又让「已执行过就永远算被本进程认领」把 reaper 的孤儿回收
    * 永久挡住。失败收口同样清掉。 */
   s.executedWorkflow.delete(taskId);
-  /* 以前 finalizeFailure 只发 `error` 事件。而 `error` 会把 SSE 流关掉（见
-   * /api/tasks/[id]/stream/route.ts），于是带着结构化 `validationErrors` 的
-   * `state` 补丁永远到不了客户端。cancelTask() 的做法是对的 —— 先 `state` 再
-   * `error`。这里照做：让面板**在流还开着的时候**拿到结构化诊断，在关闭之前把
-   * d.validationErrors 补上。顺序要紧：先 state（修 UI），后 error（关连接）。 */
-  s.emitter.emit(taskId, {
-    type: "state",
-    status: "FAILED",
-    progress: 0,
-    error: friendly,
-    validationErrors: validationErrors?.length ? validationErrors : [],
-  });
-  s.emitter.emit(taskId, { type: "error", error: friendly });
+  /*  这里过去先发一个合成 "state"、再发一个 "error" 事件：那时 SSE 订阅的
+   *  是进程内 EventEmitter，缺了这两帧，画布的节点会永远停在「生成中」。现在
+   *  SSE 只读库（ADR §13-3C），上面的 finalizeFailure 落库加 persistLogs 就是
+   *  客户端看到失败的唯一来源——两种宿主同形，事件顺序也就不再是契约。 */
   if (promptId) s.promptToTask.delete(promptId);
   s.promptByTask.delete(taskId);
   s.lastLogPct.delete(taskId);
