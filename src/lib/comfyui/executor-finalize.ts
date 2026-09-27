@@ -418,11 +418,24 @@ async function completeInner(
     kickQueue();
     return;
   }
-  await taskRepository.finalizeSuccess(taskId, {
+  const outcome = await taskRepository.finalizeSuccess(taskId, {
     resultImages: saved,
     params: taskParamsPatched,
     ...(workflowSnapshot ? { workflowSnapshot } : {}),
   });
+  if (outcome !== "written") {
+    /* 进程内的 claimFinalize 挡得住同进程的重复收口，挡不住跨进程：这一行
+     *  可能已被对侧宿主收口（或压根不归本宿主）。此时**不再补 TaskImage 行**——
+     *  给一条不归自己、且终态已由别人落定的行挂产物，等于凭空多出两套结果。 */
+    log(
+      taskId,
+      "warn",
+      `成功收口未落库（${outcome}）：终态已由别处落定或归属不属于本进程，产物行不补写`,
+    );
+    s.active = Math.max(0, s.active - 1);
+    kickQueue();
+    return;
+  }
   await taskRepository.createImages(
     taskId,
     saved.map((s2, i) => ({
@@ -550,11 +563,21 @@ export async function finalizeFailure(
     : "";
   log(taskId, "error", `✗ 生成失败：${friendly}${elapsedSuffix}`);
 
-  await taskRepository.finalizeFailure(
+  const outcome = await taskRepository.finalizeFailure(
     taskId,
     friendly,
     validationErrors?.length ? validationErrors : undefined,
   );
+  if (outcome !== "written") {
+    /* 典型现场：用户先点取消（行已是 CANCELLED），随后被 kill 的执行进程走到
+     *  这里——守卫把它挡成「不改写别人的终态」。后面的清理照做（槽位、内存映射、
+     *  日志），只有落库这一步没发生。 */
+    log(
+      taskId,
+      "warn",
+      `失败收口未落库（${outcome}）：终态已由别处落定或归属不属于本进程`,
+    );
+  }
 
   await persistLogs(taskId);
   taskRuntimeLog?.error(`任务失败 ${taskId}: ${friendly}`);

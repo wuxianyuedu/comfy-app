@@ -364,7 +364,14 @@ export async function reapStaleQueuedTasks(): Promise<void> {
           validationErrors: [],
         });
         s.emitter.emit(t.id, { type: "error", error: reason });
-        await taskRepository.finalizeFailure(t.id, reason);
+        const outcome = await taskRepository.finalizeFailure(t.id, reason);
+        if (outcome !== "written") {
+          /* SELECT 与 UPDATE 之间被执行方自己收口了（或归属已变）：正常的窄竞态，
+           * 不是故障，但要留一行——没有它，「判了却没落库」在日志里是隐身的。 */
+          logger.warn(
+            `[comfyui] reaper: 跳过收口 ${t.id}（${outcome}），终态已由执行方落定`,
+          );
+        }
         await persistLogs(t.id);
       } finally {
         reaperState.reaping.delete(t.id);
@@ -503,11 +510,16 @@ export async function reapStaleRunningTasks(): Promise<void> {
           type: verdict === "succeeded" ? "done" : "error",
           ...(verdict === "failed" ? { error: reason } : {}),
         });
-        await taskRepository.finalizeFromReaper(
+        const outcome = await taskRepository.finalizeFromReaper(
           t.id,
           finalStatus,
           verdict === "failed" ? reason : null,
         );
+        if (outcome !== "written") {
+          logger.warn(
+            `[comfyui] reaper: 跳过对账收口 ${t.id}（${outcome}），终态已由执行方落定`,
+          );
+        }
         await persistLogs(t.id);
       } finally {
         reaperState.reaping.delete(t.id);

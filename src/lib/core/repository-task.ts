@@ -36,7 +36,11 @@ const NO_LIMIT = sql`-1`;
  *  传进来。设计依据见 P3 §5 ADR 附录 §11.1（`docs/superpowers/specs/` 目录下
  *  `p3-phase2-executor-host-design.md`）。本 class 下方的 12 个对应方法各
  *  delegate 一行到 `impl.xxx(...)`。 */
-const impl: TaskRepoImpl = createTaskRepoImpl(db);
+/* `owner: "inline"` 是本进程的归属声明：Next 里那几条执行写路径（enqueue /
+ * executor-cli / executor-ws / executor-finalize / reaper）只在
+ * `COMFY_EXECUTOR=inline` 时被调用，host 模式下 Next 只剩「建行 + 取消」，而
+ * `cancel` 正是 impl 里唯一免归属的写。判据与理由见 ADR §14 D4。 */
+const impl: TaskRepoImpl = createTaskRepoImpl(db, { owner: "inline" });
 
 /** 把「不限条数」作为 limit 传下去（run-time 是 `sql` 片段，见 NO_LIMIT 注释）。 */
 function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {

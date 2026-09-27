@@ -4,9 +4,11 @@
  *
  * 为什么单独一份测试、而不是加进 `repository.test.ts`：impl 是**双宿主共用**的
  * 实现（Next 侧与未来 executor host 都走同一份），它的正确性独立于 `TaskRepository`
- * 类的 delegate 装配——测试直接吃 `createTaskRepoImpl(db)`，锁的是 SQL 主体的
- * 语义（compare-and-set 判据、4 条件 AND、有/无 workflowSnapshot 的 spread、
- * `validationErrors` 归一、`replaceLogs` 的 swallow 等）。
+ * 类的 delegate 装配——测试直接吃 `createTaskRepoImpl(db, { owner })`（同一份内存
+ * 库上挂 inline / host 两份实例，只差构造期的归属声明，§14 D4 那一组靠它们对测
+ * 两片的写入），锁的是 SQL 主体的语义（compare-and-set 判据、终态与归属两条守卫、
+ * 4 条件 AND、有/无 workflowSnapshot 的 spread、`validationErrors` 归一、
+ * `replaceLogs` 的 swallow 等）。
  *
  * db 用**内存 SQLite + 真 Drizzle**（`tests/helpers/test-db.ts` 那套 better-sqlite3
  * 后端）。`createTaskRepoImpl` 形参类型是 `TaskRepoDb`（libsql 客户端），本文件
@@ -28,13 +30,18 @@ import type { TaskRepoDb } from "./repository-task-impl-types";
 
 let tdb: TestDb;
 let impl: TaskRepoImpl;
+/** host 归属那一片的实例：与 `impl` 同库、只差构造期的 owner 声明。 */
+let hostImpl: TaskRepoImpl;
 let userId: string;
 
 beforeAll(() => {
   tdb = createTestDb();
   // 内存测试库结构上是同一份 drizzle builder，运行时类型名义不同（better-sqlite3
   // vs libsql）；一次性断言、之后所有 impl 方法都用这个 `db`。
-  impl = createTaskRepoImpl(tdb as unknown as TaskRepoDb);
+  impl = createTaskRepoImpl(tdb as unknown as TaskRepoDb, { owner: "inline" });
+  hostImpl = createTaskRepoImpl(tdb as unknown as TaskRepoDb, {
+    owner: "host",
+  });
 });
 
 beforeEach(() => {
@@ -485,7 +492,9 @@ describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
       execPayload: { nodes: [{ id: "1", type: "KSampler" }] },
       params: { workflowInputs: [{ nodeId: "1", name: "text", value: "x" }] },
     });
-    const job = await impl.findExecJob(id);
+    // findExecJob 是 host 领取后重建 Job 的读，所以走 host 那片（带归属条件后，
+    // 用 inline 实例读会正确地被挡成 null，见下方 §14 D4 那一组）。
+    const job = await hostImpl.findExecJob(id);
     expect(job?.workflowName).toBe("w");
     expect(job?.execPayload).toEqual({
       nodes: [{ id: "1", type: "KSampler" }] as unknown[],
@@ -499,5 +508,123 @@ describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
     expect(await impl.findExecJob("nope")).toBeNull();
     const bare = await seed({});
     expect((await impl.findExecJob(bare))?.execPayload ?? null).toBeNull();
+  });
+});
+
+/**
+ * 收口写入的两条守卫（P3 §5 ADR §14 D4）：终态不再被改写 + 只动自己那一片。
+ *
+ * 钉住两个真实事故面：① host 把用户取消的行 SIGKILL 之后，被杀进程的退出收口
+ * 会走到 `finalizeFailure`，而它曾是**无条件 UPDATE**——把 `CANCELLED` 改写回
+ * `FAILED`（用户体感「点了取消却显示失败」）；② 两个宿主并存时，任何一侧按 id
+ * 裸写都可能落到对侧名下的行。
+ */
+describe("收口写入的终态守卫与归属守卫（Phase 4-A1 / ADR §14 D4）", () => {
+  it("取消之后迟到的失败收口落不进去（CANCELLED 不再被覆盖成 FAILED）", async () => {
+    const id = await seed({
+      status: "RUNNING",
+      claimedBy: "inline",
+      promptId: "p-1",
+    });
+    expect(await impl.cancel(id)).toBe("written");
+    expect(
+      await impl.finalizeFailure(id, "comfy-cli 异常退出（code=null）"),
+    ).toBe("skipped-terminal");
+    expect(readRow(id)).toMatchObject({ status: "CANCELLED" });
+  });
+
+  it("对已经结束的任务点取消不翻状态（SUCCEEDED 保持 SUCCEEDED）", async () => {
+    const id = await seed({ status: "SUCCEEDED", claimedBy: "inline" });
+    expect(await impl.cancel(id)).toBe("skipped-terminal");
+    expect(readRow(id)?.status).toBe("SUCCEEDED");
+  });
+
+  it("成功收口之后失败收口落不进去，且返回值说清是谁赢了", async () => {
+    const id = await seed({ status: "RUNNING", claimedBy: "inline" });
+    expect(
+      await impl.finalizeSuccess(id, { resultImages: [], params: {} }),
+    ).toBe("written");
+    expect(await impl.finalizeFailure(id, "后到的原因")).toBe(
+      "skipped-terminal",
+    );
+    expect(readRow(id)?.status).toBe("SUCCEEDED");
+  });
+
+  it("inline 实例改不动 host 名下的行，原因回 skipped-not-owned", async () => {
+    const id = await seed({
+      status: "RUNNING",
+      claimedBy: "host",
+      promptId: "p-2",
+    });
+    expect(
+      await impl.finalizeSuccess(id, { resultImages: [], params: {} }),
+    ).toBe("skipped-not-owned");
+    expect(await impl.updateProgress(id, 55)).toBe(false);
+    expect(await impl.markRunning(id, "p-3")).toBe(false);
+    expect(readRow(id)).toMatchObject({ status: "RUNNING", claimedBy: "host" });
+  });
+
+  it("host 实例对自己那片照常落库", async () => {
+    const id = await seed({ status: "RUNNING", claimedBy: "host" });
+    expect(await hostImpl.finalizeFailure(id, "真的失败")).toBe("written");
+    expect(readRow(id)?.status).toBe("FAILED");
+  });
+
+  it("cancel 是唯一免归属的写：Next 侧实例能取消 host 名下的行", async () => {
+    const id = await seed({
+      status: "RUNNING",
+      claimedBy: "host",
+      promptId: "p-4",
+    });
+    expect(await impl.cancel(id)).toBe("written");
+    expect(readRow(id)?.status).toBe("CANCELLED");
+  });
+
+  it("replaceLogs 带归属守卫、不带终态守卫（收口后的尾随日志不许被抹掉）", async () => {
+    const hostRow = await seed({ status: "RUNNING", claimedBy: "host" });
+    await impl.replaceLogs(hostRow, [{ level: "info", message: "越片写入" }]);
+    expect(readRow(hostRow)?.logs).not.toEqual([
+      { level: "info", message: "越片写入" },
+    ]);
+    await hostImpl.replaceLogs(hostRow, [{ level: "info", message: "归我" }]);
+    expect(readRow(hostRow)?.logs).toEqual([
+      { level: "info", message: "归我" },
+    ]);
+
+    const done = await seed({ status: "SUCCEEDED", claimedBy: "inline" });
+    await impl.replaceLogs(done, [
+      { level: "info", message: "收口之后的尾行" },
+    ]);
+    expect(readRow(done)?.logs).toEqual([
+      { level: "info", message: "收口之后的尾行" },
+    ]);
+  });
+
+  it("findExecJob 跨片读不到（要交给 ComfyUI 的图不许读成别人的）", async () => {
+    const id = await seed({
+      claimedBy: "host",
+      execPayload: { prompt: "host 的图" },
+    });
+    expect(await impl.findExecJob(id)).toBeNull();
+    expect(await hostImpl.findExecJob(id)).toMatchObject({
+      execPayload: { prompt: "host 的图" },
+    });
+  });
+
+  it("reaper 的 repo 实例与 configureReaper 的 owner 不同源时收口被挡下", async () => {
+    // 两处的 owner 必须同源（host 脚本里就是同一个 hostRepo 实例）；不同源时
+    // 表现是「判了却没落库」，守卫返回的原因就是排障的唯一线索。
+    const id = await seed({ status: "RUNNING", claimedBy: "host" });
+    expect(await impl.finalizeFromReaper(id, "FAILED", "对账判失败")).toBe(
+      "skipped-not-owned",
+    );
+    expect(readRow(id)?.status).toBe("RUNNING");
+  });
+
+  it("行不存在时回 skipped-missing（与「已被别处收口」区分开）", async () => {
+    expect(await impl.finalizeFailure("no-such-task", "x")).toBe(
+      "skipped-missing",
+    );
+    expect(await impl.cancel("no-such-task")).toBe("skipped-missing");
   });
 });

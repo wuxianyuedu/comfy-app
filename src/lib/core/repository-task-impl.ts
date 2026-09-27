@@ -71,21 +71,71 @@ function ownedBy(owner: TaskClaimMode) {
     : or(isNull(task.claimedBy), eq(task.claimedBy, "inline"));
 }
 
+/** `ownedBy()` 的内存侧同判据（行已经在手里、只需分类「为什么没写进去」时用）。
+ *  两条必须同步改：SQL 侧漏一行、内存侧多认一行，就会把别人的行判成「归我」。 */
+function isOwnedBy(claimedBy: string | null, owner: TaskClaimMode): boolean {
+  return owner === "host"
+    ? claimedBy === "host"
+    : claimedBy === null || claimedBy === "inline";
+}
+
+/**
+ * 一次收口写入的结果（P3 §5 ADR §14 D4）。
+ *
+ * 为什么要四态而不是 boolean：调用点在「0 行受影响」时真正需要知道的是**原因**——
+ * 「这一行已经被别处收口了（我的结果该丢）」和「这一行不归我这个宿主（我根本不该
+ * 动它）」走的是两条完全不同的排障路径，混成一个 false 就只能靠日志猜。
+ */
+export type TaskWriteOutcome =
+  "written" | "skipped-terminal" | "skipped-not-owned" | "skipped-missing";
+
 /**
  * 14 个 exec-chain 方法的实现工厂（12 个 delegate 自 class + Phase 3-A 新增的
  * `claimNextQueued` + 3-B1 新增的 `findExecJob`；两者暂不进 class delegate——
  * 领取循环是 host 独占的 pull，直接调 impl）。
  *
- * Next 侧：`createTaskRepoImpl(db)`（`repository-task.ts` 模块顶层，`db` 来自
- * `~/lib/db`）；host 侧：`createTaskRepoImpl(drizzle(createClient({url:
- * "file:./db.sqlite"})))`——同一份 SQL、两种客户端注入。
+ * Next 侧：`createTaskRepoImpl(db, { owner: "inline" })`（`repository-task.ts`
+ * 模块顶层，`db` 来自 `~/lib/db`）；host 侧：`createTaskRepoImpl(drizzle(
+ * createClient({url: "file:./db.sqlite"})), { owner: "host" })`——同一份 SQL、
+ * 两种客户端注入，加上各自的归属声明。
+ *
+ * `owner` 是**构造期声明**而不是逐调用点传参：一条行的归属只能由写它的那个宿主
+ * 声明，漏传比错传更危险（默认成 inline 会让 host 悄悄改写别人的行），所以形参
+ * 故意做成必填。
  *
  * `TaskRepoDb` 是结构最小约束（见 `./repository-task-impl-types`），只锁本
  * 文件用到的 `.select()/.update()/.insert()` 三条 builder；drizzle 的
  * libsql / better-sqlite3 两种 adapter 都天然满足，测试里可以直接把
  * `createTestDb()` 传进来（走 `as unknown as TaskRepoDb` 一次性断言）。
  */
-export function createTaskRepoImpl(db: TaskRepoDb) {
+export function createTaskRepoImpl(
+  db: TaskRepoDb,
+  options: { owner: TaskClaimMode },
+) {
+  const { owner } = options;
+
+  /** 收口写入的共用守卫：终态不再被改写 + 只动自己那一片（ADR §14 D4）。 */
+  function writeGuard(taskId: string) {
+    return and(
+      eq(task.id, taskId),
+      notInArray(task.status, TERMINAL_STATES),
+      ownedBy(owner),
+    );
+  }
+
+  /** 「0 行受影响」时的原因分类——只在输掉的那条路径上多付一次读。 */
+  async function classifySkipped(taskId: string): Promise<TaskWriteOutcome> {
+    const rows = await db
+      .select({ status: task.status, claimedBy: task.claimedBy })
+      .from(task)
+      .where(eq(task.id, taskId))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return "skipped-missing";
+    if (!isOwnedBy(row.claimedBy, owner)) return "skipped-not-owned";
+    return "skipped-terminal";
+  }
+
   return {
     /** executor-finalize 收口时读归属与请求参数（projectId / params / prompt /
      *  negativePrompt / workflowName / referenceImages / createdAt）。 */
@@ -115,7 +165,7 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
     },
 
     /**
-     * 进度回写（顺带把行标成 RUNNING）：**只在非终态行上生效**。
+     * 进度回写（顺带把行标成 RUNNING）：**只在非终态、且归本宿主的行上生效**。
      *
      * 判据与旧注释一致（`repository-task.ts` 里原 JSDoc 完整解释过）：执行
      * 路径异步，ComfyUI 的 WS progress 帧与本任务被别的路径收口可能交错；一条
@@ -138,21 +188,17 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
           status: "RUNNING",
           ...(node !== undefined ? { progressNode: node } : {}),
         })
-        .where(
-          and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)),
-        )
+        .where(writeGuard(taskId))
         .returning({ id: task.id });
       return updated.length > 0;
     },
 
-    /** 记下 promptId 并标 RUNNING（同样只对非终态行生效，理由见 updateProgress）。 */
+    /** 记下 promptId 并标 RUNNING（守卫同 updateProgress：非终态 + 归本宿主）。 */
     async markRunning(taskId: string, promptId: string): Promise<boolean> {
       const updated = await db
         .update(task)
         .set({ status: "RUNNING", promptId })
-        .where(
-          and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)),
-        )
+        .where(writeGuard(taskId))
         .returning({ id: task.id });
       return updated.length > 0;
     },
@@ -192,7 +238,10 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
     /** host 领取后重建 Job 的行读（P3 §5 ADR §13-3B1 决定 1）：执行载荷取
      *  `execPayload`（提交时刻的 RAW 原件）、覆盖项取 `params.workflowInputs`，
      *  **不经 workflowName 回查模板**——模板被改/删不影响在队任务执行提交时的图。
-     *  找不到行返回 null（行已被回收/删除，调用方跳过并记日志即可）。 */
+     *  找不到行返回 null（行已被回收/删除，调用方跳过并记日志即可）。
+     *
+     *  带归属条件是刻意的：这条读出来的就是**要交给 ComfyUI 执行的图**，跨片读到
+     *  别人的载荷（比如误把 inline 的 id 递进 host 的 tick）等于替别的宿主起跑。 */
     async findExecJob(taskId: string): Promise<{
       workflowName: string;
       execPayload: unknown;
@@ -205,13 +254,14 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
           params: task.params,
         })
         .from(task)
-        .where(eq(task.id, taskId))
+        .where(and(eq(task.id, taskId), ownedBy(owner)))
         .limit(1);
       return rows[0] ?? null;
     },
 
     /** 成功收口：写 SUCCEEDED + progress=100 + finishedAt；有 workflowSnapshot
-     *  时一并落，允许后续按产物完整复现（种子已经在 resultImages / params 里）。 */
+     *  时一并落，允许后续按产物完整复现（种子已经在 resultImages / params 里）。
+     *  受 `writeGuard` 约束：已终态的行与不归本宿主的行都不改写（ADR §14 D4）。 */
     async finalizeSuccess(
       taskId: string,
       data: {
@@ -219,8 +269,8 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
         params: unknown;
         workflowSnapshot?: unknown;
       },
-    ): Promise<void> {
-      await db
+    ): Promise<TaskWriteOutcome> {
+      const updated = await db
         .update(task)
         .set({
           status: "SUCCEEDED",
@@ -232,17 +282,23 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
             ? { workflowSnapshot: data.workflowSnapshot }
             : {}),
         })
-        .where(eq(task.id, taskId));
+        .where(writeGuard(taskId))
+        .returning({ id: task.id });
+      return updated.length > 0 ? "written" : classifySkipped(taskId);
     },
 
     /** 失败收口：写 FAILED + error + finishedAt；`validationErrors` 空数组与
-     *  undefined 都归一存 null，非空才 stringify。 */
+     *  undefined 都归一存 null，非空才 stringify。
+     *
+     *  守卫前这里是**无条件 UPDATE**：host 把用户取消的行 SIGKILL 之后，被杀进程
+     *  的 close 回调会走到这里，把 `CANCELLED` 改写回 `FAILED`（用户体感「点了
+     *  取消却显示失败」）。见 ADR §14 签字前核实的事实 2。 */
     async finalizeFailure(
       taskId: string,
       error: string,
       validationErrors?: unknown[],
-    ): Promise<void> {
-      await db
+    ): Promise<TaskWriteOutcome> {
+      const updated = await db
         .update(task)
         .set({
           status: "FAILED",
@@ -252,29 +308,46 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
             : null,
           finishedAt: new Date(),
         })
-        .where(eq(task.id, taskId));
+        .where(writeGuard(taskId))
+        .returning({ id: task.id });
+      return updated.length > 0 ? "written" : classifySkipped(taskId);
     },
 
-    /** 用户取消：写 CANCELLED + finishedAt；调用方（enqueue.cancelTask）在
-     *  此之前已经按需调过 `interrupt()` 让 ComfyUI 也丢掉 prompt。 */
-    async cancel(taskId: string): Promise<void> {
-      await db
+    /** 用户取消：写 CANCELLED + finishedAt。
+     *
+     * **归属例外的唯一一处**（ADR §14 D4）：取消这个动作只活在 Next 进程里，而
+     * host 名下的行也必须能被取消，所以这里刻意不叠 `ownedBy(owner)`——叠了就等于
+     * 把「Next 取消 host 任务」这条合法路径堵死。跨归属的只有**状态标记**：
+     * 「kill 在飞执行」仍归 owner 自己做（host 的 `reconcileCancelled` /
+     * inline 的自己名下 `cliProcs`），非 owner 不越界碰执行细节。
+     *
+     * 终态守卫照常叠：对已结束的任务点取消不该把 SUCCEEDED 翻成 CANCELLED。 */
+    async cancel(taskId: string): Promise<TaskWriteOutcome> {
+      const updated = await db
         .update(task)
         .set({ status: "CANCELLED", finishedAt: new Date() })
-        .where(eq(task.id, taskId));
+        .where(
+          and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)),
+        )
+        .returning({ id: task.id });
+      return updated.length > 0 ? "written" : classifySkipped(taskId);
     },
 
     /** reaper 判决后的收口：从 ComfyUI 的 /history、/queue 对账回来才落，
-     *  所以状态由调用方指定（SUCCEEDED 或 FAILED）、error 允许 null。 */
+     *  所以状态由调用方指定（SUCCEEDED 或 FAILED）、error 允许 null。
+     *  受 `writeGuard` 约束：reaper 的 repo 实例 owner 必须与 `configureReaper`
+     *  传的 owner 同源，否则这里会静默 skip（判成 `skipped-not-owned`）。 */
     async finalizeFromReaper(
       taskId: string,
       status: "SUCCEEDED" | "FAILED",
       error: string | null,
-    ): Promise<void> {
-      await db
+    ): Promise<TaskWriteOutcome> {
+      const updated = await db
         .update(task)
         .set({ status, finishedAt: new Date(), error })
-        .where(eq(task.id, taskId));
+        .where(writeGuard(taskId))
+        .returning({ id: task.id });
+      return updated.length > 0 ? "written" : classifySkipped(taskId);
     },
 
     /** 用户取消路径的前置判：只取 status 与 promptId 两列，避免把 workflowSnapshot /
@@ -292,12 +365,15 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
 
     /** 任务日志整包回写（`runner-state.persistLogs` 的落库边）。
      *  `.catch(→undefined)` 是**故意的**：日志面板的内存视图仍完整，这一次
-     *  没持久化不影响业务；真故障由上层的 `deps.log.warn` 走镜像通道。 */
+     *  没持久化不影响业务；真故障由上层的 `deps.log.warn` 走镜像通道。
+     *
+     *  只带归属守卫、**不带终态守卫**：收口之后仍会有尾随日志（耗时、产物路径、
+     *  取消原因），按终态挡掉就等于把失败原因从面板上抹掉——那条正是排障要看的。 */
     async replaceLogs(taskId: string, logs: unknown[]): Promise<void> {
       await db
         .update(task)
         .set({ logs })
-        .where(eq(task.id, taskId))
+        .where(and(eq(task.id, taskId), ownedBy(owner)))
         .catch(() => undefined);
     },
 
