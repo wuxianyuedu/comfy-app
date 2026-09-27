@@ -87,15 +87,6 @@ export function WorkshopHeader({
             模式契约
           </Button>
         </Hint>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          aria-label="账户"
-          className="bg-primary/50 rounded-full text-white"
-        >
-          <Icon data-icon="inline-start" name="user" size={16} />
-        </Button>
       </div>
     </header>
   );
