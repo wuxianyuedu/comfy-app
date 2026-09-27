@@ -34,7 +34,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * 「每条用例起十几个 prettier」收敛成「整批一次」，这里没有可收敛的调用数（每个
  * 用例都要建一个独立的仓库 + 基线），所以只能把整文件的超时放宽。放宽只影响本
  * 文件，不掩盖本文件内真实的挂起（30s 仍远小于任何真实死锁的暴露时间）。 */
-vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+/* prettier 全仓扫描是本套件最慢的用例族：满载下 30s 不够（实测越线）。 */
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 const SCRIPT = join(process.cwd(), "scripts", "check-format.cjs");
 

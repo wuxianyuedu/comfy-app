@@ -50,7 +50,8 @@ function symlinkSafe(target: string, linkPath: string): void {
  * 5s 的用例超时在全量并行满载时会被击穿（CI 实测过一次 `Test timed out in 5000ms`，
  * 报在 `tests/check-format.test.ts` 的同类用例上）。整文件放宽到 30s——只影响本文件，
  * 不掩盖其它文件的真实挂起。 */
-vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+/* prettier 全仓扫描是本套件最慢的用例族：满载下 30s 不够（实测越线）。 */
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 /**
  * prettier 的 **JS 入口**（不是 `node_modules/.bin/prettier`）。
