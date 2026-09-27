@@ -278,6 +278,11 @@ describe("契约口展示名的单一出处", () => {
       exposedParamDisplayLabel("prompt"),
       exposedParamDisplayLabel("negative"),
       exposedParamDisplayLabel("size"),
+      /* 内置口径里的「种子」口：随「API 通道改远端模型按模式适配器」那一批加进
+       * 默认清单（`model-mode-contract.ts`），同批只更新了
+       * `model-mode-contract.test.ts`，这里漏了 —— 本用例锁的是「展示名同一份
+       * 出处」，与清单里有几口无关，所以跟着清单补。 */
+      exposedParamDisplayLabel("seed"),
     ]);
   });
 });

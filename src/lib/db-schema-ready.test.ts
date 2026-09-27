@@ -64,7 +64,25 @@ function useTempCwd(): { restore: () => void } {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  if (tmp) fs.rmSync(tmp, { recursive: true, force: true });
+  /* 「reaper 模块级副作用」那组会真加载 `~/server/db`，libsql 的 file: 客户端
+   * 开着 `<tmp>/db.sqlite` 的句柄；Windows 上句柄未释放时删除目录直接 EPERM
+   * （POSIX 上删得掉，所以这条只在 Windows 露出来）。先关掉单例上的客户端
+   * （`NODE_ENV !== "production"` 时它挂在 `globalThis.db`），再带退避地删 ——
+   * `maxRetries` 正是 Node 给 EPERM/EBUSY 这类瞬态锁准备的重试口。 */
+  const cached = (
+    globalThis as unknown as {
+      db?: { $client?: { close?: () => void } };
+    }
+  ).db;
+  cached?.$client?.close?.();
+  if (tmp) {
+    fs.rmSync(tmp, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 100,
+    });
+  }
 });
 
 describe("probeSchemaSync", () => {
