@@ -10,6 +10,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
+/* 取消走集中出口（`task-cancel-client`）：这里此前自己挂了一份
+ * `api.task.cancel.useMutation()`，于是「取消失败怎么提示」在历史面板与画布
+ * 面板各说一套（§12.14 端点收口）。取消的服务端语义见 ADR §14 D2。 */
+import { cancelTask } from "~/lib/task-cancel-client";
 import {
   copyFailureText,
   useCopyResult,
@@ -186,7 +190,6 @@ export function useHistoryList(): HistoryListController {
     [],
   );
 
-  const cancelTask = api.task.cancel.useMutation();
   const deleteTask = api.task.delete.useMutation();
 
   /* 反馈通道适配：本面板的「成功」走 `info`（一句陈述，不是庆祝），
@@ -204,14 +207,14 @@ export function useHistoryList(): HistoryListController {
 
   const cancel = useCallback(
     async (id: string) => {
-      await runAsyncAction(() => cancelTask.mutateAsync({ id }), {
+      await runAsyncAction(() => cancelTask(id), {
         report,
         failureText: "取消失败，请稍后重试",
         successText: "已发送取消请求",
       });
       refresh();
     },
-    [cancelTask, refresh, report],
+    [refresh, report],
   );
 
   const remove = useCallback(
