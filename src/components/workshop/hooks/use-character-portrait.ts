@@ -237,70 +237,73 @@ export function useCharacterPortrait(opts: {
     async (character: Character, overrides?: PortraitGenerateOverrides) => {
       /* 并发守卫用同步闸门，不读 session.busy（它是渲染态）：*/
       if (!taskLock.tryEnter()) return;
-      const prompt = character.positivePrompt.trim();
-      if (!prompt) {
-        fail(
-          "该角色还没有生成提示词，请先补全角色信息（外貌 / 服装等会自动合成提示词）",
-        );
-        return;
-      }
-      const channel = session.channel;
-      const remoteModel = (
-        overrides?.remoteModel ?? session.remoteModel
-      ).trim();
-      const localWorkflowId = (
-        overrides?.localWorkflowId ?? session.localWorkflowId
-      ).trim();
-      /* 本地通道没有内置模板可回落：必须先选好一个工作流库工作流（自带封装）。
-       * 与区块的门禁提示同一口径。 */
-      if (channel === "local" && !localWorkflowId) {
-        fail(
-          "本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数）",
-        );
-        return;
-      }
-      /* 日志里写「比例 + 档位（+ 倍数）」而不是折算出来的像素 —— 尺寸的表达
-       *  就是这两种，具体像素由目标工作流按它自己的口径算。 */
-      const size = shotSizeSummary(session.size);
-      const label = character.name || "该角色";
-      const localLabel = (overrides?.localLabel ?? "").trim();
-      const modelLabel =
-        channel === "local"
-          ? `本地 · ${localLabel || "库工作流"}`
-          : remoteModel
-            ? `远端 API · ${remoteModel}`
-            : "远端 API";
-      /* 从这里到第一个 await 之间是同步区：闸门已被上面的 `tryEnter` 占住，
-       *  第二次调用必定被那道守卫挡下。 */
-      /** 结果归属的项目：与 projectIdRef 比对，防止写进别的项目的角色列表。 */
-      const originProjectId = projectId;
-      /* 首行（本次用的通道 · 模型 · 尺寸）直接重置成会话日志，不经过 appendLog，
-       *  故这里单独落一次盘 —— 否则 log/workshop/ 的历史里只有「完成」没有「开始」，
-       *  回看时看不出这一张是用什么参数跑的。 */
-      const startLog = makePortraitLog(
-        "info",
-        `开始为「${label}」生成定妆照（${modelLabel} · ${size}）`,
-      );
-      persistGenerationLogs("portrait", [toPersistable(startLog)]);
-      setSession((prev) => ({
-        ...prev,
-        busy: true,
-        focusCharacterId: character.id,
-        /* 远端是一次性请求、不提供进度：这一路用 null 表示「不确定」，
-         *  别拿 0 冒充「刚开始」。 */
-        progress: channel === "remote" ? null : 0,
-        modelLabel,
-        status: "",
-        error: "",
-        log: [startLog],
-      }));
-      const req: PortraitRequest = {
-        prompt,
-        negative: character.negativePrompt || undefined,
-        /* 尺寸表达原样带过去：三条通道各自要的形状由网络层现算。 */
-        size: session.size,
-      };
+      /* 拿到锁之后的每一条路径（含门禁早退）都必须走到 finally 归还 ——
+       * 旧实现里「提示词为空 / 未选工作流」的门禁早退直接 return，锁被
+       * 永久占住，之后所有生成 / 导入都静默无响应（点了没反应）。 */
       try {
+        const prompt = character.positivePrompt.trim();
+        if (!prompt) {
+          fail(
+            "该角色还没有生成提示词，请先补全角色信息（外貌 / 服装等会自动合成提示词）",
+          );
+          return;
+        }
+        const channel = session.channel;
+        const remoteModel = (
+          overrides?.remoteModel ?? session.remoteModel
+        ).trim();
+        const localWorkflowId = (
+          overrides?.localWorkflowId ?? session.localWorkflowId
+        ).trim();
+        /* 本地通道没有内置模板可回落：必须先选好一个工作流库工作流（自带封装）。
+         * 与区块的门禁提示同一口径。 */
+        if (channel === "local" && !localWorkflowId) {
+          fail(
+            "本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数）",
+          );
+          return;
+        }
+        /* 日志里写「比例 + 档位（+ 倍数）」而不是折算出来的像素 —— 尺寸的表达
+         *  就是这两种，具体像素由目标工作流按它自己的口径算。 */
+        const size = shotSizeSummary(session.size);
+        const label = character.name || "该角色";
+        const localLabel = (overrides?.localLabel ?? "").trim();
+        const modelLabel =
+          channel === "local"
+            ? `本地 · ${localLabel || "库工作流"}`
+            : remoteModel
+              ? `远端 API · ${remoteModel}`
+              : "远端 API";
+        /* 从这里到第一个 await 之间是同步区：闸门已被上面的 `tryEnter` 占住，
+         *  第二次调用必定被那道守卫挡下。 */
+        /** 结果归属的项目：与 projectIdRef 比对，防止写进别的项目的角色列表。 */
+        const originProjectId = projectId;
+        /* 首行（本次用的通道 · 模型 · 尺寸）直接重置成会话日志，不经过 appendLog，
+         *  故这里单独落一次盘 —— 否则 log/workshop/ 的历史里只有「完成」没有「开始」，
+         *  回看时看不出这一张是用什么参数跑的。 */
+        const startLog = makePortraitLog(
+          "info",
+          `开始为「${label}」生成定妆照（${modelLabel} · ${size}）`,
+        );
+        persistGenerationLogs("portrait", [toPersistable(startLog)]);
+        setSession((prev) => ({
+          ...prev,
+          busy: true,
+          focusCharacterId: character.id,
+          /* 远端是一次性请求、不提供进度：这一路用 null 表示「不确定」，
+           *  别拿 0 冒充「刚开始」。 */
+          progress: channel === "remote" ? null : 0,
+          modelLabel,
+          status: "",
+          error: "",
+          log: [startLog],
+        }));
+        const req: PortraitRequest = {
+          prompt,
+          negative: character.negativePrompt || undefined,
+          /* 尺寸表达原样带过去：三条通道各自要的形状由网络层现算。 */
+          size: session.size,
+        };
         if (channel === "local") {
           /* 本地通道只有库工作流这条路：内置 txt2img（+ Checkpoint）已移除。 */
           const { taskId, url } = await generateWorkflowPortrait(
@@ -380,7 +383,7 @@ export function useCharacterPortrait(opts: {
         appendLog(makePortraitLog("error", message));
       } finally {
         /* focusCharacterId 保留：让发起本次生成的角色卡继续展示状态与日志。
-         * busy 与锁一起复位：writeBackCandidate 的早退（return）也走这里。 */
+         * busy 与锁一起复位：门禁早退（return）也走这里，锁绝不带出函数。 */
         taskLock.exit();
         setSession((prev) => ({ ...prev, busy: false }));
       }
@@ -402,20 +405,22 @@ export function useCharacterPortrait(opts: {
     async (character: Character, file: File) => {
       /* 与生成共用同一把锁：导入与生成不允许叠加。 */
       if (!taskLock.tryEnter()) return;
-      if (!file.type.startsWith("image/")) {
-        fail("只能导入图片文件");
-        return;
-      }
-      taskLock.tryEnter();
-      const originProjectId = projectId;
-      setSession((prev) => ({
-        ...prev,
-        importing: true,
-        focusCharacterId: character.id,
-        status: "",
-        error: "",
-      }));
+      /* 拿到锁之后的每一条路径（含「非图片文件」的门禁早退）都必须走到
+       * finally 归还 —— 旧实现里类型检查失败直接 return，之后所有生成 /
+       * 导入都被这把没还的锁静默挡死（同 generate 的回归口径）。 */
       try {
+        if (!file.type.startsWith("image/")) {
+          fail("只能导入图片文件");
+          return;
+        }
+        const originProjectId = projectId;
+        setSession((prev) => ({
+          ...prev,
+          importing: true,
+          focusCharacterId: character.id,
+          status: "",
+          error: "",
+        }));
         const url = await importPortraitFile(file, { projectId });
         const attached = writeBackCandidate(
           character.id,

@@ -127,6 +127,55 @@ describe("useCharacterPortrait 门禁", () => {
     expect(result.current.session.error).toBe("");
     expect(result.current.session.localWorkflowId).toBe("wf-1");
   });
+
+  it("门禁拒绝后锁被归还：下一次合法生成仍能发起（回归：门禁早退曾泄漏锁）", async () => {
+    const { result } = renderHook(() => useHarness("p1"));
+
+    /* 第一次：本地通道未选工作流 → 门禁拒绝。旧实现在这里直接 return，
+     * 锁被永久占住 —— 之后的 generate / importFile 全部静默无响应。 */
+    await act(async () => {
+      await result.current.actions.generate(character);
+    });
+    expect(result.current.session.error).toContain("本地通道需要先选模型");
+
+    /* 第二次：补齐选择后必须能真正发起请求。 */
+    mockedLocal.mockResolvedValue({
+      taskId: "task-1",
+      url: "/api/generated/a.png",
+    });
+    await act(async () => {
+      await result.current.actions.generate(character, {
+        localWorkflowId: "wf-1",
+      });
+    });
+
+    expect(mockedLocal).toHaveBeenCalledTimes(1);
+    expect(result.current.characters[0]!.portraits ?? []).toHaveLength(1);
+    expect(result.current.session.busy).toBe(false);
+  });
+
+  it("提示词为空的门禁拒绝同样归还锁（同一把锁的两条早退路径都要走 finally）", async () => {
+    const { result } = renderHook(() => useHarness("p1"));
+
+    await act(async () => {
+      await result.current.actions.generate(
+        makeCharacter({ positivePrompt: "  " }),
+      );
+    });
+    expect(result.current.session.error).toContain("还没有生成提示词");
+
+    mockedLocal.mockResolvedValue({
+      taskId: "task-1",
+      url: "/api/generated/a.png",
+    });
+    await act(async () => {
+      await result.current.actions.generate(character, {
+        localWorkflowId: "wf-1",
+      });
+    });
+
+    expect(mockedLocal).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("useCharacterPortrait 生成", () => {
@@ -320,6 +369,27 @@ describe("useCharacterPortrait 导入", () => {
 
     expect(mockedImport).not.toHaveBeenCalled();
     expect(result.current.session.error).toBe("只能导入图片文件");
+    expect(result.current.session.importing).toBe(false);
+  });
+
+  it("非图片被拒后锁被归还：后续合法导入仍能发起（回归：门禁早退曾泄漏锁）", async () => {
+    const { result } = renderHook(() => useHarness("p1"));
+
+    const bad = new File(["x"], "note.txt", { type: "text/plain" });
+    await act(async () => {
+      await result.current.actions.importFile(character, bad);
+    });
+    expect(result.current.session.error).toBe("只能导入图片文件");
+
+    /* 第二次导入合法文件必须真正发起 —— 旧实现锁没还，这里会静默 return。 */
+    mockedImport.mockResolvedValue("/api/materials/characters/up.png");
+    const good = new File(["x"], "portrait.png", { type: "image/png" });
+    await act(async () => {
+      await result.current.actions.importFile(character, good);
+    });
+
+    expect(mockedImport).toHaveBeenCalledTimes(1);
+    expect(result.current.characters[0]!.portraits ?? []).toHaveLength(1);
     expect(result.current.session.importing).toBe(false);
   });
 

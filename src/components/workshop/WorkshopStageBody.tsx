@@ -110,6 +110,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     openApiSettings,
     markRendered,
     dismissNotice,
+    showNotice,
   } = controller;
 
   /* 本地剧本文件导入：读取 .md / .txt 内容并写入 scriptMarkdown。
@@ -122,9 +123,18 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
        * 长得一样。 */
       void readFileAsText(file)
         .then((text) => {
-          if (text.trim()) setScriptMarkdown(text);
+          if (text.trim()) {
+            setScriptMarkdown(text);
+          } else {
+            showNotice(`「${file.name}」没有可导入的内容，已保留当前剧本`);
+          }
         })
-        .catch(() => setScriptMarkdown(""));
+        .catch(() => {
+          /* 读取失败不得清空已有剧本（旧实现把 scriptMarkdown 覆盖成空串，
+           * 一次坏文件就毁掉整份剧本）。降级不得静默（规范 10 §10.3.1）：
+           * 说清发生了什么、内容没有丢。 */
+          showNotice(`「${file.name}」读取失败，已保留当前剧本内容`);
+        });
     },
   });
 
@@ -342,6 +352,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 apiChannels={apiChannels}
                 onOpenApiSettings={openApiSettings}
                 onShotsChange={setShots}
+                onNotice={showNotice}
                 onNextStage={() => setTab("video")}
               />
             </React.Suspense>
@@ -369,6 +380,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 apiChannels={apiChannels}
                 onOpenApiSettings={openApiSettings}
                 onShotsChange={setShots}
+                onNotice={showNotice}
                 onPrevStage={() => setTab("shots")}
                 onNextStage={() => setTab("render")}
               />

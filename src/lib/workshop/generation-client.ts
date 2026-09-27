@@ -49,6 +49,48 @@ export async function startLocalGenerate(
   return res.taskId;
 }
 
+/** 本地 ComfyUI 单个任务的统一安全阀（30 分钟无响应即判超时）。
+ *  生图 / 视频 / 分镜批量三处的观察循环共用同一份常量 —— 哪一处漏配，
+ *  批量循环就会永久卡死在一条沉默的 SSE 流上。 */
+export const LOCAL_TASK_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** 重挂载恢复要用的任务真值快照（task 表 + 已落盘产物）。
+ *
+ *  SSE 流对「订阅前就已终态」的任务只回放日志与一条 state 帧 —— 成功终态
+ *  既不带产物也不发 done 帧（产物只随 live 的 done 帧下发），订阅一个已经
+ *  成功的任务拿不到 imageUrl。所以「刷新后恢复失联任务」必须先查这份真值：
+ *  已终态直接回写，仍在跑才去重订阅等 done 帧。 */
+export interface TaskSnapshot {
+  /** 任务表里的状态原文（SUCCEEDED / FAILED / CANCELLED / RUNNING / QUEUED…）。 */
+  status: string;
+  /** 终态失败时的原因（任务表 error 列）。 */
+  error?: string;
+  /** 已落盘产物（本地任务 imageUrl / clipUrl 的真值来源）。 */
+  outputs: SavedOutput[];
+}
+
+/** 查一个本地任务的状态与产物快照；任务不存在 / 查询失败返回 null
+ *（调用方按「任务失联」如实收尾，不假装它还在跑）。 */
+export async function fetchTaskSnapshot(
+  taskId: string,
+): Promise<TaskSnapshot | null> {
+  try {
+    const task: unknown = await vanillaApi.task.detail.query({ id: taskId });
+    if (!isRecord(task)) return null;
+    const status = task.status;
+    if (typeof status !== "string" || status === "") return null;
+    return {
+      status,
+      ...(typeof task.error === "string" && task.error
+        ? { error: task.error }
+        : {}),
+      outputs: extractSavedOutputs(task.images),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** 工坊里可选的生成模式：先把工作流按「内容类别（图 / 视频）」分栏，
  *  再在栏内按具体模式（文生图 / 图生图 / 文生视频 / 图生视频…）分类。
  *  工坊按当前阶段只展示对应类别下的工作流。 */

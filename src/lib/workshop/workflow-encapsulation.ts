@@ -444,10 +444,56 @@ export function buildEncapsulatedInputs(args: {
     if (!landed) reported.add("size");
   }
   /* 自定义口同理：给了值而**生效契约里没有这个口**（作者刚把它从契约里删掉，
-   *  而调用方还在按旧清单给值）映射层看不见 —— 在这里补报，否则用户会以为值
-   *  已经下发下去了。 */
+   * 而调用方还在按旧清单给值）映射层看不见 —— 在这里补报，否则用户会以为值
+   * 已经下发下去了。 */
   for (const id of Object.keys(values.custom ?? {})) {
     if (!hasEntry(id)) reported.add(id);
   }
   return { workflowInputs: inputs, unmatched: [...reported] };
+}
+
+/* ── unmatched 的用户口径 ──────────────────────────────────────────────
+ *
+ * `unmatched` 里是**契约口 id**（prompt / size-width / reference-image-2…），
+ * 直接给用户看等于没说。三个调用点（工坊控制器 / 镜头生图 / 视频生成）共用
+ * 这一份翻译，避免各写各的措辞。 */
+
+/** 预制契约口 id → 用户口径名。 */
+const UNMATCHED_LABELS: Record<string, string> = {
+  prompt: "正向提示词",
+  negative: "负向提示词",
+  size: "尺寸",
+  "first-frame": "首帧",
+  "last-frame": "尾帧",
+  duration: "时长",
+  seed: "种子",
+};
+
+/** 参考图口（reference-image / reference-image-2 …）统一叫「参考图」；
+ *  其余 id 命预制表，自定义口没有内置名，原样展示 id。 */
+function unmatchedLabel(id: string): string {
+  if (id === "reference-image" || /^reference-image-\d+$/.test(id)) {
+    return "参考图";
+  }
+  return UNMATCHED_LABELS[id] ?? `自定义口 ${id}`;
+}
+
+/** unmatched 契约口 → 一句可行动的提示；全部落了端口（空数组）返回 null。
+ *
+ *  「给了值却落不到端口」意味着该值**没有生效**（工作流用图内默认值顶上），
+ *  静默就是「改了没反应」（规范 10 §10.3.1 降级不得静默）—— 调用方拿到
+ *  非空结果必须展示给用户。 */
+export function describeUnmatchedInputs(
+  unmatched: readonly string[],
+): string | null {
+  if (unmatched.length === 0) return null;
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  for (const id of unmatched) {
+    const label = unmatchedLabel(id);
+    if (seen.has(label)) continue;
+    seen.add(label);
+    labels.push(label);
+  }
+  return `以下设置本次未生效（工作流没有连到对应端口的线，已沿用工作流内默认值）：${labels.join("、")}。可到工作流库给该工作流连线，或换用其它工作流`;
 }

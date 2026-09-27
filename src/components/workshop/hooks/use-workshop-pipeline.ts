@@ -11,12 +11,16 @@ import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import {
   buildLibraryWorkflowInput,
   fetchApiChannels,
+  fetchTaskSnapshot,
   fetchWorkshopWorkflows,
+  LOCAL_TASK_TIMEOUT_MS,
   startLocalGenerate,
   watchTask,
   type GenerateInput,
   type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
+import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
+import { withTimeoutResult } from "~/lib/with-timeout";
 import {
   fetchServerDraft,
   pushServerDraft,
@@ -252,6 +256,9 @@ export interface WorkshopPipelineController {
   closeModeContract: () => void;
   handleApiChannelsSaved: (channels: ApiChannelsView) => void;
   dismissNotice: () => void;
+  /** 写一条用户可见的提示（错误 / 门禁 / 未生效警告）：stage 组件内部的
+   *  降级路径（如文件导入失败）经它上屏，不在视图里自建第二条提示通道。 */
+  showNotice: (message: string) => void;
   markRendered: () => void;
   /* ── 所在项目（Phase 2：并入统一 proj_*，工坊不再自建多项目） ── */
   activeProjectId: string;
@@ -537,12 +544,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       .catch(() => undefined);
   }, []);
 
-  /** 提示条自动消失，避免需要用户手动关闭的瞬时噪声。 */
-  React.useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 4000);
-    return () => clearTimeout(timer);
-  }, [notice]);
+  /* 提示条不自动消失：写入 notice 的都是错误 / 门禁 / 「未生效」警告，
+   * 4 秒自灭曾让失败原因来不及读（规范 10 §10.3.1 的可见出口要求）。
+   * 消除走视图常驻的「关闭」按钮（dismissNotice）；新提示整条替换旧提示。 */
 
   /**
    * 分镜阶段的单镜生图(StoryboardPlanner 的 onGenerate 契约不变):
@@ -553,19 +557,104 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    *  按 ISSUE #145 只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值。
    *
    *  尺寸只表达一次（比例 + 分辨率 或 比例 + 百万像素 + 倍数）：整块交给封装层
-   *  （宽高由 size-presets 按场景现算）。 */
+   *  （宽高由 size-presets 按场景现算）。没落到任何端口的口随结果以提示文案
+   *  返回 —— 「给了值却没生效」必须让用户知道（规范 10 §10.3.1），不静默丢。 */
   const buildShotInput = React.useCallback(
-    async (shot: Shot): Promise<GenerateInput> => {
+    async (
+      shot: Shot,
+    ): Promise<{ input: GenerateInput; unmatchedWarning: string | null }> => {
       /* 草稿里存的是尺寸表达（老数据可能是 "832x1216" 字符串，回读时归一）。 */
       const sizeSpec = parseShotSize(shot.params.size);
-      const { input } = await buildLibraryWorkflowInput(workflowId, {
+      const { input, unmatched } = await buildLibraryWorkflowInput(workflowId, {
         prompt: shot.prompt,
         negativePrompt: shot.negativePrompt || undefined,
         size: sizeSpec,
       });
-      return input;
+      return { input, unmatchedWarning: describeUnmatchedInputs(unmatched) };
     },
     [workflowId],
+  );
+
+  /** 观察一个本地生图任务直到落定，结果回写对应镜头。generateShot 与
+   *  「恢复失联任务」共用同一条观察循环；回写前核对 `taskId` 归属 ——
+   *  恢复期间用户可能已对同一镜头重新发起（换了任务），旧观察不得覆盖新结果。
+   *  30 分钟无响应按失败收尾并退订（与 ShotStudio / VideoStudio 的安全阀
+   *  同口径、同常量）：批量循环永不卡死在一条沉默的流上。 */
+  const watchShotTask = React.useCallback(
+    (shotId: string, taskId: string): Promise<void> => {
+      /* 订阅句柄 —— watchTask 返回前先给一个空实现，超时路径上一定已赋值。 */
+      let close: () => void = () => undefined;
+      return withTimeoutResult(
+        new Promise<void>((resolve) => {
+          close = watchTask(taskId, {
+            onProgress: (pct, node) => {
+              /* 高频回调：按条目独立节流（规范 16 §16.2.4.68）。这条的值是
+               * 「百分比 + 当前节点名」的复合体，故只用闸门、不用 hook。 */
+              if (!progressGate.current.allow(shotId)) return;
+              setShotProgress((prev) => ({
+                ...prev,
+                [shotId]: {
+                  pct,
+                  ...(node?.label ? { label: node.label } : {}),
+                },
+              }));
+            },
+            onOutput: (out) => {
+              if (out.kind !== "video") {
+                setShots((prev) =>
+                  prev.map((item) =>
+                    item.id === shotId && item.taskId === taskId
+                      ? { ...item, imageUrl: out.url }
+                      : item,
+                  ),
+                );
+              }
+            },
+            onSettled: (result) => {
+              setShotProgress((prev) => {
+                const next = { ...prev };
+                delete next[shotId];
+                return next;
+              });
+              setShots((prev) =>
+                prev.map((item) =>
+                  item.id === shotId && item.taskId === taskId
+                    ? { ...item, status: result.ok ? "done" : "failed" }
+                    : item,
+                ),
+              );
+              if (!result.ok && result.message) {
+                setNotice(`镜头生成失败：${result.message}`);
+              }
+              resolve();
+            },
+          });
+        }),
+        LOCAL_TASK_TIMEOUT_MS,
+        undefined,
+        {
+          onTimeout: () => {
+            /* 安全阀：超时退订（放弃等待后流还挂着才是真问题），按失败收尾，
+             * 批量循环得以继续下一镜。 */
+            close();
+            setShotProgress((prev) => {
+              const next = { ...prev };
+              delete next[shotId];
+              return next;
+            });
+            setShots((prev) =>
+              prev.map((item) =>
+                item.id === shotId && item.taskId === taskId
+                  ? { ...item, status: "failed" }
+                  : item,
+              ),
+            );
+            setNotice("任务超时（30 分钟无响应），已按失败收尾");
+          },
+        },
+      );
+    },
+    [],
   );
 
   const generateShot = React.useCallback(
@@ -582,53 +671,16 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         ),
       );
       try {
-        const input = await buildShotInput(shot);
+        const { input, unmatchedWarning } = await buildShotInput(shot);
+        /* 未生效的口在发起前提示：生成要跑几十秒到几十分钟，事后说就晚了。 */
+        if (unmatchedWarning) setNotice(unmatchedWarning);
         const taskId = await startLocalGenerate(input);
         setShots((prev) =>
           prev.map((item) =>
             item.id === shot.id ? { ...item, taskId } : item,
           ),
         );
-        await new Promise<void>((resolve) => {
-          watchTask(taskId, {
-            onProgress: (pct, node) => {
-              /* 高频回调：按条目独立节流（规范 16 §16.2.4.68）。这条的值是
-               * 「百分比 + 当前节点名」的复合体，故只用闸门、不用 hook。 */
-              if (!progressGate.current.allow(shot.id)) return;
-              setShotProgress((prev) => ({
-                ...prev,
-                [shot.id]: {
-                  pct,
-                  ...(node?.label ? { label: node.label } : {}),
-                },
-              }));
-            },
-            onOutput: (out) => {
-              if (out.kind !== "video") {
-                setShots((prev) =>
-                  prev.map((item) =>
-                    item.id === shot.id ? { ...item, imageUrl: out.url } : item,
-                  ),
-                );
-              }
-            },
-            onSettled: (result) => {
-              setShotProgress((prev) => {
-                const next = { ...prev };
-                delete next[shot.id];
-                return next;
-              });
-              setShots((prev) =>
-                prev.map((item) =>
-                  item.id === shot.id
-                    ? { ...item, status: result.ok ? "done" : "failed" }
-                    : item,
-                ),
-              );
-              resolve();
-            },
-          });
-        });
+        await watchShotTask(shot.id, taskId);
       } catch (err: unknown) {
         setShots((prev) =>
           prev.map((item) =>
@@ -642,8 +694,64 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         setGenerating(false);
       }
     },
-    [workflowId, buildShotInput],
+    [workflowId, buildShotInput, watchShotTask],
   );
+
+  /* ── 恢复失联任务（刷新 / 切走页签后重挂载）───────────────────────────
+   *  草稿把 status=running 与 taskId 一起持久化，但观察循环活在内存里 ——
+   *  重挂载后没有任何人再订阅那条 SSE，镜头会永远停在「生成中」。恢复前
+   *  先查 task 表真值：SSE 对「订阅前已终态」的任务只回放日志与一条 state
+   *  帧（成功终态不带产物、不发 done 帧），直接重订阅会把已成功的任务判成
+   *  「连接中断」。所以：已终态 → 直接回写产物 / 失败态；仍在跑 → 重订阅
+   *  等 done 帧；查无真值 → 如实按失败收尾。视频片段没有持久化任务 id，
+   *  暂时恢复不了（见欠缺清单）。 */
+  const resumedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (resumedRef.current) return;
+    resumedRef.current = true;
+    for (const shot of latestDraftRef.current.shots) {
+      const taskId = shot.taskId;
+      if (shot.status !== "running" || !taskId) continue;
+      const shotId = shot.id;
+      void (async () => {
+        const snapshot = await fetchTaskSnapshot(taskId);
+        /* 恢复是异步的：期间用户可能对同一镜头重新发起（taskId 已换）。
+         * 回写只认「仍归属本任务」的镜头，不覆盖新一轮生成的状态。 */
+        const patchIfOwned = (p: Partial<Shot>) =>
+          setShots((prev) =>
+            prev.map((item) =>
+              item.id === shotId && item.taskId === taskId
+                ? { ...item, ...p }
+                : item,
+            ),
+          );
+        if (!snapshot) {
+          patchIfOwned({ status: "failed" });
+          return;
+        }
+        if (snapshot.status === "SUCCEEDED") {
+          /* 产物以任务真值回写（SSE 重订阅拿不到已完成任务的产物）。 */
+          const image = snapshot.outputs.find((out) => out.kind === "image");
+          if (image) {
+            patchIfOwned({ imageUrl: image.url, status: "done" });
+          } else {
+            patchIfOwned({ status: "failed" });
+            setNotice("任务已完成但没有产出文件，请重新生成该镜头");
+          }
+          return;
+        }
+        if (snapshot.status === "FAILED" || snapshot.status === "CANCELLED") {
+          patchIfOwned({ status: "failed" });
+          if (snapshot.error) setNotice(`镜头生成失败：${snapshot.error}`);
+          return;
+        }
+        /* 仍在跑（RUNNING / QUEUED）：重订阅，等 live 的 done 帧回写。 */
+        await watchShotTask(shotId, taskId);
+      })();
+    }
+    // 仅挂载执行一次；镜头列表经 ref 读取（惰性初始化在首渲染已完成）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const imageDoneCount = shots.filter((item) => !!item.imageUrl).length;
   const clipDoneCount = shots.filter((item) => !!item.clipUrl).length;
@@ -718,6 +826,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   );
 
   const dismissNotice = React.useCallback(() => setNotice(null), []);
+  const showNotice = React.useCallback((message: string) => {
+    setNotice(message);
+  }, []);
   const markRendered = React.useCallback(() => setRendered(true), []);
 
   return {
@@ -778,6 +889,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     closeModeContract,
     handleApiChannelsSaved,
     dismissNotice,
+    showNotice,
     markRendered,
     activeProjectId,
   };

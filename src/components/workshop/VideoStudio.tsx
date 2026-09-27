@@ -7,11 +7,13 @@ import {
   apiPollVideo,
   apiSubmitVideo,
   buildLibraryWorkflowInput,
+  LOCAL_TASK_TIMEOUT_MS,
   prepareLocalInputImage,
   startLocalGenerate,
   watchTask,
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
+import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { ChannelSwitch, ShotCard } from "./VideoStudio.parts";
 import { framesFor, videoPrompt } from "./video-studio-utils";
@@ -27,14 +29,13 @@ interface Props {
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
   onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
+  /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
+  onNotice: (message: string) => void;
   onPrevStage: () => void;
   onNextStage: () => void;
 }
 
 type Channel = "local" | "api";
-
-/** 本地 ComfyUI 单个视频镜头的安全阀（30 分钟无响应即判超时）。 */
-const LOCAL_TASK_TIMEOUT_MS = 30 * 60 * 1000;
 
 /** 空操作（订阅句柄的初值）。 */
 function noop(): void {
@@ -54,6 +55,7 @@ export function VideoStudio({
   apiChannels,
   onOpenApiSettings,
   onShotsChange,
+  onNotice,
   onPrevStage,
   onNextStage,
 }: Props) {
@@ -182,17 +184,20 @@ export function VideoStudio({
         /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个视频工作流
          *（封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，其余走工作流默认值）。
          * 见 generateClip 入口的门禁。 */
-        const input: GenerateInput = (
-          await buildLibraryWorkflowInput(workflowId, {
-            prompt,
-            negativePrompt: shot.negativePrompt || undefined,
-            ...(inputImage ? { firstFrame: inputImage } : {}),
-            ...(typeof shot.duration === "number" && shot.duration > 0
-              ? { duration: shot.duration }
-              : {}),
-            frames,
-          })
-        ).input;
+        const built = await buildLibraryWorkflowInput(workflowId, {
+          prompt,
+          negativePrompt: shot.negativePrompt || undefined,
+          ...(inputImage ? { firstFrame: inputImage } : {}),
+          ...(typeof shot.duration === "number" && shot.duration > 0
+            ? { duration: shot.duration }
+            : {}),
+          frames,
+        });
+        /* 没落到任何端口的口本次不生效（工作流用图内默认值）—— 静默就是
+         * 「改了没反应」（规范 10 §10.3.1），走控制器提示条说清楚。 */
+        const unmatchedWarning = describeUnmatchedInputs(built.unmatched);
+        if (unmatchedWarning) onNotice(unmatchedWarning);
+        const input: GenerateInput = built.input;
 
         const taskId = await startLocalGenerate(input);
         await runLocalTask(shot.id, taskId);
