@@ -1372,10 +1372,31 @@ export function spawnExecutorHost() {
     );
     return null;
   }
+  /* host 的 stdout/stderr 落**按次命名**的文件（与 next dev 的
+   * nextjs-stdout/stderr 同族同处理），不接进本控制台：pino 的中文 warn
+   * 直接进 Windows 控制台会被按 GBK 解码成乱码（文件通道恒 UTF-8），
+   * 且 host 的逐 tick 输出会淹没 launcher 自己的进度行。 */
+  const servicesDir = path.join(ROOT, "log", "services");
+  fs.mkdirSync(servicesDir, { recursive: true });
+  pruneTimestampedLogs(
+    servicesDir,
+    ["executor-host-stdout-", "executor-host-stderr-"],
+    5,
+  );
+  const hostOut = path.join(
+    servicesDir,
+    `executor-host-stdout-${runTimestamp}.log`,
+  );
+  const hostErr = path.join(
+    servicesDir,
+    `executor-host-stderr-${runTimestamp}.log`,
+  );
   const child = spawnInGroup({
     command: process.execPath,
     args: [hostScript],
     cwd: ROOT,
+    stdoutFile: hostOut,
+    stderrFile: hostErr,
     env: {
       ...process.env,
       /* 显式回写归一化后的值：`.env` 来源时它不在 process.env 里，而 host 自己
@@ -1387,6 +1408,7 @@ export function spawnExecutorHost() {
     },
   });
   spawned.push(child);
+  log(`host 输出通道：${hostOut} / ${hostErr}`, "INFO");
   return child;
 }
 /**

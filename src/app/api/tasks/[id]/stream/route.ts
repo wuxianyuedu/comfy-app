@@ -72,6 +72,10 @@ export async function GET(
               /* 把 workflowName 透出去，好让 GlobalStepLogPanel 的任务切换器
                * 用「<名称> · 状态」给条目打标签，而不是一个光秃秃的 14 字符 id。 */
               workflowName: task.workflowName,
+              /* 成功终态必须带产出清单：done 帧只由进程内 emitter 发（inline
+               * 路径），host 执行的任务到不了这条——客户端拿 state.images 收口
+               * （P3 §5 ADR §13-3B1 手工端到端抓到的「完成不落定」）。 */
+              images: task.resultImages,
             });
             lastSent.status = task.status;
             lastSent.progress = task.progress ?? 0;
@@ -176,6 +180,12 @@ export async function GET(
                   error: cur.error,
                   validationErrors: parseValidationErrors(cur.validationErrors),
                   workflowName: cur.workflowName,
+                  /* 只在终态附带产出清单（与初始回放的 state 帧同形）：
+                   * host 执行的任务没有进程内 done 帧，客户端靠这份 images
+                   * 收口成功态；非终态不带上，5s 轮询帧保持轻量。 */
+                  ...(isTerminalTaskStatus(cur.status)
+                    ? { images: cur.resultImages }
+                    : {}),
                 });
               } catch {
                 cleanup();

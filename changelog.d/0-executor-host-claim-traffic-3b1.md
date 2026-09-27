@@ -11,6 +11,11 @@
 
 - **`--claim-once` 测试钩子**：host 跑恰好一个领取 tick 后 exit（掐掉 enqueue 刚拉起的异步链，测试机不会真带起 ComfyUI）；骨架形态（无 `COMFY_EXECUTOR`）用它是 exit 1 拒绝。契约测据此钉「领取发生 + 行翻 RUNNING + 不碰 inline 行」。
 
+## Fixed
+
+- **host 完成任务界面不落定（手工端到端抓到的收口缺口，评审重点 1 实锤）**：客户端 `watchTask` 的成功收口唯一出口是进程内 emitter 的 `done` 帧——host 执行没有 done，`state` 帧的 SUCCEEDED 又被显式跳过（原注释自认「当前被静默跳过、等待 done 帧」），于是 DB 已 SUCCEEDED 而界面卡「生成中」、按钮不复位、服务端终态关流后 EventSource 重连成风暴。修复：`findSseSnapshot` 轻投影补 `resultImages`（路径小数组，不破坏轻量契约），stream 路由的终态 `state` 帧（初始回放 + 5s 轮询两处）附带 `images`（与 done 帧的 `saved` 同源同形），`watchTask` 的 SUCCEEDED `state` 帧按 done 同款判据收口（空产出=失败、逐条 `onOutput`、`settled` 早退防重发）；inline 的 done 路径零改动。新增落定状态机契约测 5 条（假 EventSource）。
+- **host pino 中文 warn 在 Windows 控制台按 GBK 解码成乱码**：launcher 拉起 host 时 stdout/stderr 落**按次命名**文件 `log/services/executor-host-{stdout,stderr}-<ts>.log`（与 next dev 的 stdout/stderr 通道同处理，保留 5 份轮转），文件通道恒 UTF-8；控制台也不再被 host 逐 tick 输出淹没。
+
 ## 测试（新增/改动）
 
 - `repository-task-impl.test.ts`：`findExecJob` 2 条（三列返回 / 未知 id null + execPayload 缺省回 null）。
