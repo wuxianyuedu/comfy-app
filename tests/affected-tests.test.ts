@@ -9,11 +9,15 @@ import {
   resolveAffectedTests,
   specCandidates,
 } from "../scripts/affected-tests.mjs";
+import { KNOWN_FAILED_FILES } from "../scripts/quality-gate-shared.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 夹具：`files` 是「仓库相对路径 → 内容」；测试文件当输出候选，其余当 import 图节点。 */
-function harness(files: Record<string, string>) {
+function harness(
+  files: Record<string, string>,
+  opts: { knownFailed?: string[] } = {},
+) {
   const keys = Object.keys(files);
   const testFiles = keys.filter(isTestPath);
   const sourceFiles = keys.filter(isSourcePath);
@@ -22,6 +26,7 @@ function harness(files: Record<string, string>) {
       changedPaths,
       testFiles,
       sourceFiles,
+      knownFailed: opts.knownFailed,
       readText: (rel: string) => files[rel] ?? null,
     });
 }
@@ -183,6 +188,36 @@ describe("affected-tests：兜底方向", () => {
     expect(res.tests).toEqual([...FIXED_STRUCTURAL_TESTS].sort());
   });
 
+  it("已知基线红只从增量面剔除，固定清单与其余受影响用例照跑", () => {
+    const RED = "src/a/other-line-red.test.ts";
+    const run = harness(
+      {
+        "src/a/leaf.ts": "export const leaf = 1;",
+        "src/a/green.test.ts": "import { leaf } from '~/a/leaf';",
+        [RED]: "import { leaf } from '~/a/leaf';",
+      },
+      { knownFailed: [RED] },
+    );
+    const res = run(["src/a/leaf.ts"]);
+    expect(res.tests).toContain("src/a/green.test.ts");
+    expect(res.tests).not.toContain(RED);
+    // 剔除必须留痕：调用方（钩子）把它打印出来，不静默。
+    expect(res.reasons.__skipped).toContain(RED);
+    for (const fixed of FIXED_STRUCTURAL_TESTS)
+      expect(res.tests).toContain(fixed);
+  });
+
+  it("固定清单里的文件就算被登记为基线红也不剔除", () => {
+    // 那几条是全库不变量的唯一执行者，没有「先放行」的余地。
+    const pinned = "tests/single-logger-channel.test.ts";
+    expect(FIXED_STRUCTURAL_TESTS).toContain(pinned);
+    const run = harness(
+      { [UI_TEST]: "it('x', () => {});" },
+      { knownFailed: [pinned] },
+    );
+    expect(run(["docs/README.md"]).tests).toContain(pinned);
+  });
+
   it("改动清单为空 → 同样只给固定清单", () => {
     const res = resolveAffectedTests({
       changedPaths: [],
@@ -198,6 +233,15 @@ describe("affected-tests：与仓库现状的漂移守卫", () => {
   it("固定清单里每个文件都真实存在", () => {
     // 用例改名/删掉时，写死的清单会**静默**不再守任何东西 —— 这条就是拦这个。
     const missing = FIXED_STRUCTURAL_TESTS.filter(
+      (rel) => !fs.existsSync(path.join(ROOT, rel)),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("登记的已知基线红指向真实存在的文件", () => {
+    // 写错一个路径 = 这一条**永远命中不了**，于是它挡住的东西悄悄放行，而清单看着
+    // 还在。机制本身静默失效比少一条登记更难查，所以按存在性钉住。
+    const missing = KNOWN_FAILED_FILES.filter(
       (rel) => !fs.existsSync(path.join(ROOT, rel)),
     );
     expect(missing).toEqual([]);
