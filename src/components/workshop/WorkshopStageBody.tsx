@@ -70,6 +70,8 @@ interface WorkshopStageBodyProps {
 
 export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
   const {
+    /* 任务归属：这一屏的生成要落到哪个项目（镜头号在每条生成路径上现取） */
+    activeProjectId,
     tab,
     setTab,
     stageIndex,
@@ -343,6 +345,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 characters={characters}
                 styles={styles}
                 workflowId={workflowId}
+                projectId={activeProjectId}
                 apiChannels={apiChannels}
                 onOpenApiSettings={openApiSettings}
                 onShotsChange={setShots}
@@ -372,6 +375,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               <LazyVideoStudio
                 shots={shots}
                 workflowId={videoWorkflowId}
+                projectId={activeProjectId}
                 apiChannels={apiChannels}
                 onOpenApiSettings={openApiSettings}
                 onShotsChange={setShots}

@@ -21,6 +21,7 @@ import {
   LOCAL_TASK_TIMEOUT_MS,
   preparePortraitReferences,
   startLocalGenerate,
+  withGenerationAttribution,
   watchTask,
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
@@ -46,6 +47,8 @@ interface Props {
   styles: StyleRef[];
   /** 选定的工作流库工作流 id：本地通道的唯一可执行来源（内置模板已移除）。 */
   workflowId: string;
+  /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
+  projectId: string;
   /** 掩码后的 API 通道配置；图片通道的放行判据来自这里。 */
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
@@ -129,6 +132,7 @@ export function ShotStudio({
   characters,
   styles,
   workflowId,
+  projectId,
   apiChannels,
   onOpenApiSettings,
   onShotsChange,
@@ -277,7 +281,9 @@ export function ShotStudio({
         if (unmatchedWarning) onNotice(unmatchedWarning);
         const input: GenerateInput = built.input;
 
-        const taskId = await startLocalGenerate(input);
+        const taskId = await startLocalGenerate(
+          withGenerationAttribution(input, { projectId, shotId: shot.id }),
+        );
         patchShot(shot.id, { taskId, status: "running" });
         await runLocalTask(shot.id, taskId);
       } else {

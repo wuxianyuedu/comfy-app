@@ -569,6 +569,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const generation = useWorkshopGeneration({
     workflowId,
     characters,
+    projectId: activeProjectId,
     setShots,
     notify: setNotice,
   });
