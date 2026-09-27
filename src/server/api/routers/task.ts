@@ -7,6 +7,7 @@ import {
   rateLimitedProcedure,
 } from "~/server/api/trpc";
 import { taskRepository } from "~/lib/core/repository";
+import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
 import { kindOf } from "~/lib/media/media-kind";
 
 /* 扩展名判据已收敛到 `media-kind.ts`（ISSUE #571）。此前这里自带一份清单，
@@ -126,7 +127,13 @@ export const taskRouter = createTRPCRouter({
       if (task?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
-      await taskRepository.cancel(input.id);
+      /* 取消的统一出口（P3 §5 ADR §14 D2）：走执行侧那份 `cancelTask`，而不是
+       * 只把行写成 CANCELLED。区别对用户可感三件事——① 落一行「用户取消任务」
+       * 进执行日志（只写状态时面板上看不到原因）；② 这一行正占着 ComfyUI 执行位
+       * 时请求中断，不再「按了取消还继续出图」；③ 归还本进程的并发槽并清理记账。
+       * 归属在 host 名下时也有效：跨归属的只是状态标记与全局中断，kill 在飞子进程
+       * 仍由 host 自己的 tick 负责（executor-host.mjs 的 reconcileCancelled）。 */
+      await cancelExecutorTask(input.id);
       return { ok: true };
     }),
 

@@ -9,6 +9,7 @@
 // 起来，那条隐式耦合已随 P3 §5 ADR §14 D3 摘掉。
 
 import { interrupt } from "./client";
+import { errorText } from "~/lib/error-message";
 import {
   state,
   log,
@@ -96,12 +97,24 @@ export function getLogs(taskId: string): LogEntry[] {
   return state().logs.get(taskId) ?? [];
 }
 
+/**
+ * 取消一个任务（用户动作的唯一出口，ADR §14 D2）。
+ *
+ * 「该不该发全局中断」的依据是**本进程是否握着这个任务的在飞子进程**
+ * （`cliProcs.has(taskId)`），而不是去问 ComfyUI 的队列：端到端实测过，
+ * comfy-cli 提交的 prompt 在整轮执行期间**不出现在** `/queue` 的
+ * `queue_running`（真跑 10s，全程 `running=[]`），拿它当判据等于「永远不中断」。
+ * 按归属反过来判才是构造性正确的：只有握着子进程的那一侧发全局停，inline 与
+ * host 各管各的，天然不会误停对侧正在跑的任务。
+ */
 export async function cancelTask(taskId: string) {
   // 顶部一次性 resolve：下游 closure 沿用旧名（`taskRepository`），
   // call site 不动。拿不到（未注入 + 纯 Node dynamic import 撞 server-only）
   // → 本函数直接 reject，让 route handler / tRPC caller 感知。
   const taskRepository = await resolveTaskRepo();
   const store = state();
+  /* 中断判据必须在 kill **之前**取：下面就把句柄从表里删掉了。 */
+  const wasInFlightHere = cliProcs.has(taskId);
   // 先把驱动这个任务的 comfy-cli 子进程杀掉，再翻状态。
 
   const cliProc = cliProcs.get(taskId);
@@ -154,11 +167,29 @@ export async function cancelTask(taskId: string) {
     return;
   }
 
-  if (!isTerminal(task.status) && task.promptId) {
-    try {
-      await interrupt();
-    } catch {
-      /* ignore */
+  if (!isTerminal(task.status)) {
+    /* 条件性中断（ADR §14 D2）：只有这个任务正由本进程执行时才发全局停。
+     * host 名下的在飞任务不在这里发——本进程握不到它的子进程，由 host 自己的
+     * tick 在 kill 之后发（`executor-host.mjs` 的 `reconcileCancelled`）。 */
+    if (wasInFlightHere) {
+      try {
+        await interrupt();
+        log(taskId, "warn", "已请求 ComfyUI 中断当前这一轮生成");
+      } catch (err) {
+        /* 中断失败不等于取消失败：状态照收，但要把「这一轮还会跑完」告诉用户，
+         * 否则他们看到的就是「按了取消为什么还在出图」却没有任何解释（硬规则 4）。 */
+        log(
+          taskId,
+          "warn",
+          `中断请求失败：ComfyUI 会继续跑完当前这一轮（${errorText(err, "interrupt")}）`,
+        );
+      }
+    } else {
+      log(
+        taskId,
+        "info",
+        "本进程没有该任务的在飞执行（排队中 / 归另一宿主），不发送全局中断——那会打断其它在飞任务",
+      );
     }
   }
 
@@ -191,21 +222,27 @@ export async function cancelTask(taskId: string) {
    * "running"，「生成中…」按钮再也不回来。现在发一个合成的 state 事件，让画布的
    * patch() 把节点翻成 error；再发一个终态 error 事件，让 EventSource 的
    * onmessage 处理器关掉连接（与 finalizeFailure 里的做法一致）。顺序要紧：
-   * 先 state（修 UI），后 error（关连接）。 */
+   * 先 state（修 UI），后 error（关连接）。
+   *
+   * 只在**非终态**时发：行已经是 SUCCEEDED/FAILED 的话，这次取消没改写任何状态
+   * （4-A1 的守卫会把它挡成 skipped-terminal），发合成事件会把「已完成」的节点
+   * 翻成取消，属于凭空造假象。 */
 
-  store.emitter.emit(taskId, {
-    type: "state",
+  if (!isTerminal(task.status)) {
+    store.emitter.emit(taskId, {
+      type: "state",
 
-    status: "CANCELLED",
+      status: "CANCELLED",
 
-    progress: 0,
+      progress: 0,
 
-    error: "用户取消",
+      error: "用户取消",
 
-    validationErrors: [],
-  });
+      validationErrors: [],
+    });
 
-  store.emitter.emit(taskId, { type: "error", error: "用户取消" });
+    store.emitter.emit(taskId, { type: "error", error: "用户取消" });
+  }
   /* 把这个任务还没落盘的防抖日志刷出去：让「用户取消任务」这一行与在途的告警
    * 都先进数据库，再把行标成终态。否则「取消后立刻刷新」会看不到那条取消记录。 */
 
