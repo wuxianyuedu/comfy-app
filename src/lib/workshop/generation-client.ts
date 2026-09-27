@@ -516,14 +516,36 @@ function relayErrorMessage(data: unknown, status: number): string {
  */
 type RelayResponse = Record<string, unknown> | null;
 
+/** API 中继的统一请求上限。远端生图 / 生视频本身就可能要几分钟（10 分钟与
+ *  视频轮询的 deadline 同量纲），但一个真挂死的连接不该让 UI 无限 busy ——
+ *  到点 abort，调用方拿到一句可行动的中文报错。 */
+const RELAY_TIMEOUT_MS = 10 * 60 * 1000;
+
 async function postRelay(
   body: Record<string, unknown>,
 ): Promise<RelayResponse> {
-  const res = await fetch("/api/workshop-api/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/workshop-api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
+    });
+  } catch (e: unknown) {
+    /* AbortSignal.timeout 的到点是 TimeoutError（浏览器主动 abort 是
+     * AbortError）：翻译成可行动的中文，别让控制台的英文 DOMException
+     * 原样进错误条。 */
+    if (
+      e instanceof DOMException &&
+      (e.name === "TimeoutError" || e.name === "AbortError")
+    ) {
+      throw new Error(
+        "API 通道请求超时（10 分钟无响应），请检查通道地址或稍后重试",
+      );
+    }
+    throw e;
+  }
   let data: unknown;
   try {
     data = await res.json();
