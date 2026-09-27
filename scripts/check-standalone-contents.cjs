@@ -91,6 +91,9 @@ const ALLOWED_SCRIPTS = new Set([
   // 编排器的内部分件（逐项登记；与 RUNTIME_SCRIPTS 同源）
   "launcher-core/procs.mjs",
   "launcher-core/shell.mjs",
+  // COMFY_EXECUTOR 判据的纯 Node 侧唯一定义（launcher 门控与 executor-host 都
+  // 静态 import 它；ADR §14 D5）。缺它时 host 静默跑成骨架。
+  "launcher-core/executor-mode.mjs",
   // shell.mjs / procs.mjs 的命令行回显出口（少这份 = 运行期 ERR_MODULE_NOT_FOUND）
   "launcher-core/command-echo.mjs",
   "launcher-core/log.mjs",

@@ -402,33 +402,36 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
     expect(body).toContain("spawned.push(child)");
   });
 
-  it("run() 里以 COMFY_EXECUTOR 门控、默认 inline 不 spawn（Phase 2 只灰度）", () => {
-    // 默认必须是 inline —— 未显式设 env 时不能起 host。3-B1 起判据收进
-    // `resolveComfyExecutorMode()`（进程 env → .env 回读 → "inline"），
-    // 门控本身形状不变：只认 `host`，其它值 warn 后走 inline 分支。
+  it("run() 以 COMFY_EXECUTOR 门控、默认 inline 不 spawn（Phase 2 只灰度）", () => {
+    // 默认必须是 inline —— 未给值时不能起 host。判据自 4-A4（ADR §14 D5）起收在
+    // `launcher-core/executor-mode.mjs`（进程 env → .env 回读 → 归一化），launcher
+    // 只用它的返回值；门控形状不变：只认 `host`，未知值 warn 后走 inline 分支。
+    expect(launcherSrc).toContain('from "./launcher-core/executor-mode.mjs"');
     expect(launcherSrc).toMatch(
-      /const executorMode = resolveComfyExecutorMode\(\)/,
+      /const \{ mode: executorMode, unknown: unknownExecutor \} =\s*resolveExecutorMode\(\)/,
     );
-    expect(launcherSrc).toMatch(/return raw \|\| ["']inline["']/);
-    // 只有 `host` 才 spawn；其它值 warn 后走 inline 分支。
     expect(launcherSrc).toMatch(/executorMode === ["']host["']/);
     expect(launcherSrc).toMatch(/spawnExecutorHost\(\)/);
+    expect(launcherSrc).toContain("不识别");
   });
 
-  it("3-B1：host 子进程拿到归一化后的 COMFY_EXECUTOR，且 resolver 回读 .env", () => {
+  it("4-A4：host 子进程拿到归一化后的 COMFY_EXECUTOR；.env 回读在共享内核里", () => {
     // 显式回写：`.env` 来源时子进程 process.env 里没有这个 key，不传会造成
     // 「launcher 认为 host 模式、host 起着骨架」的静默错配。
     const start = launcherSrc.indexOf("export function spawnExecutorHost(");
     const body = launcherSrc.slice(start, launcherSrc.indexOf("\n}", start));
-    expect(body).toContain("COMFY_EXECUTOR: resolveComfyExecutorMode()");
-    // resolver 本体必须有 .env 回读（复用 parseEnvFile，不另写一份解析）。
-    const rStart = launcherSrc.indexOf(
+    expect(body).toContain("COMFY_EXECUTOR: resolveExecutorMode().mode");
+    // 回读 `.env` 这件事只许有一份实现（纯 Node 层），且复用既有的 parseEnvFile。
+    const kernel = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "launcher-core", "executor-mode.mjs"),
+      "utf8",
+    );
+    expect(kernel).toContain("parseEnvFile(");
+    expect(kernel).toContain('"COMFY_EXECUTOR"');
+    // launcher 里不许再留第二份归一化实现（漂移就是这么发生的）
+    expect(launcherSrc).not.toContain(
       "export function resolveComfyExecutorMode(",
     );
-    expect(rStart, "resolveComfyExecutorMode 未定义").toBeGreaterThan(-1);
-    const rBody = launcherSrc.slice(rStart, launcherSrc.indexOf("\n}", rStart));
-    expect(rBody).toContain("parseEnvFile(");
-    expect(rBody).toContain('"COMFY_EXECUTOR"');
   });
 
   it("RUNTIME_SCRIPTS 含 executor-host.mjs（桌面包用户改 .env 才能试 host）", () => {

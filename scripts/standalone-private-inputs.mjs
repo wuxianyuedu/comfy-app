@@ -135,6 +135,9 @@ export const RUNTIME_SCRIPTS = [
   // 资源，两者也都在 dev-launcher.mjs 的顶层静态 import 里。
   "launcher-core/procs.mjs",
   "launcher-core/shell.mjs",
+  // `COMFY_EXECUTOR` 判据的纯 Node 侧唯一定义（ADR §14 D5）：launcher 的门控与
+  // host 脚本的运行时开关都静态 import 它，缺一份就是 host 静默跑成骨架。
+  "launcher-core/executor-mode.mjs",
   // shell.mjs 与 procs.mjs 都要 import 它（命令行回显的唯一出口）：少这份就是
   // 运行期 `ERR_MODULE_NOT_FOUND`，表现与「缺一份内部分件」完全一样。
   "launcher-core/command-echo.mjs",
