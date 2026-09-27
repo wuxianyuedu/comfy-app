@@ -53,8 +53,8 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 
 因此桌面包里设 `COMFY_EXECUTOR=host` 的表现是：host 启动即大声失败
 （`runtime boot FAILED`，exit 1，见 `log/services/executor-host-stderr-*.log`），
-任务不会入库执行、也不会误跑。产物化支持是独立立项（ADR §13 的 3-E：闭包计算
-+ 拷贝进产物 + `check-standalone-contents` 真数产物验证 + 壳环境实测）。
+任务不会入库执行、也不会误跑。产物化支持是独立立项（ISSUE #1169，范围见 ADR §13
+的 3-E：闭包计算 + 拷贝进产物 + `check-standalone-contents` 真数产物验证 + 壳环境实测）。
 
 ## 日志与状态去哪看
 
@@ -85,4 +85,4 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 2. **`[comfy-cli 原始]` 行内 prompt 字段乱码**：python stdout 管道编码问题，
    先于 host 线存在，独立 ISSUE #1164 治理（修向 `PYTHONIOENCODING=utf-8`）。
 3. host 模式下的产物下载 / 封面链路复用 Next 的 `/api/generated` 静态映射，
-   桌面包立项（3-E）时需一并核对壳内静态目录的可写性。
+   桌面包立项（ISSUE #1169）时需一并核对壳内静态目录的可写性。

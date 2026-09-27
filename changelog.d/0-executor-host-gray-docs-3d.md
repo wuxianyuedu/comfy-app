@@ -1,7 +1,7 @@
 ## Added
 
 - **P3 §5 第 2 期 · Phase 3-D：executor-host 灰度文档**：新增 `docs/guide-executor-host.md`——host 模式的用途（重启 Next 不断任务 / 崩溃 Q2 恢复 / Phase 5 地基）、开法（shell 或 `.env` 设 `COMFY_EXECUTOR=host`，**必须走 launcher 入口，`pnpm dev` 裸链路不拉起 host**——灰度期最易踩的坑）、回退、四路日志通道、归属分片/取消/恢复语义速查、三条已知观察项（ComfyUI 懒拉起竞态、cli stdout 编码乱码、桌面包边界）。README「启动编排」节与 `docs/README.md` 索引挂点；`launch-and-build.md` §5 排障手册 +2 行（「host 任务永远停队列」→ 入口选错；「executor-host boot FAILED exit 1」→ tsx/库路径，含桌面包边界）。
-- **桌面包支持 host 立项为 3-E**（3-D 拍板 B 口径后的摸底结论）：壳的编排链已通（`shell_launch.rs` 走 `dev-launcher --mode prebuilt`，与 dev 共用 6.5 步），真缺口 = standalone 产物不含 `src/lib/**` 源码态执行链闭包与 tsx/esbuild（devDependencies）；3-E 范围：闭包计算+拷贝、`check-standalone-contents` 真数门槛、standalone 内 `--once` 冒烟、壳环境实测。ADR §13 记录。
+- **桌面包支持 host 立项为 3-E**（ISSUE #1169；3-D 拍板 B 口径后的摸底结论）：壳的编排链已通（`shell_launch.rs` 走 `dev-launcher --mode prebuilt`，与 dev 共用 6.5 步），真缺口 = standalone 产物不含 `src/lib/**` 源码态执行链闭包与 tsx/esbuild（devDependencies）；3-E 范围：闭包计算+拷贝、`check-standalone-contents` 真数门槛、standalone 内 `--once` 冒烟、壳环境实测。ADR §13 记录。
 
 ## Fixed
 
