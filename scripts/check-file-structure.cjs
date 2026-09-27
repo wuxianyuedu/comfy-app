@@ -441,6 +441,11 @@ const DOMAIN_EXEMPT = new Set([
    * **四处都在用**，横跨视图逻辑层、ComfyUI 执行链与服务端编排 ——
    * 进任何子域都会让其余侧反向依赖它。与 `retry-policy` 同款：顶层单例。 */
   "src/lib/with-timeout.ts",
+  /* 「有界并发的任务池」唯一出口（规范 §12.18）：`components/workshop` 的三个
+   * 批量生成循环（镜头生图 / 视频生成 / 分镜批量）共用 —— 本地 ComfyUI 按队列
+   * 串行执行，串行提交会在「落定 → 再提交」之间空转。与 `with-timeout` 同款：
+   * 异步编排原语，进任何子域都会让其余消费方反向依赖它。顶层单例。 */
+  "src/lib/async-pool.ts",
 ]);
 
 /** R13/R14 的扫描:只看 `src/lib` 的顶层条目,不递归。 */

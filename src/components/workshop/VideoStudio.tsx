@@ -8,6 +8,7 @@ import {
   apiPollVideo,
   apiSubmitVideo,
   buildLibraryWorkflowInput,
+  WORKSHOP_BATCH_CONCURRENCY,
   LOCAL_TASK_TIMEOUT_MS,
   prepareLocalInputImage,
   startLocalGenerate,
@@ -16,6 +17,7 @@ import {
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
 import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
+import { runWithConcurrency } from "~/lib/async-pool";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { ChannelSwitch, ShotCard } from "./VideoStudio.parts";
 import { framesFor, videoPrompt } from "./video-studio-utils";
@@ -236,12 +238,17 @@ export function VideoStudio({
 
   async function generateBatch() {
     if (pending.length === 0) return;
-    await batch.run(async () => {
-      for (const shot of [...pending]) {
-        if (shot.clipUrl || shot.clipStatus === "running") continue;
-        await generateClip(shot);
-      }
-    });
+    await batch.run(() =>
+      /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：同镜头生图批量。 */
+      runWithConcurrency(
+        [...pending],
+        WORKSHOP_BATCH_CONCURRENCY,
+        async (shot) => {
+          if (shot.clipUrl || shot.clipStatus === "running") return;
+          await generateClip(shot);
+        },
+      ),
+    );
   }
 
   return (
