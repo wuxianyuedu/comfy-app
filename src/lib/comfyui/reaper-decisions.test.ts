@@ -85,8 +85,7 @@ function runningRow(id: string, promptId: string | null) {
 /** 清掉 runner 的 in-memory 足迹，确保每个用例从「冷启动」开始。 */
 function resetRunnerState() {
   const s = state();
-  s.queue.length = 0;
-  s.active = 0;
+  s.pendingDispatch.clear();
   s.logs.clear();
   s.executedWorkflow.clear();
   s.promptToTask.clear();
@@ -284,9 +283,9 @@ describe("QUEUED reaper 判决矩阵", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("任务仍在 s.queue 等待出队 → 跳过回收，交给正常执行路径", async () => {
+  it("任务在本进程的在飞集合里（已领取未收口）→ 跳过回收，交给正常执行路径", async () => {
     const reaper = await loadReaper();
-    state().queue.push({ taskId: "t-queued" });
+    state().pendingDispatch.add("t-queued");
     repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-queued")]);
 
     await reaper.reapStaleQueuedTasks!();

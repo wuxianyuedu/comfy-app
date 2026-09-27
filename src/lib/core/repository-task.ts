@@ -408,7 +408,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return rows[0]?.c ?? 0;
   }
 
-  // 以下 13 个方法各 delegate 一行到 `impl`；SQL 主体与 JSDoc（包括
+  // 以下 16 个方法各 delegate 一行到 `impl`；SQL 主体与 JSDoc（包括
   // `updateProgress` / `markRunning` 里 `notInArray(task.status, TERMINAL_STATES)`
   // 判据的完整解释、`finalizeSuccess` 的 workflowSnapshot 可选写、`finalizeFailure`
   // 的 validationErrors 归一、`replaceLogs` 的 `.catch(→undefined)` swallow、
@@ -448,6 +448,19 @@ export class TaskRepository extends DrizzleRepository<Task> {
     impl.replaceRawCli(taskId, lines);
 
   findRawCli: TaskRepoImpl["findRawCli"] = (taskId) => impl.findRawCli(taskId);
+
+  listQueuedIds: TaskRepoImpl["listQueuedIds"] = (owner, take) =>
+    impl.listQueuedIds(owner, take);
+
+  /* 领取与载荷读也 delegate 进类（P3 §5 ADR §14 D1 第二刀）：此前只有 host 一条
+   * pull，所以留在 impl 层「直接调 impl」；现在 Next 也是领取宿主，两侧都经由
+   * `executor-dispatch` 拿同一份实现——也是该模块能保持 §18.4 第三类的条件
+   * （它只依赖注入进来的仓储形状，不依赖 impl 的构造细节）。 */
+  claimNextQueued: TaskRepoImpl["claimNextQueued"] = (mode, take) =>
+    impl.claimNextQueued(mode, take);
+
+  findExecJob: TaskRepoImpl["findExecJob"] = (taskId) =>
+    impl.findExecJob(taskId);
 
   listStaleQueued: TaskRepoImpl["listStaleQueued"] = (cutoff, take, owner) =>
     impl.listStaleQueued(cutoff, take, owner);

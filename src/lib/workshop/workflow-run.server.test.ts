@@ -5,13 +5,13 @@
  * 出错的表现是「任务建了但跑不出图」或「参数没落到端口上」——都属于用户只能
  * 看到一句「失败」的那类。这里锁三件事：
  *   ① 工作流不存在 / 不属于该用户 → 直接抛错（不许静默建一个空任务）；
- *   ② rawJson 有 / 无 → 两条入队形状（comfy-cli 覆盖项 vs 服务端回填的 API 图）；
+ *   ② rawJson 有 / 无 → 建行与踢领取的两种结果（有载荷才提交、没载荷先报错）；
  *   ③ 对外封装的三元组真的按 nodeId + name 落到图上（数值回写不丢类型）。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { enqueueMock, taskRepo } = vi.hoisted(() => ({
-  enqueueMock: vi.fn<(job: unknown) => void>(() => undefined),
+const { kickMock, taskRepo } = vi.hoisted(() => ({
+  kickMock: vi.fn<(job: unknown) => void>(() => undefined),
   taskRepo: {
     createQueued: vi.fn(async (_input: unknown) => ({ id: "task-1" })),
   },
@@ -21,10 +21,8 @@ vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../tests/helpers/test-db");
   return { db: createTestDb() };
 });
-vi.mock("~/lib/comfyui/enqueue", () => ({
-  enqueue: enqueueMock,
-  getLogs: vi.fn(),
-  cancelTask: vi.fn(),
+vi.mock("~/lib/comfyui/executor-continuation", () => ({
+  kickQueue: kickMock,
 }));
 /* `repository` 是 server-only 的 Drizzle 实现（import 即读库），本用例只想验
  * 编排判决，故两个仓储整体换桩（与 server/film/orchestrator.test.ts 同一口径）。 */
@@ -73,10 +71,10 @@ describe("createWorkflowRunTask", () => {
       }),
     ).rejects.toThrow("工作流不存在");
     expect(taskRepo.createQueued).not.toHaveBeenCalled();
-    expect(enqueueMock).not.toHaveBeenCalled();
+    expect(kickMock).not.toHaveBeenCalled();
   });
 
-  it("rawJson 工作流 → enqueue 带 rawJson + workflowInputs 作 overrides", async () => {
+  it("rawJson 工作流 → 建行带 execPayload + workflowInputs，随后踢一次领取", async () => {
     wfRepoStub.findByIdForUser.mockResolvedValue({
       id: "wf-1",
       name: "库生图",
@@ -112,19 +110,17 @@ describe("createWorkflowRunTask", () => {
       name: "prompt",
       value: "一只猫",
     });
-    const job = enqueueMock.mock.calls[0]![0] as {
-      rawJson?: unknown;
-      overrides?: unknown;
+    // 载荷只随行走（§14 D1 第二刀：派发是库里的一次 pull，不再有内存 Job）
+    const createdFull = taskRepo.createQueued.mock.calls[0]![0] as {
+      execPayload?: unknown;
+      claimedBy?: string;
     };
-    expect(job.rawJson).toBeDefined();
-    expect(job.overrides).toContainEqual({
-      nodeId: "1",
-      name: "prompt",
-      value: "一只猫",
-    });
+    expect(createdFull.execPayload).toBeDefined();
+    expect(createdFull.claimedBy).toBe("inline");
+    expect(kickMock).toHaveBeenCalledTimes(1);
   });
 
-  it("无 rawJson → 抛「没有可执行内容」，不建任务也不入队", async () => {
+  it("无 rawJson → 抛「没有可执行内容」，不建任务也不踢领取", async () => {
     wfRepoStub.findByIdForUser.mockResolvedValue({
       id: "wf-2",
       name: "空工作流",
@@ -142,6 +138,6 @@ describe("createWorkflowRunTask", () => {
         values: { prompt: "新提示词" },
       }),
     ).rejects.toThrow("工作流没有可执行内容");
-    expect(enqueueMock).not.toHaveBeenCalled();
+    expect(kickMock).not.toHaveBeenCalled();
   });
 });

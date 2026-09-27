@@ -32,7 +32,7 @@ const EXEC_CHAIN_FILES = [
   "src/lib/comfyui/runner-state-shape.ts",
   "src/lib/comfyui/enqueue.ts",
   "src/lib/comfyui/executor.ts",
-  "src/lib/comfyui/executor-scheduler.ts",
+  "src/lib/comfyui/executor-dispatch.ts",
   "src/lib/comfyui/executor-cli.ts",
   "src/lib/comfyui/executor-finalize.ts",
   "src/lib/comfyui/executor-ws.ts",

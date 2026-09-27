@@ -8,10 +8,10 @@
 //     不碰 DB、不 import 任何 TS。2-B 的三条契约测钉的就是这个形态。
 //   host → **运行时形态（3-B0 地基 / 3-B1 接流量）**：boot 跑注入链——
 //     tsx 加载 TS → libsql file 客户端（与 `src/server/db.ts` 同一锚点规则）→
-//     `createTaskRepoImpl(drizzle(client))` → **六条 seam 全注入**（deps 复用
+//     `createTaskRepoImpl(drizzle(client))` → **七条 seam 全注入**（deps 复用
 //     Next 侧同一份实现，理由见 `bootRuntime` 文件头注释）→ Q2 首扫（只扫
 //     host 片）→ 主循环每 `CLAIM_TICK_MS` 领一行（`claimNextQueued("host",1)`
-//     → 由 `execPayload` 重建 Job → `enqueue()` 走与 inline 同一条执行链）
+//     → 由 `execPayload` 重建 Job → 与 Next 共用 `executor-dispatch.ts` 那一条 pull）
 //     + 取消收尾（本地 kill 在飞 comfy-cli）。
 //
 // 为什么领取要配 reaper 归属分片：孤儿判决依赖**进程内**内存足迹
@@ -23,7 +23,8 @@
 //   node scripts/executor-host.mjs                    骨架：boot → 心跳 5s → 常驻
 //   COMFY_EXECUTOR=host node scripts/executor-host.mjs  运行时：注入链 + Q2 + 领取循环
 //   加 --once         完成 boot（含注入链/Q2）后立即 exit 0（smoke 用）
-//   加 --claim-once   额外跑**恰好一个**领取 tick 后 exit 0（契约测钩子）
+//   加 --claim-once   额外跑**恰好一个**领取 tick 后 exit 0（契约测钩子；
+//                     跳过就绪门控，验的是领取与载荷重建的机械步骤）
 //   加 --interval=1000  心跳每 1s（默认 5s）
 //
 // 环境变量：
@@ -148,37 +149,25 @@ function resolveDbFile(url) {
 let hostRuntime = null;
 
 /** 领取节拍（ms）。与 inline 的「点一次跑一个」语义对齐：每 tick `take=1`，
- *  串行的深队列由 enqueue 自己的 MAX_CONCURRENCY 管，这里不一次领一串。 */
+ *  串行的深队列由 dispatch 的槽位判据（MAX_CONCURRENCY）管，这里不一次领一串。 */
 const CLAIM_TICK_MS =
   Number.parseInt(process.env.COMFYAPP_HOST_CLAIM_TICK_MS ?? "", 10) || 2_000;
 
-/** 领一行并投递执行：`claimNextQueued`（单语句原子，见 impl）→ `findExecJob`
- *  从行重建 Job（载荷是**提交时刻**的 execPayload，不回查模板）→ `enqueue()`
- *  走与 inline 同一条执行链（六 seam 已在 boot 注入 host 版实现）。 */
-async function claimTickOnce() {
+/** 领一行并投递执行 + 取消收尾（P3 §5 ADR §14 D1 第二刀之后）：
+ *  领取与提交的全部判据都在 `src/lib/comfyui/executor-dispatch.ts`（与 Next 侧
+ *  同一条 pull：就绪门控 → 槽位 → `claimNextQueued` → 由 `execPayload` 重建 Job
+ *  → comfy-cli），本进程只提供注入过的 `owner:"host"` 那份仓储与子进程句柄。
+ *  这里原先自己写了「领 + 重建 + enqueue」三步，与 Next 侧那条内存队列并存成
+ *  **两条**派发循环——判据分叉的根源（`RUNNING` 有两种含义、冷启动遗留行只有一
+ *  侧会救、`queued` 统计恒 0）。留着这一层只因为收尾对账（kill + interrupt）
+ *  是 host 独有的：它要碰本进程的 `cliProcs`。 */
+async function claimTickOnce(options = {}) {
   if (!hostRuntime) return;
-  const { hostRepo, enqueueJob } = hostRuntime;
-  const claimed = await hostRepo.claimNextQueued("host", 1);
-  for (const taskId of claimed) {
-    const row = await hostRepo.findExecJob(taskId);
-    if (!row?.execPayload) {
-      /* 行没有执行载荷 = 3-B1 之前的历史 host 行（理论不存在：那时没人写
-       * claimedBy='host'）或建行异常。判失败留可见原因，不许变 RUNNING 僵尸
-       * （host 片 reaper 是这条的兜底，主动收口是更快更准的那条）。 */
-      await hostRepo.finalizeFailure(
-        taskId,
-        "任务缺少执行载荷（execPayload），host 无法重建执行请求",
-      );
-      writeLine(`claim-dropped taskId=${taskId} reason=missing-execPayload`);
-      continue;
-    }
-    enqueueJob({
-      taskId,
-      workflowName: row.workflowName,
-      rawJson: row.execPayload,
-      overrides: row.params?.workflowInputs ?? undefined,
-    });
-    writeLine(`claim-dispatched taskId=${taskId} bootId=${bootId}`);
+  const claimedId = await hostRuntime.claimAndDispatch(options);
+  /* 这行是本进程「领到并交棒给执行链」的唯一可见证据（契约测与排障都读它）；
+   * 领取判据本身在 dispatch 里，日志不重复写第二份。 */
+  if (claimedId) {
+    writeLine(`claim-dispatched taskId=${claimedId} bootId=${bootId}`);
   }
   await reconcileCancelled();
 }
@@ -224,10 +213,10 @@ async function reconcileCancelled() {
  *  心跳的 host 比不起来的 host 更危险（规范硬规则 4：失败路径要有用户可见
  *  出口，不许静默退化）。
  *
- *  六条 seam 全部注入同一份 `hostRepo`（3-A/3-B1 的 impl 工厂）与**同一份
+ *  七条 seam 全部注入同一份 `hostRepo`（3-A/3-B1 的 impl 工厂）与**同一份
  *  Next 侧实现**（client.ts 的 resolveComfyBase/getView、core/logger）——它们
  *  都是 §18.4 第三类模块，宿主可直接加载；设置经 `app-settings.server.ts` 的
- *  文件缓存读到与 Next 相同的落盘值。实测「六 seam 全加载 + 注入」零
+ *  文件缓存读到与 Next 相同的落盘值。实测「七 seam 全加载 + 注入」零
  *  unhandled rejection（见 changelog 碎片的 spike 记录）。 */
 async function bootRuntime() {
   const { register } = await import("tsx/esm/api");
@@ -248,8 +237,7 @@ async function bootRuntime() {
 
   const { configureReaper, startReaper } =
     await import("../src/lib/comfyui/reaper.ts");
-  const { configureEnqueue, enqueue } =
-    await import("../src/lib/comfyui/enqueue.ts");
+  const { configureEnqueue } = await import("../src/lib/comfyui/enqueue.ts");
   const { configureTraceLogPath } = await import("../src/lib/comfyui/trace.ts");
   const { configureRunner } =
     await import("../src/lib/comfyui/runner-state.ts");
@@ -259,9 +247,17 @@ async function bootRuntime() {
     await import("../src/lib/comfyui/executor-finalize.ts");
   const { configureExecutorWs } =
     await import("../src/lib/comfyui/executor-ws.ts");
+  /* 派发循环与 Next 侧共用同一份（P3 §5 ADR §14 D1 第二刀）：注入本进程的
+   * 仓储与归属声明后，`claimAndDispatchOnce` 就是「领 host 片的那一行并提交」。 */
+  const { configureDispatch, claimAndDispatchOnce } =
+    await import("../src/lib/comfyui/executor-dispatch.ts");
   const { resolveComfyBase, getView, interrupt } =
     await import("../src/lib/comfyui/client.ts");
   const { logger } = await import("../src/lib/core/logger.ts");
+
+  // owner:"host" 与上面两处同源（reaper / dispatch 都读这一份归属声明）：
+  // 不同源的表现是「领到了却收不进去」，唯一线索是返回值里的 skipped-not-owned。
+  configureDispatch({ taskRepo: hostRepo, owner: "host" });
 
   // owner:"host" —— Q2 扫表与 30s 定时 sweep 都只收 host 片，绝不误杀 inline
   // 的在飞任务（分片判据见文件头与 impl 的 ownedBy()）。
@@ -280,9 +276,14 @@ async function bootRuntime() {
     runtimeLog: logger,
   });
   configureExecutorWs({ taskRepo: hostRepo });
-  hostRuntime = { hostRepo, enqueueJob: enqueue, cliProcs, interrupt };
+  hostRuntime = {
+    hostRepo,
+    cliProcs,
+    interrupt,
+    claimAndDispatch: claimAndDispatchOnce,
+  };
   writeLine(
-    "runtime inject-ok seams=runner+cli+finalize+ws+enqueue+reaper(owner=host)+trace",
+    "runtime inject-ok seams=runner+cli+finalize+ws+enqueue+reaper(owner=host)+dispatch(owner=host)+trace",
   );
 
   const before = await hostRepo.listStaleQueued(
@@ -335,7 +336,9 @@ if (claimOnce) {
     process.exit(1);
   }
   try {
-    await claimTickOnce();
+    /* `--claim-once` 验的是「领取 + 载荷重建」这几步机械动作，就绪门控在没有真
+     * ComfyUI 的机器上永远过不去，所以这里显式跳过它（常驻循环与 kick 都不跳）。 */
+    await claimTickOnce({ skipReadyGate: true });
   } catch (err) {
     writeLine(
       `claim-tick FAILED：${err instanceof Error ? err.message : String(err)}`,

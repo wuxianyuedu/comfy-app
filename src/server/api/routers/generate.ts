@@ -7,7 +7,7 @@ import {
   taskRepository,
   workflowTemplateRepository,
 } from "~/lib/core/repository";
-import { enqueue } from "~/lib/comfyui/enqueue";
+import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 
@@ -82,17 +82,12 @@ export const generateRouter = createTRPCRouter({
         claimedBy: executorClaim,
         execPayload: tpl.rawJson,
       });
-      /* host 模式只建行不执行：任务由 executor host 按 claimedBy='host' 领取
-       *（P3 §5 ADR §6/§13-3B1）。进程内 enqueue 只在 inline 发生——若两侧都
-       * 驱动同一行就是 ADR §6 开头描述的「双 finalize 错乱」事故形态。 */
-      if (executorClaim === "inline") {
-        enqueue({
-          taskId: task.id,
-          workflowName,
-          rawJson: tpl.rawJson,
-          overrides: data.workflowInputs,
-        });
-      }
+      /* 提交只写库里那一行，派发动作不在这里（P3 §5 ADR §14 D1 第二刀）：
+       * 这里过去对 inline 片直接 `enqueue()` 推进进程内存队列，于是「队列」有两份
+       * 真相（内存 vs 库）。现在两宿主统一走 `executor-dispatch.ts` 的一条 pull，
+       * 这次 kick 只是省掉等 2s 节拍；行归对侧（host 片）时它自然空转，
+       * 不会与 host 抢同一行——领取谓词是 impl 里唯一的 `ownedBy()`。 */
+      kickQueue();
       generateRuntimeLog.info(`生成任务已入队 ${task.id}`, {
         type: taskType,
         workflow: workflowName,
