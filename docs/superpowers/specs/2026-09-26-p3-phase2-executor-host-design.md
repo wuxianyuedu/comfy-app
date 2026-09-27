@@ -482,5 +482,5 @@ configureExecutorCli({
 
 - 用户/运维文档：`docs/guide-executor-host.md`（用途、开法与「必须走 launcher」的坑、回退、日志通道、恢复语义、已知观察项），README 与 docs/README 索引已挂点；`launch-and-build.md` §5 排障手册 +2 行（任务停队列=入口选错；boot FAILED=tsx/库路径，含桌面包边界）。
 - **3-B1 决定 2 的日志空窗已由 3-C 收口**（log 进 DB 轮询投影，两模式同一契约），该决定的历史口径以本条为准。
-- **桌面包口径（3-D 拍板：B=要支持）→ 拆独立立项 3-E**：摸底实测缺口 = standalone 产物不含 host 的 `src/lib/**` 源码态闭包与 tsx/esbuild（devDependencies）；壳的编排链本身已通（`shell_launch.rs` 走 `dev-launcher --mode prebuilt`，6.5 步共用）。3-E 范围：闭包计算+拷贝进产物（复用 §13.5.8 静态 import 图机制）、`check-standalone-contents` 真数产物门槛扩展、`--once` 于 `.next/standalone` 内冒烟、壳环境端到端实测。3-D 文档按「当前仅 dev」口径写。
-- `[comfy-cli 原始]` 行 prompt 字段 GBK 乱码（python stdout 管道编码，先于本线存在）：3-D 拍板记独立 ISSUE、不混进文档 PR。
+- **桌面包口径（3-D 拍板：B=要支持）→ 拆独立立项 3-E（ISSUE #1169）**：摸底实测缺口 = standalone 产物不含 host 的 `src/lib/**` 源码态闭包与 tsx/esbuild（devDependencies）；壳的编排链本身已通（`shell_launch.rs` 走 `dev-launcher --mode prebuilt`，6.5 步共用）。3-E 范围：闭包计算+拷贝进产物（复用 §13.5.8 静态 import 图机制）、`check-standalone-contents` 真数产物门槛扩展、`--once` 于 `.next/standalone` 内冒烟、壳环境端到端实测。3-D 文档按「当前仅 dev」口径写。
+- `[comfy-cli 原始]` 行 prompt 字段 GBK 乱码（python stdout 管道编码，先于本线存在）：3-D 拍板记独立 ISSUE #1164、不混进文档 PR。
