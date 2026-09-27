@@ -1,7 +1,7 @@
 # P3 §5 第 2 期：ComfyUI 执行器迁出 Next 进程（executor-host.mjs）
 
 - 日期：2026-09-26
-- 状态：**v2** —— §11.1 Phase 2-A 详细设计已补，等待 Phase 2-A 实施签字；§3 的 Q1/Q2/Q3 三条仍是「方向已定、细节待评审」
+- 状态：**实施中** —— Phase 2-A/2-B/2-C、3-A、3-B0、3-B1、3-C、3-D 已合入 master（#1124 / #1131 / #1133 / #1138 / #1151 / #1157 / #1168）；§13 是逐期落地时的已签修正，§14 是 Phase 4（删旧）的签字；`COMFY_EXECUTOR=host` 目前**仅 dev 可用**，桌面包支持拆 ISSUE #1169（3-E）
 - 前置：P3 §5 第 1 期已完全收线（#1042/#1045/#1053/#1056/#1060/#1068/#1071/#1074/#1075/#1077/#1080/#1083/#1086/#1090 共 14 PR，整条 ComfyUI 执行链 + lib 层地基都进 §18.4 第三类；host boot 顺序与 inject 接缝已就位）
 - 上游方案：`outputs/p3-executor-process-migration-plan.md`（审计 §2.7 / 架构级）
 - 范围：
@@ -82,6 +82,8 @@ Tauri shell (app.exe)
 - host 启动时扫 `SELECT * FROM task WHERE status IN ('RUNNING','QUEUED') AND updatedAt < now - grace_period`——沿用 reaper 现有 `reapStaleQueuedTasks` / `reapStaleRunningTasks` 判决（现 reaper.ts 已经拆出 `reaper-decisions.ts` 纯判决 + 单测）。
 - **Next 侧不再跑 reaper**（Phase 4 删；Phase 3 期间双跑用 env 开关互斥，见 §6）。
 - host 心跳：每 N 秒 touch 一遍 RUNNING 行的 `updatedAt`（复用 `markRunning`），Next 侧读到「updatedAt 陈旧」就提示「执行器失联」。
+
+> **与现状的差（Phase 4 签字时逐条核实，2026-09-27）**：上面三条里有两处按设想想、实际没长出来，另有一处口径已变。① `reaper-decisions.ts` **从未拆出**——判决逻辑仍在 `reaper.ts` 里，`reaper-decisions.test.ts` 直接测它；② stale 判据读的是 **`createdAt`**（`repository-task-impl.ts:325`、`:360`），不是本条设想的 `updatedAt`，而「touch `updatedAt` 心跳」从未落地（跨进程失联只能靠下一次的 30s 扫描发现）；③ 「Next 侧不再跑 reaper」在 Phase 3 期间并未生效：`reaper.ts:553` 顶层自启 + `enqueue.ts:11` 裸 import，host 在 `:230` import 同一模块，于是**两进程各跑一个 30s 常驻循环**，互斥靠 `ownedBy()` 分片而不是 env 开关。收口形态见 §14 D3。
 
 **评审要点**
 
@@ -484,3 +486,18 @@ configureExecutorCli({
 - **3-B1 决定 2 的日志空窗已由 3-C 收口**（log 进 DB 轮询投影，两模式同一契约），该决定的历史口径以本条为准。
 - **桌面包口径（3-D 拍板：B=要支持）→ 拆独立立项 3-E（ISSUE #1169）**：摸底实测缺口 = standalone 产物不含 host 的 `src/lib/**` 源码态闭包与 tsx/esbuild（devDependencies）；壳的编排链本身已通（`shell_launch.rs` 走 `dev-launcher --mode prebuilt`，6.5 步共用）。3-E 范围：闭包计算+拷贝进产物（复用 §13.5.8 静态 import 图机制）、`check-standalone-contents` 真数产物门槛扩展、`--once` 于 `.next/standalone` 内冒烟、壳环境端到端实测。3-D 文档按「当前仅 dev」口径写。
 - `[comfy-cli 原始]` 行 prompt 字段 GBK 乱码（python stdout 管道编码，先于本线存在）：3-D 拍板记独立 ISSUE #1164、不混进文档 PR。
+
+---
+
+## 14. Phase 4（删旧）——四个已签决定（2026-09-27 签字）
+
+签字前先核实的事实（纠正既有叙述，其中两条是本线自己写错的）：
+
+1. UI 取消链路是 `use-cancel-task.ts:58` → `task-cancel-client.ts:13` → `task.ts:129` → `repository-task-impl.ts:260-265`，**只写 `status=CANCELLED + finishedAt`**：不发 interrupt、不写日志、不碰执行方。`interrupt()`（`client.ts:426`）唯一调用点在 `enqueue.ts:160` 的 `cancelTask`，而它在生产里没有调用方（唯一的 `cancelFilm` 也没有入口）。据此 `docs/guide-executor-host.md`「行为语义」里那句「界面点取消 → Next 写 CANCELLED + POST /interrupt」与本节 3-B1 决定 3 的同一表述**作废**。
+2. `reconcileCancelled`（`executor-host.mjs:194`）SIGKILL 之后，由被杀 cli 的 close 回调（`executor-cli.ts:453-495`）走 `finalizeFailure`（impl `:240-256`，当时无终态守卫）把 CANCELLED **覆盖成 FAILED**——用户体感是「我点了取消，界面显示失败」。
+3. `reaper.ts:553` 是模块顶层裸调 `startReaper()`，host 在 `:230` import 它 → host 也常驻 30s 循环，3-B1 口径里的「一次性 Q2」名不副实；陈旧判据读的是 `createdAt`（impl `:325`、`:360`），本节早期章节写的 `updatedAt` 与代码不符。
+
+- **D1 范围主线 = 先拆进程内依赖、再收敛派发循环（两刀，不许并成一刀）**。4-A 做地基：D2/D3/D4 三条 + `COMFY_EXECUTOR` 跨宿主一致性 + `reconcileCancelled` 补测。4-B 才把两条派发循环（`executor-scheduler.ts:35-93` 的 `shift()` 与 `executor-host.mjs:152-178` 的 `claimTickOnce`）收敛成一条 pull 并删掉 `runner-state` 的 `queue`。**4-A 必须先落的理由**：`firstframe.ts:59`（靠 emitter 的 done 事件，host 下永不发 → 挂满 `:53` 的 5min 超时，直接断 film 首帧）、`queue-status.server.ts:35-60`（读 Next 进程内存）、`raw-cli/route.ts:22`、ComfyUI 懒拉起的触发点 `enqueue.ts:80` —— 这四个进程内依赖不先摘，删队列会同时断掉首帧 / 状态栏 / cli 原文面板 / 「谁负责起 ComfyUI」。
+- **D2 取消 = 统一出口 + 条件性 interrupt**。把 `enqueue.ts:100-211` 那份全量收尾（kill / CANCELLED 日志 / 终态锁 / interrupt / 内存清理 / emitter 合成 / persistLogs）抽成共享内核，传输层由宿主注入（§18.4、§12.12：内核不落任何一侧的 IO），inline 与 host 两条路径都走它。**interrupt 只在「被取消的行正是 ComfyUI 当前在跑的那个 prompt」时发**：`POST /api/interrupt` 不带 prompt 参数、是全局停（`client.ts:426-433`），而 ComfyUI 实例跨进程共享、两片的在飞任务都可能排在它后面——无条件 interrupt 会把**另一片正在跑的任务**一起打断并判成失败。排队中但未开跑的任务取消 = 只标状态，由派发侧不再放行。
+- **D3 reaper = 摘顶层自启 + 双宿主显式启动**（含一处判据方向翻转，已签字）。`reaper.ts:553` 的顶层裸调删除、`startReaper()` 变显式调用；Next 侧启动点 = `src/instrumentation.ts` 的 `NEXT_RUNTIME === "nodejs"` 分支（Next 官方「每进程一次」钩子，动态 import 形态与既有 `capture-streams.server` 一致，Edge 图不受影响）；host 侧在注入链之后显式 start，注释写清「Q2 首扫 = 第一次 sweep」。`tests/reaper-side-effect.test.ts` 两条锁「模块必须自启」的断言随之翻转，但该护栏的原始动机（不许依赖调用方记得调）要以**更强形式保留**：新增断言「`instrumentation.ts` 的 nodejs 分支里存在且仅存在一处 reaper 启动」，把「会不会漏」从口头约定变成机器判据。
+- **D4 终态 CAS = 终态守卫全落 + 按 id 写路径带归属**（签字时选了比「只修 finalize 两条」更彻底的那档）。impl 七个裸写方法（`updateProgress:129`、`markRunning:149`、`finalizeSuccess:215`、`finalizeFailure:240`、`cancel:260`、`findExecJob:196`、`replaceLogs:296`）统一收口成两条 WHERE——`status NOT IN (TERMINAL)` 与 `ownedBy(owner)`；owner 由调用方（宿主）声明，返回 `boolean` 让调用点能区分「没我的份」与「已被别处收口」，判据只从 `ownedBy()` 单一定义点出，不留第二处 SQL 拼法。**一处必须显式的例外（对签字口径的必要修正，不静默改）**：`cancel` **不带** owner 条件。理由：取消是用户对「本机这次任务」的动作，而 UI 与取消 RPC 只活在 Next 进程里，host 名下的行必须由 Next 侧标成 CANCELLED——带归属条件等于把「取消 host 任务」这条合法路径堵死。跨归属的只是**状态标记**，「kill 在飞执行」仍归 owner 自己做（host 走 `reconcileCancelled`、inline 走自己名下的 `cliProcs`），非 owner 不越界写执行细节。
