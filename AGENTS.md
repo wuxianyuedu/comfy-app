@@ -78,7 +78,10 @@
    跑旧二进制（历史黑屏事故来源）。
 6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 第 1 步 `scripts/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个**服务端形态作为判据本身保留**，但随 ISSUE #623 与 `.cnb.yml` 一同失去调用方（§13.5）——**目前不再有 CI 兜底**。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。
 7. **提交必须通过 `.githooks/pre-commit`**（分支守卫 + 结构检查 + tsc + eslint +
-   UI/逻辑分离棘轮 + CHANGELOG 碎片，全部走 `pnpm exec`）。钩子失败先修代码，
+   UI/逻辑分离棘轮 + 结构守护与受影响用例 + CHANGELOG 碎片，全部走 `pnpm exec`）。
+   测试那一层是「改到哪、测到哪」的增量层（固定清单 + 暂存改动牵扯的用例，判据与
+   **已知边界**见 §13.5.8）——它不保证传递依赖、也不是全量，全量仍由 `pnpm test` /
+   `pnpm check:all` 负责。钩子失败先修代码，
    禁止 `--no-verify` 绕过进历史。钩子由 `pnpm install` 自动接上
    （`package.json` postinstall → `scripts/install-git-hooks.mjs` 写
    `core.hooksPath=.githooks`）；未生效时手动 `git config core.hooksPath .githooks`。
