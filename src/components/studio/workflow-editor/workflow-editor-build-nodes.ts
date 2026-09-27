@@ -47,7 +47,7 @@ import {
 } from "./WorkflowEditorNodes";
 
 /** `WorkflowDetail.graph` 的一个条目（从工作流原件派生的节点条目）。shared 的
- *  detail 类型把它声明成 `graph: Record<string, any>`；这里在不改共享类型的
+ *  detail 类型把它声明成 `graph: Record<string, ApiWorkflowNode>`；这里在不改共享类型的
  * 前提下，把本文件这两处取用收窄。 */
 type GraphEntry = { inputs?: WorkflowNodeData["inputs"] };
 /** `detail.boundaryPins.inputs / .outputs` 里的一个边界 pin ——

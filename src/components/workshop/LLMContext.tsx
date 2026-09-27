@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { completeChat } from "~/lib/llm/browser";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import type { LLMConfigView } from "~/lib/llm/types";
 import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
@@ -48,17 +49,31 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
-  const value: LLMContextValue = {
-    config,
-    localModels,
-    remoteModels,
-    remoteImageModels,
-    loading,
-    settingsOpen,
-    openSettings: () => setSettingsOpen(true),
-    closeSettings: () => setSettingsOpen(false),
-    refresh,
-  };
+  /* `value` 必须 `useMemo`：Context 的 value 一换引用，所有 `useLLM()` 消费方
+   * 无条件重渲染（它们无法只订阅其中一个字段）。没有 memo 时，本 Provider 的
+   * 任何一次重渲染（含 `settingsOpen` 翻转本身）都会把整棵子树带着跑一遍。 */
+  const value = React.useMemo<LLMContextValue>(
+    () => ({
+      config,
+      localModels,
+      remoteModels,
+      remoteImageModels,
+      loading,
+      settingsOpen,
+      openSettings: () => setSettingsOpen(true),
+      closeSettings: () => setSettingsOpen(false),
+      refresh,
+    }),
+    [
+      config,
+      localModels,
+      remoteModels,
+      remoteImageModels,
+      loading,
+      settingsOpen,
+      refresh,
+    ],
+  );
 
   return (
     <LLMContext.Provider value={value}>
@@ -114,15 +129,21 @@ export function LLMStatusChip() {
 export function LLMSettingsButton() {
   const { openSettings } = useLLM();
   return (
-    <Button
-      variant="outline"
-      onClick={openSettings}
-      title="LLM 文本生成设置"
-      className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm transition-colors"
-    >
-      <Icon name="settings" size={14} className="mr-1.5 inline align-[-2px]" />
-      LLM 设置
-    </Button>
+    <Hint label="LLM 文本生成设置">
+      <Button
+        variant="outline"
+        onClick={openSettings}
+        className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm transition-colors"
+      >
+        <Icon
+          data-icon="inline-start"
+          name="settings"
+          size={14}
+          className="mr-1.5 inline align-[-2px]"
+        />
+        LLM 设置
+      </Button>
+    </Hint>
   );
 }
 
@@ -229,6 +250,7 @@ function LLMSettingsModal({
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
+        aria-label="模型选择"
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-md"

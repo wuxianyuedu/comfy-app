@@ -21,9 +21,9 @@
     它们给 POSIX CI 钉契约；Windows 侧形态判据已由不依赖真实 spawn 的用例钉住。
     其中「候选不可用原因」一例拆成平台无关 + POSIX 专属两半，Windows 覆盖不丢。
   - **全量并行的超时抖动**：循环依赖 / 死导出 / 注释语言 / 主题 token 等真扫全仓
-    的守卫用例，单跑 2~7s、满载翻几倍，按默认 5s / 10s 超时随机红。全局
-    `testTimeout / hookTimeout` 提到 30s，worker 并发压到 `maxWorkers: 8`
-    （16 核全开会把自己挤到超时），LogPanel 自带的 20s 同步放宽到 30s。
+    的守卫用例，单跑 2~7s、满载翻几倍，按默认 5s / 10s 超时随机红。超时与并发
+    预算按实测重定（`testTimeout: 20s` 天花板 + `maxWorkers: 8`，master #1152 的
+    口径），LogPanel 这类重交互文件整文件放宽到 45s、不再给单个用例补显式超时。
   - **FilmStudio 快照未随语义 token 迁移重生成**（迁移后的类名是对的，快照过期），
     重新生成。
   - **24 行英文注释中文化**（TopBar / command / WorkflowRunRawCliModal /

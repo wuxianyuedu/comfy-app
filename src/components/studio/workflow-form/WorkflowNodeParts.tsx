@@ -18,6 +18,7 @@
 import React from "react";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { ioLabel, typeDisplay } from "~/components/studio/workflow-io";
 import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 
@@ -54,7 +55,7 @@ export function WorkflowNodeHeader({
       <div className="flex min-w-0 items-center gap-2">
         <span
           aria-label="类型 工作流"
-          className="text-primary flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold"
+          className="text-primary flex size-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold"
           style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
         >
           W
@@ -121,24 +122,25 @@ export function WorkflowNodeActionButton({
   label,
   disabled = false,
   onClick,
-  title,
+  hint,
 }: {
   label: React.ReactNode;
   disabled?: boolean;
   onClick?: () => void;
-  title?: string;
+  hint?: string;
 }) {
   return (
-    <Button
-      variant="ghost"
-      disabled={disabled}
-      onClick={onClick}
-      title={title}
-      className="nodrag nopan from-primary to-accent h-[43px] w-full justify-center gap-2 rounded-t-none rounded-b-[14px] bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] hover:opacity-95"
-      style={{ fontFamily: "var(--font-sans)" }}
-    >
-      {label}
-    </Button>
+    <Hint label={hint} wrap>
+      <Button
+        variant="ghost"
+        disabled={disabled}
+        onClick={onClick}
+        className="nodrag nopan from-primary to-accent h-[43px] w-full justify-center gap-2 rounded-t-none rounded-b-[14px] bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] hover:opacity-95"
+        style={{ fontFamily: "var(--font-sans)" }}
+      >
+        {label}
+      </Button>
+    </Hint>
   );
 }
 

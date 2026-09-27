@@ -135,10 +135,10 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 
 **现状（唯一的一层）**
 
-| 层                | 位置                            | 拦什么                                        | 能绕过吗                                  |
-| ----------------- | ------------------------------- | --------------------------------------------- | ----------------------------------------- |
-| 本地              | `.githooks/pre-commit`（25 步） | 分支守卫 + 结构硬规则 + tsc + eslint + 各棘轮 | 只能 `--no-verify`（进历史，Review 可见） |
-| 平台（push 保护） | CNB **分支保护设置**            | `master` 的直接 push（放行 PR 合并）          | 需管理员改设置                            |
+| 层                | 位置                                        | 拦什么                                        | 能绕过吗                                  |
+| ----------------- | ------------------------------------------- | --------------------------------------------- | ----------------------------------------- |
+| 本地              | `.githooks/pre-commit`（判据分 4 组并行跑） | 分支守卫 + 结构硬规则 + tsc + eslint + 各棘轮 | 只能 `--no-verify`（进历史，Review 可见） |
+| 平台（push 保护） | CNB **分支保护设置**                        | `master` 的直接 push（放行 PR 合并）          | 需管理员改设置                            |
 
 > **服务端形态的判据本身仍在**：`scripts/check-branch-guard.cjs` 的
 > `--pr-check` / `--merge-commit` 两个服务端形态随 `.cnb.yml` 一起失去了调用方，
@@ -147,7 +147,8 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 > 理由见上面 `⚠️` 那段。
 
 ```
-本地提交前必须通过（.githooks/pre-commit，29 步）：
+本地提交前必须通过（.githooks/pre-commit；判据按互不依赖分 4 组并行：
+A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R4/R7-R12（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-react-updater-purity.cjs
@@ -165,15 +166,12 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 ✅ node scripts/check-code-duplication.cjs   # 跨文件重复块棘轮（见 12 §12.12）
 ✅ node scripts/check-function-length.cjs    # 函数长度棘轮 TS/TSX（见 12 §12.13）
 ✅ node scripts/check-rust-function-length.cjs # 函数长度棘轮 Rust 壳（见 12 §12.13.1）
-✅ vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts
-   tests/core-spine-single-source.test.ts   # core 骨架单一事实源（见 18 §18.8）
+✅ vitest run $(node scripts/affected-tests.mjs)  # C 组：结构守护固定清单 + 本次改动
+   # 牵扯到的用例，一次 vite（固定清单唯一出处是脚本里的 FIXED_STRUCTURAL_TESTS，见下 13.5.8）
 ✅ node scripts/check-circular-deps.cjs      # 模块循环依赖棘轮（见 12 §12.7）
-✅ vitest run tests/lib-node-only-declarations.test.ts # src/lib Node-only 声明（见 18 §18.4）
 ✅ node scripts/check-format.cjs             # prettier 格式棘轮（见下 13.5.1）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
 ✅ node scripts/check-dead-exports.cjs       # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）
-✅ vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
-   # core 出口纪律与基类纯度（见 18 §18.8）
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
 ✅ node scripts/check-non-null-assertions.cjs # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）
 ✅ node scripts/check-void-floats.cjs         # src/lib `void someFn(...)` 悬空棘轮（见下 13.5.7）
@@ -269,8 +267,9 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 4. **「prettier 没改这个文件」与「prettier 跳过了这个文件」不是一回事，判据必须
    以后者能落到实处的那个口径为准**。批量口径（一次 `prettier --write <临时目录>`）
    是性能要求：逐文件起 prettier 的成本在改动文件数上线性叠加，12 个文件就约 5s，
-   正好顶穿 vitest 默认的 `testTimeout`（现场是别的门禁用例报
-   `Test timed out in 5000ms`，看起来像「测试写得慢」）。但批量结果里「这个文件
+   正好顶穿当时那套默认超时（现场是别的门禁用例报
+   `Test timed out in 5000ms`，看起来像「测试写得慢」；该默认值后来按实测抬到了
+   20s，见 §11.13，但这条教训本身不变 —— 慢的是子进程冷启动，不是断言）。但批量结果里「这个文件
    没出现在改写清单里」同时覆盖两件事，而只有前者能推出「这次提交不是纯格式化」：
 
    | 没出现在清单里             | 真结论       | 判据                      |
@@ -331,21 +330,21 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
   的语义改成「交给缓存镜像」，而缓存镜像的版本键与 `pnpm-lock.yaml` 之间没有任何
   判据会在漂移时报警。
 
-**关掉之后谁来守门禁**：`.githooks/pre-commit`（24 步，见 13.5）。它与平台侧那套
+**关掉之后谁来守门禁**：`.githooks/pre-commit`（判据清单见 13.5）。它与平台侧那套
 **大部分同源**（同一批 `scripts/check-*.cjs` 与契约测试），差别有两层：
 
 1. **它只保护「启用了钩子、且没加 `--no-verify`」的检出** ——
    别的检出直推 `master` 不再有任何服务端复核，只能靠平台的分支保护设置拦。
 2. **原来只在 CI 上跑的那几步，现在没有执行者**（逐条登记，别让它们静默消失）：
 
-| 判据                                                                 | 原来的落点                                        | 现状                                                                                      |
-| -------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 全量单测 + 覆盖率门槛（`pnpm run test:coverage`，3000+ 用例）        | CI 第 6 步                                        | **无自动执行者**。按需手动跑；提交门槛里只有少量契约测试（见 13.5 清单第 16/18/20/24 步） |
-| `pnpm run build` + `check-standalone-contents.cjs`（产物级护栏）     | CI 第 27/28 步                                    | **无自动执行者**。改构建 / 产物相关的东西后手动跑                                         |
-| E2E `playwright test --grep @critical`                               | CI 第 30 步                                       | **无自动执行者**。按需手动跑                                                              |
-| `db:push` 建库                                                       | CI 第 3 步                                        | 只在手动跑 E2E 前需要                                                                     |
-| R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | CI 第 8 步                                        | 本地这一步不带 `--strict`，**棘轮当前无执行者**（`.githooks/pre-commit` 里有 ⚠️ 标注）    |
-| `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑，仅在 `pnpm doc:gen` 内部作为第 1 步 | 本地钩子里没有它，**改了文档/权威源后需手动跑**（`pnpm doc:check` / `pnpm doc:gen`）      |
+| 判据                                                                 | 原来的落点                                        | 现状                                                                                          |
+| -------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 全量单测 + 覆盖率门槛（`pnpm run test:coverage`，3000+ 用例）        | CI 第 6 步                                        | **无自动执行者**。按需手动跑；提交门槛里只有固定清单 + 受影响用例（见 13.5 的 C 组与 13.5.8） |
+| `pnpm run build` + `check-standalone-contents.cjs`（产物级护栏）     | CI 第 27/28 步                                    | **无自动执行者**。改构建 / 产物相关的东西后手动跑                                             |
+| E2E `playwright test --grep @critical`                               | CI 第 30 步                                       | **无自动执行者**。按需手动跑                                                                  |
+| `db:push` 建库                                                       | CI 第 3 步                                        | 只在手动跑 E2E 前需要                                                                         |
+| R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | CI 第 8 步                                        | 本地这一步不带 `--strict`，**棘轮当前无执行者**（`.githooks/pre-commit` 里有 ⚠️ 标注）        |
+| `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑，仅在 `pnpm doc:gen` 内部作为第 1 步 | 本地钩子里没有它，**改了文档/权威源后需手动跑**（`pnpm doc:check` / `pnpm doc:gen`）          |
 
 > 这张表是**有意留下的欠账**，不是遗漏：把全量 3000+ 用例塞进每次 commit 会让本地
 > 提交慢到没人愿意用，而那正是当初把它放去 CI 的原因。**去处不是把配置贴回去**，
@@ -377,7 +376,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 想验证什么            | 怎么做                                                                      | 对应 13.5 清单里的哪一步         |
 | --------------------- | --------------------------------------------------------------------------- | -------------------------------- |
 | 代码评审（语义判断）  | 在 PR / Issue 里 `@` 评审 NPC                                               | 不在机器清单里，是**人**的那一层 |
-| 全量单测 + 覆盖率门槛 | `@` NPC 跑 `pnpm run test:coverage`                                         | 第 16/18/20/24 步之外的欠账      |
+| 全量单测 + 覆盖率门槛 | `@` NPC 跑 `pnpm run test:coverage`                                         | C 组（13.5.8）之外的欠账         |
 | 产物级护栏            | 改动构建 / 产物后 `@` 跑 `pnpm run build` + `check-standalone-contents.cjs` | 欠账条目 2                       |
 | E2E 关键流程          | `@` 跑 `pnpm exec playwright test --grep @critical`（先 `db:push`）         | 欠账条目 3/4                     |
 | R5 行数棘轮           | `@` 跑 `check-file-structure.cjs --strict`                                  | 欠账条目 5                       |
@@ -385,7 +384,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 **边界（不要做过头）**：
 
 - **这不是把门禁从本地搬回平台**。机器判据仍然只在 `.githooks/pre-commit`
-  （13.5 的清单，29 步）；按需召唤给的是**另一次运行的机会**，不是新的唯一事实源。
+  （13.5 的清单）；按需召唤给的是**另一次运行的机会**，不是新的唯一事实源。
 - **不要为它写 `.cnb.yml`**。`pull_request` / `push` 类事件是**无条件执行**的，
   写下去就又回到 13.5.3 的额度结论；「每天只跑一次」这种节流平台也不支持
   （无「今天跑过就跳过」的判据，见 13.5.3）。
@@ -400,7 +399,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 （如 `12-代码组织与文件结构.md` 的 §12.4.6），而这类差异在 `pnpm doc:check` 眼里是
 「编辑态文档一切正确」，两个判据管的不是同一件事。
 
-判据排在 `.githooks/pre-commit` 第 26 步（浮层刻度棘轮插在其后，第 27 步），与写入模式**共用同一份「源 → 生成物」计算**
+判据排在 `.githooks/pre-commit` 的 D 组（静态判据；浮层刻度棘轮紧随其后），与写入模式**共用同一份「源 → 生成物」计算**
 （`scripts/render-doc-placeholders.cjs` 的 `renderDocContent()`，只比对不写入）。
 报三个方向 —— 少报任何一个，漏掉的那类都会静默留在产物目录里：
 
@@ -441,7 +440,7 @@ TypeScript AST 的 `ts.isNonNullExpression`（不用正则——正则会把 `!=
 `RULE_VERSION` 常量：目前只认 `NonNullExpression` 一种形态；将来若把
 `<T>x!` / `x?.y!` 之类扩展形态纳入，或**再一次调整扫描范围**，必须同步改这
 个常数——旧基线与新计数**不是同一个量**，`--update` 会拒绝放宽（除非版本已
-改），防止「顺手把基线调大」的后门。判据排在 `.githooks/pre-commit` 第 28
+改），防止「顺手把基线调大」的后门。判据排在 `.githooks/pre-commit` 的 D 组
 步（浮层刻度是 27）。
 
 #### 13.5.7 src/lib `void someFn(...)` 悬空棘轮（`node scripts/check-void-floats.cjs`）
@@ -473,7 +472,76 @@ await」等一并揪出来，一次报几百处、评审看下来全是"这里�
 基线 `scripts/.void-floats-baseline.json` 首建 14 处 / 5 文件（`enqueue.ts` 4、
 `executor-scheduler.ts` 3、`runner-state.ts` 3、`reaper.ts` 2、
 `canvas-store.ts` 2）；`--update` 需伴随下降、`--strict` 强制下降同批收紧。
-判据排在 `.githooks/pre-commit` 第 29 步。
+判据排在 `.githooks/pre-commit` 的 D 组末尾。
+
+#### 13.5.8 提交前增量测试层：改到哪、测到哪（`node scripts/affected-tests.mjs`）
+
+`.githooks/pre-commit` 的 C 组从「写死几个结构守护用例」升级成**固定清单 + 本次
+改动牵扯到的用例**，仍然只起一次 vite（§13.5 的口径：需要 vite 的测试并入同一行
+`vitest run`，别新起一次冷启）。固定清单的**唯一出处**是脚本里的
+`FIXED_STRUCTURAL_TESTS`，钩子不再抄一份 —— 抄的那份在用例改名后会变成
+「一条都不跑、钩子却全绿」。固定清单守的是**全库级不变量**（不会因为
+「本次没改到」而变得安全）：
+
+| 用例                                         | 守的东西                                      |
+| -------------------------------------------- | --------------------------------------------- |
+| `tests/single-logger-channel.test.ts`        | 日志实现只有一处（§7）                        |
+| `tests/container-single-access.test.ts`      | 仓储只有一种取用法（§18）                     |
+| `tests/core-spine-single-source.test.ts`     | core 骨架的三处「唯一事实源」（§18.8）        |
+| `tests/lib-node-only-declarations.test.ts`   | `src/lib` 的 Node-only 声明唯一口径（§18.4）  |
+| `tests/core-barrel-entry-discipline.test.ts` | `src/lib/core/index.ts` 的出口纪律（§18.8）   |
+| `tests/test-mock-targets.test.ts`            | `vi.mock` 的说明符解析到真实存在的模块        |
+| `tests/repository-base-purity.test.ts`       | `repository-base` 保持纯机械 CRUD 基类（§18） |
+| `tests/affected-tests.test.ts`               | 本层自己的判据（见本节末尾）                  |
+
+**四条命中判据**（方向一律是「宁可多跑，不许漏跑」）：
+
+| 判据             | 抓住的是什么                                                                                                                                                                                                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 自身             | 改测试就跑它                                                                                                                                                                                                                                                                                         |
+| 同名兄弟 / 快照  | 改 `x.ts` 跑 `x.test.ts(x)`；改 `__snapshots__/x.test.tsx.snap` 跑宿主                                                                                                                                                                                                                               |
+| 反向 import 闭包 | 谁 import 了改动文件、谁又 import 了那些文件……沿 import 图走到测试为止。静态 `from`、副作用 import、动态 `import()`、`require`、`vi.mock` 都算；别名 `~/` `@/`、相对说明符按**引用方位置**解析；目录 import 命中 `dir/index.*`，所以 barrel 的转出口天然在图里（**没有**「同目录就算消费」那种放宽） |
+| 按路径引用       | 改动路径以字面量出现在测试里（门禁 `execFileSync` 起被测脚本、主题用例按路径读 CSS），另含 `scripts/<name>` ⇄ `tests/<name>.test.ts` 的同名配对                                                                                                                                                      |
+
+闭包为什么必须走满：视图层的常态是 `X.test → Panel → X.tsx`，只走一跳时改 `X.tsx`
+解析出来是「受影响 0 个用例」（实测撞到过），那「改到哪、测到哪」就是空话。
+图按**说明符候选**建键、不按「目标文件是否存在」过滤 —— 暂存删除之后路径已经不在
+索引里，而「谁还 import 着它」正是这次改动最直接的破坏面。
+
+**别线的基线红从增量面里剔掉，但必须留痕**：闭包会把无关的测试拉进来，其中有的在
+master 上本来就红（属别线），于是「一笔无关改动」会被别人的红拦住 —— 那是这一层第一次
+真撞上就有的形态。处理方式是复用 `scripts/quality-gate-shared.mjs` 的
+`KNOWN_FAILED_FILES`（与 `run-tests.mjs` / 一键门禁**同一份**清单，不另立第二份），
+只从**增量**面剔除，钩子的 stderr 打印跳过了哪几条与清单在哪。**固定清单不参与剔除**
+（那几条是全库不变量的唯一执行者）。粒度是文件，所以一条红会连同一文件里其他断言一起
+放行 —— 登记前先确认那条门禁在别处还有没有更强的执行者（清单里每条都注了归属与该句）。
+修好后**立刻删登记**：留着 = 永久静默跳过，退化不会再被发现（§11.12 第 3、4 条）。
+
+**这一层仍然抓不到的**（写清楚，不要当成已完成）：运行时拼出来的路径
+（`import(base + name)`、`path.join(dir, …)`）与解析目录（`src` / `tests` /
+`scripts` / `tools`）之外的消费方。所以它**不是全量的替代**，全量仍由 `pnpm test` /
+`pnpm check:all` 负责。
+
+**公共地基被改时是「放弃收窄」而不是「猜一个子集」**：`vitest.config.ts`、
+`tests/setup.ts`、`package.json` / lockfile、`tsconfig.json`、`.githooks/**` 命中时
+只跑固定清单，并把放弃的理由打到 stderr（钩子的组日志里看得见）。
+**兜底刻意不是「跑全量」**：全量当前带着别线的基线红（§11.13 的三档实测：
+`maxWorkers: 8` 后仍有 4 文件 / 14 用例为真断言失败），把全量塞进钩子等于把提交闸
+变成不可用 —— 那种闸活不过一周。等那批基线红清零后，把脚本里 `mode === "all"`
+那条分支改成跑全量，并删掉这段说明。
+
+**代价实测**（16 逻辑核的开发机）：建图 + 解析约 **1.0–1.1s**（读 1.2k 个源码文件、
+6.4k 条说明符）。解析出来的面按改动半径线性放大 —— 改一个基元
+（`ui/tooltip.tsx`）52 个用例、钩子那批实测 1m40s；改一条链路
+（`lib/comfyui/reaper.ts`）83 个用例；改一个只被一块面板消费的筛选条 10 个。
+不按耗时取舍：跑多少由**改动的影响面**决定，这正是这一层的定义；嫌慢的出口是把
+大改动拆小（本来就该拆），而不是给解析加天花板。
+
+判据由 `tests/affected-tests.test.ts` 钉住（17 条）：四条判据各一组夹具、**两跳
+传递**与 barrel 转出口（含「没转出去的 sibling 不算消费」这条反面）、被删文件的
+消费方仍被拉起、公共地基的放弃收窄、**结果永不为空**（空参数会让 `vitest run`
+跑成全量）、固定清单每个文件真实存在、`isTestPath` 与 `vitest.config.ts` 的
+`include` 不漂移。
 
 ### 13.6 分支与合并策略
 

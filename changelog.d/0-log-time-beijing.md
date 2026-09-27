@@ -1,0 +1,4 @@
+## Fixed
+
+- **日志时间全部对齐北京时间（UTC+8），并收拢到统一入口**：此前同一份日志面板里混着两套时钟——启动编排写进 `app-runtime.log` 的 WARN 行、桌面壳 `tauri-plugin-log` 的行首时间走的是 UTC，与其余走本地时刻的行差 8 小时；按次命名的日志文件名（`dev-launcher-<戳>.log` / `nextjs-stdout-<戳>.log`）也是 UTC，与文件内容的行首时刻对不上。现在：Node 侧所有时间形态统一从 `scripts/launcher-core/log.mjs` 的 `localTimestamp()` 派生（行内容与文件名同源）；Rust 壳的 `local_timestamp()` 改走 `chrono::Local`，`tauri-plugin-log` 两个 builder 显式设置 `TimezoneStrategy::UseLocal`（插件默认是 UTC）。chrono 已作为 tauri（serde_with）的传递依赖在 `Cargo.lock` 中，未给依赖图新增 crate。
+- 展示层手写时间格式改走统一出口 `~/lib/time-format`：`log-sessions` 的会话标签、`RunControlBar` 的步骤时刻、`ErrorPanel` 的错误上下文时刻不再各自拼日期；`usage-*` 临时媒体文件的本地时间戳改用 `formatCompactStamp(..., { millis: true })`（新增 millis 选项，避免一次生成的多份产物落在同一秒互相覆盖）。`CustomNodesSettings/parsing.ts` 零消费的 `nowTimeStr` 删除。机器可读字段（DB / 状态文件 / API 载荷里的 ISO 时间）保持 UTC 不变——那是绝对时刻的规范存储形态，展示层才转本地。

@@ -18,6 +18,7 @@ import {
   type DimensionGroup,
   type EnrichedWidget,
 } from "../workflow-io";
+import { Hint } from "~/components/ui/hint";
 
 /** W/H 形态的尺寸组（比例 + 分辨率 / 百万像素 → 算宽高）。 */
 export type SizeGroup = DimensionGroup & {
@@ -86,41 +87,51 @@ export function RequiredChips({
               {pin.label ?? pin.name}
             </span>
             {onRequiredChange && (
-              <Button
-                variant={required ? "danger" : "ghost"}
-                onClick={() => onRequiredChange(pin.ioKey, !required)}
-                title={
+              <Hint
+                label={
                   required
                     ? "已标记为必填，点击切换为可选"
                     : "点击将其标记为必填"
                 }
-                className={`nodrag nopan h-auto rounded px-1.5 py-px text-[10px] font-medium ${
-                  required
-                    ? ""
-                    : "border-border-strong bg-subtle text-ink-muted border"
-                }`}
               >
-                {required ? "必填" : "可选"}
-              </Button>
+                <Button
+                  variant={required ? "danger" : "ghost"}
+                  onClick={() => onRequiredChange(pin.ioKey, !required)}
+                  className={`nodrag nopan h-auto rounded px-1.5 py-px text-[10px] font-medium ${
+                    required
+                      ? ""
+                      : "border-border-strong bg-subtle text-ink-muted border"
+                  }`}
+                >
+                  {required ? "必填" : "可选"}
+                </Button>
+              </Hint>
             )}
             {onVisibilityChange && visibilityMode && (
-              <Button
-                variant="ghost"
-                title={
+              <Hint
+                label={
                   visible
                     ? "该参数在当前模式下已可见，点击隐藏"
                     : "该参数在当前模式下已隐藏，点击恢复显示"
                 }
-                onClick={() => onVisibilityChange(pin.ioKey, !visible)}
-                onMouseDown={(event) => event.stopPropagation()}
-                className={`nodrag nopan h-auto rounded p-0.5 ${
-                  visible
-                    ? "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
-                    : "text-ink-fainter hover:bg-surface-2 hover:text-ink-bright"
-                }`}
               >
-                {visible ? <Eye size={11} /> : <EyeOff size={11} />}
-              </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => onVisibilityChange(pin.ioKey, !visible)}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  className={`nodrag nopan h-auto rounded p-0.5 ${
+                    visible
+                      ? "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
+                      : "text-ink-fainter hover:bg-surface-2 hover:text-ink-bright"
+                  }`}
+                >
+                  {visible ? (
+                    <Eye data-icon="inline-start" size={11} />
+                  ) : (
+                    <EyeOff data-icon="inline-start" size={11} />
+                  )}
+                </Button>
+              </Hint>
             )}
           </span>
         );

@@ -21,6 +21,7 @@ import {
   type MouseEvent,
 } from "react";
 import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
+import { Hint } from "~/components/ui/hint";
 import {
   copyFailureText,
   useCopyFeedback,
@@ -242,47 +243,56 @@ export function DebugChainFooter({
               </code>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <Button
-                variant="info"
-                size="xs"
-                onClick={() => source && openInVscode(source.absolutePath)}
-                disabled={!source}
-                className="h-auto rounded-md px-2.5 py-1"
-                title="在 Visual Studio Code 中打开该文件（需已安装 VSCode）"
+              <Hint
+                label="在 Visual Studio Code 中打开该文件（需已安装 VSCode）"
+                wrap
               >
-                在 VSCode 打开
-              </Button>
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={() => onCopyText(viewedFile)}
-                className={`h-auto rounded-md px-2.5 py-1 ${
-                  copyFailed
-                    ? "border-destructive/40 text-danger-strong"
-                    : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
-                }`}
-                title={copyFailed ? copyFailureText() : "复制完整相对路径"}
+                <Button
+                  variant="info"
+                  size="xs"
+                  onClick={() => source && openInVscode(source.absolutePath)}
+                  disabled={!source}
+                  className="h-auto rounded-md px-2.5 py-1"
+                >
+                  在 VSCode 打开
+                </Button>
+              </Hint>
+              <Hint label={copyFailed ? copyFailureText() : "复制完整相对路径"}>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => onCopyText(viewedFile)}
+                  className={`h-auto rounded-md px-2.5 py-1 ${
+                    copyFailed
+                      ? "border-destructive/40 text-danger-strong"
+                      : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
+                  }`}
+                >
+                  {copyFailed
+                    ? "复制失败"
+                    : copyOutcome.on
+                      ? "已复制"
+                      : "复制路径"}
+                </Button>
+              </Hint>
+              <Hint
+                label={copyFailed ? copyFailureText() : "复制全部源码"}
+                wrap
               >
-                {copyFailed
-                  ? "复制失败"
-                  : copyOutcome.on
-                    ? "已复制"
-                    : "复制路径"}
-              </Button>
-              <Button
-                variant="warning"
-                size="xs"
-                onClick={() => source && onCopyText(source.content)}
-                disabled={!source}
-                className="h-auto rounded-md px-2.5 py-1"
-                title={copyFailed ? copyFailureText() : "复制全部源码"}
-              >
-                {copyFailed
-                  ? "复制失败"
-                  : copyOutcome.on
-                    ? "已复制"
-                    : "复制代码"}
-              </Button>
+                <Button
+                  variant="warning"
+                  size="xs"
+                  onClick={() => source && onCopyText(source.content)}
+                  disabled={!source}
+                  className="h-auto rounded-md px-2.5 py-1"
+                >
+                  {copyFailed
+                    ? "复制失败"
+                    : copyOutcome.on
+                      ? "已复制"
+                      : "复制代码"}
+                </Button>
+              </Hint>
               <Button
                 variant="outline"
                 size="icon-xs"

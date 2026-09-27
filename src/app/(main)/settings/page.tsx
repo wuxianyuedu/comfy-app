@@ -21,6 +21,7 @@ import { ChevronRight, Copy } from "lucide-react";
 
 import { Button, buttonVariants } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+import { Hint } from "~/components/ui/hint";
 import {
   copyFailureText,
   useCopyFeedback,
@@ -156,17 +157,20 @@ export function SettingsLoadError({
             </>
           }
           trailing={
-            <Button
-              variant="outline"
-              onClick={copyErrorText}
-              className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
-              title={
+            <Hint
+              label={
                 copyFailed ? copyFailureText("下方展开区") : "复制这段错误文案"
               }
             >
-              <Copy size={13} />
-              {copyFailed ? "复制失败" : copied.on ? "已复制" : "复制"}
-            </Button>
+              <Button
+                variant="outline"
+                onClick={copyErrorText}
+                className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
+              >
+                <Copy data-icon="inline-start" size={13} />
+                {copyFailed ? "复制失败" : copied.on ? "已复制" : "复制"}
+              </Button>
+            </Hint>
           }
         >
           <pre className="border-border bg-surface-1 custom-scrollbar mt-3 max-h-64 overflow-auto rounded-lg border p-3 text-left font-mono text-[11px] break-all whitespace-pre-wrap">

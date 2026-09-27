@@ -6,7 +6,10 @@ import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 import { cn } from "~/lib/utils";
 
 function TooltipProvider({
-  delay = 0,
+  /* 300ms 是「悬停提示」的节奏档：贴近原生 `title=` 的出现速度，避免鼠标划过
+   * 密集工具条时一串浮层连弹（`hint.tsx` 的调用点大半在工具条上）。
+   * Base UI 自己给 trigger 的默认值是 600，这里显式定档、不靠默认值漂移。 */
+  delay = 300,
   ...props
 }: TooltipPrimitive.Provider.Props) {
   return (

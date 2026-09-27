@@ -11,6 +11,7 @@
 import { useCallback, useState } from "react";
 
 import { Button } from "~/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import {
   Dialog,
   DialogContent,
@@ -72,21 +73,26 @@ export function SizePresetTableModal({
             {title}配置
           </DialogTitle>
           <div className="border-border-strong bg-canvas-deep flex items-center gap-1 rounded-lg border p-0.5">
-            {SCENES.map((item) => (
-              <Button
-                key={item}
-                variant="ghost"
-                aria-pressed={scene === item}
-                onClick={() => setScene(item)}
-                className={`h-auto rounded-md px-2.5 py-1 text-[11px] ${
-                  scene === item
-                    ? "bg-primary/20 text-ink-bright ring-primary/50 ring-1"
-                    : "text-ink-muted hover:bg-subtle hover:text-ink-bright"
-                }`}
-              >
-                {SIZE_SCENE_LABELS[item]}
-              </Button>
-            ))}
+            <ToggleGroup
+              multiple={false}
+              value={[scene]}
+              onValueChange={(vals) => {
+                const next = vals[0];
+                if (next === "image" || next === "video") setScene(next);
+              }}
+              aria-label="尺寸档位场景"
+              className="gap-1"
+            >
+              {SCENES.map((item) => (
+                <ToggleGroupItem
+                  key={item}
+                  value={item}
+                  className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+                >
+                  {SIZE_SCENE_LABELS[item]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
           </div>
           <span className="text-ink-muted text-[11px]">
             1k / 2k / 4k 在该场景下的宽高（图片与视频两套口径）

@@ -1,5 +1,6 @@
 import { Folder, X } from "lucide-react";
 
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { isVideo } from "~/lib/media/media";
@@ -109,20 +110,24 @@ export function HistoryDetailModal({
           <div className="border-border-subtle relative flex items-center justify-between gap-3 border-b px-5 py-3">
             <h3 className="u-title">任务详情</h3>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="xs"
-                disabled={!current?.id || actions.openFolderBusy}
-                onClick={() => {
-                  if (!current?.id) return;
-                  void actions.openFolder(current.id);
-                }}
-                className="border-border text-ink-strong hover:border-border-strong hover:text-ink h-auto gap-1.5 rounded-md px-2.5 py-1 text-[11px]"
-                title="在系统文件管理器中打开本次生成的目录（图片 / 视频 / 音频 / workflow.json / manifest.json 都在这里）"
+              <Hint
+                label="在系统文件管理器中打开本次生成的目录（图片 / 视频 / 音频 / workflow.json / manifest.json 都在这里）"
+                wrap
               >
-                <Folder size={12} />
-                打开目录
-              </Button>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  disabled={!current?.id || actions.openFolderBusy}
+                  onClick={() => {
+                    if (!current?.id) return;
+                    void actions.openFolder(current.id);
+                  }}
+                  className="border-border text-ink-strong hover:border-border-strong hover:text-ink h-auto gap-1.5 rounded-md px-2.5 py-1 text-[11px]"
+                >
+                  <Folder data-icon="inline-start" size={12} />
+                  打开目录
+                </Button>
+              </Hint>
               {actions.folderPopover && (
                 <div
                   className={`border-border bg-panel-deep absolute top-[52px] right-5 ${zClass("popup")} w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl`}
@@ -139,7 +144,7 @@ export function HistoryDetailModal({
                       className="text-ink-muted hover:text-ink-bright"
                       aria-label="关闭"
                     >
-                      <X size={12} />
+                      <X data-icon="inline-start" size={12} />
                     </Button>
                   </div>
                   {actions.folderPopover.helperMissing ? (
@@ -188,19 +193,23 @@ export function HistoryDetailModal({
               )}
               {firstImage?.localPath && (
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    disabled={actions.downloading}
-                    onClick={() => {
-                      if (!current?.id) return;
-                      void actions.downloadWorkflow(current.id);
-                    }}
-                    className="border-border text-ink-strong hover:border-border-strong hover:text-ink h-auto rounded-md px-2.5 py-1 text-[11px]"
-                    title="下载本次执行实际用到的工作流 JSON（含当时的节点与参数，工作流模板后续改动也不影响复现）"
+                  <Hint
+                    label="下载本次执行实际用到的工作流 JSON（含当时的节点与参数，工作流模板后续改动也不影响复现）"
+                    wrap
                   >
-                    下载工作流
-                  </Button>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      disabled={actions.downloading}
+                      onClick={() => {
+                        if (!current?.id) return;
+                        void actions.downloadWorkflow(current.id);
+                      }}
+                      className="border-border text-ink-strong hover:border-border-strong hover:text-ink h-auto rounded-md px-2.5 py-1 text-[11px]"
+                    >
+                      下载工作流
+                    </Button>
+                  </Hint>
                   <span
                     className="bg-subtle text-ink-muted hidden rounded px-1.5 py-0.5 text-[10px] sm:inline"
                     title={sourceLabel}
@@ -216,7 +225,7 @@ export function HistoryDetailModal({
                 className="text-ink-muted hover:text-ink-bright"
                 aria-label="关闭"
               >
-                <X size={16} />
+                <X data-icon="inline-start" size={16} />
               </Button>
             </div>
           </div>

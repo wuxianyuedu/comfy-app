@@ -159,10 +159,13 @@ describe("ParseProgressBanner", () => {
       screen.getByText("· custom_nodes/ipadapter_plus"),
     ).toBeInTheDocument();
     /* 进度条为确定宽度：`done/total*100` 经 `~/lib/progress` 的 `pctToWidth`
-       取整（3/8 = 37.5 → 38）。宽度口径收口后不再出现小数 —— 走
+       取整（3/8 = 37.5 → 38）；渲染侧改用 translateX 动画（§2.7 布局属性
+       动画），38% 对应 translateX(-62%)。口径收口后不再出现小数 —— 走
        `~/components/ui/progress-bar` 的 `data-slot` 取节点。 */
-    const bar = container.querySelector('[data-slot="progress-bar-fill"]')!;
-    expect(bar).toHaveStyle({ width: "38%" });
+    const bar = container.querySelector<HTMLElement>(
+      '[data-slot="progress-bar-fill"]',
+    )!;
+    expect(bar.style.transform).toBe("translateX(-62%)");
     expect(screen.getByTitle("hashing packages…")).toBeInTheDocument();
   });
 

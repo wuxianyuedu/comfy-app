@@ -5,7 +5,7 @@
  *  友好的「右键开始」引导卡（画布确实为空时显示）。
  */
 import { Icon } from "~/components/ui/icon";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 
 interface EmptyCanvasHintProps {
   /** true → 水合覆盖层；false → 空画布引导。 */
@@ -28,28 +28,28 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
       <div className="border-border-strong from-subtle to-canvas-deep backdrop-bl dark:shadow-black/40ur-md rounded-3xl border bg-linear-to-br px-12 py-10 shadow-2xl shadow-black/10">
         <div className="mb-3 flex justify-center gap-2">
           <span
-            className="inline-block h-10 w-10 rounded-xl shadow-lg"
+            className="inline-block size-10 rounded-xl shadow-lg"
             style={{
               background: "linear-gradient(135deg, #B584FF 0%, #FF9DCD 100%)",
               boxShadow: "0 4px 18px rgba(181,132,255,0.45)",
             }}
           />
           <span
-            className="inline-block h-10 w-10 rounded-xl shadow-lg"
+            className="inline-block size-10 rounded-xl shadow-lg"
             style={{
               background: "linear-gradient(135deg, #5BC6FF 0%, #6BEBEB 100%)",
               boxShadow: "0 4px 18px rgba(91,198,255,0.45)",
             }}
           />
           <span
-            className="inline-block h-10 w-10 rounded-xl shadow-lg"
+            className="inline-block size-10 rounded-xl shadow-lg"
             style={{
               background: "linear-gradient(135deg, #5BE3C4 0%, #67E89D 100%)",
               boxShadow: "0 4px 18px rgba(91,227,196,0.45)",
             }}
           />
           <span
-            className="inline-block h-10 w-10 rounded-xl shadow-lg"
+            className="inline-block size-10 rounded-xl shadow-lg"
             style={{
               background: "linear-gradient(135deg, #FFD571 0%, #FF9C5B 100%)",
               boxShadow: "0 4px 18px rgba(255,213,113,0.45)",

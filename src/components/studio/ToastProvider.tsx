@@ -4,6 +4,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
   useRef,
   useMemo,
@@ -11,7 +12,7 @@ import React, {
 import { X } from "lucide-react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { nextId } from "~/lib/unique-id";
 
 type ToastKind = "success" | "error" | "info" | "loading";
@@ -76,6 +77,16 @@ const KIND_STYLE: Record<
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  /* 卸载时清掉所有挂起的自动收起定时器：Provider 卸载后这些 setTimeout 仍会
+   * 触发 dismiss → setItems，向已卸载组件 setState（规范 §8.5 / P7）。 */
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      pending.forEach((tm) => clearTimeout(tm));
+      pending.clear();
+    };
+  }, []);
 
   const dismiss = useCallback((id: string) => {
     setItems((prev) => prev.filter((prev) => prev.id !== id));
@@ -176,7 +187,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 className="text-ink-muted hover:text-ink-bright hover:bg-transparent"
                 aria-label="关闭"
               >
-                <X size={14} />
+                <X data-icon="inline-start" size={14} />
               </Button>
             </div>
           );

@@ -286,7 +286,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     position={Position.Left}
                     id={inp.name}
                     isConnectable={false}
-                    className="!h-2 !w-2 !rounded-full"
+                    className="!size-2 !rounded-full"
                     style={{
                       left: 0,
                       top: `calc(50% + ${offset}px)`,
@@ -308,7 +308,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     position={Position.Right}
                     id={`out:${out.name}`}
                     isConnectable={false}
-                    className="!h-2 !w-2 !rounded-full"
+                    className="!size-2 !rounded-full"
                     style={{
                       right: 0,
                       top: `calc(50% + ${offset}px)`,
@@ -363,7 +363,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                       position={Position.Left}
                       id={inName}
                       isConnectable={false}
-                      className="!border-port-surface !h-2.5 !w-2.5 !rounded-full !border"
+                      className="!border-port-surface !size-2.5 !rounded-full !border"
                       style={{
                         left: 5,
                         background: inCol,
@@ -531,7 +531,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     position={Position.Left}
                     id={inp.name}
                     isConnectable={false}
-                    className="!border-port-surface !h-2.5 !w-2.5 !rounded-full !border"
+                    className="!border-port-surface !size-2.5 !rounded-full !border"
                     style={{
                       left: 5,
                       background: typeCol,

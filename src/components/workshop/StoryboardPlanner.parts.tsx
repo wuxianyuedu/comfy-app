@@ -1,6 +1,7 @@
 "use client";
 
 import { Trash } from "lucide-react";
+import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { FormField } from "~/components/ui/form-field";
 import type { Shot, ShotType, Character, StyleRef } from "~/lib/workshop/types";
@@ -70,7 +71,7 @@ export function ShotRow({
   return (
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
-        <span className="bg-primary-soft text-primary grid h-6 w-6 place-items-center rounded-full text-xs font-semibold">
+        <span className="bg-primary-soft text-primary grid size-6 place-items-center rounded-full text-xs font-semibold">
           {shot.index}
         </span>
         <span className="text-muted-foreground text-xs">
@@ -84,7 +85,7 @@ export function ShotRow({
           className="text-muted-foreground hover:text-danger-strong ml-auto"
           aria-label="删除镜头"
         >
-          <Trash size={15} />
+          <Trash data-icon="inline-start" size={15} />
         </Button>
       </div>
 
@@ -176,16 +177,17 @@ export function ShotRow({
         <p className="text-muted-foreground mb-1 flex items-center justify-between text-xs font-medium">
           生图提示词
           {onPolish && (
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={onPolish}
-              disabled={polishBusy}
-              title="用模型润色为更有画面感的提示词"
-              className="text-primary hover:bg-primary/10 h-auto rounded px-1.5 py-0.5 text-[10px]"
-            >
-              {polishBusy ? "润色中…" : "✨ AI 润色"}
-            </Button>
+            <Hint label="用模型润色为更有画面感的提示词" wrap>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={onPolish}
+                disabled={polishBusy}
+                className="text-primary hover:bg-primary/10 h-auto rounded px-1.5 py-0.5 text-[10px]"
+              >
+                {polishBusy ? "润色中…" : "✨ AI 润色"}
+              </Button>
+            </Hint>
           )}
         </p>
         <p className="text-ink/80 text-xs leading-relaxed break-words">

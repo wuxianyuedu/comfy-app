@@ -4,7 +4,7 @@
 // 集中承载 LLMProvider 的 configGet 查询与设置弹窗的 configSave 提交。
 // LLMContext.tsx（provider + 弹窗视图）不再直接出现 `api.llm.*`。
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo } from "react";
 
 import {
   effectiveProviderType,
@@ -58,28 +58,31 @@ export interface LLMConfigController {
   refresh: () => void;
 }
 
+/** 候选模型分组：本地（Ollama）/ 远端文本（chat）/ 远端生图（image）。 */
+type ModelSplit = {
+  local: string[];
+  remote: string[];
+  remoteImage: string[];
+};
+
+const EMPTY_SPLIT: ModelSplit = { local: [], remote: [], remoteImage: [] };
+
 export function useLLMConfig(): LLMConfigController {
   const configQ = api.llm.configGet.useQuery();
-  const [config, setConfig] = useState<LLMConfigView | null>(null);
-  const [split, setSplit] = useState<{
-    local: string[];
-    remote: string[];
-    remoteImage: string[];
-  }>({ local: [], remote: [], remoteImage: [] });
 
   const refresh = useCallback(() => {
     void configQ.refetch();
   }, [configQ]);
 
-  // query 结果 → 本地状态（渲染期调整，React 19 模式，见 §17.2 hook 范式）。
-  const cfg = configQ.data?.config;
-  const [prevCfg, setPrevCfg] = useState(cfg);
-  /* 播种条件：数据引用变化时重新播种；或数据已就绪而 derived config 仍未
-   * 落定（首帧即命中 tRPC 缓存的场景）时播种。若只用引用对比，热重挂时
-   * prevCfg 初值被缓存命中、cfg===prevCfg 永不成立，分支不触发——本地/远端
-   * 候选与 config 就一直为空（下拉只剩「工具」一项）。与设置页播种同源守卫。 */
-  if (cfg && (cfg !== prevCfg || !config)) {
-    setPrevCfg(cfg);
+  /* query 结果 → 分组候选 + 收窄后的配置视图：两者都是 `cfg` 的**纯函数**
+   * （不含用户输入），故直接 useMemo 派生（P2：去掉「prev 引用对比 + 渲染期
+   * setState」的记账 state，也免掉首帧命中 tRPC 缓存时不播种的坑）。 */
+  const { config, split } = useMemo((): {
+    config: LLMConfigView | null;
+    split: ModelSplit;
+  } => {
+    const cfg = configQ.data?.config;
+    if (!cfg) return { config: null, split: EMPTY_SPLIT };
     /* 服务端的候选列表已条目化（本地=字符串、远端=带独立连接参数的对象），
        工坊下拉据此把「本地 / 远端」两组静态分开。
        注意：远端候选仅取 chat 类型——图片/视频模型不能执行文本生成。 */
@@ -102,7 +105,7 @@ export function useLLMConfig(): LLMConfigController {
     const effectiveProvider = effectiveProviderType(
       cfg.provider,
       cfg.baseUrl,
-      !!cfg.apiKey,
+      !!cfg.hasApiKey,
     );
     /* 兜底：当前生效主模型不在候选里时，按生效提供方归入对应组，保证下拉总能选它。
        明确是远端 image/video 类型的主模型不收入文本候选（避免误选到生成任务）。 */
@@ -114,14 +117,16 @@ export function useLLMConfig(): LLMConfigController {
         local.push(model);
       }
     }
-    setSplit({ local, remote, remoteImage: remoteImageNames });
-    setConfig({
-      ...cfg,
-      provider: effectiveProvider,
-      extraModels: toModelNames(cfg.extraModels),
-      hasApiKey: !!cfg.apiKey,
-    });
-  }
+    return {
+      split: { local, remote, remoteImage: remoteImageNames },
+      config: {
+        ...cfg,
+        provider: effectiveProvider,
+        extraModels: toModelNames(cfg.extraModels),
+        hasApiKey: !!cfg.hasApiKey,
+      },
+    };
+  }, [configQ.data]);
 
   return {
     config,
@@ -154,21 +159,19 @@ export function useLLMConfigSave(): LLMConfigSaveController {
     async (input: LLMConfigSaveInput): Promise<LLMConfigView> => {
       const data = await saveBusy.run(() => saveCfg.mutateAsync(input));
       const cfg = data.config;
-      const rawExtra: unknown = (cfg as Record<string, unknown>).extraModels;
+      const rawExtra: unknown = cfg.extraModels;
       return {
         ...cfg,
-        hasApiKey: !!cfg.apiKey,
+        hasApiKey: !!cfg.hasApiKey,
         // 与 useLLMConfig 同口径：本机 ollama 误存成「远端」时，保存后的
         // 视图配置也要按生效提供方展示，否则徽标/页脚闪回「远端」。
         provider: effectiveProviderType(
-          cfg.provider as "local" | "remote",
+          cfg.provider,
           cfg.baseUrl,
-          !!cfg.apiKey,
+          !!cfg.hasApiKey,
         ),
         extraModels: toModelNames(rawExtra),
-        temperatureByTask:
-          (cfg.temperatureByTask as
-            Record<string, number> | null | undefined) ?? undefined,
+        temperatureByTask: cfg.temperatureByTask ?? undefined,
       };
     },
     [saveCfg, saveBusy],

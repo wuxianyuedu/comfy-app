@@ -727,7 +727,9 @@
       void applyCompact(!logVisible);
       if (logVisible) {
         fetchLog();
-        logTimer = setInterval(fetchLog, 800);
+        // 1.5s：日志命令每轮要读多个文件尾部，800ms 的收益撑不起这个成本；
+        // 首帧 fetchLog 立即执行，展开日志时仍是即时可见。
+        logTimer = setInterval(fetchLog, 1500);
       } else if (logTimer) {
         clearInterval(logTimer);
         logTimer = null;

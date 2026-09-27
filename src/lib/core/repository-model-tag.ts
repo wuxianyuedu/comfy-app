@@ -87,6 +87,37 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
     return { id: row.id, name: row.name, count: Number(c?.v ?? 0) };
   }
 
+  /** `upsertByName` 的批量版：保存工作流时一次要落一整套标签，逐个调用就是
+   *  每个标签 2~3 次往返（查 → 插 → 计数）。批量版一次 `IN` 查出已有的、
+   *  一条多值 INSERT 补齐缺的，最后按**输入顺序**返回 id（与逐个版同样确定；
+   *  count 视图不需要，`setModelTags` 只吃 id）。 */
+  async upsertByNames(userId: string, names: string[]): Promise<string[]> {
+    if (!names.length) return [];
+    const wanted = [...new Set(names)];
+    const idByName = new Map<string, string>();
+    const existing = await db
+      .select({ id: workflowModelTag.id, name: workflowModelTag.name })
+      .from(workflowModelTag)
+      .where(
+        and(
+          eq(workflowModelTag.userId, userId),
+          inArray(workflowModelTag.name, wanted),
+        ),
+      );
+    for (const row of existing) idByName.set(row.name, row.id);
+    const missing = wanted.filter((name) => !idByName.has(name));
+    if (missing.length > 0) {
+      const inserted = await db
+        .insert(workflowModelTag)
+        .values(missing.map((name) => ({ userId, name })))
+        .returning({ id: workflowModelTag.id, name: workflowModelTag.name });
+      for (const row of inserted) idByName.set(row.name, row.id);
+    }
+    return names
+      .map((name) => idByName.get(name))
+      .filter((id): id is string => id !== undefined);
+  }
+
   async findByUserAndName(
     userId: string,
     name: string,

@@ -1,6 +1,8 @@
 "use client";
 import React from "react";
+import { randomSeed } from "~/lib/comfyui/random-seed";
 import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
+import { EmptyState } from "~/components/ui/empty-state";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -63,12 +65,52 @@ function noop(): void {
  *  有限数字 → 用该固定 seed（pin 住以复现）。 */
 function resolveSeed(raw: string): number {
   const trimmed = raw.trim();
-  if (trimmed === "")
-    return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+  if (trimmed === "") return randomSeed();
   const n = Number(trimmed);
-  return Number.isFinite(n)
-    ? Math.trunc(n)
-    : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+  return Number.isFinite(n) ? Math.trunc(n) : randomSeed();
+}
+
+/** 自动预填：分镜输出 → 图片提示词。
+ *
+ *  从「场景分镜」来的镜头已带构建好的提示词；任何为空的（例如导入的裸镜头）
+ *  从场景 + 角色卡一次性填上；被用户手改过的镜头（`editedRef`）不覆盖。
+ *
+ *  `scenes` / `characters` / `styles` 是父级每次渲染可能重建的数组，走 ref
+ *  读最新值（每次渲染后同步），触发源只留 `shots` —— 否则父级任何一次
+ *  重渲染都会让它跑一遍 O(N) 扫描（`onShotsChange` 是 setState，引用稳定）。 */
+function useAutoFillPrompts(
+  shots: Shot[],
+  inputs: { scenes: Scene[]; characters: Character[]; styles: StyleRef[] },
+  onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>,
+  editedRef: React.RefObject<Set<string>>,
+): void {
+  const inputsRef = React.useRef(inputs);
+  React.useEffect(() => {
+    inputsRef.current = inputs;
+  });
+  React.useEffect(() => {
+    const needsFill = shots.some(
+      (s) => !s.prompt.trim() && !editedRef.current.has(s.id),
+    );
+    if (!needsFill) return;
+    const { scenes, characters, styles } = inputsRef.current;
+    onShotsChange((prev) =>
+      prev.map((shot) => {
+        if (shot.prompt.trim() || editedRef.current.has(shot.id)) return shot;
+        const scene = scenes.find((sc) => sc.id === shot.sceneId);
+        const chars = characters.filter((c) =>
+          shot.characterIds.includes(c.id),
+        );
+        const style = styles.find((st) => st.slug === shot.skillSlug);
+        return {
+          ...shot,
+          prompt: buildShotPrompt(shot, scene, chars, style),
+          negativePrompt:
+            shot.negativePrompt || buildShotNegative(chars, style),
+        };
+      }),
+    );
+  }, [shots, onShotsChange, editedRef]);
 }
 
 /**
@@ -117,31 +159,13 @@ export function ShotStudio({
     (s) => !s.imageUrl && (s.status === "idle" || s.status === "failed"),
   );
 
-  // ── 自动预填：分镜输出 → 图片提示词 ──────────────────────
-  // 从「场景分镜」来的镜头已带构建好的提示词；任何为空的
-  //（例如导入的裸镜头）从场景 + 角色卡一次性填上。
-  React.useEffect(() => {
-    const needsFill = shots.some(
-      (s) => !s.prompt.trim() && !editedRef.current.has(s.id),
-    );
-    if (!needsFill) return;
-    onShotsChange((prev) =>
-      prev.map((shot) => {
-        if (shot.prompt.trim() || editedRef.current.has(shot.id)) return shot;
-        const scene = scenes.find((sc) => sc.id === shot.sceneId);
-        const chars = characters.filter((c) =>
-          shot.characterIds.includes(c.id),
-        );
-        const style = styles.find((st) => st.slug === shot.skillSlug);
-        return {
-          ...shot,
-          prompt: buildShotPrompt(shot, scene, chars, style),
-          negativePrompt:
-            shot.negativePrompt || buildShotNegative(chars, style),
-        };
-      }),
-    );
-  }, [shots, scenes, characters, styles, onShotsChange]);
+  // ── 自动预填：分镜输出 → 图片提示词（逻辑收在 useAutoFillPrompts）──
+  useAutoFillPrompts(
+    shots,
+    { scenes, characters, styles },
+    onShotsChange,
+    editedRef,
+  );
 
   function patchShot(id: string, p: Partial<Shot>) {
     onShotsChange((prev) =>
@@ -304,7 +328,7 @@ export function ShotStudio({
           onClick={onOpenApiSettings}
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
         >
-          <Icon name="settings" size={12} />
+          <Icon data-icon="inline-start" name="settings" size={12} />
           API 通道设置
         </Button>
         {/* 不用 <label> 包住选择器：它内部会挂尺寸表配置弹窗，弹窗里的输入框
@@ -364,10 +388,11 @@ export function ShotStudio({
       )}
 
       {shots.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
-          暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 —
-          镜头提示词会自动带入本阶段。
-        </div>
+        <EmptyState
+          variant="hint"
+          description="暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 — 镜头提示词会自动带入本阶段。"
+          className="py-10 text-sm"
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {shots.map((shot) => {
@@ -379,7 +404,7 @@ export function ShotStudio({
                 className="border-border bg-surface rounded-xl border p-4"
               >
                 <div className="mb-2 flex items-center gap-2">
-                  <span className="bg-primary-soft text-primary grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
+                  <span className="bg-primary-soft text-primary grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
                     {shot.index}
                   </span>
                   <span className="text-muted-foreground truncate text-xs">

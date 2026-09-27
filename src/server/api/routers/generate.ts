@@ -9,6 +9,7 @@ import {
 } from "~/lib/core/repository";
 import { enqueue } from "~/lib/comfyui/enqueue";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
+import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 
 const WorkflowInputSchema = z.object({
   nodeId: z.string(),
@@ -62,6 +63,8 @@ export const generateRouter = createTRPCRouter({
         );
       }
 
+      const executorClaim = resolveExecutorClaim();
+
       const task = await taskRepository.createQueued({
         userId: ctx.user.id,
         type: taskType,
@@ -73,13 +76,20 @@ export const generateRouter = createTRPCRouter({
         referenceImages: data.referenceImages?.length
           ? data.referenceImages
           : undefined,
+        claimedBy: executorClaim,
+        execPayload: tpl.rawJson,
       });
-      enqueue({
-        taskId: task.id,
-        workflowName,
-        rawJson: tpl.rawJson,
-        overrides: data.workflowInputs,
-      });
+      /* host 模式只建行不执行：任务由 executor host 按 claimedBy='host' 领取
+       *（P3 §5 ADR §6/§13-3B1）。进程内 enqueue 只在 inline 发生——若两侧都
+       * 驱动同一行就是 ADR §6 开头描述的「双 finalize 错乱」事故形态。 */
+      if (executorClaim === "inline") {
+        enqueue({
+          taskId: task.id,
+          workflowName,
+          rawJson: tpl.rawJson,
+          overrides: data.workflowInputs,
+        });
+      }
       generateRuntimeLog.info(`生成任务已入队 ${task.id}`, {
         type: taskType,
         workflow: workflowName,

@@ -326,7 +326,7 @@ export function ImageViewer({
                 title="缩小"
                 className="text-ink-muted hover:text-ink rounded-md"
               >
-                <Minus size={14} />
+                <Minus data-icon="inline-start" size={14} />
               </Button>
               <span
                 className="text-ink-muted w-12 text-center text-[11px] tabular-nums"
@@ -342,7 +342,7 @@ export function ImageViewer({
                 title="放大"
                 className="text-ink-muted hover:text-ink rounded-md"
               >
-                <Plus size={14} />
+                <Plus data-icon="inline-start" size={14} />
               </Button>
               <Button
                 variant="ghost"
@@ -368,7 +368,7 @@ export function ImageViewer({
                     : "text-ink-muted hover:text-ink"
                 }`}
               >
-                <Maximize2 size={11} />
+                <Maximize2 data-icon="inline-start" size={11} />
                 原始大小
               </Button>
               <Button
@@ -379,7 +379,7 @@ export function ImageViewer({
                 title="关闭"
                 className="text-ink-muted hover:text-ink rounded-md"
               >
-                <X size={15} />
+                <X data-icon="inline-start" size={15} />
               </Button>
             </div>
           </div>

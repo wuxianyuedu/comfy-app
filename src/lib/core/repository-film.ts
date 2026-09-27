@@ -7,7 +7,13 @@ import "server-only";
 import { db } from "~/lib/db";
 import { filmProject, filmShot, type FilmProject } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
+import { tailWindow } from "~/lib/page-window";
 import { eq, and, desc, asc, inArray, isNotNull, count } from "drizzle-orm";
+
+/** 单个成片任务的日志行数上限：`logs` 是 JSON 列，每打一条日志都要把整个
+ *  数组读出来、再整列写回去 —— 无上限时这条路的成本随日志条数线性变贵
+ *  （成片监看每 4s 就打进度日志），界面也只显示最近一段。 */
+const LOGS_MAX = 500;
 
 export interface FilmSummary {
   id: string;
@@ -123,7 +129,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     arr.push(entry);
     await db
       .update(filmProject)
-      .set({ logs: arr })
+      .set({ logs: tailWindow(arr, LOGS_MAX) })
       .where(eq(filmProject.id, id))
       .catch(() => undefined);
   }

@@ -88,7 +88,7 @@ export function DetailBody({
               onClick={onEdit}
               className="h-auto gap-1 rounded-md px-2 py-1 text-[11px]"
             >
-              <Maximize2 className="h-3 w-3" />
+              <Maximize2 data-icon="inline-start" className="size-3" />
               在编辑器中打开
             </Button>
           </div>

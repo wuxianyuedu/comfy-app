@@ -17,6 +17,7 @@
 import "server-only";
 
 import { compareText } from "~/lib/ordered-set";
+import { getOrCreate } from "~/lib/collections";
 import { lastSegments } from "~/lib/path-display";
 import { promises as fs } from "fs";
 import path from "path";
@@ -197,7 +198,7 @@ export async function collectByFolder(
   for (const scope of scopes) {
     for (const f of MATERIAL_FOLDERS) {
       const items = await listFolderItems(scope, f.id);
-      if (items.length) map.get(f.id)!.push(...items);
+      if (items.length) getOrCreate(map, f.id, () => []).push(...items);
     }
   }
   for (const [, arr] of map)

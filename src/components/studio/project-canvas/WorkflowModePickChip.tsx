@@ -103,7 +103,7 @@ export function WorkflowModePickChip({
                 }`}
               >
                 {isDef && (
-                  <span className="bg-primary-strong h-1.5 w-1.5 rounded-full" />
+                  <span className="bg-primary-strong size-1.5 rounded-full" />
                 )}
               </span>
             ),

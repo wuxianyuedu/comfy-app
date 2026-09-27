@@ -16,8 +16,10 @@
 //
 // 纯函数 + 注入 exists/readdir：不 spawn、不碰网络，可独立单测。真实调用方
 // 注入默认的 fs 实现（见 collectComfyPythonCandidates 的默认参数）。
-
-import "server-only";
+//
+// §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）——只依赖
+// Node 内建 `fs` / `os` / `path` + 纯函数 `~/lib/path-display`，登记进
+// `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import fs from "fs";
 import os from "os";
 import path from "path";

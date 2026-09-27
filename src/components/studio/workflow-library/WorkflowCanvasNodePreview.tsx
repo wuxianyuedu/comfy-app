@@ -228,13 +228,13 @@ export function WorkflowCanvasNodePreview({
       onLog: (taskId, entry) => {
         appendWorkflowRunLog(taskId, entry);
       },
-      onOutput: (taskId, output) => {
+      onOutput: (_taskId, output) => {
         if (output.kind === "image" && output.url) {
           resultUrlRef.current = output.url;
           setResultUrl(output.url);
         }
       },
-      onSettled: (taskId, result) => {
+      onSettled: (_taskId, result) => {
         if (result.ok) {
           setPhase({
             kind: "done",
@@ -655,7 +655,7 @@ export function WorkflowCanvasNodePreview({
                   label="▶ 用此工作流生成"
                   disabled={true}
                   onClick={run}
-                  title="切换到「实际使用」页签后可执行"
+                  hint="切换到「实际使用」页签后可执行"
                 />
               }
             />
@@ -724,7 +724,7 @@ export function WorkflowCanvasNodePreview({
                 label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
                 disabled={!canRun}
                 onClick={run}
-                title={
+                hint={
                   missingLabels.length > 0
                     ? `必填参数未填：${missingLabels.join("、")}`
                     : undefined
@@ -737,6 +737,7 @@ export function WorkflowCanvasNodePreview({
 
       {/* ── 进度条（两种模式通用，running 时显示） ── */}
       {phase.kind === "running" && (
+        // p71-allow:start brand 渐变 · 工作流执行进度条 violet→fuchsia 双色（项目品牌视觉），见 §3.6.1
         <div className="w-[380px]" aria-live="polite">
           <ProgressBar
             value={pct}
@@ -751,6 +752,7 @@ export function WorkflowCanvasNodePreview({
             fillClassName="bg-linear-to-r from-violet-500 to-fuchsia-500 duration-300"
           />
         </div>
+        // p71-allow:end
       )}
 
       {/* ── 运行结果图（只在「实际使用」页签显示；编辑对外参数是配置界面，

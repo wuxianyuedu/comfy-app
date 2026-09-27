@@ -31,6 +31,7 @@ import {
   PARAM_NODE_OUTPUT_ROW_H,
 } from "~/lib/workflow/workflow-param-mapping";
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
+import { Hint } from "~/components/ui/hint";
 
 export interface WorkflowParamCardProps {
   entryId: string;
@@ -177,7 +178,7 @@ export function WorkflowParamCard({
         }}
       >
         <span
-          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          className="size-1.5 shrink-0 rounded-full"
           style={{
             background: style.color,
             boxShadow: `0 0 6px ${style.color}`,
@@ -195,28 +196,32 @@ export function WorkflowParamCard({
           )}
         </span>
         {onReset && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onReset}
-            disabled={!canReset}
-            /* 卡片上的小圆钮沿用自己这套尺寸与内边距：基元 `size` 变体写死了
-             *  h/w，必须 `h-auto w-auto` 让回来（16 §16.2.4.2 第 3 条）。 */
-            className={`nodrag nopan h-auto w-auto shrink-0 rounded p-0.5 ${
-              canReset
-                ? "text-ink-soft hover:bg-subtle hover:text-ink-bright"
-                : "text-ink-fainter cursor-default"
-            }`}
-            data-testid={`param-node-reset-${entryId}`}
-            title={
+          <Hint
+            label={
               canReset
                 ? "恢复默认：撤销该对外参数在当前模式下的连线，回到自动探测的默认线"
                 : "已是默认连线状态"
             }
-            aria-label="恢复默认"
+            wrap
           >
-            <RotateCcw size={11} />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={onReset}
+              disabled={!canReset}
+              /* 卡片上的小圆钮沿用自己这套尺寸与内边距：基元 `size` 变体写死了
+               *  h/w，必须 `h-auto w-auto` 让回来（16 §16.2.4.2 第 3 条）。 */
+              className={`nodrag nopan h-auto w-auto shrink-0 rounded p-0.5 ${
+                canReset
+                  ? "text-ink-soft hover:bg-subtle hover:text-ink-bright"
+                  : "text-ink-fainter cursor-default"
+              }`}
+              data-testid={`param-node-reset-${entryId}`}
+              aria-label="恢复默认"
+            >
+              <RotateCcw data-icon="inline-start" size={11} />
+            </Button>
+          </Hint>
         )}
       </div>
 

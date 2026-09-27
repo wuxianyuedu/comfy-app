@@ -11,7 +11,6 @@
  */
 
 import { useState } from "react";
-import { textHandler } from "~/lib/form-props";
 
 import {
   TEMPERATURE_TASKS,
@@ -21,8 +20,9 @@ import type { TaskType } from "~/lib/llm/types";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
+import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Disclosure } from "~/components/ui/disclosure";
 
@@ -31,7 +31,10 @@ import {
   STATUS_TEXT_CLASS,
 } from "../settings-status-row-config";
 
-import { StatusButton, Card, Field } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { SelectMenu } from "~/components/ui/select-menu";
+import { Toggle } from "~/components/ui/toggle";
+import { StatusButton, Field } from "./SettingsPrimitives";
 import { RuntimeLogBox } from "./RuntimeLogBox";
 
 export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
@@ -50,7 +53,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
     });
 
   return (
-    <Card title="本地模型（Ollama）">
+    <SettingsCard title="本地模型（Ollama）">
       {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
       <Field
         label="Base URL"
@@ -130,18 +133,13 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         <div className="mb-3">
           <FormField label="当前模型" id="ollama-current-model">
             {(a11y) => (
-              <select
-                {...a11y}
+              <SelectMenu
                 value={c.drafts.llm.model}
-                onChange={textHandler((model) => c.patchLlm({ model }))}
-                className="border-border text-ink focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-              >
-                {c.ollamaModels.map((model) => (
-                  <option key={model.name} value={model.name}>
-                    {model.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(model: string) => c.patchLlm({ model })}
+                options={c.ollamaModels.map((m) => m.name)}
+                fullWidth
+                {...a11y}
+              />
             )}
           </FormField>
           {c.ollamaModels.length > 1 && (
@@ -154,26 +152,21 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     model.name === c.drafts.llm.model ||
                     c.drafts.llm.localCandidates.includes(model.name);
                   return (
-                    <Button
+                    <Toggle
                       key={model.name}
-                      variant="ghost"
-                      size="xs"
+                      size="sm"
+                      pressed={checked}
+                      onPressedChange={() => c.toggleExtraModel(model.name)}
                       title={
                         model.name === c.drafts.llm.model
                           ? "当前模型（始终可用）"
                           : "勾选后工坊各阶段可直接切换"
                       }
-                      aria-pressed={checked}
-                      onClick={() => c.toggleExtraModel(model.name)}
-                      className={`h-auto rounded-lg border px-2.5 py-1 text-xs ${
-                        checked
-                          ? "bg-primary/15 text-primary border-primary"
-                          : "text-muted-foreground hover:bg-subtle border-border"
-                      }`}
+                      className="h-auto rounded-lg border px-2.5 py-1 text-xs"
                     >
                       {checked ? "✓" : ""}
                       {model.name}
-                    </Button>
+                    </Toggle>
                   );
                 })}
               </div>
@@ -256,18 +249,19 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     </p>
                   </div>
                   {isOverridden && (
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      title="恢复推荐默认"
-                      onClick={() => {
-                        clearTaskEdit(key);
-                        c.setTaskTemperature(key, "");
-                      }}
-                      className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
-                    >
-                      ↺
-                    </Button>
+                    <Hint label="恢复推荐默认" accessibleName>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => {
+                          clearTaskEdit(key);
+                          c.setTaskTemperature(key, "");
+                        }}
+                        className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
+                      >
+                        ↺
+                      </Button>
+                    </Hint>
                   )}
                   <Input
                     type="number"
@@ -292,6 +286,6 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       <StatusButton onClick={() => void c.saveLlm()} disabled={c.saving}>
         保存 LLM 配置
       </StatusButton>
-    </Card>
+    </SettingsCard>
   );
 }

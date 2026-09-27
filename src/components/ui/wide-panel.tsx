@@ -20,7 +20,7 @@ import { readStorageItem, writeStorageItem } from "~/lib/browser-storage";
  * 宽度档：`popupClassName={wide ? W.wide : W.base}`
  * 同一文件里第二处：`className={`…h-[85vh]… ${wide ? W.wide : W.base}`}`
  * 触发钮：`<Button onClick={() => setWide((w) => !w)} title={wide ? "收缩" : "加宽"}>`
- * 图标：`{wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}`
+ * 图标：`{wide ? <Minimize2 data-icon="inline-start" size={16}/> : <Maximize2 data-icon="inline-start" size={16}/>}`
  * 闭合：`</Button>`
  * ```
  *
@@ -163,7 +163,11 @@ export function WidePanelToggle({
       aria-label={panel.toggleLabel}
       className={className}
     >
-      {panel.wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+      {panel.wide ? (
+        <Minimize2 data-icon="inline-start" size={16} />
+      ) : (
+        <Maximize2 data-icon="inline-start" size={16} />
+      )}
     </Button>
   );
 }

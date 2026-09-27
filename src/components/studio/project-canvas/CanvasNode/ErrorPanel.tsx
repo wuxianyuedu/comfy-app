@@ -9,6 +9,7 @@
  * running/idle 切换时重置）。 */
 import { useMemo, useState } from "react";
 import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
+import { Hint } from "~/components/ui/hint";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -19,6 +20,7 @@ import {
 import { Alert } from "~/components/ui/alert";
 import { Disclosure } from "~/components/ui/disclosure";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
+import { formatLocalStamp } from "~/lib/time-format";
 import {
   adviseOnError,
   shouldAutoExpandError,
@@ -152,64 +154,73 @@ export function ErrorPanel({
                * 预检阶段的校验错误时才出现。用 Boolean() 包一层是为了让 TS
                * 满意 ——`d.errorContext?.request` 的类型是`unknown`。 */}
               {Boolean(errorContext?.request) && taskId && (
+                <Hint label="用相同参数重跑一次">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      void onRetry(errorContext?.request);
+                    }}
+                    className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
+                  >
+                    ↻ 重试
+                  </Button>
+                </Hint>
+              )}
+              <Hint
+                label={errExpanded ? "收起错误详情" : "展开错误详情"}
+                accessibleName
+              >
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    void onRetry(errorContext?.request);
-                  }}
+                  onClick={() => setErrExpanded((value) => !value)}
                   className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
-                  title="用相同参数重跑一次"
                 >
-                  ↻ 重试
+                  {errExpanded ? "▲" : "▼"}
                 </Button>
-              )}
-              <Button
-                variant="outline"
-                onClick={() => setErrExpanded((value) => !value)}
-                className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
-                title={errExpanded ? "收起错误详情" : "展开错误详情"}
-              >
-                {errExpanded ? "▲" : "▼"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  copyDetail(
-                    JSON.stringify(
-                      {
-                        nodeId: nodeId,
-                        workflowId: workflowId ?? null,
-                        workflowName: workflowName ?? null,
-                        taskId: taskId ?? null,
-                        errorStatus: errorStatus ?? null,
-                        validationErrors: validationErrors ?? null,
-                        error:
-                          typeof error === "string"
-                            ? error
-                            : (() => {
-                                try {
-                                  return JSON.stringify(error);
-                                } catch {
-                                  return String(error);
-                                }
-                              })(),
-                        request: errorContext?.request ?? null,
-                        ts: errorContext?.timestamp ?? new Date().toISOString(),
-                      },
-                      null,
-                      2,
-                    ),
-                  );
-                }}
-                className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
-                title={
+              </Hint>
+              <Hint
+                label={
                   detailCopyFailed
                     ? copyFailureText("下方展开区")
                     : "复制错误详情到剪贴板（含 taskId 与请求参数）"
                 }
               >
-                {detailCopyFailed ? "复制失败" : "⧉"}
-              </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    copyDetail(
+                      JSON.stringify(
+                        {
+                          nodeId: nodeId,
+                          workflowId: workflowId ?? null,
+                          workflowName: workflowName ?? null,
+                          taskId: taskId ?? null,
+                          errorStatus: errorStatus ?? null,
+                          validationErrors: validationErrors ?? null,
+                          error:
+                            typeof error === "string"
+                              ? error
+                              : (() => {
+                                  try {
+                                    return JSON.stringify(error);
+                                  } catch {
+                                    return String(error);
+                                  }
+                                })(),
+                          request: errorContext?.request ?? null,
+                          ts:
+                            errorContext?.timestamp ?? new Date().toISOString(),
+                        },
+                        null,
+                        2,
+                      ),
+                    );
+                  }}
+                  className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
+                >
+                  {detailCopyFailed ? "复制失败" : "⧉"}
+                </Button>
+              </Hint>
             </div>
           </div>
 
@@ -269,7 +280,7 @@ export function ErrorPanel({
                 if (!t) return null;
                 const dt = new Date(t);
                 if (Number.isNaN(dt.getTime())) return t;
-                return dt.toLocaleString("zh-CN", { hour12: false });
+                return formatLocalStamp(dt);
               })();
               const hasCtx =
                 Boolean(taskId) ||
@@ -297,14 +308,15 @@ export function ErrorPanel({
                       {taskId && (
                         <>
                           <span className="text-danger-strong/60">taskId</span>
-                          <Button
-                            variant="ghost"
-                            onClick={() => copyTaskId(taskId)}
-                            className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
-                            title="点击复制 taskId"
-                          >
-                            {taskId}
-                          </Button>
+                          <Hint label="点击复制 taskId">
+                            <Button
+                              variant="ghost"
+                              onClick={() => copyTaskId(taskId)}
+                              className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
+                            >
+                              {taskId}
+                            </Button>
+                          </Hint>
                         </>
                       )}
                       {ts && (

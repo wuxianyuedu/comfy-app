@@ -37,6 +37,9 @@ import path from "node:path";
 let tmp: string;
 let dbFile: string;
 
+/** 本文件临时目录的前缀：既是建目录用的名字，也是「扫上一轮」的认领域判据。 */
+const TMP_PREFIX = "db-schema-ready-";
+
 /** 建一个只含哨兵表 `task` 的 sqlite（表结构取本项目 schema 的最小子集）。 */
 function createSchema(file: string): void {
   execFileSync(
@@ -56,15 +59,57 @@ function createSchema(file: string): void {
  *  返回的还原函数必须在 `afterEach` 里调用：cwd 替身一旦泄漏到后面的
  *  `describe`，就会把 `~/env` 的 `.env` 探测带偏（见文件头「两条确定性约束」）。 */
 function useTempCwd(): { restore: () => void } {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "db-schema-ready-"));
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), TMP_PREFIX));
   dbFile = path.join(tmp, "db.sqlite");
   const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(tmp);
   return { restore: () => cwdSpy.mockRestore() };
 }
 
+/**
+ * 扫掉**上一轮**留下的临时目录。
+ *
+ * 为什么不在这里删自己那份：libsql 的 sqlite 句柄由它的工作线程持有，
+ * `client.close()` 既不返回 Promise，实测句柄还要 **1–9s** 才释放（并行负载下
+ * 更久且没有上界）—— 本文件此前在 `afterEach` 里带 `maxRetries` 删，就是在赌这个
+ * 不确定的窗口，安静机赶得上、108 文件一起跑就赶不上（表现为只在钩子里红一次的
+ * EPERM，隔离跑反而绿）。进程内「等到能删为止」是把不确定量搬进关键路径；改成
+ * 下一轮开头扫一次，既不留垃圾，也永远不会因为锁而红。
+ *
+ * 只认自己的前缀，且跳过 60s 内还在写的目录（同机可能另有一条 vitest 正在用）。
+ */
+function sweepStaleTempDirs(): void {
+  const base = os.tmpdir();
+  let names: string[];
+  try {
+    names = fs.readdirSync(base);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!name.startsWith(TMP_PREFIX)) continue;
+    const full = path.join(base, name);
+    try {
+      if (Date.now() - fs.statSync(full).mtimeMs < 60_000) continue;
+      fs.rmSync(full, { recursive: true, force: true });
+    } catch {
+      // 还被别的进程占着：这轮不删，下一轮再来（删除是尽力，不是契约）。
+    }
+  }
+}
+
+sweepStaleTempDirs();
+
 afterEach(() => {
   vi.restoreAllMocks();
-  if (tmp) fs.rmSync(tmp, { recursive: true, force: true });
+  /* 关掉挂在单例上的客户端（`NODE_ENV !== "production"` 时 `~/server/db` 会把它
+   * 留在 `globalThis.db`）。这一步是卫生，不是「让删得掉」—— 真正的释放要等
+   * 线程结束，见上面 `sweepStaleTempDirs` 的说明。 */
+  const cached = (
+    globalThis as unknown as {
+      db?: { $client?: { close?: () => void } };
+    }
+  ).db;
+  cached?.$client?.close?.();
 });
 
 describe("probeSchemaSync", () => {

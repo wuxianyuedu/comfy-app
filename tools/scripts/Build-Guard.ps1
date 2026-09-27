@@ -201,8 +201,8 @@ function Test-UnattendedBuild {
 
 # 编译前确认目标壳未被占用。
 #   AutoCloseShell：先 taskkill /PID <pid> /T /F 回收再复查（禁止单杀，见规范 §3）
-#     不传也会回收「陈旧壳」（其启动器已退出的孤儿壳）；非交互构建（双击 / 由启动器
-#     拉起）同样自动回收。只有「启动器还在跑 / 用户可能正开着应用」才中止构建。
+#     不传也会回收「陈旧壳」（其 exe 路径已指不到本仓库的残留进程）；非交互构建
+#     （资源管理器双击）同样自动回收。只有「用户可能正开着应用」才中止构建。
 # 返回 0 = 可以继续构建；返回 1 = 必须中止，调用方直接 exit 1。
 function Assert-ShellNotRunning {
     [CmdletBinding()]
@@ -220,7 +220,7 @@ function Assert-ShellNotRunning {
     $reclaimed = 0
     foreach ($p in $running) {
         if (Test-StaleShellProcess -ProjectRoot $ProjectRoot -Process $p) {
-            Log ("[前置] 回收陈旧桌面壳（PID {0}，其启动器已退出）：{1}" -f $p.Id, $p.Path)
+            Log ("[前置] 回收陈旧桌面壳（PID {0}，其 exe 路径已指不到本仓库）：{1}" -f $p.Id, $p.Path)
             try { taskkill /PID $p.Id /T /F 2>&1 | Out-Null } catch { }
             $reclaimed++
         } else {

@@ -12,6 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { Hint } from "~/components/ui/hint";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Separator } from "~/components/ui/separator";
 import { SidebarTrigger } from "~/components/ui/sidebar";
@@ -59,40 +60,38 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
       </span>
 
       <div className="ml-auto flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onOpenSearch}
-          className="gap-1.5"
-          title="全局搜索（⌘K）"
-          aria-label="全局搜索"
-        >
-          <Search size={16} />
-          <span className="hidden md:inline">搜索</span>
-          <KbdGroup>
-            <Kbd>⌘</Kbd>
-            <Kbd>K</Kbd>
-          </KbdGroup>
-        </Button>
+        <Hint label="全局搜索（⌘K）">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onOpenSearch}
+            className="gap-1.5"
+            aria-label="全局搜索"
+          >
+            <Search data-icon="inline-start" size={16} />
+            <span className="hidden md:inline">搜索</span>
+            <KbdGroup>
+              <Kbd>⌘</Kbd>
+              <Kbd>K</Kbd>
+            </KbdGroup>
+          </Button>
+        </Hint>
         <MessageCenterButton />
 
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                title="应用菜单"
-                aria-label="应用菜单"
-              >
-                <ChevronDown />
-              </Button>
+              <Hint label="应用菜单">
+                <Button variant="ghost" size="icon-sm" aria-label="应用菜单">
+                  <ChevronDown data-icon="inline-start" />
+                </Button>
+              </Hint>
             }
           />
           <DropdownMenuContent align="end" className="w-44">
-            {/* base-ui 的 DropdownMenuLabel 就是 Menu.GroupLabel，外面必须包一层
-                DropdownMenuGroup（或 DropdownMenuRadioGroup）；否则打开菜单直接抛
-                "MenuGroupContext is missing"（与 CanvasContextMenu 同一处坑）。 */}
+            {/* base-ui 的 DropdownMenuLabel 实为 Menu.GroupLabel，必须包在
+                DropdownMenuGroup（或 DropdownMenuRadioGroup）里；否则打开菜单会抛
+                "MenuGroupContext is missing"（与 CanvasContextMenu 同款约定）。 */}
             <DropdownMenuGroup>
               <DropdownMenuLabel>应用</DropdownMenuLabel>
               <DropdownMenuItem onClick={onOpenSettings}>

@@ -14,8 +14,10 @@
 // 模块分层：纯解析函数（参数传 parsed JSON / 文件内容）可独立单测；真实 IO
 // （读 %APPDATA% 文件）收敛在 resolveDesktopLaunchMeta()，文件缺失/异常一律
 // 静默降级返回 null，由 lifecycle 回落到默认端口 + 用户配置。
-
-import "server-only";
+//
+// §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）——依赖
+// Node 内建 `fs` / `os` / `path` + 同批已摘 server-only 的 `./instance-kind`。
+// 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import fs from "fs";
 import os from "os";
 import path from "path";

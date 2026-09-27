@@ -54,9 +54,11 @@ export interface RecentProject {
  * 色值本身属规范 03 §3.6.1 的**类型色例外**（项目类别色与
  * `lib/project-canvas/canvas-types.ts` 的 `NODE_META.color` 同构），
  * 已在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES` 登记。 */
+type KindConfig = { label: string; color: string; icon: React.ReactNode };
+
 const KIND_CONFIG: Record<
-  string,
-  { label: string; color: string; icon: React.ReactNode }
+  "canvas" | "generation" | "workflow" | "video",
+  KindConfig
 > = {
   canvas: {
     label: "画布",
@@ -79,6 +81,17 @@ const KIND_CONFIG: Record<
     icon: <Video size={14} />,
   },
 };
+
+/** 按项目 kind 取展示配置。`proj.kind` 是宽字符串（旧行可能为空 / 未知），
+ *  故此处收口「未知 / 缺省 → 生成」这一条判据，返回**非空**配置——调用点不再
+ *  各自 `KIND_CONFIG[... ]!`（`Record<string,T>` 的查表在 noUncheckedIndexedAccess
+ *  下恒为 `T|undefined`，逼出一串 `!`）。 */
+function kindConfigOf(kind: string | null | undefined): KindConfig {
+  const key = kind ?? "generation";
+  return key in KIND_CONFIG
+    ? KIND_CONFIG[key as keyof typeof KIND_CONFIG]
+    : KIND_CONFIG.generation;
+}
 
 /** 把类别色按给定透明度档降为背景（`color-mix` 现取，不硬编码透明色）。 */
 function kindTint(color: string, percent: number): string {
@@ -144,9 +157,7 @@ export function HomePage({
         <div className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[960px] px-10 py-16">
             {/* ── Title ── */}
-            <h1 className="text-ink mb-3 text-center text-[34px] font-bold tracking-tight">
-              灵感从这里开始
-            </h1>
+            <h1 className="u-title-hero mb-3 text-center">灵感从这里开始</h1>
             <p className="text-ink-faint mb-10 text-center text-sm">
               用本地 AI 模型，自由创作图像、视频与专属模型
             </p>
@@ -200,7 +211,7 @@ export function HomePage({
                   onClick={() => onNavigate?.(card.id as WorkspaceView)}
                   className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto flex-col items-start gap-2.5 rounded-2xl border p-4 text-left font-normal transition-all hover:shadow-lg hover:shadow-black/5 dark:shadow-black/10"
                 >
-                  <span className="bg-primary/10 text-primary-strong group-hover:bg-primary/15 flex h-10 w-10 items-center justify-center rounded-xl transition-colors">
+                  <span className="bg-primary/10 text-primary-strong group-hover:bg-primary/15 flex size-10 items-center justify-center rounded-xl transition-colors">
                     {card.icon}
                   </span>
                   <div>
@@ -247,9 +258,7 @@ export function HomePage({
                 {/* 最近项目卡片 —— 画布 / 项目风 */}
                 {recentProjects.length > 0
                   ? recentProjects.slice(0, 3).map((proj) => {
-                      const cfg =
-                        KIND_CONFIG[proj.kind ?? "generation"] ??
-                        KIND_CONFIG.generation;
+                      const cfg = kindConfigOf(proj.kind);
                       return (
                         <Button
                           key={proj.id}
@@ -263,13 +272,13 @@ export function HomePage({
                         >
                           {/* Kind icon */}
                           <div
-                            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors"
+                            className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors"
                             style={{
-                              backgroundColor: kindTint(cfg!.color, 15),
-                              color: cfg!.color,
+                              backgroundColor: kindTint(cfg.color, 15),
+                              color: cfg.color,
                             }}
                           >
-                            {cfg!.icon}
+                            {cfg.icon}
                           </div>
 
                           {/* Info */}
@@ -281,15 +290,15 @@ export function HomePage({
                               <span
                                 className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 backdrop-blur-sm ring-inset"
                                 style={{
-                                  color: cfg!.color,
-                                  backgroundColor: kindTint(cfg!.color, 15),
+                                  color: cfg.color,
+                                  backgroundColor: kindTint(cfg.color, 15),
                                   ["--tw-ring-color" as string]: kindTint(
-                                    cfg!.color,
+                                    cfg.color,
                                     30,
                                   ),
                                 }}
                               >
-                                {cfg!.label}
+                                {cfg.label}
                               </span>
                             </div>
                             <div className="text-ink-fainter mt-1 flex items-center gap-2 text-[11.5px]">
@@ -307,7 +316,7 @@ export function HomePage({
                                       key={ti}
                                       src={thumb}
                                       alt=""
-                                      className="ring-border-strong h-10 w-10 shrink-0 rounded-lg object-cover ring-1"
+                                      className="ring-border-strong size-10 shrink-0 rounded-lg object-cover ring-1"
                                     />
                                   ))}
                               </div>
@@ -323,14 +332,14 @@ export function HomePage({
                         "generation",
                         "workflow",
                       ] as const;
-                      const cfg = KIND_CONFIG[kinds[index - 1]!]!;
+                      const cfg = kindConfigOf(kinds[index - 1]);
                       return (
                         <div
                           key={kinds[index - 1]}
                           className="border-border bg-surface-1 flex items-start gap-3 rounded-[16px] border p-3.5 opacity-60"
                         >
                           <div
-                            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                            className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl"
                             style={{
                               backgroundColor: kindTint(cfg.color, 12),
                               color: cfg.color,
@@ -341,7 +350,7 @@ export function HomePage({
                           <div className="flex-1">
                             <div className="bg-border-strong h-3.5 w-3/4 rounded" />
                             <div className="bg-border mt-2 h-3 w-1/2 rounded" />
-                            <div className="bg-border mt-2.5 h-10 w-10 rounded-lg" />
+                            <div className="bg-border mt-2.5 size-10 rounded-lg" />
                           </div>
                         </div>
                       );

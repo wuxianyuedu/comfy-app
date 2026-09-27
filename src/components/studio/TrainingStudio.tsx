@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "~/components/ui/button";
 import { Alert, AlertTitle } from "~/components/ui/alert";
+import { EmptyState } from "~/components/ui/empty-state";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { useTrainingStudio } from "./hooks/use-training-studio";
@@ -109,7 +110,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
       {/* ── Top Toolbar ───────────────────────────── */}
       <header className="border-border-subtle bg-panel/88 z-base relative flex h-12 shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md">
         <div className="flex items-center gap-2">
-          <span className="u-title">LoRA 训练工作室</span>
+          <h1 className="font-title u-title-page">LoRA 训练工作室</h1>
           <span className="text-ink-fainter text-xs">· 炼丹</span>
         </div>
 
@@ -255,7 +256,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                       <MediaThumbnail
                         src={`/api/file/${encodeURIComponent(data.name)}`}
                         alt={data.name}
-                        className="h-9 w-9 shrink-0 rounded object-cover"
+                        className="size-9 shrink-0 rounded object-cover"
                       />
                       <input
                         value={data.caption}
@@ -451,11 +452,10 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               训练任务
             </h3>
             {c.jobs.length === 0 ? (
-              <div className="border-border text-ink-muted grid min-h-[160px] place-items-center rounded-2xl border border-dashed">
-                <p className="text-sm">
-                  还没有训练任务。在右侧配置并点击「开始训练」。
-                </p>
-              </div>
+              <EmptyState
+                description="还没有训练任务。在右侧配置并点击「开始训练」。"
+                minHeightClass="min-h-[160px]"
+              />
             ) : (
               <div className="flex flex-col gap-3">
                 {c.jobs.map((job) => {

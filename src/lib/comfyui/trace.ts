@@ -28,14 +28,41 @@
  *     避免一个巨大 payload 把文件写成几 MB。
  *   - **路径来自 `log-paths`**（唯一事实来源），不在本文件手拼 `log/` 目录。
  */
-import "server-only";
+// §18.4 三选一：本模块走第三类（纯 Node 宿主）——依赖登记在
+// `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
+// 顶层值 import 只有 Node 内建 `fs` / `path`；`~/lib/log/log-paths` 是
+// server-only 侧模块，因此改由**加载即 fire-and-forget 的动态 import** 填
+// `traceLogPathRef`——本模块的诊断契约第一条就是「写入失败绝不阻塞业务」，
+// 首启动窗口内路径未 ready 时 trace 静默 skip，与旧行为一致。纯 Node 宿主
+// 侧（未来 `scripts/executor-host.mjs`）可在自己的入口调 `configureTraceLogPath`
+// 显式注入路径，不依赖那条 dynamic import（那条会撞 server-only throw、
+// 由 `.catch(() => undefined)` 咽下、`traceLogPathRef` 保持 null、trace 静默）。
 import fs from "node:fs";
 import path from "node:path";
 
 import { redactSecretShaped } from "~/lib/core/redact-secret";
-import { COMFYUI_TRACE_LOG } from "~/lib/log/log-paths";
 import { formatLocalStamp } from "~/lib/time-format";
 import { TRACE_LINE_MAX, clampText } from "~/lib/text-clamp";
+
+/** 由动态 import 或 `configureTraceLogPath` 填充；未 ready 时 `trace()` 静默 skip。 */
+let traceLogPathRef: string | null = null;
+
+/** 显式注入 trace 落盘路径。executor host（P3 §5 第 2 期）在 boot 时调用，
+ *  避免走默认的 dynamic import → 撞 server-only throw 后静默 skip 的路径。 */
+export function configureTraceLogPath(p: string): void {
+  traceLogPathRef = p;
+}
+
+// 加载即拉 log-paths，把「唯一的日志路径常量」填进 traceLogPathRef。
+// 失败（比如纯 Node 里 server-only 抛）就咽下——本模块契约是「写不进去不阻塞业务」，
+// 静默 skip 与旧行为对齐。
+void import("~/lib/log/log-paths")
+  .then((m) => {
+    traceLogPathRef ??= m.COMFYUI_TRACE_LOG;
+  })
+  .catch(() => {
+    /* 静默：诊断通道不得把业务带崩 */
+  });
 
 /** trace 子组件：同一 trace 文件中用来区分消息来自哪条通道。 */
 export type TraceChannel = "cli" | "ws" | "http" | "history" | "session";
@@ -96,7 +123,11 @@ export function trace(
   meta?: Record<string, unknown>,
 ): void {
   try {
-    const dir = path.dirname(COMFYUI_TRACE_LOG);
+    // 动态 import 尚未落地 / 纯 Node 未 configure → 静默 skip。
+    // 与「trace 是诊断通道、绝不因写入失败崩业务」的原契约一致。
+    const tracePath = traceLogPathRef;
+    if (!tracePath) return;
+    const dir = path.dirname(tracePath);
     if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) {
       fs.mkdirSync(/*turbopackIgnore: true*/ dir, { recursive: true });
     }
@@ -109,11 +140,7 @@ export function trace(
         ? ` ${clampLine(JSON.stringify(redactSecretShaped(meta)))}`
         : "";
     const line = `[${localTimestamp()}] [INFO] [trace] ${channel} [${taskId ?? "-"}] ${text}${metaText}\n`;
-    fs.appendFileSync(
-      /*turbopackIgnore: true*/ COMFYUI_TRACE_LOG,
-      line,
-      "utf-8",
-    );
+    fs.appendFileSync(/*turbopackIgnore: true*/ tracePath, line, "utf-8");
   } catch {
     /* trace 写入失败绝不阻塞业务主流程（可能是只读盘 / 路径被占）。 */
   }

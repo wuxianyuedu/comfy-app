@@ -83,3 +83,21 @@ describe("isTaskClaimedInProcess — QUEUED reaper 的 in-memory 认领保护", 
     expect(isTaskClaimedInProcess(s, cli(["task-1"]), "task-1")).toBe(true);
   });
 });
+
+/** `configureReaper` 接缝 smoke（P3 §5 第 1 期·最后一步：reaper lazy 化）。
+ *  兼作 `configureReaper` 在 `check-dead-exports` 眼里的消费方。dynamic import
+ *  拿 reaper 本体，避开给上面那批纯判决函数测试添加额外加载。 */
+describe("configureReaper 接缝", () => {
+  it("接受 Partial<ReaperDeps>、两次调用是合并语义", async () => {
+    const mod = await import("./reaper");
+    const fakeRepo = {
+      listStaleQueued: async () => [],
+      listStaleRunning: async () => [],
+      finalizeFailure: async () => undefined,
+      finalizeFromReaper: async () => undefined,
+    };
+    expect(() => mod.configureReaper({ taskRepo: fakeRepo })).not.toThrow();
+    // 再来一次空 Partial：合法、只是没覆盖任何东西。
+    expect(() => mod.configureReaper({})).not.toThrow();
+  });
+});

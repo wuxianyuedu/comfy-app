@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { textHandler } from "~/lib/form-props";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
@@ -51,7 +52,7 @@ export function ModelTagManager({
     setEditingDraft("");
   }, []);
   const commitEdit = useCallback(
-    (id: string, oldName: string) => {
+    (_id: string, oldName: string) => {
       void c.renameTag(oldName, editingDraft).then((ok) => {
         if (ok) cancelEdit();
       });
@@ -82,7 +83,7 @@ export function ModelTagManager({
               className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
               aria-label="关闭"
             >
-              <Icon name="x" className="h-4 w-4" />
+              <Icon data-icon="inline-start" name="x" className="size-4" />
             </Button>
           </div>
 
@@ -160,7 +161,7 @@ export function ModelTagManager({
                         // 否则两次提交会竞速（例如 Enter + blur 都触发，
                         // 第二个看到一个已重命名的标签而报 404）。
                         onBlur={() => cancelEdit()}
-                        className="bg-canvas-deep text-ink-bright min-w-0 flex-1 rounded-md border border-fuchsia-500/50 px-2 py-0.5 text-sm outline-none focus:border-fuchsia-400"
+                        className="bg-canvas-deep text-ink-bright border-primary/50 focus:border-primary min-w-0 flex-1 rounded-md border px-2 py-0.5 text-sm outline-none"
                       />
                     ) : (
                       <span
@@ -175,21 +176,29 @@ export function ModelTagManager({
                       <span className="bg-surface-2 text-ink-soft rounded-full px-2 py-0.5 text-[11px] tabular-nums">
                         {tag.count} 个工作流
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => void c.deleteTag(tag.name, tag.count)}
-                        disabled={isEditing}
-                        title={
+                      <Hint
+                        label={
                           tag.count > 0
                             ? `删除「${tag.name}」，会一并解除 ${tag.count} 个工作流的绑定`
                             : `删除「${tag.name}」`
                         }
-                        className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
-                        aria-label={`删除 ${tag.name}`}
+                        wrap
                       >
-                        <Icon name="trash" className="h-3.5 w-3.5" />
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => void c.deleteTag(tag.name, tag.count)}
+                          disabled={isEditing}
+                          className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
+                          aria-label={`删除 ${tag.name}`}
+                        >
+                          <Icon
+                            data-icon="inline-start"
+                            name="trash"
+                            className="size-3.5"
+                          />
+                        </Button>
+                      </Hint>
                     </div>
                   </div>
                 </div>

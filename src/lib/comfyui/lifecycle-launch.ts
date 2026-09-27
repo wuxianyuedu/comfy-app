@@ -12,7 +12,13 @@
  */
 
 import { errorText } from "~/lib/error-message";
-import "server-only";
+// §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批·汇聚点）。
+// 静态依赖里除 `../app-settings/app-settings.server`（`.server` 后缀、内部无
+// server-only、纯 Node 可加载）以外，其余全在 comfyui 前 8 批与 lib 层地基批
+// 中纯化——`~/lib/process/process-launch`（本批同批摘除）、`~/lib/core/logger`
+// （经 #1075 app-runtime-log + #1074 log-paths 通链）、`./launch-path` /
+// `./proc-detect` / `./desktop-instance` / `./lifecycle-exit`（叶模块批 #1056 /
+// #1077）、`~/lib/log/log-paths`（#1074）。登记进 `PURE_NODE_HOSTS`。
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";

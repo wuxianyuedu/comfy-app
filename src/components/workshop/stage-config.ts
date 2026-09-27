@@ -45,6 +45,12 @@ export interface StageViewContext {
   scriptReady: boolean;
   characterCount: number;
   sceneCount: number;
+  /**
+   * 镜头目标数 = 各场景 `scene.shotCount` 之和（导入时按它铺占位镜头，见
+   * `docs/guides/feature-workshop-flow.md`）。**0 表示剧本还没拆出场景**，
+   * 此时「还差几镜」没有可派生的答案，屏面就不给目标，只报已排数。
+   */
+  shotTarget: number;
   shotCount: number;
   imageDoneCount: number;
   clipDoneCount: number;
@@ -151,27 +157,42 @@ export function stagePrereq(
 
 export interface MissingItem {
   label: string;
-  need: number;
-  color: string;
+  /**
+   * 还差多少；`null` = **这一项没有可派生的目标**。
+   *
+   * 为什么允许 null：角色卡的数量由剧本里真正提到的人物决定、场景数由脚本解析结果决定，
+   * 两者都不是「目标」。此前这里写着固定 2 / 3 / 16（其中 16 是被删掉的「默认 16 镜占位」
+   * 留下的孤儿常数），于是右侧清单会对一个真实项目喊「还差 16 项」——一个编出来的缺口
+   * 比不报缺口更糟：用户会照着它去凑数。现在无目标可派生时只报已建数。
+   */
+  gap: number | null;
+  /** 这一项是否可以认为已就绪（决定清单上的完成态与颜色档）。 */
+  done: boolean;
 }
 
-/** 右侧「缺失素材」清单：达到目标数后 need 归零，视图显示为已完成。 */
+/**
+ * 右侧「缺失素材 / 下一步」清单。判据全部来自 `StageViewContext` 的真实计数，
+ * 唯一的「目标」是镜头数（由场景的 `shotCount` 汇总派生），不是常数。
+ * 颜色不在这里给：视图按 `done` 取语义档（规范 03 §3.6.2），本模块不再带色值。
+ */
 export function buildMissingSummary(ctx: StageViewContext): MissingItem[] {
+  const shotGap =
+    ctx.shotTarget > 0 ? Math.max(ctx.shotTarget - ctx.shotCount, 0) : null;
   return [
     {
-      label: "角色卡未建立",
-      need: Math.max(2 - ctx.characterCount, 0),
-      color: "#FF5C76",
+      label: "角色卡",
+      gap: null,
+      done: ctx.characterCount > 0,
     },
     {
-      label: "场景未规划",
-      need: Math.max(3 - ctx.sceneCount, 0),
-      color: "#FFB553",
+      label: "场景",
+      gap: null,
+      done: ctx.sceneCount > 0,
     },
     {
       label: "分镜脚本",
-      need: Math.max(16 - ctx.shotCount, 0),
-      color: "#5CA8FF",
+      gap: shotGap,
+      done: shotGap === null ? ctx.shotCount > 0 : shotGap === 0,
     },
   ];
 }

@@ -1,14 +1,17 @@
 "use client";
 
 import { subscribeAppEvent } from "~/lib/app-events";
-import { textHandler } from "~/lib/form-props";
+import { taskStatusLabel } from "~/lib/task-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { EmptyState } from "~/components/ui/empty-state";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue } from "~/lib/display-value";
 import { downloadText } from "~/lib/browser-io";
@@ -35,16 +38,6 @@ const TYPE_CHIP: Record<string, string> = {
   INPAINT: "局部重绘",
   HIRERES: "高清放大",
   VIDEO: "视频",
-};
-
-/* 状态文案（配色不走这里 —— 它是叠在缩略图上的角标，颜色由
- *`ui/status-badge` 按同一份状态 → 语义 token 映射给出，见规范 16 §16.2.4.5）。 */
-const STATUS_LABEL: Record<string, string> = {
-  SUCCEEDED: "已完成",
-  FAILED: "失败",
-  CANCELLED: "已取消",
-  QUEUED: "排队中",
-  RUNNING: "生成中",
 };
 
 function taskCover(images: ProjectOutputImage[]): ProjectOutputImage | null {
@@ -177,7 +170,7 @@ export function ProjectOutputs() {
         {/* ── Header ── */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h1 className="font-title text-ink-bright text-xl font-bold">
+            <h1 className="font-title u-title-page">
               {activeProject?.name ?? "未命名项目"}
             </h1>
             <span className="bg-primary/15 text-primary-strong rounded-full px-2.5 py-0.5 text-[11px] font-medium">
@@ -185,17 +178,14 @@ export function ProjectOutputs() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <select
+            <SelectMenu
               value={projectId}
-              onChange={textHandler(setProjectId)}
-              className="border-border-strong bg-subtle text-ink-soft rounded-lg border px-3 py-2 text-xs outline-none focus:border-violet-500/40"
-            >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id} className="bg-node">
-                  {project.name ?? "未命名项目"}
-                </option>
-              ))}
-            </select>
+              onChange={setProjectId}
+              options={projects.map((p) => p.id)}
+              labels={Object.fromEntries(
+                projects.map((p) => [p.id, p.name ?? "未命名项目"]),
+              )}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -208,6 +198,7 @@ export function ProjectOutputs() {
         </div>
 
         {/* ── Cover banner ── */}
+        {/* p71-allow:start brand violet/fuchsia · 封面横幅与项目徽章（非状态色），见 §3.6.1 */}
         <div className="relative mb-6 h-[180px] overflow-hidden rounded-2xl border border-violet-500/20">
           {cover ? (
             <MediaThumbnail
@@ -232,19 +223,17 @@ export function ProjectOutputs() {
             </p>
           </div>
         </div>
+        {/* p71-allow:end */}
 
         {/* ── Output grid ── */}
         {loading ? (
           <p className="text-ink-muted text-sm">加载中…</p>
         ) : outputs.length === 0 ? (
-          <div className="border-border-strong text-ink-muted grid min-h-[280px] place-items-center rounded-2xl border border-dashed">
-            <div className="text-center">
-              <p className="text-ink-soft text-lg font-medium">还没有产出</p>
-              <p className="mt-1 text-sm">
-                在画布里跑一次生成，结果会自动归档到本项目目录。
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            title="还没有产出"
+            description="在画布里跑一次生成，结果会自动归档到本项目目录。"
+            minHeightClass="min-h-[280px]"
+          />
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {outputs.map((output) => {
@@ -277,8 +266,9 @@ export function ProjectOutputs() {
                       </div>
                     )}
 
+                    {/* p71-allow:start brand violet/fuchsia · 视频产出播放按钮与类型徽章（非状态色） */}
                     {isVideoOut && (
-                      <span className="ring-border-strong absolute top-1/2 left-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2">
+                      <span className="ring-border-strong absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2">
                         <svg
                           width="24"
                           height="24"
@@ -295,9 +285,10 @@ export function ProjectOutputs() {
                         视频
                       </span>
                     )}
+                    {/* p71-allow:end */}
                     <StatusBadge
                       status={output.status}
-                      label={STATUS_LABEL[output.status] ?? output.status}
+                      label={taskStatusLabel(output.status)}
                       dot={false}
                       className="absolute top-2 left-2 px-2 py-0.5 text-[11px]"
                     />
@@ -330,6 +321,7 @@ export function ProjectOutputs() {
       >
         <SheetContent
           side="right"
+          aria-label={`产出 #${selected?.id.slice(-4) ?? ""}`}
           showCloseButton={false}
           className="gap-0 p-0"
           panelClassName="bg-node border-border-strong w-[380px] max-w-[90vw]"
@@ -353,7 +345,7 @@ export function ProjectOutputs() {
                   className="text-ink-muted hover:text-ink"
                   aria-label="关闭"
                 >
-                  <X size={16} />
+                  <X data-icon="inline-start" size={16} />
                 </Button>
               </div>
 
@@ -452,21 +444,24 @@ export function ProjectOutputs() {
               {/* footer actions */}
               <div className="border-border-strong border-t p-4">
                 <div className="flex gap-2">
-                  <Button
-                    variant="primary-solid"
-                    size="sm"
-                    onClick={handleCopy}
-                    className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
-                    title={
+                  <Hint
+                    label={
                       copyFailed ? copyFailureText() : "复制元数据到剪贴板"
                     }
                   >
-                    {copyFailed
-                      ? "复制失败"
-                      : copied.on
-                        ? "已复制 ✓"
-                        : "复制元数据"}
-                  </Button>
+                    <Button
+                      variant="primary-solid"
+                      size="sm"
+                      onClick={handleCopy}
+                      className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
+                    >
+                      {copyFailed
+                        ? "复制失败"
+                        : copied.on
+                          ? "已复制 ✓"
+                          : "复制元数据"}
+                    </Button>
+                  </Hint>
                   <Button
                     variant="outline"
                     size="sm"

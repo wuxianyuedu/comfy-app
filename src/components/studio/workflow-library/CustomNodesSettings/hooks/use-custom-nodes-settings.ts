@@ -28,35 +28,15 @@ import type {
   DiscoveredSubpkg,
   ParseProgress,
   ParseReport,
+  ParseStreamEvent,
   SettingsResp,
+  SettingsStreamEvent,
   SummaryPkg,
 } from "../types";
 
-/** 设置/解析进度流的一行 ndjson —— 仅本对话框消费的字段。 */
-interface SettingsStreamEvent {
-  type?: string;
-  parents?: string[];
-  parent?: string;
-  phase?: string;
-  msg?: string;
-  discovered?: number;
-  total?: number;
-  done?: number;
-  packages?: DiscoveredSubpkg[];
-  summary?: SettingsResp["summary"];
-  lastReport?: ParseReport | null;
-  byPath?: Record<string, SummaryPkg>;
-  message?: string;
-}
-
-/** 解析日志流的一行 ndjson。 */
-interface ParseStreamEvent {
-  type?: string;
-  level?: string;
-  msg?: string;
-  report?: ParseReport | null;
-  ok?: boolean;
-}
+/** 解析控制台日志的内存上限（规范 §2.1）：流式解析可能一次性吐出成百上千行，
+ * 无上限会泄漏内存并让面板重渲染变贵。 */
+const PARSE_LOG_MAX = 2000;
 
 type RowState = ReturnType<typeof deriveRowState>;
 
@@ -160,10 +140,15 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    * `ReferenceError: window is not defined`，`pnpm test` 因此随机非零退出，
    * 而用例层面全绿）。ISSUE #489。 */
   const aliveRef = useRef(true);
+  const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
+      if (progressHideTimerRef.current)
+        clearTimeout(progressHideTimerRef.current);
     };
   }, []);
 
@@ -208,6 +193,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         console_.scrollTop = Math.max(0, console_.scrollTop + targetTop - 8);
       });
     }
+    return undefined;
   }, [logs, parseBusy.busy, perPkgParsing]);
 
   // 解析开始或结束时，把对话框滚到日志控制台 —— 否则高个子包列表把日志推到折叠线
@@ -218,6 +204,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
+    return undefined;
   }, [parseBusy.busy, perPkgParsing, logs.length]);
   // 单包解析完成时也滚到日志：此刻新 report 追加、reloadFromServer() 重新填充列表。
   useEffect(() => {
@@ -230,6 +217,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
+    return undefined;
   }, [report, parseBusy.busy, perPkgParsing]);
 
   /** 从服务端拉取设置并写入本地 state。首个 await 之前不做同步 setState，因此可直接
@@ -311,24 +299,21 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
             setProgress((progress) => {
               // 用最新事件告知的值。total/done/discovered 仅当事件确实携带时才更新
               // （解析器每个有意义的 tick 都会发）；只带 msg 的事件不会重置计数器。
-              // 空串 parent 须保留上一值（之前是 ||）。
-              const evParent = typeof ev.parent === "string" ? ev.parent : "";
+              // 空串 parent 须保留上一值。
+              const evParent = ev.parent ?? "";
               const next = {
                 ...progress,
                 parent: evParent.length > 0 ? evParent : progress.parent,
               };
-              if (ev.phase === "queue") next.phase = "queue";
-              if (ev.phase === "scan") next.phase = "scan";
-              if (ev.phase === "hash") next.phase = "hash";
+              if (ev.phase) next.phase = ev.phase;
               if (ev.msg) next.msg = ev.msg;
-              if (typeof ev.discovered === "number")
-                next.discovered = ev.discovered;
-              if (typeof ev.total === "number") next.total = ev.total;
-              if (typeof ev.done === "number") next.done = ev.done;
+              if (ev.discovered !== undefined) next.discovered = ev.discovered;
+              if (ev.total !== undefined) next.total = ev.total;
+              if (ev.done !== undefined) next.done = ev.done;
               return next;
             });
           } else if (ev.type === "discover_done") {
-            if (typeof ev.parent === "string") {
+            if (ev.parent !== undefined) {
               discoveredByParent[ev.parent] = ev.packages ?? [];
             }
             // 这里不动包计数器 —— 解析器在 JSON 行之前已发出自己的最终 tick
@@ -344,7 +329,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
             byPath = ev.byPath ?? {};
           } else if (ev.type === "error") {
             const message =
-              typeof ev.message === "string" && ev.message.length > 0
+              ev.message !== undefined && ev.message.length > 0
                 ? ev.message
                 : "未知错误";
             setSaveErr("扫描失败：" + message);
@@ -364,7 +349,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       if (!aliveRef.current) return;
       setLoading(false);
       // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
-      setTimeout(() => {
+      if (progressHideTimerRef.current)
+        clearTimeout(progressHideTimerRef.current);
+      progressHideTimerRef.current = setTimeout(() => {
         if (!aliveRef.current) return;
         setProgress({
           phase: "",
@@ -440,10 +427,12 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         try {
           const obj = JSON.parse(line) as ParseStreamEvent;
           if (obj.type === "log") {
-            setLogs((prev) => [
-              ...prev,
-              { level: obj.level ?? "info", msg: obj.msg ?? "" },
-            ]);
+            setLogs((prev) =>
+              [
+                ...prev,
+                { level: obj.level ?? "info", msg: obj.msg ?? "" },
+              ].slice(-PARSE_LOG_MAX),
+            );
           } else if (obj.type === "done") {
             void onDone(obj.report ?? null, !!obj.ok);
           }

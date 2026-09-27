@@ -179,7 +179,13 @@ export function parseAnsiSegments(text: string): AnsiSegment[] {
     }
   };
 
-  const re = new RegExp(SGR_RE.source, "g");
+  /* 直接复用模块级的 `SGR_RE`（它本身就带 `g`），并先归零 `lastIndex`。
+   * 原先是 `new RegExp(SGR_RE.source, "g")` —— 本函数对**每一行**日志调用
+   * 一次，等于每行编译一次正则、再丢一个临时对象；日志面板一屏数百行且是
+   * 同步计算，这笔开销会直接压在渲染路径上。带 `g` 的实例要显式归零
+   * lastIndex（记录的是上次匹配停在哪），与本模块其它使用点同款写法。 */
+  const re = SGR_RE;
+  re.lastIndex = 0;
   let last = 0;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {

@@ -31,6 +31,7 @@
  * ───────────────────────────────────────────────────────────────────── */
 
 import type { ValidationError } from "~/lib/comfyui/validation";
+import { tailWindow } from "~/lib/page-window";
 
 /* StepLogEntry 从本模块再导出，让 ImageGenerationPanel 能同时拿到类型与
  * 缓存助手，而不必造成循环导入（面板 ↔ 缓存）。
@@ -62,6 +63,15 @@ export interface StepLogPanelState {
 }
 
 const MAX_ENTRIES = 256;
+
+/* 单个任务的日志行数上限。面板本来就只显示尾部 300 行（LOG_MODAL_MAX_ROWS），
+ * 再往前既看不到、也让每次 `[...prev.logs, entry]` 的拷贝一路变贵 ——
+ * 长跑任务（几分钟、上千行）下这点尤其明显。 */
+export const MAX_LOGS_PER_TASK = 2000;
+
+/* 去重只比对尾部若干条：日志按时间追加，重复的那条一定紧跟在它自己之后，
+ * 全量 `some` 让每条新日志都变成 O(n)，整个流就是 O(n²)。 */
+const DEDUPE_WINDOW = 64;
 
 const cache = new Map<string, StepLogPanelState>();
 
@@ -114,11 +124,25 @@ export function appendStepLog(
     validationErrors: null,
   };
   // 按 (时间, 消息) 去重 —— 与 ImageGenerationPanel 里的 SSE 去重口径一致。
-  if (prev.logs.some((log) => log.t === entry.t && log.msg === entry.msg)) {
-    return prev;
+  let duplicated = false;
+  for (
+    let index = Math.max(0, prev.logs.length - DEDUPE_WINDOW);
+    index < prev.logs.length;
+    index += 1
+  ) {
+    const known = prev.logs[index];
+    if (known?.t === entry.t && known?.msg === entry.msg) {
+      duplicated = true;
+      break;
+    }
   }
+  if (duplicated) return prev;
+
+  const logs = [...prev.logs, entry];
   const next: StepLogPanelState = {
-    logs: [...prev.logs, entry],
+    /* 尾部窗口走 `~/lib/page-window`（规范 16 §16.2.4.67）—— 与面板显示时的
+     * 取尾部 300 行是同一个出口，不在这里再写一个 `slice(-n)`。 */
+    logs: tailWindow(logs, MAX_LOGS_PER_TASK),
     validationErrors: prev.validationErrors,
   };
   touch(taskId, next);

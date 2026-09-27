@@ -29,6 +29,7 @@ import {
   createRgthreeGroupsStore,
   createNodeJsonViewerStore,
 } from "../workflow-editor/WorkflowStores";
+import { Hint } from "~/components/ui/hint";
 
 /* ── 兼容再导出：消费方统一从 ./wf-contexts 取以下符号 ── */
 export {
@@ -94,28 +95,29 @@ export function NodeIdChip({
   };
 
   return (
-    <Button
-      ref={ref}
-      variant="outline"
-      data-node-id-chip={nodeId}
-      data-variant={variant}
-      onClick={handleOpen}
-      onMouseDown={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-      onDoubleClick={(event) => event.stopPropagation()}
-      title={`查看节点 ${nodeId} 在工作流 JSON 中的原始数据`}
-      aria-label={`查看节点 #${nodeId} 的原始 JSON 数据`}
-      className={
-        variant === "subgraph"
-          ? "nodrag nopan group border-primary-400/40 bg-primary-500/10 text-primary-strong hover:border-primary-300/70 hover:bg-primary-500/25 focus:ring-primary-400/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold tracking-wider uppercase focus:ring-1 focus:outline-none"
-          : "nodrag nopan group border-info/45 bg-info/15 text-info-strong hover:border-info/70 hover:bg-info/25 focus:ring-info/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold focus:ring-1 focus:outline-none"
-      }
-    >
-      <span aria-hidden style={{ fontSize: 9, lineHeight: 1 }}>
-        🔍
-      </span>
-      <span>#{nodeId}</span>
-    </Button>
+    <Hint label={`查看节点 ${nodeId} 在工作流 JSON 中的原始数据`}>
+      <Button
+        ref={ref}
+        variant="outline"
+        data-node-id-chip={nodeId}
+        data-variant={variant}
+        onClick={handleOpen}
+        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
+        aria-label={`查看节点 #${nodeId} 的原始 JSON 数据`}
+        className={
+          variant === "subgraph"
+            ? "nodrag nopan group border-primary-400/40 bg-primary-500/10 text-primary-strong hover:border-primary-300/70 hover:bg-primary-500/25 focus:ring-primary-400/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold tracking-wider uppercase focus:ring-1 focus:outline-none"
+            : "nodrag nopan group border-info/45 bg-info/15 text-info-strong hover:border-info/70 hover:bg-info/25 focus:ring-info/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold focus:ring-1 focus:outline-none"
+        }
+      >
+        <span aria-hidden style={{ fontSize: 9, lineHeight: 1 }}>
+          🔍
+        </span>
+        <span>#{nodeId}</span>
+      </Button>
+    </Hint>
   );
 }
 

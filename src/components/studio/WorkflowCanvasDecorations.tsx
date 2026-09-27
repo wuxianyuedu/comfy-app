@@ -1,6 +1,6 @@
 "use client";
 /* 拆出来的画布装饰组件 —— 原本在 WorkflowCanvasEditor.tsx 里。 */
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { digitsOnly, textHandler } from "~/lib/form-props";
 import { clamp } from "~/lib/clamp";
 import {
@@ -12,6 +12,7 @@ import {
 import type { CanvasSettings } from "./canvas/WorkflowCanvasSettings";
 import { DEFAULT_CANVAS_SETTINGS } from "./canvas/WorkflowCanvasSettings";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { alphaText } from "~/lib/number-format";
 import {
@@ -146,6 +147,21 @@ export function ZoomIndicator({
     moved: boolean;
   } | null>(null);
   const justDraggedRef = useRef(false);
+  // 拖拽缩放期间挂到 window 的监听器；卸载时若拖拽尚未结束（鼠标按住未松手）
+  // 必须移除，否则泄漏到页面生命周期（规范 §8.5 / P7）。
+  const scrubListenersRef = useRef<{
+    onMove: (ev: MouseEvent) => void;
+    onUp: () => void;
+  } | null>(null);
+  useEffect(() => {
+    return () => {
+      const ls = scrubListenersRef.current;
+      if (ls) {
+        window.removeEventListener("mousemove", ls.onMove);
+        window.removeEventListener("mouseup", ls.onUp);
+      }
+    };
+  }, []);
 
   const pct = Math.round(zoom * 100);
 
@@ -184,12 +200,14 @@ export function ZoomIndicator({
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      scrubListenersRef.current = null;
       const st = dragRef.current;
       dragRef.current = null;
       setDragging(false);
       if (st?.moved) justDraggedRef.current = true;
       else if (st) beginEdit();
     };
+    scrubListenersRef.current = { onMove, onUp };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
@@ -209,29 +227,32 @@ export function ZoomIndicator({
           onCancel: () => setEditing(false),
         })}
         title="输入缩放百分比后回车"
-        className="bg-panel text-ink-bright z-base absolute top-3 right-3 h-7 w-16 rounded-md border border-purple-400/60 px-2 text-right text-[11px] font-medium tabular-nums shadow-lg outline-none"
+        className="bg-panel text-ink-bright z-base border-primary/60 absolute top-3 right-3 h-7 w-16 rounded-md border px-2 text-right text-[11px] font-medium tabular-nums shadow-lg outline-none"
       />
     );
   }
 
   return (
-    <Button
-      variant="outline"
-      onMouseDown={onScrubStart}
-      onClick={() => {
-        if (justDraggedRef.current) {
-          justDraggedRef.current = false;
-          return;
-        }
-        beginEdit();
-      }}
-      title="点击输入缩放倍数，或按住上下拖动调整"
-      className={`border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg backdrop-blur-sm select-none hover:border-white/25 ${
-        dragging ? "border-primary-400/50 cursor-grabbing" : "cursor-ns-resize"
-      }`}
-    >
-      {pct}%
-    </Button>
+    <Hint label="点击输入缩放倍数，或按住上下拖动调整">
+      <Button
+        variant="outline"
+        onMouseDown={onScrubStart}
+        onClick={() => {
+          if (justDraggedRef.current) {
+            justDraggedRef.current = false;
+            return;
+          }
+          beginEdit();
+        }}
+        className={`border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg backdrop-blur-sm select-none hover:border-white/25 ${
+          dragging
+            ? "border-primary-400/50 cursor-grabbing"
+            : "cursor-ns-resize"
+        }`}
+      >
+        {pct}%
+      </Button>
+    </Hint>
   );
 }
 

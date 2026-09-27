@@ -18,11 +18,11 @@ export default function Error({
 
   return (
     <div className="bg-bg flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
-      <div className="bg-primary/10 text-primary grid h-16 w-16 place-items-center rounded-2xl">
+      <div className="bg-primary/10 text-primary grid size-16 place-items-center rounded-2xl">
         <Icon name="alert" size={28} />
       </div>
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">页面出错了</h1>
+        <h1 className="u-title-page">页面出错了</h1>
         <p className="text-muted-foreground mt-2 max-w-md">
           发生了一个意外错误{error.digest ? `（${error.digest}）` : ""}
           。你可以重试，或返回首页。

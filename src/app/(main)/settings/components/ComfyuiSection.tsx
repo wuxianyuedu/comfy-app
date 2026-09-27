@@ -17,7 +17,9 @@ import {
   STATUS_TEXT_CLASS,
 } from "../settings-status-row-config";
 
-import { StatusButton, Card, Field } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { StatusButton, Field } from "./SettingsPrimitives";
+import { FieldLabel } from "~/components/ui/field";
 import { RuntimeLogBox } from "./RuntimeLogBox";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
@@ -59,7 +61,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
   const desktopManaged = !!c.comfyInstance?.desktopManaged;
 
   return (
-    <Card title="创作后端（ComfyUI）">
+    <SettingsCard title="创作后端（ComfyUI）">
       <Field
         label="ComfyUI 路径（源码根或桌面版实例根）"
         value={c.drafts.settings.comfyuiPath}
@@ -131,9 +133,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
             c.patchSettings({ comfyuiAutoStart: next === true })
           }
         />
-        <label htmlFor="comfyui-autostart" className="text-ink/80 text-sm">
+        <FieldLabel htmlFor="comfyui-autostart" className="text-ink/80 text-sm">
           提交任务时 ComfyUI 未运行则自动启动
-        </label>
+        </FieldLabel>
       </div>
       <div className="mb-4 flex items-center gap-2">
         <Checkbox
@@ -143,12 +145,12 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
             c.patchSettings({ autoSyncLocalWorkflow: next === true })
           }
         />
-        <label
+        <FieldLabel
           htmlFor="auto-sync-local-workflow"
           className="text-ink/80 text-sm"
         >
           查看本地文件工作流时自动同步最新内容
-        </label>
+        </FieldLabel>
       </div>
       <p className="text-muted-foreground -mt-2 mb-4 text-xs">
         关（默认）：进详情只提示「磁盘文件有更新」，需回工作流库点「同步」按钮才更新，
@@ -267,6 +269,6 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
       <StatusButton onClick={() => void c.savePrefs()} disabled={c.saving}>
         保存偏好
       </StatusButton>
-    </Card>
+    </SettingsCard>
   );
 }

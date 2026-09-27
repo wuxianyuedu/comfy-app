@@ -159,9 +159,20 @@ export function useTrainingStudio(): TrainingStudioController {
       await uploadBusy.run(() =>
         runAsyncAction(
           async () => {
-            for (const file of list) {
-              const name = await uploadDatasetImage(file);
-              setDataset((prev) => [...prev, { name, caption: "" }]);
+            const uploaded: DatasetItem[] = [];
+            try {
+              for (const file of list) {
+                const name = await uploadDatasetImage(file);
+                uploaded.push({ name, caption: "" });
+              }
+            } finally {
+              /* 失败即停，但**已成功的那几张要留下**：图已经在服务端了，连着丢掉
+               * 等于让用户白传一遍、还在服务端留下孤儿文件。仍然只在收尾时
+               * setState 一次（不是逐张），所以「N 次重渲染」的收益没丢 ——
+               * 批量化改的是渲染次数，不该顺手改掉失败语义。 */
+              if (uploaded.length > 0) {
+                setDataset((prev) => [...prev, ...uploaded]);
+              }
             }
           },
           {

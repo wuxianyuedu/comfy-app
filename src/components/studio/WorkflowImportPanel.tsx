@@ -9,6 +9,7 @@
 import { useMemo } from "react";
 import { textHandler } from "~/lib/form-props";
 
+import { Hint } from "~/components/ui/hint";
 import { Textarea } from "~/components/ui/textarea";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { FormField } from "~/components/ui/form-field";
@@ -76,26 +77,27 @@ export function WorkflowImportPanel({
       onDragLeave={onPanelDragLeave}
       onDrop={onPanelDrop}
       className={`border-border-strong bg-subtle mb-6 rounded-2xl border p-5 transition-colors ${
-        panelDragActive ? "border-violet-400/70 bg-violet-500/5" : ""
+        panelDragActive ? "border-primary/70 bg-primary/5" : ""
       }`}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-ink-bright text-sm font-semibold">
           导入 ComfyUI 工作流
         </h2>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          className="text-ink-muted hover:text-ink-soft"
-          title="关闭"
-        >
-          ✕
-        </Button>
+        <Hint label="关闭" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            className="text-ink-muted hover:text-ink-soft"
+          >
+            ✕
+          </Button>
+        </Hint>
       </div>
 
       {panelDragActive && (
-        <p className="text-ink-soft mb-3 rounded-lg border border-dashed border-violet-400/50 px-3 py-2 text-center text-xs">
+        <p className="text-ink-soft border-primary/50 mb-3 rounded-lg border border-dashed px-3 py-2 text-center text-xs">
           松开即可读取该 JSON 文件
         </p>
       )}
@@ -113,7 +115,7 @@ export function WorkflowImportPanel({
               value={importName}
               onChange={textHandler(setImportName)}
               placeholder="例如：胶片人像 _v2（留空则用文件名）"
-              className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
+              className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted focus:border-primary/40 w-full rounded-lg border px-3 py-2 text-sm outline-none"
             />
           )}
         </FormField>

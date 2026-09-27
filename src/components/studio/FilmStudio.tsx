@@ -5,11 +5,15 @@ import { textHandler } from "~/lib/form-props";
 import { ClipboardCheck, Redo2, Undo2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { Separator } from "~/components/ui/separator";
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { FormField } from "~/components/ui/form-field";
+import { FieldLabel } from "~/components/ui/field";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { ShotReviewDialog } from "~/components/agent-run/ShotReviewDialog";
 import { useFilmStudio } from "./hooks/use-film-studio";
@@ -134,55 +138,72 @@ export function FilmStudio() {
       {/* ── Top Toolbar ─────────────────────────────── */}
       <header className="border-border-subtle bg-panel/88 z-base relative flex shrink-0 items-center gap-3 border-b px-4 py-0 backdrop-blur-md">
         {/* Project name */}
-        <div className="flex items-center gap-2">
-          <span className="u-title">{c.title}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="font-title u-title-page min-w-0 truncate">
+            {c.title}
+          </h1>
           <span className="text-ink-fainter text-xs">· 视频成片工作室</span>
         </div>
 
         <div className="bg-surface-2 h-5 w-px" />
 
         {/* Undo / Redo */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleUndo}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
-          title="撤销"
-        >
-          <Undo2 size={16} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleRedo}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
-          title="重做"
-        >
-          <Redo2 size={16} />
-        </Button>
+        <Hint label="撤销" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleUndo}
+            className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
+          >
+            <Undo2 data-icon="inline-start" size={16} />
+          </Button>
+        </Hint>
+        <Hint label="重做" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleRedo}
+            className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
+          >
+            <Redo2 data-icon="inline-start" size={16} />
+          </Button>
+        </Hint>
 
         {/* Spacer */}
         <div className="flex-1" />
 
         {/* Play button */}
-        <Button
-          variant="primary-solid"
-          size="icon-lg"
-          onClick={handleTogglePlay}
-          className="rounded-xl shadow-sm hover:scale-[1.03]"
-          title={isPlaying ? "暂停" : "播放预览"}
-        >
-          {isPlaying ? (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="4" width="4" height="16" rx="1" />
-              <rect x="14" y="4" width="4" height="16" rx="1" />
-            </svg>
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          )}
-        </Button>
+        <Hint label={isPlaying ? "暂停" : "播放预览"}>
+          <Button
+            variant="primary-solid"
+            size="icon-lg"
+            onClick={handleTogglePlay}
+            className="rounded-xl shadow-sm hover:scale-[1.03]"
+          >
+            {isPlaying ? (
+              <svg
+                data-icon="inline-start"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <rect x="6" y="4" width="4" height="16" rx="1" />
+                <rect x="14" y="4" width="4" height="16" rx="1" />
+              </svg>
+            ) : (
+              <svg
+                data-icon="inline-start"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
+          </Button>
+        </Hint>
 
         <div className="w-3" />
 
@@ -239,15 +260,16 @@ export function FilmStudio() {
               </span>
             </div>
             {!isProjectSource && (
-              <Button
-                variant="primary"
-                size="icon-xs"
-                onClick={handleAddShot}
-                className="rounded-md"
-                title="新增镜头"
-              >
-                +
-              </Button>
+              <Hint label="新增镜头" accessibleName>
+                <Button
+                  variant="primary"
+                  size="icon-xs"
+                  onClick={handleAddShot}
+                  className="rounded-md"
+                >
+                  +
+                </Button>
+              </Hint>
             )}
           </div>
 
@@ -317,24 +339,29 @@ export function FilmStudio() {
                   {/* 项目镜头才给「退回让 AI 重做」入口（与画布镜头节点同源 requestShotRedo）。 */}
                   {isProjectSource && (
                     <>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => setReviewShot(shot)}
-                        title="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）"
-                        className="text-ink-soft hover:bg-primary/15 shrink-0"
+                      <Hint
+                        label="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）"
+                        accessibleName
                       >
-                        <ClipboardCheck />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => void c.redoShot(shot.id)}
-                        title="退回让 AI 重做这一镜"
-                        className="text-ink-soft hover:bg-primary/15 mr-1 shrink-0"
-                      >
-                        ↺
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => setReviewShot(shot)}
+                          className="text-ink-soft hover:bg-primary/15 shrink-0"
+                        >
+                          <ClipboardCheck data-icon="inline-start" />
+                        </Button>
+                      </Hint>
+                      <Hint label="退回让 AI 重做这一镜" accessibleName>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => void c.redoShot(shot.id)}
+                          className="text-ink-soft hover:bg-primary/15 mr-1 shrink-0"
+                        >
+                          ↺
+                        </Button>
+                      </Hint>
                     </>
                   )}
                 </div>
@@ -353,35 +380,39 @@ export function FilmStudio() {
             </span>
 
             {/* Play overlay */}
-            <Button
-              variant="ghost"
-              onClick={handleTogglePlay}
-              className="border-border-strong flex size-16 items-center justify-center rounded-full border bg-black/45 text-white shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
-              title={isPlaying ? "暂停" : "播放"}
-            >
-              {isPlaying ? (
-                <svg
-                  width="28"
-                  height="28"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <rect x="6" y="4" width="4" height="16" rx="1" />
-                  <rect x="14" y="4" width="4" height="16" rx="1" />
-                </svg>
-              ) : (
-                <svg
-                  width="28"
-                  height="28"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </Button>
+            <Hint label={isPlaying ? "暂停" : "播放"}>
+              <Button
+                variant="ghost"
+                onClick={handleTogglePlay}
+                className="border-border-strong flex size-16 items-center justify-center rounded-full border bg-black/45 text-white shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
+              >
+                {isPlaying ? (
+                  <svg
+                    data-icon="inline-start"
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <rect x="6" y="4" width="4" height="16" rx="1" />
+                    <rect x="14" y="4" width="4" height="16" rx="1" />
+                  </svg>
+                ) : (
+                  <svg
+                    data-icon="inline-start"
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
+              </Button>
+            </Hint>
 
             {/* 影片进度覆盖层（生成中） */}
+            {/* p71-allow:start brand 渐变 · 影片进度条 violet→fuchsia 双色（项目品牌视觉），见 §3.6.1 */}
             {c.film && running && (
               <div className="absolute right-0 bottom-0 left-0 bg-black/60 px-4 py-2.5 backdrop-blur-sm">
                 <ProgressBar
@@ -397,6 +428,7 @@ export function FilmStudio() {
                 />
               </div>
             )}
+            {/* p71-allow:end */}
 
             {/* 成片播放器（完成后） */}
             {c.film?.status === "DONE" && c.film.finalVideo && (
@@ -427,6 +459,7 @@ export function FilmStudio() {
             {/* Tracks container */}
             <div className="relative flex flex-col gap-1">
               {/* Playhead */}
+              {/* p71-allow:start timeline playhead 红 · 视频剪辑行业的播放头视觉惯例、非错误状态色；走 bg-destructive 会被误读成「这里出错了」 */}
               <div
                 className="z-base pointer-events-none absolute bottom-0 w-[2px] bg-red-400/80"
                 style={{
@@ -437,6 +470,7 @@ export function FilmStudio() {
               >
                 <div className="absolute -top-1 left-[-7px] h-[10px] w-4 rounded-sm bg-red-400/80" />
               </div>
+              {/* p71-allow:end */}
 
               {/* Video track */}
               <div className="bg-subtle flex h-11 items-center gap-2 rounded-md px-2">
@@ -466,7 +500,7 @@ export function FilmStudio() {
                   字幕轨
                 </span>
                 <div
-                  className="flex h-6 flex-1 items-center rounded bg-emerald-400/15 px-2.5 ring-1 ring-emerald-400/25 ring-inset"
+                  className="bg-success/15 ring-success/25 flex h-6 flex-1 items-center rounded px-2.5 ring-1 ring-inset"
                   style={{ width: "280px" }}
                 >
                   <span className="text-info-strong truncate text-[9px]">
@@ -531,7 +565,7 @@ export function FilmStudio() {
                     ),
                   ),
                 )}
-                className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:ring-1"
               />
             </FormField>
 
@@ -560,7 +594,7 @@ export function FilmStudio() {
                     ),
                   )
                 }
-                className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:ring-1"
               />
             </FormField>
 
@@ -601,35 +635,36 @@ export function FilmStudio() {
             <Separator className="bg-border-subtle" />
 
             {/* 镜头来源：统一项目镜头（工坊产出）/ 剧本自动分镜（自由文本）。
- 有活跃项目镜头时默认走项目；无镜头时项目项禁用。 */}
-            <div
-              className="flex items-center gap-1"
-              role="group"
+ 有活跃项目镜头时默认走项目；无镜头时项目项禁用。P77：走 ui/toggle-group
+ （单选、multiple=false），active 视觉由基元的 `data-[state=on]:bg-muted`
+ 统一持有，不再每处手写 variant=primary/ghost 对。 */}
+            <ToggleGroup
+              multiple={false}
+              value={[c.shotSource]}
+              onValueChange={(vals) => {
+                const next = vals[0];
+                if (typeof next === "string" && next !== c.shotSource) {
+                  c.setShotSource(next as "project" | "script");
+                }
+              }}
               aria-label="镜头来源"
+              className="gap-1"
             >
-              <Button
-                type="button"
-                variant={c.shotSource === "project" ? "primary" : "ghost"}
-                size="xs"
-                aria-pressed={c.shotSource === "project"}
+              <ToggleGroupItem
+                value="project"
                 disabled={!c.activeProjectId || c.projectShotCount === 0}
-                onClick={() => c.setShotSource("project")}
-                className="h-auto flex-1 rounded-lg"
+                className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs"
               >
                 当前项目镜头
                 {c.projectShotCount > 0 ? `（${c.projectShotCount}）` : ""}
-              </Button>
-              <Button
-                type="button"
-                variant={c.shotSource === "script" ? "primary" : "ghost"}
-                size="xs"
-                aria-pressed={c.shotSource === "script"}
-                onClick={() => c.setShotSource("script")}
-                className="h-auto flex-1 rounded-lg"
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="script"
+                className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs"
               >
                 剧本自动分镜
-              </Button>
-            </div>
+              </ToggleGroupItem>
+            </ToggleGroup>
 
             {c.shotSource === "project" ? (
               <p className="text-ink-fainter bg-canvas/60 border-border rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
@@ -659,22 +694,20 @@ export function FilmStudio() {
               label="视频工作流（工作流库）"
               labelClassName="text-ink-faint mb-1.5 text-[11px]"
             >
-              <select
+              <SelectMenu
                 value={c.videoWorkflowId}
-                onChange={textHandler(c.setVideoWorkflowId)}
-                className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
-              >
-                <option value="">
-                  {c.videoWorkflows.length
+                onChange={c.setVideoWorkflowId}
+                options={c.videoWorkflows.map((wf) => wf.id)}
+                labels={Object.fromEntries(
+                  c.videoWorkflows.map((wf) => [wf.id, wf.name]),
+                )}
+                placeholder={
+                  c.videoWorkflows.length
                     ? "选择视频工作流…"
-                    : "工作流库里还没有视频工作流"}
-                </option>
-                {c.videoWorkflows.map((wf) => (
-                  <option key={wf.id} value={wf.id}>
-                    {wf.name}
-                  </option>
-                ))}
-              </select>
+                    : "工作流库里还没有视频工作流"
+                }
+                fullWidth
+              />
               {!c.videoWorkflowId && (
                 <span className="text-ink-fainter mt-1 block text-[10.5px]">
                   没有内置视频工作流可回落 ——
@@ -688,33 +721,31 @@ export function FilmStudio() {
               label="首帧合成工作流（可选，工作流库）"
               labelClassName="text-ink-faint mb-1.5 text-[11px]"
             >
-              <select
+              <SelectMenu
                 value={c.imageWorkflowId}
-                onChange={textHandler(c.setImageWorkflowId)}
-                className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
-              >
-                <option value="">
-                  {c.imageWorkflows.length
+                onChange={c.setImageWorkflowId}
+                options={c.imageWorkflows.map((wf) => wf.id)}
+                labels={Object.fromEntries(
+                  c.imageWorkflows.map((wf) => [wf.id, wf.name]),
+                )}
+                placeholder={
+                  c.imageWorkflows.length
                     ? "不需要 / 未选择"
-                    : "工作流库里还没有图类工作流"}
-                </option>
-                {c.imageWorkflows.map((wf) => (
-                  <option key={wf.id} value={wf.id}>
-                    {wf.name}
-                  </option>
-                ))}
-              </select>
+                    : "工作流库里还没有图类工作流"
+                }
+                fullWidth
+              />
             </FormField>
 
             {/* Subtitle toggle */}
-            <label className="border-border bg-canvas/60 flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5">
+            <FieldLabel className="border-border bg-canvas/60 flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5">
               <span className="text-ink-field text-sm">烧录字幕</span>
               <Checkbox
                 checked={c.subtitleOn}
                 onCheckedChange={(checked) => c.setSubtitleOn(checked === true)}
-                className="accent-violet-500"
+                className="accent-primary"
               />
-            </label>
+            </FieldLabel>
 
             {/* BGM upload */}
             <div>
@@ -766,7 +797,7 @@ export function FilmStudio() {
 
       {/* ── Status Bar ──────────────────────────────── */}
       <footer className="border-border-subtle bg-panel-deep/95 z-base relative flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm">
-        <span className="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40" />
+        <span className="bg-success shadow-success/40 inline-block h-[7px] w-[7px] rounded-full shadow-sm" />
         <span className="text-ink-muted text-[11px]">
           ComfyUI 本地已连接 · Wan I2V 视频模型就绪 · GPU 可用
         </span>

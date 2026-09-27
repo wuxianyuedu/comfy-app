@@ -24,7 +24,11 @@
 // exit 事件。PowerShell 重定向写出的 stdout 是 UTF-16LE，直接按 utf-8 读会
 // 变乱码，这里提供 decodePowerShellOutput() 收尾。
 
-import "server-only";
+// §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）。同目录同族的
+// `kill-process-tree.ts` 就是这形态的原型；lifecycle-launch 静态引本模块做
+// spawn，只有本模块也摘掉 server-only、lifecycle-launch 才能在纯 Node 里加载。
+// 依赖：`child_process` / `fs` / `~/lib/core/logger`（经 app-runtime-log #1075
+// + log-paths #1074 通链，纯 Node 可加载） / `~/lib/with-timeout`（纯函数）。
 import { spawn, type ChildProcess } from "child_process";
 import { closeSync, openSync } from "fs";
 import { logger } from "~/lib/core/logger";

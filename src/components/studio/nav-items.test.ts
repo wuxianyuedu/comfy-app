@@ -14,6 +14,7 @@ const GLOBAL_IDS: WorkspaceView[] = [
   "home",
   "models",
   "history",
+  "queue",
   "train",
   "workflows",
 ];

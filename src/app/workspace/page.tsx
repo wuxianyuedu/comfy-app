@@ -51,6 +51,14 @@ const HistoryList = dynamic(
   () => import("~/components/studio").then((mod) => mod.HistoryList),
   { ssr: false },
 );
+/* 队列与运行：与历史同族（都在看「机器现在在干什么」），只在进入该视图时才拉。 */
+const QueueMonitor = dynamic(
+  () =>
+    import("~/components/studio/queue/QueueMonitor").then(
+      (mod) => mod.QueueMonitor,
+    ),
+  { ssr: false },
+);
 const TrainingStudio = dynamic(
   () => import("~/components/studio").then((mod) => mod.TrainingStudio),
   { ssr: false },
@@ -88,6 +96,7 @@ const WORKSPACE_VIEWS: WorkspaceView[] = [
   "works",
   "workshop",
   "history",
+  "queue",
   "train",
   "film",
   "workflows",
@@ -106,6 +115,9 @@ function writeLastView(view: WorkspaceView): void {
   if (typeof window === "undefined") return;
   sessionStorage.setItem(WS_VIEW_KEY, view);
 }
+
+/** 视图历史栈保留上限（P2：只去重不裁剪会无限增长）。 */
+const WORKSPACE_VIEW_HISTORY_MAX = 50;
 
 export default function WorkspacePage() {
   const router = useRouter();
@@ -132,7 +144,8 @@ export default function WorkspacePage() {
     setViewHistory((prev) => {
       const last = prev[prev.length - 1];
       if (last === view) return prev; // dedup
-      return [...prev, view];
+      // 历史栈只去重不裁剪会无限增长（P2）；保留最近一段即可，更早的用不到。
+      return [...prev, view].slice(-WORKSPACE_VIEW_HISTORY_MAX);
     });
     setViewMode(view);
     writeLastView(view);
@@ -320,6 +333,9 @@ export default function WorkspacePage() {
 
       case "history":
         return <HistoryList onOpenTask={handleOpenProject} />;
+
+      case "queue":
+        return <QueueMonitor onOpenSettings={openSettings} />;
 
       case "train":
         return <TrainingStudio onOpenSettings={openSettings} />;

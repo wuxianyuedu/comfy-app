@@ -7,7 +7,7 @@ import React from "react";
 import { readTextInput } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Textarea } from "~/components/ui/textarea";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
@@ -28,9 +28,9 @@ const TOOL_STATUS_LABEL: Record<AgentToolRun["status"], string> = {
 };
 
 const TOOL_STATUS_COLOR: Record<AgentToolRun["status"], string> = {
-  running: "bg-amber-400",
-  done: "bg-emerald-400",
-  error: "bg-red-400",
+  running: "bg-warning",
+  done: "bg-success",
+  error: "bg-destructive",
 };
 
 export function AgentOverlay({
@@ -75,11 +75,13 @@ export function AgentOverlay({
     >
       {/* Header */}
       <div className="border-border flex items-center gap-2 border-b px-4 py-3">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
+        {/* p71-allow:start brand 渐变 · 智能体头像 violet→fuchsia 双色（项目品牌视觉），单档 token 化会失去渐变识别度，见 §3.6.1 */}
+        <span className="flex size-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
           <Icon name="bot" size={13} className="text-white" />
         </span>
+        {/* p71-allow:end */}
         <div className="flex-1">
-          <h3 className="text-ink text-[13px] font-semibold">创作指挥 Agent</h3>
+          <h3 className="text-ink u-title">创作指挥 Agent</h3>
           <p className="text-muted-foreground text-[10px]">
             用对话指挥完整工坊流程
           </p>
@@ -91,7 +93,7 @@ export function AgentOverlay({
           className="text-muted-foreground hover:text-ink"
           aria-label="关闭 Agent"
         >
-          <Icon name="x" size={14} />
+          <Icon data-icon="inline-start" name="x" size={14} />
         </Button>
       </div>
 
@@ -138,7 +140,7 @@ export function AgentOverlay({
             if (msg.role === "user") {
               return (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl bg-violet-500/90 px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap text-white">
+                  <div className="bg-primary/90 max-w-[85%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap text-white">
                     {msg.content}
                   </div>
                 </div>
@@ -244,7 +246,7 @@ export function AgentOverlay({
           {busy ? (
             <Spinner className="size-3.5" />
           ) : (
-            <Icon name="arrowup" size={14} />
+            <Icon data-icon="inline-start" name="arrowup" size={14} />
           )}
         </Button>
       </div>
@@ -261,7 +263,7 @@ export function AgentFab({ onOpen }: { onOpen: () => void }) {
       className={`shadow-primary-500/20 fixed right-6 bottom-8 ${zClass("popup")} h-auto gap-2 rounded-full px-4 py-2.5 shadow-lg transition-transform hover:scale-105`}
       aria-label="打开创作指挥 Agent"
     >
-      <Icon name="bot" size={15} />
+      <Icon data-icon="inline-start" name="bot" size={15} />
       Agent
     </Button>
   );

@@ -19,16 +19,35 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}", "tests/**/*.test.{ts,tsx}"],
     globals: false,
     setupFiles: ["tests/setup.ts"],
-    /* 超时按「全量并行跑」而不是「单文件跑」给余量：本套件里有一批真扫全仓的
-     * 守卫用例（循环依赖 / 死导出 / 注释语言 / 主题 token…默认 5s / 10s 是按
-     * 单测的体量定的），单独跑 2~7s，全量并行时与其他 worker 抢 CPU 会翻几倍
-     * —— 此前它们在全量跑里按默认超时随机红（单跑全绿，无法归因）。30s 对
-     * 真挂死的用例也只是多等一会儿，换来的是全量跑的结果可归因。 */
-    testTimeout: 30_000,
+    /* 超时预算：vitest 的默认值（用例 5s / 钩子 10s）低于本仓库的实测下限。
+     *
+     * 串行隔离跑（`--no-file-parallelism`）的最慢单条用例已经是 5469ms
+     * （`client-bundle-node-builtins` 的全 `src/**`「use client」可达性 DFS），
+     * `db-schema-ready` 4770ms —— 一条贴着默认值、一条在默认值之上，
+     * 也就是**不开并行都会红**。全量并行时再乘一份争用系数：16 逻辑核上
+     * 约 10 个 worker，而门禁用例各条要 `execFileSync` 真起 Node / git /
+     * prettier 子进程，一轮实测 28 条报 `Test timed out in 5000ms`、
+     * 2 个文件报 `Hook timed out in 10000ms`（两个 theme 用例的 `beforeAll`
+     * 要现编一份 CSS，隔离跑 7.2s）。
+     *
+     * 20s = 最慢实测值 ×3.6；`it()` / `describe()` 上已有的显式预算
+     * （10s / 30s / 60s / 120s 那几处）优先级更高，不受这里影响。
+     * ⚠️ 这是**天花板不是目标**：用例慢到接近 20s 时该优化用例本身
+     * （收窄扫描面、复用子进程），别再往上调这个数 —— 那等于把
+     * 「挂死」的检出时间一起放大。 */
+    testTimeout: 20_000,
     hookTimeout: 30_000,
-    /* 16 核全开时重扫描用例（每条还要再起 node 子进程扫仓）会把自己挤到超时
-     * （实测 LogPanel 的 20s 在满载下也爆）；压到一半，全量墙钟多几十秒，
-     * 换每次跑的结果稳定。 */
+    /* 并发上限：16 逻辑核（约 8 物理核）上默认开 ~15 个 worker，而门禁用例每条
+     * 要再起 Node / git / prettier 子进程 —— 超订的那一份直接从「等 CPU」变成
+     * 「等子进程」，于是要测 5s 的用例排到 30s 以上。同一台机器、同一份代码的
+     * 三档实测（全量 437 文件）：
+     *   默认并发（15）→ 红 8 文件 / 18 用例，墙钟 461s
+     *   `maxWorkers: 8` → 红 4 文件 / 14 用例，墙钟 659s（**超时类红归零**）
+     *   `--no-file-parallelism` → 与上一档同集合，用于给单条红定性
+     * 剩下那 14 条全是 `AssertionError`（启动器 / 壳 / 产物三线），没有一条是
+     * 争用假红 —— 也就是这一档已经把「并发导致的不可归因红」买干净了。
+     * 代价写清楚：墙钟 +43%。买的是「隔离重跑一遍再定性」这件事不再需要发生
+     * （见规范 §11.13），以及增量测试层不会把别线的红算到本次提交头上。 */
     maxWorkers: 8,
     // 覆盖率棘轮策略(2026-08-29):已覆盖目录按真实水平设硬门槛,随测试增长上调;
     // 新目录覆盖后加入下表。全库 3% 的整体数字仅作信息参考,不设全局门槛。
@@ -135,6 +154,7 @@ export default defineConfig({
          *   · `app-events` 只有在 jsdom 下才走得到真实分支（`window` 的
          *     存在性判据），用例自带 `@vitest-environment jsdom`。 */
         "src/lib/clamp.ts",
+        "src/lib/collections.ts",
         "src/lib/upper-token.ts",
         "src/lib/app-events.ts",
         /* 本批三条新出口（规范 16 §16.2.4.66 ~ §16.2.4.68）。
@@ -151,6 +171,12 @@ export default defineConfig({
         "src/components/ui/use-reentrancy-lock.ts",
         "src/components/ui/use-refresh-ticket.ts",
         "src/components/ui/use-busy-action.ts",
+        /* P82 的合规出口（悬停提示收成一处，规范 16 §16.2.3 / §12.18 补地基）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/components/ui/hint.tsx",
+        /* `ui/toggle-group` 的选中档三层是本仓库的定制（规范 16 §16.8），
+         * 有用例钉住就得进门槛。同款 **两处同批改**。 */
+        "src/components/ui/toggle-group.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -715,6 +741,12 @@ export default defineConfig({
           statements: 100,
           branches: 100,
         },
+        "src/lib/collections.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         "src/lib/upper-token.ts": {
           lines: 100,
           functions: 100,
@@ -886,6 +918,25 @@ export default defineConfig({
           branches: 85,
         },
         "src/components/ui/use-image-zoom.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* P82 出口 `hint.tsx` —— 实测满档：三条判据分支（空 label 不渲染 /
+         * `accessibleName` 补名 / 子元素已有 `aria-label` 不覆盖）各有用例，
+         * 外加「render 接管后 onClick 与 disabled 不丢」「插锚点时提示挂在
+         * 锚点上（禁用按钮的说明仍要弹得出）」两条形态回归。 */
+        "src/components/ui/hint.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* `ui/toggle-group` 的三条用例：选中档三层（描边 / 字重 / 抬层）在
+         * `data-[pressed]:*` 上、悬停档保持官方版的 `bg-muted`（两条一起才说明
+         * 「不是靠改悬停解决的」）、`aria-pressed` 仍由基元持有。实测满档。 */
+        "src/components/ui/toggle-group.tsx": {
           lines: 100,
           functions: 100,
           statements: 100,

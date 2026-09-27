@@ -508,14 +508,30 @@ fn strip_ansi(text: &str) -> String {
   out
 }
 
+/// 读文件尾部 `max_bytes` 字节：`seek` 到尾部再读，不整读文件。
+///
+/// 日志追加不轮转、跨运行累积，而启动页面板每 800ms 轮询一次 ——
+/// `std::fs::read` 整文件读入的成本随历史线性变贵。返回
+/// `(字节, 是否发生了截断)`，截断时调用方照旧丢弃不完整的首行。
+fn read_tail_bytes(path: &std::path::Path, max_bytes: usize) -> Option<(Vec<u8>, bool)> {
+  use std::io::{Read, Seek, SeekFrom};
+  let mut file = std::fs::File::open(path).ok()?;
+  let len = file.metadata().ok()?.len() as usize;
+  let truncated = len > max_bytes;
+  let start = if truncated { len - max_bytes } else { 0 };
+  file.seek(SeekFrom::Start(start as u64)).ok()?;
+  let mut buf = Vec::with_capacity(len - start);
+  file.read_to_end(&mut buf).ok()?;
+  Some((buf, truncated))
+}
+
 /// 读取日志文件尾部：max_bytes 截断 + max_lines 限行，去 ANSI，失败返回 None。
 fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> Option<String> {
-  let data = std::fs::read(path).ok()?;
+  let (data, truncated) = read_tail_bytes(path, max_bytes)?;
   if data.is_empty() {
     return Some(String::new());
   }
-  let start = data.len().saturating_sub(max_bytes);
-  let text = String::from_utf8_lossy(&data[start..]);
+  let text = String::from_utf8_lossy(&data);
   let plain = strip_ansi(&text);
   let mut lines: Vec<&str> = plain
     .lines()
@@ -524,7 +540,7 @@ fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> 
     //（PS>TerminatingError(...)），对「执行到哪一步」毫无信息量，直接滤掉
     .filter(|l| !l.starts_with("PS>TerminatingError"))
     .collect();
-  if start > 0 && !lines.is_empty() {
+  if truncated && !lines.is_empty() {
     lines.remove(0); // 丢弃被截断的不完整首行
   }
   if lines.len() > max_lines {
@@ -1287,6 +1303,9 @@ fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
   // 壳自持日志到 <项目根>/log/shell/shell.log——standalone 双击无 launcher 重定向，
   // 壳若在 launcher 之外崩溃仍有日志可查（launch-and-build.md §4：按子系统分区）。
   // 插件自带 KeepOne 轮转，避免文件无限增长。
+  // 时区固定 UseLocal：插件的默认策略是 UTC（`DEFAULT_TIMEZONE_STRATEGY`），
+  // 壳 stderr 被 launcher 重定向进 log/launcher/ 后面板直接展示——UTC 会让
+  // 同一份面板里的行与其余本地时钟的行差 8 小时。
   let mut targets = vec![
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
@@ -1300,6 +1319,7 @@ fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
   }
   tauri_plugin_log::Builder::new()
     .level(log::LevelFilter::Info)
+    .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
     .targets(targets)
     .build()
 }
@@ -1307,8 +1327,10 @@ fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
 #[cfg(debug_assertions)]
 fn build_log_plugin(_project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
   // dev 模式：壳日志由 launcher 把 stderr 重定向进 log/launcher/，无需壳自持文件。
+  // 时区同样固定 UseLocal（理由见 release 分支的注释）。
   tauri_plugin_log::Builder::new()
     .level(log::LevelFilter::Info)
+    .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
     .targets([
       tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
       tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),

@@ -4,10 +4,13 @@ import { useState, type CSSProperties } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { textHandler } from "~/lib/form-props";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Spinner } from "~/components/ui/page-loading";
+import { FieldLabel } from "~/components/ui/field";
+import { Spinner } from "~/components/ui/spinner";
+import { EmptyState } from "~/components/ui/empty-state";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
 import { useModelFolderConfig } from "./hooks/use-model-folder-config";
@@ -34,7 +37,7 @@ export function ModelLibrary() {
       <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-title text-ink text-xl font-bold">模型库</h1>
+            <h1 className="font-title u-title-page">模型库</h1>
             <p className="text-ink-muted mt-1 text-sm">
               本机 ComfyUI 可用模型，按扫描目录分类 ——
               每个目录即一种独立的模型类型。
@@ -46,7 +49,7 @@ export function ModelLibrary() {
               onClick={() => c.setConfigOpen(true)}
               className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-2"
             >
-              <Icon name="settings" size={16} />
+              <Icon data-icon="inline-start" name="settings" size={16} />
               模型目录配置
             </Button>
             <input
@@ -80,24 +83,21 @@ export function ModelLibrary() {
         {c.loading ? (
           <p className="text-ink-muted text-sm">加载中…</p>
         ) : c.filtered.length === 0 ? (
-          <div className="border-border text-ink-muted grid min-h-[300px] place-items-center rounded-2xl border border-dashed">
-            <div className="text-center">
-              <p className="text-ink-strong text-lg font-medium">
-                模型库还没有内容
-              </p>
-              <p className="mt-1 max-w-md text-sm">
-                没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。
-              </p>
+          <EmptyState
+            title="模型库还没有内容"
+            description="没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。"
+            minHeightClass="min-h-[300px]"
+            action={
               <Button
                 variant="primary"
                 onClick={() => c.setConfigOpen(true)}
                 className="mt-4 h-auto gap-1.5 rounded-lg px-4 py-2"
               >
-                <Icon name="settings" size={16} />
+                <Icon data-icon="inline-start" name="settings" size={16} />
                 去配置目录
               </Button>
-            </div>
-          </div>
+            }
+          />
         ) : (
           // 紧凑列表 —— 每行是 [类型药丸][文件名][大小]。
           // 旧的卡片栅格（4 列 + 28px 占位图标 + 重复的 fileName）
@@ -310,7 +310,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright rounded-lg"
               aria-label="关闭"
             >
-              <Icon name="close" size={18} />
+              <Icon data-icon="inline-start" name="close" size={18} />
             </Button>
           </div>
 
@@ -339,7 +339,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               {c.scanning ? (
                 <Spinner className="size-3.5" />
               ) : (
-                <Icon name="shuffle" size={14} />
+                <Icon data-icon="inline-start" name="shuffle" size={14} />
               )}
               {c.scanning ? "扫描中…" : "重新扫描"}
             </Button>
@@ -353,7 +353,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               placeholder="搜索目录名…"
               className="border-border bg-subtle text-ink-bright flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
             />
-            <label className="text-ink-faint flex shrink-0 cursor-pointer items-center gap-2 text-xs">
+            <FieldLabel className="text-ink-faint flex shrink-0 cursor-pointer items-center gap-2 text-xs">
               <Checkbox
                 checked={c.onlyEnabled}
                 onCheckedChange={(checked) =>
@@ -362,7 +362,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                 className="border-border-strong bg-surface-2 text-primary-strong focus:ring-primary/40 size-3.5 rounded"
               />
               仅显示已启用
-            </label>
+            </FieldLabel>
           </div>
 
           {/* list */}
@@ -370,13 +370,14 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
             {c.loading ? (
               <p className="text-ink-muted text-sm">加载中…</p>
             ) : c.totalCount === 0 ? (
-              <div className="border-border text-ink-muted grid min-h-[160px] place-items-center rounded-xl border border-dashed">
-                <p className="text-sm">
-                  {c.comfyReachable
+              <EmptyState
+                description={
+                  c.comfyReachable
                     ? "ComfyUI 中没有可识别的模型目录。"
-                    : "未连接 ComfyUI；请先启动本地 ComfyUI。"}
-                </p>
-              </div>
+                    : "未连接 ComfyUI；请先启动本地 ComfyUI。"
+                }
+                minHeightClass="min-h-[160px]"
+              />
             ) : (
               <>
                 {c.enabledRows.length > 0 && (
@@ -460,7 +461,7 @@ function FolderConfigRow({
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-ink-bright) font-mono text-sm">
+            <span className="text-ink-bright font-mono text-sm">
               {row.folder}
             </span>
             <span
@@ -494,20 +495,21 @@ function FolderConfigRow({
               onClick={enableFromAvailable}
               className="h-auto gap-1 rounded-lg px-3 py-1.5"
             >
-              <Icon name="plus" size={12} />
+              <Icon data-icon="inline-start" name="plus" size={12} />
               启用
             </Button>
           )}
           {row.hasConfig && (
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={remove}
-              className="text-ink-muted hover:bg-surface-2 hover:text-ink-strong h-auto rounded-md px-2 py-1"
-              title="删除配置（不再扫描）"
-            >
-              删除
-            </Button>
+            <Hint label="删除配置（不再扫描）">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={remove}
+                className="text-ink-muted hover:bg-surface-2 hover:text-ink-strong h-auto rounded-md px-2 py-1"
+              >
+                删除
+              </Button>
+            </Hint>
           )}
         </div>
       </div>

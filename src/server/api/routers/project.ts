@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  authedProcedure,
+  rateLimitedProcedure,
+} from "~/server/api/trpc";
 import { projectRepository, taskRepository } from "~/lib/core/repository";
 import { asRecord } from "~/lib/is-record";
 
@@ -63,7 +67,7 @@ export const projectRouter = createTRPCRouter({
     }),
 
   /* DELETE /api/projects/[id] —— 删除 */
-  delete: authedProcedure
+  delete: rateLimitedProcedure
     .input(z.object({ projectId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await projectRepository.deleteForUser(ctx.user.id, input.projectId);
@@ -73,7 +77,11 @@ export const projectRouter = createTRPCRouter({
   /* GET /api/projects/[id]/outputs —— 读 */
   outputs: authedProcedure
     .input(z.object({ projectId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      const project = await projectRepository.findById(input.projectId);
+      if (project?.userId !== ctx.user.id) {
+        throw new Error("Project not found");
+      }
       const tasks = await taskRepository.findByProjectIdWithImages(
         input.projectId,
       );

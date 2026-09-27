@@ -306,10 +306,10 @@ export function ScriptMarkdownEditor({
       {/* Header */}
       <header className="border-border flex h-14 items-center justify-between border-b px-5">
         <div className="flex items-center gap-3">
-          <span className="bg-primary/15 text-primary grid h-8 w-8 place-items-center rounded-lg">
+          <span className="bg-primary/15 text-primary grid size-8 place-items-center rounded-lg">
             <FileText size={16} />
           </span>
-          <h2 className="text-ink-bright text-[15px] font-semibold">{title}</h2>
+          <h2 className="text-ink-bright u-title">{title}</h2>
         </div>
         <Button
           variant="ghost"
@@ -318,7 +318,7 @@ export function ScriptMarkdownEditor({
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
           aria-label="关闭"
         >
-          <X size={18} />
+          <X data-icon="inline-start" size={18} />
         </Button>
       </header>
 
@@ -376,7 +376,7 @@ export function ScriptMarkdownEditor({
           variant="primary-solid"
           size="xs"
           onClick={onSave}
-          className="shadow-primary-500/20 h-auto rounded-lg px-5 py-2 shadow-lg"
+          className="h-auto rounded-lg px-5 py-2"
         >
           保存
         </Button>

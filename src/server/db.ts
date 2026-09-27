@@ -27,6 +27,7 @@ import path from "node:path";
 import { env } from "~/env";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
+import { sql } from "drizzle-orm";
 import * as schema from "./db/schema";
 
 /** Fallback DB file when `DATABASE_URL` carries no path (relative to CWD).
@@ -92,4 +93,20 @@ if (env.NODE_ENV !== "production") globalForDb.db = db;
  */
 export function closeDb(): void {
   client.close();
+}
+
+/** Liveness probe for the health route (keeps the route off `db` / `orm`
+ *  directly, see standards 1 1.10). Same `SELECT 1` the route used to run.
+ *
+ *  It **returns the promise** and callers must await it: the driver went async
+ *  with the libsql migration, so an un-awaited probe reports "db: up" for a
+ *  database that is actually broken (the route answers 200 while the rejection
+ *  floats unserved). That is the one thing an external probe must never do.
+ *
+ *  Kept ASCII on purpose: this module is in the Next build graph and gets
+ *  rendered by `next-code-frame`, which slices the offending line by byte --
+ *  a multibyte char makes the Rust side panic off a char boundary and kills
+ *  the whole build (AGENTS hard rule 16 / standards 12 12.4.6). */
+export function pingDatabase(): Promise<unknown> {
+  return db.run(sql`select 1`);
 }

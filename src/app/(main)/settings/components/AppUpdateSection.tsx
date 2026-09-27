@@ -9,14 +9,15 @@
 
 import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 
-import { Card, StatusButton } from "./SettingsPrimitives";
+import { SettingsCard } from "~/components/ui/settings-card";
+import { StatusButton } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
   return (
-    <Card title="应用更新">
+    <SettingsCard title="应用更新">
       {!c.appUpdate.inShell ? (
         <p className="text-muted-foreground text-sm">
           当前运行在浏览器 / 开发模式，非桌面壳内，无法检测应用更新。
@@ -79,18 +80,23 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
             <div className="mt-4">
               <div className="border-border bg-surface-1 h-2 w-full overflow-hidden rounded-full border">
                 <div
-                  className="bg-primary h-full rounded-full transition-[width]"
+                  className="bg-primary h-full rounded-full transition-transform"
                   style={{
-                    width: c.appUpdate.progress.total
-                      ? `${Math.min(
-                          100,
-                          Math.round(
-                            (c.appUpdate.progress.downloaded /
-                              c.appUpdate.progress.total) *
-                              100,
-                          ),
-                        )}%`
-                      : "40%",
+                    /* 用 translateX 代替 width 动画：只触发合成层、不引发重排
+                     * （§2.7 布局属性动画）。轨道 overflow-hidden 把右侧裁成圆角，
+                     * 可见左端仍是填充自身的圆角。 */
+                    transform: `translateX(${
+                      (c.appUpdate.progress.total
+                        ? Math.min(
+                            100,
+                            Math.round(
+                              (c.appUpdate.progress.downloaded /
+                                c.appUpdate.progress.total) *
+                                100,
+                            ),
+                          )
+                        : 40) - 100
+                    }%)`,
                   }}
                 />
               </div>
@@ -105,6 +111,6 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
           )}
         </>
       )}
-    </Card>
+    </SettingsCard>
   );
 }

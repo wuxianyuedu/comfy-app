@@ -64,11 +64,11 @@ describe("全部参数表（「浏览全部参数」那一块）", () => {
       "negative",
       "size",
       "duration",
+      /* #942 抽卡纠偏起，种子是内置预制口之一（排在时长之后）。 */
+      "seed",
       "reference-image",
       "first-frame",
       "last-frame",
-      /* #942 抽卡纠偏起，种子是第 8 个内置预制口。 */
-      "seed",
     ]);
     expect(
       catalog.filter((item) => item.added).map((item) => item.type),

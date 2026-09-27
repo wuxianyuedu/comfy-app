@@ -32,9 +32,9 @@ import {
 } from "../canvas/WorkflowCanvasSettings";
 import {
   WFStoresProvider,
-  getIOEditApi,
-  getRgthreeApi,
-  getViewerApi,
+  useIOEditApi,
+  useRgthreeApi,
+  useViewerApi,
   useIOEditStore,
   selectIoEditMode,
   selectWorkflowIO,
@@ -201,7 +201,7 @@ interface WFStoresHelper {
   viewer: ReturnType<typeof createNodeJsonViewerStore>;
 }
 
-/* 内层：全部既有逻辑。经 getIOEditApi/getRgthreeApi/getViewerApi 直读直写
+/* 内层：全部既有逻辑。经 useIOEditApi/useRgthreeApi/useViewerApi 直读直写
  * store（hook 在 <WFStoresProvider> 之下才合法，故体逻辑用 *Api 访问）。 */
 function WorkflowEditorBody({
   workflowId,
@@ -212,9 +212,9 @@ function WorkflowEditorBody({
   onClose: () => void;
   onSave?: () => void;
 }) {
-  const ioApi = getIOEditApi();
-  const rgthreeApi = getRgthreeApi();
-  const viewerApi = getViewerApi();
+  const ioApi = useIOEditApi();
+  const rgthreeApi = useRgthreeApi();
+  const viewerApi = useViewerApi();
   const [detail, setDetail] = useState<WorkflowDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

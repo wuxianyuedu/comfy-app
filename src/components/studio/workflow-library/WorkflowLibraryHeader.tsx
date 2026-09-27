@@ -53,9 +53,7 @@ export function WorkflowLibraryHeader({
 }: WorkflowLibraryHeaderProps) {
   return (
     <div className="border-border-subtle flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-5 py-2.5">
-      <h1 className="font-title text-ink shrink-0 text-lg font-bold">
-        工作流库
-      </h1>
+      <h1 className="font-title u-title-page shrink-0">工作流库</h1>
 
       {/* 紧凑筛选下拉：紧跟标题右侧，组内不换行（三个下拉是一组，拆行会错位） */}
       <div
@@ -81,7 +79,7 @@ export function WorkflowLibraryHeader({
           onClick={onToggleImport}
           className={`${HEADER_ACTION_BTN} btn-gradient shadow-primary-500/20 hover:shadow-primary-500/30 text-white shadow-lg`}
         >
-          <FolderInput size={13} />
+          <FolderInput data-icon="inline-start" size={13} />
           导入工作流
         </Button>
         <ModeContractSettings />

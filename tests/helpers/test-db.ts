@@ -36,6 +36,8 @@ const jsonColumns = new Set<string>([
   "resultImages",
   "logs",
   "validationErrors",
+  "execPayload",
+  "progressNode",
   "paramMap",
   "workflowIO",
   "rawJson",
@@ -118,7 +120,7 @@ CREATE TABLE IF NOT EXISTS task (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, type TEXT NOT NULL, prompt TEXT NOT NULL, negativePrompt TEXT,
   params TEXT NOT NULL, workflowName TEXT NOT NULL, workflowSnapshot TEXT, projectId TEXT, referenceImages TEXT,
   status TEXT NOT NULL DEFAULT 'QUEUED', promptId TEXT, progress INTEGER NOT NULL DEFAULT 0, resultImages TEXT,
-  logs TEXT, error TEXT, validationErrors TEXT, createdAt TEXT NOT NULL, finishedAt TEXT
+  logs TEXT, error TEXT, validationErrors TEXT, createdAt TEXT NOT NULL, finishedAt TEXT, claimedBy TEXT, execPayload TEXT, progressNode TEXT
 );
 CREATE TABLE IF NOT EXISTS taskImage (
   id TEXT PRIMARY KEY, taskId TEXT NOT NULL, localPath TEXT NOT NULL, mediaType TEXT NOT NULL DEFAULT 'image',
@@ -229,7 +231,7 @@ function isDateColumn(col: string): boolean {
   return col.endsWith("At") && col !== "sourceMtime" && col !== "sortIndex";
 }
 
-function parseRow(table: string, row: Record<string, unknown>): Row {
+function parseRow(_table: string, row: Record<string, unknown>): Row {
   const out: Row = { ...row };
   for (const [k, v] of Object.entries(out)) {
     if (v != null && jsonColumns.has(k) && typeof v === "string") {

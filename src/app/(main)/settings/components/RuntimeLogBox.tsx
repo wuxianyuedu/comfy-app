@@ -17,11 +17,12 @@
  */
 
 import { useRef, useState, type ReactNode } from "react";
-import { textHandler } from "~/lib/form-props";
 import { Maximize2, Minimize2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { StatusDot } from "~/components/ui/status-dot";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { FullScreenDialog } from "~/components/ui/fullscreen-dialog";
 import { formatSessionLabel } from "~/lib/log/log-sessions";
@@ -71,16 +72,17 @@ export function RuntimeLogBox({
             follow={follow}
             onFollowChange={setFollow}
             trailing={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setFullscreen(true)}
-                title="全屏查看"
-                aria-label="全屏查看"
-                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-              >
-                <Maximize2 size={14} />
-              </Button>
+              <Hint label="全屏查看">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setFullscreen(true)}
+                  aria-label="全屏查看"
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                >
+                  <Maximize2 data-icon="inline-start" size={14} />
+                </Button>
+              </Hint>
             }
           />
           <LogBody
@@ -107,16 +109,17 @@ export function RuntimeLogBox({
           follow={follow}
           onFollowChange={setFollow}
           trailing={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setFullscreen(false)}
-              title="退出全屏"
-              aria-label="退出全屏"
-              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-            >
-              <Minimize2 size={16} />
-            </Button>
+            <Hint label="退出全屏">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setFullscreen(false)}
+                aria-label="退出全屏"
+                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+              >
+                <Minimize2 data-icon="inline-start" size={16} />
+              </Button>
+            </Hint>
           }
         />
         <LogBody
@@ -182,19 +185,16 @@ function LogToolbar({
       <div className="flex shrink-0 items-center gap-2">
         {/* 只有一次启动时不给下拉：一个选不出别的东西的下拉只是噪声。 */}
         {log.sessions.length > 1 && (
-          <select
+          <SelectMenu
             value={log.sessionId ?? ""}
-            onChange={textHandler(log.selectSession)}
+            onChange={log.selectSession}
+            options={log.sessions.map((s) => s.id)}
+            labels={Object.fromEntries(
+              log.sessions.map((s) => [s.id, formatSessionLabel(s)]),
+            )}
             aria-label="切换要查看的启动"
-            title="切换要查看的启动"
-            className="border-border bg-surface-2 text-ink focus:border-primary max-w-55 truncate rounded-md border px-2 py-0.5 text-[11px] outline-none"
-          >
-            {log.sessions.map((session) => (
-              <option key={session.id} value={session.id}>
-                {formatSessionLabel(session)}
-              </option>
-            ))}
-          </select>
+            className="max-w-55 text-[11px]"
+          />
         )}
         {!follow && (
           <Button

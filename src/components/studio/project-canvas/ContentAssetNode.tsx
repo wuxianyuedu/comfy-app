@@ -3,6 +3,7 @@
 import React from "react";
 import { textHandler } from "~/lib/form-props";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -69,21 +70,22 @@ export function ContentAssetBody({
       <div className="relative">
         <Textarea
           ref={textareaRef}
-          className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 h-[260px] w-full resize-none rounded-xl border px-3 py-2.5 text-[12px] leading-relaxed transition-colors focus-visible:border-violet-500/40"
+          className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 focus-visible:border-primary/40 h-[260px] w-full resize-none rounded-xl border px-3 py-2.5 text-[12px] leading-relaxed transition-colors"
           value={data.content ?? ""}
           placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
           onChange={textHandler((content) => onPatch({ content }))}
         />
-        <Button
-          variant="ghost"
-          size="icon-lg"
-          onClick={() => textareaRef.current?.focus()}
-          title="编辑文本"
-          className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
-          style={{ background: accent }}
-        >
-          <Icon name="pen" size={16} />
-        </Button>
+        <Hint label="编辑文本" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            onClick={() => textareaRef.current?.focus()}
+            className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
+            style={{ background: accent }}
+          >
+            <Icon data-icon="inline-start" name="pen" size={16} />
+          </Button>
+        </Hint>
       </div>
     );
   }
@@ -160,7 +162,7 @@ export function ContentAssetBody({
           onMouseDown={(event) => event.stopPropagation()}
           className={`nodrag nopan text-ink-soft flex h-[260px] w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed transition-colors ${
             isDropOver
-              ? "text-ink-bright border-violet-500/70 bg-violet-500/10"
+              ? "text-ink-bright border-primary/70 bg-primary/10"
               : "border-ink-fainter bg-canvas-deep hover:text-ink-bright hover:border-ink-soft"
           }`}
         >
@@ -179,31 +181,33 @@ export function ContentAssetBody({
        *  整个预览区但不拦截 FAB / 拖入 / 点击。FAB 是后渲染的兄弟节点，
        *  视觉上自然压在覆盖层之上。 */}
       {status === "running" && <WaterFillProgress progress={progress ?? 0} />}
-      <Button
-        variant="ghost"
-        size="icon-lg"
-        onClick={() => onPickMedia(isPic ? "picture" : "movie")}
-        title={isPic ? "上传图片" : "上传视频"}
-        className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
-        style={{ background: accent }}
-      >
-        <Icon name="plus" size={18} />
-      </Button>
+      <Hint label={isPic ? "上传图片" : "上传视频"} accessibleName>
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          onClick={() => onPickMedia(isPic ? "picture" : "movie")}
+          className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
+          style={{ background: accent }}
+        >
+          <Icon data-icon="inline-start" name="plus" size={18} />
+        </Button>
+      </Hint>
 
       {/* 多图数量标签（右上角） */}
       {imageCount > 1 && mediaSrc && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => {
-            gallery.setIndex(0);
-            gallery.setOpen(true);
-          }}
-          className="absolute top-2.5 right-2.5 h-auto min-w-[20px] rounded-full bg-black/70 px-1.5 text-[10px] font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 backdrop-blur-sm hover:bg-violet-500/80 hover:text-white"
-          title={`查看全部 ${imageCount} 张图片`}
-        >
-          {imageCount}
-        </Button>
+        <Hint label={`查看全部 ${imageCount} 张图片`}>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => {
+              gallery.setIndex(0);
+              gallery.setOpen(true);
+            }}
+            className="hover:bg-primary/80 absolute top-2.5 right-2.5 h-auto min-w-[20px] rounded-full bg-black/70 px-1.5 text-[10px] font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 backdrop-blur-sm hover:text-white"
+          >
+            {imageCount}
+          </Button>
+        </Hint>
       )}
 
       {/* ── 画廊覆盖层 ── */}
@@ -221,18 +225,19 @@ export function ContentAssetBody({
           popupClassName="flex max-w-none items-center justify-center bg-transparent"
         >
           {/* 关闭按钮 */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(event) => {
-              event.stopPropagation();
-              gallery.setOpen(false);
-            }}
-            className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-4 right-4 rounded-full hover:text-white"
-            title="关闭"
-          >
-            <X size={16} />
-          </Button>
+          <Hint label="关闭" accessibleName>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(event) => {
+                event.stopPropagation();
+                gallery.setOpen(false);
+              }}
+              className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-4 right-4 rounded-full hover:text-white"
+            >
+              <X data-icon="inline-start" size={16} />
+            </Button>
+          </Hint>
 
           {/* 主图 */}
           <MediaThumbnail
@@ -247,37 +252,40 @@ export function ContentAssetBody({
           {/* 左右切换 + 计数 */}
           {galleryImages.length > 1 && (
             <>
-              <Button
-                variant="ghost"
-                size="icon-lg"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  gallery.setIndex(
-                    (index) =>
-                      (index - 1 + galleryImages.length) % galleryImages.length,
-                  );
-                }}
-                disabled={galleryImages.length <= 1}
-                className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 left-4 -translate-y-1/2 rounded-full hover:text-white"
-                title="上一张"
-              >
-                <ChevronLeft size={18} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-lg"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  gallery.setIndex(
-                    (index) => (index + 1) % galleryImages.length,
-                  );
-                }}
-                disabled={galleryImages.length <= 1}
-                className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 right-4 -translate-y-1/2 rounded-full hover:text-white"
-                title="下一张"
-              >
-                <ChevronRight size={18} />
-              </Button>
+              <Hint label="上一张" accessibleName wrap>
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    gallery.setIndex(
+                      (index) =>
+                        (index - 1 + galleryImages.length) %
+                        galleryImages.length,
+                    );
+                  }}
+                  disabled={galleryImages.length <= 1}
+                  className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 left-4 -translate-y-1/2 rounded-full hover:text-white"
+                >
+                  <ChevronLeft data-icon="inline-start" size={18} />
+                </Button>
+              </Hint>
+              <Hint label="下一张" accessibleName wrap>
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    gallery.setIndex(
+                      (index) => (index + 1) % galleryImages.length,
+                    );
+                  }}
+                  disabled={galleryImages.length <= 1}
+                  className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 right-4 -translate-y-1/2 rounded-full hover:text-white"
+                >
+                  <ChevronRight data-icon="inline-start" size={18} />
+                </Button>
+              </Hint>
               {/* 底部计数 + 缩略条 */}
               <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3">
                 <span className="tabular-ns rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium text-white/90 backdrop-blur-sm">
@@ -285,27 +293,27 @@ export function ContentAssetBody({
                 </span>
                 <div className="bg-subtle flex gap-1.5 overflow-hidden rounded-full p-1 backdrop-blur-sm">
                   {galleryImages.map((img, i) => (
-                    <Button
-                      key={img.id}
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        gallery.setIndex(i);
-                      }}
-                      className={`h-auto w-6 shrink-0 overflow-hidden rounded-full border-2 p-0 hover:bg-transparent ${
-                        i === gallery.index
-                          ? "border-violet-400 opacity-100"
-                          : "border-transparent opacity-50 hover:opacity-80"
-                      }`}
-                      title={`第 ${i + 1} 张`}
-                    >
-                      <MediaThumbnail
-                        src={comfyImageUrl({ filename: img.localPath })}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    </Button>
+                    <Hint label={`第 ${i + 1} 张`} accessibleName key={img.id}>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          gallery.setIndex(i);
+                        }}
+                        className={`h-auto w-6 shrink-0 overflow-hidden rounded-full border-2 p-0 hover:bg-transparent ${
+                          i === gallery.index
+                            ? "border-primary opacity-100"
+                            : "border-transparent opacity-50 hover:opacity-80"
+                        }`}
+                      >
+                        <MediaThumbnail
+                          src={comfyImageUrl({ filename: img.localPath })}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </Button>
+                    </Hint>
                   ))}
                 </div>
               </div>

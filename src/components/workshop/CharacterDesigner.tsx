@@ -2,7 +2,9 @@
 import React from "react";
 import { textHandler } from "~/lib/form-props";
 import { Trash } from "lucide-react";
+import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { EmptyState } from "~/components/ui/empty-state";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { useBusyAction } from "~/components/ui/use-busy-action";
@@ -556,9 +558,11 @@ export function CharacterDesigner({
       />
 
       {characters.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
-          还没有角色。添加角色后会自动生成可送入生图的提示词。
-        </div>
+        <EmptyState
+          variant="hint"
+          description="还没有角色。添加角色后会自动生成可送入生图的提示词。"
+          className="py-10 text-sm"
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {characters.map((character, i) => (
@@ -567,7 +571,7 @@ export function CharacterDesigner({
               className="border-border bg-surface rounded-xl border p-4"
             >
               <div className="mb-3 flex items-center gap-2">
-                <span className="bg-primary-soft text-primary grid h-6 w-6 place-items-center rounded-full text-xs font-semibold">
+                <span className="bg-primary-soft text-primary grid size-6 place-items-center rounded-full text-xs font-semibold">
                   {i + 1}
                 </span>
                 <input
@@ -578,27 +582,29 @@ export function CharacterDesigner({
                   className="text-ink hover:border-border focus:border-primary flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium outline-none"
                   placeholder="角色名"
                 />
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => handleAICard(character)}
-                  disabled={aiAction.isBusy(character.id) || gen.busy}
-                  className="border-primary-soft text-primary hover:bg-primary-soft h-auto rounded-md px-2 py-1"
-                  title="用 LLM 补全外貌/服装/性格"
-                >
-                  {aiAction.isBusy(character.id) ? (
-                    "…"
-                  ) : (
-                    <>
-                      <Icon
-                        name="sparkles"
-                        size={12}
-                        className="mr-1 inline align-[-2px]"
-                      />
-                      AI 润色
-                    </>
-                  )}
-                </Button>
+                <Hint label="用 LLM 补全外貌/服装/性格" wrap>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => handleAICard(character)}
+                    disabled={aiAction.isBusy(character.id) || gen.busy}
+                    className="border-primary-soft text-primary hover:bg-primary-soft h-auto rounded-md px-2 py-1"
+                  >
+                    {aiAction.isBusy(character.id) ? (
+                      "…"
+                    ) : (
+                      <>
+                        <Icon
+                          data-icon="inline-start"
+                          name="sparkles"
+                          size={12}
+                          className="mr-1 inline align-[-2px]"
+                        />
+                        AI 润色
+                      </>
+                    )}
+                  </Button>
+                </Hint>
                 <CharacterReviewButton character={character} />
                 <Button
                   variant="ghost"
@@ -607,7 +613,7 @@ export function CharacterDesigner({
                   className="text-muted-foreground hover:text-danger-strong"
                   aria-label="删除角色"
                 >
-                  <Trash size={16} />
+                  <Trash data-icon="inline-start" size={16} />
                 </Button>
               </div>
 

@@ -129,9 +129,16 @@ export function detectFolderHelper(
     if (handled) return;
     handled = true;
     onHandled?.();
+    if (typeof window !== "undefined")
+      window.removeEventListener("blur", onBlur);
   };
   if (typeof window !== "undefined") {
     window.addEventListener("blur", onBlur);
+    // 兜底：即使 settle 从未被调用，超时后也移除监听器，避免泄漏（规范 §8.5）。
+    setTimeout(() => {
+      if (typeof window !== "undefined")
+        window.removeEventListener("blur", onBlur);
+    }, windowMs);
   }
   return {
     settle: () =>

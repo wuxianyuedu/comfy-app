@@ -106,7 +106,7 @@ export function LibraryHostCard({
         <div className="flex flex-col gap-1 pr-[14px] pb-1.5 pl-[14px]">
           <div className="flex h-7 min-w-0 items-center gap-1">
             <WorkflowStaticChip>
-              <span className="bg-success-strong h-1.5 w-1.5 rounded-full" />
+              <span className="bg-success-strong size-1.5 rounded-full" />
               <span className="text-success-strong text-[11px] font-semibold">
                 本机
               </span>

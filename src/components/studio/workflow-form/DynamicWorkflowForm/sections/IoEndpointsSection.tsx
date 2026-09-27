@@ -6,6 +6,7 @@ import {
 } from "../../../workflow-io";
 import { SectionHeader } from "../SectionHeader";
 import { PIN_ACCENT } from "../constants";
+import { Separator } from "~/components/ui/separator";
 
 interface IoEndpointsSectionProps {
   /** Wire-only inputs (必须连线) — rendered as read-only chips. */
@@ -43,7 +44,7 @@ export function IoEndpointsSection({
                 className="border-info/25 bg-info/10 text-info inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px]"
                 title={`${wireInput.nodeTitle ?? ""} · ${wireInput.name} · 仅可通过连线输入`}
               >
-                <span className="bg-info h-1.5 w-1.5 rounded-full" />
+                <span className="bg-info size-1.5 rounded-full" />
                 {label}
                 {/* chip 打印 pin 真实类型（含 IMAGEUPLOAD 等自定义类型）。 */}
                 <span className="font-mono text-[9px] opacity-70">
@@ -55,7 +56,7 @@ export function IoEndpointsSection({
         </div>
       )}
       {wireInputs.length > 0 && outputs.length > 0 && showOutputs && (
-        <div className="border-border-strong h-px shrink-0 border-t border-dashed" />
+        <Separator className="border-border-strong h-px shrink-0 border-t border-dashed bg-transparent" />
       )}
       {showOutputs && outputs.length > 0 && (
         <>
@@ -63,7 +64,7 @@ export function IoEndpointsSection({
             <span className="text-ink-muted text-[10px] font-medium">
               输出端点
             </span>
-            <div className="border-border-subtle flex-1 border-t border-dashed" />
+            <Separator className="border-border-subtle h-0 flex-1 border-t border-dashed bg-transparent" />
           </div>
           <div className="flex flex-wrap gap-1.5">
             {outputs.map((output) => (
@@ -72,7 +73,7 @@ export function IoEndpointsSection({
                 className="border-success/25 bg-success/10 text-success inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px]"
                 title={`${output.nodeTitle ?? ""} · ${output.name}`}
               >
-                <span className="bg-success h-1.5 w-1.5 rounded-full" />
+                <span className="bg-success size-1.5 rounded-full" />
                 {/* conflict-aware：同上，撞名时回退到原始 name。 */}
                 {ioLabel(output, [...inputs, ...outputs])}
                 <span className="font-mono text-[9px] opacity-70">

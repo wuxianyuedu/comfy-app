@@ -23,6 +23,13 @@ import { errorText } from "~/lib/error-message";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { AppError } from "~/lib/core/errors";
 import { isRecord } from "~/lib/is-record";
+import type {
+  DiscoveredSubpkg,
+  ParseReport,
+  ParseStreamEvent,
+  SettingsResp,
+  SettingsStreamEvent,
+} from "~/lib/comfyui/custom-nodes-stream";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorDetail } from "~/lib/api-error";
 import { withTimeoutResult } from "~/lib/with-timeout";
@@ -99,10 +106,41 @@ function getLocalWorkflowPaths(): string[] {
   return derived ? [derived, ...extra] : extra;
 }
 
+/* manifest 摘要的短路缓存：GET 每次都读 + 解析整份 manifest（自定义节点包一多
+ * 就是几百 KB），而文件只在 parse / 流式解析收尾时被写 —— 按 (size, mtime) 指纹
+ * 缓存，写入后指纹必变、缓存自然失效。 */
+interface ManifestSummary {
+  generatedAt: string | null;
+  totalNodes: number;
+  packages: ManifestPackageSummary[];
+  missingPaths: string[];
+  parseErrors: unknown[];
+  sources: string[];
+}
+
+let manifestSummaryCache: {
+  stamp: string;
+  summary: ManifestSummary | null;
+} | null = null;
+
+/** @returns {string | null} */
+function manifestStamp() {
+  try {
+    const st = fs.statSync(MANIFEST);
+    return `${st.size}:${Math.trunc(st.mtimeMs)}`;
+  } catch {
+    return null;
+  }
+}
+
 /* 汇总磁盘上的 manifest 供界面展示。同时对每个「配了、但还不是叶子包」的父路径
  * 输出探测到的子包，好让界面提示「这个目录下有 N 个子包，可以逐个解析」。
  */
 function readManifestSummary() {
+  const stamp = manifestStamp();
+  if (stamp && manifestSummaryCache?.stamp === stamp) {
+    return manifestSummaryCache.summary;
+  }
   if (!fs.existsSync(MANIFEST)) return null;
   try {
     const parsed: unknown = JSON.parse(fs.readFileSync(MANIFEST, "utf-8"));
@@ -131,7 +169,7 @@ function readManifestSummary() {
       });
     }
     const sources: string[] = jsonField<string[]>(m, "sources", []);
-    return {
+    const summary = {
       generatedAt: jsonField<string | null>(m, "generatedAt", null),
       totalNodes: Object.keys(
         jsonField<Record<string, unknown>>(m, "nodes", {}),
@@ -141,6 +179,9 @@ function readManifestSummary() {
       parseErrors: jsonField<unknown[]>(m, "parseErrors", []),
       sources,
     };
+    // stat 失败（极罕见）时 stamp 为 null：返回结果但不缓存。
+    if (stamp !== null) manifestSummaryCache = { stamp, summary };
+    return summary;
   } catch {
     return null;
   }
@@ -174,7 +215,25 @@ function buildPathMap(
 
 /* 对一组父目录跑只读的 `discover` 模式并返回子包。
  * 做短暂缓存，因为界面上路径输入一变就会调它。 */
-const discoverCache = new Map<string, { at: number; result: unknown[] }>();
+const discoverCache = new Map<
+  string,
+  { at: number; result: DiscoveredSubpkg[] }
+>();
+
+/* 缓存容量上限。必须设：键由请求体里的父目录列表拼成（外部可控），而 TTL 只在
+ * 读的时候判 —— 过期的条目本身会一直留在表里，不设界就是无上限增长。 */
+const DISCOVER_CACHE_MAX = 32;
+
+/** 写缓存并把容量压回上限：超出时淘汰最早插入的键（Map 的插入序）。 */
+function rememberDiscover(key: string, result: DiscoveredSubpkg[]): void {
+  discoverCache.delete(key);
+  discoverCache.set(key, { at: Date.now(), result });
+  while (discoverCache.size > DISCOVER_CACHE_MAX) {
+    const oldest = discoverCache.keys().next().value;
+    if (oldest === undefined) break;
+    discoverCache.delete(oldest);
+  }
+}
 
 /** 单个 `discover` 进程的最长等待。解析器要扫完父目录再算一遍 hash，
  *  目录大时能到分钟级 —— 但再久也不能让请求挂到客户端超时，超时即放弃
@@ -240,11 +299,12 @@ async function runDiscover(parentDirs: readonly unknown[]): Promise<unknown[]> {
     if (stdout === null) continue;
     try {
       const parsed: unknown = JSON.parse(stdout);
-      const pkgs: unknown[] =
+      const pkgs = (
         isRecord(parsed) && Array.isArray(parsed.packages)
           ? parsed.packages
-          : [];
-      discoverCache.set(key, { at: Date.now(), result: pkgs });
+          : []
+      ) as DiscoveredSubpkg[];
+      rememberDiscover(key, pkgs);
       return pkgs;
     } catch {
       // 输出不是 JSON —— 换下一个解释器再试
@@ -273,7 +333,7 @@ interface DiscoverProgressFields {
 
 function runDiscoverStreaming(
   parent: string,
-  send: (obj: unknown) => void,
+  send: (ev: SettingsStreamEvent) => void,
 ): Promise<unknown[]> {
   const cached = discoverCache.get(parent);
   if (cached && Date.now() - cached.at < 5000) {
@@ -401,11 +461,12 @@ function runDiscoverStreaming(
           const parsed: unknown = finalJson
             ? JSON.parse(finalJson)
             : { packages: [] };
-          const pkgs: unknown[] =
+          const pkgs = (
             isRecord(parsed) && Array.isArray(parsed.packages)
               ? parsed.packages
-              : [];
-          discoverCache.set(parent, { at: Date.now(), result: pkgs });
+              : []
+          ) as DiscoveredSubpkg[];
+          rememberDiscover(parent, pkgs);
           resolved = true;
           send({
             type: "discover_done",
@@ -431,15 +492,25 @@ function runDiscoverStreaming(
   });
 }
 
+/* 校验外部进程参数：拒绝 flag 形态（前缀 -）、空/超长、含 shell/元字符，
+ * 防客户端把 `--out=...` 之类伪装成包名注入到 spawn argv。 */
+function safeSpawnArg(token: unknown): string | null {
+  if (typeof token !== "string") return null;
+  if (token.length === 0 || token.length > 8192) return null;
+  if (token.startsWith("-")) return null;
+  if (/[\0'"$;`&|<>(){}=]/.test(token)) return null;
+  return token;
+}
+
 /* 构建流式响应：先把解析器的实时日志透出去，再给报告。
  * 传 `onlyPkgs`（具体子包路径）表示做子集 / 合并解析；
  * 否则 `paths` 就是完整的根目录列表。 */
-function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
+function streamParse(paths: string[], onlyPkgs?: string[]): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const send = (obj: unknown) =>
-        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      const send = (ev: ParseStreamEvent) =>
+        controller.enqueue(encoder.encode(JSON.stringify(ev) + "\n"));
 
       const pyCandidates = ["python3", "python", "py"];
       const args = [
@@ -549,7 +620,7 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
           send({
             type: "done",
             ok: !!report,
-            report,
+            report: report as ParseReport | null,
             stderr: "",
             exitCode: code,
           });
@@ -635,8 +706,8 @@ async function buildGetResponse(): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (obj: unknown) =>
-        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      const send = (ev: SettingsStreamEvent) =>
+        controller.enqueue(encoder.encode(JSON.stringify(ev) + "\n"));
       try {
         send({ type: "discover_start", parents: paths, total: paths.length });
         const discoveredByParent: Record<string, unknown[]> = {};
@@ -655,8 +726,8 @@ async function buildGetResponse(): Promise<Response> {
         // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。
         send({
           type: "summary",
-          summary,
-          lastReport,
+          summary: summary as SettingsResp["summary"],
+          lastReport: lastReport as ParseReport | null,
           byPath,
           settings: { paths, localWorkflowPaths },
         });
@@ -706,10 +777,22 @@ export async function POST(req: NextRequest) {
 
   if (action === "parse") {
     const paths = getPaths();
-    // 仅做 join(",") 透传给子进程,元素类型无需收窄(与原 any 行为逐字一致)。
-    const onlyPkgs: readonly unknown[] | undefined = Array.isArray(rec.packages)
-      ? rec.packages
-      : undefined;
+    const rawPkgs = Array.isArray(rec.packages) ? rec.packages : undefined;
+    let onlyPkgs: string[] | undefined;
+    if (rawPkgs?.length) {
+      const sanitized: string[] = [];
+      for (const p of rawPkgs) {
+        const s = safeSpawnArg(p);
+        if (s === null) {
+          return NextResponse.json(
+            { ok: false, error: "invalid package entry" },
+            { status: 400 },
+          );
+        }
+        sanitized.push(s);
+      }
+      onlyPkgs = sanitized;
+    }
     if (onlyPkgs?.length) {
       // 子集解析 —— 不必先设置 CUSTOM_NODES_PATH
       return streamParse(paths, onlyPkgs);
@@ -728,7 +811,18 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "discover") {
-    const parents: unknown[] = Array.isArray(rec.parents) ? rec.parents : [];
+    const parentsRaw = Array.isArray(rec.parents) ? rec.parents : [];
+    const parents: string[] = [];
+    for (const p of parentsRaw) {
+      const s = safeSpawnArg(p);
+      if (s === null) {
+        return NextResponse.json(
+          { ok: false, error: "invalid parent path" },
+          { status: 400 },
+        );
+      }
+      parents.push(s);
+    }
     const result = await runDiscover(parents);
     return NextResponse.json({ ok: true, packages: result });
   }

@@ -728,7 +728,7 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   })();
 
   // 结论在 stdout，守卫的日志（`Log` 被桩件改写到 stderr）要一起收，
-  // 否则「回收陈旧壳」「非交互构建」「请先结束启动器」这些可见出口断言不到。
+  // 否则「回收陈旧桌面壳」「非交互构建」「正在运行的壳进程」这些可见出口断言不到。
   // PS 5.1 对重定向输出默认按系统 ANSI 代码页（zh-CN 为 GBK）编码中文，这里
   // 按 UTF-8 读必是乱码，故在会话内先强制 UTF-8（pwsh 7 本就 UTF-8，前置语句
   // 是无害重复；setter 在无控制台句柄的宿主可能抛错，吞掉即可）。
@@ -750,12 +750,12 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   };
 
   // 打桩 Get-CimInstance（进程枚举）与 taskkill（回收动作）：既用来验证筛选规则，
-  // 也用来验证「陈旧壳 / 非交互构建自动回收后继续」与「启动器还在跑才中止」这两条
-  // ISSUE #412 的判据——不真的动本机进程。
+  // 也用来验证「陈旧壳 / 非交互构建自动回收后继续」与「用户可能正开着应用才中止」
+  // 这两条 ISSUE #412 的判据——不真的动本机进程。
   //
-  // 造数据用 `{ Id, Path, Cmd, Name }`：Name 为 `app.exe`（壳）或启动器 exe 名
-  // （`app.exe`）。`Name='xxx'` 按名过滤；`ProcessId=<n>` 用来回答
-  // 「我是谁 / 我爹是谁」（`Test-UnattendedBuild` 靠它判双击 / 由启动器拉起），
+  // 造数据用 `{ Id, Path, Cmd, Name }`：Name 是被按名过滤的进程名（桌面壳只有
+  // `app.exe`）。`Name='xxx'` 按名过滤；`ProcessId=<n>` 用来回答
+  // 「我是谁 / 我爹是谁」（`Test-UnattendedBuild` 靠它判是否资源管理器双击），
   // 桩件查自身时如实回 `$PID`，查父进程时回 `opts.parent`。
   const guardScript = (
     procsJson: string,
@@ -861,9 +861,10 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
    * ISSUE #412：用户双击 build-all 时一上来就被「目标文件被占用」挡下，
    * 提示「请先关闭桌面窗口」——可窗口早就关了，照做也关不掉，卡成死循环。
    *
-   * 判据收敛成：陈旧壳（起它的启动器已退出 = 无主孤儿壳）与非交互构建下的占用
-   * 自动回收后继续；只有「启动器还在跑 / 用户可能正开着应用」才中止。
-   * 这里用打桩进程表把三条规则各锁一次（回收动作走 Write-Output 便于断言）。
+   * 判据收敛成：陈旧壳（其 exe 路径已指不到本仓库 = 提权实例 / 老式命令行残留）与
+   * 非交互构建下的占用自动回收后继续；只有「用户可能正开着应用」才中止。
+   * 这里用打桩进程表把三条判据各锁一次（陈旧壳回收 / 有人在守则中止 / 非交互自动回收，
+   * 回收动作走 Write-Output 便于断言）。
    */
   // 结论走 stdout、守卫日志走 stderr（同 dev-launcher 用例的套路）：`Log` 若也写
   // stdout，正文会与 `CODE=` 挤在同一行，断言被日志粘住而失衡。
@@ -890,9 +891,11 @@ Write-Output ("|END")
 `;
 
   it.skipIf(!psExe)(
-    "陈旧壳（启动器已退出）自动回收后继续构建，不再要求用户去关窗口",
+    "陈旧壳（exe 路径指不到本仓库的残留进程）自动回收后继续构建，不再要求用户去关窗口",
     () => {
       const root = process.cwd();
+      // 提权实例取不到 ExecutablePath、只有命令行提到项目根的老式残留：窗口早关了，
+      // 只剩进程，留着会让每次构建都被挡一次。
       const json = JSON.stringify([
         {
           Id: 711,
@@ -900,7 +903,7 @@ Write-Output ("|END")
            * 拿不到可执行路径（壳已退出 / 快照过期）。Path 留空，命令行里
            * 仍带本仓库路径 —— Get-RunningShellProcess 靠 Cmd 命中它。 */
           Path: "",
-          Cmd: join(root, "src-tauri", "target", "release", "app.exe"),
+          Cmd: `app.exe working-dir ${root}`,
           Name: "app.exe",
         },
       ]);
@@ -916,6 +919,27 @@ Write-Output ("|END")
   );
 
   it.skipIf(!psExe)(
+    "exe 就在本仓库 target 下 = 用户可能正开着应用：不自动回收，中止并点名占用者",
+    () => {
+      const root = process.cwd();
+      const json = JSON.stringify([
+        {
+          Id: 721,
+          Path: join(root, "src-tauri", "target", "release", "app.exe"),
+          Cmd: "",
+          Name: "app.exe",
+        },
+      ]);
+      // 有人守着终端（父进程是终端）时脚本不替用户决定关窗口：判成「陈旧」却误杀
+      // 用户正开着的窗口，比多让他关一次代价大得多（见 Test-StaleShellProcess 注释）。
+      const out = runGuard(assertShellScript(json, { parent: "pwsh.exe" }));
+      expect(out).toContain("CODE=1");
+      expect(out).toContain("KILLED=0");
+      expect(out).toContain("正在运行的壳进程：PID 721");
+    },
+  );
+
+  it.skipIf(!psExe)(
     "双击构建（父进程 explorer）没人能确认，占用一律自动回收后继续",
     () => {
       const root = process.cwd();
@@ -927,13 +951,13 @@ Write-Output ("|END")
           Name: "app.exe",
         },
       ]);
+      // 路径命中本仓库 -> 不是陈旧壳，本该中止；非交互（双击）没人能确认，改走自动回收分支。
       const out = runGuard(assertShellScript(json, { parent: "explorer.exe" }));
       expect(out).toContain("CODE=0");
       expect(out).toContain("KILLED=1");
       expect(out).toContain("非交互构建");
     },
   );
-
 });
 
 describe("启动链路「不抢前台」判据（唯一的入口是壳）", () => {
@@ -1126,7 +1150,9 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     const focus = readFileSync(FOCUS_SCRIPT, "utf8");
     expect(focus).toContain("def decide_handoff(");
     expect(focus).toContain("foreground-watch.log");
-    expect(existsSync(join(process.cwd(), "scripts", "start_tauri_launcher.py"))).toBe(false);
+    expect(
+      existsSync(join(process.cwd(), "scripts", "start_tauri_launcher.py")),
+    ).toBe(false);
   });
 
   it("启动页首次可见时被带到前台（双击的直接反馈，不是「别打断」那一档）", () => {
@@ -1220,7 +1246,9 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
       "承载 HTML 的字符串字面量必须纯 ASCII，中文只许出现在注释里",
     ).toBe(0);
     // …而中文注释里的说明必须是「应用侧怎么收尾」那条（注入端与收尾端同源）
-    expect(rust.slice(stubEnd, stubEnd + 400)).toContain("clearLaunchLoadingStub");
+    expect(rust.slice(stubEnd, stubEnd + 400)).toContain(
+      "clearLaunchLoadingStub",
+    );
     // ⑥ 应用侧收尾：根布局挂载即清（浏览器里没有占位，调用是空操作）
     const cleaner = readFileSync(
       join(process.cwd(), "src", "app", "LaunchLoadingStubCleaner.tsx"),
@@ -1252,7 +1280,9 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     );
     // 「要不要注入」的判据取自启动模式，且判据只有一处：`collect()` 里读一次、
     // 由 `expect_slow_first_paint` 传下去，`setup_standalone_runtime` 不再自己判。
-    expect(rust).toContain('expect_slow_first_paint: launch_mode != "standalone"');
+    expect(rust).toContain(
+      'expect_slow_first_paint: launch_mode != "standalone"',
+    );
     expect(rust).toContain(
       "watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);",
     );

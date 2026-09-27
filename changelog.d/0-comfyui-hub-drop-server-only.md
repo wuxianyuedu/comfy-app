@@ -1,0 +1,8 @@
+## Changed
+
+- **3 个汇聚点摘 server-only（P3 迁移第 1 期·lib 层地基批）**：`comfyui/status.ts`、`comfyui/lifecycle-launch.ts`、`process/process-launch.ts` 三个模块清完。三者自身**都不引** `taskRepository` 等业务侧 server-only 模块，只是**过去**间接经过一层叶模块的 server-only（`instance-kind` / `env-python` / `desktop-instance` / `log-paths` / `app-runtime-log` / `open-in-browser`），那些叶模块在前 3 批（#1056 / #1074 / #1075 / #1077）里逐个摘掉后，本批的三条汇聚点自身的 server-only 声明已经是**最后一颗钉子**——拿掉后整批在纯 Node 里能干净加载。
+  - `comfyui/status.ts`：ComfyUI 运行态快照的**四路判据汇聚点**（HTTP 探测 / 进程表 / 桌面元数据 / 环境反查）。静态依赖 `fs` / `path` / `app-settings.server`（`.server` 后缀、内部无 server-only） / `endpoints` / `launch-path` / `instance-kind` / `proc-detect` / `tracing-ignore` / `probe` / `env-python` / `logger`（经 #1075 通链）——**全部**纯 Node 可加载。
+  - `comfyui/lifecycle-launch.ts`：ComfyUI 拉起路径的编排（bound/keepAlive 两种模式）。静态引 `process-launch`（本批同步摘）、`log-paths`（#1074）、`launch-path` / `proc-detect` / `desktop-instance` / `lifecycle-exit`（#1056 / #1077）、`logger`（3rd class）；宿主耦合（`st` 单例 / 运行日志 / 横幅 / 清「关闭中」标记）走 `LaunchHost` 参数注入，不引 lifecycle.ts（避成环 §12.7）。
+  - `process/process-launch.ts`：与 `kill-process-tree.ts` 同目录同族的 **spawn 侧**（bound / keepAlive + PowerShell Start-Process 中介）。这一步把 lifecycle-launch 的最后一颗钉子拆掉。
+  - 三条登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。scanner 现 `unguarded=20`（前 15 批 comfyui + lib-log + 二级叶 + 本批 3 汇聚 + 3 pre-existing + client 已算 leaf 归入 comfyui），全部由登记消化；`libOnlyReachable=0` / `clientReachable=0` 保持。零行为变化。
+  - 验证：`tsc --noEmit` / `eslint --max-warnings 0` / `vitest run src/lib/comfyui src/lib/process tests/lib-node-only-declarations.test.ts` **557/557 全绿**（含 `status.test.ts` / `lifecycle-launch.test.ts` 各自既有回归）/ `.githooks/pre-commit` 28 步全过。

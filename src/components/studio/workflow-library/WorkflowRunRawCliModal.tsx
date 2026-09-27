@@ -1,14 +1,13 @@
 "use client";
 
 /**
- * WorkflowRunRawCliModal —— 工作流库「查看 comfy-cli 完整输出」弹窗。
+ * WorkflowRunRawCliModal —— 工作流库「查看完整 comfy-cli 输出」弹窗。
  *
- * 执行日志面板把每条 `[comfy-cli 原始]` 行折成一行（且按行数封顶），拿不到
- * 全量，所以这个弹窗是「要就要全」的出口：从 /api/tasks/[id]/raw-cli 拉取
- * 某任务**完整、未截断**的 comfy-cli stdout/stderr 行来渲染：JSON 载荷
- * （`[comfy-cli 原始]` / `stdout` 行）走可折叠、带语法高亮的 JsonViewer；
- * 其余一律按原文展示。只读视图：网络调用收在 lib/comfyui/raw-cli-client
- * （UI / 逻辑分离）。
+ * 执行日志面板会把每一行 `[comfy-cli 原始]` 折成一行（并按行数封顶保留），所以本
+ * 弹窗是「拿全量」的出口：从 /api/tasks/[id]/raw-cli 取某次任务完整、未截断的
+ * comfy-cli stdout/stderr 行并渲染——JSON 负载（`[comfy-cli 原始]` / `stdout`
+ * 那些行）走可折叠、带语法高亮的 JsonViewer，其余按原始文本展示。只读：网络调用
+ * 收在 lib/comfyui/raw-cli-client（UI/逻辑分离）。
  *
  * 运行期每 1.5s 轮询一次完整输出（服务端上限 5000 行），所以这里刻意不做
  * 「整份重建」—— 三条防线合起来让轮询只在**真的来了新行**时付代价：
@@ -24,6 +23,8 @@ import { Copy, FileJson, RefreshCw, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { FieldLabel } from "~/components/ui/field";
+import { Hint } from "~/components/ui/hint";
 import { JsonViewer } from "~/components/ui/json-viewer";
 import { useInterval } from "~/components/ui/use-interval";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
@@ -105,6 +106,12 @@ export function WorkflowRunRawCliModal({
   const [loaded, setLoaded] = useState(false);
   const [autoscroll, setAutoscroll] = useState(true);
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   const parsed = useMemo(() => lines.map(parseRawCliLine), [lines]);
@@ -152,7 +159,8 @@ export function WorkflowRunRawCliModal({
   const copy = useCopyFeedback({
     onSuccess: () => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 1500);
     },
     onFailure: "silent",
   });
@@ -162,6 +170,7 @@ export function WorkflowRunRawCliModal({
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
+        aria-label="comfy-cli 完整输出"
         data-testid="wflib-raw-cli-modal"
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
@@ -180,33 +189,36 @@ export function WorkflowRunRawCliModal({
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => copy(lines.join("\n"))}
-                title="复制全部"
-                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-              >
-                <Copy size={15} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => loadRef.current()}
-                title="刷新"
-                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-              >
-                <RefreshCw size={15} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
-                title="关闭"
-                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-              >
-                <X size={16} />
-              </Button>
+              <Hint label="复制全部" accessibleName>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => copy(lines.join("\n"))}
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                >
+                  <Copy data-icon="inline-start" size={15} />
+                </Button>
+              </Hint>
+              <Hint label="刷新" accessibleName>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => loadRef.current()}
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                >
+                  <RefreshCw data-icon="inline-start" size={15} />
+                </Button>
+              </Hint>
+              <Hint label="关闭" accessibleName>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onClose}
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                >
+                  <X data-icon="inline-start" size={16} />
+                </Button>
+              </Hint>
             </div>
           </div>
 
@@ -248,14 +260,14 @@ export function WorkflowRunRawCliModal({
             <span>
               {copied ? "已复制全部" : "完整、未经截断的 comfy-cli 输出"}
             </span>
-            <label className="flex cursor-pointer items-center gap-1.5 select-none">
+            <FieldLabel className="flex cursor-pointer items-center gap-1.5 select-none">
               <Checkbox
                 checked={autoscroll}
                 onCheckedChange={(c) => setAutoscroll(c === true)}
                 className="cursor-pointer"
               />
               自动滚动
-            </label>
+            </FieldLabel>
           </div>
         </div>
       </DialogContent>

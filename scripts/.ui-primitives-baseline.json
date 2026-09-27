@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-24",
+  "generatedAt": "2026-09-26",
   "note": "视图层自实现 UI 基元的存量（规范 16 §16.2.3）。棘轮只许下降；新增请先改用 ui/ 基元，不要用 --update 放水。豁免口径见脚本内 EXEMPT_DIRS（与规范 §16.2.3 同源）。",
   "rules": {
     "P1": "视图内手写 <button>（应使用 ~/components/ui/button 的 <Button>）",
@@ -12,8 +12,7 @@
     "P66": "自建「同一时刻只跑一件」的重入闸门（应使用 ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock）",
     "P67": "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）",
     "P68": "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
-    "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
-    "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）"
+    "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）"
   },
   "total": 0,
   "files": {}

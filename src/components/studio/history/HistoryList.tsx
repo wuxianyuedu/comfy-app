@@ -1,12 +1,13 @@
 "use client";
 
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { textHandler } from "~/lib/form-props";
 
 import { HistoryDetailModal } from "./HistoryDetailModal";
 import { HistoryTaskCard } from "./HistoryTaskCard";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { EmptyState } from "~/components/ui/empty-state";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { useHistoryList } from "./hooks/use-history-list";
 import { FILTERS, type SortKey, type TaskItem } from "./history-types";
 
@@ -84,25 +85,20 @@ export function HistoryList({
         {/* ── Header ── */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-title text-ink text-xl font-bold">历史记录</h1>
+            <h1 className="font-title u-title-page">历史记录</h1>
             <p className="text-ink-muted mt-1 text-sm">
               所有生成任务与执行日志，按时间倒序排列。
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <select
+            <SelectMenu
               value={c.sort}
-              onChange={textHandler((value) => c.setSort(value as SortKey))}
-              className="border-border bg-subtle text-ink-strong rounded-lg border px-3 py-1.5 text-xs outline-none focus:border-violet-500/40"
+              onChange={(value) => c.setSort(value as SortKey)}
+              options={["newest", "oldest"]}
+              labels={{ newest: "时间倒序", oldest: "时间正序" }}
               aria-label="排序"
-            >
-              <option value="newest" className="bg-node">
-                时间倒序
-              </option>
-              <option value="oldest" className="bg-node">
-                时间正序
-              </option>
-            </select>
+              className="text-xs"
+            />
             <Button
               variant="outline"
               size="xs"
@@ -161,21 +157,20 @@ export function HistoryList({
         {c.loading ? (
           <p className="text-ink-muted text-sm">加载中…</p>
         ) : c.filteredCount === 0 ? (
-          <div className="border-border text-ink-muted grid min-h-[300px] place-items-center rounded-2xl border border-dashed">
-            <div className="text-center">
-              <p className="text-ink-strong text-lg font-medium">
-                {c.empty.title}
-              </p>
-              <p className="mt-1 text-sm">{c.empty.hint}</p>
-            </div>
-          </div>
+          <EmptyState
+            title={c.empty.title}
+            description={c.empty.hint}
+            minHeightClass="min-h-[300px]"
+          />
         ) : (
           <div className="flex-col gap-6">
             {c.visibleGroups.map((group) => (
               <section key={group.key}>
                 {/* ── 日期分组标题 ── */}
                 <div className="mb-3 flex items-center gap-3">
+                  {/* p71-allow:start brand 渐变 · 日期分组标题左侧竖条 violet→fuchsia 双色（项目品牌视觉）· §3.6.1 */}
                   <div className="h-4 w-1 rounded-full bg-linear-to-b from-violet-500 to-fuchsia-500" />
+                  {/* p71-allow:end */}
                   <h2 className="text-ink-strong text-sm font-semibold">
                     {group.key}
                   </h2>

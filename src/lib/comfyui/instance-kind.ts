@@ -14,8 +14,12 @@
 //   portable = python_embeded（便携运行时）与 main.py 同层；
 //   venv = 源码内 .venv / venv（自建 Python 虚拟环境）；
 //   unknown = 无 main.py（不是有效安装）等无法判定的情形。
-
-import "server-only";
+//
+// §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）——只有
+// `fs` / `path` 两条 Node 内建值 import，登记进
+// `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
+// desktop-instance / launch-path / status 静态引本模块的形态识别，摘掉
+// server-only 是它们能在纯 Node 里加载的前置。
 import fs from "fs";
 import path from "path";
 
