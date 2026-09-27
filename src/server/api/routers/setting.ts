@@ -156,7 +156,22 @@ export const settingRouter = createTRPCRouter({
    *  `--enable-cors-header`），所以正常路径下这里应当恒为「可嵌」；
    *  `target` 只有 embed / blocked 两档，两者都留在同一个窗口的页签里。 */
   comfyEmbeddable: authedProcedure
-    .input(z.object({ base: z.string().url(), hostOrigin: z.string().url() }))
+    .input(
+      z.object({
+        base: z
+          .string()
+          .url()
+          .refine((u) => /^https?:\/\//.test(u), {
+            message: "base 必须为 http/https",
+          }),
+        hostOrigin: z
+          .string()
+          .url()
+          .refine((u) => /^https?:\/\//.test(u), {
+            message: "hostOrigin 必须为 http/https",
+          }),
+      }),
+    )
     .query(async ({ input }) => {
       const verdict = await probeComfyEmbeddable(input.base, input.hostOrigin);
       return {

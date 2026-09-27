@@ -1,0 +1,19 @@
+version: 2
+
+# 第二执行者：把本地 pre-commit 的核心门禁搬上 CNB 流水线，
+# 解除「门禁只跑本地、--no-verify 可绕过」的风险（P0-1）。
+# 仅跑不依赖桌面壳重编的判据（tsc / eslint 零警告 / vitest）。
+# Rust 壳（B 系列）与 next build 不在本流水线，避免拉起 cargo 工具链。
+stages:
+  - quality
+
+jobs:
+  quality-gate:
+    stage: quality
+    image: node:20
+    script:
+      - corepack enable
+      - pnpm install --frozen-lockfile
+      - pnpm run lint
+      - pnpm exec tsc --noEmit
+      - pnpm test
