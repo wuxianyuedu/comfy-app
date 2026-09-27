@@ -16,20 +16,21 @@
  *   ① 改动的测试文件本身；
  *   ② 同名兄弟：改 `x.ts` → 跑 `x.test.ts`；改快照 `__snapshots__/x.test.tsx.snap`
  *      → 跑 `x.test.tsx`；
- *   ③ **直接** import 了改动文件的测试（静态 `from` / 副作用 import /
- *      动态 `import()` / `require()` / `vi.mock`，含 `~/` 与 `@/` 别名，
- *      相对说明符按**该测试自身的位置**解析）；
- *   ④ barrel：测试 import 了 `dir`（解析到 `dir/index.*`），而改动落在同一个
- *      `dir` 里 —— 转出口会把改动透出去，这条不能省；
- *   ⑤ 改动路径以字面量出现在测试文本里：门禁用例用 `execFileSync` 起被测脚本、
+ *   ③ **反向 import 闭包**：谁 import 了改动文件、谁又 import 了那些文件……沿 import
+ *      图走到测试为止（含 `~/` 与 `@/` 别名、相对说明符按**引用方位置**解析、目录
+ *      import 命中 `dir/index.*` 的 barrel 转出口）。只看「谁直接 import」不够：
+ *      视图层的常态是 `X.test → Panel → X.tsx`，只走一跳时改 `X.tsx` 会解析出
+ *      「受影响 0 个用例」（实测撞到过），那这句承诺就是空话。
+ *   ④ 改动路径以字面量出现在测试文本里：门禁用例用 `execFileSync` 起被测脚本、
  *      主题用例按路径读 CSS，这类消费不是 import，只有整串匹配抓得住。
  *      同族：改 `scripts/<name>.cjs|mjs|py` 时按名字配 `tests/<name>.test.ts`。
  *
- * ⚠️ 这一层**不保证传递依赖**（A → B → 测试 不在它的视野里）。全量套件当前带着
- * 别线的基线红，所以「拿不准就跑全量」在这里不可用 —— 遇到公共地基（`vitest.config.ts`、
- * `tests/setup.ts`、`package.json` / lockfile、`.githooks/**`）被改时明确
- * **放弃收窄**：只跑固定清单，并把放弃的理由打到 stderr。放弃是被看见的，不是静默
- * 降级；等基线红清零后，把 `mode === "all"` 那条分支改成跑全量（规范 §13.5.8）。
+ * ⚠️ 闭包只跟着**静态写出来的**说明符走，两类它抓不到：运行时拼出来的路径
+ * （`import(base + name)`、`path.join(dir, …)`）、以及解析目录之外的消费方。
+ * 全量套件当前带着别线的基线红，所以「拿不准就跑全量」在这里不可用 —— 遇到公共地基
+ * （`vitest.config.ts`、`tests/setup.ts`、`package.json` / lockfile、`.githooks/**`）
+ * 被改时明确**放弃收窄**：只跑固定清单，并把放弃的理由打到 stderr。放弃是被看见的，
+ * 不是静默降级；等基线红清零后，把 `mode === "all"` 那条分支改成跑全量（规范 §13.5.8）。
  *
  * 用法：
  *   node scripts/affected-tests.mjs                # 读暂存区（pre-commit 用）
@@ -150,24 +151,19 @@ const SPEC_RE =
   /(?:\bfrom|\bimport|\brequire|vi\.mock|jest\.mock)\s*\(?\s*["']([^"'\n]+)["']/g;
 
 /**
- * 一份测试源码消费掉的模块（候选路径集合）+ 它 import 过的 barrel 目录。
+ * 一份源码静态引用到的模块（候选路径集合，含 barrel 的 `dir/index.*` 形态）。
  * @param {string} text
- * @param {string} testFile
- * @returns {{modules: Set<string>, barrelDirs: Set<string>}}
+ * @param {string} fromFile
+ * @returns {Set<string>}
  */
-function consumedBy(text, testFile) {
-  const modules = new Set();
-  const barrelDirs = new Set();
+function specifiersOf(text, fromFile) {
+  const out = new Set();
   for (const m of text.matchAll(SPEC_RE)) {
     const spec = m[1];
     if (!spec) continue;
-    for (const cand of specCandidates(spec, testFile)) {
-      modules.add(cand);
-      if (/^index\.(ts|tsx|mjs)$/.test(path.posix.basename(cand)))
-        barrelDirs.add(path.posix.dirname(cand));
-    }
+    for (const cand of specCandidates(spec, fromFile)) out.add(cand);
   }
-  return { modules, barrelDirs };
+  return out;
 }
 
 /**
@@ -183,10 +179,15 @@ function wideReasonFor(rel) {
  * 核心解析：改动清单 + 测试清单 +（注入的）读文件函数 → 该跑哪些测试。
  * 不碰 git、不碰真实磁盘，便于用例喂夹具。
  *
- * @param {{changedPaths: string[], testFiles: string[], readText: (rel: string) => string | null}} input
+ * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null}} input
  * @returns {Resolution}
  */
-export function resolveAffectedTests({ changedPaths, testFiles, readText }) {
+export function resolveAffectedTests({
+  changedPaths,
+  testFiles,
+  sourceFiles,
+  readText,
+}) {
   /** @type {Record<string, string>} */
   const reasons = {};
   const picked = new Set();
@@ -257,33 +258,59 @@ export function resolveAffectedTests({ changedPaths, testFiles, readText }) {
     }
   }
 
-  const changedDirs = new Set(list.map((p) => path.posix.dirname(p)));
+  /* ── ③ 反向 import 闭包 ────────────────────────────────────────────────
+   * `importedBy` 按**候选路径**建键（不按「文件是否存在」过滤）：被删掉或改名的
+   * 文件已经不在索引清单里，但它的消费方仍然静态写着那个说明符 —— 那些测试正是
+   * 这次改动会打破的东西，按存在性过滤就会把它们连同改动一起漏掉。
+   * 成本：读 1.2k 个源码文件 + 6.4k 条说明符，实测 <1s。 */
+  const nodes = new Set([...sourceFiles, ...testFiles]);
+  /** @type {Map<string, Set<string>>} */
+  const importedBy = new Map();
+  /** @type {Map<string, string>} */
+  const texts = new Map();
+  for (const from of nodes) {
+    const text = readText(from);
+    if (text === null || text === undefined) continue;
+    texts.set(from, text);
+    for (const cand of specifiersOf(text, from)) {
+      let bucket = importedBy.get(cand);
+      if (!bucket) importedBy.set(cand, (bucket = new Set()));
+      bucket.add(from);
+    }
+  }
+
+  /** @type {Map<string, number>} */
+  const hops = new Map();
+  const queue = [];
+  for (const rel of list) {
+    hops.set(rel, 0);
+    queue.push(rel);
+  }
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (cur === undefined) continue;
+    const hop = (hops.get(cur) ?? 0) + 1;
+    for (const consumer of importedBy.get(cur) ?? []) {
+      if (hops.has(consumer)) continue;
+      hops.set(consumer, hop);
+      queue.push(consumer);
+    }
+  }
+  for (const [file, hop] of hops) {
+    if (hop > 0 && isTestPath(file)) add(file, `反向 import ${hop} 跳`);
+  }
+
+  /* ── ④ 路径以字面量被引用（闭包抓不到的那类消费）──────────────────────── */
   for (const testFile of testFiles) {
     if (picked.has(testFile)) continue;
-    const text = readText(testFile);
-    if (text === null || text === undefined) continue;
-    const { modules, barrelDirs } = consumedBy(text, testFile);
-    /** @type {string | null} */
-    let why = null;
+    const text = texts.get(testFile);
+    if (text === undefined) continue;
     for (const rel of list) {
-      if (modules.has(rel)) {
-        why = "直接 import";
-        break;
-      }
-      if (text.includes(rel)) {
-        why = "按路径引用";
+      if (rel !== testFile && text.includes(rel)) {
+        add(testFile, "按路径引用");
         break;
       }
     }
-    if (!why) {
-      for (const dir of changedDirs) {
-        if (barrelDirs.has(dir)) {
-          why = "barrel 同目录";
-          break;
-        }
-      }
-    }
-    if (why) add(testFile, why);
   }
 
   return withFixed("subset", picked);
@@ -323,14 +350,34 @@ function stagedPaths() {
     .filter(Boolean);
 }
 
-/** 全部测试文件（`git ls-files` 走索引，不扫盘）。 @returns {string[] | null} */
-function listTestFiles() {
+/** 参与 import 图的文件目录与扩展名：闭包要能穿过 `scripts/` 里的门禁脚本。 */
+const SOURCE_DIRS = ["src/", "tests/", "scripts/", "tools/"];
+const SOURCE_EXT_RE = /\.(ts|tsx|mts|js|jsx|mjs|cjs)$/;
+
+/**
+ * 一个 tracked 路径是否进 import 图（`.d.ts` 是纯声明，不做节点）。
+ * @param {string} rel
+ * @returns {boolean}
+ */
+export function isSourcePath(rel) {
+  return (
+    SOURCE_DIRS.some((dir) => rel.startsWith(dir)) &&
+    SOURCE_EXT_RE.test(rel) &&
+    !rel.endsWith(".d.ts")
+  );
+}
+
+/**
+ * `git ls-files` 走索引、不扫盘：未跟踪的临时文件不该进图。
+ * @returns {string[] | null}
+ */
+function trackedPaths() {
   const out = git(["ls-files"]);
   if (out === null) return null;
   return out
     .split("\n")
     .map((s) => s.trim())
-    .filter(isTestPath);
+    .filter(Boolean);
 }
 
 /**
@@ -345,6 +392,19 @@ function readText(rel) {
   }
 }
 
+/**
+ * 一次 `git ls-files` 出两份清单：测试（输出的候选）与 import 图的节点。
+ * @returns {{testFiles: string[], sourceFiles: string[]} | null}
+ */
+function collectInputs() {
+  const tracked = trackedPaths();
+  if (tracked === null) return null;
+  return {
+    testFiles: tracked.filter(isTestPath),
+    sourceFiles: tracked.filter(isSourcePath),
+  };
+}
+
 function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--fixed-only")) {
@@ -356,16 +416,21 @@ function main() {
     ci >= 0
       ? argv.slice(ci + 1).filter((a) => !a.startsWith("--"))
       : (stagedPaths() ?? []);
-  const testFiles = listTestFiles();
+  const inputs = collectInputs();
   /** @type {Resolution} */
   const res =
-    testFiles === null
+    inputs === null
       ? {
           mode: "all",
           tests: [...FIXED_STRUCTURAL_TESTS].sort(),
           reasons: { __note: "读不到测试清单（git ls-files 失败）" },
         }
-      : resolveAffectedTests({ changedPaths: changed, testFiles, readText });
+      : resolveAffectedTests({
+          changedPaths: changed,
+          testFiles: inputs.testFiles,
+          sourceFiles: inputs.sourceFiles,
+          readText,
+        });
 
   const extra = res.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t));
   if (res.mode === "all") {
