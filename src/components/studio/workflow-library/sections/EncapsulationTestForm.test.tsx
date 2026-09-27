@@ -10,6 +10,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import type { EncapsulationEntryStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
@@ -121,14 +122,19 @@ describe("EncapsulationTestForm", () => {
     expect(onRun.mock.calls[0]?.[0].negativePrompt).toBe("lowres");
   });
 
-  it("未就绪（canRun=false）时禁用输入与执行按钮，并把原因挂上", () => {
+  it("未就绪（canRun=false）时禁用输入与执行按钮，并把原因挂上", async () => {
     renderForm(T2I_ENTRIES, {
       canRun: false,
       runDisabledReason: "提示词未落到端口",
     });
     const button = screen.getByRole("button", { name: "执行流程测试" });
     expect(button).toBeDisabled();
-    expect(button.getAttribute("title")).toBe("提示词未落到端口");
+    /* 原因现在由 `<Hint label wrap>` 承载：`disabled` 的按钮不发指针事件，
+     * 提示挂在它外层锚点上（见 `ui/hint` 的 `wrap` 一档），悬停锚点才读得到。 */
+    const anchor = button.parentElement;
+    if (!anchor) throw new Error("找不到 <Hint wrap> 的锚点层");
+    await userEvent.hover(anchor);
+    expect(await screen.findByText("提示词未落到端口")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("输入负向提示词")).toBeDisabled();
   });
 

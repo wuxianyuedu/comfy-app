@@ -110,7 +110,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
       {/* ── Top Toolbar ───────────────────────────── */}
       <header className="border-border-subtle bg-panel/88 z-base relative flex h-12 shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md">
         <div className="flex items-center gap-2">
-          <span className="u-title">LoRA 训练工作室</span>
+          <h1 className="font-title u-title-page">LoRA 训练工作室</h1>
           <span className="text-ink-fainter text-xs">· 炼丹</span>
         </div>
 

@@ -10,6 +10,7 @@
 // 模式契约 = 每种模式对外有哪些统一输入 / 输出。后者在工作流库也有一份。
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
@@ -63,29 +64,31 @@ export function WorkshopHeader({
         <span className="bg-amber/15 text-amber rounded-full px-3 py-1.5 text-xs font-medium">
           距离成片还差 {pendingCategories} 个阶段
         </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 gap-1 rounded-full px-3 py-1.5 text-xs"
-          title="为远端模型配置工坊各模式下的输入 / 输出"
-        >
-          <Icon data-icon="inline-start" name="settings" size={13} />
-          模型适配
-          {anyChannelConfigured ? " · 已配置" : ""}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={onOpenModeContract}
-          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 gap-1 rounded-full px-3 py-1.5 text-xs"
-          title="配置每种模式对外有哪些统一输入 / 输出（本地工作流按它配落点）"
-        >
-          <Icon data-icon="inline-start" name="settings" size={13} />
-          模式契约
-        </Button>
+        <Hint label="为远端模型配置工坊各模式下的输入 / 输出">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={onOpenApiSettings}
+            className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 gap-1 rounded-full px-3 py-1.5 text-xs"
+          >
+            <Icon data-icon="inline-start" name="settings" size={13} />
+            模型适配
+            {anyChannelConfigured ? " · 已配置" : ""}
+          </Button>
+        </Hint>
+        <Hint label="配置每种模式对外有哪些统一输入 / 输出（本地工作流按它配落点）">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={onOpenModeContract}
+            className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 gap-1 rounded-full px-3 py-1.5 text-xs"
+          >
+            <Icon data-icon="inline-start" name="settings" size={13} />
+            模式契约
+          </Button>
+        </Hint>
         <Button
           type="button"
           size="icon"

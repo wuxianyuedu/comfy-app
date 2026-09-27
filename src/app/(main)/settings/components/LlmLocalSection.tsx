@@ -20,6 +20,7 @@ import type { TaskType } from "~/lib/llm/types";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
+import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { StatusDot } from "~/components/ui/status-dot";
@@ -248,18 +249,19 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     </p>
                   </div>
                   {isOverridden && (
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      title="恢复推荐默认"
-                      onClick={() => {
-                        clearTaskEdit(key);
-                        c.setTaskTemperature(key, "");
-                      }}
-                      className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
-                    >
-                      ↺
-                    </Button>
+                    <Hint label="恢复推荐默认" accessibleName>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => {
+                          clearTaskEdit(key);
+                          c.setTaskTemperature(key, "");
+                        }}
+                        className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
+                      >
+                        ↺
+                      </Button>
+                    </Hint>
                   )}
                   <Input
                     type="number"

@@ -39,7 +39,6 @@ export interface ModelLibraryController {
 }
 
 export function useModelLibrary(): ModelLibraryController {
-  const [models, setModels] = useState<ModelRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string>(ALL_TYPES);
@@ -87,12 +86,13 @@ export function useModelLibrary(): ModelLibraryController {
     return () => clearTimeout(t);
   }, [syncMut, loadModels]);
 
-  // react-query data → 本地行（渲染期调整，React 19 模式）。
-  const [prevListData, setPrevListData] = useState(listQ.data);
-  if (listQ.data && listQ.data !== prevListData) {
-    setPrevListData(listQ.data);
-    setModels((listQ.data.models ?? []) as unknown as ModelRow[]);
-  }
+  /* react-query 数据 → 本地行：`models` 是 `listQ.data` 的纯派生（P2：去掉
+   * 「prev 引用对比 + 渲染期 setState」的记账 state），不再是独立可变状态。
+   * 手动刷新走 `listQ.refetch()`，同样体现为 `listQ.data` 变化。 */
+  const models = useMemo(
+    () => (listQ.data?.models ?? []) as unknown as ModelRow[],
+    [listQ.data],
+  );
 
   const filtered = useMemo(
     () => filterModels(models, filter, q),

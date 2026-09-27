@@ -272,6 +272,30 @@ describe("listStaleQueued（reaper 扫 QUEUED 孤儿：4 条件 AND）", () => {
     await seed({ status: "RUNNING", createdAt: oldDate });
     expect(await impl.listStaleQueued(cutoff, 10)).toHaveLength(0);
   });
+
+  it("归属分片（Phase 3-B0）：host 片只收 'host' 行，NULL/'inline' 行归 inline 片", async () => {
+    const hostOrphan = await seed({
+      status: "QUEUED",
+      createdAt: oldDate,
+      claimedBy: "host",
+    });
+    const inlineOrphan = await seed({ status: "QUEUED", createdAt: oldDate });
+    const explicitInline = await seed({
+      status: "QUEUED",
+      createdAt: oldDate,
+      claimedBy: "inline",
+    });
+    const hostIds = await impl.listStaleQueued(cutoff, 10, "host");
+    expect(hostIds.map((r) => r.id)).toEqual([hostOrphan]);
+    const inlineIds = await impl.listStaleQueued(cutoff, 10, "inline");
+    expect(inlineIds.map((r) => r.id).sort()).toEqual(
+      [inlineOrphan, explicitInline].sort(),
+    );
+    // 缺省第三参 = inline 片（Next 侧不改调用签名时行为与现状等价）
+    expect(
+      (await impl.listStaleQueued(cutoff, 10)).map((r) => r.id).sort(),
+    ).toEqual([inlineOrphan, explicitInline].sort());
+  });
 });
 
 describe("listStaleRunning（reaper 扫 RUNNING 孤儿：4 条件 AND + promptId 非空）", () => {
@@ -295,6 +319,34 @@ describe("listStaleRunning（reaper 扫 RUNNING 孤儿：4 条件 AND + promptId
       promptId: null,
     });
     expect(await impl.listStaleRunning(cutoff, 10)).toHaveLength(0);
+  });
+
+  it("归属分片（Phase 3-B0）：RUNNING 片同样按 claimedBy 切，与领取谓词同一条判据", async () => {
+    const hostOrphan = await seed({
+      status: "RUNNING",
+      createdAt: oldDate,
+      promptId: "pid-h",
+      claimedBy: "host",
+    });
+    const inlineOrphan = await seed({
+      status: "RUNNING",
+      createdAt: oldDate,
+      promptId: "pid-i",
+      claimedBy: "inline",
+    });
+    const nullOrphan = await seed({
+      status: "RUNNING",
+      createdAt: oldDate,
+      promptId: "pid-n",
+    });
+    expect(
+      (await impl.listStaleRunning(cutoff, 10, "host")).map((r) => r.id),
+    ).toEqual([hostOrphan]);
+    expect(
+      (await impl.listStaleRunning(cutoff, 10, "inline"))
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual([inlineOrphan, nullOrphan].sort());
   });
 });
 
@@ -412,5 +464,29 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
     });
     // 同一行随后可被正主领走
     expect(await impl.claimNextQueued("host", 10)).toEqual([hostId]);
+  });
+});
+
+describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
+  it("返回 workflowName / execPayload / params 三列（不回查模板）", async () => {
+    const id = await seed({
+      claimedBy: "host",
+      execPayload: { nodes: [{ id: "1", type: "KSampler" }] },
+      params: { workflowInputs: [{ nodeId: "1", name: "text", value: "x" }] },
+    });
+    const job = await impl.findExecJob(id);
+    expect(job?.workflowName).toBe("w");
+    expect(job?.execPayload).toEqual({
+      nodes: [{ id: "1", type: "KSampler" }] as unknown[],
+    });
+    expect(job?.params).toMatchObject({
+      workflowInputs: [{ nodeId: "1", name: "text", value: "x" }],
+    });
+  });
+
+  it("未知 id 返回 null；execPayload 缺省行为该列回 null（调用方判失败用）", async () => {
+    expect(await impl.findExecJob("nope")).toBeNull();
+    const bare = await seed({});
+    expect((await impl.findExecJob(bare))?.execPayload ?? null).toBeNull();
   });
 });

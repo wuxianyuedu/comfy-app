@@ -24,9 +24,7 @@ export default function GlobalError({
             <Icon name="alert" size={28} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              应用发生严重错误
-            </h1>
+            <h1 className="u-title-page">应用发生严重错误</h1>
             <p className="text-muted-foreground mt-2 max-w-md">
               界面渲染时出现了未捕获的错误
               {error.digest ? `（${error.digest}）` : ""}

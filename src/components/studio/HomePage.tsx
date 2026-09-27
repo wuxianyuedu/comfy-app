@@ -157,9 +157,7 @@ export function HomePage({
         <div className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[960px] px-10 py-16">
             {/* ── Title ── */}
-            <h1 className="text-ink mb-3 text-center text-[34px] font-bold tracking-tight">
-              灵感从这里开始
-            </h1>
+            <h1 className="u-title-hero mb-3 text-center">灵感从这里开始</h1>
             <p className="text-ink-faint mb-10 text-center text-sm">
               用本地 AI 模型，自由创作图像、视频与专属模型
             </p>

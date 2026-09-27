@@ -11,6 +11,7 @@ import {
 import { Button } from "~/components/ui/button";
 import type { WorkflowNodeData, IoRef } from "../workflow-types";
 import type { NodePalette } from "./workflow-node-palette";
+import { Hint } from "~/components/ui/hint";
 
 export interface FlowNodeRole {
   key: string;
@@ -54,40 +55,41 @@ export function FlowNodeHeader({
        *  好让节点拖拽处理器不把它当成拖拽起点。
        *  折叠时箭头朝**右**（点击展开），展开时顺时针转 90°
        *  朝**下**（点击收起）。 */}
-      <Button
-        variant="ghost"
-        size="icon-xs"
+      <Hint label={isCollapsed ? "展开" : "折叠"}>
+        <Button
+          variant="ghost"
+          size="icon-xs"
 
-        aria-label={isCollapsed ? "展开节点" : "折叠节点"}
-        title={isCollapsed ? "展开" : "折叠"}
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggleCollapsed();
-        }}
-        onMouseDown={(event) => event.stopPropagation()}
-        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
-        style={{ pointerEvents: "auto" }}
-      >
-        <svg
-          data-icon="inline-start"
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="none"
-          style={{
-            transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
-            transition: "transform 120ms ease",
+          aria-label={isCollapsed ? "展开节点" : "折叠节点"}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleCollapsed();
           }}
+          onMouseDown={(event) => event.stopPropagation()}
+          className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
+          style={{ pointerEvents: "auto" }}
         >
-          <path
-            d="M3.5 2 L7 5 L3.5 8"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </Button>
+          <svg
+            data-icon="inline-start"
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            style={{
+              transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
+              transition: "transform 120ms ease",
+            }}
+          >
+            <path
+              d="M3.5 2 L7 5 L3.5 8"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Button>
+      </Hint>
       <span
         className="inline-block size-2 shrink-0 rounded-full"
         style={{

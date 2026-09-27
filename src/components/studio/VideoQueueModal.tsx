@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { textHandler } from "~/lib/form-props";
 import { Trash, X } from "lucide-react";
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -182,14 +183,15 @@ export function VideoQueueModal({
                   {runningCount} 个进行中
                 </span>
               )}
-              <Button
-                variant="link"
-                onClick={loadTasks}
-                className="text-ink-muted hover:text-primary h-auto p-0 text-[11px]"
-                title="刷新"
-              >
-                ↻ 刷新
-              </Button>
+              <Hint label="刷新">
+                <Button
+                  variant="link"
+                  onClick={loadTasks}
+                  className="text-ink-muted hover:text-primary h-auto p-0 text-[11px]"
+                >
+                  ↻ 刷新
+                </Button>
+              </Hint>
             </div>
             <div className="flex items-center gap-2">
               <div className="bg-subtle flex rounded-lg p-0.5">

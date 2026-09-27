@@ -82,6 +82,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
     projectId?: string | null;
     referenceImages?: unknown;
     workflowSnapshot?: unknown;
+    /** 执行归属（P3 §5 ADR §6）：提交侧按 `resolveExecutorClaim()` 显式传
+     *  `'inline'|'host'`；缺省 null 只服务「调用方尚未接入灰度」的兼容路径
+     *  （NULL 语义归 inline 片，领取/回收两侧等价）。 */
+    claimedBy?: "inline" | "host" | null;
+    /** 提交时刻的 RAW 执行载荷（ADR §13-3B1 决定 1）：host 由它重建 Job，
+     *  不经 workflowName 回查模板（模板改/删不影响在队任务）。 */
+    execPayload?: unknown;
   }): Promise<Task> {
     const rows = await db
       .insert(task)
@@ -95,6 +102,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
         projectId: input.projectId ?? null,
         referenceImages: input.referenceImages ?? undefined,
         workflowSnapshot: input.workflowSnapshot ?? undefined,
+        claimedBy: input.claimedBy ?? null,
+        execPayload: input.execPayload ?? null,
         status: "QUEUED",
       })
       .returning();
@@ -305,6 +314,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
     error: string | null;
     validationErrors: string | null;
     workflowName: string | null;
+    resultImages: unknown;
   } | null> {
     const rows = await db
       .select({
@@ -313,6 +323,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
         error: task.error,
         validationErrors: task.validationErrors,
         workflowName: task.workflowName,
+        // 终态收口要带产出清单（host 模式没有进程内 done 帧，见 stream 路由）；
+        // 它是路径小数组，不破坏「不拉 workflowSnapshot/logs 大列」的轻投影契约。
+        resultImages: task.resultImages,
       })
       .from(task)
       .where(eq(task.id, id))
@@ -356,11 +369,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
   replaceLogs: TaskRepoImpl["replaceLogs"] = (taskId, logs) =>
     impl.replaceLogs(taskId, logs);
 
-  listStaleQueued: TaskRepoImpl["listStaleQueued"] = (cutoff, take) =>
-    impl.listStaleQueued(cutoff, take);
+  listStaleQueued: TaskRepoImpl["listStaleQueued"] = (cutoff, take, owner) =>
+    impl.listStaleQueued(cutoff, take, owner);
 
-  listStaleRunning: TaskRepoImpl["listStaleRunning"] = (cutoff, take) =>
-    impl.listStaleRunning(cutoff, take);
+  listStaleRunning: TaskRepoImpl["listStaleRunning"] = (cutoff, take, owner) =>
+    impl.listStaleRunning(cutoff, take, owner);
 
   createImages: TaskRepoImpl["createImages"] = (taskId, images) =>
     impl.createImages(taskId, images);

@@ -5,7 +5,7 @@ export default function NotFound() {
     <div className="bg-bg flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
       <p className="text-primary text-7xl font-bold tracking-tight">404</p>
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">页面走丢了</h1>
+        <h1 className="u-title-page">页面走丢了</h1>
         <p className="text-muted-foreground mt-2">
           你访问的页面不存在，或已被移动。
         </p>

@@ -22,7 +22,7 @@ export default function Error({
         <Icon name="alert" size={28} />
       </div>
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">页面出错了</h1>
+        <h1 className="u-title-page">页面出错了</h1>
         <p className="text-muted-foreground mt-2 max-w-md">
           发生了一个意外错误{error.digest ? `（${error.digest}）` : ""}
           。你可以重试，或返回首页。

@@ -1,8 +1,10 @@
 "use client";
 
 import { subscribeAppEvent } from "~/lib/app-events";
+import { taskStatusLabel } from "~/lib/task-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
@@ -36,16 +38,6 @@ const TYPE_CHIP: Record<string, string> = {
   INPAINT: "局部重绘",
   HIRERES: "高清放大",
   VIDEO: "视频",
-};
-
-/* 状态文案（配色不走这里 —— 它是叠在缩略图上的角标，颜色由
- *`ui/status-badge` 按同一份状态 → 语义 token 映射给出，见规范 16 §16.2.4.5）。 */
-const STATUS_LABEL: Record<string, string> = {
-  SUCCEEDED: "已完成",
-  FAILED: "失败",
-  CANCELLED: "已取消",
-  QUEUED: "排队中",
-  RUNNING: "生成中",
 };
 
 function taskCover(images: ProjectOutputImage[]): ProjectOutputImage | null {
@@ -178,7 +170,7 @@ export function ProjectOutputs() {
         {/* ── Header ── */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h1 className="font-title text-ink-bright text-xl font-bold">
+            <h1 className="font-title u-title-page">
               {activeProject?.name ?? "未命名项目"}
             </h1>
             <span className="bg-primary/15 text-primary-strong rounded-full px-2.5 py-0.5 text-[11px] font-medium">
@@ -296,7 +288,7 @@ export function ProjectOutputs() {
                     {/* p71-allow:end */}
                     <StatusBadge
                       status={output.status}
-                      label={STATUS_LABEL[output.status] ?? output.status}
+                      label={taskStatusLabel(output.status)}
                       dot={false}
                       className="absolute top-2 left-2 px-2 py-0.5 text-[11px]"
                     />
@@ -452,21 +444,24 @@ export function ProjectOutputs() {
               {/* footer actions */}
               <div className="border-border-strong border-t p-4">
                 <div className="flex gap-2">
-                  <Button
-                    variant="primary-solid"
-                    size="sm"
-                    onClick={handleCopy}
-                    className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
-                    title={
+                  <Hint
+                    label={
                       copyFailed ? copyFailureText() : "复制元数据到剪贴板"
                     }
                   >
-                    {copyFailed
-                      ? "复制失败"
-                      : copied.on
-                        ? "已复制 ✓"
-                        : "复制元数据"}
-                  </Button>
+                    <Button
+                      variant="primary-solid"
+                      size="sm"
+                      onClick={handleCopy}
+                      className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
+                    >
+                      {copyFailed
+                        ? "复制失败"
+                        : copied.on
+                          ? "已复制 ✓"
+                          : "复制元数据"}
+                    </Button>
+                  </Hint>
                   <Button
                     variant="outline"
                     size="sm"

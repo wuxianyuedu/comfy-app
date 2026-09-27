@@ -18,6 +18,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { zClass } from "~/lib/shell/overlay-z";
 
 /* ── 画布区 + 右键菜单 + 底部工具栏 ────
@@ -152,7 +153,7 @@ export function CanvasArea({
         <div className="border-border-strong bg-panel/95 flex items-center gap-0.5 rounded-xl border px-1.5 py-1 shadow-lg shadow-black/10 backdrop-blur-md">
           {/* 发送 / 运行按钮 */}
           <ToolbarButton
-            title="执行"
+            hint="执行"
             onClick={() => onContextAction?.("run")}
             active
           >
@@ -163,7 +164,7 @@ export function CanvasArea({
 
           {/* Zoom out */}
           <ToolbarButton
-            title="缩小"
+            hint="缩小"
             onClick={() => onZoomChange?.(Math.max(10, zoom - 10))}
           >
             −
@@ -176,7 +177,7 @@ export function CanvasArea({
 
           {/* Zoom in */}
           <ToolbarButton
-            title="放大"
+            hint="放大"
             onClick={() => onZoomChange?.(Math.min(400, zoom + 10))}
           >
             +
@@ -186,7 +187,7 @@ export function CanvasArea({
 
           {/* Fit screen */}
           <ToolbarButton
-            title="适应屏幕"
+            hint="适应屏幕"
             onClick={() => onContextAction?.("fit-view")}
           >
             <Maximize size={13} />
@@ -194,7 +195,7 @@ export function CanvasArea({
 
           {/* Toggle visibility */}
           <ToolbarButton
-            title="显示/隐藏"
+            hint="显示/隐藏"
             onClick={() => onContextAction?.("toggle-visibility")}
           >
             <Eye size={13} />
@@ -203,12 +204,12 @@ export function CanvasArea({
           <ToolbarDivider />
 
           {/* Undo */}
-          <ToolbarButton title="撤销" onClick={() => onContextAction?.("undo")}>
+          <ToolbarButton hint="撤销" onClick={() => onContextAction?.("undo")}>
             <RotateCcw size={13} />
           </ToolbarButton>
 
           {/* Redo */}
-          <ToolbarButton title="重做" onClick={() => onContextAction?.("redo")}>
+          <ToolbarButton hint="重做" onClick={() => onContextAction?.("redo")}>
             <RotateCw size={13} />
           </ToolbarButton>
 
@@ -241,28 +242,29 @@ export function CanvasArea({
 function ToolbarButton({
   children,
   onClick,
-  title,
+  hint,
   active = false,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
-  title?: string;
+  hint?: string;
   active?: boolean;
 }) {
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      onClick={onClick}
-      title={title}
-      className={`rounded-lg text-xs ${
-        active
-          ? "bg-primary/12 text-ink-bright hover:bg-primary/18"
-          : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
-      }`}
-    >
-      {children}
-    </Button>
+    <Hint label={hint} accessibleName>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={onClick}
+        className={`rounded-lg text-xs ${
+          active
+            ? "bg-primary/12 text-ink-bright hover:bg-primary/18"
+            : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
+        }`}
+      >
+        {children}
+      </Button>
+    </Hint>
   );
 }
 

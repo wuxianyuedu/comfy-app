@@ -38,6 +38,7 @@ import {
 } from "./log-virtual";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { modalWidth } from "~/components/ui/dialog-width";
+import { Hint } from "~/components/ui/hint";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 import { useElementBox } from "~/components/ui/use-element-box";
 import { FILTER_SELECTED_STYLES, selectionInsideLogs } from "./log-row-style";
@@ -516,87 +517,96 @@ export function LogPanel() {
 
             {/* Actions */}
             <div className="flex items-center gap-1 pl-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setWrap((prev) => !prev)}
-                title={wrap ? "折叠超长行" : "自动换行显示"}
-                /* 选中态与级别按钮同一份：`bg-subtle` 在浅色主题下与行头底色同值。 */
-                className={`rounded-md p-2 transition-colors ${
-                  wrap
-                    ? `${FILTER_SELECTED_STYLES} text-ink-bright`
-                    : "text-ink-muted hover:bg-subtle hover:text-ink"
-                }`}
-              >
-                <Type size={16} />
-              </Button>
-              {/* title 写明范围：复制/下载的是**当前筛选下的全部日志**（跨所有页）。
+              <Hint label={wrap ? "折叠超长行" : "自动换行显示"} accessibleName>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setWrap((prev) => !prev)}
+                  /* 选中态与级别按钮同一份：`bg-subtle` 在浅色主题下与行头底色同值。 */
+                  className={`rounded-md p-2 transition-colors ${
+                    wrap
+                      ? `${FILTER_SELECTED_STYLES} text-ink-bright`
+                      : "text-ink-muted hover:bg-subtle hover:text-ink"
+                  }`}
+                >
+                  <Type size={16} />
+                </Button>
+              </Hint>
+              {/* 提示写明范围：复制/下载的是**当前筛选下的全部日志**（跨所有页）。
                * 复制这枚自己带成败反馈（§16.2.4.43）—— 失败时原地换成「复制失败」
                * 并说明怎么自救，成功时短暂换成对勾。 */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={copyAllAction}
-                title={
+              <Hint
+                label={
                   copyFailed
                     ? copyFailureText("日志列表")
                     : `复制当前筛选的全部日志（${scopeLabel} · ${total} 条）`
                 }
-                aria-label="复制当前筛选的全部日志"
-                className={`rounded-md ${
-                  copyFailed
-                    ? "text-danger-strong"
-                    : "text-ink-muted hover:bg-subtle hover:text-ink"
-                }`}
               >
-                {copyFailed ? (
-                  <span className="text-[10px] whitespace-nowrap">
-                    复制失败
-                  </span>
-                ) : copyOutcome.on ? (
-                  <Check data-icon="inline-start" size={16} />
-                ) : (
-                  <Copy data-icon="inline-start" size={16} />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={download}
-                title={`下载为文本文件（当前筛选的全部日志：${scopeLabel} · ${total} 条）`}
-                aria-label="下载当前筛选的全部日志"
-                className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={copyAllAction}
+                  aria-label="复制当前筛选的全部日志"
+                  className={`rounded-md ${
+                    copyFailed
+                      ? "text-danger-strong"
+                      : "text-ink-muted hover:bg-subtle hover:text-ink"
+                  }`}
+                >
+                  {copyFailed ? (
+                    <span className="text-[10px] whitespace-nowrap">
+                      复制失败
+                    </span>
+                  ) : copyOutcome.on ? (
+                    <Check data-icon="inline-start" size={16} />
+                  ) : (
+                    <Copy data-icon="inline-start" size={16} />
+                  )}
+                </Button>
+              </Hint>
+              <Hint
+                label={`下载为文本文件（当前筛选的全部日志：${scopeLabel} · ${total} 条）`}
               >
-                <Download data-icon="inline-start" size={16} />
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={download}
+                  aria-label="下载当前筛选的全部日志"
+                  className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+                >
+                  <Download data-icon="inline-start" size={16} />
+                </Button>
+              </Hint>
               {/* 服务端落盘版导出（见 SaveExportButton）。 */}
               <SaveExportButton
                 label={origin ?? "all"}
                 scopeLabel={scopeLabel}
                 total={total}
               />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={clear}
-                title="清空面板"
-                className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
-              >
-                <Trash2 data-icon="inline-start" size={16} />
-              </Button>
+              <Hint label="清空面板" accessibleName>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={clear}
+                  className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+                >
+                  <Trash2 data-icon="inline-start" size={16} />
+                </Button>
+              </Hint>
               <WidePanelToggle
                 panel={panel}
                 className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
               />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsOpen(false)}
-                title="关闭 (Ctrl+Shift+L)"
-                className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
-              >
-                <X data-icon="inline-start" size={16} />
-              </Button>
+              <Hint label="关闭 (Ctrl+Shift+L)" accessibleName>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsOpen(false)}
+                  className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+                >
+                  <X data-icon="inline-start" size={16} />
+                </Button>
+              </Hint>
             </div>
           </div>
 
@@ -709,64 +719,80 @@ export function LogPanel() {
                 </Button>
               )}
               <span className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => setPage(safePage - 1)}
-                  disabled={safePage <= 1}
-                  title="更新的一页"
-                  className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
-                >
-                  <ChevronLeft data-icon="inline-start" size={14} />
-                </Button>
+                <Hint label="更新的一页" accessibleName wrap>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setPage(safePage - 1)}
+                    disabled={safePage <= 1}
+                    className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
+                  >
+                    <ChevronLeft data-icon="inline-start" size={14} />
+                  </Button>
+                </Hint>
                 {/* 当前正看的是哪一段（来源 / 级别 / 搜索词），点任意一项即去掉
                   那一层筛选。此处用按钮而不是纯文本：页脚是「说出来我在看什么」
                   的位置，回滚动作本来就该在这儿，不必让用户跑回顶部找。 */}
                 <span className="text-ink-soft flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setOrigin("all")}
-                    disabled={!origin || origin === "all"}
-                    title={
+                  <Hint
+                    label={
                       origin && origin !== "all" ? "去掉来源筛选" : undefined
                     }
-                    className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
+                    wrap
                   >
-                    {ORIGIN_TEXT[origin ?? "all"]}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setFilter("all")}
-                    disabled={filter === "all"}
-                    title={filter !== "all" ? "去掉级别筛选" : undefined}
-                    className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
-                  >
-                    {FILTER_LABELS.find((item) => item.value === filter)?.label}
-                  </Button>
-                  {search.trim() && (
                     <Button
                       variant="ghost"
                       size="xs"
-                      onClick={() => setSearch("")}
-                      title="清空搜索"
-                      className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
+                      data-testid="logpanel-origin-chip"
+                      onClick={() => setOrigin("all")}
+                      disabled={!origin || origin === "all"}
+                      className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
                     >
-                      {`搜索「${search.trim()}」`}
+                      {ORIGIN_TEXT[origin ?? "all"]}
                     </Button>
+                  </Hint>
+                  <Hint
+                    label={filter !== "all" ? "去掉级别筛选" : undefined}
+                    wrap
+                  >
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      data-testid="logpanel-level-chip"
+                      onClick={() => setFilter("all")}
+                      disabled={filter === "all"}
+                      className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
+                    >
+                      {
+                        FILTER_LABELS.find((item) => item.value === filter)
+                          ?.label
+                      }
+                    </Button>
+                  </Hint>
+                  {search.trim() && (
+                    <Hint label="清空搜索">
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setSearch("")}
+                        className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
+                      >
+                        {`搜索「${search.trim()}」`}
+                      </Button>
+                    </Hint>
                   )}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => setPage(safePage + 1)}
-                  disabled={safePage >= totalPages}
-                  title="更早的一页"
-                  className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
-                >
-                  <ChevronRight data-icon="inline-start" size={14} />
-                </Button>
+                <Hint label="更早的一页" accessibleName wrap>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setPage(safePage + 1)}
+                    disabled={safePage >= totalPages}
+                    className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
+                  >
+                    <ChevronRight data-icon="inline-start" size={14} />
+                  </Button>
+                </Hint>
               </span>
             </span>
           </div>

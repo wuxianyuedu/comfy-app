@@ -8,8 +8,9 @@
  * 错误策略：拉取失败**静默**——单图模式仍要正常显示内容，不能因为一次
  * 查询失败就把整个节点渲染成错误态。
  *
- * taskId / enabled 切换时在**渲染期**清空旧图（React 19 的「渲染期调整
- * state」范式）：否则新任务的首帧会先渲染上一张任务的相册缩略图。
+ * taskId / enabled 切换时要立刻拿不到旧图，否则新任务的首帧会先渲染上一张
+ * 任务的相册缩略图。做法是把图集和「它属于哪一轮上下文」一起存成一条 state，
+ * 渲染时按上下文键取值（不再用渲染期 setState 清空）。
  */
 
 "use client";
@@ -43,16 +44,18 @@ export function useContentAssetGallery({
   taskId,
   enabled,
 }: UseContentAssetGalleryArgs): ContentAssetGallery {
-  const [images, setImages] = useState<TaskGalleryImage[] | null>(null);
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
 
   const ctxKey = `${taskId ?? ""}|${enabled}`;
-  const [prevCtxKey, setPrevCtxKey] = useState(ctxKey);
-  if (ctxKey !== prevCtxKey) {
-    setPrevCtxKey(ctxKey);
-    setImages(null);
-  }
+  /* 图集与「它属于哪一轮上下文」一起存成一条 state（P2：去掉渲染期 setState）。
+   * 上下文变了就当作这一轮还没有图 —— 与原先在渲染期 `setImages(null)` 等价：
+   * 新任务的首帧不会渲染上一任务的缩略图。 */
+  const [gallery, setGallery] = useState<{
+    key: string;
+    images: TaskGalleryImage[] | null;
+  }>({ key: ctxKey, images: null });
+  const images = gallery.key === ctxKey ? gallery.images : null;
 
   useEffect(() => {
     if (!taskId || !enabled) return;
@@ -62,13 +65,18 @@ export function useContentAssetGallery({
     void (async () => {
       try {
         const list = await fetchTaskImages(taskId);
-        guard.commit(() => setImages(list && list.length > 1 ? list : null));
+        guard.commit(() =>
+          setGallery({
+            key: ctxKey,
+            images: list && list.length > 1 ? list : null,
+          }),
+        );
       } catch {
         /* 静默：单图模式仍正常显示，见文件头 */
       }
     })();
     return () => guard.dispose();
-  }, [taskId, enabled]);
+  }, [taskId, enabled, ctxKey]);
 
   return { images, open, index, setOpen, setIndex };
 }

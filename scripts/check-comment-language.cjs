@@ -59,10 +59,15 @@ const path = require("node:path");
 
 const ROOT = process.cwd();
 const BASELINE = path.join(__dirname, ".comment-language-baseline.json");
-/** 判据版本:只有判据本身变了(例如换了「疑似英文句子」的阈值)才允许一次性重记,
+/**
+ * 判据版本：只有判据本身变了（例如换了「疑似英文句子」的阈值）才允许一次性重记，
  *  其余情况数字只许下降 —— 否则 `--update` 就成了「这条先放宽一下」的后门
- *  (与 §12.13 / §12.16 同款口径)。 */
-const RULE_VERSION = 2;
+ *  （与 §12.13 / §12.16 同款口径）。
+ * 版本 3：`looksEnglish()` 补上第 ② 条「剩余部分须含虚词/动词」——只数词数的旧口径
+ *  会把中文段落里折行的标识符 / 路径 / 类名清单整片判成违规（实测 21 行里 19 行是
+ *  这一类），判据因此从「能挡真英文注释」退化成「逼人在引用行上垫中文」。
+ */
+const RULE_VERSION = 3;
 const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
@@ -217,8 +222,36 @@ async function asciiOnlyModules() {
  * 纯符号行(分隔线 / 标签 / 标点)不含连续英文单词,自然不计入;
  * `// TODO: check` 只有 2 个单词,同样不计入 —— 见头注的判定口径第 2 条。
  */
+/**
+ * 一行注释是否「用英文写的说明句」。两条同时成立才算：
+ *   ① **剥掉引用形态**之后还剩 ≥ `ENGLISH_WORDS_THRESHOLD` 个英文词。剥三类：
+ *      反引号内联代码、成对引号里的字面量、**连字符拼接的标识符整体**
+ *      （`open-in-browser` / `use-reentrancy-lock` / `proc-detect`…）——
+ *      第三类不能省：连字符在 `\b` 眼里就是词边界，模块名里的
+ *      `in` / `on` / `as` / `it` 会被当成虚词，把一整串纯路径清单误判成英文句子；
+ *   ② 剩余部分**含英文虚词/动词**（`JSDOC_PROSE_WORDS_RE`，与 JSDoc 结构行
+ *      豁免同源的那张表）—— 也就是它构成一句英文。
+ *
+ * 为什么要加第 ② 条：本规则治的是「**人读的说明文字用英文写**」，而不是
+ * 「注释里出现了英文」。中文段落里把一批标识符 / 路径 / 类名 / ARIA 属性
+ * 折到下一行，是极常见的写法，旧口径（只看词数）会把它们整片判成违规 ——
+ * 实测 21 行里 20 行是这一类，于是基线只能靠「垫一句中文」或「放宽基线」
+ * 去消红，两者都把门禁推向噪音（噪音判据的终局是没人再看它）。
+ *
+ * 代价要说清：**不含虚词的纯实词英文短句不再被拦**（例如
+ * `// probe launch path timeout`）。这张表本身覆盖 100+ 个高频虚词与常用
+ * 动词，真正的英文散文几乎必然命中；漏的那一类由 review 兜，不靠这里加码。
+ * 第 ① 条的词数下限因此只作「有没有英文书写痕迹」的粗筛，不再是充分条件。
+ */
 function looksEnglish(text) {
-  return (text.match(ENGLISH_WORD_RE) || []).length >= ENGLISH_WORDS_THRESHOLD;
+  const bare = text
+    .replace(/`[^`]*`/g, " ")
+    .replace(/"[^"]*"|'[^']*'|“[^”]*”/g, " ")
+    .replace(/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/g, " ");
+  if ((bare.match(ENGLISH_WORD_RE) || []).length < ENGLISH_WORDS_THRESHOLD) {
+    return false;
+  }
+  return JSDOC_PROSE_WORDS_RE.test(bare);
 }
 
 function hasCJK(text) {

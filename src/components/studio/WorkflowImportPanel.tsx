@@ -9,6 +9,7 @@
 import { useMemo } from "react";
 import { textHandler } from "~/lib/form-props";
 
+import { Hint } from "~/components/ui/hint";
 import { Textarea } from "~/components/ui/textarea";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { FormField } from "~/components/ui/form-field";
@@ -83,15 +84,16 @@ export function WorkflowImportPanel({
         <h2 className="text-ink-bright text-sm font-semibold">
           导入 ComfyUI 工作流
         </h2>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          className="text-ink-muted hover:text-ink-soft"
-          title="关闭"
-        >
-          ✕
-        </Button>
+        <Hint label="关闭" accessibleName>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            className="text-ink-muted hover:text-ink-soft"
+          >
+            ✕
+          </Button>
+        </Hint>
       </div>
 
       {panelDragActive && (

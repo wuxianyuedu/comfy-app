@@ -16,7 +16,7 @@
 import { LOG_MODAL_MAX_ROWS, tailWindow } from "~/lib/page-window";
 import { Checkbox } from "~/components/ui/checkbox";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FileText, X } from "lucide-react";
 import { StepLogRow } from "./StepLogRow";
 import { StepLogTaskPicker } from "./StepLogTaskPicker";
@@ -24,6 +24,7 @@ import type { StepLogEntry } from "./stepLogCache";
 import { listCachedTaskIds } from "./stepLogCache";
 import { useActiveTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
+import { Hint } from "~/components/ui/hint";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { FieldLabel } from "~/components/ui/field";
 import { Button } from "~/components/ui/button";
@@ -33,7 +34,7 @@ import { useTaskStepLogStream } from "./hooks/use-task-step-log-stream";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
-import { useScrollFollow } from "~/components/ui/use-scroll-follow";
+import { VirtualLogList } from "~/components/studio/logs/VirtualLogList";
 import { displayValue } from "~/lib/display-value";
 
 type Level = StepLogEntry["level"];
@@ -104,14 +105,6 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
    *`ui/use-scroll-follow`（规范 16 §16.2.4.24）—— 收口前这里是手写的
    *`scrollTop = scrollHeight`，且**用户上滚不会退出跟随**（会被按回底部，
    * 读不到上面的步骤）。checkbox 保留为「跟随」的显式开关。 */
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const scroller = useScrollFollow({
-    containerRef: scrollerRef,
-    watch: `${logs.length}:${filter}`,
-    following: autoscroll,
-    onFollowingChange: setAutoscroll,
-  });
-
   const cachedIds = useMemo(
     () => listCachedTaskIds(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,21 +146,22 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   return (
     <>
       {/* 浮动触发按钮 —— 仅调试模式开启时渲染。 */}
-      <Button
-        variant="outline"
-        onClick={() => setOpen(true)}
-        title="打开执行日志"
-        data-testid="step-log-trigger"
-        className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
-      >
-        <FileText data-icon="inline-start" size={12} />
-        执行日志
-        {errorCount > 0 && (
-          <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
-            {errorCount}
-          </span>
-        )}
-      </Button>
+      <Hint label="打开执行日志">
+        <Button
+          variant="outline"
+          onClick={() => setOpen(true)}
+          data-testid="step-log-trigger"
+          className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
+        >
+          <FileText data-icon="inline-start" size={12} />
+          执行日志
+          {errorCount > 0 && (
+            <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
+              {errorCount}
+            </span>
+          )}
+        </Button>
+      </Hint>
 
       {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */}
@@ -209,16 +203,17 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 status !== "SUCCEEDED" &&
                 status !== "FAILED" &&
                 status !== "CANCELLED" ? (
-                  <Button
-                    variant="outline"
-                    onClick={onCancelFromPanel}
-                    disabled={cancellingFromPanel}
-                    title="取消当前查看的任务"
-                    data-testid="log-panel-cancel"
-                    className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 h-auto rounded-md border px-2 py-0.5 text-[10.5px]"
-                  >
-                    {cancellingFromPanel ? "× 取消中…" : "× 取消"}
-                  </Button>
+                  <Hint label="取消当前查看的任务" wrap>
+                    <Button
+                      variant="outline"
+                      onClick={onCancelFromPanel}
+                      disabled={cancellingFromPanel}
+                      data-testid="log-panel-cancel"
+                      className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 h-auto rounded-md border px-2 py-0.5 text-[10.5px]"
+                    >
+                      {cancellingFromPanel ? "× 取消中…" : "× 取消"}
+                    </Button>
+                  </Hint>
                 ) : null}
                 {cachedIds.length > 0 && (
                   <StepLogTaskPicker
@@ -238,14 +233,15 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   panel={panel}
                   className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
                 />
-                <Button
-                  variant="ghost"
-                  onClick={() => setOpen(false)}
-                  title="关闭"
-                  className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
-                >
-                  <X data-icon="inline-start" size={16} />
-                </Button>
+                <Hint label="关闭" accessibleName>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setOpen(false)}
+                    className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
+                  >
+                    <X data-icon="inline-start" size={16} />
+                  </Button>
+                </Hint>
               </div>
             </div>
 
@@ -259,23 +255,26 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       : visibleAll.filter((l) => l.level === option.value)
                           .length;
                   return (
-                    <Button
+                    <Hint
+                      label={`${option.label}（${count} 条）`}
                       key={option.value}
-                      variant="ghost"
-                      onClick={() => setFilter(option.value)}
-                      title={`${option.label}（${count} 条）`}
-                      data-testid={`log-filter-${option.value}`}
-                      className={`h-auto rounded-md px-2.5 py-1 text-[13px] font-normal ${
-                        filter === option.value
-                          ? "bg-surface-2 text-ink-bright"
-                          : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
-                      }`}
                     >
-                      {option.label}
-                      <span className="text-ink-fainter ml-1 text-[11px]">
-                        {count}
-                      </span>
-                    </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setFilter(option.value)}
+                        data-testid={`log-filter-${option.value}`}
+                        className={`h-auto rounded-md px-2.5 py-1 text-[13px] font-normal ${
+                          filter === option.value
+                            ? "bg-surface-2 text-ink-bright"
+                            : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
+                        }`}
+                      >
+                        {option.label}
+                        <span className="text-ink-fainter ml-1 text-[11px]">
+                          {count}
+                        </span>
+                      </Button>
+                    </Hint>
                   );
                 })}
               </div>
@@ -289,36 +288,44 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               </FieldLabel>
             </div>
 
-            {/* Log body — 与应用日志同款行样式 */}
-            <div
-              ref={scrollerRef}
-              onScroll={scroller.onScroll}
-              className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
-            >
-              {valErrs.length > 0 && (
-                <div className="border-destructive/40 bg-destructive/8 mb-2 rounded border p-2">
-                  <div className="text-destructive mb-1.5 text-[13px] font-semibold">
-                    ⚠ 工作流验证错误（{valErrs.length}）
-                  </div>
-                  <ValidationErrorList
-                    errors={valErrs.slice(0, 12)}
-                    className="text-destructive/95"
-                  />
-                  {valErrs.length > 12 && (
-                    <div className="text-destructive/80 mt-1 text-[12px]">
-                      +{valErrs.length - 12} more…
+            {/* Log body — 虚拟滚动（复用 VirtualLogList，与应用日志同款行样式） */}
+            <VirtualLogList
+              entries={visible}
+              getMessage={(log) => log.msg}
+              renderRow={(log) => <StepLogRow log={log} />}
+              following={autoscroll}
+              onFollowingChange={setAutoscroll}
+              watch={`${logs.length}:${filter}`}
+              className="bg-canvas-deep/60"
+              topSlot={
+                <>
+                  {valErrs.length > 0 && (
+                    <div className="border-destructive/40 bg-destructive/8 mb-2 rounded border p-2">
+                      <div className="text-destructive mb-1.5 text-[13px] font-semibold">
+                        ⚠ 工作流验证错误（{valErrs.length}）
+                      </div>
+                      <ValidationErrorList
+                        errors={valErrs.slice(0, 12)}
+                        className="text-destructive/95"
+                      />
+                      {valErrs.length > 12 && (
+                        <div className="text-destructive/80 mt-1 text-[12px]">
+                          +{valErrs.length - 12} more…
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {!valErrs.length && error && (
-                <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-[13px]">
-                  <div className="break-words whitespace-pre-wrap">{error}</div>
-                </div>
-              )}
-
-              {visible.length === 0 ? (
+                  {!valErrs.length && error && (
+                    <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-[13px]">
+                      <div className="break-words whitespace-pre-wrap">
+                        {error}
+                      </div>
+                    </div>
+                  )}
+                </>
+              }
+              emptySlot={
                 <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
                   <FileText
                     size={32}
@@ -327,14 +334,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   />
                   {taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
                 </div>
-              ) : (
-                <div className="flex flex-col">
-                  {visible.map((log, index) => (
-                    <StepLogRow key={`${log.t}:${index}`} log={log} />
-                  ))}
-                </div>
-              )}
-            </div>
+              }
+            />
 
             {/* Footer */}
             <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">

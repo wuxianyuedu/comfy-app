@@ -5221,14 +5221,15 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("P81IconSuffix.tsx");
   });
 
-  /* ── P82「视图层 `<Button>` 原生 title=」（棘轮）差分回归 ─────────
-   * 见 scripts/check-ui-primitives.cjs 里 P82 注释：合规出口
-   * `~/components/ui/tooltip` 的 `<Tooltip>` + `<TooltipTrigger
-   * render={<Button …/>}>`（Base UI render prop · 不用 asChild）。
-   * 判据按 `<Button(?=[\s/>])([^>]*)>` 抓开括号、里面命中 `\btitle\s*=`
-   * 即计一处。漏计（`onClick={() => a > b}` 里 `>` 让 `[^>]*` 早停）
-   * 是安全的 · 棘轮只降不升。 */
-  it('P82 视图层 <Button title="x"> 计入棘轮（相对基线增量 → 阻断）', () => {
+  /* ── P82「视图层 `<Button>` 原生 title=」（硬闸）差分回归 ─────────
+   * 见 scripts/check-ui-primitives.cjs 里 P82 注释：合规出口是
+   * `~/components/ui/hint` 的 `<Hint label=…>`（`Tooltip` + Base UI
+   * `TooltipTrigger render={…}` 的薄封装）。
+   * 判据取「`<Button` 之后整段属性」，属性段由 `readJsxAttrsPastTag()` 平衡
+   * 扫描。引入时用的是粗锚 `[^>]*`，它会被属性段里箭头函数 / `{a > b}` /
+   * 带引号的值里那个 `>` 截断 —— 粗锚在真实库上数到 78、AST 复数是 157。
+   * 下面的「漏计已闭合」那条就是钉这个：三种曾被漏掉的形态现在都计到。 */
+  it('P82 视图层 <Button title="x"> 直接阻断（硬闸命中行形态）', () => {
     seedBaseline();
     write(
       "src/components/studio/P82RawTitle.tsx",
@@ -5242,7 +5243,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     );
     const { code, output } = run();
     expect(code, output).not.toBe(0);
-    expect(output).toContain("P82");
+    expect(output).toMatch(/P82\s*→/);
     expect(output).toContain("studio/P82RawTitle.tsx");
   });
 
@@ -5266,21 +5267,52 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     );
     const { code, output } = run();
     expect(code, output).not.toBe(0);
-    expect(output).toContain("P82");
+    expect(output).toMatch(/P82\s*→/);
     expect(output).toContain("studio/P82Multiline.tsx");
   });
 
-  it("P82 不误伤 <Tooltip render={<Button/>}>（合规出口）与子元素的 title=（那是子 div 的账）", () => {
+  it("P82 计数不再被属性段里的 > 截断（粗锚曾漏计的三种形态现在全计到）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P82ArrowFn.tsx",
+      [
+        "export function V({ count, a, b }: Props) {",
+        "  return (",
+        "    <>",
+        '      <Button onClick={() => a > b} title="箭头函数在前">一</Button>',
+        '      <Button disabled={count > 0} title="表达式里带比较">二</Button>',
+        '      <Button aria-label="a>b" title="引号里带尖括号">三</Button>',
+        '      <Button title="本来就能计到的">四</Button>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    /* 用 --report（只出清单、不判失败）锁计数：粗锚时代这条只有 1，
+     * 平衡扫描后是 4 —— 漏计闭死才是本条能升硬闸的前提。 */
+    const { code, output } = run(["--report"]);
+    expect(code, output).toBe(0);
+    const line = output.split(/\r?\n/).find((l) => l.includes("] P82 "));
+    expect(line, output).toBeDefined();
+    expect(line).toMatch(/—— 4 处 \/ 1 文件/);
+  });
+
+  it("P82 不误伤 <Hint> 与 <Tooltip render={<Button/>}>（两种合规出口）", () => {
     seedBaseline();
     write(
       "src/components/studio/P82Ok.tsx",
       [
         "export function V() {",
         "  return (",
-        "    <Tooltip>",
-        "      <TooltipTrigger render={<Button onClick={x}>删除</Button>} />",
-        "      <TooltipContent>删除当前节点</TooltipContent>",
-        "    </Tooltip>",
+        "    <>",
+        '      <Hint label="删除当前节点" accessibleName>',
+        "        <Button onClick={x}>⌫</Button>",
+        "      </Hint>",
+        "      <Tooltip>",
+        "        <TooltipTrigger render={<Button onClick={x}>删除</Button>} />",
+        "        <TooltipContent>删除当前节点</TooltipContent>",
+        "      </Tooltip>",
+        "    </>",
         "  );",
         "}",
       ].join("\n"),
@@ -5299,6 +5331,108 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         '    <ButtonLink href="/x" title="返回">',
         "      返回",
         "    </ButtonLink>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（棘轮）差分回归 ──────
+   * 判据见 scripts/check-ui-primitives.cjs 里 P83 的注释：只管 h1（屏级），
+   * 属性段必须出现 u-title-page / u-title-hero / text-page / text-hero 之一，
+   * 且不得再叠 text-lg / text-[34px] 这类硬写字号。 */
+  it("P83 h1 各屏自写字号 → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P83MissingTier.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <h1 className="font-title text-ink text-xl font-bold">历史记录</h1>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P83");
+    expect(output).toContain("studio/P83MissingTier.tsx");
+  });
+
+  it("P83 已走档但再叠硬写字号 → 仍计（档位给数，调用点不补第二套）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P83DoubleSize.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <h1 className="u-title-page text-[34px]">首页</h1>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P83");
+  });
+
+  it("P83 合规出口：u-title-page / u-title-hero / text-page 都不计", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P83Ok.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        '      <h1 className="font-title u-title-page">模型库</h1>',
+        '      <h1 className="u-title-hero text-center">把创意变成成片</h1>',
+        '      <h1 className="text-page">设置</h1>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P83 数组 / cn(...) 形态的 className 要读得到档位（粗锚会在这里漏计）", () => {
+    /* `className={[...].join("")}` 与 `cn("u-title-page", a > b ? … : …)` 里都有
+     * `>`，用 `[^>]*` 那种粗锚会在表达式中间早停、把这行判成「没有档位要求」，
+     * 于是判据在这里静默失效 —— 属性段必须平衡扫描（同 P82 的教训）。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P83ArrayAttrs.tsx",
+      [
+        "export function V({ n }: { n: number }) {",
+        "  return (",
+        "    <>",
+        '      <h1 className={["u-title-page", n > 1 ? "mt-2" : ""].join(" ")}>列表</h1>',
+        '      <h1 className={cn("u-title-page", n > 1 ? "text-ink" : "text-ink")}>另一屏</h1>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P83 只管屏级标题：h2 / h3 的多档微排版不入本条", () => {
+    /* 区块级标题刻意保留 10.5–14px 的几档，并成一档会压平层次；判据越界就会
+     * 逼下一个人拆掉合理的排版去迎合机器。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P83Sections.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        '      <h2 className="text-sm font-semibold">筛选</h2>',
+        '      <h3 className="text-[10.5px] font-semibold tracking-wider">节点</h3>',
+        "    </>",
         "  );",
         "}",
       ].join("\n"),

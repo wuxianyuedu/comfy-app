@@ -22,6 +22,7 @@ import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import type { Character } from "~/lib/workshop/types";
 
 import { useCharacterReview } from "./hooks/use-character-review";
+import { Hint } from "~/components/ui/hint";
 
 export interface CharacterReviewButtonProps {
   character: Character;
@@ -45,16 +46,17 @@ export function CharacterReviewButton({
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => setOpen(true)}
-        aria-label="AI 评审这张角色卡"
-        title="AI 评审这张角色卡"
-        className="text-ink-soft hover:bg-primary/15"
-      >
-        <ClipboardCheck data-icon="inline-start" size={16} />
-      </Button>
+      <Hint label="AI 评审这张角色卡">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setOpen(true)}
+          aria-label="AI 评审这张角色卡"
+          className="text-ink-soft hover:bg-primary/15"
+        >
+          <ClipboardCheck data-icon="inline-start" size={16} />
+        </Button>
+      </Hint>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
