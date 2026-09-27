@@ -59,15 +59,19 @@ run_group() {
 run_group A "tsc --noEmit" sh -c 'pnpm exec tsc --noEmit'
 run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm run lint'
 
-# ── C：core/lib 结构守护测试合并成一次 vitest（只 boot 一次 vite）──────────
-run_group C "core/lib 结构守护测试" sh -c 'pnpm exec vitest run \
-  tests/single-logger-channel.test.ts \
-  tests/container-single-access.test.ts \
-  tests/core-spine-single-source.test.ts \
-  tests/lib-node-only-declarations.test.ts \
-  tests/core-barrel-entry-discipline.test.ts \
-  tests/test-mock-targets.test.ts \
-  tests/repository-base-purity.test.ts'
+# ── C：结构守护测试（固定清单 + 本次改动牵扯到的用例）合并成一次 vitest ──────
+# 固定清单的**唯一出处**是 `scripts/affected-tests.mjs` 的 FIXED_STRUCTURAL_TESTS，
+# 这里不再抄一遍：抄一份就会漂移，且清单里的用例被改名后，钩子会「一条都不跑却
+# 仍然绿」。增量层的五条判据与它的**已知边界**（不保证传递依赖；命中公共地基时
+# 明确放弃收窄、兜底不是全量）写在该脚本文件头与规范 §13.5.4。
+run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
+  set -f
+  files=$(node scripts/affected-tests.mjs) || exit 1
+  if [ -z "$files" ]; then
+    echo "[pre-commit] affected 解析没给出清单 —— 宁可阻断，也不让 vitest 不带参数跑成全量"
+    exit 1
+  fi
+  pnpm exec vitest run $files'
 
 # ── D：其余静态判据（互不依赖；组内串行以控内存，但整体与 A/B/C 并行）──────
 # 每条命令的规范出处见 scripts/ 对应脚本头部；顺序即执行序，新增判据追加到这里。
