@@ -31,6 +31,8 @@ interface Props {
   onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
   /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
   onNotice: (message: string) => void;
+  /** 取消一个进行中的本机视频任务（控制器统一出口）。 */
+  onCancelShot: (shot: Shot) => void;
   onPrevStage: () => void;
   onNextStage: () => void;
 }
@@ -56,6 +58,7 @@ export function VideoStudio({
   onOpenApiSettings,
   onShotsChange,
   onNotice,
+  onCancelShot,
   onPrevStage,
   onNextStage,
 }: Props) {
@@ -269,6 +272,7 @@ export function VideoStudio({
               fps={fps}
               onPatch={(p) => patchShot(shot.id, p)}
               onGenerate={() => void generateClip(shot)}
+              onCancel={() => void onCancelShot(shot)}
             />
           ))}
         </div>

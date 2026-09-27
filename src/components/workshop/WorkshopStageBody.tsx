@@ -111,6 +111,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     markRendered,
     dismissNotice,
     showNotice,
+    cancelShotTask,
   } = controller;
 
   /* 本地剧本文件导入：读取 .md / .txt 内容并写入 scriptMarkdown。
@@ -353,6 +354,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 onOpenApiSettings={openApiSettings}
                 onShotsChange={setShots}
                 onNotice={showNotice}
+                onCancelShot={(shot) => void cancelShotTask(shot, "image")}
                 onNextStage={() => setTab("video")}
               />
             </React.Suspense>
@@ -381,6 +383,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 onOpenApiSettings={openApiSettings}
                 onShotsChange={setShots}
                 onNotice={showNotice}
+                onCancelShot={(shot) => void cancelShotTask(shot, "video")}
                 onPrevStage={() => setTab("shots")}
                 onNextStage={() => setTab("render")}
               />

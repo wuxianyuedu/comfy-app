@@ -14,6 +14,7 @@ import {
   fetchTaskSnapshot,
   fetchWorkshopWorkflows,
   LOCAL_TASK_TIMEOUT_MS,
+  cancelLocalTask,
   preparePortraitReferences,
   startLocalGenerate,
   watchTask,
@@ -248,6 +249,9 @@ export interface WorkshopPipelineController {
 
   // ── 动作
   generateShot: (shot: Shot) => Promise<void>;
+  /** 取消一个进行中的本机任务（生图 / 视频通用）：调 task.cancel 后由观察
+   *  循环收到 CANCELLED 终态收尾。API 直连任务没有本机任务 id，取消不了。 */
+  cancelShotTask: (shot: Shot, target: "image" | "video") => Promise<void>;
   openScriptEditor: () => void;
   closeScriptEditor: () => void;
   saveScriptEditor: () => void;
@@ -656,8 +660,13 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
                   : { status: result.ok ? "done" : "failed" },
               );
               if (!result.ok && result.message) {
+                /* 用户主动取消走的是 CANCELLED 终态：不是故障，文案要分开 ——
+                 * 否则一次正常取消会被报成红色「生成失败」。 */
+                const cancelled = result.message.includes("CANCELLED");
                 setNotice(
-                  `${target === "video" ? "视频" : "镜头"}生成失败：${result.message}`,
+                  cancelled
+                    ? `${target === "video" ? "视频" : "镜头"}任务已取消，可重新生成`
+                    : `${target === "video" ? "视频" : "镜头"}生成失败：${result.message}`,
                 );
               }
               resolve();
@@ -727,6 +736,27 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       }
     },
     [workflowId, buildShotInput, watchShotTask],
+  );
+
+  /** 取消一个进行中的本机任务（生图 / 视频通用）。真正把界面收尾的是观察
+   *  循环：task.cancel 把任务置 CANCELLED，SSE 的终态帧随后落定 —— 状态回
+   *  failed、提示「已取消，可重新生成」。这里只负责发起取消并把失败原因
+   *  说清（任务可能恰好已结束）。 */
+  const cancelShotTask = React.useCallback(
+    async (shot: Shot, target: "image" | "video") => {
+      const taskId = target === "video" ? shot.clipTaskId : shot.taskId;
+      if (!taskId) {
+        setNotice("该任务无法取消（非本机任务，或已经结束）");
+        return;
+      }
+      try {
+        await cancelLocalTask(taskId);
+        setNotice("已发送取消请求，正在等待任务停止…");
+      } catch (e: unknown) {
+        setNotice(errorMessage(e, "取消失败（任务可能已经结束）"));
+      }
+    },
+    [],
   );
 
   /* ── 恢复失联任务（刷新 / 切走页签后重挂载）───────────────────────────
@@ -945,6 +975,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     characterPortraitActions,
 
     generateShot,
+    cancelShotTask,
     openScriptEditor,
     closeScriptEditor,
     saveScriptEditor,

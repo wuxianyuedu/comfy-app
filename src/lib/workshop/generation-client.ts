@@ -50,6 +50,13 @@ export async function startLocalGenerate(
   return res.taskId;
 }
 
+/** 取消一个本地任务（tRPC task.cancel）：任务状态置 CANCELLED，正在观察它的
+ *  SSE 会收到终态帧并落定（产物被丢弃，镜头状态回 failed + 提示「已取消」）。
+ *  任务不存在 / 已结束由服务端报错，调用方把错误原样给提示条。 */
+export async function cancelLocalTask(taskId: string): Promise<void> {
+  await vanillaApi.task.cancel.mutate({ id: taskId });
+}
+
 /** 本地 ComfyUI 单个任务的统一安全阀（30 分钟无响应即判超时）。
  *  生图 / 视频 / 分镜批量三处的观察循环共用同一份常量 —— 哪一处漏配，
  *  批量循环就会永久卡死在一条沉默的 SSE 流上。 */

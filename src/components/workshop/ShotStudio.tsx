@@ -51,6 +51,8 @@ interface Props {
   onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
   /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
   onNotice: (message: string) => void;
+  /** 取消一个进行中的本机任务（控制器统一出口）。 */
+  onCancelShot: (shot: Shot) => void;
   onNextStage: () => void;
 }
 
@@ -89,6 +91,7 @@ export function ShotStudio({
   onOpenApiSettings,
   onShotsChange,
   onNotice,
+  onCancelShot,
   onNextStage,
 }: Props) {
   const [channel, setChannel] = React.useState<Channel>("local");
@@ -399,6 +402,7 @@ export function ShotStudio({
               workflowId={workflowId}
               apiReady={apiReady}
               onGenerate={(s) => void generateShot(s)}
+              onCancel={(s) => void onCancelShot(s)}
               onPromptChange={(id, prompt) => {
                 editedRef.current.add(id);
                 patchShot(id, { prompt });
@@ -456,6 +460,8 @@ interface ShotCardRowProps {
   workflowId: string;
   apiReady: boolean;
   onGenerate: (shot: Shot) => void;
+  /** 取消本条进行中的本机任务（有 taskId 才显示按钮）。 */
+  onCancel: (shot: Shot) => void;
   /** 提示词被手改：父层记入 editedRef（自动预填不再覆盖）并写回镜头。 */
   onPromptChange: (id: string, prompt: string) => void;
 }
@@ -469,6 +475,7 @@ function ShotCardRow({
   workflowId,
   apiReady,
   onGenerate,
+  onCancel,
   onPromptChange,
 }: ShotCardRowProps) {
   return (
@@ -538,6 +545,18 @@ function ShotCardRow({
               ? "重新生成"
               : "生成此镜头"}
         </Button>
+        {shot.status === "running" && shot.taskId && (
+          /* 只对本机任务可取消（API 直连没有可取消的任务 id）：
+             点击后 task.cancel 置 CANCELLED，观察循环收终态收尾。 */
+          <Button
+            variant="secondary"
+            size="xs"
+            onClick={() => onCancel(shot)}
+            className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
+          >
+            取消
+          </Button>
+        )}
         {shot.taskId && (
           <span className="text-faint truncate text-[10px]">
             任务 {shot.taskId.slice(0, 12)}…

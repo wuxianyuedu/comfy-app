@@ -16,6 +16,7 @@ import { createProject } from "~/lib/project-canvas/canvas-store";
 import {
   LOCAL_TASK_TIMEOUT_MS,
   buildLibraryWorkflowInput,
+  cancelLocalTask,
   startLocalGenerate,
   type LibraryWorkflowBuildResult,
 } from "~/lib/workshop/generation-client";
@@ -40,6 +41,7 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
     watchTask: watchTaskMock,
     fetchTaskSnapshot: fetchTaskSnapshotMock,
     startLocalGenerate: vi.fn(),
+    cancelLocalTask: vi.fn(),
     buildLibraryWorkflowInput: vi.fn(),
     fetchApiChannels: vi.fn(async () => null),
     fetchWorkshopWorkflows: vi.fn(async () => []),
@@ -99,6 +101,7 @@ beforeEach(() => {
   localStorage.clear();
   watchTaskMock.mockReset();
   fetchTaskSnapshotMock.mockReset();
+  vi.mocked(cancelLocalTask).mockReset();
   global.fetch = vi.fn(
     async () =>
       new Response(JSON.stringify({ skills: [], models: [] }), {
@@ -410,5 +413,82 @@ describe("useWorkshopPipeline generateShot 的可靠性出口", () => {
     expect(closeSpy).toHaveBeenCalled();
     expect(result.current.shots[0]!.status).toBe("failed");
     expect(result.current.notice).toContain("超时");
+  });
+});
+
+describe("useWorkshopPipeline cancelShotTask", () => {
+  it("生图任务进行中：调 task.cancel，观察循环收到 CANCELLED 后按「已取消」收尾", async () => {
+    const project = createProject();
+    seedDraft(project.id, [makeShot({ status: "idle" })]);
+    const { result } = renderHook(() => useWorkshopPipeline());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    /* 真实时序：先发起生成（观察循环挂上、taskId 写回镜头），再取消。 */
+    vi.mocked(buildLibraryWorkflowInput).mockResolvedValue(buildResult());
+    vi.mocked(startLocalGenerate).mockResolvedValue("task-cancel");
+    watchTaskMock.mockImplementation(() => () => undefined);
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = result.current.generateShot(result.current.shots[0]!);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.shots[0]!.taskId).toBe("task-cancel");
+
+    await act(async () => {
+      await result.current.cancelShotTask(result.current.shots[0]!, "image");
+    });
+    expect(vi.mocked(cancelLocalTask)).toHaveBeenCalledWith("task-cancel");
+    expect(result.current.notice).toContain("已发送取消请求");
+
+    /* SSE 收到 CANCELLED 终态：不是故障，文案不报「生成失败」。 */
+    await act(async () => {
+      watchTaskMock.mock.calls[0]![1].onSettled({
+        ok: false,
+        message: "任务 CANCELLED",
+      });
+      await pending;
+    });
+    expect(result.current.shots[0]!.status).toBe("failed");
+    expect(result.current.notice).toContain("已取消");
+    expect(result.current.notice).not.toContain("生成失败");
+  });
+
+  it("视频任务进行中：按 clipTaskId 取消", async () => {
+    const project = createProject();
+    seedDraft(project.id, [
+      /* 恢复逻辑会把 running 的片段收尾（快照 mock 未配置 → failed），
+       * 但 cancelShotTask 只读任务 id：failed 的镜头带着 clipTaskId 仍可验「按
+       * clipTaskId 取消」这条取参口径。 */
+      makeShot({ clipStatus: "failed", clipTaskId: "clip-cancel" }),
+    ]);
+    const { result } = renderHook(() => useWorkshopPipeline());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.cancelShotTask(result.current.shots[0]!, "video");
+    });
+    expect(vi.mocked(cancelLocalTask)).toHaveBeenCalledWith("clip-cancel");
+  });
+
+  it("没有可取消的任务 id（API 通道 / 已结束）：提示不支持，不发 cancel", async () => {
+    const project = createProject();
+    seedDraft(project.id, [makeShot({ status: "running" })]);
+    const { result } = renderHook(() => useWorkshopPipeline());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.cancelShotTask(result.current.shots[0]!, "image");
+    });
+    expect(vi.mocked(cancelLocalTask)).not.toHaveBeenCalled();
+    expect(result.current.notice).toContain("无法取消");
   });
 });
