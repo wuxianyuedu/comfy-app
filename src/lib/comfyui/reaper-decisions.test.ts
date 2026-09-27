@@ -78,7 +78,7 @@ function queuedRow(id: string, promptId: string | null = null) {
 }
 
 /** 造一条 RUNNING 行（promptId 已写，finishedAt 未写）。 */
-function runningRow(id: string, promptId: string) {
+function runningRow(id: string, promptId: string | null) {
   return { id, promptId, createdAt: new Date(Date.now() - 300_000) };
 }
 
@@ -537,6 +537,50 @@ describe("RUNNING reaper 判决矩阵", () => {
     await reaper.reapStaleRunningTasks!();
 
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ISSUE #1184：`RUNNING` 且 `promptId` 为空的行以前被 SQL 的
+   * `promptId IS NOT NULL` 挡在两条 sweeper 之外（QUEUED 版又只要 `QUEUED`），
+   * 宿主在这段窗口崩溃就**永久卡「生成中」**、界面无出口。现在它们会被交出来，
+   * 由下面三条判据决定去向。
+   */
+  it("无 promptId 但本进程仍握着它的 cli 句柄：两轮都不插手（正常执行中）", async () => {
+    const reaper = await loadReaper();
+    vi.mocked(cliProcs).set("t-np1", {} as never);
+    repoMock("listStaleRunning").mockResolvedValue([
+      runningRow("t-np1", null),
+      runningRow("t-np1", null),
+    ]);
+
+    await reaper.reapStaleRunningTasks!();
+    await reaper.reapStaleRunningTasks!();
+
+    expect(repoMock("finalizeFailure")).not.toHaveBeenCalled();
+  });
+
+  it("无 promptId 的第一轮只登记不判死（刚领取、还没 spawn 的行长得一样）", async () => {
+    const reaper = await loadReaper();
+    repoMock("listStaleRunning").mockResolvedValue([runningRow("t-np2", null)]);
+
+    await reaper.reapStaleRunningTasks!();
+
+    expect(repoMock("finalizeFailure")).not.toHaveBeenCalled();
+    // 登记这件事本身要可见：排障时「为什么这轮没收」得有一条线索
+    expect(logsOf("t-np2").some((m) => m.includes("本轮先登记"))).toBe(true);
+  });
+
+  it("无 promptId 且连续两轮无人认领：判 FAILED 并说明宿主可能已崩溃", async () => {
+    const reaper = await loadReaper();
+    repoMock("listStaleRunning").mockResolvedValue([runningRow("t-np3", null)]);
+
+    await reaper.reapStaleRunningTasks!();
+    await reaper.reapStaleRunningTasks!();
+
+    const [taskId, reason] = callArgsOf(repoMock("finalizeFailure"));
+    expect(taskId).toBe("t-np3");
+    expect(String(reason)).toContain("prompt_id");
+    expect(String(reason)).toContain("请重新执行");
   });
 });
 

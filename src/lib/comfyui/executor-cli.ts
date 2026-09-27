@@ -344,7 +344,18 @@ export async function executeViaComfyCli(job: Job) {
 
   const child = spawn(/*turbopackIgnore: true*/ py, args, {
     cwd: process.cwd(),
-    env: { ...process.env, DO_NOT_TRACK: "1", COMFY_CLI_NO_TELEMETRY: "1" },
+    /* `PYTHONUNBUFFERED=1`：非 TTY 的管道上 python 的 stdout 是**块缓冲**，事件会
+     * 成批迟到。实测后果不是「不好看」而是两条真缺陷——`prompt_id` 与 progress
+     * 要到收尾才落库，于是进度条整轮停在 0%，而这行 `RUNNING` 且 `promptId` 为空
+     * 的记录一度落在两条 sweeper 的判据之外（ISSUE #1184）。打开行缓冲让事件实时
+     * 到，回收侧的「两轮观察」才有可信的时间窗。
+     * 编码（`PYTHONIOENCODING`）另在 ISSUE #1164 治理，不混进本刀。 */
+    env: {
+      ...process.env,
+      DO_NOT_TRACK: "1",
+      COMFY_CLI_NO_TELEMETRY: "1",
+      PYTHONUNBUFFERED: "1",
+    },
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
