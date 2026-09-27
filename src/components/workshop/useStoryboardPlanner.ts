@@ -20,6 +20,8 @@ import {
   mergeParams,
 } from "~/lib/workshop/prompt-builder";
 import { workshopUid } from "~/lib/workshop/script-parser";
+import { runWithConcurrency } from "~/lib/async-pool";
+import { WORKSHOP_BATCH_CONCURRENCY } from "~/lib/workshop/generation-client";
 import {
   buildExtractShotsMessages,
   buildShotsFromEntries,
@@ -416,9 +418,11 @@ export function useStoryboardPlanner(props: Props) {
     const pending = shots.filter(
       (shot) => shot.status === "idle" || shot.status === "failed",
     );
-    for (const shot of pending) {
-      await onGenerate(shot);
-    }
+    /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：onGenerate 内部自兜单条失败，
+     * 一条 failed 不中断批量。 */
+    await runWithConcurrency(pending, WORKSHOP_BATCH_CONCURRENCY, (shot) =>
+      onGenerate(shot),
+    );
   }
 
   /* ── 图片提示词：AI 润色 ──
