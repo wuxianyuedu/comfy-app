@@ -3690,27 +3690,29 @@ const RULES = {
    * 「禁用按钮弹不出原因」三类场景。
    *
    * 判据按形态取：视图层 `<Button` 后紧跟空白 / `>` / `/`（不误伤
-   * `<ButtonLink>`）时，读它的**整个属性段**、里面命中 `\btitle\s*=` 即计一处。
-   * 属性段由 `readJsxAttrsPastTag()` 平衡扫描（`{}` 计深度、引号与模板串内
-   * 不判结构），**不再**用 `[^>]*` 那种粗锚：箭头函数 `onClick={() => …}` 里的
-   * `>` 会让粗锚早停、把该 Button 判成「没 title=」——引入时按粗锚实测 78 处，
-   * 用 TypeScript AST 复扫同一作用域是 157 处（`LogPanel.tsx` 单文件粗锚记 3、
-   * 实有 10）。棘轮阶段漏计不假红，但「清零 + 升硬闸」必须建立在看得见全部
-   * 存量的判据上，所以本条与升硬闸同批改实现。 */
+   * `<ButtonLink>`）时，**平衡扫描**它的整个开标签、解析出属性、再判
+   * `title=` 的取值档位（见 `countButtonTitle`）：
+   *   · 属性段边界交给扫描器（`scanJsxAttrs`），不用 `[^>]*` 那种粗锚 ——
+   *     箭头函数 `onClick={() => …}` 里的 `>` 会让粗锚早停、把后面带 `title=`
+   *     的 Button 漏掉（引入时粗锚实测 78 处、AST 复扫 157 处）；
+   *   · 属性名**整名匹配**（`parseJsxProps` 里 `-` `.` `$` `:` 都算名字字符）——
+   *     旧的 `\btitle\s*=` 会把 `data-title=` / `aria-label="title=x"` 误报；
+   *   · 取值分五档，只有 static（`title="文字"`）与 dynamic（`title={expr}`）
+   *     计违规；empty（`title=""` / `{undefined}` / `{null}`）等同没写、不计；
+   *     `{...props}` 展开的 unknown 单列人工抽查（静态判不了，见 `--report`
+   *     的 `P82-unknown` 通道）。
+   *   ⚠️ 已知边界：**字符串 / 模板字面量里**字面出现的 `<Button title=…>`
+   *   （如测试夹具的字符串）仍会被命中 —— 这一档只有 AST（`@babel/parser`
+   *   开 jsx 插件或 ts-morph 遍历 `JsxOpeningElement`）能根治；本仓库实测
+   *   该形态真实出现 0 处（落在注释里的已被 `stripComments` 剥掉），故不在
+   *   正则/扫描器上继续打补丁（§12.18）。 */
   P82: {
     label:
       "视图层 <Button> 用原生 title=（应走 ~/components/ui/hint 的 <Hint label=…>；shadcn composition.md）",
-    count: (t) => {
-      const t2 = stripComments(t);
-      let n = 0;
-      const re = /<Button(?=[\s/>])/g;
-      let m;
-      while ((m = re.exec(t2)) !== null) {
-        const attrs = readJsxAttrsPastTag(t2, re.lastIndex);
-        if (attrs !== null && /\btitle\s*=/.test(attrs)) n++;
-      }
-      return n;
-    },
+    /* 五档判定（见 countButtonTitle）：只有 static / dynamic 计入违规；
+     * empty（空值等同没写）与 unknown（{...props} 展开、静态判不了）不进
+     * 这条硬闸，后者单列人工抽查。 */
+    count: (t) => countButtonTitle(t).violations,
   },
 
   /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（硬闸）─────────────────
@@ -3755,32 +3757,228 @@ const RULES = {
   },
 };
 
-/**
- * 从 JSX 开括号的属性段起点扫到收尾的 `>`，返回中间那段文本（取不到收尾 `>`
- * 时返回 `null`）。要平衡三件事，少一件就会漏计或误伤：
- *   · `{…}` 表达式里的 `>` 不算标签收尾（`disabled={a > b}`、`onClick={() => x()}`）；
- *   · 字符串 / 模板字面量里的 `{` `}` `>` 都不参与结构判断；
- *   · 嵌套表达式（`{list.map((x) => <b>{x}</b>)}`）靠深度计数吃下。
- */
-function readJsxAttrsPastTag(src, from) {
-  let depth = 0;
-  let quote = null;
-  for (let i = from; i < src.length; i++) {
+/* ── P82 判据：JSX 开标签扫描 + 属性解析 + 五档判定 ────────────────
+ * 判据的三段拆开写，各管一件事（正则只定位起点，边界交给扫描器）：
+ *   ① scanJsxAttrs()       —— 从属性段起点扫到收尾 `>`：`{}` 计深度、引号
+ *      （含模板串）内不判结构、`\` 跳转义、`{…}` 里再进一层嵌套表达式；
+ *   ② parseJsxProps()      —— 把属性段切成一段段属性，**按整名匹配**（于是
+ *      `data-title=` / `mytitle=` / `aria-label="title=x"` 都不会被当成 title）；
+ *   ③ classifyTitleValue() —— 对每个 title 取值分档，只有 static / dynamic 算违规。
+ * 全部返回结构化结果，`--report` 可直接印出 unknown 清单人工抽查。 */
+
+/** 名字字符集：JSX 标签名与属性名的可接受字符（含 `-` `.` `$` `:`）。 */
+const JSX_NAME_CHAR = /[A-Za-z0-9_$:.-]/;
+
+/** 从 `i`（引号起点）跳到字符串结束后的下标；处理转义与模板串 `${…}` 插值。 */
+function skipJsxString(src, i) {
+  const q = src[i];
+  i++;
+  while (i < src.length) {
     const ch = src[i];
-    if (quote) {
-      if (ch === "\\") i++;
-      else if (ch === quote) quote = null;
+    if (ch === "\\") {
+      i += 2;
       continue;
     }
-    if (ch === '"' || ch === "'" || ch === "`") {
-      quote = ch;
+    if (q === "`" && ch === "$" && src[i + 1] === "{") {
+      /* 模板串插值：吃下平衡的一对花括号（内部可能再含字符串）。 */
+      i += 2;
+      let depth = 1;
+      while (i < src.length && depth > 0) {
+        const c = src[i];
+        if (c === '"' || c === "'" || c === "`") {
+          i = skipJsxString(src, i);
+          continue;
+        }
+        if (c === "{") depth++;
+        else if (c === "}") depth--;
+        i++;
+      }
       continue;
     }
-    if (ch === "{") depth++;
-    else if (ch === "}") depth = Math.max(0, depth - 1);
-    else if (ch === ">" && depth === 0) return src.slice(from, i);
+    if (ch === q) return i + 1;
+    i++;
+  }
+  return i;
+}
+
+/** 从属性段起点 `from` 扫到收尾 `>`，返回 { attrs, end } 或 null（取不到收尾）。 */
+function scanJsxAttrs(src, from) {
+  let i = from;
+  let depth = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '"' || c === "'" || c === "`") {
+      i = skipJsxString(src, i);
+      continue;
+    }
+    if (c === "{") {
+      depth++;
+      i++;
+      continue;
+    }
+    if (c === "}") {
+      depth = Math.max(0, depth - 1);
+      i++;
+      continue;
+    }
+    /* 只有 depth === 0 且不在字符串里时的 `>` 才算标签结束。 */
+    if (depth === 0 && c === ">")
+      return { attrs: src.slice(from, i), end: i + 1 };
+    i++;
   }
   return null;
+}
+
+/** 属性段文本（`scanJsxAttrs` 的只取 attrs 版本）：取不到收尾 `>` 返回 `null`。
+ *  P83（屏级标题 `<h1>`）等处只关心属性段内容、不关心收尾下标，用这个更直白。 */
+function readJsxAttrsPastTag(src, from) {
+  const scanned = scanJsxAttrs(src, from);
+  return scanned ? scanned.attrs : null;
+}
+
+/** 从 `i`（`{` 起点）吃下一整对平衡花括号，返回 `}` 之后的下标。
+ *  与 scanJsxAttrs 的区别：本函数**只**吃一层 `{…}`、不把 `>` 当终点 ——
+ *  属性值 `onClick={() => a > b}` 里那个 `>` 属于表达式内部，标签的收尾
+ *  `>` 在其后。内部字符串照样跳（`title={"a}b"}` 里的 `}` 不参与配对）。 */
+function skipJsxBraceExpr(src, i) {
+  let depth = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '"' || c === "'" || c === "`") {
+      i = skipJsxString(src, i);
+      continue;
+    }
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+    i++;
+  }
+  return i;
+}
+
+/** 把属性段解析成属性对象列表：[{ name, kind }]，kind ∈ value|spread|bare。
+ *  · spread —— `{...props}`（名字为 `...`），title 可能由此带进来；
+ *  · value  —— `name=…`（值可能是引号串 / `{…}` 表达式 / 裸标记）；
+ *  · bare   —— 只有名字（如 `disabled` / `accessibleName`）。
+ *  按整名匹配，`-` `.` `$` `:` 都是名字字符，所以 `data-title` 不会命中 `title`。 */
+function parseJsxProps(attrs) {
+  const props = [];
+  let i = 0;
+  const n = attrs.length;
+  while (i < n) {
+    const c = attrs[i];
+    if (/\s|\//.test(c)) {
+      i++;
+      continue;
+    }
+    if (c === "{") {
+      const after = skipJsxBraceExpr(attrs, i);
+      const inner = attrs.slice(i, after);
+      /* 属性级的 `{…}` 只有 `{...props}` 是展开；其余（如 `{cond && <X/>}`）
+       * 不是属性，跳过即可。 */
+      if (/^\{\s*\.\.\./.test(inner))
+        props.push({ name: "...", kind: "spread" });
+      i = after;
+      continue;
+    }
+    if (!JSX_NAME_CHAR.test(c)) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < n && JSX_NAME_CHAR.test(attrs[j])) j++;
+    const name = attrs.slice(i, j);
+    let k = j;
+    while (k < n && /\s/.test(attrs[k])) k++;
+    if (attrs[k] !== "=") {
+      props.push({ name, kind: "bare" });
+      i = j;
+      continue;
+    }
+    k++;
+    while (k < n && /\s/.test(attrs[k])) k++;
+    const vc = attrs[k];
+    if (vc === '"' || vc === "'" || vc === "`") {
+      const after = skipJsxString(attrs + ">", k);
+      props.push({ name, kind: "value", raw: attrs.slice(k, after) });
+      i = after;
+    } else if (vc === "{") {
+      const after = skipJsxBraceExpr(attrs, k);
+      props.push({ name, kind: "value", raw: attrs.slice(k, after) });
+      i = after;
+    } else {
+      let m = k;
+      while (m < n && !/[\s{("'`]/.test(attrs[m])) m++;
+      props.push({ name, kind: "value", raw: attrs.slice(k, m) });
+      i = m;
+    }
+  }
+  return props;
+}
+
+/** 扫视图层每个 `<Button>` 开标签，按「有没有原生 `title=`」判 P82 违规。
+ *
+ *  **注意 polarity**：P82 是「不许用原生 `title=`」（该走 `<Hint>`），不是
+ *  「必须给 title」。所以计违规的是 `title=` 的**出现**，不是缺席。
+ *
+ *  五档取名的方向沿用「这一处该怎么处置」：
+ *    · clean   —— 没有 title 属性、也没有 spread          → 合规，不计
+ *    · empty   —— `title=""` / `title={undefined|null}`    → 空值不产生原生
+ *                 tooltip，等同于没写，不计违规（**旧判据把这一档也当违规，
+ *                 是误报**）
+ *    · static  —— `title="有内容"`                       → 真·原生 tooltip，违规
+ *    · dynamic —— `title={expr}`                          → 运行时才知值，默认
+ *                 当违规（`<Hint label={expr}>` 才是出口）
+ *    · unknown —— 有 `{...props}` 展开且无显式 title       → 静态判不了 title
+ *                 会不会被带进来，单列人工抽查、不计违规（**旧判据漏计**）
+ *  返回值里 `violations = static + dynamic`，P82 只把它计入硬闸。 */
+function countButtonTitle(text) {
+  const t = stripComments(text);
+  const res = {
+    clean: 0,
+    empty: 0,
+    static: 0,
+    dynamic: 0,
+    unknown: 0,
+    violations: 0,
+    unknownHits: [],
+  };
+  const re = /<Button(?=[\s/>])/g;
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    const scanned = scanJsxAttrs(t, re.lastIndex);
+    if (!scanned) continue;
+    const props = parseJsxProps(scanned.attrs);
+    const titles = props.filter((p) => p.name === "title");
+    if (titles.length) {
+      /* 同名重复时取最后一个（JSX 后者覆盖前者）。 */
+      const tier = classifyTitleValue(titles[titles.length - 1]);
+      res[tier]++;
+      if (tier === "static" || tier === "dynamic") res.violations++;
+    } else if (props.some((p) => p.kind === "spread")) {
+      res.unknown++;
+      res.unknownHits.push(m.index);
+    } else {
+      res.clean++;
+    }
+  }
+  return res;
+}
+
+/** 单条 `title=` 取值分档：空串 / `{undefined}` / `{null}` / `{void 0}` → empty；
+ *  引号串（含空模板串）按内容判；`{…}` 表达式有非空内容 → dynamic。 */
+function classifyTitleValue(prop) {
+  const raw = (prop.raw ?? "").trim();
+  if (!raw) return "empty";
+  if (raw.startsWith("{")) {
+    const expr = raw.slice(1).replace(/}$/, "").trim();
+    if (/^(undefined|null|void\s+0|)$/.test(expr)) return "empty";
+    return "dynamic";
+  }
+  const unquoted = raw.replace(/^["'`]/, "").replace(/["'`]$/, "");
+  return unquoted ? "static" : "empty";
 }
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -4085,9 +4283,9 @@ const HARD_GATE_RULES = new Set([
    * #1123 引入时按粗锚冻结 78 处，治理那一批（#1135）用 TypeScript AST 复扫
    * 发现真存量是 157 处 / 69 文件 —— 粗锚 `[^>]*` 会被属性段里箭头函数的 `>`
    * 截断，`title=` 排在 `onClick={() => …}` 之后的全漏。#1135 一次清零（出口
-   * 抽在 `~/components/ui/hint` 的 `<Hint>`，§12.18 补地基）→ 本 PR 把判据换成
-   * 平衡扫描（`readJsxAttrsPastTag()`）并升为硬闸：**先让判据看得见全部存量，
-   * 再冻结为 0**，顺序反了就会把硬闸建在看不见的存量上。 */
+   * 抽在 `~/components/ui/hint` 的 `<Hint>`，§12.18 补地基）→ 判据换成
+   * 平衡扫描（`scanJsxAttrs` + `parseJsxProps` + 五档）并升为硬闸：**先让判据
+   * 看得见全部存量，再冻结为 0**，顺序反了就会把硬闸建在看不见的存量上。 */
   "P82",
 ]);
 
@@ -4278,7 +4476,23 @@ function main() {
   }
 
   /* 报告层：只出清单（排批次用，不判失败）。 */
+  /* P82 的 unknown 通道：title 可能经 `{...props}` 带进来，静态判不了 ——
+   * 不进硬闸，只在 --report 里单列出来人工抽查（用户明确的口径：missing 计违规、
+   * unknown 单列）。 */
   if (REPORT_ONLY) {
+    const unknownRows = [];
+    for (const dir of SCAN_DIRS) {
+      for (const rel of walk(dir)) {
+        if (!/\.[jt]sx?$/.test(rel) || rel.endsWith(".d.ts")) continue;
+        if (isTest(rel)) continue;
+        const inUi = /^src\/components\/ui\//.test(rel);
+        if (inUi && !UI_ALSO_SCANNED.has("P82")) continue;
+        const r = countButtonTitle(
+          fs.readFileSync(path.join(ROOT, rel), "utf8"),
+        );
+        if (r.unknown) unknownRows.push([rel, r.unknown]);
+      }
+    }
     for (const [id, rule] of Object.entries(RULES)) {
       const hits = Object.entries(now)
         .filter(([, c]) => c[id])
@@ -4292,6 +4506,15 @@ function main() {
       }
       if (hits.length > 15) console.log(`  … 另 ${hits.length - 15} 个文件`);
     }
+    const ukSum = unknownRows.reduce((n, [, c]) => n + c, 0);
+    console.log(
+      `[ui-primitives] P82-unknown 展开 props 里可能带 title（人工抽查，不计违规）—— ${ukSum} 处 / ${unknownRows.length} 文件`,
+    );
+    for (const [rel, c] of unknownRows.slice(0, 15)) {
+      console.log(`  · ${rel}（${c} 处）`);
+    }
+    if (unknownRows.length > 15)
+      console.log(`  … 另 ${unknownRows.length - 15} 个文件`);
     console.log("[ui-primitives] --report 模式：只出清单，不判失败 ✓");
     process.exit(0);
   }
