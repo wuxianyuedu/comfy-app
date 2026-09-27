@@ -316,7 +316,7 @@ describe("listStaleQueued（reaper 扫 QUEUED 孤儿：4 条件 AND）", () => {
   });
 });
 
-describe("listStaleRunning（reaper 扫 RUNNING 孤儿：4 条件 AND + promptId 非空）", () => {
+describe("listStaleRunning（reaper 扫 RUNNING 孤儿：状态/时限/归属三条 AND，promptId 可为空）", () => {
   const oldDate = new Date(Date.now() - 60_000);
   const cutoff = new Date(Date.now() - 30_000);
 
@@ -330,13 +330,15 @@ describe("listStaleRunning（reaper 扫 RUNNING 孤儿：4 条件 AND + promptId
     expect(got.map((r) => r.id)).toContain(id);
   });
 
-  it("与 Queued 版对偶：无 promptId 的 RUNNING 不返（那条走 Queued 判决）", async () => {
-    await seed({
+  it("无 promptId 的 RUNNING 行也交出来（ISSUE #1184：以前这条条件把它挡成回收黑洞）", async () => {
+    const id = await seed({
       status: "RUNNING",
       createdAt: oldDate,
       promptId: null,
     });
-    expect(await impl.listStaleRunning(cutoff, 10)).toHaveLength(0);
+    expect(
+      (await impl.listStaleRunning(cutoff, 10)).map((r) => r.id),
+    ).toContain(id);
   });
 
   it("归属分片（Phase 3-B0）：RUNNING 片同样按 claimedBy 切，与领取谓词同一条判据", async () => {
