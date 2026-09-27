@@ -83,8 +83,12 @@ export const db = globalForDb.db ?? drizzle(client, { schema });
 
 if (env.NODE_ENV !== "production") globalForDb.db = db;
 
-/** 探活数据库连通性（health 路由专用，避免路由层直接持 db/orm，§1.10）。
- *  行为与原路由的 `SELECT 1` 探活一致；路由改调本函数即可。 */
+/** Liveness probe for the health route (keeps the route off `db` / `orm`
+ *  directly, see standards 1 1.10). Same `SELECT 1` the route used to run.
+ *  Kept ASCII on purpose: this module is in the Next build graph and gets
+ *  rendered by `next-code-frame`, which slices the offending line by byte --
+ *  a multibyte char makes the Rust side panic off a char boundary and kills
+ *  the whole build (AGENTS hard rule 16 / standards 12 12.4.6). */
 export function pingDatabase(): void {
   db.run(sql`select 1`);
 }
