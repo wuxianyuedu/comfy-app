@@ -20,6 +20,7 @@ import { clampPct } from "~/lib/progress";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
 import { isRecord } from "~/lib/is-record";
+import type { Character } from "./types";
 import {
   extractSavedOutputs,
   type ApiChannelView,
@@ -47,6 +48,55 @@ export async function startLocalGenerate(
   const res = await vanillaApi.generate.generate.mutate(input);
   if (!res?.taskId) throw new Error("本地生成任务创建失败");
   return res.taskId;
+}
+
+/** 取消一个本地任务（tRPC task.cancel）：任务状态置 CANCELLED，正在观察它的
+ *  SSE 会收到终态帧并落定（产物被丢弃，镜头状态回 failed + 提示「已取消」）。
+ *  任务不存在 / 已结束由服务端报错，调用方把错误原样给提示条。 */
+export async function cancelLocalTask(taskId: string): Promise<void> {
+  await vanillaApi.task.cancel.mutate({ id: taskId });
+}
+
+/** 本地 ComfyUI 单个任务的统一安全阀（30 分钟无响应即判超时）。
+ *  生图 / 视频 / 分镜批量三处的观察循环共用同一份常量 —— 哪一处漏配，
+ *  批量循环就会永久卡死在一条沉默的 SSE 流上。 */
+export const LOCAL_TASK_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** 重挂载恢复要用的任务真值快照（task 表 + 已落盘产物）。
+ *
+ *  SSE 流对「订阅前就已终态」的任务只回放日志与一条 state 帧 —— 成功终态
+ *  既不带产物也不发 done 帧（产物只随 live 的 done 帧下发），订阅一个已经
+ *  成功的任务拿不到 imageUrl。所以「刷新后恢复失联任务」必须先查这份真值：
+ *  已终态直接回写，仍在跑才去重订阅等 done 帧。 */
+export interface TaskSnapshot {
+  /** 任务表里的状态原文（SUCCEEDED / FAILED / CANCELLED / RUNNING / QUEUED…）。 */
+  status: string;
+  /** 终态失败时的原因（任务表 error 列）。 */
+  error?: string;
+  /** 已落盘产物（本地任务 imageUrl / clipUrl 的真值来源）。 */
+  outputs: SavedOutput[];
+}
+
+/** 查一个本地任务的状态与产物快照；任务不存在 / 查询失败返回 null
+ *（调用方按「任务失联」如实收尾，不假装它还在跑）。 */
+export async function fetchTaskSnapshot(
+  taskId: string,
+): Promise<TaskSnapshot | null> {
+  try {
+    const task: unknown = await vanillaApi.task.detail.query({ id: taskId });
+    if (!isRecord(task)) return null;
+    const status = task.status;
+    if (typeof status !== "string" || status === "") return null;
+    return {
+      status,
+      ...(typeof task.error === "string" && task.error
+        ? { error: task.error }
+        : {}),
+      outputs: extractSavedOutputs(task.images),
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** 工坊里可选的生成模式：先把工作流按「内容类别（图 / 视频）」分栏，
@@ -586,6 +636,53 @@ export async function prepareLocalInputImage(image: string): Promise<string> {
     );
   }
   return filename;
+}
+
+/* 定妆照 URL → 已上传文件名的会话内缓存：批量生成时同一镜的同一张定妆照
+ * 会随每个镜头反复请求，缓存让 ComfyUI 输入目录里不再为同一张图堆 N 份副本。 */
+const portraitRefCache = new Map<string, string>();
+/** 缓存上限：超过就整表清掉（定妆照数量有限，正常到不了）。 */
+const PORTRAIT_REF_CACHE_MAX = 32;
+
+/** 收集镜头相关角色的**已选定定妆照**，上传进 ComfyUI 输入目录，
+ *  作为本次镜头生图的参考图（`referenceImages` 的值）。
+ *
+ *  流程口径（docs/guides/feature-workshop-flow.md §4）：定妆照就是「后续分镜图
+ *  的参考图基准」。参考图口吃的是**已上传文件的文件名**，所以逐张经
+ *  `prepareLocalInputImage` 上传；单张失败不拖垮整次生成 —— 跳过并计入
+ *  `failedCount`，由调用方决定是否提示（降级不得静默，规范 10 §10.3.1）。
+ *
+ *  顺序按 `characterIds`（分镜里的角色出场序）。内置默认契约只有两个参考图槽
+ *  （reference-image / -2），超过两张的定妆照落不进端口，这里截到两张、
+ *  不做无效上传。没有角色选了定妆照 → 空数组，调用方不给这个口。 */
+export async function preparePortraitReferences(
+  characters: Character[],
+  characterIds: readonly string[],
+): Promise<{ files: string[]; failedCount: number }> {
+  const urls = characterIds
+    .map((id) => characters.find((c) => c.id === id)?.portraitUrl)
+    .filter((url): url is string => typeof url === "string" && url !== "")
+    .slice(0, 2);
+  const files: string[] = [];
+  let failedCount = 0;
+  for (const url of urls) {
+    const cached = portraitRefCache.get(url);
+    if (cached) {
+      files.push(cached);
+      continue;
+    }
+    try {
+      const filename = await prepareLocalInputImage(url);
+      if (portraitRefCache.size >= PORTRAIT_REF_CACHE_MAX) {
+        portraitRefCache.clear();
+      }
+      portraitRefCache.set(url, filename);
+      files.push(filename);
+    } catch {
+      failedCount += 1;
+    }
+  }
+  return { files, failedCount };
 }
 
 function narrowChannel(v: unknown, fallbackPath: string): ApiChannelView {

@@ -8,7 +8,9 @@ import { getActiveId } from "~/lib/project-canvas/canvas-store";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import {
+  cancelLocalTask,
   fetchApiChannels,
+  fetchTaskSnapshot,
   fetchWorkshopWorkflows,
   type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
@@ -21,6 +23,7 @@ import {
   pushProduction,
 } from "~/lib/production/production-client";
 import { buildProductionPayload } from "~/lib/production/payload";
+import { errorMessage } from "~/lib/error-message";
 import { beginStaleRun } from "~/lib/stale-run";
 import {
   DEFAULT_META,
@@ -241,6 +244,9 @@ export interface WorkshopPipelineController {
 
   // ── 动作
   generateShot: (shot: Shot) => Promise<void>;
+  /** 取消一个进行中的本机任务（生图 / 视频通用）：调 task.cancel 后由观察
+   *  循环收到 CANCELLED 终态收尾。API 直连任务没有本机任务 id，取消不了。 */
+  cancelShotTask: (shot: Shot, target: "image" | "video") => Promise<void>;
   openScriptEditor: () => void;
   closeScriptEditor: () => void;
   saveScriptEditor: () => void;
@@ -250,6 +256,9 @@ export interface WorkshopPipelineController {
   closeModeContract: () => void;
   handleApiChannelsSaved: (channels: ApiChannelsView) => void;
   dismissNotice: () => void;
+  /** 写一条用户可见的提示（错误 / 门禁 / 未生效警告）：stage 组件内部的
+   *  降级路径（如文件导入失败）经它上屏，不在视图里自建第二条提示通道。 */
+  showNotice: (message: string) => void;
   markRendered: () => void;
   /* ── 所在项目（Phase 2：并入统一 proj_*，工坊不再自建多项目） ── */
   activeProjectId: string;
@@ -550,18 +559,16 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     return () => guard.dispose();
   }, []);
 
-  /** 提示条自动消失，避免需要用户手动关闭的瞬时噪声。 */
-  React.useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 4000);
-    return () => clearTimeout(timer);
-  }, [notice]);
+  /* 提示条不自动消失：写入 notice 的都是错误 / 门禁 / 「未生效」警告，
+   * 4 秒自灭曾让失败原因来不及读（规范 10 §10.3.1 的可见出口要求）。
+   * 消除走视图常驻的「关闭」按钮（dismissNotice）；新提示整条替换旧提示。 */
 
   /* 单镜生图的执行态与编排（generating / shotProgress / buildShotInput /
    * generateShot）已拆到 `use-workshop-generation` —— 它只服务「跑一次生成」，
    * 混在主管线里会让「草稿与六段状态」和「高频进度回写」每次改动互相碰到。 */
   const generation = useWorkshopGeneration({
     workflowId,
+    characters,
     setShots,
     notify: setNotice,
   });
@@ -572,6 +579,116 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     (sum, scene) => sum + Math.max(1, scene.shotCount),
     0,
   );
+
+  /** 取消一个进行中的本机任务（生图 / 视频通用）。真正把界面收尾的是观察
+   *  循环：task.cancel 把任务置 CANCELLED，SSE 的终态帧随后落定 —— 状态回
+   *  failed、提示「已取消，可重新生成」。这里只负责发起取消并把失败原因
+   *  说清（任务可能恰好已结束）。 */
+  const cancelShotTask = React.useCallback(
+    async (shot: Shot, target: "image" | "video") => {
+      const taskId = target === "video" ? shot.clipTaskId : shot.taskId;
+      if (!taskId) {
+        setNotice("该任务无法取消（非本机任务，或已经结束）");
+        return;
+      }
+      try {
+        await cancelLocalTask(taskId);
+        setNotice("已发送取消请求，正在等待任务停止…");
+      } catch (e: unknown) {
+        setNotice(errorMessage(e, "取消失败（任务可能已经结束）"));
+      }
+    },
+    [],
+  );
+
+  /* ── 恢复失联任务（刷新 / 切走页签后重挂载）───────────────────────────
+   *  草稿把 status / clipStatus=running 与任务 id 一起持久化，但观察循环活在
+   *  内存里 —— 重挂载后没有任何人再订阅那条 SSE，镜头会永远停在「生成中」。
+   *  恢复前先查 task 表真值：SSE 对「订阅前已终态」的任务只回放日志与一条
+   *  state 帧（成功终态不带产物、不发 done 帧），直接重订阅会把已成功的任务
+   *  判成「连接中断」。所以：已终态 → 直接回写产物 / 失败态；仍在跑 → 重订阅
+   *  等 done 帧；查无真值 → 如实按失败收尾。生图（taskId / status）与视频
+   *  （clipTaskId / clipStatus）各认各的字段。 */
+  const resumedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (resumedRef.current) return;
+    resumedRef.current = true;
+    /** 恢复一个失联任务：查真值 → 已终态直接回写，仍在跑才重订阅。 */
+    const resumeTask = (
+      shotId: string,
+      taskId: string,
+      target: "image" | "video",
+    ) => {
+      void (async () => {
+        const snapshot = await fetchTaskSnapshot(taskId);
+        /* 恢复是异步的：期间用户可能对同一镜头重新发起（任务 id 已换）。
+         * 回写只认「仍归属本任务」的镜头，不覆盖新一轮生成的状态。 */
+        const patchIfOwned = (p: Partial<Shot>) =>
+          setShots((prev) =>
+            prev.map((item) => {
+              if (item.id !== shotId) return item;
+              const owned =
+                target === "video"
+                  ? item.clipTaskId === taskId
+                  : item.taskId === taskId;
+              return owned ? { ...item, ...p } : item;
+            }),
+          );
+        const isVideo = target === "video";
+        if (!snapshot) {
+          patchIfOwned(
+            isVideo ? { clipStatus: "failed" } : { status: "failed" },
+          );
+          return;
+        }
+        if (snapshot.status === "SUCCEEDED") {
+          /* 产物以任务真值回写（SSE 重订阅拿不到已完成任务的产物）。 */
+          const output = snapshot.outputs.find(
+            (o) => o.kind === (isVideo ? "video" : "image"),
+          );
+          if (output) {
+            patchIfOwned(
+              isVideo
+                ? { clipUrl: output.url, clipStatus: "done" }
+                : { imageUrl: output.url, status: "done" },
+            );
+          } else {
+            patchIfOwned(
+              isVideo ? { clipStatus: "failed" } : { status: "failed" },
+            );
+            setNotice(
+              isVideo
+                ? "视频任务已完成但没有产出文件，请重新生成该片段"
+                : "任务已完成但没有产出文件，请重新生成该镜头",
+            );
+          }
+          return;
+        }
+        if (snapshot.status === "FAILED" || snapshot.status === "CANCELLED") {
+          patchIfOwned(
+            isVideo ? { clipStatus: "failed" } : { status: "failed" },
+          );
+          if (snapshot.error) {
+            setNotice(
+              `${isVideo ? "视频" : "镜头"}生成失败：${snapshot.error}`,
+            );
+          }
+          return;
+        }
+        /* 仍在跑（RUNNING / QUEUED）：重订阅，等 live 的 done 帧回写。 */
+        await generation.watchShotTask(shotId, taskId, target);
+      })();
+    };
+    for (const shot of latestDraftRef.current.shots) {
+      if (shot.status === "running" && shot.taskId) {
+        resumeTask(shot.id, shot.taskId, "image");
+      } else if (shot.clipStatus === "running" && shot.clipTaskId) {
+        resumeTask(shot.id, shot.clipTaskId, "video");
+      }
+    }
+    // 仅挂载执行一次；镜头列表经 ref 读取（惰性初始化在首渲染已完成）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const imageDoneCount = shots.filter((item) => !!item.imageUrl).length;
   const clipDoneCount = shots.filter((item) => !!item.clipUrl).length;
@@ -648,6 +765,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   );
 
   const dismissNotice = React.useCallback(() => setNotice(null), []);
+  const showNotice = React.useCallback((message: string) => {
+    setNotice(message);
+  }, []);
   const markRendered = React.useCallback(() => setRendered(true), []);
 
   return {
@@ -699,6 +819,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     characterPortraitActions,
 
     generateShot: generation.generateShot,
+    cancelShotTask,
     openScriptEditor,
     closeScriptEditor,
     saveScriptEditor,
@@ -708,6 +829,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     closeModeContract,
     handleApiChannelsSaved,
     dismissNotice,
+    showNotice,
     markRendered,
     activeProjectId,
   };

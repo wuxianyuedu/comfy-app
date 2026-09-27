@@ -178,6 +178,7 @@ export function ShotCard({
   fps,
   onPatch,
   onGenerate,
+  onCancel,
 }: {
   shot: Shot;
   progress: number;
@@ -187,6 +188,8 @@ export function ShotCard({
   fps: number;
   onPatch: (patch: Partial<Shot>) => void;
   onGenerate: () => void;
+  /** 取消本条进行中的本机视频任务（有 clipTaskId 才显示按钮）。 */
+  onCancel: () => void;
 }) {
   const clipStatus = shot.clipStatus ?? "idle";
   return (
@@ -293,6 +296,18 @@ export function ShotCard({
               ? "重新生成"
               : "生成片段"}
         </Button>
+        {clipStatus === "running" && shot.clipTaskId && (
+          /* 只对本机任务可取消：API 直连的 remoteTaskId 是另一套体系，没有
+             可取消的本机任务 id。 */
+          <Button
+            variant="secondary"
+            size="xs"
+            onClick={onCancel}
+            className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto shrink-0 rounded-lg px-3 py-1.5"
+          >
+            取消
+          </Button>
+        )}
       </div>
 
       {error && (
