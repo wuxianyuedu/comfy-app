@@ -54,8 +54,8 @@
  *     （`mt-1 border-t pt-1`）、不参与滚动。
  *
  * 外部 props 一字未改（`value` / `onChange` / `options` / `labels` /
- * `placeholder` / `disabled` / `className` / `fullWidth` /
- * `popoverMinWidth` / `autoFitFromOptions` / `footer` / `onOpenChange`
+ * `placeholder` / `disabled` / `className` / `fullWidth` 四个常用项 /
+ * `popoverMinWidth` 弹层最小宽 / `autoFitFromOptions` / `footer` / `onOpenChange`
  * 全保留），33 处消费点 0 改动。
  */
 
@@ -133,8 +133,8 @@ const ITEM_BASE =
 
 /** 浮层自动加宽的四条常量口径与 PR 之前一致（详见文件头注释）。 */
 const POPOVER_AUTO_MAX = 720;
-const POPOVER_AUTO_HEADROOM = 56; // 24 px padding + ~32 px for dot / arrow
-const POPOVER_PER_CHAR_PX = 8; // ~8 px per text-[12px] glyph in Inter
+const POPOVER_AUTO_HEADROOM = 56; // 24px 内边距 + 圆点/箭头一行约 32px
+const POPOVER_PER_CHAR_PX = 8; // Inter 字体 text-[12px] 下每个字符约 8px
 const POPOVER_AUTO_MIN = 160;
 
 export function SelectMenu({

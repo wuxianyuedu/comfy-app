@@ -896,12 +896,14 @@ Write-Output ("|END")
       const json = JSON.stringify([
         {
           Id: 711,
-          Path: join(root, "src-tauri", "target", "release", "app.exe"),
-          Cmd: "",
+          /* 陈旧壳的现行判据（ISSUE #784 去掉启动器概念之后）：进程快照里
+           * 拿不到可执行路径（壳已退出 / 快照过期）。Path 留空，命令行里
+           * 仍带本仓库路径 —— Get-RunningShellProcess 靠 Cmd 命中它。 */
+          Path: "",
+          Cmd: join(root, "src-tauri", "target", "release", "app.exe"),
           Name: "app.exe",
         },
       ]);
-      // 进程表里没有任何本仓库启动器 -> 该壳是无主孤儿壳
       const out = runGuard(assertShellScript(json));
       expect(out).toContain("CODE=0");
       expect(out).toContain("KILLED=1");

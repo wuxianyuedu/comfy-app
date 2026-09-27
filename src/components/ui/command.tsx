@@ -60,13 +60,12 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {/* The <Command> wrapper is mandatory: CommandInput / CommandList /
-            CommandItem / CommandGroup / CommandEmpty all read the store from
-            <Command>'s context via cmdk's useCmdk, which dereferences
-            store.subscribe directly. Without this ancestor, opening the dialog
-            throws "Cannot read properties of undefined (reading 'subscribe')"
-            (the primitives are not rendered while the dialog is closed, so the
-            bug stays hidden until the panel opens). */}
+        {/* <Command> 这层包装必须保留：CommandInput / CommandList / CommandItem /
+            CommandGroup / CommandEmpty 都经 cmdk 的 useCmdk 从 <Command> 的
+            context 读 store，而 useCmdk 会直接解引用 store.subscribe。少了这层
+            祖先，打开弹窗就抛 "Cannot read properties of undefined (reading
+            'subscribe')"（弹窗没开时这些基元不渲染，所以这个坑要等面板真正
+            打开才暴露）。 */}
         <Command>{children}</Command>
       </DialogContent>
     </Dialog>

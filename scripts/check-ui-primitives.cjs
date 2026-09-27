@@ -521,8 +521,8 @@ const UI_ALSO_SCANNED = new Set([
 const UI_ONLY_RULES = new Set([
   /* §16.2.3 / §12.18：ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress /
    * Slider / Empty / Field）。判据本身按形态锚点已经收窄（`export function
-   * X(Badge|Chip|Tag)` / `role="progressbar"` / `type="range"` /
-   * `export function Empty\w*` / `<label htmlFor>` + `aria-describedby`），
+   * X(Badge|Chip|Tag)` 这类命名 / `role="progressbar"` / `type="range"` 属性
+   * / `export function Empty\w*` 命名 / `<label htmlFor>` + `aria-describedby`），
    * 视图层里出现同样形态**本就不该**——那是 P1/P16 的账；让 P67 只在 ui/ 里
    * 跑，避免与视图层判据重复计数、也避免误伤业务包装组件。 */
   "P67",
@@ -3219,14 +3219,14 @@ const RULES = {
   /* ── P71「视图层手写 dark:palette 色（应走语义 token）」（棘轮，§4.11.1）───
    * shadcn `styling.md`「No manual `dark:` color overrides. Use semantic
    * tokens」+ 规范 §4.11.1「映射表里的颜色也必须走语义 token」。项目的
-   * `--color-success` / `--color-warning` / `--color-destructive` /
+   * `--color-success` / `--color-warning` / `--color-destructive` 几类
    * `--color-primary-*` 等 token 内部已含深浅两态，写 `text-amber-700
    * dark:text-amber-400` 这种「字面量 + 手写 dark:」等于把同一件事在明暗
    * 两处各写一遍，改主题跟不动。
    *
    * 锚点：`dark:` 前缀 + Tailwind 调色板色名 + 数字档位（覆盖
-   * `dark:text-red-400` / `dark:bg-emerald-500/15` / `dark:border-amber-*`
-   * 等）。`text-ink-*` / `bg-subtle` / `text-muted-foreground` 这类语义类
+   * `dark:text-red-400` 这类红 / `dark:bg-emerald-500/15` 这类绿 /
+   * `dark:border-amber-*` 这几条字面量）。`text-ink-*` / `bg-subtle` / `text-muted-foreground` 这类语义类
    * 不含调色板色名 + 数字档，天然不命中。
    *
    * 例外块：`// p71-allow:start <一句话理由>` 与 `// p71-allow:end` 之间的

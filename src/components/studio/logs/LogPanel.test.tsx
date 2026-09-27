@@ -36,7 +36,7 @@ import { LOG_ROW_SINGLE } from "./log-virtual";
 /* 本文件是 jsdom 里的**重交互**用例（数百行日志的渲染 + 多次 userEvent 点击），
  * 默认 5s 超时在全量并行负载下不够（翻页 / 回到最新等用例各自偶发超时）。
  * 整文件放宽到 20s——只作用于本文件，不影响其它文件的失败速度。 */
-vi.setConfig({ testTimeout: 20_000 });
+vi.setConfig({ testTimeout: 30_000 });
 
 function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
   return {
@@ -174,7 +174,7 @@ describe("LogPanel 日志面板", () => {
     expect(screen.getByText(/第 1 \/ 2 页/)).toBeInTheDocument();
     // 最新一页包含时间最近的那条
     expect(screen.getByText(/事件 249/)).toBeInTheDocument();
-  }, 20_000);
+  }, 30_000);
 
   it("翻到更早一页能看到第 1 页没有的日志", async () => {
     seed(LOG_PAGE_SIZE + 50);
@@ -185,7 +185,7 @@ describe("LogPanel 日志面板", () => {
     await user.click(screen.getByTitle("更早的一页"));
     expect(screen.getByText(/第 2 \/ 2 页/)).toBeInTheDocument();
     expect(screen.getByText(/事件 0$/)).toBeInTheDocument();
-  }, 20_000);
+  }, 30_000);
 
   it("渲染的行按时刻升序（用户诉求「最基本的时间顺序」）", () => {
     seed(20);
@@ -219,7 +219,7 @@ describe("LogPanel 日志面板", () => {
     expect(
       screen.queryByRole("button", { name: /有 \d+ 条新的日志/ }),
     ).toBeNull();
-  }, 20_000);
+  }, 30_000);
 
   it("按来源筛选能滤掉启动行，只看应用运行日志", async () => {
     act(() =>
@@ -682,7 +682,7 @@ describe("LogPanel 日志面板", () => {
     /* 点一下就能回到最新一页 */
     await user.click(screen.getByRole("button", { name: /回到最新/ }));
     expect(screen.getByText(/第 1 \/ 4 页/)).toBeInTheDocument();
-  }, 20_000);
+  }, 30_000);
 
   /* ISSUE #262 六审：「日志多了我想复制报错文本还是复制不了，我刚选中内容就
    * 刷走了，需要每条日志后面加一个复制按钮，可复制日志内容」。

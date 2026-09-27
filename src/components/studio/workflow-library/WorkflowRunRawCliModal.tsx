@@ -1,16 +1,14 @@
 "use client";
 
 /**
- * WorkflowRunRawCliModal — work-flow library"view full comfy-cli output" dialog.
+ * WorkflowRunRawCliModal —— 工作流库「查看 comfy-cli 完整输出」弹窗。
  *
- * The execution-log panel folds each`[comfy-cli 原始]` line into one row (and
- * caps how many it keeps by row count), so this dialog is the"get everything"
- * exit: it fetches the COMPLETE, untruncated comfy-cli stdout/stderr lines for a
- * task from
- * /api/tasks/[id]/raw-cli and renders them: JSON payloads (the`[comfy-cli
- * 原始]` /`stdout` lines) go through the collapsible, syntax-highlighted
- * JsonViewer; everything else is shown as raw text. View-only: the network
- * call lives in lib/comfyui/raw-cli-client (UI/logic separation).
+ * 执行日志面板把每条 `[comfy-cli 原始]` 行折成一行（且按行数封顶），拿不到
+ * 全量，所以这个弹窗是「要就要全」的出口：从 /api/tasks/[id]/raw-cli 拉取
+ * 某任务**完整、未截断**的 comfy-cli stdout/stderr 行来渲染：JSON 载荷
+ * （`[comfy-cli 原始]` / `stdout` 行）走可折叠、带语法高亮的 JsonViewer；
+ * 其余一律按原文展示。只读视图：网络调用收在 lib/comfyui/raw-cli-client
+ * （UI / 逻辑分离）。
  *
  * 运行期每 1.5s 轮询一次完整输出（服务端上限 5000 行），所以这里刻意不做
  * 「整份重建」—— 三条防线合起来让轮询只在**真的来了新行**时付代价：

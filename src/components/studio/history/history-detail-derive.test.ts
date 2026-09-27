@@ -95,7 +95,7 @@ describe("deriveTaskOrigin", () => {
 });
 
 describe("deriveWorkshopParams", () => {
-  it("T2I：按契约列出提示词 / 负向提示词 / 尺寸三个口（空值也占位）", () => {
+  it("T2I：按契约列出提示词 / 负向提示词 / 尺寸 / 种子四个口（空值也占位）", () => {
     const detail = makeDetail({
       workflow: "w",
       prompt: "少女",
@@ -106,7 +106,12 @@ describe("deriveWorkshopParams", () => {
       ],
     });
     const rows = deriveWorkshopParams(detail, "T2I", null, null);
-    expect(rows.map((r) => r.id)).toEqual(["prompt", "negative", "size"]);
+    expect(rows.map((r) => r.id)).toEqual([
+      "prompt",
+      "negative",
+      "size",
+      "seed",
+    ]);
     expect(rows[0]?.value).toBe("少女");
     expect(rows[1]?.value).toBeUndefined(); // 没给负向 → 仍占位、value undefined
     expect(String(rows[2]?.value)).toContain("3:4"); // 尺寸从 workflowInputs 聚合

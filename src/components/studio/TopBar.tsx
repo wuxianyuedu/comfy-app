@@ -90,9 +90,9 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
             }
           />
           <DropdownMenuContent align="end" className="w-44">
-            {/* base-ui's DropdownMenuLabel is Menu.GroupLabel and must be wrapped in
-                DropdownMenuGroup (or DropdownMenuRadioGroup); otherwise opening the
-                menu throws "MenuGroupContext is missing" (matches CanvasContextMenu). */}
+            {/* base-ui 的 DropdownMenuLabel 就是 Menu.GroupLabel，外面必须包一层
+                DropdownMenuGroup（或 DropdownMenuRadioGroup）；否则打开菜单直接抛
+                "MenuGroupContext is missing"（与 CanvasContextMenu 同一处坑）。 */}
             <DropdownMenuGroup>
               <DropdownMenuLabel>应用</DropdownMenuLabel>
               <DropdownMenuItem onClick={onOpenSettings}>

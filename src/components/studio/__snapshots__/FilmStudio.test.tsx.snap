@@ -184,7 +184,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
               type="button"
             >
               <div
-                class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-400"
+                class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-primary/10 text-primary-strong"
               >
                 镜头缩略图
               </div>
@@ -217,7 +217,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                 </div>
               </div>
               <span
-                class="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                class="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium bg-success/15 text-success-strong"
               >
                 完成
               </span>
@@ -266,7 +266,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                 </div>
               </div>
               <span
-                class="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                class="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium bg-primary/15 text-primary-strong"
               >
                 生成中
               </span>
@@ -435,7 +435,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                 style="width: 280px;"
               >
                 <span
-                  class="truncate text-[9px] text-cyan-700 dark:text-cyan-400"
+                  class="text-info-strong truncate text-[9px]"
                 >
                   「城市在晨光中苏醒，镜头缓缓推进…」
                 </span>
@@ -469,7 +469,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                   />
                 </svg>
                 <span
-                  class="truncate text-[9px] text-violet-700 dark:text-violet-400"
+                  class="text-primary-strong truncate text-[9px]"
                 >
                   背景音乐 · 氛围感配乐
                 </span>
@@ -758,7 +758,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </span>
             <input
               accept="audio/*"
-              class="text-ink-fainter w-full text-[11px] file:mr-2 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1.5 file:text-[11px] file:text-violet-800 dark:text-violet-300 dark:file:text-violet-300"
+              class="text-ink-fainter hover:text-primary-strong file:bg-primary/20 file:text-primary-strong w-full text-[11px] file:mr-2 file:rounded-lg file:border-0 file:px-3 file:py-1.5 file:text-[11px]"
               type="file"
             />
           </div>
