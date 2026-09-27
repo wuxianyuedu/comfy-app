@@ -152,7 +152,12 @@ export const llmRouter = createTRPCRouter({
       z.object({
         provider: z.enum(["local", "remote"]).optional(),
         apiKey: z.string().optional(),
-        baseUrl: z.string().optional(),
+        baseUrl: z
+          .string()
+          .refine((u) => /^https?:\/\//.test(u), {
+            message: "baseUrl 必须为 http/https",
+          })
+          .optional(),
         model: z.string().optional(),
         /** 候选清单：字符串=本地 ollama 候选；对象=远端独立模型（写入 remoteModel 表） */
         extraModels: extraModelsSchema.optional(),

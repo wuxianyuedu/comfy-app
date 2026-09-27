@@ -93,7 +93,7 @@
 
 ### P0 — 缺了就不算「已发布产品」（阻塞发布）
 
-- [ ] **P0-1 无 CI/CD**：`.github/workflows` / `*.cnb.yml` 均不存在，门禁只在本地且 `--no-verify` 可绕过，无第二执行者。建议：CNB 流水线跑 `pnpm check` + 全量 `vitest run --coverage` + 棘轮 `--strict` + `pnpm audit`。证据：`docs/standards/11-测试与可观测性.md:160-167`；`docs/standards/12-代码组织与文件结构.md:534-535`。
+- [x] **P0-1 CI 流水线（已建 .cnb.yml）**：新增 `.cnb.yml` 把本地核心门禁（eslint 零警告 / `tsc --noEmit` / `vitest run`）搬上 CNB 跑，解除「门禁仅本地、`--no-verify` 可绕过」。未含 `pnpm audit` 与棘轮 `--strict`（待平台 runner/registry 镜像配置稳定后再补，避免噪声阻断）；Rust 壳与 `next build` 不进本流水线（避免拉 cargo 工具链）。证据：`.cnb.yml`。
 - [ ] **P0-2 自动更新未接通**：`tauri.conf.json` `updater.endpoints:[]` / `pubkey:""` / 未开 `createUpdaterArtifacts`；能力已开校验全无（填端点即变未验签更新）。需：生成 keypair、配端点、开产物。证据：`src-tauri/tauri.conf.json:34-41,43-67`；`src-tauri/capabilities/remote.json:19`。
 - [ ] **P0-3 客户端崩溃零上报**：缺 `src/sentry.client.config.ts`，`instrumentation.ts` 仅 nodejs/edge 分支；ErrorBoundary 仅 `console.error`。证据：`src/instrumentation.ts:8-24`；`src/components/ui/error-boundary.tsx:31-35`。
 - [ ] **P0-4 无 release / source map 关联**：`next.config.js` 无 `withSentryConfig` / sourceMap 上传，堆栈无法符号化。证据：`next.config.js`（grep sentry/Sentry/sourceMap = 0）。
@@ -106,7 +106,7 @@
 - [ ] **A2 IDOR：`task.workflow` 无归属校验**（同文件 delete 有 `userId` 判定）。证据：`src/server/api/routers/task.ts:179-194`。
 - [ ] **A3 IDOR：`project.outputs` 无归属校验**（get/patch 有 owner 判定）。证据：`src/server/api/routers/project.ts:74-79`。
 - [ ] **A4 LLM `apiKey` 明文回传客户端**（含远端条目）。证据：`src/lib/llm/server.ts:184`；`src/server/api/routers/llm.ts:60-64`。
-- [ ] **A5 SSRF：`llm` / `comfyEmbeddable` 任意 URL 服务端 fetch 带 Bearer**（`trainerUrl` 有 `^https?://` 校验，这两处无）。证据：`src/server/api/routers/llm.ts:151-165`；`setting.ts:158-166`；`src/lib/comfy/comfy-embed.ts:274-280`。
+- [x] **A5 SSRF 协议白名单（已修复）**：`llm.configSave` 的 `baseUrl` 与 `setting.comfyEmbeddable` 的 `base`/`hostOrigin` 输入层加 `^https?://` 校验（与 `trainerUrl` 同口径），挡 `file://` 等非 http 协议；`comfy-embed.ts` 的 `probeComfyEmbeddable` 已有 `isHttpOrigin` 运行时防护，本次补齐输入层纵深。证据：`src/server/api/routers/llm.ts`、`src/server/api/routers/setting.ts`。
 - [ ] **A6 `/api/custom-nodes` 参数注入 → 任意文件覆写**（`--only-pkgs` 可被 `--out=` 覆盖）。证据：`src/app/api/custom-nodes/route.ts:768-777,506-513`。
 - [ ] **A7 `workflow.create.sourcePath` 读本机任意文件 + 路径回显**。证据：`src/server/api/routers/workflow.ts:450-471`；`src/lib/comfyui/importSource.ts:66-70`。
 - [ ] **A8 `task.delete` 缺路径包含校验**（与 `openFolder` 白名单不自洽，`../` 不拦）。证据：`src/server/api/routers/task.ts:207-218`。
