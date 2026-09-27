@@ -3,6 +3,7 @@
 // 工坊右侧栏：缺失素材、生成资源（本地 Checkpoint）、资源库清单。纯展示。
 
 import { Button } from "~/components/ui/button";
+import { cn } from "~/lib/utils";
 import { Icon } from "~/components/ui/icon";
 import { FieldLabel } from "~/components/ui/field";
 import {
@@ -110,13 +111,16 @@ export function WorkshopAside({
     apiChannels?.image.configured === true ||
     apiChannels?.video.configured === true;
 
+  /**
+   * 只列**真有计数**的行。此前这里还摆着「剧本大纲.md / 分镜脚本.json」两行
+   * 与固定「参考图 / 音效 0 项」—— 那是写死的文案，不是项目的内容；素材的真实
+   * 清单在画布的素材库里（`use-material-library`），这一屏不再冒充。
+   * 「场景图」也改名为「镜头出图」：它数的是已出图的**镜头**条数，不是场景数。
+   */
   const resourceRows: Array<[string, string]> = [
-    ["剧本大纲.md", "文档"],
-    ["分镜脚本.json", "数据"],
-    ["角色卡", `${characterCount} 项`],
-    ["场景图", `${imageDoneCount} 项`],
-    ["视频片段", `${clipDoneCount} 项`],
-    ["参考图 / 音效", "0 项"],
+    ["角色卡", `${String(characterCount)} 项`],
+    ["镜头出图", `${String(imageDoneCount)} 项`],
+    ["视频片段", `${String(clipDoneCount)} 项`],
   ];
 
   return (
@@ -135,14 +139,21 @@ export function WorkshopAside({
           {missing.map((item) => (
             <div key={item.label} className="flex items-center gap-3">
               <span
-                className="size-2.5 rounded-full"
-                style={{ background: item.color }}
+                className={cn(
+                  "size-2.5 rounded-full",
+                  item.done ? "bg-success" : "bg-warning",
+                )}
+                aria-hidden
               />
               <span className="text-ink flex-1 text-[12.5px]">
                 {item.label}
               </span>
               <span className="text-faint text-[11px]">
-                {item.need > 0 ? `${item.need} 项待补` : "✓ 已完成"}
+                {item.done
+                  ? "已完成"
+                  : item.gap === null
+                    ? "尚未建立"
+                    : `${String(item.gap)} 项待补`}
               </span>
             </div>
           ))}
@@ -209,13 +220,9 @@ export function WorkshopAside({
             </div>
           ))}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          className="text-muted-foreground bg-subtle hover:bg-surface-2 mt-3 w-full rounded-lg py-2.5 text-xs"
-        >
-          + 导入素材
-        </Button>
+        <p className="text-faint mt-3 text-[11px] leading-relaxed">
+          参考图、音效等素材在画布的素材库导入与管理，这里只做汇总展示。
+        </p>
       </div>
     </aside>
   );
