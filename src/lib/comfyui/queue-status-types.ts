@@ -11,11 +11,13 @@ export interface ComfyRunningTask {
   workflowName: string | null;
   /** 主模型文件名（从本次实际提交的图里认出来，见 `executed-model.ts`）；认不出为 null。 */
   model: string | null;
-  /** 任务开始时刻（epoch 毫秒）—— 前端拿它算「已运行 mm:ss」。 */
+  /** 任务开始时刻（epoch 毫秒）—— 前端拿它算「已运行 mm:ss」。
+   *  取自 `Task.claimedAt`（领取或首条进度帧定格），旧行退化成提交时刻。 */
   startedAt: number;
   /** 采样步数进度（0~100）。 */
   progress: number;
-  /** 当前节点类名（`lastNodeByTask` 记的）；没有为 null。 */
+  /** 当前节点类名（`Task.progressNode` 里的 `classType`）；没有为 null。
+   *  comfy-cli 那条进度事件源拿不到 `class_type`，此时就是 null。 */
   nodeType: string | null;
 }
 

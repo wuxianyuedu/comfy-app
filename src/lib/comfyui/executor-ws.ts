@@ -387,7 +387,14 @@ async function handleMessage(raw: string) {
     // progress 消息自带 node id——把节点 id / 类别名 / 步数一并
     // 发给前端，画布与管线节点才能显示「当前节点 + 百分比」而不仅是总数。
     let node:
-      { id: string; label?: string; value: number; max: number } | undefined;
+      | {
+          id: string;
+          label?: string;
+          classType?: string;
+          value: number;
+          max: number;
+        }
+      | undefined;
     const rawNodeId: unknown = data.node;
     const nodeId =
       typeof rawNodeId === "string" || typeof rawNodeId === "number"
@@ -407,7 +414,11 @@ async function handleMessage(raw: string) {
         id: nodeId,
         value,
         max,
-        ...(classType ? { label: nodeLabel(classType) } : {}),
+        /* `classType` 与 `label` 都存（P3 §5 ADR §14 D1 的 4-B2）：`label` 是给
+         * 画布看的中文标签，而状态栏那一格历史上显示的是**类名**（此前只活在内存
+         * 的 `lastNodeByTask` 里，host 执行时 Next 读不到）。类名跟着快照一起落库，
+         * 两个宿主才是同一份契约；认不出类名时两者都不带。 */
+        ...(classType ? { classType, label: nodeLabel(classType) } : {}),
       };
     }
     /* 进度回写走「只在非终态行生效」的 compare-and-set：本任务若已被

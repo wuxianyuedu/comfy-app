@@ -41,6 +41,7 @@ import {
   state,
   log,
   persistLogs,
+  persistRawCli,
   claimFinalize,
   claimSettle,
 } from "./runner-state";
@@ -486,6 +487,9 @@ async function completeInner(
   }
 
   await persistLogs(taskId);
+  /* 完整原文这一包只在收口时写一次（见 `persistRawCli` 的分工说明）：执行侧是谁
+   * 不重要，读的人永远从库里取（P3 §5 ADR §14 D1 的 4-B2）。 */
+  await persistRawCli(taskId);
   taskRuntimeLog?.info(`任务完成 ${taskId}`, { outputs: saved.length });
   /* 打一行「总耗时 Xs」：让用户看到整轮跑的墙上时间。startedAt 缺失时退化成一句
    * 通用说明 —— 这只在「上一次服务端生命周期入队、本次重新接管」时才会发生，
@@ -579,6 +583,7 @@ export async function finalizeFailure(
   }
 
   await persistLogs(taskId);
+  await persistRawCli(taskId);
   taskRuntimeLog?.error(`任务失败 ${taskId}: ${friendly}`);
   // 清掉本模块给这个任务加的状态，同一个 taskId 再入队时从干净状态开始。
   if (startedAt) s.startedAt.delete(taskId);

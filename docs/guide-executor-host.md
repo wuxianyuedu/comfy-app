@@ -98,6 +98,15 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
   最后一个读者「文生视频的首帧那一跳」也改成读库等终态（`comfyui/firstframe.ts`，
   ADR §14 D1）——它此前是 host 模式下**必坏**的功能：订阅永远等不到 `done`，挂满
   5 分钟超时后整条失败。回归由 `tests/in-process-event-channel-retired.test.ts` 钉住。
+- **底部状态栏那一格与「查看完整输出」**（Phase 4-B2 起同形，ADR §14 D1）：这两处
+  此前读的是 Next 进程的内存，host 执行时分别是「排队 0、在跑 null」和空态。现在
+  四个字段全部来自库里那行——排队数 = `status='QUEUED'` 的计数（跨归属，这一格答的
+  是「本应用堵了几个」）、「已运行」= 新增的 `claimedAt` 列（领取时、或第一次转
+  RUNNING 的那条进度帧 / `markRunning` 时定格，后续不刷新）、「当前节点」=
+  `progressNode.classType`（与画布用的中文 `label` 一起存；comfy-cli 那条事件源拿不到
+  类名时为空，与内存版旧行为一致）、「主模型」= 从 `execPayload` 现认（库里只有它是
+  执行侧一定会写的，`workflowSnapshot` 要到成功收口才落）。comfy-cli 完整原文由执行侧
+  在收口时整包写一次进 `rawCli` 列，所以 host 的任务也点得开。
 - **崩溃恢复**：host 被杀 → 在飞 comfy-cli 随进程组整树回收（launcher 语义）；
   遗留 RUNNING 行由 reaper 对账收口。reaper 的启动点是**两处显式调用**（Phase 4-A2
   起，不再靠模块加载自启）：Next 侧 = `src/instrumentation.ts` 的 nodejs 分支，

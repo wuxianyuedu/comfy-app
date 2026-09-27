@@ -373,6 +373,9 @@ export function clearFinalize(taskId: string): void {
 export type RunnerDeps = {
   taskRepo: {
     replaceLogs(taskId: string, entries: LogEntry[]): Promise<void>;
+    /** comfy-cli 完整原文整包落库（P3 §5 ADR §14 D1 的 4-B2）：「查看完整输出」
+     *  这个排障入口此前只有执行进程自己看得见。 */
+    replaceRawCli(taskId: string, lines: string[]): Promise<void>;
   };
   log: {
     warn(msg: string): void;
@@ -474,7 +477,35 @@ export function appendRawCli(taskId: string, line: string): void {
   touchAndEvict(store.rawCli, taskId, arr, LOGS_MAX_TASKS);
 }
 
-/** 读取某次执行累积的 comfy-cli 完整原文（无记录返回空数组）。 */
-export function getRawCli(taskId: string): string[] {
+/** 读取某次执行累积的 comfy-cli 完整原文（无记录返回空数组）。
+ *  刻意**不导出**：唯一的读者是下面的 `persistRawCli`，对外入口是
+ *  `/api/tasks/[id]/raw-cli`，它读库而不是读本进程的内存。 */
+function getRawCli(taskId: string): string[] {
   return state().rawCli.get(taskId) ?? [];
+}
+
+/** 把 comfy-cli 完整原文整包落库（P3 §5 ADR §14 D1 的 4-B2）。
+ *
+ *  与 `persistLogs` 的分工：日志跟着 200ms 防抖走（每几秒一次整包重写），原文
+ *  **只在收口点写一次**——它能到几千行，跟着防抖重写等于白写几十遍。所以这一句
+ *  的调用点是成功 / 失败 / 取消三条收口，不是 `appendRawCli`。
+ *  失败的处理与 `persistLogs` 同形：排障入口少一份原文，不该把收口链路整段回滚。 */
+export async function persistRawCli(taskId: string): Promise<void> {
+  const lines = getRawCli(taskId);
+  if (lines.length === 0) return;
+  try {
+    const { taskRepo } = await resolveDeps();
+    await taskRepo.replaceRawCli(taskId, lines);
+  } catch (e) {
+    const message = `[comfyui] persistRawCli(${taskId}) 落库失败：${errorText(
+      e,
+      "unknown",
+    )}`;
+    try {
+      const { log: hostLog } = await resolveDeps();
+      hostLog.warn(message);
+    } catch {
+      throw e;
+    }
+  }
 }

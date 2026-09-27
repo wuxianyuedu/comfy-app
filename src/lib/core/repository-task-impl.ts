@@ -1,5 +1,5 @@
 /**
- * `repository-task-impl.ts` — Task 仓储**执行链侧** 14 个方法的实现（工厂）
+ * `repository-task-impl.ts` — Task 仓储**执行链侧** 16 个方法的实现（工厂）
  * ===========================================================================
  *
  * P3 §5 第 1 期·Phase 2-A-1：从 `repository-task.ts` 抽出的 exec 侧 SQL 主体，
@@ -30,7 +30,7 @@
  * `unguarded`；登记 PURE_NODE_HOSTS 只是**给未来**「impl 里若加了 node: 前缀
  * import」留的锚，当前 scanner 视角不严格必要。
  */
-import { and, eq, inArray, isNull, lt, notInArray, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { TERMINAL_TASK_STATUSES } from "../task-state";
 import { task, taskImage } from "~/server/db/schema";
@@ -81,9 +81,183 @@ export type TaskWriteOutcome =
   "written" | "skipped-terminal" | "skipped-not-owned" | "skipped-missing";
 
 /**
- * 14 个 exec-chain 方法的实现工厂（12 个 delegate 自 class + Phase 3-A 新增的
- * `claimNextQueued` + 3-B1 新增的 `findExecJob`；两者暂不进 class delegate——
- * 领取循环是 host 独占的 pull，直接调 impl）。
+ * 「队列领取 / 孤儿扫描 / 产物落表」这一组从工厂里切出来放这里（规范 §12.13）。
+ *
+ * 切分轴是**职责**而不是类型或行数：这一组读写的是「队列与扫描」形态（按归属谓词
+ * 领行、按 cutoff 扫孤儿、给产物落 TaskImage 行），彼此只共用模块级的 `ownedBy()`；
+ * 留在工厂里的那一组是「单条任务的执行写入」形态，共用终态与归属两条守卫
+ * （`writeGuard` / `classifySkipped` / `claimStamp`）。两条职责装在一个函数里，
+ * 长到 400 行就该显形——拆法是分函数，不是在一个函数里加分段注释。
+ *
+ * 返回值由工厂 `...` 并进同一个对象，所以 `TaskRepoImpl` 的形状与调用方视角
+ * **一字不变**（`owner` 仍是构造期声明，只是从工厂参数转授给这里）。
+ */
+function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
+  return {
+    /**
+     * 队列领取（P3 §5 ADR §6/§7 Phase 3-A）：单语句
+     * `UPDATE ... WHERE id IN (SELECT ... ORDER BY createdAt LIMIT ?) RETURNING id`。
+     *
+     * 原子性由 SQLite「单写语句内子查询同语句求值」保证：inline/host 两个领取方
+     * 各自最多领走互不重叠的行。刻意不用 `db.transaction` + 先 SELECT 后 UPDATE：
+     * 本实现要同时跑在三种宿主（better-sqlite3 同步测试库 / libsql http /
+     * libsql file）上，async 事务回调在同步驱动上于 continuation 之前就 COMMIT，
+     * 原子性静默失效。
+     *
+     * 归属谓词跟 ADR §6：host 只领显式 `'host'` 的行；inline 领 NULL（历史行与
+     * 未带归属的建行）与 `'inline'`。领取时把 `claimedBy` 覆写为 `mode`，NULL
+     * 行由此转为显式归属；reaper 分片（`listStale*` 的 `owner`）用同一归属谓词。
+     */
+    async claimNextQueued(
+      mode: TaskClaimMode,
+      take: number,
+    ): Promise<string[]> {
+      const candidates = db
+        .select({ id: task.id })
+        .from(task)
+        .where(and(eq(task.status, "QUEUED"), ownedBy(mode)))
+        .orderBy(task.createdAt)
+        .limit(take);
+      const claimed = await db
+        .update(task)
+        .set({
+          status: "RUNNING",
+          claimedBy: mode,
+          // 领走即开始：这里是**无条件覆写**（不是 `claimStamp()` 的 COALESCE），
+          // 因为一次领取就是新一轮执行的起点（崩溃后重领的行不该带着上一轮的时刻）。
+          claimedAt: new Date(),
+        })
+        .where(inArray(task.id, candidates))
+        .returning({ id: task.id });
+      return claimed.map((row) => row.id);
+    },
+
+    /** host 领取后重建 Job 的行读（P3 §5 ADR §13-3B1 决定 1）：执行载荷取
+     *  `execPayload`（提交时刻的 RAW 原件）、覆盖项取 `params.workflowInputs`，
+     *  **不经 workflowName 回查模板**——模板被改/删不影响在队任务执行提交时的图。
+     *  找不到行返回 null（行已被回收/删除，调用方跳过并记日志即可）。
+     *
+     *  带归属条件是刻意的：这条读出来的就是**要交给 ComfyUI 执行的图**，跨片读到
+     *  别人的载荷（比如误把 inline 的 id 递进 host 的 tick）等于替别的宿主起跑。 */
+    async findExecJob(taskId: string): Promise<{
+      workflowName: string;
+      execPayload: unknown;
+      params: unknown;
+    } | null> {
+      const rows = await db
+        .select({
+          workflowName: task.workflowName,
+          execPayload: task.execPayload,
+          params: task.params,
+        })
+        .from(task)
+        .where(and(eq(task.id, taskId), ownedBy(owner)))
+        .limit(1);
+      return rows[0] ?? null;
+    },
+
+    /** reaper 扫 QUEUED 孤儿：5 条件 AND（QUEUED + `finishedAt IS NULL` +
+     *  `createdAt < cutoff` + `promptId IS NULL` + 归属 `owner` 片），逐个破一
+     *  条都不返。`owner` 缺省 `'inline'`（NULL 归 inline，与现状全 NULL 的行
+     *  集等价）；host 进程注入 `'host'` 后只收自己那份——灰度期两进程并存时
+     *  互相看不见对方的孤儿，防跨片误杀。 */
+    async listStaleQueued(
+      cutoff: Date,
+      take: number,
+      owner: TaskClaimMode = "inline",
+    ): Promise<Array<{ id: string; createdAt: Date; workflowName: string }>> {
+      return db
+        .select({
+          id: task.id,
+          createdAt: task.createdAt,
+          workflowName: task.workflowName,
+        })
+        .from(task)
+        .where(
+          and(
+            eq(task.status, "QUEUED"),
+            isNull(task.finishedAt),
+            lt(task.createdAt, cutoff),
+            isNull(task.promptId),
+            ownedBy(owner),
+          ),
+        )
+        .limit(take);
+    },
+
+    /** reaper 扫 RUNNING 孤儿（ISSUE #1184 起**不再要求 `promptId` 非空**）：
+     *  曾经带一条 `promptId IS NOT NULL`，于是「已被领取、但 comfy-cli 还没把
+     *  `prompt_id` 回传落库」的 RUNNING 行两边都不匹配——`listStaleQueued` 只要
+     *  `QUEUED`、本条不要空 promptId——宿主在那段窗口里崩溃就再没有任何回收兜底，
+     *  界面永久停「生成中」。现在这类行也交出来，由判决侧按「本进程是否还认领它」
+     *  定夺（`reaper.ts` 的 `isTaskClaimedInProcess` + 两轮观察）。 */
+    async listStaleRunning(
+      cutoff: Date,
+      take: number,
+      owner: TaskClaimMode = "inline",
+    ): Promise<
+      Array<{
+        id: string;
+        promptId: string | null;
+        createdAt: Date;
+        workflowName: string;
+      }>
+    > {
+      return db
+        .select({
+          id: task.id,
+          promptId: task.promptId,
+          createdAt: task.createdAt,
+          workflowName: task.workflowName,
+        })
+        .from(task)
+        .where(
+          and(
+            eq(task.status, "RUNNING"),
+            isNull(task.finishedAt),
+            lt(task.createdAt, cutoff),
+            ownedBy(owner),
+          ),
+        )
+        .limit(take);
+    },
+
+    /** executor-finalize 成功后落 TaskImage 行（含封面/排序/媒体类型/种子/尺寸）。
+     *  `width` / `height` 缺省时存 null（非图像类没有语义尺寸）。 */
+    async createImages(
+      taskId: string,
+      images: Array<{
+        localPath: string;
+        sortIndex: number;
+        isCover: boolean;
+        mediaType: string;
+        seed: string | null;
+        width?: number | null;
+        height?: number | null;
+      }>,
+    ): Promise<void> {
+      await db.insert(taskImage).values(
+        images.map((im) => ({
+          taskId,
+          localPath: im.localPath,
+          sortIndex: im.sortIndex,
+          isCover: im.isCover,
+          mediaType: im.mediaType,
+          seed: im.seed,
+          width: im.width ?? null,
+          height: im.height ?? null,
+        })),
+      );
+    },
+  };
+}
+/**
+ * 16 个 exec-chain 方法的实现工厂（13 个 delegate 自 class + Phase 3-A 新增的
+ * `claimNextQueued` + 3-B1 新增的 `findExecJob`；后两者暂不进 class delegate——
+ * 领取循环是 host 独占的 pull，直接调 impl）。4-B2 又加了 `replaceRawCli` /
+ * `findRawCli` 两条，并让 `claimedAt` 在三处写入（领取、`markRunning`、进度帧）。
+ * 其中「领取 / 孤儿扫描 / 产物落表」那五条由上面的 `createQueueScanSection` 构造、
+ * 在这里 `...` 并进同一个返回对象——拆的是函数不是文件，`TaskRepoImpl` 的形状不变。
  *
  * Next 侧：`createTaskRepoImpl(db, { owner: "inline" })`（`repository-task.ts`
  * 模块顶层，`db` 来自 `~/lib/db`）；host 侧：`createTaskRepoImpl(drizzle(
@@ -99,6 +273,7 @@ export type TaskWriteOutcome =
  * libsql / better-sqlite3 两种 adapter 都天然满足，测试里可以直接把
  * `createTestDb()` 传进来（走 `as unknown as TaskRepoDb` 一次性断言）。
  */
+
 export function createTaskRepoImpl(
   db: TaskRepoDb,
   options: { owner: TaskClaimMode },
@@ -112,6 +287,18 @@ export function createTaskRepoImpl(
       notInArray(task.status, TERMINAL_STATES),
       ownedBy(owner),
     );
+  }
+
+  /** 「第一次转到 RUNNING 时把开始时刻定格」的 SET 片段（P3 §5 ADR §14 D1 的 4-B2）。
+   *  进度帧每几秒一发，只有第一条把 `claimedAt` 从 NULL 落成时刻，之后的都不
+   *  刷新——否则「已运行」永远接近零。
+   *  参数给 **ISO 字符串而不是 `Date`**（实测两条都踩过才定下来）：`sql` 模板里的
+   *  值**不走**该列的 `toDriver`（那是给 `.set()` 直接赋值用的），而 better-sqlite3
+   *  与 libsql 都只能绑 primitive——给 `Date` 会死在
+   *  `SQLite3 can only bind numbers, strings, …`。ISO 文本正是本列 `toDriver` 的
+   *  产物，所以两种写法落库的形态一致。 */
+  function claimStamp() {
+    return sql`COALESCE(${task.claimedAt}, ${new Date().toISOString()})`;
   }
 
   /** 「0 行受影响」时的原因分类——只在输掉的那条路径上多付一次读。 */
@@ -128,6 +315,7 @@ export function createTaskRepoImpl(
   }
 
   return {
+    ...createQueueScanSection(db, owner),
     /** executor-finalize 收口时读归属与请求参数（projectId / params / prompt /
      *  negativePrompt / workflowName / referenceImages / createdAt）。 */
     async findExecutionMeta(taskId: string): Promise<{
@@ -170,13 +358,20 @@ export function createTaskRepoImpl(
     async updateProgress(
       taskId: string,
       pct: number,
-      node?: { id: string; label?: string; value: number; max: number },
+      node?: {
+        id: string;
+        label?: string;
+        classType?: string;
+        value: number;
+        max: number;
+      },
     ): Promise<boolean> {
       const updated = await db
         .update(task)
         .set({
           progress: pct,
           status: "RUNNING",
+          claimedAt: claimStamp(),
           ...(node !== undefined ? { progressNode: node } : {}),
         })
         .where(writeGuard(taskId))
@@ -184,70 +379,16 @@ export function createTaskRepoImpl(
       return updated.length > 0;
     },
 
-    /** 记下 promptId 并标 RUNNING（守卫同 updateProgress：非终态 + 归本宿主）。 */
+    /** 记下 promptId 并标 RUNNING（守卫同 updateProgress：非终态 + 归本宿主）。
+     *  `claimedAt` 同上用 COALESCE 定格：inline 的 raw 路径常常要等整轮跑完才拿到
+     *  promptId，若这里无条件覆写，「已运行」会从收尾那一刻重新开始。 */
     async markRunning(taskId: string, promptId: string): Promise<boolean> {
       const updated = await db
         .update(task)
-        .set({ status: "RUNNING", promptId })
+        .set({ status: "RUNNING", promptId, claimedAt: claimStamp() })
         .where(writeGuard(taskId))
         .returning({ id: task.id });
       return updated.length > 0;
-    },
-
-    /**
-     * 队列领取（P3 §5 ADR §6/§7 Phase 3-A）：单语句
-     * `UPDATE ... WHERE id IN (SELECT ... ORDER BY createdAt LIMIT ?) RETURNING id`。
-     *
-     * 原子性由 SQLite「单写语句内子查询同语句求值」保证：inline/host 两个领取方
-     * 各自最多领走互不重叠的行。刻意不用 `db.transaction` + 先 SELECT 后 UPDATE：
-     * 本实现要同时跑在三种宿主（better-sqlite3 同步测试库 / libsql http /
-     * libsql file）上，async 事务回调在同步驱动上于 continuation 之前就 COMMIT，
-     * 原子性静默失效。
-     *
-     * 归属谓词跟 ADR §6：host 只领显式 `'host'` 的行；inline 领 NULL（历史行与
-     * 未带归属的建行）与 `'inline'`。领取时把 `claimedBy` 覆写为 `mode`，NULL
-     * 行由此转为显式归属；reaper 分片（`listStale*` 的 `owner`）用同一归属谓词。
-     */
-    async claimNextQueued(
-      mode: TaskClaimMode,
-      take: number,
-    ): Promise<string[]> {
-      const candidates = db
-        .select({ id: task.id })
-        .from(task)
-        .where(and(eq(task.status, "QUEUED"), ownedBy(mode)))
-        .orderBy(task.createdAt)
-        .limit(take);
-      const claimed = await db
-        .update(task)
-        .set({ status: "RUNNING", claimedBy: mode })
-        .where(inArray(task.id, candidates))
-        .returning({ id: task.id });
-      return claimed.map((row) => row.id);
-    },
-
-    /** host 领取后重建 Job 的行读（P3 §5 ADR §13-3B1 决定 1）：执行载荷取
-     *  `execPayload`（提交时刻的 RAW 原件）、覆盖项取 `params.workflowInputs`，
-     *  **不经 workflowName 回查模板**——模板被改/删不影响在队任务执行提交时的图。
-     *  找不到行返回 null（行已被回收/删除，调用方跳过并记日志即可）。
-     *
-     *  带归属条件是刻意的：这条读出来的就是**要交给 ComfyUI 执行的图**，跨片读到
-     *  别人的载荷（比如误把 inline 的 id 递进 host 的 tick）等于替别的宿主起跑。 */
-    async findExecJob(taskId: string): Promise<{
-      workflowName: string;
-      execPayload: unknown;
-      params: unknown;
-    } | null> {
-      const rows = await db
-        .select({
-          workflowName: task.workflowName,
-          execPayload: task.execPayload,
-          params: task.params,
-        })
-        .from(task)
-        .where(and(eq(task.id, taskId), ownedBy(owner)))
-        .limit(1);
-      return rows[0] ?? null;
     },
 
     /** 成功收口：写 SUCCEEDED + progress=100 + finishedAt；有 workflowSnapshot
@@ -368,98 +509,30 @@ export function createTaskRepoImpl(
         .catch(() => undefined);
     },
 
-    /** reaper 扫 QUEUED 孤儿：5 条件 AND（QUEUED + `finishedAt IS NULL` +
-     *  `createdAt < cutoff` + `promptId IS NULL` + 归属 `owner` 片），逐个破一
-     *  条都不返。`owner` 缺省 `'inline'`（NULL 归 inline，与现状全 NULL 的行
-     *  集等价）；host 进程注入 `'host'` 后只收自己那份——灰度期两进程并存时
-     *  互相看不见对方的孤儿，防跨片误杀。 */
-    async listStaleQueued(
-      cutoff: Date,
-      take: number,
-      owner: TaskClaimMode = "inline",
-    ): Promise<Array<{ id: string; createdAt: Date; workflowName: string }>> {
-      return db
-        .select({
-          id: task.id,
-          createdAt: task.createdAt,
-          workflowName: task.workflowName,
-        })
-        .from(task)
-        .where(
-          and(
-            eq(task.status, "QUEUED"),
-            isNull(task.finishedAt),
-            lt(task.createdAt, cutoff),
-            isNull(task.promptId),
-            ownedBy(owner),
-          ),
-        )
-        .limit(take);
+    /** comfy-cli 完整原文整包落库（P3 §5 ADR §14 D1 的 4-B2：「查看完整输出」
+     *  此前只有执行进程自己看得见）。
+     *  守卫形态与 `replaceLogs` 同族——**只带归属、不带终态**：被 kill 的 cli 在
+     *  收尾时还会吐出行，而那些正是「取消后为什么这样」的现场。
+     *  与 `replaceLogs` 分开而不是并成一条 UPDATE：日志走 200ms 防抖、每几秒一次，
+     *  原文整包可以到几千行，跟着防抖重写等于白写几十遍。这里不吞错——`persistRawCli`
+     *  那一层统一决定失败怎么露出来。 */
+    async replaceRawCli(taskId: string, lines: string[]): Promise<void> {
+      await db
+        .update(task)
+        .set({ rawCli: lines })
+        .where(and(eq(task.id, taskId), ownedBy(owner)));
     },
 
-    /** reaper 扫 RUNNING 孤儿（ISSUE #1184 起**不再要求 `promptId` 非空**）：
-     *  曾经带一条 `promptId IS NOT NULL`，于是「已被领取、但 comfy-cli 还没把
-     *  `prompt_id` 回传落库」的 RUNNING 行两边都不匹配——`listStaleQueued` 只要
-     *  `QUEUED`、本条不要空 promptId——宿主在那段窗口里崩溃就再没有任何回收兜底，
-     *  界面永久停「生成中」。现在这类行也交出来，由判决侧按「本进程是否还认领它」
-     *  定夺（`reaper.ts` 的 `isTaskClaimedInProcess` + 两轮观察）。 */
-    async listStaleRunning(
-      cutoff: Date,
-      take: number,
-      owner: TaskClaimMode = "inline",
-    ): Promise<
-      Array<{
-        id: string;
-        promptId: string | null;
-        createdAt: Date;
-        workflowName: string;
-      }>
-    > {
-      return db
-        .select({
-          id: task.id,
-          promptId: task.promptId,
-          createdAt: task.createdAt,
-          workflowName: task.workflowName,
-        })
+    /** 「查看完整输出」入口的行读（跨归属：这是给用户看的读，不是执行侧的写）。
+     *  只取这一列，别的字段调用方一个都不需要。 */
+    async findRawCli(taskId: string): Promise<string[] | null> {
+      const rows = await db
+        .select({ rawCli: task.rawCli })
         .from(task)
-        .where(
-          and(
-            eq(task.status, "RUNNING"),
-            isNull(task.finishedAt),
-            lt(task.createdAt, cutoff),
-            ownedBy(owner),
-          ),
-        )
-        .limit(take);
-    },
-
-    /** executor-finalize 成功后落 TaskImage 行（含封面/排序/媒体类型/种子/尺寸）。
-     *  `width` / `height` 缺省时存 null（非图像类没有语义尺寸）。 */
-    async createImages(
-      taskId: string,
-      images: Array<{
-        localPath: string;
-        sortIndex: number;
-        isCover: boolean;
-        mediaType: string;
-        seed: string | null;
-        width?: number | null;
-        height?: number | null;
-      }>,
-    ): Promise<void> {
-      await db.insert(taskImage).values(
-        images.map((im) => ({
-          taskId,
-          localPath: im.localPath,
-          sortIndex: im.sortIndex,
-          isCover: im.isCover,
-          mediaType: im.mediaType,
-          seed: im.seed,
-          width: im.width ?? null,
-          height: im.height ?? null,
-        })),
-      );
+        .where(eq(task.id, taskId))
+        .limit(1);
+      const value = rows[0]?.rawCli;
+      return Array.isArray(value) ? (value as string[]) : null;
     },
   };
 }
