@@ -413,3 +413,10 @@ configureExecutorCli({ taskRepo: hostTaskRepo, logger: hostLog, resolveComfyBase
 2. **灰度期日志空窗 = 接受、3-C 收口**（选 A）：实测 `src/app/api/tasks/[id]/stream/route.ts` 已有每 5s `findSseSnapshot` DB 轮询转发 `status/progress/error` 差异——host 执行的状态变化本就跨进程可见，唯一缺的是执行中实时 log 流（日志仍经 host `persistLogs` 落 DB 列，下次连接 replay 可见）。拒「log-poll 提前进 3-B1」（PR 变胖），log 进轮询投影属 3-C 自然内容。
 3. **host 侧取消收尾 = 最小版进 3-B1**（选 A）：host tick 检查自己 RUNNING 行的取消/终态 → 本地 `killProcessTree`/丢弃在飞 comfy-cli。现状 `interrupt()` 是 POST 共享 ComfyUI、跨进程仍有效，但 cli 子进程在 host 进程内 Next 摸不到 → 不补会有「取消后还出图」新事故面。ADR 4-B 的完整 `cancelTask` 搬迁照旧留 4-B。
 4. **打包小口径**：inline 建行也显式写 `claimedBy='inline'`（NULL 只服务历史行）；claim 节奏每 tick `take=1` + 2s tick（与 inline 串行并发语义对齐）；claim 后执行抛错走 `finalizeFailure`、不造 RUNNING 僵尸（host 片 reaper 兜底）。host 版 `resolveComfyBase`/`getView`/logger 首选 import 同一份 client.ts/logger（已第三类），前置实测「六 seam 全加载 + getSettingsSync 在 host 读到同一份设置」通过才接线。
+
+**3-C（SSE 单源化）——三个已签决定（2026-09-27 追加）**
+
+- **D1 节点级进度持久化**：`task.progressNode`（json，`{id,label?,value,max}`）由 `updateProgress` 可选第三参写入（executor-ws 现成的 node 对象；帧无节点信息时**不覆写**，标签不闪没）。动机：#1151 后状态/收口已走 DB，但画布「当前节点+步数」仍只在进程内 progress 帧里，host 模式拿不到——两模式观感分叉。
+- **D2 轮询节奏 5s → 3s**（Q1 原提议值）。本机 libsql 异步驱动、个位数活跃流，成本可忽略。
+- **D3 stream 路由退役 `subscribe`（emitter→SSE 通道）**：路由变成纯 DB 单源——log 增量按游标 diff 发帧、state 帧带 node/终态带 images（#1151 已铺）；单一来源无重复帧，inline/host 同一契约（代价：inline 实时性从即时变 ≤3s + persistLogs 200ms 防抖）。`subscribe` 本体保留（`firstframe.ts` 进程内消费不受影响），emitter 彻底删除在 4-A。
+- 初始回放的 `replaySrc` 分支按 ADR 原案保留（内存日志优先、DB 兜底，接住防抖窗口）。

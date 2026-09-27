@@ -315,6 +315,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
     validationErrors: string | null;
     workflowName: string | null;
     resultImages: unknown;
+    progressNode: unknown;
+    logs: unknown;
   } | null> {
     const rows = await db
       .select({
@@ -326,6 +328,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
         // 终态收口要带产出清单（host 模式没有进程内 done 帧，见 stream 路由）；
         // 它是路径小数组，不破坏「不拉 workflowSnapshot/logs 大列」的轻投影契约。
         resultImages: task.resultImages,
+        // 3-C（ADR §13 D1/D2）：SSE 单源化后轮询要读节点进度与日志增量。
+        // 「轻量投影」的边界随之从「不含大列」改为「不含 workflowSnapshot」——
+        // 本机 libsql 异步驱动、单用户个位数活跃流，3s 一次可承受。
+        progressNode: task.progressNode,
+        logs: task.logs,
       })
       .from(task)
       .where(eq(task.id, id))
@@ -340,8 +347,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
   // reaper 两个 listStale 判据的 4 条件 AND 等等）都在
   // `./repository-task-impl.ts`。签名通过 `TaskRepoImpl["method"]` 反推、与
   // impl 单点绑定，避免两处漂移。
-  updateProgress: TaskRepoImpl["updateProgress"] = (taskId, pct) =>
-    impl.updateProgress(taskId, pct);
+  updateProgress: TaskRepoImpl["updateProgress"] = (taskId, pct, node) =>
+    impl.updateProgress(taskId, pct, node);
 
   markRunning: TaskRepoImpl["markRunning"] = (taskId, promptId) =>
     impl.markRunning(taskId, promptId);

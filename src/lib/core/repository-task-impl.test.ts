@@ -108,6 +108,17 @@ describe("updateProgress（compare-and-set：终态行不改写）", () => {
       expect(readRow(id)?.progress).toBe(88);
     }
   });
+
+  it("node 快照随进度落 progressNode 列；帧无节点信息时不覆写（3-C D1）", async () => {
+    const id = await seed({ status: "QUEUED" });
+    const node = { id: "76", value: 3, max: 20, label: "KSampler" };
+    expect(await impl.updateProgress(id, 30, node)).toBe(true);
+    expect(readRow(id)?.progressNode).toEqual(node);
+    // 下一帧没带节点：progress 更新、progressNode 保留上一个（标签不闪没）
+    expect(await impl.updateProgress(id, 40)).toBe(true);
+    expect(readRow(id)?.progress).toBe(40);
+    expect(readRow(id)?.progressNode).toEqual(node);
+  });
 });
 
 describe("markRunning（同族 compare-and-set）", () => {
