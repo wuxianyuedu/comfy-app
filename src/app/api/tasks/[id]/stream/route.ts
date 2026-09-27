@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { taskRepository } from "~/lib/core/repository";
-import { getLogs, subscribe } from "~/lib/comfyui/enqueue";
-import type { TaskEvent } from "~/lib/comfyui/runner-state";
+import { getLogs } from "~/lib/comfyui/enqueue";
 import { parseValidationErrors } from "~/lib/comfyui/validation";
 import { isTerminalTaskStatus } from "~/lib/task-state";
 import { unauthorizedResponse } from "~/server/lib/error-response";
@@ -30,13 +29,17 @@ export async function GET(
       const send = (obj: unknown) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
 
-      /* 下面「初始回放」与「数据库实情轮询」两处共用。
-       * 两者必须读写同一个变量，否则轮询会在初始发送之后
-       * 立刻把同一个状态再发一遍。 */
-      const lastSent: { status: string; progress: number } = {
+      /* 下面「初始回放」与「数据库轮询」两处共用同一组游标。
+       * `lastSent`：已发出的状态快照（相同则不重发 state 帧）。
+       * `sentLogCount`：已发出的日志条数——日志是**追加数组**，轮询按它做
+       * 增量 diff 发 log 帧（P3 §5 ADR §13-3C：SSE 单源化，log/state 都以
+       * DB 为准；初始回放读内存是为了接住 persistLogs 200ms 防抖窗口）。 */
+      const lastSent: { status: string; progress: number; nodeKey: string } = {
         status: "",
         progress: 0,
+        nodeKey: "",
       };
+      let sentLogCount = 0;
 
       // 初始状态（覆盖「订阅之前任务就已经结束」的情形）。
       taskRepository
@@ -61,6 +64,7 @@ export async function GET(
             // 若把 state 排在日志前面，后续 log 帧会被丢弃，用户只看到「等待日志…」
             // 而看不到失败原因（任务在 SSE 建立前就已终态时必现）。
             replaySrc.forEach((entry) => send({ type: "log", entry }));
+            sentLogCount = replaySrc.length;
             // 把结构化校验错误透出去，好让消费方（CreatePanel）
             // 渲染出精确到字段的列表，而不是 `error` 里那句英文摘要。
             send({
@@ -72,6 +76,8 @@ export async function GET(
               /* 把 workflowName 透出去，好让 GlobalStepLogPanel 的任务切换器
                * 用「<名称> · 状态」给条目打标签，而不是一个光秃秃的 14 字符 id。 */
               workflowName: task.workflowName,
+              // 当前执行节点（3-C D1：画布「当前节点+步数」随快照走 DB）
+              node: task.progressNode,
               /* 成功终态必须带产出清单：done 帧只由进程内 emitter 发（inline
                * 路径），host 执行的任务到不了这条——客户端拿 state.images 收口
                * （P3 §5 ADR §13-3B1 手工端到端抓到的「完成不落定」）。 */
@@ -79,6 +85,7 @@ export async function GET(
             });
             lastSent.status = task.status;
             lastSent.progress = task.progress ?? 0;
+            lastSent.nodeKey = JSON.stringify(task.progressNode ?? null);
             /* 订阅之前任务就已终态：emitter 不会再发 done/error，而轮询那条
              * 「与上次发出的快照不同才动作」的判据刚被这次回放喂成了恒假 ——
              * 两条退出路径都到不了，只能在这里收口（日志与终态 state 都已
@@ -90,15 +97,12 @@ export async function GET(
           /* 初始回放失败可忽略 — 订阅与轮询随后仍会推送状态 */
         });
 
-      /* 三条退出路径 —— emitter 终态、轮询读到终态、客户端 abort —— 必须收进
-       * 同一个 cleanup：只清其中一条，剩下的那条（最常见的就是 emitter 终态分支）
-       * 会让 3s 的 DB 轮询在流关闭之后继续跑，直到进程退出 —— 客户端早已断连，
-       * 服务端却每 3s 查一次库，看过的任务越多残留越多。
-       * 句柄收在一个可变对象里而不是各自 `let`：cleanup 要能被 subscribe 的回调
-       * 调用，而回调注册时这些句柄还没创建 —— 直接 `const` 引用不到（TDZ），
-       * 这正是原先两个定时器只能声明在回调之后、因而没法被清掉的结构性原因。 */
+      /* 两条退出路径 —— 轮询读到终态、客户端 abort —— 必须收进同一个
+       * cleanup：只清一条，剩下的那条会让 3s 的 DB 轮询在流关闭之后继续跑
+       * （3-C 前还有 emitter 终态这条，订阅通道已随单源化退役）。
+       * 句柄收在一个可变对象里：cleanup 既被定时器回调调用、也被 `send`
+       * 抛错路径调用，`const` 各自声明会踩 TDZ（历史注释保留原委）。 */
       const handles: {
-        unsubscribe?: () => void;
         heartbeat?: ReturnType<typeof setInterval>;
         poll?: ReturnType<typeof setInterval>;
       } = {};
@@ -113,21 +117,7 @@ export async function GET(
         } catch {
           /* 流已经关了 —— 忽略 */
         }
-        handles.unsubscribe?.();
       };
-
-      handles.unsubscribe = subscribe(id, (e: TaskEvent) => {
-        /* 连接已死时 `send`（controller.enqueue）会抛 —— 此时必须走 cleanup：
-         * abort 事件未必能触发（反向代理缓冲、keep-alive 提前断开都会让
-         * `req.signal` 不亮），这是「订阅与定时器残留」的最后一条漏网路径。 */
-        try {
-          send(e);
-        } catch {
-          cleanup();
-          return;
-        }
-        if (e.type === "done" || e.type === "error") cleanup();
-      });
 
       /* SSE 心跳。若长时间没有字节流动，操作系统 / 负载均衡 / 代理会在看似空闲
        * 30–60s 后悄悄掐掉这个 socket（QUEUED 中的任务很常见：可能几分钟都没有
@@ -145,17 +135,15 @@ export async function GET(
         }
       }, 15000);
 
-      /* 数据库「实情」轮询。执行器内存里的 `emitter` 只为
-       * **执行器自己产生**的事件发消息（progress / log / done / error）。
-       * 外部导致的状态变化 —— cancelTask()（在此次修复前它只写数据库）、
-       * instrumentation.ts 对「僵尸 RUNNING」任务的对账，
-       * 或任何其它改 Task.status 的代码路径 —— 都到不了 SSE 订阅方。
-       * 这里每 5s 轮一次：只要数据库里的状态 / 进度与上次发出的快照不同，
-       * 就补发一个 `state` 事件，于是即使某条代码路径忘了调 emitter.emit()，
-       * 前端的 d.status 也不会卡住。轮询走 `findSseSnapshot` 的轻量投影 ——
-       * `findById` 会把 `workflowSnapshot` / `logs` 两个大 JSON 一并拉回，
-       * 而这里只读状态和进度。abort 时关闭；
-       * 同时最多只允许一次轮询在途，避免堆积。 */
+      /* 数据库轮询 = SSE 的唯一事件源（P3 §5 ADR §13-3C，D2 定 3s）。
+       * 此前它是「emitter 之外的兜底」（取消只写库、外部对账改状态等路径
+       * 到不了订阅方），进程内 emitter 负责实时 log/progress/done；
+       * host 执行（Phase 3-B1）让 emitter 只覆盖 inline 一半流量，两模式
+       * 契约分裂——#1151 先补了终态收口，这一步把 log 增量与节点进度也
+       * 统一走 DB：单一来源、无重复帧、inline/host 同一观感（代价是
+       * ≤3s 延迟与 persistLogs 的 200ms 防抖）。
+       * `findSseSnapshot` 是窄投影（不含 workflowSnapshot 大列）；
+       * 同时最多一次轮询在途，abort 时关闭。 */
       let polling = false;
       handles.poll = setInterval(() => {
         if (polling) return;
@@ -164,15 +152,27 @@ export async function GET(
           .findSseSnapshot(id)
           .then((cur) => {
             if (!cur) return;
-            if (
+            // 日志是 unknown 列：Array.isArray 收窄到 any[] 会踩
+            // no-unsafe-assignment，标注成 unknown[] 保住类型纪律。
+            const logs: unknown[] = Array.isArray(cur.logs) ? cur.logs : [];
+            const nodeKey = JSON.stringify(cur.progressNode ?? null);
+            const changed =
               cur.status !== lastSent.status ||
-              cur.progress !== lastSent.progress
-            ) {
-              lastSent.status = cur.status;
-              lastSent.progress = cur.progress ?? 0;
-              /* 与 emitter 回调同理：`send` 抛错说明流已关闭、连接已死，
-               * 此时清理整套句柄（幂等），否则这一路轮询会空转到进程退出。 */
-              try {
+              cur.progress !== lastSent.progress ||
+              nodeKey !== lastSent.nodeKey;
+            try {
+              /* 日志增量：追加数组按游标切。DB 数组只会变长（persistLogs
+               * 整包重写同一序列）；万一看到变短（异常形态），只把游标
+               * 归正、不重发历史，宁缺勿重。 */
+              if (logs.length < sentLogCount) sentLogCount = logs.length;
+              for (const entry of logs.slice(sentLogCount)) {
+                send({ type: "log", entry });
+              }
+              sentLogCount = Math.max(sentLogCount, logs.length);
+              if (changed) {
+                lastSent.status = cur.status;
+                lastSent.progress = cur.progress ?? 0;
+                lastSent.nodeKey = nodeKey;
                 send({
                   type: "state",
                   status: cur.status,
@@ -180,19 +180,23 @@ export async function GET(
                   error: cur.error,
                   validationErrors: parseValidationErrors(cur.validationErrors),
                   workflowName: cur.workflowName,
+                  node: cur.progressNode,
                   /* 只在终态附带产出清单（与初始回放的 state 帧同形）：
                    * host 执行的任务没有进程内 done 帧，客户端靠这份 images
-                   * 收口成功态；非终态不带上，5s 轮询帧保持轻量。 */
+                   * 收口成功态（#1151）；非终态不带上，轮询帧保持轻量。 */
                   ...(isTerminalTaskStatus(cur.status)
                     ? { images: cur.resultImages }
                     : {}),
                 });
-              } catch {
-                cleanup();
-                return;
               }
-              if (isTerminalTaskStatus(cur.status)) cleanup();
+            } catch {
+              /* `send` 抛 = 流已关、连接已死：abort 事件未必能触发
+               * （反向代理缓冲 / keep-alive 提前断开），这是定时器残留
+               * 的最后一条漏网路径，必须走 cleanup。 */
+              cleanup();
+              return;
             }
+            if (isTerminalTaskStatus(cur.status)) cleanup();
           })
           .catch(() => {
             /* 数据库抖了一下 —— 下一个 tick 再试 */
@@ -200,7 +204,7 @@ export async function GET(
           .finally(() => {
             polling = false;
           });
-      }, 5000);
+      }, 3000);
 
       req.signal.addEventListener("abort", () => cleanup());
     },

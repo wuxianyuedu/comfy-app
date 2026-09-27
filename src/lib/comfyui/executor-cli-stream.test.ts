@@ -124,7 +124,18 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
       '{"type":"queued","prompt_id":"p1"}\n{"type":"progress","completed":1,"total":4}\n',
     );
     expect(onPromptId).toHaveBeenCalledWith("p1");
-    expect(onProgress).toHaveBeenCalledWith(25);
+    // 事件不带 node：第二参为 undefined（3-C D1 的透传契约）
+    expect(onProgress).toHaveBeenCalledWith(25, undefined);
+  });
+
+  it("progress 事件带 node 时透传当前节点步数（3-C D1：调用方落 progressNode）", () => {
+    const { p, onProgress } = mk();
+    p.sink('{"type":"progress","node":"76:69","completed":3,"total":25}\n');
+    expect(onProgress).toHaveBeenCalledWith(12, {
+      id: "76:69",
+      value: 3,
+      max: 25,
+    });
   });
 
   it("envelope 事件触发收口，ok 原样透给 finish", () => {
