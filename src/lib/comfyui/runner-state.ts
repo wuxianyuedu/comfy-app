@@ -17,28 +17,20 @@
 // //
 
 // // **§18.4 三选一：本模块走第三类（纯 Node 宿主，不加 server-only / 不加 .server.ts）**。
-
 // // P3 executor host 迁移第 1 期·第三步：整条 ComfyUI 执行链从 Next 专属耦合里解绑。
-
-// // 未来 `scripts/executor-host.mjs`（纯 Node 宿主）与 Next server 双宿主加载本模块；
-
+// // `scripts/executor-host.mjs`（纯 Node 宿主）与 Next server 双宿主加载本模块；
 // // 一旦给它加 `server-only`，纯 Node 侧的 import 就是一句 `throw`——正是硬规则
-
 // // 「纯 Node 宿主两者都不加」的原型（同 `src/lib/process/kill-process-tree.ts`）。
-
-// // 本模块顶层仍有 `import { EventEmitter } from "events"` 这一 Node 内建值 import
-
-// // （state() 内部构造 emitter 用），因此会落进 `unguarded`——由
-
-// // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS` 显式登记。
+// // 进程内事件通道（emitter）随 P3 §5 ADR §14 D1 退役后，本模块顶层不再 import
+// // 任何 Node 内建值，于是 scanner 视角它不再落进 `unguarded`、`PURE_NODE_HOSTS`
+// // 那条登记也随之删掉——**但「不许带 `server-only`」这条约束一字未变**，改带
+// // 之后 host 侧 `bootRuntime()` 的注入链会在加载本模块时直接 throw。
 
 // //
 
 // // 模块边界见 docs/standards/18-lib层规范.md。
 
 //
-
-import { EventEmitter } from "events";
 
 import { errorText } from "~/lib/error-message";
 import { HISTORY_READ } from "../retry-policy";
@@ -94,7 +86,6 @@ export type {
   LogEntry,
   RawWorkflowOverride,
   RunnerState,
-  TaskEvent,
 } from "./runner-state-shape";
 
 declare global {
@@ -102,17 +93,9 @@ declare global {
 }
 
 export function state(): RunnerState {
-  if (!globalThis.comfyRunner) {
-    const emitter = new EventEmitter();
-
-    /* 监听器上限刻意保持有限 —— **不要用 0**：那是「无限」，会永久关掉
-     * MaxListenersExceededWarning，而它正是这里唯一能自动报出「某个 taskId 的
-     * 订阅没退干净」的信号（每条 SSE 连接靠 `subscribe` 的返回值退订，漏一处就在
-     * 这个单例 emitter 上留一个监听器，进程存活期间不释放）。50 对正常使用足够。 */
-    emitter.setMaxListeners(50);
-
-    globalThis.comfyRunner = createEmptyState(emitter);
-  }
+  /* 单例里不再有 EventEmitter：进程内事件通道已随 ADR §14 D1 退役，执行进度的
+   * 对外通道只剩 DB 行 + `/api/tasks/[id]/stream` 的轮询（§13-3C 单源化）。 */
+  globalThis.comfyRunner ??= createEmptyState();
 
   return globalThis.comfyRunner;
 }
@@ -152,7 +135,7 @@ function callerLoc(): string {
   }
 }
 
-// 追加一条结构化日志：留内存 + 推给实时订阅方 + 防抖落库，
+// 追加一条结构化日志：留内存 + 防抖落库，
 
 // 让 SSE 重放能覆盖全部内容。
 
@@ -227,8 +210,6 @@ export function log(taskId: string, level: LogEntry["level"], msg: string) {
   if (arr.length > LOGS_MAX_LINES) arr.splice(0, arr.length - LOGS_MAX_LINES);
 
   touchAndEvict(store.logs, taskId, arr, LOGS_MAX_TASKS);
-
-  store.emitter.emit(taskId, { type: "log", entry });
 
   schedulePersistLogs(taskId);
 }

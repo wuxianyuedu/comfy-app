@@ -23,7 +23,6 @@ vi.mock("~/server/db", async () => {
 });
 vi.mock("~/lib/comfyui/enqueue", () => ({
   enqueue: enqueueMock,
-  subscribe: vi.fn(),
   getLogs: vi.fn(),
   cancelTask: vi.fn(),
 }));

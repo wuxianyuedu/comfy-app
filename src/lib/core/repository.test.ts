@@ -844,6 +844,7 @@ describe("TaskRepository", () => {
       status: "RUNNING",
       progress: 42,
       resultImages: null,
+      error: null,
     });
     expect(await taskRepository.findExecutionMeta("nope")).toBeNull();
   });

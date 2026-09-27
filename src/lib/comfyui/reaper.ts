@@ -4,9 +4,9 @@
 //   • reapStaleQueuedTasks()  —— QUEUED 超过 30s 且没有 promptId → FAILED
 //   • reapStaleRunningTasks() —— RUNNING 的孤儿任务，拿 ComfyUI 的
 //     /history 与 /queue 对账 → SUCCEEDED / FAILED
-// 它以**模块级副作用**的形式启动自己（用 globalThis 键兜住，
-// Next.js HMR 因此永远不会造出第二个定时器）。enqueue.ts 以副作用方式导入本模块，
-// 于是任何会入队 / 订阅的服务端一启动就把它拉起来了。
+// 两条清扫器由**宿主显式起**（ADR §14 D3）：Next 侧 `src/instrumentation.ts`、
+// host 侧 `scripts/executor-host.mjs`，各一处 `startReaper()`；模块加载不再有副作用。
+// 常驻循环用 globalThis 键兜住，Next.js HMR 因此永远不会造出第二个定时器。
 
 import { errorText } from "~/lib/error-message";
 import { isSchemaReady } from "~/lib/db-schema-ready";
@@ -357,18 +357,10 @@ export async function reapStaleQueuedTasks(): Promise<void> {
         }
         const reason = `任务卡在队列超过 ${ageSec}s，且 ComfyUI 队列与历史中均无对应活动（本进程内存队列也无此任务的执行链）— 请重新执行`;
         log(t.id, "error", reason);
-        /* 合成一对「state → error」事件，让任何 SSE 订阅者立刻看到终态失败，
-         *  随后把 DB 行标成 FAILED。**不**调 processQueue() ——
-         *  这个任务在内存里根本没有作业，而且我们明确不希望把一个未知工作流
-         *  重新入队。 */
-        s.emitter.emit(t.id, {
-          type: "state",
-          status: "FAILED",
-          progress: 0,
-          error: reason,
-          validationErrors: [],
-        });
-        s.emitter.emit(t.id, { type: "error", error: reason });
+        /*  上面那行 error 日志与下面的终态写入就是用户拿到的全部出口：SSE 自 ADR
+         *  §13-3C 起只读库，进程内合成事件那条通道随 §14 D1 退役了。这里也**不**调
+         *  processQueue()——这个任务在内存里根本没有作业，我们明确不希望把一个
+         *  未知工作流重新入队。尾部的 persistLogs 把原因行与终态同批落库。 */
         const outcome = await taskRepository.finalizeFailure(t.id, reason);
         if (outcome !== "written") {
           /* SELECT 与 UPDATE 之间被执行方自己收口了（或归属已变）：正常的窄竞态，
@@ -438,14 +430,6 @@ export async function reapStaleRunningTasks(): Promise<void> {
           );
           if (!claimTerminal(t.id)) continue;
           const reason = `任务被领取后 ${ageSec}s 仍未回传 prompt_id，且连续两轮都无人认领它（执行宿主可能已崩溃）— 请重新执行`;
-          s.emitter.emit(t.id, {
-            type: "state",
-            status: "FAILED",
-            progress: 0,
-            error: reason,
-            validationErrors: [],
-          });
-          s.emitter.emit(t.id, { type: "error", error: reason });
           const outcome = await taskRepository.finalizeFailure(t.id, reason);
           if (outcome !== "written") {
             logger.warn(
@@ -550,18 +534,6 @@ export async function reapStaleRunningTasks(): Promise<void> {
         }
         const finalStatus = verdict === "succeeded" ? "SUCCEEDED" : "FAILED";
         log(t.id, verdict === "succeeded" ? "success" : "error", reason);
-        /* 复用函数顶层的 s，避免嵌套块内重复声明触发 no-shadow。 */
-        s.emitter.emit(t.id, {
-          type: "state",
-          status: finalStatus,
-          progress: verdict === "succeeded" ? 1 : 0,
-          error: verdict === "failed" ? reason : null,
-          validationErrors: [],
-        });
-        s.emitter.emit(t.id, {
-          type: verdict === "succeeded" ? "done" : "error",
-          ...(verdict === "failed" ? { error: reason } : {}),
-        });
         const outcome = await taskRepository.finalizeFromReaper(
           t.id,
           finalStatus,

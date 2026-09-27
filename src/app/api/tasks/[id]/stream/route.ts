@@ -78,18 +78,17 @@ export async function GET(
               workflowName: task.workflowName,
               // 当前执行节点（3-C D1：画布「当前节点+步数」随快照走 DB）
               node: task.progressNode,
-              /* 成功终态必须带产出清单：done 帧只由进程内 emitter 发（inline
-               * 路径），host 执行的任务到不了这条——客户端拿 state.images 收口
-               * （P3 §5 ADR §13-3B1 手工端到端抓到的「完成不落定」）。 */
+              /*  成功终态必须带产出清单：客户端拿这一份 images 收口成功态
+               * （P3 §5 ADR §13-3B1 手工端到端抓到的「完成不落定」）。done 帧
+               * 那条进程内通道已随 §14 D1 退役，inline 与 host 因此同形。 */
               images: task.resultImages,
             });
             lastSent.status = task.status;
             lastSent.progress = task.progress ?? 0;
             lastSent.nodeKey = JSON.stringify(task.progressNode ?? null);
-            /* 订阅之前任务就已终态：emitter 不会再发 done/error，而轮询那条
-             * 「与上次发出的快照不同才动作」的判据刚被这次回放喂成了恒假 ——
-             * 两条退出路径都到不了，只能在这里收口（日志与终态 state 都已
-             * 回放完毕，此时关闭不丢数据）。 */
+            /*  回放之前任务就已终态：轮询那条「与上次发出的快照不同才动作」的判据
+             * 刚被这次回放喂成了恒假，于是再没有别的退出路径 —— 只能在这里收口
+             * （日志与终态 state 都已回放完毕，此时关闭不丢数据）。 */
             if (isTerminalTaskStatus(task.status)) cleanup();
           }
         })

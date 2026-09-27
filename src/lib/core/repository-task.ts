@@ -267,16 +267,24 @@ export class TaskRepository extends DrizzleRepository<Task> {
   findExecutionMeta: TaskRepoImpl["findExecutionMeta"] = (taskId) =>
     impl.findExecutionMeta(taskId);
 
+  /** 等一条任务跑到终态时的最小读面：状态 + 进度 + 产出清单 + 失败原因。
+   *
+   *  `error` 是为首帧那条等待补进来的（P3 §5 ADR §14 D1）：调用方过去从进程内
+   *  `error` 事件里拿到的是执行链写好的那句人话原因，改成读库收口后如果只看到
+   *  `status=FAILED`，用户拿到的解释就从「显存不足」退化成「首帧生成失败」——
+   *  一条 text 列的代价，换回的是排障时唯一有用的那句话。 */
   async findExecutionProgress(taskId: string): Promise<{
     status: string;
     progress: number;
     resultImages: unknown;
+    error: string | null;
   } | null> {
     const rows = await db
       .select({
         status: task.status,
         progress: task.progress,
         resultImages: task.resultImages,
+        error: task.error,
       })
       .from(task)
       .where(eq(task.id, taskId))

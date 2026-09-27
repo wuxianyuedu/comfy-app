@@ -328,16 +328,6 @@ export async function executeViaComfyCli(job: Job) {
       ? `→ 启动 comfy-cli 进程（raw UI-format → API 转换）`
       : `→ 启动 comfy-cli 进程（API 图直接提交）`,
   );
-  s.emitter.emit(taskId, {
-    type: "log",
-    entry: {
-      t: Date.now(),
-      level: "info",
-      msg: isRaw
-        ? "已使用 comfy-cli 提交 raw 工作流"
-        : "已使用 comfy-cli 提交 API 工作流",
-    },
-  });
 
   let promptId: string | null = null;
   let settled = false;
@@ -439,7 +429,6 @@ export async function executeViaComfyCli(job: Job) {
       progress: number,
       node?: { id: string; value: number; max: number },
     ) => {
-      s.emitter.emit(taskId, { type: "progress", progress, node });
       /* 进度同样落库（P3 §5 ADR §13-3C D1/D3）：SSE 已单源化走 DB，cli 路径
        *  的进度事件此前只发进程内 emitter——host 模式下界面全程 0% 的根因。
        *  CAS 语义在 updateProgress 内部（终态行不再改写），这里 fire-and-forget，

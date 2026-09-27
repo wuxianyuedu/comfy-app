@@ -1,4 +1,4 @@
-// 面向外部的入队 API：队列 / 订阅 / 日志 / 取消，服务 ComfyUI 执行器。
+// 面向外部的入队 API：队列 / 日志 / 取消，服务 ComfyUI 执行器。
 //
 // 从历史上的单文件 `runner.ts` 拆出。本模块持有 API 路由与编排方用的
 // **公开入口**；真正的 WS 执行机制在 executor.ts，孤儿回收在 reaper.ts。
@@ -18,7 +18,7 @@ import {
   clearFinalize,
   MAX_CONCURRENCY,
 } from "./runner-state";
-import type { Job, TaskEvent, LogEntry } from "./runner-state";
+import type { Job, LogEntry } from "./runner-state";
 import { connect, processQueue, cliProcs } from "./executor";
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·最后一步：让 reaper / enqueue 也能被纯
@@ -80,17 +80,6 @@ export function enqueue(job: Job) {
   void connect();
 
   void processQueue();
-}
-
-export function subscribe(
-  taskId: string,
-  cb: (e: TaskEvent) => void,
-): () => void {
-  const store = state();
-
-  store.emitter.on(taskId, cb);
-
-  return () => store.emitter.off(taskId, cb);
 }
 
 export function getLogs(taskId: string): LogEntry[] {
@@ -218,33 +207,12 @@ export async function cancelTask(taskId: string) {
   const hadSlot = inQueue || cliProcs.has(taskId);
 
   if (hadSlot) store.active = Math.max(0, store.active - 1);
-  /* 以前取消只改数据库与内存槽，从不往 SSE 推送 —— 于是前端的 d.status 永远停在
-   * "running"，「生成中…」按钮再也不回来。现在发一个合成的 state 事件，让画布的
-   * patch() 把节点翻成 error；再发一个终态 error 事件，让 EventSource 的
-   * onmessage 处理器关掉连接（与 finalizeFailure 里的做法一致）。顺序要紧：
-   * 先 state（修 UI），后 error（关连接）。
-   *
-   * 只在**非终态**时发：行已经是 SUCCEEDED/FAILED 的话，这次取消没改写任何状态
-   * （4-A1 的守卫会把它挡成 skipped-terminal），发合成事件会把「已完成」的节点
-   * 翻成取消，属于凭空造假象。 */
-
-  if (!isTerminal(task.status)) {
-    store.emitter.emit(taskId, {
-      type: "state",
-
-      status: "CANCELLED",
-
-      progress: 0,
-
-      error: "用户取消",
-
-      validationErrors: [],
-    });
-
-    store.emitter.emit(taskId, { type: "error", error: "用户取消" });
-  }
   /* 把这个任务还没落盘的防抖日志刷出去：让「用户取消任务」这一行与在途的告警
-   * 都先进数据库，再把行标成终态。否则「取消后立刻刷新」会看不到那条取消记录。 */
+   * 都先进数据库，再把行标成终态。否则「取消后立刻刷新」会看不到那条取消记录。
+   *
+   * 这里过去还发过一对合成的「state → error」事件去把画布节点翻成取消：SSE 自
+   * 3-C 起只读库（ADR §13-3C），进程内事件通道已整体退役，客户端看到取消的
+   * 唯一来源就是上面 `taskRepository.cancel` 落的那个终态行。 */
 
   await persistLogs(taskId);
 
