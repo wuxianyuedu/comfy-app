@@ -98,9 +98,7 @@ export function WorkshopModelAdapterModal({
         <div className="border-border bg-surface flex max-h-[86vh] w-full max-w-3xl flex-col rounded-2xl border shadow-2xl">
           <div className="flex items-center justify-between px-5 pt-4 pb-2">
             <div>
-              <h3 className="text-ink-strong text-sm font-semibold">
-                模型适配
-              </h3>
+              <h3 className="text-ink-strong u-title">模型适配</h3>
               <p className="text-muted-foreground mt-0.5 text-[11px]">
                 为远端模型配置工坊各模式下的输入 /
                 输出：统一输入（提示词、宽高比、

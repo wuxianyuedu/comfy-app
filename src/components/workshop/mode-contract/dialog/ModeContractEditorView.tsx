@@ -48,7 +48,7 @@ export function ModeContractEditorView({
     <>
       <div className="flex items-start justify-between px-5 pt-4 pb-2">
         <div>
-          <h3 className="text-ink-strong text-sm font-semibold">模式契约</h3>
+          <h3 className="text-ink-strong u-title">模式契约</h3>
           <p className="text-muted-foreground mt-0.5 text-[11px]">
             每种模式的统一输入 / 输出 ——
             本地工作流按它配落点，远端模型按它建适配器。
