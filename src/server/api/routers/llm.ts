@@ -174,13 +174,15 @@ export const llmRouter = createTRPCRouter({
       if (input.extraModels !== undefined) {
         await remoteModelRepository.replaceAll(split.remoteEntries);
       }
-      const config = await llmConfigRepository.upsertSingleton({
+      await llmConfigRepository.upsertSingleton({
         ...input,
         // 本地候选只写名字字符串（无 extraModels 输入时保持原值）；远端条目已落
         // remoteModel 表，llmConfig 不再承载远端对象，避免两类混存。
         extraModels:
           input.extraModels !== undefined ? split.localNames : undefined,
       });
+      // 回传脱敏配置（不携带明文 apiKey，改发 hasApiKey 布尔），与 configGet 同源。
+      const config = await getConfigForClient();
       return { config };
     }),
 

@@ -5,7 +5,11 @@ import { TRPCError } from "@trpc/server";
 import type { WorkflowTemplate } from "~/server/db/schema";
 import { workflowTemplate } from "~/server/db/schema";
 import { eq, and, inArray, desc, sql, type SQL } from "drizzle-orm";
-import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  authedProcedure,
+  rateLimitedProcedure,
+} from "~/server/api/trpc";
 import { logger } from "~/server/lib/logger";
 import {
   workflowTemplateRepository,
@@ -142,6 +146,33 @@ function findRootFor(
     }
   }
   return best?.raw;
+}
+
+function normalizePathKey(p: string): string {
+  try {
+    return path.resolve(p).replace(/\\/g, "/").toLowerCase();
+  } catch {
+    return p.replace(/\\/g, "/").toLowerCase();
+  }
+}
+
+/** 允许导入本地工作流的目录集合（与本地工作流扫描器同源，单一事实来源）。 */
+function getAllowedLocalWorkflowRoots(): string[] {
+  const derived = deriveComfyuiWorkflowsDir(getSettingsSync().comfyuiPath);
+  const extra = (process.env.LOCAL_WORKFLOWS_PATH ?? "")
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return derived ? [derived, ...extra] : extra;
+}
+
+/** 判定 absPath 是否落在允许导入的根目录内（忽略大小写 / 正反斜杠）。 */
+function isWithinAllowedLocalWorkflowRoot(absPath: string): boolean {
+  const key = normalizePathKey(absPath);
+  return getAllowedLocalWorkflowRoots().some((root) => {
+    const rk = normalizePathKey(root);
+    return key === rk || key.startsWith(rk + "/");
+  });
 }
 
 export const workflowRouter = createTRPCRouter({
@@ -454,12 +485,25 @@ export const workflowRouter = createTRPCRouter({
       const body = input;
 
       // ── 本地文件导入 ──
-      const sourcePath =
+      const sourcePathRaw =
         typeof body.sourcePath === "string" ? body.sourcePath.trim() : "";
-      if (sourcePath) {
+      if (sourcePathRaw) {
+        let absSourcePath: string;
+        try {
+          absSourcePath = path.resolve(sourcePathRaw);
+        } catch {
+          absSourcePath = sourcePathRaw;
+        }
+        if (!isWithinAllowedLocalWorkflowRoot(absSourcePath)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "只允许导入配置目录（LOCAL_WORKFLOWS_PATH / ComfyUI workflows）下的工作流文件",
+          });
+        }
         let imported;
         try {
-          imported = await importFromLocalPath(sourcePath, {
+          imported = await importFromLocalPath(absSourcePath, {
             preferredTaskType:
               typeof body.taskType === "string" ? body.taskType : undefined,
             defaultName: typeof body.name === "string" ? body.name : undefined,
@@ -472,7 +516,7 @@ export const workflowRouter = createTRPCRouter({
           });
         }
         const fallbackName =
-          sourcePath
+          sourcePathRaw
             .split(/[\\/]/)
             .pop()
             ?.replace(/\.(json|workflow)$/i, "")
@@ -815,7 +859,7 @@ export const workflowRouter = createTRPCRouter({
     }),
 
   /* DELETE /api/workflows/[id] —— 删除 */
-  delete: authedProcedure
+  delete: rateLimitedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const existing = await workflowTemplateRepository.findByIdForUser(

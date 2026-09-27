@@ -226,7 +226,7 @@ export function useSettingsPage(): SettingsPageController {
     const split = splitExtraModels(llmConfig.extraModels);
     setLlmDraft({
       ...llmConfig,
-      apiKey: llmConfig.apiKey ?? null,
+      apiKey: null,
       /* 本地候选（字符串）与远端独立模型（对象）从同一下发清单里拆开存，互不混写 */
       localCandidates: split.localNames.filter((n) => n !== llmConfig.model),
       extraModels: split.remoteEntries.filter(

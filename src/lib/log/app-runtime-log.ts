@@ -67,6 +67,27 @@ function stringify(fields?: Record<string, unknown>): string {
   }
 }
 
+const MAX_LOG_BYTES = 10 * 1024 * 1024;
+const KEEP_LOG_BACKUPS = 3;
+
+/** 体积超限时轮转：当前文件改名 `.1`，旧的 `.i` 依次后移，最多保留 KEEP_LOG_BACKUPS 份。 */
+function rotateIfNeeded(filePath: string): void {
+  try {
+    const st = fs.statSync(/*turbopackIgnore: true*/ filePath);
+    if (st.size <= MAX_LOG_BYTES) return;
+    for (let i = KEEP_LOG_BACKUPS - 1; i >= 1; i--) {
+      const cur = `${filePath}.${i}`;
+      const nxt = `${filePath}.${i + 1}`;
+      if (fs.existsSync(/*turbopackIgnore: true*/ cur)) {
+        fs.renameSync(/*turbopackIgnore: true*/ cur, nxt);
+      }
+    }
+    fs.renameSync(/*turbopackIgnore: true*/ filePath, `${filePath}.1`);
+  } catch {
+    // 轮转失败绝不阻塞业务
+  }
+}
+
 function makeLogger(
   ns: string,
   filePath: string = APP_RUNTIME_LOG,
@@ -82,6 +103,7 @@ function makeLogger(
         fs.mkdirSync(dir, { recursive: true });
       }
       const line = `[${localTimestamp()}] [${LEVEL_TAG[level]}]${ns ? ` [${ns}]` : ""} ${msg}${stringify(fields)}\n`;
+      rotateIfNeeded(filePath);
       fs.appendFileSync(/*turbopackIgnore: true*/ filePath, line, "utf-8");
     } catch {
       // 日志写入失败绝不阻塞业务主流程
