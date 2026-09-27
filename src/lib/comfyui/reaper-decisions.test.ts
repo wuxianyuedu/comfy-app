@@ -9,8 +9,8 @@
 //   QUEUED reaper：真孤儿才回收；仍被本进程认领 / ComfyUI 正在启动 → 跳过。
 //   RUNNING reaper：拿 ComfyUI /history 与 /queue 对账，给出三态判决。
 //
-// 打桩方式沿用 reaper.test.ts：reaper 模块在被 import 时就自启两条 sweeper，
-// 因此必须先把它的副作用依赖全部 mock 掉。
+// 打桩方式沿用 reaper.test.ts：本文件的用例会把两条 sweeper **直接调用**
+// （模块加载已零副作用，见 ADR §14 D3），因此先把它们的副作用依赖全部 mock 掉。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -107,7 +107,7 @@ function resetRunnerState() {
   s.emitter.removeAllListeners();
 }
 
-/* reaper 的两条 sweeper 在模块被 import 时自启一次并每 30s 再跑。
+/* 两条 sweeper 由宿主显式起的循环每 30s 跑一次（ADR §14 D3）。
  * 这里导出被测函数以便直接调用——避免依赖 30s 定时器（会让用例变成
  * 「等 30 秒」或者变成对定时器实现的断言）。 */
 type ReaperInternals = {

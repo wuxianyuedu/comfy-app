@@ -82,9 +82,12 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
   （≤3s + 200ms 落库防抖）。曾经「host 任务实时日志静默」的空窗已由 Phase 3-C
   收口，两模式同一契约。
 - **崩溃恢复**：host 被杀 → 在飞 comfy-cli 随进程组整树回收（launcher 语义）；
-  遗留 RUNNING 行由对账收口——host 侧不只在 boot 首扫（Q2）跑一次，之后仍按 30s
-  节奏常驻扫自己那一片（`reaper.ts` 的 sweeper；Phase 4 D3 会把它从「模块加载即
-  自启」改成两处显式启动，届时本条按启动点重写）。
+  遗留 RUNNING 行由 reaper 对账收口。reaper 的启动点是**两处显式调用**（Phase 4-A2
+  起，不再靠模块加载自启）：Next 侧 = `src/instrumentation.ts` 的 nodejs 分支，
+  host 侧 = `scripts/executor-host.mjs` 注入链之后的 `startReaper()`；起表即首扫
+  就是 Q2 对账，之后两进程各自按 30s 常驻扫自己那一片（分片判据见上）。
+  dev 下 Turbopack 会**懒编译** instrumentation，实测 `✓ Ready` 之后约 40s 才跑完
+  首扫——冷启动后短暂看到遗留行还在 `QUEUED`/`RUNNING` 属正常，不是没接上。
 
 ## 已知观察项（灰度期）
 

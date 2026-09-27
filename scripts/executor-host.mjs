@@ -229,7 +229,7 @@ async function bootRuntime() {
   // 归属条件（ADR §14 D4），两处不一致会让本进程的收口全部静默 skip。
   const hostRepo = createTaskRepoImpl(drizzle(client), { owner: "host" });
 
-  const { configureReaper, reapStaleQueuedTasks, reapStaleRunningTasks } =
+  const { configureReaper, startReaper } =
     await import("../src/lib/comfyui/reaper.ts");
   const { configureEnqueue, enqueue } =
     await import("../src/lib/comfyui/enqueue.ts");
@@ -273,8 +273,11 @@ async function bootRuntime() {
     20,
     "host",
   );
-  await reapStaleQueuedTasks();
-  await reapStaleRunningTasks();
+  /* 起表即首扫就是 Q2 对账（ADR §14 D3：reaper 不再由模块加载自启，宿主显式
+   * 起）。startReaper 内部的 sweepOnce 先过 `isSchemaReady()` 再跑两条 sweeper，
+   * 之后按 30s 常驻——所以这里不再裸调 reapStale*Tasks：那会绕过表就绪守卫，
+   * 而「表在、查询失败」这类真故障本来就该由 sweeper 自己的 catch 暴露。 */
+  startReaper();
   writeLine(
     `runtime q2-scan hostShardQueued=${before.length} bootId=${bootId}`,
   );

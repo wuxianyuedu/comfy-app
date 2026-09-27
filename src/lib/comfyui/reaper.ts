@@ -540,18 +540,24 @@ function sweepOnce(): void {
   void reapStaleRunningTasks();
 }
 
-function startReaper() {
+/**
+ * 起孤儿回收的常驻循环。**由宿主显式调用**，模块加载不再有副作用
+ * （P3 §5 ADR §14 D3）：Next 侧的调用点只有 `src/instrumentation.ts` 的
+ * nodejs 分支一处，host 侧是 `scripts/executor-host.mjs` 注入链之后一处，
+ * 两处都由 `tests/reaper-side-effect.test.ts` 钉住。
+ *
+ * 幂等：`reaperState.handle` 已在就直接返回（dev 的 HMR / 重复调用安全）。
+ */
+export function startReaper(): void {
   if (reaperState.handle) return; // 跨 HMR 重载的单例
-  /* 模块加载时先跑一次：刚重启的 dev server 便能**立刻**收拾掉
-   * 上一段生命周期遗留下的任务，而不是等到 30 秒之后。
+  /* 起表时先跑一次：刚重启的 dev server 便能**立刻**收拾掉上一段生命周期
+   * 遗留下的任务，而不是等到 30 秒之后。
    *
-   *  守卫：本模块是以**裸副作用**方式被导入的（enqueue.ts），
-   *  因此在「数据库还不可用」时加载模块图同样会执行它 —— 最典型的是
-   *  `next build` 的 collect-page-data / prerender 阶段，
-   *  以及还没跑过 `pnpm db:push` 的干净检出。
-   *  那时读库会抛 `no such table: task`，浮出来变成构建阶段的错误，
-   *  把 CI 的 `pnpm build` 门槛打红，而原因与报错栈里的路由毫无关系。
-   *  跳过是安全的：回收是幂等的，每 REAPER_MS 还会再来一轮。
+   *  守卫：`isSchemaReady()` 只挡「表还没建」——还没跑过 `pnpm db:push` 的
+   *  干净检出、以及构建期模块图被加载的那条路径（规范硬规则 16 / ISSUE #489）
+   *  上读库会抛 `no such table: task`，浮出来变成构建阶段的错误，把
+   *  `pnpm build` 门槛打红，而原因与报错栈里的路由毫无关系。跳过是安全的：
+   *  回收是幂等的，每 REAPER_MS 还会再来一轮。
    *
    *  「库坏了」（表存在但查询失败）**不**在这里被吞掉——那种情况继续走
    *  各自的 catch 暴露出来，本判断只挡「表还没建」。 */
@@ -562,4 +568,3 @@ function startReaper() {
    * 常驻的 HTTP server 仍持有事件循环，unref 不会让进程提前退出。 */
   reaperState.handle.unref?.();
 }
-startReaper();
