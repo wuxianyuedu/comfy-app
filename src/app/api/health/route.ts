@@ -28,7 +28,7 @@ const CORS_HEADERS = { "Access-Control-Allow-Origin": "*" };
 export async function GET() {
   const schema = probeSchemaSync();
   try {
-    pingDatabase();
+    await pingDatabase();
     if (schema !== "ready") {
       logger.error({ schema }, "health_check_schema_not_ready");
       return NextResponse.json(
