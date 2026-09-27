@@ -18,10 +18,13 @@ import {
 import {
   apiGenerateImage,
   buildLibraryWorkflowInput,
+  LOCAL_TASK_TIMEOUT_MS,
+  preparePortraitReferences,
   startLocalGenerate,
   watchTask,
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
+import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import {
   parseShotSize,
@@ -48,13 +51,14 @@ interface Props {
   onOpenApiSettings: () => void;
   /** 镜头列表所有者（WorkshopPipeline setShots）—— 欢迎函数式补丁。 */
   onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
+  /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
+  onNotice: (message: string) => void;
+  /** 取消一个进行中的本机任务（控制器统一出口）。 */
+  onCancelShot: (shot: Shot) => void;
   onNextStage: () => void;
 }
 
 type Channel = "local" | "api";
-
-/** 本地 ComfyUI 单镜头的安全阀（30 分钟无响应即判超时）。 */
-const LOCAL_TASK_TIMEOUT_MS = 30 * 60 * 1000;
 
 /** 空操作（订阅句柄的初值）。 */
 function noop(): void {
@@ -128,6 +132,8 @@ export function ShotStudio({
   apiChannels,
   onOpenApiSettings,
   onShotsChange,
+  onNotice,
+  onCancelShot,
   onNextStage,
 }: Props) {
   const [channel, setChannel] = React.useState<Channel>("local");
@@ -243,18 +249,33 @@ export function ShotStudio({
             ? shot.params.size
             : shotSize,
         );
+        /* 定妆照 → 参考图（流程 §4 的口径）：镜头相关角色选了定妆照就带上；
+         * 没连参考图口的工作流会经 unmatched 提示，上传失败只提示失败数。 */
+        const refs = await preparePortraitReferences(
+          characters,
+          shot.characterIds,
+        );
+        if (refs.failedCount > 0) {
+          onNotice(
+            `${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`,
+          );
+        }
         /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个生图工作流
          *（封装口径只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值），否则
          * 没有可执行的图。见 generateShot 入口的门禁。 */
-        const input: GenerateInput = (
-          await buildLibraryWorkflowInput(workflowId, {
-            prompt: shot.prompt,
-            negativePrompt: shot.negativePrompt || undefined,
-            size: sizeSpec,
-            // 高级 · 种子：默认随机（留空每次新 seed），填数字则 pin 住（见 resolveSeed）。
-            seed: resolveSeed(seedInput),
-          })
-        ).input;
+        const built = await buildLibraryWorkflowInput(workflowId, {
+          prompt: shot.prompt,
+          negativePrompt: shot.negativePrompt || undefined,
+          size: sizeSpec,
+          // 高级 · 种子：默认随机（留空每次新 seed），填数字则 pin 住（见 resolveSeed）。
+          seed: resolveSeed(seedInput),
+          ...(refs.files.length > 0 ? { referenceImages: refs.files } : {}),
+        });
+        /* 没落到任何端口的口本次不生效（工作流用图内默认值）—— 静默就是
+         * 「改了没反应」（规范 10 §10.3.1），走控制器提示条说清楚。 */
+        const unmatchedWarning = describeUnmatchedInputs(built.unmatched);
+        if (unmatchedWarning) onNotice(unmatchedWarning);
+        const input: GenerateInput = built.input;
 
         const taskId = await startLocalGenerate(input);
         patchShot(shot.id, { taskId, status: "running" });
@@ -395,99 +416,24 @@ export function ShotStudio({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {shots.map((shot) => {
-            const p = progress[shot.id] ?? 0;
-            const err = errors[shot.id];
-            return (
-              <div
-                key={shot.id}
-                className="border-border bg-surface rounded-xl border p-4"
-              >
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="bg-primary-soft text-primary grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
-                    {shot.index}
-                  </span>
-                  <span className="text-muted-foreground truncate text-xs">
-                    {shot.sceneHeading}
-                  </span>
-                  <StatusBadge status={shot.status} />
-                  {busyCount > 0 && shot.status === "running" && (
-                    <span className="text-muted-foreground text-[10px]">
-                      {p > 0 ? `${Math.round(p)}%` : "排队中…"}
-                    </span>
-                  )}
-                  <span className="text-faint ml-auto text-[10px]">
-                    {channel === "local" ? "本地" : "API"}
-                  </span>
-                </div>
-
-                {shot.status === "running" && (
-                  <ProgressBar
-                    value={p}
-                    /* 同 VideoStudio.parts：起点 0 时留一格可见。 */
-                    minVisible={4}
-                    showValue={false}
-                    className="mb-2"
-                    trackClassName="bg-elevated h-1"
-                  />
-                )}
-
-                <Textarea
-                  value={shot.prompt}
-                  onChange={(e) => {
-                    editedRef.current.add(shot.id);
-                    patchShot(shot.id, { prompt: e.target.value });
-                  }}
-                  rows={2}
-                  className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 rounded-md px-2 py-1.5 text-xs"
-                  placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
-                />
-                {err && (
-                  <Alert
-                    variant="danger"
-                    /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
-                    className="mt-1 block rounded-md border-transparent px-2 py-1 text-[11px]"
-                  >
-                    {err}
-                  </Alert>
-                )}
-
-                <div className="mt-2 flex items-center gap-3">
-                  <Button
-                    variant="primary-solid"
-                    size="xs"
-                    onClick={() => void generateShot(shot)}
-                    disabled={
-                      shot.status === "running" ||
-                      !shot.prompt ||
-                      (channel === "local" && !workflowId) ||
-                      (channel === "api" && !apiReady)
-                    }
-                    className="h-auto rounded-lg px-4 py-1.5"
-                  >
-                    {shot.status === "running"
-                      ? "生成中…"
-                      : shot.imageUrl
-                        ? "重新生成"
-                        : "生成此镜头"}
-                  </Button>
-                  {shot.taskId && (
-                    <span className="text-faint truncate text-[10px]">
-                      任务 {shot.taskId.slice(0, 12)}…
-                    </span>
-                  )}
-                </div>
-
-                {shot.imageUrl && (
-                  <MediaThumbnail
-                    src={shot.imageUrl}
-                    alt={shot.sceneHeading}
-                    className="border-border mt-2 max-h-64 w-auto rounded-lg border"
-                  />
-                )}
-              </div>
-            );
-          })}
+          {shots.map((shot) => (
+            <ShotCardRow
+              key={shot.id}
+              shot={shot}
+              progress={progress[shot.id] ?? 0}
+              error={errors[shot.id]}
+              busyCount={busyCount}
+              channel={channel}
+              workflowId={workflowId}
+              apiReady={apiReady}
+              onGenerate={(s) => void generateShot(s)}
+              onCancel={(s) => void onCancelShot(s)}
+              onPromptChange={(id, prompt) => {
+                editedRef.current.add(id);
+                patchShot(id, { prompt });
+              }}
+            />
+          ))}
         </div>
       )}
 
@@ -521,5 +467,135 @@ function StatusBadge({ status }: { status: Shot["status"] }) {
       dot={false}
       className="px-2 py-0.5 text-[10px]"
     />
+  );
+}
+
+/** 单个镜头卡片行：状态 / 进度 / 提示词编辑 / 生成按钮 / 成图预览。
+ *  从 ShotStudio 主体拆出（规范 §12.13 函数长度）：主组件只留编排与工具行，
+ *  「一条镜头长什么样」收在这里。 */
+interface ShotCardRowProps {
+  shot: Shot;
+  /** 本条目的实时进度（0~100）。 */
+  progress: number;
+  /** 本条目的失败原因；undefined = 无错误。 */
+  error: string | undefined;
+  /** 全表在跑的条目数（>0 且本条在跑时显示百分比 / 排队中）。 */
+  busyCount: number;
+  channel: Channel;
+  workflowId: string;
+  apiReady: boolean;
+  onGenerate: (shot: Shot) => void;
+  /** 取消本条进行中的本机任务（有 taskId 才显示按钮）。 */
+  onCancel: (shot: Shot) => void;
+  /** 提示词被手改：父层记入 editedRef（自动预填不再覆盖）并写回镜头。 */
+  onPromptChange: (id: string, prompt: string) => void;
+}
+
+function ShotCardRow({
+  shot,
+  progress,
+  error,
+  busyCount,
+  channel,
+  workflowId,
+  apiReady,
+  onGenerate,
+  onCancel,
+  onPromptChange,
+}: ShotCardRowProps) {
+  return (
+    <div className="border-border bg-surface rounded-xl border p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="bg-primary-soft text-primary grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
+          {shot.index}
+        </span>
+        <span className="text-muted-foreground truncate text-xs">
+          {shot.sceneHeading}
+        </span>
+        <StatusBadge status={shot.status} />
+        {busyCount > 0 && shot.status === "running" && (
+          <span className="text-muted-foreground text-[10px]">
+            {progress > 0 ? `${Math.round(progress)}%` : "排队中…"}
+          </span>
+        )}
+        <span className="text-faint ml-auto text-[10px]">
+          {channel === "local" ? "本地" : "API"}
+        </span>
+      </div>
+
+      {shot.status === "running" && (
+        <ProgressBar
+          value={progress}
+          /* 同 VideoStudio.parts：起点 0 时留一格可见。 */
+          minVisible={4}
+          showValue={false}
+          className="mb-2"
+          trackClassName="bg-elevated h-1"
+        />
+      )}
+
+      <Textarea
+        value={shot.prompt}
+        onChange={(e) => onPromptChange(shot.id, e.target.value)}
+        rows={2}
+        className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 rounded-md px-2 py-1.5 text-xs"
+        placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
+      />
+      {error && (
+        <Alert
+          variant="danger"
+          /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
+          className="mt-1 block rounded-md border-transparent px-2 py-1 text-[11px]"
+        >
+          {error}
+        </Alert>
+      )}
+
+      <div className="mt-2 flex items-center gap-3">
+        <Button
+          variant="primary-solid"
+          size="xs"
+          onClick={() => onGenerate(shot)}
+          disabled={
+            shot.status === "running" ||
+            !shot.prompt ||
+            (channel === "local" && !workflowId) ||
+            (channel === "api" && !apiReady)
+          }
+          className="h-auto rounded-lg px-4 py-1.5"
+        >
+          {shot.status === "running"
+            ? "生成中…"
+            : shot.imageUrl
+              ? "重新生成"
+              : "生成此镜头"}
+        </Button>
+        {shot.status === "running" && shot.taskId && (
+          /* 只对本机任务可取消（API 直连没有可取消的任务 id）：
+             点击后 task.cancel 置 CANCELLED，观察循环收终态收尾。 */
+          <Button
+            variant="secondary"
+            size="xs"
+            onClick={() => onCancel(shot)}
+            className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
+          >
+            取消
+          </Button>
+        )}
+        {shot.taskId && (
+          <span className="text-faint truncate text-[10px]">
+            任务 {shot.taskId.slice(0, 12)}…
+          </span>
+        )}
+      </div>
+
+      {shot.imageUrl && (
+        <MediaThumbnail
+          src={shot.imageUrl}
+          alt={shot.sceneHeading}
+          className="border-border mt-2 max-h-64 w-auto rounded-lg border"
+        />
+      )}
+    </div>
   );
 }

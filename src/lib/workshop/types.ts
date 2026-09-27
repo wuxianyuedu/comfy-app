@@ -90,6 +90,9 @@ export interface Shot {
   transition?: Transition; // 与下一镜的转场
   clipStatus?: "idle" | "queued" | "running" | "done" | "failed" | "stale";
   clipUrl?: string; // 生成的视频片段地址
+  /** 本机视频任务的 id（同 `taskId`：随草稿持久化，重挂载后据此恢复失联任务）。
+   *  API 直连通道的 remoteTaskId 是另一套体系，不落这里。 */
+  clipTaskId?: string;
 }
 
 export type MotionLevel = "low" | "medium" | "high";

@@ -10,6 +10,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildEncapsulatedInputs,
+  describeUnmatchedInputs,
   exposedValueOf,
   pruneEmptyExposedValues,
   withExposedValue,
@@ -867,5 +868,41 @@ describe("种子口：连了才落，没连落不下去（实际是否可换由�
   it("pruneEmpty 保留 seed（含 0 这个有效值），没给则不写", () => {
     expect(pruneEmptyExposedValues({ seed: 0 }).seed).toBe(0);
     expect(pruneEmptyExposedValues({}).seed).toBeUndefined();
+  });
+});
+
+describe("unmatched 的用户口径：describeUnmatchedInputs", () => {
+  it("全部落了端口（空数组）→ null，调用方不必提示", () => {
+    expect(describeUnmatchedInputs([])).toBeNull();
+  });
+
+  it("预制口翻译成用户口径名，不用契约口 id 直接糊脸", () => {
+    expect(describeUnmatchedInputs(["seed"])).toContain("种子");
+    expect(describeUnmatchedInputs(["prompt"])).toContain("正向提示词");
+    expect(describeUnmatchedInputs(["negative"])).toContain("负向提示词");
+    expect(describeUnmatchedInputs(["size"])).toContain("尺寸");
+    expect(describeUnmatchedInputs(["duration"])).toContain("时长");
+  });
+
+  it("参考图各序号统一叫「参考图」，多条只报一次", () => {
+    const text = describeUnmatchedInputs([
+      "reference-image",
+      "reference-image-2",
+    ]);
+    expect(text).toContain("参考图");
+    expect((text ?? "").match(/参考图/g)).toHaveLength(1);
+  });
+
+  it("同一个标签去重；提示里给出可行动的下一步（去工作流库连线）", () => {
+    const text = describeUnmatchedInputs(["seed", "seed"]);
+    expect(text).toContain("种子");
+    expect(text).not.toContain("种子、种子");
+    expect(text).toContain("工作流库");
+  });
+
+  it("自定义口没有内置名：原样展示 id，不冒充预制口", () => {
+    expect(describeUnmatchedInputs(["custom-text-1"])).toContain(
+      "自定义口 custom-text-1",
+    );
   });
 });
