@@ -13,7 +13,8 @@ import type * as ImportSourceModule from "~/lib/comfyui/importSource";
  * localWorkflows、raw 的 detectFormat/extractPositions）全部走真实实现 —— 导入链
  * 里**不再有**「转 API 图」这一步，所以不需要再 mock 转换器。
  */
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 
 const { getSessionMock } = vi.hoisted(() => ({
   getSessionMock: vi.fn<(args: { headers: Headers }) => Promise<unknown>>(
@@ -198,9 +199,23 @@ describe("workflow.list", () => {
 
 // ──────────────────────────────────── create ────────────────────────────────────
 
+/* 「本地文件导入」这两条用例的 fixture 必须落在**允许导入的根**里：create 先过一道
+ * 路径闸（只允许 LOCAL_WORKFLOWS_PATH / ComfyUI workflows 目录之下的文件），根外的
+ * 路径会在闸上被拦下，根本走不到用例要验的那两个分支（名称回退 / 失败透传）。
+ * 根由 router 直接读 `process.env.LOCAL_WORKFLOWS_PATH`（`~/lib/envfile` 那层已被
+ * mock 成 null，所以这里只影响这一族的取值）。 */
+const WF_ALLOWED_ROOT = path.join(process.cwd(), "wf-allowed-root");
+
 describe("workflow.create", () => {
+  let previousRoots: string | undefined;
   beforeEach(() => {
     seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    previousRoots = process.env.LOCAL_WORKFLOWS_PATH;
+    process.env.LOCAL_WORKFLOWS_PATH = WF_ALLOWED_ROOT;
+  });
+  afterEach(() => {
+    if (previousRoots === undefined) delete process.env.LOCAL_WORKFLOWS_PATH;
+    else process.env.LOCAL_WORKFLOWS_PATH = previousRoots;
   });
 
   it("RAW 原件导入：默认名、坐标与原件一起落库", async () => {
@@ -244,14 +259,14 @@ describe("workflow.create", () => {
       taskType: "T2I",
       rawJson: RAW_WF,
       positions: null,
-      sourcePath: "C:/wf/my-flow.json",
+      sourcePath: path.join(WF_ALLOWED_ROOT, "my-flow.json"),
       sourceChecksum: "abc123",
       sourceMtime: 1234,
       warnings: [],
       format: "raw",
     });
     const res = await createCaller(makeCtx()).create({
-      sourcePath: "C:/wf/my-flow.json",
+      sourcePath: path.join(WF_ALLOWED_ROOT, "my-flow.json"),
     });
     expect(res.name).toBe("my-flow"); // body.name 缺省 → 文件名
     expect(res.source).toBe("local");
@@ -264,8 +279,20 @@ describe("workflow.create", () => {
       new Error("文件不存在"),
     );
     await expect(
-      createCaller(makeCtx()).create({ sourcePath: "C:/wf/missing.json" }),
+      createCaller(makeCtx()).create({
+        sourcePath: path.join(WF_ALLOWED_ROOT, "missing.json"),
+      }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST", message: "文件不存在" });
+  });
+
+  it("根目录之外的路径在导入闸上被拦下，且不碰磁盘导入", async () => {
+    // 这条闸是「任意文件读取」的防线（能报路径就能读别人家目录里的 json），
+    // 所以「拦下」与「拦在哪一步」都要钉住：`importFromLocalPath` 不许被调用。
+    const outside = path.join(process.cwd(), "elsewhere", "wf.json");
+    const call = createCaller(makeCtx()).create({ sourcePath: outside });
+    await expect(call).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(call).rejects.toThrow(/只允许导入配置目录/);
+    expect(importFromLocalPath).not.toHaveBeenCalled();
   });
 
   it("Zod 校验：name 超长 → BAD_REQUEST", async () => {
