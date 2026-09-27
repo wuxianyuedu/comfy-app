@@ -314,6 +314,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
     error: string | null;
     validationErrors: string | null;
     workflowName: string | null;
+    resultImages: unknown;
   } | null> {
     const rows = await db
       .select({
@@ -322,6 +323,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
         error: task.error,
         validationErrors: task.validationErrors,
         workflowName: task.workflowName,
+        // 终态收口要带产出清单（host 模式没有进程内 done 帧，见 stream 路由）；
+        // 它是路径小数组，不破坏「不拉 workflowSnapshot/logs 大列」的轻投影契约。
+        resultImages: task.resultImages,
       })
       .from(task)
       .where(eq(task.id, id))
