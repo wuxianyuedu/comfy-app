@@ -163,7 +163,12 @@ export async function cancelTask(taskId: string) {
     }
   }
 
-  await taskRepository.cancel(taskId);
+  const outcome = await taskRepository.cancel(taskId);
+  if (outcome !== "written") {
+    /* 守卫挡下来的取消（多数是「已经是终态了」）：内存记账照清，但库里那行
+     *  没动，留一行免得事后从日志里查不到为什么状态没变。 */
+    log(taskId, "warn", `取消未改写终态（${outcome}），仅清理本进程记账`);
+  }
 
   if (task.promptId) store.promptToTask.delete(task.promptId);
 
