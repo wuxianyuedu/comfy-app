@@ -30,16 +30,7 @@
  * `unguarded`；登记 PURE_NODE_HOSTS 只是**给未来**「impl 里若加了 node: 前缀
  * import」留的锚，当前 scanner 视角不严格必要。
  */
-import {
-  and,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  notInArray,
-  or,
-} from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, notInArray, or } from "drizzle-orm";
 
 import { TERMINAL_TASK_STATUSES } from "../task-state";
 import { task, taskImage } from "~/server/db/schema";
@@ -406,9 +397,12 @@ export function createTaskRepoImpl(
         .limit(take);
     },
 
-    /** reaper 扫 RUNNING 孤儿：与 Queued 版对偶，多一条 `promptId IS NOT NULL`
-     *  （带 promptId 的行归 ComfyUI 负责、由 /history 与 /queue 对账）。归属
-     *  分片同 Queued 版。 */
+    /** reaper 扫 RUNNING 孤儿（ISSUE #1184 起**不再要求 `promptId` 非空**）：
+     *  曾经带一条 `promptId IS NOT NULL`，于是「已被领取、但 comfy-cli 还没把
+     *  `prompt_id` 回传落库」的 RUNNING 行两边都不匹配——`listStaleQueued` 只要
+     *  `QUEUED`、本条不要空 promptId——宿主在那段窗口里崩溃就再没有任何回收兜底，
+     *  界面永久停「生成中」。现在这类行也交出来，由判决侧按「本进程是否还认领它」
+     *  定夺（`reaper.ts` 的 `isTaskClaimedInProcess` + 两轮观察）。 */
     async listStaleRunning(
       cutoff: Date,
       take: number,
@@ -434,7 +428,6 @@ export function createTaskRepoImpl(
             eq(task.status, "RUNNING"),
             isNull(task.finishedAt),
             lt(task.createdAt, cutoff),
-            isNotNull(task.promptId),
             ownedBy(owner),
           ),
         )

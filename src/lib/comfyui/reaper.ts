@@ -149,15 +149,20 @@ const RUNNING_TICK_CAP = 5;
 interface ReaperGlobal {
   handle: ReturnType<typeof setInterval> | null;
   reaping: Set<string>;
+  /** 「这一轮见到 RUNNING 且无 promptId」的登记处，下一轮仍在才判孤儿（见
+   *  `reapStaleRunningTasks` 的两轮观察）。全局名从 v1 升到 v2：HMR 期间残留的
+   *  旧对象没有这个字段，`??=` 不会补，判据会静默失效。 */
+  noPromptSeen: Set<string>;
 }
 
 declare global {
-  var __comfyReaper_v1: ReaperGlobal | undefined;
+  var __comfyReaper_v2: ReaperGlobal | undefined;
 }
 
-const reaperState: ReaperGlobal = (globalThis.__comfyReaper_v1 ??= {
+const reaperState: ReaperGlobal = (globalThis.__comfyReaper_v2 ??= {
   handle: null,
   reaping: new Set(),
+  noPromptSeen: new Set(),
 });
 /**
  * 纯内存的认领检查：`taskId` 是否仍被**当前** dev server 进程持有
@@ -404,8 +409,55 @@ export async function reapStaleRunningTasks(): Promise<void> {
     if (stale.length === 0) return;
     const base = await resolveComfyBase();
     const s = state();
+    /* 本轮见到的「RUNNING 且无 promptId」行；循环结束后整体替换登记表。 */
+    const noPromptThisRound = new Set<string>();
     for (const t of stale) {
-      if (!t.promptId) continue;
+      if (!t.promptId) {
+        /* ISSUE #1184：这一族行以前被 SQL 的 `promptId IS NOT NULL` 直接挡在
+         * 两条 sweeper 之外 —— 宿主在那段窗口崩溃就永久卡「生成中」。
+         * 本进程还认领它（内存队列 / cli 句柄 / 已起步）= 正常执行中，不插手。 */
+        if (isTaskClaimedInProcess(s, (id) => cliProcs.has(id), t.id)) continue;
+        /* 「刚领取、还没来得及 spawn comfy-cli」的行长得一模一样，所以要**连续
+         * 两轮**都见到才判孤儿：两轮之间隔 REAPER_MS(30s)，而
+         * `claimNextQueued → enqueueJob` 落内存足迹是亚秒级，中间窗口不会被误杀。 */
+        noPromptThisRound.add(t.id);
+        if (!reaperState.noPromptSeen.has(t.id)) {
+          log(
+            t.id,
+            "warn",
+            "任务处于 RUNNING 但还没有 prompt_id 回传，本轮先登记；下一轮仍无人认领才判孤儿",
+          );
+          continue;
+        }
+        reaperState.noPromptSeen.delete(t.id);
+        if (reaperState.reaping.has(t.id)) continue;
+        reaperState.reaping.add(t.id);
+        try {
+          const ageSec = Math.round(
+            (Date.now() - t.createdAt.getTime()) / 1000,
+          );
+          if (!claimTerminal(t.id)) continue;
+          const reason = `任务被领取后 ${ageSec}s 仍未回传 prompt_id，且连续两轮都无人认领它（执行宿主可能已崩溃）— 请重新执行`;
+          s.emitter.emit(t.id, {
+            type: "state",
+            status: "FAILED",
+            progress: 0,
+            error: reason,
+            validationErrors: [],
+          });
+          s.emitter.emit(t.id, { type: "error", error: reason });
+          const outcome = await taskRepository.finalizeFailure(t.id, reason);
+          if (outcome !== "written") {
+            logger.warn(
+              `[comfyui] reaper: 跳过无 promptId 行的收口 ${t.id}（${outcome}）`,
+            );
+          }
+          await persistLogs(t.id);
+        } finally {
+          reaperState.reaping.delete(t.id);
+        }
+        continue;
+      }
       if (reaperState.reaping.has(t.id)) continue;
       /* 若该 prompt 仍被当前 dev server 进程的 in-memory runner 监控
        * （comfy-cli / WS 正在等待结果，`promptToTask` 中仍有映射），说明
@@ -525,6 +577,9 @@ export async function reapStaleRunningTasks(): Promise<void> {
         reaperState.reaping.delete(t.id);
       }
     }
+    /* 登记表整体换成本轮的结果：拿到 promptId 或已离开 RUNNING 的行不必再占着
+     * 「等下一轮」的资格，否则它们会在很久以后被一次无关的登记误判。 */
+    reaperState.noPromptSeen = noPromptThisRound;
     logger.warn(
       `[comfyui] reaper(running): checked ${stale.length} stale RUNNING task(s) (older than ${RUNNING_STALE_MS / 1000}s)`,
     );
