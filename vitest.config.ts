@@ -19,6 +19,36 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}", "tests/**/*.test.{ts,tsx}"],
     globals: false,
     setupFiles: ["tests/setup.ts"],
+    /* 超时预算：vitest 的默认值（用例 5s / 钩子 10s）低于本仓库的实测下限。
+     *
+     * 串行隔离跑（`--no-file-parallelism`）的最慢单条用例已经是 5469ms
+     * （`client-bundle-node-builtins` 的全 `src/**`「use client」可达性 DFS），
+     * `db-schema-ready` 4770ms —— 一条贴着默认值、一条在默认值之上，
+     * 也就是**不开并行都会红**。全量并行时再乘一份争用系数：16 逻辑核上
+     * 约 10 个 worker，而门禁用例各条要 `execFileSync` 真起 Node / git /
+     * prettier 子进程，一轮实测 28 条报 `Test timed out in 5000ms`、
+     * 2 个文件报 `Hook timed out in 10000ms`（两个 theme 用例的 `beforeAll`
+     * 要现编一份 CSS，隔离跑 7.2s）。
+     *
+     * 20s = 最慢实测值 ×3.6；`it()` / `describe()` 上已有的显式预算
+     * （10s / 30s / 60s / 120s 那几处）优先级更高，不受这里影响。
+     * ⚠️ 这是**天花板不是目标**：用例慢到接近 20s 时该优化用例本身
+     * （收窄扫描面、复用子进程），别再往上调这个数 —— 那等于把
+     * 「挂死」的检出时间一起放大。 */
+    testTimeout: 20_000,
+    hookTimeout: 30_000,
+    /* 并发上限：16 逻辑核（约 8 物理核）上默认开 ~15 个 worker，而门禁用例每条
+     * 要再起 Node / git / prettier 子进程 —— 超订的那一份直接从「等 CPU」变成
+     * 「等子进程」，于是要测 5s 的用例排到 30s 以上。同一台机器、同一份代码的
+     * 三档实测（全量 437 文件）：
+     *   默认并发（15）→ 红 8 文件 / 18 用例，墙钟 461s
+     *   `maxWorkers: 8` → 红 4 文件 / 14 用例，墙钟 659s（**超时类红归零**）
+     *   `--no-file-parallelism` → 与上一档同集合，用于给单条红定性
+     * 剩下那 14 条全是 `AssertionError`（启动器 / 壳 / 产物三线），没有一条是
+     * 争用假红 —— 也就是这一档已经把「并发导致的不可归因红」买干净了。
+     * 代价写清楚：墙钟 +43%。买的是「隔离重跑一遍再定性」这件事不再需要发生
+     * （见规范 §11.13），以及增量测试层不会把别线的红算到本次提交头上。 */
+    maxWorkers: 8,
     // 覆盖率棘轮策略(2026-08-29):已覆盖目录按真实水平设硬门槛,随测试增长上调;
     // 新目录覆盖后加入下表。全库 3% 的整体数字仅作信息参考,不设全局门槛。
     coverage: {
