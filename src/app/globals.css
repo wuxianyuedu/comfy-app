@@ -209,6 +209,7 @@
      顺带生成 text-section / text-page / text-hero 工具类。 */
   --text-section: 0.875rem; /* 卡片 / 区块标题（.u-title） */
   --text-page: 1.5rem; /* 屏级标题（.u-title-page —— 每屏唯一的 h1） */
+  --text-stage: 1.0625rem; /* 段级标题（.u-title-stage，工坊六段当前段的标题） */
   --text-hero: 2.125rem; /* 首页欢迎区大标题（.u-title-hero，屏级档的唯一例外） */
 
   /* Display / titles — Sarasa Gothic SC Bold preferred, falls back to Noto/PingFang (Ardot #169~#177) */
@@ -691,6 +692,15 @@ textarea::-webkit-scrollbar {
     color: var(--color-ink);
     letter-spacing: -0.01em;
   }
+  /* 段级标题：屏级与区块之间那一层。段名比卡片标题重、比项目名轻，刻意留一档 ——
+     收口成档是为了**一处能调**，不是为了把层次压平（判据见 §3.10 的「刻意不管」）。 */
+  .u-title-stage {
+    font-size: var(--text-stage);
+    font-weight: 600;
+    color: var(--color-ink);
+    letter-spacing: -0.015em;
+  }
+
   /* 页面级标题（h1）统一规范：每屏一个，且只走这一档（判据见 16 §16.2.3 P83）。 */
   .u-title-page {
     font-size: var(--text-page);
