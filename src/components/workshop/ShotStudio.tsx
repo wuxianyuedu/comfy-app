@@ -512,7 +512,7 @@ function ShotCardRow({
   return (
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
-        <span className="bg-primary-soft text-primary grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
+        <span className="bg-primary-soft text-primary grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
           {shot.index}
         </span>
         <span className="text-muted-foreground truncate text-xs">
