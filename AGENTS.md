@@ -137,6 +137,8 @@
 
 被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构 / 命名 → §12.8、源码控制字符 → §12.11、跨平台动作对照 → §9.5、CHANGELOG 碎片 → §13.10.5），**不要用 `--no-verify` 换一条干净历史**。
 
+**报错指向的文件你根本没碰过 → 先复算 master 基线再怀疑自己**：PR 在平台侧是 squash 合并、不跑本地钩子，而 #623 之后已无 CI 兜底，所以硬闸违规可以直接落进 `master` 成为所有人的基线（棘轮类有数字可记账，**硬闸类须为 0、没有「带病通行」的中间态** → 一旦落地就拦住从它分出的每一个提交）。复算手法与处置口径见 §13.6.2（`git worktree add ../.wt-base-check cnb/master` → 在干净基线上跑同一条门禁 → 同样命中即别线的红，不许你为它放宽判据）。
+
 启动 / 构建 / 产物层的**症状 → 已知根因**、日志顺序、端口「解析链 vs 静态链」、corepack 三形态、`dev.mjs` 静默 `exit=0`、启动页被 Explorer 压后……**全部收在 [`docs/standards/launch-and-build.md`](docs/standards/launch-and-build.md) §5 排障手册**（本项目全部历史事故都在里面）。按需定位：端口两条链与 `dev.port.derived` 判据见 §1.1（`pnpm doc:check` 已核对，文档里不要写死 3100）；`.env` 三项非空 → `scripts/env-preflight.mjs` + 哨兵表 → `scripts/db-schema-state.mjs` 两条预检挂在 `dev.mjs` / `start.mjs` 起 Next 之前，见 §9.1 / §9.2 第 6 条；corepack 三形态探测、`whichCommand()` / `usableCommand()` 判据、`pnpm check:toolchain` 自查入口见 §2.1.1–2.1.4；「`✓ Ready` 后两秒 `exit=0`」的内层 `pnpm.cmd` 拼法事故与 `pnpmInvocation()` 唯一入口见 §2.1.6；启动页 vs 应用窗的前台归属（`spawn_splash_front()` / `bring_splash_to_front()`）见 §1.3。**日志按 §4 布局看** `log/` 分区（`launcher/` → `nextjs/` → `services/` → `tools/` → `archive/`）。改完构建 / 产物相关的东西，先跑 `node scripts/check-standalone-contents.cjs`（同时查「不该有的」与「必须有的」）。**用例红先定性再改**：`pnpm exec vitest run --no-file-parallelism <文件>` 隔离重跑，串行也红才是真红；串行绿的是预算 / 并发问题（预算与 `maxWorkers` 的实测出处见 §11.13，不要靠继续抬超时掩盖）。
 
 ## 维护约定

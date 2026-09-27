@@ -38,7 +38,4 @@ export const KNOWN_FAILED_FILES = [
    * 别处更强的执行者：`scripts/check-standalone-contents.cjs` 是同一判据的
    * 产物侧检查，构建后按需跑（规范 §7.3 / §7.4）。 */
   "tests/turbopack-tracing-excludes.test.ts",
-  /* 主题 token 线：「源码里没有新增的裸自定义属性」白名单少一条登记，
-   * 由该线决定并档还是补白名单理由。 */
-  "tests/theme-token-single-source.test.ts",
 ];
