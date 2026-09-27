@@ -11,6 +11,7 @@ import {
   LOCAL_TASK_TIMEOUT_MS,
   prepareLocalInputImage,
   startLocalGenerate,
+  withGenerationAttribution,
   watchTask,
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
@@ -27,6 +28,8 @@ interface Props {
   /** 选定的视频工作流 id：本地通道的唯一可执行来源（内置模板已移除）。
    * 按封装口径暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
   workflowId: string;
+  /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
+  projectId: string;
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
   onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
@@ -55,6 +58,7 @@ function noop(): void {
 export function VideoStudio({
   shots,
   workflowId,
+  projectId,
   apiChannels,
   onOpenApiSettings,
   onShotsChange,
@@ -203,7 +207,9 @@ export function VideoStudio({
         if (unmatchedWarning) onNotice(unmatchedWarning);
         const input: GenerateInput = built.input;
 
-        const taskId = await startLocalGenerate(input);
+        const taskId = await startLocalGenerate(
+          withGenerationAttribution(input, { projectId, shotId: shot.id }),
+        );
         /* 任务 id 随草稿持久化：刷新 / 切页签后重挂载，控制器按它恢复失联任务
          * （与生图阶段的 taskId 同一机制）。 */
         patchShot(shot.id, { clipTaskId: taskId });

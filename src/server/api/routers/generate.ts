@@ -32,6 +32,8 @@ export const GenerateSchema = z.object({
   paramMap: z.record(z.string(), z.string()).optional(),
   workflowInputs: z.array(WorkflowInputSchema).optional(),
   projectId: z.string().optional(),
+  /** 工坊镜头号：只作归属，不参与执行（执行载荷与它无关）。 */
+  shotId: z.string().optional(),
   referenceImages: z.array(z.string()).optional(),
 });
 
@@ -73,6 +75,7 @@ export const generateRouter = createTRPCRouter({
         params: data,
         workflowName,
         projectId: data.projectId ?? null,
+        shotId: data.shotId ?? null,
         referenceImages: data.referenceImages?.length
           ? data.referenceImages
           : undefined,

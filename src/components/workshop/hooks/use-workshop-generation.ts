@@ -21,6 +21,7 @@ import {
   preparePortraitReferences,
   startLocalGenerate,
   watchTask,
+  withGenerationAttribution,
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
 import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
@@ -35,6 +36,14 @@ export interface WorkshopGenerationDeps {
   workflowId: string;
   /** 角色卡表：镜头相关角色选了定妆照时，按它取参考图下发（流程 §4）。 */
   characters: Character[];
+  /**
+   * 当前项目 id（空串 = 还没有活跃项目）。与镜头号一起写进任务行，让「这一镜出过图吗」
+   * 能由数据库回答，而不是只信草稿里那个 `imageUrl` 字符串。
+   *
+   * 这里是**原始字符串**而不是对象：整个依赖要被 `generateShot` 的 useCallback 吃进去，
+   * 传对象会让回调每次渲染都换身份，下游 memo 全废。
+   */
+  projectId: string;
   /** 回写目标镜头的 status / taskId / imageUrl —— 镜头数据仍归主管线持有。 */
   setShots: React.Dispatch<React.SetStateAction<Shot[]>>;
   /** 需要引起用户注意的失败/阻断文案通道（由主管线决定怎么渲染，不用 alert）。 */
@@ -57,6 +66,7 @@ export interface WorkshopGenerationApi {
 export function useWorkshopGeneration({
   workflowId,
   characters,
+  projectId,
   setShots,
   notify,
 }: WorkshopGenerationDeps): WorkshopGenerationApi {
@@ -228,7 +238,12 @@ export function useWorkshopGeneration({
         const { input, unmatchedWarning } = await buildShotInput(shot);
         /* 未生效的口在发起前提示：生成要跑几十秒到几十分钟，事后说就晚了。 */
         if (unmatchedWarning) notify(unmatchedWarning);
-        const taskId = await startLocalGenerate(input);
+        /* 归属在这里补，不进 `buildLibraryWorkflowInput`：那个封装同时服务封装页签的
+         * 流程测试，那边既没有项目也没有镜头，塞进去会让它长出一个多数调用方都得传
+         * null 的参数。 */
+        const taskId = await startLocalGenerate(
+          withGenerationAttribution(input, { projectId, shotId: shot.id }),
+        );
         setShots((prev) =>
           prev.map((item) =>
             item.id === shot.id ? { ...item, taskId } : item,
@@ -252,7 +267,7 @@ export function useWorkshopGeneration({
      * 稳定引用，不必写；搬进本 hook 后它们变成**入参**，不写进依赖就是 lint 掩盖。
      * 调用侧传的是 useState 的 setter（同一组件生命周期内引用不变），所以回调身份
      * 与拆分前一致，不会多触发下游重渲染。 */
-    [workflowId, buildShotInput, notify, setShots, watchShotTask],
+    [workflowId, projectId, buildShotInput, notify, setShots, watchShotTask],
   );
   return {
     generating,

@@ -680,10 +680,17 @@ describe("TaskRepository", () => {
     const t1 = await taskRepository.createQueued({
       ...queued,
       projectId: "p1",
+      shotId: "s7",
       workflowSnapshot: { nodes: [] },
       referenceImages: ["a.png"],
     });
-    expect(t1).toMatchObject({ status: "QUEUED", projectId: "p1" });
+    expect(t1).toMatchObject({
+      status: "QUEUED",
+      projectId: "p1",
+      shotId: "s7",
+    });
+    // 归属列要真落盘、真读得回来（内存 SQLite 真库，不是 mock 的调用断言）
+    expect((await taskRepository.findById(t1.id))?.shotId).toBe("s7");
     expect(t1.workflowSnapshot).toEqual({ nodes: [] });
 
     const t2 = await taskRepository.createQueued(queued);
@@ -704,6 +711,9 @@ describe("TaskRepository", () => {
     ).toHaveLength(1);
     // 只出自己的
     expect(await taskRepository.listByUser("u2")).toEqual([]);
+    // 不传归属的旧形状调用点落 NULL（不能污染成空串，否则「无归属」与「归属为空」
+    // 在库里同形）——放在用例末尾：它新增一行，会改变上面的条数断言。
+    expect((await taskRepository.createQueued(queued)).shotId).toBeNull();
   });
 
   it("listByUser includeImages 走关系装载：封面优先、sortIndex 升序", async () => {

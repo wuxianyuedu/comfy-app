@@ -84,6 +84,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
     params: unknown;
     workflowName: string;
     projectId?: string | null;
+    /** 工坊镜头号（归属用；NULL = 不是按镜生成，或归属未知）。 */
+    shotId?: string | null;
     referenceImages?: unknown;
     workflowSnapshot?: unknown;
     /** 执行归属（P3 §5 ADR §6）：提交侧按 `resolveExecutorClaim()` 显式传
@@ -104,6 +106,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
         params: input.params,
         workflowName: input.workflowName,
         projectId: input.projectId ?? null,
+        shotId: input.shotId ?? null,
         referenceImages: input.referenceImages ?? undefined,
         workflowSnapshot: input.workflowSnapshot ?? undefined,
         claimedBy: input.claimedBy ?? null,
