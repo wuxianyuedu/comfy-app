@@ -5338,4 +5338,106 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const { code, output } = run();
     expect(code, output).toBe(0);
   });
+
+  /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（棘轮）差分回归 ──────
+   * 判据见 scripts/check-ui-primitives.cjs 里 P83 的注释：只管 h1（屏级），
+   * 属性段必须出现 u-title-page / u-title-hero / text-page / text-hero 之一，
+   * 且不得再叠 text-lg / text-[34px] 这类硬写字号。 */
+  it("P83 h1 各屏自写字号 → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P83MissingTier.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <h1 className="font-title text-ink text-xl font-bold">历史记录</h1>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P83");
+    expect(output).toContain("studio/P83MissingTier.tsx");
+  });
+
+  it("P83 已走档但再叠硬写字号 → 仍计（档位给数，调用点不补第二套）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P83DoubleSize.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <h1 className="u-title-page text-[34px]">首页</h1>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P83");
+  });
+
+  it("P83 合规出口：u-title-page / u-title-hero / text-page 都不计", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P83Ok.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        '      <h1 className="font-title u-title-page">模型库</h1>',
+        '      <h1 className="u-title-hero text-center">把创意变成成片</h1>',
+        '      <h1 className="text-page">设置</h1>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P83 数组 / cn(...) 形态的 className 要读得到档位（粗锚会在这里漏计）", () => {
+    /* `className={[...].join("")}` 与 `cn("u-title-page", a > b ? … : …)` 里都有
+     * `>`，用 `[^>]*` 那种粗锚会在表达式中间早停、把这行判成「没有档位要求」，
+     * 于是判据在这里静默失效 —— 属性段必须平衡扫描（同 P82 的教训）。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P83ArrayAttrs.tsx",
+      [
+        "export function V({ n }: { n: number }) {",
+        "  return (",
+        "    <>",
+        '      <h1 className={["u-title-page", n > 1 ? "mt-2" : ""].join(" ")}>列表</h1>',
+        '      <h1 className={cn("u-title-page", n > 1 ? "text-ink" : "text-ink")}>另一屏</h1>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P83 只管屏级标题：h2 / h3 的多档微排版不入本条", () => {
+    /* 区块级标题刻意保留 10.5–14px 的几档，并成一档会压平层次；判据越界就会
+     * 逼下一个人拆掉合理的排版去迎合机器。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P83Sections.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <>",
+        '      <h2 className="text-sm font-semibold">筛选</h2>',
+        '      <h3 className="text-[10.5px] font-semibold tracking-wider">节点</h3>',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
 });
