@@ -3702,6 +3702,47 @@ const RULES = {
       return n;
     },
   },
+
+  /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（棘轮）─────────────────
+   * `globals.css` 里 `.u-title-page` 注明就是「页面级标题（h1）统一规范」，可它
+   * 引入至今只有 1 处消费者；屏级标题实际写在 11 个 h1 上，尺寸有 18 / 20 / 24 /
+   * 34px 四五种 —— 同一个角色在不同屏大小不一，而 `.u-title` / `.u-title-page`
+   * 的数值本身也是工具类里的硬编码字面量（规范 03 §3.2 反对的那一类）。
+   *
+   * 判据只管 **h1（屏级）**：属性段里必须出现屏级档
+   * （`u-title-page` / `u-title-hero` / `text-page` / `text-hero`），且不得再叠
+   * 硬写字号（`text-lg`、`text-[34px]` 这类）。`u-title-hero` 是有意留的第二档：
+   * 首页欢迎区的大标题确实不是屏级标题那一档，但例外必须有名字，不能留成某处
+   * 内联的 `text-[34px]` —— 否则「唯一档」这句话在第一屏就先破了。
+   *
+   * 区块级标题（h2 / h3）**不入本条**：那里刻意保留 10.5–14px 的多档微排版，
+   * 并成一档会压平信息层次，那是另一件事，不该由这条判据顺手管。
+   *
+   * 属性段用 `readJsxAttrsPastTag` 平衡扫描（同 P82 的教训）：`className={cn(...)}`
+   * 里的 `>` 不提前收尾、`className={[..].join("")}` 的数组形态也能读全 ——
+   * 粗锚 `[^>]*` 会在这两种写法上漏计。 */
+  P83: {
+    label:
+      "屏级标题 <h1> 未走字阶档 u-title-page / u-title-hero，或在 h1 上硬写字号（字号由档位给，不在调用点写）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      let n = 0;
+      const re = /<h1(?=[\s/>])/g;
+      let m;
+      while ((m = re.exec(t2)) !== null) {
+        const attrs = readJsxAttrsPastTag(t2, re.lastIndex);
+        if (attrs === null) continue;
+        const hasTier =
+          /\b(?:u-title-page|u-title-hero|text-page|text-hero)\b/.test(attrs);
+        const hardSize =
+          /\btext-(?:xs|sm|base|md|lg|xl|2xl|3xl|4xl|5xl)\b|\btext-\[/.test(
+            attrs,
+          );
+        if (!hasTier || hardSize) n++;
+      }
+      return n;
+    },
+  },
 };
 
 /**

@@ -138,8 +138,10 @@ export function FilmStudio() {
       {/* ── Top Toolbar ─────────────────────────────── */}
       <header className="border-border-subtle bg-panel/88 z-base relative flex shrink-0 items-center gap-3 border-b px-4 py-0 backdrop-blur-md">
         {/* Project name */}
-        <div className="flex items-center gap-2">
-          <span className="u-title">{c.title}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="font-title u-title-page min-w-0 truncate">
+            {c.title}
+          </h1>
           <span className="text-ink-fainter text-xs">· 视频成片工作室</span>
         </div>
 
