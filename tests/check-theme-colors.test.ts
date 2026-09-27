@@ -8,11 +8,13 @@
  *   · 成组常量表里的类型色被豁免（不报）；
  *   · 新写在常量表里的类型色同样被豁免（豁免随表走，不是逐行白名单）；
  *   · 组件里写着表面/文字语义的写死色值不被误放（进基线/被拦）；
- *   · 注释里的色值与 ISSUE 号（`#346`）不算命中。
+ *   · 注释里的色值与 ISSUE 号（`#346`）不算命中；
+ *   · **一条都不命中的豁免**是负债（它会静默放行该文件今后的写死色值），
+ *     必须被点名并阻断 —— 实测清掉过 4 条这样的条目。
  *
  * 规范：docs/standards/03-样式与-tailwind.md §3.6.1
  */
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
   mkdirSync,
@@ -53,20 +55,18 @@ function scanner(
     mkdirSync(path.dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   }
+  /* stdout + stderr 都要拼进 output：告警走 console.warn（stderr），而成功分支
+   * 只拿得到 stdout —— 不拼就等于「负债只提醒」那条判据永远测不到。 */
   const run = (args: string[] = []): { ok: boolean; output: string } => {
-    try {
-      return {
-        ok: true,
-        output: execFileSync(
-          process.execPath,
-          [path.join(root, "scripts", path.basename(SCRIPT)), ...args],
-          { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-        ),
-      };
-    } catch (err) {
-      const e = err as { stdout?: string; stderr?: string };
-      return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
-    }
+    const res = spawnSync(
+      process.execPath,
+      [path.join(root, "scripts", path.basename(SCRIPT)), ...args],
+      { cwd: root, encoding: "utf8" },
+    );
+    return {
+      ok: res.status === 0,
+      output: `${res.stdout ?? ""}${res.stderr ?? ""}`,
+    };
   };
   return { root, run };
 }
@@ -142,6 +142,115 @@ describe("check-theme-colors", () => {
       { "src/components/studio/Thing.tsx": 1 },
     );
     expect(run().ok).toBe(true);
+  });
+
+  /* 豁免登记之后还会「过期」：文件被 token 化了、或色值只剩在注释里（判据
+   * 本来就不数注释），条目却还留在表上。它不报错，只会把该文件**今后**新写的
+   * 死色值一并静默放行 —— 所以一条命不中的豁免是负债，本轮实测清掉 4 条。
+   * 按文件判（不是按条目判），否则「被前一条遮蔽」会被误报成死条目。 */
+  it("豁免一条都没命中 = 负债，阻断并点名该删哪条", () => {
+    const { run } = scanner({
+      "src/lib/comfyui/types.ts":
+        "// 设计稿给的类型色：MODEL #7C5CFF / IMAGE #3FBF7F\nexport const x = 1;\n",
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("不再命中任何东西");
+    expect(output).toContain("src/lib/comfyui/types.ts");
+  });
+
+  it("对照：同一份文件的色值回到代码里，豁免正常命中便不报负债", () => {
+    const { run } = scanner({
+      "src/lib/comfyui/types.ts":
+        'export const PORT_COLORS = { MODEL: "#7C5CFF", IMAGE: "#3FBF7F" };\n',
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(true);
+    expect(output).not.toContain("不再命中任何东西");
+  });
+
+  it("--report 下负债只提醒，不判失败", () => {
+    const { run } = scanner({
+      "src/lib/comfyui/types.ts":
+        "// 类型色：MODEL #7C5CFF\nexport const x = 1;\n",
+    });
+    const { ok, output } = run(["--report"]);
+    expect(ok).toBe(true);
+    expect(output).toContain("豁免一处都没命中");
+  });
+});
+
+/**
+ * 「幽灵 token」硬闸（规范 03 §3.6.1）。
+ *
+ * 这条治的是**反方向**的漏改：颜色不再写死、改成 `var(--color-x)`，但 `--color-x`
+ * 从来没在任何 CSS 里声明过。CSS 变量查无此名时不报错，`fill` 退成黑色初值、
+ * `stroke` 退成 `none` —— 图标变黑块、描边图形整条消失。
+ *
+ * 回归来源是实测事故：`ui/seed-mode-button.tsx` 的四枚 seed 图标在一次目录归并里
+ * 从写死色值改成了 `var(--color-seed-*)`，`globals.css` 却没补定义，从此静默失效
+ * 若干轮；同期该文件的主题色豁免一处都不再命中（= 上面那条死豁免判据），
+ * 两面是同一件事。
+ */
+describe("幽灵 token（引用了从未定义的 --color-*）", () => {
+  it("fill 引用的 token 全仓无定义 → 阻断并点名行号", () => {
+    const { run } = scanner({
+      "src/components/ui/GhostIcon.tsx":
+        'export const I = () => <svg><path fill="var(--color-nope)" /></svg>;\n',
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("--color-nope");
+    expect(output).toContain("src/components/ui/GhostIcon.tsx:1");
+  });
+
+  it("同名 token 在 globals.css 的 @theme 里有定义 → 通过", () => {
+    const { run } = scanner({
+      "src/app/globals.css": "@theme {\n  --color-real: #ff6b6b;\n}\n",
+      "src/components/ui/RealIcon.tsx":
+        'export const I = () => <svg><path fill="var(--color-real)" /></svg>;\n',
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("被注释掉的声明不算定义（幽灵 token 的形态就是「引用还在、定义没了」）", () => {
+    const { run } = scanner({
+      "src/app/globals.css": "@theme {\n  /* --color-real: #ff6b6b; */\n}\n",
+      "src/components/ui/RealIcon.tsx":
+        'export const I = () => <svg><path fill="var(--color-real)" /></svg>;\n',
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("--color-real");
+  });
+
+  /* 明确的不覆盖边界：带兜底值时渲染结果确定（取不到也有色），不判。
+   * Tailwind 裸变量 `text-(--x)` 与运行期注入的变量同样不判 —— 实测那种形态
+   * 里「CSS 查无此名」是常态（base-ui 注入 --transform-origin 等），硬判会误报一片。 */
+  it("带兜底值的 var() 不判", () => {
+    const { run } = scanner({
+      "src/components/ui/OkIcon.tsx":
+        'export const I = () => <svg><path stroke="var(--color-nope, currentColor)" /></svg>;\n',
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("真实仓库：seed 图标的 5 颗 token 有定义（事故不复发的锚点）", () => {
+    const css = readFileSync(
+      path.resolve(__dirname, "../src/app/globals.css"),
+      "utf8",
+    );
+    for (const name of [
+      "--color-seed-fixed",
+      "--color-seed-step",
+      "--color-seed-dice-bg",
+      "--color-seed-dice-stroke",
+      "--color-seed-dice-pip",
+    ]) {
+      expect(css, `globals.css 缺 ${name}：图标会静默变黑/消失`).toMatch(
+        new RegExp(`^\\s*${name}\\s*:`, "m"),
+      );
+    }
   });
 });
 
