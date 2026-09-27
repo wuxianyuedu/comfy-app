@@ -25,6 +25,15 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 1. 设开关（二选一，两种给法都生效）：
    - shell：`$env:COMFY_EXECUTOR = "host"`（POSIX 用 `export`）；
    - `.env`：追加一行 `COMFY_EXECUTOR=host`。
+
+   > 三处读同一个 key、同一套归一化（大小写与首尾空白宽容；**进程 env 优先于
+   > `.env`**，显式写 `COMFY_EXECUTOR=` 就是关掉）：Next 侧
+   > `src/lib/comfyui/executor-mode.ts`，launcher 与 host 脚本共用
+   > `scripts/launcher-core/executor-mode.mjs`。同层两份、跨层一份，两份之间由
+   > `tests/executor-mode-consistency.test.ts` 逐值比对（ADR §14 D5）——
+   > 在此之前 host 那份漏了 trim 与 `.env` 回读，写 `" host "` 或只改 `.env`
+   > 手工起 host 都会静默跑成骨架。
+
 2. **必须走 launcher 入口**：`node scripts/dev-launcher.mjs`，或双击
    `tools/start/start-web.ps1` / `start-tauri.ps1`。
 

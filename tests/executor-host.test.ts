@@ -1,7 +1,11 @@
 /**
  * `scripts/executor-host.mjs` 的两组契约：
- *   1. **骨架形态**（2-B 三条，未设 `COMFY_EXECUTOR`）：`--once` 起落、常驻 +
- *      SIGTERM、日志路径——骨架必须**不碰 DB**，这三条钉的就是它的极简性。
+ *   1. **骨架形态**（2-B 三条，**显式** `COMFY_EXECUTOR=inline`）：`--once` 起落、
+ *      常驻 + SIGTERM、日志路径——骨架必须**不碰 DB**，这三条钉的就是它的极简性。
+ *      为什么要显式给值而不是「不设」：判据自 4-A4（ADR §14 D5）起会回读仓库
+ *      `.env`，而开发机那份完全可能写着 `COMFY_EXECUTOR=host`（4-A4 实测就是这种
+ *      机器）——让本地配置决定用例结论，得到的不是绿就是假绿。进程 env 优先于
+ *      `.env`，给一个 `inline` 就把这一组钉住了。
  *      常驻模式的 POSIX 细节：能收终止信号并落盘；Windows 上 Node 控制台
  *      SIGTERM 语义与 POSIX 不同（`child.kill("SIGTERM")` 实际走
  *      TerminateProcess、handler 不跑），只断「进程真的终止了 + 之前的
@@ -47,7 +51,12 @@ function runHost(args: string[], logPath: string) {
   return new Promise<{ code: number | null; stderr: string }>((resolve) => {
     const child = spawn(process.execPath, [HOST_SCRIPT, ...args], {
       cwd: REPO_ROOT,
-      env: { ...process.env, COMFYAPP_HOST_LOG: logPath },
+      // 显式 inline：见文件头——不钉住就会被开发机的 `.env` 判成运行时形态。
+      env: {
+        ...process.env,
+        COMFY_EXECUTOR: "inline",
+        COMFYAPP_HOST_LOG: logPath,
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stderr = "";
@@ -88,7 +97,11 @@ describe("scripts/executor-host.mjs 骨架", () => {
     const logPath = path.join(tmp, "exec.log");
     const child = spawn(process.execPath, [HOST_SCRIPT, "--interval=100"], {
       cwd: REPO_ROOT,
-      env: { ...process.env, COMFYAPP_HOST_LOG: logPath },
+      env: {
+        ...process.env,
+        COMFY_EXECUTOR: "inline",
+        COMFYAPP_HOST_LOG: logPath,
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
     try {
@@ -271,10 +284,14 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
     expect(readTaskRow(dbPath, rowId).status).toBe("QUEUED");
   }, 90_000);
 
-  it("--claim-once 在无 COMFY_EXECUTOR 的骨架形态被拒 → exit 1（骨架没有可领取的运行时）", async () => {
+  it("--claim-once 在骨架形态（显式 COMFY_EXECUTOR=inline）被拒 → exit 1（骨架没有可领取的运行时）", async () => {
     const tmp = mkTmp();
     const logPath = path.join(tmp, "claim-skel.log");
-    const { code } = await runHostWith(["--claim-once"], {}, logPath);
+    const { code } = await runHostWith(
+      ["--claim-once"],
+      { COMFY_EXECUTOR: "inline" },
+      logPath,
+    );
     expect(code).toBe(1);
     expect(fs.readFileSync(logPath, "utf-8")).toContain(
       "--claim-once 需要 COMFY_EXECUTOR=host",

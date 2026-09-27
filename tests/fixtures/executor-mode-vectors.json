@@ -1,0 +1,22 @@
+{
+  "comment": "COMFY_EXECUTOR 判据的共享向量（ADR §14 D5）。Node 侧 `scripts/launcher-core/executor-mode.mjs` 与 TS 侧 `src/lib/comfyui/executor-mode.ts` 必须对每一条给出同一个 mode；unknown 是「用户写下的、我们认不出的原值」，判决仍按 inline，但调用方必须留一行可见提示。两侧不能合成一份（跨层共享要么给 launcher 引入 tsx、要么让 src/lib 去 import scripts，两条都撞既有约束），所以一致性由 tests/executor-mode-consistency.test.ts 逐值比对。",
+  "vectors": [
+    { "raw": "host", "mode": "host", "unknown": null },
+    { "raw": "HOST", "mode": "host", "unknown": null },
+    { "raw": "  host  ", "mode": "host", "unknown": null },
+    { "raw": "host\n", "mode": "host", "unknown": null },
+    { "raw": "\tHost ", "mode": "host", "unknown": null },
+    { "raw": "inline", "mode": "inline", "unknown": null },
+    { "raw": "INLINE", "mode": "inline", "unknown": null },
+    { "raw": " inline ", "mode": "inline", "unknown": null },
+    { "raw": "", "mode": "inline", "unknown": null },
+    { "raw": "   ", "mode": "inline", "unknown": null },
+    { "raw": "\n", "mode": "inline", "unknown": null },
+    { "raw": "hosts", "mode": "inline", "unknown": "hosts" },
+    { "raw": "external", "mode": "inline", "unknown": "external" },
+    { "raw": " HOST2 ", "mode": "inline", "unknown": "host2" },
+    { "raw": "0", "mode": "inline", "unknown": "0" },
+    { "raw": "false", "mode": "inline", "unknown": "false" },
+    { "raw": "宿主", "mode": "inline", "unknown": "宿主" }
+  ]
+}

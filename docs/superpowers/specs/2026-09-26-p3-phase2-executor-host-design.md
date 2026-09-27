@@ -508,6 +508,14 @@ configureExecutorCli({
 
 - **D4 终态 CAS = 终态守卫全落 + 按 id 写路径带归属**（签字时选了比「只修 finalize 两条」更彻底的那档）。impl 七个裸写方法（`updateProgress:129`、`markRunning:149`、`finalizeSuccess:215`、`finalizeFailure:240`、`cancel:260`、`findExecJob:196`、`replaceLogs:296`）统一收口成两条 WHERE——`status NOT IN (TERMINAL)` 与 `ownedBy(owner)`；owner 是**构造期声明**（`createTaskRepoImpl(db, { owner })`，形参故意必填：默认成 inline 会让 host 悄悄改写别人的行，漏传比错传更危险），判据只从 `ownedBy()` 单一定义点出、不留第二处 SQL 拼法。四个终态写（`finalizeSuccess` / `finalizeFailure` / `finalizeFromReaper` / `cancel`）的返回值是四态 `TaskWriteOutcome`（`written` / `skipped-terminal` / `skipped-not-owned` / `skipped-missing`）——收成 boolean 就把「已被别处收口」和「没我的份」混成一团，调用点只能靠猜；两条进度写保持既有 boolean。两处按各自语义取舍：`replaceLogs` 只带归属守卫、**不带**终态守卫（收口之后的尾随日志正是失败原因，挡掉等于抹掉排障线索）；`findExecJob` 带归属条件（它读出来的就是要交给 ComfyUI 的图）。附带的同源约束：reaper 的 repo 实例 owner 必须与 `configureReaper({ owner })` 同源，不同源的表现是「判了却没落库」，返回值里的 `skipped-not-owned` 是唯一线索（已配用例钉住）。**一处必须显式的例外（对签字口径的必要修正，不静默改）**：`cancel` **不带** owner 条件。理由：取消是用户对「本机这次任务」的动作，而 UI 与取消 RPC 只活在 Next 进程里，host 名下的行必须由 Next 侧标成 CANCELLED——带归属条件等于把「取消 host 任务」这条合法路径堵死。跨归属的只是**状态标记**，「kill 在飞执行」仍归 owner 自己做（host 走 `reconcileCancelled`、inline 走自己名下的 `cliProcs`），非 owner 不越界写执行细节。
 
+**D5（4-A4，签字时以「默认口径」给出、本轮落码）= `COMFY_EXECUTOR` 判据：同层收成一份 + 跨层加一致性门禁**。三处实现里 Next 侧（TS）与 launcher 规则一致，host 脚本那份是 `(process.env.COMFY_EXECUTOR ?? "inline").toLowerCase()` —— 既没 `trim()` 也没 `.env` 回读，于是两类静默错配：写 `" host "` 时 Next 把行写成 `claimedBy='host'` 而 host 起着骨架；只在 `.env` 里给开关 + 手工起 host 同样跑成骨架。两种表现都是「任务永远停在队列里等回收器判失败」，界面与日志都看不出为什么。
+
+- 跨层**不**合成一份（这是签字时那条「不抽跨宿主共享内核」的原始理由）：让 launcher 复用 TS 那份要给它引入 tsx，而 launcher 正是拉起 tsx 的那一层；让 `src/lib` 去 import `scripts/*.mjs` 撞 §18.4 分层与 Node-only scanner。
+- 同层（launcher 与 host 脚本都是纯 Node）**收成一份** `scripts/launcher-core/executor-mode.mjs`：`normalizeExecutorMode` / `readExecutorEnvRaw` / `resolveExecutorMode`，并复用既有 `parseEnvFile`。同层去重没有跨层代价，且符合 §12.18。新脚本随之登记进 `RUNTIME_SCRIPTS` 与 `ALLOWED_SCRIPTS`（两处同源，缺一份就是桌包里 host 静默跑骨架）。
+- 两份之间的漂移由门禁管：`tests/executor-mode-consistency.test.ts` 用**一份共享向量**（`tests/fixtures/executor-mode-vectors.json`，17 条，含大小写/首尾空白/制表/换行/空值/未知值/中文值）让 Node 与 TS 两侧真跑同一组输入逐值比对，另断言两个纯 Node 宿主都不许再长出第二份归一化（去注释后扫源码）。形态沿用既有的 `tests/app-port-cross-language.test.ts`。
+- 优先级语义钉死一条：**进程 env 给了值（哪怕是空串）就不再回读 `.env`**，与 @next/env 的覆盖规则同形；这条两侧必须一致，否则「显式关掉」在 Next 侧生效、在 host 侧被 `.env` 顶回去。
+- 顺带纠正一处测试的非 hermeneic：`tests/executor-host.test.ts` 的骨架组原先靠「不设 env」表达骨架，而本地 `.env` 完全可能写着 host（实测这台机器就是）——改为显式 `COMFY_EXECUTOR=inline`，让环境不再决定用例结论。
+
 **Phase 4 的实测副产物：回收判据补一条（ISSUE #1184，2026-09-27）**
 
 D4 落地后按「跑真任务找出口」的口径继续做 4-A3 端到端，抓到一个不属于任何一刀的缺陷：`listStaleRunning` 带着 `promptId IS NOT NULL`，而 `listStaleQueued` 只认 `QUEUED` —— 于是「已被领取、`prompt_id` 还没回传」这段时间的 `RUNNING` 行**两条 sweeper 都看不见**；宿主恰好在这段时间崩溃，那行就永久停在「生成中」，界面上没有任何出口（用户只能删行或重启数据库）。根因还有一层：comfy-cli 的 stdout 在非 TTY 管道上是块缓冲，`prompt_id`/progress 事件成批迟到（实测整轮 `promptId` 为 NULL、收尾才出现），所以这段窗口不是毫秒级而是**整轮**。

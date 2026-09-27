@@ -31,7 +31,7 @@ import { fileURLToPath } from "node:url";
 
 import { resolveAppPort } from "./app-port.mjs";
 import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
-import { checkEnvFile, parseEnvFile } from "./env-preflight.mjs";
+import { checkEnvFile } from "./env-preflight.mjs";
 import {
   archiveRunLog,
   createLogSink,
@@ -74,6 +74,8 @@ import {
 } from "./launcher-core/shell.mjs";
 import { echoCommandLine } from "./launcher-core/command-echo.mjs";
 import { syncSplashAssets } from "./launcher-core/splash-assets.mjs";
+// `COMFY_EXECUTOR` 判据的纯 Node 侧唯一定义（与 executor-host.mjs 共用，ADR §14 D5）
+import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
 import {
   checkNodeModules,
   lockfileDrift,
@@ -949,16 +951,20 @@ export async function run(argv = process.argv.slice(2)) {
   // 同一套归一化——这里额外回读 `.env` 是因为纯 Node 不注入 .env，而 Next
   // server 的 process.env 里有它（@next/env），不回读会造成「Next 写 host 片、
   // launcher 却不拉 host」的任务停摆组合。
-  const executorMode = resolveComfyExecutorMode();
+  // 4-A4 起归一化收在 `launcher-core/executor-mode.mjs`（纯 Node 侧唯一定义，
+  // host 脚本共用同一份），两侧判决是否同值由 tests/executor-mode-consistency.test.ts
+  // 逐值比对（ADR §14 D5）。
+  const { mode: executorMode, unknown: unknownExecutor } =
+    resolveExecutorMode();
   if (executorMode === "host") {
     const hostChild = spawnExecutorHost();
     log(
       `executor-host 已启动（PID ${hostChild?.pid ?? "?"}，COMFY_EXECUTOR=host 灰度中；host 领取 claimedBy='host' 的行）`,
       "OK",
     );
-  } else if (executorMode !== "inline") {
+  } else if (unknownExecutor) {
     log(
-      `COMFY_EXECUTOR="${executorMode}" 不识别，按默认 inline 处理（可选：inline|host）`,
+      `COMFY_EXECUTOR="${unknownExecutor}" 不识别，按默认 inline 处理（可选：inline|host）`,
       "WARN",
     );
   }
@@ -1337,32 +1343,11 @@ export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
  *
  *  为什么不发 COMFYAPP_PORT：host 起 ComfyUI 用的是自己的 lifecycle，与 Next 端
  *  口不共享；Phase 2-C 骨架不 spawn ComfyUI，也就用不上端口。 */
-/** `COMFY_EXECUTOR` 的 launcher 侧解析：进程 env 优先，`.env` 回读兜底
- *  （纯 Node 不注入 .env；Next 侧 process.env 有 @next/env 灌进去的同名值，
- *  两侧因此对 shell / .env 两种给法都成立）。归一化规则与
- *  `src/lib/comfyui/executor-mode.ts` 一致：trim + lowercase，未知值由调用方
- *  按 inline 处理并 warn。 */
-export function resolveComfyExecutorMode() {
-  let raw = (process.env.COMFY_EXECUTOR ?? "").trim().toLowerCase();
-  if (!raw) {
-    try {
-      const envPath = path.join(ROOT, ".env");
-      if (fs.existsSync(envPath)) {
-        raw = (
-          parseEnvFile(fs.readFileSync(envPath, "utf-8")).get(
-            "COMFY_EXECUTOR",
-          ) ?? ""
-        )
-          .trim()
-          .toLowerCase();
-      }
-    } catch {
-      raw = "";
-    }
-  }
-  return raw || "inline";
-}
-
+/** 4-A4（ADR §14 D5）：这里原有的 `resolveComfyExecutorMode()` 已收进
+ *  `launcher-core/executor-mode.mjs` —— launcher 与 executor-host 是同一层的两个
+ *  纯 Node 宿主，各写一份归一化的结果是「`" host "` 时 Next 写 host 片、host 却
+ *  起骨架」这类静默错配。与 Next 侧（TS）那份是否同值，由
+ *  `tests/executor-mode-consistency.test.ts` 逐值比对。 */
 export function spawnExecutorHost() {
   const hostScript = path.join(ROOT, "scripts", "executor-host.mjs");
   if (!fs.existsSync(hostScript)) {
@@ -1402,7 +1387,7 @@ export function spawnExecutorHost() {
       /* 显式回写归一化后的值：`.env` 来源时它不在 process.env 里，而 host 自己
        * 只认 COMFY_EXECUTOR 来决定跑骨架还是运行时链——不传会出现
        * 「launcher 认为 host 模式、host 起着骨架」的静默错配。 */
-      COMFY_EXECUTOR: resolveComfyExecutorMode(),
+      COMFY_EXECUTOR: resolveExecutorMode().mode,
       // 编排器把 boot id 传下去，让 host 日志与 launcher 日志能按同一时间戳串起来。
       COMFYAPP_HOST_BOOT_ID: runTimestamp,
     },

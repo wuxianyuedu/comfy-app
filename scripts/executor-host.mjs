@@ -52,6 +52,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { parseEnvFile } from "./env-preflight.mjs";
+import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const argv = process.argv.slice(2);
@@ -104,10 +105,15 @@ process.chdir(ROOT);
 const bootId =
   process.env.COMFYAPP_HOST_BOOT_ID ?? `${Date.now().toString(36)}`;
 
-/** `COMFY_EXECUTOR` 判据与 `dev-launcher.mjs` 的 `spawnExecutorHost()` 门控一致：
- *  只有显式 `host` 才跑运行时注入链；其它值（含未设）保持 2-B 骨架行为，
- *  这样 2-B 的三条契约测（无此 env）不受影响。 */
-const executorMode = (process.env.COMFY_EXECUTOR ?? "inline").toLowerCase();
+/** 判据与 launcher **同源**于 `launcher-core/executor-mode.mjs`（ADR §14 D5）。
+ *  这里原先自己写了一行 `(process.env.COMFY_EXECUTOR ?? "inline").toLowerCase()`：
+ *  既没有 `trim()`、也没有 `.env` 回读，于是两种静默错配——
+ *  ① `COMFY_EXECUTOR=" host "`：Next 侧归一化认它是 host、把行写成
+ *     `claimedBy='host'`，本进程却按骨架起，于是任务永远停在队列里等回收器判失败；
+ *  ② 只在 `.env` 里写开关（手工起 host 的常规给法）同样跑成骨架。
+ *  只有显式 host 才走运行时注入链；其它值保持 2-B 骨架行为（Phase 2-B 的三条
+ *  契约测不设此 env，不受影响）。 */
+const { mode: executorMode, unknown: unknownExecutor } = resolveExecutorMode();
 const runtimeMode = executorMode === "host";
 
 /** `DATABASE_URL` 解析优先级对齐 Next 侧（`src/env.mjs` 先读进程 env、再回退
@@ -297,6 +303,13 @@ async function bootRuntime() {
 writeLine(
   `boot pid=${process.pid} bootId=${bootId} node=${process.version} platform=${process.platform} mode=${runtimeMode ? "runtime" : "skeleton"}`,
 );
+/* 认不出的值不猜意图：按骨架起，但必须留一行——否则用户写错一个字母换来的是
+ * 「任务永远停在队列」而日志里一句解释都没有（规范硬规则 4）。 */
+if (unknownExecutor) {
+  writeLine(
+    `COMFY_EXECUTOR="${unknownExecutor}" 不识别，按骨架起（可选：inline|host）`,
+  );
+}
 
 if (runtimeMode) {
   try {
