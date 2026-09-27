@@ -87,6 +87,29 @@ function seedBaseline(): void {
   expect(code, output).toBe(0);
 }
 
+/**
+ * 把 workdir 里那份脚本改成「这几条仍走棘轮」的形态 —— 只把 rule id 从
+ * `HARD_GATE_RULES` 摘掉，判据本身一字不动。
+ *
+ * 为什么要这样造：现网 82 条**全部**是硬闸，而「冻结存量 → 只许降 → --strict
+ * 要求收紧 → --update 拒绝放宽」这套棘轮语义是给**新引入的判据**起步用的。
+ * 不给它造一个执行者，这条路就没有任何测试覆盖，下次真加新判据时它是坏的也没人知道。
+ */
+function demoteToRatchet(...ids: string[]): void {
+  const p = join(workdir, "scripts", "check-ui-primitives.cjs");
+  let src = readFileSync(p, "utf8");
+  for (const id of ids) {
+    const next = src.replace(new RegExp(`\\n[ \\t]*"${id}",[^\\n]*`), "");
+    if (next === src) {
+      throw new Error(
+        `${id} 不在 HARD_GATE_RULES 里 —— 本组用例的前提已变，改测试`,
+      );
+    }
+    src = next;
+  }
+  writeFileSync(p, src);
+}
+
 const BUTTON_VIEW =
   'export function V() {\n  return <button type="button">ok</button>;\n}\n';
 const PORTAL_VIEW =
@@ -194,9 +217,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("P3");
   });
 
-  /* ── P7 / P8：同 P4~P6 的硬闸，口径是「必须为 0」─────────────────────
-   * 这两条与 P1~P3 的棘轮**性质不同**：棘轮允许「先冻结存量再逐批降」，
-   * 而 P7/P8 已经在同批清零，所以基线里没有它们 —— 第一处新增就直接断。 */
+  /* ── P7 / P8：口径是「必须为 0」的硬闸 ──────────────────────────────────
+   * P1~P3 起初是「先冻结存量、逐批降」的计数棘轮，存量清零后与本批一并升为
+   * 硬闸 —— 现在这个文件里没有一条判据允许「基线上调」。 */
   it("视图里自写「隐藏 file input + 手工触发」直接阻断（规范 P7）", () => {
     seedBaseline();
     write("src/components/workshop/F.tsx", FILE_INPUT_VIEW);
@@ -310,6 +333,59 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     ) as { rules: Record<string, string> };
     expect(baseline.rules.P7).toBeUndefined();
     expect(baseline.rules.P8).toBeUndefined();
+  });
+
+  /* ── 12 条 0 值棘轮升为硬闸（P1/P2/P3/P44~P46/P65~P69/P83）──────────────
+   * 升闸的实际收益**不是**「新增会红」—— 棘轮对没在基线里记过账的规则同样红
+   * （`新增 Pn → 文件` 那条分支）。真正的区别在 `--update`：棘轮可以把新增量
+   * 登记成「起点」，硬闸连登记都拒。此前 P44/P45/P46/P65/P66 的段头与规范标题
+   * 都写着「硬闸」而判据其实是棘轮 —— 那 5 处名实不符由本批消掉。 */
+  it("升硬闸的 12 条不进基线，且有存量时 --update 直接拒绝、不写盘", () => {
+    seedBaseline();
+    const baselinePath = join(
+      workdir,
+      "scripts",
+      ".ui-primitives-baseline.json",
+    );
+    const before = readFileSync(baselinePath, "utf8");
+    const rules = (JSON.parse(before) as { rules: Record<string, string> })
+      .rules;
+    for (const id of [
+      "P1",
+      "P2",
+      "P3",
+      "P44",
+      "P45",
+      "P46",
+      "P65",
+      "P66",
+      "P67",
+      "P68",
+      "P69",
+      "P83",
+    ]) {
+      expect(rules[id], `${id} 不该留在棘轮记账里`).toBeUndefined();
+    }
+
+    // 手写 <button>：判据必须数得到（正例），否则「0」只是扫描器瞎了。
+    write("src/components/workshop/Promoted.tsx", BUTTON_VIEW);
+    const updated = run(["--update"]);
+    expect(updated.code).toBe(1);
+    expect(updated.output).toContain("拒绝更新基线");
+    expect(readFileSync(baselinePath, "utf8")).toBe(before);
+    const blocked = run();
+    expect(blocked.code).toBe(1);
+    expect(blocked.output).toContain("P1");
+  });
+
+  it("全部判据都是硬闸：棘轮集为空时基线只剩记账壳，不静默放行", () => {
+    /* 这一条守的是「机制本身还在」：如果哪天 `ratchetOnly` 或 `HARD_GATE_RULES`
+     * 写错，让某条判据既不进硬闸也不进棘轮，它会**两边都不判** —— 静默失效。 */
+    seedBaseline();
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("82 条");
+    expect(output).toContain("0 处命中");
   });
 
   it("视图里自写 ::-webkit-scrollbar 外观直接阻断，不进棘轮（规范 P4）", () => {
@@ -3993,6 +4069,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("棘轮：已登记的存量放行，新增的仍阻断", () => {
+    demoteToRatchet("P1");
     write("src/components/workshop/Known.tsx", BUTTON_VIEW);
     seedBaseline();
     expect(run().code).toBe(0);
@@ -4004,6 +4081,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("棘轮：同一文件处数上升也阻断（只许降不许升）", () => {
+    demoteToRatchet("P1");
     write("src/components/studio/G.tsx", BUTTON_VIEW);
     seedBaseline();
     write("src/components/studio/G.tsx", BUTTON_VIEW + BUTTON_VIEW);
@@ -4013,6 +4091,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("--update 拒绝放宽基线（不得用 --update 掩盖新增）", () => {
+    demoteToRatchet("P1");
     write("src/components/studio/H.tsx", BUTTON_VIEW);
     seedBaseline();
     write("src/components/studio/I.tsx", BUTTON_VIEW);
@@ -4022,6 +4101,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("治理后收紧：--strict 要求执行 --update，收紧后转绿", () => {
+    demoteToRatchet("P1");
     write("src/components/studio/J.tsx", BUTTON_VIEW);
     seedBaseline();
     write("src/components/studio/J.tsx", "export const J = 1;\n");
@@ -4041,10 +4121,24 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("基线文件缺失时给可行动提示而不是静默通过", () => {
+    // 「先有基线」只对棘轮成立：登记着存量才有可比的东西。
+    demoteToRatchet("P1");
     write("src/components/studio/L.tsx", BUTTON_VIEW);
     const { code, output } = run();
     expect(code).toBe(1);
     expect(output).toContain("--update");
+  });
+
+  it("全是硬闸时，缺基线不再成为假前置（照样数得出命中）", () => {
+    /* 反例形态：82 条全升硬闸之后，「基线缺失」如果仍然先决退出，那么删掉基线
+     * 文件就能让门禁只报「先跑 --update」而不去数硬闸 —— 而 `--update` 此时又被
+     * 硬闸拒收，门禁自己把自己锁死。硬闸的判据是「恒为 0」，与基线在不在无关。 */
+    write("src/components/studio/L2.tsx", BUTTON_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P1");
+    expect(output).toContain("src/components/studio/L2.tsx");
+    expect(output).not.toContain("基线文件缺失");
   });
 
   /* ── 注释里的 `<button>` 是说明，不是实现 ────────────────────────────────
@@ -4085,6 +4179,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("写入的基线带 rules 说明与 total（清单不自证失效）", () => {
+    demoteToRatchet("P1", "P2", "P3");
     write("src/components/studio/M.tsx", BUTTON_VIEW);
     seedBaseline();
     const baseline = JSON.parse(
@@ -4858,6 +4953,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 载体挑棘轮里最朴素的 P1（视图层裸 `<button>`）：P71/P78/P79/P80/P81
    * 都在其他 PR 里升硬闸、走不到「新判据起点登记」这条分支了。 */
   it("--update 允许登记新判据起点、但拦下已有 rule id 的上升", () => {
+    demoteToRatchet("P1");
     write(
       "src/components/studio/P1Seed.tsx",
       [

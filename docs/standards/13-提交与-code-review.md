@@ -536,6 +536,10 @@ master 上本来就红（属别线），于是「一笔无关改动」会被别�
 （`lib/comfyui/reaper.ts`）83 个用例；改一个只被一块面板消费的筛选条 10 个。
 不按耗时取舍：跑多少由**改动的影响面**决定，这正是这一层的定义；嫌慢的出口是把
 大改动拆小（本来就该拆），而不是给解析加天花板。
+**钩子那一档另配并发**：C 组跑 `--maxWorkers=4`（不是配置里的 8）—— 钩子里
+A(tsc)、B(eslint)、D(二十多个判据脚本) 与它并行，再按 8 起 forks 就会抢不过来，
+现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
+respond`（几百条全过、退出码非零）。全量 `pnpm test` 仍走配置里的 8。
 
 判据由 `tests/affected-tests.test.ts` 钉住（17 条）：四条判据各一组夹具、**两跳
 传递**与 barrel 转出口（含「没转出去的 sibling 不算消费」这条反面）、被删文件的

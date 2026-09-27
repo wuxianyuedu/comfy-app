@@ -22,9 +22,12 @@
  *      `ui/page-loading` 的 `PageLoading`（块级）/ `Spinner`（行内 · 按钮内）、
  *      `ui/skeleton` / `ui/progress` 这类加载态基元，状态圆点的脉冲走
  *      `ui/status-dot`）
- *   —— P1~P3 合计走一条棘轮：**按文件记账、只许降不许升**，与
- *      `check-ui-logic-separation.cjs` / `check-theme-colors.cjs` 同一口径
- *      （基线 `scripts/.ui-primitives-baseline.json`）。
+ *   —— P1~P3 起初走的是**棘轮**（按文件记账、只许降不许升，与
+ *      `check-ui-logic-separation.cjs` / `check-theme-colors.cjs` 同一口径，基线
+ *      `scripts/.ui-primitives-baseline.json`）。存量清零后它们与其余判据一样进了
+ *      `HARD_GATE_RULES`：**现在 82 条全部须为 0**。棘轮这条路径留着，是给
+ *      **新引入的判据**起步用的（先冻结存量 → 清零 → 升硬闸，顺序不能反，
+ *      见 P82 那条的教训）。
  *
  *   P4 视图里再写一份 `::-webkit-scrollbar` 外观（**硬闸，不是棘轮**）——
  *      `src/app/globals.css` 是自绘滚动条的唯一出口（`.custom-scrollbar` /
@@ -310,10 +313,11 @@
  *   · `*.test.*` / `__tests__/**` 测试里的 DOM 与 mock 不算视图实现。
  *
  * 用法：
- *   node scripts/check-ui-primitives.cjs            # 检查（棘轮：只许降不许升）
+ *   node scripts/check-ui-primitives.cjs            # 检查（82 条硬闸全部须为 0）
  *   node scripts/check-ui-primitives.cjs --strict   # 基线下调也失败（强制收紧）
  *   node scripts/check-ui-primitives.cjs --report   # 只出清单，不判失败（排批次用）
- *   node scripts/check-ui-primitives.cjs --update   # 治理后重写基线（须伴随下降）
+ *   node scripts/check-ui-primitives.cjs --update   # 只给**新引入的棘轮判据**登记起点
+ *                                                  # （硬闸未清零时直接拒绝，不写基线）
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -3159,7 +3163,7 @@ const RULES = {
     },
   },
 
-  /* ── P68「视图层手写 `<input>` 或 `<textarea>`」（棘轮，§16.2.3 / §12.18）─────
+  /* ── P68「视图层手写 `<input>` 或 `<textarea>`」（硬闸，§16.2.3 / §12.18）─────
    * P67 是 ui/ 层判据（UI_ONLY_RULES），P68/P69 是**视图层**判据（默认作用域：
    * view + app + server，`ui/` `hooks/` `lib/` 走原有 EXEMPT_DIRS 短路）。
    * 2026-09-23 治理 settings/ 目录 9 处 raw input 之后，全库还剩约 40 处
@@ -3198,7 +3202,7 @@ const RULES = {
     },
   },
 
-  /* ── P69「视图层手写 `<input type="checkbox|radio">`」（棘轮，§16.2.3 / §12.18）
+  /* ── P69「视图层手写 `<input type="checkbox|radio">`」（硬闸，§16.2.3 / §12.18）
    * shadcn `ui/checkbox.tsx` 与 `ui/radio-group.tsx` 早已装（PR #925 拉齐到
    * 最新形态），但视图层仍有多处原生 `<input type="checkbox">` + `accent-*`
    * 着色档——浏览器 OS 级控件、深色主题下勾选态与整站焦点档不协调、
@@ -3234,7 +3238,7 @@ const RULES = {
     },
   },
 
-  /* ── P71「视图层手写 dark:palette 色（应走语义 token）」（棘轮，§4.11.1）───
+  /* ── P71「视图层手写 dark:palette 色（应走语义 token）」（硬闸，§4.11.1）───
    * shadcn `styling.md`「No manual `dark:` color overrides. Use semantic
    * tokens」+ 规范 §4.11.1「映射表里的颜色也必须走语义 token」。项目的
    * `--color-success` / `--color-warning` / `--color-destructive` /
@@ -3347,7 +3351,7 @@ const RULES = {
     },
   },
 
-  /* ── P75「视图层手搓空态卡」（棘轮，shadcn composition.md · Empty 基元）───
+  /* ── P75「视图层手搓空态卡」（硬闸，shadcn composition.md · Empty 基元）───
    * `pnpm dlx shadcn@latest add empty` 已装 `~/components/ui/empty.tsx`
    * （`<Empty>` + `EmptyHeader/Title/Description/Content/Media` 组合）、
    * 项目自立 `~/components/ui/empty-state.tsx`（`<EmptyState>` · page/error/hint
@@ -3406,7 +3410,7 @@ const RULES = {
     },
   },
 
-  /* ── P76「视图层裸写 <select>」（棘轮，规范 §16.2.3 / §12.18）───────────
+  /* ── P76「视图层裸写 <select>」（硬闸，规范 §16.2.3 / §12.18）───────────
    * P68 拦住了裸 `<input>` / `<textarea>`、P69 拦住了裸
    * `<input type=checkbox|radio>`；`<select>` 是同一族里的漏项。
    * 项目里已有两个合规出口：
@@ -3438,7 +3442,7 @@ const RULES = {
     },
   },
 
-  /* ── P78「视图层裸写 <label>」（棘轮，规范 §16.2.4.26 / §12.18）─────────
+  /* ── P78「视图层裸写 <label>」（硬闸，规范 §16.2.4.26 / §12.18）─────────
    * 与 P23 是同一族账的两层：
    *   · **P23**（硬闸，视图层已清零）数的是「`<label>` + 控件同文件出现」的
    *     **表单行组合形态**——15 处已收口到 `~/components/ui/form-field` 的
@@ -3470,7 +3474,7 @@ const RULES = {
     },
   },
 
-  /* ── P77「视图层手写 aria-pressed」（棘轮，shadcn forms.md）────────────
+  /* ── P77「视图层手写 aria-pressed」（硬闸，shadcn forms.md）────────────
    * shadcn `forms.md` 原文：`Option sets (2–7 choices) use ToggleGroup. Don't loop Button with manual active state.`
    *
    * 项目里 `~/components/ui/toggle-group` 装了（shadcn base-nova 版，内部
@@ -3506,7 +3510,7 @@ const RULES = {
     },
   },
 
-  /* ── P79「视图层无 dark: 前缀的浅色原色板」（棘轮，shadcn styling.md）──
+  /* ── P79「视图层无 dark: 前缀的浅色原色板」（硬闸，shadcn styling.md）──
    * P71 只管 `dark:` 前缀的调色板（把同一件事在明暗两处各写一遍），P79 补上
    * **无前缀的浅色版原色板** —— shadcn `styling.md` 原则 4 原文：`Use semantic colors. bg-primary, text-muted-foreground — never raw values like bg-blue-500.`
    *
@@ -3547,7 +3551,7 @@ const RULES = {
     },
   },
 
-  /* ── P80「视图层 w-N 与 h-N 同值应换 size-N」（棘轮，shadcn styling.md）──
+  /* ── P80「视图层 w-N 与 h-N 同值应换 size-N」（硬闸，shadcn styling.md）──
    * shadcn `styling.md` 原则：`Use size-* when width and height are equal.
    * size-10 not w-10 h-10.` `size-N` 是 `w-N h-N` 的简写、由 tailwind
    * 内建；同一份 `w-N h-N` 手写会：
@@ -3602,7 +3606,7 @@ const RULES = {
     },
   },
 
-  /* ── P81「视图层 `<Button>` 内 icon 缺 `data-icon=`」（棘轮，shadcn composition.md）──
+  /* ── P81「视图层 `<Button>` 内 icon 缺 `data-icon=`」（硬闸，shadcn composition.md）──
    * shadcn `composition.md`：`Icons in buttons need data-icon="inline-start"
    * or "inline-end" (Base UI + Tailwind v4 has-* selector).` 项目 `ui/button.tsx`
    * 的 `buttonVariants` size 变体（default / xs / sm / lg）里显式依赖这个 hook：
@@ -3703,7 +3707,7 @@ const RULES = {
     },
   },
 
-  /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（棘轮）─────────────────
+  /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（硬闸）─────────────────
    * `globals.css` 里 `.u-title-page` 注明就是「页面级标题（h1）统一规范」，可它
    * 引入至今只有 1 处消费者；屏级标题实际写在 11 个 h1 上，尺寸有 18 / 20 / 24 /
    * 34px 四五种 —— 同一个角色在不同屏大小不一，而 `.u-title` / `.u-title-page`
@@ -4051,6 +4055,26 @@ const HARD_GATE_RULES = new Set([
    * `dark:<palette>-N` 直接阻断，走语义 token 或就地 `p71-allow` 声明
    * （ANSI SGR 8 色 / 品牌渐变端点 / 类别装饰色 · P71/P79 共享一份 allow）。 */
   "P71",
+  /* ── 12 条 0 值棘轮一次性升为硬闸 ────────────────────────────────────────
+   * 升闸的前提不是「数字是 0」，而是**那 0 数得出来**：这几条此前都带正例
+   * 用例（喂一段违规代码、断言它被数到并阻断），所以 0 = 清完了，不是扫描器
+   * 瞎了（P82 的教训：判据用粗锚时 78 看着像 0）。差别只在 `--update`：
+   * 棘轮还能把新增量登记成「起点」，硬闸连登记都拒 —— 规范标题写着「硬闸」
+   * 而判据其实是棘轮的那几条（P44/P45/P46/P65/P66）在这里一并名实相符。
+   * 例外出口沿用 P71/P79 的形态：确有业务需要时**就地写 allow 标记 + 理由**，
+   * 不给规则加全局豁免目录（加了它就等于没有）。 */
+  "P1", // 视图内手写 <button>
+  "P2", // 视图内自建 createPortal 浮层
+  "P3", // 视图内自写 spinner / pulse 动画
+  "P44", // 自写文本截断
+  "P45", // 自写指数退避算术
+  "P46", // 手拼日期串
+  "P65", // 忙碌位复位写在成功路径上
+  "P66", // 自建重入闸门
+  "P67", // ui/ 层自造组件绕开已装基元
+  "P68", // 视图层手写 <input> / <textarea>
+  "P69", // 视图层手写 <input type=checkbox|radio>
+  "P83", // 屏级标题不走字阶档 / h1 上硬写字号
   /* P82（shadcn composition.md · 「悬停说明走 Tooltip、不走原生 title」）：
    * #1123 引入时按粗锚冻结 78 处，治理那一批（#1135）用 TypeScript AST 复扫
    * 发现真存量是 157 处 / 69 文件 —— 粗锚 `[^>]*` 会被属性段里箭头函数的 `>`
@@ -4162,8 +4186,9 @@ function writeBaseline(files) {
       {
         generatedAt: new Date().toISOString().slice(0, 10),
         note:
-          "视图层自实现 UI 基元的存量（规范 16 §16.2.3）。棘轮只许下降；" +
-          "新增请先改用 ui/ 基元，不要用 --update 放水。" +
+          "视图层自实现 UI 基元的存量（规范 16 §16.2.3）。当前全部判据都是硬闸" +
+          "（须为 0），下面的 rules 只登记**仍是棘轮**的那几条 —— 空对象是正常状态，" +
+          "不是基线丢了。新增违规请先改用 ui/ 基元，不要用 --update 放水。" +
           "豁免口径见脚本内 EXEMPT_DIRS（与规范 §16.2.3 同源）。",
         rules: Object.fromEntries(
           Object.entries(RULES)
@@ -4184,13 +4209,14 @@ function main() {
   const prev = fs.existsSync(BASELINE)
     ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
     : null;
-  const baseFiles = prev?.files ?? null;
+  let baseFiles = prev?.files ?? null;
 
   if (UPDATE) {
     const gate = hardGateHits(now);
     if (gate.length) {
       console.error(
-        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P35）。\n  " +
+        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（" +
+          `${HARD_GATE_RULES.size} 条，全部须为 0）。\n  ` +
           gate.join("\n  ") +
           "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
           "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）、" +
@@ -4264,11 +4290,22 @@ function main() {
     process.exit(0);
   }
 
-  if (!baseFiles) {
+  /* 「先有基线才能判」只对**棘轮**成立：硬闸的判据是「恒为 0」，跟基线在不在
+   * 没关系。把两者绑死会造出一个假前置 —— 全库判据都升成硬闸之后，删掉基线文件
+   * 竟能让门禁报「先跑 --update」而不去数那 82 条（`--update` 此时还会被硬闸拒，
+   * 于是门禁自己把自己锁死）。 */
+  const hasRatchetRules = Object.keys(RULES).some(
+    (id) => !HARD_GATE_RULES.has(id),
+  );
+  if (!baseFiles && hasRatchetRules) {
     console.error(
       "[ui-primitives] 基线文件缺失：先执行 node scripts/check-ui-primitives.cjs --update",
     );
     process.exit(1);
+  }
+  if (!baseFiles) {
+    // 没有棘轮判据可比：给一份空账，后面的比对天然只剩硬闸一条路。
+    baseFiles = {};
   }
 
   const problems = hardGateHits(now);
@@ -4301,22 +4338,10 @@ function main() {
       `（规范 16 §16.2.3）`,
   );
   console.log(
-    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档 / P16 自绘进度条 / P17 自写键值行 / P18 裸写 img·video / P19 手写媒体拖拽源 / P20 自写全局快捷键 / P21 自写滚动跟随 / P22 自写外部导航 / P23 自写表单行 / P24 自写读文件 / P25 自写 localStorage /
-  P26 自写 Enter 提交 / P27 自写异步动作反馈样板 / P28 自读媒体自然尺寸 /
-  P29 手拼查询串 / P30 按条目共用错误位 / P31 自写作废守卫 / P32 手拼错误信封 /
-  P33 自写唯一 id / P34 自写报错建议词表 / P35 亲手拼画布节点 /
-  P36 手写树的缩进与子行容器 / P37 自写「某一条在忙」的执行态 /
-  P38 手写元素几何的算术 / P39 裸写「等一帧再做事」的调度 /
-  P40 裸调 copyText 不接反馈出口 / P41 自写入参收窄与 isRecord /
-  P42 手拼错误文案的动作前缀 / P43 手写复制失败提示 / P44 自写文本截断 /
-  P45 自写指数退避 / P46 手拼日期串 / P47 自写扩展名⇄MIME 表 /
-  P48 自写宽松对象视图 / P49 自写文件名安全化 /
-  P50 自写数字精度格式化 / P51 自写去重合并 / P52 自拼自切 data URL /
-  P53 手写键盘键判据 / P54 自写 SGR 转义序列 / P55 自写书写法换算 /
-  P56 手工把路径变成展示文本 / P57 自写 props 剔除表 / P58 自写异步超时 race /
-  P59 手写数值夹取 / P60 自写大写归一 / P61 裸写应用事件 /
-  P62 自写事件值改写样板 / P63 自写分页与窗口切片 / P64 高频进度回调直写 state /
-  P65 忙碌位复位写在成功路径上 / P66 自建重入闸门，须为 0）：${hardGateHits(now).length} 处`,
+    /* 不把每条硬闸的名字手抄进输出：那份清单已经漂过（写着 P4~P66，而 P67~P83
+     * 与本轮升闸的 12 条都不在里面）。名字看 `--report`，这里只报「多少条、响了几条」。 */
+    `[ui-primitives] 硬闸判据 ${HARD_GATE_RULES.size} 条（全部须为 0）：` +
+      `${hardGateHits(now).length} 处命中`,
   );
 
   if (problems.length) {
