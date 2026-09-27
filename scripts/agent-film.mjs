@@ -11,7 +11,7 @@
 // 用法：
 //   pnpm agent:film --project <proj_..> --idea "一句话创意" \
 //       --image-workflow <图类工作流id> --video-workflow <视频工作流id> \
-//       [--approval auto|stage|shot] [--url http://127.0.0.1:3000] [--dry-run] [--json]
+//       [--approval auto|stage|shot] [--url http://127.0.0.1:3000] [--dry-run] [--json] ← 可选
 //
 // 纯逻辑（parseArgs / build*Call / superjson 解析 / 轮询状态机）都单独导出，便于离线单测；
 // 真实网络只在 main() 里发生，`--dry-run` 只打印将要发出的请求。

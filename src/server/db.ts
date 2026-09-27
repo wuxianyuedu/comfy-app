@@ -83,6 +83,18 @@ export const db = globalForDb.db ?? drizzle(client, { schema });
 
 if (env.NODE_ENV !== "production") globalForDb.db = db;
 
+/**
+ * Close the underlying libsql client (tests only today).
+ *
+ * Nothing in the app ever closes it: the Next server process ends with the
+ * connection still open. Tests that point `DATABASE_URL` at a temp file need
+ * the handle released before they can delete that file on Windows (an open
+ * sqlite file cannot be unlinked -- `rmSync` fails with EPERM).
+ */
+export function closeDb(): void {
+  client.close();
+}
+
 /** Liveness probe for the health route (keeps the route off `db` / `orm`
  *  directly, see standards 1 1.10). Same `SELECT 1` the route used to run.
  *

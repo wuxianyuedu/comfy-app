@@ -18,8 +18,8 @@
  * 换成 lucide `Loader2Icon`（`<svg>`）之后**这条坑天然不存在**——`<svg>`
  * 是 replaced element、`width` / `height` 直接生效、不依赖调用处的
  * `display`。所以旧的 `inline-block` 断言删掉，改成断言**新契约**：
- *   · `data-slot="spinner"` / `role="status"` / `aria-label="Loading"`
- *     ——a11y 三件套由基元给出；
+ *   · a11y 三件套由基元给出：`data-slot="spinner"` /
+ *     `role="status"` / `aria-label="Loading"`；
  *   · `size-6` 在调用处生效（jsdom 无布局、只能验类名）；
  *   · `animate-spin` 走基元而非调用处自写（P3 判据的合规方向）。
  */
