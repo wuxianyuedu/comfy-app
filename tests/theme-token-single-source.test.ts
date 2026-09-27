@@ -137,6 +137,7 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       "--spacing-", // 间距刻度
       "--z-index-", // 层级刻度
       "--radius-", // 圆角刻度
+      "--text-", // 字阶刻度（.u-title / .u-title-page / .u-title-stage / .u-title-hero）
       "--xy-", // React Flow 变量
       "--json-view-", // json 查看器主题
       "--shimmer-", // 骨架微光

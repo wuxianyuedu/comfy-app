@@ -81,7 +81,7 @@ export function AgentOverlay({
         </span>
         {/* p71-allow:end */}
         <div className="flex-1">
-          <h3 className="text-ink text-[13px] font-semibold">创作指挥 Agent</h3>
+          <h3 className="text-ink u-title">创作指挥 Agent</h3>
           <p className="text-muted-foreground text-[10px]">
             用对话指挥完整工坊流程
           </p>

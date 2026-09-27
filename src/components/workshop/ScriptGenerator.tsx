@@ -150,7 +150,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
       {/* ── 生成剧本 ── */}
       <section className="border-primary-soft bg-primary-soft/30 rounded-xl border p-4">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-primary flex items-center text-sm font-semibold">
+          <h3 className="text-primary u-title flex items-center">
             <Icon
               name="sparkles"
               size={14}

@@ -220,7 +220,7 @@ export function FinalComposer({
           <Button
             variant="primary-solid"
             onClick={exportPlan}
-            className="shadow-primary-500/20 h-auto rounded-xl px-4 py-2 font-semibold shadow-lg"
+            className="h-auto rounded-xl px-4 py-2 font-semibold"
           >
             导出合成清单
           </Button>
