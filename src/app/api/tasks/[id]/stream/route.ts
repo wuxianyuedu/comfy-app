@@ -51,11 +51,12 @@ export async function GET(
               ? task.logs
               : [];
             // 优先回放 runner 内存日志（state().logs），它是每次 log() 写入的完整
-            // 现场、也是持久化到 DB 的源，恒为 DB 日志的超集。enqueue()/processQueue()
-            // 在 startGenerate 返回前、前端 EventSource 尚未订阅时就会输出
-            // 「任务已加入执行队列」「输入参数（workflowInputs，N 项）」等行；这些行
-            // 落库走 200ms 防抖，若 SSE 在防抖窗口内连接，只读 DB 会漏掉它们，
-            // 表现为「第二次执行（WS 已开，processQueue 同步发日志）没有显示执行参数」。
+            // 现场、也是持久化到 DB 的源，恒为 DB 日志的超集。提交与领取
+            // （`kickQueue` → `claimAndDispatchOnce`）在 startGenerate 返回前、
+            // 前端 EventSource 尚未订阅时就会输出「任务已从队列领取」
+            // 「输入参数（workflowInputs，N 项）」等行；这些行落库走 200ms 防抖，
+            // 若 SSE 在防抖窗口内连接，只读 DB 会漏掉它们，
+            // 表现为「第二次执行（WS 已开、领取同步发日志）没有显示执行参数」。
             // 这里改读内存日志兜底：内存为空（如服务器重启）时回落 DB 日志。
             const inMemory = getLogs(id);
             const replaySrc = inMemory.length > 0 ? inMemory : existing;

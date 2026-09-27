@@ -1,5 +1,5 @@
 /**
- * `repository-task-impl.ts` — Task 仓储**执行链侧** 16 个方法的实现（工厂）
+ * `repository-task-impl.ts` — Task 仓储**执行链侧** 17 个方法的实现（工厂）
  * ===========================================================================
  *
  * P3 §5 第 1 期·Phase 2-A-1：从 `repository-task.ts` 抽出的 exec 侧 SQL 主体，
@@ -94,6 +94,19 @@ export type TaskWriteOutcome =
  */
 function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
   return {
+    /** 排队行的只读窥视（P3 §5 ADR §14 D1 的第二刀）：领取循环在「本进程现在还
+     *  跑不动」时需要告诉用户它在等什么，而**不能**为此就把行领走（领了不跑正是
+     *  这一刀要消灭的形态）。只取 id、按提交序、不改任何状态。 */
+    async listQueuedIds(owner: TaskClaimMode, take: number): Promise<string[]> {
+      const rows = await db
+        .select({ id: task.id })
+        .from(task)
+        .where(and(eq(task.status, "QUEUED"), ownedBy(owner)))
+        .orderBy(task.createdAt)
+        .limit(take);
+      return rows.map((row) => row.id);
+    },
+
     /**
      * 队列领取（P3 §5 ADR §6/§7 Phase 3-A）：单语句
      * `UPDATE ... WHERE id IN (SELECT ... ORDER BY createdAt LIMIT ?) RETURNING id`。
@@ -252,10 +265,11 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
   };
 }
 /**
- * 16 个 exec-chain 方法的实现工厂（13 个 delegate 自 class + Phase 3-A 新增的
- * `claimNextQueued` + 3-B1 新增的 `findExecJob`；后两者暂不进 class delegate——
- * 领取循环是 host 独占的 pull，直接调 impl）。4-B2 又加了 `replaceRawCli` /
- * `findRawCli` 两条，并让 `claimedAt` 在三处写入（领取、`markRunning`、进度帧）。
+ * 17 个 exec-chain 方法的实现工厂（全部 delegate 自 class；原本「host 独占 pull」
+ * 的 `claimNextQueued` / `findExecJob` 在 §14 D1 第二刀之后也进了类——Next 现在
+ * 同样是领取宿主，两侧共用同一条 `executor-dispatch`）。4-B2 加了 `replaceRawCli`
+ * / `findRawCli` 两条，并让 `claimedAt` 在三处写入（领取、`markRunning`、进度帧）；
+ * 4-B3 加 `listQueuedIds`（只读窥视排队行，用于「在等什么」的提示与广播）。
  * 其中「领取 / 孤儿扫描 / 产物落表」那五条由上面的 `createQueueScanSection` 构造、
  * 在这里 `...` 并进同一个返回对象——拆的是函数不是文件，`TaskRepoImpl` 的形状不变。
  *

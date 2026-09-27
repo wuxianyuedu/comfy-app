@@ -1,11 +1,9 @@
 {
-  "generatedAt": "2026-09-22",
+  "generatedAt": "2026-09-27",
   "ruleVersion": 1,
   "note": "src/lib 生产代码里 `void someFn(...)` 语句形式的数量(棘轮,只许降不许升)。判据:TypeScript AST 的 ExpressionStatement > UnaryExpression(void) > CallExpression。规则版本变了必须同步改脚本常数。",
-  "total": 14,
+  "total": 7,
   "files": {
-    "src/lib/comfyui/enqueue.ts": 4,
-    "src/lib/comfyui/executor-scheduler.ts": 3,
     "src/lib/comfyui/reaper.ts": 2,
     "src/lib/comfyui/runner-state.ts": 3,
     "src/lib/project-canvas/canvas-store.ts": 2

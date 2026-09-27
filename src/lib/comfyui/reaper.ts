@@ -23,6 +23,7 @@ import {
   log,
   persistLogs,
   claimFinalize,
+  releaseDispatchSlot,
   type RunnerState,
 } from "./runner-state";
 import { logger } from "~/lib/core/logger";
@@ -81,12 +82,10 @@ async function resolveTaskRepo(): Promise<TaskRepoForReaper | null> {
 }
 
 /* ── DB 侧的 QUEUED 回收器 ─────────────────────────
- * 症状：dev server 冷重启之后，状态为
+ * 症状：宿主进程冷重启之后，状态为
  *   `status=QUEUED, promptId=null, finishedAt=null` 的任务会永远挂着 ——
- *   进程内的 `s.queue` 没了，心跳只作用于（上面的）内存队列，
- *   而没有任何代码路径……
- *   re-claims DB-side QUEUED rows.  The user sees "加入队列后就不
- *   继续执行了".
+ *   进程内的在飞记账（原 `s.queue`，现 `pendingDispatch`）没了，而库里那行
+ *   没人再领，用户看到的是"加入队列后就不继续执行了"。
  *
  * 修法有两层：
  *   (a) reapStaleQueuedTasks() —— 模块加载时跑一次，之后每 30s 一次。
@@ -174,7 +173,7 @@ const reaperState: ReaperGlobal = (globalThis.__comfyReaper_v2 ??= {
  * 天真的回收器就会把它错杀。
  *
  * 判据信号，从最便宜的排起：
- *   (a) 还在 `s.queue` 里等着 → 马上要出队；
+ *   (a) 本进程已领走它（`pendingDispatch`，§14 D1 第二刀后取代原来的内存队列）；
  *   (b) 有 comfy-cli 子进程在驱动它（cliProcs）→ raw 路径在飞，
  *       promptId 还没回传；
  *   (c) executedWorkflow 已有记录 → raw 路径已经起步。
@@ -182,12 +181,14 @@ const reaperState: ReaperGlobal = (globalThis.__comfyReaper_v2 ??= {
  * 与 RUNNING 回收器的 `promptToTask` 守卫一致。
  */
 export function isTaskClaimedInProcess(
-  s: Pick<RunnerState, "queue" | "executedWorkflow" | "settled">,
+  s: Pick<RunnerState, "pendingDispatch" | "executedWorkflow" | "settled">,
   hasCliProc: (taskId: string) => boolean,
   taskId: string,
 ): boolean {
   return (
-    s.queue.some((job) => job.taskId === taskId) ||
+    /* 本进程领走了它、还没交出子进程（或已交出但还没收口）——原来这一路读的是
+     * 内存队列 `s.queue`，那条队列已随 §14 D1 第二刀删除。 */
+    s.pendingDispatch.has(taskId) ||
     hasCliProc(taskId) ||
     s.executedWorkflow.has(taskId) ||
     /* `settled` 是 reaper 与正常执行路径共享的「终态已认领」集合
@@ -359,7 +360,7 @@ export async function reapStaleQueuedTasks(): Promise<void> {
         log(t.id, "error", reason);
         /*  上面那行 error 日志与下面的终态写入就是用户拿到的全部出口：SSE 自 ADR
          *  §13-3C 起只读库，进程内合成事件那条通道随 §14 D1 退役了。这里也**不**调
-         *  processQueue()——这个任务在内存里根本没有作业，我们明确不希望把一个
+         *  kickQueue()——被回收的行已经落终态、不会再被领一次，我们也不希望把一个
          *  未知工作流重新入队。尾部的 persistLogs 把原因行与终态同批落库。 */
         const outcome = await taskRepository.finalizeFailure(t.id, reason);
         if (outcome !== "written") {
@@ -370,6 +371,10 @@ export async function reapStaleQueuedTasks(): Promise<void> {
           );
         }
         await persistLogs(t.id);
+        /* 本进程若正握着这一条在飞，收口后必须归还槽位——否则一条被回收的死任务
+         * 会把并发额度永久占住，领取循环从此不再往前走（内存队列时代这处只减计数器，
+         * 泄漏面相同）。归还后靠 2s 的领取节拍继续推进，这里不额外 kick。 */
+        releaseDispatchSlot(t.id);
       } finally {
         reaperState.reaping.delete(t.id);
       }
@@ -437,6 +442,10 @@ export async function reapStaleRunningTasks(): Promise<void> {
             );
           }
           await persistLogs(t.id);
+          /* 本进程若正握着这一条在飞，收口后必须归还槽位——否则一条被回收的死任务
+           * 会把并发额度永久占住，领取循环从此不再往前走（内存队列时代这处只减计数器，
+           * 泄漏面相同）。归还后靠 2s 的领取节拍继续推进，这里不额外 kick。 */
+          releaseDispatchSlot(t.id);
         } finally {
           reaperState.reaping.delete(t.id);
         }
@@ -545,6 +554,10 @@ export async function reapStaleRunningTasks(): Promise<void> {
           );
         }
         await persistLogs(t.id);
+        /* 本进程若正握着这一条在飞，收口后必须归还槽位——否则一条被回收的死任务
+         * 会把并发额度永久占住，领取循环从此不再往前走（内存队列时代这处只减计数器，
+         * 泄漏面相同）。归还后靠 2s 的领取节拍继续推进，这里不额外 kick。 */
+        releaseDispatchSlot(t.id);
       } finally {
         reaperState.reaping.delete(t.id);
       }

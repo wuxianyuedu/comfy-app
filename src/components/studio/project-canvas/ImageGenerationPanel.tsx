@@ -386,7 +386,7 @@ export function ImageGenerationPanel({
                   : "▶ 用此工作流生成"}
             </Button>
             {/* 卡住任务的逃生通道。
-             * 当 runner 的 raw 路径把`s.active` 占着不放时，
+             * 当 runner 的 raw 路径把在飞槽位占着不放时，
              * 图片节点曾永远卡在「生成中…」（早前的修复
              * 堵上了泄漏，但更早的在途任务仍靠
              * 这个按钮恢复）。调用 POST /api/tasks/{id}/cancel，

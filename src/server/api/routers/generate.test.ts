@@ -31,8 +31,8 @@ vi.mock("~/lib/log/app-runtime-log", async (importOriginal) => {
   };
 });
 
-const { enqueueMock } = vi.hoisted(() => ({
-  enqueueMock: vi.fn<(job: unknown) => void>(() => undefined),
+const { kickMock } = vi.hoisted(() => ({
+  kickMock: vi.fn<(job: unknown) => void>(() => undefined),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -46,8 +46,8 @@ vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-vi.mock("~/lib/comfyui/enqueue", () => ({
-  enqueue: enqueueMock,
+vi.mock("~/lib/comfyui/executor-continuation", () => ({
+  kickQueue: kickMock,
   subscribe: vi.fn(),
   getLogs: vi.fn(),
   cancelTask: vi.fn(),
@@ -106,17 +106,12 @@ describe("generate.generate（工作流库工作流）", () => {
     expect(row?.claimedBy).toBe("inline");
     // 执行载荷建行即落库（host 模式共用同一建行形状）
     expect(row?.execPayload).toEqual(RAW_WF);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
-    const job = enqueueMock.mock.calls[0]?.[0] as {
-      taskId: string;
-      rawJson?: unknown;
-      overrides?: unknown;
-    };
-    expect(job.taskId).toBe(res.taskId);
-    expect(job.rawJson).toEqual(RAW_WF);
-    expect(job.overrides).toEqual([
-      { nodeId: "1", name: "text", value: "a cat" },
-    ]);
+    // 派发不再经内存 Job（§14 D1 第二刀）：载荷只随行走（上面两条断言：
+    // claimedBy=inline 与 execPayload），这里踢一次只是省掉等 2s 节拍。
+    expect(kickMock).toHaveBeenCalledTimes(1);
+    expect(
+      (row?.params as { workflowInputs?: unknown }).workflowInputs,
+    ).toEqual([{ nodeId: "1", name: "text", value: "a cat" }]);
   });
 
   /**
@@ -165,9 +160,9 @@ describe("generate.generate（工作流库工作流）", () => {
         workflow: "wf-host",
         prompt: "a cat",
       });
-      // 执行整个让给 host：Next 进程内不许再驱动这一行（双驱动 = ADR §6 的
-      // 双 finalize 事故形态）
-      expect(enqueueMock).not.toHaveBeenCalled();
+      // 执行整个让给 host：Next 不驱动这一行。kick 仍然会调一次，但双执行不成立
+      // ——领取谓词 ownedBy("inline") 看不见 host 行（由 impl 的 §6 归属组钉住）。
+      expect(kickMock).toHaveBeenCalledTimes(1);
       const row = tdb.$tables.tasks.find((t) => t.id === res.taskId);
       expect(row?.status).toBe("QUEUED");
       expect(row?.claimedBy).toBe("host");
@@ -182,7 +177,7 @@ describe("generate.generate（工作流库工作流）", () => {
     await expect(
       createCaller(makeCtx()).generate({ workflow: "no-such-workflow" }),
     ).rejects.toThrow("Workflow not found");
-    expect(enqueueMock).not.toHaveBeenCalled();
+    expect(kickMock).not.toHaveBeenCalled();
     expect(tdb.$tables.tasks).toHaveLength(0);
   });
 
@@ -194,7 +189,7 @@ describe("generate.generate（工作流库工作流）", () => {
     await expect(caller.generate({ workflow: "" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
-    expect(enqueueMock).not.toHaveBeenCalled();
+    expect(kickMock).not.toHaveBeenCalled();
     expect(tdb.$tables.tasks).toHaveLength(0);
   });
 });
@@ -216,15 +211,13 @@ describe("generate.generate（RAW 原件执行路径）", () => {
     });
     const row = tdb.$tables.tasks.find((t) => t.id === res.taskId);
     expect(row?.type).toBe("T2V");
-    const job = enqueueMock.mock.calls[0]?.[0] as {
-      taskId: string;
-      rawJson?: unknown;
-      overrides?: unknown;
-      prompt?: unknown;
-    };
-    expect(job.rawJson).toEqual(rawJson);
-    expect(job.overrides).toEqual([{ nodeId: "1", name: "text", value: "hi" }]);
-    expect(job.prompt).toBeUndefined();
+    // 载荷随行：execPayload 就是模板的 RAW 原件，覆盖项在 params.workflowInputs。
+    // 「不再走 /prompt」这条口径现在由 dispatch 只读 execPayload 保证
+    // （见 executor-dispatch.test.ts 的「两种载荷都只交 comfy-cli」组）。
+    expect(row?.execPayload).toEqual(rawJson);
+    expect(
+      (row?.params as { workflowInputs?: unknown }).workflowInputs,
+    ).toEqual([{ nodeId: "1", name: "text", value: "hi" }]);
   });
 
   it("边界：模板 rawJson 为空 → 报「没有可执行内容」", async () => {
@@ -237,7 +230,7 @@ describe("generate.generate（RAW 原件执行路径）", () => {
     await expect(
       createCaller(makeCtx()).generate({ workflow: "wf-empty" }),
     ).rejects.toThrow("工作流没有可执行内容");
-    expect(enqueueMock).not.toHaveBeenCalled();
+    expect(kickMock).not.toHaveBeenCalled();
   });
 
   it("越权/不存在：非本人且不存在的 workflow → 'Workflow not found'", async () => {

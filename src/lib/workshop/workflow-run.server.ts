@@ -15,7 +15,7 @@ import {
   taskRepository,
   workflowTemplateRepository,
 } from "~/lib/core/repository";
-import { enqueue } from "~/lib/comfyui/enqueue";
+import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
@@ -103,15 +103,11 @@ export async function createWorkflowRunTask(
   if (!hasExecutableWorkflow(tpl)) {
     throw new Error(`工作流没有可执行内容（rawJson 为空）：${tpl.name}`);
   }
-  /* host 模式下不进程内 enqueue：行已落 claimedBy='host'，由 executor host
-   * 领取执行（与 generate 路由同一分叉，P3 §5 ADR §13-3B1）。 */
-  if (executorClaim === "inline") {
-    enqueue({
-      taskId: task.id,
-      workflowName: tpl.name,
-      rawJson: tpl.rawJson,
-      overrides: workflowInputs,
-    });
-  }
+  /* 提交只写库里那一行（`claimedBy` 决定归谁领）——P3 §5 ADR §14 D1 第二刀：
+   * 这里过去对 inline 片额外调 `enqueue()` 往进程内存队列推一份，于是「派发的
+   * 真相」有两份（内存 vs 库），host 与 Next 各读各的。现在两宿主只走
+   * `executor-dispatch.ts` 那一条 pull；下面这一次 kick 纯粹是**省掉等节拍**
+   * （不推进行内队列），行归对侧时它自然空转、不会双执行。 */
+  kickQueue();
   return { taskId: task.id, workflowName: tpl.name, taskType: tpl.taskType };
 }
