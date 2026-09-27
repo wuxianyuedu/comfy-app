@@ -42,6 +42,27 @@ import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
 export type GenerateInput = RouterInputs["generate"]["generate"];
 
 /* 创建一个本地 ComfyUI 生成任务；resolve 出任务 id。 */
+/**
+ * 给一次生成补上**归属**：属于哪个项目、为哪一镜跑的。
+ *
+ * 为什么单独一个出口：工坊有三条按镜生成的路径（分镜段的单镜生图、镜头生图段、
+ * 视频段各一条），三处都要往同一份入参上挂这一对字段。各写一遍就会各漂一次，
+ * 而「这一镜出过图吗」以后只能由这两个字段回答。
+ *
+ * 空的 `projectId` **不写成空串**：「没有归属」与「归属是空串」在库里必须能区分，
+ * 否则统计会把两者并成一类，历史行（从没写过归属的那批）也会污染结论。
+ */
+export function withGenerationAttribution(
+  input: GenerateInput,
+  attribution: { projectId?: string | null; shotId?: string | null },
+): GenerateInput {
+  return {
+    ...input,
+    ...(attribution.projectId ? { projectId: attribution.projectId } : {}),
+    ...(attribution.shotId ? { shotId: attribution.shotId } : {}),
+  };
+}
+
 export async function startLocalGenerate(
   input: GenerateInput,
 ): Promise<string> {

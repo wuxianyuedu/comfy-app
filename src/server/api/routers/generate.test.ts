@@ -119,6 +119,38 @@ describe("generate.generate（工作流库工作流）", () => {
     ]);
   });
 
+  /**
+   * 归属列：健康度条要能回答「这一镜出过图吗」，靠的就是建行时这两列。
+   * 三条断言各有其因：写了要落库、**没写必须是 NULL 而不是空串**（否则「无归属」
+   * 与「归属为空」在库里同一形状，历史行会被误并进统计），以及 shotId 不写时同样落 NULL。
+   */
+  it("带上 projectId / shotId 时落进归属列，缺省时落 NULL 而不是空串", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-lib",
+      userId: "user-a",
+      name: "库生图",
+      taskType: "T2I",
+      rawJson: RAW_WF,
+    });
+    const attributed = await createCaller(makeCtx()).generate({
+      workflow: "wf-lib",
+      prompt: "a cat",
+      projectId: "proj_1",
+      shotId: "shot-3",
+    });
+    const rowA = tdb.$tables.tasks.find((t) => t.id === attributed.taskId);
+    expect(rowA?.projectId).toBe("proj_1");
+    expect(rowA?.shotId).toBe("shot-3");
+
+    const bare = await createCaller(makeCtx()).generate({
+      workflow: "wf-lib",
+      prompt: "a cat",
+    });
+    const rowB = tdb.$tables.tasks.find((t) => t.id === bare.taskId);
+    expect(rowB?.projectId).toBeNull();
+    expect(rowB?.shotId).toBeNull();
+  });
+
   it("host 模式（COMFY_EXECUTOR=host）：建 host 归属行 + 落 execPayload，**不**进程内 enqueue", async () => {
     process.env.COMFY_EXECUTOR = "host";
     try {
