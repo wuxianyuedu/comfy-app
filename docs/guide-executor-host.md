@@ -96,13 +96,16 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
   `QUEUED`（带 `claimedBy`），**谁执行由领取决定**——Next 与 host 各自跑同一个
   `executor-dispatch.ts`，按自己的归属片 `claimNextQueued` 领行再交 comfy-cli。
   三点可见后果：
-  1. `RUNNING` 只剩一个意思（真的在跑）。此前 Next 侧另有一条内存队列，行被领走
-     后可能还在内存里等槽，状态栏的「排队数」因此恒为 0；现在那条队列没了。
+  1. `RUNNING` 只剩一个意思（真的在跑）。此前 host 那条领取循环把行翻成 `RUNNING`
+     之后，它还可能在进程内存队列里等槽，那段窗口里状态栏的「排队数」数出来是 0
+     （inline 侧等待的行仍是 `QUEUED`，计数没错）；现在那条队列没了。
   2. **就绪前不领行**：ComfyUI 没起来 / WS 没连上时行留在 `QUEUED`，等就绪的下一拍
      才被领走（提交后那一次即时 kick 通常就够，撞上空窗最多等 2s）。等待期间任务
      日志里会有一行「⏳ 等待 ComfyUI WebSocket 连接就绪…」。
-  3. 冷启动遗留在 `QUEUED` 的行现在**会被领回来执行**（以前只有 host 那条 pull
-     会救，inline 那条看不见库，只能等回收器判失败）。
+  3. 冷启动遗留在 `QUEUED` 的行**两宿主都会领**（以前只有 host 那条 pull 会救，
+     inline 那条看不见库，只能等回收器判失败）。**但窗口只有 30s**：跨过 `STALE_MS`
+     的排队行会被新宿主的首扫当场判成「请重新执行」而不是被领回，机制与实测时刻见
+     下方「崩溃恢复」，判决语义的收口在 ISSUE #1204。
   循环的启动点与 reaper 同形态：**两处显式调用**——Next 侧
   `src/instrumentation.ts` 的 nodejs 分支、host 侧 `scripts/executor-host.mjs`
   注入链之后（host 自己的 tick 驱动同一个 `claimAndDispatchOnce`，不再起第二条循环）。
@@ -128,6 +131,16 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
   起，不再靠模块加载自启）：Next 侧 = `src/instrumentation.ts` 的 nodejs 分支，
   host 侧 = `scripts/executor-host.mjs` 注入链之后的 `startReaper()`；起表即首扫
   就是 Q2 对账，之后两进程各自按 30s 常驻扫自己那一片（分片判据见上）。
+  **`QUEUED` 遗留行的窗口只有 30s，而且首扫必赢**：首扫在 `startReaper()` 里当场
+  发起，早于领取循环 `setInterval` 的注册（两宿主都是这个顺序），而第一拍最早也要
+  等 1.5s、还要过 WS OPEN 门控。实测（副本库 + 真 ComfyUI，两个不同 pid 的宿主）：
+  aged 48s 的遗留行在新宿主 `inject-ok 02:35:27.684` 之后 1.4s（`02:35:29.052`）被
+  `marked 1 stale QUEUED task(s) as FAILED`，而同批 boot 诊断数出的是
+  `hostShardQueued=1`——**同一时刻这条行对领取循环完全可领**；把重启间隔压到 12s
+  （aged ≈13s）时，新宿主 `18:38:03.127Z` 把它领回并跑完 `SUCCEEDED`（`claimedAt`
+  由新宿主写）。所以「重启后排队任务自动续跑」目前只在 <30s 的重启里成立；那条
+  死信规则针对的形状（`QUEUED` 且无 `promptId` = raw 路径正在飞）已经随 4-B3 消失，
+  判决语义本身的收口见 ISSUE #1204。
   dev 下 Turbopack 会**懒编译** instrumentation，实测 `✓ Ready` 之后约 40s 才跑完
   首扫——冷启动后短暂看到遗留行还在 `QUEUED`/`RUNNING` 属正常，不是没接上。
   「已被领取、但 `prompt_id` 还没回传」的 `RUNNING` 行同样在回收范围内
