@@ -84,18 +84,22 @@ describe("RuntimeLogBox", () => {
     const trigger = screen.getByLabelText("切换要查看的启动");
     expect(trigger.textContent).toContain("10:07:41 · ▶ ComfyUI 启动会话");
 
+    /* 选项是**异步挂载**的：Base UI 的弹层走 portal，`user.click` 落下时它还没
+     * 进 DOM。同步 `getAllByRole` 在空载的事件循环里恰好来得及，CPU 被并行用例
+     * 抢满时就查不到（实测红在 `Unable to find an accessible element with the
+     * role "option"`）—— 这里要的是「等到它出现」，不是「再快一点」。 */
     await user.click(trigger);
-    const labels = screen
-      .getAllByRole("option")
-      .map((option) => option.textContent);
+    const labels = (await screen.findAllByRole("option")).map(
+      (option) => option.textContent,
+    );
     expect(labels).toEqual([
       "10:01:03 · ▶ ComfyUI 启动会话",
       "10:07:41 · ▶ ComfyUI 启动会话",
     ]);
 
-    const first = screen
-      .getAllByRole("option")
-      .find((option) => option.textContent?.startsWith("10:01:03"));
+    const first = (await screen.findAllByRole("option")).find((option) =>
+      option.textContent?.startsWith("10:01:03"),
+    );
     if (!first) throw new Error("弹层里没有 10:01:03 那一档会话");
     await user.click(first);
     expect(log.selectSession).toHaveBeenCalledWith("12");
