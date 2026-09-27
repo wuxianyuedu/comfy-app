@@ -52,6 +52,29 @@ function readCapture(path: string): string {
   }
 }
 
+/**
+ * 等到某段文本真的落盘再读。
+ *
+ * 转录走的是 `bufferedAppend`（攒进内存、满 64KB 或最多 1s 一次落盘 —— 高频
+ * 日志下每行一次 `appendFileSync` 会把事件循环占满），所以**同步读只能看到安装
+ * 时写的横幅**，看不到刚写进 stdout 的那行。轮询到出现为止：正常路径几乎立刻
+ * 命中（比固定 sleep 快），超时就原样返回，于是「压根没落盘」仍会被断言读成红，
+ * 不会被误当成「再等等就有」。
+ */
+async function readCaptureWhenFilled(
+  filePath: string,
+  needle: string,
+  timeoutMs = 3_000,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const text = readCapture(filePath);
+    if (text.includes(needle)) return text;
+    if (Date.now() > deadline) return text;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
 let originalStdoutWrite: typeof process.stdout.write;
 let originalStderrWrite: typeof process.stderr.write;
 
@@ -85,7 +108,10 @@ describe("installStreamCapture", () => {
     process.stdout.write("首屏编译错误：Module not found\n");
     process.stderr.write("FATAL: An unexpected Turbopack error occurred\n");
 
-    const text = readCapture(file);
+    const text = await readCaptureWhenFilled(
+      file,
+      "FATAL: An unexpected Turbopack error occurred",
+    );
     expect(text).toContain("首屏编译错误：Module not found");
     expect(text).toContain("FATAL: An unexpected Turbopack error occurred");
   });
@@ -118,7 +144,9 @@ describe("installStreamCapture", () => {
 
     // 原实现仍被调用
     expect(writes.join("")).toContain("业务输出");
-    // 同时落了盘
-    expect(readCapture(mod.panelCaptureLogPath())).toContain("业务输出");
+    // 同时落了盘（走缓冲，要等到落盘再读）
+    expect(
+      await readCaptureWhenFilled(mod.panelCaptureLogPath(), "业务输出"),
+    ).toContain("业务输出");
   });
 });
