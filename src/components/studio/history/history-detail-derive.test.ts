@@ -95,7 +95,7 @@ describe("deriveTaskOrigin", () => {
 });
 
 describe("deriveWorkshopParams", () => {
-  it("T2I：按契约列出提示词 / 负向提示词 / 尺寸三个口（空值也占位）", () => {
+  it("T2I：按契约列出提示词 / 负向提示词 / 尺寸 / 种子四个口（空值也占位）", () => {
     const detail = makeDetail({
       workflow: "w",
       prompt: "少女",
