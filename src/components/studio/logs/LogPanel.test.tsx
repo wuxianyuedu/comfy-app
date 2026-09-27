@@ -734,18 +734,26 @@ describe("LogPanel 日志面板", () => {
     /* 选中态此前只有 `bg-subtle`——而浅色主题下它与行头底色（surface-1）是
      * 同一个值 #f7f8fa，于是「选中的是哪一项」在浅色下完全看不出来（ISSUE #609
      * 第 1 条）。判据落在**类**上：底色 + 描边 + 字重三层里至少底色与描边
-     * 都换成了主色调，任何一层单独失效仍读得出选中。 */
+     * 都换成了主色调，任何一层单独失效仍读得出选中。
+     * ⚠️ 这里按**类名 token** 精确比对而不是子串包含：`ui/toggle-group` 会给每个
+     * item 都挂 `data-[pressed]:ring-*` / `data-[pressed]:font-semibold`（规范 16
+     * §16.8），子串判据分不出「裸类」与「带变体前缀的类」，会把未选中项也判成
+     * 「带着这三样」——那是假红，且真正要防的「选中没有区分度」反而被盖住。 */
+    const tokensOf = (el: HTMLElement) => new Set(el.className.split(/\s+/));
     const selected = levelButton("全部");
     expect(selected.getAttribute("aria-pressed")).toBe("true");
-    expect(selected.className).toContain("bg-primary/12");
-    expect(selected.className).toContain("ring-primary/45");
-    expect(selected.className).toContain("font-semibold");
+    const selectedTokens = tokensOf(selected);
+    expect(selectedTokens.has("bg-primary/12!")).toBe(true);
+    expect(selectedTokens.has("ring-primary/45")).toBe(true);
+    expect(selectedTokens.has("font-semibold")).toBe(true);
 
     /* 未选中的按钮不得带这三样（否则「选中」就没有区分度了）。 */
     const unselected = levelButton("警告");
     expect(unselected.getAttribute("aria-pressed")).toBe("false");
-    expect(unselected.className).not.toContain("bg-primary/12");
-    expect(unselected.className).not.toContain("ring-primary/45");
+    const unselectedTokens = tokensOf(unselected);
+    expect(unselectedTokens.has("bg-primary/12!")).toBe(false);
+    expect(unselectedTokens.has("ring-primary/45")).toBe(false);
+    expect(unselectedTokens.has("font-semibold")).toBe(false);
   });
 
   it("复制的是**当前筛选**的全部日志，不是整个面板的行", async () => {
