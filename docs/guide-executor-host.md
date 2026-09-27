@@ -58,25 +58,32 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 
 ## 日志与状态去哪看
 
-| 通道 | 位置 | 内容 |
-|---|---|---|
-| host 编排日志 | `log/services/executor-host.log` | boot / 心跳 / `claim-dispatched` / `cancel-reaped` / boot FAILED |
-| host pino 通道 | `log/services/executor-host-{stdout,stderr}-<启动时间戳>.log` | 执行链内部日志（含 reaper / 进度回写） |
-| 执行 trace | `log/comfyui/comfyui-trace-host.log` | cli 事件 / WS 事件 / history 对账（与 inline 的 trace 分文件，不互串） |
-| 任务真相 | `db.sqlite` 的 `task` 行 | `claimedBy`（归属）、`status/progress/progressNode`、`logs`、`resultImages` |
+| 通道           | 位置                                                          | 内容                                                                        |
+| -------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| host 编排日志  | `log/services/executor-host.log`                              | boot / 心跳 / `claim-dispatched` / `cancel-reaped` / boot FAILED            |
+| host pino 通道 | `log/services/executor-host-{stdout,stderr}-<启动时间戳>.log` | 执行链内部日志（含 reaper / 进度回写）                                      |
+| 执行 trace     | `log/comfyui/comfyui-trace-host.log`                          | cli 事件 / WS 事件 / history 对账（与 inline 的 trace 分文件，不互串）      |
+| 任务真相       | `db.sqlite` 的 `task` 行                                      | `claimedBy`（归属）、`status/progress/progressNode`、`logs`、`resultImages` |
 
 ## 行为语义速查
 
 - **归属分片**：`task.claimedBy='host'` 的行只被 host 领取与回收；inline（含历史
   NULL 行）只被 Next 侧处理——两进程并存不会互抢、不会互误杀（判据单一定义在
   `repository-task-impl.ts` 的 `ownedBy()`）。
-- **取消**：界面点取消 → Next 写 `CANCELLED` + POST `/interrupt`（共享 ComfyUI
-  实例，跨进程有效）；host 的 tick 见到取消态会 kill 自己名下在飞的 comfy-cli。
+- **取消**：界面点取消只把行标成 `CANCELLED`（`repository-task-impl.ts` 的 `cancel`）——
+  它**不**调 ComfyUI 的 `/interrupt`（那是全局停，当前只被 `enqueue.ts` 的 `cancelTask`
+  用着，而后者没有界面调用方）。真正在执行的一侧各自收尾：host 的 tick 见到取消态
+  kill 自己名下在飞的 comfy-cli，排队中未开跑的任务由派发侧不再放行。
+  两个已按代码核实的缺陷由 Phase 4 治理（ADR §14 的 D2/D4）：① 被 kill 那一轮会走
+  cli 退出收口把 `CANCELLED` 覆盖成 `FAILED`（表现是「点了取消却显示失败」）；
+  ② ComfyUI 不中断，当前这一轮仍会跑完并出图。
 - **进度 / 日志**：执行方（host 或 inline）写库，界面统一走 SSE→DB 短轮询
   （≤3s + 200ms 落库防抖）。曾经「host 任务实时日志静默」的空窗已由 Phase 3-C
   收口，两模式同一契约。
 - **崩溃恢复**：host 被杀 → 在飞 comfy-cli 随进程组整树回收（launcher 语义）；
-  遗留 RUNNING 行由下次 boot 的 Q2 扫表（host 片）对账收口。
+  遗留 RUNNING 行由对账收口——host 侧不只在 boot 首扫（Q2）跑一次，之后仍按 30s
+  节奏常驻扫自己那一片（`reaper.ts` 的 sweeper；Phase 4 D3 会把它从「模块加载即
+  自启」改成两处显式启动，届时本条按启动点重写）。
 
 ## 已知观察项（灰度期）
 
