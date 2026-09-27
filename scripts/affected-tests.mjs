@@ -44,6 +44,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(HERE, "..");
@@ -179,7 +181,7 @@ function wideReasonFor(rel) {
  * 核心解析：改动清单 + 测试清单 +（注入的）读文件函数 → 该跑哪些测试。
  * 不碰 git、不碰真实磁盘，便于用例喂夹具。
  *
- * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null}} input
+ * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[]}} input
  * @returns {Resolution}
  */
 export function resolveAffectedTests({
@@ -187,6 +189,7 @@ export function resolveAffectedTests({
   testFiles,
   sourceFiles,
   readText,
+  knownFailed = [],
 }) {
   /** @type {Record<string, string>} */
   const reasons = {};
@@ -313,7 +316,15 @@ export function resolveAffectedTests({
     }
   }
 
-  return withFixed("subset", picked);
+  /* 已知基线红（`KNOWN_FAILED_FILES` 单点定义，与 `run-tests.mjs` / 一键门禁同一份）：
+   * 从**增量**面里剔掉，否则别线的红会让无关提交落不了地。固定清单不受影响 ——
+   * 那几条是全库不变量的执行者，没有「先放行」的余地。剔除是被打印出来的，不是静默。 */
+  const skipped = [...picked].filter((t) => knownFailed.includes(t));
+  for (const t of skipped) picked.delete(t);
+
+  const out = withFixed("subset", picked);
+  if (skipped.length > 0) out.reasons.__skipped = skipped.join(" ");
+  return out;
 }
 
 /* ── 以下是与 git / 真实磁盘打交道的部分（用例不覆盖这一段，纯转调）─────── */
@@ -430,6 +441,7 @@ function main() {
           testFiles: inputs.testFiles,
           sourceFiles: inputs.sourceFiles,
           readText,
+          knownFailed: KNOWN_FAILED_FILES,
         });
 
   const extra = res.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t));
@@ -442,6 +454,13 @@ function main() {
     process.stderr.write(
       `[affected] 暂存 ${changed.length} 个文件 → 跑 ${res.tests.length} 个测试` +
         `（固定 ${FIXED_STRUCTURAL_TESTS.length} + 受影响 ${extra.length}）\n`,
+    );
+  }
+  if (res.reasons.__skipped) {
+    process.stderr.write(
+      `[affected] 跳过已知基线红 ${res.reasons.__skipped.split(" ").length} 个` +
+        `（${res.reasons.__skipped}）—— 清单在 scripts/quality-gate-shared.mjs，` +
+        "修好后立刻删，别让它长期静默\n",
     );
   }
   // 空集绝不允许：`vitest run` 不带位置参数就是跑全量。
