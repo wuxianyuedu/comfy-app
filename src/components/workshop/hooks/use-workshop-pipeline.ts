@@ -4,17 +4,12 @@
 // 视图层只消费这里返回的 controller，不持有任何业务规则。
 
 import React from "react";
-import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import {
-  buildLibraryWorkflowInput,
   fetchApiChannels,
   fetchWorkshopWorkflows,
-  startLocalGenerate,
-  watchTask,
-  type GenerateInput,
   type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
 import {
@@ -57,11 +52,13 @@ import {
   type Tab,
 } from "~/components/workshop/stage-config";
 
-import { parseShotSize } from "~/components/workshop/shot-size-config";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
-import { errorMessage } from "~/lib/error-message";
+import {
+  useWorkshopGeneration,
+  type ShotProgressMap,
+} from "./use-workshop-generation";
 import {
   useCharacterPortrait,
   type PortraitSession,
@@ -131,8 +128,9 @@ type SkillsApiResponse = {
   }>;
 };
 
-/** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别）。 */
-export type ShotProgressMap = Record<string, { pct: number; label?: string }>;
+/* 进度类型随生成逻辑一起住在 `use-workshop-generation`；这里再导出一次，
+   保持主管线的对外类型面不变（消费方仍从本文件取）。 */
+export type { ShotProgressMap };
 
 /** 工坊「从剧本提取」/工具类会话的界面状态。
  *
@@ -346,10 +344,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [videoWorkflowId, setVideoWorkflowId] = React.useState(
     () => loadWorkshopDraftOnce()?.videoWorkflowId ?? "",
   );
-  const [generating, setGenerating] = React.useState(false);
-  const [shotProgress, setShotProgress] = React.useState<ShotProgressMap>({});
   /* 镜头进度的节流闸门（见 `~/components/ui/use-throttled-progress`）。 */
-  const progressGate = React.useRef(createThrottleGate());
   const [rendered, setRendered] = React.useState(false);
   const [apiChannels, setApiChannels] = React.useState<ApiChannelsView | null>(
     null,
@@ -562,106 +557,14 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  /**
-   * 分镜阶段的单镜生图(StoryboardPlanner 的 onGenerate 契约不变):
-   * 走与画布一致的本地 ComfyUI 链路(tRPC generate → SSE 任务流),
-   * 结果回写 Shot.imageUrl / status,镜头生图阶段自动继承。
-   */
-  /** 单镜生成请求的封装：本地通道一律走工作流库工作流（内置模板已移除），
-   *  按 ISSUE #145 只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值。
-   *
-   *  尺寸只表达一次（比例 + 分辨率 或 比例 + 百万像素 + 倍数）：整块交给封装层
-   *  （宽高由 size-presets 按场景现算）。 */
-  const buildShotInput = React.useCallback(
-    async (shot: Shot): Promise<GenerateInput> => {
-      /* 草稿里存的是尺寸表达（老数据可能是 "832x1216" 字符串，回读时归一）。 */
-      const sizeSpec = parseShotSize(shot.params.size);
-      const { input } = await buildLibraryWorkflowInput(workflowId, {
-        prompt: shot.prompt,
-        negativePrompt: shot.negativePrompt || undefined,
-        size: sizeSpec,
-      });
-      return input;
-    },
-    [workflowId],
-  );
-
-  const generateShot = React.useCallback(
-    async (shot: Shot) => {
-      // 本地通道没有内置模板可回落：必须先选好一个工作流库生图工作流。
-      if (!workflowId) {
-        setNotice("请先在右侧「生成资源」选择一个生图工作流（工作流库）");
-        return;
-      }
-      setGenerating(true);
-      setShots((prev) =>
-        prev.map((item) =>
-          item.id === shot.id ? { ...item, status: "running" } : item,
-        ),
-      );
-      try {
-        const input = await buildShotInput(shot);
-        const taskId = await startLocalGenerate(input);
-        setShots((prev) =>
-          prev.map((item) =>
-            item.id === shot.id ? { ...item, taskId } : item,
-          ),
-        );
-        await new Promise<void>((resolve) => {
-          watchTask(taskId, {
-            onProgress: (pct, node) => {
-              /* 高频回调：按条目独立节流（规范 16 §16.2.4.68）。这条的值是
-               * 「百分比 + 当前节点名」的复合体，故只用闸门、不用 hook。 */
-              if (!progressGate.current.allow(shot.id)) return;
-              setShotProgress((prev) => ({
-                ...prev,
-                [shot.id]: {
-                  pct,
-                  ...(node?.label ? { label: node.label } : {}),
-                },
-              }));
-            },
-            onOutput: (out) => {
-              if (out.kind !== "video") {
-                setShots((prev) =>
-                  prev.map((item) =>
-                    item.id === shot.id ? { ...item, imageUrl: out.url } : item,
-                  ),
-                );
-              }
-            },
-            onSettled: (result) => {
-              setShotProgress((prev) => {
-                const next = { ...prev };
-                delete next[shot.id];
-                return next;
-              });
-              setShots((prev) =>
-                prev.map((item) =>
-                  item.id === shot.id
-                    ? { ...item, status: result.ok ? "done" : "failed" }
-                    : item,
-                ),
-              );
-              resolve();
-            },
-          });
-        });
-      } catch (err: unknown) {
-        setShots((prev) =>
-          prev.map((item) =>
-            item.id === shot.id ? { ...item, status: "failed" } : item,
-          ),
-        );
-        const message = errorMessage(err, "生成失败");
-        console.error(message);
-        setNotice(message);
-      } finally {
-        setGenerating(false);
-      }
-    },
-    [workflowId, buildShotInput],
-  );
+  /* 单镜生图的执行态与编排（generating / shotProgress / buildShotInput /
+   * generateShot）已拆到 `use-workshop-generation` —— 它只服务「跑一次生成」，
+   * 混在主管线里会让「草稿与六段状态」和「高频进度回写」每次改动互相碰到。 */
+  const generation = useWorkshopGeneration({
+    workflowId,
+    setShots,
+    notify: setNotice,
+  });
 
   /* 镜头目标数从场景表派生（每场景至少算 1 镜，与导入时铺占位镜头的口径同源）；
    * 场景还没拆出来时它是 0 —— 此时「还差几镜」没有可信答案，清单就不报缺口。 */
@@ -781,8 +684,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     clipDoneCount,
     rendered,
 
-    generating,
-    shotProgress,
+    generating: generation.generating,
+    shotProgress: generation.shotProgress,
     isScriptEditorOpen,
     apiSettingsOpen,
     modeContractOpen,
@@ -795,7 +698,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     characterPortrait,
     characterPortraitActions,
 
-    generateShot,
+    generateShot: generation.generateShot,
     openScriptEditor,
     closeScriptEditor,
     saveScriptEditor,
