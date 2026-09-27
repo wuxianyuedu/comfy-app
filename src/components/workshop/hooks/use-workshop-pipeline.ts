@@ -14,6 +14,7 @@ import {
   fetchTaskSnapshot,
   fetchWorkshopWorkflows,
   LOCAL_TASK_TIMEOUT_MS,
+  preparePortraitReferences,
   startLocalGenerate,
   watchTask,
   type GenerateInput,
@@ -565,25 +566,56 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     ): Promise<{ input: GenerateInput; unmatchedWarning: string | null }> => {
       /* 草稿里存的是尺寸表达（老数据可能是 "832x1216" 字符串，回读时归一）。 */
       const sizeSpec = parseShotSize(shot.params.size);
+      /* 定妆照 → 参考图（流程 §4 的口径）：镜头相关角色选了定妆照就带上下发，
+       * 落到作者连给参考图口的行上；工作流没连参考图口时进 unmatched，由
+       * 下面的提示条告知。上传失败不拖垮生成，只有失败数需要提示。 */
+      const refs = await preparePortraitReferences(
+        characters,
+        shot.characterIds,
+      );
+      if (refs.failedCount > 0) {
+        setNotice(
+          `${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`,
+        );
+      }
       const { input, unmatched } = await buildLibraryWorkflowInput(workflowId, {
         prompt: shot.prompt,
         negativePrompt: shot.negativePrompt || undefined,
         size: sizeSpec,
+        ...(refs.files.length > 0 ? { referenceImages: refs.files } : {}),
       });
       return { input, unmatchedWarning: describeUnmatchedInputs(unmatched) };
     },
-    [workflowId],
+    [workflowId, characters],
   );
 
-  /** 观察一个本地生图任务直到落定，结果回写对应镜头。generateShot 与
-   *  「恢复失联任务」共用同一条观察循环；回写前核对 `taskId` 归属 ——
-   *  恢复期间用户可能已对同一镜头重新发起（换了任务），旧观察不得覆盖新结果。
+  /** 观察一个本地任务直到落定，结果回写对应镜头。生图与视频共用这一条观察
+   *  循环（`target` 决定写哪组字段：生图写 imageUrl/status，视频写
+   *  clipUrl/clipStatus）；generateShot / generateClip 的批量循环与「恢复失联
+   *  任务」都走它。回写前核对任务归属 —— 恢复期间用户可能已对同一镜头重新
+   *  发起（换了任务），旧观察不得覆盖新结果。
    *  30 分钟无响应按失败收尾并退订（与 ShotStudio / VideoStudio 的安全阀
    *  同口径、同常量）：批量循环永不卡死在一条沉默的流上。 */
   const watchShotTask = React.useCallback(
-    (shotId: string, taskId: string): Promise<void> => {
+    (
+      shotId: string,
+      taskId: string,
+      target: "image" | "video" = "image",
+    ): Promise<void> => {
       /* 订阅句柄 —— watchTask 返回前先给一个空实现，超时路径上一定已赋值。 */
       let close: () => void = () => undefined;
+      /** 回写只认「仍归属本任务」的镜头（生图与视频的归属字段不同）。 */
+      const patchIfOwned = (p: Partial<Shot>) =>
+        setShots((prev) =>
+          prev.map((item) => {
+            if (item.id !== shotId) return item;
+            const owned =
+              target === "video"
+                ? item.clipTaskId === taskId
+                : item.taskId === taskId;
+            return owned ? { ...item, ...p } : item;
+          }),
+        );
       return withTimeoutResult(
         new Promise<void>((resolve) => {
           close = watchTask(taskId, {
@@ -600,15 +632,17 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
               }));
             },
             onOutput: (out) => {
-              if (out.kind !== "video") {
-                setShots((prev) =>
-                  prev.map((item) =>
-                    item.id === shotId && item.taskId === taskId
-                      ? { ...item, imageUrl: out.url }
-                      : item,
-                  ),
-                );
-              }
+              /* 生图只要图片产物、视频只要视频产物（另一种是别的阶段的）。 */
+              const wanted =
+                target === "video"
+                  ? out.kind !== "image"
+                  : out.kind !== "video";
+              if (!wanted) return;
+              patchIfOwned(
+                target === "video"
+                  ? { clipUrl: out.url }
+                  : { imageUrl: out.url },
+              );
             },
             onSettled: (result) => {
               setShotProgress((prev) => {
@@ -616,15 +650,15 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
                 delete next[shotId];
                 return next;
               });
-              setShots((prev) =>
-                prev.map((item) =>
-                  item.id === shotId && item.taskId === taskId
-                    ? { ...item, status: result.ok ? "done" : "failed" }
-                    : item,
-                ),
+              patchIfOwned(
+                target === "video"
+                  ? { clipStatus: result.ok ? "done" : "failed" }
+                  : { status: result.ok ? "done" : "failed" },
               );
               if (!result.ok && result.message) {
-                setNotice(`镜头生成失败：${result.message}`);
+                setNotice(
+                  `${target === "video" ? "视频" : "镜头"}生成失败：${result.message}`,
+                );
               }
               resolve();
             },
@@ -642,12 +676,10 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
               delete next[shotId];
               return next;
             });
-            setShots((prev) =>
-              prev.map((item) =>
-                item.id === shotId && item.taskId === taskId
-                  ? { ...item, status: "failed" }
-                  : item,
-              ),
+            patchIfOwned(
+              target === "video"
+                ? { clipStatus: "failed" }
+                : { status: "failed" },
             );
             setNotice("任务超时（30 分钟无响应），已按失败收尾");
           },
@@ -698,56 +730,89 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   );
 
   /* ── 恢复失联任务（刷新 / 切走页签后重挂载）───────────────────────────
-   *  草稿把 status=running 与 taskId 一起持久化，但观察循环活在内存里 ——
-   *  重挂载后没有任何人再订阅那条 SSE，镜头会永远停在「生成中」。恢复前
-   *  先查 task 表真值：SSE 对「订阅前已终态」的任务只回放日志与一条 state
-   *  帧（成功终态不带产物、不发 done 帧），直接重订阅会把已成功的任务判成
-   *  「连接中断」。所以：已终态 → 直接回写产物 / 失败态；仍在跑 → 重订阅
-   *  等 done 帧；查无真值 → 如实按失败收尾。视频片段没有持久化任务 id，
-   *  暂时恢复不了（见欠缺清单）。 */
+   *  草稿把 status / clipStatus=running 与任务 id 一起持久化，但观察循环活在
+   *  内存里 —— 重挂载后没有任何人再订阅那条 SSE，镜头会永远停在「生成中」。
+   *  恢复前先查 task 表真值：SSE 对「订阅前已终态」的任务只回放日志与一条
+   *  state 帧（成功终态不带产物、不发 done 帧），直接重订阅会把已成功的任务
+   *  判成「连接中断」。所以：已终态 → 直接回写产物 / 失败态；仍在跑 → 重订阅
+   *  等 done 帧；查无真值 → 如实按失败收尾。生图（taskId / status）与视频
+   *  （clipTaskId / clipStatus）各认各的字段。 */
   const resumedRef = React.useRef(false);
   React.useEffect(() => {
     if (resumedRef.current) return;
     resumedRef.current = true;
-    for (const shot of latestDraftRef.current.shots) {
-      const taskId = shot.taskId;
-      if (shot.status !== "running" || !taskId) continue;
-      const shotId = shot.id;
+    /** 恢复一个失联任务：查真值 → 已终态直接回写，仍在跑才重订阅。 */
+    const resumeTask = (
+      shotId: string,
+      taskId: string,
+      target: "image" | "video",
+    ) => {
       void (async () => {
         const snapshot = await fetchTaskSnapshot(taskId);
-        /* 恢复是异步的：期间用户可能对同一镜头重新发起（taskId 已换）。
+        /* 恢复是异步的：期间用户可能对同一镜头重新发起（任务 id 已换）。
          * 回写只认「仍归属本任务」的镜头，不覆盖新一轮生成的状态。 */
         const patchIfOwned = (p: Partial<Shot>) =>
           setShots((prev) =>
-            prev.map((item) =>
-              item.id === shotId && item.taskId === taskId
-                ? { ...item, ...p }
-                : item,
-            ),
+            prev.map((item) => {
+              if (item.id !== shotId) return item;
+              const owned =
+                target === "video"
+                  ? item.clipTaskId === taskId
+                  : item.taskId === taskId;
+              return owned ? { ...item, ...p } : item;
+            }),
           );
+        const isVideo = target === "video";
         if (!snapshot) {
-          patchIfOwned({ status: "failed" });
+          patchIfOwned(
+            isVideo ? { clipStatus: "failed" } : { status: "failed" },
+          );
           return;
         }
         if (snapshot.status === "SUCCEEDED") {
           /* 产物以任务真值回写（SSE 重订阅拿不到已完成任务的产物）。 */
-          const image = snapshot.outputs.find((out) => out.kind === "image");
-          if (image) {
-            patchIfOwned({ imageUrl: image.url, status: "done" });
+          const output = snapshot.outputs.find(
+            (o) => o.kind === (isVideo ? "video" : "image"),
+          );
+          if (output) {
+            patchIfOwned(
+              isVideo
+                ? { clipUrl: output.url, clipStatus: "done" }
+                : { imageUrl: output.url, status: "done" },
+            );
           } else {
-            patchIfOwned({ status: "failed" });
-            setNotice("任务已完成但没有产出文件，请重新生成该镜头");
+            patchIfOwned(
+              isVideo ? { clipStatus: "failed" } : { status: "failed" },
+            );
+            setNotice(
+              isVideo
+                ? "视频任务已完成但没有产出文件，请重新生成该片段"
+                : "任务已完成但没有产出文件，请重新生成该镜头",
+            );
           }
           return;
         }
         if (snapshot.status === "FAILED" || snapshot.status === "CANCELLED") {
-          patchIfOwned({ status: "failed" });
-          if (snapshot.error) setNotice(`镜头生成失败：${snapshot.error}`);
+          patchIfOwned(
+            isVideo ? { clipStatus: "failed" } : { status: "failed" },
+          );
+          if (snapshot.error) {
+            setNotice(
+              `${isVideo ? "视频" : "镜头"}生成失败：${snapshot.error}`,
+            );
+          }
           return;
         }
         /* 仍在跑（RUNNING / QUEUED）：重订阅，等 live 的 done 帧回写。 */
-        await watchShotTask(shotId, taskId);
+        await watchShotTask(shotId, taskId, target);
       })();
+    };
+    for (const shot of latestDraftRef.current.shots) {
+      if (shot.status === "running" && shot.taskId) {
+        resumeTask(shot.id, shot.taskId, "image");
+      } else if (shot.clipStatus === "running" && shot.clipTaskId) {
+        resumeTask(shot.id, shot.clipTaskId, "video");
+      }
     }
     // 仅挂载执行一次；镜头列表经 ref 读取（惰性初始化在首渲染已完成）
     // eslint-disable-next-line react-hooks/exhaustive-deps

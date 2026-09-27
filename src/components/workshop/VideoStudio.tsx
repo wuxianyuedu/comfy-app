@@ -200,6 +200,9 @@ export function VideoStudio({
         const input: GenerateInput = built.input;
 
         const taskId = await startLocalGenerate(input);
+        /* 任务 id 随草稿持久化：刷新 / 切页签后重挂载，控制器按它恢复失联任务
+         * （与生图阶段的 taskId 同一机制）。 */
+        patchShot(shot.id, { clipTaskId: taskId });
         await runLocalTask(shot.id, taskId);
       } else {
         const submit = await apiSubmitVideo({

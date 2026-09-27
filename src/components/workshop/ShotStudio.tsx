@@ -17,6 +17,7 @@ import {
   apiGenerateImage,
   buildLibraryWorkflowInput,
   LOCAL_TASK_TIMEOUT_MS,
+  preparePortraitReferences,
   startLocalGenerate,
   watchTask,
   type GenerateInput,
@@ -221,6 +222,17 @@ export function ShotStudio({
             ? shot.params.size
             : shotSize,
         );
+        /* 定妆照 → 参考图（流程 §4 的口径）：镜头相关角色选了定妆照就带上；
+         * 没连参考图口的工作流会经 unmatched 提示，上传失败只提示失败数。 */
+        const refs = await preparePortraitReferences(
+          characters,
+          shot.characterIds,
+        );
+        if (refs.failedCount > 0) {
+          onNotice(
+            `${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`,
+          );
+        }
         /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个生图工作流
          *（封装口径只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值），否则
          * 没有可执行的图。见 generateShot 入口的门禁。 */
@@ -230,6 +242,7 @@ export function ShotStudio({
           size: sizeSpec,
           // 高级 · 种子：默认随机（留空每次新 seed），填数字则 pin 住（见 resolveSeed）。
           seed: resolveSeed(seedInput),
+          ...(refs.files.length > 0 ? { referenceImages: refs.files } : {}),
         });
         /* 没落到任何端口的口本次不生效（工作流用图内默认值）—— 静默就是
          * 「改了没反应」（规范 10 §10.3.1），走控制器提示条说清楚。 */

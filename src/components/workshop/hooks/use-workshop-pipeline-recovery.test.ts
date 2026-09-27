@@ -253,6 +253,105 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     expect(result.current.shots[0]!.imageUrl).toBeUndefined();
     expect(result.current.shots[0]!.status).toBe("running");
   });
+
+  it("刷新恢复（视频）：片段任务已成功 → clipUrl 真值回写，不重订阅 SSE", async () => {
+    const project = createProject();
+    seedDraft(project.id, [
+      makeShot({
+        status: "done",
+        imageUrl: "/api/generated/shot.png",
+        clipStatus: "running",
+        clipTaskId: "clip-ok",
+      }),
+    ]);
+    fetchTaskSnapshotMock.mockResolvedValue({
+      status: "SUCCEEDED",
+      outputs: [{ url: "/api/generated/clip-ok/1.mp4", kind: "video" }],
+    });
+
+    const { result } = renderHook(() => useWorkshopPipeline());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.shots[0]).toMatchObject({
+      clipStatus: "done",
+      clipUrl: "/api/generated/clip-ok/1.mp4",
+    });
+    expect(watchTaskMock).not.toHaveBeenCalled();
+  });
+
+  it("刷新恢复（视频）：成功任务的产物里没有视频（只有图）→ 按失败收尾", async () => {
+    const project = createProject();
+    seedDraft(project.id, [
+      makeShot({ clipStatus: "running", clipTaskId: "clip-noout" }),
+    ]);
+    fetchTaskSnapshotMock.mockResolvedValue({
+      status: "SUCCEEDED",
+      outputs: [{ url: "/api/generated/x.png", kind: "image" }],
+    });
+
+    const { result } = renderHook(() => useWorkshopPipeline());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.shots[0]!.clipStatus).toBe("failed");
+    expect(result.current.shots[0]!.clipUrl).toBeUndefined();
+    expect(result.current.notice).toContain("没有产出文件");
+  });
+
+  it("刷新恢复（视频）：片段任务仍在跑 → 重订阅 SSE，落定回写 clipStatus", async () => {
+    const project = createProject();
+    seedDraft(project.id, [
+      makeShot({ clipStatus: "running", clipTaskId: "clip-live" }),
+    ]);
+    fetchTaskSnapshotMock.mockResolvedValue({ status: "RUNNING", outputs: [] });
+    watchTaskMock.mockImplementation((_taskId, h) => {
+      h.onSettled({ ok: true });
+      return () => undefined;
+    });
+
+    const { result } = renderHook(() => useWorkshopPipeline());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(watchTaskMock).toHaveBeenCalledTimes(1);
+    expect(watchTaskMock.mock.calls[0]![0]).toBe("clip-live");
+    expect(result.current.shots[0]!.clipStatus).toBe("done");
+  });
+
+  it("刷新恢复（视频）：恢复期间重新发起片段（clipTaskId 已换），旧恢复不覆盖", async () => {
+    const project = createProject();
+    seedDraft(project.id, [
+      makeShot({ clipStatus: "running", clipTaskId: "clip-old" }),
+    ]);
+    let resolveSnapshot!: (v: unknown) => void;
+    fetchTaskSnapshotMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSnapshot = resolve;
+      }),
+    );
+
+    const { result } = renderHook(() => useWorkshopPipeline());
+    act(() => {
+      result.current.setShots((prev) =>
+        prev.map((item) =>
+          item.id === "shot-1" ? { ...item, clipTaskId: "clip-new" } : item,
+        ),
+      );
+    });
+    await act(async () => {
+      resolveSnapshot({
+        status: "SUCCEEDED",
+        outputs: [{ url: "/api/generated/old.mp4", kind: "video" }],
+      });
+    });
+
+    expect(result.current.shots[0]!.clipUrl).toBeUndefined();
+    expect(result.current.shots[0]!.clipStatus).toBe("running");
+  });
 });
 
 describe("useWorkshopPipeline generateShot 的可靠性出口", () => {

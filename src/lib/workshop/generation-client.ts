@@ -20,6 +20,7 @@ import { clampPct } from "~/lib/progress";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
 import { isRecord } from "~/lib/is-record";
+import type { Character } from "./types";
 import {
   extractSavedOutputs,
   type ApiChannelView,
@@ -612,6 +613,53 @@ export async function prepareLocalInputImage(image: string): Promise<string> {
     );
   }
   return filename;
+}
+
+/* 定妆照 URL → 已上传文件名的会话内缓存：批量生成时同一镜的同一张定妆照
+ * 会随每个镜头反复请求，缓存让 ComfyUI 输入目录里不再为同一张图堆 N 份副本。 */
+const portraitRefCache = new Map<string, string>();
+/** 缓存上限：超过就整表清掉（定妆照数量有限，正常到不了）。 */
+const PORTRAIT_REF_CACHE_MAX = 32;
+
+/** 收集镜头相关角色的**已选定定妆照**，上传进 ComfyUI 输入目录，
+ *  作为本次镜头生图的参考图（`referenceImages` 的值）。
+ *
+ *  流程口径（docs/guides/feature-workshop-flow.md §4）：定妆照就是「后续分镜图
+ *  的参考图基准」。参考图口吃的是**已上传文件的文件名**，所以逐张经
+ *  `prepareLocalInputImage` 上传；单张失败不拖垮整次生成 —— 跳过并计入
+ *  `failedCount`，由调用方决定是否提示（降级不得静默，规范 10 §10.3.1）。
+ *
+ *  顺序按 `characterIds`（分镜里的角色出场序）。内置默认契约只有两个参考图槽
+ *  （reference-image / -2），超过两张的定妆照落不进端口，这里截到两张、
+ *  不做无效上传。没有角色选了定妆照 → 空数组，调用方不给这个口。 */
+export async function preparePortraitReferences(
+  characters: Character[],
+  characterIds: readonly string[],
+): Promise<{ files: string[]; failedCount: number }> {
+  const urls = characterIds
+    .map((id) => characters.find((c) => c.id === id)?.portraitUrl)
+    .filter((url): url is string => typeof url === "string" && url !== "")
+    .slice(0, 2);
+  const files: string[] = [];
+  let failedCount = 0;
+  for (const url of urls) {
+    const cached = portraitRefCache.get(url);
+    if (cached) {
+      files.push(cached);
+      continue;
+    }
+    try {
+      const filename = await prepareLocalInputImage(url);
+      if (portraitRefCache.size >= PORTRAIT_REF_CACHE_MAX) {
+        portraitRefCache.clear();
+      }
+      portraitRefCache.set(url, filename);
+      files.push(filename);
+    } catch {
+      failedCount += 1;
+    }
+  }
+  return { files, failedCount };
 }
 
 function narrowChannel(v: unknown, fallbackPath: string): ApiChannelView {
