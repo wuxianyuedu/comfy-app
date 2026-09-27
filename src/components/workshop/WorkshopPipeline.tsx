@@ -18,7 +18,7 @@ import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pi
 import { WorkshopAside } from "~/components/workshop/WorkshopAside";
 import { WorkshopHeader } from "~/components/workshop/WorkshopHeader";
 import { WorkshopStageBody } from "~/components/workshop/WorkshopStageBody";
-import { WorkshopStageNav } from "~/components/workshop/WorkshopStageNav";
+import { WorkshopStageRail } from "~/components/workshop/WorkshopStageRail";
 import type { WorkshopAgentToolHandlers } from "~/components/workshop/hooks/use-workshop-agent";
 import { renderProjectFilm } from "~/lib/film/render-film-client";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
@@ -68,14 +68,16 @@ export function WorkshopPipeline() {
 
         <RunControlBar />
 
-        <WorkshopStageNav
-          tab={controller.tab}
-          stageRatios={controller.stageRatios}
-          viewContext={controller.viewContext}
-          onTabChange={controller.setTab}
-        />
-
-        <div className="grid grid-cols-1 gap-5 p-6 lg:grid-cols-[1fr_308px]">
+        {/* 三列：阶段轨道（固定列，不随内容挤压）+ 内容 + 右侧检查/素材。
+            轨道原先是 grid 之上的一条全宽横条；现在它进网格作第一列，
+            宽度取 --spacing-stage-rail 一档，不在此处重复写字面量。 */}
+        <div className="grid grid-cols-1 gap-5 p-6 lg:grid-cols-[var(--spacing-stage-rail)_1fr_308px]">
+          <WorkshopStageRail
+            tab={controller.tab}
+            stageRatios={controller.stageRatios}
+            viewContext={controller.viewContext}
+            onTabChange={controller.setTab}
+          />
           <WorkshopStageBody controller={controller} />
           <WorkshopAside
             missing={controller.missing}
