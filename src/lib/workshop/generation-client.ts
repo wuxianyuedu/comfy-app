@@ -78,6 +78,11 @@ export async function cancelLocalTask(taskId: string): Promise<void> {
   await vanillaApi.task.cancel.mutate({ id: taskId });
 }
 
+/** 批量生成的并发档：本地 ComfyUI 按队列串行执行，2 = 「一条在跑、一条排队
+ *  预热」，消除「上一条落定 → 再提交下一条」之间的空转；API 通道保守取 2，
+ *  不试探远端限流。三个批量循环（镜头生图 / 视频生成 / 分镜批量）共用这一档。 */
+export const WORKSHOP_BATCH_CONCURRENCY = 2;
+
 /** 本地 ComfyUI 单个任务的统一安全阀（30 分钟无响应即判超时）。
  *  生图 / 视频 / 分镜批量三处的观察循环共用同一份常量 —— 哪一处漏配，
  *  批量循环就会永久卡死在一条沉默的 SSE 流上。 */

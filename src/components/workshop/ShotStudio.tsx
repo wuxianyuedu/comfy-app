@@ -18,6 +18,7 @@ import {
 import {
   apiGenerateImage,
   buildLibraryWorkflowInput,
+  WORKSHOP_BATCH_CONCURRENCY,
   LOCAL_TASK_TIMEOUT_MS,
   preparePortraitReferences,
   startLocalGenerate,
@@ -26,6 +27,7 @@ import {
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
 import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
+import { runWithConcurrency } from "~/lib/async-pool";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import {
   parseShotSize,
@@ -309,13 +311,19 @@ export function ShotStudio({
 
   async function generateBatch() {
     if (pending.length === 0) return;
-    await batch.run(async () => {
-      for (const shot of [...pending]) {
-        // 每轮重新检查存活 —— 用户可能在运行中编辑 / 删除。
-        if (shot.status === "running" || shot.imageUrl) continue;
-        await generateShot(shot);
-      }
-    });
+    await batch.run(() =>
+      /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：在跑的与排队的同存，
+       * 不再「await 一条到底再提交下一条」地空转。 */
+      runWithConcurrency(
+        [...pending],
+        WORKSHOP_BATCH_CONCURRENCY,
+        async (shot) => {
+          // 每轮重新检查存活 —— 用户可能在运行中编辑 / 删除。
+          if (shot.status === "running" || shot.imageUrl) return;
+          await generateShot(shot);
+        },
+      ),
+    );
   }
 
   return (

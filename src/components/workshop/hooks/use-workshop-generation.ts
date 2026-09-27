@@ -70,7 +70,9 @@ export function useWorkshopGeneration({
   setShots,
   notify,
 }: WorkshopGenerationDeps): WorkshopGenerationApi {
-  const [generating, setGenerating] = React.useState(false);
+  /** 在途生成链的条数（不是布尔）：批量并发下同刻可能有两条链在跑，
+   *  布尔会被先结束的那条提前复位。对外仍表现为 generating = 条数 > 0。 */
+  const [generatingDepth, setGeneratingDepth] = React.useState(0);
   const [shotProgress, setShotProgress] = React.useState<ShotProgressMap>({});
   /* 按条目独立节流的闸门（规范 16 §16.2.4.68）：值为「百分比 + 节点名」的
    * 复合体，故只用闸门、不用 hook。 */
@@ -228,7 +230,7 @@ export function useWorkshopGeneration({
         notify("请先在右侧「生成资源」选择一个生图工作流（工作流库）");
         return;
       }
-      setGenerating(true);
+      setGeneratingDepth((depth) => depth + 1);
       setShots((prev) =>
         prev.map((item) =>
           item.id === shot.id ? { ...item, status: "running" } : item,
@@ -260,7 +262,7 @@ export function useWorkshopGeneration({
         console.error(message);
         notify(message);
       } finally {
-        setGenerating(false);
+        setGeneratingDepth((depth) => Math.max(0, depth - 1));
       }
     },
     /* 依赖比拆分前多两个：`notify` / `setShots` 在原来那层是 useState 直接给出的
@@ -270,7 +272,7 @@ export function useWorkshopGeneration({
     [workflowId, projectId, buildShotInput, notify, setShots, watchShotTask],
   );
   return {
-    generating,
+    generating: generatingDepth > 0,
     shotProgress,
     generateShot,
     watchShotTask,
