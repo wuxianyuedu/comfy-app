@@ -71,6 +71,22 @@ export function AuroraBackground({ className = "" }: { className?: string }) {
  *
  * `tone` 只表达色相（走 token），强度由 `alpha` 决定。
  */
+/**
+ * 三种色相各写**完整字面名**，不许拼成 `--color-aurora-${tone}`。
+ *
+ * 两个理由：① 门禁 `check-theme-colors.cjs` 的「幽灵 token」判据比对的是字面名，
+ * 拼出来的引用它根本看不见；② Tailwind v4 会 **tree-shake `@theme` 里没被引用的变量**，
+ * 而它判断「有没有被引用」看的也是源码里的字面名 —— 拼出来的名字它同样看不见。
+ * 这两条叠起来意味着：拼法今天能活，纯粹是因为别处（`AuroraBackground` 上半段、
+ * `TrainingStudio` 的 `stroke=`）恰好把这三颗名字整名写过；哪天重构掉那几行，
+ * 极光晕会当场失色且无任何报错。把名字写全 = 这个文件自己就把 token 保住了。
+ */
+const AURORA_TONE_VAR: Record<"violet" | "cyan" | "magenta", string> = {
+  violet: "var(--color-aurora-violet)",
+  cyan: "var(--color-aurora-cyan)",
+  magenta: "var(--color-aurora-magenta)",
+};
+
 export function AuroraGlow({
   tone,
   alpha,
@@ -81,7 +97,7 @@ export function AuroraGlow({
   alpha: number;
   className?: string;
 }) {
-  const stop = `color-mix(in srgb, var(--color-aurora-${tone}) ${Math.round(alpha * 100)}%, transparent)`;
+  const stop = `color-mix(in srgb, ${AURORA_TONE_VAR[tone]} ${Math.round(alpha * 100)}%, transparent)`;
   return (
     <div
       aria-hidden
