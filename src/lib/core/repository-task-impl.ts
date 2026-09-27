@@ -121,11 +121,23 @@ export function createTaskRepoImpl(db: TaskRepoDb) {
      * 路径异步，ComfyUI 的 WS progress 帧与本任务被别的路径收口可能交错；一条
      * 收口之后迟到的进度回写会把行从 SUCCEEDED/FAILED/CANCELLED 打回 RUNNING、
      * SSE 客户端就永远卡在「生成中…」。返回是否真的更新了行。
+     *
+     * `node`（P3 §5 ADR §13-3C D1）是当前执行节点快照，SSE 纯轮询化后画布
+     * 「当前节点 + 步数」只能从 DB 读；`undefined` = 本帧无节点信息，**不覆写**
+     * 原值（保留上一个节点，标签不闪没）。
      */
-    async updateProgress(taskId: string, pct: number): Promise<boolean> {
+    async updateProgress(
+      taskId: string,
+      pct: number,
+      node?: { id: string; label?: string; value: number; max: number },
+    ): Promise<boolean> {
       const updated = await db
         .update(task)
-        .set({ progress: pct, status: "RUNNING" })
+        .set({
+          progress: pct,
+          status: "RUNNING",
+          ...(node !== undefined ? { progressNode: node } : {}),
+        })
         .where(
           and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)),
         )

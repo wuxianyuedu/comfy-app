@@ -273,6 +273,11 @@ export const task = sqliteTable(
      *  执行「点运行时那一刻」的图。inline 路径不读它（仍走现查的同一份入参），
      *  但同样写入，保证两种模式下行形态一致、可事后复现。 */
     execPayload: text("execPayload", { mode: "json" }),
+    /** 当前执行节点的进度快照（P3 §5 ADR §13-3C 决定 D1）：
+     *  `{ id, label?, value, max }`，由 executor-ws 的 progress 帧写入。
+     *  SSE 改纯 DB 轮询后（D3），画布「当前节点 + 步数」展示在 inline/host
+     *  两模式下走同一契约；无节点信息的进度帧不覆写本列（保留上一个）。 */
+    progressNode: text("progressNode", { mode: "json" }),
   },
   (t) => [
     index("task_user_created_idx").on(t.userId, t.createdAt),

@@ -68,7 +68,7 @@ async function loadRealResolveComfyBase() {
 }
 type TaskRepoForCli = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
-  "markRunning"
+  "markRunning" | "updateProgress"
 >;
 type ResolveComfyBaseFn = () => Promise<string>;
 
@@ -424,8 +424,18 @@ export async function executeViaComfyCli(job: Job) {
         })
         .catch(() => undefined);
     },
-    onProgress: (progress: number) => {
-      s.emitter.emit(taskId, { type: "progress", progress });
+    onProgress: (
+      progress: number,
+      node?: { id: string; value: number; max: number },
+    ) => {
+      s.emitter.emit(taskId, { type: "progress", progress, node });
+      /* 进度同样落库（P3 §5 ADR §13-3C D1/D3）：SSE 已单源化走 DB，cli 路径
+       *  的进度事件此前只发进程内 emitter——host 模式下界面全程 0% 的根因。
+       *  CAS 语义在 updateProgress 内部（终态行不再改写），这里 fire-and-forget，
+       *  形态对齐上方 onPromptId 的 markRunning 调用。 */
+      void taskRepository
+        .updateProgress(taskId, progress, node)
+        .catch(() => undefined);
     },
   });
   child.stdout?.on("data", stdoutParser.sink);

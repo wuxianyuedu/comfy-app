@@ -179,8 +179,12 @@ export interface EnvelopeParserDeps {
   finish: (ok: boolean, env: unknown) => void;
   /** 记下 prompt_id（写库 + 建立 prompt→task 索引由调用方做）。 */
   onPromptId: (promptId: string) => void;
-  /** 进度百分比（已从 completed/total 换算）。 */
-  onProgress: (percent: number) => void;
+  /** 进度百分比（已从 completed/total 换算）；`node` 是事件自带的当前节点
+   *  步数信息（raw graph 的 class_type 在 cli 路径拿不到，label 缺省）。 */
+  onProgress: (
+    percent: number,
+    node?: { id: string; value: number; max: number },
+  ) => void;
   /** 可注入的 trace（默认全局 trace）。 */
   trace?: TraceFn;
   /** 完整原始行（不截断）收集：供前端「查看完整输出」入口。默认不收集
@@ -301,7 +305,14 @@ export function createCliEnvelopeParser(
       typeof evt.total === "number" &&
       evt.total > 0
     ) {
-      deps.onProgress(Math.round((evt.completed / evt.total) * 100));
+      // 3-C D1：SSE 单源化后进度必须落库，node 一并透出给调用方写 progressNode
+      const nodeId = typeof evt.node === "string" ? evt.node : undefined;
+      deps.onProgress(
+        Math.round((evt.completed / evt.total) * 100),
+        nodeId
+          ? { id: nodeId, value: evt.completed, max: evt.total }
+          : undefined,
+      );
       return;
     }
     if (evt.type === "executing" || evt.type === "execution_success") {

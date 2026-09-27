@@ -384,20 +384,6 @@ async function handleMessage(raw: string) {
     /* 「值 / 上限 → 百分比」收在 `~/lib/progress`：上限不可用（≤0 / 非有限）
      * 时它返回 `null`，这里落回 0 —— 落库的 `progress` 是**确定值**语义。 */
     const pct = toPct(value, max) ?? 0;
-    /* 进度回写走「只在非终态行生效」的 compare-and-set：本任务若已被
-     *  reaper 判终态、或被用户取消，说明这一轮结果不再归我们，迟到的进度
-     *  帧**必须被丢弃**。否则 DB 行会从终态被打回 RUNNING，SSE 的 3s 实情
-     *  轮询先看到终态关掉了流，客户端就永远卡在「生成中…」（用户看不到
-     *  任何失败出口，只能刷新）。 */
-    const taskRepository = await resolveTaskRepo();
-    if (!(await taskRepository.updateProgress(taskId, pct))) {
-      log(
-        taskId,
-        "warn",
-        "忽略迟到进度：本任务已由其它路径收口（终态不再改写）",
-      );
-      return;
-    }
     // progress 消息自带 node id——把节点 id / 类别名 / 步数一并
     // 发给前端，画布与管线节点才能显示「当前节点 + 百分比」而不仅是总数。
     let node:
@@ -423,6 +409,22 @@ async function handleMessage(raw: string) {
         max,
         ...(classType ? { label: nodeLabel(classType) } : {}),
       };
+    }
+    /* 进度回写走「只在非终态行生效」的 compare-and-set：本任务若已被
+     *  reaper 判终态、或被用户取消，说明这一轮结果不再归我们，迟到的进度
+     *  帧**必须被丢弃**。否则 DB 行会从终态被打回 RUNNING，SSE 的 3s 实情
+     *  轮询先看到终态关掉了流，客户端就永远卡在「生成中…」（用户看不到
+     *  任何失败出口，只能刷新）。
+     *  node 一并落库（P3 §5 ADR §13-3C D1）：SSE 单源化后节点进度只能从 DB
+     *  读；无节点信息的帧传 undefined，impl 侧不覆写原值。 */
+    const taskRepository = await resolveTaskRepo();
+    if (!(await taskRepository.updateProgress(taskId, pct, node))) {
+      log(
+        taskId,
+        "warn",
+        "忽略迟到进度：本任务已由其它路径收口（终态不再改写）",
+      );
+      return;
     }
     s.emitter.emit(taskId, { type: "progress", progress: pct, node });
 
