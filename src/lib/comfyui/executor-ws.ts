@@ -426,7 +426,6 @@ async function handleMessage(raw: string) {
       );
       return;
     }
-    s.emitter.emit(taskId, { type: "progress", progress: pct, node });
 
     // 里程碑日志做节流，避免面板被刷得读不动。
     const last = s.lastLogPct.get(taskId) ?? -1;

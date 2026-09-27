@@ -1,5 +1,5 @@
 // `configureEnqueue` 接缝 smoke（P3 §5 第 1 期·最后一步：enqueue lazy 化）。
-// 本文件只做**这一件事**——enqueue 里其余函数（enqueue / subscribe / cancelTask）
+// 本文件只做**这一件事**——enqueue 里其余函数（enqueue / cancelTask）
 // 的既有测试要么在其它测试文件覆盖、要么就是集成路径需要 ComfyUI / DB 双活，
 // 不在本 PR 的范围。本文件同时是 `configureEnqueue` 在 `check-dead-exports`
 // 眼里的消费方（同目录 `.test.ts` 算数）。
@@ -138,25 +138,21 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     expect(logged(taskId, "中断请求失败")).toBe(true);
   });
 
-  it("行已是终态：不补发合成的 CANCELLED 事件（不把「已完成」翻成取消）", async () => {
-    const { taskId } = setup(
+  it("行已是终态：不改写终态、不发全局中断，只清本进程记账", async () => {
+    const { taskId, repo } = setup(
       { status: "SUCCEEDED", promptId: "p-e" },
       {
         cancelOutcome: "skipped-terminal",
       },
     );
-    const seen: unknown[] = [];
-    const off = mod.subscribe(taskId, (event) => seen.push(event));
 
     await mod.cancelTask(taskId);
-    off();
 
-    expect(
-      seen.some(
-        (event) => (event as { status?: string }).status === "CANCELLED",
-      ),
-    ).toBe(false);
+    expect(repo.cancel).toHaveBeenCalledWith(taskId);
     expect(client.interrupt).not.toHaveBeenCalled();
     expect(logged(taskId, "取消未改写终态")).toBe(true);
+    /* 内存记账照清：留着 promptId → taskId 的映射，下一轮对账会以为这条
+     * prompt 仍归本进程看，reaper 因此永远不插手一个早该收口的行。 */
+    expect(runnerState.state().promptToTask.has("p-e")).toBe(false);
   });
 });

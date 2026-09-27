@@ -92,6 +92,12 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 - **进度 / 日志**：执行方（host 或 inline）写库，界面统一走 SSE→DB 短轮询
   （≤3s + 200ms 落库防抖）。曾经「host 任务实时日志静默」的空窗已由 Phase 3-C
   收口，两模式同一契约。
+- **对外只有一条通道 = 数据库那一行**（Phase 4-B1 起）：执行链原先另有一套进程内
+  `EventEmitter`（`done` / `error` / `progress` / `log` 帧），它只能在写它的那个进程里
+  响，跨宿主必然漏。SSE 单源化之后它已只剩写入、没有读者，因此整体退役；服务端里
+  最后一个读者「文生视频的首帧那一跳」也改成读库等终态（`comfyui/firstframe.ts`，
+  ADR §14 D1）——它此前是 host 模式下**必坏**的功能：订阅永远等不到 `done`，挂满
+  5 分钟超时后整条失败。回归由 `tests/in-process-event-channel-retired.test.ts` 钉住。
 - **崩溃恢复**：host 被杀 → 在飞 comfy-cli 随进程组整树回收（launcher 语义）；
   遗留 RUNNING 行由 reaper 对账收口。reaper 的启动点是**两处显式调用**（Phase 4-A2
   起，不再靠模块加载自启）：Next 侧 = `src/instrumentation.ts` 的 nodejs 分支，

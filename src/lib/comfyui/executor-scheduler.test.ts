@@ -62,7 +62,6 @@ function resetRunnerState() {
   s.promptToTask.clear();
   s.startedAt.clear();
   s.lastNodeByTask.clear();
-  s.emitter.removeAllListeners();
 }
 
 function logsOf(taskId: string): string[] {
