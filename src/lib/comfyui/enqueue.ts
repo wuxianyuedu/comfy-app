@@ -14,6 +14,7 @@ import {
   state,
   log,
   persistLogs,
+  persistRawCli,
   claimFinalize,
   clearFinalize,
   MAX_CONCURRENCY,
@@ -215,6 +216,9 @@ export async function cancelTask(taskId: string) {
    * 唯一来源就是上面 `taskRepository.cancel` 落的那个终态行。 */
 
   await persistLogs(taskId);
+  /* 被 kill 的 comfy-cli 在退出前吐的行正是「取消之后发生了什么」的现场，
+   * 所以取消这条收口也写一包原文（P3 §5 ADR §14 D1 的 4-B2）。 */
+  await persistRawCli(taskId);
 
   if (hadSlot) void processQueue();
 }

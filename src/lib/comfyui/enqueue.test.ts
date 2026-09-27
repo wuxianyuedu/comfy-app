@@ -87,6 +87,7 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
       findStatusAndPromptById: vi.fn(async () => row),
       cancel: vi.fn(async () => cancelOutcome),
       replaceLogs: vi.fn(async () => undefined),
+      replaceRawCli: vi.fn(async () => undefined),
     };
     mod.configureEnqueue({ taskRepo: repo });
     runnerState.configureRunner({ taskRepo: repo, log: runnerLog });

@@ -144,7 +144,10 @@ describe("scripts/executor-host.mjs 骨架", () => {
  *  TS + 注入 reaper(owner=host)/enqueue/trace + Q2 扫自己那片。 */
 describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", () => {
   /** 在临时目录建一份最小 `task` 表库（列取 reaper/领取实际触达的集合），
-   *  种一行 **inline 片**的超时 QUEUED 孤儿。 */
+   *  种一行 **inline 片**的超时 QUEUED 孤儿。
+   *  `claimedAt` 在这份清单里是因为领取语句写它（ADR §14 D1 的 4-B2）——缺列的
+   *  表现是 host 侧 `claim-tick FAILED` 并以退出码 1 收场（本用例正是这么抓到的），
+   *  而不是「少记了一个时间」。 */
   function mkDbWithInlineOrphan(dir: string): {
     dbPath: string;
     rowId: string;
@@ -155,7 +158,8 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
       `CREATE TABLE task (
         id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'QUEUED',
         promptId TEXT, finishedAt TEXT, createdAt TEXT NOT NULL,
-        workflowName TEXT, params TEXT, execPayload TEXT, claimedBy TEXT
+        workflowName TEXT, params TEXT, execPayload TEXT, claimedBy TEXT,
+        claimedAt TEXT
       )`,
     );
     const staleAt = new Date(Date.now() - 120_000)

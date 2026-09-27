@@ -1,6 +1,7 @@
 /**
- * `repository-task-impl.ts` 的 13 个 exec-chain 方法的契约测（12 方法主体来自
- * P3 §5 Phase 2-A-1；`claimNextQueued` 为 Phase 3-A 追加，见下方专组）。
+ * `repository-task-impl.ts` 的 15 个 exec-chain 方法的契约测（12 方法主体来自
+ * P3 §5 Phase 2-A-1；`claimNextQueued` 为 Phase 3-A 追加，见下方专组；
+ * `replaceRawCli` / `findRawCli` 为 Phase 4-B2 追加）。
  *
  * 为什么单独一份测试、而不是加进 `repository.test.ts`：impl 是**双宿主共用**的
  * 实现（Next 侧与未来 executor host 都走同一份），它的正确性独立于 `TaskRepository`
@@ -72,6 +73,15 @@ function readRow(id: string): Record<string, unknown> | undefined {
   );
 }
 
+/** `claimedAt` 的毫秒值（没写过就是 null）。
+ *  测试库把 `*At` 结尾的列统一还原成 `Date`（`tests/helpers/test-db.ts` 的
+ *  `parseRow`），所以这里比 `getTime()` 而不是比对象身份——每次读都是新构造的
+ *  `Date`，`toBe` 会恒假。 */
+function claimedMs(id: string): number | null {
+  const value = readRow(id)?.claimedAt;
+  return value instanceof Date ? value.getTime() : null;
+}
+
 describe("findExecutionMeta", () => {
   it("命中时返回 projectId / params / prompt / negativePrompt / workflowName / referenceImages / createdAt 七列", async () => {
     const id = await seed({
@@ -126,6 +136,32 @@ describe("updateProgress（compare-and-set：终态行不改写）", () => {
     expect(readRow(id)?.progress).toBe(40);
     expect(readRow(id)?.progressNode).toEqual(node);
   });
+
+  it("progressNode 原样存 classType（4-B2：画布读 label、状态栏读类名）", async () => {
+    const id = await seed({ status: "QUEUED" });
+    const node = {
+      id: "76",
+      value: 3,
+      max: 20,
+      classType: "KSampler",
+      label: "采样器",
+    };
+    expect(await impl.updateProgress(id, 30, node)).toBe(true);
+    expect(readRow(id)?.progressNode).toEqual(node);
+  });
+
+  it("第一条进度帧把 claimedAt 从 NULL 定格，后续帧不刷新（4-B2 的耗时基准）", async () => {
+    const id = await seed({ status: "QUEUED" });
+    await impl.updateProgress(id, 10, { id: "1", value: 1, max: 10 });
+    expect(claimedMs(id)).not.toBeNull();
+    const first = claimedMs(id);
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await impl.updateProgress(id, 20, { id: "2", value: 2, max: 10 });
+    /* COALESCE 而不是无条件覆写：进度帧每几秒一发，跟着刷就等于「已运行」永远
+     * 接近零。 */
+    expect(claimedMs(id)).toBe(first);
+  });
 });
 
 describe("markRunning（同族 compare-and-set）", () => {
@@ -141,6 +177,22 @@ describe("markRunning（同族 compare-and-set）", () => {
     const id = await seed({ status: "SUCCEEDED", promptId: "orig" });
     expect(await impl.markRunning(id, "late")).toBe(false);
     expect(readRow(id)?.promptId).toBe("orig");
+  });
+
+  it("没写过进度时由 markRunning 定格 claimedAt；已有则不覆写（4-B2）", async () => {
+    const id = await seed({ status: "QUEUED" });
+    expect(await impl.markRunning(id, "pid-a")).toBe(true);
+    expect(claimedMs(id)).not.toBeNull();
+
+    const other = await seed({ status: "QUEUED" });
+    await impl.updateProgress(other, 10, { id: "1", value: 1, max: 10 });
+    const fromProgress = claimedMs(other);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    /* raw 路径的 promptId 常常整轮跑完才回传（#1184 实测），若这里无条件覆写，
+     * 状态栏的耗时会从收尾那一刻重新开始。 */
+    expect(await impl.markRunning(other, "pid-b")).toBe(true);
+    expect(claimedMs(other)).toBe(fromProgress);
+    expect(readRow(other)?.promptId).toBe("pid-b");
   });
 });
 
@@ -485,6 +537,20 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
     // 同一行随后可被正主领走
     expect(await impl.claimNextQueued("host", 10)).toEqual([hostId]);
   });
+
+  it("领取把 claimedAt 写成当前时刻，且**不复用**上一轮的时刻（4-B2）", async () => {
+    const staleAt = new Date(Date.now() - 60_000);
+    const id = await seed({ claimedBy: "host", claimedAt: staleAt });
+
+    expect(await hostImpl.claimNextQueued("host", 1)).toEqual([id]);
+
+    const stamped = claimedMs(id);
+    expect(stamped).not.toBeNull();
+    /* 与 `updateProgress` / `markRunning` 那两处的 COALESCE 相反，这里是无条件覆写：
+     * 一次领取就是新一轮执行的起点，崩溃后重领的行不该带着上一轮的耗时基准。 */
+    expect(stamped).toBeGreaterThan(staleAt.getTime());
+    expect(Math.abs((stamped ?? 0) - Date.now())).toBeLessThan(5_000);
+  });
 });
 
 describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
@@ -628,5 +694,39 @@ describe("收口写入的终态守卫与归属守卫（Phase 4-A1 / ADR §14 D4�
       "skipped-missing",
     );
     expect(await impl.cancel("no-such-task")).toBe("skipped-missing");
+  });
+});
+
+/** `replaceRawCli` / `findRawCli`（P3 §5 ADR §14 D1 的 4-B2）。
+ *
+ *  钉的是「查看完整输出」这个排障入口的**跨宿主可见性**：原文由执行侧在收口时
+ *  整包写一次，读侧不再碰执行进程的内存——host 执行的任务此前点进去永远是空态。
+ *  守卫形态与 `replaceLogs` 同族（只带归属、不带终态），尾随输出不该被挡掉。 */
+describe("replaceRawCli / findRawCli", () => {
+  it("整包重写，且**终态行也写**（只带归属守卫）", async () => {
+    const id = await seed({ status: "SUCCEEDED" });
+    await impl.replaceRawCli(id, ["a", "b"]);
+    expect(await impl.findRawCli(id)).toEqual(["a", "b"]);
+    // 再写一次是整包替换，不是追加（与 replaceLogs 同形）
+    await impl.replaceRawCli(id, ["c"]);
+    expect(await impl.findRawCli(id)).toEqual(["c"]);
+  });
+
+  it("写不进别人那一片（归属守卫），但读是跨归属的", async () => {
+    const id = await seed({ claimedBy: "host" });
+    await impl.replaceRawCli(id, ["x"]);
+    expect(await hostImpl.findRawCli(id)).toBeNull();
+    // 正主写一次……
+    await hostImpl.replaceRawCli(id, ["h"]);
+    // ……inline 作为**读侧**照样看得见（这一列是给用户的排障入口，不是执行状态）
+    expect(await impl.findRawCli(id)).toEqual(["h"]);
+  });
+
+  it("没写过的行与不存在的行都回 null；写入空数组回空数组", async () => {
+    const id = await seed({});
+    expect(await impl.findRawCli(id)).toBeNull();
+    expect(await impl.findRawCli("no-such-task")).toBeNull();
+    await impl.replaceRawCli(id, []);
+    expect(await impl.findRawCli(id)).toEqual([]);
   });
 });
