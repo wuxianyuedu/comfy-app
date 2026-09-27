@@ -192,7 +192,7 @@ describe("reaper 模块级副作用", () => {
     closeDb();
   });
 
-  it("表未就绪时加载 reaper 不读库（旧实现在此处抛 no such table）", async () => {
+  it("表未就绪时启动 reaper 不读库（旧实现在此处抛 no such table）", async () => {
     vi.resetModules();
     // `env.js` 由 `vi.stubEnv` 的 SKIP_ENV_VALIDATION 放行后，仍会校验必填项；
     // 两处密钥按「占位值」给出，等价于 CI 里 `pnpm test` 的真实条件。
@@ -206,8 +206,12 @@ describe("reaper 模块级副作用", () => {
       "listStaleQueued",
     );
 
-    await expect(import("./comfyui/reaper")).resolves.toBeTruthy();
-    // 副作用是 fire-and-forget：给异步 sweeper 一点时间落定
+    /* 加载模块本身已不再起回收器（ADR §14 D3），所以这里必须**显式**起一次：
+     * 否则本用例只验了「什么都没发生」，判据会静默失效——要验的是「起了表、
+     * 而表还没就绪时不读库」。 */
+    const reaper = await import("./comfyui/reaper");
+    reaper.startReaper();
+    // 首扫是 fire-and-forget：给异步 sweeper 一点时间落定
     await new Promise((r) => setTimeout(r, 50));
 
     expect(listStaleQueued).not.toHaveBeenCalled();

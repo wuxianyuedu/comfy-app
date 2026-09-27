@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Job } from "./runner-state";
 
-/* 把 reaper 那些带副作用的依赖 mock 掉，这样 import ./reaper
- *（它会以模块副作用的形式启动 `startReaper()`）就不会碰到真实的数据库 / ComfyUI。
+/* 把 reaper 那些带副作用的依赖 mock 掉，这样 import ./reaper 就不会碰到真实的
+ * 数据库 / ComfyUI（ADR §14 D3 之后本模块加载零副作用，起表要显式调
+ * `startReaper()`；这里的桩是为两条 sweeper 被直接调用时准备的）。
  * `isTaskClaimedInProcess` 本身是纯函数，但该模块还持有两个清扫定时器 ——
  * 把它们替换成空操作，既让 import 安全，又能测到那个纯助手。 */
 vi.mock("../core/repository", () => ({
