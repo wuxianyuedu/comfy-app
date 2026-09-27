@@ -492,10 +492,20 @@ function runDiscoverStreaming(
   });
 }
 
+/* 校验外部进程参数：拒绝 flag 形态（前缀 -）、空/超长、含 shell/元字符，
+ * 防客户端把 `--out=...` 之类伪装成包名注入到 spawn argv。 */
+function safeSpawnArg(token: unknown): string | null {
+  if (typeof token !== "string") return null;
+  if (token.length === 0 || token.length > 8192) return null;
+  if (token.startsWith("-")) return null;
+  if (/[\0'"$;`&|<>(){}=]/.test(token)) return null;
+  return token;
+}
+
 /* 构建流式响应：先把解析器的实时日志透出去，再给报告。
  * 传 `onlyPkgs`（具体子包路径）表示做子集 / 合并解析；
  * 否则 `paths` 就是完整的根目录列表。 */
-function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
+function streamParse(paths: string[], onlyPkgs?: string[]): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -767,10 +777,22 @@ export async function POST(req: NextRequest) {
 
   if (action === "parse") {
     const paths = getPaths();
-    // 仅做 join(",") 透传给子进程,元素类型无需收窄(与原 any 行为逐字一致)。
-    const onlyPkgs: readonly unknown[] | undefined = Array.isArray(rec.packages)
-      ? rec.packages
-      : undefined;
+    const rawPkgs = Array.isArray(rec.packages) ? rec.packages : undefined;
+    let onlyPkgs: string[] | undefined;
+    if (rawPkgs?.length) {
+      const sanitized: string[] = [];
+      for (const p of rawPkgs) {
+        const s = safeSpawnArg(p);
+        if (s === null) {
+          return NextResponse.json(
+            { ok: false, error: "invalid package entry" },
+            { status: 400 },
+          );
+        }
+        sanitized.push(s);
+      }
+      onlyPkgs = sanitized;
+    }
     if (onlyPkgs?.length) {
       // 子集解析 —— 不必先设置 CUSTOM_NODES_PATH
       return streamParse(paths, onlyPkgs);
@@ -789,7 +811,18 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "discover") {
-    const parents: unknown[] = Array.isArray(rec.parents) ? rec.parents : [];
+    const parentsRaw = Array.isArray(rec.parents) ? rec.parents : [];
+    const parents: string[] = [];
+    for (const p of parentsRaw) {
+      const s = safeSpawnArg(p);
+      if (s === null) {
+        return NextResponse.json(
+          { ok: false, error: "invalid parent path" },
+          { status: 400 },
+        );
+      }
+      parents.push(s);
+    }
     const result = await runDiscover(parents);
     return NextResponse.json({ ok: true, packages: result });
   }

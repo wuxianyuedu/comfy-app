@@ -19,8 +19,4 @@ export const postRouter = createTRPCRouter({
         createdById: ctx.user.id,
       });
     }),
-
-  getSecretMessage: authedProcedure.query(() => {
-    return "you can now see this secret message!";
-  }),
 });
