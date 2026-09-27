@@ -70,14 +70,16 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 - **归属分片**：`task.claimedBy='host'` 的行只被 host 领取与回收；inline（含历史
   NULL 行）只被 Next 侧处理——两进程并存不会互抢、不会互误杀（判据单一定义在
   `repository-task-impl.ts` 的 `ownedBy()`）。
-- **取消**：界面点取消只把行标成 `CANCELLED`（`repository-task-impl.ts` 的 `cancel`）——
-  它**不**调 ComfyUI 的 `/interrupt`（那是全局停，当前只被 `enqueue.ts` 的 `cancelTask`
-  用着，而后者没有界面调用方）。真正在执行的一侧各自收尾：host 的 tick 见到取消态
-  kill 自己名下在飞的 comfy-cli，排队中未开跑的任务由派发侧不再放行。
-  两个曾按代码核实的缺陷里，**「被 kill 那一轮把 `CANCELLED` 覆盖成 `FAILED`」已由
-  Phase 4-A1 的终态守卫修掉**（迟到的收口现在被挡下、只留一行日志）。仍存在的那条：
-  ComfyUI 不中断，当前这一轮会跑完并出图（取消省下的是「还排在队列里的部分」，不是
-  正在跑的那一步），治理在 ADR §14 的 D2。
+- **取消**（Phase 4-A3 起的语义，ADR §14 D2）：界面点取消走执行侧那份统一出口
+  `enqueue.cancelTask` —— 落一行「用户取消任务」进执行日志、把行标成 `CANCELLED`、
+  清理本进程记账与并发槽。**中断（`POST /api/interrupt`）只由握着该任务在飞子进程的
+  那一侧发**：inline 在 `cancelTask` 里发，host 在自己的 tick kill 之后发
+  （`reconcileCancelled`，日志 `cancel-reaped … interrupt=sent`）。跨进程之所以这样分：
+  `/api/interrupt` 是**全局停**、不带 prompt 参数，而 ComfyUI 实例两宿主共享，
+  谁都能发就等于谁都能误停对方的在飞任务。
+  为什么判据不是「问 ComfyUI 谁在跑」：实测 comfy-cli 提交的 prompt 在整轮执行期间
+  **不出现在** `/queue` 的 `queue_running`，用它当依据会退化成「永远不中断」
+  （详见 ISSUE #1184）。
 - **进度 / 日志**：执行方（host 或 inline）写库，界面统一走 SSE→DB 短轮询
   （≤3s + 200ms 落库防抖）。曾经「host 任务实时日志静默」的空窗已由 Phase 3-C
   收口，两模式同一契约。

@@ -423,12 +423,20 @@ export async function uploadImage(
   return (await res.json()) as { name?: string };
 }
 
+/** 让 ComfyUI 中断**当前正在执行的这一轮**（全局停、不带 prompt 参数——所以
+ *  「该不该发」的判据在调用方：只有握着该任务在飞执行的那一侧才发，见
+ *  `enqueue.cancelTask` 与 `executor-host.mjs` 的 `reconcileCancelled`）。
+ *  非 2xx 必须抛：调用方要靠它区分「中断请求发出去了」与「ComfyUI 没接」，
+ *  静默成功会让取消继续出图时没有任何可查的痕迹（规范硬规则 4）。 */
 export async function interrupt(): Promise<void> {
   const base = await resolveComfyBase();
-  await fetch(`${base}/api/interrupt`, {
+  const res = await fetch(`${base}/api/interrupt`, {
     method: "POST",
     signal: AbortSignal.timeout(5_000),
   });
+  if (!res.ok) {
+    throw new Error(`POST /api/interrupt -> ${res.status}`);
+  }
 }
 
 /* ── /system_stats ──────────────────────────────────────────────────────

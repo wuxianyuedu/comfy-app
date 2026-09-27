@@ -177,11 +177,12 @@ async function claimTickOnce() {
   await reconcileCancelled();
 }
 
-/** 取消收尾最小版（ADR §13-3B1 决定 3）：`interrupt()` 是 POST 共享 ComfyUI、
- *  Next 侧跨进程仍有效，但 comfy-cli 子进程活在**本进程**的 `cliProcs` 里，
- *  Next 摸不到——tick 检查在飞行的 DB 状态，见 CANCELLED 就地 kill。
- *  kill 形态逐字对齐 `enqueue.cancelTask` 的同款三行（同一判据源，不另发明
- *  一套），finalize 守卫挡住被杀 cli 的迟到回写。 */
+/** 取消收尾（ADR §13-3B1 决定 3 → §14 D2 落定形态）：用户点取消时 Next 只把行
+ *  标成 CANCELLED（它看不见本进程的 `cliProcs`），tick 见到取消态就地 kill，
+ *  并**由本侧**发 `interrupt()`——kill 只收走 comfy-cli，它提交的 prompt 还在
+ *  ComfyUI 那边跑，不发就是「取消后继续出图」。
+ *  kill 形态与 `enqueue.cancelTask` 同构（同一判据源，不另发明一套），被杀 cli
+ *  的迟到回写由 impl 的终态守卫挡下（§14 D4）。 */
 async function reconcileCancelled() {
   const { hostRepo, cliProcs } = hostRuntime;
   for (const taskId of [...cliProcs.keys()]) {
@@ -196,7 +197,17 @@ async function reconcileCancelled() {
         /* ignore：与 cancelTask 同形——进程可能已自己退了 */
       }
       cliProcs.delete(taskId);
-      writeLine(`cancel-reaped taskId=${taskId}`);
+      /* 中断由**握着子进程的这一侧**发（ADR §14 D2）：Next 看不见本进程的
+       * cliProcs，所以它只负责把行标成 CANCELLED；真正让 ComfyUI 停手的是这里。
+       * kill 只是收走 comfy-cli，它提交的 prompt 还在服务端跑着——不发 interrupt
+       * 就会「取消后继续出图」。失败不致命：状态已经是 CANCELLED。 */
+      let interruptState = "sent";
+      try {
+        await hostRuntime.interrupt();
+      } catch (err) {
+        interruptState = `failed:${err?.message ?? err}`;
+      }
+      writeLine(`cancel-reaped taskId=${taskId} interrupt=${interruptState}`);
     } catch {
       /* DB 抖动不杀 tick：下一轮再看 */
     }
@@ -242,7 +253,7 @@ async function bootRuntime() {
     await import("../src/lib/comfyui/executor-finalize.ts");
   const { configureExecutorWs } =
     await import("../src/lib/comfyui/executor-ws.ts");
-  const { resolveComfyBase, getView } =
+  const { resolveComfyBase, getView, interrupt } =
     await import("../src/lib/comfyui/client.ts");
   const { logger } = await import("../src/lib/core/logger.ts");
 
@@ -263,7 +274,7 @@ async function bootRuntime() {
     runtimeLog: logger,
   });
   configureExecutorWs({ taskRepo: hostRepo });
-  hostRuntime = { hostRepo, enqueueJob: enqueue, cliProcs };
+  hostRuntime = { hostRepo, enqueueJob: enqueue, cliProcs, interrupt };
   writeLine(
     "runtime inject-ok seams=runner+cli+finalize+ws+enqueue+reaper(owner=host)+trace",
   );
