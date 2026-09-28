@@ -21,7 +21,8 @@
  *      · **死豁免**：登记在表上却一处都不命中的条目 = 负债，会把该文件今后的
  *        写死色值静默放行，出现即阻断（口径按文件、不按条目，见下方注释）；
  *      · **幽灵 token**：字面 `var(--color-…)` 引用了从未定义的 token —— 不报错、只是
- *        颜色消失（`fill` 退黑、`stroke` 退 none），出现即阻断；
+ *        颜色消失（`fill` 退黑、`stroke` 退 none），出现即阻断；**带兜底值的同样阻断**
+ *        （那种渲染结果确定，但等于用硬编码值冒充 token，叫「装饰性 indirection」）；
  *      · **拼接 token 名**：`--color-${x}` / `"--color-" + x` —— 前一条比对不到它，
  *        而 Tailwind v4 按源码里的**字面名**决定保留哪颗 `@theme` 变量，拼出来的名字
  *        看不见 → 那颗 token 连产物都进不去（实测无人引用的声明在产物里出现 0 次）。
@@ -502,8 +503,8 @@ function classifyFile(rel) {
  * 这类属性，于是 `--color-canvas-grid-line`（从未定义，靠 `<Background color=…>` 的
  * 兜底值活着）本来就抓不到；更讽刺的是，把三处网格线收进一个出口函数之后，引用变成
  * 了出口里的模板串（`color-mix(… var(--color-canvas-grid-line) X% …)`），**连属性形态
- * 都不是了** —— 集中化这个动作本身会把引用搬出判据的视野。所以判据只认三个条件：
- * 字面量、无兜底、带 `--color-` 前缀，不再关心它挂在哪个语法位置上。
+ * 都不是了** —— 集中化这个动作本身会把引用搬出判据的视野。所以判据只认两个条件：
+ * **字面量**、**带 `--color-` 前缀**，不再关心它挂在哪个语法位置上。
  *
  * **判据边界**（说清不覆盖什么，别以为这条能抓所有未定义变量）：
  *   · 覆盖**任何字面量** `var(--color-…)` 引用 —— 不限于呈现属性：SVG 的
@@ -511,18 +512,24 @@ function classifyFile(rel) {
  *     `style={{}}`、Tailwind 的 `[var(--color-x)]`，以及**收在出口函数里的模板串**
  *     （`gridLineColor()` 就是这种 —— 只按属性形态判的话，集中化本身就会把引用
  *     搬出判据视野，这个洞是本次改动实测踩出来的）；
- *   · **带兜底值的不报**（`var(--x, #fff)`）—— 取不到也有色，渲染结果确定；
+ *   · **带不带兜底都判**（④）：`var(--color-x, #fff)` 里 x 从未声明时渲染结果确实
+ *     确定（永远走兜底），所以它不是「看不见」那类失效，而是**装饰性 indirection** ——
+ *     读代码的人以为这行随主题，实际是一个硬编码值冒充 token，把 §3.6.1 的
+ *     「单一事实来源」悄悄换成局部常量。上一版把带兜底列为「明确不覆盖」，
+ *     而 `--color-canvas-grid-line` 正是靠那条豁免活了好几轮，故本次收回该豁免；
  *   · **运行期注入的变量不判**：`--transform-origin` / `--available-height` /
  *     `--sidebar-width` 这些由 base-ui 与宿主代码写入的名字不带 `--color-` 前缀，
  *     天然落在本判据之外；实测 Tailwind 裸变量写法 310 处里 43 处「CSS 查无此名」
- *     全是这一类 —— 静态硬判会误报一片，那部分交给 review；
+ *     全是这一类 —— 静态硬判会误报一片，那部分交给 review。
+ *     （`--color-*` 命名空间内**没有**运行期注入的正当用法：实测全仓 `setProperty`
+ *     与 style 对象键里都不出现 `--color-` 名字，所以带前缀就足以排除噪声。）
  *   · **拼接出来的名字判不到**，交给下面第 ③ 条。
  *
- * 实测口径：非测试代码里字面 `var(--color-…)`（无兜底）**175 处，查无定义 0 处**。
- * 早先只认属性形态时是 28 处 —— 泛化把覆盖率放大到 6 倍而不引入任何误报，
- * 因为「必须带 `--color-` 前缀 + 必须是无兜底的字面量」这两个条件已经把噪声排掉了。
+ * 实测口径：非测试代码里字面 `var(--color-…)` **175 处，查无定义 0 处**；
+ * 带兜底的 **0 处**（唯一那处就是刚被收掉的网格线）。早先只认属性形态时是 28 处 ——
+ * 泛化把覆盖率放大到 6 倍而不引入任何误报。
  */
-const COLOR_VAR_REF_RE = /var\(\s*(--color-[\w-]+)\s*\)/g;
+const COLOR_VAR_REF_RE = /var\(\s*(--color-[\w-]+)\s*([),])/g;
 const CSS_VAR_DECL_RE = /^\s*(--color-[\w-]+)\s*:/gm;
 
 /**
@@ -625,7 +632,8 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
     });
   }
 
-  /* 幽灵 token：同一个文件循环里顺手扫，避免第二次遍历 src。 */
+  /* 幽灵 token：同一个文件循环里顺手扫，避免第二次遍历 src。
+   * `m[2] === ","` 表示这行带兜底值 —— 渲染确定，但那是「装饰性 indirection」（④）。 */
   for (let i = 0; i < codeLines.length; i++) {
     for (const m of codeLines[i].matchAll(COLOR_VAR_REF_RE)) {
       if (declaredColorVars.has(m[1])) continue;
@@ -633,6 +641,7 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
         file: r,
         line: i + 1,
         name: m[1],
+        fallback: m[2] === ",",
         text: lines[i].trim(),
       });
     }
@@ -701,10 +710,12 @@ if (unusedExempts.length > 0 && !REPORT_ONLY) {
 function printGhosts() {
   if (!ghosts.length) return;
   console.log(
-    "[theme-colors] 引用了从未定义的 --color-*（字面 var() 会静默退成初值）：",
+    "[theme-colors] 引用了从未定义的 --color-*（字面 var() 查无此名）：",
   );
   for (const g of ghosts) {
-    console.log(`  ✗ ${g.file}:${g.line} — ${g.name}｜${g.text}`);
+    console.log(
+      `  ✗ ${g.file}:${g.line} — ${g.name}${g.fallback ? "（带兜底 = 装饰性 indirection：兜底永远生效，这行其实不随主题）" : "（无兜底 = 静默退成初值）"}｜${g.text}`,
+    );
   }
 }
 
@@ -763,9 +774,11 @@ if (ghosts.length > 0 && !REPORT_ONLY) {
   printGhosts();
   console.error(
     `[theme-colors] ${ghosts.length} 处幽灵 token：var(--color-…) 查无定义。` +
-      "SVG 的 fill 会退成黑色、stroke 会退成 none —— 不报错，只是看不见。\n" +
-      "  二选一：在 src/app/globals.css 的 @theme 里补上定义，或把这一行改回写死色值\n" +
-      "  （后者要按 §3.6.1 登记豁免）。边界与不覆盖的形态见 §3.6.1「幽灵 token」一节。",
+      "无兜底时 SVG 的 fill 退成黑色、stroke 退成 none（不报错，只是看不见）；\n" +
+      "  带兜底时渲染结果确定，但那行其实不随主题 —— 是硬编码值冒充 token（§3.6.1 的反面）。\n" +
+      "  二选一：在 src/app/globals.css 的 @theme 里补上定义（需要两态就补两档），\n" +
+      "  或把这一行改回写死色值（后者要按 §3.6.1 登记豁免）。\n" +
+      "  边界与不覆盖的形态见 §3.6.1.1「幽灵 token / 装饰性 indirection」一节。",
   );
   process.exit(1);
 }
