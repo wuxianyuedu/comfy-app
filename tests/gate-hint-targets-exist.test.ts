@@ -10,7 +10,7 @@
  *   · `check-ui-primitives.cjs` 的改法提示里曾写着「Empty / Field 基元未装 → 去
  *     `shadcn add`」，而两个基元早就装好 —— 提示会指挥人做错事。
  *
- * 两条判据口径：
+ * 三条判据口径：
  *   1. **只看字符串字面量、剥掉注释**。注释里出现旧路径往往是**有意叙述历史**
  *      （如「自某次拆分起 `src/lib/app-settings.ts` 拆成目录」），那不是缺陷；
  *      写成字符串的路径则是要拿去比对/豁免/提示的，指错就是失效。
@@ -18,6 +18,11 @@
  *      本身就是会漂的那类东西。另留一组锚点字面量，既证明「自动发现真的收到了这些
  *      脚本」，也让提交前的增量测试层在改到它们时把本文件拉进 C 组（§13.5.8 的
  *      「按路径引用」判据）。
+ *   3. **命名空间要分开**：本判据问的是「**仓库**里有没有这个文件」，而产物层门禁里
+ *      有一批字面量问的是「**构建产物**里有没有」。那两个命名空间会撞（实测撞上的就是
+ *      执行器宿主的运行时图与构建清单），撞上的按下面 `PRODUCT_ROOT_LITERALS` 精确配对
+ *      放行，**并且例外项自己也要能被复算**（见「例外项还在守东西」那条用例）——
+ *      否则这张表就退化成「谁都能往里加一条」。
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -64,6 +69,50 @@ function gateScripts() {
     .map((f) => `scripts/${f}`);
 }
 
+/**
+ * 「**产物根**相对」的字面量：仓库里本来就没有这些文件，是构建脚本在构建期写进产物的。
+ *
+ * 实测撞上的这一对来自执行器宿主的运行时图与构建清单（登记方是产物层门禁
+ * `check-standalone-contents.cjs` 的 `REQUIRED_HOST_FILES`，生成方是
+ * `build-executor-host.mjs`）。**登记的代价由下面那条用例承担**，这张表不是免检名单。
+ *
+ * 为什么按 `登记脚本 + 路径 + 生成脚本` 三元组精确配对，而不是「以 `scripts/` 开头的
+ * 一律放行」或「整份脚本豁免」：那两个都会把判据的扫描面开个洞 —— 门禁里真正会犯的错
+ * 恰好就是「把要豁免的源码文件路径抄错」（本文件动因第一条那次就是这么静默失效的），
+ * 而抄错的路径同样长得像产物路径。
+ */
+const PRODUCT_ROOT_LITERALS: Array<{
+  /** 把这条路径当字面量写下来的那份门禁脚本 */
+  script: string;
+  /** 字面量本身（相对仓库根，但语义上相对产物根） */
+  path: string;
+  /** 构建期生成它的脚本：登记理由由它承担 */
+  generatedBy: string;
+}> = [
+  {
+    script: "scripts/check-standalone-contents.cjs",
+    path: "scripts/executor-host.runtime.mjs",
+    generatedBy: "scripts/build-executor-host.mjs",
+  },
+  {
+    script: "scripts/check-standalone-contents.cjs",
+    path: "scripts/executor-host.build.json",
+    generatedBy: "scripts/build-executor-host.mjs",
+  },
+];
+
+/** 读一份仓库内脚本的源码（读不到即返回空串，让断言去报「指不到东西」）。 */
+function sourceOf(rel: string): string {
+  const abs = path.join(ROOT, rel);
+  return existsSync(abs) ? readFileSync(abs, "utf8") : "";
+}
+
+function isProductRootLiteral(script: string, p: string): boolean {
+  return PRODUCT_ROOT_LITERALS.some((e) => e.script === script && e.path === p);
+}
+
+/** 排除「产物根」命名空间之后，某份门禁脚本里真正该存在的仓库路径字面量。 */
+
 describe("门禁脚本里的路径字面量必须存在", () => {
   const scripts = gateScripts();
 
@@ -80,9 +129,12 @@ describe("门禁脚本里的路径字面量必须存在", () => {
     const dead = [];
     let seen = 0;
     for (const rel of scripts) {
-      const paths = quotedRepoPaths(readFileSync(path.join(ROOT, rel), "utf8"));
-      seen += paths.length;
-      for (const p of paths) {
+      const all = quotedRepoPaths(sourceOf(rel));
+      seen += all.length;
+      // 「产物根」命名空间的字面量不参与本判据（构建期才存在的文件名，仓库里查不到
+      // 不是缺陷）；它们由下面那条用例反向守着，不许变成免检洞
+      for (const p of all) {
+        if (isProductRootLiteral(rel, p)) continue;
         if (!existsSync(path.join(ROOT, p))) dead.push(`${rel} → ${p}`);
       }
     }
@@ -98,6 +150,34 @@ describe("门禁脚本里的路径字面量必须存在", () => {
       `这些路径被门禁当数据用（豁免项 / 比对目标 / 改法提示），但仓库里没有：\n  ${dead.join("\n  ")}\n` +
         "要么改成真存在的路径，要么删掉这条已经指不到东西的记录（留着 = 假装在守）",
     ).toEqual([]);
+  });
+
+  /**
+   * 例外表自己也得是**活的**，三条都得复算：
+   *   ① 登记方脚本里这个字面量还在（不在了 = 这条例外已经是空账，该删）；
+   *   ② 生成方脚本逐字写着这个文件名（不写了 = 产物里不会再有它，登记理由失效）；
+   *   ③ 仓库里仍然**没有**这个文件（哪天改成入库，就该从例外表里删掉，让它回到
+   *      被本判据正常管着的状态）。
+   * 没有这条用例，例外表就是一张「加进去就没人再检查」的清单 —— 而那正是本文件
+   * 动因里被批评的形态。
+   */
+  it("产物根例外项还在守东西：三条登记理由都能复算", () => {
+    expect(PRODUCT_ROOT_LITERALS.length).toBeGreaterThan(0);
+    for (const entry of PRODUCT_ROOT_LITERALS) {
+      const basename = path.posix.basename(entry.path);
+      expect(
+        quotedRepoPaths(sourceOf(entry.script)),
+        `例外失效：${entry.script} 里已经没有字面量 ${entry.path} —— 把这条例外从表里删掉`,
+      ).toContain(entry.path);
+      expect(
+        sourceOf(entry.generatedBy),
+        `例外失效：${entry.generatedBy} 已经不再产出 ${basename} —— 登记理由不成立`,
+      ).toContain(basename);
+      expect(
+        existsSync(path.join(ROOT, entry.path)),
+        `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从产物根例外表里删掉`,
+      ).toBe(false);
+    }
   });
 
   it("假路径判为不存在、真路径判为存在（上面那条不是空转）", () => {
