@@ -9,8 +9,8 @@
  *   2. 槽位满不领；
  *   3. 载荷两种格式都只能交 comfy-cli（ISSUE #632 之后的唯一提交口径）；
  *   4. 提交异常必须归还槽位，否则一条坏任务永久占住 `MAX_CONCURRENCY=1`。
- * 新增的两组是这一刀带来的：领取时把上一轮的收口锁与日志缓冲清干净（重跑语义），
- * 以及「广播给还在排队的行」——它原来读内存队列，现在读库。
+ * 新增的两组是这一刀带来的：领取时清掉上一轮的收口一次性锁（重跑语义；日志缓冲的
+ * 轮次边界在**收口**处，见 ISSUE #1206），以及「广播给还在排队的行」——它原来读内存队列，现在读库。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -73,6 +73,7 @@ function resetRunnerState() {
   s.pendingDispatch.clear();
   s.ws = null;
   s.logs.clear();
+  s.queuedEntries.clear();
   s.wsWaitLogged.clear();
   s.executedWorkflow.clear();
   s.promptToTask.clear();
@@ -230,10 +231,10 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     expect(msgs.some((m) => m.includes("a cat"))).toBe(true);
   });
 
-  it("重跑同一个 taskId：上一轮的收口锁与日志缓冲被清掉", async () => {
-    openWs();
+  it("等待提示在同一条被领走之后仍在：缓冲重开时接回本轮排队期的行", async () => {
     const repo = fakeRepo({
       claimNextQueued: vi.fn(async () => ["t-rerun"]),
+      listQueuedIds: vi.fn(async () => ["t-rerun"]),
       findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
         workflowName: "w",
         execPayload: { nodes: [] },
@@ -243,17 +244,41 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
     state().settled.add("t-rerun");
     state().finalized.add("t-rerun");
-    state().logs.set("t-rerun", [
-      { t: 1, level: "info", msg: "上一轮的旧现场" },
+
+    /* 第一拍：WS 未就绪 → 不领行，只把「在等什么」写进还在排队的行。 */
+    expect(await mod.claimAndDispatchOnce()).toBeNull();
+    expect(repo.claimNextQueued).not.toHaveBeenCalled();
+
+    openWs();
+    await mod.claimAndDispatchOnce();
+
+    /* 两把一次性收口锁仍然在领取时清（重跑语义）。 */
+    expect(state().settled.has("t-rerun")).toBe(false);
+    expect(state().finalized.has("t-rerun")).toBe(false);
+    /* 这一条是 ISSUE #1206 的本体：`logs.set(taskId, [])` 曾把等待提示一起抹掉，
+     *  而回收器不再兜底判死排队行之后（ISSUE #1204），它是唯一说明「这条在等什么」
+     *  的出口。顺序也要成立——等待在前、开跑在后，用户才看得出中间隔了多久。 */
+    const msgs = logsOf("t-rerun");
+    const iWait = msgs.findIndex((m) => m.includes("等待 ComfyUI"));
+    const iClaim = msgs.findIndex((m) => m.includes("任务已从队列领取"));
+    expect(iWait).toBeGreaterThanOrEqual(0);
+    expect(iClaim).toBeGreaterThan(iWait);
+  });
+
+  it("排队期的登记只兑现一次：领取之后就结束，不会被下一轮复用", async () => {
+    openWs();
+    const repo = fakeRepo({
+      claimNextQueued: vi.fn(async () => ["t-once-seed"]),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+    state().queuedEntries.set("t-once-seed", [
+      { t: 1, level: "warn", msg: "⏳ 等待 ComfyUI WebSocket 连接就绪…" },
     ]);
 
     await mod.claimAndDispatchOnce();
 
-    expect(state().settled.has("t-rerun")).toBe(false);
-    expect(state().finalized.has("t-rerun")).toBe(false);
-    expect(logsOf("t-rerun").some((m) => m.includes("上一轮的旧现场"))).toBe(
-      false,
-    );
+    expect(state().queuedEntries.has("t-once-seed")).toBe(false);
+    expect(logsOf("t-once-seed")[0]).toContain("等待 ComfyUI");
   });
 
   it("行没有执行载荷：判失败并归还槽位，不留 RUNNING 僵尸", async () => {

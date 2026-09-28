@@ -46,9 +46,11 @@ import {
   MAX_CONCURRENCY,
   clearFinalize,
   log,
+  logWhileQueued,
   markDispatched,
   releaseDispatchSlot,
   state,
+  takeQueuedEntries,
 } from "./runner-state";
 import type { Job, LogEntry } from "./runner-state";
 import { executeViaComfyCli } from "./executor-cli";
@@ -121,7 +123,7 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
     for (const id of ids) {
       if (s.wsWaitLogged.has(id)) continue;
       s.wsWaitLogged.add(id);
-      log(
+      logWhileQueued(
         id,
         "warn",
         "⏳ 等待 ComfyUI WebSocket 连接就绪；若 ComfyUI 未运行且已开启自动启动，将自动拉起并在此后继续执行…",
@@ -179,15 +181,17 @@ export async function claimAndDispatchOnce(options?: {
   if (!taskId) return null;
 
   markDispatched(taskId);
-  /* 领到手 = 这一轮从零开始，原来在 `enqueue()` 里做的四件记账搬到这里（第二刀）：
+  /* 领到手 = 这一轮的执行起点，原来在 `enqueue()` 里做的四件记账搬到这里（第二刀）：
    *   · `settled` / `finalized` 两把一次性锁要清，否则同一个 taskId 重跑时新的
    *     终态会被上一轮的标记挡住；
-   *   · 日志缓冲重开（`log()` 之后落库的是这一轮的现场，不混上一轮的尾巴）；
+   *   · 日志缓冲重开，但**接上本轮排队期写下的行**（`takeQueuedEntries`）。清成空
+   *     数组会连带抹掉「⏳ 等待 ComfyUI WebSocket 连接就绪…」，而回收器不再兜底判死
+   *     排队行之后（ISSUE #1204），那句是唯一说明「这条在等什么」的出口（#1206）；
    *   · `startedAt` 记时刻，完成时那句「总耗时 Xs」以它为基准（库里另有一列
    *     `claimedAt` 给状态栏用，两者同刻）。 */
   s.settled.delete(taskId);
   clearFinalize(taskId);
-  s.logs.set(taskId, []);
+  s.logs.set(taskId, takeQueuedEntries(taskId));
   s.startedAt.set(taskId, Date.now());
   log(
     taskId,
@@ -311,7 +315,7 @@ async function announceWaiting(
   const resolved = await resolveDispatch();
   if (!resolved) return;
   const ids = await resolved.repo.listQueuedIds(resolved.owner, ANNOUNCE_LIMIT);
-  for (const id of ids) log(id, level, msg);
+  for (const id of ids) logWhileQueued(id, level, msg);
 }
 
 /* 同一个叶子总线、第二种注册：通道层（executor-ws）在 ComfyUI 自动启动的每个
