@@ -286,11 +286,10 @@ async function bootRuntime() {
     "runtime inject-ok seams=runner+cli+finalize+ws+enqueue+reaper(owner=host)+dispatch(owner=host)+trace",
   );
 
-  const before = await hostRepo.listStaleQueued(
-    new Date(Date.now() - 30_000),
-    20,
-    "host",
-  );
+  /* boot 诊断：本片（claimedBy='host'）现在有几行在排队。pull 模型下这个数字
+   * 就等于「我起来之后会领走多少」——回收器不再把健康的排队行判死（ISSUE #1204），
+   * 所以这行与真实可领行数从此一致，不再出现「数出 1、1.4s 后判失败」的自相矛盾。 */
+  const before = await hostRepo.listQueuedIds("host", 20);
   /* 起表即首扫就是 Q2 对账（ADR §14 D3：reaper 不再由模块加载自启，宿主显式
    * 起）。startReaper 内部的 sweepOnce 先过 `isSchemaReady()` 再跑两条 sweeper，
    * 之后按 30s 常驻——所以这里不再裸调 reapStale*Tasks：那会绕过表就绪守卫，

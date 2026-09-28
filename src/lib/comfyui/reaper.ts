@@ -36,7 +36,7 @@ async function loadRealTaskRepo() {
 }
 type TaskRepoForReaper = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
-  | "listStaleQueued"
+  | "listStaleUnownedQueued"
   | "listStaleRunning"
   | "finalizeFailure"
   | "finalizeFromReaper"
@@ -81,46 +81,36 @@ async function resolveTaskRepo(): Promise<TaskRepoForReaper | null> {
   }
 }
 
-/* ── DB 侧的 QUEUED 回收器 ─────────────────────────
- * 症状：宿主进程冷重启之后，状态为
- *   `status=QUEUED, promptId=null, finishedAt=null` 的任务会永远挂着 ——
- *   进程内的在飞记账（原 `s.queue`，现 `pendingDispatch`）没了，而库里那行
- *   没人再领，用户看到的是"加入队列后就不继续执行了"。
+/* ── DB 侧的「无主 QUEUED」回收器（死信出口）─────────────────────────
+ * 判据（ISSUE #1204 起）：`QUEUED` + 无 `promptId` + 未收口 + 年龄过 `STALE_MS`
+ *   + **不属于任何已知归属片**（`claimedBy` 既不是 inline 也不是 host）。最后一条
+ *   就是本条规则的全部用处：正常数据永远不匹配它，它只给「写着归属、却没有任何宿主
+ *   会去领」的畸形行留一个用户可见出口（硬规则 4：失败必须有日志与可见出口）。
  *
- * 修法有两层：
- *   (a) reapStaleQueuedTasks() —— 模块加载时跑一次，之后每 30s 一次。
- *       一个**孤儿**任务满足「QUEUED 超过 STALE_MS 且没有 `promptId`，
- *       并且在当前进程里**没有任何内存足迹**」（dev 冷重启把执行器清空了），
- *       才被标成 FAILED，并给出明确原因 —— 用户能在日志面板看到解释并重跑。
- *       带 `promptId` 的任务归 ComfyUI 负责（它在 ComfyUI 的队列里，不在我们的），
- *       因此不碰。
- *   (b) cancelTask() 现在还处理「只有 DB 行、没有内存条目」的状态，
- *       用户不必等那 30s 的回收节拍就有出口。
+ * 为什么以前不是这样：这条 sweeper 生于 push 模型，那时「`QUEUED` 且无 `promptId`」
+ *   有两种完全不同的含义——(1) 没人管了（孤儿，该判死）；(2) raw UI 路径已经把任务
+ *   交给了 comfy-cli 子进程，而 comfy-cli 在 POST 给 ComfyUI 之前**不会**把行翻成
+ *   `RUNNING`、也不写 `promptId`（健康在飞）。所以判死条件是「aged 过 `STALE_MS`
+ *   且本进程内存查不到足迹」，再配下方那层向 ComfyUI 要**外部证据**的守卫（ISSUE #378），
+ *   专门用来不误杀 (2)。
  *
- *  **适用范围很重要**：QUEUED 回收器**只**能回收真正孤儿的任务
- *  （dev 冷重启抹掉了内存执行器）。**当前**进程仍在积极处理的任务必须放过 ——
- *  哪怕它的 DB 行还是 `QUEUED, promptId=null`。raw UI 格式那条路径
- *  （@see executeViaComfyCli）在 spawn 出来的 comfy-cli 进程把工作流转好、
- *  POST 给 ComfyUI 之前，是**不会**把任务标成 RUNNING / 写 promptId 的。
- *  而这个窗口在 Python 冷启动 / 加载模型时可能超过 STALE_MS，
- *  所以没有「内存认领」这道检查，回收器就会把一个健康的任务错杀。
- *  in-flight task ("任务卡在队列超过 Ns…无人 re-claim").  The check
- *  下面这条判据与 RUNNING 回收器的 `promptToTask` 守卫一致。
+ * ADR §14 D1 第二刀之后 (2) 这一类**不复存在**：提交方只往库里写一行 `QUEUED`，领取
+ *   是单语句原子翻 `RUNNING`（`claimNextQueued`），唯一提交实现是 `executeViaComfyCli`
+ *   （`executor-ws` 的直连 `/prompt` 已无调用方）。于是「`QUEUED` 且无 `promptId`」
+ *   只剩一个意思：**还没被领**——等槽（`MAX_CONCURRENCY=1`）、等本片宿主起来、或等
+ *   ComfyUI 起来（就绪门控），三种都是健康的等待态，归领取循环负责。按片判死反而会
+ *   主动伤人：实测宿主的 boot 首扫排在领取循环第一拍之前（第一拍最早 1.5s、还要过
+ *   WebSocket OPEN 门控），一行 48s 的遗留 `QUEUED` 在新宿主 boot 后 1.4s 就被判成
+ *   「请重新执行」，而同批 boot 诊断数出的正是 `hostShardQueued=1`。
  *
- *  判死前的最后一道保险（ISSUE #378）：in-memory 认领检查是**进程内**记忆，
- *  它有两个已知盲区——(1) `cliProcs` 若因 HMR 重新求值而丢失（已改挂
- *  globalThis，见 executor-cli.ts），(2) raw 任务在 comfy-cli 回传
- *  prompt_id 前 DB 行一直是 `QUEUED/promptId=null`，而 comfy-cli 子进程
- *  是**独立进程**：dev server 重启后旧子进程仍在驱动 ComfyUI，新进程对它
- *  一无所知。此时队列里没有、cliProcs 里没有、executedWorkflow 里也没有
- *  ——三个信号全空，但任务其实健康在跑（用户看到的正是节点在刷「▶ 开始执行」
- *  的同时被判死）。因此判死前必须向 ComfyUI 要**外部证据**：若 ComfyUI 的
- *  /queue 或 /history 仍有本应用（同一 client_id 家族 / 本地主机）的活动，
- *  就说明有在飞的工作流，本轮不回收，等下一 tick 再对账。ComfyUI 不可达
- *  （网络抖动）同样判「证据不足」而不杀——宁可晚一轮，不可误杀。
+ * 本刀的用户可见性代价要写清：没有活宿主时，排队行不再被标失败，「它在等什么」由
+ *   状态栏的排队数与行上的「⏳ 等待 ComfyUI WebSocket 连接就绪…」来说（那行会被领取
+ *   时的日志缓冲重开抹掉，另记 ISSUE #1206），而不是靠 30s 后一个 `FAILED` 兜底。
+ *
+ * 下方那道「判死前的外部证据」守卫原样保留：它约束的是任何一次误杀，与归属无关。
  */
 const REAPER_MS = 30_000;
-const STALE_MS = 30_000; // a QUEUED task older than this with no promptId is "dead"
+const STALE_MS = 30_000; // 过老且**无主**的 QUEUED 行才算死信（判据见上方块）
 /* RUNNING 回收器：一个任务**确实**到了 ComfyUI（promptId 已写），
  *  但它的内存执行器丢了（dev 冷重启、崩溃），就会永远卡在 RUNNING ——
  *  心跳只重新驱动内存队列。ComfyUI 的 /queue 对内存状态也一无所知，
@@ -142,7 +132,7 @@ const RUNNING_TICK_CAP = 5;
  *  因此只在模块作用域放一个 `let reaperHandle` 的话，每次热重载都会被重置成 null，
  *  然后新建一个 setInterval。多个定时器会并发跑 reapStaleQueuedTasks() ——
  *  而 findMany → update 不是原子的，同一个 QUEUED 任务会被记 2~3 次
- *  （现场是「卡在队列 2203s / 2210s / 2217s」三条）。
+ *  （现场是同一任务的三条失败原因、相隔 7s 递增）。
  *  因此把 handle 与在途守卫**都**挂在 globalThis 上：
  *  无论热重载多少次，每个进程里只有一个回收器。 */
 interface ReaperGlobal {
@@ -207,8 +197,8 @@ export function isTaskClaimedInProcess(
  *  已在 settled → 认领失败；否则加入 settled 并清掉看门狗定时器。
  *
  *  为什么必须共享：reaper 判 FAILED 与 executor 判 SUCCEEDED/FAILED 是两个
- *  独立写入者。若双方对同一 taskId 各写一次，SSE 订阅者先收到 reaper 的原因
- *  （「任务卡在队列超过 Ns…」），随后 DB / 应用日志又被 executor 的原因覆盖
+ *  独立写入者。若双方对同一 taskId 各写一次，面板先读到 reaper 的原因
+ *  （死信行那句「没有任何执行宿主会领它」），随后 DB / 应用日志又被 executor 的原因覆盖
  *  （「未找到生成结果」），用户就会看到「执行日志」与「应用日志」互相矛盾——
  *  这正是本次要修的跨次运行失败原因不一致。加锁后谁先认领谁赢，两处一致。 */
 function claimTerminal(taskId: string): boolean {
@@ -282,10 +272,11 @@ export async function reapStaleQueuedTasks(): Promise<void> {
   // 顶部一次性 resolve：下游 closure 沿用旧名（`taskRepository`），call site 不动。
   const taskRepository = await resolveTaskRepo();
   if (!taskRepository) return;
-  const owner = depsOverride.owner ?? "inline";
   try {
     const cutoff = new Date(Date.now() - STALE_MS);
-    const stale = await taskRepository.listStaleQueued(cutoff, 20, owner);
+    /* 不再传 `owner`：判据本身就是「不属于任何已知归属片」（ISSUE #1204），带分片
+     *  参数会把它伪装成「本片内的孤儿扫描」，而本片内的 `QUEUED` 行归领取循环管。 */
+    const stale = await taskRepository.listStaleUnownedQueued(cutoff, 20);
     if (stale.length === 0) return;
     const s = state();
     /* 外部证据每个 tick 只探一次（不按行重复请求：20 行 × 2 次请求 = 40 次）。
@@ -299,9 +290,9 @@ export async function reapStaleQueuedTasks(): Promise<void> {
       reaperState.reaping.add(t.id);
       try {
         const ageSec = Math.round((Date.now() - t.createdAt.getTime()) / 1000);
-        /* 内存认领守卫：当前进程仍持有这个任务时，它**不是**孤儿 ——
-         *  留给正常的执行路径去收口。只有在内存里毫无足迹的任务
-         *  （dev 冷重启）才算真孤儿。 */
+        /* 内存认领守卫：无主行按判据不该有任何宿主领它，但「本进程正握着它」一旦
+         *  成立就说明它不是死信（例如刚被写回一个陌生归属），留给执行路径自己收口。
+         *  守卫留着的成本是一行判断，省掉的是误杀。 */
         if (isTaskClaimedInProcess(s, (id) => cliProcs.has(id), t.id)) {
           log(
             t.id,
@@ -356,7 +347,7 @@ export async function reapStaleQueuedTasks(): Promise<void> {
           );
           continue;
         }
-        const reason = `任务卡在队列超过 ${ageSec}s，且 ComfyUI 队列与历史中均无对应活动（本进程内存队列也无此任务的执行链）— 请重新执行`;
+        const reason = `任务在队列里待了 ${ageSec}s 而没有任何执行宿主会领它（claimedBy=「${t.claimedBy}」不是合法归属值，合法值只有 inline / host）— 请核对 COMFY_EXECUTOR 配置后重新执行`;
         log(t.id, "error", reason);
         /*  上面那行 error 日志与下面的终态写入就是用户拿到的全部出口：SSE 自 ADR
          *  §13-3C 起只读库，进程内合成事件那条通道随 §14 D1 退役了。这里也**不**调
@@ -381,7 +372,7 @@ export async function reapStaleQueuedTasks(): Promise<void> {
     }
     if (stale.length > 0) {
       logger.warn(
-        `[comfyui] reaper: marked ${stale.length} stale QUEUED task(s) as FAILED (older than ${STALE_MS / 1000}s, no promptId)`,
+        `[comfyui] reaper: marked ${stale.length} dead-letter QUEUED task(s) as FAILED (older than ${STALE_MS / 1000}s, no promptId, claimedBy 不属于任何归属片)`,
       );
     }
   } catch (err) {
