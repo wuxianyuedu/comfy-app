@@ -1808,6 +1808,11 @@ className={`…h-[85vh]… ${wide ? W.width : W.base}`}            // ← ② �
 被读成一个数），确定值则给 `role="progressbar"` + `aria-valuenow`。
 填充观感的差异（品牌实心 / 渐变）走 `fillClassName`，不由调用处重画轨道。
 
+**条上没字时要给 `ariaLabel`**（可选）。工坊顶栏的健康度是「一段一根细条」的
+分段形态，条上没有可见文字，读屏器只剩一个数字、说不出这是哪一段。注意
+`label` 替代不了它：`label` 渲染出来的那行文字与 ARIA 宿主（`Root`）是兄弟节点，
+不构成命名关系。不传时不写 `aria-label` 属性，既有消费点的 DOM 一字不变。
+
 > **与 `ui/water-fill-progress` 的分工**：那是「水逐渐装满」的**覆盖层**
 > （`absolute inset-0`，水位是 `height` 而不是 `width`，还有正弦波水面），
 > 是另一种视觉形态，不是同一条账。它自己也改用 `clampPct` 取数值。
