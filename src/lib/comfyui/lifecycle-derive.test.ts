@@ -24,6 +24,8 @@ import {
   shouldClearStoppingOnStopMiss,
   hasEmbedClearanceFlag,
   withEmbedClearanceFlag,
+  isPortConflictLine,
+  portConflictExitDetail,
   COMFY_EMBED_FLAG,
   type EnsureFacts,
 } from "./lifecycle-derive";
@@ -538,5 +540,29 @@ describe("isWithinWindow — 计时窗口判据", () => {
     expect(isWithinWindow({ at: 1_000, nowMs: 1_010, windowMs: 10 })).toBe(
       false,
     );
+  });
+});
+
+describe("isPortConflictLine — 端口被占的 stderr 识别", () => {
+  it("认出 ComfyUI 绑定端口失败的报错行（实测现场的原文形态）", () => {
+    expect(
+      isPortConflictLine(
+        "[ERROR] Port 8188 is already in use on address 127.0.0.1. Please close the other application or use a different port with --port.",
+      ),
+    ).toBe(true);
+    expect(isPortConflictLine("port 8188 is already in use")).toBe(true);
+  });
+
+  it("普通启动输出不误报", () => {
+    expect(isPortConflictLine("Starting server")).toBe(false);
+    expect(
+      isPortConflictLine("To see the GUI go to: http://127.0.0.1:8188"),
+    ).toBe(false);
+    expect(isPortConflictLine("")).toBe(false);
+  });
+
+  it("portConflictExitDetail 给出可行动去向（转接管 + 日志位置）", () => {
+    expect(portConflictExitDetail()).toContain("端口已被其他实例占用");
+    expect(portConflictExitDetail()).toContain("comfyui-runtime.log");
   });
 });

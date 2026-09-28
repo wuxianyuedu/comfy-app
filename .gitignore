@@ -100,6 +100,8 @@ playwright-report/
 
 # agent 工具链本地产物（IDE 会话记忆 / temp / tmp，不入版本库）
 .workbuddy/
+# ZCode 本地会话产物（规划文件等，与 .workbuddy/ 同类，不入库）
+.zcode/
 # Qoder 项目本地工作区：默认忽略其内容（Better Harness 评审 canvas/findings/run 产物、
 # 每开发者机器各自生成的 IDE 会话/索引/配置），但放行可提交的 project agent 资产
 # skills/commands（它们是共享配置，等同 AGENTS.md，应入库）。

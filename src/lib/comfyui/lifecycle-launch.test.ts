@@ -31,6 +31,27 @@ vi.mock("./proc-detect", () => ({
     .mockResolvedValue({ pid: null, failed: false }),
   findPidListeningPort: vi.fn().mockResolvedValue(null),
 }));
+/* runEnsureLaunch 的端口冲突用例需要封闭的探测面：./probe（快照的端口探测）、
+ * ./client（waitForExistingInstanceReady 经 host 注入的 probe 不走它，但 status
+ * 快照链会经 ./probe 拿端口事实；一并钉死避免摸真实本机端口）、./status（快照
+ * 结果直接编排）。./status 用**完整 mock**而不是 importOriginal 展开：真实模块
+ * 会拉起 ~/lib/core/logger → app-runtime-log → log-paths 的整条链，而本文件对
+ * log-paths 的 mock 只给了 SERVICES_LOG_DIR（本文件的用例用不到别的导出）。 */
+vi.mock("./client", () => ({
+  probeComfyBase: vi.fn().mockResolvedValue(null),
+  probeComfyAtPort: vi.fn().mockResolvedValue(null),
+  resolveComfyBase: vi.fn().mockRejectedValue(new Error("not running")),
+  resetComfyBase: vi.fn(),
+}));
+vi.mock("./probe", () => ({
+  probeComfyAtPort: vi.fn().mockResolvedValue(null),
+  probeBaseOnce: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("./status", () => ({
+  getComfyRuntimeSnapshot: vi.fn(),
+  launcherCommandCandidates: vi.fn().mockReturnValue([]),
+  readRegisteredLauncher: vi.fn().mockReturnValue(null),
+}));
 vi.mock("~/lib/process/process-launch", () => ({
   spawnManaged: vi.fn(),
   waitForDetachMediator: vi.fn().mockResolvedValue({ code: 0, stderr: "" }),
@@ -202,5 +223,68 @@ describe("pruneKeepAliveLogs —— 按次命名的保活日志只建不删会�
     pruneKeepAliveLogs();
     expect(fs.existsSync(bystander)).toBe(true);
     expect(fs.existsSync(mark)).toBe(true);
+  });
+});
+
+describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止、转接管", () => {
+  beforeEach(() => {
+    vi.mocked(getExitPolicy).mockReturnValue({
+      exitKillComfyui: false,
+      exitKillOllama: false,
+    });
+    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
+  });
+
+  it("重定向 stderr 出现 Port already in use → 中止等待，转等待已有实例就绪", async () => {
+    // 现场原文：新进程绑 8188 失败当场退出，这行落在保活重定向 err 文件里。
+    fs.writeFileSync(
+      path.join(SERVICES_LOG_DIR, "comfyui-keepalive-stamp.err.log"),
+      "[INFO] Starting server\n" +
+        "[ERROR] Port 8188 is already in use on address 127.0.0.1.\n",
+    );
+    const { spawnManaged } = await import("~/lib/process/process-launch");
+    // spawnManaged 是同步返回（keepAlive 下 child 是中介进程句柄）
+    vi.mocked(spawnManaged).mockReturnValue({ child: { pid: 4321 } } as never);
+    const { getComfyRuntimeSnapshot } = await import("./status");
+    vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue({
+      running: true,
+      pid: 97356,
+      port: 8188,
+      via: "配置路径的实例",
+      unverified: false,
+      didQueryProcTable: true,
+      source: "process",
+    } as never);
+
+    const { runEnsureLaunch } = await import("./lifecycle-launch");
+    const notes: string[] = [];
+    /* 探针编排：等待循环第 1 轮（还没读到冲突行之前）应答 null → 置冲突标记；
+     * 第 2 轮 earlyExit 中止并转接管 —— 此后实例应答，接管成功。 */
+    const host: LaunchHost = {
+      st: { stopRequested: false },
+      appendRuntimeLog: vi.fn(),
+      appendSessionBanner: vi.fn(),
+      clearComfyStopping: vi.fn(),
+      localTimestamp: () => "stamp",
+      markSessionStart: vi.fn(),
+      markSessionEnd: vi.fn(),
+      probeComfyUi: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue("http://127.0.0.1:8188"),
+    };
+
+    const r = await runEnsureLaunch({
+      host,
+      settings: getSettingsSync(),
+      timeoutMs: 30_000,
+      note: (msg) => notes.push(msg),
+    });
+
+    expect(r.ok, JSON.stringify({ r, notes })).toBe(true);
+    expect(r.detail).toContain("接管");
+    // 关键：没有为「接管」再 spawn 第二个进程
+    expect(vi.mocked(spawnManaged)).toHaveBeenCalledTimes(1);
+    expect(notes.join("\n")).toContain("转为等待该实例就绪");
   });
 });
