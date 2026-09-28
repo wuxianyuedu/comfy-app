@@ -2,10 +2,10 @@
 // 顶栏进度这一块的唯一出处：一段胶囊 + 一根分段条。
 //
 // 这个胶囊过去自己数一遍 ratio，与总进度条各说一次同一件事；两处口径一旦不同，
-// 用户先撞上的是自相矛盾而不是某个具体的错。后来总进度条换成了「六段一条」的分段
-// 控件，同一条账还是只有一份数据源。用例锁四件事：段数与段名都来自 health 快照、
-// 顶栏不再出现第二处进度视觉、色档由 ratio 决定（数据里不带色值）、全完成时不留
-// 假缺口。
+// 用户先撞上的是自相矛盾而不是某个具体的错。后来总进度条换成了分段控件（一段一根
+// 细条），同一条账还是只有一份数据源。用例锁四件事：段数来自 health 快照、可见段名
+// 走两字缩略而可访问名走全名（两者来自不同字段，不是同一个值写两遍）、色档由 ratio
+// 决定（数据里不带色值）、全完成时不留假缺口。
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -30,7 +30,14 @@ function healthOf(
   return (Object.keys(rows) as HealthRow["id"][]).map((id) => {
     const override = overrides[id];
     const ratio = typeof override === "number" ? override : override ? 1 : 0;
-    return { id, label: id, ratio, pending: ratio < 1 };
+    /* 缩略与全名故意取不同值：写成一样就无法证明视图分别用了这两个字段。 */
+    return {
+      id,
+      label: id,
+      shortLabel: id.slice(0, 2),
+      ratio,
+      pending: ratio < 1,
+    };
   });
 }
 
@@ -81,7 +88,7 @@ describe("WorkshopHeader 的健康度分段条", () => {
     return [...container.querySelectorAll('[data-slot="progress-bar-fill"]')];
   }
 
-  it("一段一根条，段名与可访问名同源于快照；顶栏没有第二处进度视觉", () => {
+  it("一段一根条：可见段名走缩略、可访问名走全名；顶栏没有第二处进度视觉", () => {
     const rows = healthOf({ script: true, character: 0.5 });
     const { container } = renderHeader(rows);
     const tracks = tracksOf(container);
@@ -92,8 +99,11 @@ describe("WorkshopHeader 的健康度分段条", () => {
       expect(track.getAttribute("role")).toBe("progressbar");
       expect(track.getAttribute("aria-label")).toBe(rows[i]?.label);
     });
+    /* 屏面上是缩略、ARIA 上是全名 —— 两个字段各走一处。写反了或都写全名，
+       这两条断言会一条红在「找不到可见缩略」、一条红在「全名不该出现在屏面」。 */
     for (const row of rows) {
-      expect(screen.getByText(row.label)).toBeTruthy();
+      expect(screen.getByText(row.shortLabel)).toBeTruthy();
+      expect(screen.queryByText(row.label)).toBeNull();
     }
     expect(screen.getByText("总进度 40%")).toBeTruthy();
     expect(container.textContent).not.toContain("项目总进度");
