@@ -38,6 +38,8 @@ import {
   buildEarlyExitDetail,
   buildSpawnArgs,
   isKeepAliveDead,
+  isPortConflictLine,
+  portConflictExitDetail,
   resolveLaunchPolicy,
   shouldCheckKeepAliveProcess,
 } from "./lifecycle-derive";
@@ -52,8 +54,15 @@ import {
   startComfyExitWatcher,
   type ComfyExitReport,
 } from "./lifecycle-exit";
+import { getComfyRuntimeSnapshot } from "./status";
 
-export type EnsureResult = { ok: boolean; base: string | null; detail: string };
+export type EnsureResult = {
+  ok: boolean;
+  base: string | null;
+  detail: string;
+  /** 保活拉起的进程因端口被占而绑定失败（caller 据此转「等待已有实例就绪」）。 */
+  portConflict?: boolean;
+};
 
 /** 保活启动的进程存在性检查：宽限期（解释器冷启动也要时间）后才首次检查，
  *  之后限频复查 —— 防止把「正在启动」误判为「没起来」，也避免每轮轮询
@@ -172,9 +181,81 @@ export async function runEnsureLaunch(input: {
     deadline: input.timeoutMs != null ? Date.now() + input.timeoutMs : null,
     timeoutDetail: `ComfyUI 启动超过 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/services/comfyui-runtime.log`,
   };
-  return keepAlive
-    ? launchKeepAliveMode(host, ctx)
-    : launchBoundMode(host, ctx);
+  const result = keepAlive
+    ? await launchKeepAliveMode(host, ctx)
+    : await launchBoundMode(host, ctx);
+  if (!result.ok && result.portConflict) {
+    /* 端口被占：占着端口的极可能就是另一个 ComfyUI 实例（上一会话的保活移交 /
+     * 外部启动）。与其把「启动失败」甩给排队任务，不如转去等那个实例就绪 ——
+     * 就绪判定与接管复用同一条路径。只转一次：再失败就如实回报。 */
+    note("配置端口已被其他实例占用，转为等待该实例就绪…");
+    return waitForExistingInstanceReady({
+      host,
+      settings,
+      timeoutMs: input.timeoutMs ?? null,
+      note,
+    });
+  }
+  return result;
+}
+
+/**
+ * 等待「已在运行的实例」就绪并接管（**不 spawn 新进程**）。
+ *
+ * 两个入口：
+ *   · `ensureComfyUiReady` 的入口分支 —— HTTP 探测没探到（实例正忙 / 冷加载中，
+ *     `/system_stats` 超 1.5s）但进程级快照确认进程在跑。此时再 spawn 一个新
+ *     进程，结局是「端口被占秒退 + 就绪判定被旧实例的应答冒领 + 退出横幅张冠
+ *     李戴」（实测现场）；改为等这个实例自己就绪。
+ *   · `runEnsureLaunch` 的端口冲突兜底 —— 拉起后才发现端口被占，转同一条路。
+ *
+ * 判死用进程级快照而不是 mainPy 进程表直查：快照的候选链覆盖 Comfy Desktop
+ * （uv 起、命令行没有 main.py）那一族，且「查询失败（unverified）」与「查过
+ * 没命中」分得开 —— 前者不下结论，连续 2 次确认查无进程才判死（与保活退出
+ * 监督器同一口径）。
+ */
+export async function waitForExistingInstanceReady(input: {
+  host: LaunchHost;
+  settings: ReturnType<typeof getSettingsSync>;
+  /** 硬超时时长（毫秒）；null = 不设硬超时（手动启动语义，与拉起路径一致）。 */
+  timeoutMs: number | null;
+  note: (msg: string) => void;
+}): Promise<EnsureResult> {
+  const { host, settings, note } = input;
+  let goneStreak = 0;
+  const result = await waitForComfyReady({
+    deadline: input.timeoutMs != null ? Date.now() + input.timeoutMs : null,
+    timeoutDetail: `已有 ComfyUI 实例持续未响应（等待 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 后放弃）；可能正忙或已卡死，详见 log/services/comfyui-runtime.log`,
+    readyDetail: "ComfyUI 已就绪（接管已在运行的实例）",
+    onReady: (base) => note(`ComfyUI 已就绪（接管）：${base}`),
+    onDead: (detail) => note(detail),
+    earlyExit: () =>
+      host.st.stopRequested
+        ? {
+            ok: false,
+            base: null,
+            detail: "已手动关闭 ComfyUI，停止等待启动",
+          }
+        : null,
+    probe: () => host.probeComfyUi(2000),
+    isDead: async () => {
+      const snap = await getComfyRuntimeSnapshot();
+      if (snap.unverified || !snap.didQueryProcTable || snap.running) {
+        goneStreak = 0;
+        return null;
+      }
+      goneStreak += 1;
+      return goneStreak >= 2
+        ? "已在运行的 ComfyUI 实例在等待期间退出。可重新触发启动；详见 log/services/comfyui-runtime.log"
+        : null;
+    },
+  });
+  if (result.ok) {
+    /* 接管：与入口快路径同款 —— 这个实例不是本次拉起的，补挂退出监督
+     * （幂等：已挂着就不重挂）。 */
+    ensureKeepAliveWatchOnAdoption({ host, settings, note });
+  }
+  return result;
 }
 
 /**
@@ -244,6 +325,9 @@ async function launchKeepAliveMode(
   let everSeenProcess = false;
   let missCount = 0;
   let lastProcessCheckAt = 0;
+  /* 重定向 stderr 里出现「端口被占」即置位：本次拉起的进程绑定失败已死，
+   * 继续等只会被占端口的那个实例「冒领」就绪（实测现场）。 */
+  let portConflict = false;
   /* 重定向文件的增量跟随游标：把新字节按行带进 comfyui-runtime.log */
   const kaOffsets = { out: 0, err: 0 };
   const tailKeepAliveLog = (file: string, key: "out" | "err") => {
@@ -260,6 +344,7 @@ async function launchKeepAliveMode(
       kaOffsets[key] = stat.size;
       for (const line of buf.toString("utf-8").split(/\r?\n/)) {
         const trimmed = line.trimEnd();
+        if (isPortConflictLine(trimmed)) portConflict = true;
         if (trimmed.trim())
           appendRuntimeLog(
             `[${key}] ${clampText(trimmed, { maxLength: INLINE_STDERR_MAX, marker: "" })}`,
@@ -283,10 +368,20 @@ async function launchKeepAliveMode(
       appendSessionBanner("end", "■ ComfyUI 保活进程已退出");
       note(detail);
     },
-    earlyExit: () =>
-      st.stopRequested
-        ? { ok: false, base: null, detail: "已手动关闭 ComfyUI，停止等待启动" }
-        : null,
+    earlyExit: () => {
+      if (st.stopRequested)
+        return {
+          ok: false,
+          base: null,
+          detail: "已手动关闭 ComfyUI，停止等待启动",
+        };
+      /* 「端口被占」在重定向 stderr 里现身后，本次拉起的进程已经死了；
+       * 再等下去，就绪判定只会被占端口的那个实例应答冒领。立即中止，
+       * caller（runEnsureLaunch）据此转「等待已有实例就绪」。 */
+      if (portConflict)
+        return { ok: false, base: null, detail: portConflictExitDetail() };
+      return null;
+    },
     /* 每轮先把新输出跟进日志，再做就绪探测。 */
     probe: async () => {
       tailKeepAliveLog(kaOutLog, "out");
@@ -331,7 +426,9 @@ async function launchKeepAliveMode(
   });
   if (!result.ok) {
     note(result.detail);
-    return result;
+    /* 端口冲突的失败带上机器可读标记：caller 不把它当终态失败，而是转
+     * 「等待已有实例就绪」（占着端口的极可能就是另一个 ComfyUI）。 */
+    return portConflict ? { ...result, portConflict: true } : result;
   }
 
   /* 就绪之后起**退出监督**：保活模式没有子进程句柄（Windows 上是 Start-Process
