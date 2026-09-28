@@ -201,9 +201,9 @@ describe("reaper 模块级副作用", () => {
     vi.stubEnv("DATABASE_URL", `file:${dbFile}`);
 
     const repository = await import("./core/repository");
-    const listStaleQueued = vi.spyOn(
+    const listStaleUnownedQueued = vi.spyOn(
       repository.taskRepository,
-      "listStaleQueued",
+      "listStaleUnownedQueued",
     );
 
     /* 加载模块本身已不再起回收器（ADR §14 D3），所以这里必须**显式**起一次：
@@ -214,7 +214,7 @@ describe("reaper 模块级副作用", () => {
     // 首扫是 fire-and-forget：给异步 sweeper 一点时间落定
     await new Promise((r) => setTimeout(r, 50));
 
-    expect(listStaleQueued).not.toHaveBeenCalled();
-    listStaleQueued.mockRestore();
+    expect(listStaleUnownedQueued).not.toHaveBeenCalled();
+    listStaleUnownedQueued.mockRestore();
   });
 });

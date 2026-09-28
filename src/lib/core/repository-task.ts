@@ -462,8 +462,10 @@ export class TaskRepository extends DrizzleRepository<Task> {
   findExecJob: TaskRepoImpl["findExecJob"] = (taskId) =>
     impl.findExecJob(taskId);
 
-  listStaleQueued: TaskRepoImpl["listStaleQueued"] = (cutoff, take, owner) =>
-    impl.listStaleQueued(cutoff, take, owner);
+  listStaleUnownedQueued: TaskRepoImpl["listStaleUnownedQueued"] = (
+    cutoff,
+    take,
+  ) => impl.listStaleUnownedQueued(cutoff, take);
 
   listStaleRunning: TaskRepoImpl["listStaleRunning"] = (cutoff, take, owner) =>
     impl.listStaleRunning(cutoff, take, owner);

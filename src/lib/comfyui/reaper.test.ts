@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from "vitest";
  * 把它们替换成空操作，既让 import 安全，又能测到那个纯助手。 */
 vi.mock("../core/repository", () => ({
   taskRepository: {
-    listStaleQueued: vi.fn().mockResolvedValue([]),
+    listStaleUnownedQueued: vi.fn().mockResolvedValue([]),
     listStaleRunning: vi.fn().mockResolvedValue([]),
     finalizeFailure: vi.fn(),
     finalizeFromReaper: vi.fn(),
@@ -91,7 +91,7 @@ describe("configureReaper 接缝", () => {
   it("接受 Partial<ReaperDeps>、两次调用是合并语义", async () => {
     const mod = await import("./reaper");
     const fakeRepo = {
-      listStaleQueued: async () => [],
+      listStaleUnownedQueued: async () => [],
       listStaleRunning: async () => [],
       finalizeFailure: async () => "written" as const,
       finalizeFromReaper: async () => "written" as const,

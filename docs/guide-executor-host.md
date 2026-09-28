@@ -39,7 +39,11 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 
 > ⚠️ **`pnpm dev` 不会拉起 host。** 它是裸 Next 链路（只解析端口 + 起 dev
 > server），没有编排步骤——这种起法下任务行会被标成 host 归属，但没有任何进程
-> 来领，任务停在队列里等回收器判失败。这是灰度期最容易踩的坑。
+> 来领。ISSUE #1204 之后这类行**不再被回收器判失败**，而是留在队列里等一个会领它
+> 的宿主：现象从「30s 后报『请重新执行』」变成「一直不动、排队数一直涨」，行上只有
+> 一句「⏳ 等待…」。**别把它当成卡死去重启应用**，判据是 launcher 控制台有没有
+> 「executor-host 已启动」、`log/services/executor-host.log` 有没有 `mode=runtime`。
+> 这是灰度期最容易踩的坑。
 
 3. 确认起来了（两处证据）：
    - launcher 控制台：`executor-host 已启动（PID …，COMFY_EXECUTOR=host 灰度中…）`；
@@ -102,10 +106,9 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
   2. **就绪前不领行**：ComfyUI 没起来 / WS 没连上时行留在 `QUEUED`，等就绪的下一拍
      才被领走（提交后那一次即时 kick 通常就够，撞上空窗最多等 2s）。等待期间任务
      日志里会有一行「⏳ 等待 ComfyUI WebSocket 连接就绪…」。
-  3. 冷启动遗留在 `QUEUED` 的行**两宿主都会领**（以前只有 host 那条 pull 会救，
-     inline 那条看不见库，只能等回收器判失败）。**但窗口只有 30s**：跨过 `STALE_MS`
-     的排队行会被新宿主的首扫当场判成「请重新执行」而不是被领回，机制与实测时刻见
-     下方「崩溃恢复」，判决语义的收口在 ISSUE #1204。
+  3. 冷启动遗留在 `QUEUED` 的行**两宿主都会领**（inline 那条以前看不见库，只能等
+     回收器判失败）。回收器**不再按 30s 判死本片的排队行**（ISSUE #1204）：宿主在跑
+     就最迟下一拍（1.5~2s）领走；宿主没起来就一直等，起来那刻接着跑，不白判失败。
   循环的启动点与 reaper 同形态：**两处显式调用**——Next 侧
   `src/instrumentation.ts` 的 nodejs 分支、host 侧 `scripts/executor-host.mjs`
   注入链之后（host 自己的 tick 驱动同一个 `claimAndDispatchOnce`，不再起第二条循环）。
@@ -130,17 +133,21 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
   遗留 RUNNING 行由 reaper 对账收口。reaper 的启动点是**两处显式调用**（Phase 4-A2
   起，不再靠模块加载自启）：Next 侧 = `src/instrumentation.ts` 的 nodejs 分支，
   host 侧 = `scripts/executor-host.mjs` 注入链之后的 `startReaper()`；起表即首扫
-  就是 Q2 对账，之后两进程各自按 30s 常驻扫自己那一片（分片判据见上）。
-  **`QUEUED` 遗留行的窗口只有 30s，而且首扫必赢**：首扫在 `startReaper()` 里当场
-  发起，早于领取循环 `setInterval` 的注册（两宿主都是这个顺序），而第一拍最早也要
-  等 1.5s、还要过 WS OPEN 门控。实测（副本库 + 真 ComfyUI，两个不同 pid 的宿主）：
-  aged 48s 的遗留行在新宿主 `inject-ok 02:35:27.684` 之后 1.4s（`02:35:29.052`）被
-  `marked 1 stale QUEUED task(s) as FAILED`，而同批 boot 诊断数出的是
-  `hostShardQueued=1`——**同一时刻这条行对领取循环完全可领**；把重启间隔压到 12s
-  （aged ≈13s）时，新宿主 `18:38:03.127Z` 把它领回并跑完 `SUCCEEDED`（`claimedAt`
-  由新宿主写）。所以「重启后排队任务自动续跑」目前只在 <30s 的重启里成立；那条
-  死信规则针对的形状（`QUEUED` 且无 `promptId` = raw 路径正在飞）已经随 4-B3 消失，
-  判决语义本身的收口见 ISSUE #1204。
+  就是 Q2 对账，之后两进程各自按 30s 常驻——**RUNNING** 那条按片对账（分片判据见上），
+  **QUEUED** 那条只判无主行（见下）。
+  **`QUEUED` 遗留行不再被判死（ISSUE #1204 收口）**：boot 顺序没变——首扫仍在
+  领取循环第一拍之前发起——变的是**判据本身**：回收器只判「没有任何宿主片会领」的行
+  （`claimedBy` 既不是 inline 也不是 host 的畸形值），本片内 aged 的排队行是健康的
+  等待态，交给领取循环。改动前的实测形态留档，说明为什么要改：一行 aged 48s 的 host
+  遗留行在新宿主 `inject-ok` 后 1.4s 被 `marked 1 stale QUEUED task(s) as FAILED`，
+  而同批 boot 诊断数出的正是 `hostShardQueued=1`。改动后同一份脚本（同机、同两行
+  载荷、间隔拉到 48s）：新宿主 `boot 08:48:38.612` → `q2-scan hostShardQueued=1` →
+  首扫跑过、整份宿主日志里**零条** QUEUED 判死 → `claimedAt 00:48:43.773Z`（距
+  `inject-ok` 3.8s）领回 → `SUCCEEDED`，用时 7.7s、`rawCli` 17 行、`taskImage` 1 行。
+  代价也要写清：没有活宿主时排队行不再有失败判决，可解释性只剩状态栏的排队数与行上
+  那句「⏳ 等待 ComfyUI WebSocket 连接就绪…」（而这句目前会被领取时的日志缓冲重开
+  抹掉，ISSUE #1206）。同批确认 RUNNING 侧没被带坏：宿主 A 崩溃留下的 `RUNNING` 行
+  由 B 连续两轮对账（`reaper(running): checked 1 stale RUNNING task(s)`）在 117s 收口。
   dev 下 Turbopack 会**懒编译** instrumentation，实测 `✓ Ready` 之后约 40s 才跑完
   首扫——冷启动后短暂看到遗留行还在 `QUEUED`/`RUNNING` 属正常，不是没接上。
   「已被领取、但 `prompt_id` 还没回传」的 `RUNNING` 行同样在回收范围内
