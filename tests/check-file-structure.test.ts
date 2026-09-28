@@ -1278,28 +1278,84 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
       join(process.cwd(), "src-tauri", "src", "lib.rs"),
       "utf8",
     );
-    // 「要不要注入」的判据取自启动模式，且判据只有一处：`collect()` 里读一次、
-    // 由 `expect_slow_first_paint` 传下去，`setup_standalone_runtime` 不再自己判。
+    const shellLaunch = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "shell_launch.rs"),
+      "utf8",
+    );
+    const READ = 'std::env::var("COMFYAPP_LAUNCH_MODE")';
+    /**
+     * 判据本体：启动模式**谁读、谁写**的形态，而不是某句字面出现几次。
+     *
+     * 这里原先钉的是「`lib.rs` 里 `READ` 恰好出现 3 次，第三处在 `collect()`」。
+     * 那次计数后来把一个**有意的修复**判成了回归：`collect()` 不再自己读环境变量，
+     * 改为收 `launch_mode` 参数，值取自 `run()` 调 `ensure_launch_mode()` 的返回 ——
+     * 而「自己读」那一轮恰恰发生在写入之前（旧缺陷，见 `lib.rs` 里 collect 的注释）。
+     * 计数与不变式在这里不是一回事，所以改成方向性判据：净效果比原来**更严**
+     * （多了「collect 不许自读」「写入点全仓唯一且不在 lib.rs」两条），
+     * 且不再依赖「第三处读在哪里」这种实现细节。
+     */
+    expect(
+      rust,
+      "collect 必须收 launch_mode 参数（值来自 ensure_launch_mode 的返回），不要再自己读",
+    ).toContain("fn collect(self_launch: bool, launch_mode: &str)");
     expect(rust).toContain(
       'expect_slow_first_paint: launch_mode != "standalone"',
     );
     expect(rust).toContain(
       "watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);",
     );
-    // 模式本身由壳自己按「编排器在不在」定（Python 启动器已移除）：
-    // 决定者只有 shell_launch::ensure_launch_mode 一处，
-    // 消费者是 setup_standalone_runtime 一处（后者经环境变量读，因为是它决定
-    // 要不要拉内嵌 server 的那个瞬间）。
-    // 调用点在自编排的命名步骤里（run() 与 setup 闭包都不再直接调它：
-    // 步骤体抽成 start_self_orchestration 是因为 Rust 侧函数长度阈值 120 行）。
+    // collect 函数体内不许出现那次读：读了就回到「读发生在写之前」的老缺陷。
+    // 函数体用**括号配平**取：按「下一个同级 `fn`」切尾不可靠 —— collect 可能是
+    // 该 impl 里最后一个函数，那样会把后面别的函数的读取点一起扫进来（实测如此）。
+    const collectAt = rust.indexOf("fn collect(self_launch: bool");
+    expect(collectAt, "找不到 collect 的定义（判据落点漂了）").toBeGreaterThan(
+      -1,
+    );
+    const bodyStart = rust.indexOf("{", collectAt);
+    let depth = 0;
+    let bodyEnd = -1;
+    for (let i = bodyStart; i < rust.length; i += 1) {
+      const ch = rust[i];
+      if (ch === "{") depth += 1;
+      else if (ch === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          bodyEnd = i;
+          break;
+        }
+      }
+    }
+    expect(
+      bodyEnd,
+      "collect 的函数体括号没配平（判据取形失败）",
+    ).toBeGreaterThan(-1);
+    const collectBody = rust.slice(bodyStart, bodyEnd + 1);
+    expect(collectBody).not.toContain(READ);
+    // 两处消费点各自可指认：一处在 setup_standalone_runtime（决定起不起内嵌
+    // server 的那个瞬间），一处在 standalone 载荷解析里的 refuses_dev_fallback
+    // （显式 standalone 不许悄悄回退 dev）。
+    expect(rust, "setup_standalone_runtime 那一处读不见了").toContain(
+      `let launch_mode = ${READ}.unwrap_or_default();`,
+    );
+    expect(rust, "拒绝回退 dev 的那处读不见了").toContain(
+      `matches!(${READ}.as_deref(), Ok("standalone"))`,
+    );
+    expect(
+      rust.split(READ).length - 1,
+      "lib.rs 里启动模式的读取点只许两处：setup_standalone_runtime + refuses_dev_fallback" +
+        "（collect 收参数、不自己读；写入点在 shell_launch）",
+    ).toBe(2);
+    // 写入点全仓唯一，就在「决定者」里；lib.rs 一行都不许写。
     expect(rust).toContain("shell_launch::ensure_launch_mode(project_root)");
     expect(
-      rust.match(/std::env::var\("COMFYAPP_LAUNCH_MODE"\)/g)?.length,
-      "启动模式的读取点只许有三处：collect()（推导首帧看护）+ setup_standalone_runtime" +
-        "（决定起不起 sidecar）+ spawn_sidecar 内的 refuses_dev_fallback（显式 standalone 不许回退 dev）；" +
-        "写入点则只有 shell_launch::ensure_launch_mode 一处",
-    ).toBe(3);
-    expect(rust).toContain("shell_launch::ensure_launch_mode");
+      shellLaunch.split('set_var("COMFYAPP_LAUNCH_MODE"').length - 1,
+      "ensure_launch_mode 之外不许再写启动模式",
+    ).toBe(1);
+    expect(rust).not.toContain('set_var("COMFYAPP_LAUNCH_MODE"');
+    expect(
+      shellLaunch.split(READ).length - 1,
+      "决定者自己只许读一次（已写过就返回那个值）",
+    ).toBe(1);
   });
 
   it("壳侧启动页也显式置前一次（本地冷启动时无须等复核进程）", () => {
