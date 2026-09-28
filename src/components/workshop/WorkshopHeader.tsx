@@ -13,12 +13,15 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { cn } from "~/lib/utils";
+import { countPendingStages } from "~/components/workshop/stage-config";
+import type { HealthRow } from "~/components/workshop/stage-config";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 
 interface WorkshopHeaderProps {
   title: string;
   progressPct: number;
-  pendingCategories: number;
+  health: HealthRow[];
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
   onOpenModeContract: () => void;
@@ -27,11 +30,15 @@ interface WorkshopHeaderProps {
 export function WorkshopHeader({
   title,
   progressPct,
-  pendingCategories,
+  health,
   apiChannels,
   onOpenApiSettings,
   onOpenModeContract,
 }: WorkshopHeaderProps) {
+  /* 唯一一份进度账在 health 里：段数与「差哪几段」都由它派生，头部不再自己数一遍。 */
+  const pendingRows = health.filter((row) => row.pending);
+  const pendingCount = countPendingStages(health);
+  const pendingLabels = pendingRows.map((row) => row.label).join("、");
   const anyChannelConfigured =
     apiChannels?.image.configured === true ||
     apiChannels?.video.configured === true;
@@ -59,8 +66,19 @@ export function WorkshopHeader({
       />
 
       <div className="flex flex-1 items-center justify-end gap-3">
-        <span className="bg-amber/15 text-amber rounded-full px-3 py-1.5 text-xs font-medium">
-          距离成片还差 {pendingCategories} 个阶段
+        {/* 过去这里独立数一遍 ratio，和总进度条各说一次同一件事，两处一旦口径不同就是
+            自相矛盾。现在胶囊只呈现「差哪几段」，段数与名字同源于 health 快照。 */}
+        <span
+          className={cn(
+            "rounded-full px-3 py-1.5 text-xs font-medium",
+            pendingCount > 0
+              ? "bg-amber/15 text-amber"
+              : "bg-success/15 text-success-strong",
+          )}
+        >
+          {pendingCount > 0
+            ? `还差 ${pendingCount} 段：${pendingLabels}`
+            : "六段流程已完成"}
         </span>
         <Hint label="为远端模型配置工坊各模式下的输入 / 输出">
           <Button

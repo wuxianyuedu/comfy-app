@@ -43,12 +43,14 @@ import type {
   StyleRef,
 } from "~/lib/workshop/types";
 import {
+  buildHealthSnapshot,
   buildMissingSummary,
   computeProgressPct,
   computeStageRatios,
   stagePrereq,
   STAGE_DEFS,
   STAGE_TITLES,
+  type HealthRow,
   type MissingItem,
   type StageRatios,
   type StageViewContext,
@@ -194,7 +196,8 @@ export interface WorkshopPipelineController {
   stageRatios: StageRatios;
   progressPct: number;
   prereq: { text: string; go: Tab } | null;
-  pendingCategories: number;
+  /** 六段的健康度快照（唯一一份进度账；「还差几段」由它派生）。 */
+  health: HealthRow[];
   viewContext: StageViewContext;
   missing: MissingItem[];
 
@@ -724,9 +727,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const stageRatios = computeStageRatios(viewContext, rendered);
   const progressPct = computeProgressPct(stageRatios);
   const prereq = stagePrereq(tab, viewContext);
-  const pendingCategories = Object.values(stageRatios).filter(
-    (ratio) => ratio < 1,
-  ).length;
+  const health = buildHealthSnapshot(stageRatios, viewContext);
   const { title: stageTitle, desc: stageDesc } = STAGE_TITLES[tab];
   const stageIndex = STAGE_DEFS.findIndex((stage) => stage.id === tab) + 1;
 
@@ -780,7 +781,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     stageRatios,
     progressPct,
     prereq,
-    pendingCategories,
+    health,
     viewContext,
     missing,
 
