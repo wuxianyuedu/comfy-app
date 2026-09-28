@@ -60,7 +60,7 @@ export function WorkshopPipeline() {
         <WorkshopHeader
           title={controller.meta.title}
           progressPct={controller.progressPct}
-          pendingCategories={controller.pendingCategories}
+          health={controller.health}
           apiChannels={controller.apiChannels}
           onOpenApiSettings={controller.openApiSettings}
           onOpenModeContract={controller.openModeContract}
