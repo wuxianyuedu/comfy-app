@@ -226,18 +226,32 @@ describe("幽灵 token（引用了从未定义的 --color-*）", () => {
     expect(output).toContain("--color-real");
   });
 
-  /* 明确的不覆盖边界：带兜底值时渲染结果确定（取不到也有色），不判。
-   * Tailwind 裸变量 `text-(--x)` 与运行期注入的变量同样不判 —— 实测那种形态
-   * 里「CSS 查无此名」是常态（base-ui 注入 --transform-origin 等），硬判会误报一片。 */
-  it("带兜底值的 var() 不判", () => {
+  /* 带兜底的引用：名字**已声明**才合法。兜底让渲染结果确定，所以它不是「看不见」
+   * 那类失效，而是装饰性 indirection —— 一行硬编码值挂着 token 的名字，读代码的人
+   * 以为它随主题。`--color-canvas-grid-line` 就是靠这条豁免活了好几轮的，故收回。
+   * 仍然不判的形态：Tailwind 裸变量 `text-(--x)` 与运行期注入的变量 —— 实测那种
+   * 形态里「CSS 查无此名」是常态（base-ui 注入 --transform-origin 等），硬判会误报一片。 */
+  it("带兜底但名字从未定义 → 阻断（装饰性 indirection）", () => {
     const { run } = scanner({
       "src/components/ui/OkIcon.tsx":
         'export const I = () => <svg><path stroke="var(--color-nope, currentColor)" /></svg>;\n',
     });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("--color-nope");
+    expect(output).toContain("装饰性 indirection");
+  });
+
+  it("带兜底且名字已声明 → 通过（兜底只是防御性写法）", () => {
+    const { run } = scanner({
+      "src/app/globals.css": "@theme {\n  --color-real: #ff6b6b;\n}\n",
+      "src/components/ui/OkIcon.tsx":
+        'export const I = () => <svg><path stroke="var(--color-real, currentColor)" /></svg>;\n',
+    });
     expect(run().ok).toBe(true);
   });
 
-  /* 判据认的是「字面量 + 无兜底 + --color- 前缀」这三个条件，**不认语法位置**。
+  /* 判据认的是「字面量 + 带 `--color-` 前缀」这两个条件（带不带兜底都算），
    * 回归来源：把三处画布网格线收进一个出口函数之后，引用变成了出口里的模板串，
    * 只按属性形态判的判据会因为「集中化」这个正确动作而失明 ——
    * 泛化就是为了不让收口反而制造盲区。 */
