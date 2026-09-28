@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "next build && node scripts/standalone-private-inputs.mjs",
+    "build": "next build && node scripts/build-executor-host.mjs && node scripts/standalone-private-inputs.mjs && node scripts/smoke-executor-host-standalone.mjs",
     "analyze": "node scripts/analyze-bundle.mjs",
     "agent:film": "node scripts/agent-film.mjs",
     "check": "pnpm run lint && tsc --noEmit",
@@ -108,6 +108,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "better-sqlite3": "^12.0.0",
     "drizzle-kit": "^0.31.0",
+    "esbuild": "0.25.12",
     "eslint": "^10.11.0",
     "eslint-config-next": "^16.3.5",
     "eslint-plugin-boundaries": "^7.2.0",
