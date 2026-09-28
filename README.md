@@ -141,9 +141,11 @@ Comfy-APP-T3/
 平台判据只有两处出处（`scripts/launcher-core/**` 与 `kill-process-tree`）：入口与
 编排都不再自己摸 `process.platform`，因此没有「改一侧忘了另一侧」这件事。
 
-灰度能力：**ComfyUI 执行器可切独立宿主**（`COMFY_EXECUTOR=host`，仅 dev、必须走
-launcher 入口；`pnpm dev` 裸链路不拉起 host）——开关方法、日志位置与恢复语义见
-[执行器宿主指南](docs/guide-executor-host.md)。
+灰度能力：**ComfyUI 执行器可切独立宿主**（`COMFY_EXECUTOR=host`，**当前仅 dev 可用**、
+必须走 launcher 入口；`pnpm dev` 裸链路不拉起 host）。宿主的运行时图已随构建进产物
+（[规范 §7.5](docs/standards/launch-and-build.md)），但桌包的 standalone 形态还没有进程
+拉起它——ISSUE #1216 落地前，**桌包里不要设这个开关**（不写 = inline）。开关方法、日志
+位置与恢复语义见 [执行器宿主指南](docs/guide-executor-host.md)。
 
 ---
 

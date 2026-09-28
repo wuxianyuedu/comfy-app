@@ -50,7 +50,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { parseEnvFile } from "./env-preflight.mjs";
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
@@ -208,79 +208,70 @@ async function reconcileCancelled() {
     }
   }
 }
-/** 运行时注入链（3-B0 建地基 / 3-B1 接上执行链）：把 P3 §5 ADR §4 的 boot 顺序
- *  落到一个纯 Node 进程里。任何一步失败都**大声退出 1**——一个不注入却照常
- *  心跳的 host 比不起来的 host 更危险（规范硬规则 4：失败路径要有用户可见
- *  出口，不许静默退化）。
+/** 运行时图的两种加载形态（3-E1，ISSUE #1169）。判据是**内容**，不看 env、不猜意图：
+ *   · dev 检出 —— `scripts/executor-host.runtime.mjs` 不在，装 tsx 的 ESM 钩子后加载
+ *     `src/lib/**` 的源码态图（3-E 之前的运行路径，一字不差）。
+ *   · standalone / 桌包产物 —— 那份预编译件在，直接 import 它。产物里既没有 `tsx`
+ *     （devDependency）也不指望 `src/lib/**` 的 TS 源，所以这条分支必须存在。
+ *     反向的缺件形态不会静默：产物少了预编译件就退回 dev 分支、以
+ *     `Cannot find package 'tsx'` 大声 exit 1，而「产物里到底起不起得来」由
+ *     `pnpm build` 收尾的冒烟拦下（scripts/smoke-executor-host-standalone.mjs）。
  *
- *  七条 seam 全部注入同一份 `hostRepo`（3-A/3-B1 的 impl 工厂）与**同一份
- *  Next 侧实现**（client.ts 的 resolveComfyBase/getView、core/logger）——它们
- *  都是 §18.4 第三类模块，宿主可直接加载；设置经 `app-settings.server.ts` 的
- *  文件缓存读到与 Next 相同的落盘值。实测「七 seam 全加载 + 注入」零
- *  unhandled rejection（见 changelog 碎片的 spike 记录）。 */
-async function bootRuntime() {
+ * 图本体在 `src/lib/comfyui/host-runtime.ts`——只管「宿主需要哪些模块」；进程外壳
+ * 职责（env 解析 / 日志通道 / 心跳 / argv 钩子 / 领取节拍）全留在本文件，两种形态共用。 */
+const RUNTIME_BUNDLE = path.join(ROOT, "scripts", "executor-host.runtime.mjs");
+
+async function loadRuntimeGraph() {
+  if (fs.existsSync(RUNTIME_BUNDLE)) {
+    return await import(pathToFileURL(RUNTIME_BUNDLE).href);
+  }
   const { register } = await import("tsx/esm/api");
   register();
+  return await import("../src/lib/comfyui/host-runtime.ts");
+}
 
-  const { createClient } = await import("@libsql/client");
-  const { drizzle } = await import("drizzle-orm/libsql");
-  const dbFile = resolveDbFile(resolveDatabaseUrl());
-  const client = createClient({ url: `file:${dbFile}` });
-  await client.execute("PRAGMA journal_mode = WAL");
-  await client.execute("PRAGMA foreign_keys = ON");
+/** 运行时注入链（3-B0 建地基 / 3-B1 接上执行链 / 3-E1 换成交付件）：把 P3 §5
+ *  ADR §4 的 boot 顺序落到一个纯 Node 进程里。任何一步失败都**大声退出 1**——一个
+ *  不注入却照常心跳的 host 比不起来的 host 更危险（规范硬规则 4：失败路径要有
+ *  用户可见出口，不许静默退化）。
+ *
+ *  这些 seam 全部注入同一份 `hostRepo`（3-A/3-B1 的 impl 工厂）与**同一份 Next 侧
+ *  实现**（client 的 resolveComfyBase/getView、core/logger）——它们都是 §18.4
+ *  第三类模块，宿主可直接加载；设置经 `app-settings.server.ts` 的文件缓存读到与
+ *  Next 相同的落盘值。实测「seam 全加载 + 注入」零 unhandled rejection。 */
+async function bootRuntime() {
+  const graph = await loadRuntimeGraph();
+  const dbUrl = resolveDatabaseUrl();
+  const hostRepo = await graph.createHostRepo(resolveDbFile(dbUrl));
 
-  const { createTaskRepoImpl } =
-    await import("../src/lib/core/repository-task-impl.ts");
-  // owner:"host" 与下方 configureReaper 的 owner 同源：impl 的收口写入现在带
-  // 归属条件（ADR §14 D4），两处不一致会让本进程的收口全部静默 skip。
-  const hostRepo = createTaskRepoImpl(drizzle(client), { owner: "host" });
-
-  const { configureReaper, startReaper } =
-    await import("../src/lib/comfyui/reaper.ts");
-  const { configureEnqueue } = await import("../src/lib/comfyui/enqueue.ts");
-  const { configureTraceLogPath } = await import("../src/lib/comfyui/trace.ts");
-  const { configureRunner } =
-    await import("../src/lib/comfyui/runner-state.ts");
-  const { configureExecutorCli, cliProcs } =
-    await import("../src/lib/comfyui/executor-cli.ts");
-  const { configureExecutorFinalize } =
-    await import("../src/lib/comfyui/executor-finalize.ts");
-  const { configureExecutorWs } =
-    await import("../src/lib/comfyui/executor-ws.ts");
-  /* 派发循环与 Next 侧共用同一份（P3 §5 ADR §14 D1 第二刀）：注入本进程的
-   * 仓储与归属声明后，`claimAndDispatchOnce` 就是「领 host 片的那一行并提交」。 */
-  const { configureDispatch, claimAndDispatchOnce } =
-    await import("../src/lib/comfyui/executor-dispatch.ts");
-  const { resolveComfyBase, getView, interrupt } =
-    await import("../src/lib/comfyui/client.ts");
-  const { logger } = await import("../src/lib/core/logger.ts");
-
-  // owner:"host" 与上面两处同源（reaper / dispatch 都读这一份归属声明）：
-  // 不同源的表现是「领到了却收不进去」，唯一线索是返回值里的 skipped-not-owned。
-  configureDispatch({ taskRepo: hostRepo, owner: "host" });
-
-  // owner:"host" —— Q2 扫表与 30s 定时 sweep 都只收 host 片，绝不误杀 inline
-  // 的在飞任务（分片判据见文件头与 impl 的 ownedBy()）。
-  configureReaper({ taskRepo: hostRepo, owner: "host" });
-  configureEnqueue({ taskRepo: hostRepo });
-  configureTraceLogPath(
+  /* owner:"host" 与下面 configureReaper 的 owner 同源（ADR §14 D4 之后收口写入带
+   * 归属条件）：不一致的表现是本进程的收口全部静默 skip 成 skipped-not-owned。 */
+  graph.configureDispatch({ taskRepo: hostRepo, owner: "host" });
+  // 同上：Q2 扫表与 30s 定时 sweep 都只收 host 片，绝不误杀 inline 的在飞任务。
+  graph.configureReaper({ taskRepo: hostRepo, owner: "host" });
+  graph.configureEnqueue({ taskRepo: hostRepo });
+  graph.configureTraceLogPath(
     process.env.COMFYAPP_HOST_TRACE ??
       path.join(ROOT, "log", "comfyui", "comfyui-trace-host.log"),
   );
   // 执行链四条 seam（3-B1）：deps 全部复用 Next 侧同一份实现（文件头理由）。
-  configureRunner({ taskRepo: hostRepo, log: logger });
-  configureExecutorCli({ logger, taskRepo: hostRepo, resolveComfyBase });
-  configureExecutorFinalize({
+  graph.configureRunner({ taskRepo: hostRepo, log: graph.logger });
+  graph.configureExecutorCli({
+    logger: graph.logger,
     taskRepo: hostRepo,
-    getView,
-    runtimeLog: logger,
+    resolveComfyBase: graph.resolveComfyBase,
   });
-  configureExecutorWs({ taskRepo: hostRepo });
+  graph.configureExecutorFinalize({
+    taskRepo: hostRepo,
+    getView: graph.getView,
+    runtimeLog: graph.logger,
+  });
+  graph.configureExecutorWs({ taskRepo: hostRepo });
   hostRuntime = {
     hostRepo,
-    cliProcs,
-    interrupt,
-    claimAndDispatch: claimAndDispatchOnce,
+    cliProcs: graph.cliProcs,
+    interrupt: graph.interrupt,
+    claimAndDispatch: graph.claimAndDispatchOnce,
   };
   writeLine(
     "runtime inject-ok seams=runner+cli+finalize+ws+enqueue+reaper(owner=host)+dispatch(owner=host)+trace",
@@ -288,15 +279,22 @@ async function bootRuntime() {
 
   /* boot 诊断：本片（claimedBy='host'）现在有几行在排队。pull 模型下这个数字
    * 就等于「我起来之后会领走多少」——回收器不再把健康的排队行判死（ISSUE #1204），
-   * 所以这行与真实可领行数从此一致，不再出现「数出 1、1.4s 后判失败」的自相矛盾。 */
-  const before = await hostRepo.listQueuedIds("host", 20);
+   * 所以这行与真实可领行数从此一致，不再出现「数出 1、1.4s 后判失败」的自相矛盾。
+   *
+   * 表就绪守卫是给**桌包出厂第一跑**加的（3-E1）：编排器的 schema 同步排在拉起宿主
+   * 之后，那一刻库里可能还没有 task 表，裸扫表抛错会把整条注入链判成「boot FAILED
+   * 退出 1」——而「表还没建」不是故障。守卫与 reaper 用同一份 `isSchemaReady()`
+   * （它内部也是先判就绪再 sweep）；跳过只少一行诊断，领取节拍照常往前走。 */
+  const before = graph.isSchemaReady(dbUrl)
+    ? await hostRepo.listQueuedIds("host", 20)
+    : null;
   /* 起表即首扫就是 Q2 对账（ADR §14 D3：reaper 不再由模块加载自启，宿主显式
    * 起）。startReaper 内部的 sweepOnce 先过 `isSchemaReady()` 再跑两条 sweeper，
    * 之后按 30s 常驻——所以这里不再裸调 reapStale*Tasks：那会绕过表就绪守卫，
    * 而「表在、查询失败」这类真故障本来就该由 sweeper 自己的 catch 暴露。 */
-  startReaper();
+  graph.startReaper();
   writeLine(
-    `runtime q2-scan hostShardQueued=${before.length} bootId=${bootId}`,
+    `runtime q2-scan hostShardQueued=${before?.length ?? "schema-not-ready"} bootId=${bootId}`,
   );
 }
 
