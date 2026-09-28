@@ -88,16 +88,19 @@ export type {
   RunnerState,
 } from "./runner-state-shape";
 
+/* 名字里带版本：**给 `RunnerState` 加字段时必须一起升版**。`??=` 只认键名，
+ *  旧单例不会被补全，热重载后新字段就是 `undefined`——读它是 TypeError，写判据的
+ *  地方则静默失效（`pendingDispatch` 与 `queuedEntries` 都是加过字段没升版的实例）。 */
 declare global {
-  var comfyRunner: RunnerState | undefined;
+  var comfyRunner_v2: RunnerState | undefined;
 }
 
 export function state(): RunnerState {
   /* 单例里不再有 EventEmitter：进程内事件通道已随 ADR §14 D1 退役，执行进度的
    * 对外通道只剩 DB 行 + `/api/tasks/[id]/stream` 的轮询（§13-3C 单源化）。 */
-  globalThis.comfyRunner ??= createEmptyState();
+  globalThis.comfyRunner_v2 ??= createEmptyState();
 
-  return globalThis.comfyRunner;
+  return globalThis.comfyRunner_v2;
 }
 
 function callerLoc(): string {
@@ -198,7 +201,11 @@ function touchAndEvict<V>(
   }
 }
 
-export function log(taskId: string, level: LogEntry["level"], msg: string) {
+export function log(
+  taskId: string,
+  level: LogEntry["level"],
+  msg: string,
+): LogEntry {
   const store = state();
 
   const entry: LogEntry = { t: Date.now(), level, msg, src: callerLoc() };
@@ -212,6 +219,47 @@ export function log(taskId: string, level: LogEntry["level"], msg: string) {
   touchAndEvict(store.logs, taskId, arr, LOGS_MAX_TASKS);
 
   schedulePersistLogs(taskId);
+
+  return entry;
+}
+
+/** 排队期一行写入量的上限：等待原因只有几种固定句式，超了就是异常，不再攒。 */
+const QUEUED_KEEP_MAX = 8;
+
+/** 记一行**排队期**日志，并把它登记为「本轮领取时要保留的行」。
+ *
+ *  为什么要有这个：`claimAndDispatchOnce()` 领到行会重开缓冲（原意是「重跑不混
+ *  上一轮的尾巴」），那连带抹掉了本轮刚写下的「⏳ 等待 ComfyUI WebSocket 连接
+ *  就绪…」——而回收器不再兜底判死排队行之后（ISSUE #1204），那句是用户唯一能
+ *  看到「这条在等什么」的地方（ISSUE #1206）。边界不能整体挪到收口：收口之后
+ *  还会再打「✓ 全部完成」这类行，先删缓冲就让它带着整包 `replaceLogs` 把现场
+ *  覆盖成一两行（实测过，比原缺陷更糟）。所以只把「排队期的行」单独保住。 */
+export function logWhileQueued(
+  taskId: string,
+  level: LogEntry["level"],
+  msg: string,
+): void {
+  const store = state();
+  const kept = store.queuedEntries.get(taskId) ?? [];
+  kept.push(log(taskId, level, msg));
+  if (kept.length > QUEUED_KEEP_MAX) {
+    kept.splice(0, kept.length - QUEUED_KEEP_MAX);
+  }
+  store.queuedEntries.set(taskId, kept);
+  /* 有界：JS Map 的迭代顺序=插入顺序，超量时淘汰最早登记的 taskId（这些行已经
+   * 落过一次库，丢的只是「领取时保留」这份冗余，不是现场）。 */
+  if (store.queuedEntries.size > LOGS_MAX_TASKS) {
+    const oldest = store.queuedEntries.keys().next().value;
+    if (oldest !== undefined) store.queuedEntries.delete(oldest);
+  }
+}
+
+/** 领取时取回本轮排队期写下的行，并结束这份登记（一个 taskId 只用一次）。 */
+export function takeQueuedEntries(taskId: string): LogEntry[] {
+  const store = state();
+  const kept = store.queuedEntries.get(taskId) ?? [];
+  store.queuedEntries.delete(taskId);
+  return kept;
 }
 
 // 每个 taskId 一个防抖落库器。一个任务最多只有一次待写；
@@ -452,9 +500,9 @@ export async function persistLogs(taskId: string) {
   // 内部把 DB 落库的失败咽下——理由与旧行为不匹配：
   //   · caller 有 3 处写 `void persistLogs(...)`（防抖回调里），
   //     不 catch 就直接变成 unhandledRejection，进程级噪声；
-  //   · 另外 7 处 `await persistLogs(...)`（enqueue / executor-finalize /
-  //     reaper），若这里抛错会让 finalize 链路整段回滚，表现比「一份日志
-  //     没落库」严重得多。
+  //   · 另外几处 `await persistLogs(...)`
+  //     （enqueue / executor-finalize / reaper），若这里抛错会让 finalize 链路整段回滚，
+  //     表现比「一份日志没落库」严重得多。
   // 日志面板的**内存视图**仍完整（state().logs），只是这一次没持久化；
   // 真故障通过 log.warn 落 app-runtime.log 镜像通道，运维看得到。
   // resolveDeps 自身也可能抛（executor host 忘记 configureRunner → 动态
