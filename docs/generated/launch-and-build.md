@@ -1480,11 +1480,22 @@ Warning: Dynamic filesystem access causes tracing of the whole project
 > 结论：看到别人（或历史提交）说「加个 `/*turbopackIgnore: true*/` 就好了」，
 > 先按上表验一遍——**仓库里现有的这些注解都是无效的**，不能作为「已修」的证据。
 
-**第三件事：真正的防线是 `outputFileTracingExcludes`。** 它工作在**产物路径**层面
-（next.config.js 顶层键，Next 16 起不再挂 `experimental`），不依赖 Turbopack 的静态
-分析，因此对「动态路径访问」这种静态判不准的情况照样有效。本仓库已排除
-`src-tauri/`、`python-venv/`、`tools/`、`docs/`、`e2e/`、`tests/`、`log/` 等
-（体积护栏 1.5GB 也在这一条上）。
+**第三件事：`outputFileTracingExcludes` 是「意图声明」，不是「减法」——实测它对全项目
+追踪带进来的文件一条都不减。** 它工作在产物路径层面（next.config.js 顶层键，Next 16 起
+不再挂 `experimental`），本仓库已声明排除 `src-tauri/`、`python-venv/`、`tools/`、
+`docs/`、`e2e/`、`tests/`、`log/` 等（体积护栏 1.5GB 也挂在这条上）。逐条数产物后实测：
+
+| 声明在 excludes 里的条目      | 同一次构建后产物里的**真文件**数量   |
+| ----------------------------- | ------------------------------------ |
+| `./changelog.d/**`            | 747                                  |
+| `./src/**/*.test.ts` + `.tsx` | 406                                  |
+| `./src-tauri/**`              | 4553（含上一轮 `static` 的整份副本） |
+| `./db.sqlite`（单文件条目）   | 0（有效）                            |
+
+> 也就是说：**别在 excludes 里补一条就当修好了**——单文件条目（`db.sqlite`）实测有效，
+> 整目录条目在全项目追踪这一路上一律不减。真正的减法只发生在产物层显式删除
+> （`scripts/standalone-private-inputs.mjs`，见下方「第六件事」）。这与 `.env` 那条
+> 已知盲区同源：环境文件是无条件复制的，`./.env` 写什么都删不掉。
 
 **第四件事：告警能不能「真减量」——取决于路径能不能静态收敛（实测判据）。**
 Turbopack 的判据不是「有没有动态分量」，而是**路径表达式的最末一段是不是动态值**。
@@ -1525,6 +1536,44 @@ node -e "const j=require('./.next/server/instrumentation.js.nft.json');   consol
 所以处置办法不是加注解，而是 `scripts/check-standalone-contents.cjs` 那条真数文件的
 护栏（见下方「门禁」）。
 
+**第六件事：产物层减法必须按「形状」递归，且必须 symlink-safe。** 按目录名删根级条目
+（`DEV_ARTIFACTS`）覆盖不了三类泄漏，因为它们不在产物根：
+
+| 形状（相对产物根）     | 为什么按根目录名删不到                                      |
+| ---------------------- | ----------------------------------------------------------- |
+| `src/**/*.test.ts(x)`  | 除根级 `src/` 外，`src-tauri/static/src/` 里也有一份        |
+| `docs/**/*.md`         | 在**依赖包里**（`node_modules/next/dist/docs` 实测 456 份） |
+| `.env*` / `db.sqlite*` | 实测在 `static` 层报出过 `prisma/db.sqlite`，不在根那层     |
+
+**符号链接是本节最容易踩坏开发机的一处。** `.next/standalone/node_modules/<pkg>`
+不是目录而是**指向本仓库 pnpm store 的链接**（实测 `node_modules/next` 指向
+`node_modules/.pnpm/next@16.3.5_…`）。由此两条硬规则：
+
+- **剔除侧不许穿链接删**（按 `lstatSync` 停在链接上）：顺链接删那 456 份 `docs/*.md`
+  等于删开发机依赖，而不是清产物。
+- **检查侧不许穿链接数**（同理）：顺链接数会把开发机内容记成产物内容——之前那次
+  「`pino` 一个包漏 484 份文档」就是这么数出来的假账，产物里根本没有这些真文件。
+  依赖包内容**真正**变成产物真文件，是 `build-desktop.mjs` 用 `dereference: true`
+  拷进 `static` 之后（实测在那一层数到 472 份真 `.md`）。
+- 唯一的例外是**反向**检查（「必须有的」Next 运行时脚本）：那份清单按「运行时可达」
+  算，经链接 require 得到就算在位；用「真文件」口径会把它判成缺件（假红）。
+
+**为什么删依赖包文档是安全的（顺手记一条别踩的坑）**：`next/dist/docs/*.md` 确实有代码
+读它——`next/dist/server/lib/generate-agent-files.js`（由 `app-info-log.js` 调用，
+即 `next dev` 的启动横幅会据此生成 AGENTS.md）。但分发产物跑的是 `server.js`
+（`src-tauri/src/lib.rs` 里 `res_dir.join("server.js")`），不在那条 dev 路径上；
+`python-venv/.../docs/conf.py` 这类**非 .md** 也不在形状里，形状只判文档。
+
+**减法落地后的端到端复核**（改完必须自己跑一遍，别只信单测）：
+
+```bash
+pnpm build                       # 收尾即 stripDevArtifacts（含形状剔除）
+node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
+# 再把 .env / .next/static 临时补进 standalone，起 server.js 数状态码：
+# 页面与 /api/* 全 200、日志里 `Failed to load external module` 计数为 0，
+# 才算证明「删掉的这些不是运行时依赖」（§7.4 那种「页面正常、接口全 500」的反例）
+```
+
 **三条禁令**
 
 1. **不要**用 `turbopack.ignoreIssue` 消这条警：它只过滤 CLI 输出与 overlay，
@@ -1543,11 +1592,19 @@ node -e "const j=require('./.next/server/instrumentation.js.nft.json');   consol
 - **配置层** `tests/turbopack-tracing-excludes.test.ts`：锁 excludes 的完整性
   ——键位在顶层、关键目录清单不缺（含 `changelog.d/` 与 `src/**/*.test.ts`）、
   改动不静默失效，并断言 `turbopack.ignoreIssue` 没有拿来遮这条告警。
+  **它锁的是「意图没被偷偷抹掉」，不是「文件被减掉了」**（第三件事的实测表就是
+  这条断言与产物现实的落差）。
 - **产物层** `scripts/check-standalone-contents.cjs`（CI 在 `pnpm build` 之后调用）：
   真去数 `.next/standalone` 里有没有测试文件 / 变更碎片 / 文档，命中即非零退出。
   为什么必须有这一层：「清单还在」不等于「清单生效」（历史事故：键位挂在
   `experimental` 下一个字都没被读），且上面第五件事那种 `instrumentation` 盲区
   只有数产物才看得见。产物不存在时该脚本跳过——它守的是构建结果，不是构建本身。
+  计数口径按**真文件**（不穿符号链接），理由见第六件事。
+- **减法与判据同源** `tests/dist-artifact-hygiene.test.ts`：剔除侧
+  （`standalone-private-inputs.mjs` 的 `FORBIDDEN_SHAPES` + `PRIVATE_SHAPES`）与
+  检查侧（`check-standalone-contents.cjs` 的 `FORBIDDEN`）那五行正则**逐字相同**，
+  并由该用例在临时目录里**真删一次**——含一条安全判据：夹具里造一个指向外部目录的
+  链接，剔除后外部内容必须原样存在。
 
 > 清单只锁「关键目录在不在」，不锁白名单全量：全量比对会在每次合理地新增排除项时
 > 无谓变红，反而让人习惯性改测试。产物层那条才是真正的兜底。
@@ -1595,6 +1652,12 @@ node -e "const j=require('./.next/server/instrumentation.js.nft.json');   consol
   `package.json` 的 `build`（`next build && node scripts/standalone-private-inputs.mjs`，
   保证 `pnpm build` 自身产出的 standalone 就是干净的，**CI 只跑 build**）与
   `scripts/build-desktop.mjs`（组装 static 后再剥一次，唯一能覆盖 static 这一层的地方）。
+  该清单原只删**产物根那层**的文件名，而判据是按形状判的：实测
+  `check-standalone-contents.cjs` 在 `static` 上报出过 `prisma/db.sqlite`——
+  判据早就写了「开发库文件绝不能出现」，减法却够不着子目录。现在同一次剔除额外跑
+  `PRIVATE_SHAPES`（`(^|\/)\.env…$`、`(^|\/)db\.sqlite(-wal|-shm)?$`）递归删，
+  且**不穿符号链接**（standalone 的 `node_modules/<pkg>` 是指向开发机 pnpm store 的
+  链接，穿链接删等于损坏依赖；口径与理由见 §7.2 第六件事）。
 
 **门禁**（配置层 + 产物层）：
 

@@ -1,5 +1,5 @@
 /**
- * 构建期「全项目追踪」告警的**真正防线**护栏（ISSUE #489）
+ * 构建期「全项目追踪」告警的清单护栏 + 产物级探针（ISSUE #489）
  * ===========================================================================
  *
  * 背景：`next build`（Turbopack）对无法静态收敛的动态路径访问（`path.resolve` /
@@ -11,12 +11,17 @@
  * **为什么不是靠注解**：`/*turbopackIgnore: true*​/` 只作用于动态 `import()` /
  * `require()`，对 `fs.*` 的路径访问一概无效（四种写法逐一实测均无效，见规范
  * `launch-and-build.md` §7.2）。仓库里现有那些注解从未生效，不能当「已修」。
- * 因此真正的防线是 `next.config.js` 的 `outputFileTracingExcludes` —— 它工作在
- * **产物路径**层面，不依赖静态分析。
+ * 因此本用例锁 `next.config.js` 的 `outputFileTracingExcludes` **清单不被静默删项**。
+ *
+ * ⚠️ 但「清单在」不等于「清单减掉了东西」——实测这份清单对「全项目 tracing」带进来
+ * 的文件**不做减法**：`./changelog.d/`、`./src/` 下的测试文件、`./src-tauri/` 都写在
+ * 里面，产物里仍有对应数量的真文件。真正把文件拿掉的是产物层显式删除
+ * （`scripts/standalone-private-inputs.mjs` 的 DEV_ARTIFACTS + 形状剔除），所以下面那组
+ * **产物级探针**才是这条口子的判据，本文件的清单断言只是「意图声明」的一半。规范 §7.2。
  *
  * 本用例只锁「防线还在、且没被静默改坏」这三件事：
  *   ① excludes 在**顶层**键位（历史事故：挂在 `experimental` 下完全不生效）；
- *   ② 关键目录清单齐全（删项 = 那些目录重新进产物，且没有任何提示）；
+ *   ② 关键目录清单齐全（删项 = 这份意图被静悄悄抹掉，且没有任何提示）；
  *   ③ 没有用 `turbopack.ignoreIssue` 遮这条告警（那是关信号而非修问题）。
  */
 import { readFileSync } from "node:fs";
@@ -82,16 +87,21 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
      * 而注释剥掉后仍可能让 `includes` 因为切片端点而误判（端点正好落在键上时
      * `includes` 为真）。这里取 experimental 块的右花括号，比较「键定义」与
      * 「块结束」的先后 —— 键在块内即键在前，键在顶层即块在前，没有歧义。 */
-    const experimentalEnd = code.indexOf("\n  },", code.indexOf("experimental: {"));
-    expect(experimentalEnd, "找不到 experimental 块结束位置").toBeGreaterThan(-1);
+    const experimentalEnd = code.indexOf(
+      "\n  },",
+      code.indexOf("experimental: {"),
+    );
+    expect(experimentalEnd, "找不到 experimental 块结束位置").toBeGreaterThan(
+      -1,
+    );
     expect(
       keyIndex < experimentalEnd,
       "outputFileTracingExcludes 不得放在 experimental 下（Next 16 已升为顶层键，写在旧位置一个字都不会被读）",
     ).toBe(false);
     // 反向锚点：块内必须真的有 useTypeScriptCli（否则「块结束」定位错了、白测）
-    expect(code.slice(code.indexOf("experimental: {"), experimentalEnd)).toContain(
-      "useTypeScriptCli",
-    );
+    expect(
+      code.slice(code.indexOf("experimental: {"), experimentalEnd),
+    ).toContain("useTypeScriptCli");
   });
 
   it.each([
@@ -156,13 +166,24 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
  * 反向验证：构造一个不含 `.next/standalone` 的工作目录，本组必须**全跳过且
  * 0 失败**（而不是 ENOENT）；构造一个含 `src/*.test.ts` 的假产物，必须报出它。
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync } from "node:fs";
 
 function standaloneDir(): string {
   return join(process.cwd(), ".next", "standalone");
 }
 
-/** 递归列出目录下所有相对路径（只在目录存在时调用）。 */
+/**
+ * 递归列出目录下所有相对路径（只在目录存在时调用）。
+ *
+ * **不穿符号链接**（按 `lstatSync` 判类型，链接本身算一项、不进去数它背后的文件）：
+ * standalone 的 `node_modules/<pkg>` 是指向本仓库 pnpm store 的链接，顺着数会把
+ * **开发机的依赖内容**记成产物内容 —— 实测那 456 个 `next/dist/docs/*.md` 就是这么
+ * 出现在「产物」清单里的，而产物层根本不能顺链接删它们（那会损坏开发机依赖，
+ * 见 `scripts/standalone-private-inputs.mjs` 的形状剔除为什么用 lstat）。
+ * 依赖包内容真正变成产物里的真文件，是 `build-desktop.mjs` 用 `dereference: true`
+ * 拷进 `src-tauri/static` 之后 —— 那一层由 `check-standalone-contents.cjs` 用同一份
+ * 口径数（它在那里实测到 472 个真文档）。
+ */
 function listFiles(dir: string, prefix = ""): string[] {
   const out: string[] = [];
   for (const name of readdirSync(dir)) {
@@ -170,8 +191,12 @@ function listFiles(dir: string, prefix = ""): string[] {
     const rel = prefix ? `${prefix}/${name}` : name;
     let st;
     try {
-      st = statSync(abs);
+      st = lstatSync(abs);
     } catch {
+      continue;
+    }
+    if (st.isSymbolicLink()) {
+      out.push(rel);
       continue;
     }
     if (st.isDirectory()) out.push(...listFiles(abs, rel));
