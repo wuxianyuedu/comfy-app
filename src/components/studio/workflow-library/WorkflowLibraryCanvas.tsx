@@ -70,6 +70,12 @@ import {
   LibraryOutputsNode,
   LibraryParamsNode,
 } from "./WorkflowLibraryCanvasNodes";
+import { gridLineColor } from "../canvas/workflow-canvas-grid";
+
+/* 预览画布的网格线强度：库里不做尺寸表与标尺，只给「这是一块画布」的观感，
+ * 所以取一个定值 —— 与编辑器画布 `DEFAULT_CANVAS_SETTINGS.gridMajorAlpha`
+ * 同档（0.14），色相则完全走同一个 `--color-canvas-grid-line`。 */
+const LIBRARY_GRID_LINE_ALPHA = 0.14;
 
 export interface WorkflowLibraryCanvasProps {
   io: WorkflowIOMap | null;
@@ -444,13 +450,14 @@ function WorkflowLibraryCanvasInner({
           className="wflib-canvas-flow"
           data-testid="wflib-canvas-flow"
         >
-          {/* 网格背景与编辑器画布同一套（浅色细格），只给「这是一块画布」的观感 ——
-            不做尺寸表与标尺，库里不需要。 */}
+          {/* 网格背景与编辑器画布同一套（色相同一个 token，α 现取）——
+              此前这里写的是 `var(--color-canvas-grid-line, rgba(148,163,184,0.14))`，
+              而那颗 token 从未定义过：永远走兜底，读代码的人会以为它随主题，实际不随。 */}
           <Background
             variant={BackgroundVariant.Lines}
             gap={20}
             size={1}
-            color="var(--color-canvas-grid-line, rgba(148,163,184,0.14))"
+            color={gridLineColor(LIBRARY_GRID_LINE_ALPHA)}
           />
         </ReactFlow>
       </LibraryNodeContentContext.Provider>
