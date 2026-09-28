@@ -57,7 +57,8 @@ export async function GET(
             // 「输入参数（workflowInputs，N 项）」等行；这些行落库走 200ms 防抖，
             // 若 SSE 在防抖窗口内连接，只读 DB 会漏掉它们，
             // 表现为「第二次执行（WS 已开、领取同步发日志）没有显示执行参数」。
-            // 这里改读内存日志兜底：内存为空（如服务器重启）时回落 DB 日志。
+            // 这里改读内存日志兜底：内存为空（服务器重启）时回落 DB 日志。内存那份
+            // 只是整包落库前的草稿，两者内容同源，不会互相矛盾（ISSUE #1206）。
             const inMemory = getLogs(id);
             const replaySrc = inMemory.length > 0 ? inMemory : existing;
             // 回放顺序必须「先日志、后终态 state」：前端 watchTask 在处理 state 的

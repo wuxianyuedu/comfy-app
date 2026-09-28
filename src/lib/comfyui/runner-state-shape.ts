@@ -12,8 +12,8 @@
 //     （没声明却引 Node 内建），也不会被 `clientReachable` 抓到（浏览器图引
 //     Node-only 会整页 500）。这是「拆层不影响 import-graph 判定」的关键。
 //
-// 单例（`globalThis.comfyRunner`）与 IO（`persistLogs` / `logger` / `taskRepository`）
-// 都留在 `runner-state.ts`。
+// 单例（`globalThis.comfyRunner_vN`，加字段必须升版号）与 IO（`persistLogs` /
+// `logger` / `taskRepository`）都留在 `runner-state.ts`。
 
 import type WebSocket from "ws";
 
@@ -85,7 +85,17 @@ export type RunnerState = {
    *  `executedWorkflow`（comfy-cli 存的就是提交那一刻的图），登记在 ISSUE #1202。 */
   promptByTask: Map<string, Record<string, unknown>>;
 
+  /** taskId → 这一轮的日志缓冲。落库是整包 `replaceLogs`（不是追加），所以这一份
+   *  就是「库里那一列接下来会变成什么」的草稿，进程内活着的轮次都攒在这里，由
+   *  `LOGS_MAX_TASKS` 的 LRU 收干。 */
   logs: Map<string, LogEntry[]>;
+
+  /** taskId → **本轮排队期**写下的行（等待原因那类）。领取会重开 `logs`（重跑不混
+   *  上一轮的尾巴），这份登记让领取那一刻把本轮已经写过、且已经落库的行接回去，
+   *  否则「⏳ 等待 ComfyUI WebSocket 连接就绪…」会被抹掉——回收器不再兜底判死排队
+   *  行之后，那句是唯一说明「这条在等什么」的出口（ISSUE #1206）。
+   *  由 `logWhileQueued` 写、`takeQueuedEntries` 取走即清。 */
+  queuedEntries: Map<string, LogEntry[]>;
 
   /** comfy-cli 完整原始输出（按行、不截断）：供前端「查看完整输出」入口按需
    *  拉取。面板的 `[comfy-cli 原始]`/`stdout`/`stderr` 行出于防刷屏做了单行与
@@ -155,6 +165,7 @@ export function createEmptyState(): RunnerState {
     promptToTask: new Map(),
     promptByTask: new Map(),
     logs: new Map(),
+    queuedEntries: new Map(),
     rawCli: new Map(),
     lastLogPct: new Map(),
     lastNodeByTask: new Map(),
