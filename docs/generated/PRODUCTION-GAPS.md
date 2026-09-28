@@ -93,7 +93,7 @@
 
 ### P0 — 缺了就不算「已发布产品」（阻塞发布）
 
-- [x] **P0-1 CI 流水线（已建 .cnb.yml）**：新增 `.cnb.yml` 把本地核心门禁（eslint 零警告 / `tsc --noEmit` / `vitest run`）搬上 CNB 跑，解除「门禁仅本地、`--no-verify` 可绕过」。未含 `pnpm audit` 与棘轮 `--strict`（待平台 runner/registry 镜像配置稳定后再补，避免噪声阻断）；Rust 壳与 `next build` 不进本流水线（避免拉 cargo 工具链）。证据：`.cnb.yml`。
+- [ ] **P0-1 CI 流水线**：缺口不是「没写配置」，而是**免费额度用不起**（#623 实测：`cpus: 8` 下一次 PR 近 1 核时，160 核时/月几十次 PR 就见底）。`76275841` 曾补回一份缩水版 `.cnb.yml` 充当「第二执行者」，但它**匹配不到任何事件**（顶层缺分支键与事件键，CNB 的形态是 `分支: { 事件: [流水线] }`）——构建历史里 `push` / `pull_request` 一条都没有，比删除前更彻底地静默失效，已按 ISSUE #1229 删除。出路不是把配置贴回去，而是 13.5.4 的**按需召唤**：在 PR / Issue 里 `@` 评审 NPC 跑一轮全量单测 / 产物护栏 / E2E，不 `@` 就不花核时。证据：`changelog.d/1229-remove-dead-cnb-yml.md`；规范 13.5.3 / 13.5.4。
 - [ ] **P0-2 自动更新未接通**：`tauri.conf.json` `updater.endpoints:[]` / `pubkey:""` / 未开 `createUpdaterArtifacts`；能力已开校验全无（填端点即变未验签更新）。需：生成 keypair、配端点、开产物。证据：`src-tauri/tauri.conf.json:34-41,43-67`；`src-tauri/capabilities/remote.json:19`。
 - [ ] **P0-3 客户端崩溃零上报**：缺 `src/sentry.client.config.ts`，`instrumentation.ts` 仅 nodejs/edge 分支；ErrorBoundary 仅 `console.error`。证据：`src/instrumentation.ts:8-24`；`src/components/ui/error-boundary.tsx:31-35`。
 - [ ] **P0-4 无 release / source map 关联**：`next.config.js` 无 `withSentryConfig` / sourceMap 上传，堆栈无法符号化。证据：`next.config.js`（grep sentry/Sentry/sourceMap = 0）。
