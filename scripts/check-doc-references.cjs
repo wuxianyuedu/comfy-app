@@ -327,6 +327,35 @@ const AGENTS_ROOT_FILES = new Set([
   "db.sqlite",
 ]);
 
+/* ── 运行期产物不该被要求存在（.gitignore 是判据，不靠人工记名单）────────
+ * C1/C3 的语义是「AGENTS.md 里那个路径**指向的文件确实在仓库里**」。而
+ * `db.sqlite` 这类是**运行期产物**：它被 `.gitignore` 忽略，任何干净检出
+ * （CI / 新克隆 / 评审容器）都不存在，只有跑过 `pnpm db:push` 的开发机才有。
+ * 把它登记进 AGENTS_ROOT_FILES 等于要求门禁恒红——实测 62283f41 加了这一项后
+ * `pnpm doc:check` 一直报这一条，而「按提示去改 AGENTS.md」是错的：那句话本来就
+ * 该提这个文件名（它讲的是「构建会把它复制进产物」，不是「仓库里有这个文件」）。
+ *
+ * 判据因此落在 `.gitignore` 上而不是「再列一份豁免名单」：被忽略 = 不进版本库 =
+ * 不能要求存在。名单会漏、会随 .gitignore 漂移，.gitignore 不会。
+ */
+function gitignoredRootNames() {
+  const gi = exists(".gitignore") ? readText(".gitignore") : "";
+  const names = new Set();
+  for (const raw of gi.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || line.startsWith("!")) continue;
+    // 只认「根级单名」形态（`db.sqlite` / `/db.sqlite`）：带斜杠的是子路径规则，
+    // 与 AGENTS_ROOT_FILES（全是根级文件名）不同口径，别混进来。
+    const name = line.replace(/^\//, "");
+    if (name.includes("/")) continue;
+    names.add(name);
+  }
+  return names;
+}
+
+/** `.gitignore` 里的根级单名集合（每次进程只算一次）。 */
+const GITIGNORED_ROOT_NAMES = gitignoredRootNames();
+
 /** 把一段反引号内容或链接 URL 判成「仓库相对路径」→ 返回规范化后的相对路径；不是则返回 null。 */
 function looksLikeRepoPath(raw) {
   const p = raw.trim();
@@ -371,6 +400,8 @@ function checkAgentsMdPaths() {
     for (const c of candidates) {
       const p = looksLikeRepoPath(c.raw);
       if (!p) continue;
+      // 运行期产物（被 .gitignore 忽略）不参与「文件必须存在」判定，见上节。
+      if (GITIGNORED_ROOT_NAMES.has(p)) continue;
       const key = `${p}@L${lineno}`;
       if (seen.has(key)) continue;
       seen.add(key);
