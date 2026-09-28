@@ -12,7 +12,7 @@
  *      boot/heartbeat 都落了盘」。真正的整树回收由 `cross-platform-launcher.test.ts`
  *      与 `kill-process-tree.windows.test.ts` 那族覆盖。
  *   2. **运行时注入链**（3-B0 两条，`COMFY_EXECUTOR=host`）：golden 跨片不误杀
- *      （inline 片孤儿在 host Q2 后原样 QUEUED）+ 库不可达时大声退出 1。
+ *      （inline 片的排队行在 host boot 后原样 QUEUED、零误杀）+ 库不可达时大声退出 1。
  *   日志文件一律落各用例自己 mkdtemp 的临时目录、绝不落到仓库 `log/`。
  *
  * 反证：把脚本里的 `writeLine` 换成 no-op，用例 1/2/3 都会红；去掉 reaper 的
@@ -144,11 +144,11 @@ describe("scripts/executor-host.mjs 骨架", () => {
  *  TS + 注入 reaper(owner=host)/enqueue/trace + Q2 扫自己那片。 */
 describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", () => {
   /** 在临时目录建一份最小 `task` 表库（列取 reaper/领取实际触达的集合），
-   *  种一行 **inline 片**的超时 QUEUED 孤儿。
+   *  种一行 **inline 片**的超时排队行（ISSUE #1204 起它不再是「孤儿」形状）。
    *  `claimedAt` 在这份清单里是因为领取语句写它（ADR §14 D1 的 4-B2）——缺列的
    *  表现是 host 侧 `claim-tick FAILED` 并以退出码 1 收场（本用例正是这么抓到的），
    *  而不是「少记了一个时间」。 */
-  function mkDbWithInlineOrphan(dir: string): {
+  function mkDbWithInlineQueued(dir: string): {
     dbPath: string;
     rowId: string;
   } {
@@ -168,9 +168,9 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
       .slice(0, 23);
     db.prepare(
       "INSERT INTO task (id,status,createdAt,workflowName) VALUES (?,'QUEUED',?,?)",
-    ).run("inline-orphan-1", staleAt, "w");
+    ).run("inline-queued-1", staleAt, "w");
     db.close();
-    return { dbPath, rowId: "inline-orphan-1" };
+    return { dbPath, rowId: "inline-queued-1" };
   }
 
   /** 往同一份临时库补一行 host 片的 QUEUED 任务（带执行载荷）。 */
@@ -191,10 +191,10 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
     }
   }
 
-  it("golden：host boot 的 Q2 只数 host 片——inline 片孤儿原样 QUEUED、零误杀", async () => {
+  it("golden：host boot 的排队计数只数 host 片——inline 片排队行原样 QUEUED、零误杀", async () => {
     const tmp = mkTmp();
     const logPath = path.join(tmp, "host.log");
-    const { dbPath, rowId } = mkDbWithInlineOrphan(tmp);
+    const { dbPath, rowId } = mkDbWithInlineQueued(tmp);
     const { code, stderr } = await new Promise<{
       code: number | null;
       stderr: string;
@@ -221,7 +221,7 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
     expect(text).toContain("runtime inject-ok");
     // NULL 归属行不算 host 片：Q2 计数必须为 0……
     expect(text).toMatch(/q2-scan hostShardQueued=0/);
-    // ……且那行 inline 孤儿在 host boot 前后一字未动（仍 QUEUED、没被 FAIL）。
+    // ……且那行 inline 片的排队行在 host boot 前后一字未动（仍 QUEUED、没被 FAIL）。
     const row = readTaskRow(dbPath, rowId);
     expect(row.status).toBe("QUEUED");
     expect(row.claimedBy ?? null).toBeNull();
@@ -271,7 +271,7 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
   it("--claim-once：领走恰好一行 host 行（QUEUED→RUNNING + claim-dispatched），不碰 inline 行", async () => {
     const tmp = mkTmp();
     const logPath = path.join(tmp, "claim.log");
-    const { dbPath, rowId } = mkDbWithInlineOrphan(tmp);
+    const { dbPath, rowId } = mkDbWithInlineQueued(tmp);
     seedHostRow(dbPath, "host-job-1");
     const { code, stderr } = await runHostWith(
       ["--claim-once"],
@@ -284,7 +284,7 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
     const claimed = readTaskRow(dbPath, "host-job-1");
     expect(claimed.status).toBe("RUNNING");
     expect(claimed.claimedBy).toBe("host");
-    // 领取跨片红线：同库的 inline 孤儿不被这条 tick 动到
+    // 领取跨片红线：同库的 inline 片排队行不被这条 tick 动到
     expect(readTaskRow(dbPath, rowId).status).toBe("QUEUED");
   }, 90_000);
 

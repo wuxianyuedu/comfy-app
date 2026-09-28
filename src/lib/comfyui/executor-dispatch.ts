@@ -12,17 +12,20 @@
  *     `claimedBy` 从库里领行。
  *
  * 两条循环读的是两份真相（内存 vs 库），后果不止「代码重复」：
- *   1. `RUNNING` 的含义分裂——行被领走时库里已经是 `RUNNING`，而它可能还躺在
- *      内存队列里等空槽，于是状态栏的 `queued` 恒为 0（4-B2 端到端实测到的）；
- *   2. 冷启动遗留在 `QUEUED` 的行只有 host 那条会救回来（inline 那条看不见库，
- *      只能等 reaper 判孤儿）；
+ *   1. `RUNNING` 的含义分裂——host 那片把行领走时库里已经是 `RUNNING`，而它可能
+ *      还躺在内存队列里等空槽，那段窗口里状态栏的 `queued` 数出来是 0（4-B2 端到
+ *      端实测到的；inline 那片等待的行仍是 `QUEUED`，计数没错）；
+ *   2. 冷启动遗留在 `QUEUED` 的行只有 host 那条 pull 会救回来（inline 那条看不见
+ *      库，只能等回收器按 30s 判死——那条规则本身也已被 ISSUE #1204 收窄）；
  *   3. 「谁负责起 ComfyUI」挂在内存队列的入队动作上（`enqueue()` 里那句
  *      `void connect()`），改成库驱动后必须一起搬进来，否则没人拉起。
  *
  * 现在两宿主共用本模块：Next 的 owner 是 `inline`、host 的是 `host`，领取谓词
  * 仍是 impl 里唯一的 `ownedBy()`。**领之前先确认本进程跑得动**（签字选定的形态）：
- * WS 没就绪就不领行，行留在 `QUEUED`，由 `QUEUED` 那条已有的 `isComfyStarting()`
- * 守卫兜住 ComfyUI 冷启动的窗口。这样 `RUNNING` 就只剩一个意思：真的在跑。
+ * WS 没就绪就不领行，行留在 `QUEUED`，等就绪的下一拍再领——`QUEUED` 因此是健康的
+ * 等待态，回收器不会来判死它（死信规则已收窄到「没有任何宿主片会领」的行，
+ * ISSUE #1204；ComfyUI 冷启动那 30~120s 的窗口原先靠 `isComfyStarting()` 守卫兜，
+ * 现在整类都不进候选集）。这样 `RUNNING` 就只剩一个意思：真的在跑。
  *
  * 启动点是**两处显式调用**（与 reaper 在 §14 D3 之后的形态同构，判据由
  * `tests/dispatch-startup-points.test.ts` 钉）：Next 侧

@@ -6,7 +6,7 @@
 // 下次改动很容易又踩回去。
 //
 // 本文件按「什么情况 → 什么判决」逐条钉住两条 sweeper 的决策表：
-//   QUEUED reaper：真孤儿才回收；仍被本进程认领 / ComfyUI 正在启动 → 跳过。
+//   QUEUED reaper：只有没有任何宿主片会领的死信行才回收（ISSUE #1204）；仍被本进程认领 / ComfyUI 正在启动 → 跳过。
 //   RUNNING reaper：拿 ComfyUI /history 与 /queue 对账，给出三态判决。
 //
 // 打桩方式沿用 reaper.test.ts：本文件的用例会把两条 sweeper **直接调用**
@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../core/repository", () => ({
   taskRepository: {
-    listStaleQueued: vi.fn().mockResolvedValue([]),
+    listStaleUnownedQueued: vi.fn().mockResolvedValue([]),
     listStaleRunning: vi.fn().mockResolvedValue([]),
     finalizeFailure: vi.fn().mockResolvedValue(undefined),
     finalizeFromReaper: vi.fn().mockResolvedValue(undefined),
@@ -43,7 +43,7 @@ import { cancelPersistLogs, state } from "./runner-state";
 type MockedFn = ReturnType<typeof vi.fn>;
 function repoMock(
   name:
-    | "listStaleQueued"
+    | "listStaleUnownedQueued"
     | "listStaleRunning"
     | "finalizeFailure"
     | "finalizeFromReaper",
@@ -72,9 +72,15 @@ function logsOf(taskId: string): string[] {
   return (state().logs.get(taskId) ?? []).map((e) => e.msg);
 }
 
-/** 造一条 QUEUED 孤儿行（createdAt 早于 STALE_MS）。 */
+/** 造一条**无主**的 QUEUED 死信行：`claimedBy` 取一个没有任何宿主片会领的值
+ *  （ISSUE #1204 起，这是本 sweeper 唯一的命中形状），createdAt 早于 STALE_MS。 */
 function queuedRow(id: string, promptId: string | null = null) {
-  return { id, promptId, createdAt: new Date(Date.now() - 120_000) };
+  return {
+    id,
+    promptId,
+    claimedBy: "worker",
+    createdAt: new Date(Date.now() - 120_000),
+  };
 }
 
 /** 造一条 RUNNING 行（promptId 已写，finishedAt 未写）。 */
@@ -115,7 +121,7 @@ type ReaperInternals = {
 
 /** ComfyUI 侧「无活动」的默认应答：/queue 空、/history 空。
  *  QUEUED reaper 判死前必须拿到这份证据（见 comfyHasActiveWorkflow），
- *  否则真孤儿用例会因「证据不足」被跳过。 */
+ *  否则无主行用例会因「证据不足」被跳过。 */
 function stubComfyIdle() {
   vi.stubGlobal(
     "fetch",
@@ -136,7 +142,7 @@ function stubComfyIdle() {
 
 beforeEach(() => {
   resetRunnerState();
-  repoMock("listStaleQueued").mockResolvedValue([]);
+  repoMock("listStaleUnownedQueued").mockResolvedValue([]);
   repoMock("listStaleRunning").mockResolvedValue([]);
   repoMock("finalizeFailure").mockClear();
   repoMock("finalizeFromReaper").mockClear();
@@ -165,30 +171,43 @@ async function loadReaper(): Promise<
   return mod;
 }
 
-describe("QUEUED reaper 判决矩阵", () => {
-  it("真孤儿（无任何 in-memory 足迹）→ 判 FAILED 并写入可行动原因", async () => {
+describe("QUEUED 死信判决矩阵（ISSUE #1204 起：只判没有任何宿主片会领的行）", () => {
+  it("无主行（没有任何宿主片会领 + 无任何 in-memory 足迹）→ 判 FAILED 并写入可行动原因", async () => {
     const reaper = await loadReaper();
     expect(
       reaper.reapStaleQueuedTasks,
       "reapStaleQueuedTasks 应对测试可见",
     ).toBeTypeOf("function");
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-orphan")]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([
+      queuedRow("t-orphan"),
+    ]);
 
     await reaper.reapStaleQueuedTasks!();
 
     expect(repoMock("finalizeFailure")).toHaveBeenCalledTimes(1);
+    /* 扫描**不再带 owner**：判据本身就是「不属于任何已知归属片」。传分片参数等于
+     *  把本片的排队行重新当成孤儿池——那正是本刀要消灭的形态（实测新宿主 boot 首扫
+     *  会把领取循环第一拍还没赶上的遗留行当场判失败）。 */
+    expect(repoMock("listStaleUnownedQueued").mock.calls[0]).toHaveLength(2);
     const [taskId, reason] = callArgsOf(repoMock("finalizeFailure"));
     expect(taskId).toBe("t-orphan");
-    expect(String(reason)).toContain("卡在队列");
-    expect(String(reason)).toContain("请重新执行");
-    expect(logsOf("t-orphan").some((m) => m.includes("卡在队列"))).toBe(true);
+    expect(String(reason)).toContain("没有任何执行宿主会领它");
+    /* 原因必须指向真正能救它的动作（改归属/配置），而不是让用户白跑一次：重跑
+     *  写回的仍是同一个没人领的归属值。 */
+    expect(String(reason)).toContain("COMFY_EXECUTOR");
+    expect(String(reason)).toContain("worker");
+    expect(
+      logsOf("t-orphan").some((m) => m.includes("没有任何执行宿主会领它")),
+    ).toBe(true);
   });
 
   it("进程内无足迹，但 ComfyUI 仍在执行/排队 → 不回收（ISSUE #378 误杀回归）", async () => {
     /* raw 路径的 comfy-cli 子进程是独立进程：dev server 重启后队列、cliProcs、
      * executedWorkflow 全都空了，但 ComfyUI 侧工作流仍在跑。此时不能判死。 */
     const reaper = await loadReaper();
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-inflight")]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([
+      queuedRow("t-inflight"),
+    ]);
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -215,7 +234,9 @@ describe("QUEUED reaper 判决矩阵", () => {
 
   it("ComfyUI 不可达（无法确认）→ 不回收，本轮放行等下次对账", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-unreachable")]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([
+      queuedRow("t-unreachable"),
+    ]);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
@@ -233,11 +254,11 @@ describe("QUEUED reaper 判决矩阵", () => {
     ).toBe(true);
   });
 
-  it("ComfyUI 队列空且无 prompt_id 线索 → 判孤儿（历史里别的条目不算「在跑」）", async () => {
-    /* /history 保留全部历史且无时间过滤：若拿「历史非空」当在飞证据，孤儿会
-     *  永久卡在 QUEUED（永不回收）。这里钉住「历史非空 ≠ 本任务在跑」。 */
+  it("ComfyUI 队列空且无 prompt_id 线索 → 判死信（历史里别的条目不算「在跑」）", async () => {
+    /* /history 保留全部历史且无时间过滤：若拿「历史非空」当在飞证据，无主行会
+     *  永久留在队列里无人收口。这里钉住「历史非空 ≠ 本任务在跑」。 */
     const reaper = await loadReaper();
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-dead")]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-dead")]);
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -266,7 +287,7 @@ describe("QUEUED reaper 判决矩阵", () => {
 
   it("外部证据每个 tick 只探一次（不按行重复网络请求）", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleQueued").mockResolvedValue([
+    repoMock("listStaleUnownedQueued").mockResolvedValue([
       queuedRow("t-a"),
       queuedRow("t-b"),
     ]);
@@ -286,7 +307,9 @@ describe("QUEUED reaper 判决矩阵", () => {
   it("任务在本进程的在飞集合里（已领取未收口）→ 跳过回收，交给正常执行路径", async () => {
     const reaper = await loadReaper();
     state().pendingDispatch.add("t-queued");
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-queued")]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([
+      queuedRow("t-queued"),
+    ]);
 
     await reaper.reapStaleQueuedTasks!();
 
@@ -299,7 +322,7 @@ describe("QUEUED reaper 判决矩阵", () => {
   it("comfy-cli 子进程正在驱动（promptId 未回传）→ 跳过回收", async () => {
     const reaper = await loadReaper();
     vi.mocked(cliProcs).set("t-cli", {} as never);
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-cli")]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-cli")]);
 
     await reaper.reapStaleQueuedTasks!();
 
@@ -309,7 +332,7 @@ describe("QUEUED reaper 判决矩阵", () => {
   it("executedWorkflow 已记录（raw 路径已开始）→ 跳过回收", async () => {
     const reaper = await loadReaper();
     state().executedWorkflow.set("t-raw", {});
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-raw")]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-raw")]);
 
     await reaper.reapStaleQueuedTasks!();
 
@@ -319,7 +342,7 @@ describe("QUEUED reaper 判决矩阵", () => {
   it("ComfyUI 正在自动启动（lifecycle 单飞进行中）→ 跳过并写「等待自动启动」", async () => {
     const reaper = await loadReaper();
     comfyStartingMock().mockReturnValue(true);
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-boot")]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-boot")]);
 
     await reaper.reapStaleQueuedTasks!();
 
@@ -332,7 +355,7 @@ describe("QUEUED reaper 判决矩阵", () => {
   it("同一任务被并发 tick 重复认领 → 只收口一次（不出现重复 FAILED 日志）", async () => {
     const reaper = await loadReaper();
     const row = queuedRow("t-dup");
-    repoMock("listStaleQueued").mockResolvedValue([row, row]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([row, row]);
 
     await reaper.reapStaleQueuedTasks!();
 
@@ -341,25 +364,29 @@ describe("QUEUED reaper 判决矩阵", () => {
 
   it("终态已被本进程认领（s.settled）→ 跳过回收，避免二次写终态（ISSUE #378）", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-settled")]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([
+      queuedRow("t-settled"),
+    ]);
     /* 模拟 executor 已抢先收口：任务不在 queue / cliProcs / executedWorkflow，
      *  但终态已被认领（例如 complete() 正在收尾）。 */
     state().settled.add("t-settled");
 
     await reaper.reapStaleQueuedTasks!();
 
-    /* 认领保护命中 → 既不写库也不推「卡在队列」原因（该原因若推出去，就会和
+    /* 认领保护命中 → 既不写库也不推死信原因（该原因若推出去，就会和
      *  executor 稍后写入的真实原因在「执行日志 / 应用日志」两处互相矛盾）。 */
     expect(repoMock("finalizeFailure")).not.toHaveBeenCalled();
-    expect(logsOf("t-settled").some((m) => m.includes("卡在队列"))).toBe(false);
+    expect(
+      logsOf("t-settled").some((m) => m.includes("没有任何执行宿主会领它")),
+    ).toBe(false);
     expect(
       logsOf("t-settled").some((m) => m.includes("仍在当前进程的执行链中")),
     ).toBe(true);
   });
 
-  it("真孤儿被回收后 s.finalized 落锁 → 同进程再次 tick 不再重复写库", async () => {
+  it("无主行被回收后 s.finalized 落锁 → 同进程再次 tick 不再重复写库", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-once")]);
+    repoMock("listStaleUnownedQueued").mockResolvedValue([queuedRow("t-once")]);
 
     await reaper.reapStaleQueuedTasks!();
     expect(repoMock("finalizeFailure")).toHaveBeenCalledTimes(1);
@@ -375,7 +402,7 @@ describe("QUEUED reaper 判决矩阵", () => {
 
   it("repository 抛错 → 不冒泡（reaper 失败不能拖垮 dev server），且只落一条 warn", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleQueued").mockRejectedValue(new Error("db down"));
+    repoMock("listStaleUnownedQueued").mockRejectedValue(new Error("db down"));
 
     await expect(reaper.reapStaleQueuedTasks!()).resolves.toBeUndefined();
   });

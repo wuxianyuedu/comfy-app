@@ -30,7 +30,17 @@
  * `unguarded`；登记 PURE_NODE_HOSTS 只是**给未来**「impl 里若加了 node: 前缀
  * import」留的锚，当前 scanner 视角不严格必要。
  */
-import { and, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { TERMINAL_TASK_STATUSES } from "../task-state";
 import { task, taskImage } from "~/server/db/schema";
@@ -61,6 +71,11 @@ function ownedBy(owner: TaskClaimMode) {
     ? eq(task.claimedBy, "host")
     : or(isNull(task.claimedBy), eq(task.claimedBy, "inline"));
 }
+
+/** 已知的归属片（值域同上）。回收器要用它的**补集**：一条 `QUEUED` 行只要属于
+ *  任何一片，就是「还在等自己那片的领取循环」，不是死信——`ownedBy()` 是正向形态，
+ *  这里是反向形态，两者必须一起改。 */
+const KNOWN_CLAIM_MODES: string[] = ["inline", "host"];
 
 /** `ownedBy()` 的内存侧同判据（行已经在手里、只需分类「为什么没写进去」时用）。
  *  两条必须同步改：SQL 侧漏一行、内存侧多认一行，就会把别人的行判成「归我」。 */
@@ -169,21 +184,36 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
       return rows[0] ?? null;
     },
 
-    /** reaper 扫 QUEUED 孤儿：5 条件 AND（QUEUED + `finishedAt IS NULL` +
-     *  `createdAt < cutoff` + `promptId IS NULL` + 归属 `owner` 片），逐个破一
-     *  条都不返。`owner` 缺省 `'inline'`（NULL 归 inline，与现状全 NULL 的行
-     *  集等价）；host 进程注入 `'host'` 后只收自己那份——灰度期两进程并存时
-     *  互相看不见对方的孤儿，防跨片误杀。 */
-    async listStaleQueued(
+    /** reaper 扫**死信** QUEUED 行（ISSUE #1204 起的口径）：QUEUED +
+     *  `finishedAt IS NULL` + `createdAt < cutoff` + `promptId IS NULL` +
+     *  **不属于任何已知归属片**。前四条不变，第五条从 `ownedBy(owner)` 换成它的补集：
+     *  pull 模型（ADR §14 D1 第二刀）下「`QUEUED` 且无 `promptId`」只剩一个意思——
+     *  **还没被领**（等槽 / 等宿主起来 / 等 ComfyUI 就绪），那是健康的等待态，归领取
+     *  循环负责，不是回收器该判死的形状。这条规则原先针对的形态（raw 路径在 POST 给
+     *  ComfyUI 之前不翻 `RUNNING`、不写 `promptId`）已随「唯一提交实现 = comfy-cli +
+     *  领取即单语句原子翻 `RUNNING`」消失，留着它反而会先把新宿主 boot 第一拍还没来的
+     *  遗留行判成失败（实测：boot 诊断数出 `hostShardQueued=1`，1.4s 后同一行 FAILED）。
+     *  NULL 归 inline（见 `ownedBy`），所以只有「写着归属、却不在这两个值上」的行才算
+     *  无主——正常数据永远不匹配，本条因此退成畸形行的兜底出口。 */
+    async listStaleUnownedQueued(
       cutoff: Date,
       take: number,
-      owner: TaskClaimMode = "inline",
-    ): Promise<Array<{ id: string; createdAt: Date; workflowName: string }>> {
-      return db
+    ): Promise<
+      Array<{
+        id: string;
+        createdAt: Date;
+        workflowName: string;
+        claimedBy: string;
+      }>
+    > {
+      const rows = await db
         .select({
           id: task.id,
           createdAt: task.createdAt,
           workflowName: task.workflowName,
+          /* 判死原因要把那个「没人领的归属值」说出来：用户重跑救不了它，能救的是
+           *  把 `COMFY_EXECUTOR` 配回有宿主在跑的那一侧。 */
+          claimedBy: task.claimedBy,
         })
         .from(task)
         .where(
@@ -192,15 +222,24 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
             isNull(task.finishedAt),
             lt(task.createdAt, cutoff),
             isNull(task.promptId),
-            ownedBy(owner),
+            isNotNull(task.claimedBy),
+            notInArray(task.claimedBy, KNOWN_CLAIM_MODES),
           ),
         )
         .limit(take);
+      /* 谓词里已有 `claimedBy IS NOT NULL`，而 drizzle 不会据此把投影收窄成非空：
+       * 在边界上断言一次，读侧（把陌生归属值写进用户可见的判死原因）不必再判空。 */
+      return rows as Array<{
+        id: string;
+        createdAt: Date;
+        workflowName: string;
+        claimedBy: string;
+      }>;
     },
 
     /** reaper 扫 RUNNING 孤儿（ISSUE #1184 起**不再要求 `promptId` 非空**）：
      *  曾经带一条 `promptId IS NOT NULL`，于是「已被领取、但 comfy-cli 还没把
-     *  `prompt_id` 回传落库」的 RUNNING 行两边都不匹配——`listStaleQueued` 只要
+     *  `prompt_id` 回传落库」的 RUNNING 行两边都不匹配——`listStaleUnownedQueued` 只要
      *  `QUEUED`、本条不要空 promptId——宿主在那段窗口里崩溃就再没有任何回收兜底，
      *  界面永久停「生成中」。现在这类行也交出来，由判决侧按「本进程是否还认领它」
      *  定夺（`reaper.ts` 的 `isTaskClaimedInProcess` + 两轮观察）。 */

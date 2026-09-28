@@ -896,7 +896,7 @@ describe("TaskRepository", () => {
     });
   });
 
-  it("replaceLogs 写日志列；listStaleQueued / listStaleRunning 的判决条件", async () => {
+  it("replaceLogs 写日志列；listStaleUnownedQueued / listStaleRunning 的判决条件", async () => {
     const t = await taskRepository.createQueued(queued);
     await taskRepository.replaceLogs(t.id, [{ msg: "1" }]);
     expect((await taskRepository.findById(t.id))?.logs).toEqual([{ msg: "1" }]);
@@ -906,12 +906,15 @@ describe("TaskRepository", () => {
     ).resolves.toBeUndefined();
 
     const cutoff = new Date(Date.now() + 60_000);
-    const staleQueued = await taskRepository.listStaleQueued(cutoff, 10);
-    expect(staleQueued.map((r) => r.id)).toEqual([t.id]);
+    /* 本刀改掉的判据：cutoff 放到未来也只该捞出「没有任何宿主片会领」的行。
+     *  `createQueued` 不写 claimedBy ⇒ NULL 归 inline 片，那是一条健康的等待态行，
+     *  不再被扫成死信（ISSUE #1204；正面命中形状在 impl 的契约测里）。 */
+    const staleQueued = await taskRepository.listStaleUnownedQueued(cutoff, 10);
+    expect(staleQueued).toEqual([]);
 
     // 有 promptId 的排队任务不算「从未开工」；RUNNING + 有 promptId 才算 stale running
     await taskRepository.markRunning(t.id, "pid-1");
-    expect(await taskRepository.listStaleQueued(cutoff, 10)).toEqual([]);
+    expect(await taskRepository.listStaleUnownedQueued(cutoff, 10)).toEqual([]);
     expect(
       (await taskRepository.listStaleRunning(cutoff, 10)).map((r) => r.id),
     ).toEqual([t.id]);

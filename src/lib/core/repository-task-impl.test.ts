@@ -304,70 +304,60 @@ describe("replaceLogs（swallow 语义：写失败不抛，面板视图仍在）
   });
 });
 
-describe("listStaleQueued（reaper 扫 QUEUED 孤儿：4 条件 AND）", () => {
+describe("listStaleUnownedQueued（reaper 的死信扫描：5 条件 AND，ISSUE #1204）", () => {
   const oldDate = new Date(Date.now() - 60_000);
   const freshDate = new Date();
   const cutoff = new Date(Date.now() - 30_000);
+  /** 没有任何宿主片会领的归属值——本条规则**唯一**的命中形状。 */
+  const unowned = "worker";
 
-  it("命中：QUEUED + finishedAt=null + createdAt<cutoff + promptId=null", async () => {
+  it("命中：QUEUED + finishedAt=null + createdAt<cutoff + promptId=null + 无主归属", async () => {
     const id = await seed({
       status: "QUEUED",
       createdAt: oldDate,
       promptId: null,
+      claimedBy: unowned,
     });
-    const got = await impl.listStaleQueued(cutoff, 10);
+    const got = await impl.listStaleUnownedQueued(cutoff, 10);
     expect(got.map((r) => r.id)).toContain(id);
+    /* 判死原因要把「哪个归属值没人领」说出来，所以 claimedBy 必须在投影里。 */
+    expect(got.find((r) => r.id === id)?.claimedBy).toBe(unowned);
   });
 
-  it("破一条：已 finishedAt 不返", async () => {
+  const broken: Array<[string, Record<string, unknown>]> = [
+    ["已 finishedAt 不返", { finishedAt: new Date() }],
+    ["createdAt 不早于 cutoff 不返（还没过时限）", { createdAt: freshDate }],
+    [
+      "有 promptId 不返（归 ComfyUI 负责，由 listStaleRunning 对账）",
+      { promptId: "pid" },
+    ],
+    [
+      "status 不是 QUEUED 不返（RUNNING 走 listStaleRunning 对账）",
+      { status: "RUNNING" },
+    ],
+  ];
+  it.each(broken)("破一条：%s", async (_label, extra) => {
     await seed({
       status: "QUEUED",
       createdAt: oldDate,
-      finishedAt: new Date(),
+      claimedBy: unowned,
+      ...extra,
     });
-    expect(await impl.listStaleQueued(cutoff, 10)).toHaveLength(0);
+    expect(await impl.listStaleUnownedQueued(cutoff, 10)).toHaveLength(0);
   });
 
-  it("破一条：createdAt 不早于 cutoff 不返（还没到 stale 时限）", async () => {
-    await seed({ status: "QUEUED", createdAt: freshDate });
-    expect(await impl.listStaleQueued(cutoff, 10)).toHaveLength(0);
-  });
-
-  it("破一条：有 promptId 不返（归 ComfyUI 负责，由 listStaleRunning 对账）", async () => {
-    await seed({ status: "QUEUED", createdAt: oldDate, promptId: "pid" });
-    expect(await impl.listStaleQueued(cutoff, 10)).toHaveLength(0);
-  });
-
-  it("破一条：status 不是 QUEUED 不返（RUNNING 走 listStaleRunning 对账）", async () => {
-    await seed({ status: "RUNNING", createdAt: oldDate });
-    expect(await impl.listStaleQueued(cutoff, 10)).toHaveLength(0);
-  });
-
-  it("归属分片（Phase 3-B0）：host 片只收 'host' 行，NULL/'inline' 行归 inline 片", async () => {
-    const hostOrphan = await seed({
-      status: "QUEUED",
-      createdAt: oldDate,
-      claimedBy: "host",
-    });
-    const inlineOrphan = await seed({ status: "QUEUED", createdAt: oldDate });
-    const explicitInline = await seed({
-      status: "QUEUED",
-      createdAt: oldDate,
-      claimedBy: "inline",
-    });
-    const hostIds = await impl.listStaleQueued(cutoff, 10, "host");
-    expect(hostIds.map((r) => r.id)).toEqual([hostOrphan]);
-    const inlineIds = await impl.listStaleQueued(cutoff, 10, "inline");
-    expect(inlineIds.map((r) => r.id).sort()).toEqual(
-      [inlineOrphan, explicitInline].sort(),
-    );
-    // 缺省第三参 = inline 片（Next 侧不改调用签名时行为与现状等价）
-    expect(
-      (await impl.listStaleQueued(cutoff, 10)).map((r) => r.id).sort(),
-    ).toEqual([inlineOrphan, explicitInline].sort());
+  /* 本刀的正面对象：三种正常归属的 aged `QUEUED` 行**一律不返**。pull 模型下它们
+   *  是健康的等待态（等槽 / 等本片宿主起来 / 等 ComfyUI 就绪），归领取循环负责；
+   *  旧判据会把新宿主 boot 第一拍还没赶上的遗留行当场判成「请重新执行」——实测
+   *  boot 诊断 `hostShardQueued=1` 与 1.4s 后的 FAILED 说的就是同一行（ISSUE #1204）。
+   *  这一条同时钉住 `ownedBy()` 的 NULL 归 inline 语义不许漂。 */
+  it("正常归属（NULL / 'inline' / 'host'）的 aged QUEUED 行一律不返", async () => {
+    await seed({ status: "QUEUED", createdAt: oldDate });
+    await seed({ status: "QUEUED", createdAt: oldDate, claimedBy: "inline" });
+    await seed({ status: "QUEUED", createdAt: oldDate, claimedBy: "host" });
+    expect(await impl.listStaleUnownedQueued(cutoff, 10)).toHaveLength(0);
   });
 });
-
 describe("listStaleRunning（reaper 扫 RUNNING 孤儿：状态/时限/归属三条 AND，promptId 可为空）", () => {
   const oldDate = new Date(Date.now() - 60_000);
   const cutoff = new Date(Date.now() - 30_000);
