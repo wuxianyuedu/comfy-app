@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { gridLineColor } from "../src/components/studio/canvas/workflow-canvas-grid";
+
 /**
  * 主题 token 的**产物侧**判据（规范 03 §3.6.1.1 的配套，非提交前必跑层）。
  *
@@ -320,6 +322,136 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
           2,
         )}:1）更看不见 —— 写死单一色相的老问题回来了`,
       ).toBeGreaterThanOrEqual(seen.dark.ratio);
+    }
+  });
+
+  /**
+   * **二次代入**这条路径（上一批留下的缝，本次补）。
+   *
+   * 上一条用例把 `color-mix()` 直接写进 `stroke`，那不是画布真正走的路。真实路径是：
+   * React Flow 把 `<Background color=…>` 写成内联自定义属性
+   * `--xy-background-pattern-color-props`，样式表里再
+   * `stroke: var(--xy-background-pattern-color-props, var(--xy-background-pattern-color, 默认))`
+   * 取它 —— 也就是**「一个 var() 嵌在自定义属性里、又被外层 var() 二次代入」**，
+   * 而且内层那个 `var()` 自己还带着 `color-mix()`。三段各有各的失效方式，
+   * 只验两头等于没验中间。
+   *
+   * 样式表由画布组件模块级 import，所以这里必须走 `/workspace`（`/login` 上没有这三条规则）。
+   */
+  test("二次代入：经 --xy-background-pattern-color-props 取到的仍是同一个色", async ({
+    page,
+  }) => {
+    await page.goto("/workspace", { waitUntil: "domcontentloaded" });
+
+    /* 反空转：真规则不在场就别往下断言 —— 否则「取到了默认灰」会被读成「token 生效」。 */
+    const ruleCount = await page.evaluate(() => {
+      let n = 0;
+      for (const sheet of Array.from(document.styleSheets)) {
+        let rules: CSSRuleList | null = null;
+        try {
+          rules = sheet.cssRules;
+        } catch {
+          continue;
+        }
+        for (const r of Array.from(rules ?? []))
+          if (r.cssText?.includes("--xy-background-pattern-color-props")) n++;
+      }
+      return n;
+    });
+    expect(
+      ruleCount,
+      "/workspace 没带上 xyflow 的 background-pattern 规则（这条用例的前提没了）",
+    ).toBeGreaterThanOrEqual(3);
+
+    const expr = gridLineColor(0.14);
+    for (const dark of [false, true]) {
+      await setTheme(page, dark);
+      const got = await page.evaluate((e) => {
+        const wrap = document.createElement("div");
+        wrap.style.setProperty("--xy-background-pattern-color-props", e);
+        const svg = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "svg",
+        );
+        const path = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path",
+        );
+        /* 类名是真实路径的关键：stroke 由样式表按这个选择器给，不是内联。 */
+        path.setAttribute("class", "react-flow__background-pattern lines");
+        svg.appendChild(path);
+        wrap.appendChild(svg);
+        document.body.appendChild(wrap);
+        const stroke = getComputedStyle(path).stroke;
+        wrap.remove();
+        return stroke;
+      }, expr);
+      const key = dark ? "深色" : "浅色";
+      const c = parseColor(got);
+      expect(
+        c.a,
+        `${key}档：stroke=${got}（α 没穿过二次代入）`,
+      ).toBeGreaterThan(0);
+      const want = dark ? [148, 163, 184] : [0, 0, 0];
+      expect(
+        [Math.round(c.r), Math.round(c.g), Math.round(c.b)],
+        `${key}档经自定义属性取到的不是那个色相（stroke=${got}）`,
+      ).toEqual(want);
+    }
+
+    /**
+     * 负控制，也是这条路径最阴的地方：内层 token 一旦不存在，`--props` 整个变成
+     * guaranteed-invalid，外层 `var(--props, 默认)` **静默退回 xyflow 自己的默认灰** ——
+     * 不报错、不变黑、也不留痕，比 seed 图标那次的「退成黑色」还安静。
+     * 所以这里断「确实退回了别的颜色」，把这个事实钉在测试里，而不是等下一个人猜。
+     */
+    /**
+     * 负控制，也是这条路径最阴的地方：内层 token 一旦不存在，整条 `stroke` 声明
+     * **不报错**，只是静默降级。实测降级到哪儿**取决于作用域**：
+     *   · 挂在 `.react-flow` 之外（xyflow 的 `…-lines-color-default` 不在作用域）→ `none`，线直接消失；
+     *   · 挂在 `.react-flow` 内 → 退回 xyflow 的默认灰（不是我们的色相）。
+     * 两种都无声。所以这里不赌具体值，只钉那条不变的不变量：**幽灵 token 绝不会
+     * 解析成我们的色相**，并把两种作用域的实际值打印出来供排障对照 ——
+     * 比 seed 图标那次「退成黑色」还安静，因为画面看着「只是没有网格线」。
+     */
+    const ghostExpr =
+      "color-mix(in srgb, var(--color-nope-token) 14%, transparent)";
+    const inBothScopes = await page.evaluate((e) => {
+      const read = (hostClass: string): string => {
+        const host = document.createElement("div");
+        if (hostClass) host.className = hostClass;
+        const svg = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "svg",
+        );
+        svg.setAttribute(
+          "style",
+          `--xy-background-pattern-color-props: ${e}; width: 40px; height: 40px`,
+        );
+        const path = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path",
+        );
+        path.setAttribute("class", "react-flow__background-pattern lines");
+        svg.appendChild(path);
+        host.appendChild(svg);
+        document.body.appendChild(host);
+        const stroke = getComputedStyle(path).stroke;
+        host.remove();
+        return stroke;
+      };
+      return { detached: read(""), inReactFlow: read("react-flow") };
+    }, ghostExpr);
+    console.log(
+      `[二次代入负控制] 内层 token 缺失 → 裸作用域 stroke=${inBothScopes.detached} / .react-flow 内 stroke=${inBothScopes.inReactFlow}（两种都无声）`,
+    );
+    for (const [scope, stroke] of Object.entries(inBothScopes)) {
+      if (stroke === "none") continue; // 线消失：同样是「没画出我们的色相」
+      const c = parseColor(stroke);
+      expect(
+        [Math.round(c.r), Math.round(c.g), Math.round(c.b)],
+        `${scope} 作用域下幽灵 token 竟解析成了黑色（stroke=${stroke}）—— 说明这条路径的行为变了，规范 §3.6.1.1 的这段要重写`,
+      ).not.toEqual([0, 0, 0]);
     }
   });
 });
