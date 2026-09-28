@@ -10,11 +10,9 @@
  *
  * view 层只渲染；数据（runs/logs）经 useSyncExternalStore 从 store 读取，
  * 任务订阅逻辑在 use-workflow-run-task.ts（§17 UI/逻辑分离）。
+ * 时间线主体（级别筛选 + 自动滚动 + 虚拟列表 + 底栏计数）收在共享的
+ * `logs/TaskLogTimeline`（队列页执行日志弹窗同款），本文件只保留头部与外壳。
  */
-
-import { formatClock } from "~/lib/time-format";
-import { LOG_MODAL_MAX_ROWS, tailWindow } from "~/lib/page-window";
-import { Checkbox } from "~/components/ui/checkbox";
 
 import {
   useEffect,
@@ -24,7 +22,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import { FileText, X } from "lucide-react";
-import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import {
   getWorkflowRunStoreSnapshot,
   subscribeWorkflowRunStore,
@@ -41,49 +38,12 @@ import { Hint } from "~/components/ui/hint";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { SelectMenu } from "~/components/ui/select-menu";
-import { FieldLabel } from "~/components/ui/field";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
-import { VirtualLogList } from "~/components/studio/logs/VirtualLogList";
-
-/* 与项目画布 GlobalStepLogPanel 同款 level badge 配色，走语义 token
- * （§4.11.1 / P71）：error→destructive、warn→warning、success→success、
- * progress→primary、info→info。token 内部含深浅两态，不再写 dark:。 */
-type Level = TaskLogEntry["level"];
-const LEVEL_STYLES: Record<Level, string> = {
-  error: "bg-destructive/15 text-destructive border-destructive/20",
-  warn: "bg-warning/15 text-warning-strong border-warning/20",
-  success: "bg-success/15 text-success-strong border-success/20",
-  progress: "bg-primary/15 text-primary-strong border-primary/20",
-  info: "bg-info/15 text-info-strong border-info/20",
-};
-function levelLabel(level: Level): string {
-  switch (level) {
-    case "error":
-      return "ERROR";
-    case "warn":
-      return "WARN";
-    case "success":
-      return "OK";
-    case "progress":
-      return "PROG";
-    default:
-      return "INFO";
-  }
-}
-/* 与应用日志同款，带毫秒。 */
-function fmtTime(t: number): string {
-  return formatClock(t, { millis: true });
-}
-
-const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
-  { label: "全部", value: "all" },
-  { label: "错误", value: "error" },
-  { label: "警告", value: "warn" },
-  { label: "完成", value: "success" },
-  { label: "进度", value: "progress" },
-  { label: "信息", value: "info" },
-];
+import {
+  TaskLogEmptyHint,
+  TaskLogTimeline,
+} from "~/components/studio/logs/TaskLogTimeline";
 
 export interface WorkflowRunLogModalProps {
   /** 所属工作流：日志只展示当前工作流的运行（切换工作流独立显示）。 */
@@ -149,13 +109,8 @@ export function WorkflowRunLogModal({
   );
   const logs = run?.logs ?? [];
 
-  const [filter, setFilter] = useState<Level | "all">("all");
   /* 加宽档与它的记忆收在`~/components/ui/wide-panel`（规范 16 §16.2.4.18）。 */
   const panel = useWidePanel("wflib-run-log", RUN_LOG_WIDTH);
-  const [autoscroll, setAutoscroll] = useState(true);
-  /* 贴底与「用户有没有接管滚动」的判据收在`ui/use-scroll-follow`
-   *（规范 16 §16.2.4.24）。收口前这里是手写的`scrollTop = scrollHeight`
-   * —— 用户上滚读历史会被按回底部，且没有跟随态可显示。 */
   /* 弹窗取消按钮复用画布同款 hook（视图零 IO）。 */
   const { cancelling, cancel } = useCancelTask({
     taskId: viewTaskId,
@@ -164,13 +119,6 @@ export function WorkflowRunLogModal({
 
   if (!open) return null;
 
-  /* 弹窗里的行数是一处界面预算，不是「倒数 300 条」这段算式各写一遍 ——
-   * 尾部窗口收在`~/lib/page-window`（规范 16 §16.2.4.67）。 */
-  const visibleAll = tailWindow(logs, LOG_MODAL_MAX_ROWS);
-  const visible =
-    filter === "all"
-      ? visibleAll
-      : visibleAll.filter((l) => l.level === filter);
   const status = run?.status ?? "running";
   /* 文案在这里，配色走`ui/status-badge` 的同一份状态 → 语义 token 映射
    *（规范 16 §16.2.4.5）。 */
@@ -291,79 +239,11 @@ export function WorkflowRunLogModal({
             </div>
           </div>
 
-          {/* 级别筛选栏 */}
-          <div className="border-border bg-card flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
-            <div className="flex items-center gap-1">
-              {FILTER_LABELS.map((option) => {
-                const count =
-                  option.value === "all"
-                    ? visibleAll.length
-                    : visibleAll.filter((l) => l.level === option.value).length;
-                return (
-                  <Hint
-                    label={`${option.label}（${count} 条）`}
-                    key={option.value}
-                  >
-                    <Button
-                      variant="ghost"
-                      onClick={() => setFilter(option.value)}
-                      className={`h-auto rounded-md px-2.5 py-1 text-[13px] ${
-                        filter === option.value
-                          ? "bg-surface-2 text-ink"
-                          : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
-                      }`}
-                    >
-                      {option.label}
-                      <span className="text-ink-fainter ml-1 text-[11px]">
-                        {count}
-                      </span>
-                    </Button>
-                  </Hint>
-                );
-              })}
-            </div>
-            <FieldLabel className="text-ink-faint flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
-              <Checkbox
-                checked={autoscroll}
-                onCheckedChange={(checked) => setAutoscroll(checked === true)}
-                className="accent-primary size-3.5 cursor-pointer"
-              />
-              自动滚动
-            </FieldLabel>
-          </div>
-
-          {/* Log body — 虚拟滚动（复用 VirtualLogList） */}
-          <VirtualLogList
-            entries={visible}
-            getMessage={(log) => log.msg}
-            renderRow={(log) => (
-              <div
-                data-testid="wflib-modal-log-line"
-                data-level={log.level}
-                className="border-border-subtle hover:bg-card flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
-              >
-                <span className="text-ink-muted shrink-0">
-                  {fmtTime(log.t)}
-                </span>
-                <span
-                  className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
-                >
-                  {levelLabel(log.level)}
-                </span>
-                <span className="text-ink-strong min-w-0 flex-1 break-words whitespace-pre-wrap">
-                  {log.msg}
-                </span>
-                {log.src && (
-                  <span className="text-ink-fainter hover:text-ink-faint max-w-[200px] shrink-0 truncate text-[11px]">
-                    {log.src}
-                  </span>
-                )}
-              </div>
-            )}
-            following={autoscroll}
-            onFollowingChange={setAutoscroll}
-            watch={`${logs.length}:${filter}`}
-            className="bg-panel-deep/60"
+          {/* 时间线主体（级别筛选 + 自动滚动 + 虚拟列表 + 底栏计数）—— 共享组件 */}
+          <TaskLogTimeline
+            logs={logs}
+            rowTestId="wflib-modal-log-line"
+            listClassName="bg-panel-deep/60"
             topSlot={
               run?.errorMessage ? (
                 <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-[13px]">
@@ -374,20 +254,11 @@ export function WorkflowRunLogModal({
               ) : null
             }
             emptySlot={
-              <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
-                <FileText size={32} strokeWidth={1.5} className="opacity-30" />
-                {run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
-              </div>
+              <TaskLogEmptyHint
+                message={run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
+              />
             }
           />
-
-          {/* Footer */}
-          <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
-            <span>
-              显示 {visible.length} / 总计 {visibleAll.length} 条
-            </span>
-            <span>保留最近 300 条</span>
-          </div>
         </div>
       </DialogContent>
       <WorkflowRunRawCliModal

@@ -12,13 +12,16 @@ import {
   QUEUED_WINDOW,
   RECENT_WINDOW,
   bucketQueueRows,
-  emptyStateText,
   estimateRemainingMs,
+  offlineBannerText,
+  offlineEmptyText,
+  offlineRunningCardNote,
   queuedWithPosition,
   recentWithin,
   remainingText,
   reprintText,
   runningElapsedText,
+  runningHintText,
   type QueueRow,
 } from "./queue-monitor-config";
 
@@ -123,19 +126,39 @@ describe("estimateRemainingMs", () => {
   });
 });
 
-describe("emptyStateText", () => {
-  it("离线时只说没连上，不报排队数", () => {
-    const state = emptyStateText(false, 7);
+describe("离线文案三件套", () => {
+  it("整页空态（离线且一条任务都没有）：只说没连上，不报排队数", () => {
+    const state = offlineEmptyText();
     expect(state.title).toContain("未运行");
-    expect(state.description).not.toContain("7");
+    expect(state.description).toContain("自动接上");
   });
 
-  it("在线但有排队时说清「还有几个」", () => {
-    expect(emptyStateText(true, 3).description).toContain("3");
+  it("离线横幅（列表还在时）：说「不会开始」与自动接上，不整页替换", () => {
+    const banner = offlineBannerText();
+    expect(banner.title).toContain("未连接");
+    expect(banner.description).toContain("暂时不会开始");
   });
 
-  it("全空时给出「提交后会发生什么」，不停在一句空态标题", () => {
-    expect(emptyStateText(true, 0).description).toContain("出现在这里");
+  it("跑动中空位（在线有排队）：说清「还有几个」", () => {
+    const hint = runningHintText(true, 3);
+    expect(hint.title).toContain("刚跑完");
+    expect(hint.description).toContain("3");
+  });
+
+  it("跑动中空位（在线全空）：给出「提交后会发生什么」", () => {
+    expect(runningHintText(true, 0).description).toContain("出现在这里");
+  });
+
+  it("跑动中空位（离线）：不说「上一条刚跑完」（离线没跑完任何东西），不重复「未连接」", () => {
+    const hint = runningHintText(false, 7);
+    expect(hint.title).toBe("没有在跑的任务");
+    expect(hint.title).not.toContain("刚跑完");
+    expect(hint.description).not.toContain("未连接");
+  });
+
+  it("离线兜底跑动卡如实说明缺哪些明细，不留空格", () => {
+    expect(offlineRunningCardNote()).toContain("未连接");
+    expect(offlineRunningCardNote()).toContain("耗时与节点");
   });
 });
 

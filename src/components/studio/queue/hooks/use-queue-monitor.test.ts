@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 // 队列与运行 · 第②层的执行态单测。
 //
-// 四条真正会坏掉的行为在这里锁住：
+// 真正会坏掉的行为在这里锁住：
 //   · **位次方向** —— 服务端一律按 createdAt 倒序回，界面拿到的位次必须是先入先出；
 //   · **进度没回报就不给剩余数**（写「估算中」，不给一个看起来像数的东西）；
 //   · **取消失败也要刷新** —— 用户可能已在别处把它取消，界面继续显示「排队中」
 //     比一次多余的刷新贵得多；
-//   · **复制去重投的成败要报出来** —— 复制失败是浏览器权限给的，不报就等于吞掉点击。
+//   · **复制去重投的成败要报出来** —— 复制失败是浏览器权限给的，不报就等于吞掉点击；
+//   · **离线的待执行数不报 0** —— `/api/comfy/queue` 读不到时库行是唯一口径，
+//     页头「待执行 0」配一屏排队列表是自相矛盾。
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -199,16 +201,57 @@ describe("useQueueMonitor", () => {
     expect(toast.error).toHaveBeenCalledWith("该任务还没有产出文件");
   });
 
-  it("离线：online 为假，两个排队口径照实相加", () => {
+  it("在线：waitingCount 是两个排队口径照实相加", () => {
     /* 两个口径都要给非零值，否则「相加」这件事根本没被断言到：
      * `queued` 是本应用排队的条数，`comfy.pending` 含用户在 ComfyUI 原生界面排的。 */
     queueResult = queueView({
-      online: false,
+      online: true,
       comfy: { running: 0, pending: 1 },
       queued: 2,
     });
     const { result } = renderHook(() => useQueueMonitor());
-    expect(result.current.online).toBe(false);
+    expect(result.current.online).toBe(true);
     expect(result.current.waitingCount).toBe(3);
+  });
+
+  it("离线：waitingCount 退回库里的行数，不报 0（与下方列表自相矛盾比少算更糟）", () => {
+    /* `/api/comfy/queue` 读不到时它的两个计数恒为 0；此时页头若显示「待执行 0」，
+     * 而列表里明明排着两条，就是同一屏自相矛盾。库里的 RUNNING + QUEUED 行
+     * 是离线时唯一可信的口径。 */
+    listTasks = [
+      queuedRow("late", "后提交的工作流"),
+      queuedRow("early", "先提交的工作流"),
+      { ...queuedRow("run-1", "在跑的工作流"), status: "RUNNING" },
+    ];
+    queueResult = queueView({
+      online: false,
+      comfy: { running: 0, pending: 0 },
+      queued: 0,
+      running: null,
+    });
+    const { result } = renderHook(() => useQueueMonitor());
+    expect(result.current.waitingCount).toBe(3);
+    /* 离线兜底卡要的数据：库里的 RUNNING 行原样上抛。 */
+    expect(result.current.runningRows.map((r) => r.id)).toEqual(["run-1"]);
+    expect(result.current.running).toBeNull();
+  });
+
+  it("openLog / closeLog：目标行是快照，closeLog 清空", () => {
+    const { result } = renderHook(() => useQueueMonitor());
+    expect(result.current.logRow).toBeNull();
+    const target = {
+      id: "t-1",
+      workflowName: "某工作流",
+      status: "RUNNING",
+      error: null,
+    };
+    act(() => {
+      result.current.openLog(target);
+    });
+    expect(result.current.logRow).toEqual(target);
+    act(() => {
+      result.current.closeLog();
+    });
+    expect(result.current.logRow).toBeNull();
   });
 });
