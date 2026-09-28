@@ -210,6 +210,23 @@ function collectFiles(dir, followLinks) {
 }
 
 /**
+ * 「必须有的」Next 运行时脚本缺件清单（纯查询，本脚本与用例共用）。
+ *
+ * 按**运行时可达**口径判：`node_modules/next` 在 standalone 里是指向 pnpm store 的链接，
+ * 运行时经它照样 require 得到，所以判「必须有的」要穿链接数；用「真文件」口径会把它
+ * 判成缺件（假红）。
+ *
+ * @param {string} dir 产物目录
+ * @returns {string[]} 缺件（相对 `RUNTIME_DIR` 的文件名）
+ */
+function missingRequiredRuntimeFiles(dir) {
+  const reachable = collectFiles(dir, true);
+  return REQUIRED_RUNTIME_FILES.filter(
+    (name) => !reachable.includes(`${RUNTIME_DIR}/${name}`),
+  );
+}
+
+/**
  * 数一份产物的文件并做同一份禁忌清单检查。
  * @param {string} dir 产物目录
  * @param {string} label 输出前缀
@@ -234,21 +251,27 @@ function checkDir(dir, label) {
   // （Failed to load external module），而构建期毫无提示。防线是 next.config.js
   // 的 outputFileTracingIncludes —— 但「清单还在」不等于「清单生效」（历史事故
   // 已经吃过一次），所以这里真去数文件。规范 §7.4。
-  if (label === "standalone") {
-    // 这里换成「可达口径」的清单：`node_modules/next` 在 standalone 里是指向 pnpm
-    // store 的链接，运行时经它照样 require 得到，所以判「必须有的」要穿链接数；
-    // 用上面那份「真文件」清单会把它判成缺件（假红）。
-    const reachable = collectFiles(dir, true);
-    const missingRuntime = REQUIRED_RUNTIME_FILES.filter(
-      (name) => !reachable.includes(`${RUNTIME_DIR}/${name}`),
-    );
+  //
+  // **两层产物都查**（此前只查 standalone，是个真空档）：最终被编译期内嵌进 exe 的
+  // 是 `src-tauri/static` 那一份，而 build-desktop 的整树拷贝（`dereference: true`）
+  // 与剪枝全部发生在 standalone 那次检查**之后** —— 只查一层等于「构建期过了就当
+  // 出厂件也在」。缺件在 exe 里的表现完全一样：页面正常、接口全 500。
+  // 判据与宿主那条一致：只有这一层真的是个产物（有 `server.js`）才提缺件 ——
+  // 开发机上 `src-tauri/static` 常只剩几个入库例外文件，对那种半成品目录报「缺件」
+  // 只会把人指到错的地方。
+  if (files.includes("server.js")) {
+    const missingRuntime = missingRequiredRuntimeFiles(dir);
     if (missingRuntime.length > 0) {
       failed = true;
       console.error(
         `[${label}] Next 运行时脚本缺件 ${missingRuntime.length} 个：\n  ` +
           missingRuntime.join("\n  ") +
           "\n  后果是所有 App Route 返回 500（页面正常、接口全挂）。" +
-          "请确认 next.config.js 的 outputFileTracingIncludes 仍在（§7.4）。",
+          (label === "standalone"
+            ? "请确认 next.config.js 的 outputFileTracingIncludes 仍在（§7.4）。"
+            : "这一层是 build-desktop 组装出来的：先确认 `.next/standalone` 那层不缺" +
+              "（缺则回到 outputFileTracingIncludes，§7.4），再确认组装时的拷贝/剪枝" +
+              "没把它抹掉（`dereference: true` 那一步），然后重跑 pnpm tauri build。"),
       );
     }
   }
@@ -344,6 +367,9 @@ module.exports = {
   FORBIDDEN,
   ALLOWED_SCRIPTS,
   REQUIRED_RUNTIME_FILES,
+  REQUIRED_HOST_FILES,
   RUNTIME_DIR,
   collectFiles,
+  missingRequiredRuntimeFiles,
+  checkDir,
 };
