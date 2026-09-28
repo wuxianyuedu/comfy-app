@@ -30,6 +30,12 @@ const config = {
   // 排除 src-tauri / python-venv / 仓库工具与缓存目录，避免整仓库根被复制进
   // static 进而嵌入 exe。
   // 注意：`generated/**` 不能排除——generated/prisma 是 Prisma 运行时必需。
+  // ⚠️ 这份清单是**意图声明**，不是减法：实测它对「全项目 tracing」带进来的文件
+  // 一条都没减掉（`./changelog.d/**`、`./src/**/*.test.ts`、`./src-tauri/**` 都写在
+  // 下面，产物里对应的那些真文件一个没少）。把文件真正拿掉的是产物层显式删除
+  // （`scripts/standalone-private-inputs.mjs`），判据是数产物的
+  // `scripts/check-standalone-contents.cjs` —— 别在这里补一条就当修好了，
+  // 下面 `.env` 那条注释记的是同一个坑。规范 §7.2。
   outputFileTracingExcludes: {
     "/**": [
       "./src-tauri/**",

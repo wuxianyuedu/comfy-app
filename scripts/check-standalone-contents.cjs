@@ -10,6 +10,12 @@
  *
  * 但「清单还在」不等于「清单生效」——历史事故正是键位挂在 `experimental` 下
  * 一个字都没被读，却因为没有任何检查去数产物里的文件而无人察觉。
+ * ⚠️ 实测口径（别再把 `outputFileTracingExcludes` 当防线）：那份清单里声明过的**整目录**
+ * 条目对「全项目 tracing」带进来的文件一条都不减（`./changelog.d/` 对应 747 个真文件、
+ * `./src/` 下的测试文件对应 406 个、`./src-tauri/` 对应 4553 个），只有单文件条目
+ * （`./db.sqlite`）实测有效。**减法在 `scripts/standalone-private-inputs.mjs`**，
+ * 本脚本负责证明减法真的发生了（规范 §7.2 第三/第六件事）。
+ *
  * 本脚本在**构建之后**真去数 `.next/standalone`：测试文件 / 变更碎片 /
  * 文档目录绝不能出现在产物里（它们不可能是任何 server code 的运行时依赖）。
  *
@@ -47,7 +53,10 @@ const FORBIDDEN = [
   // 自带 README / tsconfig.json / eslint.config.js 是正常且必需的，把它们算违规
   // 会让这条护栏变成噪声，进而被当成「反正都红」而忽略。
   ["开发期文件", /^(AGENTS|CHANGELOG|README)\.md$/],
-  ["开发期配置", /^(eslint|playwright|prettier|drizzle|vitest)\.config\.[cm]?[jt]s$/],
+  [
+    "开发期配置",
+    /^(eslint|playwright|prettier|drizzle|vitest)\.config\.[cm]?[jt]s$/,
+  ],
   ["开发期配置", /^(components|tsconfig|typedoc)\.json$/],
   ["门禁锁文件", /^pnpm-(lock|workspace)\.ya?ml$/],
   ["TS 增量编译缓存", /^tsconfig\.tsbuildinfo$/],
@@ -119,20 +128,65 @@ const REQUIRED_RUNTIME_FILES = [
   "pages-turbo.runtime.prod.js", // middleware
 ];
 
-function listFiles(dir, prefix, out) {
+/**
+ * 数一份产物里的文件。
+ *
+ * `followLinks=false`（判「不该有的」用）：**不穿符号链接**。standalone 的
+ * `node_modules/<pkg>` 是指向本仓库 pnpm store 的链接（实测 `node_modules/next`
+ * 指向 `node_modules/.pnpm/next@…`），顺着链接数会把**开发机的依赖内容**记成产物
+ * 内容（那 456 个 `next/dist/docs/*.md` 就是这么来的：产物里根本没有这些真文件，
+ * 而剔除侧也不能顺链接删——那会损坏开发机依赖）。
+ * `followLinks=true` 只在「必须有的」反向检查里用：运行时脚本经链接可达即算在位，
+ * 这份产物本来就能跑起来。
+ */
+function listFiles(dir, prefix, out, followLinks, seen) {
   for (const name of fs.readdirSync(dir)) {
     const abs = path.join(dir, name);
     const rel = prefix ? `${prefix}/${name}` : name;
     let st;
     try {
-      st = fs.statSync(abs);
+      st = fs.lstatSync(abs);
     } catch {
-      continue; // 断链（pnpm symlink 等），跳过
+      continue; // 断链 / 读不到，跳过
     }
-    if (st.isDirectory()) listFiles(abs, rel, out);
-    else out.push(rel);
+    if (st.isSymbolicLink()) {
+      if (!followLinks) {
+        out.push(rel); // 链接本身算一项产物内容，但不进去数它背后的真文件
+        continue;
+      }
+      let realDir;
+      try {
+        realDir = fs.statSync(abs).isDirectory() ? fs.realpathSync(abs) : null;
+      } catch {
+        out.push(rel);
+        continue;
+      }
+      if (!realDir) {
+        out.push(rel);
+        continue;
+      }
+      // 链接成环时（pnpm store 不会，但产物被人手工拼过就不能保证）seen 集合是
+      // 唯一的止环判据：同一个真实目录只展开一次
+      if (seen.has(realDir)) {
+        out.push(rel);
+        continue;
+      }
+      seen.add(realDir);
+      listFiles(abs, rel, out, followLinks, seen);
+      continue;
+    }
+    if (st.isDirectory()) {
+      listFiles(abs, rel, out, followLinks, seen);
+      continue;
+    }
+    out.push(rel);
   }
   return out;
+}
+
+/** 外层入口：`followLinks=false` 数产物自己的真内容，`true` 数「运行时可达的」。 */
+function collectFiles(dir, followLinks) {
+  return listFiles(dir, "", [], followLinks, new Set([dir]));
 }
 
 /**
@@ -142,7 +196,9 @@ function listFiles(dir, prefix, out) {
  * @returns {boolean} 是否发现违规
  */
 function checkDir(dir, label) {
-  const files = listFiles(dir, "", []);
+  // 判「不该有的」只数产物自己的真内容（不穿链接）；判「必须有的」按运行时可达算，
+  // 两处口径不同是刻意的，理由见 listFiles 的注释。
+  const files = collectFiles(dir, false);
   let failed = false;
   // scripts/ 白名单：产物里的每个文件都必须是登记过的（支持嵌套路径，
   // 逐项登记而不是放行整个目录 —— 目录级放行会让以后新增的脚本自动进产物）。
@@ -159,8 +215,12 @@ function checkDir(dir, label) {
   // 的 outputFileTracingIncludes —— 但「清单还在」不等于「清单生效」（历史事故
   // 已经吃过一次），所以这里真去数文件。规范 §7.4。
   if (label === "standalone") {
+    // 这里换成「可达口径」的清单：`node_modules/next` 在 standalone 里是指向 pnpm
+    // store 的链接，运行时经它照样 require 得到，所以判「必须有的」要穿链接数；
+    // 用上面那份「真文件」清单会把它判成缺件（假红）。
+    const reachable = collectFiles(dir, true);
     const missingRuntime = REQUIRED_RUNTIME_FILES.filter(
-      (name) => !files.includes(`${RUNTIME_DIR}/${name}`),
+      (name) => !reachable.includes(`${RUNTIME_DIR}/${name}`),
     );
     if (missingRuntime.length > 0) {
       failed = true;
@@ -177,7 +237,9 @@ function checkDir(dir, label) {
     console.error(
       `[${label}] 内部门禁脚本不该进产物，却发现 ${strayScripts.length} 个：\n  ` +
         strayScripts.slice(0, 8).join("\n  ") +
-        (strayScripts.length > 8 ? `\n  …（其余 ${strayScripts.length - 8} 个省略）` : "") +
+        (strayScripts.length > 8
+          ? `\n  …（其余 ${strayScripts.length - 8} 个省略）`
+          : "") +
         "\n  （runtime 真的会读的脚本靠 ALLOWED_SCRIPTS 白名单保留；" +
         "新增脚本默认应被剔除，要保留请登记并说明理由）",
     );
@@ -220,15 +282,30 @@ function main() {
 
   if (failed) {
     console.error(
-      "\n[standalone] 请检查两处：① next.config.js 的 outputFileTracingExcludes" +
-        "（键位必须在顶层，Next 16 已把它从 experimental 升为顶层键；写在旧位置" +
-        "一个字都不会被读）；② scripts/build-desktop.mjs 的「分发卫生」剔除清单" +
-        "（.env / db.sqlite* / AGENTS.md / 各 *.config.* / scripts/** 只能靠显式删除，" +
-        "excludes 对 .env 与文件类条目实测无效）。规范 §7.2、§7.3。",
+      "\n[standalone] 按这两处的**职责**排查，别按顺序猜（规范 §7.2、§7.3）：" +
+        "① `scripts/standalone-private-inputs.mjs` —— 减法只在这里发生：根级条目" +
+        "（DEV_ARTIFACTS / PRIVATE_INPUTS）+ 递归形状（FORBIDDEN_SHAPES / PRIVATE_SHAPES），" +
+        "剔除不穿符号链接；产物是 `pnpm build` 收尾剥的还是 build-desktop 组装后剥的，" +
+        "决定于一层就查一层。② `next.config.js` 的 `outputFileTracingExcludes` 只是**意图" +
+        "声明**（实测整目录条目一条都不减，键位还得在顶层——写在 `experimental` 下" +
+        "一个字都不会被读），它拦不住任何东西，别靠补条目「修」这条红。",
     );
     return 1;
   }
   return 0;
 }
 
-process.exit(main());
+/**
+ * 只在「被当作脚本执行」时跑：被 `require` 时（`tests/dist-artifact-hygiene.test.ts`
+ * 要把两份清单拿来**逐字比对**）绝不能顺手 `process.exit` —— 那会把测试进程带走，
+ * 而「比对代码在、但一条都没真的比过」正是这类清单判据最难发现的失效形态。
+ */
+if (require.main === module) process.exit(main());
+
+module.exports = {
+  FORBIDDEN,
+  ALLOWED_SCRIPTS,
+  REQUIRED_RUNTIME_FILES,
+  RUNTIME_DIR,
+  collectFiles,
+};
