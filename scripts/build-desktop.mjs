@@ -27,6 +27,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -46,6 +47,8 @@ import {
   RUNTIME_SCRIPTS,
   stripDevArtifacts,
   stripPrivateInputs,
+  isStaticPathAllowed,
+  pruneStaticToAllowList,
 } from "./standalone-private-inputs.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -185,30 +188,19 @@ for (const launcherFile of RUNTIME_SCRIPTS.filter((name) =>
   );
 }
 
-// ── 2.1 §整治：噪声目录在**复制前**就排除 ──
-// next.config 的 outputFileTracingExcludes 已从源头排除 src-tauri/python-venv/
-// generated 等，但此处再兜底一次（防字段失效或新增大目录）。清单同时喂给
-// `cpSync` 的 filter：docs / tests / tools / python-venv 这些大目录不再
-// 「先整树拷进 static、再逐个 rmSync 删掉」地白走一遍文件复制。
+// ── 2.1 §装配：static 的顶层是**默认拒绝**的白名单 ──
+// 从 ISSUE #1216 起 `bundle.resources = ["static/"]` 会真的把这一层装进安装包，
+// 所以「多带一个目录」必须在装配层就被看见，而不是等用户解包才发现。判据本体在
+// `standalone-private-inputs.mjs` 的 `STATIC_ALLOWED_TOPLEVEL`（与产物层检查、
+// 用例同源，不在这里再抄一份名单）。
+//
+// 为什么在**复制前**判而不是「整树拷来再删」：实测这一层今天躺着 `src/` 11.7 MB、
+// `changelog.d/` 3.3 MB 与开发机的 `data/llm-secret.key`，白名单生效后这些一个字节
+// 都不必复制。file tracing 仍会把它们带进 `.next/standalone`（根因与修法归
+// ISSUE #1217），本条只管「装进桌包的那一份」。
 // 注意：node_modules/.cache 单独排除，不能整体排除 node_modules（standalone
 // 运行时必需裁剪版）。
-const STATIC_NOISE = new Set([
-  ".git",
-  ".workbuddy",
-  "coverage",
-  "docs",
-  "tests",
-  "test-results",
-  "e2e",
-  "tools",
-  "log",
-  "temp",
-  "run",
-  "dist",
-  "python-venv",
-  "generated",
-  "src-tauri",
-]);
+const staticAllowed = (abs) => isStaticPathAllowed(relative(nextOut, abs));
 
 cpSync(nextOut, staticDir, {
   recursive: true,
@@ -216,24 +208,17 @@ cpSync(nextOut, staticDir, {
   filter: (src) => {
     const rel = relative(nextOut, src);
     if (rel === "") return true; // 根目录本身
-    const top = rel.split(/[\\/]/)[0];
-    if (STATIC_NOISE.has(top)) return false;
+    if (!staticAllowed(src)) return false;
     const cacheRel = join("node_modules", ".cache");
     return rel !== cacheRel && !rel.startsWith(cacheRel + sep);
   },
 });
 
-/* ── 2.1 §整治：tracing 噪声的 rmSync 兜底 ──
- * filter 已在复制前挡掉这些目录，此处保留作兜底（清单失效/新增大目录时
- * 仍然兜得住），命中与否都只是空操作。 */
-for (const name of STATIC_NOISE) {
-  const p = join(staticDir, name);
-  if (existsSync(p)) {
-    rmSync(p, { recursive: true, force: true });
-    console.log(
-      `[build-desktop]   §整治 已剔除 tracing 噪声目录 static/${name}`,
-    );
-  }
+/* §装配：白名单的落盘兜底。filter 已在复制前挡掉名单外条目，这里保留作兜底
+ * （有人绕过 filter 往 static 里写文件、或将来改复制方式时仍然兜得住），
+ * 命中与否都只是空操作。 */
+for (const name of pruneStaticToAllowList(staticDir)) {
+  console.log(`[build-desktop]   §装配 已剔除桌包不带的顶层条目 static/${name}`);
 }
 rmSync(join(staticDir, "node_modules", ".cache"), {
   recursive: true,
@@ -266,21 +251,166 @@ stripPrivateInputs(staticDir, (name) => {
 stripDevArtifacts(staticDir, (name) => {
   console.log(`[build-desktop]   §分发卫生 已剔除开发期文件 static/${name}`);
 });
-// 分发卫生之后断言宿主三件还在：`scripts/**` 走白名单剪枝，白名单登记与这里的
-// 断言是同一件事的两半——登记漏了会被剪掉，断言漏了则「产物里设 host 起不来」
-// 这件事要等到用户现场才发现（`.next/standalone` 那层的冒烟只跑得到自己那层）。
-for (const hostFile of [
+// ── 2.3 §首启建表：把 schema 的 DDL 随包带出去 ──
+// 为什么需要（ISSUE #1216 实测）：载荷里的 node_modules 只有生产依赖，**drizzle-kit 不在
+// 其中**，桌包首启因此没有任何办法建表。把载荷跑起来后的现场是 `/workspace` 200、
+// `/api/health` 503，而 hint 让人去「执行 pnpm db:push」——桌面用户既没有 pnpm 也没有
+// 检出，这就是「页面开着、接口全 500」那一类形态。
+//
+// 形态选择：构建期用 `drizzle-kit export --sql` 出一份 DDL 随包（运行期由
+// `scripts/standalone-runtime.mjs` 在**表为零**时执行）。**不**随包带一份「已经建好表的
+// 空库」：那正是硬规则 17 挡过的事故——`next build` 会把开发机的 `db.sqlite` 复制进
+// standalone，出厂库于是变成开发库（开发者本机数据变成用户的数据）。这里带出去的只有
+// DDL，下面那条「不许有 INSERT」的断言就是这条选择的机器判据。
+//
+// 单一事实源不变：DDL 每轮构建都从 `src/server/db/schema.ts` 现生成，不另存一份手工 SQL
+// （手工副本迟早与 schema 漂开，而漂开的表现是首启建出一张缺列的表）。
+const schemaSqlPath = join(staticDir, "schema.sql");
+{
+  const invocation = pnpmInvocation([
+    "exec",
+    "drizzle-kit",
+    "export",
+    "--sql",
+  ]);
+  if (!invocation) {
+    fail("PATH 上找不到可用的 pnpm，无法导出首启建表用的 DDL（先跑 pnpm check:toolchain）。");
+  }
+  echoCommandLine(invocation.command, invocation.args);
+  const exported = spawnSync(invocation.command, invocation.args, {
+    cwd: root,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  const sql = (exported.stdout ?? "").trim();
+  if (exported.status !== 0 || sql.length === 0) {
+    fail(
+      `drizzle-kit export 失败（exit ${exported.status ?? "?"}）：` +
+        `${(exported.stderr ?? "").slice(0, 400) || "没有输出"}——桌包首启将没有建表能力`,
+    );
+  }
+  // 判据两条：真有建表语句；且**没有任何数据语句**。
+  if (!/CREATE TABLE/i.test(sql)) {
+    fail("drizzle-kit export 的输出里没有 CREATE TABLE——DDL 导出口径变了，请检查本步。");
+  }
+  if (/INSERT INTO/i.test(sql)) {
+    fail(
+      "drizzle-kit export 的输出里出现 INSERT INTO：首启 DDL 只许建结构、不许带数据，" +
+        "否则等于把开发机数据做成出厂数据（硬规则 17）。",
+    );
+  }
+  writeFileSync(schemaSqlPath, `${sql}\n`, "utf8");
+  console.log(
+    `[build-desktop]   §首启建表 已导出 static/schema.sql（${((sql.length / 1024) | 0) + 1} KB，只含 DDL）`,
+  );
+}
+
+// 剪枝之后**逐件断言载荷必备件还在**：`scripts/**` 走白名单剪枝，白名单登记与这里的
+// 断言是同一件事的两半——登记漏了会被剪掉，断言漏了则「桌包里设 host 起不来 /
+// standalone 起不来」要等到用户现场才发现（`.next/standalone` 那层的冒烟只跑得到自己那层）。
+for (const payloadFile of [
   "scripts/executor-host.mjs",
   "scripts/executor-host.runtime.mjs",
   "scripts/executor-host.build.json",
+  // standalone 运行入口与其环境装配：分发产物不含 .env，运行期配置只由这份入口装配，
+  // 被 §装配 白名单误剪掉的表现是「壳起不了 server」（ISSUE #1216）。
+  "scripts/standalone-runtime.mjs",
+  "scripts/launcher-core/standalone-runtime-env.mjs",
+  // 首启建表的 DDL（上面 §首启建表 产出）：缺它 = 桌包首启建不出表，页面 200 接口全 500。
+  "schema.sql",
 ]) {
-  if (!existsSync(join(staticDir, hostFile))) {
+  if (!existsSync(join(staticDir, payloadFile))) {
     fail(
-      `桌包缺宿主件 static/${hostFile}：先跑 pnpm build（收尾会生成预编译运行时图），` +
-        "再确认 standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS 有登记这一条",
+      `桌包缺件 static/${payloadFile}：先跑 pnpm build（收尾生成宿主的预编译运行时图），` +
+        "再确认 standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS / STATIC_ALLOWED_TOPLEVEL " +
+        "登记了这一条",
     );
   }
 }
+// ── 2.4 §载荷实体化：把 pnpm 的软链结构摊平成可分发的真实目录 ──
+// 为什么必须做（ISSUE #1216 实测）：`.next/standalone/node_modules` 的**顶层条目是指向
+// 仓库 store 的绝对软链**（`next -> <repo>/node_modules/.pnpm/next@…/node_modules/next`），
+// Next 的追踪只把被引用的那份文件拷进 `.pnpm/` 里。于是 `cpSync({dereference:true})`
+// 之后顶层 `next` 成了真实目录，而它赖以解析的**兄弟包**（`@swc/helpers` 等）仍在
+// `.pnpm/<key>/node_modules/` 那一层——真起 server 的表现是
+// `Cannot find module '@swc/helpers/_/_interop_require_default'`，require stack 指向
+// `next/dist/server/config.js`，看起来像产物缺件，实际是**布局语义**没搬过来。
+// 判据来自实跑：修好后 `/workspace` 200、`/api/health` 503（那句「表还没建」是首启
+// 正常态），没修之前 server 直接 exit 1。
+//
+// 形态选择：把 store 里的包**上提**到顶层（先看 pnpm 的 hoist 兜底层
+// `.pnpm/node_modules/`，再看各包的私有层），然后把 `.pnpm` 整棵删掉——不是「上提后
+// 再留一份 store」，实测那样载荷是 404 MB，扁平化后是 245 MB。
+// 同名多版本时取第一个发现者：这与 pnpm 自己在 hoist 兜底层的取舍同形，且下面的
+// 「载荷可解析性断言」会在构建期就把选错的那一类抓出来（不是等用户双击）。
+const storeDir = join(staticDir, "node_modules", ".pnpm");
+if (existsSync(storeDir)) {
+  const nmDir = join(staticDir, "node_modules");
+  /** 包名（含 `@scope/name`）→ 源目录。Map 的首个命中者胜出 = 上面那条优先级。 */
+  const packages = new Map();
+  const collectLevel = (base) => {
+    if (!existsSync(base)) return;
+    for (const entry of readdirSync(base)) {
+      if (entry.startsWith(".")) continue;
+      const abs = join(base, entry);
+      if (!existsSync(abs) || !statSync(abs).isDirectory()) continue;
+      if (entry.startsWith("@")) {
+        for (const sub of readdirSync(abs)) {
+          const subAbs = join(abs, sub);
+          if (!packages.has(`${entry}/${sub}`) && existsSync(subAbs)) {
+            packages.set(`${entry}/${sub}`, subAbs);
+          }
+        }
+        continue;
+      }
+      if (!packages.has(entry)) packages.set(entry, abs);
+    }
+  };
+  collectLevel(join(storeDir, "node_modules"));
+  for (const key of readdirSync(storeDir)) {
+    if (key === "node_modules") continue;
+    collectLevel(join(storeDir, key, "node_modules"));
+  }
+  let hoisted = 0;
+  for (const [rel, src] of packages) {
+    const dest = join(nmDir, rel);
+    if (existsSync(dest)) continue;
+    cpSync(src, dest, { recursive: true, dereference: true });
+    hoisted += 1;
+  }
+  rmSync(storeDir, { recursive: true, force: true });
+  console.log(
+    `[build-desktop]   §载荷实体化 上提 ${hoisted} 个包并删除 .pnpm（顶层 ${packages.size} 个候选名）`,
+  );
+
+  // 载荷可解析性断言：这些是 server 启动路径上**必定**要解析的模块，其中
+  // `@swc/helpers/_/_interop_require_default` 就是本次实测最先炸掉的那一个。
+  // 缺件在这里失败 = 构建期就拦住；放过去就是用户双击时「窗口停在启动页」。
+  const requireFromPayload = createRequire(join(staticDir, "package.json"));
+  const mustResolve = [
+    "next/dist/server/next.js",
+    "@swc/helpers/_/_interop_require_default",
+    "@libsql/client",
+  ];
+  const unresolved = mustResolve.filter((spec) => {
+    try {
+      requireFromPayload.resolve(spec);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  if (unresolved.length > 0) {
+    fail(
+      `桌包载荷解析不到这些运行期模块：${unresolved.join(", ")}——` +
+        "standalone server 起不来（表现是窗口停在启动页）。先查上面的 §载荷实体化 是否被跳过。",
+    );
+  }
+  console.log(
+    `[build-desktop]   §载荷实体化 可解析性断言通过（${mustResolve.join(", ")}）`,
+  );
+}
+
 cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), {
   recursive: true,
 });

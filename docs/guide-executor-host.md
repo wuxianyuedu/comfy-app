@@ -68,19 +68,19 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
 追踪恰好把 `src/**` 带进产物」那条噪声（规范 §7.2）——两条通道互不依赖，缺预编译件
 会以 `boot FAILED` 大声失败而不是静默退化。
 
-**但桌包里设 `COMFY_EXECUTOR=host` 目前仍然不会执行任务**，原因换了：`standalone`
-模式（壳直接起内嵌 `server.js`）**不经过编排器**，而「拉起宿主」这一步在编排器的 6.5
-步里——没有进程去起那个已经能跑起来的宿主。表现因此从「boot 大声失败 exit 1」变成
-#1204 之后的新形态：任务被标成 host 归属、安静地留在队列里等一个不存在的宿主，状态栏
-排队数一直涨，行上只有「⏳ 等待…」一句。**判据**：`log/services/executor-host.log`
-里连 `boot pid=` 那行都没有（不是起不来，是根本没人起）。
+**但桌包里设 `COMFY_EXECUTOR=host` 目前仍然不会执行任务**，原因又换了一次：3-E2a（本刀）
+已经把 standalone 形态接通——`tauri.conf.json` 声明 `bundle.resources: ["static/"]`，壳经
+Node sidecar 起的是新入口 `scripts/standalone-runtime.mjs`（它装配运行期 env、首启建表，
+再带起 `server.js`；五层断点与实测见规范 §7.6）。**缺的只剩入口的宿主半边**：入口现在
+只管 server，还没按 `resolveExecutorMode()` 去起那个已经能 boot 的宿主。表现因此是
+#1204 之后的形态：任务被标成 host 归属、安静地留在队列里，状态栏排队数一直涨，行上只有
+「⏳ 等待…」一句。**判据**：`log/services/executor-host.log` 里连 `boot pid=` 那行都没有
+（不是起不来，是根本没人起）；而入口自己的 `boot pid=… port=…` 那一行**在**（壳日志里），
+这两行一对比就能定性。
 
-分发口径：**3-E2（ISSUE #1216）落地前，不要在桌包里设这个开关**（保持不写 = inline）。
-3-E2 的范围 = standalone 下由谁拉起宿主（已签方向：新增一个 standalone 运行入口，
-由它起 `server.js` 并按 `resolveExecutorMode()` 决定要不要起宿主，壳侧只换一行命令）+
-桌包资源装配本身的定性（`tauri.conf.json` 目前没有 `bundle.resources`，
-`src-tauri/static` → `resource_dir()` 这一截要靠一次真 `pnpm tauri build` 才算定性，
-不许凭文档推断）。
+分发口径：**3-E2b（ISSUE #1216）落地前，不要在桌包里设这个开关**（保持不写 = inline）。
+3-E2b 的范围 = 入口按 `resolveExecutorMode()` 拉起宿主 + 孙子层（入口 → server / 宿主）
+的整树回收 + 灰度口径放开与验收。
 
 ## 日志与状态去哪看
 

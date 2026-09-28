@@ -115,6 +115,11 @@ const ALLOWED_SCRIPTS = new Set([
   "launcher-core/orchestrator.mjs",
   "launcher-core/corepack.mjs",
   "launcher-core/splash-assets.mjs",
+  // 桌包 standalone 的运行入口与它的环境装配（ISSUE #1216）：壳把 `node server.js`
+  // 换成 `node scripts/standalone-runtime.mjs`，缺这份 = 载荷只能退回直接起 server，
+  // 首启建表与运行期 env 装配（分发产物按硬规则 17 不含 .env）一起失效。
+  "standalone-runtime.mjs",
+  "launcher-core/standalone-runtime-env.mjs",
 ]);
 
 /** Next 自带运行时脚本目录（相对产物根）。 */
@@ -146,6 +151,19 @@ const REQUIRED_HOST_FILES = [
   "scripts/executor-host.mjs", // 进程外壳（env 解析 / 心跳 / 领取节拍）
   "scripts/executor-host.runtime.mjs", // 预编译运行时图（缺它 = 退回 tsx 分支 → boot FAILED）
   "scripts/executor-host.build.json", // 构建清单：inputs/externals，供门禁复算
+];
+
+/**
+ * 桌包载荷（`src-tauri/static`，即 `bundle.resources` 装进安装包的那一份）的必备件。
+ * 判据同 REQUIRED_HOST_FILES：缺件不在构建期报错，只在用户双击时表现为起不来。
+ */
+const REQUIRED_PAYLOAD_FILES = [
+  // standalone 运行入口与它的环境装配（ISSUE #1216）：分发产物按硬规则 17 不含 .env，
+  // 运行期配置只能由这份入口装配。
+  "scripts/standalone-runtime.mjs",
+  "scripts/launcher-core/standalone-runtime-env.mjs",
+  // 首启建表的 DDL：载荷里没有 drizzle-kit，建表只能靠这份随包的 SQL。
+  "schema.sql",
 ];
 
 /**
@@ -305,6 +323,24 @@ function checkDir(dir, label) {
         "standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS）。",
     );
   }
+  // 桌包载荷的必备件（ISSUE #1216）：**只查 static 这一层**——`schema.sql` 与运行入口
+  // 都由装配步产出/从仓库显式拷贝，`.next/standalone` 那一层没有它们才是常态（入口是
+  // 给壳用的，standalone 层由 pnpm build 的冒烟负责）。缺件的表现同样是「双击没反应 /
+  // 窗口停在启动页」，构建期不数文件就没人知道。
+  const missingPayload =
+    label === "static" && files.includes("server.js")
+      ? REQUIRED_PAYLOAD_FILES.filter((p) => !files.includes(p))
+      : [];
+  if (missingPayload.length > 0) {
+    failed = true;
+    console.error(
+      `[${label}] 桌包载荷必备件缺件 ${missingPayload.length} 个：\n  ` +
+        missingPayload.join("\n  ") +
+        "\n  后果：standalone 形态下壳起不了 server（缺入口）或首启建不出表（缺 " +
+        "schema.sql，表现是页面 200、接口全 500）。\n  修法：跑 node scripts/build-desktop.mjs" +
+        "（§首启建表 导出 DDL、§10.2 同步运行期脚本），再确认没被 §装配 白名单剪掉。",
+    );
+  }
   for (const [tag, re] of FORBIDDEN) {
     const hits = files.filter((f) => re.test(f));
     if (hits.length > 0) {
@@ -368,6 +404,7 @@ module.exports = {
   ALLOWED_SCRIPTS,
   REQUIRED_RUNTIME_FILES,
   REQUIRED_HOST_FILES,
+  REQUIRED_PAYLOAD_FILES,
   RUNTIME_DIR,
   collectFiles,
   missingRequiredRuntimeFiles,

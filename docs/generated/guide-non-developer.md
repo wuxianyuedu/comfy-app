@@ -146,45 +146,56 @@
 > `src-tauri\target\release\app.exe`？
 > **有 = 成品，双击就能用**；没有 = 源码，只能走上面的浏览器模式。
 
-> ⚠️ 关于「免装环境」的一句话说清楚：
-> 桌面包里的启动器就是 **`app.exe` 本身**（不再有第二层 exe），它有两种形态：
-> - **独立版（standalone，推荐给非开发人员）**：把前端静态资源 + Node 运行时都内嵌好，
->   运行时不连 dev server，**真正免装任何开发环境**。壳的判据是「检出里没有编排器」。
+> ⚠️ 关于「免装环境」的一句话说清楚：桌包启动器就是 **`app.exe` 本身**
+> （不再有第二层 exe），它有两种形态，而**只有装出来的那一种真的免装环境**：
+> - **独立版（standalone，推荐给非开发人员）**：壳自己经内置 Node 起应用，不连 dev
+>   server、不需要对方装 Node/pnpm。判据是「这个目录里没有编排器
+>   `scripts\dev-launcher.mjs`」——安装后的目录（`%LOCALAPPDATA%\ComfyAPP`）里没有它，
+>   所以走这条；见规范 §7.6 与 `tools/README.md`。
 > - **prebuilt 版**：运行时会起一个 Node dev server，因此**仍需本机装有 Node/pnpm**，
->   更适合开发人员日常用。
->
-> 给非开发人员分发时，**请务必分发独立版**（完整目录，别只拷一个 exe），否则对方仍会被
-> 要求装 Node。要最省事，直接用下方的 `tools/start/start-desktop.ps1`——它会自检并自动
-> 选择可用的壳。
+>   更适合开发人员日常用。「把整个检出目录拷给别人」得到的就是这一种（里面有编排器），
+>   别把它当成免装环境的独立版。
 
 ### 6.2 谁来产出「即开即用桌面包」
 
 桌面包由**开发人员**在一台 Windows 电脑上构建生成：
 
-- 构建独立版（推荐分发）：运行 `tools\build\build-standalone.ps1`（完整生产构建壳 +
-  standalone 资源），产出 `src-tauri\target\release\`（含 `app.exe` / `server.js` /
-  `.next` / `binaries\`）；
+- **推荐：产出安装包**——`pnpm tauri build`（`beforeBuildCommand` 会先跑
+  `node scripts/build-desktop.mjs` 组装 standalone 载荷），产物在
+  `src-tauri\target\release\bundle\`：`nsis\ComfyAPP_<版本>_x64-setup.exe` 与
+  `msi\ComfyAPP_<版本>_x64_en-US.msi`。安装位置是**每用户目录**
+  `%LOCALAPPDATA%\ComfyAPP`（NSIS 默认 perUser，实测 `installer.nsi` 的 `INSTDIR` 分支），
+  装完后那一层里是 `ComfyAPP.exe` + `node.exe` + `static\`（`server.js`、裁剪版
+  `node_modules`、`.next`、`scripts\`、首启建表用的 `schema.sql`）。普通用户**双击安装包**
+  即完成安装，桌面/开始菜单出现 ComfyAPP；
 - 或运行 `tools\build\build-all.ps1` 产出 prebuilt 版（只有壳，需对方装 Node，见上）。
 
-随后把成品目录（含随附的 `tools/start/start-desktop.ps1`）打成 zip 发给普通用户。
-**你作为非开发人员不需要碰构建这一步。**
+> 别再往「解压一个目录就用」的方向发：那种目录里通常带着 `scripts\dev-launcher.mjs`
+> （= prebuilt 形态，仍需 Node/pnpm），而且实测安装包与裸目录的布局并不是一回事。
+> **你作为非开发人员不需要碰构建这一步。**
 
 ### 6.3 拿到桌面包后怎么运行
 
-1. 把桌面包目录解压到一个**路径不含中文和空格**的位置（如 `C:\apps\Comfy-APP`）；
-2. 双击 **`tools/start/start-desktop.ps1`**——它会先自动检查桌面包是否完整、缺了什么会给中文提示；
-3. 自检通过后会自动启动：先弹出一个「正在启动」的加载画面，稍等出现主窗口即成功；
-4. 关掉主窗口即退出（日志保留在 `log\` 目录，方便出问题时发给团队）。
+**走安装包（推荐）**：
 
-> 不想用 `tools/start/start-desktop.ps1`，也可直接双击桌面包里的
-> `src-tauri\target\release\app.exe`。
+1. 双击开发人员发来的 `ComfyAPP_<版本>_x64-setup.exe`，按提示装完（默认装到你自己的
+   `%LOCALAPPDATA%\ComfyAPP`，不需要管理员权限）；
+2. 从开始菜单/桌面图标启动 ComfyAPP：先弹「正在启动」的加载画面，出现主窗口即成功；
+3. 关掉主窗口即退出。日志在安装目录的 `static\log\` 下（出问题时发给团队）。
+
+**拿到的是解压目录**（开发人员直接拷了一个项目目录给你）：
+
+1. 解压到一个**路径不含中文和空格**的位置（如 `C:\apps\Comfy-APP`）；
+2. 双击 **`tools/start/start-desktop.ps1`**——它会先自检桌包是否完整、缺什么给中文提示；
+3. 这一种是 prebuilt 形态（目录里有编排器），**本机需要装 Node/pnpm**；只想免装环境就用上面的安装包。
 
 ### 6.4 桌面包没运行起来怎么办
 
-- 双击 `tools/start/start-desktop.ps1` 时若提示「未找到桌面壳/缺少文件」→ 按提示的说明对照 6.2，多半是
-  桌面包不完整（少了 `server.js` / `binaries\` 等运行资源），重新完整解压即可；
+- 装完双击没反应 → 看安装目录里 `node.exe` 与 `static\server.js` 在不在（安装包正常装完
+  一定在）；缺了就重装一次。启动页本身也会说出「为什么起不来、该先做什么」；
+- 解压目录那条路提示「未找到桌面壳/缺少文件」→ 按提示对照 6.2，多半是没构建过或没拷全；
 - Windows 10/11 已内置 WebView2，一般无需单独装；
-- 仍失败：把 `log\` 下的日志发给开发人员即可（详见第 8 节）。
+- 仍失败：把日志（安装目录 `static\log\`，或解压目录的 `log\`）发给开发人员即可（详见第 8 节）。
 
 > 想深入了解桌面包构建流程的开发人员，见 `README.md` 与 `docs/standards/launch-and-build.md`。
 
