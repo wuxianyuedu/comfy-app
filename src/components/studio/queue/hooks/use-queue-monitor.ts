@@ -17,7 +17,7 @@
 //       （订阅式共享一次轮询），状态栏与本视图都只订阅。它改动常驻组件的数据归属，
 //       应单开 PR，别混在功能改动里。
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   COMFY_QUEUE_POLL_MS,
@@ -31,6 +31,7 @@ import { cancelTask } from "~/lib/task-cancel-client";
 import { api } from "~/trpc/react";
 
 import { useToast } from "../../ToastProvider";
+import type { QueueTaskLogTarget } from "../QueueTaskLogModal";
 import {
   bucketQueueRows,
   estimateRemainingMs,
@@ -54,25 +55,34 @@ export interface RunningCardView {
 }
 
 export interface QueueMonitorController {
-  /** ComfyUI 是否可达。离线时整屏只说这一件事，不报排队数。 */
+  /** ComfyUI 是否可达。false 时列表照常渲染（数据来自本地库），只多一条
+   * 「未连接」横幅说明队列不会开始。 */
   online: boolean;
-  /** 正在跑的那条；没有在跑时为 null。 */
+  /** 正在跑的那条（富卡片：来自 `/api/comfy/queue`）；没有在跑时为 null。 */
   running: RunningCardView | null;
+  /** 库里 status=RUNNING 的行。`running` 为 null 而这里非空 = ComfyUI 没连上
+   * （富卡片的数据源不可达），离线兜底卡用它渲染。 */
+  runningRows: QueueRow[];
   /** 排队项，`position` 从 1 起（1 = 下一个开跑）。 */
   queued: Array<{ row: QueueRow; position: number }>;
   /** 最近结果（已截到窗口上限，新的在前）。 */
   recent: QueueRow[];
-  /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法。 */
+  /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法；离线时退回
+   * 「库里在跑 + 排队的行数」（`/api/comfy/queue` 读不到，不能报 0）。 */
   waitingCount: number;
   loading: boolean;
   /** 拉取失败的一句话；null 表示查询本身没问题（动作失败走 toast，不落这里）。 */
   loadError: string | null;
+  /** 正在查看执行日志的那条；null = 弹窗关着。 */
+  logRow: QueueTaskLogTarget | null;
   /** 这一条正在被操作吗（判据在出口里，视图不再自己比 id）。 */
   isBusy: (id: string) => boolean;
   refresh: () => void;
   cancel: (id: string, label: string) => Promise<void>;
   openFolder: (row: QueueRow) => Promise<void>;
   copyForReprint: (row: QueueRow) => Promise<void>;
+  openLog: (task: QueueTaskLogTarget) => void;
+  closeLog: () => void;
 }
 
 /** 队列与运行的全部逻辑。容器与视图只消费这一份 controller。 */
@@ -80,6 +90,9 @@ export function useQueueMonitor(): QueueMonitorController {
   const toast = useToast();
   const queue = useComfyQueue();
   const copyText = useCopyResult();
+  /* 日志弹窗的目标行：openLog 那一刻的快照（不是从 listQ 派生）——否则每 2s
+   * 一次的轮询都会换掉对象身份，弹窗会被误重挂、SSE 反复重订。 */
+  const [logRow, setLogRow] = useState<QueueTaskLogTarget | null>(null);
 
   const listQ = api.task.list.useQuery(
     { take: 200 },
@@ -188,15 +201,23 @@ export function useQueueMonitor(): QueueMonitorController {
   return {
     online: queue.online,
     running,
+    runningRows: buckets.running,
     queued,
     recent: recentWithin(buckets.recent),
-    waitingCount: queue.queued + queue.comfy.pending,
+    /* 离线时 `/api/comfy/queue` 读不到、两个计数恒为 0，而列表明明排着队 ——
+     * 退回「库里在跑 + 排队」的行数，别让「待执行 0」和下面的列表自相矛盾。 */
+    waitingCount: queue.online
+      ? queue.queued + queue.comfy.pending
+      : buckets.running.length + queued.length,
     loading: listQ.isPending,
     loadError: listQ.isError ? "读不到任务记录，后端可能刚重启" : null,
+    logRow,
     isBusy: (id: string) => action.isBusy(id),
     refresh: () => void listQ.refetch(),
     cancel,
     openFolder,
     copyForReprint,
+    openLog: (task) => setLogRow(task),
+    closeLog: () => setLogRow(null),
   };
 }

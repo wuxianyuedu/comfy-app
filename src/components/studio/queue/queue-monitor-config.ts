@@ -123,20 +123,47 @@ export function runningElapsedText(elapsedMs: number | null): string {
 }
 
 /**
- * 空态文案。
+ * 「ComfyUI 未连接且一条任务都没有」的整页空态。
  *
  * 「没在跑」有两种原因（队列真的空 / 后端没连上），合成一句会让用户以为任务丢了。
- * 与状态栏那一格的口径一致：离线时不报排队数，只说没连上。
+ * 离线但列表里还有任务时不说这句 —— 那种情形列表照常铺开，只在顶部放一条横幅
+ * （见 `offlineBannerText`），整页被空态替换正是「状态闪一下」观感的放大器。
  */
-export function emptyStateText(
+export function offlineEmptyText(): { title: string; description: string } {
+  return {
+    title: "ComfyUI 未运行",
+    description:
+      "队列里的任务不会开始。启动后端后这一屏会自动接上，不用手动刷新。",
+  };
+}
+
+/**
+ * 离线横幅（列表还在时顶部的提示条）：只说「现在不会开始 + 连上会自动接上」，
+ * 不报排队数 —— 排队数在页头和列表里都看得见，横幅再报一遍是同一件事说两遍。
+ */
+export function offlineBannerText(): { title: string; description: string } {
+  return {
+    title: "ComfyUI 未连接",
+    description:
+      "队列里的任务暂时不会开始；连接恢复后这一屏自动接上，不用手动刷新。",
+  };
+}
+
+/**
+ * 「跑动中」段的空位文案（这一段没有卡可显示时）。
+ *
+ * 在线时的两种话术沿用原 `emptyStateText` 的口径（刚跑完有排队 / 完全没任务）；
+ * 离线时不再说「上一条刚跑完」（离线时根本没跑完任何东西），也不重复横幅的
+ * 「未连接」——上面已经说过一遍，这里只答「这一段为什么空」。
+ */
+export function runningHintText(
   online: boolean,
   waitingCount: number,
 ): { title: string; description: string } {
   if (!online) {
     return {
-      title: "ComfyUI 未运行",
-      description:
-        "队列里的任务不会开始。启动后端后这一屏会自动接上，不用手动刷新。",
+      title: "没有在跑的任务",
+      description: "连接恢复后，排队的任务会自动接上。",
     };
   }
   if (waitingCount > 0) {
@@ -149,6 +176,12 @@ export function emptyStateText(
     title: "没有在跑的任务，也没有排队中的条目",
     description: "从画布或工坊提交一次生成，它会立刻出现在这里。",
   };
+}
+
+/** 离线兜底跑动卡（数据来自库里的 RUNNING 行）的说明行：富数据（耗时 /
+ * 节点 / 模型）来自 `/api/comfy/queue`，读不到时如实说缺什么，不留空格。 */
+export function offlineRunningCardNote(): string {
+  return "ComfyUI 未连接，连接后显示耗时与节点明细。";
 }
 
 /**
