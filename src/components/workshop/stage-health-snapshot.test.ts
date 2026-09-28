@@ -56,4 +56,19 @@ describe("buildHealthSnapshot", () => {
       countPendingStages(notRendered) - 1,
     );
   });
+
+  it("缩略名是全名的一部分、彼此不重复、且短到窄槽位放得下", () => {
+    const empty = ctx();
+    const rows = buildHealthSnapshot(computeStageRatios(empty, false), empty);
+    const shorts = rows.map((row) => row.shortLabel);
+    expect(shorts).toHaveLength(STAGE_DEFS.length);
+    /* 六段并排时缩略重复 = 顶栏出现两个「镜头」，用户无从分辨是哪一段。 */
+    expect(new Set(shorts).size).toBe(shorts.length);
+    for (const row of rows) {
+      /* 缩略只能从全名里取，不是另起一名：换名会让顶栏与阶段轨道两套叫法。 */
+      expect(row.label.includes(row.shortLabel)).toBe(true);
+      /* 四字段名正是顶栏那格放不下的长度，缩略的上限就是两字。 */
+      expect(row.shortLabel.length).toBeLessThanOrEqual(2);
+    }
+  });
 });

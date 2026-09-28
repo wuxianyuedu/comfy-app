@@ -124,6 +124,12 @@ export const RUNTIME_SCRIPTS = [
   // COMFY_EXECUTOR）时，脚本得随包带出去。清单必须与 check-standalone-contents
   // 里的 ALLOWED_SCRIPTS 同源（tests/dist-artifact-hygiene.test.ts 核对）。
   "executor-host.mjs",
+  // 宿主的预编译运行时图与它的构建清单（3-E1，ISSUE #1169）：这两件**不是仓库源码**，
+  // 而是构建期由 scripts/build-executor-host.mjs 写进产物的（桌包里没有 tsx，也不该
+  // 依赖 src/lib/** 的 TS 源）。登记进白名单是因为它们落在 scripts/ 下——不登记就会被
+  // 下面的剪枝删掉，表现是「产物里设 host 起不来」。
+  "executor-host.runtime.mjs",
+  "executor-host.build.json",
   // lockfile 差异：编排器启动前打印「不一致的具体位置」（render-lock-diff），
   // worktree 解析同一份差异对象（lock-diff）—— 两者都是静态 import。
   "lockfile/render-lock-diff.mjs",
@@ -146,6 +152,18 @@ export const RUNTIME_SCRIPTS = [
   "launcher-core/orchestrator.mjs",
   "launcher-core/corepack.mjs",
   "launcher-core/splash-assets.mjs",
+];
+
+/**
+ * 构建期产出、不在仓库源码里的白名单条目（相对 scripts/）。
+ *
+ * scripts/build-desktop.mjs 拷 RUNTIME_SCRIPTS 时**跳过**这些名字（仓库里没有同名
+ * 源文件，按缺件失败会把人引向「清单漂了」这个错方向），改在组装完整树之后断言它们
+ * 还在——真正的故障是「忘了跑 pnpm build 里的那一步」或「被剪枝误删」。
+ */
+export const BUILT_RUNTIME_SCRIPTS = [
+  "executor-host.runtime.mjs",
+  "executor-host.build.json",
 ];
 
 /** 产物根下不该随分发包出去的开发文件（相对产物根）。 */

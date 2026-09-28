@@ -95,6 +95,11 @@ const ALLOWED_SCRIPTS = new Set([
   // 的 spawnExecutorHost 在 COMFY_EXECUTOR=host 灰度下起；桌面包里也要能起来。
   // 与 standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS 同源，缺一份即红。
   "executor-host.mjs",
+  // 宿主的预编译运行时图 + 构建清单（3-E1，ISSUE #1169）：构建期产出、不在仓库
+  // 源码里，与 RUNTIME_SCRIPTS 同源登记（漂移的两头都难查：剔除侧漏 = 产物缺件，
+  // 检查侧漏 = 把合法产物判成违规）。
+  "executor-host.runtime.mjs",
+  "executor-host.build.json",
   "lockfile/render-lock-diff.mjs",
   "lockfile/lock-diff.mjs",
   // 编排器的内部分件（逐项登记；与 RUNTIME_SCRIPTS 同源）
@@ -126,6 +131,21 @@ const REQUIRED_RUNTIME_FILES = [
   "app-route-turbo.runtime.prod.js", // 所有 route.ts
   "app-page-turbo.runtime.prod.js", // RSC 页面
   "pages-turbo.runtime.prod.js", // middleware
+];
+
+/**
+ * 宿主（COMFY_EXECUTOR=host）在产物里跑起来所必需的文件，**相对产物根**逐个点名。
+ *
+ * 与 REQUIRED_RUNTIME_FILES 同一类判据：缺件不在构建期报错，只在运行期表现为
+ * 「设了 host 起不来」。本脚本查「有没有」，「起不起得来」由
+ * scripts/smoke-executor-host-standalone.mjs 在 pnpm build 收尾真起一次进程验。
+ * 两道都要，因为冒烟只跑 .next/standalone，而桌包组装（整树拷贝 + 剪枝）发生在
+ * 冒烟之后，static 层没人再看第二眼。
+ */
+const REQUIRED_HOST_FILES = [
+  "scripts/executor-host.mjs", // 进程外壳（env 解析 / 心跳 / 领取节拍）
+  "scripts/executor-host.runtime.mjs", // 预编译运行时图（缺它 = 退回 tsx 分支 → boot FAILED）
+  "scripts/executor-host.build.json", // 构建清单：inputs/externals，供门禁复算
 ];
 
 /**
@@ -242,6 +262,24 @@ function checkDir(dir, label) {
           : "") +
         "\n  （runtime 真的会读的脚本靠 ALLOWED_SCRIPTS 白名单保留；" +
         "新增脚本默认应被剔除，要保留请登记并说明理由）",
+    );
+  }
+  // 宿主必需文件的反向检查（3-E1）。**两层产物都查**，但只在这一层真的是个产物时
+  // （有 server.js）才提缺件：开发机上 src-tauri/static 常只剩一两个入库例外文件
+  // （.gitignore 的 !/static/scripts/ 例外），对那种半成品目录报「缺件」只会让人
+  // 去查错的地方。
+  const missingHost = files.includes("server.js")
+    ? REQUIRED_HOST_FILES.filter((p) => !files.includes(p))
+    : [];
+  if (missingHost.length > 0) {
+    failed = true;
+    console.error(
+      `[${label}] 执行器宿主必需文件缺件 ${missingHost.length} 个：\n  ` +
+        missingHost.join("\n  ") +
+        "\n  后果：桌包/standalone 里设 COMFY_EXECUTOR=host 时宿主 boot 大声失败" +
+        "（exit 1）——任务不会误跑，但也不会跑。\n  修法：先跑 pnpm build（收尾含 " +
+        "node scripts/build-executor-host.mjs），再确认没被剪枝误删（白名单在 " +
+        "standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS）。",
     );
   }
   for (const [tag, re] of FORBIDDEN) {

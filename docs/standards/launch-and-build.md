@@ -1329,7 +1329,8 @@ zustand 队列，而不是再加一个模块级单例。
 | **`pnpm test` 随机非零退出**（`Test Files N passed` / `Tests M passed / 0 failed` 全绿，退出码却来自 `Unhandled Errors`；每次点名的文件都不同） | **游离的异步链路在用例结束后才 resolve/reject**（ISSUE #489）。已实测三处同族（都是「与报错点名的文件毫无关系」的失败）：① `use-model-library.ts` 的 `listQ.refetch().finally(() => setLoading(false))` 在 jsdom 环境拆除后才 resolve，触发 React 更新调度去读不存在的 `window`（`ReferenceError: window is not defined` @ `resolveUpdatePriority` / `dispatchSetState`）；② `use-custom-nodes-settings.ts` 的「完成后提示停留 800ms」`setTimeout` 同源；③ `runner-state.ts` 的 `schedulePersistLogs` **防抖定时器不属于任何生命周期**，清空内存 state 后仍在 200ms / 1500ms 后打到已 `vi.mock` 撤销的 repository（`TypeError: taskRepository.replaceLogs is not a function`）。`cleanup()` 只卸载组件、**不会取消已发出的 promise 与已排的 timer** | 已修：① 两处 hook 加卸载标记（先判存活再 setState）；③ 新增公共取消 API `cancelPersistLogs`，用例在 `beforeEach` **与** `afterEach` 两头都掐（只在 `beforeEach` 清，定时器会在「本用例结束后、下个 `beforeEach` 之前」的窗口里触发）。回归：`use-model-library.test.ts` 用「卡住回包 + 放行后记账」把偶发变**必现**（只统计更新调度栈的 `window` 读取，避开 react-query / tRPC 的 ambient 读取噪声），`reaper-decisions.test.ts` 锁「取消后不再有排期」。反向验证：还原任一实现即挂 |
 | **host 模式任务永远停在队列「等待执行」**（界面不推进、无失败出口） | `COMFY_EXECUTOR=host` 是用 **launcher** 读的还是 **`pnpm dev`** 起的：裸 dev.mjs 链路没有编排 6.5 步，host 根本没被拉起，行标了 host 归属没人领（inline 片的回收器也不跨片误杀） | 走 `node scripts/dev-launcher.mjs` 或 `tools/start/start-web.ps1`；确认 launcher 控制台有「executor-host 已启动」、`log/services/executor-host.log` 有 `mode=runtime`+`inject-ok`。详见 [执行器宿主指南](../guide-executor-host.md) |
 | **重启后排队中的任务变成「任务卡在队列超过 Ns…请重新执行」**（不是被领回续跑）——**已修，见下一格** | pull 模型下 `QUEUED` 已经是健康的等待态（等槽 / 等宿主起来 / 等 ComfyUI 就绪），而 reaper 的 `STALE_MS=30s` 死信规则仍按旧形状判它；首扫在 `startReaper()` 里当场发起、排在领取循环第一拍（≥1.5s，还要过 WS OPEN 门控）**之前**，于是 aged>30s 的遗留行必输——实测同一个新宿主先数出 `hostShardQueued=1`，1.4s 后打出 `marked 1 stale QUEUED task(s) as FAILED`，说的就是这一行。重启间隔压到 30s 以内时同一批行能被新宿主领回并跑到 `SUCCEEDED`（`claimedAt` 由新宿主写）。机制与实测时刻见 [执行器宿主指南](../guide-executor-host.md) 的「崩溃恢复」段；判决语义的收口另记 ISSUE #1204 | 已按 ISSUE #1204 收口（选项 (b)「收窄判决」）：`reapStaleQueuedTasks` 的候选集从「本片 + aged + 无 `promptId`」换成「**不属于任何已知归属片** + aged + 无 `promptId`」，本片内 aged 的排队行是健康的等待态、交给领取循环。改完同一份取证脚本（间隔 48s，同两行 host 载荷）：新宿主 boot 后 `q2-scan hostShardQueued=1`、宿主日志零条 QUEUED 判死、遗留行被领回并 `SUCCEEDED`；RUNNING 那条对账不受影响（同批量到 117s 两轮收口）。**没有**去挪 boot 顺序——那只把窗口从 0 挪到「领取节拍 + WS 就绪」，根因还在 |
-| **`executor-host` boot FAILED、exit 1**（launcher 显示已启动但日志随即静默） | 运行时注入链任一步失败：`tsx` 缺失（**桌面包产物不含 src/lib 源码态执行链与 tsx，host 模式当前仅 dev 支持**，产物化=ADR §13 的 3-E 立项）、`DATABASE_URL` 指向不可达路径、`.env` 库地址与进程 env 不一致 | 看 `log/services/executor-host-stderr-<ts>.log` 的 FAILED 行原文；dev 下先核 `DATABASE_URL`（进程 env → .env 回读 → 默认，与 Next 同判据），桌面包场景把开关删掉即回 inline |
+| **`executor-host` boot FAILED、exit 1**（launcher 显示已启动但日志随即静默） | 运行时注入链任一步失败都会大声退出。dev 下几乎都是 `DATABASE_URL` 指向不可达路径、或 `.env` 库地址与进程 env 不一致；产物（桌包/standalone）下多一种：**按内容**选到了预编译运行时图却起不来——缺 `scripts/executor-host.runtime.mjs` = 那份产物是旧构建（同批判据：`scripts/executor-host.build.json` 在不在），externals 解析不到 = 裁剪版 `node_modules` 里没有 `@libsql/client` / `ws` / `pino` 其中之一。两条都在 `pnpm build` 收尾的冒烟里当场拦（机制见 §7.5），不会等到运行期才暴露 | 看 `log/services/executor-host-stderr-<ts>.log` 的 FAILED 行原文；dev 下先核 `DATABASE_URL`（进程 env → .env 回读 → 默认，与 Next 同判据），桌面包场景把开关删掉即回 inline |
+| **桌包里设了 `COMFY_EXECUTOR=host`，`log/services/executor-host.log` 里连 `boot pid=` 都没有** | **不是起不来，是没人起**：拉起宿主的唯一一处是编排器第 6.5 步（`scripts/dev-launcher.mjs` 的 `spawnExecutorHost()`），而 standalone 形态由壳直接起内嵌 `server.js`、不经过编排器（`src-tauri/src/lib.rs` 的 `setup_standalone_runtime()`）。宿主件已随包、也能起来，只是没有调用者——表现自 ISSUE #1204 之后是「安静留在队列」：行被写成 host 归属、回收器不再判死它、状态栏排队数只涨不落 | 分发口径：**ISSUE #1216 落地前不要在桌包里设这个开关**（保持不写 = inline）。谁该拉起它、以及 `src-tauri/static → resource_dir()` 那层还没定性的事，都记在 [执行器宿主指南](../guide-executor-host.md) 的「桌面包」段 |
 **hook 里一条脱离组件生命周期的游离 promise 链**（ISSUE #489）：`src/components/studio/hooks/use-model-library.ts` 的 `listQ.refetch().finally(() => setLoading(false))` 在测试结束（jsdom 环境已拆）之后才 resolve，于是 setLoading 触发 React 更新调度、去读已不存在的 `window` → `ReferenceError: window is not defined`（`resolveUpdatePriority` / `dispatchSetState`）。`cleanup()` 只卸载组件、**不会取消这条已发出的 promise**。谁被点名只取决于谁的 MSW handler 回包慢一拍 → 报错文件每次不同（实测 65 轮里 4 轮，约 6%） | 已修：hook 加 `aliveRef` 卸载标记，`.finally` 先判存活再 `setLoading`；回归 `src/components/studio/hooks/use-model-library.test.ts` 用「卡住回包 + 放行后记账」把偶发变**必现**（只统计更新调度栈的 window 读取，避开 react-query/tRPC 的 ambient 读取噪声）。反向验证：去掉 aliveRef 判定 → 本条挂（0 vs 10） |
 | **`pnpm test` 在仓库根新建 `log/` 并写入日志**（CI 上从无到有、开发者本机悄悄多几行，其中含用例的密钥标记行） | **用例直连真实日志路径**（ISSUE #489）：`src/server/lib/logger.test.ts` 的镜像用例 import 真实 `APP_RUNTIME_LOG` 用 `slice(before.length)` 读增量，`generate.test.ts` 的业务里程碑日志也落真实文件；镜像/日志是**真实写盘**副作用，不隔离就会写字 | 已修：`createPinoLogger({ mirror })` 支持注入镜像目标，两处用例都落到自己的 mkdtemp 目录；删掉 `log/` 跑 `pnpm test` 不再重建目录 |
 | **双击 `run-local.ps1`（及其它任何走 `Invoke-Entry` 的入口）在打开逻辑脚本之前就报** `Invoke-Entry: …\tools\start\run-local.ps1:32` + `无法检索变量 '$NodeScript'，因为尚未设置该变量。`（ISSUE #564） | **入口公共库引用了一个从未声明的变量**（ISSUE #562 的跨平台重构留的坑）：`scripts/entry-common.ps1` 的 `Invoke-Entry` 里有一处 `if ($NodeScript) { … }`，而 `$NodeScript` 只是注释里的一个 `.PARAMETER` 说明——**从未进过 `param()` 参数表，也从未被任何入口传过**。本库顶部是 `Set-StrictMode -Version Latest`，这一档会把「引用不存在的变量」从 `$null` 升级成**终止性错误**；而这条判断在主路径上（不是 else 分支），于是 `run-local.ps1` / `verify-quality.ps1` / `run-tests.ps1` / `generate-docs.ps1` / `sync-lint.ps1` / `register-comfyapp-protocol.ps1` 等**每一个**走 `Invoke-Entry` 的双击入口都在调起逻辑脚本之前炸掉（报错还是英文函数名 + 内部变量名，用户完全看不出该做什么）。它躲过了所有门禁：`.ps1` 引用未声明变量**在解析期不报错**，只在实际执行到那一行才炸，而 `pnpm lint` / `tsc` / 结构门禁 R7-R8 都读不到它 | 已修：删掉这条从未接线的 分支与配套的 `Invoke-NodeEntry`——本库只认 PowerShell 逻辑脚本，要调 `.mjs`（如启动编排器 `scripts/dev-launcher.mjs`）的入口各自做薄壳（`scripts/dev-launcher.ps1` 是参考形态），在 `param()` 之外新增一个没人传的开关只会再养出一个同类地雷。库头注释补上「为什么不在这里支持 `.mjs`」。回归测试 `tests/entry-common-strict-mode.test.ts`：静态核 `param()` 声明的变量覆盖函数体引用的每一个变量（反向验证：还原旧文件即失败），并在有 PowerShell 的环境里**真跑**一次 `Invoke-Entry`，断言它走到自己的「未找到逻辑脚本」出口而不是被 StrictMode 终止 |
@@ -1780,6 +1781,69 @@ outputFileTracingIncludes: {
 > 只看到 3 个文件就是缺件。
 
 ---
+
+### 7.5 宿主的运行时图进产物：构建期预编译 + 收尾真起进程冒烟（ISSUE #1169 / 3-E1）
+
+**要解决的问题**：`COMFY_EXECUTOR=host` 的执行链原本由 `scripts/executor-host.mjs`
+用 tsx 加载 `src/lib/**` 的 TypeScript 源。dev 检出里没问题；产物里 `tsx` 是
+devDependency（不随包分发），于是 boot 直接大声失败（`Cannot find package 'tsx'`）。
+在那之前还有一条**看起来能用**的旁路：Turbopack 的「全项目追踪」恰好把 `src/**`
+带进了 `.next/standalone`——也就是 §7.2 里被判定为噪声、要求清掉的那条告警。宿主能跑
+这件事等于押在一条**待清理**的通道上，谁去修 §7.2 都会把它静默弄断。
+
+**已签方向 = 构建期预编译**。`pnpm build` 现在是四步链，**顺序本身就是判据**：
+
+| 步                                                       | 脚本                                       | 为什么在这个位置                                                                                                                                                                          |
+| -------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1                                                        | `next build`                             | 先有 standalone 根（`server.js` 在场）。产物化脚本以「目标目录里有没有 `server.js`」作前置断言，缺就直接抛，不在错的目录里写出半套文件                                                    |
+| 2                                                        | `scripts/build-executor-host.mjs`        | esbuild 把 `src/lib/comfyui/host-runtime.ts` 那张图打成一份 ESM 写进产物根（`scripts/executor-host.runtime.mjs`），并写构建清单 `scripts/executor-host.build.json`（entry / inputs / externals / bytes） |
+| 3                                                        | `scripts/standalone-private-inputs.mjs`  | §7.3 的开发机私有输入剥离。预编译那两件已登记在 `RUNTIME_SCRIPTS` / `BUILT_RUNTIME_SCRIPTS`，剥离按白名单剪 `scripts/**` 时不会剪掉它们；顺序在 2 之后 = 剥离看到的是最终集合            |
+| 4                                                        | `scripts/smoke-executor-host-standalone.mjs` | **对最终产物**冒烟：宿主三件齐 → 清单里每个非内置 external 都能解析 → 真起一个宿主进程（`--once` + 临时空库）跑完 boot，要求出现 `runtime inject-ok` 且没有 `boot FAILED`                |
+
+冒烟必须排在 3 之后：「剥完之后还缺不缺件」只有这一步能定性。
+
+**为什么 external 只有那三个包**（`@libsql/client` / `ws` / `pino`）：它们带原生绑定
+或可选加速模块，还有与服务端共享的进程级单例，打进 bundle 会坏。反过来，纯 JS 的
+`drizzle-orm` / `zod` / `@paralleldrive/cuid2` **必须**打进来——裁剪版
+`node_modules` 顶层根本没有它们（Next 把这几个编进了 server chunk）。谁external谁
+bundled 不靠人记。清单里还会混进 `fs` / `os` / `path` / `child_process` 这类**裸名内置模块**（被包进来的 CJS 用裸名 `require` 的结果，实测这份清单 7 条里有 4 条是它们）——冒烟按内置名单跳过它们，别把它们当成「第四第五个外部依赖」去装包。
+
+**两个不写下来一定会被改错的细节**：
+
+- `server-only` 解析成内存里的桩（自定义命名空间 `server-only-stub`），**不是**列进
+  external。作为 external 它会被 ESM 提升（hoisting）到 bundle 顶部，而该包的入口就是
+  一句 throw——宿主进程加载即崩，恰好破坏「只有被问到才加载」这条 lazy 边界；做成
+  bundle 内的桩则保持 lazy，throw 文案与包自己的契约一致。
+- bundle 顶部注入 `createRequire` banner。被包进来的 CJS（pino / drizzle 内部）运行期
+  仍会 `require("node:crypto")`，纯 ESM 作用域里没有 `require` →
+  `Dynamic require of "node:crypto" is not supported`。**这一条只有真起进程的冒烟抓得到**，
+  tsc / eslint / 单测都碰不到它。
+
+**入口按内容判据选择加载哪份图**：`scripts/executor-host.mjs` 只看
+`scripts/executor-host.runtime.mjs` 在不在——在就用预编译件，不在（dev 检出）就装 tsx
+的 ESM 钩子加载 TS 源。与 §1.5 里壳「按检出里有没有编排器决定运行形态」同一取向：
+**环境开关会撒谎，文件内容不会**。两条通道互不依赖，缺预编译件在产物里仍以
+`boot FAILED` 大声失败，不会半接线地跑起来。boot 诊断那句排队数统计先过
+`isSchemaReady()`，表没就绪时打 `schema-not-ready` 而不是抛（硬规则 16 的「先判就绪」）。
+
+**门禁（四层，各管一件事）**：
+
+| 层         | 判据                                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 构建链     | `tests/executor-host-artifact.test.ts`：锁 `build` 的四步顺序、externals 清单内容、`createRequire` banner、`server-only` 桩，以及入口「按内容判据」且**不残留** `../src/lib/*.ts` 的裸导入 |
+| 产物缺件   | `scripts/check-standalone-contents.cjs` 的 `REQUIRED_HOST_FILES`：只有 `server.js` 在场才查（dev 检出没跑过构建不该红），`.next/standalone` 与 `src-tauri/static` 两层都查      |
+| 桌包装配   | `scripts/build-desktop.mjs`：拷贝时跳过「仓库里没有同名源」的构建期生成件，并在 §7.3 剥离**之后**断言宿主三件仍在，缺件报 `桌包缺宿主件 …` 并指明先跑 `pnpm build`                    |
+| 运行期     | `pnpm build` 收尾冒烟（第 4 步）+ 真产物 boot 用例（有 `server.js` 才跑，缺产物自动 skip）                                                                              |
+
+两份新脚本（`build-executor-host.mjs` / `smoke-executor-host-standalone.mjs`）的**错误出口文案保持 ASCII 英文**（§9.5：构建期脚本用 `[ERROR] …` 短句），注释按硬规则 23 写中文——它们不在 Next 的模块图上、`next-code-frame` 渲染不到，因此**不进** §9.6 那份白名单（名单越短越好，加错一个的代价是构建偶发崩）。
+
+> **别把本节读成「桌包已经支持 host」**：这里只解决了「产物里跑不起来」。桌包的
+> standalone 形态**不经过编排器**，而拉起宿主那一步在编排器第 6.5 步里——所以产物里
+> 现在没有进程会去起那个已经能起来的宿主，已另记 ISSUE #1216。分发口径与「连
+> `boot pid=` 都没有」这条排障判据见
+> [执行器宿主指南](../guide-executor-host.md) 的「桌面包」段。冒烟证明的也只是
+> 「能 boot 到 `inject-ok` 并完成一次队列扫描」，**不等于**「能连 ComfyUI 出图」。
+
 
 ## 8. Windows 入口规范：一律 .ps1，禁用 .bat / .cmd / .vbs
 

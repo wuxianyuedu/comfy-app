@@ -10,7 +10,9 @@
  *   1. `value === null` 是**不确定态**（滑动条纹），不是 0% 空条；
  *   2. **a11y 语义由基元给**（收口前 10 处里只有 2 处声明了 `role`）/「不确定」态没有 `aria-valuenow`（它不该被读成一个数）；
  *   3. 宽度下限只抬非零值（`minVisible`）；
- *   4. 填充观感差异走 `fillClassName`，不重画轨道。
+ *   4. 填充观感差异走 `fillClassName`，不重画轨道；
+ *   5. 条上没有可见文字时，可访问名走 `ariaLabel`（不传就不写 `aria-label`，
+ *      既有消费点的 DOM 一字不变）。
  *
  * **PR-3 起 DOM 分两层**（P67 治理、改用 `ProgressPrimitive.Root`）：
  *   · `data-slot="progress-bar-track"` 挂在 base-ui Progress **Root** 上，
@@ -95,6 +97,32 @@ describe("ProgressBar 的不确定态（value === null）", () => {
     const { container } = render(<ProgressBar value={null} label="扫描中" />);
     expect(container.textContent).toContain("扫描中");
     expect(container.textContent).not.toContain("%");
+  });
+});
+
+describe("ProgressBar 的可访问名（条上没字的那种用法）", () => {
+  /** 基元挂名走 `ariaLabel`：可见文案 `label` 与 ARIA 宿主是兄弟节点，
+   *  不构成命名关系 —— 分段健康度那种「一根细条代表一段阶段」的形态
+   *  只能靠它，否则读屏器只报一个数字、说不出这是哪一段。 */
+  function trackOf(container: HTMLElement): Element {
+    const track = container.querySelector('[data-slot="progress-bar-track"]');
+    if (track === null) throw new Error("找不到 ARIA 宿主");
+    return track;
+  }
+
+  it("给了 ariaLabel 就挂在 ARIA 宿主上，与数值同处一个元素", () => {
+    const { container } = render(
+      <ProgressBar value={100} ariaLabel="剧本" showValue={false} />,
+    );
+    const track = trackOf(container);
+    expect(track.getAttribute("aria-label")).toBe("剧本");
+    expect(track.getAttribute("role")).toBe("progressbar");
+    expect(track.getAttribute("aria-valuenow")).toBe("100");
+  });
+
+  it("不传时不写 aria-label 属性（既有消费点的 DOM 一字不变）", () => {
+    const { container } = render(<ProgressBar value={40} label="项目总进度" />);
+    expect(trackOf(container).hasAttribute("aria-label")).toBe(false);
   });
 });
 

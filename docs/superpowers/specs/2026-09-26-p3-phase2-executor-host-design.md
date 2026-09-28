@@ -1,7 +1,7 @@
 # P3 §5 第 2 期：ComfyUI 执行器迁出 Next 进程（executor-host.mjs）
 
 - 日期：2026-09-26
-- 状态：**实施中** —— Phase 2-A/2-B/2-C、3-A、3-B0、3-B1、3-C、3-D、4-A1~4-A4 已合入 master（#1124 / #1131 / #1133 / #1138 / #1151 / #1157 / #1168 / #1178 / #1183 / #1186 / #1190）；4-B1 已合入 #1193（`c2ea2b1d`），4-B2 已合入 #1196（`601a6c67`），4-B3（两条派发循环收成一条 pull）已合入 #1203（`90c627e3`）——§14 D1 点名的四个进程内依赖至此全部摘完；4-B4 已合入 #1208（`d9c4a8fa`），4-B5（排队期写下的行在领取之后还在，ISSUE #1206）在本 PR；§13 是逐期落地时的已签修正，§14 是 Phase 4（删旧）的签字；`COMFY_EXECUTOR=host` 目前**仅 dev 可用**，桌面包支持拆 ISSUE #1169（3-E）
+- 状态：**实施中** —— Phase 2-A/2-B/2-C、3-A、3-B0、3-B1、3-C、3-D、4-A1~4-A4 已合入 master（#1124 / #1131 / #1133 / #1138 / #1151 / #1157 / #1168 / #1178 / #1183 / #1186 / #1190）；4-B1 已合入 #1193（`c2ea2b1d`），4-B2 已合入 #1196（`601a6c67`），4-B3（两条派发循环收成一条 pull）已合入 #1203（`90c627e3`）——§14 D1 点名的四个进程内依赖至此全部摘完；4-B4 已合入 #1208（`d9c4a8fa`），4-B5（排队期写下的行在领取之后还在，ISSUE #1206）已合入 #1212（`37ef62f0`）；3-E1（宿主的运行时图构建期预编译进产物 + 收尾真起进程冒烟，ISSUE #1169 的第一半）在本 PR，3-E2（桌包 standalone 下由谁拉起宿主）另记 ISSUE #1216；§13 是逐期落地时的已签修正，§14 是 Phase 4（删旧）的签字，§15 是 3-E；`COMFY_EXECUTOR=host` 目前**仅 dev 可用**
 - 前置：P3 §5 第 1 期已完全收线（#1042/#1045/#1053/#1056/#1060/#1068/#1071/#1074/#1075/#1077/#1080/#1083/#1086/#1090 共 14 PR，整条 ComfyUI 执行链 + lib 层地基都进 §18.4 第三类；host boot 顺序与 inject 接缝已就位）
 - 上游方案：`outputs/p3-executor-process-migration-plan.md`（审计 §2.7 / 架构级）
 - 范围：
@@ -541,3 +541,59 @@ configureExecutorCli({
 D4 落地后按「跑真任务找出口」的口径继续做 4-A3 端到端，抓到一个不属于任何一刀的缺陷：`listStaleRunning` 带着 `promptId IS NOT NULL`，而 `listStaleQueued` 只认 `QUEUED` —— 于是「已被领取、`prompt_id` 还没回传」这段时间的 `RUNNING` 行**两条 sweeper 都看不见**；宿主恰好在这段时间崩溃，那行就永久停在「生成中」，界面上没有任何出口（用户只能删行或重启数据库）。根因还有一层：comfy-cli 的 stdout 在非 TTY 管道上是块缓冲，`prompt_id`/progress 事件成批迟到（实测整轮 `promptId` 为 NULL、收尾才出现），所以这段窗口不是毫秒级而是**整轮**。
 
 处置两条一起做：执行侧 spawn 注入 `PYTHONUNBUFFERED=1`（窗口从「整轮」缩到亚秒）；回收侧放开 `promptId` 条件 + 用**两轮观察**替代单轮判定（`reaperState.noPromptSeen`，跨 HMR 的全局状态因此升到 `__comfyReaper_v2`）。为什么不单轮判：「刚 `claimNextQueued` 完、还没走到 `enqueueJob`」的行与真孤儿形状完全相同，而领取→入队是亚秒级、两轮之间隔 30s，单轮必然误杀。依据链上还有一句前提要记：**同一 shard 只允许一个宿主进程**（launcher 负责），否则「本进程没有内存足迹 ⇒ 真孤儿」不成立。
+
+---
+
+## 15. 3-E（桌面包支持 host）——切法与 3-E1 落地记录
+
+**签字（2026-09-28）两条**：
+
+1. **切法 = 拆两半，先做产物完整性**（选项「拆两半」）。摸底时把 3-E 当成一件事（「桌
+   包里跑不起来」），实测后它其实是两件，混在一刀里会让「产物缺件」和「没人拉起」互相
+   遮掩：3-E1 = 产物里那份执行图能不能 boot（本刀）；3-E2 = 谁在 standalone 形态下起这个
+   已经能 boot 的进程（ISSUE #1216）。
+2. **宿主运行时的形态 = 构建期预编译**（签字口径「哪个对使用者最好就选哪个」之后的
+   定性）。两条候选：**构建期 esbuild 预编译** vs **随包带 tsx + `src/lib` TS 源**。
+   选前者：`tsx` 是 devDependency、还带一份平台专属的驱动二进制，为了一个灰度开关把
+   它们装进分发的桌面应用是拿使用者的下载体积和安装面换开发方便；预编译只多一份约
+   1.4 MB 的 ESM（实测 306 个输入、1 471 724 字节），并且把 devDependency 从运行期路径
+   上彻底摘掉。
+
+**3-E1 落地记录（2026-09-28，本 PR）**：
+
+- **图从哪儿来**：新增 `src/lib/comfyui/host-runtime.ts` 作为宿主图的**静态**汇出点
+  （`host-runtime` 只做再导出 + `createHostRepo(dbFile)`，不含编排逻辑）。必要性：esbuild
+  要一个静态入口才能把图算全，而 `scripts/executor-host.mjs` 里原本是七段 `await import()`
+  拼出来的——那种形状打包器看不见。
+- **入口按内容选加载通道**：`RUNTIME_BUNDLE` 在 → 用它；不在 → 装 tsx 钩子加载 TS 源。
+  判据是「文件在不在」，不是「是不是桌包 / 有没有 `.env`」——与 §1.5 壳按「检出里有没有
+  编排器」定形态同一条取向。缺预编译件在产物里仍然 `boot FAILED` 大声退出，不会半接线跑。
+- **两处非显然的取舍**（都会静默炸，写在脚本文件头，这里留结论）：`server-only` 做成
+  bundle 内的内存桩而不是 external（external 会被 ESM hoisting 提到顶部、加载即抛，破坏
+  「没被问到就不加载」的 lazy 边界）；bundle 顶部注入 `createRequire` banner（被包进来的
+  CJS 运行期 `require("node:crypto")`，纯 ESM 没有 `require`）。后者**只有真起进程的冒烟
+  抓得到**，tsc / eslint / 单测都不覆盖——这也是「冒烟放构建收尾、且排在私有输入剥离
+  之后」这条顺序签字的理由。
+- **external 名单的判据不是「哪些是外部包」**：只有 `@libsql/client` / `ws` / `pino` 保持
+  external（原生绑定 / 可选加速 / 进程级单例），`drizzle-orm` / `zod` / `@paralleldrive/cuid2`
+  必须打进来，因为裁剪版 `node_modules` 顶层根本没有它们（Next 把这几个编进了 server
+  chunk）。谁 external 由构建清单 `executor-host.build.json` 记账，冒烟按清单逐条 `resolve`，
+  不靠人记。
+- **四层门禁**：`tests/executor-host-artifact.test.ts`（构建链顺序 / externals / banner /
+  `server-only` 桩 / 入口不残留裸 `../src/lib/*.ts` 导入 / `isSchemaReady` 守卫 / 白名单登记 /
+  `build-desktop` 跳过+断言 / 冒烟对空目录的判定 / 有真产物时的 boot 用例）；
+  `check-standalone-contents.cjs` 的 `REQUIRED_HOST_FILES`（`server.js` 在场才查，standalone 与
+  static 两层）；`build-desktop.mjs` 剥离后的缺件断言；`pnpm build` 收尾冒烟。
+- **实测**：一次干净 `pnpm build` 走完四步，冒烟输出 `externals ok (6 recorded, 306 bundled
+  inputs, 1436 KB)`、队列扫描那行报 `schema-not-ready`（临时空库里没有表，正是 §18.4 纯
+  Node 宿主该有的行为），宿主进程 `runtime inject-ok` 后 `--once` 正常退出 0。
+- **明确没做**（别把本刀读成「桌包能用 host」）：standalone 形态下的拉起者（#1216，还
+  含 `src-tauri/static → resource_dir()` 那层资源装配的定性——要先真跑一次
+  `pnpm tauri build` 才允许定范围）；冒烟只证明「boot 到 `inject-ok` + 一次队列扫描」，
+  不证明连 ComfyUI 出图。分发口径仍是**桌包里不要设这个开关**，README 与指南同步收到
+  这条口径。
+- **同批另开一条**：摸底时量到「一次干净 `pnpm build` 之后 `.next/standalone` 里带整棵
+  源码树」（377 个 `src/**\/*.test.ts(x)` / 745 个 `changelog.d\/*.md` / 502 个 `docs\/*.md`，而
+  `next.config.js` 的 `outputFileTracingExcludes` 已逐条写了这些 glob）—— 与本刀无关、
+  `master` 上就红，另记 ISSUE #1217，不在本 PR 里顺手修（§7.2 那条告警的清理与它同一条
+  线，混进 host 这刀会让两边判据都没法独立回退）。

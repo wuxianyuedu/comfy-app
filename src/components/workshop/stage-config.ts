@@ -2,13 +2,17 @@
 // 纯数据 + 纯函数（无 React、无副作用）：hook 负责算完下发，视图组件直接消费。
 
 /** 全部阶段始终可进入 — 顺序仅是推荐流(自动预填沿此方向推进)。 */
+//
+// `shortLabel` 只服务**窄槽位**：顶栏的分段健康度一条只有几十像素宽，四字段名
+// （场景分镜 / 镜头生图 / 成片合成）在那儿会被截成「场景分…」。全名 `label` 仍是
+// 阶段轨道与胶囊句子里的口径 —— 缩略是给「放不下」的那一处用的，不是给所有地方换名。
 export const STAGE_DEFS = [
-  { id: "script", label: "剧本" },
-  { id: "character", label: "角色卡" },
-  { id: "storyboard", label: "场景分镜" },
-  { id: "shots", label: "镜头生图" },
-  { id: "video", label: "视频生成" },
-  { id: "render", label: "成片合成" },
+  { id: "script", label: "剧本", shortLabel: "剧本" },
+  { id: "character", label: "角色卡", shortLabel: "角色" },
+  { id: "storyboard", label: "场景分镜", shortLabel: "分镜" },
+  { id: "shots", label: "镜头生图", shortLabel: "镜头" },
+  { id: "video", label: "视频生成", shortLabel: "视频" },
+  { id: "render", label: "成片合成", shortLabel: "成片" },
 ] as const;
 
 export type Tab = (typeof STAGE_DEFS)[number]["id"];
@@ -197,10 +201,12 @@ export function buildMissingSummary(ctx: StageViewContext): MissingItem[] {
   ];
 }
 
-/** 健康度快照的一行：一段阶段在屏顶进度条上的表达。 */
+/** 健康度快照的一行：一段阶段在屏顶分段条上的表达。 */
 export interface HealthRow {
   id: Tab;
   label: string;
+  /** 窄槽位（分段条）用的两字缩略；要念出全名的地方一律用 `label`。 */
+  shortLabel: string;
   /** 0~1 完成度，直接来自 computeStageRatios，不在这里二次加工。 */
   ratio: number;
   /** 这一段还缺不缺东西（用于屏顶只留一处「还差几段」的说法）。 */
@@ -208,9 +214,9 @@ export interface HealthRow {
 }
 
 /**
- * 屏顶健康度条的数据源。
+ * 屏顶分段健康度条的数据源。
  *
- * 为什么要单独一个纯函数：屏顶现在同时存在三种「进度怎么说」——总进度条、
+ * 为什么要单独一个纯函数：屏顶现在同时存在三种「进度怎么说」——分段健康度条、
  * 「距离成片还差 N 个阶段」的胶囊、以及阶段导航里每段的小字。三处各自表述，
  * 数字对不上时用户先撞上的是矛盾而不是错误。这里把「一段阶段的健康度」收成一份
  * 结构，视图要么用它、要么明确写「我不进这份账」，不再各算各的。
@@ -227,6 +233,7 @@ export function buildHealthSnapshot(
     return {
       id: stage.id,
       label: stage.label,
+      shortLabel: stage.shortLabel,
       ratio,
       pending: ratio < 1,
     };
