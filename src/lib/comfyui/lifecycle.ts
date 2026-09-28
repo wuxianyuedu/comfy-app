@@ -38,6 +38,7 @@ import { killProcessTree } from "~/lib/process/kill-process-tree";
 import {
   ensureKeepAliveWatchOnAdoption,
   runEnsureLaunch,
+  waitForExistingInstanceReady,
   type LaunchHost,
 } from "./lifecycle-launch";
 import { resolveComfyLaunchPlan } from "./launch-path";
@@ -800,12 +801,29 @@ export async function ensureComfyUiReady(
         "ComfyUI 未运行，且未配置安装路径——请到 设置 → 创作后端 填写 ComfyUI 路径",
     };
   }
-  st.starting = runEnsureLaunch({
-    host,
-    settings,
-    timeoutMs: opts.timeoutMs,
-    note,
-  });
+  /* HTTP 没探到 ≠ 没在跑：旧保活实例正忙（出图 / 事件循环饱和）时
+   * /system_stats 那 1.5s 会超时，而上面的入口探测只认这一次 fetch。进程级
+   * 快照不依赖 ComfyUI 的 HTTP 响应能力 —— 进程确实在跑就转「等待已有实例
+   * 就绪」，不重复拉起。重复拉起的结局是：新进程绑端口失败秒退、就绪判定被
+   * 占端口的旧实例应答冒领、退出横幅张冠李戴（实测现场）。
+   * 手动启动路径刚失效过快照（上面 manual 分支），这里取到的是新事实。 */
+  const existingRunning = (await getComfyRuntimeSnapshot()).running;
+  if (existingRunning) {
+    note("ComfyUI 进程已在运行但接口暂未响应，等待其就绪（不重复拉起）…");
+  }
+  st.starting = existingRunning
+    ? waitForExistingInstanceReady({
+        host,
+        settings,
+        timeoutMs: opts.timeoutMs ?? null,
+        note,
+      })
+    : runEnsureLaunch({
+        host,
+        settings,
+        timeoutMs: opts.timeoutMs,
+        note,
+      });
 
   try {
     const r = await st.starting;

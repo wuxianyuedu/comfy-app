@@ -3,7 +3,7 @@
 // 自动启动（ensureComfyUiReady，manual=false）不应再把 ComfyUI 悄悄拉起；
 // 只有手动点「启动 ComfyUI」（manual=true）或重新开启自动启动才清闩锁并放行。
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 /* Mock 掉 lifecycle 的副作用依赖：避免测试触碰真实 spawn / fs / DB / ComfyUI。
  *  probeComfyUi 底层是 probeComfyBase（按次探测）：默认桩返回 null =「探不通」，
@@ -702,5 +702,77 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
     const after = await getComfyUiStatus({ force: true });
     expect(after.probing).toBe(true);
     expect(after.starting).toBe(false);
+  });
+});
+
+describe("已有实例在跑但 HTTP 暂未响应：不重复拉起，等待接管（实测现场）", () => {
+  /* 现场还原：上一会话遗留的保活实例占着 8188 且正忙（/system_stats 超 1.5s），
+   * 旧逻辑会再 spawn 一个新进程 → 绑端口失败秒退 → 就绪判定被旧实例应答冒领 →
+   * 退出横幅张冠李戴。新判据：入口探测 null 时先问进程级快照，进程在跑就转
+   * 「等待已有实例就绪」。 */
+  let mainPyPid: number | null = null;
+
+  beforeEach(async () => {
+    const { resetComfyRuntimeSnapshot } = await import("./status");
+    resetComfyRuntimeSnapshot();
+    const { spawnManaged } = await import("~/lib/process/process-launch");
+    vi.mocked(spawnManaged).mockClear();
+    mainPyPid = null;
+    const { findPidForMainPyDetailed } = await import("./proc-detect");
+    vi.mocked(findPidForMainPyDetailed).mockImplementation(async () => ({
+      pid: mainPyPid,
+      failed: false,
+    }));
+  });
+
+  afterEach(async () => {
+    // 等待超时/判死会落自动启动失败闩锁（globalThis 单例），别污染后面的用例。
+    clearComfyAutoStartFailure();
+  });
+
+  it("入口探测 null + 快照确认进程在跑：不 spawn，等实例应答后接管成功", async () => {
+    mainPyPid = 97356; // 快照判活：进程表命中 main.py
+    const { probeComfyBase } = await import("./client");
+    vi.mocked(probeComfyBase)
+      .mockResolvedValueOnce(null) // 入口那次：实例正忙，超时
+      .mockResolvedValue("http://127.0.0.1:8188"); // 等待循环：应答即接管
+
+    const r = await ensureComfyUiReady({ timeoutMs: 30_000 });
+
+    expect(r.ok).toBe(true);
+    expect(r.detail).toContain("接管");
+    const { spawnManaged } = await import("~/lib/process/process-launch");
+    expect(vi.mocked(spawnManaged)).not.toHaveBeenCalled();
+  });
+
+  it("等待期间快照连续确认进程消失：如实报失败，不冒领就绪", async () => {
+    mainPyPid = 97356; // 入口快照：进程在
+    const { probeComfyBase } = await import("./client");
+    // 入口那次探测（第 1 次）返回 null 且**不动进程表**——快照必须仍看到进程在，
+    // 才会走进接管等待；从等待循环的第 1 次探测（第 2 次调用）起进程消失。
+    let probeCalls = 0;
+    vi.mocked(probeComfyBase).mockImplementation(async () => {
+      probeCalls += 1;
+      if (probeCalls >= 2) mainPyPid = null;
+      return null;
+    });
+
+    const r = await ensureComfyUiReady({ timeoutMs: 30_000 });
+
+    expect(r.ok).toBe(false);
+    expect(r.detail).toContain("等待期间退出");
+    const { spawnManaged } = await import("~/lib/process/process-launch");
+    expect(vi.mocked(spawnManaged)).not.toHaveBeenCalled();
+  });
+
+  it("已有实例持续不应答直到超时：给可行动的超时文案", async () => {
+    mainPyPid = 1; // 进程一直在（isDead 不判死），但 HTTP 始终不应答
+    const { probeComfyBase } = await import("./client");
+    vi.mocked(probeComfyBase).mockResolvedValue(null);
+
+    const r = await ensureComfyUiReady({ timeoutMs: 1 });
+
+    expect(r.ok).toBe(false);
+    expect(r.detail).toContain("持续未响应");
   });
 });

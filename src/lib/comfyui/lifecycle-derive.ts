@@ -435,3 +435,31 @@ export function deriveComfyUiStatus(
     via: null,
   };
 }
+
+/* ── 端口冲突识别（保活重定向 stderr → 等待循环的如实归因）──────────────
+ *
+ * 保活拉起的真实进程是 Start-Process 的孙进程：它绑定端口失败（上一会话遗留
+ * 的保活实例还占着配置端口）时当场退出，而中介照样 exit 0 —— 等待循环唯一
+ * 看得见的证据就是重定向 stderr 里的那行报错。此前只抄日志不参与判决，结局
+ * 是「就绪判定被占端口的旧实例冒领 + 退出横幅张冠李戴」（实测现场）。
+ * 这里把「这行输出意味着什么」收成纯函数，等待循环逐行喂入。
+ */
+
+/** ComfyUI 绑定端口失败时 stderr 的那句话（认核心形态，中英文与版本差异
+ *  都落在这一条正则里）。 */
+const PORT_CONFLICT_PATTERN = /Port\s+\d+\s+is\s+already\s+in\s+use/i;
+
+/** 该行输出是否意味着「端口被其他实例占用，本次拉起的进程绑定失败」。
+ *  误报的代价是放弃一次本可成功的等待、转走接管路径 —— 方向安全。 */
+export function isPortConflictLine(line: string): boolean {
+  return PORT_CONFLICT_PATTERN.test(line);
+}
+
+/** 端口冲突中止等待时的可行动文案（caller 据此转「等待已有实例就绪」）。 */
+export function portConflictExitDetail(): string {
+  return (
+    "本次拉起的 ComfyUI 进程已退出：配置端口已被其他实例占用" +
+    "（常见于上一会话遗留的保活实例仍在运行）。转为等待该实例就绪；" +
+    "详见 log/services/comfyui-runtime.log"
+  );
+}
