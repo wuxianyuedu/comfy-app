@@ -47,15 +47,22 @@ import { cn } from "~/lib/utils";
  *     或薄封装补」。基元的 Track 是容器、Indicator 是可选子件，塞自己
  *     画的 fill div 不违语义。
  *
- * **外部 API 完全不变**（`value` / `label` / `showValue` / `className`
+ * **外部 API 向后兼容**（`value` / `label` / `showValue` / `className`
  * / `trackClassName` / `fillClassName` / `minVisible`）——15 处消费点
  * （`FilmStudio` / `WorkshopHeader` / `WorkshopEncapsulationPanel` /
  * `TrainingStudio` / `CanvasProgressIndicator` 等）零改动。
  *
+ * 之后补的唯一新增项 `ariaLabel`（可选）：给**条上没有可见文字**的用法
+ * （工坊顶栏那种一段一根细条的分段控件）补可访问名。`label` 是渲染出来的
+ * 可见文案，与本件的 ARIA 宿主是兄弟节点、不构成命名关系，所以条上没字的
+ * 进度条对读屏器只剩一个数字、说不出「这是哪一段」—— 那不如不报。
+ * 不传时行为与旧版逐字节一致（不写 `aria-label` 属性）。
+ *
  * ## DOM 契约（回归测试锁的形状）
  *
  *   · `data-slot="progress-bar-track"` 挂在 base-ui Root 上（与旧实现
- *     同名，测试继续拿它读 role/aria-valuenow/aria-valuetext）；
+ *     同名，测试继续拿它读 role/aria-valuenow/aria-valuetext，传了
+ *     `ariaLabel` 时也拿它读 `aria-label`）；
  *   · `data-slot="progress-bar-fill"` 与 `data-slot="progress-bar-indeterminate"`
  *     仍在原位置（本件自绘的两个 `<div>`）；
  *   · 视觉轨道 `<ProgressTrack>` 挂 `data-slot="progress-track"`（shadcn
@@ -69,6 +76,7 @@ export function ProgressBar({
   trackClassName,
   fillClassName,
   minVisible,
+  ariaLabel,
 }: {
   /** 0..100；**`null` = 不确定态**（总数未知 / 算不出来）。 */
   value: number | null;
@@ -81,6 +89,11 @@ export function ProgressBar({
   fillClassName?: string;
   /** 可见下限宽度（%）：`0 < pct < minVisible` 时抬到 minVisible，0 仍为 0。 */
   minVisible?: number;
+  /**
+   * 可访问名。只在**条上没有可见文字**时给（如分段健康度：一根细条代表一段
+   * 阶段，字都在别处）。可见文案 `label` 不构成命名关系，故两者不互相替代。
+   */
+  ariaLabel?: string;
 }) {
   const indeterminate = value === null;
   /* 百分比**先夹取再取整**：接口 / SSE 给的数不可信（`-1` / `120`），
@@ -100,6 +113,7 @@ export function ProgressBar({
        * 的 DOM 契约保持不变、`getAttribute("role") === "progressbar"` 的
        * 断点不动。 */
       data-slot="progress-bar-track"
+      aria-label={ariaLabel}
       className={cn("w-full", className)}
       aria-valuetext={indeterminate ? "进行中" : undefined}
     >
