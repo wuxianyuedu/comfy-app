@@ -47,6 +47,21 @@ function stripComments(source: string, lineComments = true): string {
   return lineComments ? noBlock.replace(/^[ \t]*\/\/.*$/gm, "") : noBlock;
 }
 
+/**
+ * 取 `marker` 起、到下一个顶格 `}` 为止的函数体。
+ *
+ * 「A 必须排在 B 之前」这类顺序判据要落在**同一个可数的范围**里：整份文件比会
+ * 命中别处的同名调用，函数体比才说明这两步真的前后相邻（本仓库把它们抽成小函数
+ * 之后，顺序就搬进了那个函数体内）。
+ */
+function fnBody(source: string, marker: string): string {
+  const start = source.indexOf(marker);
+  expect(start, `找不到 ${marker}`).toBeGreaterThan(-1);
+  const rest = source.slice(start);
+  const end = rest.indexOf("\n}\n");
+  return end > 0 ? rest.slice(0, end) : rest;
+}
+
 describe("壳自编排：认亲判据", () => {
   it("壳侧认亲只看 COMFYAPP_SHELL_OWNED（不看「有没有 dev server」这类形态）", () => {
     const source = stripComments(read("src-tauri/src/shell_launch.rs"));
@@ -145,9 +160,15 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
     expect(rust).toMatch(
       /#\[cfg\(not\(debug_assertions\)\)\]\s*pub fn ensure_launch_mode/,
     );
-    expect(rust).toMatch(
-      /#\[cfg\(debug_assertions\)\]\s*pub fn ensure_launch_mode\(_project_root: &str\) \{\}/,
+    // debug 下必须是**不写**的空实现（写了就与 `pnpm tauri dev` 的 dev server 抢同一个
+    // 端口）。返回值形态可以变（调用方要按形态说话），判据不变：不许 set_var。
+    const debugImplAt = rust.indexOf(
+      "#[cfg(debug_assertions)]\npub fn ensure_launch_mode",
     );
+    expect(debugImplAt, "debug 形态下的空实现不见了").toBeGreaterThan(-1);
+    const debugImpl = rust.slice(debugImplAt, debugImplAt + 260);
+    expect(debugImpl).not.toContain("set_var");
+    expect(debugImpl).not.toContain("orchestrator_script");
     const lib = stripComments(read("src-tauri/src/lib.rs"));
     expect(lib).toContain("shell_launch::ensure_launch_mode(project_root)");
   });
@@ -195,6 +216,23 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     expect(page).toMatch(/status\.error \|\| status\.shellLaunchFailed/);
     // 有失败态时面板给的是失败诊断（含壳写下的路径），而不是「日志还没写入」。
     expect(page).toMatch(/failureDiagnostics\(status\)/);
+  });
+
+  it("应用地址每轮向壳重取，不在第一轮锁死（standalone 的端口是现挑的）", () => {
+    const page = splash();
+    const start = page.indexOf("async function tick()");
+    const end = page.indexOf("setInterval(tick");
+    expect(start, "找不到启动页的轮询函数").toBeGreaterThan(-1);
+    const tickBody = page.slice(start, end);
+    // 一次性锁存（`if (!appUrl) appUrl = await resolveAppUrl()` 当轮定终身）在
+    // standalone 下必坏：sidecar 听的是 pick_free_port 挑出来的空闲端口，而它写进
+    // 壳状态的时机**晚于**首帧轮询 —— 页面于是永远探测一个没人听的端口，
+    // 表现是服务早就 200 了而启动页停在 0%（ISSUE #1216 实测的第七层）。
+    expect(tickBody).toContain("invoke('get_app_url')");
+    expect(tickBody).toMatch(/if \(shellUrl\) appUrl = shellUrl/);
+    // 兜底链（launch-status.json / 写死的 3000）只在壳答不上来时才走，
+    // 且仍然只走一次——它给不出权威地址，每轮问只会多刷 get_launch_status。
+    expect(tickBody).toMatch(/else if \(!appUrl\) appUrl = await resolveAppUrl\(\)/);
   });
 
   it("快照自己也带诊断出口（编排器顶掉它之前，现场已经在磁盘上）", () => {
@@ -440,20 +478,25 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       // 真正在听的那个。回填必须发生在它之前。
       const source = lib();
       const run = source.slice(source.indexOf("pub fn run()"));
-      const fillAt = run.indexOf("publish_project_root_env");
-      const singleAt = run.indexOf("another_instance_running");
+      const fillAt = run.indexOf("claim_project_root_env()");
+      const singleAt = run.indexOf("another_instance_owns_this_checkout()");
       expect(fillAt).toBeGreaterThan(-1);
       expect(singleAt).toBeGreaterThan(-1);
       expect(fillAt).toBeLessThan(singleAt);
+      // 回填本体确实在那一步里（抽函数不等于顺序变了，但抽完之后必须还能数到）
+      const claim = fnBody(source, "fn claim_project_root_env()");
+      expect(claim).toContain("publish_project_root_env(&resolved_root)");
     });
 
     it("self_launch 判据在回填之前捕获（否则永远为假）", () => {
       // 判据是「COMFYAPP_PROJECT_ROOT 缺席」，而回填会让它不再缺席 ——
       // 取判据与回填的顺序反过来，双击链路就不会再自编排了。
+      // 两步现在收在 `claim_project_root_env` 里（run() 只剩一次调用），
+      // 顺序判据因此落在那个函数体内部。
       const source = lib();
-      const run = source.slice(source.indexOf("pub fn run()"));
-      const judgeAt = run.indexOf("let self_launch");
-      const fillAt = run.indexOf("publish_project_root_env");
+      const claim = fnBody(source, "fn claim_project_root_env()");
+      const judgeAt = claim.indexOf("let self_launch");
+      const fillAt = claim.indexOf("publish_project_root_env");
       expect(judgeAt).toBeGreaterThan(-1);
       expect(judgeAt).toBeLessThan(fillAt);
       // collect 不再自己重算这条判据（重算时环境已被回填 = 常量）。

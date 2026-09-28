@@ -345,7 +345,7 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 谁在编排                | `COMFYAPP_PROJECT_ROOT` 环境变量。它**只在壳自己从 exe 位置推导出项目根时缺席**——那正是「双击 exe」。启动模式的 `COMFYAPP_LAUNCH_MODE` 现在由壳自己写（见下），不能拿它当判据（判据会随写入顺序漂） |
 | 起什么                  | `node scripts/dev-launcher.mjs --mode prebuilt`（`shell_launch::spawn_orchestrator`），经官方 shell 插件                                                                                            |
-| 跑步模式                | `ensure_launch_mode()`：编排脚本在 → `prebuilt`（走 dev server）；不在 → `standalone`（走内嵌 server）。**只在 release 写**，debug 归 `pnpm tauri dev` 管                                           |
+| 跑步模式                | `ensure_launch_mode()`：编排脚本在 → `prebuilt`（走 dev server）；不在 → `standalone`（走内嵌 server）。**只在 release 写**，debug 归 `pnpm tauri dev` 管。standalone 那一支的载荷装配与运行入口（`bundle.resources` + `scripts/standalone-runtime.mjs`）见 §7.6                                             |
 | 起不起得来              | `can_self_launch()`：编排脚本 + `node_modules\.modules.yaml` + 关键依赖存在（只读、极快）；不满足时不静默 —— `mark_launch_failed()` 把原因与修法写到 `run/launch-status.json`                       |
 | 上一次的残留            | 起之前先用 `find_owned_orchestrator()` 找**自己认领过的**编排器（壳被强杀时 job 与进程组都可能落空，它会原地留着占端口，表现是「双击没反应」）；命中即 `reap_pid()` 回收再启动                      |
 | 认亲                    | 进程环境块里的 `COMFYAPP_SHELL_OWNED=1`（只有壳写、只有它起的编排器才有）。**不按形态猜**——「有没有 dev server」「命令行里有没有项目根」都认不出是谁起的                                            |
@@ -1333,6 +1333,15 @@ zustand 队列，而不是再加一个模块级单例。
 | **`executor-host` boot FAILED、exit 1**（launcher 显示已启动但日志随即静默） | 运行时注入链任一步失败都会大声退出。dev 下几乎都是 `DATABASE_URL` 指向不可达路径、或 `.env` 库地址与进程 env 不一致；产物（桌包/standalone）下多一种：**按内容**选到了预编译运行时图却起不来——缺 `scripts/executor-host.runtime.mjs` = 那份产物是旧构建（同批判据：`scripts/executor-host.build.json` 在不在），externals 解析不到 = 裁剪版 `node_modules` 里没有 `@libsql/client` / `ws` / `pino` 其中之一。两条都在 `pnpm build` 收尾的冒烟里当场拦（机制见 §7.5），不会等到运行期才暴露 | 看 `log/services/executor-host-stderr-<ts>.log` 的 FAILED 行原文；dev 下先核 `DATABASE_URL`（进程 env → .env 回读 → 默认，与 Next 同判据），桌面包场景把开关删掉即回 inline |
 | **桌包里设了 `COMFY_EXECUTOR=host`，`log/services/executor-host.log` 里连 `boot pid=` 都没有** | **不是起不来，是没人起**：拉起宿主的唯一一处是编排器第 6.5 步（`scripts/dev-launcher.mjs` 的 `spawnExecutorHost()`），而 standalone 形态由壳直接起内嵌 `server.js`、不经过编排器（`src-tauri/src/lib.rs` 的 `setup_standalone_runtime()`）。宿主件已随包、也能起来，只是没有调用者——表现自 ISSUE #1204 之后是「安静留在队列」：行被写成 host 归属、回收器不再判死它、状态栏排队数只涨不落 | 分发口径：**ISSUE #1216 落地前不要在桌包里设这个开关**（保持不写 = inline）。谁该拉起它、以及 `src-tauri/static → resource_dir()` 那层还没定性的事，都记在 [执行器宿主指南](../guide-executor-host.md) 的「桌面包」段 |
 **hook 里一条脱离组件生命周期的游离 promise 链**（ISSUE #489）：`src/components/studio/hooks/use-model-library.ts` 的 `listQ.refetch().finally(() => setLoading(false))` 在测试结束（jsdom 环境已拆）之后才 resolve，于是 setLoading 触发 React 更新调度、去读已不存在的 `window` → `ReferenceError: window is not defined`（`resolveUpdatePriority` / `dispatchSetState`）。`cleanup()` 只卸载组件、**不会取消这条已发出的 promise**。谁被点名只取决于谁的 MSW handler 回包慢一拍 → 报错文件每次不同（实测 65 轮里 4 轮，约 6%） | 已修：hook 加 `aliveRef` 卸载标记，`.finally` 先判存活再 `setLoading`；回归 `src/components/studio/hooks/use-model-library.test.ts` 用「卡住回包 + 放行后记账」把偶发变**必现**（只统计更新调度栈的 window 读取，避开 react-query/tRPC 的 ambient 读取噪声）。反向验证：去掉 aliveRef 判定 → 本条挂（0 vs 10） |
+| **双击桌包后窗口一直停在启动页，壳日志里没有 `[sidecar]` 行（或报 `standalone 载荷缺失`）** | standalone 那三层装配任一层断掉：① `tauri.conf.json` 没声明 `bundle.resources` → 安装目录里根本没有 `static/`；② 声明了但 `src-tauri/static` 是空的/旧的（没跑装配步）；③ 载荷在但 sidecar 找不到（打包器落 `node.exe` 在资源根，不是 `binaries/` 子目录） | 看安装目录：`static\server.js` 与 `node.exe` 都在才算装配完整；缺任一件先跑 `node scripts/build-desktop.mjs` 再 `pnpm tauri build`。**改了壳侧路径必须重编壳**（硬规则 5，带 `--features custom-protocol`）。机制与实测证据见 §7.6 |
+| **桌包页面正常打开、接口全 500，`/api/health` 回 `db:"empty"` 且 hint 写着「执行 pnpm db:push」** | 首启没建表：载荷只带生产依赖，`drizzle-kit` **不在其中**，桌包用户既没有 pnpm 也没有检出（ISSUE #1216 实测）。这不是业务 bug，是产物缺 `schema.sql` | 判据一行：载荷根（安装目录的 `static\`）有没有 `schema.sql`。没有 = 装配步被跳过，重跑 `node scripts/build-desktop.mjs`；有而仍 500 = 看入口日志里 `schema bootstrap` 那一行是否报错（入口只在**零表**时应用 DDL，已有库不会被重建）。见 §7.6 |
+| **桌包里 server 起不来，壳日志出现 `[sidecar] Error: Cannot find module '@swc/helpers/_/_interop_require_default'`（require stack 指向 `next/dist/server/config.js`）** | 载荷**不是自包含的**：`.next/standalone/node_modules` 的顶层条目是指向仓库 store 的绝对软链，`cpSync({dereference:true})` 摊平后兄弟包失联——看起来像产物缺件，实际是布局语义没搬过来（§7.6 第 3 层） | 判据：`static\node_modules\.pnpm` **还在** = §载荷实体化 被跳过。重跑 `node scripts/build-desktop.mjs`，它会在实体化后真解析三个启动路径上的模块、解析不到就构建失败（不会让你带着坏载荷出一个安装包） |
+| **壳日志出现 `[sidecar] Error: EISDIR: illegal operation on a directory, lstat 'F:'`（`path` 只有盘符）** | 桌包把 `resource_dir()` 的绝对路径当**参数**交给了 node：Windows 上 `current_exe()` 返回 `\\?\` verbatim 路径，Rust 侧 `exists()` 正常、node 却在 `\\?\F:` 处断开。只在真桌包形态下才走到（开发检出走 prebuilt） | 运行目标必须是**相对载荷根**的形态（`SIDE_REL_RUNTIME_ENTRY` / `SIDE_REL_SERVER`），`cwd` 已给到载荷根；判据在 `standalone_payload_tests`（把绝对路径再传一次即红）。见 §7.6 第 2 层 |
+| **安装完成后双击图标没反应 / 窗口永远停在启动页，壳日志写着 `launch mode=""，跳过 standalone sidecar`** | 第 6 层：`COMFYAPP_LAUNCH_MODE` 原本只在「壳自己编排」那条链里写，而那条链的判据要求项目根推得出来；安装目录里没有 `package.json` 与 `scripts\dev-launcher.mjs`，于是模式从未被写、standalone 分支被跳过 | 运行模式现在在 `run()` 里、**建启动页之前**定一次（幂等，见 §7.6 第 8 层）；判据 = Rust 用例钉住「写早于建窗」。自查：壳日志有没有 `launch mode=standalone` 与 `[sidecar]` 两类行；只看到 dev URL 相关行就是这一层 | 
+| **桌包日志一切正常（`[sidecar] boot pid=… port=1239`）、浏览器打开那个端口 `/api/health` 也 200，窗口却停在启动页 0%** | 第 7 层：启动页在**第一轮**就把应用地址锁存了，而 standalone 的 sidecar 听的是现挑的空闲端口、在那之后才写回壳状态——页面每轮探测的是默认端口，一个没人听的端口 | 判据一行：日志里 `navigate_to_app called with url:` 的端口与 `[sidecar] boot … port=` 是否同一个（不同 = 这一层）。启动页每轮向壳重取 `get_app_url`，用例见 `tests/shell-self-launch.test.ts`。见 §7.6 第 7 层 |
+| **一次健康的桌包启动，启动页上写着「项目根未推导出来…请回到 src-tauri/target/release/ 启动 / 用 build-standalone.ps1 构建」，壳日志里同一句 `COMFYAPP_PROJECT_ROOT 为空` 每 250ms 一条** | 第 8 层：模式决定发生得太晚（原先排在 setup 末尾，而建窗到那一刻之间实测有 8 秒），启动页在这段窗口里只能按「环境问题」回答；而 standalone 的安装目录里「没有项目根」本来就是常态 | 空根时先判形态标记（`AppState::is_standalone`，由那次决定带进来），standalone 回「独立版没有编排器状态文件」且不报 WARN。两条契约由 `standalone_payload_tests` 钉住。见 §7.6 第 8 层 |
+| **桌包启动后 2 秒，壳日志出现 `main first paint watch timed out (120s), splash kept`** | 看护循环里「主窗 URL 还不是应用地址」那一支 `continue` 跳过了循环底部的 `sleep`，480 次探测在微秒内烧完——那句「120s」是假的，看护提前下班（第 6–8 层修好后重跑才看得见） | 该分支自己 `sleep(PROBE_INTERVAL_MS)`；用例 `first_paint_watch_never_spins_without_sleeping`。见 §7.6 第 8 层末尾 |
+| **桌包启动即报 `MissingEnvFileError`（提示还写着 `pnpm env:init`）** | 分发产物按硬规则 17 **不含 `.env`**，而 `src/env.js` 判的是文件在不在。运行期配置由 `scripts/standalone-runtime.mjs` 装配；报出这一句说明壳起的还是 `server.js`（旧载荷 / 入口被剪掉），而不是入口 | 判据：载荷根有没有 `scripts\standalone-runtime.mjs`；壳日志里 `boot pid=... port=...` 那一行在不在。修法：重跑装配并确认 `RUNTIME_SCRIPTS` 登记了入口（§7.6 第 5 层） |
 | **`pnpm test` 在仓库根新建 `log/` 并写入日志**（CI 上从无到有、开发者本机悄悄多几行，其中含用例的密钥标记行） | **用例直连真实日志路径**（ISSUE #489）：`src/server/lib/logger.test.ts` 的镜像用例 import 真实 `APP_RUNTIME_LOG` 用 `slice(before.length)` 读增量，`generate.test.ts` 的业务里程碑日志也落真实文件；镜像/日志是**真实写盘**副作用，不隔离就会写字 | 已修：`createPinoLogger({ mirror })` 支持注入镜像目标，两处用例都落到自己的 mkdtemp 目录；删掉 `log/` 跑 `pnpm test` 不再重建目录 |
 | **双击 `run-local.ps1`（及其它任何走 `Invoke-Entry` 的入口）在打开逻辑脚本之前就报** `Invoke-Entry: …\tools\start\run-local.ps1:32` + `无法检索变量 '$NodeScript'，因为尚未设置该变量。`（ISSUE #564） | **入口公共库引用了一个从未声明的变量**（ISSUE #562 的跨平台重构留的坑）：`scripts/entry-common.ps1` 的 `Invoke-Entry` 里有一处 `if ($NodeScript) { … }`，而 `$NodeScript` 只是注释里的一个 `.PARAMETER` 说明——**从未进过 `param()` 参数表，也从未被任何入口传过**。本库顶部是 `Set-StrictMode -Version Latest`，这一档会把「引用不存在的变量」从 `$null` 升级成**终止性错误**；而这条判断在主路径上（不是 else 分支），于是 `run-local.ps1` / `verify-quality.ps1` / `run-tests.ps1` / `generate-docs.ps1` / `sync-lint.ps1` / `register-comfyapp-protocol.ps1` 等**每一个**走 `Invoke-Entry` 的双击入口都在调起逻辑脚本之前炸掉（报错还是英文函数名 + 内部变量名，用户完全看不出该做什么）。它躲过了所有门禁：`.ps1` 引用未声明变量**在解析期不报错**，只在实际执行到那一行才炸，而 `pnpm lint` / `tsc` / 结构门禁 R7-R8 都读不到它 | 已修：删掉这条从未接线的 分支与配套的 `Invoke-NodeEntry`——本库只认 PowerShell 逻辑脚本，要调 `.mjs`（如启动编排器 `scripts/dev-launcher.mjs`）的入口各自做薄壳（`scripts/dev-launcher.ps1` 是参考形态），在 `param()` 之外新增一个没人传的开关只会再养出一个同类地雷。库头注释补上「为什么不在这里支持 `.mjs`」。回归测试 `tests/entry-common-strict-mode.test.ts`：静态核 `param()` 声明的变量覆盖函数体引用的每一个变量（反向验证：还原旧文件即失败），并在有 PowerShell 的环境里**真跑**一次 `Invoke-Entry`，断言它走到自己的「未找到逻辑脚本」出口而不是被 StrictMode 终止 |
 
@@ -1843,8 +1852,8 @@ bundled 不靠人记。清单里还会混进 `fs` / `os` / `path` / `child_proce
 | 层       | 判据                                                                                                                                                                                       |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 构建链   | `tests/executor-host-artifact.test.ts`：锁 `build` 的四步顺序、externals 清单内容、`createRequire` banner、`server-only` 桩，以及入口「按内容判据」且**不残留** `../src/lib/*.ts` 的裸导入 |
-| 产物缺件 | `scripts/check-standalone-contents.cjs` 的 `REQUIRED_HOST_FILES`：只有 `server.js` 在场才查（dev 检出没跑过构建不该红），`.next/standalone` 与 `src-tauri/static` 两层都查                 |
-| 桌包装配 | `scripts/build-desktop.mjs`：拷贝时跳过「仓库里没有同名源」的构建期生成件，并在 §7.3 剥离**之后**断言宿主三件仍在，缺件报 `桌包缺宿主件 …` 并指明先跑 `pnpm build`                         |
+| 产物缺件 | `scripts/check-standalone-contents.cjs` 的 `REQUIRED_HOST_FILES` 与 `REQUIRED_PAYLOAD_FILES`：只有 `server.js` 在场才查（dev 检出没跑过构建不该红），`.next/standalone` 与 `src-tauri/static` 两层都查 |
+| 桌包装配 | `scripts/build-desktop.mjs`：拷贝时跳过「仓库里没有同名源」的构建期生成件，并在 §7.3 剥离**之后**逐件断言载荷必备件（宿主三件 + standalone 入口与 `schema.sql`）仍在，缺件报 `桌包缺件 …` 并指明先跑 `pnpm build` |
 | 运行期   | `pnpm build` 收尾冒烟（第 4 步）+ 真产物 boot 用例（有 `server.js` 才跑，缺产物自动 skip）                                                                                                 |
 
 两份新脚本（`build-executor-host.mjs` / `smoke-executor-host-standalone.mjs`）的**错误出口文案保持 ASCII 英文**（§9.5：构建期脚本用 `[ERROR] …` 短句），注释按硬规则 23 写中文——它们不在 Next 的模块图上、`next-code-frame` 渲染不到，因此**不进** §9.6 那份白名单（名单越短越好，加错一个的代价是构建偶发崩）。
@@ -1855,6 +1864,68 @@ bundled 不靠人记。清单里还会混进 `fs` / `os` / `path` / `child_proce
 > `boot pid=` 都没有」这条排障判据见
 > [执行器宿主指南](../guide-executor-host.md) 的「桌面包」段。冒烟证明的也只是
 > 「能 boot 到 `inject-ok` 并完成一次队列扫描」，**不等于**「能连 ComfyUI 出图」。
+
+
+### 7.6 桌包 standalone 形态的装配与运行入口（ISSUE #1216 / 3-E2a）
+
+**一句话**：standalone（壳直接起内嵌 server、不经编排器）此前**从未真通过**。摸底时以为是「差一个拉起宿主的人」，真跑之后是**八层**各自断掉：装配（1）、壳侧路径与顺序（2、6、7、8）、载荷自包含（3）、运行期缺件（4、5）。本节把它们放在一起说，因为**它们的表现是同一个**：双击后窗口停在启动页，或页面 200 而接口全 500。第 6–8 层是第 1–5 层修好之后**再真跑一次壳**才露出来的——这正是本节的要点：这条链的每一层都会伪装成同一句「停在启动页」，只有把上一层修掉才看得见下一层。
+
+| #   | 断在哪一层                                                                                             | 一手证据（2026-09-28 真构建）                                                                                                                          | 修法与判据                                                                                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **没有装配者**：`src-tauri/static` 组装完了，但没人把它放进 `resource_dir()`                             | 生成的 `installer.nsi` 里 `; Copy resources` 段是**空的**；Install 段只有 `File "${MAINBINARYSRCPATH}"` 与 `File /a "/oname=node.exe"`                  | `tauri.conf.json` 声明 `bundle.resources: ["static/"]`（实测落点 = `$INSTDIR\static\**`，目录前缀被保留）。判据：壳拼的载荷根与 conf 声明同形（Rust + vitest 各一条）   |
+| 2   | **sidecar 路径拼错**：壳找 `resource_dir()/binaries/node.exe`，打包器落 `resource_dir()/node.exe`        | 同上一行的 `/oname=node.exe`（剥三元组后缀、不留 `binaries/` 子目录）；`target/release/node.exe` 是 8-26 的陈旧残留，今天这次构建没再产出它             | 载荷根与 sidecar 各只拼一处；`spawn_sidecar` 的源码形态由 Rust 单测**反向**钉住（拼回 `"binaries"` 即红）                                                               |
+| 3   | **载荷不是自包含的**：`.next/standalone/node_modules` 顶层是**指向仓库 store 的绝对软链**，摊平后失联     | `Cannot find module '@swc/helpers/_/_interop_require_default'`，require stack 指向 `next/dist/server/config.js`——看着像产物缺件，实际是**布局语义**没搬过来 | `build-desktop.mjs` 的 §载荷实体化：把 `.pnpm` 里的包**上提**到顶层后删掉 `.pnpm`（实测 404 MB → 245 MB），随后**真解析** `next/dist/server/next.js` / `@swc/helpers/_/_interop_require_default` / `@libsql/client`，解析不到即构建失败 |
+| 4   | **首启没有建表能力**：载荷只带生产依赖，`drizzle-kit` 不在其中                                            | `/workspace` 200、`/api/health` 503 + `db:"empty"`，而 hint 让人「执行 pnpm db:push」——桌面用户既没有 pnpm 也没有检出                                     | §首启建表：构建期 `drizzle-kit export --sql` 现生成 `schema.sql` 随包（**只含 DDL；出现 `INSERT INTO` 直接构建失败**），运行期由入口在**零表**时应用；已有用户的表绝不动 |
+| 5   | **运行期没有 `.env`**：硬规则 17 把它剥掉了，而 `src/env.js` 判的是「文件在不在」                          | `MissingEnvFileError`（提示还写着 `pnpm env:init`，桌包里同样做不到）                                                                                    | 新增 `scripts/standalone-runtime.mjs`，判据本体在 `scripts/launcher-core/standalone-runtime-env.mjs`：装配 `SKIP_ENV_VALIDATION` + 四项必填 + **绝对** `DATABASE_URL`；`BETTER_AUTH_SECRET` 持久化在 `data/runtime-secret.json`（跨重启稳定；文件写坏时报错，不悄悄换一把） |
+
+第 2 层里还藏着第二条（真跑壳才暴露）：Windows 上 `std::env::current_exe()` 返回 `\\?\` 开头的 verbatim 路径，`resource_dir()` 由它派生。Rust 侧 `exists()` 判得对、文件确实在那儿，但把这份字符串当**参数**交给 node，node 会在 `\\?\F:` 处断开并报 `EISDIR: illegal operation on a directory, lstat 'F:'`——现场与根因完全连不上，而且这条只在真桌包形态下才走到（开发检出永远走 prebuilt 分支，所以历史上从没人碰过）。落法因此改成： 运行目标用**相对载荷根**的两个常量（`SIDE_REL_RUNTIME_ENTRY` / `SIDE_REL_SERVER`），`exists()` 判据与传给 sidecar 的参数同源于同一常量，Rust 单测禁止再把绝对路径当参数传。
+
+**第 6 层：写模式的调用点够不到真安装形态**（第 1–5 层修好后重跑壳才暴露）。`COMFYAPP_LAUNCH_MODE` 原先只在 `start_self_orchestration` 里写，而 `self_launch` 的判据含「项目根推得出来」；安装目录里既没有 `package.json` 也没有 `scripts/dev-launcher.mjs` ⇒ 项目根为空 ⇒ 那条链整段不跑 ⇒ `setup_standalone_runtime` 读到空串，走 else 分支「跳过 standalone sidecar，使用 dev URL」——壳日志是 `launch mode=""`。也就是说**桌包永远起不了内嵌 server**，与载荷对不对无关。修法：release 分支里在 `setup_standalone_runtime` 之前先 `ensure_launch_mode(&project_root)`（该函数幂等，prebuilt 那条链的顺序不变）。
+
+**第 7 层：启动页把应用地址在第一轮锁死**。载荷与 sidecar 都真起来了（日志里 `boot pid=… port=1239`、`/api/health` 200），窗口却永远停在启动页 0%。原因是启动页（`{{shell.splash}}`）的 `if (!appUrl) appUrl = await resolveAppUrl()`：第一轮问到的地址是壳的**初始** `app_url`（按检出路径推导的默认端口），而 standalone 的 sidecar 听的是 `pick_free_port()` 现挑的空闲端口、在那之后才写回状态——于是页面每轮探测的都是一个没人听的端口。壳侧那句注释「更新应用 URL，供启动页 ready 后导航」本来就要求一条**持续**的更新通道，一次性锁存把它掐断了。修法：每轮向壳重取 `get_app_url`，取不到才走兜底链（兜底仍只走一次，否则每轮多刷一次 `get_launch_status`）。用例：`tests/shell-self-launch.test.ts` 里「应用地址每轮向壳重取」。
+
+**第 8 层：模式定得太晚，于是启动页在健康启动上说假话**。第 6 层的修法（在 release 分支里补一次 `ensure_launch_mode`）位置仍然偏晚：它在 setup 的末尾，而启动页从**建窗那一刻**起每 250ms 问一次状态。standalone 实测从建窗到定模式隔着 8 秒，这 8 秒里壳只能按「项目根推不出来」回答——画面上是三段指错方向的提示（「回检出启动」「用 tools\build\build-standalone.ps1 构建」），日志里是 66 条一模一样的 WARN（同一形态放跑一次没被杀，33 分钟就是 2MB）。修法：把这一次决定提到 `run()` 里、建启动页之前，并把结果**记进应用状态**（`AppState::new(..., launch_mode == "standalone")`）；`get_launch_status` 在空根时先判这个标记，standalone 直接回「独立版由壳自己拉起内嵌服务，没有编排器状态文件」，不再报故障。两条契约由 Rust 用例 `launch_mode_is_decided_before_the_splash_ever_asks` 与 `standalone_reports_no_status_file_without_the_env_warning` 钉住（后者还反向钉住「模式判据只有一处」：`get_launch_status` 与 `LaunchContext::collect` 都不许自己再读一遍环境变量）。
+
+同一次重跑还暴露两条**只在这条链走通之后**才看得见的：
+
+- **主窗首帧看护在微秒内烧完预算**：`watch_main_first_paint` 里「URL 还不是应用地址」那一支 `continue` 跳过了循环底部的 `sleep`，480 次探测瞬间跑完，日志在启动后 2 秒就打出 `main first paint watch timed out (120s), splash kept`——那句「120s」是假的，看护在它最该在场的时刻已经下班。判据没命中的那一条路径必须自己歇（用例 `first_paint_watch_never_spins_without_sleeping`）。顺带修正：`LaunchContext::collect` 原先**自己读** `COMFYAPP_LAUNCH_MODE` 推导 `expect_slow_first_paint`，而那一刻它还没被写，永远读到空串 ⇒ standalone 也按「首帧很慢」贴加载占位，正是该字段注释说要避免的白闪；现在模式由调用方传入。
+- **实体化带出的整包文档：两侧同判据，不给护栏加豁免**。§载荷实体化 上提的是 store 里的**整包**，自带 `docs/*.md`（实测 472 个：`node_modules/next/dist/docs/**` 456 个 + `node_modules/pino/docs/**` 14 个等），本刀第一次跑 `check-standalone-contents.cjs` 就是被这一条判红的（当时那份 `static` 是 #1220 之前组装的）。**不要**给护栏加「node_modules 豁免」——加了豁免，将来漏剥就再没人知道。正确的分工是：护栏照旧判「要不得」，剔除侧在组装步（§分发卫生 2.2）删掉它；实测在 §载荷实体化 之后再跑一次 `stripDevArtifacts(staticDir)` 命中 **0 个**，说明 2.2 的位置已经够（2.1 那次拷贝是 `dereference: true`，落到 static 时已经是真文件，链接不链接的分工只作用在 `.next/standalone` 那一层）。两侧同形由 `tests/dist-artifact-hygiene.test.ts` 的「桌包载荷里的第三方包文档」钉。
+
+**为什么是「壳起入口」而不是「壳起 `server.js`」**（签字方向）：第 4、5 层都得有人装配，后续「`COMFY_EXECUTOR=host` 时起宿主」也要有人执行。三条候选：
+
+- **由 Rust 壳直接装配**：端口口径、密钥生成、按次命名日志、回收语义都得在另一门语言再写一份（ADR §14 D5「判据只收一处」+ 硬规则 3），且每次改动都要重编壳（硬规则 5）。
+- **由 Next 进程 fork 宿主**：把 Phase 4-B3 才卸掉的「Next 负责拉起执行宿主」耦合装回去，且宿主与 server 同生死。
+- **新增一个 standalone 运行入口**（选定）：它是壳的直系子进程，起 `server.js`（必要时起宿主），退出时按整棵树回收。多出来的一层进程由既有两条机制兜住——壳的 `KILL_ON_JOB_CLOSE` Job Object，与壳退出时的 `scripts/reap-process.mjs` 补刀。
+
+入口按**内容**被选中：载荷里有 `scripts/standalone-runtime.mjs` 就走它，没有就退回直接起 `server.js`（兼容按旧配置组装的载荷）。与 §1.5「按检出里有没有编排器定形态」同一条取向：环境开关会撒谎，文件内容不会。
+
+**运行期数据的落位**（签字口径 = 每用户目录）：NSIS 默认装到 `%LOCALAPPDATA%\<产品名>`（实测 `installer.nsi` 的 `INSTDIR` 分支——perUser 走 `$LOCALAPPDATA`，perMachine 才去 `$PROGRAMFILES`），因此**载荷根本来就是每用户可写目录**：`db.sqlite` / `log/` / `data/` / `public/generated/` 这些按 `process.cwd()` 解析的运行期目录都落在那一层。注意 Next 的 standalone `server.js` 启动即 `process.chdir(__dirname)`，所以壳必须把 `current_dir` 显式对齐到载荷根（`spawn_sidecar` 的 `.current_dir(&app_root)`），否则「入口建的库」与「server 读的库」是两个文件。卸载删的是安装清单里的文件，运行期写出的库与日志留在原处（`RMDir` 不递归）。**把数据与代码彻底分家**要收口 10 余处 `process.cwd()` 锚点（`app-settings.server.ts` / `llm/secrets.ts` / `log/log-paths.ts` / `comfyui/executor-cli.ts` 等），不在本刀顺手做。
+
+**同批堵掉的一处泄漏**（与硬规则 17 同一件事）：`.next/standalone/data/` 实测带着开发机的 `llm-secret.key` 与 `app-settings.json`（全项目追踪顺手拷进来的），而 resources 一旦真装配就会随安装包出去——**解包即得密钥**。两条判据：`PRIVATE_INPUTS` 逐条点名 `data/` 那两份；`src-tauri/static` 的顶层改成**默认拒绝**的白名单（`STATIC_ALLOWED_TOPLEVEL` + `RUNTIME_SRC` 逐文件放行，实测挡掉 `src/` 11.7 MB、`changelog.d/` 3.3 MB、`Comfy APP.lnk`、`build-launcher/`、`next.config.js`）。
+
+> **与 §7.2 / ISSUE #1217 的边界**：「tracing 把开发期目录带进 `.next/standalone`」这条根因仍归 #1217。本刀的默认拒绝只作用在**装配这一层**——理由是：从这一刀起 `static/` 是真的会分发出去的东西，那里多带一个目录不再是「脏」，而是「泄漏」。
+
+**`src` 为什么按文件放行**：桌包的回收入口 `scripts/reap-process.mjs`（以及 `dev-launcher.mjs`）运行期 `await import("../src/lib/process/kill-process-tree.ts")`——硬规则 3 的平台机制单点就在那份 TS 里。随包能用是因为 Node 22.18+/24 的类型擦除默认开启，而**随包的 Node 是构建机那一份二进制**（`build-desktop.mjs` 复制 `process.execPath`），所以这个能力在构建时就钉死了，与使用者装没装 Node 无关。清单只放这一份文件（`RUNTIME_SRC`），由 `tests/standalone-runtime.test.ts` 与两处说明符逐字比对——将来给它加个 `enum` 之类的非可擦除语法，红的是这条用例而不是用户的双击。
+
+**自查入口**（不装安装包也能验）：
+
+```bash
+node scripts/build-desktop.mjs                                     # 组装 + §载荷实体化 + §首启建表 + 逐件断言
+PORT=4210 node src-tauri/static/scripts/standalone-runtime.mjs      # 看 boot 行 / 建表 / 日志与库的落点
+node scripts/check-standalone-contents.cjs                          # 真数产物：不该有的 + 必须有的
+```
+
+**但上面三条都验不到第 6–8 层**——那三层要的是「壳自己起一遍」。不装安装包的复演法（本次实测用的就是它）：在**检出之外**建一个与打包器同布局的目录（`{{shell.app.exe}}` + `node.exe` + `static\**`，`static` 用真拷贝而不是符号链，否则运行期写入会落回载荷目录把产物弄脏），把 `src-tauri/target/release/{{shell.app.exe}}` 复制进去双击。第 6–8 层各留下一条只在壳侧才有的日志证据（`launch mode=""` / 探测端口与 `boot pid=… port=…` 不一致 / 建窗到定模式之间的 WARN 串）。
+
+`cargo test --release --features custom-protocol --lib` 里的 `standalone_payload_tests` 钉壳侧两条拼法与 conf 同形、模式决定的位置、以及「空根按形态说话」这一条（判据落的是源码形态，因为「窗口停在启动页」需要一次真双击才看得见）。
+
+> ⚠️ **`tauri bundle` 只重打包、不重装配**（它不跑 `beforeBuildCommand`）。实测踩过：按上面
+> 第二条自查跑过一次载荷之后，载荷根里就有了 `db.sqlite` / `log/` / `data/runtime-secret.json`
+> 这类运行期写入物，直接 `pnpm exec tauri bundle` 会把它们一起装进安装包——**开发库与密钥
+> 变成出厂内容**（硬规则 17）。所以分发包必须由 `pnpm tauri build` 产出（它先重装配），
+> 中间态要打包时先跑 `node scripts/build-desktop.mjs` 或 `node scripts/check-standalone-contents.cjs`。
+
+---
 
 ## 8. Windows 入口规范：一律 .ps1，禁用 .bat / .cmd / .vbs
 
@@ -2238,6 +2309,7 @@ sidecar」两种不同形态的失败。
 | `src/lib` 的零消费值导出棘轮（规范 §12.16）          | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                    | `scripts/check-dead-exports.cjs`（`node scripts/check-dead-exports.cjs`，契约测试 `tests/check-dead-exports.test.ts`）                               |
 | pnpm 可执行形态的唯一出口（规范 §2.1.1 / §2.1.7）    | `scripts/prepare-local-run.ps1`（第 2/3 步经它）                         | `scripts/launcher-core/shell.mjs`（`pnpmInvocation` / `runPnpmSync`，契约测试 `tests/dev-launcher-toolchain-gate.test.ts`）                          |
 | 依赖表结构自愈（Drizzle push 失败后补列 / 补索引）   | `scripts/dev-launcher.ps1`（schema 同步阶段）                            | `scripts/heal-db.cjs`（被启动链路的 schema 同步阶段调用）                                                                                            |
+| 桌包 standalone 运行（不经编排器的内嵌 server，ISSUE #1216）  | `src-tauri\target\release\{{shell.app.exe}}`（双击，壳自己起入口）/ `tools/start/start-desktop.ps1` | `scripts/standalone-runtime.mjs`（由壳经 Node sidecar 起；刻意**不**挂 `pnpm` 脚本——它不是开发者命令，是一种运行形态） |
 | 接上提交门槛（`core.hooksPath=.githooks`）           | `scripts/prepare-local-run.ps1`（由 `pnpm install` 的 postinstall 触发） | `scripts/install-git-hooks.mjs`（`node scripts/install-git-hooks.mjs`；postinstall 逐字调用它，契约测试 `tests/postinstall-cross-platform.test.ts`） |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，

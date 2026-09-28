@@ -29,7 +29,17 @@ import { existsSync, lstatSync, readdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** 不得随分发包出去的仓库根文件（相对产物根）。 */
+/**
+ * 不得随分发包出去的开发机私有输入（相对产物根）。
+ *
+ * `data/**` 这一组是 ISSUE #1216 摸底时量到的同类泄漏（与 `.env` 同源同性质）：
+ * `src/lib/llm/secrets.ts` 把 LLM 密钥的主密钥写在 `data/llm-secret.key`、
+ * `src/lib/app-settings/app-settings.server.ts` 把整机设置写在
+ * `data/app-settings.json`，两者都按 `process.cwd()` 落在仓库根，于是被
+ * file tracing 一起带进 `.next/standalone`，再随 `src-tauri/static` 进安装包——
+ * **解包即得开发机的密钥与全部本机设置**。`data/` 目录本身是运行期按需建的
+ * （两处写入方都有 `mkdirSync(..., { recursive: true })`），剔除不会改变任何行为。
+ */
 export const PRIVATE_INPUTS = [
   ".env",
   ".env.local",
@@ -38,6 +48,12 @@ export const PRIVATE_INPUTS = [
   "db.sqlite",
   "db.sqlite-wal",
   "db.sqlite-shm",
+  "data/llm-secret.key",
+  "data/app-settings.json",
+  // standalone 首启由 `scripts/launcher-core/standalone-runtime-env.mjs` 写进载荷根的
+  // 会话签名密钥。它是**运行期产物**：跑过一次再重新打包（`tauri bundle` 不重装配）就会
+  // 被当成分发内容带出去，与 `.env` 同性质。
+  "data/runtime-secret.json",
 ];
 
 /**
@@ -152,7 +168,135 @@ export const RUNTIME_SCRIPTS = [
   "launcher-core/orchestrator.mjs",
   "launcher-core/corepack.mjs",
   "launcher-core/splash-assets.mjs",
+  // 桌包 standalone 形态的运行入口与它的环境装配（ISSUE #1216）：壳把
+  // `node server.js` 换成 `node scripts/standalone-runtime.mjs`，缺这份就是
+  // standalone 桌包回到「起不来且没人知道为什么」。
+  "standalone-runtime.mjs",
+  "launcher-core/standalone-runtime-env.mjs",
 ];
+
+/**
+ * `src-tauri/static`（= 装进安装包的 `bundle.resources`）允许的**顶层条目**。
+ *
+ * 为什么这里必须是白名单而不是再列一份黑名单：`bundle.resources` 从 ISSUE #1216
+ * 起是真的会分发出去的东西（此前 `resources` 段是空的，`static/` 里多脏都没人看见），
+ * 而 file tracing 每次升级都可能多带一个目录（实测这一层今天躺着 `src/` 11.7 MB、
+ * `changelog.d/` 3.3 MB、`data/llm-secret.key`、`Comfy APP.lnk`、`build-launcher/`）。
+ * 黑名单是欠完备的——#1217 记的正是「`outputFileTracingExcludes` 整份未生效」这条根因；
+ * 在装配这一层用默认拒绝，才让「多带一个目录」必然被看见而不是等用户解包发现。
+ *
+ * 每一项的运行时理由：
+ *   · `server.js` + `package.json` + `.next/` + `node_modules/` —— Next standalone
+ *     的四件必需（`server.js` 启动即 `process.chdir(__dirname)`，配置读
+ *     `.next/required-server-files.json`，所以 `next.config.js` **不需要**随包）。
+ *   · `public/` —— 静态资源与生成图落地目录（`public/generated` 是写侧）。
+ *   · `scripts/` —— 编排器与宿主的运行期脚本（清单见 `RUNTIME_SCRIPTS`）。
+ *   · `splash.html` / `index.html` —— 启动页与根路径兜底页（壳与 sidecar 都读）。
+ *   · `schema.sql` —— 首启建表的 DDL，由 `build-desktop.mjs` 的 §首启建表 现生成
+ *     （载荷里没 drizzle-kit，桌包首启只能靠它；只含结构、不许含数据）。
+ *
+ * 注意 `src` **不在**这份顶层名单里：桌包不需要整棵源码树（`src/` 11.7 MB，里面还有
+ * 377 个测试文件）。但运行期有一处真的会读 TS 源——`scripts/reap-process.mjs` 与
+ * `scripts/dev-launcher.mjs` 都 `await import("../src/lib/process/kill-process-tree.ts")`
+ * （硬规则 3 的平台机制单点），缺它桌包里的回收入口直接起不来。所以 `src` 走
+ * `RUNTIME_SRC` 的**逐文件**放行，见下面那份清单与 `isStaticPathAllowed()`。
+ */
+export const STATIC_ALLOWED_TOPLEVEL = [
+  ".next",
+  "index.html",
+  "node_modules",
+  "package.json",
+  "public",
+  "schema.sql",
+  "scripts",
+  "server.js",
+  "splash.html",
+];
+
+/**
+ * 随桌包带出去的 `src/**` 运行期依赖（相对 `src/`，逐文件、不给目录级放行）。
+ *
+ * 判据与 `RUNTIME_SCRIPTS` 同一套：只看「运行期代码里有没有真的 import 它」，不看
+ * 「看着像不像运行时的」。目录级放行会让将来新增的 `src/**` 自动进产物，而这条白名单
+ * 存在的全部意义就是「默认不进」。
+ *
+ * 为什么允许放行 TS 源：Node 22.18+/24 的类型擦除（type stripping）默认开启，
+ * `.mjs` 里 `import("./x.ts")` 能直接跑——注意随包的 Node 是**构建机那一份二进制**
+ * （`build-desktop.mjs` 复制 `process.execPath`），所以这个能力在构建时就钉死了，
+ * 与使用者装没装 Node 无关。该文件必须是「可擦除语法」（无 enum / namespace /
+ * 参数属性），由 tests/dist-artifact-hygiene.test.ts 钉住，避免哪天给它加个 enum
+ * 就把桌包的回收链静默弄断。
+ */
+export const RUNTIME_SRC = ["lib/process/kill-process-tree.ts"];
+
+/**
+ * `src-tauri/static` 里某一条相对路径是否允许存在（默认拒绝）。
+ *
+ * @param {string} relPosix 相对 static 根的 POSIX 风格路径（不含前导 `./`）
+ * @returns {boolean}
+ */
+export function isStaticPathAllowed(relPosix) {
+  const rel = relPosix.replace(/\\/g, "/").replace(/^\.?\//, "");
+  if (rel === "") return true;
+  const top = rel.split("/")[0] ?? "";
+  if (STATIC_ALLOWED_TOPLEVEL.includes(top)) return true;
+  if (top !== "src") return false;
+  // `src` 本身与其祖先目录要放行，否则 cpSync 走不到被放行那个文件；再逐条比对
+  // RUNTIME_SRC（相对 src/ 的路径）。
+  for (const allowed of RUNTIME_SRC) {
+    const full = `src/${allowed}`;
+    if (rel === full || full.startsWith(`${rel}/`)) return true;
+  }
+  return false;
+}
+
+/**
+ * 把一个产物目录裁剪到「桌包允许的样子」（默认拒绝）。
+ *
+ * 顶层按 `STATIC_ALLOWED_TOPLEVEL` 判，`src/` 再按 `RUNTIME_SRC` 逐文件判；
+ * `scripts/` 那一份由 `stripDevArtifacts()` 按 `RUNTIME_SCRIPTS` 剪，不在这里重复。
+ *
+ * 用途有两层：`build-desktop.mjs` 的 `cpSync` filter 已经按同一判据在**复制前**挡掉
+ * （省掉 15 MB 无谓复制），这里保留作落盘兜底——有人绕过 filter 直接往 static 写文件、
+ * 或将来改了复制方式时，泄漏仍然被这一刀挡住。命中与否都只是空操作。
+ *
+ * @param {string} dir 目标目录（`src-tauri/static`）
+ * @param {(name: string) => void} [onRemoved] 每删一项的回调（用于日志）
+ * @returns {string[]} 实际删掉的条目（相对 dir）
+ */
+export function pruneStaticToAllowList(dir, onRemoved) {
+  const removed = [];
+  for (const entry of readdirSync(dir)) {
+    if (isStaticPathAllowed(entry)) continue;
+    rmSync(join(dir, entry), { recursive: true, force: true });
+    removed.push(entry);
+    onRemoved?.(entry);
+  }
+  // src/ 是「顶层放行祖先、逐文件判叶子」的形态：自顶向下走一遍。
+  const srcDir = join(dir, "src");
+  if (existsSync(srcDir)) {
+    /**
+     * @param {string} abs 当前扫描的绝对目录
+     * @param {string} rel 相对 `src/` 的路径（顶层调用传空串）
+     */
+    const walk = (abs, rel) => {
+      for (const entry of readdirSync(abs)) {
+        const childRel = rel ? `${rel}/${entry}` : entry;
+        const childAbs = join(abs, entry);
+        if (isStaticPathAllowed(`src/${childRel}`)) {
+          if (statSync(childAbs).isDirectory()) walk(childAbs, childRel);
+          continue;
+        }
+        rmSync(childAbs, { recursive: true, force: true });
+        removed.push(`src/${childRel}`);
+        onRemoved?.(`src/${childRel}`);
+      }
+    };
+    walk(srcDir, "");
+    if (readdirSync(srcDir).length === 0) rmSync(srcDir, { recursive: true, force: true });
+  }
+  return removed;
+}
 
 /**
  * 构建期产出、不在仓库源码里的白名单条目（相对 scripts/）。

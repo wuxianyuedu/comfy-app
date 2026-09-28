@@ -53,10 +53,22 @@ struct AppState {
   /// （页面加载完成的窗口交接、150s 安全网、就绪兜底导航），避免用户已经
   /// 放弃的启动又把窗口弹出来。
   abandoned: Mutex<bool>,
+  /// 本次启动是不是 standalone 形态（壳自己拉起内嵌 server）。
+  ///
+  /// 值来自 `run()` 里那次 `ensure_launch_mode`（判据只在那一处），在建状态时
+  /// 就记下。存在的理由：standalone 的安装目录里「项目根为空」是常态，而
+  /// `get_launch_status` 原先把空根一律当成「环境问题」来报（要用户回检出启动 /
+  /// 去跑构建脚本），一次健康启动的启动页上因此满是指出错方向的段落。
+  standalone: Mutex<bool>,
 }
 
 impl AppState {
-  fn new(project_root: String, app_url: String, foreground: bool) -> Self {
+  fn new(
+    project_root: String,
+    app_url: String,
+    foreground: bool,
+    standalone: bool,
+  ) -> Self {
     Self {
       project_root: Mutex::new(project_root),
       app_url: Mutex::new(app_url),
@@ -64,6 +76,7 @@ impl AppState {
       foreground: Mutex::new(foreground),
       attention: Mutex::new(false),
       abandoned: Mutex::new(false),
+      standalone: Mutex::new(standalone),
     }
   }
 
@@ -122,6 +135,10 @@ impl AppState {
   fn set_app_url(&self, url: String) {
     *self.app_url.lock().unwrap() = url;
   }
+
+  fn is_standalone(&self) -> bool {
+    *self.standalone.lock().unwrap()
+  }
 }
 
 /// 默认开发 URL：端口经 `single_instance::resolve_app_port()` 解析
@@ -149,6 +166,16 @@ fn default_dev_url(host: &str) -> String {
 fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
   let root = state.project_root();
   if root.is_empty() {
+    // standalone 形态：安装目录里本来就没有检出，「没有状态文件」是设计如此，
+    // 不是环境问题。这一支必须走在 WARN 之前：启动页每 250ms 问一次，按「环境
+    // 问题」报会让一次健康启动刷出上千行同样的 WARN（实测 33 分钟 2MB），
+    // 而那段提示（回检出启动 / 去跑构建脚本）对装完双击的用户全是错的方向。
+    if state.is_standalone() {
+      return Ok(no_status_payload(
+        "",
+        "独立版由桌面壳直接拉起内嵌服务，没有编排器的状态文件；服务就绪后会自动进入应用。",
+      ));
+    }
     // 项目根为空 = 壳推不出来：这不是「还没写」，壳写不进去就是因为没根。
     // 返回结构化兜底（让启动页能说出原因）而不是 Err（Err 在页面上只是一句
     // 无信息量的「读不到」）。
@@ -859,61 +886,141 @@ fn sidecar_binary_name() -> &'static str {
 /// 进程经 **tauri-plugin-shell** 拉起（而不是 `std::process::Command`）：
 /// 官方插件按平台选解释器并让 `kill()` 连带回收子进程，跨平台回收因此不必
 /// 自己写两套（见 SIDECAR 静态量的注释）。
+/// sidecar 的两个运行目标（**相对载荷根**，斜杠形式）。
+///
+/// 为什么不是绝对路径：Windows 上 `current_exe()` 给的是 `\\?\` verbatim 路径，
+/// `resource_dir()` 由它派生；这种字符串交给 node 会被解析坏（实测报
+/// `EISDIR ... lstat 'F:'`）。完整推导与现场记在 `resolve_standalone_payload` 里。
+///
+/// 两条必须与载荷布局一一对应：`scripts/standalone-runtime.mjs` 由
+/// `scripts/standalone-private-inputs.mjs` 的 `RUNTIME_SCRIPTS` 带出去、
+/// `server.js` 由 Next 的 standalone 输出带出去，二者都在载荷根同一层；
+/// `resolve_standalone_payload` 里的 `exists()` 判据用的就是这个相对形态的绝对化结果。
+///
+/// 判据由 `standalone_payload_tests` 按**源码文本**核对（不在用例里引用这两个常量：
+/// 那样 debug 构建会因为 `cfg` 掉它们而编不过，`cargo test` 不带 `--release` 就红了）。
+const SIDE_REL_RUNTIME_ENTRY: &str = "scripts/standalone-runtime.mjs";
+const SIDE_REL_SERVER: &str = "server.js";
+
+/// standalone 载荷在资源目录里的落位（`spawn_sidecar` 需要的三件事）。
+#[cfg(not(debug_assertions))]
+struct StandalonePayload {
+  /// Node sidecar 二进制本体（资源根下的 `node[.exe]`）。
+  node: std::path::PathBuf,
+  /// 载荷根 = `resource_dir()/static`：`server.js` 与 `scripts/` 都在这一层，
+  /// 也是子进程的 `cwd`（应用里的运行期目录全按 cwd 解析）。
+  app_root: std::path::PathBuf,
+  /// 交给 sidecar 的参数：相对载荷根的形态。
+  target_arg: &'static str,
+}
+
+/// 载荷解析的结果：要么拿到可起的载荷，要么**已经**回退到 dev URL（调用方直接返回）。
+#[cfg(not(debug_assertions))]
+enum ResolvedPayload {
+  Ready(StandalonePayload),
+  /// 「没载荷但允许退回 dev server」这条分支已在函数内把应用地址设好，不再起 sidecar。
+  FellBackToDevUrl,
+}
+
+/// 解析 standalone 载荷的落位，并处理「载荷不全」这条失败路径。
+///
+/// 抽出来是因为它回答的是另一个问题（**该不该起、起什么**），而 `spawn_sidecar` 回答的是
+/// 「怎么起、输出谁读、退出怎么收」（§12.13：按职责切，而不是在长函数里加注释分段）。
+#[cfg(not(debug_assertions))]
+fn resolve_standalone_payload(
+  app: &tauri::AppHandle,
+) -> Result<ResolvedPayload, Box<dyn std::error::Error>> {
+  let res_dir = app.path().resource_dir()?;
+  // 载荷落位只认打包配置这一份形态（实测生成的 installer.nsi 里的 File 指令）：
+  //   · `bundle.resources = ["static/"]` → `resource_dir()/static/**`，`server.js` 在那
+  //     一层；目录前缀被保留，不会被摊平到资源根。
+  //   · `bundle.externalBin = ["binaries/node"]` → `resource_dir()/node.exe`：打包器
+  //     剥掉目标三元组后缀，也**不留 `binaries/` 子目录**。旧代码拼的
+  //     `resource_dir()/binaries/node.exe` 在真安装目录里从来不存在（`/oname=node.exe`
+  //     就是证据），这是 standalone 形态一直没接通的第二个原因——第一个是那时候根本
+  //     没有装配者（`resources` 段是空的）。
+  let app_root = res_dir.join("static");
+  let node = res_dir.join(sidecar_binary_name());
+  // `Path::join` 在 Windows 上吃正斜杠，所以 exists() 判据与传给 sidecar 的参数
+  // 用**同一个**相对形态拼出来，不可能各写一份后漂开。
+  let server = app_root.join(SIDE_REL_SERVER);
+  let missing = format!(
+    "standalone 载荷缺失：{:?}。两段装配都要在——beforeBuildCommand（scripts/build-desktop.mjs）\
+     组装 src-tauri/static，tauri.conf.json 的 bundle.resources 把它装进资源目录",
+    server
+  );
+  if server.exists() {
+    // 运行目标按**内容**选：新载荷里有 `scripts/standalone-runtime.mjs` 就走它（由它装配
+    // 运行期 env——分发产物里没有 `.env`，见规范 §7.6；后续它还负责在
+    // `COMFY_EXECUTOR=host` 时拉起执行宿主），没有就退回直接起 `server.js`，兼容按旧
+    // 配置组装出来的载荷。判据是「文件在不在」，与 §1.5「按检出里有没有编排器」同取向。
+    //
+    // 交给它的参数必须是**相对载荷根**的形态，不能是绝对路径：Windows 上
+    // `std::env::current_exe()` 返回 `\\?\` 开头的 verbatim 路径，`resource_dir()` 由它
+    // 派生——Rust 自己处理这种路径完全正常（上面的 `exists()` 就判得对），但把这份字符串
+    // 当**参数**交给 node，node 会在 `\\?\F:` 处断开并报 `EISDIR: illegal operation on a
+    // directory, lstat 'F:'`。现场与根因完全连不上，而且这条只在真桌包形态下才走到
+    // （开发检出永远走 prebuilt 分支，所以它潜伏到本次实测才露头）。
+    let target_arg = if app_root.join(SIDE_REL_RUNTIME_ENTRY).exists() {
+      SIDE_REL_RUNTIME_ENTRY
+    } else {
+      SIDE_REL_SERVER
+    };
+    return Ok(ResolvedPayload::Ready(StandalonePayload {
+      node,
+      app_root,
+      target_arg,
+    }));
+  }
+  // 允许回退 dev 的模式判据：只认「显式 standalone」这一种拒绝回退的情形，所以判的是
+  // **缺省值**而不是整条字符串比较；启动模式的唯一读取点仍在 `setup_standalone_runtime`。
+  let refuses_dev_fallback =
+    matches!(std::env::var("COMFYAPP_LAUNCH_MODE").as_deref(), Ok("standalone"));
+  if refuses_dev_fallback {
+    // 显式 standalone 但资源缺失：必须报错，禁止悄悄回退 dev——否则「装的是独立版却
+    // 跑成 dev」会产生歧义行为。
+    return Err(missing.into());
+  }
+  // 默认/未显式指定：回退到 dev URL（launcher 的 prebuilt 分支会自己起 dev server），
+  // 避免「直接 cargo build --release（没跑 beforeBuildCommand）」让壳启动即 panic。
+  if let Ok(dev_url) = std::env::var("COMFYAPP_DEV_URL") {
+    log::warn!("[ComfyAPP] standalone server.js 缺失，回退到 dev URL: {}", dev_url);
+    if let Some(state) = app.try_state::<AppState>() {
+      state.set_app_url(dev_url);
+    }
+    return Ok(ResolvedPayload::FellBackToDevUrl);
+  }
+  Err(missing.into())
+}
+
 #[cfg(not(debug_assertions))]
 fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
   use tauri_plugin_shell::process::CommandEvent;
   use tauri_plugin_shell::ShellExt;
 
   let port = pick_free_port();
-  // 允许回退 dev 的模式判据：只认「显式 standalone」这一种拒绝回退的情形，
-  // 所以这里判的是**缺省值**而不是整条字符串比较。它不引用 run() 里那份
-  // COMFYAPP_LAUNCH_MODE（本函数只在 setup_standalone_runtime 命中 standalone
-  // 分支时才会被调用，语义上已经隐含），启动模式的唯一读取点仍在 run()。
-  let refuses_dev_fallback = matches!(
-    std::env::var("COMFYAPP_LAUNCH_MODE").as_deref(),
-    Ok("standalone")
-  );
-  let res_dir = app.path().resource_dir()?;
-  let node = res_dir.join("binaries").join(sidecar_binary_name());
-  let server = res_dir.join("server.js");
+  let payload = match resolve_standalone_payload(app)? {
+    ResolvedPayload::FellBackToDevUrl => return Ok(()),
+    ResolvedPayload::Ready(p) => p,
+  };
 
-  if !server.exists() {
-    if refuses_dev_fallback {
-      // 显式 standalone 模式但资源缺失：必须报错，禁止悄悄回退 dev——
-      // 否则「双击 start-tauri-standalone.exe 却跑成 dev」会产生歧义行为。
-      return Err(format!(
-        "standalone 模式但 server.js 不存在：{:?}。请先执行 pnpm tauri build（beforeBuildCommand 会组装 src-tauri/static）",
-        server
-      )
-      .into());
-    }
-    // 默认/未显式指定：回退到 dev URL 模式（launcher 的 Prebuilt 分支会单独
-    // 启动 Next dev server，壳只需加载 COMFYAPP_DEV_URL 即可），避免「直接
-    // cargo build --release（未跑 beforeBuildCommand）」导致壳启动即 panic。
-    if let Ok(dev_url) = std::env::var("COMFYAPP_DEV_URL") {
-      log::warn!("[ComfyAPP] standalone server.js 缺失，回退到 dev URL: {}", dev_url);
-      if let Some(state) = app.try_state::<AppState>() {
-        state.set_app_url(dev_url);
-      }
-      return Ok(());
-    }
-    return Err(format!(
-      "standalone server.js 不存在：{:?}。请先执行 pnpm tauri build（beforeBuildCommand 会组装 src-tauri/static）",
-      server
-    )
-    .into());
-  }
-
-  // 直接执行 sidecar 二进制本身（不经 shell 解释器）：
-  // `Command::new` 在 shell 插件里是「可执行 + 参数」语义，路径由资源目录给出，
-  // 不需要 `sh -c` / `cmd /C` 这层间接 —— 少一层中转就少一个孤儿来源。
+  // 参数用**相对载荷根**的形态（根因见 `resolve_standalone_payload` 里那段 verbatim
+  // 路径的实测说明），`cwd` 给到载荷根，二者指向同一个文件。
+  //
+  // 直接执行 sidecar 二进制本身（不经 shell 解释器）：`Command::new` 在 shell 插件里是
+  // 「可执行 + 参数」语义，路径由资源目录给出，不需要 `sh -c` / `cmd /C` 这层间接 ——
+  // 少一层中转就少一个孤儿来源。
   let (mut rx, child) = app
     .shell()
-    .command(node.to_string_lossy().to_string())
-    .args([server.to_string_lossy().to_string()])
+    .command(payload.node.to_string_lossy().to_string())
+    .args([payload.target_arg])
     .env("PORT", port.to_string())
     .env("HOSTNAME", "127.0.0.1")
-    .current_dir(&res_dir)
+    // cwd = 载荷根（`server.js` 所在那一层），不是资源根：应用里的运行期目录
+    // （`log/` / `data/` / `public/generated/` / `db.sqlite`）全部按 `process.cwd()`
+    // 解析，而 Next 的 standalone server 启动即 `process.chdir(__dirname)`——两者必须
+    // 落在同一层，否则「server 写的库」和「入口要补的配置」是两个地方。
+    .current_dir(&payload.app_root)
     .spawn()?;
   *SIDECAR.lock().unwrap() = Some(child);
 
@@ -1064,7 +1171,8 @@ fn fallback_without_splash(handle: &tauri::AppHandle) {
 ///
 /// `stub_visible` 由调用方按启动模式给：dev / prebuilt 恒为 true（此时应用首帧
 /// 必然晚于导航），standalone 是 false（内嵌 server 随壳一起就绪，主窗很快有画面，
-/// **连探测都不启动**——否则探测会在首帧之前把占位盖上去，反而白闪一下）。
+/// 贴占位反而白闪一下）。**看护本身两种形态都要跑**——它同时是「首帧到位」这件事
+/// 在日志里唯一的界标，占位贴不贴才是由 `stub_visible` 分叉的那一步。
 ///
 /// 判据是 **URL 离开 about:blank** 而不是「主窗可见」：主窗在 setup 时就已创建，
 /// `is_visible()` 在交接前后都是 false，拿它当界标会让探测提前退出。
@@ -1094,6 +1202,11 @@ fn watch_main_first_paint(handle: tauri::AppHandle, mut stub_visible: bool) {
       }
       let url = win.url().map(|u| u.to_string()).unwrap_or_default();
       if !is_app_url(&url) {
+        // 这一支必须自己睡：底部的 `sleep` 会被 `continue` 跳过，于是 480 次探测在
+        // 微秒内烧完 —— 而「主窗还没导航到应用」正是看护最该在场的那段时间。
+        // 现场（standalone 实测）：启动 2 秒日志里就出现「timed out (120s), splash kept」，
+        // 看护提前下班，占位也就再没机会贴上去。
+        std::thread::sleep(Duration::from_millis(PROBE_INTERVAL_MS));
         continue;
       }
       if app_document_shown(&handle) {
@@ -1563,21 +1676,19 @@ fn splash_window_size(app: &tauri::AppHandle) -> (f64, f64) {
 struct LaunchContext {
   project_root: String,
   app_url: String,
-  /// 启动模式（standalone / prebuilt / tauri）。只在 release 的
-  /// `setup_standalone_runtime` 里读（debug 下那段整体 cfg 掉了），因此这里
-  /// 显式说明「不是死字段」——它的用途是决定「要不要拉起内嵌 server」。
-  #[allow(dead_code)]
   /// 主窗「首帧看护」要不要注入加载占位：dev / prebuilt 下应用首帧必然晚于
   /// 导航（要等 next dev 首编译），而 standalone 的内嵌 server 随壳一起就绪，
   /// 注入占位只会白闪一下（见 `watch_main_first_paint`）。
+  /// 值由**已定好的**启动模式推导（`collect` 的入参），不再自己读环境变量。
   expect_slow_first_paint: bool,
   /// 本次是不是「双击壳」这条链路（= 没有人替壳做过编排决策）。
   ///
   /// 判据是 `COMFYAPP_PROJECT_ROOT` 缺席：它是**壳内所有编排决策的前置条件**
   /// （端口推导、单实例按检出隔离、编排脚本与日志路径都以它为锚点），只有壳自己
   /// 从 exe 位置推导出项目根时才会缺席 —— 那正是「双击 `target/release/app.exe`」。
-  /// 用它而不是「`COMFYAPP_LAUNCH_MODE` 缺席」，是因为后者现在由壳自己写
-  /// （`ensure_launch_mode`），在 `collect()` 之后才存在，判据会随写入顺序漂。
+  /// 用它而不是「`COMFYAPP_LAUNCH_MODE` 缺席」，是因为那条环境变量**由壳自己写**
+  /// （`ensure_launch_mode`），拿一个自己刚写的值当「有没有外部注入者」的判据，
+  /// 等于把结论当前提。
   self_launch: bool,
   foreground: bool,
 }
@@ -1593,16 +1704,17 @@ impl LaunchContext {
   /// `self_launch` 由 `run()` 在**回填环境变量之前**捕获后传进来（见
   /// `publish_project_root_env`）：判据是「本次双击有没有外部注入者」，
   /// 而回填之后这个判据就永远为假了 —— 在 collect 里重算等于把判据变成常量。
-  fn collect(self_launch: bool) -> Self {
+  ///
+  /// `launch_mode` 同样由调用方给：它此刻**已经定过**（`run()` 在建启动页之前
+  /// 调 `ensure_launch_mode`）。原先这里自己读环境变量，而那一轮读发生在写入之前，
+  /// 于是永远读到空串、`expect_slow_first_paint` 永远为真 —— standalone 也照注入
+  /// 占位，正是本字段注释说要避免的白闪。
+  fn collect(self_launch: bool, launch_mode: &str) -> Self {
     let project_root = resolve_project_root();
     // 开发模式默认跳本地 Next.js dev server；脚本 / 终端调用可经环境变量注入。
     // 生产模式在 spawn_sidecar 中更新为实际 sidecar 端口。
     let app_url = std::env::var("COMFYAPP_DEV_URL")
       .unwrap_or_else(|_| default_dev_url("localhost"));
-    // 启动模式（standalone / prebuilt）此时可能还没定：`ensure_launch_mode`
-    // 在 setup 里按「编排器在不在」写它（那是**唯一读取点**）。这里只在
-    // 显式传入时用它推导首帧看护。
-    let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
     if self_launch {
       log::info!(
         "[ComfyAPP] no external launcher owns this process (COMFYAPP_PROJECT_ROOT absent): \
@@ -1625,6 +1737,39 @@ impl LaunchContext {
   }
 }
 
+/// 推导项目根、回填给子进程，并回答「本次是不是双击壳」。
+///
+/// 两件事的**顺序**是判据本身：`self_launch` 挂在 `COMFYAPP_PROJECT_ROOT` 缺席上
+/// （见 `LaunchContext::self_launch`），而回填会让它永远不再缺席 —— 先回填再判
+/// 等于把判据变成常量。回填又必须早于任何后续读取点：单实例身份与端口推导
+/// （`single_instance::identity_root`）紧接着就要用，双击场景下这是唯一一次机会
+/// （见 `publish_project_root_env` 的注释）。
+fn claim_project_root_env() -> (String, bool) {
+  let resolved_root = resolve_project_root();
+  let self_launch = cfg!(not(debug_assertions))
+    && std::env::var("COMFYAPP_PROJECT_ROOT").is_err()
+    && !resolved_root.is_empty();
+  publish_project_root_env(&resolved_root);
+  publish_shell_exe_env();
+  (resolved_root, self_launch)
+}
+
+/// 同一检出的壳是否已经在前台跑着（§1.4 按检出单实例）。
+///
+/// 是 → 向它发「唤起前台」事件并让本进程退出：不同检出的壳互不可见、各自独立
+/// 运行，而同一检出起两份会让两边争同一个库与同一批端口。
+/// 判据必须在**建任何窗口之前**问一次——窗口一出现，第二个壳就已经在打扰用户了。
+fn another_instance_owns_this_checkout() -> bool {
+  if !single_instance::another_instance_running() {
+    return false;
+  }
+  log::info!(
+    "[ComfyAPP] another instance of this checkout is running, focus requested and exiting \
+     (this launch did not start a window; the running instance was brought to front)"
+  );
+  true
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   /* CLI 形态（保活拉起的中介）必须在**任何**壳初始化之前分叉出去：它只做一次
@@ -1633,26 +1778,14 @@ pub fn run() {
   if let Some(code) = detached_spawn::run_from_args() {
     std::process::exit(code);
   }
-  // 「本次是不是双击壳」必须在回填项目根**之前**判定：判据挂在
-  // COMFYAPP_PROJECT_ROOT 缺席上（见 LaunchContext::self_launch），而下面这行
-  // 回填会让它永远不再缺席。先取判据、再回填，顺序反过来就是把判据变成常量。
-  let resolved_root = resolve_project_root();
-  let self_launch = cfg!(not(debug_assertions))
-    && std::env::var("COMFYAPP_PROJECT_ROOT").is_err()
-    && !resolved_root.is_empty();
-  // 项目根必须在**任何**后续读取点之前定下来：单实例身份与端口推导
-  // （single_instance::identity_root）在下一行就要用，而双击场景下这是唯一一次
-  // 机会（见 publish_project_root_env 的注释）。
-  publish_project_root_env(&resolved_root);
-  publish_shell_exe_env();
+  let (resolved_root, self_launch) = claim_project_root_env();
 
-  // 按检出单实例（§1.4）：同一检出的壳已在跑时，向其发送「唤起前台」事件后
-  // 退出；不同检出的壳互不可见、各自独立运行。必须在建窗口之前判定。
-  if single_instance::another_instance_running() {
-    log::info!(
-      "[ComfyAPP] another instance of this checkout is running, focus requested and exiting \
-       (this launch did not start a window; the running instance was brought to front)"
-    );
+  /* 运行模式必须在**建启动页之前**定下来：启动页从建窗那一刻起每 250ms 问一次
+   * 状态，而定得太晚就只能按「项目根推不出来」回答（规范 §7.6 第 8 层）。 */
+  let launch_mode = shell_launch::ensure_launch_mode(&resolved_root);
+
+  // 按检出单实例（§1.4）：必须在建任何窗口之前判定。
+  if another_instance_owns_this_checkout() {
     return;
   }
   let LaunchContext {
@@ -1661,7 +1794,7 @@ pub fn run() {
     expect_slow_first_paint,
     self_launch,
     foreground,
-  } = LaunchContext::collect(self_launch);
+  } = LaunchContext::collect(self_launch, &launch_mode);
 
   // 先写本次启动的会话标记，日志面板随后据此只展示本次启动内容。
   // 必须在 build_log_plugin 之前：该函数不依赖日志插件，直接写 shell-launch.log。
@@ -1687,7 +1820,12 @@ pub fn run() {
     // setup 闭包（自编排要按项目根拼编排脚本路径）。`clone` 是**必要的**——
     // 上面那条 `let LaunchContext { project_root, .. } = ...` 把所有权拆出来了，
     // 而 manage 会把它移进状态里，闭包再引用就是 use-after-move。
-    .manage(AppState::new(project_root.clone(), app_url, foreground))
+    .manage(AppState::new(
+      project_root.clone(),
+      app_url,
+      foreground,
+      launch_mode == "standalone",
+    ))
     .invoke_handler(tauri::generate_handler![
       get_launch_status,
       navigate_to_app,
@@ -1703,9 +1841,11 @@ pub fn run() {
     // setup 闭包要求 `'static`：它要活到应用退出，因此引用的局部变量必须**捕获
     // 所有权**（`move`），否则 `expect_slow_first_paint` 这类按值传入的局部量会在
     // 闭包借用检查时直接编译不过（`closure may outlive the current function`）。
-    // `launch_mode` 只走引用（见下方的 `&launch_mode`），`move` 一并捕获所有权，
-    // 两者都在此之后不再被用到。
     .setup(move |app| {
+      // 模式在 `run()` 里就定了（必须早于启动页存在），但那一刻 **log 插件还没装上**：
+      // 插件是 Builder 链上 `.plugin(log_plugin)` 之后才生效的，`setup` 是最早的
+      // 安全点。这一行是「本次启动按哪种形态跑」在日志里唯一的落点，别删。
+      log::info!("[ComfyAPP] launch mode={launch_mode}");
       // run() 只做装配，启动编排按职责拆成命名步骤（原先整段塞在 setup 闭包里，
       // 单函数近 300 行，而 Rust 侧没有函数长度门禁——见 §12.13 / ISSUE #536 P4）。
       // 顺序是契约：先收二次启动事件并定启动页尺寸，再建隐藏的 main 窗并挂其加载
@@ -2158,6 +2298,14 @@ fn spawn_splash_watchdog(_app: &mut tauri::App) {}
 
 /// 生产模式（release）启动编排：按启动模式决定是否拉起内嵌 standalone server，
 /// 并在启动页资源缺失时走「等应用就绪直接导航」的兜底，避免永久黑屏。
+///
+/// 模式本身由 `run()` 在建启动页之前写好（`ensure_launch_mode`），本函数只读。
+/// 为什么这条链上**必须**有人写它（ISSUE #1216 实测的第六层，与载荷对不对无关）：
+/// 它原先只在 `start_self_orchestration` 里调用，而 `self_launch` 的判据含
+/// 「项目根推得出来」；真安装目录里既没有 `package.json` 也没有
+/// `scripts/dev-launcher.mjs` ⇒ 项目根为空 ⇒ 那条链整段不跑 ⇒ 没人写
+/// `COMFYAPP_LAUNCH_MODE` ⇒ 这里读到空串就「跳过 standalone sidecar，使用
+/// dev URL」，表现是**装完双击永远停在启动页**。
 #[cfg(not(debug_assertions))]
 fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
   // 启动模式的**唯一读取点**就在本函数里（原先由 run() 读一次再传进来，于是
@@ -2352,6 +2500,167 @@ mod project_root_tests {
   }
 }
 
+/// standalone 载荷的路径判据回归（ISSUE #1216）。
+///
+/// 判据只能落在**源码形态**上：这条链的失效形态是「窗口停在启动页」，要一个真安装包 +
+/// 一次真双击才看得见，而构建期一片绿。实测的第一版就是这样——壳拼
+/// `resource_dir()/binaries/node.exe`，而打包器落的是 `resource_dir()/node.exe`
+/// （`installer.nsi` 里那句 `File /a "/oname=node.exe"` 就是一手证据）；`server.js`
+/// 同理拼在资源根，而资源实际落在 `resource_dir()/static/`。
+/// 下面钉的就是「壳拼的路径 == 打包器实际落的位置」这一条对应关系。
+#[cfg(test)]
+mod standalone_payload_tests {
+  // 这里不 `use super::*`：判据全部按 `include_str!` 的源码文本核对，release 专用的
+  // 函数与常量在 debug 构建里被 cfg 掉了，引进来只会得到一条 unused import。
+
+  /// 取 `include_str!("lib.rs")` 里从 `marker` 到下一个顶层 `}` 的源码片段
+  /// （与 `window_startup_tests::fn_body` 同一手法，认调用形态而不是裸标识符，
+  /// 否则命中自己的注释就成了永远通过）。
+  fn fn_body(marker: &str) -> String {
+    let src = include_str!("lib.rs");
+    let start = src.find(marker).unwrap_or_else(|| panic!("找不到 {marker}"));
+    let rest = &src[start..];
+    rest[..rest.find("\n}\n").unwrap()].to_string()
+  }
+
+  #[test]
+  fn sidecar_and_payload_root_match_the_bundler_layout() {
+    // 落位判据在 `resolve_standalone_payload`（它回答「该不该起、起什么」），起进程与
+    // 收尾在 `spawn_sidecar`——两处都要钉：拆函数之后只盯一处，等于给「把路径拼回旧
+    // 写法」留了一条不会被发现的缝。
+    let resolve = fn_body("fn resolve_standalone_payload");
+    let spawn = fn_body("fn spawn_sidecar");
+    assert!(
+      resolve.contains("res_dir.join(sidecar_binary_name())"),
+      "sidecar 必须取资源根下的 node.exe / node（打包器剥掉三元组后缀、不留 binaries/ 子目录）：{resolve}"
+    );
+    assert!(
+      !resolve.contains(r#".join("binaries")"#) && !spawn.contains(r#".join("binaries")"#),
+      "不许回退到 resource_dir()/binaries/<node> 那一拼法——那个位置在真安装目录里不存在"
+    );
+    assert!(
+      resolve.contains(r#"let app_root = res_dir.join("static");"#),
+      "载荷根必须锚在 bundle.resources 实际落点 resource_dir()/static：{resolve}"
+    );
+    assert!(
+      resolve.contains("app_root.join(SIDE_REL_SERVER)")
+        && resolve.contains("app_root.join(SIDE_REL_RUNTIME_ENTRY)"),
+      "两个运行目标的 exists() 判据都要从载荷根拼，且共用那两个相对常量：{resolve}"
+    );
+    assert!(
+      spawn.contains(".args([payload.target_arg])")
+        && !spawn.contains("target.to_string_lossy()"),
+      "交给 sidecar 的参数只能是解析出的相对形态——绝对路径正是本次实测被 node 解析坏的那种：{spawn}"
+    );
+    assert!(
+      spawn.contains(".current_dir(&payload.app_root)"),
+      "cwd 必须是载荷根：Next 的 server 启动即 chdir 到自己所在层，两侧锚点不同会让库与日志落到两个地方：{spawn}"
+    );
+    // 相对常量本身按**源码文本**核对（不在用例里引用常量：那样 debug 构建会因 `cfg`
+    // 掉 release 函数而编不过，`cargo test` 不带 `--release` 就红了）。带盘符或反斜杠的
+    // 绝对/verbatim 形态正是本次实测被 node 解析坏的那一种。
+    let src = include_str!("lib.rs");
+    assert!(
+      src.contains(r#"const SIDE_REL_RUNTIME_ENTRY: &str = "scripts/standalone-runtime.mjs";"#)
+        && src.contains(r#"const SIDE_REL_SERVER: &str = "server.js";"#),
+      "两个运行目标必须是相对载荷根的形态（正斜杠、无盘符）"
+    );
+    assert!(
+      resolve.contains("FellBackToDevUrl") && spawn.contains("FellBackToDevUrl"),
+      "「载荷缺失 + 允许回退 dev」这条分支要仍在解析侧与起进程两侧各自可见：{resolve}"
+    );
+  }
+
+  /// 「先定模式，再建启动页」这条顺序是桌包能不能**说对情况**的契约。
+  ///
+  /// 两层理由叠在一起（ISSUE #1216 实测的第六、七层）：
+  ///   · 不在这条链上写模式，standalone 分支读到空串就跳过 sidecar —— 装完双击
+  ///     永远停在启动页（第六层：真安装布局下项目根为空 → `self_launch` 为假 →
+  ///     只有 `start_self_orchestration` 里那次调用的话，没人写过模式）；
+  ///   · 写得太晚（原先在 setup 的 release 分支里，排在建窗之后）也一样坏：启动页
+  ///     从建窗那一刻起每 250ms 问一次状态，实测那 8 秒里它拿到的是「项目根推不出来
+  ///     = 你的检出有问题」，一次健康启动被指控成环境问题。
+  /// 判据落在源码顺序上：写点必须早于启动页存在的那一刻。
+  #[test]
+  fn launch_mode_is_decided_before_the_splash_ever_asks() {
+    let src = include_str!("lib.rs");
+    let write = src
+      .find("shell_launch::ensure_launch_mode(&resolved_root);")
+      .expect("run() 里必须在建启动页之前定一次运行模式");
+    let splash = src
+      .find("setup_splash_window(app);")
+      .expect("找不到启动页的创建点");
+    let read = src
+      .find("setup_standalone_runtime(app)?;")
+      .expect("找不到 standalone 装配的调用点");
+    assert!(
+      write < splash && splash < read,
+      "模式要早于启动页创建，启动页才可能问对；实测顺序：写 {write} / 建窗 {splash} / 读 {read}"
+    );
+    // 模式判据只有一处（`ensure_launch_mode`）：状态里存的、首帧看护用的，
+    // 都从这一次决定的值派生，不许再有第二处自己推。
+    let collect = fn_body("fn collect(self_launch: bool, launch_mode: &str)");
+    assert!(
+      !collect.contains("COMFYAPP_LAUNCH_MODE"),
+      "LaunchContext::collect 不得自己再读一次模式（它原先读在写入之前，永远读到空串）：{collect}"
+    );
+  }
+
+  /// standalone 形态下「没有状态文件」是设计如此，不是环境问题（实测第七层）。
+  ///
+  /// 判据落在源码形态上：这条链走通之后，启动页仍会每 250ms 问一次状态，
+  /// 而**一次健康启动**里问到的每一轮都落在「项目根为空」那一支。旧写法把那一支
+  /// 当故障报（WARN + 让用户回检出 / 去跑构建脚本），于是：健康启动的画面上全是
+  /// 指错方向的段落，日志里 33 分钟刷了 2MB 同一条 WARN。
+  #[test]
+  fn standalone_reports_no_status_file_without_the_env_warning() {
+    let src = include_str!("lib.rs");
+    let status = fn_body("fn get_launch_status");
+    let standalone_first = status
+      .find("state.is_standalone()")
+      .expect("standalone 那一支必须存在：没有状态文件要按形态说明，而不是按故障报");
+    let warned = status
+      .find("COMFYAPP_PROJECT_ROOT 为空")
+      .expect("非 standalone 的项目根推导失败仍要报出来");
+    assert!(
+      standalone_first < warned,
+      "先判形态再报故障，否则 standalone 每轮轮询都会刷一条 WARN：{status}"
+    );
+    // 启动模式的判据不许在这里出现第二次：形态是建状态时从那次决定里带进来的。
+    assert!(
+      !status.contains("COMFYAPP_LAUNCH_MODE"),
+      "get_launch_status 不得自己再读一次启动模式（判据只有一处）：{status}"
+    );
+
+    let manage = src
+      .find(".manage(AppState::new(")
+      .expect("找不到应用状态的装配点");
+    let manage_body = &src[manage..manage + 400];
+    assert!(
+      manage_body.contains(r#"launch_mode == "standalone""#),
+      "standalone 标记必须由那次决定直接带进状态，而不是别处再推一遍：{manage_body}"
+    );
+  }
+
+  #[test]
+  fn conf_declares_the_resources_the_shell_looks_for() {
+    // 壳的判据与打包配置是一对：任何一侧单独改动都会把桌包变成「双击没反应」，
+    // 而这两处相距很远、改的时候谁也想不到对方。
+    let conf: String = include_str!("../tauri.conf.json")
+      .chars()
+      .filter(|c| !c.is_whitespace())
+      .collect();
+    assert!(
+      conf.contains(r#""resources":["static/"]"#),
+      "tauri.conf.json 必须声明 bundle.resources = [\"static/\"]，与 spawn_sidecar 里的载荷根同形"
+    );
+    assert!(
+      conf.contains(r#""externalBin":["binaries/node"]"#),
+      "sidecar 的声明处只此一份，判据与 scripts/build-desktop.mjs 的 sidecarFileName 同源"
+    );
+  }
+}
+
 /// 启动期窗口行为的回归测试。
 ///
 /// 这两条缺陷的共同点：**判据没法用运行期断言表达**——「启动页有没有被挪
@@ -2465,6 +2774,29 @@ mod window_startup_tests {
     assert!(
       fallback.contains("navigate_when_ready") && fallback.contains("app_url"),
       "兜底必须落到 navigate_when_ready（等应用就绪 → 导航主窗 → 显示主窗），并取到应用地址：{fallback}"
+    );
+  }
+
+  /// 看护循环里每一条「本轮不判定」的路径都要自己歇一下。
+  ///
+  /// 现场（standalone 实测）：日志在启动后 2 秒就出现「main first paint watch
+  /// timed out (120s), splash kept」——那句「120s」是假的，480 次探测在微秒内
+  /// 烧完了。根因是「主窗 URL 还不是应用地址」那一支 `continue` 跳过了循环底部
+  /// 的 `sleep`，而启动期的前几十秒**恰恰**都是这一支：看护在它最该在场的
+  /// 时刻已经下班，占位再没机会贴上去。
+  #[test]
+  fn first_paint_watch_never_spins_without_sleeping() {
+    let src = include_str!("lib.rs");
+    let at = src
+      .find("!is_app_url(&url)")
+      .expect("找不到「URL 还不是应用地址」那一支");
+    let rest = &src[at..];
+    let branch = &rest[..rest
+      .find("continue;")
+      .expect("这一支的结尾是 continue，判据没命中时要跳过本轮")];
+    assert!(
+      branch.contains("std::thread::sleep(Duration::from_millis(PROBE_INTERVAL_MS))"),
+      "continue 会跳过循环底部的 sleep，这一支必须自己歇：{branch}"
     );
   }
 }

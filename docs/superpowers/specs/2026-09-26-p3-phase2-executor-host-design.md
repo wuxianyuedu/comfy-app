@@ -1,7 +1,7 @@
 # P3 §5 第 2 期：ComfyUI 执行器迁出 Next 进程（executor-host.mjs）
 
 - 日期：2026-09-26
-- 状态：**实施中** —— Phase 2-A/2-B/2-C、3-A、3-B0、3-B1、3-C、3-D、4-A1~4-A4 已合入 master（#1124 / #1131 / #1133 / #1138 / #1151 / #1157 / #1168 / #1178 / #1183 / #1186 / #1190）；4-B1 已合入 #1193（`c2ea2b1d`），4-B2 已合入 #1196（`601a6c67`），4-B3（两条派发循环收成一条 pull）已合入 #1203（`90c627e3`）——§14 D1 点名的四个进程内依赖至此全部摘完；4-B4 已合入 #1208（`d9c4a8fa`），4-B5（排队期写下的行在领取之后还在，ISSUE #1206）已合入 #1212（`37ef62f0`）；3-E1（宿主的运行时图构建期预编译进产物 + 收尾真起进程冒烟，ISSUE #1169 的第一半）在本 PR，3-E2（桌包 standalone 下由谁拉起宿主）另记 ISSUE #1216；§13 是逐期落地时的已签修正，§14 是 Phase 4（删旧）的签字，§15 是 3-E；`COMFY_EXECUTOR=host` 目前**仅 dev 可用**
+- 状态：**实施中** —— Phase 2-A/2-B/2-C、3-A、3-B0、3-B1、3-C、3-D、4-A1~4-A4 已合入 master（#1124 / #1131 / #1133 / #1138 / #1151 / #1157 / #1168 / #1178 / #1183 / #1186 / #1190）；4-B1 已合入 #1193（`c2ea2b1d`），4-B2 已合入 #1196（`601a6c67`），4-B3（两条派发循环收成一条 pull）已合入 #1203（`90c627e3`）——§14 D1 点名的四个进程内依赖至此全部摘完；4-B4 已合入 #1208（`d9c4a8fa`），4-B5（排队期写下的行在领取之后还在，ISSUE #1206）已合入 #1212（`37ef62f0`）；3-E1（宿主的运行时图构建期预编译进产物 + 收尾真起进程冒烟，ISSUE #1169 的第一半）已合入 #1219（`3e8b1b3f`）；3-E2（桌包 standalone 下由谁拉起宿主）另记 ISSUE #1216，**其立项前提已被实测否掉**（standalone 形态从未接通，五层各自断掉），更正与落地见 §16；§13 是逐期落地时的已签修正，§14 是 Phase 4（删旧）的签字，§15 是 3-E1，§16 是 3-E2；`COMFY_EXECUTOR=host` 目前**仅 dev 可用**
 - 前置：P3 §5 第 1 期已完全收线（#1042/#1045/#1053/#1056/#1060/#1068/#1071/#1074/#1075/#1077/#1080/#1083/#1086/#1090 共 14 PR，整条 ComfyUI 执行链 + lib 层地基都进 §18.4 第三类；host boot 顺序与 inject 接缝已就位）
 - 上游方案：`outputs/p3-executor-process-migration-plan.md`（审计 §2.7 / 架构级）
 - 范围：
@@ -597,3 +597,39 @@ D4 落地后按「跑真任务找出口」的口径继续做 4-A3 端到端，�
   `next.config.js` 的 `outputFileTracingExcludes` 已逐条写了这些 glob）—— 与本刀无关、
   `master` 上就红，另记 ISSUE #1217，不在本 PR 里顺手修（§7.2 那条告警的清理与它同一条
   线，混进 host 这刀会让两边判据都没法独立回退）。
+
+## 16. 3-E2（桌包 standalone）——前提被实测否掉的更正与 3-E2a 落地记录
+
+**3-E2 立项时写的那条前提错了，这里按实测更正**（ISSUE #1216 正文里同步过）：当时判断「宿主件已随包、也能起来，缺的只是没有进程去起它」。真跑一次 `pnpm tauri build` 之后，实情是 **standalone 形态从未接通**，而且断点不止一处：
+
+| #   | 断点                                                                                   | 一手证据（2026-09-28 真构建）                                                                        |
+| --- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 1   | `bundle.resources` 缺席 → `src-tauri/static` 没有任何装配者进安装包                     | 生成的 `installer.nsi` 里 `; Copy resources` 段为空，Install 段只有主 exe 与 `node.exe`               |
+| 2   | 壳拼 `resource_dir()/binaries/node.exe`，打包器落 `resource_dir()/node.exe`             | 同上一行的 `File /a "/oname=node.exe"`；`target/release/node.exe` 是 8-26 的陈旧残留                  |
+| 3   | 载荷**不自包含**：`.next/standalone/node_modules` 顶层是指向仓库 store 的绝对软链       | `cpSync({dereference:true})` 摊平后 `Cannot find module '@swc/helpers/_/_interop_require_default'`    |
+| 4   | 首启建不了表：载荷只带生产依赖，`drizzle-kit` 不在其中                                   | `/workspace` 200、`/api/health` 503 + `db:"empty"`，hint 让人「执行 pnpm db:push」                    |
+| 5   | 运行期没有 `.env`（硬规则 17 剥掉了），而 `src/env.js` 判的是「文件在不在」              | `MissingEnvFileError`                                                                                |
+
+第 7 层（第 6 层修好、sidecar 真的在 `boot pid=… port=1239` 上起来之后才暴露）：窗口仍停在启动页 0%，因为 `splash.html` 第一轮就把应用地址锁存了（`if (!appUrl) appUrl = await resolveAppUrl()`），拿到的是壳的**初始**地址（按检出路径推导的默认端口），而 standalone 的端口是 `pick_free_port()` 现挑的、在那之后才写回状态。壳侧那句「更新应用 URL，供启动页 ready 后导航」本来就要求一条持续通道。修法：每轮向壳重取 `get_app_url`。
+
+第 8 层（同一次重跑）：模式决定发生在 setup 末尾，而启动页从建窗那一刻起每 250ms 问一次状态；standalone 实测这中间隔着 8 秒，那 8 秒里壳只能按「项目根推不出来」回答——健康启动被指控成环境问题（三段指错方向的提示 + 66 条同一条 WARN）。修法把这一次决定提到 `run()` 建窗之前，并把结果记进应用状态；`get_launch_status` 空根时先判形态标记。两条契约 + 「模式判据只有一处」都由 Rust 用例钉住（`launch_mode_is_decided_before_the_splash_ever_asks` / `standalone_reports_no_status_file_without_the_env_warning`）。
+
+顺带量到一条**必须与装配同刀修掉**的泄漏：`.next/standalone/data/` 里带着开发机的 `llm-secret.key` 与 `app-settings.json`，而 resources 一旦真装配就会随安装包出去（解包即得密钥）。
+
+第 2 层里还藏着第二条（真跑壳才暴露）：Windows 上 `std::env::current_exe()` 返回 `\\?\` 开头的 verbatim 路径，`resource_dir()` 由它派生。Rust 侧 `exists()` 判得对、文件确实在那儿，但把这份字符串当**参数**交给 node，node 会在 `\\?\F:` 处断开并报 `EISDIR: illegal operation on a directory, lstat 'F:'`——现场与根因完全连不上，而且这条只在真桌包形态下才走到（开发检出永远走 prebuilt 分支，所以历史上从没人碰过）。落法因此改成： 运行目标用**相对载荷根**的两个常量（`SIDE_REL_RUNTIME_ENTRY` / `SIDE_REL_SERVER`），`exists()` 判据与传给 sidecar 的参数同源于同一常量，Rust 单测禁止再把绝对路径当参数传。
+
+第 6 层（把 1–5 层都修好之后重跑壳才暴露）：`COMFYAPP_LAUNCH_MODE` 只在 `start_self_orchestration` 里写，而 `self_launch` 要求「项目根推得出来」——真安装目录里两件判据文件都没有 ⇒ 模式从未被写 ⇒ `setup_standalone_runtime` 读到空串跳过 sidecar。这一层与载荷无关，所以「桌包永远起不了内嵌 server」还有一道独立的门。修法是幂等写一次模式——但**写在哪**由第 8 层决定（提到 `run()` 里、建启动页之前）。
+
+**签字**：① 范围走「先把 standalone 接通，再补宿主拉起者」——不再让「谁起宿主」这一刀去背上面五层；② 运行期数据落位 = **每用户目录**（实测 NSIS 默认 perUser → `%LOCALAPPDATA%\ComfyAPP`，载荷根因此本来就可写）；③ 切口 = **新增一个 standalone 运行入口**（`scripts/standalone-runtime.mjs`），否掉「由 Rust 壳直接装配 env」与「由 Next 进程 fork 宿主」两条（理由与 #1216 正文一致：判据分叉 / 把 4-B3 卸掉的耦合装回去）。
+
+**3-E2a 落地记录（本 PR）**：接通 1–5 层与入口的 server 半边。
+
+- 装配：`bundle.resources: ["static/"]`（实测落点 `resource_dir()/static/**`，前缀保留）；壳侧载荷根与 sidecar 各只拼一处，且 `spawn_sidecar` 的源码形态由 Rust 单测**反向**钉住（拼回 `binaries` 即红）。
+- 载荷实体化：`build-desktop.mjs` §载荷实体化 把 `.pnpm` 里的包上提到顶层再删 `.pnpm`（实测 404 MB → 245 MB；上提 36 个包 / 顶层 42 个候选名），随后**真解析** `next/dist/server/next.js`、`@swc/helpers/_/_interop_require_default`、`@libsql/client`——解析不到就构建失败，而不是让用户双击时才发现。「同名多版本取第一个发现者」这条取舍写在函数上方，它之所以可以接受，正是后面那三条解析断言在兜。
+- 首启建表：§首启建表 用 `drizzle-kit export --sql` 现生成 `schema.sql`（实测 24 张表 / 13 KB）随包，入口在**零表**时应用；两条构建期断言——必须有 `CREATE TABLE`、**不许出现 `INSERT INTO`**（这条是「不带出厂数据」的机器判据，而不是注释承诺）。
+- 运行期 env：`scripts/launcher-core/standalone-runtime-env.mjs` 装配 `SKIP_ENV_VALIDATION` + 四项必填 + **绝对** `DATABASE_URL`；`BETTER_AUTH_SECRET` 持久化在 `data/runtime-secret.json`，「文件在但内容不可用」一律抛错——悄悄换一把等于把既有会话全部作废，而现场不会有任何线索。`OAUTH_PLACEHOLDER` 与 `newAuthSecret()` 收成一个定义点，`env-init.mjs` 改为 import（原先两份字面量各自都能起来，分叉了没人报红）。
+- 卫生：`src-tauri/static` 顶层改成**默认拒绝**（`STATIC_ALLOWED_TOPLEVEL` + `RUNTIME_SRC` 逐文件），并给 `PRIVATE_INPUTS` 补上 `data/llm-secret.key` / `data/app-settings.json`。`src` 只放行 `lib/process/kill-process-tree.ts` 一份——那是 `reap-process.mjs` / `dev-launcher.mjs` 运行期 `await import` 的目标（硬规则 3 的单点），随包能跑是因为 Node 22.18+/24 的类型擦除默认开启、而**随包的 Node 就是构建机那份二进制**。
+- 实测（不装安装包，直接在装配出来的 `src-tauri/static` 上按首启形态跑）：入口 `schema bootstrap tables=0->24` → `boot pid=… port=3975`，`/`、`/workspace`、`/api/health` 全 200（health 从 503 变 200 就是首启建表生效的证据）；收尾用真回收入口 `node scripts/reap-process.mjs <pid> --force` → `taskkill /T /F（exit 0）`、端口失联，整棵树没有留孤儿。
+- 端到端（壳这一侧，同样不装安装包）：在**检出之外**摆一份与打包器同布局的假安装目录（`app.exe` + `node.exe` + `static\**` 真拷贝），双击 `src-tauri/target/release/app.exe` → 壳日志依次出现 `launch mode=standalone` → `[sidecar] [standalone-runtime] schema bootstrap tables=0->24` → `boot pid=… port=14178` → `navigate_to_app called with url: http://127.0.0.1:14178/workspace`（端口与 boot 行一致 = 第 7 层生效） → `main window Finished` → 首页渲染出来，`/api/health` 回 `{"status":"ok","db":"up"}`；而 `COMFYAPP_PROJECT_ROOT 为空` 那条 WARN 归零（第 8 层生效）。第 6–8 层只有这一种验法：上面两条自查命令都绕过了壳。
+
+**明确不在本刀**：入口的**宿主半边**（`resolveExecutorMode()` → 起 `executor-host.mjs`、孙子层回收、灰度口径放开）= 3-E2b，收口 ISSUE #1216；`bundle.resources` 之外那条「`--no-bundle` 只产出裸壳、不产出可运行载荷」的文档口径要按实测安装包内容再写（不凭推断）。

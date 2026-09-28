@@ -335,16 +335,17 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 | 形态 | 触发条件 | 说明 | 改动热更新 |
 |------|----------|------|-----------|
 | prebuilt（开发检出） | 检出里有 `scripts/dev-launcher.mjs` | 壳起编排器 → dev server，前端 HMR | 前端 HMR；Rust 需重编 |
-| standalone（分发副本） | 检出里**没有**编排器 | 壳走内嵌 server（Node sidecar），双击即独立运行 | 不可（需重构建） |
+| standalone（分发副本） | 检出里**没有**编排器 | 壳经 Node sidecar 起 `scripts/standalone-runtime.mjs`：由它装配运行期 env（产物不含 `.env`，见规范 §7.6）并首启建表，再带起内嵌 server | 不可（需重构建） |
 
 > 为什么不是「按 exe 名字区分」：用户手里只有 `app.exe` 一个文件，拿它去猜形态
 > 会把两种形态都判错。判据放在**内容**（编排器在不在）上，这是唯一可判且不会漂的。
 
-> 为何 prebuilt 默认连 dev server 而非独立运行：直接运行 `target/release/app.exe` 时，
-> Tauri 的 `resource_dir()` 指向 `src-tauri`，而 standalone 的 `server.js` 在 `src-tauri/static`
-> 子目录，壳检测不到 `server.js` 便回退到 `COMFYAPP_DEV_URL`（dev server）；只有组装过
-> standalone 资源（或打包安装）后 `resource_dir()` 指向 resources 且 `server.js` 在根，
-> 才会走真正独立的 standalone 模式。
+> standalone 的载荷从哪来：`scripts/build-desktop.mjs` 组装 `src-tauri/static`，
+> `tauri.conf.json` 的 `bundle.resources: ["static/"]` 再把它装进资源目录（实测落点
+> `resource_dir()/static/`）。这两段**都要在**——此前 `resources` 段是空的，所以
+> 「壳起内嵌 server」这条路从来没有通过（五层断点与实测见规范 §7.6，ISSUE #1216）。
+> 直接运行 `target/release/app.exe` 时走的是哪条路，仍由「检出里有没有编排器」决定：
+> 开发检出里有，于是走 prebuilt 连 dev server。
 
 ### 资源异常时清理重建
 

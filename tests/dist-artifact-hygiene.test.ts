@@ -162,6 +162,34 @@ describe("check-standalone-contents：产物层检查覆盖私有输入", () => 
   });
 });
 
+/* ── 整包上提之后两侧判据必须仍然同形（ISSUE #1216 与 #1220 的交界）───────── */
+
+describe("桌包载荷里的第三方包文档：判它的删它，谁都不让路", () => {
+  it("产物护栏判它违规、形状清单负责删掉它", () => {
+    // §载荷实体化 上提后的包是 store 里的**整包**，自带 docs（实测 static 层
+    // 472 个：`node_modules/next/dist/docs/**` 456 个 + pino 等 16 个）。
+    // 本刀一度想给护栏加「node_modules 豁免」来消掉这条红——**不要那样修**：
+    // 加了豁免，将来漏剥就再没人知道。两侧同判据才是闭合的：护栏说要不得，
+    // 剔除侧真删得掉（组装步 2.2 就删了，实测在实体化之后再跑一次命中 0 个）。
+    const rel = "node_modules/next/dist/docs/index.md";
+    const { FORBIDDEN } = checkerExports();
+    expect(
+      FORBIDDEN.some(([, re]) => re.test(rel)),
+      "「文档目录」那条禁忌必须命中第三方包文档",
+    ).toBe(true);
+
+    const dir = mkdtempSync(join(tmpdir(), "comfyapp-hoisted-"));
+    try {
+      mkdirSync(join(dir, dirname(rel)), { recursive: true });
+      writeFileSync(join(dir, rel), "docs");
+      expect(stripForbiddenShapes(dir)).toEqual([rel]);
+      expect(existsSync(join(dir, rel))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 /* ── 开发期文件与内部门禁脚本：白名单剔除（ISSUE #489）─────────────────── */
 const stripDevArtifactsBody = stripModule.slice(
   stripModule.indexOf("export function stripDevArtifacts"),
@@ -260,6 +288,7 @@ interface CheckerExports {
   FORBIDDEN: Array<[string, RegExp]>;
   REQUIRED_RUNTIME_FILES: string[];
   REQUIRED_HOST_FILES: string[];
+  REQUIRED_PAYLOAD_FILES: string[];
   RUNTIME_DIR: string;
   collectFiles: (dir: string, followLinks: boolean) => string[];
   missingRequiredRuntimeFiles: (dir: string) => string[];
@@ -539,13 +568,15 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   /**
    * 造一份「确实是个产物」的最小目录：有 `server.js`，运行时脚本按传入子集铺。
    *
-   * 宿主那三件也一并铺齐 —— `checkDir` 里那条 `missingHost` 同样以「有 server.js」为
-   * 前提，不铺齐的话本用例报出来的红就不是我们要验的那一条（变量必须只有一个）。
+   * 宿主那三件与桌包载荷那三件也一并铺齐 —— `checkDir` 里那条 `missingHost` 与
+   * `missingPayload` 同样以「有 server.js」为前提，不铺齐的话本用例报出来的红就不是
+   * 我们要验的那一条（变量必须只有一个）。它们各自的内容与「同形」由
+   * `tests/standalone-runtime.test.ts` 与 `tests/executor-host-artifact.test.ts` 守。
    */
   function makeProduct(dir: string, present: string[]): void {
     const mod = checkerExports();
     writeFileSync(join(dir, "server.js"), "// entry");
-    for (const rel of mod.REQUIRED_HOST_FILES) {
+    for (const rel of [...mod.REQUIRED_HOST_FILES, ...mod.REQUIRED_PAYLOAD_FILES]) {
       const abs = join(dir, rel);
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, "// host");
