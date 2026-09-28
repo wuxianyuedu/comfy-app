@@ -18,10 +18,17 @@ import "server-only";
 // 为什么值得单独一格：`MAX_CONCURRENCY=1`，任务全在串行排队。用户看着画布上某个
 // 节点转圈时，最想知道的正是「前面还堵着几个、当前这个跑了多久、跑的是哪个
 // 工作流与模型」。
+//
+// `online` 不只认 HTTP（ISSUE：队列页「未运行」闪一下）：ComfyUI 跑图 GPU 满载时
+// `/queue` 会**连续**超时，只认 HTTP 会把「正在生成」闪报成「离线」。HTTP 那拍
+// 没读到时回落进程级快照（`status.ts`，不依赖 ComfyUI 的 HTTP 响应能力）——
+// 进程活着就仍算在线。快照的 `unverified`（进程表也查失败）不当作在跑，
+// 瞬时抖动由前端 `useOfflineGate` 的连续失败阈值兜底。
 
 import { taskRepository } from "../core/repository-task";
 import { getComfyQueue } from "./client";
 import { primaryModelName } from "./executed-model";
+import { getComfyRuntimeSnapshot } from "./status";
 import { queueTraceSummary } from "./trace";
 import type { ComfyQueueStatus, ComfyRunningTask } from "./queue-status-types";
 
@@ -32,9 +39,16 @@ export async function collectComfyQueueStatus(): Promise<ComfyQueueStatus> {
     describeComfy(),
     taskRepository.countQueuedForStatusBar(),
   ]);
+  if (comfy !== null) {
+    return { online: true, comfy, running, queued };
+  }
+  /* HTTP 没读到：回落「进程在不在」。comfy 计数置 0 的含义是「这一拍没读到
+   * ComfyUI 自己的口径」，不是「队列空了」——本应用的排队数（`queued`）来自库，
+   * 不受影响。 */
+  const snap = await getComfyRuntimeSnapshot();
   return {
-    online: comfy !== null,
-    comfy: comfy ?? { running: 0, pending: 0 },
+    online: snap.running,
+    comfy: { running: 0, pending: 0 },
     running,
     queued,
   };

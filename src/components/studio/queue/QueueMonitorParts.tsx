@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Activity, Copy, FolderOpen, X } from "lucide-react";
+import { Activity, Copy, FileText, FolderOpen, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
@@ -62,6 +62,7 @@ export function QueueRowLine({
   onCancel,
   onCopy,
   onOpenFolder,
+  onOpenLog,
 }: {
   row: QueueRow;
   leading?: string;
@@ -69,6 +70,7 @@ export function QueueRowLine({
   onCancel: () => void;
   onCopy: () => void;
   onOpenFolder: () => void;
+  onOpenLog: () => void;
 }) {
   const terminal = isTerminalTaskStatus(row.status);
   const ago = timeAgo(row.createdAt.getTime());
@@ -92,6 +94,16 @@ export function QueueRowLine({
         </span>
       ) : null}
       <span className="flex shrink-0 items-center gap-1">
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={onOpenLog}
+          aria-label="查看这一条的执行日志"
+          className="h-auto gap-1"
+        >
+          <FileText data-icon="inline-start" className="size-3" aria-hidden />
+          日志
+        </Button>
         {terminal ? (
           <>
             <Button
