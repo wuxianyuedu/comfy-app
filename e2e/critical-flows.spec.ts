@@ -349,7 +349,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
     // 打开设置（overlay 形态，不卸载 workspace 组件树）。
     // 设置入口是 nav 底部的图标按钮，只有 title="设置"。
-    await page.getByTitle("设置").first().click();
+    await page
+      .getByRole("button", { name: "设置", exact: true })
+      .first()
+      .click();
     // 设置 overlay 是 dynamic import + 首屏 loading，给它更宽的等待窗口。
     await expect(page.getByRole("heading", { name: "设置" })).toBeVisible({
       timeout: 20_000,
@@ -378,7 +381,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await expectTopHitsTabStrip(page);
 
     // 入口在底部状态栏：只有 title 属性，没有可读文本。
-    await page.getByTitle(/^日志面板/).click();
+    await page.getByRole("button", { name: /^日志面板/ }).click();
     // 面板标题：确认弹窗真的打开了（而不是入口没接上）。
     await expect(
       page.getByText("应用日志", { exact: true }).first(),
@@ -443,13 +446,26 @@ test.describe("应用页签与全屏视图 @critical", () => {
       });
     }
 
+    /**
+     * 这一组定位器分两种，不是混用图省事：
+     *   - 入口按钮的说明走 `Hint`（规范 16 §16.2.3 P82：图标按钮与悬停说明用
+     *     Tooltip，不用原生 `title=`）—— 提示文案渲染成浮层、**不落 `title` 属性**，
+     *     所以 `getByTitle(/^日志面板/)`、`getByTitle("更早的一页")` 这类匹配不到，
+     *     只能按可访问名取（`getByRole("button", { name })`，由 `Hint` 的
+     *     `accessibleName` 写成 `aria-label`）。
+     *   - 面板加宽档（`ui/wide-panel` 的 `title={panel.toggleLabel}`）与来源/级别
+     *     计数（`LogFilterBar` 的 `title={…}`）**仍是刻意的原生 `title`**，那几处
+     *     `getByTitle` 是对的，别顺手一起换。
+     */
     async function openPanel(page: Page) {
       await page.goto("/workspace");
-      await page.getByTitle(/^日志面板/).click();
+      await page.getByRole("button", { name: /^日志面板/ }).click();
       await expect(
         page.getByText("应用日志", { exact: true }).first(),
       ).toBeVisible();
-      await expect(page.getByTitle("更早的一页")).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "更早的一页" }),
+      ).toBeVisible();
     }
 
     test("@critical 下拉弹层贴住扳机底边，且候选点得动、来源切得过来", async ({
@@ -515,9 +531,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await openPanel(page);
 
       await expect(page.getByText(/第 1 \/ \d+ 页/)).toBeVisible();
-      await page.getByTitle("更早的一页").click();
+      await page.getByRole("button", { name: "更早的一页" }).click();
       await expect(page.getByText(/第 2 \/ \d+ 页/)).toBeVisible();
-      await page.getByTitle("更新的一页").click();
+      await page.getByRole("button", { name: "更新的一页" }).click();
       await expect(page.getByText(/第 1 \/ \d+ 页/)).toBeVisible();
     });
 
@@ -617,7 +633,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
        * 毫秒量级（用户读到的就是「明显卡顿」）。虚拟化之后只剩几十行，
        * 给一个宽松但足以区分两者的上限。 */
       const t0 = Date.now();
-      await page.getByTitle("更早的一页").click();
+      await page.getByRole("button", { name: "更早的一页" }).click();
       await expect(page.getByText(/第 2 \/ \d+ 页/)).toBeVisible();
       expect(Date.now() - t0).toBeLessThan(1500);
     });
@@ -1118,7 +1134,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       });
 
       await page.goto("/workspace");
-      await page.getByTitle(/^日志面板/).click();
+      await page.getByRole("button", { name: /^日志面板/ }).click();
       await expect(
         page.getByText("应用日志", { exact: true }).first(),
       ).toBeVisible();
@@ -1200,7 +1216,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       });
 
       await page.goto("/workspace");
-      await page.getByTitle(/^日志面板/).click();
+      await page.getByRole("button", { name: /^日志面板/ }).click();
       await expect(
         page.getByText("应用日志", { exact: true }).first(),
       ).toBeVisible();
@@ -1251,7 +1267,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 语义启动，即用户实际会遇到的正常路径。 */
   async function openComfyFromSettings(page: Page) {
     await page.goto("/workspace");
-    await page.getByTitle("设置").first().click();
+    await page
+      .getByRole("button", { name: "设置", exact: true })
+      .first()
+      .click();
     await expect(page.getByRole("heading", { name: "设置" })).toBeVisible({
       timeout: 20_000,
     });

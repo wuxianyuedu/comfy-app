@@ -175,3 +175,22 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
     expect(screen.getByTitle(/全应用实时帧率/)).toBeInTheDocument();
   });
 });
+
+describe("BrowserStatusBar 纯图标按钮的可访问名", () => {
+  /**
+   * 日志面板入口只有图标（外加可选的错误计数徽标），没有可见文字。少了
+   * `accessibleName`，它就既没有 `aria-label` 也没有 `title` —— 读屏用户点到的
+   * 是一颗匿名按钮，而自动化只能退回去等一个并不存在的 `title`
+   * （`locator.click` 没有独立动作超时，会静静等满整条用例的预算）。
+   * `ui/hint` 的契约正是「纯图标按钮传 accessibleName，由它把提示文案写成子元素
+   * 的 aria-label」，这里钉它真的落到 DOM 上。
+   */
+  it("日志面板入口的提示文案同时是它的可访问名", () => {
+    renderBar(viewModel());
+
+    const trigger = screen.getByRole("button", { name: /^日志面板/ });
+    expect(trigger).toBeInTheDocument();
+    /* 名字由 aria-label 给（可见文字仍为空）：换成只写 title 就守不住读屏这条路。 */
+    expect(trigger.getAttribute("aria-label")).toMatch(/^日志面板/);
+  });
+});
