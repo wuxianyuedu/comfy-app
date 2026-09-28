@@ -109,7 +109,12 @@ function walk(dir, out = []) {
       continue;
     const full = path.join(dir, name);
     if (fs.statSync(full).isDirectory()) walk(full, out);
-    else if (/\.(ts|tsx)$/.test(name)) out.push(full);
+    // 消费方语料必须含 `.mjs` / `.cjs`：USAGE_ROOTS 里 `scripts` 全是这两种后缀，而
+    // 纯 Node 宿主经 `await import()` 消费地基层导出（实例：`scripts/executor-host.mjs`
+    // 取 `src/lib/comfyui/host-runtime.ts` 的 `createHostRepo`）。只数 `.ts/.tsx` 会把
+    // 「有消费方」判成零消费——与本文件头那句「值导出在 src/scripts/e2e 里零引用」
+    // 相反（§12.17：注释与判据相反，下一个人照注释写只会多一条不生效的口径）。
+    else if (/\.(ts|tsx|mjs|cjs)$/.test(name)) out.push(full);
   }
   return out;
 }

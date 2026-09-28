@@ -50,7 +50,13 @@ function write(rel: string, content: string): void {
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "dead-exports-gate-"));
   copyFileSync(SCRIPT, join(workdir, "check-dead-exports.cjs"));
-  for (const d of ["src/lib", "src/trpc", "src/components", "scripts", "tests"]) {
+  for (const d of [
+    "src/lib",
+    "src/trpc",
+    "src/components",
+    "scripts",
+    "tests",
+  ]) {
     mkdirSync(join(workdir, d), { recursive: true });
   }
 });
@@ -73,6 +79,20 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     write(
       "src/components/c.ts",
       'import { used } from "@/lib/util";\nexport const x = used();\n',
+    );
+    const { code, output } = run();
+    expect(code).toBe(0);
+    expect(output).toContain("无新增零消费导出");
+  });
+
+  it("只被 scripts 下的 .mjs 消费也算消费（纯 Node 宿主经动态 import 取导出）", () => {
+    write(
+      "src/lib/graph.ts",
+      "export async function makeRepo(): Promise<number> {\n  return 2;\n}\n",
+    );
+    write(
+      "scripts/host.mjs",
+      'const graph = await import("../src/lib/graph.ts");\nexport const repo = await graph.makeRepo();\n',
     );
     const { code, output } = run();
     expect(code).toBe(0);
@@ -130,10 +150,7 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
   });
 
   it("src/trpc 里被消费的导出放行（客户端入口层与 lib 同一口径）", () => {
-    write(
-      "src/trpc/react.tsx",
-      "export const api = { ping: () => 1 };\n",
-    );
+    write("src/trpc/react.tsx", "export const api = { ping: () => 1 };\n");
     write(
       "src/components/consumer.ts",
       'import { api } from "~/trpc/react";\nexport const x = api.ping();\n',
@@ -240,7 +257,10 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
   });
 
   it("没有任何测试文件 import 该模块时仍是零消费（判据不会退化成「有没有人写过这个名字」）", () => {
-    write("src/lib/lonely.ts", "export function trulyDead(): number {\n  return 1;\n}\n");
+    write(
+      "src/lib/lonely.ts",
+      "export function trulyDead(): number {\n  return 1;\n}\n",
+    );
     // 一份**别的**模块的测试，只是提到了这个名字 —— 不构成消费
     write(
       "tests/other.test.ts",
@@ -286,10 +306,14 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
       "src/lib/workshop/script-parser.ts#emptyProject",
       "src/lib/log/log-paths.ts#NEXTJS_PANEL_LOG_PREFIX",
     ]) {
-      const result = execFileSync(process.execPath, [SCRIPT, "--verify", target], {
-        cwd: process.cwd(),
-        encoding: "utf8",
-      });
+      const result = execFileSync(
+        process.execPath,
+        [SCRIPT, "--verify", target],
+        {
+          cwd: process.cwd(),
+          encoding: "utf8",
+        },
+      );
       expect(result).toContain("有消费");
     }
   });

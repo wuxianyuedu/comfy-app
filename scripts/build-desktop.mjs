@@ -42,6 +42,7 @@ import { syncSplashAssets } from "./launcher-core/splash-assets.mjs";
 // 开发机私有输入（.env / db.sqlite*）的剔除清单与实现：与 `pnpm build` 的
 // 收尾步骤共用同一份，避免两处清单各写一套后静默漂移。
 import {
+  BUILT_RUNTIME_SCRIPTS,
   RUNTIME_SCRIPTS,
   stripDevArtifacts,
   stripPrivateInputs,
@@ -162,6 +163,11 @@ const launcherDestDir = join(staticDir, "scripts");
 for (const launcherFile of RUNTIME_SCRIPTS.filter((name) =>
   name.endsWith(".mjs"),
 )) {
+  // BUILT_RUNTIME_SCRIPTS 是构建期由 scripts/build-executor-host.mjs 直接写进
+  // .next/standalone 的产物（宿主的预编译运行时图，3-E1 / ISSUE #1169）——仓库里
+  // 没有同名源文件，按「清单漂移」失败会把人引向错误方向。它们随下面的整树拷贝
+  // 进 static，并由其后的「桌包里的宿主件在不在」断言兜住。
+  if (BUILT_RUNTIME_SCRIPTS.includes(launcherFile)) continue;
   const launcherSrc = join(root, "scripts", launcherFile);
   if (!existsSync(launcherSrc)) {
     // 白名单里面写了但源文件不在 = 清单漂移。静默跳过会让桌面包里的编排器
@@ -260,6 +266,21 @@ stripPrivateInputs(staticDir, (name) => {
 stripDevArtifacts(staticDir, (name) => {
   console.log(`[build-desktop]   §分发卫生 已剔除开发期文件 static/${name}`);
 });
+// 分发卫生之后断言宿主三件还在：`scripts/**` 走白名单剪枝，白名单登记与这里的
+// 断言是同一件事的两半——登记漏了会被剪掉，断言漏了则「产物里设 host 起不来」
+// 这件事要等到用户现场才发现（`.next/standalone` 那层的冒烟只跑得到自己那层）。
+for (const hostFile of [
+  "scripts/executor-host.mjs",
+  "scripts/executor-host.runtime.mjs",
+  "scripts/executor-host.build.json",
+]) {
+  if (!existsSync(join(staticDir, hostFile))) {
+    fail(
+      `桌包缺宿主件 static/${hostFile}：先跑 pnpm build（收尾会生成预编译运行时图），` +
+        "再确认 standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS 有登记这一条",
+    );
+  }
+}
 cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), {
   recursive: true,
 });
