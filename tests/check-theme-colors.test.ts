@@ -27,6 +27,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { stripComments } from "./helpers/strip-comments";
+
 const SCRIPT = path.resolve(__dirname, "../scripts/check-theme-colors.cjs");
 const tempDirs: string[] = [];
 
@@ -233,6 +235,44 @@ describe("幽灵 token（引用了从未定义的 --color-*）", () => {
         'export const I = () => <svg><path stroke="var(--color-nope, currentColor)" /></svg>;\n',
     });
     expect(run().ok).toBe(true);
+  });
+
+  /* 判据认的是「字面量 + 无兜底 + --color- 前缀」这三个条件，**不认语法位置**。
+   * 回归来源：把三处画布网格线收进一个出口函数之后，引用变成了出口里的模板串，
+   * 只按属性形态判的判据会因为「集中化」这个正确动作而失明 ——
+   * 泛化就是为了不让收口反而制造盲区。 */
+  it("非属性形态（出口函数里的模板串）同样抓到", () => {
+    const { run } = scanner({
+      "src/components/studio/canvas/grid.ts":
+        "export const line = (a: number): string =>\n" +
+        "  `color-mix(in srgb, var(--color-nope-helper) ${a}%, transparent)`;\n",
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("--color-nope-helper");
+  });
+
+  /* 收口的锚点：色相只许在 globals.css 定义一次，任何调用处再写回 rgba 都算退化。 */
+  it("真实仓库：网格线三处画布共用同一个 token", () => {
+    const grid = readFileSync(
+      path.resolve(
+        __dirname,
+        "../src/components/studio/canvas/workflow-canvas-grid.ts",
+      ),
+      "utf8",
+    );
+    expect(grid).toContain("var(--color-canvas-grid-line)");
+    for (const rel of [
+      "../src/components/studio/WorkflowCanvasDecorations.tsx",
+      "../src/components/studio/workflow-library/WorkflowLibraryCanvas.tsx",
+    ]) {
+      /* 只判代码：注释里正当地会出现被禁的叙述本身（「此前这里写的是 rgba…」），
+       * 拿原文匹配就是自打自 —— 判据会红在一行文档上。 */
+      expect(
+        stripComments(readFileSync(path.resolve(__dirname, rel), "utf8")),
+        `${rel} 又写回了网格线色相`,
+      ).not.toMatch(/148\s*,\s*163\s*,\s*184/);
+    }
   });
 
   it("真实仓库：seed 图标的 5 颗 token 有定义（事故不复发的锚点）", () => {

@@ -30,6 +30,7 @@ import {
   GRID_BASE_LAYER_ID,
   GRID_MAJOR_LAYER_ID,
   GRID_MINOR_LAYER_ID,
+  gridLineColor,
 } from "./canvas/workflow-canvas-grid";
 
 afterEach(cleanup);
@@ -99,5 +100,63 @@ describe("CanvasGrid · 画布底色", () => {
     expect(hasLayer(container, GRID_MINOR_LAYER_ID)).toBe(true);
     expect(hasLayer(container, GRID_BASE_LAYER_ID)).toBe(true);
     expect(hasLayer(container, GRID_MAJOR_LAYER_ID)).toBe(true);
+  });
+});
+
+/**
+ * 网格线的**颜色出口**契约（规范 03 §3.6.1.1）。
+ *
+ * 此前同一件事有三份写法：这里两处写死 `rgba(148,163,184, α)`，工作流库预览一处
+ * 写 `var(--color-canvas-grid-line, …)` 而那颗 token 从没定义过（永远走兜底，
+ * 读代码的人却以为它随主题）。豁免清单只能用散文记一句「与 WorkflowCanvasDecorations
+ * 同源」，机器兜不住。现在色相只在 `globals.css` 定义一次，调用处只给 α。
+ *
+ * 这两条用例钉的是**送达**（React Flow 把 `color` 写成自定义属性
+ * `--xy-background-pattern-color-props`，真正的 `stroke` 由样式表取它 ——
+ * jsdom 读得到属性文本，所以「送到没送到」在这里就能判）；
+ * 「浏览器能否解析 `color-mix()`」归 e2e（`e2e/theme-token-consumers.spec.ts`）。
+ */
+describe("网格线颜色出口", () => {
+  /** 某一层实际下发的颜色表达式（React Flow 写在 svg 的内联自定义属性上）。 */
+  function patternColor(container: HTMLElement, layerId: string): string {
+    const svgs = Array.from(
+      container.querySelectorAll("svg.react-flow__background"),
+    );
+    for (const svg of svgs) {
+      const mine = Array.from(svg.querySelectorAll("pattern")).some((p) =>
+        p.id.endsWith(layerId),
+      );
+      if (mine)
+        return (
+          svg
+            .getAttribute("style")
+            ?.match(/--xy-background-pattern-color-props:\s*([^;]+);/)?.[1] ??
+          ""
+        );
+    }
+    return "";
+  }
+
+  it("出口只给 α：色相一律走 token，不再在任何调用处写死", () => {
+    const { container } = renderGrid();
+    for (const layer of [GRID_MINOR_LAYER_ID, GRID_MAJOR_LAYER_ID]) {
+      const color = patternColor(container, layer);
+      expect(color, `${layer} 的颜色表达式没走 token`).toContain(
+        "var(--color-canvas-grid-line)",
+      );
+      expect(color, `${layer} 又写回了死色相`).not.toMatch(/148/);
+    }
+  });
+
+  /* 主参考线的 α 直接来自用户设置（不乘缩放系数），所以能钉到具体百分比 ——
+   * 这一条同时验「α 真的乘上去了」和「百分数写法不丢精度」。 */
+  it("主参考线按用户设置的 α 现取（默认 0.14 → 14%）", () => {
+    const { container } = renderGrid();
+    expect(patternColor(container, GRID_MAJOR_LAYER_ID)).toBe(
+      gridLineColor(DEFAULT_CANVAS_SETTINGS.gridMajorAlpha),
+    );
+    expect(gridLineColor(0.14)).toContain(") 14%,");
+    expect(gridLineColor(0.132)).toContain(") 13.2%,");
+    expect(gridLineColor(1)).toContain(") 100%,");
   });
 });

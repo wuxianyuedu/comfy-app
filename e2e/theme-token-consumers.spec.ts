@@ -30,6 +30,7 @@ const CONSUMED_TOKENS = [
   "--color-aurora-magenta",
   "--color-node-mix-base",
   "--color-note-tint-base",
+  "--color-canvas-grid-line",
 ];
 
 /** 图标类 token → 它实际托在哪个表面类上（对比度按这一对算）。 */
@@ -81,11 +82,75 @@ async function readSurface(page: Page, cls: string): Promise<string> {
   }, cls);
 }
 
+/**
+ * 计算出来的颜色有三种可能的序列化形态，必须都认：
+ *  · `#rrggbb` —— `globals.css` 里的原始声明；
+ *  · `rgb()` / `rgba()` —— 普通 `var()` 解析到 `stroke` / `fill` 上；
+ *  · **`color(srgb 0 0 0 / 0.14)`** —— `color-mix(in srgb, …)` 的计算值，
+ *    Chromium 保留 sRGB 色彩空间来序列化它，分量是 **0~1 的浮点**而不是 0~255。
+ * 最后一型是实测撞出来的：拿 `/^rgba?\(/` 去断 `color-mix()` 的结果，
+ * 会得到一条「没解析」的红 —— 而值其实是对的。所以断言比**分量**，不比字符串。
+ */
+type Color = { r: number; g: number; b: number; a: number };
+
+function parseColor(css: string): Color {
+  const t = css.trim();
+  const space =
+    /^color\(\s*srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)/i.exec(
+      t,
+    );
+  if (space) {
+    return {
+      r: Number(space[1]) * 255,
+      g: Number(space[2]) * 255,
+      b: Number(space[3]) * 255,
+      a: space[4] === undefined ? 1 : Number(space[4]),
+    };
+  }
+  const fn =
+    /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/i.exec(
+      t,
+    );
+  if (fn) {
+    return {
+      r: Number(fn[1]),
+      g: Number(fn[2]),
+      b: Number(fn[3]),
+      a: fn[4] === undefined ? 1 : Number(fn[4]),
+    };
+  }
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(t);
+  const digits = hex?.[1];
+  if (digits) {
+    const full =
+      digits.length === 3
+        ? digits
+            .split("")
+            .map((c) => c + c)
+            .join("")
+        : digits;
+    return {
+      r: Number.parseInt(full.slice(0, 2), 16),
+      g: Number.parseInt(full.slice(2, 4), 16),
+      b: Number.parseInt(full.slice(4, 6), 16),
+      a: 1,
+    };
+  }
+  throw new Error(`解析不出颜色：${css}`);
+}
+
+/** 半透明的线叠在不透明画布底上，得到实际参与显示的合成色。 */
+function blendOver(fg: string, bg: string): string {
+  const f = parseColor(fg);
+  const b = parseColor(bg);
+  const mix = (x: number, y: number) => Math.round(x * f.a + y * (1 - f.a));
+  return `rgb(${mix(f.r, b.r)}, ${mix(f.g, b.g)}, ${mix(f.b, b.b)})`;
+}
+
 function relativeLuminance(css: string): number {
-  const m = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(css);
-  if (!m) throw new Error(`解析不出颜色：${css}`);
-  const lin = [m[1], m[2], m[3]]
-    .map((part) => Number(part) / 255)
+  const c = parseColor(css);
+  const lin = [c.r, c.g, c.b]
+    .map((v) => v / 255)
     .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
   return (
     0.2126 * (lin[0] ?? 0) + 0.7152 * (lin[1] ?? 0) + 0.0722 * (lin[2] ?? 0)
@@ -161,6 +226,100 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         `${token} 两态同值（${lightValue}）—— 那「做成两档」是空的，` +
           "浅色下看不清的问题并没有被解决",
       ).toBe(true);
+    }
+  });
+
+  /**
+   * 网格线（规范 03 §3.6.1.1 的 A 方案落地）。
+   *
+   * 这里验两件在源码层判不出来的事：
+   *  ① `color-mix()` 写在 SVG 的 `stroke` 位置上**解析得了** —— React Flow 的
+   *     `<Background color=…>` 把值写成自定义属性 `--xy-background-pattern-color-props`，
+   *     真正的 stroke 由样式表取它，所以「送到」由 jsdom 用例钉、「解析得了」只能在这里钉；
+   *  ② 改动的目的成立：**浅色画布上的网格线不该比深色下更看不见**。写死 slate-400 时
+   *     浅色 1.11:1 / 深色 1.20:1（浅色反而更弱），换两档之后浅色走黑、反超深色。
+   */
+  test("网格线：color-mix 在 stroke 位置解析，且浅色不再比深色更弱", async ({
+    page,
+  }) => {
+    /* 三档 α 都是真值：0.14 = 主参考线默认与库预览定值，0.22 = 细线默认，0.6 = 用户拉高。 */
+    for (const alpha of [0.14, 0.22, 0.6]) {
+      /* 与 `gridLineColor()` 同一套取整口径：α 换算成百分数，不丢一位小数。 */
+      const percent = Math.round(alpha * 1000) / 10;
+      const expr = `color-mix(in srgb, var(--color-canvas-grid-line) ${percent}%, transparent)`;
+      const seen: Record<
+        "light" | "dark",
+        { stroke: string; color: Color; ratio: number }
+      > = {} as never;
+
+      for (const dark of [false, true]) {
+        await setTheme(page, dark);
+        const key = dark ? ("dark" as const) : ("light" as const);
+        const got = await page.evaluate(
+          ({ expr: e, token }) => {
+            const svg = document.createElementNS(
+              "http://www.w3.org/2000/svg",
+              "svg",
+            );
+            const path = document.createElementNS(
+              "http://www.w3.org/2000/svg",
+              "path",
+            );
+            path.setAttribute("style", `stroke: ${e}`);
+            svg.appendChild(path);
+            document.body.appendChild(svg);
+            const stroke = getComputedStyle(path).stroke;
+            svg.remove();
+            return {
+              stroke,
+              canvas: getComputedStyle(document.documentElement)
+                .getPropertyValue(token)
+                .trim(),
+            };
+          },
+          { expr, token: "--color-canvas" },
+        );
+        /* 线要真画出来：解析不出颜色 / 全透明 = 幽灵 token 的静默形态。 */
+        const color = parseColor(got.stroke);
+        expect(
+          color.a,
+          `α=${alpha} ${key}档的线没画出来：stroke=${got.stroke}`,
+        ).toBeGreaterThan(0);
+        seen[key] = {
+          stroke: got.stroke,
+          color,
+          ratio: contrastRatio(blendOver(got.stroke, got.canvas), got.canvas),
+        };
+      }
+
+      /* 两档各取对应色相：浅=黑、深=slate-400（**就是原来写死的那个值**，
+       * 所以深色主题下像素不变）。比分量不比字符串 —— 序列化形态是
+       * `color(srgb …)`，字符串断言会在 Chromium 改写法那天无故变红。 */
+      const expected: Record<"light" | "dark", [number, number, number]> = {
+        light: [0, 0, 0],
+        dark: [148, 163, 184],
+      };
+      for (const key of ["light", "dark"] as const) {
+        const c = seen[key].color;
+        const [r, g, b] = expected[key];
+        const got2 = [Math.round(c.r), Math.round(c.g), Math.round(c.b)];
+        expect(
+          got2,
+          `${key}档网格线色相应当是 [${r}, ${g}, ${b}]，实际 ${JSON.stringify(
+            got2,
+          )}（stroke=${seen[key].stroke}）`,
+        ).toEqual([r, g, b]);
+        expect(c.a, `${key}档的 α 没乘上去`).toBeCloseTo(alpha, 3);
+      }
+      console.log(
+        `[网格线 α=${alpha}] 浅 ${seen.light.ratio.toFixed(2)}:1 / 深 ${seen.dark.ratio.toFixed(2)}:1`,
+      );
+      expect(
+        seen.light.ratio,
+        `α=${alpha} 时浅色画布的网格线（${seen.light.ratio.toFixed(2)}:1）比深色（${seen.dark.ratio.toFixed(
+          2,
+        )}:1）更看不见 —— 写死单一色相的老问题回来了`,
+      ).toBeGreaterThanOrEqual(seen.dark.ratio);
     }
   });
 });

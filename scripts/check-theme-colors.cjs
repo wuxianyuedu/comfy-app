@@ -20,7 +20,7 @@
  *   ③ **反向三层**（都是硬闸，不进基线）：
  *      · **死豁免**：登记在表上却一处都不命中的条目 = 负债，会把该文件今后的
  *        写死色值静默放行，出现即阻断（口径按文件、不按条目，见下方注释）；
- *      · **幽灵 token**：呈现属性引用了从未定义的 `--color-*` —— 不报错、只是
+ *      · **幽灵 token**：字面 `var(--color-…)` 引用了从未定义的 token —— 不报错、只是
  *        颜色消失（`fill` 退黑、`stroke` 退 none），出现即阻断；
  *      · **拼接 token 名**：`--color-${x}` / `"--color-" + x` —— 前一条比对不到它，
  *        而 Tailwind v4 按源码里的**字面名**决定保留哪颗 `@theme` 变量，拼出来的名字
@@ -360,13 +360,6 @@ const EXEMPT_TABLES = [
       "子图节点两处类型色：默认端口色三档（#ec4899 / #6b7280 / #7C5CFC）与选中描边（rgba(56,189,248,0.9)）",
   },
   {
-    file: "src/components/studio/WorkflowCanvasDecorations.tsx",
-    exports: [],
-    reason:
-      "画布网格线色（148,163,184 + **透明度档由用户设置实时计算**）—— 两条网格线是浮在画布上的装饰，" +
-      "浅色下也仍然读得出，判据 2 不成立",
-  },
-  {
     file: "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx",
     exports: [],
     reason:
@@ -391,12 +384,6 @@ const EXEMPT_TABLES = [
     file: "src/components/studio/debug/DebugChainFooter.tsx",
     exports: [],
     reason: "调试链路条的类型色（琥珀描边 + 底色），色值即「调试态」语义",
-  },
-  {
-    file: "src/components/studio/workflow-library/WorkflowLibraryCanvas.tsx",
-    exports: [],
-    reason:
-      "画布网格线的 `var(--color-canvas-grid-line, …)` 兜底值（与 WorkflowCanvasDecorations 同源）",
   },
   {
     file: "src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.tsx",
@@ -502,25 +489,40 @@ function classifyFile(rel) {
 /* ── 幽灵 token：引用了从未定义的 --color-* ─────────────────── */
 
 /**
- * 呈现属性写 `fill="var(--color-x)"`，而 `--color-x` 全仓没人定义时**什么错都不报**：
- * `fill` 退成黑色初值、`stroke` 退成 `none` —— 图标变黑块、描边类图形整条消失。
- * 这比留一处写死色值更糟：写死至少还是设计稿里那个颜色。
+ * 字面写 `var(--color-x)`，而 `--color-x` 全仓没人定义时**什么错都不报**：
+ * 属性退成初值 —— SVG 的 `fill` 变黑、`stroke` 变 `none`，图标变黑块、描边类图形
+ * 整条消失。这比留一处写死色值更糟：写死至少还是设计稿里那个颜色。
  *
  * 实测来历：`ui/seed-mode-button.tsx` 的 5 颗 `--color-seed-*` 是在一次目录归并
  * 里从写死色值改成 `var()` 引用的，`globals.css` 却没补上定义，四个 seed 图标
  * 从此静默失效。同一件事的另一面是「该文件的主题色豁免不再命中任何东西」——
  * 死豁免把它暴露了出来，所以两条判据同批补。
  *
+ * **为什么判据从「属性形态」泛化成「任何字面引用」**：第一版只认 `fill=` / `stroke=`
+ * 这类属性，于是 `--color-canvas-grid-line`（从未定义，靠 `<Background color=…>` 的
+ * 兜底值活着）本来就抓不到；更讽刺的是，把三处网格线收进一个出口函数之后，引用变成
+ * 了出口里的模板串（`color-mix(… var(--color-canvas-grid-line) X% …)`），**连属性形态
+ * 都不是了** —— 集中化这个动作本身会把引用搬出判据的视野。所以判据只认三个条件：
+ * 字面量、无兜底、带 `--color-` 前缀，不再关心它挂在哪个语法位置上。
+ *
  * **判据边界**（说清不覆盖什么，别以为这条能抓所有未定义变量）：
- *   · 只认 `fill` / `stroke` / `stopColor` 一类**呈现属性**上的字符串字面量
- *     `var(--color-…)`，且**没有兜底值**（`var(--x, #fff)` 不报 —— 取不到也有色）；
- *   · `style={{}}`、Tailwind 任意值 `text-(--x)`、以及运行期注入的变量
- *     （`--transform-origin` / `--sidebar-width` 这些由 base-ui 与宿主代码写入的）
- *     一律不判：实测 Tailwind 裸变量写法 310 处引用里有 43 处「CSS 里查无此名」，
- *     全部是运行期注入 —— 静态硬判会误报一片，那部分交给 review。
+ *   · 覆盖**任何字面量** `var(--color-…)` 引用 —— 不限于呈现属性：SVG 的
+ *     `fill=` / `stroke=` / `stopColor=`、React Flow `<Background color= bgColor=>`、
+ *     `style={{}}`、Tailwind 的 `[var(--color-x)]`，以及**收在出口函数里的模板串**
+ *     （`gridLineColor()` 就是这种 —— 只按属性形态判的话，集中化本身就会把引用
+ *     搬出判据视野，这个洞是本次改动实测踩出来的）；
+ *   · **带兜底值的不报**（`var(--x, #fff)`）—— 取不到也有色，渲染结果确定；
+ *   · **运行期注入的变量不判**：`--transform-origin` / `--available-height` /
+ *     `--sidebar-width` 这些由 base-ui 与宿主代码写入的名字不带 `--color-` 前缀，
+ *     天然落在本判据之外；实测 Tailwind 裸变量写法 310 处里 43 处「CSS 查无此名」
+ *     全是这一类 —— 静态硬判会误报一片，那部分交给 review；
+ *   · **拼接出来的名字判不到**，交给下面第 ③ 条。
+ *
+ * 实测口径：非测试代码里字面 `var(--color-…)`（无兜底）**175 处，查无定义 0 处**。
+ * 早先只认属性形态时是 28 处 —— 泛化把覆盖率放大到 6 倍而不引入任何误报，
+ * 因为「必须带 `--color-` 前缀 + 必须是无兜底的字面量」这两个条件已经把噪声排掉了。
  */
-const PRESENTATION_VAR_RE =
-  /\b(?:fill|stroke|stopColor|stop-color|flood-color|lighting-color)\s*=\s*["']var\(\s*(--color-[\w-]+)\s*\)["']/g;
+const COLOR_VAR_REF_RE = /var\(\s*(--color-[\w-]+)\s*\)/g;
 const CSS_VAR_DECL_RE = /^\s*(--color-[\w-]+)\s*:/gm;
 
 /**
@@ -625,7 +627,7 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
 
   /* 幽灵 token：同一个文件循环里顺手扫，避免第二次遍历 src。 */
   for (let i = 0; i < codeLines.length; i++) {
-    for (const m of codeLines[i].matchAll(PRESENTATION_VAR_RE)) {
+    for (const m of codeLines[i].matchAll(COLOR_VAR_REF_RE)) {
       if (declaredColorVars.has(m[1])) continue;
       ghosts.push({
         file: r,
@@ -699,7 +701,7 @@ if (unusedExempts.length > 0 && !REPORT_ONLY) {
 function printGhosts() {
   if (!ghosts.length) return;
   console.log(
-    "[theme-colors] 引用了从未定义的 --color-*（呈现属性会静默失效）：",
+    "[theme-colors] 引用了从未定义的 --color-*（字面 var() 会静默退成初值）：",
   );
   for (const g of ghosts) {
     console.log(`  ✗ ${g.file}:${g.line} — ${g.name}｜${g.text}`);
