@@ -131,7 +131,8 @@ describe("本地文件工作流 · 自动同步设置", () => {
 });
 
 describe("resync 是写回磁盘内容的唯一入口", () => {
-  const src = read("src/server/api/routers/workflow.ts");
+  /* resync 自 workflow.ts 按子域拆分后落在 workflow-mutations.ts（key 逐字不变）。 */
+  const src = read("src/server/api/routers/workflow-mutations.ts");
 
   it("它才做「重新导入 + 落库」", () => {
     expect(src).toMatch(/resync:[\s\S]{0,2000}?reimportFromSource/);
