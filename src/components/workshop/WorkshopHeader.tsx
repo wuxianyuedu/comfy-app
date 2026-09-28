@@ -1,7 +1,7 @@
 "use client";
 
-// 工坊顶栏：项目标识（只读，项目身份由首页决定）、总进度、模型适配 / 模式契约两个入口。
-// 纯展示，数据由 controller 下发。
+// 工坊顶栏：项目标识（只读，项目身份由首页决定）、六段流程的健康度分段条、模型适配 /
+// 模式契约两个入口。纯展示，数据由 controller 下发。
 //
 // Phase 2：并入统一 proj_* 项目后，工坊不再有自建的项目切换器——新建 / 切换 /
 // 删除项目统一在首页（canvas-store）发生，这里只展示当前所在项目的标题。
@@ -13,6 +13,7 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { toPct } from "~/lib/progress";
 import { cn } from "~/lib/utils";
 import { countPendingStages } from "~/components/workshop/stage-config";
 import type { HealthRow } from "~/components/workshop/stage-config";
@@ -57,17 +58,41 @@ export function WorkshopHeader({
         </div>
       </div>
 
-      {/* 项目总进度：放到最顶部（设计稿红框区域） */}
-      <ProgressBar
-        value={progressPct}
-        label="项目总进度"
-        className="hidden w-full max-w-[260px] text-[11px] lg:block"
-        trackClassName="bg-elevated mt-1.5 h-2"
-      />
+      {/* 各段流程的健康度：一段一根细条，条长 = 该段完成度，颜色 = 收没收尾。
+          它**取代**了原先这里那根「项目总进度」条：顶栏同时挂总条与分段条，就是把
+          同一件事说两遍，两处口径不一致时用户先撞上的是矛盾。总数没丢 —— 折成左边
+          一个数字；「还差哪几段」仍是右侧胶囊的文字表述（色觉之外还有一条路径）。 */}
+      <div className="hidden min-w-0 flex-1 items-center gap-3 lg:flex">
+        <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+          总进度 {progressPct}%
+        </span>
+        <div
+          role="group"
+          aria-label="工坊流程健康度"
+          className="flex min-w-0 flex-1 items-center gap-2"
+        >
+          {health.map((row) => (
+            <ProgressBar
+              key={row.id}
+              className="min-w-0 flex-1"
+              value={toPct(row.ratio, 1)}
+              label={row.label}
+              showValue={false}
+              ariaLabel={row.label}
+              /* 段宽只有几十像素，2% 画不出可辨识的一格，会和「还没开始」看着
+                 一样。`minVisible` 就是这条差异的既有出口（0 仍然恒为 0）。 */
+              minVisible={10}
+              trackClassName="bg-elevated h-1.5"
+              fillClassName={row.ratio >= 1 ? "bg-success" : undefined}
+            />
+          ))}
+        </div>
+      </div>
 
       <div className="flex flex-1 items-center justify-end gap-3">
-        {/* 过去这里独立数一遍 ratio，和总进度条各说一次同一件事，两处一旦口径不同就是
-            自相矛盾。现在胶囊只呈现「差哪几段」，段数与名字同源于 health 快照。 */}
+        {/* 过去这里独立数一遍 ratio，与左边的进度表述各说一次同一件事，两处一旦口径
+            不同就是自相矛盾。现在胶囊只呈现「差哪几段」这段文字：条负责每段到哪，
+            胶囊负责差的是哪几段，段数与名字同源于 health 快照。 */}
         <span
           className={cn(
             "rounded-full px-3 py-1.5 text-xs font-medium",
