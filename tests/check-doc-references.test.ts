@@ -384,6 +384,28 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
     expect(output).toContain("未找到对应标题锚点");
   });
 
+  /* 运行期产物（被 .gitignore 忽略）不得被要求存在。
+   * 判据是 62283f41 那次引入的恒红：`db.sqlite` 进了 AGENTS_ROOT_FILES，而它
+   * 被 .gitignore 忽略——干净检出（CI / 新克隆 / 评审容器）里永远不存在，于是
+   * `pnpm doc:check` 一直报这一条，而「按提示改 AGENTS.md」是错的（那句话本来就
+   * 该提这个文件名，它讲的是「构建会把它复制进产物」）。 */
+  it("被 .gitignore 忽略的根级产物（`db.sqlite`）不参与「必须存在」判定", () => {
+    const { code, output } = runCheck();
+    expect(output).toContain("[doc:check] ✓");
+    expect(code).toBe(0);
+    // AGENTS.md 里确实写着它（反向保护：不是靠「文档里没这句」换来的绿）
+    expect(docText("AGENTS.md")).toContain("`db.sqlite`");
+    expect(docText(".gitignore")).toMatch(/^db\.sqlite$/m);
+  });
+
+  it("豁免判据落在 .gitignore 上，不是又列一份人工名单", () => {
+    const script = readFileSync(CHECK, "utf8");
+    expect(script).toContain("function gitignoredRootNames()");
+    expect(script).toContain("GITIGNORED_ROOT_NAMES.has(p)");
+    // 反向：真不存在的路径仍要拦（豁免只覆盖 .gitignore 里登记过的名字）。
+    expect(script).toContain("在仓库中不存在");
+  });
+
   it("路径通配 / 占位符 / range 记法不被误判为路径（零误报回归）", () => {
     // 探针里塞几种典型「看起来像路径但不是路径」的形态，期望 code=0。
     const { code, output } = withAgentsMdProbe(
