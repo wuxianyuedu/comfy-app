@@ -55,19 +55,32 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 **回退**：把 `COMFY_EXECUTOR` 删掉或改回 `inline`，重启 launcher——行为与灰度前
 逐字相同。
 
-## 桌面包（app.exe / 预构建壳）：暂不支持
+## 桌面包（app.exe / 预构建壳）：宿主件已随包，但还没人拉起它
 
-桌面壳的编排链本身已经通了（壳会拉起 `dev-launcher --mode prebuilt`，同一处
-步骤拉 host），但 **standalone 产物今天不含 host 的运行前提**：
+3-E1（ISSUE #1169 的第一半）已经解决「产物里跑不起来」：`pnpm build` 收尾会把宿主的
+运行时图**预编译**成 `scripts/executor-host.runtime.mjs`（连一份构建清单
+`executor-host.build.json`，记 inputs/externals 供门禁复算）落进产物，然后
+**真起一次宿主进程**做冒烟（`scripts/smoke-executor-host-standalone.mjs`，它是
+`pnpm build` 的收尾一步；桌包构建的 1/4 步就是 `pnpm build`，所以组装 static 之前
+一定已经冒过烟）。宿主入口按**内容**决定加载
+哪份图：预编译件在 → 用它；不在（dev 检出）→ 装 tsx 的 ESM 钩子加载 `src/lib/**` 的
+TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**不再依赖**「Turbopack 全项目
+追踪恰好把 `src/**` 带进产物」那条噪声（规范 §7.2）——两条通道互不依赖，缺预编译件
+会以 `boot FAILED` 大声失败而不是静默退化。
 
-- host 动态加载的是 `src/lib/**` 的**源码态**执行链（reaper / enqueue /
-  executor-* 等），Next 构建只把它们编译进 `.next/server` 分块，原始 TS 不进产物；
-- TS 运行时 `tsx`（及其 esbuild 二进制）是 devDependency，同样不在产物里。
+**但桌包里设 `COMFY_EXECUTOR=host` 目前仍然不会执行任务**，原因换了：`standalone`
+模式（壳直接起内嵌 `server.js`）**不经过编排器**，而「拉起宿主」这一步在编排器的 6.5
+步里——没有进程去起那个已经能跑起来的宿主。表现因此从「boot 大声失败 exit 1」变成
+#1204 之后的新形态：任务被标成 host 归属、安静地留在队列里等一个不存在的宿主，状态栏
+排队数一直涨，行上只有「⏳ 等待…」一句。**判据**：`log/services/executor-host.log`
+里连 `boot pid=` 那行都没有（不是起不来，是根本没人起）。
 
-因此桌面包里设 `COMFY_EXECUTOR=host` 的表现是：host 启动即大声失败
-（`runtime boot FAILED`，exit 1，见 `log/services/executor-host-stderr-*.log`），
-任务不会入库执行、也不会误跑。产物化支持是独立立项（ISSUE #1169，范围见 ADR §13
-的 3-E：闭包计算 + 拷贝进产物 + `check-standalone-contents` 真数产物验证 + 壳环境实测）。
+分发口径：**3-E2（ISSUE #1216）落地前，不要在桌包里设这个开关**（保持不写 = inline）。
+3-E2 的范围 = standalone 下由谁拉起宿主（已签方向：新增一个 standalone 运行入口，
+由它起 `server.js` 并按 `resolveExecutorMode()` 决定要不要起宿主，壳侧只换一行命令）+
+桌包资源装配本身的定性（`tauri.conf.json` 目前没有 `bundle.resources`，
+`src-tauri/static` → `resource_dir()` 这一截要靠一次真 `pnpm tauri build` 才算定性，
+不许凭文档推断）。
 
 ## 日志与状态去哪看
 
