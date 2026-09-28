@@ -196,3 +196,44 @@ export function buildMissingSummary(ctx: StageViewContext): MissingItem[] {
     },
   ];
 }
+
+/** 健康度快照的一行：一段阶段在屏顶进度条上的表达。 */
+export interface HealthRow {
+  id: Tab;
+  label: string;
+  /** 0~1 完成度，直接来自 computeStageRatios，不在这里二次加工。 */
+  ratio: number;
+  /** 这一段还缺不缺东西（用于屏顶只留一处「还差几段」的说法）。 */
+  pending: boolean;
+}
+
+/**
+ * 屏顶健康度条的数据源。
+ *
+ * 为什么要单独一个纯函数：屏顶现在同时存在三种「进度怎么说」——总进度条、
+ * 「距离成片还差 N 个阶段」的胶囊、以及阶段导航里每段的小字。三处各自表述，
+ * 数字对不上时用户先撞上的是矛盾而不是错误。这里把「一段阶段的健康度」收成一份
+ * 结构，视图要么用它、要么明确写「我不进这份账」，不再各算各的。
+ *
+ * 判定不掺任何写死目标：ratio 来自 stageRatios（其入参全是草稿/生成态的真实计数），
+ * pending 就是「这一段还没做完」，不接受「应该有几个」这类外部常数。
+ */
+export function buildHealthSnapshot(
+  ratios: StageRatios,
+  _ctx: StageViewContext,
+): HealthRow[] {
+  return STAGE_DEFS.map((stage) => {
+    const ratio = ratios[stage.id];
+    return {
+      id: stage.id,
+      label: stage.label,
+      ratio,
+      pending: ratio < 1,
+    };
+  });
+}
+
+/** 还差几段没做完（屏顶胶囊的唯一数据源，替代各处自行数 ratio）。 */
+export function countPendingStages(rows: readonly HealthRow[]): number {
+  return rows.filter((row) => row.pending).length;
+}
