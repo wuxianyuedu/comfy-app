@@ -83,6 +83,15 @@
     0 0 0 / 0.12
   ); /* 小地图非视口遮罩 (light default) */
   --color-canvas-grid-dot: rgb(0 0 0 / 0.22); /* 画布点阵底纹 (light default) */
+  /* 画布网格**线**色。与上一行 `--color-canvas-grid-dot` 有意不同：**这里不烤 α**。
+     点阵的强度是设计定死的，而网格线的强度是**用户在画布设置里调的**（`gridMinorAlpha`
+     / `gridMajorAlpha`），还要再乘一个随缩放淡出的系数 —— 所以本 token 只给色相，
+     α 由调用处用 `color-mix(in srgb, var(--color-canvas-grid-line) X%, transparent)`
+     现取（出口在 `canvas/workflow-canvas-grid.ts` 的 `gridLineColor()`）。
+     浅档取黑，与点阵的浅档同约定；此前两处画布各自写死 `rgba(148,163,184,…)`，
+     实测细网格在浅色画布上只有 1.18:1（深画布 1.41），浅档换成黑后是 1.68:1。
+     深档保持 `rgb(148 163 184)` 原值 —— 深色主题下**像素不变**。 */
+  --color-canvas-grid-line: rgb(0 0 0);
   --color-panel: #ffffff; /* 面板/顶栏/浮层 (light default) */
   --color-panel-deep: #f0f1f5; /* 侧栏/页脚 (light default) */
   --color-card: #ffffff; /* 卡片/下拉浮层 (light default) */
@@ -275,6 +284,8 @@
   --color-canvas-deep: #0f0f14; /* 输入控件/深面板底 */
   --color-canvas-minimap-mask: rgb(0 0 0 / 0.78); /* 小地图非视口遮罩 */
   --color-canvas-grid-dot: rgb(255 255 255 / 0.22); /* 画布点阵底纹 */
+  /* 网格线深档 = 原写死色相（slate-400），深色主题下像素不变；α 见 `@theme` 的说明。 */
+  --color-canvas-grid-line: rgb(148 163 184);
   --color-panel: #14141a; /* 面板/顶栏/浮层 */
   --color-panel-deep: #0f0f16; /* 侧栏/页脚 */
   --color-card: #16161c; /* 卡片/下拉浮层 */

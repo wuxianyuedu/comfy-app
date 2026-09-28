@@ -14,11 +14,11 @@ import { DEFAULT_CANVAS_SETTINGS } from "./canvas/WorkflowCanvasSettings";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { enterCommit } from "~/components/ui/use-enter-commit";
-import { alphaText } from "~/lib/number-format";
 import {
   GRID_BASE_LAYER_ID,
   GRID_MAJOR_LAYER_ID,
   GRID_MINOR_LAYER_ID,
+  gridLineColor,
 } from "./canvas/workflow-canvas-grid";
 export const GRID_CELL = 10;
 export const GRID_MAJOR_EVERY = 10;
@@ -77,7 +77,7 @@ export function CanvasGrid({
            *（此前缩放 0.5 时透明度直接是 0）。 */
           gap={settings.gridGap}
           lineWidth={settings.gridMinorLineWidth}
-          color={`rgba(148,163,184,${alphaText(settings.gridMinorAlpha * minorAlpha)})`}
+          color={gridLineColor(settings.gridMinorAlpha * minorAlpha)}
         />
       )}
       {/* 底色层：**唯一一个恒常渲染**的网格层（它自己就是画布的底色）。
@@ -97,7 +97,7 @@ export function CanvasGrid({
           variant={BackgroundVariant.Lines}
           gap={settings.gridGap * GRID_MAJOR_EVERY}
           lineWidth={settings.gridMajorLineWidth}
-          color={`rgba(148,163,184,${alphaText(settings.gridMajorAlpha)})`}
+          color={gridLineColor(settings.gridMajorAlpha)}
           bgColor="transparent"
         />
       )}
