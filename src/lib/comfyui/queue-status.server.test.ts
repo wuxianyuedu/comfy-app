@@ -22,6 +22,12 @@ const stub = vi.hoisted(() => {
   const state = {
     running: null as Record<string, unknown> | null,
     queued: 0,
+    /** 进程级快照的桩返回值（`status.ts` 的 `ComfyRuntimeSnapshot` 子集）。 */
+    snapshot: {
+      running: false,
+      unverified: false,
+      didQueryProcTable: true,
+    } as { running: boolean; unverified: boolean; didQueryProcTable: boolean },
   };
   return {
     state,
@@ -31,6 +37,7 @@ const stub = vi.hoisted(() => {
       queue_running: [{ prompt_id: "p1" }],
       queue_pending: [{ prompt_id: "p2" }, { prompt_id: "p3" }],
     })),
+    getSnapshot: vi.fn(async () => state.snapshot),
   };
 });
 
@@ -41,6 +48,9 @@ vi.mock("~/lib/core/repository-task", () => ({
   },
 }));
 vi.mock("~/lib/comfyui/client", () => ({ getComfyQueue: stub.getQueue }));
+vi.mock("~/lib/comfyui/status", () => ({
+  getComfyRuntimeSnapshot: stub.getSnapshot,
+}));
 
 const mod = await import("./queue-status.server");
 
@@ -78,6 +88,11 @@ function baseRow(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   stub.state.running = baseRow();
   stub.state.queued = 2;
+  stub.state.snapshot = {
+    running: false,
+    unverified: false,
+    didQueryProcTable: true,
+  };
   // 三条句柄在用例间不清零的话，「各发一次」那条会累计成 8 次。
   stub.findRunning.mockClear();
   stub.countQueued.mockClear();
@@ -85,6 +100,7 @@ beforeEach(() => {
     queue_running: [{ prompt_id: "p1" }],
     queue_pending: [{ prompt_id: "p2" }, { prompt_id: "p3" }],
   }));
+  stub.getSnapshot.mockClear();
 });
 
 describe("状态栏那一格的全部来源都是库", () => {
@@ -150,7 +166,7 @@ describe("状态栏那一格的全部来源都是库", () => {
     expect(status.running?.nodeType).toBeNull();
   });
 
-  it("ComfyUI 不可达：整格降级成离线，但仍把库里那两个数报出来", async () => {
+  it("ComfyUI HTTP 不可达且进程也不在：整格降级成离线，但仍把库里那两个数报出来", async () => {
     stub.getQueue.mockResolvedValueOnce(null);
 
     const status = await mod.collectComfyQueueStatus();
@@ -159,6 +175,45 @@ describe("状态栏那一格的全部来源都是库", () => {
     expect(status.comfy).toEqual({ running: 0, pending: 0 });
     expect(status.queued).toBe(2);
     expect(status.running?.taskId).toBe("t-1");
+  });
+
+  it("HTTP 没读到但进程活着（跑图满载 /queue 连续超时的那一档）：仍算在线", async () => {
+    stub.getQueue.mockResolvedValue(null);
+    stub.state.snapshot = {
+      running: true,
+      unverified: false,
+      didQueryProcTable: true,
+    };
+
+    const status = await mod.collectComfyQueueStatus();
+
+    expect(stub.getSnapshot).toHaveBeenCalledTimes(1);
+    expect(status.online).toBe(true);
+    /* comfy 计数置 0 的含义是「这一拍没读到」，不是「队列空了」；
+     * 本应用自己的两个数照常来自库。 */
+    expect(status.comfy).toEqual({ running: 0, pending: 0 });
+    expect(status.queued).toBe(2);
+    expect(status.running?.taskId).toBe("t-1");
+  });
+
+  it("HTTP 没读到且快照 unverified（进程表也查失败）：不当作在跑", async () => {
+    stub.getQueue.mockResolvedValue(null);
+    stub.state.snapshot = {
+      running: false,
+      unverified: true,
+      didQueryProcTable: true,
+    };
+
+    const status = await mod.collectComfyQueueStatus();
+
+    expect(status.online).toBe(false);
+  });
+
+  it("HTTP 正常时不问快照：回落只在失败路径付一次 IO", async () => {
+    const status = await mod.collectComfyQueueStatus();
+
+    expect(status.online).toBe(true);
+    expect(stub.getSnapshot).not.toHaveBeenCalled();
   });
 
   it("三条读各发一次：没有为拿一个字段再回查一遍", async () => {
