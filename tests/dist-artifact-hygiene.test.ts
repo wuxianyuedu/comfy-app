@@ -28,7 +28,7 @@ import {
 import { dirname, join, relative, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 // 运行时真的调用白名单剔除（不是只读源码文本）：嵌套条目 / 未登记新文件的
 // 行为只有真删一次才看得出来。
@@ -247,25 +247,37 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
 });
 
 /**
- * 取 `check-standalone-contents.cjs` 的禁忌清单（**真 require**，不是解析源码文本）。
+ * `check-standalone-contents.cjs` 的导出面（**真 require**，不是解析源码文本）。
  *
  * 为什么 require 而不是正则扫源码：那份清单里的条目会被 prettier 折行（实测
  * `["开发期配置", …]` 就是被折的那条），按文本取要么随格式无谓变红、要么把
  * `[^/]` 这种「字符类里的斜杠」切成半条正则（本文件前一版就是这么炸的：
  * `Invalid regular expression: Unterminated character class`）。require 拿到的是
- * ** RegExp 对象本身**，比对 `.source` 才是逐字比对。
+ * **RegExp 对象本身**与**真函数**，比对与调用才作数。
  * 该脚本在 `require.main !== module` 时不会 `process.exit`（见文件尾的守卫）。
  */
-function checkerForbidden(): Array<[string, RegExp]> {
-  const mod = createRequire(import.meta.url)(
+interface CheckerExports {
+  FORBIDDEN: Array<[string, RegExp]>;
+  REQUIRED_RUNTIME_FILES: string[];
+  REQUIRED_HOST_FILES: string[];
+  RUNTIME_DIR: string;
+  collectFiles: (dir: string, followLinks: boolean) => string[];
+  missingRequiredRuntimeFiles: (dir: string) => string[];
+  checkDir: (dir: string, label: string) => boolean;
+}
+
+function checkerExports(): CheckerExports {
+  return createRequire(import.meta.url)(
     "../scripts/check-standalone-contents.cjs",
-  ) as {
-    FORBIDDEN: Array<[string, RegExp]>;
-  };
+  ) as CheckerExports;
+}
+
+function checkerForbidden(): Array<[string, RegExp]> {
+  const { FORBIDDEN } = checkerExports();
   // 解析退化（清单改名 / 导出漏项）会让下面所有断言静默变成「什么都没核对」——
   // 而这正是「清单核对型」判据最危险的失效形态，先要求它数到东西
-  expect(mod.FORBIDDEN.length).toBeGreaterThan(8);
-  return mod.FORBIDDEN;
+  expect(FORBIDDEN.length).toBeGreaterThan(8);
+  return FORBIDDEN;
 }
 
 /** 某个标签在禁忌清单里的全部正则原文（同名的可以有多条）。 */
@@ -507,5 +519,141 @@ describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
       "开发机私有输入",
       "开发库文件",
     ]);
+  });
+});
+
+/* ── 「必须有的」反向检查：两层产物都要数（规范 §7.4）─────────────────────
+ *
+ * 此前这段只在 `label === "standalone"` 时跑，而最终被编译期内嵌进 exe 的是
+ * `build-desktop` 组装后的 `src-tauri/static` —— 整树 `dereference: true` 拷贝与白名单
+ * 剪枝全发生在 standalone 那一次检查**之后**。缺 `app-route-turbo` 在 exe 里的表现与在
+ * 构建目录里一模一样（页面正常、接口全 500），所以「构建期过了」推不出「出厂件也在」。
+ */
+describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
+  const NAMES: [string, string, string] = [
+    "app-route-turbo.runtime.prod.js",
+    "app-page-turbo.runtime.prod.js",
+    "pages-turbo.runtime.prod.js",
+  ];
+
+  /**
+   * 造一份「确实是个产物」的最小目录：有 `server.js`，运行时脚本按传入子集铺。
+   *
+   * 宿主那三件也一并铺齐 —— `checkDir` 里那条 `missingHost` 同样以「有 server.js」为
+   * 前提，不铺齐的话本用例报出来的红就不是我们要验的那一条（变量必须只有一个）。
+   */
+  function makeProduct(dir: string, present: string[]): void {
+    const mod = checkerExports();
+    writeFileSync(join(dir, "server.js"), "// entry");
+    for (const rel of mod.REQUIRED_HOST_FILES) {
+      const abs = join(dir, rel);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, "// host");
+    }
+    for (const name of present) {
+      const abs = join(dir, mod.RUNTIME_DIR, name);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, "runtime");
+    }
+  }
+
+  it("齐件判 0 缺、少一件就点名那一件（不是恒绿也不是恒红）", () => {
+    const dir = mkdtempSync(join(tmpdir(), "comfyapp-req-"));
+    try {
+      makeProduct(dir, NAMES);
+      expect(checkerExports().missingRequiredRuntimeFiles(dir)).toEqual([]);
+      rmSync(join(dir, checkerExports().RUNTIME_DIR, NAMES[0]), {
+        force: true,
+      });
+      expect(checkerExports().missingRequiredRuntimeFiles(dir)).toEqual([
+        NAMES[0],
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * 这条是**本次修复的本体**：同一份缺件目录，label 传 `"static"` 也必须报。
+   *
+   * 判据落在行为上（真调用 `checkDir` 并捕输出），而不是「源码里还有没有那个
+   * `if (label === …)`」—— 结构断言在别人换一种写法时会无谓变红，或反过来在检查
+   * 真的被删掉时变成无谓的绿。
+   */
+  it("static（真正被内嵌进 exe 的那一层）也报缺件", () => {
+    const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-req-"));
+    const lines: string[] = [];
+    // 两个通道都按住：checkDir 的「✓ 产物干净」走 console.log，不接住会往测试输出里灌噪声
+    const errSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation((...args: unknown[]) => {
+        lines.push(args.join(" "));
+      });
+    const logSpy = vi
+      .spyOn(console, "log")
+      .mockImplementation((...args: unknown[]) => {
+        lines.push(args.join(" "));
+      });
+    try {
+      // 故意少 app-route-turbo
+      makeProduct(dir, NAMES.slice(1));
+      expect(checkerExports().checkDir(dir, "static")).toBe(true);
+      expect(
+        lines.some(
+          (line) =>
+            line.includes("[static]") && line.includes("Next 运行时脚本缺件"),
+        ),
+        "static 层没被缺件检查覆盖：组装与剪枝发生在那之后，没人看第二眼",
+      ).toBe(true);
+
+      // 反向对照：同一份目录把件补齐就该放行（证明上面那条不是恒红）
+      lines.length = 0;
+      makeProduct(dir, [NAMES[0]]);
+      expect(checkerExports().checkDir(dir, "static")).toBe(false);
+      expect(lines.join(" ")).not.toContain("Next 运行时脚本缺件");
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * 两个口径的分工也得钉住，否则下次有人「统一成一份清单」就会一边假红一边假绿：
+   * standalone 的 `node_modules/next` 是指向 pnpm store 的**链接**，
+   * 「必须有的」按可达判（经链接 require 得到就算在位），
+   * 「不该有的」按真文件判（不穿链接，否则把开发机内容算成产物内容）。
+   */
+  it("判「必须有的」穿链接可达即算在位，判「不该有的」不穿", () => {
+    const store = mkdtempSync(join(tmpdir(), "comfyapp-store-rt-"));
+    const dir = mkdtempSync(join(tmpdir(), "comfyapp-link-rt-"));
+    const { RUNTIME_DIR, collectFiles, missingRequiredRuntimeFiles } =
+      checkerExports();
+    /**
+     * 链接挂在 `node_modules/next` 上，所以 `store` 扮演的就是 next **包本身**：
+     * 里面的相对路径是 RUNTIME_DIR 去掉 `node_modules/next/` 前缀的那一段。
+     */
+    const insidePkg = RUNTIME_DIR.replace(/^node_modules\/next\//, "");
+    try {
+      for (const name of NAMES) {
+        const abs = join(store, insidePkg, name);
+        mkdirSync(dirname(abs), { recursive: true });
+        writeFileSync(abs, "runtime");
+      }
+      mkdirSync(join(dir, "node_modules"), { recursive: true });
+      writeFileSync(join(dir, "server.js"), "// entry");
+      symlinkDir(store, join(dir, "node_modules", "next"));
+
+      // 运行时经链接 require 得到 → 判「必须有的」不能报缺件（那是假红）
+      expect(missingRequiredRuntimeFiles(dir)).toEqual([]);
+      // 同一份目录按「真文件」口径数：链接背后的内容不算产物内容
+      const real = collectFiles(dir, false);
+      expect(real).not.toContain(`${RUNTIME_DIR}/${NAMES[0]}`);
+      // 链接本身算一项产物内容（探针不空跑）
+      expect(real).toContain("node_modules/next");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(store, { recursive: true, force: true });
+    }
   });
 });

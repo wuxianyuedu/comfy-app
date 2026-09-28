@@ -1775,6 +1775,17 @@ outputFileTracingIncludes: {
   逐个点名 `REQUIRED_RUNTIME_FILES`（`app-route-turbo` / `app-page-turbo` /
   `pages-turbo`），缺任一份即非零退出。这是该脚本里唯一一条「查缺件」而非
   「查多余」的规则，因为缺件的表现恰恰是运行期 500、而构建期静默。
+  **两层产物都要数**（`.next/standalone` 与 `src-tauri/static`）：此前它按
+  `label === "standalone"` 只数构建目录那一份，而真正被编译期内嵌进 exe 的是
+  `build-desktop` 组装后的 `static` —— 整树 `dereference: true` 拷贝与白名单剪枝
+  **全部发生在 standalone 那次检查之后**，所以「构建期过了」推不出「出厂件也在」，
+  而缺件在 exe 里的表现一模一样（页面正常、接口全 500）。
+  提缺件的前提改成「这一层真的是个产物」（目录里有 `server.js`）——
+  开发机上 `src-tauri/static` 常只剩几个入库例外文件，对那种半成品目录报缺件只会
+  把人指到错的地方（同 §7.5 宿主那一条的判据）。计数口径也随之分成两套、
+  各由一条用例钉住：「不该有的」按**真文件**数（不穿符号链接），
+  「必须有的」按**运行时可达**数（standalone 的 `node_modules/next` 是指向 pnpm store
+  的链接，经它 require 得到就算在位，用真文件口径会把它判成缺件 = 假红）。
 
 > **自查一行**（产物已存在时）：
 > `ls .next/standalone/node_modules/next/dist/compiled/next-server/` ——
@@ -1793,12 +1804,12 @@ devDependency（不随包分发），于是 boot 直接大声失败（`Cannot fi
 
 **已签方向 = 构建期预编译**。`pnpm build` 现在是四步链，**顺序本身就是判据**：
 
-| 步                                                       | 脚本                                       | 为什么在这个位置                                                                                                                                                                          |
-| -------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1                                                        | `next build`                             | 先有 standalone 根（`server.js` 在场）。产物化脚本以「目标目录里有没有 `server.js`」作前置断言，缺就直接抛，不在错的目录里写出半套文件                                                    |
-| 2                                                        | `scripts/build-executor-host.mjs`        | esbuild 把 `src/lib/comfyui/host-runtime.ts` 那张图打成一份 ESM 写进产物根（`scripts/executor-host.runtime.mjs`），并写构建清单 `scripts/executor-host.build.json`（entry / inputs / externals / bytes） |
-| 3                                                        | `scripts/standalone-private-inputs.mjs`  | §7.3 的开发机私有输入剥离。预编译那两件已登记在 `RUNTIME_SCRIPTS` / `BUILT_RUNTIME_SCRIPTS`，剥离按白名单剪 `scripts/**` 时不会剪掉它们；顺序在 2 之后 = 剥离看到的是最终集合            |
-| 4                                                        | `scripts/smoke-executor-host-standalone.mjs` | **对最终产物**冒烟：宿主三件齐 → 清单里每个非内置 external 都能解析 → 真起一个宿主进程（`--once` + 临时空库）跑完 boot，要求出现 `runtime inject-ok` 且没有 `boot FAILED`                |
+| 步  | 脚本                                         | 为什么在这个位置                                                                                                                                                                                         |
+| --- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `next build`                                 | 先有 standalone 根（`server.js` 在场）。产物化脚本以「目标目录里有没有 `server.js`」作前置断言，缺就直接抛，不在错的目录里写出半套文件                                                                   |
+| 2   | `scripts/build-executor-host.mjs`            | esbuild 把 `src/lib/comfyui/host-runtime.ts` 那张图打成一份 ESM 写进产物根（`scripts/executor-host.runtime.mjs`），并写构建清单 `scripts/executor-host.build.json`（entry / inputs / externals / bytes） |
+| 3   | `scripts/standalone-private-inputs.mjs`      | §7.3 的开发机私有输入剥离。预编译那两件已登记在 `RUNTIME_SCRIPTS` / `BUILT_RUNTIME_SCRIPTS`，剥离按白名单剪 `scripts/**` 时不会剪掉它们；顺序在 2 之后 = 剥离看到的是最终集合                            |
+| 4   | `scripts/smoke-executor-host-standalone.mjs` | **对最终产物**冒烟：宿主三件齐 → 清单里每个非内置 external 都能解析 → 真起一个宿主进程（`--once` + 临时空库）跑完 boot，要求出现 `runtime inject-ok` 且没有 `boot FAILED`                                |
 
 冒烟必须排在 3 之后：「剥完之后还缺不缺件」只有这一步能定性。
 
@@ -1828,12 +1839,12 @@ bundled 不靠人记。清单里还会混进 `fs` / `os` / `path` / `child_proce
 
 **门禁（四层，各管一件事）**：
 
-| 层         | 判据                                                                                                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 构建链     | `tests/executor-host-artifact.test.ts`：锁 `build` 的四步顺序、externals 清单内容、`createRequire` banner、`server-only` 桩，以及入口「按内容判据」且**不残留** `../src/lib/*.ts` 的裸导入 |
-| 产物缺件   | `scripts/check-standalone-contents.cjs` 的 `REQUIRED_HOST_FILES`：只有 `server.js` 在场才查（dev 检出没跑过构建不该红），`.next/standalone` 与 `src-tauri/static` 两层都查      |
-| 桌包装配   | `scripts/build-desktop.mjs`：拷贝时跳过「仓库里没有同名源」的构建期生成件，并在 §7.3 剥离**之后**断言宿主三件仍在，缺件报 `桌包缺宿主件 …` 并指明先跑 `pnpm build`                    |
-| 运行期     | `pnpm build` 收尾冒烟（第 4 步）+ 真产物 boot 用例（有 `server.js` 才跑，缺产物自动 skip）                                                                              |
+| 层       | 判据                                                                                                                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 构建链   | `tests/executor-host-artifact.test.ts`：锁 `build` 的四步顺序、externals 清单内容、`createRequire` banner、`server-only` 桩，以及入口「按内容判据」且**不残留** `../src/lib/*.ts` 的裸导入 |
+| 产物缺件 | `scripts/check-standalone-contents.cjs` 的 `REQUIRED_HOST_FILES`：只有 `server.js` 在场才查（dev 检出没跑过构建不该红），`.next/standalone` 与 `src-tauri/static` 两层都查                 |
+| 桌包装配 | `scripts/build-desktop.mjs`：拷贝时跳过「仓库里没有同名源」的构建期生成件，并在 §7.3 剥离**之后**断言宿主三件仍在，缺件报 `桌包缺宿主件 …` 并指明先跑 `pnpm build`                         |
+| 运行期   | `pnpm build` 收尾冒烟（第 4 步）+ 真产物 boot 用例（有 `server.js` 才跑，缺产物自动 skip）                                                                                                 |
 
 两份新脚本（`build-executor-host.mjs` / `smoke-executor-host-standalone.mjs`）的**错误出口文案保持 ASCII 英文**（§9.5：构建期脚本用 `[ERROR] …` 短句），注释按硬规则 23 写中文——它们不在 Next 的模块图上、`next-code-frame` 渲染不到，因此**不进** §9.6 那份白名单（名单越短越好，加错一个的代价是构建偶发崩）。
 
@@ -1843,7 +1854,6 @@ bundled 不靠人记。清单里还会混进 `fs` / `os` / `path` / `child_proce
 > `boot pid=` 都没有」这条排障判据见
 > [执行器宿主指南](../guide-executor-host.md) 的「桌面包」段。冒烟证明的也只是
 > 「能 boot 到 `inject-ok` 并完成一次队列扫描」，**不等于**「能连 ComfyUI 出图」。
-
 
 ## 8. Windows 入口规范：一律 .ps1，禁用 .bat / .cmd / .vbs
 
