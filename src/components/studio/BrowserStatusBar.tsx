@@ -314,7 +314,12 @@ export function BrowserStatusBar() {
 
         <MessageCenterButton />
 
-        <Hint label={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`}>
+        {/* 纯图标按钮（只有图标与可选的错误计数徽标，没有可见文字）：按 ui/hint 的契约
+            传 accessibleName，让提示文案同时成为 aria-label —— 否则读屏只报一颗匿名按钮。 */}
+        <Hint
+          label={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`}
+          accessibleName
+        >
           <Button
             variant="ghost"
             onClick={toggleOpen}
