@@ -6,6 +6,10 @@
 
 export interface ComfyStatsPayload {
   online: boolean;
+  /** 进程级判活：ComfyUI 进程还活着（`online:false` 但此项为 true = 在跑、
+   *  只是这一拍 HTTP 没应答）。路由侧经进程快照判定；HTTP 成功时恒为 true。
+   *  与 `/api/comfy/queue` 的在线口径同源（queue-status.server.ts 的快照回落）。 */
+  processAlive?: boolean;
   gpuName?: string;
   vramUsed: number;
   vramFree: number;

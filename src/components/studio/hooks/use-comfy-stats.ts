@@ -42,6 +42,10 @@ const OFFLINE: ComfyStatsPayload = {
 export function useComfyStats(): ComfyStatsController {
   const [stats, setStats] = useState<ComfyStatsPayload | null>(null);
   const [stale, setStale] = useState(false);
+  /* 进程级判活：最近一次观测里 ComfyUI 进程还活着（路由经进程快照给出）。
+   * HTTP 连续超时但进程在跑时它让 online 保持 true——顶栏不闪「未运行」，
+   * 数据保留旧值并置 stale（与 `/api/comfy/queue` 的在线口径同源）。 */
+  const [processAlive, setProcessAlive] = useState(false);
   /* 连续失败迟滞：单次探测失败（ComfyUI 跑图时 /system_stats 超时或网络抖动）
    * 不立刻翻离线，保留上一次好数据；连续达阈值才提交离线（判据见 use-offline-gate）。 */
   const tolerateOffline = useOfflineGate();
@@ -56,8 +60,17 @@ export function useComfyStats(): ComfyStatsController {
     if (myReq !== reqIdRef.current) return; // 已有更新的请求在跑，丢弃本次迟到回包
     if (next.online) {
       tolerateOffline(true);
+      setProcessAlive(true);
       setStats(next);
       setStale(false);
+      return;
+    }
+    /* 进程活着、只是这一拍没应答（跑图满载）：这不是「掉线」观测——不计入
+     * 连续失败（反而清零），数据保留旧值并置 stale，在线结论保持。 */
+    if (next.processAlive) {
+      tolerateOffline(true);
+      setProcessAlive(true);
+      setStale(true);
       return;
     }
     /* 离线观测：容忍期内保留上一次好数据、只打 stale 标记（不闪「未运行」）；
@@ -66,6 +79,7 @@ export function useComfyStats(): ComfyStatsController {
       setStale(true);
     } else {
       setStats(OFFLINE);
+      setProcessAlive(false);
       setStale(false);
     }
   }, [tolerateOffline]);
@@ -77,7 +91,8 @@ export function useComfyStats(): ComfyStatsController {
     pauseWhenHidden: true,
   });
 
-  const online = stats?.online === true;
+  /* 在线 = 读到过好数据，或最近一次观测确认进程还活着（数据可能暂时读不到）。 */
+  const online = stats?.online === true || processAlive;
 
   return { stats, online, stale: online && stale, refresh: pollOnce };
 }
