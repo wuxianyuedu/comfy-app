@@ -15,22 +15,26 @@
 // 其余行（DATABASE_URL、COMFYAPP_PORT 注释等）原样保留。
 //
 // 幂等：已存在 `.env` 时不覆盖（只报告），绝不吞掉使用者的配置。
-import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+// 密钥与占位值的**单一定义点**在 launcher-core 那份（桌包 standalone 运行期也用它）：
+// 两侧各写一份的后果不是重复代码，而是「dev 检出的鉴权配置形状」与「桌包里的」悄悄
+// 不同——而两边都能正常启动，没有任何判据会红（§12.12）。
+import {
+  newAuthSecret,
+  OAUTH_PLACEHOLDER,
+} from "./launcher-core/standalone-runtime-env.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envPath = path.join(root, ".env");
 const examplePath = path.join(root, ".env.example");
 
-/** 本地 OAuth 占位值：非空即可过 schema 校验，不参与任何真实鉴权。 */
-const OAUTH_PLACEHOLDER = "local-dev-placeholder";
-
 /** 按 KEY= 逐行覆盖（锚行首，兼容 example 未来新增注释/行）——与
  *  `scripts/prepare-local-run.ps1` 的 `(?m)^KEY=.*$` 口径一致。 */
 function fill(content) {
-  const secret = randomBytes(32).toString("hex");
+  const secret = newAuthSecret();
   return content
     .replace(/^BETTER_AUTH_SECRET=.*$/m, `BETTER_AUTH_SECRET="${secret}"`)
     .replace(

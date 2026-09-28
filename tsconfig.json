@@ -52,6 +52,11 @@
     "generated",
     "docs",
     "src-tauri/static",
+    /* 声明 bundle.resources 之后，tauri build 会把载荷**摆到 exe 旁边**
+       （实测 src-tauri/target/release/static/**，resource_dir() 的落点）。
+       那里含应用的 TS 源与第三方 .ts，不排除的话 tsc 检查的是构建产物：
+       报出来的类型错误指向一份没人维护的副本，改动方向完全看不出来。 */
+    "src-tauri/target",
     "temp",
     /* 构建/运行时产物：非源码，且内含第三方 .js（checkJs 会对它们报大量无关错误） */
     "python-venv",

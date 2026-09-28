@@ -232,10 +232,14 @@ pub fn reap_pid(project_root: &str, pid: u32) {
 ///
 /// 非 release（debug，`pnpm tauri dev`）**不写**：那里 dev server 由
 /// `beforeDevCommand` 起着，壳写一个模式进去只会与 dev 链路打架。
+///
+/// 返回本次定下的模式（已写过就返回那个值）：调用方要把它记进应用状态，
+/// 让启动页在建窗后的第一句问话就能按形态回答（见 lib.rs 的 `get_launch_status`）。
+/// 判据本体仍只在这里，调用方不重复推。
 #[cfg(not(debug_assertions))]
-pub fn ensure_launch_mode(project_root: &str) {
-  if std::env::var("COMFYAPP_LAUNCH_MODE").is_ok() {
-    return;
+pub fn ensure_launch_mode(project_root: &str) -> String {
+  if let Ok(mode) = std::env::var("COMFYAPP_LAUNCH_MODE") {
+    return mode;
   }
   let mode = if orchestrator_script(project_root).is_some() {
     "prebuilt"
@@ -248,10 +252,13 @@ pub fn ensure_launch_mode(project_root: &str) {
     "[ComfyAPP] launch mode={mode}（编排器{}）",
     if mode == "prebuilt" { "在，走 dev server" } else { "不在，走内嵌 standalone server" }
   );
+  mode.to_string()
 }
 
 #[cfg(debug_assertions)]
-pub fn ensure_launch_mode(_project_root: &str) {}
+pub fn ensure_launch_mode(_project_root: &str) -> String {
+  String::new()
+}
 
 /// 起不来时写 `run/launch-status.json`，让启动页说清「为什么起不来、该先做什么」。
 ///

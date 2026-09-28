@@ -744,7 +744,21 @@
       if (navigating) return;
       ticks++;
 
-      if (!appUrl) appUrl = await resolveAppUrl();
+      /* 应用地址每轮向壳重取，不在第一轮锁死。
+       * standalone 形态下 sidecar 听的是**现挑的空闲端口**（`spawn_sidecar` 的
+       * pick_free_port），而它把地址写进壳状态的时机在建启动页**之后**：首帧轮询
+       * 抢在那次写入之前，一次性锁存就会永远拿着「按检出路径推导的默认端口」去探测
+       * 一个没人听的端口 —— 表现是服务其实早就好了（/api/health 200）而启动页停在
+       * 0%。壳侧那句「更新应用 URL，供启动页 ready 后导航」要的就是这条更新通道，
+       * 页面必须真的每轮都读它。 */
+      let shellUrl = '';
+      try {
+        shellUrl = await invoke('get_app_url');
+      } catch (e) {
+        // 壳的 command 尚未注册（页面比 setup 更早跑完）：下一轮再取
+      }
+      if (shellUrl) appUrl = shellUrl;
+      else if (!appUrl) appUrl = await resolveAppUrl();
 
       // 1. 先尝试读取 launcher 写入的进度信息（如果有）
       const status = await fetchStatus();

@@ -153,7 +153,7 @@ describe("白名单两侧与桌包断言", () => {
     expect(buildDesktop).toContain(
       "BUILT_RUNTIME_SCRIPTS.includes(launcherFile)",
     );
-    expect(buildDesktop).toContain("桌包缺宿主件");
+    expect(buildDesktop).toContain("桌包缺件");
   });
 });
 
