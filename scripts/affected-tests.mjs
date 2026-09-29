@@ -53,8 +53,9 @@ const ROOT = path.resolve(HERE, "..");
 /**
  * 固定结构守护清单：与本次改动无关、每次提交都要跑的那批。它们守的是**全库级**
  * 不变量（日志通道单点、容器单入口、core 主干单一来源、lib 的 Node-only 声明、
- * barrel 出口纪律、mock 目标存在性、仓储基类纯净）——这些不会因为「本次没改到」
- * 而变得安全。这一份是**唯一出处**，钩子不再自己抄一遍。
+ * barrel 出口纪律、mock 目标存在性、仓储基类纯净、平台侧 CI 配置的在不在与规范
+ * 口径一致）——这些不会因为「本次没改到」而变得安全。这一份是**唯一出处**，
+ * 钩子不再自己抄一遍。
  */
 export const FIXED_STRUCTURAL_TESTS = [
   "tests/single-logger-channel.test.ts",
@@ -64,6 +65,10 @@ export const FIXED_STRUCTURAL_TESTS = [
   "tests/core-barrel-entry-discipline.test.ts",
   "tests/test-mock-targets.test.ts",
   "tests/repository-base-purity.test.ts",
+  // 「平台侧没有自动兜底」这件事现在是文档口径 + 仓库现实两头都要对上：加回一份
+  // `.cnb.yml` 不会让任何现有判据变红（规范 §13.5.3 的结论只写在正文里），而它一旦
+  // 存在就会被读成「有 CI 兜底」——绿灯可信度的地基不能靠人记得住。
+  "tests/no-platform-ci-config.test.ts",
   // 本层自己的判据必须在**每一次**提交里跑：解析器一旦把「自己」算漏了，
   // 只有这一条能发现（它守的是「增量层还在增量」这件事本身）。
   "tests/affected-tests.test.ts",
