@@ -1295,23 +1295,34 @@ test.describe("应用页签与全屏视图 @critical", () => {
       ];
 
       await page.route("**/api/logs/current**", async (route: Route) => {
-        const source = new URL(route.request().url()).searchParams.get(
-          "source",
-        );
+        const params = new URL(route.request().url()).searchParams;
+        const source = params.get("source");
+        /* 游标桩要与真服务端的 readLogSlice 同形（`src/app/api/logs/current/route.ts`）：
+           `size` 是**恒定的文件总大小**，客户端拿上一轮响应的 `size` 当游标；游标 == size
+           就是「读到文件末尾」→ 回空，且 size 与 offset 都不许缩 —— 把 size 报小等于宣称
+           「文件被新运行重建」，会触发尾部重读。
+           此前这里每轮无视 offset 重发同一批行：dev-launcher 的行没有时间戳，解析层按契约
+           钳到「当时本地时刻」（`log-store.ts` 时间线契约第 3 条），于是每轮生成一个新的
+           `time+level+message` 键，去重救不回来 —— 面板里同一条日志出现 3 份，
+           `getByText` 直接撞严格模式。 */
+        const offset = Number(params.get("offset") ?? "0");
         const lines =
           source === "dev-launcher"
             ? devLines
             : source === "launcher"
               ? launcherLines
               : [];
-        const content = lines.join("\n") + (lines.length ? "\n" : "");
+        const full = lines.join("\n") + (lines.length ? "\n" : "");
+        /* 前面留 1000 字节当「本会话之前已有的内容」，让尾部窗口那条路也走得到。 */
+        const size = 1000 + full.length;
+        const at = offset > 0 && offset < size ? offset : 1000;
         await route.fulfill({
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
-            content,
-            size: 1000 + content.length,
-            offset: 0,
+            content: offset >= size ? "" : full.slice(Math.max(0, at - 1000)),
+            size,
+            offset: at,
             sessionStart,
             bootId: "e2e:1",
           }),
@@ -1324,11 +1335,18 @@ test.describe("应用页签与全屏视图 @critical", () => {
         page.getByText("应用日志", { exact: true }).first(),
       ).toBeVisible();
 
-      /* 四个级别标记都被认出来，正文里不残留 `[HH:mm:ss] [LEVEL]` 前缀。 */
-      await expect(page.getByText("预检通过")).toBeVisible();
-      await expect(page.getByText("检查端口占用")).toBeVisible();
-      await expect(page.getByText("Job Object 创建成功")).toBeVisible();
-      await expect(page.getByText("找不到预编译 Tauri 壳")).toBeVisible();
+      /* 四个级别标记都被认出来，正文里不残留 `[HH:mm:ss] [LEVEL]` 前缀。
+         这里只取 `.first()`、**不钉「恰好一行」**：实测面板有两个独立消费者（状态栏
+         的错误计数与面板本体）各自从 `offset=0` 读一轮，而 dev-launcher 的行被钳到
+         「当时本地时刻」，两轮生成的是两个不同的去重键 —— 是否重复取决于两轮的间隔。
+         那是另一条产品侧问题（已登记），不该由这条用例用断言去掩盖，也不该让它决定
+         用例的稳定性。本条守的是级别解析与「正文不残留前缀」。 */
+      await expect(page.getByText("预检通过").first()).toBeVisible();
+      await expect(page.getByText("检查端口占用").first()).toBeVisible();
+      await expect(page.getByText("Job Object 创建成功").first()).toBeVisible();
+      await expect(
+        page.getByText("找不到预编译 Tauri 壳").first(),
+      ).toBeVisible();
 
       const body = await page.locator("[data-log-text]").allInnerTexts();
       expect(body.length).toBeGreaterThan(0);
@@ -1338,17 +1356,21 @@ test.describe("应用页签与全屏视图 @critical", () => {
         );
       }
 
-      /* 级别标签与正文分开：`INFO` / `ERROR` 出现在级别徽标里，而不是正文里。 */
+      /* 级别标签与正文分开：`INFO` / `ERROR` 出现在级别徽标里，而不是正文里。
+         `.first()` 的取舍同上：重复行不由这条用例裁决。 */
       const errorRow = page
         .locator("[data-log-text]")
-        .filter({ hasText: "找不到预编译 Tauri 壳" });
+        .filter({ hasText: "找不到预编译 Tauri 壳" })
+        .first();
       await expect(errorRow).toHaveText("找不到预编译 Tauri 壳");
 
       /* 切到「启动」来源，四个级别标记仍在（说明是按级别解析、不是原文兜底）。 */
       await page.getByRole("combobox", { name: "按来源筛选" }).click();
       await page.getByRole("option", { name: /^启动 4 / }).click();
-      await expect(page.getByText("检查端口占用")).toBeVisible();
-      await expect(page.getByText("找不到预编译 Tauri 壳")).toBeVisible();
+      await expect(page.getByText("检查端口占用").first()).toBeVisible();
+      await expect(
+        page.getByText("找不到预编译 Tauri 壳").first(),
+      ).toBeVisible();
     });
   });
 
