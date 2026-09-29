@@ -1395,10 +1395,12 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * ComfyUI 相关 tRPC 端点的统一桩：状态说「在跑、地址是假服务」，内嵌探测结论
    * 可参数化，「在浏览器打开」计次并回报成功。
    *
-   * 为什么必须是一个处理器：Playwright 里两条同样作用域的路由（都按 `api/trpc`
-   * 通配挂上去）是**后注册的优先**，一个用例里挂两次就会把先挂的那个整个遮蔽
-   * （实测第三条用例的计数因此恒 0）。假 ComfyUI 在 8188 上（playwright.config
-   * 的第二个 webServer）。
+   * 为什么必须是一个处理器：同一个 URL 被多条通配路由匹配时，**后注册的那条先被
+   * 调用**，而它对不认识的 URL 会 `route.continue()` 把请求**直接放去网络** —— 先
+   * 注册的那条根本没机会应答。后果不是「有点遮蔽」而是两边都静默失灵：实测先挂
+   * 计次桩、后挂状态桩，`comfyOpen` 计数恒 0（看起来像动作没发出，其实是路由顺序
+   * 吃的）。所以这个 describe 里的 ComfyUI 端点统一由下面这一个处理器分派。
+   * 假 ComfyUI 在 8188 上（playwright.config 的第二个 webServer）。
    */
   async function stubComfyTrpc(
     page: Page,
