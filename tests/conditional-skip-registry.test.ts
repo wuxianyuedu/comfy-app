@@ -17,15 +17,17 @@
  *   3. **报数要带上这一句**：全量绿 ≠ 产物级判据跑过。跑之前先确认 `pnpm build` 有没有
  *      做过（同 §11.13 末尾那条 ⚠️ 与 `check-standalone-contents.cjs`）。
  *
- * 扫描口径的边界（写清楚，不假装万能）：只认**语句起始位置**的 skip 站点，所以断言里
- * 出现的 `describe.skipIf(...)` 字符串（`turbopack-tracing-excludes.test.ts` 就拿它当
- * 被测文本）不会被算成站点；别名只认「同文件内 `const X = it.skipIf(...)` 之后 `X(` 开头
- * 的行」。这两条各由「判据不是空转」那组用例钉住 —— 形状变了要一起改这里，而不是让它
- * 静默漏数。
+ * 扫描口径的边界（写清楚，不假装万能）：① 先过 `stripComments`（`./helpers/strip-comments`，
+ * §12.18 的复用件）—— 这类判据扫的是**代码里的站点**，而文件头说明里正当会出现被扫的形状；
+ * ② 只认**语句起始位置**的站点，所以断言里出现的 `describe.skipIf(...)` 字符串
+ * （`turbopack-tracing-excludes.test.ts` 就拿它当被测文本）不会被算成站点；③ 别名只认
+ * 「同文件内 `const X = it.skipIf(...)` 之后以 `X(` 开头的行」。这三条各由「判据不是空转」
+ * 那组用例钉住 —— 形状变了要一起改这里，而不是让它静默漏数。
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -129,7 +131,10 @@ function testFiles(dir: string, found: string[] = []): string[] {
 
 /** 一个文件里的条件 skip 站点，按守卫文本归组计数。 */
 export function skipSitesIn(rel: string): Map<string, number> {
-  const lines = readFileSync(path.join(ROOT, rel), "utf8").split(/\r?\n/);
+  // 先剥注释再扫：判据针对的是**代码里的 skip 站点**，而这类文件头的说明里正当会
+  // 出现被扫的形状（本文件自己就是）。共享件见 `./helpers/strip-comments`（§12.18）。
+  const raw = stripComments(readFileSync(path.join(ROOT, rel), "utf8"));
+  const lines = raw.split(/\r?\n/);
   const byGuard = new Map<string, number>();
   /** 同文件内的别名 → 它的守卫文本。 */
   const aliases = new Map<string, string>();
