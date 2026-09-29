@@ -166,6 +166,9 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-code-duplication.cjs   # 跨文件重复块棘轮（见 12 §12.12）
 ✅ node scripts/check-function-length.cjs    # 函数长度棘轮 TS/TSX（见 12 §12.13）
 ✅ node scripts/check-rust-function-length.cjs # 函数长度棘轮 Rust 壳（见 12 §12.13.1）
+✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
+   # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳里 37 条 #[test] 唯一的执行者），并复用
+   # `dev-launcher.mjs` 的 `shellStaleWarning` 把硬规则 5「改了壳必须重编」升成阻断（见 11 §11.10.4）
 ✅ vitest run $(node scripts/affected-tests.mjs)  # C 组：结构守护固定清单 + 本次改动
    # 牵扯到的用例，一次 vite（固定清单唯一出处是脚本里的 FIXED_STRUCTURAL_TESTS，见下 13.5.8）
 ✅ node scripts/check-circular-deps.cjs      # 模块循环依赖棘轮（见 12 §12.7）
