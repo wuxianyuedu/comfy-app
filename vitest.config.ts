@@ -196,6 +196,15 @@ export default defineConfig({
          *     存在性判据），用例自带 `@vitest-environment jsdom`。 */
         "src/lib/layout-budget.ts",
         "src/components/ui/use-narrow-nav.ts",
+        /* API 路由 handler（体检清单 ⑦ 的第一批：闸门与三态契约类）。这一层此前
+         * **整层不在覆盖率面上** —— 既不在 `src/lib` 也不在 `src/server` 的通配里，
+         * 于是路由的鉴权 / 路径包含 / 状态码契约坏了没有任何数字会动。
+         * 与下面的 `thresholds` **两处同批**登记（只写一处 = 门槛静默失效）。 */
+        "src/app/api/generated/\\[...path\\]/route.ts",
+        "src/app/api/debug/source/route.ts",
+        "src/app/api/comfy/stats/route.ts",
+        "src/app/api/comfy/queue/route.ts",
+        "src/app/api/comfy/ensure/route.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1003,6 +1012,48 @@ export default defineConfig({
           functions: 85,
           statements: 90,
           branches: 70,
+        },
+        /* ── API 路由 handler 第一批（体检清单 ⑦）────────────────────────────
+         *
+         * 数值取实测（这一批都是 100/100/100/100，见各自用例），口径仍是 §18.6：
+         * 不设理想值、只升不降。敢设满档是因为**这一步现在真的被判定**（E2 之后
+         * `check:all` 的 test 门带 `--coverage`）—— 满档回退会当场变红，而不是像
+         * 台账 E7 那样攒出一堆「写着 100、其实没人判」的旧账。
+         *
+         * ⚠️ **动态段目录名必须转义**：`coverage.include` 走 glob，`[...path]` 里的
+         * 方括号是字符类 —— 写成字面量时条目**静默不匹配**（文件加载了、测试也过了，
+         * 报告里却查无此文件，门槛成了一条空挂的登记）。要写
+         * `src/app/api/generated/\\[...path\\]/route.ts`。给 `[id]` / `[[...slug]]`
+         * 这类路由加门槛时同理；判据同「只写一处就静默失效」那一族。 */
+        "src/app/api/generated/[...path]/route.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/app/api/debug/source/route.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/app/api/comfy/stats/route.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/app/api/comfy/queue/route.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/app/api/comfy/ensure/route.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
       },
     },
