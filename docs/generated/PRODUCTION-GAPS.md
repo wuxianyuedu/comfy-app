@@ -93,7 +93,7 @@
 
 ### P0 — 缺了就不算「已发布产品」（阻塞发布）
 
-- [ ] **P0-1 CI 流水线**：缺口不是「没写配置」，而是**免费额度用不起**（#623 实测：`cpus: 8` 下一次 PR 近 1 核时，160 核时/月几十次 PR 就见底）。`76275841` 曾补回一份缩水版 `.cnb.yml` 充当「第二执行者」，但它**匹配不到任何事件**（顶层缺分支键与事件键，CNB 的形态是 `分支: { 事件: [流水线] }`）——构建历史里 `push` / `pull_request` 一条都没有，比删除前更彻底地静默失效，已按 ISSUE #1229 删除。出路不是把配置贴回去，而是 13.5.4 的**按需召唤**：在 PR / Issue 里 `@` 评审 NPC 跑一轮全量单测 / 产物护栏 / E2E，不 `@` 就不花核时。证据：`changelog.d/1229-remove-dead-cnb-yml.md`；规范 13.5.3 / 13.5.4。
+- [ ] **P0-1 CI 流水线**：缺口不是「没写配置」，而是**免费额度用不起**（#623 实测：`cpus: 8` 下一次 PR 近 1 核时，160 核时/月几十次 PR 就见底）。`76275841` 曾补回一份缩水版 `.cnb.yml` 充当「第二执行者」，但它**匹配不到任何事件**（顶层缺分支键与事件键，CNB 的形态是 `分支: { 事件: [流水线] }`）——构建历史里 `push` / `pull_request` 一条都没有，比删除前更彻底地静默失效，已按 ISSUE #1229 删除。出路不是把配置贴回去，而是 13.5.4 的**按需召唤**：在 PR / Issue 里 `@` 评审 NPC 跑一轮全量单测 / 产物护栏 / E2E，不 `@` 就不花核时。「补回一份看起来在守门的配置」这件事此前只有文档口径、没有判据（加回文件不会让任何现有门禁变红），现由 `tests/no-platform-ci-config.test.ts` 守住三头一致：仓库根没有自动触发型 CI 配置 + 规范确实这么写着 + `doc-facts` 不把它登记成 path 类事实；该用例登记在提交前的固定守护清单里，每次提交都跑。证据：`changelog.d/1229-remove-dead-cnb-yml.md`；规范 13.5.3 / 13.5.4；`tests/no-platform-ci-config.test.ts`。
 - [ ] **P0-2 自动更新未接通**：`tauri.conf.json` `updater.endpoints:[]` / `pubkey:""` / 未开 `createUpdaterArtifacts`；能力已开校验全无（填端点即变未验签更新）。需：生成 keypair、配端点、开产物。证据：`src-tauri/tauri.conf.json:34-41,43-67`；`src-tauri/capabilities/remote.json:19`。
 - [ ] **P0-3 客户端崩溃零上报**：缺 `src/sentry.client.config.ts`，`instrumentation.ts` 仅 nodejs/edge 分支；ErrorBoundary 仅 `console.error`。证据：`src/instrumentation.ts:8-24`；`src/components/ui/error-boundary.tsx:31-35`。
 - [ ] **P0-4 无 release / source map 关联**：`next.config.js` 无 `withSentryConfig` / sourceMap 上传，堆栈无法符号化。证据：`next.config.js`（grep sentry/Sentry/sourceMap = 0）。
@@ -138,7 +138,12 @@
 
 ### P2 — 成熟度与体验
 
-- [ ] **E1 pre-commit 仅跑 7 测试文件（1.6%）**；`check:all` 仅 4 项不含棘轮。证据：`.githooks/pre-commit:63-70`；`scripts/quality-gate.mjs:39-65`。
+- [ ] **E1 提交时只跑一小撮用例**：原记「pre-commit 仅跑 7 测试文件（1.6%）」的形态已
+      变过一次——现在是**固定 9 份结构守护 + 沿静态 import 图解析出的受影响用例**
+      （`scripts/affected-tests.mjs`，规范 §13.5.8），改到哪测到哪这条已落地。仍未解决
+      的两点：① 靠运行时 `readdir` 自扫扫描面的判据不会被「改了某份 check 脚本」拉进
+      这一层（实测撞到过一次：那条红在 master 静置到全量复跑才看见）；② `check:all` 只有
+      4 项、不含棘轮/E2E/覆盖率。证据：`.githooks/pre-commit:63-70`；`scripts/quality-gate.mjs:39-65`。
 - [ ] **E2 覆盖率门槛是死配置**（test 门无 `--coverage`）。证据：`scripts/quality-gate.mjs:61-64`；`vitest.config.ts:22-23,41-59,146-181`。
 - [ ] **E3 服务端集成覆盖 4/16 router**；E2E 仅 3 spec / 31 用例且无登录态。证据：`src/server/api/routers/**`；`e2e/*.spec.ts`；`playwright.config.ts`。
 - [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。
