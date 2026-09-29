@@ -134,6 +134,11 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   run "函数长度棘轮" node scripts/check-function-length.cjs
   # Rust 函数长度（规范 12.13）：阈值 120（Rust 是结构化编排，自然长度比 TSX 短）。
   run "Rust 函数长度棘轮" node scripts/check-rust-function-length.cjs
+  # 桌面壳门禁（规范 §11.10.4 / AGENTS 硬规则 5）：只在暂存改动命中 src-tauri 的四类壳输入
+  # 时才做事 —— ① 有 .rs 改动就跑 `cargo test`（壳里 37 条 #[test] 此前唯一的执行者，
+  # 全仓没有任何一步跑过它）；② 复用 dev-launcher 的 `shellStaleWarning` 把「改了壳必须
+  # 重编」从启动时告警升成本次提交阻断。没碰壳时这一步立刻返回 0，不给普通前端提交加时间。
+  run "桌面壳（改了 src-tauri 才跑）" node scripts/shell-gate.mjs
   # 模块循环依赖（规范 12.7）：环的症状是「import 顺序变了就 undefined is not a
   # function」，排查成本极高，因此把「无环」做成棘轮。
   run "模块循环依赖棘轮" node scripts/check-circular-deps.cjs
