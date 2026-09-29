@@ -10,17 +10,17 @@
 
 ## 技术栈
 
-| 层 | 技术 |
-|----|------|
-| 前端框架 | Next.js 16（App Router, React 19, TypeScript） |
-| 样式 | Tailwind CSS v4（`@tailwindcss/postcss`） |
-| API | tRPC v11 + TanStack React Query |
-| 鉴权 | better-auth |
-| 数据库 | Drizzle ORM + better-sqlite3（SQLite；schema 见 `src/server/db/schema.ts`） |
-| 状态管理 | Zustand |
-| 桌面壳 | Tauri v2（Rust）+ WebView2 |
-| 测试 | Vitest（单元/组件）、Playwright（e2e） |
-| 文档 | TypeDoc（输出至 `docs/`） |
+| 层       | 技术                                                                        |
+| -------- | --------------------------------------------------------------------------- |
+| 前端框架 | Next.js 16（App Router, React 19, TypeScript）                              |
+| 样式     | Tailwind CSS v4（`@tailwindcss/postcss`）                                   |
+| API      | tRPC v11 + TanStack React Query                                             |
+| 鉴权     | better-auth                                                                 |
+| 数据库   | Drizzle ORM + better-sqlite3（SQLite；schema 见 `src/server/db/schema.ts`） |
+| 状态管理 | Zustand                                                                     |
+| 桌面壳   | Tauri v2（Rust）+ WebView2                                                  |
+| 测试     | Vitest（单元/组件）、Playwright（e2e）                                      |
+| 文档     | TypeDoc（输出至 `docs/`）                                                   |
 
 ---
 
@@ -80,19 +80,19 @@ Comfy-APP-T3/
 
 ## 根目录文件用途
 
-| 文件 | 用途 |
-|------|------|
-| `package.json` | 前端依赖与脚本（`dev` / `build` / `tauri` / `test` 等） |
-| `next.config.js` | Next.js 配置，含 `output: 'standalone'`（供桌面壳打包）与产物排除清单 |
-| `scripts/standalone-private-inputs.mjs` | 从产物里剥掉开发机私有输入（`.env` / `db.sqlite*`），由 `pnpm build` 与 `build-desktop.mjs` 共用 |
-| `tsconfig.json` | TypeScript 配置 |
-| `eslint.config.js` `prettier.config.js` | 代码检查与格式化 |
-| `postcss.config.js` | Tailwind CSS v4 接入 |
-| `vitest.config.ts` `playwright.config.ts` | 测试配置 |
-| `typedoc.json` | API 文档生成配置 |
-| `public/splash.html` | 桌面壳启动加载页（编译时嵌入，由 Tauri 窗口初始显示） |
-| `CHANGELOG.md` | 变更日志（**不要直接改**：条目先进 `changelog.d/` 碎片，见 [规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)） |
-| `changelog.d/` | 变更日志碎片：一件变更一个文件，避免并行分支在 `CHANGELOG.md` 上冲突 |
+| 文件                                      | 用途                                                                                                                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`                            | 前端依赖与脚本（`dev` / `build` / `tauri` / `test` 等）                                                                                                             |
+| `next.config.js`                          | Next.js 配置，含 `output: 'standalone'`（供桌面壳打包）与产物排除清单                                                                                               |
+| `scripts/standalone-private-inputs.mjs`   | 从产物里剥掉开发机私有输入（`.env` / `db.sqlite*`），由 `pnpm build` 与 `build-desktop.mjs` 共用                                                                    |
+| `tsconfig.json`                           | TypeScript 配置                                                                                                                                                     |
+| `eslint.config.js` `prettier.config.js`   | 代码检查与格式化                                                                                                                                                    |
+| `postcss.config.js`                       | Tailwind CSS v4 接入                                                                                                                                                |
+| `vitest.config.ts` `playwright.config.ts` | 测试配置                                                                                                                                                            |
+| `typedoc.json`                            | API 文档生成配置                                                                                                                                                    |
+| `public/splash.html`                      | 桌面壳启动加载页（编译时嵌入，由 Tauri 窗口初始显示）                                                                                                               |
+| `CHANGELOG.md`                            | 变更日志（**不要直接改**：条目先进 `changelog.d/` 碎片，见 [规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)） |
+| `changelog.d/`                            | 变更日志碎片：一件变更一个文件，避免并行分支在 `CHANGELOG.md` 上冲突                                                                                                |
 
 > **双击入口都在 `tools/` 下**（启动类 `tools/start/`、构建类 `tools/build/`），
 > 根目录只保留工程配置与文档，见下方「双击入口速查」与 `tools/README.md`。
@@ -133,19 +133,20 @@ Comfy-APP-T3/
 双击入口就是壳本身（`src-tauri\target\release\app.exe`），平台差异如下
 （规范 §3.2 / §3.3）：
 
-| 平台 | 入口 | 平台机制（回收 / 探测） |
-|---|---|---|
-| Windows | `app.exe`（双击）、`tools/start/*.ps1` | `taskkill /PID <pid> /T /F`（收在 `src/lib/process/kill-process-tree.ts`） |
-| Linux / macOS | `pnpm dev`、`node scripts/dev-launcher.mjs` | POSIX 进程组（`detached` 建组 + 整组信号） |
+| 平台          | 入口                                        | 平台机制（回收 / 探测）                                                    |
+| ------------- | ------------------------------------------- | -------------------------------------------------------------------------- |
+| Windows       | `app.exe`（双击）、`tools/start/*.ps1`      | `taskkill /PID <pid> /T /F`（收在 `src/lib/process/kill-process-tree.ts`） |
+| Linux / macOS | `pnpm dev`、`node scripts/dev-launcher.mjs` | POSIX 进程组（`detached` 建组 + 整组信号）                                 |
 
 平台判据只有两处出处（`scripts/launcher-core/**` 与 `kill-process-tree`）：入口与
 编排都不再自己摸 `process.platform`，因此没有「改一侧忘了另一侧」这件事。
 
-灰度能力：**ComfyUI 执行器可切独立宿主**（`COMFY_EXECUTOR=host`，**当前仅 dev 可用**、
-必须走 launcher 入口；`pnpm dev` 裸链路不拉起 host）。宿主的运行时图已随构建进产物
-（[规范 §7.5](docs/standards/launch-and-build.md)），但桌包的 standalone 形态还没有进程
-拉起它——ISSUE #1216 落地前，**桌包里不要设这个开关**（不写 = inline）。开关方法、日志
-位置与恢复语义见 [执行器宿主指南](docs/guide-executor-host.md)。
+灰度能力：**ComfyUI 执行器可切独立宿主**（`COMFY_EXECUTOR=host`）。dev 侧**必须走
+launcher 入口**（`pnpm dev` 裸链路不拉起 host）；桌包侧从 3-E2b 起由 standalone 运行入口
+按同一个开关拉起宿主（开关只认壳进程继承的环境变量——分发产物不含 `.env`）。宿主的
+运行时图随构建进产物（[规范 §7.5](docs/standards/launch-and-build.md)），装配与运行
+链路见 §7.6。两处都仍是**灰度**：不写这个开关 = inline，与灰度前逐字相同。开关方法、
+日志位置与恢复语义见 [执行器宿主指南](docs/guide-executor-host.md)。
 
 ---
 
@@ -155,34 +156,34 @@ Comfy-APP-T3/
 右键 `scripts/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」完成一次性关联
 （Windows 默认双击 `.ps1` 是用记事本打开），详见 `docs/standards/launch-and-build.md` §8.3。
 
-| 我想… | 双击 |
-|---|---|
-| 在浏览器里开发（看得到日志） | `tools/start/start-web.ps1` |
-| 启动桌面壳（双击即用） | `tools/start/start-tauri.ps1`（等价于双击 `src-tauri\target\release\app.exe`） |
-| 启动桌面壳（dev，Rust 热重载） | `tools/start/start-tauri-dev.ps1` |
-| 运行已构建好的桌面包 | `tools/start/start-desktop.ps1` |
-| 第一次在本机跑起来（自检 + 装依赖 + 生成 `.env`） | `tools/start/run-local.ps1` |
-| 跑一遍质量门禁（typecheck / lint / vitest） | `tools/start/verify-quality.ps1` |
-| 只跑测试（可指定单个文件 / 复现基线失败） | `tools/start/run-tests.ps1` |
-| 拉取更新后同步依赖并跑 lint | `tools/start/sync-lint.ps1` |
-| 注册 `comfyapp://` 协议（任务历史「打开文件夹」） | `tools/start/register-comfyapp-protocol.ps1` |
-| 构建发行包（release 壳） | `tools/build/*.ps1`（见 `tools/README.md`） |
+| 我想…                                             | 双击                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 在浏览器里开发（看得到日志）                      | `tools/start/start-web.ps1`                                                    |
+| 启动桌面壳（双击即用）                            | `tools/start/start-tauri.ps1`（等价于双击 `src-tauri\target\release\app.exe`） |
+| 启动桌面壳（dev，Rust 热重载）                    | `tools/start/start-tauri-dev.ps1`                                              |
+| 运行已构建好的桌面包                              | `tools/start/start-desktop.ps1`                                                |
+| 第一次在本机跑起来（自检 + 装依赖 + 生成 `.env`） | `tools/start/run-local.ps1`                                                    |
+| 跑一遍质量门禁（typecheck / lint / vitest）       | `tools/start/verify-quality.ps1`                                               |
+| 只跑测试（可指定单个文件 / 复现基线失败）         | `tools/start/run-tests.ps1`                                                    |
+| 拉取更新后同步依赖并跑 lint                       | `tools/start/sync-lint.ps1`                                                    |
+| 注册 `comfyapp://` 协议（任务历史「打开文件夹」） | `tools/start/register-comfyapp-protocol.ps1`                                   |
+| 构建发行包（release 壳）                          | `tools/build/*.ps1`（见 `tools/README.md`）                                    |
 
 ### 同一件事在 Linux / macOS / CI 上怎么写
 
 `.ps1` 只解决「Windows 上怎么被双击」；**逻辑是跨平台的，入口不是**。常用动作逐条对照
 （完整表与它对应的门禁见 [launch-and-build.md §9.5](docs/standards/launch-and-build.md)）：
 
-| 我想… | Linux / macOS / CI | 对应 Windows 双击 |
-|---|---|---|
-| 启动开发环境 | `pnpm dev` | `tools/start/start-web.ps1` |
-| 跑质量门禁（typecheck / lint / vitest） | `pnpm check:all` | `tools/start/verify-quality.ps1` |
-| 只跑测试 | `pnpm test:file [文件]` | `tools/start/run-tests.ps1` |
-| 连已知基线失败一起跑 | `pnpm test:full` | `tools/start/run-tests.ps1 -Full` |
-| 同步依赖 + lint | `pnpm install && pnpm lint` | `tools/start/sync-lint.ps1` |
-| 生成 `.env` | `pnpm env:init` | `tools/start/run-local.ps1` |
-| 建库 | `pnpm db:push` | （双击启动链路会自动做） |
-| 生成原文文档 | `pnpm doc:gen` | `tools/docs/generate-docs.ps1` |
+| 我想…                                   | Linux / macOS / CI          | 对应 Windows 双击                 |
+| --------------------------------------- | --------------------------- | --------------------------------- |
+| 启动开发环境                            | `pnpm dev`                  | `tools/start/start-web.ps1`       |
+| 跑质量门禁（typecheck / lint / vitest） | `pnpm check:all`            | `tools/start/verify-quality.ps1`  |
+| 只跑测试                                | `pnpm test:file [文件]`     | `tools/start/run-tests.ps1`       |
+| 连已知基线失败一起跑                    | `pnpm test:full`            | `tools/start/run-tests.ps1 -Full` |
+| 同步依赖 + lint                         | `pnpm install && pnpm lint` | `tools/start/sync-lint.ps1`       |
+| 生成 `.env`                             | `pnpm env:init`             | `tools/start/run-local.ps1`       |
+| 建库                                    | `pnpm db:push`              | （双击启动链路会自动做）          |
+| 生成原文文档                            | `pnpm doc:gen`              | `tools/docs/generate-docs.ps1`    |
 
 > 这张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 在 pre-commit 与 CI 核对
 > 每个动作两侧的脚本都真实存在 —— **新增动作却只写了一侧会提交失败**。
@@ -271,15 +272,15 @@ pnpm tauri build
 
 开发时**不需要编译 Rust 壳**也能跑前端；若要桌面壳热重载，用 Tauri dev。
 
-| 方式 | 命令 / 入口 | 说明 |
-|------|------------|------|
-| 纯前端（浏览器） | `pnpm dev` | 启动 Next dev server，访问控制台打印的 `http://localhost:<COMFYAPP_PORT>`（缺省按检出路径推导到 3200~3999，不是固定 3100；端口契约见 [规范 §1.1](docs/standards/launch-and-build.md#11-端口统一配置comfyapp_port)） |
-| 桌面壳（双击即用） | 双击 `src-tauri\target\release\app.exe` | 壳自己起编排器与 dev server：窗口秒出、改前端即时刷新（Rust 改动需重新 `cargo build`） |
-| 桌面壳（Rust 也热重载） | 双击 `tools/start/start-tauri-dev.ps1` 或 `pnpm tauri dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
-| 桌面壳（独立运行，不连 dev server） | 先跑 `tools\build\build-standalone.ps1`，再双击 `src-tauri\target\release\app.exe` | standalone 模式：内置 Node sidecar 运行 Next standalone server（检出里没有编排器时壳自动走这条路），改动需重新构建才生效 |
-| 桌面壳（无控制台入口） | 双击 `tools/start/start-tauri.ps1` | 直接启动 `src-tauri\target\release\app.exe`（等价于双击壳本身） |
-| 桌面壳（dev，Rust 热重载） | 双击 `tools/start/start-tauri-dev.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `pnpm tauri dev`） |
-| Web 开发（可见日志） | 双击 `tools/start/start-web.ps1` | 控制台打印 dev-launcher 日志 |
+| 方式                                | 命令 / 入口                                                                        | 说明                                                                                                                                                                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 纯前端（浏览器）                    | `pnpm dev`                                                                         | 启动 Next dev server，访问控制台打印的 `http://localhost:<COMFYAPP_PORT>`（缺省按检出路径推导到 3200~3999，不是固定 3100；端口契约见 [规范 §1.1](docs/standards/launch-and-build.md#11-端口统一配置comfyapp_port)） |
+| 桌面壳（双击即用）                  | 双击 `src-tauri\target\release\app.exe`                                            | 壳自己起编排器与 dev server：窗口秒出、改前端即时刷新（Rust 改动需重新 `cargo build`）                                                                                                                              |
+| 桌面壳（Rust 也热重载）             | 双击 `tools/start/start-tauri-dev.ps1` 或 `pnpm tauri dev`                         | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢）                                                                                                                                         |
+| 桌面壳（独立运行，不连 dev server） | 先跑 `tools\build\build-standalone.ps1`，再双击 `src-tauri\target\release\app.exe` | standalone 模式：内置 Node sidecar 运行 Next standalone server（检出里没有编排器时壳自动走这条路），改动需重新构建才生效                                                                                            |
+| 桌面壳（无控制台入口）              | 双击 `tools/start/start-tauri.ps1`                                                 | 直接启动 `src-tauri\target\release\app.exe`（等价于双击壳本身）                                                                                                                                                     |
+| 桌面壳（dev，Rust 热重载）          | 双击 `tools/start/start-tauri-dev.ps1`                                             | 隐藏窗口启动 tauri dev 模式（等价于 `pnpm tauri dev`）                                                                                                                                                              |
+| Web 开发（可见日志）                | 双击 `tools/start/start-web.ps1`                                                   | 控制台打印 dev-launcher 日志                                                                                                                                                                                        |
 
 > 窗口初始加载 `splash.html` 启动页，随后自动探测 dev server 就绪并跳转应用；
 > 探测地址由壳按 §1.1 的端口契约注入（`COMFYAPP_DEV_URL`），`tauri.conf.json` 的静态
@@ -304,6 +305,7 @@ pnpm tauri build
 
 它执行 `tools\build\build-tauri-release.ps1` → 编译出
 `src-tauri/target/release/app.exe`。编译前会：
+
 - 同步 `splash.html` 进 `src-tauri/splash-assets/`（启动页是编译期嵌入的）；
 - 补齐 Node sidecar（`src-tauri/binaries/node-<triple>.exe`，`externalBin` 在编译期被校验）。
 
@@ -332,10 +334,10 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 
 **一个 exe，两种形态**（判据见规范 §1.5，`shell_launch::ensure_launch_mode`）：
 
-| 形态 | 触发条件 | 说明 | 改动热更新 |
-|------|----------|------|-----------|
-| prebuilt（开发检出） | 检出里有 `scripts/dev-launcher.mjs` | 壳起编排器 → dev server，前端 HMR | 前端 HMR；Rust 需重编 |
-| standalone（分发副本） | 检出里**没有**编排器 | 壳经 Node sidecar 起 `scripts/standalone-runtime.mjs`：由它装配运行期 env（产物不含 `.env`，见规范 §7.6）并首启建表，再带起内嵌 server | 不可（需重构建） |
+| 形态                   | 触发条件                            | 说明                                                                                                                                   | 改动热更新            |
+| ---------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| prebuilt（开发检出）   | 检出里有 `scripts/dev-launcher.mjs` | 壳起编排器 → dev server，前端 HMR                                                                                                      | 前端 HMR；Rust 需重编 |
+| standalone（分发副本） | 检出里**没有**编排器                | 壳经 Node sidecar 起 `scripts/standalone-runtime.mjs`：由它装配运行期 env（产物不含 `.env`，见规范 §7.6）并首启建表，再带起内嵌 server | 不可（需重构建）      |
 
 > 为什么不是「按 exe 名字区分」：用户手里只有 `app.exe` 一个文件，拿它去猜形态
 > 会把两种形态都判错。判据放在**内容**（编排器在不在）上，这是唯一可判且不会漂的。
@@ -360,15 +362,15 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 
 ## 构建流程速查
 
-| 目标 | 命令 |
-|------|------|
-| 浏览器开发 | `pnpm dev` |
-| 桌面壳开发（热重载） | `pnpm tauri dev` 或双击 `tools\start\start-tauri-dev.ps1` |
-| 一键构建（release 壳 = 唯一入口） | `tools\build\build-all.ps1` |
-| 仅 release 壳 | `tools\build\build-tauri-release.ps1` |
-| 独立模式资源（standalone） | `tools\build\build-standalone.ps1` |
-| 完整安装包 | `pnpm tauri build` |
-| 清理重建前端资源 | `tools\build\rebuild-static.ps1` |
+| 目标                              | 命令                                                      |
+| --------------------------------- | --------------------------------------------------------- |
+| 浏览器开发                        | `pnpm dev`                                                |
+| 桌面壳开发（热重载）              | `pnpm tauri dev` 或双击 `tools\start\start-tauri-dev.ps1` |
+| 一键构建（release 壳 = 唯一入口） | `tools\build\build-all.ps1`                               |
+| 仅 release 壳                     | `tools\build\build-tauri-release.ps1`                     |
+| 独立模式资源（standalone）        | `tools\build\build-standalone.ps1`                        |
+| 完整安装包                        | `pnpm tauri build`                                        |
+| 清理重建前端资源                  | `tools\build\rebuild-static.ps1`                          |
 
 更详细的脚本职责、启动入口对比（`start-tauri.ps1` / `start-tauri-dev.ps1` / 壳自身）、CSP 与 standalone 模式说明，
 见 [`tools/README.md`](./tools/README.md)。
