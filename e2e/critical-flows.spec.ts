@@ -110,12 +110,25 @@ test.describe("工作区链路 @critical", () => {
       page.getByRole("heading", { name: "灵感从这里开始" }),
     ).toBeVisible();
 
-    // 侧栏主干入口齐备：这是「应用能用」的最小结构断言
-    for (const label of ["首页", "画布", "工坊", "模型", "流程"]) {
+    /* 侧栏主干入口齐备：这是「应用能用」的最小结构断言。
+     * 名单是导航拆成两类之后的**全局那一类**（`NavItems.tsx` 的 `globalNavItems()`，
+     * id 与顺序由 `src/components/studio/nav-items.test.ts` 钉死）。这里按用户可见的
+     * 标签重复一份，而不是 import 那份常量：e2e 的断言应当只看屏幕上有无这些东西，
+     * 拿 React 侧常量当数据源会让「常量与渲染不一致」这种真故障变成用例里的自洽。 */
+    for (const label of ["首页", "模型", "历史", "队列", "炼丹", "流程"]) {
       await expect(
         page.getByRole("button", { name: label, exact: true }).first(),
       ).toBeVisible();
     }
+
+    /* 画布 / 工坊是项目内页签：没进项目时它们**不在侧栏**，在首页以入口卡出现。
+     * 早先这里把这两个名字混进上面那个侧栏循环，于是从导航拆类那天起就一直是红的。 */
+    await expect(
+      page.getByRole("button", { name: /新建画布/ }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /全链路工坊/ }).first(),
+    ).toBeVisible();
 
     // 最近项目分区存在（空态也要有标题，不能整段消失）
     await expect(page.getByRole("heading", { name: "最近项目" })).toBeVisible();
