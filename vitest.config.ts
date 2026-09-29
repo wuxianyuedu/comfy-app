@@ -189,6 +189,13 @@ export default defineConfig({
         /* `ui/toggle-group` 的选中档三层是本仓库的定制（规范 16 §16.8），
          * 有用例钉住就得进门槛。同款 **两处同批改**。 */
         "src/components/ui/toggle-group.tsx",
+        /* 左轨让位这笔账（阈值算式 + 三档优先推导）与它的窄窗判据出口。
+         * 同款 **两处同批改**（`coverage.include` + `thresholds`）：
+         *   · `layout-budget` 是纯函数模块（无 React、无 IO），可逐分支钉死；
+         *   · `use-narrow-nav` 只有在 jsdom 下才走得到真实分支（`window` 的
+         *     存在性判据），用例自带 `@vitest-environment jsdom`。 */
+        "src/lib/layout-budget.ts",
+        "src/components/ui/use-narrow-nav.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -978,6 +985,24 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 左轨让位那笔账：算式、三档优先（含「来回拖窗口后豁免过期」）、以及与
+         * 真实列宽对账的漂移判据。纯函数，实测满档。 */
+        "src/lib/layout-budget.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 窄窗判据 + 跨越次数。实测 lines 91.66 / branch 75 / funcs 85.71：
+         * 唯一没走到的分支是 `getServerSnapshot`（SSR 快照），jsdom 与真浏览器都
+         * 不会调它 —— 不为它把文件改成可注入（那是为了凑数而改结构），门槛按实测
+         * 取不高于现状的档。 */
+        "src/components/ui/use-narrow-nav.ts": {
+          lines: 90,
+          functions: 85,
+          statements: 90,
+          branches: 70,
         },
       },
     },
