@@ -1,0 +1,6 @@
+## Fixed
+
+- **桌包设了 `COMFY_EXECUTOR=host` 时宿主在模块加载阶段就退出 1：`unable to determine transport target for "pino-pretty"`**（P3 §5 · Phase 3-E2b，ISSUE #1216）。`src/lib/core/logger.ts` 只在 `NODE_ENV === "production"` 时走 JSON 直写，否则给 pino 挂 `pino-pretty` 的 worker transport——而 `pino-pretty` 是 devDependency，**两层产物里都没有**（实测 `.next/standalone` 与 `src-tauri/static` 的 `node_modules` 都只有 `pino`）。Next 的 standalone `server.js` 自己会补 `NODE_ENV`，**宿主是独立进程、不经过它**，于是拿到的就是壳继承来的空值 → 选到 pretty 分支 → 找不到 transport → 退出 1，现场是壳日志一行 `host exited code=1`。
+  - 修法：`scripts/launcher-core/standalone-runtime-env.mjs` 的 `buildStandaloneRuntimeEnv` 显式给 `NODE_ENV: "production"`，且写在 `...env` **之后**（因此也盖掉壳继承来的 `development`）。载荷**就是**生产构建，这一项本来就该由装配步说清楚，而不是指望某个子进程自己补。
+  - **为什么 `pnpm build` 收尾的 packaged host 冒烟没抓到**：冒烟跑的是仓库里的 `.next/standalone`，Node 的模块上溯会撞到仓库自己的 dev 依赖，于是「在仓库里能跑、装到用户机器上就崩」。这条形状已记进规范 §7.6 与 §5 排障表；用例改成两侧都钉：单测 `buildStandaloneRuntimeEnv` 给的值，同时让桩宿主把 `process.env.NODE_ENV` 打回来看（子进程真拿到才算）。
+    桌包要真出图还差 comfy-cli 的 Python 解释器——执行链按 `<载荷根>/python-venv/comfy-cli/…` 找，而载荷里没有 Python（百 MB 级环境不该随包）。找不到时任务被**大声判 FAILED**，行上给中文错误 + 「建议」+ 重试按钮（实测截图如此），不会卡在队列；本机已有 comfy-cli 时给壳进程设 `COMFY_CLI_PYTHON=<python.exe 绝对路径>` 即可跑完整轮。「桌包自带 comfy-cli / 引导安装」= ISSUE #1239。

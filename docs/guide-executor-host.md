@@ -20,7 +20,7 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 2. **崩溃可恢复**——host 挂了，下次启动按 Q2 语义扫表对账收孤儿（不永久卡「生成中」）；
 3. 为后续把 film 等长流程编排也搬出 Next（Phase 5）打好地基。
 
-## 怎么开（dev，当前唯一支持的场景）
+## 怎么开（dev）
 
 1. 设开关（二选一，两种给法都生效）：
    - shell：`$env:COMFY_EXECUTOR = "host"`（POSIX 用 `export`）；
@@ -55,7 +55,7 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 **回退**：把 `COMFY_EXECUTOR` 删掉或改回 `inline`，重启 launcher——行为与灰度前
 逐字相同。
 
-## 桌面包（app.exe / 预构建壳）：宿主件已随包，但还没人拉起它
+## 桌面包（app.exe / 预构建壳）：宿主件已随包，standalone 入口也会起它
 
 3-E1（ISSUE #1169 的第一半）已经解决「产物里跑不起来」：`pnpm build` 收尾会把宿主的
 运行时图**预编译**成 `scripts/executor-host.runtime.mjs`（连一份构建清单
@@ -68,19 +68,45 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
 追踪恰好把 `src/**` 带进产物」那条噪声（规范 §7.2）——两条通道互不依赖，缺预编译件
 会以 `boot FAILED` 大声失败而不是静默退化。
 
-**但桌包里设 `COMFY_EXECUTOR=host` 目前仍然不会执行任务**，原因又换了一次：3-E2a（本刀）
-已经把 standalone 形态接通——`tauri.conf.json` 声明 `bundle.resources: ["static/"]`，壳经
-Node sidecar 起的是新入口 `scripts/standalone-runtime.mjs`（它装配运行期 env、首启建表，
-再带起 `server.js`；五层断点与实测见规范 §7.6）。**缺的只剩入口的宿主半边**：入口现在
-只管 server，还没按 `resolveExecutorMode()` 去起那个已经能 boot 的宿主。表现因此是
-#1204 之后的形态：任务被标成 host 归属、安静地留在队列里，状态栏排队数一直涨，行上只有
-「⏳ 等待…」一句。**判据**：`log/services/executor-host.log` 里连 `boot pid=` 那行都没有
-（不是起不来，是根本没人起）；而入口自己的 `boot pid=… port=…` 那一行**在**（壳日志里），
-这两行一对比就能定性。
+**桌包里设 `COMFY_EXECUTOR=host` 从 3-E2b 起真的会执行任务**（ISSUE #1216 收口）。
+中间那一层是 3-E2a 接通的 standalone 运行入口：`tauri.conf.json` 声明
+`bundle.resources: ["static/"]`，壳经 Node sidecar 起的不是 `server.js` 而是
+`scripts/standalone-runtime.mjs`（装配运行期 env、首启建表、带起 server，再按开关带起
+宿主；八层断点与实测见规范 §7.6）。宿主与 server 因此是**同父兄弟**——都是壳的孙子，
+不是 Next 进程 fork 出来的（那正是 Phase 4-B3 才卸掉的耦合：宿主与 server 同生死）。
 
-分发口径：**3-E2b（ISSUE #1216）落地前，不要在桌包里设这个开关**（保持不写 = inline）。
-3-E2b 的范围 = 入口按 `resolveExecutorMode()` 拉起宿主 + 孙子层（入口 → server / 宿主）
-的整树回收 + 灰度口径放开与验收。
+桌包侧与 dev 的三点差别：
+
+1. **开关的常规来源是壳进程继承的环境变量**。分发产物里**没有** `.env`（硬规则 17 剥掉
+   了），所以桌包的正常路径就是：系统环境变量，或
+   `$env:COMFY_EXECUTOR="host"; & "<安装目录>\ComfyAPP.exe"`。判据不另写一份：入口调的
+   还是 `resolveExecutorMode()`（ADR §14 D5 的唯一定义），`" host "` 这类值同样被归一化成
+   host。它保留的那一层「进程 env 里没有再看 `.env`」在桌包里也仍然生效——只是那份文件
+   得用户自己往安装目录放；**别把它当常规入口**，载荷里根本没有它，写进文档会让人以为
+   桌包与 dev 的给法完全同形。
+2. **看的是入口日志，不是 launcher 控制台**（桌包没有 launcher）。壳日志里三行按顺序：
+   `executor mode=host` → `host pid=… out=… err=…` → 之后 `log/services/` 里宿主的
+   `boot pid=` / `mode=runtime` / `runtime inject-ok`。
+3. **宿主退出不会带走应用**：入口打一行 `host exited code=…`，server 继续跑，任务留在
+   队列（#1204 之后的既定语义）。**既不降级回 inline、也不自动重启**——降级会让已经写成
+   host 归属的行变成没人领的孤儿，重启会把「起不来的宿主」掩盖成「慢」。
+4. **真出图还差一个 comfy-cli 的 Python 解释器**（桌包的分发边界，实测）：载荷里既没有
+   Python 也没有 comfy-cli（那是百 MB 级的环境，不该随包），执行链按
+   `<载荷根>/python-venv/comfy-cli/…` 找解释器、找不到就把任务**大声判失败**，行上给的是
+   中文错误与「建议」两条出口（不是卡在队列）。本机已有 comfy-cli 时，给壳进程设
+   `COMFY_CLI_PYTHON=<python.exe 绝对路径>` 即可跑完整轮——3-E2b 的验收就是这么过的
+   （桌包库里一行 `SUCCEEDED` + 1.27 MB 的 `img_0.png`，由桌包 server 经
+   `/api/generated/...` 发出来）。「桌包自带 comfy-cli / 引导安装」= ISSUE #1239，不在本刀顺手做。
+
+**没起宿主时的三种定性**（都从壳日志读，不用猜）：
+
+| 现象                                  | 判据                                        | 含义                                                                                      |
+| ------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 连 `executor mode=` 都没有            | 壳起的还是 `server.js`（旧载荷 / 没重编壳） | 重跑 `node scripts/build-desktop.mjs` 并 `pnpm tauri build`                               |
+| `executor mode=inline`                | 开关没传到壳进程                            | 用系统环境变量或上面那条命令式起法（载荷里没有 `.env`，那一层回读要用户自己放文件才成立） |
+| `host SKIPPED: no …executor-host.mjs` | 设了 host 而载荷缺宿主件                    | 装配被跳过或被剪枝误删（§7.4 / §7.6 的必备件判据）                                        |
+
+分发口径：桌包与 dev 一样仍是**灰度**——不写这个开关 = inline，行为与灰度前逐字相同。
 
 ## 日志与状态去哪看
 
@@ -124,11 +150,11 @@ Node sidecar 起的是新入口 `scripts/standalone-runtime.mjs`（它装配运�
   3. 冷启动遗留在 `QUEUED` 的行**两宿主都会领**（inline 那条以前看不见库，只能等
      回收器判失败）。回收器**不再按 30s 判死本片的排队行**（ISSUE #1204）：宿主在跑
      就最迟下一拍（1.5~2s）领走；宿主没起来就一直等，起来那刻接着跑，不白判失败。
-  循环的启动点与 reaper 同形态：**两处显式调用**——Next 侧
-  `src/instrumentation.ts` 的 nodejs 分支、host 侧 `scripts/executor-host.mjs`
-  注入链之后（host 自己的 tick 驱动同一个 `claimAndDispatchOnce`，不再起第二条循环）。
-  判据在 `tests/dispatch-startup-points.test.ts`，行为判据在
-  `src/lib/comfyui/executor-dispatch.test.ts`。
+     循环的启动点与 reaper 同形态：**两处显式调用**——Next 侧
+     `src/instrumentation.ts` 的 nodejs 分支、host 侧 `scripts/executor-host.mjs`
+     注入链之后（host 自己的 tick 驱动同一个 `claimAndDispatchOnce`，不再起第二条循环）。
+     判据在 `tests/dispatch-startup-points.test.ts`，行为判据在
+     `src/lib/comfyui/executor-dispatch.test.ts`。
 - **对外只有一条通道 = 数据库那一行**（Phase 4-B1 起）：执行链原先另有一套进程内
   `EventEmitter`（`done` / `error` / `progress` / `log` 帧），它只能在写它的那个进程里
   响，跨宿主必然漏。SSE 单源化之后它已只剩写入、没有读者，因此整体退役；服务端里
