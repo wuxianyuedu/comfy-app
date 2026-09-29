@@ -260,7 +260,8 @@ export function reconcilePnpmVersion(root = ROOT) {
   };
 }
 
-/** 旧版桌面壳提醒（判据与 .ps1 的 Test-ShellFreshness 同源：比时间戳）。 */
+/** 旧版桌面壳提醒（比时间戳）。同一判据被提交门禁 `scripts/shell-gate.mjs` 复用：
+ *  暂存改动命中壳输入时，它从「启动时 WARN」升成「阻断未重编的提交」，见规范 §11.10.4。 */
 /** @param {string} shellExe @param {string} [root] @returns {string | null} */
 export function shellStaleWarning(shellExe, root = ROOT) {
   let exeTime = 0;
