@@ -69,6 +69,9 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `.cnb.yml` 不会让任何现有判据变红（规范 §13.5.3 的结论只写在正文里），而它一旦
   // 存在就会被读成「有 CI 兜底」——绿灯可信度的地基不能靠人记得住。
   "tests/no-platform-ci-config.test.ts",
+  // 像素基线按平台分文件：少一档不是「那一档没跑」，而是判失败并顺手生成半套未入库的
+  // PNG。这条守的是「视觉层在真正执行它的那台机器上到底有没有基线」，与本次改动无关。
+  "tests/visual-baseline-pairing.test.ts",
   // 本层自己的判据必须在**每一次**提交里跑：解析器一旦把「自己」算漏了，
   // 只有这一条能发现（它守的是「增量层还在增量」这件事本身）。
   "tests/affected-tests.test.ts",

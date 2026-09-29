@@ -14,6 +14,7 @@ pnpm typecheck          # tsc --noEmit
 ## 单元测试（Vitest）
 
 ### 配置
+
 - 配置文件：`vitest.config.ts`
 - 默认环境：node（纯函数/store，不依赖 DOM）
 - 组件渲染：测试文件头 `// @vitest-environment jsdom`
@@ -24,36 +25,37 @@ pnpm typecheck          # tsc --noEmit
 
 ### 测试栈与配方
 
-| 层 | 工具 | 要点 |
-|----|------|------|
-| 纯函数 | vitest | 正常路径 + 边界 + 非法输入；文件名中文描述行为 |
-| Zustand store | vitest | 每用例前重置状态（`setState` 初始值或 reset）；派生字段必须通过 action 触发（直接 setState 不会重算） |
-| 组件渲染 | @testing-library/react + jsdom | `getByRole`/`getByText` 优先；交互用 `userEvent`；jest-dom 匹配器已在 `tests/setup.ts` 全局注册 |
-| hooks | renderHook（@testing-library/react） | ReactFlow 等有 Provider 依赖的需包对应 Provider，否则跳过该分支并注明 |
-| Tauri 壳冒烟 | tauri-driver / Playwright WebView（Windows），或脚本层冒烟 | 只测壳级能力：启动、custom-protocol、崩溃兜底/进程树清理、日志出口；业务/画布/数据流去 Web 层测（见规范第 11.10 节）。改动 src-tauri 需 `cargo build --release --features custom-protocol` 重编后跑 |
+| 层            | 工具                                                       | 要点                                                                                                                                                                                                |
+| ------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 纯函数        | vitest                                                     | 正常路径 + 边界 + 非法输入；文件名中文描述行为                                                                                                                                                      |
+| Zustand store | vitest                                                     | 每用例前重置状态（`setState` 初始值或 reset）；派生字段必须通过 action 触发（直接 setState 不会重算）                                                                                               |
+| 组件渲染      | @testing-library/react + jsdom                             | `getByRole`/`getByText` 优先；交互用 `userEvent`；jest-dom 匹配器已在 `tests/setup.ts` 全局注册                                                                                                     |
+| hooks         | renderHook（@testing-library/react）                       | ReactFlow 等有 Provider 依赖的需包对应 Provider，否则跳过该分支并注明                                                                                                                               |
+| Tauri 壳冒烟  | tauri-driver / Playwright WebView（Windows），或脚本层冒烟 | 只测壳级能力：启动、custom-protocol、崩溃兜底/进程树清理、日志出口；业务/画布/数据流去 Web 层测（见规范第 11.10 节）。改动 src-tauri 需 `cargo build --release --features custom-protocol` 重编后跑 |
 
 ### 当前覆盖（231 用例 / 17 文件）
 
-| 文件 | 覆盖模块 | 用例数 |
-|---|---|---|
-| `src/lib/workflow-types.test.ts` | 工作流类型映射（code→类型、类别、分类、边界值） | 7 |
-| `src/lib/comfyui/markdown.test.ts` | Markdown 渲染（标题层级、列表、引用、XSS 转义、空输入） | 9 |
-| `src/components/studio/workflow-utils.test.ts` | 画布颜色工具（hexToRgba、mixHex、lightenHex、边界） | 12 |
-| `src/server/api/middleware/rate-limit.test.ts` | 限流中间件（滑动窗口、独立 key、过期重置） | 5 |
-| `src/components/studio/AgentPanel.test.tsx` | AgentPanel（空态、四状态、回调、禁用态、头像兜底） | 8 |
-| `src/components/studio/logs/log-store.test.ts` | 日志 store（批量追加/上限裁剪/过滤搜索/serialize/解析） | 53 |
-| `src/components/studio/debug/debug-store.test.ts` | 调试开关 store（状态迁移、幂等） | 7 |
-| `src/components/studio/workflow-library/CustomNodesSettings/parsing.test.ts` | 解析纯函数（pathKey/deriveRowState/splitPaths/eqArr） | 33 |
-| `src/components/studio/workflow-library/WorkflowLibraryHelpers.test.ts` | 库卡片派生（格式标志/同步态/技术名/ago） | 27 |
-| `src/lib/media.test.ts` | isVideo（扩展名/大小写/URL/查询串/边界） | 9 |
-| `src/components/studio/canvas/SubgraphHeader.test.tsx` | 子图头（标题回退、折叠/钻入回调、IO checkbox 条件） | 12 |
-| `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.test.tsx` | Field/StatusDot/StatusBadge/NodeChip | 11 |
-| `src/components/studio/project-canvas/CanvasNode/ResultCard.test.tsx` | 结果卡（三分支、mediaType 判定、占位与回退） | 11 |
-| `src/components/studio/workflow-form/DynamicWorkflowForm/sections/*.test.tsx` | 表单分区（骨架/空态/I/O 端点 chip） | 10 |
-| `src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.test.tsx` | 设置行/值 chip/汇总/进度/报告卡 | 17 |
-| （另 2 个文件为既有 lib 测试） | — | — |
+| 文件                                                                                | 覆盖模块                                                | 用例数 |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------- | ------ |
+| `src/lib/workflow-types.test.ts`                                                    | 工作流类型映射（code→类型、类别、分类、边界值）         | 7      |
+| `src/lib/comfyui/markdown.test.ts`                                                  | Markdown 渲染（标题层级、列表、引用、XSS 转义、空输入） | 9      |
+| `src/components/studio/workflow-utils.test.ts`                                      | 画布颜色工具（hexToRgba、mixHex、lightenHex、边界）     | 12     |
+| `src/server/api/middleware/rate-limit.test.ts`                                      | 限流中间件（滑动窗口、独立 key、过期重置）              | 5      |
+| `src/components/studio/AgentPanel.test.tsx`                                         | AgentPanel（空态、四状态、回调、禁用态、头像兜底）      | 8      |
+| `src/components/studio/logs/log-store.test.ts`                                      | 日志 store（批量追加/上限裁剪/过滤搜索/serialize/解析） | 53     |
+| `src/components/studio/debug/debug-store.test.ts`                                   | 调试开关 store（状态迁移、幂等）                        | 7      |
+| `src/components/studio/workflow-library/CustomNodesSettings/parsing.test.ts`        | 解析纯函数（pathKey/deriveRowState/splitPaths/eqArr）   | 33     |
+| `src/components/studio/workflow-library/WorkflowLibraryHelpers.test.ts`             | 库卡片派生（格式标志/同步态/技术名/ago）                | 27     |
+| `src/lib/media.test.ts`                                                             | isVideo（扩展名/大小写/URL/查询串/边界）                | 9      |
+| `src/components/studio/canvas/SubgraphHeader.test.tsx`                              | 子图头（标题回退、折叠/钻入回调、IO checkbox 条件）     | 12     |
+| `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.test.tsx`     | Field/StatusDot/StatusBadge/NodeChip                    | 11     |
+| `src/components/studio/project-canvas/CanvasNode/ResultCard.test.tsx`               | 结果卡（三分支、mediaType 判定、占位与回退）            | 11     |
+| `src/components/studio/workflow-form/DynamicWorkflowForm/sections/*.test.tsx`       | 表单分区（骨架/空态/I/O 端点 chip）                     | 10     |
+| `src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.test.tsx` | 设置行/值 chip/汇总/进度/报告卡                         | 17     |
+| （另 2 个文件为既有 lib 测试）                                                      | —                                                       | —      |
 
 ### 新增测试指引
+
 - 纯函数模块（lib 层、utils）优先补 `*.test.ts`
 - 组件测试范例：`AgentPanel.test.tsx`（轻量交互）、`SubgraphHeader.test.tsx`（真实 Provider 包装）
 - 断言基于实现语义编写，禁止为"让测试通过"而弱化断言
@@ -69,9 +71,9 @@ pnpm typecheck          # tsc --noEmit
 
 `pnpm test:coverage` 跑 v8 覆盖率并对**已覆盖目录**设硬阈值（低于即失败）：
 
-| 目录 | 门槛（lines/funcs/stmts/branches） |
-|------|------|
-| `src/server/api/middleware/**` | 75 / 75 / 75 / 70 |
+| 目录                           | 门槛（lines/funcs/stmts/branches） |
+| ------------------------------ | ---------------------------------- |
+| `src/server/api/middleware/**` | 75 / 75 / 75 / 70                  |
 
 **规则**：新覆盖一个目录（测试补齐到 70%+）就把它加进 `vitest.config.ts` 的
 `thresholds` 表并抬高数字；阈值只升不降。全库整体数字（当前 ~3%，组件库为主）
@@ -92,8 +94,17 @@ pnpm test:visual
 pnpm test:e2e
 ```
 
-- 用例放 `e2e/visual/*.visual.spec.ts`，命名带 `.visual` 便于 CI 单独筛选。
+- 用例放 `e2e/visual/*.visual.spec.ts`，命名带 `.visual` 便于单独筛选（跑哪一层就点名哪一层：
+  `pnpm test:visual` 只跑像素基线，`pnpm test:e2e` 含 `e2e/visual`）。
 - 基线 PNG 与 spec 同目录（Playwright 默认 `*-snapshots/`），**提交入库**。
+- ⚠️ **基线文件名带平台，每个真正执行像素回归的环境都要有自己的那一套**：当前只有
+  `-win32.png`（开发机）。缺档时 Playwright 不是「跳过」而是判失败**并把新生成的 PNG 写进
+  目录**，于是留下半套基线；判据见 `tests/visual-baseline-pairing.test.ts`（齐全 / 入库 /
+  无孤儿三头，登记在提交前的固定守护清单）。
+- ⚠️ **像素可复现要自己挣**：根布局的全局状态栏带实时帧率与时钟，Next 的 dev 指示器也在
+  页面上 —— 这类 chrome 必须 `mask` 掉，否则 fullPage 永远取不到两张稳定截图。写法见
+  `e2e/visual/login.visual.spec.ts` 的 `unstableChromeMasks`；验收口径是**同一命令连跑两次
+  都绿**，不是 `--update-snapshots` 那一次写成功。
 - 基线变更（合法 UI 改动）重录 + 人工 review：
   ```bash
   pnpm exec playwright test e2e/visual --update-snapshots
