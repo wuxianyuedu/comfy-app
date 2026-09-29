@@ -129,6 +129,7 @@ const SETTINGS: Settings = {
   comfyLorasDir: "",
   comfyuiPath: "D:/ComfyUI",
   comfyuiExtraArgs: "",
+  comfyCliPython: "",
   comfyuiAutoStart: true,
   comfyuiPort: 0,
   exitKillComfyui: true,

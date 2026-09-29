@@ -59,6 +59,13 @@ const PURE_NODE_HOSTS = [
   //     Windows 各自走本机自带工具，不依赖 lsof。
   "src/lib/comfyui/gpu-vram.ts",
   "src/lib/comfyui/launch-path.ts",
+  // comfy-cli-python.ts（ISSUE #1239）：与 `launch-path.ts` 同族的纯解析地基 ——
+  // 从设置项 `comfyCliPython` 推导 comfy-cli 解释器落点、按形态给「找不到」的提示。
+  // 只有 `node:path` 一条内建 value import、不引任何 server-only 侧模块；消费方是
+  // 本清单里的第三类 `executor-cli.ts`，在桌包里那条链跑在**纯 Node 宿主**。它和
+  // `launch-path.ts` 一样是「Next server 与执行宿主双宿主共用」的地基，所以按第三类
+  // 登记，而不是用 `server-only` 把自己说成「只能服务端用」。
+  "src/lib/comfyui/comfy-cli-python.ts",
   "src/lib/comfyui/proc-detect.ts",
   // trace.ts：诊断通道，落盘路径 `COMFYUI_TRACE_LOG` 从 `~/lib/log/log-paths`
   // （server-only）拿。P3 迁移第 1 期·第三步把它改成**加载即 fire-and-forget 的
