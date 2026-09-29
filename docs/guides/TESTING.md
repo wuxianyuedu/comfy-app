@@ -41,15 +41,16 @@ pnpm test:visual        # 只跑像素基线那一层
 
 ### 测试栈与配方
 
-| 层            | 工具                                                                  | 要点                                                                                                                                                                                            |
-| ------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 纯函数        | vitest                                                                | 正常路径 + 边界 + 非法输入；文件名中文描述行为                                                                                                                                                  |
-| Zustand store | vitest                                                                | 每用例前重置状态（`setState` 初始值或 reset）；派生字段必须通过 action 触发（直接 setState 不会重算）                                                                                           |
-| 组件渲染      | @testing-library/react + jsdom                                        | `getByRole`/`getByText` 优先；交互用 `userEvent`；jest-dom 匹配器已在 `tests/setup.ts` 全局注册                                                                                                 |
-| hooks         | renderHook（@testing-library/react）                                  | ReactFlow 等有 Provider 依赖的包对应 Provider（`tests/helpers/react-flow.tsx`），否则跳过该分支并注明                                                                                           |
-| 前端集成      | `tests/helpers/renderWithProviders.tsx` + `tests/helpers/trpc-msw.ts` | useQuery/useMutation 走**真实 tRPC 管线**（MSW 在网络层拦并转发到 `tests/helpers/test-trpc.ts` 现造的 router），必测 loading / error / 缓存失效 / 乐观更新（规范 §11.3）                        |
-| 数据访问层    | `tests/helpers/test-db.ts`                                            | 内存 SQLite + **真 Drizzle**，不 mock —— 这层的正确性全在「SQL 怎么写」上                                                                                                                       |
-| Tauri 壳冒烟  | tauri-driver / Playwright WebView（Windows），或脚本层冒烟            | 只测壳级能力：启动、custom-protocol、崩溃兜底/进程树清理、日志出口；业务/画布/数据流去 Web 层测（见规范 §11.10）。改动 src-tauri 需 `cargo build --release --features custom-protocol` 重编后跑 |
+| 层            | 工具                                                                  | 要点                                                                                                                                                                                                                                                                   |
+| ------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 纯函数        | vitest                                                                | 正常路径 + 边界 + 非法输入；文件名中文描述行为                                                                                                                                                                                                                         |
+| Zustand store | vitest                                                                | 每用例前重置状态（`setState` 初始值或 reset）；派生字段必须通过 action 触发（直接 setState 不会重算）                                                                                                                                                                  |
+| 组件渲染      | @testing-library/react + jsdom                                        | `getByRole`/`getByText` 优先；交互用 `userEvent`；jest-dom 匹配器已在 `tests/setup.ts` 全局注册                                                                                                                                                                        |
+| hooks         | renderHook（@testing-library/react）                                  | ReactFlow 等有 Provider 依赖的包对应 Provider（`tests/helpers/react-flow.tsx`），否则跳过该分支并注明                                                                                                                                                                  |
+| 前端集成      | `tests/helpers/renderWithProviders.tsx` + `tests/helpers/trpc-msw.ts` | useQuery/useMutation 走**真实 tRPC 管线**（MSW 在网络层拦并转发到 `tests/helpers/test-trpc.ts` 现造的 router），必测 loading / error / 缓存失效 / 乐观更新（规范 §11.3）                                                                                               |
+| 数据访问层    | `tests/helpers/test-db.ts`                                            | 内存 SQLite + **真 Drizzle**，不 mock —— 这层的正确性全在「SQL 怎么写」上                                                                                                                                                                                              |
+| API 路由      | vitest（node 环境）                                                   | `vi.mock` 掉依赖（鉴权 / lifecycle / fs / db）后 `await import("./route")` 取 `GET`/`POST`，断**状态码 + 信封形状**；闸门类（路径包含、NUL、扩展名白名单、三态契约）逐条反向验 —— 只测正常路径等于没测。给这些文件设覆盖率门槛时 `[...path]` 这类动态段要转义（§11.7） |
+| Tauri 壳冒烟  | tauri-driver / Playwright WebView（Windows），或脚本层冒烟            | 只测壳级能力：启动、custom-protocol、崩溃兜底/进程树清理、日志出口；业务/画布/数据流去 Web 层测（见规范 §11.10）。改动 src-tauri 需 `cargo build --release --features custom-protocol` 重编后跑                                                                        |
 
 ### 怎么数覆盖（不留会烂的清单）
 
@@ -170,7 +171,9 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
 - [ ] **E2E / 视觉没有自动执行者**：都在本地手动档（`pnpm test:e2e` / `pnpm test:visual`）。
 - [ ] **Rust 壳的 `#[test]` 不进门禁**：`cargo test` 目前只出现在文档正文；
       硬规则 5「改了壳必须重编」也没有判据（台账 ⑥ 那条要补的就是这个）。
-- [ ] **`src/app` 页面层基本裸奔**：48 个 page/route/layout 里多数所在目录零测试（台账 P1/E3）。
+- [ ] **API 路由与页面层仍有大片裸奔**：40 个 `route.ts` 里 12 个有同名测试（本轮补了 5 个
+      闸门类端点 —— `generated/[...path]`、`debug/source`、`comfy/{stats,queue,ensure}`，
+      都已进覆盖率门槛），剩下 28 个与 6 个 `page.tsx` 的目录级测试仍是少数（台账 P1/E3）。
 - [ ] **`DynamicWorkflowForm` / `CanvasNode` 主组件的深度行为测试**（fetch/poll 生命周期）仍开放。
 - [ ] 存量 4 份 `.snap` 结构快照按行为断言迁移（见 §11.9）。
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）。
