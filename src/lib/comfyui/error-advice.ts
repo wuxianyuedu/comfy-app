@@ -48,11 +48,20 @@ interface AdviceRule {
   advice: (error: string) => string;
 }
 
-/* 顺序即优先级。两条刻意排在最前：
+/* 顺序即优先级。三条刻意排在最前：
+ *  · comfy-cli 解释器缺失 —— 报错原文带着 Windows 绝对路径，会被后面的规则按
+ *    子串误抢（`not found` / 路径里的 `.exe`）；
  *  · UUID 形态（wrapper 子图缺失）—— 它同时含 `not found`，会被模型缺失那条抢走；
  *  · 结构化校验（ValueError / KeyError / 类型不匹配）—— 它同时含 `not found` 的
  *    子串（`not exists`）时也一样。 */
 const ADVICE_RULES: AdviceRule[] = [
+  {
+    // 执行链的 Python 解释器找不到（桌包不随包 Python / comfy-cli，ISSUE #1239）
+    pattern:
+      /未找到 comfy-cli|comfy[-_]cli.{0,24}(python|解释器)|COMFY_CLI_PYTHON/i,
+    advice: () =>
+      "执行链找不到 comfy-cli 的 Python 解释器。桌包不随包 Python：请自备一个装好 comfy-cli 的 Python，再到「设置 → 创作后端 → comfy-cli 解释器」填它的绝对路径（开发检出也可以直接建 `python-venv/comfy-cli`），然后点「重试」。",
+  },
   {
     // wrapper 子图 / ComfyUI 子图未安装（必须优先于通用的「模型缺失」）
     pattern: /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,

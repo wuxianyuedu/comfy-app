@@ -32,6 +32,7 @@
 // 登记进 PURE_NODE_HOSTS 是「标方向 + 消化 unguarded」，不是「本模块已能在纯
 // Node 里加载」——那要等 client / repository / app-runtime-log 各自拆完。
 import { errorText } from "~/lib/error-message";
+import { getSettingsSync } from "../app-settings/app-settings.server";
 import { fireAndForget } from "~/lib/async-action";
 import { tailWindow } from "~/lib/page-window";
 import { spawn } from "child_process";
@@ -39,6 +40,7 @@ import type { ChildProcess } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import { primaryModelName } from "./executed-model";
+import { comfyCliInterpreter, comfyCliMissingHint } from "./comfy-cli-python";
 import { state, log, appendRawCli } from "./runner-state";
 import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
@@ -243,18 +245,7 @@ export async function executeViaComfyCli(job: Job) {
     log(taskId, "info", `使用模型：${modelName}`);
   }
 
-  const binDir = process.platform === "win32" ? "Scripts" : "bin";
-  const pyName = process.platform === "win32" ? "python.exe" : "python";
-  /* Python 虚拟环境放在项目根目录 python-venv/comfy-cli，便于安装、升级和统一配置。
-   * 可通过 COMFY_CLI_PYTHON 环境变量覆盖，指向已有的 Python 解释器。 */
-  const defaultPy = path.join(
-    process.cwd(),
-    "python-venv",
-    "comfy-cli",
-    binDir,
-    pyName,
-  );
-  const py = process.env.COMFY_CLI_PYTHON ?? defaultPy;
+  const py = comfyCliInterpreter(getSettingsSync().comfyCliPython);
   const args = [
     "-m",
     "comfy_cli",
@@ -278,19 +269,15 @@ export async function executeViaComfyCli(job: Job) {
   try {
     await fs.access(py, fs.constants.F_OK);
   } catch {
-    const winHint =
-      "请在项目根目录执行：\n" +
-      "  python -m venv python-venv\\comfy-cli\n" +
-      "  python-venv\\comfy-cli\\Scripts\\python.exe -m pip install --upgrade pip\n" +
-      "  python-venv\\comfy-cli\\Scripts\\python.exe -m pip install comfy-cli\n" +
-      "或设置环境变量 COMFY_CLI_PYTHON 指向已有的 Python 解释器。";
-    const nixHint =
-      "请在项目根目录执行：\n" +
-      "  python3 -m venv python-venv/comfy-cli\n" +
-      "  python-venv/comfy-cli/bin/pip install --upgrade pip\n" +
-      "  python-venv/comfy-cli/bin/pip install comfy-cli\n" +
-      "或设置环境变量 COMFY_CLI_PYTHON 指向已有的 Python 解释器。";
-    const hint = process.platform === "win32" ? winHint : nixHint;
+    /* 判据用**文件**而不是环境变量（§1.5 / §7.6 的取向：环境开关会撒谎，文件内容
+     * 不会）——`pnpm-lock.yaml` 是产物护栏明令不许随包的形状
+     * （`check-standalone-contents.cjs` 的「门禁锁文件」），所以它只在真检出里在。
+     * **不能**拿 `scripts/dev-launcher.mjs` 当判据：那份是运行期脚本，随桌包载荷一起出去。 */
+    const inCheckout = await fs
+      .access(path.join(process.cwd(), "pnpm-lock.yaml"), fs.constants.F_OK)
+      .then(() => true)
+      .catch(() => false);
+    const hint = comfyCliMissingHint({ inCheckout });
     log(taskId, "error", `未找到 comfy-cli Python 解释器：${py}\n${hint}`);
     fireAndForget(
       fail(taskId, "", `未找到 comfy-cli Python 解释器：${py}`),
@@ -309,7 +296,9 @@ export async function executeViaComfyCli(job: Job) {
     "info",
     `comfy-cli 执行${isRaw ? " raw 工作流（UI→API 转换）" : " API 工作流"}（${host}:${port}）`,
   );
-  log(taskId, "info", `  ${pyName} ${args.join(" ")}`);
+  // 打完整解释器路径而不是裸 `python.exe`：这一行的用途是「照着复现这次调用」，
+  // 而解释器落在哪（设置项 / 项目根 venv）正是复现时最容易搞错的一件事。
+  log(taskId, "info", `  ${py} ${args.join(" ")}`);
   /* ISSUE #216：把完整命令行写进 trace，便于在支持现场原样复现。 */
   trace("cli", taskId, "启动 comfy-cli", {
     bin: py,

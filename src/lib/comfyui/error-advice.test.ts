@@ -26,6 +26,19 @@ describe("adviseOnError", () => {
     );
   });
 
+  it("comfy-cli 解释器缺失：建议指向设置页，而不是让用户建 venv（ISSUE #1239）", () => {
+    // 报错原文带着 Windows 绝对路径，规则必须排在通用「模型缺失 / not found」之前，
+    // 否则会被按子串误抢成一句与成因无关的建议。
+    const advice = adviseOnError(
+      "未找到 comfy-cli Python 解释器：D:\\apps\\ComfyAPP\\static\\python-venv\\comfy-cli\\Scripts\\python.exe",
+    );
+    expect(advice).toContain("设置");
+    expect(advice).toContain("comfy-cli 解释器");
+    // 桌包用户没有 pnpm 也没有检出：这条建议里不许出现开发者命令
+    expect(advice).not.toContain("pip install");
+    expect(adviseOnError("COMFY_CLI_PYTHON not set")).toContain("comfy-cli");
+  });
+
   it("连接失败：超时 / 拒绝连接 / 网络三种写法同一句建议", () => {
     const a = adviseOnError("ECONNREFUSED 127.0.0.1:8188");
     const b = adviseOnError("request timed out");

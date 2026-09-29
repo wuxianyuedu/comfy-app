@@ -1,7 +1,7 @@
 # P3 §5 第 2 期：ComfyUI 执行器迁出 Next 进程（executor-host.mjs）
 
 - 日期：2026-09-26
-- 状态：**实施中** —— Phase 2-A/2-B/2-C、3-A、3-B0、3-B1、3-C、3-D、4-A1~4-A4 已合入 master（#1124 / #1131 / #1133 / #1138 / #1151 / #1157 / #1168 / #1178 / #1183 / #1186 / #1190）；4-B1 已合入 #1193（`c2ea2b1d`），4-B2 已合入 #1196（`601a6c67`），4-B3（两条派发循环收成一条 pull）已合入 #1203（`90c627e3`）——§14 D1 点名的四个进程内依赖至此全部摘完；4-B4 已合入 #1208（`d9c4a8fa`），4-B5（排队期写下的行在领取之后还在，ISSUE #1206）已合入 #1212（`37ef62f0`）；3-E1（宿主的运行时图构建期预编译进产物 + 收尾真起进程冒烟，ISSUE #1169 的第一半）已合入 #1219（`3e8b1b3f`）；3-E2（桌包 standalone 下由谁拉起宿主）另记 ISSUE #1216，**其立项前提已被实测否掉**（standalone 形态从未接通，五层各自断掉），更正与落地见 §16；§13 是逐期落地时的已签修正，§14 是 Phase 4（删旧）的签字，§15 是 3-E1，§16 是 3-E2a（已合入 #1231 `e4a3e042`），§17 是 3-E2b（ISSUE #1216 收口）；`COMFY_EXECUTOR=host` 现在 **dev 与桌包 standalone 两条链路都会拉起宿主**，仍属灰度（默认不设 = inline）。桌包侧的剩余边界是 comfy-cli 的 Python 解释器不随包（ISSUE #1239）
+- 状态：**实施中** —— Phase 2-A/2-B/2-C、3-A、3-B0、3-B1、3-C、3-D、4-A1~4-A4 已合入 master（#1124 / #1131 / #1133 / #1138 / #1151 / #1157 / #1168 / #1178 / #1183 / #1186 / #1190）；4-B1 已合入 #1193（`c2ea2b1d`），4-B2 已合入 #1196（`601a6c67`），4-B3（两条派发循环收成一条 pull）已合入 #1203（`90c627e3`）——§14 D1 点名的四个进程内依赖至此全部摘完；4-B4 已合入 #1208（`d9c4a8fa`），4-B5（排队期写下的行在领取之后还在，ISSUE #1206）已合入 #1212（`37ef62f0`）；3-E1（宿主的运行时图构建期预编译进产物 + 收尾真起进程冒烟，ISSUE #1169 的第一半）已合入 #1219（`3e8b1b3f`）；3-E2（桌包 standalone 下由谁拉起宿主）另记 ISSUE #1216，**其立项前提已被实测否掉**（standalone 形态从未接通，五层各自断掉），更正与落地见 §16；§13 是逐期落地时的已签修正，§14 是 Phase 4（删旧）的签字，§15 是 3-E1，§16 是 3-E2a（已合入 #1231 `e4a3e042`），§17 是 3-E2b（ISSUE #1216 收口），§18 是 #1239 的签字与落地（解释器改由设置项指路径，PR #1251）；`COMFY_EXECUTOR=host` 现在 **dev 与桌包 standalone 两条链路都会拉起宿主**，仍属灰度（默认不设 = inline）。桌包侧 comfy-cli 的 Python 解释器边界已按「用户自备 + 设置页指路径」收口（ISSUE #1239，见 §18），同轮实测到的「收口写失败被吞」另记 ISSUE #1250
 - 前置：P3 §5 第 1 期已完全收线（#1042/#1045/#1053/#1056/#1060/#1068/#1071/#1074/#1075/#1077/#1080/#1083/#1086/#1090 共 14 PR，整条 ComfyUI 执行链 + lib 层地基都进 §18.4 第三类；host boot 顺序与 inject 接缝已就位）
 - 上游方案：`outputs/p3-executor-process-migration-plan.md`（审计 §2.7 / 架构级）
 - 范围：
@@ -658,3 +658,51 @@ inputs, 1436 KB)`、队列扫描那行报 `schema-not-ready`（临时空库里�
 - 失败出口同样验到：没设 `COMFY_CLI_PYTHON` 时那一行是 `FAILED` + 「未找到 comfy-cli Python 解释器：…\python-venv\comfy-cli\Scripts\python.exe」，应用「历史」页把这句连同「建议」和「重试」按钮渲染出来了（截图）。
 - 回收：关窗后 `comfyapp-pkg-sim` 下的三个 node（入口 / server / 宿主）全部消失；**用户自己的 ComfyUI（另一棵进程树）仍在**（`/system_stats` 200），说明收的是自己那棵树、没有越界。
 - 门禁：`tests/standalone-runtime.test.ts` 28 条（新增 6 条：NODE_ENV 单测 + 起 / 不起 / 缺件 SKIPPED / 中途退出 / 值归一化 / 子进程真拿到 production）；`check-standalone-contents` 两层干净；`build-desktop` 全流程 exit 0。
+
+---
+
+## 18. #1239（桌包真出图的最后一格：comfy-cli 解释器由设置项指路径）——签字与落地记录（PR #1251）
+
+**签字口径**：#1239 三条候选里签 **B —— 用户自备 + 设置页指路径**，与 `comfyuiPath` 完全同形。
+不随包 Python（百 MB 级环境 + 平台与版本矩阵都要进装配步，且载荷根出现 `python-venv/` 会撞
+硬规则 17 的私有输入判据），也不做首启引导（桌包用户没有终端）。
+
+**落法**（三条，全部收在既有唯一口径上，没有新开第二条链）：
+
+| 层   | 落点                                                                                | 为什么在这里                                                                                                                                                                                       |
+| ---- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 值   | 设置项 `comfyCliPython`，`DEFAULTS` 的默认值取 `COMFY_CLI_PYTHON`                   | 「环境变量是设置项的默认值」这条形态 `comfyuiPath ← COMFYUI_PATH` 已经走通；老用法（给壳进程设 env）一字不改照旧生效                                                                               |
+| 推导 | 纯叶子 `src/lib/comfyui/comfy-cli-python.ts`（§18.4 第三类，同族 `launch-path.ts`） | 落点优先级与「找不到」的提示是纯解析；为这一行去 mock 整条派发链不值。形态分叉的判据用**文件**（`pnpm-lock.yaml` 在不在），不用环境变量，也不能用 `scripts/dev-launcher.mjs`（那份随桌包载荷出去） |
+| 出口 | `error-advice.ts` 新增一条且**排最前**；设置页字段 + tRPC schema                    | 报错原文带 Windows 绝对路径，会被「模型缺失 / not found」按子串误抢；建议表是全项目唯一口径，别再在组件里写第二份                                                                                  |
+
+**端到端又数到两条**（都是「文档里写着、代码里没成立」那一类）：
+
+1. **宿主读的设置必须按文件指纹失效**。桌包里 `data/app-settings.json` 由内嵌 server 写、由执行
+   宿主读，两个进程各一份模块级缓存；`getSettingsSync()` 旧实现「有缓存就永远用缓存」，于是宿主
+   把第一次读到的空值钉死 —— 用户照提示填完解释器点「重试」，看到的还是同一条 FAILED。修法是
+   把缓存失效判据改成 `mtimeMs` + `size`（与 `localWorkflows` 的校验和备忘同口径），且**先取指纹
+   后读内容**（顺序反过来会把「新指纹 + 旧内容」钉住）。回归：守卫改回 `if (cache) return cache`
+   → 三条用例即红。**这条对后续所有「由宿主取」的设置项都成立**，别再在调用点各自加一层缓存。
+2. **提示里指的分区名必须是界面上真有的那个**。第一版写「设置 → ComfyUI → comfy-cli 解释器」，
+   打包界面上那张卡叫「创作后端（ComfyUI）」、导航项叫「创作后端」。这类漂移不会让任何用例变红，
+   所以钉成 `tests/settings-hint-label-matches-page.test.ts`（分区名取自 `SETTINGS_SECTIONS`、
+   字段名按卡的源码核对）。
+
+**验收记录（假安装目录 `%LOCALAPPDATA%\comfyapp-pkg-sim`，载荷 = 本次 `build-desktop` 产物）**：
+
+- 设置项留空 → 行 `FAILED`，错误里的解释器路径是**载荷根**的 `static\python-venv\comfy-cli\Scripts\python.exe`，
+  行上「建议」指向设置页那一项、不含 `pip install` / `python -m venv`。
+- 在打包界面里「创作后端 → comfy-cli 解释器」填路径 → 保存 → 值落进载荷根 `data/app-settings.json`
+  → 同一行改回 QUEUED 重试 → 宿主**没重启**跑完：日志里是设置里那台解释器的绝对路径 +
+  `-m comfy_cli run --workflow …\static\temp\comfy-cli\wf-pkg3e2bmumh50es.json …`，库里
+  `pkg3e2bmumh50es` = `SUCCEEDED` / `resultImages=/api/generated/…/img_0.png`，
+  桌包 server `GET` 回 `200 image/png`、1,265,859 字节。
+- 关窗回收：入口 + server + 宿主三个 node 全部消失；用户自己起的 ComfyUI 未被带走。
+- 启动形态的一条硬约束：**cwd 必须是安装目录**。cwd 是壳推导项目根的候选之一，把 cwd 给成开发检出
+  根，壳就会走 prebuilt 分支去起 `scripts/dev-launcher.mjs --mode prebuilt`，standalone 那条根本没跑
+  ——「桌包设了 host 却没宿主」的一种成因，与 §5 那三条定性并列。
+
+**遗留（不在本刀）**：桌包拓扑里 server 与宿主**两个进程都在跑 ComfyUI lifecycle**，且收口写失败被
+`fireAndForget` 吞掉 —— 实测一次「领取失败 + `fail() 收口异常` ⇒ 行永久 RUNNING、并发上限 1 卡住
+整条队列、reaper 每 30s 只 `checked` 不接管」。根因疑似 `SQLITE_BUSY`（drizzle 只回 `Failed query`、
+cause 没落日志，故未定死）。记在 **ISSUE #1250**。
