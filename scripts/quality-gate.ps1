@@ -79,8 +79,14 @@ $Blocks = @(
      Cmd = "pnpm"; Args = @("run","lint"); Run = $true }
   @{ Name = "format";    Label = "Prettier format ratchet (scripts/check-format.cjs)";
      Cmd = "node"; Args = @("scripts\check-format.cjs"); Run = $true }
-  @{ Name = "test";      Label = "Vitest full run (excluding known baseline failures)";
-     Cmd = "pnpm"; Args = @("exec","vitest","run"); Run = $true; IsTest = $true }
+  # 覆盖率门槛此前是**死配置**：`vitest.config.ts` 的 `coverage.thresholds` 写了
+  # 几十条按实测定的门槛，而这一步是裸 `vitest run`，不带 `--coverage` —— 没有任何
+  # 自动化路径判定过它们（规范 §11.7 / 台账 E2）。与 quality-gate.mjs 同批同步。
+  # 两个约束：① 只在全量档判 —— 单文件跑 --coverage 会把其余路径按 0% 算、
+  # thresholds 每条都刷红；② 红与覆盖率已各自记账（vitest.config.ts 的
+  # reportOnFailure），不再「一条红 → 报告不产出 → 门槛静默缺席」。
+  @{ Name = "test";      Label = "Vitest full run + coverage ratchet (excluding known baseline failures)";
+     Cmd = "pnpm"; Args = @("exec","vitest","run","--coverage"); Run = $true; IsTest = $true }
 )
 
 # Which gates to run

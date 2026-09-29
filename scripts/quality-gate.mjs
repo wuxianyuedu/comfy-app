@@ -59,8 +59,22 @@ const GATES = {
     args: ["../scripts/check-format.cjs"],
   },
   test: {
-    label: "Vitest full run (excluding known baseline failures)",
-    args: ["exec", "vitest", "run"],
+    label:
+      "Vitest full run + coverage ratchet (excluding known baseline failures)",
+    /* 覆盖率门槛此前是**死配置**：`vitest.config.ts` 的 `coverage.thresholds` 写了
+     * 几十条按实测定的门槛，但门禁这一步是裸 `vitest run`，不带 `--coverage` ——
+     * 于是没有任何自动化路径判定过它们，「覆盖率棘轮」只存在于配置文件里
+     * （规范 §11.7 / 台账 E2）。
+     * 两个约束一起记在这里：
+     *   1. **只在全量档判**。单文件跑 `--coverage` 会把其余路径按 0% 算，
+     *      `thresholds` 表里的每一条都刷红（实测：单跑一份 LogPanel 就报出
+     *      `src/lib/workshop/**` / `ui/image-viewer.tsx` 等一串 0% 不达标）——
+     *      所以这一步不能收窄，也别学它把 `--coverage` 加进钩子的增量档。
+     *   2. 红与覆盖率已经**各自记账**（`vitest.config.ts` 的 `reportOnFailure`），
+     *      不再出现「一条试用例红 → 报告不产出 → 门槛静默缺席」。
+     * 代价说清楚：这一步的墙钟从约 10 分钟涨到带 instrumentation 的量级（实测全量
+     * 591s → 更长），`check:all` 本来就是「按需完整验证」那一档，不是每次提交。 */
+    args: ["exec", "vitest", "run", "--coverage"],
   },
 };
 
