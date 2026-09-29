@@ -144,7 +144,24 @@
       的两点：① 靠运行时 `readdir` 自扫扫描面的判据不会被「改了某份 check 脚本」拉进
       这一层（实测撞到过一次：那条红在 master 静置到全量复跑才看见）；② `check:all` 只有
       4 项、不含棘轮/E2E/覆盖率。证据：`.githooks/pre-commit:63-70`；`scripts/quality-gate.mjs:39-65`。
-- [ ] **E2 覆盖率门槛是死配置**（test 门无 `--coverage`）。证据：`scripts/quality-gate.mjs:61-64`；`vitest.config.ts:22-23,41-59,146-181`。
+- [x] **E2 覆盖率门槛是死配置**：根因比「test 门无 `--coverage`」还深一层 —— 即使加上，
+      v8 在任何用例红时默认**清数据、不产出报告**，门槛照样一条都不判（实测全量 464 文件 /
+      2 败 → `coverage/` 是空的，终端只看得见那两条红）。两处一起修：两侧门禁
+      （`scripts/quality-gate.mjs` 的 `GATES.test` 与 `scripts/quality-gate.ps1` 的 `$Blocks`）
+      的 test 门带 `--coverage`；`vitest.config.ts` 补 `coverage.reportOnFailure`。
+      两条约束记在规范 §11.7：覆盖率只在**全量**这一档判（单文件跑 `--coverage` 会把其余
+      路径按 0% 汇总、`thresholds` 每条都刷红），别挪进钩子的增量层。§11.13 补了
+      「带 coverage」这个预算维度（`LogPanel.test.tsx` 45s → 120s，单跑实测 25.0s / 34.4s）。
+      开门那一次抓到的 21 条真回退已按实测重基线，**欠的课转 E7**。
+      证据：`scripts/quality-gate.mjs`、`scripts/quality-gate.ps1`、`vitest.config.ts`。
+- [ ] **E7 覆盖率棘轮开门即抓到的真回退（补用例清单）**：E2 把门打开的那一次全量跑
+      （465 文件全绿）当场报出 21 条不达标，已按 §18.6 逐条降到「实测向下取整到 5 的倍数」，
+      旧值与原因留在 `vitest.config.ts` 的 `coverage.thresholds` 注释块里。这不是并行档抖动：
+      同一批文件**单跑**带 `--coverage` 得到一模一样的数字。欠的课按大头排 ——
+      `src/lib/process/process-launch.ts` 行 17.9%、`src/lib/process/kill-process-tree.ts`
+      行 29.1%（执行宿主那批新代码 + 平台相关分支）、`src/lib/log/log-file-client.ts` 行 23.5%、
+      `src/lib/core/repository-task.ts` 行 70.6%、`src/lib/browser-storage.ts` 行 81.8%。
+      补上对应用例后**同批**把门槛抬回旧值（只升不降）。
 - [ ] **E3 服务端集成覆盖 4/16 router**；E2E 仅 3 spec / 31 用例且无登录态。证据：`src/server/api/routers/**`；`e2e/*.spec.ts`；`playwright.config.ts`。
 - [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。
 - [ ] **E5 棘轮 `--update` 无制衡**。证据：`AGENTS.md:94,97`。
