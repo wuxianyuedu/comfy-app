@@ -83,9 +83,27 @@ export function deriveComfyuiWorkflowsDir(comfyuiPath: string): string | null {
 
 let cache: AppSettings | null = null;
 
-/* 同步读取，带进程内缓存。从请求处理器里调用是安全的。 */
+/* 缓存的失效判据是**文件指纹**，不是「进程内有没有缓存」。
+ * 桌包拓扑里这两件事发生在两个进程：设置由内嵌 server 写盘，解释器路径由执行宿主
+ * 取值。宿主只在第一次取值时读盘 → 用户在「设置」页填完解释器再点「重试」，宿主
+ * 拿到的仍是空值，同一个 FAILED 复现（实测：宿主不重启就永远读不到新值）。
+ * 判据取 `mtimeMs` + `size` 二元组，与 `comfyui/localWorkflows.ts` 的校验和备忘同口径。 */
+let cacheFingerprint = "";
+
+/** 设置文件的指纹；文件缺失 / 不可读时返回空串 —— 「缺失」本身也只需触发一次重读。 */
+function settingsFileFingerprint(): string {
+  try {
+    const stat = fs.statSync(/*turbopackIgnore: true*/ SETTINGS_FILE);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return "";
+  }
+}
+
+/* 同步读取，带进程内缓存（磁盘上的设置一变就重读）。从请求处理器里调用是安全的。 */
 export function getSettingsSync(): AppSettings {
-  if (cache) return cache;
+  const fingerprint = settingsFileFingerprint();
+  if (cache && fingerprint === cacheFingerprint) return cache;
   try {
     const raw = fs.readFileSync(
       /*turbopackIgnore: true*/ SETTINGS_FILE,
@@ -101,6 +119,9 @@ export function getSettingsSync(): AppSettings {
   } catch {
     cache = migrateExitDefaults({ ...DEFAULTS });
   }
+  /* 指纹先取、内容后读：中间若有人写了盘，下一次调用会因为指纹对不上而重读，
+   * 最坏是多重读一次；反过来（先读再取指纹）会把「新指纹 + 旧内容」钉住，永久读到旧值。 */
+  cacheFingerprint = fingerprint;
   return cache;
 }
 
@@ -120,6 +141,10 @@ export async function saveSettings(
     JSON.stringify(next, null, 2),
     "utf-8",
   );
+  /* 落盘后把指纹对齐到刚写的这一份：不这样做的话，下一次读会拿「自己刚写进去的
+   * mtime」判成外部改动、白白重读一遍。别的进程（执行宿主）不受这里影响，
+   * 它自己按文件指纹重读。 */
+  cacheFingerprint = settingsFileFingerprint();
   return next;
 }
 

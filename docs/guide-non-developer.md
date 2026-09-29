@@ -11,7 +11,6 @@
 > 真实值由 `pnpm doc:check` 运行时从源码/配置动态提取并核对。占位符语义见
 > [`docs/reference-facts.md`](reference-facts.md)。
 
-
 ## 1. 一句话结论
 
 **普通用户请走「浏览器模式」**：它只需要装 2 个软件（Node.js + pnpm），
@@ -55,14 +54,14 @@
 
 ### 你总共要做的事（概览）
 
-| 步骤 | 做什么 | 谁来执行 | 大约耗时 |
-|------|--------|----------|----------|
-| ① | 安装 Node.js（LTS 版） | 你（可让 `tools/start/run-local.ps1` 提示/代装） | 2~5 分钟 |
-| ② | 开启 pnpm（Node 自带的 corepack） | `tools/start/run-local.ps1` | 1 分钟 |
-| ③ | 安装项目依赖 | `tools/start/run-local.ps1` | 3~10 分钟 |
-| ④ | 生成本地配置文件 `.env` | `tools/start/run-local.ps1` 自动完成 | 秒级 |
-| ⑤ | 启动 | 双击 `tools/start/start-web.ps1` | 1~2 分钟 |
-| ⑥ | 打开浏览器使用 | 你 | 秒级 |
+| 步骤 | 做什么                            | 谁来执行                                         | 大约耗时  |
+| ---- | --------------------------------- | ------------------------------------------------ | --------- |
+| ①    | 安装 Node.js（LTS 版）            | 你（可让 `tools/start/run-local.ps1` 提示/代装） | 2~5 分钟  |
+| ②    | 开启 pnpm（Node 自带的 corepack） | `tools/start/run-local.ps1`                      | 1 分钟    |
+| ③    | 安装项目依赖                      | `tools/start/run-local.ps1`                      | 3~10 分钟 |
+| ④    | 生成本地配置文件 `.env`           | `tools/start/run-local.ps1` 自动完成             | 秒级      |
+| ⑤    | 启动                              | 双击 `tools/start/start-web.ps1`                 | 1~2 分钟  |
+| ⑥    | 打开浏览器使用                    | 你                                               | 秒级      |
 
 ---
 
@@ -88,6 +87,7 @@
 进入项目文件夹里的 `tools\start\` 目录，找到 **`run-local.ps1`**，**双击**它。
 
 它会自动帮你：
+
 - ✅ 检查 `node` 是否装好（没装会提示你先装，见 4.1）；
 - ✅ 检查 `pnpm` 是否可用，缺失时用 Node 自带的 `corepack` 自动开启；
 - ✅ 检查 pnpm 版本是否与项目要求一致（`package.json` 的 `packageManager`），不一致时自动用 corepack 切换到正确版本；
@@ -139,9 +139,9 @@
 
 ### 6.1 先分清几种东西
 
-| 你拿到的东西 | 是什么 | 能不能直接运行 |
-|--------------|--------|----------------|
-| **源码仓库**（一堆 .ts/.rs 文件） | 原始代码 | ❌ 没有编译产物，需整套开发环境，**不适合非开发人员** |
+| 你拿到的东西                               | 是什么                           | 能不能直接运行                                                  |
+| ------------------------------------------ | -------------------------------- | --------------------------------------------------------------- |
+| **源码仓库**（一堆 .ts/.rs 文件）          | 原始代码                         | ❌ 没有编译产物，需整套开发环境，**不适合非开发人员**           |
 | **即开即用桌面包**（完整构建好的成品目录） | 由开发人员产出、可直接双击的成品 | ✅ 解压后双击 `tools/start/start-desktop.ps1`（或对应 exe）即可 |
 
 > 判断口诀：桌面包目录里有没有 **`scripts\dev-launcher.mjs`**、以及能不能找到
@@ -150,6 +150,7 @@
 
 > ⚠️ 关于「免装环境」的一句话说清楚：桌包启动器就是 **`{{shell.app.exe}}` 本身**
 > （不再有第二层 exe），它有两种形态，而**只有装出来的那一种真的免装环境**：
+>
 > - **独立版（standalone，推荐给非开发人员）**：壳自己经内置 Node 起应用，不连 dev
 >   server、不需要对方装 Node/pnpm。判据是「这个目录里没有编排器
 >   `scripts\dev-launcher.mjs`」——安装后的目录（`%LOCALAPPDATA%\ComfyAPP`）里没有它，
@@ -203,25 +204,25 @@
 
 ## 7. 常见问题（FAQ）
 
-| 现象 | 可能原因 / 解决办法 |
-|------|---------------------|
-| 双击 `tools/start/run-local.ps1` 提示「找不到 node」 | Node.js 没装或装完没重启电脑，先完成 4.1 |
-| 双击 `tools/start/run-local.ps1` 报 `pnpm` 相关错误 | 可先手动重装依赖：在项目根打开终端执行 `pnpm install` 再双击启动 |
-| 双击 `tools/start/run-local.ps1` 时 `pnpm install` 失败，报 `'sh' is not recognized as an internal or external command` / `ERR_PNPM_EXECUTOR_LIFECYCLE_SCRIPT_FAILED` | 旧版本用 `sh` 起安装后的钩子脚本，而 Windows 的 cmd 没有 `sh`（ISSUE #636）。**先拉取最新代码**（改成纯 Node 入口后即可正常安装）；仍失败再按上一条处理 |
-| 再双击 `tools/start/run-local.ps1` 直接显示「依赖已就绪、跳过安装」，但应用仍起不来 | 依赖**装过**但可能不是当前代码要求的版本（拉了更新没重装）。启动器现在会比对 lockfile 并自动补装、补装后复核；若报「依赖补装后仍未就绪」，照提示删掉 `node_modules` 后重新双击本脚本 |
-| 应用一直开着、期间拉到新代码，打开某功能变成白屏 / 点了没反应（控制台报 `xxx is not a function`） | 「界面比代码旧」：已打开的界面不会因代码变化重建自己。**按 `Ctrl+R` 重载一次即恢复**；仍不行就关掉应用重新双击启动入口。详见 [`guide-stale-code.md`](guide-stale-code.md) |
-| 团队更新了代码后启动报错 / 拉取更新后怎么同步环境 | 见 [`guides/sync-after-pull.md`](guides/sync-after-pull.md)：先关掉运行中的窗口，重双击 `tools/start/run-local.ps1`；报 pnpm 相关错误则删 `node_modules` 后重双击 |
-| 启动时提示「pnpm 版本不匹配 / pnpm 有更新」 | 启动器会自动检测并在必要时用 corepack 对齐，**通常无需手动操作**；若自动对齐失败，窗口/日志会给出提示，手动执行一次 `corepack enable && corepack prepare pnpm@12.4.1 --activate`（版本号以提示为准）即可 |
-| 双击 `tools/start/start-web.ps1` 报「数据库/表不存在」 | 首次会自动建库；如仍异常，先双击 `tools/start/run-local.ps1` 补齐依赖与 `.env` 后重试 |
-| 跑工作流时提示「未找到 comfy-cli Python 解释器」 | 本机 `python-venv/comfy-cli` 缺失；重新双击 `tools/start/run-local.ps1` 会自动补装，或手工执行 `scripts/setup-comfy-cli-venv.ps1`（需联网） |
-| 浏览器打不开页面（`ERR_CONNECTION_REFUSED`） | 先看地址栏端口是不是照抄了 `3100`——实际端口是窗口打印的 `[dev.mjs] COMFYAPP_PORT=<端口>`（见 4.3~4.4）；再确认 `tools/start/start-web.ps1` 的控制台窗口还开着；首次编译较慢，多等一会再刷新 |
-| 端口被占用起不来 | 启动器会先清理**本检出端口族**（`COMFYAPP_PORT` 及 +1/+2）的残留进程，并自动往后找一个空闲端口；仍失败可重启电脑后再试 |
-| 想彻底重置环境 | 删除项目里的 `node_modules` 文件夹和 `.env` 文件后，重新执行 4.1~4.3 |
-| 依赖下载很慢 / 失败 | 网络原因；可重试，或用团队提供的镜像源 |
-| 双击 `tools/start/start-desktop.ps1` / 启动器没反应 / 提示缺文件 | 大概率是桌面包解压不完整（缺 `_internal` 等），重新完整解压，见 6.4 |
-| 桌面包提示要装 Node / 起 dev server | 你拿到的可能是 prebuilt 版；找开发人员要**独立版**桌面包即可免装（见 6.1） |
-| 桌面包想升级 / 找最新版 | 找开发人员重新要一份新构建的即开即用桌面包即可 |
-| 不知道我要的是浏览器版还是桌面版 | 想要「独立窗口像装好的软件一样」→ 桌面版（第 6 节）；只是想先看效果 → 浏览器版（第 3~4 节） |
+| 现象                                                                                                                                                                  | 可能原因 / 解决办法                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 双击 `tools/start/run-local.ps1` 提示「找不到 node」                                                                                                                  | Node.js 没装或装完没重启电脑，先完成 4.1                                                                                                                                                                                                                                                                        |
+| 双击 `tools/start/run-local.ps1` 报 `pnpm` 相关错误                                                                                                                   | 可先手动重装依赖：在项目根打开终端执行 `pnpm install` 再双击启动                                                                                                                                                                                                                                                |
+| 双击 `tools/start/run-local.ps1` 时 `pnpm install` 失败，报 `'sh' is not recognized as an internal or external command` / `ERR_PNPM_EXECUTOR_LIFECYCLE_SCRIPT_FAILED` | 旧版本用 `sh` 起安装后的钩子脚本，而 Windows 的 cmd 没有 `sh`（ISSUE #636）。**先拉取最新代码**（改成纯 Node 入口后即可正常安装）；仍失败再按上一条处理                                                                                                                                                         |
+| 再双击 `tools/start/run-local.ps1` 直接显示「依赖已就绪、跳过安装」，但应用仍起不来                                                                                   | 依赖**装过**但可能不是当前代码要求的版本（拉了更新没重装）。启动器现在会比对 lockfile 并自动补装、补装后复核；若报「依赖补装后仍未就绪」，照提示删掉 `node_modules` 后重新双击本脚本                                                                                                                            |
+| 应用一直开着、期间拉到新代码，打开某功能变成白屏 / 点了没反应（控制台报 `xxx is not a function`）                                                                     | 「界面比代码旧」：已打开的界面不会因代码变化重建自己。**按 `Ctrl+R` 重载一次即恢复**；仍不行就关掉应用重新双击启动入口。详见 [`guide-stale-code.md`](guide-stale-code.md)                                                                                                                                       |
+| 团队更新了代码后启动报错 / 拉取更新后怎么同步环境                                                                                                                     | 见 [`guides/sync-after-pull.md`](guides/sync-after-pull.md)：先关掉运行中的窗口，重双击 `tools/start/run-local.ps1`；报 pnpm 相关错误则删 `node_modules` 后重双击                                                                                                                                               |
+| 启动时提示「pnpm 版本不匹配 / pnpm 有更新」                                                                                                                           | 启动器会自动检测并在必要时用 corepack 对齐，**通常无需手动操作**；若自动对齐失败，窗口/日志会给出提示，手动执行一次 `corepack enable && corepack prepare pnpm@12.4.1 --activate`（版本号以提示为准）即可                                                                                                        |
+| 双击 `tools/start/start-web.ps1` 报「数据库/表不存在」                                                                                                                | 首次会自动建库；如仍异常，先双击 `tools/start/run-local.ps1` 补齐依赖与 `.env` 后重试                                                                                                                                                                                                                           |
+| 跑工作流时提示「未找到 comfy-cli Python 解释器」                                                                                                                      | **浏览器版 / 开发检出**：本机 `python-venv/comfy-cli` 缺失；重新双击 `tools/start/run-local.ps1` 会自动补装，或手工执行 `scripts/setup-comfy-cli-venv.ps1`（需联网）。**桌面包**：桌包不随包 Python——自备一个装好 comfy-cli 的 Python，在「设置 → 创作后端 → comfy-cli 解释器」填它的绝对路径，保存后点「重试」 |
+| 浏览器打不开页面（`ERR_CONNECTION_REFUSED`）                                                                                                                          | 先看地址栏端口是不是照抄了 `3100`——实际端口是窗口打印的 `[dev.mjs] COMFYAPP_PORT=<端口>`（见 4.3~4.4）；再确认 `tools/start/start-web.ps1` 的控制台窗口还开着；首次编译较慢，多等一会再刷新                                                                                                                     |
+| 端口被占用起不来                                                                                                                                                      | 启动器会先清理**本检出端口族**（`COMFYAPP_PORT` 及 +1/+2）的残留进程，并自动往后找一个空闲端口；仍失败可重启电脑后再试                                                                                                                                                                                          |
+| 想彻底重置环境                                                                                                                                                        | 删除项目里的 `node_modules` 文件夹和 `.env` 文件后，重新执行 4.1~4.3                                                                                                                                                                                                                                            |
+| 依赖下载很慢 / 失败                                                                                                                                                   | 网络原因；可重试，或用团队提供的镜像源                                                                                                                                                                                                                                                                          |
+| 双击 `tools/start/start-desktop.ps1` / 启动器没反应 / 提示缺文件                                                                                                      | 大概率是桌面包解压不完整（缺 `_internal` 等），重新完整解压，见 6.4                                                                                                                                                                                                                                             |
+| 桌面包提示要装 Node / 起 dev server                                                                                                                                   | 你拿到的可能是 prebuilt 版；找开发人员要**独立版**桌面包即可免装（见 6.1）                                                                                                                                                                                                                                      |
+| 桌面包想升级 / 找最新版                                                                                                                                               | 找开发人员重新要一份新构建的即开即用桌面包即可                                                                                                                                                                                                                                                                  |
+| 不知道我要的是浏览器版还是桌面版                                                                                                                                      | 想要「独立窗口像装好的软件一样」→ 桌面版（第 6 节）；只是想先看效果 → 浏览器版（第 3~4 节）                                                                                                                                                                                                                     |
 
 > 更多面向开发者的启动故障排查，见 `docs/standards/launch-and-build.md` 第 5 节
 > 「症状 → 已知根因对照表」。

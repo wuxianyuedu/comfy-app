@@ -146,7 +146,9 @@ launcher 入口**（`pnpm dev` 裸链路不拉起 host）；桌包侧从 3-E2b �
 按同一个开关拉起宿主（开关只认壳进程继承的环境变量——分发产物不含 `.env`）。宿主的
 运行时图随构建进产物（[规范 §7.5](docs/standards/launch-and-build.md)），装配与运行
 链路见 §7.6。两处都仍是**灰度**：不写这个开关 = inline，与灰度前逐字相同。开关方法、
-日志位置与恢复语义见 [执行器宿主指南](docs/guide-executor-host.md)。
+日志位置与恢复语义见 [执行器宿主指南](docs/guide-executor-host.md)。桌包里要**真出图**还
+差一个装好 comfy-cli 的 Python 解释器（不随包，百 MB 级环境）：在「设置 → 创作后端 →
+comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与建议见指南第 4 点。
 
 ---
 

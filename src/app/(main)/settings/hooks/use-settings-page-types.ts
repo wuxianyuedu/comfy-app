@@ -37,6 +37,8 @@ export type Settings = {
   comfyLorasDir: string;
   comfyuiPath: string;
   comfyuiExtraArgs: string;
+  /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */
+  comfyCliPython: string;
   comfyuiAutoStart: boolean;
   /** ComfyUI 监听端口；0 = 默认 8188（启动时按需显式传 --port）。 */
   comfyuiPort: number;
