@@ -20,6 +20,8 @@ import {
   taskRepository,
 } from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
+import { logger } from "~/lib/core/logger";
+import { isSchemaReady } from "~/lib/db-schema-ready";
 import { normalizeProductionProgress } from "~/lib/production/progress";
 import type { Shot } from "~/lib/workshop/types";
 import { cancelTask } from "~/lib/comfyui/enqueue";
@@ -515,9 +517,51 @@ export async function startFilm(id: string) {
 }
 
 // ── watch + update ──────────────────────────────────────────
-async function watchFilm(id: string) {
-  const MAX_ITER = 240; // ~16 min at 4s
-  for (let i = 0; i < MAX_ITER; i++) {
+/* 监看循环的两项常量。写在一起是因为**给用户看的预算文案必须与判据同源**：
+ * 上一版把「~16 min」写在注释里、把「超过 16 分钟」写在报错文案里，改一个
+ * 另一个不会跟着改。 */
+const WATCH_POLL_MS = 4000;
+const WATCH_MAX_ITER = 240;
+const WATCH_BUDGET_MIN = Math.round((WATCH_POLL_MS * WATCH_MAX_ITER) / 60000);
+
+/* **监看在飞表**（跨模块实例）。`watchFilm` 是被 `void` 起来的常驻循环，而
+ * dev 的热重启不会杀掉旧模块那条 promise 链 —— 旧循环还在跑，本模块的新实例
+ * 又会被下面的 boot 扫描再起一条，于是同一部影片有两个监看同时在写进度、
+ * 并且都会调 `composeFilm`（`markComposing` 是无条件写）⇒ 同一部片被 ffmpeg
+ * 合成两次。所以「谁在监看这部影片」必须放在跨 HMR 仍然活着的地方。
+ * 键名带版本号是既定的坑：`??=` 只认键名，不会给旧单例补字段（同 `runner-state`）。 */
+declare global {
+  var filmWatchInFlight_v1: Set<string> | undefined;
+}
+
+function inFlightFilms(): Set<string> {
+  globalThis.filmWatchInFlight_v1 ??= new Set<string>();
+  return globalThis.filmWatchInFlight_v1;
+}
+
+/** 监看一部影片直到出片 / 判失败；同一部影片在本进程内**至多一条**循环。 */
+async function watchFilm(id: string, opts: { resumed?: boolean } = {}) {
+  const inFlight = inFlightFilms();
+  if (inFlight.has(id)) return;
+  inFlight.add(id);
+  try {
+    await watchLoop(id, opts);
+  } finally {
+    inFlight.delete(id);
+  }
+}
+
+async function watchLoop(id: string, opts: { resumed?: boolean }) {
+  if (opts.resumed) {
+    /* 续跑要在行日志里留痕：否则用户看到的是「重启之后它自己动起来了」，
+     * 而支持现场需要据这一行判断「是 boot 扫描接上的，还是原循环还活着」。 */
+    await appendFilmLog(
+      id,
+      "info",
+      `进程重启后续跑监看（本轮预算 ${WATCH_BUDGET_MIN} 分钟）`,
+    );
+  }
+  for (let i = 0; i < WATCH_MAX_ITER; i++) {
     const film = await filmRepository.findById(id);
     if (!film || film.status === "CANCELLED" || film.status === "FAILED")
       return;
@@ -526,6 +570,19 @@ async function watchFilm(id: string) {
     }
 
     const shots = await filmShotRepository.listByFilm(id);
+    /* 一行镜头都没有的 GENERATING 只可能是「`markGenerating` 之后、逐镜提交之前」
+     * 崩在这里。这条状态在本刀之前不可达（监看只由 `startFilm` 起，那时 shots 必然
+     * 非空），而 boot 续跑扫描会把它捡起来 —— 不判掉就是 `0/0` 的 NaN 进度，
+     * 然后带着一条空时间线去合成。 */
+    if (!shots.length) {
+      await filmRepository.markFailed(id, "没有可继续的镜头");
+      await appendFilmLog(
+        id,
+        "error",
+        "监看发现这部影片一个镜头都没有（在逐镜提交之前就中断了），已判失败：请重新创建镜头后再点「开始生成」。",
+      );
+      return;
+    }
     let pending = 0;
     let done = 0;
     let failed = 0;
@@ -535,13 +592,21 @@ async function watchFilm(id: string) {
      * 就是 2N 次往返（N = 镜头数），跑满 240 轮是上万次查询。 */
     const awaiting: (typeof shots)[number][] = [];
     for (const shot of shots) {
-      if (!shot.taskId) {
-        pending++;
-        continue;
-      }
+      /* **先判终态、再判有没有 taskId**，顺序是判据不是风格：这一趟原先是
+       * `if (!shot.taskId) { pending++; continue }` 打头，于是「已终态但没有任务」
+       * 的镜头被数成还在等 —— 而那种行是真实存在的：逐镜提交时 `catch` 落的是
+       * `markFailed(shot.id)`（没有 taskId），成片重跑/续跑时也可能带着已完成的旧镜头。
+       * 后果不是显示不准，是**永不收口**：`pending` 永远不为 0，于是既不合成、
+       * 也不判失败，一路轮询到预算耗尽才落一句「生成超时」（实测：夹具里一个
+       * SUCCEEDED 无 taskId 的镜头就让影片停在 progress 50）。
+       * 真正「没任务又不是终态」的（IDLE / 提交前就崩的 QUEUED）照旧算等待。 */
       if (shot.status === "SUCCEEDED" || shot.status === "FAILED") {
         if (shot.status === "SUCCEEDED") done++;
         else failed++;
+        continue;
+      }
+      if (!shot.taskId) {
+        pending++;
         continue;
       }
       awaiting.push(shot);
@@ -623,10 +688,81 @@ async function watchFilm(id: string) {
       await composeFilm(id);
       return;
     }
-    await sleep(4000);
+    await sleep(WATCH_POLL_MS);
   }
   await filmRepository.markFailed(id, "生成超时");
-  await appendFilmLog(id, "error", "影片生成超时（超过 16 分钟）");
+  await appendFilmLog(
+    id,
+    "error",
+    `影片生成超时（本轮监看超过 ${WATCH_BUDGET_MIN} 分钟）`,
+  );
+}
+
+/**
+ * 进程重启后的恢复扫描：把丢了监看主体的影片接回去（P3 §5 ADR 的 5-A）。
+ *
+ * 为什么需要它：`startFilm` 末尾那条 `void watchFilm()` 只活在**当前进程**里，
+ * 而 dev 的热重启与桌包的重启都会让它消失 —— 镜头对应的任务却还在库里由执行侧
+ * 推进（宿主不跟着 Next 一起死，ADR §14 D1）。没人监看 ⇒ 影片永远停在
+ * `GENERATING`：既不出片也不失败，界面上是一个转不完的圈。返回值只给日志与用例
+ * 用，调用方不据它做决策。
+ */
+export async function resumeStalledFilms(): Promise<{
+  resumed: string[];
+  abandoned: string[];
+}> {
+  /* 表还没建就整轮跳过，与回收器同一口径（`sweepOnce` 也判这一条）。哨兵表是
+   * `task`，而首启是一次把整套 DDL 应用上去的 ⇒ `task` 在时 `filmProject` 也在。
+   * 「表在、查询失败」不在这里被吞：那走下面的 catch，Warn 出来但仍不炸启动。
+   *
+   * 这条扫描是**一次性**的（不像回收器每 30s 一轮），跳过了就得等下一次重启才有人
+   * 接片，所以必须留痕 —— 否则现场只能看到「影片停在生成中」而读不到任何原因。 */
+  if (!isSchemaReady()) {
+    logger.info("[film] 重启恢复扫描跳过（表还没建就绪）");
+    return { resumed: [], abandoned: [] };
+  }
+
+  const resumed: string[] = [];
+  const abandoned: string[] = [];
+
+  try {
+    for (const film of await filmRepository.listByStatus(["GENERATING"])) {
+      /* 本进程已有循环在跑（HMR 之后旧循环还活着）就不再起第二条 ——
+       * 判据与 `watchFilm` 内部那道是同一份在飞表，两处各自判就会漂开。 */
+      if (inFlightFilms().has(film.id)) continue;
+      resumed.push(film.id);
+      void watchFilm(film.id, { resumed: true });
+    }
+
+    /* COMPOSING **不**续跑，直接判掉。`composeFilm` 一见到 COMPOSING 就早退
+     * （`status === "COMPOSING" || "DONE"` 那条），而它是**无条件**写进去的状态，
+     * 于是崩在合成中的影片连界面上「重新合成」这个唯一出口都被自己挡住 ——
+     * 判成 FAILED 才把出口接回来（FAILED 是 `composeFilm` 允许重跑的状态），
+     * 而不是开机时静默重跑 ffmpeg（用户没要求却开始占 CPU 写文件）。 */
+    for (const film of await filmRepository.listByStatus(["COMPOSING"])) {
+      await filmRepository.markFailed(
+        film.id,
+        "合成中断（进程在合成期间退出）",
+      );
+      await appendFilmLog(
+        film.id,
+        "error",
+        "合成在进程重启时被打断，已判失败。镜头视频仍在，点「重新合成」可再来一次（需要本机装有 ffmpeg）。",
+      );
+      abandoned.push(film.id);
+    }
+  } catch (err) {
+    logger.warn(
+      `[film] ${errorText(err, "resumeStalledFilms 失败（重启恢复扫描）")}`,
+    );
+  }
+
+  if (resumed.length || abandoned.length) {
+    logger.info(
+      `[film] 重启恢复扫描：续跑监看 ${resumed.length} 部，合成中断判失败 ${abandoned.length} 部`,
+    );
+  }
+  return { resumed, abandoned };
 }
 
 // ── ffmpeg helpers ─────────────────────────────────────────

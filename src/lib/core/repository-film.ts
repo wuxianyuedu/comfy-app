@@ -134,6 +134,22 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .catch(() => undefined);
   }
 
+  /** 按状态列出影片（进程重启后的恢复扫描用），`createdAt` 升序 = 先起先续。
+   *
+   *  刻意**不带 userId**：这条查询的语义是「本机这份库里还有哪些行该有人推进」，
+   *  扫描者不知道也不该关心归属；本应用是单用户本地应用，多一层归属条件只会让
+   *  「重启后没人续跑」的窗口更难解释。排序与领取队列同口径（先起先续）。 */
+  async listByStatus(
+    statuses: readonly string[],
+  ): Promise<Array<{ id: string; status: string }>> {
+    if (statuses.length === 0) return [];
+    return db
+      .select({ id: filmProject.id, status: filmProject.status })
+      .from(filmProject)
+      .where(inArray(filmProject.status, [...statuses]))
+      .orderBy(asc(filmProject.createdAt));
+  }
+
   async markGenerating(id: string): Promise<void> {
     await db
       .update(filmProject)

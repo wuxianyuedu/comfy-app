@@ -30,6 +30,12 @@ const filmRepo = vi.hoisted(() => ({
   appendLog: vi.fn(
     async (_id: string, _entry: { level: string; msg: string }) => undefined,
   ),
+  /** 恢复扫描用的按状态查询（5-A）。默认「库里没有未收尾的影片」。 */
+  listByStatus: vi.fn<
+    (
+      _statuses: readonly string[],
+    ) => Promise<Array<{ id: string; status: string }>>
+  >(async () => []),
 }));
 type ShotRow = { id: string; taskId: string | null };
 type CreatedShot = {
@@ -55,6 +61,11 @@ const shotRepo = vi.hoisted(() => ({
 const taskRepo = vi.hoisted(() => ({
   createQueued: vi.fn(async (_input: unknown) => ({ id: "task-1" })),
   findExecutionProgress: vi.fn(async (_taskId: string) => null),
+  /** 监看一轮**只发一次**批量进度查询（`watchLoop` 无条件调它，空数组由仓储侧
+   *  早退）；缺这个键的话循环会在这一行 reject，把「收没收到口」演成「静默死掉」。 */
+  findExecutionProgressMany: vi.fn<(_ids: string[]) => Promise<unknown[]>>(
+    async () => [],
+  ),
 }));
 const skillRepo = vi.hoisted(() => ({
   findBySlug: vi.fn(async (_slug: string) => null),
@@ -118,6 +129,21 @@ vi.mock("~/lib/llm/server", () => ({
   completeLLMStructured: llmStructured,
 }));
 
+/* 首启建表就绪判据：恢复扫描与回收器同一口径（表还没建就整轮跳过）。
+ * 默认给「已就绪」，让不关心这条的用例不必各自设。 */
+const schemaReadyMock = vi.hoisted(() => vi.fn(() => true));
+vi.mock("~/lib/db-schema-ready", () => ({ isSchemaReady: schemaReadyMock }));
+
+/* 诊断通道桩：真 logger 在模块加载期就建 pino 实例并挂 ERROR 镜像（它会往仓库
+ * `log/` 写字 —— 规范里明令用例不许那么干）。本文件的判决不需要它的落盘，
+ * 只需要「扫描失败时确实 Warn 了一次」可断言。 */
+const loggerMock = vi.hoisted(() => ({
+  info: vi.fn((_msg: string) => undefined),
+  warn: vi.fn((_msg: string) => undefined),
+  error: vi.fn((_msg: string) => undefined),
+}));
+vi.mock("~/lib/core/logger", () => ({ logger: loggerMock }));
+
 /* ffmpeg：本模块**真的** spawn 子进程。编排判决不需要真 ffmpeg，因此把
  * `child_process.spawn` 桩成「立刻以 code 0 结束」的空进程。 */
 vi.mock("child_process", async (importOriginal) => ({
@@ -136,6 +162,7 @@ import {
   composeFilm,
   createFilm,
   createFilmFromProject,
+  resumeStalledFilms,
   startFilm,
   syncFilmToProject,
 } from "./orchestrator";
@@ -146,6 +173,8 @@ beforeEach(() => {
   shotRepo.listByFilm.mockResolvedValue([]);
   shotRepo.listActiveWithTask.mockResolvedValue([]);
   llmStructured.mockResolvedValue([]);
+  filmRepo.listByStatus.mockResolvedValue([]);
+  schemaReadyMock.mockReturnValue(true);
 });
 
 describe("cancelFilm — 取消要撤到任务层，不能只改界面状态", () => {
@@ -481,5 +510,150 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
     prodRepo.getForUser.mockResolvedValue(null);
     await syncFilmToProject("u1", "proj_missing", []);
     expect(prodRepo.upsertForUser).not.toHaveBeenCalled();
+  });
+});
+
+/* ── 重启后的恢复扫描（P3 §5 ADR 5-A）────────────────────────
+ * 这一刀的用户可见形态是「影片停在 GENERATING，转圈转到天荒地老」：监看循环活在
+ * 进程里，而热重启 / 桌包重启会把它弄丢，镜头任务却还在库里由执行侧推进。
+ * 判的是**扫描的接线与判决**，不是轮询循环本身（那条循环的 IO 在上面的用例里）。 */
+describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
+  /** 把 `listByStatus` 桩成「按传入的状态返回对应行」。扫描是分两次查的
+   * （GENERATING 一次、COMPOSING 一次），对参数偷懒会让两个判决互相串味。 */
+  function rowsByStatus(rows: Array<{ id: string; status: string }>) {
+    filmRepo.listByStatus.mockImplementation(async (statuses) =>
+      rows.filter((r) => statuses.includes(r.status)),
+    );
+  }
+
+  it("还在 GENERATING 的影片被接回监看（零镜头那种当场判掉，并留痕是续跑）", async () => {
+    rowsByStatus([{ id: "f-gen", status: "GENERATING" }]);
+    filmRepo.findById.mockResolvedValue({ id: "f-gen", status: "GENERATING" });
+    shotRepo.listByFilm.mockResolvedValue([]);
+
+    const result = await resumeStalledFilms();
+    expect(result).toEqual({ resumed: ["f-gen"], abandoned: [] });
+
+    /* 零镜头 = 「markGenerating 之后、逐镜提交之前」崩的那一格。它只有扫描会捡起来
+     * （原先监看只由 startFilm 起，那时 shots 必然非空），所以必须判掉而不是
+     * 拿 `0/0` 的 NaN 进度去合成一条空时间线。 */
+    await vi.waitFor(() =>
+      expect(filmRepo.markFailed).toHaveBeenCalledWith(
+        "f-gen",
+        "没有可继续的镜头",
+      ),
+    );
+    const msgs = filmRepo.appendLog.mock.calls.map((c) => c[1]?.msg ?? "");
+    expect(msgs.some((m) => m.includes("进程重启后续跑监看"))).toBe(true);
+  });
+
+  it("停在 COMPOSING 的影片判 FAILED 并把「重新合成」的出口接回来，且不自个重跑 ffmpeg", async () => {
+    rowsByStatus([{ id: "f-comp", status: "COMPOSING" }]);
+
+    const result = await resumeStalledFilms();
+
+    /* `composeFilm` 一见到 COMPOSING 就早退 ⇒ 不判掉的话，这一格连界面上那个
+     * 「重新合成」按钮都点不动（它是唯一出口，却被自己的状态挡住）。 */
+    expect(result).toEqual({ resumed: [], abandoned: ["f-comp"] });
+    expect(filmRepo.markFailed).toHaveBeenCalledWith(
+      "f-comp",
+      expect.stringContaining("合成中断"),
+    );
+    expect(filmRepo.appendLog).toHaveBeenCalledWith(
+      "f-comp",
+      expect.objectContaining({ level: "error" }),
+    );
+    /* 反向判据：扫描不许在开机时静默重跑合成（markComposing 只由 composeFilm 写）。 */
+    expect(filmRepo.markComposing).not.toHaveBeenCalled();
+  });
+
+  it("同一部影片至多一条循环：旧循环还在飞时，第二次扫描不再起一条", async () => {
+    rowsByStatus([{ id: "f-busy", status: "GENERATING" }]);
+    /* 把第一条循环钉在「等数据库」上，模拟热重启后旧模块那条还没走完的情形。 */
+    let release: (value: unknown) => void = () => undefined;
+    filmRepo.findById.mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    expect((await resumeStalledFilms()).resumed).toEqual(["f-busy"]);
+    expect((await resumeStalledFilms()).resumed).toEqual([]);
+
+    release({ id: "f-busy", status: "CANCELLED" });
+  });
+
+  it("「已终态但没有 taskId」的镜头不算等待，否则影片永不收口", async () => {
+    rowsByStatus([{ id: "f-term", status: "GENERATING" }]);
+    filmRepo.findById.mockResolvedValue({ id: "f-term", status: "GENERATING" });
+    /* 两个镜头都已终态、都没有 taskId：一个是历史行（成功过），一个是「逐镜提交时
+     * catch 掉了」的（`markFailed` 不落 taskId）。旧顺序先判 `!shot.taskId`，于是它们
+     * 都被数成等待 ⇒ `pending` 永不为 0 ⇒ 既不合成也不判失败，一路轮询到预算耗尽
+     * 才落一句「生成超时」（dev 实测：影片停在 progress 50 不动）。
+     * 第二次 `listByFilm` 是合成侧的「取可用镜头」，给它空数组 ⇒ `composeFilm` 在建
+     * 临时目录**之前**就早退，用例不往仓库 `public/` 里写任何东西。 */
+    shotRepo.listByFilm
+      .mockResolvedValueOnce([
+        {
+          id: "s0",
+          order: 0,
+          status: "SUCCEEDED",
+          taskId: null,
+          videoPath: "/generated/films/_fixture/clip0.mp4",
+          progress: 100,
+        },
+        {
+          id: "s1",
+          order: 1,
+          status: "FAILED",
+          taskId: null,
+          videoPath: null,
+          progress: 0,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await resumeStalledFilms();
+
+    await vi.waitFor(() =>
+      expect(filmRepo.updateProgress).toHaveBeenCalledWith("f-term", 100),
+    );
+    /* 钉「循环走到了 `pending === 0` 那一支」：确实去调了合成，而合成给出的第一个
+     * 判决就是「没有可用的镜头视频」。 */
+    await vi.waitFor(() =>
+      expect(filmRepo.markComposing).toHaveBeenCalledWith("f-term"),
+    );
+    await vi.waitFor(() =>
+      expect(filmRepo.markFailed).toHaveBeenCalledWith(
+        "f-term",
+        "没有可用的镜头视频",
+      ),
+    );
+  });
+
+  it("表还没建就整轮不查（与回收器同一口径）", async () => {
+    schemaReadyMock.mockReturnValue(false);
+
+    const result = await resumeStalledFilms();
+
+    expect(result).toEqual({ resumed: [], abandoned: [] });
+    expect(filmRepo.listByStatus).not.toHaveBeenCalled();
+    /* 这条扫描是一次性的（回收器每 30s 还会再来一轮，它不会）：跳过之后就得等
+     * 下一次重启才有人接片，所以「为什么没接」必须在日志里读得到。 */
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      expect.stringContaining("重启恢复扫描跳过"),
+    );
+  });
+
+  it("扫描自己炸了不许把启动打死，但要 Warn 出来", async () => {
+    filmRepo.listByStatus.mockRejectedValue(new Error("no such table"));
+
+    await expect(resumeStalledFilms()).resolves.toEqual({
+      resumed: [],
+      abandoned: [],
+    });
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.stringContaining("resumeStalledFilms 失败"),
+    );
   });
 });
