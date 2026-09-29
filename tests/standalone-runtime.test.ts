@@ -467,8 +467,12 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     // 桩宿主的输出：三项都必须落在同一个值上
     const echoed = hostStdout();
     expect(echoed).toContain("exec=host");
-    // 绝对路径：宿主与 server 读同一个库文件，靠的就是这一条（相对路径 = 赌两侧锚点一致）
-    expect(echoed).toMatch(/db=file:[A-Za-z]:[\\/]/);
+    // 绝对路径：宿主与 server 读同一个库文件，靠的就是这一条（相对路径 = 赌两侧锚点一致）。
+    // 判据写成「绝对路径」而不是某个平台的形状：原实现只认 `[A-Za-z]:\`，
+    // 那是把 Windows 当唯一平台（本仓库处处强调跨平台），在 POSIX 上必红。
+    const dbUrl = /db=(file:\S+)/.exec(echoed)?.[1] ?? "";
+    expect(dbUrl, `宿主没回显库路径：${echoed}`).not.toBe("");
+    expect(path.isAbsolute(dbUrl.slice("file:".length))).toBe(true);
     // 子进程真的拿到 production（不是只在单测里成立）：pino 在别值时去找 pino-pretty，
     // 而那份 devDependency 不在载荷里 —— 桌包宿主退出 1 的现场就是这条。
     expect(echoed).toContain("node=production");
@@ -540,6 +544,26 @@ describe("装配、打包配置与产物判据三者同形", () => {
     // sidecar 由打包器落在资源根（剥三元组后缀），壳不许再拼 binaries/ 子目录。
     expect(shell).toContain("res_dir.join(sidecar_binary_name())");
     expect(shell).not.toContain('res_dir.join("binaries")');
+  });
+
+  it("只编壳的那条路也补齐 static 占位（bundle.resources 编译期校验）", () => {
+    // 实测（ISSUE #1247）：全新克隆上跑「一键发布构建」（build-all.ps1 →
+    // build-tauri-release.ps1，只编 release 壳、不跑 build-desktop.mjs），
+    // cargo build 在 app 的 build script 里 panic：
+    //   tauri build failed: resource path `static` doesn't exist
+    // externalBin 的报错在前（sidecar 那条已修），但两者是**同一条判据**：
+    // tauri-build 每次编译都校验 conf 里声明的路径存在，而这些路径是构建产物、
+    // 不入库，所以两条都要有补齐步。
+    const script = read("tools/scripts/build-tauri-release.ps1");
+    expect(script).toContain('$resDir = Join-Path $TAURI_DIR "static"');
+    expect(script).toContain("Test-Path $resDir");
+    // 占位目录只是编译期过闸，不许被当成可运行载荷——所以必须同时点明
+    // 「这不是载荷」与「真要桌包请跑 build-standalone」。
+    expect(script).toContain("build-standalone.ps1");
+    // resources 声明一旦挪走，这条补齐步就成了死代码：两侧同形。
+    expect(read("src-tauri/tauri.conf.json").replace(/\s+/g, "")).toContain(
+      '"resources":["static/"]',
+    );
   });
 
   it("build-desktop 里三条实测判据都还在", () => {
