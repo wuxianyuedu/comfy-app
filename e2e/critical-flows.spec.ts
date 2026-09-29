@@ -1375,22 +1375,87 @@ test.describe("应用页签与全屏视图 @critical", () => {
   });
 
   /**
-   * 同一处回归的**第三形态**：ComfyUI 页签里的内容。
+   * 同一处回归的**第三形态**：ComfyUI 的查看出口。
    *
-   * 前两轮修的都是「本应用自己的浮层盖住标题行」，而 ComfyUI 页签是另一类：
-   * 页签打开了、地址也对，里面却什么都没有 —— 未开 CORS 的 ComfyUI 会对
-   * 跨源请求返 **403**（origin-only 中间件），响应体为空所以一片白。宿主页
-   * 跨源读不到响应头、事件也不带原因，所以「能不能嵌」由服务端
-   * `setting.comfyEmbeddable` 回答。
+   * 前两轮修的都是「本应用自己的浮层盖住标题行」，而这一轮关于「点开后看不看
+   * 得见东西」。两种形态的出口不是同一个东西（判据 `shouldUseBrowserTab`）：
+   *   · **桌面壳内**：把 ComfyUI 开成**同一个窗口的一个页签**，里面渲染 iframe；
+   *     未开 CORS 时 ComfyUI 对跨源返 403，是一片空白，所以「能不能嵌」由服务端
+   *     `setting.comfyEmbeddable` 回答，不可嵌时仍在**同一个页签内**给可读说明
+   *     （ISSUE #310 的原话是「只要多页签，不要另一个窗口」）。
+   *   · **浏览器 / dev**：不内嵌、也不画应用内页签栏，直接把 ComfyUI 交给
+   *     **新浏览器页签**（`window.open`），并给一条可见反馈。
    *
-   * 两个方向都要守住（ISSUE #310，用户要求「只要多页签，不要另一个窗口」）：
-   *   ① 可嵌 → 页签里确实渲染 iframe；
-   *   ② 不可嵌 → 仍在**同一个窗口的页签**里给出可读说明，不弹第二个窗口。
+   * Playwright 起的是浏览器形态，所以上面那两条壳内断言（页签里的 iframe、
+   * 页签内的不可嵌说明）在本套件里量不到 —— 本文件下面的三条按**浏览器形态的
+   * 契约**守：新浏览器页签真的开出去、反馈看得见、应用内不长出假页签栏或 iframe。
+   * 壳内那两条目前没有任何自动化覆盖，要验得先把用例跑进真壳（§11.10.4 壳冒烟）。
    */
-  /* 打开设置 → 创作后端 → 点「打开查看」。假 ComfyUI 在 8188 上（见
-   * playwright.config.ts 的第二个 webServer），带 `--enable-cors-header`
-   * 语义启动，即用户实际会遇到的正常路径。 */
-  async function openComfyFromSettings(page: Page) {
+  /**
+   * ComfyUI 相关 tRPC 端点的统一桩：状态说「在跑、地址是假服务」，内嵌探测结论
+   * 可参数化，「在浏览器打开」计次并回报成功。
+   *
+   * 为什么必须是一个处理器：同一个 URL 被多条通配路由匹配时，**后注册的那条先被
+   * 调用**，而它对不认识的 URL 会 `route.continue()` 把请求**直接放去网络** —— 先
+   * 注册的那条根本没机会应答。后果不是「有点遮蔽」而是两边都静默失灵：实测先挂
+   * 计次桩、后挂状态桩，`comfyOpen` 计数恒 0（看起来像动作没发出，其实是路由顺序
+   * 吃的）。所以这个 describe 里的 ComfyUI 端点统一由下面这一个处理器分派。
+   * 假 ComfyUI 在 8188 上（playwright.config 的第二个 webServer）。
+   */
+  async function stubComfyTrpc(
+    page: Page,
+    options: { embeddable?: boolean } = {},
+  ) {
+    const calls = { open: 0 };
+    await page.route("**/api/trpc/**", async (route: Route) => {
+      const url = route.request().url();
+      /* 两种响应形状不能混：`comfyui.status` 的 `data` **就是**状态对象，
+         而 `comfyEmbeddable` / `comfyOpen` 的 `data` 外面还包一层 `json`
+         （与文件顶部 `stubBackend` 的用法一致）。包错层前端读到的是 undefined。 */
+      const fulfillRaw = (data: unknown) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ result: { data } }),
+        });
+      const fulfillJson = (data: unknown) => fulfillRaw({ json: data });
+      if (url.includes("comfyui.status")) {
+        await fulfillRaw({
+          up: true,
+          base: "http://127.0.0.1:8188",
+          starting: false,
+          stopping: false,
+        });
+        return;
+      }
+      if (url.includes("comfyEmbeddable")) {
+        await fulfillJson({
+          embeddable: options.embeddable ?? true,
+          reason: "ComfyUI 对跨源请求返回 403（未开启 CORS）",
+        });
+        return;
+      }
+      if (url.includes("comfyOpen")) {
+        calls.open += 1;
+        await fulfillJson({
+          ok: true,
+          detail: "已用系统默认浏览器打开 ComfyUI",
+        });
+        return;
+      }
+      await route.continue();
+    });
+    return calls;
+  }
+
+  /**
+   * 打开设置 → 创作后端（→ 可选地点「打开查看」）。
+   *
+   * `thenOpenView` 给 false 的场合：下一条用例要数「在浏览器打开」有没有额外开
+   * 窗口，而「打开查看」本身就会开一个新浏览器页签 —— 顺手点上它，判据就被自己
+   * 的动作污染了。
+   */
+  async function openComfyFromSettings(page: Page, thenOpenView = true) {
     await page.goto("/workspace");
     await page
       .getByRole("button", { name: "设置", exact: true })
@@ -1400,87 +1465,64 @@ test.describe("应用页签与全屏视图 @critical", () => {
       timeout: 20_000,
     });
     await page.getByRole("button", { name: "创作后端", exact: true }).click();
+    if (!thenOpenView) {
+      return;
+    }
     await page
       .getByRole("button", { name: /打开查看/ })
       .first()
       .click();
   }
 
-  test("@critical ComfyUI 在页签里内嵌渲染 不另开窗口", async ({ page }) => {
-    let windowCount = 0;
-    page.on("popup", () => {
-      windowCount += 1;
-    });
+  test("@critical 浏览器形态点「打开查看」把 ComfyUI 交给新浏览器页签", async ({
+    page,
+    context,
+  }) => {
+    await stubComfyTrpc(page);
+    const popupPromise = context.waitForEvent("page", { timeout: 20_000 });
 
     await openComfyFromSettings(page);
 
-    // 页签里确实渲染出被嵌页（而不是一片空白）。
-    await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(1, {
-      timeout: 20_000,
-    });
-    // 页签栏出现 ComfyUI —— 就是用户要的「多页签」形态。
-    await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
-    // 且**没有**弹出第二个窗口。
-    expect(windowCount).toBe(0);
+    // 真的开出一个新浏览器页签，地址就是 ComfyUI（假服务在 8188）。
+    const popup = await popupPromise;
+    expect(popup.url()).toContain("127.0.0.1:8188");
+    await popup.close();
+
+    // 反馈要看得见：静默打开新页签，用户不知道发生了什么。
+    await expect(page.getByText(/已在新浏览器页签打开 ComfyUI/)).toBeVisible();
+
+    /* 浏览器形态不内嵌、也不画假页签栏（判据 `shouldUseBrowserTab`）。
+       「壳内页签里渲染 iframe」那条契约在这里量不到，见上面的说明块。 */
+    await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(0);
+    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(
+      0,
+    );
   });
 
-  /* 负向：内嵌探测判「不可嵌」时，**仍然留在同一个页签**里给出可读说明 ——
-   * 不塞一个注定空白的 iframe、不弹第二个窗口、不跳浏览器。
+  /* 负向（浏览器形态版）：即使服务端内嵌探测回答「不可嵌」，浏览器形态也**不去看
+   * 这个结论** —— 它压根不内嵌，直接交给新浏览器页签。所以这里守的是两件「不该
+   * 出现」：不塞一个注定空白的 iframe、不把壳内那句「无法在此页签中显示」搬到浏览器
+   * 形态来（那句说明的前提是「同一个页签」，浏览器形态没有这个页签）。
    *
-   * 只桩 `comfyEmbeddable` 一个端点（其余走真实后端）：判定要覆盖的是
-   * 「客户端拿到 blocked 结论后怎么渲染」，而 blocked 的**成因**（ComfyUI 未开
-   * CORS 对跨源返 403）已在 `src/lib/comfy-embed.test.ts` 与假 ComfyUI 的
-   * 真实 403 场景里各自钉住。 */
-  test("@critical ComfyUI 不可嵌时在同一页签里给说明 不另开窗口", async ({
+   * 壳内的正向契约（不可嵌 → 同一个页签内给可读说明、且不弹第二个窗口）在本套件
+   * 量不到，归 §11.10.4 的壳冒烟。`blocked` 结论本身怎么产出由
+   * `src/lib/comfy/comfy-embed.test.ts` 守着。 */
+  test("@critical 内嵌探测结论不影响浏览器形态：仍走新浏览器页签", async ({
     page,
+    context,
   }) => {
-    let windowCount = 0;
-    page.on("popup", () => {
-      windowCount += 1;
-    });
-
-    await page.route("**/api/trpc/**", async (route: Route) => {
-      const url = route.request().url();
-      if (!url.includes("comfyEmbeddable")) {
-        await route.continue();
-        return;
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          result: {
-            data: {
-              /* 必须是**服务端**的探测结论形状（`{ embeddable, reason }`）：
-               * `target` 是客户端 `openComfyTab` 的产出，桩在这里等于把
-               * 「结论 → 渲染」这段链路整个跳过。 */
-              json: {
-                embeddable: false,
-                reason: "ComfyUI 对跨源请求返回 403（未开启 CORS）",
-              },
-            },
-          },
-        }),
-      });
-    });
+    await stubComfyTrpc(page, { embeddable: false });
+    const popupPromise = context.waitForEvent("page", { timeout: 20_000 });
 
     await openComfyFromSettings(page);
 
-    // 绝不塞一个注定空白的内嵌 iframe（那正是空白页签的来源）。
+    const popup = await popupPromise;
+    expect(popup.url()).toContain("127.0.0.1:8188");
+    await popup.close();
+
+    // 壳内那句说明不该出现在浏览器形态里。
+    await expect(page.getByText(/无法在此页签中显示/)).toHaveCount(0);
     await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(0);
-    // 说明留在**页签内**，用户看得见成因。
-    await expect(page.getByText(/无法在此页签中显示 ComfyUI/)).toBeVisible({
-      timeout: 20_000,
-    });
-    // 说明里必须带上**地址**：只剩一句「看不了」时，用户无法自查，也分不清是
-    // 应用外壳拦的还是 ComfyUI 自己拦的（ISSUE #310 第三次回归的现场）。
-    await expect(
-      page.getByText("http://127.0.0.1:8188", { exact: true }),
-    ).toBeVisible();
-    // 页签本身照常存在（不是「什么都没发生」）。
-    await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
-    // 不弹第二个窗口。
-    expect(windowCount).toBe(0);
   });
 
   /**
@@ -1491,7 +1533,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 浏览器里没法真开一个系统窗口，所以这里断言「动作发出去了」——桩掉该端点
    * 并数调用次数；同时用 popup 计数确认**没有**在应用内另开窗口。
    */
-  test("@critical 在浏览器打开 ComfyUI 不新增也不切换应用页签", async ({
+  test("@critical 在浏览器打开 ComfyUI 动作发出且不切走当前视图", async ({
     page,
   }) => {
     let windowCount = 0;
@@ -1499,48 +1541,14 @@ test.describe("应用页签与全屏视图 @critical", () => {
       windowCount += 1;
     });
 
-    let browserOpenCalls = 0;
-    await page.route("**/api/trpc/**", async (route: Route) => {
-      const url = route.request().url();
-      if (!url.includes("comfyOpen")) {
-        await route.continue();
-        return;
-      }
-      browserOpenCalls += 1;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          result: {
-            data: {
-              json: { ok: true, detail: "已用系统默认浏览器打开 ComfyUI" },
-            },
-          },
-        }),
-      });
-    });
+    /* 状态、内嵌结论与「在浏览器打开」的计次都由同一个桩负责：这条通配路由
+       后注册者优先，另挂一条会把统一桩整个遮蔽（实测计数恒 0）。 */
+    const comfyCalls = await stubComfyTrpc(page);
 
-    await openComfyFromSettings(page);
-    // 先走页签形态（同一条 @critical 链路）：此刻页签是「主应用 + ComfyUI」。
-    // 用可重试的 `toHaveCount` 取基线，不用一次性 `count()` —— 「打开查看」里
-    // 先 await 服务端探测、再 openTab，页签是**过一会儿**才出现的；一次性取值
-    // 会把尚未新增的「1 个」当成基线，随后断言必然失败（本次实测踩到）。
-    await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
-    await expect(page.getByRole("tab")).toHaveCount(2);
-    const tabsBefore = await page.getByRole("tab").count();
+    await openComfyFromSettings(page, false);
+    // 设置页停在创作后端那一屏（上面没离开设置），基线就是「仍在设置里」。
+    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
 
-    // 回到设置里点「在浏览器打开」。
-    // 先切回**主应用**页签：ComfyUI 页签是保持挂载 + CSS 显隐的（切页签不丢画布
-    // 编辑态），而上面刚把 ComfyUI 页签激活了 —— 主应用连同设置页一起被 `hidden`，
-    // 不切回来则导航栏与按钮都点不到。切回后设置页仍停在创作后端那一屏
-    // （点「打开查看」不离开设置），不必再点一次导航栏的「设置」（那会再叠一层
-    // 设置全屏视图，把底下的界面盖住）。
-    await page.getByRole("tab", { name: "主应用" }).click();
-    const activeBefore = await page
-      .getByRole("tab")
-      .evaluateAll((els) =>
-        els.findIndex((el) => el.getAttribute("aria-selected") === "true"),
-      );
     await page
       .getByRole("button", { name: /在浏览器打开/ })
       .first()
@@ -1548,24 +1556,16 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
     // 动作确实发出了（服务端有可见出口，不是静默失败）。
     await expect
-      .poll(() => browserOpenCalls, { timeout: 20_000 })
+      .poll(() => comfyCalls.open, { timeout: 20_000 })
       .toBeGreaterThan(0);
-    // 页签数量不变、激活项也不变：这条出口不新增、也不切换页签。
-    await expect(page.getByRole("tab")).toHaveCount(tabsBefore);
-    await expect
-      .poll(
-        () =>
-          page
-            .getByRole("tab")
-            .evaluateAll((els) =>
-              els.findIndex(
-                (el) => el.getAttribute("aria-selected") === "true",
-              ),
-            ),
-        { timeout: 10_000 },
-      )
-      .toBe(activeBefore);
-    // 也不在应用内另开窗口。
+    /* 这条出口不与当前视图抢位置：点完还在设置里，且它不在应用内开新页签、
+       也不弹浏览器页签（走的是系统默认浏览器那条服务端出口）。
+       壳内那条「不新增也不切换应用页签」在这里量不到 —— 浏览器形态本来就没有
+       应用内页签栏，归 §11.10.4 壳冒烟。 */
+    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
+    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(
+      0,
+    );
     expect(windowCount).toBe(0);
   });
 });
