@@ -155,11 +155,25 @@ test.describe("工作区链路 @critical", () => {
    * 是「2px 上下边框叠在一个行内盒上」：**4×21 的竖线**。用户看不出那是加载
    * 指示器，只读到一个来源不明的图案。
    *
-   * 尺寸只有真实浏览器量得出来（jsdom 不做布局、不做行内盒的宽高失效）：
+   * 尺寸只有真实浏览器量得出来（jsdom 不做布局、不做行内盒的宽高失效）。三条判据：
    *   1. 宽高都到位（老形态宽 4px）；
    *   2. 是个圆（宽高相等），不是竖条；
-   *   3. 容器**不是 flex** —— 否则这条判据又会退回「靠调用处布局撑着」，
-   *      下一个非 flex 的落点照样塌成竖线。
+   *   3. **把父容器的 flex 抽掉再复量一次**，仍然成立 —— 守的是「尺寸不靠调用处
+   *      布局撑着」：下一个非 flex 的落点照样会塌成竖线。
+   *
+   * 第 3 条原先钉的是「这个落点的父容器**不是** flex」。那是实现细节：加载态后来
+   * 进了 `EmptyState` 的 flex 图标位，代理判据从此恒红，却不说明任何退化。现在
+   * 直接做那个实验（量完立刻还原），比老写法严：老写法只会红，不会告诉你为什么。
+   *
+   * 读数用 `getComputedStyle` 的 width/height，不用 `boundingBox()`：spinner 带
+   * `animate-spin` 持续旋转，boundingBox 量到的是旋转后的外接矩形。两个实测后果：
+   *   · 读数随角度漂 —— 同一根图标两次跑分别量到 26×26 与 34×34；
+   *   · 判据会在最该红的时候放行 —— 老写法下把图标换成默认尺寸（真值 16×16）
+   *     用例**仍然绿**（旋转后的外接矩形把宽度抬过了 16 这条线）。
+   * 顺带一个算式：w×h 的盒转 45° 后外接矩形两边都是 (w+h)/√2 —— 24×16 的竖条
+   * 在 45° 那一刻量起来正好是正方形，「宽高相等」这条判据因此根本不由 boundingBox 保证。
+   * 两处负向验证各红在指定断言上：换成默认尺寸报 `宽度塌了：16×16`，
+   * 只给宽不给高报 `不是圆：24×16`。
    */
   test("@critical 工作流库加载态的转圈是真的圆，不是一条竖线", async ({
     page,
@@ -180,21 +194,68 @@ test.describe("工作区链路 @critical", () => {
       timeout: 15_000,
     });
 
-    const spinner = page.locator('[data-slot="spinner"]').first();
-    const box = await spinner.boundingBox();
-    expect(box).not.toBeNull();
-    const size = box ?? { width: 0, height: 0 };
-    /* 老形态宽 4px / 高 21px；正常形态是 24×24（`size-6`）。 */
-    expect(size.width).toBeGreaterThan(16);
-    /* 圆：宽高相等（给 1px 抗锯齿余量），竖条会在这里红。 */
-    expect(Math.abs(size.width - size.height)).toBeLessThanOrEqual(1);
+    /* 锁在**加载态这一处**：页面上同时还有工作流编辑器覆盖层的另一根 spinner
+       （实测同一刻能数到两根），整页 `.first()` 拿到的未必是加载态那根。
+       取法：从「正在加载工作流」那段文案往上找**第一个含 spinner 的祖先**，
+       不依赖某个未必存在的 data-slot。 */
+    const spinner = page
+      .getByText(/正在加载工作流/)
+      .locator("xpath=ancestor::*[.//*[@data-slot='spinner']][1]")
+      .locator('[data-slot="spinner"]')
+      .first();
+    await expect(spinner).toBeAttached();
 
-    /* 尺寸不能靠调用处的 flex 撑着 —— 图标容器本身不是 flex 项时才见真章。 */
-    const containerIsFlex = await spinner.evaluate((el) => {
+    /* 量**布局尺寸**（computed width/height），不是 boundingBox：
+       spinner 是 `<svg>`，SVG 图形元素没有 offsetWidth/offsetHeight（实测 undefined）；
+       而 boundingBox 量到的是 `animate-spin` 旋转后的外接矩形 —— 尺寸随角度在
+       24↔34 之间漂（同一刻两次读数实测差 8px），更要命的是 45° 时一根 24×16 的
+       竖条量起来正好是正方形。老写法在最该红的那一刻会绿。 */
+    const measure = () =>
+      spinner.evaluate((el) => {
+        const style = getComputedStyle(el as SVGElement);
+        return {
+          width: Number.parseFloat(style.width),
+          height: Number.parseFloat(style.height),
+        };
+      });
+
+    const size = await measure();
+    /* 老形态宽 4px / 高 21px；正常形态是 24×24（`size-6`）。 */
+    expect(
+      size.width,
+      `宽度塌了：${size.width}×${size.height}`,
+    ).toBeGreaterThan(16);
+    expect(
+      Math.abs(size.width - size.height),
+      `不是圆：${size.width}×${size.height}`,
+    ).toBeLessThanOrEqual(1);
+
+    /* 尺寸不能靠调用处的布局撑着。老判据钉的是「这个落点的父容器不是 flex」——
+       那是实现细节：加载态后来进了 EmptyState 的 flex 图标位，代理判据就恒红了。
+       它真正要守的事是「把 flex 抽掉，图标还站得住吗」，所以这里直接做那个实验
+       （改完立刻还原）。这条比原来严：老写法在 flex 落点只会红，不会告诉你为什么。 */
+    const sizeWithoutFlex = await spinner.evaluate((el) => {
       const parent = el.parentElement;
-      return parent ? getComputedStyle(parent).display.includes("flex") : false;
+      if (parent === null) throw new Error("spinner 没有父节点，判据落点漂了");
+      const previous = parent.style.display;
+      parent.style.display = "block";
+      const style = getComputedStyle(el as SVGElement);
+      const box = {
+        width: Number.parseFloat(style.width),
+        height: Number.parseFloat(style.height),
+      };
+      if (previous === "") parent.style.removeProperty("display");
+      else parent.style.display = previous;
+      return box;
     });
-    expect(containerIsFlex).toBe(false);
+    expect(
+      sizeWithoutFlex.width,
+      `抽掉 flex 后宽度塌了：${sizeWithoutFlex.width}×${sizeWithoutFlex.height}`,
+    ).toBeGreaterThan(16);
+    expect(
+      Math.abs(sizeWithoutFlex.width - sizeWithoutFlex.height),
+      `抽掉 flex 后不成圆：${sizeWithoutFlex.width}×${sizeWithoutFlex.height}`,
+    ).toBeLessThanOrEqual(1);
   });
 
   test("@critical 工作流库空态给出可行动指引而不是空白", async ({ page }) => {
