@@ -47,6 +47,45 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+/** 取一个 `.mjs` 里的**相对** import 说明符（`./x` / `../x`）。 */
+function relativeImportsOf(entryFile: string): string[] {
+  const src = fs.readFileSync(entryFile, "utf8");
+  const found = new Set<string>();
+  for (const match of src.matchAll(/from\s+"(\.{1,2}\/[^"]+\.mjs)"/g)) {
+    const spec = match[1];
+    if (spec !== undefined) found.add(spec);
+  }
+  return [...found];
+}
+
+/**
+ * 把 `scripts/<entryRel>` 连同**逐层的相对依赖**一起复制进临时检出（保持相对路径形状）。
+ *
+ * 为什么不只拷入口：入口的依赖闭包会长。曾经只拷 `env-init.mjs` 就够，后来它
+ * import 了 `launcher-core/standalone-runtime-env.mjs`，于是子进程报的是
+ * `ERR_MODULE_NOT_FOUND` 的调用栈 —— 既不是预检结论也指不到业务原因，而用例只是
+ * 「exit 1」。按闭包复制之后，这类漂移不会再以同一种令人误解的方式红。
+ */
+function copyScriptWithRelativeClosure(entryRel: string): string {
+  const scriptsRoot = path.join(ROOT, "scripts");
+  const entrySrc = path.join(scriptsRoot, entryRel);
+  const pending = [entrySrc];
+  const seen = new Set<string>();
+  while (pending.length > 0) {
+    const file = pending.shift();
+    if (file === undefined || seen.has(file)) continue;
+    seen.add(file);
+    if (!fs.existsSync(file)) continue;
+    const dest = path.join(tmp, "scripts", path.relative(scriptsRoot, file));
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(file, dest);
+    for (const spec of relativeImportsOf(file)) {
+      pending.push(path.resolve(path.dirname(file), spec));
+    }
+  }
+  return path.join(tmp, "scripts", entryRel);
+}
+
 /** 真跑 `scripts/env-init.mjs`（把项目根换成临时目录的等价形态不成立——
  *  脚本按自身位置定位项目根，所以这里用一个同名的最小检出副本）。 */
 function runEnvInitIn(files: Record<string, string>): {
@@ -55,10 +94,7 @@ function runEnvInitIn(files: Record<string, string>): {
   stderr: string;
   scriptPath: string;
 } {
-  const scriptsDir = path.join(tmp, "scripts");
-  fs.mkdirSync(scriptsDir, { recursive: true });
-  const scriptPath = path.join(scriptsDir, "env-init.mjs");
-  fs.copyFileSync(path.join(ROOT, "scripts", "env-init.mjs"), scriptPath);
+  const scriptPath = copyScriptWithRelativeClosure("env-init.mjs");
   for (const [rel, content] of Object.entries(files)) {
     fs.writeFileSync(path.join(tmp, rel), content, "utf8");
   }
@@ -83,7 +119,9 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
   });
 
   it("从 .env.example 生成后，三个必填项都非空且能过预检", () => {
-    const r = runEnvInitIn({ ".env.example": fs.readFileSync(EXAMPLE, "utf8") });
+    const r = runEnvInitIn({
+      ".env.example": fs.readFileSync(EXAMPLE, "utf8"),
+    });
     expect(r.status, r.stderr).toBe(0);
 
     const envPath = path.join(tmp, ".env");
@@ -103,8 +141,10 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
     const example = fs.readFileSync(EXAMPLE, "utf8");
     // .env.example 里的 COMFYAPP_PORT 是注释行，这里按「用户已启用固定端口」的
     // 真实形态改成未注释的赋值，验证补齐时不会把它连同空值一起重写掉。
-    const custom =
-      example.replace(/^# COMFYAPP_PORT=.*$/m, 'COMFYAPP_PORT="3456"');
+    const custom = example.replace(
+      /^# COMFYAPP_PORT=.*$/m,
+      'COMFYAPP_PORT="3456"',
+    );
     const first = runEnvInitIn({ ".env.example": example, ".env": custom });
     expect(first.status).toBe(0);
     const after = fs.readFileSync(path.join(tmp, ".env"), "utf8");
@@ -115,9 +155,18 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
   it("已存在且必填项非空时跳过，不动用户内容", () => {
     const example = fs.readFileSync(EXAMPLE, "utf8");
     const filled = example
-      .replace(/^BETTER_AUTH_SECRET=.*$/m, 'BETTER_AUTH_SECRET="' + "a".repeat(64) + '"')
-      .replace(/^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_ID="mine"')
-      .replace(/^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m, 'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"');
+      .replace(
+        /^BETTER_AUTH_SECRET=.*$/m,
+        'BETTER_AUTH_SECRET="' + "a".repeat(64) + '"',
+      )
+      .replace(
+        /^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m,
+        'BETTER_AUTH_GITHUB_CLIENT_ID="mine"',
+      )
+      .replace(
+        /^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m,
+        'BETTER_AUTH_GITHUB_CLIENT_SECRET="mine"',
+      );
     const before = filled;
     const r = runEnvInitIn({ ".env.example": example, ".env": filled });
     expect(r.status).toBe(0);
@@ -150,7 +199,8 @@ describe("预检判据与 src/env.js 同口径", () => {
     fs.writeFileSync(path.join(tmp, ".env"), content, "utf8");
     const problem = checkEnvFile(tmp, {});
     expect(problem, "空串必须被判为未就绪").not.toBeNull();
-    for (const key of REQUIRED_ENV_KEYS) expect(problem!.message).toContain(key);
+    for (const key of REQUIRED_ENV_KEYS)
+      expect(problem!.message).toContain(key);
   });
 
   it("缺文件时报的是「找不到 .env」，并且不夹带任何 Windows 专属入口", () => {
@@ -197,7 +247,7 @@ describe("预检判据与 src/env.js 同口径", () => {
   it("解析器忽略注释行、支持带引号与不带引号两种写法", () => {
     const parsed = parseEnvFile(
       [
-        "# BETTER_AUTH_SECRET=\"注释里的不算\"",
+        '# BETTER_AUTH_SECRET="注释里的不算"',
         'BETTER_AUTH_SECRET="abc"',
         "BETTER_AUTH_GITHUB_CLIENT_ID=plain",
       ].join("\n"),
@@ -212,7 +262,9 @@ describe("dev/start 在起 Next 之前预检", () => {
 
   it.each(entries)("%s 调用 exitIfEnvNotReady 且发生在 spawn 之前", (rel) => {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
-    expect(src).toContain('import { exitIfEnvNotReady } from "./env-preflight.mjs"');
+    expect(src).toContain(
+      'import { exitIfEnvNotReady } from "./env-preflight.mjs"',
+    );
     const gate = src.indexOf("exitIfEnvNotReady(root)");
     const spawn = src.search(/spawnSync\(/);
     expect(gate, "必须调用预检").toBeGreaterThan(-1);
