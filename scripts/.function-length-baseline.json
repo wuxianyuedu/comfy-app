@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-26",
+  "generatedAt": "2026-09-28",
   "ruleVersion": 3,
   "note": "超过 400 行的函数计数（规范 §12.13，判据版本 3）。棘轮只许下降：新增巨型函数须先拆分，再收紧基线。",
-  "total": 17,
+  "total": 16,
   "files": {
     "src/components/studio/TrainingStudio.tsx": 1,
     "src/components/studio/FilmStudio.tsx": 1,
@@ -16,7 +16,6 @@
     "src/components/workshop/hooks/use-workshop-pipeline.ts": 1,
     "src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.ts": 1,
     "src/components/studio/project-canvas/MaterialLibraryPanel.tsx": 1,
-    "src/lib/comfyui/workflow-detail-raw-inputs.ts": 1,
     "src/components/studio/ProjectOutputs.tsx": 1,
     "src/components/workshop/useStoryboardPlanner.ts": 1,
     "src/components/studio/workflow-form/AspectMegapixelControl.tsx": 1,
