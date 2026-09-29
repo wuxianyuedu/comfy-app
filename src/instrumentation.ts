@@ -30,6 +30,17 @@ export async function register() {
     await import("./lib/comfyui/executor-dispatch").then((m) =>
       m.startDispatchLoop(),
     );
+    /* 成片监看的**唯一** Next 侧恢复点（P3 §5 ADR 5-A）：`startFilm` 末尾那条
+     * `void watchFilm()` 只活在当前进程里，热重启 / 桌包重启会把它弄丢，而镜头任务
+     * 还在库里由执行侧推进 —— 没人监看就是影片永远停在 GENERATING（既不出片也不失败）。
+     * 放在这里的同一条 nodejs 分支、与 reaper / dispatch 并排，是刻意的：本文件在
+     * Edge runtime 也执行，Node-only 与 server-only 模块只能走动态 import。
+     * 注意 dev 下本文件**懒编译**（实测 `✓ Ready` 之后约 40s 才跑完这一支），
+     * 所以热重启后的恢复会晚到几十秒，属正常而不是没接上；桌包（standalone 编译产物）
+     * 则是进程起来就跑。 */
+    await import("./server/film/orchestrator").then((m) =>
+      m.resumeStalledFilms(),
+    );
     await import("./sentry.server.config");
   }
   if (process.env.NEXT_RUNTIME === "edge") {

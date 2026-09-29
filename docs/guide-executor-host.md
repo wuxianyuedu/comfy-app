@@ -211,6 +211,20 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
   刚领取、还没 spawn comfy-cli 的正常任务。前提是**同一 shard 只跑一个宿主**
   （由 launcher 保证），这也是「本进程没有足迹 ⇒ 真孤儿」成立的依据。
 
+- **成片监看丢了怎么办（ADR 5-A）**：`startFilm` 末尾那条 `void watchFilm()` 只活在
+  当前进程里，而镜头对应的任务还在库里由执行侧推进 —— Next 重启（dev 热编译、桌包重启）
+  之后没人监看，影片就永远停在 `GENERATING`：既不出片也不失败，界面是一个转不完的圈。
+  现在由 `src/instrumentation.ts` 里**唯一一处** `resumeStalledFilms()` 起表后续跑它，
+  行日志留痕「进程重启后续跑监看（本轮预算 N 分钟）」。三条判据：① 同一部影片**至多一条**
+  循环，去重靠挂在 `globalThis.filmWatchInFlight_v1` 上的在飞表 —— 模块级 `Set` 是错的
+  （热重启后旧循环还在飞、新模块看不见它，两条循环都会去调 `composeFilm` ⇒ 同一部片被
+  ffmpeg 合成两次）；② 停在 `COMPOSING` 的**不续跑、直接判 FAILED**，因为 `composeFilm`
+  一见到 COMPOSING 就早退，不判掉连界面上「重新合成」这个唯一出口都被自己挡住（FAILED 才是
+  它允许重跑的状态），也不在开机时静默重跑 ffmpeg；③ 被捡起来的 `GENERATING` 若一行镜头
+  都没有（`markGenerating` 之后、逐镜提交之前崩的），当场判 FAILED 并写清下一步 ——
+  这条状态只有扫描会捡到，放过去就是 NaN 进度 + 拿空时间线去合成。
+  dev 下这条恢复会晚到几十秒（instrumentation 懒编译，与上面同源），不是没接上。
+
 ## 已知观察项（灰度期）
 
 1. **ComfyUI 懒拉起**：Phase 4-B3 起，「谁去连 / 谁去拉起 ComfyUI」收在领取循环里
