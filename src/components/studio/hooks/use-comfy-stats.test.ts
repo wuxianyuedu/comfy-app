@@ -17,15 +17,20 @@ vi.mock("~/lib/comfy/comfy-stats-client", () => ({
   fetchComfyStats: fetchMock,
 }));
 
-// 捕获 useInterval 传入的 run，手动驱动轮询（比 fake timer 更确定、不依赖真实时钟）。
-let capturedRun: (() => unknown) | null = null;
-vi.mock("~/components/ui/use-interval", () => ({
-  useInterval: (run: () => unknown) => {
-    capturedRun = run;
+// store 用 `~/lib/poll-timer` 起轮询；这里把它桩掉，改由测试手动驱动
+// （比 fake timer 更确定：不受真实时钟影响，也不会「挂载即先跑一次」抢掉
+//  我们给 fetchComfyStats 排好的返回值顺序）。
+vi.mock("~/lib/poll-timer", () => ({
+  startPollTimer: () => () => {
+    void 0;
   },
 }));
 
 import { useComfyStats } from "./use-comfy-stats";
+import {
+  refreshComfyStats,
+  resetComfyStatsStoreForTest,
+} from "~/lib/comfy/comfy-stats-store";
 
 const GIB = 1024 * 1024 * 1024;
 
@@ -53,13 +58,15 @@ const OFFLINE: ComfyStatsPayload = {
 /** 手动跑一轮轮询并等其异步落定。 */
 async function tick() {
   await act(async () => {
-    await capturedRun?.();
+    await refreshComfyStats();
   });
 }
 
 beforeEach(() => {
-  capturedRun = null;
   vi.clearAllMocks();
+  /* store 是模块级单例（快照 + 迟滞计数机都有状态），不复位就等于让上一条用例
+     攒下的连续失败接着影响下一条 —— 那正是本文件想钉住的东西。 */
+  resetComfyStatsStoreForTest();
 });
 
 describe("useComfyStats 连续失败迟滞", () => {
