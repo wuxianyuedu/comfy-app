@@ -49,7 +49,7 @@ if ((Assert-ShellNotRunning -ProjectRoot $PROJECT_ROOT -Purpose "构建 release 
 Log "  未发现正在运行的桌面壳，继续。"
 Log ""
 
-Log "[3/4] 同步启动页资源 + 补齐 Node sidecar（编译期校验必需）"
+Log "[3/4] 补齐编译期必需产物：启动页资源 + static 载荷目录 + Node sidecar"
 # prebuilt 模式的页面由 dev server（http://127.0.0.1:3100）提供，壳里只需要启动页；
 # standalone 的 server.js / .next 资源由 tools\build\build-standalone.ps1 负责。
 # 过去这里在 static 缺失时会跑完整 build-desktop.mjs，而 Next standalone 的 file
@@ -97,6 +97,25 @@ if (-not (Test-Path $sidecar)) {
     New-Item -ItemType Directory -Force $binDir | Out-Null
     Copy-Item -Force $node.Source $sidecar
     Log "  已补齐 Node sidecar：node-$triple.exe（复制自 $($node.Source)）"
+}
+Log ""
+
+# tauri.conf.json 声明 bundle.resources = ["static/"]。tauri-build 与 externalBin
+# 同样地在**每次 cargo build 的编译期**校验它存在，只是 externalBin 的报错在前：
+# 全新克隆 / 清理过 static 的机器上（static 是构建产物，被 .gitignore 忽略，
+# ISSUE #1216 起才成为真实分发载荷），shell 侧一过就 panic：
+#   tauri build failed: resource path `static` doesn't exist
+# 与 sidecar 不同，这里**不能**用「随便建个空目录」糊过去：static 缺失意味着
+# 本轮只想编 prebuilt 壳（standalone 载荷由 build-standalone.ps1 装配），
+# 空目录只是占位，不构成载荷。装配完整时（跑过 build-desktop.mjs）就原样放行。
+$resDir = Join-Path $TAURI_DIR "static"
+if (-not (Test-Path $resDir)) {
+    New-Item -ItemType Directory -Force $resDir | Out-Null
+    Log "  已补齐空的 static 占位目录（bundle.resources 编译期校验必需）。"
+    Log "  注意：这**不是**可运行载荷。要产出双击即独立运行的桌包，"
+    Log "        请运行 tools\build\build-standalone.ps1（它会真装配 static）。"
+} elseif (-not (Test-Path (Join-Path $resDir "server.js"))) {
+    Log "  检测到 static 存在但只是占位/半成品（无 server.js），保持原样。"
 }
 Log ""
 
