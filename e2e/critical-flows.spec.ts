@@ -377,9 +377,12 @@ test.describe("工作台概览 @critical", () => {
     });
 
     await page.goto("/workspace");
-    // 应用日志入口在设置页/状态栏；这里只断言页面在轮询接口可用时不白屏。
+    /* 这条原本只断言了首页标题可见 —— 名字里的「打开日志面板」根本没发生，
+       所以它恒绿、什么都没守。现在按可访问名真的点开入口再验面板标题：
+       守的是「状态栏那颗入口接得上、面板标题看得见」。 */
+    await page.getByRole("button", { name: /^日志面板/ }).click();
     await expect(
-      page.getByRole("heading", { name: "灵感从这里开始" }),
+      page.getByText("应用日志", { exact: true }).first(),
     ).toBeVisible();
   });
 });
@@ -387,42 +390,51 @@ test.describe("工作台概览 @critical", () => {
 test.describe("应用页签与全屏视图 @critical", () => {
   /**
    * ISSUE #310 回归：应用级页签搬到窗口标题行后，应用内的「全屏视图」
-   * （设置、工作流编辑器、消息中心…）仍按 `fixed inset-0` 铺满整个视口，
-   * 把标题行里的页签整条盖住 —— 用户打开这些视图后就再也看不到页签。
+   * （设置、工作流编辑器、消息中心…）与居中弹窗仍按 `fixed inset-0` 铺满整个
+   * 视口，把用户的**出路**整条盖住。
    *
-   * 这里在浏览器形态（`InAppTabStrip`，无原生标题行可让位）下断言：
-   * 打开设置后，页签栏仍在视口内可见、且未被设置层覆盖。
+   * 两种形态的出路不是同一个东西，判据也跟着分：
+   *   · **桌面壳内**出路是标题行页签栏 —— 但 Playwright 驱动不了壳窗口，这条
+   *     在本套件里量不到（页签栏不渲染），只能由壳侧验证守；
+   *   · **浏览器 / dev 形态**按设计**不渲染任何应用内页签栏**（`ShellTabs.tsx`
+   *     文件头：浏览器自带页签栏，再画一条既占纵向空间又与原生重复），实测
+   *     `[role="tablist"]` 计数为 0。此时用户唯一的常驻出路是**底部状态栏**
+   *     与各视图自己的关闭/返回出口。
+   *
+   * 所以这里守的是同一类退化的浏览器形态版本：浮层若盖住状态栏，
+   * `elementFromPoint` 会返回浮层自己的子节点。顺带钉住「不画假页签栏」——
+   * 哪天有人补一条应用内页签栏，这条会红，而不是悄悄多占 32px 纵向空间。
    */
-  /**
-   * 复用「顶部命中页签栏」的判定：浮层若盖住标题行，elementFromPoint
-   * 会返回浮层自己的子节点。
-   */
-  async function expectTopHitsTabStrip(page: Page) {
-    const tablist = page.getByRole("tablist", { name: "应用页签" });
-    await expect(tablist).toBeVisible();
-    const tabBox = await tablist.boundingBox();
-    expect(tabBox).not.toBeNull();
-    const box = tabBox ?? { x: 0, y: 0, width: 0, height: 0 };
-    expect(box.height).toBeGreaterThan(0);
-    const hitTest = await page.evaluate(
-      ({ x, y }) => {
-        const el = document.elementFromPoint(x, y);
-        return el ? Boolean(el.closest('[role="tablist"]')) : false;
-      },
-      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+  const centerHitsOwnSubtree = (target: ReturnType<Page["locator"]>) =>
+    target.evaluate((el) => {
+      const box = (el as HTMLElement).getBoundingClientRect();
+      const top = document.elementFromPoint(
+        box.x + box.width / 2,
+        box.y + box.height / 2,
+      );
+      return top !== null && (el as HTMLElement).contains(top);
+    });
+
+  async function expectStatusBarNotCovered(page: Page) {
+    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(
+      0,
     );
-    expect(hitTest).toBe(true);
+    const statusbar = page.getByLabel("底部状态栏");
+    await expect(statusbar).toBeVisible();
+    expect(
+      await centerHitsOwnSubtree(statusbar),
+      "底部状态栏被浮层盖住了：中心命中落在浮层子树上",
+    ).toBe(true);
   }
 
-  test("@critical 打开设置后应用页签仍可见可点", async ({ page }) => {
+  test("@critical 打开设置后底部状态栏与视图出路都不被盖住", async ({
+    page,
+  }) => {
     await stubBackend(page);
     await page.goto("/workspace");
-
-    const tablist = page.getByRole("tablist", { name: "应用页签" });
-    await expect(tablist).toBeVisible();
+    await expectStatusBarNotCovered(page);
 
     // 打开设置（overlay 形态，不卸载 workspace 组件树）。
-    // 设置入口是 nav 底部的图标按钮，只有 title="设置"。
     await page
       .getByRole("button", { name: "设置", exact: true })
       .first()
@@ -432,8 +444,16 @@ test.describe("应用页签与全屏视图 @critical", () => {
       timeout: 20_000,
     });
 
-    // 关键断言：页签栏仍在、且没有被设置层盖住（顶部元素仍是页签）。
-    await expectTopHitsTabStrip(page);
+    // 关键断言：设置层铺满视口之后，状态栏与视图自己的「返回」出路都还点得到。
+    await expectStatusBarNotCovered(page);
+    const back = page
+      .getByRole("button", { name: "返回", exact: true })
+      .first();
+    await expect(back).toBeVisible();
+    expect(
+      await centerHitsOwnSubtree(back),
+      "设置视图的「返回」出口被自己的浮层结构盖住了",
+    ).toBe(true);
   });
 
   /**
@@ -441,7 +461,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 首轮修复只改了「全屏视图」，弹窗类仍是 `fixed inset-0`，于是打开应用日志
    * 后页签与右上角的关闭按钮照样被挡住。这条把弹窗形态钉进 E2E。
    */
-  test("@critical 打开应用日志面板后应用页签仍可见可点", async ({ page }) => {
+  test("@critical 打开应用日志面板后状态栏与面板关闭出口都不被盖住", async ({
+    page,
+  }) => {
     await stubBackend(page);
     await page.route("**/api/logs/current**", async (route: Route) => {
       await route.fulfill({
@@ -452,16 +474,23 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     await page.goto("/workspace");
-    await expectTopHitsTabStrip(page);
+    await expectStatusBarNotCovered(page);
 
-    // 入口在底部状态栏：只有 title 属性，没有可读文本。
+    // 入口在底部状态栏：纯图标按钮，可访问名由 Hint 的 accessibleName 给出。
     await page.getByRole("button", { name: /^日志面板/ }).click();
     // 面板标题：确认弹窗真的打开了（而不是入口没接上）。
     await expect(
       page.getByText("应用日志", { exact: true }).first(),
     ).toBeVisible();
 
-    await expectTopHitsTabStrip(page);
+    await expectStatusBarNotCovered(page);
+    // 面板唯一的可见出路（另有 Esc / Ctrl+Shift+L 两条，用户看不见就等于没有）。
+    const close = page.getByRole("button", { name: /^关闭/ }).first();
+    await expect(close).toBeVisible();
+    expect(
+      await centerHitsOwnSubtree(close),
+      "日志面板的关闭按钮被面板自己的结构盖住了",
+    ).toBe(true);
   });
 
   /**
