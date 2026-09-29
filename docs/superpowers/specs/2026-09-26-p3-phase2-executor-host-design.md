@@ -1,7 +1,7 @@
 # P3 §5 第 2 期：ComfyUI 执行器迁出 Next 进程（executor-host.mjs）
 
 - 日期：2026-09-26
-- 状态：**实施中** —— Phase 2-A/2-B/2-C、3-A、3-B0、3-B1、3-C、3-D、4-A1~4-A4 已合入 master（#1124 / #1131 / #1133 / #1138 / #1151 / #1157 / #1168 / #1178 / #1183 / #1186 / #1190）；4-B1 已合入 #1193（`c2ea2b1d`），4-B2 已合入 #1196（`601a6c67`），4-B3（两条派发循环收成一条 pull）已合入 #1203（`90c627e3`）——§14 D1 点名的四个进程内依赖至此全部摘完；4-B4 已合入 #1208（`d9c4a8fa`），4-B5（排队期写下的行在领取之后还在，ISSUE #1206）已合入 #1212（`37ef62f0`）；3-E1（宿主的运行时图构建期预编译进产物 + 收尾真起进程冒烟，ISSUE #1169 的第一半）已合入 #1219（`3e8b1b3f`）；3-E2（桌包 standalone 下由谁拉起宿主）另记 ISSUE #1216，**其立项前提已被实测否掉**（standalone 形态从未接通，五层各自断掉），更正与落地见 §16；§13 是逐期落地时的已签修正，§14 是 Phase 4（删旧）的签字，§15 是 3-E1，§16 是 3-E2；`COMFY_EXECUTOR=host` 目前**仅 dev 可用**
+- 状态：**实施中** —— Phase 2-A/2-B/2-C、3-A、3-B0、3-B1、3-C、3-D、4-A1~4-A4 已合入 master（#1124 / #1131 / #1133 / #1138 / #1151 / #1157 / #1168 / #1178 / #1183 / #1186 / #1190）；4-B1 已合入 #1193（`c2ea2b1d`），4-B2 已合入 #1196（`601a6c67`），4-B3（两条派发循环收成一条 pull）已合入 #1203（`90c627e3`）——§14 D1 点名的四个进程内依赖至此全部摘完；4-B4 已合入 #1208（`d9c4a8fa`），4-B5（排队期写下的行在领取之后还在，ISSUE #1206）已合入 #1212（`37ef62f0`）；3-E1（宿主的运行时图构建期预编译进产物 + 收尾真起进程冒烟，ISSUE #1169 的第一半）已合入 #1219（`3e8b1b3f`）；3-E2（桌包 standalone 下由谁拉起宿主）另记 ISSUE #1216，**其立项前提已被实测否掉**（standalone 形态从未接通，五层各自断掉），更正与落地见 §16；§13 是逐期落地时的已签修正，§14 是 Phase 4（删旧）的签字，§15 是 3-E1，§16 是 3-E2a（已合入 #1231 `e4a3e042`），§17 是 3-E2b（ISSUE #1216 收口）；`COMFY_EXECUTOR=host` 现在 **dev 与桌包 standalone 两条链路都会拉起宿主**，仍属灰度（默认不设 = inline）。桌包侧的剩余边界是 comfy-cli 的 Python 解释器不随包（ISSUE #1239）
 - 前置：P3 §5 第 1 期已完全收线（#1042/#1045/#1053/#1056/#1060/#1068/#1071/#1074/#1075/#1077/#1080/#1083/#1086/#1090 共 14 PR，整条 ComfyUI 执行链 + lib 层地基都进 §18.4 第三类；host boot 顺序与 inject 接缝已就位）
 - 上游方案：`outputs/p3-executor-process-migration-plan.md`（审计 §2.7 / 架构级）
 - 范围：
@@ -511,13 +511,14 @@ configureExecutorCli({
   - **提交方只写库 + kick 一次**：`kickQueue` 总线从一条回调扩成两条（另一条是 `announceToQueuedTasks`——通道层要告诉排队的行「ComfyUI 正在自动启动 / 已就绪」，而「谁在排队」只有调度层知道，直接 import 调度层就是又造回边）。kick 只负责**省掉等 2s 节拍**，正确性靠常驻循环，所以注册缺失时只 warn 一次。
   - **double-failure 不再立刻再领**：`finalizeFailure` 自己抛（库写不进去）时只归还槽位、不 kick——在那种时刻自旋只会把每次领取都变成一次失败，交给 2s 节拍才是有退避的推进。这条是**写测试时抓到的**：原来的 `void processQueue()` 形态搬到 pull 上会变成「假仓储一直返回同一行 → 无界递归 → vitest worker 直接崩」，生产里对应的是「库坏了还不停去领」。
   - `claimAndDispatchOnce({ skipReadyGate })` 只给 host 的 `--claim-once` 契约钩子用（它验的是领取与载荷重建的机械步骤，就绪门控在不跑真 ComfyUI 的机器上永远过不去）；常驻循环与 kick 都不传。
-  启动点仍是「两宿主各一处显式调用」（与 §14 D3 的 reaper 同形态），由新增的 `tests/dispatch-startup-points.test.ts` 钉：Next 侧 `instrumentation.ts` 一处、host 脚本里出现 `startDispatchLoop(` 即为双循环、全仓调用点数恰为一。副产物两条：`claimNextQueued` / `findExecJob` 随 Next 也成为领取宿主而补进 class delegate；`executor-scheduler.ts` 与其用例整体删除（契约原样搬进 `executor-dispatch.test.ts`，另加「载荷缺失不留 RUNNING 僵尸」「重跑清收口锁」与「等待提示在同一条被领走之后仍在」（后者是 4-B5 补的）两条）。
+    启动点仍是「两宿主各一处显式调用」（与 §14 D3 的 reaper 同形态），由新增的 `tests/dispatch-startup-points.test.ts` 钉：Next 侧 `instrumentation.ts` 一处、host 脚本里出现 `startDispatchLoop(` 即为双循环、全仓调用点数恰为一。副产物两条：`claimNextQueued` / `findExecJob` 随 Next 也成为领取宿主而补进 class delegate；`executor-scheduler.ts` 与其用例整体删除（契约原样搬进 `executor-dispatch.test.ts`，另加「载荷缺失不留 RUNNING 僵尸」「重跑清收口锁」与「等待提示在同一条被领走之后仍在」（后者是 4-B5 补的）两条）。
 
   **落地后实测更正（4-B3 端到端取证，2026-09-28，PR #1203 评论）**：本刀合并前在 `docs/guide-executor-host.md` 与 changelog 碎片里写过一句「冷启动遗留的 `QUEUED` 行会被领回执行」，端到端量下来**只对 <30s 的重启成立**，已按实测收回（同批改掉的还有「状态栏排队数」那句：恒 0 是 host 模式那段的形状，不是两种模式都这样）。抢同一行的是两条 boot 机制：`startReaper()` 的首扫当场发起，两宿主都把它排在领取循环 `setInterval` 注册**之前**，而第一拍最早 1.5s、还要过 WS OPEN 门控。实测一个 aged 48s 的遗留行在新宿主 `inject-ok 02:35:27.684` 之后 1.4s（`02:35:29.052`）被 `marked 1 stale QUEUED task(s) as FAILED`，而同批 boot 诊断数出的是 `hostShardQueued=1`——**同一时刻这条行对领取循环完全可领**；把重启间隔压到 12s（aged ≈13s）时同一行被新宿主 `18:38:03.127Z` 领回并跑到 `SUCCEEDED`。判决语义的收口记 ISSUE #1204，推荐选项 (b)：pull 模型下 `QUEUED` 已经是健康的等待态（等槽 / 等宿主起来 / 等 ComfyUI 起来），而那条 30s 规则针对的形状——「`QUEUED` 且无 `promptId` = raw 路径正在 POST 途中」——随唯一提交实现收进 comfy-cli（`executor-ws` 的直连 `/prompt` 已无调用方）而不复存在，「领到了却没跑起来」已由 `RUNNING` 那两条 sweeper（含 #1184 的两轮登记）覆盖。同批取证另外量到两处：① 签字的顺序判据成立——宿主 `inject-ok` 后前两拍都没领（4.5s 后才翻 `RUNNING`），而宿主在 `inject-ok` 之前被整树收走时两行仍是 `QUEUED / claimedAt=null`，「先领后判」没有复活；② 「⏳ 等待 WebSocket 就绪」那行会被领取时的日志缓冲重开（`store.logs.set(taskId, [])`）加上整包 `replaceLogs` 抹掉——等待期间可见、开跑后从历史消失，判据只断了「写过」没断「领走之后还在」，另记 ISSUE #1206（**已随 4-B5 修掉**，见下）。
 
   **落地记录（4-B4，2026-09-28，ISSUE #1204：回收器的 `QUEUED` 判据对齐 pull 模型）**。上一条实测把现象指到「boot 顺序」，但签字选定的是**改判据**而不是改顺序（选项 (b)，不是 (a)「只挪 boot 顺序」）：(a) 只是把窗口从 0 挪到「领取节拍 + WS 就绪」那么长，ComfyUI 起不来时门控过不去、首扫照样判死——根因是那条规则的**前提**没了，不是它跑早了。落地的判据：`reapStaleQueuedTasks` 的候选集从 `ownedBy(owner)` 换成它的补集（`claimedBy` 既不是 inline 也不是 host；NULL 归 inline 所以不匹配），另外三条（`QUEUED` / 无 `promptId` / 过 `STALE_MS`）不变。`isTaskClaimedInProcess`、`isComfyStarting()` 与 ISSUE #378 那层「向 ComfyUI 要外部证据」的守卫**全部保留**——它们约束的是任何一次误杀，与归属无关，成本是一行判断。方法随之改名 `listStaleUnownedQueued(cutoff, take)` 并**去掉 owner 参数**：「带分片参数的 QUEUED 扫描」这个形状本身就是旧模型的残留，留着它等于给下一个人留一条「本片孤儿池」的误读路径，判决矩阵里钉了一条「调用只许有两个参数」。判死原因从「请重新执行」换成「没有任何执行宿主会领它（`claimedBy=「X」`）— 请核对 `COMFY_EXECUTOR` 配置」：让用户重跑是**假出口**，重跑写回的仍是同一个没人领的值；投影因此要带出 `claimedBy`。host 的 `q2-scan hostShardQueued=` 从「数 stale 行」改成「数本片排队行」，从此这行诊断与判决不再互相矛盾。判据落点：impl 契约测新增「正常归属（NULL / `inline` / `host`）的 aged `QUEUED` 行**一律不返**」（把谓词换回 `ownedBy()` 这条立刻红 = 反向自证）与「命中形状必须带 `claimedBy`」；`repository.test.ts` 那处 facade 断言按新判据翻转。接受的取舍写进指南与 §5 排障表：**没有活宿主时排队行不再有失败判决**，可解释性由状态栏排队数 + 行上那句「⏳ 等待…」承担（后者当时还会被领取时的日志缓冲重开抹掉，已随 4-B5 修掉，见下）。实测（副本库 + 真 ComfyUI，同一份两行脚本、间隔拉到 48s）：改动前新宿主 boot 后 1.4s 打出 `marked 1 stale QUEUED task(s) as FAILED`；改动后宿主日志零条 QUEUED 判死，遗留行在 `inject-ok` 后 3.8s 被领回并 `SUCCEEDED`（用时 7.7s、`rawCli` 17 行、`taskImage` 1 行）。同批确认 RUNNING 侧没被带坏——宿主 A 崩溃留下的 `RUNNING` 行由 B 连续两轮对账在 117s 收口（ISSUE #1184 的两轮守卫原样生效）。
 
   **落地记录（4-B5，2026-09-28，ISSUE #1206：排队期写下的行在领取之后还在）**。第一版把日志的轮次边界整体从「领取」挪到「收口」（新增 `closeLogRound`，收口时落库后删缓冲），端到端一跑就坏了：落库是**整包 `replaceLogs`**，而 `complete()` 在 `await persistLogs` **之后**还要打「✓ 全部完成（总耗时 Xs）」，那一行带着自己的防抖落库把整列覆盖成一行——实测库里的现场从 38 行变成 1 行，比原缺陷严重得多，那一版当场回退。最终形态只把「本轮排队期写下的行」单独保住：`RunnerState.queuedEntries` 存这几个条目（`logWhileQueued` 写、`takeQueuedEntries` 取走即清，按 Map 插入顺序做有界淘汰），领取处 `s.logs.set(taskId, takeQueuedEntries(taskId))` 以它为起点重开缓冲，其余时序一字不改。**顺带修掉一处同类隐患**：`state()` 的单例键从 `comfyRunner` 升成 `comfyRunner_v2`——`??=` 只认键名，加字段不升版号，热重载后的旧单例就没有这个字段（`pendingDispatch` 是 4-B3 加的、当时也没升，同一个坑），这件事写进模块头注释当规则。判据：`runner-state.test.ts` 四条（登记取回一次即清 / 普通 `log()` 不登记 / **落库之后再打的行必须仍带着之前的现场**——就是上面那次坏法的反向钉 / 有界淘汰），`executor-dispatch.test.ts` 按真实时序跑「不就绪写提示 → 就绪 → 领取」并断言缓冲里等待提示的下标在领取行之前。**残留限制（不藏）**：跨宿主时上一个宿主写的行仍会被新宿主的整包替换覆盖，本刀只保证同一宿主内「排队期 → 开跑」这一段不断链。
+
 - **D2 取消 = 统一出口 + 条件性 interrupt**。把 `enqueue.ts:100-211` 那份全量收尾（kill / CANCELLED 日志 / 终态锁 / interrupt / 内存清理 / emitter 合成 / persistLogs）抽成共享内核，传输层由宿主注入（§18.4、§12.12：内核不落任何一侧的 IO），inline 与 host 两条路径都走它。**interrupt 只在「被取消的行正是 ComfyUI 当前在跑的那个 prompt」时发**：`POST /api/interrupt` 不带 prompt 参数、是全局停（`client.ts:426-433`），而 ComfyUI 实例跨进程共享、两片的在飞任务都可能排在它后面——无条件 interrupt 会把**另一片正在跑的任务**一起打断并判成失败。排队中但未开跑的任务取消 = 只标状态，由派发侧不再放行。
 
   **落地记录（4-A3，2026-09-27，含一处判据依据的更动）**：签字时设想的中断判据是「问 ComfyUI 这个 prompt 是否正在跑」（`/queue` 的 `queue_running`）。端到端实测把它否掉了：comfy-cli 提交的 prompt 在整轮执行期间**不出现在** `queue_running`（真跑 10s，`/queue` 与 `/api/queue` 全程 `running=[]`），照这个判据实现的结果是「永远不中断」——功能存在但一次都不会触发。因此改成**构造性的归属判据**：谁握着该任务的在飞子进程谁发中断。inline 在 `cancelTask` 里以 `cliProcs.has(taskId)`（取值必须在 kill 之前）决定发不发；host 在 `reconcileCancelled` kill 之后发。跨进程由此天然互不误停，且 `cancelTask` 里不再要求行上有 `promptId`（同一个实测：`promptId` 往往到收尾才落库）。取消的其余语义收在 `enqueue.cancelTask` 这一处出口：tRPC `task.cancel` 改为调它（此前只写 `status+finishedAt`，面板上看不到「用户取消」这一行），历史面板那份绕过集中出口的 `api.task.cancel` 也并回 `task-cancel-client`。`interrupt()` 加了 `!res.ok` 抛错——否则调用方分不清「发出去了」与「ComfyUI 没接」，`cancel-reaped … interrupt=sent` 这句日志就没有判据。行已是终态时不再补发合成的 `CANCELLED`/`error` 事件（4-A1 的守卫会把它挡成 `skipped-terminal`，事件却照发，等于把「已完成」翻成取消）。实测链（副本库 + 真 ComfyUI）：`claim-dispatched 17:41:19.5` → comfy-cli 起 `17:41:27.9`（Next 侧同时记「本进程没有该任务的在飞执行…不发送全局中断」）→ cli 被收走 `17:41:28.07` → `cancel-reaped … interrupt=sent 17:41:30.6` → 行 `CANCELLED`、`error=null`、`taskImage` 零行。实测同时暴露的「`promptId`/`progress` 整轮不回写 ⇒ `RUNNING` 且无 `promptId` 的行两条 sweeper 查询都不匹配 ⇒ 宿主崩溃时永久卡生成中」另记 ISSUE #1184。
@@ -585,7 +586,7 @@ D4 落地后按「跑真任务找出口」的口径继续做 4-A3 端到端，�
   `check-standalone-contents.cjs` 的 `REQUIRED_HOST_FILES`（`server.js` 在场才查，standalone 与
   static 两层）；`build-desktop.mjs` 剥离后的缺件断言；`pnpm build` 收尾冒烟。
 - **实测**：一次干净 `pnpm build` 走完四步，冒烟输出 `externals ok (6 recorded, 306 bundled
-  inputs, 1436 KB)`、队列扫描那行报 `schema-not-ready`（临时空库里没有表，正是 §18.4 纯
+inputs, 1436 KB)`、队列扫描那行报 `schema-not-ready`（临时空库里没有表，正是 §18.4 纯
   Node 宿主该有的行为），宿主进程 `runtime inject-ok` 后 `--once` 正常退出 0。
 - **明确没做**（别把本刀读成「桌包能用 host」）：standalone 形态下的拉起者（#1216，还
   含 `src-tauri/static → resource_dir()` 那层资源装配的定性——要先真跑一次
@@ -602,13 +603,13 @@ D4 落地后按「跑真任务找出口」的口径继续做 4-A3 端到端，�
 
 **3-E2 立项时写的那条前提错了，这里按实测更正**（ISSUE #1216 正文里同步过）：当时判断「宿主件已随包、也能起来，缺的只是没有进程去起它」。真跑一次 `pnpm tauri build` 之后，实情是 **standalone 形态从未接通**，而且断点不止一处：
 
-| #   | 断点                                                                                   | 一手证据（2026-09-28 真构建）                                                                        |
-| --- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| 1   | `bundle.resources` 缺席 → `src-tauri/static` 没有任何装配者进安装包                     | 生成的 `installer.nsi` 里 `; Copy resources` 段为空，Install 段只有主 exe 与 `node.exe`               |
-| 2   | 壳拼 `resource_dir()/binaries/node.exe`，打包器落 `resource_dir()/node.exe`             | 同上一行的 `File /a "/oname=node.exe"`；`target/release/node.exe` 是 8-26 的陈旧残留                  |
-| 3   | 载荷**不自包含**：`.next/standalone/node_modules` 顶层是指向仓库 store 的绝对软链       | `cpSync({dereference:true})` 摊平后 `Cannot find module '@swc/helpers/_/_interop_require_default'`    |
-| 4   | 首启建不了表：载荷只带生产依赖，`drizzle-kit` 不在其中                                   | `/workspace` 200、`/api/health` 503 + `db:"empty"`，hint 让人「执行 pnpm db:push」                    |
-| 5   | 运行期没有 `.env`（硬规则 17 剥掉了），而 `src/env.js` 判的是「文件在不在」              | `MissingEnvFileError`                                                                                |
+| #   | 断点                                                                              | 一手证据（2026-09-28 真构建）                                                                      |
+| --- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 1   | `bundle.resources` 缺席 → `src-tauri/static` 没有任何装配者进安装包               | 生成的 `installer.nsi` 里 `; Copy resources` 段为空，Install 段只有主 exe 与 `node.exe`            |
+| 2   | 壳拼 `resource_dir()/binaries/node.exe`，打包器落 `resource_dir()/node.exe`       | 同上一行的 `File /a "/oname=node.exe"`；`target/release/node.exe` 是 8-26 的陈旧残留               |
+| 3   | 载荷**不自包含**：`.next/standalone/node_modules` 顶层是指向仓库 store 的绝对软链 | `cpSync({dereference:true})` 摊平后 `Cannot find module '@swc/helpers/_/_interop_require_default'` |
+| 4   | 首启建不了表：载荷只带生产依赖，`drizzle-kit` 不在其中                            | `/workspace` 200、`/api/health` 503 + `db:"empty"`，hint 让人「执行 pnpm db:push」                 |
+| 5   | 运行期没有 `.env`（硬规则 17 剥掉了），而 `src/env.js` 判的是「文件在不在」       | `MissingEnvFileError`                                                                              |
 
 第 7 层（第 6 层修好、sidecar 真的在 `boot pid=… port=1239` 上起来之后才暴露）：窗口仍停在启动页 0%，因为 `splash.html` 第一轮就把应用地址锁存了（`if (!appUrl) appUrl = await resolveAppUrl()`），拿到的是壳的**初始**地址（按检出路径推导的默认端口），而 standalone 的端口是 `pick_free_port()` 现挑的、在那之后才写回状态。壳侧那句「更新应用 URL，供启动页 ready 后导航」本来就要求一条持续通道。修法：每轮向壳重取 `get_app_url`。
 
@@ -633,3 +634,27 @@ D4 落地后按「跑真任务找出口」的口径继续做 4-A3 端到端，�
 - 端到端（壳这一侧，同样不装安装包）：在**检出之外**摆一份与打包器同布局的假安装目录（`app.exe` + `node.exe` + `static\**` 真拷贝），双击 `src-tauri/target/release/app.exe` → 壳日志依次出现 `launch mode=standalone` → `[sidecar] [standalone-runtime] schema bootstrap tables=0->24` → `boot pid=… port=14178` → `navigate_to_app called with url: http://127.0.0.1:14178/workspace`（端口与 boot 行一致 = 第 7 层生效） → `main window Finished` → 首页渲染出来，`/api/health` 回 `{"status":"ok","db":"up"}`；而 `COMFYAPP_PROJECT_ROOT 为空` 那条 WARN 归零（第 8 层生效）。第 6–8 层只有这一种验法：上面两条自查命令都绕过了壳。
 
 **明确不在本刀**：入口的**宿主半边**（`resolveExecutorMode()` → 起 `executor-host.mjs`、孙子层回收、灰度口径放开）= 3-E2b，收口 ISSUE #1216；`bundle.resources` 之外那条「`--no-bundle` 只产出裸壳、不产出可运行载荷」的文档口径要按实测安装包内容再写（不凭推断）。
+
+## 17. 3-E2b（standalone 入口的宿主半边）——签字与落地记录
+
+**签字四问**（动手前问的，四条都按推荐签）：
+
+| #   | 决定                        | 签的口径                                                                                                                                                                                                                                                                      |
+| --- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 桌包里开关从哪读            | **只认壳进程继承的环境变量**。不新增 `data/executor.json`、不读库里的设置——多一个来源就是多一处会与人对不上的判决，而 `resolveExecutorMode()` 是 ADR §14 D5 收口过的唯一定义（它保留的 `.env` 回读在桌包里仍然生效，但载荷根本没有那份文件，文档因此不许写成「`.env` 没用」） |
+| 2   | 宿主起不来 / 中途退出怎么办 | **大声报，不降级不重启**。降级回 inline 会让已经写成 host 归属的行变成没人领的孤儿；重启会把「起不来的宿主」掩盖成「慢」。server 继续跑，用户仍看得见界面与排队数                                                                                                             |
+| 3   | 桌包灰度口径                | **放开为「可用但仍标灰度」**：README 与指南改成「设了就起、判据看这三行」，§5 那条「连 `boot pid=` 都没有」的老判据换成按三行日志定性                                                                                                                                         |
+| 4   | 验收强度                    | **要真出图**（不是只看 boot）：桌包库里一行 `SUCCEEDED` + 真 PNG + 由桌包 server 发出来                                                                                                                                                                                       |
+
+**落法**（三条，都写在规范 §7.6 的「入口的宿主半边」）：宿主与 server 是同父兄弟而不是 Next 的 fork（回收因此收两棵树、先宿主后 server）；env 复用同一份装配结果，只覆盖 `COMFY_EXECUTOR`（归一化值）与 `COMFYAPP_HOST_BOOT_ID`（与两份日志同一个 stamp，算一次传下去）；`NODE_ENV=production` 由装配步显式给。
+
+**真桌面上又数到两条**：① `NODE_ENV` 不给 production 时，pino 会去找 devDependency `pino-pretty`（两层产物都没有），宿主在模块加载阶段退出 1——而 `pnpm build` 收尾的冒烟**结构上看不见这一条**，因为它跑在仓库里、模块上溯撞到仓库的 dev 依赖。② 桌包真出图还差 comfy-cli 的 Python 解释器（载荷里没有、也不该有）；找不到时任务被大声判 FAILED 并给出中文错误 + 建议 + 重试，这条边界 = ISSUE #1239，不在本刀顺手做。
+
+**验收记录（假安装目录 = 与打包器同布局的真拷贝，双击重编后的 release 壳）**：
+
+- 壳日志：`launch mode=standalone` → `schema bootstrap tables=0->24` → `boot pid=96148 server=99920 port=5714` → `executor mode=host` → `host pid=106344 out=… err=…`。
+- 宿主日志（载荷根 `log/services/`）：`boot pid=… mode=runtime` → `runtime inject-ok seams=runner+cli+finalize+ws+enqueue+reaper(owner=host)+dispatch(owner=host)+trace` → `q2-scan hostShardQueued=0 bootId=2026-09-29-09-06-50` → 每 5s 心跳，bootId 与两份日志文件名同一个 stamp。
+- 真出图：桌包库里 `pkg3e2bmulzd6a9` = `SUCCEEDED` / `progress=100` / `claimedBy=host` / `promptId=6bdbf72e-…` / `resultImages=/api/generated/pkg3e2bmulzd6a9/img_0.png`；磁盘上该文件 1,265,859 字节（另带 `manifest.json` / `workflow.json`）；**由桌包 server 经 `GET /api/generated/…` 取回 200 与同样字节数**——「宿主写的文件 server 发得出来」这条跨进程交接是本轮的关键证据。
+- 失败出口同样验到：没设 `COMFY_CLI_PYTHON` 时那一行是 `FAILED` + 「未找到 comfy-cli Python 解释器：…\python-venv\comfy-cli\Scripts\python.exe」，应用「历史」页把这句连同「建议」和「重试」按钮渲染出来了（截图）。
+- 回收：关窗后 `comfyapp-pkg-sim` 下的三个 node（入口 / server / 宿主）全部消失；**用户自己的 ComfyUI（另一棵进程树）仍在**（`/system_stats` 200），说明收的是自己那棵树、没有越界。
+- 门禁：`tests/standalone-runtime.test.ts` 28 条（新增 6 条：NODE_ENV 单测 + 起 / 不起 / 缺件 SKIPPED / 中途退出 / 值归一化 / 子进程真拿到 production）；`check-standalone-contents` 两层干净；`build-desktop` 全流程 exit 0。
