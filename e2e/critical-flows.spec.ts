@@ -1468,6 +1468,14 @@ test.describe("应用页签与全屏视图 @critical", () => {
     if (!thenOpenView) {
       return;
     }
+    /* 先等状态真的落到界面上，再点「打开查看」。
+       浏览器分支只有拿得到**已缓存的 base** 时才同步 `window.open`；缓存还空着会先
+       `await` 一次 refetch，而 await 之后再 open 会被弹窗拦截器吞掉 —— 表现是「点了
+       没反应」，用例等到超时（整批跑时实测复现，单跑因为缓存已热不复现）。这一句同时
+       也是「用户看得见 ComfyUI 在跑、地址就在按钮旁边」的断言。 */
+    await expect(page.getByText(/ComfyUI 运行中/).first()).toBeVisible({
+      timeout: 20_000,
+    });
     await page
       .getByRole("button", { name: /打开查看/ })
       .first()

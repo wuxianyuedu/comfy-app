@@ -12,6 +12,15 @@ import { cn } from "~/lib/utils";
  * `use-wide-panel` 同处一室。`components.json` 里那条 `"hooks": "~/hooks"` 是
  * 模板残留，不构成先例。 */
 import { useIsMobile } from "~/components/ui/use-mobile";
+import { Hint } from "~/components/ui/hint";
+import { useNarrowNavState } from "~/components/ui/use-narrow-nav";
+import {
+  NAV_AUTO_COLLAPSE_MAX_PX,
+  NAV_WIDTH_COLLAPSED_PX,
+  NAV_WIDTH_EXPANDED_PX,
+  resolveRailCollapsed,
+  type RailChoice,
+} from "~/lib/layout-budget";
 /* ⌘/Ctrl+B 走 §16.2 的 P20 唯一出口，不用自己 `addEventListener`（见下方注释）。 */
 import { useHotkey } from "~/components/ui/use-hotkey";
 import { Button } from "~/components/ui/button";
@@ -41,9 +50,11 @@ const SIDEBAR_COOKIE_NAME = "sidebar_state";
 /* 官方是 7 天 —— 对「记忆型偏好」太短（用户会觉得设置过一周自己变了）；
  * 与 `useWidePanel` 的加宽档（永久）语义对齐，取 1 年。 */
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
-const SIDEBAR_WIDTH = "16rem";
+/* 宽度从这里取，不在本文件写字面量：它们同时是「左轨何时该自动收起」那笔账的
+   加数（唯一出处 `~/lib/layout-budget`，漂移由 `layout-budget.test.ts` 反算钉住）。 */
+const SIDEBAR_WIDTH = `${NAV_WIDTH_EXPANDED_PX}px`;
 const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_WIDTH_ICON = "3rem";
+const SIDEBAR_WIDTH_ICON = `${NAV_WIDTH_COLLAPSED_PX}px`;
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 type SidebarContextProps = {
@@ -53,6 +64,8 @@ type SidebarContextProps = {
   openMobile: boolean;
   setOpenMobile: (open: boolean) => void;
   isMobile: boolean;
+  /** 当前收起是不是「布局纪律替用户收的」，而不是用户自己点的。 */
+  collapsedByAuto: boolean;
   toggleSidebar: () => void;
 };
 
@@ -81,14 +94,35 @@ function SidebarProvider({
   onOpenChange?: (open: boolean) => void;
 }) {
   const isMobile = useIsMobile();
+  /* 窄窗判据与跨越次数（阈值那笔账在 ~/lib/layout-budget）。 */
+  const { narrow, crossings } = useNarrowNavState();
   const [openMobile, setOpenMobile] = React.useState(false);
 
-  /* 内部态；两个 prop 同时给了就是受控（`openProp` 优先）。 */
+  /* 内部态；两个 prop 同时给了就是受控（`openProp` 优先）。
+     这一档是**用户偏好**（含 cookie 读出的 `defaultOpen`），不是屏面上生效的那一档。 */
   const [_open, _setOpen] = React.useState(defaultOpen);
-  const open = openProp ?? _open;
+  const preferredOpen = openProp ?? _open;
+
+  /* 本次会话里的显式表态，连同「表态时的跨越次数」。窗口再跨越一次阈值即作废 ——
+     于是生效态是纯推导，不需要在 effect 里清标记。 */
+  const [choice, setChoice] = React.useState<RailChoice | null>(null);
+  const collapsed = resolveRailCollapsed({
+    narrow,
+    crossings,
+    choice,
+    preferredOpen,
+  });
+  const open = !collapsed;
+  const choiceInForce = choice !== null && choice.atCrossing === crossings;
+  /* 收起是纪律替用户做的，还是用户自己点的 —— 决定提示怎么说。 */
+  const collapsedByAuto = collapsed && !choiceInForce;
+
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value;
+      /* 记下「用户表态」与表态时的跨越次数：自动收起走的不是这条路，
+         所以纪律不会把用户的偏好写脏（cookie 也只在这里写）。 */
+      setChoice({ open: openState, atCrossing: crossings });
       if (setOpenProp) {
         setOpenProp(openState);
       } else {
@@ -103,7 +137,7 @@ function SidebarProvider({
         SIDEBAR_COOKIE_MAX_AGE,
       );
     },
-    [setOpenProp, open],
+    [setOpenProp, open, crossings],
   );
 
   /* 开关侧栏。窄窗下官方形态是浮层，所以两档各有自己的开合态。 */
@@ -127,9 +161,19 @@ function SidebarProvider({
       isMobile,
       openMobile,
       setOpenMobile,
+      collapsedByAuto,
       toggleSidebar,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+    [
+      state,
+      open,
+      setOpen,
+      isMobile,
+      openMobile,
+      setOpenMobile,
+      collapsedByAuto,
+      toggleSidebar,
+    ],
   );
 
   return (
@@ -262,24 +306,33 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, collapsedByAuto } = useSidebar();
+
+  /* 文案必须区分自动与手动：不分的话用户会以为是自己点坏了 —— 这是设计评审当时
+     点出的问题。自动态还要给出「为什么收」与「怎么不再自动收」：只有阈值数字能
+     解释这条规则，光说「已自动收起」等于没说。 */
+  const hintLabel = collapsedByAuto
+    ? `展开导航（自动：窗口窄于 ${String(NAV_AUTO_COLLAPSE_MAX_PX + 1)}px 时先让位给内容区；点一下即在本窗口宽度下记住你的选择）`
+    : "显示或隐藏导航（⌘/Ctrl+B）";
 
   return (
-    <Button
-      data-sidebar="trigger"
-      data-slot="sidebar-trigger"
-      variant="ghost"
-      size="icon-sm"
-      className={cn(className)}
-      onClick={(event) => {
-        onClick?.(event);
-        toggleSidebar();
-      }}
-      {...props}
-    >
-      <PanelLeftIcon data-icon="inline-start" />
-      <span className="sr-only">Toggle Sidebar</span>
-    </Button>
+    <Hint label={hintLabel}>
+      <Button
+        data-sidebar="trigger"
+        data-slot="sidebar-trigger"
+        variant="ghost"
+        size="icon-sm"
+        className={cn(className)}
+        onClick={(event) => {
+          onClick?.(event);
+          toggleSidebar();
+        }}
+        {...props}
+      >
+        <PanelLeftIcon data-icon="inline-start" />
+        <span className="sr-only">Toggle Sidebar</span>
+      </Button>
+    </Hint>
   );
 }
 
