@@ -1255,3 +1255,51 @@ Python 在非 ASCII locale 下 `sys.stdout` 与 `open()` 都跟着 locale 走。
 
 那是**又造一处平台分叉**，而本仓的平台判据只许收在两处（AGENTS 硬规则 3 / launch-and-build §3.1–§3.3）。
 何况候选 2 只救 stdio，救不了 Python 自己 `open()` 读文件那条崩路径 —— 上面那张表的第二行就是它。
+
+---
+
+## 26. #1182 方案 3（组 A 报错落在生成物上时当场点破）——只做定性，共写没解决
+
+这条不是本线的缺陷，是**门槛层的一条误导**：Phase 4-A2 端到端验证时同目录起了第二个
+`next dev` 实例，收进程按硬规则 3 整树 SIGKILL，之后 `git commit` 被组 A 拦下 —— 报的是
+`.next/dev/types/validator.ts` 的两条语法错（TS1005 / TS1128），而那次改动里没有半个
+`.next` 文件。launch-and-build §5 排障手册早有这一行，处置口径是「整目录移走」；
+本刀把「先怀疑自己」这一步从人身上挪到机器上。
+
+### 落的是什么、不是什么
+
+落的是 issue 里三条候选的第 3 条：**只在「所有 `error TS` 行都落在 `.next/` 那一个目录段」时**
+打印成因 + 处置命令。`scripts/check-tsc-artifact-hint.cjs` 由 `.githooks/pre-commit` 汇总段
+在组 A 失败分支里调用，带 `|| true` 且自身恒退 0 —— 判决仍属于 tsc，这条不许变成第二种
+失败形态，也不许把组 A 的红洗成绿。
+
+它**不解决**共写。第 1 条（实例级 `distDir` 分叉）与第 2 条（收法改温和）都没做，ISSUE #1182
+保持 open：前者要连带核 `outputFileTracing*` 与 `check-standalone-contents.cjs` 对 `.next`
+路径的假设（AGENTS 硬规则 17/18），不是本刀的体量；后者弱于前者，崩溃/断电照样留半截。
+
+### 一处「先验证再印给用户」的必要代价
+
+提示里那句 `rm -rf .next/dev/types` 不是白来的：`next-env.d.ts` 明确
+`import "./.next/dev/types/routes.d.ts"`，直觉上把目录删掉会把红从生成物搬到源码。实测**不搬**
+（最小工程复现同样形态：缺生成目录时 tsc 对这行 side-effect import 不报错）。做法是先在真
+`.next/dev/types` 移走的状态下跑一次全量 tsc（无新增红，只有当时那个 `.cjs` 自己的 `@ts-nocheck`
+缺失误报），再用最小工程把「缺目录 + 那两行 import」单独复现一次。判据里留了一条正向用例
+钉住处置命令的措辞，但**这条结论的机器化守卫是删目录后 tsc 不新增红这个动作本身** —— 若哪天
+Next 改口径，提示里那条命令要跟着改，别只改判据。
+
+### 误报口径（这条判据的全部价值所在）
+
+- 掺进任何一个非 `.next` 文件（哪怕只有一条真类型错）→ 完全沉默，不许让人拿「删生成物」
+  去交差；
+- 一条 `error TS` 都没有（OOM、`tsconfig` 读不到、参数错）→ 沉默；
+- `.nextify/` 这类同前缀目录不算生成物（认的是目录段，不是前缀）。
+
+反向用例比正向更要紧：这条提示一旦在「真类型错」上出现一次，之后就没人信它了。
+
+### 本地复演（不是照抄 issue 的字符串）
+
+把真 `validator.ts` 的第 79 行截到 `type __IsExpected<Specific extends AppPageConfig`（复现
+SIGKILL 落在写文件窗口那半行），`pnpm exec tsc --noEmit --incremental false` 给出
+`.next/dev/types/validator.ts(79,51): error TS1005: '>' expected.`，判据 `artifactOnly=true`
+且提示原样打印；把文件按 sha256 还原后 tsc 复绿。**单行也能点破**是这次补的一条用例 ——
+现场是两行，但半截文件有几行报错取决于断在哪，判据不能要求凑够两条。
