@@ -166,6 +166,7 @@ export interface ProductionProgress {
 | **P3 shot 级双向同步** | 落地 `lib/production/`（types + sync reducer，按 §18.14 登记子域 + §18.6 门槛）；画布节点 ↔ Shot 物化/回写                                        | 新增 `lib/production/`、`canvas-types.ts` 加 `shotId`、`ProjectCanvas` 投影、工坊阶段视图         | 可拆 2 PR   | 高（核心）       |
 | **P4 完成状态统一**    | 三处状态源收敛为 `ProductionProgress` 持久化；两侧一致展示                                                                                        | `lib/production/`、`project` 行、工坊 `stage-config` 派生、画布顶栏                               | 是          | 中               |
 | **P5 AI 一键出片接入** | `server/film/orchestrator.ts` 改读统一项目 `Shot[]`；`filmProject.projectId` 关联；补 agent 视频/合成工具（`lib/agent/tools.ts`）；两侧实时看进度 | `server/film/`、`lib/agent/`、工坊/画布进度展示                                                   | 是          | 中               |
+| **P6 项目主页**        | 进入项目后落到**项目主页**（项目页签第一项）：六个阶段的完成状态 + 素材计数 + `RunControlBar`；阶段完成由**内容**派生（不靠阶段游标，回退不误报）；画布去掉 `RunControlBar` 浮层 | 新增 `lib/production/project-home.ts`、`components/studio/project-home/`、`NavItems.tsx`、`workspace/page.tsx` | 是 | 低 |
 
 **推进原则**：每阶段独立 PR、独立可回滚；P3 是承重的双向同步核心，前置于 P4/P5；先 P1 拿到"先建项目"的可见收益，再逐层收敛。
 
