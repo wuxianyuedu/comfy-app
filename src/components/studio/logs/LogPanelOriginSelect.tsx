@@ -151,7 +151,12 @@ const ORIGIN_LABELS: LogOriginFilter[] = [
  * 来源的显示文案（下拉、标题徽标、页脚共用一份，避免同一来源三种叫法）。
  */
 const ORIGIN_TEXT: Record<LogOriginFilter, string> = {
-  all: "全部来源",
+  /* 「全部来源」是**日志条数**（同一条日志被六路读到只算一条）；下面那六个是
+   * **切过去会看到几行**（各自文件里的副本各算一条）。两个口径都写在界面上，
+   * 不靠用户自己推：同一批启动行躺在 launcher / 启动 / 壳侧编排 / 壳日志四份
+   * 文件里，相加本来就不等于上面那个数——把它们画成一列可相加的分项，是这条
+   * 下拉最容易被误读的地方（e2e 曾按「可相加」断言，整批跑时必红）。 */
+  all: "全部来源（按条去重）",
   "app-runtime": "应用运行",
   /** 应用服务自身输出（Next dev server 的 stdout/stderr 转录）。 */
   app: "应用服务",
@@ -237,7 +242,7 @@ function OriginSelect({
           aria-hidden
           className="border-border-strong text-ink-muted flex items-center gap-3 border-b px-2.5 py-1 text-[11px]"
         >
-          <span className="w-16 shrink-0">来源</span>
+          <span className="shrink-0">来源</span>
           {ORIGIN_COLUMNS.map((column) => (
             <span key={column.key} className="w-14 shrink-0 text-right">
               {column.title}
@@ -255,7 +260,7 @@ function OriginSelect({
                   className="gap-0 py-1 pr-7 pl-1.5 text-[12px]"
                 >
                   <span className="flex items-center gap-3">
-                    <span className="text-ink-bright w-16 shrink-0">
+                    <span className="text-ink-bright shrink-0">
                       {ORIGIN_TEXT[origin]}
                     </span>
                     {ORIGIN_COLUMNS.map((column) => (
