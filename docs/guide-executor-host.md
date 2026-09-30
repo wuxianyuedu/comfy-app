@@ -178,7 +178,10 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
   WS 帧靠 `executedWorkflow`（提交那一刻真正交出去的图，API 与 RAW 两种形状都认）认类名，
   comfy-cli 的 `executing` 事件本来就自带 `class_type`（`progress` 不带，也按那张图认）。
   以前这里写的「comfy-cli 那条事件源拿不到类名时为空」只对 `progress` 成立，实测更正见 ADR §24；
-  仍然会为空的是「整轮被 ComfyUI 缓存」那一类（没有任何 `progress` / `executing` 帧，§24 末尾记了这条账）、「主模型」= 从 `execPayload` 现认（库里只有它是
+  **仍然会为空的是「整轮被 ComfyUI 缓存」那一类，而且这是刻意的**（ISSUE #1278 签的口径）：那种轮次
+  一个 `progress` / `executing` 帧都没有，没有「当前」可显示；它改为在日志里逐节点给
+  「≡ 节点 […] 命中缓存，跳过」，收口前再补一句「本轮 N 个节点全部命中 ComfyUI 执行缓存」，
+  所以那一格空、但现场不缺（读数与判据见 ADR §27）。「主模型」= 从 `execPayload` 现认（库里只有它是
   执行侧一定会写的，`workflowSnapshot` 要到成功收口才落）。comfy-cli 完整原文由执行侧
   在收口时整包写一次进 `rawCli` 列，所以 host 的任务也点得开。
 - **崩溃恢复**：host 被杀 → 在飞 comfy-cli 随进程组整树回收（launcher 语义）；
