@@ -83,6 +83,9 @@ const ALIASES = [
   "--sidebar-primary-foreground",
   "--sidebar-accent",
   "--sidebar-accent-foreground",
+  /* 选中档：官方 ui/sidebar 只有 `accent` 一档（悬停与选中共用），ISSUE #1291
+     拆出选中档后新增的别名。它同样是「转发到项目 token」的一员，不是裸字面量。 */
+  "--sidebar-selected",
   "--sidebar-border",
   "--sidebar-ring",
   "--ring-shadow",
