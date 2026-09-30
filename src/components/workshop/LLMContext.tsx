@@ -92,39 +92,6 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** 显示当前提供方的小状态章。 */
-export function LLMStatusChip() {
-  const { config, loading, openSettings } = useLLM();
-  if (loading) {
-    return (
-      <span className="bg-subtle text-muted-foreground rounded-full px-2 py-0.5 text-xs">
-        LLM…
-      </span>
-    );
-  }
-  if (!config) {
-    return (
-      <Button
-        variant="warning"
-        size="xs"
-        onClick={openSettings}
-        className="h-auto rounded-full px-2 py-0.5 text-xs"
-      >
-        未配置 LLM
-      </Button>
-    );
-  }
-  const label = config.provider === "local" ? "本地 LLM" : "远端 API";
-  return (
-    <span
-      className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs"
-      title={`${label} · ${config.model}`}
-    >
-      {label} · {config.model}
-    </span>
-  );
-}
-
 /** 打开 LLM 设置弹窗的齿轮按钮。 */
 export function LLMSettingsButton() {
   const { openSettings } = useLLM();
