@@ -92,15 +92,15 @@ export type {
  *  旧单例不会被补全，热重载后新字段就是 `undefined`——读它是 TypeError，写判据的
  *  地方则静默失效（`pendingDispatch` 与 `queuedEntries` 都是加过字段没升版的实例）。 */
 declare global {
-  var comfyRunner_v2: RunnerState | undefined;
+  var comfyRunner_v3: RunnerState | undefined;
 }
 
 export function state(): RunnerState {
   /* 单例里不再有 EventEmitter：进程内事件通道已随 ADR §14 D1 退役，执行进度的
    * 对外通道只剩 DB 行 + `/api/tasks/[id]/stream` 的轮询（§13-3C 单源化）。 */
-  globalThis.comfyRunner_v2 ??= createEmptyState();
+  globalThis.comfyRunner_v3 ??= createEmptyState();
 
-  return globalThis.comfyRunner_v2;
+  return globalThis.comfyRunner_v3;
 }
 
 function callerLoc(): string {
@@ -443,7 +443,6 @@ export function forgetTaskFootprint(taskId: string, promptId?: string): void {
   s.startedAt.delete(taskId);
   s.lastNodeByTask.delete(taskId);
   s.lastLogPct.delete(taskId);
-  s.promptByTask.delete(taskId);
   /* 手里有 promptId 就按它删（调用点那一格），再整表反查一遍兜底：
    * 本进程同时在飞最多 1 条（MAX_CONCURRENCY），扫不出性能问题，
    * 却能保证「摘干净」这句话没有例外 —— 传空串的那些路径（提交前就崩）靠的就是反查。 */

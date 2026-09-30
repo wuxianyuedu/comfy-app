@@ -49,6 +49,7 @@ import {
   type ComfyHistoryEntry,
 } from "./executor-history";
 import { trace } from "./trace";
+import { classTypeForNode, nodeLabel } from "./graph-node-class";
 
 /* 既有导入路径的兼容出口：这两个符号曾在本模块定义，现已下沉到叶子模块
  * （断环所需）。对外的名字与签名逐字不变，只换实现位置。 */
@@ -83,19 +84,6 @@ async function resolveTaskRepo(): Promise<TaskRepoForWs> {
 /* 自动启动状态提示的防重复标记：仅在 WS 真正打开后复位，
    避免重连循环对同一段启动反复刷「未运行，正在自动启动」。 */
 let comfyDownNotified = false;
-
-function nodeLabel(classType?: string): string {
-  const map: Record<string, string> = {
-    CheckpointLoaderSimple: "加载模型",
-    CLIPTextEncode: "编码提示词",
-    EmptyLatentImage: "初始化潜空间",
-    KSampler: "采样去噪",
-    VAEDecode: "VAE 解码",
-    SaveImage: "保存图像",
-    LoraLoader: "加载 LoRA",
-  };
-  return map[classType ?? ""] ?? classType ?? "未知节点";
-}
 
 /**
  * 建立事件通道。
@@ -275,8 +263,12 @@ function scheduleReconnect() {
 /**
  * 统一 WS 消息入口。所有协议判断（标准 ComfyUI vs kaytool v0.28 非标准信号）
  * 都委托给 `comfyProtocol` Adapter，协议差异只存在于 protocol-adapter.ts。
+ *
+ * 导出只给用例（`executor-ws.test.ts` 里那条 #1202 的判据：喂一帧 `progress`，
+ * 断言落库的 `progressNode` 带类名与中文标签）—— 真连接由 `connect()` 挂上去，
+ * 别处不该直接调它。
  */
-async function handleMessage(raw: string) {
+export async function handleMessage(raw: string) {
   let msg: unknown;
   try {
     msg = JSON.parse(raw);
@@ -318,22 +310,12 @@ async function handleMessage(raw: string) {
 
   if (signal === "node-started") {
     // 某节点开始执行 —— 打进日志，让进度对用户透明。
-    const graph: Record<string, unknown> | undefined =
-      s.promptByTask.get(taskId);
-    const graphNode = graph?.[String(data.node)];
-    const classTypeRaw =
-      graphNode && typeof graphNode === "object"
-        ? (graphNode as Record<string, unknown>).class_type
-        : undefined;
-    // class_type 正常是 string；非 string 时保留原值（断言仅收口类型，
-    // 运行时与原 any 行为逐值一致：nodeLabel 内部按 string 键查表）。
-    const classType =
-      typeof classTypeRaw === "string"
-        ? classTypeRaw
-        : classTypeRaw != null
-          ? (classTypeRaw as string)
-          : undefined;
     const nodeId = String(data.node);
+    /* 类名从**真正提交出去的那张图**里认（`executedWorkflow`），API 图与 RAW 原件两种
+     * 形状都认。此前读的是 `promptByTask`，而那份写入方随 4-B3 删掉 `enqueue()` 一起
+     * 消失了 ⇒ 这一格恒空，日志永远打成「▶ 节点 [3] 未知节点（?）」（ISSUE #1202）。
+     * 认不出仍然是 undefined、仍然打 "?"，不猜。 */
+    const classType = classTypeForNode(s.executedWorkflow.get(taskId), nodeId);
     /* 记下这个节点，等 ComfyUI 下一条 `executing` 把 `data.node` 发成 null 时，
      * 就能补上它的完成行 —— 于是日志从孤零零一行 "▶ KSampler"，变成
      * "▶ KSampler → ✔ KSampler" 的成对时间线。 */
@@ -390,15 +372,10 @@ async function handleMessage(raw: string) {
         ? String(rawNodeId)
         : null;
     if (nodeId) {
-      const graph: Record<string, unknown> | undefined =
-        s.promptByTask.get(taskId);
-      const graphNode = graph?.[nodeId];
-      const classTypeRaw =
-        graphNode && typeof graphNode === "object"
-          ? (graphNode as Record<string, unknown>).class_type
-          : undefined;
-      const classType =
-        typeof classTypeRaw === "string" ? classTypeRaw : undefined;
+      const classType = classTypeForNode(
+        s.executedWorkflow.get(taskId),
+        nodeId,
+      );
       node = {
         id: nodeId,
         value,
