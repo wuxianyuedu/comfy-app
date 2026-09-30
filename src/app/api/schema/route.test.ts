@@ -53,6 +53,7 @@ describe("GET /api/schema", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       ok: true,
+      canPush: true,
       phase: "synced",
       detail: null,
       at: "2026-09-20T12:44:30.766Z",
@@ -76,7 +77,11 @@ describe("GET /api/schema", () => {
     const { GET } = await import("./route");
     const res = await GET();
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ ok: false, phase: "unknown" });
+    await expect(res.json()).resolves.toEqual({
+      ok: false,
+      phase: "unknown",
+      canPush: true,
+    });
   });
 
   it("文件内容坏掉（不是 JSON / 不是对象）时同样回 unknown，绝不抛", async () => {
@@ -87,12 +92,14 @@ describe("GET /api/schema", () => {
     await expect((await GET()).json()).resolves.toEqual({
       ok: false,
       phase: "unknown",
+      canPush: true,
     });
 
     fs.writeFileSync(statusFile, '"synced"', "utf8");
     await expect((await GET()).json()).resolves.toEqual({
       ok: false,
       phase: "unknown",
+      canPush: true,
     });
   });
 
