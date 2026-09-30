@@ -355,6 +355,15 @@ const DOMAIN_EXEMPT = new Set([
    * `pageSize` 为 0 / 空列表），必须同一口径。进任何子域都会让其余侧反向
    * 依赖它 —— 与 `clamp` / `ordered-set` 同款：顶层单例。 */
   "src/lib/page-window.ts",
+  /* 「这个地址能不能交给外部程序（协议只许 http/https）」的唯一判据（台账 A5 复算）：
+   * `lib/comfy`（`isHttpOrigin` 转发到它）、`lib/shell`（`openUrlInBrowser` 在发起 IO
+   * 之前拦）、`src/server/api/routers` 的 `setting`（trainerUrl / comfyEmbeddable 两个地址）
+   * 与 `llm`（baseUrl）**都在吃**，而「服务端会去 fetch 的地址」和「交给 OS 打开的地址」
+   * 必须同一口径 —— 分开放就会再次出现「补了 fetch 那两条、漏了 openExternal 那条」。
+   * 放进 `comfy` / `shell` 任一侧都会让另一侧反向依赖那个域；收口前它是四份实现
+   *（一份按 `new URL()` 解析、三份前缀正则，正则那三份实测两个方向都错）。
+   * 与 `endpoints` / `sqlite-pragmas` 同款：安全判据的顶层单例。 */
+  "src/lib/url-scheme.ts",
   "src/lib/server-cache.ts",
   // 数据层:在 §18.3 里是 element `server`(与 lib/core 同层),不是域
   "src/lib/db.ts",

@@ -1393,6 +1393,26 @@ describe("RemoteModelRepository", () => {
     expect((await remoteModelRepository.list())[0]!.id).toBe(created[0]!.id);
   });
 
+  it("replaceAll 不保留已有密钥：省略 apiKey 会被写成 null（台账 A11 的成因）", async () => {
+    /* 与上一条是同一个函数、同一条批量语句：`workshopAdapters` 从既有行继承，
+     * `apiKey` 却直接覆盖成传入值。而 `getConfigForClient`（A4 的脱敏）下发的条目
+     * **本来就不带 apiKey** —— 设置页把拿到的清单原样回写一次，存过的远端密钥就
+     * 被清成 null（用户表现：填过一次密钥的远端模型，隔一次设置保存就 401）。
+     * 这条断言的不是「应该如此」，而是把现状钉住：真去修（「省略=保留、显式清空=null」）
+     * 时这一条必须一起改，免得「顺手兼容」把数据丢失静默带回来。 */
+    await remoteModelRepository.replaceAll([
+      { name: "甲", baseUrl: "https://a/v1", apiKey: "sk-keep-me" },
+    ]);
+    expect((await remoteModelRepository.findByName("甲"))?.apiKey).toBe(
+      "sk-keep-me",
+    );
+
+    await remoteModelRepository.replaceAll([
+      { name: "甲", baseUrl: "https://a/v1" },
+    ]);
+    expect((await remoteModelRepository.findByName("甲"))?.apiKey).toBeNull();
+  });
+
   it("findByName / 适配器读写 / 模型不存在时的空返回", async () => {
     expect(await remoteModelRepository.findByName("nope")).toBeNull();
     expect(await remoteModelRepository.getWorkshopAdapters("nope")).toEqual([]);
