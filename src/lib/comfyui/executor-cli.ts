@@ -32,6 +32,7 @@
 // 登记进 PURE_NODE_HOSTS 是「标方向 + 消化 unguarded」，不是「本模块已能在纯
 // Node 里加载」——那要等 client / repository / app-runtime-log 各自拆完。
 import { errorText } from "~/lib/error-message";
+import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { fireAndForget } from "~/lib/async-action";
 import { tailWindow } from "~/lib/page-window";
@@ -208,7 +209,9 @@ export async function executeViaComfyCli(job: Job) {
       fireAndForget(
         fail(taskId, "", "工作流没有可执行的节点（可能全部被禁用）"),
         (e) =>
-          cliWarn(`[comfyui] ${errorText(e, `fail(${taskId}) 空图收口异常`)}`),
+          cliWarn(
+            `[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 空图收口异常`)}`,
+          ),
       );
       return;
     }
@@ -283,7 +286,7 @@ export async function executeViaComfyCli(job: Job) {
       fail(taskId, "", `未找到 comfy-cli Python 解释器：${py}`),
       (e) =>
         cliWarn(
-          `[comfyui] ${errorText(e, `fail(${taskId}) 缺解释器收口异常`)}`,
+          `[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 缺解释器收口异常`)}`,
         ),
     );
     return;
@@ -358,7 +361,9 @@ export async function executeViaComfyCli(job: Job) {
     fireAndForget(
       fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）"),
       (e) =>
-        cliWarn(`[comfyui] ${errorText(e, `fail(${taskId}) 看门狗收口异常`)}`),
+        cliWarn(
+          `[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 看门狗收口异常`)}`,
+        ),
     );
   }, CLI_TIMEOUT_MS);
 
@@ -371,11 +376,13 @@ export async function executeViaComfyCli(job: Job) {
     patched,
     complete: (id, pid) =>
       fireAndForget(complete(id, pid), (e) =>
-        cliWarn(`[comfyui] ${errorText(e, `complete(${id}) 收口异常`)}`),
+        cliWarn(
+          `[comfyui] ${sqliteAwareErrorText(e, `complete(${id}) 收口异常`)}`,
+        ),
       ),
     fail: (id, pid, detail, ves) =>
       fireAndForget(fail(id, pid, detail, ves), (e) =>
-        cliWarn(`[comfyui] ${errorText(e, `fail(${id}) 收口异常`)}`),
+        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${id}) 收口异常`)}`),
       ),
     settle: () => {
       if (settled) return false;
@@ -472,7 +479,7 @@ export async function executeViaComfyCli(job: Job) {
       ),
       (e) =>
         cliWarn(
-          `[comfyui] ${errorText(e, `fail(${taskId}) 进程退出收口异常`)}`,
+          `[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 进程退出收口异常`)}`,
         ),
     );
   });
@@ -488,7 +495,7 @@ export async function executeViaComfyCli(job: Job) {
       fail(taskId, promptId ?? "", errorText(err, "comfy-cli 启动失败")),
       (e) =>
         cliWarn(
-          `[comfyui] ${errorText(e, `fail(${taskId}) 启动失败收口异常`)}`,
+          `[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 启动失败收口异常`)}`,
         ),
     );
   });

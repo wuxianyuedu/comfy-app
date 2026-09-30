@@ -176,6 +176,35 @@ describe("槽位判据", () => {
     expect(state().pendingDispatch.size).toBe(0);
     expect(cli.executeViaComfyCli).not.toHaveBeenCalled();
   });
+
+  it("领取那一次写失败：日志必须把驱动错误码带出来（ISSUE #1262 的前置）", async () => {
+    /* 为什么钉这一条：#1262 现场只有一句 `Failed query: update "task" set …`，
+     * 分不清是「别的进程扣着写锁」「没这张表」还是「连接本身坏了」，于是那次
+     * 「窗口散掉之后还写不进去」的读数至今无法归因。终态那条路 #1250 已经修好了，
+     * 领取这条路一直是瞎的 —— 断言引的就是这句 warn 本身。 */
+    openWs();
+    const wrapped = new Error(
+      'Failed query: update "task" set "status" = ? where "task"."id" in (select …) returning "id"',
+    );
+    wrapped.cause = { code: "SQLITE_BUSY", message: "database is locked" };
+    const repo = fakeRepo({
+      claimNextQueued: vi.fn(async () => {
+        throw wrapped;
+      }),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    expect(await mod.claimAndDispatchOnce()).toBeNull();
+
+    const { logger } = await import("~/lib/core/logger");
+    const warned = vi
+      .mocked(logger.warn)
+      .mock.calls.map((c) => String(c[0]))
+      .filter((m) => m.includes("领取队列任务失败"))
+      .join("\n");
+    expect(warned).toContain("SQLITE_BUSY");
+    expect(warned).toContain("database is locked");
+  });
 });
 
 describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {

@@ -32,7 +32,7 @@
  *
  * @module comfyui/executor-continuation — 调度层的两条回调总线（唯一注册点）
  */
-import { errorText } from "~/lib/error-message";
+import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { logger } from "~/lib/core/logger";
 import type { LogEntry } from "./runner-state-shape";
 
@@ -75,7 +75,7 @@ export function kickQueue(): void {
     return;
   }
   void Promise.resolve(kick()).catch((err: unknown) => {
-    logger.warn(`[comfyui] ${errorText(err, "续跑出队失败")}`);
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "续跑出队失败")}`);
   });
 }
 
@@ -105,6 +105,6 @@ export function announceToQueuedTasks(
     return;
   }
   void Promise.resolve(announce(msg, level)).catch((err: unknown) => {
-    logger.warn(`[comfyui] ${errorText(err, "排队任务广播失败")}`);
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "排队任务广播失败")}`);
   });
 }
