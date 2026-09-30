@@ -235,6 +235,106 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
     });
   });
 
+  /* ── 整轮命中执行缓存（ISSUE #1278）──────────────────────────────────────
+   * 事件原文来自本机复演：同一份 execPayload 连跑两轮，冷轮出 `executing`×11 +
+   * `progress`×25，缓存轮出 `execution_cached`×11 而 **一个 `executing`/`progress`
+   * 都没有**，于是那 ~30s 里面板只有「已提交」和收口两行。 */
+  const CACHED_KSAMPLER =
+    '{"schema": "event/1", "type": "execution_cached", "node": "76:69", ' +
+    '"title": "KSampler", "class_type": "KSampler", "prompt_id": "e313d1cf"}\n';
+
+  it("execution_cached 给一行按节点现场，且**不写** progressNode", () => {
+    const lines: Array<[string, string, string]> = [];
+    const { p, onProgress } = mk({
+      log: (taskId, level, msg) => {
+        lines.push([taskId, level, msg]);
+      },
+    });
+
+    p.sink(CACHED_KSAMPLER);
+
+    expect(
+      lines.map((l) => l[2]).find((m) => m.includes("comfy-cli 节点")),
+    ).toBe("≡ comfy-cli 节点 [76:69] 采样去噪（KSampler） 命中缓存，跳过");
+    // 「当前节点 + 步数」是 4-B2 给的契约，缓存轮没有「当前」—— 这里必须一次都不调。
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+
+  it("同一个节点在「开始执行」与「命中缓存」两行里给同一个名字", () => {
+    const lines: Array<[string, string, string]> = [];
+    const { p } = mk({
+      log: (taskId, level, msg) => {
+        lines.push([taskId, level, msg]);
+      },
+    });
+
+    // 混合轮：76:69 缓存命中、76:65 真跑。两行的 `[id] 中文名（ClassType）` 必须同形。
+    p.sink(CACHED_KSAMPLER);
+    p.sink(
+      '{"schema": "event/1", "type": "executing", "node": "76:65", ' +
+        '"title": "VAE Decode", "class_type": "VAEDecode"}\n',
+    );
+
+    expect(
+      lines.map((l) => l[2]).filter((m) => m.includes("comfy-cli 节点")),
+    ).toEqual([
+      "≡ comfy-cli 节点 [76:69] 采样去噪（KSampler） 命中缓存，跳过",
+      "▶ comfy-cli 节点 [76:65] VAE 解码（VAEDecode） 开始执行",
+    ]);
+  });
+
+  it("节点数对得上才给汇总行，且不影响收口（finish 照旧）", () => {
+    const lines: Array<[string, string, string]> = [];
+    const { p, finish } = mk({
+      log: (taskId, level, msg) => {
+        lines.push([taskId, level, msg]);
+      },
+    });
+
+    p.sink('{"schema": "event/1", "type": "converted", "node_count": 2}\n');
+    p.sink(CACHED_KSAMPLER);
+    p.sink(
+      '{"schema": "event/1", "type": "execution_cached", "node": "95", ' +
+        '"title": "Save Image (Advanced)", "class_type": "SaveImageAdvanced"}\n',
+    );
+    p.sink('{"type":"envelope","ok":true}\n');
+
+    expect(
+      lines.map((l) => l[2]).filter((m) => m.includes("全部命中")),
+    ).toEqual([
+      "≡ 本轮 2 个节点全部命中 ComfyUI 执行缓存（未重算，因此没有按节点进度）",
+    ]);
+    expect(finish).toHaveBeenCalledWith(true, { type: "envelope", ok: true });
+  });
+
+  it("混合轮（只有部分命中）与没有 converted 的轮都不给汇总行", () => {
+    for (const over of [
+      // 只有 1 个 cached、converted 报 11 个 ⇒ 真话是「部分命中」，不许写「全部」。
+      { nodeCount: 11, cached: 1 },
+      // 没有 converted ⇒ 总数未知，不许凭 cached>0 就下结论。
+      { nodeCount: undefined, cached: 3 },
+    ]) {
+      const lines: Array<[string, string, string]> = [];
+      const { p } = mk({
+        log: (taskId, level, msg) => {
+          lines.push([taskId, level, msg]);
+        },
+      });
+      if (over.nodeCount !== undefined) {
+        p.sink(
+          `{"schema": "event/1", "type": "converted", "node_count": ${over.nodeCount}}\n`,
+        );
+      }
+      for (let i = 0; i < over.cached; i++) p.sink(CACHED_KSAMPLER);
+      p.sink('{"type":"envelope","ok":true}\n');
+
+      expect(
+        lines.map((l) => l[2]).some((m) => m.includes("全部命中")),
+        JSON.stringify(over),
+      ).toBe(false);
+    }
+  });
+
   it("非 JSON 行不抛错，也不触发任何分发", () => {
     const { p, onPromptId, finish } = mk();
     expect(() => p.sink("Traceback (most recent call last):\n")).not.toThrow();
