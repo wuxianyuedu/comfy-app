@@ -9,8 +9,10 @@ import {
   foldRemoteToLocal,
   isLoopbackBaseUrl,
   isMisplacedLocalOllama,
+  normalizeEntryApiKey,
   normalizeExtraModels,
   resolveTaskTemperature,
+  splitExtraModels,
   TASK_TYPES,
   type TaskType,
 } from "./types";
@@ -74,9 +76,11 @@ describe("resolveTaskTemperature", () => {
 
 describe("normalizeExtraModels", () => {
   it("旧数据（纯名字字符串）归一化为条目，丢弃空白项", () => {
+    // 字符串形态只带了名字 —— 对连接参数**不提供意见**，所以不挂 `apiKey` 键
+    // （挂 null 会被 `replaceAll` 读成「用户要清空密钥」，台账 A11）
     expect(normalizeExtraModels(["gpt-4o", "  ", "claude-3"])).toEqual([
-      { name: "gpt-4o", baseUrl: null, apiKey: null, kind: null },
-      { name: "claude-3", baseUrl: null, apiKey: null, kind: null },
+      { name: "gpt-4o", baseUrl: null, kind: null },
+      { name: "claude-3", baseUrl: null, kind: null },
     ]);
   });
 
@@ -100,8 +104,39 @@ describe("normalizeExtraModels", () => {
         kind: "chat",
       },
       { name: "qwen", baseUrl: null, apiKey: null, kind: null },
-      { name: "bad-kind", baseUrl: null, apiKey: null, kind: null },
+      // 条目根本没带 `apiKey` 键 → 不提供意见，不挂这个键（区别于上面「显式空串」）
+      { name: "bad-kind", baseUrl: null, kind: null },
     ]);
+  });
+
+  /* `apiKey` 是三态的（台账 A11）：「清空」与「没意见」必须是两个不同的形状，
+     否则设置页保存（整份覆盖）会把脱敏下发的「没意见」读成「清空」。
+     `normalizeExtraModels` 与 `splitExtraModels` 共用同一份 `normalizeEntryApiKey`，
+     两条都验 —— 它们此前各写一份「不是非空串就折成 null」，正是压平三态的地方。 */
+  it("非空串 → 去空白的新值；空串 / null → 显式清空（挂 null）", () => {
+    expect(normalizeEntryApiKey({ apiKey: "  sk-1  " })).toBe("sk-1");
+    expect(normalizeEntryApiKey({ apiKey: "   " })).toBeNull();
+    expect(normalizeEntryApiKey({ apiKey: null })).toBeNull();
+    const [kept] = normalizeExtraModels([{ name: "m", apiKey: " sk-1 " }]);
+    expect(kept?.apiKey).toBe("sk-1");
+    const [cleared] = normalizeExtraModels([{ name: "m", apiKey: null }]);
+    expect(cleared?.apiKey).toBeNull();
+    const [bySplit] = splitExtraModels([
+      { name: "m", apiKey: null },
+    ]).remoteEntries;
+    expect(bySplit?.apiKey).toBeNull();
+  });
+
+  it("缺键 / undefined / 其它类型 → 不提供意见：两个归一器都不挂这个键", () => {
+    for (const rec of [{}, { apiKey: undefined }, { apiKey: 42 }]) {
+      expect(normalizeEntryApiKey(rec)).toBeUndefined();
+      const [entry] = normalizeExtraModels([{ name: "m", ...rec }]);
+      const [splitEntry] = splitExtraModels([
+        { name: "m", ...rec },
+      ]).remoteEntries;
+      expect(Object.keys(entry ?? {})).not.toContain("apiKey");
+      expect(Object.keys(splitEntry ?? {})).not.toContain("apiKey");
+    }
   });
 
   it("无名 / 非字符串 / 非数组输入一律丢弃或返回空", () => {

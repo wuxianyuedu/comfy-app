@@ -1157,8 +1157,11 @@ describe("useSettingsPage", () => {
       (e) => e.name === "gpt-4o-2024",
     );
     expect(renamed?.baseUrl).toBe("https://api.example.com/v1");
-    /* 未提供 apiKey → 保留原值 */
-    expect(renamed?.apiKey).toBe("sk-1");
+    /* 未重填、也没勾「清除密钥」→ 这一条**不带 apiKey 键**（= 本次不提供意见）。
+     * 此前这里是 `(existing?.apiKey ?? null)`，而真实场景里 `existing` 来自服务端
+     * **脱敏下发**的清单（永远没值）→ 折成 null → 覆盖式保存把库里那把密钥清掉
+     * （台账 A11）。草稿不该留着它没见过的值。 */
+    expect(Object.keys(renamed ?? {})).not.toContain("apiKey");
     expect(
       result.current.remoteModelList.some((e) => e.name === "gpt-4o"),
     ).toBe(false);
@@ -1191,6 +1194,44 @@ describe("useSettingsPage", () => {
       result.current.remoteModelList.find((e) => e.name === "qwen3:14b")
         ?.apiKey,
     ).toBeNull();
+  });
+
+  it("远端模型密钥的三态表达：重填=新值 / 显式清除=null / 都没动=不带这个键（台账 A11）", async () => {
+    /* 覆盖式保存（`replaceAll`）里「没带这个键」与「带了 null」是两回事：
+     * 前者=我不提供意见（服务端保留既有），后者=用户按了「清除密钥」。
+     * 客户端此前把两者压成同一个 `null`（草稿拿的是服务端脱敏后的清单，
+     * `existing?.apiKey` 永远是空 → 折成 null），于是「原样保存一次设置」就把
+     * 所有远端模型的密钥清掉。三态在这里一次性钉住。 */
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    const entryOf = (name: string) =>
+      result.current.remoteModelList.find((e) => e.name === name);
+
+    await act(async () => {
+      await result.current.addRemoteModel({ name: "m1", apiKey: "sk-old" });
+    });
+    expect(entryOf("m1")?.apiKey).toBe("sk-old");
+
+    // ① 重填（带空白要去掉）→ 写新值
+    await act(async () => {
+      await result.current.updateRemoteModel("m1", { apiKey: "  sk-new  " });
+    });
+    expect(entryOf("m1")?.apiKey).toBe("sk-new");
+
+    // ② 显式清除 → null（服务端据此真的清掉）
+    await act(async () => {
+      await result.current.updateRemoteModel("m1", { clearApiKey: true });
+    });
+    expect(entryOf("m1")?.apiKey).toBeNull();
+
+    // ③ 都没动（只改名）→ 这个键根本不出现在条目里
+    await act(async () => {
+      await result.current.updateRemoteModel("m1", { name: "m1b" });
+    });
+    expect(entryOf("m1b")).toBeDefined();
+    expect(Object.keys(entryOf("m1b") ?? {})).not.toContain("apiKey");
   });
 
   it("远端模型：编辑未配置条目被拒；改名同步生效模型字段", async () => {
