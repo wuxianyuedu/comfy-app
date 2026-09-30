@@ -255,6 +255,22 @@ export default defineConfig({
          * 门槛取实测（两者单跑皆 100/100/100/100，见各自用例）。 */
         "src/components/studio/comfy-resource-metrics.ts",
         "src/components/studio/LocalComputeCard.tsx",
+        /* 体检清单 ⑦ 第四刀 · 产物读取口的归属（台账 A13）：
+         *   · `media/output-access.ts` 是「这条产物能不能确定属于别人」的唯一判据。
+         *     它按落点命名分三族（素材格 / 画布格走项目行、`films` 走出成片行、
+         *     其余走任务行），每族一条查询、每条都有一个「查不到就放行」的保守侧
+         *     —— 那个侧写坏了不会报错，只会把自己的图打成 404，所以必须满档判定。
+         *   · 同批改的 `api/generated/[...path]/route.ts` 已在上面第一批里（满档），
+         *     它的用例新增了「拒绝发生在 readFile 之前」与「Cache-Control 必须是
+         *     private」两档 —— 后者是这条闸的实际出口：标 `public` 会让共享缓存
+         *     把 A 的产物回给 B，判据写得再对也只剩形式。 */
+        "src/lib/media/output-access.ts",
+        /* `src/proxy.ts` —— 产物读取口的**接线**本身（台账 A13 的最后一环）。
+         * 产物落在 `public/generated/` 下，而 `public/**` 由 Next 按静态文件直接发出、
+         * 不经过 route handler —— 只在 route 上加闸门时，把 URL 里的 `api/` 去掉就整条
+         * 绕过（本机实测：同一份图，静态形状 200、带闸形状 401）。这一层不进覆盖率面，
+         * 「闸有没有真的接到请求上」就没有任何数字会动；而它的失效形态是**零报错**。 */
+        "src/proxy.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1211,6 +1227,26 @@ export default defineConfig({
           functions: 80,
           statements: 80,
           branches: 75,
+        },
+        /* ── 体检清单 ⑦ 第四刀 · 产物归属判据（台账 A13，实测满档）──────────
+         * 敢设 100 是因为「三族 × 每族的保守侧」这六个分支真的各有用例：
+         * 项目格两种（我的 / 别人的）+ 共享区 + 库里没有的目录名、成片格三种
+         * （我的 / 别人的 / `_tmp_` 中间目录）+ 无主的 bgm + 查不到的 id、
+         * 任务格三种（我的 / 别人的 / 行已删）。少任何一支都会掉下 100 当场红。 */
+        "src/lib/media/output-access.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 同上：`matcher` 里那两条产物前缀是**删掉不会有任何用例报错**的一档
+         * （通配那条把带点路径全排除了，产物 URL 个个带扩展名），所以把它写成
+         * 对 `config.matcher` 的直接断言，并给这一层满档。 */
+        "src/proxy.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         "src/components/studio/LocalComputeCard.tsx": {
           lines: 100,
