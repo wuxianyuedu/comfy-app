@@ -43,14 +43,7 @@ function healthOf(
 
 function renderHeader(health: HealthRow[]) {
   return render(
-    <WorkshopHeader
-      title="雾中来信"
-      progressPct={40}
-      health={health}
-      apiChannels={null}
-      onOpenApiSettings={() => undefined}
-      onOpenModeContract={() => undefined}
-    />,
+    <WorkshopHeader title="雾中来信" progressPct={40} health={health} />,
   );
 }
 

@@ -5,6 +5,7 @@ import {
   globalNavItems,
   isProjectTab,
   NAV_ITEMS,
+  OVERLAY_NAV_ITEMS,
   PROJECTS_ENTRY,
   projectTabs,
   type WorkspaceView,
@@ -65,5 +66,35 @@ describe("NAV_ITEMS（全量注册表）", () => {
     ];
     expect([...partition].sort()).toEqual(NAV_ITEMS.map((i) => i.id).sort());
     expect(new Set(partition).size).toBe(partition.length);
+  });
+});
+
+describe("OVERLAY_NAV_ITEMS（全局浮层入口）", () => {
+  it("恰好两项：模型适配 / 模式契约", () => {
+    expect(OVERLAY_NAV_ITEMS.map((i) => i.overlay)).toEqual([
+      "model-adapters",
+      "mode-contract",
+    ]);
+    expect(OVERLAY_NAV_ITEMS.map((i) => i.label)).toEqual([
+      "模型适配",
+      "模式契约",
+    ]);
+  });
+
+  it("它们不是视图：id 空间与 WorkspaceView 无交集", () => {
+    /* 用 `overlay` 而不是 `id` 建模，就是为了让「当前视图」不出现两个到不了的值。
+       这条钉住两者确实各走各的命名空间 —— 混进 WorkspaceView 会让 TopBar 反查到
+       一个永远不 active 的标题、page.tsx 的视图白名单也要跟着塞两个假值。 */
+    const viewIds: string[] = NAV_ITEMS.map((i) => i.id);
+    for (const item of OVERLAY_NAV_ITEMS) {
+      expect(viewIds).not.toContain(item.overlay);
+    }
+  });
+
+  it("位置紧跟「流程」：全局项末尾之后就是它们", () => {
+    /* 契约口清单是工作流库配落点的依据、适配器是远端模型的字段映射，两件事都服务
+       「流程」这条链路 —— 所以它们的入口贴着「流程」，不与其它全局项混排。 */
+    const ids = [...globalNavItems().map((i) => i.id)];
+    expect(ids[ids.length - 1]).toBe("workflows");
   });
 });

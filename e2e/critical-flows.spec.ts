@@ -121,6 +121,14 @@ test.describe("工作区链路 @critical", () => {
       ).toBeVisible();
     }
 
+    /* 「流程」下面那两项是**应用级浮层入口**（模型适配 / 模式契约）：它们不切视图、
+     * 只开弹窗，且与项目无关，所以留在侧栏而不进工坊那个项目内视图。 */
+    for (const label of ["模型适配", "模式契约"]) {
+      await expect(
+        page.getByRole("button", { name: label, exact: true }).first(),
+      ).toBeVisible();
+    }
+
     /* 画布 / 工坊是项目内页签：没进项目时它们**不在侧栏**，在首页以入口卡出现。
      * 早先这里把这两个名字混进上面那个侧栏循环，于是从导航拆类那天起就一直是红的。 */
     await expect(
