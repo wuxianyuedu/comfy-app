@@ -16,6 +16,8 @@ import {
   type SchemaSyncNotice,
   type SchemaSyncStatus,
 } from "./hooks/use-schema-sync-status";
+import { useSchemaSyncPush } from "./hooks/use-schema-sync-push";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import {
   comfyQueueNotice,
   useComfyQueue,
@@ -138,6 +140,8 @@ const SCHEMA_TONE_CLASS: Record<SchemaSyncNotice["tone"], string> = {
 
 function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
   const notice = schemaSyncNotice(status);
+  const { push, pushing } = useSchemaSyncPush();
+  const [confirming, setConfirming] = useState(false);
   if (notice === null) return null;
 
   const tone = SCHEMA_TONE_CLASS[notice.tone];
@@ -152,6 +156,36 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
           {notice.text}
         </Button>
       </Hint>
+    );
+  }
+  if (notice.actionable) {
+    return (
+      <>
+        <Hint label={notice.title}>
+          <Button
+            variant="ghost"
+            disabled={pushing}
+            className={`h-auto shrink-0 gap-1 rounded px-1 py-0 text-[11px] hover:underline ${tone}`}
+            onClick={() => setConfirming(true)}
+          >
+            {notice.text}
+            <span className="text-ink-fainter">· 点击同步</span>
+          </Button>
+        </Hint>
+        <ConfirmDialog
+          open={confirming}
+          onClose={() => setConfirming(false)}
+          onConfirm={() => {
+            setConfirming(false);
+            void push();
+          }}
+          pending={pushing}
+          danger
+          title="立即执行数据库同步？"
+          confirmLabel="同步"
+          description={`${notice.title}\n\n这批变更含「会丢数据」的语句（删列 / 重建表），执行后那些数据无法找回。确认这些数据可以丢弃后再继续。`}
+        />
+      </>
     );
   }
   return (

@@ -25,13 +25,20 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const file = path.join(process.cwd(), "log", "schema-sync.json");
+  /* 「立即同步」按钮能不能显示：执行件在不在。桌包载荷刻意不带
+   * `scripts/db-sync.mjs`（那里没有 drizzle-kit，跑了也没用，见
+   * standalone-private-inputs.mjs 的白名单），状态栏据这个能力位回落成
+   * 「跑 pnpm db:push」的纯提示，而不是一个点了必然 404 的按钮。 */
+  const canPush = fs.existsSync(
+    path.join(process.cwd(), "scripts", "db-sync.mjs"),
+  );
   try {
     const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
     if (isRecord(parsed)) {
-      return NextResponse.json({ ok: true, ...parsed });
+      return NextResponse.json({ ok: true, canPush, ...parsed });
     }
-    return NextResponse.json({ ok: false, phase: "unknown" });
+    return NextResponse.json({ ok: false, phase: "unknown", canPush });
   } catch {
-    return NextResponse.json({ ok: false, phase: "unknown" });
+    return NextResponse.json({ ok: false, phase: "unknown", canPush });
   }
 }
