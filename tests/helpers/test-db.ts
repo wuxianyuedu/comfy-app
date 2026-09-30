@@ -565,6 +565,38 @@ export function seedProject(
   return getRow("project", id);
 }
 
+/**
+ * 种一条成片。给归属类用例用（`films/<id>.mp4` 的落点名字里就是成片行 id），
+ * 其余列一律吃 schema 默认值 —— 这些用例只关心 `userId` 那一格。
+ * 与 `filmRepository.create` 的取舍：那条会生成 cuid，路径断言就得先读回 id；
+ * 这里允许调用方钉死 id，才写得清「猜得到别人的成片 id」这个攻击形状。
+ */
+export function seedFilm(
+  _tdb: TestDb,
+  input: {
+    id?: string;
+    userId: string;
+    projectId?: string | null;
+    title?: string;
+    script?: string;
+    finalVideo?: string | null;
+  },
+): Row {
+  const id = input.id ?? `seed-film-${++seedSeq}`;
+  const at = new Date();
+  insertInto("filmProject", {
+    id,
+    userId: input.userId,
+    projectId: input.projectId ?? null,
+    title: input.title ?? "seeded-film",
+    script: input.script ?? "",
+    finalVideo: input.finalVideo ?? null,
+    createdAt: at,
+    updatedAt: at,
+  });
+  return getRow("filmProject", id);
+}
+
 export interface SeedRemoteModelInput {
   id?: string;
   name: string;

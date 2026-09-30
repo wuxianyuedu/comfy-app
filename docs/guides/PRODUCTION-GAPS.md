@@ -121,9 +121,9 @@
 > 就从两态变成三态，而覆盖式写入（`replaceAll` 这类）读不出第三种意图就会变成数据丢失。
 >
 > **⑨ 第一刀（同日）把这同一族判据推到素材库**：A12（scope 不判归属）当场修掉并配 36 条
-> 判据；顺带把同一条链上更靠外的那一环记成 **A13 且明确不修** —— `/api/generated` 只判
-> 路径包含、不判会话与归属，A12 把列表收紧之后「直接猜路径读」仍然敞开。
-> 留着它是为了不让「素材库测过了」被读成「产物读取也安全了」。
+> 判据；顺带把同一条链上更靠外的那一环记成 **A13** —— `/api/generated` 只判路径包含、
+> 不判会话与归属，A12 把列表收紧之后「直接猜路径读」仍然敞开。留着它是为了不让
+> 「素材库测过了」被读成「产物读取也安全了」。**下一刀就按这个名字把它修掉了**（见 A13 条目）。
 
 - [ ] **A1 鉴权默认关闭**：无会话回落演示用户，`loginRequired` 默认 false，约 20 个 router 可写。证据：`src/lib/auth-server.ts:99-106`；`src/lib/app-settings/index.ts:96`。需评估默认强鉴权或显式化。
       ⚠️ 它同时是 A2/A3/A6/A7/A8 那一批「越权」的实际可达性前提：单用户本机部署下这些
@@ -261,22 +261,78 @@
       反向验证两处：写闸短路 → 恰好 4 条红，读侧收窄摘掉 → 恰好 3 条红。
       证据：`src/lib/media/materials.ts`、`src/server/api/routers/material.ts`、
       `src/app/api/materials/route.ts`。
-- [ ] **A13 产物与素材的读取口是纯路径静态流：`/api/generated/[...path]` 没有会话校验、也没有归属**：
-      这个端点只做「解析后仍在 `public/generated` 之内」这一条路径判据（那条有判据，
-      #1260 补的），任何能访问该端口的一方都能按路径读走**所有人**的任务产物与素材
-      （落点命名里就有别人的项目 id 与任务 id）。同一条通道也是素材面板里
-      `item.url` 指向的地方，所以 A13 把「列表」收紧之后，**直接猜路径读**仍然是敞开的。
-      本轮没修的原因是要一起定三件事，缺一件就是假修：
-      ① 加会话校验（`requireRequestUser`）会牵动桌包与 WebView 里 `<img>` / `<video>`
-      的加载语义与每请求一次的鉴权开销；② 只加会话不等于归属 —— 还得把
-      「这条路径属于哪个用户」变成可判的数据（现在只有目录名里的项目 id 与 task 行的
-      `userId` 两处真相）；③ 素材的「用户直接把文件丢进目录也算可见」是刻意选型
-      （见 `~/lib/media/materials` 的存储说明），一旦按归属过滤就得重新定义这条。
-      建议的最小一刀：先给 `/api/generated` 加会话校验（挡掉无凭据的端口扫描），
-      再按 `task.userId` / 项目归属做路径前缀白名单。
-      证据：`src/app/api/generated/[...path]/route.ts`（无 `requireRequestUser`）、
-      `src/lib/media/materials.ts`（`item.url` 的形状）、`src/lib/comfyui/executor-finalize.ts`
-      （产物落点按 `projects/<pid>/<tid>` 命名）。
+- [x] **A13 产物与素材的读取口是纯路径静态流：`/api/generated/[...path]` 没有会话校验、也没有归属（本批修复 + 判据）**：
+      这个端点原先只做「解析后仍在 `public/generated` 之内」那一条路径判据（那条有判据，
+      #1260 补的），于是任何能访问该端口的一方都能按路径读走**所有人**的任务产物与素材
+      —— 落点命名里就写着主人的身份：`projects/<项目 id>/<任务 id>`、`materials/<项目 id>/…`、
+      `<任务 id>/…`、`films/<成片 id>.mp4`。A12 把「列表」收紧之后，这一环是同一族的
+      最后一公里：列表看不见 ≠ 猜不到路径就读不到。
+      修法分三层，各判各的：
+      ① **会话** —— 入口改吃 REST 面唯一闸门 `requireRequestUser()`，无会话 401；
+      ② **归属** —— 新增 `src/lib/media/output-access.ts` 作唯一判据，回答的是
+      「这条产物**能否被确定属于别人**」（三态里保守的那一半）：项目两族直接吃 A12 那份
+      `materialScopeOwnership`（**不再写第二份**「目录名是谁的」），`films` 查出成片行，
+      其余按 `<任务 id>` 查任务行。库里查不到一律不算别人的 —— 判成别人的会把用户自己的
+      历史产物打成 404 且毫无线索，判成自己的最多是被读到，代价不对称。
+      拒绝发生在 `fs.readFile` **之前**，状态给 **404 而不是 403**（与「文件不存在」同形，
+      这个端点不顺带回答「某个 id 存不存在」；口径同 A2 / A3 / A12）。
+      ③ **接线**（这一层是写到一半才发现缺的，也是本条最值钱的部份）—— 上面两件做完
+      自评已经是「修好了」，实测却当场推翻：产物根是 `public/generated/`，而 `public/**`
+      由 Next **按静态文件直接发出、不经过任何 route handler**。同一个文件、两个 URL：
+      `/generated/<taskId>/img_0.png` → 200 带出 1154930 字节原图（`Cache-Control: public, max-age=0`），
+      `/api/generated/<taskId>/img_0.png` → 401。把 URL 里的 `api/` 去掉就整条绕过，
+      而且桌包（standalone 起的服务）与 dev 两处一致。修法落在 `src/proxy.ts`
+      （Next 16 的 `middleware` 继任者，本仓库原本是一份空转的落点）：把 `/generated/**`
+      rewrite 进 `/api/generated/**`，让两种形状过同一道闸 —— 旧数据里 `/generated/...`
+      形状的 URL（`workshop/media-source.server.ts` 历史上两种都收）因此继续可用，
+      只是也得过闸。**配置层做不到这件事**：`next.config.js` 的 `rewrites()` 返回扁平数组
+      时属于 `afterFiles`，实测压不过 `public/` 里的真文件（另起一份最小 Next 应用验过）。
+      这一层自己还藏着一档更静默的：沿用下来的那条 `matcher` 通配把**带点的路径整个排除**
+      （为了不动静态资源），而产物 URL 个个带扩展名 —— 只删 `matcher` 里产物前缀那两条、
+      `proxy()` 一行代码不动，`/generated/<taskId>/img_0.png` 立刻回到 200、`/api/…` 仍 401，
+      且**零报错**。「规则写了」与「规则跑到了」是两件事。
+      折完之后在**桌包 standalone 形态**上按四档实测（`loginRequired` 打开、会话来自临时隔离库，
+      两种 URL 形状逐档同答案）：无会话 → 401；有会话但那一行任务属于别人 → **404**；
+      属于自己 → 200；库里查不到这一行 → 200（保守侧）。第四档就是「历史产物不误伤」这句
+      话在真机上的形状，前三档是「挡得住」在真机上的形状。
+      另注：`src/middleware.ts` 与 `src/proxy.ts` **不能并存** —— 实测 Next 16.3.5 在
+      `next dev` 期抛 `Both middleware file and proxy file are detected` 的
+      unhandledRejection，新加的那条一个字都不生效。加规则一律改 `src/proxy.ts`。
+      两处刻意留下的边界，写在这里而不是被 `return false` 吸收：
+      · **只在 `loginRequired` 打开时启用归属判定** —— 关掉时每个请求都解析成同一个演示
+      用户，判定在数学上不可能有不同结果，只会因历史行的 `userId` 漂移把用户自己的产物打裂；
+      · **`films/bgm` 是无主内容**（上传口 `api/film/bgm/route.ts` 落在全局单一目录、
+      不记归属），判不了就明写在 `UNSCOPED_PREFIXES` 里 —— 新增落点时先问「它属于某个用户吗」，
+      属于却没进这张表的，就是漏了一条判据。
+      顺带一处**只有加了归属之后才成立的**收紧：`Cache-Control` 从 `public` 改 `private`
+      （长缓存与 `immutable` 保留）。产物按任务目录一次性写入所以敢长缓存，但标 `public`
+      等于允许共享缓存把 A 的产物回给 B —— 那会让上面那道闸只剩形式。
+      判据：`src/lib/media/output-access.test.ts` 19 条（内存 SQLite + 真 Drizzle，
+      逐族钉「我的 / 别人的 / 查不到」三档，并断言无主前缀**根本不去查库**）+
+      `src/app/api/generated/[...path]/route.test.ts` 11 条（401、403 两种形状、
+      他人产物 404 且一次都不读盘、单用户跳过判定、`private` + `immutable`）+
+      `src/proxy.test.ts` 9 条（改写只动 pathname、查询串保留、`/api/generated` 不二次改写、
+      以及直接断言 `config.matcher` 里有产物前缀那两条）。
+      反向验证八处，每处只红该管的那几条：归属闸整块摘掉 → 2 红；不分单/多用户无条件判定 → 1 红；
+      缓存退回 `public` → 1 红；无主前缀豁免摘掉 → 2 红；「查不到」改判成别人的 → 1 红；
+      `projects` 一族漏判（落到任务查询）→ 1 红；`matcher` 漏掉产物前缀 → 真机 200/401 分叉
+      （单测里断言 `config.matcher` 那两条即在位）；只留静态口不设 rewrite → 同一份图两处答案不同。
+      代价与残留：每次读取多一次按主键的行查询（产物一文件一次，浏览器侧另有 `private`
+      长缓存，本机 SQLite 上不构成瓶颈）；产物请求现在多过一层 proxy（dev 实测该层 ~0.3s
+      含首次编译，稳态为亚毫秒级 rewrite）；**逐条按路径前缀判归属仍是「命名即权限」这一族
+      的根本形状** —— 盘上文件本身没有属主记录，哪天落点命名换了形状，这张判据表就得同步，
+      所以布局与判据两份都在 `src/lib/media/`（`output-paths` 管形状、`output-access` 管属主）
+      并要求新增落点同批改。**另一条残留同源于此**：只要产物还住在 `public/` 下，
+      「静态直发」这条旁路就永远依赖 `src/proxy.ts` 那份 `matcher` 记得写全；把产物根搬出
+      `public/` 才是结构性的关法（`generatedRoot()` 已是唯一出口，代价是历史盘上文件要迁）。
+      搬家之外还欠一件：静态口原本支持 `Range`，折进 route 之后 `Range` 被忽略（整文件
+      200 回全量）—— 现行视频 URL 本来就写的是 `/api/generated/films/…`（`compose-film`
+      收口时就这么存），所以这条不是回归，只是**旧数据里 `/generated/…` 形状的视频**若被
+      播放器直接打开，拖动进度条会表现为整段重下；要补就该补在 route 上（一处补、两种形状都吃到）。
+      证据：`src/lib/media/output-access.ts`、`src/app/api/generated/[...path]/route.ts`、
+      `src/proxy.ts`（接线与 matcher）、
+      `src/app/api/film/bgm/route.ts`（无主前缀的来源）、`src/server/film/compose-film.ts`
+      （`films/_tmp_<id>` 中间目录与 `films/<id>.mp4` 收口 —— 判据里那条 `_tmp_` 还原就是为它写的）。
 - [ ] **B1 capability 对回环通配源开满**（`http://127.0.0.1:*` + `process:default` / `updater:default`）。证据：`src-tauri/capabilities/remote.json:8-26`；`src-tauri/tauri.conf.json:31`。
 - [ ] **B2 生产路径 21 处 `unwrap()` + 构建失败 panic**，无降级 UI。证据：`src-tauri/src/lib.rs:72,918,1391,1741`；`shell_launch.rs:78,83,201`。
 - [ ] **B3 违反自身规范：`std::process::Command` 直起外部进程 3 处**（应走 `tauri-plugin-shell`）。证据：`src-tauri/src/shell_launch.rs:575`；`lib.rs:1167`；`detached_spawn.rs:147`。

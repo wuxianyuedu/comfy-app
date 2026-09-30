@@ -180,6 +180,10 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
       5 个 —— `generated/[...path]`、`debug/source`、`comfy/{stats,queue,ensure}`；第二批补了
       `custom-nodes` 的 argv 注入闸门；⑨第一刀补了 `materials` 的归属闸门；另有 `schema/*`
       两条是别线补的），剩下 25 个与 6 个 `page.tsx` 的目录级测试仍是少数（台账 P1/E3）。
+      ⑦第四刀没加 `route.ts` 用例，但补了产物的**第二个入口**的判据（`src/proxy.test.ts`）：
+      产物住在 `public/generated/` 下，而 `public/**` 由 Next 按静态文件直发、不经过任何
+      handler —— 只在 route 上加闸门时，把 URL 里的 `api/` 去掉就整条绕过
+      （实测同一份图：静态形状 200、带闸形状 401）。
 - [ ] **服务端 router 集成覆盖 7/16**：`generate` / `run` / `task` / `workflow` / `project` /
       `setting` / `material`（后三个分别是闸门第二批、第三批与⑨第一刀补的，用例都按
       **归属 / 协议闸门**组织，不按 procedure 顺序铺）。其余 9 个里 `llm`（出口脱敏在
