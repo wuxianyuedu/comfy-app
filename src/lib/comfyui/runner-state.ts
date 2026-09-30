@@ -422,6 +422,55 @@ export function isDispatchedHere(taskId: string): boolean {
 }
 
 /**
+ * 摘掉「本进程还在执行这一行」的**全部**内存足迹（ISSUE #1250）。
+ *
+ * 为什么必须一次摘干净，而不是「归还槽位」就够了：`reaper.ts` 的
+ * `isTaskClaimedInProcess` 读的是四样（`pendingDispatch` / comfy-cli 子进程 /
+ * `executedWorkflow` / `settled`），**任何一样还留着，回收器就认为这一行有人管**，
+ * 每 30s 只打一句 `checked` 而永不动作。桌包实演量到过一次：终态写穷尽后只归还了
+ * 槽位，那一行在 `RUNNING` 上停了 11 分钟、22 轮回收全部空转 —— 因为 `fail()` 在
+ * `writeTerminal` 抛出后就没走到那几行 `delete`。
+ *
+ * 键表与原来两处手工清理逐字一致（成功分支与失败分支各抄一份 = 第四份副本，
+ * 这里收成唯一出口）：**不动** `settled` / `finalized`（正常收口成功后仍要它们挡住
+ * 二次写库，语义见 {@link claimSettle} / {@link claimFinalize}），也**不动**
+ * comfy-cli 子进程句柄（那是 `executor-cli` 的 `cliProcs`，杀进程才是它的清理）。
+ */
+export function forgetTaskFootprint(taskId: string, promptId?: string): void {
+  const s = state();
+  s.pendingDispatch.delete(taskId);
+  s.executedWorkflow.delete(taskId);
+  s.startedAt.delete(taskId);
+  s.lastNodeByTask.delete(taskId);
+  s.lastLogPct.delete(taskId);
+  s.promptByTask.delete(taskId);
+  /* 手里有 promptId 就按它删（调用点那一格），再整表反查一遍兜底：
+   * 本进程同时在飞最多 1 条（MAX_CONCURRENCY），扫不出性能问题，
+   * 却能保证「摘干净」这句话没有例外 —— 传空串的那些路径（提交前就崩）靠的就是反查。 */
+  if (promptId && s.promptToTask.get(promptId) === taskId) {
+    s.promptToTask.delete(promptId);
+  }
+  for (const [known, owner] of s.promptToTask) {
+    if (owner === taskId) s.promptToTask.delete(known);
+  }
+}
+
+/**
+ * 终态那一次写**没落库**时的自处：足迹与两把一次性锁一起丢掉。
+ *
+ * 与 {@link forgetTaskFootprint} 的差别只在最后一句：库里的行仍然是 `RUNNING`，
+ * 本进程对它的「已认领终态」「已落终态」两个主张都成了谎 —— 留着它们，回收器的
+ * `claimTerminal` 会被自己的旧记账挡死，那一行就再没有人判。清掉之后接管成立，
+ * 而重复写库仍有库里那道 CAS（`status not in (SUCCEEDED, FAILED, CANCELLED)`）兜着。
+ */
+export function forgetTaskClaimEntirely(taskId: string): void {
+  const s = state();
+  forgetTaskFootprint(taskId);
+  s.settled.delete(taskId);
+  s.finalized.delete(taskId);
+}
+
+/**
  * runner-state 的**宿主依赖注入接缝**（P3 迁移第 1 期·第二/三步）。
  *
  * 现状：本模块只剩一处真 IO —— `persistLogs` 里的 `await taskRepository.replaceLogs`

@@ -771,3 +771,132 @@ pre-commit 跑的是非 strict（R5 只提醒）、`check:all` 也不调这条�
 **这一刀顺带买到的两条判据**（都是端到端才暴露、单测写不出来也不会红的）：① 监看计数顺序把影片钉死在 `progress=50`（见上）；
 ② 用例的 `taskRepository` 桩**缺 `findExecutionProgressMany` 这个键**时，循环会在那一行 reject、
 `resumeStalledFilms` 那边看起来「跑成功了」而影片一动不动 —— 补上这个键之后，夹具用例才真的能断到收口。
+
+## 20. #1250（终态库写失败不许被咽掉）——签字、两处被实测推翻的前提、落地记录
+
+**签字四问**（动手前问的，四条都按推荐签）：
+
+| #   | 决定             | 签的口径                                                                                      |
+| --- | ---------------- | --------------------------------------------------------------------------------------------- |
+| 1   | 下一刀做哪条     | **#1250：收口写失败不许被吞**（Phase 5 之后的执行链最后一格静默失效）                          |
+| 2   | 穷尽之后怎么办   | **有限次退避重试 + 归还槽位交给回收器接管** —— 前提是不再依赖「再写一行库」作为接管信号        |
+| 3   | 并发写这条根因   | **本刀顺手给库连接设 `busy_timeout`**                                                          |
+| 4   | 验收强度         | **单测/判据 + 桌包双进程写复演**                                                               |
+
+这一刀的实际产出与签字时的心智模型有两处不同，两处都是**复演与量具**推翻的，不是读代码读出来的 ——
+按第 4 问签的口径，这两处只能靠真进程看到。
+
+### 被推翻的前提一：「归还槽位」不等于「回收器接管」
+
+签第 2 问时的模型是：`releaseDispatchSlot()` 让 `isDispatchedHere()` 变 false ⇒ 回收器那句
+「本进程没有足迹 ⇒ 真孤儿」（#1184 立下的）下一轮就接管。桌包复演跑出来的事实是：
+
+- 22:50:41.621 那一行被领成 `RUNNING`；外部进程从这一刻起每 14s 按住一轮 WAL 写位；
+- 22:50:46.815 宿主抛出终态写失败，stdout 里第一次出现了驱动错误码
+  （`…（SQLite: SQLITE_BUSY / SQLITE_BUSY: database is locked / database is locked）`）——
+  ① 「原因要看得见」这一半**成立**；
+- 然后那一行在 `RUNNING` 上停了 **11 分半**，期间回收器扫了 **22 轮**，每轮只打一句
+  `reaper(running): checked 1 stale RUNNING task(s) (older than 60s)`，一次动作都没有。
+
+根因不在回收器，而在 `fail()` 自己：`writeTerminal` 抛出后，函数末尾那几行清理
+（`s.executedWorkflow.delete(taskId)` 等）**再也没机会执行**，而 `reaper.ts:174` 的
+`isTaskClaimedInProcess` 读的是**四样**（`pendingDispatch` / comfy-cli 子进程 /
+`executedWorkflow` / `settled`）—— 只归还槽位，另外三样还替这一行主张「本进程仍在执行」。
+
+修法因此不是「再加一条回收规则」，而是把清理收成一处：`runner-state.ts` 新增
+`forgetTaskFootprint(taskId, promptId?)`（四样足迹 + 反查 `promptToTask`）与
+`forgetTaskClaimEntirely(taskId)`（再加 `settled` / `finalized` 两把一次性锁 —— 写没落库时
+这两个主张都是谎，留着会把回收器自己的 `claimTerminal` 挡死）。`complete()` / `fail()` 末尾
+那两处手工 `delete` 与 `giveUp` 现在都走这同一个出口；`enqueue.ts` 的取消路径**没有**并进来，
+它「只在确实持有槽位时才归还」的条件语义与这里不同，硬合会把那条判据洗掉。
+
+用例侧也照这个改：`executor-write-retry.test.ts` 的穷尽那条不再只断言 `isDispatchedHere`
+变 false，而是直接引回收器那句判据 `isTaskClaimedInProcess(state(), () => false, id)` 为 false
+—— 只断言槽位的话，这条用例在旧实现下也是绿的，那就等于没写。
+
+### 被推翻的前提二：`PRAGMA busy_timeout` 在 `@libsql/client` 上覆盖不到执行写的那条连接
+
+签第 3 问时的做法是「把 PRAGMA 收成一份清单、四处站点都加 `busy_timeout = 2000`」。
+复演读数对不上：桌包那一格 4 次终态重试挤在 **0.6 秒**里跑完，每次都是**秒抛** ——
+如果预算真在，每次应该等满 2 秒。量具（`temp/measure-*.mjs`，两个进程 + 真驱动，
+每档都重复可跑）给出的因果是：
+
+| 形状                                       | 争用方读回的预算 | 结果                                   |
+| ------------------------------------------ | ---------------- | -------------------------------------- |
+| 不设（本刀之前的现状）                     | 驱动默认 `0`     | `SQLITE_BUSY`，**4ms**                 |
+| 开机 `PRAGMA busy_timeout = 2000` 一处设好 | 读回 `2000`      | 单连接形状：等到 **1123ms** 后**写成功** |
+| 同上，但池里另有一条连接被占用             | 读回 `2000`      | **11ms** 秒抛（= 没设）                |
+| `createClient({ timeout: 2000 })`          | 建连接时设好     | **2221ms** 后抛（等满了）              |
+| 同上，池里另有一条连接被占用               | —                | **2135ms** 后抛（照样覆盖得到）        |
+| `createClient({ timeout: 500 })`、持锁 4s  | —                | **669ms** 后抛                         |
+
+机制读法：`@libsql/client` 的 `file:` 客户端是**连接池**，`maxConnections = Math.max(1, config.concurrency)`
+而 `concurrency` 未配时是 `undefined` ⇒ `NaN` ⇒「永远没到上限」⇒ 池随时新开一条
+**没见过开机那条 PRAGMA** 的连接；`timeout` 则走 `new Database(path, { timeout })`，
+由驱动在**建立每条连接**时设好。最后一行（预算 500 ⇒ 等 669ms 抛）是用来排除「那两秒是别的原因」的。
+
+代价也跟着量了：libsql 的语句执行是**同步**的，所以等锁多少毫秒，本进程的事件循环就停摆多少毫秒 ——
+等锁 2.2 秒期间，同进程 10ms 的心跳**一次都没跳**（本该约 220 次）。
+
+于是本刀把这两族**分开**（这是签字口径的修正，不是加码）：
+
+- `src/lib/sqlite-pragmas.ts` 的共用清单只留**库级**两条（`journal_mode` / `foreign_keys`）——
+  它们设过就落进文件，PRAGMA 是正确形状；`busy_timeout` 从清单里**移除**，因为留在里面等于
+  让「四处都设了」这句话继续是假的。判据把这条也钉住（清单里不许再出现 `busy_timeout`）。
+- 等待预算改由 `createClient({ timeout: SQLITE_BUSY_TIMEOUT_MS })` 给，且**只给执行宿主**，
+  值 **250ms**。给在宿主：它是为执行而生的进程，250ms 换掉「毫秒级瞬时锁也要走重试」值得。
+  不给 Next：它还要响应界面，而秒抛 + `TERMINAL_DB_WRITE` 的 40/80/160 退避本来就是为
+  「对手几十毫秒就散」设计的。两侧不对称是签字决定，所以由用例逐侧核对（Next 两处
+  出现 `SQLITE_BUSY_TIMEOUT_MS` 即红）。
+- 启动器那侧（`scripts/launcher-core/standalone-runtime-env.mjs`，非 TS 宿主、`node:sqlite`
+  **单连接**）保留自己那条 `PRAGMA busy_timeout = 2000`：那一刻是首启建表，整个 schema 一次跑完，
+  「等一等」比「启动失败」好，而且没有界面请求在等它。单连接是这里能用 PRAGMA 的前提。
+
+`SQLITE_BUSY_TIMEOUT_MS` 只有 250ms ⇒ **稍长一点的锁必然走到穷尽路径**，也就是说「设了预算」
+绝不能被当成「不必重试」。这条关系写成了用例（`250 < 一次真锁`），免得下一次有人把预算当防线删重试。
+
+### 落法（五处，都不新开第二条链）
+
+- `src/lib/sqlite-error.ts`（纯叶子）：沿 `cause` 链取 `code` / `message` 拼回一句可读文本
+  （`describeSqliteWriteError`），以及「这一族等一等就有锁」的判定（`isSqliteBusyError`，
+  只认 `SQLITE_BUSY` / `SQLITE_LOCKED` / `SQLITE_PROTOCOL` 与 `database is locked` 句式；
+  认不出原因判不可重试 —— 不把 `no such table` 拖成四次同样的写入）。
+- `retry-policy.ts`：`TERMINAL_DB_WRITE = 4 次 / 指数 40ms / 封顶 300ms`（累计等待 280ms）。
+- `executor-write-retry.ts`：`writeTerminal(taskId, label, write)` 包住**状态那一次写**
+  （`finalizeSuccess` / `finalizeFailure`），产物行与日志刷盘不在这一条上。
+- `executor-finalize.ts`：两处调用点接 `writeTerminal`；末尾清理改走 `forgetTaskFootprint`。
+- `runner-state.ts` / `host-runtime.ts` / 三处连接站点 + 启动器：上面两节说的足迹与预算。
+
+### 验收记录
+
+### 验收记录（桌包双进程写复演跑通；dev 那条被一个新发现的坏挡住，另开 issue）
+
+载荷 = 本次 `build-desktop` 产物整树重放到假安装目录 `%LOCALAPPDATA%\comfyapp-pkg-sim`，
+`COMFY_EXECUTOR=host`、**cwd 给成安装目录**（否则壳的 `resolve_project_root()` 会把检出根当项目根、
+误走 prebuilt 那一支 —— §5 那行记过）。载荷侧先核过形状：
+`scripts/executor-host.runtime.mjs` 里 `createClient({ url, timeout: SQLITE_BUSY_TIMEOUT_MS })`、
+`SQLITE_BUSY_TIMEOUT_MS = 250`、`SQLITE_PRAGMAS` 只有两条、穷尽文案以 `\uXXXX` 转义形存在。
+造行用「克隆一条已知能跑通的行 + 把 `comfyCliPython` 置空」⇒ 领取后 ~2–4.6s 必落终态，
+抢锁窗口的位置因此可复现（真出图要几十秒，窗口能不能盖住终态写全看运气）。
+
+| 阶段 | 现场（时间戳取自 `static/db.sqlite` 与 `static/log/services/executor-host-stdout-2026-09-30-09-11-56.log`） |
+| --- | --- |
+| 上一轮遗留行（**只归还槽位**那版代码留下的） | 本次启动后 stdout 在 `09:12:01` 与 `09:12:31` 各打一句 `reaper(running): checked 1 stale RUNNING task(s)`，行的 `finishedAt=09:12:31.103` ⇒ 两轮节拍（第一轮登记、第二轮判定）就是这两拍，`error=任务被领取后 37310s 仍未回传 prompt_id，且连续两轮都无人认领它（执行宿主可能已崩溃）— 请重新执行`。⇒ 回收器那句判据本身是好的，坏在**同进程内**足迹没摘 |
+| 对照组（不抢锁） | `claimedAt 01:15:03.651` → `finishedAt 01:15:05.677` = **2.03s** 领取→终态，`FAILED` |
+| 目标行（外部进程从 `RUNNING` 起每 4s 按住写位，共 6 周期 / 41.5s） | `09:15:09` 行日志 `warn 终态失败收口写库撞锁，按预算重试（最多 4 次）` → `09:15:11` `error 终态失败收口写库失败（已试 4 次）：Failed query: … host（SQLite: SQLITE_BUSY / SQLITE_BUSY: database is locked / database is locked）；本进程不再认领这一行，队列继续推进，未收口的行由回收器下一轮对账判定。` ⇒ **原因可见 + 4 次退避 + 穷尽留痕三条同场成立** |
+| 穷尽之后 | 抢锁方自己散掉之后（窗口散掉于 09:15:11 + 4s 那一拍），`09:16:30` 回收器 `checked 2` 并给目标行登记 `warn 任务处于 RUNNING 但还没有 prompt_id 回传，本轮先登记；下一轮仍无人认领才判孤儿`；`09:17:01.113` 判 `FAILED`（**穷尽后 110s**：60s 年龄门槛 + 30s 两轮节拍 + 余量） |
+| 队列有没有被卡住 | 见证行 `claimedAt 09:15:24.517` —— 目标行穷尽（09:15:11）后 **13 秒**就被领走，而不是等那一行收口才往前走 |
+| 留痕落库的时机 | 目标行 `logs` 列在抢锁期间是 NULL（写库正是失败的那件事），到回收器接管那一次的 `persistLogs` 才把上面三行一起刷进去 —— 复演把这一格也读出来了，文档里因此不写「穷尽当场就能在行日志里看到」 |
+
+**dev 那一条没跑完，并且撞出一个新的坏**（如实记，不算已验）：dev 起的是 inline 形态
+（`COMFY_EXECUTOR=host pnpm dev` 这次没带出宿主进程，终态写发生在 Next 进程里）。对照组正常
+（`01:23:34.374` 领取 → `01:23:42.935` 判 `FAILED`，`error=工作流校验未通过（comfy-cli 对照服务端校验）…`
+—— 顺带证明校验失败的用户可见文案是好的）。但外部按锁的那一段结束后，**Next 进程自己把写位扣住不放**：
+`09:24:12` 起领取循环每 2s 报一次 `领取队列任务失败：Failed query: update "task" set "status" = ? …（database is locked）`，
+一直到把 dev 整树杀掉才松开（杀掉后 3ms 就能写）。持锁方就在 Next 进程内（同进程的另一条池化连接），
+机制未定 —— 已开 **ISSUE #1262** 带复现步骤单独查，不混进本刀。
+
+**这一刀的判据清单**（都跑过）：`sqlite-error.test.ts` 8 条、`executor-write-retry.test.ts` 4 条
+（穷尽那条现在断言的是回收器那句 `isTaskClaimedInProcess`，不再是「槽位归还」）、
+`sqlite-pragma-sites.test.ts` 7 条（含把「开机 PRAGMA 覆盖不到池里新开的连接 = 11ms 秒抛」与
+「`timeout` 选项覆盖得到 = 等到并写成功」当场量出来的那两条）、`retry-policy.test.ts` +1 条。
