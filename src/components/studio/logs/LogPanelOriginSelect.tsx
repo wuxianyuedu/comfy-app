@@ -142,6 +142,8 @@ const ORIGIN_LABELS: LogOriginFilter[] = [
   "app",
   "dev",
   "launcher",
+  "shell-launch",
+  "shell",
   CONSOLE_ORIGIN,
 ];
 
@@ -155,6 +157,10 @@ const ORIGIN_TEXT: Record<LogOriginFilter, string> = {
   app: "应用服务",
   dev: "启动",
   launcher: "启动器",
+  /** 壳侧编排链路（log/launcher/shell-launch.log）：双击启动最早的现场。 */
+  "shell-launch": "壳侧编排",
+  /** 壳自持日志（log/shell/shell.log）：壳自己的诊断与编排器转发。 */
+  shell: "壳日志",
   /* 无文件来源的那些行（浏览器 console 拦截、Tauri 事件、全局未捕获错误）。
    * 文案写「控制台 / 全局错误」而不是「其他」：它回答的是「这批行是谁写的」，
    * 让用户一眼知道切过去能看到什么（`ResizeObserver loop…`、未捕获的 Promise

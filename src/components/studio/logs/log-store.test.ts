@@ -198,7 +198,14 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
       warn: 1,
       error: 1,
     });
-    for (const origin of ["dev", "launcher", "app", "app-runtime"] as const) {
+    for (const origin of [
+      "dev",
+      "launcher",
+      "shell-launch",
+      "shell",
+      "app",
+      "app-runtime",
+    ] as const) {
       expect(table[origin].all).toBe(origin === "app" ? 1 : 0);
     }
   });
@@ -224,6 +231,8 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
       all: zero,
       dev: zero,
       launcher: zero,
+      "shell-launch": zero,
+      shell: zero,
       app: zero,
       "app-runtime": zero,
       [CONSOLE_ORIGIN]: zero,
@@ -238,6 +247,8 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
     const logs = [
       makeEntry({ origin: "dev" }),
       makeEntry({ origin: "launcher", level: "warn" }),
+      makeEntry({ origin: "shell-launch" }),
+      makeEntry({ origin: "shell", level: "warn" }),
       makeEntry({ origin: "app" }),
       makeEntry({ origin: "app-runtime", level: "error" }),
       makeEntry({ level: "error" }), // console 拦截
@@ -248,6 +259,8 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
     const buckets = [
       "dev",
       "launcher",
+      "shell-launch",
+      "shell",
       "app",
       "app-runtime",
       CONSOLE_ORIGIN,
@@ -509,6 +522,10 @@ describe("会话起点不得裁掉「每次运行覆盖重建」的来源（ISSU
     /* 每次运行覆盖重建 → 不裁：拿起点去裁只会把本次启动早期的行误判成历史 */
     expect(isSessionScopedOrigin("launcher")).toBe(false);
     expect(isSessionScopedOrigin("dev")).toBe(false);
+    /* 壳侧两路虽然也是追加写累积，但锚点晚于壳的启动报告——裁剪会把
+     * 「为什么起不来」的头几行裁掉，与 launcher / dev 同口径（不裁）。 */
+    expect(isSessionScopedOrigin("shell")).toBe(false);
+    expect(isSessionScopedOrigin("shell-launch")).toBe(false);
     /* 运行期生成、无文件来源 */
     expect(isSessionScopedOrigin(undefined)).toBe(false);
   });
