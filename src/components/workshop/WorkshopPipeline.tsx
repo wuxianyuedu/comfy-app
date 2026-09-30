@@ -10,6 +10,7 @@
 // 本文件只做：取 controller → 组合视图 → 挂载弹层。
 
 import { AgentFab, AgentOverlay } from "~/components/workshop/AgentOverlay";
+import { useDraggablePosition } from "~/components/ui/use-draggable-position";
 import { useWorkshopAgent } from "~/components/workshop/hooks/use-workshop-agent";
 import { ModeContractDialog } from "~/components/workshop/mode-contract/ModeContractDialog";
 import { WorkshopModelAdapterModal } from "~/components/workshop/WorkshopModelAdapterModal";
@@ -23,6 +24,13 @@ import type { WorkshopAgentToolHandlers } from "~/components/workshop/hooks/use-
 import { renderProjectFilm } from "~/lib/film/render-film-client";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { RunControlBar } from "~/components/agent-run/RunControlBar";
+
+/** Agent 入口位置的存储键与默认落点（右下角、让开底部状态栏）。
+ *
+ * 这两个常量提到组件外：它们是 `useDraggablePosition` 的 effect 依赖，
+ * 在渲染里新造对象会让量位置的 effect 每帧重跑。 */
+const AGENT_FAB_POSITION_KEY = "comfyapp:agent-fab-position:v1";
+const AGENT_FAB_DEFAULT_OFFSET = { right: 24, bottom: 40 };
 
 export function WorkshopPipeline() {
   const controller = useWorkshopPipeline();
@@ -53,6 +61,15 @@ export function WorkshopPipeline() {
       }),
   };
   const agentController = useWorkshopAgent(agentHandlers);
+
+  /* Agent 入口的位置：可拖动 + 跨会话记住（`ui/use-draggable-position`）。
+   * 浮层展开后跟着同一份偏移走，所以位置只在 hook 里存一次 —— 常量对象
+   * 提出来，避免每次渲染新造一个把它变成 effect 的依赖。 */
+  const agentFab = useDraggablePosition<HTMLButtonElement>({
+    storageKey: AGENT_FAB_POSITION_KEY,
+    defaultOffset: AGENT_FAB_DEFAULT_OFFSET,
+    onClick: agentController.openAgent,
+  });
 
   return (
     <LLMProvider>
@@ -106,9 +123,21 @@ export function WorkshopPipeline() {
         )}
       </div>
 
-      {/* Agent 指挥助手浮层 */}
-      {!agentController.open && <AgentFab onOpen={agentController.openAgent} />}
-      <AgentOverlay controller={agentController} />
+      {/* Agent 指挥助手：入口与浮层共用同一份位置偏移（拖到哪、浮层就从哪展开）。
+          浮层打开时不再渲染入口 —— 入口那一枚图标的位置由浮层自己接着表达。 */}
+      {!agentController.open && (
+        <AgentFab
+          elementRef={agentFab.elementCallbackRef}
+          onOpen={agentController.openAgent}
+          offset={agentFab.offset}
+          dragging={agentFab.dragging}
+          handleProps={agentFab.handleProps}
+        />
+      )}
+      <AgentOverlay
+        controller={agentController}
+        anchor={agentFab.offset ?? AGENT_FAB_DEFAULT_OFFSET}
+      />
     </LLMProvider>
   );
 }
