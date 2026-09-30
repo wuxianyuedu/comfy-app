@@ -1,5 +1,6 @@
 import type * as LoggerModule from "~/lib/core/logger";
 import type * as EnvfileModule from "~/lib/envfile";
+import { readEnvVar } from "~/lib/envfile";
 import type * as AppSettingsModule from "~/lib/app-settings/app-settings.server";
 import type * as ImportSourceModule from "~/lib/comfyui/importSource";
 /**
@@ -202,8 +203,8 @@ describe("workflow.list", () => {
 /* 「本地文件导入」这两条用例的 fixture 必须落在**允许导入的根**里：create 先过一道
  * 路径闸（只允许 LOCAL_WORKFLOWS_PATH / ComfyUI workflows 目录之下的文件），根外的
  * 路径会在闸上被拦下，根本走不到用例要验的那两个分支（名称回退 / 失败透传）。
- * 根由 router 直接读 `process.env.LOCAL_WORKFLOWS_PATH`（`~/lib/envfile` 那层已被
- * mock 成 null，所以这里只影响这一族的取值）。 */
+ * 根的出处与扫描器同源（`workflow-local-roots` 的 `readEnvVar` 口径）—— 这里
+ * 通过被 mock 的 `readEnvVar` 播种，与生产里的取值链一致。 */
 const WF_ALLOWED_ROOT = path.join(process.cwd(), "wf-allowed-root");
 
 describe("workflow.create", () => {
@@ -212,8 +213,11 @@ describe("workflow.create", () => {
     seedUser(tdb, { id: "user-a", email: "a@test.dev" });
     previousRoots = process.env.LOCAL_WORKFLOWS_PATH;
     process.env.LOCAL_WORKFLOWS_PATH = WF_ALLOWED_ROOT;
+    // 根的取值链已收口到 readEnvVar：播种走被 mock 的同一出处
+    vi.mocked(readEnvVar).mockReturnValue(WF_ALLOWED_ROOT);
   });
   afterEach(() => {
+    vi.mocked(readEnvVar).mockReturnValue(null);
     if (previousRoots === undefined) delete process.env.LOCAL_WORKFLOWS_PATH;
     else process.env.LOCAL_WORKFLOWS_PATH = previousRoots;
   });

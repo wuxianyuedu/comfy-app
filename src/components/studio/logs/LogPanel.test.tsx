@@ -35,18 +35,13 @@ import { LOG_ROW_SINGLE } from "./log-virtual";
 
 /* 本文件是 jsdom 里的**重交互**用例（数百行日志的渲染 + 多次 userEvent 点击），
  * 默认 5s 超时在全量并行负载下不够（翻页 / 回到最新等用例各自偶发超时）。
- * 来由要分两档记，因为**带覆盖率跑与不带上差一截**：
- *   · 证明「不止 2000 条封顶」必须真塞过 `LOG_PAGE_SIZE`（2000+50 条）；
- *   · 安静机单跑**不带** coverage：这两条在 45s 预算内（整文件 33 例 74.6s）；
- *   · 单跑**带** coverage（v8 instrumentation）：`渲染最新一页` 25.0s、
- *     `翻到更早一页` 34.4s —— 已经贴着上一档 45s；
- *   · 全量并行 + coverage（`pnpm test:coverage`，8 worker 抢 CPU）：整文件 176.0s，
- *     上面那两条以 `Test timed out in 45000ms` 收 —— 不是功能坏，是预算贴地。
- * 现在取「单跑带 coverage 的最差实测 ×3.5」= 120s，让覆盖率档与不覆盖档共用一个数
- * （规范 §11.13 的口径：预算按实测留余量，但**这是天花板不是目标**）。
- * ⚠️ 真正的解法是把 2000 行的渲染成本降下来（虚拟化 / 收窄种子），不是继续抬这个数 ——
- *    它每抬一次，「挂死」的检出时间就一起变长。别再给单个用例补显式超时。 */
-vi.setConfig({ testTimeout: 120_000 });
+ * 分页族已改用**小页夹具**（`useSmallPage`）：页数判定、翻页交互、边界禁用、
+ * 新日志横幅的回归不依赖「真塞 2000+ 行」——2000 行满页在 jsdom 的渲染成本
+ * （约 1.5 万节点 × 8~10s）是纯预算损耗，真实浏览器的成本由 e2e 量（本文件
+ * 末尾的分工注释）。20s 取的是现役最重用例（多步翻页交互）实测的 ~3 倍：
+ * 安静机与负载机都过得去，真死循环也不至于等到天荒地老。
+ * ⚠️ 只作用于本文件；别再给单个用例补显式超时（那会让这一档变成五处要同改的数）。 */
+vi.setConfig({ testTimeout: 20_000 });
 
 function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
   return {
@@ -69,10 +64,11 @@ function seed(count: number) {
 }
 
 /**
- * 把每页大小临时改成 200（顶层与 `header` 切片必须同时改，见 §7.20.5）：
- * 交互密集的翻页用例不必每个动作都重排 2000 行——默认页大小的完整渲染
- * 成本已由「渲染最新一页」那条用例覆盖。夹具自带页数（600 / 200 = 3 页），
- * 不依赖 LOG_PAGE_SIZE 的具体值。
+ * 把每页大小临时改成 `size`（顶层与 `header` 切片必须同时改，见 §7.20.5）：
+ * 交互密集的翻页用例不必每个动作都重排 2000 行——分页/横幅/边界禁用的回归
+ * 判定与页大小无关；默认页大小（2000 行）满页渲染的真实成本由 e2e 在真实
+ * 浏览器里量，jsdom 只锁几何与接线。夹具自带页数，不依赖 LOG_PAGE_SIZE 的
+ * 具体值。
  */
 function useSmallPage(size = 200) {
   act(() =>
@@ -177,8 +173,11 @@ function levelButton(label: string): HTMLElement {
 }
 
 describe("LogPanel 日志面板", () => {
-  it("渲染最新一页，并给出总页数（不再只有一个 2000 条的封顶页）", () => {
-    seed(LOG_PAGE_SIZE + 50);
+  it("渲染最新一页，并给出总页数（不再只有一个封顶页）", () => {
+    /* 小页夹具：250 = 页大小 200 × 1 + 50，页数必 >1 且页脚必须分页
+     * —— 旧实现「只渲染最新一页、无翻页」在这里给出 1/1，本用例即红。 */
+    useSmallPage();
+    seed(250);
     render(<LogPanel />);
 
     expect(screen.getByText(/第 1 \/ 2 页/)).toBeInTheDocument();
@@ -187,7 +186,8 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("翻到更早一页能看到第 1 页没有的日志", async () => {
-    seed(LOG_PAGE_SIZE + 50);
+    useSmallPage();
+    seed(250);
     render(<LogPanel />);
     const user = userEvent.setup();
 
@@ -209,7 +209,7 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("停在历史页时提示「有新的日志」并可一键回到最新", async () => {
-    seed(600);
+    seed(400);
     useSmallPage();
     render(<LogPanel />);
     const user = userEvent.setup();
@@ -659,43 +659,45 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("翻页后停在历史页仍能翻回来，且页码始终在范围内", async () => {
-    seed(600);
-    useSmallPage();
+    /* 小页夹具：400 行 / 每页 100 = 4 页——8 次翻页交互每次重排 100 行，
+     * 回归判定（来回翻 + 首末页禁用 + 停留期间页码不跳）与页大小无关。 */
+    seed(400);
+    useSmallPage(100);
     render(<LogPanel />);
     const user = userEvent.setup();
 
     /* 用户反馈「日志这里没法翻页」。这条把「来回翻 + 首末页禁用」钉住：
      * 水位的改动不该让 page 被钳回第 1 页（旧实现里两者互相牵连）。 */
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
-    expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
+    expect(screen.getByText(/第 2 \/ 4 页/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
-    expect(screen.getByText(/第 3 \/ 3 页/)).toBeInTheDocument();
+    expect(screen.getByText(/第 3 \/ 4 页/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "更新的一页" }));
-    expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
+    expect(screen.getByText(/第 2 \/ 4 页/)).toBeInTheDocument();
 
     /* 已经是最新一页时「更新的一页」禁用；最早一页时「更早的一页」禁用 */
     await user.click(screen.getByRole("button", { name: "更新的一页" }));
-    expect(screen.getByText(/第 1 \/ 3 页/)).toBeInTheDocument();
+    expect(screen.getByText(/第 1 \/ 4 页/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "更新的一页" })).toBeDisabled();
 
     /* 翻到历史页后停留期间有新日志：页码不跳、提示出现（用户要的是「我在这看，
      * 别把我拽走」）。 */
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
-    expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
+    expect(screen.getByText(/第 2 \/ 4 页/)).toBeInTheDocument();
     act(() =>
       useLogStore
         .getState()
         .appendFileLogs([makeEntry(9_999, { message: "新来的" })]),
     );
     /* 正好来了 1 条新的（页面仍停在第 2 页，因为还没点「回到最新」） */
-    expect(screen.getByText(/第 2 \/ 4 页/)).toBeInTheDocument();
+    expect(screen.getByText(/第 2 \/ 5 页/)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /有 1 条新的日志/ }),
     ).toBeInTheDocument();
 
     /* 点一下就能回到最新一页 */
     await user.click(screen.getByRole("button", { name: /回到最新/ }));
-    expect(screen.getByText(/第 1 \/ 4 页/)).toBeInTheDocument();
+    expect(screen.getByText(/第 1 \/ 5 页/)).toBeInTheDocument();
   });
 
   /* ISSUE #262 六审：「日志多了我想复制报错文本还是复制不了，我刚选中内容就

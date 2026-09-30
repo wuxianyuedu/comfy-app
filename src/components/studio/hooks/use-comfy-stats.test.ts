@@ -127,3 +127,52 @@ describe("useComfyStats 连续失败迟滞", () => {
     expect(result.current.online).toBe(false);
   });
 });
+
+describe("useComfyStats 进程级判活（与 /api/comfy/queue 同口径）", () => {
+  /** 路由在 HTTP 失败但进程快照判活时的返回形态。 */
+  const aliveButNoAnswer: ComfyStatsPayload = {
+    online: false,
+    processAlive: true,
+    vramUsed: 0,
+    vramFree: 0,
+    vramTotal: 0,
+    ramUsed: 0,
+    ramTotal: 0,
+  };
+
+  it("成功后连续「进程在但没应答」：online 保持 true、保留旧数据置 stale、不翻离线", async () => {
+    fetchMock.mockResolvedValueOnce(onlineStats());
+    const { result } = renderHook(() => useComfyStats());
+    await tick();
+    expect(result.current.online).toBe(true);
+
+    fetchMock.mockResolvedValue(aliveButNoAnswer);
+    for (let i = 0; i < 5; i++) await tick(); // 远超离线阈值，也不该翻离线
+
+    expect(result.current.online).toBe(true);
+    expect(result.current.stats?.vramUsed).toBe(2 * GIB);
+    expect(result.current.stale).toBe(true);
+  });
+
+  it("从没读到过数据 + 进程在跑：online 为 true（连接中），不报未运行", async () => {
+    fetchMock.mockResolvedValue(aliveButNoAnswer);
+    const { result } = renderHook(() => useComfyStats());
+    for (let i = 0; i < 5; i++) await tick();
+
+    expect(result.current.online).toBe(true);
+    expect(result.current.stats).toBeNull();
+  });
+
+  it("进程真没了（无 processAlive）连续达阈值：翻离线", async () => {
+    fetchMock.mockResolvedValueOnce(onlineStats());
+    const { result } = renderHook(() => useComfyStats());
+    await tick();
+    fetchMock.mockResolvedValue({ ...OFFLINE });
+    await tick();
+    await tick();
+    await tick();
+
+    expect(result.current.online).toBe(false);
+    expect(result.current.stats).toEqual(OFFLINE);
+  });
+});
