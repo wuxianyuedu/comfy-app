@@ -1303,3 +1303,68 @@ SIGKILL 落在写文件窗口那半行），`pnpm exec tsc --noEmit --incrementa
 `.next/dev/types/validator.ts(79,51): error TS1005: '>' expected.`，判据 `artifactOnly=true`
 且提示原样打印；把文件按 sha256 还原后 tsc 复绿。**单行也能点破**是这次补的一条用例 ——
 现场是两行，但半截文件有几行报错取决于断在哪，判据不能要求凑够两条。
+
+---
+
+## 27. #1278（整轮命中执行缓存时没有按节点可见性）——落地记录，签字口径 (a)+(c)
+
+#1202 复演时撞出来的另一条账（当时另开 issue，没混进那一刀）：同一份工作流第二次提交若整轮
+命中 ComfyUI 的执行缓存，comfy-cli 一个 `executing` / `progress` 都不发，于是那 ~20s 里
+界面只有「已提交」和收口两行 —— 状态栏「当前节点」空、日志里按节点行 0 条，而任务其实
+**已经跑完了**。这条买的是那种轮次的可解释性，不是类名。
+
+### 签字口径（先取证再签，签完才动代码）
+
+- **(a) 按节点补日志行**：`execution_cached` 一行「≡ comfy-cli 节点 [76:69] 采样去噪（KSampler）
+  命中缓存，跳过」。
+- **(c) 全命中时再给一句汇总**：「≡ 本轮 11 个节点全部命中 ComfyUI 执行缓存（未重算，因此没有
+  按节点进度）」。
+- **(b) 被否**：让 `progressNode` 承载「最后一个被跳过的节点」。那一格在 4-B2 的契约里是
+  「**当前**节点 + 步数」，而缓存轮没有「当前」—— 写进去等于让状态栏显示一个早已跑完的节点。
+  宁缺不假。
+
+### 三种形状的真机读数（同一张图、独立宿主进程、副本库）
+
+| 轮次 | comfy-cli 事件 | 面板里的按节点行 | `progressNode` | 汇总行 |
+| --- | --- | --- | --- | --- |
+| 冷轮（改动前取证） | `executing`×11 + `progress`×25 | 11 行「▶ … 开始执行」 | `{"id":"76:69",…,"classType":"KSampler"}` | 无 |
+| 整轮缓存 | `execution_cached`×11，**0 条** `executing`/`progress` | 11 行「≡ … 命中缓存，跳过」 | **NULL（刻意）** | 1 行「≡ 本轮 11 个节点全部命中…」 |
+| 混合轮（只打掉一句提示词） | `execution_cached`×7 + `executing`×4 + `progress`×25，`converted.node_count=11` | 7 行「≡」+ 4 行「▶」 | KSampler 25/25 | **无（正确沉默）** |
+
+`execution_cached` 与 `executing` 一样**自带** `class_type` 与 `title`（真机原文，别再按
+§13-3C 那句「cli 拿不到类名」推理 —— 那句在 §24 已经被推翻过一次），所以名字不需要回查图；
+而 `converted` 带 `node_count` ⇒ 「全部命中」这个判决有权威总数可用，不必自己数 UI 图。
+
+### 实现落点（一处算法、三个动词）
+
+`executing` / `execution_success` / `execution_cached` 三行里那段
+`[id] 中文名（ClassType）` 收成本模块内的 `nodeTag()`：三行在面板里是同一格内容、只是动词不同，
+各写一遍迟早给出不一致的名字（用例里钉了「同一个节点在两行里同名」）。
+汇总行挂在 `envelope` 分支**收口之前**（那一刻才知道全不全），且要求
+`cachedNodes === nodeCountTotal` —— 混合轮里缺的就是进度而不是定性，写「全部命中」就是假话。
+
+### 复演那条「打掉缓存」的动作本身踩了个坑（值得记，别下一个人重踩）
+
+第一版往 `execPayload` 的子图定义里追加标记，改了 2 个 `CLIPTextEncode`，**两轮照样全缓存**。
+真图上根本不读那份值：提交的是「`execPayload` + `applyApiOverrides(params.workflowInputs)`」
+现场合成的结果，override 会**覆盖**图里那格。改 `params.workflowInputs` 里那条 `text` 之后
+才拿到混合轮。⇒ 以后要造「部分命中」的现场，动 override，不动 UI 图内层 widgets。
+
+### 判据
+
+`src/lib/comfyui/executor-cli-stream.test.ts` 新增 4 条（整文件 23→27 条，`src/lib/comfyui` 全目录
+44 份文件 607 passed）：缓存行文案与「**不写** progressNode」（断言 `onProgress` 一次都没调）、
+同名节点跨动词一致、全命中才给汇总且 `finish` 照旧、混合轮与缺 `converted` 两种情形都不给汇总。
+变异验证：把汇总判据放宽成 `cachedNodes >= 0` 并把缓存行文案换成占位串 → **3 条红**（不是 1 条，
+因为「沉默」与「文案」是两条独立断言），还原后全绿。
+
+### 没做的事
+
+- **WS 那条路径同样不认 `execution_cached`**：`protocol-adapter.ts` 的 `classify()` 只认
+  `executing` / `progress` / `execution_success` / `execution_error`，这一帧落到 `other` 被丢掉。
+  但**本机构造不出这一帧的形状与出现条件**（raw 任务的进度实测走 cli stdout 不走 WS），而 WS 那份
+  历史上是「一帧带 `data.nodes[]` 列表」的形态、与 cli 的逐节点事件不同形。
+  照 #1202 的教训（只接一条等于没修）这条**必须补**，但要先取证再动代码，所以另开 issue 记账，
+  不混进本刀、也不凭代码形状写断言。
+- 缓存轮的「这一轮省了多少时间」没做（需要 ComfyUI 侧的耗时口径，本刀只有 `claimedAt`→`finishedAt`
+  这一格，不足以拆出「重算 vs 取缓存」）。

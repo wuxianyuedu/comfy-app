@@ -5,9 +5,10 @@
  * 从 `executor-cli.ts` 的 `executeViaComfyCli`（473 行）里拆出来的**流处理**：
  *
  *   - {@link createCliEnvelopeParser}  stdout 的「按行聚合 JSON envelope」——
- *     buffer 累积、切行、JSON.parse、按事件类型分发（queued / envelope /
- *     error / progress / executing）。此前这段是 `child.stdout?.on("data", …)`
- *     里的 98 行内联回调，捕获 promptId / patched / finish，**只能起真进程验证**。
+ *     buffer 累积、切行、JSON.parse、按事件类型分发（queued / converted /
+ *     envelope / error / progress / executing / execution_cached）。此前这段是
+ *     `child.stdout?.on("data", …)` 里的 98 行内联回调，捕获 promptId / patched /
+ *     finish，**只能起真进程验证**。
  *   - {@link findNodeErrorsCarrier}    在 comfy-cli 的 envelope 里深搜
  *     `node_errors`（结构化校验错误的唯一真身）。
  *   - {@link createCliStderrSink}      stderr 的「过滤噪声 + 截断 + 汇总」。
@@ -219,6 +220,34 @@ export interface CliEnvelopeParser {
 }
 
 /**
+ * 「面向节点的日志行」里那一段 `[id] 中文名（ClassType）` 的唯一算法。
+ *
+ * 三个事件都用它（`executing` / `execution_success` / `execution_cached`），因为它们
+ * 在面板里是同一格内容，只是动词不同 —— 各写一遍迟早给出不一致的名字。
+ * 类名优先取**事件自带**的那一格（实测 `executing` / `execution_cached` 都带
+ * `class_type`，而且是 ComfyUI 展开子图后的权威值）；没有才退回按图认
+ * （`deps.patched`，与 `progress` 帧同一条路，见 ADR §24）。
+ */
+function nodeTag(
+  evt: JsonRecord,
+  patched: Record<string, unknown> | undefined,
+): string {
+  const node = (evt.node ??
+    (evt.data as JsonRecord | null | undefined)?.node ??
+    "?") as string;
+  const fromEvent =
+    typeof evt.class_type === "string" && evt.class_type
+      ? evt.class_type
+      : undefined;
+  const classType =
+    fromEvent ??
+    (node && node !== "?" ? classTypeForNode(patched, node) : undefined);
+  return classType
+    ? ` [${node}] ${nodeLabel(classType)}（${classType}）`
+    : ` [${node}]`;
+}
+
+/**
  * 构造 stdout 的 `data` 回调：按行聚合 JSON envelope 并按类型分发。
  *
  * 返回的对象可直接喂 chunk 断言，不必起真进程 —— 这正是本项要解决的
@@ -232,6 +261,10 @@ export function createCliEnvelopeParser(
   let buf = "";
   let nonJsonLines = 0;
   let rawJsonLines = 0;
+  /** `converted` 报的节点总数（整轮缓存的判据要它，别自己数图 —— 图是 UI 形状）。 */
+  let nodeCountTotal: number | undefined;
+  /** 本轮命中执行缓存的节点数（ISSUE #1278）。 */
+  let cachedNodes = 0;
 
   const handleLine = (line: string): void => {
     if (!line) return;
@@ -303,7 +336,29 @@ export function createCliEnvelopeParser(
       );
       return;
     }
+    if (evt.type === "converted" && typeof evt.node_count === "number") {
+      nodeCountTotal = evt.node_count;
+      return;
+    }
     if (evt.type === "envelope") {
+      /* 整轮命中 ComfyUI 执行缓存时，`executing` / `progress` 一条都不会来（实测
+       * 序列：converted / prompt_preview / queued / execution_cached×N / executed /
+       * output / envelope）—— 于是整轮约 30s 里界面像「什么都没发生」，只有收口那
+       * 一下（ISSUE #1278）。按节点的现场已由下方 `execution_cached` 分支逐行给出，
+       * 这里补一句总体定性，让人不必自己数那 N 行。
+       * 只在「一个节点都没真跑」时给这句：混合轮里有 executing，那时缺的不是定性
+       * 而是进度，写「全部命中缓存」就是假话。 */
+      if (
+        cachedNodes > 0 &&
+        nodeCountTotal !== undefined &&
+        cachedNodes === nodeCountTotal
+      ) {
+        log(
+          taskId,
+          "info",
+          `≡ 本轮 ${cachedNodes} 个节点全部命中 ComfyUI 执行缓存（未重算，因此没有按节点进度）`,
+        );
+      }
       deps.finish(Boolean(evt.ok), evt);
       return;
     }
@@ -345,25 +400,21 @@ export function createCliEnvelopeParser(
       );
       return;
     }
+    if (evt.type === "execution_cached") {
+      /* 缓存跳过的节点：给一行按节点的现场，但**不写 progressNode** —— 那一格在
+       * 4-B2 的契约里是「当前节点 + 步数」，而缓存轮没有「当前」（这一格瞬时就是
+       * 终点，写进去等于让状态栏显示一个早已跑完的节点）。宁缺不假。 */
+      cachedNodes++;
+      log(
+        taskId,
+        "info",
+        `≡ comfy-cli 节点${nodeTag(evt, deps.patched)} 命中缓存，跳过`,
+      );
+      return;
+    }
     if (evt.type === "executing" || evt.type === "execution_success") {
       // 原样转发 CLI 事件，给到「按节点」的可见性。
-      const node = (evt.node ??
-        (evt.data as JsonRecord | null | undefined)?.node ??
-        "?") as string;
-      /* 类名优先用事件自带的那一格（实测 `executing` 带 `class_type`，而且它是
-       * ComfyUI 展开子图后的权威值）；没有才退回按图认（与 progress 帧同一条路）。 */
-      const fromEvent =
-        typeof evt.class_type === "string" && evt.class_type
-          ? evt.class_type
-          : undefined;
-      const classType =
-        fromEvent ??
-        (node && node !== "?"
-          ? classTypeForNode(deps.patched, String(node))
-          : undefined);
-      const who = classType
-        ? ` [${node}] ${nodeLabel(classType)}（${classType}）`
-        : ` [${node}]`;
+      const who = nodeTag(evt, deps.patched);
       log(
         taskId,
         "info",
