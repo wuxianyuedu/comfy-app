@@ -75,6 +75,280 @@ export interface BuildInitialNodesCtx {
   hostNodeId?: string;
 }
 
+/**
+ * 边界 pin → wfGroup(wfIoPort …) 栏杆布局（从 `buildInitialNodes` 拆出，§12.13）。
+ *
+ * The user asked: "子工作流的输入节点和输出参数节点不需要可用单独拖动，
+ * 支持整体拖动即可，参数间的距离没必要那么大，紧凑些，再像图中那样
+ * 加个边框就行了". So:
+ *   • 每条栏杆（输入 / 输出各一条）各自包在一个 wfGroup 矩形里，用紫色可
+ *     拖拽样式（draggable: true + pointerEvents: auto + cursor: move），
+ *     用户抓一次分组，整列一起滑走。
+ *   • 各个 wfIoPort 子节点带 parentId + extent: "parent" + draggable: false，
+ *     React Flow 因此把它们锁在分组框内并随分组自动移动。
+ *   • 纵向间距用 PORT_ROW_GAP（4px）、行高用 IO_PORT_HEIGHT（22px）。
+ *   • 分组位置经 `detail.positions["grp:bpin:…"]` 落库：会话里保存过的覆盖
+ *     位置优先于「按内部包围盒锚定」的布局兜底——前者是用户亲手拖出来的结果。
+ */
+/* IO 端口节点的尺寸是文件顶部的模块级常量（IO_PORT_HEIGHT /
+ *  PORT_ROW_GAP / GROUP_*）—— 下面的布局过程与 WfIoPortNode 渲染器
+ *  共用同一份，两边不会各自漂移。 */
+/* ── 边界 pin → wfGroup(wfIoPort …) ──
+ *
+ *  The user asked: "子工作流的输入节点和输出参数节点不需要可用单独拖动，
+ *  支持整体拖动即可，参数间的距离没必要那么大，紧凑些，再像图中那样
+ *  加个边框就行了".  So:
+ *        *    • 每条栏杆（输入 / 输出各一条）现在各自包在一个 wfGroup 矩形里，
+ *        *      用紫色可拖拽样式（draggable: true + pointerEvents: auto +
+ *        *      cursor: move）。用户抓一次分组，整列一起滑走。
+ *        *    • 各个 wfIoPort 子节点带 parentId: <分组 id> + extent: "parent" +
+ *        *      draggable: false，React Flow 因此把它们锁在分组框内，
+ *        *      并随着分组自动移动（见下一条）。
+ *      parent's transform.
+ *        *    • 纵向间距用 PORT_ROW_GAP（4px）、行高用 IO_PORT_HEIGHT（22px）——
+ *        *      行贴得很紧而标签仍不被裁。
+ *      touching.
+ *        *    • 分组位置经 `detail.positions["grp:bpin:…"]` 落库。会话里保存过的
+ *        *      覆盖位置优先于「按内部包围盒锚定」的布局兜底 —— 前者是用户亲手
+ *        *      拖出来的结果。早先「一个 pin 一张卡片」的渲染把位置写进
+ *        *      positionsById（那是空操作），于是每次刷新都退回包围盒锚定；
+ *        *      位置**落在分组上**才让挪过的列留得住。 */
+const buildBoundaryPinNode = (
+  pin: BoundaryPin,
+  kind: "input" | "output",
+  parentId: string,
+  relY: number,
+  relX: number,
+): Node => ({
+  id: `bpin:${pin.id}`,
+  type: "wfIoPort",
+  parentId,
+  extent: "parent",
+  position: { x: relX, y: relY },
+  zIndex: IO_PORT_Z,
+  draggable: false,
+  selectable: true,
+  connectable: false,
+  style: { width: IO_PORT_WIDTH, height: IO_PORT_HEIGHT },
+  data: {
+    /* 显示名链路：边界 pin 的 `label` 是作者设的业务名（`FRAMES`、
+     *  `IMAGE_FINAL`、`MODEL_HIGH_1st`），**优先**读它。取不到再回落
+     *  `localized`（ComfyUI 的 i18n），最后回落 `name` ——
+     * 保证标题永远不会是空的。链路与 WfSubgraphNode.outputs.display
+     * 一致，两层渲染出同一个字符串；`name === type` 时 tooltip 会补上
+     * 解析出的类型以便区分。 */
+    title: pin.label ?? pin.localized ?? pin.name ?? "",
+    type: pin.type,
+    direction: kind,
+    parentNodeId: null,
+    parentNodeTitle: "",
+    connectsTo: null,
+    connectsFrom: null,
+  },
+});
+/* wfIoPort 子节点在它所属栏杆分组里的 X 锚点。
+ *
+ *  两条栏杆各自从所属 wfGroup 的**角**（右上 / 左上）锚定，而不是都从
+ *  同一条左边缘锚定：早先的输入侧布局把端口贴死在 wfGroup 的右边框上
+ *  （`relX = 2 * GROUP_PAD_X`），于是 `right:-4` 的 handle 整个**露在框外**
+ *  ——截图里能看到绿色的圆点溢过红色的 Inputs 框。
+ *
+ *   - 输入 pin：名字在端口右侧（justify-end → 标签贴右边缘）；端口从
+ *     wfGroup 的**右上角**锚定，让它的右边缘落在 wfGroup 边框内侧
+ *     GROUP_PAD_X 处。handle（`right:-4`）最终落在框内 6px 处，
+ *     与输出行严格镜像。⇒ relX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X。
+ *   - 输出 pin：名字在端口左侧（justify-start → 标签贴左边缘）；端口从
+ *     wfGroup 的**左上角**锚定，让它的左边缘落在 wfGroup 边框内侧
+ *     GROUP_PAD_X 处。handle（`left:-4`）最终落在框内 6px 处。
+ *     ⇒ relX = GROUP_PAD_X。 */
+const wfGroupWidth = IO_PORT_WIDTH + 2 * GROUP_PAD_X;
+const inputRelX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X;
+const outputRelX = GROUP_PAD_X;
+/* 为整条栏杆建一个 wfGroup 节点。`draggable: true` 把 WfGroupNode 翻到
+ *  交互模式（pointerEvents: auto、cursor: move），React Flow 会自动带上
+ *  声明了 extent:"parent" 的子节点。高度这里**直接给** ——
+ *  下面各行 pin 的纵向偏移是变化的，套不进早先那个
+ *  `pinCount * IO_PORT_HEIGHT + (n-1)*PORT_ROW_GAP` 公式。 */
+const buildBoundaryGroup = (
+  id: string,
+  title: string,
+  pos: { x: number; y: number },
+  height: number,
+): Node | null => {
+  if (height <= 0) return null;
+  return {
+    id,
+    type: "wfGroup",
+    position: pos,
+    zIndex: GROUP_Z,
+    draggable: true,
+    selectable: true,
+    connectable: false,
+    data: { title, color: GROUP_RAIL_COLOR, draggable: true },
+    style: { width: IO_PORT_WIDTH + 2 * GROUP_PAD_X, height },
+  };
+};
+/* 算出栏杆锚点位置，必要时回落到按包围盒锚定的默认值。
+ *  `savedGroupPos` 里可能已经有上个会话里用户拖出来的位置 —— 尊重它。
+ *
+ *  这里**不**把两条栏杆硬凑成包围盒对齐的一列，而是按 ComfyUI 存在
+ *  `boundaryPins.inputs[i].pos` / `boundaryPins.outputs[i].pos` 上的原始
+ *  坐标给每个分组锚定。那些坐标是「未改动的工作流里，对应内部槽位端口
+ *  所在的绝对画布位置」—— 正是用户当时指的东西。
+ *  screenshot #2 ("这里有子图的输入节点和输出节点的位置，要按照
+ *  这个来").  The fallback (bbox-anchored) only kicks in when those
+ *      *  原始位置缺失或全是 0 时才落回包围盒（较旧的、或手搓的工作流）。
+ *      *  pin 的 y 坐标按 `rawPinY - groupY` 推导，
+ *      *  这样各行的纵向间距才保持原样。 */
+function layoutBoundaryPins(
+  detail: WorkflowDetail,
+  middlePos: Record<string, { x: number; y: number }>,
+): Node[] {
+  if (!detail.boundaryPins) return [];
+  const mIds = Object.keys(middlePos);
+  if (mIds.length === 0) return [];
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity;
+  for (const id of mIds) {
+    const p = middlePos[id];
+    if (p!.x < minX) minX = p!.x;
+    if (p!.x > maxX) maxX = p!.x;
+    if (p!.y < minY) minY = p!.y;
+  }
+  /* 参考布局：┃ 左输入列 ┃ 中间画布列 ┃ 右输出列 ┃。
+   *  每条栏杆与中间包围盒之间的空隙必须 ≥ 一个中间节点的宽度（约 280px）
+   *  再加上一点呼吸余量，否则 wfIoPort 的标签会被埋进中间的 WfNode 卡片里。
+   *  工作流带真实 pin.pos 坐标时（常见路径）**优先**走下面的原始 pin 锚定；
+   *  这个 360px 的包围盒兜底只在所有 pin.pos 都缺失或为 0 时才生效。 */
+  const RAIL_GAP = 360;
+  const leftRailX = minX - RAIL_GAP;
+  const rightRailX = maxX + RAIL_GAP;
+
+  const rawPosOf = (pin: BoundaryPin): [number, number] | null => {
+    if (Array.isArray(pin.pos) && pin.pos.length >= 2) {
+      const x = Number(pin.pos[0]) || 0;
+      const y = Number(pin.pos[1]) || 0;
+      /* (0,0) 一律当作「没提供」—— 原件里没有该 pin 的位置时就是这个形态。
+       *  回落到按包围盒锚定的栏杆，
+       *  总好过把所有 pin 都堆在画布原点。 */
+      if (x !== 0 || y !== 0) return [x, y];
+    }
+    return null;
+  };
+  const inputsRaw = (detail.boundaryPins.inputs ?? []).map(rawPosOf);
+  const outputsRaw = (detail.boundaryPins.outputs ?? []).map(rawPosOf);
+  /* 分组的默认锚点：取所有带真实原始位置的 pin 里最小的 x
+   *  （输入取最左、输出取最右）与最小的 y，然后把分组原点往左上挪，
+   *  让最上面那个 pin 落在标题栏 + 约 GROUP_PAD_X 之内。
+   *  输入与输出是「朝内」的，所以左侧取 minX、右侧取 maxX。 */
+  const computeGroupDefault = (
+    list: ([number, number] | null)[],
+    side: "left" | "right",
+  ): { x: number; y: number } | null => {
+    let anchorX = side === "left" ? Infinity : -Infinity;
+    let minRy = Infinity;
+    let any = false;
+    for (const p of list) {
+      if (!p) continue;
+      any = true;
+      if (side === "left" ? p[0] < anchorX : p[0] > anchorX) anchorX = p[0];
+      if (p[1] < minRy) minRy = p[1];
+    }
+    if (!any) return null;
+    return {
+      x: anchorX - GROUP_PAD_X,
+      y: minRy - GROUP_TITLE_BAR - GROUP_PAD_X,
+    };
+  };
+  const inputsDefault = computeGroupDefault(inputsRaw, "left");
+  const outputsDefault = computeGroupDefault(outputsRaw, "right");
+
+  const positionsById = detail.positions ?? {};
+  const savedIn: [number, number] | undefined =
+    positionsById["grp:bpin:inputs"];
+  const savedOut: [number, number] | undefined =
+    positionsById["grp:bpin:outputs"];
+
+  const inputsGroupPos = savedIn
+    ? { x: savedIn[0], y: savedIn[1] }
+    : (inputsDefault ?? {
+        x: leftRailX - GROUP_PAD_X,
+        y: minY - GROUP_TITLE_BAR,
+      });
+  const outputsGroupPos = savedOut
+    ? { x: savedOut[0], y: savedOut[1] }
+    : (outputsDefault ?? {
+        x: rightRailX - GROUP_PAD_X,
+        y: minY - GROUP_TITLE_BAR,
+      });
+
+  const stackRel = (i: number) =>
+    GROUP_TITLE_BAR + i * (IO_PORT_HEIGHT + PORT_ROW_GAP);
+  const inputsRelYs = detail.boundaryPins.inputs.map((_p, i) => {
+    const r = inputsRaw[i];
+    return r ? r[1] - inputsGroupPos.y : stackRel(i);
+  });
+  const outputsRelYs = detail.boundaryPins.outputs.map((_p, i) => {
+    const r = outputsRaw[i];
+    return r ? r[1] - outputsGroupPos.y : stackRel(i);
+  });
+  const minHeight = GROUP_TITLE_BAR + GROUP_PAD_Y_BOTTOM;
+  const computedHeight = (relYs: number[]): number => {
+    if (relYs.length === 0) return 0;
+    return Math.max(
+      minHeight,
+      Math.max(...relYs) + IO_PORT_HEIGHT + GROUP_PAD_Y_BOTTOM,
+    );
+  };
+
+  const out: Node[] = [];
+
+  const inputsGroup = buildBoundaryGroup(
+    "grp:bpin:inputs",
+    "Inputs",
+    inputsGroupPos,
+    computedHeight(inputsRelYs),
+  );
+  if (inputsGroup) {
+    out.push(inputsGroup);
+    detail.boundaryPins.inputs.forEach((pin, i) => {
+      out.push(
+        buildBoundaryPinNode(
+          pin,
+          "input",
+          "grp:bpin:inputs",
+          inputsRelYs[i]!,
+          inputRelX,
+        ),
+      );
+    });
+  }
+
+  const outputsGroup = buildBoundaryGroup(
+    "grp:bpin:outputs",
+    "Outputs",
+    outputsGroupPos,
+    computedHeight(outputsRelYs),
+  );
+  if (outputsGroup) {
+    out.push(outputsGroup);
+    detail.boundaryPins.outputs.forEach((pin, i) => {
+      out.push(
+        buildBoundaryPinNode(
+          pin,
+          "output",
+          "grp:bpin:outputs",
+          outputsRelYs[i]!,
+          outputRelX,
+        ),
+      );
+    });
+  }
+
+  return out;
+}
+
 export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   const {
     detail,
@@ -339,264 +613,6 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     (node) => !isNoteType(node.class_type),
   );
 
-  /* IO 端口节点的尺寸是文件顶部的模块级常量（IO_PORT_HEIGHT /
-   *  PORT_ROW_GAP / GROUP_*）—— 下面的布局过程与 WfIoPortNode 渲染器
-   *  共用同一份，两边不会各自漂移。 */
-  /* ── 边界 pin → wfGroup(wfIoPort …) ──
-   *
-   *  The user asked: "子工作流的输入节点和输出参数节点不需要可用单独拖动，
-   *  支持整体拖动即可，参数间的距离没必要那么大，紧凑些，再像图中那样
-   *  加个边框就行了".  So:
-   *        *    • 每条栏杆（输入 / 输出各一条）现在各自包在一个 wfGroup 矩形里，
-   *        *      用紫色可拖拽样式（draggable: true + pointerEvents: auto +
-   *        *      cursor: move）。用户抓一次分组，整列一起滑走。
-   *        *    • 各个 wfIoPort 子节点带 parentId: <分组 id> + extent: "parent" +
-   *        *      draggable: false，React Flow 因此把它们锁在分组框内，
-   *        *      并随着分组自动移动（见下一条）。
-   *      parent's transform.
-   *        *    • 纵向间距用 PORT_ROW_GAP（4px）、行高用 IO_PORT_HEIGHT（22px）——
-   *        *      行贴得很紧而标签仍不被裁。
-   *      touching.
-   *        *    • 分组位置经 `detail.positions["grp:bpin:…"]` 落库。会话里保存过的
-   *        *      覆盖位置优先于「按内部包围盒锚定」的布局兜底 —— 前者是用户亲手
-   *        *      拖出来的结果。早先「一个 pin 一张卡片」的渲染把位置写进
-   *        *      positionsById（那是空操作），于是每次刷新都退回包围盒锚定；
-   *        *      位置**落在分组上**才让挪过的列留得住。 */
-  const buildBoundaryPinNode = (
-    pin: BoundaryPin,
-    kind: "input" | "output",
-    parentId: string,
-    relY: number,
-    relX: number,
-  ): Node => ({
-    id: `bpin:${pin.id}`,
-    type: "wfIoPort",
-    parentId,
-    extent: "parent",
-    position: { x: relX, y: relY },
-    zIndex: IO_PORT_Z,
-    draggable: false,
-    selectable: true,
-    connectable: false,
-    style: { width: IO_PORT_WIDTH, height: IO_PORT_HEIGHT },
-    data: {
-      /* 显示名链路：边界 pin 的 `label` 是作者设的业务名（`FRAMES`、
-       *  `IMAGE_FINAL`、`MODEL_HIGH_1st`），**优先**读它。取不到再回落
-       *  `localized`（ComfyUI 的 i18n），最后回落 `name` ——
-       * 保证标题永远不会是空的。链路与 WfSubgraphNode.outputs.display
-       * 一致，两层渲染出同一个字符串；`name === type` 时 tooltip 会补上
-       * 解析出的类型以便区分。 */
-      title: pin.label ?? pin.localized ?? pin.name ?? "",
-      type: pin.type,
-      direction: kind,
-      parentNodeId: null,
-      parentNodeTitle: "",
-      connectsTo: null,
-      connectsFrom: null,
-    },
-  });
-  /* wfIoPort 子节点在它所属栏杆分组里的 X 锚点。
-   *
-   *  两条栏杆各自从所属 wfGroup 的**角**（右上 / 左上）锚定，而不是都从
-   *  同一条左边缘锚定：早先的输入侧布局把端口贴死在 wfGroup 的右边框上
-   *  （`relX = 2 * GROUP_PAD_X`），于是 `right:-4` 的 handle 整个**露在框外**
-   *  ——截图里能看到绿色的圆点溢过红色的 Inputs 框。
-   *
-   *   - 输入 pin：名字在端口右侧（justify-end → 标签贴右边缘）；端口从
-   *     wfGroup 的**右上角**锚定，让它的右边缘落在 wfGroup 边框内侧
-   *     GROUP_PAD_X 处。handle（`right:-4`）最终落在框内 6px 处，
-   *     与输出行严格镜像。⇒ relX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X。
-   *   - 输出 pin：名字在端口左侧（justify-start → 标签贴左边缘）；端口从
-   *     wfGroup 的**左上角**锚定，让它的左边缘落在 wfGroup 边框内侧
-   *     GROUP_PAD_X 处。handle（`left:-4`）最终落在框内 6px 处。
-   *     ⇒ relX = GROUP_PAD_X。 */
-  const wfGroupWidth = IO_PORT_WIDTH + 2 * GROUP_PAD_X;
-  const inputRelX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X;
-  const outputRelX = GROUP_PAD_X;
-  /* 为整条栏杆建一个 wfGroup 节点。`draggable: true` 把 WfGroupNode 翻到
-   *  交互模式（pointerEvents: auto、cursor: move），React Flow 会自动带上
-   *  声明了 extent:"parent" 的子节点。高度这里**直接给** ——
-   *  下面各行 pin 的纵向偏移是变化的，套不进早先那个
-   *  `pinCount * IO_PORT_HEIGHT + (n-1)*PORT_ROW_GAP` 公式。 */
-  const buildBoundaryGroup = (
-    id: string,
-    title: string,
-    pos: { x: number; y: number },
-    height: number,
-  ): Node | null => {
-    if (height <= 0) return null;
-    return {
-      id,
-      type: "wfGroup",
-      position: pos,
-      zIndex: GROUP_Z,
-      draggable: true,
-      selectable: true,
-      connectable: false,
-      data: { title, color: GROUP_RAIL_COLOR, draggable: true },
-      style: { width: IO_PORT_WIDTH + 2 * GROUP_PAD_X, height },
-    };
-  };
-  /* 算出栏杆锚点位置，必要时回落到按包围盒锚定的默认值。
-   *  `savedGroupPos` 里可能已经有上个会话里用户拖出来的位置 —— 尊重它。
-   *
-   *  这里**不**把两条栏杆硬凑成包围盒对齐的一列，而是按 ComfyUI 存在
-   *  `boundaryPins.inputs[i].pos` / `boundaryPins.outputs[i].pos` 上的原始
-   *  坐标给每个分组锚定。那些坐标是「未改动的工作流里，对应内部槽位端口
-   *  所在的绝对画布位置」—— 正是用户当时指的东西。
-   *  screenshot #2 ("这里有子图的输入节点和输出节点的位置，要按照
-   *  这个来").  The fallback (bbox-anchored) only kicks in when those
-   *      *  原始位置缺失或全是 0 时才落回包围盒（较旧的、或手搓的工作流）。
-   *      *  pin 的 y 坐标按 `rawPinY - groupY` 推导，
-   *      *  这样各行的纵向间距才保持原样。 */
-  const layoutBoundaryPins = (
-    middlePos: Record<string, { x: number; y: number }>,
-  ): Node[] => {
-    if (!detail.boundaryPins) return [];
-    const mIds = Object.keys(middlePos);
-    if (mIds.length === 0) return [];
-    let minX = Infinity,
-      maxX = -Infinity,
-      minY = Infinity;
-    for (const id of mIds) {
-      const p = middlePos[id];
-      if (p!.x < minX) minX = p!.x;
-      if (p!.x > maxX) maxX = p!.x;
-      if (p!.y < minY) minY = p!.y;
-    }
-    /* 参考布局：┃ 左输入列 ┃ 中间画布列 ┃ 右输出列 ┃。
-     *  每条栏杆与中间包围盒之间的空隙必须 ≥ 一个中间节点的宽度（约 280px）
-     *  再加上一点呼吸余量，否则 wfIoPort 的标签会被埋进中间的 WfNode 卡片里。
-     *  工作流带真实 pin.pos 坐标时（常见路径）**优先**走下面的原始 pin 锚定；
-     *  这个 360px 的包围盒兜底只在所有 pin.pos 都缺失或为 0 时才生效。 */
-    const RAIL_GAP = 360;
-    const leftRailX = minX - RAIL_GAP;
-    const rightRailX = maxX + RAIL_GAP;
-
-    const rawPosOf = (pin: BoundaryPin): [number, number] | null => {
-      if (Array.isArray(pin.pos) && pin.pos.length >= 2) {
-        const x = Number(pin.pos[0]) || 0;
-        const y = Number(pin.pos[1]) || 0;
-        /* (0,0) 一律当作「没提供」—— 原件里没有该 pin 的位置时就是这个形态。
-         *  回落到按包围盒锚定的栏杆，
-         *  总好过把所有 pin 都堆在画布原点。 */
-        if (x !== 0 || y !== 0) return [x, y];
-      }
-      return null;
-    };
-    const inputsRaw = (detail.boundaryPins.inputs ?? []).map(rawPosOf);
-    const outputsRaw = (detail.boundaryPins.outputs ?? []).map(rawPosOf);
-    /* 分组的默认锚点：取所有带真实原始位置的 pin 里最小的 x
-     *  （输入取最左、输出取最右）与最小的 y，然后把分组原点往左上挪，
-     *  让最上面那个 pin 落在标题栏 + 约 GROUP_PAD_X 之内。
-     *  输入与输出是「朝内」的，所以左侧取 minX、右侧取 maxX。 */
-    const computeGroupDefault = (
-      list: ([number, number] | null)[],
-      side: "left" | "right",
-    ): { x: number; y: number } | null => {
-      let anchorX = side === "left" ? Infinity : -Infinity;
-      let minRy = Infinity;
-      let any = false;
-      for (const p of list) {
-        if (!p) continue;
-        any = true;
-        if (side === "left" ? p[0] < anchorX : p[0] > anchorX) anchorX = p[0];
-        if (p[1] < minRy) minRy = p[1];
-      }
-      if (!any) return null;
-      return {
-        x: anchorX - GROUP_PAD_X,
-        y: minRy - GROUP_TITLE_BAR - GROUP_PAD_X,
-      };
-    };
-    const inputsDefault = computeGroupDefault(inputsRaw, "left");
-    const outputsDefault = computeGroupDefault(outputsRaw, "right");
-
-    const positionsById = detail.positions ?? {};
-    const savedIn: [number, number] | undefined =
-      positionsById["grp:bpin:inputs"];
-    const savedOut: [number, number] | undefined =
-      positionsById["grp:bpin:outputs"];
-
-    const inputsGroupPos = savedIn
-      ? { x: savedIn[0], y: savedIn[1] }
-      : (inputsDefault ?? {
-          x: leftRailX - GROUP_PAD_X,
-          y: minY - GROUP_TITLE_BAR,
-        });
-    const outputsGroupPos = savedOut
-      ? { x: savedOut[0], y: savedOut[1] }
-      : (outputsDefault ?? {
-          x: rightRailX - GROUP_PAD_X,
-          y: minY - GROUP_TITLE_BAR,
-        });
-
-    const stackRel = (i: number) =>
-      GROUP_TITLE_BAR + i * (IO_PORT_HEIGHT + PORT_ROW_GAP);
-    const inputsRelYs = detail.boundaryPins.inputs.map((_p, i) => {
-      const r = inputsRaw[i];
-      return r ? r[1] - inputsGroupPos.y : stackRel(i);
-    });
-    const outputsRelYs = detail.boundaryPins.outputs.map((_p, i) => {
-      const r = outputsRaw[i];
-      return r ? r[1] - outputsGroupPos.y : stackRel(i);
-    });
-    const minHeight = GROUP_TITLE_BAR + GROUP_PAD_Y_BOTTOM;
-    const computedHeight = (relYs: number[]): number => {
-      if (relYs.length === 0) return 0;
-      return Math.max(
-        minHeight,
-        Math.max(...relYs) + IO_PORT_HEIGHT + GROUP_PAD_Y_BOTTOM,
-      );
-    };
-
-    const out: Node[] = [];
-
-    const inputsGroup = buildBoundaryGroup(
-      "grp:bpin:inputs",
-      "Inputs",
-      inputsGroupPos,
-      computedHeight(inputsRelYs),
-    );
-    if (inputsGroup) {
-      out.push(inputsGroup);
-      detail.boundaryPins.inputs.forEach((pin, i) => {
-        out.push(
-          buildBoundaryPinNode(
-            pin,
-            "input",
-            "grp:bpin:inputs",
-            inputsRelYs[i]!,
-            inputRelX,
-          ),
-        );
-      });
-    }
-
-    const outputsGroup = buildBoundaryGroup(
-      "grp:bpin:outputs",
-      "Outputs",
-      outputsGroupPos,
-      computedHeight(outputsRelYs),
-    );
-    if (outputsGroup) {
-      out.push(outputsGroup);
-      detail.boundaryPins.outputs.forEach((pin, i) => {
-        out.push(
-          buildBoundaryPinNode(
-            pin,
-            "output",
-            "grp:bpin:outputs",
-            outputsRelYs[i]!,
-            outputRelX,
-          ),
-        );
-      });
-    }
-
-    return out;
-  };
-
   /* 内层的图节点一律渲染成完整的 WfNode / WfSubgraphNode 卡片 ——
    *  不再按 is_input_endpoint / is_output_endpoint 把某些节点换成 wfIoPort。
    *  那种做法在「每个节点同时带两个标记」的子图上直接塌掉，
@@ -656,7 +672,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       ...groupNodes,
       ...noteNodes,
       ...middleNodes,
-      ...layoutBoundaryPins(middlePosById),
+      ...layoutBoundaryPins(detail, middlePosById),
     ];
   }
 
@@ -692,7 +708,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       ...groupNodes,
       ...noteNodes,
       ...middleNodes,
-      ...layoutBoundaryPins(middlePosById),
+      ...layoutBoundaryPins(detail, middlePosById),
     ];
   }
 
@@ -710,6 +726,6 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     ...groupNodes,
     ...noteNodes,
     ...middleNodes,
-    ...layoutBoundaryPins(middlePosById),
+    ...layoutBoundaryPins(detail, middlePosById),
   ];
 }
