@@ -12,7 +12,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
@@ -92,22 +91,6 @@ export function AppShell({
       className="h-full min-h-0"
     >
       <Sidebar collapsible="icon">
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                tooltip="Comfy-APP"
-                onClick={() => onSelect("home")}
-              >
-                <span className="text-ink-strong grid flex-1 text-left text-sm leading-tight font-semibold">
-                  Comfy-APP
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupContent>
