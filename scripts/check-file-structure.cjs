@@ -299,6 +299,18 @@ const DOMAIN_EXEMPT = new Set([
    * 且「指数退避 vs 固定间隔」的分野是跨域的同一类判据。进任何子域都会让
    * 其余侧反向依赖它 —— 与 `progress` / `list-filter` 同款：顶层单例。 */
   "src/lib/retry-policy.ts",
+  /* 「打开一份 SQLite 连接要跑哪几条 PRAGMA」的唯一清单（ISSUE #1250）：Next 主库
+   *（`src/server/db.ts`）、工坊库（`src/server/workshop/db.ts`）与执行宿主自己的库
+   *（`src/lib/comfyui/host-runtime.ts`）三侧连接都用它；启动器那侧是非 TS 宿主、
+   * 引不到本模块，由 `tests/sqlite-pragma-sites.test.ts` 核两边同源。为什么必须在
+   * 一处：`busy_timeout` 是**每条连接**的等待预算，漏在哪一侧就那一侧照旧撞锁报错
+   * —— 与 `endpoints` / `retry-policy` 同款：顶层单例。 */
+  "src/lib/sqlite-pragmas.ts",
+  /* 「SQLite 写失败的原因怎么取出来、哪一族值得等一等再试」（ISSUE #1250）：
+   * 收口写重试（`src/lib/comfyui/executor-write-retry.ts`）是现在的消费方，但判据是
+   * **驱动的错误码族**、不是执行域的形状 —— 放进 `comfyui/` 会让「锁」这个 SQLite
+   * 概念变成某个域的私有语义，下一个直连库的写路径就无法复用同款判断。同款顶层单例。 */
+  "src/lib/sqlite-error.ts",
   /* 「把一个数夹进一个区间」的唯一出口（ISSUE #672）：视图层（滑块填充比例、
    * 数值步进器、图片缩放倍数、画布缩放、镜头时长）与 `src/lib` / `src/server`
    *（日志字节切片、日志会话时间戳、序号夹取、VRAM 读数、影片镜头数、落库前
