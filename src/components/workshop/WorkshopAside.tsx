@@ -1,8 +1,10 @@
 "use client";
 
-// 工坊右侧栏：缺失素材、生成资源（本地 Checkpoint）、资源库清单。纯展示。
+// 工坊右侧栏：缺失素材、生成资源（本地 Checkpoint）、资源库计数。
+// 纯展示 + 一个跳转入口（「在资源库中打开」广播 `workspace:navigate`）。
 
 import { Button } from "~/components/ui/button";
+import { emitAppEvent } from "~/lib/app-events";
 import { cn } from "~/lib/utils";
 import { Icon } from "~/components/ui/icon";
 import { FieldLabel } from "~/components/ui/field";
@@ -210,9 +212,19 @@ export function WorkshopAside({
             </div>
           ))}
         </div>
-        <p className="text-faint mt-3 text-[11px] leading-relaxed">
-          参考图、音效等素材在画布的素材库导入与管理，这里只做汇总展示。
-        </p>
+        {/* 「资源库」现在是项目界面的一级页签（画布 / 工坊 / 资源库 / 产出 / 成片），
+            这里只留计数与一个入口 —— 刻意的分工：工坊右栏回答「这一步的材料够不够」，
+            真正的分类 / 搜索 / 上传 / 删除都在那一页里做，不在两处各摆一套。 */}
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() =>
+            emitAppEvent("workspace:navigate", { view: "library" })
+          }
+          className="text-muted-foreground bg-subtle hover:bg-surface-2 mt-3 w-full rounded-lg py-2.5 text-xs"
+        >
+          在资源库中打开 →
+        </Button>
       </div>
     </aside>
   );

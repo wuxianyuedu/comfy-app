@@ -21,6 +21,9 @@ export type { WorkspaceView } from "./NavItems";
 export { WorksGallery } from "./WorksGallery";
 export { ProjectOutputs } from "./ProjectOutputs";
 
+/* 资源库：素材管理从工坊右栏的计数卡提成项目页签（与本文件同层的一级视图）。 */
+export { ResourceLibrary } from "./library/ResourceLibrary";
+
 export { ModelLibrary } from "./ModelLibrary";
 
 export { WorkflowLibrary } from "./workflow-library/WorkflowLibrary";
@@ -31,6 +34,12 @@ export { TrainingStudio } from "./TrainingStudio";
 
 export { FilmStudio } from "./FilmStudio";
 export { ProjectCanvas } from "./ProjectCanvas";
+
+/* 项目主页（进入项目后的落点）：状态总览 + AI 自主成片操纵台。
+ * 走自己的 barrel（`project-home/index.ts`）—— 它与 `ProjectCanvas` 一样是
+ * 一级视图，视图内部还有状态卡子件，收在目录里比平铺在 studio/ 好找。 */
+export { ProjectHomePage } from "./project-home";
+export type { ProjectHomePageProps } from "./project-home";
 
 export { HistoryList } from "./history/HistoryList";
 

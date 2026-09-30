@@ -4,9 +4,9 @@
  * CharacterDesigner 的两个分域 sub-hook（§12.13 函数长度：主组件 605 行，
  * 两个动作域各自只依赖注入的事实，与主组件的渲染无共享 state）：
  *
- *   · `useCharacterExtractFlow` —— 三通道提取 + 外部导入（与
+ *   · `useCharacterExtractFlow` —— 两通道（本地 / 远端模型）提取 + 外部导入（与
  *     `useStoryboardExtractFlow` 同族：会话经 props 注入 / 遗留用法退化
- *     局部会话；工具=确定性解析，本地/API=LLM 流式输出角色卡 JSON）。
+ *     局部会话；本地/API 通道 = LLM 流式输出角色卡 JSON）。
  *   · `useCharacterAiFlow` —— 一句话生成（独立模型选择 + 流式进度）与
  *     逐角色 AI 润色（「哪一条在忙」useItemAction /「错误挂那一条」
  *     useItemErrors，规范 16 §16.2.4.40 / §16.2.4.33）。
@@ -63,7 +63,7 @@ function looksLikeJson(text: string): boolean {
   return text.startsWith("{") || text.startsWith("[");
 }
 
-/** 通道 → LLM provider(工具通道不调用模型;本地/远端复用既有 /api/llm 链路) */
+/** 通道 → LLM provider(本地/远端复用既有 /api/llm 链路) */
 function channelProvider(channel: ExtractChannel): "local" | "remote" {
   return channel === "local" ? "local" : "remote";
 }
@@ -107,7 +107,7 @@ export function useCharacterExtractFlow(input: {
   // 并经 props.extract 注入：展示读 session，流程里写入走 actions。
   // controller 跨阶段页签常驻，提取中切页签再切回状态不丢，无需模块级缓存。
   // 遗留/独立使用（未注入 extract prop）时，退化为本组件局部会话。
-  const localExtract = useExtractSession("tool", "character");
+  const localExtract = useExtractSession("local", "character");
   const { session: extractSession, actions: extractActions } = extract ?? {
     session: localExtract[0],
     actions: localExtract[1],
@@ -130,7 +130,7 @@ export function useCharacterExtractFlow(input: {
 
   const hasScript = !!scriptMarkdown?.trim();
 
-  /** 三通道提取入口:工具=确定性解析;本地/API=LLM 输出 JSON,失败降级提示 */
+  /** 提取入口：本地模型 / 远端 API 由 LLM 输出角色卡 JSON，失败降级提示 */
   async function handleExtract() {
     const script = (scriptMarkdown ?? "").trim();
     if (!script) {
@@ -139,14 +139,14 @@ export function useCharacterExtractFlow(input: {
       });
       return;
     }
-    if (extractChannel !== "tool" && !config) {
+    if (!config) {
       openSettings();
       return;
     }
     cacheExtractPatch({
       busy: true,
       progress: "",
-      status: extractChannel === "tool" ? "" : "正在调用模型提取角色卡…",
+      status: "正在调用模型提取角色卡…",
       error: "",
     });
     // 新一次提取：重置日志为仅含 init 一条（上次执行记录随组件保留在面板里，
@@ -154,49 +154,37 @@ export function useCharacterExtractFlow(input: {
     setLog([
       makeExtractLog(
         "init",
-        `使用 ${extractChannel === "tool" ? "内置规则" : extractChannel === "local" ? "本地模型" : "远端模型"} ${extractChannel === "tool" ? "" : parseChannelOption(extractChannelValue).model || ""}从剧本提取角色`,
+        `使用 ${extractChannel === "local" ? "本地模型" : "远端模型"} ${parseChannelOption(extractChannelValue).model || ""}从剧本提取角色`,
       ),
     ]);
     try {
-      let drafts: ParsedCharacterDraft[];
-      if (extractChannel === "tool") {
-        drafts = parseCharacterEntries(script);
-        if (drafts.length === 0) {
-          cacheExtractPatch({
-            error:
-              "工具通道未在剧本中找到「人物:/角色:」行。可检查剧本结构后重试,或切换到本地模型 / 配置API 通道。",
-          });
-          return;
-        }
-      } else {
-        const requestMessages = buildExtractCharactersMessages(script);
+      const requestMessages = buildExtractCharactersMessages(script);
+      appendLog(
+        makeExtractLog(
+          "request",
+          `向模型发送请求（provider=${channelProvider(extractChannel)}, model=${parseChannelOption(extractChannelValue).model || "默认"}）`,
+          formatRequestMessages(requestMessages),
+        ),
+      );
+      const full = await streamChat({
+        messages: requestMessages,
+        opts: {
+          provider: channelProvider(extractChannel),
+          model: parseChannelOption(extractChannelValue).model,
+        },
+        onToken: (token) => appendProgress(token),
+      });
+      appendLog(makeExtractLog("output", "模型返回完成，正在解析…", full));
+      const drafts = parseExtractedCharacters(full);
+      if (drafts.length === 0) {
         appendLog(
-          makeExtractLog(
-            "request",
-            `向模型发送请求（provider=${channelProvider(extractChannel)}, model=${parseChannelOption(extractChannelValue).model || "默认"}）`,
-            formatRequestMessages(requestMessages),
-          ),
+          makeExtractLog("error", "模型未返回有效角色卡 JSON，解析失败"),
         );
-        const full = await streamChat({
-          messages: requestMessages,
-          opts: {
-            provider: channelProvider(extractChannel),
-            model: parseChannelOption(extractChannelValue).model,
-          },
-          onToken: (token) => appendProgress(token),
+        cacheExtractPatch({
+          error:
+            "模型未返回有效角色卡 JSON,解析失败。可重试,或调整脚本后重跑。",
         });
-        appendLog(makeExtractLog("output", "模型返回完成，正在解析…", full));
-        drafts = parseExtractedCharacters(full);
-        if (drafts.length === 0) {
-          appendLog(
-            makeExtractLog("error", "模型未返回有效角色卡 JSON，解析失败"),
-          );
-          cacheExtractPatch({
-            error:
-              "模型未返回有效角色卡 JSON,解析失败。可重试,或改用「工具」通道。",
-          });
-          return;
-        }
+        return;
       }
       const res = mergeCharacterDrafts(characters, drafts, styles);
       appendLog(
@@ -219,7 +207,7 @@ export function useCharacterExtractFlow(input: {
     } catch (e: unknown) {
       appendLog(makeExtractLog("error", errorMessage(e, "提取失败")));
       cacheExtractPatch({
-        error: `${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`,
+        error: `${errorMessage(e, "提取失败")} 可重试,或调整脚本后重跑。`,
       });
     } finally {
       cacheExtractPatch({ busy: false });

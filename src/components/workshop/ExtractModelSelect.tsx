@@ -30,27 +30,20 @@ function optionLabel(name: string, badge: string): React.ReactNode {
   );
 }
 
-const TOOL_OPTION = "tool";
-
-/** 分组模型下拉：选项 = [工具] + [本地模型组] + [远端 API 组]。
+/** 分组模型下拉：选项 = [本地模型组] + [远端 API 组]。
  *  候选来源是设置里保存的「静态配置」（本地候选 + 远端独立模型），不再
  *  在展开时实时探测服务。选完本地 / 远端模型后才去校验对应服务是否可达，
- *  并把结果以内联提示展示在下方（不影响「工具」通道与提取动作）。
- *  `allowTool=false` 时用于生成场景（剧本 / 一句话生成角色）：没有「工具」
- *  通道，占位文案也随之从「选择提取方式」改为「选择模型」。 */
+ *  并把结果以内联提示展示在下方。无「工具」通道（确定性解析已移除）。 */
 export function ExtractModelSelect({
   value,
   onChange,
-  allowTool = true,
 }: {
   value: string;
   onChange: (value: string) => void;
-  /** 是否提供「工具」通道（仅纯规则解析场景需要；LLM 生成场景传 false） */
-  allowTool?: boolean;
 }) {
   const { localModels, remoteModels } = useLLM();
   const { channel, model } = parseChannelOption(value);
-  const selKey = channel === "tool" || !model ? "" : `${channel}::${model}`;
+  const selKey = !model ? "" : `${channel}::${model}`;
 
   /* 「选完再校验可用性」：选中本地 / 远端模型后才去探测对应服务是否可达。
    * 以 (key → 结果) 的缓存保存校验结果，异步回调里才 setState（不违反
@@ -87,28 +80,26 @@ export function ExtractModelSelect({
   }, [selKey, channel, model]);
 
   const options = React.useMemo(() => {
-    const list: string[] = allowTool ? [TOOL_OPTION] : [];
+    const list: string[] = [];
     for (const m of localModels) list.push(`local::${m}`);
     for (const m of remoteModels) list.push(`remote::${m}`);
     return list;
-  }, [allowTool, localModels, remoteModels]);
+  }, [localModels, remoteModels]);
 
   const labels = React.useMemo(() => {
-    const map: Record<string, React.ReactNode> = allowTool
-      ? { [TOOL_OPTION]: "工具 · 内置规则解析（不调用模型）" }
-      : {};
+    const map: Record<string, React.ReactNode> = {};
     for (const m of localModels) map[`local::${m}`] = optionLabel(m, "本地");
     for (const m of remoteModels) map[`remote::${m}`] = optionLabel(m, "远端");
     return map;
-  }, [allowTool, localModels, remoteModels]);
+  }, [localModels, remoteModels]);
 
   /* 内联可用性提示（放在下拉触发钮下方，关闭后仍可见）。
-   * 只有当前选中是本地 / 远端模型时才展示：校验中 → 结果（可达 / 原因）。 */
+   * 选中本地 / 远端模型时展示：校验中 → 结果（可达 / 原因）。 */
   const selAvail = selKey ? availByKey[selKey] : undefined;
   /* 无已缓存结果即视为校验中（探测在选中时即被 effect 触发）。 */
   const selChecking = !!selKey && !selAvail;
   let hint: React.ReactNode = null;
-  if (channel !== "tool") {
+  if (channel) {
     const badge = channel === "local" ? "本地" : "远端";
     if (selChecking) {
       hint = (
@@ -140,7 +131,7 @@ export function ExtractModelSelect({
           onChange={onChange}
           options={options}
           labels={labels}
-          placeholder={allowTool ? "选择提取方式" : "选择模型"}
+          placeholder="选择模型"
           className="!bg-subtle !border-border text-xs"
           popoverMinWidth={280}
           autoFitFromOptions={false}

@@ -351,11 +351,11 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
 
   // ── 提取会话收归 controller：切页签卸载只丢 stage 组件，此处常驻 ──
   const [characterExtract, characterExtractActions] = useExtractSession(
-    "tool",
+    "local",
     "character",
   );
   const [storyboardExtract, storyboardExtractActions] = useExtractSession(
-    "tool",
+    "local",
     "storyboard",
   );
 

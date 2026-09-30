@@ -7,6 +7,7 @@ import {
   Cable,
   Film,
   Folder,
+  FolderOpen,
   History,
   Home,
   Image as ImageIcon,
@@ -23,7 +24,7 @@ import {
  *     弹窗而不是视图：模型适配 / 模式契约。这两件事是**项目无关**的（模式是工作流库定义的、
  *     适配器是每个远端模型 × 每个模式的字段映射，都不依赖某个具体项目），所以它们的入口
  *     不进工坊那个项目内视图；
- *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（画布 / 工坊 / 产出 / 成片），
+ *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片），
  *     不再进主页侧栏：它们是对「当前项目」的操作投影，脱离项目无意义；
  *   · 项目入口（`PROJECTS_ENTRY`）—— 侧栏最底部的「项目」分组（可展开列出已有项目）。
  *
@@ -33,10 +34,12 @@ import {
  */
 export type WorkspaceView =
   | "home"
+  | "project"
   | "canvas"
   | "models"
   | "works"
   | "workshop"
+  | "library"
   | "history"
   | "queue"
   | "train"
@@ -51,7 +54,7 @@ export interface NavItem {
   enabled?: boolean;
   /**
    * 属于「项目页签」：只在项目界面顶部的标签栏出现，不进主页侧栏顶部列表。
-   * 画布 / 工坊 / 产出 / 成片是对「当前项目」的操作投影。
+   * 主页 / 画布 / 工坊 / 资源库 / 产出 / 成片是对「当前项目」的操作投影。
    */
   projectScoped?: boolean;
   icon: React.ReactNode;
@@ -172,6 +175,17 @@ export const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    /* 项目主页放在页签第一位：它是进入项目后的落点（此前直接落画布，
+     * 而画布承载不了「这个项目做到哪了」这类项目级问题）。图标用 `Home`
+     * 与全局「首页」同形 —— 两个 home 语义层级不同（应用级 / 项目级），
+     * 靠所在分组区分，换一个陌生图标反而更难认。 */
+    id: "project",
+    label: "主页",
+    enabled: true,
+    projectScoped: true,
+    icon: <Home size={22} strokeWidth={1.8} />,
+  },
+  {
     id: "canvas",
     label: "画布",
     enabled: true,
@@ -189,6 +203,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: "工坊",
     projectScoped: true,
     icon: <BookOpen size={22} strokeWidth={1.8} />,
+  },
+  {
+    id: "library",
+    label: "资源库",
+    projectScoped: true,
+    icon: <FolderOpen size={22} strokeWidth={1.8} />,
   },
   {
     id: "outputs",
@@ -213,7 +233,7 @@ export function globalNavItems(): NavItem[] {
   );
 }
 
-/** 项目界面顶部的切换页签（画布 / 工坊 / 产出 / 成片）。 */
+/** 项目界面顶部的切换页签（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）。 */
 export function projectTabs(): NavItem[] {
   return NAV_ITEMS.filter((item) => item.projectScoped);
 }

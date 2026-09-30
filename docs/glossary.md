@@ -110,7 +110,9 @@
 | **工作室**（studio） | **组件库命名空间**，不是产品名、不是页面 | `src/components/studio/` | ❌「Studio 页面」；页面叫工作区/工作流库等 |
 | **工坊**（workshop） | 剧本→分镜→成片的 LLM 流水线模块 | `src/components/workshop/`、`src/lib/workshop/` | 与「工作室」一字之差，指代完全不同，勿混用 |
 | **页签**（shell tab） | 窗口标题行上的内容页签（可挂内部浏览器页） | `src/lib/shell-tabs-store.ts`、`ShellTabs.tsx` | ❌「标签页」（那是 `Tag`/`Badge`） |
-| **视图**（view） | 工作区内切换的主内容区（home/canvas/workflows/…） | `WORKSPACE_VIEWS`（`src/app/workspace/page.tsx`）、`WorkspaceView` 类型 | ❌「页面」（页面特指 Next 路由） |
+| **视图**（view） | 工作区内切换的主内容区（home/project/canvas/workflows/…） | `WORKSPACE_VIEWS`（`src/app/workspace/page.tsx`）、`WorkspaceView` 类型 | ❌「页面」（页面特指 Next 路由） |
+| **应用首页**（`home`） | 工作区的顶层入口（侧栏 + 「灵感从这里开始」+ 最近项目） | `NAV_ITEMS` id `home`；`HomePage.tsx` | **与「项目主页」不是一回事**：那一个是**项目级**的（进入某个项目后的落点）。两者中英文都可叫「主页」，写文档时带上限定词 |
+| **项目主页**（`project`） | 进入项目后的落点：项目状态总览 + AI 自主成片操纵台 | `NAV_ITEMS` id `project`（项目页签第一项）；`src/components/studio/project-home/` | 见上一行；也叫「项目内主页」 |
 | **设置浮层**（SettingsOverlay） | 覆盖在工作区上的设置面板（不是独立路由） | `src/components/settings/SettingsOverlay.tsx` | 另有 `/settings` 路由页，两者别混 |
 | **项目**（`works`，「项目」导航） | 产出素材相册视图 | `NAV_ITEMS` id `works`；`WorksGallery` | **与「画布项目」不是一回事**（§3） |
 | **产出**（outputs） | 项目输出物汇总视图 | `ProjectOutputs.tsx` | 与「项目」视图区分 |
