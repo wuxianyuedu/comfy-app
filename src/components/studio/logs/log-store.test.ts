@@ -21,6 +21,7 @@ import {
   selectFirstPageWindow,
   captureLocation,
   computeOriginCounts,
+  computeFiltered,
   bucketOf,
   CONSOLE_ORIGIN,
   formatEntryForClipboard,
@@ -242,7 +243,13 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
   /* ISSUE #262 六审：用户的原话是「有的日志只在全部页签才显示，这种也要有自己的
    * 分类或是归入其他分类」。判据是一条**守恒关系**：各分类加起来 = 全部来源。
    * 它把「有没有行落不进任何分类」变成可断言的等式——再加一类新来源却忘了给它
-   * 建桶，这条会红。 */
+   * 建桶，这条会红。
+   *
+   * ⚠️ 这条守恒用的是**互不重复**的行（每行内容不同、各属一个来源）。真实面板
+   * 里同一条启动行会同时躺在 launcher / 启动 / 壳侧编排 / 壳日志四份文件里，
+   * 那时「逐来源各数一份」与「全部来源按条去重」**本来就不相等**，界面上也必须
+   * 分开摆（见 `ORIGIN_TEXT.all` 与 `dedupeByIdentity`）；撞时间线上限时更会
+   * 连这个等式都算不出来（ISSUE #1240 / #1282 的实时红）。 */
   it("守恒：各分类之和 = 全部来源（没有行落不进任何分类）", () => {
     const logs = [
       makeEntry({ origin: "dev" }),
@@ -274,6 +281,75 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
       const perLevel = buckets.reduce((acc, key) => acc + table[key][level], 0);
       expect(perLevel).toBe(table.all[level]);
     }
+  });
+
+  /* ISSUE #1282：e2e 那条守恒在整批跑时红（`Expected: 5000, Received: 3335`），
+   * 根因不是「撞上限」，而是**同一批行的副本**——六路来源各自读自己那份文件，而
+   * 其中若干文件装的是同一段内容的副本（`dev-launcher.log` 转写 dev 的输出、
+   * `shell-launch.log` 与 launcher 的两份互相重叠）。同一条日志因此：
+   *   · 只在「全部来源」里算一条（`all` = 身份数）；
+   *   · 在它落过的每个来源里各算一条（那是「切过去会看到几行」的答案）。
+   * 于是「各分类之和 = 全部来源」这条等式在副本面前**本来就不成立**，
+   * 强行断言它等于把两个不同语义的量画成可相加的分项。 */
+  it("同一条日志被多路读到：全部来源算一条，逐来源各算一份（守恒只在来源内成立）", () => {
+    const dup = {
+      time: 1_700_000_000_000,
+      level: "info" as const,
+      message: "同一行",
+    };
+    const table = computeOriginCounts([
+      makeEntry({ ...dup, origin: "dev" }),
+      makeEntry({ ...dup, origin: "launcher" }),
+      makeEntry({ ...dup, origin: "shell" }),
+      makeEntry({ ...dup, origin: "shell-launch" }),
+      makeEntry({ origin: "app", message: "别的行" }),
+    ]);
+
+    /* 「全部来源」= 两条不同的日志（副本不重复算）。 */
+    expect(table.all.all).toBe(2);
+    /* 逐来源 = 那份文件里的行数：切到「启动器」确实会看到那一行。 */
+    for (const origin of [
+      "dev",
+      "launcher",
+      "shell",
+      "shell-launch",
+    ] as const) {
+      expect(table[origin].all).toBe(1);
+    }
+    expect(table.app.all).toBe(1);
+    /* 逐来源**内部**守恒仍然成立（该来源的四个级别之和 = 该来源的总数）。 */
+    for (const origin of [
+      "dev",
+      "launcher",
+      "shell-launch",
+      "shell",
+      "app",
+      "app-runtime",
+      CONSOLE_ORIGIN,
+      "all",
+    ] as const) {
+      const c = table[origin];
+      expect(c.info + c.debug + c.warn + c.error).toBe(c.all);
+    }
+  });
+
+  it("「全部来源」与逐来源同口径落到「切过去有几行」上（筛选结果与计数对齐）", () => {
+    const dup = {
+      time: 1_700_000_000_000,
+      level: "warn" as const,
+      message: "同一行",
+    };
+    const logs = [
+      makeEntry({ ...dup, origin: "launcher" }),
+      makeEntry({ ...dup, origin: "dev" }),
+    ];
+    /* 全部来源：副本只显示一次（时间线上不出现两条一模一样的行）。 */
+    expect(computeFiltered(logs, "all", "", "all")).toHaveLength(1);
+    /* 具体来源：照给，那是用户切过去要找的那一份。 */
+    expect(computeFiltered(logs, "all", "", "launcher")).toHaveLength(1);
+    expect(computeFiltered(logs, "all", "", "dev")).toHaveLength(1);
+    /* 计数与筛选同口径：全部来源数 1，与上面那行对得上。 */
+    expect(computeOriginCounts(logs).all.all).toBe(1);
   });
 
   it("bucketOf 是归类规则的唯一事实来源：无来源归 console，有来源归自己", () => {
@@ -1867,14 +1943,16 @@ describe("appendFileLogs 走时间线合并（#262 回归）", () => {
  * **连续**重复，且只保留前 limit 条 + 一条「重复 N 次」说明。
  */
 describe("dedupeRepeats 连续重复行折叠", () => {
-  /* 连续重复行的定义是「时刻 + 级别 + 内容」全同（跨来源去重用的同一判据），
-   * 因此夹具刻意让 message 取同一个值，只有 time 不同也不影响折叠（相邻即折叠）。 */
+  /* 连续重复 = 「级别 + 内容」相同的**相邻**行（同一条应用在每轮轮询里重写一遍，
+   * 时刻必然不同，因此折叠键不带时刻）。这里逐秒递增模拟真实节奏：同一毫秒的
+   * 同一段正文属于另一条规则——那是「同一条日志被多路读到」的跨来源副本，
+   * 由 `mergeTimeline` 收成一条，根本走不到显示层（见 `arrivalKey`）。 */
   const repeat = (n: number) =>
     Array.from({ length: n }, (_, i) =>
       makeEntry({
         id: `r-${i}`,
         message: "ComfyUI 未就绪，等待中",
-        time: 1_000 + i,
+        time: 1_000 + i * 1_000,
       }),
     );
 
