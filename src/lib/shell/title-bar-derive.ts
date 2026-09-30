@@ -6,8 +6,11 @@
 
 /** 是否需要渲染「自定义标题栏」（即页签是否搬到窗口标题行）。
  *
- * 只有桌面壳里才有原生标题栏可让位；浏览器 / dev 下窗口由系统浏览器提供，
- * 必须退回「应用内页签栏」，否则页签将无处可拖拽、也没有窗口按钮可接管。
+ * 只有桌面壳里才有原生标题栏可让位。判据为假（浏览器 / dev）时**不是**「退回
+ * 应用内页签栏」—— `ShellTabs.tsx` 在这种情况下什么都不画（浏览器自带页签栏，
+ * 再画一条既占纵向空间又与原生重复），只承载 children；ComfyUI 改由新浏览器页签
+ * 打开（见 `shouldUseBrowserTab`）。e2e 实测该形态下页面里 `role="tablist"` 计数
+ * 为 0 —— 写这条相关的断言前先确认自己在哪种形态里。
  */
 export function shouldUseTitleBarTabs(isDesktop: boolean): boolean {
   return isDesktop;

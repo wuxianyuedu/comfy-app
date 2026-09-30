@@ -73,6 +73,39 @@ describe("useInterval", () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it("轮询动作抛错走明确通道（console.error），不静默沉掉", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {
+      void 0;
+    });
+    renderHook(() =>
+      useInterval(() => Promise.reject(new Error("poll boom")), { ms: 1000 }),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(spy).toHaveBeenCalledWith(
+      "[use-interval] 轮询动作抛错",
+      expect.any(Error),
+    );
+    spy.mockRestore();
+  });
+
+  it("两条暂停判据都关掉时不挂窗口事件监听", () => {
+    const addSpy = vi.spyOn(document, "addEventListener");
+    renderHook(() =>
+      useInterval(vi.fn(), {
+        ms: 1000,
+        pauseWhenHidden: false,
+        pauseWhenUnfocused: false,
+      }),
+    );
+    expect(addSpy).not.toHaveBeenCalledWith(
+      "visibilitychange",
+      expect.anything(),
+    );
+    addSpy.mockRestore();
+  });
+
   it("ms 为 null / 0 表示不轮询", async () => {
     const run = vi.fn();
     renderHook(() => useInterval(run, { ms: null }));

@@ -77,6 +77,21 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           ? "已配置——ComfyUI 未运行时提交任务会自动拉起。"
           : "未配置——ComfyUI 未运行时任务会失败。"}
       </p>
+      <Field
+        label="comfy-cli 解释器（Python 绝对路径）"
+        value={c.drafts.settings.comfyCliPython}
+        onChange={(value) => c.patchSettings({ comfyCliPython: value })}
+        placeholder="例如 D:\\tools\\python-venv\\comfy-cli\\Scripts\\python.exe"
+      />
+      <p className="text-muted-foreground -mt-2 mb-3 text-xs">
+        任务是通过 comfy-cli 提交给 ComfyUI 的，需要一个装好 comfy-cli 的 Python
+        解释器。桌面版不随包
+        Python：请自备后把解释器的绝对路径填在这里；留空则退回 项目目录下的
+        python-venv/comfy-cli（开发检出的默认落点）。
+        {c.drafts.settings.comfyCliPython.trim()
+          ? "已配置——执行链会用这个解释器。"
+          : "未配置——开发检出里若已有 python-venv/comfy-cli 可留空，桌面版任务会失败。"}
+      </p>
       {instanceType && (
         <div className="-mt-2 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           <span className="text-muted-foreground">安装形态</span>

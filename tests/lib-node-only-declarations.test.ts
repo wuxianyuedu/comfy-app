@@ -59,6 +59,13 @@ const PURE_NODE_HOSTS = [
   //     Windows 各自走本机自带工具，不依赖 lsof。
   "src/lib/comfyui/gpu-vram.ts",
   "src/lib/comfyui/launch-path.ts",
+  // comfy-cli-python.ts（ISSUE #1239）：与 `launch-path.ts` 同族的纯解析地基 ——
+  // 从设置项 `comfyCliPython` 推导 comfy-cli 解释器落点、按形态给「找不到」的提示。
+  // 只有 `node:path` 一条内建 value import、不引任何 server-only 侧模块；消费方是
+  // 本清单里的第三类 `executor-cli.ts`，在桌包里那条链跑在**纯 Node 宿主**。它和
+  // `launch-path.ts` 一样是「Next server 与执行宿主双宿主共用」的地基，所以按第三类
+  // 登记，而不是用 `server-only` 把自己说成「只能服务端用」。
+  "src/lib/comfyui/comfy-cli-python.ts",
   "src/lib/comfyui/proc-detect.ts",
   // trace.ts：诊断通道，落盘路径 `COMFYUI_TRACE_LOG` 从 `~/lib/log/log-paths`
   // （server-only）拿。P3 迁移第 1 期·第三步把它改成**加载即 fire-and-forget 的
@@ -79,6 +86,14 @@ const PURE_NODE_HOSTS = [
   // 后续 PR 把 client / executor-history / executor-continuation 拆完后，
   // 本模块才能真正被纯 Node 宿主加载。
   "src/lib/comfyui/executor-finalize.ts",
+  // output-paths.ts：任务产物布局（落盘目录 / 产物 URL / 删除目标）的唯一一份定义。
+  // 它必须同时被**落盘侧**（上面那条 `executor-finalize.ts`，第三类宿主模块）与
+  // **读删侧**（`src/server/api/routers/task.ts` 的 openFolder / delete）静态 import：
+  // 布局一旦分成两处实现，就会出现「落盘认 `projects/<pid>/<tid>`、删除只认
+  // `<tid>`」这种分叉（本批修的就是它）。给落盘侧引的那条边挂 `server-only`
+  // 等于把这条约束重新拆开，而它只有 `path` 一条 Node 内建 value import，
+  // 「浏览器图别引我」同样由 scanner 的 clientReachable 判据盯。
+  "src/lib/media/output-paths.ts",
   // executor-cli.ts：P3 第 1 期·第三步·执行批。摘掉 server-only 后本模块**自身**
   // 的静态边已解——logger（走加载即 fire-and-forget + `cliWarn` 静默 skip）、
   // taskRepository / resolveComfyBase（在 `executeViaComfyCli` 顶部一次性

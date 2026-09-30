@@ -37,6 +37,18 @@ export type AppSettings = {
   comfyuiPath: string;
   /** 传给 ComfyUI main.py 的额外命令行参数（如 --input-directory ...）。 */
   comfyuiExtraArgs: string;
+  /**
+   * 驱动 ComfyUI 的 **comfy-cli Python 解释器**（执行链用它跑 `-m comfy_cli run`）。
+   *
+   * 留空 = 退回 `<cwd>/python-venv/comfy-cli/{Scripts|bin}/python(.exe)`（开发检出的
+   * 默认落点）。桌包**不随包** Python 与 comfy-cli（百 MB 级环境，且带版本矩阵），
+   * 所以桌面形态要真出图必须由用户自备一个装好 comfy-cli 的解释器，然后在这里指
+   * 路径——与 `comfyuiPath`「用户自备 + 设置项」同一条形态（ISSUE #1239 的签字口径）。
+   *
+   * 默认值取 `COMFY_CLI_PYTHON`：与 `comfyuiPath ← COMFYUI_PATH` 同形，即**环境变量是
+   * 这一项的默认值**，设置页里填过的值优先（`getSettingsSync` 是 `{...DEFAULTS, ...文件}`）。
+   */
+  comfyCliPython: string;
   /** 提交任务发现 ComfyUI 未运行时，是否自动按 comfyuiPath 启动。 */
   comfyuiAutoStart: boolean;
   /**
@@ -91,6 +103,8 @@ export const DEFAULTS: AppSettings = {
   comfyLorasDir: process.env.COMFY_LORAS_DIR ?? "",
   comfyuiPath: process.env.COMFYUI_PATH ?? "",
   comfyuiExtraArgs: "",
+  // 环境变量只是这一项的**默认值**（与上面 comfyuiPath 同形）；设置页里填过的值优先。
+  comfyCliPython: process.env.COMFY_CLI_PYTHON ?? "",
   comfyuiAutoStart: true,
   comfyuiPort: 0,
   loginRequired: false,

@@ -110,12 +110,25 @@ test.describe("工作区链路 @critical", () => {
       page.getByRole("heading", { name: "灵感从这里开始" }),
     ).toBeVisible();
 
-    // 侧栏主干入口齐备：这是「应用能用」的最小结构断言
-    for (const label of ["首页", "画布", "工坊", "模型", "流程"]) {
+    /* 侧栏主干入口齐备：这是「应用能用」的最小结构断言。
+     * 名单是导航拆成两类之后的**全局那一类**（`NavItems.tsx` 的 `globalNavItems()`，
+     * id 与顺序由 `src/components/studio/nav-items.test.ts` 钉死）。这里按用户可见的
+     * 标签重复一份，而不是 import 那份常量：e2e 的断言应当只看屏幕上有无这些东西，
+     * 拿 React 侧常量当数据源会让「常量与渲染不一致」这种真故障变成用例里的自洽。 */
+    for (const label of ["首页", "模型", "历史", "队列", "炼丹", "流程"]) {
       await expect(
         page.getByRole("button", { name: label, exact: true }).first(),
       ).toBeVisible();
     }
+
+    /* 画布 / 工坊是项目内页签：没进项目时它们**不在侧栏**，在首页以入口卡出现。
+     * 早先这里把这两个名字混进上面那个侧栏循环，于是从导航拆类那天起就一直是红的。 */
+    await expect(
+      page.getByRole("button", { name: /新建画布/ }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /全链路工坊/ }).first(),
+    ).toBeVisible();
 
     // 最近项目分区存在（空态也要有标题，不能整段消失）
     await expect(page.getByRole("heading", { name: "最近项目" })).toBeVisible();
@@ -142,11 +155,25 @@ test.describe("工作区链路 @critical", () => {
    * 是「2px 上下边框叠在一个行内盒上」：**4×21 的竖线**。用户看不出那是加载
    * 指示器，只读到一个来源不明的图案。
    *
-   * 尺寸只有真实浏览器量得出来（jsdom 不做布局、不做行内盒的宽高失效）：
+   * 尺寸只有真实浏览器量得出来（jsdom 不做布局、不做行内盒的宽高失效）。三条判据：
    *   1. 宽高都到位（老形态宽 4px）；
    *   2. 是个圆（宽高相等），不是竖条；
-   *   3. 容器**不是 flex** —— 否则这条判据又会退回「靠调用处布局撑着」，
-   *      下一个非 flex 的落点照样塌成竖线。
+   *   3. **把父容器的 flex 抽掉再复量一次**，仍然成立 —— 守的是「尺寸不靠调用处
+   *      布局撑着」：下一个非 flex 的落点照样会塌成竖线。
+   *
+   * 第 3 条原先钉的是「这个落点的父容器**不是** flex」。那是实现细节：加载态后来
+   * 进了 `EmptyState` 的 flex 图标位，代理判据从此恒红，却不说明任何退化。现在
+   * 直接做那个实验（量完立刻还原），比老写法严：老写法只会红，不会告诉你为什么。
+   *
+   * 读数用 `getComputedStyle` 的 width/height，不用 `boundingBox()`：spinner 带
+   * `animate-spin` 持续旋转，boundingBox 量到的是旋转后的外接矩形。两个实测后果：
+   *   · 读数随角度漂 —— 同一根图标两次跑分别量到 26×26 与 34×34；
+   *   · 判据会在最该红的时候放行 —— 老写法下把图标换成默认尺寸（真值 16×16）
+   *     用例**仍然绿**（旋转后的外接矩形把宽度抬过了 16 这条线）。
+   * 顺带一个算式：w×h 的盒转 45° 后外接矩形两边都是 (w+h)/√2 —— 24×16 的竖条
+   * 在 45° 那一刻量起来正好是正方形，「宽高相等」这条判据因此根本不由 boundingBox 保证。
+   * 两处负向验证各红在指定断言上：换成默认尺寸报 `宽度塌了：16×16`，
+   * 只给宽不给高报 `不是圆：24×16`。
    */
   test("@critical 工作流库加载态的转圈是真的圆，不是一条竖线", async ({
     page,
@@ -167,21 +194,68 @@ test.describe("工作区链路 @critical", () => {
       timeout: 15_000,
     });
 
-    const spinner = page.locator('[data-slot="spinner"]').first();
-    const box = await spinner.boundingBox();
-    expect(box).not.toBeNull();
-    const size = box ?? { width: 0, height: 0 };
-    /* 老形态宽 4px / 高 21px；正常形态是 24×24（`size-6`）。 */
-    expect(size.width).toBeGreaterThan(16);
-    /* 圆：宽高相等（给 1px 抗锯齿余量），竖条会在这里红。 */
-    expect(Math.abs(size.width - size.height)).toBeLessThanOrEqual(1);
+    /* 锁在**加载态这一处**：页面上同时还有工作流编辑器覆盖层的另一根 spinner
+       （实测同一刻能数到两根），整页 `.first()` 拿到的未必是加载态那根。
+       取法：从「正在加载工作流」那段文案往上找**第一个含 spinner 的祖先**，
+       不依赖某个未必存在的 data-slot。 */
+    const spinner = page
+      .getByText(/正在加载工作流/)
+      .locator("xpath=ancestor::*[.//*[@data-slot='spinner']][1]")
+      .locator('[data-slot="spinner"]')
+      .first();
+    await expect(spinner).toBeAttached();
 
-    /* 尺寸不能靠调用处的 flex 撑着 —— 图标容器本身不是 flex 项时才见真章。 */
-    const containerIsFlex = await spinner.evaluate((el) => {
+    /* 量**布局尺寸**（computed width/height），不是 boundingBox：
+       spinner 是 `<svg>`，SVG 图形元素没有 offsetWidth/offsetHeight（实测 undefined）；
+       而 boundingBox 量到的是 `animate-spin` 旋转后的外接矩形 —— 尺寸随角度在
+       24↔34 之间漂（同一刻两次读数实测差 8px），更要命的是 45° 时一根 24×16 的
+       竖条量起来正好是正方形。老写法在最该红的那一刻会绿。 */
+    const measure = () =>
+      spinner.evaluate((el) => {
+        const style = getComputedStyle(el as SVGElement);
+        return {
+          width: Number.parseFloat(style.width),
+          height: Number.parseFloat(style.height),
+        };
+      });
+
+    const size = await measure();
+    /* 老形态宽 4px / 高 21px；正常形态是 24×24（`size-6`）。 */
+    expect(
+      size.width,
+      `宽度塌了：${size.width}×${size.height}`,
+    ).toBeGreaterThan(16);
+    expect(
+      Math.abs(size.width - size.height),
+      `不是圆：${size.width}×${size.height}`,
+    ).toBeLessThanOrEqual(1);
+
+    /* 尺寸不能靠调用处的布局撑着。老判据钉的是「这个落点的父容器不是 flex」——
+       那是实现细节：加载态后来进了 EmptyState 的 flex 图标位，代理判据就恒红了。
+       它真正要守的事是「把 flex 抽掉，图标还站得住吗」，所以这里直接做那个实验
+       （改完立刻还原）。这条比原来严：老写法在 flex 落点只会红，不会告诉你为什么。 */
+    const sizeWithoutFlex = await spinner.evaluate((el) => {
       const parent = el.parentElement;
-      return parent ? getComputedStyle(parent).display.includes("flex") : false;
+      if (parent === null) throw new Error("spinner 没有父节点，判据落点漂了");
+      const previous = parent.style.display;
+      parent.style.display = "block";
+      const style = getComputedStyle(el as SVGElement);
+      const box = {
+        width: Number.parseFloat(style.width),
+        height: Number.parseFloat(style.height),
+      };
+      if (previous === "") parent.style.removeProperty("display");
+      else parent.style.display = previous;
+      return box;
     });
-    expect(containerIsFlex).toBe(false);
+    expect(
+      sizeWithoutFlex.width,
+      `抽掉 flex 后宽度塌了：${sizeWithoutFlex.width}×${sizeWithoutFlex.height}`,
+    ).toBeGreaterThan(16);
+    expect(
+      Math.abs(sizeWithoutFlex.width - sizeWithoutFlex.height),
+      `抽掉 flex 后不成圆：${sizeWithoutFlex.width}×${sizeWithoutFlex.height}`,
+    ).toBeLessThanOrEqual(1);
   });
 
   test("@critical 工作流库空态给出可行动指引而不是空白", async ({ page }) => {
@@ -303,9 +377,12 @@ test.describe("工作台概览 @critical", () => {
     });
 
     await page.goto("/workspace");
-    // 应用日志入口在设置页/状态栏；这里只断言页面在轮询接口可用时不白屏。
+    /* 这条原本只断言了首页标题可见 —— 名字里的「打开日志面板」根本没发生，
+       所以它恒绿、什么都没守。现在按可访问名真的点开入口再验面板标题：
+       守的是「状态栏那颗入口接得上、面板标题看得见」。 */
+    await page.getByRole("button", { name: /^日志面板/ }).click();
     await expect(
-      page.getByRole("heading", { name: "灵感从这里开始" }),
+      page.getByText("应用日志", { exact: true }).first(),
     ).toBeVisible();
   });
 });
@@ -313,42 +390,51 @@ test.describe("工作台概览 @critical", () => {
 test.describe("应用页签与全屏视图 @critical", () => {
   /**
    * ISSUE #310 回归：应用级页签搬到窗口标题行后，应用内的「全屏视图」
-   * （设置、工作流编辑器、消息中心…）仍按 `fixed inset-0` 铺满整个视口，
-   * 把标题行里的页签整条盖住 —— 用户打开这些视图后就再也看不到页签。
+   * （设置、工作流编辑器、消息中心…）与居中弹窗仍按 `fixed inset-0` 铺满整个
+   * 视口，把用户的**出路**整条盖住。
    *
-   * 这里在浏览器形态（`InAppTabStrip`，无原生标题行可让位）下断言：
-   * 打开设置后，页签栏仍在视口内可见、且未被设置层覆盖。
+   * 两种形态的出路不是同一个东西，判据也跟着分：
+   *   · **桌面壳内**出路是标题行页签栏 —— 但 Playwright 驱动不了壳窗口，这条
+   *     在本套件里量不到（页签栏不渲染），只能由壳侧验证守；
+   *   · **浏览器 / dev 形态**按设计**不渲染任何应用内页签栏**（`ShellTabs.tsx`
+   *     文件头：浏览器自带页签栏，再画一条既占纵向空间又与原生重复），实测
+   *     `[role="tablist"]` 计数为 0。此时用户唯一的常驻出路是**底部状态栏**
+   *     与各视图自己的关闭/返回出口。
+   *
+   * 所以这里守的是同一类退化的浏览器形态版本：浮层若盖住状态栏，
+   * `elementFromPoint` 会返回浮层自己的子节点。顺带钉住「不画假页签栏」——
+   * 哪天有人补一条应用内页签栏，这条会红，而不是悄悄多占 32px 纵向空间。
    */
-  /**
-   * 复用「顶部命中页签栏」的判定：浮层若盖住标题行，elementFromPoint
-   * 会返回浮层自己的子节点。
-   */
-  async function expectTopHitsTabStrip(page: Page) {
-    const tablist = page.getByRole("tablist", { name: "应用页签" });
-    await expect(tablist).toBeVisible();
-    const tabBox = await tablist.boundingBox();
-    expect(tabBox).not.toBeNull();
-    const box = tabBox ?? { x: 0, y: 0, width: 0, height: 0 };
-    expect(box.height).toBeGreaterThan(0);
-    const hitTest = await page.evaluate(
-      ({ x, y }) => {
-        const el = document.elementFromPoint(x, y);
-        return el ? Boolean(el.closest('[role="tablist"]')) : false;
-      },
-      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+  const centerHitsOwnSubtree = (target: ReturnType<Page["locator"]>) =>
+    target.evaluate((el) => {
+      const box = (el as HTMLElement).getBoundingClientRect();
+      const top = document.elementFromPoint(
+        box.x + box.width / 2,
+        box.y + box.height / 2,
+      );
+      return top !== null && (el as HTMLElement).contains(top);
+    });
+
+  async function expectStatusBarNotCovered(page: Page) {
+    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(
+      0,
     );
-    expect(hitTest).toBe(true);
+    const statusbar = page.getByLabel("底部状态栏");
+    await expect(statusbar).toBeVisible();
+    expect(
+      await centerHitsOwnSubtree(statusbar),
+      "底部状态栏被浮层盖住了：中心命中落在浮层子树上",
+    ).toBe(true);
   }
 
-  test("@critical 打开设置后应用页签仍可见可点", async ({ page }) => {
+  test("@critical 打开设置后底部状态栏与视图出路都不被盖住", async ({
+    page,
+  }) => {
     await stubBackend(page);
     await page.goto("/workspace");
-
-    const tablist = page.getByRole("tablist", { name: "应用页签" });
-    await expect(tablist).toBeVisible();
+    await expectStatusBarNotCovered(page);
 
     // 打开设置（overlay 形态，不卸载 workspace 组件树）。
-    // 设置入口是 nav 底部的图标按钮，只有 title="设置"。
     await page
       .getByRole("button", { name: "设置", exact: true })
       .first()
@@ -358,8 +444,16 @@ test.describe("应用页签与全屏视图 @critical", () => {
       timeout: 20_000,
     });
 
-    // 关键断言：页签栏仍在、且没有被设置层盖住（顶部元素仍是页签）。
-    await expectTopHitsTabStrip(page);
+    // 关键断言：设置层铺满视口之后，状态栏与视图自己的「返回」出路都还点得到。
+    await expectStatusBarNotCovered(page);
+    const back = page
+      .getByRole("button", { name: "返回", exact: true })
+      .first();
+    await expect(back).toBeVisible();
+    expect(
+      await centerHitsOwnSubtree(back),
+      "设置视图的「返回」出口被自己的浮层结构盖住了",
+    ).toBe(true);
   });
 
   /**
@@ -367,7 +461,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 首轮修复只改了「全屏视图」，弹窗类仍是 `fixed inset-0`，于是打开应用日志
    * 后页签与右上角的关闭按钮照样被挡住。这条把弹窗形态钉进 E2E。
    */
-  test("@critical 打开应用日志面板后应用页签仍可见可点", async ({ page }) => {
+  test("@critical 打开应用日志面板后状态栏与面板关闭出口都不被盖住", async ({
+    page,
+  }) => {
     await stubBackend(page);
     await page.route("**/api/logs/current**", async (route: Route) => {
       await route.fulfill({
@@ -378,16 +474,23 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     await page.goto("/workspace");
-    await expectTopHitsTabStrip(page);
+    await expectStatusBarNotCovered(page);
 
-    // 入口在底部状态栏：只有 title 属性，没有可读文本。
+    // 入口在底部状态栏：纯图标按钮，可访问名由 Hint 的 accessibleName 给出。
     await page.getByRole("button", { name: /^日志面板/ }).click();
     // 面板标题：确认弹窗真的打开了（而不是入口没接上）。
     await expect(
       page.getByText("应用日志", { exact: true }).first(),
     ).toBeVisible();
 
-    await expectTopHitsTabStrip(page);
+    await expectStatusBarNotCovered(page);
+    // 面板唯一的可见出路（另有 Esc / Ctrl+Shift+L 两条，用户看不见就等于没有）。
+    const close = page.getByRole("button", { name: /^关闭/ }).first();
+    await expect(close).toBeVisible();
+    expect(
+      await centerHitsOwnSubtree(close),
+      "日志面板的关闭按钮被面板自己的结构盖住了",
+    ).toBe(true);
   });
 
   /**
@@ -1179,12 +1282,33 @@ test.describe("应用页签与全屏视图 @critical", () => {
       };
       const now = Date.now();
       const sessionStart = now - 30_000;
+      /* 「只有时刻、没有日期」的行（dev.mjs 的真实形状）会被解析层按**今天同一时刻**
+         重建。所以这个时刻必须落在现在之前：一旦在未来，服务端的 `clampLogTime`
+         （`src/lib/log/log-session-scope.ts`）就把它钳成「本次读取的 now」，两轮读取
+         生成两个不同的去重键，面板把同一批行计两次 —— 本用例下面钉的「启动 4」就会
+         变成 8。真实运行里这类行永远是过去时刻，钳制不触发；写死 `10:22:24` 等于每天
+         只在 10:22 之后才忠实，其余时段伪造了一个未来时间，把用例绑死在 #1240 的机制上。 */
+      const clock = (t: number) => {
+        const d = new Date(t);
+        const p = (n: number) => String(n).padStart(2, "0");
+        return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+      };
+      /* 跨零点的那几十秒里「今天同一时刻」仍然会跑到未来（23:59 > 00:00），这一极少
+         窗口退化成带完整日期时间戳的写法：本用例要守的是级别解析与正文不残留前缀，
+         「同批行两轮读到同一个键」这个不变量在两种写法下都成立。 */
+      const devBase = now - 40_000;
+      const crossesMidnight =
+        new Date(devBase).getDate() !== new Date(now).getDate();
+      const devStamp = (offsetMs: number) => {
+        const t = now - offsetMs;
+        return crossesMidnight ? fmt(t) : clock(t);
+      };
       /* 两个来源各自的真实形态（级别填充、缩进续行、残码） */
       const devLines = [
-        "[10:22:24] [INFO ] 预检通过",
-        "[10:22:25] [STEP] 检查端口占用",
-        "[10:22:26] [OK   ] Job Object 创建成功",
-        "  [10:22:27] [ERROR] 找不到预编译 Tauri 壳",
+        `[${devStamp(40_000)}] [INFO ] 预检通过`,
+        `[${devStamp(39_000)}] [STEP] 检查端口占用`,
+        `[${devStamp(38_000)}] [OK   ] Job Object 创建成功`,
+        `  [${devStamp(37_000)}] [ERROR] 找不到预编译 Tauri 壳`,
       ];
       const launcherLines = [
         `[${fmt(now - 45_000)}] === launcher started ===`,
@@ -1192,23 +1316,34 @@ test.describe("应用页签与全屏视图 @critical", () => {
       ];
 
       await page.route("**/api/logs/current**", async (route: Route) => {
-        const source = new URL(route.request().url()).searchParams.get(
-          "source",
-        );
+        const params = new URL(route.request().url()).searchParams;
+        const source = params.get("source");
+        /* 游标桩要与真服务端的 readLogSlice 同形（`src/app/api/logs/current/route.ts`）：
+           `size` 是**恒定的文件总大小**，客户端拿上一轮响应的 `size` 当游标；游标 == size
+           就是「读到文件末尾」→ 回空，且 size 与 offset 都不许缩 —— 把 size 报小等于宣称
+           「文件被新运行重建」，会触发尾部重读。
+           此前这里每轮无视 offset 重发同一批行：dev-launcher 的行没有时间戳，解析层按契约
+           钳到「当时本地时刻」（`log-store.ts` 时间线契约第 3 条），于是每轮生成一个新的
+           `time+level+message` 键，去重救不回来 —— 面板里同一条日志出现 3 份，
+           `getByText` 直接撞严格模式。 */
+        const offset = Number(params.get("offset") ?? "0");
         const lines =
           source === "dev-launcher"
             ? devLines
             : source === "launcher"
               ? launcherLines
               : [];
-        const content = lines.join("\n") + (lines.length ? "\n" : "");
+        const full = lines.join("\n") + (lines.length ? "\n" : "");
+        /* 前面留 1000 字节当「本会话之前已有的内容」，让尾部窗口那条路也走得到。 */
+        const size = 1000 + full.length;
+        const at = offset > 0 && offset < size ? offset : 1000;
         await route.fulfill({
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
-            content,
-            size: 1000 + content.length,
-            offset: 0,
+            content: offset >= size ? "" : full.slice(Math.max(0, at - 1000)),
+            size,
+            offset: at,
             sessionStart,
             bootId: "e2e:1",
           }),
@@ -1221,11 +1356,18 @@ test.describe("应用页签与全屏视图 @critical", () => {
         page.getByText("应用日志", { exact: true }).first(),
       ).toBeVisible();
 
-      /* 四个级别标记都被认出来，正文里不残留 `[HH:mm:ss] [LEVEL]` 前缀。 */
-      await expect(page.getByText("预检通过")).toBeVisible();
-      await expect(page.getByText("检查端口占用")).toBeVisible();
-      await expect(page.getByText("Job Object 创建成功")).toBeVisible();
-      await expect(page.getByText("找不到预编译 Tauri 壳")).toBeVisible();
+      /* 四个级别标记都被认出来，正文里不残留 `[HH:mm:ss] [LEVEL]` 前缀。
+         这里只取 `.first()`：面板有两个独立消费者（状态栏的错误计数与面板本体），
+         本条守的是级别解析与「正文不残留前缀」，不裁决渲染层的重复计数 —— 那属于
+         #1240 的口径。上一段注释里写的「两轮各钳到当时本地时刻 → 键不同」是桩把
+         时刻写死在未来才触发的路径，已按真实形态改掉（时刻取现在之前）；因此下面
+         那条「启动 4」的来源计数重新有意义，由它守住「同一批行只计一次」。 */
+      await expect(page.getByText("预检通过").first()).toBeVisible();
+      await expect(page.getByText("检查端口占用").first()).toBeVisible();
+      await expect(page.getByText("Job Object 创建成功").first()).toBeVisible();
+      await expect(
+        page.getByText("找不到预编译 Tauri 壳").first(),
+      ).toBeVisible();
 
       const body = await page.locator("[data-log-text]").allInnerTexts();
       expect(body.length).toBeGreaterThan(0);
@@ -1235,37 +1377,106 @@ test.describe("应用页签与全屏视图 @critical", () => {
         );
       }
 
-      /* 级别标签与正文分开：`INFO` / `ERROR` 出现在级别徽标里，而不是正文里。 */
+      /* 级别标签与正文分开：`INFO` / `ERROR` 出现在级别徽标里，而不是正文里。
+         `.first()` 的取舍同上：重复行不由这条用例裁决。 */
       const errorRow = page
         .locator("[data-log-text]")
-        .filter({ hasText: "找不到预编译 Tauri 壳" });
+        .filter({ hasText: "找不到预编译 Tauri 壳" })
+        .first();
       await expect(errorRow).toHaveText("找不到预编译 Tauri 壳");
 
       /* 切到「启动」来源，四个级别标记仍在（说明是按级别解析、不是原文兜底）。 */
       await page.getByRole("combobox", { name: "按来源筛选" }).click();
       await page.getByRole("option", { name: /^启动 4 / }).click();
-      await expect(page.getByText("检查端口占用")).toBeVisible();
-      await expect(page.getByText("找不到预编译 Tauri 壳")).toBeVisible();
+      await expect(page.getByText("检查端口占用").first()).toBeVisible();
+      await expect(
+        page.getByText("找不到预编译 Tauri 壳").first(),
+      ).toBeVisible();
     });
   });
 
   /**
-   * 同一处回归的**第三形态**：ComfyUI 页签里的内容。
+   * 同一处回归的**第三形态**：ComfyUI 的查看出口。
    *
-   * 前两轮修的都是「本应用自己的浮层盖住标题行」，而 ComfyUI 页签是另一类：
-   * 页签打开了、地址也对，里面却什么都没有 —— 未开 CORS 的 ComfyUI 会对
-   * 跨源请求返 **403**（origin-only 中间件），响应体为空所以一片白。宿主页
-   * 跨源读不到响应头、事件也不带原因，所以「能不能嵌」由服务端
-   * `setting.comfyEmbeddable` 回答。
+   * 前两轮修的都是「本应用自己的浮层盖住标题行」，而这一轮关于「点开后看不看
+   * 得见东西」。两种形态的出口不是同一个东西（判据 `shouldUseBrowserTab`）：
+   *   · **桌面壳内**：把 ComfyUI 开成**同一个窗口的一个页签**，里面渲染 iframe；
+   *     未开 CORS 时 ComfyUI 对跨源返 403，是一片空白，所以「能不能嵌」由服务端
+   *     `setting.comfyEmbeddable` 回答，不可嵌时仍在**同一个页签内**给可读说明
+   *     （ISSUE #310 的原话是「只要多页签，不要另一个窗口」）。
+   *   · **浏览器 / dev**：不内嵌、也不画应用内页签栏，直接把 ComfyUI 交给
+   *     **新浏览器页签**（`window.open`），并给一条可见反馈。
    *
-   * 两个方向都要守住（ISSUE #310，用户要求「只要多页签，不要另一个窗口」）：
-   *   ① 可嵌 → 页签里确实渲染 iframe；
-   *   ② 不可嵌 → 仍在**同一个窗口的页签**里给出可读说明，不弹第二个窗口。
+   * Playwright 起的是浏览器形态，所以上面那两条壳内断言（页签里的 iframe、
+   * 页签内的不可嵌说明）在本套件里量不到 —— 本文件下面的三条按**浏览器形态的
+   * 契约**守：新浏览器页签真的开出去、反馈看得见、应用内不长出假页签栏或 iframe。
+   * 壳内那两条目前没有任何自动化覆盖，要验得先把用例跑进真壳（§11.10.4 壳冒烟）。
    */
-  /* 打开设置 → 创作后端 → 点「打开查看」。假 ComfyUI 在 8188 上（见
-   * playwright.config.ts 的第二个 webServer），带 `--enable-cors-header`
-   * 语义启动，即用户实际会遇到的正常路径。 */
-  async function openComfyFromSettings(page: Page) {
+  /**
+   * ComfyUI 相关 tRPC 端点的统一桩：状态说「在跑、地址是假服务」，内嵌探测结论
+   * 可参数化，「在浏览器打开」计次并回报成功。
+   *
+   * 为什么必须是一个处理器：同一个 URL 被多条通配路由匹配时，**后注册的那条先被
+   * 调用**，而它对不认识的 URL 会 `route.continue()` 把请求**直接放去网络** —— 先
+   * 注册的那条根本没机会应答。后果不是「有点遮蔽」而是两边都静默失灵：实测先挂
+   * 计次桩、后挂状态桩，`comfyOpen` 计数恒 0（看起来像动作没发出，其实是路由顺序
+   * 吃的）。所以这个 describe 里的 ComfyUI 端点统一由下面这一个处理器分派。
+   * 假 ComfyUI 在 8188 上（playwright.config 的第二个 webServer）。
+   */
+  async function stubComfyTrpc(
+    page: Page,
+    options: { embeddable?: boolean } = {},
+  ) {
+    const calls = { open: 0 };
+    await page.route("**/api/trpc/**", async (route: Route) => {
+      const url = route.request().url();
+      /* 两种响应形状不能混：`comfyui.status` 的 `data` **就是**状态对象，
+         而 `comfyEmbeddable` / `comfyOpen` 的 `data` 外面还包一层 `json`
+         （与文件顶部 `stubBackend` 的用法一致）。包错层前端读到的是 undefined。 */
+      const fulfillRaw = (data: unknown) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ result: { data } }),
+        });
+      const fulfillJson = (data: unknown) => fulfillRaw({ json: data });
+      if (url.includes("comfyui.status")) {
+        await fulfillRaw({
+          up: true,
+          base: "http://127.0.0.1:8188",
+          starting: false,
+          stopping: false,
+        });
+        return;
+      }
+      if (url.includes("comfyEmbeddable")) {
+        await fulfillJson({
+          embeddable: options.embeddable ?? true,
+          reason: "ComfyUI 对跨源请求返回 403（未开启 CORS）",
+        });
+        return;
+      }
+      if (url.includes("comfyOpen")) {
+        calls.open += 1;
+        await fulfillJson({
+          ok: true,
+          detail: "已用系统默认浏览器打开 ComfyUI",
+        });
+        return;
+      }
+      await route.continue();
+    });
+    return calls;
+  }
+
+  /**
+   * 打开设置 → 创作后端（→ 可选地点「打开查看」）。
+   *
+   * `thenOpenView` 给 false 的场合：下一条用例要数「在浏览器打开」有没有额外开
+   * 窗口，而「打开查看」本身就会开一个新浏览器页签 —— 顺手点上它，判据就被自己
+   * 的动作污染了。
+   */
+  async function openComfyFromSettings(page: Page, thenOpenView = true) {
     await page.goto("/workspace");
     await page
       .getByRole("button", { name: "设置", exact: true })
@@ -1275,87 +1486,72 @@ test.describe("应用页签与全屏视图 @critical", () => {
       timeout: 20_000,
     });
     await page.getByRole("button", { name: "创作后端", exact: true }).click();
+    if (!thenOpenView) {
+      return;
+    }
+    /* 先等状态真的落到界面上，再点「打开查看」。
+       浏览器分支只有拿得到**已缓存的 base** 时才同步 `window.open`；缓存还空着会先
+       `await` 一次 refetch，而 await 之后再 open 会被弹窗拦截器吞掉 —— 表现是「点了
+       没反应」，用例等到超时（整批跑时实测复现，单跑因为缓存已热不复现）。这一句同时
+       也是「用户看得见 ComfyUI 在跑、地址就在按钮旁边」的断言。 */
+    await expect(page.getByText(/ComfyUI 运行中/).first()).toBeVisible({
+      timeout: 20_000,
+    });
     await page
       .getByRole("button", { name: /打开查看/ })
       .first()
       .click();
   }
 
-  test("@critical ComfyUI 在页签里内嵌渲染 不另开窗口", async ({ page }) => {
-    let windowCount = 0;
-    page.on("popup", () => {
-      windowCount += 1;
-    });
+  test("@critical 浏览器形态点「打开查看」把 ComfyUI 交给新浏览器页签", async ({
+    page,
+    context,
+  }) => {
+    await stubComfyTrpc(page);
+    const popupPromise = context.waitForEvent("page", { timeout: 20_000 });
 
     await openComfyFromSettings(page);
 
-    // 页签里确实渲染出被嵌页（而不是一片空白）。
-    await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(1, {
-      timeout: 20_000,
-    });
-    // 页签栏出现 ComfyUI —— 就是用户要的「多页签」形态。
-    await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
-    // 且**没有**弹出第二个窗口。
-    expect(windowCount).toBe(0);
+    // 真的开出一个新浏览器页签，地址就是 ComfyUI（假服务在 8188）。
+    const popup = await popupPromise;
+    expect(popup.url()).toContain("127.0.0.1:8188");
+    await popup.close();
+
+    // 反馈要看得见：静默打开新页签，用户不知道发生了什么。
+    await expect(page.getByText(/已在新浏览器页签打开 ComfyUI/)).toBeVisible();
+
+    /* 浏览器形态不内嵌、也不画假页签栏（判据 `shouldUseBrowserTab`）。
+       「壳内页签里渲染 iframe」那条契约在这里量不到，见上面的说明块。 */
+    await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(0);
+    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(
+      0,
+    );
   });
 
-  /* 负向：内嵌探测判「不可嵌」时，**仍然留在同一个页签**里给出可读说明 ——
-   * 不塞一个注定空白的 iframe、不弹第二个窗口、不跳浏览器。
+  /* 负向（浏览器形态版）：即使服务端内嵌探测回答「不可嵌」，浏览器形态也**不去看
+   * 这个结论** —— 它压根不内嵌，直接交给新浏览器页签。所以这里守的是两件「不该
+   * 出现」：不塞一个注定空白的 iframe、不把壳内那句「无法在此页签中显示」搬到浏览器
+   * 形态来（那句说明的前提是「同一个页签」，浏览器形态没有这个页签）。
    *
-   * 只桩 `comfyEmbeddable` 一个端点（其余走真实后端）：判定要覆盖的是
-   * 「客户端拿到 blocked 结论后怎么渲染」，而 blocked 的**成因**（ComfyUI 未开
-   * CORS 对跨源返 403）已在 `src/lib/comfy-embed.test.ts` 与假 ComfyUI 的
-   * 真实 403 场景里各自钉住。 */
-  test("@critical ComfyUI 不可嵌时在同一页签里给说明 不另开窗口", async ({
+   * 壳内的正向契约（不可嵌 → 同一个页签内给可读说明、且不弹第二个窗口）在本套件
+   * 量不到，归 §11.10.4 的壳冒烟。`blocked` 结论本身怎么产出由
+   * `src/lib/comfy/comfy-embed.test.ts` 守着。 */
+  test("@critical 内嵌探测结论不影响浏览器形态：仍走新浏览器页签", async ({
     page,
+    context,
   }) => {
-    let windowCount = 0;
-    page.on("popup", () => {
-      windowCount += 1;
-    });
-
-    await page.route("**/api/trpc/**", async (route: Route) => {
-      const url = route.request().url();
-      if (!url.includes("comfyEmbeddable")) {
-        await route.continue();
-        return;
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          result: {
-            data: {
-              /* 必须是**服务端**的探测结论形状（`{ embeddable, reason }`）：
-               * `target` 是客户端 `openComfyTab` 的产出，桩在这里等于把
-               * 「结论 → 渲染」这段链路整个跳过。 */
-              json: {
-                embeddable: false,
-                reason: "ComfyUI 对跨源请求返回 403（未开启 CORS）",
-              },
-            },
-          },
-        }),
-      });
-    });
+    await stubComfyTrpc(page, { embeddable: false });
+    const popupPromise = context.waitForEvent("page", { timeout: 20_000 });
 
     await openComfyFromSettings(page);
 
-    // 绝不塞一个注定空白的内嵌 iframe（那正是空白页签的来源）。
+    const popup = await popupPromise;
+    expect(popup.url()).toContain("127.0.0.1:8188");
+    await popup.close();
+
+    // 壳内那句说明不该出现在浏览器形态里。
+    await expect(page.getByText(/无法在此页签中显示/)).toHaveCount(0);
     await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(0);
-    // 说明留在**页签内**，用户看得见成因。
-    await expect(page.getByText(/无法在此页签中显示 ComfyUI/)).toBeVisible({
-      timeout: 20_000,
-    });
-    // 说明里必须带上**地址**：只剩一句「看不了」时，用户无法自查，也分不清是
-    // 应用外壳拦的还是 ComfyUI 自己拦的（ISSUE #310 第三次回归的现场）。
-    await expect(
-      page.getByText("http://127.0.0.1:8188", { exact: true }),
-    ).toBeVisible();
-    // 页签本身照常存在（不是「什么都没发生」）。
-    await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
-    // 不弹第二个窗口。
-    expect(windowCount).toBe(0);
   });
 
   /**
@@ -1366,7 +1562,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 浏览器里没法真开一个系统窗口，所以这里断言「动作发出去了」——桩掉该端点
    * 并数调用次数；同时用 popup 计数确认**没有**在应用内另开窗口。
    */
-  test("@critical 在浏览器打开 ComfyUI 不新增也不切换应用页签", async ({
+  test("@critical 在浏览器打开 ComfyUI 动作发出且不切走当前视图", async ({
     page,
   }) => {
     let windowCount = 0;
@@ -1374,48 +1570,14 @@ test.describe("应用页签与全屏视图 @critical", () => {
       windowCount += 1;
     });
 
-    let browserOpenCalls = 0;
-    await page.route("**/api/trpc/**", async (route: Route) => {
-      const url = route.request().url();
-      if (!url.includes("comfyOpen")) {
-        await route.continue();
-        return;
-      }
-      browserOpenCalls += 1;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          result: {
-            data: {
-              json: { ok: true, detail: "已用系统默认浏览器打开 ComfyUI" },
-            },
-          },
-        }),
-      });
-    });
+    /* 状态、内嵌结论与「在浏览器打开」的计次都由同一个桩负责：这条通配路由
+       后注册者优先，另挂一条会把统一桩整个遮蔽（实测计数恒 0）。 */
+    const comfyCalls = await stubComfyTrpc(page);
 
-    await openComfyFromSettings(page);
-    // 先走页签形态（同一条 @critical 链路）：此刻页签是「主应用 + ComfyUI」。
-    // 用可重试的 `toHaveCount` 取基线，不用一次性 `count()` —— 「打开查看」里
-    // 先 await 服务端探测、再 openTab，页签是**过一会儿**才出现的；一次性取值
-    // 会把尚未新增的「1 个」当成基线，随后断言必然失败（本次实测踩到）。
-    await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
-    await expect(page.getByRole("tab")).toHaveCount(2);
-    const tabsBefore = await page.getByRole("tab").count();
+    await openComfyFromSettings(page, false);
+    // 设置页停在创作后端那一屏（上面没离开设置），基线就是「仍在设置里」。
+    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
 
-    // 回到设置里点「在浏览器打开」。
-    // 先切回**主应用**页签：ComfyUI 页签是保持挂载 + CSS 显隐的（切页签不丢画布
-    // 编辑态），而上面刚把 ComfyUI 页签激活了 —— 主应用连同设置页一起被 `hidden`，
-    // 不切回来则导航栏与按钮都点不到。切回后设置页仍停在创作后端那一屏
-    // （点「打开查看」不离开设置），不必再点一次导航栏的「设置」（那会再叠一层
-    // 设置全屏视图，把底下的界面盖住）。
-    await page.getByRole("tab", { name: "主应用" }).click();
-    const activeBefore = await page
-      .getByRole("tab")
-      .evaluateAll((els) =>
-        els.findIndex((el) => el.getAttribute("aria-selected") === "true"),
-      );
     await page
       .getByRole("button", { name: /在浏览器打开/ })
       .first()
@@ -1423,24 +1585,16 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
     // 动作确实发出了（服务端有可见出口，不是静默失败）。
     await expect
-      .poll(() => browserOpenCalls, { timeout: 20_000 })
+      .poll(() => comfyCalls.open, { timeout: 20_000 })
       .toBeGreaterThan(0);
-    // 页签数量不变、激活项也不变：这条出口不新增、也不切换页签。
-    await expect(page.getByRole("tab")).toHaveCount(tabsBefore);
-    await expect
-      .poll(
-        () =>
-          page
-            .getByRole("tab")
-            .evaluateAll((els) =>
-              els.findIndex(
-                (el) => el.getAttribute("aria-selected") === "true",
-              ),
-            ),
-        { timeout: 10_000 },
-      )
-      .toBe(activeBefore);
-    // 也不在应用内另开窗口。
+    /* 这条出口不与当前视图抢位置：点完还在设置里，且它不在应用内开新页签、
+       也不弹浏览器页签（走的是系统默认浏览器那条服务端出口）。
+       壳内那条「不新增也不切换应用页签」在这里量不到 —— 浏览器形态本来就没有
+       应用内页签栏，归 §11.10.4 壳冒烟。 */
+    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
+    await expect(page.getByRole("tablist", { name: "应用页签" })).toHaveCount(
+      0,
+    );
     expect(windowCount).toBe(0);
   });
 });

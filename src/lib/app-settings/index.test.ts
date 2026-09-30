@@ -8,6 +8,7 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
     comfyLorasDir: "",
     comfyuiPath: "",
     comfyuiExtraArgs: "",
+    comfyCliPython: "",
     comfyuiAutoStart: true,
     comfyuiPort: 0,
     loginRequired: false,

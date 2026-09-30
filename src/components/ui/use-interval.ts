@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
+import { startPollTimer } from "~/lib/poll-timer";
 
 /**
  * useInterval —— 「按固定间隔重复跑一个异步动作」的**唯一实现**
@@ -57,6 +57,16 @@ export interface UseIntervalOptions {
    * 页面在跟新（例如挂着看长任务进度），维持既有语义不越过边界。
    */
   pauseWhenUnfocused?: boolean;
+  /**
+   * 轮询动作抛错时的通道；缺省落浏览器控制台（视图层可以这么写，
+   * `src/lib` 里的实现本体不行 —— 见 poll-timer 的对应注释）。
+   */
+  onError?: (err: unknown) => void;
+}
+
+/** 视图侧默认通道：一次失败一行，不炸轮询循环。 */
+function reportPollError(err: unknown): void {
+  console.error("[use-interval] 轮询动作抛错", err);
 }
 
 /**
@@ -72,9 +82,16 @@ export function useInterval(
     immediate = true,
     pauseWhenHidden = true,
     pauseWhenUnfocused,
+    onError = reportPollError,
   }: UseIntervalOptions,
 ): void {
   const runRef = useRef(run);
+  /* onError 与 run 同样走 ref：它每次渲染可能是新的箭头函数，进了依赖数组就会
+     因调用方内联写法而反复重建定时器；放 ref 里则由 effect 一次性接走、读最新值。 */
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
   /* 渲染期写 ref 会被 react-hooks/refs 判为「渲染期访问 ref」，且并发渲染下
    * 可能写到被丢弃的那次渲染上 —— 在 effect 里同步（同 `use-update-check`
    * 的 `onDirtyRef`）。 */
@@ -83,66 +100,15 @@ export function useInterval(
   }, [run]);
 
   useEffect(() => {
-    if (ms == null || ms <= 0) return;
-
-    // 未显式指定时按运行环境决定：桌面壳里默认开、浏览器 tab 里默认关。
-    const unfocused = pauseWhenUnfocused ?? isDesktopShell();
-
-    let timer: ReturnType<typeof setInterval> | null = null;
-
-    const tick = () => {
-      void runRef.current();
-    };
-    const start = () => {
-      if (timer !== null) clearInterval(timer);
-      if (immediate) tick();
-      timer = setInterval(tick, ms);
-    };
-    const stop = () => {
-      if (timer !== null) {
-        clearInterval(timer);
-        timer = null;
-      }
-    };
-
-    if (!pauseWhenHidden && !unfocused) {
-      start();
-      return stop;
-    }
-
-    // 停轮询的判据：任一命中即「用户此刻不在这个窗口上」。
-    // - `visibilitychange` 覆盖：浏览器切标签页 / 最小化 / 系统休眠；
-    // - `document.hasFocus()` 覆盖：桌面壳里窗口被别的窗口遮挡但未最小化，
-    //   visibilityState 仍是 visible，`visibilitychange` 不触发。
-    const shouldPause = () => {
-      if (pauseWhenHidden && document.visibilityState !== "visible")
-        return true;
-      if (unfocused && !document.hasFocus()) return true;
-      return false;
-    };
-
-    const onChange = () => {
-      if (shouldPause()) stop();
-      else start();
-    };
-
-    if (!shouldPause()) start();
-    if (pauseWhenHidden) {
-      document.addEventListener("visibilitychange", onChange);
-    }
-    if (unfocused) {
-      window.addEventListener("focus", onChange);
-      window.addEventListener("blur", onChange);
-    }
-    return () => {
-      stop();
-      if (pauseWhenHidden) {
-        document.removeEventListener("visibilitychange", onChange);
-      }
-      if (unfocused) {
-        window.removeEventListener("focus", onChange);
-        window.removeEventListener("blur", onChange);
-      }
-    };
+    /* 实现本体在 `~/lib/poll-timer` —— 那份「立即先跑 / 后台暂停 / 回前台补跑 /
+       桌面壳失焦也暂停」的判据只能有一处：非 React 的持有者（如系统指标 store）
+       也要用它，各写一份一定会漂。这里只负责把它接到组件生命周期上。 */
+    return startPollTimer(() => runRef.current(), {
+      ms,
+      immediate,
+      pauseWhenHidden,
+      pauseWhenUnfocused,
+      onError: (err: unknown) => onErrorRef.current(err),
+    });
   }, [ms, immediate, pauseWhenHidden, pauseWhenUnfocused]);
 }

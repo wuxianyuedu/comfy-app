@@ -70,13 +70,15 @@ export function readOrCreateAuthSecret(appRoot) {
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(
         file,
-        `${JSON.stringify({ betterAuthSecret: secret }, null, 2) }\n`,
+        `${JSON.stringify({ betterAuthSecret: secret }, null, 2)}\n`,
         "utf8",
       );
       return secret;
     }
     // 其它读失败（权限 / 目录被删成半个）是真故障，必须报出来。
-    throw new Error(`cannot read auth secret: ${file} (${err?.message ?? err})`);
+    throw new Error(
+      `cannot read auth secret: ${file} (${err?.message ?? err})`,
+    );
   }
   // 以下三种「文件在但内容不能用」一律抛错，**不悄悄换一把**：换密钥等于把用户已有的
   // 会话全部作废（表现是莫名其妙被登出），而现场不会有任何线索指向密钥文件坏了。
@@ -121,12 +123,17 @@ export function standaloneDbFile(appRoot) {
  * @param {{ appRoot: string, dbFile?: string }} input
  * @returns {{ applied: boolean, tablesBefore: number, tablesAfter: number }}
  */
-export function ensureStandaloneSchema({ appRoot, dbFile = standaloneDbFile(appRoot) }) {
+export function ensureStandaloneSchema({
+  appRoot,
+  dbFile = standaloneDbFile(appRoot),
+}) {
   const schemaFile = path.join(appRoot, "schema.sql");
   const db = new DatabaseSync(dbFile);
   try {
     const count = () =>
-      db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table'").get().n;
+      db
+        .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table'")
+        .get().n;
     const tablesBefore = Number(count());
     if (tablesBefore > 0) {
       return { applied: false, tablesBefore, tablesAfter: tablesBefore };
@@ -137,8 +144,16 @@ export function ensureStandaloneSchema({ appRoot, dbFile = standaloneDbFile(appR
           "(emitted by scripts/build-desktop.mjs); run `pnpm tauri build` (or node scripts/build-desktop.mjs) first",
       );
     }
+    // PRAGMA 清单的权威定义在 `src/lib/sqlite-pragmas.ts`（那条 TS 侧的共用清单）；
+    // 本文件是非 TS 宿主、引不到它，所以照抄一份，由 `tests/sqlite-pragma-sites.test.ts`
+    // 核两边一致。下面那条 busy_timeout 是**这一侧自己的**预算，故意比宿主的
+    // `SQLITE_BUSY_TIMEOUT_MS`（250ms）长：这里是首启建表，一次跑完整个 schema 文件，
+    // 撞上一个还在跑的宿主时「等一等」比「启动失败」好，而这个进程此刻不在服务任何界面
+    // 请求（libsql/node:sqlite 的语句执行都是同步的，等锁的毫秒数就是本进程停摆的毫秒数，
+    // 所以交互侧只给 250ms）。TS 侧走 `timeout` 客户端选项而不是 PRAGMA —— 见那文件头。
     db.exec("PRAGMA journal_mode = WAL");
     db.exec("PRAGMA foreign_keys = ON");
+    db.exec("PRAGMA busy_timeout = 2000");
     db.exec(readFileSync(schemaFile, "utf8"));
     const tablesAfter = Number(count());
     if (tablesAfter === 0) {
@@ -164,7 +179,11 @@ export function ensureStandaloneSchema({ appRoot, dbFile = standaloneDbFile(appR
  * @param {{ appRoot: string, port: number, env?: NodeJS.ProcessEnv }} input
  * @returns {NodeJS.ProcessEnv}
  */
-export function buildStandaloneRuntimeEnv({ appRoot, port, env = process.env }) {
+export function buildStandaloneRuntimeEnv({
+  appRoot,
+  port,
+  env = process.env,
+}) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(
       `standalone runtime needs a valid PORT from the shell, got: ${JSON.stringify(port)}`,
@@ -172,6 +191,16 @@ export function buildStandaloneRuntimeEnv({ appRoot, port, env = process.env }) 
   }
   return {
     ...env,
+    // 载荷**就是**生产构建（Next 自己的 standalone `server.js` 启动即把这一项设成
+    // production）。必须由这里显式给的原因是宿主：它是独立 Node 进程，不经过
+    // `server.js`，而 `src/lib/core/logger.ts` 在 `NODE_ENV !== "production"` 时选的
+    // 是 pino-pretty 的 worker transport —— `pino-pretty` 是 devDependency，**不在载荷
+    // 里**，于是宿主在模块加载阶段就 `unable to determine transport target for
+    // "pino-pretty"` 退出 1（实测：桌包设 `COMFY_EXECUTOR=host` 时入口打出
+    // `host exited code=1`）。`pnpm build` 收尾的冒烟看不见这一条，因为它跑的
+    // `.next/standalone` 在仓库里，Node 的模块上溯会撞到仓库的 dev 依赖——
+    // 「在仓库里能跑、装到用户机器上就崩」正是这条判据要堵的形状。
+    NODE_ENV: "production",
     SKIP_ENV_VALIDATION: "1",
     PORT: String(port),
     HOSTNAME: LOOPBACK_HOST,

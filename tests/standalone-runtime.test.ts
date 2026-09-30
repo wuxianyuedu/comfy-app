@@ -242,6 +242,20 @@ describe("入口的运行期环境装配（分发产物不含 .env）", () => {
     expect(env.BETTER_AUTH_URL).toBe("http://127.0.0.1:4123");
   });
 
+  it("NODE_ENV 必须是 production，并且盖掉继承来的 development", async () => {
+    const { buildStandaloneRuntimeEnv } = await loadEnv();
+    // 载荷**就是**生产构建（Next 的 standalone `server.js` 自己会设这一项），但宿主
+    // 是独立进程、不经过 server.js。留在 development 的后果实测过：`src/lib/core/logger.ts`
+    // 会选 pino-pretty 的 worker transport，而那是 devDependency、不在载荷里，宿主在
+    // 模块加载阶段就 `unable to determine transport target for "pino-pretty"` 退出 1。
+    const env = buildStandaloneRuntimeEnv({
+      appRoot: workdir,
+      port: 4127,
+      env: { NODE_ENV: "development" },
+    });
+    expect(env.NODE_ENV).toBe("production");
+  });
+
   it("BETTER_AUTH_SECRET 跨调用稳定（变了等于把用户登出）", async () => {
     const { buildStandaloneRuntimeEnv, AUTH_SECRET_FILE_REL } = await loadEnv();
     const first = String(
@@ -332,8 +346,10 @@ describe("首启建表（载荷里没有 drizzle-kit）", () => {
 });
 
 describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大声失败）", () => {
-  /** 组一个最小载荷：入口与注册表里的运行期脚本都在，`server.js` 用桩替。 */
-  function stagePayload(serverBody: string) {
+  /** 组一个最小载荷：入口与注册表里的运行期脚本都在，`server.js` 用桩替。
+   *  `host` 给字符串 = 用这份桩覆盖 `scripts/executor-host.mjs`（注册表会把真入口
+   *  拷进来，不覆盖就会真起一个宿主）；给 `null` = 载荷里**没有**宿主入口。 */
+  function stagePayload(serverBody: string, host?: string | null) {
     for (const name of registry.RUNTIME_SCRIPTS) {
       if (registry.BUILT_RUNTIME_SCRIPTS.includes(name)) continue; // 构建期产物，桩里没有
       const src = path.join(ROOT, "scripts", name);
@@ -343,21 +359,41 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
       cpSync(src, dest);
     }
     writeFileSync(path.join(workdir, "schema.sql"), FIXTURE_DDL, "utf8");
+    // 回收入口运行期 `await import` 的那份 TS 也要在（真载荷由 build-desktop 按
+    // `RUNTIME_SRC` 逐文件放行）。缺它 `reap-process.mjs` 会报「无法加载进程树回收
+    // 模块」，于是「收了两棵树」那类断言验的就不是回收，而是假出来的载荷。
+    for (const rel of registry.RUNTIME_SRC) {
+      const dest = path.join(workdir, "src", rel);
+      mkdirSync(path.dirname(dest), { recursive: true });
+      cpSync(path.join(ROOT, "src", rel), dest);
+    }
     if (serverBody !== "") {
       writeFileSync(path.join(workdir, "server.js"), serverBody, "utf8");
     }
+    const hostPath = path.join(workdir, "scripts", "executor-host.mjs");
+    if (host === null) rmSync(hostPath, { force: true });
+    else if (host !== undefined) writeFileSync(hostPath, host, "utf8");
   }
 
   const entryPath = () =>
     path.join(workdir, "scripts", "standalone-runtime.mjs");
-  const runWith = (port: string) =>
+  const runWith = (port: string, extraEnv: Record<string, string> = {}) =>
     spawnSync(process.execPath, [entryPath()], {
       encoding: "utf8",
-      env: { ...process.env, PORT: port },
+      env: { ...process.env, PORT: port, ...extraEnv },
       timeout: 90_000,
     });
   const both = (r: { stdout?: string; stderr?: string }) =>
     `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  /** 宿主自己的输出通道内容（入口把这两份路径写在 `host pid=` 那一行里）。 */
+  function hostStdout() {
+    const dir = path.join(workdir, "log", "services");
+    if (!existsSync(dir)) return "";
+    return readdirSync(dir)
+      .filter((n) => n.startsWith("executor-host-stdout-"))
+      .map((n) => readFileSync(path.join(dir, n), "utf8"))
+      .join("");
+  }
 
   it("boot 行 + 首启建表 + 按次命名的日志（文件名里没有冒号与空格）", () => {
     stagePayload("console.log('stub server up'); process.exit(0);\n");
@@ -404,6 +440,99 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     expect(out.status).toBe(1);
     expect(both(out)).toMatch(/PORT/);
   });
+
+  /* ── 宿主半边（3-E2b，ISSUE #1216 收口的那一半）───────────────────────────
+   *
+   * 判据都落在**真跑**上：桩宿主把自己的 env 打到 stdout（入口已把它重定向到
+   * `log/services/executor-host-stdout-*.log`），于是「开关有没有读到、库是不是同一份、
+   * boot id 有没有串起来」都是看得见的字，而不是对源码文本的想象。 */
+
+  const STUB_HOST_ALIVE =
+    "process.stdout.write(`HOST exec=${process.env.COMFY_EXECUTOR} " +
+    "db=${process.env.DATABASE_URL} boot=${process.env.COMFYAPP_HOST_BOOT_ID} " +
+    "node=${process.env.NODE_ENV}\\n`);\n" +
+    "setInterval(() => {}, 500);\n";
+
+  it("COMFY_EXECUTOR=host ⇒ 起宿主，env 带着归一化值 / 绝对库 / boot id，退出时收两棵树", () => {
+    stagePayload(
+      "console.log('stub server up'); process.exit(0);\n",
+      STUB_HOST_ALIVE,
+    );
+    const out = runWith("4220", { COMFY_EXECUTOR: "host" });
+    const text = both(out);
+    expect(out.status, text).toBe(0);
+    expect(text).toMatch(/executor mode=host/);
+    const hostPid = /host pid=(\d+)/.exec(text)?.[1];
+    expect(hostPid, text).toBeTruthy();
+    // 桩宿主的输出：三项都必须落在同一个值上
+    const echoed = hostStdout();
+    expect(echoed).toContain("exec=host");
+    // 绝对路径：宿主与 server 读同一个库文件，靠的就是这一条（相对路径 = 赌两侧锚点一致）。
+    // 判据写成「绝对路径」而不是某个平台的形状：原实现只认 `[A-Za-z]:\`，
+    // 那是把 Windows 当唯一平台（本仓库处处强调跨平台），在 POSIX 上必红。
+    const dbUrl = /db=(file:\S+)/.exec(echoed)?.[1] ?? "";
+    expect(dbUrl, `宿主没回显库路径：${echoed}`).not.toBe("");
+    expect(path.isAbsolute(dbUrl.slice("file:".length))).toBe(true);
+    // 子进程真的拿到 production（不是只在单测里成立）：pino 在别值时去找 pino-pretty，
+    // 而那份 devDependency 不在载荷里 —— 桌包宿主退出 1 的现场就是这条。
+    expect(echoed).toContain("node=production");
+    const stamp = /executor-host-stdout-(\S+?)\.log/.exec(text)?.[1];
+    expect(stamp, `入口没打出宿主输出通道：${text}`).toBeTruthy();
+    expect(
+      echoed,
+      `boot id 必须与本次日志同名（跨进程 grep 的唯一线索）：${echoed}`,
+    ).toContain(`boot=${stamp}`);
+    // 退出时先收宿主（server 已自己退了，不该出现它的假 reap）
+    expect(text).toContain(`reap pid=${hostPid}`);
+    expect(text).not.toMatch(/reap FAILED/);
+  });
+
+  it("不设开关 ⇒ 明确写出 mode=inline，且一个宿主进程都不起", () => {
+    stagePayload("process.exit(0);\n", STUB_HOST_ALIVE);
+    const out = runWith("4221");
+    const text = both(out);
+    expect(out.status, text).toBe(0);
+    expect(text).toMatch(/executor mode=inline/);
+    expect(text).not.toMatch(/host pid=/);
+    expect(existsSync(path.join(workdir, "log", "services"))).toBe(false);
+  });
+
+  it("设了 host 而载荷里没有宿主入口 ⇒ 大声说明并留在 host 归属，不偷偷降级", () => {
+    stagePayload("console.log('stub server up'); process.exit(0);\n", null);
+    const out = runWith("4222", { COMFY_EXECUTOR: "host" });
+    const text = both(out);
+    expect(out.status, text).toBe(0);
+    expect(text).toMatch(/host SKIPPED/);
+    // 降级（改判 inline）会把已经写成 host 归属的行变成没人领的孤儿 —— 明令不许。
+    expect(text).not.toMatch(/mode=inline/);
+  });
+
+  it("宿主中途退出 ⇒ 大声一行、server 继续跑、退出码仍由 server 定，且不再补刀", () => {
+    stagePayload(
+      "setTimeout(() => process.exit(0), 1500);\n",
+      "process.exit(7);\n",
+    );
+    const out = runWith("4223", { COMFY_EXECUTOR: "host" });
+    const text = both(out);
+    expect(out.status, text).toBe(0);
+    expect(text).toMatch(/host exited code=7/);
+    // 已经退掉的宿主不许再补一刀（那会在日志里留一行假的 reap FAILED）
+    const hostPid = /host pid=(\d+)/.exec(text)?.[1];
+    expect(hostPid, text).toBeTruthy();
+    expect(text).not.toContain(`reap pid=${hostPid}`);
+  });
+
+  it("开关值两侧同判据：带空格的 host 仍起宿主，认不出的值按 inline 起并回显原值", () => {
+    stagePayload("process.exit(0);\n", STUB_HOST_ALIVE);
+    const padded = both(runWith("4224", { COMFY_EXECUTOR: " host " }));
+    expect(padded).toMatch(/executor mode=host/);
+    expect(padded).toMatch(/host pid=\d+/);
+
+    stagePayload("process.exit(0);\n", STUB_HOST_ALIVE);
+    const weird = both(runWith("4225", { COMFY_EXECUTOR: "weird" }));
+    expect(weird).toMatch(/executor mode=inline unknown="weird"/);
+    expect(weird).not.toMatch(/host pid=/);
+  });
 });
 
 describe("装配、打包配置与产物判据三者同形", () => {
@@ -415,6 +544,26 @@ describe("装配、打包配置与产物判据三者同形", () => {
     // sidecar 由打包器落在资源根（剥三元组后缀），壳不许再拼 binaries/ 子目录。
     expect(shell).toContain("res_dir.join(sidecar_binary_name())");
     expect(shell).not.toContain('res_dir.join("binaries")');
+  });
+
+  it("只编壳的那条路也补齐 static 占位（bundle.resources 编译期校验）", () => {
+    // 实测（ISSUE #1247）：全新克隆上跑「一键发布构建」（build-all.ps1 →
+    // build-tauri-release.ps1，只编 release 壳、不跑 build-desktop.mjs），
+    // cargo build 在 app 的 build script 里 panic：
+    //   tauri build failed: resource path `static` doesn't exist
+    // externalBin 的报错在前（sidecar 那条已修），但两者是**同一条判据**：
+    // tauri-build 每次编译都校验 conf 里声明的路径存在，而这些路径是构建产物、
+    // 不入库，所以两条都要有补齐步。
+    const script = read("tools/scripts/build-tauri-release.ps1");
+    expect(script).toContain('$resDir = Join-Path $TAURI_DIR "static"');
+    expect(script).toContain("Test-Path $resDir");
+    // 占位目录只是编译期过闸，不许被当成可运行载荷——所以必须同时点明
+    // 「这不是载荷」与「真要桌包请跑 build-standalone」。
+    expect(script).toContain("build-standalone.ps1");
+    // resources 声明一旦挪走，这条补齐步就成了死代码：两侧同形。
+    expect(read("src-tauri/tauri.conf.json").replace(/\s+/g, "")).toContain(
+      '"resources":["static/"]',
+    );
   });
 
   it("build-desktop 里三条实测判据都还在", () => {

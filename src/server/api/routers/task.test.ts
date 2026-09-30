@@ -4,16 +4,21 @@ import type * as FsPromises from "fs/promises";
  * task.router 集成测试。
  *
  * mock 边界：~/server/db（内存 Prisma 替身）、~/server/better-auth、
- * ~/lib/core/logger（静音）、fs/promises（仅替换 stat——openFolder 的
- * 「目录存在」分支不再触真实磁盘；unlink/rm 保持真实实现，路径不存在时
- * 被 .catch 吞掉，无副作用）。repository 与限流中间件均走真实实现。
+ * ~/lib/core/logger（静音，同时给「失败必须有日志」那条硬规则留一个可断言的句柄）、
+ * fs/promises（替换 `stat` 与 `rm` —— openFolder 的「目录存在」分支与 delete 的
+ * 产物清理都不再触真实磁盘，用例也不许往仓库的 public/generated 里写删）。
+ * repository 与限流中间件均走真实实现。
  */
+import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { statMock } = vi.hoisted(() => ({
+const { statMock, rmMock } = vi.hoisted(() => ({
   statMock: vi.fn<(path: string) => Promise<unknown>>(async () => {
     throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
   }),
+  rmMock: vi.fn<(path: string, opts?: unknown) => Promise<void>>(
+    async () => undefined,
+  ),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -30,10 +35,13 @@ vi.mock("~/lib/core/logger", async (importOriginal) => ({
 vi.mock("fs/promises", async (importOriginal) => ({
   ...(await importOriginal<typeof FsPromises>()),
   stat: statMock,
+  rm: rmMock,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { taskRouter } from "~/server/api/routers/task";
+import { logger } from "~/lib/core/logger";
+import { generatedRoot } from "~/lib/media/output-paths";
 import {
   getTestDb,
   seedUser,
@@ -228,6 +236,28 @@ describe("task.workflow", () => {
       "Task not found",
     );
   });
+
+  it("他人任务 → NOT_FOUND（台账 A2：快照里是整份工作流，越权读等于抄走别人的图）", async () => {
+    seedTask(tdb, {
+      id: "task-b",
+      userId: "user-b",
+      workflowSnapshot: {
+        workflow: { nodes: [{ type: "KSampler" }] },
+        source: "canvas",
+        capturedAt: "t0",
+      },
+    });
+    const caller = createCaller(
+      makeCtx({ user: { id: "user-a", email: "a@test.dev", name: null } }),
+    );
+    await expect(caller.workflow({ id: "task-b" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    // 不存在的 id 走同一条出口：越权与「查不到」不可区分，不给探测 id 用
+    await expect(caller.workflow({ id: "nope" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
 });
 
 // ─────────────────────────────────── openFolder ───────────────────────────────────
@@ -267,15 +297,56 @@ describe("task.openFolder", () => {
 // ───────────────────────────────── delete（限流） ─────────────────────────────────
 
 describe("task.delete（rateLimitedProcedure）", () => {
-  it("删除自己的任务：连产物清理一起触发，行被移除", async () => {
+  it("删除自己的任务：产物目录整体删掉、行被移除", async () => {
     seedTask(tdb, {
       id: "task-1",
       userId: "user-a",
-      images: [COVER("img-1", "/nonexistent/task-1/1.png")],
+      images: [COVER("img-1", "/api/generated/task-1/1.png")],
     });
     expect(await createCaller(makeCtx()).delete({ id: "task-1" })).toEqual({
       ok: true,
     });
+    expect(rmMock).toHaveBeenCalledWith(
+      path.resolve(generatedRoot(), "task-1"),
+      { recursive: true, force: true },
+    );
+    expect(tdb.$tables.tasks.find((t) => t.id === "task-1")).toBeUndefined();
+  });
+
+  it("项目任务的产物目录按 projects/<pid>/<tid> 删（与落盘侧同一布局，台账 A8）", async () => {
+    /* 旧写法在这里只拼 `public/generated/<taskId>`，而 executor-finalize 对
+     * 项目任务落的是 `projects/<pid>/<tid>` —— 「在画布里删任务」于是永远删不到
+     * 目录，磁盘单调增长，且失败被 .catch 吞掉、日志里一个字都没有。 */
+    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
+    await createCaller(makeCtx()).delete({ id: "task-1" });
+    expect(rmMock).toHaveBeenCalledWith(
+      path.resolve(generatedRoot(), "projects", "proj-1", "task-1"),
+      { recursive: true, force: true },
+    );
+  });
+
+  it("id 形状越界 → 不动磁盘、只删库行，并把原因落日志（台账 A8 的另一半）", async () => {
+    /* 落库的 id 正常是服务端 cuid，这里故意 seed 一行穿越形状的 id：
+     * 判据不许依赖「上游生成不了坏形状」这一条口头保证 —— `fs.rm(..., recursive)`
+     * 拿到根外路径就是整目录级别的破坏。 */
+    const evil = path.join("..", "..", "outside");
+    seedTask(tdb, { id: evil, userId: "user-a" });
+    expect(await createCaller(makeCtx()).delete({ id: evil })).toEqual({
+      ok: true,
+    });
+    expect(rmMock).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("越界"));
+    expect(tdb.$tables.tasks.find((t) => t.id === evil)).toBeUndefined();
+  });
+
+  it("磁盘删不掉不阻塞删库，但失败原因必须可见（硬规则 4）", async () => {
+    seedTask(tdb, { id: "task-1", userId: "user-a" });
+    rmMock.mockRejectedValueOnce(new Error("EBUSY: resource busy"));
+    expect(await createCaller(makeCtx()).delete({ id: "task-1" })).toEqual({
+      ok: true,
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("EBUSY"));
     expect(tdb.$tables.tasks.find((t) => t.id === "task-1")).toBeUndefined();
   });
 
@@ -284,6 +355,7 @@ describe("task.delete（rateLimitedProcedure）", () => {
     await expect(
       createCaller(makeCtx()).delete({ id: "task-b" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(rmMock).not.toHaveBeenCalled();
   });
 
   // 21 次串行调用叠加 timingMiddleware 的 dev 随机延迟，放宽本用例超时

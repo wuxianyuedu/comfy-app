@@ -30,6 +30,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
+import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
 import {
   fetchHistoryEntry,
   traceComfyQueue,
@@ -37,6 +38,7 @@ import {
 } from "./executor-history";
 import { historyTraceSummary, historyOutputKeys, trace } from "./trace";
 import { kickQueue } from "./executor-continuation";
+import { writeTerminal } from "./executor-write-retry";
 import {
   state,
   log,
@@ -45,6 +47,7 @@ import {
   claimFinalize,
   claimSettle,
   releaseDispatchSlot,
+  forgetTaskFootprint,
 } from "./runner-state";
 import type { ValidationError } from "./validation";
 
@@ -185,9 +188,10 @@ async function completeInner(
     reqW = Number(sizeMatch[1]);
     reqH = Number(sizeMatch[2]);
   }
-  const publicBase = projectId
-    ? `/api/generated/projects/${projectId}/${taskId}`
-    : `/api/generated/${taskId}`;
+  /* 产物地址前缀与磁盘目录同一份布局（`~/lib/media/output-paths`）：这一句
+   * 写进 TaskImage.localPath，删除侧要按它把整个目录删掉 —— 两处各拼一遍就
+   * 会分叉（历史上删除侧只认 `<taskId>`，项目任务的产物目录于是永远留在盘上）。 */
+  const publicBase = taskOutputUrl(taskId, projectId);
   /* 显式打一行「拉取 history」：让「最后一个节点跑完」到「history 就绪」之间的
    * 空档可见 —— ComfyUI 在这段是异步的（成功信号先到，产物后落盘），所以在
    * 这个窗口里卡住，否则看起来就像「执行器冻住了」。 */
@@ -315,10 +319,16 @@ async function completeInner(
   if (texts.length) parts.push(`${texts.length} 段文本`);
   log(taskId, "success", `✓ 生成完成，开始下载 ${parts.join("、") || "结果"}`);
 
-  const baseDir = path.join(process.cwd(), "public", "generated");
-  const dir = projectId
-    ? path.join(baseDir, "projects", projectId, taskId)
-    : path.join(baseDir, taskId);
+  /* 落盘目录：与 publicBase 同源。越界判据也在这里生效 —— projectId 由客户端
+   * 生成，一个 `../../x` 形状过去能把产物写到 public/generated 之外，而
+   * `/api/generated/[...path]` 的白名单只认根内，写出去等于文件永远读不到；
+   * 现在它变成一次硬失败（由 complete() 收口成 finalizeFailure，用户看得见）。 */
+  const dir = taskOutputDir(taskId, projectId);
+  if (!dir) {
+    throw new Error(
+      `产物目录越界，已拒绝落盘：taskId=${taskId} projectId=${projectId ?? "(无)"}`,
+    );
+  }
   await fs.mkdir(dir, { recursive: true });
   const saved: { localPath: string; mediaType: string }[] = [];
 
@@ -420,11 +430,15 @@ async function completeInner(
     kickQueue();
     return;
   }
-  const outcome = await taskRepository.finalizeSuccess(taskId, {
-    resultImages: saved,
-    params: taskParamsPatched,
-    ...(workflowSnapshot ? { workflowSnapshot } : {}),
-  });
+  const outcome = await writeTerminal(taskId, "成功收口", () =>
+    taskRepository.finalizeSuccess(taskId, {
+      resultImages: saved,
+      params: taskParamsPatched,
+      ...(workflowSnapshot ? { workflowSnapshot } : {}),
+    }),
+  );
+  /* 只把「状态那一次写」纳入重试预算：下面的产物行与日志刷盘若失败，行已经是
+   * SUCCEEDED（用户看得见终态），属于另一种坏法（少几行产物），不在 #1250 这条上。 */
   if (outcome !== "written") {
     /* 进程内的 claimFinalize 挡得住同进程的重复收口，挡不住跨进程：这一行
      *  可能已被对侧宿主收口（或压根不归本宿主）。此时**不再补 TaskImage 行**——
@@ -502,14 +516,11 @@ async function completeInner(
       Math.round((Date.now() - startedAt) / 100) / 10,
     );
     log(taskId, "info", `✓ 全部完成（总耗时 ${elapsedSec}s）`);
-    s.startedAt.delete(taskId);
   }
-  s.lastNodeByTask.delete(taskId);
-  s.promptToTask.delete(promptId);
-  s.promptByTask.delete(taskId);
-  s.executedWorkflow.delete(taskId);
-  s.lastLogPct.delete(taskId);
-  releaseDispatchSlot(taskId);
+  /* 本进程对这一行的记账一次清完（键表就是那份判据读的四样，见 runner-state）。
+   * 成功收口**不**动 `settled` / `finalized`：这一行的终态确实落库了，那两把锁
+   * 还要挡住「同进程另一条路径再写一次」。 */
+  forgetTaskFootprint(taskId, promptId);
   kickQueue();
 }
 
@@ -567,10 +578,12 @@ export async function finalizeFailure(
     : "";
   log(taskId, "error", `✗ 生成失败：${friendly}${elapsedSuffix}`);
 
-  const outcome = await taskRepository.finalizeFailure(
-    taskId,
-    friendly,
-    validationErrors?.length ? validationErrors : undefined,
+  const outcome = await writeTerminal(taskId, "失败收口", () =>
+    taskRepository.finalizeFailure(
+      taskId,
+      friendly,
+      validationErrors?.length ? validationErrors : undefined,
+    ),
   );
   if (outcome !== "written") {
     /* 典型现场：用户先点取消（行已是 CANCELLED），随后被 kill 的执行进程走到
@@ -586,20 +599,13 @@ export async function finalizeFailure(
   await persistLogs(taskId);
   await persistRawCli(taskId);
   taskRuntimeLog?.error(`任务失败 ${taskId}: ${friendly}`);
-  // 清掉本模块给这个任务加的状态，同一个 taskId 再入队时从干净状态开始。
-  if (startedAt) s.startedAt.delete(taskId);
-  s.lastNodeByTask.delete(taskId);
-  /* executedWorkflow 只在 complete() 成功分支清过，失败分支一直留着——
-   * 既泄漏内存，又让「已执行过就永远算被本进程认领」把 reaper 的孤儿回收
-   * 永久挡住。失败收口同样清掉。 */
-  s.executedWorkflow.delete(taskId);
+  /* 与成功分支同一份清理（键表见 runner-state）：`executedWorkflow` 过去只在成功
+   * 分支清，失败分支一直留着 —— 既泄漏内存，又让「本进程还在执行这一行」被
+   * reaper 的 `isTaskClaimedInProcess` 读成真的，把孤儿回收永久挡住。 */
+  forgetTaskFootprint(taskId, promptId);
   /*  这里过去先发一个合成 "state"、再发一个 "error" 事件：那时 SSE 订阅的
    *  是进程内 EventEmitter，缺了这两帧，画布的节点会永远停在「生成中」。现在
    *  SSE 只读库（ADR §13-3C），上面的 finalizeFailure 落库加 persistLogs 就是
    *  客户端看到失败的唯一来源——两种宿主同形，事件顺序也就不再是契约。 */
-  if (promptId) s.promptToTask.delete(promptId);
-  s.promptByTask.delete(taskId);
-  s.lastLogPct.delete(taskId);
-  releaseDispatchSlot(taskId);
   kickQueue();
 }

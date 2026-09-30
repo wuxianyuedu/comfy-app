@@ -47,6 +47,8 @@ export const settingRouter = createTRPCRouter({
         comfyLorasDir: z.string().optional(),
         comfyuiPath: z.string().optional(),
         comfyuiExtraArgs: z.string().optional(),
+        /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */
+        comfyCliPython: z.string().optional(),
         comfyuiAutoStart: z.boolean().optional(),
         exitKillComfyui: z.boolean().optional(),
         exitKillOllama: z.boolean().optional(),
