@@ -122,6 +122,11 @@
 > 同日已修）。这条是本轮唯一「修一个洞的同时挖出一个洞」的记录，值得留着：
 > **脱敏与回写必须一起设计** —— 出口把某个字段抹掉时，「这条没值」与「这次不覆盖」
 > 就从两态变成三态，而覆盖式写入（`replaceAll` 这类）读不出第三种意图就会变成数据丢失。
+>
+> **⑨ 第一刀（同日）把这同一族判据推到素材库**：A12（scope 不判归属）当场修掉并配 36 条
+> 判据；顺带把同一条链上更靠外的那一环记成 **A13 且明确不修** —— `/api/generated` 只判
+> 路径包含、不判会话与归属，A12 把列表收紧之后「直接猜路径读」仍然敞开。
+> 留着它是为了不让「素材库测过了」被读成「产物读取也安全了」。
 
 - [ ] **A1 鉴权默认关闭**：无会话回落演示用户，`loginRequired` 默认 false，约 20 个 router 可写。证据：`src/lib/auth-server.ts:99-106`；`src/lib/app-settings/index.ts:96`。需评估默认强鉴权或显式化。
       ⚠️ 它同时是 A2/A3/A6/A7/A8 那一批「越权」的实际可达性前提：单用户本机部署下这些
@@ -238,6 +243,43 @@
       `src/app/(main)/settings/hooks/use-settings-page.test.ts`（客户端三态表达）。
       证据：`src/lib/llm/types.ts`、`src/lib/core/repository-user.ts`、
       `src/lib/llm/server.ts`、`src/app/(main)/settings/hooks/use-settings-page.ts`。
+- [x] **A12 素材库的 scope 不判归属：能把别人的项目 id 填进参数读写删（本批修复 + 判据）**：
+      素材库是文件系统支撑的，分片方式就是**把画布项目 id 直接当目录名**
+      （`public/generated/materials/<projectId>/<folder>/<file>`），所以「scope」这个参数
+      同时是路径片段与权限边界。旧代码只判了前者（`sanitizeScope` / `sanitizeFileName` /
+      `folderDir` 的包含断言），没判后者，于是两条越权路都通着：
+      ① `scope=cross` 直接返回 `listScopes()` —— 等于把「本机都有哪些项目」当成一份
+      可枚举清单交出去，再顺着它翻每个项目的素材；② 把别人的 `proj_*` 填进任意参数，
+      读得到别人的文件、写进别人的面板、删得掉别人的文件。
+      两个入口（tRPC `material.*` 与 REST `/api/materials`）**各写一份** `resolveScopes`，
+      两份都漏了同一条判据 —— 正是 §12.12 说的形态。
+      修法：判据收成 `~/lib/media/materials.ts` 一处（`materialScopeOwnership` /
+      `visibleMaterialScopes` / `canWriteMaterialScope`），两个入口都吃它。三态而不是两态：
+      `mine` / `foreign`（一律看不见、不可写）/ `unclaimed`（共享区，或库里还没这一行 ——
+      画布 id 由客户端生成、镜像是尽力而为，把「还没同步上来的新项目」判成不可写会
+      直接堵死上传素材这条路）。处置口径照搬 A2 / A3：**越权与不存在同形**
+      （REST 404、tRPC `NOT_FOUND`），且写 / 删的拒绝发生在 `writeFile` / `rm` / `unlink` 之前。
+      判据：`src/server/api/routers/material.test.ts` 18 条 +
+      `src/app/api/materials/route.test.ts` 18 条（两个门各自一套，含「一次都没落盘」的断言）；
+      反向验证两处：写闸短路 → 恰好 4 条红，读侧收窄摘掉 → 恰好 3 条红。
+      证据：`src/lib/media/materials.ts`、`src/server/api/routers/material.ts`、
+      `src/app/api/materials/route.ts`。
+- [ ] **A13 产物与素材的读取口是纯路径静态流：`/api/generated/[...path]` 没有会话校验、也没有归属**：
+      这个端点只做「解析后仍在 `public/generated` 之内」这一条路径判据（那条有判据，
+      #1260 补的），任何能访问该端口的一方都能按路径读走**所有人**的任务产物与素材
+      （落点命名里就有别人的项目 id 与任务 id）。同一条通道也是素材面板里
+      `item.url` 指向的地方，所以 A13 把「列表」收紧之后，**直接猜路径读**仍然是敞开的。
+      本轮没修的原因是要一起定三件事，缺一件就是假修：
+      ① 加会话校验（`requireRequestUser`）会牵动桌包与 WebView 里 `<img>` / `<video>`
+      的加载语义与每请求一次的鉴权开销；② 只加会话不等于归属 —— 还得把
+      「这条路径属于哪个用户」变成可判的数据（现在只有目录名里的项目 id 与 task 行的
+      `userId` 两处真相）；③ 素材的「用户直接把文件丢进目录也算可见」是刻意选型
+      （见 `~/lib/media/materials` 的存储说明），一旦按归属过滤就得重新定义这条。
+      建议的最小一刀：先给 `/api/generated` 加会话校验（挡掉无凭据的端口扫描），
+      再按 `task.userId` / 项目归属做路径前缀白名单。
+      证据：`src/app/api/generated/[...path]/route.ts`（无 `requireRequestUser`）、
+      `src/lib/media/materials.ts`（`item.url` 的形状）、`src/lib/comfyui/executor-finalize.ts`
+      （产物落点按 `projects/<pid>/<tid>` 命名）。
 - [ ] **B1 capability 对回环通配源开满**（`http://127.0.0.1:*` + `process:default` / `updater:default`）。证据：`src-tauri/capabilities/remote.json:8-26`；`src-tauri/tauri.conf.json:31`。
 - [ ] **B2 生产路径 21 处 `unwrap()` + 构建失败 panic**，无降级 UI。证据：`src-tauri/src/lib.rs:72,918,1391,1741`；`shell_launch.rs:78,83,201`。
 - [ ] **B3 违反自身规范：`std::process::Command` 直起外部进程 3 处**（应走 `tauri-plugin-shell`）。证据：`src-tauri/src/shell_launch.rs:575`；`lib.rs:1167`；`detached_spawn.rs:147`。
@@ -291,11 +333,12 @@
       同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
       —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
       按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
-- [ ] **E3 服务端集成覆盖 6/16 router**（generate / run / task / workflow / project /
-      setting —— project 与 setting 分别是⑦第二、三批补的，全部按归属与协议闸门组织）。
-      其余 10 个里 `llm`（A4 的出口形状在 `lib/llm/server.test.ts` 判着，router 层的
-      zod 闸还没有）、`custom-nodes`（tRPC 侧）、`material` / `film` / `train` / `model`
-      都在写本机状态。E2E 仅 3 spec / 31 用例且无登录态。
+- [ ] **E3 服务端集成覆盖 7/16 router**（generate / run / task / workflow / project /
+      setting / material —— project、setting 是⑦第二、三批补的，material 是⑨第一刀补的，
+      全部按归属与协议闸门组织）。其余 9 个里 `llm`（A4 的出口形状在
+      `lib/llm/server.test.ts` 判着，router 层的 zod 闸还没有）、`custom-nodes`（tRPC 侧）、
+      `film` / `train` / `model` / `user` 都在写本机状态或读别人的行。
+      E2E 仅 3 spec / 31 用例且无登录态。
       证据：`src/server/api/routers/**`；`e2e/*.spec.ts`；`playwright.config.ts`。
 - [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。
 - [ ] **E5 棘轮 `--update` 无制衡**。证据：`AGENTS.md:94,97`。
