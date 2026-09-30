@@ -28,6 +28,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { createClient } from "@libsql/client";
 import { DatabaseSync } from "node:sqlite";
@@ -346,11 +347,18 @@ function runOnce(
   mode: string,
 ): Promise<string> {
   return new Promise((resolve) => {
-    /* 子进程由仓库自带的 `tsx` 起（`pnpm exec`），CWD 是仓库根 —— 只有这样才能
-     * 加载**真模块**（`src/lib/sqlite-pragmas.ts` 自己还会 import `~/lib/**`）。 */
+    /* 子进程**直接由 node 起 tsx**，不经 `pnpm exec`：Windows 上 `pnpm` 是 `.cmd`/`.ps1`
+     * 壳，而 Node ≥ 24 起批处理必须先经过 shell —— `spawn("pnpm.cmd", …)` 一律
+     * `EINVAL`（本仓为这件事记过账，ISSUE #638，`scripts/check-format.cjs` 文件头就是它）。
+     * 这一组要同时起 7 个进程抢同一个新库，所以也不能改成「复用 `pnpmInvocation()`」——
+     * 那条在本机会解析成 pwsh 起 `pnpm.ps1`，每个子进程多一层 shell 启动抖动，
+     * 而这套量具量的正是几毫秒窗口里的 PRAGMA 竞态（文件里另一处注释已经在抱怨启动抖动）。
+     * tsx 的入口按**它自己的 exports 表**解析（`tsx/cli`），不硬编码 `dist/cli.mjs`。
+     * CWD 仍是仓库根 —— 只有这样才能加载真模块（`src/lib/sqlite-pragmas.ts` 还要 import
+     * `~/lib/**`，别名由仓库根的 tsconfig 解析）。 */
     const child = spawn(
-      pnpmBin(),
-      ["exec", "tsx", worker, moduleUrl, startFile, file, mode],
+      process.execPath,
+      [TSX_CLI, worker, moduleUrl, startFile, file, mode],
       { cwd: ROOT, stdio: ["ignore", "pipe", "inherit"] },
     );
     let out = "";
@@ -364,11 +372,9 @@ function runOnce(
   });
 }
 
-/** `pnpm` 的可执行名按平台分叉（Windows 上是 `.cmd`）—— 与仓库其余跨平台脚本
- *  同一口径，别在这里硬编码 `pnpm`。 */
-function pnpmBin(): string {
-  return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-}
+/** tsx 的 CLI 入口：按包自己的 exports 表解析（`tsx/cli`），不硬编码 `dist/cli.mjs`，
+ *  也不去碰 `pnpm` 那个平台分叉的壳 —— 见 `runOnce` 里那段 EINVAL 的说明（ISSUE #638）。 */
+const TSX_CLI = createRequire(import.meta.url).resolve("tsx/cli");
 
 describe("等锁预算的两种形状，当场量出来", () => {
   it("开机 PRAGMA 覆盖不到池里新开的连接（那种形状等于没设）", async () => {
