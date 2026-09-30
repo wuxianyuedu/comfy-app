@@ -78,6 +78,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 本层自己的判据必须在**每一次**提交里跑：解析器一旦把「自己」算漏了，
   // 只有这一条能发现（它守的是「增量层还在增量」这件事本身）。
   "tests/affected-tests.test.ts",
+  // 「拿正则断言源码形状」前要先剥注释 —— 这件事仓里已各自内联了 18 份（ISSUE #1192），
+  // 而 §12.12 的孪生判据抓不到（每份都远小于 60 行）。台账双向都拦：新增一份 = 红，
+  // 收敛掉一份却没收紧台账 = 红。它守的是「这张表还有没有记账能力」，与本次改动无关，
+  // 所以必须进固定清单（只在受影响时才跑，等于让下一次复制悄悄过去）。
+  "tests/strip-comments-single-source.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
