@@ -131,11 +131,98 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
   it("progress 事件带 node 时透传当前节点步数（3-C D1：调用方落 progressNode）", () => {
     const { p, onProgress } = mk();
     p.sink('{"type":"progress","node":"76:69","completed":3,"total":25}\n');
+    // 这一格没给 `patched` ⇒ 认不出类名，但 id 与步数照旧透出（进度不许因为
+    // 类名缺失就丢帧）—— #1202 之前的常态就是这个形状。
     expect(onProgress).toHaveBeenCalledWith(12, {
       id: "76:69",
       value: 3,
       max: 25,
     });
+  });
+
+  it("给了 patched（提交那一刻的图）就把类名与中文标签一起透出（ISSUE #1202）", () => {
+    // raw 任务的进度历史上全走 comfy-cli 这条路，所以状态栏「当前节点」能不能显示
+    // 类名取决于这里，而不是 executor-ws 那一侧。子图 id（`76:69`）也要认得出。
+    const { p, onProgress } = mk({
+      patched: {
+        nodes: [{ id: 76, type: "SUBGRAPH_ID", inputs: [] }],
+        definitions: {
+          subgraphs: [
+            {
+              id: "SUBGRAPH_ID",
+              nodes: [{ id: 69, type: "KSampler", inputs: [] }],
+            },
+          ],
+        },
+      },
+    });
+    p.sink('{"type":"progress","node":"76:69","completed":3,"total":25}\n');
+    expect(onProgress).toHaveBeenCalledWith(12, {
+      id: "76:69",
+      value: 3,
+      max: 25,
+      classType: "KSampler",
+      label: "采样去噪",
+    });
+  });
+
+  it("`executing` 事件自带 class_type 时以事件为准（那是 ComfyUI 展开子图后的权威值）", () => {
+    const lines: Array<[string, string, string]> = [];
+    const { p } = mk({
+      log: (taskId, level, msg) => {
+        lines.push([taskId, level, msg]);
+      },
+      // 图里这一格故意给一个不同的类名：真出图实测 `executing` 带 class_type，
+      // 事件那一份才是 ComfyUI 真正在跑的那个节点。
+      patched: { nodes: [{ id: 76, type: "KSampler", inputs: [] }] },
+    });
+
+    p.sink(
+      '{"schema": "event/1", "type": "executing", "node": "76:67", ' +
+        '"title": "CLIP Text Encode (Positive Prompt)", "class_type": "CLIPTextEncode"}\n',
+    );
+
+    expect(
+      lines.map((l) => l[2]).find((m) => m.includes("comfy-cli 节点")),
+    ).toBe("▶ comfy-cli 节点 [76:67] 编码提示词（CLIPTextEncode） 开始执行");
+  });
+
+  it("`progress` 事件不带类名 ⇒ 按 `patched` 那张图认（与 WS 帧同一个出口）", () => {
+    const { p, onProgress } = mk({
+      patched: { nodes: [{ id: 76, type: "SUBGRAPH_ID", inputs: [] }] },
+    });
+    p.sink(
+      '{"schema":"event/1","type":"progress","node":"76","completed":1,"total":25}\n',
+    );
+
+    expect(onProgress).toHaveBeenCalledWith(4, {
+      id: "76",
+      value: 1,
+      max: 25,
+      classType: "SUBGRAPH_ID",
+      label: "SUBGRAPH_ID", // 表里没有的类名，nodeLabel 原样回类名（不编一个中文名）
+    });
+  });
+
+  it("事件不带 class_type 时那两行退回按图认（开始与完成用同一个名字，别一边有一边没有）", () => {
+    const lines: Array<[string, string, string]> = [];
+    const { p } = mk({
+      log: (taskId, level, msg) => {
+        lines.push([taskId, level, msg]);
+      },
+      patched: { nodes: [{ id: 3, type: "LoraLoader", inputs: [] }] },
+    });
+
+    p.sink('{"type":"executing","node":"3"}\n');
+    p.sink('{"type":"execution_success","node":"3"}\n');
+
+    // 只看这两行本身（parser 还会为每条原始行打一行「[comfy-cli 原始] …」）。
+    expect(
+      lines.map((l) => l[2]).filter((m) => m.includes("comfy-cli 节点")),
+    ).toEqual([
+      "▶ comfy-cli 节点 [3] 加载 LoRA（LoraLoader） 开始执行",
+      "✓ comfy-cli 节点 [3] 加载 LoRA（LoraLoader） 执行完成",
+    ]);
   });
 
   it("envelope 事件触发收口，ok 原样透给 finish", () => {

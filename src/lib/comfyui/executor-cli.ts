@@ -423,7 +423,13 @@ export async function executeViaComfyCli(job: Job) {
     },
     onProgress: (
       progress: number,
-      node?: { id: string; value: number; max: number },
+      node?: {
+        id: string;
+        value: number;
+        max: number;
+        classType?: string;
+        label?: string;
+      },
     ) => {
       /* 进度同样落库（P3 §5 ADR §13-3C D1/D3）：SSE 已单源化走 DB，cli 路径
        *  的进度事件此前只发进程内 emitter——host 模式下界面全程 0% 的根因。

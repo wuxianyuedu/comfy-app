@@ -118,6 +118,19 @@ function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
   }
   return node;
 }
+/** 认 RAW（UI 格式）图里某个节点的类名（`nodes[].type`；子图内部节点按宿主链下钻）。
+ *
+ *  这个出口只为一件事存在：让「WS 帧回来的节点 id → 类名」与「画布覆盖注入找到那个
+ *  节点」用的是**同一条定位逻辑**（`resolveRawNode`），两处各算各的迟早会给出不同的
+ *  节点（消费方见 `graph-node-class.ts`，ISSUE #1202）。 */
+export function rawUiNodeType(
+  raw: unknown,
+  nodeId: string,
+): string | undefined {
+  if (!raw || typeof raw !== "object" || !nodeId) return undefined;
+  const type = resolveRawNode(raw as JsonRecord, nodeId)?.type;
+  return typeof type === "string" && type ? type : undefined;
+}
 /** 具名控件输入在 UI 节点 `widgets_values` 数组里的下标。 */
 function widgetSlot(node: RawUiNode, name: string): number {
   const inputs = node?.inputs ?? [];

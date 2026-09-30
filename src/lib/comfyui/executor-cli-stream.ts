@@ -18,6 +18,7 @@
  */
 
 import { trace } from "./trace";
+import { classTypeForNode, nodeLabel } from "./graph-node-class";
 import { INLINE_DUMP_MAX, clampText } from "~/lib/text-clamp";
 
 /** 面板日志的注入点（同 TraceFn：默认用 runner-state 的 log，测试传收集器）。
@@ -179,11 +180,29 @@ export interface EnvelopeParserDeps {
   finish: (ok: boolean, env: unknown) => void;
   /** 记下 prompt_id（写库 + 建立 prompt→task 索引由调用方做）。 */
   onPromptId: (promptId: string) => void;
-  /** 进度百分比（已从 completed/total 换算）；`node` 是事件自带的当前节点
-   *  步数信息（raw graph 的 class_type 在 cli 路径拿不到，label 缺省）。 */
+  /** 进度百分比（已从 completed/total 换算）；`node` 是事件自带的当前节点信息。
+   *
+   *  两类事件的形状不一样，是实测出来的（真出图那一轮，见 ADR §24）：
+   *   · `executing` **自带** `class_type` 与 `title` —— 直接用它，那是 ComfyUI 展开
+   *     子图之后的权威值；
+   *   · `progress` 只有 `node` / `completed` / `total`，**不带**类名 ⇒ 只能靠
+   *     `deps.patched`（提交那一刻真正交出去的图）认，走的是与 WS 帧同一个出口
+   *     `classTypeForNode`（两种图形状都认，含 `76:69` 这种子图链 id）。
+   *  认不出时 `classType` / `label` 都不带，id 与步数照旧透出 —— 进度帧不许因为
+   *  认不出类名就被丢掉。
+   *
+   *  这里顺带更正一句旧口径：3-C（§13-3C）与 4-B2（§14 D1）都写着「comfy-cli 那条
+   *  事件源拿不到 class_type」，实测只对 `progress` 成立；`executing` 是带的，而
+   *  `progress` 也不是拿不到，只是当年没人去查那张就在手上的图。 */
   onProgress: (
     percent: number,
-    node?: { id: string; value: number; max: number },
+    node?: {
+      id: string;
+      value: number;
+      max: number;
+      classType?: string;
+      label?: string;
+    },
   ) => void;
   /** 可注入的 trace（默认全局 trace）。 */
   trace?: TraceFn;
@@ -307,26 +326,50 @@ export function createCliEnvelopeParser(
     ) {
       // 3-C D1：SSE 单源化后进度必须落库，node 一并透出给调用方写 progressNode
       const nodeId = typeof evt.node === "string" ? evt.node : undefined;
+      /* 类名靠提交那一刻的图认（`deps.patched`），与 WS 帧同一个出口 ——
+       * raw 任务的进度历史上就是从这条路上来的，所以状态栏「当前节点」那一格
+       * 能不能显示类名，取决于这里（ISSUE #1202）。 */
+      const classType = nodeId
+        ? classTypeForNode(deps.patched, nodeId)
+        : undefined;
       deps.onProgress(
         Math.round((evt.completed / evt.total) * 100),
         nodeId
-          ? { id: nodeId, value: evt.completed, max: evt.total }
+          ? {
+              id: nodeId,
+              value: evt.completed,
+              max: evt.total,
+              ...(classType ? { classType, label: nodeLabel(classType) } : {}),
+            }
           : undefined,
       );
       return;
     }
     if (evt.type === "executing" || evt.type === "execution_success") {
-      // 原样转发 CLI 事件，给到「按节点」的可见性（拿不到原始 raw graph 的
-      // class_type UUID，但节点 id + 事件类型足以显示「有东西在跑」）。
+      // 原样转发 CLI 事件，给到「按节点」的可见性。
       const node = (evt.node ??
         (evt.data as JsonRecord | null | undefined)?.node ??
         "?") as string;
+      /* 类名优先用事件自带的那一格（实测 `executing` 带 `class_type`，而且它是
+       * ComfyUI 展开子图后的权威值）；没有才退回按图认（与 progress 帧同一条路）。 */
+      const fromEvent =
+        typeof evt.class_type === "string" && evt.class_type
+          ? evt.class_type
+          : undefined;
+      const classType =
+        fromEvent ??
+        (node && node !== "?"
+          ? classTypeForNode(deps.patched, String(node))
+          : undefined);
+      const who = classType
+        ? ` [${node}] ${nodeLabel(classType)}（${classType}）`
+        : ` [${node}]`;
       log(
         taskId,
         "info",
         evt.type === "execution_success"
-          ? `✓ comfy-cli 节点 [${node}] 执行完成`
-          : `▶ comfy-cli 节点 [${node}] 开始执行`,
+          ? `✓ comfy-cli 节点${who} 执行完成`
+          : `▶ comfy-cli 节点${who} 开始执行`,
       );
     }
   };

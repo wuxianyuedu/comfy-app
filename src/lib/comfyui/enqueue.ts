@@ -114,8 +114,6 @@ export async function cancelTask(taskId: string) {
 
     if (task.promptId) store.promptToTask.delete(task.promptId);
 
-    store.promptByTask.delete(taskId);
-
     const hadSlot = isDispatchedHere(taskId) || cliProcs.has(taskId);
 
     if (hadSlot) releaseDispatchSlot(taskId);
@@ -163,7 +161,6 @@ export async function cancelTask(taskId: string) {
 
   if (task.promptId) store.promptToTask.delete(task.promptId);
 
-  store.promptByTask.delete(taskId);
   // 清掉本模块给这个任务加的记账，同一个 taskId 再入队时从干净状态开始。
 
   store.startedAt.delete(taskId);
