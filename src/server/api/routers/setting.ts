@@ -27,6 +27,7 @@ import {
   DRIZZLE_STUDIO_DEFAULT_PORT,
 } from "~/lib/drizzle-studio/lifecycle";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
+import { isHttpUrl } from "~/lib/url-scheme";
 
 export const settingRouter = createTRPCRouter({
   /* GET /api/settings —— 读 */
@@ -40,9 +41,13 @@ export const settingRouter = createTRPCRouter({
     .input(
       z.object({
         comfyuiPort: z.number().int().min(0).max(65535).optional(),
+        /* 协议白名单判据在 `~/lib/url-scheme`（一处定义）：这里曾各写一份
+         * `/^https?:\/\//`，而那份正则实测两个方向都错 —— 误拒 `HTTPS://x`
+         * （合法地址）、误放行 `http://␣␣`（不是地址，存进设置后每次去连它都
+         * 换回一句难查的连接错误）。 */
         trainerUrl: z
           .string()
-          .refine((url) => url === "" || /^https?:\/\//.test(url))
+          .refine((url) => url === "" || isHttpUrl(url))
           .optional(),
         comfyLorasDir: z.string().optional(),
         comfyuiPath: z.string().optional(),
@@ -163,15 +168,11 @@ export const settingRouter = createTRPCRouter({
         base: z
           .string()
           .url()
-          .refine((u) => /^https?:\/\//.test(u), {
-            message: "base 必须为 http/https",
-          }),
+          .refine(isHttpUrl, { message: "base 必须为 http/https" }),
         hostOrigin: z
           .string()
           .url()
-          .refine((u) => /^https?:\/\//.test(u), {
-            message: "hostOrigin 必须为 http/https",
-          }),
+          .refine(isHttpUrl, { message: "hostOrigin 必须为 http/https" }),
       }),
     )
     .query(async ({ input }) => {
@@ -208,7 +209,12 @@ export const settingRouter = createTRPCRouter({
 
   /** 用系统默认浏览器打开任意 http(s) 地址（桌面壳内 target=_blank 外链
    *  打不开，须走 Node 端系统浏览器命令，与「打开查看」语义一致）。
-   *  用于生成结果的视频/图片等远程资源在默认浏览器里打开播放。 */
+   *  用于生成结果的视频/图片等远程资源在默认浏览器里打开播放。
+   *
+   *  ⚠️ 入参是**请求方给的任意地址**，而 `z.string().url()` 只管「是不是一个 URL」
+   *  —— 它放行 `file:` / `javascript:` / 自定义协议。协议白名单落在
+   *  `openUrlInBrowser()` 里（判据一处定义、覆盖每一个出口），非 http(s) 时
+   *  返回 `{ ok: false, detail }` 且**不 spawn**；这一路的前端会原样把 detail 显示出来。 */
   openExternal: authedProcedure
     .input(z.object({ url: z.string().url() }))
     .mutation(async ({ input }) => openUrlInBrowser(input.url)),

@@ -219,6 +219,16 @@ export default defineConfig({
         "src/server/api/routers/project.ts",
         "src/server/api/routers/task.ts",
         "src/lib/media/output-paths.ts",
+        /* 体检清单 ⑦ 第三批 · 协议白名单收成一处（台账 A5 复算）：
+         *   · `url-scheme.ts` 是「这个地址能不能交给外部程序」的唯一判据，
+         *     四条出口（`setting.trainerUrl` / `comfyEmbeddable` 的两个地址 /
+         *     `llm.baseUrl` / `openUrlInBrowser`）都改吃它 —— 每一支都必须有人判；
+         *   · `routers/setting.ts` 第一次有执行者（34 条）。
+         * 与下面 `thresholds` **两处同批**登记。`open-in-browser.ts` 不单列：
+         * 它已在 `src/lib/shell/**` 这一组里，而没覆盖到的分支只有 darwin/linux
+         * 两条平台分叉（本机是 win32，跑不到），单列一条只会把「测不到的那支」写进门槛。 */
+        "src/lib/url-scheme.ts",
+        "src/server/api/routers/setting.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1105,6 +1115,23 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* ── 体检清单 ⑦ 第三批 · 协议白名单（实测登记）──────────────────────
+         * `url-scheme.ts` 满档：它是四条出口共用的那一句判据，掉一支就是某个
+         * 危险协议被放行 —— 没有「大部分对就行」这一档。 */
+        "src/lib/url-scheme.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* `setting.ts`：分支 91.66 → 90。余下那一支是 `comfyStatus` 里
+         * `status.via ?? null` 的另一侧（快照命中与外部实例两种来源）。 */
+        "src/server/api/routers/setting.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
         },
       },
     },

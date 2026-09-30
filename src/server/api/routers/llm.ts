@@ -7,6 +7,7 @@ import {
   getConfigForClient,
 } from "~/lib/llm/server";
 import { splitExtraModels } from "~/lib/llm/types";
+import { isHttpUrl } from "~/lib/url-scheme";
 import { remoteModelRepository } from "~/lib/core/repository";
 import {
   isCustomContractInputId,
@@ -154,9 +155,7 @@ export const llmRouter = createTRPCRouter({
         apiKey: z.string().optional(),
         baseUrl: z
           .string()
-          .refine((u) => /^https?:\/\//.test(u), {
-            message: "baseUrl 必须为 http/https",
-          })
+          .refine(isHttpUrl, { message: "baseUrl 必须为 http/https" })
           .optional(),
         model: z.string().optional(),
         /** 候选清单：字符串=本地 ollama 候选；对象=远端独立模型（写入 remoteModel 表） */
