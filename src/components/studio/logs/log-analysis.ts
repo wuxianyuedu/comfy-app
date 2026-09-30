@@ -462,9 +462,29 @@ function isLogLine(line: string): boolean {
   );
 }
 
-/** 行身份：同一行被多路读到（launcher 转写含 dev 输出）时据此去重。 */
+/**
+ * 行身份：同一行被多路读到（launcher 转写含 dev 输出）时据此去重。
+ *
+ * **刻意不含 `origin`**：面板有六个来源、各自从**自己那一份**文件里读，其中若干
+ * 文件装的是同一段内容的副本（`dev-launcher.log` 转写 dev 的输出、`shell-launch.log`
+ * 与 launcher 的两份互相重叠）。带上 `origin` 会让同一行在时间线上落成六份，
+ * 界面上的「全部来源 4000 条」与「各分类之和 24000 条」指的是同一批事件。
+ */
 function entryKey(entry: Pick<LogEntry, "time" | "level" | "message">): string {
   return `${entry.time}\u0000${entry.level}\u0000${entry.message}`;
+}
+
+/**
+ * 行身份（**跨来源无关**）：同一条日志不论被哪几路读到，身份都相同。
+ *
+ * 与 {@link entryKey} 是同一个构造、这里单独留一支具名函数，是为了让
+ * 「按身份记账」这件事在调用处读起来是它自己的概念（计数 / 过滤 / 去重共用），
+ * 而不是又一次内联模板字符串——三处各写一遍时，改一处忘两处的漂移必然发生。
+ */
+export function logEntryKey(
+  entry: Pick<LogEntry, "time" | "level" | "message">,
+): string {
+  return entryKey(entry);
 }
 
 /**
@@ -484,18 +504,55 @@ export function mergeTimeline(
   fresh: LogEntry[],
 ): LogEntry[] {
   if (fresh.length === 0) return current;
-  const seen = new Set(current.map(entryKey));
+  /* 同一条日志会被多路读到（六路轮询里若干文件装的是同一段内容的副本），
+   * 因此两件事都要做：
+   *   1. **已落板的种类不再落第二份**——按 `entryKey`（不含 origin）去重，
+   *      否则界面上的「全部来源」与「各分类之和」指的是同一批事件的两种口径；
+   *   2. **同一秒内后到的来源要并进已落板那一行**——它的 origin 可能正是用户
+   *      在找的那个（启动行只写在 launcher / dev-launcher 的副本里，用户切到
+   *      「启动器」却看不到时，问题就出在这一步没做）。 */
+  const seen = new Map<string, LogEntry>();
+  const sameArrival = new Map<string, LogEntry>();
+  for (const entry of current) {
+    const key = entryKey(entry);
+    seen.set(key, entry);
+    /* 同毫秒同正文的副本行（`seq` 只差几个数）视为同一条日志的另一次读取。 */
+    const near = arrivalKey(entry);
+    if (!sameArrival.has(near)) sameArrival.set(near, entry);
+  }
   const added: LogEntry[] = [];
+  let changed = false;
   for (const entry of fresh) {
     const key = entryKey(entry);
     if (seen.has(key)) continue;
-    seen.add(key);
+    /* 已经有一条「同一毫秒写下的同一段正文」在板上：并进它的 origin，
+     * 不再单独落一份。 */
+    const existing = sameArrival.get(arrivalKey(entry));
+    if (existing) {
+      if (existing.origin !== entry.origin) {
+        existing.origin = entry.origin;
+        changed = true;
+      }
+      continue;
+    }
+    seen.set(key, entry);
+    sameArrival.set(arrivalKey(entry), entry);
     added.push(entry);
   }
-  if (added.length === 0) return current;
-  const merged = current.length === 0 ? added.slice() : [...current, ...added];
+  if (added.length === 0) return changed ? current.slice() : current;
+  const merged =
+    current.length === 0 || changed
+      ? [...current.map((e) => ({ ...e })), ...added]
+      : [...current, ...added];
   merged.sort((a, b) => (a.time !== b.time ? a.time - b.time : a.seq - b.seq));
   return merged;
+}
+
+/** 同一秒内的副本判据：时刻取整到秒 + 级别 + 正文（`entryKey` 的毫秒容忍版）。 */
+function arrivalKey(
+  entry: Pick<LogEntry, "time" | "level" | "message">,
+): string {
+  return `${Math.floor(entry.time / 1000)}\u0000${entry.level}\u0000${entry.message}`;
 }
 
 /** 时间线的**真实**末条（最新一条）——「已读水位」「有无新内容」「跳最新」都用它。 */
@@ -628,6 +685,40 @@ export function computeCounts(logs: LogEntry[], search = ""): LogLevelCounts {
 }
 
 /**
+ * 按**行身份**挑出代表行：同一条日志被多路读到、在时间线上落成多份时，只留
+ * 第一份（`mergeTimeline` 落板的就是它）。
+ *
+ * 视图层的去重（`dedupeRepeats`）只折叠**长成一样**的连续行；六路来源的副本行
+ * 长在 `origin` 上，因此「全部来源」的时间线本来就该把它们各自显示出来（用户
+ * 切到「应用运行」看的正是那一份）。但**数字**是另一回事：界面上的「全部来源
+ * N 条」与「各分类之和」指的是同一批事件，而同一批事件在六个来源里各有各的
+ * 计数——两边口径不同时，用户读到的就是「下拉上加起来比『全部来源』多好几倍」。
+ *
+ * 口径（与 `computeOriginCounts` 的守恒契约配套）：
+ * - `all`（全部来源）**按身份计一次**：它是「这批日志有多少条」的答案；
+ * - 逐来源**各按自己那份文件里的条数**计：它是「切过去会看到几行」的答案，
+ *   与 `computeFiltered` 的筛选结果逐条对齐（否则就是那种最不可信的数字）；
+ * - 于是守恒只在**每个来源内部**成立（该来源的各级别之和 = 该来源的总数），
+ *   跨来源相加**不**等于「全部来源」——两边的语义本来就不同，界面上也必须
+ *   分开摆（见 `LogFilterBar` 的标签：级别按钮的数字是「当前来源」的）。
+ */
+export function dedupeByIdentity(
+  logs: LogEntry[],
+  origin: LogOriginFilter = "all",
+): LogEntry[] {
+  if (origin !== "all") return logs;
+  const seen = new Set<string>();
+  const out: LogEntry[] = [];
+  for (const entry of logs) {
+    const key = logEntryKey(entry);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(entry);
+  }
+  return out;
+}
+
+/**
  * 来源 × 级别的二维计数表（`all` = 全部来源）。
  *
  * 面板此前**只有一个总数**：级别筛选行上的数字是全部来源的合计，来源下拉里
@@ -661,17 +752,31 @@ export function computeOriginCounts(
 
   for (const entry of logs) {
     if (!matchesSearch(entry, search)) continue;
-    table.all.all += 1;
-    table.all[entry.level] += 1;
     /* 逐来源独立计数（ISSUE #360），且**每个来源都必须有一个桶**：
      * 无 origin 的行（console 拦截 / Tauri 事件 / 全局错误）归 `console`，
-     * 有 origin 的归它自己。于是「console + 四个文件来源 = 全部来源」这条
-     * 守恒关系恒成立——下拉里的分类加起来就是「全部来源」，不会再出现
-     * 「只在全部页签才显示、哪个分类都进不去」的行（ISSUE #262 六审）。 */
+     * 有 origin 的归它自己。于是「每个来源的各级别之和 = 该来源的总数」在
+     * 任何情况下都成立，不会再出现「只在全部页签才显示、哪个分类都进不去」
+     * 的行（ISSUE #262 六审）。 */
     const bucket = table[bucketOf(entry)];
     if (!bucket) continue;
     bucket.all += 1;
     bucket[entry.level] += 1;
+  }
+  /* 「全部来源」按**身份**计（同一条日志被六路读到只算一条）。
+   *
+   * 这里是那张「下拉里四列数字」的**全部**来源：`table[origin]` 的每一项都是
+   * 「切到这个来源会看到几行」，而 `table.all` 是「面板上有多少条日志」——
+   * 两者语义不同，因此**跨来源相加本来就不等于 all**（同一批启动行写在
+   * launcher / dev-launcher / shell / shell-launch 好几份文件里，副本各算一份）。
+   *
+   * 历史形态：`all` 与逐来源用同一批行累加，于是撞上时间线上限（5000）时
+   * `all` 被截到上限、各分类之和还在算被挤掉的那些，守恒连「撞上限之前」都不
+   * 成立——e2e 那条守恒判据因此在整批跑时红（实测 5000 vs 3335）。
+   * 现在两个口径各自成立、各自可断言：逐来源**内部**守恒，`all` 等于身份数。 */
+  for (const entry of dedupeByIdentity(logs)) {
+    if (!matchesSearch(entry, search)) continue;
+    table.all.all += 1;
+    table.all[entry.level] += 1;
   }
   return table;
 }
@@ -699,7 +804,11 @@ export function computeFiltered(
   disabled: LogCategoryFilter[] = [],
 ): LogEntry[] {
   const disabledSet = disabled.length > 0 ? new Set(disabled) : null;
-  return logs.filter((entry) => {
+  /* 「全部来源」按身份去重（同一条日志被六路读到只显示一次，与 `table.all` 的
+   * 计数同口径）；选了具体来源就是「那份文件里的行」，逐行照给——副本不丢，
+   * 因为用户切过去正是为了看 `origin` 指的那一份。 */
+  const scoped = dedupeByIdentity(logs, origin);
+  return scoped.filter((entry) => {
     const levelOk = filter === "all" || entry.level === filter;
     /* 过滤与计数共用 `bucketOf`：两处各写一份判据必然漂移，而漂移的表现正是
      * 「下拉上写着 5 条、切过去只有 3 条」这类不再可信的数字（ISSUE #360）。 */
