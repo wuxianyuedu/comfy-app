@@ -38,7 +38,6 @@ import { Info, TriangleAlert } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Spinner } from "~/components/ui/spinner";
-import { overlayClass } from "~/lib/full-screen-layer";
 import { onNextFrame } from "~/lib/next-frame";
 
 export interface ConfirmDialogProps {
@@ -107,9 +106,14 @@ export function ConfirmDialog({
       <DialogContent
         aria-labelledby={titleId}
         showCloseButton={false}
-        className={overlayClass("modal", "p-0")}
-        /* 外观仍由本组件决定（弹窗形态是产品语言，不是 shadcn 默认卡片）：
-           遮罩自定义在内容层上，base-ui 弹窗本体只作「居中 + 无障碍」的容器。 */
+        /* 卡片外观由本组件的内部 div 决定（与库里其它自绘弹窗同一惯例）：
+           popup 基元自带 `fixed top-1/2 left-1/2` 居中定位，**不能**把
+           `overlayClass("modal", …)`（那是给遮罩层的「铺满内容区」定位）传给
+           DialogContent —— 它会落在卡片上，和基元的居中定位打架：卡片被拉伸
+           成整块内容区又被 −50% 平移，实体卡缩到左上角视口之外，用户看到的
+           就是一块空黑框（「数据库过期 → 点击同步」的确认弹窗实测如此）。 */
+        className="bg-transparent p-0 ring-0"
+        popupClassName="w-fit"
         data-testid="modal-dialog"
       >
         <div
