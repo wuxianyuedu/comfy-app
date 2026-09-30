@@ -176,16 +176,16 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
       在暂存改动命中壳输入时跑 `cargo test`、并把硬规则 5「改了壳必须重编」变成判据 ——
       但它**不是全量执行者**：不动壳的提交永远不跑那 37 条 `#[test]`，全量仍要靠
       `cd src-tauri && cargo test` 的手上（`check:all` 里也没有这一路）。
-- [ ] **API 路由与页面层仍有大片裸奔**：40 个 `route.ts` 里 13 个有同名测试（第一批补了
-      5 个闸门类端点 —— `generated/[...path]`、`debug/source`、`comfy/{stats,queue,ensure}`；
-      第二批补了 `custom-nodes` 的 argv 注入闸门），剩下 27 个与 6 个 `page.tsx` 的目录级
-      测试仍是少数（台账 P1/E3）。
-- [ ] **服务端 router 集成覆盖 6/16**：`generate` / `run` / `task` / `workflow` / `project` /
-      `setting`（后两个分别是闸门第二批与第三批补的，用例都按**归属 / 协议闸门**组织，
-      不按 procedure 顺序铺）。其余 10 个里 `llm`（出口脱敏在 `lib/llm/server.test.ts` 判着，
-      router 层的 zod 闸没人判）、`custom-nodes`（tRPC 侧）、`material`、`film`、`train`、
-      `model` 都在写本机状态 —— 台账 A 系列三批复算证明：「一个 router 没有执行者」的
-      实际含义是「它的归属闸门坏了没人红」。
+- [ ] **API 路由与页面层仍有大片裸奔**：40 个 `route.ts` 里 15 个有同名测试（闸门第一批补了
+      5 个 —— `generated/[...path]`、`debug/source`、`comfy/{stats,queue,ensure}`；第二批补了
+      `custom-nodes` 的 argv 注入闸门；⑨第一刀补了 `materials` 的归属闸门；另有 `schema/*`
+      两条是别线补的），剩下 25 个与 6 个 `page.tsx` 的目录级测试仍是少数（台账 P1/E3）。
+- [ ] **服务端 router 集成覆盖 7/16**：`generate` / `run` / `task` / `workflow` / `project` /
+      `setting` / `material`（后三个分别是闸门第二批、第三批与⑨第一刀补的，用例都按
+      **归属 / 协议闸门**组织，不按 procedure 顺序铺）。其余 9 个里 `llm`（出口脱敏在
+      `lib/llm/server.test.ts` 判着，router 层的 zod 闸没人判）、`custom-nodes`（tRPC 侧）、
+      `film`、`train`、`model`、`user` 都在写本机状态或读别人的行 —— 台账 A 系列几批复算
+      证明：「一个 router 没有执行者」的实际含义是「它的归属闸门坏了没人红」。
 - [ ] **`DynamicWorkflowForm` / `CanvasNode` 主组件的深度行为测试**（fetch/poll 生命周期）仍开放。
 - [ ] 存量 4 份 `.snap` 结构快照按行为断言迁移（见 §11.9）。
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）。

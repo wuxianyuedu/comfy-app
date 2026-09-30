@@ -236,6 +236,16 @@ export default defineConfig({
          * 两条平台分叉（本机是 win32，跑不到），单列一条只会把「测不到的那支」写进门槛。 */
         "src/lib/url-scheme.ts",
         "src/server/api/routers/setting.ts",
+        /* 体检清单 ⑨ 第一刀 · 素材库的归属：
+         *   · `media/materials.ts` 是 scope 归属与路径清洗的**唯一判据所在**
+         *     （两个入口都吃它），所以它的分支必须被数字盯着；
+         *   · `routers/material.ts` 与 `api/materials/route.ts` 是同一套判据的
+         *     两个门 —— 只测一边等于另一半没 gate，两边一起登记。
+         * 三条都按**实测**登记（不是回退）；未覆盖的部分主要是 REST 的 500 兜底与
+         * 素材列举里的 stat 失败分支，欠账记在 E7 边上。 */
+        "src/lib/media/materials.ts",
+        "src/server/api/routers/material.ts",
+        "src/app/api/materials/route.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1161,6 +1171,27 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 90,
+        },
+        /* ── 体检清单 ⑨ · 素材库归属（实测登记）──────────────────────────── */
+        "src/lib/media/materials.ts": {
+          lines: 95,
+          functions: 90,
+          statements: 85,
+          branches: 80,
+        },
+        "src/server/api/routers/material.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 90,
+          branches: 75,
+        },
+        /* REST 那条（305 行、含 multipart 上传与 500 兜底）是三个里最薄的：
+         * 判据本身都测到了，缺的是错误分支与超大上传的回执路径。 */
+        "src/app/api/materials/route.ts": {
+          lines: 85,
+          functions: 80,
+          statements: 80,
+          branches: 75,
         },
       },
     },
