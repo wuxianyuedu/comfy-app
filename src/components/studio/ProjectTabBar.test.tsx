@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// ProjectTabBar 渲染测试：项目界面顶部切换器渲染四个页签、高亮当前项、点击回抛对应视图。
+// ProjectTabBar 渲染测试：项目界面顶部切换器渲染五个页签、高亮当前项、点击回抛对应视图。
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
@@ -8,9 +8,9 @@ import { ProjectTabBar } from "./ProjectTabBar";
 afterEach(cleanup);
 
 describe("ProjectTabBar", () => {
-  it("渲染 画布/工坊/产出/成片 四个页签", () => {
+  it("渲染 主页/画布/工坊/产出/成片 五个页签", () => {
     render(<ProjectTabBar active="canvas" onSelect={vi.fn()} />);
-    for (const label of ["画布", "工坊", "产出", "成片"]) {
+    for (const label of ["主页", "画布", "工坊", "产出", "成片"]) {
       expect(screen.getByRole("tab", { name: new RegExp(label) })).toBeTruthy();
     }
   });
