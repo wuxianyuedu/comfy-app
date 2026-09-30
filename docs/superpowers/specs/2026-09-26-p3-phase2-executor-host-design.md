@@ -1045,14 +1045,29 @@ server 已经是退出态 —— 那条判据的作用就是不让每条正常�
 入口 138180 与 server 123012 都还在，杀完之后 `/api/health` 仍回 `{"status":"ok","db":"up"}` ——
 第 2 条成立：**宿主退 = 只留一行日志、不降级也不重启**，所以把影片推进交给宿主是加脆性。
 
-**取数形状的一条说明（别再踩）**：这两条**没有**走 `app.exe`。先用
-`Start-Process app.exe -WorkingDirectory <安装目录>`（会话里已 `$env:COMFY_EXECUTOR='host'`）起过一次，
-入口日志给的是 `executor mode=inline` —— 那份 env 没到壳进程，而桌包里这个开关**只认壳继承的 env**
-（§3-D 那条口径），所以那一次跑的不是 host 拓扑、不作数。改成用载荷自己的 `node.exe` 直接起
-`static\scripts\standalone-runtime.mjs`（显式给 `PORT` 与 `COMFY_EXECUTOR`）就对了。
-本次要判的两条都住在入口这一段（两棵树的父子关系与回收），壳只是入口的父进程、不参与这两条判决，
-所以直接起入口测到的就是断言本身；**但「用户从桌面图标进去能不能把开关带进壳」这一格不是这里判的**，
-它仍是 §3-D 那条 env 继承口径，别拿这次读数去替它背书。
+**取数形状的两条说明（别再踩）**
+
+- 上面两条读数**没有**走 `app.exe`，而是用载荷自己的 `node.exe` 直接起
+  `static\scripts\standalone-runtime.mjs`（显式给 `PORT` 与 `COMFY_EXECUTOR`）。要判的两条都住在
+  入口这一段（两棵树的父子关系与回收），壳只是入口的父进程、不参与这两条判决。
+- 第一次想走壳时踩了一个**纯属工具层**的坑，别把它读成产品行为：用 `powershell -File <脚本>`
+  （脚本里 `$env:COMFY_EXECUTOR='host'` 之后 `Start-Process app.exe -WorkingDirectory <安装目录>`）
+  起的那一轮，入口日志是 `executor mode=inline` —— 那一轮跑的不是 host 拓扑，**不作数**。
+  随后改用 `powershell -Command` 在命令行里内联设同一个变量再起同一个 `app.exe`，入口日志就是
+  `executor mode=host` + `host pid=138568`：
+  ```
+  [standalone-runtime] schema ready tables=24
+  [standalone-runtime] boot pid=125884 server=129932 port=4375 appRoot=…\comfyapp-pkg-sim\static
+  [standalone-runtime] executor mode=host
+  [standalone-runtime] host pid=138568 out=…executor-host-stdout-2026-09-30-13-16-57.log …
+  ```
+  ⇒ **桌包「壳继承会话 env ⇒ 入口判 host ⇒ 起宿主」这条链是通的**（指南 §3-D 那条常规给法照旧成立），
+  上一版这里写的「那份 env 没到壳进程」**是把我的启动脚本当成产品行为读错了，已订正**；
+  那个 `-File` 形态为什么不传**没有继续查**（工具层，不值得查）。
+  顺带这一轮也补上了「读数是在直接起入口的拓扑上取的」那格保留：**走壳与不走壳，入口这一段的拓扑一致**
+  （都是 entry → server 树 + host 树），所以上面两条读数对出厂形态同样成立。
+- 仍然**没测**的一格：用户从图标双击（没有会话 env）时靠**系统环境变量**给开关 —— 那是指南 §3-D 的
+  常规给法，本轮没有重测，别拿上面任何一条读数替它背书。
 
 ### 没做的事（逐格留档，别下一个人重算）
 
