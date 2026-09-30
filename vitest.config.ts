@@ -246,6 +246,15 @@ export default defineConfig({
         "src/lib/media/materials.ts",
         "src/server/api/routers/material.ts",
         "src/app/api/materials/route.ts",
+        /* 首页「本机算力」卡带出的两个新出口：**两处同批**登记。
+         *   · `comfy-resource-metrics.ts` —— 显存/内存口径命名的唯一出处，状态栏与
+         *     首页卡都读它；它一旦漂移，两处消费点会同时变红（负向验证实测过），
+         *     所以这一层必须有数字看着。
+         *   · `LocalComputeCard.tsx` —— 「读不到数的三种情形」是这张卡的全部价值，
+         *     分支都在 jsdom 用例里走到位。
+         * 门槛取实测（两者单跑皆 100/100/100/100，见各自用例）。 */
+        "src/components/studio/comfy-resource-metrics.ts",
+        "src/components/studio/LocalComputeCard.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1164,6 +1173,16 @@ export default defineConfig({
           statements: 100,
           branches: 100,
         },
+        /* 首页「本机算力」卡与它读的口径描述符（与上面 `coverage.include` 同批登记）。
+         * 满档的依据是实测而不是理想值：描述符是纯函数、卡片的分支全在 jsdom 用例里
+         * 走到位（含「未运行 / 首帧未到 / 迟滞期」三条互斥出口）。这块掉覆盖会同时
+         * 影响状态栏与首页两处消费点，值得被数字看着。 */
+        "src/components/studio/comfy-resource-metrics.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         /* `setting.ts`：分支 91.66 → 90。余下那一支是 `comfyStatus` 里
          * `status.via ?? null` 的另一侧（快照命中与外部实例两种来源）。 */
         "src/server/api/routers/setting.ts": {
@@ -1192,6 +1211,12 @@ export default defineConfig({
           functions: 80,
           statements: 80,
           branches: 75,
+        },
+        "src/components/studio/LocalComputeCard.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
       },
     },
