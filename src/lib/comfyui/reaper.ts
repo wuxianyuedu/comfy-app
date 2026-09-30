@@ -9,6 +9,7 @@
 // 常驻循环用 globalThis 键兜住，Next.js HMR 因此永远不会造出第二个定时器。
 
 import { errorText } from "~/lib/error-message";
+import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { isSchemaReady } from "~/lib/db-schema-ready";
 // `../core/repository` 静态值 import 已改成 lazy（P3 §5 第 1 期·最后一步：
 // 让整条 reaper 边不再撞 `import "server-only"` throw、纯 Node executor host
@@ -376,7 +377,9 @@ export async function reapStaleQueuedTasks(): Promise<void> {
       );
     }
   } catch (err) {
-    logger.warn(`[comfyui] ${errorText(err, "reapStaleQueuedTasks 失败")}`);
+    logger.warn(
+      `[comfyui] ${sqliteAwareErrorText(err, "reapStaleQueuedTasks 失败")}`,
+    );
   }
 }
 
@@ -560,7 +563,9 @@ export async function reapStaleRunningTasks(): Promise<void> {
       `[comfyui] reaper(running): checked ${stale.length} stale RUNNING task(s) (older than ${RUNNING_STALE_MS / 1000}s)`,
     );
   } catch (err) {
-    logger.warn(`[comfyui] ${errorText(err, "reapStaleRunningTasks 失败")}`);
+    logger.warn(
+      `[comfyui] ${sqliteAwareErrorText(err, "reapStaleRunningTasks 失败")}`,
+    );
   }
 }
 
