@@ -8,7 +8,7 @@
   - Phase 2：新增 `scripts/executor-host.mjs`，作为 launcher 的一个受管子进程；用 `COMFY_EXECUTOR=host|inline` env 开关，**默认 inline、host 只是可起、不接管流量**
   - Phase 3：把提交侧写 DB 队列 + host 领任务；SSE 通道走「短轮询 DB」；env 切 `host` 灰度
   - Phase 4：删 Next 侧 `comfyRunner` 全局 + 三层补丁里被 host 取代的部分
-  - Phase 5：`film/orchestrator.ts` 的 `watchFilm` 纳入 host（或 boot 扫描）
+  - Phase 5：`film/orchestrator.ts` 的 `watchFilm` 纳入 host（或 boot 扫描）—— 已收口：签的是 boot 扫描那半句（§19），host 那半句判为不搬（§23）
 - **不做**：`../core/repository` 数据层双宿主（独立议题，见 §11）
 
 ---
@@ -214,9 +214,9 @@ await reapStaleRunningTasks();
 
 **Phase 5**
 
-- 5-A：`film/orchestrator.ts` 的 `void watchFilm()` 挪到 host（或 boot 时一次性扫 GENERATING）；对齐「进程重启后不再卡 GENERATING」诉求。
+- 5-A：`film/orchestrator.ts` 的 `void watchFilm()` 挪到 host（或 boot 时一次性扫 GENERATING）；对齐「进程重启后不再卡 GENERATING」诉求。**已落：签的是 boot 扫描那一半（§19）；「挪到 host」那一半由 §23 判为不搬，本行不再有后续刀。**
 
-**独立**：`../core/repository` 数据层双宿主（server-only 摘除 / driver 化）—— 见 §11。
+**独立**：`../core/repository` 数据层双宿主（server-only 摘除 / driver 化）—— 见 §11，收口于 §23。
 
 ## 8. 风险与回退
 
@@ -254,6 +254,9 @@ Phase 5 之后再评估：
 - 若 host 侧只用 4-5 个方法、注入版本能长期稳住 → 保持分离，`../core/repository` 的 server-only 继续作为「浏览器图别引我」的兜底（better-sqlite3 / libsql 不在 `NODE_BUILTINS` 白名单，拿掉只能靠 review 兜底）。
 
 **决策**：Phase 2-A 里的 `repository-task.driver.ts` 抽一层就够；**不做**摘 `../core/repository` 的 server-only。
+
+本节那句「Phase 5 之后再评估」（= 把成片编排迁进宿主）**已经在 §23 收口**：取到代码证据之后判为不搬。
+往后再有人读到 §11，评估结论看 §23，不必从这一节重算一遍。
 
 ---
 
@@ -297,7 +300,7 @@ Phase 5 之后再评估：
 
 **结论：exec 链的 12 个方法**都**不需要**这个映射（它们本来就是 select/where/update/insert）。真正需要这张表的是**Phase 3-B**（host 侧「按镜头批量取进度」的 `findExecutionProgressMany`）与**Phase 5**（film 侧「按项目列任务带封面」的 `listByUser` / `findByProject` 那三个 relational 查询）——那些**不属于 Phase 2-A 的 scope**。
 
-Phase 2-A 只抽这 12 个方法；等 Phase 3-B 真需要 `findExecutionProgressMany` 时（**它已经在 `repository-task.ts` 里、本来就是 `.select().from(task).where(inArray(id, ids))` 普通查询、不是 relational**）照同一模板补进 impl；等 Phase 5 film 侧需要带 `images` 关联的 `listByUser` 时，再做那张 relational→select/where 的映射。
+Phase 2-A 只抽这 12 个方法；等 Phase 3-B 真需要 `findExecutionProgressMany` 时（**它已经在 `repository-task.ts` 里、本来就是 `.select().from(task).where(inArray(id, ids))` 普通查询、不是 relational**）照同一模板补进 impl；等 Phase 5 film 侧需要带 `images` 关联的 `listByUser` 时，再做那张 relational→select/where 的映射。**这一格随 §23 一起作废**：film 侧不进宿主 ⇒ 那张映射表没有排期，UI 列表卡继续用 Next 侧的单例仓储。
 
 （这里避免「预先设计一个 Phase 5 才用到的映射表」的 §12.15 陷阱——没有第二个消费者的抽象就抽象得过早。）
 
@@ -440,7 +443,7 @@ configureExecutorCli({
 - 2026-09-26：v1 起草。Q1/Q2/Q3 + §10 五个未决点等待评审。
 - 2026-09-26：v2 新增 §11.1 · Phase 2-A 详细设计。回答两个开放点：
   - **host db 客户端**：`@libsql/client`（与 Next 侧同源、零新依赖、WAL 并行）；**不**引入 `node:sqlite` / `better-sqlite3`。
-  - **relational→select/where 映射**：Phase 2-A scope 内的 12 方法**全部本来就是** select/where/update/insert，**无需**映射；relational 只出现在 UI 列表卡（`listByUser` / `findById`），留到 Phase 5 film 侧真需要时再抽。
+  - **relational→select/where 映射**：Phase 2-A scope 内的 12 方法**全部本来就是** select/where/update/insert，**无需**映射；relational 只出现在 UI 列表卡（`listByUser` / `findById`），留到 Phase 5 film 侧真需要时再抽。（这一格已随 §23 作废：film 侧不进宿主，映射表不再排期。）
   - 新增 §11.1 · 摸底表 + 决定 1 + 决定 2 + 抽法（impl + delegate、避开 §12.12 孪生）+ 单测覆盖 + 破坏面 0 + 分 PR 切法（预期 1 个 PR）。
 
 ---
@@ -980,11 +983,70 @@ issue 不关，改写成「等一次可归因的现场」，并把它需要的�
 
 **门槛与门禁**：`src/server/film/**` 的实测 64/76.7/64/55.6（分母没变，同一批判决换文件住），
 门槛保持 30/50/35/25 不升不降；`src/lib/film/**` 那格里 `film-status.ts` 是纯类型文件
-（v8 记 0/0，目录聚合仍是 100），因此 100/90/100/90 不动。`--strict` 现在只剩工坊线的
-`workflow.ts`（944 行）超限 —— 那是别人的账，本刀不替它放宽判据。循环依赖 0 组、
+（v8 记 0/0，目录聚合仍是 100），因此 100/90/100/90 不动。写这节时 `--strict` 只剩工坊线的
+`workflow.ts`（944 行）超限 —— 那是别人的账，本刀不替它放宽判据；它由工坊线自己的
+`23bc80da` 收掉，所以本 PR 合入后 `--strict` 是 **[structure] OK**（零超限）。循环依赖 0 组、
 零消费导出 0、孪生对 0 对。
 
 **顺手核的一句文档口径**（issue 里点的第二条）：指南 `feature-workshop-flow.md` 那条
 「成片合成是纯客户端」在服务端管线（`render_film` 工具 + `composeFilm`）出现后已经说不全 ——
 改成明写**两条路**：工坊内的时间线预览/导出确实是客户端，服务端的 `composeFilm` 真起 ffmpeg
 出片并回写项目，两者互不替代。
+
+---
+
+## 23. #1255（把成片编排迁进执行宿主）——前提取到证据后被否掉，关单不搬
+
+§11 结尾那句「Phase 5 之后再评估」在这里收口。ISSUE #1255 把要动哪些地基记全了（六格清单），
+这次**逐格复核了一遍**，结论是不搬：不是「代价太大所以先放着」，而是**这一刀想买的那件事在桌包拓扑里
+不成立**，而 dev 那一格 §19（5-A）已经补上。
+
+### 否掉它的那两条实测
+
+1. **桌包里 server 退 ⇒ 宿主被整树收走**，所以「编排在宿主里 ⇒ Next 死了还能继续出片」是假的。
+   入口 `scripts/standalone-runtime.mjs` 把 server 与宿主作为**同父兄弟**各起一棵树，
+   `server.on("exit")` 直接调 `close()`，`close()` 里对宿主那棵树调 `reapTree(host.pid)`
+   （走 `scripts/reap-process.mjs`，硬规则 3）。§17 的「同生死」是这条代码路径的口径名，
+   本次是把它读回代码确认的，不是沿用旧结论。
+2. **反向不对称，所以搬过去是加脆性不是减脆性**。同一份入口里宿主退出只打一行
+   `host exited`，**不降级、不重启**（§17 的签字理由：降级会让已写成 host 归属的行没人领）。
+   把影片推进交给宿主之后，宿主自己退出的那类故障（解释器没配、模块加载期退出等）会让界面照常活着、
+   影片停在原地的同时**没有任何进程会继续推它**；今天的形态下「应用开着就一定活的那一个」是 Next。
+3. dev 侧那一格：Turbopack 改服务端模块是热重载、不是进程死亡，真重启/崩溃之后的续跑由
+   §19 的 `resumeStalledFilms` 负责（代价 = 一个重启间隔内不推进）。所以 §11 当初想要的
+   「扛过一次热重启」也已经在手。
+
+### 没做的事（逐格留档，别下一个人重算）
+
+- `src/lib/core/repository-film.ts`（313 行、两个类）与 `src/lib/core/repository-production.ts`
+  （120 行）仍是 `import "server-only"` + 直引 `~/lib/db` 的单例，没有改成
+  `createTaskRepoImpl(db, { owner })` 那个可注入形态；宿主今天仍然只有 task 一张片
+  （`host-runtime.ts` 的 `createHostRepo()` + 八条 seam，没有第 9、10 条）。
+- `tests/lib-server-imports.test.ts` 的 `REGISTERED` 仍是**空清单**，本刀没有新增
+  `src/lib/** → src/server/**` 这条越界边。
+- `src/lib/db-schema-ready.ts` 的哨兵仍然只判 `task` 一张表。
+- ffmpeg 子进程的回收归属没动：现在由 Next 起、随 Next 那棵树收；「杀宿主 → 无孤儿 ffmpeg」
+  这条实测因此不需要做。
+- 跨进程触发契约没动 —— 这条最要紧：§14 D1 刚把派发收敛成**一条 pull**，影片若搬过去就得再造
+  一条「提交在 Next、推进在宿主」的通道，那是明确违 D1 的。
+
+### §22（#1257）顺手把将来的成本降了一截，但那不是搬迁
+
+`compose-film.ts`（341 行）+ `compose-steps.ts`（93 行，只 import `path` 与 `~/lib/path-display`、
+`~/lib/number-format`）+ `film-log.ts`（20 行）已经从编排文件里切出来，与 Next 专属依赖
+（`workflow-run.server` / `llm/server` / `enqueue` / `firstframe`，全留在编排侧）分开了。
+将来若要搬，路比 issue 记的更短；但**这三件仍带 `server-only`、仍住 `src/server/**`**，
+数据层那格一格没动，所以结构限制原样存在。
+
+### 什么条件下重开这条
+
+三条里任一条成立就值得重估，否则不要凭「ADR Phase 5 那行字面还没做」重开：
+
+1. 出现「Next 必须能退出而影片继续」的**真需求**（例如把 server 侧做成可重载的界面层）。
+2. 桌包拓扑改成宿主有**独立生命周期** —— 入口不再在 `server.on("exit")` 里收宿主，或宿主能被
+   重新拉起（那要连带推翻 §17 的「不降级不重启」签字）。
+3. 数据层双宿主因**别的原因**必须先做（例如宿主需要读 film 之外的第二张业务表）；那时影片侧的
+   搬迁是顺路，而不是它自己立项的理由。
+
+**决策**：ISSUE #1255 关成 `not_planned`，理由 = 上述第 1、2 条实测；§11 的「Phase 5 之后再评估」
+到此为止，往后的口径以本节为准。
