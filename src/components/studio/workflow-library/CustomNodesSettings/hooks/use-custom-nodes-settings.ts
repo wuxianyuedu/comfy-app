@@ -96,6 +96,140 @@ export interface CustomNodesSettingsController {
   };
 }
 
+/**
+ * ndjson 进度事件流的消费器（从 `fetchSettings` 拆出，§12.13）。
+ *
+ * 逐行解析设置流的 ndjson 事件（每行由 JSON.parse 自身校验，坏行跳过）：
+ * discover_start / progress / discover_done 逐拍写进度（经 sinks），
+ * summary / error 聚合。聚合结果（paths / summary / lastReport / byPath /
+ * discoveredByParent）**原样返回**，落库（setState）由调用方统一处理——
+ * 消费器本身不持有任何 React 状态。
+ */
+/**
+ * 缓存预热路径的 blob 解析（从 `fetchSettings` 拆出，§12.13）：校验 settings
+ * 存在——401 / 500 等错误响应没有 settings，原代码直接炸
+ * `Cannot read properties of undefined (reading 'paths')`，真实原因被掩盖；
+ * 这里读出服务端给的可读信息——返回落库所需的五元组。
+ */
+function parseSettingsBlob(
+  data: SettingsResp & { error?: { message?: string } | string },
+  status: number,
+): {
+  paths: string[];
+  summary: SettingsResp["summary"];
+  lastReport: ParseReport | null;
+  discoveredByParent: Record<string, DiscoveredSubpkg[]>;
+  byPath: Record<string, SummaryPkg>;
+} {
+  if (!data.settings) {
+    const err = data.error;
+    const detail =
+      typeof err === "string" ? err : (err?.message ?? `HTTP ${status}`);
+    throw new Error(detail || `读取配置失败（HTTP ${status}）`);
+  }
+  const paths = data.settings.paths || [];
+  return {
+    paths,
+    summary: data.summary,
+    lastReport: data.lastReport,
+    discoveredByParent: data.discoveredByParent || {},
+    byPath: data.byPath || {},
+  };
+}
+async function consumeSettingsStream(
+  res: Response,
+  sinks: {
+    setProgress: Dispatch<SetStateAction<ParseProgress>>;
+    setSaveErr: (msg: string) => void;
+  },
+): Promise<{
+  paths: string[];
+  summary: SettingsResp["summary"];
+  lastReport: ParseReport | null;
+  byPath: Record<string, SummaryPkg>;
+  discoveredByParent: Record<string, DiscoveredSubpkg[]>;
+}> {
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("服务器未返回流式响应");
+  const decoder = new TextDecoder();
+  let buf = "";
+  let summary: SettingsResp["summary"] = null;
+  let lastReport: ParseReport | null = null;
+  let byPath: Record<string, SummaryPkg> = {};
+  const discoveredByParent: Record<string, DiscoveredSubpkg[]> = {};
+  const paths: string[] = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl);
+      buf = buf.slice(nl + 1);
+      if (!line.trim()) continue;
+      // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；每行由 JSON.parse 自身校验。
+      let ev: SettingsStreamEvent;
+      try {
+        ev = JSON.parse(line) as SettingsStreamEvent;
+      } catch {
+        continue;
+      }
+      if (ev.type === "discover_start") {
+        paths.push(...(ev.parents ?? []));
+        sinks.setProgress({
+          phase: "queue",
+          done: 0,
+          total: 0,
+          discovered: 0,
+          parent: "",
+          msg: "准备扫描…",
+        });
+      } else if (ev.type === "progress") {
+        sinks.setProgress((progress) => {
+          // 用最新事件告知的值。total/done/discovered 仅当事件确实携带时才更新
+          // （解析器每个有意义的 tick 都会发）；只带 msg 的事件不会重置计数器。
+          // 空串 parent 须保留上一值。
+          const evParent = ev.parent ?? "";
+          const next = {
+            ...progress,
+            parent: evParent.length > 0 ? evParent : progress.parent,
+          };
+          if (ev.phase) next.phase = ev.phase;
+          if (ev.msg) next.msg = ev.msg;
+          if (ev.discovered !== undefined) next.discovered = ev.discovered;
+          if (ev.total !== undefined) next.total = ev.total;
+          if (ev.done !== undefined) next.done = ev.done;
+          return next;
+        });
+      } else if (ev.type === "discover_done") {
+        if (ev.parent !== undefined) {
+          discoveredByParent[ev.parent] = ev.packages ?? [];
+        }
+        // 这里不动包计数器 —— 解析器在 JSON 行之前已发出自己的最终 tick
+        // （✔ ... done=M|total=M）。我们只刷新 header 里展示的 parent。
+        sinks.setProgress((progress) => ({
+          ...progress,
+          parent: ev.parent ?? progress.parent,
+          msg: `✔ ${ev.parent ?? ""}`,
+        }));
+      } else if (ev.type === "summary") {
+        summary = ev.summary ?? null;
+        lastReport = ev.lastReport ?? null;
+        byPath = ev.byPath ?? {};
+      } else if (ev.type === "error") {
+        const message =
+          ev.message !== undefined && ev.message.length > 0
+            ? ev.message
+            : "未知错误";
+        sinks.setSaveErr("扫描失败：" + message);
+      }
+    }
+  }
+
+  return { paths, summary, lastReport, byPath, discoveredByParent };
+}
+
 export function useCustomNodesSettings(): CustomNodesSettingsController {
   const [open, setOpen] = useState(false);
   const [savedPaths, setSavedPaths] = useState<string[]>([]);
@@ -234,115 +368,24 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         const data = (await res.json()) as SettingsResp & {
           error?: { message?: string } | string;
         };
-        /* 401 / 500 等错误响应没有 settings —— 原代码直接炸
-         * `Cannot read properties of undefined (reading 'paths')`，
-         * 真实原因被掩盖。这里读出服务端给的可读信息。 */
-        if (!data.settings) {
-          const err = data.error;
-          const detail =
-            typeof err === "string"
-              ? err
-              : (err?.message ?? `HTTP ${res.status}`);
-          throw new Error(detail || `读取配置失败（HTTP ${res.status}）`);
-        }
-        const paths = data.settings.paths || [];
-        setSavedPaths(paths);
-        setSummary(data.summary);
-        setReport(data.lastReport);
-        setDiscoveredByParent(data.discoveredByParent || {});
-        setByPath(data.byPath || {});
-        /* 「补默认展开」收在 `ExpansionSet.seedDefaults`（规范 16 §16.2.4.17）：
-         * 此前这段逐字抄了两遍（冷 / 热两条路径），而它承载的语义是
-         * 「**已有表态的键不覆盖**」—— 用户手动收起过的目录不该在刷新后弹回来。 */
-        seedParentDefaults(paths);
+        const parsed = parseSettingsBlob(data, res.status);
+        setSavedPaths(parsed.paths);
+        setSummary(parsed.summary);
+        setReport(parsed.lastReport);
+        setDiscoveredByParent(parsed.discoveredByParent);
+        setByPath(parsed.byPath);
+        seedParentDefaults(parsed.paths);
         return;
       }
 
-      // 冷路径：读取 ndjson 进度事件流。
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("服务器未返回流式响应");
-      const decoder = new TextDecoder();
-      let buf = "";
-      let summary: SettingsResp["summary"] = null;
-      let lastReport: ParseReport | null = null;
-      let byPath: Record<string, SummaryPkg> = {};
-      const discoveredByParent: Record<string, DiscoveredSubpkg[]> = {};
-      const paths: string[] = [];
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, nl);
-          buf = buf.slice(nl + 1);
-          if (!line.trim()) continue;
-          // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；每行由 JSON.parse 自身校验。
-          let ev: SettingsStreamEvent;
-          try {
-            ev = JSON.parse(line) as SettingsStreamEvent;
-          } catch {
-            continue;
-          }
-          if (ev.type === "discover_start") {
-            paths.push(...(ev.parents ?? []));
-            setProgress({
-              phase: "queue",
-              done: 0,
-              total: 0,
-              discovered: 0,
-              parent: "",
-              msg: "准备扫描…",
-            });
-          } else if (ev.type === "progress") {
-            setProgress((progress) => {
-              // 用最新事件告知的值。total/done/discovered 仅当事件确实携带时才更新
-              // （解析器每个有意义的 tick 都会发）；只带 msg 的事件不会重置计数器。
-              // 空串 parent 须保留上一值。
-              const evParent = ev.parent ?? "";
-              const next = {
-                ...progress,
-                parent: evParent.length > 0 ? evParent : progress.parent,
-              };
-              if (ev.phase) next.phase = ev.phase;
-              if (ev.msg) next.msg = ev.msg;
-              if (ev.discovered !== undefined) next.discovered = ev.discovered;
-              if (ev.total !== undefined) next.total = ev.total;
-              if (ev.done !== undefined) next.done = ev.done;
-              return next;
-            });
-          } else if (ev.type === "discover_done") {
-            if (ev.parent !== undefined) {
-              discoveredByParent[ev.parent] = ev.packages ?? [];
-            }
-            // 这里不动包计数器 —— 解析器在 JSON 行之前已发出自己的最终 tick
-            // （✔ ... done=M|total=M）。我们只刷新 header 里展示的 parent。
-            setProgress((progress) => ({
-              ...progress,
-              parent: ev.parent ?? progress.parent,
-              msg: `✔ ${ev.parent ?? ""}`,
-            }));
-          } else if (ev.type === "summary") {
-            summary = ev.summary ?? null;
-            lastReport = ev.lastReport ?? null;
-            byPath = ev.byPath ?? {};
-          } else if (ev.type === "error") {
-            const message =
-              ev.message !== undefined && ev.message.length > 0
-                ? ev.message
-                : "未知错误";
-            setSaveErr("扫描失败：" + message);
-          }
-        }
-      }
-
-      setSavedPaths(paths);
-      setSummary(summary);
-      setReport(lastReport);
-      setDiscoveredByParent(discoveredByParent);
-      setByPath(byPath);
-      seedParentDefaults(paths);
+      // 冷路径：读取 ndjson 进度事件流（消费器拆到模块级，见其说明）。
+      const acc = await consumeSettingsStream(res, { setProgress, setSaveErr });
+      setSavedPaths(acc.paths);
+      setSummary(acc.summary);
+      setReport(acc.lastReport);
+      setDiscoveredByParent(acc.discoveredByParent);
+      setByPath(acc.byPath);
+      seedParentDefaults(acc.paths);
     } catch (e) {
       setSaveErr(errorText(e, "读取配置失败"));
     } finally {

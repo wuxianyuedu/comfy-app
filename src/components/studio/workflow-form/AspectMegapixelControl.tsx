@@ -60,6 +60,88 @@ import {
   type AspectMegaGroup,
 } from "./DimensionControlParts";
 
+/* ── 三个纯派生（§17.1：删掉 JSX 也能测）──
+ * 从组件体提出：入参全是显式事实，输出是选项清单。useMemo 只保留调用。 */
+
+/** 比例段候选：优先用工作流自己的 options，否则给内置预设表；未知标签按
+ *  「宽:高」解析比例，解析不出按 1:1（只影响图标的形状，不影响写回的值）。 */
+function buildAspectOptions(
+  options: string[] | undefined,
+): { value: string; label: string; ratio: number }[] {
+  const source =
+    Array.isArray(options) && options.length > 0
+      ? options
+      : ASPECT_RATIO_LABEL_PRESETS.map((preset) => preset.value);
+  return source.map((value) => {
+    const known = ASPECT_RATIO_LABEL_PRESETS.find(
+      (preset) => preset.value === value,
+    );
+    if (known) return { value, label: known.label, ratio: known.ratio };
+    const ratio = parseRatioFromLabel(value);
+    return { value, label: shortRatioLabel(value), ratio: ratio ?? 1 };
+  });
+}
+
+/** 「像素」一栏的档位：分辨率（查场景表换算）与百万像素（直接给值）两行。 */
+function buildClarityOptions(input: {
+  scene: ReturnType<typeof sceneFromMode>;
+  activeRatio: number;
+  table: ReturnType<typeof useSizePresetTable>["table"];
+  currentMultiple: AlignMultiple;
+}): {
+  label: string;
+  subgroup: string;
+  megapixels: number;
+  multiple: AlignMultiple;
+}[] {
+  const { scene, activeRatio, table, currentMultiple } = input;
+  const rows: {
+    label: string;
+    subgroup: string;
+    megapixels: number;
+    multiple: AlignMultiple;
+  }[] = [];
+  for (const tier of RESOLUTION_TIERS) {
+    const size = resolutionDims(scene, activeRatio, tier, table);
+    rows.push({
+      label: tier,
+      subgroup: CLARITY_SUBGROUP_OF_KIND.resolution,
+      megapixels: megapixelsOf(size),
+      multiple: alignMultipleOf(size),
+    });
+  }
+  for (const tier of MEGAPIXEL_TIERS) {
+    rows.push({
+      label: `${tier}M`,
+      subgroup: CLARITY_SUBGROUP_OF_KIND.megapixel,
+      megapixels: tier,
+      multiple: currentMultiple,
+    });
+  }
+  return rows;
+}
+
+/** 倍数段候选：优先工作流自己的 options，否则 8/16/32/64；当前值不在候选里
+ *  时动态补上并排序（自由倍数也要在列表里可见、可再次选中）。 */
+function buildMultipleOptions(input: {
+  multiple: EnrichedWidget | undefined;
+  currentMultiple: AlignMultiple;
+}): { value: number; label: string }[] {
+  const { multiple, currentMultiple } = input;
+  const source =
+    multiple && Array.isArray(multiple.options) && multiple.options.length > 0
+      ? multiple.options
+      : ALIGN_MULTIPLE_OPTIONS.map((option) => String(option));
+  const parsed = source
+    .map((item) => Number(item))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (multiple && !parsed.some((n) => n === currentMultiple)) {
+    parsed.push(currentMultiple);
+    parsed.sort((a, b) => a - b);
+  }
+  return parsed.map((n) => ({ value: n, label: String(n) }));
+}
+
 export function AspectMegapixelControl({
   group,
   values,
@@ -100,24 +182,10 @@ export function AspectMegapixelControl({
     Number(values[megapixels.ioKey] ?? megapixels.defaultValue ?? 1) || 1;
 
   /** 候选章：节点自己的 COMBO 选项（可用时）。 */
-  const aspectOptions = useMemo((): {
-    value: string;
-    label: string;
-    ratio: number;
-  }[] => {
-    const source =
-      Array.isArray(aspect.options) && aspect.options.length > 0
-        ? aspect.options
-        : ASPECT_RATIO_LABEL_PRESETS.map((preset) => preset.value);
-    return source.map((value) => {
-      const known = ASPECT_RATIO_LABEL_PRESETS.find(
-        (preset) => preset.value === value,
-      );
-      if (known) return { value, label: known.label, ratio: known.ratio };
-      const ratio = parseRatioFromLabel(value);
-      return { value, label: shortRatioLabel(value), ratio: ratio ?? 1 };
-    });
-  }, [aspect.options]);
+  const aspectOptions = useMemo(
+    () => buildAspectOptions(aspect.options),
+    [aspect.options],
+  );
 
   /** 反检测活跃章，好让手打的值也能高亮。 */
   const activeAspect = useMemo(() => {
@@ -172,38 +240,10 @@ export function AspectMegapixelControl({
         : DEFAULT_ALIGN_MULTIPLE;
   }, [multiple, values]);
 
-  /** 「像素」一栏的档位：分辨率（查场景表换算）与百万像素（直接给值）两行。 */
-  const clarityOptions = useMemo((): {
-    label: string;
-    subgroup: string;
-    megapixels: number;
-    multiple: AlignMultiple;
-  }[] => {
-    const rows: {
-      label: string;
-      subgroup: string;
-      megapixels: number;
-      multiple: AlignMultiple;
-    }[] = [];
-    for (const tier of RESOLUTION_TIERS) {
-      const size = resolutionDims(scene, activeRatio, tier, table);
-      rows.push({
-        label: tier,
-        subgroup: CLARITY_SUBGROUP_OF_KIND.resolution,
-        megapixels: megapixelsOf(size),
-        multiple: alignMultipleOf(size),
-      });
-    }
-    for (const tier of MEGAPIXEL_TIERS) {
-      rows.push({
-        label: `${tier}M`,
-        subgroup: CLARITY_SUBGROUP_OF_KIND.megapixel,
-        megapixels: tier,
-        multiple: currentMultiple,
-      });
-    }
-    return rows;
-  }, [scene, activeRatio, table, currentMultiple]);
+  const clarityOptions = useMemo(
+    () => buildClarityOptions({ scene, activeRatio, table, currentMultiple }),
+    [scene, activeRatio, table, currentMultiple],
+  );
 
   /* 当前 megapixels 值落在哪个档位上：分辨率档按「该档换算出的总像素」比对，
    * 百万像素档按档位数值比对。
@@ -219,20 +259,10 @@ export function AspectMegapixelControl({
     return exact?.label ?? megapixelLabel(currentMp);
   }, [clarityOptions, currentMp]);
 
-  const multipleOptions = useMemo((): { value: number; label: string }[] => {
-    const source =
-      multiple && Array.isArray(multiple.options) && multiple.options.length > 0
-        ? multiple.options
-        : ALIGN_MULTIPLE_OPTIONS.map((option) => String(option));
-    const parsed = source
-      .map((item) => Number(item))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    if (multiple && !parsed.some((n) => n === currentMultiple)) {
-      parsed.push(currentMultiple);
-      parsed.sort((a, b) => a - b);
-    }
-    return parsed.map((n) => ({ value: n, label: String(n) }));
-  }, [multiple, currentMultiple]);
+  const multipleOptions = useMemo(
+    () => buildMultipleOptions({ multiple, currentMultiple }),
+    [multiple, currentMultiple],
+  );
 
   const multipleLabel = useMemo(
     () => String(currentMultiple),

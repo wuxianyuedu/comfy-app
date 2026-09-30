@@ -204,3 +204,70 @@ describe("快照与背压", () => {
     expect(snapshot.stats?.vramTotal).toBe(0);
   });
 });
+
+/**
+ * 进程级判活：回包 `online:false` 但 `processAlive:true` 时**不是**「掉线」观测。
+ * 口径与 `/api/comfy/queue` 同源（`queue-status.server.ts` 的快照回落）——进程在跑、
+ * 只是这一拍 HTTP 没应答（跑图满载），顶栏不该闪「未运行」。
+ */
+describe("进程级判活（与 /api/comfy/queue 同口径）", () => {
+  /** 路由在 HTTP 失败但进程快照判活时的返回形态。 */
+  const ALIVE_BUT_NO_ANSWER: ComfyStatsPayload = {
+    online: false,
+    processAlive: true,
+    vramUsed: 0,
+    vramFree: 0,
+    vramTotal: 0,
+    ramUsed: 0,
+    ramTotal: 0,
+  };
+
+  it("成功后连续「进程在但没应答」：在线保持、保留旧数据置 stale、不翻离线", async () => {
+    subscribeComfyStats(noop);
+    fetchMock.mockResolvedValueOnce(onlineStats());
+    await refreshComfyStats();
+    const goodStats = getComfyStatsSnapshot().stats;
+
+    fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
+    for (let i = 0; i < 5; i++) await refreshComfyStats(); // 远超离线阈值也不该翻
+
+    const snapshot = getComfyStatsSnapshot();
+    expect(snapshot.online).toBe(true);
+    expect(snapshot.stats).toBe(goodStats); // 保留旧读数
+    expect(snapshot.stale).toBe(true);
+  });
+
+  it("从没读到过数据 + 进程在跑：算在线（连接中），不报未运行", async () => {
+    subscribeComfyStats(noop);
+    fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
+    for (let i = 0; i < 5; i++) await refreshComfyStats();
+
+    const snapshot = getComfyStatsSnapshot();
+    expect(snapshot.online).toBe(true);
+    expect(snapshot.stats).toBeNull();
+  });
+
+  it("「进程在但没应答」清零计数：随后一次真离线不立刻翻（仍走迟滞）", async () => {
+    subscribeComfyStats(noop);
+    fetchMock.mockResolvedValueOnce(onlineStats());
+    await refreshComfyStats();
+    fetchMock.mockResolvedValueOnce(OFFLINE);
+    await refreshComfyStats(); // 容忍 1
+    fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
+    await refreshComfyStats(); // 进程判活 → 计数清零
+    fetchMock.mockResolvedValue(OFFLINE);
+    await refreshComfyStats(); // 清零后的第 1 次失败，仍在容忍期
+    expect(getComfyStatsSnapshot().online).toBe(true);
+  });
+
+  it("进程真没了（回包不带 processAlive）连续达阈值：翻离线", async () => {
+    subscribeComfyStats(noop);
+    fetchMock.mockResolvedValueOnce(onlineStats());
+    await refreshComfyStats();
+    fetchMock.mockResolvedValue(OFFLINE);
+    await refreshComfyStats();
+    await refreshComfyStats();
+    await refreshComfyStats(); // 第 3 次 → 提交离线
+    expect(getComfyStatsSnapshot().online).toBe(false);
+  });
+});

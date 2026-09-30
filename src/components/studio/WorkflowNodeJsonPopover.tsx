@@ -55,6 +55,46 @@ export type RawNodeView = {
   pos: [number, number] | null;
 };
 
+/**
+ * 从「运行视图」快照组装出可展示的节点 JSON（view 页签的正文来源）。
+ *
+ * 组装优先级：完整 rawNode 原样透出 → 否则按 entry / raw 里**确实存在**的
+ * 字段逐个收进一份新对象（mode / widgets_values / outputs / flags /
+ * properties 只在非空时收），最后补 pos。全部为空返回 null（调用方退回
+ * saved 页签的降级文案）。纯派生（§17.1：删掉 JSX 也能测）。
+ */
+function buildViewJson(nodeView: RawNodeView | null): RawNodeJson | null {
+  if (!nodeView) return null;
+  if (nodeView.rawNode && typeof nodeView.rawNode === "object") {
+    return nodeView.rawNode;
+  }
+  const out: RawNodeJson = {};
+  const e = nodeView.entry;
+  const r = nodeView.raw;
+  if (e && typeof e.class_type === "string") out.class_type = e.class_type;
+  if (
+    e &&
+    typeof e === "object" &&
+    "inputs" in e &&
+    e.inputs &&
+    typeof e.inputs === "object"
+  ) {
+    out.inputs = e.inputs;
+  }
+  if (e?._meta && Object.keys(e._meta).length) out._meta = e._meta;
+  if (r) {
+    if (r.mode !== 0) out.mode = r.mode;
+    if (r.widgets_values?.length) out.widgets_values = r.widgets_values;
+    if (r.outputs?.length) out.outputs = r.outputs;
+    const flagKeys = Object.keys(r.flags ?? {});
+    if (flagKeys.length) out.flags = r.flags;
+    const propKeys = Object.keys(r.properties ?? {});
+    if (propKeys.length) out.properties = r.properties;
+  }
+  if (nodeView.pos) out.pos = nodeView.pos;
+  return Object.keys(out).length ? out : null;
+}
+
 export function NodeJsonPopover({
   request,
   getJson,
@@ -75,37 +115,7 @@ export function NodeJsonPopover({
     [getView, request.nodeId],
   );
   const [tab, setTab] = useState<"saved" | "view">("view");
-  const viewObj = useMemo<RawNodeJson | null>(() => {
-    if (!nodeView) return null;
-    if (nodeView.rawNode && typeof nodeView.rawNode === "object") {
-      return nodeView.rawNode;
-    }
-    const out: RawNodeJson = {};
-    const e = nodeView.entry;
-    const r = nodeView.raw;
-    if (e && typeof e.class_type === "string") out.class_type = e.class_type;
-    if (
-      e &&
-      typeof e === "object" &&
-      "inputs" in e &&
-      e.inputs &&
-      typeof e.inputs === "object"
-    ) {
-      out.inputs = e.inputs;
-    }
-    if (e?._meta && Object.keys(e._meta).length) out._meta = e._meta;
-    if (r) {
-      if (r.mode !== 0) out.mode = r.mode;
-      if (r.widgets_values?.length) out.widgets_values = r.widgets_values;
-      if (r.outputs?.length) out.outputs = r.outputs;
-      const flagKeys = Object.keys(r.flags ?? {});
-      if (flagKeys.length) out.flags = r.flags;
-      const propKeys = Object.keys(r.properties ?? {});
-      if (propKeys.length) out.properties = r.properties;
-    }
-    if (nodeView.pos) out.pos = nodeView.pos;
-    return Object.keys(out).length ? out : null;
-  }, [nodeView]);
+  const viewObj = useMemo(() => buildViewJson(nodeView), [nodeView]);
   const pretty = useMemo(() => {
     if (tab === "saved") {
       return json

@@ -134,6 +134,242 @@ function isWrapperAliasSlot(name: string): boolean {
   return /^value_\d+$/.test(slot) || /^\d+$/.test(slot);
 }
 
+/**
+ * 子图封装节点的 proxyWidgets 富化（`buildRawInputs` 的第二阶段，独立成函数
+ * 以满足 §12.13 的函数长度阈值——两个阶段本就各答一件事：第一趟按节点解析
+ * `inputs[]`/`widgets_values`，本函数只处理「封装节点 → 内部节点」的代理）。
+ *
+ * ComfyUI 导出的子图工作流会在每个封装节点上带一个 `properties.proxyWidgets`
+ * 数组，把 wrapper.inputs[i] 映射到「内部节点 id + 字段名」。封装节点自己的
+ * `widgets_values[]` 是空的——真正的值存在对应内部节点的 `widgets_values[]`
+ * 里，下标按「数到该输入时已见过的 widget 槽位」确定；seed /
+ * control_after_generate 的双槽捆绑要一次前进 2。
+ *
+ * 基础解析器已经给带 widget 标记的输入盖上 `widget: { name }` 与
+ * `isConnection`，但对封装节点来说 widgets_values 是空的——这趟富化跑之前，
+ * 每一行 widget 都是空白。
+ */
+async function enrichSubgraphProxyWidgets(input: {
+  raw: RawWorkflow | null;
+  /** 原地更新：每个封装节点的条目列表会被整体替换。 */
+  rawInputsById: Record<string, RawInputEntry[]>;
+  comboOptionsForClassField: (
+    classType: string | undefined,
+    field: string,
+  ) => Promise<string[] | undefined>;
+  multilineForClassField: (
+    classType: string | undefined,
+    field: string,
+  ) => Promise<boolean | undefined>;
+}): Promise<void> {
+  const {
+    raw,
+    rawInputsById,
+    comboOptionsForClassField,
+    multilineForClassField,
+  } = input;
+  if (raw?.definitions?.subgraphs) {
+    const subs = raw.definitions.subgraphs;
+    /* 按 id 给每个子图定义里的内部节点建索引，查找降到 O(1)。 */
+    const internalByIdByKey = new Map<string, Map<string, RawNode>>();
+    for (const subKey of Object.keys(subs)) {
+      const subDef = subs[subKey];
+
+      const map = new Map<string, RawNode>();
+
+      if (Array.isArray(subDef?.nodes)) {
+        for (const inN of subDef.nodes) {
+          if (inN?.id != null) map.set(String(inN.id), inN);
+        }
+      }
+
+      internalByIdByKey.set(subKey, map);
+    }
+    /* 找出封装节点 UUID classType 对应的那个子图定义。 */
+    const resolveSubDef = (
+      classType: string,
+    ): { key: string; def: RawSubgraphDef } | null => {
+      const direct = subs[classType];
+      if (direct) return { key: classType, def: direct };
+      for (const k of Object.keys(subs)) {
+        const cand = subs[k];
+        if (cand?.id === classType) return { key: k, def: cand };
+      }
+      return null;
+    };
+    /* 取内部节点上某个 widget 字段的当前值：走 inputs[] 找到对应槽位，
+     * 再按它索引 widgets_values[]。seed + control_after_generate 的双槽捆绑
+     * 也要处理 —— 碰到 seed / noise_seed widget 时槽位计数器前进两次
+     * （这些输入总是带一个隐含的 `control_after_generate` 伙伴槽）。 */
+    const lookupFieldValue = (
+      internalNode: RawNode | undefined,
+      fieldName: string,
+    ): unknown => {
+      if (!internalNode || !Array.isArray(internalNode.inputs))
+        return undefined;
+      const inputs = internalNode.inputs;
+      const wv: unknown[] = Array.isArray(internalNode.widgets_values)
+        ? internalNode.widgets_values
+        : [];
+      /* control_after_generate 永远紧跟在 seed 的**下一个**槽位。 */
+      if (fieldName === "control_after_generate") {
+        const seedIdx = inputs.findIndex(
+          (i) => !!i && (i.name === "seed" || i.name === "noise_seed"),
+        );
+        if (seedIdx < 0) return undefined;
+        let slot = 0;
+        for (let k = 0; k <= seedIdx; k++) {
+          if (inputs[k]?.widget) slot++;
+        }
+        return slot < wv.length ? wv[slot] : undefined;
+      }
+      /* 通用路径：数出目标输入之前有多少个 widget 槽。 */
+      const inputIdx = inputs.findIndex((i) => i?.name === fieldName);
+      if (inputIdx < 0) return undefined;
+      let slot = 0;
+      for (let k = 0; k < inputIdx; k++) {
+        const inp = inputs[k];
+        if (inp?.widget) {
+          slot++;
+          /* seed 捆绑要额外占掉一个 control_after_generate 的槽 */
+          if (inp.name === "seed" || inp.name === "noise_seed") slot++;
+        }
+      }
+      return slot < wv.length ? wv[slot] : undefined;
+    };
+    /* 给每个封装节点预先算好 (subDefKey, proxyWidgets, internalById)，
+     * 工作流里封装节点很多时，内层映射的代价仍然很低。 */
+    const wrapperNodeIds: string[] = [];
+    for (const nodeId of Object.keys(rawInputsById)) {
+      const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
+      if (!rn) continue;
+      const classType = typeof rn.type === "string" ? rn.type : "";
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType)) continue;
+      wrapperNodeIds.push(nodeId);
+    }
+
+    for (const nodeId of wrapperNodeIds) {
+      const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
+      if (!rn) continue;
+      const classType = typeof rn.type === "string" ? rn.type : "";
+      const resolved = resolveSubDef(classType);
+      if (!resolved) continue;
+      const internalById = internalByIdByKey.get(resolved.key);
+      if (!internalById) continue;
+      /* proxyWidgets 的键形态有两种：官方是 `[[内部节点id, 字段名]]`，也有导出
+       *  写成 `{ 槽位名: [内部节点id, 字段名] }`。两种都读，否则这类工作流会被
+       *  整段跳过 —— 别名清不掉、内部字段名也取不到（ISSUE #349）。 */
+      const proxyPairs = collectProxyWidgetPairs(rn.properties?.proxyWidgets);
+      const byName = new Map<string, [string, string]>();
+      const ordered: Array<[string, string]> = [];
+      for (const pair of proxyPairs) {
+        if (pair.slot !== undefined && !byName.has(pair.slot))
+          byName.set(pair.slot, pair.target);
+        ordered.push(pair.target);
+      }
+      if (ordered.length === 0) continue;
+
+      const subNodeType =
+        typeof resolved.def?.name === "string" && resolved.def.name.trim()
+          ? resolved.def.name
+          : classType;
+
+      const existingList = rawInputsById[nodeId] ?? [];
+      /* `proxyWidgets` 是按**widget 输入的次序**（第 i 个暴露的 widget 槽）
+       *  索引的，**不是**原始输入数组的下标 —— ComfyUI 构建这个数组时会跳过
+       *  纯连线端口。因此必须用**专门的** `widgetSlot` 计数器走 widget 槽，
+       *  不能复用映射里的 `idx`（它把每个输入都数进去，端口也在内）。
+       *  复用 `idx` 的后果：封装节点只要在首尾有非 widget 端口，
+       *  映射就整体错位 —— 每个被封装的值都落到错误的行上，
+       *  末尾的 widget 输入则掉出数组尾部，渲染成空占位格。 */
+      let widgetSlot = 0;
+      /* 已被位置序消费过的 (内部节点, 字段) 对 —— 防重复匹配串台。 */
+      const usedProxyTargets = new Set<string>();
+      const updatedList = existingList.map((entry) => {
+        /* 只富化**已经**带 widget 标记的输入（即被暴露的 widget 槽，
+         *  而不是纯连线端口）。纯端口在客户端正确地留在 connInputs 里。 */
+        if (!entry.widget) return entry;
+        /* 首选按槽位名匹配：`value_1` 直取自己的目标，比位置更抗得住导出差异。
+         *  名字对不上（命名不是 value_N 的私有导出）时退回位置序。 */
+        const proxy = byName.get(entry.name) ?? ordered[widgetSlot];
+        widgetSlot += 1;
+        /* 位置序只能全表唯一地成立：一旦拿到的目标已被别的槽位占用，说明顺序
+         *  不可信 —— 宁可给空，也不把别的槽位的字段名安到这一行上。 */
+        if (!proxy || usedProxyTargets.has(proxyKey(proxy))) return entry;
+        usedProxyTargets.add(proxyKey(proxy));
+        const [internalNodeId, fieldName] = proxy;
+        const internalNode = internalById.get(internalNodeId);
+        const updated: RawInputEntry = { ...entry };
+        if (updated.widgetValue === undefined) {
+          const value = lookupFieldValue(internalNode, fieldName);
+
+          if (value !== undefined) updated.widgetValue = value;
+        }
+        /* 封装条目自己没带类型时，采用内部节点该槽位的类型作为权威值
+         *  （防御性 —— 通常原始 JSON 里本来就有）。 */
+        if (internalNode && Array.isArray(internalNode.inputs)) {
+          const inp = internalNode.inputs.find((i) => i?.name === fieldName);
+          if (typeof inp?.type === "string") updated.type = inp.type;
+          if (!updated.label && typeof inp?.localized_name === "string") {
+            updated.label = inp.localized_name;
+          }
+          /* 记录内部真实字段（业务名的唯一来源）。wrapper 本层槽位名是
+           *  ComfyUI 自动编号的别名（value_1），富化据此才能在别名之外
+           *  找到真实字段名与其 label / localized（ISSUE #349）。 */
+          if (internalNodeId && fieldName) {
+            updated.proxyField = {
+              nodeId: internalNodeId,
+              field: fieldName,
+              ...(typeof inp?.label === "string" ? { label: inp.label } : {}),
+              ...(typeof inp?.localized_name === "string"
+                ? { localized: inp.localized_name }
+                : {}),
+            };
+          }
+          /* 存下代理目标（内部节点的 class + 字段），下面那趟异步 COMBO
+           *  候选值处理便能为本封装节点上的 COMBO widget 从
+           *  /api/object_info 解析候选清单。 */
+          updated.__comboClass = internalNode.type;
+          updated.__comboField = fieldName;
+        } else if (internalNodeId && fieldName) {
+          /* 内部节点缺失（子图定义不完整 / 同名冲突）时也要留下字段名——
+           *  它仍比别名 value_1 有信息量，富化按 field 兜底。 */
+          updated.proxyField = { nodeId: internalNodeId, field: fieldName };
+        }
+        return updated;
+      });
+      /* Re-stamp multiline 现在才知道值（基础解析跑在这一趟之前，可能整段跳过）。
+       *  声明查的是**内部节点**的类与字段（业务语义在那一侧），wrapper 本层的
+       *  槽位名只是别名。必须排在下面的 COMBO 趟之前：那一趟会把
+       *  `__comboClass` / `__comboField` 临时字段删掉。 */
+      for (const e of updatedList) {
+        if (e.type !== "STRING" || e.multiline) continue;
+        const declared = await multilineForClassField(
+          e.__comboClass ?? subNodeType,
+          e.__comboField ?? e.name,
+        );
+        if (inferIsMultiline(declared, e.widgetValue)) e.multiline = true;
+      }
+      /* 从 /api/object_info 解析 COMBO 候选清单（每次请求只取一次，带缓存）。
+       *  只有是 COMBO 的封装 widget 输入才会拿到 `comboOptions` 数组，
+       *  其余一律不动。ComfyUI 不可达时，这些临时字段直接丢掉，
+       *  消费方回落到普通文本控件。 */
+      for (const e of updatedList) {
+        if (e.type === "COMBO" && e.__comboClass) {
+          const opts = await comboOptionsForClassField(
+            e.__comboClass,
+            e.__comboField ?? "",
+          );
+          if (opts) e.comboOptions = opts;
+        }
+        delete e.__comboClass;
+        delete e.__comboField;
+      }
+      rawInputsById[nodeId] = updatedList;
+    }
+  }
+}
+
 /** 子图边界 pin 的作者名表：`槽位名 → 作者 label`（按子图 UUID 分组）。
  *
  *  ComfyUI 把子工作流封装节点（wrapper）的暴露槽位逐槽自动编号成 `value_1` /
@@ -427,225 +663,13 @@ export async function buildRawInputs(
       }
     }
   }
-  /* 子图封装节点的 widget 值查找。
-   *
-   * ComfyUI 导出的子图工作流会在每个封装节点上带一个
-   * `properties.proxyWidgets` 数组，把 wrapper.inputs[i] 映射到「内部节点 +
-   * widget 字段」：`proxyWidgets[i] = [内部节点id, 字段名]`。
-   * 封装节点自己的 `widgets_values[]` 是空的 —— 真正的值存在对应内部节点的
-   * `widgets_values[]` 里，下标为下面那个槽位计数器。
-   * 具体做法：走内部节点的 `inputs[]` 数组，找到 `fieldName` 对应的槽位
-   * （边数边累计已见到的 widget 槽数 —— ComfyUI / LiteGraph 把 widget 值
-   * 按输入顺序存成一个扁平数组）。
-   * 特例：KSampler / KSamplerAdvanced 把 `seed` 与 `control_after_generate`
-   * 捆成**连续的两个** widget 槽 —— `seed` 占 0 号槽，
-   * `control_after_generate` 落在 1 号槽；因此槽位计数器一旦碰到 seed widget
-   * 就要一次前进 2。
-   * 上面的基础解析器已经给带 widget 标记的输入盖上了 `widget: { name }`
-   * （ComfyUI 导出的封装节点总是有），并从 `inp.link` 盖 `isConnection`，
-   * 还尝试从 `rn.widgets_values[widgetCounter]` 取 `widgetValue` ——
-   * 但对封装节点来说后者是空的，因此在这趟富化跑之前，
-   * 每一行 widget 都是空白。 */
-  if (raw?.definitions?.subgraphs) {
-    const subs = raw.definitions.subgraphs;
-    /* 按 id 给每个子图定义里的内部节点建索引，查找降到 O(1)。 */
-    const internalByIdByKey = new Map<string, Map<string, RawNode>>();
-    for (const subKey of Object.keys(subs)) {
-      const subDef = subs[subKey];
-
-      const map = new Map<string, RawNode>();
-
-      if (Array.isArray(subDef?.nodes)) {
-        for (const inN of subDef.nodes) {
-          if (inN?.id != null) map.set(String(inN.id), inN);
-        }
-      }
-
-      internalByIdByKey.set(subKey, map);
-    }
-    /* 找出封装节点 UUID classType 对应的那个子图定义。 */
-    const resolveSubDef = (
-      classType: string,
-    ): { key: string; def: RawSubgraphDef } | null => {
-      const direct = subs[classType];
-      if (direct) return { key: classType, def: direct };
-      for (const k of Object.keys(subs)) {
-        const cand = subs[k];
-        if (cand?.id === classType) return { key: k, def: cand };
-      }
-      return null;
-    };
-    /* 取内部节点上某个 widget 字段的当前值：走 inputs[] 找到对应槽位，
-     * 再按它索引 widgets_values[]。seed + control_after_generate 的双槽捆绑
-     * 也要处理 —— 碰到 seed / noise_seed widget 时槽位计数器前进两次
-     * （这些输入总是带一个隐含的 `control_after_generate` 伙伴槽）。 */
-    const lookupFieldValue = (
-      internalNode: RawNode | undefined,
-      fieldName: string,
-    ): unknown => {
-      if (!internalNode || !Array.isArray(internalNode.inputs))
-        return undefined;
-      const inputs = internalNode.inputs;
-      const wv: unknown[] = Array.isArray(internalNode.widgets_values)
-        ? internalNode.widgets_values
-        : [];
-      /* control_after_generate 永远紧跟在 seed 的**下一个**槽位。 */
-      if (fieldName === "control_after_generate") {
-        const seedIdx = inputs.findIndex(
-          (i) => !!i && (i.name === "seed" || i.name === "noise_seed"),
-        );
-        if (seedIdx < 0) return undefined;
-        let slot = 0;
-        for (let k = 0; k <= seedIdx; k++) {
-          if (inputs[k]?.widget) slot++;
-        }
-        return slot < wv.length ? wv[slot] : undefined;
-      }
-      /* 通用路径：数出目标输入之前有多少个 widget 槽。 */
-      const inputIdx = inputs.findIndex((i) => i?.name === fieldName);
-      if (inputIdx < 0) return undefined;
-      let slot = 0;
-      for (let k = 0; k < inputIdx; k++) {
-        const inp = inputs[k];
-        if (inp?.widget) {
-          slot++;
-          /* seed 捆绑要额外占掉一个 control_after_generate 的槽 */
-          if (inp.name === "seed" || inp.name === "noise_seed") slot++;
-        }
-      }
-      return slot < wv.length ? wv[slot] : undefined;
-    };
-    /* 给每个封装节点预先算好 (subDefKey, proxyWidgets, internalById)，
-     * 工作流里封装节点很多时，内层映射的代价仍然很低。 */
-    const wrapperNodeIds: string[] = [];
-    for (const nodeId of Object.keys(rawInputsById)) {
-      const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
-      if (!rn) continue;
-      const classType = typeof rn.type === "string" ? rn.type : "";
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType)) continue;
-      wrapperNodeIds.push(nodeId);
-    }
-
-    for (const nodeId of wrapperNodeIds) {
-      const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
-      if (!rn) continue;
-      const classType = typeof rn.type === "string" ? rn.type : "";
-      const resolved = resolveSubDef(classType);
-      if (!resolved) continue;
-      const internalById = internalByIdByKey.get(resolved.key);
-      if (!internalById) continue;
-      /* proxyWidgets 的键形态有两种：官方是 `[[内部节点id, 字段名]]`，也有导出
-       *  写成 `{ 槽位名: [内部节点id, 字段名] }`。两种都读，否则这类工作流会被
-       *  整段跳过 —— 别名清不掉、内部字段名也取不到（ISSUE #349）。 */
-      const proxyPairs = collectProxyWidgetPairs(rn.properties?.proxyWidgets);
-      const byName = new Map<string, [string, string]>();
-      const ordered: Array<[string, string]> = [];
-      for (const pair of proxyPairs) {
-        if (pair.slot !== undefined && !byName.has(pair.slot))
-          byName.set(pair.slot, pair.target);
-        ordered.push(pair.target);
-      }
-      if (ordered.length === 0) continue;
-
-      const subNodeType =
-        typeof resolved.def?.name === "string" && resolved.def.name.trim()
-          ? resolved.def.name
-          : classType;
-
-      const existingList = rawInputsById[nodeId] ?? [];
-      /* `proxyWidgets` 是按**widget 输入的次序**（第 i 个暴露的 widget 槽）
-       *  索引的，**不是**原始输入数组的下标 —— ComfyUI 构建这个数组时会跳过
-       *  纯连线端口。因此必须用**专门的** `widgetSlot` 计数器走 widget 槽，
-       *  不能复用映射里的 `idx`（它把每个输入都数进去，端口也在内）。
-       *  复用 `idx` 的后果：封装节点只要在首尾有非 widget 端口，
-       *  映射就整体错位 —— 每个被封装的值都落到错误的行上，
-       *  末尾的 widget 输入则掉出数组尾部，渲染成空占位格。 */
-      let widgetSlot = 0;
-      /* 已被位置序消费过的 (内部节点, 字段) 对 —— 防重复匹配串台。 */
-      const usedProxyTargets = new Set<string>();
-      const updatedList = existingList.map((entry) => {
-        /* 只富化**已经**带 widget 标记的输入（即被暴露的 widget 槽，
-         *  而不是纯连线端口）。纯端口在客户端正确地留在 connInputs 里。 */
-        if (!entry.widget) return entry;
-        /* 首选按槽位名匹配：`value_1` 直取自己的目标，比位置更抗得住导出差异。
-         *  名字对不上（命名不是 value_N 的私有导出）时退回位置序。 */
-        const proxy = byName.get(entry.name) ?? ordered[widgetSlot];
-        widgetSlot += 1;
-        /* 位置序只能全表唯一地成立：一旦拿到的目标已被别的槽位占用，说明顺序
-         *  不可信 —— 宁可给空，也不把别的槽位的字段名安到这一行上。 */
-        if (!proxy || usedProxyTargets.has(proxyKey(proxy))) return entry;
-        usedProxyTargets.add(proxyKey(proxy));
-        const [internalNodeId, fieldName] = proxy;
-        const internalNode = internalById.get(internalNodeId);
-        const updated: RawInputEntry = { ...entry };
-        if (updated.widgetValue === undefined) {
-          const value = lookupFieldValue(internalNode, fieldName);
-
-          if (value !== undefined) updated.widgetValue = value;
-        }
-        /* 封装条目自己没带类型时，采用内部节点该槽位的类型作为权威值
-         *  （防御性 —— 通常原始 JSON 里本来就有）。 */
-        if (internalNode && Array.isArray(internalNode.inputs)) {
-          const inp = internalNode.inputs.find((i) => i?.name === fieldName);
-          if (typeof inp?.type === "string") updated.type = inp.type;
-          if (!updated.label && typeof inp?.localized_name === "string") {
-            updated.label = inp.localized_name;
-          }
-          /* 记录内部真实字段（业务名的唯一来源）。wrapper 本层槽位名是
-           *  ComfyUI 自动编号的别名（value_1），富化据此才能在别名之外
-           *  找到真实字段名与其 label / localized（ISSUE #349）。 */
-          if (internalNodeId && fieldName) {
-            updated.proxyField = {
-              nodeId: internalNodeId,
-              field: fieldName,
-              ...(typeof inp?.label === "string" ? { label: inp.label } : {}),
-              ...(typeof inp?.localized_name === "string"
-                ? { localized: inp.localized_name }
-                : {}),
-            };
-          }
-          /* 存下代理目标（内部节点的 class + 字段），下面那趟异步 COMBO
-           *  候选值处理便能为本封装节点上的 COMBO widget 从
-           *  /api/object_info 解析候选清单。 */
-          updated.__comboClass = internalNode.type;
-          updated.__comboField = fieldName;
-        } else if (internalNodeId && fieldName) {
-          /* 内部节点缺失（子图定义不完整 / 同名冲突）时也要留下字段名——
-           *  它仍比别名 value_1 有信息量，富化按 field 兜底。 */
-          updated.proxyField = { nodeId: internalNodeId, field: fieldName };
-        }
-        return updated;
-      });
-      /* Re-stamp multiline 现在才知道值（基础解析跑在这一趟之前，可能整段跳过）。
-       *  声明查的是**内部节点**的类与字段（业务语义在那一侧），wrapper 本层的
-       *  槽位名只是别名。必须排在下面的 COMBO 趟之前：那一趟会把
-       *  `__comboClass` / `__comboField` 临时字段删掉。 */
-      for (const e of updatedList) {
-        if (e.type !== "STRING" || e.multiline) continue;
-        const declared = await multilineForClassField(
-          e.__comboClass ?? subNodeType,
-          e.__comboField ?? e.name,
-        );
-        if (inferIsMultiline(declared, e.widgetValue)) e.multiline = true;
-      }
-      /* 从 /api/object_info 解析 COMBO 候选清单（每次请求只取一次，带缓存）。
-       *  只有是 COMBO 的封装 widget 输入才会拿到 `comboOptions` 数组，
-       *  其余一律不动。ComfyUI 不可达时，这些临时字段直接丢掉，
-       *  消费方回落到普通文本控件。 */
-      for (const e of updatedList) {
-        if (e.type === "COMBO" && e.__comboClass) {
-          const opts = await comboOptionsForClassField(
-            e.__comboClass,
-            e.__comboField ?? "",
-          );
-          if (opts) e.comboOptions = opts;
-        }
-        delete e.__comboClass;
-        delete e.__comboField;
-      }
-      rawInputsById[nodeId] = updatedList;
-    }
-  }
+  /* 第二阶段：子图封装节点的 proxyWidgets 富化（独立函数，见其说明）。 */
+  await enrichSubgraphProxyWidgets({
+    raw,
+    rawInputsById,
+    comboOptionsForClassField,
+    multilineForClassField,
+  });
 
   return { rawInputsById, sizeById };
 }
