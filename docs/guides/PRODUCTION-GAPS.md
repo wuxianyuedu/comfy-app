@@ -111,6 +111,12 @@
 > 一条安全项被关闭时，必须能指出「哪条用例在钉它」（下面每条 `[x]` 都写了判据文件名）。
 > 复算没找到能机器判的形式（「这条已经修了但没勾」是语义判断，写个启发式扫描器
 > 只会误报一片、本身就成了会静默失效的清单 —— 见 §12.18 末段），因此只落这一条口径。
+>
+> **第二批（同月）接着复算了 A4 / A5**：A4 同样属于「早修了、没勾、判据是弱断言」，
+> 已勾销并把判据加强；A5 的口径本身是对的，但**漏了第四个落点**（`setting.openExternal`），
+> 而且四份实现里三份是前缀正则、实测两个方向都错 —— 已收成 `src/lib/url-scheme.ts` 一处。
+> 顺带照出 A4 那次脱敏的**副作用**，另立 **A11**（远端模型密钥被「保存一次设置」清掉）。
+> 这条是本轮唯一「修一个洞的同时挖出一个洞」的记录，值得留着：脱敏与回写必须一起设计。
 
 - [ ] **A1 鉴权默认关闭**：无会话回落演示用户，`loginRequired` 默认 false，约 20 个 router 可写。证据：`src/lib/auth-server.ts:99-106`；`src/lib/app-settings/index.ts:96`。需评估默认强鉴权或显式化。
       ⚠️ 它同时是 A2/A3/A6/A7/A8 那一批「越权」的实际可达性前提：单用户本机部署下这些
@@ -132,8 +138,34 @@
       判据：`src/server/api/routers/project.test.ts`（17 条，含越权写 / 越权读 / 跨用户删三态）。
       证据：`src/server/api/routers/project.ts`、`src/lib/core/repository-project.ts`（update 分支
       仍只按 id —— 归属判定在 router 层，与 `get`/`patch` 同一处口径）。
-- [ ] **A4 LLM `apiKey` 明文回传客户端**（含远端条目）。证据：`src/lib/llm/server.ts:171`（`apiKey: r.apiKey` 仍在下发）；`src/server/api/routers/llm.ts:60-64`。
-- [x] **A5 SSRF 协议白名单（已修复）**：`llm.configSave` 的 `baseUrl` 与 `setting.comfyEmbeddable` 的 `base`/`hostOrigin` 输入层加 `^https?://` 校验（与 `trainerUrl` 同口径），挡 `file://` 等非 http 协议；`comfy-embed.ts` 的 `probeComfyEmbeddable` 已有 `isHttpOrigin` 运行时防护，本次补齐输入层纵深。证据：`src/server/api/routers/llm.ts`、`src/server/api/routers/setting.ts`。
+- [x] **A4 LLM `apiKey` 明文回传客户端（已修 + 本批把判据加强到「整个出口序列化后一个字都不带」）**：
+      `8740948` 就把 `configGet` / `configSave` 的出口改成脱敏形状了（顶层 `apiKey` 剥掉、
+      改发 `hasApiKey`，远端条目逐条 `apiKey: undefined`），台账同样没勾。
+      原有判据（`src/lib/llm/server.test.ts`）只断「那两个键是 undefined」—— 而这一族故障的表现是
+      「密钥跟着配置接口一起发到浏览器、再跟着日志一起落盘」，所以本批把它换成**整个出口对象
+      序列化后两把密钥（顶层与远端条目各一把）一个字都不出现**，并显式种进库里（不再是 null）。
+      ⚠️ 那次脱敏带来一条新的副作用，另立 **A11** 记着。
+      证据：`src/lib/llm/server.ts`（`getConfigForClient`）、`src/lib/llm/server.test.ts`。
+- [x] **A5 SSRF / 协议白名单（已修复；本批复算出「同一个口径漏了第四个落点」并补上）**：
+      `llm.configSave` 的 `baseUrl` 与 `setting.comfyEmbeddable` 的 `base`/`hostOrigin` 输入层加
+      `^https?://` 校验（与 `trainerUrl` 同口径），挡 `file://` 等非 http 协议；
+      `comfy-embed.ts` 的 `probeComfyEmbeddable` 已有 `isHttpOrigin` 运行时防护。
+      **复算照出两件事**：
+      ① 同一句话在库里写了四遍（一份 `new URL()` 解析 + 三份前缀正则），而前缀正则实测**两个方向都错**
+      —— 误拒合法的 `HTTPS://x`（大小写敏感）、误放行 `http://␣␣` 与 `http://x y`（不是合法 URL，
+      存进设置后每次连它都换回一句难查的连接错误）；
+      ② 覆盖面漏了**危害最大的那条**：`setting.openExternal` 的目标地址由请求方给，而它只过
+      `z.string().url()` —— 那道闸管「是不是一个 URL」，`file:` / `javascript:` / 自定义协议
+      （Windows 的 `search-ms:`、`ms-msdt:`，本应用的 `comfyapp:`）全都算「是」，
+      而 `cmd /c start "" <协议>:…` 会**直接拉起协议处理器对应的本机程序**。
+      修法：判据收成 `src/lib/url-scheme.ts` 的 `isHttpUrl()`（按 `new URL()` 解析、一处定义），
+      四条出口全部改吃它，并在 `openUrlInBrowser()` 里**发起 IO 之前**拦 —— 内部那两条
+      （`comfyOpen` / `dbStudioOpen`）给的本来就是 http 地址，加闸不改行为。
+      判据：`src/lib/url-scheme.test.ts`（12 条）、`src/lib/shell/open-in-browser.test.ts`（12 条，
+      含「拒绝时一次都不 spawn」与「URL 必须是独立 argv 元素」）、
+      `src/server/api/routers/setting.test.ts`（34 条，端到端不 mock 地基）。
+      证据：`src/lib/url-scheme.ts`、`src/lib/shell/open-in-browser.ts`、
+      `src/server/api/routers/setting.ts`、`src/server/api/routers/llm.ts`。
 - [x] **A6 `/api/custom-nodes` 参数注入 → 任意文件覆写（已修 + 本批补 35 条判据）**：
       `8740948` 加了 `safeSpawnArg()`（拒 flag 形态 / 空 / 超长 / shell 元字符），此前无执行者。
       判据现在分两层：坏形状必须在 **spawn 之前**就被拒（`expect(spawn).not.toHaveBeenCalled()`
@@ -169,6 +201,26 @@
       `8740948` 一并删掉了它，`src/server/api/routers/post.ts` 现只剩 `getLatest` / `create`
       两条且都在 `authedProcedure` 后。（台账当时把「修了什么」写进了代码注释，
       却没改这张表 —— 见上方 P1 段首的复算说明。）
+- [ ] **A11 远端模型密钥会被「保存一次设置」清掉（A4 那次脱敏的副作用，本批照出）**：
+      `getConfigForClient` 下发的远端条目**不带 `apiKey`**（A4 要求的脱敏），而
+      `llm.configSave` 走 `remoteModelRepository.replaceAll(...)` —— 那一条批量语句是
+      「整份覆盖」：入参里没有 `apiKey` 就写 `null`，且 `onConflictDoUpdate` 的
+      `set` 里 `apiKey` 取的是本次传入值。于是设置页把**刚拿到的那份清单**原样回写一次，
+      每条远端模型的密钥就被写成 `null`。用户表现：填过一次密钥的远端模型，
+      隔一次设置保存就 401，而界面没有任何地方说过「密钥没了」。
+      同一条语句里 `workshopAdapters` 是**从既有行继承**的（`adaptersByName`），
+      `apiKey` 却没有 —— 一个函数内两种语义，正是「覆盖 vs 合并」没收口的形态。
+      客户端那条路也给不出信号：`updateRemoteModel` 在「用户没重填」时写的是
+      `(existing?.apiKey ?? null)`，「显式清空」（`clearApiKey`）也是 `null`，
+      两者到服务端**长成同一个样子**，所以修必须同时改两端。
+      建议修法：出口给每条带 `hasApiKey`（与顶层同口径），客户端「未重填」时**省略**
+      `apiKey`（`undefined`）、显式清空才发 `null`；`replaceAll` 按「省略 = 保留既有、
+      `null` = 清空」处理（与它已经对 `workshopAdapters` 做的事一致）。
+      现状已由 `src/lib/core/repository.test.ts`「replaceAll 不保留已有密钥」钉住
+      —— 真去修时这一条必须一起改，别把数据丢失静默带回来。
+      证据：`src/lib/core/repository-user.ts`（`replaceAll`）、`src/lib/llm/server.ts`
+      （`getConfigForClient` 的条目形状）、`src/app/(main)/settings/hooks/use-settings-page.ts`
+      （`addRemoteModel` / `updateRemoteModel` 的 null 语义）。
 - [ ] **B1 capability 对回环通配源开满**（`http://127.0.0.1:*` + `process:default` / `updater:default`）。证据：`src-tauri/capabilities/remote.json:8-26`；`src-tauri/tauri.conf.json:31`。
 - [ ] **B2 生产路径 21 处 `unwrap()` + 构建失败 panic**，无降级 UI。证据：`src-tauri/src/lib.rs:72,918,1391,1741`；`shell_launch.rs:78,83,201`。
 - [ ] **B3 违反自身规范：`std::process::Command` 直起外部进程 3 处**（应走 `tauri-plugin-shell`）。证据：`src-tauri/src/shell_launch.rs:575`；`lib.rs:1167`；`detached_spawn.rs:147`。
@@ -222,10 +274,12 @@
       同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
       —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
       按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
-- [ ] **E3 服务端集成覆盖 5/16 router**（generate / run / task / workflow / project，
-      project 是本批补的：17 条归属判据）；其余 11 个 router 仍无执行者，其中
-      `custom-nodes` / `llm` / `setting` / `material` / `film` 都在写本机状态。
-      E2E 仅 3 spec / 31 用例且无登录态。证据：`src/server/api/routers/**`；`e2e/*.spec.ts`；`playwright.config.ts`。
+- [ ] **E3 服务端集成覆盖 6/16 router**（generate / run / task / workflow / project /
+      setting —— project 与 setting 分别是⑦第二、三批补的，全部按归属与协议闸门组织）。
+      其余 10 个里 `llm`（A4 的出口形状在 `lib/llm/server.test.ts` 判着，router 层的
+      zod 闸还没有）、`custom-nodes`（tRPC 侧）、`material` / `film` / `train` / `model`
+      都在写本机状态。E2E 仅 3 spec / 31 用例且无登录态。
+      证据：`src/server/api/routers/**`；`e2e/*.spec.ts`；`playwright.config.ts`。
 - [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。
 - [ ] **E5 棘轮 `--update` 无制衡**。证据：`AGENTS.md:94,97`。
 - [ ] **E6 无 bundle 体积门禁 / 变异测试 / a11y 自动化**。

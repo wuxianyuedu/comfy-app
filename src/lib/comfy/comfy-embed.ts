@@ -26,6 +26,7 @@
 //   - `decideComfyTabOpen(embed)`：由「可嵌性」推出去哪打开。
 
 import { errorText } from "~/lib/error-message";
+import { isHttpUrl } from "~/lib/url-scheme";
 
 /** 探测结果：对端是否允许被 `hostOrigin` 内嵌。 */
 export type EmbedVerdict = {
@@ -91,14 +92,11 @@ export function isSameOrigin(a: string, b: string): boolean {
   }
 }
 
-/** 地址是否为 http(s) 源（`about:blank` / `file:` / `tauri://` 一律不算）。 */
+/** 地址是否为 http(s) 源（`about:blank` / `file:` / `tauri://` 一律不算）。
+ *  判据本身在 `~/lib/url-scheme`（§12.12：同一句话不许有两份实现）——
+ *  这里保留 `isHttpOrigin` 这个名字只为调用点读得顺（它手里的是 origin）。 */
 export function isHttpOrigin(origin: string): boolean {
-  try {
-    const { protocol } = new URL(origin);
-    return protocol === "http:" || protocol === "https:";
-  } catch {
-    return false;
-  }
+  return isHttpUrl(origin);
 }
 
 /**
