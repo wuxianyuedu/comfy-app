@@ -159,11 +159,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             生成剧本
           </h3>
           {/* 与角色卡一致：本次生成可独立选择 本地 / 远端 的哪个模型 */}
-          <ExtractModelSelect
-            value={genSelectValue}
-            onChange={setGenSel}
-            allowTool={false}
-          />
+          <ExtractModelSelect value={genSelectValue} onChange={setGenSel} />
         </div>
         <div className="flex flex-col gap-2">
           <Textarea

@@ -21,11 +21,6 @@ function makeConfig(patch: Partial<LLMConfigView> = {}): LLMConfigView {
 }
 
 describe("channel-options 通道编解码", () => {
-  it("工具通道不带模型名", () => {
-    expect(channelOptionValue("tool", "")).toBe("tool");
-    expect(parseChannelOption("tool")).toEqual({ channel: "tool", model: "" });
-  });
-
   it("本地 / 远端通道编解码互逆，模型名含冒号也不丢", () => {
     for (const value of [
       "local::llama3",
@@ -62,8 +57,12 @@ describe("channel-options 独立选择与全局配置的换算", () => {
     });
   });
 
-  it("脏值解析出工具通道时按本地兜底（生成类下拉没有工具通道）", () => {
+  it("脏值（非 local/remote）按本地兜底", () => {
     expect(resolveChannelSelection("tool", makeConfig())).toEqual({
+      provider: "local",
+      model: "",
+    });
+    expect(resolveChannelSelection("garbage", null)).toEqual({
       provider: "local",
       model: "",
     });
