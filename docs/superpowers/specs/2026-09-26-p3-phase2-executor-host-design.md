@@ -478,7 +478,7 @@ configureExecutorCli({
 
 **3-C（SSE 单源化）——三个已签决定（2026-09-27 追加）**
 
-- **D1 节点级进度持久化**：`task.progressNode`（json，`{id,label?,value,max}`）由 `updateProgress` 可选第三参写入；帧无节点信息时**不覆写**，标签不闪没。动机：#1151 后状态/收口已走 DB，但画布「当前节点+步数」仍只在进程内 progress 帧里，host 模式拿不到——两模式观感分叉。**两条执行路径都要接**：executor-ws 的 WS progress 帧，以及 comfy-cli stdout 的 `type:"progress"` 事件——E2E 实测 raw 路径的进度全走 cli 不走 WS，cli 的 `onProgress` 此前只发进程内 emitter，单源化后进度全程 0%（本 PR 补 DB 回写；cli 路径拿不到 raw graph 的 class_type，label 缺省、id/步数照存）。
+- **D1 节点级进度持久化**：`task.progressNode`（json，`{id,label?,value,max}`）由 `updateProgress` 可选第三参写入；帧无节点信息时**不覆写**，标签不闪没。动机：#1151 后状态/收口已走 DB，但画布「当前节点+步数」仍只在进程内 progress 帧里，host 模式拿不到——两模式观感分叉。**两条执行路径都要接**：executor-ws 的 WS progress 帧，以及 comfy-cli stdout 的 `type:"progress"` 事件——E2E 实测 raw 路径的进度全走 cli 不走 WS，cli 的 `onProgress` 此前只发进程内 emitter，单源化后进度全程 0%（本 PR 补 DB 回写；cli 路径拿不到 raw graph 的 class_type，label 缺省、id/步数照存 —— **这半句由 §24 推翻并修掉**：`executing` 事件本来就带 `class_type`，`progress` 不带但那张图就在手上）。
 - **D2 轮询节奏 5s → 3s**（Q1 原提议值）。本机 libsql 异步驱动、个位数活跃流，成本可忽略。
 - **D3 stream 路由退役 `subscribe`（emitter→SSE 通道）**：路由变成纯 DB 单源——log 增量按游标 diff 发帧、state 帧带 node/终态带 images（#1151 已铺）；单一来源无重复帧，inline/host 同一契约（代价：inline 实时性从即时变 ≤3s + persistLogs 200ms 防抖）。`subscribe` 本体保留（`firstframe.ts` 进程内消费不受影响），emitter 彻底删除在 4-A。
 - 初始回放的 `replaySrc` 分支按 ADR 原案保留（内存日志优先、DB 兜底，接住防抖窗口）。
@@ -504,7 +504,7 @@ configureExecutorCli({
 
   **落地记录（4-B1，2026-09-27，四个依赖里的第一个 + 一处比签字时更严重的事实）**：动手前先把 emitter 的读者数了一遍，结论是**它在 3-C 之后就没有读者了**——`/api/tasks/[id]/stream` 早已不订阅进程内事件，`enqueue.subscribe` 全仓唯一剩下的消费者就是首帧那一处。于是那 13 处 `emit` 全是空转，而空转比缺代码更坏：它让后来人以为「取消会发事件」「成功有 done 帧」，照这条契约给新宿主写代码就必然再长出一个首帧那样的洞。所以这一刀的形态从「改首帧的读法」扩成「整条进程内事件通道退役」：`RunnerState.emitter` 字段、`TaskEvent` 类型、`createEmptyState(emitter)` 形参、`enqueue.subscribe`、以及客户端解析器里再也收不到的 `done` / `error` / `progress` 三种帧分支，一并删除；首帧改读 `findExecutionProgress`（窄投影补一列 `error`，否则用户可见的失败原因从「CUDA out of memory」退化成「首帧生成失败」），等待节拍收进 `~/lib/retry-policy` 的具名策略 `FIRST_FRAME_WAIT`。回归由新增的 `tests/in-process-event-channel-retired.test.ts` 钉（含一条「判据本身有效」的反向验证），退役后的跨宿主语义写进 `docs/guide-executor-host.md` 的「对外只有一条通道 = 数据库那一行」。一条 §18.4 的连带变化按判据走：`runner-state.ts` 不再顶层 import `events`，于是它不再落进 scanner 的 `unguarded`，`PURE_NODE_HOSTS` 那条登记依「清单只许变短」撤掉——**「不许带 `server-only`」这条约束一字未动**，理由搬进模块头部。剩余三个依赖：`queue-status`、`raw-cli`、懒拉起触发点。
 
-  **落地记录（4-B2，2026-09-27，第二与第三个依赖：状态栏那一格 + cli 原文面板）**。三处形状签字选定「给库补列」而不是「降级」，理由是 Phase 4 的终态就是 inline 分支被删掉——留一个「只有 inline 能用」的功能，等于给那条分支留活命的理由：① **`claimedAt` 列**（「已运行 mm:ss」的基准；内存里那个 `startedAt` 只有执行进程自己看得见）。写入三处：`claimNextQueued` 无条件覆写（一次领取就是新一轮的起点），`markRunning` 与首条进度帧用 `COALESCE` 定格（进度帧每几秒一发，跟着刷等于耗时永远接近零；而 raw 路径的 `promptId` 常常整轮跑完才回传，无条件覆写会让耗时从收尾那一刻重新开始）。历史 RUNNING 行不回填，读侧对 `claimedAt IS NULL` 退回 `createdAt` 近似，并写明那只是本列上线前一小撮旧行的兜底。② **`progressNode` 增存 `classType`**（状态栏历史上显示的是类名，库里只有中文 `label`）：两个都存，画布与状态栏各读各的，可见契约零变化；comfy-cli 那条事件源本来就拿不到 `class_type`，此时类名为空——与内存版旧行为一致，不是新缺口。③ **`rawCli` 列 + 收口时整包写一次**（成功 / 失败 / 取消三条收口都写；不跟着日志的 200ms 防抖走，那等于把几千行原文白写几十遍）。「查看完整输出」的读侧因此不再碰 Next 内存，`getRawCli` 收成模块私有。主模型那一格不加列：`primaryModelName()` 两种图形态都能认，而 `execPayload` 是执行侧唯一一定写得上的载荷（`workflowSnapshot` 要到成功收口才落）。
+  **落地记录（4-B2，2026-09-27，第二与第三个依赖：状态栏那一格 + cli 原文面板）**。三处形状签字选定「给库补列」而不是「降级」，理由是 Phase 4 的终态就是 inline 分支被删掉——留一个「只有 inline 能用」的功能，等于给那条分支留活命的理由：① **`claimedAt` 列**（「已运行 mm:ss」的基准；内存里那个 `startedAt` 只有执行进程自己看得见）。写入三处：`claimNextQueued` 无条件覆写（一次领取就是新一轮的起点），`markRunning` 与首条进度帧用 `COALESCE` 定格（进度帧每几秒一发，跟着刷等于耗时永远接近零；而 raw 路径的 `promptId` 常常整轮跑完才回传，无条件覆写会让耗时从收尾那一刻重新开始）。历史 RUNNING 行不回填，读侧对 `claimedAt IS NULL` 退回 `createdAt` 近似，并写明那只是本列上线前一小撮旧行的兜底。② **`progressNode` 增存 `classType`**（状态栏历史上显示的是类名，库里只有中文 `label`）：两个都存，画布与状态栏各读各的，可见契约零变化；comfy-cli 那条事件源本来就拿不到 `class_type`，此时类名为空——与内存版旧行为一致，不是新缺口（**这句由 §24 推翻**：只对 `progress` 成立，且由 ISSUE #1202 修掉，真出图读数在 §24）。③ **`rawCli` 列 + 收口时整包写一次**（成功 / 失败 / 取消三条收口都写；不跟着日志的 200ms 防抖走，那等于把几千行原文白写几十遍）。「查看完整输出」的读侧因此不再碰 Next 内存，`getRawCli` 收成模块私有。主模型那一格不加列：`primaryModelName()` 两种图形态都能认，而 `execPayload` 是执行侧唯一一定写得上的载荷（`workflowSnapshot` 要到成功收口才落）。
 
   4-B2 的实测副产物是一条**测试基建的镜像漂移**：`tests/helpers/test-db.ts` 用的是手写 `CREATE TABLE` 文本，加列时漏改它的表现是 `SqliteError: table task has no column named rawCli`、栈指向 drizzle 的 insert，看不出真正要改的是那个 helper。新增 `tests/test-db-schema-drift.test.ts` 把「schema 每张表的每一列都在测试库 DDL 里」变成判据（并自证有效：一张表都没比对到就自己红）；`jsonColumns` 那一半盖不住——它的缺失表现是读回来是字符串而不是对象，本判据不硬造替代断言。另记一条实现层事实：`sql` 模板里的值**不走**该列的 `toDriver`（只有 `.set()` 直接赋值才走），而 better-sqlite3 / libsql 都只能绑 primitive——所以 `claimStamp()` 给的是 ISO 字符串而不是 `Date`，落库形态与 `toDriver` 的产物一致。
 
@@ -1103,3 +1103,93 @@ server 已经是退出态 —— 那条判据的作用就是不让每条正常�
 
 **决策**：ISSUE #1255 关成 `not_planned`，理由 = 上述第 1、2 条实测；§11 的「Phase 5 之后再评估」
 到此为止，往后的口径以本节为准。
+
+---
+
+## 24. #1202（认节点类名）——落地记录，含一条被实测推翻的旧口径与一条被否掉的「正解」后半句
+
+### 现场
+
+`RunnerState.promptByTask` 只剩两个读者（`executor-ws.ts` 的 `executing` / `progress` 分支），
+写方随 4-B3 删掉 `enqueue()` 一起消失 ⇒ 那一格恒空。后果是两格用户可见的东西长期退化：
+
+- 日志里「▶ 节点 [3] 未知节点（?）」；
+- `task.progressNode` 不带 `classType` / `label` —— 而 4-B2 之后状态栏「当前节点」读的就是
+  `classType`、画布读 `label`（§14 D1 那条），所以这格空 = 状态栏在 host 执行时永远没有节点名。
+
+历史库里的证据：两条 3-E2b 之后真跑成功的 raw 行，`progressNode` 都是 `NULL`。
+
+### 改法（两条执行路径都要接，只接一条等于没修）
+
+| 落点 | 改了什么 |
+| --- | --- |
+| `src/lib/comfyui/graph-node-class.ts`（新） | `classTypeForNode(graph, nodeId)`：API 形状走 `graph[id].class_type`，RAW（UI 原件）形状走 `nodes[].type`；`nodeLabel()` 也从 `executor-ws.ts` 搬进来（两条路共用一份中文名表，留两份就是 §12.12 的孪生对） |
+| `raw-overrides.ts` | 新出口 `rawUiNodeType()`，**只做一件事**：让「WS/cli 帧的节点 id → 类名」与「画布覆盖注入找那个节点」共用 `resolveRawNode` 那一条下钻（含子图链 `76:67`）。两处各算各的迟早给出不同节点 |
+| `executor-ws.ts` | 两个读者从 `promptByTask` 改读 `executedWorkflow`（提交那一刻真正交出去的图，画布覆盖已注入、纯 UI 节点已剔除，所以与帧里的 id 对得上） |
+| `executor-cli-stream.ts` | **这才是 raw 任务的实际来源**：raw 进度走 comfy-cli 的 stdout，不走 WS。`progress` 事件把 `deps.patched` 那份图认出的类名一起透出；`executing` 那两行日志带上「中文名（ClassType）」 |
+| `runner-state-shape.ts` / `runner-state.ts` / `enqueue.ts` | 删掉 `promptByTask`（字段 + 三处 delete + 两处用例清零），单例键随之 `comfyRunner_v2 → v3`（加/减字段都要升版号，`??=` 只认键名） |
+
+### 被实测否掉的一条「正解」
+
+issue 原文的正解是「两个读者改读 `executedWorkflow`，然后删掉 `promptByTask` **与 `Job.prompt`**」。
+前半句照做；**后半句没做** —— `Job.prompt` 不是没主的字段，它是 `executor-cli.ts`
+非 RAW 那条分支的**入参**（`applyApiOverrides(prompt, overrides)` → 收拾图 → 直接提交）。
+删它等于把 API 提交形态一起删掉，那不是 #1202 的范围。字段留着，注释改成明写「当前两条入口都不带它，
+但那条分支消费它」。
+
+### 被实测推翻的一条旧口径
+
+§13-3C（D1）与 §14（4-B2 那一格）都写着「**comfy-cli 那条事件源拿不到 `class_type`**，
+所以类名为空 / `label` 缺省，与内存版旧行为一致，不是新缺口」。真机抓原文之后：
+
+```
+{"schema":"event/1","type":"executing","node":"76:67","title":"CLIP Text Encode (Positive Prompt)","class_type":"CLIPTextEncode",…}
+{"schema":"event/1","type":"progress","node":"76:69","completed":1,"total":25,…}
+```
+
+⇒ 那句话**只对 `progress` 成立**：`executing` 是自带 `class_type` 与 `title` 的（而且那是 ComfyUI
+展开子图之后的权威值，所以现在实现是「事件优先、图兜底」）；而 `progress` 也不真是「拿不到」，
+只是当年没人去查那张就在 `deps.patched` 里的图。旧记录按当日的理解留着，从这里以本节为准。
+
+### 读数（真出图三跑，副本库 + 独立宿主进程）
+
+形态照本线一贯的复演套路（拷库 → 克隆一条历史成功的 raw 行 → `spawn(process.execPath, ["scripts/executor-host.mjs"])`
+且 `DATABASE_URL` 指副本 → 只读观察 → `reap-process.mjs` 整树回收）。
+
+1. **原样克隆那一跑：整轮被 ComfyUI 缓存**（11 个节点全是 `execution_cached`，没有 `executing` /
+   `progress`）⇒ `progressNode` 仍为 `NULL`。**这一跑不作数**，但也顺手量出一个真的缺口：
+   缓存轮次里我们完全不解析 `execution_cached` / `executed`，所以「这次跑的东西一个节点都没动」
+   在界面上与「什么都没发生」长得一样 —— 另开一条记（见下）。
+2. **打掉缓存那一跑**（把提示词换成带唯一标记的一句 ⇒ `CLIPTextEncode` 输入变了 ⇒ 真的采样）：
+   `progressNode` 一路跟着刷新，最终
+   `{"id":"76:69","value":25,"max":25,"classType":"KSampler","label":"采样去噪"}`
+   —— 类名与中文名都在，而且 `76:69` 是**子图链 id**（顶层 wrapper 76 里的内部节点 69），
+   说明委托给 `resolveRawNode` 那一条下钻在真数据上是通的。面板同时出现四行按节点日志：
+   ```
+   ▶ comfy-cli 节点 [76:67] 编码提示词（CLIPTextEncode） 开始执行
+   ▶ comfy-cli 节点 [76:69] 采样去噪（KSampler） 开始执行
+   ▶ comfy-cli 节点 [76:65] VAE 解码（VAEDecode） 开始执行
+   ▶ comfy-cli 节点 [95] SaveImageAdvanced（SaveImageAdvanced） 开始执行
+   ```
+   最后一行是 `nodeLabel` 的兜底形态：表里没有的类名**原样回类名**，不编一个中文名。
+3. **第三跑只为取事件原文**（`executing` / `progress` 各首例，就是上面那两行），用来判「类名到底
+   该从事件取还是从图取」—— 这条决定实现形状，不猜。
+
+### 判据
+
+- `graph-node-class.test.ts` 4 条：API 形状 / RAW 形状 / 子图链 id / 两种形状同时命中时 API 优先 /
+  载荷不可信（`null` / 字符串 / 数字 / 数组 / 空图）一律不抛且认不出。
+- `executor-ws.test.ts` 新增 5 条：RAW 任务一帧 `progress` 落库时带 `classType` + 中文 `label`
+  （#1202 原文明说「没有任何用例断言这件事」的那格）、API 形状同样带、
+  图里没有这个节点时两者都不带但**进度帧照落**、还没有图时也不丢帧、`executing` 记下的
+  `lastNodeByTask` 用同一份图。
+- `executor-cli-stream.test.ts` 新增 3 条：`executing` 事件自带类名时以事件为准（图里故意给一个
+  不同的类名）、`progress` 不带类名时按图认、事件与图都认不出时日志只报 id。
+- **反向验过它真的会红**：把 `progress` 那一侧的取值临时改回「恒空」（等价于修前行为），
+  两条正向断言立刻红、三条负向仍绿 —— 这条判据不是自证的空壳。
+
+### 顺带留下的一条账（没做，另开 ISSUE #1278）
+
+`execution_cached` / `executed` 两种 comfy-cli 事件目前**不解析**。全缓存轮次里它们是唯一的发生，
+于是界面表现为「进度不动、也没有任何按节点行」，而 ComfyUI 其实已经把这单收完了。
+要买的东西与 #1202 不同（那是「认不出类名」，这是「缓存轮次没有可见性」），所以没混进这一刀，登记为 ISSUE #1278。
