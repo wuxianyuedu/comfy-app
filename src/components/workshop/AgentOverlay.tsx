@@ -17,6 +17,8 @@ import type {
 } from "./hooks/use-workshop-agent";
 import { zClass } from "~/lib/shell/overlay-z";
 import { enterCommit } from "~/components/ui/use-enter-commit";
+import { Hint } from "~/components/ui/hint";
+import { useViewportSize } from "~/components/ui/use-viewport-size";
 
 const GREETING =
   "你好！我是工坊的创作指挥助手。你可以直接用自然语言告诉我想做什么，我会帮你指挥整个创作流程。\n\n比如：\n• 「帮我写一个海边重逢的温暖短片剧本」\n• 「在现有剧本基础上提取主要角色」\n• 「把分镜规划出来」";
@@ -27,6 +29,72 @@ const TOOL_STATUS_LABEL: Record<AgentToolRun["status"], string> = {
   error: "失败",
 };
 
+/** 浮层入口图标的直径（`size-10` = 40px）与「入口 ↔ 面板」之间的间距。 */
+const PANEL_ANCHOR_OFFSET = 48;
+
+/** 「面板 ↔ 视口上沿 / 下沿」的最小留白（px）。 */
+const PANEL_EDGE_GAP_PX = 16;
+
+/** 面板的自然高度（`h-[560px]`），后面几处算式都要引用它。 */
+const PANEL_HEIGHT_PX = 560;
+
+/** 「图标上方放得下」的判据（px）：低于它就把面板改从图标下方展开。
+ *
+ *  320 是「标题栏 + 工具过程 + 至少四五条对话 + 输入框」的读数 —— 再矮就只剩
+ *  标题栏和输入框，用户打开面板却读不到任何一句回复，等于把对话藏起来了。 */
+const PANEL_MIN_HEIGHT_PX = 320;
+
+/**
+ * 面板纵向落点：优先在图标**上方**展开（与图标底边对齐），上方放不下就翻到
+ * 图标**下方**。
+ *
+ * 拖动过的入口常落在屏幕中部甚至偏上（用户就是为了不挡内容才拖的），此时只往上
+ * 展开会把面板压到一两百像素高；翻到下方则能把它完整铺开。
+ *
+ * 返回的是**内联样式片段**而不是像素值：算式里只用 `100dvh` 与传入的偏移，
+ * 渲染期不读 `window`（理由见调用处注释）。`anchorBottom` 是入口底边距视口
+ * 下沿的距离，也就是「图标下方还剩多少」—— 面板翻到下方时占的正是这一段。
+ */
+export function panelPlacement(
+  anchorBottom: number,
+  /** 视口高（px）。**必须**由调用处传进来的理由见下方注释 —— 只有
+   *  `anchorBottom` 推不出「图标上方还剩多少」。 */
+  viewportHeight: number,
+): {
+  top?: string;
+  bottom?: string;
+  height: string;
+  maxHeight: string;
+} {
+  /* 图标**上方**还剩多少 = 视口高 − 图标底边距下沿 − 图标直径 − 留白。
+   * 放不下 `PANEL_MIN_HEIGHT_PX` 就翻到图标下方。
+   *
+   * 这个判据**必须**用到视口高：`anchorBottom` 只说「图标下方还剩多少」，
+   * 上方的余量 = 视口高 − 图标高 − 它。早先版本误把它当成「上方余量」
+   *（越大越宽裕），于是在「图标贴顶、偏移很大」时反而选了向上展开，
+   * 把面板压成 144px 高 —— 标题栏与输入框之外什么都看不见。 */
+  const spaceAbove =
+    viewportHeight - anchorBottom - PANEL_ANCHOR_OFFSET - PANEL_EDGE_GAP_PX;
+  if (spaceAbove >= PANEL_MIN_HEIGHT_PX) {
+    return {
+      bottom: `${anchorBottom}px`,
+      height: `${PANEL_HEIGHT_PX}px`,
+      maxHeight: `calc(100dvh - ${anchorBottom}px - ${PANEL_EDGE_GAP_PX}px)`,
+    };
+  }
+  /* 翻到下方：顶边落在图标下沿（`100dvh − anchorBottom`）再让开一个间距。
+   *
+   * 高度上限同样写成 `100dvh` 的算式，**与 `top` 用同一个来源** —— 混用
+   *「JS 读到的视口高」与「CSS 的 `dvh`」会在两者不等时（软键盘弹起、
+   *  地址栏收放）让面板被 `max-height` 截短或伸出视口，而那种不一致没有任何
+   *  东西会报警。`height` 只给自然高度，实际显示高由 `max-height` 收口。 */
+  return {
+    top: `calc(100dvh - ${anchorBottom - PANEL_ANCHOR_OFFSET}px)`,
+    height: `${PANEL_HEIGHT_PX}px`,
+    maxHeight: `calc(100dvh - ${anchorBottom}px - ${PANEL_ANCHOR_OFFSET}px - ${PANEL_EDGE_GAP_PX}px)`,
+  };
+}
+
 const TOOL_STATUS_COLOR: Record<AgentToolRun["status"], string> = {
   running: "bg-warning",
   done: "bg-success",
@@ -35,8 +103,12 @@ const TOOL_STATUS_COLOR: Record<AgentToolRun["status"], string> = {
 
 export function AgentOverlay({
   controller,
+  anchor,
 }: {
   controller: WorkshopAgentController;
+  /** 浮层入口当前所在位置（距视口右 / 下）—— 展开的对话窗跟着它走，见下方
+   *  「面板与入口的相对位置」注释。 */
+  anchor: { right: number; bottom: number };
 }) {
   const {
     open,
@@ -51,6 +123,11 @@ export function AgentOverlay({
   } = controller;
   const taRef = React.useRef<HTMLTextAreaElement>(null);
 
+  /* 面板纵向落点要判「图标上方放不放得下」，这需要视口高（见
+   * `panelPlacement` 的 Why）。首帧为 `null` —— 那时先不摆位（先不渲染比按
+   * 假高度摆错要好），挂载后立刻量到并落位。 */
+  const viewport = useViewportSize();
+
   /* 对话区跟随底部：贴底与「用户有没有接管滚动」的判据收在
    *`ui/use-scroll-follow`（规范 16 §16.2.4.24）。收口前这里是手写的
    *`scrollTop = scrollHeight` —— 用户往上滚读上一句 AI 回复会被立刻按回
@@ -62,7 +139,7 @@ export function AgentOverlay({
     watch: `${messages.length}:${busy}`,
   });
 
-  if (!open) return null;
+  if (!open || viewport === null) return null;
 
   const visibleMessages =
     messages.length === 0
@@ -71,7 +148,25 @@ export function AgentOverlay({
 
   return (
     <div
-      className={`border-border bg-panel-deep/95 fixed right-6 bottom-6 ${zClass("popup")} flex h-[560px] w-[440px] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl`}
+      /* 面板与入口的相对位置：入口那一枚图标是锚点，面板从它**左侧**展开
+       * （`right` 再加上图标直径与间距）。
+       *
+       * 两者此前**各写一处固定偏移**（入口 `right-6 bottom-8`、面板
+       * `right-6 bottom-6`）—— 用户拖动入口之后，面板倏地跳回右下角、跟入口
+       * 脱节；窄窗下面板还会直接贴住视口边。位置**只由入口那一个来源派生**，
+       * 这里不再出现第二份「角落偏移」。
+       *
+       * 纵向由 `panelPlacement()` 判一次（见那个函数的 Why），高度收口交给 CSS
+       * 的 `max-height`／`top`／`bottom` 算式 —— 渲染期不读 `window.innerHeight`
+       *（SSR 与首帧拿不到真实视口，会 hydrate 出两份不同的内联样式）。
+       *
+       *   高度：`height` 给自然高度、`max-height` 收口，两者一起读作
+       *  「想长到 560px，但不许超出视口」。 */
+      style={{
+        right: anchor.right + PANEL_ANCHOR_OFFSET,
+        ...panelPlacement(anchor.bottom, viewport.height),
+      }}
+      className={`border-border bg-panel-deep/95 ${zClass("popup")} fixed flex w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl`}
     >
       {/* Header */}
       <div className="border-border flex items-center gap-2 border-b px-4 py-3">
@@ -254,17 +349,57 @@ export function AgentOverlay({
   );
 }
 
-/** 触发 Agent 浮层打开的浮动按钮。 */
-export function AgentFab({ onOpen }: { onOpen: () => void }) {
+/**
+ * 触发 Agent 浮层打开的浮动入口。
+ *
+ * 三件事与「一枚悬浮图标」一起给出（少一件这条入口就是碍事的）：
+ *
+ *   · **只占一枚图标** —— 此前是「图标 + Agent」的胶囊，右下角常驻时正好压在
+ *     工坊右栏（生成资源 / 资源库）与内容区的交界上，把「选择生图工作流」这类
+ *     控件的右半截盖住。收成 40px 的圆钮后，它让出的横向空间就是那些控件的。
+ *   · **可以拖** —— 让它常驻某处就总有挡住东西的时候，`useDraggablePosition`
+ *     给出拖动 + 位置记忆（见该 hook 的 Why：位置跟右下角走、跨会话记住、
+ *     拖动与点击靠位移阈值分开）。
+ *   · **悬停给名字** —— 只剩图标之后，光看一枚机器人图标说不出它是干什么的；
+ *     提示由 `Hint` 给（全库唯一出口，规范 16 §16.2.3），不走原生 `title=`。
+ *
+ * 「被拖动的位置」由调用处透传进来（`WorkshopPipeline` 同时要用它定位浮层
+ * 展开后的位置），本组件不自己持有一份。
+ */
+export function AgentFab({
+  elementRef,
+  onOpen,
+  offset,
+  dragging,
+  handleProps,
+}: {
+  /** 挂在按钮上的 ref 回调（由 `useDraggablePosition` 给）——
+   *  拖动逻辑靠它知道元素什么时候进的 DOM、也靠它量尺寸夹边界。 */
+  elementRef: (el: HTMLButtonElement | null) => void;
+  onOpen: () => void;
+  /** 距视口右 / 下的偏移；`null` = 还没量到，先不渲染（避免闪一下再跳位）。 */
+  offset: { right: number; bottom: number } | null;
+  dragging: boolean;
+  handleProps: {
+    onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
+  };
+}) {
+  if (offset === null) return null;
   return (
-    <Button
-      variant="primary-solid"
-      onClick={onOpen}
-      className={`shadow-primary-500/20 fixed right-6 bottom-8 ${zClass("popup")} h-auto gap-2 rounded-full px-4 py-2.5 shadow-lg transition-transform hover:scale-105`}
-      aria-label="打开创作指挥 Agent"
-    >
-      <Icon data-icon="inline-start" name="bot" size={15} />
-      Agent
-    </Button>
+    <Hint label="创作指挥 Agent（可拖动摆到任意位置）" side="left">
+      <Button
+        ref={elementRef}
+        variant="primary-solid"
+        {...handleProps}
+        onClick={onOpen}
+        style={{ right: offset.right, bottom: offset.bottom }}
+        className={`shadow-primary-500/20 ${zClass("popup")} fixed size-10 touch-none rounded-full p-0 shadow-lg ${
+          dragging ? "cursor-grabbing" : "cursor-grab"
+        }`}
+        aria-label="打开创作指挥 Agent"
+      >
+        <Icon data-icon="inline-start" name="bot" size={18} />
+      </Button>
+    </Hint>
   );
 }
