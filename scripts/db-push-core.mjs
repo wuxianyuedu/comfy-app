@@ -86,7 +86,11 @@ export function pendingStatements(output) {
     const text = line.trim();
     /* 状态行（`[✓] Changes applied` / `[i] No changes detected` /
      * 下一次 `Reading config`）是这段列表的结束标志；空行只是分隔。 */
-    if (/^(\[|Reading config|Warning\b|No changes detected|Changes applied)/i.test(text)) {
+    if (
+      /^(\[|Reading config|Warning\b|No changes detected|Changes applied)/i.test(
+        text,
+      )
+    ) {
       break;
     }
     if (SQL_LINE.test(text)) out.push(text);
@@ -98,7 +102,9 @@ export function pendingStatements(output) {
  *  @param {string[]} statements `pendingStatements` 的结果
  *  @returns {boolean} */
 export function canAutoApply(statements) {
-  return statements.length > 0 && statements.every((s) => SAFE_STATEMENT.test(s));
+  return (
+    statements.length > 0 && statements.every((s) => SAFE_STATEMENT.test(s))
+  );
 }
 
 /** 白名单之外的语句（给人看的原因）。
@@ -106,6 +112,60 @@ export function canAutoApply(statements) {
  *  @returns {string[]} */
 export function riskyStatements(statements) {
   return statements.filter((s) => !SAFE_STATEMENT.test(s));
+}
+
+/**
+ * 把「会丢数据」的语句翻成人话 —— 哪张表、哪一列、丢的是什么。
+ *
+ * 给 `ensureSchemaCurrent` 的 stale detail 用：人要做「丢不丢得起」的决定，
+ * 只报条数不报清单，等于让人闭眼确认（toast / 确认弹窗 / 启动日志共用这一句，
+ * 由状态文件 → `GET /api/schema` 一路透传）。
+ *
+ * 只描述白名单之外的语句。认得出的给出「表.列（丢失方式）」；认不出的原样
+ * 收进清单（截到 80 字符）—— **描述不出来 ≠ 不列出来**，交给人自己看。
+ *
+ * SQLite 的重建表在语句列表里的痕迹是 `CREATE TABLE `__new_x``（它在白名单
+ * 里，不危险）+ `DROP TABLE `x``（危险）：前者先收集成「重建痕迹」，让对应的
+ * `DROP TABLE` 说成「重建表（只有对不上的列会丢）」而不是「删表」；搬运 /
+ * 改名中间步骤（`INSERT INTO __new_x …` / `ALTER TABLE __new_x RENAME …`）
+ * 不重复列。
+ *
+ * @param {string[]} statements `pendingStatements` 的结果
+ * @returns {string[]} 每条一句的描述（去重、保序）
+ */
+export function describeRiskyChanges(statements) {
+  /** 被 drizzle 用 `__new_` 三件套重建的表名。@type {Set<string>} */
+  const recreated = new Set();
+  for (const s of statements) {
+    const m = s.match(/^CREATE\s+TABLE\s+`__new_([^`]+)`/i);
+    if (m) recreated.add(m[1]);
+  }
+  /** @type {string[]} */
+  const out = [];
+  for (const raw of statements) {
+    if (SAFE_STATEMENT.test(raw)) continue;
+    const sql = raw.replace(/;+\s*$/, "");
+    let desc = null;
+    let m;
+    if (
+      (m = sql.match(
+        /^ALTER\s+TABLE\s+`([^`]+)`\s+DROP\s+COLUMN\s+`([^`]+)`$/i,
+      ))
+    ) {
+      desc = `${m[1]}.${m[2]}（删列，该列的数据会丢）`;
+    } else if ((m = sql.match(/^DROP\s+TABLE\s+`([^`]+)`$/i))) {
+      desc = recreated.has(m[1])
+        ? `${m[1]}（重建表，对不上的列的数据会丢）`
+        : `${m[1]}（删表，整张表的数据会丢）`;
+    } else if (/__new_/.test(sql)) {
+      continue; /* 重建表的搬运 / 改名步骤，上面那条已经讲过 */
+    }
+    if (desc === null) {
+      desc = `「${sql.length > 80 ? `${sql.slice(0, 77)}…` : sql}」`;
+    }
+    if (!out.includes(desc)) out.push(desc);
+  }
+  return out;
 }
 
 /**

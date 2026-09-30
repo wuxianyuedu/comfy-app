@@ -208,6 +208,36 @@ describe("canAutoApply —— 白名单", () => {
     ).toBe(false);
   });
 
+  it("describeRiskyChanges 把危险语句翻成「哪个表哪列会丢」，完整列出", async () => {
+    const { describeRiskyChanges } =
+      await import("../scripts/db-push-core.mjs");
+    expect(
+      describeRiskyChanges([
+        "ALTER TABLE `user` DROP COLUMN `color`;",
+        "DROP TABLE `task`;",
+        /* SQLite 的重建表三件套：建 __new、搬数据、删旧表再改名。 */
+        "CREATE TABLE `__new_workflowTemplate` (`id` text PRIMARY KEY);",
+        "INSERT INTO `__new_workflowTemplate`(`id`) SELECT `id` FROM `workflowTemplate`;",
+        "DROP TABLE `workflowTemplate`;",
+        "ALTER TABLE `__new_workflowTemplate` RENAME TO `workflowTemplate`;",
+        /* 白名单内的语句不描述（它不丢数据）。 */
+        "ALTER TABLE `user` ADD `a` text;",
+      ]),
+    ).toEqual([
+      "user.color（删列，该列的数据会丢）",
+      "task（删表，整张表的数据会丢）",
+      "workflowTemplate（重建表，对不上的列的数据会丢）",
+    ]);
+  });
+
+  it("describeRiskyChanges：认不出的语句原样列出（描述不出来 ≠ 不列出来）", async () => {
+    const { describeRiskyChanges } =
+      await import("../scripts/db-push-core.mjs");
+    expect(describeRiskyChanges(["UPDATE `user` SET `a` = 1;"])).toEqual([
+      "「UPDATE `user` SET `a` = 1」",
+    ]);
+  });
+
   it("空列表不算「可以自动应用」（不认识就交人工）", async () => {
     const { canAutoApply } = await import("../scripts/db-push-core.mjs");
     expect(canAutoApply([])).toBe(false);
@@ -377,6 +407,8 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     });
     expect(state.state).toBe("stale");
     expect(state.detail, "要讲清是「会丢数据」这一类").toContain("会丢数据");
+    /* detail 要把「哪个表哪列会丢」完整列出（toast / 确认弹窗共用这一句）。 */
+    expect(state.detail).toContain("user.color（删列，该列的数据会丢）");
     expect(applyChanges, "危险变更不许走到应用那一步").not.toHaveBeenCalled();
     /* 这条是这次改动真正要保住的东西：数据没被启动链路悄悄删掉。 */
     expect(columnsOf(dbFile, "user")).toContain("color");
