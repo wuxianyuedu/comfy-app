@@ -13,7 +13,7 @@
 ## Docs
 
 - ADR §13-3C（D1）与 §14（4-B2）里那句「comfy-cli 那条事件源拿不到 `class_type`」被真机原文推翻：**只对 `progress` 成立** —— `executing` 事件本来就带 `class_type` 与 `title`（而且是 ComfyUI 展开子图后的权威值，所以实现取「事件优先、图兜底」）。旧记录按当日理解留着，两处各加一句指向 §24；灰度指南 `docs/guide-executor-host.md` 那条「拿不到类名时为空」改成现状。
-- 灰度指南里同批写明**仍然会为空的合法情形**：整轮被 ComfyUI 缓存（全是 `execution_cached`，一个 `progress` / `executing` 都没有）。这一类是另一条账（缓存轮次没有按节点可见性），已另开 issue，没混进这一刀。
+- 灰度指南里同批写明**仍然会为空的合法情形**：整轮被 ComfyUI 缓存（全是 `execution_cached`，一个 `progress` / `executing` 都没有）。这一类是另一条账（缓存轮次没有按节点可见性），已另开 ISSUE #1278，没混进这一刀。
 
 ## Tests
 
