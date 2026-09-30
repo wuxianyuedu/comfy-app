@@ -284,6 +284,13 @@ export default defineConfig({
          * 绕过（本机实测：同一份图，静态形状 200、带闸形状 401）。这一层不进覆盖率面，
          * 「闸有没有真的接到请求上」就没有任何数字会动；而它的失效形态是**零报错**。 */
         "src/proxy.ts",
+        /* 模型库这一刀的三个新文件（**两处同批**登记）。两个既有文件刻意不在这里
+         * 新设门槛：`ModelCard.tsx` 与 `ModelLibrary.tsx` 此前不在覆盖率面上，
+         * 拿一次隔离跑的数去锁它们，等于用不等同于全量的口径立规矩 —— 它们的行为
+         * 判据在各自的用例里（死链、假基座、缺档位都各有用例钉着），不靠数字兜。 */
+        "src/components/model/model-type-labels.ts",
+        "src/components/model/model-cover.ts",
+        "src/components/model/ModelDetailDialog.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1291,6 +1298,33 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 模型库这一刀的三个新文件（与上面 `coverage.include` 同批登记）。
+         * 数值按**隔离实测**向下取整到 5 的倍数（§18.6），不抬到理想值：
+         *   · `model-type-labels.ts` 是纯表 + 一个查表函数，四项皆满；
+         *   · `model-cover.ts` 分支只到 50 —— 没走到的那支是色表为空时的兜底
+         *     （按设计不可达，写出来是为了不用非空断言）。如实登记 50，
+         *     而不是为了好看把它抬成 100 再让下一次全量红；
+         *   · `ModelDetailDialog.tsx` 未覆盖的是封面加载失败的 `fallback` 渲染
+         *     函数与 `onOpenChange` 的反向回调（弹窗只能由用户关掉，jsdom 里
+         *     没有真实的关闭路径）。 */
+        "src/components/model/model-type-labels.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/model/model-cover.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 50,
+        },
+        "src/components/model/ModelDetailDialog.tsx": {
+          lines: 85,
+          functions: 70,
+          statements: 90,
+          branches: 65,
         },
       },
     },
