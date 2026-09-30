@@ -20,6 +20,7 @@
 import {
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   rmdirSync,
   writeFileSync,
@@ -27,9 +28,12 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { createClient } from "@libsql/client";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { sleep } from "../src/lib/with-timeout";
 
 import {
   SQLITE_BUSY_TIMEOUT_MS,
@@ -153,10 +157,17 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
     expect(SQLITE_BUSY_TIMEOUT_MS).toBe(250);
   });
 
-  it("三处 TS 站点都只走那份清单（不许再各写一份字面量）", () => {
+  it("三处 TS 站点都只走共用出口（不许再各写一份字面量、也不许各写一遍循环）", () => {
     for (const rel of TS_SITES) {
       const src = code(rel);
-      expect(src, `${rel} 必须 import 共用清单`).toContain("SQLITE_PRAGMAS");
+      /* 出口是 `applySqlitePragmas`（清单 + 撞锁重试都在它里面，ISSUE #1282）：
+       * 三处站点要的是同一件事，各写一遍循环就必然漏一处。 */
+      expect(src, `${rel} 必须 import 共用出口`).toContain(
+        "applySqlitePragmas",
+      );
+      expect(src, `${rel} 不该再自己遍历清单`).not.toContain(
+        "for (const pragma of SQLITE_PRAGMAS)",
+      );
       expect(src, `${rel} 不该再硬编码 journal_mode`).not.toContain(
         '"PRAGMA journal_mode = WAL"',
       );
@@ -192,6 +203,173 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
   });
 });
 
+/**
+ * `applySqlitePragmas` 的**撞锁重试**当场量出来（ISSUE #1282）。
+ *
+ * 为什么要有这一组：`next build` 的 collect-page-data 起 7 个 worker 进程，每个都
+ * import `src/server/db.ts`、于是每个都跑一遍开机 PRAGMA，而**一份全新的库文件**
+ * 上 `PRAGMA journal_mode = WAL` 要独占锁 —— 实测 3/8 抛 `SQLITE_BUSY`，异常从模块
+ * 顶层 await 浮出 worker 就被 Next 聚合成 `Failed to collect page data`，报错行还落在
+ * 无关路由上。现场形态是「干净检出上第一次 `pnpm build` 必失败、再跑一次就好」，
+ * 而 CI 每次都是干净检出。
+ *
+ * 两条用例缺一不可：
+ *   · 第一条量**修复本身**（8 个独立进程同时打一份新库 → 全绿）；
+ *   · 第二条量**量具没坏**（同一形状下裸循环确实会抛）—— 否则第一条在
+ *     「未来某版 SQLite 不再抢锁」时也会绿，而那时它已经什么都不判了。
+ */
+describe("开机 PRAGMA 撞锁有界重试，当场量出来", () => {
+  it("裸循环在 8 进程同时打新库时会抛（量具没坏）", async () => {
+    const outcomes = await racePragmaBoot("bare");
+    expect(
+      outcomes.filter((o) => o !== "ok").length,
+      "同一形状下裸循环一次都没抛 —— 前提已不成立，下面那条用例不再说明任何事",
+    ).toBeGreaterThan(0);
+  });
+
+  it("applySqlitePragmas 在同样形状下全绿", async () => {
+    const outcomes = await racePragmaBoot("retry");
+    expect(
+      outcomes.filter((o) => o !== "ok"),
+      `有进程仍抛：${outcomes.filter((o) => o !== "ok").join(" / ")}`,
+    ).toEqual([]);
+  });
+});
+
+/* ── 竞态量具：8 个**独立进程**同时把一份新库切到 WAL（ISSUE #1282）──────
+ *
+ * 为什么必须跨进程：同进程内的多条连接会被驱动自己串行化（实测 7 条连接跑同一个
+ * 循环全绿），只有独立进程才复现得出「别人正拿独占锁」那一档。`next build` 的
+ * 7 个 worker 正是独立进程。 */
+const raceSandbox = path.join(
+  ROOT,
+  "node_modules",
+  ".cache",
+  `sqlite-pragma-race-${process.pid}`,
+);
+
+/** 子进程脚本源码：`mode=bare` 是修复前的形状（裸循环），`mode=retry` 走真出口。
+ *
+ *  被测的是**真模块**（不是复制一份逻辑）：复制逻辑等于量一个副本，改了真文件也不会红。
+ *  路径用**相对仓库根**的那条（`../../../src/lib/...`），不用 `~/lib/...`：子进程脚本
+ *  落在 `node_modules/.cache` 下，tsx 的 paths 解析认的是「离文件最近的 tsconfig」——
+ *  在 `node_modules` 里这条路不通。语法用 ESM：脚本是 `.mts`，顶层 await 才成立
+ *  （esbuild 对 `.ts` 在非 module 包下按 CJS 转译，直接报 Top-level await 不支持）。 */
+const RACE_WORKER_SOURCE = `
+import { existsSync, writeFileSync } from "node:fs";
+import { createClient } from "@libsql/client";
+
+/* 被测模块的**绝对路径**由父进程作为 argv[1] 传来：写成脚本里的相对路径就要数
+ * 「这个脚本相对仓库根有几层」—— 那个数会随沙箱目录深度漂移，实测正是它把
+ * 进程变成 ERR_MODULE_NOT_FOUND（子进程崩了、结论却长得像「撞锁失败」）。 */
+const [moduleUrl, startFile, file, mode] = process.argv.slice(2);
+const { applySqlitePragmas, SQLITE_PRAGMAS } = await import(moduleUrl);
+const spin = (ms) =>
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/* 到位标记：父进程靠它确认「人都齐了」再发令 —— **必须写在等发令之前**，
+ * 否则就是死锁：子进程等 startFile、父进程等到位数。 */
+writeFileSync(startFile + ".arrived." + process.pid, "");
+
+/* 起跑线：tsx 的启动抖动有几十到几百毫秒，不齐步的话各进程的 PRAGMA 会被错开、
+ * 抢不到同一个窗口（实测那样量出来「一次都不抛」，量到的是启动抖动而不是抢锁）。
+ * 所有人先在这里等同一个文件出现，再一起冲。 */
+while (!existsSync(startFile)) spin(2);
+/* 抢占窗口只有几毫秒：再多等一小会儿，让最后一个进程也到位。 */
+spin(30);
+
+const client = createClient({ url: "file:" + file });
+try {
+  if (mode === "retry") {
+    await applySqlitePragmas(client);
+  } else {
+    for (const pragma of SQLITE_PRAGMAS) await client.execute(pragma);
+  }
+  console.log("ok");
+} catch (err) {
+  console.log("fail:" + (err?.code ?? err?.message ?? "unknown"));
+}
+`;
+
+/** 被量子进程加载的模块：**绝对 file: URL**（见 worker 源码里那段说明）。 */
+const PRAGMA_MODULE_URL = pathToFileURL(
+  path.join(ROOT, "src", "lib", "sqlite-pragmas.ts"),
+).href;
+
+/** 竞态进程数：`next build` 实测是 7（"Collecting page data using 7 workers"）。 */
+const RACE_PROCS = 7;
+
+/** 跑一轮 N 进程竞态，返回每个进程的结论（`ok` / `fail:CODE` / `exit:N`）。
+ *
+ *  流程：先算出所有进程的**齐步文件**路径 → 落盘让它出现（= 发令）→ 等所有子进程
+ *  各回一个 `.arrived.<pid>` → 收结论。少了齐步这一步，量到的是「启动抖动」而不是
+ *  「抢锁」（实测会一次都不抛）。 */
+async function racePragmaBoot(mode: "bare" | "retry"): Promise<string[]> {
+  /* 每一轮一个**独立目录**：库文件、齐步文件、到位标记、子进程脚本都关在里面 ——
+   * 共用目录时上一轮的 `.arrived.*` 会被这一轮数进来，「人都齐了」就是假的。 */
+  const dir = path.join(raceSandbox, `${mode}-${Date.now().toString(36)}`);
+  mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, "race.sqlite");
+  const startFile = path.join(dir, "go");
+  const worker = path.join(dir, "worker.mts");
+  writeFileSync(worker, RACE_WORKER_SOURCE, "utf8");
+
+  /* 先起进程（它们各自在 `while (!existsSync(startFile))` 上自旋等发令），
+   * 等齐到位数再发令，这样所有人的 PRAGMA 落在同一个几毫秒窗口里。 */
+  const pending = Array.from({ length: RACE_PROCS }, () =>
+    runOnce(worker, PRAGMA_MODULE_URL, startFile, file, mode),
+  );
+  await waitForArrivals(startFile, RACE_PROCS);
+  /* 发令：这一步之后所有进程几乎同时执行 PRAGMA。 */
+  writeFileSync(startFile, "");
+  return Promise.all(pending);
+}
+
+/** 等 `expect` 个 `.arrived.<pid>` 出现（上限 10s，超时也继续 —— 结论由退出码说话）。 */
+async function waitForArrivals(startFile: string, expectCount: number) {
+  const dir = path.dirname(startFile);
+  const base = path.basename(startFile) + ".arrived.";
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const arrived = readdirSync(dir).filter((n) => n.startsWith(base)).length;
+    if (arrived >= expectCount) return;
+    await sleep(10);
+  }
+}
+
+/** 起一个进程跑 worker，取它 stdout 的第一行；非零退出也算一条结论。 */
+function runOnce(
+  worker: string,
+  moduleUrl: string,
+  startFile: string,
+  file: string,
+  mode: string,
+): Promise<string> {
+  return new Promise((resolve) => {
+    /* 子进程由仓库自带的 `tsx` 起（`pnpm exec`），CWD 是仓库根 —— 只有这样才能
+     * 加载**真模块**（`src/lib/sqlite-pragmas.ts` 自己还会 import `~/lib/**`）。 */
+    const child = spawn(
+      pnpmBin(),
+      ["exec", "tsx", worker, moduleUrl, startFile, file, mode],
+      { cwd: ROOT, stdio: ["ignore", "pipe", "inherit"] },
+    );
+    let out = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      out += chunk.toString();
+    });
+    child.on("exit", (code) => {
+      const line = out.split("\n").find((l) => l.trim());
+      resolve(line?.trim() ?? `exit:${code}`);
+    });
+  });
+}
+
+/** `pnpm` 的可执行名按平台分叉（Windows 上是 `.cmd`）—— 与仓库其余跨平台脚本
+ *  同一口径，别在这里硬编码 `pnpm`。 */
+function pnpmBin(): string {
+  return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+}
+
 describe("等锁预算的两种形状，当场量出来", () => {
   it("开机 PRAGMA 覆盖不到池里新开的连接（那种形状等于没设）", async () => {
     const { outcome, elapsed } = await attemptWith("pragma");
@@ -224,6 +402,7 @@ describe("等锁预算的两种形状，当场量出来", () => {
  * 于是「连接失败」和「量具坏了」在这条用例里长得一模一样。 */
 beforeAll(() => {
   mkdirSync(sandbox, { recursive: true });
+  mkdirSync(raceSandbox, { recursive: true });
   writeFileSync(holderScript, HOLDER_SOURCE, "utf8");
   const db = new DatabaseSync(dbFile);
   db.exec("PRAGMA journal_mode = WAL");
@@ -246,4 +425,6 @@ afterAll(() => {
   } catch {
     /* 非空就留给系统 */
   }
+  /* 竞态那组用的是自己的沙箱（库文件 + 子进程脚本），同一口径清掉。 */
+  rmSync(raceSandbox, { recursive: true, force: true });
 });

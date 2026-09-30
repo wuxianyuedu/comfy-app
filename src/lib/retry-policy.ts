@@ -154,3 +154,25 @@ export const TERMINAL_DB_WRITE = {
   /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
   maxAttempts: 4,
 } as const;
+
+/**
+ * 开机那几条库级 PRAGMA：最多 5 次、指数退避基数 25ms、封顶 200ms（累计 25+50+100+200 = 375ms）。
+ *
+ * 对手与 `TERMINAL_DB_WRITE` **同族但更短命**：它不是「另一个进程正写着一行」，而是
+ * **一群进程同时把一份新库切到 WAL**。实测（7 个独立进程同时跑 `PRAGMA journal_mode = WAL`
+ * 打一份刚建的空库）：3/8 抛 `SQLITE_BUSY` —— 切换日志模式要独占锁，而那一刻别人不是
+ * 「正在写」，只是「正在开」。`next build` 的 `Collecting page data using 7 workers` 正是
+ * 这个形状：每个 worker 都 import `src/server/db.ts`，于是每个都跑一次开机 PRAGMA。
+ * 几毫秒内自己散掉，所以基数比终态写还小、次数略多（这里每次都很便宜，且失败是
+ * **构建直接红**，与「一行任务卡住」不是一个量级）。
+ *
+ * 形状仍是**有界**的：穷尽后如实抛出（不吞），因为「切 WAL 切不掉」也可能是只读挂载 /
+ * 磁盘满一类真故障，那类必须让构建或启动失败得看得见。
+ */
+export const SQLITE_PRAGMA_BOOT = {
+  shape: "exponential",
+  baseMs: 25,
+  maxMs: 200,
+  /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
+  maxAttempts: 5,
+} as const;

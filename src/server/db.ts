@@ -25,7 +25,7 @@
 import "server-only";
 import path from "node:path";
 import { env } from "~/env";
-import { SQLITE_PRAGMAS } from "~/lib/sqlite-pragmas";
+import { applySqlitePragmas } from "~/lib/sqlite-pragmas";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { sql } from "drizzle-orm";
@@ -78,9 +78,14 @@ const client = createClient({
 // pragmas; the lock-waiting budget is a per-connection option (`timeout`) and this
 // side intentionally does not set it -- a contended write here fails fast and the
 // caller decides, because waiting would stall this process' event loop (ISSUE #1250).
-for (const pragma of SQLITE_PRAGMAS) {
-  await client.execute(pragma);
-}
+//
+// The application itself goes through `applySqlitePragmas` because the boot
+// loop must survive a *concurrent* WAL switch: `next build` collects page data
+// with 7 worker processes, each importing this module, and a brand-new database
+// file gives only one of them the exclusive lock (measured 3/8 SQLITE_BUSY) --
+// the rejection escapes a module-scope await and takes the whole build down
+// (ISSUE #1282).
+await applySqlitePragmas(client);
 
 const globalForDb = globalThis as unknown as {
   db: ReturnType<typeof drizzle<typeof schema>> | undefined;
