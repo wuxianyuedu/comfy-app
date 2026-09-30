@@ -231,6 +231,11 @@ const DOMAIN_EXEMPT = new Set([
    * 放进任何一侧的子域都会让另一侧反向依赖那个域 —— 与 `endpoints.ts` /
    * `progress.ts` 同款:「唯一持有者 + 任何域消费」的顶层单例。 */
   "src/lib/layout-budget.ts",
+  /* 两条轮询/去抖判据的本体:状态栏、首页、队列通道等多处都要用,而 lib 不能反向
+   * import components/**(硬规则 22),所以本体在这层、hook 只做外壳。与
+   * endpoints / progress 同款:「唯一持有者 + 任何域消费」的顶层单例。 */
+  "src/lib/poll-timer.ts",
+  "src/lib/offline-gate.ts",
   /* 搜索关键字的归一化与分组过滤（ISSUE #672）：视图层（工坊多选、工作流库
    * 筛选、日志面板、画布 chip）、`src/server` 的物化路由与 `src/app/api` 的
    * REST 路由**都在用**，且逻辑层与视图层必须同一口径（命中判据折了小写而

@@ -205,6 +205,13 @@ export default defineConfig({
         "src/app/api/comfy/stats/route.ts",
         "src/app/api/comfy/queue/route.ts",
         "src/app/api/comfy/ensure/route.ts",
+        /* 系统指标收成单点持有者这一刀带出的三个新出口：轮询内核、在线迟滞本体、
+         * 指标 store。同款 **两处同批改**（coverage.include + thresholds）：
+         * poll-timer 的未覆盖分支是「既不隐藏也不失焦」那条早退，offline-gate 实测满档，
+         * comfy-stats-store 未覆盖的只有 SSR 快照那一份。门槛按实测取不高于现状的档。 */
+        "src/lib/poll-timer.ts",
+        "src/lib/offline-gate.ts",
+        "src/lib/comfy/comfy-stats-store.ts",
         /* 体检清单 ⑦ 第二批 · 并到安全台账 A 系列：这一批的用例是「先写断言、
          * 照出越权、顺手修」，所以门槛登记的是**判据本身**而不是新增行数。
          *   · `custom-nodes/route.ts` —— argv 注入闸门（A6）：POST 那几条出口
@@ -1067,6 +1074,24 @@ export default defineConfig({
           lines: 100,
           functions: 100,
           statements: 100,
+          branches: 100,
+        },
+        "src/lib/poll-timer.ts": {
+          lines: 90,
+          functions: 85,
+          statements: 90,
+          branches: 85,
+        },
+        "src/lib/offline-gate.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/comfy/comfy-stats-store.ts": {
+          lines: 95,
+          functions: 75,
+          statements: 95,
           branches: 100,
         },
         /* ── 体检清单 ⑦ 第二批 · 并到安全台账 A 系列（按实测登记）────────────
