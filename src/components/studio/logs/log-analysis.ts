@@ -521,6 +521,10 @@ export function lastSeqOf(logs: LogEntry[]): number {
  * 之前**（exe 路径、项目根、探测结果…）。用一个全局 cutoff 一刀切，
  * 这些真·本次运行的行会被当成历史丢掉——用户读到的就是「启动和启动器日志
  * 丢失」（ISSUE #262 复审）。覆盖重建的来源不存在「历史行」，因此不参与裁剪。
+ *
+ * 壳侧两路（shell / shell-launch）**故意不进**这个集合：它们的文件虽然是追加
+ * 写、跨运行累积，但同一条锚点晚于壳的启动报告——按会话裁剪会把「为什么起
+ * 不来」的头几行裁掉（见 `/api/logs/current` 的 resolveSourceFile 注释）。
  */
 const SESSION_SCOPED_ORIGINS = new Set<NonNullable<LogEntry["origin"]>>([
   "app-runtime",
@@ -648,6 +652,8 @@ export function computeOriginCounts(
     all: zeroCounts(),
     dev: zeroCounts(),
     launcher: zeroCounts(),
+    "shell-launch": zeroCounts(),
+    shell: zeroCounts(),
     app: zeroCounts(),
     "app-runtime": zeroCounts(),
     [CONSOLE_ORIGIN]: zeroCounts(),
