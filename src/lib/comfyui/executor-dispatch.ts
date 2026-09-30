@@ -40,6 +40,7 @@
  */
 import WebSocket from "ws";
 import { errorText } from "~/lib/error-message";
+import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { fireAndForget } from "~/lib/async-action";
 import { logger } from "~/lib/core/logger";
 import {
@@ -130,7 +131,7 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
       );
     }
   } catch (err) {
-    logger.warn(`[comfyui] ${errorText(err, "等待提示写入失败")}`);
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "等待提示写入失败")}`);
   }
 }
 
@@ -174,7 +175,7 @@ export async function claimAndDispatchOnce(options?: {
   try {
     claimed = await repo.claimNextQueued(owner, 1);
   } catch (err) {
-    logger.warn(`[comfyui] ${errorText(err, "领取队列任务失败")}`);
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "领取队列任务失败")}`);
     return null;
   }
   const taskId = claimed[0];
@@ -277,7 +278,9 @@ export function startDispatchLoop(intervalMs = DISPATCH_TICK_MS): void {
   if (dispatchState.handle) return;
   dispatchState.handle = setInterval(() => {
     fireAndForget(claimAndDispatchOnce(), (err: unknown) => {
-      logger.warn(`[comfyui] ${errorText(err, "领取循环异常（下一轮重试）")}`);
+      logger.warn(
+        `[comfyui] ${sqliteAwareErrorText(err, "领取循环异常（下一轮重试）")}`,
+      );
     });
   }, intervalMs);
   /* `unref()`：常驻后台职责不该把事件循环吊住（dev server 关停能自然退出）。 */
@@ -298,7 +301,7 @@ export function stopDispatchLoop(): void {
 registerQueueKick(() => {
   fireAndForget(claimAndDispatchOnce(), (err: unknown) => {
     logger.warn(
-      `[comfyui] ${errorText(err, "续跑领取失败（下一拍由常驻循环再试）")}`,
+      `[comfyui] ${sqliteAwareErrorText(err, "续跑领取失败（下一拍由常驻循环再试）")}`,
     );
   });
 });
