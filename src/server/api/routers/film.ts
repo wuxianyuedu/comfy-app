@@ -15,7 +15,7 @@ export const filmRouter = createTRPCRouter({
   /* GET /api/film —— 读 */
   list: authedProcedure.query(async ({ ctx }) => {
     const films = await filmRepository.listByUser(ctx.user.id);
-    const { isFFmpegAvailable } = await import("~/server/film/orchestrator");
+    const { isFFmpegAvailable } = await import("~/server/film/compose-film");
     return { films, ffmpegAvailable: await isFFmpegAvailable() };
   }),
 
@@ -124,7 +124,7 @@ export const filmRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const film = await filmRepository.findByIdForUser(ctx.user.id, input.id);
       if (!film) throw new Error("Film not found");
-      const { composeFilm } = await import("~/server/film/orchestrator");
+      const { composeFilm } = await import("~/server/film/compose-film");
       await composeFilm(input.id);
       return { ok: true };
     }),

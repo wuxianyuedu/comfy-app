@@ -944,3 +944,47 @@ issue 不关，改写成「等一次可归因的现场」，并把它需要的�
 
 **留下的账**：#1262 仍开，判据已就位；真实现场出现时，先读那句 warn 的 `(SQLite: …)` 再决定
 是「池里一条连接带着未提交事务回池」还是「外部持锁」。
+
+
+## 22. #1257（`orchestrator.ts` 越线之后的下沉：合成那半段搬出去）——落地记录
+
+这不是新决策，是 §19 末尾那笔记账的兑现：5-A 的 +136 行把 `src/server/film/orchestrator.ts`
+从 898 推到 1034（越过规范 §12.6 的文件行数上限 900）。当时**没有**把它塞进
+`scripts/.file-size-baseline.json`（基线 `total: 0` 保持），而是开 ISSUE #1257 记着
+「谁推过线谁拆」—— 把超限文件登记进基线等于让判据从此对它永久失明。
+
+**切法照 issue 里已经验过的那条**（两条走不通的路也写在里面，这次没再试）：
+
+| 新文件 | 装什么 | 为什么是它 |
+| --- | --- | --- |
+| `src/server/film/film-log.ts` | `appendFilmLog` | 编排侧与合成侧都要往 `filmProject.logs` 追加行；它留在任何一侧，另一侧就得反向 import 它 |
+| `src/server/film/compose-film.ts` | `isFFmpegAvailable` + `_ffmpegOk` 闩锁、`runFFmpeg`、`composeFilm`，**以及 `syncFilmToProject` + `FilmShotClip`** | 回写只被合成调用（出片之后才谈得上回写）。只搬 `composeFilm` 不搬回写 ⇒ 新模块反向引 `./orchestrator`、编排又引合成 ⇒ 环。`check-circular-deps` 判的是 AST 上的 import，`import type` 也不算安全 |
+| `src/lib/film/film-status.ts` | `FilmStatus` / `ShotStatus` 一份定义 | 这两条联合原本在 `orchestrator.ts` 与 `src/components/studio/film-studio-config.ts` **各抄一份**（§12.12 的形态：两边都是同一组字面量，改一处另一处连编译期都不报错）。放 `src/lib` 是因为视图层与服务端都要用，而 lib 是两侧共同的地基（放 server 就会让 components 为了一行类型去引服务端，`eslint boundaries` 拦的就是那个）。config 侧改成 re-export，对外 API 一字不变 |
+
+编排文件只留「剧本 → 分镜 → 建片 → 逐镜提交 → 监看」，**1034 → 707 行**（合成 341 行、行日志 20 行、状态族 21 行各自成文件）；方向变成单向一条链：
+`orchestrator` → `compose-film` → `film-log` / `compose-steps`。
+
+**搬法是脚本搬的，不是手抄的**（`temp/split-film-compose.cjs`，一次性）：三段合计 314 行、
+含大量 ffmpeg 参数数组与 CJK 注释，手抄一次就可能把某个哨兵值（`code: -1` + `"timeout"`）
+或某条注释改味，而那只在真跑 ffmpeg 时才暴露。脚本按行范围取段 + **每段校验必须含的锚点文本**，
+锚不对直接退出；搬完用 `tsc` 追哪些 import 变成多余（`spawn` / `fs` / `path` / `sizeSpecDims` / `normalizeProductionProgress` /
+`errorMessage` / `withTimeoutResult`，以及 `text-clamp` 与 `compose-steps` 两整行），
+也追出我一开始误删的两格（`toSizeSpec` 编排侧读载荷时还要用；`FilmStatus` 编排侧只剩引用类型）。
+
+**连带改到的调用点**（迁移目录「五查」里这一刀命中三条）：`film` router 两处
+`await import("~/server/film/orchestrator")` 改指 `compose-film`；`orchestrator.test.ts`
+的导入按归属拆成两行（`composeFilm` / `syncFilmToProject` 走新模块）；仓储桩不用复制 ——
+它 mock 的是 `~/lib/core/repository` 那一层，合成侧从同一入口取，桩照旧生效。
+**没改**的一处是刻意留的：`orchestrator` 不再 `export type FilmStatus / ShotStatus`，
+先全仓 grep 确认没有跨文件消费者再动，别留一个「看起来在用其实没人引」的转发出口。
+
+**门槛与门禁**：`src/server/film/**` 的实测 64/76.7/64/55.6（分母没变，同一批判决换文件住），
+门槛保持 30/50/35/25 不升不降；`src/lib/film/**` 那格里 `film-status.ts` 是纯类型文件
+（v8 记 0/0，目录聚合仍是 100），因此 100/90/100/90 不动。`--strict` 现在只剩工坊线的
+`workflow.ts`（944 行）超限 —— 那是别人的账，本刀不替它放宽判据。循环依赖 0 组、
+零消费导出 0、孪生对 0 对。
+
+**顺手核的一句文档口径**（issue 里点的第二条）：指南 `feature-workshop-flow.md` 那条
+「成片合成是纯客户端」在服务端管线（`render_film` 工具 + `composeFilm`）出现后已经说不全 ——
+改成明写**两条路**：工坊内的时间线预览/导出确实是客户端，服务端的 `composeFilm` 真起 ffmpeg
+出片并回写项目，两者互不替代。
