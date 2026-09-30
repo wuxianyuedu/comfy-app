@@ -95,6 +95,7 @@ export function LogFilterBar({
           if (
             typeof next === "string" &&
             (next === "all" ||
+              next === "debug" ||
               next === "info" ||
               next === "warn" ||
               next === "error") &&
