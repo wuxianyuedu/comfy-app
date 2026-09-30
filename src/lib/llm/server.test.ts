@@ -256,10 +256,10 @@ describe("getConfigForClient", () => {
       {
         name: "tbl-remote",
         baseUrl: "https://t/v1",
-        // 给客户端的形态里密钥一律被剥掉（顶层与远端条目都是），所以这里不再是
-        // `null`。「本地=字符串 / 远端=对象」这条类型区分与「不外泄密钥」是两件事，
-        // 两条都要看得见。
-        apiKey: undefined,
+        // 给客户端的形态里密钥一律不出门（顶层与远端条目都是），连键都不挂 ——
+        // 挂 `undefined` 与挂 `null` 在覆盖式保存里读起来不一样，见台账 A11。
+        // 但「这条存没存过密钥」必须出门，否则客户端分不清「没配过」与「没重填」。
+        hasApiKey: false,
         kind: "chat",
       },
     ]);
@@ -286,17 +286,17 @@ describe("getConfigForClient", () => {
     const serialized = JSON.stringify(out);
     expect(serialized).not.toContain("sk-top-secret");
     expect(serialized).not.toContain("sk-remote-secret");
-    // 脱敏不等于把条目也删掉：设置页还要看得见「这条远端模型存在」
+    // 脱敏不等于把条目也删掉：设置页要看得见「这条远端模型存在、且配过密钥」——
+    // 后者是台账 A11 的另一半：没有这个信息，客户端就无法把「没重填」与「清空」分开表达。
     const remote = out.extraModels.find(
       (e) => typeof e === "object" && e !== null && e.name === "tbl-keyed",
     );
     expect(remote).toMatchObject({
       name: "tbl-keyed",
       baseUrl: "https://t/v1",
+      hasApiKey: true,
     });
-    // ⚠️ 出口**不区分**「这条有没有密钥」（`hasApiKey` 只有顶层那一份）——
-    // 这正是台账 A11 的成因：设置页拿到的是 `apiKey: undefined`，回写时
-    // `replaceAll` 按「整份覆盖」把它写成 null，存过的远端密钥一次保存就没。
+    expect(Object.keys(remote ?? {})).not.toContain("apiKey");
   });
 
   it("远端表里误存的本地 ollama（回环 + 无密钥）折回本地候选字符串", async () => {

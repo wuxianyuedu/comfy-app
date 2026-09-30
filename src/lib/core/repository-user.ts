@@ -194,9 +194,11 @@ export class RemoteModelRepository {
 
   /**
    * 以给定条目列表为远端模型的最终态做全量同步（去重键=name）：
-   *   已存在 name → 更新 baseUrl/apiKey/kind；新 name → 插入；
+   *   已存在 name → 更新 baseUrl / kind / apiKey；新 name → 插入；
    *   库里存在但本次未给出 → 删除。
    * 设置页保存整份远端清单时调用，保证服务端只认这一份真相。
+   * ⚠️ `apiKey` 是**三态**的（缺键 = 继承既有、`null`/空 = 清空、非空串 = 写入新值），
+   *   `workshopAdapters` 一律从既有行继承 —— 见下面循环里的注释与台账 A11。
    */
   async replaceAll(
     entries: Array<{
@@ -206,6 +208,12 @@ export class RemoteModelRepository {
       kind?: RemoteModelKind | null;
     }>,
   ): Promise<RemoteModel[]> {
+    /* 既有行先取一次：`workshopAdapters` 与 `apiKey` 都要从它继承。这个接口是
+     * 「整份覆盖」，而调用点（设置页保存）手里的清单来自 `getConfigForClient` ——
+     * 那份是**脱敏过的**（条目不带 apiKey）。把「没带」读成「用户要清空」，就是
+     * 台账 A11：原样保存一次设置，所有远端模型的密钥没了。 */
+    const rows = await this.list();
+    const keyByName = new Map(rows.map((r) => [r.name, r.apiKey ?? null]));
     const seen = new Set<string>();
     const cleaned: Array<{
       name: string;
@@ -217,14 +225,26 @@ export class RemoteModelRepository {
       const name = e.name.trim();
       if (!name || seen.has(name)) continue;
       seen.add(name);
+      /* `apiKey` 的三态（与 `~/lib/llm/types` 的 `normalizeEntryApiKey` 同一语义）：
+       *   · `undefined`（缺键）→ 继承库里那把，不二次加密、也不清空；
+       *   · `null` / 空串 / 全空白 → 用户显式清空；
+       *   · 非空串 → 加密后写入。加密这一步 `llmConfig` 那条路径一直有做，而这里
+       *     此前直接落明文 —— `db.sqlite` 会被 `next build` 整份复制进 standalone
+       *     产物（硬规则 17），明文密钥就是这么跟着桌包分发的。读取侧
+       *     `decryptLlmKey` 对历史明文值原样透传，所以老数据不受影响。 */
+      const apiKey =
+        e.apiKey === undefined
+          ? (keyByName.get(name) ?? null)
+          : e.apiKey === null || e.apiKey.trim() === ""
+            ? null
+            : encryptLlmKey(e.apiKey.trim());
       cleaned.push({
         name,
         baseUrl: e.baseUrl?.trim() ? e.baseUrl.trim() : null,
-        apiKey: e.apiKey?.trim() ? e.apiKey.trim() : null,
+        apiKey,
         kind: e.kind ?? "chat",
       });
     }
-    const rows = await this.list();
     const removed = rows.filter((r) => !seen.has(r.name));
     if (removed.length > 0) {
       await db.delete(remoteModel).where(

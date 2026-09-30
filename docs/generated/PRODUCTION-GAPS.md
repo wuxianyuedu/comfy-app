@@ -118,8 +118,10 @@
 > **第二批（同月）接着复算了 A4 / A5**：A4 同样属于「早修了、没勾、判据是弱断言」，
 > 已勾销并把判据加强；A5 的口径本身是对的，但**漏了第四个落点**（`setting.openExternal`），
 > 而且四份实现里三份是前缀正则、实测两个方向都错 —— 已收成 `src/lib/url-scheme.ts` 一处。
-> 顺带照出 A4 那次脱敏的**副作用**，另立 **A11**（远端模型密钥被「保存一次设置」清掉）。
-> 这条是本轮唯一「修一个洞的同时挖出一个洞」的记录，值得留着：脱敏与回写必须一起设计。
+> 顺带照出 A4 那次脱敏的**副作用**，另立 **A11**（远端模型密钥被「保存一次设置」清掉，
+> 同日已修）。这条是本轮唯一「修一个洞的同时挖出一个洞」的记录，值得留着：
+> **脱敏与回写必须一起设计** —— 出口把某个字段抹掉时，「这条没值」与「这次不覆盖」
+> 就从两态变成三态，而覆盖式写入（`replaceAll` 这类）读不出第三种意图就会变成数据丢失。
 
 - [ ] **A1 鉴权默认关闭**：无会话回落演示用户，`loginRequired` 默认 false，约 20 个 router 可写。证据：`src/lib/auth-server.ts:99-106`；`src/lib/app-settings/index.ts:96`。需评估默认强鉴权或显式化。
       ⚠️ 它同时是 A2/A3/A6/A7/A8 那一批「越权」的实际可达性前提：单用户本机部署下这些
@@ -147,7 +149,8 @@
       原有判据（`src/lib/llm/server.test.ts`）只断「那两个键是 undefined」—— 而这一族故障的表现是
       「密钥跟着配置接口一起发到浏览器、再跟着日志一起落盘」，所以本批把它换成**整个出口对象
       序列化后两把密钥（顶层与远端条目各一把）一个字都不出现**，并显式种进库里（不再是 null）。
-      ⚠️ 那次脱敏带来一条新的副作用，另立 **A11** 记着。
+      ⚠️ 那次脱敏带来一条新的副作用（**A11**，同日已修）：脱敏后的清单被覆盖式回写，
+      「没带密钥」与「清空密钥」在旧形状里是同一个 `null`。
       证据：`src/lib/llm/server.ts`（`getConfigForClient`）、`src/lib/llm/server.test.ts`。
 - [x] **A5 SSRF / 协议白名单（已修复；本批复算出「同一个口径漏了第四个落点」并补上）**：
       `llm.configSave` 的 `baseUrl` 与 `setting.comfyEmbeddable` 的 `base`/`hostOrigin` 输入层加
@@ -204,26 +207,37 @@
       `8740948` 一并删掉了它，`src/server/api/routers/post.ts` 现只剩 `getLatest` / `create`
       两条且都在 `authedProcedure` 后。（台账当时把「修了什么」写进了代码注释，
       却没改这张表 —— 见上方 P1 段首的复算说明。）
-- [ ] **A11 远端模型密钥会被「保存一次设置」清掉（A4 那次脱敏的副作用，本批照出）**：
+- [x] **A11 远端模型密钥被「保存一次设置」清掉（A4 那次脱敏的副作用，本批照出并修复）**：
       `getConfigForClient` 下发的远端条目**不带 `apiKey`**（A4 要求的脱敏），而
       `llm.configSave` 走 `remoteModelRepository.replaceAll(...)` —— 那一条批量语句是
-      「整份覆盖」：入参里没有 `apiKey` 就写 `null`，且 `onConflictDoUpdate` 的
-      `set` 里 `apiKey` 取的是本次传入值。于是设置页把**刚拿到的那份清单**原样回写一次，
-      每条远端模型的密钥就被写成 `null`。用户表现：填过一次密钥的远端模型，
-      隔一次设置保存就 401，而界面没有任何地方说过「密钥没了」。
-      同一条语句里 `workshopAdapters` 是**从既有行继承**的（`adaptersByName`），
-      `apiKey` 却没有 —— 一个函数内两种语义，正是「覆盖 vs 合并」没收口的形态。
-      客户端那条路也给不出信号：`updateRemoteModel` 在「用户没重填」时写的是
-      `(existing?.apiKey ?? null)`，「显式清空」（`clearApiKey`）也是 `null`，
-      两者到服务端**长成同一个样子**，所以修必须同时改两端。
-      建议修法：出口给每条带 `hasApiKey`（与顶层同口径），客户端「未重填」时**省略**
-      `apiKey`（`undefined`）、显式清空才发 `null`；`replaceAll` 按「省略 = 保留既有、
-      `null` = 清空」处理（与它已经对 `workshopAdapters` 做的事一致）。
-      现状已由 `src/lib/core/repository.test.ts`「replaceAll 不保留已有密钥」钉住
-      —— 真去修时这一条必须一起改，别把数据丢失静默带回来。
-      证据：`src/lib/core/repository-user.ts`（`replaceAll`）、`src/lib/llm/server.ts`
-      （`getConfigForClient` 的条目形状）、`src/app/(main)/settings/hooks/use-settings-page.ts`
-      （`addRemoteModel` / `updateRemoteModel` 的 null 语义）。
+      「整份覆盖」：入参里没有 `apiKey` 就写 `null`，`onConflictDoUpdate` 也照传值覆盖。
+      于是设置页把**刚拿到的那份清单**原样回写一次，每条远端模型的密钥就被写成 `null`。
+      用户表现：填过一次密钥的远端模型，隔一次设置保存就 401，而界面没有任何地方说过「密钥没了」。
+      同一条语句里 `workshopAdapters` 是**从既有行继承**的，`apiKey` 却没有 ——
+      一个函数内两种语义，正是「覆盖 vs 合并」没收口的形态。客户端那条路也给不出信号：
+      `updateRemoteModel` 在「用户没重填」时写 `(existing?.apiKey ?? null)`，
+      与「显式清空」（`clearApiKey`）到服务端**长成同一个样子**，所以必须两端一起改。
+      **修法（三态，一次改到四个位置）**：
+      · `~/lib/llm/types.ts` 新增 `normalizeEntryApiKey()` —— 非空串 = 写新值 /
+      `null` 或空白串 = 显式清空 / 缺键与 `undefined` = **不提供意见**；
+      `normalizeExtraModels` 与 `splitExtraModels` 都改吃它（这两处此前各写一份
+      「不是非空串就折成 null」，正是把三态压成两态的地方）；
+      · `replaceAll` 缺键时从既有行继承（与 `workshopAdapters` 同一处理，且不二次加密 ——
+      继承的是库里那份密文原样）；
+      · `getConfigForClient` 逐条下发 `hasApiKey`（密钥照旧不出门，但「这条配过」出门，
+      客户端才有办法表达「我没重填」）；
+      · `updateRemoteModel` 未重填也未清除时**省略该键**（草稿不揣测保留值）。
+      顺带修掉同一条写入路径上的另一半问题：`replaceAll` 此前把远端密钥**明文落库**
+      （`llmConfig` 那条路径一直是 AES-GCM 加密的），而 `db.sqlite` 会被 `next build`
+      整份复制进 standalone 产物 —— 正是硬规则 17 说的那条「密钥明文分发」通道。
+      读取侧 `decryptLlmKey` 对历史明文值原样透传，老数据不受影响。
+      判据：`src/lib/llm/types.test.ts`（三态 + 两个归一器同源）、
+      `src/lib/core/repository.test.ts`（「全量同步」那条现在验「缺键=继承、密文原样搬运、
+      明文不落盘」，另有一条专测三态）、`src/lib/llm/server.test.ts`（出口带 `hasApiKey`
+      且整个序列化结果一个字密钥都不出现）、
+      `src/app/(main)/settings/hooks/use-settings-page.test.ts`（客户端三态表达）。
+      证据：`src/lib/llm/types.ts`、`src/lib/core/repository-user.ts`、
+      `src/lib/llm/server.ts`、`src/app/(main)/settings/hooks/use-settings-page.ts`。
 - [ ] **B1 capability 对回环通配源开满**（`http://127.0.0.1:*` + `process:default` / `updater:default`）。证据：`src-tauri/capabilities/remote.json:8-26`；`src-tauri/tauri.conf.json:31`。
 - [ ] **B2 生产路径 21 处 `unwrap()` + 构建失败 panic**，无降级 UI。证据：`src-tauri/src/lib.rs:72,918,1391,1741`；`shell_launch.rs:78,83,201`。
 - [ ] **B3 违反自身规范：`std::process::Command` 直起外部进程 3 处**（应走 `tauri-plugin-shell`）。证据：`src-tauri/src/shell_launch.rs:575`；`lib.rs:1167`；`detached_spawn.rs:147`。
