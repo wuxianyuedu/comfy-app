@@ -184,13 +184,27 @@ export async function getConfigForClient() {
   const cfgSafe = { ...cfg };
   delete (cfgSafe as Partial<LLMConfig>).apiKey;
   const extraSafe = extra.map((e) =>
-    typeof e === "object" && e !== null ? { ...e, apiKey: undefined } : e,
+    typeof e === "object" && e !== null ? maskRemoteEntryForClient(e) : e,
   );
   return {
     ...cfgSafe,
     hasApiKey: Boolean(cfg.apiKey),
     apiKey: undefined,
     extraModels: extraSafe,
+  };
+}
+
+/** 下发给客户端的远端条目：明文密钥一律剥掉（台账 A4），但**留下「这条存过密钥」**。
+ *
+ * 那半个信息不是锦上添花：客户端拿不到密钥，就分不清「这条从来没配过」与
+ * 「这条配过、这次用户没重填」，而设置页保存是「整份清单覆盖」（`replaceAll`）——
+ * 于是「没带」被读成「清空」，密钥隔一次保存就没（台账 A11）。
+ * 有了 `hasApiKey`，回写时未重填的条目就**省略** `apiKey` 键，而不是填 `null`。 */
+function maskRemoteEntryForClient(e: RemoteModelEntry): RemoteModelEntry {
+  const { apiKey, ...rest } = e;
+  return {
+    ...rest,
+    hasApiKey: Boolean(apiKey) || rest.hasApiKey === true,
   };
 }
 
