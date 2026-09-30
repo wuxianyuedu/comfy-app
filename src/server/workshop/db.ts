@@ -14,7 +14,7 @@ import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 
 import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
-import { SQLITE_PRAGMAS } from "~/lib/sqlite-pragmas";
+import { applySqlitePragmas } from "~/lib/sqlite-pragmas";
 import * as schema from "~/server/db/schema";
 
 /** 未配置 `DATABASE_URL` 时与 drizzle-kit 同锚点的兜底库文件（相对进程 CWD）。 */
@@ -38,8 +38,11 @@ const client = createClient({
 // 客户端选项（`timeout`），本侧刻意不给 —— 等锁是同步的，会把服务界面的这个进程
 // 一起停住那么久（判据与实测见 `sqlite-pragmas` 文件头，ISSUE #1250）。
 // 模块顶层 await 让首次查询前一定就位。
-for (const pragma of SQLITE_PRAGMAS) {
-  await client.execute(pragma);
-}
+//
+// 应用走 `applySqlitePragmas`：开机这几条要容忍「别的进程正在同时切 WAL」——
+// `next build` 的 collect-page-data 会起 7 个 worker，每个都 import 这条链，
+// 而一份全新的库文件只让其中一个拿到独占锁（实测 3/8 抛 SQLITE_BUSY），
+// 异常从模块顶层 await 浮出就把整个构建带走了（ISSUE #1282）。
+await applySqlitePragmas(client);
 
 export const workshopDb = drizzle(client, { schema });
