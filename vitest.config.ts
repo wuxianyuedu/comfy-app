@@ -205,6 +205,20 @@ export default defineConfig({
         "src/app/api/comfy/stats/route.ts",
         "src/app/api/comfy/queue/route.ts",
         "src/app/api/comfy/ensure/route.ts",
+        /* 体检清单 ⑦ 第二批 · 并到安全台账 A 系列：这一批的用例是「先写断言、
+         * 照出越权、顺手修」，所以门槛登记的是**判据本身**而不是新增行数。
+         *   · `custom-nodes/route.ts` —— argv 注入闸门（A6）：POST 那几条出口
+         *     已逐分支钉住，GET 侧（manifest / report 读取）仍是欠账，见台账 E7；
+         *   · `routers/project.ts` —— 归属闸门（A3 + 本批新照出的 upsert 越权写）；
+         *   · `routers/task.ts` —— 同一族的归属与越界闸门（A2 快照越权读、
+         *     A8 产物目录越界），23 条用例已在跑，此前**从未被门槛判过**；
+         *   · `media/output-paths.ts` —— 产物布局的唯一定义（A8 收口点），
+         *     它同时被落盘侧与读删侧静态 import，分叉一次就是「删不掉的产物」。
+         * 与上面那批同款：**两处同批**登记（`coverage.include` + `thresholds`）。 */
+        "src/app/api/custom-nodes/route.ts",
+        "src/server/api/routers/project.ts",
+        "src/server/api/routers/task.ts",
+        "src/lib/media/output-paths.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1050,6 +1064,43 @@ export default defineConfig({
           branches: 100,
         },
         "src/app/api/comfy/ensure/route.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* ── 体检清单 ⑦ 第二批 · 并到安全台账 A 系列（按实测登记）────────────
+         * `custom-nodes` 只登记到实测值：35 条用例覆盖的是 POST 的闸门与三态，
+         * GET 侧那套 manifest / report 读取（磁盘探测 + 缓存指纹）仍没有执行者。
+         * 这是**已知欠账**，登记在台账 E7，不许把它当成「这个文件测完了」。
+         * 补上 GET 用例后按 §18.6 上调（只许升）。 */
+        "src/app/api/custom-nodes/route.ts": {
+          lines: 40,
+          functions: 45,
+          statements: 35,
+          branches: 35,
+        },
+        /* `project.ts`：分支 94.44 → 90（余下两处是 `patch` 里「nodes 给了、
+         * edges 没给」这类形状组合，与 `params ?? {}` 的另一侧 —— 后者在当前
+         * schema 下取不到，属于不可达分支，不为它写假数据凑数）。 */
+        "src/server/api/routers/project.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
+        },
+        /* `task.ts`：94.11 / 89.39 → 90 / 85。余下的是 `inferMediaType` 的
+         * 音频/视频文案分支与 `list` 的补页出口 —— 都是「投影长什么样」而不是
+         * 「越不越得过去」，本批不动它们。 */
+        "src/server/api/routers/task.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 90,
+          branches: 85,
+        },
+        /* 产物布局：一个形状、三条出口（落盘 / URL / 删除），每一支都必须有
+         * 人判 —— 它是「一处认 projects、一处不认」这类分叉的最后一道线。 */
+        "src/lib/media/output-paths.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

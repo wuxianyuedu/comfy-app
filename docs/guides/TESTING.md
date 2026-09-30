@@ -169,11 +169,18 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
 - [ ] **没有平台侧兜底**：#623 之后不跑流水线，唯一自动化是本地钩子（`--no-verify` 可绕）。
       口径与出路见规范 §13.5.3 / §13.5.4（按需召唤评审 NPC），别再补「看起来在守门」的配置。
 - [ ] **E2E / 视觉没有自动执行者**：都在本地手动档（`pnpm test:e2e` / `pnpm test:visual`）。
-- [ ] **Rust 壳的 `#[test]` 不进门禁**：`cargo test` 目前只出现在文档正文；
-      硬规则 5「改了壳必须重编」也没有判据（台账 ⑥ 那条要补的就是这个）。
-- [ ] **API 路由与页面层仍有大片裸奔**：40 个 `route.ts` 里 12 个有同名测试（本轮补了 5 个
-      闸门类端点 —— `generated/[...path]`、`debug/source`、`comfy/{stats,queue,ensure}`，
-      都已进覆盖率门槛），剩下 28 个与 6 个 `page.tsx` 的目录级测试仍是少数（台账 P1/E3）。
+- [ ] **Rust 壳的 `#[test]` 只在「改了 `.rs`」时被跑**：`scripts/shell-gate.mjs`（pre-commit D 组）
+      在暂存改动命中壳输入时跑 `cargo test`、并把硬规则 5「改了壳必须重编」变成判据 ——
+      但它**不是全量执行者**：不动壳的提交永远不跑那 37 条 `#[test]`，全量仍要靠
+      `cd src-tauri && cargo test` 的手上（`check:all` 里也没有这一路）。
+- [ ] **API 路由与页面层仍有大片裸奔**：40 个 `route.ts` 里 13 个有同名测试（第一批补了
+      5 个闸门类端点 —— `generated/[...path]`、`debug/source`、`comfy/{stats,queue,ensure}`；
+      第二批补了 `custom-nodes` 的 argv 注入闸门），剩下 27 个与 6 个 `page.tsx` 的目录级
+      测试仍是少数（台账 P1/E3）。
+- [ ] **服务端 router 集成覆盖 5/16**：`generate` / `run` / `task` / `workflow` / `project`
+      （`project` 是第二批补的，17 条全是归属判据）。其余 11 个里 `custom-nodes`（tRPC 侧）、
+      `llm`、`setting`、`material`、`film` 都在写本机状态 —— 台账 A 系列那批越权判据
+      证明「一个 router 没有执行者」的实际含义是「它的归属闸门坏了没人红」。
 - [ ] **`DynamicWorkflowForm` / `CanvasNode` 主组件的深度行为测试**（fetch/poll 生命周期）仍开放。
 - [ ] 存量 4 份 `.snap` 结构快照按行为断言迁移（见 §11.9）。
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）。
