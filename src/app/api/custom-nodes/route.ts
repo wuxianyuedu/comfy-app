@@ -823,6 +823,12 @@ export async function POST(req: NextRequest) {
       }
       parents.push(s);
     }
+    /* 空批不去起解释器：`runDiscover([])` 原本照样按 python3 → python → py 轮一遍
+     * （每轮各带一次超时与进程启动），扫一个都不存在的目录还要花掉三轮子进程。
+     * 非数组的 `parents` 在上面已经收成空数组，所以这一条同时兜住畸形入参。 */
+    if (parents.length === 0) {
+      return NextResponse.json({ ok: true, packages: [] });
+    }
     const result = await runDiscover(parents);
     return NextResponse.json({ ok: true, packages: result });
   }
