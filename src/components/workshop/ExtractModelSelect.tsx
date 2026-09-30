@@ -131,7 +131,7 @@ export function ExtractModelSelect({
           onChange={onChange}
           options={options}
           labels={labels}
-          placeholder="选择提取方式"
+          placeholder="选择模型"
           className="!bg-subtle !border-border text-xs"
           popoverMinWidth={280}
           autoFitFromOptions={false}

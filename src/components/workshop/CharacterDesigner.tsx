@@ -115,7 +115,6 @@ export function CharacterDesigner({
     genProgress,
     genStatus,
     genError,
-    genSel,
     setGenSel,
     handleAIGenerate,
     handleAICard,
@@ -210,19 +209,6 @@ export function CharacterDesigner({
             {gen.busy ? "生成中…" : "AI 生成"}
           </Button>
         </div>
-        {config && !genSel && (
-          <p className="text-muted-foreground mt-2 text-[11px]">
-            未手动选择模型时，沿用全局配置（当前：
-            {channelProviderLabel(config.provider)} ·{""}
-            {config.model || "未选模型"}）。点下拉可切换本次生成的 本地/远端
-            模型。
-          </p>
-        )}
-        {!config && (
-          <p className="text-muted-foreground mt-2 text-[11px]">
-            未配置 LLM。点右上角「LLM 设置」接入本地或远端模型后即可使用 AI。
-          </p>
-        )}
         {/* 一句话生成角色的执行日志（模型调用过程/原文/成功/失败，独立展示不与提取区混杂） */}
         {(gen.busy || genProgress || genStatus || genError) && (
           <div className="mt-2">

@@ -397,7 +397,6 @@ export function useCharacterAiFlow(input: {
     genProgress,
     genStatus,
     genError,
-    genSel,
     setGenSel,
     handleAIGenerate,
     handleAICard,

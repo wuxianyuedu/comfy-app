@@ -17,10 +17,7 @@ import {
   resolveChannelSelection,
 } from "~/lib/workshop/channel-options";
 import { streamChat } from "~/lib/llm/browser";
-import {
-  buildScriptMarkdownMessages,
-  buildScriptTemplate,
-} from "~/lib/llm/prompts";
+import { buildScriptMarkdownMessages } from "~/lib/llm/prompts";
 import { errorMessage } from "~/lib/error-message";
 
 interface Props {
@@ -56,13 +53,6 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
   /** 本次生成实际生效的 provider/model 与下拉展示值（换算见 channel-options）。 */
   const genEffective = resolveChannelSelection(genSel, config);
   const genSelectValue = channelSelectionDisplayValue(genSel, config);
-
-  /** 模板结构化（离线）：不调用模型，按固定模板产出可编辑的剧本骨架 */
-  function handleStructure() {
-    if (!idea.trim()) return;
-    onScriptChange(buildScriptTemplate(meta, idea));
-    setIdea("");
-  }
 
   async function handleAI() {
     if (!idea.trim()) return;
@@ -169,36 +159,26 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             className="border-border bg-bg"
             placeholder="输入一句话灵感或粘贴一段粗稿，直接生成完整剧本…"
           />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={handleStructure}
-              disabled={!idea.trim() || ai.busy}
-              className="border-border text-ink hover:bg-subtle h-auto rounded-lg px-4 py-2"
-            >
-              模板生成（离线）
-            </Button>
-            <Button
-              variant="primary-solid"
-              onClick={handleAI}
-              disabled={!idea.trim() || ai.busy}
-              className="h-auto rounded-lg px-4 py-2"
-            >
-              {ai.busy ? (
-                "AI 生成中…"
-              ) : (
-                <>
-                  <Icon
-                    data-icon="inline-start"
-                    name="sparkles"
-                    size={13}
-                    className="mr-1 inline align-[-2px]"
-                  />
-                  AI 生成剧本
-                </>
-              )}
-            </Button>
-          </div>
+          <Button
+            variant="primary-solid"
+            onClick={handleAI}
+            disabled={!idea.trim() || ai.busy}
+            className="h-auto w-fit rounded-lg px-4 py-2"
+          >
+            {ai.busy ? (
+              "AI 生成中…"
+            ) : (
+              <>
+                <Icon
+                  data-icon="inline-start"
+                  name="sparkles"
+                  size={13}
+                  className="mr-1 inline align-[-2px]"
+                />
+                AI 生成剧本
+              </>
+            )}
+          </Button>
           {ai.busy && aiDraft && (
             <pre className="bg-bg text-ink/80 max-h-48 overflow-auto rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap">
               {aiDraft}
@@ -211,20 +191,6 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
           )}
           {aiStatus && !aiError && (
             <p className="text-primary text-xs">{aiStatus}</p>
-          )}
-          {!config && !ai.busy && (
-            <p className="text-muted-foreground text-xs">
-              未配置 LLM，AI 生成将不可用（仍可用「模板生成」）。可在右上角「LLM
-              设置」中接入本地或远端模型。
-            </p>
-          )}
-          {config && !genSel && (
-            <p className="text-muted-foreground text-xs">
-              未手动选择模型时，沿用全局配置（当前：
-              {channelProviderLabel(config.provider)} ·{""}
-              {config.model || "未选模型"}）。点上方下拉可切换本次生成的
-              本地/远端 模型。
-            </p>
           )}
         </div>
       </section>
