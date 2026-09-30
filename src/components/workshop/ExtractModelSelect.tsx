@@ -35,7 +35,9 @@ const TOOL_OPTION = "tool";
 /** 分组模型下拉：选项 = [工具] + [本地模型组] + [远端 API 组]。
  *  候选来源是设置里保存的「静态配置」（本地候选 + 远端独立模型），不再
  *  在展开时实时探测服务。选完本地 / 远端模型后才去校验对应服务是否可达，
- *  并把结果以内联提示展示在下方（不影响「工具」通道与提取动作）。 */
+ *  并把结果以内联提示展示在下方（不影响「工具」通道与提取动作）。
+ *  `allowTool=false` 时用于生成场景（剧本 / 一句话生成角色）：没有「工具」
+ *  通道，占位文案也随之从「选择提取方式」改为「选择模型」。 */
 export function ExtractModelSelect({
   value,
   onChange,
@@ -138,7 +140,7 @@ export function ExtractModelSelect({
           onChange={onChange}
           options={options}
           labels={labels}
-          placeholder="选择提取方式"
+          placeholder={allowTool ? "选择提取方式" : "选择模型"}
           className="!bg-subtle !border-border text-xs"
           popoverMinWidth={280}
           autoFitFromOptions={false}
