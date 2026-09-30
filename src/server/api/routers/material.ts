@@ -1,33 +1,21 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import {
   MATERIAL_FOLDERS,
   SHARED_SCOPE,
+  canWriteMaterialScope,
   collectByFolder,
   folderDir,
   isValidFolder,
-  listScopes,
   sanitizeFileName,
   sanitizeScope,
+  visibleMaterialScopes,
   type MaterialItem,
 } from "~/lib/media/materials";
-
-async function resolveScopes(
-  scopeMode: string | null,
-  projectId: string | null,
-): Promise<string[]> {
-  if (scopeMode === "cross") {
-    const all = await listScopes();
-    return all.length ? all : projectId ? [projectId] : [];
-  }
-  const scopes: string[] = [];
-  if (projectId) scopes.push(projectId);
-  scopes.push(SHARED_SCOPE);
-  return scopes;
-}
 
 export const materialRouter = createTRPCRouter({
   /* GET /api/materials?projectId=&scope=&folder=&q= —— 读 */
@@ -42,7 +30,7 @@ export const materialRouter = createTRPCRouter({
         })
         .optional(),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const projectId = sanitizeScope(input?.projectId ?? null);
       const scopeMode = input?.scope ?? null;
       const folder = input?.folder?.trim() ?? null;
@@ -50,7 +38,10 @@ export const materialRouter = createTRPCRouter({
        * 同一段是同一条账。 */
       const q = normalizeNeedle(input?.q ?? "") || null;
 
-      const scopes = await resolveScopes(scopeMode, projectId);
+      const scopes = await visibleMaterialScopes(ctx.user.id, {
+        cross: scopeMode === "cross",
+        projectId,
+      });
 
       const byFolder = await collectByFolder(scopes);
       const folders = MATERIAL_FOLDERS.map((MATERIAL_FOLDERS) => ({
@@ -86,11 +77,18 @@ export const materialRouter = createTRPCRouter({
         scope: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const folder = input.folder;
       if (!isValidFolder(folder)) throw new Error("Invalid folder");
       const scope =
         sanitizeScope(input.projectId ?? input.scope ?? null) ?? SHARED_SCOPE;
+      // 归属闸与 `/api/materials` POST 同一份判据（`~/lib/media/materials`）。
+      if (!(await canWriteMaterialScope(ctx.user.id, scope))) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "素材不存在或无权访问",
+        });
+      }
       const fileName = sanitizeFileName(input.name);
       if (!fileName) throw new Error("Invalid file name");
 
@@ -113,10 +111,18 @@ export const materialRouter = createTRPCRouter({
         scope: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       if (!isValidFolder(input.folder)) throw new Error("Invalid folder");
       const scope =
         sanitizeScope(input.projectId ?? input.scope ?? null) ?? SHARED_SCOPE;
+      /* 归属判定必须在**碰磁盘之前**：这一条的副作用是 `fs.rm`，拦在响应阶段
+       * 等于已经删完再报错（§11.2.1 的闸门判据）。 */
+      if (!(await canWriteMaterialScope(ctx.user.id, scope))) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "素材不存在或无权访问",
+        });
+      }
       const fileName = sanitizeFileName(input.name);
       if (!fileName) throw new Error("Invalid file name");
 
