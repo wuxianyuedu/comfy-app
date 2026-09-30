@@ -1,56 +1,63 @@
-import Link from "next/link";
-
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Card } from "~/components/ui/card";
+import { displayValue } from "~/lib/display-value";
 
+import { modelCoverGradient } from "./model-cover";
+import { modelTypeLabel } from "./model-type-labels";
+
+/**
+ * 卡片消费的数据 = `modelRepository.list()` 返回的 `model` 表行的**子集**。
+ *
+ * 字段名刻意与库里保持一致（`coverUrl` 而不是 `cover`）：此前这里写的是 `cover`，
+ * 而库里那一列叫 `coverUrl`，中间又没有任何映射层（hook 直接把行 cast 过来）——
+ * 于是封面**从来没有渲染出来过**，每张卡都在走渐变兜底，而界面看起来「只是没有图」。
+ * 现在按真名取，缺图与字段名写错才是两件能分开的事。
+ *
+ * 另外这里**不再有** `uses` / `likes`：`model` 表没有这两列（本机模型库也不是模型站），
+ * 原先留着就是两个永远 undefined 的假字段，渲染出一个永远空着的格子。
+ */
 export type ModelCardData = {
   id: string;
   name: string;
   type: string;
-  baseModel?: string;
-  cover?: string;
-  uses?: number;
-  likes?: number;
+  fileName?: string;
+  folder?: string | null;
+  subfolder?: string | null;
+  baseModel?: string | null;
+  coverUrl?: string | null;
+  description?: string | null;
+  source?: string;
+  isAvailable?: boolean;
+  createdAt?: string | Date | null;
 };
 
-const GRADIENTS = [
-  "linear-gradient(135deg,#7C5CFC 0%,#FF5CA8 100%)",
-  "linear-gradient(135deg,#5B8DEF 0%,#7C5CFC 100%)",
-  "linear-gradient(135deg,#22C55E 0%,#0EA5E9 100%)",
-  "linear-gradient(135deg,#F59E0B 0%,#FF5CA8 100%)",
-  "linear-gradient(135deg,#EC4899 0%,#8B5CF6 100%)",
-  "linear-gradient(135deg,#0EA5E9 0%,#22D3EE 100%)",
-];
-
-function hash(s: string) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h;
-}
-
-const TYPE_LABEL: Record<string, string> = {
-  CHECKPOINT: "大模型",
-  LORA: "LoRA",
-  CONTROLNET: "控制网",
-  VAE: "VAE",
-  EMBEDDING: "嵌入",
-  UPSCALE: "放大",
-};
-
-export function ModelCard({ model }: { model: ModelCardData }) {
-  const grad = GRADIENTS[hash(model.id) % GRADIENTS.length];
+export function ModelCard({
+  model,
+  onOpen,
+}: {
+  model: ModelCardData;
+  /** 打开详情。整张卡就是一个触发器 —— 不再指向 `/models/[id]`：那条路由不存在，
+   *  点进去是 404（详情改为弹窗，见 `ModelDetailDialog`）。 */
+  onOpen: (model: ModelCardData) => void;
+}) {
+  const grad = modelCoverGradient(model.id);
   return (
-    <Link href={`/models/${model.id}`} className="group block">
-      {/* 卡片外壳走 ui/card（规范 16 §16.2.3）：`ui/card` 此前零引用，
-          而这条「圆角 + 边框 + `overflow-hidden` + 悬浮阴影」的形态在
-          这里手写了一遍 —— 它正是基元存在的那件事。配色仍在调用处
-          （`gap-0 py-0` 抵消基元的内边距、`bg-surface` 覆盖 `bg-card`）。 */}
-      <Card className="border-border bg-surface gap-0 py-0 transition-shadow group-hover:shadow-[0_8px_30px_rgba(20,20,40,0.10)]">
+    <Button
+      type="button"
+      variant="ghost"
+      /* 卡片本体是触发器：`h-auto w-full p-0` 把按钮的盒子让给 Card，
+         圆角/边框/悬浮阴影这些外壳形态仍由 `ui/card` 持有（规范 16 §16.2.3）。 */
+      className="h-auto w-full p-0 text-left [&:not(:hover)]:bg-transparent"
+      onClick={() => onOpen(model)}
+      aria-label={`查看 ${model.name} 详情`}
+    >
+      <Card className="group border-border bg-surface gap-0 py-0 transition-shadow group-hover:shadow-[0_8px_30px_rgba(20,20,40,0.10)]">
         <div className="relative aspect-[4/3] w-full overflow-hidden">
-          {model.cover ? (
+          {model.coverUrl ? (
             <MediaThumbnail
-              src={model.cover}
+              src={model.coverUrl}
               alt={model.name}
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               /* 加载失败落回与「没有封面」同一个渐变底 —— 同一张卡的
@@ -68,24 +75,28 @@ export function ModelCard({ model }: { model: ModelCardData }) {
               style={{ background: grad }}
             />
           )}
-          {/* 类型徽标走 ui/badge（第 9 批新增的覆盖场景之一）：它是
-              「浮在图片上的极小面积叠层」，浅底会与封面糊在一起 —— 走
-              §3.6.1 的固定暗色判据，故底色仍取 `bg-black/45` 而不是 token。 */}
+          {/* 类型徽标走 ui/badge：它是「浮在图片上的极小面积叠层」，浅底会与封面
+              糊在一起 —— 走 §3.6.1 的固定暗色判据，故底色仍取 `bg-black/45`。 */}
           <Badge className="absolute top-2 left-2 rounded-md border-transparent bg-black/45 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
-            {TYPE_LABEL[model.type] ?? model.type}
+            {modelTypeLabel(model.type)}
           </Badge>
         </div>
         <div className="p-3">
           <p className="u-title truncate">{model.name}</p>
-          <div className="text-muted-foreground mt-1 flex items-center justify-between text-xs">
-            <span>{model.baseModel ?? "SDXL"}</span>
-            <span>
-              {model.uses ? `${model.uses} 用` : ""}
-              {model.likes ? ` · ${model.likes} 赞` : ""}
+          <div className="text-muted-foreground mt-1 flex items-center justify-between gap-2 text-xs">
+            {/* 基座未知就显示占位符，不写死「SDXL」：那会让一个 SD1.5 的模型
+                在卡面上被说成 SDXL，而用户没有别的地方能看出来。 */}
+            <span className="min-w-0 truncate">
+              {displayValue(model.baseModel)}
             </span>
+            {model.fileName && (
+              <span className="u-mono shrink-0 opacity-70">
+                {model.fileName}
+              </span>
+            )}
           </div>
         </div>
       </Card>
-    </Link>
+    </Button>
   );
 }
