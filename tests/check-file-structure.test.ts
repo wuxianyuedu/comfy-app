@@ -292,6 +292,17 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       expect(code).toBe(1);
       expect(output).toContain("R11");
     });
+
+    it("同名的测试文件不算约定文件（src/proxy.test.ts 放行）", () => {
+      // 判据读的是「摘掉扩展名与 `.test` 之后的 base」，不清理 `.test` 就会把
+      // 放在约定文件旁边的那份用例判成「约定文件放错位置」—— 而测试文件既不会被
+      // Next 加载，也就谈不上「静默丢失」。这条是实测撞出来的：给 proxy 补用例时
+      // 直接被拦，而正确修法当时看起来只有「把测试挪去 tests/」这一种。
+      writeProxy("src/proxy.test.ts");
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R11");
+    });
   });
 
   // ── R12：src/ 源码里不得内嵌控制字符（规范 §12.11）──
