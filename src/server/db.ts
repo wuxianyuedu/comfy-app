@@ -25,6 +25,7 @@
 import "server-only";
 import path from "node:path";
 import { env } from "~/env";
+import { SQLITE_PRAGMAS } from "~/lib/sqlite-pragmas";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { sql } from "drizzle-orm";
@@ -72,8 +73,14 @@ const client = createClient({
 // commands, so a slow startup pragma would otherwise race with the first
 // route-handler hit. Next 15 / Node 20 support top-level await in ESM server
 // modules; this file is `server-only` so it never lands in the client graph.
-await client.execute("PRAGMA journal_mode = WAL");
-await client.execute("PRAGMA foreign_keys = ON");
+// The list itself is not written here: the host and the workshop connection share
+// `~/lib/sqlite-pragmas`. That list deliberately carries only the two database-level
+// pragmas; the lock-waiting budget is a per-connection option (`timeout`) and this
+// side intentionally does not set it -- a contended write here fails fast and the
+// caller decides, because waiting would stall this process' event loop (ISSUE #1250).
+for (const pragma of SQLITE_PRAGMAS) {
+  await client.execute(pragma);
+}
 
 const globalForDb = globalThis as unknown as {
   db: ReturnType<typeof drizzle<typeof schema>> | undefined;
