@@ -2,10 +2,7 @@
  * app-events —— 「跨组件广播一条应用事件」的**唯一出口**
  * （规范 16 §16.2.4.65）。
  *
- * 为什么收口：全库有 **5 条**自定义事件（`comfyapp:canvas-store-changed` /
- * 五条（`canvas:produce`、`open-task`、`custom-nodes:updated`，
- * 以及两条目录 / 仓库变更信号）/
- * `custom-nodes:updated`），散在 **9 个文件**里订阅或派发，而它们的**命运
+ * 为什么收口：全库的自定义事件散在多个文件里订阅或派发，而它们的**命运
  * 各不相同** —— 这不是重复代码，是**同一份字面量的两端分开两处**：
  *
  * | 事件 | 事件名的定义处 | 订阅侧 | 派发侧 |
@@ -15,6 +12,7 @@
  * | `open-task` | **没有** | 1 处硬编码 | **已经不存在**（死监听） |
  * | `comfyapp:local-workflows-path-changed` | 订阅方自己的模块常量（**不导出**） | 同定义处 | 视图侧硬编码 |
  * | `custom-nodes:updated` | `config/custom-nodes`（**导出了**） | 视图侧 import | 同定义处 |
+ * | `workspace:navigate` | **本文件**（导出了） | `app/workspace/page.tsx` | 工坊右栏的「资源库」卡 |
  *
  * 前四条的失效模式是同一种，且**全是静默的**：
  *   · **写侧改名、读侧认不出自己** —— 与 §16.2.4.58 的横幅色板同款；
@@ -70,6 +68,17 @@ export interface AppEvents {
   "comfyapp:local-workflows-path-changed": undefined;
   /** 自定义节点注册表刷新完成。 */
   "custom-nodes:updated": { count: number };
+  /**
+   * 请求工作区切到某个视图。载荷：视图 id（`WorkspaceView`）。
+   *
+   * 为什么用事件而不是 props：触发方（工坊右栏的「资源库」卡）与持有视图状态的
+   * 容器（`app/workspace/page.tsx`）之间隔着 `WorkshopPipeline` / `WorkshopAside`
+   * 两层，为一条「跳过去」的链接穿三层 props 不划算；订阅侧也只有一处。
+   *
+   * 载荷刻意写成 `string` 而不是 import `WorkspaceView`：本模块在 `src/lib`，
+   * 不得反向依赖视图层（§18 硬规则 22）—— 合法性由订阅侧按已有枚举收敛。
+   */
+  "workspace:navigate": { view: string };
 }
 
 /** 应用事件名的联合类型。 */

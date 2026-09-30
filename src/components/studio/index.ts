@@ -21,6 +21,9 @@ export type { WorkspaceView } from "./NavItems";
 export { WorksGallery } from "./WorksGallery";
 export { ProjectOutputs } from "./ProjectOutputs";
 
+/* 资源库：素材管理从工坊右栏的计数卡提成项目页签（与本文件同层的一级视图）。 */
+export { ResourceLibrary } from "./library/ResourceLibrary";
+
 export { ModelLibrary } from "./ModelLibrary";
 
 export { WorkflowLibrary } from "./workflow-library/WorkflowLibrary";

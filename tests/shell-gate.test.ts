@@ -6,14 +6,17 @@
  * 宽了 = 每个前端提交都要付一次 Rust 编译（冷实测 430s），那会让人直接 `--no-verify`，
  * 判据反而归零。本文件守的就是这两头，外加「别自己重抄一份比时间戳的逻辑」。
  */
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   RUST_SOURCE_RE,
   SHELL_INPUT_RE,
   decide,
+  dropAdoptedShellInputs,
 } from "../scripts/shell-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -126,9 +129,136 @@ describe("桌面壳提交门禁的触发面（§11.10.4 / 硬规则 5）", () =>
     expect(src).toMatch(/return 1;\s*\n\s*\}\s*\n\s*if \(code !== 0\)/);
   });
 
+  it("不自己重抄一份合并判据：采纳过滤只认 MERGE_HEAD 与第二父比对", () => {
+    const src = read(GATE_SCRIPT);
+    expect(src).toContain("dropAdoptedShellInputs");
+    expect(src).toContain("MERGE_HEAD");
+  });
+
   it("脚本与钩子都在（防「判据写在文档里、文件却没了」）", () => {
     for (const rel of [GATE_SCRIPT, HOOK, LAUNCHER]) {
       expect(existsSync(path.join(ROOT, rel)), rel).toBe(true);
     }
+  });
+});
+
+/**
+ * 合并提交下「原样采纳对方那侧」的壳输入不该触发重编判据。
+ *
+ * 现场：一个纯前端 PR 拉了 master，master 上早已编好发版的 `splash-assets/` 被自动
+ * 合并进来；`git diff --cached` 把它算成本次改动，于是本地编不出壳的机器（Linux
+ * 容器 / 非 Windows）上，这个 PR 被永久拦死 —— 而它一个壳文件都没创作。
+ * 这里用真实临时仓库跑出 `git merge` 的三种形态，守的是「该放行的放行、该拦的仍拦」。
+ */
+describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
+  const temps: string[] = [];
+
+  afterEach(() => {
+    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** 建一个临时仓库；返仓库根。`git` 用户名/邮箱按仓库级设，不污染全局。 */
+  function initRepo(): string {
+    const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-"));
+    temps.push(dir);
+    const git = (...args: string[]) =>
+      execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "t@t.t");
+    git("config", "user.name", "t");
+    // 本机 / CI 全局可能开了 commit.gpgsign，临时仓库一律关掉（否则造不出提交）。
+    git("config", "commit.gpgsign", "false");
+    return dir;
+  }
+
+  function write(dir: string, rel: string, body: string): void {
+    const full = path.join(dir, rel);
+    execFileSync("mkdir", ["-p", path.dirname(full)]);
+    writeFileSync(full, body);
+  }
+
+  function commit(dir: string, msg: string): void {
+    execFileSync("git", ["-C", dir, "add", "-A"], { stdio: "pipe" });
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", msg], { stdio: "pipe" });
+  }
+
+  it("非合并态：原样返回，不做任何过滤", () => {
+    const dir = initRepo();
+    write(dir, "a.txt", "x");
+    commit(dir, "init");
+    const staged = ["src-tauri/splash-assets/index.html", "src/lib/x.ts"];
+    expect(dropAdoptedShellInputs(staged, dir)).toEqual(staged);
+  });
+
+  it("合并态 + 壳文件只是采纳自对方那侧 ⇒ 被剔除（不触发重编判据）", () => {
+    const dir = initRepo();
+    // 共同祖先：壳文件是旧内容
+    write(dir, "src-tauri/splash-assets/index.html", "old");
+    write(dir, "src/lib/x.ts", "1");
+    commit(dir, "base");
+    // 我方分支：只改前端
+    write(dir, "src/lib/x.ts", "2");
+    commit(dir, "feat");
+    // 对方分支：改了壳（这就是 master 上「早已编好发版」的那侧）
+    const base = execFileSync("git", ["-C", dir, "rev-parse", "HEAD~1"], {
+      encoding: "utf8",
+    }).trim();
+    execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "other", base], {
+      stdio: "pipe",
+    });
+    write(dir, "src-tauri/splash-assets/index.html", "new-from-other");
+    commit(dir, "shell on other");
+    // 回到我方，合并对方 —— 用 `--no-commit` 把合并**停在进行中**：
+    // 无冲突的 merge 会自动提交并清掉 MERGE_HEAD，那时门禁根本不会跑，
+    // 过滤也就无从谈起。真正的现场（PR 拉了 master 后停在冲突/待提交）才有 MERGE_HEAD。
+    execFileSync("git", ["-C", dir, "checkout", "-q", "main"], { stdio: "pipe" });
+    execFileSync("git", ["-C", dir, "merge", "--no-commit", "--no-edit", "other"], {
+      stdio: "pipe",
+    });
+
+    const staged = [
+      "src-tauri/splash-assets/index.html", // 采纳自 other
+      "src/lib/x.ts", // 本次前端改动（两端都有，但内容不同）
+    ];
+    const kept = dropAdoptedShellInputs(staged, dir);
+    // 壳文件与 MERGE_HEAD 一致 ⇒ 剔除；非壳文件一律保留
+    expect(kept).toEqual(["src/lib/x.ts"]);
+    expect(decide(kept).touchesShell).toBe(false);
+  });
+
+  it("合并态 + 冲突解决真动过壳文件 ⇒ 必须保留（判据不放松）", () => {
+    const dir = initRepo();
+    write(dir, "src-tauri/splash-assets/index.html", "old");
+    commit(dir, "base");
+    // 我方改壳
+    write(dir, "src-tauri/splash-assets/index.html", "mine");
+    commit(dir, "shell mine");
+    // 对方也改同一行 ⇒ 冲突，逼出「解决时动手」
+    const base = execFileSync("git", ["-C", dir, "rev-parse", "HEAD~1"], {
+      encoding: "utf8",
+    }).trim();
+    execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "other", base], {
+      stdio: "pipe",
+    });
+    write(dir, "src-tauri/splash-assets/index.html", "theirs");
+    commit(dir, "shell theirs");
+    execFileSync("git", ["-C", dir, "checkout", "-q", "main"], { stdio: "pipe" });
+    try {
+      execFileSync("git", ["-C", dir, "merge", "--no-edit", "other"], {
+        stdio: "pipe",
+      });
+    } catch {
+      /* 期望冲突 */
+    }
+    // 解决冲突：写一个既非 mine 也非 theirs 的版本
+    write(dir, "src-tauri/splash-assets/index.html", "resolved-by-me");
+    execFileSync("git", ["-C", dir, "add", "-A"], { stdio: "pipe" });
+
+    const kept = dropAdoptedShellInputs(
+      ["src-tauri/splash-assets/index.html"],
+      dir,
+    );
+    expect(kept).toEqual(["src-tauri/splash-assets/index.html"]);
+    expect(decide(kept).touchesShell).toBe(true);
   });
 });

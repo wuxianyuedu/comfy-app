@@ -22,6 +22,7 @@ const PROJECT_TAB_IDS: WorkspaceView[] = [
   "project",
   "canvas",
   "workshop",
+  "library",
   "outputs",
   "film",
 ];
@@ -36,7 +37,7 @@ describe("globalNavItems", () => {
 });
 
 describe("projectTabs", () => {
-  it("恰好是那五个项目内视图（主页 / 画布 / 工坊 / 产出 / 成片）", () => {
+  it("恰好是那六个项目内视图（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）", () => {
     expect(projectTabs().map((i) => i.id)).toEqual(PROJECT_TAB_IDS);
   });
 

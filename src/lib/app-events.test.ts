@@ -68,6 +68,16 @@ describe("emitAppEvent / subscribeAppEvent", () => {
     offB();
   });
 
+  it("`workspace:navigate` 的载荷是 `{ view }`（跳视图请求方与订阅方各一层）", () => {
+    const seen: string[] = [];
+    const off = subscribeAppEvent("workspace:navigate", (p) => {
+      seen.push(p.view);
+    });
+    emitAppEvent("workspace:navigate", { view: "library" });
+    expect(seen).toEqual(["library"]);
+    off();
+  });
+
   it("无 `window` 时订阅给一个空操作、派发直接返回（不抛错，也不排队重放）", () => {
     /* 事件是「此刻的广播」—— 补发一条上一轮的广播会让读侧拿到过期载荷。
      * jsdom 里 `window` 恒存在（见 vitest.config.ts 里对这条的说明），
