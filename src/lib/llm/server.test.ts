@@ -266,6 +266,39 @@ describe("getConfigForClient", () => {
     expect(out.apiKey).toBeUndefined();
   });
 
+  it("库里两处都存了可用密钥时，出口仍然一个字都不带（台账 A4 的反向硬闸）", async () => {
+    /* A4 的表现不是「功能坏了」而是「密钥跟着配置接口一起发到浏览器 / 跟着日志
+     * 一起落盘」，所以断言不能只看 `apiKey` 那一个键：把整个出口对象序列化一遍，
+     * 两把密钥一个字都不许出现（顶层与远端条目都算）。 */
+    await llmConfigRepository.upsertSingleton({
+      baseUrl: "https://global/v1",
+      apiKey: "sk-top-secret",
+    });
+    seedRemoteModel(tdb, {
+      name: "tbl-keyed",
+      baseUrl: "https://t/v1",
+      apiKey: "sk-remote-secret",
+    });
+
+    const out = await getConfigForClient();
+    expect(out.apiKey).toBeUndefined();
+    expect(out.hasApiKey).toBe(true);
+    const serialized = JSON.stringify(out);
+    expect(serialized).not.toContain("sk-top-secret");
+    expect(serialized).not.toContain("sk-remote-secret");
+    // 脱敏不等于把条目也删掉：设置页还要看得见「这条远端模型存在」
+    const remote = out.extraModels.find(
+      (e) => typeof e === "object" && e !== null && e.name === "tbl-keyed",
+    );
+    expect(remote).toMatchObject({
+      name: "tbl-keyed",
+      baseUrl: "https://t/v1",
+    });
+    // ⚠️ 出口**不区分**「这条有没有密钥」（`hasApiKey` 只有顶层那一份）——
+    // 这正是台账 A11 的成因：设置页拿到的是 `apiKey: undefined`，回写时
+    // `replaceAll` 按「整份覆盖」把它写成 null，存过的远端密钥一次保存就没。
+  });
+
   it("远端表里误存的本地 ollama（回环 + 无密钥）折回本地候选字符串", async () => {
     await llmConfigRepository.upsertSingleton({
       baseUrl: "http://127.0.0.1:11434/v1",

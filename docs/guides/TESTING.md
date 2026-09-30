@@ -177,10 +177,12 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
       5 个闸门类端点 —— `generated/[...path]`、`debug/source`、`comfy/{stats,queue,ensure}`；
       第二批补了 `custom-nodes` 的 argv 注入闸门），剩下 27 个与 6 个 `page.tsx` 的目录级
       测试仍是少数（台账 P1/E3）。
-- [ ] **服务端 router 集成覆盖 5/16**：`generate` / `run` / `task` / `workflow` / `project`
-      （`project` 是第二批补的，17 条全是归属判据）。其余 11 个里 `custom-nodes`（tRPC 侧）、
-      `llm`、`setting`、`material`、`film` 都在写本机状态 —— 台账 A 系列那批越权判据
-      证明「一个 router 没有执行者」的实际含义是「它的归属闸门坏了没人红」。
+- [ ] **服务端 router 集成覆盖 6/16**：`generate` / `run` / `task` / `workflow` / `project` /
+      `setting`（后两个分别是闸门第二批与第三批补的，用例都按**归属 / 协议闸门**组织，
+      不按 procedure 顺序铺）。其余 10 个里 `llm`（出口脱敏在 `lib/llm/server.test.ts` 判着，
+      router 层的 zod 闸没人判）、`custom-nodes`（tRPC 侧）、`material`、`film`、`train`、
+      `model` 都在写本机状态 —— 台账 A 系列三批复算证明：「一个 router 没有执行者」的
+      实际含义是「它的归属闸门坏了没人红」。
 - [ ] **`DynamicWorkflowForm` / `CanvasNode` 主组件的深度行为测试**（fetch/poll 生命周期）仍开放。
 - [ ] 存量 4 份 `.snap` 结构快照按行为断言迁移（见 §11.9）。
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）。
