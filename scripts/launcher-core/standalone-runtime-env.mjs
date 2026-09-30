@@ -144,8 +144,16 @@ export function ensureStandaloneSchema({
           "(emitted by scripts/build-desktop.mjs); run `pnpm tauri build` (or node scripts/build-desktop.mjs) first",
       );
     }
+    // PRAGMA 清单的权威定义在 `src/lib/sqlite-pragmas.ts`（那条 TS 侧的共用清单）；
+    // 本文件是非 TS 宿主、引不到它，所以照抄一份，由 `tests/sqlite-pragma-sites.test.ts`
+    // 核两边一致。下面那条 busy_timeout 是**这一侧自己的**预算，故意比宿主的
+    // `SQLITE_BUSY_TIMEOUT_MS`（250ms）长：这里是首启建表，一次跑完整个 schema 文件，
+    // 撞上一个还在跑的宿主时「等一等」比「启动失败」好，而这个进程此刻不在服务任何界面
+    // 请求（libsql/node:sqlite 的语句执行都是同步的，等锁的毫秒数就是本进程停摆的毫秒数，
+    // 所以交互侧只给 250ms）。TS 侧走 `timeout` 客户端选项而不是 PRAGMA —— 见那文件头。
     db.exec("PRAGMA journal_mode = WAL");
     db.exec("PRAGMA foreign_keys = ON");
+    db.exec("PRAGMA busy_timeout = 2000");
     db.exec(readFileSync(schemaFile, "utf8"));
     const tablesAfter = Number(count());
     if (tablesAfter === 0) {

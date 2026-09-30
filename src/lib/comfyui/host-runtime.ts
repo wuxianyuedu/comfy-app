@@ -19,6 +19,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { createTaskRepoImpl } from "../core/repository-task-impl";
 import { logger } from "../core/logger";
 import { isSchemaReady } from "../db-schema-ready";
+import { SQLITE_BUSY_TIMEOUT_MS, SQLITE_PRAGMAS } from "../sqlite-pragmas";
 import { configureDispatch, claimAndDispatchOnce } from "./executor-dispatch";
 import { configureExecutorCli, cliProcs } from "./executor-cli";
 import { configureExecutorFinalize } from "./executor-finalize";
@@ -31,14 +32,24 @@ import { configureTraceLogPath } from "./trace";
 
 import type { TaskRepoImpl } from "../core/repository-task-impl";
 
-/** 建 host 片自己的仓储：libsql 文件库 + WAL/外键两条 PRAGMA，与 Next 侧同 schema。
+/** 建 host 片自己的仓储：libsql 文件库 + 那份共用 PRAGMA 清单，与 Next 侧同 schema。
  *
  *  `dbFile` 由入口算好传来（绝对路径判据在入口那侧：`ROOT` 与 `process.chdir` 都在
- *  它手里），这里不碰 `process.cwd()`，保证两种加载形态读到同一个库。 */
+ *  它手里），这里不碰 `process.cwd()`，保证两种加载形态读到同一个库。
+ *  PRAGMA 走 `~/lib/sqlite-pragmas` 那一份而不是本地再列两行：宿主与内嵌 server 写的
+ *  是同一个库文件。等待预算则**只能**由 `timeout` 这个客户端选项给：`file:` 客户端是
+ *  连接池，开机那条 `PRAGMA busy_timeout` 只落在它当时借到的那一条连接上，池后开的
+ *  连接没有预算（实测：那种形状撞锁 11ms 就抛；带 `timeout` 才会等）。
+ *  预算给在本侧、不给 Next 侧的理由见 `sqlite-pragmas` 文件头：同步等锁会占住本进程
+ *  事件循环，宿主是为执行而生的进程，Next 还要响应界面。 */
 export async function createHostRepo(dbFile: string): Promise<TaskRepoImpl> {
-  const client = createClient({ url: `file:${dbFile}` });
-  await client.execute("PRAGMA journal_mode = WAL");
-  await client.execute("PRAGMA foreign_keys = ON");
+  const client = createClient({
+    url: `file:${dbFile}`,
+    timeout: SQLITE_BUSY_TIMEOUT_MS,
+  });
+  for (const pragma of SQLITE_PRAGMAS) {
+    await client.execute(pragma);
+  }
   return createTaskRepoImpl(drizzle(client), { owner: "host" });
 }
 

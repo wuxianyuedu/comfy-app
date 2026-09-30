@@ -22,6 +22,7 @@ import {
   HISTORY_READ,
   OLLAMA_READY,
   OLLAMA_STOP_PROBE,
+  TERMINAL_DB_WRITE,
   WS_RECONNECT,
   backoffDelayMs,
 } from "./retry-policy";
@@ -126,5 +127,22 @@ describe("具名策略（本条账的核心：策略不同、且各有理由）"
     for (const p of [COMFY_STOP_PROBE, DRIZZLE_STOP_PROBE, OLLAMA_STOP_PROBE]) {
       expect(p.baseMs * p.maxAttempts).toBeLessThan(6000);
     }
+  });
+
+  it("终态库写的预算：4 次写、累计等待 280ms，且封顶生效", () => {
+    /* #1250：撞的是**另一个进程的写锁**（桌包里 server 与执行宿主同开一份 WAL 库），
+     * 与 WS 重连那种「对端可能长时间不可用」不是一族 —— 锁通常几十毫秒就散，所以
+     * 基数小、次数少；穷尽之后就归还槽位让回收器接管，收口一路等在库里没有意义。 */
+    expect(TERMINAL_DB_WRITE.shape).toBe("exponential");
+    expect(TERMINAL_DB_WRITE.maxAttempts).toBe(4);
+    const waits = [0, 1, 2].map((attempt) =>
+      backoffDelayMs({ ...TERMINAL_DB_WRITE, attempt }),
+    );
+    expect(waits).toEqual([40, 80, 160]);
+    expect(waits.reduce((a, b) => a + b, 0)).toBe(280);
+    // 退避不许冲破封顶（`2 ** attempt` 在 attempt 大时会爆炸）。
+    expect(
+      backoffDelayMs({ ...TERMINAL_DB_WRITE, attempt: 30 }),
+    ).toBeLessThanOrEqual(TERMINAL_DB_WRITE.maxMs);
   });
 });

@@ -131,3 +131,26 @@ export const OLLAMA_STOP_PROBE = {
   baseMs: 500,
   maxAttempts: 10,
 } as const;
+
+/**
+ * 终态那一次库写：最多 4 次写、指数退避基数 40ms、封顶 300ms（累计等待 40+80+160 = 280ms）。
+ *
+ * 场景与 `WS_RECONNECT` **不同**，所以不复用它的形状：对手不是「可能长时间不可用的服务」，
+ * 而是**另一个进程持有的写锁** —— 桌包拓扑里内嵌 server 与执行宿主同时写同一份 WAL 库。
+ * 宿主那条连接的等待预算只有 `SQLITE_BUSY_TIMEOUT_MS`（250ms；形状是客户端 `timeout`
+ * 选项，不是开机 PRAGMA，理由见 `sqlite-pragmas` 文件头），稍长一点的锁照旧撞回
+ * `SQLITE_BUSY`（ISSUE #1250 的现场）。这种冲突通常几十毫秒内自己散掉 ⇒ 基数要小
+ * （多等不如早让路），次数要少：穷尽之后不是继续等，而是**摘干净本进程对这一行的足迹、
+ * 让回收器对账接管**（见 `comfyui/executor-write-retry.ts`）。只归还槽位是不够的 ——
+ * 回收器那句「本进程没有足迹」的判据读的是四样，实测漏掉 `executedWorkflow` 时那一行
+ * 在 `RUNNING` 上停了 11 分钟、22 轮回收全打 `checked` 空转。
+ * 与 `HISTORY_READ` 同为「对端一定就绪、只是慢一拍」那一族，但次数明显更少 ——
+ * 收口拖在库里没有意义，用户的界面在等这个终态。
+ */
+export const TERMINAL_DB_WRITE = {
+  shape: "exponential",
+  baseMs: 40,
+  maxMs: 300,
+  /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
+  maxAttempts: 4,
+} as const;
