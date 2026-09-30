@@ -4,7 +4,6 @@ import {
   buildCharacterMessages,
   buildReviewMessages,
   buildScriptMarkdownMessages,
-  buildScriptTemplate,
   buildShotRepromptMessages,
   buildStoryboardMessages,
   parseCharacter,
@@ -38,38 +37,6 @@ describe("buildScriptMarkdownMessages", () => {
     expect(user!.content).not.toContain("undefined");
     expect(user!.content).toContain("未指定");
     expect(user!.content).toContain("无");
-  });
-});
-
-describe("buildScriptTemplate", () => {
-  it("离线模板带场景骨架与台词占位（不调用模型）", () => {
-    const md = buildScriptTemplate(
-      { type: "micro_film", tone: "温暖", logline: "梗概" },
-      "我的灵感",
-    );
-    expect(md).toContain("## 场景1");
-    expect(md).toContain("V1 角色名");
-    expect(md).toContain("我的灵感");
-    expect(md).toContain("温暖");
-  });
-
-  it("段落之间不留连续空行，也不以空行结尾", () => {
-    const md = buildScriptTemplate(
-      { type: "micro_film", tone: "", logline: "" },
-      "x",
-    );
-    expect(md).not.toMatch(/\n{3,}/);
-    expect(md).toBe(md.trim());
-  });
-
-  it("未知项目类型回落到原值，不产出 undefined", () => {
-    const md = buildScriptTemplate(
-      // 故意塞一个 PROJECT_TYPE_LABELS 覆盖不到的取值。
-      { type: "unknown-type" as never, tone: "", logline: "" },
-      "x",
-    );
-    expect(md).toContain("unknown-type");
-    expect(md).not.toContain("undefined");
   });
 });
 
