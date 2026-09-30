@@ -14,7 +14,11 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   const stats = await getSystemStats();
-  if (stats !== null) {
+  // 判据按真值而不是 `!== null`：采集器的类型是 `| null`，可它读的是外部 HTTP 的
+  // 收口，任何「这一拍没读到」都必须落到下面那个**带 `online` 字段的完整降级包**。
+  // 写成 `!== null` 时，一个 `undefined` 会回出 `{ processAlive: true }`（没有
+  // `online`），状态栏据此渲染就成了第三种状态 —— 而它正是这个端点要消灭的东西。
+  if (stats) {
     return NextResponse.json({ ...stats, processAlive: true });
   }
   /* HTTP 没读到 ≠ 没在跑：与 `/api/comfy/queue` 同一口径（queue-status.server.ts

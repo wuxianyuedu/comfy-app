@@ -33,6 +33,7 @@ vi.mock("~/lib/poll-timer", () => ({
 import { startPollTimer } from "~/lib/poll-timer";
 
 import {
+  getComfyStatsServerSnapshot,
   getComfyStatsSnapshot,
   refreshComfyStats,
   resetComfyStatsStoreForTest,
@@ -136,6 +137,20 @@ describe("快照与背压", () => {
     await refreshComfyStats();
     expect(getComfyStatsSnapshot()).not.toBe(first);
     expect(getComfyStatsSnapshot().stats?.vramUsed).toBe(5 * GIB);
+  });
+
+  it("服务端快照与客户端快照同一个对象：SSR 首帧不制造第三种状态", () => {
+    /* `getComfyStatsServerSnapshot` 只在 React 走 SSR 时被调用（jsdom 那一路不会），
+     * 所以这条判的不是行数而是它的契约：必须与 `getComfyStatsSnapshot()` **同一身份**
+     * —— `useSyncExternalStore` 按 `Object.is` 判等，服务端渲染返回一份新对象会让
+     * hydration 之后立刻再渲染一次；而未观测过时它就是「无数据」那一档
+     * （`stats:null / online:false / stale:false`），不能凭空造出「离线」或「连接中」。 */
+    expect(getComfyStatsServerSnapshot()).toBe(getComfyStatsSnapshot());
+    expect(getComfyStatsServerSnapshot()).toEqual({
+      stats: null,
+      online: false,
+      stale: false,
+    });
   });
 
   it("迟到的旧回包被丢弃：只认最新一次观测", async () => {
