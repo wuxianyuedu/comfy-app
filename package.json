@@ -31,7 +31,6 @@
     "docs": "typedoc",
     "typecheck": "tsc --noEmit",
     "check:all": "node scripts/quality-gate.mjs",
-    "check:all:lint": "node scripts/quality-gate.mjs --mode lint",
     "test:coverage": "vitest run --coverage",
     "mcp:stdio": "tsx tools/mcp-stdio.ts",
     "mcp:http": "tsx tools/mcp-http.ts",

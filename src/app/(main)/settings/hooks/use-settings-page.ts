@@ -10,7 +10,7 @@
  * 不算「按任务温度」的合并规则。
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useFlashLatch } from "~/components/ui/use-flash-state";
 import { useExternalAction } from "~/components/ui/use-external-action";
@@ -19,28 +19,12 @@ import { useExternalAction } from "~/components/ui/use-external-action";
  * 而 `app-settings.ts` 顶层 import fs —— 走那条路会让设置页整页 500（ISSUE #282/#317）。 */
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { runAsyncAction } from "~/lib/async-action";
-import { errorMessage, rawErrorDetail } from "~/lib/error-message";
-import { useShellTabs } from "~/lib/shell/shell-tabs-store";
-import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
-import { openComfyTab } from "~/lib/comfy/comfy-tab-client";
-import { shouldUseBrowserTab } from "~/lib/comfy/comfy-embed";
-import { postAppRuntimeLog } from "~/lib/log/log-file-client";
-import { probeRemoteApi } from "~/lib/llm/browser";
-import {
-  queryUsageTask,
-  testModelUsage,
-  type UsageTaskQueryInput,
-  type UsageTestInput,
-} from "~/lib/llm/usage-test-client";
-import {
-  splitExtraModels,
-  type RemoteModelEntry,
-  type RemoteModelKind,
-  type TaskType,
-} from "~/lib/llm/types";
+import { splitExtraModels, type RemoteModelEntry } from "~/lib/llm/types";
 import { api } from "~/trpc/react";
 
-import { useRuntimeLogSource } from "./use-runtime-log-source";
+import { useSettingsComfy } from "./use-settings-page-comfy";
+import { useSettingsLoadStatus } from "./use-settings-page-load-status";
+import { useSettingsRemoteModels } from "./use-settings-page-remote-models";
 import { useSettingsAppUpdate } from "./use-settings-page-app-update";
 import { useSettingsDbStudio } from "./use-settings-page-db-studio";
 import { useSettingsOllama } from "./use-settings-page-ollama";
@@ -102,29 +86,6 @@ function writeSettingsCache(value: {
   }
 }
 
-/**
- * 合并候选模型：主模型 + 勾选的多选，按首次出现去重。
- * 主模型永远在列（本地 Ollama 当前生效模型）；查询结果相同时返回原引用，
- * 避免「主模型切换 → 勾选列表重算」引发受控组件输入抖动。
- */
-function mergeExtraModels(
-  current: string[],
-  model: string,
-  toggled: string,
-): string[] {
-  const next =
-    model.trim() !== ""
-      ? [model, ...current.filter((m) => m !== model)]
-      : [...current];
-  if (!toggled.trim()) return next;
-  if (next.includes(toggled)) {
-    // 取消勾选：主模型不可移除
-    if (toggled === model) return next;
-    return next.filter((m) => m !== toggled);
-  }
-  return [...next, toggled];
-}
-
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
 export function useSettingsPage(): SettingsPageController {
   const [section, setSection] = useState<Section>("llmLocal");
@@ -141,8 +102,6 @@ export function useSettingsPage(): SettingsPageController {
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmDraft, setLlmDraft] = useState<LlmConfig | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<Settings | null>(null);
-  const [comfyStarting, setComfyStarting] = useState(false);
-
   const settingsQ = api.setting.get.useQuery();
   const llmQ = api.llm.configGet.useQuery();
   /* 这两份查询的「最后一次成功结果」：读取失败时用它兜底播种草稿。
@@ -181,19 +140,8 @@ export function useSettingsPage(): SettingsPageController {
   /* 安装形态：**不 gate 在 statusQueriesEnabled 上**，与首屏的 get/configGet 同批
    * 发出 —— 它是 fs-only 的毫秒级判据，跟着 comfyStatus 一起等秒级探测就白拆了。
    * 改路径 / 启动参数后由 savePrefs、startComfy 手动 refetch（形态依赖路径）。 */
-  const comfyInstanceQ = api.setting.comfyInstance.useQuery();
-  const comfyStatusQ = api.setting.comfyStatus.useQuery(undefined, {
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: false,
-    enabled: statusQueriesEnabled,
-  });
-  const comfyStartM = api.setting.comfyStart.useMutation();
-  const comfyStopM = api.setting.comfyStop.useMutation();
-  /* 「在浏览器打开」：服务端能力早就有了（openComfyUi → openUrlInBrowser 拉起
-   * 系统默认浏览器），此前只缺一个能点到它的入口。与页签内嵌**并列**，不替代。 */
-  const comfyOpenM = api.setting.comfyOpen.useMutation();
-  const [comfyStopping, setComfyStopping] = useState(false);
-  const [comfyOpening, setComfyOpening] = useState(false);
+  /* ComfyUI 的状态查询 / 启动关闭打开动作 / 运行时日志整体沉在
+   * `./use-settings-page-comfy`（与 ollama / db-studio 同族的 sub-hook）。 */
   const openExternalM = api.setting.openExternal.useMutation();
 
   /* 设置页的整页提示条：亮起 3.5s 自动收起。定时器管理（连点清旧、
@@ -294,153 +242,30 @@ export function useSettingsPage(): SettingsPageController {
     showFlash,
   });
 
-  /* ── ComfyUI 启动 ───────────────────────────────────────── */
-  const startComfy = useCallback(async () => {
-    setSaving(true);
-    setComfyStarting(true);
-    try {
-      await runAsyncAction(
-        async () => {
-          await saveSetting.mutateAsync({
-            comfyuiPath: settingsDraft?.comfyuiPath,
-            comfyuiExtraArgs: settingsDraft?.comfyuiExtraArgs,
-            comfyuiAutoStart: settingsDraft?.comfyuiAutoStart,
-            comfyuiPort: settingsDraft?.comfyuiPort,
-          });
-          const result = await comfyStartM.mutateAsync({});
-          await comfyStatusQ.refetch();
-          // 启动动作会先把当前草稿（含路径）落库：形态跟着重判定一次。
-          await comfyInstanceQ.refetch();
-          /* 端点返回 `{ ok, detail }` 的信封（服务端自己探过启动结果），
-           * 交给出口按同一口径读 —— 调用处不再写 `result.ok ? "ok" : "err"`。 */
-          return result;
-        },
-        { report: showFlash, failureText: "启动 ComfyUI 失败" },
-      );
-    } finally {
-      setSaving(false);
-      setComfyStarting(false);
-    }
-  }, [
+  /* ── ComfyUI 启动 / 状态 / 打开（沉在 sub-hook）──────────────────
+   * 状态查询（comfyStatus 5s 轮询、enabled 门控）、启动（先把草稿里的
+   * ComfyUI 各项落库再拉起）、关闭、页签内嵌打开、系统浏览器打开、运行时
+   * 启动日志的 active 判据——全部收在 `./use-settings-page-comfy`。
+   * 返回形状与原 controller 逐字段一致。 */
+  const {
+    comfyStatus,
+    comfyInstance,
+    comfyStarting,
+    comfyStopping,
+    comfyOpening,
+    comfyBrowserOpening,
+    startComfy,
+    stopComfy,
+    openComfy,
+    openComfyInBrowser,
+    comfyLog,
+    refetchComfyInstance,
+  } = useSettingsComfy({
     settingsDraft,
-    saveSetting,
-    comfyStartM,
-    comfyStatusQ,
-    comfyInstanceQ,
     showFlash,
-  ]);
-
-  const stopComfy = useCallback(async () => {
-    setSaving(true);
-    setComfyStopping(true);
-    try {
-      await runAsyncAction(
-        async () => {
-          const result = await comfyStopM.mutateAsync();
-          await comfyStatusQ.refetch();
-          return result;
-        },
-        { report: showFlash, failureText: "关闭 ComfyUI 失败" },
-      );
-    } finally {
-      setSaving(false);
-      setComfyStopping(false);
-    }
-  }, [comfyStopM, comfyStatusQ, showFlash]);
-
-  const openComfy = useCallback(async () => {
-    /* 浏览器 / dev 形态：不内嵌、不占应用内页签栏，直接把 ComfyUI 交给新浏览器
-     * 页签。window.open 必须在任何 await 之前同步调用才不被弹窗拦截器拦下，所以
-     * 这条分支放在 refetch 之前，用状态轮询已缓存的 base（浏览器里轮询很勤，基本
-     * 是新鲜的）；拿不到缓存才退回 refetch（冷启动罕见路径）。见 comfy-embed.ts
-     * `shouldUseBrowserTab` 的形态说明。 */
-    if (shouldUseBrowserTab(isDesktopShell())) {
-      const cached = comfyStatusQ.data?.base ?? null;
-      if (cached) {
-        window.open(cached, "_blank", "noopener,noreferrer");
-        showFlash("ok", `已在新浏览器页签打开 ComfyUI（${cached}）`);
-        return;
-      }
-      setComfyOpening(true);
-      try {
-        const fresh = await comfyStatusQ.refetch();
-        const b = fresh.data?.base ?? null;
-        if (!b) {
-          showFlash(
-            "err",
-            "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看",
-          );
-          return;
-        }
-        window.open(b, "_blank", "noopener,noreferrer");
-        showFlash("ok", `已在新浏览器页签打开 ComfyUI（${b}）`);
-      } finally {
-        setComfyOpening(false);
-      }
-      return;
-    }
-
-    setComfyOpening(true);
-    try {
-      /* 点「打开查看」前先要一份新鲜状态：用户此刻的意图就是「打开我在运行的
-       * 实例」，拿几秒前的旧结论会直接报「未在运行」并把按钮禁用掉（ISSUE #339
-       * 里「外部已经启动了，界面却打不开」的观感来源）。 */
-      const fresh = await comfyStatusQ.refetch();
-      const base = fresh.data?.base ?? comfyStatusQ.data?.base ?? null;
-      if (!base) {
-        showFlash("err", "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看");
-        await comfyStatusQ.refetch();
-        return;
-      }
-      /* 桌面壳：打开方式由服务端探测结论决定（ISSUE #310）——目标是**只有多页签**、
-       * 不弹第二个窗口。正常情况下 ComfyUI 由本应用拉起、启动参数带了
-       * `--enable-cors-header`，跨源不会被 origin-only 中间件拦 403，直接内嵌；
-       * 万一判到不可嵌（外部实例不受本应用参数控制等），页签照常打开、里面渲染
-       * 可读说明 —— 仍留在同一个窗口里，不另开窗口。 */
-      const decision = await openComfyTab(base, window.location.origin);
-      // 用稳定 id 打开 ComfyUI 页签：重启后端口偏移（base 变化）时
-      // 复用同一页签并刷新地址，而不是叠出重复页签。
-      useShellTabs.getState().openTab({
-        id: "comfyui",
-        label: "ComfyUI",
-        url: decision.embedUrl,
-        closable: true,
-        blockedReason: decision.target === "blocked" ? decision.detail : null,
-        /* 不可嵌时把地址一并带进说明：用户能复制到浏览器自查，也能判断
-         * 是外壳拦的还是 ComfyUI 自己拦的（ISSUE #310）。 */
-        blockedUrl: decision.target === "blocked" ? decision.base : null,
-      });
-      showFlash(decision.target === "embed" ? "ok" : "err", decision.detail);
-      // 无论成败都刷新状态行，修正探测抖动（如进程查询超时）造成的「未运行」显示。
-      await comfyStatusQ.refetch();
-    } catch (error) {
-      showFlash("err", errorMessage(error, "打开 ComfyUI 失败"));
-      // 失败同样要刷新状态行（与上面那条同源：探测抖动造成的「未运行」显示）。
-      await comfyStatusQ.refetch();
-    } finally {
-      setComfyOpening(false);
-    }
-  }, [comfyStatusQ, showFlash]);
-
-  /* 「在浏览器打开」＝把 ComfyUI 交给系统默认浏览器（放大看 / 装浏览器插件 /
-   * 多屏铺开）。它与页签内嵌是**并列出口**，不改变页签那一套：页签仍然内嵌，
-   * 这里只是把同一个地址再交给浏览器。
-   *
-   * 端点用 comfyOpen 而不是 openExternal：地址由服务端自己探（openComfyUi 内部
-   * 先 probeComfyUi），不采信前端 state 里的旧 base —— 用户点按钮时可能已经
-   * 隔了很久，端口可能已经变了，拿旧地址会打开一个空白浏览器页。
-   *
-   * 与 openComfy 一样先 refetch 一次状态，避免拿几秒前的旧结论误报「未运行」。 */
-  const openComfyInBrowserAction = useExternalAction({
-    target: "browser",
-    report: showFlash,
+    setSaving,
+    statusQueriesEnabled,
   });
-  const openComfyInBrowser = useCallback(async () => {
-    await openComfyInBrowserAction.run(async () => {
-      await comfyStatusQ.refetch();
-      return comfyOpenM.mutateAsync();
-    });
-  }, [openComfyInBrowserAction, comfyOpenM, comfyStatusQ]);
 
   /* ── Drizzle Studio：状态查询 + 启动 / 关闭 / 打开 + 运行时日志 ──
    * 状态与动作沉在 sub-hook；enabled 门控与 comfyStatus 同口径（首屏两份配置
@@ -470,16 +295,6 @@ export function useSettingsPage(): SettingsPageController {
     },
     [openExternalAction, openExternalM],
   );
-
-  /* ── 常驻服务启动日志（ComfyUI / Drizzle Studio / Ollama）─────────────
-   * 三条通道都是「追加不轮转」的文件（多次启动的行混在一起），服务端按会话
-   * 横幅切分后回「会话列表 + 选中会话正文」，见 use-runtime-log-source。
-   * `active` = 正在启动 → 每秒跟随本次启动；否则挂载 / 刷新时取一次。 */
-  const comfyLogActive = comfyStarting || !!comfyStatusQ.data?.starting;
-  const comfyLog = useRuntimeLogSource({
-    source: "comfyui-runtime",
-    active: comfyLogActive,
-  });
 
   /* ── 保存 ───────────────────────────────────────────────── */
   /** 把给定草稿落库。远程模型的添加 / 编辑 / 移除即时保存也走这里；
@@ -543,7 +358,7 @@ export function useSettingsPage(): SettingsPageController {
           await settingsQ.refetch();
           // 形态是「配置路径的目录形态」的函数：路径可能刚被改过，立即重判定一次
           // （不必等 5s 轮询，也不该再走一次秒级运行态探测）。
-          await comfyInstanceQ.refetch();
+          await refetchComfyInstance();
         },
         {
           report: showFlash,
@@ -554,7 +369,7 @@ export function useSettingsPage(): SettingsPageController {
     } finally {
       setSaving(false);
     }
-  }, [settingsDraft, saveSetting, settingsQ, comfyInstanceQ, showFlash]);
+  }, [settingsDraft, saveSetting, settingsQ, refetchComfyInstance, showFlash]);
 
   /* ── 按任务温度 ─────────────────────────────────────────── */
   const patchLlm = useCallback((patch: Partial<LlmConfig>) => {
@@ -565,220 +380,33 @@ export function useSettingsPage(): SettingsPageController {
     setSettingsDraft((draft) => (draft ? { ...draft, ...patch } : draft));
   }, []);
 
-  /** 勾选/取消一个本地候选模型（多选集 = 主模型 + 勾选项）。
-   *  option C：本地候选只存名字（字符串、无 apiKey），与远端独立模型(extraModels)
-   *  彻底分开，不写进 remoteModel。 */
-  const toggleExtraModel = useCallback((name: string) => {
-    setLlmDraft((draft) => {
-      if (!draft) return draft;
-      const nextNames = mergeExtraModels(
-        draft.localCandidates,
-        draft.model,
-        name,
-      );
-      const unchanged =
-        nextNames.length === draft.localCandidates.length &&
-        nextNames.every((n, i) => n === draft.localCandidates[i]);
-      return unchanged ? draft : { ...draft, localCandidates: nextNames };
-    });
-  }, []);
+  /* ── 远端模型管理 / 本地候选勾选 / 按任务温度（沉在 sub-hook）──────
+   * 这一块只依赖「当前 llm 草稿 + 草稿编辑 + 即时落库出口」，与 ComfyUI /
+   * DbStudio / Ollama 无任何共享 state。返回形状与原 controller 逐字段一致。 */
+  const {
+    toggleExtraModel,
+    remoteModelList,
+    addRemoteModel,
+    updateRemoteModel,
+    removeRemoteModel,
+    probeRemote,
+    testModelUsage: testModelUsageFn,
+    queryUsageTask: queryUsageTaskFn,
+    setTaskTemperature,
+  } = useSettingsRemoteModels({
+    llmDraft,
+    setLlmDraft,
+    patchLlm,
+    persistLlmDraft,
+  });
 
-  /* ── 远端模型管理 ──
-   * 设置页只做「配置」：条目的增删改 + 测试连接，不区分「当前生效」——
-   * 实际用哪个模型由工坊运行时切换（configSave.model）。
-   * 增删改即时落库（无需再点保存按钮），失败时提示条给出可读错误。
-   * 连通性 / 实际调用测试走服务端代理（apiKey 不直接打远端）。 */
-  const addRemoteModel = useCallback(
-    async (entry: {
-      name: string;
-      baseUrl?: string;
-      apiKey?: string;
-      kind?: RemoteModelKind;
-    }): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
-      const name = entry.name.trim();
-      if (!name) return { ok: false, error: "请填写模型名称" };
-      if (llmDraft.extraModels.some((e) => e.name === name)) {
-        return { ok: false, error: `模型「${name}」已在列表中` };
-      }
-      const cleaned: RemoteModelEntry = {
-        name,
-        baseUrl: entry.baseUrl?.trim() ? entry.baseUrl.trim() : null,
-        apiKey: entry.apiKey?.trim() ? entry.apiKey.trim() : null,
-        kind: entry.kind ?? null,
-      };
-      const nextDraft = {
-        ...llmDraft,
-        extraModels: [...llmDraft.extraModels, cleaned],
-      };
-      setLlmDraft(nextDraft);
-      return persistLlmDraft(nextDraft);
-    },
-    [llmDraft, persistLlmDraft],
-  );
-
-  const removeRemoteModel = useCallback(
-    async (name: string): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
-      const next = llmDraft.extraModels.filter((e) => e.name !== name);
-      if (next.length === llmDraft.extraModels.length) return { ok: true };
-      const nextDraft = { ...llmDraft, extraModels: next };
-      setLlmDraft(nextDraft);
-      return persistLlmDraft(nextDraft);
-    },
-    [llmDraft, persistLlmDraft],
-  );
-
-  /** 编辑既有条目（只作用于已配置条目）；改名时若当前生效模型引用的是旧名，
-   *  同步改 draft.model —— 工坊按名字引用模型，不同步会指向不存在的名字。 */
-  const updateRemoteModel = useCallback(
-    async (
-      name: string,
-      patch: {
-        name?: string;
-        baseUrl?: string | null;
-        apiKey?: string;
-        clearApiKey?: boolean;
-        kind?: RemoteModelKind | null;
-      },
-    ): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
-      const nextName = (patch.name ?? name).trim();
-      if (!nextName) return { ok: false, error: "请填写模型名称" };
-      const existing = llmDraft.extraModels.find((e) => e.name === name);
-      if (!existing) {
-        return { ok: false, error: `模型「${name}」不存在，请刷新后重试` };
-      }
-      if (
-        nextName !== name &&
-        llmDraft.extraModels.some((e) => e.name === nextName)
-      ) {
-        return { ok: false, error: `模型「${nextName}」已在列表中` };
-      }
-      const updated: RemoteModelEntry = {
-        name: nextName,
-        baseUrl:
-          patch.baseUrl === undefined
-            ? (existing?.baseUrl ?? null)
-            : patch.baseUrl,
-        apiKey: patch.clearApiKey
-          ? null
-          : patch.apiKey?.trim()
-            ? patch.apiKey.trim()
-            : (existing?.apiKey ?? null),
-        kind: patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
-      };
-      const nextDraft = {
-        ...llmDraft,
-        model: llmDraft.model === name ? nextName : llmDraft.model,
-        extraModels: llmDraft.extraModels.map((e) =>
-          e.name === name ? updated : e,
-        ),
-      };
-      setLlmDraft(nextDraft);
-      return persistLlmDraft(nextDraft);
-    },
-    [llmDraft, persistLlmDraft],
-  );
-
-  const probeRemote = useCallback(
-    async (input: { baseUrl?: string; apiKey?: string; model?: string }) =>
-      probeRemoteApi(input),
-    [],
-  );
-
-  /** 模型「实际使用」测试（chat / 生图 / 生视频各一次真实调用）。
-   *  网络封装在 lib/llm/usage-test-client，密钥解析在服务端完成。 */
-  const testModelUsageFn = useCallback(
-    async (input: UsageTestInput) => testModelUsage(input),
-    [],
-  );
-
-  /** 「继续等待」已提交的异步视频任务（同一条目连接参数 + taskId，只查不重交）。
-   *  网络封装在 lib/llm/usage-test-client，密钥解析在服务端完成。 */
-  const queryUsageTaskFn = useCallback(
-    async (input: UsageTaskQueryInput) => queryUsageTask(input),
-    [],
-  );
-
-  /** 远端候选模型列表（配置视图，按保存顺序）——设置页不区分「当前生效」，
-   *  用哪个模型由工坊运行时切换。 */
-  const remoteModelList: RemoteModelEntry[] = llmDraft?.extraModels ?? [];
-
-  const setTaskTemperature = useCallback(
-    (task: TaskType, raw: string) => {
-      if (!llmDraft) return;
-      const base = llmDraft.temperatureByTask ?? {};
-      /* 清空输入框 = 删掉该 key（而不是写入 undefined），否则「已覆盖」徽标
-       * 会一直亮着，且保存时会把 undefined 一并发给后端。 */
-      const next =
-        raw === ""
-          ? Object.fromEntries(
-              Object.entries(base).filter(([key]) => key !== task),
-            )
-          : { ...base, [task]: Number(raw) };
-      patchLlm({
-        temperatureByTask:
-          Object.keys(next).length > 0
-            ? (next as Record<TaskType, number>)
-            : undefined,
-      });
-    },
-    [llmDraft, patchLlm],
-  );
-
-  /* ── 加载失败判定 ────────────────────────────────────────────
-   * 「任一查询失败」与「两份配置都没拿到」是两件事。此前 `hasError` 只按
-   * 「两份数据都为空」判定，于是「setting.get 成功、llm.configGet 失败」时：
-   * 失败为真、草稿却仍为空 → 既不满足 hasError、也不满足 isInitialLoad，
-   * 容器一路落到那句没有重试、没有原因、也没有日志指引的「配置数据未就绪」，
-   * 用户被冻在死胡同里（正是 ISSUE #304 截图的现象）。
-   * 现在把两个语义拆开：
-   *   - `queryFailed`：任一查询 isError（错误视图与补记日志的判据）；
-   *   - `hasError`：queryFailed **且** 草稿未就绪（容器据此走降级视图）。
-   * 「一半成功一半失败」时草稿同样为空，因此也会落到错误视图，拿到重试与
-   * 日志出口，而不是死角文案。 */
-  const queryFailed = !!settingsQ.isError || !!llmQ.isError;
-  const isInitialLoad = settingsQ.isLoading || llmQ.isLoading;
-
-  /* 多查询同批失败时，优先展示「更靠近根因」的那条：两份都没拿到时按
-   * settings → llm 顺序取第一条非空错误（都是 undefined 时交 fallback）。 */
-  const failedError =
-    (settingsQ.isError ? settingsQ.error : undefined) ??
-    (llmQ.isError ? llmQ.error : undefined);
-
-  const errorText = queryFailed ? errorMessage(failedError, "未知错误") : "";
-
-  /* 失败涉及的查询名（给面板日志的字段用；两个都失败时都记上）。 */
-  const failedQueries = [
-    settingsQ.isError ? "setting.get" : null,
-    llmQ.isError ? "llm.configGet" : null,
-  ]
-    .filter((name): name is string => name !== null)
-    .join(",");
-
-  /* 加载失败落 app-runtime 错误日志（面板轮询 source=app-runtime 可见）。
-   * 查询失败只体现在降级 UI，不经过 console / unhandledrejection，全局
-   * 错误钩子收不到——不主动补记的话，用户遇到失败时面板里什么也没有。
-   * 同一错误文案只记一次（ref 去重；重试后仍是同一错误不刷屏）。 */
-  const loggedErrorRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!queryFailed || errorText === loggedErrorRef.current) return;
-    loggedErrorRef.current = errorText;
-    void postAppRuntimeLog("settings", "error", `设置加载失败 ${errorText}`, {
-      query: failedQueries,
-      /* 原始报错（含 tRPC code / 服务端 message / stack 首行）一并落盘：
-       * 面板展示的是翻译后的可读文案，原文留在日志里供排查。 */
-      raw: rawErrorDetail(failedError),
-    });
-  }, [queryFailed, errorText, failedQueries, failedError]);
+  /* 加载失败判定与补记日志（沉在 sub-hook；说明见其文件头）。 */
+  const { queryFailed, isInitialLoad, errorText } = useSettingsLoadStatus();
 
   const retry = useCallback(() => {
     void settingsQ.refetch();
     void llmQ.refetch();
   }, [settingsQ, llmQ]);
-
-  const comfy = comfyStatusQ.data;
 
   /* 两份草稿齐了才算「可渲染表单」；只有一份时仍走错误/加载态，避免
    * 半份草稿导致视图里到处判空。 */
@@ -823,22 +451,12 @@ export function useSettingsPage(): SettingsPageController {
     ollamaModels,
     ollamaStarting,
     startOllama,
-    comfyStatus: comfy
-      ? {
-          up: !!comfy.up,
-          starting: !!comfy.starting,
-          probing: !!comfy.probing,
-          stopping: !!comfy.stopping,
-          base: comfy.base ?? null,
-          port: comfy.port ?? 0,
-          via: comfy.via ?? null,
-        }
-      : null,
-    comfyInstance: comfyInstanceQ.data ?? null,
+    comfyStatus,
+    comfyInstance,
     comfyStarting,
     comfyStopping,
     comfyOpening,
-    comfyBrowserOpening: openComfyInBrowserAction.busy,
+    comfyBrowserOpening,
     startComfy,
     stopComfy,
     openComfy,
@@ -851,7 +469,7 @@ export function useSettingsPage(): SettingsPageController {
     stopDbStudio,
     openDbStudio,
     openExternalUrl,
-    comfyLog: { ...comfyLog, active: comfyLogActive },
+    comfyLog,
     dbStudioLog,
     ollamaLog,
     ollamaStopping,

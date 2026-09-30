@@ -15,6 +15,10 @@
 //   · 4s 一轮、挂载即先跑一次、后台暂停、回前台补跑 —— 全部走 `~/lib/poll-timer`
 //    （与 `useInterval` 同一实现，见规范 16 §16.2.4.15）；
 //   · 连续失败迟滞走 `~/lib/offline-gate`（与队列通道同一判据，各持一台计数机）；
+//   · **进程级判活**：回包 `online:false` 但 `processAlive:true`（进程在跑、只是这一拍
+//     HTTP 没应答）不算「掉线」观测——清零连续失败计数、保留旧数据并置 stale，
+//     在线结论保持；从未读到过数据时也按「在线（连接中）」渲染，顶栏不闪「未运行」。
+//     口径与 `/api/comfy/queue` 同源（queue-status.server.ts 的快照回落）；
 //   · 背压：只认最新一次请求的回包，迟到的旧回包丢弃（`useInterval` 明确不挡重叠，
 //    这条由本文件负责，与原 hook 一致）。
 
@@ -30,7 +34,7 @@ export const COMFY_STATS_POLL_MS = 4000;
 export interface ComfyStatsSnapshot {
   /** 最近一次读到的指标；尚未返回时为 null。 */
   stats: ComfyStatsPayload | null;
-  /** ComfyUI 是否在线（online 且最近一次成功）。 */
+  /** ComfyUI 是否在线：读到过好数据，或最近一次观测确认进程还活着（数据可能暂时读不到）。 */
   online: boolean;
   /** 处于迟滞容忍期内、显示的是上一次好数据（不闪离线，但需弱化提示）。 */
   stale: boolean;
@@ -70,6 +74,11 @@ let stopPolling: (() => void) | null = null;
    —— 计数机是有状态的，不复位会让上一条用例攒下的连续失败污染下一条。 */
 let observeOnline = createOfflineGate();
 
+/* 进程级判活：最近一次观测里 ComfyUI 进程还活着（路由经进程快照给出）。HTTP 连续
+   超时但进程在跑时它让 online 保持 true —— 顶栏不闪「未运行」，数据保留旧值并置
+   stale。回包 online 成功时也置 true。 */
+let processAlive = false;
+
 /** 背压：`useInterval` 不挡重叠，只认最新一次的观测。 */
 let requestId = 0;
 
@@ -106,6 +115,7 @@ function recordMissedObservation(): void {
     });
     return;
   }
+  processAlive = false;
   publish({ stats: OFFLINE_STATS, online: false, stale: false });
 }
 
@@ -115,7 +125,20 @@ async function pollOnce(): Promise<void> {
   if (myRequest !== requestId) return; // 已有更新的请求在跑，丢弃本次迟到回包
   if (next.online) {
     observeOnline(true);
+    processAlive = true;
     publish({ stats: next, online: true, stale: false });
+    return;
+  }
+  /* 进程活着、只是这一拍没应答（跑图满载）：这不是「掉线」观测——不计入连续失败
+     （反而清零），数据保留旧值并置 stale，在线结论保持。 */
+  if (next.processAlive) {
+    observeOnline(true);
+    processAlive = true;
+    publish({
+      stats: snapshot.stats,
+      online: processAlive || snapshot.stats?.online === true,
+      stale: snapshot.stats !== null,
+    });
     return;
   }
   recordMissedObservation();
@@ -170,6 +193,7 @@ export function resetComfyStatsStoreForTest(): void {
   stopPolling?.();
   stopPolling = null;
   requestId = 0;
+  processAlive = false;
   observeOnline = createOfflineGate();
   snapshot = { stats: null, online: false, stale: false };
 }

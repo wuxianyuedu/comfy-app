@@ -2,39 +2,28 @@
 
 import {
   ChevronLeft,
-  ChevronRight,
   CircleHelp,
-  Download,
-  FileText,
-  Folder,
-  Image as ImageIcon,
   LayoutGrid,
   List,
-  Music,
   Plus,
   Search,
-  Trash2,
-  Video,
   X,
 } from "lucide-react";
 import { Hint } from "~/components/ui/hint";
-import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
 import { textHandler } from "~/lib/form-props";
-import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
 import { useFilePicker } from "~/components/ui/file-picker";
-import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
 import { useState } from "react";
+
+import { MaterialLibraryContent } from "./MaterialLibraryContent";
 
 import {
   useMaterialLibrary,
   type MaterialScope,
 } from "./hooks/use-material-library";
 import type { MaterialItem } from "~/lib/media/materials-client";
-import { displayValue } from "~/lib/display-value";
 
 /* 对外类型再导出：历史消费方从本文件 import MaterialItem，保持 API 不变。 */
 export type { MaterialItem };
@@ -42,38 +31,6 @@ export type { MaterialItem };
 /* ── Types ───────────────────────────────────────────────── */
 
 type DisplayMode = "grid" | "list";
-
-/* ── Helpers（纯展示：格式化与配色，不含业务规则）──────────── */
-
-/** 分类图标底色 + 文件夹渐变——两处**装饰色**都属 §3.6.1 文档化例外，
- *  走 `p71-allow` 例外块而不是硬塞状态语义 token：
- *    · `KIND_STYLE`：image / video / audio / doc 的**分类识别色**——
- *      紫=图、蓝=视频、绿=音频是这套 UI 里"素材类型"的视觉语言（与
- *      历史面板同源），"绿"在这里**不是 success 状态**、是 audio 类型；
- *      没有对应的"媒体类型"语义 token，硬映射会丢信息（三种归同一 token
- *      就无法区分），全塞 status-* 更是把分类装饰错当状态色。
- *    · `FOLDER_ICON_TINT`：文件夹图标黄橙渐变——是"目录容器"的
- *      通用装饰（与 macOS / 资源管理器的文件夹色一脉相承），与状态无关。
- *  两处都是"字面量本身即语义"的形态——同 ANSI SGR 终端 8 色的判据。 */
-// p71-allow:start 媒体分类识别色 + 文件夹装饰色——§3.6.1 文档化例外，颜色本身即语义
-const KIND_STYLE: Record<string, string> = {
-  image: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  video: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  audio: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  doc: "bg-subtle text-ink-soft",
-};
-
-/** 文件夹图标块（列表 / 网格两处都用；容器边长/圆角由调用方加）。 */
-const FOLDER_ICON_TINT =
-  "bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-700/90 dark:text-yellow-400/80";
-// p71-allow:end
-
-function KindIcon({ kind }: { kind: string }) {
-  if (kind === "image") return <ImageIcon size={18} strokeWidth={1.8} />;
-  if (kind === "video") return <Video size={18} strokeWidth={1.8} />;
-  if (kind === "audio") return <Music size={18} strokeWidth={1.8} />;
-  return <FileText size={18} strokeWidth={1.8} />;
-}
 
 /* ── Component ───────────────────────────────────────────── */
 
@@ -103,8 +60,6 @@ export function MaterialLibraryPanel({
     folder,
     search,
     folders,
-    items,
-    loading,
     uploading,
     error,
     searching,
@@ -114,7 +69,6 @@ export function MaterialLibraryPanel({
     setSearch,
     enterFolder,
     upload,
-    remove,
     refresh,
   } = c;
   /* 素材上传选择器：多选、无类型限制（素材库也收音频/视频）。 */
@@ -310,253 +264,12 @@ export function MaterialLibraryPanel({
         </div>
       )}
 
-      {/* ── Content ── */}
-      <div className="min-w-0 flex-1 overflow-y-auto px-2 pb-4">
-        {loading ? (
-          /* Skeleton */
-          <div className="flex-col gap-1 px-2 pt-1">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={`skeleton-${i}`}
-                className="flex items-center gap-3 py-2"
-              >
-                <Skeleton className="bg-subtle size-9 shrink-0 rounded-lg" />
-                <Skeleton className="bg-subtle h-3 flex-1 rounded" />
-              </div>
-            ))}
-          </div>
-        ) : showItems ? (
-          items.length === 0 ? (
-            /* 空状态：大图标 + 提示文案 + 操作引导 */
-            <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-              {/* 文件夹图标 */}
-              <div className="border-border-strong bg-subtle mb-5 flex size-20 items-center justify-center rounded-2xl border">
-                <Folder
-                  size={40}
-                  strokeWidth={1.2}
-                  className="text-ink-fainter"
-                />
-              </div>
-              <p className="text-ink-soft text-[14px] font-medium">
-                {searching ? "没有匹配的素材" : "暂无内容"}
-              </p>
-              {!searching && (
-                <div className="text-ink-fainter mt-4 flex-col gap-2 text-[12px]">
-                  <Button
-                    variant="ghost"
-                    onClick={uploadPicker.open}
-                    className="hover:text-primary-strong flex h-auto items-center gap-2 font-normal hover:bg-transparent"
-                  >
-                    <Plus data-icon="inline-start" size={14} />
-                    点击 + 或右键菜单创建内容
-                  </Button>
-                  <p className="flex items-center gap-2">
-                    <Download size={14} strokeWidth={1.8} />
-                    也可以从画布拖入素材保存到这里
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : display === "grid" ? (
-            /* 网格视图 */
-            <div className="grid grid-cols-2 gap-2 px-1 pt-1">
-              {items.map((item) => (
-                <div
-                  key={item.id}
-                  {...mediaDragSourceProps({
-                    url: item.url,
-                    displayName: item.name,
-                    kind: item.kind,
-                    className:
-                      "group border-border-strong bg-subtle relative overflow-hidden rounded-lg border",
-                  })}
-                >
-                  <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
-                    {item.kind === "image" || item.kind === "video" ? (
-                      <MediaThumb
-                        src={item.url}
-                        alt={item.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div
-                        className={`flex h-12 w-12 items-center justify-center rounded-lg ${KIND_STYLE[item.kind]}`}
-                      >
-                        <KindIcon kind={item.kind} />
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-ink-soft truncate px-2 py-1.5 text-[11px]">
-                    {item.name}
-                  </p>
-                  {/* hover 操作 */}
-                  <div className="absolute top-1 right-1 hidden gap-1 group-hover:flex">
-                    {onUse && (
-                      <Hint label="加入画布" accessibleName>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() => onUse(item)}
-                          className="text-ink-soft rounded bg-black/60 backdrop-blur hover:bg-black/60 hover:text-white"
-                        >
-                          <Plus
-                            data-icon="inline-start"
-                            size={12}
-                            strokeWidth={2.5}
-                          />
-                        </Button>
-                      </Hint>
-                    )}
-                    <Hint label="删除" accessibleName>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => void remove(item)}
-                        className="text-ink-soft hover:text-destructive rounded bg-black/60 backdrop-blur hover:bg-black/60"
-                      >
-                        <Trash2 data-icon="inline-start" size={12} />
-                      </Button>
-                    </Hint>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            /* 列表视图 */
-            <div className="flex flex-col gap-0.5">
-              {items.map((item) => (
-                <div
-                  key={item.id}
-                  {...mediaDragSourceProps({
-                    url: item.url,
-                    displayName: item.name,
-                    kind: item.kind,
-                    className:
-                      "hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors",
-                  })}
-                >
-                  {item.kind === "image" || item.kind === "video" ? (
-                    <div className="bg-canvas-deep size-9 shrink-0 overflow-hidden rounded-lg">
-                      <MediaThumb
-                        src={item.url}
-                        alt={item.name}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${KIND_STYLE[item.kind]}`}
-                    >
-                      <KindIcon kind={item.kind} />
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-ink-bright truncate text-[13px]">
-                      {item.name}
-                    </p>
-                    <p className="text-ink-fainter mt-0.5 text-[11px]">
-                      {searching ? `${item.folderName} ·` : ""}
-                      {displayValue(fmtBytes(item.size))}
-                    </p>
-                  </div>
-                  <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">
-                    {onUse && (
-                      <Hint label="加入画布" accessibleName>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => onUse(item)}
-                          className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
-                        >
-                          <Plus
-                            data-icon="inline-start"
-                            size={13}
-                            strokeWidth={2.5}
-                          />
-                        </Button>
-                      </Hint>
-                    )}
-                    <a
-                      href={item.url}
-                      download={item.name}
-                      draggable={false}
-                      className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
-                      title="下载"
-                    >
-                      <Download size={13} />
-                    </a>
-                    <Hint label="删除" accessibleName>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => void remove(item)}
-                        className="text-ink-muted hover:bg-subtle hover:text-destructive rounded-md"
-                      >
-                        <Trash2 data-icon="inline-start" size={13} />
-                      </Button>
-                    </Hint>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        ) : /* 分类列表 — 响应 display 网格/列表切换 */
-        display === "grid" ? (
-          <div className="grid grid-cols-3 gap-2 px-1 pt-1">
-            {folders.map((folder) => (
-              <Button
-                key={folder.id}
-                variant="ghost"
-                onClick={() => enterFolder(folder.id)}
-                className="border-border-strong bg-subtle hover:bg-surface-2 hover:border-ink-fainter group flex h-auto flex-col items-center gap-2 rounded-lg border py-4 font-normal transition-colors"
-              >
-                <div
-                  className={`flex h-12 w-12 items-center justify-center rounded-xl ${FOLDER_ICON_TINT}`}
-                >
-                  <Folder size={22} strokeWidth={1.8} />
-                </div>
-                <span className="text-ink-soft min-w-0 truncate text-center text-[12px]">
-                  {folder.name}
-                </span>
-                {folder.count > 0 && (
-                  <span className="text-ink-fainter text-[10px] tabular-nums">
-                    {folder.count}
-                  </span>
-                )}
-              </Button>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-0.5">
-            {folders.map((folder) => (
-              <Button
-                key={folder.id}
-                variant="ghost"
-                onClick={() => enterFolder(folder.id)}
-                className="hover:bg-subtle group flex h-auto w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left font-normal transition-colors"
-              >
-                <div
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${FOLDER_ICON_TINT}`}
-                >
-                  <Folder size={18} strokeWidth={1.8} />
-                </div>
-                <span className="text-ink-bright min-w-0 flex-1 truncate text-[13px]">
-                  {folder.name}
-                </span>
-                <span className="text-ink-fainter shrink-0 text-[11px] tabular-nums">
-                  {folder.count > 0 ? folder.count : ""}
-                </span>
-                <ChevronRight
-                  data-icon="inline-start"
-                  size={12}
-                  strokeWidth={2.5}
-                  className="text-ink-fainter group-hover:text-ink-muted shrink-0"
-                />
-              </Button>
-            ))}
-          </div>
-        )}
-      </div>
+      <MaterialLibraryContent
+        c={c}
+        display={display}
+        onUse={onUse}
+        onOpenUploadPicker={() => uploadPicker.open}
+      />
     </aside>
   );
 }
