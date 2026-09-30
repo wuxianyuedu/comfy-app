@@ -35,6 +35,7 @@ flowchart TD
     NAV["左侧导航「流程」→ 视图 workflows"]
     USE["项目画布 / 工坊 选择工作流"]
     FILES["磁盘上的本地工作流目录"]
+    OVERLAY["左侧导航「流程」下方的<br/>模型适配 / 模式契约（应用级，与项目无关）"]
   end
 
   subgraph LIB["工作流库页面"]
@@ -48,6 +49,7 @@ flowchart TD
   end
 
   NAV --> LIST
+  OVERLAY --> CONTRACT_ENTRY["全局注册表：模式契约（每种模式的口 / 输出）<br/>模型适配（远端模型 × 模式的字段映射）"]
   FILES --> PEND
   LIST --> DETAIL
   PEND -->|"⤓ 载入"| DB

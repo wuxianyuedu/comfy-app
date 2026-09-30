@@ -12,7 +12,6 @@
 import { AgentFab, AgentOverlay } from "~/components/workshop/AgentOverlay";
 import { useDraggablePosition } from "~/components/ui/use-draggable-position";
 import { useWorkshopAgent } from "~/components/workshop/hooks/use-workshop-agent";
-import { ModeContractDialog } from "~/components/workshop/mode-contract/ModeContractDialog";
 import { WorkshopModelAdapterModal } from "~/components/workshop/WorkshopModelAdapterModal";
 import { LLMProvider } from "~/components/workshop/LLMContext";
 import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pipeline";
@@ -78,9 +77,6 @@ export function WorkshopPipeline() {
           title={controller.meta.title}
           progressPct={controller.progressPct}
           health={controller.health}
-          apiChannels={controller.apiChannels}
-          onOpenApiSettings={controller.openApiSettings}
-          onOpenModeContract={controller.openModeContract}
         />
 
         <RunControlBar />
@@ -104,7 +100,6 @@ export function WorkshopPipeline() {
             videoWorkflowId={controller.videoWorkflowId}
             onVideoWorkflowChange={controller.setVideoWorkflowId}
             apiChannels={controller.apiChannels}
-            onOpenApiSettings={controller.openApiSettings}
             characterCount={controller.characters.length}
             imageDoneCount={controller.imageDoneCount}
             clipDoneCount={controller.clipDoneCount}
@@ -112,14 +107,10 @@ export function WorkshopPipeline() {
           />
         </div>
 
-        {/* 模型适配：为远端模型配置工坊各模式下的输入 / 输出映射 */}
+        {/* 模型适配的**上下文入口**（「API 直连未配置 → 去配置」）：整幅入口在侧栏
+            （与项目无关），这里只服务阶段内那句就近提示。 */}
         {controller.apiSettingsOpen && (
           <WorkshopModelAdapterModal onClose={controller.closeApiSettings} />
-        )}
-
-        {/* 模式契约：每种模式对外有哪些统一输入 / 输出（独立入口、独立界面） */}
-        {controller.modeContractOpen && (
-          <ModeContractDialog onClose={controller.closeModeContract} />
         )}
       </div>
 

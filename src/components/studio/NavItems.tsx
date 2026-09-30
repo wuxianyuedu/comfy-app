@@ -4,6 +4,7 @@ import React from "react";
 import {
   BookOpen,
   Box,
+  Cable,
   Film,
   Folder,
   FolderOpen,
@@ -11,13 +12,18 @@ import {
   Home,
   Image as ImageIcon,
   ListChecks,
+  Puzzle,
 } from "lucide-react";
 
 /**
  * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。
  *
- * 三个分区（一处定义、多处消费，避免漂移）：
+ * 四个分区（一处定义、多处消费，避免漂移）：
  *   · 全局项（`globalNavItems`）—— 主页侧栏顶部常驻：首页 / 模型 / 历史 / 队列 / 炼丹 / 流程；
+ *   · 全局浮层（`OVERLAY_NAV_ITEMS`）—— 紧跟全局项之后，仍是**应用级**入口但点开的是
+ *     弹窗而不是视图：模型适配 / 模式契约。这两件事是**项目无关**的（模式是工作流库定义的、
+ *     适配器是每个远端模型 × 每个模式的字段映射，都不依赖某个具体项目），所以它们的入口
+ *     不进工坊那个项目内视图；
  *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片），
  *     不再进主页侧栏：它们是对「当前项目」的操作投影，脱离项目无意义；
  *   · 项目入口（`PROJECTS_ENTRY`）—— 侧栏最底部的「项目」分组（可展开列出已有项目）。
@@ -65,6 +71,49 @@ const ICON_PROPS = {
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 };
+
+/** 全局浮层入口的机器 id —— 不进 `WorkspaceView`：它不切视图，只开弹窗。 */
+export type OverlayEntryId = "model-adapters" | "mode-contract";
+
+/**
+ * 应用级浮层入口（**项目无关**，故不进项目内的任何界面）。
+ *
+ * 与 `NavItem` 分开建模的原因：`NavItem.id` 是 `WorkspaceView`，它是「当前在哪个视图」
+ * 的全集，被 `TopBar` 反查标题、被 `page.tsx` 的路由状态消费。这两项并不改变视图
+ * （弹窗盖在哪个视图上都成立），塞进 `WorkspaceView` 会让「当前视图」多出两个
+ * 永远到不了的值。它们只需要「标签 + 图标 + 开哪个弹窗」三件事。
+ */
+export interface OverlayNavItem {
+  overlay: OverlayEntryId;
+  label: string;
+  icon: React.ReactNode;
+}
+
+/**
+ * 侧栏里紧跟「流程」之后的两项：模型适配 / 模式契约。
+ *
+ * 为什么放这里而不是工坊顶栏：工坊是**项目内**视图（顶部标签栏那四个之一），
+ * 而这两个入口读写的是全局注册表（模式契约 = 每种模式有哪些统一输入 / 输出；
+ * 模型适配 = 每个远端模型 × 每个模式的字段映射），与当前项目无关。挂在项目内
+ * 视图上会让人以为「换了项目就得重配一遍」。
+ *
+ * 「流程」是它们的近邻而非任意位置：契约口清单是工作流库配落点的依据、适配器是
+ * 远端模型的字段映射，两者都服务工作流这条链路。
+ */
+export const OVERLAY_NAV_ITEMS: OverlayNavItem[] = [
+  {
+    overlay: "model-adapters",
+    label: "模型适配",
+    /* 与「模型」那项（`Box`）刻意不同：一个管模型库本身，一个管远端接口的字段映射。 */
+    icon: <Cable size={22} strokeWidth={1.8} />,
+  },
+  {
+    overlay: "mode-contract",
+    label: "模式契约",
+    /* 与工作流库页头那枚「模式契约」按钮同图标（同一件事在两处出现时认得出是同一件）。 */
+    icon: <Puzzle size={22} strokeWidth={1.8} />,
+  },
+];
 
 /** 侧栏底部「项目」分组入口（不作为顶部项，也不作为项目页签）。 */
 export const PROJECTS_ENTRY: NavItem = {

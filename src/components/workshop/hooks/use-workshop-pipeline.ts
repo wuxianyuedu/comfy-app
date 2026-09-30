@@ -220,8 +220,6 @@ export interface WorkshopPipelineController {
   shotProgress: ShotProgressMap;
   isScriptEditorOpen: boolean;
   apiSettingsOpen: boolean;
-  /** 「模式契约」弹窗开关（与 apiSettingsOpen 并列的独立入口）。 */
-  modeContractOpen: boolean;
   /** 需要引起用户注意的失败/阻断文案（替代 alert，由视图决定怎么渲染）。 */
   notice: string | null;
 
@@ -244,8 +242,6 @@ export interface WorkshopPipelineController {
   saveScriptEditor: () => void;
   openApiSettings: () => void;
   closeApiSettings: () => void;
-  openModeContract: () => void;
-  closeModeContract: () => void;
   handleApiChannelsSaved: (channels: ApiChannelsView) => void;
   dismissNotice: () => void;
   /** 写一条用户可见的提示（错误 / 门禁 / 未生效警告）：stage 组件内部的
@@ -351,8 +347,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     null,
   );
   const [apiSettingsOpen, setApiSettingsOpen] = React.useState(false);
-  /* 模式契约是与模型适配并列的独立界面（ISSUE #597）：两个开关、两个弹窗。 */
-  const [modeContractOpen, setModeContractOpen] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
 
   // ── 提取会话收归 controller：切页签卸载只丢 stage 组件，此处常驻 ──
@@ -629,14 +623,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     () => setApiSettingsOpen(false),
     [],
   );
-  const openModeContract = React.useCallback(
-    () => setModeContractOpen(true),
-    [],
-  );
-  const closeModeContract = React.useCallback(
-    () => setModeContractOpen(false),
-    [],
-  );
 
   const handleApiChannelsSaved = React.useCallback(
     (channels: ApiChannelsView) => {
@@ -690,7 +676,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     shotProgress: generation.shotProgress,
     isScriptEditorOpen,
     apiSettingsOpen,
-    modeContractOpen,
     notice,
 
     characterExtract,
@@ -707,8 +692,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     saveScriptEditor,
     openApiSettings,
     closeApiSettings,
-    openModeContract,
-    closeModeContract,
     handleApiChannelsSaved,
     dismissNotice,
     showNotice,

@@ -88,7 +88,6 @@ interface WorkshopAsideProps {
   videoWorkflowId: string;
   onVideoWorkflowChange: (value: string) => void;
   apiChannels: ApiChannelsView | null;
-  onOpenApiSettings: () => void;
   characterCount: number;
   imageDoneCount: number;
   clipDoneCount: number;
@@ -103,7 +102,6 @@ export function WorkshopAside({
   videoWorkflowId,
   onVideoWorkflowChange,
   apiChannels,
-  onOpenApiSettings,
   characterCount,
   imageDoneCount,
   clipDoneCount,
@@ -194,14 +192,6 @@ export function WorkshopAside({
           value={videoWorkflowId}
           onChange={onVideoWorkflowChange}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onOpenApiSettings}
-          className="text-muted-foreground bg-subtle hover:bg-surface-2 mt-3 w-full rounded-lg py-2.5 text-xs"
-        >
-          配置模型适配（远端生图 / 视频）
-        </Button>
       </div>
 
       {/* Resource library */}
