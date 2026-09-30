@@ -1,4 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+/* 分类清单的唯一出处（与设置页开关、来源下拉同一份）。e2e import 源码走相对路径，
+ * 与 `theme-token-consumers.spec.ts` 同一写法。 */
+import { LOG_CATEGORY_FILTERS } from "../src/components/studio/logs/log-types";
 
 /**
  * 关键链路 E2E（ISSUE #317）：把「登录 → 工作区 → 工作流库执行 → 工作台概览」
@@ -1096,38 +1099,48 @@ test.describe("应用页签与全屏视图 @critical", () => {
         .toBeGreaterThanOrEqual(3);
 
       /* 「各分类之和 = 全部来源」：**守恒**。多加一类来源却忘了给它建桶时，
-       * 这条会红——用户报的「有的日志只在全部页签才显示」正是那个状态。
+       * 这条要当场红 —— 用户报的「有的日志只在全部页签才显示」正是那个状态。
        *
-       * 数字读的是每项里的 `sr-only` 纯文本摘要（`N 条 · 信息 x · 警告 y ·
-       * 错误 z`）而不是自绘的四列：后者是视觉产物，列的位置随样式变，读它等于
-       * 把用例绑在排版上。 */
-      const summaryOf = async (label: string) =>
-        page
-          .getByRole("option", { name: new RegExp(`^${label} \\d`) })
-          .evaluate((el) => {
-            /* 选项里的 `sr-only` 有好几处（四列各自的「N 警告」也在其中），
-             * 只有那个**以数字开头**的才是整行的纯文本摘要。 */
-            const nodes = Array.from(el.querySelectorAll(".sr-only"));
-            const summary = nodes
-              .map((n) => n.textContent?.trim() ?? "")
-              .find((t) => /^\d+ 条/.test(t));
-            return Number(/^(\d+) 条/.exec(summary ?? "")?.[1] ?? "0");
-          });
+       * 数字读每项里的 `sr-only` 纯文本摘要（`N 条 · 信息 x · 警告 y · 错误 z`），
+       * 不读自绘的四列：后者是视觉产物，列的位置随样式变，读它等于把用例绑在排版上。
+       *
+       * ⚠️ 档位清单**从下拉自己的渲染结果里枚举**，用例里不再抄第二份。此前这里
+       * 写死五档，#1286 给面板接入两档壳侧来源（shell / shell-launch）之后就变成
+       * 结构性不可能通过（实测 3336 ≠ 5000，ISSUE #1303）—— 而抄一份清单恰恰让这条
+       * 断言失去了它唯一的用途：新增来源忘了建桶时变红，而不是先把自己弄红。 */
+      const origins = await page.getByRole("option").evaluateAll((els) =>
+        els.map((el) => {
+          /* 整行文本开头即「档位名 + 数字」（后面才是四列与 sr-only 摘要），
+           * 取到第一个数字之前就是档位名。 */
+          const label =
+            /^(.*?)\s*\d/.exec(el.textContent?.trim() ?? "")?.[1]?.trim() ?? "";
+          /* 选项里的 `sr-only` 有好几处（四列各自的「N 警告」也在其中），
+           * 只有那个**以数字开头**的才是整行的纯文本摘要。 */
+          const summary = Array.from(el.querySelectorAll(".sr-only"))
+            .map((n) => n.textContent?.trim() ?? "")
+            .find((t) => /^\d+ 条/.test(t));
+          return {
+            label,
+            count: Number(/^(\d+) 条/.exec(summary ?? "")?.[1] ?? "0"),
+          };
+        }),
+      );
 
-      const total = await summaryOf("全部来源");
+      const total = origins.find((o) => o.label === "全部来源")?.count ?? 0;
       expect(total).toBeGreaterThan(5);
-      const buckets = [
-        "应用运行",
-        "应用服务",
-        "启动",
-        "启动器",
-        "控制台 / 全局错误",
-      ];
-      let sum = 0;
-      for (const label of buckets) sum += await summaryOf(label);
-      expect(sum).toBe(total);
-      /* 那批无文件来源的行确实有自己的计数（不是 0，也不只计入「全部来源」）。 */
-      expect(await summaryOf("控制台 / 全局错误")).toBeGreaterThanOrEqual(3);
+      const buckets = origins.filter((o) => o.label !== "全部来源");
+      /* 档位数必须等于应用那份分类清单的长度（唯一出处 `LOG_CATEGORY_FILTERS`）：
+       * 少一档 = 有来源没建桶，多一档 = 下拉里冒出不属于任何分类的档位。 */
+      expect(buckets.map((o) => o.label)).toHaveLength(
+        LOG_CATEGORY_FILTERS.length,
+      );
+      expect(buckets.reduce((acc, o) => acc + o.count, 0)).toBe(total);
+      /* 那批无文件来源的行确实有自己的计数（不是 0，也不只计入「全部来源」）。
+       * 这里按名取**一个**桶是刻意的：它守的是「这一类有没有自己的桶」，不是清单本身；
+       * 名字若被改，这一条会红并直接指到那个桶，不需要维护第二份档位表。 */
+      expect(
+        origins.find((o) => o.label === "控制台 / 全局错误")?.count ?? 0,
+      ).toBeGreaterThanOrEqual(3);
 
       /* 切过去能看到那批行（切来源会回到第 1 页，窗口重取），且文件来源的行
        * 不在里面。 */
