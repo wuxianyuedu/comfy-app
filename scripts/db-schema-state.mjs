@@ -20,6 +20,7 @@ import { DatabaseSync } from "node:sqlite";
 import { echoCommandLine } from "./launcher-core/command-echo.mjs";
 import {
   canAutoApply,
+  describeRiskyChanges,
   pendingStatements,
   pushSchema,
   riskyStatements,
@@ -321,10 +322,17 @@ export function ensureSchemaCurrent(root, options = {}) {
       for (const statement of pending) forward(`  ${statement}\n`);
       forward("\n");
     }
+    if (pending.length === 0) {
+      return notSynced("没能从 drizzle 的输出里认出待执行的语句");
+    }
+    /* detail 里把「哪个表哪列会丢」**完整列出**（经状态文件 → /api/schema
+     * 一路透传到 toast 与确认弹窗）：用户要做「丢不丢得起」的决定，只给
+     * 条数不给清单等于让人闭眼确认。控制台那侧已经有逐条原文（上面的
+     * forward），detail 这侧给同一批语句的人话版。 */
+    const described = describeRiskyChanges(pending);
+    const listing = described.length > 0 ? `：${described.join("；")}` : "";
     return notSynced(
-      pending.length === 0
-        ? "没能从 drizzle 的输出里认出待执行的语句"
-        : `含「会丢数据」的语句 ${riskyStatements(pending).length} 条（删列 / 重建表），启动链路不替你做这个决定`,
+      `含「会丢数据」的语句 ${riskyStatements(pending).length} 条（删列 / 重建表）${listing}，启动链路不替你做这个决定`,
     );
   }
 
