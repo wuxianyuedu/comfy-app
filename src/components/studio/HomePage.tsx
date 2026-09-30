@@ -13,6 +13,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { AuroraGlow } from "~/components/ui/aurora-background";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { LocalComputeCard } from "./LocalComputeCard";
 import { type WorkspaceView } from "./NavItems";
 
 /* ── 首页 —— Updream 风全屏仪表盘（对齐 Ardot） ─
@@ -26,7 +27,8 @@ import { type WorkspaceView } from "./NavItems";
   │ 侧  │  标题：灵感从这里开始!                  │
   │ 栏  │  输入框 + 工具栏                         │
   │    │  快捷动作药丸                      │
-  │(72│  最近项目栅格                    │
+  │(72│  本机算力卡（在线 / 显存 / 内存）      │
+  │px)│  最近项目栅格                    │
   │px)│                                          │
   │    │  [极光光斑在所有内容之后]        │
   └────┴──────────────────────────────────────────┘
@@ -222,6 +224,11 @@ export function HomePage({
                   </div>
                 </Button>
               ))}
+            </div>
+
+            {/* ── 本机算力（后端在线状态 + 显存/内存占用） ── */}
+            <div className="mt-8">
+              <LocalComputeCard />
             </div>
 
             {/* ── Recent Projects ── */}

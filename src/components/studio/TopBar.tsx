@@ -49,7 +49,7 @@ export interface TopBarProps {
  * 图标档下它只剩一个字母，展开档下用户早就知道自己开的是什么应用；而工具条里
  * 图标与文字之间恰好空着一个槽位（右侧的搜索 / 消息 / 菜单靠 `ml-auto` 顶到
  * 最右），标题正好补上——**应用全局只有这一行顶栏**（首页与其余视图共用 `AppShell`，
- * 项目页签的画布 / 工坊 / 资源库 / 产出 / 成片走 `ProjectTabBar` 高亮，见 `ProjectTabBar`）。
+ * 项目页签的主页 / 画布 / 工坊 / 资源库 / 产出 / 成片走 `ProjectTabBar` 高亮，见 `ProjectTabBar`）。
  * 只是那个名称行也不白占：顶部省下约 3.5rem 的纵向空间。
  */
 export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {

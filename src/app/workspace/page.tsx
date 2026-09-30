@@ -55,6 +55,15 @@ const ModelLibrary = dynamic(
   () => import("~/components/studio").then((mod) => mod.ModelLibrary),
   { ssr: false },
 );
+/* 项目主页：进入项目后的落点。懒加载 —— 它与画布 / 工坊一样只在进项目后需要，
+ * 放在应用首页的初始包里没有收益。 */
+const ProjectHomePage = dynamic(
+  () =>
+    import("~/components/studio/project-home").then(
+      (mod) => mod.ProjectHomePage,
+    ),
+  { ssr: false },
+);
 const HistoryList = dynamic(
   () => import("~/components/studio").then((mod) => mod.HistoryList),
   { ssr: false },
@@ -99,6 +108,7 @@ const WS_VIEW_KEY = "comfyapp:workspace-view-v1";
 
 const WORKSPACE_VIEWS: WorkspaceView[] = [
   "home",
+  "project",
   "canvas",
   "models",
   "works",
@@ -270,16 +280,23 @@ export default function WorkspacePage() {
   const handleNewProject = useCallback(() => {
     // 统一「新建项目」入口：创建一个真实的 proj_* 项目（落库 + 设为活跃），
     // 画布/工坊/成片后续都挂在这个项目上（Phase 1 先立画布为脊柱）。
+    // 落点是**项目主页**：新项目还没有任何内容，直接进画布是一张空网
+    //（进去之后仍然只能得到「先回主页看看项目要干什么」）；主页给出
+    // 状态与「AI 自主成片」这条主动作，是更合适的起步位置。
     createProject();
     refreshActiveProject();
-    navigateTo("canvas");
+    navigateTo("project");
   }, [navigateTo, refreshActiveProject]);
 
-  // 打开一个画布项目 —— 设为活跃并跳到画布视图。
+  /* 打开一个项目 —— 设为活跃并落到**项目主页**。
+   *
+   * 此前落画布，于是「一进项目就是一张无限画布」，用户看不到这个项目做到哪了
+   *（画布只表达节点图，不表达阶段 / 素材 / 成片）。主页是项目级视图的入口，
+   * 想去画布再从页签切一步。 */
   const handleOpenCanvasProject = useCallback(
     (id: string) => {
       setActive(id);
-      navigateTo("canvas");
+      navigateTo("project");
     },
     [navigateTo],
   );
@@ -302,10 +319,10 @@ export default function WorkspacePage() {
   const handleOpenProject = useCallback(
     (id: string) => {
       if (id === "new") {
-        // 统一新建项目：创建真实 proj_* 并进入画布（与 handleNewProject 一致）。
+        // 统一新建项目：创建真实 proj_* 并进入项目主页（与 handleNewProject 一致）。
         createProject();
         refreshActiveProject();
-        navigateTo("canvas");
+        navigateTo("project");
       } else {
         // 真实作品：跳转作品详情页（溯源 + 执行日志）
         router.push(`/create/${id}`);
@@ -333,7 +350,7 @@ export default function WorkspacePage() {
   // 其它模式切换会反复装卸 console 包装（makeLogger 双重嵌套），是日志观察者
   // 自身报错的结构性诱因（LogProvider Console Error）。
   const renderCenter = () => {
-    // 项目优先闸门：进入项目界面（画布 / 工坊 / 资源库 / 产出 / 成片）前必须先有一个活跃项目。
+    // 项目优先闸门：进入项目界面（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）前必须先有一个活跃项目。
     if (isProjectTab(viewMode) && !activeProjectId) {
       return (
         <ProjectGate
@@ -343,6 +360,17 @@ export default function WorkspacePage() {
       );
     }
     switch (viewMode) {
+      case "project":
+        return (
+          <ProjectHomePage
+            projectName={
+              recentProjects.find((p) => p.id === activeProjectId)?.name ??
+              "未命名项目"
+            }
+            onNavigate={handleNavSelect}
+          />
+        );
+
       case "works":
         return (
           <WorksGallery

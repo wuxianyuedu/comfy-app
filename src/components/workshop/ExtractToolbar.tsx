@@ -59,7 +59,7 @@ function logBadgeLabel(kind: ExtractLogEntry["kind"]): string {
 interface ExtractToolbarProps {
   /** 区块标题，如「从剧本提取角色」 */
   title: string;
-  /** 完整下拉选项值（tool | local::<model> | remote::<model>） */
+  /** 完整下拉选项值（local::<model> | remote::<model>） */
   channelValue: string;
   onChannelValueChange: (value: string) => void;
   onExtract: () => void;

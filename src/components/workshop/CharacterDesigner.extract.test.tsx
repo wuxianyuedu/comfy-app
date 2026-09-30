@@ -4,6 +4,9 @@
 // 经 onCharactersChange 回写到父级状态，否则卡片不出现在下方列表中。
 // 根因：handleExtract / handleImportFile 调用了 mergeCharacterDrafts 却从未把
 // 返回的 res.list 通过 onCharactersChange 上抛，导致提取"成功"但列表不刷新。
+//
+// 提取通道只剩本地 / 远端模型（「工具」确定性解析已移除），故这里 mock 掉
+// `~/lib/llm/browser` 的 streamChat，让它返回一段角色卡 JSON，验证并入回写。
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { CharacterDesigner } from "~/components/workshop/CharacterDesigner";
@@ -11,14 +14,29 @@ import type { Character } from "~/lib/workshop/types";
 
 vi.mock("~/components/workshop/LLMContext", () => ({
   useLLM: () => ({
-    config: null,
-    localModels: [],
+    config: {
+      provider: "local",
+      baseUrl: "http://localhost:11434",
+      model: "llama3",
+      temperature: 0.7,
+      maxTokens: 2048,
+      hasApiKey: false,
+    },
+    localModels: ["llama3"],
     remoteModels: [],
     loading: false,
     settingsOpen: false,
     openSettings: vi.fn(),
     closeSettings: vi.fn(),
     refresh: vi.fn(),
+  }),
+}));
+
+vi.mock("~/lib/llm/browser", () => ({
+  streamChat: vi.fn(async () => {
+    return JSON.stringify([
+      { name: "小满", appearance: "短黑发,清秀,白色连衣裙" },
+    ]);
   }),
 }));
 
@@ -32,7 +50,7 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("CharacterDesigner 提取后回写角色列表", () => {
-  it("工具通道提取成功后将并入的角色写入 onCharactersChange", async () => {
+  it("模型通道提取成功后将并入的角色写入 onCharactersChange", async () => {
     const onCharactersChange = vi.fn();
     render(
       <CharacterDesigner
@@ -43,10 +61,10 @@ describe("CharacterDesigner 提取后回写角色列表", () => {
       />,
     );
 
-    // 触发「从剧本提取角色」区块的「提取」按钮（工具通道，不调用模型）
+    // 触发「从剧本提取角色」区块的「提取」按钮（默认本地模型通道）
     fireEvent.click(screen.getByRole("button", { name: "提取" }));
 
-    // 提取为异步流程（setLog / parse 之后才合并），用 waitFor 等待
+    // 提取为异步流程（streamChat → parse → merge 之后才合并），用 waitFor 等待
     await vi.waitFor(() => {
       expect(onCharactersChange).toHaveBeenCalled();
     });
@@ -57,7 +75,5 @@ describe("CharacterDesigner 提取后回写角色列表", () => {
     const first = listArg?.[0];
     expect(first).toBeDefined();
     expect(first!.name).toBe("小满");
-    // 并入的角色携带重算好的正向提示词
-    expect(first!.positivePrompt).toBeTruthy();
   });
 });

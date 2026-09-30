@@ -9,6 +9,10 @@ import { useLogPanel } from "./logs/LogProvider";
 import { MessageCenterButton } from "~/components/message-center/MessageCenterButton";
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
+import {
+  STALE_RESOURCE_NOTE,
+  selectVisibleResourceMetrics,
+} from "./comfy-resource-metrics";
 import { useDevServerStatus } from "./hooks/use-dev-server-status";
 import {
   schemaSyncNotice,
@@ -283,39 +287,21 @@ export function BrowserStatusBar() {
         className={`flex w-[500px] shrink-0 items-center gap-2.5 transition-opacity ${
           stale ? "opacity-50" : "opacity-100"
         }`}
-        title={stale ? "ComfyUI 指标暂时读不到，显示的是上一次数据" : undefined}
+        title={stale ? STALE_RESOURCE_NOTE : undefined}
       >
-        {/* 显存（nvidia-smi 物理专用显存口径） */}
-        {smiVram && (
-          <UsageItem
-            label="显存"
-            title="nvidia-smi 物理专用显存（与任务管理器「专用 GPU 内存」同口径）"
-            used={smiVram.used}
-            total={smiVram.total}
-            pct={smiVram.pct}
-          />
-        )}
-
-        {/* 显存（ComfyUI CUDA 逻辑口径） */}
-        {cudaVram && (
-          <UsageItem
-            label="显存·ComfyUI"
-            title="ComfyUI 上报的 CUDA 口径（显存剩余可用/总量，已用 = 总量 − 剩用）"
-            used={cudaVram.used}
-            total={cudaVram.total}
-            pct={cudaVram.pct}
-          />
-        )}
-
-        {/* 内存占用 */}
-        {ram && (
-          <UsageItem
-            label="内存"
-            title="系统内存占用"
-            used={ram.used}
-            total={ram.total}
-            pct={ram.pct}
-          />
+        {/* 三档资源的标签、口径 title 与「缺值整档隐藏」的判据都在
+           `comfy-resource-metrics`（首页算力卡读同一份），这里只负责行内排版。 */}
+        {selectVisibleResourceMetrics({ cudaVram, smiVram, ram }).map(
+          ({ descriptor, bar }) => (
+            <UsageItem
+              key={descriptor.key}
+              label={descriptor.label}
+              title={descriptor.title}
+              used={bar.used}
+              total={bar.total}
+              pct={bar.pct}
+            />
+          ),
         )}
 
         {/* 降级提示 */}

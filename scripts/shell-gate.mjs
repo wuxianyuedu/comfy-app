@@ -24,6 +24,16 @@
  * 提交拦下来（`launcher-core/splash-assets.mjs` 里「内容没变就不写盘」就是在护这个数）。
  * 只有当**暂存区里就是本次的壳改动**时，这个比较才指向提交者自己。
  *
+ * **合并提交（`merge` 进行中）**：`git diff --cached` 在合并态下报的是「相对第一父
+ * 的整份内容差」，于是被合进来的那一侧（如 master 上早已编好、发过版的
+ * `splash-assets/`）会被算成「本次改了壳」—— 表现是本地根本编不出壳（Linux 容器 /
+ * 非 Windows 机器）时，一个纯前端 PR 只因拉了 master 就被永久拦死。
+ *
+ * 判据是「这次合并自己有没有创作壳内容」：某个壳输入**同时**不同于第一父（HEAD）
+ * 与第二父（`MERGE_HEAD`）才算法定改动。仅与第一父不同、而与第二父逐字节相同 = 只是
+ * 原样采纳了对方那侧（`git merge` 自动合并的常态），不是本次改动，不触发重编判据。
+ * 冲突解决若真动过壳文件，它两侧都不同，照样进清单 —— 判据不放松。
+ *
  * 用法：`node scripts/shell-gate.mjs`（由 `.githooks/pre-commit` 的 D 组调用）
  *      `node scripts/shell-gate.mjs --staged a b c`（手工指定清单，调试用）
  */
@@ -53,6 +63,36 @@ export function stagedFiles() {
   });
   if (out.status !== 0) return [];
   return out.stdout.split(/\r?\n/).filter(Boolean);
+}
+
+/**
+ * 合并态下，过滤掉「只是原样采纳了对方那侧」的壳输入 —— 它们不该触发重编判据。
+ *
+ * `MERGE_HEAD` 存在即正处于合并提交（`repoRoot/.git/MERGE_HEAD`）。此时
+ * `git diff --cached --name-only` 列出的是「相对第一父（HEAD）的整份内容差」，其中
+ * 被合进来的那侧（如 master 上早已编好发版的 `splash-assets/`）也在内。判据：某文件
+ * **同时**不同于第一父与第二父，才算法定改动；只与第一父不同、与第二父逐字节相同
+ * = 自动合并原样采纳，不是本次创作。
+ *
+ * @param {string[]} staged `git diff --cached --name-only` 的结果。
+ * @param {string} [repoRoot] 仓库根（默认本仓库；单测传临时仓库）。
+ * @returns {string[]} 过滤后的清单；非合并态原样返回。
+ */
+export function dropAdoptedShellInputs(staged, repoRoot = ROOT) {
+  const mergeHeadPath = path.join(repoRoot, ".git", "MERGE_HEAD");
+  if (!fs.existsSync(mergeHeadPath)) return staged;
+  const mergeHead = fs.readFileSync(mergeHeadPath, "utf8").trim();
+  if (!mergeHead) return staged;
+  return staged.filter((file) => {
+    if (!SHELL_INPUT_RE.test(file)) return true;
+    // 与第二父（被合进来的那侧）一致 ⇒ 只是采纳，不算本次改动。
+    const againstMergeHead = spawnSync(
+      "git",
+      ["-C", repoRoot, "diff", "--quiet", mergeHead, "--", file],
+      { cwd: repoRoot },
+    );
+    return againstMergeHead.status !== 0;
+  });
 }
 
 /**
@@ -108,7 +148,11 @@ export function freshnessProblem() {
 function main() {
   const argv = process.argv.slice(2);
   const stagedIdx = argv.indexOf("--staged");
-  const staged = stagedIdx >= 0 ? argv.slice(stagedIdx + 1) : stagedFiles();
+  // 显式清单（`--staged a b c`）是调试 / 覆写通道，调用方说了算，不过采纳过滤；
+  // 只有从暂存区自动推导时，才剔除「原样采纳对方那侧」的壳文件
+  // （见 dropAdoptedShellInputs）—— 否则纯前端 PR 只要拉了 master 就被永久拦住。
+  const staged =
+    stagedIdx >= 0 ? argv.slice(stagedIdx + 1) : dropAdoptedShellInputs(stagedFiles());
   const { touchesShell, needsCargoTest } = decide(staged);
 
   if (!touchesShell) {
