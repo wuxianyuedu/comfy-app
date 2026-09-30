@@ -1360,11 +1360,20 @@ SIGKILL 落在写文件窗口那半行），`pnpm exec tsc --noEmit --incrementa
 
 ### 没做的事
 
-- **WS 那条路径同样不认 `execution_cached`**：`protocol-adapter.ts` 的 `classify()` 只认
-  `executing` / `progress` / `execution_success` / `execution_error`，这一帧落到 `other` 被丢掉。
-  但**本机构造不出这一帧的形状与出现条件**（raw 任务的进度实测走 cli stdout 不走 WS），而 WS 那份
-  历史上是「一帧带 `data.nodes[]` 列表」的形态、与 cli 的逐节点事件不同形。
-  照 #1202 的教训（只接一条等于没修）这条**必须补**，但要先取证再动代码，所以另开 issue 记账，
-  不混进本刀、也不凭代码形状写断言。
+- **本刀提交时写过一句「WS 那半也必须补（照 #1202 的教训，只接一条等于没修）」—— 那句被本机读数否掉了，
+  订正在这里**。它当时是按 `protocol-adapter.classify()` 的代码形状推的：那一支确实不认
+  `execution_cached`，会落到 `other` 丢掉。但同一批复演的 trace 给出的是**另一件事**：
+  按 kind 计数 `cli`=80、`history`=1、**`ws`=0**（`WS 消息` / `WS 消息无归属任务` /
+  `WS 消息非合法 JSON` 三个出口全 0），而派发就绪门控要求 WS 是 OPEN 的（门控过了才会提交）
+  ⇒ 带 `prompt_id` 的执行帧（含 `execution_cached`）**根本没落到 `handleMessage`**。
+  合理解释与 §13-3C 是同一件事的两面：ComfyUI 把执行事件只发给排队那个 client，而排队的是 comfy-cli
+  自己那条连接。⇒ #1278 在 WS 侧**没有可修的对象**，不是「漏接了一帧」。
+  **这条读数的边界要说清**：`handleMessage` 那四个 `trace("ws", …)` 出口里，只有「非合法 JSON」
+  （278 行）在 `if (!promptId) return;` 这一跳**之前**，其余三条（无归属任务 292 / WS 消息 296 /
+  执行错误 423）都在之后。所以 kind=`ws` 全 0 同时意味着「连一帧解析失败的原文都没来」，
+  唯一覆盖不到的是「**合法 JSON 但不带 `prompt_id`**」那一类（`status` 就属于它）——
+  能断言的是「带 `prompt_id` 的执行帧一条都没来」。
+  这条读数顺带问出一个更该记账的问题（**executor-ws 那套按节点分支现在是否已零消费**），
+  开成 ISSUE #1315，取证清单在那个 issue 里；结论拿到之前不动 `executor-ws.ts`。
 - 缓存轮的「这一轮省了多少时间」没做（需要 ComfyUI 侧的耗时口径，本刀只有 `claimedAt`→`finishedAt`
   这一格，不足以拆出「重算 vs 取缓存」）。
