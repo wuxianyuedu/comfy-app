@@ -183,9 +183,11 @@ export default defineConfig({
         "src/components/ui/use-reentrancy-lock.ts",
         "src/components/ui/use-refresh-ticket.ts",
         "src/components/ui/use-busy-action.ts",
-        /* P82 的合规出口（悬停提示收成一处，规范 16 §16.2.3 / §12.18 补地基）。
-         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        /* P82 的合规出口（悬停提示收成一处，规范 16 §16.2.3 / §12.18 补地基）
+         * 与它脚下的 `tooltip.tsx`（ISSUE #1295 给它加了视口安全边距，
+         * 见规范 §16.8 台账）。与上面那批同款：**两处同批改**。 */
         "src/components/ui/hint.tsx",
+        "src/components/ui/tooltip.tsx",
         /* `ui/toggle-group` 的选中档三层是本仓库的定制（规范 16 §16.8），
          * 有用例钉住就得进门槛。同款 **两处同批改**。 */
         "src/components/ui/toggle-group.tsx",
@@ -196,6 +198,17 @@ export default defineConfig({
          *     存在性判据），用例自带 `@vitest-environment jsdom`。 */
         "src/lib/layout-budget.ts",
         "src/components/ui/use-narrow-nav.ts",
+        /* 悬浮元素「拖到哪、下次还在哪」这一笔账的两个出口（ISSUE #1295 /
+         * 规范 16 §16.2.4.72）：
+         *   · `use-draggable-position` 是拖动 + 位置记忆 + 视口夹取，
+         *     用例覆盖到「阈值内算点击 / 超阈值算拖动」「拖出视口被夹住」
+         *     「窗口缩小后收紧」「只接主键」；
+         *   · `use-viewport-size` 是「视口多大」的唯一读数，用例覆盖到
+         *     「首帧 `null`」「resize 跟随」「取值未变不换引用」。
+         * 同款 **两处同批改**（`coverage.include` + `thresholds`）——
+         * 只写门槛不进 `include` 会让门槛静默失效。 */
+        "src/components/ui/use-draggable-position.ts",
+        "src/components/ui/use-viewport-size.ts",
         /* API 路由 handler（体检清单 ⑦ 的第一批：闸门与三态契约类）。这一层此前
          * **整层不在覆盖率面上** —— 既不在 `src/lib` 也不在 `src/server` 的通配里，
          * 于是路由的鉴权 / 路径包含 / 状态码契约坏了没有任何数字会动。
@@ -507,6 +520,22 @@ export default defineConfig({
           functions: 100,
           statements: 95,
           branches: 85,
+        },
+        /* ISSUE #1295 的两个出口。按 §18.6 取**实测值向下取整到 5 的倍数**：
+         * `use-draggable-position` 实测 93.9/75.6/100/100，未覆盖的是
+         *「元素始终为 null」那条兜底（真实调用里元素一定会挂上）与
+         * `viewportRef` 的空值回退；`use-viewport-size` 实测满档。 */
+        "src/components/ui/use-draggable-position.ts": {
+          lines: 90,
+          functions: 100,
+          statements: 90,
+          branches: 75,
+        },
+        "src/components/ui/use-viewport-size.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         /* 「标签 + 控件 + 校验错误」：ARIA 关联是本条账的核心，用例逐条钉
          * （htmlFor/id、aria-invalid、aria-describedby、空串错误、
@@ -1035,6 +1064,15 @@ export default defineConfig({
          * 外加「render 接管后 onClick 与 disabled 不丢」「插锚点时提示挂在
          * 锚点上（禁用按钮的说明仍要弹得出）」两条形态回归。 */
         "src/components/ui/hint.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* `ui/tooltip` 本轮新进面：两条判据（默认留出安全边距、调用处可按容器
+         * 改档）。实测满档 —— 浮层的定位输出是引擎的事，用例只锁「档位来源」，
+         * 不去断言 `style.top` 这类派生像素值（规范 16 §16.2.3.1）。 */
+        "src/components/ui/tooltip.tsx": {
           lines: 100,
           functions: 100,
           statements: 100,
