@@ -75,16 +75,26 @@ export function describeUnhandledRejection(reason: unknown): string {
  *
  * - `dev` / `launcher`：启动链路（dev-launcher.log / dev-launcher-stderr.log，
  *   后者是壳写下的诊断与 `[orchestrator] …` 转发）；
+ * - `shell-launch` / `shell`：壳侧启动链路（log/launcher/shell-launch.log /
+ *   log/shell/shell.log，双击启动的最早一段现场——启动报告、壳的诊断——只
+ *   在这两份里，应用运行后此前完全看不到）；
  * - `app`：**应用服务自身输出**（Next dev server 的 stdout / stderr 转录，
  *   见 `src/lib/capture-streams.server.ts`）——首屏编译错误、Turbopack FATAL、
  *   未捕获的服务端异常都在这里，此前不在任何被轮询的文件里，导致「应用服务
  *   没起来」时面板一片空白（ISSUE #360）；
  * - `app-runtime`：应用运行期业务操作（见 src/lib/app-runtime-log.ts）。
  *
- * 四路的行都带写入时刻，合并后由 `mergeTimeline` 按时刻排序，因此到达顺序
+ * 各路的行都带写入时刻，合并后由 `mergeTimeline` 按时刻排序，因此到达顺序
  * 不影响面板的时间序（ISSUE #262）。
  */
-const POLL_SOURCES = ["launcher", "dev", "app", "app-runtime"] as const;
+const POLL_SOURCES = [
+  "launcher",
+  "shell-launch",
+  "shell",
+  "dev",
+  "app",
+  "app-runtime",
+] as const;
 type PollSource = (typeof POLL_SOURCES)[number];
 
 /** 轮询间隔：日志「实时感」与请求量的折中（对齐规范 07 §7.8 的增量轮询）。 */

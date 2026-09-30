@@ -36,7 +36,8 @@ export interface LogEntry {
   /** Where the log came from（console / tauri / system）。 */
   source: "console" | "tauri" | "system";
   /** 文件来源：dev-launcher / launcher / 应用服务输出 / app-runtime 的文件行带此标记。 */
-  origin?: "dev" | "launcher" | "app" | "app-runtime";
+  origin?:
+    "dev" | "launcher" | "app" | "app-runtime" | "shell" | "shell-launch";
   /** console 日志的调用位置（文件:行号） */
   location?: string;
   /**
@@ -95,6 +96,8 @@ export const LOG_CATEGORY_FILTERS: LogCategoryFilter[] = [
   "app",
   "dev",
   "launcher",
+  "shell-launch",
+  "shell",
   "console",
 ];
 

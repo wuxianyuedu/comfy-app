@@ -6,6 +6,7 @@ import path from "node:path";
 import { resolveSessionStart } from "~/lib/log/log-session-scope";
 import { fileMtimeMs } from "~/lib/log/log-session-scope.server";
 import { getServerBootId } from "~/lib/shell/dev-server-id";
+import { launchPaths } from "~/lib/shell/launch-diagnostics";
 import {
   DEV_LAUNCHER_CURRENT_SENTINEL,
   DEV_LAUNCHER_LOG,
@@ -17,6 +18,12 @@ import {
 
 const LAUNCHER_LOG_FILE = LAUNCHER_SHELL_LOG;
 const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;
+
+/* 壳侧启动链路的两份日志（壳自持 log/shell/shell.log + 壳侧编排链路
+ * log/launcher/shell-launch.log）。路径的唯一事实来源是 `launchPaths`——
+ * 它与 Rust 壳侧共用同一组路径常量（tests/launch-diagnostics-paths.test.ts
+ * 逐项核对），这里不再抄一份字面量。 */
+const SHELL_CHAIN_PATHS = launchPaths(process.cwd());
 
 /** 应用服务输出转录文件（本次进程）：惰性解析，取不到时退化为「文件不存在」。 */
 function panelCaptureLog(): string | null {
@@ -221,6 +228,18 @@ function resolveSourceFile(
   if (source === "app") {
     const file = panelCaptureLog();
     return file ? { file, resumable: true } : null;
+  }
+  /* 壳侧两路（shell = 壳自持日志；shell-launch = 壳侧编排链路）：双击启动的
+   * 最早一段现场（exe / 项目根 / 启动报告）只在这两份里，应用运行后面板此前
+   * 完全看不到。文件虽是**追加写、跨运行累积**，但**不能**按会话起点裁剪：
+   * 锚点（dev-launcher.log 的 mtime）晚于壳写下的头几行（启动报告在编排器被
+   * 拉起之前就落盘了），拿它裁会把「为什么起不来」的那几行误判成历史丢掉
+   * —— 与 launcher / dev 同口径（不裁），旧运行的行靠行内时间戳区分。 */
+  if (source === "shell") {
+    return { file: SHELL_CHAIN_PATHS.shellLog, resumable: false };
+  }
+  if (source === "shell-launch") {
+    return { file: SHELL_CHAIN_PATHS.shellLaunchLog, resumable: false };
   }
   /* 启动链路日志（launcher / dev-launcher）每次运行覆盖重建，天然只有本次
    * 内容，不需要会话起点；切片规则一致。 */

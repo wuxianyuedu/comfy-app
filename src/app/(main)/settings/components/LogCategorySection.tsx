@@ -27,6 +27,8 @@ const CATEGORY_HINT: Record<LogCategoryFilter, string> = {
   app: "应用服务自身输出（Next dev server 的 stdout/stderr 转录）",
   dev: "启动过程日志（dev-launcher）",
   launcher: "启动器日志（dev-launcher-stderr）",
+  "shell-launch": "壳侧编排链路日志（shell-launch，双击启动最早的现场）",
+  shell: "壳自持日志（shell.log，壳的诊断与编排器输出转发）",
   console: "浏览器 console 拦截 / Tauri 事件 / 全局未捕获错误",
 };
 
