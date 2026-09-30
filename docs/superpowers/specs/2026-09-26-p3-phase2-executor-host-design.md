@@ -1007,7 +1007,7 @@ issue 不关，改写成「等一次可归因的现场」，并把它需要的�
    入口 `scripts/standalone-runtime.mjs` 把 server 与宿主作为**同父兄弟**各起一棵树，
    `server.on("exit")` 直接调 `close()`，`close()` 里对宿主那棵树调 `reapTree(host.pid)`
    （走 `scripts/reap-process.mjs`，硬规则 3）。§17 的「同生死」是这条代码路径的口径名，
-   本次是把它读回代码确认的，不是沿用旧结论。
+   本次先把它读回代码确认，随后又跑了一次真机读数（见下面「补测的读数」那一节）。
 2. **反向不对称，所以搬过去是加脆性不是减脆性**。同一份入口里宿主退出只打一行
    `host exited`，**不降级、不重启**（§17 的签字理由：降级会让已写成 host 归属的行没人领）。
    把影片推进交给宿主之后，宿主自己退出的那类故障（解释器没配、模块加载期退出等）会让界面照常活着、
@@ -1015,6 +1015,44 @@ issue 不关，改写成「等一次可归因的现场」，并把它需要的�
 3. dev 侧那一格：Turbopack 改服务端模块是热重载、不是进程死亡，真重启/崩溃之后的续跑由
    §19 的 `resumeStalledFilms` 负责（代价 = 一个重启间隔内不推进）。所以 §11 当初想要的
    「扛过一次热重启」也已经在手。
+
+### 补测的读数（同日，把上面两条从代码路径变成现场）
+
+第 1、2 条当时依据的是读代码，这次各跑了一次真机现场（载荷 = `comfyapp-pkg-sim`，
+其中 `scripts/standalone-runtime.mjs` 与 `scripts/executor-host.mjs` 与 master `cmp` 逐字节相同）：
+
+```
+[standalone-runtime] boot pid=104948 server=128120 port=10077 appRoot=…\comfyapp-pkg-sim\static
+[standalone-runtime] executor mode=host
+[standalone-runtime] host pid=139224 out=…executor-host-stdout-2026-09-30-13-03-43.log …
+—— 只杀 server 那一棵树（taskkill /PID 128120 /T /F，exit 0）——
+[standalone-runtime] closing (server exited code=1 signal=null)
+[standalone-runtime] reap pid=139224 taskkill /PID 139224 /T /F（exit 0）
+```
+
+之后入口、server、宿主三个 pid 全部不在，入口自己以 exit 1 退出 —— 第 1 条成立：
+**server 一退，宿主就被整树收走**，所以「编排搬进宿主 ⇒ Next 死了还能继续出片」在安装包里拿不到。
+（日志里没有 `reap pid=128120` 那一行是对的：`close()` 只在 child「还活着」时补刀，
+server 已经是退出态 —— 那条判据的作用就是不让每条正常路径都留一行假的 `reap FAILED`。）
+
+```
+[standalone-runtime] host pid=130772 …
+—— 只杀宿主那一棵树 ——
+[standalone-runtime] host exited code=1 signal=null （server 继续在跑；任务会留在队列，…）
+```
+
+`grep -c "^\[standalone-runtime\] host pid="` = **1**（没有第二个宿主被拉起来），
+入口 138180 与 server 123012 都还在，杀完之后 `/api/health` 仍回 `{"status":"ok","db":"up"}` ——
+第 2 条成立：**宿主退 = 只留一行日志、不降级也不重启**，所以把影片推进交给宿主是加脆性。
+
+**取数形状的一条说明（别再踩）**：这两条**没有**走 `app.exe`。先用
+`Start-Process app.exe -WorkingDirectory <安装目录>`（会话里已 `$env:COMFY_EXECUTOR='host'`）起过一次，
+入口日志给的是 `executor mode=inline` —— 那份 env 没到壳进程，而桌包里这个开关**只认壳继承的 env**
+（§3-D 那条口径），所以那一次跑的不是 host 拓扑、不作数。改成用载荷自己的 `node.exe` 直接起
+`static\scripts\standalone-runtime.mjs`（显式给 `PORT` 与 `COMFY_EXECUTOR`）就对了。
+本次要判的两条都住在入口这一段（两棵树的父子关系与回收），壳只是入口的父进程、不参与这两条判决，
+所以直接起入口测到的就是断言本身；**但「用户从桌面图标进去能不能把开关带进壳」这一格不是这里判的**，
+它仍是 §3-D 那条 env 继承口径，别拿这次读数去替它背书。
 
 ### 没做的事（逐格留档，别下一个人重算）
 
