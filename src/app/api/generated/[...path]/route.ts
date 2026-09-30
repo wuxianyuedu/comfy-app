@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "node:path";
 
 import { contentTypeForPath } from "~/lib/media/mime-ext";
+import { generatedRoot, isWithinGeneratedRoot } from "~/lib/media/output-paths";
 
 /**
  * /api/generated/[...path] — 任务产物文件流。
@@ -26,10 +27,15 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const root = path.resolve(process.cwd(), "public", "generated");
+  /* 产物根与「仍在根内」的判据来自 `~/lib/media/output-paths` —— 落盘侧
+   * （executor-finalize）、打开侧与删除侧都吃同一份定义；这一条曾经只在
+   * 本地内联拼一次，属于 §12.12 说的那类「一处改了另一处不知道」。 */
+  const root = generatedRoot();
   const abs = path.resolve(root, ...segments);
-  /* 路径穿越防护：解析后必须仍在 public/generated 内（含根本身相等拒绝）。 */
-  if (abs !== root && !abs.startsWith(root + path.sep)) {
+  /* 路径穿越防护：解析后必须仍在 public/generated 内。解析回根目录本身**不算越界**
+   * （判据放它过去），但它是个目录 → `readFile` 抛错 → 由下面的 catch 统一回 404，
+   * 而不是 500。 */
+  if (!isWithinGeneratedRoot(abs, root)) {
     return new Response("Forbidden", { status: 403 });
   }
 

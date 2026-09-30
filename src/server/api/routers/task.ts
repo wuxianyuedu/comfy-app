@@ -7,6 +7,9 @@ import {
   rateLimitedProcedure,
 } from "~/server/api/trpc";
 import { taskRepository } from "~/lib/core/repository";
+import { logger } from "~/lib/core/logger";
+import { errorMessage } from "~/lib/error-message";
+import { taskOutputDir } from "~/lib/media/output-paths";
 import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
 import { kindOf } from "~/lib/media/media-kind";
 
@@ -147,38 +150,31 @@ export const taskRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
       const fsPromises = await import("fs/promises");
-      const path = await import("path");
-      const baseDir = path.join(process.cwd(), "public", "generated");
-      const dir = task.projectId
-        ? path.join(baseDir, "projects", task.projectId, input.id)
-        : path.join(baseDir, input.id);
-      // 白名单：解析后的目录必须留在 public/generated 之下
-      const normalized = path.resolve(dir);
-      const normalizedBase = path.resolve(baseDir);
-      if (
-        normalized !== normalizedBase &&
-        !normalized.startsWith(normalizedBase + path.sep)
-      ) {
+      /* 目录由 `taskOutputDir()` 一处算：形状会让它落到产物根之外（例如客户端
+       * 生成的 projectId 写成 `../../x`）时返回 null → 这里按越界处置。
+       * 旧写法在本处内联拼路径 + 内联白名单，与 `delete` 那份已经分叉，见
+       * `~/lib/media/output-paths.ts` 的模块注释。 */
+      const dir = taskOutputDir(input.id, task.projectId);
+      if (!dir) {
+        logger.warn(
+          `[task.openFolder] 产物目录越界，已拒绝：taskId=${input.id} projectId=${task.projectId}`,
+        );
         throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
       }
       let exists = false;
       try {
-        const st = await fsPromises.stat(normalized);
+        const st = await fsPromises.stat(dir);
         exists = st.isDirectory();
       } catch {
         exists = false;
       }
       if (!exists) {
-        return {
-          opened: false,
-          error: "directory missing",
-          absolutePath: normalized,
-        };
+        return { opened: false, error: "directory missing", absolutePath: dir };
       }
       return {
         opened: true,
-        absolutePath: normalized,
-        comfyappUrl: "comfyapp://open?path=" + encodeURIComponent(normalized),
+        absolutePath: dir,
+        comfyappUrl: "comfyapp://open?path=" + encodeURIComponent(dir),
       };
     }),
 
@@ -212,24 +208,33 @@ export const taskRouter = createTRPCRouter({
       if (task?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
       }
-      // 磁盘上的图片文件也一并删掉。
       const fsPromises = await import("fs/promises");
-      const path = await import("path");
-      const publicRoot = path.resolve(process.cwd(), "public");
-      for (const img of task.images) {
-        const full = path.resolve(
-          publicRoot,
-          img.localPath.replace(/^\/+/, ""),
+      /* 产物目录整体删除，目录与落盘侧共用 `taskOutputDir()` 这一份定义。
+       *
+       * 旧写法在这里有两处各自拼错的拼接，而两条失败都被
+       * `.catch(() => undefined)` 吞掉（磁盘一直在涨、日志里一个字都没有）：
+       *  · 目录只拼 `public/generated/<taskId>`，而 project 任务的产物实际落在
+       *    `projects/<projectId>/<taskId>` 下 —— 在画布里删任务永远删不到目录；
+       *  · 又按 `TaskImage.localPath` 逐张 unlink，却把 `/api/generated/...`
+       *    解析成 `public/api/generated/...`（多了一段 `api`）→ 每次都是 ENOENT。
+       * 现在只留「删整个产物目录」这一条：落盘侧保证每张产物都在该目录内
+       * （同一个 segments 派生），逐张删反而可能碰目录之外的文件。
+       * 越界（id / projectId 形状会把结果甩出产物根）时只删库行并把原因落日志，
+       * 不允许把一个根外路径交给 `fs.rm(..., { recursive: true })`。 */
+      const dir = taskOutputDir(input.id, task.projectId);
+      if (!dir) {
+        logger.warn(
+          `[task.delete] 产物目录越界，只删库行不动磁盘：taskId=${input.id} projectId=${task.projectId}`,
         );
-        if (full !== publicRoot && !full.startsWith(publicRoot + path.sep)) {
-          continue;
-        }
-        fsPromises.unlink(full).catch(() => undefined);
+      } else {
+        fsPromises
+          .rm(dir, { recursive: true, force: true })
+          .catch((e: unknown) =>
+            logger.warn(
+              `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(e, String(e))}`,
+            ),
+          );
       }
-      const dir = path.join(process.cwd(), "public", "generated", input.id);
-      fsPromises
-        .rm(dir, { recursive: true, force: true })
-        .catch(() => undefined);
       await taskRepository.delete(input.id);
       return { ok: true };
     }),

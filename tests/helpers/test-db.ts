@@ -532,6 +532,14 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
   return getRow("task", id);
 }
 
+/**
+ * 种一条项目。两个易踩的坑在这里收掉：
+ *  · `nodes` / `edges` 在 schema 里是 `NOT NULL DEFAULT '[]'` —— 缺省给 `null`
+ *    会被 `insertInto` 原样写进去（`undefined` 才跳过），于是「按默认值种项目」
+ *    直接撞约束；
+ *  · 排序判据（`project.list` 按 `updatedAt` 倒序）用的是 `updatedAt`，
+ *    所以调用方传的日期必须落到那一列，否则传多少日期都是同一时刻、断言变成掷硬币。
+ */
 export function seedProject(
   _tdb: TestDb,
   input: {
@@ -544,15 +552,15 @@ export function seedProject(
   },
 ): Row {
   const id = input.id ?? `seed-proj-${++seedSeq}`;
-  const now = new Date().toISOString();
+  const at = input.updatedAt ?? new Date();
   insertInto("project", {
     id,
     userId: input.userId,
     name: input.name,
-    nodes: input.nodes ?? null,
-    edges: input.edges ?? null,
-    createdAt: input.updatedAt ?? new Date(),
-    updatedAt: now,
+    nodes: input.nodes ?? [],
+    edges: input.edges ?? [],
+    createdAt: at,
+    updatedAt: at,
   });
   return getRow("project", id);
 }

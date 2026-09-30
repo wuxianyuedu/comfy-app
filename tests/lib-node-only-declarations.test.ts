@@ -86,6 +86,14 @@ const PURE_NODE_HOSTS = [
   // 后续 PR 把 client / executor-history / executor-continuation 拆完后，
   // 本模块才能真正被纯 Node 宿主加载。
   "src/lib/comfyui/executor-finalize.ts",
+  // output-paths.ts：任务产物布局（落盘目录 / 产物 URL / 删除目标）的唯一一份定义。
+  // 它必须同时被**落盘侧**（上面那条 `executor-finalize.ts`，第三类宿主模块）与
+  // **读删侧**（`src/server/api/routers/task.ts` 的 openFolder / delete）静态 import：
+  // 布局一旦分成两处实现，就会出现「落盘认 `projects/<pid>/<tid>`、删除只认
+  // `<tid>`」这种分叉（本批修的就是它）。给落盘侧引的那条边挂 `server-only`
+  // 等于把这条约束重新拆开，而它只有 `path` 一条 Node 内建 value import，
+  // 「浏览器图别引我」同样由 scanner 的 clientReachable 判据盯。
+  "src/lib/media/output-paths.ts",
   // executor-cli.ts：P3 第 1 期·第三步·执行批。摘掉 server-only 后本模块**自身**
   // 的静态边已解——logger（走加载即 fire-and-forget + `cliWarn` 静默 skip）、
   // taskRepository / resolveComfyBase（在 `executeViaComfyCli` 顶部一次性

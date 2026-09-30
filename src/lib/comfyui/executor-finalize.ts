@@ -30,6 +30,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
+import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
 import {
   fetchHistoryEntry,
   traceComfyQueue,
@@ -185,9 +186,10 @@ async function completeInner(
     reqW = Number(sizeMatch[1]);
     reqH = Number(sizeMatch[2]);
   }
-  const publicBase = projectId
-    ? `/api/generated/projects/${projectId}/${taskId}`
-    : `/api/generated/${taskId}`;
+  /* 产物地址前缀与磁盘目录同一份布局（`~/lib/media/output-paths`）：这一句
+   * 写进 TaskImage.localPath，删除侧要按它把整个目录删掉 —— 两处各拼一遍就
+   * 会分叉（历史上删除侧只认 `<taskId>`，项目任务的产物目录于是永远留在盘上）。 */
+  const publicBase = taskOutputUrl(taskId, projectId);
   /* 显式打一行「拉取 history」：让「最后一个节点跑完」到「history 就绪」之间的
    * 空档可见 —— ComfyUI 在这段是异步的（成功信号先到，产物后落盘），所以在
    * 这个窗口里卡住，否则看起来就像「执行器冻住了」。 */
@@ -315,10 +317,16 @@ async function completeInner(
   if (texts.length) parts.push(`${texts.length} 段文本`);
   log(taskId, "success", `✓ 生成完成，开始下载 ${parts.join("、") || "结果"}`);
 
-  const baseDir = path.join(process.cwd(), "public", "generated");
-  const dir = projectId
-    ? path.join(baseDir, "projects", projectId, taskId)
-    : path.join(baseDir, taskId);
+  /* 落盘目录：与 publicBase 同源。越界判据也在这里生效 —— projectId 由客户端
+   * 生成，一个 `../../x` 形状过去能把产物写到 public/generated 之外，而
+   * `/api/generated/[...path]` 的白名单只认根内，写出去等于文件永远读不到；
+   * 现在它变成一次硬失败（由 complete() 收口成 finalizeFailure，用户看得见）。 */
+  const dir = taskOutputDir(taskId, projectId);
+  if (!dir) {
+    throw new Error(
+      `产物目录越界，已拒绝落盘：taskId=${taskId} projectId=${projectId ?? "(无)"}`,
+    );
+  }
   await fs.mkdir(dir, { recursive: true });
   const saved: { localPath: string; mediaType: string }[] = [];
 
