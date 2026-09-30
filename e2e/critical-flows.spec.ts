@@ -1282,12 +1282,33 @@ test.describe("应用页签与全屏视图 @critical", () => {
       };
       const now = Date.now();
       const sessionStart = now - 30_000;
+      /* 「只有时刻、没有日期」的行（dev.mjs 的真实形状）会被解析层按**今天同一时刻**
+         重建。所以这个时刻必须落在现在之前：一旦在未来，服务端的 `clampLogTime`
+         （`src/lib/log/log-session-scope.ts`）就把它钳成「本次读取的 now」，两轮读取
+         生成两个不同的去重键，面板把同一批行计两次 —— 本用例下面钉的「启动 4」就会
+         变成 8。真实运行里这类行永远是过去时刻，钳制不触发；写死 `10:22:24` 等于每天
+         只在 10:22 之后才忠实，其余时段伪造了一个未来时间，把用例绑死在 #1240 的机制上。 */
+      const clock = (t: number) => {
+        const d = new Date(t);
+        const p = (n: number) => String(n).padStart(2, "0");
+        return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+      };
+      /* 跨零点的那几十秒里「今天同一时刻」仍然会跑到未来（23:59 > 00:00），这一极少
+         窗口退化成带完整日期时间戳的写法：本用例要守的是级别解析与正文不残留前缀，
+         「同批行两轮读到同一个键」这个不变量在两种写法下都成立。 */
+      const devBase = now - 40_000;
+      const crossesMidnight =
+        new Date(devBase).getDate() !== new Date(now).getDate();
+      const devStamp = (offsetMs: number) => {
+        const t = now - offsetMs;
+        return crossesMidnight ? fmt(t) : clock(t);
+      };
       /* 两个来源各自的真实形态（级别填充、缩进续行、残码） */
       const devLines = [
-        "[10:22:24] [INFO ] 预检通过",
-        "[10:22:25] [STEP] 检查端口占用",
-        "[10:22:26] [OK   ] Job Object 创建成功",
-        "  [10:22:27] [ERROR] 找不到预编译 Tauri 壳",
+        `[${devStamp(40_000)}] [INFO ] 预检通过`,
+        `[${devStamp(39_000)}] [STEP] 检查端口占用`,
+        `[${devStamp(38_000)}] [OK   ] Job Object 创建成功`,
+        `  [${devStamp(37_000)}] [ERROR] 找不到预编译 Tauri 壳`,
       ];
       const launcherLines = [
         `[${fmt(now - 45_000)}] === launcher started ===`,
@@ -1336,11 +1357,11 @@ test.describe("应用页签与全屏视图 @critical", () => {
       ).toBeVisible();
 
       /* 四个级别标记都被认出来，正文里不残留 `[HH:mm:ss] [LEVEL]` 前缀。
-         这里只取 `.first()`、**不钉「恰好一行」**：实测面板有两个独立消费者（状态栏
-         的错误计数与面板本体）各自从 `offset=0` 读一轮，而 dev-launcher 的行被钳到
-         「当时本地时刻」，两轮生成的是两个不同的去重键 —— 是否重复取决于两轮的间隔。
-         那是另一条产品侧问题（已登记），不该由这条用例用断言去掩盖，也不该让它决定
-         用例的稳定性。本条守的是级别解析与「正文不残留前缀」。 */
+         这里只取 `.first()`：面板有两个独立消费者（状态栏的错误计数与面板本体），
+         本条守的是级别解析与「正文不残留前缀」，不裁决渲染层的重复计数 —— 那属于
+         #1240 的口径。上一段注释里写的「两轮各钳到当时本地时刻 → 键不同」是桩把
+         时刻写死在未来才触发的路径，已按真实形态改掉（时刻取现在之前）；因此下面
+         那条「启动 4」的来源计数重新有意义，由它守住「同一批行只计一次」。 */
       await expect(page.getByText("预检通过").first()).toBeVisible();
       await expect(page.getByText("检查端口占用").first()).toBeVisible();
       await expect(page.getByText("Job Object 创建成功").first()).toBeVisible();
