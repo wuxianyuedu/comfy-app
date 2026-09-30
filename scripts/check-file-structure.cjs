@@ -551,8 +551,14 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
       .replace(/\.test$/, "");
     if (/\d{8}_\d{6}/.test(e.name)) problems.push("R3 时间戳备份文件:" + rel);
     /* R11 的位置判据:Next 约定文件只允许出现在 src/ 根。放进 app/ 或更深
-     * 的目录 Next 不会加载 —— 文件在、代理不在,构建期毫无提示。 */
-    if (base === "proxy" || base === "middleware") {
+     * 的目录 Next 不会加载 —— 文件在、代理不在,构建期毫无提示。
+     * 只看**约定文件本身**:`base` 上面已经把 `.test` 摘掉了(那是给 R2 命名规则
+     * 用的),不清这一下会把 `src/proxy.test.ts` 判成「约定文件放错位置」——
+     * 测试文件既不会被 Next 加载,也就无从「静默丢失」。 */
+    if (
+      (base === "proxy" || base === "middleware") &&
+      !/\.test\.(tsx?|mjs|cjs|js)$/.test(e.name)
+    ) {
       const canonical = "src/" + base + ".ts";
       if (rel !== canonical)
         problems.push(
