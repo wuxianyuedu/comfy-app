@@ -8,9 +8,9 @@ import { ProjectTabBar } from "./ProjectTabBar";
 afterEach(cleanup);
 
 describe("ProjectTabBar", () => {
-  it("渲染 画布/工坊/产出/成片 四个页签", () => {
+  it("渲染 画布/工坊/资源库/产出/成片 五个页签", () => {
     render(<ProjectTabBar active="canvas" onSelect={vi.fn()} />);
-    for (const label of ["画布", "工坊", "产出", "成片"]) {
+    for (const label of ["画布", "工坊", "资源库", "产出", "成片"]) {
       expect(screen.getByRole("tab", { name: new RegExp(label) })).toBeTruthy();
     }
   });

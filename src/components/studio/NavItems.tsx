@@ -6,6 +6,7 @@ import {
   Box,
   Film,
   Folder,
+  FolderOpen,
   History,
   Home,
   Image as ImageIcon,
@@ -17,7 +18,7 @@ import {
  *
  * 三个分区（一处定义、多处消费，避免漂移）：
  *   · 全局项（`globalNavItems`）—— 主页侧栏顶部常驻：首页 / 模型 / 历史 / 队列 / 炼丹 / 流程；
- *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（画布 / 工坊 / 产出 / 成片），
+ *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（画布 / 工坊 / 资源库 / 产出 / 成片），
  *     不再进主页侧栏：它们是对「当前项目」的操作投影，脱离项目无意义；
  *   · 项目入口（`PROJECTS_ENTRY`）—— 侧栏最底部的「项目」分组（可展开列出已有项目）。
  *
@@ -31,6 +32,7 @@ export type WorkspaceView =
   | "models"
   | "works"
   | "workshop"
+  | "library"
   | "history"
   | "queue"
   | "train"
@@ -45,7 +47,7 @@ export interface NavItem {
   enabled?: boolean;
   /**
    * 属于「项目页签」：只在项目界面顶部的标签栏出现，不进主页侧栏顶部列表。
-   * 画布 / 工坊 / 产出 / 成片是对「当前项目」的操作投影。
+   * 画布 / 工坊 / 资源库 / 产出 / 成片是对「当前项目」的操作投影。
    */
   projectScoped?: boolean;
   icon: React.ReactNode;
@@ -142,6 +144,12 @@ export const NAV_ITEMS: NavItem[] = [
     icon: <BookOpen size={22} strokeWidth={1.8} />,
   },
   {
+    id: "library",
+    label: "资源库",
+    projectScoped: true,
+    icon: <FolderOpen size={22} strokeWidth={1.8} />,
+  },
+  {
     id: "outputs",
     label: "产出",
     enabled: true,
@@ -164,7 +172,7 @@ export function globalNavItems(): NavItem[] {
   );
 }
 
-/** 项目界面顶部的切换页签（画布 / 工坊 / 产出 / 成片）。 */
+/** 项目界面顶部的切换页签（画布 / 工坊 / 资源库 / 产出 / 成片）。 */
 export function projectTabs(): NavItem[] {
   return NAV_ITEMS.filter((item) => item.projectScoped);
 }

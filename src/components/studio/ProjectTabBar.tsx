@@ -5,7 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { projectTabs, type WorkspaceView } from "./NavItems";
 
 export interface ProjectTabBarProps {
-  /** 当前项目内视图（画布 / 工坊 / 产出 / 成片之一），决定哪个页签高亮。 */
+  /** 当前项目内视图（画布 / 工坊 / 资源库 / 产出 / 成片之一），决定哪个页签高亮。 */
   active: WorkspaceView;
   /** 切换项目内视图。 */
   onSelect: (view: WorkspaceView) => void;
@@ -14,7 +14,7 @@ export interface ProjectTabBarProps {
 }
 
 /**
- * 项目界面顶部的切换器 —— 画布 / 工坊 / 产出 / 成片 在同一个「项目界面」里以标签页互切。
+ * 项目界面顶部的切换器 —— 画布 / 工坊 / 资源库 / 产出 / 成片 在同一个「项目界面」里以标签页互切。
  *
  * 这四项此前散在主页侧栏、靠 `active === "home"` 切换显隐（点别的视图就莫名复现）。
  * 现在它们从全局侧栏移出、收进这里：进入某个项目后，顶部这一排标签就是项目的操作面。

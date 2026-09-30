@@ -43,6 +43,14 @@ const ProjectOutputs = dynamic(
   () => import("~/components/studio").then((mod) => mod.ProjectOutputs),
   { ssr: false },
 );
+/* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */
+const ResourceLibrary = dynamic(
+  () =>
+    import("~/components/studio/library/ResourceLibrary").then(
+      (mod) => mod.ResourceLibrary,
+    ),
+  { ssr: false },
+);
 const ModelLibrary = dynamic(
   () => import("~/components/studio").then((mod) => mod.ModelLibrary),
   { ssr: false },
@@ -95,6 +103,7 @@ const WORKSPACE_VIEWS: WorkspaceView[] = [
   "models",
   "works",
   "workshop",
+  "library",
   "history",
   "queue",
   "train",
@@ -150,6 +159,20 @@ export default function WorkspacePage() {
     setViewMode(view);
     writeLastView(view);
   }, []);
+
+  /* 「请求切到某个视图」的应用事件订阅（唯一订阅侧）。
+   * 触发方是工坊右栏的「资源库」卡 —— 那条链路上有 WorkshopPipeline /
+   * WorkshopAside 两层，穿 props 不划算（见 `lib/app-events` 里本事件的说明）。
+   * 载荷是字符串，这里按 `WORKSPACE_VIEWS` 收敛：未知 id 直接忽略，
+   * 不让它把 `viewMode` 带进一个无分支可渲染的状态。 */
+  useEffect(
+    () =>
+      subscribeAppEvent("workspace:navigate", ({ view }) => {
+        const target = WORKSPACE_VIEWS.find((candidate) => candidate === view);
+        if (target) navigateTo(target);
+      }),
+    [navigateTo],
+  );
 
   // ── 视频队列弹窗 ──
   const [videoQueueOpen, setVideoQueueOpen] = useState(false);
@@ -310,7 +333,7 @@ export default function WorkspacePage() {
   // 其它模式切换会反复装卸 console 包装（makeLogger 双重嵌套），是日志观察者
   // 自身报错的结构性诱因（LogProvider Console Error）。
   const renderCenter = () => {
-    // 项目优先闸门：进入项目界面（画布 / 工坊 / 产出 / 成片）前必须先有一个活跃项目。
+    // 项目优先闸门：进入项目界面（画布 / 工坊 / 资源库 / 产出 / 成片）前必须先有一个活跃项目。
     if (isProjectTab(viewMode) && !activeProjectId) {
       return (
         <ProjectGate
@@ -358,6 +381,9 @@ export default function WorkspacePage() {
 
       case "outputs":
         return <ProjectOutputs />;
+
+      case "library":
+        return <ResourceLibrary />;
 
       case "workshop":
         return (
