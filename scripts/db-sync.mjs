@@ -27,10 +27,16 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+/* `--force`：跳过 dry-run 白名单按 `pnpm db:push` 的口径直接应用（含丢数据语句）。
+ * 唯一调用方是 POST /api/schema/push —— 用户已在状态栏的确认弹窗里知情并确认；
+ * 启动链路 spawn 本脚本时**不带**这个参数，决策权仍归人。 */
+const force = process.argv.includes("--force");
+
 writeSchemaSyncStatus(root, { phase: "syncing" });
 
 const result = ensureSchemaCurrent(root, {
   forward: (chunk) => process.stderr.write(chunk),
+  force,
 });
 
 writeSchemaSyncStatus(root, {

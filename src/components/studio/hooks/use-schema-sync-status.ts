@@ -28,6 +28,10 @@ export interface SchemaSyncStatus {
   phase: SchemaSyncPhase;
   /** 失败原因（`stale` / `missing` 时有），给提示的 tooltip 用。 */
   detail: string | null;
+  /** 执行件（`scripts/db-sync.mjs`）在不在：桌包载荷刻意不带它（那里没有
+   * drizzle-kit），`false` 时 missing / stale 回落成「跑 pnpm db:push」的
+   * 纯提示，不给一个点了必然失败的按钮。 */
+  canPush: boolean;
 }
 
 /** 状态栏那一格该说什么（纯函数，组件只管把 tone 映射成颜色）。 */
@@ -37,6 +41,9 @@ export interface SchemaSyncNotice {
   title: string;
   /** `ok` 那档是「点一下刷新」的按钮（同步完是一次性事件）。 */
   refreshable: boolean;
+  /** `stale` / `missing` 且本机有执行件：渲染成「立即同步」按钮（点击后仍要
+   * 过确认弹窗 —— 那批变更会丢数据，按钮只是发起、不是授权）。 */
+  actionable: boolean;
 }
 
 /**
@@ -61,6 +68,7 @@ export function schemaSyncNotice(
         title:
           "启动时发现库结构与当前 schema 不一致，正在后台同步（只自动应用建表 / 建索引 / 加列这类不丢数据的变更）",
         refreshable: false,
+        actionable: false,
       };
     case "synced":
       return {
@@ -68,27 +76,34 @@ export function schemaSyncNotice(
         text: "数据库已同步 · 点此刷新",
         title: "数据库结构已同步到当前版本，点击刷新页面",
         refreshable: true,
+        actionable: false,
       };
     case "missing":
+    case "stale": {
+      const missing = status.phase === "missing";
+      const title = missing
+        ? status.detail === null
+          ? "数据库表还没建，需要先执行 pnpm db:push"
+          : `数据库表还没建：${status.detail}`
+        : status.detail === null
+          ? "数据库结构与 schema 不一致，需要人工同步"
+          : `数据库结构与 schema 不一致：${status.detail}`;
+      /* 有执行件 → 给「立即同步」入口（文案不必再复述命令）；没有（桌包）
+       * → 维持原样，只给命令让人到终端跑。 */
       return {
         tone: "error",
-        text: "数据库表还没建 · 跑 pnpm db:push",
-        title:
-          status.detail === null
-            ? "数据库表还没建，需要先执行 pnpm db:push"
-            : `数据库表还没建：${status.detail}`,
+        text: status.canPush
+          ? missing
+            ? "数据库表还没建"
+            : "数据库结构过期"
+          : missing
+            ? "数据库表还没建 · 跑 pnpm db:push"
+            : "数据库结构过期 · 跑 pnpm db:push",
+        title,
         refreshable: false,
+        actionable: status.canPush,
       };
-    case "stale":
-      return {
-        tone: "error",
-        text: "数据库结构过期 · 跑 pnpm db:push",
-        title:
-          status.detail === null
-            ? "数据库结构与 schema 不一致，需要人工同步"
-            : `数据库结构与 schema 不一致：${status.detail}`,
-        refreshable: false,
-      };
+    }
     default:
       return null;
   }
@@ -150,6 +165,7 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
   const [status, setStatus] = useState<SchemaSyncStatus>({
     phase: "unknown",
     detail: null,
+    canPush: false,
   });
   const stoppedRef = useRef(false);
 
@@ -171,7 +187,7 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
        * 也不提示 —— 那时刷新什么也不会变。 */
       if (phase === "synced") {
         if (!isFresh(at) || readAck() === at) {
-          setStatus({ phase: "unknown", detail: null });
+          setStatus({ phase: "unknown", detail: null, canPush: false });
           return;
         }
         writeAck(at);
@@ -180,6 +196,7 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
       setStatus({
         phase,
         detail: typeof record.detail === "string" ? record.detail : null,
+        canPush: record.canPush === true,
       });
     } catch {
       /* 探测失败不动状态：瞬时断网不该把「正在同步」抹掉（与 dev server 存活
