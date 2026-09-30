@@ -44,18 +44,28 @@ export interface TopBarProps {
  *     `useHotkey` 监听 ⌘/Ctrl+K 打开）。此前压住是因为 `command` 还没合并
  *     （在 #886），用 `Dialog` + 自绘列表会撞 P11（自绘浮层选项列表）。
  *   - **应用菜单**：设置。
+ *
+ * 视图标题放在这里，是因为侧栏头部那条「Comfy-APP」名称行**没有承载任何信息**：
+ * 图标档下它只剩一个字母，展开档下用户早就知道自己开的是什么应用；而工具条里
+ * 图标与文字之间恰好空着一个槽位（右侧的搜索 / 消息 / 菜单靠 `ml-auto` 顶到
+ * 最右），标题正好补上——**应用全局只有这一行顶栏**（首页与其余视图共用 `AppShell`，
+ * 项目页签的画面 / 工坊 / 产出 / 成片走 `ProjectTabBar` 高亮，见 `ProjectTabBar`）。
+ * 只是那个名称行也不白占：顶部省下约 3.5rem 的纵向空间。
  */
 export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   const label = NAV_ITEMS.find((item) => item.id === active)?.label ?? "工作区";
 
   return (
     <header className="border-border-subtle bg-canvas/85 z-base flex h-12 shrink-0 items-center gap-2 border-b px-3 backdrop-blur-sm">
-      <SidebarTrigger className="-ml-1" title="侧栏（⌘/Ctrl+B）" />
+      <SidebarTrigger className="-ml-1" />
       <Separator
         orientation="vertical"
         className="data-[orientation=vertical]:h-4"
       />
-      <span className="text-ink-strong truncate text-sm font-medium">
+      <span
+        className="text-ink-strong min-w-0 truncate text-sm font-medium"
+        title={label}
+      >
         {label}
       </span>
 
