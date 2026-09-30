@@ -185,11 +185,7 @@ export function CharacterDesigner({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ExtractModelSelect
-            value={genSelectValue}
-            onChange={setGenSel}
-            allowTool={false}
-          />
+          <ExtractModelSelect value={genSelectValue} onChange={setGenSel} />
           <input
             value={brief}
             onChange={textHandler(setBrief)}

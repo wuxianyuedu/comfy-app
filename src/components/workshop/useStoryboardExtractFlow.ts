@@ -46,7 +46,7 @@ function looksLikeJson(text: string): boolean {
   return text.startsWith("{") || text.startsWith("[");
 }
 
-/** 通道 → LLM provider(工具通道不调用模型;本地/远端复用既有 /api/llm 链路) */
+/** 通道 → LLM provider(本地/远端复用既有 /api/llm 链路) */
 function channelProvider(channel: ExtractChannel): "local" | "remote" {
   return channel === "local" ? "local" : "remote";
 }
@@ -77,12 +77,12 @@ export function useStoryboardExtractFlow(input: {
   } = input;
 
   // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
-  // 下拉选项值（tool | local::<model> | remote::<model>），通道与模型一并保存。
+  // 下拉选项值（local::<model> | remote::<model>），通道与模型一并保存。
   // 提取的 通道/忙闲/过程/状态/错误/执行日志 已收归工坊 controller(storyboardExtract)
   // 并经 props.extract 注入：展示读 session，写入走 actions。controller 跨阶段页签
   // 常驻，提取中切页签再切回状态不丢，无需模块级缓存。遗留/独立使用(未注入)时
   // 退化为本 hook 局部会话。
-  const localExtract = useExtractSession("tool", "storyboard");
+  const localExtract = useExtractSession("local", "storyboard");
   const { session: extractSession, actions: extractActions } = extract ?? {
     session: localExtract[0],
     actions: localExtract[1],
@@ -124,7 +124,7 @@ export function useStoryboardExtractFlow(input: {
     setExtractState({ status: `已提取 ${built.length} 个镜头` });
   }
 
-  /** 三通道提取入口:工具=确定性拆分;本地/API=LLM 输出 JSON,失败降级提示 */
+  /** 提取入口：本地模型 / 远端 API 由 LLM 输出分镜 JSON，失败降级提示 */
   async function handleExtract() {
     const script = (scriptMarkdown ?? "").trim();
     if (!script) {
@@ -133,64 +133,48 @@ export function useStoryboardExtractFlow(input: {
       });
       return;
     }
-    if (extractChannel !== "tool" && !config) {
+    if (!config) {
       openSettings();
       return;
     }
     setExtractState({
       busy: true,
       progress: "",
-      status: extractChannel === "tool" ? "" : "正在调用模型提取分镜…",
+      status: "正在调用模型提取分镜…",
       error: "",
     });
     // 新一次提取：重置日志为仅含 init 一条，展示本次输入→输出→结果链路。
     setLog([
       makeExtractLog(
         "init",
-        `使用 ${extractChannel === "tool" ? "内置规则" : extractChannel === "local" ? "本地模型" : "远端模型"} ${extractChannel === "tool" ? "" : parseChannelOption(extractChannelValue).model || ""}从剧本提取分镜`,
+        `使用 ${extractChannel === "local" ? "本地模型" : "远端模型"} ${parseChannelOption(extractChannelValue).model || ""}从剧本提取分镜`,
       ),
     ]);
     try {
-      let entries: ShotEntry[];
-      if (extractChannel === "tool") {
-        const drafts = parseShotDrafts(script, knownNames);
-        if (drafts.length === 0) {
-          setExtractState({
-            error:
-              "工具通道未在剧本中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行。可检查剧本结构后重试,或切换到本地模型 / 配置API 通道。",
-          });
-          return;
-        }
-        entries = drafts.map(draftToShotEntry);
-      } else {
-        const requestMessages = buildExtractShotsMessages(script, knownNames);
-        appendLog(
-          makeExtractLog(
-            "request",
-            `向模型发送请求（provider=${channelProvider(extractChannel)}, model=${parseChannelOption(extractChannelValue).model || "默认"}）`,
-            formatRequestMessages(requestMessages),
-          ),
-        );
-        const full = await streamChat({
-          messages: requestMessages,
-          opts: {
-            provider: channelProvider(extractChannel),
-            model: parseChannelOption(extractChannelValue).model,
-          },
-          onToken: (token) => setExtractAppendProgress(token),
+      const requestMessages = buildExtractShotsMessages(script, knownNames);
+      appendLog(
+        makeExtractLog(
+          "request",
+          `向模型发送请求（provider=${channelProvider(extractChannel)}, model=${parseChannelOption(extractChannelValue).model || "默认"}）`,
+          formatRequestMessages(requestMessages),
+        ),
+      );
+      const full = await streamChat({
+        messages: requestMessages,
+        opts: {
+          provider: channelProvider(extractChannel),
+          model: parseChannelOption(extractChannelValue).model,
+        },
+        onToken: (token) => setExtractAppendProgress(token),
+      });
+      appendLog(makeExtractLog("output", "模型返回完成，正在解析…", full));
+      const entries = parseExtractedShots(full);
+      if (entries.length === 0) {
+        appendLog(makeExtractLog("error", "模型未返回有效分镜 JSON，解析失败"));
+        setExtractState({
+          error: "模型未返回有效分镜 JSON,解析失败。可重试,或调整脚本后重跑。",
         });
-        appendLog(makeExtractLog("output", "模型返回完成，正在解析…", full));
-        entries = parseExtractedShots(full);
-        if (entries.length === 0) {
-          appendLog(
-            makeExtractLog("error", "模型未返回有效分镜 JSON，解析失败"),
-          );
-          setExtractState({
-            error:
-              "模型未返回有效分镜 JSON,解析失败。可重试,或改用「工具」通道。",
-          });
-          return;
-        }
+        return;
       }
       appendLog(
         makeExtractLog("result", `解析出 ${entries.length} 个分镜，准备写入`),
@@ -199,7 +183,7 @@ export function useStoryboardExtractFlow(input: {
     } catch (e: unknown) {
       appendLog(makeExtractLog("error", errorMessage(e, "提取失败")));
       setExtractState({
-        error: `${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`,
+        error: `${errorMessage(e, "提取失败")} 可重试,或调整脚本后重跑。`,
       });
     } finally {
       setExtractState({ busy: false });
