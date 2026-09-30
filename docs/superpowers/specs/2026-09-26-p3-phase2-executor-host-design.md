@@ -1193,3 +1193,65 @@ issue 原文的正解是「两个读者改读 `executedWorkflow`，然后删掉 
 `execution_cached` / `executed` 两种 comfy-cli 事件目前**不解析**。全缓存轮次里它们是唯一的发生，
 于是界面表现为「进度不动、也没有任何按节点行」，而 ComfyUI 其实已经把这单收完了。
 要买的东西与 #1202 不同（那是「认不出类名」，这是「缓存轮次没有可见性」），所以没混进这一刀，登记为 ISSUE #1278。
+
+---
+
+## 25. #1164（comfy-cli 回传的中文乱码）——落地记录，含一条被实测否掉的「修法候选 1」
+
+这条缺陷**先于本工作线存在**（3-C 的真机端到端复现时记下），落在本线的执行链上所以记在这里。
+
+### 现场与根因
+
+`[comfy-cli 原始]` 行内嵌的 prompt JSON 里中文是乱码，而我们自己拼的日志行中文正常。
+根因在 **Python 那侧的默认编码**，不在 Node 的解码：中文 Windows 的 ANSI 代码页是 GBK/CP936，
+Python 在非 ASCII locale 下 `sys.stdout` 与 `open()` 都跟着 locale 走。
+
+用 comfy-cli 那份解释器（`python-venv/comfy-cli/Scripts/python.exe`）在本机量了三态：
+
+| 注入 | `sys.stdout.encoding` | stdio 按 UTF-8(fatal) 解 | 读我们写的 UTF-8 工作流文件 |
+| --- | --- | --- | --- |
+| 什么都不给（今天的生产形态） | `gbk` | **解不动** ⇒ 面板乱码 | `UnicodeDecodeError`、exit 1 |
+| 只给 `PYTHONIOENCODING=utf-8` | `utf-8` | 解得动、中文复原 | **仍然 `UnicodeDecodeError`**（`open()` 不看这个变量） |
+| 给 `PYTHONUTF8=1` | `utf-8` | 解得动 | `MATCH=True`（UTF-8 模式管全局，含 `open()`） |
+
+⇒ **issue 里「倾向候选 1（`PYTHONIOENCODING` 最小、跨平台安全）」这一手被实测否掉**：它只是半个修复，
+而且留下的是更坏的那一半（显示好了，读文件照样崩）。落地给两个键：
+`PYTHONUTF8=1` 管全局、`PYTHONIOENCODING=utf-8` 再显式钉死 stdio。
+
+同一条口径仓里其实早就有 —— `lifecycle-launch.ts` 给 **ComfyUI 本体** 那份 env 里两个键都设了，
+理由写得比这条 issue 更硬：中文 Windows 上自定义节点 `print` 一个 emoji（非 GBK 字符）会抛
+`UnicodeEncodeError` 把进程直接打崩。本刀把 comfy-cli 这条链路对齐过去，不新造约定。
+
+### A/B 真机读数（同一条工作流、各自打掉执行缓存、独立宿主进程指副本库）
+
+种进去的提示词带一个唯一标记（`戴宇航员头盔的柴犬·before` / `·after`），判据就是
+「这串中文在 comfy-cli 回传的 `rawCli` 里是否原样活着」：
+
+| | 终态 | 标记在 `rawCli` 里活着 | 标记在我们自己的面板日志里活着 | U+FFFD |
+| --- | --- | --- | --- | --- |
+| 修前 | SUCCEEDED | **否** | 是 | **16** |
+| 修后 | SUCCEEDED | 是 | 是 | 0 |
+
+（两跑的终态都是 SUCCEEDED，所以这不是「任务失败」那一类可见故障 —— 是**取证现场被写坏**：
+出图成功了，但 `rawCli` / `prompt_preview` 这些本该能复现「ComfyUI 到底收到了什么」的原文，
+中文那一半是废字节。也正是这条让 #1250/#1262 那套「日志要能自证原因」的口径缺一块：
+原文乱码时，看日志的人分不清是用户提示词本来就怪、还是我们转手时弄坏的。）
+
+### 判据
+
+`tests/comfy-cli-python-utf8.test.ts` 三条（先 `stripComments` 再匹配，用的是那条台账刚推广的共享件）：
+
+1. comfy-cli 那份 spawn `env` 字面量里 `PYTHONUTF8` / `PYTHONIOENCODING` 都在
+   （顺带钉住同块的 `PYTHONUNBUFFERED`，那是 #1184 的兄弟判决，别被后人改没）；
+2. 两条管道都**显式** `setEncoding("utf-8")` —— 写侧锁了 UTF-8，读侧漂掉同样是乱码；
+3. `lifecycle-launch.ts` 那份保持同一口径（防止有人把「ComfyUI 本体的那两个键」当历史包袱清掉）。
+
+选择器上的一处自我订正：第一版用「含 `PYTHONUNBUFFERED` 的 env 块」定位，直接把 ComfyUI 那条链路
+判成「找不到」（它那一份叫 `stdioEnv`、也没有 `PYTHONUNBUFFERED`）—— 改成按大括号配平扫
+`env` / `stdioEnv` / `childEnv` 三种字面量、再挑装着 `PYTHON*` 键的那一个。
+判据也做过变异验证：只删 `PYTHONUTF8` 留 `PYTHONIOENCODING`（正是那个「半个修复」）→ 第 1 条红。
+
+### 为什么不做候选 2（Node 侧按代码页解）
+
+那是**又造一处平台分叉**，而本仓的平台判据只许收在两处（AGENTS 硬规则 3 / launch-and-build §3.1–§3.3）。
+何况候选 2 只救 stdio，救不了 Python 自己 `open()` 读文件那条崩路径 —— 上面那张表的第二行就是它。

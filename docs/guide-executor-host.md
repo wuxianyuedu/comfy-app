@@ -240,7 +240,16 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
    （就绪门控不过时 `void connect()`，拉起动作在 `lifecycle` 里单飞），提交方不再
    直接驱动它。剩下的观察点变成：host 与 Next 两侧各自都会为自己的那片去探测端口
    ——同机同实例下 `ensureComfyUiReady` 有单飞闩锁，灰度继续观察。
-2. **`[comfy-cli 原始]` 行内 prompt 字段乱码**：python stdout 管道编码问题，
-   先于 host 线存在，独立 ISSUE #1164 治理（修向 `PYTHONIOENCODING=utf-8`）。
+2. **`[comfy-cli 原始]` 行内中文乱码（ISSUE #1164，已修）**：根因是中文 Windows 的 ANSI
+   代码页 GBK/CP936 上，Python 在非 ASCII locale 下**默认按 locale 走** —— 实测不注入任何
+   编码 env 时 `sys.stdout.encoding = gbk`，回传原文按 UTF-8 强解就是乱码（真机 A/B：修前
+   `rawCli` 里那句中文提示词复原不了、还留着 16 个 U+FFFD；修后原样活着）。
+   **`PYTHONIOENCODING=utf-8` 只是半个修复**，别照旧写法停在这儿：它只管 stdio，
+   `open()` 仍按 GBK 读我们写出去的那份 UTF-8 工作流文件（含中文 prompt），直接
+   `UnicodeDecodeError` 退出 1。两个键都要给 —— `PYTHONUTF8=1`（UTF-8 模式，管全局含文件读）
+   + `PYTHONIOENCODING=utf-8`（再显式钉死 stdio），与 `lifecycle-launch.ts` 给 ComfyUI 本体
+   那一份同形（那里早为「自定义节点 print emoji 崩进程」立过这条口径）。
+   两侧都由 `tests/comfy-cli-python-utf8.test.ts` 钉住（含「读侧 `setEncoding("utf-8")`
+   不许漂」那一条 —— 写侧锁了、读侧漂掉同样是乱码）。
 3. host 模式下的产物下载 / 封面链路复用 Next 的 `/api/generated` 静态映射，
    桌面包立项（ISSUE #1169）时需一并核对壳内静态目录的可写性。
