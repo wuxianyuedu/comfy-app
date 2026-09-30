@@ -74,10 +74,11 @@ let stopPolling: (() => void) | null = null;
    —— 计数机是有状态的，不复位会让上一条用例攒下的连续失败污染下一条。 */
 let observeOnline = createOfflineGate();
 
-/* 进程级判活：最近一次观测里 ComfyUI 进程还活着（路由经进程快照给出）。HTTP 连续
-   超时但进程在跑时它让 online 保持 true —— 顶栏不闪「未运行」，数据保留旧值并置
-   stale。回包 online 成功时也置 true。 */
-let processAlive = false;
+/* 进程级判活**不在这里存副本**：判活的来源是每一轮回包自己的 `processAlive`
+   （路由经进程快照给出），读它就地的 `next.processAlive` 即可。此前这里挂过一个
+   模块级 `let processAlive`，但三个写点之后没有任何读点（唯一的读点是那句
+   `processAlive || …` 的左操作数，而它自己被上一行赋成了 true，右边永不可达）——
+   写而不读的状态比没有状态更坏：它会在下一次重构里被当成「有语义的标志」保留下来。 */
 
 /** 背压：`useInterval` 不挡重叠，只认最新一次的观测。 */
 let requestId = 0;
@@ -115,7 +116,6 @@ function recordMissedObservation(): void {
     });
     return;
   }
-  processAlive = false;
   publish({ stats: OFFLINE_STATS, online: false, stale: false });
 }
 
@@ -125,7 +125,6 @@ async function pollOnce(): Promise<void> {
   if (myRequest !== requestId) return; // 已有更新的请求在跑，丢弃本次迟到回包
   if (next.online) {
     observeOnline(true);
-    processAlive = true;
     publish({ stats: next, online: true, stale: false });
     return;
   }
@@ -133,10 +132,12 @@ async function pollOnce(): Promise<void> {
      （反而清零），数据保留旧值并置 stale，在线结论保持。 */
   if (next.processAlive) {
     observeOnline(true);
-    processAlive = true;
     publish({
       stats: snapshot.stats,
-      online: processAlive || snapshot.stats?.online === true,
+      /* 「在线结论保持」= 直接写 `true`。此前这里是 `processAlive || …`，而上一行
+         刚把那个模块级标志置真，右操作数永远求不到 —— 一个永不可达的分支把这条
+         门槛挂在死式上（v8 实测这一支分支覆盖 95.23%，空缺就是它）。 */
+      online: true,
       stale: snapshot.stats !== null,
     });
     return;
@@ -193,7 +194,6 @@ export function resetComfyStatsStoreForTest(): void {
   stopPolling?.();
   stopPolling = null;
   requestId = 0;
-  processAlive = false;
   observeOnline = createOfflineGate();
   snapshot = { stats: null, online: false, stale: false };
 }
