@@ -88,6 +88,10 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 那条 selector **真的会响** —— 「配置写在」与「配置在跑」是两件事（§11.7 同源），
   // 而它守的是「下一次新增一处就红」，与本次改动无关，所以进固定清单。
   "tests/router-error-envelope.test.ts",
+  // 「挂载即欠执行者」：root.ts 每挂一条 procedure，就必须有测试真的调用它。
+  // 这条判据的对象正是「router 挂了、接口能通、却从来没人跑过」这一族（台账 E3），
+  // 而它守的是**下一次新增** —— 与本次暂存改动无关，只在受影响时才跑等于形同虚设。
+  "tests/trpc-surface-executors.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

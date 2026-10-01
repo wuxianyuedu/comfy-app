@@ -325,6 +325,14 @@ export default defineConfig({
         "src/server/api/routers/skill.ts",
         "src/server/api/routers/workflow-model.ts",
         "src/server/api/routers/generate.ts",
+        /* 体检清单 ⑨ 第四刀 · E3 收口（台账 E3）带出的一个 router：
+         * `workflow-detail.ts` 是 `workflow` 这个聚合 router 拆出去的三个兄弟文件之一，
+         * 它的 `detailFull` / `subgraph` 此前**零执行者** —— 而 `workflow.test.ts` 34 条
+         * 用例在场，「这个 router 有测试」这句话当时照样全绿（这正是判据升到 procedure
+         * 粒度的原因）。同族的另外几个文件（`workflow-list.ts` / `workflow-mutations.ts` /
+         * `workflow-local-roots.ts`）不在这一刀的范围：它们的用例早就在场，缺的是门槛登记，
+         * 那是 E7 覆盖率欠账的账，不是本批改动的账（口径同上面那句 `run.ts`）。 */
+        "src/server/api/routers/workflow-detail.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1441,6 +1449,15 @@ export default defineConfig({
           branches: 100,
         },
         "src/server/api/routers/generate.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* E3 收口这一刀（见 coverage.include 同批注释）：`workflow-detail.ts` 三条
+         * procedure 各有一个入口，5 条用例把三条分支（归属塌形 / 三种 NOT_FOUND /
+         * 入参转发）都走满了 —— 单跑 `workflow.test.ts` 实测四维 100，就登记 100。 */
+        "src/server/api/routers/workflow-detail.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

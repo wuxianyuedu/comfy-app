@@ -435,16 +435,46 @@
       （口径同 §18.6「门槛取实测、旧值与原因写在注释里」）。
       证据：`eslint.config.js`、`tests/router-error-envelope.test.ts`、`tests/helpers/trpc.ts`、
       `src/server/api/routers/{material,project,task,generate,run,skill,workflow-model}.ts`。
-- [ ] **E3 服务端集成覆盖 13/16 router**（generate / run / task / workflow / project /
-      setting / material / film / train / model / llm / skill / workflowModel ——
-      project、setting 是⑦第二、三批补的，material 是⑨第一刀补的，
-      film / train / model / llm 是⑨第二刀补的（52 条，四个入口按实测满档登记），
-      skill / workflowModel 是⑨第三刀补的（19 条，随 E8 的错误信封一起），
-      全部按归属 / 闸门组织，不按 procedure 顺序铺）。剩下 3 个：`custom-nodes`（tRPC 侧）、
-      `user`、`post` —— 每个都是一句没答过的问句「这个 procedure 从迁移那天起真的跑通过吗」
-      （⑨ 第二刀在这句上照出了 `train.cancel`，见 F13）。
-      E2E 仅 3 spec / 31 用例且无登录态。
-      证据：`src/server/api/routers/**`；`e2e/*.spec.ts`；`playwright.config.ts`。
+- [x] **E3 服务端集成覆盖收口：判据从「router 有没有测试文件」升到「每条 procedure 有没有执行者」（本批）**：
+      台账从 13/16 走到这里，最后 3 个零执行者的口（`customNode` / `user` / `post`）
+      **没有一条被补成测试** —— 给死口写用例等于把它焊死。逐条定性后删除：
+      · `customNode.list`：`nodes` 写死成 `[]`（真正的 manifest 读取在 REST
+      `/api/custom-nodes`，同一份数据两个门、tRPC 这一个是假的），并把
+      `getSettingsSync()` **整包**回给客户端（本机安装路径 + 全部开关状态），零消费方；
+      · `post.getLatest` / `post.create`：T3 脚手架示例。源码注释自称「OWASP A01：列表与
+      读取都要求已登录」，而 `loginRequired` 默认 `false` ⇒ `authedProcedure` 回落演示用户
+      ⇒ 那句「要求登录」在默认配置下等于没写；`getLatest` 也没有 `createdById` 过滤，
+      是跨用户读。零消费方；
+      · `user.me`：客户端取会话走的是 better-auth 的 `authClient`（`src/app/login/page.tsx`），
+      这口从没有被调用过。
+      **判据落在挂载动作上**（`tests/trpc-surface-executors.test.ts`，已进
+      `FIXED_STRUCTURAL_TESTS`）：枚举 `appRouter` 的 74 条 procedure，要求每条都出现在
+      「import 了该 router 文件闭包」的测试里的调用形态 —— 「文件在、某几条口照样零执行者」
+      是这一族最后的漏洞，所以粒度必须是 procedure 而不是 router。三条配套 sanity：
+      扫描面本身非空（空输入不许绿）、命名空间都得在 `root.ts` 登记、判据自身用合成的
+      `ghost.*` 反证四种形态（没测试 / 只 import 不调用 / 调用但没 import / 齐备）。
+      本批顺带填的两个真空（除那 3 个 router 外全表仅有的两条零执行者口，功能是真的、
+      缺的是判据）：`workflow.detailFull` / `workflow.subgraph` 共 5 条用例，钉
+      「他人的 id 与不存在的 id **逐字**同形」「`bust` / `uid` / `hostId` 三个入参真的
+      转到了 lib」。反向验证逐条做过：去掉 `findByIdForUserSelect` 的 userId 条件 →
+      两条归属用例红；`bust` 写成 `{}` → bust 用例红；`hostId` 写死 `""` → 子图坐标用例红。
+      证据：`src/server/api/root.ts`、`tests/trpc-surface-executors.test.ts`、
+      `src/server/api/routers/workflow.test.ts`、`vitest.config.ts`（workflow 一族首次登记门槛）。
+      **本批复算出来、按口径没有升成硬闸的存量**（判据第一次被看见就有 13 条，误报一片的
+      判据只能精确化、不能靠放宽基线装机 —— 口径同 E8）：**13 条 procedure 有执行者、
+      零消费方** —— `llm.complete`、`material.list` / `material.save` / `material.delete`、
+      `project.get` / `project.patch`、`skill.create`、`train.detail`（另有本批删掉的 4 条）。
+      口径是「客户端源码里搜不到 `api|trpc|vanillaApi|sender.<ns>.<proc>` 的字面调用」，
+      复算方法：`appRouter._def.procedures` 全枚举 + 沿 import 闭包比对 `src/` 非服务端源码。
+      `material.*` 三条与 `project.get` 大概率是 REST 面把 tRPC 面替掉了（同数据两个门，
+      §12.14 收口），删哪一侧是产品判断，不在本批擅自定。
+- [ ] **E3′ 零消费的 tRPC 口 13 条**（上一条复算出来的存量，未定处置）：逐条问「这口还有谁要」，
+      与 REST 面重复的收口到一侧，确实要留的补上消费方或登记豁免；判据等存量清零后再升硬闸。
+      证据：`docs/guides/PRODUCTION-GAPS.md` E3 条的复算口径。
+- [ ] **E3″ 端到端仍只有 3 spec / 31 用例且无登录态**（E3 的 router 维度已收口，这一维度没动）：
+      没有任何一条走完「登录 → 建项目 → 出图」的旅程，所以壳起不来、会话过期、
+      中间件改写这类**只在真实 HTTP 栈上成立**的缺陷没有执行者（A13 的产物口就是靠手工
+      实测才发现的，见那条）。证据：`e2e/*.spec.ts`；`playwright.config.ts`。
 - [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。
 - [ ] **E5 棘轮 `--update` 无制衡**。证据：`AGENTS.md:94,97`。
 - [ ] **E6 无 bundle 体积门禁 / 变异测试 / a11y 自动化**。
@@ -469,9 +499,16 @@
       `Record<string, AnySQLiteColumn>`，见 `repository-lora.ts` 的注释）。
       **同族还没查完的两处**：① 其它仓储/工具签名里的 `unknown` + `as never`
       （全仓 `as never` 的现存数量由 `check-non-null-assertions` 之外的另一条线管，没有专门判据）；
-      ② 「一个 procedure 从迁移那天起就是死的」这类缺陷**只有执行者能发现**，
-      剩下 5 个零测试 router（`post` / `user` / `skill` / `workflowModel` / `customNode`）
-      是同一问句的未答部分。证据：`src/lib/core/repository-lora.ts`（修后的类型与注释）、
+      ② 「一个 procedure 从迁移那天起就是死的」这类缺陷**只有执行者能发现** —— 这一支
+      随 E3 收口（`tests/trpc-surface-executors.test.ts` 把「挂载即欠执行者」做成判据，
+      `post` / `user` / `customNode` 就是被它照出来后删掉的）。
+      **本批复算照出的新同族实例（后果是性能，不是 500）**：
+      `workflowTemplateRepository.findByIdForUserSelect(userId, id, _select)` 的第三参
+      **带下划线、根本没被用**，实现走的是 `db.select()` 全列 —— 于是 `workflow-detail.ts`
+      里那份「只取需要的列，别把 `positions` / `rawJson` 两个大 JSON blob 拖两遍」的投影
+      清单是空气，方法名承诺的能力没在。与 ① 同因：`select?: unknown` 让调用点与实现
+      的错位对编译器不可见。证据：`src/lib/core/repository-workflow-template.ts:57-70`。
+      证据：`src/lib/core/repository-lora.ts`（修后的类型与注释）、
       `changelog.d/0-router-gates-tranche2.md`。
 - [ ] **P3 卫生**：无 `.editorconfig`；`package.json` 无 `engines`；tsconfig 缺 `exactOptionalPropertyTypes` 等；`cn@^0.3.0` / `lucide-react:^1.47.0` 版本偏宽；双 TS 版本导致构建/门禁语义不一致；`/api/update-check` 无鉴权回显变更指纹；`comfyapp://` 由外部 helper 实现需单独审计防任意网页利用本机路径。
 
