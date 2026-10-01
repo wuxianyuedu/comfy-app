@@ -120,9 +120,15 @@ function runCargoTest() {
   return r.status ?? 1;
 }
 
-/** 壳时效：返回要阻断的消息，或 null（没改壳 / exe 比源码新）。 */
-export function freshnessProblem() {
-  const exe = defaultShellExe(ROOT);
+/**
+ * 壳时效：返回要阻断的消息，或 null（没改壳 / exe 比源码新）。
+ *
+ * `root` 可传是为了让**判决可被夹具执行**（ISSUE #1356）：此前它被模块级 `ROOT` 钉死，
+ * 于是「壳陈旧 ⇒ 阻断」这条传导从来没有用例跑过，规范 §11.10.4 那句「判据由测试锁」
+ * 只覆盖得到触发面。比时间戳的逻辑仍然只有 launcher 那一份（§12.18）。
+ */
+export function freshnessProblem(root = ROOT) {
+  const exe = defaultShellExe(root);
   if (!exe) {
     return (
       "改了桌面壳，但检出里根本没有编出来的壳" +
@@ -131,7 +137,7 @@ export function freshnessProblem() {
       "        （feature 不能省：不带它启动页会被导航到 devUrl、资源不内嵌，冷启动必现错误页）"
     );
   }
-  const warning = shellStaleWarning(exe, ROOT);
+  const warning = shellStaleWarning(exe, root);
   if (!warning) return null;
   // 判据原文结尾就是「建议重编：<命令>」，这里不再重复一遍，只补上「为什么必须重编」。
   const detail = (warning.split("；建议重编")[0] ?? warning).replace(
@@ -145,6 +151,112 @@ export function freshnessProblem() {
   );
 }
 
+/**
+ * 走过的每一格。类型写全而不是 `Record<string, unknown>`：消费方（用例）要拼 `${kind}:${state}`
+ * 并按 `kind` 收窄后读 `problem`，`unknown` 会让这些读法在 strict 下报错，
+ * 而为了让断言过就地把它们 `as string` 掉，等于把类型的意义丢掉。
+ *
+ * @typedef {{ kind: "cargo", state: "skipped" | "missing" | "ok" | "failed", code?: number }
+ *   | { kind: "freshness", state: "ok" | "blocked", problem?: string }} GateStep
+ */
+
+/**
+ * 判决本体：给定清单，决定这一步的退出码与走过的每一格。
+ *
+ * 抽成纯入口是**为了可被执行**（ISSUE #1356）—— 旧版把判决写在 `main()` 的 print 语句之间，
+ * 于是「cargo 缺失要拦」「cargo 失败就不再判时效」「壳陈旧要拦」「没编出壳要拦」这四条
+ * 只能用源码文本断言（`toContain("whichCommand")` 加一段抠源码正则），而**源码文本不是执行记录**
+ * （同族事故：#1345 把脚本自己打的 label 当成执行记录、#1350 把陈旧 `$LASTEXITCODE` 当成败）。
+ * 形状沿用 `check-dependency-audit.mjs` 的 `runAudit({ cwd, runner, fixtureFile })`：
+ * 注入只是让分支可测，出厂行为不变（§12.18，不再发明第二套）。
+ *
+ * @param {{staged?: string[], root?: string, cargoRunner?: () => number | null}} [options]
+ * @returns {{ exitCode: number, steps: GateStep[] }}
+ */
+export function runGate({
+  staged,
+  root = ROOT,
+  cargoRunner = runCargoTest,
+} = {}) {
+  const { touchesShell, needsCargoTest } = decide(staged ?? []);
+  if (!touchesShell) {
+    // 没碰壳就什么都不做（这一步不该给普通前端提交加一毫秒）。
+    return { exitCode: 0, steps: [] };
+  }
+
+  /** @type {GateStep[]} */
+  const steps = [];
+  if (needsCargoTest) {
+    const code = cargoRunner();
+    if (code === null) {
+      steps.push({ kind: "cargo", state: "missing" });
+      return { exitCode: 1, steps };
+    }
+    if (code !== 0) {
+      steps.push({ kind: "cargo", state: "failed", code });
+      // 顺序也是判据：编不过就不再往下判时效 —— 时效消息会把真因（Rust 侧编译/单测坏了）
+      // 挤成第二行，而这两笔钱也不该一起花。
+      return { exitCode: code, steps };
+    }
+    steps.push({ kind: "cargo", state: "ok" });
+  } else {
+    steps.push({ kind: "cargo", state: "skipped" });
+  }
+
+  const problem = freshnessProblem(root);
+  if (problem) {
+    steps.push({ kind: "freshness", state: "blocked", problem });
+    return { exitCode: 1, steps };
+  }
+  steps.push({ kind: "freshness", state: "ok" });
+  return { exitCode: 0, steps };
+}
+
+/**
+ * 把 `runGate` 的走格打成人类可读的行（打印只在 `main`，判决不在这里）。
+ *
+ * @param {{ exitCode: number, steps: GateStep[] }} result
+ * @returns {{ to: "out" | "err", text: string }[]}
+ */
+function linesFor(result) {
+  /** @type {{ to: "out" | "err", text: string }[]} */
+  const out = [];
+  for (const step of result.steps) {
+    if (step.kind === "cargo") {
+      if (step.state === "missing") {
+        out.push({
+          to: "err",
+          text:
+            "[shell-gate] PATH 上找不到 cargo —— 改了 Rust 壳却编不了，等于没验证。\n" +
+            "        装 Rust 工具链：https://rustup.rs/（或换一台能编壳的机器提交）",
+        });
+      } else if (step.state === "failed") {
+        out.push({
+          to: "err",
+          text: `[shell-gate] ✗ cargo test 失败（退出码 ${step.code}）—— 壳侧单测是这 37 条的唯一执行者，先修再提`,
+        });
+      } else if (step.state === "ok") {
+        out.push({ to: "out", text: "  [ok] cargo test" });
+      } else {
+        out.push({
+          to: "out",
+          text: "  · 跳过 cargo test（只改了 conf / build.rs / 启动页，Rust 源码没动）",
+        });
+      }
+      continue;
+    }
+    if (step.state === "blocked") {
+      out.push({ to: "err", text: `[shell-gate] ✗ ${step.problem}` });
+    } else {
+      out.push({
+        to: "out",
+        text: "  [ok] 壳二进制时效（复用 dev-launcher 的 shellStaleWarning 判据）",
+      });
+    }
+  }
+  return out;
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const stagedIdx = argv.indexOf("--staged");
@@ -152,48 +264,22 @@ function main() {
   // 只有从暂存区自动推导时，才剔除「原样采纳对方那侧」的壳文件
   // （见 dropAdoptedShellInputs）—— 否则纯前端 PR 只要拉了 master 就被永久拦住。
   const staged =
-    stagedIdx >= 0 ? argv.slice(stagedIdx + 1) : dropAdoptedShellInputs(stagedFiles());
-  const { touchesShell, needsCargoTest } = decide(staged);
+    stagedIdx >= 0
+      ? argv.slice(stagedIdx + 1)
+      : dropAdoptedShellInputs(stagedFiles());
 
-  if (!touchesShell) {
-    // 没碰壳就什么都不做（这一步不该给普通前端提交加一毫秒）。
-    return 0;
-  }
+  if (!decide(staged).touchesShell) return 0;
 
   console.log("[shell-gate] 暂存改动命中 src-tauri 的四类壳输入，开始判：");
-
-  if (needsCargoTest) {
+  if (decide(staged).needsCargoTest) {
     console.log("  · cargo test（src-tauri/src/** 有改动）");
-    const code = runCargoTest();
-    if (code === null) {
-      console.error(
-        "[shell-gate] PATH 上找不到 cargo —— 改了 Rust 壳却编不了，等于没验证。\n" +
-          "        装 Rust 工具链：https://rustup.rs/（或换一台能编壳的机器提交）",
-      );
-      return 1;
-    }
-    if (code !== 0) {
-      console.error(
-        `[shell-gate] ✗ cargo test 失败（退出码 ${code}）—— 壳侧单测是这 37 条的唯一执行者，先修再提`,
-      );
-      return code;
-    }
-    console.log("  [ok] cargo test");
-  } else {
-    console.log(
-      "  · 跳过 cargo test（只改了 conf / build.rs / 启动页，Rust 源码没动）",
-    );
   }
-
-  const problem = freshnessProblem();
-  if (problem) {
-    console.error(`[shell-gate] ✗ ${problem}`);
-    return 1;
+  const result = runGate({ staged });
+  for (const line of linesFor(result)) {
+    if (line.to === "err") console.error(line.text);
+    else console.log(line.text);
   }
-  console.log(
-    "  [ok] 壳二进制时效（复用 dev-launcher 的 shellStaleWarning 判据）",
-  );
-  return 0;
+  return result.exitCode;
 }
 
 if (
