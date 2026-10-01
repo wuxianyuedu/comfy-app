@@ -12,14 +12,34 @@
 // 所以：这段是那条规则的**实现本体**，`useInterval` 只是它的 React 外壳。
 // 语义、边界与坑（含「上一轮没回来就发下一轮」不在这里挡，那是背压、由调用方决定）
 // 全部以 `use-interval.ts` 的文件头为准，两处共用同一份判断，不各写一套。
+//
+// **`ms` 可以是函数**（ISSUE #1351）：存活探测要「按阶段给频率」（启动等待
+// 400ms、空闲 15s、出图 30s、隐藏 60s），而档位在运行中会变。函数形态让
+// 「下一拍等多久」在**每拍跑完之后**重新问一次 —— 调用方因此不必 stop/start
+// 换档（那会重放一次「立刻先跑」，正好多打一探测在高峰期）。细节见
+// {@link PollTimerOptions.ms}。
 
 import { fireAndForget } from "~/lib/async-action";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 
 /** 启动一条轮询；返回停止函数。 */
 export interface PollTimerOptions {
-  /** 间隔毫秒数；`null` / `0` 表示不跑。 */
-  ms: number | null;
+  /** 间隔毫秒数；`null` / `0` 表示不跑。
+   *
+   *  也可以给一个**函数**：每次跑完都重新问一次「下一拍等多久」。这是
+   *  「按阶段给频率」唯一的落点（ISSUE #1351）—— 存活探测在「启动等待 /
+   *  空闲 / 出图 / 隐藏」四档之间的间隔差一个数量级，而档位在**运行中**变
+   *  （用户点了生成、切走了窗口），一个创建时就定死的数字表达不了。
+   *
+   *  为什么不让调用方自己 stop/start 来换间隔：那会把「停表 → 立刻先跑一次
+   *  → 重新装事件监听」这段**每次都重放一遍**，于是切一次档就多发一探测
+   *  （而出图档本来就该降压，这一下正好打在高峰期）。函数形态只在**本拍跑完之后**
+   *  生效，不会抢跑。
+   *
+   *  函数返回 `null` 表示「**下一拍不排**」（调用方仍可经 `stop()` / 重建拉起）；
+   *  返回 `0` 表示「立刻再跑一拍」（事件驱动那一档）。两者**不可混为一谈**：
+   *  把 `null` 当 `0` 会成为忙等（实测一秒空转上万次）。 */
+  ms: number | null | (() => number | null);
   /** 启动时是否立即先跑一次（默认 true）。 */
   immediate?: boolean;
   /** 页面不可见时是否暂停（默认 true），回前台立即补跑一次。 */
@@ -51,12 +71,16 @@ export function startPollTimer(
     onError,
   }: PollTimerOptions,
 ): () => void {
-  if (ms == null || ms <= 0) return () => undefined;
+  /* 固定间隔与函数间隔走**两条装表路径**：固定值用 `setInterval`（最省事、语义
+   * 也最直白），函数值必须用 `setTimeout` 链 —— 每拍跑完才知道下一拍等多久。 */
+  const dynamic = typeof ms === "function";
+  if (!dynamic && (ms == null || ms <= 0)) return () => undefined;
 
   // 未显式指定时按运行环境决定：桌面壳里默认开、浏览器 tab 里默认关。
   const unfocused = pauseWhenUnfocused ?? isDesktopShell();
 
   let timer: ReturnType<typeof setInterval> | null = null;
+  let chain: ReturnType<typeof setTimeout> | null = null;
 
   const tick = (): void => {
     /* `run` 可以是 async 函数，返回值因此可能是 Promise。这里不写 `void run()`：
@@ -69,11 +93,34 @@ export function startPollTimer(
       clearInterval(timer);
       timer = null;
     }
+    if (chain !== null) {
+      clearTimeout(chain);
+      chain = null;
+    }
   };
   const start = (): void => {
     stop();
     if (immediate) tick();
-    timer = setInterval(tick, ms);
+    if (!dynamic) {
+      timer = setInterval(tick, ms);
+      return;
+    }
+    /* 函数形态：本拍跑完再问下一拍的间隔。`run` 是异步的，但这里**不等它**
+     * ——等待会让「上一轮还没回来」变成阻塞，而背压是调用方的事（见文件头）。
+     * 「跑完再排」在这里的含义是「本拍已发车」，不是「本拍已到站」。 */
+    const arm = (): void => {
+      const next = ms();
+      /* `null` = 下一拍不排（调用方靠 `stop()` / 重建拉起，或者它自己会重新
+       * 订阅）。**不能与 `0` 混为一谈**：`0` 是「立刻再跑一拍」（事件驱动那一档），
+       * 把 `null` 也当成 0 就成了忙等 —— 实测这条会在一秒内空转上万次。 */
+      if (next === null) return;
+      const delay = next <= 0 ? 0 : next;
+      chain = setTimeout(() => {
+        tick();
+        arm();
+      }, delay);
+    };
+    arm();
   };
 
   if (!pauseWhenHidden && !unfocused) {
