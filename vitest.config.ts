@@ -405,6 +405,24 @@ export default defineConfig({
           statements: 75,
           branches: 70,
         },
+        /* 应用内控制台（ISSUE #1327）：命令目录/解析（`console-catalog`）、
+         * 回环闸门（`console-guard`）、SSE 客户端（`console-client`）、
+         * 执行面（`console-run`）、运行槽单例（`console-registry`）。
+         * 新增域**同批**登记（规范 §12.5.3 R14 / §18.6）：本条的数值取自
+         * `pnpm exec vitest run --coverage src/lib/console` 的实测值向下取整到
+         * 5 的倍数（96.39 / 84.35 / 100 / 98.41 → 95/80/100/95），只升不降。
+         * 为什么 functions 只给 95、branches 只给 85：执行面里有几条分支在本机
+         * **够不到** —— `spawn` **同步**抛（可执行文件不存在时 Node 走的是异步
+         * `error` 事件，已由用例覆盖）、`remaining <= 0` 那一轮的兜底、
+         * 以及若干「参数交互上到不了」的默认值分支。它们的判据在用例里
+         * （含真起进程断言整树回收），只是覆盖率工具按行/按分支算不到。
+         * 门槛仍按同一条口径取：实测值向下取整到 5 的倍数。 */
+        "src/lib/console/**": {
+          lines: 95,
+          functions: 95,
+          statements: 95,
+          branches: 85,
+        },
         // Phase 3a：生产模型同步 reducer（shot ↔ 画布节点）。sync.ts 实测 100%，
         // 门槛取 95 给 3b/3c 追加留余量，只升不降（§18.6）。src/lib/** 已在
         // coverage.include 里，无需单列 include。

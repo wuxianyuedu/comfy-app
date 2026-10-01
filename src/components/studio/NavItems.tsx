@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   ListChecks,
   Puzzle,
+  Terminal,
 } from "lucide-react";
 
 /**
@@ -21,9 +22,9 @@ import {
  * 四个分区（一处定义、多处消费，避免漂移）：
  *   · 全局项（`globalNavItems`）—— 主页侧栏顶部常驻：首页 / 模型 / 历史 / 队列 / 炼丹 / 流程；
  *   · 全局浮层（`OVERLAY_NAV_ITEMS`）—— 紧跟全局项之后，仍是**应用级**入口但点开的是
- *     弹窗而不是视图：模型适配 / 模式契约。这两件事是**项目无关**的（模式是工作流库定义的、
- *     适配器是每个远端模型 × 每个模式的字段映射，都不依赖某个具体项目），所以它们的入口
- *     不进工坊那个项目内视图；
+ *     弹窗/浮层而不是视图：模型适配 / 模式契约 / 控制台。这三件事都是**项目无关**的
+ *     （模式是工作流库定义的、适配器是每个远端模型 × 每个模式的字段映射、控制台跑的是
+ *     仓库级的脚本命令，都不依赖某个具体项目），所以它们的入口不进工坊那个项目内视图；
  *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片），
  *     不再进主页侧栏：它们是对「当前项目」的操作投影，脱离项目无意义；
  *   · 项目入口（`PROJECTS_ENTRY`）—— 侧栏最底部的「项目」分组（可展开列出已有项目）。
@@ -72,8 +73,8 @@ const ICON_PROPS = {
   strokeLinejoin: "round" as const,
 };
 
-/** 全局浮层入口的机器 id —— 不进 `WorkspaceView`：它不切视图，只开弹窗。 */
-export type OverlayEntryId = "model-adapters" | "mode-contract";
+/** 全局浮层入口的机器 id —— 不进 `WorkspaceView`：它不切视图，只开浮层。 */
+export type OverlayEntryId = "model-adapters" | "mode-contract" | "console";
 
 /**
  * 应用级浮层入口（**项目无关**，故不进项目内的任何界面）。
@@ -112,6 +113,15 @@ export const OVERLAY_NAV_ITEMS: OverlayNavItem[] = [
     label: "模式契约",
     /* 与工作流库页头那枚「模式契约」按钮同图标（同一件事在两处出现时认得出是同一件）。 */
     icon: <Puzzle size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 控制台（ISSUE #1327）：跑质量门禁 / db:push / git 查询这类「本来要另开一个
+     * 终端窗口」的操作。放**应用级**入口而不是项目页签 —— 它跑的是仓库级脚本
+     * （`pnpm test`、`drizzle-kit`），与「当前是哪个画布项目」无关；挂在项目内
+     * 会让人以为换项目就换了一套命令。 */
+    overlay: "console",
+    label: "控制台",
+    icon: <Terminal size={22} strokeWidth={1.8} />,
   },
 ];
 
