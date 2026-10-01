@@ -284,7 +284,7 @@ function scheduleReconnect() {
  * 长会话一小时就是几千行诊断噪声，而这个问题只需要「这类帧来过」这一个事实。
  *
  * 计数放在模块级（不是 `RunnerState`）：纯诊断，跨 HMR 丢了计数不影响任何判决，
- * 不值得为它升那份单例键的版本；类型数设上限，免得被异常服务刷成一个无界 Map。
+ * 不值得为它升那份单例键的版本；类型数设上限，免得被异常服务刷成一个无界集合。
  */
 const unownedFrameTypes = new Set<string>();
 const UNOWNED_FRAME_TYPE_MAX = 32;
