@@ -5,9 +5,22 @@
  * 窄了 = 改了壳没人管（就是此前 37 条 `#[test]` 从不跑、硬规则 5 只靠人记的那个状态）；
  * 宽了 = 每个前端提交都要付一次 Rust 编译（冷实测 430s），那会让人直接 `--no-verify`，
  * 判据反而归零。本文件守的就是这两头，外加「别自己重抄一份比时间戳的逻辑」。
+ *
+ * 另有一半是 ISSUE #1356 才补上的：**判决本身**。此前 `runGate` 的四条出口（cargo 缺失 /
+ * cargo 失败 / 壳陈旧 / 没编出壳）与「判出问题 ⇒ 非零退出」这条传导从来没有用例执行过，
+ * 只有一段抠源码文本的断言顶着 —— 那是「源码长这样」，不是「跑起来会退 1」。现在由
+ * `runGate 的四条判决分支真跑` 那组用夹具（一次性检出 + 受控 mtime + 注入的 cargoRunner）执行。
  */
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -17,6 +30,8 @@ import {
   SHELL_INPUT_RE,
   decide,
   dropAdoptedShellInputs,
+  freshnessProblem,
+  runGate,
 } from "../scripts/shell-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -121,12 +136,14 @@ describe("桌面壳提交门禁的触发面（§11.10.4 / 硬规则 5）", () =>
     expect(hook).toContain("node scripts/shell-gate.mjs");
   });
 
-  it("cargo 缺失时不静默放行：脚本必须给出可行动的指路", () => {
+  it("cargo 缺失时的话术要能指路（**退出码那一半改由 runGate 的用例真跑**）", () => {
     const src = read(GATE_SCRIPT);
     expect(src).toContain("whichCommand");
     expect(src).toMatch(/rustup\.rs/);
-    // 找不到 cargo 的分支必须返回非零，而不是 `return 0` 蒙过去。
-    expect(src).toMatch(/return 1;\s*\n\s*\}\s*\n\s*if \(code !== 0\)/);
+    // 这里**不再**用 `toMatch(/return 1;\s*\n\s*\}\s*\n\s*if \(code !== 0\)/)` 那种抠源码
+    // 文本的写法（ISSUE #1356）：它断言的是「源码长这样」而不是「跑起来会退 1」，
+    // 加一行注释就红、判决坏了却不红 —— 两向都不稳。「缺失 ⇒ 退 1」现在由
+    // `runGate 的四条判决分支真跑` 那组里的 cargoRunner 用例执行。
   });
 
   it("不自己重抄一份合并判据：采纳过滤只认 MERGE_HEAD 与第二父比对", () => {
@@ -154,7 +171,8 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
   const temps: string[] = [];
 
   afterEach(() => {
-    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+    for (const dir of temps.splice(0))
+      rmSync(dir, { recursive: true, force: true });
   });
 
   /** 建一个临时仓库；返仓库根。`git` 用户名/邮箱按仓库级设，不污染全局。 */
@@ -179,7 +197,9 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
 
   function commit(dir: string, msg: string): void {
     execFileSync("git", ["-C", dir, "add", "-A"], { stdio: "pipe" });
-    execFileSync("git", ["-C", dir, "commit", "-q", "-m", msg], { stdio: "pipe" });
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", msg], {
+      stdio: "pipe",
+    });
   }
 
   it("非合并态：原样返回，不做任何过滤", () => {
@@ -211,10 +231,16 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
     // 回到我方，合并对方 —— 用 `--no-commit` 把合并**停在进行中**：
     // 无冲突的 merge 会自动提交并清掉 MERGE_HEAD，那时门禁根本不会跑，
     // 过滤也就无从谈起。真正的现场（PR 拉了 master 后停在冲突/待提交）才有 MERGE_HEAD。
-    execFileSync("git", ["-C", dir, "checkout", "-q", "main"], { stdio: "pipe" });
-    execFileSync("git", ["-C", dir, "merge", "--no-commit", "--no-edit", "other"], {
+    execFileSync("git", ["-C", dir, "checkout", "-q", "main"], {
       stdio: "pipe",
     });
+    execFileSync(
+      "git",
+      ["-C", dir, "merge", "--no-commit", "--no-edit", "other"],
+      {
+        stdio: "pipe",
+      },
+    );
 
     const staged = [
       "src-tauri/splash-assets/index.html", // 采纳自 other
@@ -242,7 +268,9 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
     });
     write(dir, "src-tauri/splash-assets/index.html", "theirs");
     commit(dir, "shell theirs");
-    execFileSync("git", ["-C", dir, "checkout", "-q", "main"], { stdio: "pipe" });
+    execFileSync("git", ["-C", dir, "checkout", "-q", "main"], {
+      stdio: "pipe",
+    });
     try {
       execFileSync("git", ["-C", dir, "merge", "--no-edit", "other"], {
         stdio: "pipe",
@@ -260,5 +288,177 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
     );
     expect(kept).toEqual(["src-tauri/splash-assets/index.html"]);
     expect(decide(kept).touchesShell).toBe(true);
+  });
+});
+
+/* ── 判决与传导的真跑（ISSUE #1356）───────────────────────────────────────
+ *
+ * 上面那组钉的是**触发面**（哪些文件算壳输入）与**合并采纳过滤**（真造 git 合并态）。
+ * 这一组钉的是另一半：`runGate` 的四条出口与「判出问题 ⇒ 非零退出」这条传导。
+ *
+ * 为什么单独补：旧版把判决写在 `main()` 的 print 语句之间，所以这四条从来没有用例跑过，
+ * 只有一段抠源码文本的断言顶着（`toContain("whichCommand")` 加
+ * `toMatch(/return 1;\s*\n\s*\}\s*\n\s*if \(code !== 0\)/)`）—— 那是「源码长这样」，
+ * 不是「跑起来会退 1」。同族事故：#1345 把脚本自己打的 label 当成执行记录、
+ * #1350 把陈旧 `$LASTEXITCODE` 当成败。**源码文本不是执行记录。**
+ */
+describe("runGate 的四条判决分支真跑（夹具）", () => {
+  const temps: string[] = [];
+
+  afterEach(() => {
+    for (const dir of temps.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  const HOUR = 3_600_000;
+
+  /**
+   * 造一份最小壳检出：四类输入齐，`exe` 决定壳二进制的新旧。
+   *
+   * - `newer` = 编过了（该放行）；`older` = 改了壳忘了重编（该拦）；`none` = 根本没编出来（该拦 + 给命令）。
+   * - `app.exe` 与 `app` 两个名字都放：`defaultShellExe()` 按平台选，两个都有就不必给 CI 分叉。
+   * - 时间差给足 1 小时：文件系统 mtime 粒度在某些卷上是秒级，差几十毫秒的比较不稳。
+   */
+  function shellFixture(exe: "newer" | "older" | "none"): string {
+    const dir = mkdtempSync(path.join(tmpdir(), "shell-gate-fixture-"));
+    temps.push(dir);
+    const inputTime = new Date(Date.now() - 5 * HOUR);
+    const inputs: [string, string][] = [
+      ["src-tauri/tauri.conf.json", "{}\n"],
+      ["src-tauri/build.rs", "// fixture\n"],
+      ["src-tauri/src/lib.rs", "// fixture\n"],
+      ["src-tauri/splash-assets/index.html", "<html></html>\n"],
+    ];
+    for (const [rel, body] of inputs) {
+      const full = path.join(dir, rel);
+      mkdirSync(path.dirname(full), { recursive: true });
+      writeFileSync(full, body);
+      utimesSync(full, inputTime, inputTime);
+    }
+    if (exe !== "none") {
+      const exeTime = new Date(
+        inputTime.getTime() + (exe === "newer" ? HOUR : -HOUR),
+      );
+      for (const name of ["app.exe", "app"]) {
+        const full = path.join(dir, "src-tauri", "target", "release", name);
+        mkdirSync(path.dirname(full), { recursive: true });
+        writeFileSync(full, "MZ-fixture");
+        utimesSync(full, exeTime, exeTime);
+      }
+    }
+    return dir;
+  }
+
+  it("没碰壳：退 0，且一步都不走（不给普通前端提交加一毫秒）", () => {
+    const dir = shellFixture("older");
+    const r = runGate({
+      staged: ["src/app/page.tsx", "src/lib/x.ts"],
+      root: dir,
+    });
+    expect(r.exitCode).toBe(0);
+    // 空 steps 才是「什么都没做」；「做了但都过」不是一回事
+    expect(r.steps).toEqual([]);
+  });
+
+  it("只改 conf、壳二进制比源码新：放行", () => {
+    const dir = shellFixture("newer");
+    const r = runGate({ staged: ["src-tauri/tauri.conf.json"], root: dir });
+    expect(r.exitCode).toBe(0);
+    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual([
+      "cargo:skipped",
+      "freshness:ok",
+    ]);
+  });
+
+  /**
+   * 取第 `idx` 格的时效消息。`steps` 是判别联合，读 `problem` 前必须先按 `kind` 收窄 ——
+   * 收窄之后「这一步根本不是时效判决」会给出空串，断言就落在「它必须是 blocked」上。
+   */
+  function freshnessOf(r: ReturnType<typeof runGate>, idx = 1): string {
+    const step = r.steps[idx];
+    return step?.kind === "freshness" ? (step.problem ?? "") : "";
+  }
+
+  it("只改 conf、壳二进制是旧的：退 1，消息说清「重编」而不是只说「失败了」", () => {
+    const dir = shellFixture("older");
+    const r = runGate({ staged: ["src-tauri/tauri.conf.json"], root: dir });
+    expect(r.exitCode).toBe(1);
+    const problem = freshnessOf(r);
+    expect(problem).toContain("二进制仍是旧的");
+    // 硬规则 5 的关键提醒：feature 不能省，不带它冷启动必现错误页
+    expect(problem).toContain("--features custom-protocol");
+  });
+
+  it("改了 Rust 而 PATH 上没有 cargo：退 1（此前这条只有源码文本断言）", () => {
+    const dir = shellFixture("newer");
+    const r = runGate({
+      staged: ["src-tauri/src/lib.rs"],
+      root: dir,
+      cargoRunner: () => null,
+    });
+    expect(r.exitCode).toBe(1);
+    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual([
+      "cargo:missing",
+    ]);
+  });
+
+  it("改了 Rust 而 cargo 退非 0：把那个码原样交出去，且**不再往下判时效**", () => {
+    // 顺序也是判据：Rust 侧编不过时，时效消息会把真因挤成第二行，两笔钱也不该一起花。
+    // 夹具里 exe 故意做成旧的 —— 如果实现忘了 return，这里会多出一条 freshness:blocked。
+    const dir = shellFixture("older");
+    const r = runGate({
+      staged: ["src-tauri/src/lib.rs"],
+      root: dir,
+      cargoRunner: () => 7,
+    });
+    expect(r.exitCode).toBe(7);
+    expect(r.steps).toHaveLength(1);
+    expect(r.steps.some((s) => s.kind === "freshness")).toBe(false);
+  });
+
+  it("改了 Rust、cargo 通过、壳也是新的：两格都记 ok 并退 0", () => {
+    const dir = shellFixture("newer");
+    const r = runGate({
+      staged: ["src-tauri/src/lib.rs"],
+      root: dir,
+      cargoRunner: () => 0,
+    });
+    expect(r.exitCode).toBe(0);
+    expect(r.steps.map((s) => `${s.kind}:${s.state}`)).toEqual([
+      "cargo:ok",
+      "freshness:ok",
+    ]);
+  });
+
+  it("检出里压根没有壳二进制：退 1 并给全重编命令（不是「跳过」）", () => {
+    const dir = shellFixture("none");
+    const r = runGate({ staged: ["src-tauri/tauri.conf.json"], root: dir });
+    expect(r.exitCode).toBe(1);
+    const problem = freshnessOf(r);
+    expect(problem).toContain("根本没有编出来的壳");
+    expect(problem).toContain(
+      "cargo build --release --features custom-protocol",
+    );
+  });
+
+  it("freshnessProblem 单独可判：newer 给 null、older 给话术（不靠 runGate 顺带）", () => {
+    expect(freshnessProblem(shellFixture("newer"))).toBeNull();
+    expect(freshnessProblem(shellFixture("older")) ?? "").toContain(
+      "二进制仍是旧的",
+    );
+  });
+
+  it("CLI 的退出码就是 runGate 的退出码（传导不能被 print 语句吃掉）", () => {
+    // 不依赖这台机器的壳新不新：断言的是**两个入口给同一个结论**。
+    // 旧形状里这条无法测 —— 判决埋在 main 的 console.log 之间，夹具进不去。
+    const staged = ["src-tauri/tauri.conf.json"];
+    const inProcess = runGate({ staged });
+    const cli = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "shell-gate.mjs"), "--staged", ...staged],
+      { cwd: ROOT, encoding: "utf8" },
+    );
+    expect(cli.status).toBe(inProcess.exitCode);
+    expect([0, 1]).toContain(cli.status);
   });
 });
