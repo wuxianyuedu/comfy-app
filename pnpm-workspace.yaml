@@ -52,6 +52,13 @@ overrides:
   # prisma/@prisma/client 子树及 deepmerge-ts，避免携带 CVE 的依赖进入锁文件。
   '@better-auth/prisma-adapter>prisma': '0.0.0-nonexistent'
   '@better-auth/prisma-adapter>@prisma/client': '0.0.0-nonexistent'
+  # eslint-plugin-unused-imports 把 @typescript-eslint/eslint-plugin 声明为**可选 peer**
+  # （范围 ^8.0.0-0），pnpm 的 autoInstallPeers 会为它**独立**解析出一个实例；而本项目
+  # 直接依赖的 typescript-eslint 自带同一批插件。两者只要版本不同，ESLint 10 就会在
+  # 扁平配置合并时报 `ConfigError: Cannot redefine plugin "@typescript-eslint"` ——
+  # 表现是**整仓 lint 完全跑不起来**（连非 React 文件都过不去），而不是几条告警。
+  # 锁成同一个版本即可：让可选 peer 与 typescript-eslint 解析到同一实例。
+  '@typescript-eslint/eslint-plugin': '8.71.0'
   # 安全修复（ISSUE #1331，`node scripts/check-dependency-audit.mjs` 的第一批存量）：
   # 下面四条都是**同 major 的补丁版**，且全部是**传递依赖**（没有一处是我们直接 import 的
   # API），所以走 overrides 而不是升级顶层依赖 —— 顶层升级既动不到它们（父包钉着自己的
