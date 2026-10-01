@@ -6,6 +6,7 @@ import "server-only";
 
 import { db } from "~/lib/db";
 import { clampPct } from "~/lib/progress";
+import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { loraTrainingJob, type LoraTrainingJob } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { tailWindow } from "~/lib/page-window";
@@ -70,29 +71,25 @@ export class LoraTrainingJobRepository extends DrizzleRepository<LoraTrainingJob
     return rows[0]!;
   }
 
+  /** 按用户取一条训练任务。
+   *  `select` 收的是 **Drizzle 的列引用**（`{ id: loraTrainingJob.id }` 这种）。
+   *  ⚠️ 迁移期这一度是 `select?: unknown` + `db.select(select as never)`：调用点写回
+   *  Prisma 那套布尔投影（`{ id: true, status: true }`）时编译器一声不响，运行时生成
+   *  的是空投影 → SQL 语法错，`train.cancel` 自 Prisma→Drizzle 迁移起每次都是 500，
+   *  而这条路由没有执行者，所以没有任何一条红。类型收紧就是这条的判据：
+   *  要减列就传列引用，别把布尔值递进来。 */
   async findByIdForUser(
     userId: string,
     id: string,
-    select?: unknown,
+    select?: Record<string, AnySQLiteColumn>,
   ): Promise<LoraTrainingJob | null> {
-    if (select) {
-      const rows = await db
-        .select(select as never)
-        .from(loraTrainingJob)
-        .where(
-          and(eq(loraTrainingJob.id, id), eq(loraTrainingJob.userId, userId)),
-        )
-        .limit(1);
-      return rows[0] ?? null;
-    }
-    const rows = await db
-      .select()
+    const rows = await (select ? db.select(select) : db.select())
       .from(loraTrainingJob)
       .where(
         and(eq(loraTrainingJob.id, id), eq(loraTrainingJob.userId, userId)),
       )
       .limit(1);
-    return rows[0] ?? null;
+    return (rows[0] as LoraTrainingJob | undefined) ?? null;
   }
 
   async findStatusById(jobId: string): Promise<{ status: string } | null> {

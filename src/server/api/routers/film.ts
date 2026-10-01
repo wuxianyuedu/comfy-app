@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { filmRepository } from "~/lib/core/repository";
 import { FILM_COMPOSE_SIZE } from "~/lib/film/film-size";
@@ -93,7 +94,11 @@ export const filmRouter = createTRPCRouter({
       const film = await filmRepository.findByIdForUser(ctx.user.id, input.id, {
         includeShots: true,
       });
-      if (!film) throw new Error("Film not found");
+      /* 按 `findByIdForUser` 取片 = 越权与不存在天然同形；但错误必须是 **NOT_FOUND**
+       * 而不是裸 Error —— 后者会被 tRPC 归成 INTERNAL_SERVER_ERROR，客户端拿不到能
+       * 分支的码、服务端还把一次正常点击报成故障（口径同 A2 / A3 / A12）。 */
+      if (!film)
+        throw new TRPCError({ code: "NOT_FOUND", message: "成片不存在" });
       return { film };
     }),
 
@@ -102,7 +107,8 @@ export const filmRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const film = await filmRepository.findByIdForUser(ctx.user.id, input.id);
-      if (!film) throw new Error("Film not found");
+      if (!film)
+        throw new TRPCError({ code: "NOT_FOUND", message: "成片不存在" });
       await filmRepository.markCancelled(input.id);
       return { ok: true };
     }),
@@ -112,7 +118,8 @@ export const filmRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const film = await filmRepository.findByIdForUser(ctx.user.id, input.id);
-      if (!film) throw new Error("Film not found");
+      if (!film)
+        throw new TRPCError({ code: "NOT_FOUND", message: "成片不存在" });
       const { startFilm } = await import("~/server/film/orchestrator");
       await startFilm(input.id);
       return { ok: true };
@@ -123,7 +130,8 @@ export const filmRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const film = await filmRepository.findByIdForUser(ctx.user.id, input.id);
-      if (!film) throw new Error("Film not found");
+      if (!film)
+        throw new TRPCError({ code: "NOT_FOUND", message: "成片不存在" });
       const { composeFilm } = await import("~/server/film/compose-film");
       await composeFilm(input.id);
       return { ok: true };
