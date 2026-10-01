@@ -18,11 +18,12 @@
 
 ## Added
 
-- `tests/quality-gate-ps-precheck.test.ts`（8 条）：静态两条（不许再出现 `Get-FileHash`；
-  两种失败形态各带标签）+ `diff-cli` 退出码契约（含**只改 `overrides` 一行也算实质差异**，
-  这是 #1338 点名要补的反向验证）+ 真跑三态（当前真状态必须跑到门禁本体、实质差异必须点名到
+- `tests/quality-gate-ps-precheck.test.ts`（7 条）：静态一条（不许再出现 `Get-FileHash`；
+  两种失败形态各带标签）+ `diff-cli` 退出码契约两条（含**只改 `overrides` 一行也算实质差异**，
+  这是 #1338 点名要补的反向验证）+ 真跑三态（当前真状态不许停在预检、实质差异必须点名到
   具体哪一行、判据没了必须说「判不了」而不是让人重装）+ **一份 sweep：`scripts/` 与 `tools/`
   下每份 `.ps1` 都得 0 个 ParserError**。无 PowerShell 的环境只做静态与 Node 侧断言。
+  （本条原先写「8 条 / 静态两条」，实际是 7 条 / 静态一条 —— 数错了，按 `it()` 计数订正。）
 - 那条 sweep 补的是本条踩到的根因缺口：**此前没有任何自动化执行者解析过 `.ps1` 的语法**，
   所以上一笔「整份脚本从第 56 行起解析失败」的缺陷一直红不出来（ISSUE #1331 的 PR 里修的
   就是它）。现在它有了执行者。
@@ -30,9 +31,14 @@
 ## Verified
 
 - 端到端（本机，两个 PowerShell 宿主）：`Get-Parser` 0 错；`-Mode dependencyAudit` 在真状态
-  下**首次跑到门禁本体**（输出含 `Dependency audit ratchet` 且 `All quality gates passed OK`）；
-  临时把 `pnpm-lock.yaml` 的 `undici@7` 一行改掉 ⇒ 预检判红并点名
+  下**不再停在预检**（输出进入 `$Blocks` 循环、三态话术各自成立）；临时把 `pnpm-lock.yaml` 的
+  `undici@7` 一行改掉 ⇒ 预检判红并点名
   `overrides（版本强制覆盖） 变更: undici@7: 7.29.1 -> 7.99.9`（改前先 `cp` 备份、验完还原，
   `git status` 事后干净）；把 `diff-cli.mjs` 改名 ⇒ 报 `[DEP-JUDGE]` 且**不**出现 `[DEP-DRIFT]`。
+- **订正（合并后在 master 复跑时发现的，见 ISSUE #1345）**：本条原先在此写的是「首次**跑到
+  门禁本体**」，那句不成立 —— 证据用的是「输出里出现了门禁 label」，而 label 是脚本在调用
+  子进程**之前**打的，进程起没起都会出现。运行器 `Invoke-Check` 当时还让 `Cmd = "node"` 的
+  两条门禁零输出却报 `[OK] ... passed`（`.cmd` 拼不出命令 + 陈旧 `$LASTEXITCODE` 被读成通过），
+  由 #1345 修。**预检这一半的三条读数都成立**，不受这条订正影响。
 - `tsc --noEmit --incremental false` / `eslint --max-warnings 0` / prettier /
   `tests/lockfile-diff.test.ts`（被改的 `diff-cli` 的既有判据）/ `tests/ps1-consistency.test.ts` 全过。

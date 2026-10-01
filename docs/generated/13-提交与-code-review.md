@@ -594,7 +594,7 @@ override → 手工写注释解释为什么」，而**「这次忘了查」没�
 里「用 node 直跑门禁脚本」那条分支从只认 `.cjs` 扩到也认 `.mjs` —— 只认前者会把新的
 ESM 门禁当成 pnpm 参数送出去。
 
-**PS 侧那两条既有缺陷（一条本刀修、一条由 #1338 收口），记清楚形状**：① `quality-gate.ps1`
+**PS 侧的既有缺陷（① 本刀修、② 由 #1338 收口、运行器层另立 #1345），记清楚形状**：① `quality-gate.ps1`
 **整份脚本此前解析失败** —— 第 56 行那个正则写在双引号串里用了 `\"`，而 PowerShell 的转义符是
 反引号不是反斜杠，于是字符串被提前结束；`[Parser]::ParseFile` 在 PS 5.1 与 pwsh 7 上**各报
 3 个错**（本机实测），`-Mode` 给什么都进不了脚本体。它由 `fbabbc25` 引入，而**当时没有任何
@@ -611,9 +611,32 @@ ESM 门禁当成 pnpm 参数送出去。
 反面教材）。现在判决与明细共用 `scripts/lockfile/diff-cli.mjs` 的退出码（0 一致 / 1 实质差异 /
 2 判不了），并把**「判不了」与「不一致」分成两条话术**（`[DEP-JUDGE]` / `[DEP-DRIFT]`）——
 判据自身跑不起来时 Node 默认退 1，不分开就会把「判据没了」报成「依赖陈旧、去重装」。
-修完之后的实测读数：`pwsh -File scripts/quality-gate.ps1 -Mode dependencyAudit` →
-`[OK] Dependency audit ratchet … passed` + `All quality gates passed OK`，也就是 Windows
-那一侧的一键门禁**第一次真的跑到门禁本体**。
+修完之后的实测读数：**预检这一半成立** —— 三态各自说话（`[DEP-JUDGE]` / `[DEP-DRIFT]` / 放行），
+`-Mode dependencyAudit` 不再停在预检。
+
+**但当时随本刀写下的那句「第一次真的跑到门禁本体」是错的，由 ISSUE #1345 订正。**
+错因是证据选错了：`==>` 那行 label 是脚本在 `&` **之前**用 `Write-Host` 打的，进程起没起都会
+出现，拿它当「跑到本体」的证据等于钉一个假绿（`tests/quality-gate-ps-precheck.test.ts` 当时
+钉的就是同一个弱标记，所以用例跟着一起绿）。走进 `$Blocks` 之后 `Invoke-Check` 还叠着三条
+通道，让 `Cmd = "node"` 那两条门禁（`format`、`dependencyAudit`）**不论子脚本做什么都是绿的**：
+
+1. 它给 `^(pnpm|npm|node)$` 一律拼 `.cmd`（`ac62b64d` 引入的假设），而本机 `node` 是真
+   `node.exe`、`node.cmd` 不存在（`Get-Command node.cmd` → NOT FOUND）⇒ `&` 连进程都没起。
+   对 pnpm/npm 拼 `.cmd` 是对的（裸名会解析到同名 `.ps1`，受执行策略摆布）。
+2. `&` 起不来时 PowerShell 只发一条非终止错误、**不写 `$LASTEXITCODE`**，于是下一步读到的是
+   **预检那次成功调用留下的 0** ⇒ `[OK] ... passed`、整体退 0。定性证据：同一条命令直跑子脚本
+   一定打得出 `[dep-audit]` / `[format]`，而这两行在 PS 侧一次都没出现过。
+   （排除了另一种猜测：`$null -eq 0` 在 pwsh 7 是 False，所以那个 0 是陈旧值不是空值。）
+3. 子进程的 stdout 默认进函数的输出流，和 `return $code` 拼成数组
+   （实测 `Object[] ["child-marker-line", 0]`）⇒ 即便进程起来了，判决也不是纯退出码、
+   输出还被吞进变量里看不见（旧形状下 pnpm 那几条门禁的输出同样是被吞掉的）。
+
+现在的形状：命令按 `<name>.cmd` → `<name>` 候选解析，解析不到直接 `[FAIL][GATE-NOEXEC]` 退 127；
+调用前 `$global:LASTEXITCODE = $null`（实测两宿主一致：失败启动后仍为 `$null`，成功启动必写
+真实码），调用后仍为 `$null` 同样判 `[GATE-NOEXEC]`；子进程输出经 `| Out-Host` 落宿主，返回值
+只剩退出码。**口径（可迁移到别的判据）：证明「某一步跑过了」只能拿那一步自己的输出当证据。**
+Node 侧 `quality-gate.mjs` 不受这条影响（`result.error` + `status ?? 1`），已核对，不再写第二份。
+回归用例见 `tests/quality-gate-ps-precheck.test.ts` 里「运行器真跑」那组。
 
 **首批落地的读数**（2026-10-01 本机）：`pnpm audit --json` 当时报 **10 条
 high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 major 的现成修复版**，

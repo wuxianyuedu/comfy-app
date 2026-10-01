@@ -56,11 +56,12 @@ const REGISTERED: Registration[] = [
   {
     file: "tests/quality-gate-ps-precheck.test.ts",
     guard: "!hasPs",
-    count: 2,
+    count: 3,
     tier: "env",
     why:
-      "PATH 上没有 PowerShell 时，依赖预检的三态真跑与「每份 .ps1 都可解析」那条 sweep " +
-      "都跑不了（ISSUE #1338 的判据本就长在 Windows 侧）；同文件里静态与 Node 侧断言不分平台，始终在判",
+      "PATH 上没有 PowerShell 时，依赖预检三态、运行器「没跑起来必须判红」（ISSUE #1345）" +
+      "与「每份 .ps1 都可解析」那条 sweep 都跑不了（判据本就长在 Windows 侧）；" +
+      "同文件里静态与 Node 侧断言不分平台，始终在判",
   },
   {
     file: "tests/check-file-structure.test.ts",

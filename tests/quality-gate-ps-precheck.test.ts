@@ -14,6 +14,10 @@
  *    Node 的默认退出码是 1，而 1 在这份契约里是「判出了实质差异」—— 不分开的话，
  *    机器会指着人说「去重装」，而真实原因是判据没了（这正是本条实测到的形态）。
  *
+ * 后来这个文件成了 `quality-gate.ps1` 的**执行者**，覆盖面因此不止预检：还管运行器
+ * `Invoke-Check` 的「没跑起来 ≠ 通过」（ISSUE #1345，见下面那两组），以及「每份 `.ps1`
+ * 都得能解析」那条 sweep。两层各自的失效形状不同，注释里分开写，别混成一条。
+ *
  * 无 PowerShell 的环境（Linux CI）只做静态断言：真实执行在 Windows 侧。
  * 断言一律打在 ASCII 标签（`[DEP-DRIFT]` / `[DEP-JUDGE]`）与 ASCII 的差异明细上 ——
  * `Write-Host` 的中文经 `powershell.exe` 管道出来是 GBK 乱码，认中文子串的用例会
@@ -63,6 +67,8 @@ function makeFakeRepo(
   opts: {
     lockfileText?: string;
     dropFiles?: string[];
+    /** 改写假检出里那份 `quality-gate.ps1`（验运行器自身的形状时用）。 */
+    patchGateText?: (src: string) => string;
   } = {},
 ): { root: string; installedLock: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dep-precheck-"));
@@ -70,6 +76,10 @@ function makeFakeRepo(
   fs.mkdirSync(path.join(root, "scripts", "lockfile"), { recursive: true });
   fs.mkdirSync(path.join(root, "node_modules", ".pnpm"), { recursive: true });
   fs.copyFileSync(GATE_PS1, path.join(root, "scripts", "quality-gate.ps1"));
+  if (opts.patchGateText) {
+    const p = path.join(root, "scripts", "quality-gate.ps1");
+    fs.writeFileSync(p, opts.patchGateText(fs.readFileSync(p, "utf8")), "utf8");
+  }
   fs.copyFileSync(
     path.join(ROOT, "scripts", "quality-gate-shared.mjs"),
     path.join(root, "scripts", "quality-gate-shared.mjs"),
@@ -187,12 +197,14 @@ describe("diff-cli 的退出码契约（纯 Node，跨平台）", () => {
 });
 
 describe.skipIf(!hasPs)("依赖预检真跑（Windows / 有 PowerShell 时）", () => {
-  it("当前真状态：不许停在预检，必须跑到门禁本体", () => {
+  it("当前真状态：不许停在预检（label 出现只等于进了 $Blocks 循环）", () => {
     const { root } = makeFakeRepo();
     const r = runGate(root);
     expect(r.out).not.toContain("[DEP-DRIFT]");
     expect(r.out).not.toContain("[DEP-JUDGE]");
-    // 跑到 $Blocks 的证据：门禁 label 出现在输出里（旧形状在这里永远只有预检那四行）
+    // ⚠️ 这条**不是**「门禁本体跑过了」的证据：`==>` 那行 label 是脚本在调用子进程
+    // **之前**用 Write-Host 打的（`Invoke-Check` 开头），子进程起没起都会出现。
+    // #1345 的假绿正是把这条当成了那种证据。真证据在下面那条 `[dep-audit]` 用例里。
     expect(r.out).toContain("Dependency audit ratchet");
   });
 
@@ -219,6 +231,92 @@ describe.skipIf(!hasPs)("依赖预检真跑（Windows / 有 PowerShell 时）", 
     expect(r.out).not.toContain("[DEP-DRIFT]");
   });
 });
+
+/**
+ * 运行器（`Invoke-Check`）的判据（ISSUE #1345）。
+ *
+ * 上面那组管的是**预检**这一层；这一组管**门禁本体**那一层，两层的失效形状不同：
+ * `Invoke-Check` 旧代码对 `pnpm|npm|node` 一律拼 `.cmd`（本机 `node.cmd` 不存在，node 是
+ * 真 exe），`&` 起不来时 PowerShell 只发一条非终止错误、**不写 `$LASTEXITCODE`**，于是读到
+ * 预检那次成功调用留下的 0 ⇒ 零子进程输出却打 `[OK] ... passed`、整体退 0。
+ * 同一条链上还有第三层：子进程的 stdout 默认进函数输出流，和 `return $code` 拼成数组，
+ * 所以判决既不是纯退出码、输出也看不见 —— 实测 `Object[] ["child-marker-line", 0]`。
+ */
+const NOEXEC_MUTATION = {
+  from: 'Cmd = "node"; Args = @("scripts\\check-dependency-audit.mjs")',
+  to: 'Cmd = "node-absent-on-this-machine"; Args = @("--version")',
+};
+
+describe("运行器：命令解析与「没跑起来」（静态）", () => {
+  it("「没执行」有自己的 ASCII 标签，且不再有「对 node 也拼 .cmd」那一步", () => {
+    expect(gateSrc).toContain("[GATE-NOEXEC]");
+    expect(gateSrc).not.toMatch(
+      /\$Block\.Cmd -match "\^\(pnpm\|npm\|node\)\$"/,
+    );
+  });
+
+  it("变异点还在（不在这儿就整组反向用例会静默空跑）", () => {
+    expect(gateSrc).toContain(NOEXEC_MUTATION.from);
+  });
+});
+
+describe.skipIf(!hasPs)(
+  "运行器真跑：判决必须来自子进程真的执行（ISSUE #1345）",
+  () => {
+    it("真状态 -Mode dependencyAudit：要看见子进程自己的 [dep-audit] 标记", async () => {
+      // 跑**真仓库**而不是假检出：这条要钉的就是「这台机器上的真门禁真的执行了」。
+      // `[dep-audit]` 前缀在脚本的三条出口（有新增/无新增/拿不到 registry）里都会打，
+      // 所以它只在「进程根本没起来」时缺席 —— 正是本条要抓的那一种。
+      const r = spawnSync(
+        psExe,
+        [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          GATE_PS1,
+          "-Mode",
+          "dependencyAudit",
+        ],
+        { cwd: ROOT, encoding: "utf8", timeout: 240_000 },
+      );
+      const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+      expect(out).toContain("[dep-audit]");
+      expect(out).not.toContain("[GATE-NOEXEC]");
+      // 不锁 status：真有基线外新增时它该退 1（那是 #1331 的判据），本条只问「跑没跑」。
+    }, 240_000);
+
+    it("命令拼不出来：判 [GATE-NOEXEC]、退非 0，且整份输出里不许出现 passed", () => {
+      const { root } = makeFakeRepo({
+        patchGateText: (src) =>
+          src.replace(NOEXEC_MUTATION.from, NOEXEC_MUTATION.to),
+      });
+      const r = runGate(root);
+      expect(r.out).toContain("[GATE-NOEXEC]");
+      expect(r.out).not.toContain("passed");
+      expect(r.status).not.toBe(0);
+    });
+
+    it("进程起来了且退非 0：判红必须来自它的退出码", () => {
+      // 与上面那条成对：一条管「没跑起来」，一条管「跑了且失败」；旧形状下**前者**被陈旧
+      // $LASTEXITCODE 读成 `[OK]`。
+      // 边界要说清：这条**不**覆盖「子进程 stdout 被并进返回值」那一半（去掉 `| Out-Host`
+      // 它照样绿，实测过）—— node 的 `Cannot find module` 走 stderr、没进函数输出流，
+      // 返回值就只剩退出码一个元素。 stdout 被吞那半由上面 `[dep-audit]` 那条钉。
+      const { root } = makeFakeRepo({
+        patchGateText: (src) =>
+          src.replace(
+            NOEXEC_MUTATION.from,
+            'Cmd = "node"; Args = @("scripts\\no-such-gate.mjs")',
+          ),
+      });
+      const r = runGate(root);
+      expect(r.out).toContain("failed (exit 1)");
+      expect(r.out).not.toContain("passed");
+      expect(r.status).toBe(1);
+    });
+  },
+);
 
 describe.skipIf(!hasPs)(
   "所有 .ps1 必须可解析（补上「没人解析 PowerShell」那一格）",
