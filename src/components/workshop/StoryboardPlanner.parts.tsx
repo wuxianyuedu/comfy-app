@@ -11,7 +11,7 @@ import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
-import { SHOT_STATUS_LABEL } from "./ShotStudio";
+import { SHOT_STATUS_LABEL } from "./shot-status-config";
 import type { ShotProgress } from "./useStoryboardPlanner";
 
 const SHOT_TYPES: ShotType[] = [

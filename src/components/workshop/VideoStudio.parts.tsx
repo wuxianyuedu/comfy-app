@@ -7,7 +7,7 @@ import { Alert } from "~/components/ui/alert";
 import { FieldLabel } from "~/components/ui/field";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
-import { SHOT_STATUS_LABEL } from "./ShotStudio";
+import { SHOT_STATUS_LABEL } from "./shot-status-config";
 import { SelectMenu } from "~/components/ui/select-menu";
 import {
   MOTION_LABELS,
