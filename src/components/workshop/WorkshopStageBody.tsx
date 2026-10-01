@@ -13,7 +13,7 @@ import { useFilePicker } from "~/components/ui/file-picker";
 import { readFileAsText } from "~/lib/file-io";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Icon } from "~/components/ui/icon";
-import { markdownToHtml } from "~/lib/comfyui/markdown";
+import { markdownToHtml } from "~/lib/markdown";
 import type { WorkshopPipelineController } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { SCROLLBAR_VISIBLE_CLASSES } from "~/components/workshop/ScriptMarkdownEditor.parts";
 import { StageHint } from "~/components/workshop/StageHint";

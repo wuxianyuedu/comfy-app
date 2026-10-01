@@ -427,7 +427,9 @@
          `dark` prop）→ 两态 `--json-view-*` token；
        · `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）→ 按 `resolvedTheme`
          在 `one-dark-pro` / `github-light` 间切换；
-       · `lib/comfyui/markdown.ts` 内联 style → `--color-md-*` token。
+       · markdown 渲染产物的内联 style（`lib/markdown/styles.ts`）→ `--color-md-*`
+         token。ISSUE #1329 之后渲染器迁到 marked + DOMPurify，但样式表仍在**同一处**
+         （`MARKDOWN_ELEMENT_STYLES`），因此 `--color-md-*` 这组 token 的消费方没有变。
 
    ───────────────────────────────────────────────────────────────────
    类型色例外（Type-color exemption）—— 本条不是「暗色表面」，而是「色值

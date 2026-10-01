@@ -211,6 +211,12 @@ const DOMAINS = [
   "llm",
   "log",
   "media",
+  /* markdown 渲染域（ISSUE #1329）：`marked` + `DOMPurify` 的接线、消毒白名单与
+   * 样式表。它**不属于 `comfyui`** —— 渲染的是「一段用户文本变成 DOM 片段」这件事，
+   * 与 ComfyUI 编排无关；历史上因为第一个消费方是 ComfyUI 便签而落在
+   * `comfyui/markdown.ts`，于是第二个、第三个消费方（剧本预览、工坊剧本区）
+   * 每次取用它都要反向依赖 ComfyUI 域。 */
+  "markdown",
   "process",
   "production",
   "project-canvas",

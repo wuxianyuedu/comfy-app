@@ -443,6 +443,21 @@ export default defineConfig({
           statements: 75,
           branches: 70,
         },
+        /* markdown 渲染域（ISSUE #1329）：`marked` + `DOMPurify` 的接线、消毒
+         * 白名单、样式表。新增域**同批**登记（规范 §12.5.3 R14 / §18.6）——
+         * 数值取自 `pnpm exec vitest run --coverage src/lib/markdown` 的实测值
+         * 向下取整到 5 的倍数（lines 95.9 / branches 91.7 / functions 100 /
+         * statements 97.6 → 95/90/100/95），只升不降。
+         * 未满 100 的是 lines 与 branches 两项：`styles.ts` 的「标签名 → 规则」
+         * 表里有若干本仓库目前不产生的标签（`h6` / `details` 等），它们是给将来
+         * 留的落点而不是漏测；`html.ts` 里还留着「已缓存实例」这一条快路径分支。
+         * 覆盖率工具按行/按分支算得到它们，用例数不到 —— 判据以实测为准（§18.6）。 */
+        "src/lib/markdown/**": {
+          lines: 95,
+          functions: 100,
+          statements: 95,
+          branches: 90,
+        },
         /* 应用内控制台（ISSUE #1327）：命令目录/解析（`console-catalog`）、
          * 回环闸门（`console-guard`）、SSE 客户端（`console-client`）、
          * 执行面（`console-run`）、运行槽单例（`console-registry`）。
