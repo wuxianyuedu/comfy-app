@@ -54,6 +54,16 @@ type Registration = {
  */
 const REGISTERED: Registration[] = [
   {
+    file: "tests/log-common-invoke.test.ts",
+    guard: "!hasPs",
+    count: 1,
+    tier: "env",
+    why:
+      "没有 PowerShell 时跑不了 `Invoke-Logged` 的三态真跑（ISSUE #1350 的判决本就长在 " +
+      "Windows 双击构建侧，两个宿主各跑一遍）；同文件的静态判据（ASCII 标签 + 三个入口共用" +
+      "同一份结论）不分平台，始终在判",
+  },
+  {
     file: "tests/quality-gate-ps-precheck.test.ts",
     guard: "!hasPs",
     count: 3,
