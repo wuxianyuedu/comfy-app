@@ -171,9 +171,14 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
     ).toBeTruthy();
     /* 比的是**解析后的绝对路径**，不是「去掉 .. 之后的段数」：
      * 写成 `..\..\public\generated` 那种偏移一位的错法，去掉点之后段数一样，
-     * 只有按 $PSScriptRoot 真解析一次才露出来。 */
-    expect(path.resolve(scriptsDir, matched!)).toBe(
-      generatedRoot(path.resolve(scriptsDir, "..")),
-    );
+     * 只有按 $PSScriptRoot 真解析一次才露出来。
+     *
+     * 分隔符先归一成 POSIX：`.ps1` 里写的是 Windows 形态（`..\public\generated`），
+     * 而 `path.resolve` 只在 Windows 上把 `\` 当分隔符 —— 直接在 POSIX 上解析会
+     * 把整串当成**一个文件名**，判据与平台绑定、Linux 上恒红（实测 `pnpm test`
+     * 在干净 master 上就这样，见 §13.6.2 的基线复算）。归一之后两侧都真解析一次，
+     * 判据的语义（「偏移一位会被照出来」）一分不减。 */
+    const resolved = path.resolve(scriptsDir, matched!.replace(/\\/g, "/"));
+    expect(resolved).toBe(generatedRoot(path.resolve(scriptsDir, "..")));
   });
 });

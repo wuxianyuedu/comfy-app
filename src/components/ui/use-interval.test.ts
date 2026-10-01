@@ -214,4 +214,59 @@ describe("useInterval", () => {
     });
     expect(run, "显式关掉 unfocused 判据后失焦也不停").toHaveBeenCalledTimes(4);
   });
+
+  /* `ms` 可以是函数（ISSUE #1351）：「按阶段给频率」要的就是**每拍跑完之后**
+   * 重新问一次下一拍等多久 —— 档位在运行中会变（用户点了生成 / 切走了窗口 /
+   * 刚收到崩溃信号），一个创建时就定死的数字表达不了。 */
+  it("ms 给函数：每拍之后重新问一次「下一拍等多久」", async () => {
+    const run = vi.fn();
+    let ms = 1000;
+    renderHook(() => useInterval(run, { ms: () => ms }));
+    expect(run, "挂载即先跑一次").toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(run, "不到点不跑").toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(run).toHaveBeenCalledTimes(2);
+
+    /* 「每拍之后重新问」的语义：**已经排上的那一拍不受影响**（它按排时的值
+       到点），新值从**下一拍**开始生效。 */
+    ms = 5000;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(run, "已排上的那一拍按旧值到点").toHaveBeenCalledTimes(3);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4999);
+    });
+    expect(run, "新档还没到").toHaveBeenCalledTimes(3);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(run, "到新档就跑了").toHaveBeenCalledTimes(4);
+  });
+
+  it("ms 函数返回 0：立刻再跑一拍（事件驱动「不等下一拍」那一档）", async () => {
+    const run = vi.fn();
+    renderHook(() => useInterval(run, { ms: () => 0 }));
+    expect(run).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(run, "0 档立刻再跑").toHaveBeenCalledTimes(2);
+  });
+
+  it("ms 函数返回 null：下一拍不再排（调用方可再经 stop / 重建拉起）", async () => {
+    const run = vi.fn();
+    renderHook(() => useInterval(run, { ms: () => null }));
+    expect(run, "挂载即先跑一次").toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(run, "返回 null 之后不再跑").toHaveBeenCalledTimes(1);
+  });
 });
