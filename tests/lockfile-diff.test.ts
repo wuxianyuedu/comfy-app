@@ -274,10 +274,16 @@ describe("漂移分支接线（防细节被删掉回潮）", () => {
     expect(s).toContain("$drifted");
   });
 
-  it("quality-gate.ps1 的依赖预检同样输出明细", () => {
+  it("quality-gate.ps1 的依赖预检同样输出明细，且判决只用那份语义比较器", () => {
     const s = read("scripts/quality-gate.ps1");
     expect(s).toContain("lockfile\\diff-cli.mjs");
-    expect(s).toContain("Write-DepDriftDetail");
+    // 断言打在**行为形状**上而不是函数名上：旧实现靠 `Write-DepDriftDetail` 再调一次
+    // diff-cli，而那次调用的结论与判决阶段的结论可以不一致（ISSUE #1338 实测到的正是
+    // 「判决说不一致、明细说实质一致」）。现在明细是判决那一次的转手输出 ——
+    // 认名字会把正确的重构误报成「细节被删掉」。
+    expect(s).toMatch(/\$Drift\.report\s*\|\s*ForEach-Object/);
+    // 哈希比对恒为「不一致」（那两份文件本就不同形），所以这条本身就是判据的一部分。
+    expect(s).not.toMatch(/Get-FileHash/);
   });
 
   it("同步指南写明「会打印差异明细」，避免文档与行为脱钩", () => {
