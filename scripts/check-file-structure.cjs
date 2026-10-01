@@ -200,6 +200,11 @@ const DOMAINS = [
   "app-settings",
   "comfy",
   "comfyui",
+  /* 应用内控制台（ISSUE #1327）：命令目录/解析、执行面、回环闸门、运行槽单例。
+   * 它是「本机命令执行」这一件事的域 —— 与 `comfyui`（ComfyUI 编排）、
+   * `process`（进程树回收地基）都不同族：那两个是执行引擎的地基，本域是
+   * **面向用户的入口**（谁点了什么、输出给谁看、什么时候回收）。 */
+  "console",
   "core",
   "drizzle-studio",
   "film",

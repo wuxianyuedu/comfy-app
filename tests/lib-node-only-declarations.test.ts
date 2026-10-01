@@ -177,6 +177,25 @@ const PURE_NODE_HOSTS = [
   // executor host 加载 reaper 时**这里**就 throw、跑不到探针；摘掉之后整条
   // reaper 边通了（下一步给 enqueue / reaper 的 taskRepository 静态边做 lazy）。
   "src/lib/db-schema-ready.ts",
+  /* 应用内控制台（ISSUE #1327）：`console-run.ts` 顶层
+   * `import { spawn } from "child_process"`（起用户敲的那条命令）。
+   * `console-registry.ts` 不在这里 —— 它只引 `./console-run` 与 `./console-limits`
+   * 两个纯模块、零 Node 内建 import，所以按 scanner 视角它是「无需声明的纯模块」
+   * （反向的登记会立刻被下面那条「登记项必须仍然成立」判红）。
+   *
+   * **为什么按第三类登记而不是给它们加 `server-only`**：
+   *   · 执行面的回收语义**必须**走 `~/lib/process/kill-process-tree`（硬规则 3），
+   *     而那个模块本身就是第三类（由 `scripts/reap-process.mjs` 在纯 Node 里
+   *     动态加载）—— 给本域挂 `server-only` 会把「它与回收地基同族」说反；
+   *   · 它的判据是「能不能在单测里喂**真进程**并断言输出/退出码/整树回收」
+   *     （见 `console-run.test.ts` 的孙进程用例）。带 `server-only` 的模块在
+   *     vitest 里要靠 `vi.mock("server-only")` 才加载得动，那正是 §18.4 点名过
+   *     的「仪式化声明」——声明了却什么也没拦住。
+   *
+   * 「浏览器图别引我」这条约束由 scanner 的 `clientReachable` 判据盯：本域里
+   * 客户端可达的只有 `console-catalog` / `console-limits` / `console-client` /
+   * `console-guard` 四个（零 Node 内建 import），执行面与运行槽不在那条路径上。 */
+  "src/lib/console/console-run.ts",
 ];
 
 type Report = {
