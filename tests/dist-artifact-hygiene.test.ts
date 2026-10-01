@@ -36,6 +36,10 @@ import {
   FORBIDDEN_SHAPES,
   PRIVATE_SHAPES,
   RUNTIME_SCRIPTS,
+  RUNTIME_SRC,
+  STANDALONE_ALLOWED_TOPLEVEL,
+  STATIC_ALLOWED_TOPLEVEL,
+  pruneStandaloneToAllowList,
   stripDevArtifacts,
   stripForbiddenShapes,
 } from "../scripts/standalone-private-inputs.mjs";
@@ -290,6 +294,11 @@ interface CheckerExports {
   REQUIRED_HOST_FILES: string[];
   REQUIRED_PAYLOAD_FILES: string[];
   RUNTIME_DIR: string;
+  STANDALONE_ALLOWED_TOPLEVEL: string[];
+  STATIC_ALLOWED_TOPLEVEL: string[];
+  ALLOWED_SRC_FILES: string[];
+  allowedTopLevelFor: (label: string) => string[];
+  isAllowedSrcPath: (rel: string) => boolean;
   collectFiles: (dir: string, followLinks: boolean) => string[];
   missingRequiredRuntimeFiles: (dir: string) => string[];
   checkDir: (dir: string, label: string) => boolean;
@@ -576,7 +585,10 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
   function makeProduct(dir: string, present: string[]): void {
     const mod = checkerExports();
     writeFileSync(join(dir, "server.js"), "// entry");
-    for (const rel of [...mod.REQUIRED_HOST_FILES, ...mod.REQUIRED_PAYLOAD_FILES]) {
+    for (const rel of [
+      ...mod.REQUIRED_HOST_FILES,
+      ...mod.REQUIRED_PAYLOAD_FILES,
+    ]) {
       const abs = join(dir, rel);
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, "// host");
@@ -686,5 +698,159 @@ describe("Next 运行时脚本缺件检查覆盖两层产物", () => {
       rmSync(dir, { recursive: true, force: true });
       rmSync(store, { recursive: true, force: true });
     }
+  });
+});
+
+/* ── 顶层默认拒绝（ISSUE #1217）──────────────────────────────────────────
+ * 判据方向与 FORBIDDEN 相反：那份是黑名单，每多一个被 tracing 带进来的目录就要有人
+ * 记得补一条，**漏掉是静默的**。实测同一次构建走 Turbopack 时
+ * `outputFileTracingExcludes` 对整目录条目一条都不减 —— 40 个顶层条目 / 19274 个真文件，
+ * 里面躺着 `src-tauri` 8516 个、`python-venv` 5356 个、`db.sqlite`+WAL/SHM、`.env`，
+ * 还有仓库根那个 `Comfy APP.lnk`；而**跑完当时那套按名字的剔除清单之后仍然剩 19 个顶层
+ * 条目**（`log/` 100 份开发日志、`tests`、`e2e`、`tools`、`build-launcher`、`run`、`temp`、
+ * 两份 `*.config.*`、那个 `.lnk` 全活着）。所以这一格改成「只允许运行时必需那几件」。
+ *
+ * 三条用例各钉一件事：两份清单逐字同源（漂移两头都白跑）、凭空多一个顶层条目必须红
+ * （反向对照证明它不是恒红）、剔除侧真删得动。 */
+describe("产物顶层的默认拒绝（ISSUE #1217）", () => {
+  it("检查侧与剔除侧的顶层清单逐字同源，且不是空清单", () => {
+    const mod = checkerExports();
+    expect(mod.STANDALONE_ALLOWED_TOPLEVEL).toEqual(
+      STANDALONE_ALLOWED_TOPLEVEL,
+    );
+    expect(mod.STATIC_ALLOWED_TOPLEVEL).toEqual(STATIC_ALLOWED_TOPLEVEL);
+    expect(mod.ALLOWED_SRC_FILES).toEqual(RUNTIME_SRC);
+    // 比对退化最常见的形态是两边都拿到 []，那时上面三条断言全部无意义地绿。
+    expect(mod.STANDALONE_ALLOWED_TOPLEVEL.length).toBeGreaterThan(3);
+    expect(mod.STATIC_ALLOWED_TOPLEVEL.length).toBeGreaterThan(3);
+    // static 只比 standalone 多装配步产出的那三件（不许有人把源码树放进来）
+    expect(
+      mod.STATIC_ALLOWED_TOPLEVEL.filter(
+        (n) => !mod.STANDALONE_ALLOWED_TOPLEVEL.includes(n),
+      ),
+    ).toEqual(["index.html", "schema.sql", "splash.html"]);
+    expect(mod.STANDALONE_ALLOWED_TOPLEVEL).not.toContain("src");
+    expect(mod.STANDALONE_ALLOWED_TOPLEVEL).not.toContain("next.config.js");
+  });
+
+  /** 造一份「顶层合法」的最小 standalone：四件必需 + 宿主三件 + 运行时脚本齐件。 */
+  function makeMinimalStandalone(dir: string): void {
+    const mod = checkerExports();
+    writeFileSync(join(dir, "server.js"), "// entry");
+    writeFileSync(join(dir, "package.json"), "{}");
+    mkdirSync(join(dir, ".next"), { recursive: true });
+    mkdirSync(join(dir, "public"), { recursive: true });
+    for (const rel of mod.REQUIRED_HOST_FILES) {
+      const abs = join(dir, rel);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, "// host");
+    }
+    for (const name of mod.REQUIRED_RUNTIME_FILES) {
+      const abs = join(dir, mod.RUNTIME_DIR, name);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, "runtime");
+    }
+  }
+
+  /** 捕 checkDir 的两个输出通道（「✓ 产物干净」走 log，违规走 error）。 */
+  function captureCheck(
+    dir: string,
+    label: string,
+  ): { failed: boolean; lines: string[] } {
+    const lines: string[] = [];
+    const errSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation((...a: unknown[]) => {
+        lines.push(a.join(" "));
+      });
+    const logSpy = vi
+      .spyOn(console, "log")
+      .mockImplementation((...a: unknown[]) => {
+        lines.push(a.join(" "));
+      });
+    try {
+      return { failed: checkerExports().checkDir(dir, label), lines };
+    } finally {
+      errSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+  }
+
+  it("凭空多一个顶层条目 → 红并点名；补齐白名单形态就放行（不是恒红）", () => {
+    const dir = mkdtempSync(join(tmpdir(), "comfyapp-top-"));
+    try {
+      makeMinimalStandalone(dir);
+      // 反向对照先跑：同一份目录合法时必须不红，否则下面那条「红」没有信息量。
+      const clean = captureCheck(dir, "standalone");
+      expect(clean.failed, clean.lines.join(" ")).toBe(false);
+
+      mkdirSync(join(dir, "some-new-traced-dir"), { recursive: true });
+      writeFileSync(join(dir, "Comfy APP.lnk"), "快捷方式");
+      const dirty = captureCheck(dir, "standalone");
+      expect(dirty.failed).toBe(true);
+      const report = dirty.lines.join(" ");
+      expect(report).toContain("顶层出现白名单外的条目");
+      expect(report).toContain("some-new-traced-dir");
+      expect(report).toContain("Comfy APP.lnk");
+      // 红话必须给出路：报「谁在运行期读它」这个问题，而不是让人往 excludes 补一条。
+      expect(report).toContain("谁在运行期读它");
+      expect(report).toContain("standalone-private-inputs.mjs");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("剔除侧真跑一遍：陌生顶层被删掉，必需件与 src 里那条一个不碰", () => {
+    const dir = mkdtempSync(join(tmpdir(), "comfyapp-top-prune-"));
+    try {
+      makeMinimalStandalone(dir);
+      // src 是「祖先放行、叶子逐文件判」：RUNTIME_SRC 那条要留着，旁边的一起删掉。
+      // 取 [0] 要判空（`noUncheckedIndexedAccess`），而这条用例的前提就是它存在。
+      const runtimeSrcFile = RUNTIME_SRC[0];
+      if (!runtimeSrcFile) throw new Error("RUNTIME_SRC 为空，本用例无从判断");
+      const keep = join(dir, "src", ...runtimeSrcFile.split("/"));
+      mkdirSync(dirname(keep), { recursive: true });
+      writeFileSync(keep, "// runtime");
+      writeFileSync(join(dir, "src", "secret-notes.ts"), "// 不该出去");
+      mkdirSync(join(dir, "python-venv"), { recursive: true });
+      writeFileSync(join(dir, "python-venv", "sitecustomize.py"), "#");
+      writeFileSync(join(dir, "AGENTS.md"), "# 内部规范");
+
+      const removed = pruneStandaloneToAllowList(dir);
+      expect(removed).toContain("python-venv");
+      expect(removed).toContain("AGENTS.md");
+      // 剔除侧报的是 POSIX 风格相对路径（与 FORBIDDEN_SHAPES 的判据同形），别按平台分隔符断言。
+      expect(removed).toContain("src/secret-notes.ts");
+      expect(existsSync(join(dir, "src", "secret-notes.ts"))).toBe(false);
+      expect(existsSync(join(dir, "python-venv"))).toBe(false);
+      expect(existsSync(join(dir, "AGENTS.md"))).toBe(false);
+      // 必需件与那条运行期 TS 源不许被牵连
+      expect(existsSync(join(dir, "server.js"))).toBe(true);
+      expect(existsSync(keep)).toBe(true);
+      expect(existsSync(join(dir, ".next"))).toBe(true);
+      // 剪完再让判据数一次：应当放行（两侧口径此时才叫真对上）
+      expect(captureCheck(dir, "standalone").failed).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("构建收尾真接上了这一刀（main 里不调，它就只是个被导出的函数）", () => {
+    const mainBody = stripModule.slice(
+      stripModule.lastIndexOf("function main()"),
+    );
+    expect(mainBody).toContain("pruneStandaloneToAllowList(standalone");
+  });
+
+  it("判据接进 `pnpm build`，且排在减法之后、冒烟之前", () => {
+    const build = pkg.scripts.build ?? "";
+    const iStrip = build.indexOf("standalone-private-inputs.mjs");
+    const iCheck = build.indexOf("check-standalone-contents.cjs");
+    const iSmoke = build.indexOf("smoke-executor-host-standalone.mjs");
+    expect(iCheck).toBeGreaterThan(-1);
+    // 顺序是判据：先减法、再数产物，最后才真起进程（冒烟对最终产物负责）。
+    expect(iStrip).toBeGreaterThanOrEqual(0);
+    expect(iStrip).toBeLessThan(iCheck);
+    expect(iCheck).toBeLessThan(iSmoke);
   });
 });
