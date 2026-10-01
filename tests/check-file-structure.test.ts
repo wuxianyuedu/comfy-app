@@ -306,8 +306,9 @@ describe("check-file-structure.cjs（提交门槛）", () => {
   });
 
   // ── R12：src/ 源码里不得内嵌控制字符（规范 §12.11）──
-  // 判据来自一次真实事故：`lib/comfyui/markdown.ts` 曾用真的 NUL 字节做占位符
-  // 哨兵（`\0CODE<n>\0`），于是整个文件被 git / diff / grep / 编辑器当二进制：
+  // 判据来自一次真实事故：当年的自研 markdown 渲染器（`lib/comfyui/markdown.ts`，
+  // ISSUE #1329 后整块迁到 `lib/markdown/`）曾用真的 NUL 字节做占位符哨兵
+  //（`\0CODE<n>\0`），于是整个文件被 git / diff / grep / 编辑器当二进制：
   // `git diff` 只回「Binary files differ」、`git show --stat` 显示 bin、
   // `grep -rn` 静默跳过。哨兵改成可打印形式后，这条规则负责防回潮。
   describe("R12：源码内嵌控制字符被阻断（规范 §12.11）", () => {
