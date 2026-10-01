@@ -70,7 +70,8 @@ pnpm test 2>&1 | tail -3                                          # Test Files /
 - 理由 + 站点数，进提交前的固定守护清单）。
 
 **结构性缺口不藏在心里，记在台账**：`docs/guides/PRODUCTION-GAPS.md` 的 E 系列与 P1 段
-（例如 `src/app` 下 page/route/layout 的目录级零测试、16 个 router 里有几个带同名测试、
+（例如 `src/app` 下 page/route/layout 的目录级零测试、挂载在 `appRouter` 上的
+procedure 有没有执行者（这条已由 `tests/trpc-surface-executors.test.ts` 接管，见下）、
 覆盖率回退要补的五个文件）。往这里抄一份数字只会漂移两次。
 
 ### 新增测试指引
@@ -184,15 +185,25 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
       产物住在 `public/generated/` 下，而 `public/**` 由 Next 按静态文件直发、不经过任何
       handler —— 只在 route 上加闸门时，把 URL 里的 `api/` 去掉就整条绕过
       （实测同一份图：静态形状 200、带闸形状 401）。
-- [ ] **服务端 router 集成覆盖 13/16**：`generate` / `run` / `task` / `workflow` / `project` /
-      `setting` / `material` / `film` / `train` / `model` / `llm` / `skill` / `workflowModel`
-      （前七个分别是闸门第二批、第三批与⑨第一刀补的，后六个是⑨第二、三刀补的，用例都按
-      **归属 / 协议 / 数值 / 枚举闸门 / 错误信封**组织，不按 procedure 顺序铺）。其余 3 个
-      `custom-nodes`（tRPC 侧）、`user`、`post` 都在写本机状态或读别人的行 —— 台账 A 系列几批复算证明：
-      「一个 router 没有执行者」的实际含义是「它的归属闸门坏了没人红」；⑨第二刀把这句推得
-      更狠：**`train.cancel` 自 Prisma→Drizzle 迁移起每次都 500**（仓储那个
-      `select?: unknown` + `db.select(select as never)` 把调用点的形状错误整个咽掉，
-      见台账 F13）—— 没有执行者的地方烂掉的不只是判据，还有功能本身。
+- [x] **服务端 router 集成覆盖已收口，判据升到 procedure 粒度**：13 个 router
+      （`generate` / `run` / `task` / `workflow` / `project` / `setting` / `material` /
+      `film` / `train` / `model` / `llm` / `skill` / `workflowModel`）的用例都按
+      **归属 / 协议 / 数值 / 枚举闸门 / 错误信封**组织，不按 procedure 顺序铺。
+      最后 3 个零执行者的口（`custom-nodes` tRPC 侧 / `user` / `post`）没有被补成测试，
+      而是**定性后删除** —— 给死口写用例等于把它焊死：`customNode.list` 的 `nodes` 是写死的
+      `[]`（真实现在 REST `/api/custom-nodes`）还顺手回整个 settings；`post.getLatest`
+      的注释自称「要求已登录」，而 `loginRequired` 默认 `false` 让那句话等于没写，且它
+      没有 `createdById` 过滤；`user.me` 客户端从来不调（会话走 better-auth 的 `authClient`）。
+      防线现在挂在**挂载动作**上：`tests/trpc-surface-executors.test.ts` 枚举 `appRouter`
+      的每条 procedure，要求它出现在「import 了该 router 文件闭包」的测试里的调用形态，
+      并自带四条反证（没测试 / 只 import 不调用 / 调用但没 import / 齐备）。
+      为什么粒度必须是 procedure 而不是 router：⑨ 三批清完后复算，剩下的两条零执行者口
+      （`workflow.detailFull` / `workflow.subgraph`）**藏在一份有测试文件的 router 里** ——
+      「每个 router 都有一份测试」这句话当时照样全绿。台账 A 系列几批复算证明「一个
+      procedure 没有执行者」的实际含义是「它的闸门坏了没人红」，⑨第二刀更狠：
+      **`train.cancel` 自 Prisma→Drizzle 迁移起每次都 500**（仓储那个 `select?: unknown` +
+      `db.select(select as never)` 把调用点的形状错误整个咽掉，见台账 F13）——
+      没有执行者的地方烂掉的不只是判据，还有功能本身。
       ⑨第三刀清的是同一族的另一维：**错误码本身**（19 处裸 `throw new Error` = 业务分支在客户端
       表现成 500，台账 E8）。防线落在 eslint 的 `no-restricted-syntax`（B 组每次提交都跑、直接指到
       行号），并由 `tests/router-error-envelope.test.ts` 三层验全：存量为零、**扫描面非空**
