@@ -59,3 +59,23 @@ overrides:
   # 表现是**整仓 lint 完全跑不起来**（连非 React 文件都过不去），而不是几条告警。
   # 锁成同一个版本即可：让可选 peer 与 typescript-eslint 解析到同一实例。
   '@typescript-eslint/eslint-plugin': '8.71.0'
+  # 安全修复（ISSUE #1331，`node scripts/check-dependency-audit.mjs` 的第一批存量）：
+  # 下面四条都是**同 major 的补丁版**，且全部是**传递依赖**（没有一处是我们直接 import 的
+  # API），所以走 overrides 而不是升级顶层依赖 —— 顶层升级既动不到它们（父包钉着自己的
+  # range），也会把无关的次版本跳变一起带进来。
+  # 每条都按 registry 给的 `patched_versions` 取**最小可达的修复版**，别顺手写成 `^x`：
+  # range 会让下一次 install 悄悄跳到一个没人复核过的新版本。
+  #   · js-yaml 4.3.1 → 4.3.2（`shadcn > cosmiconfig > js-yaml`，原型污染 DoS 类）
+  'js-yaml@4': '4.3.2'
+  #   · fast-uri 3.1.6 → 3.1.7（`@hookform/resolvers > ajv > fast-uri` 等 20 条路径；
+  #     另一条 advisory 标注受影响版本 `=3.1.6` 且「上游无修复版」—— 离开 3.1.6 即同时消掉，
+  #     这正是「按 advisory 记账」与「按版本记账」会给出不同结论的例子）
+  'fast-uri@3': '3.1.7'
+  #   · undici 7.29.0 → 7.29.1（`shadcn > @dotenvx/dotenvx > undici`）
+  'undici@7': '7.29.1'
+  #   · brace-expansion 有**两条 major 同时中招**，所以键上必须带 major，写一条全局
+  #     override 会把 1.x 的消费方（`minimatch@3`）顶到 5.x 的 API 上：
+  #     1.1.18 → 1.1.20（`eslint-config-next > eslint-plugin-* > minimatch@3`）
+  #     5.0.9  → 5.0.11（`@sentry/nextjs > … > glob > minimatch@10`、`shadcn > ts-morph > …`）
+  'brace-expansion@1': '1.1.20'
+  'brace-expansion@5': '5.0.11'

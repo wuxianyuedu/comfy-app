@@ -1,5 +1,6 @@
 import type * as LoggerModule from "~/lib/core/logger";
 import type * as EnvfileModule from "~/lib/envfile";
+import type * as RawModule from "~/lib/comfyui/raw";
 import { readEnvVar } from "~/lib/envfile";
 import type * as AppSettingsModule from "~/lib/app-settings/app-settings.server";
 import type * as ImportSourceModule from "~/lib/comfyui/importSource";
@@ -9,7 +10,9 @@ import type * as ImportSourceModule from "~/lib/comfyui/importSource";
  * mock 边界：~/server/db（内存 Prisma 替身，见 tests/helpers/test-db.ts）、
  * ~/server/better-auth（getSession）、~/lib/core/logger（静音）、
  * ~/lib/envfile（屏蔽真实 .env 的 LOCAL_WORKFLOWS_PATH）、
- * ~/lib/comfyui/importSource（本地文件导入/重导入，避免真实磁盘依赖）。
+ * ~/lib/comfyui/importSource（本地文件导入/重导入，避免真实磁盘依赖）、
+ * ~/lib/comfyui/raw 的 fetchObjectInfo（钉成 null：本机开着 ComfyUI 时
+ * 详情里的 COMBO 候选会变成真数据，同一份断言就随开发机状态漂）。
  * 其余（repository、workflow-types、workflow.ts、workflow-detail、
  * localWorkflows、raw 的 detectFormat/extractPositions）全部走真实实现 —— 导入链
  * 里**不再有**「转 API 图」这一步，所以不需要再 mock 转换器。
@@ -57,6 +60,13 @@ vi.mock("~/lib/comfyui/importSource", async (importOriginal) => ({
   importFromLocalPath: vi.fn(),
   reimportFromSource: vi.fn(),
 }));
+/* COMBO 候选的唯一权威来源是运行中的 ComfyUI（/api/object_info）。详情与子图
+ * 视图在拿不到它时优雅降级成文本控件 —— 判据要钉的是「降级发生在哪」，
+ * 不是本机此刻有没有 ComfyUI。 */
+vi.mock("~/lib/comfyui/raw", async (importOriginal) => ({
+  ...(await importOriginal<typeof RawModule>()),
+  fetchObjectInfo: vi.fn(async () => null),
+}));
 
 import { createCallerFactory, createTRPCContext } from "~/server/api/trpc";
 import { workflowRouter } from "~/server/api/routers/workflow";
@@ -69,7 +79,7 @@ import {
   seedUser,
   seedWorkflowTemplate,
 } from "../../../../tests/helpers/test-db";
-import { makeCtx } from "../../../../tests/helpers/trpc";
+import { makeCtx, errorEnvelope } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(workflowRouter);
 const tdb = getTestDb();
@@ -333,6 +343,115 @@ describe("workflow.detail", () => {
     await expect(caller.detail({} as never)).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
+  });
+});
+
+// ─────────────────────────────── detailFull / subgraph ─────────────────────────
+
+/** 一份带内嵌子图的 RAW 工作流：外层只有 wrapper 节点 `4`，子图内部有节点 `7`。
+ *  子图定义是**数组**（ComfyUI 的导出形态），按 `.id` 匹配 uid。 */
+const SUBGRAPH_WF = {
+  last_node_id: 5,
+  last_link_id: 0,
+  nodes: [{ id: 4, type: "PrimitiveNode", pos: [0, 0] }],
+  links: [],
+  definitions: {
+    subgraphs: [
+      {
+        id: "sg-uuid-1",
+        name: "I2V 子图",
+        inputs: [{ name: "value_1", label: "Seed", type: "INT" }],
+        outputs: [],
+        nodes: [{ id: 7, type: "KSampler", pos: [1, 1] }],
+        links: [],
+        groups: [],
+      },
+    ],
+  },
+};
+
+describe("workflow.detailFull", () => {
+  it("派生详情的归属只看 ctx：他人的 id 与不存在的 id 逐字同形", async () => {
+    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    seedWorkflowTemplate(tdb, { id: "df-wf-b", userId: "user-b" });
+    const caller = createCaller(makeCtx());
+    const foreign = await errorEnvelope(caller.detailFull({ id: "df-wf-b" }));
+    const missing = await errorEnvelope(caller.detailFull({ id: "df-nope" }));
+    // 逐字写死而不是只比「两次相等」：两次都返回成功时「相等」照样成立。
+    expect(foreign).toEqual({ code: "NOT_FOUND", message: "未找到该工作流" });
+    expect(missing).toEqual(foreign);
+  });
+
+  it("input.bust 真的转到 lib：不带它拿服务端缓存，带它现读", async () => {
+    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedWorkflowTemplate(tdb, { id: "df-bust", userId: "user-a", name: "V1" });
+    const caller = createCaller(makeCtx());
+    expect((await caller.detailFull({ id: "df-bust" })).name).toBe("V1");
+    // 让库里这一行变成 V2，而**不动那份缓存**（等价于另一个写入方改了名）：
+    // 清表重播同 id 的一行，比在测试里手写 UPDATE 更接近「库和缓存各走各的」这个真实工况。
+    tdb.$reset();
+    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedWorkflowTemplate(tdb, { id: "df-bust", userId: "user-a", name: "V2" });
+    // 先钉住「缓存确实在」：没有这一条，下面那句 bust 生效只是「缓存本来就没生效」的假象。
+    expect((await caller.detailFull({ id: "df-bust" })).name).toBe("V1");
+    // 顶栏「🔄 强制重载」的唯一实现路径就是这个入参被转给了 lib。
+    expect((await caller.detailFull({ id: "df-bust", bust: true })).name).toBe(
+      "V2",
+    );
+  });
+});
+
+describe("workflow.subgraph", () => {
+  it("派生子图视图：uid 与 hostId 都转到 lib（拖拽坐标按宿主链还原）", async () => {
+    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedWorkflowTemplate(tdb, {
+      id: "sg-wf",
+      userId: "user-a",
+      rawJson: SUBGRAPH_WF,
+      positions: { "4:7": [11, 22] },
+    });
+    const caller = createCaller(makeCtx());
+    const bare = await caller.subgraph({ id: "sg-wf", uid: "sg-uuid-1" });
+    expect(bare.format).toBe("raw-subgraph");
+    expect(bare.name).toBe("I2V 子图");
+    expect(bare.parentId).toBe("sg-wf");
+    // 不带宿主链前缀时读不到「4:7」那条拖拽值，节点 7 退回原始坐标
+    expect(bare.positions).toEqual({ "7": [1, 1] });
+    const hosted = await caller.subgraph({
+      id: "sg-wf",
+      uid: "sg-uuid-1",
+      hostId: "4",
+    });
+    expect(hosted.positions).toEqual({ "7": [11, 22] });
+  });
+
+  it("三种 NOT_FOUND 各有其形，且他人一律塌成「未找到该工作流」", async () => {
+    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    seedWorkflowTemplate(tdb, { id: "sg-plain", userId: "user-a" });
+    seedWorkflowTemplate(tdb, {
+      id: "sg-with",
+      userId: "user-a",
+      rawJson: SUBGRAPH_WF,
+    });
+    seedWorkflowTemplate(tdb, { id: "sg-b", userId: "user-b" });
+    const caller = createCaller(makeCtx());
+    // 有行、没有内嵌子图
+    expect(
+      await errorEnvelope(caller.subgraph({ id: "sg-plain", uid: "x" })),
+    ).toEqual({ code: "NOT_FOUND", message: "该工作流没有内嵌子工作流" });
+    // 有子图、uid 对不上（消息带被截断的 uid，供排障定位是哪一层面包屑）
+    const wrongUid = await errorEnvelope(
+      caller.subgraph({ id: "sg-with", uid: "no-such-uid" }),
+    );
+    expect(wrongUid.code).toBe("NOT_FOUND");
+    // 现状：uid 只回显前 8 个字符（面包屑定位用），断言按实际形态写死
+    expect(wrongUid.message).toBe("未找到子工作流 no-such-");
+    // 他人的行必须与「根本没有这行」同形：不能靠错误消息探出别人的工作流存在
+    expect(
+      await errorEnvelope(caller.subgraph({ id: "sg-b", uid: "x" })),
+    ).toEqual({ code: "NOT_FOUND", message: "未找到该工作流" });
   });
 });
 

@@ -115,7 +115,7 @@ export const taskRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const task = await taskRepository.findByIdWithImages(input.id);
       if (task?.userId !== ctx.user.id) {
-        throw new Error("Task not found");
+        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
       return task;
     }),
@@ -184,10 +184,11 @@ export const taskRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const owner = await taskRepository.findByIdWithImages(input.id);
       if (owner?.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
+        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
       const task = await taskRepository.findSnapshotById(input.id);
-      if (!task) throw new Error("Task not found");
+      if (!task)
+        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       const snap = task.workflowSnapshot as {
         workflow?: unknown;
         capturedAt?: string;
@@ -206,7 +207,7 @@ export const taskRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const task = await taskRepository.findByIdWithImages(input.id);
       if (task?.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
+        throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
       const fsPromises = await import("fs/promises");
       /* 产物目录整体删除，目录与落盘侧共用 `taskOutputDir()` 这一份定义。

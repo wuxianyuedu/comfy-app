@@ -40,6 +40,14 @@ if (!window.matchMedia) {
 
 afterEach(cleanup);
 
+/* `next-themes` 在测试里没有 Provider，`useTheme()` 会回落到默认上下文（点一下
+ * 什么都不发生），断言不到「按当前档反向翻」。这里换成可观测的桩。 */
+const themeMock = vi.hoisted(() => ({
+  resolvedTheme: "dark",
+  setTheme: vi.fn(),
+}));
+vi.mock("next-themes", () => ({ useTheme: () => themeMock }));
+
 /** 工具条里的 `SidebarTrigger` 依赖 `ui/sidebar` 的 context，得包一层 provider。 */
 function renderTopBar(active: Parameters<typeof TopBar>[0]["active"]) {
   return render(
@@ -78,6 +86,35 @@ describe("TopBar", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "全局搜索" }));
     expect(onOpenSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("光暗按钮按当前档反向翻 —— 不是固定写死某一档", () => {
+    /* 每次都要重新渲染：改桩对象的值不会让已挂载的组件重取 `useTheme()`，
+       第二次点击仍会读到旧档（那不是被测行为，是夹具在骗自己）。 */
+    themeMock.resolvedTheme = "dark";
+    const first = renderTopBar("home");
+    fireEvent.click(screen.getByRole("button", { name: "切换深浅色" }));
+    expect(themeMock.setTheme).toHaveBeenLastCalledWith("light");
+    first.unmount();
+
+    themeMock.resolvedTheme = "light";
+    renderTopBar("home");
+    fireEvent.click(screen.getByRole("button", { name: "切换深浅色" }));
+    expect(themeMock.setTheme).toHaveBeenLastCalledWith("dark");
+    cleanup();
+  });
+
+  /* 两枚图标**同时**在 DOM 里，靠 `dark:` 变体决定谁可见。若改成按 `resolvedTheme`
+     条件渲染，服务端与首帧那个值是 undefined —— 按钮会在 hydration 后跳一下，
+     而这正是 next-themes 文档要求 suppressHydrationWarning 的那类问题。 */
+  it("太阳与月亮同时存在，可见性交给 CSS（不靠首帧未定的 resolvedTheme）", () => {
+    const { container } = renderTopBar("home");
+    const icons = container.querySelectorAll("svg");
+    const sun = container.querySelector("svg.dark\\:hidden");
+    const moon = container.querySelector("svg.hidden.dark\\:block");
+    expect(sun).toBeTruthy();
+    expect(moon).toBeTruthy();
+    expect(icons.length).toBeGreaterThanOrEqual(2);
   });
 });
 

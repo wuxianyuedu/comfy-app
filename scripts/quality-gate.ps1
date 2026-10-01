@@ -25,7 +25,7 @@ Extend / maintain - how to add a new gate:
     entry and it is enforced again.
 #>
 param(
-  [ValidateSet("typecheck", "lint", "format", "test", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "all")]
   [string]$Mode = "all"
 )
 
@@ -53,7 +53,12 @@ function Get-KnownFailedFilesFromShared {
     return @()
   }
   # 单双引号都要认：Node 侧同一个模块里两种写法都合法。
-  return @([regex]::Matches($m.Groups[1].Value, "['\"]([^'\"]+)['\"]") | ForEach-Object { $_.Groups[1].Value })
+  # 这条**必须用单引号字符串**写：PowerShell 里 `\` 不是转义符，双引号串内的 `\"`
+  # 会当场把字符串结束掉，整份脚本从这一行起解析失败（实测 PS 5.1 与 pwsh 7 各报
+  # 3 个 ParserError，`-Mode` 无论给什么都进不了脚本体 —— 也就是说这份一键门禁
+  # 在此形态下是**整份死掉**的，而没有任何自动化执行者会去解析 .ps1，所以红不出来）。
+  # 单引号串里 `"` 是字面量，`''` 才是一个 `'`。
+  return @([regex]::Matches($m.Groups[1].Value, '[''"]([^''"]+)[''"]') | ForEach-Object { $_.Groups[1].Value })
 }
 
 $KNOWN_FAILED_FILES = @(Get-KnownFailedFilesFromShared)
@@ -87,6 +92,12 @@ $Blocks = @(
   # reportOnFailure），不再「一条红 → 报告不产出 → 门槛静默缺席」。
   @{ Name = "test";      Label = "Vitest full run + coverage ratchet (excluding known baseline failures)";
      Cmd = "pnpm"; Args = @("exec","vitest","run","--coverage"); Run = $true; IsTest = $true }
+  # 依赖漏洞扫描棘轮（ISSUE #1331，规范 §13.5）：与 quality-gate.mjs 的 GATES 同批同步。
+  # 刻意不在 pre-commit —— 它是网络请求，离线/registry 抖动不该变成提交失败（§13.5.4
+  # 「按需召唤」那一层）；拿不到 registry 时脚本打「未扫描」退 0，话术里不许出现「干净」。
+  # 台账按 (包名, advisory id) 记账、双向拦、--update 只许降，理由见脚本头。
+  @{ Name = "dependencyAudit"; Label = "Dependency audit ratchet (high/critical; ledger keyed by package+advisory)";
+     Cmd = "node"; Args = @("scripts\check-dependency-audit.mjs"); Run = $true }
 )
 
 # Which gates to run

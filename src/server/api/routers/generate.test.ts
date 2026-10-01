@@ -60,7 +60,7 @@ import {
   seedUser,
   seedWorkflowTemplate,
 } from "../../../../tests/helpers/test-db";
-import { makeCtx } from "../../../../tests/helpers/trpc";
+import { errorEnvelope, makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(generateRouter);
 const tdb = getTestDb();
@@ -173,10 +173,10 @@ describe("generate.generate（工作流库工作流）", () => {
     }
   });
 
-  it("工作流不存在 → 抛 Workflow not found（不入队）", async () => {
+  it("工作流不存在 → NOT_FOUND（不入队、不落任务行）", async () => {
     await expect(
       createCaller(makeCtx()).generate({ workflow: "no-such-workflow" }),
-    ).rejects.toThrow("Workflow not found");
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(kickMock).not.toHaveBeenCalled();
     expect(tdb.$tables.tasks).toHaveLength(0);
   });
@@ -227,13 +227,15 @@ describe("generate.generate（RAW 原件执行路径）", () => {
       userId: "user-a",
       rawJson: null,
     });
-    await expect(
+    const env = await errorEnvelope(
       createCaller(makeCtx()).generate({ workflow: "wf-empty" }),
-    ).rejects.toThrow("工作流没有可执行内容");
+    );
+    expect(env.code).toBe("PRECONDITION_FAILED");
+    expect(env.message).toContain("没有可执行内容");
     expect(kickMock).not.toHaveBeenCalled();
   });
 
-  it("越权/不存在：非本人且不存在的 workflow → 'Workflow not found'", async () => {
+  it("越权与不存在同形：非本人和不存在的 workflow 给同一个码", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-b",
       userId: "user-b",
@@ -241,10 +243,10 @@ describe("generate.generate（RAW 原件执行路径）", () => {
     });
     await expect(
       createCaller(makeCtx()).generate({ workflow: "wf-b" }),
-    ).rejects.toThrow("Workflow not found");
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
       createCaller(makeCtx()).generate({ workflow: "wf-missing" }),
-    ).rejects.toThrow("Workflow not found");
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(tdb.$tables.tasks).toHaveLength(0);
   });
 });

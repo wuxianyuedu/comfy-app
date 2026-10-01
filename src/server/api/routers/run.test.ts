@@ -32,7 +32,7 @@ import { createCallerFactory } from "~/server/api/trpc";
 import { runRouter } from "~/server/api/routers/run";
 import { productionRepository } from "~/lib/core/repository-production";
 import { getTestDb, seedUser } from "../../../../tests/helpers/test-db";
-import { makeCtx } from "../../../../tests/helpers/trpc";
+import { errorEnvelope, makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(runRouter);
 const tdb = getTestDb();
@@ -84,10 +84,14 @@ describe("run.status", () => {
 });
 
 describe("run.start / 生命周期", () => {
-  it("无生产数据 → 抛可行动错误", async () => {
-    await expect(
+  it("无生产数据 → PRECONDITION_FAILED + 可行动文案", async () => {
+    // 码必须是 4xx：写成裸 Error 会被归成 INTERNAL_SERVER_ERROR，界面只剩「出错了」，
+    // 而「先在工坊产出内容」这句可行动的提示到不了用户面前（硬规则 4）。
+    const env = await errorEnvelope(
       createCaller(makeCtx()).start({ projectId: "proj_x" }),
-    ).rejects.toThrow(/还没有生产数据/);
+    );
+    expect(env.code).toBe("PRECONDITION_FAILED");
+    expect(env.message).toContain("还没有生产数据");
   });
 
   it("空项目启动 → running + 下一步 generate_script，并持久化 run", async () => {

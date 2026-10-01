@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { workflowModelTagRepository } from "~/lib/core/repository";
 
@@ -36,12 +37,14 @@ export const workflowModelRouter = createTRPCRouter({
         ctx.user.id,
         input.oldName,
       );
-      if (!existing) throw new Error("Tag does not exist");
+      if (!existing)
+        throw new TRPCError({ code: "NOT_FOUND", message: "标签不存在" });
       const collision = await workflowModelTagRepository.findByUserAndName(
         ctx.user.id,
         input.newName,
       );
-      if (collision) throw new Error("Tag already exists");
+      if (collision)
+        throw new TRPCError({ code: "CONFLICT", message: "标签名已存在" });
       const tag = await workflowModelTagRepository.rename(
         existing.id,
         input.newName,

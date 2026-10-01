@@ -76,6 +76,24 @@ const GATES = {
      * 591s → 更长），`check:all` 本来就是「按需完整验证」那一档，不是每次提交。 */
     args: ["exec", "vitest", "run", "--coverage"],
   },
+  /**
+   * 依赖漏洞扫描棘轮（ISSUE #1331，规范 §13.5）。
+   *
+   * 与 `format` 同属「会随时间变坏」的那一类：昨天的依赖树干净推不出今天干净 ——
+   * registry 每天在发新 advisory，而此前**没有任何机器路径**会告诉我们「上游已出修复版」
+   * （实测开立时：`js-yaml` 的修复版 4.3.2 已发布，仓库里躺的是 4.3.1）。
+   *
+   * 刻意**不**接进 `.githooks/pre-commit`：这是网络请求，离线或 registry 抖动会把
+   * 「提交失败」变成日常，与 §13.5.4「按需召唤」那一层一致。脚本自身在拿不到 registry
+   * 时打「未扫描」并退 0（话术里不许出现「干净」），但 stdout 不是 JSON、pnpm 压根没起来
+   * 这类**判据坏了**的形态仍判红。台账形状（按 `(包名, advisory id)` 记账、双向拦、
+   * `--update` 只许降、每条基线必须有 reason）见 `check-dependency-audit.mjs` 文件头。
+   */
+  dependencyAudit: {
+    label:
+      "Dependency audit ratchet (high/critical; ledger keyed by package+advisory)",
+    args: ["../scripts/check-dependency-audit.mjs"],
+  },
 };
 
 function parseArgs(argv) {
@@ -151,9 +169,11 @@ function runGate(pnpm, key) {
   const gate = GATES[key];
   /** 实际的命令行形态：宿主（`.ps1` 形态时是 pwsh/powershell）+ pnpm 参数。 */
   const invocation = (args) => [pnpm.command, ...pnpm.prefixArgs, ...args];
-  // 门禁脚本是 `node scripts/xxx.cjs` 而不是 pnpm 子命令：用 node 直接跑，
+  // 门禁脚本是 `node scripts/xxx.cjs` / `xxx.mjs` 而不是 pnpm 子命令：用 node 直接跑，
   // 免得再套一层 pnpm exec（那层只带来解析开销与 Windows 的 .cmd 差异）。
-  if (gate.args[0]?.endsWith(".cjs")) {
+  // 认 `.mjs` 与认 `.cjs` 是同一条理由 —— 只认后者会让新加的 ESM 门禁被当成
+  // pnpm 参数（`pnpm ../scripts/x.mjs`），表现是一句看不懂的「command not found」。
+  if (/\.(?:c|m)?js$/.test(gate.args[0] ?? "")) {
     const script = path.resolve(ROOT, "scripts", path.basename(gate.args[0]));
     console.log("");
     console.log(`==> ${gate.label}`);

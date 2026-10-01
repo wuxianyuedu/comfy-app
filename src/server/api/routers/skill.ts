@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { skillRepository } from "~/lib/core/repository";
 import { BUILTIN_SKILLS, CATEGORY_LABELS } from "~/lib/skills-seed";
@@ -67,7 +68,11 @@ export const skillRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const existing = await skillRepository.findBySlug(input.slug);
-      if (existing) throw new Error("Slug already exists");
+      if (existing)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "该 slug 已存在，换一个名字",
+        });
       const skill = await skillRepository.createUserSkill({
         name: input.name,
         slug: input.slug,
