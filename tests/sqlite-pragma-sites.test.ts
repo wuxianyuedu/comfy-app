@@ -39,7 +39,9 @@ import { sleep } from "../src/lib/with-timeout";
 import {
   SQLITE_BUSY_TIMEOUT_MS,
   SQLITE_PRAGMAS,
+  applySqlitePragmas,
 } from "../src/lib/sqlite-pragmas";
+import { SQLITE_PRAGMA_BOOT } from "../src/lib/retry-policy";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const code = (rel: string): string =>
@@ -204,44 +206,229 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
   });
 });
 
+/* ── 竞态量具的常数 ────────────────────────────────────────────────
+ * 必须声明在用例块**之前**：`it()` 的标题是模板串、在**收集期**就求值，把常数放在下面会
+ * 撞 TDZ —— 表现是整个文件 "Cannot access 'RACE_PROCS' before initialization"，
+ * 而不是某条用例红（那种红长得像判据写坏了）。 */
+
 /**
- * `applySqlitePragmas` 的**撞锁重试**当场量出来（ISSUE #1282）。
+ * 被量子进程数。
  *
- * 为什么要有这一组：`next build` 的 collect-page-data 起 7 个 worker 进程，每个都
- * import `src/server/db.ts`、于是每个都跑一遍开机 PRAGMA，而**一份全新的库文件**
- * 上 `PRAGMA journal_mode = WAL` 要独占锁 —— 实测 3/8 抛 `SQLITE_BUSY`，异常从模块
- * 顶层 await 浮出 worker 就被 Next 聚合成 `Failed to collect page data`，报错行还落在
- * 无关路由上。现场形态是「干净检出上第一次 `pnpm build` 必失败、再跑一次就好」，
- * 而 CI 每次都是干净检出。
+ * 7 是照 #1282 当时的现场取的（`next build` 打印 `Collecting page data using 7 workers`）。
+ * 2026-10-01 同一台机器、`next` 已升到 16.3.8 的那次构建读到的是 **`using 15 workers`** ——
+ * 这个数会随 CPU 与版本变，别把它当常量信仰。这里仍按 7 跑是**偏保守**的一侧：进程更少
+ * ⇒ 窗口更容易错开 ⇒ 更容易「一次都不抛」，正是它需要多轮的原因之一。
+ */
+const RACE_PROCS = 7;
+
+/**
+ * 等 N 个子进程全部到位的上限。本机 tsx 冷启一轮实测 7.4s、热启 2.2–2.8s，满载更久。
+ * 上一版写死 10s 且**超时也继续发令**，而那批进程错开起跑的形状恰好是「一次都不抛」=
+ * 假红（#1337 的一条待分辨可能，本机没触发但它是条会静默降级的通道）。现在到位不足会
+ * 明确报出来，不再装作量到了。
+ */
+const ARRIVAL_DEADLINE_MS = 25_000;
+
+/** 「量具没坏」那一轮最多连跑几轮（见一次抛就停，所以常态下只跑 1 轮）。 */
+const RACE_CONTROL_ROUNDS = 6;
+
+/**
+ * 单条竞态用例的预算：最坏情况是一轮都没抛、跑满 `RACE_CONTROL_ROUNDS` 轮，每轮都可能
+ * 等到位上限。必须显式给 —— 否则是以「超时红」的形态失败，而那条红又会像极了
+ * 「前提不成立」，正好是本次要分开的那两种成因。
+ */
+const RACE_CASE_TIMEOUT_MS =
+  RACE_CONTROL_ROUNDS * (ARRIVAL_DEADLINE_MS + 20_000) + 30_000;
+
+/** 一轮竞态的读数：每个进程的结论 + **实际到位数**（后者是 #1337 补的那一格）。 */
+type RaceRound = { outcomes: string[]; arrived: number };
+
+/**
+ * `applySqlitePragmas` 的**撞锁重试**当场量出来（ISSUE #1282，形状重定于 #1337）。
  *
- * 两条用例缺一不可：
- *   · 第一条量**修复本身**（8 个独立进程同时打一份新库 → 全绿）；
- *   · 第二条量**量具没坏**（同一形状下裸循环确实会抛）—— 否则第一条在
- *     「未来某版 SQLite 不再抢锁」时也会绿，而那时它已经什么都不判了。
+ * 原始现场：`next build` 的 collect-page-data 会起多个 worker 进程，每个都 import
+ * `src/server/db.ts`、于是每个都跑一遍开机 PRAGMA，而**一份全新的库文件**上
+ * `PRAGMA journal_mode = WAL` 要独占锁 —— 实测会抛 `SQLITE_BUSY`（#1282 那轮记的是
+ * 3/8），异常从模块顶层 await 浮出 worker 就被 Next 聚合成 `Failed to collect page data`，
+ * 报错行还落在无关路由上。现场形态是「干净检出上第一次 `pnpm build` 必失败、再跑一次就好」。
+ *
+ * **为什么这一组只剩一条断言的一半**（#1337 的归因，读数都是本机 2026-10-01 量的）：
+ * 「几个进程同时抢那份独占转换窗口」这件事本身是**亚毫秒窗口上的概率事件** —— 同形状跑
+ * 5 轮，每轮抛的次数是 1 / 3 / 0 / 2 / 4；也就是说单轮「一次都没抛」的概率约 1/5，而它
+ * 并不指示任何回归。把它当判决用，代价是这条判据会在没坏的时候红（实测真用例 3 跑 2 绿 1 红），
+ * 而红不可归因的判据久了就没人看（ISSUE #1179 记的就是这个下场）。
+ *
+ * 所以形状改成两半各归其位：
+ *   · **因果交给下面那个 describe**（单元层注入 BUSY，确定性地量「裸循环第一次就抛 /
+ *     出口会等且最终成功 / 非锁族一次都不重试 / 穷尽照样抛」）—— 判决不再依赖运气；
+ *   · **现场保真留在这一组**：仍然真起 N 个独立进程互撞，但改成**多轮、见一次抛就停**
+ *     （P50 成本与单轮一样，只有真出问题的那次才会跑满）。它现在的角色是「这台机器上
+ *     这个窗口还在」，不再单独扛因果。
+ *
+ * 红话必须分得开两种「一次都没抛」：**没齐步**（错开起跑，量到的是启动抖动）与
+ * **每轮都齐了却没人撞锁**（转换形状真的变了）—— 这两件事的下一步动作完全不同。
  */
 describe("开机 PRAGMA 撞锁有界重试，当场量出来", () => {
-  it("裸循环在 8 进程同时打新库时会抛（量具没坏）", async () => {
-    const outcomes = await racePragmaBoot("bare");
-    expect(
-      outcomes.filter((o) => o !== "ok").length,
-      "同一形状下裸循环一次都没抛 —— 前提已不成立，下面那条用例不再说明任何事",
-    ).toBeGreaterThan(0);
+  it(
+    `裸循环在 ${RACE_PROCS} 进程同时打新库时会抛（量具没坏；多轮、见一次抛就停）`,
+    async () => {
+      const rounds: RaceRound[] = [];
+      for (let round = 0; round < RACE_CONTROL_ROUNDS; round++) {
+        const r = await racePragmaBoot("bare");
+        rounds.push(r);
+        /* 见一次抛就收工：常态下第一轮就够（约 3s），只有「今天一直没抛」那种轮次才会跑满。 */
+        if (r.outcomes.some((o) => o !== "ok")) break;
+      }
+      const threw = rounds.reduce(
+        (n, r) => n + r.outcomes.filter((o) => o !== "ok").length,
+        0,
+      );
+      const desynced = rounds.filter((r) => r.arrived < RACE_PROCS);
+      expect(
+        threw,
+        `${rounds.length} 轮互撞一次都没抛（其中 ${desynced.length} 轮没等齐 ${RACE_PROCS} 个进程）。` +
+          (desynced.length > 0
+            ? ` 没齐的那几轮量到的是「错开起跑」而不是「抢不到锁」—— 先查 tsx 冷启与机器负载` +
+              `（到位上限 ${ARRIVAL_DEADLINE_MS}ms；本机冷启实测 7.4s、满载更久），别去放宽下面的断言。`
+            : ` 每轮都齐步发令却没人撞锁 —— 那才是「WAL 转换不再互斥」这一前提真的变了，` +
+              `要按 ISSUE #1337 重新定性这条对照，而不是把它删掉。`),
+      ).toBeGreaterThan(0);
+    },
+    RACE_CASE_TIMEOUT_MS,
+  );
+
+  it(
+    `applySqlitePragmas 在同样形状下全绿（且这一轮确实齐步过）`,
+    async () => {
+      const r = await racePragmaBoot("retry");
+      /* 这一条的结论「出口扛得住真互撞」只有在那批进程确实同窗起跑时才成立；
+       * 没齐就跑绿的「全绿」是什么都没判的全绿，所以要当场拦下来而不是默认相信。 */
+      expect(
+        r.arrived,
+        `只有 ${r.arrived}/${RACE_PROCS} 个进程在 ${ARRIVAL_DEADLINE_MS}ms 内到位 —— 错开起跑的话` +
+          `「全绿」什么也没判（成因见上：tsx 冷启 / 机器负载）。`,
+      ).toBe(RACE_PROCS);
+      expect(
+        r.outcomes.filter((o) => o !== "ok"),
+        `有进程仍抛：${r.outcomes.filter((o) => o !== "ok").join(" / ")}`,
+      ).toEqual([]);
+    },
+    RACE_CASE_TIMEOUT_MS,
+  );
+});
+
+/* ── 单元层：把 BUSY **注入**进来，确定性地量「出口与裸循环的差别」──────────
+ *
+ * 为什么这一层要存在（#1337）：上面那组进程互撞的窗口是亚毫秒级的概率事件（同形状 5 轮
+ * 实测每轮抛 1 / 3 / 0 / 2 / 4 次），拿它扛判决就会在什么都没坏的时候红。因果改由这里钉：
+ * 结果只取决于代码形状，不取决于时机。两半各归其位之后，进程层那一组才回归它真正的角色
+ * —— 「这台机器上这个窗口还在」。
+ *
+ * 四条用例对着 `applySqlitePragmas` 的四个分支：重试到成功 / 非锁族一次都不重试 /
+ * 穷尽照样抛（且抛的是原错误）/ 同一形状下裸循环第一次就抛。最后那条就是「量具没坏」
+ * 在单元层的等价物 —— 它不需要任何运气。 */
+
+/** 一条会按脚本抛错的假连接。 */
+function scriptedTarget(
+  failures: number,
+  err: { code?: string; message: string } = {
+    code: "SQLITE_BUSY",
+    message: "database is locked",
+  },
+): { calls: string[]; execute(sql: string): Promise<unknown> } {
+  const target: { calls: string[]; execute(sql: string): Promise<unknown> } = {
+    calls: [],
+    async execute(sql: string): Promise<unknown> {
+      target.calls.push(sql);
+      if (target.calls.length <= failures) {
+        throw Object.assign(
+          new Error(err.message),
+          err.code ? { code: err.code } : {},
+        );
+      }
+      return { rows: [] };
+    },
+  };
+  return target;
+}
+
+/** 修复前那个形状：没有容错的裸循环（等价于 #1282 之前三处站点各写一遍的那段）。 */
+async function bareLoop(
+  target: { execute(sql: string): Promise<unknown> },
+  pragmas: readonly string[],
+): Promise<void> {
+  for (const pragma of pragmas) await target.execute(pragma);
+}
+
+describe("撞锁重试的因果（单元层：注入 BUSY，不赌时机）", () => {
+  it("锁族错误连续出现时，出口重试到成功 —— 同一条 PRAGMA 试了 3 次才过", async () => {
+    const target = scriptedTarget(2);
+    await expect(
+      applySqlitePragmas(target, SQLITE_PRAGMAS),
+    ).resolves.toBeUndefined();
+    /* 前 3 次都是 WAL（抛、抛、成），第 4 次才是 foreign_keys。
+     * 认次数而不是认耗时：等没等由退避常数决定，本机负载会改它，而次数不会说谎。 */
+    expect(target.calls).toEqual([
+      SQLITE_PRAGMAS[0],
+      SQLITE_PRAGMAS[0],
+      SQLITE_PRAGMAS[0],
+      SQLITE_PRAGMAS[1],
+    ]);
   });
 
-  it("applySqlitePragmas 在同样形状下全绿", async () => {
-    const outcomes = await racePragmaBoot("retry");
-    expect(
-      outcomes.filter((o) => o !== "ok"),
-      `有进程仍抛：${outcomes.filter((o) => o !== "ok").join(" / ")}`,
-    ).toEqual([]);
+  it("非锁族错误：原样抛，且一次都不重试（认不出原因就退避 = 把真故障拖成慢故障）", async () => {
+    /* 消息里也不能带锁族短语 —— `isSqliteBusyError` 有「只看 message」的兜底分支
+     * （下面那条用例钉的就是它），所以这里给一句真·结构错误。第一版写的是
+     * code=SQLITE_ERROR + message="database is locked"，结果被判成锁族重试了：
+     * 那是夹具写错，不是判据错。 */
+    const target = scriptedTarget(1, {
+      code: "SQLITE_ERROR",
+      message: "no such table: task",
+    });
+    await expect(
+      applySqlitePragmas(target, SQLITE_PRAGMAS),
+    ).rejects.toMatchObject({ code: "SQLITE_ERROR" });
+    expect(target.calls.length).toBe(1);
+  });
+
+  it("驱动只给 message、不给 code 时仍按锁族重试（那条兜底分支是有用的，别删）", async () => {
+    const target = scriptedTarget(2, { message: "database is locked" });
+    await expect(
+      applySqlitePragmas(target, SQLITE_PRAGMAS),
+    ).resolves.toBeUndefined();
+    expect(target.calls.length).toBe(4);
+  });
+
+  it(`一直撞锁：穷尽后照样抛，且正好试 ${SQLITE_PRAGMA_BOOT.maxAttempts} 次`, async () => {
+    const target = scriptedTarget(99);
+    await expect(
+      applySqlitePragmas(target, SQLITE_PRAGMAS),
+    ).rejects.toMatchObject({ code: "SQLITE_BUSY" });
+    expect(target.calls.length).toBe(SQLITE_PRAGMA_BOOT.maxAttempts);
+  });
+
+  it("同一份注入交给裸循环：第一次 BUSY 就抛 —— 出口存在的理由就是这一格", async () => {
+    const target = scriptedTarget(1);
+    await expect(bareLoop(target, SQLITE_PRAGMAS)).rejects.toMatchObject({
+      code: "SQLITE_BUSY",
+    });
+    expect(target.calls.length).toBe(1);
   });
 });
 
-/* ── 竞态量具：8 个**独立进程**同时把一份新库切到 WAL（ISSUE #1282）──────
+/* ── 竞态量具：N 个**独立进程**同时把一份新库切到 WAL（ISSUE #1282，形状重定于 #1337）─
  *
  * 为什么必须跨进程：同进程内的多条连接会被驱动自己串行化（实测 7 条连接跑同一个
  * 循环全绿），只有独立进程才复现得出「别人正拿独占锁」那一档。`next build` 的
- * 7 个 worker 正是独立进程。 */
+ * collect-page-data worker 正是独立进程。
+ *
+ * 顺带记一条**已被实测否掉**的替代方案（免得下一个人再想一遍）：想用「另一个进程持住
+ * `BEGIN EXCLUSIVE`」造出确定性的撞锁是不成立的 —— 本机真测：持锁方在时攻方执行
+ * `PRAGMA journal_mode = WAL` 直接返回 `wal`，既不抛也不静默 no-op。这条通道上唯一
+ * 能挡住 WAL 转换的就是**另一个进程正在同一瞬间转换**，而那本质是概率事件 —— 所以
+ * 因果交给单元层注入，进程层只负责「现场还在」。 */
+let raceRoundSeq = 0;
+
 const raceSandbox = path.join(
   ROOT,
   "node_modules",
@@ -297,18 +484,20 @@ const PRAGMA_MODULE_URL = pathToFileURL(
   path.join(ROOT, "src", "lib", "sqlite-pragmas.ts"),
 ).href;
 
-/** 竞态进程数：`next build` 实测是 7（"Collecting page data using 7 workers"）。 */
-const RACE_PROCS = 7;
-
-/** 跑一轮 N 进程竞态，返回每个进程的结论（`ok` / `fail:CODE` / `exit:N`）。
+/** 跑一轮 N 进程竞态，返回每个进程的结论（`ok` / `fail:CODE` / `exit:N`）**以及实际到位数**。
  *
- *  流程：先算出所有进程的**齐步文件**路径 → 落盘让它出现（= 发令）→ 等所有子进程
- *  各回一个 `.arrived.<pid>` → 收结论。少了齐步这一步，量到的是「启动抖动」而不是
- *  「抢锁」（实测会一次都不抛）。 */
-async function racePragmaBoot(mode: "bare" | "retry"): Promise<string[]> {
+ *  流程：起 N 个子进程（它们各自在 `while (!existsSync(startFile))` 上自旋等发令）→
+ *  等所有子进程各回一个 `.arrived.<pid>` → 落盘 `startFile`（= 发令）→ 收结论。
+ *  少了齐步这一步，量到的是「启动抖动」而不是「抢锁」（实测会一次都不抛）。
+ *  到位数一并返回：#1337 之后它属于判据的一部分 —— 「没齐也发令」的那一轮不能算量到了。 */
+async function racePragmaBoot(mode: "bare" | "retry"): Promise<RaceRound> {
   /* 每一轮一个**独立目录**：库文件、齐步文件、到位标记、子进程脚本都关在里面 ——
-   * 共用目录时上一轮的 `.arrived.*` 会被这一轮数进来，「人都齐了」就是假的。 */
-  const dir = path.join(raceSandbox, `${mode}-${Date.now().toString(36)}`);
+   * 共用目录时上一轮的 `.arrived.*` 会被这一轮数进来，「人都齐了」就是假的。
+   * 序号 + 时间戳两个都带上：多轮可以在同一毫秒内开跑，只靠时间戳会撞同一个目录。 */
+  const dir = path.join(
+    raceSandbox,
+    `${mode}-${++raceRoundSeq}-${Date.now().toString(36)}`,
+  );
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, "race.sqlite");
   const startFile = path.join(dir, "go");
@@ -320,22 +509,36 @@ async function racePragmaBoot(mode: "bare" | "retry"): Promise<string[]> {
   const pending = Array.from({ length: RACE_PROCS }, () =>
     runOnce(worker, PRAGMA_MODULE_URL, startFile, file, mode),
   );
-  await waitForArrivals(startFile, RACE_PROCS);
-  /* 发令：这一步之后所有进程几乎同时执行 PRAGMA。 */
+  const arrived = await waitForArrivals(startFile, RACE_PROCS);
+  /* 发令：这一步之后所有进程几乎同时执行 PRAGMA。到位不足也发令 —— 但把数带回去，
+   * 由调用方决定这一轮算不算数（#1337：不许「没齐也装作量到了」）。 */
   writeFileSync(startFile, "");
-  return Promise.all(pending);
+  const outcomes = await Promise.all(pending);
+  return { outcomes, arrived };
 }
 
-/** 等 `expect` 个 `.arrived.<pid>` 出现（上限 10s，超时也继续 —— 结论由退出码说话）。 */
-async function waitForArrivals(startFile: string, expectCount: number) {
+/**
+ * 等 `expectCount` 个 `.arrived.<pid>` 出现，返回**实际到位数**。
+ *
+ * 上一版是「上限 10s，超时也继续」且不回报 —— 于是 tsx 冷启（本机实测 7.4s）或满载
+ * 逼近上限时，这一轮会在只有部分进程就绪时发令，而那批进程错开起跑的形状恰好是
+ * 「一次都不抛」（文件里另一处注释早就点过这个形态）。到位数现在进 `RaceRound`，
+ * 由用例判它自己那条结论还成不成立。
+ */
+async function waitForArrivals(
+  startFile: string,
+  expectCount: number,
+): Promise<number> {
   const dir = path.dirname(startFile);
   const base = path.basename(startFile) + ".arrived.";
-  const deadline = Date.now() + 10_000;
+  const deadline = Date.now() + ARRIVAL_DEADLINE_MS;
+  let arrived = 0;
   while (Date.now() < deadline) {
-    const arrived = readdirSync(dir).filter((n) => n.startsWith(base)).length;
-    if (arrived >= expectCount) return;
+    arrived = readdirSync(dir).filter((n) => n.startsWith(base)).length;
+    if (arrived >= expectCount) return arrived;
     await sleep(10);
   }
+  return arrived;
 }
 
 /** 起一个进程跑 worker，取它 stdout 的第一行；非零退出也算一条结论。 */
