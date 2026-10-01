@@ -82,7 +82,7 @@ flowchart TD
      拼片 + 烧字幕 + 混 BGM，出片后用 `syncFilmToProject` 把逐镜 clip 与项目进度回写来源项目
      （两个入口：`film` router 的「重新合成」与 Agent 的 `render_film` 工具；
      代码在 `src/server/film/compose-film.ts`，2026-09-30 之前它与剧本/分镜同住在 `orchestrator.ts`）。
-     这条路的产物落在 `public/generated/films/<id>.mp4`，与时间线导出互不替代。
+     这条路的产物落在产物根下的 `generated/films/<id>.mp4`，与时间线导出互不替代。
 
 ---
 

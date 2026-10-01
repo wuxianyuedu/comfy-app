@@ -20,12 +20,14 @@ import { describe, expect, it, afterAll } from "vitest";
 
 import {
   ARTIFACT_URL_PREFIX,
+  artifactDirDisplay,
   artifactDiskPath,
   artifactUrl,
   generatedRoot,
   filmBgmRoot,
   filmsRoot,
   isWithinGeneratedRoot,
+  legacyGeneratedRoot,
   materialsRoot,
   taskOutputDir,
   taskOutputSegments,
@@ -36,16 +38,25 @@ import {
 const ROOT = path.resolve(path.sep + "output-root");
 
 describe("generatedRoot", () => {
-  it("显式 cwd → <cwd>/public/generated（解析后的绝对路径）", () => {
+  it("显式 cwd → `<cwd>/generated`（解析后的绝对路径，不在 public/ 下）", () => {
     expect(generatedRoot("/srv/app")).toBe(
-      path.resolve("/srv/app", "public", "generated"),
+      path.resolve("/srv/app", "generated"),
     );
   });
 
   it("缺省用 process.cwd()，与 /api/generated/[...path] 的根同一算法", () => {
-    expect(generatedRoot()).toBe(
-      path.resolve(process.cwd(), "public", "generated"),
+    expect(generatedRoot()).toBe(path.resolve(process.cwd(), "generated"));
+  });
+
+  it("根**不在 public/ 下**（台账 A13 的结构性关法：public 由 Next 静态直发、不经 handler）", () => {
+    const root = generatedRoot("/srv/app");
+    expect(root.startsWith(path.resolve("/srv/app", "public"))).toBe(false);
+    // 旧根仍然是唯一一处知道历史落点的定义 —— 迁移与它的判据都从这里取，
+    // 别在调用点再拼一遍 "public", "generated"（那条判据见 artifact-layout 那份）。
+    expect(legacyGeneratedRoot("/srv/app")).toBe(
+      path.resolve("/srv/app", "public", "generated"),
     );
+    expect(legacyGeneratedRoot("/srv/app")).not.toBe(root);
   });
 });
 
@@ -213,5 +224,16 @@ describe("子层位置（materials / films / films+bgm）", () => {
     expect(isWithinGeneratedRoot(materialsRoot(ROOT), filmsRoot(ROOT))).toBe(
       false,
     );
+  });
+});
+
+describe("artifactDirDisplay（界面向用户说落点时用的那一份形状）", () => {
+  it("项目任务与自由任务各给一种相对落点，且都不带 public 那一段", () => {
+    expect(artifactDirDisplay("t1", "proj_1")).toBe(
+      `generated/projects/proj_1/t1/`,
+    );
+    expect(artifactDirDisplay("t1", null)).toBe("generated/t1/");
+    // 界面文案只能来自这里：抄一份字面量就不会随搬迁而红（台账 A13 那三处文案的旧形状）
+    expect(artifactDirDisplay("t1", "p1").startsWith("public/")).toBe(false);
   });
 });

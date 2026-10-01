@@ -7,7 +7,7 @@
 # where %1 is the full comfyapp:// URL the user clicked in the browser.
 #
 # Safety (defense-in-depth): this handler ONLY opens directories that live under
-# the app's own <scripts>\..\public\generated folder. Any other path — system
+# the app's own <scripts>\..\generated folder. Any other path — system
 # dirs, parent traversal, drive roots — is rejected. The URL itself is produced
 # by our Next.js route, which also whitelist-checks server-side, so this is the
 # second, OS-side gate. A website cannot weaponize comfyapp:// to open arbitrary
@@ -28,8 +28,8 @@ try {
   exit 1
 }
 
-# Allowed root: <scripts>\..\public\generated  (resolve symlinks/relative parts)
-$allowedRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\public\generated"))
+# Allowed root: <scripts>\..\generated  (resolve symlinks/relative parts)
+$allowedRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\generated"))
 $sep = [System.IO.Path]::DirectorySeparatorChar
 if ($target -ne $allowedRoot -and -not $target.StartsWith($allowedRoot + $sep)) {
   # Outside the sandbox -> refuse.

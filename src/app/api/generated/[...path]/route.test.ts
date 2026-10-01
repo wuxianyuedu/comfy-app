@@ -1,7 +1,7 @@
 /**
  * `GET /api/generated/[...path]` —— 任务产物文件流的契约。
  *
- * 这个端点把 `public/generated/<taskId>/<file>` 按 `/api/generated/...` 前缀吐出去，
+ * 这个端点把 `<产物根>/<taskId>/<file>` 按 `/api/generated/...` 前缀吐出去，
  * 是**任意路径读取**的入口，所以它的价值全在边界上：
  *
  *   · 没有会话（`loginRequired` 开着时）必须 401，且一次都不读盘；
@@ -44,8 +44,13 @@ vi.mock("~/lib/media/output-access", () => ({
   isForeignOwnedArtifact: foreignMock,
 }));
 
+import { generatedRoot as generatedRootOf } from "~/lib/media/output-paths";
+
 const ROOT = process.cwd();
-const generatedRoot = `${ROOT}/public/generated`.replace(/\\/g, "/");
+/* 产物根从唯一出处取（不在测试里再抄一遍 `<cwd>/generated` 的形状 —— 抄了就会在
+ * 搬迁那天变成一条假红：实现没错、断言先旧）。见 `output-paths.test.ts` 里那条
+ * 「根不在 public/ 下」的结构判据。 */
+const artifactRoot = normalize(generatedRootOf(ROOT));
 
 /** 把平台分隔符统一成正斜杠再比 —— 断言的是语义，不是 path.sep 的形状。 */
 function normalize(p: string): string {
@@ -90,7 +95,7 @@ describe("GET /api/generated/[...path]", () => {
     expect(readFile).not.toHaveBeenCalled();
   });
 
-  it("穿越出 public/generated → 403 且不读盘", async () => {
+  it("穿越出产物根 → 403 且不读盘", async () => {
     const res = await get(["..", "..", "..", "etc", "passwd"]);
     expect(res.status).toBe(403);
     expect(readFile).not.toHaveBeenCalled();
@@ -166,7 +171,7 @@ describe("GET /api/generated/[...path]", () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
     // 读的是根目录内的那个文件，不是别处。
     expect(normalize(readFile.mock.calls[0]?.[0] as string)).toBe(
-      `${generatedRoot}/t1/a.png`,
+      `${artifactRoot}/t1/a.png`,
     );
   });
 

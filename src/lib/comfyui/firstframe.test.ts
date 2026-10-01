@@ -47,6 +47,8 @@ vi.mock("~/lib/workshop/workflow-run.server", () => ({
 vi.mock("./client", () => ({ uploadImage: mocks.upload }));
 vi.mock("fs", () => ({ promises: { readFile: mocks.readFile } }));
 
+import { generatedRoot } from "~/lib/media/output-paths";
+
 const mod = await import("./firstframe");
 
 const opts = {
@@ -85,8 +87,9 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
 
     expect(mocks.readFile).toHaveBeenCalledWith(
       // 精确到整条绝对路径：这一句就是在断言「地址 → 磁盘」走的是共用解析
-      // （`artifactDiskPath`），而不是某个调用点自己拼的形状。
-      path.join(process.cwd(), "public", "generated", "ff-task", "img_0.png"),
+      // （`artifactDiskPath`），而不是某个调用点自己拼的形状。根从唯一出处取，
+      // 不在测试里重抄一遍落点（搬根那天它会假红）。
+      path.join(generatedRoot(), "ff-task", "img_0.png"),
     );
     expect(mocks.upload).toHaveBeenCalled();
   });
