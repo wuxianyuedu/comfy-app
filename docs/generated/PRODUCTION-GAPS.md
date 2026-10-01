@@ -127,6 +127,13 @@
 > 判据；顺带把同一条链上更靠外的那一环记成 **A13** —— `/api/generated` 只判路径包含、
 > 不判会话与归属，A12 把列表收紧之后「直接猜路径读」仍然敞开。留着它是为了不让
 > 「素材库测过了」被读成「产物读取也安全了」。**下一刀就按这个名字把它修掉了**（见 A13 条目）。
+>
+> **⑨ 第二刀（同日）把「router 没有执行者」变成了一件已经发生的事**：给 `film` / `train` /
+> `model` / `llm` 补 52 条判据时，照出的不是弱断言，而是**一个从 Prisma→Drizzle 迁移那天起
+> 就没跑通过的 procedure** —— `train.cancel` 每次都 500，根因是仓储那个
+> `select?: unknown` + `db.select(select as never)` 把调用点的形状错误整个咽掉（见 F13）。
+> 「闸门坏了没人红」是这一族一直以来的说法；这一刀给它补了一个不是闸门的实例：
+> **没有执行者的地方，烂掉的不只是判据，还有功能本身**。
 
 - [ ] **A1 鉴权默认关闭**：无会话回落演示用户，`loginRequired` 默认 false，约 20 个 router 可写。证据：`src/lib/auth-server.ts:99-106`；`src/lib/app-settings/index.ts:96`。需评估默认强鉴权或显式化。
       ⚠️ 它同时是 A2/A3/A6/A7/A8 那一批「越权」的实际可达性前提：单用户本机部署下这些
@@ -389,11 +396,33 @@
       同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
       —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
       按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
-- [ ] **E3 服务端集成覆盖 7/16 router**（generate / run / task / workflow / project /
-      setting / material —— project、setting 是⑦第二、三批补的，material 是⑨第一刀补的，
-      全部按归属与协议闸门组织）。其余 9 个里 `llm`（A4 的出口形状在
-      `lib/llm/server.test.ts` 判着，router 层的 zod 闸还没有）、`custom-nodes`（tRPC 侧）、
-      `film` / `train` / `model` / `user` 都在写本机状态或读别人的行。
+- [ ] **E8 router 层 19 处裸 `throw new Error` —— 业务分支在客户端表现成 500**（⑨ 第二刀扫出来的同族，本刀只动了 `film` / `train` 的 6 处）：
+      tRPC 对**非 `TRPCError`** 的抛出按内部错误归码，所以「分类不合法」「项目没生产数据」
+      「slug 重复」这些**本来就该是 4xx** 的分支，到 caller 边界是
+      `INTERNAL_SERVER_ERROR`（实测：修前的 `film.detail` 拿到的是
+      `TRPCError: Film not found { code: 'INTERNAL_SERVER_ERROR' }`）。后果三条：
+      ① 台账 A2 / A3 / A12 的「越权与不存在同形」在**状态码这一层没成立** ——
+      别人的资源与不存在的都回 500，看着一样纯属巧合，任一侧改动就分叉；
+      ② 客户端拿不到能分支的码，界面只能显示「出错了」（硬规则 4 要的「用户可见出口」缺半句）；
+      ③ 一次正常点击进 `trpc_error` 警告日志与错误率，把业务分支当故障报。
+      存量按文件数（`grep -rn "throw new Error(" src/server/api/routers/*.ts`，去掉用例）：
+      `material` 7、`project` 3、`task` 2、`run` 2、`generate` 2、`workflow-model` 2、`skill` 1。
+      **不许机械替换**：这些分支意图各不同 —— 「slug 已存在」是 CONFLICT、
+      「分类不在枚举里」是 BAD_REQUEST、「那一行不存在」是 NOT_FOUND，
+      得逐处判意图再改；每改一处要**同批**把错误码写进该 router 的用例
+      （⑨ 第一刀的 `material` 用例对「库里没有这一行」判了 `code: NOT_FOUND`，
+      对「分类不在枚举里」却只写 `rejects.toThrow("Invalid folder")` —— 消息判到了、码没判，
+      而那几处实现就是裸 Error。**覆盖率满档不等于每个维度都被判过**，这就是这一族能活到今天的原因）。
+      证据：`src/server/api/routers/material.ts`、`src/server/api/routers/project.ts`、
+      `src/server/api/routers/generate.ts`、`src/server/api/trpc.ts`（`errorFormatter` 只加
+      `zodError` 与日志，不改码）。
+- [ ] **E3 服务端集成覆盖 11/16 router**（generate / run / task / workflow / project /
+      setting / material / film / train / model / llm —— project、setting 是⑦第二、三批补的，
+      material 是⑨第一刀补的，film / train / model / llm 是⑨第二刀补的（52 条，四个入口
+      按实测满档登记），全部按归属与协议闸门组织）。剩下 5 个：`custom-nodes`（tRPC 侧）、
+      `user`、`skill`、`post`、`workflowModel` —— 每个都是一句没答过的问句
+      「这个 procedure 从迁移那天起真的跑通过吗」（⑨ 第二刀在这句上照出了 `train.cancel`，
+      见 F13）。E2E 仅 3 spec / 31 用例且无登录态。
       E2E 仅 3 spec / 31 用例且无登录态。
       证据：`src/server/api/routers/**`；`e2e/*.spec.ts`；`playwright.config.ts`。
 - [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。
@@ -411,6 +440,19 @@
 - [ ] **F10 `eslint-plugin-jsx-a11y` 未显式启用**。证据：`eslint.config.js:63-69`。
 - [ ] **F11 端口 TOCTOU + 800 槽哈希分桶碰撞无兜底**。证据：`src-tauri/src/lib.rs:831-834`；`single_instance.rs:189-192`。
 - [ ] **F12 无 Web Vitals**；SQLite 无 `busy_timeout`；几乎无事务边界。证据：`src/server/db.ts:74-75`。
+- [ ] **F13 `unknown` + `as never` 把「调用点形状错了」咽掉**（本刀照出并已修一处，**类未收口**）：
+      Prisma→Drizzle 迁移把仓储的投影参数写成 `select?: unknown`，交给 Drizzle 时
+      `db.select(select as never)` —— 于是调用点留着 Prisma 的布尔投影
+      （`{ id: true, status: true }`）时 **tsc 一声不响**，运行时生成空投影 → SQL 语法错。
+      实际后果：`train.cancel` 自那次迁移起每次 500，而这条 router 没有执行者，
+      所以没有任何一条红过（`c7a77d19` 之后的本刀补上判据并把类型收紧成
+      `Record<string, AnySQLiteColumn>`，见 `repository-lora.ts` 的注释）。
+      **同族还没查完的两处**：① 其它仓储/工具签名里的 `unknown` + `as never`
+      （全仓 `as never` 的现存数量由 `check-non-null-assertions` 之外的另一条线管，没有专门判据）；
+      ② 「一个 procedure 从迁移那天起就是死的」这类缺陷**只有执行者能发现**，
+      剩下 5 个零测试 router（`post` / `user` / `skill` / `workflowModel` / `customNode`）
+      是同一问句的未答部分。证据：`src/lib/core/repository-lora.ts`（修后的类型与注释）、
+      `changelog.d/0-router-gates-tranche2.md`。
 - [ ] **P3 卫生**：无 `.editorconfig`；`package.json` 无 `engines`；tsconfig 缺 `exactOptionalPropertyTypes` 等；`cn@^0.3.0` / `lucide-react:^1.47.0` 版本偏宽；双 TS 版本导致构建/门禁语义不一致；`/api/update-check` 无鉴权回显变更指纹；`comfyapp://` 由外部 helper 实现需单独审计防任意网页利用本机路径。
 
 ## 规范状态
