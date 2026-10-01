@@ -2,8 +2,8 @@
  * 同一套布局 —— 只在这里定义一次。
  *
  * 为什么单独一处（规范 §12.12：跨文件不许复制实现）：
- * 同一句「project 任务是 `public/generated/projects/<pid>/<tid>`、其余是
- * `public/generated/<tid>`」此前被三个调用点各自拼一遍 ——
+ * 同一句「project 任务是 `generated/projects/<pid>/<tid>`、其余是 `generated/<tid>`」
+ * 此前被三个调用点各自拼一遍 ——
  *   · `executor-finalize` 按它 `mkdir` 落盘，并把 `/api/generated/...` 写进
  *     `TaskImage.localPath`；
  *   · `task.openFolder` 按它算「在文件夹里打开」的目录；
@@ -40,9 +40,53 @@
  * 就等于把「布局只有一处定义」重新拆成两份。 */
 import path from "path";
 
-/** 产物根：`<cwd>/public/generated`，也就是 `/api/generated/[...path]` 服务的那一层。 */
+import {
+  ARTIFACT_ROOT_DIR,
+  LEGACY_ARTIFACT_ROOT_DIRS,
+  taskOutputSegments,
+} from "./output-layout";
+
+/* 形状（目录名 / 子层 / URL 前缀 / 相对段）在 `./output-layout.ts`，本层只做**磁盘解析**。
+ * 那边是浏览器安全的（不引 `node:path`），因为界面也得告诉用户东西落在哪儿 ——
+ * 之前它只能抄字面量，而抄的那一份不会随搬迁而红。这里再导出一次：
+ * 调用点仍然只需要认这一处，别让「有两个地方可以抄」重新长回来。 */
+export {
+  ARTIFACT_ROOT_DIR,
+  ARTIFACT_URL_PREFIX,
+  PROJECTS_SUBDIR,
+  artifactUrl,
+  artifactDirDisplay,
+  taskOutputSegments,
+  taskOutputUrl,
+} from "./output-layout";
+
+/** 产物根：`<cwd>/generated`，也就是 `/api/generated/[...path]` 服务的那一层。
+ *
+ * **为什么不在 `public/` 下**（台账 A13 的结构性关法）：`public/**` 由 Next **按静态文件
+ * 直接发出**，不经过任何 route handler。产物一旦落在那儿，闸装在 handler 上就等于没装 ——
+ * 实测过同一份图 `/generated/<tid>/img_0.png` 回 200 原图、`/api/generated/…` 回 401，
+ * 唯一的补法是把前缀 rewrite 进 `/api/…`（`src/proxy.ts`），而那条又依赖
+ * `config.matcher` 记得把每个带扩展名的形状列全（漏一个就是「一行代码不动、判据零执行、
+ * 零报错」）。根放在 `public/` 之外之后，这条静态通道**不存在**，判据只剩 route 一处。
+ *
+ * 顺带关掉一条分发卫生账：`build-desktop.mjs` 无 filter 整树拷 `public/**`，
+ * 而产物层的顶层名单是**默认拒绝**（`STANDALONE_ALLOWED_TOPLEVEL` /
+ * `STATIC_ALLOWED_TOPLEVEL` 里都没有 `generated`）—— 所以这一层不管带着什么都不进包，
+ * 也不必为它新增任何放行条目（规范 launch-and-build §7.3）。
+ *
+ * URL 前缀（`ARTIFACT_URL_PREFIX`）与磁盘根**是两件事**：库里存的正是前者
+ * （`TaskImage.localPath` / `Film.localPath`），所以搬根不动 URL，历史行照常读得到。 */
 export function generatedRoot(cwd: string = process.cwd()): string {
-  return path.resolve(cwd, "public", "generated");
+  return path.resolve(cwd, ARTIFACT_ROOT_DIR);
+}
+
+/** 历史产物根：`<cwd>/public/generated`。
+ *
+ * 只被一次性迁移（`artifact-root-migration.server.ts`）与它的判据引用 ——
+ * 留在这里而不是让迁移自己拼，是为了「产物布局只有这一处定义」这条判据继续成立
+ * （本文件是 `tests/artifact-layout-single-source.test.ts` 唯一放行的出处）。 */
+export function legacyGeneratedRoot(cwd: string = process.cwd()): string {
+  return path.resolve(cwd, ...LEGACY_ARTIFACT_ROOT_DIRS);
 }
 
 /** `abs` 是否「等于产物根」或「落在产物根之下」。
@@ -55,16 +99,6 @@ export function isWithinGeneratedRoot(
   root: string = generatedRoot(),
 ): boolean {
   return abs === root || abs.startsWith(root + path.sep);
-}
-
-/** 产物地址的前缀：写侧唯一的形状来源（`taskOutputUrl` 与 film / materials 共用）。
- *  读侧还认历史留下的 `/generated/…`，见 `artifactDiskPath()`。 */
-export const ARTIFACT_URL_PREFIX = "/api/generated";
-
-/** 由「根内相对段」拼产物地址。film / materials 各自重抄前缀就会分叉 ——
- *  A8 那批的教训是同一句布局被三个调用点各拼一遍，其中一个还拼错了。 */
-export function artifactUrl(segments: readonly (string | number)[]): string {
-  return `${ARTIFACT_URL_PREFIX}/${segments.join("/")}`;
 }
 
 /** 素材库子层（用户手工丢进盘的文件）。归属判据在 `materials.ts`，位置在这里。 */
@@ -110,23 +144,6 @@ export function artifactDiskPath(
   }
   const abs = path.resolve(root, path.normalize(decoded));
   return isWithinGeneratedRoot(abs, root) ? abs : null;
-}
-
-/** 布局的唯一形状来源：project 任务在 `projects/<projectId>/<taskId>` 下，
- *  其余直接在 `<taskId>` 下。磁盘与 URL 两条出口都由它派生，不再各写一遍。 */
-export function taskOutputSegments(
-  taskId: string,
-  projectId?: string | null,
-): string[] {
-  return projectId ? ["projects", projectId, taskId] : [taskId];
-}
-
-/** 浏览器地址前缀：写进 `TaskImage.localPath` / `resultImages` 的那一段。 */
-export function taskOutputUrl(
-  taskId: string,
-  projectId?: string | null,
-): string {
-  return artifactUrl(taskOutputSegments(taskId, projectId));
 }
 
 /** 任务产物目录的绝对路径；当 `taskId` / `projectId` 的形状会让结果落到产物根

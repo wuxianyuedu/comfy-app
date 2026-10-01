@@ -367,27 +367,47 @@
       含首次编译，稳态为亚毫秒级 rewrite）；**逐条按路径前缀判归属仍是「命名即权限」这一族
       的根本形状** —— 盘上文件本身没有属主记录，哪天落点命名换了形状，这张判据表就得同步，
       所以布局与判据两份都在 `src/lib/media/`（`output-paths` 管形状、`output-access` 管属主）
-      并要求新增落点同批改。**另一条残留同源于此**：只要产物还住在 `public/` 下，
-      「静态直发」这条旁路就永远依赖 `src/proxy.ts` 那份 `matcher` 记得写全；把产物根搬出
-      `public/` 才是结构性的关法。
-      **这一条现在只剩「搬」这一件事**（本批 A8 第二段把布局收成了唯一出处）：磁盘根是
-      `generatedRoot()` 一个表达式，七处读/写全吃它，`/api/generated` 前缀由
-      `ARTIFACT_URL_PREFIX` 单点持有（库里存的正是它，所以搬根**不动 URL**、老数据不失效），
-      而 `scripts/comfyapp-open-folder.ps1` 那份跨语言副本由成对判据钉着 ——
-      搬那天它会红并点名要改哪一行。剩下要一起做的四件也已列进同一条判据的头部：
-      ① 历史盘上文件要一次性搬（仓库里没有目录迁移机制，最近的前例是
-      `app-settings` 那个「布尔闩锁 + 一次性改写」的形状，且必须失败有日志 + 用户可见出口）；
-      ② `src/proxy.ts` 的 rewrite 与 matcher 在搬完之后要不要留（老数据里 `/generated/…`
-      形状的地址还得答得出，判据是「两种 URL 形状同一个答案」而不是「静态口没了」）；
-      ③ 三处 UI 文案里的 `public/generated/…`；④ 产物层两道默认拒绝清单
-      （`STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL`）——
-      顺带量到一条同源的卫生账：`scripts/build-desktop.mjs` 是**无 filter 整树拷
-      `public/**`**，而 `standalone-private-inputs.mjs:192` / `check-standalone-contents.cjs:142`
-      两道清单都把 `public` 放行、注释里写明的理由正是「静态资源与**生成图落地目录**」，
-      所以攒在构建机上的产物会跟着桌包一起分发（硬规则 17 禁的是「开发机私有输入」，
-      本机图片算不算私有输入这里不替用户定性，只把形状记下：实测本机 `src-tauri/static/public`
-      只有 2 个文件，是因为那次装配之前 `public/generated` 还空着，不是被判据挡过）。
-      搬出 `public/` 之后新根不在任何允许清单里，这一条自然关掉。
+      并要求新增落点同批改。**另一条残留同源于此，本批关掉了**：产物以前住在 `public/` 下，
+      而 `public/**` 由 Next 按静态文件直接发出、不经过任何 handler —— 那条旁路只能靠
+      `src/proxy.ts` 的 `matcher` 记得写全来堵，漏一个形状就是「一行代码不动、判据零执行、
+      零报错」。现在根搬到仓库根的 `generated/`（`generatedRoot()` 一个表达式），
+      静态通道**不再存在**，判据只剩 route 一处。这一刀能做起来，靠的是上一刀
+      （A8 第二段）把七份副本收成唯一出处 —— 于是「搬」真的只是一处改：
+      · **URL 一个字都没动**：`/api/generated/…` 是写进库里的值，也是 `ARTIFACT_URL_PREFIX`
+      这条对外承诺；搬的是磁盘位置，历史行照常读得到（判据在 `output-paths.test.ts`）。
+      · **`src/proxy.ts` 那条 rewrite 留着，但职责降级**：它从「安全上的必须」变成
+      「让老数据里 `/generated/…` 那种形状仍然走闸」的兼容层。漏配 `matcher` 的表现
+      也随之从「绕过闸门拿到原图」变成「这条路 404」—— fail 的方向从泄漏变成读不到。
+      这个取舍写进 `proxy.test.ts` 与 `proxy.ts` 的注释，别按旧理由理解这一层。
+      · **历史盘上文件一次性搬**（`artifact-root-migration.server.ts`，接在
+      `src/instrumentation.ts` 的 nodejs 分支、排在会读镜头视频的成片恢复之前）：
+      三条硬约束各有用例 —— 新根已有同名条目时**留在原地绝不覆盖**（这条优先于
+      「搬干净」）、Windows 上被占用（EPERM）时**不抛**但写一条说清「哪个条目、留在哪」的
+      面板错误（硬规则 4）、第二次调用是空转（幂等靠「旧根还在不在」，不靠额外状态）。
+      反向验证：把「同名就跳过」短路掉 → 恰好那条「绝不覆盖」的用例红。
+      · **三处 UI 文案不再自己抄路径**：组件里那句 `public/generated/projects/…` 之前是
+      布局的第二份字面量，而抄的那一份不会随搬迁而红，表现就是「界面让人去翻一个
+      已经不存在的目录」。现在形状在浏览器安全的 `output-layout.ts`（不引 `node:path`，
+      所以视图层能引；`output-paths.ts` 反过来 import 它并原样再导出，避免「有两个地方
+      可以抄」），界面用 `artifactDirDisplay()` / `ARTIFACT_ROOT_DIR`。
+      · **顺手关掉一条分发卫生账**：`build-desktop.mjs` 无 filter 整树拷 `public/**`，
+      而 `standalone-private-inputs.mjs` / `check-standalone-contents.cjs` 两道清单
+      放行 `public` 的理由写的正是「静态资源与**生成图落地目录**」—— 也就是构建机上
+      攒的产物会跟着桌包分发（硬规则 17 禁的是「开发机私有输入」，本机图片算不算
+      私有输入不替用户定性，形状先记下）。新根 `generated` **不在任何一层顶层白名单里**，
+      默认拒绝直接把它挡在包外，无需新增条目；两处注释同步改成「产物不在这里」。
+      **已知窗口（不当缺陷修，但要说清）**：`src/instrumentation.ts` 在 dev 下懒编译
+      （实测 `✓ Ready` 之后约 40s 才跑这一支），所以升级到本版的开发机，头 40 秒里读
+      历史产物会拿到 404；桌包（standalone）是进程起来就跑，用户侧没有这个窗口。
+      要关掉得在 `scripts/dev-launcher.mjs` 的预检里加一步 —— 那是「全平台唯一编排」，
+      动它前须完整读 launch-and-build §1–§3，本批没为这 40 秒去碰启动链路。
+      **一处欠同步的注释（改名不改行为，但留给下一次碰壳的那批一起做）**：
+      `src-tauri/src/lib.rs:1051` 那段「运行期目录都按 `process.cwd()` 解析」的清单里
+      还写着 `public/generated/`，应为 `generated/`。不在本批改的理由是实的：
+      暂存里出现 `src-tauri/src/*.rs` 就会付 `cargo test`（本机冷 430s）并触发
+      「改了壳必须重编 release」那道时效判据（`scripts/shell-gate.mjs`），
+      为一条注释让整个 PR 背上一次完整壳编译不值 —— 但**这条不是「以后再说」**：
+      下一次任何动到壳的 PR，把这一行捎上一起改。
       搬家之外还欠一件：静态口原本支持 `Range`，折进 route 之后 `Range` 被忽略（整文件
       200 回全量）—— 现行视频 URL 本来就写的是 `/api/generated/films/…`（`compose-film`
       收口时就这么存），所以这条不是回归，只是**旧数据里 `/generated/…` 形状的视频**若被

@@ -68,7 +68,7 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
  * `resolveScopes`，而且**两份都不判归属**）。 */
 
 /* ── 画布素材库 API ───────────────────────────────────────────
- * 文件系统支撑，落点 public/generated/materials/{scope}/{folder}/。
+ * 文件系统支撑，落点 generated/materials/{scope}/{folder}/。
  * 详见 src/lib/materials.ts 顶部的存储选型说明。
  *
  * 端点：GET    /api/materials?projectId=proj_1&scope=project

@@ -7,6 +7,8 @@
  */
 import path from "path";
 import { describe, expect, it } from "vitest";
+
+import { generatedRoot } from "~/lib/media/output-paths";
 import {
   buildNormalizeArgs,
   buildSegmentVf,
@@ -72,9 +74,9 @@ describe("buildNormalizeArgs", () => {
 });
 
 describe("clipPathOf", () => {
-  /* 期望值一律现算（`path` 按平台拼，也按平台补盘符），不写死 `/` 或 `\`。 */
+  /* 期望值一律现算，且根从唯一出处取（在测试里重抄落点 = 搬根那天假红）。 */
   const CWD = path.resolve(path.sep + "proj");
-  const at = (...segs: string[]) => path.resolve(CWD, "public", ...segs);
+  const at = (...segs: string[]) => path.join(generatedRoot(CWD), ...segs);
 
   it("执行器写进库里的 /api/generated/… 解析到产物根，不是 public/api/…", () => {
     /* 这条就是「合成成片每次都失败」的判据。库里 `filmShot.videoPath` 的值来自
@@ -82,7 +84,7 @@ describe("clipPathOf", () => {
      * 旧实现只剥前导斜杠再拼 `public`，得到 `<cwd>/public/api/generated/…`
      * —— 那个目录不存在，ffmpeg 每个镜头都报找不到输入。 */
     expect(clipPathOf(CWD, "/api/generated/films/x.mp4")).toBe(
-      at("generated", "films", "x.mp4"),
+      at("films", "x.mp4"),
     );
   });
 

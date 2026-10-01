@@ -139,7 +139,8 @@ const RUNTIME_DIR = "node_modules/next/dist/compiled/next-server";
  * 每一项为什么必需（两层共用）：`server.js` + `package.json` + `.next/` +
  * `node_modules/` 是 Next standalone 的四件必需（`server.js` 启动即
  * `process.chdir(__dirname)`，配置读 `.next/required-server-files.json`，所以
- * `next.config.js` 不需要随包）；`public/` 是静态资源与生成图落地目录；`scripts/`
+ * `next.config.js` 不需要随包）；`public/` 是静态资源（产物根已从 `public/generated`
+ * 搬到仓库根的 `generated/`，它是默认拒绝的一项，见下面清单里那条注释）；`scripts/`
  * 是编排器与宿主的运行期脚本（内部再按 `ALLOWED_SCRIPTS` 逐文件判，放行目录不等于
  * 放行整棵）；`src` 不在任何一层，只有 `RUNTIME_SRC` 逐文件放行的例外。
  * static 多出那三项是**装配步**才产出的（`schema.sql` 现生成 DDL、两份 HTML 是壳的

@@ -11,21 +11,22 @@ import { requireRequestUser } from "~/server/auth/request-user";
 /**
  * /api/generated/[...path] — 任务产物文件流。
  *
- * executor-finalize 把产物落盘到 `<cwd>/public/generated/<taskId>/`，并把
+ * executor-finalize 把产物落盘到 `<cwd>/generated/<taskId>/`，并把
  * `/api/generated/<taskId>/<file>` 形式的 localPath 写进 TaskImage /
  * resultImages —— 历史数据与所有消费方都以该前缀为 URL，但这个路由此前
  * 并不存在，产物图片在所有页面都以 404 呈现（broken image）。
  *
- * 实现按路径读 `public/generated` 下的文件流式返回：
+ * 实现按路径读产物根（`generatedRoot()`）下的文件流式返回：
  *  - 历史数据（/api 前缀）与新数据一并修复，无需迁移 DB；
- *  - 路径穿越防护：解析后必须仍落在 public/generated 内；
+ *  - 路径穿越防护：解析后必须仍落在产物根之内；
  *  - **会话 + 归属**（台账 A13）：落点命名里就写着主人的身份
  *    （`projects/<项目 id>/<任务 id>`、`materials/<项目 id>/…`、`films/<成片 id>`），
  *    所以「在根内」从来不等于「该我给你读」；
- *  - ⚠️ **本文件不是这个端点的全部**：产物根在 `public/generated/`，而 `public/**`
- *    由 Next 按静态文件直发、不经过任何 handler —— 少了 `src/proxy.ts` 里把
- *    `/generated/**` 折进 `/api/generated/**` 的那条 rewrite，上面所有判定都能靠
- *    「把 URL 里的 `api/` 去掉」绕过。改根目录、改前缀、改 `matcher` 三处必须同批。
+ *  - 产物根**不在 `public/` 下**（台账 A13 的结构性关法）：`public/**` 由 Next 按
+ *    静态文件直发、不经过任何 handler，所以根住在那儿的时候，上面这些判定靠
+ *    「把 URL 里的 `api/` 去掉」就能整条绕过（本机实测过：同一份图 200 / 401 两个
+ *    答案）。搬出来之后这条静态通道不存在，`src/proxy.ts` 那条 rewrite 只剩
+ *    「让老数据里 `/generated/…` 那种形状仍然走闸」这一件兼容活。
  *  - 产物不可变（taskId 目录一次性写入），长缓存安全 —— 但正因如此缓存必须是
  *    `private`：见下面响应头那条。
  */
@@ -50,7 +51,7 @@ export async function GET(
    * 本地内联拼一次，属于 §12.12 说的那类「一处改了另一处不知道」。 */
   const root = generatedRoot();
   const abs = path.resolve(root, ...segments);
-  /* 路径穿越防护：解析后必须仍在 public/generated 内。解析回根目录本身**不算越界**
+  /* 路径穿越防护：解析后必须仍在产物根之内。解析回根目录本身**不算越界**
    * （判据放它过去），但它是个目录 → `readFile` 抛错 → 由下面的 catch 统一回 404，
    * 而不是 500。 */
   if (!isWithinGeneratedRoot(abs, root)) {
