@@ -120,3 +120,29 @@ describe("HomePage 项目区", () => {
     expect(screen.getAllByText("唯一那条")).toHaveLength(1);
   });
 });
+
+describe("首页背景（极光光斑已撤）", () => {
+  /* 判据取「内联样式里不许出现 radial-gradient」而不是数类名：那团光斑的实质就是
+     内联径向渐变（`AuroraGlow` 把 radial-gradient 写在 style 上），类名怎么换都逃不掉
+     这条。它此前是 `mix-blend-screen` + 饱和色、**没有浅色回落** —— 浅色主题下右上角
+     糊成一块粉，而首页正是浅色态最常落的屏。 */
+  it("首页不再渲染任何径向渐变光斑", () => {
+    const { container } = render(<HomePage recentProjects={[]} />);
+    const withRadial = Array.from(
+      container.querySelectorAll<HTMLElement>("div[style]"),
+    ).filter((el) =>
+      (el.getAttribute("style") ?? "").includes("radial-gradient"),
+    );
+    expect(withRadial.map((el) => el.getAttribute("class"))).toEqual([]);
+  });
+
+  /* 替代物也要钉住 —— 否则「撤掉光斑」会被连背景一起删干净：顶部那条渐隐带是首页
+     与下方内容之间唯一的纵深分隔，且它只该有类、不该有内联样式。 */
+  it("顶部渐隐带仍在（只给纵深、不给颜色，也不带内联样式）", () => {
+    const { container } = render(<HomePage recentProjects={[]} />);
+    const band = container.querySelector("div[aria-hidden]");
+    expect(band?.className).toContain("bg-gradient-to-b");
+    expect(band?.className).toContain("from-surface-1");
+    expect(band?.getAttribute("style")).toBeNull();
+  });
+});
