@@ -309,6 +309,12 @@ export default defineConfig({
         "src/server/api/routers/train.ts",
         "src/server/api/routers/model.ts",
         "src/server/api/routers/llm.ts",
+        /* 工坊「镜头胶片带」这一刀的两个新文件（**两处同批**登记）。
+         * 状态表是从 `ShotStudio.tsx` 搬过来的：胶片带要用同一份文案，而胶片带会被
+         * `ShotStudio` import —— 反向去 ShotStudio 取就是一组循环依赖（`check-circular-deps`
+         * 的判据）。搬出来正好补上这份表此前没有的门槛。 */
+        "src/components/workshop/shot-status-config.ts",
+        "src/components/workshop/ShotFilmStrip.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1386,6 +1392,21 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 工坊「镜头胶片带」（与上面 `coverage.include` 同批登记）。
+         * 状态表是纯查表，四项皆满；胶片带未走到的两支是「场景标题为空」时可访问名
+         * 与提示文案的回退 —— 按实测登记 85，不为了凑满去造一个空标题的夹具。 */
+        "src/components/workshop/shot-status-config.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/workshop/ShotFilmStrip.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 85,
         },
       },
     },
