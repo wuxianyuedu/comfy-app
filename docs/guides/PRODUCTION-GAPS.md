@@ -393,33 +393,56 @@
       同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
       —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
       按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
-- [ ] **E8 router 层 19 处裸 `throw new Error` —— 业务分支在客户端表现成 500**（⑨ 第二刀扫出来的同族，本刀只动了 `film` / `train` 的 6 处）：
+- [x] **E8 router 层 19 处裸 `throw new Error` —— 业务分支在客户端表现成 500（本批清零 + 升成硬闸）**：
       tRPC 对**非 `TRPCError`** 的抛出按内部错误归码，所以「分类不合法」「项目没生产数据」
-      「slug 重复」这些**本来就该是 4xx** 的分支，到 caller 边界是
-      `INTERNAL_SERVER_ERROR`（实测：修前的 `film.detail` 拿到的是
-      `TRPCError: Film not found { code: 'INTERNAL_SERVER_ERROR' }`）。后果三条：
-      ① 台账 A2 / A3 / A12 的「越权与不存在同形」在**状态码这一层没成立** ——
+      「slug 重复」这些本来该是 4xx 的分支，到 caller 边界是 `INTERNAL_SERVER_ERROR`
+      （实测：修前的 `film.detail` 拿到 `TRPCError: Film not found { code: 'INTERNAL_SERVER_ERROR' }`）。
+      后果三条：① A2 / A3 / A12 的「越权与不存在同形」在**状态码这一层没成立** ——
       别人的资源与不存在的都回 500，看着一样纯属巧合，任一侧改动就分叉；
-      ② 客户端拿不到能分支的码，界面只能显示「出错了」（硬规则 4 要的「用户可见出口」缺半句）；
-      ③ 一次正常点击进 `trpc_error` 警告日志与错误率，把业务分支当故障报。
-      存量按文件数（`grep -rn "throw new Error(" src/server/api/routers/*.ts`，去掉用例）：
-      `material` 7、`project` 3、`task` 2、`run` 2、`generate` 2、`workflow-model` 2、`skill` 1。
-      **不许机械替换**：这些分支意图各不同 —— 「slug 已存在」是 CONFLICT、
-      「分类不在枚举里」是 BAD_REQUEST、「那一行不存在」是 NOT_FOUND，
-      得逐处判意图再改；每改一处要**同批**把错误码写进该 router 的用例
-      （⑨ 第一刀的 `material` 用例对「库里没有这一行」判了 `code: NOT_FOUND`，
-      对「分类不在枚举里」却只写 `rejects.toThrow("Invalid folder")` —— 消息判到了、码没判，
-      而那几处实现就是裸 Error。**覆盖率满档不等于每个维度都被判过**，这就是这一族能活到今天的原因）。
-      证据：`src/server/api/routers/material.ts`、`src/server/api/routers/project.ts`、
-      `src/server/api/routers/generate.ts`、`src/server/api/trpc.ts`（`errorFormatter` 只加
-      `zodError` 与日志，不改码）。
-- [ ] **E3 服务端集成覆盖 11/16 router**（generate / run / task / workflow / project /
-      setting / material / film / train / model / llm —— project、setting 是⑦第二、三批补的，
-      material 是⑨第一刀补的，film / train / model / llm 是⑨第二刀补的（52 条，四个入口
-      按实测满档登记），全部按归属与协议闸门组织）。剩下 5 个：`custom-nodes`（tRPC 侧）、
-      `user`、`skill`、`post`、`workflowModel` —— 每个都是一句没答过的问句
-      「这个 procedure 从迁移那天起真的跑通过吗」（⑨ 第二刀在这句上照出了 `train.cancel`，
-      见 F13）。E2E 仅 3 spec / 31 用例且无登录态。
+      ② 客户端拿不到能分支的码，界面只能显示「出错了」（硬规则 4 的「用户可见出口」缺半句）；
+      ③ 一次正常点击进 `trpc_error` 警告日志，把业务分支当故障报。
+      **逐处判意图，没有机械替换**（19 处 / 7 个文件）：
+      | 分支 | 码 | 为什么 |
+      | --- | --- | --- |
+      | 那一行不存在 / 别人的行（`project` 3、`task` 2、`generate` 1、`workflow-model.rename` 1、`run` 写回 1） | `NOT_FOUND` | 越权与不存在同形，不给探测 id 用 |
+      | 输入形状不合法（`material` 6：分类不在枚举 / 文件名清洗后为空 / 路径越界） | `BAD_REQUEST` | 是请求方的错，与服务端故障必须分开 |
+      | 名字撞车（`skill` slug、`workflow-model` 重命名目标） | `CONFLICT` | 「与现存数据冲突」既不是不存在也不是故障 |
+      | 前置数据没准备好（`run.start` 无生产数据、`generate` 空 rawJson） | `PRECONDITION_FAILED` | 文案是**下一步该做什么**，归到 404 就把可行动的提示判没了 |
+      同形的两半都要判到：别人的行与不存在的行必须**同一个码 + 同一句文案**，
+      所以判据取整个信封（`tests/helpers/trpc.ts` 的 `errorEnvelope()` 把码与消息一起取出再比），
+      不是 `rejects.toThrow(原文)` —— 只比消息时 500 与 404 可以同文案，那条口径就成了
+      一句没有判据的话（⑨ 第一刀的 `material` 用例正是这样漏的：**覆盖率满档不等于每个维度都被判过**）。
+      **防线是 lint 而不是新的 `check-*.cjs`**：`eslint.config.js` 给
+      `src/server/api/routers/**/*.ts` 上了 `no-restricted-syntax`
+      （selector `ThrowStatement > NewExpression[callee.name!="TRPCError"]`，自定义错误名也在拦），
+      B 组每次提交都跑、直接指到行号。它自己的用例 `tests/router-error-envelope.test.ts`（已进固定清单）
+      判三层：**存量为零**（扫真源码、先过 `stripComments`）、**扫描面非空**（路径写错时「零命中」
+      长得像「都修好了」）、**selector 真的会响**（拿 eslint 自带的 `Linter` 在两段片段上验：
+      裸 Error 与 `new TypeError` 报、`new TRPCError` 不报）—— 「配置写在」与「配置在跑」是两件事，§11.7 同源。
+      判据：新增 `skill.test.ts` 8 条 + `workflow-model.test.ts` 11 条（这两个 router 第一次有执行者，
+      三个码各不相同 + 幂等早退不该抛错 + 不越权改别人的行），另有 `generate` / `run` / `material` /
+      `project` / `task` 五处原有用例从「比消息」升级成「比信封」。反向验证：把任一码改回裸 Error
+      → lint 与用例双红；把 `errorEnvelope` 退化成正则比消息 → 「同形」那条红。
+      **没在本批做的**：`run.ts` 的覆盖率没进门槛（它的分支大头在别线的工坊编排里，本批只动到错误信封）；
+      `workflow-detail` / `workflow-mutations` 的 `message: "Workflow not found"` 是**英文文案**
+      （码已经对，属另一条口径，见台账 P3 卫生里的文案一致性）。
+      **一处门槛按实测下调并已留痕**：`material.ts` 的 `lines` 100 → 95（同文件
+      `statements` 90 → 95、`branches` 75 → 80 顺带收紧，净一降两升）。原因是那两处
+      `if (!dir)` 拆成多行 `TRPCError` 之后，不再被「条件行」顺带盖住 —— 它们本就是
+      **不可达的防御分支**（`scope` 过 `sanitizeScope` 的字符白名单、`folder` 是枚举，
+      `folderDir` 的包含断言因此不可能失败），留着是给「以后有人放宽那两条校验」兜底。
+      **没有 mock `folderDir` 把数字凑回 100**：那测的是今天不存在的输入形状，数字好看而判据是空的
+      （口径同 §18.6「门槛取实测、旧值与原因写在注释里」）。
+      证据：`eslint.config.js`、`tests/router-error-envelope.test.ts`、`tests/helpers/trpc.ts`、
+      `src/server/api/routers/{material,project,task,generate,run,skill,workflow-model}.ts`。
+- [ ] **E3 服务端集成覆盖 13/16 router**（generate / run / task / workflow / project /
+      setting / material / film / train / model / llm / skill / workflowModel ——
+      project、setting 是⑦第二、三批补的，material 是⑨第一刀补的，
+      film / train / model / llm 是⑨第二刀补的（52 条，四个入口按实测满档登记），
+      skill / workflowModel 是⑨第三刀补的（19 条，随 E8 的错误信封一起），
+      全部按归属 / 闸门组织，不按 procedure 顺序铺）。剩下 3 个：`custom-nodes`（tRPC 侧）、
+      `user`、`post` —— 每个都是一句没答过的问句「这个 procedure 从迁移那天起真的跑通过吗」
+      （⑨ 第二刀在这句上照出了 `train.cancel`，见 F13）。
       E2E 仅 3 spec / 31 用例且无登录态。
       证据：`src/server/api/routers/**`；`e2e/*.spec.ts`；`playwright.config.ts`。
 - [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。

@@ -83,6 +83,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 收敛掉一份却没收紧台账 = 红。它守的是「这张表还有没有记账能力」，与本次改动无关，
   // 所以必须进固定清单（只在受影响时才跑，等于让下一次复制悄悄过去）。
   "tests/strip-comments-single-source.test.ts",
+  // router 层的错误信封：裸 `throw new Error` 会被 tRPC 归成 INTERNAL_SERVER_ERROR，
+  // 「越权与不存在同形」就只剩一句没有判据的话（台账 E8）。这条同时验 eslint 配置里
+  // 那条 selector **真的会响** —— 「配置写在」与「配置在跑」是两件事（§11.7 同源），
+  // 而它守的是「下一次新增一处就红」，与本次改动无关，所以进固定清单。
+  "tests/router-error-envelope.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
