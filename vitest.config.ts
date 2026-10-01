@@ -27,8 +27,12 @@ export default defineConfig({
      * 也就是**不开并行都会红**。全量并行时再乘一份争用系数：16 逻辑核上
      * 约 10 个 worker，而门禁用例各条要 `execFileSync` 真起 Node / git /
      * prettier 子进程，一轮实测 28 条报 `Test timed out in 5000ms`、
-     * 2 个文件报 `Hook timed out in 10000ms`（两个 theme 用例的 `beforeAll`
-     * 要现编一份 CSS，隔离跑 7.2s）。
+     * 2 个文件报 `Hook timed out in 10000ms`。
+     * 那两份红来自 theme 用例的 `beforeAll` 现编一份 CSS（隔离 7.2s/文件），
+     * 这一项已经从根上去掉了：编译输入源固定后实测 0.13s/文件
+     * （理由与反向判据见 `tests/helpers/theme-tokens.ts` 和
+     * `tests/theme-tokens-compile-source.test.ts`，ISSUE #1336），
+     * 所以这两个预算**没有为它再抬一次**，留给「起子进程」那一类继续用。
      *
      * 20s = 最慢实测值 ×3.6；`it()` / `describe()` 上已有的显式预算
      * （10s / 30s / 60s / 120s 那几处）优先级更高，不受这里影响。
