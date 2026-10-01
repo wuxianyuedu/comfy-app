@@ -50,6 +50,13 @@ const WorkshopModelAdapterModal = dynamic(
     ),
   { ssr: false },
 );
+/* 控制台（ISSUE #1327）：与上面两个同族的是「懒加载 + 只在点开后存在」——
+ * 它是整块全屏浮层，即时加载等于把它那套输入/输出/预设的代价摊到每个视图首屏。 */
+const ConsolePanel = dynamic(
+  () =>
+    import("~/components/console/ConsolePanel").then((mod) => mod.ConsolePanel),
+  { ssr: false },
+);
 
 /** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
 export interface SidebarProject {
@@ -84,17 +91,18 @@ export interface AppShellProps {
  * 应用外壳 —— 左侧栏（官方 `ui/sidebar`）+ 顶部工具条（`TopBar`）+ 主内容。
  *
  * 侧栏分两段：
- *   · 顶部 = 全局项（首页 / 模型 / 历史 / 队列 / 炼丹 / 流程 + 两个全局浮层入口
- *     模型适配 / 模式契约），常驻、不随当前视图增减；
+ *   · 顶部 = 全局项（首页 / 模型 / 历史 / 队列 / 炼丹 / 流程 + 三个全局浮层入口
+ *     模型适配 / 模式契约 / 控制台），常驻、不随当前视图增减；
  *   · 底部 = 「项目」折叠分组（`Disclosure`，P10 唯一实现），展开列出已有项目 + 查看全部 / 新建。
  *
  * 主页 / 画布 / 工坊 / 资源库 / 产出 / 成片不再出现在这里 —— 它们是「项目界面」内部的顶部标签页
  * （见 `ProjectTabBar`）。此前用 `active === "home"` 决定这些页签显隐，导致点「项目」等
  * 非首页视图时它们莫名复现；改成按分区归属一次性定型，显隐不再随视图漂移。
  *
- * 两个浮层入口（模型适配 / 模式契约）**是应用级的、与项目无关**，所以留在这里而不是
- * 工坊顶栏：它们读写的是全局注册表（模式契约 = 每种模式有哪些统一输入 / 输出；
- * 模型适配 = 每个远端模型 × 每个模式的字段映射），换项目不该重配一遍。弹窗挂在
+ * 三个浮层入口（模型适配 / 模式契约 / 控制台）**是应用级的、与项目无关**，所以留在这里
+ * 而不是工坊顶栏：前两个读写的是全局注册表（模式契约 = 每种模式有哪些统一输入 / 输出；
+ * 模型适配 = 每个远端模型 × 每个模式的字段映射），控制台跑的是**仓库级**命令
+ * （`pnpm test` / `drizzle-kit` / `git log`）——换项目都不该重配一遍。弹窗挂在
  * 外壳这一层（而不是某个视图内部），切视图时也不会被连带卸载。
  */
 export function AppShell({
@@ -262,6 +270,9 @@ export function AppShell({
       )}
       {overlay === "mode-contract" && (
         <ModeContractDialog onClose={() => setOverlay(null)} />
+      )}
+      {overlay === "console" && (
+        <ConsolePanel onClose={() => setOverlay(null)} />
       )}
 
       <CommandPalette
