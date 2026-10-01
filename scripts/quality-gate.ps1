@@ -13,13 +13,16 @@ Usage:
   powershell -File scripts\quality-gate.ps1 -Mode test
   powershell -File scripts\quality-gate.ps1 -Mode all
 
-Mode: typecheck | lint | test | all   (default all)
+Mode: typecheck | lint | format | test | dependencyAudit | all   (default all)
 
 Extend / maintain - how to add a new gate:
   Each gate is one entry in the $Blocks list below:
       @{ Name="id"; Label="human text"; Cmd="pnpm"; Args=@("exec","...","..."); Run=$true }
   - Run=$true  -> included in the default 'all' run. Set $false for manual-only.
-  - On Windows the script automatically maps pnpm/npm/node to the .cmd shim.
+  - Cmd 只写命令本名（pnpm / npm / node）。Windows 侧按候选顺序 `<name>.cmd` → `<name>`
+    解析第一个真存在的：pnpm/npm 是 .cmd 外壳，而 **node 是真 exe**（本机没有 node.cmd），
+    无差别拼 .cmd 会让那条门禁连进程都不起却被读成通过 —— 见 ISSUE #1345 与 Invoke-Check。
+    解析不到会打 `[FAIL][GATE-NOEXEC]` 并退 127，绝不进 `[OK] ... passed`。
   - New test files under the vitest include pattern are picked up automatically.
   - Known baseline failures live in KNOWN_FAILED_FILES; once fixed, delete the
     entry and it is enforced again.
@@ -117,10 +120,27 @@ function Invoke-Check {
   Write-Host ""
   Write-Host "==> $($Block.Label)" -ForegroundColor Cyan
 
-  # On Windows append .cmd so PowerShell can locate the shim.
-  $exe = $Block.Cmd
+  # 命令解析按**候选顺序**来，取第一个真存在的：Windows 上 pnpm/npm 是 `.cmd` 外壳（裸名会
+  # 解析到同名 `.ps1`，受执行策略摆布，所以 `.cmd` 排在前面），而 **node 是真 exe** ——
+  # 旧代码对 `^(pnpm|npm|node)$` 一律拼 `.cmd`，本机 `node.cmd` 压根不存在
+  # （`Get-Command node.cmd` → NOT FOUND，node 走 `D:\Program Files\nodejs\node.exe`），
+  # 于是 `format` 与 `dependencyAudit` 这两条 `Cmd = "node"` 的门禁**连进程都没起**，
+  # 却照打 `[OK] ... passed`（ISSUE #1345，两个宿主实测一致）。
+  $candidates = @($Block.Cmd)
   if ($env:OS -and $env:OS -like "Windows*") {
-    if ($Block.Cmd -match "^(pnpm|npm|node)$") { $exe = "$($Block.Cmd).cmd" }
+    $candidates = @("$($Block.Cmd).cmd", $Block.Cmd)
+  }
+  $exe = $null
+  foreach ($c in $candidates) {
+    if (Get-Command $c -ErrorAction SilentlyContinue) { $exe = $c; break }
+  }
+  if (-not $exe) {
+    # 这条与「跑了且退非 0」分开：前者是**这一步没有执行**，说成「失败」会让人去查
+    # 子脚本的报错，而真正要查的是这台机器的 PATH。ASCII 标签同 [DEP-*] 的理由
+    # （powershell.exe 5.1 的管道走 GBK，认中文子串的用例随宿主变红）。
+    Write-Host "  [FAIL][GATE-NOEXEC] 命令没找到：$($Block.Cmd) —— 这一步**没有执行**，不是「执行了且通过」。" -ForegroundColor Red
+    Write-Host "        先确认它在 PATH 上（Node 侧同源门禁 scripts\quality-gate.mjs 不受这条影响，可拿它对照）。" -ForegroundColor Yellow
+    return 127
   }
 
   $argsAll = @($Block.Args)
@@ -137,7 +157,22 @@ function Invoke-Check {
   $printable = ($argsAll | ForEach-Object { "`"$_`"" }) -join " "
   Write-Host ">>> $exe $printable" -ForegroundColor Yellow
 
-  & $exe @argsAll
+  # 调用前把 $LASTEXITCODE 清空 —— 这是本条事故的另一半：`&` 起不来时 PowerShell 只发一条
+  # 非终止错误、**不会写** $LASTEXITCODE，于是下一步读到的是**上一步留下的值**。本机上一步
+  # 恰好是依赖预检那次成功的 `& node diff-cli.mjs`（值 0），于是「没跑起来」被读成
+  # `[OK] passed`（ISSUE #1345）。实测（pwsh 7 与 powershell 5.1 一致）：置 $null 之后，
+  # 失败启动仍是 $null，成功启动一定写入真实退出码 —— 所以 $null 就是「一个进程都没起来」。
+  $global:LASTEXITCODE = $null
+  # `| Out-Host` 不是排版偏好，是**判决正确性**：调用者写的是 `$code = Invoke-Check ...`，
+  # 子进程的 stdout 默认会进函数的输出流、于是和 `return $code` 拼成一个数组
+  # （实测 `Object[] ["child-marker-line", 0]`）—— `if ($code -eq 0)` 对数组是逐元素比较、
+  # 非空数组为真，整体总结会既打 `[OK]` 又说「have failures」，而门禁的输出被人吞进变量里
+  # 看不见（ISSUE #1345 的同一条链上）。Out-Host 直接写宿主、不进输出流，返回值就只剩退出码。
+  & $exe @argsAll | Out-Host
+  if ($null -eq $LASTEXITCODE) {
+    Write-Host "  [FAIL][GATE-NOEXEC] 进程没起来（$exe）—— 同样不是「执行了且通过」。" -ForegroundColor Red
+    return 127
+  }
   $code = $LASTEXITCODE
   if ($code -eq 0) { Write-Host "  [OK] $($Block.Label) passed" -ForegroundColor Green }
   else             { Write-Host "  [FAIL] $($Block.Label) failed (exit $code)" -ForegroundColor Red }
