@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "next build && node scripts/build-executor-host.mjs && node scripts/standalone-private-inputs.mjs && node scripts/smoke-executor-host-standalone.mjs",
+    "build": "next build && node scripts/build-executor-host.mjs && node scripts/standalone-private-inputs.mjs && node scripts/check-standalone-contents.cjs && node scripts/smoke-executor-host-standalone.mjs",
     "analyze": "node scripts/analyze-bundle.mjs",
     "agent:film": "node scripts/agent-film.mjs",
     "check": "pnpm run lint && tsc --noEmit",
