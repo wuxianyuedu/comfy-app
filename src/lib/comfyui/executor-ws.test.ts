@@ -9,6 +9,10 @@
 // 消费方（同目录 `.test.ts` 算数）。
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// trace 通道在本文件里整体被 mock（用例不许往仓库 log/ 写字），但 #1315 那条判据要断言
+// 「跳过归属那一跳确实留了证」，所以按名字把它取回来。
+import { trace as traceMock } from "./trace";
+
 // `./runner-state` 会带 EventEmitter + lazy persistLogs；`./client` 与
 // `../core/repository` 是 server-only 链的下游——三个都 mock 掉，避免加载本
 // 模块时经它们拽出真 pino / better-sqlite3 / ComfyUI HTTP。
@@ -165,5 +169,59 @@ describe("进度帧认节点类名（ISSUE #1202）", () => {
       node: "12",
       classType: "LoraLoader",
     });
+  });
+});
+
+/* ISSUE #1315 取证的前提。#1278 那两轮复演数出 trace 里 kind=`ws` 全 0，而当时四个
+ * `trace("ws", …)` 出口**全在** `if (!promptId) return;` 之后 —— 于是「WS 一条帧都没来」与
+ * 「帧来了但不带 `prompt_id`」两种情形在日志里长得一模一样，谁也分不开。
+ * 补上这一跳之后本机数到的是：一轮 35 条 = `status`×4 / `kaytool.resources`×16 /
+ * `dasiwa.system_monitor`×15，**没有一条执行帧**（读数记在 ADR §28）。
+ * 所以下面这三条各自钉住一个约束：留证要存在、同类型只留第一帧（逐帧落盘会把诊断文件
+ * 刷成噪声）、类型数有上限（免得被异常服务刷成一个无界集合）。 */
+describe("不带 prompt_id 的帧也要留证（ISSUE #1315）", () => {
+  const traceCalls = () =>
+    vi
+      .mocked(traceMock)
+      .mock.calls.filter((c) => c[2] === "WS 帧不带 prompt_id（跳过归属）");
+
+  it("每类只落第一帧，且不碰执行侧", async () => {
+    const updateProgress = vi.fn(async () => true);
+    mod.configureExecutorWs({ taskRepo: { updateProgress } });
+    vi.mocked(traceMock).mockClear();
+
+    const frame = (type: string) =>
+      mod.handleMessage(
+        JSON.stringify({ type, data: { probe: { exec_info: [] } } }),
+      );
+
+    await frame("p1315-first");
+    expect(traceCalls()).toHaveLength(1);
+    expect(traceCalls()[0]?.[1]).toBeNull();
+    expect(traceCalls()[0]?.[3]).toEqual({
+      type: "p1315-first",
+      dataKeys: ["probe"],
+    });
+
+    // 同类型再来一帧：必须不再落盘（这就是「逐帧落盘会刷成噪声」那条预算）。
+    await frame("p1315-first");
+    expect(traceCalls()).toHaveLength(1);
+
+    // 新类型必须能落 —— 预算不能退化成「只记第一条」。
+    await frame("p1315-second");
+    expect(traceCalls()).toHaveLength(2);
+
+    expect(updateProgress).not.toHaveBeenCalled();
+  });
+
+  it("类型数到上限后停止留证（这个集合不许无界增长）", async () => {
+    vi.mocked(traceMock).mockClear();
+    for (let i = 0; i < 40; i++) {
+      await mod.handleMessage(
+        JSON.stringify({ type: `p1315-cap-${i}`, data: { x: 1 } }),
+      );
+    }
+    // 前面那条用例已经占掉两个类型，这里再灌 40 种 ⇒ 只补到上限 32。
+    expect(traceCalls()).toHaveLength(30);
   });
 });
