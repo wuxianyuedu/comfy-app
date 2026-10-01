@@ -591,18 +591,26 @@ override → 手工写注释解释为什么」，而**「这次忘了查」没�
 里「用 node 直跑门禁脚本」那条分支从只认 `.cjs` 扩到也认 `.mjs` —— 只认前者会把新的
 ESM 门禁当成 pnpm 参数送出去。
 
-**PS 侧这一档现在「只有登记、跑不到」，两条既有缺陷都要写清（别把「清单里有」读成「Windows
-侧有人在跑」）**：本刀顺手修掉了 `quality-gate.ps1` 的**整份解析失败** —— 第 56 行那个正则写在
-双引号串里用了 `\"`，而 PowerShell 的转义符是反引号不是反斜杠，于是字符串被提前结束，
-`[Parser]::ParseFile` 在 PS 5.1 与 pwsh 7 上**各报 3 个错**（本机实测），`-Mode` 给什么都进不了
-脚本体；它由 `fbabbc25` 引入，而**没有任何自动化执行者会去解析 `.ps1` 的语法**，所以这件事
-一直红不出来。修完之后还剩另一条挡在前面：它的依赖一致性预检比的是 `pnpm-lock.yaml` 与
-`node_modules/.pnpm/lock.yaml` 两个文件的 **SHA256 是否相等**，而这两个文件本来就不是同一份内容
-（实测 13068 行 vs 12910 行、顶层键不同、根锁文件里还有 2 个 `---` 文档分隔而 `.pnpm` 那份没有，
-且两者由同一次 install 写下），于是预检**恒 FAIL**、走不到 `$Blocks` —— 而它自己下面打印的差异
-明细走的是 Node 侧那份语义比较器，结论恰好是「实质一致」：**同一段里两个结论互相矛盾**。
-登记为 **ISSUE #1338**（含修法与必须做的正反验证）。在那条修掉之前，Windows 侧这条一键门禁的
-实际执行者是 `scripts/quality-gate.mjs`（`pnpm check:all`），`.ps1` 那份只保证**清单不漏项**。
+**PS 侧那两条既有缺陷（一条本刀修、一条由 #1338 收口），记清楚形状**：① `quality-gate.ps1`
+**整份脚本此前解析失败** —— 第 56 行那个正则写在双引号串里用了 `\"`，而 PowerShell 的转义符是
+反引号不是反斜杠，于是字符串被提前结束；`[Parser]::ParseFile` 在 PS 5.1 与 pwsh 7 上**各报
+3 个错**（本机实测），`-Mode` 给什么都进不了脚本体。它由 `fbabbc25` 引入，而**当时没有任何
+自动化执行者会去解析 `.ps1` 的语法**，所以这件事一直红不出来。本刀为了验证「两侧清单一致」
+这句必须先修它（改单引号串）；现在两宿主都是 0 个 ParserError，且**这类失效有了执行者**
+（`tests/quality-gate-ps-precheck.test.ts` 扫 `scripts/` 与 `tools/` 下每份 `.ps1`）。
+② 修完 ① 还剩一条挡在前面，已由 **ISSUE #1338** 收口：那条依赖一致性预检比的是
+`pnpm-lock.yaml` 与 `node_modules/.pnpm/lock.yaml` 两个文件的 **SHA256 是否相等**，而这两份
+文件**本就不同形**（实测 13068 行 vs 12910 行、顶层键顺序不同、根锁文件含 2 个 `---` 文档分隔
+而 `.pnpm` 那份没有，且两者由同一次 install 写下、mtime 只差 1 秒）⇒ 预检**恒 FAIL**、
+走不到 `$Blocks`；而它下面打印的差异明细用的正是 Node 侧那份语义比较器，结论恰好是
+「实质一致」——**同一段里两个结论互相矛盾**。同一个坑 `prepare-local-run.ps1` 早就修对并把
+理由写在注释里，只是没被复用到门禁这一处（AGENTS 硬规则 24「写之前先查有没有现成实现」的
+反面教材）。现在判决与明细共用 `scripts/lockfile/diff-cli.mjs` 的退出码（0 一致 / 1 实质差异 /
+2 判不了），并把**「判不了」与「不一致」分成两条话术**（`[DEP-JUDGE]` / `[DEP-DRIFT]`）——
+判据自身跑不起来时 Node 默认退 1，不分开就会把「判据没了」报成「依赖陈旧、去重装」。
+修完之后的实测读数：`pwsh -File scripts/quality-gate.ps1 -Mode dependencyAudit` →
+`[OK] Dependency audit ratchet … passed` + `All quality gates passed OK`，也就是 Windows
+那一侧的一键门禁**第一次真的跑到门禁本体**。
 
 **首批落地的读数**（2026-10-01 本机）：`pnpm audit --json` 当时报 **10 条
 high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 major 的现成修复版**，
