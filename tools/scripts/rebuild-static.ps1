@@ -24,8 +24,10 @@ if (Test-Path $STATIC_DIR) {
 
 Log "[2/2] 运行 build-desktop.mjs（会执行 pnpm build 生成 standalone，耗时较长）..."
 Invoke-Logged "node scripts/build-desktop.mjs"
-if ($LASTEXITCODE -ne 0) {
-    Log "[错误] build-desktop.mjs 失败，请查看上方输出。"
+# 读内核的那份结论，不读裸 `$LASTEXITCODE`：两个读者迟早漂成两个数，而
+# `$LASTEXITCODE` 这条通道在「命令没起来」时留着上一次的 0（ISSUE #1350）。
+if ($script:LAST_INVOKE_CODE -ne 0) {
+    Log "[错误] build-desktop.mjs 失败（exit=$script:LAST_INVOKE_CODE），请查看上方输出。"
     exit 1
 }
 
