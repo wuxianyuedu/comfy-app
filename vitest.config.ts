@@ -297,6 +297,18 @@ export default defineConfig({
          * 数字看着严格，实际什么都不守。 */
         "src/components/studio/model-overview-derive.ts",
         "src/components/studio/HomeModelOverview.tsx",
+        /* 体检清单 ⑨ 第二刀 · 四个零执行者的 router（台账 E3 从 7/16 抬到 11/16）：
+         * `film` / `train` / `model` / `llm`。这一批照出的不是「闸门弱」而是
+         * **「闸门 procedure 自己就是死的」**：`train.cancel` 的第三参在 Prisma→Drizzle
+         * 迁移期是 `select?: unknown` + `select as never`，调用点写成 Prisma 的布尔投影
+         * `{ id: true, status: true }` 时编译器一声不响、运行时生成空投影 → SQL 语法错，
+         * 于是「取消训练」自那次迁移起每次 500 —— 路由没有执行者，所以没有任何一条红。
+         * 四条全按实测满档登记（52 条用例把归属、数值/协议/枚举闸与「拒绝发生在副作用
+         * 之前」逐分支钉住），掉一支当场变红。 */
+        "src/server/api/routers/film.ts",
+        "src/server/api/routers/train.ts",
+        "src/server/api/routers/model.ts",
+        "src/server/api/routers/llm.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1320,6 +1332,16 @@ export default defineConfig({
           statements: 100,
           branches: 100,
         },
+        /* ── 体检清单 ⑨ 第二刀 · 四个 router（实测满档，52 条用例）─────────
+         * 满档的理由不是「行数少」，而是每个 procedure 的真分支都被判过：
+         * 归属（别人的 id 与不存在同形）、闸（协议 / 枚举 / 数值范围 / id 形状）、
+         * 以及「拒绝必须发生在副作用之前」（编排层与写库一次都没被调用）。 */
+        "src/server/api/routers/film.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         "src/components/model/model-cover.ts": {
           lines: 100,
           functions: 100,
@@ -1346,6 +1368,24 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 90,
+        },
+        "src/server/api/routers/train.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/server/api/routers/model.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/server/api/routers/llm.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
       },
     },

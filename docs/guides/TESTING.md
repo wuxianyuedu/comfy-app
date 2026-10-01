@@ -181,12 +181,15 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
       产物住在 `public/generated/` 下，而 `public/**` 由 Next 按静态文件直发、不经过任何
       handler —— 只在 route 上加闸门时，把 URL 里的 `api/` 去掉就整条绕过
       （实测同一份图：静态形状 200、带闸形状 401）。
-- [ ] **服务端 router 集成覆盖 7/16**：`generate` / `run` / `task` / `workflow` / `project` /
-      `setting` / `material`（后三个分别是闸门第二批、第三批与⑨第一刀补的，用例都按
-      **归属 / 协议闸门**组织，不按 procedure 顺序铺）。其余 9 个里 `llm`（出口脱敏在
-      `lib/llm/server.test.ts` 判着，router 层的 zod 闸没人判）、`custom-nodes`（tRPC 侧）、
-      `film`、`train`、`model`、`user` 都在写本机状态或读别人的行 —— 台账 A 系列几批复算
-      证明：「一个 router 没有执行者」的实际含义是「它的归属闸门坏了没人红」。
+- [ ] **服务端 router 集成覆盖 11/16**：`generate` / `run` / `task` / `workflow` / `project` /
+      `setting` / `material` / `film` / `train` / `model` / `llm`（前七个分别是闸门第二批、第三批
+      与⑨第一刀补的，后四个是⑨第二刀补的 52 条，用例都按**归属 / 协议 / 数值 / 枚举闸门**
+      组织，不按 procedure 顺序铺）。其余 5 个 `custom-nodes`（tRPC 侧）、`user`、`skill`、
+      `post`、`workflowModel` 都在写本机状态或读别人的行 —— 台账 A 系列几批复算证明：
+      「一个 router 没有执行者」的实际含义是「它的归属闸门坏了没人红」；⑨第二刀把这句推得
+      更狠：**`train.cancel` 自 Prisma→Drizzle 迁移起每次都 500**（仓储那个
+      `select?: unknown` + `db.select(select as never)` 把调用点的形状错误整个咽掉，
+      见台账 F13）—— 没有执行者的地方烂掉的不只是判据，还有功能本身。
 - [ ] **`DynamicWorkflowForm` / `CanvasNode` 主组件的深度行为测试**（fetch/poll 生命周期）仍开放。
 - [ ] 存量 4 份 `.snap` 结构快照按行为断言迁移（见 §11.9）。
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）。

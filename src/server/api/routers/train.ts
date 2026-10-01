@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { loraTrainingJobRepository } from "~/lib/core/repository";
 import { enqueueTraining, isTrainerConfigured } from "~/lib/comfyui/trainer";
@@ -68,7 +69,8 @@ export const trainRouter = createTRPCRouter({
         ctx.user.id,
         input.id,
       );
-      if (!job) throw new Error("Training job not found");
+      if (!job)
+        throw new TRPCError({ code: "NOT_FOUND", message: "训练任务不存在" });
       return { job };
     }),
 
@@ -76,12 +78,17 @@ export const trainRouter = createTRPCRouter({
   cancel: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      /* 第三个参数在 Prisma→Drizzle 迁移前是 `select: { id: true, status: true }`
+       * 那种形状，迁移后仓储把它当 Drizzle 的列投影用（`select as never`），
+       * 于是这里生成的是**空投影** —— SQL 直接语法错，`train.cancel` 自那一次起
+       * 每次都是 500（路由没有执行者，所以没人红）。这一支只需要「存在 + id」，
+       * 不投影；类型口径的修复见 `repository-lora.ts`。 */
       const job = await loraTrainingJobRepository.findByIdForUser(
         ctx.user.id,
         input.id,
-        { id: true, status: true },
       );
-      if (!job) throw new Error("Training job not found");
+      if (!job)
+        throw new TRPCError({ code: "NOT_FOUND", message: "训练任务不存在" });
       const { cancelTraining } = await import("~/lib/comfyui/trainer");
       await cancelTraining(job.id);
       return { ok: true };
