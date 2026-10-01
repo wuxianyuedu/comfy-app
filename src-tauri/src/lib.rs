@@ -326,28 +326,43 @@ fn get_app_url(state: tauri::State<'_, AppState>) -> String {
   state.app_url()
 }
 
-/// 把应用窗口（main）显示出来，并按需避免抢前台。
+/// 本壳自己的窗口此刻是否握着前台（= 用户在启动期还没有让出前台）。
 ///
-/// 启动期用户可能已切到别的窗口（切出去干别的了），此时应用加载完成若是照直
-/// `show()` + `set_focus()`，Windows 会把窗口直接顶到最前面——正在看的内容被
-/// 打断。默认策略改为「只显示、不激活」：窗口出现在任务栏，同时请求一次任务栏
-/// 闪烁提醒（request_user_attention），用户处理完手上的事自己点开。
+/// 启动页在启动期一直待在用户眼皮底下：只要他没动手切走，前台就还在本壳的某个
+/// 窗口上。问的是**本进程的窗口**，不是「双击入口还在不在前台」——入口在前台
+/// 只说明用户刚点过启动，那时启动页还没出现，回答不了「几十秒后他还在不在」。
 ///
-/// 只有下面两种情况给前台，其余一律「只显示」：
+/// 不区分是哪一个窗口：启动页 / 主窗 / 壳内 ComfyUI 页签，对用户都是「这个应用」。
+fn shell_owns_foreground(app: &tauri::AppHandle) -> bool {
+  app
+    .webview_windows()
+    .values()
+    .any(|win| win.is_focused().unwrap_or(false))
+}
+
+/// 把应用窗口（main）显示出来，并按需决定抢不抢前台。
+///
+/// 判据只有一条：**用户在启动期有没有手动让出前台**。启动要几十秒，用户完全
+/// 可能在这段时间切去别的窗口干活。启动页会一直待在他眼皮底下——只要他没动手
+/// 切走，前台就还在本壳的窗口上，那就是「他还在等这个应用」，加载完成必须把前台
+/// 真的给他（只丢进任务栏的观感就是「点了启动，窗口自己在后台待着」）；只有前台
+/// 已经换成别人的窗口（他手动让出了前台）才「只显示、不激活」：窗口出现在任务栏，
+/// 同时请求一次任务栏闪烁提醒（request_user_attention），他处理完手上的事自己点开。
+///
+/// 三种情况给前台，其余一律「只显示」：
 /// 1. `request_focus`——调用方的显式意图（托盘「打开主界面」、二次启动的单实例
 ///    回调），这类场景用户就是想看它；
-/// 2. `AppState.foreground`——启动器经 `COMFYAPP_FOREGROUND` 注入，判据是
-///    「前台本来就是本应用 / 显式冷启动 / 用户再次唤起运行中的实例」；双击启动
-///    不再注入（用户切去干别的正是常态，见 scripts/start_tauri_launcher.py 的
-///    decide_foreground）。
+/// 2. `AppState.foreground`——外部经 `COMFYAPP_FOREGROUND` 注入（脚本 / 终端
+///    调用），判据是「显式冷启动 / 用户再次唤起运行中的实例」；双击启动不注入
+///    （见 shell_launch::decide_front_when_self_launched）；
+/// 3. 采样这一刻前台仍在本壳自己的窗口上（`!user_yielded`）——用户就守在启动页
+///    前面等它。
 ///
 /// **不再无条件调 `set_focus()` 试探**（ISSUE #359 回归的直接原因）：交接时
 /// `show()` 若带激活语义，Windows 会把主窗当成「新窗口」**自己放行前台**——
 /// `set_focus()` 必成功，用户的「别打断我」策略被架空。现在主窗以 `focused(false)`
-/// 创建（首次 `show()` 走 `SW_SHOWNOACTIVATE`，不向前台要焦点），前台归属的
-/// 最终裁定交给启动器的交接复核进程（scripts/win32-window-focus.py：它知道
-/// 用户是否就在等这个应用，也拿得到双击启动所赋予的输入权，能把不该给的
-/// 前台收回去）。
+/// 创建（首次 `show()` 走 `SW_SHOWNOACTIVATE`，不向前台要焦点），前台归属只按
+/// 上面三条判据在**显示之前**采样决定。
 fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
   let Some(win) = app.get_webview_window("main") else {
     return;
@@ -355,7 +370,17 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
   let state = app.try_state::<AppState>();
   let first_show = state.as_ref().map(|s| s.mark_shown()).unwrap_or(false);
   let configured = state.as_ref().map(|s| s.foreground()).unwrap_or(false);
-  let activate = request_focus || configured;
+  /* 「用户手动让出前台」在采样这一刻就是「前台已经不是本壳的窗口了」。
+   *
+   * 采样必须早于下面任何窗口动作：`show()` 之后 Windows 可能自己把前台放给刚
+   * 冒出来的主窗（交接瞬间把主窗当「新窗口」放行），那时再问就分不清「用户还在
+   * 等」与「系统自己给的」——这条也正是复核进程（win32-window-focus.py）在窗口
+   * 显示**之后**才采样、因而只能给出「还回去」那套结论的原因。
+   *
+   * 「启动期一次都没拿到前台」（系统当时拒了 set_focus）同样算成让出：那种情形
+   * 下这里再 set_focus 也会被前台锁定拦下，给用户的结果与「只显示」一致。 */
+  let user_yielded = !shell_owns_foreground(app);
+  let activate = request_focus || configured || !user_yielded;
 
   /* 首次显示这一刻才套用「上一次运行的窗口几何」（尺寸 / 位置 / 最大化）。
    *
@@ -399,9 +424,11 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     let _ = win.set_focus();
     if !win.is_focused().unwrap_or(false) {
       log::warn!(
-        "[ComfyAPP] main window shown, foreground request not granted (request={} configured={})",
+        "[ComfyAPP] main window shown, foreground request not granted \
+         (request={} configured={} user_yielded={})",
         request_focus,
-        configured
+        configured,
+        user_yielded
       );
       if let Some(s) = state.as_ref() {
         s.set_attention(true);
@@ -409,9 +436,11 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
       let _ = win.request_user_attention(Some(tauri::UserAttentionType::Informational));
     } else {
       log::info!(
-        "[ComfyAPP] main window shown with focus (request={} configured={} first={})",
+        "[ComfyAPP] main window shown with focus \
+         (request={} configured={} user_yielded={} first={})",
         request_focus,
         configured,
+        user_yielded,
         first_show
       );
     }
@@ -419,7 +448,9 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
   }
 
   log::info!(
-    "[ComfyAPP] main window shown without stealing focus (focused_after_show={} first={})",
+    "[ComfyAPP] main window shown without stealing focus \
+     (user_yielded={} focused_after_show={} first={})",
+    user_yielded,
     focused_after_show,
     first_show
   );
@@ -2797,6 +2828,42 @@ mod window_startup_tests {
     assert!(
       branch.contains("std::thread::sleep(Duration::from_millis(PROBE_INTERVAL_MS))"),
       "continue 会跳过循环底部的 sleep，这一支必须自己歇：{branch}"
+    );
+  }
+
+  /// 启动完成后抢不抢前台，只看一条：**用户在启动期有没有手动让出前台**。
+  ///
+  /// 现场（用户反馈）：只判「双击入口还在不在前台」那套判据，把「用户一直守在
+  /// 启动页前面等」也算进「可能已切走」，于是加载完成一律只把窗口丢进任务栏——
+  /// 用户看到的是「点了启动，窗口自己在后台待着」。反过来，他在这几十秒里切去
+  /// 别的窗口（**手动让出前台**）才是「别打断他」那一档。
+  ///
+  /// 判据必须是「**本壳的窗口**有没有握着前台」，而且**早于任何窗口动作采样**：
+  /// `show()` 之后 Windows 会把刚冒出来的主窗当成「新窗口」放行前台，那时再问
+  /// 就分不清「用户还在等」与「系统自己给的」——ISSUE #359 的复核进程踩的正是
+  /// 这一点。
+  #[test]
+  fn foreground_is_granted_unless_the_user_yielded_it() {
+    let show = fn_body("fn show_main_window_without_focus");
+    assert!(
+      show.contains("let activate = request_focus || configured || !user_yielded;"),
+      "缺「用户没让出前台就给前台」这一条：{show}"
+    );
+    assert!(
+      show.contains("let user_yielded = !shell_owns_foreground(app);"),
+      "「用户让出前台」必须由本壳窗口的前台归属回答：{show}"
+    );
+    let sampled = show.find("let user_yielded").expect("采样点不见了");
+    let shown = show.find("win.show()").expect("show() 不见了");
+    assert!(
+      sampled < shown,
+      "前台归属必须在显示之前采样（show() 之后系统自己会放行前台）：{show}"
+    );
+
+    let owns = fn_body("fn shell_owns_foreground");
+    assert!(
+      owns.contains("webview_windows()") && owns.contains("is_focused()"),
+      "前台归属按本壳窗口的 focused 判，不看进程名 / 句柄：{owns}"
     );
   }
 }
