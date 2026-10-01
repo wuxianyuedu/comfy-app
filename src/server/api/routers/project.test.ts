@@ -162,15 +162,21 @@ describe("project.get", () => {
     expect(res?.name).toBe("我的");
   });
 
-  it("他人项目 / 不存在 → 同一句「Project not found」（不给探测 id 用）", async () => {
+  it("他人项目 / 不存在 → 同一个错误信封，且码是 NOT_FOUND（不给探测 id 用）", async () => {
     seedProject(tdb, { id: "p-b", userId: "user-b", name: "别人的" });
     const caller = createCaller(makeCtx());
-    await expect(caller.get({ projectId: "p-b" })).rejects.toThrow(
-      "Project not found",
-    );
-    await expect(caller.get({ projectId: "nope" })).rejects.toThrow(
-      "Project not found",
-    );
+    /** 把错误信封整个取出来比 —— 只比 `message` 的话，500 与 404 可以同文案，
+     *  「同形」就成了假的；码进比较才是那句口径的机器判据。 */
+    const envelope = (p: Promise<unknown>) =>
+      p.then(
+        () => "OK",
+        (e: { code?: string; message?: string }) =>
+          `${e?.code ?? "?"}|${e?.message ?? "?"}`,
+      );
+    const foreign = await envelope(caller.get({ projectId: "p-b" }));
+    const missing = await envelope(caller.get({ projectId: "nope" }));
+    expect(foreign).toBe(missing);
+    expect(foreign.split("|")[0]).toBe("NOT_FOUND");
   });
 });
 
@@ -203,7 +209,7 @@ describe("project.patch", () => {
     expect(res).toMatchObject({ name: "新名", nodes: NODES, edges: EDGES });
   });
 
-  it("他人项目 → 不改一行、抛「Project not found」", async () => {
+  it("他人项目 → 不改一行、抛NOT_FOUND", async () => {
     seedProject(tdb, {
       id: "p-a",
       userId: "user-a",
@@ -212,7 +218,7 @@ describe("project.patch", () => {
     });
     await expect(
       createCaller(ctxB()).patch({ projectId: "p-a", name: "改掉" }),
-    ).rejects.toThrow("Project not found");
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     const row = tdb.$tables.projects.find((p) => p.id === "p-a")!;
     expect(row.name).toBe("受害画布");
     expect(row.nodes).toEqual(NODES);
@@ -323,7 +329,7 @@ describe("project.outputs", () => {
     }
   });
 
-  it("他人项目 → 抛「Project not found」（台账 A3）", async () => {
+  it("他人项目 → 抛NOT_FOUND（台账 A3）", async () => {
     seedProject(tdb, { id: "p-b", userId: "user-b", name: "别人的" });
     seedTask(tdb, {
       id: "t-b",
@@ -333,12 +339,12 @@ describe("project.outputs", () => {
     });
     await expect(
       createCaller(makeCtx()).outputs({ projectId: "p-b" }),
-    ).rejects.toThrow("Project not found");
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("不存在的项目 → 同一句「Project not found」", async () => {
+  it("不存在的项目 → 同一句NOT_FOUND", async () => {
     await expect(
       createCaller(makeCtx()).outputs({ projectId: "nope" }),
-    ).rejects.toThrow("Project not found");
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

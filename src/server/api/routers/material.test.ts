@@ -183,7 +183,7 @@ describe("material.list —— 读侧归属", () => {
   it("未知分类 → 抛错（分类是枚举，不是路径片段）", async () => {
     await expect(
       createCaller(makeCtx()).list({ projectId: "proj-a", folder: "../docs" }),
-    ).rejects.toThrow("Invalid folder");
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("scope 形状攻击被收成 null → 落到共享区，不越界", async () => {
@@ -256,7 +256,24 @@ describe("material.save —— 写侧归属与清洗", () => {
         folder: "../../outside",
         projectId: "proj-a",
       }),
-    ).rejects.toThrow("Invalid folder");
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(disk.writeFile).toEqual([]);
+  });
+
+  it("清洗后文件名为空 → BAD_REQUEST，且 mkdir / writeFile 一次都没发生", async () => {
+    // `sanitizeFileName` 对「整名是目录成分」「只有分隔符」「全是空白」都返回 null；
+    // 这条判据要落到**码**上 —— 旧写法是裸 Error，界面与故障分不开（台账 E8）。
+    for (const name of ["..", "/", "   ", "\\..\\"]) {
+      await expect(
+        createCaller(makeCtx()).save({
+          name,
+          content: "hi",
+          folder: "docs",
+          projectId: "proj-a",
+        }),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    }
+    expect(disk.mkdir).toEqual([]);
     expect(disk.writeFile).toEqual([]);
   });
 
@@ -313,7 +330,18 @@ describe("material.delete —— 删除侧归属（拒绝必须发生在 rm 之�
         folder: "../../outside",
         projectId: "proj-a",
       }),
-    ).rejects.toThrow("Invalid folder");
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(disk.rm).toEqual([]);
+  });
+
+  it("文件名清洗后为空 → BAD_REQUEST 且不 rm（整名就是 `..` 时没东西可删）", async () => {
+    await expect(
+      createCaller(makeCtx()).delete({
+        name: "..",
+        folder: "ref",
+        projectId: "proj-a",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(disk.rm).toEqual([]);
   });
 });

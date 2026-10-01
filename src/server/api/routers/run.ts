@@ -9,6 +9,7 @@
 // 把 run 置为 running 后，以 fire-and-forget 拉起服务端执行引擎 `advanceRunLoop`（推进到下一个
 // 停点：等点头 / 完成 / 失败 / 被暂停），引擎内部自带异常兜底、不抛给调用方。
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { productionRepository } from "~/lib/core/repository-production";
@@ -38,7 +39,14 @@ async function loadRun(
   projectId: string,
 ): Promise<ProductionRun> {
   const row = await productionRepository.getForUser(userId, projectId);
-  if (!row) throw new Error("该项目还没有生产数据（先在工坊产出内容再启动）");
+  // PRECONDITION_FAILED 而不是 NOT_FOUND：这一支要告诉调用方「先去医院，先产出内容」。
+  // 探测面没有变大 —— 别人的项目与没内容的项目走的是同一条 `row === null`，
+  // 回的是同一句话（口径同 A2 / A3 / A12 的「越权与不存在同形」）。
+  if (!row)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "该项目还没有生产数据（先在工坊产出内容再启动）",
+    });
   return normalizeProductionRun(row.run);
 }
 
@@ -49,7 +57,8 @@ async function persistAndPlan(
   run: ProductionRun,
 ): Promise<{ run: ProductionRun; action: RunAction }> {
   const saved = await productionRepository.updateRun(userId, projectId, run);
-  if (!saved) throw new Error("保存 run 失败：生产数据行不存在");
+  if (!saved)
+    throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
   const row = await productionRepository.getForUser(userId, projectId);
   const action = planNextRunAction(toRunView(row ?? null), run);
   return { run, action };
