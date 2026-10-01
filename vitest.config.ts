@@ -333,6 +333,9 @@ export default defineConfig({
          * `workflow-local-roots.ts`）不在这一刀的范围：它们的用例早就在场，缺的是门槛登记，
          * 那是 E7 覆盖率欠账的账，不是本批改动的账（口径同上面那句 `run.ts`）。 */
         "src/server/api/routers/workflow-detail.ts",
+        /* 视图页签 刀1 的状态模型（**两处同批**登记）。它是纯函数、判断力全在这里
+         * （页签身份、开/关/回落、序列化的"整份可用否则整份放弃"），组件侧只是接线。 */
+        "src/components/studio/workspace-tabs.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1462,6 +1465,15 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 视图页签 刀1 的状态模型（与 `coverage.include` 同批）。数值取隔离实测向下
+         * 取整到 5：行与函数满档；未走到的几支是「存储里某一项形状不对」的少数回退
+         * （语义上已被「任何一处不合法就整份放弃」那组用例覆盖，不为凑分支数造夹具）。 */
+        "src/components/studio/workspace-tabs.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 95,
+          branches: 90,
         },
       },
     },
