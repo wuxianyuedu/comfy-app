@@ -263,6 +263,19 @@ export default defineConfig({
         "src/lib/media/materials.ts",
         "src/server/api/routers/material.ts",
         "src/app/api/materials/route.ts",
+        /* 体检清单 ⑨ 第五刀 · 产物布局收口（台账 A8 第二段）带出的四个入口：
+         *   · `film/compose-steps.ts` —— 本批那条真故障的所在地（`clipPathOf` 不剥
+         *     `api/` 段 ⇒ 成片合成每条镜头必败），解析改成吃 `output-paths` 的共用判据；
+         *   · `app/api/film/bgm/route.ts` 与 `workshop/media-source.server.ts` ——
+         *     改之前的共同点是**零执行者**：改了判据却没有一处执行它，就是「修了 ≠ 记了」
+         *     那个老形状（§11.2.1 第二条），所以本批各补一组用例；
+         *   · `comfyui/firstframe.ts` —— 同一句地址的另一份解析（它剥了 `api/`，
+         *     与上面那份结论相反），换共用判据后需要数字看着。
+         * 门槛全部取这批用例的实测下限（见对应阈值块里的留痕）。 */
+        "src/server/film/compose-steps.ts",
+        "src/app/api/film/bgm/route.ts",
+        "src/lib/workshop/media-source.server.ts",
+        "src/lib/comfyui/firstframe.ts",
         /* 首页「本机算力」卡带出的两个新出口：**两处同批**登记。
          *   · `comfy-resource-metrics.ts` —— 显存/内存口径命名的唯一出处，状态栏与
          *     首页卡都读它；它一旦漂移，两处消费点会同时变红（负向验证实测过），
@@ -1496,6 +1509,46 @@ export default defineConfig({
           functions: 100,
           statements: 95,
           branches: 90,
+        },
+        /* ⑨ 第五刀 · 产物布局收口（台账 A8 第二段）这四个入口的实测下限
+         * （数字来自「只跑这批用例」那一次测量，是**下限**，全量里只会更高）。
+         * 三处刻意不是满档，没盖到什么点名如下（不写「还有一些没测」这种含糊话）：
+         *   · `compose-steps.ts` 分支 65 —— 缺的是第 34 / 82 行
+         *     `fixed(fadeOut, 2) ?? "0"` 与 `fixed(dur, 2) ?? "0"` 的右半边：
+         *     `dur` 与 `fadeOut` 都由上层算成数字，实测构造不出 `null` 那个形状；
+         *   · `bgm/route.ts` 行 95 —— 缺的是第 40 行 100MB 大小闸那一句：
+         *     要造一个真 100MB 的 File 才盖得到，不值得为数字买那份内存与时长；
+         *   · `media-source.server.ts` 只有 35/30/30/35 —— 本批只补了「本地产物地址」
+         *     这一支的执行者（含那条 `path.sep` 边界的反向验证），`http(s)` 拉取与
+         *     `resolveMediaDataUrl` 两族（第 58–121 行）仍**零执行者**，那是 E7 的账；
+         *     登记低档是为了让「新增未覆盖」看得见，而不是把它藏进 workshop 的通配档里；
+         *   · `firstframe.ts` 分支 75 / 语句 95 —— 缺的是 `values` 里三个「参数没给
+         *     就不写」的展开支（38–40）、等待轮询的退避支（53）与「库里那行没有图」
+         *     的兜底支（74）。「地址不合法就不读盘」那一条本批已补用例并改成
+         *     精确断言整条绝对路径（不再用 `stringContaining` 蒙过去）。 */
+        "src/server/film/compose-steps.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 65,
+        },
+        "src/app/api/film/bgm/route.ts": {
+          lines: 95,
+          functions: 100,
+          statements: 95,
+          branches: 75,
+        },
+        "src/lib/workshop/media-source.server.ts": {
+          lines: 35,
+          functions: 30,
+          statements: 35,
+          branches: 30,
+        },
+        "src/lib/comfyui/firstframe.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 95,
+          branches: 75,
         },
       },
     },

@@ -7,26 +7,20 @@ import { errorText } from "~/lib/error-message";
 import "server-only";
 
 import { promises as fs } from "fs";
-import path from "path";
 
 import { isRecord } from "~/lib/is-record";
+import { artifactDiskPath } from "~/lib/media/output-paths";
 import { isInlineMedia, parseDataUrl, toDataUrl } from "~/lib/media/data-url";
 import { DEFAULT_IMAGE_MIME, mimeForExt } from "~/lib/media/mime-ext";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
-const GENERATED_DIR = path.join(process.cwd(), "public", "generated");
 const MAX_BYTES = 24 * 1024 * 1024;
 
-/* 把服务端相对的生成路径（/api/generated/... 或 /generated/...）映射到
- * public/generated 下的文件。URL 不是指向本地生成产物时返回 null。
- * 同时防目录穿越。 */
+/* 服务端相对的产物地址（/api/generated/... 与历史留下的 /generated/...）→ 磁盘路径。
+ * 解析与越界判据都在 `~/lib/media/output-paths` 那一处：本文件此前自己写了一份，
+ * 而那份的越界判据少了 `path.sep` 边界（同级的 `generatedX` 目录会被算作根内）。 */
 function localPathFor(src: string): string | null {
-  const m = /^\/(?:api\/)?generated\/(.+)$/.exec(src);
-  if (!m?.[1]) return null;
-  const rel = path.normalize(decodeURIComponent(m[1]));
-  const abs = path.join(GENERATED_DIR, rel);
-  if (!abs.startsWith(GENERATED_DIR)) return null;
-  return abs;
+  return artifactDiskPath(src);
 }
 
 export interface ResolvedMedia {
