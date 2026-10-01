@@ -61,8 +61,20 @@ describe("tsc 生成物报错的点破（#1182）", () => {
     expect(hint).toContain("rm -f .next/dev/types/validator.ts");
     expect(hint).toContain("rm -rf .next/dev/types");
     expect(hint).toContain("ISSUE #1182");
-    // 不许把这条说成「已解决」：它只做定性，共写还在。
-    expect(hint).toContain("还没做");
+    // 不许把这条说成「已解决」：它只做定性，共写还在（另两条候选已按实测判死，见下面那条用例）。
+    expect(hint).toContain("本提示只做定性");
+  });
+
+  it("防复发不许再建议「给第二实例换 distDir」（实测会把共写搬到受版本控制的文件上）", () => {
+    const hint = buildHint(classifyTscErrors(REAL_ARTIFACT_OUTPUT));
+    // 这条用例钉的是**一句不该再出现的话**：#1311 那版写着「起第二实例时给它独立的 `.next`
+    // （`distDir` 按端口/实例分叉）」，而实测（Next 16.3.5，真起一个 `distDir=.next-probe-1182`
+    // 的第二实例）是 Next 自己往 `tsconfig.json` 的 `include` 追加两条实例目录、并把
+    // `next-env.d.ts` 的 import 改写成指向它 —— 那个实例的半截 validator.ts 照样进组 A，
+    // 共写没消除，还多脏了一个受版本控制的文件。照旧建议等于把下一个人推向更糟的形态。
+    expect(hint).not.toMatch(/distDir 按端口|给它独立的/);
+    expect(hint).toContain("别在同一目录双开");
+    expect(hint).toContain("git worktree");
   });
 
   it("Windows 反斜杠形态同样认得（本机就是这个形态）", () => {
