@@ -11,7 +11,6 @@ import {
   Video,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { AuroraGlow } from "~/components/ui/aurora-background";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { LocalComputeCard } from "./LocalComputeCard";
 import { HomeModelOverview } from "./HomeModelOverview";
@@ -222,22 +221,17 @@ export function HomePage({
       className="bg-canvas text-ink relative flex h-full min-h-0 w-full flex-col overflow-hidden"
       style={{ fontFamily: "var(--font-sans)" }}
     >
-      {/* ── 极光背景光斑 ───────────────── */}
+      {/* ── 顶部渐隐带（替代原先两团极光光斑）────────────────────
+          换掉的理由不是审美偏好，是两条实测：
+            · 那两团是 `mix-blend-screen` + 饱和色，**没有浅色回落** —— 浅色主题下
+              右上角会糊成一块粉，而首页是浅色态最常落的屏；
+            · 首页本来就有标题、四个入口与两张状态卡，装饰性光斑压低的是内容可读性。
+          新做法不给颜色、只给纵深（surface → canvas 的单向渐隐），深浅两态同一份
+          令牌，不需要各写一套。 */}
       <div
-        className="pointer-events-none absolute inset-0 overflow-hidden"
+        className="from-surface-1 pointer-events-none absolute inset-x-0 top-0 h-56 bg-gradient-to-b to-transparent"
         aria-hidden
-      >
-        <AuroraGlow
-          tone="violet"
-          alpha={0.42}
-          className="top-[-20%] right-[-10%] h-[70%] w-[55%] opacity-50 mix-blend-screen"
-        />
-        <AuroraGlow
-          tone="cyan"
-          alpha={0.28}
-          className="bottom-[15%] left-[-15%] h-[55%] w-[45%] opacity-50 mix-blend-screen"
-        />
-      </div>
+      />
 
       {/* ── 主内容区 ────────────────────────
           侧栏（`ui/sidebar`）与顶栏（`TopBar`）由 `AppShell` 统一提供 ——
