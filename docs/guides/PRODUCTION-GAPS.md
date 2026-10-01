@@ -459,7 +459,7 @@
       转到了 lib」。反向验证逐条做过：去掉 `findByIdForUserSelect` 的 userId 条件 →
       两条归属用例红；`bust` 写成 `{}` → bust 用例红；`hostId` 写死 `""` → 子图坐标用例红。
       证据：`src/server/api/root.ts`、`tests/trpc-surface-executors.test.ts`、
-      `src/server/api/routers/workflow.test.ts`、`vitest.config.ts`（workflow 一族首次登记门槛）。
+      `src/server/api/routers/workflow.test.ts`、`vitest.config.ts`（`workflow-detail.ts` 首次登记门槛）。
       **本批复算出来、按口径没有升成硬闸的存量**（判据第一次被看见就有 13 条，误报一片的
       判据只能精确化、不能靠放宽基线装机 —— 口径同 E8）：**13 条 procedure 有执行者、
       零消费方** —— `llm.complete`、`material.list` / `material.save` / `material.delete`、
