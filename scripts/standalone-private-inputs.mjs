@@ -189,7 +189,11 @@ export const RUNTIME_SCRIPTS = [
  *   · `server.js` + `package.json` + `.next/` + `node_modules/` —— Next standalone
  *     的四件必需（`server.js` 启动即 `process.chdir(__dirname)`，配置读
  *     `.next/required-server-files.json`，所以 `next.config.js` **不需要**随包）。
- *   · `public/` —— 静态资源与生成图落地目录（`public/generated` 是写侧）。
+ *   · `public/` —— 静态资源（`favicon.ico` / `splash.html`）。**产物不在这里**：
+ *     产物根曾是 `public/generated`（跟着静态资源一起被拷进包），现已搬到仓库根的
+ *     `generated/`（台账 A13 的结构性关法）。它是**默认拒绝**的一项 —— 顶层名单里
+ *     没有 `generated`，所以不管 tracing 带不带它都进不来；将来确需放行必须同改
+ *     两处清单并写清「谁在运行期读它」。
  *   · `scripts/` —— 编排器与宿主的运行期脚本（清单见 `RUNTIME_SCRIPTS`）。
  *   · `splash.html` / `index.html` —— 启动页与根路径兜底页（壳与 sidecar 都读）。
  *   · `schema.sql` —— 首启建表的 DDL，由 `build-desktop.mjs` 的 §首启建表 现生成

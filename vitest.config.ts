@@ -276,6 +276,16 @@ export default defineConfig({
         "src/app/api/film/bgm/route.ts",
         "src/lib/workshop/media-source.server.ts",
         "src/lib/comfyui/firstframe.ts",
+        /* ⑨ 第六刀 · 产物根搬出 `public/`（台账 A13 收官）带出的两个新文件：
+         *   · `media/output-layout.ts` —— 布局的**形状**（目录名 / 子层 / URL 前缀 /
+         *     给人看的相对落点），浏览器安全（不引 `node:path`），界面与
+         *     `output-paths.ts` 都吃它。它必须有门槛：这一层存在的唯一理由就是
+         *     「界面向用户说落点时不再抄字面量」，抄回去的话不会有任何别的信号。
+         *   · `media/artifact-root-migration.server.ts` —— 一次性搬迁历史盘上文件。
+         *     它对错的代价不对称（弄丢用户的图 vs 少搬一项），所以「绝不覆盖」
+         *     那条必须有数字看着。 */
+        "src/lib/media/output-layout.ts",
+        "src/lib/media/artifact-root-migration.server.ts",
         /* 首页「本机算力」卡带出的两个新出口：**两处同批**登记。
          *   · `comfy-resource-metrics.ts` —— 显存/内存口径命名的唯一出处，状态栏与
          *     首页卡都读它；它一旦漂移，两处消费点会同时变红（负向验证实测过），
@@ -1549,6 +1559,22 @@ export default defineConfig({
           functions: 100,
           statements: 95,
           branches: 75,
+        },
+        /* ⑨ 第六刀 · 产物根搬迁。`output-layout.ts` 四维满档（四个导出各有用例，
+         * 含界面用的 `artifactDirDisplay`）。搬迁那份留一档下限：唯一没盖到的是
+         * 「旧根本身读不到」（权限 / 正被别的进程删）那条 catch  return（第 84 行）——
+         * 造它要在别的用户下跑，不值当；这条路的后果只是「什么都不搬」。 */
+        "src/lib/media/output-layout.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/media/artifact-root-migration.server.ts": {
+          lines: 95,
+          functions: 100,
+          statements: 95,
+          branches: 90,
         },
       },
     },

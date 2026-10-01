@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Hint } from "~/components/ui/hint";
 import { textHandler } from "~/lib/form-props";
+import { ARTIFACT_ROOT_DIR } from "~/lib/media/output-layout";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -85,7 +86,7 @@ export function MaterialLibraryPanel({
           素材库
         </h2>
         <Hint
-          label="素材保存在 public/generated/materials 下，可直接把文件丢进对应分类目录"
+          label={`素材保存在 ${ARTIFACT_ROOT_DIR}/materials 下，可直接把文件丢进对应分类目录`}
           accessibleName
         >
           <Button

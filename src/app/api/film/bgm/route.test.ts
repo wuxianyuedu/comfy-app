@@ -2,7 +2,7 @@
  * `/api/film/bgm` 上传口的闸门用例（这条此前**零执行者**）。
  *
  * 为什么值得为它写：它是唯一「把用户给的文件直接写进产物根」的 REST 口，
- * 而本批把它的落点从第五份手写的 `public/generated/films/bgm` 换成了
+ * 而那次收口把它的落点从第五份手写的 `public/generated/films/bgm` 换成了
  * `filmBgmRoot()`。断言里刻意把 `process.cwd()` 顶到临时目录 ——
  * 谁再手写一份落点，就会写到临时目录之外，当场看得见（台账 A8 第二段）。
  *
@@ -33,7 +33,7 @@ vi.mock("~/server/auth/request-user", () => ({
 }));
 
 import { POST } from "./route";
-import { filmBgmRoot } from "~/lib/media/output-paths";
+import { filmBgmRoot, generatedRoot } from "~/lib/media/output-paths";
 
 const TMP = path.resolve(path.sep + "bgm-test-root");
 const cwdSpy = vi.spyOn(process, "cwd");
@@ -68,9 +68,7 @@ describe("POST /api/film/bgm", () => {
     const res = await POST(reqWith(audioForm("主题曲.mp3", "audio/mpeg")));
     expect(res.status).toBe(200);
     const { name } = (await res.json()) as { name: string };
-    expect(writes.mkdir).toEqual([
-      path.join(TMP, "public", "generated", "films", "bgm"),
-    ]);
+    expect(writes.mkdir).toEqual([filmBgmRoot(generatedRoot(TMP))]);
     expect(writes.writeFile).toEqual([path.join(filmBgmRoot(), name)]);
     expect(name).toMatch(/^bgm-[0-9a-z-]+_主题曲\.mp3$/);
   });

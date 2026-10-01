@@ -2,7 +2,7 @@
  * 的归属判据，与 `~/lib/media/output-paths`（布局）配成一对：那份管路径长什么样，
  * 这份管谁能读。
  *
- * 为什么需要它（台账 A13）：这个端点此前只有「解析后仍在 `public/generated` 之内」
+ * 为什么需要它（台账 A13）：这个端点此前只有「解析后仍在产物根之内」
  * 一条路径判据（那条有判据，#1260 补的），**既不认会话也不认归属** —— 而落点命名里
  * 就写着主人的身份：`projects/<项目 id>/<任务 id>/…`、`materials/<项目 id>/…`、
  * `<任务 id>/…`、`films/<成片 id>.mp4`。于是任何能访问这个端口的一方，都可以按路径
@@ -44,7 +44,7 @@ async function isForeignProjectScope(scope: string, userId: string) {
 }
 
 /** 这条产物**能否被确定属于请求者之外的人**（`true` 就不该给读）。
- *  `segments` 是相对于 `public/generated` 的路径片段（已经过 URL 解码）。 */
+ *  `segments` 是相对于产物根（`generatedRoot()`）的路径片段（已经过 URL 解码）。 */
 export async function isForeignOwnedArtifact(
   segments: string[],
   userId: string,

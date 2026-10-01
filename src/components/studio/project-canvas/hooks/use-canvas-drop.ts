@@ -4,7 +4,7 @@
  *  的逻辑。素材库 / 历史面板经 `placeMediaNode`（按钮点击）或
  *  拖放处理器把文件交给画布。
  *
- *  文件住在 public/generated（经 /api/generated 提供），但
+ *  文件住在产物根 generated/（经 /api/generated 提供），但
  *  图片 / 影片节点的 mediaPath 必须是 ComfyUI
  *  **输入**目录内的文件名，好让下游 LoadImage / LoadVideo 能消费它。
  *  `importOutputAsInput` 把字节拷回 ComfyUI 输入（按来源路径缓存，

@@ -9,7 +9,7 @@
  *   3. 避免一次 Prisma migration —— 本机 dev server 的 DATABASE_URL 指向
  *      临时库，改 schema 需要冷重启，风险与收益不成比例。
  *
- * 落点：public/generated/materials/{scopeDir}/{folderId}/{fileName}
+ * 落点：generated/materials/{scopeDir}/{folderId}/{fileName}
  *   scopeDir = 画布项目 id（localStorage 里的 `proj_...`），或 SHARED_SCOPE
  *   经 /api/generated/[...path] 提供读取，浏览器可直接引用。
  */
