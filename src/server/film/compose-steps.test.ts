@@ -5,6 +5,7 @@
  * `subtitles=` 滤镜，其余编码参数必须逐字相同——此前它们是手抄的两段数组，
  * 改一段忘改另一段就会让有无字幕走出不同的编码参数。
  */
+import path from "path";
 import { describe, expect, it } from "vitest";
 import {
   buildNormalizeArgs,
@@ -71,12 +72,30 @@ describe("buildNormalizeArgs", () => {
 });
 
 describe("clipPathOf", () => {
-  it("把 /api/... 形式的 videoPath 折成 cwd/public 下的绝对路径", () => {
-    // path.join 按平台分隔符拼接，断言前统一成正斜杠（生产行为不变）。
-    const joined = clipPathOf("/proj", "/api/generated/films/x.mp4").replace(
-      /\\/g,
-      "/",
+  /* 期望值一律现算（`path` 按平台拼，也按平台补盘符），不写死 `/` 或 `\`。 */
+  const CWD = path.resolve(path.sep + "proj");
+  const at = (...segs: string[]) => path.resolve(CWD, "public", ...segs);
+
+  it("执行器写进库里的 /api/generated/… 解析到产物根，不是 public/api/…", () => {
+    /* 这条就是「合成成片每次都失败」的判据。库里 `filmShot.videoPath` 的值来自
+     * `TaskImage.localPath`，而那是 `taskOutputUrl()` 写的 `/api/generated/…`；
+     * 旧实现只剥前导斜杠再拼 `public`，得到 `<cwd>/public/api/generated/…`
+     * —— 那个目录不存在，ffmpeg 每个镜头都报找不到输入。 */
+    expect(clipPathOf(CWD, "/api/generated/films/x.mp4")).toBe(
+      at("generated", "films", "x.mp4"),
     );
-    expect(joined).toBe("/proj/public/api/generated/films/x.mp4");
+  });
+
+  it("历史留下的 /generated/… 与 /api/generated/… 同答案", () => {
+    // 两种形状都是「同一个磁盘位置」的写法：老数据与 proxy rewrite 前的 URL 用后者。
+    expect(clipPathOf(CWD, "/generated/films/x.mp4")).toBe(
+      clipPathOf(CWD, "/api/generated/films/x.mp4"),
+    );
+  });
+
+  it("越界与非产物地址返回 null（处置留给调用点）", () => {
+    expect(clipPathOf(CWD, "/api/generated/../../secrets.env")).toBeNull();
+    expect(clipPathOf(CWD, "/api/other/films/x.mp4")).toBeNull();
+    expect(clipPathOf(CWD, "https://cdn/x.mp4")).toBeNull();
   });
 });

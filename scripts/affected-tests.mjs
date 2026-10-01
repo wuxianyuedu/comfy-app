@@ -92,6 +92,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 这条判据的对象正是「router 挂了、接口能通、却从来没人跑过」这一族（台账 E3），
   // 而它守的是**下一次新增** —— 与本次暂存改动无关，只在受影响时才跑等于形同虚设。
   "tests/trpc-surface-executors.test.ts",
+  // 产物布局的单一出处判据：`src/` 里出现第二处「产物根 / 产物地址 / 地址→磁盘」就红。
+  // 这条守的是「同一句布局被抄七遍、其中两遍对同一个输入结论相反」那一族（台账 A8
+  // 第二段：成片合成因此每条镜头必败），而它必须在**新增**时响 —— 与本次暂存改动
+  // 有没有碰到 media/ 目录无关，所以进固定清单。
+  "tests/artifact-layout-single-source.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

@@ -211,6 +211,41 @@
       `task.test.ts` 的三条 delete 用例（项目目录按 `projects/<pid>/<tid>` 删 / 越界不动磁盘 /
       rm 失败不阻塞删库但原因可见）。证据：`src/lib/media/output-paths.ts`、
       `src/server/api/routers/task.ts`、`src/lib/comfyui/executor-finalize.ts`。
+      **A8 第二段（本批）：同一条错在另一处活了下来 —— 「合成成片」每条镜头必败。**
+      复算「谁在自己拼这份布局」得到的不是当年那三处，而是**七处**：`materials.ts`
+      （还自带第二份包含判据）、`workshop/media-source.server.ts`（模块级常量 + 第二份地址
+      解析，而那份越界判据少了 `path.sep` 边界 —— 同级 `generatedX` 会被算作根内）、
+      `film/compose-film.ts` 四处 join 外加自己写一遍 `/api/generated/films/…`、
+      `film/compose-steps.ts` 的 `clipPathOf`、`api/film/bgm/route.ts`、
+      `comfyui/firstframe.ts`，第七份**在全部 TS 检索面之外**：
+      `scripts/comfyapp-open-folder.ps1` 把 `comfyapp://open` 的允许根写死成
+      `..\public\generated`。其中两处的结论**互相相反** —— `firstframe.ts` 剥了 `api/` 段
+      （所以首帧一直是好的），`clipPathOf` 只剥前导斜杠，于是库里 `filmShot.videoPath`
+      （= `TaskImage.localPath` = `taskOutputUrl()` 写的 `/api/generated/…`）被解析成
+      `<cwd>/public/api/generated/…`：那个目录不存在，ffmpeg 报找不到输入，去字幕重试仍失败，
+      最后 `markFailed` 收口成一句「镜头 N 归一化失败」。
+      ⚠️ **而这条曾经被断言反过来背书**：`compose-steps.test.ts` 旧的一条写
+      `expect(...).toBe("/proj/public/api/generated/films/x.mp4")` —— 用例在替 bug 签名。
+      这是 A8 那句「修了一处不等于修完」的第二次实证，也是为什么这一段的判据要扫**全部** src。
+      修法：`output-paths.ts` 补「地址 → 磁盘」的唯一解析（`artifactDiskPath`：两种形状同答案、
+      坏百分号编码判成「不是产物地址」而不是抛 `URIError`、越界返回 `null` 让调用点处置 ——
+      口径同 `taskOutputDir`），七处全改吃它 + `generatedRoot()`；子层与地址前缀也收到同一处
+      （`materialsRoot` / `filmsRoot` / `filmBgmRoot` / `ARTIFACT_URL_PREFIX` / `artifactUrl`）。
+      **前缀那句断言是对外承诺**：磁盘根将来搬到哪，`/api/generated` 都不能变 ——
+      它写在库里那些 `localPath` 里，改了等于历史产物全部读不到（这也是 A13 残留那条
+      「搬出 public/」可行的前提）。
+      判据：`tests/artifact-layout-single-source.test.ts`（固定清单 14 → 15）四条 ——
+      src 里零第二处（五种被禁形状，先剥注释再扫）、扫描面非空且唯一出处确实在面里、
+      五种形状各有一个实例真能被照出来（照不出就是装饰，不是判据）、**跨语言成对**：
+      ps1 的允许根按 `$PSScriptRoot` 实解析一次必须等于 `generatedRoot()`
+      （比绝对路径而不是比「去掉 `..` 之后的段数」—— 写成 `..\..\public\generated` 段数一样）。
+      反向验证：往任一模块塞回 `path.join(process.cwd(), "public", "generated")` → 判据点名
+      那份文件；把 ps1 改成 `..\..\` → 只有成对那条红。
+      已知边界（写在判据头部，不冒充「全收」）：三处**给人看的 UI 文案**
+      （`ProjectOutputs.tsx` / `ProjectOutputsMetadataSheet.tsx` / `MaterialLibraryPanel.tsx`
+      里的 `public/generated/…`）不是路径构造、不在扫描面内 —— 视图层引不到这份纯 Node
+      地基（`node:path` 会被客户端打包判据拦），所以它们只能跟着「搬根」那天一起改，
+      已挂进 A13 残留那条。
 - [ ] **A9 无 `middleware.ts`、better-auth 未配 `trustedOrigins`；限流仅 1 个 mutation**。证据：`src/server/better-auth/config.ts:8-39`；`src/server/api/routers/task.ts`（`rateLimitedProcedure` 只用在 delete 上）。
 - [x] **A10 脚手架残留 `post.getSecretMessage` 不在路由表（已移除，本批复算勾销）**：
       `8740948` 一并删掉了它，`src/server/api/routers/post.ts` 现只剩 `getLatest` / `create`
@@ -331,7 +366,25 @@
       所以布局与判据两份都在 `src/lib/media/`（`output-paths` 管形状、`output-access` 管属主）
       并要求新增落点同批改。**另一条残留同源于此**：只要产物还住在 `public/` 下，
       「静态直发」这条旁路就永远依赖 `src/proxy.ts` 那份 `matcher` 记得写全；把产物根搬出
-      `public/` 才是结构性的关法（`generatedRoot()` 已是唯一出口，代价是历史盘上文件要迁）。
+      `public/` 才是结构性的关法。
+      **这一条现在只剩「搬」这一件事**（本批 A8 第二段把布局收成了唯一出处）：磁盘根是
+      `generatedRoot()` 一个表达式，七处读/写全吃它，`/api/generated` 前缀由
+      `ARTIFACT_URL_PREFIX` 单点持有（库里存的正是它，所以搬根**不动 URL**、老数据不失效），
+      而 `scripts/comfyapp-open-folder.ps1` 那份跨语言副本由成对判据钉着 ——
+      搬那天它会红并点名要改哪一行。剩下要一起做的四件也已列进同一条判据的头部：
+      ① 历史盘上文件要一次性搬（仓库里没有目录迁移机制，最近的前例是
+      `app-settings` 那个「布尔闩锁 + 一次性改写」的形状，且必须失败有日志 + 用户可见出口）；
+      ② `src/proxy.ts` 的 rewrite 与 matcher 在搬完之后要不要留（老数据里 `/generated/…`
+      形状的地址还得答得出，判据是「两种 URL 形状同一个答案」而不是「静态口没了」）；
+      ③ 三处 UI 文案里的 `public/generated/…`；④ 产物层两道默认拒绝清单
+      （`STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL`）——
+      顺带量到一条同源的卫生账：`scripts/build-desktop.mjs` 是**无 filter 整树拷
+      `public/**`**，而 `standalone-private-inputs.mjs:192` / `check-standalone-contents.cjs:142`
+      两道清单都把 `public` 放行、注释里写明的理由正是「静态资源与**生成图落地目录**」，
+      所以攒在构建机上的产物会跟着桌包一起分发（硬规则 17 禁的是「开发机私有输入」，
+      本机图片算不算私有输入这里不替用户定性，只把形状记下：实测本机 `src-tauri/static/public`
+      只有 2 个文件，是因为那次装配之前 `public/generated` 还空着，不是被判据挡过）。
+      搬出 `public/` 之后新根不在任何允许清单里，这一条自然关掉。
       搬家之外还欠一件：静态口原本支持 `Range`，折进 route 之后 `Range` 被忽略（整文件
       200 回全量）—— 现行视频 URL 本来就写的是 `/api/generated/films/…`（`compose-film`
       收口时就这么存），所以这条不是回归，只是**旧数据里 `/generated/…` 形状的视频**若被

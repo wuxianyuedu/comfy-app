@@ -20,6 +20,11 @@ import { compareText } from "~/lib/ordered-set";
 import { getOrCreate } from "~/lib/collections";
 import { projectRepository } from "~/lib/core/repository-project";
 import { lastSegments } from "~/lib/path-display";
+import {
+  artifactUrl,
+  isWithinGeneratedRoot,
+  materialsRoot as artifactMaterialsRoot,
+} from "~/lib/media/output-paths";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -67,9 +72,10 @@ export function inferKind(fileName: string): MaterialKind {
 
 /* ── 路径安全 ── */
 
-/** 素材库根目录（public/generated/materials）。 */
+/** 素材库根目录（产物根下的 `materials/` 子层；根的定义在 `output-paths`，
+ *  这里只加自己那一层，不再重抄一遍 `public/generated`）。 */
 export function materialsRoot(): string {
-  return path.join(process.cwd(), "public", "generated", "materials");
+  return artifactMaterialsRoot();
 }
 
 /**
@@ -101,12 +107,13 @@ export function sanitizeFileName(
   return cleaned;
 }
 
-/** 拼出 scope/folder 的绝对目录，并断言它仍在素材库根之内。 */
+/** 拼出 scope/folder 的绝对目录，并断言它仍在素材库根之内。
+ *  包含判据用 `output-paths` 那一份（`path.sep` 收边界）—— 这一句此前是同一
+ *  判据的第二份实现，「同级 `materialsX` 也算在内」那种错法只差一个字。 */
 export function folderDir(scope: string, folder: string): string | null {
   const root = materialsRoot();
   const dir = path.join(root, scope, folder);
-  if (dir !== root && !dir.startsWith(root + path.sep)) return null;
-  return dir;
+  return isWithinGeneratedRoot(dir, root) ? dir : null;
 }
 
 /* ── 归属 ────────────────────────────────────────────────────────────────
@@ -220,9 +227,9 @@ export async function listFolderItems(
         folder,
         folderName: folderName(folder),
         kind: inferKind(name),
-        url: `/api/generated/materials/${encodeURIComponent(scope)}/${encodeURIComponent(
-          folder,
-        )}/${encodeURIComponent(name)}`,
+        url: artifactUrl(
+          ["materials", scope, folder, name].map(encodeURIComponent),
+        ),
         size: st.size,
         updatedAt: st.mtime.toISOString(),
         scope,
