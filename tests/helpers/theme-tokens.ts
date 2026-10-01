@@ -17,6 +17,10 @@
  *    按「层外声明 > 层内声明」「同层内后写胜出」的规则算出有效值。
  * 2. **引用解析**：`var(--x)` 递归求值，带环检测与 fallback 支持。
  *
+ * 编的是**固定输入源**的那份产物（`withPinnedSources`）：既不是「全仓扫类名」那一遍
+ * （实测 21109ms → 121ms，且产物不再随无关源码变），也不是源码文本本身 —— 判据读的还是
+ * Tailwind 真编出来的级联结果，口径不变。
+ *
  * 判据能覆盖本文件关心的全部失效模式：别名取错态（浅/深相同）、引用成环、
  * 引用到一个未定义的 token。
  */
@@ -82,13 +86,76 @@ export interface ThemeTokens {
 let compiled: Promise<string> | null = null;
 
 /**
+ * 这三条 utility 是**判据自己要读的**（`theme-dark-token-cascade.test.ts` 里那三条
+ * `css` 正则的来源）。Tailwind v4 只把「在源码里被用到的」类编进产物，所以关掉自动扫描之后
+ * 必须显式点名，否则 `.bg-card {}` 那条规则根本不出现、断言全红。
+ *
+ * ⚠️ 新增一条「某个 utility 编成了什么」的断言时，**来这里补一行类名**，否则那条判据会因为
+ * 产物里没有这个类而红 —— 那是正确形态的红（它在告诉你：这条断言依赖的类没被固定住）。
+ */
+const PINNED_UTILITY_CLASSES = [
+  "bg-card",
+  "bg-popover",
+  "border-border",
+] as const;
+
+/**
+ * 把「扫全仓找类名」换成「只认上面那几条」，两件事一起解决（ISSUE #1336）：
+ *
+ * 1. **耗时**：全量扫描下这份编译本机实测 **21109ms**（vitest 里隔离跑也还是要 7.2s），
+ *    两个 suite 的 `beforeAll` 各编一遍，满载时排到 `hookTimeout` 之外 ⇒ 整份 suite 红、
+ *    里面的用例全被记成 skipped。改成固定输入源之后实测 **121ms**（360819 → 23172 字节）。
+ * 2. **可复现**：全量扫描的产物会随「src 里谁用了哪个类」变 —— 判据读的是编译产物，
+ *    却间接依赖一批与主题无关的源码。钉住输入源之后，同一份 `globals.css` 永远编出同一份产物。
+ *
+ * 差异有两项，都不改任何已有值（逐条比对过两态产物：**同名不同值 = 0 条**）：
+ *
+ * - **少**：不再带「全仓哪里用到过」的默认调色板变量（`--color-red-200` 这类，实测 238 条）。
+ *   三个消费方读的都是项目自己的 token，一条都不在里面 —— 但这条是**跑出来的**，不是推出来的：
+ *   只做「关扫描 + 钉三条 utility」的第一版把 `--color-primary-strong` 的**浅色档**摇没了
+ *   （深色档手写在 `.dark {}` 里所以还在），`sidebar-state-contrast` 当场红一条，正是下一项在补它。
+ * - **多**：项目自己 `@theme` 里的变量改成**无条件声明**（`@theme static`），产物不再随
+ *   无关源码里的类用法变化 —— 判据读的是 token 的取值与级联，本来就不该依赖「谁用过了它」。
+ *
+ * 找不到 `@import "tailwindcss"` 那一行时**抛错而不是静默按全量扫描编一遍**：后者会让这条
+ * 优化悄悄失效、表现是「某天起 suite 又间歇红」，而那是最难归因的一类。
+ */
+export function withPinnedSources(cssText: string): string {
+  const noAutoScan = cssText.replace(
+    /^@import\s+["']tailwindcss["'](?:\s+source\([^)]*\))?\s*;/m,
+    '@import "tailwindcss" source(none);',
+  );
+  if (noAutoScan === cssText) {
+    throw new Error(
+      'globals.css 里找不到 @import "tailwindcss" 那一行，无法关掉全仓源码扫描。' +
+        "本文件的编译特意依赖这一行（理由见 withPinnedSources 的注释）；" +
+        "要么把它改回可识别的形态，要么同步这里的匹配式 —— 别放开扫描凑合，那会把 #1336 的耗时请回来。",
+    );
+  }
+  const pins = PINNED_UTILITY_CLASSES.map(
+    (cls) => `@source inline("${cls}");`,
+  ).join("\n");
+  // 把项目自己写的 `@theme` 改成 `@theme static`：v4 默认会**按用法 tree-shake** 主题变量
+  // ——「某个 token 有没有进产物」取决于全仓哪里用到了它，而这批用例读的是 token 的取值与
+  // 级联，不该被这件事左右（实测反例：关掉扫描后 `--color-primary-strong` 的浅色档消失，
+  // `sidebar-state-contrast` 的「浅色：选中底上的正文与指示条都够亮」当场红，而深色档因为
+  // 是手写在 `.dark {}` 里的所以还在 —— 这种「一半在、一半被摇掉」的形状比全红更难归因）。
+  // static 只**加**声明、不改任何已有值（逐条比对过两态产物：同名不同值 = 0 条）。
+  const staticTheme = noAutoScan.replace(
+    /@theme(\s+inline)?\s*\{/g,
+    "@theme$1 static {",
+  );
+  return `${staticTheme}\n${pins}\n`;
+}
+
+/**
  * 编译 `globals.css`（带缓存）。Tailwind 的 PostCSS 插件是**异步**的
  * （`LazyResult.sync()` 会抛 `Use process(css).then(cb)`），所以这里返回
  * Promise；调用方通常在 `beforeAll` 里 `await` 一次。
  */
 export function compiledGlobalsCss(): Promise<string> {
   if (compiled === null) {
-    const source = readFileSync(GLOBALS_CSS, "utf8");
+    const source = withPinnedSources(readFileSync(GLOBALS_CSS, "utf8"));
     compiled = postcss([tailwind()])
       .process(source, { from: GLOBALS_CSS })
       .then((r) => r.css);
