@@ -1377,3 +1377,69 @@ SIGKILL 落在写文件窗口那半行），`pnpm exec tsc --noEmit --incrementa
   开成 ISSUE #1315，取证清单在那个 issue 里；结论拿到之前不动 `executor-ws.ts`。
 - 缓存轮的「这一轮省了多少时间」没做（需要 ComfyUI 侧的耗时口径，本刀只有 `claimedAt`→`finishedAt`
   这一格，不足以拆出「重算 vs 取缓存」）。
+
+---
+
+## 28. #1315（`executor-ws` 的按节点分支是否已零消费）——取证结论与留下的口径
+
+这条是 §27 末尾那次自我订正顺带问出来的（订正本身走 PR #1316）。结论已经拿到，且**不是**「修一个 bug」，
+而是把一条通道的真实承载能力钉进文档 + 让它以后可被数出来。
+
+### 取证分两步，缺第二步就得不到结论
+
+**第 1 步：两种形态各数一轮 trace 的 kind 分布。**
+
+| 形态 | 怎么起的 | 那一轮 | 新增 trace 按 kind |
+| --- | --- | --- | --- |
+| host | `scripts/executor-host.mjs` + 副本库（§27 那批复演） | 混合轮 | `cli`=80 / `history`=1 / **`ws`=0** |
+| inline | 独立端口 `next dev -p 3999` + 副本库 + 子进程 env 给 `COMFY_EXECUTOR=inline`（进程 env 优先于 `.env` 那份 `host`） | 混合轮（`execution_cached`×7 + `executing`×4 + `progress`×25，SUCCEEDED，`progressNode` 落 KSampler） | `cli`=80 / `history`=1 / **`ws`=0** |
+
+到这里只能得到一句**有限**的话：带 `prompt_id` 的执行帧没落到 `handleMessage`。分不开的是另一半——
+「帧来了但不带 `prompt_id`」与「一条帧都没来」在 trace 里长得一模一样，因为当时四个
+`trace("ws", …)` 出口里只有「非合法 JSON」在 `if (!promptId) return;` 之前，其余三个都在之后。
+
+**第 2 步：把那一跳变成可观测的，再数一次**（这是 #1315 取证清单的第 2 步，不是可选装饰）。
+补完之后同一套架子数出来：
+
+```
+kind=ws 35 条，全部走「不带 prompt_id」这一跳：
+  status               ×4    dataKeys: ["status","sid"]
+  kaytool.resources    ×16   dataKeys: ["cpu_percent","cpu_count","cpu_name","ram_total",…]
+  dasiwa.system_monitor×15   dataKeys: ["cpu_percent","cpu_count","ram","swap","disks","gpus"]
+```
+
+⇒ **连接是活的、帧确实在来，但来的只有 `status` 与第三方自定义节点的遥测广播，一条执行帧都没有。**
+合理解释与 §13-3C / §27 那句是同一件事：ComfyUI 把执行事件只发给**排队那个 client**，而自 4-B3
+「唯一提交实现 = comfy-cli」之后，排队的从来不是本应用这条 WS。
+
+### 结论与处置（走向 1，签字前不提删除）
+
+1. `executor-ws` 的 `node-started` / `node-finished` / `progress` 三段与 `protocol-adapter` 的对应分类
+   **今天是零消费的**。
+2. **不删**。那是给「直连 `/prompt`」形态留的正确实现，帧哪天回来就得是对的；删掉等于把
+   「回到那形态时静默丢现场」埋回去（与本线「不靠删除解决问题」的一贯取向一致）。
+3. 面板里的**按节点现场只可能来自 `executor-cli-stream.ts`** 这一句，写进两个模块的头
+   （`executor-ws.ts` 与 `protocol-adapter.ts`），并指明「在这条通道上补可见性类功能会测不出效果」——
+   #1278 之所以在 WS 侧没有可修对象，正是这条。
+4. 那一跳的留证**按类型只落第一帧**，并设类型数上限（32）。逐帧落盘的话一轮里三分之二是同一个类型的
+   重复行、遥测约 1s 一条，长会话一小时就是几千行诊断噪声，而这个问题只需要「这类帧来过」这一个事实。
+   判据三条分别钉住：留证存在、同类型不重复、新类型仍要落（预算不许退化成「只记第一条」）、集合有界。
+   变异验证：拿掉两条预算 → **2 条红**（`got 2` / `got 40`），还原全绿。
+
+### 为什么没有给「按节点行只来自 cli」加机器判据
+
+写不出不误报的静态判据：它要断言的是「某类事件在运行期不会从某个来源到达」，属于外部服务行为，
+不是仓库里的源码形状（同类先例见 AGENTS 硬规则 24 末尾——别再为「该不该通用」造启发式扫描器）。
+所以这一条走**文档 + 可观测点**：模块头写明拓扑、那一跳留证可数，将来若执行帧真的开始到达，
+`kind=ws` 的帧型分布会立刻把它暴露出来，而不是等面板少了一行才发现。
+
+### 复演手法（下次要测 inline 形态照这个，别碰用户的实时链路）
+
+副本库用 `vacuum into`（正被 dev server 开着的库直接 `cp` 会拷到 `-wal` 未合并的页）；
+`DATABASE_URL` 与 `COMFY_EXECUTOR` 都走**子进程 env**（进程 env 优先于 `.env` 回读，见
+`launcher-core/executor-mode.mjs`），这样 `.env` 里那句 `COMFY_EXECUTOR=host` 不影响本次取证，
+也不往用户的 `db.sqlite` 与任务历史里写任何东西；`next dev` 用 `process.execPath` +
+`createRequire().resolve("next/dist/bin/next")` 起（不经 pnpm 的 `.cmd` 壳，见 #1306 那条），
+端口另起一个避免与用户实例共写 `.next`（#1182），跑完 `scripts/reap-process.mjs <pid> --force`
+整树回收并清 `public/generated/<taskId>` 与 `temp/comfy-cli/wf-*.json`。
+尺寸压到 512²（`workflowInputs` 的 `aspect_ratio` 换 `1:1 (Square)`、`megapixels` 给 0.25）省显存与时间。

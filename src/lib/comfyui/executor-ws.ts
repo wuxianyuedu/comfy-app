@@ -9,6 +9,17 @@
  * 消息的终态处理（complete / fail）在 {@link ./executor-finalize}，
  * 派发（领取 + 提交）在 {@link ./executor-dispatch}，本层只做路由。
  *
+ * **当前拓扑下这条通道承载什么（ISSUE #1315 的取证结论，读数在 ADR §28）**：
+ * 自 4-B3「唯一提交实现 = comfy-cli」之后，ComfyUI 只把**执行帧**（`executing` /
+ * `progress` / `execution_success` / `execution_error`）发给排队那个 client，也就是
+ * comfy-cli 自己那条连接；本连接收到的只有 `status` 与第三方节点的遥测广播
+ * （本机一轮实测 35 条 = `status`×4 / `kaytool.resources`×16 / `dasiwa.system_monitor`×15，
+ * **一条执行帧都没有**，inline 与 host 两种形态同形）。
+ * ⇒ 下面那几段按节点分支（`node-started` / `node-finished` / `progress`）**今天是零消费的**，
+ * 面板里的按节点现场只可能来自 {@link ./executor-cli-stream}。
+ * **但别删它们**：它们是给「直连 `/prompt`」那种形态留的正确实现，帧哪天回来就得是对的；
+ * 要在这条通道上补新功能，先照 ADR §28 的架子数一遍帧型，别写完发现测不出效果。
+ *
  * @module comfyui/executor-ws — WS 连接 / 消息处理 / 看门狗（executor 的通道层）
  */
 import WebSocket from "ws";
@@ -261,6 +272,31 @@ function scheduleReconnect() {
 }
 
 /**
+ * 不带 `prompt_id` 的 WS 帧：**每类只留第一帧**的证据。
+ *
+ * 为什么要有这一条（ISSUE #1315 取证的前提）：以前这一跳是静默 `return`，而三个
+ * 「会落 trace」的出口都在它之后 —— 于是「WS 一条帧都没来」与「帧来了但不带
+ * `prompt_id`」在诊断文件里长得一模一样，谁也分不开。本机数第一轮是 35 条：
+ * `status`×4 / `kaytool.resources`×16 / `dasiwa.system_monitor`×15，全是第三方节点的
+ * 遥测与状态广播，**没有一条执行帧**。
+ *
+ * 为什么逐帧不落：上面那 35 条里三分之二是同一个类型的重复行，遥测约 1s 一条，
+ * 长会话一小时就是几千行诊断噪声，而这个问题只需要「这类帧来过」这一个事实。
+ *
+ * 计数放在模块级（不是 `RunnerState`）：纯诊断，跨 HMR 丢了计数不影响任何判决，
+ * 不值得为它升那份单例键的版本；类型数设上限，免得被异常服务刷成一个无界 Map。
+ */
+const unownedFrameTypes = new Set<string>();
+const UNOWNED_FRAME_TYPE_MAX = 32;
+
+function noteUnownedFrame(type: string, dataKeys: string[]): void {
+  if (unownedFrameTypes.has(type)) return;
+  if (unownedFrameTypes.size >= UNOWNED_FRAME_TYPE_MAX) return;
+  unownedFrameTypes.add(type);
+  trace("ws", null, "WS 帧不带 prompt_id（跳过归属）", { type, dataKeys });
+}
+
+/**
  * 统一 WS 消息入口。所有协议判断（标准 ComfyUI vs kaytool v0.28 非标准信号）
  * 都委托给 `comfyProtocol` Adapter，协议差异只存在于 protocol-adapter.ts。
  *
@@ -284,7 +320,20 @@ export async function handleMessage(raw: string) {
   const data = message.data ?? {};
   const promptId: string | undefined =
     typeof data.prompt_id === "string" ? data.prompt_id : undefined;
-  if (!promptId) return;
+  if (!promptId) {
+    /* #1315 取证的前提：这一跳以前是**静默**的，于是「WS 到底有没有帧进来」在 trace 里
+     * 数不出来（其余三个 `trace("ws", …)` 出口都在它之后）。本机第一次数出来的是
+     * 一轮 35 条：`status`×4 / `kaytool.resources`×16 / `dasiwa.system_monitor`×15
+     * —— 全是第三方节点的遥测与状态广播，**没有一条执行帧**。
+     * 所以留证要按类型节流：逐帧落盘的话，一轮里三分之二是同一个类型的重复行，
+     * 长会话一小时就是几千行，而它回答的问题只需要「这类帧来过、大概多久一条」。
+     * 只记类型与 `data` 的键（`status` 的 data 里带着 `exec_info`，整帧抄进日志没用又大）。 */
+    noteUnownedFrame(
+      typeof message.type === "string" ? message.type : "(无 type)",
+      Object.keys(data).slice(0, 8),
+    );
+    return;
+  }
   const s = state();
   const taskId = s.promptToTask.get(promptId);
   if (!taskId) {
