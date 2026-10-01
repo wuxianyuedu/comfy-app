@@ -291,6 +291,12 @@ export default defineConfig({
         "src/components/model/model-type-labels.ts",
         "src/components/model/model-cover.ts",
         "src/components/model/ModelDetailDialog.tsx",
+        /* 首页「模型概览」这一刀的两个新文件（**两处同批**登记）。
+         * `hooks/use-model-overview.ts` 刻意不登记：它只是把 tRPC 的一行结果转交给
+         * `deriveModelOverview`，判断力全在那个纯函数里 —— 给一行接线设门槛，
+         * 数字看着严格，实际什么都不守。 */
+        "src/components/studio/model-overview-derive.ts",
+        "src/components/studio/HomeModelOverview.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1325,6 +1331,21 @@ export default defineConfig({
           functions: 70,
           statements: 90,
           branches: 65,
+        },
+        /* 首页「模型概览」（与上面 `coverage.include` 同批登记）。
+         * 推导函数是纯输入输出、四项皆满；卡片未走到的那一支是「同时有折叠项和
+         * 空目录」之外的单条件组合，按实测向下取整到 90 而不是抬成 100。 */
+        "src/components/studio/model-overview-derive.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/studio/HomeModelOverview.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
         },
       },
     },

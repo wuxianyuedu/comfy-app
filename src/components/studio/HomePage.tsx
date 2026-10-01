@@ -14,6 +14,7 @@ import { Button } from "~/components/ui/button";
 import { AuroraGlow } from "~/components/ui/aurora-background";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { LocalComputeCard } from "./LocalComputeCard";
+import { HomeModelOverview } from "./HomeModelOverview";
 import { type WorkspaceView } from "./NavItems";
 
 /* ── 首页 —— Updream 风全屏仪表盘（对齐 Ardot） ─
@@ -100,6 +101,86 @@ function kindTint(color: string, percent: number): string {
   return `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 }
 
+/**
+ * 「继续最近项目」大卡 —— 最近动过的那一个，给一整个位置。
+ *
+ * 为什么值得单独一块：小卡栅格回答的是「我有哪些项目」，而回到首页的人第一句
+ * 通常是「我上次做到哪儿了」。前者要扫，后者要一键回去。
+ *
+ * 刻意留在本文件内：它要用 `KIND_CONFIG` / `kindConfigOf` / `kindTint` 这份类别
+ * 色表（已按 §3.6.1 在 `check-theme-colors` 登记），搬出去要么把内部表导出、
+ * 要么再抄一份色表 —— 两条都是 §12.12 的孪生对。
+ */
+function ResumeProjectCard({
+  proj,
+  onOpen,
+}: {
+  proj: RecentProject;
+  onOpen: (proj: RecentProject) => void;
+}) {
+  const cfg = kindConfigOf(proj.kind);
+  const thumbs = (proj.thumbnails ?? []).slice(0, 3);
+  return (
+    <Button
+      variant="ghost"
+      onClick={() => onOpen(proj)}
+      aria-label={`继续编辑 ${proj.name}`}
+      className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 mt-6 flex h-auto w-full items-stretch gap-4 rounded-[18px] border p-4 text-left font-normal active:scale-[0.995]"
+    >
+      {/* 左：缩略图条；一张图都没有时落回类别图标块（不留空洞） */}
+      <div className="flex w-[168px] shrink-0 gap-1.5 overflow-hidden rounded-xl">
+        {thumbs.length > 0 ? (
+          thumbs.map((thumb, i) => (
+            <MediaThumbnail
+              key={`${proj.id}-resume-thumb-${i}`}
+              src={thumb}
+              alt=""
+              className="ring-border-strong size-full min-w-0 rounded-xl object-cover ring-1"
+            />
+          ))
+        ) : (
+          <div
+            className="flex size-full items-center justify-center rounded-xl"
+            style={{
+              backgroundColor: kindTint(cfg.color, 15),
+              color: cfg.color,
+            }}
+          >
+            {cfg.icon}
+          </div>
+        )}
+      </div>
+
+      {/* 右：类别 + 名字 + 副信息 + 更新时间 */}
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <span
+            className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 backdrop-blur-sm ring-inset"
+            style={{
+              color: cfg.color,
+              backgroundColor: kindTint(cfg.color, 15),
+              ["--tw-ring-color" as string]: kindTint(cfg.color, 30),
+            }}
+          >
+            {cfg.label}
+          </span>
+          <span className="text-ink-bright group-hover:text-ink min-w-0 flex-1 truncate text-[15px] font-semibold transition-colors">
+            {proj.name}
+          </span>
+        </div>
+        <div className="text-ink-fainter flex items-center gap-2 text-[12px]">
+          {proj.subtitle && (
+            <span className="min-w-0 truncate">{proj.subtitle}</span>
+          )}
+          {/* 「最近动过」这个措辞是刻意的：`updatedAt` 由上层给成什么口径，
+              这里不许再加工成一个更精确的假象。 */}
+          <span className="shrink-0">最近动过 · {proj.updatedAt}</span>
+        </div>
+      </div>
+    </Button>
+  );
+}
+
 export interface HomePageProps {
   onNewProject?: () => void;
   recentProjects?: RecentProject[];
@@ -120,6 +201,22 @@ export function HomePage({
   onNavigate,
   onShowAllProjects,
 }: HomePageProps) {
+  /**
+   * 打开一个最近项目 —— 画布项目要进画布视图，其余走 `/create/{id}`。
+   *
+   * 收成一处是因为现在有两个入口会用这条规则（「继续最近项目」大卡与下面的小卡
+   * 栅格）：此前它内联在小卡的 onClick 里，大卡要复用就得再抄一遍 —— 而两个入口
+   * 对同一个项目做出不同行为，是最难被发现的一类漂移。
+   */
+  const openRecent = (proj: RecentProject) =>
+    proj.kind === "canvas"
+      ? onOpenCanvasProject?.(proj.id)
+      : onOpenProject?.(proj.id);
+
+  /* 取一次交给渲染处：`recentProjects[0]` 在 noUncheckedIndexedAccess 下是
+     `T | undefined`，与其在 JSX 里再判一遍，不如在这里落个名字。 */
+  const resumeProject: RecentProject | undefined = recentProjects[0];
+
   return (
     <div
       className="bg-canvas text-ink relative flex h-full min-h-0 w-full flex-col overflow-hidden"
@@ -226,9 +323,12 @@ export function HomePage({
               ))}
             </div>
 
-            {/* ── 本机算力（后端在线状态 + 显存/内存占用） ── */}
-            <div className="mt-8">
+            {/* ── 本机状态：后端在不在线（算力） + 库里有没有东西（模型概览） ──
+                两张并一行：它们回答的是同一类问题的两半，上下堆会把注意力拆成两处，
+                也白白拉长首页。窄屏自然回落单列。 */}
+            <div className="mt-8 grid gap-3 lg:grid-cols-2">
               <LocalComputeCard />
+              <HomeModelOverview />
             </div>
 
             {/* ── Recent Projects ── */}
@@ -246,7 +346,13 @@ export function HomePage({
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* 第一个项目由大卡占位 —— 同一条项目不该在页面上出现两次，
+                  所以下面的栅格从第二个开始取。 */}
+              {resumeProject && (
+                <ResumeProjectCard proj={resumeProject} onOpen={openRecent} />
+              )}
+
+              <div className="mt-3 grid grid-cols-2 gap-3">
                 {/* 新建项目卡片 —— 画布风入口 */}
                 <Button
                   variant="ghost"
@@ -264,17 +370,13 @@ export function HomePage({
 
                 {/* 最近项目卡片 —— 画布 / 项目风 */}
                 {recentProjects.length > 0
-                  ? recentProjects.slice(0, 3).map((proj) => {
+                  ? recentProjects.slice(1, 4).map((proj) => {
                       const cfg = kindConfigOf(proj.kind);
                       return (
                         <Button
                           key={proj.id}
                           variant="ghost"
-                          onClick={() =>
-                            proj.kind === "canvas"
-                              ? onOpenCanvasProject?.(proj.id)
-                              : onOpenProject?.(proj.id)
-                          }
+                          onClick={() => openRecent(proj)}
                           className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto items-start gap-3 rounded-[16px] border p-3.5 text-left font-normal active:scale-[0.98]"
                         >
                           {/* Kind icon */}
