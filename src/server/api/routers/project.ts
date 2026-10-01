@@ -61,7 +61,7 @@ export const projectRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const project = await projectRepository.findById(input.projectId);
       if (project?.userId !== ctx.user.id) {
-        throw new Error("Project not found");
+        throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在" });
       }
       return project;
     }),
@@ -79,7 +79,7 @@ export const projectRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const existing = await projectRepository.findById(input.projectId);
       if (existing?.userId !== ctx.user.id) {
-        throw new Error("Project not found");
+        throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在" });
       }
       const patch: Record<string, unknown> = {};
       if (input.name !== undefined) patch.name = input.name;
@@ -102,7 +102,7 @@ export const projectRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const project = await projectRepository.findById(input.projectId);
       if (project?.userId !== ctx.user.id) {
-        throw new Error("Project not found");
+        throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在" });
       }
       const tasks = await taskRepository.findByProjectIdWithImages(
         input.projectId,

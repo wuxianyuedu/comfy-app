@@ -58,7 +58,10 @@ export const materialRouter = createTRPCRouter({
         items = pool.filter((it) => matchesNeedle(q, it.name));
       } else if (folder) {
         if (!isValidFolder(folder)) {
-          throw new Error("Invalid folder");
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "素材分类不合法",
+          });
         }
         items = byFolder.get(folder) ?? [];
       }
@@ -79,7 +82,8 @@ export const materialRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const folder = input.folder;
-      if (!isValidFolder(folder)) throw new Error("Invalid folder");
+      if (!isValidFolder(folder))
+        throw new TRPCError({ code: "BAD_REQUEST", message: "素材分类不合法" });
       const scope =
         sanitizeScope(input.projectId ?? input.scope ?? null) ?? SHARED_SCOPE;
       // 归属闸与 `/api/materials` POST 同一份判据（`~/lib/media/materials`）。
@@ -90,10 +94,12 @@ export const materialRouter = createTRPCRouter({
         });
       }
       const fileName = sanitizeFileName(input.name);
-      if (!fileName) throw new Error("Invalid file name");
+      if (!fileName)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "文件名不合法" });
 
       const dir = folderDir(scope, folder);
-      if (!dir) throw new Error("Invalid storage path");
+      if (!dir)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "素材路径不合法" });
       await fs.mkdir(dir, { recursive: true });
 
       const filePath = path.join(dir, fileName);
@@ -112,7 +118,8 @@ export const materialRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (!isValidFolder(input.folder)) throw new Error("Invalid folder");
+      if (!isValidFolder(input.folder))
+        throw new TRPCError({ code: "BAD_REQUEST", message: "素材分类不合法" });
       const scope =
         sanitizeScope(input.projectId ?? input.scope ?? null) ?? SHARED_SCOPE;
       /* 归属判定必须在**碰磁盘之前**：这一条的副作用是 `fs.rm`，拦在响应阶段
@@ -124,10 +131,12 @@ export const materialRouter = createTRPCRouter({
         });
       }
       const fileName = sanitizeFileName(input.name);
-      if (!fileName) throw new Error("Invalid file name");
+      if (!fileName)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "文件名不合法" });
 
       const dir = folderDir(scope, input.folder);
-      if (!dir) throw new Error("Invalid storage path");
+      if (!dir)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "素材路径不合法" });
       const filePath = path.join(dir, fileName);
       await fs.rm(filePath, { force: true });
       return { ok: true };

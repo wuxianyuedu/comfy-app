@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
 
@@ -50,7 +51,7 @@ export const generateRouter = createTRPCRouter({
         data.workflow,
       );
       if (!tpl) {
-        throw new Error("Workflow not found");
+        throw new TRPCError({ code: "NOT_FOUND", message: "工作流不存在" });
       }
       const workflowName = tpl.name;
       const taskType = tpl.taskType;
@@ -60,9 +61,10 @@ export const generateRouter = createTRPCRouter({
        * 没有内容时抛错，而不是静默提交一份空图（空图会在 ComfyUI 侧变成
        * 「一个节点都没有」的报错，用户看不出是入库时就没内容）。 */
       if (!hasExecutableWorkflow(tpl)) {
-        throw new Error(
-          "工作流没有可执行内容（rawJson 为空）：请重新导入该工作流",
-        );
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "工作流没有可执行内容（rawJson 为空）：请重新导入该工作流",
+        });
       }
 
       const executorClaim = resolveExecutorClaim();

@@ -52,3 +52,27 @@ export function makeCtx(opts: { user?: TRPCUser | null } = {}): {
     headers: new Headers({ "x-forwarded-for": "127.0.0.1" }),
   };
 }
+
+/** 取一次调用的错误信封（**码 + 文案**两维都拿到）。
+ *
+ * 为什么要有这一份：`rejects.toThrow(原文)` 只比消息，而 500 与 404 可以同文案 ——
+ * 那句「越权与不存在同形」就有了判据都不到的洞（裸 `throw new Error` 被 tRPC 归成
+ * INTERNAL_SERVER_ERROR 时，这类断言照样绿）。把两维一起取出来，比较才落在码上。
+ * 成功时返回 `{ code: "OK" }`，让「本该抛错却没抛」也红得看得见。 */
+export async function errorEnvelope(promise: Promise<unknown>): Promise<{
+  code: string;
+  message: string;
+}> {
+  return promise.then(
+    () => ({ code: "OK", message: "" }),
+    (e: unknown) => {
+      const err = e as { code?: unknown; message?: unknown } | null;
+      // 逐维按类型收窄：拿 `String(unknown)` 兜底会在错误对象上打出
+      // `[object Object]`，那等于把「码不对」这一维又判回成看运气。
+      return {
+        code: typeof err?.code === "string" ? err.code : "UNKNOWN",
+        message: typeof err?.message === "string" ? err.message : "",
+      };
+    },
+  );
+}

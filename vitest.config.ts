@@ -315,6 +315,16 @@ export default defineConfig({
          * 的判据）。搬出来正好补上这份表此前没有的门槛。 */
         "src/components/workshop/shot-status-config.ts",
         "src/components/workshop/ShotFilmStrip.tsx",
+        /* 体检清单 ⑨ 第三刀 · 错误信封（台账 E8）带出的三个 router：
+         *   · `skill.ts` / `workflow-model.ts` 是「零执行者 router」清单里的两个，
+         *     这一刀各给一套用例（重名的 CONFLICT、越权重名的 NOT_FOUND、
+         *     幂等早退不该抛错 —— 三个码各不相同才是可分支的界面）；
+         *   · `generate.ts` 是因为本刀把它的两处裸 Error 改成 4xx 才进面（改了就要有数字看着）。
+         * 数值取**这批用例实测**（`run.ts` 没进来：它的分支大头在别线的工坊编排里，
+         * 这一刀的改动只到错误信封，按 85/75 立个门槛等于替别人记账）。 */
+        "src/server/api/routers/skill.ts",
+        "src/server/api/routers/workflow-model.ts",
+        "src/server/api/routers/generate.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1283,11 +1293,18 @@ export default defineConfig({
           statements: 85,
           branches: 80,
         },
+        /* 旧值 lines 100（⑨ 第一刀）→ 95：**E8 把两处 `throw new Error("Invalid storage path")`
+         * 拆成多行的 `TRPCError` 之后，那两行不再被「条件行」顺带盖住**。它们现在是
+         * 真不可达：`scope` 过 `sanitizeScope`（只留 `[A-Za-z0-9_-]`）、`folder` 是枚举，
+         * `folderDir` 的包含断言因此不可能失败 —— 留它是给「以后有人放宽那两条校验」兜底的
+         * 双保险（同一条判断在 REST 口也有一份）。
+         * 没去 mock `folderDir` 凑覆盖率：那等于测一个今天不存在的输入形状，
+         * 数字好看但判据是空的。statements 90→95、branches 75→80 是顺带的实测收紧。 */
         "src/server/api/routers/material.ts": {
-          lines: 100,
+          lines: 95,
           functions: 100,
-          statements: 90,
-          branches: 75,
+          statements: 95,
+          branches: 80,
         },
         /* REST 那条（305 行、含 multipart 上传与 500 兜底）是三个里最薄的：
          * 判据本身都测到了，缺的是错误分支与超大上传的回执路径。 */
@@ -1407,6 +1424,27 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 85,
+        },
+        /* ── 体检清单 ⑨ 第三刀 · 错误信封（台账 E8）带出的三个 router ────────
+         * 门槛取这批用例的实测值向下取整到 5；`workflow-model.ts` / `generate.ts`
+         * 实测满档就登记满档（覆盖率只在**全量**这一档判，见 §11.7）。 */
+        "src/server/api/routers/skill.ts": {
+          lines: 90,
+          functions: 100,
+          statements: 90,
+          branches: 90,
+        },
+        "src/server/api/routers/workflow-model.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/server/api/routers/generate.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
       },
     },
