@@ -22,10 +22,15 @@
  *
  * 现在吃这份定义的四处：`executor-finalize`（落盘 + 写 localPath）、
  * `task.openFolder`、`task.delete`、`/api/generated/[...path]`（产物根与根内判据）。
- * 仍在本层之外的同族读者：`src/lib/media/materials.ts`（`generated/materials/...`）、
- * `src/server/film/**`（`generated/films/...`）、`src/lib/workshop/media-source.server.ts`
- * （自带一份 `/^(?:api\/)?generated\//` 的地址→磁盘映射）—— 它们各有自己的子布局，
- * 收进来是下一刀的事，这里不冒充「全都收口了」。 */
+ *
+ * **本层同时是「地址 → 磁盘」的唯一映射**（`artifactDiskPath()`）：素材库、工坊媒体源、
+ * 首帧、成片合成四处原先各自解析同一个地址，而两份实现**结论相反** ——
+ * `firstframe.ts` 剥了 `api/` 段、`compose-steps.ts` 只剥前导斜杠，于是后者把
+ * `/api/generated/…` 解析成 `public/api/generated/…`（该目录不存在），
+ * 「合成成片」对每一条由执行器产出的镜头都必败（台账 A8 那条 ENOENT 的第二处幸存）。
+ * 子层（`materials/`、`films/`、`films/bgm/`）的磁盘位置也都从 `generatedRoot()` 派生，
+ * 任何一处再写 `"public", "generated"` 字面量都由
+ * `tests/artifact-layout-single-source.test.ts` 拦下。 */
 /* §18.4 三选一：走第三类（纯 Node 地基，登记在
  * `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`）。
  * 理由是这一层的消费方本来就跨宿主：Next 侧的 `task.openFolder` / `task.delete`
@@ -42,12 +47,69 @@ export function generatedRoot(cwd: string = process.cwd()): string {
 
 /** `abs` 是否「等于产物根」或「落在产物根之下」。
  *  用 `path.sep` 收边界：`abs.startsWith(root)` 这种写法会把同级的
- *  `public/generatedX` 也算进来（前缀相同，并不是子路径）。 */
+ *  `public/generatedX` 也算进来（前缀相同，并不是子路径）。
+ *  第二个参数允许换一格比（素材库拿 `materials/` 当根来判同一件事），
+ *  判据仍只有这一处。 */
 export function isWithinGeneratedRoot(
   abs: string,
   root: string = generatedRoot(),
 ): boolean {
   return abs === root || abs.startsWith(root + path.sep);
+}
+
+/** 产物地址的前缀：写侧唯一的形状来源（`taskOutputUrl` 与 film / materials 共用）。
+ *  读侧还认历史留下的 `/generated/…`，见 `artifactDiskPath()`。 */
+export const ARTIFACT_URL_PREFIX = "/api/generated";
+
+/** 由「根内相对段」拼产物地址。film / materials 各自重抄前缀就会分叉 ——
+ *  A8 那批的教训是同一句布局被三个调用点各拼一遍，其中一个还拼错了。 */
+export function artifactUrl(segments: readonly (string | number)[]): string {
+  return `${ARTIFACT_URL_PREFIX}/${segments.join("/")}`;
+}
+
+/** 素材库子层（用户手工丢进盘的文件）。归属判据在 `materials.ts`，位置在这里。 */
+export function materialsRoot(root: string = generatedRoot()): string {
+  return path.join(root, "materials");
+}
+
+/** 成片与配乐的子层。写侧（`compose-film`）、上传侧（`/api/film/bgm`）与归属判据
+ *  （`output-access` 的 `films/bgm` 无主条目）都从这里派生。 */
+export function filmsRoot(root: string = generatedRoot()): string {
+  return path.join(root, "films");
+}
+
+export function filmBgmRoot(root: string = generatedRoot()): string {
+  return path.join(filmsRoot(root), "bgm");
+}
+
+/** 「地址 → 磁盘绝对路径」的唯一映射。两种形状都吃：写侧的 `/api/generated/…`
+ *  与静态直发时代留在老数据里的 `/generated/…`。
+ *
+ *  返回 `null` 的两种情况由调用点各自处置（口径同 `taskOutputDir()`：判据只写一份、
+ *  处置留在调用点）：「这根本不是产物地址」与「解出来的位置在产物根之外」。
+ *
+ *  剥 `api/` 那一段是这条判据存在的理由：`compose-steps.ts` 曾只剥前导斜杠，
+ *  于是执行器写进 `TaskImage.localPath` 的 `/api/generated/…` 被解析成
+ *  `public/api/generated/…`（该目录不存在），ffmpeg 每次都报「没有这个文件」，
+ *  「合成成片」对每一条镜头必败。
+ *
+ *  百分号编码：地址由请求方/画布数据给，坏编码不是越权，但也不能顺着半截字符串
+ *  去读盘 —— 判成「不是产物地址」。`path.resolve` 会把以 `/` 开头的残留段当绝对路径，
+ *  那种位置一定在根外，因此同样落到 `null`。 */
+export function artifactDiskPath(
+  url: string,
+  root: string = generatedRoot(),
+): string | null {
+  const matched = /^\/(?:api\/)?generated\/(.+)$/.exec(url)?.[1];
+  if (!matched) return null;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(matched);
+  } catch {
+    return null;
+  }
+  const abs = path.resolve(root, path.normalize(decoded));
+  return isWithinGeneratedRoot(abs, root) ? abs : null;
 }
 
 /** 布局的唯一形状来源：project 任务在 `projects/<projectId>/<taskId>` 下，
@@ -64,7 +126,7 @@ export function taskOutputUrl(
   taskId: string,
   projectId?: string | null,
 ): string {
-  return `/api/generated/${taskOutputSegments(taskId, projectId).join("/")}`;
+  return artifactUrl(taskOutputSegments(taskId, projectId));
 }
 
 /** 任务产物目录的绝对路径；当 `taskId` / `projectId` 的形状会让结果落到产物根

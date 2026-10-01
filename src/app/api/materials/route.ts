@@ -6,6 +6,7 @@ import { logger } from "~/server/lib/logger";
 import { apiErrorBody, apiErrorDetail } from "~/lib/api-error";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { artifactUrl } from "~/lib/media/output-paths";
 import {
   MATERIAL_FOLDERS,
   SHARED_SCOPE,
@@ -230,9 +231,9 @@ export async function POST(req: NextRequest) {
         name: finalName,
         folder,
         folderName: folderName(folder),
-        url: `/api/generated/materials/${encodeURIComponent(scope)}/${encodeURIComponent(
-          folder,
-        )}/${encodeURIComponent(finalName)}`,
+        url: artifactUrl(
+          ["materials", scope, folder, finalName].map(encodeURIComponent),
+        ),
         size: buf.length,
         scope,
       },

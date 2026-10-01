@@ -84,9 +84,23 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
     );
 
     expect(mocks.readFile).toHaveBeenCalledWith(
-      expect.stringContaining(path.join("generated", "ff-task", "img_0.png")),
+      // 精确到整条绝对路径：这一句就是在断言「地址 → 磁盘」走的是共用解析
+      // （`artifactDiskPath`），而不是某个调用点自己拼的形状。
+      path.join(process.cwd(), "public", "generated", "ff-task", "img_0.png"),
     );
     expect(mocks.upload).toHaveBeenCalled();
+  });
+
+  it("地址不在产物根内 → 明确失败，不去读盘也不上传", async () => {
+    // 本批新加的守卫：库里那一行被写进一个非产物地址（或越界形状）时，
+    // 表现必须是一句指明「哪一条」的错误，而不是 readFile 的 ENOENT 栈噪声。
+    mocks.rows.push(succeeded("/api/other/ff-task/img_0.png"));
+
+    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow(
+      "首帧的产物地址不合法",
+    );
+    expect(mocks.readFile).not.toHaveBeenCalled();
+    expect(mocks.upload).not.toHaveBeenCalled();
   });
 
   it("终态里只有视频：判「无图像输出」，不把视频当首帧上传", async () => {
