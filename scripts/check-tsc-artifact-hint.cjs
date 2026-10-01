@@ -15,8 +15,13 @@
  * TS1128 两条；本地复演同形截断，真 tsc 给出的是 TS1005 一条（判据对它成立）。
  *
  * 本脚本**不解决**共写，只做一件事：把排障成本从「怀疑自己」降到「一条命令」。
- * 根治的两条（实例级 `distDir` / 收法改温和）仍在 ISSUE #1182 上没做 —— 别把这条
- * 判据当成问题已闭。
+ * 另两条候选已按实测判死（ISSUE #1182 已关）：① 「给第二实例换 `distDir`」不消除共写，只是
+ * 把共写从生成物搬到两个全检出共享的文件上 —— Next 会把当前 distDir **追加进受版本控制的
+ * `tsconfig.json` 的 `include`**（于是那个实例的半截 `validator.ts` 照样进组 A，还额外弄脏
+ * 工作区），并改写 `next-env.d.ts` 的 import 指向它（换完目录那两行悬空时 tsc **不报错**，
+ * 于是从「当场红 + 一条命令处置」退化成「静默失去路由类型校验」，更坏）；② Windows 侧没有
+ * 温和原语可换 —— `windowsKillArgs()` 恒发 `/T /F`，`force` 只在 POSIX 分叉 SIGTERM/SIGKILL。
+ * 所以防复发只剩「别在同一目录双开」这一条纪律（并行验证走 `git worktree`，§13.6.2）。
  *
  * 用法（由 `.githooks/pre-commit` 的汇总段调用，只读日志、不改退出码）：
  *   node scripts/check-tsc-artifact-hint.cjs --file <组A日志>
@@ -87,8 +92,11 @@ function buildHint(v) {
     ...unique.map((f) => `    POSIX:    rm -f ${f}`),
     "    整目录形态：rm -rf .next/dev/types   (Windows: Remove-Item -Recurse -Force .next\\dev\\types)",
     "  删完直接重跑提交即可；起一次 dev / build 会把这份生成物整份重写回来。",
-    "  防复发：起第二实例时给它独立的 `.next`（`distDir` 按端口/实例分叉）或干脆别双开 ——",
-    "  这一条**还没做**，根治方案记在 ISSUE #1182（本提示只做定性，不解决共写）。",
+    "  防复发：**别在同一目录双开 `next dev`**。给第二个实例换一个 `distDir` 会更糟（实测",
+    "  Next 16.3.5：它会把那个实例目录**追加进受版本控制的 `tsconfig.json` 的 `include`**，并把",
+    "  共享的 `next-env.d.ts` 改写成指向它）—— 共写没消除，只是从生成物搬到两个人人都改的文件上，",
+    "  而红照旧（生成目录被 Next 自己写进 include）。要并行验证就走 `git worktree`（§13.6.2），",
+    "  或直接复用已经在跑的那个实例。这条与收法都记在 ISSUE #1182（本提示只做定性）。",
     "",
   ].join("\n");
 }

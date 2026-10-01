@@ -1273,9 +1273,50 @@ Python 在非 ASCII locale 下 `sys.stdout` 与 `open()` 都跟着 locale 走。
 在组 A 失败分支里调用，带 `|| true` 且自身恒退 0 —— 判决仍属于 tsc，这条不许变成第二种
 失败形态，也不许把组 A 的红洗成绿。
 
-它**不解决**共写。第 1 条（实例级 `distDir` 分叉）与第 2 条（收法改温和）都没做，ISSUE #1182
-保持 open：前者要连带核 `outputFileTracing*` 与 `check-standalone-contents.cjs` 对 `.next`
-路径的假设（AGENTS 硬规则 17/18），不是本刀的体量；后者弱于前者，崩溃/断电照样留半截。
+它**不解决**共写。当时留的两句「还没做」现在按实测改口（ISSUE #1182 据此关闭，见下面第 26.1 节）：
+第 1 条（实例级 `distDir` 分叉）**不成立**，第 2 条（收法改温和）在 Windows 侧**没有可用原语**。
+本刀当时那句「第 1 条要连带核 `outputFileTracing*` 与 `check-standalone-contents.cjs` 对 `.next`
+路径的假设（AGENTS 硬规则 17/18），不是本刀的体量」是把成本估错了方向 —— 真正的否决理由在
+类型检查这一侧，与产物层无关。
+
+### 26.1 方案 1 / 方案 2 的实测读数（2026-10-01，同一次探针跑出来的）
+
+探针手法：`next.config.js` 临时加 `distDir: process.env.COMFYAPP_NEXT_DIST_DIR ?? ".next"`，
+用该 env 起一个 `next dev -p 3999` 的第二实例（`distDir=.next-probe-1182`），读完落点之后把
+`next.config.js` / `next-env.d.ts` / `tsconfig.json` 三份按事先备份还原，实例按硬规则 3 整树回收。
+
+1. **Next 把当前 distDir 写进受版本控制的 `tsconfig.json`**。探针跑完 `git diff tsconfig.json`
+   多出两条 include：`".next-probe-1182/types/**/*.ts"`、`".next-probe-1182/dev/types/**/*.ts"`
+   （并顺手把 `lib` / `paths` 的数组重排成多行）。⇒ 换目录**没有**让那个实例的生成物脱离类型
+   检查树，半截 `validator.ts` 照样把组 A 拦下；代价还多一项：工作区被弄脏，谁 `git add -A`
+   就把别人的实例目录钉进所有人的 `tsconfig.json`。
+2. **Next 同时改写全检出共享的 `next-env.d.ts`**，那两行 import 指向探针目录。它被
+   `.gitignore` 忽略（第 19 行），所以不进 diff、也就不会有人发现指针已经漂走；而指针悬空时
+   实测全量 `tsc --noEmit --incremental false` **退 0**（`skipLibCheck: true` + 悬空发生在 `.d.ts`
+   里）⇒ 原先生效的路由类型校验**静默失效**。这条比原 bug 更坏：原来是「当场红 + 一条命令处置」，
+   换完 distDir 变成「无声」。
+3. **所以「从根上消除共写」这个前提不成立**：共写只是从 `.next/dev/types/` 搬到
+   `tsconfig.json` + `next-env.d.ts` 两个文件上，其中一个还受版本控制。
+4. 顺带量到一条与本条判据直接相关的机制：`include` 里的 `**/*.ts` **不进点开头目录**。同一份
+   语法错文件（`const a: = 1;`）分别放 `.next/probe-1182/p1182.ts`、`.next-probe-1182/q1182.ts`
+   与非点目录 `p1182-control/probe/c1182.ts`，全量 tsc 只对第三个报
+   `TS1110: Type expected`（前两个 0 条，非漏跑：同一次运行有报错即非空跑）。⇒ 生成物今天被
+   检查**纯粹因为那两条显式 include**，不是「`exclude` 少了 `.next`」；ISSUE #1182 正文那句
+   「`exclude` 里没有 `.next`，所以构建产物的语法错会以组 A 红的形态出现」机制描述反了半句，
+   结论方向不变。
+5. **方案 2（收法改温和）在 Windows 上没有对应原语**：`src/lib/process/kill-process-tree.ts`
+   的 `windowsKillArgs()` 恒发 `/T /F`，`force` 参数只在 POSIX 分叉 SIGTERM/SIGKILL ——
+   也就是 `reap-process.mjs <pid>` 不加 `--force` 在 Windows 上与加了**完全同形**（实测 via
+   就是 `taskkill /PID … /T /F`）。`taskkill` 去掉 `/F` 只对**有窗口**的进程有效，控制台
+   `node`/`next dev` 收不到；要做温和梯度就得新写一套 AttachConsole/信号注入 + 超时升级，
+   而漏杀一个 dev server 会占住端口与 `data/` 写位，比半截生成物严重得多。判为不做。
+
+**剩下的可执行项只有纪律 + 可见性**：别在同一目录双开 `next dev`；要并行验证走
+`git worktree`（§13.6.2 的现成手法）或直接复用已经在跑的实例。本刀的提示话术已按这些读数
+订正 —— #1311 那版写的「起第二实例时给它独立的 `.next`（`distDir` 按端口/实例分叉）」是**我按
+代码形状推出来的一句建议，被自己的探针否掉**，照它做会走进上面第 1、2 条更糟的形态；判据
+`tests/check-tsc-artifact-hint.test.ts` 里钉了一条「这句话不许再出现」的用例，防的就是同一个错
+第二次犯。
 
 ### 一处「先验证再印给用户」的必要代价
 
