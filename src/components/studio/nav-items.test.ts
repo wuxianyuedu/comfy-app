@@ -79,14 +79,18 @@ describe("NAV_ITEMS（全量注册表）", () => {
 });
 
 describe("OVERLAY_NAV_ITEMS（全局浮层入口）", () => {
-  it("恰好两项：模型适配 / 模式契约", () => {
+  it("恰好三项：模型适配 / 模式契约 / 控制台", () => {
+    // 这是一份**清单判据**：新增一个浮层入口必须同时改这里，
+    // 表现是「侧栏多了一项而没人登记」当场可见（而不是等评审发现）。
     expect(OVERLAY_NAV_ITEMS.map((i) => i.overlay)).toEqual([
       "model-adapters",
       "mode-contract",
+      "console",
     ]);
     expect(OVERLAY_NAV_ITEMS.map((i) => i.label)).toEqual([
       "模型适配",
       "模式契约",
+      "控制台",
     ]);
   });
 
