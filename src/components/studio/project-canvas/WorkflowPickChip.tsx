@@ -39,7 +39,7 @@ export function WorkflowPickChip({
       onSelect={onSelect}
       triggerTitle="选择工作流"
       align="start"
-      contentClassName="w-[280px] py-1"
+      contentClassName="w-70 py-1"
       triggerClassName="border-primary/35 bg-node-accent h-6 min-w-0 flex-1 rounded-lg border px-2.5 text-[12px]"
       trigger={
         <span
@@ -70,7 +70,7 @@ export function WorkflowPickChip({
         title: option.name,
         prefix: (
           <span
-            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            className={`size-1.5 shrink-0 rounded-full ${
               option.sourcePath ? "bg-status-online" : "bg-primary-strong"
             }`}
           />

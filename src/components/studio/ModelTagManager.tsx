@@ -73,7 +73,7 @@ export function ModelTagManager({
         <div className="border-border-strong bg-panel w-full max-w-md rounded-2xl border p-5 shadow-2xl shadow-black/20 dark:shadow-black/50">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-ink-bright flex items-center gap-2 text-base font-semibold">
-              <Icon name="tag" className={`h-4 w-4 ${TAG_ICON_COLOR}`} />
+              <Icon name="tag" className={`size-4 ${TAG_ICON_COLOR}`} />
               模型标签库
             </h3>
             <Button

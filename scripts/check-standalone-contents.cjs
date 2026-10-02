@@ -171,10 +171,15 @@ const STATIC_ALLOWED_TOPLEVEL = [
 /**
  * `src/` 这一格走「顶层放行祖先、叶子逐文件判」的形态，理由与剔除侧的 `RUNTIME_SRC`
  * 同一条：`scripts/reap-process.mjs` 与 `scripts/dev-launcher.mjs` 都会
- * `await import("../src/lib/process/kill-process-tree.ts")`（硬规则 3）。
- * 与剔除侧同源，由用例核对。
+ * `await import("../src/lib/process/kill-process-tree.ts")`（硬规则 3）；
+ * `scripts/launcher-core/shell.mjs` **静态** import
+ * `../../src/lib/process/executable-resolve.ts`（ISSUE #1327，可执行形态判据的唯一实现）。
+ * 与剔除侧同源，由用例核对（`tests/dist-artifact-hygiene.test.ts`）。
  */
-const ALLOWED_SRC_FILES = ["lib/process/kill-process-tree.ts"];
+const ALLOWED_SRC_FILES = [
+  "lib/process/kill-process-tree.ts",
+  "lib/process/executable-resolve.ts",
+];
 
 /** 该层允许的顶层条目。 */
 function allowedTopLevelFor(label) {

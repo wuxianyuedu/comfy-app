@@ -152,7 +152,7 @@ export function WorkflowRunLogModal({
               </span>
               {run && (
                 <span
-                  className="text-ink-muted max-w-[220px] truncate text-[11px]"
+                  className="text-ink-muted max-w-55 truncate text-[11px]"
                   title={run.workflowName}
                 >
                   {run.workflowName}
@@ -205,7 +205,7 @@ export function WorkflowRunLogModal({
                     ]),
                   )}
                   aria-label="切换查看的任务"
-                  className="max-w-[200px] text-[10.5px]"
+                  className="max-w-50 text-[10.5px]"
                 />
               )}
               <Hint
@@ -247,7 +247,7 @@ export function WorkflowRunLogModal({
             topSlot={
               run?.errorMessage ? (
                 <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-[13px]">
-                  <div className="break-words whitespace-pre-wrap">
+                  <div className="wrap-break-word whitespace-pre-wrap">
                     {run.errorMessage}
                   </div>
                 </div>

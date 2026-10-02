@@ -76,7 +76,7 @@ export function DetailHeader({
         className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2"
         data-testid="detail-header-row"
       >
-        <div className="min-w-[180px] flex-1" data-testid="detail-title-block">
+        <div className="min-w-45 flex-1" data-testid="detail-title-block">
           <h2
             className={[
               "truncate text-lg font-semibold",
@@ -119,7 +119,7 @@ export function DetailHeader({
               </Hint>
               {showAllModes && modes.length > 1 && (
                 <div
-                  className={`border-border bg-panel absolute top-full left-0 ${zClass("popup")} mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border p-1.5 shadow-xl`}
+                  className={`border-border bg-panel absolute top-full left-0 ${zClass("popup")} mt-1 flex min-w-35 flex-col gap-0.5 rounded-lg border p-1.5 shadow-xl`}
                 >
                   {modes.map((code) => (
                     <span

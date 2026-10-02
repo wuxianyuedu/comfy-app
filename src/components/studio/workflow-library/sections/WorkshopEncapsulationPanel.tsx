@@ -208,7 +208,7 @@ export function WorkshopEncapsulationPanel({
             )}
             popoverMinWidth={160}
             autoFitFromOptions={false}
-            className="!border-border-strong h-auto !bg-transparent px-2 py-0.5 text-[11px]"
+            className="border-border-strong! h-auto bg-transparent! px-2 py-0.5 text-[11px]"
           />
         )}
         <span className="text-muted-foreground text-[11px]">

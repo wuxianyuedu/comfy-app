@@ -14,10 +14,13 @@
  * mock 边界：`~/lib/app-settings/app-settings.server`、`~/lib/comfyui/lifecycle`、
  * `~/lib/comfyui/instance-kind`、`~/lib/drizzle-studio/lifecycle`（本机进程与配置的
  * 真实副作用一律不进用例）、`~/lib/comfy/comfy-embed` 的 `probeComfyEmbeddable`
- * 一条（探测要发真实 HTTP，其余成员走真实实现）。
+ * 一条（探测要发真实 HTTP，其余成员走真实实现）、`node:fs` 的 `realpathSync`
+ * 一条**默认透传的代理**（只有 `fsState.failRoot` 打开时让「取检出根」那一次抛错，
+ * 见 `revealPath` 的用例）。
  * **`~/lib/shell/open-in-browser` 不 mock，只 mock `child_process`** —— 这样
  * `openExternal` 这一条测的是「路由没有绕开地基那道闸」，而不是「路由调到了地基」。
  */
+import type * as NodeFs from "node:fs";
 import { basename, join, resolve } from "node:path";
 
 import type * as ComfyEmbedModule from "~/lib/comfy/comfy-embed";
@@ -26,6 +29,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const {
   spawnMock,
   probeMock,
+  fsState,
   getSettingsMock,
   getSettingsSyncMock,
   saveSettingsMock,
@@ -43,6 +47,8 @@ const {
   studioOpenMock,
 } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
+  /** 让「取检出根」那一次 `realpath` 抛错的开关（探针在每次调用开头读它）。 */
+  fsState: { failRoot: false },
   probeMock: vi.fn<() => Promise<{ embeddable: boolean; reason: string }>>(
     async () => ({ embeddable: true, reason: "ok" }),
   ),
@@ -102,6 +108,26 @@ vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
 vi.mock("child_process", () => ({ spawn: spawnMock }));
+/**
+ * `realpathSync` 换成「可指挥的代理」：默认原样转给真实实现，只有打开
+ * `fsState.failRoot` 时让**取检出根那一次**（参数正是 `process.cwd()`）抛错。
+ * 需要它是因为 `projectScopedProbe()` 的失败分支在真机上不可达 —— 当前工作目录
+ * 一定存在，而「根取不到」是这条闸唯一的 fail-closed 出口。
+ */
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>();
+  return {
+    ...actual,
+    realpathSync: (target: NodeFs.PathLike) => {
+      if (fsState.failRoot && String(target) === process.cwd()) {
+        throw Object.assign(new Error("ENOENT: no such file or directory"), {
+          code: "ENOENT",
+        });
+      }
+      return actual.realpathSync(target);
+    },
+  };
+});
 vi.mock("~/lib/app-settings/app-settings.server", () => ({
   getSettings: getSettingsMock,
   getSettingsSync: getSettingsSyncMock,
@@ -159,6 +185,7 @@ function installFakeChild() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fsState.failRoot = false;
   installFakeChild();
   tdb.$reset();
   getSettingsMock.mockResolvedValue({ comfyuiPort: 8188, comfyuiPath: "" });
@@ -486,5 +513,50 @@ describe("setting.revealPath —— 打开本机路径之前的存在性 + 检�
       createCaller(makeCtx()).revealPath({ path: "" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(spawnMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `revealPath` 那道闸**自己坏掉时**的方向。
+ *
+ * 上面几组判的都是「闸在工作」时的取舍；这一组判的是闸读不到检出根时倒向哪一侧。
+ * 真机上 `realpath(process.cwd())` 不会失败（当前工作目录一定存在），所以这条
+ * 分支只能靠代理把它逼出来 —— 而它恰恰是最需要钉住的一侧：闸门失效时如果默认
+ * 全放，「一句精心构造的日志让面板去打开 `C:\Windows\System32`」就从**文本判据**
+ * 进不来了改从**闸自己**进来了。
+ */
+describe("setting.revealPath —— 取不到检出根时全拒，且这个结论不粘", () => {
+  /** 与上面同一条样本：检出内、真实存在 —— 闸正常时它必须放行。 */
+  const insideProject = "package.json";
+
+  it("取不到根 → **连检出内且真实存在的路径也拒绝**，且不 spawn", async () => {
+    fsState.failRoot = true;
+    const res = await createCaller(makeCtx()).revealPath({
+      path: join(process.cwd(), insideProject),
+    });
+    expect(res.ok).toBe(false);
+    /* 说明照旧给到（硬规则 4：失败必须有用户可见出口），且**不区分**「不存在」与
+     * 「根读不到」—— 后者是本机目录结构的信息，不是请求方该拿到的探测结果。 */
+    expect(res.detail).toContain("找不到可在文件管理器里打开的路径");
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("根只是**这一轮**读不到 → 下一轮请求恢复放行（探针每次调用现取根）", async () => {
+    fsState.failRoot = true;
+    const refused = await createCaller(makeCtx()).revealPath({
+      path: join(process.cwd(), insideProject),
+    });
+    expect(refused.ok).toBe(false);
+
+    /* 关键在后半句：全拒不许被记住。探针是在**每次 procedure 调用里**重新取根，
+     * 于是「服务被搬到别的检出」「根短暂不可读」之后通道会自己活回来；如果那个
+     * null 被缓存到进程级，整条通道会永久哑掉而界面上没有任何症状。 */
+    fsState.failRoot = false;
+    spawnMock.mockClear();
+    const again = await createCaller(makeCtx()).revealPath({
+      path: join(process.cwd(), insideProject),
+    });
+    expect(again.ok).toBe(true);
+    expect(spawnMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -2,7 +2,7 @@ import { clamp } from "~/lib/clamp";
 import { NextResponse } from "next/server";
 import { apiErrorBody } from "~/lib/api-error";
 import fs from "node:fs";
-import path from "node:path";
+import { latestPanelLogFile } from "~/lib/log/capture-streams.server";
 import { resolveSessionStart } from "~/lib/log/log-session-scope";
 import { fileMtimeMs } from "~/lib/log/log-session-scope.server";
 import { getServerBootId } from "~/lib/shell/dev-server-id";
@@ -10,8 +10,6 @@ import { launchPaths } from "~/lib/shell/launch-diagnostics";
 import {
   DEV_LAUNCHER_CURRENT_SENTINEL,
   DEV_LAUNCHER_LOG,
-  NEXTJS_LOG_DIR,
-  NEXTJS_PANEL_LOG_PREFIX,
   RUNTIME_LOG_FILES,
   LAUNCHER_SHELL_LOG,
 } from "~/lib/log/log-paths";
@@ -24,26 +22,6 @@ const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;
  * 它与 Rust 壳侧共用同一组路径常量（tests/launch-diagnostics-paths.test.ts
  * 逐项核对），这里不再抄一份字面量。 */
 const SHELL_CHAIN_PATHS = launchPaths(process.cwd());
-
-/** 应用服务输出转录文件（本次进程）：惰性解析，取不到时退化为「文件不存在」。 */
-function panelCaptureLog(): string | null {
-  try {
-    const entries = fs
-      .readdirSync(/*turbopackIgnore: true*/ NEXTJS_LOG_DIR)
-      .filter(
-        /* 前缀的唯一出处是 `log-paths`（`capture-streams.server.ts` 用它命名
-         *  转录文件）——这里手抄一份字面量就是同一件事的第二个名字（§12.14）。 */
-        (name) =>
-          name.startsWith(NEXTJS_PANEL_LOG_PREFIX) && name.endsWith(".log"),
-      )
-      .sort();
-    const latest = entries[entries.length - 1];
-    return latest ? path.join(NEXTJS_LOG_DIR, latest) : null;
-  } catch {
-    /* 目录不存在（从未跑过 dev）→ 面板该来源恒空，不报错 */
-    return null;
-  }
-}
 
 /**
  * 追加写日志（app-runtime / 各常驻服务 runtime）不轮转，积累几个月后可能是
@@ -226,7 +204,7 @@ function resolveSourceFile(
   }
   /* 「应用服务输出」：Next dev server 的 stdout/stderr 转录（本次进程一份）。 */
   if (source === "app") {
-    const file = panelCaptureLog();
+    const file = latestPanelLogFile();
     return file ? { file, resumable: true } : null;
   }
   /* 壳侧两路（shell = 壳自持日志；shell-launch = 壳侧编排链路）：双击启动的

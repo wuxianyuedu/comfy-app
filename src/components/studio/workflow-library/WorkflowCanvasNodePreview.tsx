@@ -665,7 +665,7 @@ export function WorkflowCanvasNodePreview({
 
       {/* ── use 模式：简化视图（表单 + 生成按钮 + 结果） ── */}
       {viewMode === "use" && (
-        <div className="flex w-full max-w-[480px] flex-col gap-3">
+        <div className="flex w-full max-w-120 flex-col gap-3">
           <div className="border-border bg-panel rounded-xl border p-4">
             <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
               <span className="text-ink min-w-0 truncate text-sm font-semibold">
@@ -693,7 +693,7 @@ export function WorkflowCanvasNodePreview({
                   )}
                   popoverMinWidth={150}
                   autoFitFromOptions={false}
-                  className="!border-border-strong shrink-0 !bg-transparent text-[11px]"
+                  className="border-border-strong! shrink-0 bg-transparent! text-[11px]"
                 />
               ) : (
                 <span className="text-ink-faint shrink-0 text-xs">
@@ -738,7 +738,7 @@ export function WorkflowCanvasNodePreview({
       {/* ── 进度条（两种模式通用，running 时显示） ── */}
       {phase.kind === "running" && (
         // p71-allow:start brand 渐变 · 工作流执行进度条 violet→fuchsia 双色（项目品牌视觉），见 §3.6.1
-        <div className="w-[380px]" aria-live="polite">
+        <div className="w-95" aria-live="polite">
           <ProgressBar
             value={pct}
             label={
@@ -758,7 +758,7 @@ export function WorkflowCanvasNodePreview({
       {/* ── 运行结果图（只在「实际使用」页签显示；编辑对外参数是配置界面，
             不应展示上一次运行的结果图） ── */}
       {resultUrl && viewMode === "use" && (
-        <div className="w-[380px]">
+        <div className="w-95">
           <p className="text-ink-faint mb-1 text-[11px]">运行结果</p>
           {/* 缩略图盒子只有 380px 宽，看细节得点开通用查看器
               （原始大小 / 缩放 / 拖拽平移，见 `ui/image-viewer`）。 */}
@@ -774,7 +774,7 @@ export function WorkflowCanvasNodePreview({
       {/* ── 错误提示（只在「实际使用」页签显示；编辑对外参数是配置界面，
             不应展示上一次运行的执行错误） ── */}
       {phase.kind === "failed" && viewMode === "use" && (
-        <div className="border-destructive/20 bg-destructive/8 text-destructive w-[380px] rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
+        <div className="border-destructive/20 bg-destructive/8 text-destructive w-95 rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
           {phase.message}
         </div>
       )}
@@ -782,7 +782,7 @@ export function WorkflowCanvasNodePreview({
       {/* ── 素材上传提示 ── */}
       {uploadNotice && (
         <div
-          className="border-warning/25 bg-warning/10 text-warning-strong w-[380px] rounded-lg border px-3 py-2 text-[11px] leading-relaxed"
+          className="border-warning/25 bg-warning/10 text-warning-strong w-95 rounded-lg border px-3 py-2 text-[11px] leading-relaxed"
           role="status"
           aria-live="polite"
         >
@@ -801,7 +801,7 @@ export function WorkflowCanvasNodePreview({
         </div>
       )}
       {!running && missingLabels.length > 0 && viewMode === "use" && (
-        <p className="text-warning-strong/80 w-[380px] text-[11px]">
+        <p className="text-warning-strong/80 w-95 text-[11px]">
           必填参数未填：{missingLabels.join("、")}
         </p>
       )}

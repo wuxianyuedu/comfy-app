@@ -370,7 +370,7 @@ function DimensionSizeControl({
           <span className="text-accent shrink-0 text-[10px] font-semibold tracking-wider uppercase">
             比例 + 像素
           </span>
-          <div className={narrow ? "w-[112px] min-w-0" : "min-w-0 flex-1"}>
+          <div className={narrow ? "w-28 min-w-0" : "min-w-0 flex-1"}>
             <MultiSegmentPopover
               ariaLabel="选择比例与像素"
               triggerContent={`${shortRatioLabel(ratio)} / ${clarity}${clarityKind === "megapixel" ? ` / ${alignMultiple}` : ""}`}

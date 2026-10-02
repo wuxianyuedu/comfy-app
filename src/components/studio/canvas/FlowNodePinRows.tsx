@@ -100,7 +100,7 @@ export function FlowNodePinRows({
             // key 同时含两个名字，好让数字槽端口（"1"、"2" …）
             // 不在数组里撞车。
             key={`pinrow-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
-            className="relative flex h-[22px] items-center pr-5 pl-5 text-[11px]"
+            className="relative flex h-5.5 items-center pr-5 pl-5 text-[11px]"
             data-pin-input={inName}
             data-pin-output={outName}
             /* 相关行提亮背景：线加粗了、落到的那一行也跟着亮，视线从线落到行上。
@@ -116,7 +116,7 @@ export function FlowNodePinRows({
                   /* 可连接：编辑器里「对外参数节点」的线要落到这一行（端口）。
                    * 连上 / 断开都由映射层负责，工作流图本身不因此改动。 */
                   isConnectable
-                  className="!border-port-surface !size-2.5 !rounded-full !border"
+                  className="border-port-surface! size-2.5! rounded-full! border!"
                   style={{
                     left: 5,
                     background: inCol,
@@ -186,7 +186,7 @@ export function FlowNodePinRows({
                   position={Position.Right}
                   id={`out:${outName}`}
                   isConnectable={false}
-                  className="!border-port-surface !rounded-full !border"
+                  className="border-port-surface! rounded-full! border!"
                   style={{
                     right: 5,
                     background: outCol,

@@ -43,7 +43,6 @@ export type WorkspaceView =
   | "library"
   | "history"
   | "queue"
-  | "train"
   | "film"
   | "workflows"
   | "outputs";

@@ -27,6 +27,7 @@ import {
   configFingerprint,
   latestPanelTranscript,
   readDiagnosticsTail,
+  reapStaleSession,
   scanPorts,
   spawnInGroup,
   syncNextCache,
@@ -178,6 +179,59 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     clearSession(root);
     expect(readSession(root)).toBeNull();
   });
+
+  // 会话锚点是「上一次没走优雅收尾」的必然残留：壳收编排器走的是
+  // `Child.kill()`（TerminateProcess），编排器没有清理机会。此时它的子树早已被
+  // 插件 kill / Job Object 收干净 —— 回收这一步只该清锚点，不该报「回收了 PID …」
+  // （那既是噪声，旧号被系统复用时还会误伤无关进程）。
+  it("回收上一次的残留：子进程全已不在时只清锚点、不回报", async () => {
+    const root = makeTmp();
+    writeSession(root, {
+      launcher_pid: 0x7ffffffe,
+      child_pids: [0x7ffffffd, 0x7ffffffa],
+      app_port: 3311,
+      mode: "web",
+      started_at: new Date().toISOString(),
+    });
+    touchHeartbeat(root, Date.now() - HEARTBEAT_STALE_MS - 1000);
+
+    expect(await reapStaleSession(root)).toBeNull();
+    expect(readSession(root)).toBeNull();
+  });
+
+  // 反向面：真的有活着的子树才回收，并把被回收的 PID 报给调用方（用户可见的
+  // WARN 只在这种情况下出现）。
+  it("回收上一次的残留：还有活着的子树才真回收并回报", async () => {
+    const root = makeTmp();
+    const child = spawnInGroup({
+      command: process.execPath,
+      args: ["-e", "setTimeout(() => {}, 60000)"],
+      cwd: process.cwd(),
+    });
+    const pid = child.pid;
+    expect(pid).toBeGreaterThan(0);
+    writeSession(root, {
+      launcher_pid: 0x7ffffffe,
+      child_pids: [pid!],
+      app_port: 3311,
+      mode: "web",
+      started_at: new Date().toISOString(),
+    });
+    touchHeartbeat(root, Date.now() - HEARTBEAT_STALE_MS - 1000);
+
+    expect(await reapStaleSession(root)).toEqual([pid]);
+    expect(readSession(root)).toBeNull();
+    expect(
+      await waitUntil(() => {
+        try {
+          process.kill(pid!, 0);
+          return false;
+        } catch {
+          return true;
+        }
+      }, 8000),
+    ).toBe(true);
+  }, 20_000);
 
   it(".next 缓存指纹：配置不变则保留，变了才清；SKIP_CLEAN 强制保留", () => {
     const root = makeTmp();

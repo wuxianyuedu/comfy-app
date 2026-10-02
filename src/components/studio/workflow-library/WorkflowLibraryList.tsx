@@ -124,14 +124,14 @@ export function WorkflowLibraryList({
       <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
         {empty && loading ? (
           <EmptyState
-            minHeightClass="min-h-[160px]"
+            minHeightClass="min-h-40"
             title="正在加载工作流…"
             description="本地目录会一起扫描，文件多时首次载入需要几秒。"
             icon={<Spinner className="size-6" />}
           />
         ) : empty && stalled ? (
           <EmptyState
-            minHeightClass="min-h-[160px]"
+            minHeightClass="min-h-40"
             variant="error"
             icon={AlertTriangle}
             title="工作流列表还没返回"
@@ -158,7 +158,7 @@ export function WorkflowLibraryList({
           />
         ) : empty ? (
           <EmptyState
-            minHeightClass="min-h-[160px]"
+            minHeightClass="min-h-40"
             title={search ? "未找到匹配的工作流" : "还没有工作流"}
             description={
               search
@@ -246,11 +246,11 @@ export function WorkflowLibraryList({
  * 裁掉（用户看到的是「徽标不见了」）；
  * ② 名称在换行点折成两行，行高翻倍，一屏少看好几条。
  *
- * 因此给出显式上限：`truncate` +`max-w-[132px]` 把可截断的那块钉住，
+ * 因此给出显式上限：`truncate` +`max-w-33` 把可截断的那块钉住，
  * 宽度压力由它承担，徽标一律`shrink-0`（规范 03 §3.8.1：可截断的块要有
  * 贴着实测宽度的下限，按钮/徽标不许被压扁）。完整名称仍在`title` 里。
  */
-const NAME_MAX_WIDTH_CLASS = "max-w-[132px]";
+const NAME_MAX_WIDTH_CLASS = "max-w-33";
 
 function WorkflowListItem({
   workflow,
@@ -343,7 +343,7 @@ function WorkflowListItem({
                 key={tag}
                 tone="neutral"
                 title={tag}
-                className="max-w-[72px] truncate rounded-full"
+                className="max-w-18 truncate rounded-full"
               >
                 {tag}
               </ListBadge>

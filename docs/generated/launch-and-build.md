@@ -357,17 +357,17 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 （`build-launcher*.ps1`）全部移除，`app.exe` 成为唯一入口。
 「双层 exe」这个形态从此不存在，也就没有「两个同名 exe 谁是谁」的问题。
 
-| 环节                    | 判据 / 实现                                                                                                                                                                                                                                                      |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 谁在编排                | `COMFYAPP_PROJECT_ROOT` 环境变量。它**只在壳自己从 exe 位置推导出项目根时缺席**——那正是「双击 exe」。启动模式的 `COMFYAPP_LAUNCH_MODE` 现在由壳自己写（见下），不能拿它当判据（判据会随写入顺序漂）                                                              |
-| 起什么                  | `node scripts/dev-launcher.mjs --mode prebuilt`（`shell_launch::spawn_orchestrator`），经官方 shell 插件                                                                                                                                                         |
-| 跑步模式                | `ensure_launch_mode()`：编排脚本在 → `prebuilt`（走 dev server）；不在 → `standalone`（走内嵌 server）。**只在 release 写**，debug 归 `pnpm tauri dev` 管。standalone 那一支的载荷装配与运行入口（`bundle.resources` + `scripts/standalone-runtime.mjs`）见 §7.6 |
-| 起不起得来              | `can_self_launch()`：编排脚本 + `node_modules\.modules.yaml` + 关键依赖存在（只读、极快）；不满足时不静默 —— `mark_launch_failed()` 把原因与修法写到 `run/launch-status.json`                                                                                    |
-| 上一次的残留            | 起之前先用 `find_owned_orchestrator()` 找**自己认领过的**编排器（壳被强杀时 job 与进程组都可能落空，它会原地留着占端口，表现是「双击没反应」）；命中即 `reap_pid()` 回收再启动                                                                                   |
-| 认亲                    | 进程环境块里的 `COMFYAPP_SHELL_OWNED=1`（只有壳写、只有它起的编排器才有）。**不按形态猜**——「有没有 dev server」「命令行里有没有项目根」都认不出是谁起的                                                                                                         |
-| 回收                    | 壳的 `RunEvent::Exit` → 插件 `kill()` + `scripts/reap-process.mjs`（`--detach`，自杀路径等不起 `wait`）；另挂 `KILL_ON_JOB_CLOSE` Job Object 兜住壳崩溃 / 被硬杀（壳内联实现，唯一出处）                                                                         |
-| 前台                    | 双击一律不给（`decide_front_when_self_launched` = false）；`COMFYAPP_FOREGROUND` 已注入时以它为准。**唤起已运行实例**是另一条通道（单实例焦点事件），见 §1.3                                                                                                     |
-| 只 debug / release 哪边 | **只在 release**：debug 下的壳归 `pnpm tauri dev` 管，那时 dev server 由 `beforeDevCommand` 起着                                                                                                                                                                 |
+| 环节                    | 判据 / 实现                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 谁在编排                | `COMFYAPP_PROJECT_ROOT` 环境变量。它**只在壳自己从 exe 位置推导出项目根时缺席**——那正是「双击 exe」。启动模式的 `COMFYAPP_LAUNCH_MODE` 现在由壳自己写（见下），不能拿它当判据（判据会随写入顺序漂）                                                                                                                                                          |
+| 起什么                  | `node scripts/dev-launcher.mjs --mode prebuilt`（`shell_launch::spawn_orchestrator`），经官方 shell 插件                                                                                                                                                                                                                                                     |
+| 跑步模式                | `ensure_launch_mode()`：编排脚本在 → `prebuilt`（走 dev server）；不在 → `standalone`（走内嵌 server）。**只在 release 写**，debug 归 `pnpm tauri dev` 管。standalone 那一支的载荷装配与运行入口（`bundle.resources` + `scripts/standalone-runtime.mjs`）见 §7.6                                                                                             |
+| 起不起得来              | `can_self_launch()`：编排脚本 + `node_modules\.modules.yaml` + 关键依赖存在（只读、极快）；不满足时不静默 —— `mark_launch_failed()` 把原因与修法写到 `run/launch-status.json`                                                                                                                                                                                |
+| 上一次的残留            | 起之前先用 `find_owned_orchestrator()` 找**自己认领过的**编排器（壳被强杀时 job 与进程组都可能落空，它会原地留着占端口，表现是「双击没反应」）；命中即 `reap_pid()` 回收再启动                                                                                                                                                                               |
+| 认亲                    | 进程环境块里的 `COMFYAPP_SHELL_OWNED=1`（只有壳写、只有它起的编排器才有）。**不按形态猜**——「有没有 dev server」「命令行里有没有项目根」都认不出是谁起的                                                                                                                                                                                                     |
+| 回收                    | 壳的 `RunEvent::Exit` → 插件 `kill()` + `scripts/reap-process.mjs`（`--detach`，自杀路径等不起 `wait`）；另挂 `KILL_ON_JOB_CLOSE` Job Object 兜住壳崩溃 / 被硬杀（壳内联实现，唯一出处）。`kill()` 成功后顺手清编排器的会话锚点（`clear_session_anchor`）——被 `TerminateProcess` 收走的编排器没机会清，不清就会每次启动都报一条「回收遗留进程树」（见 §3.3） |
+| 前台                    | 双击一律不给（`decide_front_when_self_launched` = false）；`COMFYAPP_FOREGROUND` 已注入时以它为准。**唤起已运行实例**是另一条通道（单实例焦点事件），见 §1.3                                                                                                                                                                                                 |
+| 只 debug / release 哪边 | **只在 release**：debug 下的壳归 `pnpm tauri dev` 管，那时 dev server 由 `beforeDevCommand` 起着                                                                                                                                                                                                                                                             |
 
 > **双击壳不会起第二个壳**：这条链看起来是「壳 → 编排器 → 壳」，实际不是。
 > 自编排那次双击里，本进程**只负责编排**（起编排器 + 当启动页宿主）；
@@ -931,12 +931,21 @@ spawnInGroup（自建进程组）+ 整组回收：残留 0，端口立即释放
 （旧号可能已归某个无关进程，照着杀就是误伤）；只看心跳会把「卡死但活着」
 的实例当成死的。两条都满足才算「上一位还活着」：
 
-| 心跳          | PID  | 判定              | 动作                                                         |
-| ------------- | ---- | ----------------- | ------------------------------------------------------------ |
-| 新鲜          | 存活 | 上一位在跑        | 不回收，提示端口占用（**不擅自杀**，可能属另一份检出，§1.4） |
-| 陈旧（> 30s） | 任意 | 上一位卡死 / 被杀 | 按 `child_pids` 回收整组                                     |
-| 新鲜          | 已死 | 写完心跳即被收走  | 同上（回收）                                                 |
-| 不存在        | —    | 没有会话          | 无事发生                                                     |
+| 心跳          | PID  | 判定              | 动作                                                                        |
+| ------------- | ---- | ----------------- | --------------------------------------------------------------------------- |
+| 新鲜          | 存活 | 上一位在跑        | 不回收，提示端口占用（**不擅自杀**，可能属另一份检出，§1.4）                |
+| 陈旧（> 30s） | 任意 | 上一位卡死 / 被杀 | `child_pids` 里还有活着的 → 按组回收并回报；一个都不活着 → 只清锚点、不回报 |
+| 新鲜          | 已死 | 写完心跳即被收走  | 同上                                                                        |
+| 不存在        | —    | 没有会话          | 无事发生                                                                    |
+
+**「锚点残留」不等于「有孤儿」**：壳正常退出时用 `Child.kill()`（Windows 上是
+`TerminateProcess`）收编排器，编排器收不到信号、没机会执行自己的清理 —— 它拉起的
+整棵树早已被插件 `kill()` / Job Object 收干净，锚点却**必然**留下。因此回收前要再探
+一次 `child_pids`：一个都不活着就只清锚点（**不打印**「回收上一次运行遗留的进程树」
+—— 否则每次正常关窗后的启动都刷一条，而那些 PID 早已不存在，旧号被系统复用时还会
+误伤无关进程）。壳那一侧也在 `shell_launch::reap()` 的 `kill()` 成功后顺手清掉锚点
+（`clear_session_anchor`，见 §1.5），把这条必经的残留从源头去掉；壳被硬杀（只剩
+Job Object 兜底）时锚点仍会留下，由上面这条探活接住。
 
 **端口占用只回收自己的**：判据分两层，收在 `launcher-core/procs.mjs`
 （`pidBelongsToRoot`）与 `launcher-core/orchestrator.mjs`（`usesExplicitPort` /
@@ -973,7 +982,8 @@ dev server（Next 不认 `COMFYAPP_PORT`，必须显式传），所以**端口�
 
 | 用例                                                | 锁什么                                                                                                                                                                                                                                                                                                            | 反向验证（改回旧实现必失败）                                   |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `tests/cross-platform-launcher.test.ts`             | 真起进程组、杀完数残留；会话锚点四种心跳/PID 组合；缓存指纹清留判据；**`.ps1` 只剩入口**（不得含 `taskkill` / `Get-CimInstance` / Job Object，且 < 120 行）；编排器不摸 `process.platform`                                                                                                                        | `spawnInGroup` 的 `detached` 改回 `false` → 进程组用例残留 > 0 |
+| `tests/cross-platform-launcher.test.ts`             | 真起进程组、杀完数残留；会话锚点四种心跳/PID 组合；**回收前探活子进程**（全不在时只清锚点、不回报；还有活着的才真回收并回报）；缓存指纹清留判据；**`.ps1` 只剩入口**（不得含 `taskkill` / `Get-CimInstance` / Job Object，且 < 120 行）；编排器不摸 `process.platform`                                            | `spawnInGroup` 的 `detached` 改回 `false` → 进程组用例残留 > 0 |
+| `tests/shell-self-launch.test.ts`（回收链组）       | 壳 `kill()` 成功后清掉会话锚点（`clear_session_anchor`），且只在成功那一支清；两份锚点路径与 `dev-launcher-session.mjs` 同源（漂开 = 壳清了个不存在的文件）                                                                                                                                                       | 去掉 `clear_session_anchor(project_root)` → 必失败             |
 | `src/lib/process/kill-process-tree.windows.test.ts` | **Windows 分支真跑**：注入同名假 taskkill，断言 `taskkill /PID <pid> /T /F`、`/IM <name> /T /F` 真的被调起；空 target 不猜测性击杀；`wait: true` 等到命令结束并把退出码写进 `via`；命令起不来返回 `ok:false` 而不抛错（「参数真的发出去了」两条在 Windows 上跳过：假件只能是 `.cmd`，Node 不能直接 spawn 批处理） | `windowsKillArgs` 去掉 `/T` → 用例必失败                       |
 | `tests/dev-launcher-downstream-exit.test.ts`        | 「下游先退出」四种成因的判决表与文案（`downstreamExitKind` / `describeDownstreamExit`），只认壳侧**正标记**                                                                                                                                                                                                       | 判决表退化成「壳退了就算放弃」 → 必失败                        |
 | `tests/dev-launcher-port-reclaim.test.ts`           | 端口残留回收的两层判据：显式端口 + 应用服务自证才回收；缺省端口 / 只有检出根路径 / 命令行取不到一律不碰                                                                                                                                                                                                           | 去掉 `usesExplicitPort` 开关或去掉自证 → 必失败                |
@@ -2470,6 +2480,8 @@ sidecar」两种不同形态的失败。
 | 依赖表结构自愈（Drizzle push 失败后补列 / 补索引）                  | `scripts/dev-launcher.ps1`（schema 同步阶段）                                                       | `scripts/heal-db.cjs`（被启动链路的 schema 同步阶段调用）                                                                                                                      |
 | 桌包 standalone 运行（不经编排器的内嵌 server 与宿主，ISSUE #1216） | `src-tauri\target\release\app.exe`（双击，壳自己起入口）/ `tools/start/start-desktop.ps1` | `scripts/standalone-runtime.mjs`（由壳经 Node sidecar 起；它再按 `COMFY_EXECUTOR` 起 `scripts/executor-host.mjs`。刻意**不**挂 `pnpm` 脚本——它不是开发者命令，是一种运行形态） |
 | 接上提交门槛（`core.hooksPath=.githooks`）                          | `scripts/prepare-local-run.ps1`（由 `pnpm install` 的 postinstall 触发）                            | `scripts/install-git-hooks.mjs`（`node scripts/install-git-hooks.mjs`；postinstall 逐字调用它，契约测试 `tests/postinstall-cross-platform.test.ts`）                           |
+| 组件工作台 Storybook（开发期预览）                                  | `tools/start/storybook.ps1`                                                                         | `scripts/storybook.mjs`（`pnpm storybook` / `pnpm storybook:build`；契约测试 `tests/storybook-config.test.ts`）                                                              |
+| 故事枚举来源门禁（cva 返回值 / 漏档）                               | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/storybook-check.mjs`（`node scripts/storybook-check.mjs`，契约测试 `tests/storybook-check-script.test.ts`）                                                        |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
 而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个

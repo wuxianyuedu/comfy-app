@@ -50,7 +50,7 @@ export interface EmptyStateProps {
   variant?: EmptyStateVariant;
   /** 操作区（按钮等），居中渲染在主文案下方。 */
   action?: ReactNode;
-  /** `page` 形态的最小高度类，默认 `min-h-[220px]`。 */
+  /** `page` 形态的最小高度类，默认 `min-h-55`。 */
   minHeightClass?: string;
   className?: string;
 }
@@ -76,7 +76,7 @@ export function EmptyState({
   icon,
   variant = "page",
   action,
-  minHeightClass = "min-h-[220px]",
+  minHeightClass = "min-h-55",
   className,
 }: EmptyStateProps) {
   if (variant === "hint") {

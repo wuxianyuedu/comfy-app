@@ -16,6 +16,7 @@
  * 而不是 `inset-0`。
  */
 
+import { clamp } from "~/lib/clamp";
 import { zClass } from "~/lib/shell/overlay-z";
 
 /**
@@ -145,4 +146,71 @@ export function blocksTitleBar(className: string): boolean {
   if (!normalized.startsWith(TITLE_BAR_BLOCKING_CLASS)) return false;
   const rest = normalized.slice(TITLE_BAR_BLOCKING_CLASS.length);
   return rest === "" || rest.startsWith(" ");
+}
+
+/* ── 锚定浮层的视口边界（anchored overlay boundary）──────────────────
+ * 与前两类的区别，把三种浮层的**让位方式**摆在一起看：
+ *
+ *   · 全屏视图（`full`）：铺满内容区 → 用 `top-title-bar` **几何让位**；
+ *   · 模态弹窗（`modal`）：浮在内容区之上 → 同样用 `top-title-bar` 让位；
+ *   · **锚定浮层（气泡 / 下拉 / 气泡卡）**：位置由**锚点**决定，写不出固定的
+ *     `top-*`。它的让位只能表达成「参与定位计算的那块可用区域不要把标题行算进来」。
+ *
+ * 前两类漏了会被 `check-title-bar-clearance.cjs` 拦下（它数 `fixed inset-0`），
+ * 锚定浮层**不在它的射程里** —— 这正是气泡被标题行吃掉半截的成因：
+ *
+ *   Base UI 的 `flip` 只对**视口**判溢出。TopBar 那排按钮落在 y≈46，气泡往上
+ *   摆（`side="top"`）时顶部落在 y≈14，**视口内绰绰有余**，于是它不翻转；
+ *   而标题行占 0~36、层级 `z-chrome`(2000) 比气泡的 `z-popup`(100) 高一个数量级，
+ *   于是气泡上半截被标题行**盖掉**（不是被裁 —— 是画在了它下面）。实测 TopBar
+ *   上四个入口（全局搜索 / 深浅色 / 系统消息 / 应用菜单）**无一幸免**。
+ *
+ * 修法不是抬气泡的层级：标题行是应用级 chrome，气泡盖过它等于盖住页签与窗口
+ * 按钮的可点区域（§16.2.5 判据 4）。正确做法是把「可用区域」告诉定位引擎 ——
+ * 它据此翻转，气泡改从下方展开，既不越界也不与 chrome 争层级。 */
+
+/** 视口矩形（`getBoundingClientRect` 的坐标系，原点在视口左上角）。 */
+export interface ViewportRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * 算出锚定浮层可用的**碰撞边界** —— 有标题行时把顶上那条让出去，否则就是整个视口。
+ *
+ * 返回的是 Floating UI 的 `collisionBoundary` 收的形状（`{x, y, width, height}`，
+ * 视口坐标系）。传 `null` 表示「还不知道视口多大」（首帧 / SSR）—— 调用处据此
+ * **不传**这一档，退回基元默认的 `clipping-ancestors`，而不是拿一个假矩形去摆位
+ * （`~/components/ui/use-viewport-size` 首帧为 `null` 是同一个口径）。
+ *
+ * @param viewport     当前视口尺寸
+ * @param titleBarPx   标题行高度；**非壳态传 0**（浏览器 / dev 没有应用内标题行，
+ *                     见 `ShellTabs` 的 `shouldUseTitleBarTabs`）
+ */
+export function anchoredOverlayBoundary(
+  viewport: { width: number; height: number } | null,
+  titleBarPx: number,
+): ViewportRect | null {
+  if (!viewport || viewport.width <= 0 || viewport.height <= 0) return null;
+  /* 让位量不得超出视口本身：极端窄高（比标题行还矮的窗口）下宁可退化成整视口，
+   * 也不要给出负高度 —— 负高度的边界会让定位引擎算出一串无意义的偏移。 */
+  const top = clamp(titleBarPx, 0, viewport.height);
+  return { x: 0, y: top, width: viewport.width, height: viewport.height - top };
+}
+
+/**
+ * 标题行的高度（px）。
+ *
+ * 读的是 **`TITLE_BAR_HEIGHT_REM`**（`2.25rem`）而不是再写一个字面量：它就是
+ * `globals.css` 里 `--spacing-title-bar` 的那档值，两处漂移由
+ * `full-screen-layer.test.ts` 反向核对。
+ *
+ * @param remPx 根字号（默认 16 —— 布局档位都按 16 设计，见 `~/lib/layout-budget`
+ *              的 `REM_PX`）；由调用处注入而不在这里读 `getComputedStyle`：
+ *              本模块是纯派生，不碰 DOM 才测得动。
+ */
+export function titleBarHeightPx(remPx = 16): number {
+  return Number.parseFloat(TITLE_BAR_HEIGHT_REM) * remPx;
 }

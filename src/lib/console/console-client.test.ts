@@ -267,12 +267,17 @@ describe("runConsoleCommand", () => {
     restore();
   });
 
-  it("网络错误 → failed 且带原文", async () => {
+  it("网络错误 → failed 且翻成人话（不是把浏览器原文甩给用户）", async () => {
     const restore = stubFetch(async () => {
       throw new Error("Failed to fetch");
     });
     const outcome = await runConsoleCommand({ command: "x", onEvent: noop });
-    expect(outcome).toEqual({ kind: "failed", reason: "Failed to fetch" });
+    /* ISSUE #1327 现场：面板结论条只写着 `Failed to fetch`，用户看不出是应用服务
+     * 没起来还是命令写错。文案走 `~/lib/error-message` 的唯一出口翻成中文。 */
+    expect(outcome.kind).toBe("failed");
+    if (outcome.kind !== "failed") return;
+    expect(outcome.reason).toContain("网络请求失败");
+    expect(outcome.reason).not.toBe("Failed to fetch");
     restore();
   });
 

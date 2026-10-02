@@ -110,7 +110,7 @@ export function WidgetValueChip({
   if (widget === "select") {
     return (
       <span
-        className="bg-primary/18 text-primary-strong max-w-[100px] truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
+        className="bg-primary/18 text-primary-strong max-w-25 truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
         title={widgetValueToText(value)}
       >
         {displayValue(widgetValueToText(value))}
@@ -120,7 +120,7 @@ export function WidgetValueChip({
   if (widget === "number") {
     return (
       <span
-        className="bg-warning/18 text-warning max-w-[100px] truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
+        className="bg-warning/18 text-warning max-w-25 truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
         title={widgetValueToText(value)}
       >
         {displayValue(widgetValueToText(value))}
@@ -130,7 +130,7 @@ export function WidgetValueChip({
   // 字符串 / 文本 / 图片 / latent / 未知
   return (
     <span
-      className="bg-canvas-deep text-ink-soft max-w-[140px] truncate rounded px-1.5 py-px font-mono text-[10px]"
+      className="bg-canvas-deep text-ink-soft max-w-35 truncate rounded px-1.5 py-px font-mono text-[10px]"
       title={widgetValueToText(value)}
     >
       {displayValue(widgetValueToText(value))}

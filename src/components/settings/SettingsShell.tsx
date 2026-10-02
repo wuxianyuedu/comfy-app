@@ -58,7 +58,7 @@ export function SettingsShell({
         <h1 className="u-title-page">设置</h1>
       </div>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-[1100px] flex-1 gap-6 px-6 pt-6">
+      <div className="mx-auto flex min-h-0 w-full max-w-275 flex-1 gap-6 px-6 pt-6">
         {/* Left sidebar */}
         <nav className="w-48 shrink-0 flex-col gap-1">
           {SETTINGS_SECTIONS.map((item) => (

@@ -120,7 +120,7 @@ export function CanvasArea({
       {/* ── Context Menu ── */}
       {menu && (
         <div
-          className={`border-border-strong bg-panel fixed ${zClass("popup")} min-w-[200px] rounded-xl border py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md`}
+          className={`border-border-strong bg-panel fixed ${zClass("popup")} min-w-50 rounded-xl border py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md`}
           style={{ left: menu.x, top: menu.y }}
         >
           {contextItems.map((item) =>
@@ -171,7 +171,7 @@ export function CanvasArea({
           </ToolbarButton>
 
           {/* Zoom level */}
-          <span className="text-ink-muted min-w-[48px] text-center text-xs tabular-nums">
+          <span className="text-ink-muted min-w-12 text-center text-xs tabular-nums">
             {zoom}%
           </span>
 

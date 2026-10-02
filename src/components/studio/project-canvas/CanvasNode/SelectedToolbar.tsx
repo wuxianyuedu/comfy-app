@@ -25,7 +25,7 @@ export function SelectedToolbar({
   onRedo?: () => void;
 }) {
   const btn =
-    "nodrag nopan text-ink-soft hover:bg-subtle flex h-7 w-7 items-center justify-center rounded-full text-[13px] transition-colors";
+    "nodrag nopan text-ink-soft hover:bg-subtle flex size-7 items-center justify-center rounded-full text-[13px] transition-colors";
   return (
     <div className="nodrag nopan border-border-strong bg-panel border]/95 z-base absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full px-1 py-1 shadow-lg shadow-black/40 backdrop-blur">
       <Hint label="删除节点 (Delete)" accessibleName>
@@ -110,7 +110,7 @@ export function OutputRowPort({
           boxShadow: "none",
         }}
       />
-      <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
+      <div className="flex h-5 items-center justify-end gap-1.5 px-3.5 pt-1.5">
         <span
           className="text-ink-bright min-w-0 truncate text-[12px] font-semibold"
           style={{ fontFamily: "var(--font-sans)" }}

@@ -143,7 +143,7 @@ export function MaterialLibraryContent({
                     />
                   ) : (
                     <div
-                      className={`flex h-12 w-12 items-center justify-center rounded-lg ${KIND_STYLE[item.kind]}`}
+                      className={`flex size-12 items-center justify-center rounded-lg ${KIND_STYLE[item.kind]}`}
                     >
                       <KindIcon kind={item.kind} />
                     </div>
@@ -208,7 +208,7 @@ export function MaterialLibraryContent({
                   </div>
                 ) : (
                   <div
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${KIND_STYLE[item.kind]}`}
+                    className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${KIND_STYLE[item.kind]}`}
                   >
                     <KindIcon kind={item.kind} />
                   </div>
@@ -274,7 +274,7 @@ export function MaterialLibraryContent({
               className="border-border-strong bg-subtle hover:bg-surface-2 hover:border-ink-fainter group flex h-auto flex-col items-center gap-2 rounded-lg border py-4 font-normal transition-colors"
             >
               <div
-                className={`flex h-12 w-12 items-center justify-center rounded-xl ${FOLDER_ICON_TINT}`}
+                className={`flex size-12 items-center justify-center rounded-xl ${FOLDER_ICON_TINT}`}
               >
                 <Folder size={22} strokeWidth={1.8} />
               </div>
@@ -299,7 +299,7 @@ export function MaterialLibraryContent({
               className="hover:bg-subtle group flex h-auto w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left font-normal transition-colors"
             >
               <div
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${FOLDER_ICON_TINT}`}
+                className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${FOLDER_ICON_TINT}`}
               >
                 <Folder size={18} strokeWidth={1.8} />
               </div>

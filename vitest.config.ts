@@ -82,6 +82,10 @@ export default defineConfig({
       include: [
         "src/server/api/middleware/**",
         "src/server/film/**",
+        /* MCP 服务端：17 条工具是**外部 AI 客户端可写的入口**（整幅覆盖草稿角色卡与
+         * 分镜并落库），此前这一层既不在覆盖率面上也没有任何执行者。
+         * 与下面 `thresholds` 里的同名条目**两处同批**（只写一处 = 门槛静默失效）。 */
+        "src/server/mcp/**",
         "src/lib/**",
         /* ⚠️ 这里必须列出**每一个**被 thresholds 点名的 `ui/` 出口 ——
          * 阈值只对「出现在报告里的文件」生效，没进 `include` 的路径是一条
@@ -212,6 +216,11 @@ export default defineConfig({
          * 只写门槛不进 `include` 会让门槛静默失效。 */
         "src/components/ui/use-draggable-position.ts",
         "src/components/ui/use-viewport-size.ts",
+        /* 锚定浮层的碰撞边界（气泡被应用级标题行吃掉半个身子的修法）：
+         * 算式是纯函数（`~/lib/full-screen-layer` 的 `anchoredOverlayBoundary`），
+         * 这里量的是「壳态 / 非壳态 / 首帧」三条判据确实接上了。同款
+         * **两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/components/ui/use-overlay-boundary.ts",
         /* API 路由 handler（体检清单 ⑦ 的第一批：闸门与三态契约类）。这一层此前
          * **整层不在覆盖率面上** —— 既不在 `src/lib` 也不在 `src/server` 的通配里，
          * 于是路由的鉴权 / 路径包含 / 状态码契约坏了没有任何数字会动。
@@ -337,6 +346,11 @@ export default defineConfig({
          * 数字看着严格，实际什么都不守。 */
         "src/components/studio/model-overview-derive.ts",
         "src/components/studio/HomeModelOverview.tsx",
+        /* 视图页签 刀2 的页签条（**两处同批**登记）。两个薄 hook
+         * （`use-workspace-tabs.ts` / `use-title-bar-tabs-active.ts`）刻意不登记：
+         * 规则与判据分别已在 `workspace-tabs.ts` 与壳的 derive 层有主，
+         * 给接线设门槛等于替别人记账。 */
+        "src/components/studio/ViewTabStrip.tsx",
         /* 体检清单 ⑨ 第二刀 · 四个零执行者的 router（台账 E3 从 7/16 抬到 11/16）：
          * `film` / `train` / `model` / `llm`。这一批照出的不是「闸门弱」而是
          * **「闸门 procedure 自己就是死的」**：`train.cancel` 的第三参在 Prisma→Drizzle
@@ -673,6 +687,14 @@ export default defineConfig({
           branches: 75,
         },
         "src/components/ui/use-viewport-size.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 锚定浮层的碰撞边界：壳态 / 非壳态 / 首帧（视口未知）三条判据都有用例，
+         * 实测满档。 */
+        "src/components/ui/use-overlay-boundary.ts": {
           lines: 100,
           functions: 100,
           statements: 100,
@@ -1095,6 +1117,18 @@ export default defineConfig({
           statements: 35,
           branches: 25,
         },
+        /* MCP 服务端面（台账 F13′ 那一刀的落点）：按**实测满档**登记。
+         * 这里能到 100 是因为整层只有一件事 —— 把一次工具调用翻译成一次
+         * orchestrator 调用（`src/server/mcp/workshop-mcp.test.ts` 走真的
+         * `client.callTool`，17 条工具逐条点名 + 边界拒收两态）。
+         * 下一批新加工具而不加用例，会同时被两件事拦住：这条门槛，
+         * 以及那份用例里「17 条与测试表逐字一致」那条判据。 */
+        "src/server/mcp/**": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         // 从「30/30/30/25」抬到实测值：四组低覆盖文件进了用例 ——
         //   · `secrets`（曾 9.5/0/0）：GCM 往返 + 每次新 IV + 篡改密文/换密钥
         //     返回 null 而不抛错 + 密钥文件 0600 落盘 + env / 进程内随机兜底；
@@ -1148,12 +1182,18 @@ export default defineConfig({
          * 24.4/46.9/26.4/24.6 —— 大头是 `process-launch.ts`（17.9% 行）与
          * `kill-process-tree.ts`（29.1%），执行宿主那批新代码进来时没配用例，
          * 而当时没有任何路径判得着这条门槛。欠的课记在台账 E7；补判决面
-         * （而非真起进程）时同批抬回原值。 */
+         * （而非真起进程）时同批抬回原值。
+         *
+         * 抬一轮（ISSUE #1327）：`executable-resolve.ts` 从 `shell.mjs` 下沉进来时
+         * 同批带了 13 条用例，全量 `--coverage` 实测 69.37/69/79.59/69.91 ——
+         * 门槛按 §18.6「实测值向下取整到 5 的倍数」收紧到 65/65/75/65。
+         * 还差的那截仍由 `process-launch.ts`（17.85% 行，keepAlive 那条要走壳的
+         * 中介进程）顶着，所以**没有**一次抬回原值 50/60/50/55。 */
         "src/lib/process/**": {
-          lines: 20,
-          functions: 45,
-          statements: 25,
-          branches: 20,
+          lines: 65,
+          functions: 75,
+          statements: 65,
+          branches: 65,
         },
         "src/lib/shell/**": {
           lines: 60,
@@ -1434,6 +1474,15 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 视图页签条（与 `coverage.include` 同批）。数值取隔离实测向下取整到 5：
+         * 未覆盖的 158-160 是「+」菜单里那一行的点击 —— jsdom 里下拉不展开，
+         * 该路径由 `e2e/view-tabs.spec.ts` 在真浏览器判到，不为此造夹具。 */
+        "src/components/studio/ViewTabStrip.tsx": {
+          lines: 85,
+          functions: 75,
+          statements: 85,
+          branches: 75,
         },
         /* 模型库这一刀的三个新文件（与上面 `coverage.include` 同批登记）。
          * 数值按**隔离实测**向下取整到 5 的倍数（§18.6），不抬到理想值：

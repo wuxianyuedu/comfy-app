@@ -32,6 +32,9 @@ import {
 } from "./NavItems";
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
+import { ViewTabStrip, type OpenableView } from "./ViewTabStrip";
+import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
+import { type ViewTab } from "./workspace-tabs";
 
 /* 两个全局浮层懒加载：它们各自拉起契约编辑器 / 适配器表格与 tRPC 查询，而外壳在
  * **每个**工作区视图里都挂着 —— 即时加载等于把这两块的代价摊到所有首屏上。
@@ -84,7 +87,17 @@ export interface AppShellProps {
   /** 新建项目 → 建一条 proj_* 并进画布。 */
   onNewProject: () => void;
   /** 主内容。各视图只往这里塞东西，外壳细节（侧栏 / 顶栏 / 滚动容器）不归它们管。 */
-  children: ReactNode;
+  children: ReactNode; /**
+   * 视图页签（浏览器 / dev 形态下由外壳在内容列里渲染那条栏）。
+   * 不传时外壳行为与从前一致。
+   */
+  viewTabs?: ViewTab[];
+  activeViewKey?: string;
+  projectNameOf?: (projectId: string | null) => string | null | undefined;
+  onSelectViewTab?: (key: string) => void;
+  onCloseViewTab?: (key: string) => void;
+  openableViews?: OpenableView[];
+  onOpenView?: (view: WorkspaceView) => void;
 }
 
 /**
@@ -95,9 +108,10 @@ export interface AppShellProps {
  *     模型适配 / 模式契约 / 控制台），常驻、不随当前视图增减；
  *   · 底部 = 「项目」折叠分组（`Disclosure`，P10 唯一实现），展开列出已有项目 + 查看全部 / 新建。
  *
- * 主页 / 画布 / 工坊 / 资源库 / 产出 / 成片不再出现在这里 —— 它们是「项目界面」内部的顶部标签页
- * （见 `ProjectTabBar`）。此前用 `active === "home"` 决定这些页签显隐，导致点「项目」等
- * 非首页视图时它们莫名复现；改成按分区归属一次性定型，显隐不再随视图漂移。
+ * 主页 / 画布 / 工坊 / 资源库 / 产出 / 成片不再出现在这里 —— 它们是**视图页签**，入口是页签条
+ * 上的「+」（见 `ViewTabStrip`；原先那条 `ProjectTabBar` 已退役）。此前用
+ * `active === "home"` 决定这些页签显隐，导致点「项目」等非首页视图时它们莫名复现；
+ * 改成按分区归属一次性定型，显隐不再随视图漂移。
  *
  * 三个浮层入口（模型适配 / 模式契约 / 控制台）**是应用级的、与项目无关**，所以留在这里
  * 而不是工坊顶栏：前两个读写的是全局注册表（模式契约 = 每种模式有哪些统一输入 / 输出；
@@ -115,10 +129,19 @@ export function AppShell({
   onOpenProject,
   onShowAllProjects,
   onNewProject,
+  viewTabs,
+  activeViewKey,
+  projectNameOf,
+  onSelectViewTab,
+  onCloseViewTab,
+  openableViews,
+  onOpenView,
   children,
 }: AppShellProps) {
   /* 全局命令面板（⌘/Ctrl+K）。状态留在这里：搜索按钮在 TopBar、键盘监听用
    * P20 唯一出口 useHotkey，面板本身由 CommandPalette 渲染。 */
+  /* 桌面壳里这条栏由窗口标题行承载（与 `ShellTabs` 同一个判据）。 */
+  const titleBarTabs = useTitleBarTabsActive();
   const [commandOpen, setCommandOpen] = useState(false);
   useHotkey({ key: "k", mod: true }, () => setCommandOpen(true));
 
@@ -258,6 +281,22 @@ export function AppShell({
           onOpenSettings={onOpenSettings}
           onOpenSearch={() => setCommandOpen(true)}
         />
+
+        {/* 浏览器 / dev 形态的视图页签栏。放在内容列（`SidebarInset`）之内而不是
+            `ShellTabs` 那一层：侧栏是 fixed 定位，整窗宽度那一层会被它压住（实测
+            关闭按钮报「subtree intercepts pointer events」）。桌面壳里这条栏由窗口
+            标题行承载，所以这里按同一个判据让位。 */}
+        {titleBarTabs ? null : (
+          <ViewTabStrip
+            tabs={viewTabs ?? []}
+            activeKey={activeViewKey ?? ""}
+            projectNameOf={projectNameOf}
+            onSelect={(key) => onSelectViewTab?.(key)}
+            onClose={(key) => onCloseViewTab?.(key)}
+            openableViews={openableViews}
+            onOpenView={onOpenView}
+          />
+        )}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {children}
         </div>

@@ -387,7 +387,7 @@ function WorkflowLibraryCanvasInner({
       /* `bg-canvas` 是画布自己的底色（与项目画布同一 token）—— 面板底色
        *  （`bg-panel-deep`）与画布底色深浅不同，画布但凡没铺到容器底边，那条
        *  缝就会以「下方一块空白却不是画布」的形式被看见（ISSUE #596）。 */
-      className={`border-border-subtle bg-canvas relative h-full min-h-[460px] w-full overflow-hidden rounded-xl border ${fitted ? "" : "invisible"}`}
+      className={`border-border-subtle bg-canvas relative h-full min-h-115 w-full overflow-hidden rounded-xl border ${fitted ? "" : "invisible"}`}
       data-testid="wflib-canvas"
       /* 首帧是否已按三列内容定好缩放（视图不可见期间为 false）。测试按它断言
        *  「画布不会带着未 fit 的视口显形」。 */
@@ -467,7 +467,7 @@ function WorkflowLibraryCanvasInner({
       {flow.dropHint && (
         // p71-allow:start workshop 域 amber 装饰色 · 拖线未落定的临时提示、非状态色（对齐 §3.6.1 与「amber 是 workshop 域专有」）
         <div
-          className="z-canvas-ui pointer-events-none absolute bottom-2 left-2 max-w-[420px] rounded-lg bg-amber-100 px-2.5 py-1.5 text-[11px] text-amber-800 shadow-sm"
+          className="z-canvas-ui pointer-events-none absolute bottom-2 left-2 max-w-105 rounded-lg bg-amber-100 px-2.5 py-1.5 text-[11px] text-amber-800 shadow-sm"
           data-testid="wflib-wire-drop-hint"
         >
           没有连上：{flow.dropHint}

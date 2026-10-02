@@ -313,6 +313,19 @@ describe("dev/start 在起 Next 之前预检", () => {
         path.join(scriptsDir, "launcher-core", name),
       );
     }
+    // `shell.mjs` 静态 import `src/lib/process/executable-resolve.ts`（ISSUE #1327：
+    // 可执行形态判据的唯一实现）。副本里少这份，`dev.mjs` 在**加载阶段**就
+    // ERR_MODULE_NOT_FOUND，红出来的样子与本门禁无关（同上面那条注释）。
+    const resolveSrc = path.join(
+      ROOT,
+      "src",
+      "lib",
+      "process",
+      "executable-resolve.ts",
+    );
+    const resolveTo = path.join(tmp, "src", "lib", "process");
+    fs.mkdirSync(resolveTo, { recursive: true });
+    fs.copyFileSync(resolveSrc, path.join(resolveTo, "executable-resolve.ts"));
     const r = spawnSync(process.execPath, [path.join(scriptsDir, "dev.mjs")], {
       encoding: "utf8",
       cwd: tmp,

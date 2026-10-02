@@ -764,14 +764,19 @@
 - [ ] **F3 `next/image` 0 处且 lint 关闭**。证据：`eslint.config.js:185-192`。
 - [ ] **F4 无离线能力**（无 SW / `onLine` / 离线队列；58 文件手写 localStorage 无 persist）。
 - [ ] **F5 虚拟滚动仅 2 处**；`next/dynamic` 仅 2 处。
-- [ ] **F6 无 Storybook / 可视回归**；UI 复用棘轮 78 条存量违规。证据：`scripts/.ui-primitives-baseline.json:18`。
+- [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用棘轮 78 条存量违规。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、`scripts/.ui-primitives-baseline.json:18`。剩余的两格：①**像素基线**仍是 Playwright `toHaveScreenshot`（规范 11 §11.8），Storybook 不替代它；②**组件覆盖率**——目前只有 3 个 `ui/` 示例组件有 story，155 个 `ui/` 文件里绝大多数没有。
+      **已加的那一层判据**（同批）：故事文件的**枚举来源**由
+      `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`
+      守着（`cva()` 返回的是函数、运行期没有 `.variants`；以及手写清单漏档）。
+      判据上线时当场抓到 `button.stories.tsx` 漏列 `icon-sm` / `icon-lg` 两档
+      —— 而这两档全库有 46 处在用，口径见规范 16 §16.2.3.4。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。
 - [ ] **F10 `eslint-plugin-jsx-a11y` 未显式启用**。证据：`eslint.config.js:63-69`。
 - [ ] **F11 端口 TOCTOU + 800 槽哈希分桶碰撞无兜底**。证据：`src-tauri/src/lib.rs:831-834`；`single_instance.rs:189-192`。
 - [ ] **F12 无 Web Vitals**；SQLite 无 `busy_timeout`；几乎无事务边界。证据：`src/server/db.ts:74-75`。
-- [x] **F13 `unknown` + `as never` 把「调用点形状错了」咽掉（本批补判据并清掉两处实例；类未收完，剩 F13′）**：
+- [x] **F13 `unknown` + `as never` 把「调用点形状错了」咽掉（本批补判据并清掉两处实例；实例已随 F13′ 收完）**：
       Prisma→Drizzle 迁移把仓储的投影参数写成 `select?: unknown`，交给 Drizzle 时
       `db.select(select as never)` —— 于是调用点留着 Prisma 的布尔投影
       （`{ id: true, status: true }`）时 **tsc 一声不响**，运行时生成空投影 → SQL 语法错。
@@ -806,15 +811,55 @@
       证据：`tests/f13-projection-shapes.test.ts`、`src/lib/core/repository-workflow-template.ts`、
       `src/lib/workshop/types.ts`（`SHOT_TYPES` / `normalizeShotType`）、
       `src/lib/core/repository-lora.ts`、`changelog.d/0-router-gates-tranche2.md`。
-- [ ] **F13′ MCP 工具的写侧入参没有域内校验**（F13 收口后剩下的那一处真欠账）：
+- [x] **F13′ MCP 工具的写侧入参没有域内校验（本批修复；同族另一处另立 F13″）**：
       `src/server/mcp/workshop-mcp.ts` 的 `workshop_set_characters` / `workshop_set_storyboard`
-      把 inputSchema 写成 `z.array(z.any())`，再 `as never` 压进 `Character[]` / `Shot[]`。
-      这与其他几处「桥接第三方签名」不同 —— MCP 是**外部客户端可以随便发的边界**，
-      任意对象会原样进草稿并参与提示词重算。它现在被 `tests/f13-projection-shapes.test.ts`
-      的登记表点名记着（新增未登记的 `as never` 会红），但登记不是修复。
-      修法 = 给 `Character` / `Shot` 出一份域内 zod 契约（与 `draft-sync-shared.ts` 那份
-      校验同一口径），工具里 parse 后传值、失败回一条工具级错误，然后**删掉这两条登记**。
-      证据：`src/server/mcp/workshop-mcp.ts:240-282`、`src/server/workshop/orchestrator.ts:204,236`。
+      原本把 inputSchema 写成 `z.array(z.any())`，再 `as never` 压进 `Character[]` / `Shot[]`。
+      与其他几处「桥接第三方签名」不同 —— MCP 是**外部客户端可以随便发的边界**，而这两个工具
+      是**整幅覆盖**草稿并落库。具体后果（不是"类型不安全"这种抽象说法）：
+      `styleTags` 给成字符串时 `buildCharacterPrompt` 先过 `c.styleTags.length`（字符串也成立）
+      再 `.join()` → TypeError 打断写入路径；`characterIds` 同理被 `rebuildShotPrompts` 的
+      `.includes` 用掉。
+      修法：`~/lib/workshop/types` 出一份**贴着接口的写侧契约**（`characterInputSchema` /
+      `shotInputSchema` + 两个 list 版本），工具直接引用它，`as never` 随之消失
+      （**tsc 现在验的是真的** —— 契约产出的是真 `Character[]` / `Shot[]`）。口径四条：
+      只有「缺了就没法被引用」的必填（id / name / index）；可缺省的补默认（文本 `""`、
+      列表 `[]`，因为下游无条件读取）；**必填枚举严格**（`status` 脏值走拒收）、
+      **可选枚举认不出当没给**（`motion: "hyper"` 不落库也不因它拒收整批）；
+      `positivePrompt` / `prompt` 一律空串占位，由服务端 `rebuild*Prompts` 重算 ——
+      输入里带什么都不信（否则外部可绕过重算直接指定最终提示词）。
+      ⚠️ **一条只有落笔时才知道的事**：MCP 的入参校验发生在 SDK 从 zod 推出的
+      **JSON Schema** 上，不是 zod 本身。`z.unknown().transform(normalizeShotType)`
+      在那一层是「非可选」，于是「模型压根没给景别」这个最常见的情况会被直接拒
+      （实测 `expected nonoptional, received undefined at shots[0].shotType`）。
+      正解是 `.default(...)` + `.transform(...)`：JSON Schema 里是带 default 的可选字段，
+      zod 侧缺值先补默认再归一。
+      判据两层：① `tests/f13-projection-shapes.test.ts` 的登记表里**这两条已删**
+      （登记失去记账能力就是白表），并新增一条「MCP 面的 inputSchema 里不许出现 `z.any(`」
+      （含合成反证；变异：把契约换回 `z.array(z.any())` → 恰好这条红）；
+      ② `src/server/mcp/workshop-mcp.test.ts` —— 这一层**此前的 17 条工具零执行者**，
+      现在走真的 `client.callTool`（内存 transport，不是直接调 handler：handler 实测
+      **不做校验**，喂 `{a:""}` 会原样进 callback）逐条点名「翻译到哪个服务端出口」，
+      并判「拒收时 orchestrator 一次都没被调用」。门槛按实测 100 满档登记
+      （`coverage.include` + `thresholds` 两处同批）。
+      **同族另一处 → F13″**：`src/lib/workshop/draft-sync-shared.ts` 的 `parseDraftDto`
+      只校验容器（`Array.isArray`），元素仍是 `obj.characters as Character[]` /
+      `obj.shots as Shot[]` 强转。它该复用本批这份契约，但读的是**用户自己的草稿**——
+      「脏元素是丢弃还是保留原样」是数据保全决策，不是一次类型收口的顺带项，
+      先定口径再动（丢弃 = 静默丢用户数据；保留 = 这处继续不校验）。
+      证据：`src/lib/workshop/types.ts`、`src/server/mcp/workshop-mcp.ts`、
+      `src/server/mcp/workshop-mcp.test.ts`、`src/lib/workshop/draft-sync-shared.ts`。
+- [ ] **F13″ 草稿同步路径的元素级仍未校验（F13′ 的同族另一处，先定口径再动）**：
+      `src/lib/workshop/draft-sync-shared.ts` 的 `parseDraftDto` 只判容器
+      （`Array.isArray(obj.characters)`），元素是 `as Character[]` / `as Shot[]` 强转 ——
+      于是「数组里躺着一个 `styleTags` 是字符串的角色」照样能从 localStorage 进服务端镜像，
+      与 F13′ 修掉的 MCP 那一格是同一个洞、不同的门。
+      修法 = 复用 `~/lib/workshop/types` 的 `characterListInputSchema` / `shotListInputSchema`
+      （形状只有一份事实源，不在这里再写一遍 zod，§12.12）。
+      **动手前要先定的不是代码而是口径**：这条路径读的是用户自己的草稿，
+      认不出的元素**丢弃**= 静默丢用户数据、**保留**= 这处继续不校验。
+      建议的第三条路（与 E11 那类「按后果分档」同口径）：逐元素 `safeParse`，
+      认不出的**保留原样但整条草稿标成「需要修复」**并在界面给出口（硬规则 4），
+      既不丢数据也不把脏值当合法喂给 prompt-builder。定了再动，同批补判据。
 - [ ] **P3 卫生**：无 `.editorconfig`；`package.json` 无 `engines`；tsconfig 缺 `exactOptionalPropertyTypes` 等；`cn@^0.3.0` / `lucide-react:^1.47.0` 版本偏宽；双 TS 版本导致构建/门禁语义不一致；`/api/update-check` 无鉴权回显变更指纹；`comfyapp://` 由外部 helper 实现需单独审计防任意网页利用本机路径。
 
 ## 规范状态

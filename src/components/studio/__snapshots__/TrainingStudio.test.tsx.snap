@@ -42,7 +42,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
         class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] bg-warning/12 text-warning-strong"
       >
         <span
-          class="inline-block h-[7px] w-[7px] rounded-full bg-warning shadow-warning/40 shadow-sm"
+          class="inline-block size-1.75 rounded-full bg-warning shadow-warning/40 shadow-sm"
         />
         训练后端未配置
       </div>
@@ -62,7 +62,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       class="z-base relative flex min-h-0 flex-1 overflow-hidden"
     >
       <aside
-        class="border-border-subtle bg-panel-deep/85 flex w-[300px] shrink-0 flex-col border-r backdrop-blur-sm"
+        class="border-border-subtle bg-panel-deep/85 flex w-75 shrink-0 flex-col border-r backdrop-blur-sm"
       >
         <div
           class="border-border-subtle flex h-11 items-center justify-between border-b px-4"
@@ -326,7 +326,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 class="flex items-center gap-1"
               >
                 <span
-                  class="bg-primary-500 inline-block h-[2px] w-3"
+                  class="bg-primary-500 inline-block h-0.5 w-3"
                 />
                 训练
               </span>
@@ -334,14 +334,14 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 class="flex items-center gap-1"
               >
                 <span
-                  class="bg-info inline-block h-[2px] w-3"
+                  class="bg-info inline-block h-0.5 w-3"
                 />
                 验证
               </span>
             </div>
           </div>
           <svg
-            class="h-[120px] w-full"
+            class="h-30 w-full"
             preserveAspectRatio="none"
             viewBox="0 0 320 120"
             width="100%"
@@ -396,7 +396,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             训练任务
           </h3>
           <div
-            class="w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-balance grid place-items-center rounded-2xl border border-dashed px-4 text-center min-h-[160px] border-border"
+            class="w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-balance grid place-items-center rounded-2xl border border-dashed px-4 text-center min-h-40 border-border"
             data-slot="empty"
           >
             <div
@@ -414,7 +414,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
         </div>
       </main>
       <aside
-        class="border-border-subtle bg-panel-deep/85 flex w-[320px] shrink-0 flex-col border-l backdrop-blur-sm"
+        class="border-border-subtle bg-panel-deep/85 flex w-80 shrink-0 flex-col border-l backdrop-blur-sm"
       >
         <div
           class="border-border-subtle flex h-11 items-center border-b px-4"
@@ -464,7 +464,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             <button
               aria-expanded="false"
               aria-haspopup="listbox"
-              class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
+              class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full bg-subtle! border-border! text-ink-field h-9 text-[13px]"
               data-placeholder=""
               id="base-ui-_r_2_"
               role="combobox"
@@ -563,7 +563,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             <button
               aria-expanded="false"
               aria-haspopup="listbox"
-              class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
+              class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full bg-subtle! border-border! text-ink-field h-9 text-[13px]"
               id="base-ui-_r_8_"
               role="combobox"
               tabindex="0"
@@ -901,7 +901,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 </svg>
               </button>
               <input
-                class="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                class="text-ink-bright h-6 min-w-9 flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 inputmode="decimal"
                 type="text"
                 value="0.0001"
@@ -956,7 +956,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               <button
                 aria-expanded="false"
                 aria-haspopup="listbox"
-                class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
+                class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full bg-subtle! border-border! text-ink-field h-9 text-[13px]"
                 id="base-ui-_r_t_"
                 role="combobox"
                 tabindex="0"
@@ -1009,7 +1009,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               <button
                 aria-expanded="false"
                 aria-haspopup="listbox"
-                class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
+                class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full bg-subtle! border-border! text-ink-field h-9 text-[13px]"
                 id="base-ui-_r_11_"
                 role="combobox"
                 tabindex="0"
@@ -1092,7 +1092,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 </svg>
               </button>
               <input
-                class="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                class="text-ink-bright h-6 min-w-9 flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 inputmode="decimal"
                 type="text"
                 value="0"
@@ -1148,7 +1148,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       class="border-border-subtle bg-panel-deep/95 z-base relative flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm"
     >
       <span
-        class="bg-success-strong shadow-success-strong/40 inline-block h-[7px] w-[7px] rounded-full shadow-sm"
+        class="bg-success-strong shadow-success-strong/40 inline-block size-1.75 rounded-full shadow-sm"
       />
       <span
         class="text-ink-muted text-[11px]"

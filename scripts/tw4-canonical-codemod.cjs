@@ -5,6 +5,7 @@
  *   3. -[var(--x)] → -(--x)(v4 CSS 变量简写)
  *   4. 负值前缀 -top-[20%] → top-[-20%](负号移入括号)
  *   5. z-[99] → z-99(纯整数任意值,z 用裸数字形式)
+ *   6. break-words → wrap-break-word(v4 更名)
  * 用法:node scripts/tw4-canonical-codemod.cjs <file...>
  * 只改字符串字面量里的类名模式,不解析 AST——模式足够特异,误伤风险低。
  */
@@ -36,6 +37,10 @@ for (const file of process.argv.slice(2)) {
     .replace(/\bz-\[(\d+)\]/g, (_, n) => {
       count++;
       return "z-" + n;
+    })
+    .replace(/\bbreak-words\b/g, () => {
+      count++;
+      return "wrap-break-word";
     });
   if (count) {
     fs.writeFileSync(file, after);
