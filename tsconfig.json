@@ -65,6 +65,7 @@
     "build-launcher",
     "dist",
     "coverage",
+    "storybook-static",
     "test-results",
     "playwright-report",
     "log",
