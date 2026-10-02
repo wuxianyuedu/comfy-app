@@ -204,7 +204,7 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
       登记表还要求**双向不陈旧**（口删了登记还在 = 红，消费方接上了登记还在 = 红）并带长度棘轮。
       这一维照出来的第一批处置：`material.*` 与 `llm.complete` 是 REST 面的第二扇门，收口到
       有人走的那一侧；复算时另照出 **4 条没有落点的 `/api/*` 地址**（实测 404、界面按空态吞掉），
-      判据与处置记在台账 E3‴。
+      判据（`tests/rest-endpoint-targets.test.ts`）与四条处置见台账 E3‴，同批已关闭。
       为什么粒度必须是 procedure 而不是 router：⑨ 三批清完后复算，剩下的两条零执行者口
       （`workflow.detailFull` / `workflow.subgraph`）**藏在一份有测试文件的 router 里** ——
       「每个 router 都有一份测试」这句话当时照样全绿。台账 A 系列几批复算证明「一个

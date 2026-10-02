@@ -573,36 +573,58 @@
       反向验证逐条做过：摘掉 `train.detail` 的登记 → 主断言报 `['project.get','train.detail']`；
       把登记键改成 `project.gone` → 陈旧断言报「已经不存在，登记该删掉」。
       顺带一条**实测**：判据装机时暴露出「客户端地址没有落点」这一族（3 条真请求打向不存在的
-      handler，实测全 404；另有 1 条只是 URL 形状的缓存键），另立 E3‴ 处置。
+      handler，实测全 404；另有 1 条只是 URL 形状的缓存键），另立 E3‴ 处置（同批已关闭）。
       证据：`src/server/api/root.ts`（「登记即欠两样东西」）、
       `tests/trpc-surface-executors.test.ts`、`src/lib/workshop/generation-client.ts`
       （`fetchWorkshopStyles`）+ `src/lib/workshop/generation-client.styles.test.ts`、
       `vitest.config.ts`（素材那组从三条减成两条）。
-- [ ] **E3‴ 客户端写的 REST 地址有 3 条真请求没有落点（实测 404，界面按空态吞掉），另有 1 条 URL 形状的假地址**：
-      `next start` 起本机产物后逐条 curl（`BUILD_ID` 那一份）：
+- [x] **E3‴ 客户端写的 REST 地址有 3 条真请求没有落点（实测 404，界面按空态吞掉），另有 1 条 URL 形状的假地址（本批修复 + 判据）**：
+      复现口径是**实测**而不是读代码：起本机服务逐条 curl ——
       `GET /api/skills`、`GET /api/images?filename=…`、`GET /api/file/x.png` **全部 404**，
-      而同一条链上 `GET /api/trpc/project.list` → 200 —— 前三个 handler 在基线迁移那次提交里
+      同一条链上 `GET /api/trpc/project.list` → 200。三个 handler 在基线迁移那次提交里
       就没带过来（`git log --diff-filter=D -- src/app/api/<名>/**` 逐条可查），调用点却留着。
       失败形态不是报错而是**常年空态**：404 → 调用点一句 `catch {}` / `MediaThumbnail` 的空 `src`
       就把它咽下去（「选完图看不到图」那条实测反馈有一半是这个原因，不只是形状解析）。
-      处置：`/api/skills` 本批已改吃 `skill.list`（`fetchWorkshopStyles`，与成片工作室同一扇门）；
-      余下两条要有落点 —— `/api/images` 与 `/api/file/<name>` 其实是同一件事（本机代理 ComfyUI 的
-      `/api/view`，`src/lib/comfyui/client.ts` 的 `getView()` 已经是现成的实现，
-      旧的 `src/app/api/images/route.ts` 就是这么写的），并且应当只留一个入口。
-      第四条是 `use-workflow-detail-loader.ts` 里的 `` `/api/workflows/${id}[/subgraph]` `` ——
-      它**不发请求**（请求走 `vanillaApi.workflow.detailFull` / `subgraph`），只是拿这个形状当
-      sessionStorage 的键。真实请求早改成 tRPC 了，键还留着 REST 的样子：
-      读代码的人会以为有一条 HTTP 路，而「地址必须有落点」那条判据也会一直红在这个假阳性上。
-      改法 = 键换成请求身份三元组并把 `CACHE_KEY_PREFIX` 的 `R7` 升一档（`purgeStaleCache`
-      会把旧命名空间洗掉，TTL 本来只有 30s，代价是一次缓存未命中）。
-      判据与本条同批装（下一条 PR）：`tests/rest-endpoint-targets.test.ts` —— 扫 `src/**` 非测试代码里以引号紧接
-      `/api/` 开头的每个字面量，必须命中 `src/app/**` 目录形状推出的某个 route handler；
-      段数要对齐（少一段就是 404），`[x]` 吃一段、`[...x]` 吃剩余全部（也吃零段），
-      `${…}` 当通配段；`${base}/api/prompt` 这种前面是 `}` 的外部服务地址不进扫描面。
-      两条**必须显式登记**的非地址字面量（登记表双向不陈旧）：`/api/trpc` 是 RPC 通道基址
-      （真实请求一律是 `/api/trpc/<ns.proc>`，实测那一条 200、基址本身 404 且没人去拿它），
-      `/api/ws` 是 ComfyUI 自己的 WS 路径（拼在 `ws://<comfy host>` 上，见 `runner-state.ts`）。
-      证据：`src/lib/media/media-url.ts`、`src/components/studio/TrainingStudio.tsx`、
+      四条的处置（各归各位，没有一条靠加兜底）：
+      · `/api/skills` → 改吃 `skill.list`（`fetchWorkshopStyles`，与成片工作室同一扇门，
+      内置技能种子因此只有一份）；
+      · `/api/images` → **补上那个根本不在的 handler**（`src/app/api/images/route.ts`）：
+      本机代理 ComfyUI 的 `/api/view`，复用现成的 `getView()` 与 `contentTypeForPath()`，
+      判据顺序 = 会话 → 文件名形状 → 类别枚举 → 上游状态；失败**分三相**
+      （上游 404 → 404 / 上游别的码 → 502 / 连不上 → 503 + `hint=comfyui-unreachable`），
+      响应头必须 `private` 且不许 `immutable`（口径同 A13：响应取决于「你是谁」，
+      而 ComfyUI 的 `input` 目录会被同名上传覆盖）。
+      为了让这三相可判，`getView()` 的失败从 `Error("getView failed: 404")` 改成
+      带 `status` 的 `ComfyViewError`（消息原样保留，`executor-finalize` 那类只判
+      「拿不到就抛」的调用方零感知）—— 否则调用方只能**读消息**来分相，消息一改判决就错。
+      实测（`next dev` 起服务、ComfyUI 未运行）：`/api/images?filename=nope.png&type=input`
+      → **503** 且体里带着 `hint`（本批之前是 404 从 Next 发出，两种 404 在状态码上分不出来）；
+      缺 `filename` → 400；`filename=../../x.png` → 400；`/api/trpc/project.list` → 200。
+      · `/api/file/<name>`（训练素材缩略图）→ **不补第二扇门**：它是同一件事的另一条地址，
+      改吃 `comfyImageUrl({ filename })`，于是「ComfyUI 媒体地址」的形状仍然只在
+      `media-url.ts` 一处（那本来就是它收口的理由）。
+      · `use-workflow-detail-loader.ts` 的 `` `/api/workflows/${id}[/subgraph]` `` → 它**不发请求**
+      （真实请求走 `vanillaApi.workflow.detailFull` / `subgraph`），只是拿这个形状当
+      sessionStorage 的键；键改成请求身份三元组，`CACHE_KEY_PREFIX` 的 `R7` 升一档
+      （`purgeStaleCache` 会洗掉旧命名空间，TTL 本来 30s，代价是一次缓存未命中）。
+      判据：`tests/rest-endpoint-targets.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）——
+      扫 `src/**` 非测试代码里以引号紧接 `/api/` 开头的每个字面量，必须命中
+      `src/app/**` 目录形状推出的某个 route handler；段数要对齐（少一段就是 404），
+      `[x]` 吃一段、`[...x]` 吃剩余全部（也吃零段），`${…}` 当通配段；
+      `` `${base}/api/prompt` `` 这种前面是 `}` 的外部服务地址不进扫描面。
+      两类**长得像地址但不是地址**的必须显式登记（`NON_REQUEST_ADDRESS`，双向不陈旧：
+      字面量没了还留着 = 红，登记的路径其实有 handler = 红）：`/api/trpc` 是 RPC 通道基址
+      （真实请求一律 `/api/trpc/<ns.proc>`，实测那条 200、基址本身没人拿），
+      `/api/ws` 是 ComfyUI 自己的 WS 路径（拼在 `ws://<comfy host>` 上）。
+      **判据装机时自己先错过一次**：它抄了别处的 `collectTs`，那份递归跳过名为 `generated`
+      的目录（产物根在仓库根时是对的），于是 `src/app/api/generated/[...path]` 整个从路由表里
+      消失，`/api/generated/…` 被判成没有落点。假红暴露的正是「同一份扫描工具在不同目录
+      语义不同」——现在注释写在函数上，跳只剩 `node_modules` 与 `.next`。
+      反向验证：往 `media-url.ts` 塞一条 `/api/nope-endpoint/x` → 恰好主断言红并点名文件；
+      把登记键换成 `/api/gone-already-fixed` → 主断言与陈旧断言各红一条。
+      证据：`src/app/api/images/route.ts` + `route.test.ts`（11 条，四项门槛满档）、
+      `src/lib/comfyui/client.ts`（`ComfyViewError`）+ `client.test.ts`（`getView` 三支）、
+      `src/lib/media/media-url.ts`、`src/components/studio/TrainingStudio.tsx`、
       `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts`、
       `git show ab12a551^:src/app/api/images/route.ts`。
 - [ ] **E3″ 端到端仍只有 3 spec / 31 用例且无登录态**（E3 的 router 维度已收口，这一维度没动）：

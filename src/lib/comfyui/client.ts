@@ -338,6 +338,21 @@ export async function getHistory(
   return (await res.json()) as Record<string, unknown>;
 }
 
+/** `getView` 的失败带着 ComfyUI 回的状态码。
+ *
+ *  为什么要有这个类：调用方得分清「文件不存在」（该回 404）与「上游答了别的东西」
+ *  （该回 502）、「连不上」（该回 503 + 可分支的 hint），而这三件事在只有一个
+ *  `Error("getView failed: 404")` 的时候只能靠**读消息**猜 —— 消息改了，判决就错。
+ *  消息本身保持原样，`executor-finalize` 那类只管「拿不到就抛」的调用方零感知。 */
+export class ComfyViewError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ComfyViewError";
+    this.status = status;
+  }
+}
+
 export async function getView(
   filename: string,
   subfolder: string,
@@ -356,7 +371,8 @@ export async function getView(
     signal: AbortSignal.timeout(60_000),
   });
 
-  if (!res.ok) throw new Error(`getView failed: ${res.status}`);
+  if (!res.ok)
+    throw new ComfyViewError(res.status, `getView failed: ${res.status}`);
 
   return Buffer.from(await res.arrayBuffer());
 }
