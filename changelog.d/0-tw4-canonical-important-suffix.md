@@ -23,6 +23,16 @@
   （`{ width: 10, height: 10, right: 5 }`），语义不变、歧义消失。
 - 快照随类名同步：`TrainingStudio` / `FilmStudio` / `WorkflowEditorInner` 三个 `.snap`
   由 `vitest -u` 重生成（合并成 `size-*` 后排序位置会变，字符串替换同步不了）。
+- **续：全仓 canonical 汇总（判据直接问引擎）** —— 新增
+  `scripts/tw4-canonical-report.mjs`，对每个类名调 design system 的
+  `canonicalizeCandidates`「有没有另一种写法生成**完全相同**的 CSS」，与编辑器的
+  `suggestCanonicalClasses` 同源。约 10 秒扫完 `src` 的 10267 个唯一候选，**只剩 3 条
+  建议 4 处**，已改：`bg-gradient-to-b` → `bg-linear-to-b`（2 处）、
+  `after:-bottom-[13px]` → `after:bottom-[-13px]`、`after:start-1/2` →
+  `after:inset-s-1/2`。改完复扫为 0。
+- **TS 侧同样汇总**：新增 `scripts/report-ts-duplicate-keys.mjs`，按 AST 扫「同一属性
+  指定两次」——即编辑器那条 `ts(2783)`（项目钉的 `typescript6` **不报**它，于是同一处
+  代码命令行全绿、编辑器标红，只能按语法形态判）。875 个文件 0 处。
 
 ## Verified
 
@@ -41,4 +51,5 @@
   `scripts/tw4-spacing-canonical.mjs` 用引擎判据扫平）。
 - `scripts/tw4-canonical-codemod.cjs` 增加 `break-words` → `wrap-break-word` 规则。
 - `docs/guides/DEV-QUERIES.md` §5 补 `break-words` 迁移、important 前缀自查 grep，以及
-  `tw4-spacing-canonical.mjs` 的用法。
+  `tw4-spacing-canonical.mjs` 的用法；§5.1 新增「TypeScript：同一属性指定两次」
+  （`report-ts-duplicate-keys.mjs`），§5 里补 `tw4-canonical-report.mjs` 的用法。
