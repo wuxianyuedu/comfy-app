@@ -343,6 +343,11 @@ export default defineConfig({
          * 数字看着严格，实际什么都不守。 */
         "src/components/studio/model-overview-derive.ts",
         "src/components/studio/HomeModelOverview.tsx",
+        /* 视图页签 刀2 的页签条（**两处同批**登记）。两个薄 hook
+         * （`use-workspace-tabs.ts` / `use-title-bar-tabs-active.ts`）刻意不登记：
+         * 规则与判据分别已在 `workspace-tabs.ts` 与壳的 derive 层有主，
+         * 给接线设门槛等于替别人记账。 */
+        "src/components/studio/ViewTabStrip.tsx",
         /* 体检清单 ⑨ 第二刀 · 四个零执行者的 router（台账 E3 从 7/16 抬到 11/16）：
          * `film` / `train` / `model` / `llm`。这一批照出的不是「闸门弱」而是
          * **「闸门 procedure 自己就是死的」**：`train.cancel` 的第三参在 Prisma→Drizzle
@@ -1448,6 +1453,15 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 视图页签条（与 `coverage.include` 同批）。数值取隔离实测向下取整到 5：
+         * 未覆盖的 158-160 是「+」菜单里那一行的点击 —— jsdom 里下拉不展开，
+         * 该路径由 `e2e/view-tabs.spec.ts` 在真浏览器判到，不为此造夹具。 */
+        "src/components/studio/ViewTabStrip.tsx": {
+          lines: 85,
+          functions: 75,
+          statements: 85,
+          branches: 75,
         },
         /* 模型库这一刀的三个新文件（与上面 `coverage.include` 同批登记）。
          * 数值按**隔离实测**向下取整到 5 的倍数（§18.6），不抬到理想值：
