@@ -330,6 +330,83 @@ pub fn launch_log_path(project_root: &str) -> std::path::PathBuf {
     .join("shell-launch.log")
 }
 
+/// 编排器自己行首的时间戳 + 级别前缀（`[YYYY-MM-DD HH:MM:SS.mmm] [LEVEL ]`）。
+///
+/// dev-launcher.mjs 的 `createLogSink` 已经给每条日志写了「本地时间 + 级别」，
+/// 壳转发时若原样带上、再让 `log_launch_line` 补一层，同一条物理行里就出现
+/// 两个时刻两个级别（用户截图：`[orchestrator] [2026-10-02 11:50:31.384] [STEP ]`）。
+/// 因此转发前先把这个前缀摘掉，只保留正文 —— 行结构由壳这一层统一。
+///
+/// **只认壳自己认得的形态**：dev-launcher 的级别是定宽 5 字符（`STEP ` / `OK   ` /
+/// `WARN ` / `ERROR` / `INFO `），这里把级别两侧空白归一，`STEP` 的尾空格因此也能吃掉；
+/// 认不出（pnpm / next 的裸输出）就整行原样返回，绝不猜。
+fn strip_orchestrator_line_prefix(line: &str) -> (&str, Option<&str>) {
+  // 形态：[YYYY-MM-DD HH:MM:SS.mmm] [LEVEL] <正文>
+  if !line.starts_with('[') {
+    return (line, None);
+  }
+  let Some(close) = line.find(']') else { return (line, None) };
+  // 时间戳必须定宽 23 字符（与 local_timestamp 同形），否则不是我们认的那一层。
+  let stamp = line.get(1..close).unwrap_or("");
+  if !looks_like_local_stamp(stamp) {
+    return (line, None);
+  }
+  let rest = line.get(close + 1..).unwrap_or("");
+  let rest = rest.strip_prefix(' ').unwrap_or(rest);
+  if !rest.starts_with('[') {
+    return (line, None);
+  }
+  let Some(lvl_close) = rest.find(']') else { return (line, None) };
+  let raw_level = rest.get(1..lvl_close).unwrap_or("").trim();
+  if !matches!(
+    raw_level,
+    "STEP" | "OK" | "WARN" | "ERROR" | "INFO" | "DEBUG"
+  ) {
+    return (line, None);
+  }
+  let body = rest.get(lvl_close + 1..).unwrap_or("").trim_start();
+  (body, Some(raw_level))
+}
+
+/// 判据：这段文本是不是 `local_timestamp()` 那种定宽本地时刻（`YYYY-MM-DD HH:MM:SS.mmm`）。
+fn looks_like_local_stamp(s: &str) -> bool {
+  let b = s.as_bytes();
+  if b.len() != 23 {
+    return false;
+  }
+  // 数字位与分隔符的固定位置（YYYY-MM-DD HH:MM:SS.mmm）：认位置比认正则更省、更硬。
+  let digits = [0usize, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18, 20, 21, 22];
+  let seps = [
+    (4usize, b'-'),
+    (7, b'-'),
+    (10, b' '),
+    (13, b':'),
+    (16, b':'),
+    (19, b'.'),
+  ];
+  digits.iter().all(|&i| b[i].is_ascii_digit()) && seps.iter().all(|&(i, c)| b[i] == c)
+}
+
+/// 编排器级别 → 壳这一层（`log_launch_line` 的 level + `log::` 宏）的级别。
+///
+/// 归一二档：`WARN` → warn、`ERROR` → error，其余已认出的（`STEP`/`OK`/`INFO`/`DEBUG`）
+/// → info。**只有 `None`（认不出前缀的裸输出）才用调用方的兜底**（stdout→info /
+/// stderr→warn）——已认出的级别不该被出口方向覆盖。
+fn orchestrator_level_to_shell(level: Option<&str>, fallback: &str) -> &'static str {
+  match level {
+    Some("WARN") => "warn",
+    Some("ERROR") => "error",
+    Some(_) => "info",
+    None => {
+      if fallback == "warn" {
+        "warn"
+      } else {
+        "info"
+      }
+    }
+  }
+}
+
 /// 进度快照文件（`run/launch-status.json`）。
 pub fn status_file_path(project_root: &str) -> std::path::PathBuf {
   std::path::Path::new(project_root).join("run").join("launch-status.json")
@@ -352,6 +429,23 @@ pub fn log_launch_line(project_root: &str, level: &str, message: &str) {
   if let Err(e) = append_line(&launch_log_path(project_root), &line) {
     log::warn!("[ComfyAPP] 编排链路日志写入失败：{e:?}");
   }
+}
+
+/// 转发一行编排器输出：`log::`（channel / release 的 shell.log）与壳侧编排链路
+/// 日志（`shell-launch.log`）**同一形态、同一份正文**。
+///
+/// 收成一处的理由：两条出口此前各写各的 `[orchestrator] {text}`，任一条改了漏
+/// 改另一条，就会「面板读到的（`[orchestrator] 时刻 级别 正文`）与 channel 里的
+/// （另一份）对不上」—— 而两侧看各自都对。`level` 走 `orchestrator_level_to_shell`
+/// 的归一结论，不再让 stdout 恒 info / stderr 恒 warn 覆盖掉编排器自己的级别。
+fn log_orchestrator_line(project_root: &str, level: &str, body: &str) {
+  let message = format!("[orchestrator] {body}");
+  match level {
+    "error" => log::error!("{message}"),
+    "warn" => log::warn!("{message}"),
+    _ => log::info!("{message}"),
+  }
+  log_launch_line(project_root, level, &message);
 }
 
 /// 启动会话标记前缀。壳在每次启动时往 shell-launch.log 写一行，
@@ -655,15 +749,17 @@ pub fn spawn_orchestrator(
       match event {
         CommandEvent::Stdout(line) => {
           let text = String::from_utf8_lossy(&line).trim_end().to_string();
-          log::info!("[orchestrator] {text}");
-          // 同一行再落一份盘：release 壳没有控制台，`log::` 只进 channel，
-          // 用户手里的磁盘上必须有一份（见 log_launch_line 的注释）。
-          log_launch_line(&log_root, "info", &format!("[orchestrator] {text}"));
+          // 行结构统一：编排器自己那层「时刻 + 级别」先摘掉，只留正文，级别另取。
+          // 否则同一条物理行里会叠出两个时刻两个级别（见 strip_orchestrator_line_prefix）。
+          let (body, level) = strip_orchestrator_line_prefix(&text);
+          let shell_level = orchestrator_level_to_shell(level, "info");
+          log_orchestrator_line(&log_root, shell_level, body);
         }
         CommandEvent::Stderr(line) => {
           let text = String::from_utf8_lossy(&line).trim_end().to_string();
-          log::warn!("[orchestrator] {text}");
-          log_launch_line(&log_root, "warn", &format!("[orchestrator] {text}"));
+          let (body, level) = strip_orchestrator_line_prefix(&text);
+          let shell_level = orchestrator_level_to_shell(level, "warn");
+          log_orchestrator_line(&log_root, shell_level, body);
         }
         CommandEvent::Terminated(payload) => {
           log::info!("[ComfyAPP] orchestrator terminated: {:?}", payload.code);
@@ -1085,6 +1181,94 @@ mod tests {
         "{label} 的启动会话标记必须带 shell_pid：{content}"
       );
     }
+
+    let _ = std::fs::remove_dir_all(&tmp);
+  }
+
+  #[test]
+  fn strips_dev_launcher_line_prefix() {
+    // dev-launcher.mjs 的 createLogSink 形态：`[时刻] [级别] 正文`。
+    let (body, level) =
+      strip_orchestrator_line_prefix("[2026-10-02 11:50:31.384] [STEP ] 检查端口占用");
+    assert_eq!(body, "检查端口占用");
+    assert_eq!(level, Some("STEP"));
+
+    // 定宽补空格（`OK   ` / `INFO `）也要吃掉。
+    let (body, level) =
+      strip_orchestrator_line_prefix("[2026-10-02 11:50:31.384] [OK   ] 服务器已就绪");
+    assert_eq!(body, "服务器已就绪");
+    assert_eq!(level, Some("OK"));
+
+    let (body, level) =
+      strip_orchestrator_line_prefix("[2026-10-02 11:50:31.384] [ERROR] 找不到预编译壳");
+    assert_eq!(body, "找不到预编译壳");
+    assert_eq!(level, Some("ERROR"));
+  }
+
+  #[test]
+  fn keeps_raw_output_untouched() {
+    // pnpm / next 的裸输出没有那层前缀：整行原样返回，绝不猜。
+    for raw in [
+      "added 12 packages, and audited 900 packages in 3s",
+      "> comfy-app-t3@0.1.0 dev",
+      "[INFO] 这行只有级别、没有定宽时刻",
+      "[not-a-timestamp] [STEP ] 看起来像但不是",
+      "",
+    ] {
+      let (body, level) = strip_orchestrator_line_prefix(raw);
+      assert_eq!(body, raw, "裸输出必须原样保留：{raw}");
+      assert_eq!(level, None, "认不出前缀时不得给出级别：{raw}");
+    }
+  }
+
+  #[test]
+  fn maps_orchestrator_level_to_shell_level() {
+    // 已认出的级别按语义归一，不被出口方向（stdout/stderr）覆盖。
+    assert_eq!(orchestrator_level_to_shell(Some("WARN"), "info"), "warn");
+    assert_eq!(orchestrator_level_to_shell(Some("ERROR"), "warn"), "error");
+    assert_eq!(orchestrator_level_to_shell(Some("STEP"), "warn"), "info");
+    assert_eq!(orchestrator_level_to_shell(Some("OK"), "warn"), "info");
+    assert_eq!(orchestrator_level_to_shell(Some("INFO"), "warn"), "info");
+    // 认不出前缀（裸输出）时才用出口方向的兜底。
+    assert_eq!(orchestrator_level_to_shell(None, "info"), "info");
+    assert_eq!(orchestrator_level_to_shell(None, "warn"), "warn");
+  }
+
+  #[test]
+  fn forwarded_line_has_single_timestamp_and_level() {
+    // 回归用户截图：壳落盘的行里**只能有一层**时刻 + 级别。
+    let tmp = std::env::temp_dir().join(format!(
+      "comfyapp-orchestrator-line-{}",
+      std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+    let root = tmp.to_str().unwrap();
+
+    let raw = "[2026-10-02 11:50:31.384] [STEP ] 检查端口占用";
+    let (body, level) = strip_orchestrator_line_prefix(raw);
+    log_orchestrator_line(root, orchestrator_level_to_shell(level, "info"), body);
+
+    let content = std::fs::read_to_string(launch_log_path(root)).unwrap();
+    // 产出形态必须是 `[<壳时刻 23 字符>] [INFO] [orchestrator] 正文`：
+    // 三个方括号前缀，且**只有一处**定宽时刻（摘掉了编排器那层）。
+    let line = content.lines().next().unwrap_or_default();
+    assert_eq!(
+      line.matches('[').count(),
+      3,
+      "只应有 时刻 / 级别 / orchestrator 三个前缀：{line}"
+    );
+    // 第一个 `]` 与第二个 `[` 之间就是唯一的那层时刻，必须定宽 23 字符。
+    let close = line.find(']').unwrap();
+    assert!(
+      looks_like_local_stamp(&line[1..close]),
+      "行首必须是壳这一层的定宽时刻：{line}"
+    );
+    // 正文里不得再出现第二层「时刻 + 级别」前缀。
+    assert!(line.contains("[orchestrator] 检查端口占用"), "正文保留：{line}");
+    assert!(!line.contains("[STEP ]"), "编排器那层级别必须被摘掉：{line}");
+    assert!(!line.contains("11:50:31"), "编排器那层时刻必须被摘掉：{line}");
+    assert!(line.contains("[INFO]"), "级别由壳这一层给出：{line}");
 
     let _ = std::fs::remove_dir_all(&tmp);
   }
