@@ -19,31 +19,15 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const SCRIPT = join(process.cwd(), "scripts", "check-reformat-only.cjs");
+import { symlinkDir } from "./helpers/symlink-dir";
 
-/**
- * 目录链接:Windows 走 "junction"、其它平台走 "dir"。
- *
- * 为什么要区分:Windows 下 `fs.symlinkSync(a, b, "dir")` 需要开发者模式或管理
- * 员权限,普通开发者跑到这里 100% EPERM——门禁本体完全能跑,红的只是「测试
- * 夹具搭不起来」的环境噪声。`"junction"` 是 NTFS 内建的目录链接形式,不需要
- * 特权,在本用例的场景里(不跨机、不跨卷、能创建/删除)语义等价。macOS/Linux
- * 忽略 type 参数,行为与旧实现一致。
- */
-function symlinkSafe(target: string, linkPath: string): void {
-  symlinkSync(
-    target,
-    linkPath,
-    process.platform === "win32" ? "junction" : "dir",
-  );
-}
+const SCRIPT = join(process.cwd(), "scripts", "check-reformat-only.cjs");
 
 /* 每条用例都要在临时仓库里真跑 git（init / add / commit / merge）+ 真起 prettier
  * （门禁按「整批一次 prettier」调用，但建库 / 提交 / 判定的固定成本仍在）：默认
@@ -170,7 +154,7 @@ beforeEach(() => {
   // 模式或管理员,普通用户 100% EPERM;junction 是 NTFS 内建的目录链接形式,
   // **不需要**特权,语义在这里等价(不跨机、不跨卷、能创建/删除)。macOS/Linux
   // 忽略 type 参数,行为与旧实现一致。
-  symlinkSafe(
+  symlinkDir(
     join(process.cwd(), "node_modules"),
     join(workdir, "node_modules"),
   );
@@ -409,7 +393,7 @@ describe(
         wrapper,
         join(workdir, "node_modules", "prettier", "bin", "prettier.cjs"),
       );
-      symlinkSafe(
+      symlinkDir(
         join(process.cwd(), "node_modules", "prettier-plugin-tailwindcss"),
         join(workdir, "node_modules", "prettier-plugin-tailwindcss"),
       );

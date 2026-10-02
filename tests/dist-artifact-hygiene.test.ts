@@ -22,13 +22,14 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
+
+import { symlinkDir } from "./helpers/symlink-dir";
 
 // 运行时真的调用白名单剔除（不是只读源码文本）：嵌套条目 / 未登记新文件的
 // 行为只有真删一次才看得出来。
@@ -402,16 +403,6 @@ describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () 
  * `node_modules/<pkg>/docs/` 下的 .md、24 个 `src/` 下的 .test.tsx，都不是「某个根目录」。
  * 而 `outputFileTracingExcludes` 里同形状的条目写了也不减（规范 §7.2）。
  */
-
-/** 目录链接：Windows 走 "junction"、其它平台走 "dir"。`"dir"` 在 Windows 普通
- *  权限下必 EPERM（与 `tests/check-reformat-only.test.ts` 同一处理）。 */
-function symlinkDir(target: string, linkPath: string): void {
-  symlinkSync(
-    target,
-    linkPath,
-    process.platform === "win32" ? "junction" : "dir",
-  );
-}
 
 describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
   it("真删一次：形状命中的删掉，没命中的一个都不碰", () => {
