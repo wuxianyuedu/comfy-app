@@ -29,7 +29,6 @@ const VIEWS: WorkspaceView[] = [
   "library",
   "history",
   "queue",
-  "train",
   "film",
   "workflows",
   "outputs",

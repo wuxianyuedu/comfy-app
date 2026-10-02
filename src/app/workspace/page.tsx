@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { subscribeAppEvent } from "~/lib/app-events";
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
@@ -11,23 +11,17 @@ import {
   AuroraBackground,
 } from "~/components/studio";
 import {
-  LEGACY_WS_VIEW_KEY,
-  WS_TABS_KEY,
-  HOME_VIEW,
-  findTab,
-  homeTab,
-  initialWorkspaceTabs,
-  makeTab,
-  openViewTab,
-  parseWorkspaceTabs,
-  serializeWorkspaceTabs,
-  type WorkspaceTabsState,
-} from "~/components/studio/workspace-tabs";
+  WORKSPACE_VIEWS,
+  useWorkspaceTabs,
+} from "~/components/studio/hooks/use-workspace-tabs";
 import type { RecentProject, WorkspaceView } from "~/components/studio";
 import { WorkshopPipeline } from "~/components/workshop/WorkshopPipeline";
 import { ProjectGate } from "~/components/studio/ProjectGate";
-import { ProjectTabBar } from "~/components/studio/ProjectTabBar";
-import { isProjectTab } from "~/components/studio/NavItems";
+import {
+  globalNavItems,
+  isProjectTab,
+  projectTabs,
+} from "~/components/studio/NavItems";
 import { ShellTabs } from "~/components/studio/ShellTabs";
 import { timeAgo } from "~/lib/time-format";
 import {
@@ -109,98 +103,20 @@ const ProjectCanvas = dynamic(
 
 /* ── 工作区页面 —— Updream 风全屏编辑器 ── */
 
-/* 离开 /workspace 到其它顶层路由（如 /settings）再返回时，Next.js 会重新挂载本页面
- * 组件。用 sessionStorage 存**页签列表 + 当前页签**，重新挂载时据此恢复。
- *
- * 旧键 `LEGACY_WS_VIEW_KEY` 存的是单个视图，这里只做一次性迁移、读到即删 —— 不留两个
- * 名字指同一件事（§12.14），也不允许"两个键各存一半、恢复时看谁先到"。
- * 旧键若指向项目类视图（工坊/画布…），迁移时没有项目 id 可绑，按不可用处理回落首页：
- * 这不是丢功能，那一条旧值本来就已经无法还原成一个合法页签。 */
-const WORKSPACE_VIEWS: WorkspaceView[] = [
-  "home",
-  "project",
-  "canvas",
-  "models",
-  "works",
-  "workshop",
-  "library",
-  "history",
-  "queue",
-  "film",
-  "workflows",
-  "outputs",
-];
-
-function readTabsState(): WorkspaceTabsState | null {
-  if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(WS_TABS_KEY);
-  if (raw) return parseWorkspaceTabs(raw, WORKSPACE_VIEWS);
-
-  const legacy = sessionStorage.getItem(LEGACY_WS_VIEW_KEY);
-  if (legacy) sessionStorage.removeItem(LEGACY_WS_VIEW_KEY);
-  if (!legacy) return null;
-  const view = WORKSPACE_VIEWS.find((candidate) => candidate === legacy);
-  if (!view || view === HOME_VIEW) return null;
-  const tab = makeTab(view, null);
-  if (!tab) return null;
-  return { tabs: [homeTab(), tab], activeKey: tab.key };
-}
-
-function writeTabsState(state: WorkspaceTabsState): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.setItem(WS_TABS_KEY, serializeWorkspaceTabs(state));
-}
-
-/** 视图历史栈保留上限（P2：只去重不裁剪会无限增长）。 */
-const WORKSPACE_VIEW_HISTORY_MAX = 50;
-
 export default function WorkspacePage() {
   const router = useRouter();
 
   // ── Layout state ──
-  /* 页签状态取代单值 `viewMode`；`viewMode` 保留为**推导值**，下面的渲染分支
-     一字不改 —— 这一刀只换状态模型与持久化，界面不变（页签条 UI 在下一刀）。 */
-  const [tabsState, setTabsState] =
-    useState<WorkspaceTabsState>(initialWorkspaceTabs);
-  const viewMode: WorkspaceView =
-    findTab(tabsState.tabs, tabsState.activeKey)?.view ?? HOME_VIEW;
-
-  /* 恢复上次离开时的页签。不能放进 useState 初始值 —— SSR 阶段读不到 sessionStorage，
-     而 hydration 不会重跑 initializer，恢复就永远不生效（与旧实现同一约定）。 */
-  const tabsHydratedRef = useRef(false);
-  useEffect(() => {
-    const restored = readTabsState();
-    // 无论恢复成不成功，从这一步起才允许落盘。
-    tabsHydratedRef.current = true;
-    if (restored) {
-      // 跳过 hydration 窗口后恢复视图，避免对 SSR 渲染树造成级联 setState。
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTabsState(restored);
-    }
-  }, []);
-  useEffect(() => {
-    /* 恢复那一步之前**不落盘**：否则挂载这一轮会先把初始态（只有首页一页）写进
-       sessionStorage，把用户存好的列表冲掉，随后才读到空。 */
-    if (!tabsHydratedRef.current) return;
-    writeTabsState(tabsState);
-  }, [tabsState]);
-  // 视**图**历史栈，用于智能返回导航（避免一跳就回首页）
-  const [, setViewHistory] = useState<WorkspaceView[]>(["home"]);
-
-  /** 打开/聚焦一个视图页签，同时记录历史以支持返回按钮。 */
-  const navigateTo = useCallback((view: WorkspaceView) => {
-    setViewHistory((prev) => {
-      const last = prev[prev.length - 1];
-      if (last === view) return prev; // dedup
-      // 历史栈只去重不裁剪会无限增长（P2）；保留最近一段即可，更早的用不到。
-      return [...prev, view].slice(-WORKSPACE_VIEW_HISTORY_MAX);
-    });
-    /* 绑的是 store 的同步读数，不是 `activeProjectId` 那个 React 状态：
-       「打开项目」的 handler 里 `setActive(id)` 与 `navigateTo("project")` 是同一次
-       事件里先后调用的，读状态会拿到旧值 ⇒ 项目页签被开成"无项目"或直接丢绑。 */
-    const projectId = getActiveId();
-    setTabsState((prev) => openViewTab(prev, view, projectId));
-  }, []);
+  /* 页签状态、恢复/落盘、打开/选中/关闭都在 `useWorkspaceTabs`（§12.13：组件已经
+     在函数长度阈值附近，按职责拆而不是在里面加注释分段）。 */
+  const {
+    tabs: viewTabs,
+    activeKey: activeViewKey,
+    viewMode,
+    navigateTo,
+    selectTab: selectViewTab,
+    closeTab: closeViewTabByKey,
+  } = useWorkspaceTabs();
 
   /* 「请求切到某个视图」的应用事件订阅（唯一订阅侧）。
    * 触发方是工坊右栏的「资源库」卡 —— 那条链路上有 WorkshopPipeline /
@@ -377,6 +293,34 @@ export default function WorkspacePage() {
     [navigateTo],
   );
 
+  /**
+   * 「+」菜单里能开的视图。
+   *
+   * 这一份清单是**入口的兜底**：侧栏刻意不列项目内那六个视图（主页/画布/工坊/
+   * 资源库/产出/成片），它们此前唯一的入口是 ProjectTabBar；那条切换器退役后，
+   * 没有这里它们就变成 unreachable。项目类视图只在已有活跃项目时放出 ——
+   * 没有项目时点了也只会落到 ProjectGate，等于给一个开不了的项。
+   */
+  /** 项目 id → 项目名（页签标题用「工坊·项目名」区分同一视图的多页）。 */
+  const projectNameOf = useCallback(
+    (projectId: string | null) =>
+      projectId
+        ? (recentProjects.find((project) => project.id === projectId)?.name ??
+          null)
+        : null,
+    [recentProjects],
+  );
+
+  const openableViews = useMemo(
+    () => [
+      ...globalNavItems().map((item) => ({ view: item.id, label: item.label })),
+      ...(activeProjectId
+        ? projectTabs().map((item) => ({ view: item.id, label: item.label }))
+        : []),
+    ],
+    [activeProjectId],
+  );
+
   // ── Home 模式为整页独立视图；其余模式共用左侧导航 + 中央内容 ──
   // LogProvider/ToastProvider 全页只挂载一层：此前两个分支各自包一层，home ↔
   // 其它模式切换会反复装卸 console 包装（makeLogger 双重嵌套），是日志观察者
@@ -455,7 +399,15 @@ export default function WorkspacePage() {
   };
 
   return (
-    <ShellTabs>
+    <ShellTabs
+      viewTabs={viewTabs}
+      activeViewKey={activeViewKey}
+      projectNameOf={projectNameOf}
+      onSelectViewTab={selectViewTab}
+      onCloseViewTab={closeViewTabByKey}
+      openableViews={openableViews}
+      onOpenView={navigateTo}
+    >
       <>
         {/* 日志/Toast Provider 与底部状态栏已全局挂载（根布局），此处不再重复包裹 */}
         {/* 侧栏 + 顶栏 + 主内容容器都归 `AppShell`（规范 §12.1 规划的壳层）。
@@ -470,6 +422,13 @@ export default function WorkspacePage() {
           onOpenProject={handleOpenCanvasProject}
           onShowAllProjects={handleShowAllProjects}
           onNewProject={handleNewProject}
+          viewTabs={viewTabs}
+          activeViewKey={activeViewKey}
+          projectNameOf={projectNameOf}
+          onSelectViewTab={selectViewTab}
+          onCloseViewTab={closeViewTabByKey}
+          openableViews={openableViews}
+          onOpenView={navigateTo}
         >
           {viewMode === "home" ? (
             <HomePage
@@ -484,17 +443,6 @@ export default function WorkspacePage() {
             <>
               {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
               <AuroraBackground />
-              {/* 项目界面顶部的切换器：仅在已有一个活跃项目、且当前是项目页签时出现
-                  （无项目时 renderCenter 会先落到 ProjectGate，不必在其上叠一排页签）。 */}
-              {isProjectTab(viewMode) && activeProjectId ? (
-                <ProjectTabBar
-                  active={viewMode}
-                  onSelect={handleNavSelect}
-                  projectName={
-                    recentProjects.find((p) => p.id === activeProjectId)?.name
-                  }
-                />
-              ) : null}
               {renderCenter()}
             </>
           )}
