@@ -6,6 +6,7 @@ import { Upload } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { comfyImageUrl } from "~/lib/media/media-url";
 import { NumberField } from "~/components/ui/number-field";
 import { RangeSlider } from "~/components/ui/range-slider";
 import { FormField } from "~/components/ui/form-field";
@@ -254,7 +255,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                       className="border-border bg-card flex items-center gap-2 rounded-md border p-1.5"
                     >
                       <MediaThumbnail
-                        src={`/api/file/${encodeURIComponent(data.name)}`}
+                        src={comfyImageUrl({ filename: data.name })}
                         alt={data.name}
                         className="size-9 shrink-0 rounded object-cover"
                       />
