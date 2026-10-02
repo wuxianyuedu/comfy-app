@@ -79,14 +79,19 @@ describe("NAV_ITEMS（全量注册表）", () => {
 });
 
 describe("OVERLAY_NAV_ITEMS（全局浮层入口）", () => {
-  it("恰好两项：模型适配 / 模式契约", () => {
+  it("恰好三项、按序：模型适配 / 模式契约 / 控制台", () => {
+    /* 「恰好 + 按序」是刻意的强度：新增一个全局浮层入口时必须显式改这里，
+       不能悄悄多出一个侧栏项。`aa3ee904` 加了「控制台」却没回头改这条，
+       于是它在主干上确定性红 —— 补全的同时不降判据。 */
     expect(OVERLAY_NAV_ITEMS.map((i) => i.overlay)).toEqual([
       "model-adapters",
       "mode-contract",
+      "console",
     ]);
     expect(OVERLAY_NAV_ITEMS.map((i) => i.label)).toEqual([
       "模型适配",
       "模式契约",
+      "控制台",
     ]);
   });
 
