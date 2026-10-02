@@ -347,7 +347,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | E2E `playwright test --grep @critical`                               | CI 第 30 步                                       | **无自动执行者**。按需手动跑                                                                  |
 | `db:push` 建库                                                       | CI 第 3 步                                        | 只在手动跑 E2E 前需要                                                                         |
 | R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | CI 第 8 步                                        | 本地这一步不带 `--strict`，**棘轮当前无执行者**（`.githooks/pre-commit` 里有 ⚠️ 标注）        |
-| `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑，仅在 `pnpm doc:gen` 内部作为第 1 步 | 本地钩子里没有它，**改了文档/权威源后需手动跑**（`pnpm doc:check` / `pnpm doc:gen`）          |
+| `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑；`pnpm doc:gen` 内部作为第 1 步      | **已在本地钩子里**（D 组「文档引用与权威源一致」，ISSUE #1371 翻掉了旧的「手动档」签字）。旧口径是「改了文档后需手动跑」，而 AGENTS 规定的必跑口令是 `doc:render`（只渲染不校验），空档即由此来 |
 
 > 这张表是**有意留下的欠账**，不是遗漏：把全量 3000+ 用例塞进每次 commit 会让本地
 > 提交慢到没人愿意用，而那正是当初把它放去 CI 的原因。**去处不是把配置贴回去**，

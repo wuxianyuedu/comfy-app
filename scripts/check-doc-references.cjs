@@ -16,7 +16,12 @@
  *   - 台账命令口径：SCOPED_DOCS 里不得出现 npm run / npx 可执行命令
  *     （AGENTS 硬规则 1「只用 pnpm」；说明性引用需带纠正词，见 checkLedgerCommands）。
  *
- * 接入方式：`pnpm doc:check` 手动命令，不接 pre-commit（避免过度打扰提交）。
+ * 接入方式：`.githooks/pre-commit` D 组的静态判据之一（`pnpm doc:check` 是同一条命令的手动入口，
+ * `pnpm doc:gen` 也把它放在第 1 步）。**曾是「手动档」**，脚本此处旧写「不接 pre-commit（避免
+ * 过度打扰提交）」—— 那个理由撑不住：实测 0.64s、零网络、纯本地文本，而 §13.5.4 把「不进钩子」
+ * 的依据记在网络与耗时上（`dependencyAudit` 才是那一档）。真正的代价在别处：AGENTS 规定的必跑
+ * 口令是 `pnpm doc:render`，而它只做「源 → 生成物」、不跑本校验，于是按规范走的人一路绿灯，
+ * 存量要靠事后单独一刀清（`c4d414d5`）。签字翻档见 ISSUE #1371。
  * 人类可读映射见 docs/reference-facts.md；FACTS 与提取逻辑见 scripts/doc-facts.cjs
  * （本脚本与 doc:render 共用，避免第二事实）。
  */
