@@ -15,7 +15,14 @@
  * 规范：docs/standards/16-shadcn-ui与表单校验.md §16.2.3.2、§9.5。
  */
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -58,6 +65,29 @@ function makeRepo() {
    * 理由与「为什么收成一处」写在 `./helpers/symlink-dir`。 */
   symlinkDir(path.join(ROOT, "node_modules"), path.join(root, "node_modules"));
   mkdirSync(path.join(root, "src", "components", "ui"), { recursive: true });
+  /* 覆盖率那一段要两样东西：基线文件，与一张**指向本仓库文件的**理由表。
+     临时仓库里自己造一份，值按 `scanner()` 会写下的那份「组件 + 故事」算
+     （分母 1、已覆盖 1）。不这么做的话，**每一条故事枚举用例都会顺带红在
+     「理由表里的文件在这不存在」上**，那就不再是「枚举来源」的判据了。 */
+  writeFileSync(
+    path.join(root, "scripts", ".storybook-coverage-baseline.json"),
+    JSON.stringify({ uiSurfaces: 1, covered: 1 }),
+  );
+  /* 占位理由指向的文件要**真的存在**，否则「理由表与磁盘对得上」那条会红 ——
+     而这一组用例判的是枚举来源。/ `thing.test.ts` 是临时仓库里唯一一个
+     命中「分母之外」的文件，它必须存在才说得通。 */
+  writeFileSync(
+    path.join(root, "src", "components", "ui", "thing.test.ts"),
+    "",
+  );
+  const ledger = path.join(root, CHECK_DIR_REL, "coverage-ledger.mjs");
+  writeFileSync(
+    ledger,
+    readFileSync(ledger, "utf8").replace(
+      /export const NO_STORY_REASON = new Map\(\[[\s\S]*?\n\]\);/,
+      'export const NO_STORY_REASON = new Map([\n  ["thing.test.ts", "临时仓库里的占位理由（判据要求非空表）"],\n]);',
+    ),
+  );
   return root;
 }
 
@@ -181,5 +211,79 @@ describe("storybook-check（故事枚举来源门禁）", () => {
     const { ok, output } = runIn(root);
     expect(ok).toBe(false);
     expect(output).toContain("空转");
+  });
+
+  /**
+   * 覆盖率那一段的四个方向。为什么要有这一组：棘轮的两种错法都不报错 ——
+   * 判据写松了（阈值取不到），或者基线被人往下改一格（覆盖率的分子少一个时
+   * 没人拦）—— 而它们的后果都是「这条账重新变成一句写在文档里的话」。
+   */
+  it("覆盖率方向 ①：story 被删（内容空了但文件还在）→ 覆盖率下降拦下", () => {
+    const root = makeRepo();
+    const uiDir = path.join(root, "src", "components", "ui");
+    writeFileSync(path.join(uiDir, "thing.tsx"), COMPONENT);
+    /* 文件还在、但**不再 import 任何组件**（清空成一句说明）—— 这正是
+       「删 story 时留下一个空壳」的现实形态：glob 还扫得到它，所以不会命中
+       「一份 story 都没有」那条空转保护，覆盖率却掉到 0。 */
+    writeFileSync(
+      path.join(uiDir, "thing.stories.tsx"),
+      "export default {};\n",
+    );
+    const { ok, output } = runIn(root);
+    expect(ok).toBe(false);
+    expect(output).toContain("组件覆盖率下降");
+  });
+
+  it("覆盖率方向 ②：新增 ui/ 组件却没 story → 拦下（要求同批回答问题）", () => {
+    const root = makeRepo();
+    const uiDir = path.join(root, "src", "components", "ui");
+    writeFileSync(path.join(uiDir, "thing.tsx"), COMPONENT);
+    writeFileSync(path.join(uiDir, "thing.stories.tsx"), GOOD_STORY);
+    // 多一个只有实现、没有 story 的组件
+    writeFileSync(
+      path.join(uiDir, "another.tsx"),
+      "export const Another = () => null;\n",
+    );
+    const { ok, output } = runIn(root);
+    expect(ok).toBe(false);
+    expect(output).toContain("可预览文件数");
+  });
+
+  it("覆盖率方向 ③：分子不低于基线时棘轮不误伤（判据只挡「往下掉」）", () => {
+    const root = makeRepo();
+    const uiDir = path.join(root, "src", "components", "ui");
+    writeFileSync(path.join(uiDir, "thing.tsx"), COMPONENT);
+    writeFileSync(path.join(uiDir, "thing.stories.tsx"), GOOD_STORY);
+    writeFileSync(
+      path.join(root, "scripts", ".storybook-coverage-baseline.json"),
+      JSON.stringify({ uiSurfaces: 2, covered: 1 }),
+    );
+    const { ok, output } = runIn(root);
+    /* 这里把分母也一起改大：目的是让「分子不低于基线」这件事单独被观察到。
+       断言分两句 —— 覆盖率那一行照常打出来（1/1，基线 1/2），而唯一的一处违规
+       必须是**分母对不上**那条，绝不能是「组件覆盖率下降」：棘轮只管「本次低于
+       基线」，分母漂移是另一条判据的事。 */
+    expect(output).toContain("组件覆盖率 1/1（基线 1/2");
+    expect(output).toContain("可预览文件数");
+    expect(output).not.toContain("组件覆盖率下降");
+    expect(ok).toBe(false);
+  });
+
+  it("覆盖率方向 ④：理由表指向不存在的文件 / 已有 story 还留着 → 拦下", () => {
+    const root = makeRepo();
+    const uiDir = path.join(root, "src", "components", "ui");
+    writeFileSync(path.join(uiDir, "thing.tsx"), COMPONENT);
+    writeFileSync(path.join(uiDir, "thing.stories.tsx"), GOOD_STORY);
+    const ledger = path.join(root, CHECK_DIR_REL, "coverage-ledger.mjs");
+    writeFileSync(
+      ledger,
+      readFileSync(ledger, "utf8").replace(
+        /export const NO_STORY_REASON = new Map\(\[[\s\S]*?\n\]\);/,
+        'export const NO_STORY_REASON = new Map([\n  ["not-a-real-file.ts", "临时变异：磁盘上没有这个文件"],\n]);',
+      ),
+    );
+    const { ok, output } = runIn(root);
+    expect(ok).toBe(false);
+    expect(output).toContain("not-a-real-file.ts");
   });
 });
