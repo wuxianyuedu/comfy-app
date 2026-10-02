@@ -211,6 +211,37 @@ describe("GET /api/logs/current 增量读取", () => {
     expect(data.content).toContain("[INFO] x");
   });
 
+  /* ISSUE #1365：面板「应用服务」来源恒为空。
+   *
+   * 转录文件名是 `nextjs-panel-<pid>-<毫秒>.log`，而 `pid` 是**变长十进制**。
+   * 按字面排序取「最后一份」比较的是字符而不是数值：`…-9876-…` 排在
+   * `…-12345-…` 之后，于是「最后一份」实际落在**某次更早运行**留下的文件上。
+   * 那份文件的时刻早于本次会话起点，被 `dropStaleEntries` 整批裁掉——用户看到的
+   * 就是「应用服务一条也不显示」，而别的来源照常。
+   *
+   * 判据：**按 mtime 取最新**，与文件名里的数字长得无关。
+   */
+  it("应用服务转录按 mtime 取最新一份，不按文件名排序（ISSUE #1365）", async () => {
+    const oldFile = path.join(
+      nextjsLogDir,
+      "nextjs-panel-9876-1700000000000.log",
+    );
+    const newFile = path.join(
+      nextjsLogDir,
+      "nextjs-panel-12345-1790000000000.log",
+    );
+    fs.writeFileSync(oldFile, "上一次运行的行\n", "utf8");
+    fs.writeFileSync(newFile, "本次运行的行\n", "utf8");
+    /* pid 更大的那份**文件名字典序更小**，而它才是本次的（mtime 更新）——
+     * 这正是「按名字取最后一份」会读错的方向。 */
+    const older = Date.now() - 60_000;
+    fs.utimesSync(oldFile, older / 1000, older / 1000);
+
+    const data = await read("app", 0);
+    expect(data.content).toContain("本次运行的行");
+    expect(data.content).not.toContain("上一次运行的行");
+  });
+
   it("文件不存在时返回空内容且 size=0，不抛错", async () => {
     const data = await read("app-runtime", 0);
     expect(data.content).toBe("");
