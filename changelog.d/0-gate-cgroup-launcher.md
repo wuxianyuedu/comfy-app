@@ -14,11 +14,15 @@
 
 ## Added
 
-- `tests/hook-affected-launch.test.ts`（固定守护清单 17 → 18）：分块后**并集等于输入且
+- `tests/hook-affected-launch.test.ts`（固定守护清单 19 → 20）：分块后**并集等于输入且
   顺序不变**、每块都在命令行长预算内（单条路径就超预算时点名红，不许静默跳过）、
   启动器没有 `shell: true` 也不出现 `pnpm exec vitest` / `npx vitest` 形态、
   `.githooks/pre-commit` 的 C 组确实指向这个入口。配合成旧写法的反证与
   「空清单必须被阻断」（空参数会让 `vitest run` 跑成全量）。
+  C 组那条是**按 `run_group C … sh -c '<body>'` 解析实调用体**再断言，不是
+  `toContain(文件名)`：机制说明里也写着同一个文件名，注掉执行行的话 `toContain` 照样命中 ——
+  口径来自同批落地的 `tests/doc-check-hook-wiring.test.ts`（规范 §13.5.8「在场判据要解析」）。
+  钩子里那句「D(N 个判据脚本)」由那份判据核与实际步骤数一致，本次改写 C 组注释时原样保留。
 
 ## Docs
 

@@ -29,7 +29,7 @@
 
 ## Tests
 
-- `tests/app-event-pairing.test.ts`（进固定守护清单，16 → 17 条）：`AppEvents` 表里
+- `tests/app-event-pairing.test.ts`（进固定守护清单，18 → 19 条）：`AppEvents` 表里
   每一条必须**既有派发方又有订阅方**。认字面量与 `export const X = "a:b"` 两种写法，
   测试文件不算任何一端，定义处自己不算端，先过 `stripComments`；
   配「扫描面非空」与合成源码反证（只有派发 / 只有订阅 / 两端都在 / 实参解析不出名字

@@ -58,7 +58,8 @@ function cGroupBody(hookText: string): string {
   return raw
     .split("\n")
     .filter((line) => !/^\s*#/.test(line))
-    .join("\n");
+    .join("\n")
+    .trim();
 }
 
 describe("受影响用例的启动器", () => {
