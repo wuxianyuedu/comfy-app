@@ -108,6 +108,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 从 Prisma→Drizzle 迁移起每次 500 而零红 —— 新增一处就是重新装上那个消音器，
   // 与本次暂存改动无关也必须响，所以进固定清单。
   "tests/f13-projection-shapes.test.ts",
+  // 「判据自己有没有执行者」：`doc:check` 接进 pre-commit D 组之后的在位判据。
+  // 它必须进固定清单而不是只跟着改动走 —— 改 `.githooks/**` 会让本脚本**放弃收窄、
+  // 只跑固定清单**（实测 `--changed .githooks/pre-commit` 的清单里不含任何按路径
+  // 引用的用例），于是「有人把这一步摘回手动档」那次改动恰好不会跑到这条守卫，
+  // 表现不是红而是「文档又开始说谎而全绿」。这一族是零执行者判据（规范 §13.5.8）。
+  "tests/doc-check-hook-wiring.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

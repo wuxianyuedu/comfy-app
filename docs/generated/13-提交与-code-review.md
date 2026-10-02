@@ -536,6 +536,20 @@ master 上本来就红（属别线），于是「一笔无关改动」会被别�
 变成不可用 —— 那种闸活不过一周。等那批基线红清零后，把脚本里 `mode === "all"`
 那条分支改成跑全量，并删掉这段说明。
 
+**连带要求：守「钩子自身内容」的判据必须进固定清单**。`.githooks/**` 被改时固定清单是
+唯一的执行者，所以这类判据留在「按路径/按字面量引用才会被拉起」的那份用例里 = 零执行者，
+而它要拦的动作恰恰就是那次改动。实测（ISSUE #1371）：收录 `tests/doc-check-hook-wiring.test.ts`
+之前，`node scripts/affected-tests.mjs --changed .githooks/pre-commit` 给出 17 个用例，
+里面**没有**「`doc:check` 这一步还在不在钩子里」那组断言 —— 同一份断言写在
+`tests/check-doc-references.test.ts` 里时，改钩子的那次提交一条都不会跑到。
+同族先例：`tests/no-platform-ci-config.test.ts`（平台侧有没有兜底）、
+`tests/conditional-skip-registry.test.ts`（每个暗掉的站点都有人登记）。
+
+**在场判据要解析、不要 `toContain`**：把钩子里那一行前面加 `# ` 注掉，行内仍含同一段
+字面量，`toContain` 照样命中（实测只有「计数陈述」那条会红）。判据按行首锚定解析 D 组的
+`  run "<标签>" <命令>` 行、再断言目标命令在其中 ——「把这一步静音」正是这一族要拦的动作
+（同台账 F13「对编译器按下静音键」）。
+
 **代价实测**（16 逻辑核的开发机）：建图 + 解析约 **1.0–1.1s**（读 1.2k 个源码文件、
 6.4k 条说明符）。解析出来的面按改动半径线性放大 —— 改一个基元
 （`ui/tooltip.tsx`）52 个用例、钩子那批实测 1m40s；改一条链路
@@ -547,7 +561,8 @@ A(tsc)、B(eslint)、D(二十多个判据脚本) 与它并行，再按 8 起 for
 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 respond`（几百条全过、退出码非零）。全量 `pnpm test` 仍走配置里的 8。
 
-判据由 `tests/affected-tests.test.ts` 钉住（17 条）：四条判据各一组夹具、**两跳
+判据由 `tests/affected-tests.test.ts` 钉住（20 条，实测 `pnpm exec vitest run` 的读数；
+这个数没有判据核，改完数量要顺手同步这里）：四条判据各一组夹具、**两跳
 传递**与 barrel 转出口（含「没转出去的 sibling 不算消费」这条反面）、被删文件的
 消费方仍被拉起、公共地基的放弃收窄、**结果永不为空**（空参数会让 `vitest run`
 跑成全量）、固定清单每个文件真实存在、`isTestPath` 与 `vitest.config.ts` 的

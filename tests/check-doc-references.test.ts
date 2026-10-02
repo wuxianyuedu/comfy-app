@@ -419,36 +419,3 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
     expect(output).toContain("[doc:check] ✓");
   });
 });
-
-/**
- * 接入位置（ISSUE #1371：从「手动档」翻成 pre-commit D 组的静态判据）。
- *
- * 为什么这条要钉：本条判据过去**只在人记得跑的时候才生效**，而 AGENTS 规定的必跑口令是
- * `doc:render`（它只做「源 → 生成物」，不跑校验）。翻档之后如果哪天有人把它从钩子里摘回去，
- * 表现不是红，是「文档又开始说谎而全绿」—— 只能靠一条元判据看住。
- * 同一格先例：`tests/shell-gate.test.ts` 的「新增的门禁脚本必须同时接进 pre-commit」。
- */
-describe("doc:check 的接入位置（ISSUE #1371 翻档）", () => {
-  const hook = readFileSync(join(REPO_ROOT, ".githooks", "pre-commit"), "utf8");
-
-  it("钩子 D 组里有这一步，且调的就是本脚本", () => {
-    expect(hook).toContain(
-      'run "文档引用与权威源一致" node scripts/check-doc-references.cjs',
-    );
-  });
-
-  it("脚本头不许回到「不接 pre-commit（避免过度打扰提交）」那句旧签字", () => {
-    const script = readFileSync(CHECK, "utf8");
-    expect(script).not.toContain("不接 pre-commit（避免过度打扰提交）");
-  });
-
-  it("钩子里那句「D(N 个判据脚本)」的 N 与实际 run 行数一致（这数字没有别的判据核）", () => {
-    const claimed = /D\((\d+) 个判据脚本\)/.exec(hook);
-    expect(claimed, "钩子里的判据计数陈述还在吗？").not.toBeNull();
-    const actual = (hook.match(/^ {2}run "/gm) ?? []).length;
-    expect(
-      Number(claimed?.[1]),
-      `钩子注释写 ${claimed?.[1]}，实际 ${actual}`,
-    ).toBe(actual);
-  });
-});
