@@ -1177,23 +1177,27 @@ export default defineConfig({
           statements: 75,
           branches: 70,
         },
-        /* process/ 的 `kill-process-tree` 大部分分支要真杀进程（平台相关）。
-         * 这里从 50/60/50/55 降到实测值：棘轮开门那一次全量跑数出来是
-         * 24.4/46.9/26.4/24.6 —— 大头是 `process-launch.ts`（17.9% 行）与
-         * `kill-process-tree.ts`（29.1%），执行宿主那批新代码进来时没配用例，
-         * 而当时没有任何路径判得着这条门槛。欠的课记在台账 E7；补判决面
-         * （而非真起进程）时同批抬回原值。
-         *
-         * 抬一轮（ISSUE #1327）：`executable-resolve.ts` 从 `shell.mjs` 下沉进来时
-         * 同批带了 13 条用例，全量 `--coverage` 实测 69.37/69/79.59/69.91 ——
-         * 门槛按 §18.6「实测值向下取整到 5 的倍数」收紧到 65/65/75/65。
-         * 还差的那截仍由 `process-launch.ts`（17.85% 行，keepAlive 那条要走壳的
-         * 中介进程）顶着，所以**没有**一次抬回原值 50/60/50/55。 */
+        /* process/ 这一档的三次移动，口径都是「按实测登记、只升不降」：
+         *   1) 棘轮开门那一次全量实测 24.4/46.9/26.4/24.6，于是从 50/60/50/55 **降**到
+         *      25/20/45/20 —— 那是欠账的记账位，不是目标（欠的课记在台账 E7）。
+         *      欠账有两个来源：`kill-process-tree.ts` 的 POSIX 判据组整组
+         *      `runIf(!isWindowsPlatform())`，在这台 Windows 机器上一条都不跑；
+         *      `process-launch.ts` 只配了三个纯函数的用例，`spawnManaged` 的四条拉起
+         *      路径与中介 stderr 的读取整段无人执行。
+         *   2) ISSUE #1327 把 `executable-resolve.ts` 从 `shell.mjs` 下沉进来并同批带了
+         *      13 条用例，全量 `--coverage` 实测 69.37/69/79.59/69.91 → 抬到 65/75/65/65；
+         *      当时明写「还差的那截仍由 process-launch.ts（17.85% 行）顶着」，所以没一次抬回原值。
+         *   3) 本批把那截补完：POSIX 那张表改成**判决面**（`ps` 报什么、`process.kill`
+         *      接不接受、该发哪条命令行，全部注入），两端机器判同一个结论；真起进程数残留
+         *      那组留在原文件里照旧。全量 `--coverage` 实测 100/97.69/100/100。
+         * ⚠️ 余下 2.31% 的分支是平台绑定或不可达的两处，不是漏网：`taskkill` 以 0 退出时
+         *      via 里那半句（Linux 的假 taskkill 造得出、Windows 上 `.cmd` 起不来），
+         *      以及 `ps` 输出解析里那个走不到的兜底。 */
         "src/lib/process/**": {
-          lines: 65,
-          functions: 75,
-          statements: 65,
-          branches: 65,
+          lines: 90,
+          functions: 95,
+          statements: 90,
+          branches: 85,
         },
         "src/lib/shell/**": {
           lines: 60,
