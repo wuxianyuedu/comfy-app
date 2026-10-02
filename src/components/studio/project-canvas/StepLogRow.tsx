@@ -67,14 +67,14 @@ export const StepLogRow = memo(function StepLogRow({
         {levelLabel(log.level)}
       </span>
       <span
-        className={`min-w-0 flex-1 break-words whitespace-pre-wrap ${
+        className={`min-w-0 flex-1 wrap-break-word whitespace-pre-wrap ${
           isClient ? "text-ink-soft italic" : "text-ink-soft"
         }`}
       >
         {log.msg}
       </span>
       {log.src && (
-        <span className="text-ink-fainter hover:text-ink-soft max-w-[200px] shrink-0 truncate text-[11px]">
+        <span className="text-ink-fainter hover:text-ink-soft max-w-50 shrink-0 truncate text-[11px]">
           {log.src}
         </span>
       )}

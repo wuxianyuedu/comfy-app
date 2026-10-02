@@ -97,7 +97,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             labelClassName="text-muted-foreground mb-1 text-xs"
           >
             <SelectMenu
-              className="!bg-subtle !border-border text-sm"
+              className="bg-subtle! border-border! text-sm"
               value={meta.type}
               onChange={(value) =>
                 onMetaChange({ ...meta, type: value as ProjectType })

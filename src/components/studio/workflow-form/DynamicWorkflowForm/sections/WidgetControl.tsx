@@ -72,7 +72,7 @@ export function WidgetControl({
       }
       return (
         <textarea
-          className={`${inputCls} mt-1.5 min-h-[52px] ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
+          className={`${inputCls} mt-1.5 min-h-13 ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
           rows={4}
           value={typeof value === "string" ? value : ""}
           disabled={disabled}
@@ -133,7 +133,7 @@ export function WidgetControl({
          * 余下的卡片宽度留给标签列，避免「宽度 / 高度 / 步数」被截断。 */
         return (
           <div className="flex items-center gap-1.5">
-            <div className="max-w-[180px] min-w-[120px]">{stepper}</div>
+            <div className="max-w-45 min-w-30">{stepper}</div>
             {seedButton}
           </div>
         );
@@ -154,7 +154,7 @@ export function WidgetControl({
           aria-checked={value === true}
           disabled={disabled}
           onClick={() => onValueChange(!value)}
-          className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep ${compact ? "h-[28px] px-2.5" : "mt-1 h-[30px] px-3"} w-full justify-between rounded-md text-[12px] ${
+          className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep ${compact ? "h-[28px] px-2.5" : "mt-1 h-7.5 px-3"} w-full justify-between rounded-md text-[12px] ${
             value ? "text-success-strong" : "text-ink-muted"
           } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
         >

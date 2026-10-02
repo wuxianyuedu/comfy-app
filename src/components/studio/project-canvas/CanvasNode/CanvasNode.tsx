@@ -285,7 +285,7 @@ export const CanvasNode = React.memo(function CanvasNode({
        * （步进器以 max-w-[180px] 封顶），布局
        * 现为： [label flex-1] ……… [type chip] / [stepper ≤180]，作用于
        * 每条工作流 widget 行。 */
-      className="border-border-strong bg-card relative w-[380px] rounded-[14px] border transition-[outline,box-shadow] duration-150"
+      className="border-border-strong bg-card relative w-95 rounded-[14px] border transition-[outline,box-shadow] duration-150"
       style={
         selected
           ? {

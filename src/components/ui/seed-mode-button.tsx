@@ -178,7 +178,7 @@ export function SeedModeButton({
         sideOffset={6}
         /* 面板自身滚动：窗口再矮也不会把最后一个选项推出视口（基元负责
            `max-height` 与翻转，这里只给形态）。 */
-        className="nodrag nopan border-border-strong bg-card w-[280px] gap-0 overflow-hidden rounded-xl border p-3 shadow-2xl shadow-black/12 dark:shadow-black/60"
+        className="nodrag nopan border-border-strong bg-card w-70 gap-0 overflow-hidden rounded-xl border p-3 shadow-2xl shadow-black/12 dark:shadow-black/60"
       >
         <div className="flex flex-col gap-0.5">
           <h4 className="text-ink-bright text-[12px] font-semibold">
@@ -208,7 +208,7 @@ export function SeedModeButton({
                     : "border-transparent"
                 }`}
               >
-                <span className="bg-node-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
+                <span className="bg-node-accent flex size-9 shrink-0 items-center justify-center rounded-lg">
                   <SeedModeIcon value={item.value} />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
@@ -220,7 +220,7 @@ export function SeedModeButton({
                   </span>
                 </span>
                 <span
-                  className={`h-3.5 w-3.5 shrink-0 rounded-full border-2 transition-colors ${
+                  className={`size-3.5 shrink-0 rounded-full border-2 transition-colors ${
                     selected
                       ? "border-primary bg-primary"
                       : "border-border-strong bg-transparent"

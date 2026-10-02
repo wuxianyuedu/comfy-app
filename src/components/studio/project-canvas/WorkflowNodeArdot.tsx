@@ -135,8 +135,8 @@ function PortRowString({
   value: string;
 }) {
   return (
-    <div className="flex h-[86px] flex-col gap-[6px] py-[6px]">
-      <div className="flex h-4 items-center justify-between gap-2.5 pr-[14px] pl-[14px]">
+    <div className="flex h-21.5 flex-col gap-1.5 py-1.5">
+      <div className="flex h-4 items-center justify-between gap-2.5 pr-3.5 pl-3.5">
         <span
           className="text-ink-bright text-[12px] font-medium"
           style={{ fontFamily: "var(--font-sans)" }}
@@ -149,7 +149,7 @@ function PortRowString({
         readOnly
         rows={2}
         defaultValue={value}
-        className="bg-canvas-deep text-ink-soft border-border-subtle field-sizing-normal mx-[14px] h-[52px] min-h-0 resize-none rounded-md border px-2.5 py-2 text-[11px] leading-relaxed focus-visible:ring-0"
+        className="bg-canvas-deep text-ink-soft border-border-subtle field-sizing-normal mx-3.5 h-13 min-h-0 resize-none rounded-md border px-2.5 py-2 text-[11px] leading-relaxed focus-visible:ring-0"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </div>
@@ -167,7 +167,7 @@ function PortRowInt({
   value: string;
 }) {
   return (
-    <div className="flex h-[33px] items-center gap-2.5 pr-[14px] pl-[14px]">
+    <div className="flex h-8.25 items-center gap-2.5 pr-3.5 pl-3.5">
       <span
         className="text-ink-bright text-[12px] font-medium"
         style={{ fontFamily: "var(--font-sans)" }}
@@ -178,7 +178,7 @@ function PortRowInt({
       <input
         readOnly
         defaultValue={value}
-        className="border-border-strong bg-canvas-deep text-ink-bright h-[21px] w-[140px] rounded border px-2 text-right text-[12px] tabular-nums outline-none"
+        className="border-border-strong bg-canvas-deep text-ink-bright h-5.25 w-35 rounded border px-2 text-right text-[12px] tabular-nums outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
       <PortChip type={type} />
@@ -189,7 +189,7 @@ function PortRowInt({
 /* ── 输出端口行（28h：spacer + label + chip + pr 让出右端点位置） ── */
 function PortRowOutput({ label, type }: { label: string; type: string }) {
   return (
-    <div className="flex h-7 items-center gap-2.5 pr-[14px] pl-[14px]">
+    <div className="flex h-7 items-center gap-2.5 pr-3.5 pl-3.5">
       <div className="flex-1" />
       <span
         className="text-ink-bright text-[12px] font-medium"
@@ -214,11 +214,11 @@ function PortRowOutput({ label, type }: { label: string; type: string }) {
  */
 export function WorkflowNodeArdot() {
   return (
-    <div className="relative w-[340px]">
+    <div className="relative w-85">
       {/* ── Card 自身（overflow-hidden 保护底部 ActionBtn 圆角）── */}
       <div className="border-border-strong bg-card relative overflow-hidden rounded-[14px] border">
         {/* ── CardHeader 340×32 ── */}
-        <div className="flex h-8 items-center justify-between gap-2.5 pr-[14px] pl-[14px]">
+        <div className="flex h-8 items-center justify-between gap-2.5 pr-3.5 pl-3.5">
           <div className="flex items-center gap-2.5">
             <span
               aria-label="类型 工作流"
@@ -237,7 +237,7 @@ export function WorkflowNodeArdot() {
               自定义工作流
             </span>
           </div>
-          <div className="bg-node-accent flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] px-2">
+          <div className="bg-node-accent flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2">
             <span className="bg-primary size-1.5 rounded-full" />
             <span
               className="text-ink-soft text-[10px] font-medium"
@@ -253,7 +253,7 @@ export function WorkflowNodeArdot() {
 
         {/* ── WorkflowChipRow 340×44（chip 24h 居中）── */}
         {/* 顺序：本机（位置）→ image_z_image_int8（名称）→ T2I（类型，最右） */}
-        <div className="flex h-11 items-center gap-1.5 pr-[14px] pl-[14px]">
+        <div className="flex h-11 items-center gap-1.5 pr-3.5 pl-3.5">
           {/* Chip 1：本机（位置）· 绿点+本机+▾ */}
           <Button
             variant="outline"
@@ -340,7 +340,7 @@ export function WorkflowNodeArdot() {
         {/* ── ActionBtn 340×43（紧贴端口行下沿，0 间距） ── */}
         <Button
           variant="primary-solid"
-          className="from-primary to-accent flex h-[43px] w-full items-center justify-center gap-2 rounded-none bg-linear-to-r text-[13px] font-bold text-white hover:opacity-90"
+          className="from-primary to-accent flex h-10.75 w-full items-center justify-center gap-2 rounded-none bg-linear-to-r text-[13px] font-bold text-white hover:opacity-90"
           style={{
             fontFamily: "var(--font-sans)",
             boxShadow:

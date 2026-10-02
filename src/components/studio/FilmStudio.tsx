@@ -248,7 +248,7 @@ export function FilmStudio() {
       {/* ── 三栏主体 ───────────────────────── */}
       <div className="z-base relative flex min-h-0 flex-1 overflow-hidden">
         {/* ═══ 左：镜头列表面板（260px） ═══ */}
-        <aside className="border-border-subtle bg-panel-deep/85 flex w-[260px] shrink-0 flex-col border-r backdrop-blur-sm">
+        <aside className="border-border-subtle bg-panel-deep/85 flex w-65 shrink-0 flex-col border-r backdrop-blur-sm">
           {/* Header */}
           <div className="border-border-subtle flex h-11 items-center justify-between border-b px-4">
             <div className="flex items-center gap-2">
@@ -296,11 +296,11 @@ export function FilmStudio() {
                     {shot.thumbnailUrl ? (
                       <MediaThumbnail
                         src={shot.thumbnailUrl}
-                        className="h-12 w-[56px] shrink-0 rounded-md object-cover"
+                        className="h-12 w-14 shrink-0 rounded-md object-cover"
                       />
                     ) : (
                       <div
-                        className={`flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] ${
+                        className={`flex h-12 w-14 shrink-0 items-center justify-center rounded-md text-[10px] ${
                           isSelected
                             ? "bg-primary/10 text-primary-strong"
                             : "bg-subtle text-ink-faintest"
@@ -373,7 +373,7 @@ export function FilmStudio() {
         {/* ═══ 中：预览 + 时间线 ═══ */}
         <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden p-5 pb-3">
           {/* Preview Canvas */}
-          <div className="border-border-subtle bg-canvas-deep relative mb-3 flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-2xl border">
+          <div className="border-border-subtle bg-canvas-deep relative mb-3 flex min-h-80 flex-1 items-center justify-center overflow-hidden rounded-2xl border">
             {/* Resolution hint：写尺寸表达（比例 + 档位），与全项目的尺寸口径一致。 */}
             <span className="text-ink-faintest bg-canvas-deep absolute top-2.5 left-3 rounded px-2 py-0.5 font-mono text-[10px] backdrop-blur-sm">
               {sizeSpecSummary(c.size)} · {c.fps}fps
@@ -461,14 +461,14 @@ export function FilmStudio() {
               {/* Playhead */}
               {/* p71-allow:start timeline playhead 红 · 视频剪辑行业的播放头视觉惯例、非错误状态色；走 bg-destructive 会被误读成「这里出错了」 */}
               <div
-                className="z-base pointer-events-none absolute bottom-0 w-[2px] bg-red-400/80"
+                className="z-base pointer-events-none absolute bottom-0 w-0.5 bg-red-400/80"
                 style={{
                   left: `${Math.min(playheadPos, 600)}px`,
                   top: 0,
                   height: "100%",
                 }}
               >
-                <div className="absolute -top-1 left-[-7px] h-[10px] w-4 rounded-sm bg-red-400/80" />
+                <div className="absolute -top-1 left-[-7px] h-2.5 w-4 rounded-sm bg-red-400/80" />
               </div>
               {/* p71-allow:end */}
 
@@ -541,7 +541,7 @@ export function FilmStudio() {
         </main>
 
         {/* ═══ 右：属性面板（280px） ═══ */}
-        <aside className="border-border-subtle bg-panel-deep/85 flex w-[280px] shrink-0 flex-col border-l backdrop-blur-sm">
+        <aside className="border-border-subtle bg-panel-deep/85 flex w-70 shrink-0 flex-col border-l backdrop-blur-sm">
           {/* Header */}
           <div className="border-border-subtle flex h-11 items-center border-b px-4">
             <span className="text-ink-field text-[13px] font-semibold">
@@ -797,7 +797,7 @@ export function FilmStudio() {
 
       {/* ── Status Bar ──────────────────────────────── */}
       <footer className="border-border-subtle bg-panel-deep/95 z-base relative flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm">
-        <span className="bg-success shadow-success/40 inline-block h-[7px] w-[7px] rounded-full shadow-sm" />
+        <span className="bg-success shadow-success/40 inline-block size-1.75 rounded-full shadow-sm" />
         <span className="text-ink-muted text-[11px]">
           ComfyUI 本地已连接 · Wan I2V 视频模型就绪 · GPU 可用
         </span>

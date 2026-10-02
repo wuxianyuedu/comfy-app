@@ -127,7 +127,7 @@ function ResumeProjectCard({
       className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 mt-6 flex h-auto w-full items-stretch gap-4 rounded-[18px] border p-4 text-left font-normal active:scale-[0.995]"
     >
       {/* 左：缩略图条；一张图都没有时落回类别图标块（不留空洞） */}
-      <div className="flex w-[168px] shrink-0 gap-1.5 overflow-hidden rounded-xl">
+      <div className="flex w-42 shrink-0 gap-1.5 overflow-hidden rounded-xl">
         {thumbs.length > 0 ? (
           thumbs.map((thumb, i) => (
             <MediaThumbnail
@@ -248,7 +248,7 @@ export function HomePage({
         {/* 内容容器用 `<div>` 而不是 `<main>`：外壳的 `SidebarInset` 才是
             本页唯一的 `<main>`（规范 06 §语义标签），嵌套两个会破坏地标导航。 */}
         <div className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[960px] px-10 py-16">
+          <div className="mx-auto w-full max-w-240 px-10 py-16">
             {/* ── Title ── */}
             <h1 className="u-title-hero mb-3 text-center">灵感从这里开始</h1>
             <p className="text-ink-faint mb-10 text-center text-sm">
@@ -354,7 +354,7 @@ export function HomePage({
                   onClick={onNewProject}
                   className="group border-border bg-surface-1 hover:bg-info/5 flex h-auto flex-col items-center justify-center gap-2.5 rounded-[16px] border border-dashed py-7 font-normal active:scale-[0.98]"
                 >
-                  <div className="text-info-strong/70 group-hover:text-info-strong flex h-[28px] w-[28px] items-center justify-center rounded-xl transition-colors">
+                  <div className="text-info-strong/70 group-hover:text-info-strong flex size-7 items-center justify-center rounded-xl transition-colors">
                     <Plus size={24} strokeWidth={1.6} />
                   </div>
                   <span className="text-ink-muted group-hover:text-info-strong text-[12.5px] font-medium transition-colors">

@@ -128,7 +128,7 @@ export function NodePreviewCard({
               className="mb-1.5 grid"
               style={{ gridTemplateColumns: "1fr 1fr", gap: 4 }}
             >
-              <div className="flex flex-col gap-[3px]">
+              <div className="flex flex-col gap-0.75">
                 {typed.map((i, idx) => (
                   <PortRow
                     key={`ti-${idx}`}
@@ -139,7 +139,7 @@ export function NodePreviewCard({
                   />
                 ))}
               </div>
-              <div className="flex flex-col items-end gap-[3px]">
+              <div className="flex flex-col items-end gap-0.75">
                 {outputs.map((output, idx) => (
                   <PortRow
                     key={`to-${idx}`}
@@ -156,7 +156,7 @@ export function NodePreviewCard({
           {/* 区 2 —— widget（带标签的参数） */}
           {widgets.length > 0 && (
             <div
-              className="flex flex-col gap-[2px] border-t pt-1.5"
+              className="flex flex-col gap-0.5 border-t pt-1.5"
               style={{ borderColor: "var(--color-border-subtle)" }}
             >
               {widgets.slice(0, 32).map((widget, idx) => (

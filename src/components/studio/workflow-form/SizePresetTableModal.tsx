@@ -103,7 +103,7 @@ export function SizePresetTableModal({
           <table className="w-full border-separate border-spacing-y-1 text-[11px]">
             <thead>
               <tr className="text-ink-muted text-left">
-                <th className="w-[92px] font-medium">比例</th>
+                <th className="w-23 font-medium">比例</th>
                 {RESOLUTION_TIERS.map((tier) => (
                   <th key={tier} className="font-medium">
                     {tier.toUpperCase()}（宽 × 高）
@@ -124,7 +124,7 @@ export function SizePresetTableModal({
                       <td key={tier} className="pr-2">
                         <div className="flex items-center gap-1">
                           <NumberField
-                            className="w-[96px]"
+                            className="w-24"
                             value={dims.width}
                             min={TABLE_MIN}
                             max={TABLE_MAX}
@@ -138,7 +138,7 @@ export function SizePresetTableModal({
                           />
                           <span className="text-ink-faint">×</span>
                           <NumberField
-                            className="w-[96px]"
+                            className="w-24"
                             value={dims.height}
                             min={TABLE_MIN}
                             max={TABLE_MAX}

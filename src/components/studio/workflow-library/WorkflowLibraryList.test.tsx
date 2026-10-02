@@ -152,7 +152,7 @@ describe("列表项：名称限长 + 对外参数精简显示", () => {
 
     const name = screen.getByText(longName);
     expect(name.className).toContain("truncate");
-    expect(name.className).toMatch(/max-w-\[/);
+    expect(name.className).toMatch(/\bmax-w-\d/);
     /* 完整名称仍可从 title 读到（截断只发生在视觉上）。 */
     expect(name.getAttribute("title")).toBe(longName);
   });

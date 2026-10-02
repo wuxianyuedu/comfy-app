@@ -69,7 +69,7 @@ export function CharacterReviewButton({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex min-h-[96px] flex-col gap-3">
+          <div className="flex min-h-24 flex-col gap-3">
             {reviewing ? (
               <p className="text-ink-fainter text-sm">正在评审…</p>
             ) : error ? (

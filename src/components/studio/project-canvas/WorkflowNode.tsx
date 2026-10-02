@@ -161,7 +161,7 @@ export function WorkflowNode({
   return (
     <>
       {/* 头部：W 图标 + 标题 + 状态胶囊（Ardot token，与测试节点一致） */}
-      <div className="flex h-8 min-w-0 items-center justify-between gap-2 pr-[14px] pl-[14px]">
+      <div className="flex h-8 min-w-0 items-center justify-between gap-2 pr-3.5 pl-3.5">
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-label="类型 工作流"
@@ -179,7 +179,7 @@ export function WorkflowNode({
           </span>
         </div>
         <div
-          className="bg-overlay-accent-surface flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] px-2"
+          className="bg-overlay-accent-surface flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2"
           title={`项目画布节点 Id：${id}`}
         >
           <span
@@ -201,7 +201,7 @@ export function WorkflowNode({
        *   Row 2 (中优先级，配置类)  ② WorkflowPickChip (flex-1) + ③ ModePickChip
        *  之前单行 h-11 在 ~300px 节点宽度下 WorkflowPickChip 被压
        *  截断成 "ima..."。拆行后 WorkflowPickChip 独占一行可读全名。 */}
-      <div className="flex flex-col gap-1 pr-[14px] pb-1.5 pl-[14px]">
+      <div className="flex flex-col gap-1 pr-3.5 pb-1.5 pl-3.5">
         {/* Row 1 — 高优先级筛选 chip：来源 + 模型 */}
         <div className="flex h-7 min-w-0 items-center gap-1">
           <WorkflowSourceFilterChip

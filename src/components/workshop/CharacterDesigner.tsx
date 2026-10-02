@@ -390,7 +390,7 @@ export function CharacterDesigner({
                   艺术风格（Skill）
                 </span>
                 <SelectMenu
-                  className="!border-border !bg-subtle text-sm"
+                  className="border-border! bg-subtle! text-sm"
                   value={character.skillSlug ?? ""}
                   onChange={(value) =>
                     update(character.id, { skillSlug: value || undefined })
@@ -411,11 +411,11 @@ export function CharacterDesigner({
                 <p className="text-muted-foreground mb-1 text-xs font-medium">
                   生成提示词预览
                 </p>
-                <p className="text-ink/80 text-xs leading-relaxed break-words">
+                <p className="text-ink/80 text-xs leading-relaxed wrap-break-word">
                   {character.positivePrompt || "填写角色信息后自动生成…"}
                 </p>
                 {character.negativePrompt && (
-                  <p className="text-muted-foreground/70 mt-2 text-xs leading-relaxed break-words">
+                  <p className="text-muted-foreground/70 mt-2 text-xs leading-relaxed wrap-break-word">
                     <span className="font-medium">负向：</span>
                     {character.negativePrompt}
                   </p>

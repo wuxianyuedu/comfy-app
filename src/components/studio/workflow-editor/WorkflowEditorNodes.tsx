@@ -53,7 +53,7 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
     >
       {data.title ? (
         <div
-          className="absolute top-0 left-2 rounded-b px-1.5 py-[1px] text-[11px] leading-tight font-semibold"
+          className="absolute top-0 left-2 rounded-b px-1.5 py-0.25 text-[11px] leading-tight font-semibold"
           style={{
             color: titleCol,
             background: titleBg,
@@ -138,7 +138,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
        *  React Flow 用 `Position` 属性把 Handle 绝对定位，
        *  所以改 flex 的 `justify-…` 只挪得动可见的标签 / 值 ——
        *  圆点始终钉在 wfGroup 的那一侧。 */
-      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} text-ink-bright/90 gap-1 px-1.5 py-[1px] text-[10.5px] leading-[1.4]`}
+      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} text-ink-bright/90 gap-1 px-1.5 py-0.25 text-[10.5px] leading-[1.4]`}
       style={{
         width: IO_PORT_WIDTH,
         background: "transparent",

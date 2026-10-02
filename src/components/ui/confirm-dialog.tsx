@@ -117,7 +117,7 @@ export function ConfirmDialog({
         data-testid="modal-dialog"
       >
         <div
-          className={`bg-panel/95 relative w-full max-w-[420px] overflow-hidden rounded-2xl border p-6 ring-1 backdrop-blur-md ${ringClass}`}
+          className={`bg-panel/95 relative w-full max-w-105 overflow-hidden rounded-2xl border p-6 ring-1 backdrop-blur-md ${ringClass}`}
         >
           {/* 柔和强调底色 —— 定调但不喧宾夺主 */}
           <div
@@ -131,7 +131,7 @@ export function ConfirmDialog({
 
           <div className="relative flex items-start gap-3">
             <div
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+              className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${
                 danger ? "bg-destructive/10" : "bg-primary-500/10"
               } ${iconColor}`}
             >

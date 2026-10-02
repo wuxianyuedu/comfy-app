@@ -97,7 +97,7 @@ export function WorksGallery({
   return (
     <div className="h-full overflow-y-auto">
       <AuroraBackground />
-      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
+      <div className="mx-auto max-w-300 px-4 py-8 sm:px-8 sm:py-10">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-title u-title-page">所有项目</h1>
@@ -152,7 +152,7 @@ export function WorksGallery({
                       className="canvasProject-3.5 flex h-auto w-full items-start gap-3 rounded-2xl text-left font-normal"
                     >
                       <div
-                        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${WORKS_CATEGORY_ICON_BG}`}
+                        className={`mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl ${WORKS_CATEGORY_ICON_BG}`}
                       >
                         <svg
                           width="16"
@@ -212,10 +212,10 @@ export function WorksGallery({
             <EmptyState
               title="还没有画布项目"
               description="点击右上角「新建创作」开始你的第一个工作流，或者在工作流库载入模板。"
-              minHeightClass="min-h-[360px]"
+              minHeightClass="min-h-90"
               icon={
                 <span
-                  className={`flex h-14 w-14 items-center justify-center rounded-2xl ${WORKS_CATEGORY_ICON_BG}`}
+                  className={`flex size-14 items-center justify-center rounded-2xl ${WORKS_CATEGORY_ICON_BG}`}
                 >
                   <svg
                     width="22"

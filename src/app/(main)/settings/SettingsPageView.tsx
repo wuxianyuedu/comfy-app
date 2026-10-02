@@ -65,7 +65,7 @@ export function SettingsPageView({
           variant="warning"
           className="mb-4 flex items-start gap-3 px-4 py-2 text-sm"
         >
-          <AlertDescription className="min-w-0 flex-1 text-sm break-words">
+          <AlertDescription className="min-w-0 flex-1 text-sm wrap-break-word">
             本次未能读取最新配置，界面显示的是上一次成功读取的内容：
             {c.serveState.errorText}
           </AlertDescription>
