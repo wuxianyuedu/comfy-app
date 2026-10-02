@@ -17,6 +17,7 @@ import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { copyFailureText } from "~/components/ui/use-copy-feedback";
 import { displayValue } from "~/lib/display-value";
+import { artifactDirDisplay } from "~/lib/media/output-layout";
 import { timeAgo } from "~/lib/time-format";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
 import type { ProjectOutputItem } from "./hooks/use-project-outputs";
@@ -216,8 +217,9 @@ export function ProjectOutputsMetadataSheet({
                 </div>
                 <p className="text-ink-fainter mt-2 text-[10.5px]">
                   文件已保存至{""}
+                  {/* 形状取自布局那一处定义；组件里抄字面量会在搬根那天说错话。 */}
                   <span className="text-ink-muted font-mono">
-                    public/generated/projects/{projectId}/{selected.id}/
+                    {artifactDirDisplay(selected.id, projectId)}
                   </span>
                 </p>
               </div>

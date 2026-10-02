@@ -19,6 +19,7 @@ import { productionRepository } from "~/lib/core/repository-production";
 import { normalizeProductionProgress } from "~/lib/production/progress";
 import type { Shot } from "~/lib/workshop/types";
 import { sizeSpecDims, toSizeSpec } from "~/lib/media/size-presets";
+import { artifactUrl, filmBgmRoot, filmsRoot } from "~/lib/media/output-paths";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { withTimeoutResult } from "~/lib/with-timeout";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
@@ -158,11 +159,9 @@ export async function composeFilm(id: string) {
    * ffmpeg 要的是像素 —— 在这里折算。 */
   const { width: W, height: H } = sizeSpecDims(toSizeSpec(film.size), "video");
   const fps = film.fps;
-  const tmpDir = path.join(cwd, "public", "generated", "films", `_tmp_${id}`);
+  const tmpDir = path.join(filmsRoot(), `_tmp_${id}`);
   await fs.mkdir(tmpDir, { recursive: true });
-  await fs.mkdir(path.join(cwd, "public", "generated", "films"), {
-    recursive: true,
-  });
+  await fs.mkdir(filmsRoot(), { recursive: true });
 
   try {
     for (const [i, shot] of shots.entries()) {
@@ -174,6 +173,14 @@ export async function composeFilm(id: string) {
         throw new Error(`镜头 ${i + 1} 缺少视频文件，无法合成`);
       }
       const clip = clipPathOf(cwd, videoPath);
+      if (!clip) {
+        // 地址解不出落在产物根内的文件 = 这一条镜头不可能合成成功：
+        // 在起 ffmpeg 之前就说清是哪一条、存的是哪个地址，别让它变成一句
+        // 「No such file or directory」的 stderr 片段（硬规则 4）。
+        throw new Error(
+          `镜头 ${i + 1} 的视频地址不在产物目录内：${clampText(videoPath, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+        );
+      }
       const segOut = path.join(tmpDir, `seg_${i}.mp4`);
       const dur = shot.duration ?? film.framesPerShot / fps;
       const fadeOut = Math.max(0, dur - 0.3);
@@ -246,24 +253,13 @@ export async function composeFilm(id: string) {
         `拼接失败：${clampText(cres.stderr, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
       );
 
-    const finalPath = path.join(
-      cwd,
-      "public",
-      "generated",
-      "films",
-      `${id}.mp4`,
-    );
-    const localPath = `/api/generated/films/${id}.mp4`;
+    const finalPath = path.join(filmsRoot(), `${id}.mp4`);
+    /* 地址与磁盘同一处派生：写进 Film 行的这条就是前端 `<video src>` 拿到的那条，
+     * 自己拼一份前缀就会与 `taskOutputUrl()` 的形状分叉（台账 A8 的同一族）。 */
+    const localPath = artifactUrl(["films", `${id}.mp4`]);
 
     if (film.bgmName) {
-      const bgm = path.join(
-        cwd,
-        "public",
-        "generated",
-        "films",
-        "bgm",
-        film.bgmName,
-      );
+      const bgm = path.join(filmBgmRoot(), film.bgmName);
       const bgmExists = await fs
         .stat(bgm)
         .then(() => true)

@@ -83,10 +83,6 @@ const QueueMonitor = dynamic(
     ),
   { ssr: false },
 );
-const TrainingStudio = dynamic(
-  () => import("~/components/studio").then((mod) => mod.TrainingStudio),
-  { ssr: false },
-);
 const WorkflowLibrary = dynamic(
   () => import("~/components/studio").then((mod) => mod.WorkflowLibrary),
   { ssr: false },
@@ -367,9 +363,6 @@ export default function WorkspacePage() {
 
       case "queue":
         return <QueueMonitor onOpenSettings={openSettings} />;
-
-      case "train":
-        return <TrainingStudio onOpenSettings={openSettings} />;
 
       case "canvas":
         return (

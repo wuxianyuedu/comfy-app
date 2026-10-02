@@ -138,6 +138,35 @@ export function errorText(
 }
 
 /**
+ * 从 unknown 抛值里取出 **tRPC 错误码**（`FORBIDDEN` / `BAD_REQUEST` / …）。
+ *
+ * 为什么需要一个「取码」的出口：文案（{@link errorMessage}）回答「哪儿错了」，
+ * **码**回答「我该不该再试」—— 前者是给人读的，后者是代码要分支的。全库此前只有
+ * {@link rawErrorDetail} 在读码，而它把码拼进日志字符串就丢掉了，于是调用方想分
+ * 「服务端确定不收这个内容」与「此刻拿不到服务端」两种失败时，只能去**匹配文案**
+ * ——文案一改判决就错。§11.2.1 第七条给服务端侧定了同一条口径（闸门要判整个信封、
+ * 含码），客户端侧此前没有对应的取值出口。
+ *
+ * 取值优先级与 {@link rawErrorDetail} 共用一条链（`data.code` → `shape.code` →
+ * `code`）：tRPC 客户端把码放在 `data`，服务端 `shape` 里也有一份，裸 `Error` 上
+ * 可能有人自己挂了一个。取不到（不是字符串、或空串）返回 `null`。
+ */
+export function errorCode(e: unknown): string | null {
+  if (typeof e !== "object" || e === null) return null;
+  const obj = e as {
+    code?: unknown;
+    data?: { code?: unknown };
+    shape?: { code?: unknown };
+  };
+  for (const candidate of [obj.data?.code, obj.shape?.code, obj.code]) {
+    if (typeof candidate === "string" && candidate.length > 0) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/**
  * 从 unknown 抛值里取出**原始**报错详情（给日志/「完整错误」区用，不翻译）。
  *
  * 与 {@link errorMessage} 的分工：`errorMessage` 产出**给人看**的可读文案
@@ -169,15 +198,9 @@ export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
     const message =
       typeof obj.message === "string" && obj.message ? obj.message : null;
     if (message) parts.push(message);
-    // tRPC 客户端错误把 code / httpStatus 放在 data 里；服务端 shape 里也有 code。
-    const code =
-      typeof obj.data?.code === "string"
-        ? obj.data.code
-        : typeof obj.shape?.code === "string"
-          ? obj.shape.code
-          : typeof obj.code === "string"
-            ? obj.code
-            : null;
+    /* 码的取值链与 {@link errorCode} 同一条（两份实现会漂移：一处认 `shape.code`、
+     * 另一处不认，日志里就查不到那个码，而分支代码看不见同一个错误）。 */
+    const code = errorCode(e);
     if (code) parts.push(`code=${code}`);
     if (typeof obj.data?.httpStatus === "number") {
       parts.push(`http=${obj.data.httpStatus}`);

@@ -194,7 +194,7 @@ function main() {
     command: process.execPath,
     args: [SERVER],
     // cwd = 应用根：Next 会自己 chdir 到这里，提前对齐让 `log/`、`data/`、
-    // `public/generated/` 这些按 cwd 解析的运行期目录与 server 看到的是同一处。
+    // `generated/`（产物根）这些按 cwd 解析的运行期目录与 server 看到的是同一处。
     cwd: APP_ROOT,
     env: childEnv,
     stdoutFile,

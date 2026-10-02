@@ -13,12 +13,22 @@
  * 平台中立：期望值一律用 `path.join` / `path.resolve` 现算，不写死 `/` 或 `\`
  * ——用例在 win32 上跑，但判据本身不能只在 win32 成立。
  */
+import fs from "fs";
+import os from "os";
 import path from "path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, afterAll } from "vitest";
 
 import {
+  ARTIFACT_URL_PREFIX,
+  artifactDirDisplay,
+  artifactDiskPath,
+  artifactUrl,
   generatedRoot,
+  filmBgmRoot,
+  filmsRoot,
   isWithinGeneratedRoot,
+  legacyGeneratedRoot,
+  materialsRoot,
   taskOutputDir,
   taskOutputSegments,
   taskOutputUrl,
@@ -28,16 +38,25 @@ import {
 const ROOT = path.resolve(path.sep + "output-root");
 
 describe("generatedRoot", () => {
-  it("显式 cwd → <cwd>/public/generated（解析后的绝对路径）", () => {
+  it("显式 cwd → `<cwd>/generated`（解析后的绝对路径，不在 public/ 下）", () => {
     expect(generatedRoot("/srv/app")).toBe(
-      path.resolve("/srv/app", "public", "generated"),
+      path.resolve("/srv/app", "generated"),
     );
   });
 
   it("缺省用 process.cwd()，与 /api/generated/[...path] 的根同一算法", () => {
-    expect(generatedRoot()).toBe(
-      path.resolve(process.cwd(), "public", "generated"),
+    expect(generatedRoot()).toBe(path.resolve(process.cwd(), "generated"));
+  });
+
+  it("根**不在 public/ 下**（台账 A13 的结构性关法：public 由 Next 静态直发、不经 handler）", () => {
+    const root = generatedRoot("/srv/app");
+    expect(root.startsWith(path.resolve("/srv/app", "public"))).toBe(false);
+    // 旧根仍然是唯一一处知道历史落点的定义 —— 迁移与它的判据都从这里取，
+    // 别在调用点再拼一遍 "public", "generated"（那条判据见 artifact-layout 那份）。
+    expect(legacyGeneratedRoot("/srv/app")).toBe(
+      path.resolve("/srv/app", "public", "generated"),
     );
+    expect(legacyGeneratedRoot("/srv/app")).not.toBe(root);
   });
 });
 
@@ -127,5 +146,94 @@ describe("taskOutputDir", () => {
     expect(
       taskOutputDir(path.resolve(path.sep + "elsewhere"), null, ROOT),
     ).toBe(null);
+  });
+});
+
+describe("artifactUrl", () => {
+  it("前缀只有一份来源：taskOutputUrl 与它同形，且这个形状是对外承诺", () => {
+    expect(taskOutputUrl("t1", null)).toBe(`${ARTIFACT_URL_PREFIX}/t1`);
+    expect(taskOutputUrl("t1", "p1")).toBe(
+      `${ARTIFACT_URL_PREFIX}/projects/p1/t1`,
+    );
+    // URL 是写进库里的（TaskImage.localPath / Film.localPath）：磁盘根以后搬到哪，
+    // 这一句都不能变 —— 变了就是老数据全部读不到。
+    expect(ARTIFACT_URL_PREFIX).toBe("/api/generated");
+  });
+});
+
+describe("artifactDiskPath —— 写侧与读侧必须落在同一个文件上", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "artifact-roundtrip-"));
+  const root = path.join(tmp, "generated");
+
+  afterAll(() => {
+    // Windows：句柄没关时 rmSync 会 EPERM，按仓库既有做法带重试
+    fs.rmSync(tmp, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 100,
+    });
+  });
+
+  it("执行器落盘的目录里那个文件，用写进库的 localPath 原样取得到", () => {
+    for (const projectId of [null, "proj_1"]) {
+      const dir = taskOutputDir("t-42", projectId, root);
+      expect(dir).not.toBeNull();
+      fs.mkdirSync(dir!, { recursive: true });
+      const file = path.join(dir!, "img_0.png");
+      fs.writeFileSync(file, "png");
+      // 库里的 localPath 就是 executor-finalize 写的那一句
+      const localPath = `${taskOutputUrl("t-42", projectId)}/img_0.png`;
+      expect(artifactDiskPath(localPath, root)).toBe(file);
+      expect(fs.existsSync(artifactDiskPath(localPath, root)!)).toBe(true);
+    }
+  });
+
+  it("素材那种「每段都 percent-encode」的地址 decode 回同一个磁盘位置", () => {
+    const name = "中文 名%20.png";
+    const url = artifactUrl(
+      ["materials", "proj_1", "ref", name].map(encodeURIComponent),
+    );
+    expect(artifactDiskPath(url, root)).toBe(
+      path.join(root, "materials", "proj_1", "ref", name),
+    );
+  });
+
+  it("坏编码（孤立的 %）判成「不是产物地址」而不是抛 URIError", () => {
+    expect(artifactDiskPath("/api/generated/a%zz.png", root)).toBeNull();
+  });
+
+  it("残留成绝对路径的一段（resolve 会丢掉 root）→ null", () => {
+    expect(artifactDiskPath("/api/generated//etc/passwd", root)).toBeNull();
+  });
+
+  it("同级 generatedX 不算根内：判据带 path.sep 边界", () => {
+    expect(artifactDiskPath("/api/generated../x", root)).toBeNull();
+  });
+});
+
+describe("子层位置（materials / films / films+bgm）", () => {
+  it("全部从产物根派生，不各拼一份 public/generated", () => {
+    expect(materialsRoot(ROOT)).toBe(path.join(ROOT, "materials"));
+    expect(filmsRoot(ROOT)).toBe(path.join(ROOT, "films"));
+    expect(filmBgmRoot(ROOT)).toBe(path.join(ROOT, "films", "bgm"));
+    // 素材的 folderDir 与成片的 bgm 是两个不同的格：越界判据同一份、根不同
+    expect(isWithinGeneratedRoot(filmBgmRoot(ROOT), filmsRoot(ROOT))).toBe(
+      true,
+    );
+    expect(isWithinGeneratedRoot(materialsRoot(ROOT), filmsRoot(ROOT))).toBe(
+      false,
+    );
+  });
+});
+
+describe("artifactDirDisplay（界面向用户说落点时用的那一份形状）", () => {
+  it("项目任务与自由任务各给一种相对落点，且都不带 public 那一段", () => {
+    expect(artifactDirDisplay("t1", "proj_1")).toBe(
+      `generated/projects/proj_1/t1/`,
+    );
+    expect(artifactDirDisplay("t1", null)).toBe("generated/t1/");
+    // 界面文案只能来自这里：抄一份字面量就不会随搬迁而红（台账 A13 那三处文案的旧形状）
+    expect(artifactDirDisplay("t1", "p1").startsWith("public/")).toBe(false);
   });
 });

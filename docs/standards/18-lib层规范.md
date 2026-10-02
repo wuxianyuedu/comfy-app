@@ -157,6 +157,7 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | `src/lib/drizzle-studio/**` | 40    | 35        | 35         | 35       | 41.1 / 37.2 / 39.1                                                                                                            |
 | `src/lib/film/**`           | 100   | 90        | 100        | 90       | 100 / 100 / 100（编排迁到 `src/server/film/**` 后本目录只剩纯函数，见 §18.13）                                                |
 | `src/lib/llm/**`            | 90    | 85        | 90         | 85       | 97.5 / 96.6 / 89.7（`server.ts` 唯一 LLM 出口与 `usage-test.server.ts` 从 0 覆盖接入用例后，从 55.3 再次抬起）              |
+| `src/lib/markdown/**`       | 95    | 100       | 95         | 90       | 95.9 / 100 / 97.6 / 91.7（ISSUE #1329 新建域，门槛与域**同批**登记，见 §18.15。未满 100 的只有 lines：`styles.ts` 的标签表里有几个本仓库目前不产生的标签） |
 | `src/lib/project-canvas/**` | 70    | 70        | 65         | 50       | 69.0 / 70.8 / 53.8                                                                                                            |
 | `src/lib/workshop/**`       | 65    | 70        | 65         | 55       | 65.8 / 70.3 / 59.3                                                                                                            |
 | `src/server/film/**`        | 30    | 50        | 35         | 25       | 34.4 / 53.3 / 35.1（**首次**纳入 `coverage.include`，此前整块服务端编排零门槛，见 §18.13）                                     |
@@ -210,9 +211,9 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 仓储取用 | **只有一种**：直接 `import { xRepository } from "@/lib/core/repository"` | `tests/container-single-access.test.ts`（`src/` 内禁 `container.resolve(`）                                   |
 | 配置     | `core/config.ts` 是**类型契约 + 默认值**，不承诺「集中配置」             | `tests/core-spine-single-source.test.ts`（禁承诺句式；默认值必须取自 `CONFIG_ENV_DEFAULTS` / `endpoints.ts`） |
 
-三条判据都已接入 `.githooks/pre-commit`（第 17 步）与 CI（`Core spine single source`）。
+三条判据都已接入 `.githooks/pre-commit` 的 **C 组固定清单**（`tests/single-logger-channel.test.ts`、`tests/container-single-access.test.ts`、`tests/core-spine-single-source.test.ts` 三份用例，见 §13.5.8）；原平台流水线同名的 `Core spine single source` 那一步已随 ISSUE #623 删除。
 
-**另外两处「注释与现状相反」也已收口**（ISSUE #565，pre-commit 第 23 步 / CI
+**另外两处「注释与现状相反」也已收口**（ISSUE #565，pre-commit 的 **C 组固定清单** / 流水线同名那一步已删
 `Core barrel & repository base discipline`，详细口径见 §12.17）：
 
 | 位置                      | 曾经的注释承诺                              | 现状与判据                                                                                         |
@@ -521,6 +522,42 @@ Error: `headers` was called outside a request scope.
 > 「门槛能挂到谁身上」——根目录的模块此前**同时**逃开了 18.6 的覆盖率记账与
 > 18.4 的域级声明核对，这正是「盲区是漏出来的、不是写出来的」的又一例（§18.13.2）。
 
+## 18.15 安全敏感的渲染器换库：`markdown` 域的由来（ISSUE #1329）
+
+`src/lib/comfyui/markdown.ts`（384 行）是一套**自研 markdown 渲染器**：手写
+「整串 HTML 转义 → 按自己认得的语法拼回标签 → `href` 过 URL scheme 白名单」。
+它的输出直进 `dangerouslySetInnerHTML`，因此它实际上是**唯一**挡在用户内容与 DOM
+之间的东西。迁到 `marked` + `DOMPurify` 之后成了 `src/lib/markdown/**`。
+
+**三件与「换了个库」无关、但值得记下来的事**：
+
+**① 它是安全边界，而自研白名单天然是「加一个语法多一个绕过面」。** 每加一种语法
+就多一处需要重新论证「这次转义是否完整」的表面积，而 `marked` + `DOMPurify` 是被
+反复审计、按浏览器解析器**真实行为**做决定的组合。文件头当时把「图片、脚注、HTML
+透传、子列表、对齐」列在范围之外 —— 等于**同时欠着功能 + 欠着安全**。
+
+**② 白名单必须是「本仓库的那一份」，不能把 DOMPurify 的默认口径当成本仓库需要的。**
+实测三处差异，逐条有理由（见 `sanitize-config.ts`）：
+
+| 关注点   | DOMPurify 默认                                    | 本仓库                              | 为什么                                                                        |
+| -------- | ------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------- |
+| 基表     | 全表（含 SVG / MathML / `template`）              | `USE_PROFILES: { html: true }`      | 便签与剧本预览不需要它们，而它们恰是历史绕过面                                |
+| 表单     | 放行 `<form>` / `<button>`                        | `FORBID_TAGS` 收掉，`<input>` 保留  | 用户内容里出现表单只有钓鱼一个用途；`<input>` 是 GFM 任务列表要的             |
+| 自带样式 | 放行 `style`                                      | `FORBID_ATTR` 收掉                  | `position:fixed` 能盖住整个应用、`background:url(…)` 能渲染时外带请求          |
+| URL 协议 | 拦 `href` 上的 `data:`，**放行 `src` 上的 `data:`** | 自建协议白名单，钩子挂在剪枝之后    | `src="data:image/svg+xml,…"` 里的 SVG **可以带脚本** —— 图片成了执行通道       |
+
+最后一行是**默认口径的真缺口**、不是「多余的一层」：实测把这条钩子去掉，用例立刻红。
+
+**③ 域名与它的消费方无关。** 它落在 `comfyui/` 只是因为第一个消费方是 ComfyUI
+便签；第二个（剧本预览）与第三个（工坊剧本区）每次取用它都要**反向依赖 ComfyUI 域**。
+本域按 §12.5.3 R14 登记 `DOMAINS`，并按 §18.6 与域**同批**设覆盖率门槛 ——
+这正是 §18.14 说的「域归属是门禁，不是目录审美」。
+
+**样板价值**：本域是「**新增子域的完整动作**」的一次可抄实例 ——
+`DOMAINS` 登记 + `vitest.config.ts` 实测门槛 + 消费点迁移 + 旧域死豁免清理
+（`check-inline-style.cjs` 里指向旧路径的豁免、`.non-null-assertions-baseline.json`
+里那条 24 项的记录）**同一批**做完。任何一个漏掉都会变成「判据挂在没人管的地方」。
+
 ## 18.12 速查
 
 - 改 `src/lib/**` 前：先读本章 → 确认没碰 18.2 的禁止项 → 跑 18.5 的两条棘轮。
@@ -545,6 +582,9 @@ Error: `headers` was called outside a request scope.
 - 新增 `src/lib` 子域目录：**两件事必须同批** —— ① 在 `scripts/check-file-structure.cjs` 的
   `DOMAINS` 登记（R14，未登记即阻断）；② 在 `vitest.config.ts` 的 `thresholds` 里按**实测值**
   设门槛（18.6）。只做②会让门槛挂在一个「判据不认识」的目录上、只做①会让新域零门槛。
+  **迁走模块时第三件事**：清掉指向旧路径的**死豁免与基线条目**（`check-inline-style.cjs`
+  的 `EXEMPT`、`.non-null-assertions-baseline.json` 等）—— 一个指向不存在路径的豁免不是
+  豁免，是「下一个人往这个路径写东西时被静默放行」。完整实例见 §18.15。
 - 模块该放哪个域：根目录只收**顶层单例**（唯一持有者 + 任何域消费，登记在 `DOMAIN_EXEMPT`），
   其余一律进子域；叶子域**平铺**，不许再套 `admin/` `other/` `shared/` 这类杂物层（18.14）。
 - 需要新增守卫：**先查既有更强的那一条**（18.4 的判定反模式）。

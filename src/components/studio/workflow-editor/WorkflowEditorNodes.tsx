@@ -4,7 +4,7 @@
 import React, { useMemo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
-import { renderMarkdown } from "~/lib/comfyui/markdown";
+import { renderMarkdown } from "~/lib/markdown";
 import { WorkflowEdge } from "~/components/studio/canvas/WorkflowEdge";
 import { FlowNode } from "../canvas/WorkflowNode";
 import { WorkflowSubgraphNode } from "../canvas/WorkflowSubgraphNode";
@@ -229,8 +229,8 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
   const border = mixHex(noteTintBase, data.color, 0.65);
   const titleBg = mixHex(noteTintBase, data.color, 0.65);
   const titleText = lightenHex(data.color, 0.7);
-  /* 每次渲染只跑一遍正文 markdown。该渲染器是 XSS 安全的
-   * （输入先做 HTML 转义，href 过 URL 白名单）。 */
+  /* 每次渲染只跑一遍正文 markdown。该渲染器是 XSS 安全的：解析交给 marked，
+   *  产物过 DOMPurify 白名单（含 URL 协议白名单），见 `~/lib/markdown`。 */
   const html = useMemo(() => renderMarkdown(data.text), [data.text]);
   return (
     <div

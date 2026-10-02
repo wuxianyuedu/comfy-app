@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
+import { noteComfyBusy } from "~/lib/comfy/comfy-busy-store";
 import { isRecord } from "~/lib/is-record";
 import { useOfflineGate } from "./use-offline-gate";
 import type {
@@ -158,9 +159,22 @@ export function useComfyQueue(): ComfyQueueView {
       if (parsed.online) {
         tolerateOffline(true);
         setStatus(parsed);
+        /* 把「忙不忙」喂给全页单点（ISSUE #1351）：系统指标的持有者据此把
+         * `/system_stats` 的探测降到出图档 —— 那条探针内部会调
+         * `torch.cuda.mem_get_info`，GPU 满载时打它等于往排队的 aiohttp 里
+         * 再插请求。口径：本应用在跑 **或** ComfyUI 自己排着队都算忙。 */
+        noteComfyBusy(
+          parsed.running !== null ||
+            parsed.comfy.pending > 0 ||
+            parsed.comfy.running > 0 ||
+            parsed.queued > 0,
+        );
         return;
       }
       // 离线观测：容忍期内保留上一次好状态（不闪），连续失败达阈值才提交离线。
+      /* 离线时也要喂 `false`：不然「忙」会一直挂着（黏滞窗口过后本该转闲），
+       * `noteComfyBusy` 的黏滞 + 幂等保证这里连着喂不会把状态抖来抖去。 */
+      noteComfyBusy(false);
       if (!tolerateOffline(false)) {
         setStatus(parsed);
       }

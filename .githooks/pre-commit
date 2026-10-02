@@ -64,18 +64,21 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 这里不再抄一遍：抄一份就会漂移，且清单里的用例被改名后，钩子会「一条都不跑却
 # 仍然绿」。增量层的五条判据与它的**已知边界**（不保证传递依赖；命中公共地基时
 # 明确放弃收窄、兜底不是全量）写在该脚本文件头与规范 §13.5.4。
+#
+# 启动那一步交给 `scripts/run-affected-tests.mjs`，不在这里拼 `pnpm exec vitest run $files`：
+# 清单是位置参数，长度随改动面线性增长，而 `pnpm exec <bin>` 在 Windows 上经 `.cmd`
+# shim —— cmd.exe 的命令行上限 8191 字符。实测一次 22 个文件的提交清单就有 10840 字符，
+# vitest 根本没起，stdout 只留一行 GBK 乱码，钩子的表现是「组 C 失败」而看不见任何
+# 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
+# spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
+# **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
+# D(26 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
+# respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
+# ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
+# D 组步骤数一致，新增判据时必须同步这个数字。
 run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
-  set -f
-  files=$(node scripts/affected-tests.mjs) || exit 1
-  if [ -z "$files" ]; then
-    echo "[pre-commit] affected 解析没给出清单 —— 宁可阻断，也不让 vitest 不带参数跑成全量"
-    exit 1
-  fi
-  # `--maxWorkers=4` 只对**钩子里**成立：A(tsc)、B(eslint)、D(25 个判据脚本) 与本组
-  # 并行，vitest 再按 `vitest.config.ts` 的 8 去起 forks 就会抢不过来 —— 现场不是
-  # 用例红，而是 `Failed to start forks worker / Timeout waiting for worker to respond`
-  # （435 条全过、退出码仍非零）。全量 `pnpm test` 仍是配置里的 8，不受这里影响。
-  pnpm exec vitest run --maxWorkers=4 $files'
+  node scripts/run-affected-tests.mjs'
 
 # ── D：其余静态判据（互不依赖；组内串行以控内存，但整体与 A/B/C 并行）──────
 # 每条命令的规范出处见 scripts/ 对应脚本头部；顺序即执行序，新增判据追加到这里。
@@ -170,6 +173,16 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # button/input/textarea/dialog 四个。这条把「改过的地方留痕」机器化:标记与
   # docs/standards/16 §16.8 的台账双向一致,零网络(不判断差异内容,只保证两边不脱节)。
   run "ui/ 定制标记与台账（§16.8）" node scripts/check-ui-customizations.cjs
+  # 文档引用与权威源一致（占位符裸值 / 端口与地址 / 文档里的路径存在性 / 台账里的
+  # npm-npx 命令 / AGENTS.md ↔ standards 漂移 / 未登记的 scoped 文档）。
+  # 它长期是「手动档」（脚本头与 §13 表都写着「不接 pre-commit，避免过度打扰提交」），
+  # 而 §13.5.4 把「不进钩子」的理由记在**网络与耗时**上 —— 这条实测 0.64s、零网络、纯本地文本，
+  # 那个理由撑不住。真正的空档是：AGENTS 规定的必跑口令是 `pnpm doc:render`，而它只做
+  # 「源 → 生成物」、不跑这条校验，所以按规范走的人一路绿灯，历史上要靠事后单独一刀清存量
+  # （`c4d414d5`）。签字口径与读数见 ISSUE #1371。
+  # ⚠️ 追加在末尾是有意的：文档里有「pre-commit 第 N 步」这种按序号的引用（本身已与钩子对不上，
+  # 另账处理），插在中间会让那些数字一次性全部错位。
+  run "文档引用与权威源一致" node scripts/check-doc-references.cjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────

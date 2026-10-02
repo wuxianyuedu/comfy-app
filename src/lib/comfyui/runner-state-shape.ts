@@ -137,7 +137,7 @@ export type RunnerState = {
 
   /** 本次执行实际提交给 ComfyUI 的工作流 JSON。RAW 载荷存 patched（liblib
    *  subgraph 格式，未展开，含画布覆盖）；API 载荷存 execution-graph 收拾后的图。
-   *  任务完成后落盘到 public/generated/.../workflow.json，便于工作流模板后续改动
+   *  任务完成后落盘到 generated/.../workflow.json，便于工作流模板后续改动
    *  时仍能完整复现本次生成结果（种子已存 manifest.seed + TaskImage.seed）。
    *
    *  第二个用途（ISSUE #1202 收口时登记）：WS 的 `executing` / `progress` 帧只带节点

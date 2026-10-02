@@ -245,8 +245,8 @@ AIGC:
 
 | 命令                                               | 验证什么                                                                                                               | 何时跑                                                    |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `pnpm doc:check`                                   | 文档里的硬编码值/路径与权威源（源码/配置）一致；新增规范文档未登记进 `SCOPED_DOCS` 或豁免名单即报错（ISSUE #316 守卫） | 巡检收尾必跑；改 `docs/standards/**`、`docs/guides/**` 时 |
-| `node scripts/render-doc-placeholders.cjs --check` | 生成态 `docs/generated/**` 是否与编辑态源文档一致（落后 / 缺失 / 多余三个方向；pre-commit 第 26 步，见 13.5.5）        | 改编辑态文档后；重渲染并提交的结果是否同步                |
+| `pnpm doc:check`                                   | 文档里的硬编码值/路径与权威源（源码/配置）一致；新增规范文档未登记进 `SCOPED_DOCS` 或豁免名单即报错（ISSUE #316 守卫） | 每次提交（pre-commit D 组的「文档引用与权威源一致」，ISSUE #1371）；巡检收尾也可手跑           |
+| `node scripts/render-doc-placeholders.cjs --check` | 生成态 `docs/generated/**` 是否与编辑态源文档一致（落后 / 缺失 / 多余三个方向；pre-commit 的 D 组「生成态文档与源同步」，见 13.5.5）        | 改编辑态文档后；重渲染并提交的结果是否同步                |
 | `pnpm doc:render`                                  | 把编辑态的占位符渲染成原文，产出 `docs/generated/`                                                                     | 改含占位符文档后                                          |
 | `node scripts/check-file-structure.cjs`            | 结构/命名/注释流水硬规则（R1~R10），在 pre-commit 强制                                                                 | 每次提交                                                  |
 | `pnpm check`                                       | `pnpm run lint`（零警告，范围白名单见 `eslint.config.js`）+ `tsc --noEmit`                                             | 每次提交                                                  |

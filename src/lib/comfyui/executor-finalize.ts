@@ -320,7 +320,7 @@ async function completeInner(
   log(taskId, "success", `✓ 生成完成，开始下载 ${parts.join("、") || "结果"}`);
 
   /* 落盘目录：与 publicBase 同源。越界判据也在这里生效 —— projectId 由客户端
-   * 生成，一个 `../../x` 形状过去能把产物写到 public/generated 之外，而
+   * 生成，一个 `../../x` 形状过去能把产物写到产物根之外，而
    * `/api/generated/[...path]` 的白名单只认根内，写出去等于文件永远读不到；
    * 现在它变成一次硬失败（由 complete() 收口成 finalizeFailure，用户看得见）。 */
   const dir = taskOutputDir(taskId, projectId);

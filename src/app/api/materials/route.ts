@@ -6,6 +6,7 @@ import { logger } from "~/server/lib/logger";
 import { apiErrorBody, apiErrorDetail } from "~/lib/api-error";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { artifactUrl } from "~/lib/media/output-paths";
 import {
   MATERIAL_FOLDERS,
   SHARED_SCOPE,
@@ -62,12 +63,12 @@ const ALLOWED_MIME = new Set([
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 /* 鉴权在每个 handler 里各一次 `requireRequestUser()`（要拿到 user.id 做归属判定）。
- * 归属判据不在本文件里写第二份 —— 与 tRPC 侧共用 `~/lib/media/materials` 的
- * `visibleMaterialScopes` / `canWriteMaterialScope`（此前两边各写一份
- * `resolveScopes`，而且**两份都不判归属**）。 */
+ * 归属判据不在本文件里写第二份 —— 吃 `~/lib/media/materials` 的
+ * `visibleMaterialScopes` / `canWriteMaterialScope`（这一族曾有两个入口、各写一份
+ * `resolveScopes`，而且**两份都不判归属**；入口现在只有这一个）。 */
 
 /* ── 画布素材库 API ───────────────────────────────────────────
- * 文件系统支撑，落点 public/generated/materials/{scope}/{folder}/。
+ * 文件系统支撑，落点 generated/materials/{scope}/{folder}/。
  * 详见 src/lib/materials.ts 顶部的存储选型说明。
  *
  * 端点：GET    /api/materials?projectId=proj_1&scope=project
@@ -81,8 +82,7 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
  * DELETE ?id=scope/folder/name                                   删除
  */
 
-/** 解析出本次请求要读取的 scope 列表 —— 判据在 `visibleMaterialScopes`（一处），
- *  本文件与 tRPC 的 `material.list` 都吃它。 */
+/** 解析出本次请求要读取的 scope 列表 —— 判据在 `visibleMaterialScopes`（一处）。 */
 
 export async function GET(req: NextRequest) {
   const user = await requireRequestUser();
@@ -92,8 +92,8 @@ export async function GET(req: NextRequest) {
     const projectId = sanitizeScope(url.searchParams.get("projectId"));
     const scopeMode = url.searchParams.get("scope"); // "project" | "cross"
     const folder = url.searchParams.get("folder")?.trim() ?? null;
-    /* 归一化走 `~/lib/list-filter`（规范 16 §16.2.4.16）—— 与 tRPC 路由
-     * 的同一段此前各写一遍，`trim` 与折小写都漏一处就会两侧搜索结果不一致。 */
+    /* 归一化走 `~/lib/list-filter`（规范 16 §16.2.4.16）：同一段此前在各入口
+     * 各写一遍，`trim` 与折小写漏一处就会搜索结果两侧不一致。 */
     const q = normalizeNeedle(url.searchParams.get("q") ?? "") || null;
 
     const scopes = await visibleMaterialScopes(user.id, {
@@ -230,9 +230,9 @@ export async function POST(req: NextRequest) {
         name: finalName,
         folder,
         folderName: folderName(folder),
-        url: `/api/generated/materials/${encodeURIComponent(scope)}/${encodeURIComponent(
-          folder,
-        )}/${encodeURIComponent(finalName)}`,
+        url: artifactUrl(
+          ["materials", scope, folder, finalName].map(encodeURIComponent),
+        ),
         size: buf.length,
         scope,
       },
@@ -266,7 +266,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "id 不合法" }, { status: 400 });
     }
     /* 归属判定必须在**碰磁盘之前**：这一条的副作用是 `fs.unlink`，
-       晚一步就删完了再报错（§11.2.1）。与 tRPC 的 `material.delete` 同一份判据。 */
+       晚一步就删完了再报错（§11.2.1）。 */
     if (!(await canWriteMaterialScope(user.id, scope))) {
       return NextResponse.json(
         { error: "素材不存在或无权访问" },

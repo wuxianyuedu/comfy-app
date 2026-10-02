@@ -232,7 +232,9 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     expect(tickBody).toMatch(/if \(shellUrl\) appUrl = shellUrl/);
     // 兜底链（launch-status.json / 写死的 3000）只在壳答不上来时才走，
     // 且仍然只走一次——它给不出权威地址，每轮问只会多刷 get_launch_status。
-    expect(tickBody).toMatch(/else if \(!appUrl\) appUrl = await resolveAppUrl\(\)/);
+    expect(tickBody).toMatch(
+      /else if \(!appUrl\) appUrl = await resolveAppUrl\(\)/,
+    );
   });
 
   it("快照自己也带诊断出口（编排器顶掉它之前，现场已经在磁盘上）", () => {
@@ -245,6 +247,63 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     expect(rust).toMatch(/pub fn write_idle_status\(/);
     expect(rust).toContain('"diagnostics"');
     expect(rust).toContain("startup_report_json");
+  });
+
+  it("会话标记自己说清「它是什么、壳做了什么、接下来是谁」（ISSUE #1364）", () => {
+    // 用户原话：「启动器日志中有很多 `=== 启动会话开始（shell_pid: 143660）`，
+    // 只能看到启动了会话，启动会话是做什么的没有体现出来」。这一行是双击之后
+    // **第一眼看得到、也往往唯一看得到**的那条现场 —— 它得自己把事情说完。
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    expect(rust).toMatch(/pub fn session_start_marker\(/);
+    const body = fnBody(rust, "pub fn session_start_marker(");
+    for (const phrase of ["会话边界", "壳已接手", "编排器"]) {
+      expect(body, `标记里应说清「${phrase}」：${body}`).toContain(phrase);
+    }
+    // 前缀是面板裁剪历史日志的判据，一个字都不能改。
+    expect(rust).toMatch(
+      /pub const SESSION_START_MARKER: &str = "=== 启动会话开始"/,
+    );
+    // 标记是单行：多行会让「按前缀裁剪」把紧跟其后的第一段真实日志一起裁掉。
+    expect(body).not.toMatch(/\\n/);
+    // `log_session_start` 必须走这个唯一出口，不许各写一份拼接。
+    const startFn = fnBody(rust, "pub fn log_session_start(");
+    expect(startFn).toContain("session_marker_line(");
+    expect(startFn).not.toMatch(/format!\(\s*"\{SESSION_START_MARKER\}/);
+  });
+
+  it("三份标记共用同一个时刻（否则面板去重不掉，用户看到「有很多条」）", () => {
+    // 壳把同一个标记写进 shell-launch.log / shell.log / dev-launcher-stderr.log，
+    // 面板把三路合进同一条时间线、按「时刻 + 级别 + 正文」去重。原先两个裸行文件
+    // 写下的标记**不带时间戳**，面板只好各盖一个「解析此刻」→ 同一行读成三条
+    // （ISSUE #1364 的「有很多」就是这么来的）。
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    // 时刻要由调用方给、并且**只取一次**：函数内各取一次就等于三个时刻。
+    expect(rust).toMatch(/pub fn session_marker_line\(pid: u32, stamp: &str\)/);
+    // 取整个函数体（含内层 for 循环）：`fnBody` 在第一个内部 `}` 就停，这里要
+    // 覆盖到三处写入，所以按「下一个顶格 `fn ` / `///`」切。
+    const startAt = rust.indexOf("pub fn log_session_start(");
+    expect(startAt, "找不到 log_session_start").toBeGreaterThan(-1);
+    const rest = rust.slice(startAt);
+    const nextItem = rest.slice(1).search(/\n(?:pub fn |fn |\/\/\/ )/);
+    const startFn = nextItem > 0 ? rest.slice(0, nextItem + 1) : rest;
+    // `local_timestamp()` 在 `log_session_start` 里**只许出现一次**：写三次就是
+    // 三个时刻（即便同一毫秒，判据也不再是「共用」而是「碰巧相同」）。
+    const stamps = startFn.match(/local_timestamp\(\)/g) ?? [];
+    expect(stamps.length, `时刻只能取一次：${startFn}`).toBe(1);
+    // 三份写的是**同一个变量**，不许各自 format! 一遍。
+    for (const write of ["launch_log_path", "stderr_log", "shell_log"]) {
+      expect(startFn, `${write} 的写入点没在函数里`).toContain(write);
+    }
+    // 三份文件的写入点都在这个函数里（`shell-launch.log` 一次 + 两文件 for 循环一次），
+    // 且两处写的都是**同一个** `stamped` 变量 —— 各自 format! 一遍就是三个时刻。
+    const appends = startFn.match(/append_line\(/g) ?? [];
+    expect(appends.length, `写入点都在这里：${startFn}`).toBeGreaterThanOrEqual(
+      2,
+    );
+    const stamped = startFn.match(/\{stamped\}/g) ?? [];
+    expect(stamped.length, `每处都写 stamped 而不是各拼一次：${startFn}`).toBe(
+      appends.length,
+    );
   });
 
   it("读不到日志时把壳写下的启动报告一并给出（报告是那一刻唯一的现场）", () => {
@@ -274,6 +333,30 @@ describe("壳自编排：回收链", () => {
     const onExit = lib.slice(lib.indexOf("tauri::RunEvent::Exit =>"));
     expect(onExit).toContain("shell_launch::is_owning()");
     expect(onExit).toContain("shell_launch::reap(&root)");
+  });
+
+  // 会话锚点只有编排器自己会在 `clearSession()` 里清，而壳收它是 `Child.kill()`
+  // （Windows 上是 `TerminateProcess`）—— 它收不到信号、没有清理机会。不补这一步，
+  // 现场就是**每次正常关窗后的下一次启动都刷一条**「回收上一次运行遗留的进程树：
+  // PID …」，而那些 PID 早已被插件 kill / Job Object 收干净（回收是空转）。
+  it("壳收走编排器后清掉会话锚点（否则每次启动都刷「回收遗留进程树」）", () => {
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    const reap = rust.slice(
+      rust.indexOf("pub fn reap(project_root: &str)"),
+      rust.indexOf("pub fn reap_pid("),
+    );
+    // 只在 `kill()` 成功那一支清：失败说明编排器可能还活着，锚点必须留给下一次启动回收。
+    expect(reap).toMatch(
+      /Ok\(\(\)\)[\s\S]{0,200}clear_session_anchor\(project_root\)/,
+    );
+    expect(rust).toContain("pub fn clear_session_anchor(");
+    // 路径与 Node 侧同源（唯一实现是 `scripts/dev-launcher-session.mjs`）：
+    // 名字漂开 = 壳清了个不存在的文件，锚点照留、噪声照旧。
+    const node = stripComments(read("scripts/dev-launcher-session.mjs"));
+    for (const name of ["launcher-session.json", "launcher-heartbeat.txt"]) {
+      expect(rust).toContain(name);
+      expect(node).toContain(name);
+    }
   });
 
   it("按 PID 回收上一次的残留也走同一处平台判据", () => {
@@ -382,7 +465,8 @@ describe("壳自编排：能自起的判据与真起得来", () => {
   // **端口解析只有一个出口**：所有需要端口的调用点都走它，而它按
   // 环境变量 → 检出 .env → 路径推导 的顺序取值（与 scripts/app-port.mjs 逐条对齐）。
   describe("端口解析：.env 必须对壳可见（ISSUE #821）", () => {
-    const single = () => stripComments(read("src-tauri/src/single_instance.rs"));
+    const single = () =>
+      stripComments(read("src-tauri/src/single_instance.rs"));
 
     it("壳侧有一条 .env 优先的解析出口（而不是只做路径推导）", () => {
       const src = single();
@@ -398,7 +482,9 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       expect(src).toContain("resolve_app_port_with_source_for_root");
       expect(src).toContain("if let Some(port) = env_app_port()");
       expect(src).toContain("if let Some(port) = read_env_app_port(root)");
-      expect(src).toContain("derive_app_port_for_root(root), PortSource::Derived");
+      expect(src).toContain(
+        "derive_app_port_for_root(root), PortSource::Derived",
+      );
       expect(src).toContain('std::env::var("COMFYAPP_PORT")');
       // 端口与来源必须**同一次计算**给出：各算一遍时判据容易被静默拉开，
       // 而表现是「日志说 .env、实际用的是路径推导」——比没有日志更坏。
@@ -415,7 +501,9 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       expect(shell).not.toContain("derive_app_port_for_root(project_root)");
       expect(lib).not.toMatch(/single_instance::derive_app_port\(\)/);
       // 壳侧要端口一律经 app_port_for_root（= single_instance 的唯一出口）。
-      expect(shell).toContain("crate::single_instance::resolve_app_port_for_root(project_root)");
+      expect(shell).toContain(
+        "crate::single_instance::resolve_app_port_for_root(project_root)",
+      );
     });
 
     it("启动报告与编排日志都带上端口来源（归因那一半信息）", () => {

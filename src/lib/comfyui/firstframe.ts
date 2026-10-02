@@ -8,8 +8,8 @@
 
 import "server-only";
 import { promises as fs } from "fs";
-import path from "path";
 import type { SizeSpec } from "~/lib/media/size-presets";
+import { artifactDiskPath } from "~/lib/media/output-paths";
 import { FIRST_FRAME_WAIT, backoffDelayMs } from "~/lib/retry-policy";
 import { isTerminalTaskStatus } from "~/lib/task-state";
 import { taskRepository } from "../core/repository-task";
@@ -42,8 +42,12 @@ export async function synthesizeFirstFrame(opts: {
   });
 
   const localPath = await waitForImage(taskId);
-  const rel = localPath.replace(/^\/api\//, ""); // "generated/<id>/img_0.png"
-  const abs = path.join(process.cwd(), "public", rel);
+  /* 地址 → 磁盘只有一处判据（含越界）。这一句此前是自己拼的
+   * `path.join(cwd, "public", localPath 去掉 /api/)` —— 与成片合成那侧
+   * **对同一个输入结论相反**（那侧忘了剥 `api/`，于是永远找不到文件），
+   * 两条都是同一份布局的第二次实现，收口见 `~/lib/media/output-paths`。 */
+  const abs = artifactDiskPath(localPath);
+  if (!abs) throw new Error(`首帧的产物地址不合法：${localPath}`);
   const buf = await fs.readFile(abs);
   const res = await uploadImage(buf, `ff_${taskId}.png`, "input");
   if (!res.name) throw new Error("首帧上传失败");

@@ -10,24 +10,24 @@
 
 入口与逻辑**同名不同目录**，改动时别改错文件：
 
-| 入口（`tools/<分类>/`） | 逻辑（本目录） |
-|---|---|
-| `build/build-all.ps1` | `build-all.ps1` |
-| `build/build-launcher.ps1` | `build-launcher.ps1` |
-| `build/build-launcher-dev.ps1` | `build-launcher-dev.ps1` |
+| 入口（`tools/<分类>/`）               | 逻辑（本目录）                  |
+| ------------------------------------- | ------------------------------- |
+| `build/build-all.ps1`                 | `build-all.ps1`                 |
+| `build/build-launcher.ps1`            | `build-launcher.ps1`            |
+| `build/build-launcher-dev.ps1`        | `build-launcher-dev.ps1`        |
 | `build/build-launcher-standalone.ps1` | `build-launcher-standalone.ps1` |
-| `build/build-standalone.ps1` | `build-standalone.ps1` |
-| `build/build-tauri-release.ps1` | `build-tauri-release.ps1` |
-| `build/rebuild-static.ps1` | `rebuild-static.ps1` |
-| `registry/start-registry.ps1` | `start-registry.ps1` |
+| `build/build-standalone.ps1`          | `build-standalone.ps1`          |
+| `build/build-tauri-release.ps1`       | `build-tauri-release.ps1`       |
+| `build/rebuild-static.ps1`            | `rebuild-static.ps1`            |
+| `registry/start-registry.ps1`         | `start-registry.ps1`            |
 
 ## 公共库
 
-| 文件 | 职责 |
-|---|---|
-| `Log-Common.ps1` | 统一日志与耗时：`Log` / `Invoke-Logged` / `Open-Log`，以及 `Start-LogStopwatch` / `Format-Elapsed` / `Log-Elapsed`（构建耗时报告，规范 §7.0）。**新增构建脚本复用这三个耗时函数，不要各写一套 `Stopwatch`** —— 格式漂成几种就没法横向对比。 |
-| `Build-Guard.ps1` | 编译前置守卫 `Assert-ShellNotRunning`：`target/{release,debug}/app.exe` 被占用时会在链接收尾报 `os error 5`，且要等整轮编译走完才失败。陈旧壳与双击构建下的占用自动 `taskkill /T /F` 回收后继续；只有「用户可能正开着应用」才中止（规范 §7.1）。 |
-| `Build-Guard.ps1`（同文件另一半） | 目录占用的通用出口 `Get-ProductDirHolder` / `Write-ProductDirLockHint`：判「目录删不掉时到底是谁占着」——按「哪些进程把这些文件映射进了地址空间」点名占用者 + 给 `taskkill /PID <pid> /T /F`。原先服务的是「打包启动器 exe 的 onedir 产物目录」，那条链路已随 ISSUE #784 删除，能力保留（见规范 §7.1.1）。 |
+| 文件                              | 职责                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Log-Common.ps1`                  | 统一日志与耗时：`Log` / `Invoke-Logged` / `Open-Log`，以及 `Start-LogStopwatch` / `Format-Elapsed` / `Log-Elapsed`（构建耗时报告，规范 §7.0）。**新增构建脚本复用这三个耗时函数，不要各写一套 `Stopwatch`** —— 格式漂成几种就没法横向对比。`Invoke-Logged` 同时是**判决**来源，三态分开：跑成给 0、跑了且失败给真码、**命令没起来给 127 并打 `[CMD-NOTFOUND]`**（PowerShell 在 `&` 起不来时不写 `$LASTEXITCODE`，读回来的是上一次的 0 —— ISSUE #1350 实测，两个宿主一致）。调用方一律读 `$script:LAST_INVOKE_CODE`，**别再直接判 `$LASTEXITCODE`**（两份读者迟早给出两个结论）。执行者：`tests/log-common-invoke.test.ts`（真 dot-source 跑三态，两个 PowerShell 宿主各一遍）。 |
+| `Build-Guard.ps1`                 | 编译前置守卫 `Assert-ShellNotRunning`：`target/{release,debug}/app.exe` 被占用时会在链接收尾报 `os error 5`，且要等整轮编译走完才失败。陈旧壳与双击构建下的占用自动 `taskkill /T /F` 回收后继续；只有「用户可能正开着应用」才中止（规范 §7.1）。                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `Build-Guard.ps1`（同文件另一半） | 目录占用的通用出口 `Get-ProductDirHolder` / `Write-ProductDirLockHint`：判「目录删不掉时到底是谁占着」——按「哪些进程把这些文件映射进了地址空间」点名占用者 + 给 `taskkill /PID <pid> /T /F`。原先服务的是「打包启动器 exe 的 onedir 产物目录」，那条链路已随 ISSUE #784 删除，能力保留（见规范 §7.1.1）。                                                                                                                                                                                                                                                                                                                                                                       |
 
 `scripts/entry-common.ps1`（仓库根的 `scripts/`，不在本目录）提供入口通用能力：
 `Get-ProjectRoot` / `Get-Pwsh` / `Invoke-Entry` / `Complete-Entry` / `Test-IsDoubleClicked`。

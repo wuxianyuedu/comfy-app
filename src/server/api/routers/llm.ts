@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import {
-  getLLMConfig,
-  completeLLM,
   ensureRemoteStorageMigrated,
   getConfigForClient,
 } from "~/lib/llm/server";
@@ -188,36 +186,5 @@ export const llmRouter = createTRPCRouter({
       // 回传脱敏配置（不携带明文 apiKey，改发 hasApiKey 布尔），与 configGet 同源。
       const config = await getConfigForClient();
       return { config };
-    }),
-
-  /* POST /api/llm —— 新建：non-streaming completion */
-  complete: authedProcedure
-    .input(
-      z.object({
-        messages: z.array(
-          z.object({
-            role: z.enum(["system", "user", "assistant"]),
-            content: z.string(),
-          }),
-        ),
-        provider: z.enum(["local", "remote"]).optional(),
-        model: z.string().optional(),
-        temperature: z.number().optional(),
-        maxTokens: z.number().optional(),
-        taskType: z.enum(taskTypeKeys).optional(),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      const cfg = await getLLMConfig({
-        // P0:provider 收紧为 enum——垃圾值此前会静默按 local 误路由,
-        // 现在输入非法直接 400(Zod),不再静默回退。
-        provider: input.provider,
-        model: input.model,
-        temperature: input.temperature,
-        maxTokens: input.maxTokens,
-        taskType: input.taskType,
-      });
-      const content = await completeLLM(cfg, input.messages);
-      return { content };
     }),
 });

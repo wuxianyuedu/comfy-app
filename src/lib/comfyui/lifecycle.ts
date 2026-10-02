@@ -58,6 +58,7 @@ import {
 } from "./lifecycle-exit";
 import { formatLocalStamp } from "~/lib/time-format";
 import { COMFY_STOP_PROBE } from "../retry-policy";
+import { noteComfyExit } from "./liveness-signal";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import {
   decideEnsureLaunch,
@@ -609,6 +610,12 @@ function markComfySessionStart(info: {
 }
 
 function markComfySessionEnd(report: ComfyExitReport): void {
+  /* 先发信号、再落盘（ISSUE #1351）：退出事件的**唯一**客户端通路在这里 ——
+   * bound 的 `child.on("exit")` 与保活的窗口监督器都汇到这一步，所以只需要
+   * 一处就能把「毫秒级事件」推向浏览器。放在 `prev === null` 的早退之前：
+   * 「没有会话标记」是**对账**这件事无话可说，不是「没发生退出」——
+   * 把它一起吞掉会让客户端在最需要立刻知道的时候反而等下一拍轮询。 */
+  noteComfyExit(report);
   const prev = readSessionMark();
   if (prev === null) return;
   writeSessionMark({

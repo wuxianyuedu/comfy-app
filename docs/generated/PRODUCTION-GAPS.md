@@ -155,6 +155,32 @@
       判据：`src/server/api/routers/project.test.ts`（17 条，含越权写 / 越权读 / 跨用户删三态）。
       证据：`src/server/api/routers/project.ts`、`src/lib/core/repository-project.ts`（update 分支
       仍只按 id —— 归属判定在 router 层，与 `get`/`patch` 同一处口径）。
+      **同族第二段（客户端那一半）已补**：那句「warn 是唯一痕迹」原本是缺陷的自白 ——
+      归属闸装上之后，`FORBIDDEN` 成了一格**新真实存在**的失败，而
+      `canvas-store.persistProjectToServer` 的 `catch {}` 把它和「dev server 正在重启」
+      压成同一种静默：界面显示已保存、换端口 / 换设备一看画布是空的，用户毫无线索，
+      而再试一万次也不会成功。现在按「重试有没有用」分两档
+      （`src/lib/project-canvas/sync-notice`：确定被拒 → 可查的登记表 + 广播 →
+      `use-project-persistence` 弹一条带画布名字的提示；暂时拿不到 → 只留一行日志），
+      提示正文**按码翻成人话**（`BAD_REQUEST` 的服务端 message 是 zod 的 JSON 形状，
+      直接进 toast 等于把内部结构甩给用户 —— 「有出口」的那一半是读得懂；
+      原文与 `code=` 另走一行日志，界面上看不见码就得能查回来），
+      删除侧同一条判据（原先是 `.catch(() => undefined)` —— 「本机已经删了、
+      服务端没删掉」的后果是换端口时它再冒出来，说的是那一句而不是笼统的「同步失败」）。
+      ⚠️ 这一族的日志在浏览器侧只能走 `console`（pino 是服务端通道，打进浏览器包
+      既跑不起来也会点着 `client-bundle-node-builtins` 那条判据），而
+      「日志唯一通道」默认禁止 `src/lib` 直写 console —— 正解是按
+      `tests/single-logger-channel.test.ts` 自己的机制把**这一个文件**登记进
+      `CLIENT_ONLY`（首行 `"use client"` + 那三条判据逐条答得出），
+      不是放宽判据、更不是整目录免检。
+      判据：`sync-notice.test.ts` 26 条（分类两档各 6+8 态、去重、成功撤销，
+      「zod 原文不进界面」与「日志里查得回码」各一条）+
+      `canvas-store.test.ts` 新增 5 条（含「本地索引照常写入」这句不许回归的语义）+
+      `use-project-persistence.test.ts` 3 条（**挂载时先读表**那一格单独立一条：
+      写镜像的入口不止画布那一页 —— 工作区首页新建、画廊删除都会发镜像，而那些页面
+      没有提示器，广播发出去没人接且不排队重放，所以只订阅必然漏）。
+      证据：`src/lib/project-canvas/{sync-notice,canvas-store}.ts`、
+      `src/components/studio/project-canvas/hooks/use-project-persistence.ts`。
 - [x] **A4 LLM `apiKey` 明文回传客户端（已修 + 本批把判据加强到「整个出口序列化后一个字都不带」）**：
       `8740948` 就把 `configGet` / `configSave` 的出口改成脱敏形状了（顶层 `apiKey` 剥掉、
       改发 `hasApiKey`，远端条目逐条 `apiKey: undefined`），台账同样没勾。
@@ -214,6 +240,41 @@
       `task.test.ts` 的三条 delete 用例（项目目录按 `projects/<pid>/<tid>` 删 / 越界不动磁盘 /
       rm 失败不阻塞删库但原因可见）。证据：`src/lib/media/output-paths.ts`、
       `src/server/api/routers/task.ts`、`src/lib/comfyui/executor-finalize.ts`。
+      **A8 第二段（本批）：同一条错在另一处活了下来 —— 「合成成片」每条镜头必败。**
+      复算「谁在自己拼这份布局」得到的不是当年那三处，而是**七处**：`materials.ts`
+      （还自带第二份包含判据）、`workshop/media-source.server.ts`（模块级常量 + 第二份地址
+      解析，而那份越界判据少了 `path.sep` 边界 —— 同级 `generatedX` 会被算作根内）、
+      `film/compose-film.ts` 四处 join 外加自己写一遍 `/api/generated/films/…`、
+      `film/compose-steps.ts` 的 `clipPathOf`、`api/film/bgm/route.ts`、
+      `comfyui/firstframe.ts`，第七份**在全部 TS 检索面之外**：
+      `scripts/comfyapp-open-folder.ps1` 把 `comfyapp://open` 的允许根写死成
+      `..\public\generated`。其中两处的结论**互相相反** —— `firstframe.ts` 剥了 `api/` 段
+      （所以首帧一直是好的），`clipPathOf` 只剥前导斜杠，于是库里 `filmShot.videoPath`
+      （= `TaskImage.localPath` = `taskOutputUrl()` 写的 `/api/generated/…`）被解析成
+      `<cwd>/public/api/generated/…`：那个目录不存在，ffmpeg 报找不到输入，去字幕重试仍失败，
+      最后 `markFailed` 收口成一句「镜头 N 归一化失败」。
+      ⚠️ **而这条曾经被断言反过来背书**：`compose-steps.test.ts` 旧的一条写
+      `expect(...).toBe("/proj/public/api/generated/films/x.mp4")` —— 用例在替 bug 签名。
+      这是 A8 那句「修了一处不等于修完」的第二次实证，也是为什么这一段的判据要扫**全部** src。
+      修法：`output-paths.ts` 补「地址 → 磁盘」的唯一解析（`artifactDiskPath`：两种形状同答案、
+      坏百分号编码判成「不是产物地址」而不是抛 `URIError`、越界返回 `null` 让调用点处置 ——
+      口径同 `taskOutputDir`），七处全改吃它 + `generatedRoot()`；子层与地址前缀也收到同一处
+      （`materialsRoot` / `filmsRoot` / `filmBgmRoot` / `ARTIFACT_URL_PREFIX` / `artifactUrl`）。
+      **前缀那句断言是对外承诺**：磁盘根将来搬到哪，`/api/generated` 都不能变 ——
+      它写在库里那些 `localPath` 里，改了等于历史产物全部读不到（这也是 A13 残留那条
+      「搬出 public/」可行的前提）。
+      判据：`tests/artifact-layout-single-source.test.ts`（固定清单 14 → 15）四条 ——
+      src 里零第二处（五种被禁形状，先剥注释再扫）、扫描面非空且唯一出处确实在面里、
+      五种形状各有一个实例真能被照出来（照不出就是装饰，不是判据）、**跨语言成对**：
+      ps1 的允许根按 `$PSScriptRoot` 实解析一次必须等于 `generatedRoot()`
+      （比绝对路径而不是比「去掉 `..` 之后的段数」—— 写成 `..\..\public\generated` 段数一样）。
+      反向验证：往任一模块塞回 `path.join(process.cwd(), "public", "generated")` → 判据点名
+      那份文件；把 ps1 改成 `..\..\` → 只有成对那条红。
+      已知边界（写在判据头部，不冒充「全收」）：三处**给人看的 UI 文案**
+      （`ProjectOutputs.tsx` / `ProjectOutputsMetadataSheet.tsx` / `MaterialLibraryPanel.tsx`
+      里的 `public/generated/…`）不是路径构造、不在扫描面内 —— 视图层引不到这份纯 Node
+      地基（`node:path` 会被客户端打包判据拦），所以它们只能跟着「搬根」那天一起改，
+      已挂进 A13 残留那条。
 - [ ] **A9 无 `middleware.ts`、better-auth 未配 `trustedOrigins`；限流仅 1 个 mutation**。证据：`src/server/better-auth/config.ts:8-39`；`src/server/api/routers/task.ts`（`rateLimitedProcedure` 只用在 delete 上）。
 - [x] **A10 脚手架残留 `post.getSecretMessage` 不在路由表（已移除，本批复算勾销）**：
       `8740948` 一并删掉了它，`src/server/api/routers/post.ts` 现只剩 `getLatest` / `create`
@@ -266,11 +327,11 @@
       画布 id 由客户端生成、镜像是尽力而为，把「还没同步上来的新项目」判成不可写会
       直接堵死上传素材这条路）。处置口径照搬 A2 / A3：**越权与不存在同形**
       （REST 404、tRPC `NOT_FOUND`），且写 / 删的拒绝发生在 `writeFile` / `rm` / `unlink` 之前。
-      判据：`src/server/api/routers/material.test.ts` 18 条 +
-      `src/app/api/materials/route.test.ts` 18 条（两个门各自一套，含「一次都没落盘」的断言）；
+      判据：`src/app/api/materials/route.test.ts` 18 条（含「一次都没落盘」的断言）；
       反向验证两处：写闸短路 → 恰好 4 条红，读侧收窄摘掉 → 恰好 3 条红。
-      证据：`src/lib/media/materials.ts`、`src/server/api/routers/material.ts`、
-      `src/app/api/materials/route.ts`。
+      证据：`src/lib/media/materials.ts`、`src/app/api/materials/route.ts`。
+      （这条当初登记时是**两个门各 18 条**：tRPC 的 `material.*` 也有一套。那一扇门后来
+      因零消费方删掉了 —— 判据不减、面收成一条，见 E3′。）
 - [x] **A13 产物与素材的读取口是纯路径静态流：`/api/generated/[...path]` 没有会话校验、也没有归属（本批修复 + 判据）**：
       这个端点原先只做「解析后仍在 `public/generated` 之内」那一条路径判据（那条有判据，
       #1260 补的），于是任何能访问该端口的一方都能按路径读走**所有人**的任务产物与素材
@@ -332,15 +393,64 @@
       含首次编译，稳态为亚毫秒级 rewrite）；**逐条按路径前缀判归属仍是「命名即权限」这一族
       的根本形状** —— 盘上文件本身没有属主记录，哪天落点命名换了形状，这张判据表就得同步，
       所以布局与判据两份都在 `src/lib/media/`（`output-paths` 管形状、`output-access` 管属主）
-      并要求新增落点同批改。**另一条残留同源于此**：只要产物还住在 `public/` 下，
-      「静态直发」这条旁路就永远依赖 `src/proxy.ts` 那份 `matcher` 记得写全；把产物根搬出
-      `public/` 才是结构性的关法（`generatedRoot()` 已是唯一出口，代价是历史盘上文件要迁）。
-      搬家之外还欠一件：静态口原本支持 `Range`，折进 route 之后 `Range` 被忽略（整文件
-      200 回全量）—— 现行视频 URL 本来就写的是 `/api/generated/films/…`（`compose-film`
-      收口时就这么存），所以这条不是回归，只是**旧数据里 `/generated/…` 形状的视频**若被
-      播放器直接打开，拖动进度条会表现为整段重下；要补就该补在 route 上（一处补、两种形状都吃到）。
-      证据：`src/lib/media/output-access.ts`、`src/app/api/generated/[...path]/route.ts`、
-      `src/proxy.ts`（接线与 matcher）、
+      并要求新增落点同批改。**另一条残留同源于此，本批关掉了**：产物以前住在 `public/` 下，
+      而 `public/**` 由 Next 按静态文件直接发出、不经过任何 handler —— 那条旁路只能靠
+      `src/proxy.ts` 的 `matcher` 记得写全来堵，漏一个形状就是「一行代码不动、判据零执行、
+      零报错」。现在根搬到仓库根的 `generated/`（`generatedRoot()` 一个表达式），
+      静态通道**不再存在**，判据只剩 route 一处。这一刀能做起来，靠的是上一刀
+      （A8 第二段）把七份副本收成唯一出处 —— 于是「搬」真的只是一处改：
+      · **URL 一个字都没动**：`/api/generated/…` 是写进库里的值，也是 `ARTIFACT_URL_PREFIX`
+      这条对外承诺；搬的是磁盘位置，历史行照常读得到（判据在 `output-paths.test.ts`）。
+      · **`src/proxy.ts` 那条 rewrite 留着，但职责降级**：它从「安全上的必须」变成
+      「让老数据里 `/generated/…` 那种形状仍然走闸」的兼容层。漏配 `matcher` 的表现
+      也随之从「绕过闸门拿到原图」变成「这条路 404」—— fail 的方向从泄漏变成读不到。
+      这个取舍写进 `proxy.test.ts` 与 `proxy.ts` 的注释，别按旧理由理解这一层。
+      · **历史盘上文件一次性搬**（`artifact-root-migration.server.ts`，接在
+      `src/instrumentation.ts` 的 nodejs 分支、排在会读镜头视频的成片恢复之前）：
+      三条硬约束各有用例 —— 新根已有同名条目时**留在原地绝不覆盖**（这条优先于
+      「搬干净」）、Windows 上被占用（EPERM）时**不抛**但写一条说清「哪个条目、留在哪」的
+      面板错误（硬规则 4）、第二次调用是空转（幂等靠「旧根还在不在」，不靠额外状态）。
+      反向验证：把「同名就跳过」短路掉 → 恰好那条「绝不覆盖」的用例红。
+      · **三处 UI 文案不再自己抄路径**：组件里那句 `public/generated/projects/…` 之前是
+      布局的第二份字面量，而抄的那一份不会随搬迁而红，表现就是「界面让人去翻一个
+      已经不存在的目录」。现在形状在浏览器安全的 `output-layout.ts`（不引 `node:path`，
+      所以视图层能引；`output-paths.ts` 反过来 import 它并原样再导出，避免「有两个地方
+      可以抄」），界面用 `artifactDirDisplay()` / `ARTIFACT_ROOT_DIR`。
+      · **顺手关掉一条分发卫生账**：`build-desktop.mjs` 无 filter 整树拷 `public/**`，
+      而 `standalone-private-inputs.mjs` / `check-standalone-contents.cjs` 两道清单
+      放行 `public` 的理由写的正是「静态资源与**生成图落地目录**」—— 也就是构建机上
+      攒的产物会跟着桌包分发（硬规则 17 禁的是「开发机私有输入」，本机图片算不算
+      私有输入不替用户定性，形状先记下）。新根 `generated` **不在任何一层顶层白名单里**，
+      默认拒绝直接把它挡在包外，无需新增条目；两处注释同步改成「产物不在这里」。
+      **已知窗口（不当缺陷修，但要说清）**：`src/instrumentation.ts` 在 dev 下懒编译
+      （实测 `✓ Ready` 之后约 40s 才跑这一支），所以升级到本版的开发机，头 40 秒里读
+      历史产物会拿到 404；桌包（standalone）是进程起来就跑，用户侧没有这个窗口。
+      要关掉得在 `scripts/dev-launcher.mjs` 的预检里加一步 —— 那是「全平台唯一编排」，
+      动它前须完整读 launch-and-build §1–§3，本批没为这 40 秒去碰启动链路。
+      **一处欠同步的注释（改名不改行为，但留给下一次碰壳的那批一起做）**：
+      `src-tauri/src/lib.rs:1051` 那段「运行期目录都按 `process.cwd()` 解析」的清单里
+      还写着 `public/generated/`，应为 `generated/`。不在本批改的理由是实的：
+      暂存里出现 `src-tauri/src/*.rs` 就会付 `cargo test`（本机冷 430s）并触发
+      「改了壳必须重编 release」那道时效判据（`scripts/shell-gate.mjs`），
+      为一条注释让整个 PR 背上一次完整壳编译不值 —— 但**这条不是「以后再说」**：
+      下一次任何动到壳的 PR，把这一行捎上一起改。
+      ~~搬家之外还欠一件：静态口原本支持 `Range`，折进 route 之后 `Range` 被忽略~~
+      **（已关，本批）**：形状判据收成 `src/server/lib/range-request.ts` 一处（RFC 7233 的单档，
+      三种结论：整份 / 一段 / 满足不了），route 只把它翻成状态码 —— 一处补、两种 URL
+      形状（`/api/generated/…` 与兼容层的 `/generated/…`）都吃到。读法也一起换了：
+      原来是 `fs.readFile` 整份读进内存再切，现在按窗口 `fs.open` + `read(buf, 0, len, start)`
+      只读那一段（否则「拖一下进度条」= 整份成片进内存，这条支持就白做）。
+      实测（`next dev` 起服务，打一份 1 154 930 字节的真产物）：无 `Range` → 200 全量；
+      `bytes=0-99` → **206** + `Content-Range: bytes 0-99/1154930` 且 body 恰好 100 字节；
+      `bytes=200-` → body 1 154 730；`bytes=-50` → `bytes 1154880-1154929/1154930`；
+      `bytes=99999999-` → **416** + `Content-Range: bytes */1154930`；
+      `bytes=0-1,2-3` 与 `bytes=500-100` → 200（按 RFC 这两条是语法无效，**不许判成 416**）。
+      顺带两条只有跑起来才看得见的口径：`Accept-Ranges: bytes` 必须在场（缺了它，
+      浏览器第一次 seek 才会想起发 `Range`）；短读（同名产物被重新生成、文件在请求内变短）
+      要把 `Content-Range` 一起收窄 —— 承诺 6 个字节而 body 只有 2 个比回 404 更坏。
+      证据：`src/lib/media/output-access.ts`、`src/app/api/generated/[...path]/route.ts`
+      （32 条用例，含「带 Range 也不许绕过会话与归属闸」那组）、`src/server/lib/range-request.ts`
+      （18 条形状判据，四项门槛满档）、`src/proxy.ts`（接线与 matcher）、
       `src/app/api/film/bgm/route.ts`（无主前缀的来源）、`src/server/film/compose-film.ts`
       （`films/_tmp_<id>` 中间目录与 `films/<id>.mp4` 收口 —— 判据里那条 `_tmp_` 还原就是为它写的）。
 - [ ] **B1 capability 对回环通配源开满**（`http://127.0.0.1:*` + `process:default` / `updater:default`）。证据：`src-tauri/capabilities/remote.json:8-26`；`src-tauri/tauri.conf.json:31`。
@@ -396,6 +506,35 @@
       同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
       —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
       按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
+- [x] **E11 `check-format.cjs` 的 fail-open：prettier 没跑成时被读成「全库干净」（本批修复 + 判据）**：
+      发现路径不是「有人投诉格式」，而是另一条批次的提交门槛红了 —— `tests/check-format.test.ts`
+      里三条「期望门禁拦住」的用例在钩子的多 worker 批次里稳定红，而**串行单跑全绿**。
+      用一次性沙箱探针量到底（按用例的方式搭临时仓、直接打印子进程的 status/stdout/stderr）：
+      沙箱里 `pnpm exec prettier` 报
+      `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL — Command "prettier" not found`，**退出码 1、stdout 为空**；
+      而脚本的判读是 `const code = res.status ?? 1; if (code !== 0 && code !== 1) exit 2;`
+      —— 1 是「有差异，清单在 stdout」的合法码，于是空清单被读成
+      `未过 prettier 0 个文件（基线 0 个）` + `[format] OK` + **exit 0**。
+      后果：依赖没装 / pnpm 形态选错 / 任何让 prettier 起不来的机器上，这道棘轮**静默放行**，
+      而钩子那行 `[ok] ── check: prettier 格式棘轮` 一个字都没说。与台账 E10
+      （清单顶穿命令行上限，「组 C 红但零执行」）是同一族：**门禁的失败表现必须与
+      「跑过了且没问题」不同形**；本条更糟的一面是它连红都不红。
+      修法（三条出路全部 fail-closed）：入口解析不到 → exit 2；被信号终止（`status === null`）→ exit 2；
+      **退出 1 却一行都没列出来** → exit 2 并附 stderr。取 prettier 不再经 pnpm 层
+      （`node <本地 node_modules/prettier/bin/prettier.cjs>`，取不到才报错），
+      缓存从机器全局 `os.tmpdir()/comfyapp-prettier-cache` 换成本检出的
+      `node_modules/.cache/prettier-gate.json`（用例并发搭沙箱会共用同一份缓存；
+      实测那条路径最后是一份 1.6 MB 的 JSON 文件 —— prettier 3.9 的 `--cache-location`
+      本来就是**文件**语义，我第一版按「它该是目录」写的检查因此是错的，已撤）。
+      判据：`tests/check-format.test.ts` 加两条（21 → 23）——「入口取不到 → exit 2 且输出里
+      不许有 `[format] OK`」「假入口退 1 不落一行 → exit 2」；用例改由
+      `COMFYAPP_PRETTIER_ENTRY` 这条接缝借真实仓的 prettier（沙箱里没有 node_modules），
+      夹具里那份 `launcher-core/` 拷贝随之删除（脚本不再动态 import 它）。
+      变异实测：把「退 1 且空清单」那条规则短路 → 恰好新用例红，其余 22 条绿。
+      同族两处**已核、形态本来就安全**（写在这里免得下批再找）：`check-reformat-only.cjs`
+      用 `if (res.error || res.status !== 0) → 失败`，且批量失败时退回逐文件 stdin 兜底；
+      `run-tests.mjs` 判 `result.error` 并透传退出码。
+      证据：`scripts/check-format.cjs`、`tests/check-format.test.ts`、规范 §13.5.1。
 - [x] **E8 router 层 19 处裸 `throw new Error` —— 业务分支在客户端表现成 500（本批清零 + 升成硬闸）**：
       tRPC 对**非 `TRPCError`** 的抛出按内部错误归码，所以「分类不合法」「项目没生产数据」
       「slug 重复」这些本来该是 4xx 的分支，到 caller 边界是 `INTERNAL_SERVER_ERROR`
@@ -438,6 +577,68 @@
       （口径同 §18.6「门槛取实测、旧值与原因写在注释里」）。
       证据：`eslint.config.js`、`tests/router-error-envelope.test.ts`、`tests/helpers/trpc.ts`、
       `src/server/api/routers/{material,project,task,generate,run,skill,workflow-model}.ts`。
+- [x] **E9 应用事件通道「只剩一端」—— 装成对判据并逐条处置三条死端（本批）**：
+      `~/lib/app-events` 把事件名与载荷类型收在一张表里，但表管不到**有没有人用这一行**。
+      两种坏法全是静默的：派发方没了而监听器还挂着（表现是「界面该刷新的时候没刷新」，
+      注释却继续写着「某某按钮会通过它请求打开详情」，后来人顺着注释找不到触发源，
+      然后以为是自己看错了）；订阅方没了而广播照发（更隐蔽 —— 代码照常执行、什么都没发生）。
+      判据：`tests/app-event-pairing.test.ts`（固定守护清单 18 → 19 条）。认两种写法
+      （字面量与 `export const X = "a:b"` 的常量间接形态 —— 库里真有一处这么派发，
+      只认字面量会误报，而误报一片的判据会被当噪音关掉，那比没有判据更糟）；
+      **测试文件不算任何一端**（口径同 E3′：只有用例在调的口不是安全，是可以烂掉而没人红）；
+      定义处自己不算端；先过 `stripComments`（注释里举例提到事件名不是派发）。
+      装机实测到的存量三条**逐条处置在同一次提交里**：
+      ① `open-task` 只有订阅（`use-history-list` 里那条 `useEffect` 与表行删除；
+      `openDetail` 仍由列表行点击调用，功能面没动）；
+      ② `comfyapp:local-workflows-path-changed` 只有订阅，且它对应的 `.env` 覆盖项
+      早已被「设置里的 ComfyUI 安装路径推导」取代（`getLocalWorkflowRoots` 读 `readEnvVar`，
+      全仓没有 UI 写它）—— 连它那份**替不存在的链路背书**的用例一起删
+      （`use-workflow-library.test.ts` 里「目录配置变更事件会触发重新拉取」那条自己
+      `dispatchEvent(new CustomEvent(...))` 造出派发方，于是永远绿：口径同 §11.2.1
+      「断言在替缺陷背书比没有断言更糟」）；
+      ③ `custom-nodes:updated` 只有派发（`refreshCustomNodes()` 每次解析完都发，
+      而它的订阅侧 —— 画布的添加节点菜单 —— 已不在库里，`getAllNodeTypes()` 如今零消费方）。
+      **本批没修的那一条点名留下**：注册表刷新现在**确实没有**通知通道，
+      「从设置面板解析出新节点后，视图要硬刷新才看见」是现状；补它必须连订阅侧一起补
+      （判据会拦只有派发的那一端）。③ 的删除让 `refreshCustomNodes` 的
+      `catch { return 0 }` 第一次有了日志 —— 「刷新失败」与「manifest 里零个节点」
+      在调用方看来同形，那行 `console.error` 是唯一能分开的痕迹。
+      ⚠️ **同时量到 P61 的一处豁免过宽**（本轮没改，属他人判据）：
+      `check-ui-primitives.cjs` 的 P61 对「已经 import 了 app-events 的文件」整份跳过，
+      于是那样的文件里再裸写 `new CustomEvent("a:b")` 不计数。实测本批只在被删的那份
+      测试里见到这一形态，暂无生产侧实例；精确化方向是「按调用点豁免」而不是「按文件豁免」。
+      证据：`src/lib/app-events.ts`、`tests/app-event-pairing.test.ts`、
+      `src/config/custom-nodes.ts`、`src/components/studio/{history/hooks/use-history-list,workflow-library/hooks/use-workflow-library}.ts`。
+- [x] **E10 提交门槛的 C 组「红但不是用例红」：清单顶穿平台命令行上限，vitest 根本没起（本批发现并修）**：
+      同一次提交里撞出来的，值得单独立一条 —— C 组原本是 `pnpm exec vitest run --maxWorkers=4 $files`，
+      清单是**位置参数**、长度随改动面线性增长。改 22 个文件的那一批算出 **229 个用例 / 10840 字符**，
+      而 `pnpm exec <bin>` 在 Windows 上经 `.cmd` shim，那条链的上限是 cmd.exe 的 **8191 字符**：
+      进程没起，stdout 只有一行 GBK 乱码（「文件名或扩展名太长」），钩子只说「组 C 失败」。
+      危害不是「被拦」，是**它长得像任何别的东西** —— 判据在场、跑了 0 个用例、退出码非零而
+      原因读不出；改动面越大的提交越容易撞上，也就是治理线自己的批次最先撞。
+      与本台账反复记的「绿 ≠ 跑过」是同一族的两面：**红也 ≠ 跑过**。
+      修法与判据：启动那一步交给 `scripts/run-affected-tests.mjs`（`spawnSync(process.execPath,
+[vitest 的 ESM 入口, …])`，不经 cmd 层，上限回到 Win32 的 32767），按 24000 字符预算
+      **分块**且「宁可多起一次也不丢用例」；入口走 `require.resolve("vitest/package.json")` +
+      `bin.vitest`，不写死 `node_modules/vitest/…`（pnpm 布局下顶层只是链接）。
+      判据 `tests/hook-affected-launch.test.ts`（固定清单 19 → 20）钉四件：分块后**并集等于输入
+      且顺序不变**、每块在预算内（单条就超预算时点名红，不许静默跳过）、启动器没有 `shell: true`
+      也不出现 `pnpm exec vitest` / `npx vitest`、钩子里 C 组确实指向该入口（配合成旧写法反证）。
+      两次变异各红各的：把钩子换回旧拼法 → 恰好那条钩子文本判据红；把最后一块丢掉 → 三条
+      「不丢用例」的判据一起红。
+      ⚠️ **与同批落地的 `tests/doc-check-hook-wiring.test.ts` 对齐过一次口径**（规范 §13.5.8：
+      「在场判据要解析、不要 `toContain`」——把钩子里那行前面加 `# ` 注掉，行内仍含同一段
+      字面量，`toContain` 照样命中）：本判据原先正是 `hook.toContain("scripts/run-affected-tests.mjs")`，
+      而本文件上方的机制说明里也写着这个文件名，**在注释上命中**是分不出「在执行」与「已静音」的。
+      现在按 `run_group C … sh -c '<body>'` 解析出实调用体、剔掉行首是 `#` 的行再断言，
+      并补一条「注掉那一行」的反证（实测恰好那一条红）。同一次对齐还保住了钩子里那句
+      「D(N 个判据脚本)」的计数陈述 —— 它由那份判据核与实际 D 组步骤数一致，
+      本批改写 C 组注释时把它原样带过去并加了「新增判据必须同步这个数字」的指向。
+      ⚠️ 顺带量到但**本批没动**：`.githooks/pre-commit` 的注释里有硬日期
+      （`2026-09-22 并行化重排`）—— R10「注释禁止历史流水」只扫 `.ts/.tsx/.css`，shell 脚本
+      在判据面之外；要把这类落点也管住，得先给 R10 加扫描面而不是逐处手改。
+      证据：`.githooks/pre-commit`、`scripts/run-affected-tests.mjs`、
+      `tests/hook-affected-launch.test.ts`、规范 §13.5.8。
 - [x] **E3 服务端集成覆盖收口：判据从「router 有没有测试文件」升到「每条 procedure 有没有执行者」（本批）**：
       台账从 13/16 走到这里，最后 3 个零执行者的口（`customNode` / `user` / `post`）
       **没有一条被补成测试** —— 给死口写用例等于把它焊死。逐条定性后删除：
@@ -451,7 +652,8 @@
       · `user.me`：客户端取会话走的是 better-auth 的 `authClient`（`src/app/login/page.tsx`），
       这口从没有被调用过。
       **判据落在挂载动作上**（`tests/trpc-surface-executors.test.ts`，已进
-      `FIXED_STRUCTURAL_TESTS`）：枚举 `appRouter` 的 74 条 procedure，要求每条都出现在
+      `FIXED_STRUCTURAL_TESTS`）：枚举 `appRouter` 的全部 procedure（登记时 74 条，随后续批次增减），
+      要求每条都出现在
       「import 了该 router 文件闭包」的测试里的调用形态 —— 「文件在、某几条口照样零执行者」
       是这一族最后的漏洞，所以粒度必须是 procedure 而不是 router。三条配套 sanity：
       扫描面本身非空（空输入不许绿）、命名空间都得在 `root.ts` 登记、判据自身用合成的
@@ -463,17 +665,96 @@
       两条归属用例红；`bust` 写成 `{}` → bust 用例红；`hostId` 写死 `""` → 子图坐标用例红。
       证据：`src/server/api/root.ts`、`tests/trpc-surface-executors.test.ts`、
       `src/server/api/routers/workflow.test.ts`、`vitest.config.ts`（`workflow-detail.ts` 首次登记门槛）。
-      **本批复算出来、按口径没有升成硬闸的存量**（判据第一次被看见就有 13 条，误报一片的
-      判据只能精确化、不能靠放宽基线装机 —— 口径同 E8）：**13 条 procedure 有执行者、
+      **本批复算出来、交给下一条（E3′）处置的存量**：**13 条 procedure 有执行者、
       零消费方** —— `llm.complete`、`material.list` / `material.save` / `material.delete`、
       `project.get` / `project.patch`、`skill.create`、`train.detail`（另有本批删掉的 4 条）。
       口径是「客户端源码里搜不到 `api|trpc|vanillaApi|sender.<ns>.<proc>` 的字面调用」，
       复算方法：`appRouter._def.procedures` 全枚举 + 沿 import 闭包比对 `src/` 非服务端源码。
-      `material.*` 三条与 `project.get` 大概率是 REST 面把 tRPC 面替掉了（同数据两个门，
-      §12.14 收口），删哪一侧是产品判断，不在本批擅自定。
-- [ ] **E3′ 零消费的 tRPC 口 13 条**（上一条复算出来的存量，未定处置）：逐条问「这口还有谁要」，
-      与 REST 面重复的收口到一侧，确实要留的补上消费方或登记豁免；判据等存量清零后再升硬闸。
-      证据：`docs/guides/PRODUCTION-GAPS.md` E3 条的复算口径。
+- [x] **E3′ 零消费的 tRPC 口：收成「每条口都要有消费方」的硬闸（本批修复 + 判据）**：
+      上一批复算出 13 条有执行者、零消费方的口。逐条问过「这口还有谁要」之后分三类处置：
+      · **与 REST 面重复的两扇门收口到有人走的那一侧**（§12.12 / §12.14）：删掉
+      `src/server/api/routers/material.ts`（`material.list` / `save` / `delete` 三条）——
+      素材库面板自始至终走 REST 的 `/api/materials`（`src/lib/media/materials-client.ts`），
+      归属判据在 `src/lib/media/materials.ts` 一处。**「判据一条不减」这句先被实测驳回了**：
+      门删掉之后 `materials.ts` 的分支覆盖从 80 掉到 **78.43**（`check:all` 当场红）——
+      那些清洗与包含分支（129 字符的 scope、`..`、`a<b>.png`、201 字符的文件名、隐藏文件、
+      子目录、单条 stat 失败）此前只被那扇门的用例**顺带**走过，而活着的 REST 门送进来的全是
+      合法入参，这些形状一个都进不来。补法不是把死门找回来，而是**给判据层自己一份用例**
+      （`src/lib/media/materials.test.ts`，按判据本身组织）+ REST 补一条「素材库根读不出来时
+      按『没有别的 scope』答」，分支回到 **100** 并按实测把门槛抬上去（95/90/85/80 → 100/95/98/100）。
+      三条变异核过：去掉 scope 的长度上限 → 恰好那条拒绝用例红；把 `folderDir` 的包含断言摘掉 →
+      恰好 `..` 那条红；去掉隐藏文件的跳过 → 恰好排序那组红（其余 36 条全绿）。
+      删掉 `llm.complete` —— `/api/llm` 是活的 LLM 门
+      （还多带流式与 tools），它身上的 `provider` / `taskType` 枚举闸改由
+      `llm.configSave` 的用例判住（补了一条 `temperatureByTask` 非法键 → 400 且不落库）。
+      · **确实要留的四条登记在案并写明「谁将来接它」**：`project.get` / `project.patch` /
+      `skill.create` / `train.detail`。它们不是「判据缺失」而是「功能未接」——归属与形状闸
+      都有用例，红得起来。
+      · 判据升成硬闸：`tests/trpc-surface-executors.test.ts` 加了**第二个维度**（消费方），
+      与执行者维度共用一份挂载面（`scanSurface()`）。要点三条：
+      ① 消费面 = `src/**` 的非测试代码且**先剥注释** —— 只有测试在调 = 零消费方，
+      这正是 `material.*` 的形状（18 条归属用例全绿、界面一个字都没引用）；
+      ② 点名形态认三种（`api.ns.proc`、`api.ns["proc"]`、`RouterInputs["ns"]["proc"]`），
+      定义这条口的文件闭包不算它自己的消费方；
+      ③ 登记表 `ZERO_CONSUMER` **双向不陈旧** —— 口没了登记还在 = 红，消费方接上了登记
+      还在 = 红，登记条目长度进棘轮（`MAX_ZERO_CONSUMER`，只许降）。
+      反向验证逐条做过：摘掉 `train.detail` 的登记 → 主断言报 `['project.get','train.detail']`；
+      把登记键改成 `project.gone` → 陈旧断言报「已经不存在，登记该删掉」。
+      顺带一条**实测**：判据装机时暴露出「客户端地址没有落点」这一族（3 条真请求打向不存在的
+      handler，实测全 404；另有 1 条只是 URL 形状的缓存键），另立 E3‴ 处置（同批已关闭）。
+      证据：`src/server/api/root.ts`（「登记即欠两样东西」）、
+      `tests/trpc-surface-executors.test.ts`、`src/lib/workshop/generation-client.ts`
+      （`fetchWorkshopStyles`）+ `src/lib/workshop/generation-client.styles.test.ts`、
+      `vitest.config.ts`（素材那组从三条减成两条）。
+- [x] **E3‴ 客户端写的 REST 地址有 3 条真请求没有落点（实测 404，界面按空态吞掉），另有 1 条 URL 形状的假地址（本批修复 + 判据）**：
+      复现口径是**实测**而不是读代码：起本机服务逐条 curl ——
+      `GET /api/skills`、`GET /api/images?filename=…`、`GET /api/file/x.png` **全部 404**，
+      同一条链上 `GET /api/trpc/project.list` → 200。三个 handler 在基线迁移那次提交里
+      就没带过来（`git log --diff-filter=D -- src/app/api/<名>/**` 逐条可查），调用点却留着。
+      失败形态不是报错而是**常年空态**：404 → 调用点一句 `catch {}` / `MediaThumbnail` 的空 `src`
+      就把它咽下去（「选完图看不到图」那条实测反馈有一半是这个原因，不只是形状解析）。
+      四条的处置（各归各位，没有一条靠加兜底）：
+      · `/api/skills` → 改吃 `skill.list`（`fetchWorkshopStyles`，与成片工作室同一扇门，
+      内置技能种子因此只有一份）；
+      · `/api/images` → **补上那个根本不在的 handler**（`src/app/api/images/route.ts`）：
+      本机代理 ComfyUI 的 `/api/view`，复用现成的 `getView()` 与 `contentTypeForPath()`，
+      判据顺序 = 会话 → 文件名形状 → 类别枚举 → 上游状态；失败**分三相**
+      （上游 404 → 404 / 上游别的码 → 502 / 连不上 → 503 + `hint=comfyui-unreachable`），
+      响应头必须 `private` 且不许 `immutable`（口径同 A13：响应取决于「你是谁」，
+      而 ComfyUI 的 `input` 目录会被同名上传覆盖）。
+      为了让这三相可判，`getView()` 的失败从 `Error("getView failed: 404")` 改成
+      带 `status` 的 `ComfyViewError`（消息原样保留，`executor-finalize` 那类只判
+      「拿不到就抛」的调用方零感知）—— 否则调用方只能**读消息**来分相，消息一改判决就错。
+      实测（`next dev` 起服务、ComfyUI 未运行）：`/api/images?filename=nope.png&type=input`
+      → **503** 且体里带着 `hint`（本批之前是 404 从 Next 发出，两种 404 在状态码上分不出来）；
+      缺 `filename` → 400；`filename=../../x.png` → 400；`/api/trpc/project.list` → 200。
+      · `/api/file/<name>`（训练素材缩略图）→ **不补第二扇门**：它是同一件事的另一条地址，
+      改吃 `comfyImageUrl({ filename })`，于是「ComfyUI 媒体地址」的形状仍然只在
+      `media-url.ts` 一处（那本来就是它收口的理由）。
+      · `use-workflow-detail-loader.ts` 的 `` `/api/workflows/${id}[/subgraph]` `` → 它**不发请求**
+      （真实请求走 `vanillaApi.workflow.detailFull` / `subgraph`），只是拿这个形状当
+      sessionStorage 的键；键改成请求身份三元组，`CACHE_KEY_PREFIX` 的 `R7` 升一档
+      （`purgeStaleCache` 会洗掉旧命名空间，TTL 本来 30s，代价是一次缓存未命中）。
+      判据：`tests/rest-endpoint-targets.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）——
+      扫 `src/**` 非测试代码里以引号紧接 `/api/` 开头的每个字面量，必须命中
+      `src/app/**` 目录形状推出的某个 route handler；段数要对齐（少一段就是 404），
+      `[x]` 吃一段、`[...x]` 吃剩余全部（也吃零段），`${…}` 当通配段；
+      `` `${base}/api/prompt` `` 这种前面是 `}` 的外部服务地址不进扫描面。
+      两类**长得像地址但不是地址**的必须显式登记（`NON_REQUEST_ADDRESS`，双向不陈旧：
+      字面量没了还留着 = 红，登记的路径其实有 handler = 红）：`/api/trpc` 是 RPC 通道基址
+      （真实请求一律 `/api/trpc/<ns.proc>`，实测那条 200、基址本身没人拿），
+      `/api/ws` 是 ComfyUI 自己的 WS 路径（拼在 `ws://<comfy host>` 上）。
+      **判据装机时自己先错过一次**：它抄了别处的 `collectTs`，那份递归跳过名为 `generated`
+      的目录（产物根在仓库根时是对的），于是 `src/app/api/generated/[...path]` 整个从路由表里
+      消失，`/api/generated/…` 被判成没有落点。假红暴露的正是「同一份扫描工具在不同目录
+      语义不同」——现在注释写在函数上，跳只剩 `node_modules` 与 `.next`。
+      反向验证：往 `media-url.ts` 塞一条 `/api/nope-endpoint/x` → 恰好主断言红并点名文件；
+      把登记键换成 `/api/gone-already-fixed` → 主断言与陈旧断言各红一条。
+      证据：`src/app/api/images/route.ts` + `route.test.ts`（11 条，四项门槛满档）、
+      `src/lib/comfyui/client.ts`（`ComfyViewError`）+ `client.test.ts`（`getView` 三支）、
+      `src/lib/media/media-url.ts`、`src/components/studio/TrainingStudio.tsx`、
+      `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts`、
+      `git show ab12a551^:src/app/api/images/route.ts`。
 - [ ] **E3″ 端到端仍只有 3 spec / 31 用例且无登录态**（E3 的 router 维度已收口，这一维度没动）：
       没有任何一条走完「登录 → 建项目 → 出图」的旅程，所以壳起不来、会话过期、
       中间件改写这类**只在真实 HTTP 栈上成立**的缺陷没有执行者（A13 的产物口就是靠手工
@@ -493,26 +774,50 @@
 - [ ] **F10 `eslint-plugin-jsx-a11y` 未显式启用**。证据：`eslint.config.js:63-69`。
 - [ ] **F11 端口 TOCTOU + 800 槽哈希分桶碰撞无兜底**。证据：`src-tauri/src/lib.rs:831-834`；`single_instance.rs:189-192`。
 - [ ] **F12 无 Web Vitals**；SQLite 无 `busy_timeout`；几乎无事务边界。证据：`src/server/db.ts:74-75`。
-- [ ] **F13 `unknown` + `as never` 把「调用点形状错了」咽掉**（本刀照出并已修一处，**类未收口**）：
+- [x] **F13 `unknown` + `as never` 把「调用点形状错了」咽掉（本批补判据并清掉两处实例；类未收完，剩 F13′）**：
       Prisma→Drizzle 迁移把仓储的投影参数写成 `select?: unknown`，交给 Drizzle 时
       `db.select(select as never)` —— 于是调用点留着 Prisma 的布尔投影
       （`{ id: true, status: true }`）时 **tsc 一声不响**，运行时生成空投影 → SQL 语法错。
       实际后果：`train.cancel` 自那次迁移起每次 500，而这条 router 没有执行者，
-      所以没有任何一条红过（`c7a77d19` 之后的本刀补上判据并把类型收紧成
+      所以没有任何一条红过（`c7a77d19` 那刀补上判据、类型收紧成
       `Record<string, AnySQLiteColumn>`，见 `repository-lora.ts` 的注释）。
-      **同族还没查完的两处**：① 其它仓储/工具签名里的 `unknown` + `as never`
-      （全仓 `as never` 的现存数量由 `check-non-null-assertions` 之外的另一条线管，没有专门判据）；
-      ② 「一个 procedure 从迁移那天起就是死的」这类缺陷**只有执行者能发现** —— 这一支
-      随 E3 收口（`tests/trpc-surface-executors.test.ts` 把「挂载即欠执行者」做成判据，
-      `post` / `user` / `customNode` 就是被它照出来后删掉的）。
-      **本批复算照出的新同族实例（后果是性能，不是 500）**：
-      `workflowTemplateRepository.findByIdForUserSelect(userId, id, _select)` 的第三参
-      **带下划线、根本没被用**，实现走的是 `db.select()` 全列 —— 于是 `workflow-detail.ts`
-      里那份「只取需要的列，别把 `positions` / `rawJson` 两个大 JSON blob 拖两遍」的投影
-      清单是空气，方法名承诺的能力没在。与 ① 同因：`select?: unknown` 让调用点与实现
-      的错位对编译器不可见。证据：`src/lib/core/repository-workflow-template.ts:57-70`。
-      证据：`src/lib/core/repository-lora.ts`（修后的类型与注释）、
-      `changelog.d/0-router-gates-tranche2.md`。
+      **本批把「类」变成有判据的东西**：`tests/f13-projection-shapes.test.ts`（进固定清单）判四件事 ——
+      ① 非测试源码里每一处 `as never` 都要**逐处登记 + 写清为什么**（新增未登记 = 红；
+      登记的那处不见了 = 红；按「文件 + 该文件内次数」记账，不按会漂的行号）；
+      ② 投影类参数（名字含 `select` / `projection` / `columns`）的类型不许是
+      `unknown` / `any`；③ `.select(… as never)` 这个形状零存在（就是当年那一句）；
+      ④ 仓储签名里不许有以 `_` 开头的参数 —— 那个下划线就是「我知道没人用，但我不想删」的写法。
+      判的是**形状**而不是语义：`as never` 的语义就是「这里我不检查了」，
+      而对编译器按下静音键的地方，坏掉的时候也不会对任何人吱一声。
+      **同批清掉的三处实例**（原来都在扫描面的盲区里）：
+      · `workflowTemplateRepository.findByIdForUserSelect(userId, id, _select?: unknown)`
+      —— 参数名承诺投影、实现是 `db.select()` 全列，三个调用点还在传 Prisma 形状的
+      `{ id: true, rawJson: true, … }`。后果是性能而不是 500：详情加载每次把
+      `rawJson` 与 `positions` 两个大 JSON blob 整行拖出来，而那份「只取需要的列」
+      的清单是空气。改法 = 删掉这个不做实事的方法，元数据那一读换成**真投影**
+      （`findSourceMetaForUser` + `SOURCE_META_COLUMNS`），另两读改吃已有的
+      `findByIdForUser`（行为一字不变 —— 它们本来拿的就是整行）。
+      · LLM 回来的景别：`parseShotsFromJson` 把它声明成 `string`，下游
+      `shotType: s.shotType as never` 塞进 `Shot` —— 等于「模型返回什么景别就存什么」。
+      现在收在**解析边界**（`normalizeShotType`），并补一条用例钉住清单外的值必须回落
+      默认档（变异核过：把 passthrough 写回去 → 恰好这一条红）。
+      · 顺带照出**同一份清单被抄了四遍**：`ShotType` 联合、`VALID_SHOT_TYPES`、
+      `prompts.ts` 里的 `SHOT_TYPES`、`StoryboardPlanner.parts.tsx` 里又一份下拉选项。
+      现在 `SHOT_TYPES` 是唯一出处（联合由它派生），其余三处吃它。
+      **这一族另一半仍然只有执行者能发现**（「一个 procedure 从迁移那天起就是死的」），
+      那一支已随 E3 收口成判据（`tests/trpc-surface-executors.test.ts`）。
+      证据：`tests/f13-projection-shapes.test.ts`、`src/lib/core/repository-workflow-template.ts`、
+      `src/lib/workshop/types.ts`（`SHOT_TYPES` / `normalizeShotType`）、
+      `src/lib/core/repository-lora.ts`、`changelog.d/0-router-gates-tranche2.md`。
+- [ ] **F13′ MCP 工具的写侧入参没有域内校验**（F13 收口后剩下的那一处真欠账）：
+      `src/server/mcp/workshop-mcp.ts` 的 `workshop_set_characters` / `workshop_set_storyboard`
+      把 inputSchema 写成 `z.array(z.any())`，再 `as never` 压进 `Character[]` / `Shot[]`。
+      这与其他几处「桥接第三方签名」不同 —— MCP 是**外部客户端可以随便发的边界**，
+      任意对象会原样进草稿并参与提示词重算。它现在被 `tests/f13-projection-shapes.test.ts`
+      的登记表点名记着（新增未登记的 `as never` 会红），但登记不是修复。
+      修法 = 给 `Character` / `Shot` 出一份域内 zod 契约（与 `draft-sync-shared.ts` 那份
+      校验同一口径），工具里 parse 后传值、失败回一条工具级错误，然后**删掉这两条登记**。
+      证据：`src/server/mcp/workshop-mcp.ts:240-282`、`src/server/workshop/orchestrator.ts:204,236`。
 - [ ] **P3 卫生**：无 `.editorconfig`；`package.json` 无 `engines`；tsconfig 缺 `exactOptionalPropertyTypes` 等；`cn@^0.3.0` / `lucide-react:^1.47.0` 版本偏宽；双 TS 版本导致构建/门禁语义不一致；`/api/update-check` 无鉴权回显变更指纹；`comfyapp://` 由外部 helper 实现需单独审计防任意网页利用本机路径。
 
 ## 规范状态

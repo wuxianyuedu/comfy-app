@@ -39,7 +39,6 @@ export const WORKSPACE_VIEWS: WorkspaceView[] = [
   "library",
   "history",
   "queue",
-  "train",
   "film",
   "workflows",
   "outputs",

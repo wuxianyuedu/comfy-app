@@ -60,13 +60,47 @@ function Invoke-Logged {
     # 配色也统一成入口侧（entry-common.ps1 Invoke-Entry）的 Yellow，避免两处回显
     # 一黄一白、看起来像两种级别的输出。
     Log ">>> $Command" -ForegroundColor Yellow
+
+    # **命令起不来 ≠ 执行成功**（ISSUE #1350）。`&` 解析不到命令时 PowerShell 只发一条
+    # 非终止错误、**不会写 `$LASTEXITCODE`**，于是下面读回来的是**上一次成功调用留下的 0**
+    # —— 实测 pwsh 7 与 powershell 5.1 一致。发布构建的三个入口
+    # （build-standalone / build-tauri-release / rebuild-static）正是拿这个数判「构建失败」的，
+    # 所以 `cargo` 不在 PATH 时它们会跳过中止、一路打印「全部完成 / 可双击 app.exe」，
+    # 而那个 exe 并不存在。先解析、解析不到就当场定性，比让错误文本流进管道再猜要可靠。
+    $token = if ($Command -match '^\s*"([^"]+)"') { $Matches[1] }
+             elseif ($Command -match "^\s*'([^']+)'") { $Matches[1] }
+             else { ($Command.Trim() -split '\s+')[0] }
+    if (-not $token -or -not (Get-Command $token -ErrorAction SilentlyContinue)) {
+        # ASCII 标签的理由同 quality-gate.ps1 的 [GATE-NOEXEC]：5.1 的管道按 GBK 解码，
+        # 认中文子串的用例会随宿主与代码页变红，而这条判决正反两向都要能被稳定断言。
+        $script:LAST_INVOKE_CODE = 127
+        Log "[FAIL][CMD-NOTFOUND] 命令没找到：$token —— 这一步**没有执行**，不是「执行了且通过」。" Red
+        Log "        先确认它在 PATH 上（cargo / pnpm / node 各由自己的安装提供），再重跑本入口。" Yellow
+        return
+    }
+
+    # 调用前清空：万一解析通过了但进程仍起不来，`$null` 就是「一个都没起来」的确定性证据，
+    # 而不是上一次的结果。
+    $global:LASTEXITCODE = $null
     $sb = [scriptblock]::Create($Command)
-    & $sb 2>&1 | ForEach-Object {
-        $line = "$_"
-        Write-Host $line
-        $clean = Strip-Ansi $line
-        Add-Content -Encoding UTF8 -Path $script:LOG -Value $clean
-        $script:LAST_INVOKE_CODE = $LASTEXITCODE
+    try {
+        # 输出逐行双写（控制台 + 日志）。**不要**在这里顺手记 `$script:LAST_INVOKE_CODE`：
+        # 子进程没有任何输出时循环体一次都不执行，那份赋值就漏写结论 —— 判决只能有循环外那一次。
+        & $sb 2>&1 | ForEach-Object {
+            $line = "$_"
+            Write-Host $line
+            $clean = Strip-Ansi $line
+            Add-Content -Encoding UTF8 -Path $script:LOG -Value $clean
+        }
+    } catch {
+        $script:LAST_INVOKE_CODE = 127
+        Log "[FAIL][CMD-NOTFOUND] 起 $token 失败：$($_.Exception.Message)" Red
+        return
+    }
+    if ($null -eq $LASTEXITCODE) {
+        $script:LAST_INVOKE_CODE = 127
+        Log "[FAIL][CMD-NOTFOUND] 进程没起来（$token）—— 同样不是「执行了且通过」。" Red
+        return
     }
     $script:LAST_INVOKE_CODE = $LASTEXITCODE
 }
