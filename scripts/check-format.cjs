@@ -45,26 +45,33 @@
  *   node scripts/check-format.cjs --report    # 只出清单不判失败(盘点用)
  */
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-// pnpm 可执行形态的唯一判据（见 scripts/launcher-core/shell.mjs 的 runPnpmSync）。
-// 门禁脚本是 .cjs，而判据模块是 ESM：`require()` 拿不到它，必须用动态 import() ——
-// 那件事让**整个脚本**变成异步，因此下面所有逻辑都被包进 `async function main()`
-// 由末尾统一调用（顶层不再有 `process.exit` / `console` 的同步收尾）。
-let runPnpmSync = null;
-/** 动态加载判据模块（ESM）。只加载一次；加载失败时以非零码退出并给出可行动提示。 */
-async function loadShell() {
-  if (runPnpmSync) return runPnpmSync;
+const { createRequire } = require("node:module");
+
+/* prettier 的调用**不再经 pnpm 层**（口径同台账 E10：平台 shim 那一层正是
+ * 「命令没跑成却被读成没问题」的藏身处）。三级解析：
+ *   1. `COMFYAPP_PRETTIER_ENTRY` —— 门禁自己的用例在临时目录里搭沙箱，那里没有
+ *      `node_modules`，不给这条接缝就只能撞「Command "prettier" not found」；
+ *   2. 本地安装的 `prettier/bin/prettier.cjs`（按扫描根解析，与真实门禁一致）；
+ *   3. 两者都没有 → exit 2 并说明「没跑成」。
+ * **任何一档都不许回落成「0 个文件未过」** —— 那正是本脚本过去的 fail-open 形态。
+ *
+ * 取 ESM 判据模块（`launcher-core/shell.mjs`）的那段动态 import 随之删除：
+ * 本脚本不再需要 pnpm 形态判定，`main()` 保持 async 只为收尾顺序不变。 */
+
+/** prettier 入口的三级解析（见上）。取不到返回 null，由 `main()` 以 exit 2 收尾。 */
+function resolvePrettierEntry() {
+  const fromEnv = process.env.COMFYAPP_PRETTIER_ENTRY;
+  if (fromEnv) return fs.existsSync(fromEnv) ? fromEnv : null;
   try {
-    ({ runPnpmSync } = await import("./launcher-core/shell.mjs"));
-  } catch (e) {
-    console.error(
-      `[format] 无法加载 pnpm 形态判据模块（scripts/launcher-core/shell.mjs）：${e.message}`,
+    // 按扫描根解析：门禁在仓库根被调用，本地 `node_modules/prettier` 就是它的依赖。
+    return createRequire(path.join(ROOT, "noop.js")).resolve(
+      "prettier/bin/prettier.cjs",
     );
-    process.exit(2);
+  } catch {
+    return null;
   }
-  return runPnpmSync;
 }
 
 /* 扫描根取 cwd:门禁在仓库根被调用,而 prettier / git 都按 cwd 解析仓库
@@ -94,8 +101,23 @@ const IGNORE_GLOBS = [
   "*.js",
 ];
 
-/** prettier 缓存放临时目录:缓存不进仓库,也就不进基线。 */
-const CACHE_DIR = path.join(os.tmpdir(), "comfyapp-prettier-cache");
+/**
+ * prettier 缓存放在**本次检出**的构建输出目录下，不再是一个 `os.tmpdir()` 里的
+ * 机器全局路径（实测语义：prettier 3.9 把 `--cache-location` 当**文件**用，
+ * 那个路径下长出来的是一份 JSON 缓存，不是目录）。
+ *
+ * 换成本地路径有两个理由：① 门禁自己的用例会并发搭临时沙箱，共用机器全局路径时
+ * 多个进程往同一份缓存里写，读数不可信；② 缓存跟着用户走 → 换一台机器、
+ * 换一个 worktree 都是同一份，出问题时没法按检出隔离（本仓库有并行会话在同一台
+ * 机器上跑，这条是实测过的）。仍然不进仓库根：只在 `node_modules/.cache/` 下，
+ * 已被 git 忽略，也就不进基线。
+ */
+const CACHE_FILE = path.join(
+  ROOT,
+  "node_modules",
+  ".cache",
+  "prettier-gate.json",
+);
 
 function toPosix(p) {
   return p.split(path.sep).join("/");
@@ -152,50 +174,72 @@ function isIgnored(rel) {
   return IGNORE_RES.some((re) => re.test(rel));
 }
 
-/** 找出未过 prettier 的文件(仓库根相对 POSIX 路径,已排序、已剔除白名单)。 */
-function collectUnformatted() {
+/**
+ * 找出未过 prettier 的文件(仓库根相对 POSIX 路径,已排序,已剔除白名单)。
+ *
+ * 三条**fail-closed** 规则（本函数过去只有前两条的一半，因而存在一条
+ * 「命令没跑成 → 报全库干净」的出路，见台账 E11）：
+ *   · 子进程被信号杀掉（`status === null`，含超时被杀）→ exit 2；
+ *   · 退出码不属于 {0, 1} → exit 2（配置写错 / 解析失败，prettier 会走这一档）；
+ *   · **退出 1 却一行文件都没列出来** → exit 2。
+ * 第三条是关键：`--list-different` 返回 1 的含义是「有差异，清单在 stdout」，
+ * 而清单为空与「命令根本没跑成」（例如 `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL
+ * Command "prettier" not found`，退出码同样是 1 且 stdout 为空）在旧代码里
+ * 长得一模一样 —— 于是门禁把「什么都没扫」读成「0 个文件未过（基线 0 个）/ OK」。
+ */
+function collectUnformatted(entry) {
   const found = new Set();
   for (const glob of GLOBS) {
-    // pnpm 的可执行形态由 launcher-core/shell.mjs 一处判定（规范 §2.1.1 / §9.5）：
-    // 这里曾写死 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`，而 Windows 上
-    // 批处理只有 cmd.exe 会解释、Node 起它必然 EINVAL —— 提交门槛直接崩在
-    // `[format] 无法执行 prettier:spawnSync pnpm.cmd EINVAL`（ISSUE #638）。
-    const res = runPnpmSync(
-      [
-        "exec",
-        "prettier",
-        "--list-different",
-        "--cache",
-        "--cache-location",
-        CACHE_DIR,
-        glob,
-      ],
-      { cwd: ROOT, timeoutMs: 600_000 },
-    );
+    const args = [
+      "--list-different",
+      "--cache",
+      "--cache-location",
+      CACHE_FILE,
+      glob,
+    ];
+    const res = spawnSync(process.execPath, [entry, ...args], {
+      cwd: ROOT,
+      encoding: "utf8",
+      // 单文件清单在超大仓库里能到几百 KB；默认 1 MB 会把 stdout 截成空串，
+      // 那正好落进上面第三条要拦的形态 —— 宁可显式给大。
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 600_000,
+    });
     if (res.error) {
-      // 「命令压根没起来」与「prettier 报错退出」分开报：前者 stderr 通常是空的，
-      // 只说一句 `无法执行 prettier:` 会让根因（选错了 pnpm 形态）看起来像
-      // 「prettier 坏了」。
       console.error(
         `[format] 无法执行 prettier（${res.error.code ?? "UNKNOWN"}）：${res.error.message}\n` +
-          `[format]   实际命令：${res.command} ${res.args.join(" ")}\n` +
-          `[format]   先跑 pnpm check:toolchain 看选中的 pnpm 形态。`,
+          `[format]   实际命令：${process.execPath} ${entry} ${args.join(" ")}`,
       );
       process.exit(2);
     }
-    // `--list-different` 在「存在差异」时返回 1、无差异返回 0;其余非零码才是
-    // 真失败(配置写错 / 解析失败),必须区分 —— 否则「prettier 起不来」会被
-    // 读成「全库文件都未格式化」。
-    const code = res.status ?? 1;
-    if (code !== 0 && code !== 1) {
+    if (res.status === null) {
       console.error(
-        `[format] prettier 执行失败(exit ${code}):\n${res.stderr || res.stdout || ""}`,
+        `[format] prettier 被信号终止（${res.signal ?? "unknown"}），不是「没有差异」。\n` +
+          `[format]   入口 ${entry}，缓存 ${CACHE_FILE}。`,
       );
       process.exit(2);
     }
-    for (const line of (res.stdout || "").split("\n")) {
-      const f = line.trim();
-      if (!f || f.startsWith("[")) continue;
+    const lines = (res.stdout || "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("["));
+    if (res.status !== 0 && res.status !== 1) {
+      console.error(
+        `[format] prettier 执行失败(exit ${res.status}):\n${res.stderr || res.stdout || ""}`,
+      );
+      process.exit(2);
+    }
+    if (res.status === 1 && lines.length === 0) {
+      console.error(
+        "[format] prettier 退出 1（「有差异」）却没有列出任何文件 —— 按 fail-closed 判定为\n" +
+          "[format]   「命令没跑成」，不是「全库干净」。真实仓里出现这一行请贴出入口与\n" +
+          "[format]   下面这段 stderr。",
+      );
+      if (res.stderr)
+        console.error(`[format]   stderr: ${String(res.stderr).trim()}`);
+      process.exit(2);
+    }
+    for (const f of lines) {
       const rel = toPosix(path.relative(ROOT, path.resolve(ROOT, f)));
       if (isIgnored(rel)) continue;
       found.add(rel);
@@ -228,11 +272,22 @@ function baselineUntracked() {
 }
 
 async function main() {
-  await loadShell();
+  const entry = resolvePrettierEntry();
+  if (!entry) {
+    /* 「取不到 prettier」与「全库都格式化好了」是两种结论，必须走不同的门。
+     * 旧代码在这一档会一路走到 `[format] OK`（空清单 = 0 个未过），
+     * 也就是门禁在依赖缺失 / 形态选错的机器上**静默放行**（台账 E11）。 */
+    console.error(
+      "[format] 找不到 prettier 入口：本地 node_modules 里没有它，" +
+        "`COMFYAPP_PRETTIER_ENTRY` 也没给。\n" +
+        "[format]   以 exit 2 结束 —— 判据没跑成不许读成「全库干净」。",
+    );
+    process.exit(2);
+  }
   console.log(
     "[format] 运行 prettier --list-different（首次较慢，之后走缓存）…",
   );
-  const current = collectUnformatted();
+  const current = collectUnformatted(entry);
   const prev = readBaseline();
   const prevFiles = prev && prev.files ? prev.files : null;
 

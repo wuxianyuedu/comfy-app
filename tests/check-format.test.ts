@@ -14,12 +14,12 @@
 import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
-  cpSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,6 +39,11 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 const SCRIPT = join(process.cwd(), "scripts", "check-format.cjs");
 
+/** 真实仓里 prettier 的入口（沙箱用例通过 `COMFYAPP_PRETTIER_ENTRY` 借给它）。 */
+const PRETTIER_ENTRY = createRequire(join(process.cwd(), "noop.js")).resolve(
+  "prettier/bin/prettier.cjs",
+);
+
 let workdir = "";
 
 function write(rel: string, content: string): void {
@@ -51,8 +56,29 @@ function write(rel: string, content: string): void {
  * 跑门禁。`--report` / `--update` 之外的分支都要 `git ls-files` 认得基线，
  * 因此临时工作区必须是一个真的 git 仓库（否则三条用例都会以「基线未被跟踪」
  * 失败 —— 那验的是 git 而不是本脚本的判定）。
+ *
+ * `COMFYAPP_PRETTIER_ENTRY` 指向**真实仓的 prettier 入口**：沙箱里没有
+ * `node_modules`，不给这条接缝就会走「入口解析不到 → exit 2」那一档（那是脚本
+ * 的正确 fail-closed 行为，不是本文件要的形态）。旧写法让门禁经 `pnpm exec`
+ * 去找 prettier，沙箱里那条命令以「not found」退出 1 且 stdout 为空，
+ * 而脚本把「退出 1 + 空清单」读成「全库干净」—— 三条用例就是这么红的，
+ * 红的是**门禁的 fail-open**，不是用例写得慢（台账 E11）。
  */
 function run(args: string[] = []): { code: number; output: string } {
+  return runWithEntry(PRETTIER_ENTRY, args);
+}
+
+/**
+ * 指定 `COMFYAPP_PRETTIER_ENTRY` 跑门禁。传 `undefined` 就是「沙箱里既没有接缝、
+ * 也没有 node_modules」—— 那正是脚本必须 fail-closed 的一档（见下面两条新用例）。
+ */
+function runWithEntry(
+  entry: string | undefined,
+  args: string[] = [],
+): { code: number; output: string } {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  if (entry === undefined) delete env.COMFYAPP_PRETTIER_ENTRY;
+  else env.COMFYAPP_PRETTIER_ENTRY = entry;
   try {
     const output = execFileSync(
       process.execPath,
@@ -61,6 +87,7 @@ function run(args: string[] = []): { code: number; output: string } {
         cwd: workdir,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
+        env,
       },
     );
     return { code: 0, output };
@@ -87,20 +114,11 @@ beforeEach(() => {
   mkdirSync(join(workdir, "src", "lib"), { recursive: true });
   // 脚本与基线同目录（脚本按 __dirname 找基线），与真实布局 scripts/ 一致。
   copyFileSync(SCRIPT, join(workdir, "scripts", "check-format.cjs"));
-  // pnpm 形态判据模块按**相对脚本的路径**动态导入（scripts/launcher-core/shell.mjs）：
-  // 临时工作区里没有它，缺了就会以 exit 2 结束 —— 那验的是「脚本能不能加载」，
-  // 而不是本脚本的棘轮判定。软链一份，与真实布局一致。
-  // 用 cpSync 递归拷贝整个 launcher-core/ 而不是只链一个 shell.mjs:
-  //   · Windows 下 fs.symlink(文件) 需要开发者模式或管理员,普通用户 100% EPERM
-  //     ——门禁本体 (check-format.cjs) 在 Windows 上完全能跑,红的只是「夹具
-  //     搭不起来」的环境噪声;
-  //   · 单拷 shell.mjs 会漏它的 `./command-echo.mjs` 同级依赖 → 脚本 exit 2。
-  // launcher-core/ 一共 9 个 .mjs、<50 KB,拷一份比维护跨平台软链更省心。
-  cpSync(
-    join(process.cwd(), "scripts", "launcher-core"),
-    join(workdir, "scripts", "launcher-core"),
-    { recursive: true },
-  );
+  /* 这里**不再**拷 `scripts/launcher-core/`：门禁本体已经不经 pnpm 层找 prettier
+   * （改用 node 直起本地入口，见台账 E11），所以夹具不再需要那份形态判据模块。
+   * 沙箱里也没有 `node_modules`，prettier 由 `run()` 用
+   * `COMFYAPP_PRETTIER_ENTRY` 从真实仓借 —— 那是脚本对外的一条接缝，
+   * 「借不到」本身就是下面两条 fail-closed 用例要验的形态。 */
   git("init", "-q");
   git("config", "user.email", "t@local");
   git("config", "user.name", "t");
@@ -186,6 +204,31 @@ describe("prettier 格式棘轮", () => {
     expect(r.output).toContain("基线已更新");
     // 收紧后同一状态不再提示「治理有进展」。
     expect(run().output).not.toContain("已格式化");
+  });
+
+  it("prettier 入口取不到 → exit 2，且**不许**读成「全库干净」", () => {
+    /* 这条钉的是原来的 fail-open（台账 E11）：门禁过去经 `pnpm exec` 找 prettier，
+     * 命令找不到时退出 1、stdout 为空，而脚本把「空清单」当成「0 个文件未过」
+     * 并打 `[format] OK` 退出 0 —— 依赖缺失 / 形态选错的机器上门禁就这样瞎掉。 */
+    write("src/lib/keep.ts", CLEAN);
+    seedBaseline([]);
+    const r = runWithEntry(undefined);
+    expect(r.code).toBe(2);
+    expect(r.output).toContain("找不到 prettier 入口");
+    expect(r.output).not.toContain("[format] OK");
+  });
+
+  it("prettier 退出 1 却一行都没列出来 → exit 2（「没跑成」与「有差异」分开）", () => {
+    /* 沙箱里放一个「只按退出码说话」的假入口：`--list-different` 返回 1 的含义是
+     * 「有差异，清单在 stdout」，清单为空就说明这句话不可信。 */
+    write("src/lib/keep.ts", CLEAN);
+    seedBaseline([]);
+    const stub = join(workdir, "scripts", "fake-prettier.cjs");
+    writeFileSync(stub, "process.exit(1);\n");
+    const r = runWithEntry(stub);
+    expect(r.code).toBe(2);
+    expect(r.output).toContain("不是「全库干净」");
+    expect(r.output).not.toContain("[format] OK");
   });
 
   it("基线未被 git 跟踪 → 阻断（棘轮文件必须入库，否则 CI 上会缺失）", () => {
