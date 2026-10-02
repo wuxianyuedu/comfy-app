@@ -68,6 +68,15 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 `w-K` / `h-K` 合并成 `size-K` —— 那是换算之后才暴露出来的形态（`w-[10px] h-[10px]`
 在方括号里时 P80 数不到）。存量已清零，新代码按编辑器提示写。
 
+**「更名 / 别名 / v3 遗留」那一类**（`!x`、`break-words`、`flex-shrink`、
+`overflow-ellipsis`、`bg-gradient-to-*` …）由 `scripts/tw4-canonical-report.mjs`
+汇总：它直接问 design system 的 `canonicalizeCandidates`「有没有另一种写法生成
+**完全相同**的 CSS」，与编辑器的 `suggestCanonicalClasses` 同源。正因为判据是
+「CSS 相同」而不是「长得像 spacing 工具类」，`text-[13px]` 不会被误报成
+`text-3.25`（那不是等价替换，是改量纲）。它与上一条**互补**：各扫一类，互不重叠
+——`canonicalizeCandidates` 不认 `[22px] ↔ 5.5`（一个是字面量、一个是
+`calc(var(--spacing) * …)`，不逐字相同），而上一条不认更名类。
+
 **规则**：透明度一律 `/百分比`（小数合法，如 `/1.5`——tailwindcss 内部正是以 `parseFloat(alpha)*100` 做规范化的）。
 
 #### 3.1.1 语义颜色一律写类名，禁止 `X-(--color-…)` 内联变量
