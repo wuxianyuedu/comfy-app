@@ -82,6 +82,22 @@ function offendersOf(text: string): string[] {
   );
 }
 
+/** 从 `.ps1` 的 `$allowedRoot = …` 语句里抠出允许根的**各段**字面量。
+ *
+ * 取到「紧跟其后的第一条以 `$` 开头的顶层行」为止，因此对单行 / 多行两种写法都成立
+ * （不能按固定的 `Join-Path` 嵌套形状取：那是把写法当契约，改一次排版判据就静默返回空）。
+ * 找不到赋值语句返回 `null` —— 由调用点判「落空」，不能让它悄悄变成「零段 = 不用比」。 */
+function allowedRootSegments(ps1: string): string[] | null {
+  const start = ps1.search(/\$allowedRoot\s*=/);
+  if (start < 0) return null;
+  const rest = ps1.slice(start);
+  const ends = rest.search(/\n\s*\$/);
+  const statement = ends < 0 ? rest : rest.slice(0, ends);
+  return [...statement.matchAll(/"([^"]*)"/g)]
+    .map((m) => m[1]!)
+    .filter((segment) => segment.length > 0);
+}
+
 describe("产物布局单一出处（台账 A8 第二段）", () => {
   const files = collectSource(path.join(process.cwd(), "src")).map((f) => ({
     rel: path.relative(process.cwd(), f).replace(/\\/g, "/"),
@@ -162,23 +178,83 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
       path.join(scriptsDir, "comfyapp-open-folder.ps1"),
       "utf8",
     );
-    // 提取 `Join-Path $PSScriptRoot "<相对路径>"` 里的那个相对段
-    const matched = /Join-Path\s+\$PSScriptRoot\s+"([^"]+)"/.exec(ps1)?.[1];
+    /* 抠的是 `Join-Path` 的**各段**，不是一条拼好的相对路径。
+     *
+     * 为什么判据长这样（ISSUE #1348 的形态在前一版里是错的）：`.ps1` 原先写
+     * `Join-Path $PSScriptRoot "..\generated"` —— 一条**带平台分隔符**的字面量。
+     * 判据得把它解析成绝对路径才能和 `generatedRoot()` 比，而 `path.resolve` 只在
+     * Windows 上把 `\` 当分隔符：POSIX 上整串被当成一个文件名，
+     * 得到 `<repo>/scripts/..\generated`，与 `<repo>/generated` 永不相等 ——
+     * **Linux / CI 上恒红**。当时的补法是「解析前把 `\` 全换成 `/`」，
+     * 那是在**猜写这个字符串的机器是哪一端的**，判据与平台绑定这件事没被解决，
+     * 只是被藏进了 `replace`。真正的修法是让那段字面量不再带分隔符：
+     * 各段分开写，`Join-Path` 用宿主自己的分隔符拼，判据也按段解析。 */
+    const segments = allowedRootSegments(ps1);
     // 非空自证：那条允许根被删掉/改写时这里必须红，而不是「没找到 = 不用比」
     expect(
-      matched,
-      "ps1 里找不到 comfyapp:// 的允许根，成对判据落空",
-    ).toBeTruthy();
-    /* 比的是**解析后的绝对路径**，不是「去掉 .. 之后的段数」：
-     * 写成 `..\..\public\generated` 那种偏移一位的错法，去掉点之后段数一样，
-     * 只有按 $PSScriptRoot 真解析一次才露出来。
-     *
-     * 分隔符先归一成 POSIX：`.ps1` 里写的是 Windows 形态（`..\public\generated`），
-     * 而 `path.resolve` 只在 Windows 上把 `\` 当分隔符 —— 直接在 POSIX 上解析会
-     * 把整串当成**一个文件名**，判据与平台绑定、Linux 上恒红（实测 `pnpm test`
-     * 在干净 master 上就这样，见 §13.6.2 的基线复算）。归一之后两侧都真解析一次，
-     * 判据的语义（「偏移一位会被照出来」）一分不减。 */
-    const resolved = path.resolve(scriptsDir, matched!.replace(/\\/g, "/"));
+      segments,
+      "ps1 里找不到 comfyapp:// 的允许根赋值，成对判据落空",
+    ).not.toBeNull();
+    expect(
+      segments!.length,
+      "ps1 的允许根里抠不出任何路径段，成对判据落空",
+    ).toBeGreaterThan(0);
+    /* 各段必须是**不带分隔符**的单个名字 —— 这才是这条判据的判据本身：
+     * 谁再把 `..\generated` 那种拼好的字面量写回去（在任一平台上它都只对
+     * 一端有意义），这里当场红，而不是等 CI 上再红一次。 */
+    for (const seg of segments!) {
+      expect(
+        seg,
+        `ps1 的允许根段 "${seg}" 带了分隔符 —— 应拆成各段，让 Join-Path 用宿主分隔符拼`,
+      ).not.toMatch(/[\\/]/);
+    }
+    /* 比的是**解析后的绝对路径**，不是「段数」：写成 `.. / .. / generated`
+     * 那种偏移一位的错法，段数一样，只有按 $PSScriptRoot 真解析一次才露出来。 */
+    const resolved = path.resolve(scriptsDir, ...segments!);
     expect(resolved).toBe(generatedRoot(path.resolve(scriptsDir, "..")));
+  });
+
+  it("成对判据自身可反证：旧的「拼好的 Windows 字面量」写法会被照出来", () => {
+    /* 判据的**判据本身**：它必须真的能拦住那条非跨平台的写法，否则这次改的
+     * 就只是「换了一种也让判据绿」的写法，下一次还会长回来。
+     * 三条形状各对应一种真实错法（都是这条判据历史上见过或险些放过的）。 */
+    const scriptsDir = path.join(process.cwd(), "scripts");
+    const expected = generatedRoot(path.resolve(scriptsDir, ".."));
+
+    /** 把一段 `.ps1` 片段按判据的方式判一次，返回它是否被照出来。 */
+    const flagged = (ps1: string): boolean => {
+      const segments = allowedRootSegments(ps1);
+      if (segments === null || segments.length === 0) return true; // 抠不到 = 落空 = 红
+      return segments.some((segment) => /[\\/]/.test(segment));
+    };
+    /** 按判据的方式解析出允许根（用于断言「偏移会解析到别处」）。 */
+    const resolveOf = (ps1: string): string =>
+      path.resolve(scriptsDir, ...allowedRootSegments(ps1)!);
+
+    // ① 旧的写法：一条带分隔符的相对路径字面量 —— 正是 Linux 上恒红的那一版
+    const windowsLiteral =
+      '$allowedRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\\generated"))';
+    expect(
+      flagged(windowsLiteral),
+      "旧的「..\\generated」字面量没能被照出来 —— 判据挡不住这条非跨平台写法",
+    ).toBe(true);
+
+    // ② 偏移一位：段都是干净的，只有真解析一次才露出来
+    const offset =
+      '$allowedRoot = (Join-Path (Join-Path $PSScriptRoot "..") "..")\n$sep = 1';
+    expect(flagged(offset)).toBe(false);
+    expect(
+      resolveOf(offset),
+      "偏移一位的允许根解析到了产物根 —— 那这条判据只比了写法、没比位置",
+    ).not.toBe(expected);
+
+    // ③ 收口后的写法：两种排版（多行 / 单行）都要被接受，解析结果都等于产物根
+    for (const ok of [
+      '$allowedRoot = [IO.Path]::GetFullPath(\n  (Join-Path (Join-Path $PSScriptRoot "..") "generated"))\n$sep = 1',
+      '$allowedRoot = (Join-Path (Join-Path $PSScriptRoot "..") "generated")\n$sep = 1',
+    ]) {
+      expect(flagged(ok), `收口后的写法被误报：${ok}`).toBe(false);
+      expect(resolveOf(ok)).toBe(expected);
+    }
   });
 });
