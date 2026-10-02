@@ -149,14 +149,25 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     expect(isStaticPathAllowed("src/server/db.ts")).toBe(false);
   });
 
-  it("回收入口 import 的那份 TS 必须就在清单里（漏登记 = 桌包回收链静默断）", async () => {
-    // reap-process.mjs 与 dev-launcher.mjs 都 `await import("../src/lib/process/…")`，
-    // 而载荷里的 src/ 是默认拒绝的——清单与这两处说明符必须逐字相等。
-    const specifiers = ["scripts/reap-process.mjs", "scripts/dev-launcher.mjs"]
+  it("随包脚本 import 的那几份 TS 必须都在清单里（漏登记 = 桌包脚本加载即断）", async () => {
+    // 下列脚本都 import `../src/lib/…` 或 `../../src/lib/…`，而载荷里的 src/ 是
+    // 默认拒绝的 —— 清单与这些说明符必须逐字相等。
+    //   · `reap-process.mjs` / `dev-launcher.mjs`（`await import("../src/lib/process/…")`）；
+    //   · `launcher-core/shell.mjs`（**静态** import `../../src/lib/process/executable-resolve.ts`，
+    //     ISSUE #1327：判据下沉到 src/lib 后两侧共用同一份，见那份文件头）。
+    // 相对深度两种写法都要认（`../` 与 `../../`）。
+    const entries = [
+      "scripts/reap-process.mjs",
+      "scripts/dev-launcher.mjs",
+      "scripts/launcher-core/shell.mjs",
+    ];
+    const specifiers = entries
       .flatMap((file) =>
-        [...read(file).matchAll(/"\.\.\/src\/(lib\/[^"]+\.ts)"/g)].map(
-          (m) => m[1],
-        ),
+        [
+          ...read(file).matchAll(
+            /"\.\.(?:\/\.\.)?\/src\/(lib\/[^"]+\.ts)"/g,
+          ),
+        ].map((m) => m[1]),
       )
       .filter((v, i, arr) => arr.indexOf(v) === i)
       .sort();

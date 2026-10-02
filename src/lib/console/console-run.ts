@@ -36,6 +36,7 @@ import { spawn } from "child_process";
 import { errorText } from "~/lib/error-message";
 import { fireAndForget } from "~/lib/async-action";
 import { killProcessTree } from "~/lib/process/kill-process-tree";
+import { resolveCommandInvocation } from "~/lib/process/executable-resolve";
 import { MAX_OUTPUT_CHARS } from "./console-limits";
 
 /** 一条命令的执行事件（路由按顺序翻成 SSE 的 `data:` 行）。 */
@@ -98,6 +99,33 @@ export interface ConsoleRunner {
 }
 
 /**
+ * 「这条命令没起来」的**可读出口**（硬规则 4：失败路径要有人看得懂的那句话）。
+ *
+ * 分两种现场，因为用户要做的事不一样：
+ *   · `resolved: false`（PATH 上查无此命令）—— 说清「找过 PATH 但没有」，
+ *     并点名原始的可执行名（用户敲的 `pnpm` / `git`），再给出下一步；
+ *     **不能**只把 `spawn pnpm ENOENT` 甩出去 —— 它看着像参数写错，实际是
+ *     「这台机器上没这个命令」或「编辑器/壳的 PATH 里没有它」。
+ *   · `resolved: true`（解析过、真的起不来）—— 把**绝对路径**也报出来，
+ *     这才是排障要的那条信息（裸名字看不出起的是哪一份）。
+ */
+function startFailureMessage(
+  file: string,
+  invocation: { command: string; resolved: boolean },
+  error: unknown,
+): string {
+  const detail = errorText(error, "无法启动命令", "命令执行失败");
+  if (!invocation.resolved) {
+    return (
+      `找不到命令 ${file}（已在 PATH 上查找，没有可用形态）。` +
+      `检查它是否已安装、以及这个应用进程的 PATH 是否包含它所在的目录。` +
+      `（底层：${detail}）`
+    );
+  }
+  return `无法启动 ${invocation.command}：${detail}`;
+}
+
+/**
  * 构造一个执行器。默认单槽 + 看门狗 + 输出上限。
  *
  * 刻意做成工厂（而不是模块级单例）：路由在 dev 热编译下会被多次加载，
@@ -129,19 +157,34 @@ export function createConsoleRunner(): ConsoleRunner {
     onEvent: (event: ConsoleEvent) => void,
   ): Promise<ConsoleRunResult> {
     const startedAt = Date.now();
+
+    /* 起之前先问一次「这台机器上这个命令怎么起」（判据实现在
+     * `~/lib/process/executable-resolve`，与启动编排同一份）—— **不解析就是
+     * 那条 `spawn pnpm ENOENT`**（ISSUE #1327 的现场）：
+     *   · Windows 上 Node 的 `spawn` 不认 PATHEXT，`pnpm` 在 PATH 上是
+     *     `pnpm` / `pnpm.cmd` / `pnpm.ps1` 三个形态，裸名字一个都起不来；
+     *   · 而 `pnpm.cmd` 又是 Node 起不了的（只有 cmd.exe 会解释批处理），
+     *     真能起的是 `pnpm.ps1` 经 PowerShell —— 这层判据只在那一处。
+     * PATH 上查无此命令时**不改写** `file`（`resolved: false`），仍交给 spawn
+     * 报它那句 ENOENT，但我们把它翻成用户看得懂的一句话（见下面的 error 事件）。 */
+    const invocation = resolveCommandInvocation(opts.file, opts.args);
+
     onEvent({
       type: "start",
       runId: opts.runId,
       command: opts.command,
-      file: opts.file,
-      args: opts.args,
+      /* `file` / `args` 报**真正要起的那一份**：`.ps1` 形态时它是 PowerShell 宿主
+       * 加 `-File` 参数，而不是用户敲的那个名字 —— 这是「到底跑的是谁」的唯一答案，
+       * 排障时才能看出「为什么多了一层」。 */
+      file: invocation.command,
+      args: invocation.args,
       cwd: opts.cwd,
       startedAt,
     });
 
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(opts.file, opts.args, {
+      child = spawn(invocation.command, invocation.args, {
         cwd: opts.cwd,
         /* POSIX 自建进程组（硬规则 3 的前提）：`killProcessTree` 才能按 PGID
          * 把整组收走。Windows 上 `detached` 会另开控制台窗口，所以必须按平台
@@ -162,7 +205,7 @@ export function createConsoleRunner(): ConsoleRunner {
     } catch (e) {
       onEvent({
         type: "error",
-        message: errorText(e, "无法启动命令", "命令执行失败"),
+        message: startFailureMessage(opts.file, invocation, e),
       });
       return {
         runId: opts.runId,
@@ -254,7 +297,7 @@ export function createConsoleRunner(): ConsoleRunner {
       child.once("error", (e) => {
         onEvent({
           type: "error",
-          message: errorText(e, "无法启动命令", "命令执行失败"),
+          message: startFailureMessage(opts.file, invocation, e),
         });
         resolve({ code: null, signal: null });
       });
