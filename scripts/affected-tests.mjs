@@ -135,6 +135,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 文件自己怎么写」无感，这一条补的就是它。与本次暂存改动无关也必须响
   // （它是「下一次有人写故事」的守卫），所以进固定清单。
   "tests/storybook-cva-variant-source.test.ts",
+  // 「组件覆盖率」：上面两条守的是**已经写下的 story 怎么写**，对「`ui/` 下大多
+  // 数文件根本没有 story」天然无感 —— 于是「只有 3 个示例」这句话写进文档、
+  // 过期了也没人知道（F6 的组件覆盖率那一格就是这么挂着的）。这条把事实变成
+  // 可枚举的：现算「被 story import 的 `ui/` 组件」与基线比，只许升不许降，
+  // 并核理由表（NO_STORY_REASON）与磁盘对得上。与本次暂存改动无关也必须响
+  // （它是「下一次有人新增组件 / 删 story」的守卫），所以进固定清单。
+  "tests/storybook-component-coverage.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
