@@ -68,6 +68,12 @@ const TITLE_BAR_RENDER = /\bTITLE_BAR_HEIGHT_CLASS\b|\bh-title-bar\b/;
 const CHROME_Z = /\bTITLE_BAR_CHROME_CLASS\b|\bz-chrome\b/;
 /** 导入行不算渲染点（`import { TITLE_BAR_HEIGHT_CLASS }` 里也有这个标识符）。 */
 const IMPORT_LINE = /^\s*import\b/;
+/** 锚定浮层的定位层（base-ui 的 Positioner）—— 第三种让位形态的判定入口。
+ * 锚 `.<` 与行尾（标签可能紧跟属性或直接换行）：`Positioner.Props` 这类**类型
+ * 引用**不能被算进来（`Pick<…Positioner.Props, …>` 会误报）。 */
+const POSITIONER_OPEN = /<[A-Za-z]+Primitive\.Positioner(\s|>|$)/;
+/** 锚定浮层交出可用区域的那一行（`useOverlayBoundary` 的唯一消费形状）。 */
+const COLLISION_BOUNDARY = /collisionBoundary=\{boundary \?\? undefined\}/;
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -104,6 +110,28 @@ for (const dir of SCAN_DIRS) {
     });
     if (hits && CLEARANCE.test(text)) {
       notes.push(r);
+    }
+
+    /* 第三条规则（ISSUE #1377）：锚定浮层（气泡 / 下拉 / 气泡卡）必须把
+     * 「可用区域」交给定位引擎 —— 前两条只覆盖 `fixed inset-0` 那两类，锚定
+     * 浮层写不出固定的 `top-*`，它的让位只能表达成 `collisionBoundary`。
+     * 漏了的表现是：气泡觉得视口里放得下（Base UI 的 flip 只对**视口**判溢出），
+     * 于是照旧往上摆，而标题行 z-chrome(2000) 比它 z-popup(100) 高一个数量级
+     * —— 上半截被标题行盖掉，用户只看到一条白边加一个箭头。 */
+    const positioners = lines
+      .map((line, i) => ({ line, i }))
+      .filter(({ line }) => POSITIONER_OPEN.test(line));
+    for (const { line, i } of positioners) {
+      /* Positioner 的属性可能跨行，判据要覆盖到闭合标签为止（最多 20 行）。 */
+      const block = lines.slice(i, i + 20).join("\n");
+      if (COLLISION_BOUNDARY.test(block)) continue;
+      problems.push(
+        `${r}:${i + 1} 锚定浮层（base-ui Positioner）没有交出可用区域\n` +
+          `    → ${line.trim()}\n` +
+          `    补 collisionBoundary={boundary ?? undefined}，boundary 取自 useOverlayBoundary()` +
+          `（~/components/ui/use-overlay-boundary）；` +
+          `漏了会让浮层摆进应用级标题行、被它整块盖掉`,
+      );
     }
 
     // 第二条规则：渲染标题行的文件必须给 chrome 档层级（整文件判据，容忍
