@@ -405,12 +405,23 @@
       「改了壳必须重编 release」那道时效判据（`scripts/shell-gate.mjs`），
       为一条注释让整个 PR 背上一次完整壳编译不值 —— 但**这条不是「以后再说」**：
       下一次任何动到壳的 PR，把这一行捎上一起改。
-      搬家之外还欠一件：静态口原本支持 `Range`，折进 route 之后 `Range` 被忽略（整文件
-      200 回全量）—— 现行视频 URL 本来就写的是 `/api/generated/films/…`（`compose-film`
-      收口时就这么存），所以这条不是回归，只是**旧数据里 `/generated/…` 形状的视频**若被
-      播放器直接打开，拖动进度条会表现为整段重下；要补就该补在 route 上（一处补、两种形状都吃到）。
-      证据：`src/lib/media/output-access.ts`、`src/app/api/generated/[...path]/route.ts`、
-      `src/proxy.ts`（接线与 matcher）、
+      ~~搬家之外还欠一件：静态口原本支持 `Range`，折进 route 之后 `Range` 被忽略~~
+      **（已关，本批）**：形状判据收成 `src/server/lib/range-request.ts` 一处（RFC 7233 的单档，
+      三种结论：整份 / 一段 / 满足不了），route 只把它翻成状态码 —— 一处补、两种 URL
+      形状（`/api/generated/…` 与兼容层的 `/generated/…`）都吃到。读法也一起换了：
+      原来是 `fs.readFile` 整份读进内存再切，现在按窗口 `fs.open` + `read(buf, 0, len, start)`
+      只读那一段（否则「拖一下进度条」= 整份成片进内存，这条支持就白做）。
+      实测（`next dev` 起服务，打一份 1 154 930 字节的真产物）：无 `Range` → 200 全量；
+      `bytes=0-99` → **206** + `Content-Range: bytes 0-99/1154930` 且 body 恰好 100 字节；
+      `bytes=200-` → body 1 154 730；`bytes=-50` → `bytes 1154880-1154929/1154930`；
+      `bytes=99999999-` → **416** + `Content-Range: bytes */1154930`；
+      `bytes=0-1,2-3` 与 `bytes=500-100` → 200（按 RFC 这两条是语法无效，**不许判成 416**）。
+      顺带两条只有跑起来才看得见的口径：`Accept-Ranges: bytes` 必须在场（缺了它，
+      浏览器第一次 seek 才会想起发 `Range`）；短读（同名产物被重新生成、文件在请求内变短）
+      要把 `Content-Range` 一起收窄 —— 承诺 6 个字节而 body 只有 2 个比回 404 更坏。
+      证据：`src/lib/media/output-access.ts`、`src/app/api/generated/[...path]/route.ts`
+      （32 条用例，含「带 Range 也不许绕过会话与归属闸」那组）、`src/server/lib/range-request.ts`
+      （18 条形状判据，四项门槛满档）、`src/proxy.ts`（接线与 matcher）、
       `src/app/api/film/bgm/route.ts`（无主前缀的来源）、`src/server/film/compose-film.ts`
       （`films/_tmp_<id>` 中间目录与 `films/<id>.mp4` 收口 —— 判据里那条 `_tmp_` 还原就是为它写的）。
 - [ ] **B1 capability 对回环通配源开满**（`http://127.0.0.1:*` + `process:default` / `updater:default`）。证据：`src-tauri/capabilities/remote.json:8-26`；`src-tauri/tauri.conf.json:31`。

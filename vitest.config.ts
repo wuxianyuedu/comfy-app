@@ -252,6 +252,11 @@ export default defineConfig({
          * 它已在 `src/lib/shell/**` 这一组里，而没覆盖到的分支只有 darwin/linux
          * 两条平台分叉（本机是 win32，跑不到），单列一条只会把「测不到的那支」写进门槛。 */
         "src/lib/url-scheme.ts",
+        /* A13 残留② · 字节范围解析（`Range`）收成一处：产物读取口是视频与大图的
+         * **唯一**出口，`Range` 的三种结论（整份 / 一段 / 满足不了）在这里判形状，
+         * 端点只翻状态码。满档的理由与 `url-scheme.ts` 同一条：它是四条出口共用的
+         * 那一句判据 —— 掉一支不是「那一支没测」，而是某一种请求会被答成另一种错。 */
+        "src/server/lib/range-request.ts",
         "src/server/api/routers/setting.ts",
         /* 体检清单 ⑨ 第一刀 · 素材库的归属：
          *   · `media/materials.ts` 是 scope 归属与路径清洗的**唯一判据所在**，
@@ -1343,6 +1348,15 @@ export default defineConfig({
          * `url-scheme.ts` 满档：它是四条出口共用的那一句判据，掉一支就是某个
          * 危险协议被放行 —— 没有「大部分对就行」这一档。 */
         "src/lib/url-scheme.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 与上面 `coverage.include` 同批登记（实测满档）。这条不敢留余地：
+         * 后缀形式、裁剪、`first > last` 的优先级这些分支只要有一支没人判，
+         * 表现就是某些浏览器拖进度条时拿到 416 或半截字节，而全仓库是绿的。 */
+        "src/server/lib/range-request.ts": {
           lines: 100,
           functions: 100,
           statements: 100,
