@@ -1189,15 +1189,21 @@ export default defineConfig({
          *      当时明写「还差的那截仍由 process-launch.ts（17.85% 行）顶着」，所以没一次抬回原值。
          *   3) 本批把那截补完：POSIX 那张表改成**判决面**（`ps` 报什么、`process.kill`
          *      接不接受、该发哪条命令行，全部注入），两端机器判同一个结论；真起进程数残留
-         *      那组留在原文件里照旧。全量 `--coverage` 实测 100/97.69/100/100。
-         * ⚠️ 余下 2.31% 的分支是平台绑定或不可达的两处，不是漏网：`taskkill` 以 0 退出时
-         *      via 里那半句（Linux 的假 taskkill 造得出、Windows 上 `.cmd` 起不来），
-         *      以及 `ps` 输出解析里那个走不到的兜底。 */
+         *      那组留在原文件里照旧。本批两份文件的实测：`process-launch.ts` 100/100/100/100、
+         *      `kill-process-tree.ts` 100/96.05/100/100（原来分别是 19.35/24.07/45.45/17.85
+         *      与 31.39/25/47.61/29.11）。
+         *   4) 登记值取**整目录**的实测（这个 glob 里还有 `executable-resolve.ts`，
+         *      它的欠账由 #1327 / 台账 E12 那一批管，本批不动）：跑 `src/lib/process/` 与
+         *      `src/lib/console/` 全部用例，目录级 93.65/87.08/96.49/94.87
+         *      （语句/分支/函数/行）→ 按实测登记为 93/87/96/94。
+         * ⚠️ 剩下那点分支不是漏网，是平台绑定或走不到的兜底：`taskkill` 以 0 退出时 via 里
+         *      那半句（Linux 的假 taskkill 造得出、Windows 上 `.cmd` 起不来）、`ps` 输出解析里
+         *      那个不可达的兜底，以及 `executable-resolve.ts` 自己的 74.54% 分支。 */
         "src/lib/process/**": {
-          lines: 90,
-          functions: 95,
-          statements: 90,
-          branches: 85,
+          lines: 94,
+          functions: 96,
+          statements: 93,
+          branches: 87,
         },
         "src/lib/shell/**": {
           lines: 60,
