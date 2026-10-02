@@ -232,7 +232,9 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     expect(tickBody).toMatch(/if \(shellUrl\) appUrl = shellUrl/);
     // 兜底链（launch-status.json / 写死的 3000）只在壳答不上来时才走，
     // 且仍然只走一次——它给不出权威地址，每轮问只会多刷 get_launch_status。
-    expect(tickBody).toMatch(/else if \(!appUrl\) appUrl = await resolveAppUrl\(\)/);
+    expect(tickBody).toMatch(
+      /else if \(!appUrl\) appUrl = await resolveAppUrl\(\)/,
+    );
   });
 
   it("快照自己也带诊断出口（编排器顶掉它之前，现场已经在磁盘上）", () => {
@@ -274,6 +276,30 @@ describe("壳自编排：回收链", () => {
     const onExit = lib.slice(lib.indexOf("tauri::RunEvent::Exit =>"));
     expect(onExit).toContain("shell_launch::is_owning()");
     expect(onExit).toContain("shell_launch::reap(&root)");
+  });
+
+  // 会话锚点只有编排器自己会在 `clearSession()` 里清，而壳收它是 `Child.kill()`
+  // （Windows 上是 `TerminateProcess`）—— 它收不到信号、没有清理机会。不补这一步，
+  // 现场就是**每次正常关窗后的下一次启动都刷一条**「回收上一次运行遗留的进程树：
+  // PID …」，而那些 PID 早已被插件 kill / Job Object 收干净（回收是空转）。
+  it("壳收走编排器后清掉会话锚点（否则每次启动都刷「回收遗留进程树」）", () => {
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    const reap = rust.slice(
+      rust.indexOf("pub fn reap(project_root: &str)"),
+      rust.indexOf("pub fn reap_pid("),
+    );
+    // 只在 `kill()` 成功那一支清：失败说明编排器可能还活着，锚点必须留给下一次启动回收。
+    expect(reap).toMatch(
+      /Ok\(\(\)\)[\s\S]{0,200}clear_session_anchor\(project_root\)/,
+    );
+    expect(rust).toContain("pub fn clear_session_anchor(");
+    // 路径与 Node 侧同源（唯一实现是 `scripts/dev-launcher-session.mjs`）：
+    // 名字漂开 = 壳清了个不存在的文件，锚点照留、噪声照旧。
+    const node = stripComments(read("scripts/dev-launcher-session.mjs"));
+    for (const name of ["launcher-session.json", "launcher-heartbeat.txt"]) {
+      expect(rust).toContain(name);
+      expect(node).toContain(name);
+    }
   });
 
   it("按 PID 回收上一次的残留也走同一处平台判据", () => {
@@ -382,7 +408,8 @@ describe("壳自编排：能自起的判据与真起得来", () => {
   // **端口解析只有一个出口**：所有需要端口的调用点都走它，而它按
   // 环境变量 → 检出 .env → 路径推导 的顺序取值（与 scripts/app-port.mjs 逐条对齐）。
   describe("端口解析：.env 必须对壳可见（ISSUE #821）", () => {
-    const single = () => stripComments(read("src-tauri/src/single_instance.rs"));
+    const single = () =>
+      stripComments(read("src-tauri/src/single_instance.rs"));
 
     it("壳侧有一条 .env 优先的解析出口（而不是只做路径推导）", () => {
       const src = single();
@@ -398,7 +425,9 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       expect(src).toContain("resolve_app_port_with_source_for_root");
       expect(src).toContain("if let Some(port) = env_app_port()");
       expect(src).toContain("if let Some(port) = read_env_app_port(root)");
-      expect(src).toContain("derive_app_port_for_root(root), PortSource::Derived");
+      expect(src).toContain(
+        "derive_app_port_for_root(root), PortSource::Derived",
+      );
       expect(src).toContain('std::env::var("COMFYAPP_PORT")');
       // 端口与来源必须**同一次计算**给出：各算一遍时判据容易被静默拉开，
       // 而表现是「日志说 .env、实际用的是路径推导」——比没有日志更坏。
@@ -415,7 +444,9 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       expect(shell).not.toContain("derive_app_port_for_root(project_root)");
       expect(lib).not.toMatch(/single_instance::derive_app_port\(\)/);
       // 壳侧要端口一律经 app_port_for_root（= single_instance 的唯一出口）。
-      expect(shell).toContain("crate::single_instance::resolve_app_port_for_root(project_root)");
+      expect(shell).toContain(
+        "crate::single_instance::resolve_app_port_for_root(project_root)",
+      );
     });
 
     it("启动报告与编排日志都带上端口来源（归因那一半信息）", () => {

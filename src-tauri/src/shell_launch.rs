@@ -197,12 +197,18 @@ pub fn read_foreground_env() -> Option<bool> {
 ///   2. **编排侧的统一回收**（`scripts/reap-process.mjs`）—— 插件保证「跟随
 ///      平台」，统一回收保证「不漏」：`node → pnpm → next → turbopack worker`
 ///      才是真正会残留成孤儿的那几层。
+///
+/// `kill()` 成功即顺手清掉会话锚点：那是编排器**没机会**清的（见
+/// `clear_session_anchor`）。`kill()` 失败则原样留着，交给下一次启动的孤儿回收。
 pub fn reap(project_root: &str) {
   let child = ORCHESTRATOR.lock().unwrap().take();
   let Some(child) = child else { return };
   let pid = child.pid();
   match child.kill() {
-    Ok(()) => log::info!("[ComfyAPP] shell orchestrator stopped via shell plugin (pid {pid})"),
+    Ok(()) => {
+      log::info!("[ComfyAPP] shell orchestrator stopped via shell plugin (pid {pid})");
+      clear_session_anchor(project_root);
+    }
     Err(e) => log::warn!("[ComfyAPP] shell orchestrator stop via shell plugin failed: {e:?}"),
   }
   spawn_reaper(project_root, pid);
@@ -220,6 +226,49 @@ pub fn reap_pid(project_root: &str, pid: u32) {
   // KILL_ON_JOB_CLOSE 的 job 已经会带走自己那一棵树；这里补的是
   // 「job 也没挂上 / 壳被硬杀」的边角，动作仍走统一回收。
   spawn_reaper(project_root, pid);
+}
+
+/// 编排器的会话锚点（`run/launcher-session.json`）。
+///
+/// 与 `scripts/dev-launcher-session.mjs` 同源（那份是唯一实现，本模块只是
+/// 「把它没机会做的那一步补上」）。路径两处漂开的表现很具体：壳每次退出都留下
+/// 锚点 → 下一次启动的编排器必然打印一条「回收上一次运行遗留的进程树」。
+pub fn session_file_path(project_root: &str) -> std::path::PathBuf {
+  std::path::Path::new(project_root)
+    .join("run")
+    .join("launcher-session.json")
+}
+
+/// 心跳文件（`run/launcher-heartbeat.txt`），与 `session_file_path` 成对。
+pub fn heartbeat_file_path(project_root: &str) -> std::path::PathBuf {
+  std::path::Path::new(project_root)
+    .join("run")
+    .join("launcher-heartbeat.txt")
+}
+
+/// 清掉会话锚点（编排器已被壳收走时调用）。
+///
+/// **为什么必须由壳来做**：编排器的锚点只有它自己在 `clearSession()` 里清；
+/// 而壳收它是 `Child::kill()`（Windows 上是 `TerminateProcess`），它收不到任何
+/// 信号、没有清理机会 —— 锚点于是必留，下一次启动就会读到「心跳陈旧 + PID 已死」，
+/// 按 `child_pids` 再回收一遍早已不存在的进程并报一条 WARN。
+///
+/// **清锚点不削弱回收能力**：壳认亲靠的是进程环境块里的 `COMFYAPP_SHELL_OWNED`
+/// （`find_owned_orchestrator`），与锚点无关；编排器自己那侧的心跳/探活判据也仍然
+/// 保留（锚点真在、子树真有活的进程时照旧回收）。
+pub fn clear_session_anchor(project_root: &str) {
+  for path in [
+    session_file_path(project_root),
+    heartbeat_file_path(project_root),
+  ] {
+    match std::fs::remove_file(&path) {
+      // 不在 = 已经是目标状态（正常收尾时编排器自己清过）。
+      Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+        log::warn!("[ComfyAPP] 清理会话锚点失败（{}）：{e:?}", path.display());
+      }
+      _ => {}
+    }
+  }
 }
 
 /// 本次运行的启动模式（`prebuilt` / `standalone`）。
@@ -992,6 +1041,47 @@ mod tests {
       root.join("log").join("launcher").join("shell-launch.log")
     );
     assert_eq!(status_file_path("/proj"), root.join("run").join("launch-status.json"));
+  }
+
+  /// 会话锚点的路径与 `scripts/dev-launcher-session.mjs` 同源：壳要清理的
+  /// 正是编排器落下的那两份（名字漂开 = 清了个不存在的文件，锚点照留）。
+  #[test]
+  fn session_anchor_paths_match_orchestrator_side() {
+    let root = std::path::Path::new("/proj");
+    assert_eq!(
+      session_file_path("/proj"),
+      root.join("run").join("launcher-session.json")
+    );
+    assert_eq!(
+      heartbeat_file_path("/proj"),
+      root.join("run").join("launcher-heartbeat.txt")
+    );
+  }
+
+  #[test]
+  fn clear_session_anchor_removes_both_files_and_is_idempotent() {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-session-anchor-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(dir.join("run")).unwrap();
+    let session = dir.join("run").join("launcher-session.json");
+    let heartbeat = dir.join("run").join("launcher-heartbeat.txt");
+    std::fs::write(&session, "{}").unwrap();
+    std::fs::write(&heartbeat, "1").unwrap();
+
+    clear_session_anchor(dir.to_str().unwrap());
+    assert!(!session.exists(), "会话文件必须被清掉");
+    assert!(!heartbeat.exists(), "心跳文件必须被清掉");
+
+    // 锚点已不在时再清一次也不该报错（正常收尾时编排器自己清过就是这种形态）。
+    clear_session_anchor(dir.to_str().unwrap());
+
+    let _ = std::fs::remove_dir_all(&dir);
   }
 
   #[test]
