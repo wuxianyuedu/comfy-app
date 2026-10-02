@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,6 +9,7 @@ import {
   isTestPath,
   resolveAffectedTests,
   specCandidates,
+  wideFallbackNote,
 } from "../scripts/affected-tests.mjs";
 import { KNOWN_FAILED_FILES } from "../scripts/quality-gate-shared.mjs";
 
@@ -176,6 +178,38 @@ describe("affected-tests：兜底方向", () => {
     expect(res.reasons.__note).toContain("全局测试配置");
     // 放弃收窄时**不**把受影响面塞进去 —— 那正是本层判定不了的部分。
     expect(res.tests).toEqual([...FIXED_STRUCTURAL_TESTS].sort());
+  });
+
+  /**
+   * wide 话术里那句「为什么不兜底跑全量」（ISSUE #1393）。
+   *
+   * 旧文本写「全量当前带别线基线红」，而重测下来真断言红是 0 条 —— 假前提每遇到一次
+   * wide 提交就当着重印，就会变成所有人不动兜底的默认解释，所以它跟判据一样要有执行者。
+   * 两条一起看：第一条钉文本内容，第二条钉「CLI 真的在打印这个函数」，
+   * 否则第一条只是在守一段死代码。
+   */
+  it("wide 话术只写实测的拦路石，不许回到「带别线基线红」那句假前提", () => {
+    const note = wideFallbackNote("门槛自身", 20);
+    expect(note).toContain("32m35s"); // 耗时：wide 那档跑全量的实测墙钟
+    expect(note).toContain("空参数"); // 机制：钩子刻意不接受「空参数=全跑」
+    expect(note).not.toContain("基线红"); // 旧假前提不许回潮
+    expect(note).toContain("§13.5.8");
+  });
+
+  it("这段话说明确实由 CLI 打印（导出了却没人调用 = 第一条在守死代码）", () => {
+    const r = spawnSync(
+      process.execPath,
+      ["scripts/affected-tests.mjs", "--changed", "vitest.config.ts"],
+      { cwd: ROOT, encoding: "utf8" },
+    );
+    expect(r.status).toBe(0);
+    // 断言「后半句逐字同源」：清单条数与放弃原因都由 CLI 自己算，这里不抄常量。
+    const tail = wideFallbackNote("X", 0)
+      .split("只跑固定清单 0 个。")[1]
+      ?.trim();
+    expect(tail, "话术构造函数自己变了形").toBeTruthy();
+    expect(r.stderr).toContain("放弃收窄");
+    expect(r.stderr).toContain(tail ?? "");
   });
 
   it("只改文档 → 仍然只跑固定清单，结果永不为空", () => {

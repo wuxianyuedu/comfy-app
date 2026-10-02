@@ -63,7 +63,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 固定清单的**唯一出处**是 `scripts/affected-tests.mjs` 的 FIXED_STRUCTURAL_TESTS，
 # 这里不再抄一遍：抄一份就会漂移，且清单里的用例被改名后，钩子会「一条都不跑却
 # 仍然绿」。增量层的五条判据与它的**已知边界**（不保证传递依赖；命中公共地基时
-# 明确放弃收窄、兜底不是全量）写在该脚本文件头与规范 §13.5.4。
+# 明确放弃收窄、兜底不是全量）写在该脚本文件头与规范 §13.5.8。
 #
 # 启动那一步交给 `scripts/run-affected-tests.mjs`，不在这里拼 `pnpm exec vitest run $files`：
 # 清单是位置参数，长度随改动面线性增长，而 `pnpm exec <bin>` 在 Windows 上经 `.cmd`
