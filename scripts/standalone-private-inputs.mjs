@@ -231,7 +231,17 @@ export const STATIC_ALLOWED_TOPLEVEL = [
  * 参数属性），由 tests/dist-artifact-hygiene.test.ts 钉住，避免哪天给它加个 enum
  * 就把桌包的回收链静默弄断。
  */
-export const RUNTIME_SRC = ["lib/process/kill-process-tree.ts"];
+export const RUNTIME_SRC = [
+  "lib/process/kill-process-tree.ts",
+  /* executable-resolve.ts：可执行形态判据的唯一实现（`whichCommand` /
+   * `usableCommand` / `pnpmInvocation`，ISSUE #1327 从 `shell.mjs` 搬下来的）。
+   * `launcher-core/shell.mjs` 静态 import 它 —— 而 `shell.mjs` 本身在
+   * `RUNTIME_SCRIPTS` 里（桌包要能重新编排一次），所以这份**必须同批随包**：
+   * 缺了它不是「那一步跳过」，而是整个编排器加载即 `ERR_MODULE_NOT_FOUND`
+   * （与 `kill-process-tree.ts` 同一个理由）。它也走 Node 24 的类型擦除，
+   * 因此同样受「只许可擦除语法」约束（由 tests/dist-artifact-hygiene.test.ts 钉住）。 */
+  "lib/process/executable-resolve.ts",
+];
 
 /**
  * `.next/standalone` 允许的**顶层条目**（默认拒绝，ISSUE #1217）。

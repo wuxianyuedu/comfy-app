@@ -46,6 +46,7 @@ function mkRepo(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "dep-audit-"));
   tempDirs.push(dir);
   mkdirSync(path.join(dir, "scripts", "launcher-core"), { recursive: true });
+  mkdirSync(path.join(dir, "src", "lib", "process"), { recursive: true });
   // 真脚本 + 它的整条 import 链都得在场。漏了 `launcher-core/shell.mjs` 的话，子进程
   // 在**加载阶段**就 ERR_MODULE_NOT_FOUND，用例读到的是「脚本崩了」而不是判据结论 ——
   // 那种红会长得像业务失败，最难归因（同一坑见 tests/dev-launcher-toolchain-gate.test.ts）。
@@ -53,6 +54,9 @@ function mkRepo(): string {
   for (const rel of [
     "scripts/launcher-core/shell.mjs",
     "scripts/launcher-core/command-echo.mjs",
+    // `shell.mjs` 静态 import 它（ISSUE #1327）：可执行形态判据的唯一实现。
+    // 漏了同样在加载阶段就断，见上面那条注释。
+    "src/lib/process/executable-resolve.ts",
   ]) {
     // 必须**按原相对路径**落位：脚本里 import 的是 `./launcher-core/shell.mjs`，
     // 拷成 `scripts/shell.mjs` 会让子进程在加载阶段就 ERR_MODULE_NOT_FOUND ——

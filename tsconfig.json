@@ -19,6 +19,10 @@
     "noFallthroughCasesInSwitch": true,
     /* TS7 方向：只允许可擦除语法（禁 enum / namespace / 参数属性）。 */
     "erasableSyntaxOnly": true,
+    /* 允许按 `.ts` 后缀 import —— 只给 `scripts/**` 那侧用（`shell.mjs` 静态
+       引 `src/lib/process/executable-resolve.ts`，Node 24 的类型擦除认这个后缀）。
+       `noEmit: true` 是这条选项的前提，本文件已满足。 */
+    "allowImportingTsExtensions": true,
     "checkJs": true,
     /* Bundled projects */
     "lib": ["dom", "dom.iterable", "ES2022"],

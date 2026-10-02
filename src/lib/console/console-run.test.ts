@@ -220,8 +220,28 @@ describe("createConsoleRunner", () => {
       },
       (event) => events.push(event),
     );
-    expect(events.some((e) => e.type === "error")).toBe(true);
+    const errorFrame = events.find((e) => e.type === "error");
+    expect(errorFrame?.type).toBe("error");
     expect(result.exitCode).toBeNull();
+    /* 文案必须**说清找过 PATH**（ISSUE #1327）：裸的 `spawn xxx ENOENT` 看着像
+     * 参数写错，而用户要做的是「确认命令装没装 / 这个进程的 PATH 里有没有它」。 */
+    if (errorFrame?.type === "error") {
+      expect(errorFrame.message).toContain("definitely-not-a-real-binary-xyz");
+      expect(errorFrame.message).toContain("PATH");
+    }
+  });
+
+  it("起进程前先解析可执行形态：start 帧报的是**真正要起的那一份**", async () => {
+    /* 这条判据的现场（ISSUE #1327）：控制台把用户敲的 `pnpm` 直接丢给 spawn，
+     * Windows 上必回 `spawn pnpm ENOENT`。修法是在起之前过一遍
+     * `~/lib/process/executable-resolve`，所以 `start` 帧里的 `file` 应当是
+     * **解析后的路径**（POSIX 上就是 PATH 里的绝对路径），而不是用户敲的裸名字。 */
+    const { events } = await runOnce("node", ["-e", "0"]);
+    const start = events[0];
+    expect(start?.type).toBe("start");
+    if (start?.type !== "start") return;
+    // `node` 在 PATH 上 → 解析成绝对路径（不再是裸 `node`）。
+    expect(start.file).toBe(process.execPath);
   });
 });
 

@@ -1183,12 +1183,18 @@ export default defineConfig({
          * 24.4/46.9/26.4/24.6 —— 大头是 `process-launch.ts`（17.9% 行）与
          * `kill-process-tree.ts`（29.1%），执行宿主那批新代码进来时没配用例，
          * 而当时没有任何路径判得着这条门槛。欠的课记在台账 E7；补判决面
-         * （而非真起进程）时同批抬回原值。 */
+         * （而非真起进程）时同批抬回原值。
+         *
+         * 抬一轮（ISSUE #1327）：`executable-resolve.ts` 从 `shell.mjs` 下沉进来时
+         * 同批带了 13 条用例，全量 `--coverage` 实测 69.37/69/79.59/69.91 ——
+         * 门槛按 §18.6「实测值向下取整到 5 的倍数」收紧到 65/65/75/65。
+         * 还差的那截仍由 `process-launch.ts`（17.85% 行，keepAlive 那条要走壳的
+         * 中介进程）顶着，所以**没有**一次抬回原值 50/60/50/55。 */
         "src/lib/process/**": {
-          lines: 20,
-          functions: 45,
-          statements: 25,
-          branches: 20,
+          lines: 65,
+          functions: 75,
+          statements: 65,
+          branches: 65,
         },
         "src/lib/shell/**": {
           lines: 60,
