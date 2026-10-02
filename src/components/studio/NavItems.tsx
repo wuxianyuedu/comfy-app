@@ -20,7 +20,7 @@ import {
  * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。
  *
  * 四个分区（一处定义、多处消费，避免漂移）：
- *   · 全局项（`globalNavItems`）—— 主页侧栏顶部常驻：首页 / 模型 / 历史 / 队列 / 炼丹 / 流程；
+ *   · 全局项（`globalNavItems`）—— 主页侧栏顶部常驻：首页 / 模型 / 历史 / 队列 / 流程；
  *   · 全局浮层（`OVERLAY_NAV_ITEMS`）—— 紧跟全局项之后，仍是**应用级**入口但点开的是
  *     弹窗/浮层而不是视图：模型适配 / 模式契约 / 控制台。这三件事都是**项目无关**的
  *     （模式是工作流库定义的、适配器是每个远端模型 × 每个模式的字段映射、控制台跑的是
@@ -159,18 +159,6 @@ export const NAV_ITEMS: NavItem[] = [
     label: "队列",
     enabled: true,
     icon: <ListChecks size={22} strokeWidth={1.8} />,
-  },
-  {
-    id: "train",
-    label: "炼丹",
-    icon: (
-      <svg {...ICON_PROPS}>
-        <path d="M9 2v6l-4 7a4 4 0 003.6 6h6.8A4 4 0 0019 15l-4-7V2" />
-        <path d="M9 2h6" />
-        <path d="M8 22h8" />
-        <path d="M12 9v6" />
-      </svg>
-    ),
   },
   {
     id: "workflows",

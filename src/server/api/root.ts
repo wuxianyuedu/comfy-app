@@ -3,7 +3,6 @@ import { projectRouter } from "~/server/api/routers/project";
 import { taskRouter } from "~/server/api/routers/task";
 import { filmRouter } from "~/server/api/routers/film";
 import { workflowRouter } from "~/server/api/routers/workflow";
-import { trainRouter } from "~/server/api/routers/train";
 import { modelRouter } from "~/server/api/routers/model";
 import { skillRouter } from "~/server/api/routers/skill";
 import { llmRouter } from "~/server/api/routers/llm";
@@ -34,7 +33,6 @@ export const appRouter = createTRPCRouter({
   task: taskRouter,
   film: filmRouter,
   workflow: workflowRouter,
-  train: trainRouter,
   model: modelRouter,
   skill: skillRouter,
   llm: llmRouter,
