@@ -150,3 +150,59 @@ describe("installStreamCapture", () => {
     ).toContain("业务输出");
   });
 });
+
+/* ISSUE #1365：转录文件的「取最新一份」与「轮转」都曾按**文件名**判断，而文件名
+ * 里的 `pid` 是变长十进制——字典序比较的是字符，`…-9876-…` 排在 `…-12345-…`
+ * 之后。两个后果各自独立地让「应用服务」这一路变成恒空的来源：
+ *
+ *   1. 路由取「排序后最后一份」→ 读到某次更早运行的文件，它的行时刻早于本次
+ *      会话起点，被 `dropStaleEntries` 整批裁掉；
+ *   2. 轮转按 `bootId` 前缀找同族 → `bootId` 每次都不同，前缀只匹配到自己这一份，
+ *      于是**一份也删不掉**，陈年文件无限累积（也让第 1 条更容易踩中）。
+ */
+describe("转录文件的取最新与轮转（ISSUE #1365）", () => {
+  /** 往 nextjs 目录写一份指定 pid / mtime 的转录文件。 */
+  function writePanel(pid: number, stamp: number, body: string): string {
+    fs.mkdirSync(tmp, { recursive: true });
+    const file = path.join(tmp, `nextjs-panel-${pid}-${stamp}.log`);
+    fs.writeFileSync(file, body, "utf8");
+    const at = stamp / 1000;
+    fs.utimesSync(file, at, at);
+    return file;
+  }
+
+  it("latestPanelLogFile 按 mtime 取，不按文件名字典序", async () => {
+    const mod = await freshInstall();
+    /* pid 更大的那份文件名字典序**更小**（"12345" < "9876"），而它才是最新的：
+     * 这正是按名字取最后一份会读错的方向。 */
+    const older = writePanel(9876, Date.now() - 60_000, "上一次运行\n");
+    const newer = writePanel(12345, Date.now(), "本次运行\n");
+    expect(mod.latestPanelLogFile(tmp)).toBe(newer);
+    expect(mod.latestPanelLogFile(tmp)).not.toBe(older);
+  });
+
+  it("目录不存在时返回 null（不是抛错）", async () => {
+    const mod = await freshInstall();
+    expect(mod.latestPanelLogFile(path.join(tmp, "no-such-dir"))).toBeNull();
+  });
+
+  it("轮转按 mtime 保留最近 5 份，跨 bootId 也算同族", async () => {
+    /* 先摆 6 份历史，再安装（安装是模块级幂等的，必须在 install **之前**把夹具
+     * 准备好，否则第二次调用直接 return、根本不会走轮转）。6 份的 bootId 各不同
+     * ——这正是旧实现的漏洞：按 bootId 前缀找同族只会匹配到自己那一份，一份也
+     * 删不掉，陈年文件无限累积。 */
+    const now = Date.now();
+    for (let i = 0; i < 6; i += 1) {
+      writePanel(1000 + i, now - (6 - i) * 10_000, `第 ${i} 次运行\n`);
+    }
+    await freshInstall();
+    const left = fs
+      .readdirSync(tmp)
+      .filter((n) => n.startsWith("nextjs-panel-"))
+      .sort();
+    expect(left).toHaveLength(5);
+    /* 最老的那份（第 0 次）被删掉，最新的历史（第 5 次）还在。 */
+    expect(left.some((n) => n.includes("-1000-"))).toBe(false);
+    expect(left.some((n) => n.includes("-1005-"))).toBe(true);
+  });
+});

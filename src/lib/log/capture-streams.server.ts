@@ -55,29 +55,89 @@ export function panelCaptureLogPath(): string {
   return target;
 }
 
+/**
+ * 目录里按**写入时刻**最新的那份应用服务转录文件；取不到返回 null。
+ *
+ * 文件名（`nextjs-panel-<pid>-<毫秒>.log`）**不能按字面排序取最新**：`pid` 是
+ * 变长十进制，字典序比较的是字符而不是数值，`…-9876-…` 会排在 `…-12345-…`
+ * 之后。于是「取最后一份」实际取到的是**某次更早运行**留下的文件——它的行时刻
+ * 早于本次会话起点，被 `dropStaleEntries` 整批裁掉，面板「应用服务」一路读到
+ * 的就是一个恒为空的来源（用户报的正是「应用服务一条也不显示」）。
+ * 与启动器侧 `scripts/launcher-core/orchestrator.mjs` 的 `latestPanelTranscript`
+ * 同一口径（那边一直按 mtime 取），只是它服务于失败诊断、这边服务于面板。
+ *
+ * 本函数是「最新一份转录文件」在**服务端进程内**的唯一事实来源：读（路由）与
+ * 轮转（下面的 prune）都问它，两处各写一份必然漂移。
+ */
+export function latestPanelLogFile(dir = NEXTJS_LOG_DIR): string | null {
+  let best: { file: string; mtimeMs: number } | null = null;
+  let names: string[];
+  try {
+    names = fs.readdirSync(/*turbopackIgnore: true*/ dir);
+  } catch {
+    return null; // 目录还不存在（应用服务从未启动过）——不是错误
+  }
+  for (const name of names) {
+    if (!name.startsWith(NEXTJS_PANEL_LOG_PREFIX) || !name.endsWith(".log")) {
+      continue;
+    }
+    const file = path.join(dir, name);
+    let mtimeMs: number;
+    try {
+      mtimeMs = fs.statSync(/*turbopackIgnore: true*/ file).mtimeMs;
+    } catch {
+      continue; // 正在被轮转删掉
+    }
+    if (!best || mtimeMs > best.mtimeMs) best = { file, mtimeMs };
+  }
+  return best?.file ?? null;
+}
+
 /** 保留最近 N 份转录文件（与 dev-launcher 清理 nextjs-stdout/stderr 的口径一致）。 */
 const KEEP_FILES = 5;
 
-function pruneOldFiles(filePath: string): void {
+/**
+ * 轮转历史转录文件：按 mtime 保留最新 `KEEP_FILES` 份（**含本次这一份**）。
+ *
+ * 调用点在「本次文件刚建出来之前」，所以保留数取 `KEEP_FILES - 1`：加上马上要写
+ * 的这份正好是 5。若按 `KEEP_FILES` 保留旧文件，长期跑下来目录里会稳定多出 1 份。
+ *
+ * 「按 bootId 前缀找同族」是错的：`bootId` 每次都不同，前缀永远只匹配到**自己
+ * 这一份**，于是一份也删不掉——文件在每次启动后无限累积，而旧文件越多，
+ * 「取错最新一份」的机会就越大（见 `latestPanelLogFile`）。
+ */
+function pruneOldFiles(): void {
+  let entries: { file: string; mtimeMs: number }[];
   try {
-    const dir = path.dirname(filePath);
-    const base = path.basename(filePath);
-    const prefix = base.slice(0, base.indexOf(".") + 1);
-    const siblings = fs
-      .readdirSync(/*turbopackIgnore: true*/ dir)
-      .filter((name) => name.startsWith(prefix) && name !== base)
-      .sort()
-      .reverse()
-      .slice(KEEP_FILES - 1);
-    for (const name of siblings) {
-      try {
-        fs.unlinkSync(/*turbopackIgnore: true*/ path.join(dir, name));
-      } catch {
-        /* 被占用/已删除都无所谓 */
-      }
-    }
+    entries = fs
+      .readdirSync(/*turbopackIgnore: true*/ NEXTJS_LOG_DIR)
+      .filter(
+        (name) =>
+          name.startsWith(NEXTJS_PANEL_LOG_PREFIX) && name.endsWith(".log"),
+      )
+      .flatMap((name) => {
+        const file = path.join(NEXTJS_LOG_DIR, name);
+        try {
+          return [
+            {
+              file,
+              mtimeMs: fs.statSync(/*turbopackIgnore: true*/ file).mtimeMs,
+            },
+          ];
+        } catch {
+          return [];
+        }
+      });
   } catch {
-    /* 目录尚不存在等情形直接跳过 */
+    return; // 目录尚不存在等情形直接跳过
+  }
+  entries.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  for (const { file } of entries.slice(KEEP_FILES - 1)) {
+    try {
+      fs.unlinkSync(/*turbopackIgnore: true*/ file);
+    } catch {
+      /* 被占用/已删除都无所谓 */
+    }
   }
 }
 
@@ -143,7 +203,7 @@ export function installStreamCapture(): void {
     if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) {
       fs.mkdirSync(/*turbopackIgnore: true*/ dir, { recursive: true });
     }
-    pruneOldFiles(filePath);
+    pruneOldFiles();
     safeAppend(filePath, "----- 应用服务输出（本次运行）-----\n");
     /* app-runtime.log 是**追加不轮转**的：上一次、上上一次运行的行全留在同一
      * 个文件里。面板侧靠会话起点裁剪（log-session-scope），但**文件本身**还要
