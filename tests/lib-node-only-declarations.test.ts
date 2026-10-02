@@ -39,6 +39,16 @@ const PURE_NODE_HOSTS = [
   //   · 加 `server-only` 会把「这本模块是构建期/壳侧常量」这件事说反（它的入口
   //     会 throw），因此按 §18.4 第三类登记。
   "src/lib/shell/launch-diagnostics.ts",
+  // reveal-path.ts（ISSUE #1365）：日志行里点路径 → 在文件管理器里定位。
+  // 顶层 Node 内建 value import 有 `child_process`（spawn explorer / open /
+  // xdg-open）与 `fs`（判路径存在）+ `path`（Linux 分支取父目录）。
+  // 消费方是 tRPC 路由（Next 服务端）——**加 `server-only` 也不会多保护什么**，
+  // 却会让「同一份实现被纯 Node 宿主加载」这条潜在路径直接 throw。
+  // 与 `open-in-browser.ts` 的区别不是分层，而是 `open-in-browser` 只被
+  // `src/server/**` 引（因此随 `lib→server` 越界登记表停在那一层），本模块的
+  // 兄弟件 `~/lib/log/log-path-tokens.ts` 是**纯函数**、被浏览器侧静态引，
+  // 两者必须能各自独立加载才谈得上「识别归浏览器、打开归本机」这条分层。
+  "src/lib/shell/reveal-path.ts",
   "src/lib/process/kill-process-tree.ts",
   // workshop MCP：由 tools/mcp-{stdio,http}.ts 经 `tsx` 直接跑，**不经 Next**；
   // 它必须与 Next 侧共用同一份密文实现（`src/server/workshop/llm.ts` 也引它），

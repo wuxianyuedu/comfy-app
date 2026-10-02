@@ -5,7 +5,13 @@
 
 import { emitAppEvent } from "~/lib/app-events";
 import type { Edge } from "@xyflow/react";
+import { fireAndForget } from "~/lib/async-action";
 import type { CanvasNodeType } from "~/lib/project-canvas/canvas-types";
+import {
+  clearSyncFailure,
+  logSyncIssue,
+  reportMirrorFailure,
+} from "~/lib/project-canvas/sync-notice";
 import {
   readStorageItem,
   readStorageJson,
@@ -58,30 +64,54 @@ export function getProject(id: string): CanvasProject | null {
   return all.find((all) => all.id === id) ?? null;
 }
 
-/* 直写到服务端。尽力而为：失败被吞掉，网络/服务端不稳时绝不阻塞本地优先的界面。
+/* 直写到服务端。尽力而为，但**不是「无声」**：失败按「重试有没有用」分两档处置
+ *（判据与原因在 `~/lib/project-canvas/sync-notice`）—— 暂时拿不到只留日志、
+ * 下一轮自动保存还会再试；服务端明确不收这一份则登记成一个可查的状态，
+ * 由视图层给用户一条看得懂的提示。此前这里是 `catch {}`，于是「画布 id 属于
+ * 别人」（A3 装上归属闸之后的新后果）与「dev server 正在重启」压成同一种静默，
+ * 用户界面显示已保存、换端口一看是空的，且毫无线索。
  * 每次有意义的变更都会从 `upsertProject` 调它，于是服务端副本在换端口 / 换设备时
  * 也保持同步（单靠 localStorage 是按来源隔离的，换端口时数据会静默丢失，
  * 例如从 3100 换到 3102）。
  */
-async function persistProjectToServer(p: CanvasProject): Promise<void> {
+function persistProjectToServer(p: CanvasProject): void {
   if (typeof window === "undefined") return;
-  try {
-    await vanillaApi.project.upsert.mutate({
-      id: p.id,
-      name: p.name,
-      nodes: p.nodes ?? [],
-      edges: p.edges ?? [],
-    });
-  } catch {
-    /* 离线或服务端挂了 —— localStorage 里已经有了 */
-  }
+  /* 走 `fireAndForget` 而不是 `void fn()`：那条地基的语义就是「不 await、不抛、
+   * 失败必须落到一个显式 onError」，`onError` 没有默认值 —— 通道恰恰是这里
+   * 最不该被悄悄通用掉的东西（见 `~/lib/async-action`）。 */
+  fireAndForget(
+    vanillaApi.project.upsert
+      .mutate({
+        id: p.id,
+        name: p.name,
+        nodes: p.nodes ?? [],
+        edges: p.edges ?? [],
+      })
+      /* 成功要把之前的拒收记录撤掉：用户照着提示把名字改对之后，
+       * 旧提示继续留在界面上等于制造第二条假故障。 */
+      .then(() => {
+        clearSyncFailure(p.id);
+      }),
+    (e) => {
+      reportMirrorFailure("这份画布没能存进服务端", p, e);
+    },
+  );
 }
 
-/* 在服务端硬删除（尽力而为）。与 `deleteProject` 对应。
+/* 在服务端硬删除（尽力而为）。与 `deleteProject` 对应，失败处置与上面同一档判据：
+ * 「本机已经删了、服务端没删掉」是有后果的（换端口 / 换设备时它会再冒出来），
+ * 所以也不能只是 `.catch(() => undefined)`。
  */
-function deleteProjectOnServer(id: string): void {
+function deleteProjectOnServer(p: CanvasProject): void {
   if (typeof window === "undefined") return;
-  vanillaApi.project.delete.mutate({ projectId: id }).catch(() => undefined);
+  fireAndForget(
+    vanillaApi.project.delete.mutate({ projectId: p.id }).then(() => {
+      clearSyncFailure(p.id);
+    }),
+    (e) => {
+      reportMirrorFailure("这份画布没能从服务端删掉", p, e);
+    },
+  );
 }
 
 export function upsertProject(p: CanvasProject): void {
@@ -93,16 +123,19 @@ export function upsertProject(p: CanvasProject): void {
   writeIndex(all);
   emitChanged();
   // 同步到服务端（持久、跨来源的存储）。不阻塞。
-  void persistProjectToServer(next);
+  persistProjectToServer(next);
 }
 
 export function deleteProject(id: string): void {
-  const all = readIndex().filter((project) => project.id !== id);
-  writeIndex(all);
+  const before = readIndex();
+  /* 名字要在过滤**之前**取：拒收提示要落在用户认得出的那条画布上，
+   * 而删掉之后索引里已经没有这一条了。 */
+  const removed = before.find((project) => project.id === id);
+  writeIndex(before.filter((project) => project.id !== id));
   if (getActiveId() === id) removeStorageItem(ACTIVE_KEY);
   emitChanged();
   // 尽力在服务端也删掉。
-  deleteProjectOnServer(id);
+  if (removed) deleteProjectOnServer(removed);
 }
 
 /* 拉取服务端的项目列表，并与 localStorage 对账：
@@ -146,7 +179,7 @@ export async function hydrateFromServer(): Promise<void> {
     // 把只存在于本地的项目推上去（迁移修复前的数据）。
     for (const lp of localAll) {
       if (!serverProjects.some((sp) => sp.id === lp.id)) {
-        void persistProjectToServer(lp);
+        persistProjectToServer(lp);
       }
     }
     if (changed || localAll.length > 0) {
@@ -156,7 +189,12 @@ export async function hydrateFromServer(): Promise<void> {
       writeIndex(merged);
       emitChanged();
     }
-  } catch {
+  } catch (e) {
+    /* 拉不到服务端列表 ⇒ 这一轮只用本地索引（local-first 的承诺），并把
+     * `hydrated` 退回 false 让下一次挂载再试。但「静默重试」不等于「静默」：
+     * 这一行日志是「我的画布为什么没出现在列表里」唯一的可查出口（硬规则 4），
+     * 而它走的是 `sync-notice` 那一条诊断口 —— 本文件不许自己写 console。 */
+    logSyncIssue("读取服务端画布列表失败，本轮只用本地索引", e);
     hydrated = false;
   }
 }

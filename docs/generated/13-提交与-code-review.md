@@ -172,8 +172,11 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
    # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳里 37 条 #[test] 唯一的执行者），并复用
    # `dev-launcher.mjs` 的 `shellStaleWarning` 把硬规则 5「改了壳必须重编」升成阻断（见 11 §11.10.4）
-✅ vitest run $(node scripts/affected-tests.mjs)  # C 组：结构守护固定清单 + 本次改动
-   # 牵扯到的用例，一次 vite（固定清单唯一出处是脚本里的 FIXED_STRUCTURAL_TESTS，见下 13.5.8）
+✅ node scripts/run-affected-tests.mjs       # C 组：结构守护固定清单 + 本次改动
+   # 牵扯到的用例，一次 vite（固定清单唯一出处是 `affected-tests.mjs` 里的
+   # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
+   # 直接拼进 `pnpm exec vitest run $files` 会在 Windows 上顶穿 cmd.exe 的 8191 字符
+   # 命令行上限 —— 表现是「组 C 红、一条用例没跑、原因是一行 GBK 乱码」
 ✅ node scripts/check-circular-deps.cjs      # 模块循环依赖棘轮（见 12 §12.7）
 ✅ node scripts/check-format.cjs             # prettier 格式棘轮（见下 13.5.1）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
@@ -231,8 +234,20 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 | 治理有进展（未过文件变少）            | 提示执行 `--update` 收紧；门禁带 `--strict` 时**未收紧即失败** |
 | `--update` 试图把新增的脏文件写进基线 | **拒绝**（棘轮只许收紧）                                       |
 
-两个刻意的设计：
+刻意的设计：
 
+- **命令没跑成不能被读成「全库干净」（fail-closed，台账 E11）。** 本门禁过去经
+  `pnpm exec prettier` 起进程，而 `--list-different` 的退出码 1 含义是「有差异，
+  清单在 stdout」——`pnpm exec` 找不到 prettier 时（沙箱、依赖没装、pnpm 形态选错）
+  同样是退出 1 且 **stdout 为空**，旧代码把空清单当成「0 个文件未过」并打
+  `[format] OK`，门禁当场瞎掉而全绿。现在三条出路全部 fail-closed：入口解析不到 →
+  exit 2；子进程被信号终止 → exit 2；**退出 1 却一行都没列出来** → exit 2。
+  prettier 也不再经 pnpm 层起（`node <本地入口>`，口径同台账 E10：平台 shim 那一层
+  正是这类「起不来却被读成没问题」的藏身处），缓存从机器全局的 `os.tmpdir()` 路径
+  改到本次检出的 `node_modules/.cache/prettier-gate.json` —— 门禁用例会并发搭临时
+  沙箱，共用一份缓存时读数不可信，且跟着用户走的缓存无法按检出隔离。
+  同族两处已核过、形态本来就是安全的：`check-reformat-only.cjs`
+  （`status !== 0` 一律当失败并退回逐文件兜底）与 `run-tests.mjs`（透传退出码）。
 - **按文件记账，不记全局计数。** 计数只约束总量 —— 修好 3 个、弄坏 4 个，总数变大
   才失败，弄坏的那 3 个无人知晓。文件级记账下「把干净的文件弄脏」当场失败，而
   「这个文件此前是干净的」本身就是一个可断言的事实。
@@ -561,7 +576,27 @@ master 上本来就红（属别线），于是「一笔无关改动」会被别�
 **钩子那一档另配并发**：C 组跑 `--maxWorkers=4`（不是配置里的 8）—— 钩子里
 A(tsc)、B(eslint)、D(二十多个判据脚本) 与它并行，再按 8 起 forks 就会抢不过来，
 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
-respond`（几百条全过、退出码非零）。全量 `pnpm test` 仍走配置里的 8。
+respond`（几百条全过、退出码非零）。全量 `pnpm test` 仍走配置里的 8。这个常数现在
+写在启动器 `scripts/run-affected-tests.mjs` 里，不在钩子的那行 shell 上。
+
+**启动面自己也是一条判据面**（`tests/hook-affected-launch.test.ts`，固定清单成员）：
+清单是**位置参数**，长度随改动面线性增长。原先钩子直接 `pnpm exec vitest run $files`，
+而 `pnpm exec <bin>` 在 Windows 上经 `.cmd` shim —— cmd.exe 的命令行上限是
+**8191 字符**。实测一次改 22 个文件的提交算出 229 个用例 / **10840 字符**：vitest
+根本没起，stdout 只有一行 GBK 乱码（「文件名或扩展名太长」），钩子的表现是
+「组 C 失败」而看不见任何用例名。它的危害不是「提交被拦」，而是**它长得像任何别的
+东西**——判据在场、跑的是 0 个用例、退出码非零但原因读不出，与本仓库反复在收的
+「绿 ≠ 跑过」是同一族的两面（**红也 ≠ 跑过**）。改法：启动那一步交给
+`run-affected-tests.mjs`，用 `spawnSync(process.execPath, [vitest 的 ESM 入口, …])`
+直接起（不经 cmd 层，上限回到 Win32 的 32767），并按 24000 字符的预算**分块** ——
+**宁可多起一次 vite 也不许丢用例**，因为「少跑几条」的表现正是这一条事故本身。
+入口按 `require.resolve("vitest/package.json")` + `bin.vitest` 解析，不写死
+`node_modules/vitest/…`：pnpm 布局下真身在 `.pnpm/vitest@<ver>…/`，顶层只是链接。
+判据钉四件事：分块后并集等于输入且顺序不变、每块都在预算内（单条路径超预算则**点名红**，
+不许静默跳过）、启动器没有 `shell: true` 也不出现 `pnpm exec vitest` / `npx vitest` 形态、
+钩子里 C 组确实指向这个入口。最后那条按 `run_group C … sh -c '<body>'` **解析出实调用体**
+再断言并剔掉行首是 `#` 的行 —— 就是上一条「在场判据要解析、不要 `toContain`」在本判据上的
+落地：机制说明里也写着那个文件名，只看整份文本时「执行行已被静音」与「接得好好的」长得一样。
 
 判据由 `tests/affected-tests.test.ts` 钉住（20 条，实测 `pnpm exec vitest run` 的读数；
 这个数没有判据核，改完数量要顺手同步这里）：四条判据各一组夹具、**两跳
@@ -599,11 +634,11 @@ override → 手工写注释解释为什么」，而**「这次忘了查」没�
 （依赖 registry 可达性）。塞进每次提交会把「离线 / registry 抖动」变成提交失败，与
 13.5.4「按需召唤」那一层的分层一致。同一条理由决定了脚本内部对三种形态的区分：
 
-| 形态                             | 判定                        | 为什么                                                                  
-| -------------------------------- | --------------------------- | ---------------------------------------------------------------------- |
-| 拿到可解析的 JSON                | 正常判定（有无漏洞由台账说） | ——                                                                     
-| 命令起来了但没有 JSON（离线）    | **未扫描**，退 0，话术禁止出现「干净」 | 离线不是「依赖干净」；把它印成绿会把下一次的真红一起吞掉                
-| stdout 不是 JSON / pnpm 没起来   | **判红**                    | 这是判据自身坏了，与网络抖动不同形；静默跳过的判据等于没有判据           |
+| 形态                           | 判定                                   | 为什么                                                         |
+| ------------------------------ | -------------------------------------- | -------------------------------------------------------------- |
+| 拿到可解析的 JSON              | 正常判定（有无漏洞由台账说）           | ——                                                             |
+| 命令起来了但没有 JSON（离线）  | **未扫描**，退 0，话术禁止出现「干净」 | 离线不是「依赖干净」；把它印成绿会把下一次的真红一起吞掉       |
+| stdout 不是 JSON / pnpm 没起来 | **判红**                               | 这是判据自身坏了，与网络抖动不同形；静默跳过的判据等于没有判据 |
 
 跨平台侧照 §9.5 的口径三处同步：`scripts/quality-gate.mjs` 的 `GATES`、
 `scripts/quality-gate.ps1` 的 `$Blocks` 与 `-Mode` 单选值、上面那张跨平台动作对照表的
