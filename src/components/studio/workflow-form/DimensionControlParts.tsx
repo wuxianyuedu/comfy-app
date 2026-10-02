@@ -81,7 +81,7 @@ export function RequiredChips({
             data-dimension-pin={pin.ioKey}
           >
             <span
-              className="text-ink-soft max-w-[80px] truncate text-[10px]"
+              className="text-ink-soft max-w-20 truncate text-[10px]"
               title={pin.label ?? pin.name}
             >
               {pin.label ?? pin.name}

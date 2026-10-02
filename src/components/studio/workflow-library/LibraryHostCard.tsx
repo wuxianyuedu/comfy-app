@@ -103,7 +103,7 @@ export function LibraryHostCard({
 
         {/* chips 双行：与画布 WorkflowNode 同构（Row1 来源+模型，Row2 工作流+模式）；
          *  库内为只读语境，固定「本机 / 全部模型 / 当前工作流 / 任务类型」。 */}
-        <div className="flex flex-col gap-1 pr-[14px] pb-1.5 pl-[14px]">
+        <div className="flex flex-col gap-1 pr-3.5 pb-1.5 pl-3.5">
           <div className="flex h-7 min-w-0 items-center gap-1">
             <WorkflowStaticChip>
               <span className="bg-success-strong size-1.5 rounded-full" />

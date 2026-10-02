@@ -65,7 +65,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
   } = useHistoryPanel({ projectId });
 
   return (
-    <aside className="bg-panel/98 border-border-strong flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l backdrop-blur-md">
+    <aside className="bg-panel/98 border-border-strong flex h-full w-90 shrink-0 flex-col overflow-hidden border-l backdrop-blur-md">
       {/* ── Header ── */}
       <div className="border-border-strong flex items-center gap-2 border-b px-4 py-3">
         <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">
@@ -235,7 +235,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       />
                     ) : (
                       <div
-                        className={`flex h-12 w-12 items-center justify-center rounded-lg ${KIND_STYLE[task.mediaType]}`}
+                        className={`flex size-12 items-center justify-center rounded-lg ${KIND_STYLE[task.mediaType]}`}
                       >
                         <KindIcon kind={task.mediaType} />
                       </div>
@@ -304,7 +304,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                     </div>
                   ) : (
                     <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${KIND_STYLE[task.mediaType]}`}
+                      className={`flex size-10 shrink-0 items-center justify-center rounded-md ${KIND_STYLE[task.mediaType]}`}
                     >
                       <KindIcon kind={task.mediaType} />
                     </div>

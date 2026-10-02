@@ -74,7 +74,7 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="bg-panel border-border-strong text-ink-bright w-[340px] gap-0 border-l sm:max-w-[340px]"
+        className="bg-panel border-border-strong text-ink-bright w-85 gap-0 border-l sm:max-w-85"
         aria-label="项目画布设置"
       >
         <SheetTitle className="sr-only">项目画布设置</SheetTitle>

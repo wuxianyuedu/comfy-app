@@ -72,7 +72,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
           variant="outline"
           size="xs"
           onClick={() => setOpen((value) => !value)}
-          className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink inline-flex h-auto max-w-[260px] gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px]"
+          className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink inline-flex h-auto max-w-65 gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px]"
         >
           <span className="truncate">{label}</span>
           <span
@@ -117,7 +117,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                   }`}
                 >
                   <span
-                    className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                    className={`flex size-3.5 shrink-0 items-center justify-center rounded border ${
                       selected
                         ? "border-primary/60 bg-primary/40"
                         : "border-border-strong bg-subtle"

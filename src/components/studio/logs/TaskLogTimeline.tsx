@@ -199,7 +199,7 @@ function DefaultLogRow({
         {log.msg}
       </span>
       {log.src && (
-        <span className="text-ink-fainter hover:text-ink-faint max-w-[200px] shrink-0 truncate text-[11px]">
+        <span className="text-ink-fainter hover:text-ink-faint max-w-50 shrink-0 truncate text-[11px]">
           {log.src}
         </span>
       )}

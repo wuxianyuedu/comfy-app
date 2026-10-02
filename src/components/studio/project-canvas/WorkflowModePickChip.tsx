@@ -96,7 +96,7 @@ export function WorkflowModePickChip({
             /* radio dot — 单选，无 checkbox（选中时底色与勾由基元给）。 */
             prefix: (
               <span
-                className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
+                className={`flex size-3.5 shrink-0 items-center justify-center rounded-full border ${
                   isDef
                     ? "border-primary bg-primary-soft"
                     : "border-border-strong bg-subtle"

@@ -334,7 +334,7 @@ export function MultiModeSelect({
                 >
                   {/* checkbox: 每个被选中的模式都显示勾选标记 */}
                   <span
-                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                    className={`flex size-4 shrink-0 items-center justify-center rounded border ${
                       isSelected
                         ? "border-primary-500/60 bg-primary-500/30"
                         : "border-border-strong bg-card"

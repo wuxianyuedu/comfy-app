@@ -189,7 +189,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   className="px-1.5 py-px text-[10px]"
                 />
                 <span
-                  className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                  className={`inline-block size-1.5 shrink-0 rounded-full ${
                     connected
                       ? "bg-success shadow-[0_0_6px_rgba(52,211,153,0.7)]"
                       : "bg-gray-600"

@@ -77,7 +77,7 @@ export function DetailBody({
          *  画布页签**吃满可用高度**（不再钉在 420px）：用户把详情面板看全屏时，
          *  画布要一直铺到面板底部，下面不留一块面板底色（ISSUE #596）。高度链条
          *  靠 flex 传下去 —— 外层的 `min-h-0 flex-1` 与本层的 `h-full` 缺一不可。 */
-        <div className="border-border bg-panel-deep flex h-full min-h-[420px] flex-col rounded-2xl border p-1">
+        <div className="border-border bg-panel-deep flex h-full min-h-105 flex-col rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-ink-faint text-xs font-medium">
               画布样式预览（与项目画布节点一致，可直接运行调试）

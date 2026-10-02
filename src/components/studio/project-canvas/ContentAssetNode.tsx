@@ -70,7 +70,7 @@ export function ContentAssetBody({
       <div className="relative">
         <Textarea
           ref={textareaRef}
-          className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 focus-visible:border-primary/40 h-[260px] w-full resize-none rounded-xl border px-3 py-2.5 text-[12px] leading-relaxed transition-colors"
+          className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 focus-visible:border-primary/40 h-65 w-full resize-none rounded-xl border px-3 py-2.5 text-[12px] leading-relaxed transition-colors"
           value={data.content ?? ""}
           placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
           onChange={textHandler((content) => onPatch({ content }))}
@@ -109,7 +109,7 @@ export function ContentAssetBody({
           <MediaThumbnail
             src={mediaSrc}
             alt={data.mediaName ?? "参考图"}
-            className="border-border-strong bg-canvas-deep h-[260px] w-full rounded-xl border object-cover"
+            className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
             onClick={() => {
               if (imageCount > 1) {
                 gallery.setIndex(0);
@@ -122,7 +122,7 @@ export function ContentAssetBody({
           <MediaThumbnail
             src={mediaSrc}
             controls
-            className="border-border-strong bg-canvas-deep h-[260px] w-full rounded-xl border object-cover"
+            className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
           />
         )
       ) : (
@@ -160,7 +160,7 @@ export function ContentAssetBody({
           }}
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
-          className={`nodrag nopan text-ink-soft flex h-[260px] w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed transition-colors ${
+          className={`nodrag nopan text-ink-soft flex h-65 w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed transition-colors ${
             isDropOver
               ? "text-ink-bright border-primary/70 bg-primary/10"
               : "border-ink-fainter bg-canvas-deep hover:text-ink-bright hover:border-ink-soft"
@@ -203,7 +203,7 @@ export function ContentAssetBody({
               gallery.setIndex(0);
               gallery.setOpen(true);
             }}
-            className="hover:bg-primary/80 absolute top-2.5 right-2.5 h-auto min-w-[20px] rounded-full bg-black/70 px-1.5 text-[10px] font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 backdrop-blur-sm hover:text-white"
+            className="hover:bg-primary/80 absolute top-2.5 right-2.5 h-auto min-w-5 rounded-full bg-black/70 px-1.5 text-[10px] font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 backdrop-blur-sm hover:text-white"
           >
             {imageCount}
           </Button>

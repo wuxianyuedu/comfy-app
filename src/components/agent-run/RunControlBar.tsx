@@ -139,7 +139,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             onChange={textHandler(c.setGoal)}
             rows={2}
             placeholder="想拍什么？一句话创意即可（留空则用项目标题）"
-            className="border-border bg-subtle text-ink-field max-w-md min-w-[220px] flex-1 resize-none text-[12px]"
+            className="border-border bg-subtle text-ink-field max-w-md min-w-55 flex-1 resize-none text-[12px]"
           />
           <FieldLabel className="flex flex-col gap-1 text-[11px]">
             <span className="text-ink-faint">确认粒度</span>

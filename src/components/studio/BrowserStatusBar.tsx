@@ -213,7 +213,7 @@ function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
   const detailLines = notice.title.split("\n");
   return (
     <Popover>
-      <PopoverTrigger className="text-ink-soft hover:bg-subtle inline-flex max-w-[160px] cursor-pointer items-center gap-1 rounded px-1 py-0.5 tabular-nums">
+      <PopoverTrigger className="text-ink-soft hover:bg-subtle inline-flex max-w-40 cursor-pointer items-center gap-1 rounded px-1 py-0.5 tabular-nums">
         <span className="truncate">{notice.text}</span>
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="w-80 text-[12px]">
@@ -265,7 +265,7 @@ export function BrowserStatusBar() {
       aria-label="底部状态栏"
     >
       {/* ── 第 1 区：地址栏（固定宽度） ── */}
-      <div className="flex w-[170px] shrink-0 items-center gap-1.5">
+      <div className="flex w-42.5 shrink-0 items-center gap-1.5">
         <Lock size={11} className="text-success-strong shrink-0" />
         <span className="text-ink-fainter shrink-0">安全</span>
         <span
@@ -284,7 +284,7 @@ export function BrowserStatusBar() {
 
       {/* ── 第 3 区：显存 + 内存等资源指标（固定宽度） ── */}
       <div
-        className={`flex w-[500px] shrink-0 items-center gap-2.5 transition-opacity ${
+        className={`flex w-125 shrink-0 items-center gap-2.5 transition-opacity ${
           stale ? "opacity-50" : "opacity-100"
         }`}
         title={stale ? STALE_RESOURCE_NOTE : undefined}
@@ -316,7 +316,7 @@ export function BrowserStatusBar() {
       </div>
 
       {/* ── 第 4 区：FPS + 消息中心 + 日志 + 应用服务状态（固定宽度，最右） ── */}
-      <div className="flex w-[280px] shrink-0 items-center justify-end gap-2.5 whitespace-nowrap">
+      <div className="flex w-70 shrink-0 items-center justify-end gap-2.5 whitespace-nowrap">
         {/* 实时帧率 */}
         <span
           className="hidden items-center gap-1 md:flex"
@@ -324,7 +324,7 @@ export function BrowserStatusBar() {
         >
           <span
             aria-hidden
-            className={`inline-block h-1.5 w-1.5 rounded-full ${fpsDotColor[tone]}`}
+            className={`inline-block size-1.5 rounded-full ${fpsDotColor[tone]}`}
           />
           <span className={`tabular-nums ${fpsTextColor[tone]}`}>
             {displayValue(fps)}

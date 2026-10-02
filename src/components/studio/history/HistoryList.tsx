@@ -81,7 +81,7 @@ export function HistoryList({
   return (
     <div className="h-full overflow-y-auto">
       <AuroraBackground />
-      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
+      <div className="mx-auto max-w-300 px-4 py-8 sm:px-8 sm:py-10">
         {/* ── Header ── */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -130,7 +130,7 @@ export function HistoryList({
               >
                 {filterOption.dotCls && (
                   <span
-                    className={`h-1.5 w-1.5 rounded-full ${filterOption.dotCls}`}
+                    className={`size-1.5 rounded-full ${filterOption.dotCls}`}
                   />
                 )}
                 <span>{filterOption.label}</span>
@@ -160,7 +160,7 @@ export function HistoryList({
           <EmptyState
             title={c.empty.title}
             description={c.empty.hint}
-            minHeightClass="min-h-[300px]"
+            minHeightClass="min-h-75"
           />
         ) : (
           <div className="flex-col gap-6">

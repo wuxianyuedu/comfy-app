@@ -21,7 +21,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
         <div className="text-ink-soft truncate text-[11px]" title={label}>
           {label}
         </div>
-        <div className="border-border-strong bg-canvas-deep text-ink-soft flex h-[110px] items-center justify-center rounded-md border border-dashed text-[11px]">
+        <div className="border-border-strong bg-canvas-deep text-ink-soft flex h-27.5 items-center justify-center rounded-md border border-dashed text-[11px]">
           需要上传图片
         </div>
       </div>
@@ -38,9 +38,9 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
         <MediaThumbnail
           src={src}
           alt={ref.filename}
-          className="block max-h-[110px] w-full object-contain"
+          className="block max-h-27.5 w-full object-contain"
           fallback={
-            <div className="text-ink-muted flex h-[110px] items-center justify-center text-[10px]">
+            <div className="text-ink-muted flex h-27.5 items-center justify-center text-[10px]">
               图片不可用
             </div>
           }

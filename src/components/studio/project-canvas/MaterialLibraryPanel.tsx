@@ -79,7 +79,7 @@ export function MaterialLibraryPanel({
   });
 
   return (
-    <aside className="bg-panel/98 border-border-strong flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l backdrop-blur-md">
+    <aside className="bg-panel/98 border-border-strong flex h-full w-90 shrink-0 flex-col overflow-hidden border-l backdrop-blur-md">
       {/* ── Header ── */}
       <div className="border-border-strong flex items-center gap-2 border-b px-4 py-3">
         <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">

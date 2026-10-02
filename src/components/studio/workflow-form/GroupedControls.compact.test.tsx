@@ -137,15 +137,15 @@ describe("画布 / 库内的组合参数控件", () => {
   });
 
   it("端点圆点与参数名之间留出与节点上其他行同款的间隙", () => {
-    /* 「端口圆点和参数名字之间距离太近」（ISSUE #355）：这三行此前是 `pl-[2px]`，
+    /* 「端口圆点和参数名字之间距离太近」（ISSUE #355）：这三行此前是 `pl-0.5`，
      *  而端点 12px、圆心骑跨卡片左缘（-6）—— 圆点右沿正压在文字起点上，名字被
      *  圆点盖住。节点上其他参数行的左内边距是 14px（`WidgetInputRow` 的
-     *  `px-[14px]`），这里必须同款，圆点与名字之间才留得出 8px 的空隙。 */
+     *  `px-3.5`），这里必须同款，圆点与名字之间才留得出 8px 的空隙。 */
     const column = renderCompact();
     for (const ioKey of Object.keys(io)) {
       const row = column.querySelector(`[data-io-key="${ioKey}"]`)!;
       expect(row.className, `${ioKey} 行左内边距应与其他参数行一致`).toContain(
-        "pl-[14px]",
+        "pl-3.5",
       );
     }
   });
@@ -160,7 +160,7 @@ describe("画布 / 库内的组合参数控件", () => {
     expect(box!.className).toContain("max-w-full");
     const triggerBox = column
       .querySelector('[aria-label="选择比例、像素与倍数"]')!
-      .closest("div.w-\\[168px\\]");
+      .closest("div.w-42");
     expect(triggerBox).toBeTruthy();
   });
 });

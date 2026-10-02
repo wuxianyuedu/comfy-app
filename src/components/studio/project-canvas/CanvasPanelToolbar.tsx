@@ -62,7 +62,7 @@ export function CanvasPanelToolbar({
             <Button
               variant="ghost"
               onClick={() => onSelect(isActive ? null : item.id)}
-              className={`group relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 ${
+              className={`group relative flex size-10 items-center justify-center rounded-xl transition-all duration-150 ${
                 isActive
                   ? "bg-primary/20 text-primary-strong shadow-primary/10 ring-primary/25 shadow-sm ring-1"
                   : "text-ink-muted hover:bg-subtle hover:text-ink-soft"

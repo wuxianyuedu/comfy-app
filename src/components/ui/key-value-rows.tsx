@@ -240,7 +240,7 @@ export function KeyValueRows({
                   scope="row"
                   title={item.title}
                   className={cn(
-                    "border-border-subtle bg-card w-[36%] max-w-[180px] truncate border-r px-2.5 py-1.5 text-left align-top font-mono",
+                    "border-border-subtle bg-card w-[36%] max-w-45 truncate border-r px-2.5 py-1.5 text-left align-top font-mono",
                     keyClassName,
                   )}
                 >

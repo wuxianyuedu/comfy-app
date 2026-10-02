@@ -30,7 +30,7 @@ export function RgthreeFastGroupsBypasserBody({
   if (matches.length === 0) return null;
   const pad = Math.max(2, String(matches.length).length);
   return (
-    <div className="flex flex-col gap-[2px] px-1 pb-1">
+    <div className="flex flex-col gap-0.5 px-1 pb-1">
       {matches.map((group, index) => {
         const idx = String(index + 1).padStart(pad, "0");
         const label = `Enable ${matchTitle}${idx}`;
@@ -154,11 +154,11 @@ export function RgthreePowerLoraLoaderBody({
   });
 
   return (
-    <div className="flex w-full flex-col gap-[3px] px-1 pt-0.5 pb-1">
+    <div className="flex w-full flex-col gap-0.75 px-1 pt-0.5 pb-1">
       {/* Lora 堆栈区头 —— 始终绘制（空堆栈时也与 rgthree
        *  一致，好让作者总能在其下添加一条 lora）。 */}
       <div
-        className="flex items-center justify-between rounded px-1.5 py-[3px] text-[10px] font-medium uppercase"
+        className="flex items-center justify-between rounded px-1.5 py-0.75 text-[10px] font-medium uppercase"
         style={{
           background: "var(--color-subtle)",
           color: "var(--color-ink-soft)",
@@ -220,7 +220,7 @@ export function RgthreePowerLoraLoaderBody({
           return (
             <div
               key={`pll-r-${index}`}
-              className="flex items-center gap-2 rounded px-1.5 py-[3px] text-[11px]"
+              className="flex items-center gap-2 rounded px-1.5 py-0.75 text-[11px]"
               style={{ background: "var(--color-subtle)" }}
             >
               <span
@@ -259,7 +259,7 @@ export function RgthreePowerLoraLoaderBody({
        *  是只读的，所以是一颗静态药丸（没有点击处理器）。 */}
       <div
         aria-hidden
-        className="mt-1 flex items-center justify-center gap-2 rounded py-[6px] text-[11px] font-medium"
+        className="mt-1 flex items-center justify-center gap-2 rounded py-1.5 text-[11px] font-medium"
         style={{
           background: "rgba(139, 92, 246, 0.10)",
           border: "1px solid rgba(139, 92, 246, 0.45)",
@@ -311,7 +311,7 @@ export function RgthreeLabelBody({
   const angle = typeof p.angle === "number" ? p.angle : 0;
   return (
     <div
-      className="flex min-h-[24px] w-full flex-1 items-center px-2 py-1"
+      className="flex min-h-6 w-full flex-1 items-center px-2 py-1"
       style={{
         background: bg,
         borderRadius: typeof p.borderRadius === "number" ? p.borderRadius : 0,

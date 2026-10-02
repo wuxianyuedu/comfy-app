@@ -29,12 +29,12 @@ export function WorkflowModelFilterChip({
       trigger={
         <>
           <span
-            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            className={`size-1.5 shrink-0 rounded-full ${
               value === "all" ? "bg-accent" : "bg-accent-soft"
             }`}
           />
           <span
-            className="text-accent-soft max-w-[80px] truncate font-semibold"
+            className="text-accent-soft max-w-20 truncate font-semibold"
             style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
           >
             {label}

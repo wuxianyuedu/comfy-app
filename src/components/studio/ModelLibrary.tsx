@@ -34,7 +34,7 @@ export function ModelLibrary() {
   return (
     <div className="h-full overflow-y-auto">
       <AuroraBackground />
-      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
+      <div className="mx-auto max-w-300 px-4 py-8 sm:px-8 sm:py-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-title u-title-page">模型库</h1>
@@ -86,7 +86,7 @@ export function ModelLibrary() {
           <EmptyState
             title="模型库还没有内容"
             description="没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。"
-            minHeightClass="min-h-[300px]"
+            minHeightClass="min-h-75"
             action={
               <Button
                 variant="primary"
@@ -376,7 +376,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                     ? "ComfyUI 中没有可识别的模型目录。"
                     : "未连接 ComfyUI；请先启动本地 ComfyUI。"
                 }
-                minHeightClass="min-h-[160px]"
+                minHeightClass="min-h-40"
               />
             ) : (
               <>

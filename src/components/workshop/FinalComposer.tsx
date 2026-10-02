@@ -243,7 +243,7 @@ export function FinalComposer({
             </span>
             <span>{current.shot.sceneHeading}</span>
           </div>
-          <div className="bg-bg grid min-h-[240px] place-items-center overflow-hidden rounded-xl">
+          <div className="bg-bg grid min-h-60 place-items-center overflow-hidden rounded-xl">
             {current.shot.clipUrl ? (
               <MediaThumbnail
                 key={current.shot.id}
@@ -251,13 +251,13 @@ export function FinalComposer({
                 autoPlay
                 controls
                 onEnded={advance}
-                className="max-h-[420px] w-full"
+                className="max-h-105 w-full"
               />
             ) : current.shot.imageUrl ? (
               <MediaThumbnail
                 src={current.shot.imageUrl}
                 alt={current.shot.sceneHeading}
-                className="max-h-[420px] w-full object-contain"
+                className="max-h-105 w-full object-contain"
               />
             ) : (
               <span className="text-muted-foreground text-xs">

@@ -181,7 +181,7 @@ function VideoControl({
           { value: "preset", label: "时长 + 画质 + 比例" },
         ]}
       />
-      <div className={narrow ? "w-[168px] max-w-full" : undefined}>
+      <div className={narrow ? "w-42 max-w-full" : undefined}>
         <MultiSegmentPopover
           triggerContent={summary}
           ariaLabel="选择时长、画质与比例"

@@ -189,7 +189,7 @@ export function WirePortRows({
             <div
               key={wireInput.ioKey}
               {...portDrag(wireInput.ioKey)}
-              className={`relative flex h-[33px] shrink-0 items-center gap-2.5 pr-[14px] pl-[14px] ${isDragging ? "opacity-50" : ""}`}
+              className={`relative flex h-8.25 shrink-0 items-center gap-2.5 pr-3.5 pl-3.5 ${isDragging ? "opacity-50" : ""}`}
             >
               {isDropTarget && (
                 <div
@@ -268,7 +268,7 @@ export function WirePortRows({
           <div
             key={wireInput.ioKey}
             {...portDrag(wireInput.ioKey)}
-            className={`relative min-h-[86px] shrink-0 ${onReorder && draggingKey === wireInput.ioKey ? "opacity-50" : ""}`}
+            className={`relative min-h-21.5 shrink-0 ${onReorder && draggingKey === wireInput.ioKey ? "opacity-50" : ""}`}
           >
             {onReorder &&
               dragOverKey === wireInput.ioKey &&
@@ -284,10 +284,10 @@ export function WirePortRows({
               type={wireInput.type}
               style={{ top: 14, transform: "none" }}
             />
-            <div className="flex min-h-[86px] flex-col pt-1.5 pb-1.5">
+            <div className="flex min-h-21.5 flex-col pt-1.5 pb-1.5">
               {/* subrow h=16：label 在左（pl-14 避让 Handle 圆点 -6），
  chip 在右（pr-14 贴 Card 右内缘）——chip 永远在 subrow 右端。*/}
-              <div className="relative flex h-4 shrink-0 items-center justify-between gap-2.5 pr-[14px] pl-[14px]">
+              <div className="relative flex h-4 shrink-0 items-center justify-between gap-2.5 pr-3.5 pl-3.5">
                 <span
                   className="text-ink-bright text-[14px] font-medium"
                   style={{ fontFamily: "var(--font-sans)" }}
@@ -308,7 +308,7 @@ export function WirePortRows({
  min-w-0` 兜底——textarea 的 box 即使 intrinsic content size
  撑出 wrapper（Chrome`field-sizing:content` 的 width 接管
  在 R-ardot20 实测不可靠），wrapper 也会视觉裁掉。*/}
-              <div className="mt-1.5 min-h-0 min-w-0 flex-1 overflow-hidden pr-[14px] pl-[14px]">
+              <div className="mt-1.5 min-h-0 min-w-0 flex-1 overflow-hidden pr-3.5 pl-3.5">
                 {wireInput.control === "textarea" && (
                   <AutoResizeTextarea
                     value={typeof v === "string" ? v : ""}
@@ -368,7 +368,7 @@ export function WirePortRows({
               <div
                 key={output.ioKey}
                 {...portDrag(output.ioKey)}
-                className={`relative flex h-[28px] shrink-0 items-center gap-2.5 pr-[14px] pl-[14px] ${onReorder && draggingKey === output.ioKey ? "opacity-50" : ""}`}
+                className={`relative flex h-7 shrink-0 items-center gap-2.5 pr-3.5 pl-3.5 ${onReorder && draggingKey === output.ioKey ? "opacity-50" : ""}`}
               >
                 {onReorder &&
                   dragOverKey === output.ioKey &&

@@ -152,7 +152,7 @@ export function WorkflowRunLogModal({
               </span>
               {run && (
                 <span
-                  className="text-ink-muted max-w-[220px] truncate text-[11px]"
+                  className="text-ink-muted max-w-55 truncate text-[11px]"
                   title={run.workflowName}
                 >
                   {run.workflowName}
@@ -205,7 +205,7 @@ export function WorkflowRunLogModal({
                     ]),
                   )}
                   aria-label="切换查看的任务"
-                  className="max-w-[200px] text-[10.5px]"
+                  className="max-w-50 text-[10.5px]"
                 />
               )}
               <Hint
