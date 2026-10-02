@@ -1,7 +1,9 @@
 "use client";
+/* ui-customized: 覆盖前先看 docs/standards/16 §16.8（本文件在 shadcn 官方版之上有改动） */
 
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import { cn } from "~/lib/utils";
+import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 
 function HoverCard({ ...props }: PreviewCardPrimitive.Root.Props) {
   return <PreviewCardPrimitive.Root data-slot="hover-card" {...props} />;
@@ -25,6 +27,8 @@ function HoverCardContent({
     PreviewCardPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  /* 浮层可用区域：视口减去应用级标题行（壳态）—— 见 `useOverlayBoundary`。 */
+  const boundary = useOverlayBoundary();
   return (
     <PreviewCardPrimitive.Portal data-slot="hover-card-portal">
       <PreviewCardPrimitive.Positioner
@@ -32,6 +36,7 @@ function HoverCardContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
+        collisionBoundary={boundary ?? undefined}
         className="isolate z-50"
       >
         <PreviewCardPrimitive.Popup

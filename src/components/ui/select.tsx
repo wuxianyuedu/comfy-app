@@ -5,6 +5,7 @@ import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 
 import { cn } from "~/lib/utils";
+import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react";
 
 const Select = SelectPrimitive.Root;
@@ -87,6 +88,8 @@ function SelectContent({
        遮罩压住的问题（清单见 §16.2.5 与 ISSUE #262）。 */
     positionerClassName?: string;
   }) {
+  /* 浮层可用区域：视口减去应用级标题行（壳态）—— 见 `useOverlayBoundary`。 */
+  const boundary = useOverlayBoundary();
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
@@ -103,6 +106,7 @@ function SelectContent({
            所以模态遮罩里的下拉不会被整块压住（弹层画得出来却**收不到指针事件**，
            ISSUE #262）。调用方需要另行指定时用 positionerClassName 覆盖。 */
         className={cn(positionerClassName ?? "z-popup isolate")}
+        collisionBoundary={boundary ?? undefined}
       >
         <SelectPrimitive.Popup
           data-slot="select-content"

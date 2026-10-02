@@ -213,6 +213,11 @@ export default defineConfig({
          * 只写门槛不进 `include` 会让门槛静默失效。 */
         "src/components/ui/use-draggable-position.ts",
         "src/components/ui/use-viewport-size.ts",
+        /* 锚定浮层的碰撞边界（气泡被应用级标题行吃掉半个身子的修法）：
+         * 算式是纯函数（`~/lib/full-screen-layer` 的 `anchoredOverlayBoundary`），
+         * 这里量的是「壳态 / 非壳态 / 首帧」三条判据确实接上了。同款
+         * **两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/components/ui/use-overlay-boundary.ts",
         /* API 路由 handler（体检清单 ⑦ 的第一批：闸门与三态契约类）。这一层此前
          * **整层不在覆盖率面上** —— 既不在 `src/lib` 也不在 `src/server` 的通配里，
          * 于是路由的鉴权 / 路径包含 / 状态码契约坏了没有任何数字会动。
@@ -674,6 +679,14 @@ export default defineConfig({
           branches: 75,
         },
         "src/components/ui/use-viewport-size.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 锚定浮层的碰撞边界：壳态 / 非壳态 / 首帧（视口未知）三条判据都有用例，
+         * 实测满档。 */
+        "src/components/ui/use-overlay-boundary.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

@@ -5,6 +5,7 @@ import * as React from "react";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
 import { cn } from "~/lib/utils";
+import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
@@ -46,6 +47,8 @@ function PopoverContent({
   > & {
     positionerClassName?: string;
   }) {
+  /* 浮层可用区域：视口减去应用级标题行（壳态）—— 见 `useOverlayBoundary`。 */
+  const boundary = useOverlayBoundary();
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
@@ -57,6 +60,7 @@ function PopoverContent({
         collisionPadding={collisionPadding}
         sticky={sticky}
         className={cn("z-popup isolate", positionerClassName)}
+        collisionBoundary={boundary ?? undefined}
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"

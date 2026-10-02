@@ -5,6 +5,7 @@ import * as React from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 
 import { cn } from "~/lib/utils";
+import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 import { ChevronRightIcon, CheckIcon } from "lucide-react";
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
@@ -31,6 +32,8 @@ function DropdownMenuContent({
     MenuPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  /* 浮层可用区域：视口减去应用级标题行（壳态）—— 见 `useOverlayBoundary`。 */
+  const boundary = useOverlayBoundary();
   return (
     <MenuPrimitive.Portal>
       <MenuPrimitive.Positioner
@@ -39,6 +42,7 @@ function DropdownMenuContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
+        collisionBoundary={boundary ?? undefined}
       >
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"

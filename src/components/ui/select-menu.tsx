@@ -1,4 +1,5 @@
 "use client";
+/* ui-customized: 覆盖前先看 docs/standards/16 §16.8（本文件在 shadcn 官方版之上有改动） */
 
 /**
  * SelectMenu —— 深色主题的下拉选择（替换原生 `<select>`）。
@@ -64,6 +65,7 @@ import { ChevronDown } from "lucide-react";
 import React, { useMemo } from "react";
 
 import { cn } from "~/lib/utils";
+import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 
 interface SelectMenuProps {
   value: string;
@@ -170,6 +172,8 @@ export function SelectMenu({
   "aria-invalid": ariaInvalid,
   title,
 }: SelectMenuProps) {
+  /* 浮层可用区域：视口减去应用级标题行（壳态）—— 见 `useOverlayBoundary`。 */
+  const boundary = useOverlayBoundary();
   const effectiveMinWidth = useMemo(() => {
     if (!autoFitFromOptions) return popoverMinWidth;
     let longest = 0;
@@ -240,6 +244,7 @@ export function SelectMenu({
              触发器下方展开，位置与选中项无关。与 `ui/select` 的默认口径一致。 */
           alignItemWithTrigger={false}
           className="z-popup isolate outline-none"
+          collisionBoundary={boundary ?? undefined}
         >
           <SelectPrimitive.Popup
             data-align-trigger={false}
