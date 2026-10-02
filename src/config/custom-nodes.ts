@@ -14,13 +14,13 @@
  * 原始文件同时经 `/api/custom-nodes/manifest` 直接对外提供。
  */
 
-import { emitAppEvent } from "~/lib/app-events";
 import type {
   NodeTypeConfig,
   PortSpec,
   FieldDef,
   FieldType,
 } from "~/lib/comfyui/node-config";
+import { errorText } from "~/lib/error-message";
 
 /* 把 ComfyUI 的原始分类字符串映射到强调色。对外导出，
  * 好让界面给节点预览卡渲染同一个分类配色，而不必先构建完整的 NodeTypeConfig。 */
@@ -186,12 +186,11 @@ export function isCustomNode(classType: string): boolean {
   return classType in CUSTOM_NODE_TYPES;
 }
 
-/* `refreshCustomNodes()` 应用完一份新 manifest 后广播的事件名。
- * 渲染「依赖注册表」的视图组件（例如 `WorkflowCanvas` 的添加节点菜单）订阅它，
- * 并抬高自己的版本 state，让 React 重新跑 `getAllNodeTypes()`。
- * 没有它的话，画布只能看到首次加载时挂载的那份 ——
- * 从设置面板解析出来的更新要硬刷新才可见。 */
-export const CUSTOM_NODES_UPDATED_EVENT = "custom-nodes:updated";
+/* 注册表刷新后**没有**通知通道：曾经的订阅方（画布的添加节点菜单）已不在库里，
+ * `getAllNodeTypes()` 如今零消费方 —— 广播一条没人听的事件等于什么都没做，
+ * 而它会让下一个读代码的人以为「视图会自己刷新」。这条欠账记在台账 E9。
+ * 判据 `tests/app-event-pairing.test.ts` 要求 `AppEvents` 表里每一条两端都在场，
+ * 所以这里不再保留任何「只有派发方」的通道。 */
 
 /* `/api/custom-nodes/manifest.nodes` 里单个节点的原始形状。
  * 自定义节点设置面板直接用它，于是在注册表尚未构建时（例如刚解析完、还没有
@@ -258,14 +257,16 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
     for (const k of Object.keys(CUSTOM_NODE_PACKAGE))
       delete CUSTOM_NODE_PACKAGE[k];
     Object.assign(CUSTOM_NODE_PACKAGE, nextPackages);
-    // 通知活跃视图（画布菜单等）注册表已变更。
-    // 为 SSR 做了保护 —— 广播方与订阅方都只在浏览器里跑，
-    // 那里才有 `CustomEvent`，监听者也才能渲染。
-    if (typeof window !== "undefined") {
-      emitAppEvent(CUSTOM_NODES_UPDATED_EVENT, { count });
-    }
+    /* 注册表已就地替换完毕；刷新本身**没有**通知通道可广播（见上方
+     * `custom-nodes:updated` 那段说明），消费方下次读取时拿到的就是新的一份。 */
     return count;
-  } catch {
+  } catch (e) {
+    /* 返回 0 与「manifest 里确实一个节点都没有」在调用方看来同形，
+     * 所以这一行日志是「解析失败」唯一的痕迹（硬规则 4）。 */
+    console.error(
+      "[custom-nodes] 刷新自定义节点注册表失败：",
+      errorText(e, "读取节点清单"),
+    );
     return 0;
   }
 }

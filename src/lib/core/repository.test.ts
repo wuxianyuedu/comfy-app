@@ -41,6 +41,7 @@ import {
   remoteModelRepository,
   parseAdaptersJson,
 } from "~/lib/core/repository-user";
+import { decryptLlmKey } from "~/lib/llm/secrets";
 import { postRepository } from "~/lib/core/repository-post";
 import {
   getTestDb,
@@ -435,8 +436,7 @@ describe("WorkflowTemplateRepository", () => {
       await workflowTemplateRepository.findByIdForUser("u2", "wt1"),
     ).toBeNull();
     expect(
-      (await workflowTemplateRepository.findByIdForUserSelect("u1", "wt1"))
-        ?.name,
+      (await workflowTemplateRepository.findByIdForUser("u1", "wt1"))?.name,
     ).toBe("甲的工作流");
     expect(
       (await workflowTemplateRepository.findByIdForUser("u1", "wt1"))?.id,
@@ -1337,10 +1337,16 @@ describe("RemoteModelRepository", () => {
     expect(rows[0]).toMatchObject({
       name: "甲",
       baseUrl: "https://a/v1",
-      apiKey: "sk-a",
       kind: "chat",
     });
+    // 密钥**不以明文落盘**（`llmConfig` 那条路径一直如此；`remoteModel` 此前直接
+    // 落明文，而 `db.sqlite` 会被 next build 复制进 standalone 产物 —— 硬规则 17）
+    expect(rows[0]!.apiKey).not.toBe("sk-a");
+    expect(String(rows[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
+    expect(decryptLlmKey(rows[0]!.apiKey)).toBe("sk-a");
 
+    /* 第二次保存没带 `apiKey` 键（= 服务端脱敏下发后原样回写的形态）→ 继承既有那把，
+     * 不是清空。这正是台账 A11 修掉的语义，与 `workshopAdapters` 的继承同源。 */
     rows = await remoteModelRepository.replaceAll([
       { name: "甲", baseUrl: "https://b/v1" },
       { name: "乙", kind: "video" },
@@ -1348,8 +1354,11 @@ describe("RemoteModelRepository", () => {
     expect(rows.map((r) => r.name)).toEqual(["甲", "乙"]);
     expect(rows.find((r) => r.name === "甲")).toMatchObject({
       baseUrl: "https://b/v1",
-      apiKey: null,
     });
+    expect(decryptLlmKey(rows.find((r) => r.name === "甲")!.apiKey)).toBe(
+      "sk-a",
+    );
+    expect(rows.find((r) => r.name === "乙")?.apiKey).toBeNull();
     expect(rows.find((r) => r.name === "乙")?.kind).toBe("video");
 
     // 未给出的条目被删
@@ -1393,24 +1402,41 @@ describe("RemoteModelRepository", () => {
     expect((await remoteModelRepository.list())[0]!.id).toBe(created[0]!.id);
   });
 
-  it("replaceAll 不保留已有密钥：省略 apiKey 会被写成 null（台账 A11 的成因）", async () => {
-    /* 与上一条是同一个函数、同一条批量语句：`workshopAdapters` 从既有行继承，
-     * `apiKey` 却直接覆盖成传入值。而 `getConfigForClient`（A4 的脱敏）下发的条目
-     * **本来就不带 apiKey** —— 设置页把拿到的清单原样回写一次，存过的远端密钥就
-     * 被清成 null（用户表现：填过一次密钥的远端模型，隔一次设置保存就 401）。
-     * 这条断言的不是「应该如此」，而是把现状钉住：真去修（「省略=保留、显式清空=null」）
-     * 时这一条必须一起改，免得「顺手兼容」把数据丢失静默带回来。 */
+  it("replaceAll 的 apiKey 三态：缺键=继承既有、null/空串=清空、非空串=写新值（台账 A11）", async () => {
+    /* 上一条验的是「保存一次会不会把密钥弄丢」，这一条把三种意图分开钉死。
+     * 起因：`getConfigForClient` 下发的条目不带 `apiKey`（A4 的脱敏），而设置页保存
+     * 是整份覆盖 —— 两态写法（「没带」和「清空」都成 null）会让用户原样保存一次
+     * 就把所有远端密钥清掉。同一条批量语句里 `workshopAdapters` 早就在继承了，
+     * 语义必须对齐。 */
     await remoteModelRepository.replaceAll([
       { name: "甲", baseUrl: "https://a/v1", apiKey: "sk-keep-me" },
     ]);
-    expect((await remoteModelRepository.findByName("甲"))?.apiKey).toBe(
-      "sk-keep-me",
-    );
+    const cipherOf = () =>
+      remoteModelRepository.findByName("甲").then((r) => r?.apiKey ?? null);
 
+    // ① 缺键 → 继承既有那份
+    const before = await cipherOf();
     await remoteModelRepository.replaceAll([
-      { name: "甲", baseUrl: "https://a/v1" },
+      { name: "甲", baseUrl: "https://a2/v1" },
     ]);
-    expect((await remoteModelRepository.findByName("甲"))?.apiKey).toBeNull();
+    const after = await cipherOf();
+    /* 继承必须是**原样搬运**：重新加密会换 IV、字节必然不同，而那份「二次加密」的
+     * 东西读出来就解不开（`decryptLlmKey` 只解一层）。所以这里比的不是「能解出同一个
+     * 明文」，而是「一个字节都没变」。 */
+    expect(after).toBe(before);
+    expect(decryptLlmKey(after)).toBe("sk-keep-me");
+
+    // ② 显式 null → 清空（这才是「用户按了清除密钥」的形状）
+    await remoteModelRepository.replaceAll([{ name: "甲", apiKey: null }]);
+    expect(await cipherOf()).toBeNull();
+
+    // ③ 空串 / 全空白同样按清空处理（表单里「把字段删空」的形态）
+    await remoteModelRepository.replaceAll([
+      { name: "甲", apiKey: "sk-again" },
+    ]);
+    expect(decryptLlmKey(await cipherOf())).toBe("sk-again");
+    await remoteModelRepository.replaceAll([{ name: "甲", apiKey: "   " }]);
+    expect(await cipherOf()).toBeNull();
   });
 
   it("findByName / 适配器读写 / 模型不存在时的空返回", async () => {

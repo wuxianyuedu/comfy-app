@@ -77,7 +77,6 @@ function resetRunnerState() {
   s.wsWaitLogged.clear();
   s.executedWorkflow.clear();
   s.promptToTask.clear();
-  s.promptByTask.clear();
   s.startedAt.clear();
   s.lastNodeByTask.clear();
   s.settled.clear();

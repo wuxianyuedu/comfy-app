@@ -189,7 +189,11 @@ export const RUNTIME_SCRIPTS = [
  *   · `server.js` + `package.json` + `.next/` + `node_modules/` —— Next standalone
  *     的四件必需（`server.js` 启动即 `process.chdir(__dirname)`，配置读
  *     `.next/required-server-files.json`，所以 `next.config.js` **不需要**随包）。
- *   · `public/` —— 静态资源与生成图落地目录（`public/generated` 是写侧）。
+ *   · `public/` —— 静态资源（`favicon.ico` / `splash.html`）。**产物不在这里**：
+ *     产物根曾是 `public/generated`（跟着静态资源一起被拷进包），现已搬到仓库根的
+ *     `generated/`（台账 A13 的结构性关法）。它是**默认拒绝**的一项 —— 顶层名单里
+ *     没有 `generated`，所以不管 tracing 带不带它都进不来；将来确需放行必须同改
+ *     两处清单并写清「谁在运行期读它」。
  *   · `scripts/` —— 编排器与宿主的运行期脚本（清单见 `RUNTIME_SCRIPTS`）。
  *   · `splash.html` / `index.html` —— 启动页与根路径兜底页（壳与 sidecar 都读）。
  *   · `schema.sql` —— 首启建表的 DDL，由 `build-desktop.mjs` 的 §首启建表 现生成
@@ -230,16 +234,53 @@ export const STATIC_ALLOWED_TOPLEVEL = [
 export const RUNTIME_SRC = ["lib/process/kill-process-tree.ts"];
 
 /**
- * `src-tauri/static` 里某一条相对路径是否允许存在（默认拒绝）。
+ * `.next/standalone` 允许的**顶层条目**（默认拒绝，ISSUE #1217）。
  *
- * @param {string} relPosix 相对 static 根的 POSIX 风格路径（不含前导 `./`）
+ * 为什么这一层也要一份、而不是只守装配那层：`pnpm build` 的产物就是这一层，而实测
+ * `next build` 走 Turbopack 时 `outputFileTracingExcludes` 对「全项目追踪」带进来的
+ * 整目录条目**一条都不减** —— 同一份源码、同一份清单：Turbopack 出来是 40 个顶层条目 /
+ * 19274 个真文件（含 `src-tauri` 8520、`python-venv` 5356、`db.sqlite`+WAL/SHM、`.env`、
+ * 仓库根那个 `Comfy APP.lnk`）；而**跑完今天这套按名字的剔除清单之后仍然剩 19 个顶层条目**
+ * （`src-tauri` / `python-venv` / `tests` / `log` / `e2e` / `tools` / `build-launcher` /
+ * `run` / `temp` / `next.config.js` / `postcss.config.js` / 那个 `.lnk` 全都在）。
+ * 按名字列黑名单永远慢一步，而「多带一个目录」的表现与当年 `.env` 那次同类：
+ * 静默、构建不报错、CI 全绿。默认拒绝把这件事变成「必然被看见」。
+ *
+ * 理由与 static 同源（逐项见 `STATIC_ALLOWED_TOPLEVEL`），只少**装配步才产出**的三项
+ * （`schema.sql` / `splash.html` / `index.html`）。也没有 `generated/`：规范 §7.2 那句
+ * 「Prisma 运行时必需」属于已退役的技术栈（数据层现在是 drizzle + libsql / `node:sqlite`，
+ * 仓库根也不存在 `generated/`）。将来确需多放行一项时，**必须同批改这里与
+ * `check-standalone-contents.cjs` 的那份**（两份逐字同源由用例核对），并写清谁在运行期读它。
+ */
+export const STANDALONE_ALLOWED_TOPLEVEL = [
+  ".next",
+  "node_modules",
+  "package.json",
+  "public",
+  "scripts",
+  "server.js",
+];
+
+/**
+ * 产物里某条相对路径在这一层是否允许存在（默认拒绝的**唯一**判据实现，两层共用）。
+ *
+ * `src` 不在任何一层的顶层名单里，但**必须**能被逐文件放行：
+ * `scripts/reap-process.mjs` 与 `scripts/dev-launcher.mjs` 都
+ * `await import("../src/lib/process/kill-process-tree.ts")`（硬规则 3 的平台机制单点），
+ * 缺它两层的回收入口都起不来。所以形态是「顶层放行祖先、叶子逐文件判」，逐文件那份
+ * 清单就是 `RUNTIME_SRC`。
+ *
+ * @param {string[]} allowedToplevel 该层的顶层白名单
+ * @param {string} relPosix 相对产物根的路径（允许反斜杠）
  * @returns {boolean}
  */
-export function isStaticPathAllowed(relPosix) {
-  const rel = relPosix.replace(/\\/g, "/").replace(/^\.?\//, "");
+function isProductPathAllowed(allowedToplevel, relPosix) {
+  const rel = String(relPosix ?? "")
+    .replace(/\\/g, "/")
+    .replace(/^\.?\//, "");
   if (rel === "") return true;
   const top = rel.split("/")[0] ?? "";
-  if (STATIC_ALLOWED_TOPLEVEL.includes(top)) return true;
+  if (allowedToplevel.includes(top)) return true;
   if (top !== "src") return false;
   // `src` 本身与其祖先目录要放行，否则 cpSync 走不到被放行那个文件；再逐条比对
   // RUNTIME_SRC（相对 src/ 的路径）。
@@ -251,23 +292,42 @@ export function isStaticPathAllowed(relPosix) {
 }
 
 /**
- * 把一个产物目录裁剪到「桌包允许的样子」（默认拒绝）。
+ * `src-tauri/static` 层的判据（`build-desktop.mjs` 的 `cpSync` filter 用它）。
  *
- * 顶层按 `STATIC_ALLOWED_TOPLEVEL` 判，`src/` 再按 `RUNTIME_SRC` 逐文件判；
- * `scripts/` 那一份由 `stripDevArtifacts()` 按 `RUNTIME_SCRIPTS` 剪，不在这里重复。
+ * @param {string} relPosix 相对产物根的路径
+ */
+export function isStaticPathAllowed(relPosix) {
+  return isProductPathAllowed(STATIC_ALLOWED_TOPLEVEL, relPosix);
+}
+
+/**
+ * `.next/standalone` 层的判据。
  *
- * 用途有两层：`build-desktop.mjs` 的 `cpSync` filter 已经按同一判据在**复制前**挡掉
- * （省掉 15 MB 无谓复制），这里保留作落盘兜底——有人绕过 filter 直接往 static 写文件、
- * 或将来改了复制方式时，泄漏仍然被这一刀挡住。命中与否都只是空操作。
+ * @param {string} relPosix 相对产物根的路径
+ */
+export function isStandalonePathAllowed(relPosix) {
+  return isProductPathAllowed(STANDALONE_ALLOWED_TOPLEVEL, relPosix);
+}
+
+/**
+ * 把一个产物目录裁到该层白名单允许的样子（默认拒绝，**两层共用这一份删循环**）。
  *
- * @param {string} dir 目标目录（`src-tauri/static`）
+ * 为什么共用：两处各写一个删循环，迟早有一处忘了另一处的护栏（这里指 `src/` 走空之后
+ * 把空目录也收掉，以及不穿符号链接的口径）—— §12.12。
+ *
+ * @param {string} dir 产物目录
+ * @param {(rel: string) => boolean} isAllowed 该层的判据
  * @param {(name: string) => void} [onRemoved] 每删一项的回调（用于日志）
  * @returns {string[]} 实际删掉的条目（相对 dir）
  */
-export function pruneStaticToAllowList(dir, onRemoved) {
+function pruneToAllowList(dir, isAllowed, onRemoved) {
   const removed = [];
   for (const entry of readdirSync(dir)) {
-    if (isStaticPathAllowed(entry)) continue;
+    if (isAllowed(entry)) continue;
+    // 落在链接上只删链接本身、不顺着递归（本机实测：对一个指向别处目录的链接执行
+    // `rmSync(..., {recursive:true})`，链接没了、目标里的文件一个没动）。这一条是
+    // 这条判据敢用在自己的产物上的前提——standalone 的 `node_modules/<pkg>` 就是
+    // 指向开发机 pnpm store 的链接，口径与 `collectFiles(followLinks=false)` 一致。
     rmSync(join(dir, entry), { recursive: true, force: true });
     removed.push(entry);
     onRemoved?.(entry);
@@ -283,7 +343,7 @@ export function pruneStaticToAllowList(dir, onRemoved) {
       for (const entry of readdirSync(abs)) {
         const childRel = rel ? `${rel}/${entry}` : entry;
         const childAbs = join(abs, entry);
-        if (isStaticPathAllowed(`src/${childRel}`)) {
+        if (isAllowed(`src/${childRel}`)) {
           if (statSync(childAbs).isDirectory()) walk(childAbs, childRel);
           continue;
         }
@@ -293,9 +353,37 @@ export function pruneStaticToAllowList(dir, onRemoved) {
       }
     };
     walk(srcDir, "");
-    if (readdirSync(srcDir).length === 0) rmSync(srcDir, { recursive: true, force: true });
+    if (readdirSync(srcDir).length === 0)
+      rmSync(srcDir, { recursive: true, force: true });
   }
   return removed;
+}
+
+/**
+ * 把 `src-tauri/static` 裁到「桌包允许的样子」。
+ *
+ * `scripts/` 那一份由 `stripDevArtifacts()` 按 `RUNTIME_SCRIPTS` 剪，不在这里重复。
+ * 用途有两层：`build-desktop.mjs` 的 `cpSync` filter 已经按同一判据在**复制前**挡掉
+ * （省掉 15 MB 无谓复制），这里保留作落盘兜底——有人绕过 filter 直接往 static 写文件、
+ * 或将来改了复制方式时，泄漏仍然被这一刀挡住。命中与否都只是空操作。
+ *
+ * @param {string} dir 目标目录（`src-tauri/static`）
+ * @param {(name: string) => void} [onRemoved]
+ * @returns {string[]} 实际删掉的条目（相对 dir）
+ */
+export function pruneStaticToAllowList(dir, onRemoved) {
+  return pruneToAllowList(dir, isStaticPathAllowed, onRemoved);
+}
+
+/**
+ * 把 `.next/standalone` 裁到 `STANDALONE_ALLOWED_TOPLEVEL`（ISSUE #1217）。
+ *
+ * @param {string} dir 通常是 `.next/standalone`
+ * @param {(name: string) => void} [onRemoved]
+ * @returns {string[]} 实际删掉的条目（相对 dir）
+ */
+export function pruneStandaloneToAllowList(dir, onRemoved) {
+  return pruneToAllowList(dir, isStandalonePathAllowed, onRemoved);
 }
 
 /**
@@ -565,6 +653,29 @@ function main() {
   const devRemoved = stripDevArtifacts(standalone, (name) => {
     console.log(`[standalone-clean] 已剔除开发期文件 .next/standalone/${name}`);
   });
+  // 顶层默认拒绝（ISSUE #1217）放在两份「按名字删」的清单**之后**：那两份负责删有名字的，
+  // 这一刀负责「以后多出来的那一个谁也没听过的目录」。顺序反过来会先把白名单里的连带删掉，
+  // 日志看着像「这次剥得真干净」，其实是剪错了。
+  const topRemoved = pruneStandaloneToAllowList(standalone);
+  // 不打逐条日志：`src/` 那一格的叶子有上百个，逐行会把这次剔除挤成看不见的噪声。
+  // 按「顶层条目」与「src 叶子」两类各出一行汇总，两类都看得见、也数得出。
+  const strayTop = topRemoved.filter((name) => !name.includes("/"));
+  if (strayTop.length > 0) {
+    console.log(
+      `[standalone-clean] 已剔除顶层白名单外条目 ${strayTop.length} 个：` +
+        strayTop.slice(0, 12).join(" / ") +
+        (strayTop.length > 12 ? ` …其余 ${strayTop.length - 12} 个` : "") +
+        "（要留下请同批登记 STANDALONE_ALLOWED_TOPLEVEL 与 check-standalone-contents.cjs，" +
+        "并写清谁在运行期读它）",
+    );
+  }
+  const straySrc = topRemoved.length - strayTop.length;
+  if (straySrc > 0) {
+    console.log(
+      `[standalone-clean] 已剔除 src/ 下未逐文件登记的条目 ${straySrc} 个` +
+        `（这一格只保留 RUNTIME_SRC 点名的 ${RUNTIME_SRC.join(" / ")}）`,
+    );
+  }
   if (removed.length === 0) {
     console.log(
       "[standalone-clean] ✓ 产物无开发机私有输入（.env / db.sqlite*）",
@@ -572,6 +683,11 @@ function main() {
   }
   if (devRemoved.length === 0) {
     console.log("[standalone-clean] ✓ 产物无开发期文件 / 内部门禁脚本");
+  }
+  if (topRemoved.length === 0) {
+    console.log(
+      `[standalone-clean] ✓ 顶层只剩白名单那 ${STANDALONE_ALLOWED_TOPLEVEL.length} 类条目`,
+    );
   }
   return 0;
 }

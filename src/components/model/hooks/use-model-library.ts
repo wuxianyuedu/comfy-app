@@ -63,9 +63,7 @@ export function useModelLibrary(): ModelLibraryController {
     void vanillaApi.model.list
       .query(params)
       .then((data) => {
-        guard.commit(() =>
-          setModels((data.models ?? []) as unknown as ModelCardData[]),
-        );
+        guard.commit(() => setModels(data.models ?? []));
       })
       .catch(() => {
         /* 拉取失败保留上一次列表，不让页面弹空白 */
@@ -82,7 +80,7 @@ export function useModelLibrary(): ModelLibraryController {
     await syncBusy.run(async () => {
       await vanillaApi.model.sync.mutate();
       const data = await vanillaApi.model.list.query(params);
-      setModels((data.models ?? []) as unknown as ModelCardData[]);
+      setModels(data.models ?? []);
     });
   };
 

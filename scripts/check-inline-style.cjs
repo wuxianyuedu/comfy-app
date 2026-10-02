@@ -42,8 +42,11 @@ const INLINE_STYLE = /<style\b[^>]*>/;
 
 /** 豁免：文件路径 → 理由。只有「注释/文档里必须引用被禁写法」才配进来。 */
 const EXEMPT = new Map([
-  // 反模式表与安全净化模块的注释里必然出现该字面量（它们是口径本身）
-  ["src/lib/comfyui/markdown.ts", "HTML 净化白名单里列举 <style> 作为被剥离标签"],
+  /* ISSUE #1329：旧的自研渲染器 `lib/comfyui/markdown.ts` 曾在白名单注释里列举
+   * `<style>` —— 那条豁免随文件一起删掉了（一个指向已删文件的豁免不是豁免，
+   * 是「下一个人往这个路径写东西时被静默放行」）。新的消毒配置在
+   * `src/lib/markdown/sanitize-config.ts`，它用 DOMPurify 的配置项表达同一件事，
+   * 注释里不再出现这个字面量，因此不需要豁免。 */
 ]);
 
 function walk(dir, out = []) {

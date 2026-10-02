@@ -40,6 +40,7 @@ vi.mock("fs/promises", async (importOriginal) => ({
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { taskRouter } from "~/server/api/routers/task";
+import { taskRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
 import { generatedRoot } from "~/lib/media/output-paths";
 import {
@@ -166,15 +167,15 @@ describe("task.detail", () => {
     expect((task.images as Row[]).map((i) => i.id)).toEqual(["img-1"]);
   });
 
-  it("不存在 / 他人任务 → 抛 'Task not found'", async () => {
+  it("不存在 / 他人任务 → 同一个 NOT_FOUND（不给探测 id 用）", async () => {
     seedTask(tdb, { id: "task-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
-    await expect(caller.detail({ id: "nope" })).rejects.toThrow(
-      "Task not found",
-    );
-    await expect(caller.detail({ id: "task-b" })).rejects.toThrow(
-      "Task not found",
-    );
+    await expect(caller.detail({ id: "nope" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(caller.detail({ id: "task-b" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 });
 
@@ -224,6 +225,20 @@ describe("task.workflow", () => {
     });
   });
 
+  it("两次查询之间那一行没了 → 仍回 NOT_FOUND（防御分支不是死码）", async () => {
+    // `workflow` 先按 `findByIdWithImages` 判归属、再按 `findSnapshotById` 取快照。
+    // 两查之间被删（并发删除 / 库被换）时，第二条查不到必须走**同一个 404**，
+    // 而不是把 undefined 往下传成一次 500。
+    seedTask(tdb, { id: "task-1", userId: "user-a" });
+    const snap = vi
+      .spyOn(taskRepository, "findSnapshotById")
+      .mockResolvedValue(null);
+    await expect(
+      createCaller(makeCtx()).workflow({ id: "task-1" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    snap.mockRestore();
+  });
+
   it("快照为 null → 全 null；任务不存在 → 抛错", async () => {
     seedTask(tdb, { id: "task-1", userId: "user-a", workflowSnapshot: null });
     const caller = createCaller(makeCtx());
@@ -232,9 +247,9 @@ describe("task.workflow", () => {
       source: null,
       capturedAt: null,
     });
-    await expect(caller.workflow({ id: "nope" })).rejects.toThrow(
-      "Task not found",
-    );
+    await expect(caller.workflow({ id: "nope" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 
   it("他人任务 → NOT_FOUND（台账 A2：快照里是整份工作流，越权读等于抄走别人的图）", async () => {

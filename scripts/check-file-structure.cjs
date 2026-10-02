@@ -200,12 +200,23 @@ const DOMAINS = [
   "app-settings",
   "comfy",
   "comfyui",
+  /* 应用内控制台（ISSUE #1327）：命令目录/解析、执行面、回环闸门、运行槽单例。
+   * 它是「本机命令执行」这一件事的域 —— 与 `comfyui`（ComfyUI 编排）、
+   * `process`（进程树回收地基）都不同族：那两个是执行引擎的地基，本域是
+   * **面向用户的入口**（谁点了什么、输出给谁看、什么时候回收）。 */
+  "console",
   "core",
   "drizzle-studio",
   "film",
   "llm",
   "log",
   "media",
+  /* markdown 渲染域（ISSUE #1329）：`marked` + `DOMPurify` 的接线、消毒白名单与
+   * 样式表。它**不属于 `comfyui`** —— 渲染的是「一段用户文本变成 DOM 片段」这件事，
+   * 与 ComfyUI 编排无关；历史上因为第一个消费方是 ComfyUI 便签而落在
+   * `comfyui/markdown.ts`，于是第二个、第三个消费方（剧本预览、工坊剧本区）
+   * 每次取用它都要反向依赖 ComfyUI 域。 */
+  "markdown",
   "process",
   "production",
   "project-canvas",
@@ -551,8 +562,14 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
       .replace(/\.test$/, "");
     if (/\d{8}_\d{6}/.test(e.name)) problems.push("R3 时间戳备份文件:" + rel);
     /* R11 的位置判据:Next 约定文件只允许出现在 src/ 根。放进 app/ 或更深
-     * 的目录 Next 不会加载 —— 文件在、代理不在,构建期毫无提示。 */
-    if (base === "proxy" || base === "middleware") {
+     * 的目录 Next 不会加载 —— 文件在、代理不在,构建期毫无提示。
+     * 只看**约定文件本身**:`base` 上面已经把 `.test` 摘掉了(那是给 R2 命名规则
+     * 用的),不清这一下会把 `src/proxy.test.ts` 判成「约定文件放错位置」——
+     * 测试文件既不会被 Next 加载,也就无从「静默丢失」。 */
+    if (
+      (base === "proxy" || base === "middleware") &&
+      !/\.test\.(tsx?|mjs|cjs|js)$/.test(e.name)
+    ) {
       const canonical = "src/" + base + ".ts";
       if (rel !== canonical)
         problems.push(

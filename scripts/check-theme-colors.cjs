@@ -376,10 +376,11 @@ const EXEMPT_TABLES = [
       "换成浅色会与浅色内容糊在一起；条目同时登记进 globals.css 的固定暗色清单",
   },
   {
-    file: "src/components/model/ModelCard.tsx",
+    file: "src/components/model/model-cover.ts",
     exports: [],
     reason:
-      "模型卡封面的类别渐变（模型类别 → 品牌双色档），与 canvas-types 的 NODE_META.color 同构的内容类型色",
+      "模型封面的类别渐变（模型类别 → 品牌双色档），与 canvas-types 的 NODE_META.color 同构的内容类型色；" +
+      "色表原先长在 ModelCard.tsx 里，现收在这一个出口，卡片与详情弹窗共用同一支兜底色",
   },
   {
     file: "src/components/studio/debug/DebugChainFooter.tsx",

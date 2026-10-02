@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { subscribeAppEvent } from "~/lib/app-events";
-import { useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
@@ -10,6 +10,19 @@ import {
   AppShell,
   AuroraBackground,
 } from "~/components/studio";
+import {
+  LEGACY_WS_VIEW_KEY,
+  WS_TABS_KEY,
+  HOME_VIEW,
+  findTab,
+  homeTab,
+  initialWorkspaceTabs,
+  makeTab,
+  openViewTab,
+  parseWorkspaceTabs,
+  serializeWorkspaceTabs,
+  type WorkspaceTabsState,
+} from "~/components/studio/workspace-tabs";
 import type { RecentProject, WorkspaceView } from "~/components/studio";
 import { WorkshopPipeline } from "~/components/workshop/WorkshopPipeline";
 import { ProjectGate } from "~/components/studio/ProjectGate";
@@ -43,8 +56,25 @@ const ProjectOutputs = dynamic(
   () => import("~/components/studio").then((mod) => mod.ProjectOutputs),
   { ssr: false },
 );
+/* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */
+const ResourceLibrary = dynamic(
+  () =>
+    import("~/components/studio/library/ResourceLibrary").then(
+      (mod) => mod.ResourceLibrary,
+    ),
+  { ssr: false },
+);
 const ModelLibrary = dynamic(
   () => import("~/components/studio").then((mod) => mod.ModelLibrary),
+  { ssr: false },
+);
+/* 项目主页：进入项目后的落点。懒加载 —— 它与画布 / 工坊一样只在进项目后需要，
+ * 放在应用首页的初始包里没有收益。 */
+const ProjectHomePage = dynamic(
+  () =>
+    import("~/components/studio/project-home").then(
+      (mod) => mod.ProjectHomePage,
+    ),
   { ssr: false },
 );
 const HistoryList = dynamic(
@@ -79,18 +109,21 @@ const ProjectCanvas = dynamic(
 
 /* ── 工作区页面 —— Updream 风全屏编辑器 ── */
 
-/* 离开 /workspace 到其它顶层路由（如 /settings）再返回时，Next.js 会重新
- * 挂载本页面组件导致 viewMode 重置回 home。用 sessionStorage 保存最近一次
- * 视图，组件重新挂载时据此恢复，避免「设置打开→关闭后回到默认界面」。
- * 仅在导航离开 /workspace 时才触发恢复（cleanup 只在本页面被卸载时执行）。 */
-const WS_VIEW_KEY = "comfyapp:workspace-view-v1";
-
+/* 离开 /workspace 到其它顶层路由（如 /settings）再返回时，Next.js 会重新挂载本页面
+ * 组件。用 sessionStorage 存**页签列表 + 当前页签**，重新挂载时据此恢复。
+ *
+ * 旧键 `LEGACY_WS_VIEW_KEY` 存的是单个视图，这里只做一次性迁移、读到即删 —— 不留两个
+ * 名字指同一件事（§12.14），也不允许"两个键各存一半、恢复时看谁先到"。
+ * 旧键若指向项目类视图（工坊/画布…），迁移时没有项目 id 可绑，按不可用处理回落首页：
+ * 这不是丢功能，那一条旧值本来就已经无法还原成一个合法页签。 */
 const WORKSPACE_VIEWS: WorkspaceView[] = [
   "home",
+  "project",
   "canvas",
   "models",
   "works",
   "workshop",
+  "library",
   "history",
   "queue",
   "film",
@@ -98,17 +131,24 @@ const WORKSPACE_VIEWS: WorkspaceView[] = [
   "outputs",
 ];
 
-function readLastView(): WorkspaceView {
-  if (typeof window === "undefined") return "home";
-  const raw = sessionStorage.getItem(WS_VIEW_KEY);
-  if (!raw) return "home";
-  const view = WORKSPACE_VIEWS.find((v) => v === raw);
-  return view ?? "home";
+function readTabsState(): WorkspaceTabsState | null {
+  if (typeof window === "undefined") return null;
+  const raw = sessionStorage.getItem(WS_TABS_KEY);
+  if (raw) return parseWorkspaceTabs(raw, WORKSPACE_VIEWS);
+
+  const legacy = sessionStorage.getItem(LEGACY_WS_VIEW_KEY);
+  if (legacy) sessionStorage.removeItem(LEGACY_WS_VIEW_KEY);
+  if (!legacy) return null;
+  const view = WORKSPACE_VIEWS.find((candidate) => candidate === legacy);
+  if (!view || view === HOME_VIEW) return null;
+  const tab = makeTab(view, null);
+  if (!tab) return null;
+  return { tabs: [homeTab(), tab], activeKey: tab.key };
 }
 
-function writeLastView(view: WorkspaceView): void {
+function writeTabsState(state: WorkspaceTabsState): void {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(WS_VIEW_KEY, view);
+  sessionStorage.setItem(WS_TABS_KEY, serializeWorkspaceTabs(state));
 }
 
 /** 视图历史栈保留上限（P2：只去重不裁剪会无限增长）。 */
@@ -118,23 +158,36 @@ export default function WorkspacePage() {
   const router = useRouter();
 
   // ── Layout state ──
-  const [viewMode, setViewMode] = useState<WorkspaceView>("home");
+  /* 页签状态取代单值 `viewMode`；`viewMode` 保留为**推导值**，下面的渲染分支
+     一字不改 —— 这一刀只换状态模型与持久化，界面不变（页签条 UI 在下一刀）。 */
+  const [tabsState, setTabsState] =
+    useState<WorkspaceTabsState>(initialWorkspaceTabs);
+  const viewMode: WorkspaceView =
+    findTab(tabsState.tabs, tabsState.activeKey)?.view ?? HOME_VIEW;
 
-  /* 从 sessionStorage 恢复离开 workspace 前（如跳去 /settings）的视图。
-   * 不能把 readLastView 放进 useState 初始值——SSR 阶段 window 不可用返回 home，
-   * hydration 不会重新执行 initializer，sessionStorage 恢复就永远不生效。 */
+  /* 恢复上次离开时的页签。不能放进 useState 初始值 —— SSR 阶段读不到 sessionStorage，
+     而 hydration 不会重跑 initializer，恢复就永远不生效（与旧实现同一约定）。 */
+  const tabsHydratedRef = useRef(false);
   useEffect(() => {
-    const saved = readLastView();
-    if (saved !== "home") {
+    const restored = readTabsState();
+    // 无论恢复成不成功，从这一步起才允许落盘。
+    tabsHydratedRef.current = true;
+    if (restored) {
       // 跳过 hydration 窗口后恢复视图，避免对 SSR 渲染树造成级联 setState。
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setViewMode(saved);
+      setTabsState(restored);
     }
   }, []);
+  useEffect(() => {
+    /* 恢复那一步之前**不落盘**：否则挂载这一轮会先把初始态（只有首页一页）写进
+       sessionStorage，把用户存好的列表冲掉，随后才读到空。 */
+    if (!tabsHydratedRef.current) return;
+    writeTabsState(tabsState);
+  }, [tabsState]);
   // 视**图**历史栈，用于智能返回导航（避免一跳就回首页）
   const [, setViewHistory] = useState<WorkspaceView[]>(["home"]);
 
-  /** 跳到新视图，同时记录历史以支持返回按钮。 */
+  /** 打开/聚焦一个视图页签，同时记录历史以支持返回按钮。 */
   const navigateTo = useCallback((view: WorkspaceView) => {
     setViewHistory((prev) => {
       const last = prev[prev.length - 1];
@@ -142,9 +195,26 @@ export default function WorkspacePage() {
       // 历史栈只去重不裁剪会无限增长（P2）；保留最近一段即可，更早的用不到。
       return [...prev, view].slice(-WORKSPACE_VIEW_HISTORY_MAX);
     });
-    setViewMode(view);
-    writeLastView(view);
+    /* 绑的是 store 的同步读数，不是 `activeProjectId` 那个 React 状态：
+       「打开项目」的 handler 里 `setActive(id)` 与 `navigateTo("project")` 是同一次
+       事件里先后调用的，读状态会拿到旧值 ⇒ 项目页签被开成"无项目"或直接丢绑。 */
+    const projectId = getActiveId();
+    setTabsState((prev) => openViewTab(prev, view, projectId));
   }, []);
+
+  /* 「请求切到某个视图」的应用事件订阅（唯一订阅侧）。
+   * 触发方是工坊右栏的「资源库」卡 —— 那条链路上有 WorkshopPipeline /
+   * WorkshopAside 两层，穿 props 不划算（见 `lib/app-events` 里本事件的说明）。
+   * 载荷是字符串，这里按 `WORKSPACE_VIEWS` 收敛：未知 id 直接忽略，
+   * 不让它把 `viewMode` 带进一个无分支可渲染的状态。 */
+  useEffect(
+    () =>
+      subscribeAppEvent("workspace:navigate", ({ view }) => {
+        const target = WORKSPACE_VIEWS.find((candidate) => candidate === view);
+        if (target) navigateTo(target);
+      }),
+    [navigateTo],
+  );
 
   // ── 视频队列弹窗 ──
   const [videoQueueOpen, setVideoQueueOpen] = useState(false);
@@ -242,16 +312,23 @@ export default function WorkspacePage() {
   const handleNewProject = useCallback(() => {
     // 统一「新建项目」入口：创建一个真实的 proj_* 项目（落库 + 设为活跃），
     // 画布/工坊/成片后续都挂在这个项目上（Phase 1 先立画布为脊柱）。
+    // 落点是**项目主页**：新项目还没有任何内容，直接进画布是一张空网
+    //（进去之后仍然只能得到「先回主页看看项目要干什么」）；主页给出
+    // 状态与「AI 自主成片」这条主动作，是更合适的起步位置。
     createProject();
     refreshActiveProject();
-    navigateTo("canvas");
+    navigateTo("project");
   }, [navigateTo, refreshActiveProject]);
 
-  // 打开一个画布项目 —— 设为活跃并跳到画布视图。
+  /* 打开一个项目 —— 设为活跃并落到**项目主页**。
+   *
+   * 此前落画布，于是「一进项目就是一张无限画布」，用户看不到这个项目做到哪了
+   *（画布只表达节点图，不表达阶段 / 素材 / 成片）。主页是项目级视图的入口，
+   * 想去画布再从页签切一步。 */
   const handleOpenCanvasProject = useCallback(
     (id: string) => {
       setActive(id);
-      navigateTo("canvas");
+      navigateTo("project");
     },
     [navigateTo],
   );
@@ -274,10 +351,10 @@ export default function WorkspacePage() {
   const handleOpenProject = useCallback(
     (id: string) => {
       if (id === "new") {
-        // 统一新建项目：创建真实 proj_* 并进入画布（与 handleNewProject 一致）。
+        // 统一新建项目：创建真实 proj_* 并进入项目主页（与 handleNewProject 一致）。
         createProject();
         refreshActiveProject();
-        navigateTo("canvas");
+        navigateTo("project");
       } else {
         // 真实作品：跳转作品详情页（溯源 + 执行日志）
         router.push(`/create/${id}`);
@@ -305,7 +382,7 @@ export default function WorkspacePage() {
   // 其它模式切换会反复装卸 console 包装（makeLogger 双重嵌套），是日志观察者
   // 自身报错的结构性诱因（LogProvider Console Error）。
   const renderCenter = () => {
-    // 项目优先闸门：进入项目界面（画布 / 工坊 / 产出 / 成片）前必须先有一个活跃项目。
+    // 项目优先闸门：进入项目界面（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）前必须先有一个活跃项目。
     if (isProjectTab(viewMode) && !activeProjectId) {
       return (
         <ProjectGate
@@ -315,6 +392,17 @@ export default function WorkspacePage() {
       );
     }
     switch (viewMode) {
+      case "project":
+        return (
+          <ProjectHomePage
+            projectName={
+              recentProjects.find((p) => p.id === activeProjectId)?.name ??
+              "未命名项目"
+            }
+            onNavigate={handleNavSelect}
+          />
+        );
+
       case "works":
         return (
           <WorksGallery
@@ -350,6 +438,9 @@ export default function WorkspacePage() {
 
       case "outputs":
         return <ProjectOutputs />;
+
+      case "library":
+        return <ResourceLibrary />;
 
       case "workshop":
         return (

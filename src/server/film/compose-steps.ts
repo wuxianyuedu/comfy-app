@@ -8,9 +8,9 @@
 //      `buildNormalizeArgs`，用 `srtPath` 是否为 null 决定接不接字幕滤镜。
 //   ② `composeFilm` 连同这些长参数数组逼近文件行数上限，把纯字符串算术
 //      下沉到本模块后，编排文件只留「取事实 → 调 ffmpeg → 落库」的骨架。
-import path from "path";
 import { normalizeSlashes } from "~/lib/path-display";
 import { fixed } from "~/lib/number-format";
+import { artifactDiskPath, generatedRoot } from "~/lib/media/output-paths";
 
 /** ffmpeg 滤镜表达式里的字符转义（单引号与冒号）。 */
 function escapeFilter(s: string): string {
@@ -84,10 +84,16 @@ export function buildNormalizeArgs(opts: {
   ];
 }
 
-/** 把镜头的 `videoPath`（形如 `/api/generated/...`）解析成 `cwd` 下的绝对文件路径。
+/** 把镜头的 `videoPath` 解析成产物根下的绝对文件路径。
  *
- *  `videoPath` 可空（镜头还没出片）——这里用类型层强制调用方先判空再传入非空串，
- *  把「空 videoPath」从 `shot.videoPath!` 的静默崩溃变成调用方一次显式守卫。 */
-export function clipPathOf(cwd: string, videoPath: string): string {
-  return path.join(cwd, "public", videoPath.replace(/^\//, ""));
+ *  解析本身只有 `~/lib/media/output-paths` 那一处（两种历史形状都吃、越界返回 null）。
+ *  这一句原先写的是 `path.join(cwd, "public", 去掉前导斜杠)`，而执行器写进
+ *  `TaskImage.localPath` 的是 `/api/generated/…`，于是算出 `<cwd>/public/api/generated/…`：
+ *  那个目录不存在，ffmpeg 每个镜头都报找不到输入，「合成成片」对每一条镜头必败
+ *  （台账 A8 那条 ENOENT 的第二处幸存 —— 删除侧当年修了，这一侧没修）。
+ *
+ *  `videoPath` 可空由类型层挡在调用方（见 `compose-film` 的显式守卫）；
+ *  返回 `null` 表示「这不是一个落在产物根内的地址」，处置同样留在调用点。 */
+export function clipPathOf(cwd: string, videoPath: string): string | null {
+  return artifactDiskPath(videoPath, generatedRoot(cwd));
 }

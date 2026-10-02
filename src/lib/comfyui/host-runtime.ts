@@ -19,7 +19,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { createTaskRepoImpl } from "../core/repository-task-impl";
 import { logger } from "../core/logger";
 import { isSchemaReady } from "../db-schema-ready";
-import { SQLITE_BUSY_TIMEOUT_MS, SQLITE_PRAGMAS } from "../sqlite-pragmas";
+import { applySqlitePragmas, SQLITE_BUSY_TIMEOUT_MS } from "../sqlite-pragmas";
 import { configureDispatch, claimAndDispatchOnce } from "./executor-dispatch";
 import { configureExecutorCli, cliProcs } from "./executor-cli";
 import { configureExecutorFinalize } from "./executor-finalize";
@@ -41,15 +41,15 @@ import type { TaskRepoImpl } from "../core/repository-task-impl";
  *  连接池，开机那条 `PRAGMA busy_timeout` 只落在它当时借到的那一条连接上，池后开的
  *  连接没有预算（实测：那种形状撞锁 11ms 就抛；带 `timeout` 才会等）。
  *  预算给在本侧、不给 Next 侧的理由见 `sqlite-pragmas` 文件头：同步等锁会占住本进程
- *  事件循环，宿主是为执行而生的进程，Next 还要响应界面。 */
+ *  事件循环，宿主是为执行而生的进程，Next 还要响应界面。
+ *  清单的应用走 `applySqlitePragmas`（撞锁有界重试）：三处站点要的是同一件事，
+ *  各写一遍就必然漏一处（ISSUE #1282）。 */
 export async function createHostRepo(dbFile: string): Promise<TaskRepoImpl> {
   const client = createClient({
     url: `file:${dbFile}`,
     timeout: SQLITE_BUSY_TIMEOUT_MS,
   });
-  for (const pragma of SQLITE_PRAGMAS) {
-    await client.execute(pragma);
-  }
+  await applySqlitePragmas(client);
   return createTaskRepoImpl(drizzle(client), { owner: "host" });
 }
 

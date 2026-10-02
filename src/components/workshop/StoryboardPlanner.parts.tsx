@@ -5,25 +5,14 @@ import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { FormField } from "~/components/ui/form-field";
 import type { Shot, ShotType, Character, StyleRef } from "~/lib/workshop/types";
-import { SHOT_TYPE_LABELS } from "~/lib/workshop/types";
+import { SHOT_TYPES, SHOT_TYPE_LABELS } from "~/lib/workshop/types";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
-import { SHOT_STATUS_LABEL } from "./ShotStudio";
+import { SHOT_STATUS_LABEL } from "./shot-status-config";
 import type { ShotProgress } from "./useStoryboardPlanner";
-
-const SHOT_TYPES: ShotType[] = [
-  "extreme_wide",
-  "wide",
-  "full",
-  "medium",
-  "close",
-  "extreme_close",
-  "poi",
-  "pod",
-];
 
 /* 镜头状态标签 —— 配色与文案都走与 ShotStudio 同一处（此前两处各写一份
  * 逐字相同的 map，改状态色要点两遍名；规范 16 §16.2.4.5）。 */
@@ -101,7 +90,9 @@ export function ShotRow({
             onChange={(value) =>
               onUpdate(shot.id, { shotType: value as ShotType })
             }
-            options={SHOT_TYPES}
+            /* 清单的唯一出处是 readonly（类型由它派生），而 `SelectMenu.options` 至今是
+             * 可变 `string[]` —— 这一份浅拷贝是两边口径的接缝，不是新的真相。 */
+            options={[...SHOT_TYPES]}
             labels={SHOT_TYPE_LABELS as Record<string, string>}
             placeholder="选择景别"
           />

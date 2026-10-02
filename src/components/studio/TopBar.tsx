@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronDown, Search, Settings } from "lucide-react";
+import { ChevronDown, Moon, Search, Settings, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 
 import { MessageCenterButton } from "~/components/message-center/MessageCenterButton";
 import { Button } from "~/components/ui/button";
@@ -44,18 +45,43 @@ export interface TopBarProps {
  *     `useHotkey` 监听 ⌘/Ctrl+K 打开）。此前压住是因为 `command` 还没合并
  *     （在 #886），用 `Dialog` + 自绘列表会撞 P11（自绘浮层选项列表）。
  *   - **应用菜单**：设置。
+ *   - **光暗一键切换**：`next-themes` 的 `setTheme`，与设置页外观分区同一个出口。
+ *     这一颗此前**只有承诺没有实现** —— 设置页外观分区一直写着「也可通过顶部导航栏的
+ *     太阳/月亮按钮随时切换」，而全仓没有那个按钮（改深浅色只能进设置页）。与其删掉那句
+ *     承诺，不如把它补上：主题是最常用的单一开关，藏在一层导航之后不合理。
+ *
+ * 视图标题放在这里，是因为侧栏头部那条「Comfy-APP」名称行**没有承载任何信息**：
+ * 图标档下它只剩一个字母，展开档下用户早就知道自己开的是什么应用；而工具条里
+ * 图标与文字之间恰好空着一个槽位（右侧的搜索 / 消息 / 菜单靠 `ml-auto` 顶到
+ * 最右），标题正好补上——**应用全局只有这一行顶栏**（首页与其余视图共用 `AppShell`，
+ * 项目页签的主页 / 画布 / 工坊 / 资源库 / 产出 / 成片走 `ProjectTabBar` 高亮，见 `ProjectTabBar`）。
+ * 只是那个名称行也不白占：顶部省下约 3.5rem 的纵向空间。
  */
 export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   const label = NAV_ITEMS.find((item) => item.id === active)?.label ?? "工作区";
+  const { resolvedTheme, setTheme } = useTheme();
+
+  /**
+   * 一键翻深浅色。
+   *
+   * 读的是 `resolvedTheme` 而不是 `theme`：`theme` 可能是 `"system"`，那样点一下
+   * 会写成 system 而画面没变（本仓库 `enableSystem={false}`，但这条不依赖那个前提）。
+   */
+  const toggleTheme = () => {
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
+  };
 
   return (
     <header className="border-border-subtle bg-canvas/85 z-base flex h-12 shrink-0 items-center gap-2 border-b px-3 backdrop-blur-sm">
-      <SidebarTrigger className="-ml-1" title="侧栏（⌘/Ctrl+B）" />
+      <SidebarTrigger className="-ml-1" />
       <Separator
         orientation="vertical"
         className="data-[orientation=vertical]:h-4"
       />
-      <span className="text-ink-strong truncate text-sm font-medium">
+      <span
+        className="text-ink-strong min-w-0 truncate text-sm font-medium"
+        title={label}
+      >
         {label}
       </span>
 
@@ -74,6 +100,23 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
               <Kbd>⌘</Kbd>
               <Kbd>K</Kbd>
             </KbdGroup>
+          </Button>
+        </Hint>
+        <Hint label="切换深浅色">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={toggleTheme}
+            aria-label="切换深浅色"
+          >
+            {/* 两枚都渲染、靠 `dark:` 决定可见性：`resolvedTheme` 在服务端与首帧是
+                undefined，按它条件渲染会让按钮在 hydration 后跳一下。 */}
+            <Sun data-icon="inline-start" size={16} className="dark:hidden" />
+            <Moon
+              data-icon="inline-start"
+              size={16}
+              className="hidden dark:block"
+            />
           </Button>
         </Hint>
         <MessageCenterButton />

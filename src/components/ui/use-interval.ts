@@ -39,8 +39,15 @@ import { startPollTimer } from "~/lib/poll-timer";
  * 这个管「每隔一段时间重复跑」。两者都用定时器，但取消语义与生命周期不同。
  */
 export interface UseIntervalOptions {
-  /** 间隔毫秒数；传 `null` / `0` 表示**不轮询**（受控开关）。 */
-  ms: number | null;
+  /** 间隔毫秒数；传 `null` / `0` 表示**不轮询**（受控开关）。
+   *
+   *  也可以给一个**函数**：每拍跑完重新问一次「下一拍等多久」——
+   *  用于「按阶段给频率」（ISSUE #1351，存活探测在启动等待 / 空闲 / 出图 /
+   *  隐藏四档之间跨一个数量级，而档位在运行中会变）。函数形态**必须引用稳定**
+   *  （模块级常量或 `useCallback`），否则每次渲染换一个新函数会让 effect
+   *  重建定时器、计时被反复重置 —— 与 `run` 那一条同坑，只是 `run` 走了 ref
+   *  而这里不能（换档本身就得让实现重排）。 */
+  ms: number | null | (() => number | null);
   /** 是否在挂载时立即执行一次（默认 `true`）。 */
   immediate?: boolean;
   /**

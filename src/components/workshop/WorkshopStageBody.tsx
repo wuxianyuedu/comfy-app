@@ -13,9 +13,8 @@ import { useFilePicker } from "~/components/ui/file-picker";
 import { readFileAsText } from "~/lib/file-io";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Icon } from "~/components/ui/icon";
-import { markdownToHtml } from "~/lib/comfyui/markdown";
+import { markdownToHtml } from "~/lib/markdown";
 import type { WorkshopPipelineController } from "~/components/workshop/hooks/use-workshop-pipeline";
-import { LLMStatusChip } from "~/components/workshop/LLMContext";
 import { SCROLLBAR_VISIBLE_CLASSES } from "~/components/workshop/ScriptMarkdownEditor.parts";
 import { StageHint } from "~/components/workshop/StageHint";
 import { STAGE_DEFS } from "~/components/workshop/stage-config";
@@ -236,10 +235,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
 
               {/* ── 剧本工具（智能辅助）── */}
               <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-ink u-title">剧本工具</h3>
-                  <LLMStatusChip />
-                </div>
+                <h3 className="text-ink u-title mb-3">剧本工具</h3>
                 <React.Suspense fallback={<StageFallback />}>
                   <LazyScriptGenerator
                     meta={meta}

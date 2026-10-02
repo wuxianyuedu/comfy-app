@@ -6,6 +6,7 @@ import { unauthorizedResponse } from "~/server/lib/error-response";
 import { uniqueStamp } from "~/lib/unique-id";
 import { safeDisplayName } from "~/lib/safe-name";
 import { extOfPath, stemOfPath } from "~/lib/media/mime-ext";
+import { filmBgmRoot } from "~/lib/media/output-paths";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
   /* 落盘文件名走全库唯一出口（规范 16 §16.2.4.36）—— 收口前这里是手拼的
    * `${Date.now()}_${safe}${ext}`，与另两处上传路由各写一份「怎么保证不撞名」。 */
   const name = `${uniqueStamp("bgm-")}_${safe}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "generated", "films", "bgm");
+  const dir = filmBgmRoot();
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, name), buf);
   return NextResponse.json({ name });

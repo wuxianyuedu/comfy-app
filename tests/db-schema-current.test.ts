@@ -208,6 +208,36 @@ describe("canAutoApply —— 白名单", () => {
     ).toBe(false);
   });
 
+  it("describeRiskyChanges 把危险语句翻成「哪个表哪列会丢」，完整列出", async () => {
+    const { describeRiskyChanges } =
+      await import("../scripts/db-push-core.mjs");
+    expect(
+      describeRiskyChanges([
+        "ALTER TABLE `user` DROP COLUMN `color`;",
+        "DROP TABLE `task`;",
+        /* SQLite 的重建表三件套：建 __new、搬数据、删旧表再改名。 */
+        "CREATE TABLE `__new_workflowTemplate` (`id` text PRIMARY KEY);",
+        "INSERT INTO `__new_workflowTemplate`(`id`) SELECT `id` FROM `workflowTemplate`;",
+        "DROP TABLE `workflowTemplate`;",
+        "ALTER TABLE `__new_workflowTemplate` RENAME TO `workflowTemplate`;",
+        /* 白名单内的语句不描述（它不丢数据）。 */
+        "ALTER TABLE `user` ADD `a` text;",
+      ]),
+    ).toEqual([
+      "user.color（删列，该列的数据会丢）",
+      "task（删表，整张表的数据会丢）",
+      "workflowTemplate（重建表，对不上的列的数据会丢）",
+    ]);
+  });
+
+  it("describeRiskyChanges：认不出的语句原样列出（描述不出来 ≠ 不列出来）", async () => {
+    const { describeRiskyChanges } =
+      await import("../scripts/db-push-core.mjs");
+    expect(describeRiskyChanges(["UPDATE `user` SET `a` = 1;"])).toEqual([
+      "「UPDATE `user` SET `a` = 1」",
+    ]);
+  });
+
   it("空列表不算「可以自动应用」（不认识就交人工）", async () => {
     const { canAutoApply } = await import("../scripts/db-push-core.mjs");
     expect(canAutoApply([])).toBe(false);
@@ -377,6 +407,8 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     });
     expect(state.state).toBe("stale");
     expect(state.detail, "要讲清是「会丢数据」这一类").toContain("会丢数据");
+    /* detail 要把「哪个表哪列会丢」完整列出（toast / 确认弹窗共用这一句）。 */
+    expect(state.detail).toContain("user.color（删列，该列的数据会丢）");
     expect(applyChanges, "危险变更不许走到应用那一步").not.toHaveBeenCalled();
     /* 这条是这次改动真正要保住的东西：数据没被启动链路悄悄删掉。 */
     expect(columnsOf(dbFile, "user")).toContain("color");
@@ -395,6 +427,102 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     });
     expect(state.state).toBe("stale");
     expect(state.detail).toContain("结构没有变化");
+  });
+});
+
+describe("ensureSchemaCurrent —— force 路径（状态栏「立即同步」）", () => {
+  /**
+   * force 路径的 stub：**不该**有 dry-run（那次不带 --force 的调用是启动链路
+   * 的判据来源，force 意味着用户已在确认弹窗里知情），只接受一次 --force。
+   */
+  function forceStub(options: {
+    applyChanges?: () => void;
+    /** drizzle 说 No changes detected（并发的那份同步先做完了）。 */
+    noChanges?: boolean;
+  }): (root: string, opts?: Record<string, unknown>) => PushResult {
+    return (_root, opts) => {
+      if (opts?.force !== true) {
+        throw new Error("force 路径不应发起 dry-run");
+      }
+      if (options.noChanges) {
+        return {
+          converged: true,
+          alreadyCurrent: true,
+          invocationFailed: false,
+          blockedByTty: false,
+          error: null,
+          firstOutput: NO_CHANGES_OUTPUT,
+          finalOutput: NO_CHANGES_OUTPUT,
+        };
+      }
+      options.applyChanges?.();
+      return {
+        converged: true,
+        alreadyCurrent: false,
+        invocationFailed: false,
+        blockedByTty: false,
+        error: null,
+        firstOutput: "[✓] Changes applied\n",
+        finalOutput: NO_CHANGES_OUTPUT,
+      };
+    };
+  }
+
+  it("用户确认后，含丢数据的变更也按 --force 应用并登记指纹", async () => {
+    const { ensureSchemaCurrent, schemaFingerprint } =
+      await import("../scripts/db-schema-state.mjs");
+    /* 库里多出一列（schema 已删掉它 → dry-run 判 stale 的那批语句），force
+     * 这一路必须真的把它删掉 —— 这是用户在弹窗里确认过的那件事。 */
+    makeDb(dbFile, "db.exec('ALTER TABLE user ADD COLUMN legacy text')");
+    const state = ensureSchemaCurrent(root, {
+      databaseUrl,
+      force: true,
+      push: forceStub({
+        applyChanges: () => {
+          execFileSync(
+            process.execPath,
+            [
+              "-e",
+              `const { DatabaseSync } = require("node:sqlite");
+               const db = new DatabaseSync(${JSON.stringify(dbFile)});
+               db.exec("ALTER TABLE user DROP COLUMN legacy");
+               db.close();`,
+            ],
+            { stdio: "pipe" },
+          );
+        },
+      }),
+    });
+    expect(state.state).toBe("synced");
+    expect(columnsOf(dbFile, "user")).not.toContain("legacy");
+    expect(readUserVersion(dbFile)).toBe(schemaFingerprint(root));
+  });
+
+  it("库已一致（点按钮时并发的同步先做完了）→ ready，不误报失败", async () => {
+    const { ensureSchemaCurrent, schemaFingerprint } =
+      await import("../scripts/db-schema-state.mjs");
+    makeDb(dbFile);
+    const state = ensureSchemaCurrent(root, {
+      databaseUrl,
+      force: true,
+      push: forceStub({ noChanges: true }),
+    });
+    expect(state.state).toBe("ready");
+    expect(readUserVersion(dbFile)).toBe(schemaFingerprint(root));
+  });
+
+  it("报了 applied 但库结构没动、指纹也没登记 → stale（不许错写「已同步」）", async () => {
+    const { ensureSchemaCurrent } =
+      await import("../scripts/db-schema-state.mjs");
+    makeDb(dbFile);
+    const state = ensureSchemaCurrent(root, {
+      databaseUrl,
+      force: true,
+      push: forceStub({}),
+    });
+    expect(state.state).toBe("stale");
+    expect(state.detail).toContain("结构没有变化");
+    expect(readUserVersion(dbFile), "没成功就不许登记指纹").toBe(0);
   });
 });
 

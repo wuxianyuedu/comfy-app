@@ -99,11 +99,11 @@ export interface WorkflowDetailNote {
   color: string;
 }
 
-/** `findByIdForUserSelect` 的行类型（含 detail 转换用到的全部列）。
+/** 详情转换所需的行类型（整行，含 `rawJson` / `positions` 两个大字段）。
  *  单独起名是为了让 `buildWorkflowDetailJson` 的参数可读——
  *  它只依赖这份行数据，不依赖调用方的其它上下文。 */
 type WorkflowDetailTemplateRow = NonNullable<
-  Awaited<ReturnType<typeof workflowTemplateRepository.findByIdForUserSelect>>
+  Awaited<ReturnType<typeof workflowTemplateRepository.findByIdForUser>>
 >;
 
 /** 历史的 `GET /api/workflows/:id`（及其子图变体）返回的形状 ——
@@ -518,10 +518,9 @@ export async function buildWorkflowDetailFull(
   let sourceOutdated = false;
   let sourceMissing = false;
   let sourcePath: string | null = null;
-  const meta = await workflowTemplateRepository.findByIdForUserSelect(
+  const meta = await workflowTemplateRepository.findSourceMetaForUser(
     userId,
     id,
-    { id: true, sourcePath: true, sourceMtime: true },
   );
   if (meta?.sourcePath) {
     sourcePath = meta.sourcePath;
@@ -546,25 +545,7 @@ export async function buildWorkflowDetailFull(
     return JSON.parse(cached) as WorkflowDetailFull;
   }
 
-  const tpl = await workflowTemplateRepository.findByIdForUserSelect(
-    userId,
-    id,
-    {
-      id: true,
-      name: true,
-      taskType: true,
-      modes: true,
-      defaultMode: true,
-      graph: true,
-      paramMap: true,
-      workflowIO: true,
-      rawJson: true,
-      positions: true,
-      sourcePath: true,
-      sourceMtime: true,
-      sourceChecksum: true,
-    },
-  );
+  const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
   if (!tpl)
     throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
 
@@ -648,19 +629,7 @@ export async function buildSubgraphDetail(
     return JSON.parse(cached) as WorkflowDetailFull;
   }
 
-  const tpl = await workflowTemplateRepository.findByIdForUserSelect(
-    userId,
-    id,
-    {
-      id: true,
-      name: true,
-      taskType: true,
-      graph: true,
-      rawJson: true,
-      positions: true,
-      paramMap: true,
-    },
-  );
+  const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
   if (!tpl)
     throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
 

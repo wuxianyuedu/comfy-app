@@ -95,7 +95,6 @@ function resetRunnerState() {
   s.logs.clear();
   s.executedWorkflow.clear();
   s.promptToTask.clear();
-  s.promptByTask.clear();
   s.startedAt.clear();
   s.settled.clear();
   s.finalized.clear();

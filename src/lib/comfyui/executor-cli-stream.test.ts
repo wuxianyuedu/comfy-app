@@ -131,11 +131,98 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
   it("progress 事件带 node 时透传当前节点步数（3-C D1：调用方落 progressNode）", () => {
     const { p, onProgress } = mk();
     p.sink('{"type":"progress","node":"76:69","completed":3,"total":25}\n');
+    // 这一格没给 `patched` ⇒ 认不出类名，但 id 与步数照旧透出（进度不许因为
+    // 类名缺失就丢帧）—— #1202 之前的常态就是这个形状。
     expect(onProgress).toHaveBeenCalledWith(12, {
       id: "76:69",
       value: 3,
       max: 25,
     });
+  });
+
+  it("给了 patched（提交那一刻的图）就把类名与中文标签一起透出（ISSUE #1202）", () => {
+    // raw 任务的进度历史上全走 comfy-cli 这条路，所以状态栏「当前节点」能不能显示
+    // 类名取决于这里，而不是 executor-ws 那一侧。子图 id（`76:69`）也要认得出。
+    const { p, onProgress } = mk({
+      patched: {
+        nodes: [{ id: 76, type: "SUBGRAPH_ID", inputs: [] }],
+        definitions: {
+          subgraphs: [
+            {
+              id: "SUBGRAPH_ID",
+              nodes: [{ id: 69, type: "KSampler", inputs: [] }],
+            },
+          ],
+        },
+      },
+    });
+    p.sink('{"type":"progress","node":"76:69","completed":3,"total":25}\n');
+    expect(onProgress).toHaveBeenCalledWith(12, {
+      id: "76:69",
+      value: 3,
+      max: 25,
+      classType: "KSampler",
+      label: "采样去噪",
+    });
+  });
+
+  it("`executing` 事件自带 class_type 时以事件为准（那是 ComfyUI 展开子图后的权威值）", () => {
+    const lines: Array<[string, string, string]> = [];
+    const { p } = mk({
+      log: (taskId, level, msg) => {
+        lines.push([taskId, level, msg]);
+      },
+      // 图里这一格故意给一个不同的类名：真出图实测 `executing` 带 class_type，
+      // 事件那一份才是 ComfyUI 真正在跑的那个节点。
+      patched: { nodes: [{ id: 76, type: "KSampler", inputs: [] }] },
+    });
+
+    p.sink(
+      '{"schema": "event/1", "type": "executing", "node": "76:67", ' +
+        '"title": "CLIP Text Encode (Positive Prompt)", "class_type": "CLIPTextEncode"}\n',
+    );
+
+    expect(
+      lines.map((l) => l[2]).find((m) => m.includes("comfy-cli 节点")),
+    ).toBe("▶ comfy-cli 节点 [76:67] 编码提示词（CLIPTextEncode） 开始执行");
+  });
+
+  it("`progress` 事件不带类名 ⇒ 按 `patched` 那张图认（与 WS 帧同一个出口）", () => {
+    const { p, onProgress } = mk({
+      patched: { nodes: [{ id: 76, type: "SUBGRAPH_ID", inputs: [] }] },
+    });
+    p.sink(
+      '{"schema":"event/1","type":"progress","node":"76","completed":1,"total":25}\n',
+    );
+
+    expect(onProgress).toHaveBeenCalledWith(4, {
+      id: "76",
+      value: 1,
+      max: 25,
+      classType: "SUBGRAPH_ID",
+      label: "SUBGRAPH_ID", // 表里没有的类名，nodeLabel 原样回类名（不编一个中文名）
+    });
+  });
+
+  it("事件不带 class_type 时那两行退回按图认（开始与完成用同一个名字，别一边有一边没有）", () => {
+    const lines: Array<[string, string, string]> = [];
+    const { p } = mk({
+      log: (taskId, level, msg) => {
+        lines.push([taskId, level, msg]);
+      },
+      patched: { nodes: [{ id: 3, type: "LoraLoader", inputs: [] }] },
+    });
+
+    p.sink('{"type":"executing","node":"3"}\n');
+    p.sink('{"type":"execution_success","node":"3"}\n');
+
+    // 只看这两行本身（parser 还会为每条原始行打一行「[comfy-cli 原始] …」）。
+    expect(
+      lines.map((l) => l[2]).filter((m) => m.includes("comfy-cli 节点")),
+    ).toEqual([
+      "▶ comfy-cli 节点 [3] 加载 LoRA（LoraLoader） 开始执行",
+      "✓ comfy-cli 节点 [3] 加载 LoRA（LoraLoader） 执行完成",
+    ]);
   });
 
   it("envelope 事件触发收口，ok 原样透给 finish", () => {
@@ -146,6 +233,106 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
       ok: false,
       error: { message: "x" },
     });
+  });
+
+  /* ── 整轮命中执行缓存（ISSUE #1278）──────────────────────────────────────
+   * 事件原文来自本机复演：同一份 execPayload 连跑两轮，冷轮出 `executing`×11 +
+   * `progress`×25，缓存轮出 `execution_cached`×11 而 **一个 `executing`/`progress`
+   * 都没有**，于是那 ~30s 里面板只有「已提交」和收口两行。 */
+  const CACHED_KSAMPLER =
+    '{"schema": "event/1", "type": "execution_cached", "node": "76:69", ' +
+    '"title": "KSampler", "class_type": "KSampler", "prompt_id": "e313d1cf"}\n';
+
+  it("execution_cached 给一行按节点现场，且**不写** progressNode", () => {
+    const lines: Array<[string, string, string]> = [];
+    const { p, onProgress } = mk({
+      log: (taskId, level, msg) => {
+        lines.push([taskId, level, msg]);
+      },
+    });
+
+    p.sink(CACHED_KSAMPLER);
+
+    expect(
+      lines.map((l) => l[2]).find((m) => m.includes("comfy-cli 节点")),
+    ).toBe("≡ comfy-cli 节点 [76:69] 采样去噪（KSampler） 命中缓存，跳过");
+    // 「当前节点 + 步数」是 4-B2 给的契约，缓存轮没有「当前」—— 这里必须一次都不调。
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+
+  it("同一个节点在「开始执行」与「命中缓存」两行里给同一个名字", () => {
+    const lines: Array<[string, string, string]> = [];
+    const { p } = mk({
+      log: (taskId, level, msg) => {
+        lines.push([taskId, level, msg]);
+      },
+    });
+
+    // 混合轮：76:69 缓存命中、76:65 真跑。两行的 `[id] 中文名（ClassType）` 必须同形。
+    p.sink(CACHED_KSAMPLER);
+    p.sink(
+      '{"schema": "event/1", "type": "executing", "node": "76:65", ' +
+        '"title": "VAE Decode", "class_type": "VAEDecode"}\n',
+    );
+
+    expect(
+      lines.map((l) => l[2]).filter((m) => m.includes("comfy-cli 节点")),
+    ).toEqual([
+      "≡ comfy-cli 节点 [76:69] 采样去噪（KSampler） 命中缓存，跳过",
+      "▶ comfy-cli 节点 [76:65] VAE 解码（VAEDecode） 开始执行",
+    ]);
+  });
+
+  it("节点数对得上才给汇总行，且不影响收口（finish 照旧）", () => {
+    const lines: Array<[string, string, string]> = [];
+    const { p, finish } = mk({
+      log: (taskId, level, msg) => {
+        lines.push([taskId, level, msg]);
+      },
+    });
+
+    p.sink('{"schema": "event/1", "type": "converted", "node_count": 2}\n');
+    p.sink(CACHED_KSAMPLER);
+    p.sink(
+      '{"schema": "event/1", "type": "execution_cached", "node": "95", ' +
+        '"title": "Save Image (Advanced)", "class_type": "SaveImageAdvanced"}\n',
+    );
+    p.sink('{"type":"envelope","ok":true}\n');
+
+    expect(
+      lines.map((l) => l[2]).filter((m) => m.includes("全部命中")),
+    ).toEqual([
+      "≡ 本轮 2 个节点全部命中 ComfyUI 执行缓存（未重算，因此没有按节点进度）",
+    ]);
+    expect(finish).toHaveBeenCalledWith(true, { type: "envelope", ok: true });
+  });
+
+  it("混合轮（只有部分命中）与没有 converted 的轮都不给汇总行", () => {
+    for (const over of [
+      // 只有 1 个 cached、converted 报 11 个 ⇒ 真话是「部分命中」，不许写「全部」。
+      { nodeCount: 11, cached: 1 },
+      // 没有 converted ⇒ 总数未知，不许凭 cached>0 就下结论。
+      { nodeCount: undefined, cached: 3 },
+    ]) {
+      const lines: Array<[string, string, string]> = [];
+      const { p } = mk({
+        log: (taskId, level, msg) => {
+          lines.push([taskId, level, msg]);
+        },
+      });
+      if (over.nodeCount !== undefined) {
+        p.sink(
+          `{"schema": "event/1", "type": "converted", "node_count": ${over.nodeCount}}\n`,
+        );
+      }
+      for (let i = 0; i < over.cached; i++) p.sink(CACHED_KSAMPLER);
+      p.sink('{"type":"envelope","ok":true}\n');
+
+      expect(
+        lines.map((l) => l[2]).some((m) => m.includes("全部命中")),
+        JSON.stringify(over),
+      ).toBe(false);
+    }
   });
 
   it("非 JSON 行不抛错，也不触发任何分发", () => {

@@ -295,7 +295,10 @@ describe("LogPanel 日志面板", () => {
     const trigger = document.querySelector('[data-slot="select-trigger"]');
     const label =
       trigger?.textContent?.replace(/[\s\u25b2\u25bc\u200b]/g, "") ?? "";
-    expect(label).toBe("全部来源");
+    /* 扳机上只有这一项的名字——「（按条去重）」是它的一部分，不是数字：
+     * 来源下拉的候选里有六个「各数各的那一份」的分项，而「全部来源」是**日志
+     * 条数**，不带上这个限定语就会被读成「那六个加起来」（见 ORIGIN_TEXT）。 */
+    expect(label).toBe("全部来源（按条去重）");
   });
 
   it("级别按钮显示当前来源的计数，切来源后同步变化", () => {

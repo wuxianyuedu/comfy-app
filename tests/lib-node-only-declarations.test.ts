@@ -39,6 +39,16 @@ const PURE_NODE_HOSTS = [
   //   · 加 `server-only` 会把「这本模块是构建期/壳侧常量」这件事说反（它的入口
   //     会 throw），因此按 §18.4 第三类登记。
   "src/lib/shell/launch-diagnostics.ts",
+  // reveal-path.ts（ISSUE #1365）：日志行里点路径 → 在文件管理器里定位。
+  // 顶层 Node 内建 value import 有 `child_process`（spawn explorer / open /
+  // xdg-open）与 `fs`（判路径存在）+ `path`（Linux 分支取父目录）。
+  // 消费方是 tRPC 路由（Next 服务端）——**加 `server-only` 也不会多保护什么**，
+  // 却会让「同一份实现被纯 Node 宿主加载」这条潜在路径直接 throw。
+  // 与 `open-in-browser.ts` 的区别不是分层，而是 `open-in-browser` 只被
+  // `src/server/**` 引（因此随 `lib→server` 越界登记表停在那一层），本模块的
+  // 兄弟件 `~/lib/log/log-path-tokens.ts` 是**纯函数**、被浏览器侧静态引，
+  // 两者必须能各自独立加载才谈得上「识别归浏览器、打开归本机」这条分层。
+  "src/lib/shell/reveal-path.ts",
   "src/lib/process/kill-process-tree.ts",
   // workshop MCP：由 tools/mcp-{stdio,http}.ts 经 `tsx` 直接跑，**不经 Next**；
   // 它必须与 Next 侧共用同一份密文实现（`src/server/workshop/llm.ts` 也引它），
@@ -177,6 +187,25 @@ const PURE_NODE_HOSTS = [
   // executor host 加载 reaper 时**这里**就 throw、跑不到探针；摘掉之后整条
   // reaper 边通了（下一步给 enqueue / reaper 的 taskRepository 静态边做 lazy）。
   "src/lib/db-schema-ready.ts",
+  /* 应用内控制台（ISSUE #1327）：`console-run.ts` 顶层
+   * `import { spawn } from "child_process"`（起用户敲的那条命令）。
+   * `console-registry.ts` 不在这里 —— 它只引 `./console-run` 与 `./console-limits`
+   * 两个纯模块、零 Node 内建 import，所以按 scanner 视角它是「无需声明的纯模块」
+   * （反向的登记会立刻被下面那条「登记项必须仍然成立」判红）。
+   *
+   * **为什么按第三类登记而不是给它们加 `server-only`**：
+   *   · 执行面的回收语义**必须**走 `~/lib/process/kill-process-tree`（硬规则 3），
+   *     而那个模块本身就是第三类（由 `scripts/reap-process.mjs` 在纯 Node 里
+   *     动态加载）—— 给本域挂 `server-only` 会把「它与回收地基同族」说反；
+   *   · 它的判据是「能不能在单测里喂**真进程**并断言输出/退出码/整树回收」
+   *     （见 `console-run.test.ts` 的孙进程用例）。带 `server-only` 的模块在
+   *     vitest 里要靠 `vi.mock("server-only")` 才加载得动，那正是 §18.4 点名过
+   *     的「仪式化声明」——声明了却什么也没拦住。
+   *
+   * 「浏览器图别引我」这条约束由 scanner 的 `clientReachable` 判据盯：本域里
+   * 客户端可达的只有 `console-catalog` / `console-limits` / `console-client` /
+   * `console-guard` 四个（零 Node 内建 import），执行面与运行槽不在那条路径上。 */
+  "src/lib/console/console-run.ts",
 ];
 
 type Report = {

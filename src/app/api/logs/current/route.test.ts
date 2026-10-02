@@ -27,6 +27,26 @@ const logFile = path.join(tmp, "app-runtime.log");
 const nextjsLogDir = path.join(tmp, "nextjs");
 const panelLogFile = path.join(nextjsLogDir, "nextjs-panel-test.log");
 
+/* 壳侧两路的路径同样落到临时目录：`launchPaths` 是它们的事实来源（与 Rust
+ * 壳侧契约同源），不 mock 时 `source=shell` / `shell-launch` 会去读检出里
+ * 真实的 `log/shell/`、`log/launcher/`——本机绿、CI 红，与上面同一类 flaky。 */
+const shellLogFile = path.join(tmp, "shell.log");
+const shellLaunchLogFile = path.join(tmp, "shell-launch.log");
+
+vi.mock("~/lib/shell/launch-diagnostics", async () => {
+  const actual = await vi.importActual("~/lib/shell/launch-diagnostics");
+  return {
+    ...(actual as Record<string, unknown>),
+    launchPaths: () => ({
+      ...(
+        actual as { launchPaths: (root: string) => Record<string, unknown> }
+      ).launchPaths(tmp),
+      shellLog: shellLogFile,
+      shellLaunchLog: shellLaunchLogFile,
+    }),
+  };
+});
+
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
@@ -137,6 +157,38 @@ describe("GET /api/logs/current 增量读取", () => {
       const data = await read(source, 0);
       expect(data.sessionStart).toBeNull();
     }
+  });
+
+  /* 壳侧两路（shell / shell-launch）：双击启动最早的现场只在这两份里。文件虽
+   * 追加写累积，但锚点（dev-launcher.log 的 mtime）晚于壳的启动报告——下发
+   * 会话起点会把「为什么起不来」的头几行误判成历史裁掉，因此同「覆盖重建」
+   * 口径：sessionStart 恒为 null，旧运行的行靠行内时间戳区分。 */
+  it("壳侧两路（shell / shell-launch）不下发会话起点，且能读到内容", async () => {
+    fs.writeFileSync(
+      shellLogFile,
+      "[2026-09-30 12:22:25.261] [INFO] 壳诊断行\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      shellLaunchLogFile,
+      "[2026-09-30 12:22:25.262] [INFO] === 已把编排器拉起来（双击 app.exe） ===\n",
+      "utf8",
+    );
+    const shell = await read("shell", 0);
+    expect(shell.sessionStart).toBeNull();
+    expect(shell.content).toContain("壳诊断行");
+    const shellLaunch = await read("shell-launch", 0);
+    expect(shellLaunch.sessionStart).toBeNull();
+    expect(shellLaunch.content).toContain("已把编排器拉起来");
+  });
+
+  it("壳侧两路文件不存在时同样回空切片，不抛错", async () => {
+    fs.rmSync(shellLogFile, { force: true });
+    fs.rmSync(shellLaunchLogFile, { force: true });
+    const shell = await read("shell", 0);
+    expect(shell.content).toBe("");
+    expect(shell.size).toBe(0);
+    expect(shell.sessionStart).toBeNull();
   });
 
   it("跨运行累积的来源仍然下发会话起点（历史行仍要被裁）", async () => {

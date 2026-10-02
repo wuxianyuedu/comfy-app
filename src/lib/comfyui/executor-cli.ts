@@ -331,12 +331,26 @@ export async function executeViaComfyCli(job: Job) {
      * 要到收尾才落库，于是进度条整轮停在 0%，而这行 `RUNNING` 且 `promptId` 为空
      * 的记录一度落在两条 sweeper 的判据之外（ISSUE #1184）。打开行缓冲让事件实时
      * 到，回收侧的「两轮观察」才有可信的时间窗。
-     * 编码（`PYTHONIOENCODING`）另在 ISSUE #1164 治理，不混进本刀。 */
+     *
+     * 两个编码项（ISSUE #1164）是给 **Python 自己**的，不是给我们这侧的 stream 解码：
+     * 中文 Windows 的 ANSI 代码页是 GBK/CP936，Python 在非 ASCII locale 下默认
+     * `sys.stdout` 与 `open()` 都跟着 locale 走。实测两种坏法：
+     *   · stdout 按 GBK 编码 → 我们 `child.stdout.setEncoding("utf-8")` 解出乱码，
+     *     `[comfy-cli 原始]` 行与 prompt 中文进日志就是坏的；
+     *   · 更狠的一条：**`PYTHONIOENCODING=utf-8` 修不了它** —— `open()` 仍按 GBK 读，
+     *     读我们写出的 UTF-8 工作流文件（含中文 prompt）直接 `UnicodeDecodeError`、
+     *     exit=1 任务失败。只有 `PYTHONUTF8=1`（UTF-8 模式）能让 stdio 与 `open()`
+     *     两边都锁 UTF-8。
+     * 两个都给：`PYTHONUTF8` 管全局（含文件读），`PYTHONIOENCODING` 再显式钉死 stdio，
+     * 与 `lifecycle-launch.ts` 给 ComfyUI 本体那一份同形（那里为 emoji 崩溃立的口径）。
+     * 判据见 `tests/comfy-cli-python-utf8.test.ts`。 */
     env: {
       ...process.env,
       DO_NOT_TRACK: "1",
       COMFY_CLI_NO_TELEMETRY: "1",
       PYTHONUNBUFFERED: "1",
+      PYTHONUTF8: "1",
+      PYTHONIOENCODING: "utf-8",
     },
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
@@ -423,7 +437,13 @@ export async function executeViaComfyCli(job: Job) {
     },
     onProgress: (
       progress: number,
-      node?: { id: string; value: number; max: number },
+      node?: {
+        id: string;
+        value: number;
+        max: number;
+        classType?: string;
+        label?: string;
+      },
     ) => {
       /* 进度同样落库（P3 §5 ADR §13-3C D1/D3）：SSE 已单源化走 DB，cli 路径
        *  的进度事件此前只发进程内 emitter——host 模式下界面全程 0% 的根因。

@@ -8,7 +8,7 @@
   - Phase 2：新增 `scripts/executor-host.mjs`，作为 launcher 的一个受管子进程；用 `COMFY_EXECUTOR=host|inline` env 开关，**默认 inline、host 只是可起、不接管流量**
   - Phase 3：把提交侧写 DB 队列 + host 领任务；SSE 通道走「短轮询 DB」；env 切 `host` 灰度
   - Phase 4：删 Next 侧 `comfyRunner` 全局 + 三层补丁里被 host 取代的部分
-  - Phase 5：`film/orchestrator.ts` 的 `watchFilm` 纳入 host（或 boot 扫描）
+  - Phase 5：`film/orchestrator.ts` 的 `watchFilm` 纳入 host（或 boot 扫描）—— 已收口：签的是 boot 扫描那半句（§19），host 那半句判为不搬（§23）
 - **不做**：`../core/repository` 数据层双宿主（独立议题，见 §11）
 
 ---
@@ -214,9 +214,9 @@ await reapStaleRunningTasks();
 
 **Phase 5**
 
-- 5-A：`film/orchestrator.ts` 的 `void watchFilm()` 挪到 host（或 boot 时一次性扫 GENERATING）；对齐「进程重启后不再卡 GENERATING」诉求。
+- 5-A：`film/orchestrator.ts` 的 `void watchFilm()` 挪到 host（或 boot 时一次性扫 GENERATING）；对齐「进程重启后不再卡 GENERATING」诉求。**已落：签的是 boot 扫描那一半（§19）；「挪到 host」那一半由 §23 判为不搬，本行不再有后续刀。**
 
-**独立**：`../core/repository` 数据层双宿主（server-only 摘除 / driver 化）—— 见 §11。
+**独立**：`../core/repository` 数据层双宿主（server-only 摘除 / driver 化）—— 见 §11，收口于 §23。
 
 ## 8. 风险与回退
 
@@ -254,6 +254,9 @@ Phase 5 之后再评估：
 - 若 host 侧只用 4-5 个方法、注入版本能长期稳住 → 保持分离，`../core/repository` 的 server-only 继续作为「浏览器图别引我」的兜底（better-sqlite3 / libsql 不在 `NODE_BUILTINS` 白名单，拿掉只能靠 review 兜底）。
 
 **决策**：Phase 2-A 里的 `repository-task.driver.ts` 抽一层就够；**不做**摘 `../core/repository` 的 server-only。
+
+本节那句「Phase 5 之后再评估」（= 把成片编排迁进宿主）**已经在 §23 收口**：取到代码证据之后判为不搬。
+往后再有人读到 §11，评估结论看 §23，不必从这一节重算一遍。
 
 ---
 
@@ -297,7 +300,7 @@ Phase 5 之后再评估：
 
 **结论：exec 链的 12 个方法**都**不需要**这个映射（它们本来就是 select/where/update/insert）。真正需要这张表的是**Phase 3-B**（host 侧「按镜头批量取进度」的 `findExecutionProgressMany`）与**Phase 5**（film 侧「按项目列任务带封面」的 `listByUser` / `findByProject` 那三个 relational 查询）——那些**不属于 Phase 2-A 的 scope**。
 
-Phase 2-A 只抽这 12 个方法；等 Phase 3-B 真需要 `findExecutionProgressMany` 时（**它已经在 `repository-task.ts` 里、本来就是 `.select().from(task).where(inArray(id, ids))` 普通查询、不是 relational**）照同一模板补进 impl；等 Phase 5 film 侧需要带 `images` 关联的 `listByUser` 时，再做那张 relational→select/where 的映射。
+Phase 2-A 只抽这 12 个方法；等 Phase 3-B 真需要 `findExecutionProgressMany` 时（**它已经在 `repository-task.ts` 里、本来就是 `.select().from(task).where(inArray(id, ids))` 普通查询、不是 relational**）照同一模板补进 impl；等 Phase 5 film 侧需要带 `images` 关联的 `listByUser` 时，再做那张 relational→select/where 的映射。**这一格随 §23 一起作废**：film 侧不进宿主 ⇒ 那张映射表没有排期，UI 列表卡继续用 Next 侧的单例仓储。
 
 （这里避免「预先设计一个 Phase 5 才用到的映射表」的 §12.15 陷阱——没有第二个消费者的抽象就抽象得过早。）
 
@@ -440,7 +443,7 @@ configureExecutorCli({
 - 2026-09-26：v1 起草。Q1/Q2/Q3 + §10 五个未决点等待评审。
 - 2026-09-26：v2 新增 §11.1 · Phase 2-A 详细设计。回答两个开放点：
   - **host db 客户端**：`@libsql/client`（与 Next 侧同源、零新依赖、WAL 并行）；**不**引入 `node:sqlite` / `better-sqlite3`。
-  - **relational→select/where 映射**：Phase 2-A scope 内的 12 方法**全部本来就是** select/where/update/insert，**无需**映射；relational 只出现在 UI 列表卡（`listByUser` / `findById`），留到 Phase 5 film 侧真需要时再抽。
+  - **relational→select/where 映射**：Phase 2-A scope 内的 12 方法**全部本来就是** select/where/update/insert，**无需**映射；relational 只出现在 UI 列表卡（`listByUser` / `findById`），留到 Phase 5 film 侧真需要时再抽。（这一格已随 §23 作废：film 侧不进宿主，映射表不再排期。）
   - 新增 §11.1 · 摸底表 + 决定 1 + 决定 2 + 抽法（impl + delegate、避开 §12.12 孪生）+ 单测覆盖 + 破坏面 0 + 分 PR 切法（预期 1 个 PR）。
 
 ---
@@ -475,7 +478,7 @@ configureExecutorCli({
 
 **3-C（SSE 单源化）——三个已签决定（2026-09-27 追加）**
 
-- **D1 节点级进度持久化**：`task.progressNode`（json，`{id,label?,value,max}`）由 `updateProgress` 可选第三参写入；帧无节点信息时**不覆写**，标签不闪没。动机：#1151 后状态/收口已走 DB，但画布「当前节点+步数」仍只在进程内 progress 帧里，host 模式拿不到——两模式观感分叉。**两条执行路径都要接**：executor-ws 的 WS progress 帧，以及 comfy-cli stdout 的 `type:"progress"` 事件——E2E 实测 raw 路径的进度全走 cli 不走 WS，cli 的 `onProgress` 此前只发进程内 emitter，单源化后进度全程 0%（本 PR 补 DB 回写；cli 路径拿不到 raw graph 的 class_type，label 缺省、id/步数照存）。
+- **D1 节点级进度持久化**：`task.progressNode`（json，`{id,label?,value,max}`）由 `updateProgress` 可选第三参写入；帧无节点信息时**不覆写**，标签不闪没。动机：#1151 后状态/收口已走 DB，但画布「当前节点+步数」仍只在进程内 progress 帧里，host 模式拿不到——两模式观感分叉。**两条执行路径都要接**：executor-ws 的 WS progress 帧，以及 comfy-cli stdout 的 `type:"progress"` 事件——E2E 实测 raw 路径的进度全走 cli 不走 WS，cli 的 `onProgress` 此前只发进程内 emitter，单源化后进度全程 0%（本 PR 补 DB 回写；cli 路径拿不到 raw graph 的 class_type，label 缺省、id/步数照存 —— **这半句由 §24 推翻并修掉**：`executing` 事件本来就带 `class_type`，`progress` 不带但那张图就在手上）。
 - **D2 轮询节奏 5s → 3s**（Q1 原提议值）。本机 libsql 异步驱动、个位数活跃流，成本可忽略。
 - **D3 stream 路由退役 `subscribe`（emitter→SSE 通道）**：路由变成纯 DB 单源——log 增量按游标 diff 发帧、state 帧带 node/终态带 images（#1151 已铺）；单一来源无重复帧，inline/host 同一契约（代价：inline 实时性从即时变 ≤3s + persistLogs 200ms 防抖）。`subscribe` 本体保留（`firstframe.ts` 进程内消费不受影响），emitter 彻底删除在 4-A。
 - 初始回放的 `replaySrc` 分支按 ADR 原案保留（内存日志优先、DB 兜底，接住防抖窗口）。
@@ -501,7 +504,7 @@ configureExecutorCli({
 
   **落地记录（4-B1，2026-09-27，四个依赖里的第一个 + 一处比签字时更严重的事实）**：动手前先把 emitter 的读者数了一遍，结论是**它在 3-C 之后就没有读者了**——`/api/tasks/[id]/stream` 早已不订阅进程内事件，`enqueue.subscribe` 全仓唯一剩下的消费者就是首帧那一处。于是那 13 处 `emit` 全是空转，而空转比缺代码更坏：它让后来人以为「取消会发事件」「成功有 done 帧」，照这条契约给新宿主写代码就必然再长出一个首帧那样的洞。所以这一刀的形态从「改首帧的读法」扩成「整条进程内事件通道退役」：`RunnerState.emitter` 字段、`TaskEvent` 类型、`createEmptyState(emitter)` 形参、`enqueue.subscribe`、以及客户端解析器里再也收不到的 `done` / `error` / `progress` 三种帧分支，一并删除；首帧改读 `findExecutionProgress`（窄投影补一列 `error`，否则用户可见的失败原因从「CUDA out of memory」退化成「首帧生成失败」），等待节拍收进 `~/lib/retry-policy` 的具名策略 `FIRST_FRAME_WAIT`。回归由新增的 `tests/in-process-event-channel-retired.test.ts` 钉（含一条「判据本身有效」的反向验证），退役后的跨宿主语义写进 `docs/guide-executor-host.md` 的「对外只有一条通道 = 数据库那一行」。一条 §18.4 的连带变化按判据走：`runner-state.ts` 不再顶层 import `events`，于是它不再落进 scanner 的 `unguarded`，`PURE_NODE_HOSTS` 那条登记依「清单只许变短」撤掉——**「不许带 `server-only`」这条约束一字未动**，理由搬进模块头部。剩余三个依赖：`queue-status`、`raw-cli`、懒拉起触发点。
 
-  **落地记录（4-B2，2026-09-27，第二与第三个依赖：状态栏那一格 + cli 原文面板）**。三处形状签字选定「给库补列」而不是「降级」，理由是 Phase 4 的终态就是 inline 分支被删掉——留一个「只有 inline 能用」的功能，等于给那条分支留活命的理由：① **`claimedAt` 列**（「已运行 mm:ss」的基准；内存里那个 `startedAt` 只有执行进程自己看得见）。写入三处：`claimNextQueued` 无条件覆写（一次领取就是新一轮的起点），`markRunning` 与首条进度帧用 `COALESCE` 定格（进度帧每几秒一发，跟着刷等于耗时永远接近零；而 raw 路径的 `promptId` 常常整轮跑完才回传，无条件覆写会让耗时从收尾那一刻重新开始）。历史 RUNNING 行不回填，读侧对 `claimedAt IS NULL` 退回 `createdAt` 近似，并写明那只是本列上线前一小撮旧行的兜底。② **`progressNode` 增存 `classType`**（状态栏历史上显示的是类名，库里只有中文 `label`）：两个都存，画布与状态栏各读各的，可见契约零变化；comfy-cli 那条事件源本来就拿不到 `class_type`，此时类名为空——与内存版旧行为一致，不是新缺口。③ **`rawCli` 列 + 收口时整包写一次**（成功 / 失败 / 取消三条收口都写；不跟着日志的 200ms 防抖走，那等于把几千行原文白写几十遍）。「查看完整输出」的读侧因此不再碰 Next 内存，`getRawCli` 收成模块私有。主模型那一格不加列：`primaryModelName()` 两种图形态都能认，而 `execPayload` 是执行侧唯一一定写得上的载荷（`workflowSnapshot` 要到成功收口才落）。
+  **落地记录（4-B2，2026-09-27，第二与第三个依赖：状态栏那一格 + cli 原文面板）**。三处形状签字选定「给库补列」而不是「降级」，理由是 Phase 4 的终态就是 inline 分支被删掉——留一个「只有 inline 能用」的功能，等于给那条分支留活命的理由：① **`claimedAt` 列**（「已运行 mm:ss」的基准；内存里那个 `startedAt` 只有执行进程自己看得见）。写入三处：`claimNextQueued` 无条件覆写（一次领取就是新一轮的起点），`markRunning` 与首条进度帧用 `COALESCE` 定格（进度帧每几秒一发，跟着刷等于耗时永远接近零；而 raw 路径的 `promptId` 常常整轮跑完才回传，无条件覆写会让耗时从收尾那一刻重新开始）。历史 RUNNING 行不回填，读侧对 `claimedAt IS NULL` 退回 `createdAt` 近似，并写明那只是本列上线前一小撮旧行的兜底。② **`progressNode` 增存 `classType`**（状态栏历史上显示的是类名，库里只有中文 `label`）：两个都存，画布与状态栏各读各的，可见契约零变化；comfy-cli 那条事件源本来就拿不到 `class_type`，此时类名为空——与内存版旧行为一致，不是新缺口（**这句由 §24 推翻**：只对 `progress` 成立，且由 ISSUE #1202 修掉，真出图读数在 §24）。③ **`rawCli` 列 + 收口时整包写一次**（成功 / 失败 / 取消三条收口都写；不跟着日志的 200ms 防抖走，那等于把几千行原文白写几十遍）。「查看完整输出」的读侧因此不再碰 Next 内存，`getRawCli` 收成模块私有。主模型那一格不加列：`primaryModelName()` 两种图形态都能认，而 `execPayload` 是执行侧唯一一定写得上的载荷（`workflowSnapshot` 要到成功收口才落）。
 
   4-B2 的实测副产物是一条**测试基建的镜像漂移**：`tests/helpers/test-db.ts` 用的是手写 `CREATE TABLE` 文本，加列时漏改它的表现是 `SqliteError: table task has no column named rawCli`、栈指向 drizzle 的 insert，看不出真正要改的是那个 helper。新增 `tests/test-db-schema-drift.test.ts` 把「schema 每张表的每一列都在测试库 DDL 里」变成判据（并自证有效：一张表都没比对到就自己红）；`jsonColumns` 那一半盖不住——它的缺失表现是读回来是字符串而不是对象，本判据不硬造替代断言。另记一条实现层事实：`sql` 模板里的值**不走**该列的 `toDriver`（只有 `.set()` 直接赋值才走），而 better-sqlite3 / libsql 都只能绑 primitive——所以 `claimStamp()` 给的是 ISO 字符串而不是 `Date`，落库形态与 `toDriver` 的产物一致。
 
@@ -944,3 +947,541 @@ issue 不关，改写成「等一次可归因的现场」，并把它需要的�
 
 **留下的账**：#1262 仍开，判据已就位；真实现场出现时，先读那句 warn 的 `(SQLite: …)` 再决定
 是「池里一条连接带着未提交事务回池」还是「外部持锁」。
+
+
+## 22. #1257（`orchestrator.ts` 越线之后的下沉：合成那半段搬出去）——落地记录
+
+这不是新决策，是 §19 末尾那笔记账的兑现：5-A 的 +136 行把 `src/server/film/orchestrator.ts`
+从 898 推到 1034（越过规范 §12.6 的文件行数上限 900）。当时**没有**把它塞进
+`scripts/.file-size-baseline.json`（基线 `total: 0` 保持），而是开 ISSUE #1257 记着
+「谁推过线谁拆」—— 把超限文件登记进基线等于让判据从此对它永久失明。
+
+**切法照 issue 里已经验过的那条**（两条走不通的路也写在里面，这次没再试）：
+
+| 新文件 | 装什么 | 为什么是它 |
+| --- | --- | --- |
+| `src/server/film/film-log.ts` | `appendFilmLog` | 编排侧与合成侧都要往 `filmProject.logs` 追加行；它留在任何一侧，另一侧就得反向 import 它 |
+| `src/server/film/compose-film.ts` | `isFFmpegAvailable` + `_ffmpegOk` 闩锁、`runFFmpeg`、`composeFilm`，**以及 `syncFilmToProject` + `FilmShotClip`** | 回写只被合成调用（出片之后才谈得上回写）。只搬 `composeFilm` 不搬回写 ⇒ 新模块反向引 `./orchestrator`、编排又引合成 ⇒ 环。`check-circular-deps` 判的是 AST 上的 import，`import type` 也不算安全 |
+| `src/lib/film/film-status.ts` | `FilmStatus` / `ShotStatus` 一份定义 | 这两条联合原本在 `orchestrator.ts` 与 `src/components/studio/film-studio-config.ts` **各抄一份**（§12.12 的形态：两边都是同一组字面量，改一处另一处连编译期都不报错）。放 `src/lib` 是因为视图层与服务端都要用，而 lib 是两侧共同的地基（放 server 就会让 components 为了一行类型去引服务端，`eslint boundaries` 拦的就是那个）。config 侧改成 re-export，对外 API 一字不变 |
+
+编排文件只留「剧本 → 分镜 → 建片 → 逐镜提交 → 监看」，**1034 → 707 行**（合成 341 行、行日志 20 行、状态族 21 行各自成文件）；方向变成单向一条链：
+`orchestrator` → `compose-film` → `film-log` / `compose-steps`。
+
+**搬法是脚本搬的，不是手抄的**（`temp/split-film-compose.cjs`，一次性）：三段合计 314 行、
+含大量 ffmpeg 参数数组与 CJK 注释，手抄一次就可能把某个哨兵值（`code: -1` + `"timeout"`）
+或某条注释改味，而那只在真跑 ffmpeg 时才暴露。脚本按行范围取段 + **每段校验必须含的锚点文本**，
+锚不对直接退出；搬完用 `tsc` 追哪些 import 变成多余（`spawn` / `fs` / `path` / `sizeSpecDims` / `normalizeProductionProgress` /
+`errorMessage` / `withTimeoutResult`，以及 `text-clamp` 与 `compose-steps` 两整行），
+也追出我一开始误删的两格（`toSizeSpec` 编排侧读载荷时还要用；`FilmStatus` 编排侧只剩引用类型）。
+
+**连带改到的调用点**（迁移目录「五查」里这一刀命中三条）：`film` router 两处
+`await import("~/server/film/orchestrator")` 改指 `compose-film`；`orchestrator.test.ts`
+的导入按归属拆成两行（`composeFilm` / `syncFilmToProject` 走新模块）；仓储桩不用复制 ——
+它 mock 的是 `~/lib/core/repository` 那一层，合成侧从同一入口取，桩照旧生效。
+**没改**的一处是刻意留的：`orchestrator` 不再 `export type FilmStatus / ShotStatus`，
+先全仓 grep 确认没有跨文件消费者再动，别留一个「看起来在用其实没人引」的转发出口。
+
+**门槛与门禁**：`src/server/film/**` 的实测 64/76.7/64/55.6（分母没变，同一批判决换文件住），
+门槛保持 30/50/35/25 不升不降；`src/lib/film/**` 那格里 `film-status.ts` 是纯类型文件
+（v8 记 0/0，目录聚合仍是 100），因此 100/90/100/90 不动。写这节时 `--strict` 只剩工坊线的
+`workflow.ts`（944 行）超限 —— 那是别人的账，本刀不替它放宽判据；它由工坊线自己的
+`23bc80da` 收掉，所以本 PR 合入后 `--strict` 是 **[structure] OK**（零超限）。循环依赖 0 组、
+零消费导出 0、孪生对 0 对。
+
+**顺手核的一句文档口径**（issue 里点的第二条）：指南 `feature-workshop-flow.md` 那条
+「成片合成是纯客户端」在服务端管线（`render_film` 工具 + `composeFilm`）出现后已经说不全 ——
+改成明写**两条路**：工坊内的时间线预览/导出确实是客户端，服务端的 `composeFilm` 真起 ffmpeg
+出片并回写项目，两者互不替代。
+
+---
+
+## 23. #1255（把成片编排迁进执行宿主）——前提取到证据后被否掉，关单不搬
+
+§11 结尾那句「Phase 5 之后再评估」在这里收口。ISSUE #1255 把要动哪些地基记全了（六格清单），
+这次**逐格复核了一遍**，结论是不搬：不是「代价太大所以先放着」，而是**这一刀想买的那件事在桌包拓扑里
+不成立**，而 dev 那一格 §19（5-A）已经补上。
+
+### 否掉它的那两条实测
+
+1. **桌包里 server 退 ⇒ 宿主被整树收走**，所以「编排在宿主里 ⇒ Next 死了还能继续出片」是假的。
+   入口 `scripts/standalone-runtime.mjs` 把 server 与宿主作为**同父兄弟**各起一棵树，
+   `server.on("exit")` 直接调 `close()`，`close()` 里对宿主那棵树调 `reapTree(host.pid)`
+   （走 `scripts/reap-process.mjs`，硬规则 3）。§17 的「同生死」是这条代码路径的口径名，
+   本次先把它读回代码确认，随后又跑了一次真机读数（见下面「补测的读数」那一节）。
+2. **反向不对称，所以搬过去是加脆性不是减脆性**。同一份入口里宿主退出只打一行
+   `host exited`，**不降级、不重启**（§17 的签字理由：降级会让已写成 host 归属的行没人领）。
+   把影片推进交给宿主之后，宿主自己退出的那类故障（解释器没配、模块加载期退出等）会让界面照常活着、
+   影片停在原地的同时**没有任何进程会继续推它**；今天的形态下「应用开着就一定活的那一个」是 Next。
+3. dev 侧那一格：Turbopack 改服务端模块是热重载、不是进程死亡，真重启/崩溃之后的续跑由
+   §19 的 `resumeStalledFilms` 负责（代价 = 一个重启间隔内不推进）。所以 §11 当初想要的
+   「扛过一次热重启」也已经在手。
+
+### 补测的读数（同日，把上面两条从代码路径变成现场）
+
+第 1、2 条当时依据的是读代码，这次各跑了一次真机现场（载荷 = `comfyapp-pkg-sim`，
+其中 `scripts/standalone-runtime.mjs` 与 `scripts/executor-host.mjs` 与 master `cmp` 逐字节相同）：
+
+```
+[standalone-runtime] boot pid=104948 server=128120 port=10077 appRoot=…\comfyapp-pkg-sim\static
+[standalone-runtime] executor mode=host
+[standalone-runtime] host pid=139224 out=…executor-host-stdout-2026-09-30-13-03-43.log …
+—— 只杀 server 那一棵树（taskkill /PID 128120 /T /F，exit 0）——
+[standalone-runtime] closing (server exited code=1 signal=null)
+[standalone-runtime] reap pid=139224 taskkill /PID 139224 /T /F（exit 0）
+```
+
+之后入口、server、宿主三个 pid 全部不在，入口自己以 exit 1 退出 —— 第 1 条成立：
+**server 一退，宿主就被整树收走**，所以「编排搬进宿主 ⇒ Next 死了还能继续出片」在安装包里拿不到。
+（日志里没有 `reap pid=128120` 那一行是对的：`close()` 只在 child「还活着」时补刀，
+server 已经是退出态 —— 那条判据的作用就是不让每条正常路径都留一行假的 `reap FAILED`。）
+
+```
+[standalone-runtime] host pid=130772 …
+—— 只杀宿主那一棵树 ——
+[standalone-runtime] host exited code=1 signal=null （server 继续在跑；任务会留在队列，…）
+```
+
+`grep -c "^\[standalone-runtime\] host pid="` = **1**（没有第二个宿主被拉起来），
+入口 138180 与 server 123012 都还在，杀完之后 `/api/health` 仍回 `{"status":"ok","db":"up"}` ——
+第 2 条成立：**宿主退 = 只留一行日志、不降级也不重启**，所以把影片推进交给宿主是加脆性。
+
+**取数形状的两条说明（别再踩）**
+
+- 上面两条读数**没有**走 `app.exe`，而是用载荷自己的 `node.exe` 直接起
+  `static\scripts\standalone-runtime.mjs`（显式给 `PORT` 与 `COMFY_EXECUTOR`）。要判的两条都住在
+  入口这一段（两棵树的父子关系与回收），壳只是入口的父进程、不参与这两条判决。
+- 第一次想走壳时踩了一个**纯属工具层**的坑，别把它读成产品行为：用 `powershell -File <脚本>`
+  （脚本里 `$env:COMFY_EXECUTOR='host'` 之后 `Start-Process app.exe -WorkingDirectory <安装目录>`）
+  起的那一轮，入口日志是 `executor mode=inline` —— 那一轮跑的不是 host 拓扑，**不作数**。
+  随后改用 `powershell -Command` 在命令行里内联设同一个变量再起同一个 `app.exe`，入口日志就是
+  `executor mode=host` + `host pid=138568`：
+  ```
+  [standalone-runtime] schema ready tables=24
+  [standalone-runtime] boot pid=125884 server=129932 port=4375 appRoot=…\comfyapp-pkg-sim\static
+  [standalone-runtime] executor mode=host
+  [standalone-runtime] host pid=138568 out=…executor-host-stdout-2026-09-30-13-16-57.log …
+  ```
+  ⇒ **桌包「壳继承会话 env ⇒ 入口判 host ⇒ 起宿主」这条链是通的**（指南 §3-D 那条常规给法照旧成立），
+  上一版这里写的「那份 env 没到壳进程」**是把我的启动脚本当成产品行为读错了，已订正**；
+  那个 `-File` 形态为什么不传**没有继续查**（工具层，不值得查）。
+  顺带这一轮也补上了「读数是在直接起入口的拓扑上取的」那格保留：**走壳与不走壳，入口这一段的拓扑一致**
+  （都是 entry → server 树 + host 树），所以上面两条读数对出厂形态同样成立。
+- 仍然**没测**的一格：用户从图标双击（没有会话 env）时靠**系统环境变量**给开关 —— 那是指南 §3-D 的
+  常规给法，本轮没有重测，别拿上面任何一条读数替它背书。
+
+### 没做的事（逐格留档，别下一个人重算）
+
+- `src/lib/core/repository-film.ts`（313 行、两个类）与 `src/lib/core/repository-production.ts`
+  （120 行）仍是 `import "server-only"` + 直引 `~/lib/db` 的单例，没有改成
+  `createTaskRepoImpl(db, { owner })` 那个可注入形态；宿主今天仍然只有 task 一张片
+  （`host-runtime.ts` 的 `createHostRepo()` + 八条 seam，没有第 9、10 条）。
+- `tests/lib-server-imports.test.ts` 的 `REGISTERED` 仍是**空清单**，本刀没有新增
+  `src/lib/** → src/server/**` 这条越界边。
+- `src/lib/db-schema-ready.ts` 的哨兵仍然只判 `task` 一张表。
+- ffmpeg 子进程的回收归属没动：现在由 Next 起、随 Next 那棵树收；「杀宿主 → 无孤儿 ffmpeg」
+  这条实测因此不需要做。
+- 跨进程触发契约没动 —— 这条最要紧：§14 D1 刚把派发收敛成**一条 pull**，影片若搬过去就得再造
+  一条「提交在 Next、推进在宿主」的通道，那是明确违 D1 的。
+
+### §22（#1257）顺手把将来的成本降了一截，但那不是搬迁
+
+`compose-film.ts`（341 行）+ `compose-steps.ts`（93 行，只 import `path` 与 `~/lib/path-display`、
+`~/lib/number-format`）+ `film-log.ts`（20 行）已经从编排文件里切出来，与 Next 专属依赖
+（`workflow-run.server` / `llm/server` / `enqueue` / `firstframe`，全留在编排侧）分开了。
+将来若要搬，路比 issue 记的更短；但**这三件仍带 `server-only`、仍住 `src/server/**`**，
+数据层那格一格没动，所以结构限制原样存在。
+
+### 什么条件下重开这条
+
+三条里任一条成立就值得重估，否则不要凭「ADR Phase 5 那行字面还没做」重开：
+
+1. 出现「Next 必须能退出而影片继续」的**真需求**（例如把 server 侧做成可重载的界面层）。
+2. 桌包拓扑改成宿主有**独立生命周期** —— 入口不再在 `server.on("exit")` 里收宿主，或宿主能被
+   重新拉起（那要连带推翻 §17 的「不降级不重启」签字）。
+3. 数据层双宿主因**别的原因**必须先做（例如宿主需要读 film 之外的第二张业务表）；那时影片侧的
+   搬迁是顺路，而不是它自己立项的理由。
+
+**决策**：ISSUE #1255 关成 `not_planned`，理由 = 上述第 1、2 条实测；§11 的「Phase 5 之后再评估」
+到此为止，往后的口径以本节为准。
+
+---
+
+## 24. #1202（认节点类名）——落地记录，含一条被实测推翻的旧口径与一条被否掉的「正解」后半句
+
+### 现场
+
+`RunnerState.promptByTask` 只剩两个读者（`executor-ws.ts` 的 `executing` / `progress` 分支），
+写方随 4-B3 删掉 `enqueue()` 一起消失 ⇒ 那一格恒空。后果是两格用户可见的东西长期退化：
+
+- 日志里「▶ 节点 [3] 未知节点（?）」；
+- `task.progressNode` 不带 `classType` / `label` —— 而 4-B2 之后状态栏「当前节点」读的就是
+  `classType`、画布读 `label`（§14 D1 那条），所以这格空 = 状态栏在 host 执行时永远没有节点名。
+
+历史库里的证据：两条 3-E2b 之后真跑成功的 raw 行，`progressNode` 都是 `NULL`。
+
+### 改法（两条执行路径都要接，只接一条等于没修）
+
+| 落点 | 改了什么 |
+| --- | --- |
+| `src/lib/comfyui/graph-node-class.ts`（新） | `classTypeForNode(graph, nodeId)`：API 形状走 `graph[id].class_type`，RAW（UI 原件）形状走 `nodes[].type`；`nodeLabel()` 也从 `executor-ws.ts` 搬进来（两条路共用一份中文名表，留两份就是 §12.12 的孪生对） |
+| `raw-overrides.ts` | 新出口 `rawUiNodeType()`，**只做一件事**：让「WS/cli 帧的节点 id → 类名」与「画布覆盖注入找那个节点」共用 `resolveRawNode` 那一条下钻（含子图链 `76:67`）。两处各算各的迟早给出不同节点 |
+| `executor-ws.ts` | 两个读者从 `promptByTask` 改读 `executedWorkflow`（提交那一刻真正交出去的图，画布覆盖已注入、纯 UI 节点已剔除，所以与帧里的 id 对得上） |
+| `executor-cli-stream.ts` | **这才是 raw 任务的实际来源**：raw 进度走 comfy-cli 的 stdout，不走 WS。`progress` 事件把 `deps.patched` 那份图认出的类名一起透出；`executing` 那两行日志带上「中文名（ClassType）」 |
+| `runner-state-shape.ts` / `runner-state.ts` / `enqueue.ts` | 删掉 `promptByTask`（字段 + 三处 delete + 两处用例清零），单例键随之 `comfyRunner_v2 → v3`（加/减字段都要升版号，`??=` 只认键名） |
+
+### 被实测否掉的一条「正解」
+
+issue 原文的正解是「两个读者改读 `executedWorkflow`，然后删掉 `promptByTask` **与 `Job.prompt`**」。
+前半句照做；**后半句没做** —— `Job.prompt` 不是没主的字段，它是 `executor-cli.ts`
+非 RAW 那条分支的**入参**（`applyApiOverrides(prompt, overrides)` → 收拾图 → 直接提交）。
+删它等于把 API 提交形态一起删掉，那不是 #1202 的范围。字段留着，注释改成明写「当前两条入口都不带它，
+但那条分支消费它」。
+
+### 被实测推翻的一条旧口径
+
+§13-3C（D1）与 §14（4-B2 那一格）都写着「**comfy-cli 那条事件源拿不到 `class_type`**，
+所以类名为空 / `label` 缺省，与内存版旧行为一致，不是新缺口」。真机抓原文之后：
+
+```
+{"schema":"event/1","type":"executing","node":"76:67","title":"CLIP Text Encode (Positive Prompt)","class_type":"CLIPTextEncode",…}
+{"schema":"event/1","type":"progress","node":"76:69","completed":1,"total":25,…}
+```
+
+⇒ 那句话**只对 `progress` 成立**：`executing` 是自带 `class_type` 与 `title` 的（而且那是 ComfyUI
+展开子图之后的权威值，所以现在实现是「事件优先、图兜底」）；而 `progress` 也不真是「拿不到」，
+只是当年没人去查那张就在 `deps.patched` 里的图。旧记录按当日的理解留着，从这里以本节为准。
+
+### 读数（真出图三跑，副本库 + 独立宿主进程）
+
+形态照本线一贯的复演套路（拷库 → 克隆一条历史成功的 raw 行 → `spawn(process.execPath, ["scripts/executor-host.mjs"])`
+且 `DATABASE_URL` 指副本 → 只读观察 → `reap-process.mjs` 整树回收）。
+
+1. **原样克隆那一跑：整轮被 ComfyUI 缓存**（11 个节点全是 `execution_cached`，没有 `executing` /
+   `progress`）⇒ `progressNode` 仍为 `NULL`。**这一跑不作数**，但也顺手量出一个真的缺口：
+   缓存轮次里我们完全不解析 `execution_cached` / `executed`，所以「这次跑的东西一个节点都没动」
+   在界面上与「什么都没发生」长得一样 —— 另开一条记（见下）。
+2. **打掉缓存那一跑**（把提示词换成带唯一标记的一句 ⇒ `CLIPTextEncode` 输入变了 ⇒ 真的采样）：
+   `progressNode` 一路跟着刷新，最终
+   `{"id":"76:69","value":25,"max":25,"classType":"KSampler","label":"采样去噪"}`
+   —— 类名与中文名都在，而且 `76:69` 是**子图链 id**（顶层 wrapper 76 里的内部节点 69），
+   说明委托给 `resolveRawNode` 那一条下钻在真数据上是通的。面板同时出现四行按节点日志：
+   ```
+   ▶ comfy-cli 节点 [76:67] 编码提示词（CLIPTextEncode） 开始执行
+   ▶ comfy-cli 节点 [76:69] 采样去噪（KSampler） 开始执行
+   ▶ comfy-cli 节点 [76:65] VAE 解码（VAEDecode） 开始执行
+   ▶ comfy-cli 节点 [95] SaveImageAdvanced（SaveImageAdvanced） 开始执行
+   ```
+   最后一行是 `nodeLabel` 的兜底形态：表里没有的类名**原样回类名**，不编一个中文名。
+3. **第三跑只为取事件原文**（`executing` / `progress` 各首例，就是上面那两行），用来判「类名到底
+   该从事件取还是从图取」—— 这条决定实现形状，不猜。
+
+### 判据
+
+- `graph-node-class.test.ts` 4 条：API 形状 / RAW 形状 / 子图链 id / 两种形状同时命中时 API 优先 /
+  载荷不可信（`null` / 字符串 / 数字 / 数组 / 空图）一律不抛且认不出。
+- `executor-ws.test.ts` 新增 5 条：RAW 任务一帧 `progress` 落库时带 `classType` + 中文 `label`
+  （#1202 原文明说「没有任何用例断言这件事」的那格）、API 形状同样带、
+  图里没有这个节点时两者都不带但**进度帧照落**、还没有图时也不丢帧、`executing` 记下的
+  `lastNodeByTask` 用同一份图。
+- `executor-cli-stream.test.ts` 新增 3 条：`executing` 事件自带类名时以事件为准（图里故意给一个
+  不同的类名）、`progress` 不带类名时按图认、事件与图都认不出时日志只报 id。
+- **反向验过它真的会红**：把 `progress` 那一侧的取值临时改回「恒空」（等价于修前行为），
+  两条正向断言立刻红、三条负向仍绿 —— 这条判据不是自证的空壳。
+
+### 顺带留下的一条账（没做，另开 ISSUE #1278）
+
+`execution_cached` / `executed` 两种 comfy-cli 事件目前**不解析**。全缓存轮次里它们是唯一的发生，
+于是界面表现为「进度不动、也没有任何按节点行」，而 ComfyUI 其实已经把这单收完了。
+要买的东西与 #1202 不同（那是「认不出类名」，这是「缓存轮次没有可见性」），所以没混进这一刀，登记为 ISSUE #1278。
+
+---
+
+## 25. #1164（comfy-cli 回传的中文乱码）——落地记录，含一条被实测否掉的「修法候选 1」
+
+这条缺陷**先于本工作线存在**（3-C 的真机端到端复现时记下），落在本线的执行链上所以记在这里。
+
+### 现场与根因
+
+`[comfy-cli 原始]` 行内嵌的 prompt JSON 里中文是乱码，而我们自己拼的日志行中文正常。
+根因在 **Python 那侧的默认编码**，不在 Node 的解码：中文 Windows 的 ANSI 代码页是 GBK/CP936，
+Python 在非 ASCII locale 下 `sys.stdout` 与 `open()` 都跟着 locale 走。
+
+用 comfy-cli 那份解释器（`python-venv/comfy-cli/Scripts/python.exe`）在本机量了三态：
+
+| 注入 | `sys.stdout.encoding` | stdio 按 UTF-8(fatal) 解 | 读我们写的 UTF-8 工作流文件 |
+| --- | --- | --- | --- |
+| 什么都不给（今天的生产形态） | `gbk` | **解不动** ⇒ 面板乱码 | `UnicodeDecodeError`、exit 1 |
+| 只给 `PYTHONIOENCODING=utf-8` | `utf-8` | 解得动、中文复原 | **仍然 `UnicodeDecodeError`**（`open()` 不看这个变量） |
+| 给 `PYTHONUTF8=1` | `utf-8` | 解得动 | `MATCH=True`（UTF-8 模式管全局，含 `open()`） |
+
+⇒ **issue 里「倾向候选 1（`PYTHONIOENCODING` 最小、跨平台安全）」这一手被实测否掉**：它只是半个修复，
+而且留下的是更坏的那一半（显示好了，读文件照样崩）。落地给两个键：
+`PYTHONUTF8=1` 管全局、`PYTHONIOENCODING=utf-8` 再显式钉死 stdio。
+
+同一条口径仓里其实早就有 —— `lifecycle-launch.ts` 给 **ComfyUI 本体** 那份 env 里两个键都设了，
+理由写得比这条 issue 更硬：中文 Windows 上自定义节点 `print` 一个 emoji（非 GBK 字符）会抛
+`UnicodeEncodeError` 把进程直接打崩。本刀把 comfy-cli 这条链路对齐过去，不新造约定。
+
+### A/B 真机读数（同一条工作流、各自打掉执行缓存、独立宿主进程指副本库）
+
+种进去的提示词带一个唯一标记（`戴宇航员头盔的柴犬·before` / `·after`），判据就是
+「这串中文在 comfy-cli 回传的 `rawCli` 里是否原样活着」：
+
+| | 终态 | 标记在 `rawCli` 里活着 | 标记在我们自己的面板日志里活着 | U+FFFD |
+| --- | --- | --- | --- | --- |
+| 修前 | SUCCEEDED | **否** | 是 | **16** |
+| 修后 | SUCCEEDED | 是 | 是 | 0 |
+
+（两跑的终态都是 SUCCEEDED，所以这不是「任务失败」那一类可见故障 —— 是**取证现场被写坏**：
+出图成功了，但 `rawCli` / `prompt_preview` 这些本该能复现「ComfyUI 到底收到了什么」的原文，
+中文那一半是废字节。也正是这条让 #1250/#1262 那套「日志要能自证原因」的口径缺一块：
+原文乱码时，看日志的人分不清是用户提示词本来就怪、还是我们转手时弄坏的。）
+
+### 判据
+
+`tests/comfy-cli-python-utf8.test.ts` 三条（先 `stripComments` 再匹配，用的是那条台账刚推广的共享件）：
+
+1. comfy-cli 那份 spawn `env` 字面量里 `PYTHONUTF8` / `PYTHONIOENCODING` 都在
+   （顺带钉住同块的 `PYTHONUNBUFFERED`，那是 #1184 的兄弟判决，别被后人改没）；
+2. 两条管道都**显式** `setEncoding("utf-8")` —— 写侧锁了 UTF-8，读侧漂掉同样是乱码；
+3. `lifecycle-launch.ts` 那份保持同一口径（防止有人把「ComfyUI 本体的那两个键」当历史包袱清掉）。
+
+选择器上的一处自我订正：第一版用「含 `PYTHONUNBUFFERED` 的 env 块」定位，直接把 ComfyUI 那条链路
+判成「找不到」（它那一份叫 `stdioEnv`、也没有 `PYTHONUNBUFFERED`）—— 改成按大括号配平扫
+`env` / `stdioEnv` / `childEnv` 三种字面量、再挑装着 `PYTHON*` 键的那一个。
+判据也做过变异验证：只删 `PYTHONUTF8` 留 `PYTHONIOENCODING`（正是那个「半个修复」）→ 第 1 条红。
+
+### 为什么不做候选 2（Node 侧按代码页解）
+
+那是**又造一处平台分叉**，而本仓的平台判据只许收在两处（AGENTS 硬规则 3 / launch-and-build §3.1–§3.3）。
+何况候选 2 只救 stdio，救不了 Python 自己 `open()` 读文件那条崩路径 —— 上面那张表的第二行就是它。
+
+---
+
+## 26. #1182 方案 3（组 A 报错落在生成物上时当场点破）——只做定性，共写没解决
+
+这条不是本线的缺陷，是**门槛层的一条误导**：Phase 4-A2 端到端验证时同目录起了第二个
+`next dev` 实例，收进程按硬规则 3 整树 SIGKILL，之后 `git commit` 被组 A 拦下 —— 报的是
+`.next/dev/types/validator.ts` 的两条语法错（TS1005 / TS1128），而那次改动里没有半个
+`.next` 文件。launch-and-build §5 排障手册早有这一行，处置口径是「整目录移走」；
+本刀把「先怀疑自己」这一步从人身上挪到机器上。
+
+### 落的是什么、不是什么
+
+落的是 issue 里三条候选的第 3 条：**只在「所有 `error TS` 行都落在 `.next/` 那一个目录段」时**
+打印成因 + 处置命令。`scripts/check-tsc-artifact-hint.cjs` 由 `.githooks/pre-commit` 汇总段
+在组 A 失败分支里调用，带 `|| true` 且自身恒退 0 —— 判决仍属于 tsc，这条不许变成第二种
+失败形态，也不许把组 A 的红洗成绿。
+
+它**不解决**共写。当时留的两句「还没做」现在按实测改口（ISSUE #1182 据此关闭，见下面第 26.1 节）：
+第 1 条（实例级 `distDir` 分叉）**不成立**，第 2 条（收法改温和）在 Windows 侧**没有可用原语**。
+本刀当时那句「第 1 条要连带核 `outputFileTracing*` 与 `check-standalone-contents.cjs` 对 `.next`
+路径的假设（AGENTS 硬规则 17/18），不是本刀的体量」是把成本估错了方向 —— 真正的否决理由在
+类型检查这一侧，与产物层无关。
+
+### 26.1 方案 1 / 方案 2 的实测读数（2026-10-01，同一次探针跑出来的）
+
+探针手法：`next.config.js` 临时加 `distDir: process.env.COMFYAPP_NEXT_DIST_DIR ?? ".next"`，
+用该 env 起一个 `next dev -p 3999` 的第二实例（`distDir=.next-probe-1182`），读完落点之后把
+`next.config.js` / `next-env.d.ts` / `tsconfig.json` 三份按事先备份还原，实例按硬规则 3 整树回收。
+
+1. **Next 把当前 distDir 写进受版本控制的 `tsconfig.json`**。探针跑完 `git diff tsconfig.json`
+   多出两条 include：`".next-probe-1182/types/**/*.ts"`、`".next-probe-1182/dev/types/**/*.ts"`
+   （并顺手把 `lib` / `paths` 的数组重排成多行）。⇒ 换目录**没有**让那个实例的生成物脱离类型
+   检查树，半截 `validator.ts` 照样把组 A 拦下；代价还多一项：工作区被弄脏，谁 `git add -A`
+   就把别人的实例目录钉进所有人的 `tsconfig.json`。
+2. **Next 同时改写全检出共享的 `next-env.d.ts`**，那两行 import 指向探针目录。它被
+   `.gitignore` 忽略（第 19 行），所以不进 diff、也就不会有人发现指针已经漂走；而指针悬空时
+   实测全量 `tsc --noEmit --incremental false` **退 0**（`skipLibCheck: true` + 悬空发生在 `.d.ts`
+   里）⇒ 原先生效的路由类型校验**静默失效**。这条比原 bug 更坏：原来是「当场红 + 一条命令处置」，
+   换完 distDir 变成「无声」。
+3. **所以「从根上消除共写」这个前提不成立**：共写只是从 `.next/dev/types/` 搬到
+   `tsconfig.json` + `next-env.d.ts` 两个文件上，其中一个还受版本控制。
+4. 顺带量到一条与本条判据直接相关的机制：`include` 里的 `**/*.ts` **不进点开头目录**。同一份
+   语法错文件（`const a: = 1;`）分别放 `.next/probe-1182/p1182.ts`、`.next-probe-1182/q1182.ts`
+   与非点目录 `p1182-control/probe/c1182.ts`，全量 tsc 只对第三个报
+   `TS1110: Type expected`（前两个 0 条，非漏跑：同一次运行有报错即非空跑）。⇒ 生成物今天被
+   检查**纯粹因为那两条显式 include**，不是「`exclude` 少了 `.next`」；ISSUE #1182 正文那句
+   「`exclude` 里没有 `.next`，所以构建产物的语法错会以组 A 红的形态出现」机制描述反了半句，
+   结论方向不变。
+5. **方案 2（收法改温和）在 Windows 上没有对应原语**：`src/lib/process/kill-process-tree.ts`
+   的 `windowsKillArgs()` 恒发 `/T /F`，`force` 参数只在 POSIX 分叉 SIGTERM/SIGKILL ——
+   也就是 `reap-process.mjs <pid>` 不加 `--force` 在 Windows 上与加了**完全同形**（实测 via
+   就是 `taskkill /PID … /T /F`）。`taskkill` 去掉 `/F` 只对**有窗口**的进程有效，控制台
+   `node`/`next dev` 收不到；要做温和梯度就得新写一套 AttachConsole/信号注入 + 超时升级，
+   而漏杀一个 dev server 会占住端口与 `data/` 写位，比半截生成物严重得多。判为不做。
+
+**剩下的可执行项只有纪律 + 可见性**：别在同一目录双开 `next dev`；要并行验证走
+`git worktree`（§13.6.2 的现成手法）或直接复用已经在跑的实例。本刀的提示话术已按这些读数
+订正 —— #1311 那版写的「起第二实例时给它独立的 `.next`（`distDir` 按端口/实例分叉）」是**我按
+代码形状推出来的一句建议，被自己的探针否掉**，照它做会走进上面第 1、2 条更糟的形态；判据
+`tests/check-tsc-artifact-hint.test.ts` 里钉了一条「这句话不许再出现」的用例，防的就是同一个错
+第二次犯。
+
+### 一处「先验证再印给用户」的必要代价
+
+提示里那句 `rm -rf .next/dev/types` 不是白来的：`next-env.d.ts` 明确
+`import "./.next/dev/types/routes.d.ts"`，直觉上把目录删掉会把红从生成物搬到源码。实测**不搬**
+（最小工程复现同样形态：缺生成目录时 tsc 对这行 side-effect import 不报错）。做法是先在真
+`.next/dev/types` 移走的状态下跑一次全量 tsc（无新增红，只有当时那个 `.cjs` 自己的 `@ts-nocheck`
+缺失误报），再用最小工程把「缺目录 + 那两行 import」单独复现一次。判据里留了一条正向用例
+钉住处置命令的措辞，但**这条结论的机器化守卫是删目录后 tsc 不新增红这个动作本身** —— 若哪天
+Next 改口径，提示里那条命令要跟着改，别只改判据。
+
+### 误报口径（这条判据的全部价值所在）
+
+- 掺进任何一个非 `.next` 文件（哪怕只有一条真类型错）→ 完全沉默，不许让人拿「删生成物」
+  去交差；
+- 一条 `error TS` 都没有（OOM、`tsconfig` 读不到、参数错）→ 沉默；
+- `.nextify/` 这类同前缀目录不算生成物（认的是目录段，不是前缀）。
+
+反向用例比正向更要紧：这条提示一旦在「真类型错」上出现一次，之后就没人信它了。
+
+### 本地复演（不是照抄 issue 的字符串）
+
+把真 `validator.ts` 的第 79 行截到 `type __IsExpected<Specific extends AppPageConfig`（复现
+SIGKILL 落在写文件窗口那半行），`pnpm exec tsc --noEmit --incremental false` 给出
+`.next/dev/types/validator.ts(79,51): error TS1005: '>' expected.`，判据 `artifactOnly=true`
+且提示原样打印；把文件按 sha256 还原后 tsc 复绿。**单行也能点破**是这次补的一条用例 ——
+现场是两行，但半截文件有几行报错取决于断在哪，判据不能要求凑够两条。
+
+---
+
+## 27. #1278（整轮命中执行缓存时没有按节点可见性）——落地记录，签字口径 (a)+(c)
+
+#1202 复演时撞出来的另一条账（当时另开 issue，没混进那一刀）：同一份工作流第二次提交若整轮
+命中 ComfyUI 的执行缓存，comfy-cli 一个 `executing` / `progress` 都不发，于是那 ~20s 里
+界面只有「已提交」和收口两行 —— 状态栏「当前节点」空、日志里按节点行 0 条，而任务其实
+**已经跑完了**。这条买的是那种轮次的可解释性，不是类名。
+
+### 签字口径（先取证再签，签完才动代码）
+
+- **(a) 按节点补日志行**：`execution_cached` 一行「≡ comfy-cli 节点 [76:69] 采样去噪（KSampler）
+  命中缓存，跳过」。
+- **(c) 全命中时再给一句汇总**：「≡ 本轮 11 个节点全部命中 ComfyUI 执行缓存（未重算，因此没有
+  按节点进度）」。
+- **(b) 被否**：让 `progressNode` 承载「最后一个被跳过的节点」。那一格在 4-B2 的契约里是
+  「**当前**节点 + 步数」，而缓存轮没有「当前」—— 写进去等于让状态栏显示一个早已跑完的节点。
+  宁缺不假。
+
+### 三种形状的真机读数（同一张图、独立宿主进程、副本库）
+
+| 轮次 | comfy-cli 事件 | 面板里的按节点行 | `progressNode` | 汇总行 |
+| --- | --- | --- | --- | --- |
+| 冷轮（改动前取证） | `executing`×11 + `progress`×25 | 11 行「▶ … 开始执行」 | `{"id":"76:69",…,"classType":"KSampler"}` | 无 |
+| 整轮缓存 | `execution_cached`×11，**0 条** `executing`/`progress` | 11 行「≡ … 命中缓存，跳过」 | **NULL（刻意）** | 1 行「≡ 本轮 11 个节点全部命中…」 |
+| 混合轮（只打掉一句提示词） | `execution_cached`×7 + `executing`×4 + `progress`×25，`converted.node_count=11` | 7 行「≡」+ 4 行「▶」 | KSampler 25/25 | **无（正确沉默）** |
+
+`execution_cached` 与 `executing` 一样**自带** `class_type` 与 `title`（真机原文，别再按
+§13-3C 那句「cli 拿不到类名」推理 —— 那句在 §24 已经被推翻过一次），所以名字不需要回查图；
+而 `converted` 带 `node_count` ⇒ 「全部命中」这个判决有权威总数可用，不必自己数 UI 图。
+
+### 实现落点（一处算法、三个动词）
+
+`executing` / `execution_success` / `execution_cached` 三行里那段
+`[id] 中文名（ClassType）` 收成本模块内的 `nodeTag()`：三行在面板里是同一格内容、只是动词不同，
+各写一遍迟早给出不一致的名字（用例里钉了「同一个节点在两行里同名」）。
+汇总行挂在 `envelope` 分支**收口之前**（那一刻才知道全不全），且要求
+`cachedNodes === nodeCountTotal` —— 混合轮里缺的就是进度而不是定性，写「全部命中」就是假话。
+
+### 复演那条「打掉缓存」的动作本身踩了个坑（值得记，别下一个人重踩）
+
+第一版往 `execPayload` 的子图定义里追加标记，改了 2 个 `CLIPTextEncode`，**两轮照样全缓存**。
+真图上根本不读那份值：提交的是「`execPayload` + `applyApiOverrides(params.workflowInputs)`」
+现场合成的结果，override 会**覆盖**图里那格。改 `params.workflowInputs` 里那条 `text` 之后
+才拿到混合轮。⇒ 以后要造「部分命中」的现场，动 override，不动 UI 图内层 widgets。
+
+### 判据
+
+`src/lib/comfyui/executor-cli-stream.test.ts` 新增 4 条（整文件 23→27 条，`src/lib/comfyui` 全目录
+44 份文件 607 passed）：缓存行文案与「**不写** progressNode」（断言 `onProgress` 一次都没调）、
+同名节点跨动词一致、全命中才给汇总且 `finish` 照旧、混合轮与缺 `converted` 两种情形都不给汇总。
+变异验证：把汇总判据放宽成 `cachedNodes >= 0` 并把缓存行文案换成占位串 → **3 条红**（不是 1 条，
+因为「沉默」与「文案」是两条独立断言），还原后全绿。
+
+### 没做的事
+
+- **本刀提交时写过一句「WS 那半也必须补（照 #1202 的教训，只接一条等于没修）」—— 那句被本机读数否掉了，
+  订正在这里**。它当时是按 `protocol-adapter.classify()` 的代码形状推的：那一支确实不认
+  `execution_cached`，会落到 `other` 丢掉。但同一批复演的 trace 给出的是**另一件事**：
+  按 kind 计数 `cli`=80、`history`=1、**`ws`=0**（`WS 消息` / `WS 消息无归属任务` /
+  `WS 消息非合法 JSON` 三个出口全 0），而派发就绪门控要求 WS 是 OPEN 的（门控过了才会提交）
+  ⇒ 带 `prompt_id` 的执行帧（含 `execution_cached`）**根本没落到 `handleMessage`**。
+  合理解释与 §13-3C 是同一件事的两面：ComfyUI 把执行事件只发给排队那个 client，而排队的是 comfy-cli
+  自己那条连接。⇒ #1278 在 WS 侧**没有可修的对象**，不是「漏接了一帧」。
+  **这条读数的边界要说清**：`handleMessage` 那四个 `trace("ws", …)` 出口里，只有「非合法 JSON」
+  （278 行）在 `if (!promptId) return;` 这一跳**之前**，其余三条（无归属任务 292 / WS 消息 296 /
+  执行错误 423）都在之后。所以 kind=`ws` 全 0 同时意味着「连一帧解析失败的原文都没来」，
+  唯一覆盖不到的是「**合法 JSON 但不带 `prompt_id`**」那一类（`status` 就属于它）——
+  能断言的是「带 `prompt_id` 的执行帧一条都没来」。
+  这条读数顺带问出一个更该记账的问题（**executor-ws 那套按节点分支现在是否已零消费**），
+  开成 ISSUE #1315，取证清单在那个 issue 里；结论拿到之前不动 `executor-ws.ts`。
+- 缓存轮的「这一轮省了多少时间」没做（需要 ComfyUI 侧的耗时口径，本刀只有 `claimedAt`→`finishedAt`
+  这一格，不足以拆出「重算 vs 取缓存」）。
+
+---
+
+## 28. #1315（`executor-ws` 的按节点分支是否已零消费）——取证结论与留下的口径
+
+这条是 §27 末尾那次自我订正顺带问出来的（订正本身走 PR #1316）。结论已经拿到，且**不是**「修一个 bug」，
+而是把一条通道的真实承载能力钉进文档 + 让它以后可被数出来。
+
+### 取证分两步，缺第二步就得不到结论
+
+**第 1 步：两种形态各数一轮 trace 的 kind 分布。**
+
+| 形态 | 怎么起的 | 那一轮 | 新增 trace 按 kind |
+| --- | --- | --- | --- |
+| host | `scripts/executor-host.mjs` + 副本库（§27 那批复演） | 混合轮 | `cli`=80 / `history`=1 / **`ws`=0** |
+| inline | 独立端口 `next dev -p 3999` + 副本库 + 子进程 env 给 `COMFY_EXECUTOR=inline`（进程 env 优先于 `.env` 那份 `host`） | 混合轮（`execution_cached`×7 + `executing`×4 + `progress`×25，SUCCEEDED，`progressNode` 落 KSampler） | `cli`=80 / `history`=1 / **`ws`=0** |
+
+到这里只能得到一句**有限**的话：带 `prompt_id` 的执行帧没落到 `handleMessage`。分不开的是另一半——
+「帧来了但不带 `prompt_id`」与「一条帧都没来」在 trace 里长得一模一样，因为当时四个
+`trace("ws", …)` 出口里只有「非合法 JSON」在 `if (!promptId) return;` 之前，其余三个都在之后。
+
+**第 2 步：把那一跳变成可观测的，再数一次**（这是 #1315 取证清单的第 2 步，不是可选装饰）。
+补完之后同一套架子数出来：
+
+```
+kind=ws 35 条，全部走「不带 prompt_id」这一跳：
+  status               ×4    dataKeys: ["status","sid"]
+  kaytool.resources    ×16   dataKeys: ["cpu_percent","cpu_count","cpu_name","ram_total",…]
+  dasiwa.system_monitor×15   dataKeys: ["cpu_percent","cpu_count","ram","swap","disks","gpus"]
+```
+
+⇒ **连接是活的、帧确实在来，但来的只有 `status` 与第三方自定义节点的遥测广播，一条执行帧都没有。**
+合理解释与 §13-3C / §27 那句是同一件事：ComfyUI 把执行事件只发给**排队那个 client**，而自 4-B3
+「唯一提交实现 = comfy-cli」之后，排队的从来不是本应用这条 WS。
+
+### 结论与处置（走向 1，签字前不提删除）
+
+1. `executor-ws` 的 `node-started` / `node-finished` / `progress` 三段与 `protocol-adapter` 的对应分类
+   **今天是零消费的**。
+2. **不删**。那是给「直连 `/prompt`」形态留的正确实现，帧哪天回来就得是对的；删掉等于把
+   「回到那形态时静默丢现场」埋回去（与本线「不靠删除解决问题」的一贯取向一致）。
+3. 面板里的**按节点现场只可能来自 `executor-cli-stream.ts`** 这一句，写进两个模块的头
+   （`executor-ws.ts` 与 `protocol-adapter.ts`），并指明「在这条通道上补可见性类功能会测不出效果」——
+   #1278 之所以在 WS 侧没有可修对象，正是这条。
+4. 那一跳的留证**按类型只落第一帧**，并设类型数上限（32）。逐帧落盘的话一轮里三分之二是同一个类型的
+   重复行、遥测约 1s 一条，长会话一小时就是几千行诊断噪声，而这个问题只需要「这类帧来过」这一个事实。
+   判据两条、四个断言分别钉住：留证存在（且不写库）、同类型不重复、新类型仍要落（预算不许退化成
+   「只记第一条」）、集合有界。
+   变异验证：拿掉两条预算 → **2 条红**（`got 2` / `got 40`），还原全绿。
+
+### 为什么没有给「按节点行只来自 cli」加机器判据
+
+写不出不误报的静态判据：它要断言的是「某类事件在运行期不会从某个来源到达」，属于外部服务行为，
+不是仓库里的源码形状（同类先例见 AGENTS 硬规则 24 末尾——别再为「该不该通用」造启发式扫描器）。
+所以这一条走**文档 + 可观测点**：模块头写明拓扑、那一跳留证可数，将来若执行帧真的开始到达，
+`kind=ws` 的帧型分布会立刻把它暴露出来，而不是等面板少了一行才发现。
+
+### 复演手法（下次要测 inline 形态照这个，别碰用户的实时链路）
+
+副本库用 `vacuum into`（正被 dev server 开着的库直接 `cp` 会拷到 `-wal` 未合并的页）；
+`DATABASE_URL` 与 `COMFY_EXECUTOR` 都走**子进程 env**（进程 env 优先于 `.env` 回读，见
+`launcher-core/executor-mode.mjs`），这样 `.env` 里那句 `COMFY_EXECUTOR=host` 不影响本次取证，
+也不往用户的 `db.sqlite` 与任务历史里写任何东西；`next dev` 用 `process.execPath` +
+`createRequire().resolve("next/dist/bin/next")` 起（不经 pnpm 的 `.cmd` 壳，见 #1306 那条），
+端口另起一个避免与用户实例共写 `.next`（#1182），跑完 `scripts/reap-process.mjs <pid> --force`
+整树回收并清 `public/generated/<taskId>` 与 `temp/comfy-cli/wf-*.json`。
+尺寸压到 512²（`workflowInputs` 的 `aspect_ratio` 换 `1:1 (Square)`、`megapixels` 给 0.25）省显存与时间。

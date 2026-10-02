@@ -11,6 +11,7 @@ import {
   isRoutineRpcTimingLine,
   parseFileLogs,
   mergeTimeline,
+  dedupeByIdentity,
   dedupeRepeats,
   selectPageLogs,
   selectNewLogCount,
@@ -21,6 +22,7 @@ import {
   selectFirstPageWindow,
   captureLocation,
   computeOriginCounts,
+  computeFiltered,
   bucketOf,
   CONSOLE_ORIGIN,
   formatEntryForClipboard,
@@ -198,7 +200,14 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
       warn: 1,
       error: 1,
     });
-    for (const origin of ["dev", "launcher", "app", "app-runtime"] as const) {
+    for (const origin of [
+      "dev",
+      "launcher",
+      "shell-launch",
+      "shell",
+      "app",
+      "app-runtime",
+    ] as const) {
       expect(table[origin].all).toBe(origin === "app" ? 1 : 0);
     }
   });
@@ -224,6 +233,8 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
       all: zero,
       dev: zero,
       launcher: zero,
+      "shell-launch": zero,
+      shell: zero,
       app: zero,
       "app-runtime": zero,
       [CONSOLE_ORIGIN]: zero,
@@ -233,11 +244,19 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
   /* ISSUE #262 六审：用户的原话是「有的日志只在全部页签才显示，这种也要有自己的
    * 分类或是归入其他分类」。判据是一条**守恒关系**：各分类加起来 = 全部来源。
    * 它把「有没有行落不进任何分类」变成可断言的等式——再加一类新来源却忘了给它
-   * 建桶，这条会红。 */
+   * 建桶，这条会红。
+   *
+   * ⚠️ 这条守恒用的是**互不重复**的行（每行内容不同、各属一个来源）。真实面板
+   * 里同一条启动行会同时躺在 launcher / 启动 / 壳侧编排 / 壳日志四份文件里，
+   * 那时「逐来源各数一份」与「全部来源按条去重」**本来就不相等**，界面上也必须
+   * 分开摆（见 `ORIGIN_TEXT.all` 与 `dedupeByIdentity`）；撞时间线上限时更会
+   * 连这个等式都算不出来（ISSUE #1240 / #1282 的实时红）。 */
   it("守恒：各分类之和 = 全部来源（没有行落不进任何分类）", () => {
     const logs = [
       makeEntry({ origin: "dev" }),
       makeEntry({ origin: "launcher", level: "warn" }),
+      makeEntry({ origin: "shell-launch" }),
+      makeEntry({ origin: "shell", level: "warn" }),
       makeEntry({ origin: "app" }),
       makeEntry({ origin: "app-runtime", level: "error" }),
       makeEntry({ level: "error" }), // console 拦截
@@ -248,6 +267,8 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
     const buckets = [
       "dev",
       "launcher",
+      "shell-launch",
+      "shell",
       "app",
       "app-runtime",
       CONSOLE_ORIGIN,
@@ -261,6 +282,75 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
       const perLevel = buckets.reduce((acc, key) => acc + table[key][level], 0);
       expect(perLevel).toBe(table.all[level]);
     }
+  });
+
+  /* ISSUE #1282：e2e 那条守恒在整批跑时红（`Expected: 5000, Received: 3335`），
+   * 根因不是「撞上限」，而是**同一批行的副本**——六路来源各自读自己那份文件，而
+   * 其中若干文件装的是同一段内容的副本（`dev-launcher.log` 转写 dev 的输出、
+   * `shell-launch.log` 与 launcher 的两份互相重叠）。同一条日志因此：
+   *   · 只在「全部来源」里算一条（`all` = 身份数）；
+   *   · 在它落过的每个来源里各算一条（那是「切过去会看到几行」的答案）。
+   * 于是「各分类之和 = 全部来源」这条等式在副本面前**本来就不成立**，
+   * 强行断言它等于把两个不同语义的量画成可相加的分项。 */
+  it("同一条日志被多路读到：全部来源算一条，逐来源各算一份（守恒只在来源内成立）", () => {
+    const dup = {
+      time: 1_700_000_000_000,
+      level: "info" as const,
+      message: "同一行",
+    };
+    const table = computeOriginCounts([
+      makeEntry({ ...dup, origin: "dev" }),
+      makeEntry({ ...dup, origin: "launcher" }),
+      makeEntry({ ...dup, origin: "shell" }),
+      makeEntry({ ...dup, origin: "shell-launch" }),
+      makeEntry({ origin: "app", message: "别的行" }),
+    ]);
+
+    /* 「全部来源」= 两条不同的日志（副本不重复算）。 */
+    expect(table.all.all).toBe(2);
+    /* 逐来源 = 那份文件里的行数：切到「启动器」确实会看到那一行。 */
+    for (const origin of [
+      "dev",
+      "launcher",
+      "shell",
+      "shell-launch",
+    ] as const) {
+      expect(table[origin].all).toBe(1);
+    }
+    expect(table.app.all).toBe(1);
+    /* 逐来源**内部**守恒仍然成立（该来源的四个级别之和 = 该来源的总数）。 */
+    for (const origin of [
+      "dev",
+      "launcher",
+      "shell-launch",
+      "shell",
+      "app",
+      "app-runtime",
+      CONSOLE_ORIGIN,
+      "all",
+    ] as const) {
+      const c = table[origin];
+      expect(c.info + c.debug + c.warn + c.error).toBe(c.all);
+    }
+  });
+
+  it("「全部来源」与逐来源同口径落到「切过去有几行」上（筛选结果与计数对齐）", () => {
+    const dup = {
+      time: 1_700_000_000_000,
+      level: "warn" as const,
+      message: "同一行",
+    };
+    const logs = [
+      makeEntry({ ...dup, origin: "launcher" }),
+      makeEntry({ ...dup, origin: "dev" }),
+    ];
+    /* 全部来源：副本只显示一次（时间线上不出现两条一模一样的行）。 */
+    expect(computeFiltered(logs, "all", "", "all")).toHaveLength(1);
+    /* 具体来源：照给，那是用户切过去要找的那一份。 */
+    expect(computeFiltered(logs, "all", "", "launcher")).toHaveLength(1);
+    expect(computeFiltered(logs, "all", "", "dev")).toHaveLength(1);
+    /* 计数与筛选同口径：全部来源数 1，与上面那行对得上。 */
+    expect(computeOriginCounts(logs).all.all).toBe(1);
   });
 
   it("bucketOf 是归类规则的唯一事实来源：无来源归 console，有来源归自己", () => {
@@ -509,6 +599,10 @@ describe("会话起点不得裁掉「每次运行覆盖重建」的来源（ISSU
     /* 每次运行覆盖重建 → 不裁：拿起点去裁只会把本次启动早期的行误判成历史 */
     expect(isSessionScopedOrigin("launcher")).toBe(false);
     expect(isSessionScopedOrigin("dev")).toBe(false);
+    /* 壳侧两路虽然也是追加写累积，但锚点晚于壳的启动报告——裁剪会把
+     * 「为什么起不来」的头几行裁掉，与 launcher / dev 同口径（不裁）。 */
+    expect(isSessionScopedOrigin("shell")).toBe(false);
+    expect(isSessionScopedOrigin("shell-launch")).toBe(false);
     /* 运行期生成、无文件来源 */
     expect(isSessionScopedOrigin(undefined)).toBe(false);
   });
@@ -1287,6 +1381,50 @@ describe("isPanelSelfPollingLine 面板自轮询行过滤", () => {
   });
 });
 
+/* ── 启动会话标记：三份副本必须折叠成一条 ───────────────────── */
+
+describe("壳写的启动会话标记在面板里的形态（ISSUE #1364）", () => {
+  /** 壳写下的那一行（Rust `session_start_marker` 的原样输出，含时刻前缀）。 */
+  const MARKER_LINE =
+    "[2026-10-02 12:00:00.000] [INFO] === 启动会话开始（本次双击启动的会话边界；" +
+    "壳已接手、即将拉起编排器；本行之后的内容都属于本次启动，面板据此裁掉历史日志；" +
+    "shell_pid: 51972）";
+
+  it("标记解析成一条 info 条目，后面紧跟的启动报告不被吞掉", () => {
+    // 用户原话：「启动器日志中有很多 `=== 启动会话开始（shell_pid: …）`，只能看到
+    // 启动了会话，启动会话是做什么的没有体现出来」。两件事都要成立：这一行自己
+    // 说得清（Rust 侧的判据在 `shell_launch.rs` 的同名单测里），且**不是最后一条**
+    // ——紧跟其后的启动报告才是「接下来会怎样」的那段现场。
+    const entries = parseFileLogs(
+      [
+        MARKER_LINE,
+        "[2026-10-02 12:00:00.100] [INFO] === 启动报告：壳已接手（双击 app.exe） ===",
+        "[2026-10-02 12:00:00.200] [INFO]   项目根: F:\\AI\\Other\\comfy-app-t3",
+      ].join("\n"),
+      undefined,
+      "shell-launch",
+    );
+    expect(entries).toHaveLength(3);
+    expect(entries[0]?.level).toBe("info");
+    expect(entries[0]?.message).toContain("会话边界");
+    expect(entries[0]?.message).toContain("编排器");
+  });
+
+  it("同一行落在三份文件里（壳侧编排 / 壳日志 / 启动器）折叠成一条", () => {
+    // 壳把同一个标记写进 shell-launch.log / shell.log / dev-launcher-stderr.log。
+    // 面板把三路合进同一条时间线，去重键是「时刻 + 级别 + 正文」——三份各自盖
+    // 一个「此刻」就会被读成三条，用户看到的就是「这条标记有很多条」（ISSUE #1364）。
+    // 判据的写法侧那一半（三份共用一个 `stamped`）在 `shell_launch.rs` 的单测里。
+    const perSource = (["shell-launch", "shell", "launcher"] as const).map(
+      (origin) => parseFileLogs(MARKER_LINE + "\n", undefined, origin),
+    );
+    expect(perSource.every((e) => e.length === 1)).toBe(true);
+    const merged = dedupeByIdentity(perSource.flat());
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.message).toContain("启动会话开始");
+  });
+});
+
 /* ── parseFileLogs ────────────────────────────────────────── */
 
 describe("parseFileLogs 文件日志解析", () => {
@@ -1411,6 +1549,43 @@ describe("parseFileLogs 文件日志解析", () => {
     it("普通前缀词（[rpc] / [system]）不被级别容错吞掉", () => {
       const entries = parseFileLogs("[10:23:00] [rpc] abc 155ms", base);
       expect(entries[0]?.message).toBe("[10:23:00] [rpc] abc 155ms");
+    });
+
+    /*
+     * 壳侧编排链路日志（`log/launcher/shell-launch.log`）的形态：
+     * `[时刻] [级别] [orchestrator] 正文`。行结构必须**只有一层**时刻 + 级别——
+     * 时刻走面板行首（不进正文）、级别走徽标，正文只剩 `[orchestrator] 正文`。
+     *
+     * 回归的背景（ISSUE #1365）：壳曾把编排器已经带好的「时刻 + 级别」原样塞进
+     * 正文、再补一层自己的，用户就在同一条日志里读到两份时刻两份级别
+     * （正文里嵌套 `[定宽时刻] [STEP ]`）。现在由 `shell_launch.rs` 的
+     * `strip_orchestrator_line_prefix` 在源头摘掉，面板这侧只认「一层前缀」这一种结构。
+     */
+    it("壳转发编排器输出：只保留一层时刻与级别，正文不再嵌套", () => {
+      const entries = parseFileLogs(
+        "[2026-10-02 11:50:31.391] [INFO] [orchestrator] 检查端口占用",
+        base,
+        "shell-launch",
+      );
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.level).toBe("info");
+      expect(entries[0]?.message).toBe("[orchestrator] 检查端口占用");
+      /* 时刻只来自行首（面板行首那一个），正文里不得再出现第二份时刻/级别。 */
+      expect(entries[0]?.time).toBe(
+        new Date(2026, 9, 2, 11, 50, 31, 391).getTime(),
+      );
+      expect(entries[0]?.message).not.toContain("2026-10-02");
+      expect(entries[0]?.message).not.toContain("[STEP ]");
+    });
+
+    it("壳转发编排器输出的警告级别同样只出现一次", () => {
+      const entries = parseFileLogs(
+        "[2026-10-02 11:50:31.400] [WARN] [orchestrator] 180 秒内未就绪",
+        base,
+        "shell-launch",
+      );
+      expect(entries[0]?.level).toBe("warn");
+      expect(entries[0]?.message).toBe("[orchestrator] 180 秒内未就绪");
     });
   });
 
@@ -1850,14 +2025,16 @@ describe("appendFileLogs 走时间线合并（#262 回归）", () => {
  * **连续**重复，且只保留前 limit 条 + 一条「重复 N 次」说明。
  */
 describe("dedupeRepeats 连续重复行折叠", () => {
-  /* 连续重复行的定义是「时刻 + 级别 + 内容」全同（跨来源去重用的同一判据），
-   * 因此夹具刻意让 message 取同一个值，只有 time 不同也不影响折叠（相邻即折叠）。 */
+  /* 连续重复 = 「级别 + 内容」相同的**相邻**行（同一条应用在每轮轮询里重写一遍，
+   * 时刻必然不同，因此折叠键不带时刻）。这里逐秒递增模拟真实节奏：同一毫秒的
+   * 同一段正文属于另一条规则——那是「同一条日志被多路读到」的跨来源副本，
+   * 由 `mergeTimeline` 收成一条，根本走不到显示层（见 `arrivalKey`）。 */
   const repeat = (n: number) =>
     Array.from({ length: n }, (_, i) =>
       makeEntry({
         id: `r-${i}`,
         message: "ComfyUI 未就绪，等待中",
-        time: 1_000 + i,
+        time: 1_000 + i * 1_000,
       }),
     );
 

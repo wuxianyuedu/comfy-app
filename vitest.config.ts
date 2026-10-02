@@ -27,8 +27,12 @@ export default defineConfig({
      * 也就是**不开并行都会红**。全量并行时再乘一份争用系数：16 逻辑核上
      * 约 10 个 worker，而门禁用例各条要 `execFileSync` 真起 Node / git /
      * prettier 子进程，一轮实测 28 条报 `Test timed out in 5000ms`、
-     * 2 个文件报 `Hook timed out in 10000ms`（两个 theme 用例的 `beforeAll`
-     * 要现编一份 CSS，隔离跑 7.2s）。
+     * 2 个文件报 `Hook timed out in 10000ms`。
+     * 那两份红来自 theme 用例的 `beforeAll` 现编一份 CSS（隔离 7.2s/文件），
+     * 这一项已经从根上去掉了：编译输入源固定后实测 0.13s/文件
+     * （理由与反向判据见 `tests/helpers/theme-tokens.ts` 和
+     * `tests/theme-tokens-compile-source.test.ts`，ISSUE #1336），
+     * 所以这两个预算**没有为它再抬一次**，留给「起子进程」那一类继续用。
      *
      * 20s = 最慢实测值 ×3.6；`it()` / `describe()` 上已有的显式预算
      * （10s / 30s / 60s / 120s 那几处）优先级更高，不受这里影响。
@@ -183,9 +187,11 @@ export default defineConfig({
         "src/components/ui/use-reentrancy-lock.ts",
         "src/components/ui/use-refresh-ticket.ts",
         "src/components/ui/use-busy-action.ts",
-        /* P82 的合规出口（悬停提示收成一处，规范 16 §16.2.3 / §12.18 补地基）。
-         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        /* P82 的合规出口（悬停提示收成一处，规范 16 §16.2.3 / §12.18 补地基）
+         * 与它脚下的 `tooltip.tsx`（ISSUE #1295 给它加了视口安全边距，
+         * 见规范 §16.8 台账）。与上面那批同款：**两处同批改**。 */
         "src/components/ui/hint.tsx",
+        "src/components/ui/tooltip.tsx",
         /* `ui/toggle-group` 的选中档三层是本仓库的定制（规范 16 §16.8），
          * 有用例钉住就得进门槛。同款 **两处同批改**。 */
         "src/components/ui/toggle-group.tsx",
@@ -196,6 +202,17 @@ export default defineConfig({
          *     存在性判据），用例自带 `@vitest-environment jsdom`。 */
         "src/lib/layout-budget.ts",
         "src/components/ui/use-narrow-nav.ts",
+        /* 悬浮元素「拖到哪、下次还在哪」这一笔账的两个出口（ISSUE #1295 /
+         * 规范 16 §16.2.4.72）：
+         *   · `use-draggable-position` 是拖动 + 位置记忆 + 视口夹取，
+         *     用例覆盖到「阈值内算点击 / 超阈值算拖动」「拖出视口被夹住」
+         *     「窗口缩小后收紧」「只接主键」；
+         *   · `use-viewport-size` 是「视口多大」的唯一读数，用例覆盖到
+         *     「首帧 `null`」「resize 跟随」「取值未变不换引用」。
+         * 同款 **两处同批改**（`coverage.include` + `thresholds`）——
+         * 只写门槛不进 `include` 会让门槛静默失效。 */
+        "src/components/ui/use-draggable-position.ts",
+        "src/components/ui/use-viewport-size.ts",
         /* API 路由 handler（体检清单 ⑦ 的第一批：闸门与三态契约类）。这一层此前
          * **整层不在覆盖率面上** —— 既不在 `src/lib` 也不在 `src/server` 的通配里，
          * 于是路由的鉴权 / 路径包含 / 状态码契约坏了没有任何数字会动。
@@ -235,7 +252,131 @@ export default defineConfig({
          * 它已在 `src/lib/shell/**` 这一组里，而没覆盖到的分支只有 darwin/linux
          * 两条平台分叉（本机是 win32，跑不到），单列一条只会把「测不到的那支」写进门槛。 */
         "src/lib/url-scheme.ts",
+        /* A13 残留② · 字节范围解析（`Range`）收成一处：产物读取口是视频与大图的
+         * **唯一**出口，`Range` 的三种结论（整份 / 一段 / 满足不了）在这里判形状，
+         * 端点只翻状态码。满档的理由与 `url-scheme.ts` 同一条：它是四条出口共用的
+         * 那一句判据 —— 掉一支不是「那一支没测」，而是某一种请求会被答成另一种错。 */
+        "src/server/lib/range-request.ts",
         "src/server/api/routers/setting.ts",
+        /* 体检清单 ⑨ 第一刀 · 素材库的归属：
+         *   · `media/materials.ts` 是 scope 归属与路径清洗的**唯一判据所在**，
+         *     所以它的分支必须被数字盯着；
+         *   · 这里原本还登记着 `routers/material.ts`：它与 `api/materials/route.ts`
+         *     是同一套判据的两扇门，而界面只走 REST 那扇（`media/materials-client.ts`）
+         *     —— 零消费方的那扇随台账 E3′ 删除，判据的覆盖面由 REST 这一门 +
+         *     `materials.ts` 本身承担，不减反稳。
+         * 两条都按**实测**登记（不是回退）；未覆盖的部分主要是 REST 的 500 兜底与
+         * 素材列举里的 stat 失败分支，欠账记在 E7 边上。 */
+        "src/lib/media/materials.ts",
+        "src/app/api/materials/route.ts",
+        /* 体检清单 ⑨ 第五刀 · 产物布局收口（台账 A8 第二段）带出的四个入口：
+         *   · `film/compose-steps.ts` —— 本批那条真故障的所在地（`clipPathOf` 不剥
+         *     `api/` 段 ⇒ 成片合成每条镜头必败），解析改成吃 `output-paths` 的共用判据；
+         *   · `app/api/film/bgm/route.ts` 与 `workshop/media-source.server.ts` ——
+         *     改之前的共同点是**零执行者**：改了判据却没有一处执行它，就是「修了 ≠ 记了」
+         *     那个老形状（§11.2.1 第二条），所以本批各补一组用例；
+         *   · `comfyui/firstframe.ts` —— 同一句地址的另一份解析（它剥了 `api/`，
+         *     与上面那份结论相反），换共用判据后需要数字看着。
+         * 门槛全部取这批用例的实测下限（见对应阈值块里的留痕）。 */
+        "src/server/film/compose-steps.ts",
+        "src/app/api/film/bgm/route.ts",
+        /* E3‴ 第一条 · 本机代理 ComfyUI 媒体字节的落点（`/api/images`）。
+         * 这条口此前**根本不存在**：`comfyImageUrl()` 把地址收成一处（那是对的），
+         * 而 handler 在基线迁移时没带过来 —— 于是画布 IMAGE 输入的预览、工作流图片
+         * 预览、训练素材缩略图全部按空态吞掉。四项皆满是因为该判的四支各有用例：
+         * 会话闸（且一次上游都不碰）、三种形状闸（缺名 / 目录成分 / 类别不在枚举）、
+         * 上游 404 与别的状态与连不上三种失败各自一个码、响应头必须 private 且不许
+         * immutable。少任何一支都会掉下 100 当场红。 */
+        "src/app/api/images/route.ts",
+        "src/lib/workshop/media-source.server.ts",
+        "src/lib/comfyui/firstframe.ts",
+        /* ⑨ 第六刀 · 产物根搬出 `public/`（台账 A13 收官）带出的两个新文件：
+         *   · `media/output-layout.ts` —— 布局的**形状**（目录名 / 子层 / URL 前缀 /
+         *     给人看的相对落点），浏览器安全（不引 `node:path`），界面与
+         *     `output-paths.ts` 都吃它。它必须有门槛：这一层存在的唯一理由就是
+         *     「界面向用户说落点时不再抄字面量」，抄回去的话不会有任何别的信号。
+         *   · `media/artifact-root-migration.server.ts` —— 一次性搬迁历史盘上文件。
+         *     它对错的代价不对称（弄丢用户的图 vs 少搬一项），所以「绝不覆盖」
+         *     那条必须有数字看着。 */
+        "src/lib/media/output-layout.ts",
+        "src/lib/media/artifact-root-migration.server.ts",
+        /* 首页「本机算力」卡带出的两个新出口：**两处同批**登记。
+         *   · `comfy-resource-metrics.ts` —— 显存/内存口径命名的唯一出处，状态栏与
+         *     首页卡都读它；它一旦漂移，两处消费点会同时变红（负向验证实测过），
+         *     所以这一层必须有数字看着。
+         *   · `LocalComputeCard.tsx` —— 「读不到数的三种情形」是这张卡的全部价值，
+         *     分支都在 jsdom 用例里走到位。
+         * 门槛取实测（两者单跑皆 100/100/100/100，见各自用例）。 */
+        "src/components/studio/comfy-resource-metrics.ts",
+        "src/components/studio/LocalComputeCard.tsx",
+        /* 体检清单 ⑦ 第四刀 · 产物读取口的归属（台账 A13）：
+         *   · `media/output-access.ts` 是「这条产物能不能确定属于别人」的唯一判据。
+         *     它按落点命名分三族（素材格 / 画布格走项目行、`films` 走出成片行、
+         *     其余走任务行），每族一条查询、每条都有一个「查不到就放行」的保守侧
+         *     —— 那个侧写坏了不会报错，只会把自己的图打成 404，所以必须满档判定。
+         *   · 同批改的 `api/generated/[...path]/route.ts` 已在上面第一批里（满档），
+         *     它的用例新增了「拒绝发生在 readFile 之前」与「Cache-Control 必须是
+         *     private」两档 —— 后者是这条闸的实际出口：标 `public` 会让共享缓存
+         *     把 A 的产物回给 B，判据写得再对也只剩形式。 */
+        "src/lib/media/output-access.ts",
+        /* `src/proxy.ts` —— 产物读取口的**接线**本身（台账 A13 的最后一环）。
+         * 产物落在 `public/generated/` 下，而 `public/**` 由 Next 按静态文件直接发出、
+         * 不经过 route handler —— 只在 route 上加闸门时，把 URL 里的 `api/` 去掉就整条
+         * 绕过（本机实测：同一份图，静态形状 200、带闸形状 401）。这一层不进覆盖率面，
+         * 「闸有没有真的接到请求上」就没有任何数字会动；而它的失效形态是**零报错**。 */
+        "src/proxy.ts",
+        /* 模型库这一刀的三个新文件（**两处同批**登记）。两个既有文件刻意不在这里
+         * 新设门槛：`ModelCard.tsx` 与 `ModelLibrary.tsx` 此前不在覆盖率面上，
+         * 拿一次隔离跑的数去锁它们，等于用不等同于全量的口径立规矩 —— 它们的行为
+         * 判据在各自的用例里（死链、假基座、缺档位都各有用例钉着），不靠数字兜。 */
+        "src/components/model/model-type-labels.ts",
+        "src/components/model/model-cover.ts",
+        "src/components/model/ModelDetailDialog.tsx",
+        /* 首页「模型概览」这一刀的两个新文件（**两处同批**登记）。
+         * `hooks/use-model-overview.ts` 刻意不登记：它只是把 tRPC 的一行结果转交给
+         * `deriveModelOverview`，判断力全在那个纯函数里 —— 给一行接线设门槛，
+         * 数字看着严格，实际什么都不守。 */
+        "src/components/studio/model-overview-derive.ts",
+        "src/components/studio/HomeModelOverview.tsx",
+        /* 体检清单 ⑨ 第二刀 · 四个零执行者的 router（台账 E3 从 7/16 抬到 11/16）：
+         * `film` / `train` / `model` / `llm`。这一批照出的不是「闸门弱」而是
+         * **「闸门 procedure 自己就是死的」**：`train.cancel` 的第三参在 Prisma→Drizzle
+         * 迁移期是 `select?: unknown` + `select as never`，调用点写成 Prisma 的布尔投影
+         * `{ id: true, status: true }` 时编译器一声不响、运行时生成空投影 → SQL 语法错，
+         * 于是「取消训练」自那次迁移起每次 500 —— 路由没有执行者，所以没有任何一条红。
+         * 四条全按实测满档登记（52 条用例把归属、数值/协议/枚举闸与「拒绝发生在副作用
+         * 之前」逐分支钉住），掉一支当场变红。 */
+        "src/server/api/routers/film.ts",
+        "src/server/api/routers/train.ts",
+        "src/server/api/routers/model.ts",
+        "src/server/api/routers/llm.ts",
+        /* 工坊「镜头胶片带」这一刀的两个新文件（**两处同批**登记）。
+         * 状态表是从 `ShotStudio.tsx` 搬过来的：胶片带要用同一份文案，而胶片带会被
+         * `ShotStudio` import —— 反向去 ShotStudio 取就是一组循环依赖（`check-circular-deps`
+         * 的判据）。搬出来正好补上这份表此前没有的门槛。 */
+        "src/components/workshop/shot-status-config.ts",
+        "src/components/workshop/ShotFilmStrip.tsx",
+        /* 体检清单 ⑨ 第三刀 · 错误信封（台账 E8）带出的三个 router：
+         *   · `skill.ts` / `workflow-model.ts` 是「零执行者 router」清单里的两个，
+         *     这一刀各给一套用例（重名的 CONFLICT、越权重名的 NOT_FOUND、
+         *     幂等早退不该抛错 —— 三个码各不相同才是可分支的界面）；
+         *   · `generate.ts` 是因为本刀把它的两处裸 Error 改成 4xx 才进面（改了就要有数字看着）。
+         * 数值取**这批用例实测**（`run.ts` 没进来：它的分支大头在别线的工坊编排里，
+         * 这一刀的改动只到错误信封，按 85/75 立个门槛等于替别人记账）。 */
+        "src/server/api/routers/skill.ts",
+        "src/server/api/routers/workflow-model.ts",
+        "src/server/api/routers/generate.ts",
+        /* 体检清单 ⑨ 第四刀 · E3 收口（台账 E3）带出的一个 router：
+         * `workflow-detail.ts` 是 `workflow` 这个聚合 router 拆出去的三个兄弟文件之一，
+         * 它的 `detailFull` / `subgraph` 此前**零执行者** —— 而 `workflow.test.ts` 34 条
+         * 用例在场，「这个 router 有测试」这句话当时照样全绿（这正是判据升到 procedure
+         * 粒度的原因）。同族的另外几个文件（`workflow-list.ts` / `workflow-mutations.ts` /
+         * `workflow-local-roots.ts`）不在这一刀的范围：它们的用例早就在场，缺的是门槛登记，
+         * 那是 E7 覆盖率欠账的账，不是本批改动的账（口径同上面那句 `run.ts`）。 */
+        "src/server/api/routers/workflow-detail.ts",
+        /* 视图页签 刀1 的状态模型（**两处同批**登记）。它是纯函数、判断力全在这里
+         * （页签身份、开/关/回落、序列化的"整份可用否则整份放弃"），组件侧只是接线。 */
+        "src/components/studio/workspace-tabs.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -325,6 +466,39 @@ export default defineConfig({
           functions: 80,
           statements: 75,
           branches: 70,
+        },
+        /* markdown 渲染域（ISSUE #1329）：`marked` + `DOMPurify` 的接线、消毒
+         * 白名单、样式表。新增域**同批**登记（规范 §12.5.3 R14 / §18.6）——
+         * 数值取自 `pnpm exec vitest run --coverage src/lib/markdown` 的实测值
+         * 向下取整到 5 的倍数（lines 95.9 / branches 91.7 / functions 100 /
+         * statements 97.6 → 95/90/100/95），只升不降。
+         * 未满 100 的是 lines 与 branches 两项：`styles.ts` 的「标签名 → 规则」
+         * 表里有若干本仓库目前不产生的标签（`h6` / `details` 等），它们是给将来
+         * 留的落点而不是漏测；`html.ts` 里还留着「已缓存实例」这一条快路径分支。
+         * 覆盖率工具按行/按分支算得到它们，用例数不到 —— 判据以实测为准（§18.6）。 */
+        "src/lib/markdown/**": {
+          lines: 95,
+          functions: 100,
+          statements: 95,
+          branches: 90,
+        },
+        /* 应用内控制台（ISSUE #1327）：命令目录/解析（`console-catalog`）、
+         * 回环闸门（`console-guard`）、SSE 客户端（`console-client`）、
+         * 执行面（`console-run`）、运行槽单例（`console-registry`）。
+         * 新增域**同批**登记（规范 §12.5.3 R14 / §18.6）：本条的数值取自
+         * `pnpm exec vitest run --coverage src/lib/console` 的实测值向下取整到
+         * 5 的倍数（96.39 / 84.35 / 100 / 98.41 → 95/80/100/95），只升不降。
+         * 为什么 functions 只给 95、branches 只给 85：执行面里有几条分支在本机
+         * **够不到** —— `spawn` **同步**抛（可执行文件不存在时 Node 走的是异步
+         * `error` 事件，已由用例覆盖）、`remaining <= 0` 那一轮的兜底、
+         * 以及若干「参数交互上到不了」的默认值分支。它们的判据在用例里
+         * （含真起进程断言整树回收），只是覆盖率工具按行/按分支算不到。
+         * 门槛仍按同一条口径取：实测值向下取整到 5 的倍数。 */
+        "src/lib/console/**": {
+          lines: 95,
+          functions: 95,
+          statements: 95,
+          branches: 85,
         },
         // Phase 3a：生产模型同步 reducer（shot ↔ 画布节点）。sync.ts 实测 100%，
         // 门槛取 95 给 3b/3c 追加留余量，只升不降（§18.6）。src/lib/** 已在
@@ -488,6 +662,22 @@ export default defineConfig({
           functions: 100,
           statements: 95,
           branches: 85,
+        },
+        /* ISSUE #1295 的两个出口。按 §18.6 取**实测值向下取整到 5 的倍数**：
+         * `use-draggable-position` 实测 93.9/75.6/100/100，未覆盖的是
+         *「元素始终为 null」那条兜底（真实调用里元素一定会挂上）与
+         * `viewportRef` 的空值回退；`use-viewport-size` 实测满档。 */
+        "src/components/ui/use-draggable-position.ts": {
+          lines: 90,
+          functions: 100,
+          statements: 90,
+          branches: 75,
+        },
+        "src/components/ui/use-viewport-size.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         /* 「标签 + 控件 + 校验错误」：ARIA 关联是本条账的核心，用例逐条钉
          * （htmlFor/id、aria-invalid、aria-describedby、空串错误、
@@ -892,6 +1082,10 @@ export default defineConfig({
         // `coverage.include` 里，整个服务端编排块**零门槛**）。数值取实测值
         // 向下取整到 5 的倍数（35.12/28.9/53.33/34.4），只升不降。
         //
+        // #1257 之后这一格里是三个文件（`orchestrator` 剧本/分镜/逐镜/监看、
+        // `compose-film` 合成与项目回写、`film-log` 行日志叶子），分母没变 —— 同一批
+        // 判决面换文件住，所以数值不下调也不上调（实测 64/76.7/64/55.6，门槛仍 30/50/35/25）。
+        //
         // 为什么不是更高：它的分母是整条「分镜 → 逐镜生成 → ffmpeg 合成」链路，
         // 未覆盖部分是真的起进程 / 拉工作流 / 等轮询的分支 —— 硬抬门槛会让无关
         // 提交变红（§18.6）。补它的正确方法是给编排判决面（镜头参数折算 / 合成
@@ -1012,6 +1206,15 @@ export default defineConfig({
          * 外加「render 接管后 onClick 与 disabled 不丢」「插锚点时提示挂在
          * 锚点上（禁用按钮的说明仍要弹得出）」两条形态回归。 */
         "src/components/ui/hint.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* `ui/tooltip` 本轮新进面：两条判据（默认留出安全边距、调用处可按容器
+         * 改档）。实测满档 —— 浮层的定位输出是引擎的事，用例只锁「档位来源」，
+         * 不去断言 `style.top` 这类派生像素值（规范 16 §16.2.3.1）。 */
+        "src/components/ui/tooltip.tsx": {
           lines: 100,
           functions: 100,
           statements: 100,
@@ -1150,12 +1353,273 @@ export default defineConfig({
           statements: 100,
           branches: 100,
         },
+        /* 与上面 `coverage.include` 同批登记（实测满档）。这条不敢留余地：
+         * 后缀形式、裁剪、`first > last` 的优先级这些分支只要有一支没人判，
+         * 表现就是某些浏览器拖进度条时拿到 416 或半截字节，而全仓库是绿的。 */
+        "src/server/lib/range-request.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 首页「本机算力」卡与它读的口径描述符（与上面 `coverage.include` 同批登记）。
+         * 满档的依据是实测而不是理想值：描述符是纯函数、卡片的分支全在 jsdom 用例里
+         * 走到位（含「未运行 / 首帧未到 / 迟滞期」三条互斥出口）。这块掉覆盖会同时
+         * 影响状态栏与首页两处消费点，值得被数字看着。 */
+        "src/components/studio/comfy-resource-metrics.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         /* `setting.ts`：分支 91.66 → 90。余下那一支是 `comfyStatus` 里
          * `status.via ?? null` 的另一侧（快照命中与外部实例两种来源）。 */
         "src/server/api/routers/setting.ts": {
           lines: 100,
           functions: 100,
           statements: 100,
+          branches: 90,
+        },
+        /* ── 体检清单 ⑨ · 素材库归属（实测登记）──────────────────────────── */
+        /* 旧值 95/90/85/80（⑨ 第一刀）→ 现在按判据层自己有用例之后的**实测**登记。
+         * 抬上来的原因不是「门多了」而是门少了一扇：tRPC 的 `material.*` 因零消费方删掉后
+         * （台账 E3′）这里掉到 78.43 分支、`check:all` 当场红 —— 那些清洗与包含分支此前只被
+         * 那扇门的用例**顺带**走过，而活着的 REST 门送进来的全是合法入参。
+         * 补法是给判据层自己一份用例（`materials.test.ts`，按判据本身组织），
+         * **不是 mock 出来凑数**：`folderDir` 那条包含断言从入口确实进不来（`scope` 过
+         * `sanitizeScope`、`folder` 是枚举），但把 `..` 直接交给 `folderDir` 是能真判掉的行为 ——
+         * 它是给「以后有人放宽那两条校验」兜底的双保险，现在有人判它。
+         * 分支到 100 意味着这一族的每一条 `if` 都有人判。变异核过三条：去掉 scope 的长度上限、
+         * 摘掉 `folderDir` 的包含断言、去掉隐藏文件的跳过 —— 各自恰好红一条，其余全绿。 */
+        "src/lib/media/materials.ts": {
+          lines: 100,
+          functions: 95,
+          statements: 98,
+          branches: 100,
+        },
+        /* REST 这一条（含 multipart 上传与 500 兜底）按实测登记：判据本身都测到了，
+         * 缺的是错误分支与超大上传的回执路径。
+         * 这里原有第三份 `routers/material.ts`（95/100/95/80）：那一扇门零消费方，
+         * 与本条是同一套判据的重复实现，随台账 E3′ 删除。删它那天本文件的分支覆盖掉到
+         * 78.43（`check:all` 当场红）—— 补的是判据层自己的用例（上一条），不是把门找回来；
+         * 那句「没去 mock `folderDir` 凑覆盖率」现在要说得更准：**没有 mock**，
+         * 是把 `..` 直接交给 `folderDir` 这条真函数判的（入口进不来，判据层可以直接判）。 */
+        "src/app/api/materials/route.ts": {
+          lines: 85,
+          functions: 80,
+          statements: 80,
+          branches: 75,
+        },
+        /* ── 体检清单 ⑦ 第四刀 · 产物归属判据（台账 A13，实测满档）──────────
+         * 敢设 100 是因为「三族 × 每族的保守侧」这六个分支真的各有用例：
+         * 项目格两种（我的 / 别人的）+ 共享区 + 库里没有的目录名、成片格三种
+         * （我的 / 别人的 / `_tmp_` 中间目录）+ 无主的 bgm + 查不到的 id、
+         * 任务格三种（我的 / 别人的 / 行已删）。少任何一支都会掉下 100 当场红。 */
+        "src/lib/media/output-access.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 同上：`matcher` 里那两条产物前缀是**删掉不会有任何用例报错**的一档
+         * （通配那条把带点路径全排除了，产物 URL 个个带扩展名），所以把它写成
+         * 对 `config.matcher` 的直接断言，并给这一层满档。 */
+        "src/proxy.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/studio/LocalComputeCard.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 模型库这一刀的三个新文件（与上面 `coverage.include` 同批登记）。
+         * 数值按**隔离实测**向下取整到 5 的倍数（§18.6），不抬到理想值：
+         *   · `model-type-labels.ts` 是纯表 + 一个查表函数，四项皆满；
+         *   · `model-cover.ts` 分支只到 50 —— 没走到的那支是色表为空时的兜底
+         *     （按设计不可达，写出来是为了不用非空断言）。如实登记 50，
+         *     而不是为了好看把它抬成 100 再让下一次全量红；
+         *   · `ModelDetailDialog.tsx` 未覆盖的是封面加载失败的 `fallback` 渲染
+         *     函数与 `onOpenChange` 的反向回调（弹窗只能由用户关掉，jsdom 里
+         *     没有真实的关闭路径）。 */
+        "src/components/model/model-type-labels.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* ── 体检清单 ⑨ 第二刀 · 四个 router（实测满档，52 条用例）─────────
+         * 满档的理由不是「行数少」，而是每个 procedure 的真分支都被判过：
+         * 归属（别人的 id 与不存在同形）、闸（协议 / 枚举 / 数值范围 / id 形状）、
+         * 以及「拒绝必须发生在副作用之前」（编排层与写库一次都没被调用）。 */
+        "src/server/api/routers/film.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/model/model-cover.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 50,
+        },
+        "src/components/model/ModelDetailDialog.tsx": {
+          lines: 85,
+          functions: 70,
+          statements: 90,
+          branches: 65,
+        },
+        /* 首页「模型概览」（与上面 `coverage.include` 同批登记）。
+         * 推导函数是纯输入输出、四项皆满；卡片未走到的那一支是「同时有折叠项和
+         * 空目录」之外的单条件组合，按实测向下取整到 90 而不是抬成 100。 */
+        "src/components/studio/model-overview-derive.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/studio/HomeModelOverview.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
+        },
+        "src/server/api/routers/train.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/server/api/routers/model.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/server/api/routers/llm.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 工坊「镜头胶片带」（与上面 `coverage.include` 同批登记）。
+         * 状态表是纯查表，四项皆满；胶片带未走到的两支是「场景标题为空」时可访问名
+         * 与提示文案的回退 —— 按实测登记 85，不为了凑满去造一个空标题的夹具。 */
+        "src/components/workshop/shot-status-config.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/workshop/ShotFilmStrip.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 85,
+        },
+        /* ── 体检清单 ⑨ 第三刀 · 错误信封（台账 E8）带出的三个 router ────────
+         * 门槛取这批用例的实测值向下取整到 5；`workflow-model.ts` / `generate.ts`
+         * 实测满档就登记满档（覆盖率只在**全量**这一档判，见 §11.7）。 */
+        "src/server/api/routers/skill.ts": {
+          lines: 90,
+          functions: 100,
+          statements: 90,
+          branches: 90,
+        },
+        "src/server/api/routers/workflow-model.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/server/api/routers/generate.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* E3 收口这一刀（见 coverage.include 同批注释）：`workflow-detail.ts` 三条
+         * procedure 各有一个入口，5 条用例把三条分支（归属塌形 / 三种 NOT_FOUND /
+         * 入参转发）都走满了 —— 单跑 `workflow.test.ts` 实测四维 100，就登记 100。 */
+        "src/server/api/routers/workflow-detail.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 视图页签 刀1 的状态模型（与 `coverage.include` 同批）。数值取隔离实测向下
+         * 取整到 5：行与函数满档；未走到的几支是「存储里某一项形状不对」的少数回退
+         * （语义上已被「任何一处不合法就整份放弃」那组用例覆盖，不为凑分支数造夹具）。 */
+        "src/components/studio/workspace-tabs.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 95,
+          branches: 90,
+        },
+        /* ⑨ 第五刀 · 产物布局收口（台账 A8 第二段）这四个入口的实测下限
+         * （数字来自「只跑这批用例」那一次测量，是**下限**，全量里只会更高）。
+         * 三处刻意不是满档，没盖到什么点名如下（不写「还有一些没测」这种含糊话）：
+         *   · `compose-steps.ts` 分支 65 —— 缺的是第 34 / 82 行
+         *     `fixed(fadeOut, 2) ?? "0"` 与 `fixed(dur, 2) ?? "0"` 的右半边：
+         *     `dur` 与 `fadeOut` 都由上层算成数字，实测构造不出 `null` 那个形状；
+         *   · `bgm/route.ts` 行 95 —— 缺的是第 40 行 100MB 大小闸那一句：
+         *     要造一个真 100MB 的 File 才盖得到，不值得为数字买那份内存与时长；
+         *   · `media-source.server.ts` 只有 35/30/30/35 —— 本批只补了「本地产物地址」
+         *     这一支的执行者（含那条 `path.sep` 边界的反向验证），`http(s)` 拉取与
+         *     `resolveMediaDataUrl` 两族（第 58–121 行）仍**零执行者**，那是 E7 的账；
+         *     登记低档是为了让「新增未覆盖」看得见，而不是把它藏进 workshop 的通配档里；
+         *   · `firstframe.ts` 分支 75 / 语句 95 —— 缺的是 `values` 里三个「参数没给
+         *     就不写」的展开支（38–40）、等待轮询的退避支（53）与「库里那行没有图」
+         *     的兜底支（74）。「地址不合法就不读盘」那一条本批已补用例并改成
+         *     精确断言整条绝对路径（不再用 `stringContaining` 蒙过去）。 */
+        "src/server/film/compose-steps.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 65,
+        },
+        "src/app/api/images/route.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/app/api/film/bgm/route.ts": {
+          lines: 95,
+          functions: 100,
+          statements: 95,
+          branches: 75,
+        },
+        "src/lib/workshop/media-source.server.ts": {
+          lines: 35,
+          functions: 30,
+          statements: 35,
+          branches: 30,
+        },
+        "src/lib/comfyui/firstframe.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 95,
+          branches: 75,
+        },
+        /* ⑨ 第六刀 · 产物根搬迁。`output-layout.ts` 四维满档（四个导出各有用例，
+         * 含界面用的 `artifactDirDisplay`）。搬迁那份留一档下限：唯一没盖到的是
+         * 「旧根本身读不到」（权限 / 正被别的进程删）那条 catch  return（第 84 行）——
+         * 造它要在别的用户下跑，不值当；这条路的后果只是「什么都不搬」。 */
+        "src/lib/media/output-layout.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/media/artifact-root-migration.server.ts": {
+          lines: 95,
+          functions: 100,
+          statements: 95,
           branches: 90,
         },
       },

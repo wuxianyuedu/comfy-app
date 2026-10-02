@@ -30,10 +30,15 @@ export type Job = {
    *  工作流」—— 面板标题是客户端拼的，日志行才是可导出/回放的自包含现场。 */
   workflowName?: string;
 
-  /** API 格式的图。**当前提交链路里没人写它**（两条入口都只带 `rawJson`，
-   *  载荷是模板的 RAW 原件），于是 `promptByTask` 也只剩读者——见下面的字段说明
-   *  与 ISSUE #1202。留着这一格是因为
-   *  comfy-cli 之外的提交形态（未来若回填 API 图）还要靠它表达形状。 */
+  /** API 格式的图，走 `executeViaComfyCli` 的**非 RAW 那条分支**
+   *  （`executor-cli.ts` 里 `applyApiOverrides(prompt, overrides)` → 收拾图 → 直接提交）。
+   *  今天的两条提交入口都只带 `rawJson`，所以这一格在当前链路上是空的 —— 但它是那条
+   *  分支的**入参**，不是没主的字段：删它等于把 API 提交形态一起删掉。
+   *
+   *  ISSUE #1202 原文写的正解是「两个读者改读 `executedWorkflow`，然后删掉
+   *  `promptByTask` 与 `Job.prompt`」—— 前半句照做了，后半句**没有照做**：真正没有写方
+   *  的只有 `promptByTask`（它原来只在已删的 `enqueue()` 里被 `job.prompt` 填过一次），
+   *  而 `Job.prompt` 有活消费者。留着它，等哪天真要删 API 分支时再一起删。 */
   prompt?: Record<string, unknown>;
 
   /** 原始 UI 格式的 JSON（含子图 wrapper）—— 走 comfy-cli 执行。 */
@@ -77,13 +82,6 @@ export type RunnerState = {
   connecting: boolean;
 
   promptToTask: Map<string, string>;
-
-  /** taskId → 本次提交的 API 图，只给 WS 进度帧认「当前节点的 class_type」用。
-   *  写入方随 P3 §5 ADR §14 D1 第二刀消失（`Job.prompt` 在当前链路里永远是空，
-   *  两条提交入口都只带 RAW 原件），所以现在 raw 任务的节点标签会退化成
-   *  「未知节点」——与改前行为一致，不是新缺口。正解是改读同进程已有的
-   *  `executedWorkflow`（comfy-cli 存的就是提交那一刻的图），登记在 ISSUE #1202。 */
-  promptByTask: Map<string, Record<string, unknown>>;
 
   /** taskId → 这一轮的日志缓冲。落库是整包 `replaceLogs`（不是追加），所以这一份
    *  就是「库里那一列接下来会变成什么」的草稿，进程内活着的轮次都攒在这里，由
@@ -139,8 +137,13 @@ export type RunnerState = {
 
   /** 本次执行实际提交给 ComfyUI 的工作流 JSON。RAW 载荷存 patched（liblib
    *  subgraph 格式，未展开，含画布覆盖）；API 载荷存 execution-graph 收拾后的图。
-   *  任务完成后落盘到 public/generated/.../workflow.json，便于工作流模板后续改动
-   *  时仍能完整复现本次生成结果（种子已存 manifest.seed + TaskImage.seed）。 */
+   *  任务完成后落盘到 generated/.../workflow.json，便于工作流模板后续改动
+   *  时仍能完整复现本次生成结果（种子已存 manifest.seed + TaskImage.seed）。
+   *
+   *  第二个用途（ISSUE #1202 收口时登记）：WS 的 `executing` / `progress` 帧只带节点
+   *  id，日志那行「▶ 节点 [3] 采样器（KSampler）」与落库的 `progressNode.classType`
+   *  都靠这一份认类名 —— 必须是**提交那一刻的图**才与帧里的 id 对得上（画布原件会被
+   *  覆盖注入与剔除改动）。两种形状怎么认见 `graph-node-class.ts`。 */
   executedWorkflow: Map<string, unknown>;
 
   /** 已向排队任务写入过「等待 ComfyUI 连接/启动」提示的 taskId 集合。
@@ -163,7 +166,6 @@ export function createEmptyState(): RunnerState {
     pendingDispatch: new Set(),
     connecting: false,
     promptToTask: new Map(),
-    promptByTask: new Map(),
     logs: new Map(),
     queuedEntries: new Map(),
     rawCli: new Map(),

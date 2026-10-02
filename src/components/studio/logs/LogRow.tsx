@@ -27,9 +27,11 @@ import {
   useCopyFeedback,
 } from "~/components/ui/use-copy-feedback";
 import { isCliJsonLine, parseCliJsonLine } from "~/lib/log/log-cli-json";
+import { findLogPathTokens } from "~/lib/log/log-path-tokens";
 import { normalizeNeedle } from "~/lib/list-filter";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { formatTime } from "./log-format";
+import { useRevealLogPath } from "./use-reveal-log-path";
 import { LOG_ROW_EXPANDED, LOG_ROW_SINGLE } from "./log-virtual";
 import {
   LEVEL_BADGE_STYLES,
@@ -78,37 +80,145 @@ function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
         const className = fragment.style
           ? TOKEN_CLASS[fragment.style]
           : undefined;
-        if (!needle) {
-          return (
-            <span key={index} className={className}>
-              {fragment.text}
-            </span>
-          );
-        }
-        const lower = fragment.text.toLowerCase();
-        const parts: React.ReactNode[] = [];
-        let cursor = 0;
-        let at = lower.indexOf(needle);
-        let key = 0;
-        while (at !== -1) {
-          if (at > cursor) parts.push(fragment.text.slice(cursor, at));
-          parts.push(
-            <mark key={key++} className={SEARCH_HIT_CLASS}>
-              {fragment.text.slice(at, at + needle.length)}
-            </mark>,
-          );
-          cursor = at + needle.length;
-          at = lower.indexOf(needle, cursor);
-        }
-        if (cursor < fragment.text.length)
-          parts.push(fragment.text.slice(cursor));
         return (
           <span key={index} className={className}>
-            {parts}
+            {highlightNeedle(fragment.text, needle)}
           </span>
         );
       })}
     </>
+  );
+}
+
+/** 把一段文本按命中关键字切成 `<mark>` 与普通文本两种片段。 */
+function highlightNeedle(text: string, needle: string): React.ReactNode {
+  if (!needle) return <PathLinkedText text={text} />;
+  const lower = text.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  let at = lower.indexOf(needle);
+  let key = 0;
+  while (at !== -1) {
+    if (at > cursor) {
+      parts.push(
+        <PathLinkedText key={`t${key}`} text={text.slice(cursor, at)} />,
+      );
+    }
+    parts.push(
+      <mark key={`m${key}`} className={SEARCH_HIT_CLASS}>
+        <PathLinkedText text={text.slice(at, at + needle.length)} />
+      </mark>,
+    );
+    cursor = at + needle.length;
+    at = lower.indexOf(needle, cursor);
+    key += 1;
+  }
+  if (cursor < text.length) {
+    parts.push(<PathLinkedText key={`t${key}`} text={text.slice(cursor)} />);
+  }
+  return parts;
+}
+
+/**
+ * 一段文本 → 其中「像本机路径」的那几段变成可点的按钮（ISSUE #1365）。
+ *
+ * 用户反馈：面板里那一列路径只是紫字，看得见却点不动 —— 要打开得自己抄进资源
+ * 管理器，而启动排障时正是最需要「点一下就到现场」的时候。
+ *
+ * 分工（三层各自有单测）：**认得出**归 `~/lib/log/log-path-tokens`（纯函数，
+ * 判据在那一侧）、**点得动**归 `~/components/studio/logs/use-reveal-log-path`
+ * （重入 + 成功/失败反馈）、**打得开**归 `~/lib/shell/reveal-path` 与它的路由
+ * （命令形态 + 检出目录闸门）。这里只做「把区间映射成按钮」。
+ *
+ * 识别**在片段之内**做，不跨片段：片段是既有的视觉切分（ANSI SGR / 词法上色），
+ * 而重排它的代价是让「上色」与「可点」两层互相牵制（改一处配色要连带复核点击
+ * 区间）。分片边界落在路径中间的概率极低 —— 词法分片的切点是 `[OK]` / `http://`
+ * 这类前缀与 Windows 路径的开头，而 `F:\a\b 与 /c` 这类行本来就因为中文与空格
+ * 判据各自成段。看不清的那一段最多回到「不可点」，与今天的行为一致。
+ */
+function PathLinkedText({ text }: { text: string }): React.ReactNode {
+  const tokens = findLogPathTokens(text);
+  if (tokens.length === 0) return text;
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  for (const [index, token] of tokens.entries()) {
+    if (token.start > cursor) parts.push(text.slice(cursor, token.start));
+    parts.push(
+      <RevealPathButton key={`p${index}`} path={token.text}>
+        {token.text}
+      </RevealPathButton>,
+    );
+    cursor = token.end;
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return parts;
+}
+
+/**
+ * 一个可点的路径。
+ *
+ * 视觉：仍是原来的紫字（`TOKEN_CLASS["magenta-bright"]` 那档不去动它 —— 它是终端
+ * 观感的一部分），只加**下划线**与悬停高亮表达「这里能点」。刻意不改成链接蓝：
+ * 这一列路径的紫是既有的视觉语言，换色会让老用户以为「路径没了」。
+ *
+ * 反馈：挂在按钮自己身上（与行内复制按钮同一套口径）—— 日志是密集列表，没有地方
+ * 放常驻说明，而「点了有反应」这件事必须在**点的那一处**看得出来。失败的原因
+ * （服务端给的那句）进 `title`，鼠标停一下就能看到。
+ */
+function RevealPathButton({
+  path,
+  children,
+}: {
+  path: string;
+  children: React.ReactNode;
+}) {
+  /* 回执与成功态**必须同生共死**：两个独立定时器在时长一改就会漂移，留下
+   * 「已定位」还在、绿色已经消失的自相矛盾画面（与 `SaveExportButton` 同款）。 */
+  const hint = useFlashState(1200);
+  const feedback = useRevealLogPath(() => hint.flash());
+
+  const onReveal = () => {
+    if (feedback.busy) return;
+    feedback.reveal(path);
+  };
+
+  /* 常态那一档**取既有 token 表**而不是再写一遍色板：路径的紫是 `TOKEN_CLASS`
+   * 的 `magenta-bright`（它代表 ANSI 终端色的身份，§3.6.1 例外块），在别处手抄
+   * 一份 palette 字面量，改配色时两处就会漂 —— P71 / P79 拦的正是这件事。 */
+  const tone =
+    feedback.outcome === "done"
+      ? "text-success-strong"
+      : feedback.outcome === "failed"
+        ? "text-danger-strong"
+        : TOKEN_CLASS["magenta-bright"];
+
+  /* 悬停说明走 `ui/hint`（shadcn composition.md：`<Button>` 上不写原生 `title=`），
+   * 而这里的文案是**动态的** —— 失败时要说清是哪个候选没找到（服务端给的那句）。 */
+  const hintLabel =
+    feedback.outcome === "failed"
+      ? feedback.failure
+      : feedback.outcome === "done"
+        ? `已定位：${path}`
+        : `${path}（点击在文件管理器里定位）`;
+
+  return (
+    <Hint label={hintLabel}>
+      <Button
+        type="button"
+        onClick={onReveal}
+        /* 悬停/聚焦都给一点底色：日志行本身就是可滚动的密集文本，只有下划线时
+         * 「这一段能不能点」在长行里读不出来。 */
+        className={`hover:bg-subtle focus-visible:bg-subtle h-auto cursor-pointer rounded-sm px-0.5 py-0 leading-snug underline decoration-dotted underline-offset-2 ${tone}`}
+        aria-label={`在文件管理器里定位 ${path}`}
+      >
+        {children}
+        {hint.on ? (
+          <span className="ml-1 text-[10px] whitespace-nowrap">
+            {feedback.outcome === "failed" ? "打开失败" : "已定位"}
+          </span>
+        ) : null}
+      </Button>
+    </Hint>
   );
 }
 

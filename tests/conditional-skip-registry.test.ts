@@ -54,6 +54,26 @@ type Registration = {
  */
 const REGISTERED: Registration[] = [
   {
+    file: "tests/log-common-invoke.test.ts",
+    guard: "!hasPs",
+    count: 1,
+    tier: "env",
+    why:
+      "没有 PowerShell 时跑不了 `Invoke-Logged` 的三态真跑（ISSUE #1350 的判决本就长在 " +
+      "Windows 双击构建侧，两个宿主各跑一遍）；同文件的静态判据（ASCII 标签 + 三个入口共用" +
+      "同一份结论）不分平台，始终在判",
+  },
+  {
+    file: "tests/quality-gate-ps-precheck.test.ts",
+    guard: "!hasPs",
+    count: 3,
+    tier: "env",
+    why:
+      "PATH 上没有 PowerShell 时，依赖预检三态、运行器「没跑起来必须判红」（ISSUE #1345）" +
+      "与「每份 .ps1 都可解析」那条 sweep 都跑不了（判据本就长在 Windows 侧）；" +
+      "同文件里静态与 Node 侧断言不分平台，始终在判",
+  },
+  {
     file: "tests/check-file-structure.test.ts",
     guard: "!psExe",
     count: 6,

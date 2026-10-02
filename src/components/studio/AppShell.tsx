@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { Plus, Settings } from "lucide-react";
 
 import { useHotkey } from "~/components/ui/use-hotkey";
@@ -12,7 +13,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
@@ -23,9 +23,40 @@ import {
   SidebarRail,
 } from "~/components/ui/sidebar";
 
-import { globalNavItems, PROJECTS_ENTRY, type WorkspaceView } from "./NavItems";
+import {
+  globalNavItems,
+  OVERLAY_NAV_ITEMS,
+  PROJECTS_ENTRY,
+  type OverlayEntryId,
+  type WorkspaceView,
+} from "./NavItems";
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
+
+/* 两个全局浮层懒加载：它们各自拉起契约编辑器 / 适配器表格与 tRPC 查询，而外壳在
+ * **每个**工作区视图里都挂着 —— 即时加载等于把这两块的代价摊到所有首屏上。
+ * 与 `app/workspace/page.tsx` 里那批视图同一个口径（`ssr: false`：弹窗只在点开后存在）。 */
+const ModeContractDialog = dynamic(
+  () =>
+    import("~/components/workshop/mode-contract/ModeContractDialog").then(
+      (mod) => mod.ModeContractDialog,
+    ),
+  { ssr: false },
+);
+const WorkshopModelAdapterModal = dynamic(
+  () =>
+    import("~/components/workshop/WorkshopModelAdapterModal").then(
+      (mod) => mod.WorkshopModelAdapterModal,
+    ),
+  { ssr: false },
+);
+/* 控制台（ISSUE #1327）：与上面两个同族的是「懒加载 + 只在点开后存在」——
+ * 它是整块全屏浮层，即时加载等于把它那套输入/输出/预设的代价摊到每个视图首屏。 */
+const ConsolePanel = dynamic(
+  () =>
+    import("~/components/console/ConsolePanel").then((mod) => mod.ConsolePanel),
+  { ssr: false },
+);
 
 /** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
 export interface SidebarProject {
@@ -60,12 +91,19 @@ export interface AppShellProps {
  * 应用外壳 —— 左侧栏（官方 `ui/sidebar`）+ 顶部工具条（`TopBar`）+ 主内容。
  *
  * 侧栏分两段：
- *   · 顶部 = 全局项（首页 / 模型 / 历史 / 炼丹 / 流程），常驻、不随当前视图增减；
+ *   · 顶部 = 全局项（首页 / 模型 / 历史 / 队列 / 炼丹 / 流程 + 三个全局浮层入口
+ *     模型适配 / 模式契约 / 控制台），常驻、不随当前视图增减；
  *   · 底部 = 「项目」折叠分组（`Disclosure`，P10 唯一实现），展开列出已有项目 + 查看全部 / 新建。
  *
- * 画布 / 工坊 / 产出 / 成片不再出现在这里 —— 它们是「项目界面」内部的顶部标签页
- * （见 `ProjectTabBar`）。此前用 `active === "home"` 决定这四项显隐，导致点「项目」等
+ * 主页 / 画布 / 工坊 / 资源库 / 产出 / 成片不再出现在这里 —— 它们是「项目界面」内部的顶部标签页
+ * （见 `ProjectTabBar`）。此前用 `active === "home"` 决定这些页签显隐，导致点「项目」等
  * 非首页视图时它们莫名复现；改成按分区归属一次性定型，显隐不再随视图漂移。
+ *
+ * 三个浮层入口（模型适配 / 模式契约 / 控制台）**是应用级的、与项目无关**，所以留在这里
+ * 而不是工坊顶栏：前两个读写的是全局注册表（模式契约 = 每种模式有哪些统一输入 / 输出；
+ * 模型适配 = 每个远端模型 × 每个模式的字段映射），控制台跑的是**仓库级**命令
+ * （`pnpm test` / `drizzle-kit` / `git log`）——换项目都不该重配一遍。弹窗挂在
+ * 外壳这一层（而不是某个视图内部），切视图时也不会被连带卸载。
  */
 export function AppShell({
   active,
@@ -85,6 +123,9 @@ export function AppShell({
   useHotkey({ key: "k", mod: true }, () => setCommandOpen(true));
 
   const navItems = globalNavItems();
+  /* 浮层入口同一时刻只开一个：两项都是「配置全局注册表」，同时铺两层弹窗只会互遮。
+     状态与命令面板同源归外壳 —— 它们不属于任何视图。 */
+  const [overlay, setOverlay] = useState<OverlayEntryId | null>(null);
 
   return (
     <SidebarProvider
@@ -92,22 +133,6 @@ export function AppShell({
       className="h-full min-h-0"
     >
       <Sidebar collapsible="icon">
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                tooltip="Comfy-APP"
-                onClick={() => onSelect("home")}
-              >
-                <span className="text-ink-strong grid flex-1 text-left text-sm leading-tight font-semibold">
-                  Comfy-APP
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupContent>
@@ -134,6 +159,21 @@ export function AppShell({
                     </SidebarMenuItem>
                   );
                 })}
+
+                {/* 全局浮层入口：紧跟「流程」之后。它们不切换视图（`isActive` 恒 false），
+                    故不参与高亮；点击只开弹窗。 */}
+                {OVERLAY_NAV_ITEMS.map((item) => (
+                  <SidebarMenuItem key={item.overlay}>
+                    <SidebarMenuButton
+                      isActive={false}
+                      tooltip={item.label}
+                      onClick={() => setOverlay(item.overlay)}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -222,6 +262,18 @@ export function AppShell({
           {children}
         </div>
       </SidebarInset>
+
+      {/* 两个全局浮层：与「模型适配 / 模式契约」两个侧栏入口一一对应。
+          与工坊里那份**同一个组件**，改完注册表两处读到的是同一份口径。 */}
+      {overlay === "model-adapters" && (
+        <WorkshopModelAdapterModal onClose={() => setOverlay(null)} />
+      )}
+      {overlay === "mode-contract" && (
+        <ModeContractDialog onClose={() => setOverlay(null)} />
+      )}
+      {overlay === "console" && (
+        <ConsolePanel onClose={() => setOverlay(null)} />
+      )}
 
       <CommandPalette
         open={commandOpen}

@@ -4,6 +4,7 @@
 import { asRecord, isRecord } from "~/lib/is-record";
 import { extractJson, extractJsonArray } from "~/lib/llm/parse";
 import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
+import { normalizeShotType, type ShotType } from "~/lib/workshop/types";
 import { SUMMARY_MAX, clampText } from "~/lib/text-clamp";
 
 /** Agent 执行工具时需要调用的 controller 操作。 */
@@ -102,11 +103,15 @@ function parseCharacterFull(
   }
 }
 
-/** 从 LLM 输出文本中解析分镜镜头 JSON 数组（扫描走全库唯一的 `extractJsonArray`）。 */
+/** 从 LLM 输出文本中解析分镜镜头 JSON 数组（扫描走全库唯一的 `extractJsonArray`）。
+ *
+ *  景别在这里就收进 `ShotType`（`normalizeShotType`）—— **解析边界**是唯一该做这件事
+ *  的地方。它一度是 `shotType: string` 然后在下游写 `s.shotType as never`，
+ *  于是「模型返回什么景别都直接进库」这件事在类型层完全看不见（台账 F13）。 */
 function parseShotsFromJson(text: string): Array<{
   sceneHeading: string;
   description: string;
-  shotType: string;
+  shotType: ShotType;
   characterNames: string[];
 }> {
   try {
@@ -124,7 +129,7 @@ function parseShotsFromJson(text: string): Array<{
                 : "",
           description:
             typeof rec.description === "string" ? rec.description : "",
-          shotType: typeof rec.shotType === "string" ? rec.shotType : "medium",
+          shotType: normalizeShotType(rec.shotType),
           characterNames: Array.isArray(rec.characterNames)
             ? (rec.characterNames as unknown[]).map(String)
             : [],
@@ -418,7 +423,7 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
             index: 0,
             sceneId: "",
             sceneHeading: s.sceneHeading,
-            shotType: s.shotType as never,
+            shotType: s.shotType,
             description: s.description,
             characterIds: [],
             prompt: s.description,

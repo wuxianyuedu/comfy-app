@@ -20,6 +20,7 @@ import { DatabaseSync } from "node:sqlite";
 import { echoCommandLine } from "./launcher-core/command-echo.mjs";
 import {
   canAutoApply,
+  describeRiskyChanges,
   pendingStatements,
   pushSchema,
   riskyStatements,
@@ -215,7 +216,11 @@ function schemaDigest(root, databaseUrl) {
  *
  * @param {string} root
  * @param {{ databaseUrl?: string, push?: typeof pushSchema,
- *           forward?: (chunk: string) => void }} [options]
+ *           forward?: (chunk: string) => void,
+ *           force?: boolean }} [options]
+ *   `force` 为 true 时跳过 dry-run 白名单，按 `pnpm db:push` 的口径直接应用
+ *   （含丢数据语句）。**只有用户在界面上明确确认过丢数据风险后才能走这一路**
+ *   （状态栏「立即同步」按钮的确认弹窗），启动链路的自动同步必须用默认 false。
  * @returns {{ state: "ready" | "synced" | "missing" | "stale" | "unknown",
  *             detail?: string }}
  */
@@ -224,6 +229,7 @@ export function ensureSchemaCurrent(root, options = {}) {
     databaseUrl,
     push = pushSchema,
     forward = (chunk) => process.stdout.write(chunk),
+    force = false,
   } = options;
 
   const tablesReady = probeSchemaSync(root, databaseUrl) === "ready";
@@ -257,6 +263,45 @@ export function ensureSchemaCurrent(root, options = {}) {
     detail,
   });
 
+  /* ── 用户确认后的强制同步（状态栏「立即同步」按钮）─────────────────────
+   *
+   * dry-run 已判过这批变更「会丢数据」，用户在确认弹窗里知情后仍要求执行 ——
+   * 这就是 `pnpm db:push`（--force）的语义，只是由本链路代跑。复核判据与上面
+   * 自动应用那一路**同源**（push 前后的库结构摘要对比），不另造一份。
+   */
+  if (force) {
+    const dbFile = resolveSqlitePath(root, databaseUrl);
+    const existedBefore = fs.existsSync(dbFile);
+    const before = schemaDigest(root, databaseUrl);
+    const applied = push(root, {
+      databaseUrl,
+      force: true,
+      verifyConvergence: false,
+      forward,
+    });
+    /* 本来就没差异（点按钮与启动同步并发的窗口里另一个进程先做完了）：
+     * 登记指纹、判 ready —— 用户没有需要做的事。 */
+    if (applied.alreadyCurrent) {
+      if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
+      return { state: "ready" };
+    }
+    const after = schemaDigest(root, databaseUrl);
+    if (existedBefore && after !== null && after === before) {
+      /* 库没动：要么 drizzle 报了 applied 却没落地（要挡），要么并发的那份
+       * 同步做完后指纹还没被本进程看到。用指纹区分，别把「已同步」报成失败。 */
+      if (want !== null && readSchemaFingerprint(root, databaseUrl) === want) {
+        return { state: "ready" };
+      }
+      return notSynced("drizzle-kit 报「已应用」，但库的结构没有变化");
+    }
+    if (!applied.converged || after === null) {
+      return notSynced(staleReason(applied));
+    }
+    if (want === null) want = schemaFingerprint(root);
+    if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
+    return { state: "synced" };
+  }
+
   /* 第一次**不带 `--force`**：`strict: true` 会让 drizzle 先把待执行的语句列
    * 出来、再要求确认，而无 TTY 环境里确认弹不出来、它原地退出且**库不动** ——
    * 这一次恰好就是 dry-run，那份语句列表是「能不能自动应用」的唯一依据
@@ -277,10 +322,17 @@ export function ensureSchemaCurrent(root, options = {}) {
       for (const statement of pending) forward(`  ${statement}\n`);
       forward("\n");
     }
+    if (pending.length === 0) {
+      return notSynced("没能从 drizzle 的输出里认出待执行的语句");
+    }
+    /* detail 里把「哪个表哪列会丢」**完整列出**（经状态文件 → /api/schema
+     * 一路透传到 toast 与确认弹窗）：用户要做「丢不丢得起」的决定，只给
+     * 条数不给清单等于让人闭眼确认。控制台那侧已经有逐条原文（上面的
+     * forward），detail 这侧给同一批语句的人话版。 */
+    const described = describeRiskyChanges(pending);
+    const listing = described.length > 0 ? `：${described.join("；")}` : "";
     return notSynced(
-      pending.length === 0
-        ? "没能从 drizzle 的输出里认出待执行的语句"
-        : `含「会丢数据」的语句 ${riskyStatements(pending).length} 条（删列 / 重建表），启动链路不替你做这个决定`,
+      `含「会丢数据」的语句 ${riskyStatements(pending).length} 条（删列 / 重建表）${listing}，启动链路不替你做这个决定`,
     );
   }
 
@@ -434,9 +486,14 @@ export const SKIP_SCHEMA_SYNC_ENV = "COMFYAPP_SKIP_SCHEMA_SYNC";
  * 子进程的输出）；真正的对外信号是状态文件。
  *
  * @param {string} root 项目根
+ * @param {{ force?: boolean }} [options]
+ *   `force` 为 true 时给子进程带 `--force`：跳过 dry-run 白名单直接应用
+ *   （含丢数据语句）。**只给「用户已在界面确认过风险」的那条链路用**
+ *   （状态栏「立即同步」→ POST /api/schema/push）；启动编排的自动同步用默认 false。
  * @returns {{ started: boolean, reason?: string }}
  */
-export function spawnSchemaSync(root) {
+export function spawnSchemaSync(root, options = {}) {
+  const { force = false } = options;
   const script = path.join(root, "scripts", "db-sync.mjs");
   if (!fs.existsSync(script)) {
     /* 生产产物里 `scripts/` 只保留运行时会读的那几个（见 build-desktop 白名单），
@@ -456,12 +513,16 @@ export function spawnSchemaSync(root) {
   try {
     // 后台同步是「看不见的 15~30 秒」：先回显要跑的那条命令，出问题时至少知道
     // 谁在后台动数据库（输出落在 log/schema-sync.log，命令行则留在当前终端/编排日志）。
-    echoCommandLine(process.execPath, [script]);
-    const child = spawn(process.execPath, [script], {
-      cwd: root,
-      detached: true,
-      stdio,
-    });
+    echoCommandLine(process.execPath, force ? [script, "--force"] : [script]);
+    const child = spawn(
+      process.execPath,
+      force ? [script, "--force"] : [script],
+      {
+        cwd: root,
+        detached: true,
+        stdio,
+      },
+    );
     child.unref();
     return { started: true };
   } catch (error) {

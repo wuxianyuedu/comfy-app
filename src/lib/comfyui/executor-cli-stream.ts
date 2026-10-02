@@ -5,9 +5,10 @@
  * 从 `executor-cli.ts` 的 `executeViaComfyCli`（473 行）里拆出来的**流处理**：
  *
  *   - {@link createCliEnvelopeParser}  stdout 的「按行聚合 JSON envelope」——
- *     buffer 累积、切行、JSON.parse、按事件类型分发（queued / envelope /
- *     error / progress / executing）。此前这段是 `child.stdout?.on("data", …)`
- *     里的 98 行内联回调，捕获 promptId / patched / finish，**只能起真进程验证**。
+ *     buffer 累积、切行、JSON.parse、按事件类型分发（queued / converted /
+ *     envelope / error / progress / executing / execution_cached）。此前这段是
+ *     `child.stdout?.on("data", …)` 里的 98 行内联回调，捕获 promptId / patched /
+ *     finish，**只能起真进程验证**。
  *   - {@link findNodeErrorsCarrier}    在 comfy-cli 的 envelope 里深搜
  *     `node_errors`（结构化校验错误的唯一真身）。
  *   - {@link createCliStderrSink}      stderr 的「过滤噪声 + 截断 + 汇总」。
@@ -18,6 +19,7 @@
  */
 
 import { trace } from "./trace";
+import { classTypeForNode, nodeLabel } from "./graph-node-class";
 import { INLINE_DUMP_MAX, clampText } from "~/lib/text-clamp";
 
 /** 面板日志的注入点（同 TraceFn：默认用 runner-state 的 log，测试传收集器）。
@@ -179,11 +181,29 @@ export interface EnvelopeParserDeps {
   finish: (ok: boolean, env: unknown) => void;
   /** 记下 prompt_id（写库 + 建立 prompt→task 索引由调用方做）。 */
   onPromptId: (promptId: string) => void;
-  /** 进度百分比（已从 completed/total 换算）；`node` 是事件自带的当前节点
-   *  步数信息（raw graph 的 class_type 在 cli 路径拿不到，label 缺省）。 */
+  /** 进度百分比（已从 completed/total 换算）；`node` 是事件自带的当前节点信息。
+   *
+   *  两类事件的形状不一样，是实测出来的（真出图那一轮，见 ADR §24）：
+   *   · `executing` **自带** `class_type` 与 `title` —— 直接用它，那是 ComfyUI 展开
+   *     子图之后的权威值；
+   *   · `progress` 只有 `node` / `completed` / `total`，**不带**类名 ⇒ 只能靠
+   *     `deps.patched`（提交那一刻真正交出去的图）认，走的是与 WS 帧同一个出口
+   *     `classTypeForNode`（两种图形状都认，含 `76:69` 这种子图链 id）。
+   *  认不出时 `classType` / `label` 都不带，id 与步数照旧透出 —— 进度帧不许因为
+   *  认不出类名就被丢掉。
+   *
+   *  这里顺带更正一句旧口径：3-C（§13-3C）与 4-B2（§14 D1）都写着「comfy-cli 那条
+   *  事件源拿不到 class_type」，实测只对 `progress` 成立；`executing` 是带的，而
+   *  `progress` 也不是拿不到，只是当年没人去查那张就在手上的图。 */
   onProgress: (
     percent: number,
-    node?: { id: string; value: number; max: number },
+    node?: {
+      id: string;
+      value: number;
+      max: number;
+      classType?: string;
+      label?: string;
+    },
   ) => void;
   /** 可注入的 trace（默认全局 trace）。 */
   trace?: TraceFn;
@@ -200,6 +220,34 @@ export interface CliEnvelopeParser {
 }
 
 /**
+ * 「面向节点的日志行」里那一段 `[id] 中文名（ClassType）` 的唯一算法。
+ *
+ * 三个事件都用它（`executing` / `execution_success` / `execution_cached`），因为它们
+ * 在面板里是同一格内容，只是动词不同 —— 各写一遍迟早给出不一致的名字。
+ * 类名优先取**事件自带**的那一格（实测 `executing` / `execution_cached` 都带
+ * `class_type`，而且是 ComfyUI 展开子图后的权威值）；没有才退回按图认
+ * （`deps.patched`，与 `progress` 帧同一条路，见 ADR §24）。
+ */
+function nodeTag(
+  evt: JsonRecord,
+  patched: Record<string, unknown> | undefined,
+): string {
+  const node = (evt.node ??
+    (evt.data as JsonRecord | null | undefined)?.node ??
+    "?") as string;
+  const fromEvent =
+    typeof evt.class_type === "string" && evt.class_type
+      ? evt.class_type
+      : undefined;
+  const classType =
+    fromEvent ??
+    (node && node !== "?" ? classTypeForNode(patched, node) : undefined);
+  return classType
+    ? ` [${node}] ${nodeLabel(classType)}（${classType}）`
+    : ` [${node}]`;
+}
+
+/**
  * 构造 stdout 的 `data` 回调：按行聚合 JSON envelope 并按类型分发。
  *
  * 返回的对象可直接喂 chunk 断言，不必起真进程 —— 这正是本项要解决的
@@ -213,6 +261,10 @@ export function createCliEnvelopeParser(
   let buf = "";
   let nonJsonLines = 0;
   let rawJsonLines = 0;
+  /** `converted` 报的节点总数（整轮缓存的判据要它，别自己数图 —— 图是 UI 形状）。 */
+  let nodeCountTotal: number | undefined;
+  /** 本轮命中执行缓存的节点数（ISSUE #1278）。 */
+  let cachedNodes = 0;
 
   const handleLine = (line: string): void => {
     if (!line) return;
@@ -284,7 +336,29 @@ export function createCliEnvelopeParser(
       );
       return;
     }
+    if (evt.type === "converted" && typeof evt.node_count === "number") {
+      nodeCountTotal = evt.node_count;
+      return;
+    }
     if (evt.type === "envelope") {
+      /* 整轮命中 ComfyUI 执行缓存时，`executing` / `progress` 一条都不会来（实测
+       * 序列：converted / prompt_preview / queued / execution_cached×N / executed /
+       * output / envelope）—— 于是整轮约 30s 里界面像「什么都没发生」，只有收口那
+       * 一下（ISSUE #1278）。按节点的现场已由下方 `execution_cached` 分支逐行给出，
+       * 这里补一句总体定性，让人不必自己数那 N 行。
+       * 只在「一个节点都没真跑」时给这句：混合轮里有 executing，那时缺的不是定性
+       * 而是进度，写「全部命中缓存」就是假话。 */
+      if (
+        cachedNodes > 0 &&
+        nodeCountTotal !== undefined &&
+        cachedNodes === nodeCountTotal
+      ) {
+        log(
+          taskId,
+          "info",
+          `≡ 本轮 ${cachedNodes} 个节点全部命中 ComfyUI 执行缓存（未重算，因此没有按节点进度）`,
+        );
+      }
       deps.finish(Boolean(evt.ok), evt);
       return;
     }
@@ -307,26 +381,46 @@ export function createCliEnvelopeParser(
     ) {
       // 3-C D1：SSE 单源化后进度必须落库，node 一并透出给调用方写 progressNode
       const nodeId = typeof evt.node === "string" ? evt.node : undefined;
+      /* 类名靠提交那一刻的图认（`deps.patched`），与 WS 帧同一个出口 ——
+       * raw 任务的进度历史上就是从这条路上来的，所以状态栏「当前节点」那一格
+       * 能不能显示类名，取决于这里（ISSUE #1202）。 */
+      const classType = nodeId
+        ? classTypeForNode(deps.patched, nodeId)
+        : undefined;
       deps.onProgress(
         Math.round((evt.completed / evt.total) * 100),
         nodeId
-          ? { id: nodeId, value: evt.completed, max: evt.total }
+          ? {
+              id: nodeId,
+              value: evt.completed,
+              max: evt.total,
+              ...(classType ? { classType, label: nodeLabel(classType) } : {}),
+            }
           : undefined,
       );
       return;
     }
+    if (evt.type === "execution_cached") {
+      /* 缓存跳过的节点：给一行按节点的现场，但**不写 progressNode** —— 那一格在
+       * 4-B2 的契约里是「当前节点 + 步数」，而缓存轮没有「当前」（这一格瞬时就是
+       * 终点，写进去等于让状态栏显示一个早已跑完的节点）。宁缺不假。 */
+      cachedNodes++;
+      log(
+        taskId,
+        "info",
+        `≡ comfy-cli 节点${nodeTag(evt, deps.patched)} 命中缓存，跳过`,
+      );
+      return;
+    }
     if (evt.type === "executing" || evt.type === "execution_success") {
-      // 原样转发 CLI 事件，给到「按节点」的可见性（拿不到原始 raw graph 的
-      // class_type UUID，但节点 id + 事件类型足以显示「有东西在跑」）。
-      const node = (evt.node ??
-        (evt.data as JsonRecord | null | undefined)?.node ??
-        "?") as string;
+      // 原样转发 CLI 事件，给到「按节点」的可见性。
+      const who = nodeTag(evt, deps.patched);
       log(
         taskId,
         "info",
         evt.type === "execution_success"
-          ? `✓ comfy-cli 节点 [${node}] 执行完成`
-          : `▶ comfy-cli 节点 [${node}] 开始执行`,
+          ? `✓ comfy-cli 节点${who} 执行完成`
+          : `▶ comfy-cli 节点${who} 开始执行`,
       );
     }
   };

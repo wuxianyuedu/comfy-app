@@ -36,6 +36,8 @@ import {
   type ShotSizeState,
 } from "./shot-size-config";
 import { ShotSizePicker } from "./ShotSizePicker";
+import { ShotFilmStrip } from "./ShotFilmStrip";
+import { SHOT_STATUS_LABEL } from "./shot-status-config";
 import { SeedAdvancedField } from "./SeedAdvancedField";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
@@ -430,6 +432,16 @@ export function ShotStudio({
         />
       ) : (
         <div className="flex flex-col gap-3">
+          {/* 胶片带：纵向列表逐镜看很合适，但回答不了「16 镜跑到哪了、哪几镜挂了」。
+              点一帧只负责把那张卡滚到眼前，不引入「当前镜头」这个新状态。 */}
+          <ShotFilmStrip
+            shots={shots}
+            onJump={(shot) => {
+              document
+                .querySelector(`[data-shot-index="${shot.index}"]`)
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          />
           {shots.map((shot) => (
             <ShotCardRow
               key={shot.id}
@@ -461,17 +473,8 @@ export function ShotStudio({
   );
 }
 
-/* 镜头状态 → 文案。配色走`ui/status-badge` 的同一份状态 → 语义 token 映射；
- * 本地化的标签留在本文件（同批把 StoryboardPlanner / VideoStudio 里那两份
- * 逐字相同的副本一并收口，规范 16 §16.2.4.5）。 */
-export const SHOT_STATUS_LABEL: Record<Shot["status"], string> = {
-  idle: "待生成",
-  queued: "排队中",
-  running: "生成中",
-  done: "已完成",
-  failed: "失败",
-  stale: "待更新",
-};
+/* 镜头状态 → 文案：表在 `./shot-status-config`（与胶片带共用一份）。
+ * 这里只 import，不再持有 —— 胶片带要被本文件 import，反向取就成了一组循环依赖。 */
 
 function StatusBadge({ status }: { status: Shot["status"] }) {
   return (
@@ -518,7 +521,10 @@ function ShotCardRow({
   onPromptChange,
 }: ShotCardRowProps) {
   return (
-    <div className="border-border bg-surface rounded-xl border p-4">
+    <div
+      data-shot-index={shot.index}
+      className="border-border bg-surface rounded-xl border p-4"
+    >
       <div className="mb-2 flex items-center gap-2">
         <span className="bg-primary-soft text-primary grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
           {shot.index}

@@ -4,20 +4,28 @@ import React from "react";
 import {
   BookOpen,
   Box,
+  Cable,
   Film,
   Folder,
+  FolderOpen,
   History,
   Home,
   Image as ImageIcon,
   ListChecks,
+  Puzzle,
+  Terminal,
 } from "lucide-react";
 
 /**
  * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。
  *
- * 三个分区（一处定义、多处消费，避免漂移）：
+ * 四个分区（一处定义、多处消费，避免漂移）：
  *   · 全局项（`globalNavItems`）—— 主页侧栏顶部常驻：首页 / 模型 / 历史 / 队列 / 流程；
- *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（画布 / 工坊 / 产出 / 成片），
+ *   · 全局浮层（`OVERLAY_NAV_ITEMS`）—— 紧跟全局项之后，仍是**应用级**入口但点开的是
+ *     弹窗/浮层而不是视图：模型适配 / 模式契约 / 控制台。这三件事都是**项目无关**的
+ *     （模式是工作流库定义的、适配器是每个远端模型 × 每个模式的字段映射、控制台跑的是
+ *     仓库级的脚本命令，都不依赖某个具体项目），所以它们的入口不进工坊那个项目内视图；
+ *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片），
  *     不再进主页侧栏：它们是对「当前项目」的操作投影，脱离项目无意义；
  *   · 项目入口（`PROJECTS_ENTRY`）—— 侧栏最底部的「项目」分组（可展开列出已有项目）。
  *
@@ -27,10 +35,12 @@ import {
  */
 export type WorkspaceView =
   | "home"
+  | "project"
   | "canvas"
   | "models"
   | "works"
   | "workshop"
+  | "library"
   | "history"
   | "queue"
   | "train"
@@ -45,7 +55,7 @@ export interface NavItem {
   enabled?: boolean;
   /**
    * 属于「项目页签」：只在项目界面顶部的标签栏出现，不进主页侧栏顶部列表。
-   * 画布 / 工坊 / 产出 / 成片是对「当前项目」的操作投影。
+   * 主页 / 画布 / 工坊 / 资源库 / 产出 / 成片是对「当前项目」的操作投影。
    */
   projectScoped?: boolean;
   icon: React.ReactNode;
@@ -62,6 +72,58 @@ const ICON_PROPS = {
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 };
+
+/** 全局浮层入口的机器 id —— 不进 `WorkspaceView`：它不切视图，只开浮层。 */
+export type OverlayEntryId = "model-adapters" | "mode-contract" | "console";
+
+/**
+ * 应用级浮层入口（**项目无关**，故不进项目内的任何界面）。
+ *
+ * 与 `NavItem` 分开建模的原因：`NavItem.id` 是 `WorkspaceView`，它是「当前在哪个视图」
+ * 的全集，被 `TopBar` 反查标题、被 `page.tsx` 的路由状态消费。这些入口并不改变视图
+ * （弹窗盖在哪个视图上都成立），塞进 `WorkspaceView` 会让「当前视图」多出几个
+ * 永远到不了的值。它们只需要「标签 + 图标 + 开哪个弹窗」三件事。
+ */
+export interface OverlayNavItem {
+  overlay: OverlayEntryId;
+  label: string;
+  icon: React.ReactNode;
+}
+
+/**
+ * 侧栏里紧跟「流程」之后的那组浮层入口：模型适配 / 模式契约 / 控制台。
+ *
+ * 为什么放这里而不是工坊顶栏：工坊是**项目内**视图（顶部标签栏那几个之一），
+ * 而这几个入口读写的是全局注册表（模式契约 = 每种模式有哪些统一输入 / 输出；
+ * 模型适配 = 每个远端模型 × 每个模式的字段映射；控制台 = 仓库级脚本），
+ * 与当前项目无关。挂在项目内视图上会让人以为「换了项目就得重配一遍」。
+ *
+ * 「流程」是它们的近邻而非任意位置：契约口清单是工作流库配落点的依据、适配器是
+ * 远端模型的字段映射，两者都服务工作流这条链路；控制台跑的就是这两件事的门禁。
+ */
+export const OVERLAY_NAV_ITEMS: OverlayNavItem[] = [
+  {
+    overlay: "model-adapters",
+    label: "模型适配",
+    /* 与「模型」那项（`Box`）刻意不同：一个管模型库本身，一个管远端接口的字段映射。 */
+    icon: <Cable size={22} strokeWidth={1.8} />,
+  },
+  {
+    overlay: "mode-contract",
+    label: "模式契约",
+    /* 与工作流库页头那枚「模式契约」按钮同图标（同一件事在两处出现时认得出是同一件）。 */
+    icon: <Puzzle size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 控制台（ISSUE #1327）：跑质量门禁 / db:push / git 查询这类「本来要另开一个
+     * 终端窗口」的操作。放**应用级**入口而不是项目页签 —— 它跑的是仓库级脚本
+     * （`pnpm test`、`drizzle-kit`），与「当前是哪个画布项目」无关；挂在项目内
+     * 会让人以为换项目就换了一套命令。 */
+    overlay: "console",
+    label: "控制台",
+    icon: <Terminal size={22} strokeWidth={1.8} />,
+  },
+];
 
 /** 侧栏底部「项目」分组入口（不作为顶部项，也不作为项目页签）。 */
 export const PROJECTS_ENTRY: NavItem = {
@@ -111,6 +173,17 @@ export const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    /* 项目主页放在页签第一位：它是进入项目后的落点（此前直接落画布，
+     * 而画布承载不了「这个项目做到哪了」这类项目级问题）。图标用 `Home`
+     * 与全局「首页」同形 —— 两个 home 语义层级不同（应用级 / 项目级），
+     * 靠所在分组区分，换一个陌生图标反而更难认。 */
+    id: "project",
+    label: "主页",
+    enabled: true,
+    projectScoped: true,
+    icon: <Home size={22} strokeWidth={1.8} />,
+  },
+  {
     id: "canvas",
     label: "画布",
     enabled: true,
@@ -128,6 +201,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: "工坊",
     projectScoped: true,
     icon: <BookOpen size={22} strokeWidth={1.8} />,
+  },
+  {
+    id: "library",
+    label: "资源库",
+    projectScoped: true,
+    icon: <FolderOpen size={22} strokeWidth={1.8} />,
   },
   {
     id: "outputs",
@@ -152,7 +231,7 @@ export function globalNavItems(): NavItem[] {
   );
 }
 
-/** 项目界面顶部的切换页签（画布 / 工坊 / 产出 / 成片）。 */
+/** 项目界面顶部的切换页签（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）。 */
 export function projectTabs(): NavItem[] {
   return NAV_ITEMS.filter((item) => item.projectScoped);
 }

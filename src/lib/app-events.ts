@@ -2,42 +2,32 @@
  * app-events —— 「跨组件广播一条应用事件」的**唯一出口**
  * （规范 16 §16.2.4.65）。
  *
- * 为什么收口：全库有 **5 条**自定义事件（`comfyapp:canvas-store-changed` /
- * 五条（`canvas:produce`、`open-task`、`custom-nodes:updated`，
- * 以及两条目录 / 仓库变更信号）/
- * `custom-nodes:updated`），散在 **9 个文件**里订阅或派发，而它们的**命运
+ * 为什么收口：全库的自定义事件散在多个文件里订阅或派发，而它们的**命运
  * 各不相同** —— 这不是重复代码，是**同一份字面量的两端分开两处**：
+ *   · **写侧改名、读侧认不出自己**；
+ *   · **写侧删掉、读侧永远等不到** —— 监听器成了**没有任何触发源的死代码**
+ *     （没有任何构建会报它，注释还写着「某某按钮通过它请求打开详情」）；
+ *   · **读侧删掉、写侧白忙一场** —— 广播照发，没人重渲染；
+ *   · **载荷类型只在读侧写一遍** —— 派发侧多写一个字段不会有人发现。
  *
- * | 事件 | 事件名的定义处 | 订阅侧 | 派发侧 |
- * |------|--------------|--------|--------|
- * | `comfyapp:canvas-store-changed` | `lib/project-canvas/canvas-store`（**不导出**） | 视图侧 **3 处硬编码字符串** | 同定义处 |
- * | `canvas:produce` | **没有** | 1 处硬编码 | 2 处硬编码 |
- * | `open-task` | **没有** | 1 处硬编码 | **已经不存在**（死监听） |
- * | `comfyapp:local-workflows-path-changed` | 订阅方自己的模块常量（**不导出**） | 同定义处 | 视图侧硬编码 |
- * | `custom-nodes:updated` | `config/custom-nodes`（**导出了**） | 视图侧 import | 同定义处 |
- *
- * 前四条的失效模式是同一种，且**全是静默的**：
- *   · **写侧改名、读侧认不出自己** —— 与 §16.2.4.58 的横幅色板同款；
- *   · **写侧删掉、读侧永远等不到** —— `open-task` 正是这一档：注释还写着
- *     「VideoQueueModal 的详情按钮通过它请求打开详情」，而那个派发早已搬走，
- *     监听器成了**没有任何触发源的死代码**（没有任何构建、测试会报它）；
- *   · **载荷类型只在读侧写一遍** —— `canvas:produce` 的 `{ id, resultPath,
- *     resultMediaType }` 只在订阅侧有个 `as {...}` 断言，派发侧多写一个字段
- *     不会有人发现。
- *
- * 因此本出口做两件事，且只有这两件：
+ * 因此本出口做三件事，且只有这三件：
  *   1. **事件名与载荷类型一起定义**（`AppEvents` 表）——名字与形状在同一行上，
  *      改名时编译期就能看见所有读侧；
  *   2. **订阅与派发各一个带类型的函数**（`subscribeAppEvent` /
- *      `emitAppEvent`）—— 类型从表里取，读侧不必再断言。
+ *      `emitAppEvent`）—— 类型从表里取，读侧不必再断言；
+ *   3. 表里每一条**两端都在场** —— 由 `tests/app-event-pairing.test.ts` 判
+ *      （固定守护清单成员）。缺任何一端就是上面第二、第三种死法，
+ *      而它们的表现都是「界面该刷新的时候没刷新」这种没人报的故障。
  *
  * 刻意**不做**的事（每一种都有人以为「该这样」）：
  *   · **不做事件总线 / 不做订阅中心** —— 这是 DOM 的 `window` 事件原样转发，
- *     不引入「谁订阅了谁」的注册表。多一份状态就多一处能泄漏的地方；
+ *      不引入「谁订阅了谁」的注册表。多一份状态就多一处能泄漏的地方；
  *   · **不做 SSR 兜底里的「静默排空」** —— `emitAppEvent` 在无 `window` 时
- *     直接返回（与收口前的 `typeof window !== "undefined"` 守卫同一口径），
- *     但**不排队重放**：事件是「此刻的广播」，补发一条上一轮的广播会让读侧
- *     拿到过期的载荷；
+ *      直接返回（与收口前的 `typeof window !== "undefined"` 守卫同一口径），
+ *      但**不排队重放**：事件是「此刻的广播」，补发一条上一轮的广播会让读侧
+ *      拿到过期的载荷。**这条承诺是判据把「读侧还要在挂载时自己读一次状态」
+ *      写进注释的理由** —— 只靠事件的读侧必须能容忍「派发那一刻还没有读侧挂着」
+ *      （同一份状态可能在别的页面上被改，而那些页面没挂提示器）；
  *   · **`subscribeAppEvent` 不返回 Promise、不做防抖** —— 订阅/退订就是
  *     `addEventListener` / `removeEventListener` 的配对，返回的退订函数
  *     直接给 `useEffect` 用。
@@ -54,22 +44,37 @@
  * `emitAppEvent("…", payload)`、读侧 `subscribeAppEvent("…", handler)`。
  * **不要在别处再写一遍事件名字符串** —— 判据 P61 会拦下视图 / 逻辑 /
  * 服务端里裸写的 `new CustomEvent("…")` 与 `addEventListener("…")`。
+ * **也不许只写一端** —— `tests/app-event-pairing.test.ts` 要求这一行的每一条
+ * 都既有派发方又有订阅方（认字面量，也认 `export const X = "…"` 常量的间接写法）。
  */
 export interface AppEvents {
   /** 画布仓库（项目索引 / 激活项）发生增删改后广播。载荷：无。 */
   "comfyapp:canvas-store-changed": undefined;
+  /**
+   * 画布的**服务端镜像**状态变了（某条被永久拒收、或某条重新同步成功）。
+   * 载荷：无 —— 状态本身可查（`~/lib/project-canvas/sync-notice` 的
+   * `listSyncNotices()`），读侧**在挂载时也要读一次**：本模块不排队重放，
+   * 而写镜像的入口不止画布那一页（工作区首页新建、画廊删除都会发镜像），
+   * 那些页面上没有提示器 —— 只靠事件的读侧必然漏掉那一次。
+   */
+  "comfyapp:canvas-sync-changed": undefined;
   /** 某个画布节点产出了结果，读侧据此把输出喂给下游。 */
   "canvas:produce": {
     id: string;
     resultPath: string;
     resultMediaType?: string;
   };
-  /** 请求历史面板打开某条任务的详情。 */
-  "open-task": string;
-  /** 本地工作流目录配置变更。载荷：无。 */
-  "comfyapp:local-workflows-path-changed": undefined;
-  /** 自定义节点注册表刷新完成。 */
-  "custom-nodes:updated": { count: number };
+  /**
+   * 请求工作区切到某个视图。载荷：视图 id（`WorkspaceView`）。
+   *
+   * 为什么用事件而不是 props：触发方（工坊右栏的「资源库」卡）与持有视图状态的
+   * 容器（`app/workspace/page.tsx`）之间隔着 `WorkshopPipeline` / `WorkshopAside`
+   * 两层，为一条「跳过去」的链接穿三层 props 不划算；订阅侧也只有一处。
+   *
+   * 载荷刻意写成 `string` 而不是 import `WorkspaceView`：本模块在 `src/lib`，
+   * 不得反向依赖视图层（§18 硬规则 22）—— 合法性由订阅侧按已有枚举收敛。
+   */
+  "workspace:navigate": { view: string };
 }
 
 /** 应用事件名的联合类型。 */

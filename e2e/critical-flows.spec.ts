@@ -121,6 +121,14 @@ test.describe("工作区链路 @critical", () => {
       ).toBeVisible();
     }
 
+    /* 「流程」下面那两项是**应用级浮层入口**（模型适配 / 模式契约）：它们不切视图、
+     * 只开弹窗，且与项目无关，所以留在侧栏而不进工坊那个项目内视图。 */
+    for (const label of ["模型适配", "模式契约"]) {
+      await expect(
+        page.getByRole("button", { name: label, exact: true }).first(),
+      ).toBeVisible();
+    }
+
     /* 画布 / 工坊是项目内页签：没进项目时它们**不在侧栏**，在首页以入口卡出现。
      * 早先这里把这两个名字混进上面那个侧栏循环，于是从导航拆类那天起就一直是红的。 */
     await expect(
@@ -1062,13 +1070,17 @@ test.describe("应用页签与全屏视图 @critical", () => {
        * （`source: "console"`、无 `origin`）。必须在面板打开**之后**打印——
        * 拦截器是 `LogProvider` 挂载时装上的，更早的 console 调用没人接
        * （`addInitScript` 里打印会一条也进不了面板）。`stubLogs` 造的都是
-       * app-runtime 文件行，所以这 3 条是唯一的 console 样本。 */
-      for (let i = 0; i < 3; i += 1) {
-        await page.evaluate(() =>
-          console.error(
-            "ResizeObserver loop completed with undelivered notifications.",
-          ),
-        );
+       * app-runtime 文件行，所以这是唯一的 console 样本。
+       *
+       * 三条正文**各不相同**、也刻意不叫 `ResizeObserver loop…`，两个原因：
+       *   1. 同一毫秒写下的同一段正文属于「同一条日志被多路读到」的副本，
+       *      面板按 `arrivalKey` 收成一条（`[data-log-text]` 里也确实只该出现
+       *      一次，这正是下面那条「不重复」断言要守的）；
+       *   2. `ResizeObserver loop…` 是**浏览器自己**也会打的一条 console.error
+       *      （面板的拦截器把浏览器的 console 一起接了），用同名文本会让夹具
+       *      与真实噪声撞在一起，计数随机器/时序漂。 */
+      for (let i = 1; i <= 3; i += 1) {
+        await page.evaluate((n) => console.error(`e2e 控制台样本 ${n}`), i);
       }
       /* 拦截器经 `queueMicrotask` 入库，而面板一页 200 条、窗口**锚定**在打开
        * 面板那一刻（真实日志文件同时在往里灌行），所以「这批行马上可见」不成立
@@ -1083,60 +1095,120 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await expect(consoleOption).toBeVisible();
       /* 样本真的进了面板（时刻最新 ≠ 窗口里可见，见上面的说明）。**至少** 3 条
        * 而不是正好 3 条：应用自身也会往 console 写错误（例如资源加载失败），
-       * 它们同属这一分类，写死等值会让用例在别的机器上假红。 */
-      const consoleBucketText = async () =>
-        (await consoleOption.textContent()) ?? "";
+       * 它们同属这一分类，写死等值会让用例在别的机器上假红。
+       *
+       * 这条 `expect.poll` 同时也是「等第 3 条样本落板」的那一步：三次
+       * `console.error` 都经 `queueMicrotask` 入库，而每轮轮询会在同一毫秒里
+       * 追加一批文件行——同一毫秒内的同一段正文会被 `mergeTimeline` 按副本
+       * 收掉一条（`arrivalKey`），因此计数可能在 2 与 3 之间停一拍。下面守恒
+       * 那段的读数是同一个前提下取的，必须等它到位再往下走。 */
       await expect
         .poll(async () =>
           Number(
-            /控制台 \/ 全局错误(\d+)/.exec(await consoleBucketText())?.[1] ??
-              "0",
+            await consoleOption.evaluate((el) => {
+              const nodes = Array.from(el.querySelectorAll(".sr-only"));
+              const summary =
+                nodes
+                  .map((n) => n.textContent?.trim() ?? "")
+                  .find((t) => /^\d+ 条/.test(t)) ?? "";
+              return /^(\d+) 条/.exec(summary)?.[1] ?? "0";
+            }),
           ),
         )
         .toBeGreaterThanOrEqual(3);
 
-      /* 「各分类之和 = 全部来源」：**守恒**。多加一类来源却忘了给它建桶时，
-       * 这条会红——用户报的「有的日志只在全部页签才显示」正是那个状态。
+      /* 守恒的**正确形状**：逐来源内部守恒 + 全部来源等于身份数。
+       *
+       * 这里曾经断言「各分类之和 = 全部来源」，在整批跑时必红（实测
+       * `Expected: 5000, Received: 3335`）。两个原因，各自都是产品口径而不是
+       * 夹具问题（ISSUE #1240 / #1282）：
+       *   1. 六路来源读的是**六份文件**，其中若干份装的是同一段内容的副本
+       *      （dev-launcher 转写 dev、shell-launch 与 launcher 互相重叠）。
+       *      同一批启动行因此每个来源各有一份，相加必然大于「全部来源」；
+       *   2. 撞上时间线上限（5000）时，「全部来源」被截到上限，而各分类之和
+       *      还在算被挤掉的那些。
+       * 所以现在钉的是两条各自成立的等式：**每个来源的四个级别之和 = 该来源的
+       * 条数**（筛选结果与计数同口径），以及**全部来源 = 时间线上的条数**。
        *
        * 数字读的是每项里的 `sr-only` 纯文本摘要（`N 条 · 信息 x · 警告 y ·
        * 错误 z`）而不是自绘的四列：后者是视觉产物，列的位置随样式变，读它等于
        * 把用例绑在排版上。 */
+      /* 定位到某个来源那一项：按 `getByRole("option")` + 文本锚定，**不按
+       * accessible name 的 RegExp**——零条目的项渲染成「— 无」、有条目的渲染成
+       * 「898 条数…」，两者之间差一个数字，用 `^应用服务 \d` 这类模式会在
+       * 「这一项恰好是 0」时静默失配（等到 60s 超时，报的还是别的来源）。
+       * 文案本身（ORIGIN_TEXT）才是这一项的稳定身份。 */
+      const optionOf = (label: string) =>
+        page.getByRole("option").filter({ hasText: label }).first();
       const summaryOf = async (label: string) =>
-        page
-          .getByRole("option", { name: new RegExp(`^${label} \\d`) })
-          .evaluate((el) => {
-            /* 选项里的 `sr-only` 有好几处（四列各自的「N 警告」也在其中），
-             * 只有那个**以数字开头**的才是整行的纯文本摘要。 */
-            const nodes = Array.from(el.querySelectorAll(".sr-only"));
-            const summary = nodes
+        optionOf(label).evaluate((el) => {
+          /* 选项里的 `sr-only` 有好几处（四列各自的「N 警告」也在其中），
+           * 只有那个**以数字开头**的才是整行的纯文本摘要。 */
+          const nodes = Array.from(el.querySelectorAll(".sr-only"));
+          const summary = nodes
+            .map((n) => n.textContent?.trim() ?? "")
+            .find((t) => /^\d+ 条/.test(t));
+          return /^(\d+) 条/.exec(summary ?? "")?.[1] ?? "0";
+        });
+      /** 摘要里的「全部 / 信息 / 警告 / 错误」四个数（不读自绘的列）。 */
+      const levelsOf = async (label: string) =>
+        optionOf(label).evaluate((el) => {
+          const nodes = Array.from(el.querySelectorAll(".sr-only"));
+          const summary =
+            nodes
               .map((n) => n.textContent?.trim() ?? "")
-              .find((t) => /^\d+ 条/.test(t));
-            return Number(/^(\d+) 条/.exec(summary ?? "")?.[1] ?? "0");
-          });
+              .find((t) => /^\d+ 条/.test(t)) ?? "";
+          const num = (re: RegExp) => Number(re.exec(summary)?.[1] ?? "0");
+          return {
+            all: num(/^(\d+) 条/),
+            info: num(/信息 (\d+)/),
+            warn: num(/警告 (\d+)/),
+            error: num(/错误 (\d+)/),
+          };
+        });
 
-      const total = await summaryOf("全部来源");
+      const total = Number(await summaryOf("全部来源（按条去重）"));
       expect(total).toBeGreaterThan(5);
       const buckets = [
-        "应用运行",
         "应用服务",
         "启动",
         "启动器",
+        "壳侧编排",
+        "壳日志",
+        "应用运行",
         "控制台 / 全局错误",
       ];
-      let sum = 0;
-      for (const label of buckets) sum += await summaryOf(label);
-      expect(sum).toBe(total);
+      /* ① 逐来源内部守恒：四个级别之和 = 该来源的条数。这条把「按钮上写 2、
+       *    切过去只剩 1」挡在门外（两者共用 `matchesSearch` + `bucketOf`）。 */
+      for (const label of buckets) {
+        const c = await levelsOf(label);
+        expect(`${label} ${c.info + c.warn + c.error}`).toBe(
+          `${label} ${c.all}`,
+        );
+      }
+      /* ② 时间线口径：「全部来源（按条去重）」= 时间线上的条数。两个数字来自
+       *    同一份 `filteredLogs`（下拉读 `countsByOrigin.all`，页脚读
+       *    `counts.all`），口径不同就会「下拉说 4000、页脚说 2000」，而用户
+       *    没有任何办法判断哪个对。页脚就在面板底部、弹层盖不到它，所以这一条
+       *    不必先关下拉（关掉之后 option 定位器就失效了）。 */
+      const footerTotal = await page
+        .getByText(/面板共保留 \d+ 条/)
+        .first()
+        .evaluate(
+          (el) => /面板共保留 (\d+) 条/.exec(el.textContent ?? "")?.[1],
+        );
+      expect(Number(footerTotal)).toBe(total);
       /* 那批无文件来源的行确实有自己的计数（不是 0，也不只计入「全部来源」）。 */
-      expect(await summaryOf("控制台 / 全局错误")).toBeGreaterThanOrEqual(3);
+      expect(
+        Number(await summaryOf("控制台 / 全局错误")),
+      ).toBeGreaterThanOrEqual(3);
 
       /* 切过去能看到那批行（切来源会回到第 1 页，窗口重取），且文件来源的行
        * 不在里面。 */
       await consoleOption.click();
       await expect(
         page
-          .locator("[data-log-text]", {
-            hasText: "ResizeObserver loop completed",
-          })
+          .locator("[data-log-text]", { hasText: "e2e 控制台样本 1" })
           .first(),
       ).toBeVisible();
       await expect(

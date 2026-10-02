@@ -126,6 +126,62 @@ const ALLOWED_SCRIPTS = new Set([
 const RUNTIME_DIR = "node_modules/next/dist/compiled/next-server";
 
 /**
+ * 两层产物各自允许的**顶层条目**（默认拒绝，ISSUE #1217）。
+ *
+ * 为什么这一层要按「顶层」判而不是继续往 `FORBIDDEN` 里补形状：那份清单是欠完备的
+ * 黑名单，每多一个被 tracing 带进来的目录就要有人记得补一条，漏掉是静默的
+ * （`db.sqlite` 当年就是这么漏的）。默认拒绝把方向反过来 —— 新增一个顶层目录
+ * 必然被看见，要留下必须显式登记并写清理由。与剔除侧
+ * （`scripts/standalone-private-inputs.mjs` 的 `STANDALONE_ALLOWED_TOPLEVEL` /
+ * `STATIC_ALLOWED_TOPLEVEL`）**逐字同源**，由 `tests/dist-artifact-hygiene.test.ts`
+ * 核对：漂移的表现是「剔掉了却判违规」或「判违规却没人删」，两边都白跑。
+ *
+ * 每一项为什么必需（两层共用）：`server.js` + `package.json` + `.next/` +
+ * `node_modules/` 是 Next standalone 的四件必需（`server.js` 启动即
+ * `process.chdir(__dirname)`，配置读 `.next/required-server-files.json`，所以
+ * `next.config.js` 不需要随包）；`public/` 是静态资源（产物根已从 `public/generated`
+ * 搬到仓库根的 `generated/`，它是默认拒绝的一项，见下面清单里那条注释）；`scripts/`
+ * 是编排器与宿主的运行期脚本（内部再按 `ALLOWED_SCRIPTS` 逐文件判，放行目录不等于
+ * 放行整棵）；`src` 不在任何一层，只有 `RUNTIME_SRC` 逐文件放行的例外。
+ * static 多出那三项是**装配步**才产出的（`schema.sql` 现生成 DDL、两份 HTML 是壳的
+ * 启动页与根路径兜底）。
+ */
+const STANDALONE_ALLOWED_TOPLEVEL = [
+  ".next",
+  "node_modules",
+  "package.json",
+  "public",
+  "scripts",
+  "server.js",
+];
+
+/** 桌包载荷层（`src-tauri/static`）的顶层白名单。 */
+const STATIC_ALLOWED_TOPLEVEL = [
+  ".next",
+  "index.html",
+  "node_modules",
+  "package.json",
+  "public",
+  "schema.sql",
+  "scripts",
+  "server.js",
+  "splash.html",
+];
+
+/**
+ * `src/` 这一格走「顶层放行祖先、叶子逐文件判」的形态，理由与剔除侧的 `RUNTIME_SRC`
+ * 同一条：`scripts/reap-process.mjs` 与 `scripts/dev-launcher.mjs` 都会
+ * `await import("../src/lib/process/kill-process-tree.ts")`（硬规则 3）。
+ * 与剔除侧同源，由用例核对。
+ */
+const ALLOWED_SRC_FILES = ["lib/process/kill-process-tree.ts"];
+
+/** 该层允许的顶层条目。 */
+function allowedTopLevelFor(label) {
+  return label === "static" ? STATIC_ALLOWED_TOPLEVEL : STANDALONE_ALLOWED_TOPLEVEL;
+}
+
+/**
  * 必须出现在产物里的运行时脚本（**逐个点名**，不用通配）。
  *
  * 缺任何一份的后果都是运行期 500 而非构建报错，所以只能靠产物层数文件发现
@@ -165,6 +221,19 @@ const REQUIRED_PAYLOAD_FILES = [
   // 首启建表的 DDL：载荷里没有 drizzle-kit，建表只能靠这份随包的 SQL。
   "schema.sql",
 ];
+
+/**
+ * 某条产物内相对路径在 `src/` 这一格里是否被允许（祖先放行、叶子逐文件判）。
+ * 与剔除侧的 `RUNTIME_SRC` 同源；`rel` 形如 `src` / `src/lib` / `src/lib/…/x.ts`。
+ */
+function isAllowedSrcPath(rel) {
+  if (rel === "src") return true;
+  for (const allowed of ALLOWED_SRC_FILES) {
+    const full = `src/${allowed}`;
+    if (rel === full || full.startsWith(`${rel}/`)) return true;
+  }
+  return false;
+}
 
 /**
  * 数一份产物里的文件。
@@ -341,6 +410,64 @@ function checkDir(dir, label) {
         "（§首启建表 导出 DDL、§10.2 同步运行期脚本），再确认没被 §装配 白名单剪掉。",
     );
   }
+  /* ── 顶层默认拒绝（ISSUE #1217）─────────────────────────────────────
+   * 方向与 FORBIDDEN 相反：那份黑名单**欠完备**，每多一个被 tracing 带进来的目录都要
+   * 有人记得补一条，漏掉是静默的（`db.sqlite` 当年就是这么漏的）。这里改成「只允许
+   * 运行时必需那几件，多一个就红」，让「凭空多一个顶层目录」必然被看见。
+   *
+   * 实测为什么必须这样：同一次构建走 Turbopack 时 `outputFileTracingExcludes` 对这些
+   * 整目录条目**一条都不减**（40 个顶层条目 / 19274 个真文件，里面躺着 `src-tauri` 8520、
+   * `python-venv` 5356、`db.sqlite`+WAL/SHM、`.env` 和仓库根那个 `Comfy APP.lnk`），
+   * 而**跑完当时那套按名字的剔除清单之后仍然剩 19 个顶层条目**。规范 §7.2。
+   * 换 webpack 也不是出路（§7.2 的 A/B 量过：webpack 下这些整目录条目确实归 0，
+   * 但 `.env`、`data/`（含密钥）、`log/` 照旧进来，而运行时脚本清单点名的全是
+   * `*-turbo.runtime.prod.js`）。
+   *
+   * 顶层条目按 `readdirSync(withFileTypes)` 数、**包括符号链接在内**：链接指向开发机目录，
+   * 在「真文件」口径下它什么都不算，但它确实随包出去了。`src` 是例外——那格走
+   * 「祖先放行、叶子逐文件判」，叶子在下一条里单独判。
+   */
+  const allowedTop = allowedTopLevelFor(label);
+  const topEntries = fs
+    .readdirSync(dir, { withFileTypes: true })
+    .map((e) => e.name);
+  const strayTop = topEntries.filter(
+    (name) => name !== "src" && !allowedTop.includes(name),
+  );
+  if (strayTop.length > 0) {
+    failed = true;
+    console.error(
+      `[${label}] 顶层出现白名单外的条目 ${strayTop.length} 个：\n  ` +
+        strayTop.slice(0, 12).join("\n  ") +
+        (strayTop.length > 12
+          ? `\n  …（其余 ${strayTop.length - 12} 个省略）`
+          : "") +
+        `\n  允许的就这些：${allowedTop.join(" / ")}（外加逐文件放行的 src/）。` +
+          "\n  新增一项必须**同批**改两处：剔除侧 `standalone-private-inputs.mjs` 与这里" +
+          "（两份清单逐字同源，由 tests/dist-artifact-hygiene.test.ts 核对），并写清" +
+          "「谁在运行期读它」——只补一处会得到「删掉了却仍判违规」或反过来。" +
+          "\n  根因不在 excludes：规范 §7.2 实测 Turbopack 不读 outputFileTracingExcludes" +
+          " 的整目录条目（webpack 那条链才读，而桌包运行时脚本清单点名的是 " +
+          "`*-turbo.runtime.prod.js`，换构建器等于换整条产物链）。",
+    );
+  }
+  // `src/` 的叶子逐文件判。只锚**产物根**那一份 `src/`：`node_modules/<pkg>/src/**` 是
+  // 第三方包自己的源码，把它算成违规会让护栏变成噪声（与 FORBIDDEN 那批同一条理由）。
+  const straySrcFiles = files.filter(
+    (f) => f.startsWith("src/") && !isAllowedSrcPath(f),
+  );
+  if (straySrcFiles.length > 0) {
+    failed = true;
+    console.error(
+      `[${label}] src/ 下出现未逐文件登记的条目 ${straySrcFiles.length} 个：\n  ` +
+        straySrcFiles.slice(0, 8).join("\n  ") +
+        (straySrcFiles.length > 8
+          ? `\n  …（其余 ${straySrcFiles.length - 8} 个省略）`
+          : "") +
+        `\n  这一格是「祖先放行、叶子逐文件判」：允许的是 ${ALLOWED_SRC_FILES.join(" / ")}；` +
+          "\n  运行期真要读别的源文件，请同批改剔除侧的 RUNTIME_SRC 与这里的 ALLOWED_SRC_FILES。",
+    );
+  }
   for (const [tag, re] of FORBIDDEN) {
     const hits = files.filter((f) => re.test(f));
     if (hits.length > 0) {
@@ -385,7 +512,10 @@ function main() {
         "剔除不穿符号链接；产物是 `pnpm build` 收尾剥的还是 build-desktop 组装后剥的，" +
         "决定于一层就查一层。② `next.config.js` 的 `outputFileTracingExcludes` 只是**意图" +
         "声明**（实测整目录条目一条都不减，键位还得在顶层——写在 `experimental` 下" +
-        "一个字都不会被读），它拦不住任何东西，别靠补条目「修」这条红。",
+        "一个字都不会被读），它拦不住任何东西，别靠补条目「修」这条红。" +
+        "\n  若红的是「顶层出现白名单外的条目」（ISSUE #1217）：减法只发生在 ① 那一份，" +
+        "去 `STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL` 与 ① 的对应清单里" +
+        "**成对登记**；不要为了变绿往这里加一项 —— 先回答「谁在运行期读它」。",
     );
     return 1;
   }
@@ -402,6 +532,11 @@ if (require.main === module) process.exit(main());
 module.exports = {
   FORBIDDEN,
   ALLOWED_SCRIPTS,
+  STANDALONE_ALLOWED_TOPLEVEL,
+  STATIC_ALLOWED_TOPLEVEL,
+  ALLOWED_SRC_FILES,
+  allowedTopLevelFor,
+  isAllowedSrcPath,
   REQUIRED_RUNTIME_FILES,
   REQUIRED_HOST_FILES,
   REQUIRED_PAYLOAD_FILES,

@@ -1588,7 +1588,7 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | `LogRow` 的 `HighlightedText`                                    | `trim().toLowerCase()` | 正文分片                              |
 | `RgthreeBodies`                                                  | `trim().toLowerCase()` | 组标题                                |
 | `multi-mode-select`                                              | `trim().toLowerCase()` | code / label / subCategory / fullName |
-| `app/api/materials/route.ts` + `server/api/routers/material.ts`  | `trim().toLowerCase()` | 素材名                                |
+| `app/api/materials/route.ts`                                     | `trim().toLowerCase()` | 素材名                                |
 
 **差别不是风格，是一个语义决定 —— 且有一处判错了：**
 
@@ -2088,6 +2088,15 @@ JSON 气泡 / 预览。窗口取 160 字符 —— 实测 400 字符会把环形
 ⚠️ **只数这个赋值**：单看 `scrollHeight` 会把 `log-virtual` 的贴底算术
 （只**读**几何、不改 DOM）与 textarea 自动增高（写的是 `style.height`）一并
 算上 —— 它们都不是「贴底」这个动作。
+
+⚠️ **扫描面只到 `src/**`，启动页是它的盲区**（ISSUE #1290 的教训）：P21 数的是
+TS/TSX 视图，而 **`public/{{shell.splash}}`（启动页源，编译期内嵌进壳）也是「视图」**——
+它那份 `renderLog` 曾经无条件 `logPanel.scrollTop = logPanel.scrollHeight`，
+用户每 1.5s 的轮询刷新就被拽回底部，既没有门禁看着、也没有用例跑过它的脚本。
+**新增/改动内嵌页面（splash 与将来任何 `frontendDist` 里的 HTML）里的滚动、表单、
+外部导航时，按 P21/P22/P23 的同一条口径自查**，并配一个真跑那段脚本的用例
+（`tests/splash-log-scroll-follow.test.ts` 是现成范式：jsdom 里求值内联
+`<script>`、量几何、断言行为，而不是拿正则凑源码形态）。修法见 07 §7.18.6。
 
 ### 16.2.4.25 「谁在触发一次系统文件对话框之外的外部动作」（P22 硬闸）
 
@@ -4851,7 +4860,7 @@ pnpm exec shadcn add <name> --diff src/components/ui/<file>.tsx   # ② 看具�
 | `dropdown-menu.tsx` | 层级走刻度表的 `z-popup`                                                                                                 | 浮层层级收成一张刻度表（`ee0abfd8`）                                                                                                                                                                                                                                                                                  | 把 `z-50` 一族换成刻度表档位                                       |
 | `popover.tsx`       | 层级 `z-popup` + 两态化（深底压浅字）                                                                                    | 同上；下拉/浮层在两套主题下的对比度（`56ff17a7`）                                                                                                                                                                                                                                                                     | 加回层级档与对比度类                                               |
 | `select.tsx`        | 层级 `z-popup` + 下拉归位 / 选中项对比度                                                                                 | 同上（`d73e4f4a` / `4ca5fae3`）                                                                                                                                                                                                                                                                                       | 加回层级档与定位/对比度修正                                        |
-| `tooltip.tsx`       | 层级 `z-popup`；`TooltipProvider` 的 `delay` 默认 **300**                                                                | 层级同上；`delay` 定档 300 是给 P82 出口 `hint.tsx` 那批调用点留节奏 —— 原生 `title=` 本来就是延迟出现，落在 0 会让划过工具条时浮层连弹（Base UI 给 trigger 的默认值是 600）                                                                                                                                          | 把 `z-50` 换成刻度表档位；`delay` 默认值补回 300                   |
+| `tooltip.tsx`       | 层级 `z-popup`；`TooltipProvider` 的 `delay` 默认 **300**；`TooltipContent` 的 `collisionPadding` 默认 **12**（可被调用处覆盖）+ 浮层加 `break-words` | 层级同上；`delay` 定档 300 是给 P82 出口 `hint.tsx` 那批调用点留节奏 —— 原生 `title=` 本来就是延迟出现，落在 0 会让划过工具条时浮层连弹（Base UI 给 trigger 的默认值是 600）。`collisionPadding` 把基元默认的 **5px** 抬到 12：贴边控件（右上角 / 右下角那批工具条按钮）上的气泡右边缘会紧贴窗口边（实测 1435/1440），窗口边框与内阴影正好压住最后几个像素，长文案读起来像「被屏幕裁掉了」—— 定位没错，是**夹得太靠边**（ISSUE #1295） | 把 `z-50` 换成刻度表档位；`delay` 默认值补回 300；`collisionPadding` 默认值补回 12（含 `TOOLTIP_COLLISION_PADDING` 常量与 `break-words`） |
 | `toggle-group.tsx`  | `ToggleGroupItem` 的选中档补 `data-[pressed]:ring-1 ring-primary/45` + `font-semibold` + `z-10`                          | 官方版只给 `bg-muted`，而 `toggleVariants()` 的**悬停档与选中档是同一个值** —— 划过未选中项时它立刻长得像「当前选中」，分段控件等于没有选中态。补的描边/字重基元不在 pressed 上设，不与悬停撞；`z-10` 保证 spacing=0 时描边不被邻项盖住。底色不在此处改，留给调用方按需叠（日志级别那排还要叠主色淡底，见 §16.2.4.5） | 补回选中档的三层（描边 / 字重 / 抬层），悬停档保持官方版           |
 
 > **为什么不干脆"重来一遍、以官方为底"**：实测官方 registry 今天的内容已经与当初

@@ -1,5 +1,10 @@
-import type { ProjectMeta, Scene, ShotType } from "~/lib/workshop/types";
-import { PROJECT_TYPE_LABELS } from "~/lib/workshop/types";
+import {
+  SHOT_TYPES,
+  normalizeShotType,
+  type ProjectMeta,
+  type Scene,
+  type ShotType,
+} from "~/lib/workshop/types";
 import type { LLMMessage } from "./types";
 import { extractJson, extractJsonArray } from "./parse";
 
@@ -39,35 +44,6 @@ ${idea}`;
     { role: "system", content: SCRIPT_MD_SYSTEM },
     { role: "user", content: user },
   ];
-}
-
-/** 模板生成（离线）：把灵感/粗稿按固定模板拼成可编辑的剧本骨架，不调用模型。 */
-export function buildScriptTemplate(
-  meta: Pick<ProjectMeta, "type" | "tone" | "logline">,
-  idea: string,
-): string {
-  const metaLines = [
-    meta.tone?.trim() ? `- 基调：${meta.tone.trim()}` : "",
-    meta.type ? `- 类型：${PROJECT_TYPE_LABELS[meta.type] ?? meta.type}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-  return [
-    `# 剧本草稿`,
-    metaLines,
-    "",
-    idea.trim(),
-    "",
-    "## 场景1 · 未命名地点（未定时间）",
-    "（待补充：内/外景、地点与时间）",
-    "",
-    "Δ （在此描述第一个画面/动作）",
-    "",
-    "V1 角色名: （在此填写台词或旁白）",
-  ]
-    .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
-    .join("\n")
-    .trim();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -154,17 +130,6 @@ export function parseCharacterFull(text: string): RawCharacterFull {
 // ─────────────────────────────────────────────────────────────
 // Storyboard planning
 // ─────────────────────────────────────────────────────────────
-const SHOT_TYPES: ShotType[] = [
-  "extreme_wide",
-  "wide",
-  "full",
-  "medium",
-  "close",
-  "extreme_close",
-  "poi",
-  "pod",
-];
-
 export const STORYBOARD_SYSTEM = `你是分镜师。给定一个场景描述和可选的角色名单、艺术风格，请把它拆成若干个镜头。
 只输出严格 JSON 数组，不要额外文字或代码围栏。每个元素：
 { "shotType": "景别，取值之一：${SHOT_TYPES.join(" / ")}", "description": "该镜头画面描述（具象，含角色动作）", "characterNames": ["出场角色名，取自给定名单，可空数组"] }
@@ -201,10 +166,8 @@ export function parseStoryboard(text: string): RawShot[] {
   return data.map((datum) => {
     const obj = (datum ?? {}) as Record<string, unknown>;
 
-    const st = asText(obj.shotType, "medium") as ShotType;
-
     return {
-      shotType: SHOT_TYPES.includes(st) ? st : "medium",
+      shotType: normalizeShotType(obj.shotType),
 
       description: asText(obj.description, ""),
 

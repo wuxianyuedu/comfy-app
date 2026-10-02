@@ -7,6 +7,16 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    /* 产物根的一次性搬迁（台账 A13 的结构性关法）：历史落点在 `public/generated/`，
+     * 而 `public/**` 由 Next 按静态文件直接发出、根本不经过带闸的 route handler ——
+     * 把根搬到 `generated/` 之后那条旁路**不存在**。搬这一动作必须排在所有会读产物的
+     * 启动点**之前**（下面的成片监看恢复就会读镜头视频）。
+     * 已知窗口：dev 下本文件懒编译（实测 `✓ Ready` 之后约 40s 才跑这一支），
+     * 所以升级到本版的开发机在头 40 秒里读历史产物会拿 404；桌包是进程起来就跑，
+     * 用户侧没有这个窗口。 */
+    await import("./lib/media/artifact-root-migration.server").then((m) =>
+      m.migrateLegacyArtifactRoot(),
+    );
     /* 把本进程（应用服务）的 stdout / stderr 转录一份进面板可见日志文件：
      * 此前首屏编译错误、Turbopack FATAL、未捕获的服务端异常只落在
      * log/nextjs/nextjs-stderr-*.log，而「应用日志」面板不读它——应用服务起不来

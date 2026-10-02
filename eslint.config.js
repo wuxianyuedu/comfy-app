@@ -273,6 +273,27 @@ export default tseslint.config(
       ],
     },
   },
+  /* ── router 层的错误信封只许 TRPCError（台账 E8 的防线，2026-10-01）──────────
+   * 裸 `throw new Error("…")` 在 tRPC 里不是「一个 400/404」，而是
+   * **INTERNAL_SERVER_ERROR** —— 于是三件事同时坏：「越权与不存在同形」这条口径在
+   * 状态码层没有判据（两边都 500，看着一样纯属巧合）、界面拿不到能分支的码只能显示
+   * 「出错了」（硬规则 4）、一次正常点击进 `trpc_error` 警告日志（把业务分支当故障报）。
+   * 判据写成 lint 而不是新的 `check-*.cjs`：B 组每次提交都跑、报错直接指到行号，
+   * 也不必再新增一份「会静默失效的清单」。selector 的语义与被扫存量由
+   * `tests/router-error-envelope.test.ts` 守着（含「扫描面不能是空的」那一条）。 */
+  {
+    files: ["src/server/api/routers/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: 'ThrowStatement > NewExpression[callee.name!="TRPCError"]',
+          message:
+            "router 里请抛 new TRPCError({ code, message })：裸 Error 会被 tRPC 归成 INTERNAL_SERVER_ERROR，客户端就分不出「不存在 / 越权 / 重名」（规范 §11.2.1 第七条、台账 E8）。",
+        },
+      ],
+    },
+  },
   {
     linterOptions: {
       reportUnusedDisableDirectives: true,

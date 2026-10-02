@@ -197,6 +197,9 @@
     /* 日志面板吃掉剩余高度（不再写死 320px）：展开时窗口同步放大
        （set_splash_compact(false)），面板随窗口长高，单行日志一次能看到
        更多行；窗口被用户拉大时也不会在面板下方留空白。 */
+    /* 外层：**不回滚**，只为「回到最新」按钮提供定位上下文，并把剩余高度
+       分给里面的滚动容器。按钮若直接挂在滚动容器里，它会随日志内容一起滚
+       上去——右下角是它唯一有用的位置，所以定位上下文必须在外层。 */
     .log-panel {
       display: none;
       /* 日志面板里要能选中复制现场（见 pre 的 user-select: text）。
@@ -208,9 +211,15 @@
       background: #0B0A12;
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px;
-      padding: 10px 12px;
       flex: 1 1 auto;
       min-height: 0;
+      position: relative;
+    }
+    /* 滚动容器（真正的 overflow-y: auto）。日志面板里的一切滚动都发生在这里，
+       贴底判据读的也是它。 */
+    .log-scroll {
+      height: 100%;
+      padding: 10px 12px;
       overflow-y: auto;
     }
     .log-panel pre {
@@ -227,6 +236,30 @@
       user-select: text;
       cursor: text;
     }
+    /* 「回到最新」：用户上翻看历史后，刷新不再把他拽回底部（见 renderLog）。
+       但「不自动滚」不能等于「不知道有新内容」——硬规则 4 要求降级路径有
+       用户可见出口，所以贴底暂停时把这个按钮浮在面板右下角，点它回到最新。
+       常驻占位用 hidden 档而不是条件挂载：面板是 flex 列，节点增删会让 pre
+       的可用高度跳一下，正好落在用户正在读的那一行上。 */
+    .log-latest {
+      position: absolute;
+      right: 20px;
+      bottom: 20px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      background: var(--violet);
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    }
+    .log-latest[data-visible="true"] { display: inline-flex; }
+    .log-latest:hover { background: #8B6DFF; }
     .spinner {
       display: inline-block;
       width: 10px;
@@ -290,7 +323,11 @@
       <span class="elapsed" id="elapsed">00:00</span>
     </div>
     <div class="log-panel" id="log-panel" data-no-drag>
-      <pre id="log-pre"></pre>
+      <div class="log-scroll" id="log-scroll">
+        <pre id="log-pre"></pre>
+      </div>
+      <button class="log-latest" id="log-latest" type="button"
+              data-visible="false">↓ 回到最新</button>
     </div>
   </div>
 
@@ -303,6 +340,8 @@
     const elapsedEl = $('elapsed');
     const logBtn = $('log-btn');
     const logPanel = $('log-panel');
+    const logScroll = $('log-scroll');
+    const logLatest = $('log-latest');
     const logPre = $('log-pre');
 
     const PHASE_LABELS = {
@@ -633,12 +672,69 @@
     let logTimer = null;
     let logFailCount = 0;
 
+    /** 离底多少像素内仍算「还在跟随」——与全库唯一那处定义同值
+     * （`src/components/ui/use-scroll-follow.ts` 的 `NEAR_BOTTOM_PX`）。
+     * 启动页是**编译期内嵌的独立页面**，import 不到那份 TS，只能复述这个数字；
+     * 改一处务必改两处。小于它就退出跟随：用户上滚一点不该立刻掉出跟随态。 */
+    const NEAR_BOTTOM_PX = 32;
+
+    /** 贴底判据（纯函数，便于用例直接跑）：当前位置是不是还贴着底。
+     *
+     * 这是「用户有没有接管滚动」的**唯一**判据。启动页此前没有它——每轮
+     * 刷新（1.5s 一次）都无条件 `scrollTop = scrollHeight`，用户往上翻看
+     * 早期日志时每次轮询都被拽回底部，正是用户反馈的那条。
+     *
+     * 几何可能量不到（面板 display:none 时 clientHeight / scrollHeight 都是 0，
+     * 页面刚加载也可能都是 0）——那一档算「贴着底」，面板打开时才能落到底部，
+     * 否则展开日志永远停在顶部。 */
+    function isNearBottom(el, threshold) {
+      if (!el) return true;
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (!Number.isFinite(distance)) return true;
+      return distance < threshold;
+    }
+
+    /** 是否跟随底部。用户上滚 → false（刷新不再动他的位置）；点「回到最新」
+     * 或自己滚回底部 → true。 */
+    let logFollow = true;
+
+    /** 把「贴底暂停 / 恢复」画到界面上。
+     *
+     * 暂停只是「不再自动滚」，不能等于「有新内容也不吭声」——硬规则 4：
+     * 降级路径必须有用户可见出口。按钮常驻在 DOM 里、只切 `data-visible`：
+     * 面板是 flex 列，节点增删会让 pre 的可用高度跳一下，正好落在用户
+     * 正在读的那一行上。 */
+    function renderLogFollow() {
+      logLatest.dataset.visible = logVisible && !logFollow ? 'true' : 'false';
+    }
+
+    /** 用户滚到哪就跟随到哪（滚动事件的唯一入口）。 */
+    function onLogScroll() {
+      const next = isNearBottom(logScroll, NEAR_BOTTOM_PX);
+      if (next === logFollow) return;
+      logFollow = next;
+      renderLogFollow();
+    }
+
+    /** 回到最新：立刻贴底并恢复跟随（「回到最新」按钮的唯一入口）。 */
+    function jumpLogToLatest() {
+      logFollow = true;
+      if (logScroll) logScroll.scrollTop = logScroll.scrollHeight;
+      renderLogFollow();
+    }
+
     function renderLog(text) {
       if (text === logPre.dataset.raw) return;
       logPre.dataset.raw = text || '';
       logPre.textContent = text || '';
-      logPanel.scrollTop = logPanel.scrollHeight;
+      /* 只在用户仍贴着底时贴底。他上翻看历史时就**一个字都不动**——位置被
+       * 覆盖等于把他正在读的那几行抽走，这正是本函数此前每 1.5s 干的事。 */
+      if (logFollow) logScroll.scrollTop = logScroll.scrollHeight;
+      renderLogFollow();
     }
+
+    logScroll.addEventListener('scroll', onLogScroll);
+    logLatest.addEventListener('click', jumpLogToLatest);
 
     /** 把「读不到日志」翻译成「现在看哪里、下一步做什么」。
      *
@@ -726,6 +822,10 @@
       // 收起时回到紧凑尺寸——窗口始终与内容同尺寸，屏幕上不留空白区。
       void applyCompact(!logVisible);
       if (logVisible) {
+        /* 打开面板 = 用户此刻要看最新：恢复跟随并落到底部。
+         * 不清这个态的话，「上次关面板前上翻过」会让这次一打开就停在旧位置，
+         * 而他并没有在这轮里滚过。 */
+        jumpLogToLatest();
         fetchLog();
         // 1.5s：日志命令每轮要读多个文件尾部，800ms 的收益撑不起这个成本；
         // 首帧 fetchLog 立即执行，展开日志时仍是即时可见。
@@ -734,6 +834,7 @@
         clearInterval(logTimer);
         logTimer = null;
       }
+      renderLogFollow();
     });
 
     let navigating = false;

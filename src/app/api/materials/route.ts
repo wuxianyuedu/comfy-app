@@ -6,16 +6,18 @@ import { logger } from "~/server/lib/logger";
 import { apiErrorBody, apiErrorDetail } from "~/lib/api-error";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { artifactUrl } from "~/lib/media/output-paths";
 import {
   MATERIAL_FOLDERS,
   SHARED_SCOPE,
+  canWriteMaterialScope,
   collectByFolder,
   folderDir,
   folderName,
   isValidFolder,
-  listScopes,
   sanitizeFileName,
   sanitizeScope,
+  visibleMaterialScopes,
   type MaterialItem,
 } from "~/lib/media/materials";
 
@@ -60,17 +62,13 @@ const ALLOWED_MIME = new Set([
 ]);
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
-/** 鉴权守卫：无有效会话时返回 401（响应对象）。 */
-async function requireUser(): Promise<NextResponse | null> {
-  const user = await requireRequestUser();
-  if (!user) {
-    return unauthorizedResponse();
-  }
-  return null;
-}
+/* 鉴权在每个 handler 里各一次 `requireRequestUser()`（要拿到 user.id 做归属判定）。
+ * 归属判据不在本文件里写第二份 —— 吃 `~/lib/media/materials` 的
+ * `visibleMaterialScopes` / `canWriteMaterialScope`（这一族曾有两个入口、各写一份
+ * `resolveScopes`，而且**两份都不判归属**；入口现在只有这一个）。 */
 
 /* ── 画布素材库 API ───────────────────────────────────────────
- * 文件系统支撑，落点 public/generated/materials/{scope}/{folder}/。
+ * 文件系统支撑，落点 generated/materials/{scope}/{folder}/。
  * 详见 src/lib/materials.ts 顶部的存储选型说明。
  *
  * 端点：GET    /api/materials?projectId=proj_1&scope=project
@@ -84,36 +82,24 @@ async function requireUser(): Promise<NextResponse | null> {
  * DELETE ?id=scope/folder/name                                   删除
  */
 
-/** 解析出本次请求要读取的 scope 列表。 */
-async function resolveScopes(
-  scopeMode: string | null,
-  projectId: string | null,
-): Promise<string[]> {
-  if (scopeMode === "cross") {
-    // 跨项目：素材库下所有目录（含 _shared）
-    const all = await listScopes();
-    return all.length ? all : projectId ? [projectId] : [];
-  }
-  // 本项目：项目目录 + 共享目录（共享素材在任何项目里都应可见）
-  const scopes: string[] = [];
-  if (projectId) scopes.push(projectId);
-  scopes.push(SHARED_SCOPE);
-  return scopes;
-}
+/** 解析出本次请求要读取的 scope 列表 —— 判据在 `visibleMaterialScopes`（一处）。 */
 
 export async function GET(req: NextRequest) {
-  const denied = await requireUser();
-  if (denied) return denied;
+  const user = await requireRequestUser();
+  if (!user) return unauthorizedResponse();
   try {
     const url = new URL(req.url);
     const projectId = sanitizeScope(url.searchParams.get("projectId"));
     const scopeMode = url.searchParams.get("scope"); // "project" | "cross"
     const folder = url.searchParams.get("folder")?.trim() ?? null;
-    /* 归一化走 `~/lib/list-filter`（规范 16 §16.2.4.16）—— 与 tRPC 路由
-     * 的同一段此前各写一遍，`trim` 与折小写都漏一处就会两侧搜索结果不一致。 */
+    /* 归一化走 `~/lib/list-filter`（规范 16 §16.2.4.16）：同一段此前在各入口
+     * 各写一遍，`trim` 与折小写漏一处就会搜索结果两侧不一致。 */
     const q = normalizeNeedle(url.searchParams.get("q") ?? "") || null;
 
-    const scopes = await resolveScopes(scopeMode, projectId);
+    const scopes = await visibleMaterialScopes(user.id, {
+      cross: scopeMode === "cross",
+      projectId,
+    });
 
     // 分类计数始终返回，面板顶部/返回上级都要用
     const byFolder = await collectByFolder(scopes);
@@ -158,8 +144,8 @@ export async function GET(req: NextRequest) {
 
 /** 上传素材。multipart/form-data: file, projectId, folder, shared? */
 export async function POST(req: NextRequest) {
-  const denied = await requireUser();
-  if (denied) return denied;
+  const user = await requireRequestUser();
+  if (!user) return unauthorizedResponse();
   try {
     const form = await req.formData();
     const file = form.get("file") as File | null;
@@ -202,6 +188,15 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    /* 归属：往别人的项目格里写素材，等于把文件塞进对方面板里（并且从此按对方的
+       项目计费/展示）。状态给 404 而不是 403 —— 与「这个项目没有素材」同形，
+       不给探测项目 id 用（台账 A2 / A3 立的口径）。 */
+    if (!(await canWriteMaterialScope(user.id, scope))) {
+      return NextResponse.json(
+        { error: "素材不存在或无权访问" },
+        { status: 404 },
+      );
+    }
 
     const safeName = sanitizeFileName(file.name);
     if (!safeName)
@@ -235,9 +230,9 @@ export async function POST(req: NextRequest) {
         name: finalName,
         folder,
         folderName: folderName(folder),
-        url: `/api/generated/materials/${encodeURIComponent(scope)}/${encodeURIComponent(
-          folder,
-        )}/${encodeURIComponent(finalName)}`,
+        url: artifactUrl(
+          ["materials", scope, folder, finalName].map(encodeURIComponent),
+        ),
         size: buf.length,
         scope,
       },
@@ -250,8 +245,8 @@ export async function POST(req: NextRequest) {
 
 /** 删除素材。?id=scope/folder/name（GET 返回的 item.id 原样回传）。 */
 export async function DELETE(req: NextRequest) {
-  const denied = await requireUser();
-  if (denied) return denied;
+  const user = await requireRequestUser();
+  if (!user) return unauthorizedResponse();
   try {
     const url = new URL(req.url);
     const id = url.searchParams.get("id")?.trim();
@@ -269,6 +264,14 @@ export async function DELETE(req: NextRequest) {
     const name = sanitizeFileName(parts[2]);
     if (!scope || !isValidFolder(folder) || !name) {
       return NextResponse.json({ error: "id 不合法" }, { status: 400 });
+    }
+    /* 归属判定必须在**碰磁盘之前**：这一条的副作用是 `fs.unlink`，
+       晚一步就删完了再报错（§11.2.1）。 */
+    if (!(await canWriteMaterialScope(user.id, scope))) {
+      return NextResponse.json(
+        { error: "素材不存在或无权访问" },
+        { status: 404 },
+      );
     }
 
     const dir = folderDir(scope, folder);

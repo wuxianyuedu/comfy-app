@@ -67,7 +67,8 @@ pnpm test 2>&1 | tail -3                                          # Test Files /
 - 理由 + 站点数，进提交前的固定守护清单）。
 
 **结构性缺口不藏在心里，记在台账**：`docs/guides/PRODUCTION-GAPS.md` 的 E 系列与 P1 段
-（例如 `src/app` 下 page/route/layout 的目录级零测试、16 个 router 里有几个带同名测试、
+（例如 `src/app` 下 page/route/layout 的目录级零测试、挂载在 `appRouter` 上的
+procedure 有没有执行者**与**消费方（这两条已由 `tests/trpc-surface-executors.test.ts` 接管，见下）、
 覆盖率回退要补的五个文件）。往这里抄一份数字只会漂移两次。
 
 ### 新增测试指引
@@ -173,16 +174,45 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
       在暂存改动命中壳输入时跑 `cargo test`、并把硬规则 5「改了壳必须重编」变成判据 ——
       但它**不是全量执行者**：不动壳的提交永远不跑那 37 条 `#[test]`，全量仍要靠
       `cd src-tauri && cargo test` 的手上（`check:all` 里也没有这一路）。
-- [ ] **API 路由与页面层仍有大片裸奔**：40 个 `route.ts` 里 13 个有同名测试（第一批补了
-      5 个闸门类端点 —— `generated/[...path]`、`debug/source`、`comfy/{stats,queue,ensure}`；
-      第二批补了 `custom-nodes` 的 argv 注入闸门），剩下 27 个与 6 个 `page.tsx` 的目录级
-      测试仍是少数（台账 P1/E3）。
-- [ ] **服务端 router 集成覆盖 6/16**：`generate` / `run` / `task` / `workflow` / `project` /
-      `setting`（后两个分别是闸门第二批与第三批补的，用例都按**归属 / 协议闸门**组织，
-      不按 procedure 顺序铺）。其余 10 个里 `llm`（出口脱敏在 `lib/llm/server.test.ts` 判着，
-      router 层的 zod 闸没人判）、`custom-nodes`（tRPC 侧）、`material`、`film`、`train`、
-      `model` 都在写本机状态 —— 台账 A 系列三批复算证明：「一个 router 没有执行者」的
-      实际含义是「它的归属闸门坏了没人红」。
+- [ ] **API 路由与页面层仍有大片裸奔**：40 个 `route.ts` 里 15 个有同名测试（闸门第一批补了
+      5 个 —— `generated/[...path]`、`debug/source`、`comfy/{stats,queue,ensure}`；第二批补了
+      `custom-nodes` 的 argv 注入闸门；⑨第一刀补了 `materials` 的归属闸门；另有 `schema/*`
+      两条是别线补的），剩下 25 个与 6 个 `page.tsx` 的目录级测试仍是少数（台账 P1/E3）。
+      ⑦第四刀没加 `route.ts` 用例，但补了产物的**第二个入口**的判据（`src/proxy.test.ts`）：
+      产物当时住在 `public/generated/` 下，而 `public/**` 由 Next 按静态文件直发、不经过
+      任何 handler —— 只在 route 上加闸门时，把 URL 里的 `api/` 去掉就整条绕过
+      （实测同一份图：静态形状 200、带闸形状 401）。那条旁路后来被**结构性关掉**：
+      产物根搬到仓库根的 `generated/`（台账 A13），这层 proxy 只剩「让老形状的 URL 仍然
+      走闸」的兼容职责。
+- [x] **服务端 router 集成覆盖已收口，判据升到 procedure 粒度**：12 个 router
+      （`generate` / `run` / `task` / `workflow` / `project` / `setting` /
+      `film` / `train` / `model` / `llm` / `skill` / `workflowModel`）的用例都按
+      **归属 / 协议 / 数值 / 枚举闸门 / 错误信封**组织，不按 procedure 顺序铺。
+      最后 3 个零执行者的口（`custom-nodes` tRPC 侧 / `user` / `post`）没有被补成测试，
+      而是**定性后删除** —— 给死口写用例等于把它焊死：`customNode.list` 的 `nodes` 是写死的
+      `[]`（真实现在 REST `/api/custom-nodes`）还顺手回整个 settings；`post.getLatest`
+      的注释自称「要求已登录」，而 `loginRequired` 默认 `false` 让那句话等于没写，且它
+      没有 `createdById` 过滤；`user.me` 客户端从来不调（会话走 better-auth 的 `authClient`）。
+      防线现在挂在**挂载动作**上：`tests/trpc-surface-executors.test.ts` 枚举 `appRouter`
+      的每条 procedure，要求它出现在「import 了该 router 文件闭包」的测试里的调用形态，
+      并自带四条反证（没测试 / 只 import 不调用 / 调用但没 import / 齐备）。
+      同一份挂载面还判**第二个维度：消费方**（台账 E3′）—— 「测试全绿」与「有人在用」是
+      两件事，只有测试在调、界面从不引用的口必须进 `ZERO_CONSUMER` 登记并写明「谁将来接它」，
+      登记表还要求**双向不陈旧**（口删了登记还在 = 红，消费方接上了登记还在 = 红）并带长度棘轮。
+      这一维照出来的第一批处置：`material.*` 与 `llm.complete` 是 REST 面的第二扇门，收口到
+      有人走的那一侧；复算时另照出 **4 条没有落点的 `/api/*` 地址**（实测 404、界面按空态吞掉），
+      判据（`tests/rest-endpoint-targets.test.ts`）与四条处置见台账 E3‴，同批已关闭。
+      为什么粒度必须是 procedure 而不是 router：⑨ 三批清完后复算，剩下的两条零执行者口
+      （`workflow.detailFull` / `workflow.subgraph`）**藏在一份有测试文件的 router 里** ——
+      「每个 router 都有一份测试」这句话当时照样全绿。台账 A 系列几批复算证明「一个
+      procedure 没有执行者」的实际含义是「它的闸门坏了没人红」，⑨第二刀更狠：
+      **`train.cancel` 自 Prisma→Drizzle 迁移起每次都 500**（仓储那个 `select?: unknown` +
+      `db.select(select as never)` 把调用点的形状错误整个咽掉，见台账 F13）——
+      没有执行者的地方烂掉的不只是判据，还有功能本身。
+      ⑨第三刀清的是同一族的另一维：**错误码本身**（19 处裸 `throw new Error` = 业务分支在客户端
+      表现成 500，台账 E8）。防线落在 eslint 的 `no-restricted-syntax`（B 组每次提交都跑、直接指到
+      行号），并由 `tests/router-error-envelope.test.ts` 三层验全：存量为零、**扫描面非空**
+      （路径写错时「零命中」长得就像「都修好了」）、selector 真的会响（拿 `Linter` 跑两段片段）。
 - [ ] **`DynamicWorkflowForm` / `CanvasNode` 主组件的深度行为测试**（fetch/poll 生命周期）仍开放。
 - [ ] 存量 4 份 `.snap` 结构快照按行为断言迁移（见 §11.9）。
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）。

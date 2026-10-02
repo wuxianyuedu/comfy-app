@@ -52,12 +52,39 @@ export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
   video: "视频",
 };
 
-/** 远端候选模型条目：baseUrl / apiKey 缺省（或 null）时回落到全局连接参数。 */
+/** 远端候选模型条目。
+ *
+ * `apiKey` 是**三态**的，不是「有值 / 没值」两态（台账 A11 的成因就是把三态压成了两态）：
+ *   · 非空字符串 —— 用户这次填了新密钥，写进去；
+ *   · `null`（或空串 / 全空白）—— 用户**显式清空**，写 `null`；
+ *   · 缺键 / `undefined` —— 本次不提供意见：这条值来自服务端下发（那边出于脱敏
+ *     根本不带密钥，见 `getConfigForClient`），原样回写不等于「用户想把它清掉」。
+ * 之所以必须由调用点**省略这个键**而不是填 `null`：设置页每次保存都是「把当前清单
+ * 整份覆盖」（`remoteModelRepository.replaceAll`），两态写法会让「没动过」被读成
+ * 「清空」，填过的密钥隔一次保存就没。
+ *
+ * `hasApiKey` 是**只读视图字段**：服务端下发时逐条标「这条存过密钥」（与顶层同口径），
+ * 供设置页显示「已配置」而不把明文送进浏览器；它不参与写入判定。 */
 export interface RemoteModelEntry {
   name: string;
   baseUrl?: string | null;
   apiKey?: string | null;
   kind?: RemoteModelKind | null;
+  hasApiKey?: boolean;
+}
+
+/** `apiKey` 的三态归一（唯一一份口径，`normalizeExtraModels` 与 `splitExtraModels`
+ *  都吃它 —— 这两处此前各写一份「不是非空字符串就折成 null」，而那正是把
+ *  「服务端下发的脱敏条目」读成「用户要清空密钥」的地方）。
+ *  非空串 → 去空白后的值；`null` / 空串 / 全空白 → `null`（显式清空）；
+ *  缺键 / `undefined` / 其它类型 → `undefined`（不提供意见，保留库里既有）。 */
+export function normalizeEntryApiKey(
+  rec: Record<string, unknown>,
+): string | null | undefined {
+  const v: unknown = rec.apiKey;
+  if (typeof v === "string") return v.trim() === "" ? null : v.trim();
+  if (v === null) return null;
+  return undefined;
 }
 
 /** extraModels 的原始存储 / 传输形状：旧数据是纯名字字符串，新数据是条目对象。 */
@@ -70,8 +97,9 @@ export function normalizeExtraModels(raw: unknown): RemoteModelEntry[] {
   const kinds: readonly string[] = REMOTE_MODEL_KINDS;
   for (const item of raw) {
     if (typeof item === "string") {
+      // 字符串形态只带了名字，对连接参数**不提供意见**（挂 null 会被读成「清空」）
       if (item.trim() !== "")
-        out.push({ name: item, baseUrl: null, apiKey: null, kind: null });
+        out.push({ name: item, baseUrl: null, kind: null });
       continue;
     }
     if (typeof item !== "object" || item === null) continue;
@@ -79,16 +107,15 @@ export function normalizeExtraModels(raw: unknown): RemoteModelEntry[] {
     const name = typeof rec.name === "string" ? rec.name.trim() : "";
     if (name === "") continue;
     const kind: unknown = rec.kind;
+    const apiKey = normalizeEntryApiKey(rec);
     out.push({
       name,
       baseUrl:
         typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== ""
           ? rec.baseUrl
           : null,
-      apiKey:
-        typeof rec.apiKey === "string" && rec.apiKey.trim() !== ""
-          ? rec.apiKey
-          : null,
+      // 三态：`undefined` 时**不挂这个键**（「不提供意见」不能被写成「清空」）
+      ...(apiKey === undefined ? {} : { apiKey }),
       kind:
         typeof kind === "string" && kinds.includes(kind)
           ? (kind as RemoteModelKind)
@@ -132,16 +159,15 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
     if (name === "") continue;
     if (remoteEntries.some((e) => e.name === name)) continue;
     const kind: unknown = rec.kind;
+    const apiKey = normalizeEntryApiKey(rec);
     remoteEntries.push({
       name,
       baseUrl:
         typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== ""
           ? rec.baseUrl
           : null,
-      apiKey:
-        typeof rec.apiKey === "string" && rec.apiKey.trim() !== ""
-          ? rec.apiKey
-          : null,
+      // 与 `normalizeExtraModels` 同一份三态口径（这里就是设置页保存时走的那条）
+      ...(apiKey === undefined ? {} : { apiKey }),
       kind:
         typeof kind === "string" &&
         REMOTE_MODEL_KINDS.includes(kind as RemoteModelKind)

@@ -9,7 +9,7 @@
  *   3. 避免一次 Prisma migration —— 本机 dev server 的 DATABASE_URL 指向
  *      临时库，改 schema 需要冷重启，风险与收益不成比例。
  *
- * 落点：public/generated/materials/{scopeDir}/{folderId}/{fileName}
+ * 落点：generated/materials/{scopeDir}/{folderId}/{fileName}
  *   scopeDir = 画布项目 id（localStorage 里的 `proj_...`），或 SHARED_SCOPE
  *   经 /api/generated/[...path] 提供读取，浏览器可直接引用。
  */
@@ -18,7 +18,13 @@ import "server-only";
 
 import { compareText } from "~/lib/ordered-set";
 import { getOrCreate } from "~/lib/collections";
+import { projectRepository } from "~/lib/core/repository-project";
 import { lastSegments } from "~/lib/path-display";
+import {
+  artifactUrl,
+  isWithinGeneratedRoot,
+  materialsRoot as artifactMaterialsRoot,
+} from "~/lib/media/output-paths";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -66,9 +72,10 @@ export function inferKind(fileName: string): MaterialKind {
 
 /* ── 路径安全 ── */
 
-/** 素材库根目录（public/generated/materials）。 */
+/** 素材库根目录（产物根下的 `materials/` 子层；根的定义在 `output-paths`，
+ *  这里只加自己那一层，不再重抄一遍 `public/generated`）。 */
 export function materialsRoot(): string {
-  return path.join(process.cwd(), "public", "generated", "materials");
+  return artifactMaterialsRoot();
 }
 
 /**
@@ -100,12 +107,77 @@ export function sanitizeFileName(
   return cleaned;
 }
 
-/** 拼出 scope/folder 的绝对目录，并断言它仍在素材库根之内。 */
+/** 拼出 scope/folder 的绝对目录，并断言它仍在素材库根之内。
+ *  包含判据用 `output-paths` 那一份（`path.sep` 收边界）—— 这一句此前是同一
+ *  判据的第二份实现，「同级 `materialsX` 也算在内」那种错法只差一个字。 */
 export function folderDir(scope: string, folder: string): string | null {
   const root = materialsRoot();
   const dir = path.join(root, scope, folder);
-  if (dir !== root && !dir.startsWith(root + path.sep)) return null;
-  return dir;
+  return isWithinGeneratedRoot(dir, root) ? dir : null;
+}
+
+/* ── 归属 ────────────────────────────────────────────────────────────────
+ * 素材按 scope 分片存磁盘，而 scope **就是画布项目 id** —— 目录名本身就是别人的
+ * 项目 id。不判归属就有两条越权路：
+ *   ① `scope=cross` 的旧写法直接返回 `listScopes()`，等于把「本机都有哪些项目」
+ *      当成一份可枚举清单交出去，再顺着它翻每个项目的素材；
+ *   ② 把别人的 projectId 填进任意一个参数，读写那一格。
+ * 这一族与台账 A2 / A3 是同一件事（id 由客户端生成、可以被抄），所以口径也照搬：
+ * **越权与不存在必须同形**，不给探测项目 id 用。
+ *
+ * 结论是三态而不是两态：
+ *   · `mine` —— 库里这一行的 userId 就是请求者；
+ *   · `foreign` —— 明确属于别人，一律按「看不见 / 不可写」处置；
+ *   · `unclaimed` —— 共享区，或库里还没有这一行。后者不是漏洞而是正常路径：画布 id
+ *     由客户端生成、向服务端的镜像是尽力而为（离线时错误被吞掉），把「还没同步上来
+ *     的新项目」判成不可写会直接堵死上传素材这条路。 */
+export type MaterialScopeOwnership = "mine" | "foreign" | "unclaimed";
+
+export async function materialScopeOwnership(
+  userId: string,
+  scope: string,
+): Promise<MaterialScopeOwnership> {
+  if (scope === SHARED_SCOPE) return "unclaimed";
+  const row = await projectRepository.findById(scope);
+  if (!row) return "unclaimed";
+  return row.userId === userId ? "mine" : "foreign";
+}
+
+/** 这次请求允许看到的 scope —— 读侧的唯一出口（此前它在两个入口各写一份
+ *  `resolveScopes`，两份都不判归属；入口现在只有 `/api/materials` GET 这一个）。 */
+export async function visibleMaterialScopes(
+  userId: string,
+  opts: { cross: boolean; projectId: string | null },
+): Promise<string[]> {
+  if (opts.cross) {
+    const out: string[] = [];
+    for (const scope of await listScopes()) {
+      if (scope === SHARED_SCOPE) continue; // 末尾统一补，避免重复
+      if ((await materialScopeOwnership(userId, scope)) !== "foreign") {
+        out.push(scope);
+      }
+    }
+    out.push(SHARED_SCOPE);
+    return out;
+  }
+  const { projectId } = opts;
+  if (
+    projectId &&
+    (await materialScopeOwnership(userId, projectId)) === "foreign"
+  ) {
+    // 与「这个项目根本没有素材」同形：只回共享区
+    return [SHARED_SCOPE];
+  }
+  return projectId ? [projectId, SHARED_SCOPE] : [SHARED_SCOPE];
+}
+
+/** 写 / 删这一格素材的许可：共享区不限，明确属于别人的不行，库里没登记的放行
+ *  （理由见上面 `unclaimed` 那条）。 */
+export async function canWriteMaterialScope(
+  userId: string,
+  scope: string,
+): Promise<boolean> {
+  return (await materialScopeOwnership(userId, scope)) !== "foreign";
 }
 
 /* ── 读取 ── */
@@ -155,9 +227,9 @@ export async function listFolderItems(
         folder,
         folderName: folderName(folder),
         kind: inferKind(name),
-        url: `/api/generated/materials/${encodeURIComponent(scope)}/${encodeURIComponent(
-          folder,
-        )}/${encodeURIComponent(name)}`,
+        url: artifactUrl(
+          ["materials", scope, folder, name].map(encodeURIComponent),
+        ),
         size: st.size,
         updatedAt: st.mtime.toISOString(),
         scope,

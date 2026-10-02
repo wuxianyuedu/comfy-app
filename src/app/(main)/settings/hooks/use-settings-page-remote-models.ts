@@ -160,17 +160,25 @@ export function useSettingsRemoteModels(input: {
       ) {
         return { ok: false, error: `模型「${nextName}」已在列表中` };
       }
+      const typedKey = patch.apiKey?.trim();
       const updated: RemoteModelEntry = {
         name: nextName,
         baseUrl:
           patch.baseUrl === undefined
             ? (existing?.baseUrl ?? null)
             : patch.baseUrl,
-        apiKey: patch.clearApiKey
-          ? null
-          : patch.apiKey?.trim()
-            ? patch.apiKey.trim()
-            : (existing?.apiKey ?? null),
+        /* `apiKey` 三态（台账 A11 的客户端这一半）：
+         *   · 用户重填了 → 新值；
+         *   · 显式勾了「清除密钥」→ `null`；
+         *   · 都没动 → **省略这个键**。
+         * 此前这里是 `(existing?.apiKey ?? null)`，而真实场景里 `existing` 来自服务端
+         * **脱敏下发**的清单（永远不带值）→ 折成 `null` → `replaceAll` 按覆盖语义把
+         * 库里那把密钥清掉。草稿不该揣测保留值：「我没意见」的正确表达是缺键。 */
+        ...(typedKey
+          ? { apiKey: typedKey }
+          : patch.clearApiKey
+            ? { apiKey: null }
+            : {}),
         kind: patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
       };
       const nextDraft = {

@@ -94,6 +94,26 @@
   --color-canvas-grid-line: rgb(0 0 0);
   --color-panel: #ffffff; /* 面板/顶栏/浮层 (light default) */
   --color-panel-deep: #f0f1f5; /* 侧栏/页脚 (light default) */
+  /* 侧栏导航项的两级状态底色（ISSUE #1291）。**不要与 `--color-subtle` 合并**：
+     那颗 token 是「通用极浅表面」，被 `.u-chip` / `.u-ghost` / `.u-input` 一起消费，
+     改它会顺带改掉浮层与输入框。侧栏需要的是「相对侧栏底可见的一档底色」，两个
+     语义各自演化（如浮层要更浅、侧栏要更明显），合回去就把两条约束焊死了。
+     实测（相对各自的侧栏底 `--color-panel-deep`）：
+       浅色 悬停 1.14:1 / 选中 1.42:1；深色 悬停 1.35:1 / 选中 1.88:1。
+     两级之间也要能分（选中 vs 悬停 浅色 1.25:1 / 深色 1.39:1），否则选中态
+     只剩「和悬停一样」的底色。**浅色的上限受侧栏底本身很浅所限** —— 再深就不像
+     状态而是像一块独立的卡片，所以浅色档刻意比深色档低，两态的观感靠选中态的
+     品牌指示条 + 字重拉齐，而不是硬把浅色也压到同一个数字。
+     修复前深色两态共用 `--color-subtle` `#141419`，对侧栏底只有 **1.04:1** ——
+     「悬停和选中都无法分辨」的根因。两态取值由
+     `tests/sidebar-state-contrast.test.ts` 从编译产物里真量。
+
+     命名注意：项目 token 叫 `--color-nav-*` 而不是 `--color-sidebar-*` ——
+     `@theme inline` 里的 `--color-sidebar-accent: var(--sidebar-accent)` 是单向转发，
+     项目 token 若同名（`--color-sidebar-selected`），别名再转回来就成环
+     （`tests/helpers/theme-tokens.ts` 的环检测会直接报出来）。 */
+  --color-nav-hover: #dfe3ec; /* 导航项悬停底 (light default) */
+  --color-nav-selected: #c6ccdd; /* 导航项选中底 (light default) */
   --color-card: #ffffff; /* 卡片/下拉浮层 (light default) */
   --color-node: #ffffff; /* 节点表面/option (light default) */
   --color-node-accent: #f2eeff; /* 节点强调底 (light default) */
@@ -288,6 +308,11 @@
   --color-canvas-grid-line: rgb(148 163 184);
   --color-panel: #14141a; /* 面板/顶栏/浮层 */
   --color-panel-deep: #0f0f16; /* 侧栏/页脚 */
+  /* 深色档取到「确实看得出」的档位：`#0f0f16` 侧栏底上的两级状态。
+     悬停只表达「指针在这儿」，选中表达「当前在这一项」，所以选中比悬停再深一档
+     （相对侧栏底 1.35:1 → 1.88:1）。取值与判据见 `@theme` 里那段说明。 */
+  --color-nav-hover: #2a2a37; /* 导航项悬停底 */
+  --color-nav-selected: #40404f; /* 导航项选中底 */
   --color-card: #16161c; /* 卡片/下拉浮层 */
   /* 节点表面改**灰**：此前 #16161e 与画布底 #0a0a0f 几乎同深，节点框在暗色下
      看不出边界（用户口径：「和黑色背景相比有些看不清」）。 */
@@ -402,7 +427,9 @@
          `dark` prop）→ 两态 `--json-view-*` token；
        · `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）→ 按 `resolvedTheme`
          在 `one-dark-pro` / `github-light` 间切换；
-       · `lib/comfyui/markdown.ts` 内联 style → `--color-md-*` token。
+       · markdown 渲染产物的内联 style（`lib/markdown/styles.ts`）→ `--color-md-*`
+         token。ISSUE #1329 之后渲染器迁到 marked + DOMPurify，但样式表仍在**同一处**
+         （`MARKDOWN_ELEMENT_STYLES`），因此 `--color-md-*` 这组 token 的消费方没有变。
 
    ───────────────────────────────────────────────────────────────────
    类型色例外（Type-color exemption）—— 本条不是「暗色表面」，而是「色值
@@ -951,6 +978,7 @@ textarea::-webkit-scrollbar {
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-selected: var(--sidebar-selected);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -1031,8 +1059,12 @@ textarea::-webkit-scrollbar {
   --sidebar-foreground: var(--color-ink);
   --sidebar-primary: var(--color-primary);
   --sidebar-primary-foreground: var(--color-on-brand);
-  --sidebar-accent: var(--color-subtle);
+  --sidebar-accent: var(--color-nav-hover);
   --sidebar-accent-foreground: var(--color-ink);
+  /* 选中档单独一个别名（官方 `ui/sidebar` 没有这一档）：`data-active` 与 `hover`
+     若共用 `--sidebar-accent`，两级状态在**结构上就不可分辨** —— 这也是「选中偏弱」
+     的另一半原因（见 `ui/sidebar` 的 `sidebarMenuButtonVariants`）。 */
+  --sidebar-selected: var(--color-nav-selected);
   --sidebar-border: var(--color-border);
   --sidebar-ring: var(--color-primary);
   --chart-1: oklch(0.87 0 0);
@@ -1130,10 +1162,9 @@ textarea::-webkit-scrollbar {
 /* ── 桌面壳：让 fixed 侧栏从自定义标题行之下开始 ──────────────────────
  * shadcn `ui/sidebar` 的容器是 `fixed inset-y-0 h-svh`（钉死视口顶）。桌面壳里
  * ShellTabs 顶部多了一条自定义标题行 TitleBarTabs（高 `--spacing-title-bar`），
- * 侧栏头部「Comfy-APP」会被压在页签后面（用户实测：壳里左上角被页签遮住一块）。
- * 壳态（ShellTabs 根打 `data-shell`）下把侧栏容器的 top 让出标题行高度、高度相应
- * 减去。浏览器 / dev 无标题行（#982 起 ShellTabs 不再渲染应用内页签栏），不打
- * data-shell，侧栏仍从视口顶起。
+ * 不让位的话侧栏顶部会被那条标题行压住。壳态（ShellTabs 根打 `data-shell`）下把
+ * 侧栏容器的 top 让出标题行高度、高度相应减去。浏览器 / dev 无标题行（#982 起
+ * ShellTabs 不再渲染应用内页签栏），不打 data-shell，侧栏仍从视口顶起。
  * 顶层规则（非 @layer）+ 双属性选择器，压过 Tailwind 的 inset-y-0 / h-svh 工具类。 */
 [data-shell] [data-slot="sidebar-container"] {
   top: var(--spacing-title-bar);

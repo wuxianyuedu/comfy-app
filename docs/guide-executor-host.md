@@ -174,8 +174,14 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
   四个字段全部来自库里那行——排队数 = `status='QUEUED'` 的计数（跨归属，这一格答的
   是「本应用堵了几个」）、「已运行」= 新增的 `claimedAt` 列（领取时、或第一次转
   RUNNING 的那条进度帧 / `markRunning` 时定格，后续不刷新）、「当前节点」=
-  `progressNode.classType`（与画布用的中文 `label` 一起存；comfy-cli 那条事件源拿不到
-  类名时为空，与内存版旧行为一致）、「主模型」= 从 `execPayload` 现认（库里只有它是
+  `progressNode.classType`（与画布用的中文 `label` 一起存）。**这一格从 ISSUE #1202 起真的有值**：
+  WS 帧靠 `executedWorkflow`（提交那一刻真正交出去的图，API 与 RAW 两种形状都认）认类名，
+  comfy-cli 的 `executing` 事件本来就自带 `class_type`（`progress` 不带，也按那张图认）。
+  以前这里写的「comfy-cli 那条事件源拿不到类名时为空」只对 `progress` 成立，实测更正见 ADR §24；
+  **仍然会为空的是「整轮被 ComfyUI 缓存」那一类，而且这是刻意的**（ISSUE #1278 签的口径）：那种轮次
+  一个 `progress` / `executing` 帧都没有，没有「当前」可显示；它改为在日志里逐节点给
+  「≡ 节点 […] 命中缓存，跳过」，收口前再补一句「本轮 N 个节点全部命中 ComfyUI 执行缓存」，
+  所以那一格空、但现场不缺（读数与判据见 ADR §27）。「主模型」= 从 `execPayload` 现认（库里只有它是
   执行侧一定会写的，`workflowSnapshot` 要到成功收口才落）。comfy-cli 完整原文由执行侧
   在收口时整包写一次进 `rawCli` 列，所以 host 的任务也点得开。
 - **崩溃恢复**：host 被杀 → 在飞 comfy-cli 随进程组整树回收（launcher 语义）；
@@ -224,6 +230,10 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
   都没有（`markGenerating` 之后、逐镜提交之前崩的），当场判 FAILED 并写清下一步 ——
   这条状态只有扫描会捡到，放过去就是 NaN 进度 + 拿空时间线去合成。
   dev 下这条恢复会晚到几十秒（instrumentation 懒编译，与上面同源），不是没接上。
+  **为什么不干脆把监看搬进宿主**：桌包里 server 与宿主是同父兄弟，`server.on("exit")` 会把宿主那棵树
+  一起收走（`scripts/standalone-runtime.mjs`；实测过：那之后紧跟一行 `reap pid=<宿主>`，三个 pid 全没），
+  搬过去买不到「Next 死了还能出片」；而宿主自己退出时
+  入口不降级也不重启，影片反而会更早停摆。这一格已在 ADR §23 判为不搬并写清重开条件。
 
 - **任务跑完了却一直显示「生成中」、队列从此不往前走**（#1250）：终态那次库写失败以前只留一行 WARN，既不重试也没人接管 —— 那一行永久停在 `RUNNING`，而它还占着并发槽位（上限 1），后面的排队行就再也领不到。桌包里这族失败最常见的原因是**另一个进程的写锁**（内嵌 server 与执行宿主同开一份 WAL 库）。现在的三层就位各自都可核对：宿主 stdout 里会出现「终态…写库撞锁，按预算重试」（4 次、累计只等 280ms，只认 `SQLITE_BUSY` 那一族），穷尽时出现「本进程不再认领这一行」并紧跟一次 kick —— **归还槽位是纯内存动作，接管不依赖再写一次库**（写库正是失败的那件事），随后回收器按「本进程没有足迹 ⇒ 真孤儿」判掉这一行 —— 那句判据读的是**四样**（槽位 / comfy-cli 子进程 / `executedWorkflow` / `settled`），所以穷尽时是一次摘干净四样而不是只归还槽位；只归还槽位的版本实测过，那一行在 `RUNNING` 上停了 11 分钟、22 轮回收全打 `checked` 空转。日志里现在也能看到驱动错误码（以前只有 drizzle 的 `Failed query`，分不清是锁还是没表）—— 而且不只终态那一条：**领取、等待提示、两条回收器 sweeper、续跑 kick、七处「收口异常」**都走同一份出口（`sqliteAwareErrorText`），取不到码时明写「原因未取到」，不会给出一条看不出原因的日志（ISSUE #1262）。等锁预算的形状也订正过一次：`src/lib/sqlite-pragmas.ts` 那份四处同源的清单里只留**库级**两条，预算改由 `createClient({ timeout: 250 })` 在宿主那一侧给（开机 PRAGMA 覆盖不到池里后开的连接，实测撞锁 11ms 就抛；而 `timeout` 会等到并写成功），Next 侧刻意不设 —— 等锁是同步的，Next 还要响应界面。两处都由 `tests/sqlite-pragma-sites.test.ts` 盯着（含把这两种形状当场量出来的那两条用例）。
 
@@ -233,7 +243,16 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
    （就绪门控不过时 `void connect()`，拉起动作在 `lifecycle` 里单飞），提交方不再
    直接驱动它。剩下的观察点变成：host 与 Next 两侧各自都会为自己的那片去探测端口
    ——同机同实例下 `ensureComfyUiReady` 有单飞闩锁，灰度继续观察。
-2. **`[comfy-cli 原始]` 行内 prompt 字段乱码**：python stdout 管道编码问题，
-   先于 host 线存在，独立 ISSUE #1164 治理（修向 `PYTHONIOENCODING=utf-8`）。
+2. **`[comfy-cli 原始]` 行内中文乱码（ISSUE #1164，已修）**：根因是中文 Windows 的 ANSI
+   代码页 GBK/CP936 上，Python 在非 ASCII locale 下**默认按 locale 走** —— 实测不注入任何
+   编码 env 时 `sys.stdout.encoding = gbk`，回传原文按 UTF-8 强解就是乱码（真机 A/B：修前
+   `rawCli` 里那句中文提示词复原不了、还留着 16 个 U+FFFD；修后原样活着）。
+   **`PYTHONIOENCODING=utf-8` 只是半个修复**，别照旧写法停在这儿：它只管 stdio，
+   `open()` 仍按 GBK 读我们写出去的那份 UTF-8 工作流文件（含中文 prompt），直接
+   `UnicodeDecodeError` 退出 1。两个键都要给 —— `PYTHONUTF8=1`（UTF-8 模式，管全局含文件读）
+   + `PYTHONIOENCODING=utf-8`（再显式钉死 stdio），与 `lifecycle-launch.ts` 给 ComfyUI 本体
+   那一份同形（那里早为「自定义节点 print emoji 崩进程」立过这条口径）。
+   两侧都由 `tests/comfy-cli-python-utf8.test.ts` 钉住（含「读侧 `setEncoding("utf-8")`
+   不许漂」那一条 —— 写侧锁了、读侧漂掉同样是乱码）。
 3. host 模式下的产物下载 / 封面链路复用 Next 的 `/api/generated` 静态映射，
    桌面包立项（ISSUE #1169）时需一并核对壳内静态目录的可写性。

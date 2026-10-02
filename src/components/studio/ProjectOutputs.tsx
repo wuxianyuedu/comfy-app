@@ -10,6 +10,7 @@ import { EmptyState } from "~/components/ui/empty-state";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue } from "~/lib/display-value";
+import { artifactDirDisplay } from "~/lib/media/output-layout";
 import { downloadText } from "~/lib/browser-io";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { timeAgo } from "~/lib/time-format";
@@ -104,9 +105,8 @@ export function ProjectOutputs() {
           width: image.width,
           height: image.height,
         })),
-        savePath: projectId
-          ? `public/generated/projects/${projectId}/${selected.id}/`
-          : "",
+        /* 相对应用根的落点，形状来自布局那一处（组件里抄字面量 = 搬一次根就说错话）。 */
+        savePath: projectId ? artifactDirDisplay(selected.id, projectId) : "",
       },
       null,
       2,

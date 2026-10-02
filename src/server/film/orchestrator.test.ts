@@ -159,13 +159,13 @@ vi.mock("child_process", async (importOriginal) => ({
 
 import {
   cancelFilm,
-  composeFilm,
   createFilm,
   createFilmFromProject,
   resumeStalledFilms,
   startFilm,
-  syncFilmToProject,
 } from "./orchestrator";
+/* 合成与项目回写已下沉到 compose-film.ts（ISSUE #1257）；断言不变，只是换个入口。 */
+import { composeFilm, syncFilmToProject } from "./compose-film";
 import { NATIVE_SHOT_VIDEO_SIZE } from "~/lib/film/film-size";
 
 beforeEach(() => {
