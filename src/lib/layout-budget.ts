@@ -15,8 +15,11 @@
  * 会得到一个与仓库布局不符的断点。
  */
 
-/** rem → px 的基准（Tailwind 默认根字号）。 */
-const REM_PX = 16;
+/** rem → px 的基准（Tailwind 默认根字号）。
+ *
+ * 导出而不是留私有：标题行高度（`--spacing-title-bar`，同为 rem 档）也要按
+ * 同一根字号换算，两处各写一个 16 会随根字号调整悄悄漂开。 */
+export const REM_PX = 16;
 
 /** 展开态导航宽（与 `ui/sidebar.tsx` 的 `--sidebar-width` 同源）。 */
 export const NAV_WIDTH_EXPANDED_PX = 16 * REM_PX;

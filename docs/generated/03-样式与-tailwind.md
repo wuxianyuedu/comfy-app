@@ -546,8 +546,8 @@ pnpm theme:check    # 同时含 ①②③ 三条硬闸：命中即 exit 1 并点
 （0.48 / 0.42 / 0.40），现在统一走 `AuroraGlow`（`tone` 选色相、`alpha` 定强度）——
 与 §3.5 的「AuroraBackground 模式」是同一条要求：**同一个装饰不在多处内联重复**。
 
-**机器判定**：`scripts/check-theme-colors.cjs`（`pnpm theme:check`，pre-commit
-第 13 步）。它认「写死的 `#rrggbb` / `rgba(...)`」，而 Tailwind 类名形式的
+**机器判定**：`scripts/check-theme-colors.cjs`（`pnpm theme:check`，pre-commit 的
+D 组「主题色扫描棘轮」这一步）。它认「写死的 `#rrggbb` / `rgba(...)`」，而 Tailwind 类名形式的
 语义色类名本来就扫不到 —— 也就是说**本节的判据靠「不要在源码里写字面量」实现**：
 只要颜色是类名，`theme:check` 与改名/换 token 都不会有冲突。
 `EXEMPT_TABLES` / `EXEMPT_FIXED_DARK` 的豁免口径与 §3.6.1 完全一致。

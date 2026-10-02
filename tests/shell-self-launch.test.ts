@@ -335,6 +335,30 @@ describe("壳自编排：回收链", () => {
     expect(onExit).toContain("shell_launch::reap(&root)");
   });
 
+  // 会话锚点只有编排器自己会在 `clearSession()` 里清，而壳收它是 `Child.kill()`
+  // （Windows 上是 `TerminateProcess`）—— 它收不到信号、没有清理机会。不补这一步，
+  // 现场就是**每次正常关窗后的下一次启动都刷一条**「回收上一次运行遗留的进程树：
+  // PID …」，而那些 PID 早已被插件 kill / Job Object 收干净（回收是空转）。
+  it("壳收走编排器后清掉会话锚点（否则每次启动都刷「回收遗留进程树」）", () => {
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    const reap = rust.slice(
+      rust.indexOf("pub fn reap(project_root: &str)"),
+      rust.indexOf("pub fn reap_pid("),
+    );
+    // 只在 `kill()` 成功那一支清：失败说明编排器可能还活着，锚点必须留给下一次启动回收。
+    expect(reap).toMatch(
+      /Ok\(\(\)\)[\s\S]{0,200}clear_session_anchor\(project_root\)/,
+    );
+    expect(rust).toContain("pub fn clear_session_anchor(");
+    // 路径与 Node 侧同源（唯一实现是 `scripts/dev-launcher-session.mjs`）：
+    // 名字漂开 = 壳清了个不存在的文件，锚点照留、噪声照旧。
+    const node = stripComments(read("scripts/dev-launcher-session.mjs"));
+    for (const name of ["launcher-session.json", "launcher-heartbeat.txt"]) {
+      expect(rust).toContain(name);
+      expect(node).toContain(name);
+    }
+  });
+
   it("按 PID 回收上一次的残留也走同一处平台判据", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
     const fn = rust.slice(

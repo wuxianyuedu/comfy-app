@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  anchoredOverlayBoundary,
+  titleBarHeightPx,
   FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS,
   FULL_SCREEN_LAYER_CLASS,
   STATUS_BAR_CLEARANCE_CLASS,
@@ -15,6 +17,7 @@ import {
   overlayClass,
 } from "./full-screen-layer";
 import { zClass } from "./shell/overlay-z";
+import { REM_PX } from "./layout-budget";
 
 describe("全屏视图层定位（ISSUE #310 回归）", () => {
   it("让出窗口标题行：顶部用 top-title-bar，而不是 inset-0", () => {
@@ -139,5 +142,57 @@ describe("blocksTitleBar：门禁用的「盖标题行」判定", () => {
     expect(blocksTitleBar("fixed inset-x-0 top-0")).toBe(false);
     // 非 fixed 开头
     expect(blocksTitleBar("grid h-[85vh] inset-0")).toBe(false);
+  });
+});
+
+describe("锚定浮层的碰撞边界（气泡被标题行吃掉半个身子那件事）", () => {
+  /* 现场：TopBar 那排按钮落在 y≈46，气泡默认往上摆（`side="top"`）时顶部
+   * 落在 y≈14 —— **视口内绰绰有余**，于是 Base UI 的 `flip` 不翻转；而标题行
+   * 占 0~36、层级 `z-chrome`(2000) 比气泡的 `z-popup`(100) 高一个数量级，
+   * 气泡上半截被标题行盖掉（画在它下面，不是被裁）。实测四个入口全中招。 */
+  it("壳态：可用区域从标题行下沿起算（顶上那条让出去）", () => {
+    expect(anchoredOverlayBoundary({ width: 1440, height: 900 }, 36)).toEqual({
+      x: 0,
+      y: 36,
+      width: 1440,
+      height: 864,
+    });
+  });
+
+  it("非壳态（浏览器 / dev）：整视口可用，行为一字不变", () => {
+    expect(anchoredOverlayBoundary({ width: 1440, height: 900 }, 0)).toEqual({
+      x: 0,
+      y: 0,
+      width: 1440,
+      height: 900,
+    });
+  });
+
+  it("还不知道视口多大时返回 null —— 不拿假矩形摆位", () => {
+    // 与 `useViewportSize` 首帧为 `null` 同一口径：调用处据此**不传这一档**，
+    // 退回基元默认的 `clipping-ancestors`。
+    expect(anchoredOverlayBoundary(null, 36)).toBeNull();
+    expect(anchoredOverlayBoundary({ width: 0, height: 800 }, 36)).toBeNull();
+    expect(anchoredOverlayBoundary({ width: 1280, height: 0 }, 36)).toBeNull();
+  });
+
+  it("让位量夹在视口内：比标题行还矮的窗口不产生负高度", () => {
+    // 负高度的边界会让定位引擎算出一串无意义的偏移 —— 宁可退化成整视口。
+    expect(
+      anchoredOverlayBoundary({ width: 800, height: 20 }, 36)?.height,
+    ).toBe(0);
+    expect(anchoredOverlayBoundary({ width: 800, height: 900 }, -5)?.y).toBe(0);
+  });
+
+  it("标题行高度与 globals.css 的 --spacing-title-bar 同源（不各写一个数）", () => {
+    // 换算基准就是 TITLE_BAR_HEIGHT_REM（`2.25rem`），漂移由这条断言拦下：
+    // 它是 `globals.css` 里 `--spacing-title-bar` 的那档值。
+    expect(titleBarHeightPx(16)).toBe(36);
+    expect(titleBarHeightPx(20)).toBe(45);
+    // 默认基准 = Tailwind 的根字号（`layout-budget` 的 REM_PX）
+    expect(titleBarHeightPx()).toBe(titleBarHeightPx(REM_PX));
+    expect(`${titleBarHeightPx()}`).toBe(
+      `${Number.parseFloat(TITLE_BAR_HEIGHT_REM) * REM_PX}`,
+    );
   });
 });

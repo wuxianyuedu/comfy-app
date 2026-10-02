@@ -59,6 +59,18 @@ function runCheck(): { code: number; output: string } {
 
 const docText = (rel: string) => readFileSync(join(REPO_ROOT, rel), "utf8");
 
+/**
+ * 「这条判据真的被 `main()` 调用了吗」—— 不能用 `toContain(调用文本)`。
+ * 把那一行前面加 `// ` 注掉，行里仍含同一段字面量，`toContain` 照样命中（实测：
+ * 本文件里四处「已接入 main 流程」的老写法第一次变异全都绿着放过，ISSUE #1374）。
+ * 这里要求它是一行**独立语句**：行首只有缩进、结尾是分号。
+ */
+function isCalledInMain(script: string, call: string): boolean {
+  const mainBody = script.slice(script.indexOf("function main()"));
+  const escaped = call.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^[ \\t]*${escaped};$`, "m").test(mainBody);
+}
+
 describe("check-doc-references.cjs（pnpm doc:check）", () => {
   it("当前仓库文档引用与权威源一致（无存量裸值）", () => {
     const { code, output } = runCheck();
@@ -223,9 +235,8 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
   it("守卫已接入 main 流程（不是定义了却没人调用）", () => {
     const script = readFileSync(CHECK, "utf8");
     expect(script).toContain("checkScopeCoverage()");
-    // 必须被 main 调用，而不是只在文件里存在
-    const mainBody = script.slice(script.indexOf("function main()"));
-    expect(mainBody).toContain("checkScopeCoverage()");
+    // 必须被 main 以独立语句调用，而不是「文本里出现过」（见 isCalledInMain 的变异实测）
+    expect(isCalledInMain(script, "checkScopeCoverage()")).toBe(true);
   });
 });
 
@@ -237,8 +248,7 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
   it("已接入 main 流程（不是定义了却没人调用）", () => {
     const script = readFileSync(CHECK, "utf8");
     expect(script).toContain("function checkLedgerCommands()");
-    const mainBody = script.slice(script.indexOf("function main()"));
-    expect(mainBody).toContain("checkLedgerCommands()");
+    expect(isCalledInMain(script, "checkLedgerCommands()")).toBe(true);
   });
 
   it("台账里不再有可执行的 npm run / npx 命令", () => {
@@ -319,8 +329,7 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
   it("已接入 main 流程（不是定义了却没人调用）", () => {
     const script = readFileSync(CHECK, "utf8");
     expect(script).toContain("function checkAgentsMdDrift()");
-    const mainBody = script.slice(script.indexOf("function main()"));
-    expect(mainBody).toContain("checkAgentsMdDrift()");
+    expect(isCalledInMain(script, "checkAgentsMdDrift()")).toBe(true);
   });
 
   it("AGENTS.md 由 checkLedgerCommands 显式并入遍历（不进 SCOPED_DOCS、避免生成冗余副本）", async () => {
@@ -417,5 +426,162 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
     );
     expect(code).toBe(0);
     expect(output).toContain("[doc:check] ✓");
+  });
+});
+
+/**
+ * 门禁步骤的「序号引用」口径（ISSUE #1374，签字：删序号、改用日志里打印的标签）。
+ *
+ * 为什么这条要钉住：钩子早已是「组 0 + A/B/C/D 四个并行组」，「第 N 步」在这份形状上
+ * 没有唯一解释；而序号不属于任何现有事实核，所以每给 D 组追加一步，文档里那批数字
+ * 就整体错位一次 —— 表现不是红，是**指到别的判据上**（立案时的实测样本：UI 基元复用
+ * 棘轮写作「第 12 步」而实际第 9 条、生成态文档同步写作「第 26 步」而实际第 21 条）。
+ *
+ * 与 `tests/doc-check-hook-wiring.test.ts` 的分工：那份守「这一步在不在钩子里」，
+ * 本组守「文档怎么引用这一步」。
+ */
+describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", () => {
+  const STEP_RE = /第\s*\d+(?:\s*\/\s*\d+)?\s*步/;
+  const GATE_RE = /pre-commit|\.githooks|\bCI\b/;
+  const EXPLAIN_RE =
+    /不写|别再|不要写|禁止|应写|应改|一律|改成|序号|没有唯一|已删|已随|历史/;
+
+  /** 临时在一份文档尾部加探针、跑校验、再还原（finally 保证红的时候也还原）。 */
+  function withProbe(
+    doc: string,
+    appended: string,
+  ): {
+    code: number;
+    output: string;
+  } {
+    const target = join(REPO_ROOT, doc);
+    const original = readFileSync(target, "utf8");
+    writeFileSync(target, `${original}\n${appended}\n`, "utf8");
+    try {
+      return runCheck();
+    } finally {
+      writeFileSync(target, original, "utf8");
+    }
+  }
+
+  /** 扫描面与判据同源：AGENTS.md + 两份索引 + SCOPED_DOCS。 */
+  async function gateDocs(): Promise<string[]> {
+    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+      SCOPED_DOCS: string[];
+    };
+    return [
+      ...new Set([
+        "AGENTS.md",
+        "docs/README.md",
+        "README.md",
+        "docs/reference-facts.md",
+        ...mod.SCOPED_DOCS,
+      ]),
+    ];
+  }
+
+  it("已接入 main 流程（不是定义了却没人调用）", () => {
+    const script = readFileSync(CHECK, "utf8");
+    expect(script).toContain("function checkGateStepIndexRefs()");
+    expect(isCalledInMain(script, "checkGateStepIndexRefs()")).toBe(true);
+  });
+
+  it("量具自己没坏：注释掉的调用不算「已接入」", () => {
+    // 这条是 isCalledInMain 自己的对照 —— 变异实测发现旧写法（`toContain`）在
+    // `// checkX();` 之下仍然绿，也就是「接入判据」本身是个假判据（ISSUE #1374）。
+    const wired = "function main() {\n  checkGateStepIndexRefs();\n}\n";
+    const muted = "function main() {\n  // checkGateStepIndexRefs();\n}\n";
+    expect(isCalledInMain(wired, "checkGateStepIndexRefs()")).toBe(true);
+    expect(isCalledInMain(muted, "checkGateStepIndexRefs()")).toBe(false);
+  });
+
+  it("存量 = 0：扫描面上每条「序号 + 门禁」同行都必须带纠正词", async () => {
+    const docs = await gateDocs();
+    let scanned = 0;
+    for (const doc of docs) {
+      if (!existsSync(join(REPO_ROOT, doc))) continue;
+      scanned += 1;
+      docText(doc)
+        .split("\n")
+        .forEach((line, i) => {
+          if (!STEP_RE.test(line) || !GATE_RE.test(line)) return;
+          expect(
+            EXPLAIN_RE.test(line),
+            `${doc}:${i + 1} 用「第 N 步」引用门禁步骤且未标注为说明：${line.trim().slice(0, 80)}`,
+          ).toBe(true);
+        });
+    }
+    // 防空转：扫描面解析不出任何文档时，上面那条循环等于什么都没测。
+    expect(scanned).toBeGreaterThan(20);
+  });
+
+  it("种一条「.githooks/pre-commit 第 99 步」→ 失败，并点名行号与标签形态的改法", () => {
+    const { code, output } = withProbe(
+      "docs/guides/DEV-QUERIES.md",
+      "临时探针：该判据在 `.githooks/pre-commit` 第 99 步。",
+    );
+    expect(code).not.toBe(0);
+    expect(output).toContain("docs/guides/DEV-QUERIES.md:");
+    expect(output).toContain("第 99 步");
+    expect(output).toContain("序号没有唯一解释");
+    expect(output).toContain("── check:");
+  });
+
+  it("AGENTS.md 也在扫描面内（它是代理自动加载的导航文件）", () => {
+    const { code, output } = withProbe(
+      "AGENTS.md",
+      "临时探针：门禁见 pre-commit 第 98 步。",
+    );
+    expect(code).not.toBe(0);
+    expect(output).toContain("[AGENTS.md:");
+    expect(output).toContain("第 98 步");
+  });
+
+  it("登记表 docs/reference-facts.md 也在扫描面内（它不在 SCOPED_DOCS 里）", () => {
+    // 这份文件是 doc:check 自己的事实登记表 —— FACTS 通过 ASCII_ONLY_FACT_DOCS 读它，
+    // 不走 SCOPED_DOCS，所以「哪条判据在哪跑」写在这里时若不排除在外，就正好没人核。
+    const { code, output } = withProbe(
+      "docs/reference-facts.md",
+      "临时探针：该步在 pre-commit 第 97 步。",
+    );
+    expect(code).not.toBe(0);
+    expect(output).toContain("[docs/reference-facts.md:");
+    expect(output).toContain("第 97 步");
+  });
+
+  it("描述这条口径本身（同行带纠正词）→ 放行", () => {
+    const { code, output } = withProbe(
+      "docs/guides/DEV-QUERIES.md",
+      "引用门禁步骤一律写标签，别按「pre-commit 第 12 步」这种序号写（序号没有唯一解释）。",
+    );
+    expect(code).toBe(0);
+    expect(output).toContain("[doc:check] ✓");
+  });
+
+  it("有主人的过程序号不被误伤（同一行没有 pre-commit / .githooks / CI）", () => {
+    const { code, output } = withProbe(
+      "docs/guides/DEV-QUERIES.md",
+      "按 §2.2 第 5 步做依赖预检；`scripts/prepare-local-run.ps1` 第 3 步补齐 `.env`。",
+    );
+    expect(code).toBe(0);
+    expect(output).toContain("[doc:check] ✓");
+  });
+
+  it("changelog.d 的历史碎片不被扫（碎片是当时那次变更的记录，不许改写）", () => {
+    // 反向钉边界：AGENTS 硬规则 14 / §13.10.5 把碎片定成「一件变更一个文件」的账本，
+    // 里面的「pre-commit 第 26 步」是当时的历史事实，判据去追它等于伪造证据。
+    const probe = join(REPO_ROOT, "changelog.d", "zz-step-index-probe.md");
+    writeFileSync(
+      probe,
+      "## Fixed\n\n- 临时探针：`docs/README.md` 曾写 pre-commit 第 26 步、CI 第 30 步。\n",
+      "utf8",
+    );
+    try {
+      const { code, output } = runCheck();
+      expect(code).toBe(0);
+      expect(output).not.toContain("zz-step-index-probe");
+    } finally {
+      rmSync(probe, { force: true });
+    }
   });
 });
