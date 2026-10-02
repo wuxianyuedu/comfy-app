@@ -1,3 +1,6 @@
+import { realpathSync } from "node:fs";
+import { resolve as resolvePath, relative as relativePath } from "node:path";
+
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import {
@@ -28,6 +31,7 @@ import {
 } from "~/lib/drizzle-studio/lifecycle";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { isHttpUrl } from "~/lib/url-scheme";
+import { revealPathInFileManager } from "~/lib/shell/reveal-path";
 
 export const settingRouter = createTRPCRouter({
   /* GET /api/settings —— 读 */
@@ -218,4 +222,64 @@ export const settingRouter = createTRPCRouter({
   openExternal: authedProcedure
     .input(z.object({ url: z.string().url() }))
     .mutation(async ({ input }) => openUrlInBrowser(input.url)),
+
+  /** 在系统文件管理器里定位一个本机路径（日志面板里点路径，ISSUE #1365）。
+   *
+   *  ⚠️ 入参是**请求方给的任意字符串**（日志原文里扫出来的候选），所以这里的闸门
+   *  是把「路径存不存在」和「在不在检出目录里」**合成同一个探针**交给
+   *  `revealPathInFileManager` —— 只有同时满足两条的路径才可能被打开。合并不是
+   *  图省事：分开判时「先解析、再校验」两段之间会漏掉「解析退到的那个前缀本身
+   *  在检出外」这类情形（`F:\AI\x\..\..\Windows` 退出来的前缀），而探针
+   *  形态下每条候选都要当场答「能不能打开」，漏不掉。
+   *
+   *  为什么要有这道闸：这一路把「打开用户点的那一段文本」变成了「在本机执行一个
+   *  外部程序」，是本仓库第二处「把控制权交给外部程序」的落点（第一处是
+   *  `openExternal`，那里只有 http(s) 的协议闸）。日志行里的候选由**文本形状**
+   *  扫出，而文本可以来自任何地方（用户贴进控制台的命令输出、模型返回的日志行…）
+   *  —— 没有这道闸，一句精心构造的日志就能让面板去打开 `C:\Windows\System32`。
+   *  检出目录是**说得清的最小范围**：要打开的现场（编排脚本、日志目录、
+   *  `run/launch-status.json`、`.next` 缓存、产物目录）全在里面。 */
+  revealPath: authedProcedure
+    .input(z.object({ path: z.string().min(1).max(4096) }))
+    .mutation(async ({ input }) => {
+      return revealPathInFileManager(input.path, projectScopedProbe());
+    }),
 });
+
+/**
+ * 「这个路径能被打开吗」的探针：存在 **且** 在检出目录内。
+ *
+ * 白名单根在**每次调用时**取一次（`process.cwd()` 在 Next server 里是进程级的、
+ * 不随请求变；但取一次让「服务被换到别的检出」这件事在下一轮请求就生效，而不是
+ * 等进程重启）。`realpath` 失败（根不存在，理论上不该发生）时退化为**全拒**，
+ * 不是全放 —— 闸门失效时的默认方向只能是更严的一侧。
+ *
+ * 比较用归一化后的绝对路径：`realpath` 解掉 `..` 与符号链接，否则检出目录里一条
+ * `link -> C:\Windows` 就能绕过去。分隔符边界交给 `path.relative`（同盘外返回
+ * `..` 开头），比手拼 `root + sep` 少一处平台判据。
+ */
+function projectScopedProbe(): (candidate: string) => boolean {
+  let root: string | null = null;
+  try {
+    root = realpathSync(process.cwd());
+  } catch {
+    root = null;
+  }
+  return (candidate: string) => {
+    if (root === null) return false;
+    let real: string;
+    try {
+      real = realpathSync(resolvePath(candidate));
+    } catch {
+      return false;
+    }
+    if (real === root) return true;
+    const rel = relativePath(root, real);
+    return rel !== "" && !rel.startsWith("..") && !isAbsolutePath(rel);
+  };
+}
+
+/** `path.relative` 跨盘（Windows 盘不同）时会回一个绝对路径 —— 那就是界外。 */
+function isAbsolutePath(rel: string): boolean {
+  return /^([A-Za-z]:[\\/]|[\\/])/.test(rel);
+}
