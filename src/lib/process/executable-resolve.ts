@@ -41,10 +41,51 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-/** `whichCommand` / `usableCommand` 共用的选项（`env` 与 `platform` 可注入，便于单测）。 */
+/** 「这个候选在这台机器上到底起不起得来」的那一次 OS 交互。 */
+export interface UsabilityProbe {
+  /** 执行位检查：抛错即「没有执行权限」（默认真 `fs.accessSync(X_OK)`）。 */
+  access(candidate: string): void;
+  /** 起一次确认：返回 libuv 给的错误码，`null` = 起得来（默认真 `spawnSync`）。 */
+  spawn(candidate: string, args: string[]): string | null;
+}
+
+/** 默认探针：问这台真机器。 */
+const realUsabilityProbe: UsabilityProbe = {
+  access: (candidate) => fs.accessSync(candidate, fs.constants.X_OK),
+  spawn: (candidate, args) => {
+    const probe = spawnSync(candidate, args, {
+      stdio: "ignore",
+      windowsHide: true,
+      timeout: 10_000,
+    });
+    /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
+    return (
+      (probe.error as NodeJS.ErrnoException | null | undefined)?.code ?? null
+    );
+  },
+};
+
+/** `whichCommand` / `usableCommand` 共用的选项（`env`、`platform`、`probe` 可注入，便于单测）。 */
 export interface WhichCommandOptions {
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
   platform?: NodeJS.Platform;
+  /**
+   * 「起得起吗」的探针，默认真权限位 + 真 `spawnSync`。
+   *
+   * 为什么要这个注入口（与 `kill-process-tree.ts` 的 `COMFYAPP_TASKKILL` 同一条口径）：
+   * 本模块判的是**另一种平台**上的事（POSIX 的执行位、内核解析 shebang），
+   * 而 Windows 开发机上这两样都造不出来 —— 实测：Windows 上 `fs.accessSync(X_OK)`
+   * 对 0o755 / 0o644 / 0o444 / 0o000 **一律通过**（权限位不参与判断），
+   * 而把一个真 `.exe` 改名成无扩展名再 spawn 得到的是 `ENOENT`（CreateProcess 不认）。
+   * 于是「POSIX 上找到就用绝对路径」「没执行位要与起不来分开报」这几档在本地只有两个
+   * 下场：整组 `runIf(!win32)`（= 这台机器上零执行者，台账 E7 记的形状），
+   * 或者**为「它本来就不可能红」而通过**（更糟：绿灯是假的）。
+   * 注入探针后这张表在两端机器上判同一个结论；Windows 那几档照旧走真探测
+   * （批处理不起、`.ps1` 落宿主、MZ 头当二进制），因为那些在本机是真造得出来的。
+   * ⚠️ `whichCommand` 的记忆化键**不含 probe**（只有 name + PATH + PATHEXT + platform）：
+   *   同一个 PATH 上换探针又指望换结论，会读到上一条的缓存 —— 换探针的用例先 `clearWhichCommandCache()`。
+   */
+  probe?: UsabilityProbe;
 }
 
 /** 「这个候选能不能被 spawn」的结论。`prefixArgs` 是启动它所需的宿主参数
@@ -104,7 +145,11 @@ export function clearWhichCommandCache(): void {
  */
 export function whichCommand(
   name: string,
-  { env = process.env, platform = process.platform }: WhichCommandOptions = {},
+  {
+    env = process.env,
+    platform = process.platform,
+    probe = realUsabilityProbe,
+  }: WhichCommandOptions = {},
 ): string | null {
   const key = `${name} ${env.PATH ?? ""} ${env.PATHEXT ?? ""} ${platform}`;
   const hit = whichCache.get(key);
@@ -118,9 +163,13 @@ export function whichCommand(
     for (const ext of exts) {
       const candidate = path.join(dir, name + ext);
       if (!isFile(candidate)) continue;
-      const usable = usableCommand(candidate, undefined, { env, platform });
+      const usable = usableCommand(candidate, undefined, {
+        env,
+        platform,
+        probe,
+      });
       if (usable.ok) {
-        result = candidate;
+        result = onDiskName(dir, name + ext, candidate, platform);
         break;
       }
       // 不可用的候选直接跳过：同目录里往往还并存别的形态（`pnpm` shim 与
@@ -169,6 +218,36 @@ export function executableExts(
     if (!ordered.some((o) => o.toUpperCase() === upper)) ordered.push(ext);
   }
   return ordered;
+}
+
+/**
+ * 把命中的候选改写成**磁盘上的实际大小写**（只在 Windows 上做）。
+ *
+ * 候选名是拿 `PATHEXT` 拼出来的，而系统那份默认写成大写（`.COM;.EXE;.BAT;.CMD`），
+ * 于是解析结果可能是 `node.EXE`。spawn 这件事对大小写无所谓，但这一份路径不只用来
+ * spawn：控制台把它回显成「真正要起的那一份」、日志里写的也是它，而用户会拿它去比对
+ * 与点开（大小写不一致时既对不上、也显得解析结果不可信）。NTFS 不敏感但**保留**原
+ * 大小写，所以真实名字问目录本身要一次就够了 —— 只在命中后做一次，结果进 `whichCache`。
+ * POSIX 的大小写是要紧的，原样返回。
+ */
+function onDiskName(
+  dir: string,
+  composed: string,
+  candidate: string,
+  platform: NodeJS.Platform,
+): string {
+  if (!isWindows(platform)) return candidate;
+  const wanted = composed.toUpperCase();
+  try {
+    for (const entry of fs.readdirSync(dir)) {
+      if (entry.toUpperCase() === wanted) return path.join(dir, entry);
+    }
+  } catch {
+    /* 列不出目录（权限 / 竞态删除）就退回拼出来的那份：
+     * 一个能跑的路径比一次大小写美化重要，这里不值得让整次解析失败。 */
+    return candidate;
+  }
+  return candidate;
 }
 
 /** 这个候选路径是不是普通文件（目录 / 不可 stat 的一律不算）。 */
@@ -246,11 +325,15 @@ export function executableKind(candidate: string): ExecutableKind {
 export function usableCommand(
   candidate: string,
   probeArgs: string[] = ["--version"],
-  { env = process.env, platform = process.platform }: WhichCommandOptions = {},
+  {
+    env = process.env,
+    platform = process.platform,
+    probe = realUsabilityProbe,
+  }: WhichCommandOptions = {},
 ): CommandUsability {
   const kind = executableKind(candidate);
   try {
-    fs.accessSync(candidate, fs.constants.X_OK);
+    probe.access(candidate);
   } catch {
     return {
       ok: false,
@@ -276,13 +359,7 @@ export function usableCommand(
       reason: "batch-script",
     };
   }
-  const probe = spawnSync(candidate, probeArgs, {
-    stdio: "ignore",
-    windowsHide: true,
-    timeout: 10_000,
-  });
-  /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
-  const code = (probe.error as NodeJS.ErrnoException | null | undefined)?.code;
+  const code = probe.spawn(candidate, probeArgs);
   if (!code) {
     return { ok: true, command: candidate, prefixArgs: [], reason: null };
   }
@@ -351,9 +428,13 @@ export function powershellHost({
 export function commandInvocation(
   candidate: string,
   probeArgs: string[] = ["--version"],
-  { env = process.env, platform = process.platform }: WhichCommandOptions = {},
+  {
+    env = process.env,
+    platform = process.platform,
+    probe = realUsabilityProbe,
+  }: WhichCommandOptions = {},
 ): { command: string; prefixArgs: string[] } {
-  const usable = usableCommand(candidate, probeArgs, { env, platform });
+  const usable = usableCommand(candidate, probeArgs, { env, platform, probe });
   return usable.ok
     ? { command: usable.command, prefixArgs: usable.prefixArgs }
     : { command: candidate, prefixArgs: [] };
@@ -434,11 +515,15 @@ export interface ResolvedInvocation {
 export function resolveCommandInvocation(
   file: string,
   args: string[] = [],
-  { env = process.env, platform = process.platform }: WhichCommandOptions = {},
+  {
+    env = process.env,
+    platform = process.platform,
+    probe = realUsabilityProbe,
+  }: WhichCommandOptions = {},
 ): ResolvedInvocation {
-  const candidate = whichCommand(file, { env, platform });
+  const candidate = whichCommand(file, { env, platform, probe });
   if (!candidate) return { command: file, args, resolved: false };
-  const usable = usableCommand(candidate, args, { env, platform });
+  const usable = usableCommand(candidate, args, { env, platform, probe });
   // 可用即用宿主形态；不可用（如 `.cmd` 且无 `.ps1` 回退）仍把**绝对路径**
   // 交出去 —— 让 spawn 报一个带绝对路径的错，比报裸名字更有排障价值。
   return usable.ok
