@@ -214,9 +214,9 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 仓储取用 | **只有一种**：直接 `import { xRepository } from "@/lib/core/repository"` | `tests/container-single-access.test.ts`（`src/` 内禁 `container.resolve(`）                                   |
 | 配置     | `core/config.ts` 是**类型契约 + 默认值**，不承诺「集中配置」             | `tests/core-spine-single-source.test.ts`（禁承诺句式；默认值必须取自 `CONFIG_ENV_DEFAULTS` / `endpoints.ts`） |
 
-三条判据都已接入 `.githooks/pre-commit`（第 17 步）与 CI（`Core spine single source`）。
+三条判据都已接入 `.githooks/pre-commit` 的 **C 组固定清单**（`tests/single-logger-channel.test.ts`、`tests/container-single-access.test.ts`、`tests/core-spine-single-source.test.ts` 三份用例，见 §13.5.8）；原平台流水线同名的 `Core spine single source` 那一步已随 ISSUE #623 删除。
 
-**另外两处「注释与现状相反」也已收口**（ISSUE #565，pre-commit 第 23 步 / CI
+**另外两处「注释与现状相反」也已收口**（ISSUE #565，pre-commit 的 **C 组固定清单** / 流水线同名那一步已删
 `Core barrel & repository base discipline`，详细口径见 §12.17）：
 
 | 位置                      | 曾经的注释承诺                              | 现状与判据                                                                                         |

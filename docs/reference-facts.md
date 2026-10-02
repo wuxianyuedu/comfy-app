@@ -211,10 +211,37 @@
 > | C2 章节锚点        | 3 行窗口内同一 bullet 同时出现 `docs/standards/NN-*.md` 与 `§NN.M`（且 `major == NN`）时，去目标文件里定位 `^#{1,6}\s+(§)?NN.M\b` 标题锚点                    | 单级 `§N`（如 `§17`）不校验，粒度太粗易混淆；`launch-and-build.md` 无 `NN-` 前缀不进入匹配面，避免与 `standards/NN-*` 里同号章节跨文件误配（本仓库 `§9.5` 在 `standards/09` 与 `launch-and-build` 各有一份）。                                                                                                                                                                                                                                                                                                                                                                                                     |
 > | C4 台账命令口径    | `checkLedgerCommands` 的遍历集合是 `[AGENTS_MD_PATH, ...SCOPED_DOCS]`，让 AGENTS.md 与 §2「台账命令口径守卫」（防 npm/npx 表述漂移，AGENTS 硬规则 1）同层受控 | AGENTS.md **刻意不进** `SCOPED_DOCS`——进则被 `render-doc-placeholders` 复制成 `docs/generated/AGENTS.md`，产物里没有 {{占位符}} 需要替换、只是同一份内容，反而误导读者去改产物（规范 §13.5.5「禁止手改生成物」）。现有 `checkLedgerCommands` 已带说明性引用豁免（同句出现「改为 / 修正 / pnpm / 禁止 / 违反」放行），无需为本条单开新判据。                                                                                                                                                                                                                                                                        |
 
-守卫**不进 `.githooks/pre-commit`**——与现有 `doc:check` 同层「按需召唤」。§13.5
-明文 CI 无兜底，改 AGENTS.md 或调整 `docs/standards/**` 章节号后请本地跑一次
-`pnpm doc:check`。回归测试见 `tests/check-doc-references.test.ts`
+守卫**已随 `doc:check` 一起进 `.githooks/pre-commit`**（D 组「文档引用与权威源一致」，
+ISSUE #1371 把旧的「手动档」签字翻掉了；改 AGENTS.md 或调整 `docs/standards/**` 章节号后
+不必再靠人记得跑 `pnpm doc:check`）。回归测试见 `tests/check-doc-references.test.ts`
 「AGENTS.md ↔ standards 漂移守卫」段。
+
+## 3.7 门禁步骤的引用口径：写标签，不写序号（ISSUE #1374）
+
+> 引用 `.githooks/pre-commit` 或平台流水线里的某一步时，规范文档与索引**一律写日志里
+> 打印的标签**（`── check: <标签>`）或那一步跑的脚本名，不写「第 N 步」。
+> 判据 = `scripts/check-doc-references.cjs` 的 `checkGateStepIndexRefs()`。
+
+**为什么序号不能用**：钩子早已是「组 0 + A/B/C/D 四个并行组」，「第 N 步」在这份形状上
+**没有唯一解释**（同一批文档里混着「branch-guard 算第 1 步」与「判据从第 1 条起算」两种口径，
+两种口径下各有对不上的），而序号又不属于任何现有事实核 —— 于是每给 D 组追加一步，
+文档里那批数字就整体错位一次。**表现不是红，是指到别的判据上**（这比找不到更糟）。
+立案时的实测样本：UI 基元复用棘轮的旧序号写作 12 而实际是 D 组第 9 条；生成态文档同步的
+旧序号写作 26 而实际第 21 条；另有三处把 **C 组固定清单**里的用例称作「pre-commit 第 23 步」这种序号。
+
+**判据形状**：同一行既要出现 `第 N 步`（含 `第 27/28 步` 这种 range 形态），也要出现
+`pre-commit` / `.githooks` / `CI`，才报错。所以 §2.2 那种**过程序号**（它的第 5 步、
+`prepare-local-run.ps1` 的第 3 步）不受影响 —— 那种序号正是本条推荐的替代形态之外的正常用法。
+豁免与 C4 同族：同行出现「不写 / 别再 / 禁止 / 应写 / 一律 / 改成 / 序号 / 已删 / 历史」等
+纠正词，视为在描述这条规则本身。
+
+**刻意不扫的面**：`changelog.d/**` 与 `CHANGELOG.md`。碎片是**当时那次变更的账本**
+（AGENTS 硬规则 14 / §13.10.5），里面的序号是历史事实，回头改写等于伪造证据。
+这条边界由 `tests/check-doc-references.test.ts` 的「历史碎片不被扫」钉住。
+`docs/generated/**` 也不扫 —— 它是产物，改编辑态源文档后由 `pnpm doc:render` 还原。
+
+**标签从哪来**：`grep -n '^  run "' .githooks/pre-commit` 逐字取，或跑一次提交看
+`── check:` 那些行；`tests/doc-check-hook-wiring.test.ts` 里的 `dGroupSteps()` 是同一形状的解析器。
 
 ## 4. 维护规则
 
