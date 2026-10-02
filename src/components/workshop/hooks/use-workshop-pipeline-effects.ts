@@ -20,24 +20,13 @@ import { beginStaleRun } from "~/lib/stale-run";
 import {
   fetchApiChannels,
   fetchTaskSnapshot,
+  fetchWorkshopStyles,
   fetchWorkshopWorkflows,
 } from "~/lib/workshop/generation-client";
 import type { Shot, StyleRef } from "~/lib/workshop/types";
 import type { WorkshopDraft } from "~/lib/workshop/draft-store";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
-
-/** /api/skills 返回 payload：用于在 fetch 边界收窄，消除 any 散落。 */
-type SkillsApiResponse = {
-  skills?: Array<{
-    slug: string;
-    name: string;
-    icon: string;
-    promptTemplate: string;
-    negativePrompt?: string | null;
-    defaultParams?: Record<string, unknown> | null;
-  }>;
-};
 
 export function useWorkshopBootstrapData(input: {
   setStyles: (styles: StyleRef[]) => void;
@@ -53,16 +42,7 @@ export function useWorkshopBootstrapData(input: {
     void (async () => {
       // 技能列表（风格卡）；失败按「没有技能」处理，不打断其余两路。
       try {
-        const res = await fetch("/api/skills");
-        const data = (await res.json()) as SkillsApiResponse;
-        const list: StyleRef[] = (data.skills ?? []).map((skill) => ({
-          slug: skill.slug,
-          name: skill.name,
-          icon: skill.icon,
-          promptTemplate: skill.promptTemplate,
-          negativePrompt: skill.negativePrompt ?? undefined,
-          defaultParams: skill.defaultParams ?? undefined,
-        }));
+        const list = await fetchWorkshopStyles();
         guard.commit(() => setStyles(list));
       } catch {
         /* 失败就是空列表，界面走各自的空态 */

@@ -301,11 +301,11 @@
       画布 id 由客户端生成、镜像是尽力而为，把「还没同步上来的新项目」判成不可写会
       直接堵死上传素材这条路）。处置口径照搬 A2 / A3：**越权与不存在同形**
       （REST 404、tRPC `NOT_FOUND`），且写 / 删的拒绝发生在 `writeFile` / `rm` / `unlink` 之前。
-      判据：`src/server/api/routers/material.test.ts` 18 条 +
-      `src/app/api/materials/route.test.ts` 18 条（两个门各自一套，含「一次都没落盘」的断言）；
+      判据：`src/app/api/materials/route.test.ts` 18 条（含「一次都没落盘」的断言）；
       反向验证两处：写闸短路 → 恰好 4 条红，读侧收窄摘掉 → 恰好 3 条红。
-      证据：`src/lib/media/materials.ts`、`src/server/api/routers/material.ts`、
-      `src/app/api/materials/route.ts`。
+      证据：`src/lib/media/materials.ts`、`src/app/api/materials/route.ts`。
+      （这条当初登记时是**两个门各 18 条**：tRPC 的 `material.*` 也有一套。那一扇门后来
+      因零消费方删掉了 —— 判据不减、面收成一条，见 E3′。）
 - [x] **A13 产物与素材的读取口是纯路径静态流：`/api/generated/[...path]` 没有会话校验、也没有归属（本批修复 + 判据）**：
       这个端点原先只做「解析后仍在 `public/generated` 之内」那一条路径判据（那条有判据，
       #1260 补的），于是任何能访问该端口的一方都能按路径读走**所有人**的任务产物与素材
@@ -524,7 +524,8 @@
       · `user.me`：客户端取会话走的是 better-auth 的 `authClient`（`src/app/login/page.tsx`），
       这口从没有被调用过。
       **判据落在挂载动作上**（`tests/trpc-surface-executors.test.ts`，已进
-      `FIXED_STRUCTURAL_TESTS`）：枚举 `appRouter` 的 74 条 procedure，要求每条都出现在
+      `FIXED_STRUCTURAL_TESTS`）：枚举 `appRouter` 的全部 procedure（登记时 74 条，随后续批次增减），
+      要求每条都出现在
       「import 了该 router 文件闭包」的测试里的调用形态 —— 「文件在、某几条口照样零执行者」
       是这一族最后的漏洞，所以粒度必须是 procedure 而不是 router。三条配套 sanity：
       扫描面本身非空（空输入不许绿）、命名空间都得在 `root.ts` 登记、判据自身用合成的
@@ -536,17 +537,74 @@
       两条归属用例红；`bust` 写成 `{}` → bust 用例红；`hostId` 写死 `""` → 子图坐标用例红。
       证据：`src/server/api/root.ts`、`tests/trpc-surface-executors.test.ts`、
       `src/server/api/routers/workflow.test.ts`、`vitest.config.ts`（`workflow-detail.ts` 首次登记门槛）。
-      **本批复算出来、按口径没有升成硬闸的存量**（判据第一次被看见就有 13 条，误报一片的
-      判据只能精确化、不能靠放宽基线装机 —— 口径同 E8）：**13 条 procedure 有执行者、
+      **本批复算出来、交给下一条（E3′）处置的存量**：**13 条 procedure 有执行者、
       零消费方** —— `llm.complete`、`material.list` / `material.save` / `material.delete`、
       `project.get` / `project.patch`、`skill.create`、`train.detail`（另有本批删掉的 4 条）。
       口径是「客户端源码里搜不到 `api|trpc|vanillaApi|sender.<ns>.<proc>` 的字面调用」，
       复算方法：`appRouter._def.procedures` 全枚举 + 沿 import 闭包比对 `src/` 非服务端源码。
-      `material.*` 三条与 `project.get` 大概率是 REST 面把 tRPC 面替掉了（同数据两个门，
-      §12.14 收口），删哪一侧是产品判断，不在本批擅自定。
-- [ ] **E3′ 零消费的 tRPC 口 13 条**（上一条复算出来的存量，未定处置）：逐条问「这口还有谁要」，
-      与 REST 面重复的收口到一侧，确实要留的补上消费方或登记豁免；判据等存量清零后再升硬闸。
-      证据：`docs/guides/PRODUCTION-GAPS.md` E3 条的复算口径。
+- [x] **E3′ 零消费的 tRPC 口：收成「每条口都要有消费方」的硬闸（本批修复 + 判据）**：
+      上一批复算出 13 条有执行者、零消费方的口。逐条问过「这口还有谁要」之后分三类处置：
+      · **与 REST 面重复的两扇门收口到有人走的那一侧**（§12.12 / §12.14）：删掉
+      `src/server/api/routers/material.ts`（`material.list` / `save` / `delete` 三条）——
+      素材库面板自始至终走 REST 的 `/api/materials`（`src/lib/media/materials-client.ts`），
+      归属判据在 `src/lib/media/materials.ts` 一处。**「判据一条不减」这句先被实测驳回了**：
+      门删掉之后 `materials.ts` 的分支覆盖从 80 掉到 **78.43**（`check:all` 当场红）——
+      那些清洗与包含分支（129 字符的 scope、`..`、`a<b>.png`、201 字符的文件名、隐藏文件、
+      子目录、单条 stat 失败）此前只被那扇门的用例**顺带**走过，而活着的 REST 门送进来的全是
+      合法入参，这些形状一个都进不来。补法不是把死门找回来，而是**给判据层自己一份用例**
+      （`src/lib/media/materials.test.ts`，按判据本身组织）+ REST 补一条「素材库根读不出来时
+      按『没有别的 scope』答」，分支回到 **100** 并按实测把门槛抬上去（95/90/85/80 → 100/95/98/100）。
+      三条变异核过：去掉 scope 的长度上限 → 恰好那条拒绝用例红；把 `folderDir` 的包含断言摘掉 →
+      恰好 `..` 那条红；去掉隐藏文件的跳过 → 恰好排序那组红（其余 36 条全绿）。
+      删掉 `llm.complete` —— `/api/llm` 是活的 LLM 门
+      （还多带流式与 tools），它身上的 `provider` / `taskType` 枚举闸改由
+      `llm.configSave` 的用例判住（补了一条 `temperatureByTask` 非法键 → 400 且不落库）。
+      · **确实要留的四条登记在案并写明「谁将来接它」**：`project.get` / `project.patch` /
+      `skill.create` / `train.detail`。它们不是「判据缺失」而是「功能未接」——归属与形状闸
+      都有用例，红得起来。
+      · 判据升成硬闸：`tests/trpc-surface-executors.test.ts` 加了**第二个维度**（消费方），
+      与执行者维度共用一份挂载面（`scanSurface()`）。要点三条：
+      ① 消费面 = `src/**` 的非测试代码且**先剥注释** —— 只有测试在调 = 零消费方，
+      这正是 `material.*` 的形状（18 条归属用例全绿、界面一个字都没引用）；
+      ② 点名形态认三种（`api.ns.proc`、`api.ns["proc"]`、`RouterInputs["ns"]["proc"]`），
+      定义这条口的文件闭包不算它自己的消费方；
+      ③ 登记表 `ZERO_CONSUMER` **双向不陈旧** —— 口没了登记还在 = 红，消费方接上了登记
+      还在 = 红，登记条目长度进棘轮（`MAX_ZERO_CONSUMER`，只许降）。
+      反向验证逐条做过：摘掉 `train.detail` 的登记 → 主断言报 `['project.get','train.detail']`；
+      把登记键改成 `project.gone` → 陈旧断言报「已经不存在，登记该删掉」。
+      顺带一条**实测**：判据装机时暴露出「客户端地址没有落点」这一族（3 条真请求打向不存在的
+      handler，实测全 404；另有 1 条只是 URL 形状的缓存键），另立 E3‴ 处置。
+      证据：`src/server/api/root.ts`（「登记即欠两样东西」）、
+      `tests/trpc-surface-executors.test.ts`、`src/lib/workshop/generation-client.ts`
+      （`fetchWorkshopStyles`）+ `src/lib/workshop/generation-client.styles.test.ts`、
+      `vitest.config.ts`（素材那组从三条减成两条）。
+- [ ] **E3‴ 客户端写的 REST 地址有 3 条真请求没有落点（实测 404，界面按空态吞掉），另有 1 条 URL 形状的假地址**：
+      `next start` 起本机产物后逐条 curl（`BUILD_ID` 那一份）：
+      `GET /api/skills`、`GET /api/images?filename=…`、`GET /api/file/x.png` **全部 404**，
+      而同一条链上 `GET /api/trpc/project.list` → 200 —— 前三个 handler 在基线迁移那次提交里
+      就没带过来（`git log --diff-filter=D -- src/app/api/<名>/**` 逐条可查），调用点却留着。
+      失败形态不是报错而是**常年空态**：404 → 调用点一句 `catch {}` / `MediaThumbnail` 的空 `src`
+      就把它咽下去（「选完图看不到图」那条实测反馈有一半是这个原因，不只是形状解析）。
+      处置：`/api/skills` 本批已改吃 `skill.list`（`fetchWorkshopStyles`，与成片工作室同一扇门）；
+      余下两条要有落点 —— `/api/images` 与 `/api/file/<name>` 其实是同一件事（本机代理 ComfyUI 的
+      `/api/view`，`src/lib/comfyui/client.ts` 的 `getView()` 已经是现成的实现，
+      旧的 `src/app/api/images/route.ts` 就是这么写的），并且应当只留一个入口。
+      第四条是 `use-workflow-detail-loader.ts` 里的 `` `/api/workflows/${id}[/subgraph]` `` ——
+      它**不发请求**（请求走 `vanillaApi.workflow.detailFull` / `subgraph`），只是拿这个形状当
+      sessionStorage 的键。真实请求早改成 tRPC 了，键还留着 REST 的样子：
+      读代码的人会以为有一条 HTTP 路，而「地址必须有落点」那条判据也会一直红在这个假阳性上。
+      改法 = 键换成请求身份三元组并把 `CACHE_KEY_PREFIX` 的 `R7` 升一档（`purgeStaleCache`
+      会把旧命名空间洗掉，TTL 本来只有 30s，代价是一次缓存未命中）。
+      判据与本条同批装（下一条 PR）：`tests/rest-endpoint-targets.test.ts` —— 扫 `src/**` 非测试代码里以引号紧接
+      `/api/` 开头的每个字面量，必须命中 `src/app/**` 目录形状推出的某个 route handler；
+      段数要对齐（少一段就是 404），`[x]` 吃一段、`[...x]` 吃剩余全部（也吃零段），
+      `${…}` 当通配段；`${base}/api/prompt` 这种前面是 `}` 的外部服务地址不进扫描面。
+      两条**必须显式登记**的非地址字面量（登记表双向不陈旧）：`/api/trpc` 是 RPC 通道基址
+      （真实请求一律是 `/api/trpc/<ns.proc>`，实测那一条 200、基址本身 404 且没人去拿它），
+      `/api/ws` 是 ComfyUI 自己的 WS 路径（拼在 `ws://<comfy host>` 上，见 `runner-state.ts`）。
+      证据：`src/lib/media/media-url.ts`、`src/components/studio/TrainingStudio.tsx`、
+      `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts`、
+      `git show ab12a551^:src/app/api/images/route.ts`。
 - [ ] **E3″ 端到端仍只有 3 spec / 31 用例且无登录态**（E3 的 router 维度已收口，这一维度没动）：
       没有任何一条走完「登录 → 建项目 → 出图」的旅程，所以壳起不来、会话过期、
       中间件改写这类**只在真实 HTTP 栈上成立**的缺陷没有执行者（A13 的产物口就是靠手工
