@@ -186,6 +186,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 生成 `.env`                             | `pnpm env:init`             | `tools/start/run-local.ps1`       |
 | 建库                                    | `pnpm db:push`              | （双击启动链路会自动做）          |
 | 生成原文文档                            | `pnpm doc:gen`              | `tools/docs/generate-docs.ps1`    |
+| 起组件工作台                            | `pnpm storybook`            | （开发者命令，无双击入口）        |
 
 > 这张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 在 pre-commit 与 CI 核对
 > 每个动作两侧的脚本都真实存在 —— **新增动作却只写了一侧会提交失败**。
@@ -211,6 +212,9 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 >
 > 应用**一直开着**、期间拉到新代码后出现白屏 / 功能点了没反应（「界面比代码旧」），
 > 见 [`docs/guide-stale-code.md`](./docs/guide-stale-code.md)；应用内也会主动提示该怎么重载。
+>
+> 想单独看某个 UI 组件在受控 props 下的形态（明暗两态 / a11y），见
+> [`docs/guide-storybook.md`](./docs/guide-storybook.md)。
 
 开发人员请继续阅读下方「快速上手」与「开发模式」。
 
@@ -390,6 +394,7 @@ pnpm check        # eslint + tsc --noEmit
 pnpm test         # Vitest 单元测试
 pnpm test:e2e     # Playwright e2e
 pnpm docs         # 生成 API 文档到 docs/
+pnpm storybook    # 起组件工作台（http://127.0.0.1:6006）
 pnpm db:push      # 同步 Drizzle schema 到 db.sqlite（非交互、复核建表结果）
 pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占位值）
 ```

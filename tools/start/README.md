@@ -16,6 +16,7 @@ Windows 双击入口，逻辑在 [`../../scripts/`](../../scripts/) 同名或对
 | `run-tests.ps1` | **只**跑测试，可指定文件、可 `-Full` | `scripts/run-tests.ps1` |
 | `sync-lint.ps1` | 日常：同步依赖 + `pnpm lint` | `scripts/sync-lint.ps1` |
 | `register-comfyapp-protocol.ps1` | 一次性：注册 `comfyapp://` 协议（HKCU，免管理员） | `scripts/install-comfyapp-helper.ps1` |
+| `storybook.ps1` | 起组件工作台 Storybook（http://127.0.0.1:6006），看 ui/ 组件形态与 a11y | `scripts/storybook.mjs` |
 
 ## 非 Windows 平台（同一件事的跨平台入口）
 
@@ -31,3 +32,4 @@ Windows 双击入口，逻辑在 [`../../scripts/`](../../scripts/) 同名或对
 | 只跑测试 | `run-tests.ps1` | `pnpm test:file` / `pnpm test:full` |
 | 生成原文文档 | `../docs/generate-docs.ps1` | `pnpm doc:gen` |
 | 初始化 `.env` | `run-local.ps1` | `pnpm env:init` |
+| 起组件工作台 | `storybook.ps1` | `pnpm storybook` |

@@ -80,6 +80,9 @@ __pycache__/
 # playwright e2e artifacts
 test-results/
 playwright-report/
+
+# Storybook 静态产物（`pnpm storybook:build` 生成，不入库）
+/storybook-static/
 /src/generated/
 
 # Tauri generated assets (rebuilt by scripts/build-desktop.mjs)
