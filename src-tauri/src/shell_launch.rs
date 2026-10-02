@@ -452,6 +452,40 @@ fn log_orchestrator_line(project_root: &str, level: &str, body: &str) {
 /// `get_launch_log` 据此只返回本次启动的日志，避免历史日志混淆。
 pub const SESSION_START_MARKER: &str = "=== 启动会话开始";
 
+/// 这条标记本身要能回答「它是什么、谁写的、接下来该看哪」。
+///
+/// **前缀不能改**（`SESSION_START_MARKER` 是面板裁剪历史日志的判据，改了就对不上），
+/// 拐点全在括号里：原先括号中只有 `shell_pid: N`，用户读到的一行是
+/// 「`=== 启动会话开始（shell_pid: 51972）`」—— 而**只有这一行**是他双击之后
+/// 第一眼能看到的东西。于是「启动会话是干什么的」在这条唯一的现场里说不出话，
+/// 用户只能来问（ISSUE #1364）。
+///
+/// 括号里补三件事，都不增加新行、不改变裁剪判据：
+///   1. **它是干什么的**：本次双击启动的会话边界 —— 供面板裁掉历史日志，
+///      不是一次业务流程 / 任务；这条同时也是「为什么它单独占一行」的答案；
+///   2. **它已做了什么 / 接下来是谁接手**：说清「壳已接手」与「编排器将被拉起」，
+///      用户才知道后面那段 `[orchestrator] …` 是它的下一环；
+///   3. **它落在哪三份文件里**：三份都写，因此三份各自的「本次」都从这行起算。
+pub fn session_start_marker(pid: u32) -> String {
+  format!(
+    "{SESSION_START_MARKER}（本次双击启动的会话边界；壳已接手、即将拉起编排器；\
+     本行之后的内容都属于本次启动，面板据此裁掉历史日志；shell_pid: {pid}）"
+  )
+}
+
+/// 会话标记的**整行形态**（时间戳 + 级别 + 正文），纯函数、时刻由调用方给。
+///
+/// 抽出来是为了让「三份共用一个时刻」这件事**可判**：`log_session_start` 只调
+/// 它一次，把同一份字符串写进三个文件；测试直接给两个不同的时刻、断言出来的
+/// 行跟着变，而不是去比两次 `local_timestamp()` —— 那两次很可能落在同一毫秒，
+/// 于是断言恒真、判据等于没有（ISSUE #1364 的反向验证就栽在这里）。
+///
+/// 形态与 `log_launch_line` 逐字一致（`[时刻] [INFO] 正文`）：三份的行必须**完全
+/// 相同**面板才折叠得掉，各自拼一遍就是三个会漂的形态出处。
+pub fn session_marker_line(pid: u32, stamp: &str) -> String {
+  format!("[{stamp}] [INFO] {}", session_start_marker(pid))
+}
+
 /// 在编排链路日志里写下本次启动的会话标记。
 ///
 /// 放在最前面：后续所有当前启动的日志都落在这行之后，日志面板就能
@@ -465,10 +499,16 @@ pub fn log_session_start(project_root: &str) {
   if project_root.is_empty() {
     return;
   }
-  let pid = std::process::id();
-  let marker = format!("{SESSION_START_MARKER}（shell_pid: {pid}）");
+  /* **三份共用同一个时刻**（`stamped` 只算一次，三份都用它）：日志面板把三路
+   * 合进同一条时间线，并按「时刻 + 级别 + 正文」去重 —— 三份各自盖一个「此刻」
+   * 就会被读成三条，用户看到的正是「这条标记有很多条」（ISSUE #1364）。 */
+  let stamped = session_marker_line(std::process::id(), &local_timestamp());
   // 这份（shell-launch.log）本来就是靠标记裁剪的，见 get_launch_log。
-  log_launch_line(project_root, "info", &marker);
+  // **写的就是 `stamped` 那一行**（而不是再调一次 `log_launch_line`）：后者会自己
+  // 取一次当前时刻，于是三份的时刻差几毫秒、面板的去重就失效了（ISSUE #1364）。
+  if let Err(e) = append_line(&launch_log_path(project_root), &format!("{stamped}\n")) {
+    log::warn!("[ComfyAPP] 编排链路日志写入失败：{e:?}");
+  }
   // dev-launcher-stderr.log 与 shell.log 是追加不轮转的固定名文件，会累积历次
   // 启动。和 shell-launch.log 共用同一个标记收口，get_launch_log 才能只取本次
   // 启动之后的行——否则「查看日志」里会混进旧启动的 stderr 与壳诊断（用户的
@@ -482,7 +522,7 @@ pub fn log_session_start(project_root: &str) {
     .join("shell")
     .join("shell.log");
   for p in [stderr_log, shell_log] {
-    if let Err(e) = append_line(&p, &format!("{marker}\n")) {
+    if let Err(e) = append_line(&p, &format!("{stamped}\n")) {
       log::warn!("[ComfyAPP] 启动会话标记写入失败（{}）：{e:?}", p.display());
     }
   }
@@ -1168,8 +1208,8 @@ mod tests {
       .join("shell.log");
     for (label, path) in [
       ("shell-launch.log", launch_log_path(root)),
-      ("dev-launcher-stderr.log", stderr_log),
-      ("shell.log", shell_log),
+      ("dev-launcher-stderr.log", stderr_log.clone()),
+      ("shell.log", shell_log.clone()),
     ] {
       let content = std::fs::read_to_string(&path).unwrap_or_default();
       assert!(
@@ -1180,7 +1220,38 @@ mod tests {
         content.contains("shell_pid:"),
         "{label} 的启动会话标记必须带 shell_pid：{content}"
       );
+      assert!(
+        content.contains("会话边界") && content.contains("编排器"),
+        "{label} 的标记要自解释（ISSUE #1364）：{content}"
+      );
     }
+
+    // **三份的行必须逐字相同**（含时刻）：面板把三路合进同一条时间线并按
+    // 「时刻 + 级别 + 正文」去重，三份各自盖一个「此刻」就会被读成三条 ——
+    // 用户看到的正是「这条标记有很多条」（ISSUE #1364）。
+    let marker_lines: Vec<String> = [
+      launch_log_path(root),
+      stderr_log.clone(),
+      shell_log.clone(),
+    ]
+    .iter()
+    .map(|p| {
+      std::fs::read_to_string(p)
+        .unwrap_or_default()
+        .lines()
+        .find(|l| l.contains(SESSION_START_MARKER))
+        .map(|l| l.to_string())
+        .unwrap_or_default()
+    })
+    .collect();
+    assert!(
+      marker_lines.iter().all(|l| !l.is_empty()),
+      "三份都要有标记行：{marker_lines:?}"
+    );
+    assert!(
+      marker_lines.iter().all(|l| *l == marker_lines[0]),
+      "三份标记行必须逐字相同（含时刻），否则面板去重不掉：{marker_lines:?}"
+    );
 
     let _ = std::fs::remove_dir_all(&tmp);
   }
@@ -1271,5 +1342,52 @@ mod tests {
     assert!(line.contains("[INFO]"), "级别由壳这一层给出：{line}");
 
     let _ = std::fs::remove_dir_all(&tmp);
+  }
+
+  #[test]
+  fn session_marker_line_changes_with_the_given_stamp() {
+    // 「三份共用一个时刻」必须**可判**，而不是靠比两次 `local_timestamp()`
+    // ——那两次很可能落在同一毫秒，断言恒真、判据等于没有（ISSUE #1364 的反向
+    // 验证就栽在这里）。这一条把时刻做成函数的入参：给两个不同的时刻，得到两行
+    // 不同的文本；给同一个时刻，得到两行完全相同的文本。
+    let a = session_marker_line(7, "2026-10-02 12:00:00.000");
+    let b = session_marker_line(7, "2026-10-02 12:00:00.001");
+    let a2 = session_marker_line(7, "2026-10-02 12:00:00.000");
+    assert_ne!(a, b, "不同时刻必须落在行里（时间戳不是装饰）：{a} / {b}");
+    assert_eq!(a, a2, "同一时刻必须得到同一行（去重的前提）：{a}");
+    // 形态：`[时刻] [INFO] 正文`，与 `log_launch_line` 逐字一致。
+    assert!(a.starts_with("[2026-10-02 12:00:00.000] [INFO] "), "{a}");
+    // 标记本体（含前缀）必须原样在内 —— 面板与 `get_launch_log` 按它裁剪。
+    assert!(a.contains(SESSION_START_MARKER), "{a}");
+    assert!(a.contains("shell_pid: 7"), "{a}");
+    assert!(!a.contains('\n'), "整行必须是一行：{a}");
+  }
+
+  #[test]
+  fn session_marker_explains_itself() {
+    // 标记是用户双击之后**第一眼看得到、也往往唯一看得到**的那一行：它必须自己
+    // 回答「这是什么、壳做了什么、接下来是谁」。原先括号里只有 shell_pid，读起来
+    // 就是「启动了会话」+ 一个数字 —— 会话是干什么的一句没说（ISSUE #1364）。
+    let marker = session_start_marker(4242);
+    assert!(marker.starts_with(SESSION_START_MARKER), "前缀是裁剪判据，必须原样：{marker}");
+    assert!(marker.contains("shell_pid: 4242"), "PID 要保留：{marker}");
+    // 三件事各一条判据 —— 少一条就是「又是一行读了不知道在说什么」。
+    assert!(marker.contains("会话边界"), "要说清它是边界而不是一次业务：{marker}");
+    assert!(marker.contains("壳已接手"), "要说清壳已经做了什么：{marker}");
+    assert!(marker.contains("编排器"), "要说清接下来是谁接手：{marker}");
+    // 标记是**一行**：多行会把后面的日志挤成「标记的续行」，面板裁掉它时会连着
+    // 把第一段真实日志一起裁掉。
+    assert!(!marker.contains('\n'), "会话标记必须是单行：{marker}");
+  }
+
+  #[test]
+  fn session_marker_keeps_the_panel_prefix_contract() {
+    // 面板（Rust `tail_log_file_since_marker` 的调用方 + Node 侧
+    // `session_start_marker`）都按 SESSION_START_MARKER **前缀**查找最后一条标记。
+    // 括号里怎么改都行，前缀一旦被改，裁剪就整条失效：表现是「面板又混进历史
+    // 启动」，而且两侧各自看都「是对的」。
+    let marker = session_start_marker(1);
+    assert_eq!(&marker[..SESSION_START_MARKER.len()], SESSION_START_MARKER);
+    assert_eq!(SESSION_START_MARKER, "=== 启动会话开始");
   }
 }

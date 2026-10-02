@@ -103,6 +103,26 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 调用点一句 `catch {}` 就咽成空态，全仓库没有一条判据红过）—— 新增一条假地址
   // 与本次暂存改动无关也必须响，所以进固定清单。
   "tests/rest-endpoint-targets.test.ts",
+  // 「调用点的形状错误不许被咽掉」（台账 F13）：`as never` 逐处登记 + 投影参数不许是
+  // unknown + `.select(… as never)` 这个形状零存在。这一族的实际事故是 `train.cancel`
+  // 从 Prisma→Drizzle 迁移起每次 500 而零红 —— 新增一处就是重新装上那个消音器，
+  // 与本次暂存改动无关也必须响，所以进固定清单。
+  "tests/f13-projection-shapes.test.ts",
+  // 「判据自己有没有执行者」：`doc:check` 接进 pre-commit D 组之后的在位判据。
+  // 它必须进固定清单而不是只跟着改动走 —— 改 `.githooks/**` 会让本脚本**放弃收窄、
+  // 只跑固定清单**（实测 `--changed .githooks/pre-commit` 的清单里不含任何按路径
+  // 引用的用例），于是「有人把这一步摘回手动档」那次改动恰好不会跑到这条守卫，
+  // 表现不是红而是「文档又开始说谎而全绿」。这一族是零执行者判据（规范 §13.5.8）。
+  "tests/doc-check-hook-wiring.test.ts",
+  // 「页面内广播通道只剩一端」（台账 E9）：`AppEvents` 表里每一条都必须既有派发方
+  // 又有订阅方。装机实测到三个死端（两条死监听 + 一条没人听的广播），它们的共同
+  // 表现是「界面该刷新的时候没刷新」，而没有任何构建 / 测试会报它 ——
+  // 与本次暂存改动无关也必须响，所以进固定清单。
+  "tests/app-event-pairing.test.ts",
+  // 门槛自己的启动面（C 组的 vitest 是怎么被起来的）：清单是位置参数，长度随改动面
+  // 增长，一旦顶到平台命令行上限就会退化成「组 C 红、但一条用例都没跑、原因读不出」。
+  // 这是「判据在场却零执行」的门禁静默失效，必须与本次暂存改动无关也必须响。
+  "tests/hook-affected-launch.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

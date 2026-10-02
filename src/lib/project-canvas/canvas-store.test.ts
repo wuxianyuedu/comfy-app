@@ -8,8 +8,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const projectListQuery = vi.fn();
-const projectUpsertMutate = vi.fn();
-const projectDeleteMutate = vi.fn();
+const projectUpsertMutate = vi.fn<(...args: unknown[]) => unknown>();
+const projectDeleteMutate = vi.fn<(...args: unknown[]) => unknown>();
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
@@ -17,13 +17,17 @@ vi.mock("~/trpc/vanilla", () => ({
       list: {
         query: (...args: unknown[]) => projectListQuery(...args) as never,
       },
+      /* `Promise.resolve().then(() => …)` 而不是 `Promise.resolve(…)`：
+       * 后者会把 mock 的**同步抛错**当成 fulfilled 的值吞下去，
+       * 于是「服务端拒收这一份」这条路上永远测不到 —— 而这条镜像链的
+       * 缺陷恰恰长在失败分支上（台账 A3 装上归属闸之后才有的那一格）。 */
       upsert: {
         mutate: (...args: unknown[]) =>
-          Promise.resolve(projectUpsertMutate(...args)),
+          Promise.resolve().then(() => projectUpsertMutate(...args)),
       },
       delete: {
         mutate: (...args: unknown[]) =>
-          Promise.resolve(projectDeleteMutate(...args)),
+          Promise.resolve().then(() => projectDeleteMutate(...args)),
       },
     },
   },
@@ -33,6 +37,7 @@ import {
   EMPTY_DRAFT_NAMES,
   createDraftProject,
   createProject,
+  deleteProject,
   findNextAvailableName,
   getAllProjectNames,
   getProject,
@@ -43,7 +48,28 @@ import {
   reapAllEmptyDrafts,
   reapEmptyProject,
   setActive,
+  upsertProject,
 } from "./canvas-store";
+import { listSyncNotices } from "./sync-notice";
+
+/** 等一轮宏任务：镜像是 fire-and-forget，登记发生在 promise 落定之后。 */
+async function settled(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** tRPC 客户端错误的真实形状：码在 `data.code`。 */
+function trpcError(code: string, message: string): unknown {
+  return Object.assign(new Error(message), {
+    data: { code },
+    shape: { message, code },
+  });
+}
+
+function noticesFor(id: string): string[] {
+  return listSyncNotices()
+    .filter((notice) => notice.projectId === id)
+    .map((notice) => notice.detail);
+}
 
 const INDEX_KEY = "comfyapp.canvas.projects.v1";
 
@@ -248,6 +274,114 @@ describe("hydrateFromServer", () => {
     projectListQuery.mockRejectedValue(new Error("offline"));
     await expect(hydrateFromServer()).resolves.toBeUndefined();
     expect(listProjects()).toHaveLength(1);
+  });
+});
+
+describe("服务端镜像的失败出口", () => {
+  /* 这一组只判「登记了什么状态」，日志那一半由 `sync-notice.test.ts` 判；
+   * 不静音的话每个用例都会往转录里写几行 warn。 */
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+
+  it("被拒（项目 id 属于别人）→ 登记成一条可查的拒收，本地索引照常写入", async () => {
+    projectUpsertMutate.mockImplementation(() => {
+      throw trpcError("FORBIDDEN", "该项目 id 已属于其他用户，不能覆盖");
+    });
+    upsertProject({
+      id: "proj_m1",
+      name: "灵感板",
+      updatedAt: 1,
+      nodes: [],
+      edges: [],
+    });
+    await settled();
+
+    /* 提示按码翻成人话（原文另有日志那一行），这里判的是「这条状态存在且说得清」 */
+    expect(noticesFor("proj_m1")).toHaveLength(1);
+    expect(noticesFor("proj_m1")[0]).toContain("已经属于别的用户");
+    /* 本地优先的语义没变：被服务端拒 ≠ 把用户的画布从本地索引里删掉。 */
+    expect(getProject("proj_m1")?.name).toBe("灵感板");
+  });
+
+  it("离线 / 服务端在重启 → 不打扰用户，但留一行日志", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    projectUpsertMutate.mockImplementation(() => {
+      throw new Error("Failed to fetch");
+    });
+    upsertProject({
+      id: "proj_m2",
+      name: "A",
+      updatedAt: 1,
+      nodes: [],
+      edges: [],
+    });
+    await settled();
+
+    expect(noticesFor("proj_m2")).toHaveLength(0);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("下一轮同步成功 → 那条拒收撤掉（用户照着提示改完名字不该还剩一条红）", async () => {
+    projectUpsertMutate.mockImplementationOnce(() => {
+      throw trpcError("FORBIDDEN", "该项目 id 已属于其他用户");
+    });
+    upsertProject({
+      id: "proj_m3",
+      name: "A",
+      updatedAt: 1,
+      nodes: [],
+      edges: [],
+    });
+    await settled();
+    expect(noticesFor("proj_m3")).toHaveLength(1);
+
+    upsertProject({
+      id: "proj_m3",
+      name: "我的灵感板",
+      updatedAt: 2,
+      nodes: [],
+      edges: [],
+    });
+    await settled();
+    expect(noticesFor("proj_m3")).toHaveLength(0);
+  });
+
+  it("删除被服务端拒收 → 说的是「没能从服务端删掉」，不是「同步失败」", async () => {
+    seed([
+      { id: "proj_m4", name: "该删的", updatedAt: 1, nodes: [], edges: [] },
+    ]);
+    projectDeleteMutate.mockImplementationOnce(() => {
+      throw trpcError("UNAUTHORIZED", "会话已失效");
+    });
+    deleteProject("proj_m4");
+    await settled();
+
+    expect(noticesFor("proj_m4")).toHaveLength(1);
+    /* 后果与「没能存进去」不同：本机已经删了、服务端还留着，
+     * 换端口时它会再冒出来 —— 文案必须说得出这一句。 */
+    expect(noticesFor("proj_m4")[0]).toContain("没能从服务端删掉");
+    expect(listProjects().map((project) => project.id)).not.toContain(
+      "proj_m4",
+    );
+  });
+
+  it("重复的自动保存只留一条拒收（每 500ms 撞一次不许刷出一串提示）", async () => {
+    projectUpsertMutate.mockImplementation(() => {
+      throw trpcError("FORBIDDEN", "该项目 id 已属于其他用户");
+    });
+    const p = {
+      id: "proj_m5",
+      name: "A",
+      updatedAt: 1,
+      nodes: [],
+      edges: [],
+    };
+    upsertProject(p);
+    upsertProject(p);
+    upsertProject(p);
+    await settled();
+    expect(noticesFor("proj_m5")).toHaveLength(1);
   });
 });
 

@@ -64,10 +64,23 @@ function stripComments(src: string): string {
  *    应用日志面板，这是项目规定的客户端日志口（规范 07 §7.6）；
  *  3. 同一份诊断还走 `h.onLog` 写进工作流库「执行日志」弹窗，两条通道都要。
  *
+ * 清单按**文件**点名，不按目录：目录级豁免等于「以后往这里加 console 完全无声」，
+ * 而这条判据的全部价值就在「服务端可达的代码里不许有第二份日志实现」。
+ *
+ * 第二条 `sync-notice.ts`（画布镜像的失败状态）三条各自成立：首行 `"use client"`
+ * 且消费者只有 `canvas-store` 与画布的持久化 hook；console 是浏览器侧唯一的日志口
+ * （这里不能用 `~/lib/core/logger` —— 那是 pino + 文件/DB 落盘，打进浏览器包既跑不
+ * 起来也会点着 `client-bundle-node-builtins` 那条判据）；同一份诊断的第二条通道是
+ * 「拒收登记表 + toast（给人话）」，而 console 那一行留的是服务端原文与码（给排查），
+ * 少任何一条就变成「读不懂」或「查不到」。
+ *
  * 豁免必须由正向后置断言锁住（见用例末尾的 `it("浏览器侧豁免确实标了
  * use client")`），防止以后把豁免套在服务端可达的文件上静默放过。
  */
-const CLIENT_ONLY = ["src/lib/workshop/generation-client.ts"];
+const CLIENT_ONLY = [
+  "src/lib/workshop/generation-client.ts",
+  "src/lib/project-canvas/sync-notice.ts",
+];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

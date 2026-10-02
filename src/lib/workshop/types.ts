@@ -110,15 +110,42 @@ export const TRANSITION_LABELS: Record<Transition, string> = {
   fade: "淡入淡出",
 };
 
-export type ShotType =
-  | "extreme_wide" // 大远景
-  | "wide" // 远景
-  | "full" // 全景
-  | "medium" // 中景
-  | "close" // 近景
-  | "extreme_close" // 特写
-  | "poi" // 仰拍
-  | "pod"; // 俯拍
+/**
+ * 景别的**唯一取值清单**。
+ *
+ * 为什么是一份数组而不是联合类型字面量：`ShotType` 由它派生，
+ * 而清单本身要被三类人共用 —— 提示词里那句「取值之一：…」（两处曾各自抄一份，
+ * 加一个景别就要记得改两边，第三边还会忘）、`SHOT_TYPE_LABELS` 的键、
+ * 以及**从 LLM 回来的字符串**收窄回 `ShotType` 的那条判据
+ *（`normalizeShotType`）。曾经有一份把这条收窄跳过去写成 `as never`，
+ * 表现是「LLM 说什么就存什么」，而类型层完全不知道。
+ */
+export const SHOT_TYPES = [
+  "extreme_wide", // 大远景
+  "wide", // 远景
+  "full", // 全景
+  "medium", // 中景
+  "close", // 近景
+  "extreme_close", // 特写
+  "poi", // 仰拍
+  "pod", // 俯拍
+] as const;
+
+export type ShotType = (typeof SHOT_TYPES)[number];
+
+/** 默认景别：清单里的那一档（`normalizeShotType` 的回落值）。 */
+export const DEFAULT_SHOT_TYPE: ShotType = "medium";
+
+/** 把**外来**的景别值（LLM 输出、解析出的 JSON、URL 参数）收进清单。
+ *  不在清单里的一律回落默认档 —— 不抛错（一条镜头的景别写错不该毁掉整批解析），
+ *  但也不放它进类型系统。 */
+export function normalizeShotType(raw: unknown): ShotType {
+  return (SHOT_TYPES as readonly string[]).includes(
+    typeof raw === "string" ? raw : "",
+  )
+    ? (raw as ShotType)
+    : DEFAULT_SHOT_TYPE;
+}
 
 export const SHOT_TYPE_LABELS: Record<ShotType, string> = {
   extreme_wide: "大远景",

@@ -30,8 +30,22 @@ const LIST_ROW_COLUMNS = {
   createdAt: workflowTemplate.createdAt,
 } as const;
 
+/** 详情加载时用来判断「磁盘上有没有新版本」的最小列集：只要这三列。 */
+const SOURCE_META_COLUMNS = {
+  id: workflowTemplate.id,
+  sourcePath: workflowTemplate.sourcePath,
+  sourceMtime: workflowTemplate.sourceMtime,
+} as const;
+
 /** {@link WorkflowTemplateRepository.listForUser} 的行形状（列投影的结果）。 */
 export type WorkflowTemplateListRow = Omit<WorkflowTemplate, "positions">;
+
+/** {@link WorkflowTemplateRepository.findSourceMetaForUser} 的行形状。 */
+export type WorkflowTemplateSourceMeta = {
+  id: string;
+  sourcePath: string | null;
+  sourceMtime: number | null;
+};
 
 export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTemplate> {
   constructor() {
@@ -54,13 +68,21 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     return wf?.userId === userId ? wf : null;
   }
 
-  async findByIdForUserSelect(
+  /** 「这条工作流有没有绑着一个本地源文件」那一段元数据 —— **真投影**。
+   *
+   *  这里原本是一个 `findByIdForUserSelect(userId, id, _select?: unknown)`：
+   *  参数名承诺投影、实现里 `select()` 全列取，三个调用点还在按 Prisma 的
+   *  布尔投影写法传 `{ id: true, sourcePath: true }` —— 类型层一声不响
+   *  （`unknown` + 调用点不做校验），实际每次详情加载都把 `rawJson` 与
+   *  `positions` 这两个大 JSON blob 拖出来一遍（台账 F13：同一个 `unknown`
+   *  签名让 `train.cancel` 从迁移起每次 500，这一处是它的性能版兄弟）。
+   *  现在投影是**真的**列清单，方法名也不再承诺一个它不做的能力。 */
+  async findSourceMetaForUser(
     userId: string,
     id: string,
-    _select?: unknown,
-  ): Promise<WorkflowTemplate | null> {
+  ): Promise<WorkflowTemplateSourceMeta | null> {
     const rows = await db
-      .select()
+      .select(SOURCE_META_COLUMNS)
       .from(workflowTemplate)
       .where(
         and(eq(workflowTemplate.id, id), eq(workflowTemplate.userId, userId)),
