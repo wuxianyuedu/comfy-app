@@ -25,6 +25,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Copy, Square, X, Minus } from "lucide-react";
 import type { ShellTab } from "~/lib/shell/shell-tabs-store";
+import { MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
+import { ViewTabStrip } from "./ViewTabStrip";
+import { type ViewTab } from "./workspace-tabs";
+import { type OpenableView } from "./ViewTabStrip";
+import { type WorkspaceView } from "./NavItems";
 import {
   isDragRegionTarget,
   resolveMaximizeButtonKind,
@@ -53,6 +58,19 @@ interface TitleBarTabsProps {
   activeTabId: string;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
+  /**
+   * 视图页签。传了就用它们**取代**「主应用」那一个伪页签：同一条标题行横条里并列
+   * 「应用内视图」与「iframe 外部页面」，不再另起第二条（#1324 决策 ④(a)）。
+   * 不传时行为与从前一致。
+   */
+  viewTabs?: ViewTab[];
+  activeViewKey?: string;
+  projectNameOf?: (projectId: string | null) => string | null | undefined;
+  onSelectViewTab?: (key: string) => void;
+  onCloseViewTab?: (key: string) => void;
+  /** 「+」菜单里可打开的视图（由 ShellTabs 透传）。 */
+  openableViews?: OpenableView[];
+  onOpenView?: (view: WorkspaceView) => void;
 }
 
 /** 单个页签：标题 + 可选关闭按钮（点击不触发拖拽，见 data-no-drag）。 */
@@ -149,7 +167,20 @@ export function TitleBarTabs({
   activeTabId,
   onActivate,
   onClose,
+  viewTabs,
+  activeViewKey,
+  projectNameOf,
+  onSelectViewTab,
+  onCloseViewTab,
+  openableViews,
+  onOpenView,
 }: TitleBarTabsProps) {
+  /* 有视图页签时，「主应用」那一个伪页签由它们代表 —— 同一条横条里出现
+     「主应用」+「首页」+「模型」这种并列，用户分不清哪个才是当前页。 */
+  const hasViewTabs = !!viewTabs && viewTabs.length > 0;
+  const shellTabs = hasViewTabs
+    ? tabs.filter((tab) => tab.id !== MAIN_TAB_ID)
+    : tabs;
   const [maximized, setMaximized] = useState(false);
 
   // 启动完成后的前台归属：用户没让出前台就给前台，让出了才只在任务栏显示
@@ -211,21 +242,38 @@ export function TitleBarTabs({
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
     >
-      {/* 页签区：与标题行同一横条 */}
-      <div
-        role="tablist"
-        aria-label="应用页签"
-        className="flex items-stretch overflow-x-auto"
-      >
-        {tabs.map((tab) => (
-          <TitleBarTab
-            key={tab.id}
-            tab={tab}
-            active={tab.id === activeTabId}
-            onActivate={onActivate}
-            onClose={onClose}
+      {/* 页签区：与标题行同一横条。视图页签在前（它们代表主应用那一格），
+          iframe 页签在后；两组共用同一份 ViewTabStrip / TitleBarTab 形态。 */}
+      <div className="flex min-w-0 items-stretch overflow-x-auto">
+        {hasViewTabs ? (
+          <ViewTabStrip
+            inTitleBar
+            tabs={viewTabs}
+            activeKey={activeViewKey ?? ""}
+            projectNameOf={projectNameOf}
+            onSelect={(key) => onSelectViewTab?.(key)}
+            onClose={(key) => onCloseViewTab?.(key)}
+            openableViews={openableViews}
+            onOpenView={onOpenView}
           />
-        ))}
+        ) : null}
+        {shellTabs.length > 0 ? (
+          <div
+            role="tablist"
+            aria-label="应用页签"
+            className="flex items-stretch"
+          >
+            {shellTabs.map((tab) => (
+              <TitleBarTab
+                key={tab.id}
+                tab={tab}
+                active={tab.id === activeTabId}
+                onActivate={onActivate}
+                onClose={onClose}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* 拖拽空白区：撑满剩余宽度 */}

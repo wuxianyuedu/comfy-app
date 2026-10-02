@@ -1,8 +1,16 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { displayValue } from "~/lib/display-value";
 
@@ -31,8 +39,21 @@ export interface ViewTabStripProps {
   projectNameOf?: (projectId: string | null) => string | null | undefined;
   onSelect: (key: string) => void;
   onClose: (key: string) => void;
+  /**
+   * 「+」菜单里可打开的视图。由调用处给 —— 哪些视图能开是页面知识（有没有活跃项目
+   * 决定项目内那六个能不能开），不是页签条的知识。不传就不渲染「+」。
+   */
+  openableViews?: OpenableView[];
+  /** 从「+」菜单里选了一个视图。 */
+  onOpenView?: (view: WorkspaceView) => void;
   /** 标题行内嵌时去掉自己的边框/背景（那条横条的视觉由标题行统一持有）。 */
   inTitleBar?: boolean;
+}
+
+/** 「+」菜单里的一项：视图 id + 展示名。 */
+export interface OpenableView {
+  view: WorkspaceView;
+  label: string;
 }
 
 /**
@@ -52,6 +73,8 @@ export function ViewTabStrip({
   projectNameOf,
   onSelect,
   onClose,
+  openableViews,
+  onOpenView,
   inTitleBar = false,
 }: ViewTabStripProps) {
   return (
@@ -109,6 +132,40 @@ export function ViewTabStrip({
           </div>
         );
       })}
+
+      {/* 「+」开一个新页签。这一颗是退役 ProjectTabBar 的**前提**：侧栏刻意不列
+          项目内那六个视图（主页/画布/工坊/资源库/产出/成片），它们此前唯一的入口
+          就是那条切换器 —— 没有这里，退役会让这些视图变成 unreachable。 */}
+      {openableViews && openableViews.length > 0 ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="新页签"
+                data-no-drag
+                className="text-ink-muted hover:text-ink shrink-0"
+              >
+                <Plus data-icon="inline-start" size={14} />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start" className="w-44">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>打开视图</DropdownMenuLabel>
+              {openableViews.map((item) => (
+                <DropdownMenuItem
+                  key={item.view}
+                  onClick={() => onOpenView?.(item.view)}
+                >
+                  {item.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
     </div>
   );
 }

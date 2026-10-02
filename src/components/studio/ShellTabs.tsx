@@ -9,8 +9,10 @@
  * 两种环境形态（判据见`shouldUseTitleBarTabs`）：
  * - **桌面壳内**：主窗口关闭原生装饰，由`TitleBarTabs` 接管整条标题栏
  * （页签 + 拖拽区 + 最小化/最大化/关闭），不再额外占用应用内区域。
- * - **浏览器 / dev**：**不渲染任何应用内页签栏**。浏览器自带页签栏，再画一条
- * 假页签栏既占纵向空间又与原生重复；ComfyUI 改由「新浏览器页签」打开
+ * - **浏览器 / dev**：**不渲染 iframe 页签栏**（不是「任何页签栏」）。浏览器自带
+ * 页签栏，再画一条切外部页面的假页签栏既占纵向空间又与原生重复；ComfyUI 改由「新浏览器页签」打开。
+ * 但**视图页签条照常渲染** —— 它切的是应用内视图，与浏览器自己的标签页不是同一件事，
+ * 不构成重复；而且它是项目内那六个视图的唯一入口（`ProjectTabBar` 已退役）。
  * （见 `use-settings-page` 的 openComfy 浏览器分支 + `comfy-embed.ts`
  * `shouldUseBrowserTab`）。此时 store 里恒只有主应用页签、iframe 区为空，
  * 本组件只承载 children。
@@ -30,18 +32,36 @@
  * 样式说明：内容区高度为「窗口高 - 页签栏高（桌面壳）/ 全高（浏览器）」，主应用内部用 h-full 布局。
  */
 
-import { useCallback, useSyncExternalStore } from "react";
 import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
-import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
-import { shouldUseTitleBarTabs } from "~/lib/shell/title-bar-derive";
+import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
 import { TitleBarTabs } from "./TitleBarTabs";
+import { type ViewTab } from "./workspace-tabs";
+import { type OpenableView } from "./ViewTabStrip";
+import { type WorkspaceView } from "./NavItems";
 import { Button } from "~/components/ui/button";
 
 interface ShellTabsProps {
   /** 主应用页签的内容（即 workspace 整套界面）。 */
   children: React.ReactNode;
+  /**
+   * 视图页签（首页 / 模型 / 工坊·项目名 …）。不传时本组件行为与从前一致：
+   * 只渲染 iframe 页签，主应用是唯一的「主应用」页签。
+   */
+  viewTabs?: ViewTab[];
+  /** 当前视图页签 key。 */
+  activeViewKey?: string;
+  /** 项目 id → 项目名（页签标题用「工坊·雾中来信」区分同视图多页）。 */
+  projectNameOf?: (projectId: string | null) => string | null | undefined;
+  /** 选中某个视图页签。 */
+  onSelectViewTab?: (key: string) => void;
+  /** 关闭某个视图页签。 */
+  onCloseViewTab?: (key: string) => void;
+  /** 「+」菜单里可打开的视图（页面知识，见 ViewTabStrip）。 */
+  openableViews?: OpenableView[];
+  /** 从「+」菜单里选了一个视图。 */
+  onOpenView?: (view: WorkspaceView) => void;
 }
 
 /**
@@ -103,23 +123,26 @@ function TabBlockedNotice({
   );
 }
 
-export function ShellTabs({ children }: ShellTabsProps) {
+export function ShellTabs({
+  children,
+  viewTabs,
+  activeViewKey,
+  projectNameOf,
+  onSelectViewTab,
+  onCloseViewTab,
+  openableViews,
+  onOpenView,
+}: ShellTabsProps) {
   const tabs = useShellTabs((s) => s.tabs);
   const activeTabId = useShellTabs((s) => s.activeTabId);
   const activateTab = useShellTabs((s) => s.activateTab);
   const closeTab = useShellTabs((s) => s.closeTab);
 
-  // 壳探测只能在客户端进行（SSR 无 window）。用 useSyncExternalStore 取
-  // 客户端快照（服务端恒 false）——首帧按「非壳」渲染，客户端再取真实值，
-  // 既不触发 set-state-in-effect（规范 08 §8.6），也不会 hydration 报错。
-  const inShell = useSyncExternalStore(
-    useCallback(() => () => undefined, []),
-    () => isDesktopShell(),
-    () => false,
-  );
+  /* 壳探测（SSR 恒 false，客户端再取真值）—— 判据与 `AppShell` 共用一处，
+     否则会出现「壳里两条栏、浏览器里零条栏」这种各自自洽的错。 */
+  const useTitleBar = useTitleBarTabsActive();
 
   const contentTabs = tabs.filter((t) => t.id !== MAIN_TAB_ID);
-  const useTitleBar = shouldUseTitleBarTabs(inShell);
 
   return (
     <div
@@ -135,8 +158,19 @@ export function ShellTabs({ children }: ShellTabsProps) {
           activeTabId={activeTabId}
           onActivate={activateTab}
           onClose={closeTab}
+          viewTabs={viewTabs}
+          activeViewKey={activeViewKey}
+          projectNameOf={projectNameOf}
+          onSelectViewTab={onSelectViewTab}
+          onCloseViewTab={onCloseViewTab}
+          openableViews={openableViews}
+          onOpenView={onOpenView}
         />
       ) : null}
+
+      {/* 浏览器 / dev 形态的视图页签栏**不在这里渲染** —— 本组件这一层是整窗宽度，
+          而侧栏是 fixed 定位，栏放在这里会被侧栏压住（实测关闭按钮「subtree intercepts
+          pointer events」）。它渲染在 `AppShell` 的内容列里，那里已经算好了侧栏偏移。 */}
 
       {/* 内容区：主应用与 ComfyUI 均保持挂载，用 CSS 显隐切换，避免丢态。
        *
