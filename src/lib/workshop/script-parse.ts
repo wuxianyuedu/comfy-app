@@ -5,7 +5,15 @@
 
 import type { LLMMessage } from "~/lib/llm/types";
 import { extractJsonArray } from "~/lib/llm/parse";
-import type { Character, Scene, Shot, ShotType, StyleRef } from "./types";
+import {
+  SHOT_TYPES,
+  normalizeShotType,
+  type Character,
+  type Scene,
+  type Shot,
+  type ShotType,
+  type StyleRef,
+} from "./types";
 import {
   buildCharacterNegative,
   buildCharacterPrompt,
@@ -56,16 +64,12 @@ export interface ParsedShotDraft {
   firstInScene: boolean;
 }
 
-export const VALID_SHOT_TYPES: readonly ShotType[] = [
-  "extreme_wide",
-  "wide",
-  "full",
-  "medium",
-  "close",
-  "extreme_close",
-  "poi",
-  "pod",
-];
+/**
+ * 兼容用的别名：清单本身在 `~/lib/workshop/types` 的 `SHOT_TYPES`（唯一出处）。
+ * 这个导出名比类型早存在，去掉会让所有引用点一起改；留一层薄别名比留一份
+ * 第二个真相便宜。
+ */
+export const VALID_SHOT_TYPES: readonly ShotType[] = SHOT_TYPES;
 
 function asStr(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -455,12 +459,7 @@ export function parseExtractedShots(text: string): ShotEntry[] {
     const sceneHeading = asStr(item.sceneHeading).trim();
     const description = asStr(item.description).trim();
     if (!sceneHeading && !description) continue;
-    const st = asStr(item.shotType);
-    const shotType: ShotType = (VALID_SHOT_TYPES as readonly string[]).includes(
-      st,
-    )
-      ? (st as ShotType)
-      : "medium";
+    const shotType = normalizeShotType(item.shotType);
     const rawNames: unknown = item.characterNames;
     const characterNames = Array.isArray(rawNames)
       ? rawNames.filter((n): n is string => typeof n === "string")

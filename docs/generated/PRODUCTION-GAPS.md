@@ -657,26 +657,50 @@
 - [ ] **F10 `eslint-plugin-jsx-a11y` 未显式启用**。证据：`eslint.config.js:63-69`。
 - [ ] **F11 端口 TOCTOU + 800 槽哈希分桶碰撞无兜底**。证据：`src-tauri/src/lib.rs:831-834`；`single_instance.rs:189-192`。
 - [ ] **F12 无 Web Vitals**；SQLite 无 `busy_timeout`；几乎无事务边界。证据：`src/server/db.ts:74-75`。
-- [ ] **F13 `unknown` + `as never` 把「调用点形状错了」咽掉**（本刀照出并已修一处，**类未收口**）：
+- [x] **F13 `unknown` + `as never` 把「调用点形状错了」咽掉（本批补判据并清掉两处实例；类未收完，剩 F13′）**：
       Prisma→Drizzle 迁移把仓储的投影参数写成 `select?: unknown`，交给 Drizzle 时
       `db.select(select as never)` —— 于是调用点留着 Prisma 的布尔投影
       （`{ id: true, status: true }`）时 **tsc 一声不响**，运行时生成空投影 → SQL 语法错。
       实际后果：`train.cancel` 自那次迁移起每次 500，而这条 router 没有执行者，
-      所以没有任何一条红过（`c7a77d19` 之后的本刀补上判据并把类型收紧成
+      所以没有任何一条红过（`c7a77d19` 那刀补上判据、类型收紧成
       `Record<string, AnySQLiteColumn>`，见 `repository-lora.ts` 的注释）。
-      **同族还没查完的两处**：① 其它仓储/工具签名里的 `unknown` + `as never`
-      （全仓 `as never` 的现存数量由 `check-non-null-assertions` 之外的另一条线管，没有专门判据）；
-      ② 「一个 procedure 从迁移那天起就是死的」这类缺陷**只有执行者能发现** —— 这一支
-      随 E3 收口（`tests/trpc-surface-executors.test.ts` 把「挂载即欠执行者」做成判据，
-      `post` / `user` / `customNode` 就是被它照出来后删掉的）。
-      **本批复算照出的新同族实例（后果是性能，不是 500）**：
-      `workflowTemplateRepository.findByIdForUserSelect(userId, id, _select)` 的第三参
-      **带下划线、根本没被用**，实现走的是 `db.select()` 全列 —— 于是 `workflow-detail.ts`
-      里那份「只取需要的列，别把 `positions` / `rawJson` 两个大 JSON blob 拖两遍」的投影
-      清单是空气，方法名承诺的能力没在。与 ① 同因：`select?: unknown` 让调用点与实现
-      的错位对编译器不可见。证据：`src/lib/core/repository-workflow-template.ts:57-70`。
-      证据：`src/lib/core/repository-lora.ts`（修后的类型与注释）、
-      `changelog.d/0-router-gates-tranche2.md`。
+      **本批把「类」变成有判据的东西**：`tests/f13-projection-shapes.test.ts`（进固定清单）判四件事 ——
+      ① 非测试源码里每一处 `as never` 都要**逐处登记 + 写清为什么**（新增未登记 = 红；
+      登记的那处不见了 = 红；按「文件 + 该文件内次数」记账，不按会漂的行号）；
+      ② 投影类参数（名字含 `select` / `projection` / `columns`）的类型不许是
+      `unknown` / `any`；③ `.select(… as never)` 这个形状零存在（就是当年那一句）；
+      ④ 仓储签名里不许有以 `_` 开头的参数 —— 那个下划线就是「我知道没人用，但我不想删」的写法。
+      判的是**形状**而不是语义：`as never` 的语义就是「这里我不检查了」，
+      而对编译器按下静音键的地方，坏掉的时候也不会对任何人吱一声。
+      **同批清掉的三处实例**（原来都在扫描面的盲区里）：
+      · `workflowTemplateRepository.findByIdForUserSelect(userId, id, _select?: unknown)`
+      —— 参数名承诺投影、实现是 `db.select()` 全列，三个调用点还在传 Prisma 形状的
+      `{ id: true, rawJson: true, … }`。后果是性能而不是 500：详情加载每次把
+      `rawJson` 与 `positions` 两个大 JSON blob 整行拖出来，而那份「只取需要的列」
+      的清单是空气。改法 = 删掉这个不做实事的方法，元数据那一读换成**真投影**
+      （`findSourceMetaForUser` + `SOURCE_META_COLUMNS`），另两读改吃已有的
+      `findByIdForUser`（行为一字不变 —— 它们本来拿的就是整行）。
+      · LLM 回来的景别：`parseShotsFromJson` 把它声明成 `string`，下游
+      `shotType: s.shotType as never` 塞进 `Shot` —— 等于「模型返回什么景别就存什么」。
+      现在收在**解析边界**（`normalizeShotType`），并补一条用例钉住清单外的值必须回落
+      默认档（变异核过：把 passthrough 写回去 → 恰好这一条红）。
+      · 顺带照出**同一份清单被抄了四遍**：`ShotType` 联合、`VALID_SHOT_TYPES`、
+      `prompts.ts` 里的 `SHOT_TYPES`、`StoryboardPlanner.parts.tsx` 里又一份下拉选项。
+      现在 `SHOT_TYPES` 是唯一出处（联合由它派生），其余三处吃它。
+      **这一族另一半仍然只有执行者能发现**（「一个 procedure 从迁移那天起就是死的」），
+      那一支已随 E3 收口成判据（`tests/trpc-surface-executors.test.ts`）。
+      证据：`tests/f13-projection-shapes.test.ts`、`src/lib/core/repository-workflow-template.ts`、
+      `src/lib/workshop/types.ts`（`SHOT_TYPES` / `normalizeShotType`）、
+      `src/lib/core/repository-lora.ts`、`changelog.d/0-router-gates-tranche2.md`。
+- [ ] **F13′ MCP 工具的写侧入参没有域内校验**（F13 收口后剩下的那一处真欠账）：
+      `src/server/mcp/workshop-mcp.ts` 的 `workshop_set_characters` / `workshop_set_storyboard`
+      把 inputSchema 写成 `z.array(z.any())`，再 `as never` 压进 `Character[]` / `Shot[]`。
+      这与其他几处「桥接第三方签名」不同 —— MCP 是**外部客户端可以随便发的边界**，
+      任意对象会原样进草稿并参与提示词重算。它现在被 `tests/f13-projection-shapes.test.ts`
+      的登记表点名记着（新增未登记的 `as never` 会红），但登记不是修复。
+      修法 = 给 `Character` / `Shot` 出一份域内 zod 契约（与 `draft-sync-shared.ts` 那份
+      校验同一口径），工具里 parse 后传值、失败回一条工具级错误，然后**删掉这两条登记**。
+      证据：`src/server/mcp/workshop-mcp.ts:240-282`、`src/server/workshop/orchestrator.ts:204,236`。
 - [ ] **P3 卫生**：无 `.editorconfig`；`package.json` 无 `engines`；tsconfig 缺 `exactOptionalPropertyTypes` 等；`cn@^0.3.0` / `lucide-react:^1.47.0` 版本偏宽；双 TS 版本导致构建/门禁语义不一致；`/api/update-check` 无鉴权回显变更指纹；`comfyapp://` 由外部 helper 实现需单独审计防任意网页利用本机路径。
 
 ## 规范状态
