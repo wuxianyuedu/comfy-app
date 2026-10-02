@@ -129,6 +129,7 @@ export default tseslint.config(
       "out/**",
       "dist/**",
       "coverage/**",
+      "storybook-static/**",
       "test-results/**",
       "playwright-report/**",
       // 生成代码（在白名单目录内，必须显式排除）

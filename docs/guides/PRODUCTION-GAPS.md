@@ -764,7 +764,7 @@
 - [ ] **F3 `next/image` 0 处且 lint 关闭**。证据：`eslint.config.js:185-192`。
 - [ ] **F4 无离线能力**（无 SW / `onLine` / 离线队列；58 文件手写 localStorage 无 persist）。
 - [ ] **F5 虚拟滚动仅 2 处**；`next/dynamic` 仅 2 处。
-- [ ] **F6 无 Storybook / 可视回归**；UI 复用棘轮 78 条存量违规。证据：`scripts/.ui-primitives-baseline.json:18`。
+- [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用棘轮 78 条存量违规。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、`scripts/.ui-primitives-baseline.json:18`。剩余的两格：①**像素基线**仍是 Playwright `toHaveScreenshot`（规范 11 §11.8），Storybook 不替代它；②**组件覆盖率**——目前只有 3 个 `ui/` 示例组件有 story，155 个 `ui/` 文件里绝大多数没有。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。
