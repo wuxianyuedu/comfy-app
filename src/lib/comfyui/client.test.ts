@@ -29,6 +29,8 @@ vi.mock("~/lib/core/logger", () => ({
 }));
 
 import {
+  ComfyViewError,
+  getView,
   resolveComfyBase,
   probeComfyBase,
   resetComfyBase,
@@ -232,5 +234,55 @@ describe("探测全落空 — 只说「没探到这批地址」，且不刷屏",
     respondOn([8000]);
     await expect(resolveComfyBase()).resolves.toBe("http://127.0.0.1:8000");
     expect(warned(/window at :8000/)).toBe(true);
+  });
+});
+
+describe("getView — 取字节的地址组装与失败形状", () => {
+  /** 让 `/api/view` 按 `reply` 应答，其余请求（端口探测等）统一回 200。
+   *  顺手把打出去的查询串记进 `seen` —— 断言取这里，而不是回读 `mock.calls`
+   *  （那个元素的类型是 `URL | RequestInfo` 联合，字符串化会撞上
+   *  `no-base-to-string`；`input: unknown` 的写法与本文件顶部的 `respondOn` 一致）。 */
+  function viewReply(reply: { bytes?: number[]; status: number }) {
+    const seen: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/api/view")
+        return new Response("{}", { status: 200 });
+      seen.push(url.search);
+      if (reply.status !== 200)
+        return new Response("nope", { status: reply.status });
+      return new Response(new Uint8Array(reply.bytes ?? [1, 2, 3]), {
+        status: 200,
+      });
+    });
+    return seen;
+  }
+
+  it("三个参数都进查询串，字节原样交回（代理层不许自己猜默认值）", async () => {
+    const seen = viewReply({ bytes: [9, 8, 7], status: 200 });
+    const buf = await getView("shot_001.png", "canvas/sub", "output");
+    expect([...buf]).toEqual([9, 8, 7]);
+    const requested = new URL(`http://127.0.0.1:8188/api/view${seen[0]!}`);
+    expect(requested.searchParams.get("filename")).toBe("shot_001.png");
+    expect(requested.searchParams.get("subfolder")).toBe("canvas/sub");
+    expect(requested.searchParams.get("type")).toBe("output");
+  });
+
+  it("上游非 2xx 时抛带状态码的 ComfyViewError —— 调用方分相靠这个字段，不靠读消息", async () => {
+    viewReply({ status: 404 });
+    const err = await getView("gone.png", "", "input").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ComfyViewError);
+    expect((err as ComfyViewError).status).toBe(404);
+    // 消息保持原样：`executor-finalize` 那类只判「拿不到就抛」的调用方零感知
+    expect((err as Error).message).toBe("getView failed: 404");
+  });
+
+  it("连不上时不包成 ComfyViewError（那是「上游答了」的形状），原样把 fetch 的失败交出去", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new TypeError("fetch failed"),
+    );
+    await expect(getView("a.png", "", "input")).rejects.toBeInstanceOf(
+      TypeError,
+    );
   });
 });

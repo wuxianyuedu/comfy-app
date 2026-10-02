@@ -275,6 +275,14 @@ export default defineConfig({
          * 门槛全部取这批用例的实测下限（见对应阈值块里的留痕）。 */
         "src/server/film/compose-steps.ts",
         "src/app/api/film/bgm/route.ts",
+        /* E3‴ 第一条 · 本机代理 ComfyUI 媒体字节的落点（`/api/images`）。
+         * 这条口此前**根本不存在**：`comfyImageUrl()` 把地址收成一处（那是对的），
+         * 而 handler 在基线迁移时没带过来 —— 于是画布 IMAGE 输入的预览、工作流图片
+         * 预览、训练素材缩略图全部按空态吞掉。四项皆满是因为该判的四支各有用例：
+         * 会话闸（且一次上游都不碰）、三种形状闸（缺名 / 目录成分 / 类别不在枚举）、
+         * 上游 404 与别的状态与连不上三种失败各自一个码、响应头必须 private 且不许
+         * immutable。少任何一支都会掉下 100 当场红。 */
+        "src/app/api/images/route.ts",
         "src/lib/workshop/media-source.server.ts",
         "src/lib/comfyui/firstframe.ts",
         /* ⑨ 第六刀 · 产物根搬出 `public/`（台账 A13 收官）带出的两个新文件：
@@ -1559,6 +1567,12 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 65,
+        },
+        "src/app/api/images/route.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         "src/app/api/film/bgm/route.ts": {
           lines: 95,
