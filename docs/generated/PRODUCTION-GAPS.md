@@ -526,6 +526,27 @@
       收摊用 `scripts/reap-process.mjs` 杀整棵树。
       证据：`tests/helpers/symlink-dir.ts`、`pnpm-workspace.yaml`（overrides）、
       `changelog.d/0-storybook-check-junction-and-wdm.md`。
+- [x] **E12 新落地的跨平台判据在开发机上「只能为不可能红而绿」：`executable-resolve` 的 POSIX 那几档（本批修复）**：
+      发现路径是台账 E7 那一批 rebase 时撞上的 —— `99323be7`（ISSUE #1327，控制台起进程前先解析可执行形态）
+      落进 master 时带着**它自己的 5 条红**：`executable-resolve.test.ts` 4 条 + `console-run.test.ts` 1 条，
+      在 Windows 开发机上单跑也红（先按 §13.6.2 用 `git stash` 复算过干净基线，确认不是从我的改动来的）。
+      根因不是业务错，是**判据的输入没能全部注入**：模块把 `platform` 做成了参数（于是可以「假装是 linux」），
+      但「这个候选起不起得来」那一步仍然问真机器。实测本机：`fs.accessSync(X_OK)` 对
+      0o755 / 0o644 / 0o444 / 0o000 **一律通过**（Windows 不参与判断执行位），而把真 `.exe` 改名成
+      无扩展名再 spawn 得到 `ENOENT`（CreateProcess 不认）—— 于是「有执行位的脚本跑得起来」
+      「文件在但没有执行位」这两档在本机只有两个下场：整组 `runIf(!win32)`（这台机器上零执行者，
+      正是台账 E7 记的形状），或者**为它本来就不可能红而通过**（更糟：绿灯是假的，
+      「候选存在但不可执行 → null」那一条当时就是这样绿的 —— 它跑的是 ENOENT 那条完全不同的路径）。
+      修法是补上缺的那一个注入点（口径同 `kill-process-tree.ts` 的 `COMFYAPP_TASKKILL`）：
+      `UsabilityProbe { access, spawn }` 进 `WhichCommandOptions`，默认值就是原来那两句真调用，
+      生产侧两个消费方（`console-run.ts`、`scripts/launcher-core/shell.mjs`）零改动；
+      Windows 那几档**不注入** —— 批处理不起、`.ps1` 落宿主、MZ 头当二进制在本机是真造得出来的，照旧问真机器。
+      顺带修掉那条大小写：候选名是拿 `PATHEXT` 拼的，而系统那份默认大写（`.COM;.EXE;…`），
+      于是解析结果可能是 `node.EXE` —— spawn 无所谓，但这一份路径会回显在控制台、也会写进日志，
+      而用户拿它去比对与点开时对不上；现在命中后向目录本身要一次真实大小写（POSIX 大小写要紧，原样返回）。
+      证据：`src/lib/process/executable-resolve.ts`（`UsabilityProbe` / `onDiskName`）、
+      `src/lib/process/executable-resolve.test.ts`（`posixHost`）、`src/lib/console/console-run.test.ts`。
+      变异检过两刀：让注入的探针失效（恒问真机器）→ POSIX 那 4 条红；去掉大小写归一 → 控制台那条红。
 - [x] **E11 `check-format.cjs` 的 fail-open：prettier 没跑成时被读成「全库干净」（本批修复 + 判据）**：
       发现路径不是「有人投诉格式」，而是另一条批次的提交门槛红了 —— `tests/check-format.test.ts`
       里三条「期望门禁拦住」的用例在钩子的多 worker 批次里稳定红，而**串行单跑全绿**。
