@@ -206,6 +206,20 @@ const PURE_NODE_HOSTS = [
    * 客户端可达的只有 `console-catalog` / `console-limits` / `console-client` /
    * `console-guard` 四个（零 Node 内建 import），执行面与运行槽不在那条路径上。 */
   "src/lib/console/console-run.ts",
+  // executable-resolve.ts（ISSUE #1327）：可执行形态判据的唯一实现在这里
+  // （`whichCommand` / `usableCommand` / `pnpmInvocation` / `resolveCommandInvocation`），
+  // 从 `scripts/launcher-core/shell.mjs` 搬下来 —— 因为同一个坑在应用内控制台又踩了
+  // 一次（那边直接 `spawn("pnpm")`，Windows 上回 ENOENT）。顶层 Node 内建值 import
+  // 有 `child_process`（`spawnSync` 真起一次确认候选跑不跑得起来）/ `fs`（读
+  // PATH × PATHEXT 候选、判形态）/ `path`。
+  // **必须能被 `.mjs` 静态 import**（Node 24 默认类型擦除）：`shell.mjs` 是纯 Node
+  // 启动编排的一环，`server-only` 的入口就是一句 throw，加上去会让 `pnpm dev`
+  // 整条编排崩在加载阶段。而它同时又必须能被单测直接喂真实文件与真实进程（造
+  // `.cmd` / `.ps1` / 无扩展名 shim 三种形态断言选中哪一个），`.server.ts` 的形态
+  // 在那类用例里会碍事。故按 §18.4 第三类登记。
+  // 「浏览器图别引我」由 scanner 的 `clientReachable` 判据盯：它的消费方是
+  // `console-run.ts`（第三类）与 `scripts/**`，两者都不在 `"use client"` 可达路径上。
+  "src/lib/process/executable-resolve.ts",
 ];
 
 type Report = {

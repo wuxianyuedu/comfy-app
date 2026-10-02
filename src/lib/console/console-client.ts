@@ -12,6 +12,7 @@
 
 import { isRecord } from "~/lib/is-record";
 import { readApiError, readJsonBody } from "~/lib/api-error";
+import { errorMessage } from "~/lib/error-message";
 import { MAX_OUTPUT_CHARS } from "./console-limits";
 
 /** 客户端看到的一条命令事件（与路由发的帧一一对应）。 */
@@ -130,6 +131,10 @@ export function consumeSseChunk(
   }
 }
 
+function isAbortError(e: unknown): boolean {
+  return e instanceof Error && e.name === "AbortError";
+}
+
 /**
  * 跑一条命令，逐帧回调。
  *
@@ -153,10 +158,11 @@ export async function runConsoleCommand(
     });
   } catch (e) {
     if (isAbortError(e)) return { kind: "aborted" };
-    return {
-      kind: "failed",
-      reason: e instanceof Error ? e.message : "请求失败",
-    };
+    /* 走全库唯一的错误文案出口（`~/lib/error-message`）：它会把浏览器抛的
+     * `Failed to fetch` / `NetworkError` 翻成「网络请求失败，请检查应用服务
+     * 是否正在运行」。**不要**原样透传 —— ISSUE #1327 的现场截图里，面板结论条
+     * 就只写着 `Failed to fetch`，用户看不出「是应用服务没起来」还是「我命令写错了」。 */
+    return { kind: "failed", reason: errorMessage(e, "请求失败") };
   }
 
   if (!res.ok) {
@@ -192,15 +198,9 @@ export async function runConsoleCommand(
     return { kind: "ok" };
   } catch (e) {
     if (isAbortError(e)) return { kind: "aborted" };
-    return {
-      kind: "failed",
-      reason: e instanceof Error ? e.message : "读取输出流失败",
-    };
+    // 同上：读流中途断掉（服务重启 / 连接被掐）同样是网络层故障，不该把浏览器原文甩出来。
+    return { kind: "failed", reason: errorMessage(e, "读取输出流失败") };
   }
-}
-
-function isAbortError(e: unknown): boolean {
-  return e instanceof Error && e.name === "AbortError";
 }
 
 /**
