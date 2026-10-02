@@ -72,8 +72,26 @@ grep -rlE --include="*.tsx" --include="*.ts" -e "/\[0\.[0-9]+\]|bg-gradient-to-|
 node scripts/tw4-spacing-canonical.mjs
 node scripts/tw4-spacing-canonical.mjs --write
 
+# 全量 canonical 汇总(更名/别名/遗留类,与编辑器 suggestCanonicalClasses 同源:
+# 直接问 design system 的 canonicalizeCandidates「有没有另一种写法生成相同 CSS」)。
+# 与上面那个互补:那条管"任意值↔spacing",这条管 "!x / break-words / flex-shrink /
+# overflow-ellipsis / bg-gradient-to-*" 等。约 10s 扫完 src,默认只读:
+node scripts/tw4-canonical-report.mjs
+node scripts/tw4-canonical-report.mjs --write   # 落盘(快照仍需 vitest -u)
+
 # 检查自定义工具类(如 u-title)是否真的存在于 globals.css,防止拼错类名静默失效
 grep -n "u-title" src/app/globals.css
+```
+
+## 5.1 TypeScript：同一属性指定两次
+
+编辑器报 `ts(2783) 多次指定了 "x"`（**项目钉的 `typescript6` 对此不报** —— 同一处
+代码命令行全绿、编辑器标红），所以只能按语法形态扫：
+
+```bash
+node scripts/report-ts-duplicate-keys.mjs              # 汇总（默认不含 *.test.*）
+node scripts/report-ts-duplicate-keys.mjs --with-tests # 连测试一起扫
+node scripts/report-ts-duplicate-keys.mjs --json
 ```
 
 ## 6. 查看可用脚本

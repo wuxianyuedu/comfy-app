@@ -141,7 +141,7 @@ describe("首页背景（极光光斑已撤）", () => {
   it("顶部渐隐带仍在（只给纵深、不给颜色，也不带内联样式）", () => {
     const { container } = render(<HomePage recentProjects={[]} />);
     const band = container.querySelector("div[aria-hidden]");
-    expect(band?.className).toContain("bg-gradient-to-b");
+    expect(band?.className).toContain("bg-linear-to-b");
     expect(band?.className).toContain("from-surface-1");
     expect(band?.getAttribute("style")).toBeNull();
   });
