@@ -16,7 +16,7 @@ import {
  * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。
  *
  * 三个分区（一处定义、多处消费，避免漂移）：
- *   · 全局项（`globalNavItems`）—— 主页侧栏顶部常驻：首页 / 模型 / 历史 / 队列 / 炼丹 / 流程；
+ *   · 全局项（`globalNavItems`）—— 主页侧栏顶部常驻：首页 / 模型 / 历史 / 队列 / 流程；
  *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（画布 / 工坊 / 产出 / 成片），
  *     不再进主页侧栏：它们是对「当前项目」的操作投影，脱离项目无意义；
  *   · 项目入口（`PROJECTS_ENTRY`）—— 侧栏最底部的「项目」分组（可展开列出已有项目）。
@@ -97,18 +97,6 @@ export const NAV_ITEMS: NavItem[] = [
     label: "队列",
     enabled: true,
     icon: <ListChecks size={22} strokeWidth={1.8} />,
-  },
-  {
-    id: "train",
-    label: "炼丹",
-    icon: (
-      <svg {...ICON_PROPS}>
-        <path d="M9 2v6l-4 7a4 4 0 003.6 6h6.8A4 4 0 0019 15l-4-7V2" />
-        <path d="M9 2h6" />
-        <path d="M8 22h8" />
-        <path d="M12 9v6" />
-      </svg>
-    ),
   },
   {
     id: "workflows",

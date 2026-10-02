@@ -15,7 +15,6 @@ const GLOBAL_IDS: WorkspaceView[] = [
   "models",
   "history",
   "queue",
-  "train",
   "workflows",
 ];
 const PROJECT_TAB_IDS: WorkspaceView[] = [

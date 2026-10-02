@@ -27,8 +27,6 @@ export { WorkflowLibrary } from "./workflow-library/WorkflowLibrary";
 
 export { WorkflowCanvasEditor } from "./canvas/WorkflowCanvasEditor";
 
-export { TrainingStudio } from "./TrainingStudio";
-
 export { FilmStudio } from "./FilmStudio";
 export { ProjectCanvas } from "./ProjectCanvas";
 
