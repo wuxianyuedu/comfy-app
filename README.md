@@ -186,7 +186,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 生成 `.env`                             | `pnpm env:init`             | `tools/start/run-local.ps1`       |
 | 建库                                    | `pnpm db:push`              | （双击启动链路会自动做）          |
 | 生成原文文档                            | `pnpm doc:gen`              | `tools/docs/generate-docs.ps1`    |
-| 起组件工作台                            | `pnpm storybook`            | （开发者命令，无双击入口）        |
+| 起组件工作台                            | `pnpm storybook`            | `tools/start/storybook.ps1`       |
 
 > 这张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 在 pre-commit 与 CI 核对
 > 每个动作两侧的脚本都真实存在 —— **新增动作却只写了一侧会提交失败**。

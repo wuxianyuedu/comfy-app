@@ -496,6 +496,40 @@ node scripts/storybook-check.mjs      # 或 pnpm check:all 里的 storybook 档
 
 脚本自己**不做第二份实现**：它调的是与用例同一份 `cva-variant-source.mjs`。
 
+#### 16.2.3.5 组件覆盖率是棘轮判据，不是文档里的一句话
+
+Storybook 接入后剩下的那一格是「**组件覆盖率太低**」：`ui/` 下 100 多个文件里
+只有 3 个有 story，而这句话写在 `docs/guide-storybook.md` 的「它不做什么」里。
+**写在文档里的数字会过期，且过期时没有任何东西会红** —— 这正是 §12.13 / §16.2.3
+「只提醒 = 没有判据」那一族的形态。F6 的组件覆盖率那一格就是这么挂着的。
+
+现在它是机器判据（`tests/storybook-component-coverage.test.ts` +
+`scripts/storybook-check.mjs`，共用 `scripts/storybook-checks/coverage-ledger.mjs`
+的纯函数）：
+
+| # | 判据 | 为什么 |
+| - | ---- | ------ |
+| 1 | 分子（有 story 的组件数）**只许升不许降**，比 `scripts/.storybook-coverage-baseline.json` | 删 / 改组件名之后 story 的 `import` 没跟着改，覆盖率静默下降 |
+| 2 | 分母（`ui/` 的可预览文件数）变了要同批改基线 | 新增组件这件事**必须**被回答一次：补 story，或写进理由表 |
+| 3 | 理由表（`NO_STORY_REASON`）与磁盘双向对得上 | 指向不存在文件的条目是过期账；已有 story 还留着的条目会静默放行下一次回归 |
+
+**分母的定义**：「`ui/` 下**有可预览界面形态**的文件」——`.test.ts(x)` 与被测的
+hook（`use-*.ts`）不算（它们没有可看的东西，判据是用例，见 §11.7 的覆盖率门槛）。
+「已覆盖」= 被某个 `.stories.tsx` 直接 `import` 到的那些（同目录相对路径与
+`~/components/ui/x` 两种写法都认）。
+
+**基线为什么不是「事实源」**：事实由每次扫描现算，基线只是棘轮的**起点**。
+用例里有一条断言把二者钉在一起（基线 == 实测），所以「手改基线」这件事过不去：
+它要么在用例里红（数字漂了），要么在门禁里红（覆盖率掉下去了）。
+
+**理由表的门槛**：加一行之前先回答「**没有 story 的代价是什么**」。若代价是
+「改了样子没人看得见」，它就该有 story（哪怕要用 Args 注入数据），不该进这张表。
+逐条理由写在 `scripts/storybook-checks/coverage-ledger.mjs`，与代码同源。
+
+```bash
+node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命令出结论
+```
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，

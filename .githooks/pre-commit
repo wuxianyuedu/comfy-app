@@ -188,7 +188,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 而 Storybook 在**加载期**抛 `Cannot read properties of undefined`（侧栏有故事、
   # 画布一片空白）。判据还顺带核「手写清单没漏档」——首轮就这么漏了
   # `icon-sm` / `icon-lg` 两档（实测 46 处调用）。
-  run "故事枚举来源（cva 返回值 / 漏档）" node scripts/storybook-check.mjs
+  run "故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮" node scripts/storybook-check.mjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────

@@ -95,13 +95,44 @@ class 写入路径，日后「应用里是暗的、storybook 里是亮的」这�
 - **不进构建产物**。`.storybook/**` 与 `*.stories.tsx` 不在 Next 的模块图上：
   story 只被 Storybook 自己的 webpack 图引用，`pnpm build` 看不到它们。
   `storybook-static/` 已在 `.gitignore` 与 `tsconfig` 的 exclude 里。
-- **不覆盖业务组件**。当前只有 3 个 `ui/` 示例（14 个 story）当样板；`studio/`、
-  `workshop/` 那些依赖 tRPC / 画布运行期的组件要做 story，得先看它们的
-  数据依赖能不能用 Args 注入。（`docs/guides/PRODUCTION-GAPS.md` 的 F6 挂着
-  这条账的全貌。）
+- **不覆盖业务组件**。`studio/`、`workshop/` 那些依赖 tRPC / 画布运行期的组件
+  要做 story，得先看它们的数据依赖能不能用 Args 注入。（`docs/guides/PRODUCTION-GAPS.md`
+  的 F6 挂着这条账的全貌。）
+
+## 覆盖率：现在是机器判据，不是文档里的一句话
+
+「有多少组件被看过」此前写在**这一节**里（「当前只有 3 个 `ui/` 示例」）——
+文档里的数字会过期，而过期时没有任何东西会红。现在它由
+`scripts/storybook-checks/coverage-ledger.mjs` **现算**，与
+`scripts/.storybook-coverage-baseline.json` 比：
+
+```bash
+node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命令出结论
+```
+
+三段判据（`tests/storybook-component-coverage.test.ts` 与门禁脚本共用同一份纯函数）：
+
+1. **只许升不许降**。删 / 改名组件后 story 的 `import` 没跟着改、或直接把
+   `.stories.tsx` 删掉，覆盖率掉下来就红。基线数字由**用例**钉住（核基线 == 实测），
+   所以手改基线也过不去。
+2. **`ui/` 的可预览文件数变了要同批回答问题**：新增组件时得说清「它为什么没有
+   story」—— 有界面形态就补一份，没有就写进 `coverage-ledger.mjs` 的
+   `NO_STORY_REASON`（**逐条给理由**，不是赦免名单）。
+3. **理由表与磁盘对得上**：指向不存在文件的条目是过期账；已经有 story 却还留着的
+   条目会静默放行「下一个人把它改回去」。两条都拦。
+
+**分母是什么**：`ui/` 下「有可预览界面形态」的文件 —— `.test.ts(x)`、被测的
+hook（`use-*.ts`）不算（它们没有可看的东西，判据是单测）。已覆盖 = 被某个
+`.stories.tsx` 直接 `import` 到的那些。
+
+**没有故事的代价**：`docs/guides/PRODUCTION-GAPS.md` 的 F6 里「组件覆盖率」那格
+说的就是它 —— story 是「改完 `ui/` 组件想单独看一眼」的出口，没有 story 的组件
+只能靠「起整个应用点进去找」或者读那串几百字符的 Tailwind class 来判断改得对不对。
 
 ## 相关
 
+- 覆盖率的判据与台账：`tests/storybook-component-coverage.test.ts` +
+  `scripts/storybook-checks/coverage-ledger.mjs`（那份额外的理由表就在台账里）。
 - 枚举来源的判据：`tests/storybook-cva-variant-source.test.ts` 与
   `scripts/storybook-check.mjs`（共用 `scripts/storybook-checks/cva-variant-source.mjs`
   的纯函数，AST 判；详细口径见规范 [16 §16.2.3.4](standards/16-shadcn-ui与表单校验.md#16234-故事里的枚举清单从-props-派生不要从-cva-的返回值上取)）。
