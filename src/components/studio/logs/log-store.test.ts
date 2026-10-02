@@ -11,6 +11,7 @@ import {
   isRoutineRpcTimingLine,
   parseFileLogs,
   mergeTimeline,
+  dedupeByIdentity,
   dedupeRepeats,
   selectPageLogs,
   selectNewLogCount,
@@ -1377,6 +1378,50 @@ describe("isPanelSelfPollingLine 面板自轮询行过滤", () => {
       "app",
     );
     expect(entries.map((e) => e.message)).toEqual(["业务日志照常保留"]);
+  });
+});
+
+/* ── 启动会话标记：三份副本必须折叠成一条 ───────────────────── */
+
+describe("壳写的启动会话标记在面板里的形态（ISSUE #1364）", () => {
+  /** 壳写下的那一行（Rust `session_start_marker` 的原样输出，含时刻前缀）。 */
+  const MARKER_LINE =
+    "[2026-10-02 12:00:00.000] [INFO] === 启动会话开始（本次双击启动的会话边界；" +
+    "壳已接手、即将拉起编排器；本行之后的内容都属于本次启动，面板据此裁掉历史日志；" +
+    "shell_pid: 51972）";
+
+  it("标记解析成一条 info 条目，后面紧跟的启动报告不被吞掉", () => {
+    // 用户原话：「启动器日志中有很多 `=== 启动会话开始（shell_pid: …）`，只能看到
+    // 启动了会话，启动会话是做什么的没有体现出来」。两件事都要成立：这一行自己
+    // 说得清（Rust 侧的判据在 `shell_launch.rs` 的同名单测里），且**不是最后一条**
+    // ——紧跟其后的启动报告才是「接下来会怎样」的那段现场。
+    const entries = parseFileLogs(
+      [
+        MARKER_LINE,
+        "[2026-10-02 12:00:00.100] [INFO] === 启动报告：壳已接手（双击 app.exe） ===",
+        "[2026-10-02 12:00:00.200] [INFO]   项目根: F:\\AI\\Other\\comfy-app-t3",
+      ].join("\n"),
+      undefined,
+      "shell-launch",
+    );
+    expect(entries).toHaveLength(3);
+    expect(entries[0]?.level).toBe("info");
+    expect(entries[0]?.message).toContain("会话边界");
+    expect(entries[0]?.message).toContain("编排器");
+  });
+
+  it("同一行落在三份文件里（壳侧编排 / 壳日志 / 启动器）折叠成一条", () => {
+    // 壳把同一个标记写进 shell-launch.log / shell.log / dev-launcher-stderr.log。
+    // 面板把三路合进同一条时间线，去重键是「时刻 + 级别 + 正文」——三份各自盖
+    // 一个「此刻」就会被读成三条，用户看到的就是「这条标记有很多条」（ISSUE #1364）。
+    // 判据的写法侧那一半（三份共用一个 `stamped`）在 `shell_launch.rs` 的单测里。
+    const perSource = (["shell-launch", "shell", "launcher"] as const).map(
+      (origin) => parseFileLogs(MARKER_LINE + "\n", undefined, origin),
+    );
+    expect(perSource.every((e) => e.length === 1)).toBe(true);
+    const merged = dedupeByIdentity(perSource.flat());
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.message).toContain("启动会话开始");
   });
 });
 
