@@ -13,6 +13,10 @@ import {
   type SizeSpec,
 } from "~/lib/media/size-presets";
 import type { ProjectMeta } from "~/lib/workshop/types";
+import {
+  characterListInputSchema,
+  shotListInputSchema,
+} from "~/lib/workshop/types";
 import { saveComfySettings } from "~/server/workshop/comfyui";
 import * as orchestrator from "~/server/workshop/orchestrator";
 
@@ -242,16 +246,13 @@ export function buildWorkshopMcpServer(): McpServer {
       description: "直接写入角色卡数组（自动重算 positive/negative 提示词）。",
       inputSchema: {
         sessionId: z.string(),
-        characters: z.array(z.any()).describe("Character 数组"),
+        characters: characterListInputSchema.describe(
+          "Character 数组（整幅覆盖该会话的角色卡；positive/negative 提示词由服务端按字段重算，传了也不信）",
+        ),
       },
     },
     async (args) =>
-      json(
-        await orchestrator.setCharacters(
-          args.sessionId,
-          args.characters as never,
-        ),
-      ),
+      json(await orchestrator.setCharacters(args.sessionId, args.characters)),
   );
 
   server.registerTool(
@@ -272,13 +273,13 @@ export function buildWorkshopMcpServer(): McpServer {
       description: "直接写入镜头数组（自动重算 prompt/negativePrompt）。",
       inputSchema: {
         sessionId: z.string(),
-        shots: z.array(z.any()).describe("Shot 数组"),
+        shots: shotListInputSchema.describe(
+          "Shot 数组（整幅覆盖分镜；prompt/negativePrompt 由服务端按场景与角色重算）",
+        ),
       },
     },
     async (args) =>
-      json(
-        await orchestrator.setStoryboard(args.sessionId, args.shots as never),
-      ),
+      json(await orchestrator.setStoryboard(args.sessionId, args.shots)),
   );
 
   server.registerTool(

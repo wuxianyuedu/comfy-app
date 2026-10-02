@@ -50,11 +50,6 @@ const AS_NEVER_LEDGER: Record<string, { count: number; reason: string }> = {
     reason:
       "覆写 stream.write 时把 encoding/callback 两形参转交原实现，同一个「对齐第三方签名」的桥接（Node 的 write 重载在 TS 里收成 never 才通得过）。",
   },
-  "src/server/mcp/workshop-mcp.ts": {
-    count: 2,
-    reason:
-      "**已知欠账（台账 F13′）**：MCP 工具的入参 schema 是 `z.array(z.any())`，直接压进 `Character[]` / `Shot[]`。这不是桥接第三方签名，而是**边界上没有校验** —— 外部 MCP 客户端塞进来的任意对象会原样进草稿。修法 = 给 Character / Shot 出一份域内 zod 契约并在工具里 parse，然后删掉这两条登记。",
-  },
 };
 
 /** 递归收集 `src/**` 的非测试 `.ts` / `.tsx`。 */
@@ -81,6 +76,9 @@ const UNKNOWN_PROJECTION =
 /** 当年那一整句：把 unknown 压成 never 喂给 Drizzle 的 select。 */
 const SELECT_AS_NEVER = /\.select\([^)]*\bas never\b/g;
 /** 仓储签名里的下划线参数（「我知道没人用」的写法）。 */
+/** MCP 工具入参里的「什么都收」：`z.any()` 使整个边界没有校验。 */
+const MCP_ANY = /\bz\.any\s*\(/g;
+
 const UNDERSCORE_PARAM = /[(,]\s*_\w+\??\s*:/g;
 
 describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
@@ -146,12 +144,29 @@ describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
     expect(hits).toEqual([]);
   });
 
+  it("MCP 工具的入参 schema 里不许出现 z.any()（外部可控输入的最后一道闸）", () => {
+    /* 这扇门能整幅覆盖草稿的角色卡与分镜并落库，所以它是 `as never` 最该被拦住的地方：
+     * `z.array(z.any())` + `as never` 一叠，形状检查就整个消失了（台账 F13′ 的原始形态）。
+     * 契约本体在 `~/lib/workshop/types` 的写侧那一段，MCP 侧只引用它。 */
+    const mcpFiles = files.filter((f) => f.rel.startsWith("src/server/mcp/"));
+    expect(
+      mcpFiles.length,
+      "MCP 面一个文件都没扫到 = 这条判据是空的",
+    ).toBeGreaterThan(0);
+    const hits: string[] = [];
+    for (const { rel, text } of mcpFiles) {
+      for (const m of text.matchAll(MCP_ANY)) hits.push(`${rel} → ${m[0]}`);
+    }
+    expect(hits).toEqual([]);
+  });
+
   it("判据自身可反证：三种被禁形状都要能照出来，登记与注释不算数", () => {
     const probe = (source: string) => ({
       asNever: (source.match(AS_NEVER) ?? []).length,
       unknownProjection: (source.match(UNKNOWN_PROJECTION) ?? []).length,
       selectAsNever: (source.match(SELECT_AS_NEVER) ?? []).length,
       underscore: (source.match(UNDERSCORE_PARAM) ?? []).length,
+      mcpAny: (source.match(MCP_ANY) ?? []).length,
     });
     // 当年那一整句，三个计数一起命中
     const original = probe(
@@ -165,6 +180,10 @@ describe("F13：形状判据不许把「调用点写错了」咽掉", () => {
       probe(
         "async findByIdForUserSelect(userId: string, id: string, _select?: unknown) {",
       ).underscore,
+    ).toBe(1);
+    // MCP 面的「什么都收」：合成一份必须照得出来（照不出的那条判据是装饰）
+    expect(
+      probe('characters: z.array(z.any()).describe("Character 数组")').mcpAny,
     ).toBe(1);
     // 只有注释里出现 → 剥完注释就不该照到（否则每次引用事故都会红）
     expect(
