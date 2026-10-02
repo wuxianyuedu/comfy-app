@@ -123,6 +123,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 增长，一旦顶到平台命令行上限就会退化成「组 C 红、但一条用例都没跑、原因读不出」。
   // 这是「判据在场却零执行」的门禁静默失效，必须与本次暂存改动无关也必须响。
   "tests/hook-affected-launch.test.ts",
+  // 「Storybook 基建的配置契约」：stories glob 写错、漏引 globals.css、漏主题装饰器、
+  // 启动器漏 SKIP_ENV_VALIDATION —— 这四种错法**构建全都成功**（侧栏空着 / 裸 DOM /
+  // 只有 dark 一态 / 崩在 env.js 却看不出是配置问题），没有任何构建期或运行期判据会红。
+  // 与本次暂存改动无关也必须响（它是「下一次有人改配置」的守卫），所以进固定清单。
+  "tests/storybook-config.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
