@@ -28,8 +28,20 @@ try {
   exit 1
 }
 
-# Allowed root: <scripts>\..\generated  (resolve symlinks/relative parts)
-$allowedRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\generated"))
+# Allowed root: the app's <root>\generated folder -- one level up from
+# <scripts>, plus the artifact root dir name (resolve symlinks/relative parts).
+#
+# Deliberately built from SEPARATE segments, not a single "..\generated" literal:
+# a joined literal carries a platform-specific separator, and this root is also
+# read by cross-platform tooling -- tests/artifact-layout-single-source.test.ts
+# pairs it against generatedRoot() and must stay green on Linux/CI, where the TS
+# side could otherwise only recover the intent by string-replacing every "\"
+# with "/" (a guess at which platform wrote the string). Separate separator-free
+# segments let Join-Path use the host's own separator and let the paired
+# assertion resolve them with path.resolve(..., ...segments) as-is.
+# Nested Join-Path (not -AdditionalChildPath) to stay PS 5.1 compatible.
+$allowedRoot = [System.IO.Path]::GetFullPath(
+  (Join-Path (Join-Path $PSScriptRoot "..") "generated"))
 $sep = [System.IO.Path]::DirectorySeparatorChar
 if ($target -ne $allowedRoot -and -not $target.StartsWith($allowedRoot + $sep)) {
   # Outside the sandbox -> refuse.
