@@ -207,6 +207,11 @@ export function TitleBarTabs({
 
   return (
     <div
+      /* `data-slot="title-bar"` 是「应用顶部这条 chrome 在不在」的机器可读标记：
+       * `TitleBarTabs` 是它唯一渲染点，e2e 按它断言锚定浮层的让位对象确实在
+       *（气泡被标题行吃掉半个身子那件事，见 `~/lib/full-screen-layer`
+       * 的「锚定浮层」一节）。 */
+      data-slot="title-bar"
       className={`flex ${TITLE_BAR_HEIGHT_CLASS} ${TITLE_BAR_CHROME_CLASS} border-border-subtle bg-panel shrink-0 items-stretch border-b select-none`}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
