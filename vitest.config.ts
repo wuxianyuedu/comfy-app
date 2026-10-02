@@ -83,6 +83,10 @@ export default defineConfig({
       include: [
         "src/server/api/middleware/**",
         "src/server/film/**",
+        /* MCP 服务端：17 条工具是**外部 AI 客户端可写的入口**（整幅覆盖草稿角色卡与
+         * 分镜并落库），此前这一层既不在覆盖率面上也没有任何执行者。
+         * 与下面 `thresholds` 里的同名条目**两处同批**（只写一处 = 门槛静默失效）。 */
+        "src/server/mcp/**",
         "src/lib/**",
         /* ⚠️ 这里必须列出**每一个**被 thresholds 点名的 `ui/` 出口 ——
          * 阈值只对「出现在报告里的文件」生效，没进 `include` 的路径是一条
@@ -1108,6 +1112,18 @@ export default defineConfig({
           functions: 50,
           statements: 35,
           branches: 25,
+        },
+        /* MCP 服务端面（台账 F13′ 那一刀的落点）：按**实测满档**登记。
+         * 这里能到 100 是因为整层只有一件事 —— 把一次工具调用翻译成一次
+         * orchestrator 调用（`src/server/mcp/workshop-mcp.test.ts` 走真的
+         * `client.callTool`，17 条工具逐条点名 + 边界拒收两态）。
+         * 下一批新加工具而不加用例，会同时被两件事拦住：这条门槛，
+         * 以及那份用例里「17 条与测试表逐字一致」那条判据。 */
+        "src/server/mcp/**": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         // 从「30/30/30/25」抬到实测值：四组低覆盖文件进了用例 ——
         //   · `secrets`（曾 9.5/0/0）：GCM 往返 + 每次新 IV + 篡改密文/换密钥
