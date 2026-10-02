@@ -15,17 +15,12 @@
  * 规范：docs/standards/16-shadcn-ui与表单校验.md §16.2.3.2、§9.5。
  */
 import { execFileSync } from "node:child_process";
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+
+import { symlinkDir } from "./helpers/symlink-dir";
 
 const ROOT = path.resolve(__dirname, "..");
 const SCRIPT_REL = "scripts/storybook-check.mjs";
@@ -59,11 +54,9 @@ function makeRepo() {
   cpSync(path.join(ROOT, CHECK_DIR_REL), path.join(root, CHECK_DIR_REL), {
     recursive: true,
   });
-  symlinkSync(
-    path.join(ROOT, "node_modules"),
-    path.join(root, "node_modules"),
-    "dir",
-  );
+  /* 目录链接必须走免特权的形态，否则 Windows 上七条用例全死在夹具里。
+   * 理由与「为什么收成一处」写在 `./helpers/symlink-dir`。 */
+  symlinkDir(path.join(ROOT, "node_modules"), path.join(root, "node_modules"));
   mkdirSync(path.join(root, "src", "components", "ui"), { recursive: true });
   return root;
 }
@@ -144,10 +137,10 @@ describe("storybook-check（故事枚举来源门禁）", () => {
 
   it("拦下手写清单漏档（cva 里加了一档、故事没跟上）", () => {
     const { ok, output } = scanner({
-      story: GOOD_STORY.replace('[ "default", "danger"]', '["default"]').replace(
-        '["default", "danger"]',
+      story: GOOD_STORY.replace(
+        '[ "default", "danger"]',
         '["default"]',
-      ),
+      ).replace('["default", "danger"]', '["default"]'),
     }).run();
     expect(ok).toBe(false);
     expect(output).toContain("danger");

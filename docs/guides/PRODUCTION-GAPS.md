@@ -503,6 +503,26 @@
       同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
       —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
       按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
+- [x] **E13 Storybook 落地时自带的两条红：夹具在普通权限下必 EPERM + 一条 high 传递依赖（本批修复）**：
+      发现路径与 E12 同一条 —— 另一批 rebase 之后跑 `check:all` 才看见：`tests/storybook-check-script.test.ts`
+      七条**全红**，而红的不是判据是夹具：`symlinkSync(<仓库>/node_modules, <临时目录>/node_modules, "dir")`
+      在 Windows 上需要开发者模式或管理员令牌，实测 `EPERM: operation not permitted, symlink …`。
+      门禁本体完全能跑，红的只是「测试夹具搭不起来」——这一族本仓已经处理过两次
+      （`tests/check-reformat-only.test.ts` 的 `symlinkSafe`、`tests/dist-artifact-hygiene.test.ts` 的
+      `symlinkDir`，两处各自写了「为什么要分平台」的注释），**但第三份没抄到**，于是同一个理由
+      散在三处、第三处漏了。收成 `tests/helpers/symlink-dir.ts` 一处（Windows 走 NTFS junction，
+      不需特权且不跨机跨卷；POSIX 忽略 type 参数，行为不变），三处一起改吃它。
+      第二条是 `webpack-dev-middleware` 的 high 路径穿越（advisory #1240027，`publicPath` 不以 `/`
+      结尾时），经 `@storybook/nextjs > @storybook/builder-webpack5` 传递进来，而 Storybook 10.6.1
+      把自己的 range 钉在 6.x —— 不动到它，审计判据就一直红。走 audit 自己给的出路 ①
+      （`pnpm-workspace.yaml` 的 overrides 到修复版 7.4.5）而不是 ②（登记进基线 = 棘轮的后门）。
+      这是 overrides 块里**唯一一条跨 major**，理由与代价都写在那一行旁边：受影响面只有组件工作台的
+      dev server（本地预览、不对外提供服务）。验证走的是它真正干活的那一面而不是「装得上」——
+      `pnpm storybook:build` 出件，`pnpm storybook` 起 dev server 后 `/`、`/iframe.html`、
+      `/index.json` 全 200（后两个正是 wdm 从内存文件系统 serve 的），`pnpm why` 只剩 7.4.5 一个版本；
+      收摊用 `scripts/reap-process.mjs` 杀整棵树。
+      证据：`tests/helpers/symlink-dir.ts`、`pnpm-workspace.yaml`（overrides）、
+      `changelog.d/0-storybook-check-junction-and-wdm.md`。
 - [x] **E11 `check-format.cjs` 的 fail-open：prettier 没跑成时被读成「全库干净」（本批修复 + 判据）**：
       发现路径不是「有人投诉格式」，而是另一条批次的提交门槛红了 —— `tests/check-format.test.ts`
       里三条「期望门禁拦住」的用例在钩子的多 worker 批次里稳定红，而**串行单跑全绿**。
@@ -765,11 +785,11 @@
 - [ ] **F4 无离线能力**（无 SW / `onLine` / 离线队列；58 文件手写 localStorage 无 persist）。
 - [ ] **F5 虚拟滚动仅 2 处**；`next/dynamic` 仅 2 处。
 - [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用棘轮 78 条存量违规。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、`scripts/.ui-primitives-baseline.json:18`。剩余的两格：①**像素基线**仍是 Playwright `toHaveScreenshot`（规范 11 §11.8），Storybook 不替代它；②**组件覆盖率**——目前只有 3 个 `ui/` 示例组件有 story，155 个 `ui/` 文件里绝大多数没有。
-      **已加的那一层判据**（同批）：故事文件的**枚举来源**由
-      `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`
-      守着（`cva()` 返回的是函数、运行期没有 `.variants`；以及手写清单漏档）。
-      判据上线时当场抓到 `button.stories.tsx` 漏列 `icon-sm` / `icon-lg` 两档
-      —— 而这两档全库有 46 处在用，口径见规范 16 §16.2.3.4。
+  **已加的那一层判据**（同批）：故事文件的**枚举来源**由
+  `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`
+  守着（`cva()` 返回的是函数、运行期没有 `.variants`；以及手写清单漏档）。
+  判据上线时当场抓到 `button.stories.tsx` 漏列 `icon-sm` / `icon-lg` 两档
+  —— 而这两档全库有 46 处在用，口径见规范 16 §16.2.3.4。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。
