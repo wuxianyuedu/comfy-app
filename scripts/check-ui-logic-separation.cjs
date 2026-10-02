@@ -44,7 +44,11 @@ function walk(dir, out = []) {
   }
   return out;
 }
-const rel = (p) => p.split(path.sep).join("/").replace(ROOT.split(path.sep).join("/") + "/", "");
+const rel = (p) =>
+  p
+    .split(path.sep)
+    .join("/")
+    .replace(ROOT.split(path.sep).join("/") + "/", "");
 
 /** 棘轮作用域：视图层（组件 + 路由页面）。Route Handler 是服务端入口，不计。 */
 const RATCHET_DIRS = ["src/components", "src/app"];
@@ -59,7 +63,8 @@ const RATCHET_EXCLUDE = [
 /** 硬规则作用域：全部源码。 */
 const HARD_DIRS = ["src"];
 
-const isTest = (r) => /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/");
+const isTest = (r) =>
+  /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/");
 
 /* ── 指标 ────────────────────────────────────────────────── */
 
@@ -75,9 +80,11 @@ const COUNT_RULES = {
   S3: {
     label: "视图内 tRPC hook（应经 controller hook 暴露数据）",
     count: (t) =>
-      (t.match(
-        /\bapi\s*\.[A-Za-z0-9_]+\s*\.[A-Za-z0-9_]+\s*\.(?:useQuery|useMutation|useInfiniteQuery|useSubscription)\b/g,
-      ) || []).length,
+      (
+        t.match(
+          /\bapi\s*\.[A-Za-z0-9_]+\s*\.[A-Za-z0-9_]+\s*\.(?:useQuery|useMutation|useInfiniteQuery|useSubscription)\b/g,
+        ) || []
+      ).length,
   },
 };
 
@@ -128,17 +135,31 @@ function collect() {
       // 里那些 .tsx 是「点击复制路径」的调试用字符串常量，不是依赖。
       if (/\.ts$/.test(r)) {
         const specs = [
-          ...(t.match(/\bimport\s+(?:type\s+)?[^;]*?\bfrom\s*["']([^"']+)["']/g) || []),
-          ...(t.match(/\bexport\s+(?:\*|\{[^}]*\})\s*from\s*["']([^"']+)["']/g) || []),
+          ...(t.match(
+            /\bimport\s+(?:type\s+)?[^;]*?\bfrom\s*["']([^"']+)["']/g,
+          ) || []),
+          ...(t.match(
+            /\bexport\s+(?:\*|\{[^}]*\})\s*from\s*["']([^"']+)["']/g,
+          ) || []),
           ...(t.match(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g) || []),
         ]
-          .map((stmt) => (stmt.match(/["']([^"']+)["'](?!.*\bfrom\b)/) || stmt.match(/["']([^"']+)["']/) || [])[1])
+          .map(
+            (stmt) =>
+              (stmt.match(/["']([^"']+)["'](?!.*\bfrom\b)/) ||
+                stmt.match(/["']([^"']+)["']/) ||
+                [])[1],
+          )
           .filter((s) => typeof s === "string" && s.endsWith(".tsx"));
-        if (specs.length) hard.push(`H1 逻辑模块反引 .tsx → ${r}（${[...new Set(specs)].join(", ")}）`);
+        if (specs.length)
+          hard.push(
+            `H1 逻辑模块反引 .tsx → ${r}（${[...new Set(specs)].join(", ")}）`,
+          );
       }
       // H2：lib 下不得出现 React
       if (r.startsWith("src/lib/") && /\bfrom\s+["']react["']/.test(t)) {
-        hard.push(`H2 src/lib 内禁止 React → ${r}（改用 components/<feature>/hooks/）`);
+        hard.push(
+          `H2 src/lib 内禁止 React → ${r}（改用 components/<feature>/hooks/）`,
+        );
       }
     }
   }
@@ -151,26 +172,98 @@ function total(map) {
   return n;
 }
 
+/**
+ * 逐 `(文件, 指标)` 比较基线与现状 —— **两条路径共用这一份口径**（ISSUE #1359）。
+ *
+ * 原来 `--update` 只比总数，而且是 `if (before && after > before)`：基线总数为 0 时整个条件短路，
+ * 上升检查根本不执行。真仓库今天的基线正是 `total: 0 / files: {}`（治理做完了的那个状态），
+ * 于是「往视图层新写一条 `fetch(`，再跑一次 `--update`」就能把它收进基线 —— 硬规则 10 的棘轮
+ * 在最不该松的时候松着。总数比较还有第二个洞：修掉 A 的一处、同时新写 B 的一处，总数不变也放行。
+ * 「同一个门禁两套口径」里弱的那一条，恰好是收口用的那一条。
+ *
+ * 口径与非 `--update` 路径一致：新增条目与计数上升都算**放宽**（拒），下降与条目消失算**收紧**。
+ *
+ * @param {Record<string, Record<string, number>>} baseFiles
+ * @param {Record<string, Record<string, number>>} nowFiles
+ * @returns {{
+ *   added: { id: string, file: string, now: number, base: number | null }[],
+ *   dropped: { id: string, file: string, base: number, now: number }[],
+ * }}
+ */
+function diffAgainstBaseline(baseFiles, nowFiles) {
+  /** @type {{ id: string, file: string, now: number, base: number | null }[]} */
+  const added = [];
+  /** @type {{ id: string, file: string, base: number, now: number }[]} */
+  const dropped = [];
+  for (const [file, counts] of Object.entries(nowFiles)) {
+    const base = baseFiles[file];
+    for (const [id, n] of Object.entries(counts)) {
+      const b = base ? base[id] : undefined;
+      if (b === undefined) added.push({ id, file, now: n, base: null });
+      else if (n > b) added.push({ id, file, now: n, base: b });
+      else if (n < b) dropped.push({ id, file, base: b, now: n });
+    }
+  }
+  for (const [file, base] of Object.entries(baseFiles)) {
+    const cur = nowFiles[file];
+    for (const [id, n] of Object.entries(base)) {
+      if (!cur || cur[id] === undefined)
+        dropped.push({ id, file, base: n, now: 0 });
+    }
+  }
+  return { added, dropped };
+}
+
+/**
+ * 读基线的 `files` 映射。
+ *
+ * 分清楚两种「空」：返回 `null` 是**基线文件不存在**（首次建基线，`--update` 该允许、
+ * 检查路径该判红）；返回 `{}` 是有一份写着 0 的基线（这才是今天真仓库的状态，放宽必须拒）。
+ * 混成一种就会把「首次记账」和「从 0 放大」一起放过或一起拦掉。
+ *
+ * @returns {Record<string, Record<string, number>> | null}
+ */
+function readBaselineFiles() {
+  if (!fs.existsSync(BASELINE)) return null;
+  const base = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
+  return base.files || {};
+}
+
 /* ── 主流程 ──────────────────────────────────────────────── */
 
 const now = collect();
 
 if (UPDATE) {
-  const prev = fs.existsSync(BASELINE)
-    ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
-    : { files: {} };
-  const before = total(prev.files || {});
-  const after = total(now.ratchet);
-  if (before && after > before) {
+  const baseFiles = readBaselineFiles();
+  if (baseFiles !== null) {
+    const { added } = diffAgainstBaseline(baseFiles, now.ratchet);
+    if (added.length) {
+      console.error(
+        `[ui-logic] 拒绝把放宽写进基线（棘轮只许下降，${added.length} 条）：\n  ` +
+          added
+            .map((a) =>
+              a.base === null
+                ? `新增 ${a.id}（${COUNT_RULES[a.id].label}）→ ${a.file}（${a.now} 处）`
+                : `${a.id} 上升 ${a.base} → ${a.now} → ${a.file}`,
+            )
+            .join("\n  "),
+      );
+      console.error(
+        "  先修（逻辑搬进 <feature>/hooks/ 或 src/lib/<domain>-client.ts）再 `--update`。\n" +
+          "  「总数没变」不是理由：修掉 A 的同时新写 B，也是放宽 —— 基线按 (文件, 指标) 记账，不按总数。\n" +
+          "  （ISSUE #1331 对漏洞台账定的就是这条口径：--update 拒绝把新增写进基线。）",
+      );
+      process.exit(1);
+    }
+  }
+  if (now.hard.length) {
     console.error(
-      `[ui-logic] 拒绝放宽基线：${before} → ${after}（棘轮只许下降）。新增违规必须先修，不要用 --update 掩盖。`,
+      "[ui-logic] 存在硬规则违规，先修再更新基线：\n  " + now.hard.join("\n  "),
     );
     process.exit(1);
   }
-  if (now.hard.length) {
-    console.error("[ui-logic] 存在硬规则违规，先修再更新基线：\n  " + now.hard.join("\n  "));
-    process.exit(1);
-  }
+  const before = total(baseFiles || {});
+  const after = total(now.ratchet);
   fs.writeFileSync(
     BASELINE,
     JSON.stringify(
@@ -186,43 +279,34 @@ if (UPDATE) {
       2,
     ) + "\n",
   );
-  console.log(`[ui-logic] 基线已更新：${before} → ${after}（${BASELINE.replace(ROOT, ".")}）`);
+  console.log(
+    `[ui-logic] 基线已更新：${before} → ${after}（${BASELINE.replace(ROOT, ".")}）`,
+  );
   process.exit(0);
 }
 
 const problems = [...now.hard];
+/** @type {string[]} */
 const dropped = [];
-const tightened = [];
+const baseFiles = readBaselineFiles();
 
-if (!fs.existsSync(BASELINE)) {
-  problems.push(`基线文件缺失：先执行 node scripts/check-ui-logic-separation.cjs --update`);
+if (baseFiles === null) {
+  problems.push(
+    `基线文件缺失：先执行 node scripts/check-ui-logic-separation.cjs --update`,
+  );
 } else {
-  const base = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-  const baseFiles = base.files || {};
-  for (const [r, counts] of Object.entries(now.ratchet)) {
-    const b = baseFiles[r];
-    for (const [id, n] of Object.entries(counts)) {
-      if (!b || b[id] === undefined) {
-        problems.push(
-          `新违规 ${id}（${COUNT_RULES[id].label}）→ ${r}（${n} 处）`,
-        );
-      } else if (n > b[id]) {
-        problems.push(
-          `${id} 上升 ${b[id]} → ${n} → ${r}（${COUNT_RULES[id].label}）`,
-        );
-      } else if (n < b[id]) {
-        dropped.push(`${id} ${b[id]} → ${n}：${r}`);
-      }
-    }
+  // 与 `--update` 走的是同一个 `diffAgainstBaseline`（ISSUE #1359）：两条路径若各比各的，
+  // 「检查说没事、收口说有事」和反过来都会发生，而这两种红都难归因。
+  const cmp = diffAgainstBaseline(baseFiles, now.ratchet);
+  for (const a of cmp.added) {
+    problems.push(
+      a.base === null
+        ? `新违规 ${a.id}（${COUNT_RULES[a.id].label}）→ ${a.file}（${a.now} 处）`
+        : `${a.id} 上升 ${a.base} → ${a.now} → ${a.file}（${COUNT_RULES[a.id].label}）`,
+    );
   }
-  for (const [r, b] of Object.entries(baseFiles)) {
-    const cur = now.ratchet[r];
-    for (const [id, n] of Object.entries(b)) {
-      if (!cur || cur[id] === undefined) tightened.push(`${id} ${n} → 0：${r}`);
-    }
-    if (cur && Object.keys(cur).length === 0) tightened.push(...[]);
-  }
-  if (tightened.length) dropped.push(...tightened);
+  for (const d of cmp.dropped)
+    dropped.push(`${d.id} ${d.base} → ${d.now}：${d.file}`);
 }
 
 const hintLines = Object.entries(now.hints).map(
@@ -233,12 +317,17 @@ console.log(
   `[ui-logic] 当前违规合计 ${total(now.ratchet)} 处，涉及 ${Object.keys(now.ratchet).length} 个文件`,
 );
 if (hintLines.length) {
-  console.log("[ui-logic] 内联 async 处理器（仅提示，不计入棘轮）：\n" + hintLines.join("\n"));
+  console.log(
+    "[ui-logic] 内联 async 处理器（仅提示，不计入棘轮）：\n" +
+      hintLines.join("\n"),
+  );
 }
 
 if (problems.length) {
   console.error("[ui-logic] 违规（阻断）：\n  " + problems.join("\n  "));
-  console.error("规范见 docs/standards/17-UI与逻辑分离.md；治理后执行 --update 收紧基线");
+  console.error(
+    "规范见 docs/standards/17-UI与逻辑分离.md；治理后执行 --update 收紧基线",
+  );
   process.exit(1);
 }
 
