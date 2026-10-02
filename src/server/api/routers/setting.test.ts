@@ -18,6 +18,8 @@
  * **`~/lib/shell/open-in-browser` 不 mock，只 mock `child_process`** —— 这样
  * `openExternal` 这一条测的是「路由没有绕开地基那道闸」，而不是「路由调到了地基」。
  */
+import { basename, join, resolve } from "node:path";
+
 import type * as ComfyEmbedModule from "~/lib/comfy/comfy-embed";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -401,5 +403,88 @@ describe("setting 的状态读与进程动作", () => {
     studioStartingMock.mockReturnValue(true);
     const res = await createCaller(makeCtx()).dbStudioStatus();
     expect(res).toEqual({ up: false, port: 3210, starting: true });
+  });
+});
+
+// ─────────────────────────────── revealPath ───────────────────────────────
+
+/**
+ * `setting.revealPath` —— 把「日志里那段文本」变成「在本机执行一个外部程序」之前
+ * 的两道闸（ISSUE #1365）。
+ *
+ * 与上面 `openExternal` 那组同一族，但威胁面不同：那个的入参是 URL（协议闸能穷举），
+ * 这个的入参是**任意候选文本**（日志原文里扫出来的），所以闸门落在「磁盘上真存在」
+ * + 「在检出目录内」两条上。这里的用例全部用**本仓库里真实存在的路径**（
+ * `process.cwd()` 下的文件），因为闸门第 ① 条问的就是文件系统 —— 造一个假路径
+ * 只能测到「不存在被拒」，测不到「存在且在检出内被放行」。
+ *
+ * mock 边界与上面一致：只 mock `child_process`，`~/lib/shell/reveal-path` 走真实
+ * 实现 —— 这样测的是「路由没有绕开地基那两道闸」，而不是「路由调到了地基」。
+ */
+describe("setting.revealPath —— 打开本机路径之前的存在性 + 检出目录闸", () => {
+  /** 本检出里必然存在的一份文件（用它当「合法目标」的样本）。 */
+  const insideProject = "package.json";
+
+  it("检出目录内且真实存在的路径 → 放行，并把「选中它」交给文件管理器", async () => {
+    const res = await createCaller(makeCtx()).revealPath({
+      path: join(process.cwd(), insideProject),
+    });
+    expect(res.ok).toBe(true);
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    const [cmd, args] = spawnMock.mock.calls[0] as [string, string[]];
+    if (process.platform === "win32") {
+      /* `/select,"<路径>"` 必须是**一个**参数：拆成两个时 explorer 会把含空格的
+       * 路径截断，表现是「打开了资源管理器但什么都没选中」。 */
+      expect(cmd).toMatch(/cmd(\.exe)?$/i);
+      expect(args.at(-1)).toMatch(/^\/select,".+package\.json"$/);
+    } else if (process.platform === "darwin") {
+      /* macOS：`open -R` 把**目标本身**交给 Finder。 */
+      expect(args).toEqual(["-R", join(process.cwd(), insideProject)]);
+    } else {
+      /* Linux：各文件管理器没有统一的「选中」协议，退化为打开**父目录** ——
+       * 点一个文件的意图是「到它那儿去」，用编辑器打开它不是。 */
+      expect(args).toEqual([process.cwd()]);
+    }
+  });
+
+  it("不存在的路径 → 拒绝，且**不 spawn**（拒绝必须发生在动作之前）", async () => {
+    const res = await createCaller(makeCtx()).revealPath({
+      path: join(process.cwd(), "no-such-file-1365.txt"),
+    });
+    expect(res.ok).toBe(false);
+    expect(res.detail).toContain("找不到可在文件管理器里打开的路径");
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("检出目录之外的路径 → 拒绝，且不 spawn（文本可以来自任何地方，必须拦）", async () => {
+    /* 造一个**真实存在**但在检出外的目标：本项目的 `..`（上一级目录）。它与上面
+     * 那条的区别正是这道闸存在的理由 —— 存在性判据放行它，检出闸必须拦下。 */
+    const outside = resolve(process.cwd(), "..");
+    const res = await createCaller(makeCtx()).revealPath({ path: outside });
+    expect(res.ok).toBe(false);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("`..` 折出去的路径 → 拒绝（判据走 realpath，字符串前缀比会被绕过）", async () => {
+    const res = await createCaller(makeCtx()).revealPath({
+      path: join(process.cwd(), "..", basename(process.cwd())),
+    });
+    /* 折回来正好是检出根 → 这条**放行**是对的（它就在检出里）；用例要钉的是
+     * 「判据看的是归一化结果而不是字面量」，所以再折一层到检出外。 */
+    expect(res.ok).toBe(true);
+
+    spawnMock.mockClear();
+    const escape = await createCaller(makeCtx()).revealPath({
+      path: join(process.cwd(), "..", ".."),
+    });
+    expect(escape.ok).toBe(false);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("空串入参 → zod 拦下（不给地基一个「打开空路径」的机会）", async () => {
+    await expect(
+      createCaller(makeCtx()).revealPath({ path: "" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 });
