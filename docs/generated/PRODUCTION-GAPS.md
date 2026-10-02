@@ -155,6 +155,32 @@
       判据：`src/server/api/routers/project.test.ts`（17 条，含越权写 / 越权读 / 跨用户删三态）。
       证据：`src/server/api/routers/project.ts`、`src/lib/core/repository-project.ts`（update 分支
       仍只按 id —— 归属判定在 router 层，与 `get`/`patch` 同一处口径）。
+      **同族第二段（客户端那一半）已补**：那句「warn 是唯一痕迹」原本是缺陷的自白 ——
+      归属闸装上之后，`FORBIDDEN` 成了一格**新真实存在**的失败，而
+      `canvas-store.persistProjectToServer` 的 `catch {}` 把它和「dev server 正在重启」
+      压成同一种静默：界面显示已保存、换端口 / 换设备一看画布是空的，用户毫无线索，
+      而再试一万次也不会成功。现在按「重试有没有用」分两档
+      （`src/lib/project-canvas/sync-notice`：确定被拒 → 可查的登记表 + 广播 →
+      `use-project-persistence` 弹一条带画布名字的提示；暂时拿不到 → 只留一行日志），
+      提示正文**按码翻成人话**（`BAD_REQUEST` 的服务端 message 是 zod 的 JSON 形状，
+      直接进 toast 等于把内部结构甩给用户 —— 「有出口」的那一半是读得懂；
+      原文与 `code=` 另走一行日志，界面上看不见码就得能查回来），
+      删除侧同一条判据（原先是 `.catch(() => undefined)` —— 「本机已经删了、
+      服务端没删掉」的后果是换端口时它再冒出来，说的是那一句而不是笼统的「同步失败」）。
+      ⚠️ 这一族的日志在浏览器侧只能走 `console`（pino 是服务端通道，打进浏览器包
+      既跑不起来也会点着 `client-bundle-node-builtins` 那条判据），而
+      「日志唯一通道」默认禁止 `src/lib` 直写 console —— 正解是按
+      `tests/single-logger-channel.test.ts` 自己的机制把**这一个文件**登记进
+      `CLIENT_ONLY`（首行 `"use client"` + 那三条判据逐条答得出），
+      不是放宽判据、更不是整目录免检。
+      判据：`sync-notice.test.ts` 26 条（分类两档各 6+8 态、去重、成功撤销，
+      「zod 原文不进界面」与「日志里查得回码」各一条）+
+      `canvas-store.test.ts` 新增 5 条（含「本地索引照常写入」这句不许回归的语义）+
+      `use-project-persistence.test.ts` 3 条（**挂载时先读表**那一格单独立一条：
+      写镜像的入口不止画布那一页 —— 工作区首页新建、画廊删除都会发镜像，而那些页面
+      没有提示器，广播发出去没人接且不排队重放，所以只订阅必然漏）。
+      证据：`src/lib/project-canvas/{sync-notice,canvas-store}.ts`、
+      `src/components/studio/project-canvas/hooks/use-project-persistence.ts`。
 - [x] **A4 LLM `apiKey` 明文回传客户端（已修 + 本批把判据加强到「整个出口序列化后一个字都不带」）**：
       `8740948` 就把 `configGet` / `configSave` 的出口改成脱敏形状了（顶层 `apiKey` 剥掉、
       改发 `hasApiKey`，远端条目逐条 `apiKey: undefined`），台账同样没勾。
@@ -551,6 +577,68 @@
       （口径同 §18.6「门槛取实测、旧值与原因写在注释里」）。
       证据：`eslint.config.js`、`tests/router-error-envelope.test.ts`、`tests/helpers/trpc.ts`、
       `src/server/api/routers/{material,project,task,generate,run,skill,workflow-model}.ts`。
+- [x] **E9 应用事件通道「只剩一端」—— 装成对判据并逐条处置三条死端（本批）**：
+      `~/lib/app-events` 把事件名与载荷类型收在一张表里，但表管不到**有没有人用这一行**。
+      两种坏法全是静默的：派发方没了而监听器还挂着（表现是「界面该刷新的时候没刷新」，
+      注释却继续写着「某某按钮会通过它请求打开详情」，后来人顺着注释找不到触发源，
+      然后以为是自己看错了）；订阅方没了而广播照发（更隐蔽 —— 代码照常执行、什么都没发生）。
+      判据：`tests/app-event-pairing.test.ts`（固定守护清单 18 → 19 条）。认两种写法
+      （字面量与 `export const X = "a:b"` 的常量间接形态 —— 库里真有一处这么派发，
+      只认字面量会误报，而误报一片的判据会被当噪音关掉，那比没有判据更糟）；
+      **测试文件不算任何一端**（口径同 E3′：只有用例在调的口不是安全，是可以烂掉而没人红）；
+      定义处自己不算端；先过 `stripComments`（注释里举例提到事件名不是派发）。
+      装机实测到的存量三条**逐条处置在同一次提交里**：
+      ① `open-task` 只有订阅（`use-history-list` 里那条 `useEffect` 与表行删除；
+      `openDetail` 仍由列表行点击调用，功能面没动）；
+      ② `comfyapp:local-workflows-path-changed` 只有订阅，且它对应的 `.env` 覆盖项
+      早已被「设置里的 ComfyUI 安装路径推导」取代（`getLocalWorkflowRoots` 读 `readEnvVar`，
+      全仓没有 UI 写它）—— 连它那份**替不存在的链路背书**的用例一起删
+      （`use-workflow-library.test.ts` 里「目录配置变更事件会触发重新拉取」那条自己
+      `dispatchEvent(new CustomEvent(...))` 造出派发方，于是永远绿：口径同 §11.2.1
+      「断言在替缺陷背书比没有断言更糟」）；
+      ③ `custom-nodes:updated` 只有派发（`refreshCustomNodes()` 每次解析完都发，
+      而它的订阅侧 —— 画布的添加节点菜单 —— 已不在库里，`getAllNodeTypes()` 如今零消费方）。
+      **本批没修的那一条点名留下**：注册表刷新现在**确实没有**通知通道，
+      「从设置面板解析出新节点后，视图要硬刷新才看见」是现状；补它必须连订阅侧一起补
+      （判据会拦只有派发的那一端）。③ 的删除让 `refreshCustomNodes` 的
+      `catch { return 0 }` 第一次有了日志 —— 「刷新失败」与「manifest 里零个节点」
+      在调用方看来同形，那行 `console.error` 是唯一能分开的痕迹。
+      ⚠️ **同时量到 P61 的一处豁免过宽**（本轮没改，属他人判据）：
+      `check-ui-primitives.cjs` 的 P61 对「已经 import 了 app-events 的文件」整份跳过，
+      于是那样的文件里再裸写 `new CustomEvent("a:b")` 不计数。实测本批只在被删的那份
+      测试里见到这一形态，暂无生产侧实例；精确化方向是「按调用点豁免」而不是「按文件豁免」。
+      证据：`src/lib/app-events.ts`、`tests/app-event-pairing.test.ts`、
+      `src/config/custom-nodes.ts`、`src/components/studio/{history/hooks/use-history-list,workflow-library/hooks/use-workflow-library}.ts`。
+- [x] **E10 提交门槛的 C 组「红但不是用例红」：清单顶穿平台命令行上限，vitest 根本没起（本批发现并修）**：
+      同一次提交里撞出来的，值得单独立一条 —— C 组原本是 `pnpm exec vitest run --maxWorkers=4 $files`，
+      清单是**位置参数**、长度随改动面线性增长。改 22 个文件的那一批算出 **229 个用例 / 10840 字符**，
+      而 `pnpm exec <bin>` 在 Windows 上经 `.cmd` shim，那条链的上限是 cmd.exe 的 **8191 字符**：
+      进程没起，stdout 只有一行 GBK 乱码（「文件名或扩展名太长」），钩子只说「组 C 失败」。
+      危害不是「被拦」，是**它长得像任何别的东西** —— 判据在场、跑了 0 个用例、退出码非零而
+      原因读不出；改动面越大的提交越容易撞上，也就是治理线自己的批次最先撞。
+      与本台账反复记的「绿 ≠ 跑过」是同一族的两面：**红也 ≠ 跑过**。
+      修法与判据：启动那一步交给 `scripts/run-affected-tests.mjs`（`spawnSync(process.execPath,
+[vitest 的 ESM 入口, …])`，不经 cmd 层，上限回到 Win32 的 32767），按 24000 字符预算
+      **分块**且「宁可多起一次也不丢用例」；入口走 `require.resolve("vitest/package.json")` +
+      `bin.vitest`，不写死 `node_modules/vitest/…`（pnpm 布局下顶层只是链接）。
+      判据 `tests/hook-affected-launch.test.ts`（固定清单 19 → 20）钉四件：分块后**并集等于输入
+      且顺序不变**、每块在预算内（单条就超预算时点名红，不许静默跳过）、启动器没有 `shell: true`
+      也不出现 `pnpm exec vitest` / `npx vitest`、钩子里 C 组确实指向该入口（配合成旧写法反证）。
+      两次变异各红各的：把钩子换回旧拼法 → 恰好那条钩子文本判据红；把最后一块丢掉 → 三条
+      「不丢用例」的判据一起红。
+      ⚠️ **与同批落地的 `tests/doc-check-hook-wiring.test.ts` 对齐过一次口径**（规范 §13.5.8：
+      「在场判据要解析、不要 `toContain`」——把钩子里那行前面加 `# ` 注掉，行内仍含同一段
+      字面量，`toContain` 照样命中）：本判据原先正是 `hook.toContain("scripts/run-affected-tests.mjs")`，
+      而本文件上方的机制说明里也写着这个文件名，**在注释上命中**是分不出「在执行」与「已静音」的。
+      现在按 `run_group C … sh -c '<body>'` 解析出实调用体、剔掉行首是 `#` 的行再断言，
+      并补一条「注掉那一行」的反证（实测恰好那一条红）。同一次对齐还保住了钩子里那句
+      「D(N 个判据脚本)」的计数陈述 —— 它由那份判据核与实际 D 组步骤数一致，
+      本批改写 C 组注释时把它原样带过去并加了「新增判据必须同步这个数字」的指向。
+      ⚠️ 顺带量到但**本批没动**：`.githooks/pre-commit` 的注释里有硬日期
+      （`2026-09-22 并行化重排`）—— R10「注释禁止历史流水」只扫 `.ts/.tsx/.css`，shell 脚本
+      在判据面之外；要把这类落点也管住，得先给 R10 加扫描面而不是逐处手改。
+      证据：`.githooks/pre-commit`、`scripts/run-affected-tests.mjs`、
+      `tests/hook-affected-launch.test.ts`、规范 §13.5.8。
 - [x] **E3 服务端集成覆盖收口：判据从「router 有没有测试文件」升到「每条 procedure 有没有执行者」（本批）**：
       台账从 13/16 走到这里，最后 3 个零执行者的口（`customNode` / `user` / `post`）
       **没有一条被补成测试** —— 给死口写用例等于把它焊死。逐条定性后删除：

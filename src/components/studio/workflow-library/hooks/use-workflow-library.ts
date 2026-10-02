@@ -14,7 +14,6 @@
  * 与加载错误（`loadError`，重新拉取成功即消失）。
  */
 
-import { subscribeAppEvent } from "~/lib/app-events";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { errorMessage, errorText } from "~/lib/error-message";
@@ -243,11 +242,6 @@ export function useWorkflowLibrary(
       }
     }
   }, [listQ.data, toast]);
-
-  useEffect(
-    () => subscribeAppEvent("comfyapp:local-workflows-path-changed", load),
-    [load],
-  );
 
   /** 空列表的「为什么是空」：判据在配置层（deriveLocalRootsHint），这里只负责
    *  在拿到数据后才给出结论（未加载完不算「空」）。 */

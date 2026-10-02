@@ -321,22 +321,6 @@ describe("useWorkflowLibrary", () => {
     expect(result.current.pendingDelete).toBeNull();
   });
 
-  it("目录配置变更事件会触发重新拉取", async () => {
-    behavior = { workflows: [row({ id: "1" })], localPending: [], tags: [] };
-    const { result } = renderHook(() => useWorkflowLibrary(), {
-      wrapper: makeWrapper(),
-    });
-    await waitFor(() => expect(result.current.workflows).toHaveLength(1));
-
-    const callsBefore = listCalls;
-    await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent("comfyapp:local-workflows-path-changed"),
-      );
-    });
-    await waitFor(() => expect(listCalls).toBeGreaterThan(callsBefore));
-  });
-
   it("首次拉取卡住超过 LIST_STALL_MS 后 loadStalled 变为 true", async () => {
     // 用 fake timers 模拟后端延迟，避免测试真实等待 8 秒。
     // 注意：useFakeTimers 会影响 React Query 内部计时器，因此在本用例内启用并在

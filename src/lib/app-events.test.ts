@@ -3,9 +3,9 @@
  * 应用事件的判据（规范 16 §16.2.4.65）。
  *
  * 这条账的实质是「**同一份字面量的两端分开两处**」：事件名与载荷类型各写一份，
- * 于是写侧改名读侧认不出、写侧删掉读侧永远等不到（`open-task` 与
- * `comfyapp:local-workflows-path-changed` 就是两条**死监听** ——
- * 没有任何构建 / 测试会报它们）。
+ * 于是写侧改名读侧认不出、写侧删掉读侧永远等不到。本文件判的是**出口的机制**
+ * （带类型派发、退订配对、SSR 分支、载荷形状），而「表里每一条两端都在场」
+ * 由 `tests/app-event-pairing.test.ts` 判 —— 两边合起来才是这条出口的完整承诺。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -37,20 +37,24 @@ describe("emitAppEvent / subscribeAppEvent", () => {
 
   it("退订之后不再收到（返回的退订函数与 `addEventListener` 配对）", () => {
     let called = 0;
-    const off = subscribeAppEvent("custom-nodes:updated", () => {
+    const off = subscribeAppEvent("canvas:produce", () => {
       called++;
     });
-    emitAppEvent("custom-nodes:updated", { count: 1 });
+    emitAppEvent("canvas:produce", { id: "n1", resultPath: "/a.png" });
     off();
-    emitAppEvent("custom-nodes:updated", { count: 2 });
+    emitAppEvent("canvas:produce", { id: "n2", resultPath: "/b.png" });
     expect(called).toBe(1);
   });
 
   it("多个订阅者都收到（广播语义，不是单播）", () => {
     const hits: string[] = [];
-    const off1 = subscribeAppEvent("open-task", (id) => hits.push(`a:${id}`));
-    const off2 = subscribeAppEvent("open-task", (id) => hits.push(`b:${id}`));
-    emitAppEvent("open-task", "t1");
+    const off1 = subscribeAppEvent("canvas:produce", (p) =>
+      hits.push(`a:${p.id}`),
+    );
+    const off2 = subscribeAppEvent("canvas:produce", (p) =>
+      hits.push(`b:${p.id}`),
+    );
+    emitAppEvent("canvas:produce", { id: "t1", resultPath: "/x.png" });
     expect(hits.sort()).toEqual(["a:t1", "b:t1"]);
     off1();
     off2();
@@ -59,10 +63,10 @@ describe("emitAppEvent / subscribeAppEvent", () => {
   it("退订一次只影响自己那一个订阅", () => {
     let a = 0;
     let b = 0;
-    const offA = subscribeAppEvent("open-task", () => a++);
-    const offB = subscribeAppEvent("open-task", () => b++);
+    const offA = subscribeAppEvent("canvas:produce", () => a++);
+    const offB = subscribeAppEvent("canvas:produce", () => b++);
     offA();
-    emitAppEvent("open-task", "x");
+    emitAppEvent("canvas:produce", { id: "x", resultPath: "/x.png" });
     expect(a).toBe(0);
     expect(b).toBe(1);
     offB();
@@ -84,11 +88,11 @@ describe("emitAppEvent / subscribeAppEvent", () => {
      * 故用 `vi.stubGlobal` 显式抹掉它，覆盖 SSR 分支。 */
     vi.stubGlobal("window", undefined);
     try {
-      const off = subscribeAppEvent("open-task", () => {
+      const off = subscribeAppEvent("comfyapp:canvas-sync-changed", () => {
         throw new Error("不该被调用");
       });
       expect(() => off()).not.toThrow();
-      expect(() => emitAppEvent("open-task", "x")).not.toThrow();
+      expect(() => emitAppEvent("comfyapp:canvas-sync-changed")).not.toThrow();
     } finally {
       vi.unstubAllGlobals();
     }
