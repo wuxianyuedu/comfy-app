@@ -27,10 +27,17 @@
  *
  * ⚠️ 闭包只跟着**静态写出来的**说明符走，两类它抓不到：运行时拼出来的路径
  * （`import(base + name)`、`path.join(dir, …)`）、以及解析目录之外的消费方。
- * 全量套件当前带着别线的基线红，所以「拿不准就跑全量」在这里不可用 —— 遇到公共地基
- * （`vitest.config.ts`、`tests/setup.ts`、`package.json` / lockfile、`.githooks/**`）
- * 被改时明确**放弃收窄**：只跑固定清单，并把放弃的理由打到 stderr。放弃是被看见的，
- * 不是静默降级；等基线红清零后，把 `mode === "all"` 那条分支改成跑全量（规范 §13.5.8）。
+ * 遇到公共地基（`vitest.config.ts`、`tests/setup.ts`、`package.json` / lockfile、
+ * `.githooks/**`）被改时明确**放弃收窄**：只跑固定清单，并把放弃的理由打到 stderr。
+ * 放弃是被看见的，不是静默降级。
+ *
+ * 兜底**刻意不是跑全量**，拦路石是两条实测（不是「全量带基线红」—— 真断言红今天是 0，
+ * 见规范 §11.13 的复核行）：① 全量在钩子那一档（`--maxWorkers=4`）要 **32m35s**
+ * （560 files / 6887 passed 全绿），把它塞进 wide 提交等于每次动 lockfile 等半小时；
+ * ② 这一层的正确形态是**只跑解析出来的那份清单**，wide 时「不带位置参数」被钩子刻意
+ * 阻断（空参数 = 谁都没筛过，红也归不了因），而把全量清单拼进 argv 在 Windows 上还会撞
+ * 命令行长度上限。⇒ 翻兜底的前置是先造一条**显式的全量通道**并接受那半小时，
+ * 不是等基线红清零（那件事已经发生了）。规范 §13.5.8。
  *
  * 用法：
  *   node scripts/affected-tests.mjs                # 读暂存区（pre-commit 用）
@@ -472,6 +479,25 @@ function collectInputs() {
   };
 }
 
+/**
+ * wide（放弃收窄）那一档打印给提交者看的话术。
+ *
+ * 为什么要单独成函数、并让用例钉住文本：这句话过去写的是「全量当前带别线基线红」，
+ * 那是**假前提**（ISSUE #1393 在 master `9392a88f` 上重测：真断言红 0 条、
+ * `KNOWN_FAILED_FILES` 是空数组；`--maxWorkers=4` 全量 560 files 全绿）。
+ * 假理由每遇到一次 wide 提交就当着所有人的面重印一遍，久而久之就成了「谁也不去翻兜底」的
+ * 默认解释 —— 所以它跟判据一样需要执行者，不能只改一次文本。规范 §13.5.8 / §11.13。
+ * @param {string} note 放弃收窄的原因（哪个公共地基被改了）
+ * @param {number} count 固定清单里的用例文件数
+ */
+export function wideFallbackNote(note, count) {
+  return (
+    `[affected] 放弃收窄（${note}）→ 只跑固定清单 ${count} 个。` +
+    "兜底不是全量：wide 这一档跑全量实测要 32m35s，而钩子刻意不接受「空参数=全跑」" +
+    "这种没人筛过的形态（真断言红已经是 0，不是挡路的那件事）。规范 §13.5.8 / §11.13\n"
+  );
+}
+
 function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--fixed-only")) {
@@ -503,8 +529,7 @@ function main() {
   const extra = res.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t));
   if (res.mode === "all") {
     process.stderr.write(
-      `[affected] 放弃收窄（${res.reasons.__note ?? "见 --json"}）→ 只跑固定清单 ` +
-        `${res.tests.length} 个。兜底不是全量：全量当前带别线基线红（规范 §11.13 / §13.5.8）\n`,
+      wideFallbackNote(res.reasons.__note ?? "见 --json", res.tests.length),
     );
   } else {
     process.stderr.write(
