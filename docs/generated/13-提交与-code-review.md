@@ -172,8 +172,11 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
    # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳里 37 条 #[test] 唯一的执行者），并复用
    # `dev-launcher.mjs` 的 `shellStaleWarning` 把硬规则 5「改了壳必须重编」升成阻断（见 11 §11.10.4）
-✅ vitest run $(node scripts/affected-tests.mjs)  # C 组：结构守护固定清单 + 本次改动
-   # 牵扯到的用例，一次 vite（固定清单唯一出处是脚本里的 FIXED_STRUCTURAL_TESTS，见下 13.5.8）
+✅ node scripts/run-affected-tests.mjs       # C 组：结构守护固定清单 + 本次改动
+   # 牵扯到的用例，一次 vite（固定清单唯一出处是 `affected-tests.mjs` 里的
+   # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
+   # 直接拼进 `pnpm exec vitest run $files` 会在 Windows 上顶穿 cmd.exe 的 8191 字符
+   # 命令行上限 —— 表现是「组 C 红、一条用例没跑、原因是一行 GBK 乱码」
 ✅ node scripts/check-circular-deps.cjs      # 模块循环依赖棘轮（见 12 §12.7）
 ✅ node scripts/check-format.cjs             # prettier 格式棘轮（见下 13.5.1）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
@@ -571,7 +574,27 @@ master 上本来就红（属别线），于是「一笔无关改动」会被别�
 **钩子那一档另配并发**：C 组跑 `--maxWorkers=4`（不是配置里的 8）—— 钩子里
 A(tsc)、B(eslint)、D(二十多个判据脚本) 与它并行，再按 8 起 forks 就会抢不过来，
 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
-respond`（几百条全过、退出码非零）。全量 `pnpm test` 仍走配置里的 8。
+respond`（几百条全过、退出码非零）。全量 `pnpm test` 仍走配置里的 8。这个常数现在
+写在启动器 `scripts/run-affected-tests.mjs` 里，不在钩子的那行 shell 上。
+
+**启动面自己也是一条判据面**（`tests/hook-affected-launch.test.ts`，固定清单成员）：
+清单是**位置参数**，长度随改动面线性增长。原先钩子直接 `pnpm exec vitest run $files`，
+而 `pnpm exec <bin>` 在 Windows 上经 `.cmd` shim —— cmd.exe 的命令行上限是
+**8191 字符**。实测一次改 22 个文件的提交算出 229 个用例 / **10840 字符**：vitest
+根本没起，stdout 只有一行 GBK 乱码（「文件名或扩展名太长」），钩子的表现是
+「组 C 失败」而看不见任何用例名。它的危害不是「提交被拦」，而是**它长得像任何别的
+东西**——判据在场、跑的是 0 个用例、退出码非零但原因读不出，与本仓库反复在收的
+「绿 ≠ 跑过」是同一族的两面（**红也 ≠ 跑过**）。改法：启动那一步交给
+`run-affected-tests.mjs`，用 `spawnSync(process.execPath, [vitest 的 ESM 入口, …])`
+直接起（不经 cmd 层，上限回到 Win32 的 32767），并按 24000 字符的预算**分块** ——
+**宁可多起一次 vite 也不许丢用例**，因为「少跑几条」的表现正是这一条事故本身。
+入口按 `require.resolve("vitest/package.json")` + `bin.vitest` 解析，不写死
+`node_modules/vitest/…`：pnpm 布局下真身在 `.pnpm/vitest@<ver>…/`，顶层只是链接。
+判据钉四件事：分块后并集等于输入且顺序不变、每块都在预算内（单条路径超预算则**点名红**，
+不许静默跳过）、启动器没有 `shell: true` 也不出现 `pnpm exec vitest` / `npx vitest` 形态、
+钩子里 C 组确实指向这个入口。最后那条按 `run_group C … sh -c '<body>'` **解析出实调用体**
+再断言并剔掉行首是 `#` 的行 —— 就是上一条「在场判据要解析、不要 `toContain`」在本判据上的
+落地：机制说明里也写着那个文件名，只看整份文本时「执行行已被静音」与「接得好好的」长得一样。
 
 判据由 `tests/affected-tests.test.ts` 钉住（20 条，实测 `pnpm exec vitest run` 的读数；
 这个数没有判据核，改完数量要顺手同步这里）：四条判据各一组夹具、**两跳
