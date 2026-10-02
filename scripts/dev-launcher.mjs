@@ -86,6 +86,7 @@ import {
 import { renderDriftReport } from "./lockfile/render-lock-diff.mjs";
 import {
   clearSession,
+  isPidAlive,
   isSessionOwnerAlive,
   readSession,
   touchHeartbeat,
@@ -398,21 +399,31 @@ export async function reapAll() {
 /** 回收上一次运行遗留的进程树（崩溃 / 被 SIGKILL 时留下的孤儿）。
  *  判据是**心跳 + PID**两条（见 dev-launcher-session）：只判 PID 会被 PID 复用
  *  骗过，只判心跳会把卡死的实例当成死的。
- *  @param {string} [root] @returns {Promise<number[] | null>} 被回收的 PID */
+ *
+ *  **子进程再探一次活**：会话锚点残留本身不等于「有孤儿」——壳正常退出时用
+ *  `Child.kill()`（Windows 上是 `TerminateProcess`）收编排器，编排器收不到信号、
+ *  没机会执行自己的 `clearSession()`，锚点于是**必然**留下；而它拉起的整棵树
+ *  早已被插件 kill / Job Object 收干净。这种情形只清锚点、**不回报**，否则每次
+ *  正常关窗后的启动都会刷一条「回收上一次运行遗留的进程树」（PID 早已不存在，
+ *  徒增噪声，且旧号被系统复用时还有误伤无关进程的风险）。
+ *  @param {string} [root] @returns {Promise<number[] | null>} 真正回收的 PID */
 export async function reapStaleSession(root = ROOT) {
   if (isSessionOwnerAlive(root)) return null;
   const session = readSession(root);
   if (!session) return null;
-  const pids = Array.isArray(session.child_pids) ? session.child_pids : [];
-  if (pids.length === 0) {
+  const pids = (
+    Array.isArray(session.child_pids) ? session.child_pids : []
+  ).filter((pid) => typeof pid === "number" && pid > 0);
+  const alive = pids.filter((pid) => isPidAlive(pid));
+  if (alive.length === 0) {
     clearSession(root);
     return null;
   }
-  for (const pid of pids) {
+  for (const pid of alive) {
     await reapProcessTree({ pid, detached: !isWindows(), force: true });
   }
   clearSession(root);
-  return pids;
+  return alive;
 }
 
 /** 该 PID 的命令行（判「端口上的是不是本仓库的应用服务」，拿不到返回空串）。 */
