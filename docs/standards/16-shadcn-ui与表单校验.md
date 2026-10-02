@@ -126,7 +126,7 @@ P82 那次「基线写着 78、真存量 157」的形态。
 rule id 登记起点；任何「已有 rule id 上升」都直接拒绝，硬闸未清零时连登记都不给。
 
 ```bash
-pnpm ui:primitives            # 检查（82 条硬闸须为 0；pre-commit 第 12 步）
+pnpm ui:primitives            # 检查（82 条硬闸须为 0；pre-commit D 组「UI 基元复用棘轮」）
 pnpm ui:primitives:report     # 只出清单（排批次用，不判失败）
 node scripts/check-ui-primitives.cjs --update   # 只给新引入的判据登记起点
 ```
@@ -359,7 +359,7 @@ auto` 的遮罩压过。
   只许降不许升 —— 写得出来就说明又编了一档。
 
 ```bash
-pnpm ui:overlay-z            # 检查（棘轮 + Z1/Z2 硬闸，pre-commit 第 27 步）
+pnpm ui:overlay-z            # 检查（棘轮 + Z1/Z2 硬闸，pre-commit D 组「浮层层级刻度棘轮」）
 pnpm ui:overlay-z:report     # 只出清单（排批次用，不判失败）
 node scripts/check-overlay-z.cjs --update   # 治理后收紧基线
 ```
@@ -1567,7 +1567,7 @@ ComfyUI 节点卡外观，与 disclosure 的「一行文字 + 折叠标记」不
 轮询是服务端定时器，不在 React 生命周期里）。
 
 ```bash
-pnpm ui:primitives            # 检查（棘轮 + P4~P15 硬闸，pre-commit 第 12 步）
+pnpm ui:primitives            # 检查（棘轮 + P4~P15 硬闸，pre-commit D 组「UI 基元复用棘轮」）
 pnpm ui:primitives:report     # 只出清单
 node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 ```

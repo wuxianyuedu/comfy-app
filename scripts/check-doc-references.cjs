@@ -15,6 +15,8 @@
  *   - kind 'path'：文档保留路径原文，脚本核对路径指向的文件确实存在。
  *   - 台账命令口径：SCOPED_DOCS 里不得出现 npm run / npx 可执行命令
  *     （AGENTS 硬规则 1「只用 pnpm」；说明性引用需带纠正词，见 checkLedgerCommands）。
+ *   - 门禁步骤引用口径：规范文档/索引里不得用「第 N 步」引用 pre-commit 或已删除的平台流水线，
+ *     须写日志里打印的标签（ISSUE #1374；见 checkGateStepIndexRefs）。
  *
  * 接入方式：`.githooks/pre-commit` D 组的静态判据之一（`pnpm doc:check` 是同一条命令的手动入口，
  * `pnpm doc:gen` 也把它放在第 1 步）。**曾是「手动档」**，脚本此处旧写「不接 pre-commit（避免
@@ -212,6 +214,65 @@ function checkLedgerCommands() {
         `[${doc}:${i + 1}] 出现 npm/npx 命令（AGENTS 硬规则 1「包管理只用 pnpm」）。` +
           `请改为 pnpm（如 npm run test → pnpm test）；若是在描述该规则本身，` +
           `补上「改为/修正/pnpm」等纠正词以标明是说明而非可执行命令。`,
+      );
+    });
+  }
+}
+
+/**
+ * 门禁步骤的引用口径：规范文档与索引里引用 `.githooks/pre-commit`（或已删除的平台流水线）
+ * 的某一步，一律写**钩子日志里打印的标签**（`── check: <标签>`）或那一步跑的脚本名，
+ * 不写「第 N 步」（ISSUE #1374）。
+ *
+ * 为什么单列一条：钩子早已是「组 0 + A/B/C/D 四个并行组」，「第 N 步」在这份形状上
+ * **没有唯一解释**（同一份文档里混着「branch-guard 算第 1 步」与「判据从第 1 条起算」两种口径），
+ * 而序号又不属于任何现有事实核（本脚本管硬编码值、路径存在性、端口、npm 命令字样）。
+ * 结果是：每给 D 组追加一步，文档里那批数字就整体错位一次，表现不是红，是**指到别的判据上**。
+ * 立案时的实测样本：UI 基元复用棘轮写作「第 12 步」（实际第 9 条）、生成态文档同步写作
+ * 「第 26 步」（实际第 21 条）、三处把 C 组固定清单里的用例称作「第 23 步」。
+ *
+ * 判据范围刻意窄：同一行既要出现「第 N 步」，也要出现 pre-commit / `.githooks` / CI，
+ * 所以「§2.2 第 5 步」「`prepare-local-run.ps1` 第 3 步」这类**有主人的过程序号**不受影响
+ * —— 那种序号正是推荐形态（引用一份有顺序的程序的第几步）。
+ *
+ * 不扫 `changelog.d/**` 与 `CHANGELOG.md`：碎片是**当时那次变更的记录**，里面的序号是历史事实，
+ * 改写历史等于伪造证据（AGENTS 硬规则 14 / §13.10.5）。边界由用例
+ * `tests/check-doc-references.test.ts` 的「历史碎片不改写」钉住。
+ *
+ * 豁免：描述这条规则本身的句子（带 不写 / 别再 / 禁止 / 应写 / 一律 / 序号 / 已删 等纠正词）。
+ */
+const STEP_INDEX_RE = /第\s*\d+(?:\s*\/\s*\d+)?\s*步/;
+const GATE_STEP_REF_RE = /pre-commit|\.githooks|\bCI\b/;
+const STEP_INDEX_EXPLAIN_RE =
+  /不写|别再|不要写|禁止|应写|应改|一律|改成|序号|没有唯一|已删|已随|历史/;
+
+function checkGateStepIndexRefs() {
+  // AGENTS.md 与两份索引（docs/README.md、README.md）都带「哪条判据在哪跑」这类表述，
+  // 但都不在 SCOPED_DOCS 里（AGENTS 无占位符、索引不属于 docs/standards|guides 目录扫描面），
+  // 所以在这里显式并入遍历集合 —— 与 checkLedgerCommands 同一手法。
+  // `docs/reference-facts.md` 同理：它是**登记表本身**（FACTS 通过
+  // `ASCII_ONLY_FACT_DOCS` 读它，不通过 SCOPED_DOCS），而「哪条判据在哪跑」正是写在这份文件里的，
+  // 不并进来看不到它自己举例时用的旧序号。
+  const gateDocs = [
+    AGENTS_MD_PATH,
+    "docs/README.md",
+    "README.md",
+    "docs/reference-facts.md",
+    ...SCOPED_DOCS,
+  ];
+  for (const doc of [...new Set(gateDocs)]) {
+    if (!exists(doc)) continue;
+    const lines = readText(doc).split("\n");
+    lines.forEach((line, i) => {
+      if (!STEP_INDEX_RE.test(line)) return;
+      if (!GATE_STEP_REF_RE.test(line)) return; // 过程序号（§x.y 第 N 步）与本条无关
+      if (STEP_INDEX_EXPLAIN_RE.test(line)) return; // 描述这条规则本身，放行
+      const hit = line.match(STEP_INDEX_RE)?.[0] ?? "第 N 步";
+      problems.push(
+        `[${doc}:${i + 1}] 用「${hit}」引用门禁步骤 —— 钩子已是组 0 + A/B/C/D 四个并行组，` +
+          `序号没有唯一解释，追加一步就会整体错位（ISSUE #1374）。` +
+          `请改写为标签形态：pre-commit 的 <组>「<标签>」（标签就是日志里 \`── check: <标签>\` 那一行），` +
+          `或直接写那一步跑的脚本名；若这一行正是在描述本条口径，补「不写/禁止/序号」等纠正词。`,
       );
     });
   }
@@ -488,6 +549,7 @@ function main() {
   checkFactKeysMatchDocs();
   checkScopeCoverage();
   checkLedgerCommands();
+  checkGateStepIndexRefs();
   checkPaths();
   checkAgentsMdDrift();
   for (const doc of SCOPED_DOCS) checkDoc(doc);
