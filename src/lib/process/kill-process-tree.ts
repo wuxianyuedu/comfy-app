@@ -127,11 +127,73 @@ function readPgidSync(pid: number): number | null {
   }
 }
 
-/** POSIX 发信号：优先按进程组（`kill(-pgid)`），失败再按 pid 单杀。
+/** POSIX 的信号名（force 只换这一格，不换目标）。 */
+type PosixSignal = "SIGTERM" | "SIGKILL";
+
+/** POSIX 一次回收的**决策**（不含发信号本身）。 */
+interface PosixKillPlan {
+  /** 要发的信号（Windows 侧不用它）。 */
+  sig: PosixSignal;
+  /** 首选目标：负数 = 进程组；null = 不冒组的风险，直接兜底。 */
+  primary: { target: number; via: string } | null;
+  /** 首选被拒、或本来就不走组时的兜底目标。 */
+  fallback: { target: number; via: string };
+}
+
+/**
+ * 「该向谁发信号」这张表**唯一的定义处**。
  *
- *  `ownPgid` = 调用者自身进程组。若目标的 PGID 与之相同，说明目标与调用者
- *  同组（bound 模式），**绝不能** `kill(-pgid)` —— 那会连带把应用自己杀掉。
- *  这种情况退化为单杀 leader（此时「整组」不等于「目标的树」，无法用它回收）。
+ * 抽成纯函数的理由不是好看：异步版（`killPosix`）与同步版（`killProcessTreeSync`）
+ * 此前各抄了一遍同样的三段判断，而「自身 PGID 读不到时禁组」这条保守侧只写在
+ * `readOwnPgid` 的注释里、两边代码都没实现 —— 于是一处修好、另一处仍是旧的。
+ * 判据与发信号分开之后，同步版只剩「拿结论去执行」这一件事，测试也能在**任意平台**
+ * 把整张表跑一遍（见 kill-process-tree.posix.test.ts）。
+ *
+ * `ownPgid === null`（读不到调用者自己的组）时**视同为自身组**：无法证明目标不在
+ * 我们组里，就不许发组信号 —— 宁可退化成单杀（可能留孤儿，可再探测补救），
+ * 也不冒「应用把自己整组杀掉」这种无法补救的风险。
+ */
+function planPosixKill(input: {
+  pid: number;
+  pgid: number | null;
+  ownPgid: number | null;
+  detached: boolean;
+  force: boolean;
+}): PosixKillPlan {
+  const { pid, pgid, ownPgid, detached, force } = input;
+  const sig: PosixSignal = force ? "SIGKILL" : "SIGTERM";
+  const sharesCallerGroup =
+    pgid !== null && (ownPgid === null || ownPgid === pgid);
+
+  const fallback: PosixKillPlan["fallback"] = sharesCallerGroup
+    ? {
+        target: pid,
+        via: `kill -${sig} ${pid}（单进程兜底·与调用者同组，禁杀组）`,
+      }
+    : { target: pid, via: `kill -${sig} ${pid}（单进程兜底）` };
+
+  // 1) 向 OS 问「这个 pid 属于哪个进程组」——不猜。
+  if (pgid !== null && !sharesCallerGroup) {
+    return {
+      sig,
+      primary: { target: -pgid, via: `kill -${sig} -${pgid}（进程组）` },
+      fallback,
+    };
+  }
+  // 2) 拿不到 PGID 时，若调用方声明了 detached（= 它认为 pid 就是组长），仍试一次
+  //    `kill(-pid)`：这不是主判据，只是 ps 不可用时的补救。同组时跳过（会误伤自己）。
+  if (pgid === null && detached && !sharesCallerGroup) {
+    return {
+      sig,
+      primary: { target: -pid, via: `kill -${sig} -${pid}（进程组·未探测）` },
+      fallback,
+    };
+  }
+  // 3) 不冒组的风险：直接单杀 leader（拿不到组 / 与调用者同组时不静默失败）。
+  return { sig, primary: null, fallback };
+}
+
+/** POSIX 发信号：按 `planPosixKill` 的结论执行 —— 优先进程组，被拒再单杀。
  *
  *  返回 via 描述便于日志与断言。 */
 async function killPosix(
@@ -140,46 +202,37 @@ async function killPosix(
   force: boolean,
   ownPgid: number | null,
 ): Promise<{ ok: boolean; via: string }> {
-  const sig = force ? "SIGKILL" : "SIGTERM";
+  const plan = planPosixKill({
+    pid,
+    pgid: await readPgid(pid),
+    ownPgid,
+    detached,
+    force,
+  });
+  return executePosixPlan(plan);
+}
 
-  // 1) 向 OS 问「这个 pid 属于哪个进程组」——不猜。
-  const pgid = await readPgid(pid);
-  const sharesCallerGroup =
-    pgid !== null && ownPgid !== null && pgid === ownPgid;
-
-  if (pgid !== null && !sharesCallerGroup) {
+/** 把决策变成信号：异步与同步两个入口共用这一段。 */
+function executePosixPlan(plan: PosixKillPlan): {
+  ok: boolean;
+  via: string;
+} {
+  if (plan.primary) {
     try {
-      process.kill(-pgid, sig);
-      return { ok: true, via: `kill -${sig} -${pgid}（进程组）` };
+      process.kill(plan.primary.target, plan.sig);
+      return { ok: true, via: plan.primary.via };
     } catch {
       // 组已回收 / 权限不足 → 落到按 pid 单杀。
     }
   }
-
-  // 2) 拿不到 PGID 时，若调用方声明了 detached（= 它认为 pid 就是组长），
-  //    仍试一次 `kill(-pid)`：这不是主判据，只是 ps 不可用时的补救。
-  //    目标与调用者同组时跳过（会误伤自己）。
-  if (pgid === null && detached && !sharesCallerGroup) {
-    try {
-      process.kill(-pid, sig);
-      return { ok: true, via: `kill -${sig} -${pid}（进程组·未探测）` };
-    } catch {
-      /* 落到单杀 */
-    }
-  }
-
-  // 3) 最后兜底：按 pid 单杀（拿不到组 / 与调用者同组时不静默失败，
-  //    至少回收 leader）。
   try {
-    process.kill(pid, sig);
-    return {
-      ok: true,
-      via: sharesCallerGroup
-        ? `kill -${sig} ${pid}（单进程兜底·与调用者同组，禁杀组）`
-        : `kill -${sig} ${pid}（单进程兜底）`,
-    };
+    process.kill(plan.fallback.target, plan.sig);
+    return { ok: true, via: plan.fallback.via };
   } catch {
-    return { ok: false, via: `kill -${sig} ${pid} 失败（目标可能已退出）` };
+    return {
+      ok: false,
+      via: `kill -${plan.sig} ${plan.fallback.target} 失败（目标可能已退出）`,
+    };
   }
 }
 
@@ -345,6 +398,16 @@ export function killProcessTreeSync(
 ): KillProcessTreeResult {
   const { pid, detached = false, force = false, mode = "tree" } = opts;
   if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
+  /* `mode: "image"` 在同步入口上**没法兑现**：这张签名里只有一个 pid，没有映像名。
+   * 照字面走下去会得到 `/IM 4321 /T /F`（去杀一个名字恰好叫「4321」的映像），
+   * 在 POSIX 侧则静默退化成单杀 leader —— 两边都不是调用方要的那件事。
+   * 按映像名回收请走 `killProcessTreeByImage`（异步版从参数里拿名字）。 */
+  if (mode === "image") {
+    return {
+      ok: false,
+      via: "同步入口只有 pid，按映像名回收请走 killProcessTreeByImage",
+    };
+  }
 
   if (isWindowsPlatform()) {
     // 同步路径不阻塞等 taskkill 退出：Windows 侧命令本身是异步派发的，
@@ -352,38 +415,15 @@ export function killProcessTreeSync(
     return { ok: true, via: spawnTaskkill(windowsKillArgs(String(pid), mode)) };
   }
 
-  const sig = force ? "SIGKILL" : "SIGTERM";
-  const pgid = readPgidSync(pid);
-  const ownPgid = readPgidSync(process.pid);
-  // 与调用者同组时禁走组路径（否则会连带杀掉应用自己，见 killPosix 注释）。
-  const sharesCallerGroup =
-    pgid !== null && ownPgid !== null && pgid === ownPgid;
-
-  if (pgid !== null && !sharesCallerGroup) {
-    try {
-      process.kill(-pgid, sig);
-      return { ok: true, via: `kill -${sig} -${pgid}（进程组）` };
-    } catch {
-      /* 落到单杀 */
-    }
-  }
-  if (pgid === null && detached && !sharesCallerGroup) {
-    try {
-      process.kill(-pid, sig);
-      return { ok: true, via: `kill -${sig} -${pid}（进程组·未探测）` };
-    } catch {
-      /* 落到单杀 */
-    }
-  }
-  try {
-    process.kill(pid, sig);
-    return {
-      ok: true,
-      via: sharesCallerGroup
-        ? `kill -${sig} ${pid}（单进程兜底·与调用者同组，禁杀组）`
-        : `kill -${sig} ${pid}（单进程兜底）`,
-    };
-  } catch {
-    return { ok: false, via: `kill -${sig} ${pid} 失败（目标可能已退出）` };
-  }
+  /* 决策与异步版**同一份**（planPosixKill），差别只在读组用同步的 `ps`：
+   * 收尾路径要立刻拿到结论，不能等一个 promise。 */
+  return executePosixPlan(
+    planPosixKill({
+      pid,
+      pgid: readPgidSync(pid),
+      ownPgid: readPgidSync(process.pid),
+      detached,
+      force,
+    }),
+  );
 }
