@@ -13,7 +13,7 @@ Usage:
   powershell -File scripts\quality-gate.ps1 -Mode test
   powershell -File scripts\quality-gate.ps1 -Mode all
 
-Mode: typecheck | lint | format | test | dependencyAudit | all   (default all)
+Mode: typecheck | lint | format | test | dependencyAudit | storybook | all   (default all)
 
 Extend / maintain - how to add a new gate:
   Each gate is one entry in the $Blocks list below:
@@ -101,6 +101,11 @@ $Blocks = @(
   # 台账按 (包名, advisory id) 记账、双向拦、--update 只许降，理由见脚本头。
   @{ Name = "dependencyAudit"; Label = "Dependency audit ratchet (high/critical; ledger keyed by package+advisory)";
      Cmd = "node"; Args = @("scripts\check-dependency-audit.mjs"); Run = $true }
+  # 故事枚举来源（ISSUE #1381 续，规范 16 §16.2.3.2）：`cva()` 返回的是函数，
+  # 写成 `Object.keys(xVariants.variants.轴)` 时 Storybook 在加载期抛
+  # `Cannot read properties of undefined` —— 表现是「侧栏列着故事、画布一片空白」。
+  @{ Name = "storybook"; Label = "Storybook story enum source (cva return value / missing variants)";
+     Cmd = "node"; Args = @("scripts\storybook-check.mjs"); Run = $true }
 )
 
 # Which gates to run
