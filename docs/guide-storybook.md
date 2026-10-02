@@ -65,6 +65,17 @@ const VARIANTS: ButtonVariant[] = ["default", "outline" /* … */];
 
 `ui/button.stories.tsx` / `ui/badge.stories.tsx` 就是这么写的，照抄它们。
 
+**手写清单必须覆盖每一档，别只列「常用的那几档」**：这条有机器判据兜着
+（`tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`），
+`cva` 里加一档而故事没跟上、或整条轴被漏掉，提交时就会被点出来。判据上线时当场
+抓到一处真漏档：`button.stories.tsx` 的 `SIZES` 少列了 `icon-sm` / `icon-lg`，
+而这两档全库有 **46 处**在用 —— 「枚举手写一份」的代价是必然的，判据的作用是把
+它从「静默漏掉」变成「提交时报出来」。
+
+**为什么不用 `Object.keys(xxxVariants.variants.轴)` 一步到位**：见上一条 ——
+`cva()` 返回的是函数，运行期没有 `.variants`。顺着「宏定义一个数组再 spread 到
+各项」的思路去找捷径，最后都会绕回这个坑上。
+
 ## 明暗两态
 
 `.storybook/preview.tsx` 用 `addon-themes` 的 `withThemeByClassName`，给 `<html>`
@@ -86,10 +97,15 @@ class 写入路径，日后「应用里是暗的、storybook 里是亮的」这�
   `storybook-static/` 已在 `.gitignore` 与 `tsconfig` 的 exclude 里。
 - **不覆盖业务组件**。当前只有 3 个 `ui/` 示例（14 个 story）当样板；`studio/`、
   `workshop/` 那些依赖 tRPC / 画布运行期的组件要做 story，得先看它们的
-  数据依赖能不能用 Args 注入。
+  数据依赖能不能用 Args 注入。（`docs/guides/PRODUCTION-GAPS.md` 的 F6 挂着
+  这条账的全貌。）
 
 ## 相关
 
+- 枚举来源的判据：`tests/storybook-cva-variant-source.test.ts` 与
+  `scripts/storybook-check.mjs`（共用 `scripts/storybook-checks/cva-variant-source.mjs`
+  的纯函数，AST 判；详细口径见规范 [16 §16.2.3.4](standards/16-shadcn-ui与表单校验.md#16234-故事里的枚举清单从-props-派生不要从-cva-的返回值上取)）。
+  它与下面那条配置契约**守的不是同一件事**：这条管「故事文件自己怎么写」。
 - 配置契约的判据：`tests/storybook-config.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）
   —— 它守的是那四种「**构建全都成功**」的错法：`stories` glob 写错（侧栏空着）、
   漏引 `globals.css`（无样式裸 DOM）、漏主题装饰器（只剩 dark 一态）、启动器漏

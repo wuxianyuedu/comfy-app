@@ -94,6 +94,19 @@ const GATES = {
       "Dependency audit ratchet (high/critical; ledger keyed by package+advisory)",
     args: ["../scripts/check-dependency-audit.mjs"],
   },
+  /**
+   * 故事枚举来源（ISSUE #1381 续，规范 16 §16.2.3.2）。
+   *
+   * 与 `format` 同属「改坏了不会有人碰到」的那一类：`cva()` 返回的是函数，
+   * 写成 `Object.keys(xVariants.variants.轴)` 时运行期抛 `Cannot read properties
+   * of undefined`，而 Storybook 的表现是「侧栏列着故事、画布一片空白」——
+   * 不构建失败、不弹错，只是一片白。判据还顺带核「手写清单没漏档」，
+   * 首轮实测漏了 `icon-sm` / `icon-lg`（46 处调用在用的两档）。
+   */
+  storybook: {
+    label: "Storybook story enum source (cva return value / missing variants)",
+    args: ["../scripts/storybook-check.mjs"],
+  },
 };
 
 function parseArgs(argv) {

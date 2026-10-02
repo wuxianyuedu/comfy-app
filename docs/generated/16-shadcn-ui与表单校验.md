@@ -443,6 +443,57 @@ P1~P3 这类判据的**源码侧**由 `check-ui-primitives.cjs` 数（手写 `<b
 按词边界数 `cn(` 的形态、把字面量类串喂 `twMerge` 比差集 —— 一次性脚本形态即可，
 不值得为它建常驻门禁（它抓的是「不存在的东西」）。
 
+#### 16.2.3.4 故事里的枚举清单从 props 派生，**不要**从 `cva()` 的返回值上取
+
+Storybook 接入的那一轮（ISSUE #1381）踩到一个只在**运行时**发作的坑，值得单立一条：
+`cva()` 返回的是一个 `(props?) => string` 的**函数**，`.variants` 只活在 TS 泛型里。
+于是这行在类型上就说不通，运行期更是一碰就炸：
+
+```tsx
+// ❌ tsc 会红；Storybook 在**加载期**抛 Cannot read properties of undefined
+const variants = Object.keys(buttonVariants.variants.variant);
+
+// ✅ 从 props 派生 —— cva 的轴已经在组件侧求过值了
+type ButtonVariant = NonNullable<
+  React.ComponentProps<typeof Button>["variant"]
+>;
+const VARIANTS: ButtonVariant[] = ["default", "outline" /* … */];
+```
+
+**为什么它值得一条判据**：这个错的表现不是「构建失败」，而是「**侧栏里列着这个
+组件的故事、画布上一片空白**」—— 与「这个 story 自己挂了」的直觉完全对不上，
+首轮的 3 份 story 就是这么写的，靠逐 story 截图核出来的。而
+`tests/storybook-config.test.ts` 守的是**配置**契约（glob / 样式 / 主题 / 启动器），
+对「故事文件自己怎么写」无感。
+
+**判据四条**（`tests/storybook-cva-variant-source.test.ts` +
+门禁 `scripts/storybook-check.mjs`，共用
+`scripts/storybook-checks/cva-variant-source.mjs` 里的纯函数；AST 判，不靠正则，
+所以注释里写 `xxxVariants.variants` 讲这条规则本身**不算违规**）：
+
+| # | 判据 | 为什么 | 谁在守 |
+| - | ---- | ------ | ------ |
+| 1 | 没有任何一份 story 从 cva 的返回值上取变体表 | 首轮踩坑的原形态（基底按 `cva` 的**绑定名**判，也认 import 进来的名字；改名绕不过去） | 用例 + 门禁 |
+| 2 | `argTypes` 的 `options` 指向的清单在文件里真的存在 | 拼错名字 = 下拉空着，而 Storybook 不会为此报错 | 用例 + 门禁 |
+| 3 | 组件的每个变体轴在故事里都有候选清单 | 整条轴被漏掉 = 那一档没人验 | 用例 + 门禁 |
+| 4 | 手写清单覆盖该轴的**每一档**，且轴挂在从 props 派生的类型上 | 「cva 加一档、故事没跟上」是这条账的日常失效形态 | 用例 + 门禁 |
+
+**判据 4 上线时当场抓到一处真漏档**：`button.stories.tsx` 的 `SIZES` 只列了 6 档，
+而 `buttonVariants` 有 8 档 —— `icon-sm` / `icon-lg` 没人列过。它们不是没人用：
+全库 **46 处** `size="icon-sm" | "icon-lg"`（`dialog` / `sheet` / `sidebar` /
+设置页各弹窗 / 画布节点…）。这正是「枚举手写一份」的必然代价，也是这条判据存在的
+理由 —— 它把代价从「静默漏掉」变成「提交时报出来」。
+
+**为什么判据要同时有脚本**：pre-commit 的 C 组是「固定清单 + 受影响用例」的**增量**
+层，而这条守的是「下一次有人写故事」。钩子以外的人（以及只看脚本的读者）也要能
+一条命令问出结论：
+
+```bash
+node scripts/storybook-check.mjs      # 或 pnpm check:all 里的 storybook 档
+```
+
+脚本自己**不做第二份实现**：它调的是与用例同一份 `cva-variant-source.mjs`。
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，

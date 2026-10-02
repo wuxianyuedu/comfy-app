@@ -35,7 +35,16 @@ const VARIANTS: ButtonVariant[] = [
   "warning-solid",
   "link",
 ];
-const SIZES: ButtonSize[] = ["xs", "sm", "default", "lg", "icon", "icon-xs"];
+const SIZES: ButtonSize[] = [
+  "xs",
+  "sm",
+  "default",
+  "lg",
+  "icon",
+  "icon-xs",
+  "icon-sm",
+  "icon-lg",
+];
 
 const meta = {
   title: "UI/Button",
