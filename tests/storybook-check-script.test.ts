@@ -21,12 +21,13 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+
+import { symlinkDir } from "./helpers/symlink-dir";
 
 const ROOT = path.resolve(__dirname, "..");
 const SCRIPT_REL = "scripts/storybook-check.mjs";
@@ -60,11 +61,9 @@ function makeRepo() {
   cpSync(path.join(ROOT, CHECK_DIR_REL), path.join(root, CHECK_DIR_REL), {
     recursive: true,
   });
-  symlinkSync(
-    path.join(ROOT, "node_modules"),
-    path.join(root, "node_modules"),
-    "dir",
-  );
+  /* 目录链接必须走免特权的形态，否则 Windows 上七条用例全死在夹具里。
+   * 理由与「为什么收成一处」写在 `./helpers/symlink-dir`。 */
+  symlinkDir(path.join(ROOT, "node_modules"), path.join(root, "node_modules"));
   mkdirSync(path.join(root, "src", "components", "ui"), { recursive: true });
   /* 覆盖率那一段要两样东西：基线文件，与一张**指向本仓库文件的**理由表。
      临时仓库里自己造一份，值按 `scanner()` 会写下的那份「组件 + 故事」算

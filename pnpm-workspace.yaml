@@ -83,3 +83,15 @@ overrides:
   #     5.0.9  → 5.0.11（`@sentry/nextjs > … > glob > minimatch@10`、`shadcn > ts-morph > …`）
   'brace-expansion@1': '1.1.20'
   'brace-expansion@5': '5.0.11'
+  #   · webpack-dev-middleware 6.x → 7.4.5（`@storybook/nextjs >
+  #     @storybook/builder-webpack5 > webpack-dev-middleware`，advisory #1240027：
+  #     `publicPath` 不以 `/` 结尾时的路径穿越）。
+  #     本块里唯一一条**跨 major**：Storybook 10.6.1 把自己的 range 钉在 6.x，
+  #     不动到这条就消不掉，而 audit 判据给出的两条出路里「登记进基线」被明确排除
+  #     （棘轮的后门）。代价面只有组件工作台的 dev server（`pnpm storybook`）——
+  #     本地预览用、不对外提供服务。**验证走它真正干活的那一面**，不是「装得上」：
+  #     dev server 起来后 `/`、`/iframe.html`、`/index.json` 全 200，后两个正是 wdm 从
+  #     内存文件系统 serve 的（日志里 `[webpack-dev-middleware] wait until bundle finished`
+  #     在场）；`storybook:build` 出件；`pnpm why webpack-dev-middleware` 只剩 7.4.5 一个版本。
+  #     哪天 storybook dev 起不来，先回看这一条。
+  'webpack-dev-middleware@6': '7.4.5'

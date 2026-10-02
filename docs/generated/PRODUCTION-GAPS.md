@@ -506,6 +506,47 @@
       同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
       —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
       按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
+- [x] **E13 Storybook 落地时自带的两条红：夹具在普通权限下必 EPERM + 一条 high 传递依赖（本批修复）**：
+      发现路径与 E12 同一条 —— 另一批 rebase 之后跑 `check:all` 才看见：`tests/storybook-check-script.test.ts`
+      七条**全红**，而红的不是判据是夹具：`symlinkSync(<仓库>/node_modules, <临时目录>/node_modules, "dir")`
+      在 Windows 上需要开发者模式或管理员令牌，实测 `EPERM: operation not permitted, symlink …`。
+      门禁本体完全能跑，红的只是「测试夹具搭不起来」——这一族本仓已经处理过两次
+      （`tests/check-reformat-only.test.ts` 的 `symlinkSafe`、`tests/dist-artifact-hygiene.test.ts` 的
+      `symlinkDir`，两处各自写了「为什么要分平台」的注释），**但第三份没抄到**，于是同一个理由
+      散在三处、第三处漏了。收成 `tests/helpers/symlink-dir.ts` 一处（Windows 走 NTFS junction，
+      不需特权且不跨机跨卷；POSIX 忽略 type 参数，行为不变），三处一起改吃它。
+      第二条是 `webpack-dev-middleware` 的 high 路径穿越（advisory #1240027，`publicPath` 不以 `/`
+      结尾时），经 `@storybook/nextjs > @storybook/builder-webpack5` 传递进来，而 Storybook 10.6.1
+      把自己的 range 钉在 6.x —— 不动到它，审计判据就一直红。走 audit 自己给的出路 ①
+      （`pnpm-workspace.yaml` 的 overrides 到修复版 7.4.5）而不是 ②（登记进基线 = 棘轮的后门）。
+      这是 overrides 块里**唯一一条跨 major**，理由与代价都写在那一行旁边：受影响面只有组件工作台的
+      dev server（本地预览、不对外提供服务）。验证走的是它真正干活的那一面而不是「装得上」——
+      `pnpm storybook:build` 出件，`pnpm storybook` 起 dev server 后 `/`、`/iframe.html`、
+      `/index.json` 全 200（后两个正是 wdm 从内存文件系统 serve 的），`pnpm why` 只剩 7.4.5 一个版本；
+      收摊用 `scripts/reap-process.mjs` 杀整棵树。
+      证据：`tests/helpers/symlink-dir.ts`、`pnpm-workspace.yaml`（overrides）、
+      `changelog.d/0-storybook-check-junction-and-wdm.md`。
+- [x] **E12 新落地的跨平台判据在开发机上「只能为不可能红而绿」：`executable-resolve` 的 POSIX 那几档（本批修复）**：
+      发现路径是台账 E7 那一批 rebase 时撞上的 —— `99323be7`（ISSUE #1327，控制台起进程前先解析可执行形态）
+      落进 master 时带着**它自己的 5 条红**：`executable-resolve.test.ts` 4 条 + `console-run.test.ts` 1 条，
+      在 Windows 开发机上单跑也红（先按 §13.6.2 用 `git stash` 复算过干净基线，确认不是从我的改动来的）。
+      根因不是业务错，是**判据的输入没能全部注入**：模块把 `platform` 做成了参数（于是可以「假装是 linux」），
+      但「这个候选起不起得来」那一步仍然问真机器。实测本机：`fs.accessSync(X_OK)` 对
+      0o755 / 0o644 / 0o444 / 0o000 **一律通过**（Windows 不参与判断执行位），而把真 `.exe` 改名成
+      无扩展名再 spawn 得到 `ENOENT`（CreateProcess 不认）—— 于是「有执行位的脚本跑得起来」
+      「文件在但没有执行位」这两档在本机只有两个下场：整组 `runIf(!win32)`（这台机器上零执行者，
+      正是台账 E7 记的形状），或者**为它本来就不可能红而通过**（更糟：绿灯是假的，
+      「候选存在但不可执行 → null」那一条当时就是这样绿的 —— 它跑的是 ENOENT 那条完全不同的路径）。
+      修法是补上缺的那一个注入点（口径同 `kill-process-tree.ts` 的 `COMFYAPP_TASKKILL`）：
+      `UsabilityProbe { access, spawn }` 进 `WhichCommandOptions`，默认值就是原来那两句真调用，
+      生产侧两个消费方（`console-run.ts`、`scripts/launcher-core/shell.mjs`）零改动；
+      Windows 那几档**不注入** —— 批处理不起、`.ps1` 落宿主、MZ 头当二进制在本机是真造得出来的，照旧问真机器。
+      顺带修掉那条大小写：候选名是拿 `PATHEXT` 拼的，而系统那份默认大写（`.COM;.EXE;…`），
+      于是解析结果可能是 `node.EXE` —— spawn 无所谓，但这一份路径会回显在控制台、也会写进日志，
+      而用户拿它去比对与点开时对不上；现在命中后向目录本身要一次真实大小写（POSIX 大小写要紧，原样返回）。
+      证据：`src/lib/process/executable-resolve.ts`（`UsabilityProbe` / `onDiskName`）、
+      `src/lib/process/executable-resolve.test.ts`（`posixHost`）、`src/lib/console/console-run.test.ts`。
+      变异检过两刀：让注入的探针失效（恒问真机器）→ POSIX 那 4 条红；去掉大小写归一 → 控制台那条红。
 - [x] **E11 `check-format.cjs` 的 fail-open：prettier 没跑成时被读成「全库干净」（本批修复 + 判据）**：
       发现路径不是「有人投诉格式」，而是另一条批次的提交门槛红了 —— `tests/check-format.test.ts`
       里三条「期望门禁拦住」的用例在钩子的多 worker 批次里稳定红，而**串行单跑全绿**。
