@@ -72,7 +72,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(26 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(27 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -183,6 +183,12 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # ⚠️ 追加在末尾是有意的：文档里有「pre-commit 第 N 步」这种按序号的引用（本身已与钩子对不上，
   # 另账处理），插在中间会让那些数字一次性全部错位。
   run "文档引用与权威源一致" node scripts/check-doc-references.cjs
+  # 故事文件的枚举来源（规范 16 §16.2.3.2 / §11.8）：`cva()` 返回的是函数，
+  # 运行时没有 `.variants` —— 写成 `Object.keys(xVariants.variants.轴)` 时 tsc 会红，
+  # 而 Storybook 在**加载期**抛 `Cannot read properties of undefined`（侧栏有故事、
+  # 画布一片空白）。判据还顺带核「手写清单没漏档」——首轮就这么漏了
+  # `icon-sm` / `icon-lg` 两档（实测 46 处调用）。
+  run "故事枚举来源（cva 返回值 / 漏档）" node scripts/storybook-check.mjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────
