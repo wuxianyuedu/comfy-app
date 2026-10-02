@@ -1,10 +1,13 @@
 /**
- * `/api/materials` 的闸门用例（与 tRPC 的 `material.*` 同一套判据、两个入口）。
+ * `/api/materials` 的闸门用例 —— 素材库这一族**现在只有这一个入口**。
  *
- * 这条 REST 路由是素材面板实际走的那一条（`~/lib/media/materials-client`），
- * 而它与 tRPC 侧此前**各写一份** `resolveScopes`、两份都不判归属 —— 只测一边
- * 等于另一半没 gate。所以这里的用例刻意与 `material.test.ts` 同形：
- * 读侧「越权与不存在同形」，写 / 删侧「拒绝发生在落盘之前」。
+ * 这里曾写着「与 tRPC 的 `material.*` 同一套判据、两个入口」：那条门后来因
+ * **零消费方**删掉了（素材面板走的就是这条 REST，`~/lib/media/materials-client`），
+ * 用例因此全部收拢到这一份 —— 包括原先由那扇门覆盖的分支（见「素材库根读不出来」
+ * 那条）。判据本身在 `~/lib/media/materials.ts` 一处，两个入口曾经各写一份
+ * `resolveScopes`、两份都不判归属，那才是这段历史的意义。
+ *
+ * 组织方式：读侧「越权与不存在同形」，写 / 删侧「拒绝发生在落盘之前」。
  *
  * mock 边界：`fs`（内存假象，读写调用都记下来 —— 「没落盘」与「没读盘」都是
  * 要断言的事）、`~/server/auth/request-user`（鉴权两态）、
@@ -175,6 +178,23 @@ describe("GET /api/materials —— 读侧归属", () => {
       await GET(reqOf(urlOf("?scope=cross&folder=ref")))
     ).json()) as { items: { scope: string }[] };
     expect(body.items.map((i) => i.scope)).not.toContain("proj-b");
+  });
+
+  it("素材库根本身读不出来 → cross 按「没有别的 scope」答，而不是 500", async () => {
+    /* `listScopes()` 的 catch 分支：这一格的故障不是「用户没素材」，是磁盘层面
+     * 读不到目录（权限 / 根目录还没建）。原先这一支由 tRPC 那扇门用例覆盖，
+     * 门删掉之后必须由活着的这一扇判住 —— 否则「判据一条不减」只是句空话。 */
+    dirEntries.delete(ROOT);
+    const res = await GET(reqOf(urlOf("?scope=cross&folder=ref")));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      items: { scope: string }[];
+      folders: unknown[];
+    };
+    // 只剩共享区那一份（它是末尾统一补的，不依赖能不能枚举到目录）
+    expect(body.items.map((i) => i.scope)).toEqual([SHARED_SCOPE]);
+    // 7 个分类仍然恒定存在（前端不必自己补齐缺失分类）
+    expect(body.folders).toHaveLength(7);
   });
 
   it("未知分类 → 400（分类是枚举，不是路径片段）", async () => {
