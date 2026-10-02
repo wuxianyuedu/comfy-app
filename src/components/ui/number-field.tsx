@@ -129,7 +129,7 @@ export function NumberField({
           onCommit: ({ currentTarget }) => currentTarget.blur(),
         })}
         disabled={disabled}
-        className="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="text-ink-bright h-6 min-w-9 flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <Button
         variant="ghost"

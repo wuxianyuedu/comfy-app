@@ -35,7 +35,7 @@ const PANEL_ANCHOR_OFFSET = 48;
 /** 「面板 ↔ 视口上沿 / 下沿」的最小留白（px）。 */
 const PANEL_EDGE_GAP_PX = 16;
 
-/** 面板的自然高度（`h-[560px]`），后面几处算式都要引用它。 */
+/** 面板的自然高度（`h-140`），后面几处算式都要引用它。 */
 const PANEL_HEIGHT_PX = 560;
 
 /** 「图标上方放得下」的判据（px）：低于它就把面板改从图标下方展开。
@@ -203,7 +203,7 @@ export function AgentOverlay({
             {toolRuns.map((run) => (
               <div key={run.id} className="flex items-center gap-2">
                 <span
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${TOOL_STATUS_COLOR[run.status]}`}
+                  className={`size-1.5 shrink-0 rounded-full ${TOOL_STATUS_COLOR[run.status]}`}
                   style={
                     run.status === "running"
                       ? { animation: "pulse 1.2s ease-in-out infinite" }

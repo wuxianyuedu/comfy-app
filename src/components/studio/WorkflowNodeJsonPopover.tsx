@@ -189,7 +189,7 @@ export function NodeJsonPopover({
       <PopoverContent
         anchor={anchorElement}
         aria-label={`节点 #${request.nodeId} 的原始 JSON`}
-        className="w-[460px] max-w-[calc(100vw-2rem)] gap-0 border-0 bg-transparent p-0 shadow-none ring-0"
+        className="w-115 max-w-[calc(100vw-2rem)] gap-0 border-0 bg-transparent p-0 shadow-none ring-0"
         positionerClassName="max-h-[60vh]"
         collisionPadding={12}
         onMouseDown={(event) => event.stopPropagation()}

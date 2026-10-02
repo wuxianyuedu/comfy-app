@@ -189,7 +189,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   className="px-1.5 py-px text-[10px]"
                 />
                 <span
-                  className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                  className={`inline-block size-1.5 shrink-0 rounded-full ${
                     connected
                       ? "bg-success shadow-[0_0_6px_rgba(52,211,153,0.7)]"
                       : "bg-gray-600"
@@ -318,7 +318,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
                   {!valErrs.length && error && (
                     <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-[13px]">
-                      <div className="break-words whitespace-pre-wrap">
+                      <div className="wrap-break-word whitespace-pre-wrap">
                         {error}
                       </div>
                     </div>

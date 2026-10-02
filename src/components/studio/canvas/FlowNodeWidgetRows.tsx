@@ -102,8 +102,8 @@ export function FlowNodeWidgetRows({
             className={
               isStringWidget
                 ? "group relative flex min-h-0 flex-1 flex-col gap-1.5 py-1.5 pr-2 pl-5 text-[11px]"
-                : // min-h-[22px] h-auto lets long labels wrap.
-                  "group relative flex h-auto min-h-[22px] items-center gap-1.5 py-0.5 pr-2 pl-5 text-[11px]"
+                : // min-h-5.5 h-auto lets long labels wrap.
+                  "group relative flex h-auto min-h-5.5 items-center gap-1.5 py-0.5 pr-2 pl-5 text-[11px]"
             }
             /* 相关行提亮背景、无关行整行压暗（与 FlowNodePinRows 同一张表）。 */
             style={{ background: tone.background, opacity: tone.opacity }}
@@ -117,7 +117,7 @@ export function FlowNodeWidgetRows({
               position={Position.Left}
               id={k}
               isConnectable
-              className="!size-2.5 !rounded-full !border"
+              className="size-2.5! rounded-full! border!"
               style={{
                 left: 5,
                 background: typeCol,
@@ -152,7 +152,7 @@ export function FlowNodeWidgetRows({
                   />
                 )}
                 <span
-                  className="shrink-0 text-left text-[11px] break-words whitespace-normal"
+                  className="shrink-0 text-left text-[11px] wrap-break-word whitespace-normal"
                   style={{
                     /* 提亮档统一走表里的色；其余行沿用「连线行比普通行重一档」的
                      * 既有口径（`ink-strong` / `ink-subtle`）。 */
@@ -185,7 +185,7 @@ export function FlowNodeWidgetRows({
                   />
                 )}
                 <span
-                  className="min-w-0 shrink text-left text-[11px] break-words whitespace-normal"
+                  className="min-w-0 shrink text-left text-[11px] wrap-break-word whitespace-normal"
                   style={{
                     flex: "0 1 auto",
                     color: tone.background

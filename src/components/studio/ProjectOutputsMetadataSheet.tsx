@@ -68,7 +68,7 @@ export function ProjectOutputsMetadataSheet({
           aria-label={`产出 #${selected?.id.slice(-4) ?? ""}`}
           showCloseButton={false}
           className="gap-0 p-0"
-          panelClassName="bg-node border-border-strong w-[380px] max-w-[90vw]"
+          panelClassName="bg-node border-border-strong w-95 max-w-[90vw]"
         >
           {selected && (
             <>

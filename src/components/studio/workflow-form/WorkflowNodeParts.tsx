@@ -33,7 +33,7 @@ export function WorkflowNodeCardShell({
 }) {
   return (
     <div
-      className={`border-border-strong bg-card relative w-[380px] rounded-[14px] border shadow-xl shadow-black/6 dark:shadow-black/30 ${className}`}
+      className={`border-border-strong bg-card relative w-95 rounded-[14px] border shadow-xl shadow-black/6 dark:shadow-black/30 ${className}`}
     >
       {children}
     </div>
@@ -51,7 +51,7 @@ export function WorkflowNodeHeader({
   right?: React.ReactNode;
 }) {
   return (
-    <div className="flex h-8 min-w-0 items-center justify-between gap-2 pr-[14px] pl-[14px]">
+    <div className="flex h-8 min-w-0 items-center justify-between gap-2 pr-3.5 pl-3.5">
       <div className="flex min-w-0 items-center gap-2">
         <span
           aria-label="类型 工作流"
@@ -88,7 +88,7 @@ export function WorkflowNodePill({
 }) {
   return (
     <div
-      className="bg-node-accent flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] px-2"
+      className="bg-node-accent flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2"
       title={title}
     >
       {children}
@@ -135,7 +135,7 @@ export function WorkflowNodeActionButton({
         variant="ghost"
         disabled={disabled}
         onClick={onClick}
-        className="nodrag nopan from-primary to-accent h-[43px] w-full justify-center gap-2 rounded-t-none rounded-b-[14px] bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] hover:opacity-95"
+        className="nodrag nopan from-primary to-accent h-10.75 w-full justify-center gap-2 rounded-t-none rounded-b-[14px] bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] hover:opacity-95"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
@@ -170,7 +170,7 @@ export function WorkflowNodeOutputsRow({
       {renderHandle && output.ioKey
         ? renderHandle({ id: output.ioKey, dir: "out", type: oType })
         : null}
-      <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
+      <div className="flex h-5 items-center justify-end gap-1.5 px-3.5 pt-1.5">
         <span
           className="text-ink-bright min-w-0 truncate text-[14px] font-semibold"
           style={{ fontFamily: "var(--font-sans)" }}

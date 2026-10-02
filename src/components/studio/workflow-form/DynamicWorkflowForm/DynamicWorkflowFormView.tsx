@@ -222,7 +222,7 @@ export function DynamicWorkflowFormView({
                  * 下拉上起手会在 dragstart 里被取消）；它自身 pointer-events-none，
                  * 点击会落到下面的输入框上。 */}
                 <div
-                  className="z-base pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 text-[10px] leading-[6px] text-white/30 select-none"
+                  className="z-base pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 text-[10px] leading-1.5 text-white/30 select-none"
                   aria-hidden
                 >
                   ⋮⋮

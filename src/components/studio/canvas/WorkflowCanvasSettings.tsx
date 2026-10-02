@@ -202,7 +202,7 @@ export function CanvasSettingsPanel({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="bg-panel/97 border-border-strong text-ink-bright w-[340px] gap-0 border-l shadow-2xl shadow-black/10 sm:max-w-[340px] dark:shadow-black/50"
+        className="bg-panel/97 border-border-strong text-ink-bright w-85 gap-0 border-l shadow-2xl shadow-black/10 sm:max-w-85 dark:shadow-black/50"
         aria-label="工作流画布设置"
       >
         <SheetTitle className="sr-only">工作流画布设置</SheetTitle>

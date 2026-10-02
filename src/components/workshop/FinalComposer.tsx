@@ -243,7 +243,7 @@ export function FinalComposer({
             </span>
             <span>{current.shot.sceneHeading}</span>
           </div>
-          <div className="bg-bg grid min-h-[240px] place-items-center overflow-hidden rounded-xl">
+          <div className="bg-bg grid min-h-60 place-items-center overflow-hidden rounded-xl">
             {current.shot.clipUrl ? (
               <MediaThumbnail
                 key={current.shot.id}
@@ -251,13 +251,13 @@ export function FinalComposer({
                 autoPlay
                 controls
                 onEnded={advance}
-                className="max-h-[420px] w-full"
+                className="max-h-105 w-full"
               />
             ) : current.shot.imageUrl ? (
               <MediaThumbnail
                 src={current.shot.imageUrl}
                 alt={current.shot.sceneHeading}
-                className="max-h-[420px] w-full object-contain"
+                className="max-h-105 w-full object-contain"
               />
             ) : (
               <span className="text-muted-foreground text-xs">
@@ -337,7 +337,7 @@ export function FinalComposer({
                   labelClassName="text-muted-foreground mb-0.5 text-[10px]"
                 >
                   <SelectMenu
-                    className="!bg-subtle !border-border text-xs"
+                    className="bg-subtle! border-border! text-xs"
                     value={shot.transition ?? "cut"}
                     onChange={(value) =>
                       updateShot(shot.id, { transition: value as Transition })
@@ -352,7 +352,7 @@ export function FinalComposer({
                   labelClassName="text-muted-foreground mb-0.5 text-[10px]"
                 >
                   <SelectMenu
-                    className="!bg-subtle !border-border text-xs"
+                    className="bg-subtle! border-border! text-xs"
                     value={shot.motion ?? "medium"}
                     onChange={(value) =>
                       updateShot(shot.id, { motion: value as MotionLevel })

@@ -131,13 +131,13 @@ export function topBarGroupClass(density: TopBarDensity): string {
  * 返回箭头 30 + 间距 12 + 约 7 个中文字符的标题区——名字到这个宽度已经
  * 看不清，确实该让位给按钮了。
  */
-export const TOP_BAR_BREADCRUMB_MIN_WIDTH_CLASS = "min-w-[170px]";
+export const TOP_BAR_BREADCRUMB_MIN_WIDTH_CLASS = "min-w-42.5";
 
 /**
  * 顶栏左侧面包屑区的 class：可被压缩，但压缩的是这块、不是按钮。
  *
  * `flex-1` 让本块承担宽度协商的压力（配合内部标题的 `truncate` 截断，
- * 这是设计内的退化）；`min-w-[200px]` 是它的地板，见
+ * 这是设计内的退化）；`min-w-50` 是它的地板，见
  * `TOP_BAR_BREADCRUMB_MIN_WIDTH_CLASS` 的说明——地板的真正作用是让根容器
  * 的 `flex-wrap` 能被触发，而不是无穷无尽地再压一点。
  */

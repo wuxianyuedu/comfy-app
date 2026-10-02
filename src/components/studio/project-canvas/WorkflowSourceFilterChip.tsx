@@ -41,7 +41,7 @@ export function WorkflowSourceFilterChip({
       trigger={
         <>
           <span
-            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            className={`size-1.5 shrink-0 rounded-full ${
               isLocal ? "bg-status-online" : "bg-primary-strong"
             }`}
           />
@@ -60,7 +60,7 @@ export function WorkflowSourceFilterChip({
         label: option.label,
         prefix: (
           <span
-            className={`h-1.5 w-1.5 rounded-full ${
+            className={`size-1.5 rounded-full ${
               option.local ? "bg-status-online" : "bg-primary-strong"
             }`}
           />

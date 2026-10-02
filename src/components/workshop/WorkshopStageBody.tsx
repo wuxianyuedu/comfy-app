@@ -59,7 +59,7 @@ const LazyFinalComposer = React.lazy(() =>
 /** 懒加载占位：保留版面高度，避免 stage 切换瞬间塌陷。 */
 function StageFallback() {
   return (
-    <Skeleton className="border-border bg-surface min-h-[260px] rounded-2xl border p-5" />
+    <Skeleton className="border-border bg-surface min-h-65 rounded-2xl border p-5" />
   );
 }
 
@@ -194,7 +194,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 </div>
               </div>
               <div
-                className={`${SCROLLBAR_VISIBLE_CLASSES} bg-bg text-ink-subtle max-h-[480px] rounded-xl p-4 text-[13px] leading-7`}
+                className={`${SCROLLBAR_VISIBLE_CLASSES} bg-bg text-ink-subtle max-h-120 rounded-xl p-4 text-[13px] leading-7`}
                 dangerouslySetInnerHTML={{
                   __html: markdownToHtml(scriptMarkdown),
                 }}

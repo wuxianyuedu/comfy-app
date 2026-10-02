@@ -159,7 +159,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               const isLast = i === subgraphStack.length - 1;
               /* 所有面包屑通用的截断样式。 */
               const baseCls =
-                "max-w-[260px] truncate text-[14px] font-medium transition-colors";
+                "max-w-65 truncate text-[14px] font-medium transition-colors";
               if (isLast) {
                 /* 当前子图：不可点击的 span，配紫色
                  *  选中药丸，视觉上钉住「此处」

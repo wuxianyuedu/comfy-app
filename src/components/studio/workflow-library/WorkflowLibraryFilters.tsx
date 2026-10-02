@@ -67,7 +67,7 @@ function CountBadge({ count }: { count: number }) {
  *  （规范 03 §3.8.1），排不下由外层整组换行。
  */
 const TRIGGER_CLS =
-  "w-auto min-w-[112px] shrink-0 gap-x-1 rounded-full px-3 py-1 text-xs";
+  "w-auto min-w-28 shrink-0 gap-x-1 rounded-full px-3 py-1 text-xs";
 
 export function WorkflowLibraryFilters({
   sourceFilter,

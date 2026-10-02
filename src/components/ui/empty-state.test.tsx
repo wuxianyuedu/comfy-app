@@ -72,8 +72,8 @@ describe("EmptyState（三合一）", () => {
 
   it("minHeightClass 可覆盖（原 studio/ui 的列表区矮态）", () => {
     const { container } = render(
-      <EmptyState title="空" minHeightClass="min-h-[160px]" />,
+      <EmptyState title="空" minHeightClass="min-h-40" />,
     );
-    expect(container.firstElementChild?.className).toContain("min-h-[160px]");
+    expect(container.firstElementChild?.className).toContain("min-h-40");
   });
 });

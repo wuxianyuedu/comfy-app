@@ -184,8 +184,8 @@ export function WidgetInputRow({
               style={{ top: 16, transform: "translateY(-50%)" }}
             />
           )}
-          <div className="px-[14px] pt-1.5">{labelRow}</div>
-          <div className="px-[14px] pt-1 pb-1.5">
+          <div className="px-3.5 pt-1.5">{labelRow}</div>
+          <div className="px-3.5 pt-1 pb-1.5">
             <span className="text-ink-muted text-[11px]">只接受连线</span>
           </div>
         </div>
@@ -196,7 +196,7 @@ export function WidgetInputRow({
         {withHandle && (
           <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
         )}
-        <div className="bg-canvas-deep flex items-center gap-2 rounded-md px-2.5 py-1.5 pr-[14px] pl-[14px]">
+        <div className="bg-canvas-deep flex items-center gap-2 rounded-md px-2.5 py-1.5 pr-3.5 pl-3.5">
           <span
             className="size-2 shrink-0 rounded-full"
             style={{ background: accent }}
@@ -253,8 +253,8 @@ export function WidgetInputRow({
             style={{ top: 16, transform: "translateY(-50%)" }}
           />
         )}
-        <div className="px-[14px] pt-1.5">{labelRow}</div>
-        <div className="px-[14px] pt-1 pb-1.5">{control}</div>
+        <div className="px-3.5 pt-1.5">{labelRow}</div>
+        <div className="px-3.5 pt-1 pb-1.5">{control}</div>
       </div>
     );
   }
@@ -266,7 +266,7 @@ export function WidgetInputRow({
       {withHandle && (
         <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
       )}
-      <div className="px-[14px] pt-1.5">{labelRow}</div>
+      <div className="px-3.5 pt-1.5">{labelRow}</div>
       {control}
     </div>
   );

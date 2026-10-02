@@ -128,7 +128,7 @@ export function WorkshopAside({
       {/* Missing materials */}
       <div className="border-border bg-surface rounded-2xl border p-4">
         <div className="mb-3 flex items-center gap-2">
-          <span className="bg-amber/20 text-amber grid h-[22px] w-[22px] place-items-center rounded-lg text-[13px] font-bold">
+          <span className="bg-amber/20 text-amber grid size-5.5 place-items-center rounded-lg text-[13px] font-bold">
             !
           </span>
           <span className="text-ink text-[13px] font-semibold">

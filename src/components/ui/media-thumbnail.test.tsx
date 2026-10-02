@@ -38,7 +38,7 @@ describe("失败兜底收在出口里", () => {
 
   it("失败后默认换成中性占位，且不是把元素藏起来（格子仍在）", () => {
     const { container } = render(
-      <MediaThumbnail src={IMG} alt="x" className="h-10 w-10" />,
+      <MediaThumbnail src={IMG} alt="x" className="size-10" />,
     );
     failFirstMedia(container);
     /* 破图 / 被藏起来的元素都该消失。 */
@@ -47,7 +47,7 @@ describe("失败兜底收在出口里", () => {
     expect(placeholder).not.toBeNull();
     expect(placeholder!.textContent).toContain("图片不可用");
     /* 占位继承调用处的盒子 —— `display:none` / `visibility:hidden` 做不到这点。 */
-    expect(placeholder!.className).toContain("h-10");
+    expect(placeholder!.className).toContain("size-10");
   });
 
   it('fallback="none" 时什么都不渲染（列表里宁缺勿错）', () => {

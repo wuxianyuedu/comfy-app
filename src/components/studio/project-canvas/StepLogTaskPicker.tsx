@@ -68,7 +68,7 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
       )}
       placeholder={taskId ? undefined : "（无任务）"}
       aria-label="切换查看的任务"
-      className="max-w-[200px] text-[10.5px]"
+      className="max-w-50 text-[10.5px]"
     />
   );
 });

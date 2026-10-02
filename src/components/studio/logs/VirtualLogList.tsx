@@ -53,7 +53,7 @@ export interface VirtualLogListProps<T> {
   getId?: (entry: T) => string | undefined;
   /** 渲染单行。 */
   renderRow: RenderLogRow<T>;
-  /** 折行估高（默认 true，与 `LogPanel` 一致：`break-words whitespace-pre-wrap`）。 */
+  /** 折行估高（默认 true，与 `LogPanel` 一致：`wrap-break-word whitespace-pre-wrap`）。 */
   wrap?: boolean;
   /** 受控的「跟随底部」态；不给则非受控，组件自持。 */
   following?: boolean;

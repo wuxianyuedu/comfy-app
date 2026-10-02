@@ -137,7 +137,7 @@ export function ProjectOutputs() {
     return (
       <div className="h-full overflow-y-auto">
         <AuroraBackground />
-        <div className="mx-auto grid min-h-[60vh] max-w-[1100px] place-items-center px-6 text-center">
+        <div className="mx-auto grid min-h-[60vh] max-w-275 place-items-center px-6 text-center">
           <div>
             <p className="text-ink-soft text-lg font-medium">
               还没有打开任何画布项目
@@ -154,7 +154,7 @@ export function ProjectOutputs() {
   return (
     <div className="h-full overflow-y-auto">
       <AuroraBackground />
-      <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-8">
+      <div className="mx-auto max-w-275 px-4 py-6 sm:px-8">
         {/* ── Header ── */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -187,7 +187,7 @@ export function ProjectOutputs() {
 
         {/* ── Cover banner ── */}
         {/* p71-allow:start brand violet/fuchsia · 封面横幅与项目徽章（非状态色），见 §3.6.1 */}
-        <div className="relative mb-6 h-[180px] overflow-hidden rounded-2xl border border-violet-500/20">
+        <div className="relative mb-6 h-45 overflow-hidden rounded-2xl border border-violet-500/20">
           {cover ? (
             <MediaThumbnail
               src={cover.localPath}
@@ -220,7 +220,7 @@ export function ProjectOutputs() {
           <EmptyState
             title="还没有产出"
             description="在画布里跑一次生成，结果会自动归档到本项目目录。"
-            minHeightClass="min-h-[280px]"
+            minHeightClass="min-h-70"
           />
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
