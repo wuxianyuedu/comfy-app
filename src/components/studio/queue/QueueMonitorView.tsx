@@ -62,7 +62,7 @@ export function QueueMonitorView({
   return (
     <div className="h-full overflow-y-auto">
       <AuroraBackground />
-      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
+      <div className="mx-auto max-w-300 px-4 py-8 sm:px-8 sm:py-10">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="font-title u-title-page">队列与运行</h1>
@@ -253,7 +253,7 @@ export function QueueMonitorView({
               ) : (
                 <EmptyState
                   variant="hint"
-                  minHeightClass="min-h-[120px]"
+                  minHeightClass="min-h-30"
                   title={runningHint.title}
                   description={runningHint.description}
                 />

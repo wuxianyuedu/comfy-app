@@ -83,7 +83,7 @@ describe("详情头部：窄屏不丢按钮", () => {
   it("标题区有可读下限（压缩压力交给它，标题截断而不是把按钮挤出去）", () => {
     renderHeader();
     expect(screen.getByTestId("detail-title-block").className).toContain(
-      "min-w-[180px]",
+      "min-w-45",
     );
   });
 });
@@ -142,8 +142,8 @@ describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
 
   /* 用户口径：「全屏时，下方区域有空白却不是画布」。
    *
-   * 根因是**高度链条断了 + fitView 的下限由内容高度决定**：画布容器钉在
-   * `h-[460px]`、横向画布之外还套了一层 `overflow-auto`（它按内容高度收边），
+   * 根因是**高度链条断了 + fitView 的下限由内容高度决定**：画布容器只给了一层
+   * 固定下限（`min-h-115`）、横向画布之外还套了一层 `overflow-auto`（它按内容高度收边），
    * 而 React Flow 的 `fitView` 又只按节点包围盒缩放 —— 内容比视口矮时它不会
    * 把画布放大到铺满视口，于是画布底边以下落回面板底色。
    *
@@ -153,9 +153,9 @@ describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
 
   it("画布容器吃满可用高度，不再被钉死在外层高度上", () => {
     const canvas = read("WorkflowLibraryCanvas.tsx");
-    expect(canvas).toMatch(/bg-canvas relative h-full min-h-\[460px\]/);
+    expect(canvas).toMatch(/bg-canvas relative h-full min-h-115/);
     /* 画布自己的底色要在画布这一层（面板底色深浅不同，没铺到就成了那条缝）。 */
-    expect(canvas).not.toMatch(/bg-panel-deep relative h-full min-h-\[460px\]/);
+    expect(canvas).not.toMatch(/bg-panel-deep relative h-full min-h-115/);
   });
 
   it("预览纵向吃满父级，中间不再有一层按内容收边的高度来源", () => {
@@ -164,7 +164,7 @@ describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
     );
     /* 页签面板把高度传下去（缺 `h-full` 则整条链断在第一层）。 */
     expect(read("sections/DetailBody.tsx")).toMatch(
-      /flex h-full min-h-\[420px\] flex-col/,
+      /flex h-full min-h-105 flex-col/,
     );
   });
 
@@ -278,7 +278,7 @@ describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
     expect(filters).not.toMatch(/flex flex-wrap items-center gap-2/);
 
     /* 触发按钮：宽度跟内容走，且不许被压。 */
-    expect(filters).toContain("min-w-[112px] shrink-0");
+    expect(filters).toContain("min-w-28 shrink-0");
   });
 
   it("页头把筛选包成一组并交给整行换行，动作组不许被压", () => {

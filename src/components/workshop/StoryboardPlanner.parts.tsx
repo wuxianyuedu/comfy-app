@@ -85,7 +85,7 @@ export function ShotRow({
           labelClassName="text-muted-foreground mb-1 text-xs"
         >
           <SelectMenu
-            className="!bg-subtle !border-border text-xs"
+            className="bg-subtle! border-border! text-xs"
             value={shot.shotType}
             onChange={(value) =>
               onUpdate(shot.id, { shotType: value as ShotType })
@@ -104,7 +104,7 @@ export function ShotRow({
           labelClassName="text-muted-foreground mb-1 text-xs"
         >
           <SelectMenu
-            className="!bg-subtle !border-border text-xs"
+            className="bg-subtle! border-border! text-xs"
             value={shot.skillSlug ?? ""}
             onChange={(value) =>
               onUpdate(shot.id, { skillSlug: value || undefined })
@@ -181,7 +181,7 @@ export function ShotRow({
             </Hint>
           )}
         </p>
-        <p className="text-ink/80 text-xs leading-relaxed break-words">
+        <p className="text-ink/80 text-xs leading-relaxed wrap-break-word">
           {shot.prompt || "填写描述后自动生成…"}
         </p>
         {polishError && (

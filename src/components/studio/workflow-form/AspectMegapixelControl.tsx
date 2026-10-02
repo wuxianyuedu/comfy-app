@@ -412,12 +412,12 @@ export function AspectMegapixelControl({
                 .map((entry) => (
                   <div
                     key={entry.ioKey}
-                    /* 左内边距与节点上其他参数行同款（`pl-[14px]`）：端点圆点
+                    /* 左内边距与节点上其他参数行同款（`pl-3.5`）：端点圆点
                      * 12px、圆心骑跨卡片左缘（-6），文字从 14px 起 —— 圆点与
-                     * 参数名之间才留得出 8px 的空隙。此前这里是`pl-[2px]`，
+                     * 参数名之间才留得出 8px 的空隙。此前这里是`pl-0.5`，
                      * 圆点右沿（6px）压过文字起点（2px），名字被圆点盖住
                      * （ISSUE #355：「端口圆点和参数名字之间距离太近」）。 */
-                    className="relative flex h-[22px] items-center gap-1.5 pl-[14px]"
+                    className="relative flex h-5.5 items-center gap-1.5 pl-3.5"
                     /* 行锚点：拖拽重排与 e2e 按它认「这一行是哪一格」。 */
                     data-io-key={entry.ioKey}
                   >
@@ -451,7 +451,7 @@ export function AspectMegapixelControl({
               <span className="text-accent text-[10px] font-semibold tracking-wider uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
-              <div className="mt-1 w-[168px] min-w-0">
+              <div className="mt-1 w-42 min-w-0">
                 <MultiSegmentPopover
                   ariaLabel={
                     multiple ? "选择比例、像素与倍数" : "选择比例与像素"

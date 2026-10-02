@@ -75,7 +75,7 @@ export function StatusBadge({
     <Badge tone={tone} className={className}>
       {dot && (
         <span
-          className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-80"
+          className="size-1.5 shrink-0 rounded-full bg-current opacity-80"
           aria-hidden
         />
       )}

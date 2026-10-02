@@ -95,7 +95,7 @@ export function ChannelSwitch({
         <FieldLabel className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">帧率</span>
           <SelectMenu
-            className="!bg-subtle !border-border text-xs"
+            className="bg-subtle! border-border! text-xs"
             value={String(fps)}
             onChange={(v) => onFpsChange(Number(v) || 16)}
             options={FPS_OPTIONS}
@@ -240,7 +240,7 @@ export function ShotCard({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-ink line-clamp-2 text-[11px] leading-relaxed break-words">
+          <p className="text-ink line-clamp-2 text-[11px] leading-relaxed wrap-break-word">
             {videoPrompt(shot) || "(提示词为空)"}
           </p>
           <div className="mt-1.5 flex items-center gap-2">
@@ -266,7 +266,7 @@ export function ShotCard({
             <FieldLabel className="flex items-center gap-1 text-[11px]">
               <span className="text-muted-foreground">运动</span>
               <SelectMenu
-                className="!bg-subtle !border-border text-[11px]"
+                className="bg-subtle! border-border! text-[11px]"
                 value={shot.motion ?? "medium"}
                 onChange={(v) => onPatch({ motion: v as MotionLevel })}
                 options={MOTIONS}

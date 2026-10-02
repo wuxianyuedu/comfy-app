@@ -59,7 +59,7 @@ export function StyleSwitcher({
          *`flex-1` 改的是 flex 项的伸缩，而触发器自身仍是内容宽，
          * 旁边的兄弟一变长它就被挤回内容宽。 */
         fullWidth={!narrow}
-        className={narrow ? "w-[148px] max-w-full" : ""}
+        className={narrow ? "w-37 max-w-full" : ""}
         onChange={(value) => onChange(value as GroupStyle)}
       />
     </div>

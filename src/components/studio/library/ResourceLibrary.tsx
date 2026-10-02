@@ -57,7 +57,7 @@ export function ResourceLibrary() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
+      <div className="mx-auto max-w-300 px-4 py-8 sm:px-8 sm:py-10">
         {/* ── 页头：标题 + 说明 + 动作 ── */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -218,7 +218,7 @@ export function ResourceLibrary() {
         {/* ── 错误条：拉取与动作失败共用一条（控制器已保证动作错误优先）── */}
         {library.error && (
           <div className="border-destructive/30 bg-destructive/10 mb-4 flex items-start gap-2 rounded-lg border px-3 py-2">
-            <span className="text-destructive min-w-0 flex-1 text-[12px] break-words">
+            <span className="text-destructive min-w-0 flex-1 text-[12px] wrap-break-word">
               {library.error}
             </span>
             <Button
@@ -237,7 +237,7 @@ export function ResourceLibrary() {
             icon={FolderOpen}
             title="还没有打开的项目"
             description="素材按项目归档。先在画布 / 工坊里打开一个项目，这里就会列出它的素材；切换上方「跨项目」也可以先浏览全部项目的素材。"
-            minHeightClass="min-h-[300px]"
+            minHeightClass="min-h-75"
             action={
               <Button
                 variant="outline"

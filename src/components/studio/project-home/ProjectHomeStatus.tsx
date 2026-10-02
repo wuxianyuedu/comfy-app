@@ -31,7 +31,7 @@ function StageIcon({ done, current }: { done: boolean; current: boolean }) {
   }
   if (current) {
     /* 转圈走基元（P3 硬闸：自写 `animate-spin` 不许出现在视图里）。 */
-    return <Spinner className="text-primary size-[13px]" />;
+    return <Spinner className="text-primary size-3.25" />;
   }
   return <Circle size={13} className="text-ink-fainter" aria-hidden />;
 }

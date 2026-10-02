@@ -286,7 +286,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     position={Position.Left}
                     id={inp.name}
                     isConnectable={false}
-                    className="!size-2 !rounded-full"
+                    className="size-2! rounded-full!"
                     style={{
                       left: 0,
                       top: `calc(50% + ${offset}px)`,
@@ -308,7 +308,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     position={Position.Right}
                     id={`out:${out.name}`}
                     isConnectable={false}
-                    className="!size-2 !rounded-full"
+                    className="size-2! rounded-full!"
                     style={{
                       right: 0,
                       top: `calc(50% + ${offset}px)`,
@@ -352,7 +352,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                 /* 长的边界端口标签换行到
                  *                    *  多行换行，而不是被裁到 22px。完整理由见 WorkflowNode 内联分支
                  *                    *  的注释。 */
-                className="relative flex h-auto min-h-[22px] items-center py-0.5 pr-5 pl-5 text-[11px]"
+                className="relative flex h-auto min-h-5.5 items-center py-0.5 pr-5 pl-5 text-[11px]"
                 data-sub-pin-input={inName}
                 data-sub-pin-output={outName}
               >
@@ -363,7 +363,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                       position={Position.Left}
                       id={inName}
                       isConnectable={false}
-                      className="!border-port-surface !size-2.5 !rounded-full !border"
+                      className="border-port-surface! size-2.5! rounded-full! border!"
                       style={{
                         left: 5,
                         background: inCol,
@@ -395,7 +395,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                        *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
                        *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
                        *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
-                      className="text-ink-bright min-w-0 flex-1 text-left text-[11px] break-words whitespace-normal"
+                      className="text-ink-bright min-w-0 flex-1 text-left text-[11px] wrap-break-word whitespace-normal"
                       title={`${inLabel} (${inType})`}
                     >
                       {inLabel}
@@ -406,7 +406,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                   <>
                     <span
                       /* 与上面边界输入分支同款换行修正。 */
-                      className="text-ink-bright min-w-0 flex-1 text-right text-[11px] break-words whitespace-normal"
+                      className="text-ink-bright min-w-0 flex-1 text-right text-[11px] wrap-break-word whitespace-normal"
                       title={`${outDisplay} (${outType})`}
                     >
                       {outDisplay}
@@ -424,14 +424,16 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                       position={Position.Right}
                       id={`out:${outName}`}
                       isConnectable={false}
-                      className="!border-port-surface !rounded-full !border"
+                      className="border-port-surface! rounded-full! border!"
                       style={{
-                        right: 5,
                         background: outCol,
                         boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
+                        /* 默认右偏 5px，与左端口那颗的 `left: 5` 对称；IO 编辑模式缩到 4px
+                         *  并贴住右边缘（`right: 0`）。**别把 `right` 提到 spread 之前**：
+                         *  同一属性会被指定两次，TS 报 2783「此扩张将始终覆盖此属性」。 */
                         ...(io?.ioEditMode
                           ? { width: 4, height: 4, opacity: 0.35, right: 0 }
-                          : { width: 10, height: 10 }),
+                          : { width: 10, height: 10, right: 5 }),
                       }}
                       title={`${outDisplay} (${outType})`}
                     />
@@ -511,7 +513,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     : /* 标签 | 值框 两格行；行跨满两列并借用父 grid 的列轨道
                        * （subgrid），标签列宽 = 全部行里最长参数名，
                        *  值框起点逐行一致。 */
-                      "group relative grid min-h-[22px] py-0.5 pr-2 pl-5 text-[11px]"
+                      "group relative grid min-h-5.5 py-0.5 pr-2 pl-5 text-[11px]"
                 }
                 style={
                   isStringWidget
@@ -531,7 +533,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     position={Position.Left}
                     id={inp.name}
                     isConnectable={false}
-                    className="!border-port-surface !size-2.5 !rounded-full !border"
+                    className="border-port-surface! size-2.5! rounded-full! border!"
                     style={{
                       left: 5,
                       background: typeCol,
@@ -566,7 +568,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                       <span
                         /* 去掉 `truncate`：让长的封装 widget 标签换成多行
                          *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
-                        className="min-w-0 text-left text-[11px] break-words whitespace-normal"
+                        className="min-w-0 text-left text-[11px] wrap-break-word whitespace-normal"
                         style={{
                           color: isConn
                             ? "var(--color-ink-strong)"
@@ -606,7 +608,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         }
                         disabled
                         fullWidth
-                        className="!h-[22px] min-w-0 !py-0 !text-[11px]"
+                        className="h-5.5! min-w-0 py-0! text-[11px]!"
                         popoverMinWidth={220}
                       />
                     ) : (
@@ -667,7 +669,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                       <span
                         /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
                          *  理由与 WorkflowNode 内联分支相同。 */
-                        className="shrink-0 text-left text-[11px] break-words whitespace-normal"
+                        className="shrink-0 text-left text-[11px] wrap-break-word whitespace-normal"
                         style={{
                           color: isConn
                             ? "var(--color-ink-strong)"

@@ -184,9 +184,7 @@ describe("顶栏容器：窄了换行，不压扁按钮", () => {
     expect(tokens(TOP_BAR_BREADCRUMB_CLASS)).toContain(
       TOP_BAR_BREADCRUMB_MIN_WIDTH_CLASS,
     );
-    expect(tokens(TOP_BAR_BREADCRUMB_MIN_WIDTH_CLASS)).toContain(
-      "min-w-[170px]",
-    );
+    expect(tokens(TOP_BAR_BREADCRUMB_MIN_WIDTH_CLASS)).toContain("min-w-42.5");
   });
 });
 

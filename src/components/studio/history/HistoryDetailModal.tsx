@@ -130,7 +130,7 @@ export function HistoryDetailModal({
               </Hint>
               {actions.folderPopover && (
                 <div
-                  className={`border-border bg-panel-deep absolute top-[52px] right-5 ${zClass("popup")} w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl`}
+                  className={`border-border bg-panel-deep absolute top-13 right-5 ${zClass("popup")} w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl`}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div className="mb-2 flex items-center justify-between">

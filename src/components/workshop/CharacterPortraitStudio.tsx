@@ -144,7 +144,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             labels={localOptionLabels}
             placeholder="选择本地生图模型"
             disabled={session.busy || session.importing}
-            className="!bg-subtle !border-border text-[11px]"
+            className="bg-subtle! border-border! text-[11px]"
             popoverMinWidth={240}
           />
         )}
@@ -155,7 +155,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             options={remoteImageModels}
             placeholder="选择远端生图模型"
             disabled={session.busy || session.importing}
-            className="!bg-subtle !border-border text-[11px]"
+            className="bg-subtle! border-border! text-[11px]"
             popoverMinWidth={220}
           />
         )}

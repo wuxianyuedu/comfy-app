@@ -234,7 +234,7 @@ export function ErrorPanel({
             </p>
           )}
           {!errExpanded && (
-            <p className="nodrag nopan text-danger-strong/80 mt-1 line-clamp-2 text-[10px] break-words">
+            <p className="nodrag nopan text-danger-strong/80 mt-1 line-clamp-2 text-[10px] wrap-break-word">
               {typeof error === "string"
                 ? clampText(error.replace(/\n/g, ""), {
                     maxLength: INLINE_SNIPPET_MAX,

@@ -135,7 +135,7 @@ export function AttributeMultiSelect({
           <PopoverContent
             align="start"
             aria-label={`${label}多选`}
-            className="border-border bg-card w-[300px] gap-0 overflow-hidden rounded-lg p-0 shadow-lg shadow-black/8 dark:shadow-black/40"
+            className="border-border bg-card w-75 gap-0 overflow-hidden rounded-lg p-0 shadow-lg shadow-black/8 dark:shadow-black/40"
           >
             {/* 搜索 */}
             <div className="border-border flex items-center gap-1.5 border-b px-2 py-1.5">
@@ -179,7 +179,7 @@ export function AttributeMultiSelect({
                           }`}
                         >
                           <span
-                            className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded border ${
+                            className={`grid size-3.5 shrink-0 place-items-center rounded border ${
                               on
                                 ? "border-primary bg-primary text-white"
                                 : "border-border bg-bg"

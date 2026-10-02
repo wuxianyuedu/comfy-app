@@ -101,20 +101,20 @@ export default function LoginPage() {
       <AuroraGlow
         tone="violet"
         alpha={0.45}
-        className="-top-40 -right-32 h-[640px] w-[640px] opacity-[0.14] blur-[120px] dark:opacity-70"
+        className="-top-40 -right-32 size-160 opacity-[0.14] blur-[120px] dark:opacity-70"
       />
       <AuroraGlow
         tone="cyan"
         alpha={0.25}
-        className="-bottom-40 -left-32 h-[560px] w-[560px] opacity-10 blur-[110px] dark:opacity-60"
+        className="-bottom-40 -left-32 size-140 opacity-10 blur-[110px] dark:opacity-60"
       />
       <AuroraGlow
         tone="cyan"
         alpha={0.16}
-        className="top-1/3 left-1/2 h-[360px] w-[360px] opacity-[0.08] blur-[90px] dark:opacity-40"
+        className="top-1/3 left-1/2 size-90 opacity-[0.08] blur-[90px] dark:opacity-40"
       />
 
-      <div className="border-border-subtle bg-surface/90 shadow-ink/5 dark:border-border-strong relative w-full max-w-[440px] rounded-[20px] border p-9 shadow-[0_8px_40px] backdrop-blur-xl">
+      <div className="border-border-subtle bg-surface/90 shadow-ink/5 dark:border-border-strong relative w-full max-w-110 rounded-[20px] border p-9 shadow-[0_8px_40px] backdrop-blur-xl">
         {/* Brand */}
         <Link
           href="/"

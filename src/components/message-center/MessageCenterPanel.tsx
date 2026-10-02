@@ -162,7 +162,7 @@ export function MessageCenterPanel() {
                 >
                   <div className="flex items-start gap-3">
                     <span
-                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
+                      className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
                     >
                       <Icon size={14} />
                     </span>
@@ -180,7 +180,7 @@ export function MessageCenterPanel() {
                           {fmtTime(m.time)}
                         </time>
                       </div>
-                      <p className="text-ink-soft mt-1 text-[12.5px] leading-relaxed break-words whitespace-pre-wrap">
+                      <p className="text-ink-soft mt-1 text-[12.5px] leading-relaxed wrap-break-word whitespace-pre-wrap">
                         {m.body}
                       </p>
                     </div>

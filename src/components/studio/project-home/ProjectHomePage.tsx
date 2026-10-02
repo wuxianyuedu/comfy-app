@@ -58,7 +58,7 @@ export function ProjectHomePage({
       <AuroraBackground />
 
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-[960px] flex-col gap-6 px-8 py-10">
+        <div className="mx-auto flex w-full max-w-240 flex-col gap-6 px-8 py-10">
           {/* ── 项目标识 + 一句话进展 ─────────────────────────── */}
           <header className="flex flex-col gap-2">
             <h1 className="u-title-page truncate">{projectName}</h1>
