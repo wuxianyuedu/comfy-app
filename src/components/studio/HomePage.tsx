@@ -229,7 +229,7 @@ export function HomePage({
           新做法不给颜色、只给纵深（surface → canvas 的单向渐隐），深浅两态同一份
           令牌，不需要各写一套。 */}
       <div
-        className="from-surface-1 pointer-events-none absolute inset-x-0 top-0 h-56 bg-gradient-to-b to-transparent"
+        className="from-surface-1 pointer-events-none absolute inset-x-0 top-0 h-56 bg-linear-to-b to-transparent"
         aria-hidden
       />
 
