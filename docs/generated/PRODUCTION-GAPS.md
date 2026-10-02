@@ -480,6 +480,35 @@
       同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
       —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
       按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
+- [x] **E11 `check-format.cjs` 的 fail-open：prettier 没跑成时被读成「全库干净」（本批修复 + 判据）**：
+      发现路径不是「有人投诉格式」，而是另一条批次的提交门槛红了 —— `tests/check-format.test.ts`
+      里三条「期望门禁拦住」的用例在钩子的多 worker 批次里稳定红，而**串行单跑全绿**。
+      用一次性沙箱探针量到底（按用例的方式搭临时仓、直接打印子进程的 status/stdout/stderr）：
+      沙箱里 `pnpm exec prettier` 报
+      `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL — Command "prettier" not found`，**退出码 1、stdout 为空**；
+      而脚本的判读是 `const code = res.status ?? 1; if (code !== 0 && code !== 1) exit 2;`
+      —— 1 是「有差异，清单在 stdout」的合法码，于是空清单被读成
+      `未过 prettier 0 个文件（基线 0 个）` + `[format] OK` + **exit 0**。
+      后果：依赖没装 / pnpm 形态选错 / 任何让 prettier 起不来的机器上，这道棘轮**静默放行**，
+      而钩子那行 `[ok] ── check: prettier 格式棘轮` 一个字都没说。与台账 E10
+      （清单顶穿命令行上限，「组 C 红但零执行」）是同一族：**门禁的失败表现必须与
+      「跑过了且没问题」不同形**；本条更糟的一面是它连红都不红。
+      修法（三条出路全部 fail-closed）：入口解析不到 → exit 2；被信号终止（`status === null`）→ exit 2；
+      **退出 1 却一行都没列出来** → exit 2 并附 stderr。取 prettier 不再经 pnpm 层
+      （`node <本地 node_modules/prettier/bin/prettier.cjs>`，取不到才报错），
+      缓存从机器全局 `os.tmpdir()/comfyapp-prettier-cache` 换成本检出的
+      `node_modules/.cache/prettier-gate.json`（用例并发搭沙箱会共用同一份缓存；
+      实测那条路径最后是一份 1.6 MB 的 JSON 文件 —— prettier 3.9 的 `--cache-location`
+      本来就是**文件**语义，我第一版按「它该是目录」写的检查因此是错的，已撤）。
+      判据：`tests/check-format.test.ts` 加两条（21 → 23）——「入口取不到 → exit 2 且输出里
+      不许有 `[format] OK`」「假入口退 1 不落一行 → exit 2」；用例改由
+      `COMFYAPP_PRETTIER_ENTRY` 这条接缝借真实仓的 prettier（沙箱里没有 node_modules），
+      夹具里那份 `launcher-core/` 拷贝随之删除（脚本不再动态 import 它）。
+      变异实测：把「退 1 且空清单」那条规则短路 → 恰好新用例红，其余 22 条绿。
+      同族两处**已核、形态本来就安全**（写在这里免得下批再找）：`check-reformat-only.cjs`
+      用 `if (res.error || res.status !== 0) → 失败`，且批量失败时退回逐文件 stdin 兜底；
+      `run-tests.mjs` 判 `result.error` 并透传退出码。
+      证据：`scripts/check-format.cjs`、`tests/check-format.test.ts`、规范 §13.5.1。
 - [x] **E8 router 层 19 处裸 `throw new Error` —— 业务分支在客户端表现成 500（本批清零 + 升成硬闸）**：
       tRPC 对**非 `TRPCError`** 的抛出按内部错误归码，所以「分类不合法」「项目没生产数据」
       「slug 重复」这些本来该是 4xx 的分支，到 caller 边界是 `INTERNAL_SERVER_ERROR`
