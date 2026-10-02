@@ -155,7 +155,14 @@ beforeEach(() => {
     join(workdir, "scripts", "launcher-core"),
     { recursive: true },
   );
-  mkdirSync(join(workdir, "src", "lib"), { recursive: true });
+  mkdirSync(join(workdir, "src", "lib", "process"), { recursive: true });
+  // `shell.mjs` 静态 import 它（ISSUE #1327）：可执行形态判据的唯一实现。
+  // 少了这份，临时仓库里的 `shell.mjs` 在**加载阶段**就 ERR_MODULE_NOT_FOUND ——
+  // 与上面那条同一个坑（验的是「能不能加载」而不是本门禁）。
+  copyFileSync(
+    join(process.cwd(), "src", "lib", "process", "executable-resolve.ts"),
+    join(workdir, "src", "lib", "process", "executable-resolve.ts"),
+  );
   // 临时仓库也要能解析 prettier：真实场景里门禁在**源码仓库**里跑（node_modules
   // 就在旁边），临时仓库没有 —— 软链过来最贴近真实的解析路径，也让脚本的
   // 「向上找 prettier」这一档被真正走到（而不是悄悄退回 pnpm 兜底）。
