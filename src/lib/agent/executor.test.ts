@@ -291,6 +291,36 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     expect(state.shots[1]?.characterIds).toEqual([]);
   });
 
+  it("plan_storyboard：模型给了清单外的景别 → 回落默认档，而不是原样入库", async () => {
+    /* 这一条是台账 F13 在这个文件里的落点：`parseShotsFromJson` 一度把景别声明成
+     * `string`，下游用 `s.shotType as never` 塞进 `Shot` —— 于是「模型说什么存什么」
+     * 在类型层完全看不见（`as never` 的意思就是「这里我不检查了」）。
+     * 现在收口在解析边界（`normalizeShotType`），所以中文标签、拼错的、缺字段
+     * 三种外来值都必须落到 `medium`。 */
+    streamChat.mockResolvedValue(
+      JSON.stringify([
+        { description: "甲", shotType: "特写" },
+        { description: "乙", shotType: "extre_wide" },
+        { description: "丙" },
+        { description: "丁", shotType: "close" },
+      ]),
+    );
+    const { state, handlers } = makeMockContext();
+    state.scriptMarkdown = "剧本";
+    const res = await resolveAgentTool(
+      "plan_storyboard",
+      "{}",
+      handlers,
+    ).execute();
+    expect(res.ok).toBe(true);
+    expect(state.shots.map((shot) => shot.shotType)).toEqual([
+      "medium",
+      "medium",
+      "medium",
+      "close",
+    ]);
+  });
+
   it("plan_storyboard：解析不出镜头 → ok=false，不写空镜头", async () => {
     streamChat.mockResolvedValue("[]");
     const { state, handlers } = makeMockContext();

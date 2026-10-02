@@ -436,8 +436,7 @@ describe("WorkflowTemplateRepository", () => {
       await workflowTemplateRepository.findByIdForUser("u2", "wt1"),
     ).toBeNull();
     expect(
-      (await workflowTemplateRepository.findByIdForUserSelect("u1", "wt1"))
-        ?.name,
+      (await workflowTemplateRepository.findByIdForUser("u1", "wt1"))?.name,
     ).toBe("甲的工作流");
     expect(
       (await workflowTemplateRepository.findByIdForUser("u1", "wt1"))?.id,

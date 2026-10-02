@@ -1,4 +1,10 @@
-import type { ProjectMeta, Scene, ShotType } from "~/lib/workshop/types";
+import {
+  SHOT_TYPES,
+  normalizeShotType,
+  type ProjectMeta,
+  type Scene,
+  type ShotType,
+} from "~/lib/workshop/types";
 import type { LLMMessage } from "./types";
 import { extractJson, extractJsonArray } from "./parse";
 
@@ -124,17 +130,6 @@ export function parseCharacterFull(text: string): RawCharacterFull {
 // ─────────────────────────────────────────────────────────────
 // Storyboard planning
 // ─────────────────────────────────────────────────────────────
-const SHOT_TYPES: ShotType[] = [
-  "extreme_wide",
-  "wide",
-  "full",
-  "medium",
-  "close",
-  "extreme_close",
-  "poi",
-  "pod",
-];
-
 export const STORYBOARD_SYSTEM = `你是分镜师。给定一个场景描述和可选的角色名单、艺术风格，请把它拆成若干个镜头。
 只输出严格 JSON 数组，不要额外文字或代码围栏。每个元素：
 { "shotType": "景别，取值之一：${SHOT_TYPES.join(" / ")}", "description": "该镜头画面描述（具象，含角色动作）", "characterNames": ["出场角色名，取自给定名单，可空数组"] }
@@ -171,10 +166,8 @@ export function parseStoryboard(text: string): RawShot[] {
   return data.map((datum) => {
     const obj = (datum ?? {}) as Record<string, unknown>;
 
-    const st = asText(obj.shotType, "medium") as ShotType;
-
     return {
-      shotType: SHOT_TYPES.includes(st) ? st : "medium",
+      shotType: normalizeShotType(obj.shotType),
 
       description: asText(obj.description, ""),
 
