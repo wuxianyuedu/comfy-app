@@ -38,7 +38,7 @@ export function RgthreeFastGroupsBypasserBody({
         return (
           <div
             key={group.id}
-            className="group relative flex h-[22px] items-center gap-1.5 pr-2 pl-2 text-[11px]"
+            className="group relative flex h-5.5 items-center gap-1.5 pr-2 pl-2 text-[11px]"
           >
             <span
               className={`min-w-0 shrink truncate text-left text-[11px] ${

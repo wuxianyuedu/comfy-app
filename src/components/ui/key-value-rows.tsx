@@ -248,7 +248,7 @@ export function KeyValueRows({
                 </th>
                 <td
                   className={cn(
-                    "text-ink-bright px-2.5 py-1.5 text-left font-normal break-words",
+                    "text-ink-bright px-2.5 py-1.5 text-left font-normal wrap-break-word",
                     valueClassName,
                   )}
                 >

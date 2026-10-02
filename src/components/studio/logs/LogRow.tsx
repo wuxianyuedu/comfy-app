@@ -380,7 +380,7 @@ export const LogRow = memo(function LogRow({
        * 这个属性就是那件事的载体（见 selectionInsideLogs）。 */
       {...{ [LOG_ROW_TEXT_ATTRIBUTE]: "" }}
       className={`min-w-0 flex-1 ${
-        truncated ? "truncate" : "break-words whitespace-pre-wrap"
+        truncated ? "truncate" : "wrap-break-word whitespace-pre-wrap"
       } ${LEVEL_TEXT_STYLES[entry.level]}`}
       title={messageTitle}
     >

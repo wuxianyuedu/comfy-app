@@ -218,7 +218,7 @@ export function ResourceLibrary() {
         {/* ── 错误条：拉取与动作失败共用一条（控制器已保证动作错误优先）── */}
         {library.error && (
           <div className="border-destructive/30 bg-destructive/10 mb-4 flex items-start gap-2 rounded-lg border px-3 py-2">
-            <span className="text-destructive min-w-0 flex-1 text-[12px] break-words">
+            <span className="text-destructive min-w-0 flex-1 text-[12px] wrap-break-word">
               {library.error}
             </span>
             <Button

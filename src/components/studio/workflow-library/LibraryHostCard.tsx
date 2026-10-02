@@ -134,7 +134,7 @@ export function LibraryHostCard({
                 )}
                 popoverMinWidth={150}
                 autoFitFromOptions={false}
-                className="!border-border-strong shrink-0 !bg-transparent text-[11px]"
+                className="border-border-strong! shrink-0 bg-transparent! text-[11px]"
               />
             ) : (
               <WorkflowStaticChip>

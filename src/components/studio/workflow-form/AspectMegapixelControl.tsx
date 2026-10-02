@@ -417,7 +417,7 @@ export function AspectMegapixelControl({
                      * 参数名之间才留得出 8px 的空隙。此前这里是`pl-[2px]`，
                      * 圆点右沿（6px）压过文字起点（2px），名字被圆点盖住
                      * （ISSUE #355：「端口圆点和参数名字之间距离太近」）。 */
-                    className="relative flex h-[22px] items-center gap-1.5 pl-[14px]"
+                    className="relative flex h-5.5 items-center gap-1.5 pl-[14px]"
                     /* 行锚点：拖拽重排与 e2e 按它认「这一行是哪一格」。 */
                     data-io-key={entry.ioKey}
                   >

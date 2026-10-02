@@ -165,7 +165,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       {/* ── Error banner ── */}
       {error && (
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
-          <span className="text-destructive min-w-0 flex-1 text-[11px] break-words">
+          <span className="text-destructive min-w-0 flex-1 text-[11px] wrap-break-word">
             {error}
           </span>
           <Button

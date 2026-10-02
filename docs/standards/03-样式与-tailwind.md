@@ -14,7 +14,7 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 "hover:bg-white/6";
 ```
 
-同类规范写法迁移还有四组（历史存量已由 `scripts/tw4-canonical-codemod.cjs` 清零，新代码禁止旧写法）：
+同类规范写法迁移还有六组（历史存量已清零，新代码禁止旧写法）：
 
 ```tsx
 // 渐变更名：
@@ -32,7 +32,27 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 // 纯整数任意值用裸数字（z / order / duration 等数值工具类同理）：
 "z-99"; // ✅ v4
 "z-[99]"; // ❌ 多余括号
+
+// 断词工具类 v4 更名（`break-words` 仍能编出，但已非 canonical）：
+"wrap-break-word"; // ✅ v4
+"break-words"; // ❌ v3 旧名
+
+// important 修饰符写在**值后面**（前缀 `!` 是 v3 形式）：
+"border-port-surface! size-2.5!"; // ✅ v4
+"!border-port-surface !size-2.5"; // ❌ v3 写法
 ```
+
+> **后两组为什么没进 codemod**（前五组由 `scripts/tw4-canonical-codemod.cjs` 批量迁移）：
+> `!x` 在 JS 里与前缀否定同形（`!ok` / `!ready` 遍地都是），纯文本替换必然误伤；
+> 它只能限定在 className 字符串内改，而「引号感知」这件事正则做不到既准又稳
+> —— 误伤一行比漏一处的代价大得多。这一组靠编辑器（`suggestCanonicalClasses`
+> 的快速修复）与 review 兜住，自查：`grep -rEn 'className="[^"]*![a-z]' src`（应为 0）。
+> `wrap-break-word` 那条已进 codemod（`break-words` 这个 token 不是合法 JS 标识符，
+> 全局替换不会撞上别的含义）。
+
+同族还有一类「任意值可写成 spacing scale 倍数」（编辑器同样会提示，如
+`min-h-[22px]` → `min-h-5.5`，`5.5 × 0.25rem = 22px`）：它要逐个换算、且只对落在
+spacing 基数上的值成立，**同样不进 codemod**，按编辑器提示改即可。
 
 **规则**：透明度一律 `/百分比`（小数合法，如 `/1.5`——tailwindcss 内部正是以 `parseFloat(alpha)*100` 做规范化的）。
 
@@ -222,7 +242,7 @@ import "@/styles/json-viewer.css";
 | 子图标题栏混色基准（写死 `#16161E` 作为 `mixHex` 基色）                                                                                                | `--color-node-mix-base`                                                                                                                                                                                                                                                                                                                                                    |
 | `JsonViewer` 的 `react18-json-view` 主题（`dark` prop + `jv-theme-comfy` 暗色档）                                                                      | 两态 `--json-view-*` token（浅色默认 + `.dark` 覆盖）                                                                                                                                                                                                                                                                                                                      |
 | `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）                                                                                                       | 按 `resolvedTheme` 在 `one-dark-pro` / `github-light` 间切换                                                                                                                                                                                                                                                                                                               |
-| `lib/markdown/styles.ts` 内联 style（便签 / 剧本 Markdown）                                                                                                  | `--color-md-*` token                                                                                                                                                                                                                                                                                                                                                       |
+| `lib/markdown/styles.ts` 内联 style（便签 / 剧本 Markdown）                                                                                            | `--color-md-*` token                                                                                                                                                                                                                                                                                                                                                       |
 | 类型 chip 的载体底（`WorkflowNodeArdot` 与 `WorkflowPortHandle` 的 `portChipStyle` 都曾写死 `#1E1A2E` / `#331A28` / `#26262E`）                        | `--color-chip-type-image-bg` / `--color-chip-type-video-bg`（中性档用 `--color-border-strong`）；chip **文字**仍是类型色，**底色**是表面。同一形态在本仓库犯过两次（先只改了 `WorkflowNodeArdot`），改一处要同时扫 `portChipStyle`                                                                                                                                         |
 | 项目画布浮层工具条底（`CanvasToolbar` 的 `to-[#16121f]/85`）                                                                                           | `--color-panel/85` + `--color-shadow-strong`                                                                                                                                                                                                                                                                                                                               |
 | 节点 JSON 浮层的 accent / chip 色（写死 `#7C5CFC`/`#5BC6FF`/`#ec4899` 等）                                                                             | `--color-primary` / `--color-info` / `--color-accent-soft` / `--color-ink-faint` / `--color-success-strong` / `--color-warning`（带透明度用 `color-mix()`）                                                                                                                                                                                                                |

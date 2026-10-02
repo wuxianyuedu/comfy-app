@@ -464,7 +464,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             <button
               aria-expanded="false"
               aria-haspopup="listbox"
-              class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
+              class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full bg-subtle! border-border! text-ink-field h-9 text-[13px]"
               data-placeholder=""
               id="base-ui-_r_2_"
               role="combobox"
@@ -563,7 +563,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             <button
               aria-expanded="false"
               aria-haspopup="listbox"
-              class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
+              class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full bg-subtle! border-border! text-ink-field h-9 text-[13px]"
               id="base-ui-_r_8_"
               role="combobox"
               tabindex="0"
@@ -956,7 +956,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               <button
                 aria-expanded="false"
                 aria-haspopup="listbox"
-                class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
+                class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full bg-subtle! border-border! text-ink-field h-9 text-[13px]"
                 id="base-ui-_r_t_"
                 role="combobox"
                 tabindex="0"
@@ -1009,7 +1009,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               <button
                 aria-expanded="false"
                 aria-haspopup="listbox"
-                class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
+                class="group flex items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60 w-full bg-subtle! border-border! text-ink-field h-9 text-[13px]"
                 id="base-ui-_r_11_"
                 role="combobox"
                 tabindex="0"

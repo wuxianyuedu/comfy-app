@@ -337,7 +337,7 @@ export function FinalComposer({
                   labelClassName="text-muted-foreground mb-0.5 text-[10px]"
                 >
                   <SelectMenu
-                    className="!bg-subtle !border-border text-xs"
+                    className="bg-subtle! border-border! text-xs"
                     value={shot.transition ?? "cut"}
                     onChange={(value) =>
                       updateShot(shot.id, { transition: value as Transition })
@@ -352,7 +352,7 @@ export function FinalComposer({
                   labelClassName="text-muted-foreground mb-0.5 text-[10px]"
                 >
                   <SelectMenu
-                    className="!bg-subtle !border-border text-xs"
+                    className="bg-subtle! border-border! text-xs"
                     value={shot.motion ?? "medium"}
                     onChange={(value) =>
                       updateShot(shot.id, { motion: value as MotionLevel })

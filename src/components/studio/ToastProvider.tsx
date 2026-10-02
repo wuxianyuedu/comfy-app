@@ -175,7 +175,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   {item.title}
                 </p>
                 {item.description && (
-                  <p className="text-ink-soft mt-0.5 text-xs break-words">
+                  <p className="text-ink-soft mt-0.5 text-xs wrap-break-word">
                     {item.description}
                   </p>
                 )}

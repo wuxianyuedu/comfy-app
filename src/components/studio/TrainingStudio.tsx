@@ -622,7 +622,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             >
               <SelectMenu
                 fullWidth
-                className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
+                className="bg-subtle! border-border! text-ink-field h-9 text-[13px]"
                 value={c.form.baseModel}
                 onChange={c.setBaseModel}
                 options={c.checkpoints.map((checkpoint) => checkpoint.fileName)}
@@ -677,7 +677,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             >
               <SelectMenu
                 fullWidth
-                className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
+                className="bg-subtle! border-border! text-ink-field h-9 text-[13px]"
                 value={String(c.form.resolution)}
                 onChange={(value) => c.setResolution(Number(value))}
                 options={RESOLUTIONS.map(String)}
@@ -782,7 +782,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               >
                 <SelectMenu
                   fullWidth
-                  className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
+                  className="bg-subtle! border-border! text-ink-field h-9 text-[13px]"
                   value={c.form.optimizer}
                   onChange={c.setOptimizer}
                   options={OPTIMIZERS}
@@ -796,7 +796,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               >
                 <SelectMenu
                   fullWidth
-                  className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
+                  className="bg-subtle! border-border! text-ink-field h-9 text-[13px]"
                   value={c.form.scheduler}
                   onChange={c.setScheduler}
                   options={SCHEDULERS}

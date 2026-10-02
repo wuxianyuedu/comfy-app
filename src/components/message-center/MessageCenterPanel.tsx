@@ -180,7 +180,7 @@ export function MessageCenterPanel() {
                           {fmtTime(m.time)}
                         </time>
                       </div>
-                      <p className="text-ink-soft mt-1 text-[12.5px] leading-relaxed break-words whitespace-pre-wrap">
+                      <p className="text-ink-soft mt-1 text-[12.5px] leading-relaxed wrap-break-word whitespace-pre-wrap">
                         {m.body}
                       </p>
                     </div>
