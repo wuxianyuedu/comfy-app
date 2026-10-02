@@ -1550,6 +1550,43 @@ describe("parseFileLogs 文件日志解析", () => {
       const entries = parseFileLogs("[10:23:00] [rpc] abc 155ms", base);
       expect(entries[0]?.message).toBe("[10:23:00] [rpc] abc 155ms");
     });
+
+    /*
+     * 壳侧编排链路日志（`log/launcher/shell-launch.log`）的形态：
+     * `[时刻] [级别] [orchestrator] 正文`。行结构必须**只有一层**时刻 + 级别——
+     * 时刻走面板行首（不进正文）、级别走徽标，正文只剩 `[orchestrator] 正文`。
+     *
+     * 回归的背景（ISSUE #1365）：壳曾把编排器已经带好的「时刻 + 级别」原样塞进
+     * 正文、再补一层自己的，用户就在同一条日志里读到两份时刻两份级别
+     * （正文里嵌套 `[定宽时刻] [STEP ]`）。现在由 `shell_launch.rs` 的
+     * `strip_orchestrator_line_prefix` 在源头摘掉，面板这侧只认「一层前缀」这一种结构。
+     */
+    it("壳转发编排器输出：只保留一层时刻与级别，正文不再嵌套", () => {
+      const entries = parseFileLogs(
+        "[2026-10-02 11:50:31.391] [INFO] [orchestrator] 检查端口占用",
+        base,
+        "shell-launch",
+      );
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.level).toBe("info");
+      expect(entries[0]?.message).toBe("[orchestrator] 检查端口占用");
+      /* 时刻只来自行首（面板行首那一个），正文里不得再出现第二份时刻/级别。 */
+      expect(entries[0]?.time).toBe(
+        new Date(2026, 9, 2, 11, 50, 31, 391).getTime(),
+      );
+      expect(entries[0]?.message).not.toContain("2026-10-02");
+      expect(entries[0]?.message).not.toContain("[STEP ]");
+    });
+
+    it("壳转发编排器输出的警告级别同样只出现一次", () => {
+      const entries = parseFileLogs(
+        "[2026-10-02 11:50:31.400] [WARN] [orchestrator] 180 秒内未就绪",
+        base,
+        "shell-launch",
+      );
+      expect(entries[0]?.level).toBe("warn");
+      expect(entries[0]?.message).toBe("[orchestrator] 180 秒内未就绪");
+    });
   });
 
   it("源码怪癖:WARNING 不在行正则枚举内,该行回退为 info 并保留原文", () => {
