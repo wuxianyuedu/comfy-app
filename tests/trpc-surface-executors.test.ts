@@ -5,11 +5,11 @@
  * 都必须在某个测试文件里被真正调用过。缺一条就红。
  *
  * 为什么判「有没有执行者」而不是「有没有测试文件」：E3 这条线一批批补下来
- * （project / task / setting / material / film / train / model / llm / skill /
+ * （project / task / setting / material / film / model / llm / skill /
  * workflowModel / generate / run），反复撞见同一个断层 —— **router 挂了、
  * 也能调通、但没有任何东西调用过它**。这种口坏掉时全绿：
- *  · `train.cancel` 自 Prisma→Drizzle 迁移起每次都 500（台账 F13），而它零执行者，
- *    所以那句 500 从来没有变成任何一条红；
+ *  · `train.cancel`（炼丹功能已整体废弃删除）自 Prisma→Drizzle 迁移起每次都 500
+ *    （台账 F13），而它零执行者，所以那句 500 从来没有变成任何一条红；
  *  · `customNode.list` 把 `nodes` 写死成 `[]`、还顺手把整个 settings 回给客户端
  *    （本机路径与开关状态），零执行者、零消费方；
  *  · `post.getLatest` 那句注释写着「OWASP A01：要求已登录用户」，而
@@ -301,12 +301,10 @@ const ZERO_CONSUMER: Record<string, string> = {
     "画布保存走 `project.upsert`（整份覆盖），这条字段级更新还没有「只改名字 / 只改布局」的界面动作对应。留着的前提是补上那个动作，否则删口。",
   "skill.create":
     "工坊与成片工作室都只**读**风格卡（`skill.list`），技能管理的写侧界面还没做。这一条是「功能未接」而不是「判据缺失」：它的重名 CONFLICT / slug 形状闸都有用例。",
-  "train.detail":
-    "训练面板从 `train.list` 的行取数（列表就是它的视图），按 id 的详情读口暂无入口。与 `project.get` 同一处置：接上详情页或删口。",
 };
 
 /** 登记表长度的棘轮上限（**只许降**）：变长的唯一合法路径是先记进台账 E3′。 */
-const MAX_ZERO_CONSUMER = 4;
+const MAX_ZERO_CONSUMER = 3;
 
 /** 「有人点名这条口」的三种形态。收不全的形态写在下面的已知边界里。 */
 function consumerNeedles(ns: string, proc: string): RegExp[] {
