@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { withQuery } from "~/lib/query-string";
 import { withTimeout } from "~/lib/with-timeout";
 import { vanillaApi } from "~/trpc/vanilla";
 import type {
@@ -29,7 +28,7 @@ interface CacheEnvelope {
 /* 缓存 schema 版本后缀。每当 workflow.detailFull / subgraph 响应结构变化时就
  *  提升此后缀，使旧的 sessionStorage 条目失效（每次 fetch 都会 purge 旧命名空间，
  *  见 purgeStaleCache）。改动响应字段时只改这里一处，比散落的版本号更难漏。 */
-const CACHE_KEY_PREFIX = "wfdetail:R7:subgraphHostNamespaced:";
+const CACHE_KEY_PREFIX = "wfdetail:R8:requestIdentityAsKey:";
 const CACHE_TTL_MS = 30_000;
 
 /** 清掉所有非当前命名空间的 wfdetail:* 键，防止旧版本键残留被误命中。best-effort。 */
@@ -198,17 +197,19 @@ export function useWorkflowDetailLoader({
       const subgraphUid = opts?.subgraphUid;
       const isSubgraph = Boolean(subgraphUid);
       const hostId = opts?.hostNodeId ?? "";
-      /* 两级路径各自拼查询串：子图下钻带 `uid`（必给）与 `hostId`（可选，
-       * 空值由出口省略整个键）。编码与省略口径收在 `~/lib/query-string`。 */
-      const url = subgraphUid
-        ? withQuery(`/api/workflows/${workflowId}/subgraph`, {
-            uid: subgraphUid,
-            hostId: hostId || undefined,
-          })
-        : `/api/workflows/${workflowId}`;
-      /* hostId 是累积的「宿主:内部」链。拼进 URL 后：① 嵌套子图坐标按该前缀
-       *  读回（否则拖过的位置退回原始坐标）；② 缓存键按层级命名，同名子图不串用。 */
-      const cacheKey = CACHE_KEY_PREFIX + url;
+      /* 缓存键 = 这次请求的身份（顶层只有 id，子图再加 uid 与 hostId 链）。
+       *
+       * 这里原先拼的是 `` `/api/workflows/${id}[/subgraph]` `` 加 `withQuery(...)`，
+       * 而**那条 REST 路根本不存在** —— 真实请求走 `vanillaApi.workflow.detailFull`
+       * / `subgraph`，只剩这个键还长得像地址。形状留着不会出错，但会骗两个人：
+       * 读代码的人以为有一条 HTTP 路可走，而「客户端地址必须有落点」那条判据
+       * （`tests/rest-endpoint-targets.test.ts`）会一直红在这个假阳性上。
+       *
+       * `hostId` 是累积的「宿主:内部」链，必须进键：① 嵌套子图坐标按该前缀读回
+       * （否则拖过的位置退回原始坐标）；② 同名子图在不同层级下不串用。 */
+      const cacheKey = subgraphUid
+        ? `${CACHE_KEY_PREFIX}${workflowId}|subgraph:${subgraphUid}|host:${hostId}`
+        : `${CACHE_KEY_PREFIX}${workflowId}`;
 
       /* subgraphRawContext 让 SourceModal 从父 rawJson 切出子图自己的 LiteGraph
        *  json 当 RAW 渲染。用 detailRef（非闭包里的 detail）避免 stale；

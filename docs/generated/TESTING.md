@@ -71,7 +71,7 @@ pnpm test 2>&1 | tail -3                                          # Test Files /
 
 **结构性缺口不藏在心里，记在台账**：`docs/guides/PRODUCTION-GAPS.md` 的 E 系列与 P1 段
 （例如 `src/app` 下 page/route/layout 的目录级零测试、挂载在 `appRouter` 上的
-procedure 有没有执行者（这条已由 `tests/trpc-surface-executors.test.ts` 接管，见下）、
+procedure 有没有执行者**与**消费方（这两条已由 `tests/trpc-surface-executors.test.ts` 接管，见下）、
 覆盖率回退要补的五个文件）。往这里抄一份数字只会漂移两次。
 
 ### 新增测试指引
@@ -187,8 +187,8 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
       （实测同一份图：静态形状 200、带闸形状 401）。那条旁路后来被**结构性关掉**：
       产物根搬到仓库根的 `generated/`（台账 A13），这层 proxy 只剩「让老形状的 URL 仍然
       走闸」的兼容职责。
-- [x] **服务端 router 集成覆盖已收口，判据升到 procedure 粒度**：13 个 router
-      （`generate` / `run` / `task` / `workflow` / `project` / `setting` / `material` /
+- [x] **服务端 router 集成覆盖已收口，判据升到 procedure 粒度**：12 个 router
+      （`generate` / `run` / `task` / `workflow` / `project` / `setting` /
       `film` / `train` / `model` / `llm` / `skill` / `workflowModel`）的用例都按
       **归属 / 协议 / 数值 / 枚举闸门 / 错误信封**组织，不按 procedure 顺序铺。
       最后 3 个零执行者的口（`custom-nodes` tRPC 侧 / `user` / `post`）没有被补成测试，
@@ -199,6 +199,12 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
       防线现在挂在**挂载动作**上：`tests/trpc-surface-executors.test.ts` 枚举 `appRouter`
       的每条 procedure，要求它出现在「import 了该 router 文件闭包」的测试里的调用形态，
       并自带四条反证（没测试 / 只 import 不调用 / 调用但没 import / 齐备）。
+      同一份挂载面还判**第二个维度：消费方**（台账 E3′）—— 「测试全绿」与「有人在用」是
+      两件事，只有测试在调、界面从不引用的口必须进 `ZERO_CONSUMER` 登记并写明「谁将来接它」，
+      登记表还要求**双向不陈旧**（口删了登记还在 = 红，消费方接上了登记还在 = 红）并带长度棘轮。
+      这一维照出来的第一批处置：`material.*` 与 `llm.complete` 是 REST 面的第二扇门，收口到
+      有人走的那一侧；复算时另照出 **4 条没有落点的 `/api/*` 地址**（实测 404、界面按空态吞掉），
+      判据（`tests/rest-endpoint-targets.test.ts`）与四条处置见台账 E3‴，同批已关闭。
       为什么粒度必须是 procedure 而不是 router：⑨ 三批清完后复算，剩下的两条零执行者口
       （`workflow.detailFull` / `workflow.subgraph`）**藏在一份有测试文件的 router 里** ——
       「每个 router 都有一份测试」这句话当时照样全绿。台账 A 系列几批复算证明「一个

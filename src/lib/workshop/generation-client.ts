@@ -20,7 +20,7 @@ import { clampPct } from "~/lib/progress";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
 import { isRecord } from "~/lib/is-record";
-import type { Character } from "./types";
+import type { Character, StyleRef } from "./types";
 import {
   extractSavedOutputs,
   type ApiChannelView,
@@ -206,6 +206,51 @@ export async function fetchWorkshopWorkflows(): Promise<
     if (!isRecord(row)) continue;
     const option = toWorkflowOption(row);
     if (option) out.push(option);
+  }
+  return out;
+}
+
+/** 技能行 → 风格卡；缺字段的行**丢掉**而不是抛错 —— 少一张风格卡比整块面板
+ *  空白好，且这条口在挂载期的三路拉取里，抛出去会被调用点的 catch 吞成「没有技能」。 */
+function toStyleRef(row: Record<string, unknown>): StyleRef | null {
+  const slug = row.slug;
+  const name = row.name;
+  const promptTemplate = row.promptTemplate;
+  if (
+    typeof slug !== "string" ||
+    typeof name !== "string" ||
+    typeof promptTemplate !== "string"
+  )
+    return null;
+  return {
+    slug,
+    name,
+    icon: typeof row.icon === "string" ? row.icon : "✨",
+    promptTemplate,
+    negativePrompt:
+      typeof row.negativePrompt === "string" ? row.negativePrompt : undefined,
+    defaultParams: isRecord(row.defaultParams) ? row.defaultParams : undefined,
+  };
+}
+
+/** 拉取技能（风格卡）清单。
+ *
+ *  口是 tRPC 的 `skill.list`，与成片工作室同一扇门 —— 内置技能种子因此只有一份
+ *  （`~/lib/skills-seed`，由仓储的 `ensureBuiltIns` 落库）。
+ *
+ *  这里原先发的是 `fetch("/api/skills")`，而仓库里**没有这个路由**：请求必然 404，
+ *  404 的 HTML 又让 `res.json()` 抛错，被调用点那句 `catch {}` 吞成「没有技能」，
+ *  于是工坊的风格卡常年空态、全仓库没有一条判据红过。「客户端写的地址有没有落点」
+ *  由 `tests/rest-endpoint-targets.test.ts` 钉住。 */
+export async function fetchWorkshopStyles(): Promise<StyleRef[]> {
+  const res = await vanillaApi.skill.list.query();
+  const rows: unknown = res.skills;
+  if (!Array.isArray(rows)) return [];
+  const out: StyleRef[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const style = toStyleRef(row);
+    if (style) out.push(style);
   }
   return out;
 }

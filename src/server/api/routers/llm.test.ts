@@ -23,10 +23,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { llmServer, contracts } = vi.hoisted(() => ({
   llmServer: {
-    getLLMConfig: vi.fn(async (o: unknown) => ({ marker: "cfg", input: o })),
-    completeLLM: vi.fn(
-      async (_cfg: unknown, messages: unknown[]) => `echo:${messages.length}`,
-    ),
     ensureRemoteStorageMigrated: vi.fn(async () => undefined),
     getConfigForClient: vi.fn(async () => ({
       provider: "remote",
@@ -50,8 +46,6 @@ vi.mock("~/lib/core/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 vi.mock("~/lib/llm/server", () => ({
-  getLLMConfig: llmServer.getLLMConfig,
-  completeLLM: llmServer.completeLLM,
   ensureRemoteStorageMigrated: llmServer.ensureRemoteStorageMigrated,
   getConfigForClient: llmServer.getConfigForClient,
 }));
@@ -170,54 +164,29 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     expect(res.config).toEqual({ provider: "remote", hasApiKey: true });
     upsert.mockRestore();
   });
-});
 
-describe("complete —— 参数闸与透传", () => {
-  it("provider / taskType 非法 → BAD_REQUEST，且不发起补全", async () => {
+  it("temperatureByTask 的任务类型不在枚举里 → BAD_REQUEST，且落库前就挡下", async () => {
+    const upsert = vi.spyOn(llmConfigRepository, "upsertSingleton");
     expect(
       await codeOf(
-        caller().complete({
-          messages: [{ role: "user", content: "hi" }],
-          provider: "bedrock" as never,
-        }),
+        caller().configSave({ temperatureByTask: { translate: 0.9 } as never }),
       ),
     ).toBe("BAD_REQUEST");
     expect(
       await codeOf(
-        caller().complete({
-          messages: [{ role: "user", content: "hi" }],
-          taskType: "translate" as never,
+        caller().configSave({
+          temperatureByTask: {
+            txt2img: 0.7,
+            img2video: 0.5,
+            chat: 0.3,
+            code: 0.2,
+            creative: 0.8,
+          },
         }),
       ),
-    ).toBe("BAD_REQUEST");
-    expect(llmServer.completeLLM).not.toHaveBeenCalled();
-  });
-
-  it("role 只许 system / user / assistant", async () => {
-    expect(
-      await codeOf(
-        caller().complete({
-          messages: [{ role: "tool" as never, content: "x" }],
-        }),
-      ),
-    ).toBe("BAD_REQUEST");
-  });
-
-  it("合法请求把温度 / 任务类型交给配置解析，再原样把消息交给补全", async () => {
-    const res = await caller().complete({
-      messages: [{ role: "user", content: "hi" }],
-      provider: "remote",
-      temperature: 0.4,
-      taskType: "chat",
-    });
-    expect(llmServer.getLLMConfig).toHaveBeenCalledWith({
-      provider: "remote",
-      model: undefined,
-      temperature: 0.4,
-      maxTokens: undefined,
-      taskType: "chat",
-    });
-    expect(res.content).toBe("echo:1");
+    ).toBe("OK");
+    expect(upsert).toHaveBeenCalledTimes(1);
+    upsert.mockRestore();
   });
 });
 

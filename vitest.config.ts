@@ -252,16 +252,22 @@ export default defineConfig({
          * 它已在 `src/lib/shell/**` 这一组里，而没覆盖到的分支只有 darwin/linux
          * 两条平台分叉（本机是 win32，跑不到），单列一条只会把「测不到的那支」写进门槛。 */
         "src/lib/url-scheme.ts",
+        /* A13 残留② · 字节范围解析（`Range`）收成一处：产物读取口是视频与大图的
+         * **唯一**出口，`Range` 的三种结论（整份 / 一段 / 满足不了）在这里判形状，
+         * 端点只翻状态码。满档的理由与 `url-scheme.ts` 同一条：它是四条出口共用的
+         * 那一句判据 —— 掉一支不是「那一支没测」，而是某一种请求会被答成另一种错。 */
+        "src/server/lib/range-request.ts",
         "src/server/api/routers/setting.ts",
         /* 体检清单 ⑨ 第一刀 · 素材库的归属：
-         *   · `media/materials.ts` 是 scope 归属与路径清洗的**唯一判据所在**
-         *     （两个入口都吃它），所以它的分支必须被数字盯着；
-         *   · `routers/material.ts` 与 `api/materials/route.ts` 是同一套判据的
-         *     两个门 —— 只测一边等于另一半没 gate，两边一起登记。
-         * 三条都按**实测**登记（不是回退）；未覆盖的部分主要是 REST 的 500 兜底与
+         *   · `media/materials.ts` 是 scope 归属与路径清洗的**唯一判据所在**，
+         *     所以它的分支必须被数字盯着；
+         *   · 这里原本还登记着 `routers/material.ts`：它与 `api/materials/route.ts`
+         *     是同一套判据的两扇门，而界面只走 REST 那扇（`media/materials-client.ts`）
+         *     —— 零消费方的那扇随台账 E3′ 删除，判据的覆盖面由 REST 这一门 +
+         *     `materials.ts` 本身承担，不减反稳。
+         * 两条都按**实测**登记（不是回退）；未覆盖的部分主要是 REST 的 500 兜底与
          * 素材列举里的 stat 失败分支，欠账记在 E7 边上。 */
         "src/lib/media/materials.ts",
-        "src/server/api/routers/material.ts",
         "src/app/api/materials/route.ts",
         /* 体检清单 ⑨ 第五刀 · 产物布局收口（台账 A8 第二段）带出的四个入口：
          *   · `film/compose-steps.ts` —— 本批那条真故障的所在地（`clipPathOf` 不剥
@@ -274,6 +280,14 @@ export default defineConfig({
          * 门槛全部取这批用例的实测下限（见对应阈值块里的留痕）。 */
         "src/server/film/compose-steps.ts",
         "src/app/api/film/bgm/route.ts",
+        /* E3‴ 第一条 · 本机代理 ComfyUI 媒体字节的落点（`/api/images`）。
+         * 这条口此前**根本不存在**：`comfyImageUrl()` 把地址收成一处（那是对的），
+         * 而 handler 在基线迁移时没带过来 —— 于是画布 IMAGE 输入的预览、工作流图片
+         * 预览、训练素材缩略图全部按空态吞掉。四项皆满是因为该判的四支各有用例：
+         * 会话闸（且一次上游都不碰）、三种形状闸（缺名 / 目录成分 / 类别不在枚举）、
+         * 上游 404 与别的状态与连不上三种失败各自一个码、响应头必须 private 且不许
+         * immutable。少任何一支都会掉下 100 当场红。 */
+        "src/app/api/images/route.ts",
         "src/lib/workshop/media-source.server.ts",
         "src/lib/comfyui/firstframe.ts",
         /* ⑨ 第六刀 · 产物根搬出 `public/`（台账 A13 收官）带出的两个新文件：
@@ -1339,6 +1353,15 @@ export default defineConfig({
           statements: 100,
           branches: 100,
         },
+        /* 与上面 `coverage.include` 同批登记（实测满档）。这条不敢留余地：
+         * 后缀形式、裁剪、`first > last` 的优先级这些分支只要有一支没人判，
+         * 表现就是某些浏览器拖进度条时拿到 416 或半截字节，而全仓库是绿的。 */
+        "src/server/lib/range-request.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         /* 首页「本机算力」卡与它读的口径描述符（与上面 `coverage.include` 同批登记）。
          * 满档的依据是实测而不是理想值：描述符是纯函数、卡片的分支全在 jsdom 用例里
          * 走到位（含「未运行 / 首帧未到 / 迟滞期」三条互斥出口）。这块掉覆盖会同时
@@ -1358,27 +1381,29 @@ export default defineConfig({
           branches: 90,
         },
         /* ── 体检清单 ⑨ · 素材库归属（实测登记）──────────────────────────── */
+        /* 旧值 95/90/85/80（⑨ 第一刀）→ 现在按判据层自己有用例之后的**实测**登记。
+         * 抬上来的原因不是「门多了」而是门少了一扇：tRPC 的 `material.*` 因零消费方删掉后
+         * （台账 E3′）这里掉到 78.43 分支、`check:all` 当场红 —— 那些清洗与包含分支此前只被
+         * 那扇门的用例**顺带**走过，而活着的 REST 门送进来的全是合法入参。
+         * 补法是给判据层自己一份用例（`materials.test.ts`，按判据本身组织），
+         * **不是 mock 出来凑数**：`folderDir` 那条包含断言从入口确实进不来（`scope` 过
+         * `sanitizeScope`、`folder` 是枚举），但把 `..` 直接交给 `folderDir` 是能真判掉的行为 ——
+         * 它是给「以后有人放宽那两条校验」兜底的双保险，现在有人判它。
+         * 分支到 100 意味着这一族的每一条 `if` 都有人判。变异核过三条：去掉 scope 的长度上限、
+         * 摘掉 `folderDir` 的包含断言、去掉隐藏文件的跳过 —— 各自恰好红一条，其余全绿。 */
         "src/lib/media/materials.ts": {
-          lines: 95,
-          functions: 90,
-          statements: 85,
-          branches: 80,
+          lines: 100,
+          functions: 95,
+          statements: 98,
+          branches: 100,
         },
-        /* 旧值 lines 100（⑨ 第一刀）→ 95：**E8 把两处 `throw new Error("Invalid storage path")`
-         * 拆成多行的 `TRPCError` 之后，那两行不再被「条件行」顺带盖住**。它们现在是
-         * 真不可达：`scope` 过 `sanitizeScope`（只留 `[A-Za-z0-9_-]`）、`folder` 是枚举，
-         * `folderDir` 的包含断言因此不可能失败 —— 留它是给「以后有人放宽那两条校验」兜底的
-         * 双保险（同一条判断在 REST 口也有一份）。
-         * 没去 mock `folderDir` 凑覆盖率：那等于测一个今天不存在的输入形状，
-         * 数字好看但判据是空的。statements 90→95、branches 75→80 是顺带的实测收紧。 */
-        "src/server/api/routers/material.ts": {
-          lines: 95,
-          functions: 100,
-          statements: 95,
-          branches: 80,
-        },
-        /* REST 那条（305 行、含 multipart 上传与 500 兜底）是三个里最薄的：
-         * 判据本身都测到了，缺的是错误分支与超大上传的回执路径。 */
+        /* REST 这一条（含 multipart 上传与 500 兜底）按实测登记：判据本身都测到了，
+         * 缺的是错误分支与超大上传的回执路径。
+         * 这里原有第三份 `routers/material.ts`（95/100/95/80）：那一扇门零消费方，
+         * 与本条是同一套判据的重复实现，随台账 E3′ 删除。删它那天本文件的分支覆盖掉到
+         * 78.43（`check:all` 当场红）—— 补的是判据层自己的用例（上一条），不是把门找回来；
+         * 那句「没去 mock `folderDir` 凑覆盖率」现在要说得更准：**没有 mock**，
+         * 是把 `..` 直接交给 `folderDir` 这条真函数判的（入口进不来，判据层可以直接判）。 */
         "src/app/api/materials/route.ts": {
           lines: 85,
           functions: 80,
@@ -1556,6 +1581,12 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 65,
+        },
+        "src/app/api/images/route.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         "src/app/api/film/bgm/route.ts": {
           lines: 95,

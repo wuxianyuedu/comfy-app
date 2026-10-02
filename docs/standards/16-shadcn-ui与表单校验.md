@@ -1588,7 +1588,7 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | `LogRow` 的 `HighlightedText`                                    | `trim().toLowerCase()` | 正文分片                              |
 | `RgthreeBodies`                                                  | `trim().toLowerCase()` | 组标题                                |
 | `multi-mode-select`                                              | `trim().toLowerCase()` | code / label / subCategory / fullName |
-| `app/api/materials/route.ts` + `server/api/routers/material.ts`  | `trim().toLowerCase()` | 素材名                                |
+| `app/api/materials/route.ts`                                     | `trim().toLowerCase()` | 素材名                                |
 
 **差别不是风格，是一个语义决定 —— 且有一处判错了：**
 

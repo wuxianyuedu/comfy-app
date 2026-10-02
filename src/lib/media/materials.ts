@@ -143,8 +143,8 @@ export async function materialScopeOwnership(
   return row.userId === userId ? "mine" : "foreign";
 }
 
-/** 这次请求允许看到的 scope —— 读侧的唯一出口（tRPC `material.list` 与
- *  `/api/materials` GET 此前各写一份 `resolveScopes`，两份都不判归属）。 */
+/** 这次请求允许看到的 scope —— 读侧的唯一出口（此前它在两个入口各写一份
+ *  `resolveScopes`，两份都不判归属；入口现在只有 `/api/materials` GET 这一个）。 */
 export async function visibleMaterialScopes(
   userId: string,
   opts: { cross: boolean; projectId: string | null },

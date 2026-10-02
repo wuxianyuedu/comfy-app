@@ -97,6 +97,17 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 第二段：成片合成因此每条镜头必败），而它必须在**新增**时响 —— 与本次暂存改动
   // 有没有碰到 media/ 目录无关，所以进固定清单。
   "tests/artifact-layout-single-source.test.ts",
+  // 客户端写的 REST 地址必须有落点：`src/**` 里以引号紧接 `/api/` 开头的字面量，
+  // 得能在 `src/app/**` 的目录形状里找到一个 route handler。这条守的是
+  // 「路径写得很像真的、handler 根本不存在」那一族（台账 E3‴：三条实测 404，
+  // 调用点一句 `catch {}` 就咽成空态，全仓库没有一条判据红过）—— 新增一条假地址
+  // 与本次暂存改动无关也必须响，所以进固定清单。
+  "tests/rest-endpoint-targets.test.ts",
+  // 「调用点的形状错误不许被咽掉」（台账 F13）：`as never` 逐处登记 + 投影参数不许是
+  // unknown + `.select(… as never)` 这个形状零存在。这一族的实际事故是 `train.cancel`
+  // 从 Prisma→Drizzle 迁移起每次 500 而零红 —— 新增一处就是重新装上那个消音器，
+  // 与本次暂存改动无关也必须响，所以进固定清单。
+  "tests/f13-projection-shapes.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
