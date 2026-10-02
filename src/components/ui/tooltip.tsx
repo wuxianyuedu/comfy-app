@@ -4,6 +4,7 @@
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
 import { cn } from "~/lib/utils";
+import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 
 function TooltipProvider({
   /* 300ms 是「悬停提示」的节奏档：贴近原生 `title=` 的出现速度，避免鼠标划过
@@ -54,6 +55,10 @@ function TooltipContent({
     TooltipPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "collisionPadding"
   >) {
+  /* 可用区域由「视口减去应用级标题行」得来（壳态才有标题行）—— 见
+   * `useOverlayBoundary` 的说明。首帧量不到视口时返回 `null`，此时**不传**
+   * 这一档，退回基元默认的 `clipping-ancestors`（而不是拿假矩形摆位）。 */
+  const boundary = useOverlayBoundary();
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Positioner
@@ -62,6 +67,7 @@ function TooltipContent({
         side={side}
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
+        collisionBoundary={boundary ?? undefined}
         className="z-popup isolate"
       >
         <TooltipPrimitive.Popup

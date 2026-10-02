@@ -156,4 +156,68 @@ export function TitleBarTabs() {
     });
     expect(run().ok).toBe(true);
   });
+
+  it("拦下没交出可用区域的锚定浮层（气泡被标题行盖掉那件事，ISSUE #1377）", () => {
+    const { run } = scanner({
+      "src/components/ui/tooltip.tsx": `import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+
+export function TooltipContent() {
+  return (
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Positioner side="top" className="z-popup isolate">
+        <TooltipPrimitive.Popup>提示</TooltipPrimitive.Popup>
+      </TooltipPrimitive.Positioner>
+    </TooltipPrimitive.Portal>
+  );
+}
+`,
+    });
+    const res = run();
+    expect(res.ok).toBe(false);
+    expect(res.output).toContain("src/components/ui/tooltip.tsx:6");
+    expect(res.output).toContain("useOverlayBoundary");
+  });
+
+  it("放过交出可用区域的锚定浮层", () => {
+    const { run } = scanner({
+      "src/components/ui/tooltip.tsx": `import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
+
+export function TooltipContent() {
+  const boundary = useOverlayBoundary();
+  return (
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Positioner
+        side="top"
+        collisionBoundary={boundary ?? undefined}
+        className="z-popup isolate"
+      >
+        <TooltipPrimitive.Popup>提示</TooltipPrimitive.Popup>
+      </TooltipPrimitive.Positioner>
+    </TooltipPrimitive.Portal>
+  );
+}
+`,
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("不误伤 Positioner.Props 这类类型引用（只有 JSX 开标签才算浮层）", () => {
+    const { run } = scanner({
+      "src/components/ui/navigation-menu.tsx": `import { NavigationMenu as NavigationMenuPrimitive } from "@base-ui/react/navigation-menu";
+
+type Props = Pick<NavigationMenuPrimitive.Positioner.Props, "align">;
+
+export function NavigationMenuPositioner(props: Props) {
+  return (
+    <NavigationMenuPrimitive.Positioner
+      align={props.align}
+      collisionBoundary={boundary ?? undefined}
+    />
+  );
+}
+`,
+    });
+    expect(run().ok).toBe(true);
+  });
 });
