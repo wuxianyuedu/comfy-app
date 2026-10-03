@@ -158,6 +158,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 并核理由表（NO_STORY_REASON）与磁盘对得上。与本次暂存改动无关也必须响
   // （它是「下一次有人新增组件 / 删 story」的守卫），所以进固定清单。
   "tests/storybook-component-coverage.test.ts",
+  // 「故事面」：title 缺了 Storybook 按路径自动生成条目（落在侧栏哪个分组取决于
+  // 推导规则）、真组件没接上（画布上摆的是别的）、必填 props 没给 args（组件在
+  // 画布上抛）、同目录两套分组前缀 —— 四种错法**构建全绿、画布也画得出来**，
+  // 上面那三条 storybook 判据对它们都无感。与本次暂存改动无关也必须响
+  // （它是「下一次有人写故事」的守卫），所以进固定清单。
+  "tests/storybook-story-surface.test.ts",
   // 「eslint 增量缓存的依赖指纹」：`--cache` 的缓存键不含依赖树，而 `no-unsafe-*`
   // 是类型化规则 —— 依赖一变旧判决被整片重放，假红拦死提交、假绿洗掉真违规
   // （ISSUE #1399）。它的执行者是 `postinstall` 那一步，而改 `.githooks/**` 会让
