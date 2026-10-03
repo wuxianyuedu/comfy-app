@@ -158,8 +158,21 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         fs.renameSync(stash, generatedDir);
       }
     }
-    // 生成件在位时也得是绿的（这一条顺带证明上面那次不是「tsc 根本没跑」）。
-    expect(tsc!.run(["--noEmit"]).status).toBe(0);
+    /* 「上面那次 tsc 真的跑了」用 `--version` 证，**不再跑第二次全仓 `--noEmit`**：
+       ① 那次全量编译在这里要 10~15s，本用例因此从「秒过的 ENOENT」变成池子里
+          `Test timed out in 30000ms`（28 份并发时实测超预算）—— 而抬超时是在掩盖成本，
+          不是解决它；
+       ② 「生成件在位时仓库整体也绿」这件事，钩子 A 组每次提交都在跑同一份
+          `tsc --noEmit`，在这里再跑一遍是重复劳动；
+       ③ 本用例真正独有的断言是「**缺件**那一次退 0」。它前面那句断言已经把
+          `stdout/stderr/[spawn-error]` 打进了失败消息，所以「进程没起来」那一档
+          现在会长成 `status=null` + 一行 `ENOENT`，不会伪装成绿。 */
+    const alive = tsc!.run(["--version"]);
+    expect(
+      alive.status,
+      `tsc 起不来，④ 的绿就没有意义：\n${alive.output}`,
+    ).toBe(0);
+    expect(alive.output.trim(), "tsc 起了但没吐版本号").not.toBe("");
   });
 
   it("判据自身可反证：静态 import 生成件会让 tsc 报 TS2307", () => {
@@ -289,8 +302,24 @@ function resolveTscBin(): {
     const file = path.resolve(path.dirname(pkgJson), bin);
     if (!fs.existsSync(file)) continue;
     const runIn = (cwd: string, args: string[]) => {
-      const r = spawnSync(file, args, { cwd, encoding: "utf8" });
-      return { status: r.status, output: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+      /* 必须经 `process.execPath` 起，**不能** `spawnSync(file, …)` 直接执行那个 bin 路径：
+         pnpm 在 Windows 上把包的可执行件落成没有可执行位的 JS 壳，直接 spawn 会得到
+         `status: null` + 空 stdout —— 于是「tsc 报了 TS2307」与「tsc 一个进程都没起来」
+         在断言里长成同一个形状（本文件两条依赖真跑 tsc 的用例就是这么在 Windows 上恒红的）。
+         `output` 里一并带上 `error`：以后再遇到没起来的情况，一眼能读到 `ENOENT`。 */
+      const r = spawnSync(process.execPath, [file, ...args], {
+        cwd,
+        encoding: "utf8",
+      });
+      /* 只取 `String(r.error)`：ENOENT / EFTW 这些码本来就在它的 message 里
+         （`Error: ENOENT: ...`），而按 `.code` 取会撞上一个 tsc 与 eslint 结论相反的
+         窄化问题（一个说 `Error` 上没这个属性、一个说断言多余）—— 定性只需要一行字。 */
+      return {
+        status: r.status,
+        output: `${r.stdout ?? ""}${r.stderr ?? ""}${
+          r.error ? `\n[spawn-error] ${String(r.error)}` : ""
+        }`,
+      };
     };
     return { run: (args) => runIn(ROOT, args), runIn };
   }
