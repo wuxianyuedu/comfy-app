@@ -184,6 +184,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 表现是文档开始说谎而全绿（规范 §13.5.8 的零执行者那一族）。它守的是「下一次有人改
   // globals.css 或改这份文档」，与本次暂存改动无关也必须响，所以进固定清单。
   "tests/design-md-contract-sync.test.ts",
+  // 「减弱动态效果的三档分治」（规范 06 §6.7 的执行者）：那条条文原先写的是「所有
+  // transition/animation 都要降级」，而实测 `prefers-reduced-motion` 命中 0 次 ——
+  // 强制条文挂着零执行者，表现是「规范说做了而全绿」。它读的是 `globals.css` 的
+  // **文本**，import 图追不到（改 CSS 不会把它拉进受影响清单），所以与上面那条同因、
+  // 必须无条件响；第 ④ 档还兼管「组件改了 data-slot 名字而降级块仍指旧名」那一类静默失效。
+  "tests/reduced-motion-tiers.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

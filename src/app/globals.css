@@ -1188,3 +1188,45 @@ textarea::-webkit-scrollbar {
   top: var(--spacing-title-bar);
   height: calc(100svh - var(--spacing-title-bar));
 }
+
+/* ── 减弱动态效果（prefers-reduced-motion）：按三档分治 ─────────────
+   口径来自 owner 签字，也与规范 06 §6.7 收窄后的条文同源。**不是**一条
+   `*{animation:none}` 的全局闸门 —— 那会把 112 行走默认 150ms 的短程反馈
+   一起静音，而那一档是刻意豁免的（下面第 ③ 档写明为什么留）。
+
+   ① **循环动画 → 停**。它们才是晕动症与「盯着看很久」的真实来源：spinner /
+      skeleton / 状态点脉冲 / 不确定进度条 / 生成进度水面 / 代理运行中的圆点。
+      停掉之后每一处都还有非动画的等价表达（spinner 仍是环、进度条仍是 1/3 宽块、
+      脉冲点仍带颜色语义），不会变成「看不出来在发生什么」。
+   ② **大位移 → 去掉位移、保留淡入**。抽屉与导航面板的位移只在开合那一瞬，
+      晕动症敏感的正是在这 200~350ms 里整块面板横扫。这里只把 `translate` 归零，
+      `opacity`/`scale` 那条过渡留着 —— 既保住「它出现了」的反馈，也不再把内容
+      从屏幕边上推过去。
+   ③ **短程 hover / focus 反馈 → 不动**。125 行 `transition-*` 里只有 13 行带
+      显式时长，其余走 Tailwind 默认 150ms；这类「指针移上去那一档底色」的
+      位移量为 0，与 WCAG 2.3.3 关心的大面积/视差运动不是一回事。全局关掉会让
+      悬停态变得突兀（无过渡直接换色），代价大于收益。
+
+   `!important` 是必需的，且**不是风格问题**：① 里 `progress-bar` 的不确定条与
+   ② 之外的 `AgentOverlay` 运行点都是**内联 `style={{ animation: … }}`** ——
+   行内样式优先级高于任何层外的规则，不加 `!important` 这两处会静默不降级
+   （表现是「系统开了减弱动态，这两块还在转」，而没有任何东西会报）。
+   选择器一律挂 `data-slot`，不按 class 字面量匹配（Tailwind 的任意值类名会转义、
+   改名即失效）。 */
+@media (prefers-reduced-motion: reduce) {
+  /* ① 循环：Tailwind 工具类两处 + 自定义 keyframes 两处 + 内联 style 两处 */
+  .animate-spin,
+  .animate-pulse,
+  .wf-wave,
+  [data-slot="progress-bar-indeterminate"],
+  [data-slot="agent-tool-status-dot"] {
+    animation: none !important;
+  }
+
+  /* ② 大位移：只归零位移，保留淡入 / 缩放 */
+  [data-slot="sheet-content"],
+  [data-slot="navigation-menu-content"] {
+    translate: none !important;
+    transform: none !important;
+  }
+}
