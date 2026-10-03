@@ -256,13 +256,27 @@ function unquote(text) {
 }
 
 /**
- * 组件的变体表：`variants: { <轴>: { … } }`，只认 cva 调用里那一层。
+ * 文件里**每一处** `cva()` 的变体表：`<绑定名> → { 轴 → [档名] }`。
+ *
+ * ## 为什么按「绑定点」分组，而不是把整个文件的轴并成一张表
+ *
+ * 一个组件文件里可以有**多处** `cva()`，而它们的轴名可能**同名**
+ * （`ui/item.tsx` 就有两个：`itemVariants` 有 `variant: default|outline|muted`，
+ * `itemMediaVariants` 也有 `variant: default|icon|image`）。把整文件并成一张表会
+ * 让 `variant` 这一轴变成两者的**并集** —— 于是 story 里那份正确的
+ * `["default","outline","muted"]` 会被判成「缺 icon / image」，而**修法无处可去**：
+ * 补上那两档，`itemVariants` 那一档又该报「多」。
+ * 那不是 story 写错了，是判据把两个不同的组件看成了同一个。
+ *
+ * 绑定名取不到时（`cva()` 直接内联在 JSX / export default 里）用
+ * `#<起始行号>` 当键，保证每一处 cva 都有自己的格子。
+ *
  * @param {ts.SourceFile} source
- * @returns {Map<string, string>} 轴名 → 轴名（集合语义；值只为可读性）
+ * @returns {Map<string, Map<string, string[]>>} 绑定名 → (轴名 → 档名)
  */
-export function cvaVariantAxes(source) {
-  /** @type {Map<string, string>} */
-  const axes = new Map();
+export function cvaVariantTables(source) {
+  /** @type {Map<string, Map<string, string[]>>} */
+  const out = new Map();
   walk(source, (node) => {
     if (
       !ts.isCallExpression(node) ||
@@ -271,6 +285,16 @@ export function cvaVariantAxes(source) {
     ) {
       return;
     }
+    /* 绑定名：`const X = cva(…)` 取 X；否则退回「cva 的起始行」当键。 */
+    const parent = node.parent;
+    const binding =
+      parent !== undefined &&
+      ts.isVariableDeclaration(parent) &&
+      ts.isIdentifier(parent.name)
+        ? parent.name.text
+        : `#${String(source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1)}`;
+    /** @type {Map<string, string[]>} */
+    const axes = out.get(binding) ?? new Map();
     for (const arg of node.arguments) {
       if (!ts.isObjectLiteralExpression(arg)) continue;
       for (const prop of arg.properties) {
@@ -282,62 +306,75 @@ export function cvaVariantAxes(source) {
           continue;
         }
         for (const axis of prop.initializer.properties) {
-          if (ts.isPropertyAssignment(axis)) {
-            const name = unquote(axis.name.getText(source));
-            axes.set(name, name);
+          if (!ts.isPropertyAssignment(axis)) continue;
+          const name = unquote(axis.name.getText(source));
+          /** @type {string[]} */
+          const keys = [];
+          if (ts.isObjectLiteralExpression(axis.initializer)) {
+            for (const key of axis.initializer.properties) {
+              if (key.name === undefined) continue;
+              keys.push(unquote(key.name.getText(source)));
+            }
           }
+          const prev = axes.get(name);
+          axes.set(name, prev === undefined ? keys : [...prev, ...keys]);
         }
       }
     }
+    out.set(binding, axes);
   });
+  return out;
+}
+
+/**
+ * 组件文件里出现过的变体轴名（跨多处 `cva()` 的**并集**）。
+ *
+ * 这一层刻意是并集：调用处问的是「这个文件里有没有变体轴」以及「story 有没有
+ * 覆盖到它们」，答「有 `variant`」是对的。**逐轴的档名不能也取并集** ——
+ * 那才是上面 `cvaVariantTables` 注释里那件把两个组件混成一个的事。
+ * @param {ts.SourceFile} source
+ * @returns {Map<string, string>} 轴名 → 轴名（集合语义；值只为可读性）
+ */
+export function cvaVariantAxes(source) {
+  /** @type {Map<string, string>} */
+  const axes = new Map();
+  for (const table of cvaVariantTables(source).values()) {
+    for (const name of table.keys()) axes.set(name, name);
+  }
   return axes;
 }
 
 /**
- * 组件某个变体轴的档名（`cva` 里那一层的字面量 key）。
+ * 组件某个变体轴的档名。
  *
- * 与 `cvaVariantAxes` 同源，只是多取一层 —— 判据脚本与用例都要它，
- * 各写一份就是孪生对的起点（§12.12）。
+ * 多处 `cva()` 同名轴时**逐处返回**（`Map<绑定名, string[]>`）—— 调用处必须自己
+ * 决定「这一轴说的是哪一处」：story 的 `argTypes.options` 挂在哪一组的清单上、
+ * 那一组又是不是就是这一处。返回并集在这里是错的（见 `cvaVariantTables` 注释）。
+ *
+ * @param {ts.SourceFile} source
+ * @param {string} axis
+ * @returns {Map<string, string[]>} 绑定名 → 该处这个轴的档名
+ */
+export function cvaVariantKeysByBinding(source, axis) {
+  /** @type {Map<string, string[]>} */
+  const out = new Map();
+  for (const [binding, table] of cvaVariantTables(source)) {
+    const keys = table.get(axis);
+    if (keys !== undefined) out.set(binding, keys);
+  }
+  return out;
+}
+
+/**
+ * 组件某个变体轴的档名（多处 `cva()` 同名轴时取**并集**）。
+ *
+ * ⚠️ 只在「这个文件里这一轴只有一处」时才是正确答案。多处同名轴请用
+ * `cvaVariantKeysByBinding` —— 拿并集去比一份 story 清单会把正确的清单判成
+ * 「缺档」，而修法无处可去（补了那一处，另一处又该报「多」）。
  * @param {ts.SourceFile} source
  * @param {string} axis
  * @returns {string[]}
  */
 export function cvaVariantKeys(source, axis) {
-  /** @type {string[]} */
-  const keys = [];
-  walk(source, (node) => {
-    if (
-      !ts.isCallExpression(node) ||
-      !ts.isIdentifier(node.expression) ||
-      node.expression.text !== "cva"
-    ) {
-      return;
-    }
-    for (const arg of node.arguments) {
-      if (!ts.isObjectLiteralExpression(arg)) continue;
-      for (const prop of arg.properties) {
-        if (
-          !ts.isPropertyAssignment(prop) ||
-          prop.name.getText(source) !== "variants" ||
-          !ts.isObjectLiteralExpression(prop.initializer)
-        ) {
-          continue;
-        }
-        for (const entry of prop.initializer.properties) {
-          if (
-            !ts.isPropertyAssignment(entry) ||
-            unquote(entry.name.getText(source)) !== axis ||
-            !ts.isObjectLiteralExpression(entry.initializer)
-          ) {
-            continue;
-          }
-          for (const key of entry.initializer.properties) {
-            if (key.name === undefined) continue;
-            keys.push(unquote(key.name.getText(source)));
-          }
-        }
-      }
-    }
-  });
-  return keys;
+  return [...cvaVariantKeysByBinding(source, axis).values()].flat();
 }

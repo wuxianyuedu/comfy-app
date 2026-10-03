@@ -36,7 +36,7 @@ import { describe, expect, it } from "vitest";
 import {
   controlOptionsByAxis,
   cvaVariantAxes,
-  cvaVariantKeys,
+  cvaVariantKeysByBinding,
   derivedAxisNames,
   findCvaVariantAccess,
   literalArray,
@@ -170,11 +170,22 @@ describe("故事文件的枚举来源（ISSUE #1381）", () => {
           listed,
           `${rel(story)} 的 ${arrayName} 不是字面量数组（判据读不到它的成员）`,
         ).not.toBeNull();
+        /* 一个组件文件里可以有多处 `cva()`，轴名可能同名（`ui/item.tsx` 的
+           `itemVariants.variant` 与 `itemMediaVariants.variant`）。这时正确的
+           判据是「与**其中一处**逐字对得上」，不是与并集比：并集会把一份正确的
+           清单判成「缺档」，而修法无处可去（补了那一处，另一处又该报「多」）。 */
+        const candidates = [...cvaVariantKeysByBinding(parse(component), axis)];
         expect(
-          [...(listed ?? [])].sort(),
-          `${rel(story)} 的 ${arrayName}（轴 \`${axis}\`）与 ${rel(component)} 的 cva ` +
-            "对不上：cva 里新加 / 删掉一档时故事要跟着改",
-        ).toEqual([...cvaVariantKeys(parse(component), axis)].sort());
+          candidates.length,
+          `${rel(component)} 里轴 \`${axis}\` 一处都没取到 —— 判据在空转`,
+        ).toBeGreaterThan(0);
+        const sorted = [...(listed ?? [])].sort();
+        expect(
+          candidates.map(([, keys]) => [...keys].sort()),
+          `${rel(story)} 的 ${arrayName}（轴 \`${axis}\`）与 ${rel(component)} 的 ` +
+            "cva 对不上：cva 里新加 / 删掉一档时故事要跟着改（多处同名轴时与其中" +
+            "任意一处对得上即可）",
+        ).toContainEqual(sorted);
         // 「从 props 派生」这条正确写法的证据：轴名有对应的类型别名。
         expect(
           [...derived.values()].includes(axis),
