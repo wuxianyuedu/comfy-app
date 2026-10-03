@@ -170,6 +170,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 于是一份落库时全绿的提交拦住了从它分出去的每一次提交。它同样挂在 `postinstall` 那一步，
   // 改 `.githooks/**` 时本层只跑固定清单，所以这条也必须无条件响。
   "tests/storybook-tsc-input.test.ts",
+  // 「设计契约与主题取值会不会各自漂移」（docs/DESIGN.md 的执行者）：`doc:check` 的
+  // 遍历面是 `SCOPED_DOC_DIRS`，只含 `docs/standards` 与 `docs/guides` —— `docs/` 根级
+  // 那份契约**不在任何判据的面上**，于是「改了 token 的名或值、忘了改文档」一条都不会红，
+  // 表现是文档开始说谎而全绿（规范 §13.5.8 的零执行者那一族）。它守的是「下一次有人改
+  // globals.css 或改这份文档」，与本次暂存改动无关也必须响，所以进固定清单。
+  "tests/design-md-contract-sync.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
