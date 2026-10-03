@@ -275,13 +275,21 @@ describe("storybook-check（故事枚举来源门禁）", () => {
     writeFileSync(path.join(uiDir, "thing.tsx"), COMPONENT);
     writeFileSync(path.join(uiDir, "thing.stories.tsx"), GOOD_STORY);
     const ledger = path.join(root, CHECK_DIR_REL, "coverage-ledger.mjs");
-    writeFileSync(
-      ledger,
-      readFileSync(ledger, "utf8").replace(
-        /export const NO_STORY_REASON = new Map\(\[[\s\S]*?\n\]\);/,
-        'export const NO_STORY_REASON = new Map([\n  ["not-a-real-file.ts", "临时变异：磁盘上没有这个文件"],\n]);',
-      ),
+    /* 变异：把理由表换成一条指向**磁盘上不存在**的文件。
+       正则锚在「导出行」上而不是某一种字面量形状 —— 表本身可以是
+       `new Map([...])` 也可以是空的 `new Map()`（这一批就到了空表），
+       锚形状的写法会在表一变空时**静默失去匹配**、变异不生效、这条判据
+       在空转（正是它要拦的那族失效）。 */
+    const src = readFileSync(ledger, "utf8");
+    const mutated = src.replace(
+      /export const NO_STORY_REASON = new Map\([^;]*\);/,
+      'export const NO_STORY_REASON = new Map([\n  ["not-a-real-file.ts", "临时变异：磁盘上没有这个文件"],\n]);',
     );
+    expect(
+      mutated,
+      "变异没生效 —— 理由表的导出行形状变了，这条判据会在空转",
+    ).not.toBe(src);
+    writeFileSync(ledger, mutated);
     const { ok, output } = runIn(root);
     expect(ok).toBe(false);
     expect(output).toContain("not-a-real-file.ts");

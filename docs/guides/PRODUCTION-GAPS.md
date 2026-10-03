@@ -856,6 +856,14 @@
       故意不存在的 `missing.png`，名字写错则抛错）。跨源那道门槛（应用不回 CORS）
       是**刻意不绕**的，写明在 §16.2.3.6 —— 于是 tRPC 那一族 story 在画布上验的
       是「界面在后端不可用时的形态」，那恰好是真机上最难复现的一档。
+      **`ui/` 的组件覆盖率已到 87/87（全量），理由表清空**（同批）：那 5 条理由
+      逐条都是「补法」而不是「不能写」——`progress`（两个 slot 在 `progress-bar`
+      里看不到）、`sonner`（story 里真调 `toast()`）、`error-boundary`（配一个会抛
+      的 `Boom`）、`dialog-overlay` / `dialog-width`（**出口算出来的字符串就是它的
+      对外面**）。判据随之从「理由表非空」换成一条**双向不变式：表空 ⟺ 覆盖率已满**
+      （原判据会在表真的清空后要求人凑一条假理由）。同批修掉 `cvaVariantKeys`
+      按「整文件同名轴取并集」比较的真缺陷（`ui/item.tsx` 两处 `variant` 会被判成
+      「缺档」而修法无处可去）。口径见规范 16 §16.2.3.7。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。

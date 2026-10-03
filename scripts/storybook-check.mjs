@@ -26,7 +26,7 @@ import ts from "typescript";
 import {
   controlOptionsByAxis,
   cvaVariantAxes,
-  cvaVariantKeys,
+  cvaVariantKeysByBinding,
   derivedAxisNames,
   findCvaVariantAccess,
   literalArray,
@@ -149,8 +149,25 @@ function coverageViolations() {
       "NO_STORY_REASON 里的 " + name + " 已经有 story 了 —— 删掉这条理由",
     );
   }
-  if (NO_STORY_REASON.size === 0) {
-    out.push("NO_STORY_REASON 是空表 —— 判据在空转，先检查它是不是被删空了");
+  /* 理由表空了**不再是违规**，但仍要说清为什么。
+   *
+   * 这条守卫的原意是「别让人把表删空、然后判据看起来还在跑」—— 而它真正要防的
+   * 「判据在空转」这件事，由上面那两条**实测**判据兜着：分子的分母都非空
+   * （覆盖率 0/0 或 story 0 份时 `uiCoverage` 的统计本身就是空集）、
+   * 且「每个 story 都真的 import 到了组件」那条由用例核。
+   * 表空 + 覆盖率 100% 是一个**合法且真实**的状态（这一批就到达了），
+   * 把它判红等于要求人为凑一条假理由 —— 那正是这套棘轮最不想鼓励的事。
+   *
+   * 所以改成「空表必须与 100% 覆盖率同时成立」：表非空而覆盖率满，说明
+   * 有人把已经干净的账留在表里；表空而覆盖率不满，说明有人把理由删掉了。 */
+  if (NO_STORY_REASON.size === 0 && stat.uncovered.length > 0) {
+    out.push(
+      "NO_STORY_REASON 是空表，但还有 " +
+        stat.uncovered.length +
+        " 个组件没有 story（" +
+        stat.uncovered.slice(0, 5).join(" / ") +
+        "…）—— 要么补 story，要么把理由加回 coverage-ledger.mjs",
+    );
   }
 
   process.stdout.write(
@@ -236,14 +253,43 @@ function main() {
         );
         continue;
       }
-      const expected = cvaVariantKeys(parse(component), axis);
-      const missing = expected.filter((k) => !listed.includes(k));
-      const extra = listed.filter((k) => !expected.includes(k));
-      if (missing.length > 0 || extra.length > 0) {
+      /* 一个组件文件里可以有**多处** `cva()`，而它们的轴名可能同名
+         （`ui/item.tsx` 的 `itemVariants.variant` 与 `itemMediaVariants.variant`）。
+         这时正确的比较是「story 那份清单与**其中一处**逐字对得上」，不是与并集比
+         —— 并集会把一份正确的 `["default","outline","muted"]` 判成「缺 icon / image」，
+         而修法无处可去（补上那两档，itemVariants 那一处又该报「多」）。 */
+      const candidates = [...cvaVariantKeysByBinding(parse(component), axis)];
+      const matched = candidates.some(([, keys]) => {
+        const miss = keys.filter((k) => !listed.includes(k));
+        const ex = listed.filter((k) => !keys.includes(k));
+        return miss.length === 0 && ex.length === 0;
+      });
+      if (!matched) {
+        /* 报错时给最接近的那一处（差得最少），否则「与哪一处对不上」读不出来。 */
+        const described = candidates
+          .map(([binding, keys]) => {
+            const miss = keys.filter((k) => !listed.includes(k));
+            const ex = listed.filter((k) => !keys.includes(k));
+            return {
+              binding,
+              miss,
+              ex,
+              diff: miss.length + ex.length,
+            };
+          })
+          .sort((a, b) => a.diff - b.diff)[0];
         violations.push(
           `${rel(story)} 的 ${arrayName}（轴 \`${axis}\`）与 ${rel(component)} 的 cva 对不上` +
-            (missing.length > 0 ? `：缺 ${missing.join(" / ")}` : "") +
-            (extra.length > 0 ? `：多 ${extra.join(" / ")}` : ""),
+            (described === undefined
+              ? "（该文件里这一轴一处都没有）"
+              : `（最接近的是 ${described.binding}` +
+                (described.miss.length > 0
+                  ? `：缺 ${described.miss.join(" / ")}`
+                  : "") +
+                (described.ex.length > 0
+                  ? `：多 ${described.ex.join(" / ")}`
+                  : "") +
+                "）"),
         );
       }
       if (![...derived.values()].includes(axis)) {
