@@ -14,7 +14,7 @@
  * store 与工作流画布共享（useSyncExternalStore + localStorage `v1`），所以在这里
  * 切换会立刻在那里生效，反之亦然。
  */
-import { useDebugMode } from "./canvas/WorkflowCanvasSettings";
+import { useDebugMode } from "./canvas/hooks/use-canvas-settings";
 import { useDebugStore } from "./debug/debug-store";
 import { Hint } from "~/components/ui/hint";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
@@ -50,7 +50,7 @@ function ToggleRow({
         )}
       </span>
       {/* 开关走 ui/switch（规范 16 §16.2.3）：此前这里自绘了一个
-          「圆角底 + 绝对定位圆点」的开关，与 WorkflowCanvasSettings 的另一份
+          「圆角底 + 绝对定位圆点」的开关，与 CanvasSettingsPanel 的另一份
           同形实现各自维护 —— 开关是**状态控件**，样式改动应当只发生在一处。 */}
       <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
     </FieldLabel>

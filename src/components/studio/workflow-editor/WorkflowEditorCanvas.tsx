@@ -21,12 +21,10 @@ import {
   ZoomIndicator,
   CanvasRulers,
 } from "../WorkflowCanvasDecorations";
-import {
-  CanvasSettingsButton,
-  CanvasRecenterButton,
-  isCustomCanvasSettings,
-  type CanvasSettings,
-} from "../canvas/WorkflowCanvasSettings";
+import { CanvasSettingsButton } from "../canvas/CanvasSettingsButton";
+import { CanvasRecenterButton } from "../canvas/CanvasRecenterButton";
+import { isCustomCanvasSettings } from "../canvas/hooks/use-canvas-settings";
+import type { CanvasSettings } from "../canvas/canvas-settings-types";
 import { PORT_ROLES } from "../canvas/WorkflowNode";
 import type { WorkflowNodeData } from "../workflow-types";
 import { workflowNodeTypes, workflowEdgeTypes } from "./WorkflowEditorNodes";

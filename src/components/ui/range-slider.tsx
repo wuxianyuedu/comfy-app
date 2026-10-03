@@ -7,7 +7,7 @@ import { Slider } from "~/components/ui/slider";
  *
  * 定位：`~/components/ui/slider`（shadcn 官方 Slider、base-ui 版）的薄封装，
  * 把「单值受控 + `onChange` 拿 number」这一常见形态收在一处。消费点
- * （`TrainingStudio` 的 4 处参数、`WorkflowCanvasSettings` 的 SliderRow）
+ * （`TrainingStudio` 的 4 处参数、`CanvasSettingsPanel` 的 SliderRow）
  * 只用 `value / min / max / step / onChange / className`，本件的 props
  * 就是这些 + `id / disabled / aria-*` 三件透传。
  *

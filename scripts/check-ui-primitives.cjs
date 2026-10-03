@@ -882,9 +882,9 @@ const EXEMPT_FILES = {
   ],
   P23: [
     {
-      re: /^src\/components\/studio\/canvas\/WorkflowCanvasSettings\.tsx$/,
+      re: /^src\/components\/studio\/canvas\/CanvasSettingsPanel\.tsx$/,
       reason:
-        "画布设置里的 `LabeledSlider`：标签行是**标签与当前值左右并排**" +
+        "画布设置面板里的 `SliderRow`：标签行是**标签与当前值左右并排**" +
         "（左边「细线透明度」、右边实时读数），而 `FormField` 的标签行是" +
         "「一行标签 + 下方控件」的块级形态。套上去会把那个并排的读数挪走，" +
         "改掉渲染结果（§16.2.4.2 第 9 条）。控件是 `ui/range-slider`，" +

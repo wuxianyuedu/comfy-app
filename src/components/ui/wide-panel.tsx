@@ -32,7 +32,7 @@ import { readStorageItem, writeStorageItem } from "~/lib/browser-storage";
  *
  * ── 为什么不复用 `use-flash-state` / `use-expansion-set` 的 `useState` 形态 ──
  * 那两个是**组件内**的一次性状态（亮一下就复位、树形展开随视图生命周期走）；
- * 加宽档是**跨会话的偏好**，与 `WorkflowCanvasSettings` 的「画布偏好」
+ * 加宽档是**跨会话的偏好**，与 `useCanvasSettings` 的「画布偏好」
  * 同类。所以这里走「模块级 store + `useSyncExternalStore`」——与
  * `useCanvasSettings` 同一套机制（同一面板可能同时挂两份实例：按钮在标题栏、
  * 面板体在 Portal 里），纯 `useState` 会让两边各有一份真相。

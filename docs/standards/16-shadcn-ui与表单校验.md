@@ -690,7 +690,7 @@ node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命�
 | 模型标签编辑器       | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭）                                                     | `ui/dialog`                                                                               |
 | 属性多选下拉         | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位）                                                       | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner）                            |
 | 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元               | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除                         |
-| 两个设置抽屉         | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/WorkflowCanvasSettings.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`）                                                              |
+| 两个设置抽屉         | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/CanvasSettingsPanel.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc）    | `ui/sheet`（`side="right"`）                                                              |
 
 ### 16.2.4.2 P1 按钮分批的进度与做法
 
@@ -2322,7 +2322,7 @@ TS/TSX 视图，而 **`public/{{shell.splash}}`（启动页源，编译期内嵌
 1. **「整块可点的开关行」不是这个形态**（`<label className="flex cursor-pointer
 items-center justify-between">` 包住一个 `<Switch>`）：标签与控件**并排**、
    点哪都切换，套上块级标签行会改掉那条排布（§16.2.4.2 第 9 条）。
-   `WorkflowCanvasSettings` 的 `LabeledSlider` 同理（标签与**实时读数**并排），
+   `CanvasSettingsPanel` 的 `SliderRow` 同理（标签与**实时读数**并排），
    已按 `EXEMPT_FILES` 显式登记并写明理由。
 2. **「无单一控件」的行可以做纯标签行** —— `children` 可省略，`hint` 承载
    说明文字（工坊「提供方 / 出场角色」这类二选一按钮组、设置页「请求体额外

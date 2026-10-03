@@ -15,73 +15,47 @@
  * 与画布的差异：这里是单节点静态环境（无上游接线），wire 类输入以表单控件
  * 呈现，值为空时不下发、由 ComfyUI 侧工作流自带默认值兜底；**对外参数的落点
  * 映射**在这里可编辑（三列 React Flow 画布，见 WorkflowLibraryCanvas）。
+ *
+ * 本组件是容器（§17.2 ④）：状态机与编排都收在 hooks/ ——
+ * • `hooks/use-generation-runner.ts` 生成的相位状态机 + SSE 订阅（发起与恢复）；
+ * • `hooks/use-default-value-seeding.ts` 输入值状态 + 模式默认值播种；
+ * • `hooks/use-output-wiring.ts` 对外输出落点的编辑编排。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createThrottleGate } from "~/components/ui/use-throttled-progress";
-import { errorMessage } from "~/lib/error-message";
+import { useCallback, useMemo, useRef, useState } from "react";
+
 import {
-  startLocalGenerate,
-  type TaskProgressNode,
-} from "~/lib/workshop/generation-client";
-import {
-  appendWorkflowRunLog,
-  latestRunForWorkflow,
-  registerWorkflowRun,
-} from "~/lib/workflow/workflow-run-store";
-import {
-  useWorkflowRunResume,
-  watchWorkflowRun,
-} from "./hooks/use-workflow-run-resume";
-import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
-import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
-import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
-import {
-  defaultInputValues,
-  getMissingRequiredInputs,
-  inferGroups,
-  mergeRefreshedDefaults,
-  resolveEntrySeedMode,
-  splitWorkflowIO,
-  toWorkflowInputsPayload,
-  type WorkflowIOMap,
-} from "../workflow-io";
-import { seedModeOverrides } from "~/components/studio/project-canvas/CanvasNode/helpers";
-import { Button } from "~/components/ui/button";
-import { ProgressBar } from "~/components/ui/progress-bar";
-import { SelectMenu } from "~/components/ui/select-menu";
-import {
-  applyParamMapping,
   buildParamEntries,
-  parseParamMapping,
   sizeGroupIds,
 } from "~/lib/workflow/workflow-param-mapping";
+import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
+import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
 import {
-  applyOutputBindingEdit,
-  canApplyOutputBindingEdit,
-  clearOutputBindingEdit,
-} from "~/lib/workflow/workflow-output-binding";
+  getMissingRequiredInputs,
+  inferGroups,
+  resolveEntrySeedMode,
+  splitWorkflowIO,
+  type WorkflowIOMap,
+} from "../workflow-io";
+import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
+import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
+import { WorkflowNodeActionButton } from "~/components/studio/workflow-form/WorkflowNodeParts";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
-import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
 } from "./workflow-library-param-cards";
-import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
-import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
-import { ViewableImage } from "~/components/ui/image-viewer";
 import { useParamWiring } from "./hooks/use-param-wiring";
+import { useGenerationRunner, type Phase } from "./hooks/use-generation-runner";
+import { useDefaultValueSeeding } from "./hooks/use-default-value-seeding";
+import { useOutputWiring } from "./hooks/use-output-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
-import { WorkflowNodeActionButton } from "~/components/studio/workflow-form/WorkflowNodeParts";
-
-type Phase =
-  | { kind: "idle" }
-  | { kind: "starting" }
-  | { kind: "running"; pct: number; node?: TaskProgressNode }
-  | { kind: "done"; imageUrl?: string }
-  | { kind: "failed"; message: string };
+import { WorkflowPreviewUsePanel } from "./WorkflowPreviewUsePanel";
+import { WorkflowPreviewRunFeedback } from "./WorkflowPreviewRunFeedback";
+import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
+import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
 
 interface Props {
   workflowId: string;
@@ -107,6 +81,14 @@ interface Props {
   viewMode?: "edit" | "use";
 }
 
+/* 相位 → 状态胶囊文案（running 的百分比是动态的，查表只覆盖静态四种）。 */
+const STATUS_LABEL: Record<Exclude<Phase["kind"], "running">, string> = {
+  idle: "待开始",
+  starting: "提交中…",
+  done: "已完成",
+  failed: "失败",
+};
+
 export function WorkflowCanvasNodePreview({
   workflowId,
   workflowName,
@@ -123,47 +105,14 @@ export function WorkflowCanvasNodePreview({
 }: Props) {
   /* 视图模式归一：未指定按 "edit"（首个页签，见 Props 注释）。 */
   const viewMode = viewModeProp ?? "edit";
-  const [values, setValues] = useState<Record<string, unknown>>({});
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
-  /* 节点相位的节流闸门（`~/components/ui/use-throttled-progress`）。 */
-  const progressGate = useRef(createThrottleGate());
   /* 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。
    * 上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）。 */
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
-  // onOutput 与 onSettled 都来自同一 SSE 闭包，state 读取会拿到渲染期旧值——
-  // 用 ref 保证 onSettled 能看到 onOutput 刚写入的结果图。
-  const resultUrlRef = useRef<string | null>(null);
   /* 选中的对外参数（点卡片或点它那条线）—— 选中后按 ⌫ 断开，或按卡片头 ↺ 恢复默认。 */
   const [selectedParamId, setSelectedParamId] = useState<string | null>(null);
   /* 右列选中的对外输出口 —— 与左列的选中互斥（同一时刻只有一处被选，否则
    *  「按 ⌫ 断的是哪一根」说不清）。 */
   const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
-
-  /* 用户修改输入值或对外参数连线后，上一次失败的 banner/状态点应自动清空，
-   *  让「用此工作流生成」按钮回到可再次点击的 idle 状态。失败态只保留到用户
-   *  采取行动前，避免「已经改过了还是显示失败」的错觉。 */
-  const clearFailureOnInteraction = useCallback(() => {
-    setPhase((p) => (p.kind === "failed" ? { kind: "idle" } : p));
-  }, []);
-  const setValuesAndClearFailure = useCallback(
-    (
-      next:
-        | Record<string, unknown>
-        | ((prev: Record<string, unknown>) => Record<string, unknown>),
-    ) => {
-      clearFailureOnInteraction();
-      setValues(next);
-    },
-    [clearFailureOnInteraction],
-  );
-  const handlePatchParamMap = useCallback(
-    (next: Record<string, unknown>) => {
-      clearFailureOnInteraction();
-      return onPatchParamMap?.(next);
-    },
-    [clearFailureOnInteraction, onPatchParamMap],
-  );
 
   /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
    * 卡片列、宿主表单、seed 模式、必填判定全都按它解析，不会再出现「chip 显示着
@@ -173,90 +122,21 @@ export function WorkflowCanvasNodePreview({
     [modes, defaultMode, taskType],
   );
 
-  /* 模式默认值播种：workflow 或**生效模式**变化时，用该模式的两级默认值
-   *  （模式覆盖 -> 作者 value -> 图内 defaultValue）回填表单，使「画布样式
-   *  预览」初始即展示该模式下配置的默认值（模式 chip 上显示的就是它）。
-   *  io 尚未就绪时跳过，用户后续可自由覆盖。 */
-  const seedRef = useRef<string | null>(null);
-  /* 上一次播种下去的默认值表 —— 判断「用户有没有改过这一格」的基线（见
-   *  mergeRefreshedDefaults）。它必须始终是「播种时的那一份」，所以只在播种
-   * 处写入，其余时候连引用都不能动。 */
-  const baselineRef = useRef<Record<string, unknown>>({});
-  /* 播种键同时含 workflowId 与生效模式：换工作流 / 换模式都会落到下面的
-   * 「整表重播」分支。这一步是必须的——若只按 mode 判定，上一个工作流的
-   * 用户覆盖值会被当成新工作流的覆盖值保留下来（ioKey 恰好同名时）。 */
-  const activeSeedKey = `${workflowId ?? ""}|${effectiveMode ?? ""}`;
-  useEffect(() => {
-    if (!workflowIO) return;
-    const fresh = defaultInputValues(workflowIO, effectiveMode);
-    if (seedRef.current === activeSeedKey) {
-      /* 同一个工作流 + 同一个模式，IO 变了 = 作者在编辑器里改了默认值。
-       *  此时不能整表覆盖（会吃掉用户已填的覆盖值），只把「仍等于旧默认值」
-       *  的那一格刷新到新默认值；用户改过的格子原样保留。 */
-      setValues((current) => {
-        const merged = mergeRefreshedDefaults(
-          current,
-          baselineRef.current,
-          fresh,
-        );
-        return merged ?? current;
-      });
-      baselineRef.current = fresh;
-      return;
-    }
-    /* 首次播种 / 换工作流 / 换模式：整表采用新默认值，清掉上一份残留。 */
-    seedRef.current = activeSeedKey;
-    baselineRef.current = fresh;
-    setValues(fresh);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在 workflow/模式变化时整表播种，IO 变化走上面的保覆盖刷新
-  }, [workflowIO, workflowId, effectiveMode]);
-
-  /* 重开窗口 / 切回本页签时的运行视角恢复：还在跑就重订阅 SSE（服务端回放
-   * 补齐历史帧），已完成直接恢复产物、已失败恢复原因。**三态都要恢复** ——
-   * 此前这里只认「还在跑」那一支，于是生成结束后切回来，产物与终态双双丢失
-   * （用户实测：「生成结束后也看不到产出内容」）。不自动弹全屏日志（避免
-   * 打断用户），由用户点「执行日志」查看。 */
-  useWorkflowRunResume({
+  /* 输入值状态 + 模式默认值播种（见 use-default-value-seeding）。 */
+  const { values, setValues } = useDefaultValueSeeding({
     workflowId,
-    source: "canvas-node",
-    handlers: {
-      onProgress: (taskId, pct, node) => {
-        /* 高频回调：按任务节流（规范 16 §16.2.4.68）。 */
-        if (!progressGate.current.allow(taskId)) return;
-        setPhase({ kind: "running", pct, ...(node ? { node } : {}) });
-      },
-      onLog: (taskId, entry) => {
-        appendWorkflowRunLog(taskId, entry);
-      },
-      onOutput: (_taskId, output) => {
-        if (output.kind === "image" && output.url) {
-          resultUrlRef.current = output.url;
-          setResultUrl(output.url);
-        }
-      },
-      onSettled: (_taskId, result) => {
-        if (result.ok) {
-          setPhase({
-            kind: "done",
-            imageUrl: resultUrlRef.current ?? undefined,
-          });
-        } else {
-          setPhase({ kind: "failed", message: result.message ?? "生成失败" });
-        }
-      },
-    },
+    workflowIO,
+    effectiveMode,
   });
 
-  const running = phase.kind === "running" || phase.kind === "starting";
-  /* 本页签独立的「执行日志」入口：按钮带 canvas-node 来源过滤，弹窗同理，
-   * 与「工坊封装」页签各自一处（ISSUE #611 旧形态：两个页签各写各的）。 */
-  const [logOpen, setLogOpen] = useState(false);
-  const [logTaskId, setLogTaskId] = useState<string | null>(null);
-  const latestLogTaskId = useMemo(
-    () => latestRunForWorkflow(workflowId, "canvas-node")?.taskId ?? null,
-    [workflowId],
+  /* 与画布 WorkflowNode 同源的双行结构：inputs 由 DynamicWorkflowForm(compact)
+   * 渲染（库内无 React Flow 上下文，不带端点），outputs 单独成段在表单之后。
+   * 拆一次按 workflowIO 记忆，供卡片派生 / 缺参标签 / 组合控件判定共用。 */
+  const { inputs, outputs, widgetInputs } = useMemo(
+    () => splitWorkflowIO(workflowIO),
+    [workflowIO],
   );
-  const logViewTaskId = logTaskId ?? latestLogTaskId;
+
   const missing = useMemo(
     () =>
       workflowIO
@@ -270,26 +150,10 @@ export function WorkflowCanvasNodePreview({
       missing.map((ioKey) => {
         const entry = workflowIO?.[ioKey];
         if (!entry) return ioKey;
-        const fromInputs = splitWorkflowIO(workflowIO).inputs.find(
-          (input) => input.ioKey === ioKey,
-        );
+        const fromInputs = inputs.find((input) => input.ioKey === ioKey);
         return fromInputs?.label ?? fromInputs?.name ?? ioKey;
       }),
-    [missing, workflowIO],
-  );
-  const canRun =
-    usable && !running && missing.length === 0 && viewMode === "use";
-  /* 与画布 WorkflowNode 同源的双行结构：inputs 由 DynamicWorkflowForm(compact)
-   * 渲染（库内无 React Flow 上下文，不带端点），outputs 单独成段在表单之后。 */
-  const { inputs, outputs } = splitWorkflowIO(workflowIO);
-
-  /* 组合控件（宽/高、比例/像素/倍数、时长/画质/比例）把这些端口收进同一块控件，
-   *  表单里因此**没有独立的一行**（窄版的组合控件仍把这几个端口摆成逐行参数，
-   *  各带自己的端点）。对外参数卡片据此不再重复列这些端口 —— 那块控件本身就是
-   *  它们的入口。判定与表单同一份（`inferGroups`），不另算一遍避免漂移。 */
-  const groupedKeys = useMemo(
-    () => inferGroups(splitWorkflowIO(workflowIO).widgetInputs).groupedKeys,
-    [workflowIO],
+    [missing, inputs, workflowIO],
   );
 
   /* seed 类参数的「控件后行为」：按生效模式解析（模式覆盖优先，回退条目全局）。
@@ -303,101 +167,58 @@ export function WorkflowCanvasNodePreview({
     return map;
   }, [workflowIO, effectiveMode]);
 
+  /* 组合控件（宽/高、比例/像素/倍数、时长/画质/比例）把这些端口收进同一块控件，
+   *  表单里因此**没有独立的一行**（窄版的组合控件仍把这几个端口摆成逐行参数，
+   *  各带自己的端点）。对外参数卡片据此不再重复列这些端口 —— 那块控件本身就是
+   *  它们的入口。判定与表单同一份（`inferGroups`），不另算一遍避免漂移。 */
+  const groupedKeys = useMemo(
+    () => inferGroups(widgetInputs).groupedKeys,
+    [widgetInputs],
+  );
+
+  /* 生成运行器。`enabled` 是除「已在运行」外的可运行条件；载荷（含生效映射）
+   * 由下面的 run() 在点击时组装 —— 生效映射持有在 wiring 里，倒灌进运行器
+   * 会与 useParamWiring 的回调依赖互相成环。 */
+  const { phase, running, canRun, resultUrl, startRun, clearFailure } =
+    useGenerationRunner({
+      workflowId,
+      enabled: usable && missing.length === 0 && viewMode === "use",
+    });
+
+  /* 失败态只保留到用户采取行动前：改输入值或改落点都算「采取了行动」。 */
+  const setValuesAndClearFailure = useCallback(
+    (
+      next:
+        | Record<string, unknown>
+        | ((prev: Record<string, unknown>) => Record<string, unknown>),
+    ) => {
+      clearFailure();
+      setValues(next);
+    },
+    [clearFailure, setValues],
+  );
+  const handlePatchParamMap = useCallback(
+    (next: Record<string, unknown>) => {
+      clearFailure();
+      return onPatchParamMap?.(next);
+    },
+    [clearFailure, onPatchParamMap],
+  );
+
+  /* 本页签独立的「执行日志」入口：按钮带 canvas-node 来源过滤，弹窗同理，
+   * 与「工坊封装」页签各自一处（ISSUE #611 旧形态：两个页签各写各的）。 */
+  const [logOpen, setLogOpen] = useState(false);
+  const [logTaskId, setLogTaskId] = useState<string | null>(null);
+  const latestLogTaskId = useMemo(
+    () => latestRunForWorkflow(workflowId, "canvas-node")?.taskId ?? null,
+    [workflowId],
+  );
+  const logViewTaskId = logTaskId ?? latestLogTaskId;
+
   const statusLabel =
     phase.kind === "running"
       ? `生成中 ${phase.pct}%`
-      : phase.kind === "starting"
-        ? "提交中…"
-        : phase.kind === "done"
-          ? "已完成"
-          : phase.kind === "failed"
-            ? "失败"
-            : "待开始";
-
-  async function run() {
-    if (!canRun) return;
-    setResultUrl(null);
-    resultUrlRef.current = null;
-    setPhase({ kind: "starting" });
-    try {
-      /* 运行期载荷按**映射表**组装（不是裸的「暴露 pin 全量下发」）：
-       *  「尺寸」这类一个对外参数接多个端口的口子，值要逐端口派生成各自认的形状
-       *  （比例标签 / 百万像素 / 对齐倍数）—— 否则用户在图里连出来的那几条线
-       *  在运行期收不到值（ISSUE #355：「尺寸那三项每一项都需要从外部获取值」）。
-       *
-       *  映射表来源与画布同一份（`paramMap.source.mode:<模式>`，库里改过就跟当前
-       *  `wiring.effectiveParamMap`）。映射还没就绪（没有模式）时退回原路径。 */
-      const mapped = workflowIO
-        ? applyParamMapping({
-            io: workflowIO,
-            entries: buildParamEntries(workflowIO, undefined, {
-              mode: effectiveMode,
-            }),
-            mapping: parseParamMapping(wiring.effectiveParamMap),
-            values,
-            mode: effectiveMode,
-          })
-        : null;
-      const workflowInputs =
-        mapped && mapped.inputs.length > 0
-          ? mapped.inputs
-          : toWorkflowInputsPayload(workflowIO ?? undefined, values);
-      /* seed「控件后行为」与画布运行同源：条目上配置了 seedMode 的参数
-       * 附加 control_after_generate 输入，后端按 fixed/randomize 等处理。 */
-      const cagInputs = seedModeOverrides(workflowIO ?? null, seedModes);
-      const taskId = await startLocalGenerate({
-        workflow: workflowId,
-        workflowInputs: [...workflowInputs, ...cagInputs],
-      });
-      setPhase({ kind: "running", pct: 0 });
-      /* 登记运行记录；日志弹窗不再自动打开，由用户点本页签的「执行日志」查看。 */
-      registerWorkflowRun({
-        taskId,
-        workflowId,
-        workflowName,
-        taskType,
-        startedAt: nowMs(),
-        status: "running",
-        source: "canvas-node",
-      });
-      await new Promise<void>((resolve) => {
-        /* 订阅走 `watchWorkflowRun`（与恢复路径同一份）：它顺手把进度 / 产物 /
-         * 终态写进运行登记表 —— 切页签回来才有的可恢复。 */
-        watchWorkflowRun(taskId, {
-          onProgress: (_taskId, pct, node) => {
-            if (!progressGate.current.allow(taskId)) return;
-            setPhase({ kind: "running", pct, ...(node ? { node } : {}) });
-          },
-          onLog: (id, entry) => {
-            appendWorkflowRunLog(id, entry);
-          },
-          onOutput: (_id, out) => {
-            if (out.kind === "image" && out.url) {
-              resultUrlRef.current = out.url;
-              setResultUrl(out.url);
-            }
-          },
-          onSettled: (_id, r) => {
-            if (r.ok) {
-              setPhase({
-                kind: "done",
-                imageUrl: resultUrlRef.current ?? undefined,
-              });
-            } else {
-              setPhase({ kind: "failed", message: r.message ?? "生成失败" });
-            }
-            resolve();
-          },
-        });
-      });
-    } catch (e) {
-      setPhase({
-        kind: "failed",
-        message: errorMessage(e, String(e)),
-      });
-    }
-  }
-
+      : STATUS_LABEL[phase.kind];
   const pct = phase.kind === "running" ? phase.pct : 0;
   const nodeLabel =
     phase.kind === "running" && phase.node?.label ? phase.node.label : null;
@@ -462,7 +283,7 @@ export function WorkflowCanvasNodePreview({
    * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么 →
    * 从哪一行取值」。输出不参与**运行期**映射（没有 `source` 键空间），但它
    * 从哪一行取值是作者能改的：拖圆点写 `paramMap.output.mode:<模式>`，卡片头
-   * ↺ 恢复默认 —— 手势与落库都经下面的 `outputWiring`。 */
+   * ↺ 恢复默认 —— 手势与落库都经 `useOutputWiring`。 */
   const outputCards = useMemo(
     () =>
       deriveLibraryOutputCards({
@@ -478,74 +299,29 @@ export function WorkflowCanvasNodePreview({
     () => (effectiveMode ? modeLabel(effectiveMode) : modeLabel(taskType)),
     [effectiveMode, taskType],
   );
+  const outputWiring = useOutputWiring({
+    workflowIO,
+    effectiveMode,
+    onPatchParamMap,
+    outputCards,
+    effectiveParamMap: wiring.effectiveParamMap,
+    commitParamMap: wiring.commitParamMap,
+  });
 
-  /* ── 对外输出参数的落点编辑（右列）──
-   *
-   * 与左列同一份编排思路（本地叠加 + 落库），但键空间分开：输出的取值行写在
-   * `paramMap.output.mode:<模式>`。落库统一走 `commitParamMap`（先写本地 overlay
-   * 再落库）—— 这样输出线像左列一样**立刻**画出来，而不是等一次 PATCH + 查询
-   * 重拉（约 2s）回来才显示。
-   *
-   * 没有 `onPatchParamMap`（只读消费方）时不可拖：回调为 undefined，连线层据此
-   * 不起手（拖不动的东西不摆出能拖的样子）。 */
-  /* 解构出两个稳定引用再进 useMemo：`wiring` 每次渲染都是新对象，回调里直接写
-   * `wiring.x` 会被 eslint 要求依赖整个 `wiring`（那样 useMemo 每次都重算）。 */
-  const { effectiveParamMap: wiringParamMap, commitParamMap } = wiring;
-  const outputWiring = useMemo(
-    () => ({
-      isManual: (ioKey: string) => outputCards.isManual(ioKey),
-      connect: (outputIoKey: string, targetIoKey: string) => {
-        if (!effectiveMode || !onPatchParamMap) return;
-        if (
-          !canApplyOutputBindingEdit(
-            { ioKey: targetIoKey, mode: effectiveMode },
-            workflowIO,
-          )
-        )
-          return;
-        /* 连回它**默认**取值的那一行 = 撤销这条手工线（而不是把它写成一条
-         *  多余的覆盖）—— 否则「恢复默认」与「拖回来」会留下两种等价状态。
-         *  但这只对**已有手工绑定**的口成立：单输出行的工作流（images → images）
-         *  连的是它唯一的那一行，按旧判据会被当成「撤销一条不存在的手工线」
-         *  静默吃掉 —— 用户看到的就是「拖了没反应、输出线永远连不上」。没有
-         *  手工绑定时应写入显式绑定让线出现（卡片头 ↺ 仍可一键撤掉）。 */
-        const revert =
-          outputIoKey === targetIoKey && outputCards.isManual(outputIoKey);
-        const next = revert
-          ? clearOutputBindingEdit(wiringParamMap, outputIoKey, effectiveMode)
-          : applyOutputBindingEdit(wiringParamMap, {
-              outputIoKey,
-              ioKey: targetIoKey,
-              mode: effectiveMode,
-            });
-        commitParamMap(next);
-      },
-      disconnect: (outputIoKey: string) => {
-        if (!effectiveMode || !onPatchParamMap) return;
-        commitParamMap(
-          applyOutputBindingEdit(wiringParamMap, {
-            outputIoKey,
-            ioKey: null,
-            mode: effectiveMode,
-          }),
-        );
-      },
-      reset: (outputIoKey: string) => {
-        if (!effectiveMode || !onPatchParamMap) return;
-        commitParamMap(
-          clearOutputBindingEdit(wiringParamMap, outputIoKey, effectiveMode),
-        );
-      },
-    }),
-    [
-      outputCards,
-      effectiveMode,
-      onPatchParamMap,
-      wiringParamMap,
-      commitParamMap,
+  /** 提交到本机生成并等待落定（相位与 SSE 订阅在 use-generation-runner）。 */
+  function run() {
+    if (!canRun) return;
+    startRun({
+      workflowId,
+      workflowName,
+      taskType,
       workflowIO,
-    ],
-  );
+      effectiveMode,
+      values,
+      effectiveParamMap: wiring.effectiveParamMap,
+      seedModes,
+    });
+  }
 
   return (
     <div
@@ -637,15 +413,10 @@ export function WorkflowCanvasNodePreview({
                       label={paramCards.ownersByPin[entry.ioKey]}
                     />
                   )}
-                  onSeedModeChange={
-                    onSeedModeChange
-                      ? (ioKey: string, mode: string) =>
-                          onSeedModeChange(ioKey, mode)
-                      : undefined
-                  }
+                  onSeedModeChange={onSeedModeChange}
                   workflowId={workflowId}
-                  onUploadProgress={(message) => setUploadNotice(message)}
-                  onUploadError={(message) => setUploadNotice(message)}
+                  onUploadProgress={setUploadNotice}
+                  onUploadError={setUploadNotice}
                 />
               }
               outputs={outputs}
@@ -663,148 +434,45 @@ export function WorkflowCanvasNodePreview({
         />
       )}
 
-      {/* ── use 模式：简化视图（表单 + 生成按钮 + 结果） ── */}
+      {/* ── use 模式：简化视图（表单 + 生成按钮 + 日志入口 + 模式切换） ── */}
       {viewMode === "use" && (
-        <div className="flex w-full max-w-120 flex-col gap-3">
-          <div className="border-border bg-panel rounded-xl border p-4">
-            <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
-              <span className="text-ink min-w-0 truncate text-sm font-semibold">
-                {workflowName}
-              </span>
-              <WorkflowRunLogButton
-                workflowId={workflowId}
-                source="canvas-node"
-                taskId={logViewTaskId}
-                alwaysVisible
-                onOpen={() => setLogOpen(true)}
-              />
-              {/* 多模式工作流在这儿也要能换模式：两个页签读的是**同一个**
-                  生效模式（详情层持有），而 use 模式此前只把它当纯文本打出来
-                  —— 用户在「实际使用」里换不了模式，只能切回「编辑对外参数」
-                  再换（那一页的模式下拉在宿主卡片上）。形态与 `LibraryHostCard`
-                  的同一个下拉逐字一致，免得同一件事在两处长得不一样。 */}
-              {modes && modes.length > 1 && onModeChange ? (
-                <SelectMenu
-                  value={effectiveMode ?? taskType}
-                  onChange={onModeChange}
-                  options={modes}
-                  labels={Object.fromEntries(
-                    modes.map((code) => [code, modeLabel(code)]),
-                  )}
-                  popoverMinWidth={150}
-                  autoFitFromOptions={false}
-                  className="border-border-strong! shrink-0 bg-transparent! text-[11px]"
-                />
-              ) : (
-                <span className="text-ink-faint shrink-0 text-xs">
-                  {effectiveModeLabel}
-                </span>
-              )}
-            </div>
-            <DynamicWorkflowForm
-              io={workflowIO ?? undefined}
-              values={values}
-              onChange={setValuesAndClearFailure}
-              showOutputs={false}
-              compact
-              mode={effectiveMode}
-              seedModes={seedModes}
-              onSeedModeChange={
-                onSeedModeChange
-                  ? (ioKey: string, mode: string) =>
-                      onSeedModeChange(ioKey, mode)
-                  : undefined
-              }
-              workflowId={workflowId}
-              onUploadProgress={(message) => setUploadNotice(message)}
-              onUploadError={(message) => setUploadNotice(message)}
-            />
-            <div className="mt-4">
-              <WorkflowNodeActionButton
-                label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
-                disabled={!canRun}
-                onClick={run}
-                hint={
-                  missingLabels.length > 0
-                    ? `必填参数未填：${missingLabels.join("、")}`
-                    : undefined
-                }
-              />
-            </div>
-          </div>
-        </div>
+        <WorkflowPreviewUsePanel
+          workflowId={workflowId}
+          workflowName={workflowName}
+          workflowIO={workflowIO}
+          effectiveMode={effectiveMode}
+          taskType={taskType}
+          modes={modes}
+          onModeChange={onModeChange}
+          effectiveModeLabel={effectiveModeLabel}
+          values={values}
+          onValuesChange={setValuesAndClearFailure}
+          seedModes={seedModes}
+          onSeedModeChange={onSeedModeChange}
+          onUploadNotice={setUploadNotice}
+          running={running}
+          canRun={canRun}
+          run={run}
+          pct={pct}
+          missingLabels={missingLabels}
+          logViewTaskId={logViewTaskId}
+          onOpenLog={() => setLogOpen(true)}
+        />
       )}
 
-      {/* ── 进度条（两种模式通用，running 时显示） ── */}
-      {phase.kind === "running" && (
-        // p71-allow:start brand 渐变 · 工作流执行进度条 violet→fuchsia 双色（项目品牌视觉），见 §3.6.1
-        <div className="w-95" aria-live="polite">
-          <ProgressBar
-            value={pct}
-            label={
-              <>
-                {nodeLabel ? `正在执行 ${nodeLabel}` : "正在执行工作流"}
-                {phase.node ? `（${phase.node.value}/${phase.node.max}）` : ""}
-              </>
-            }
-            className="text-[11px]"
-            trackClassName="bg-surface-2 h-1.5"
-            fillClassName="bg-linear-to-r from-violet-500 to-fuchsia-500 duration-300"
-          />
-        </div>
-        // p71-allow:end
-      )}
-
-      {/* ── 运行结果图（只在「实际使用」页签显示；编辑对外参数是配置界面，
-            不应展示上一次运行的结果图） ── */}
-      {resultUrl && viewMode === "use" && (
-        <div className="w-95">
-          <p className="text-ink-faint mb-1 text-[11px]">运行结果</p>
-          {/* 缩略图盒子只有 380px 宽，看细节得点开通用查看器
-              （原始大小 / 缩放 / 拖拽平移，见 `ui/image-viewer`）。 */}
-          <ViewableImage
-            src={resultUrl}
-            alt="运行结果"
-            label={`${workflowName} · 运行结果`}
-            className="border-border w-full rounded-xl border"
-          />
-        </div>
-      )}
-
-      {/* ── 错误提示（只在「实际使用」页签显示；编辑对外参数是配置界面，
-            不应展示上一次运行的执行错误） ── */}
-      {phase.kind === "failed" && viewMode === "use" && (
-        <div className="border-destructive/20 bg-destructive/8 text-destructive w-95 rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
-          {phase.message}
-        </div>
-      )}
-
-      {/* ── 素材上传提示 ── */}
-      {uploadNotice && (
-        <div
-          className="border-warning/25 bg-warning/10 text-warning-strong w-95 rounded-lg border px-3 py-2 text-[11px] leading-relaxed"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <span className="min-w-0 flex-1">{uploadNotice}</span>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setUploadNotice(null)}
-              className="text-warning-strong shrink-0 rounded"
-              aria-label="关闭上传提示"
-            >
-              ✕
-            </Button>
-          </div>
-        </div>
-      )}
-      {!running && missingLabels.length > 0 && viewMode === "use" && (
-        <p className="text-warning-strong/80 w-95 text-[11px]">
-          必填参数未填：{missingLabels.join("、")}
-        </p>
-      )}
+      {/* ── 运行的内联反馈（进度 / 结果 / 失败原因 / 上传与缺参提示） ── */}
+      <WorkflowPreviewRunFeedback
+        phase={phase}
+        pct={pct}
+        nodeLabel={nodeLabel}
+        resultUrl={resultUrl}
+        workflowName={workflowName}
+        viewMode={viewMode}
+        running={running}
+        missingLabels={missingLabels}
+        uploadNotice={uploadNotice}
+        onDismissUploadNotice={() => setUploadNotice(null)}
+      />
       <WorkflowRunLogModal
         open={logOpen}
         workflowId={workflowId}
@@ -815,14 +483,4 @@ export function WorkflowCanvasNodePreview({
       />
     </div>
   );
-}
-
-/** 当前时间戳（毫秒）。
- *
- *  抽成模块级函数而不是在组件体里直接 `Date.now()`：React 的纯度检查会顺着
- *  组件作用域内的调用点判定「渲染期调用了非纯函数」，而这里其实只在**点击运行
- *  的事件回调**里执行（永远不会在渲染期跑到）。由列出的这个事实源统一取时间，
- *  也方便将来在测试里打桩。 */
-function nowMs(): number {
-  return Date.now();
 }

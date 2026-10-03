@@ -26,10 +26,8 @@ import { SourceModal } from "../SourceModal";
 import type { WorkflowDetail, WorkflowIOParam } from "../workflow-types";
 import { buildEdges } from "../workflow-utils";
 import { useMiniMapJump } from "../useMiniMapJump";
-import {
-  useCanvasSettings,
-  CanvasSettingsPanel,
-} from "../canvas/WorkflowCanvasSettings";
+import { CanvasSettingsPanel } from "../canvas/CanvasSettingsPanel";
+import { useCanvasSettings } from "../canvas/hooks/use-canvas-settings";
 import {
   WFStoresProvider,
   useIOEditApi,
