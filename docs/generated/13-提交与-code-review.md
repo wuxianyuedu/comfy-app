@@ -760,8 +760,22 @@ high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 ma
 **刻意不扫** `changelog.d/**` 与 `CHANGELOG.md`：碎片是当时那次变更的账本（13.10.5），
 里面的序号是历史事实，回头改写等于伪造证据 —— 这条边界由用例「历史碎片不被扫」钉住。
 
-**顺带修掉的同族缺陷**（`tests/check-doc-references.test.ts`）：四处「已接入 main 流程」的
-老写法是 `expect(mainBody).toContain("checkX()")`，而把那一行前面加 `// ` 注掉之后
+**序号的近亲：门禁的步数也不要写（ISSUE #1407，签字口径 (a)）**。立案现场是 `docs/standards/11`
+那节写着「`.githooks/pre-commit`（24 步）」（这个数字早已过期，别再照它数），外加抄了清单的前 6 行 ——
+那一天钩子的真实形状是 **组 0 + A + B + C + D，D 组 27 条**（`grep -c '^  run "' .githooks/pre-commit` = 27，
+这数字由 `tests/doc-check-hook-wiring.test.ts` 与钩子注释那句「D(N 个判据脚本)」逐字核对）。
+所以那句不是「将来会过期」，是**当场就已经是错的**，而没有任何东西会变红：步数既不是序号、
+也不属于任何事实核，与上面那条「不写第 N 步」是同一个失效机制。
+**副本是另一半**：#1404 给「§13.1 清单 = 钩子 D 组」装判据时照出，那份**权威清单自己**都漂了 5 步 ——
+抄一份的部分清单只会更难保持正确。所以 §11 现在只留指针（唯一出处 = §13.1 / `.githooks/pre-commit`），
+不抄命令、也不写步数。
+判据是 `checkGateStepCounts()`（同在 `pnpm doc:check` 里）：同一行出现裸计数（`24 步`）与
+`pre-commit` / `.githooks` / `CI` 即报错；命中「第 N 步」的行交给上面那条报，**不双报**；
+豁免集合与那条共用（新增 `不再` / `过期` 两个纠正词）。
+两条边界用例钉着：§11 不许再出现 `✅ node scripts/check-*` 那种命令副本；
+`prepare-local-run.ps1` 那种**有主人的过程计数**不误伤。
+
+**顺带修掉的同族缺陷**（`tests/check-doc-references.test.ts`）：四处「已接入 main 流程」的老写法是 `expect(mainBody).toContain("checkX()")`，而把那一行前面加 `// ` 注掉之后
 **它仍然绿**（注释行里也含同一段字面量）—— 也就是「接入判据」自己是假判据。
 改成 `isCalledInMain()`：要求它是一行独立语句（行首只有缩进、行尾是分号），
 并补一条「量具自己没坏」的对照用例（同一形状的 `wired` / `muted` 两段源码，前者真、后者假）。
