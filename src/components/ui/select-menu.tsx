@@ -40,7 +40,7 @@
  *
  * 深色定制定向覆盖到 base-ui 各件：
  *   · Trigger：`border-border bg-subtle text-ink-bright rounded-md px-2.5
- *     py-1.5 text-[12px]` + 自定义 chevron（`group-data-[open]:rotate-180`）；
+ *     py-1.5 text-[12px]` + 自定义 chevron（`group-data-open:rotate-180`）；
  *     默认 `w-auto`（**刻意不 `w-full`**，见 `TRIGGER_BASE` 上方原注释——
  *     一排筛选控件里 `w-auto` 覆盖 `w-full` 会被 Tailwind 输出顺序决胜、
  *     导致每个都铺满整行；工作流库页头三个下拉曾撞这条）。
@@ -144,7 +144,7 @@ const LIST_BASE = "max-h-60 w-full overflow-y-auto outline-none";
  * 转 CSS 后靠 tailwind-merge 的属性族决胜——把 selected 写在 highlighted
  * 之后，两者同现时 selected 胜。 */
 const ITEM_BASE =
-  "flex cursor-default items-center gap-1.5 truncate rounded-sm px-2.5 py-1 text-[12px] text-ink-faint outline-none transition-colors data-[highlighted]:bg-surface-2 data-[highlighted]:text-ink-bright data-[selected]:bg-primary-500/20 data-[selected]:font-medium data-[selected]:text-primary-strong data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+  "flex cursor-default items-center gap-1.5 truncate rounded-sm px-2.5 py-1 text-[12px] text-ink-faint outline-none transition-colors data-highlighted:bg-surface-2 data-highlighted:text-ink-bright data-selected:bg-primary-500/20 data-selected:font-medium data-selected:text-primary-strong data-disabled:pointer-events-none data-disabled:opacity-50";
 
 /** 浮层自动加宽的四条常量口径与 PR 之前一致（详见文件头注释）。 */
 const POPOVER_AUTO_MAX = 720;
@@ -229,7 +229,7 @@ export function SelectMenu({
           className={cn(
             /* 与旧实现同款：12×12 自绘箭头 + open 时旋转 180°；
              * `group` 挂在 Trigger 上、这里靠 `group-data-[open]:` 反应。 */
-            "text-ink-muted size-3 shrink-0 transition-transform group-data-[open]:rotate-180",
+            "text-ink-muted size-3 shrink-0 transition-transform group-data-open:rotate-180",
           )}
         />
       </SelectPrimitive.Trigger>

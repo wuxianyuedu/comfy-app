@@ -63,7 +63,7 @@ export function isPopupLayerAboveOverlay(popupZ: number): boolean {
 /**
  * 从 class 串里解出 `z-<n>` 的层级值；没有这类 class 时返回 `null`。
  *
- * 只认**裸数字**形式（`z-200`），不认 `z-[200]` / 任意值（规范 03 §3.2 已禁），
+ * 只认**裸数字**形式（`z-200`），不认 `z-200` / 任意值（规范 03 §3.2 已禁），
  * 也不认枚举档（`z-modal` / `z-popup`）—— 后者由 `zClass()` 生成、取值看
  * `~/lib/shell/overlay-z` 的刻度表，不是本函数要解的形态。
  */

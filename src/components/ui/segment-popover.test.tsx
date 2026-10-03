@@ -11,7 +11,7 @@
  *
  * jsdom 不编译 Tailwind，「高亮有没有真的画出来」判不了；能钉的是这对名字
  * 是否一致 —— ① 选项上确实带 `data-pressed`（基元侧），② 选项类名用的是
- * `data-[pressed]:` 而不是永不匹配的 `data-[state=on]:`（我们这侧）。
+ * `data-pressed:` 而不是永不匹配的 `data-[state=on]:`（我们这侧）。
  * 两条各自拦住一半回归：换基元、或把选择器写回 Radix 口径。
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -67,13 +67,13 @@ describe("MultiSegmentPopover 的选中态", () => {
     expect(option(panel, "1:1").hasAttribute("data-pressed")).toBe(false);
   });
 
-  it("选中态样式用 data-[pressed]:（不是永不匹配的 data-[state=on]:）", () => {
+  it("选中态样式用 data-pressed:（不是永不匹配的 data-[state=on]:）", () => {
     const panel = openPanel();
 
     const selected = option(panel, "16:9").className;
-    expect(selected).toContain("data-[pressed]:");
+    expect(selected).toContain("data-pressed:");
     expect(selected).not.toContain("data-[state=");
     /* 高亮的实际观感仍与收口前逐字一致（换的只是属性名，不是样式本身）。 */
-    expect(selected).toContain("data-[pressed]:bg-primary/20");
+    expect(selected).toContain("data-pressed:bg-primary/20");
   });
 });

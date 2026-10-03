@@ -33,6 +33,17 @@
 - **TS 侧同样汇总**：新增 `scripts/report-ts-duplicate-keys.mjs`，按 AST 扫「同一属性
   指定两次」——即编辑器那条 `ts(2783)`（项目钉的 `typescript6` **不报**它，于是同一处
   代码命令行全绿、编辑器标红，只能按语法形态判）。875 个文件 0 处。
+- **续：上一轮「只剩 4 处」是过滤器漏报**，一并修掉。`MAYBE_CLASS` 的尾部字符类没允许
+  字母，`translate-y-[-1px]` 这类**带单位的任意值**被整条丢掉 —— 报告说 0、真机编辑器
+  却在提示。放宽后是 44 条建议 **124 处**，全部落地：`data-[x]:`→`data-x:`（~30）、
+  `has-[:focus-visible]:`→`has-focus-visible:`（~22）、`translate-y-[-1px]`→
+  `-translate-y-px`、`translate-x-[-2.5rem]`→`-translate-x-10`、`aspect-[4/3]`、
+  `z-[200]`、`max-w-[14rem]`→`max-w-56`、`gap-[var(--gap)]`→`gap-(--gap)`。
+  负值那族**只 translate 族改** —— `-align-[2px]`、`-top-[2px]` 在 4.3.3 下要么不合法、
+  要么 CSS 不是逐字相同，引擎不给建议。
+- 锁类名的断言同步：`segment-popover`（`data-pressed:`，含测试名与注释）、
+  `toggle-group`（正则 `/data-pressed:\S+/` —— 正则不是字符串，工具碰不到）、
+  `LogPanel` 注释。快照由 `vitest -u` 重生成（FilmStudio）。
 
 ## Verified
 
@@ -53,3 +64,10 @@
 - `docs/guides/DEV-QUERIES.md` §5 补 `break-words` 迁移、important 前缀自查 grep，以及
   `tw4-spacing-canonical.mjs` 的用法；§5.1 新增「TypeScript：同一属性指定两次」
   （`report-ts-duplicate-keys.mjs`），§5 里补 `tw4-canonical-report.mjs` 的用法。
+- **`tw4-canonical-report.mjs` 加固两处**（都是这轮踩出来的）：
+  ① `--write` **默认不改 `*.test.*`**，报告里单列 —— 测试里的类名多是断言样本，
+  而**负样本改了会把判据改坏**：真踩过 `parseZClass("z-[200]")` 本是「解析器不认任意值
+  写法」的样本，被批量改成 `z-200` 后，同一文件另一行又期望 `z-200` 被解析成 200，
+  断言自相矛盾。要同步就显式加 `--with-tests`；
+  ② **孤儿快照**（没有同名测试文件、任何用例都不会校验）永远跳过，报告里点名 ——
+  当前 4 个文件、27 处，改它没有用例兜底。

@@ -115,7 +115,7 @@ export function LogFilterBar({
              * 忽略固有宽度、于是「警告」被切成 `警…`（ISSUE #262）。窄窗口下
              * 整组可能横向溢出，交给行头的 `flex-wrap` 接住（折行判据就是
              * 上面容器的 `min-w-56`），而不是靠切字。
-             * **选中态不能只靠基元的 `data-[pressed]:bg-muted`**：它解析到
+             * **选中态不能只靠基元的 `data-pressed:bg-muted`**：它解析到
              * `--color-subtle`，浅色主题下与行头 `--color-surface-1` 同值，
              * 「选中的是哪一项」就又看不见了（ISSUE #609）—— 所以选中档显式
              * 挂 `FILTER_SELECTED_ITEM_STYLES`（底色 + 描边 + 字重三层）。

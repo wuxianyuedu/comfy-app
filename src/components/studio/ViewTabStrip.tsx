@@ -103,7 +103,7 @@ export function ViewTabStrip({
             className={
               // 标题行内（壳）与应用内（浏览器）共用同一组态：只换背景层级，
               // 选中/悬停/焦点三态保持一致，避免"壳里好看、浏览器里像坏了"。
-              "text-ink-strong flex max-w-[14rem] min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors select-none " +
+              "text-ink-strong flex max-w-56 min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors select-none " +
               (active
                 ? inTitleBar
                   ? "bg-canvas/70 text-ink"
