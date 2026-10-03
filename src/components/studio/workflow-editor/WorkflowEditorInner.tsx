@@ -2,7 +2,13 @@
 /* 拆出来的 WorkflowEditorInner —— 内层编辑器，必须住在
  * ReactFlowProvider 里面。节点渲染器与注册表已移到 wf-editor-nodes.tsx
  *（分组节点、IO 端口节点、便签节点，以及节点类型表、连线类型表与共享布局常量）。
- * 它原本在 WorkflowCanvasEditor.tsx 里。 */
+ * 它原本在 WorkflowCanvasEditor.tsx 里。
+ *
+ * 本组件是容器：纯逻辑编排收在 hooks/ ——
+ * • hooks/use-workflow-viewport-fit.ts  画布聚焦（调度 + 收敛 + 居中出口）
+ * • hooks/use-workflow-graph-derivation.ts  detail → 视图元数据 → 图节点
+ * • hooks/use-io-modes-commit.ts        IO 模式集合变更的落库编排
+ * 过渡屏与画布浮层在 WorkflowEditorCanvasOverlays.tsx。 */
 import React, {
   useCallback,
   useEffect,
@@ -14,14 +20,11 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
-  useStoreApi,
   type Node,
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "~/config/custom-nodes";
-import { Button } from "~/components/ui/button";
-import { PageLoading } from "~/components/ui/page-loading";
 import { SourceModal } from "../SourceModal";
 import type { WorkflowDetail, WorkflowIOParam } from "../workflow-types";
 import { buildEdges } from "../workflow-utils";
@@ -45,23 +48,22 @@ import {
 import { WorkflowEditorTopBar } from "./WorkflowEditorTopbar";
 import { WorkflowIoPreviewPanel } from "../WorkflowIOPreviewPanel";
 import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
-import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
-import { useWorkflowDerivedData } from "./workflow-editor-derived";
-import { enrichFromViewNodes } from "./io-exposure";
+import { useWorkflowGraphDerivation } from "./hooks/use-workflow-graph-derivation";
+import { useWorkflowViewportFit } from "./hooks/use-workflow-viewport-fit";
+import { useIoModesCommit } from "./hooks/use-io-modes-commit";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
-import {
-  computeFitViewport,
-  createFitOnceScheduler,
-  createFitSettleStepper,
-  normalizeBounds,
-  type Bounds,
-  type FitBoundsNode,
-} from "./subgraph-viewport";
-import { onNextFrame } from "~/lib/next-frame";
 import { zClass } from "~/lib/shell/overlay-z";
+import {
+  CanvasHintTooltip,
+  IoEditModeBanner,
+  SubgraphErrorToast,
+  SubgraphLoadingOverlay,
+  WorkflowEditorErrorScreen,
+  WorkflowEditorLoadingScreen,
+} from "./WorkflowEditorCanvasOverlays";
 
 /* ── 画布网格 ──
  *  两层叠起来用原生 <Background> 实现，让网格随视口平移 / 缩放
@@ -90,72 +92,6 @@ import { zClass } from "~/lib/shell/overlay-z";
  *  在这个尺度下画布读起来是一张全流程地图，网格只是添乱，
  *  于是直接短路、什么都不渲染。注意 <ReactFlow> 的 minZoom 是 0.15
  *（见 ZoomIndicator），所以我们不会遇到「还想要网格、却因技术原因拿不到」的缩放档。 */
-/* ── 画布聚焦（打开工作流 / 子工作流时把视口对准真实内容）──
- *
- *  算式本体在 subgraph-viewport.ts（纯函数 + 单测）；这里只放与 React Flow
- *  store 打交道的部分：挑出参与包围盒的节点、读容器尺寸、下发视口。
- *
- *  为什么必须「反复算、直到收敛」而不是一次性 fitView：节点是分批测量的
- *  （视口裁剪下只有看得见的节点会挂载并被量到尺寸）。第一帧里测量的范围
- *  恰好就是上一个视图留下的那块视口，据此 fit 会把整张图当成「就那么大」，
- *  子图内容于是停在视野外（ISSUE #394）。 */
-const FIT_FALLBACK_SIZE = { width: 240, height: 80 } as const;
-/** 连续多少轮测量结果不再扩大就收手（超大图逐屏挂载时不必等全部量完）。 */
-const FIT_SETTLE_ROUNDS = 3;
-/** 轮数护栏，避免测量始终不稳时无限重算。 */
-const FIT_MAX_ATTEMPTS = 24;
-
-/** 参与聚焦的节点：真实节点（`wfNode` / `wfSubgraph` / `wfNote`）。
- *  跳过左右栏的边界口与它们的 `grp:bpin:*` 外框 —— 那两条栏位于
- *  `minX - RAIL_GAP` / `maxX + RAIL_GAP`（见 workflow-editor-build-nodes），
- *  参与包围盒就会把中心拉偏、把工作流压成一条细缝。 */
-function collectFitTargets(
-  nodes: readonly {
-    id: string;
-    type?: string;
-    position: { x: number; y: number };
-    measured?: { width?: number; height?: number };
-    width?: number;
-    height?: number;
-    style?: { width?: number | string; height?: number | string };
-  }[],
-): FitBoundsNode[] {
-  const out: FitBoundsNode[] = [];
-  for (const n of nodes) {
-    if (n.type === "wfIoPort") continue;
-    if (String(n.id).startsWith("grp:bpin:")) continue;
-    out.push(n);
-  }
-  return out;
-}
-
-/** 下发一次视口。没有可测量的节点时退回 React Flow 自己的 fitView。
- *
- *  `container` 必须传入**本画布实例自己**的尺寸（取自 React Flow store 的
- *  `width` / `height`）。此前这里写的是 `document.querySelector(".react-flow")`
- *  —— 页面上只要有第二个 React Flow（工作流库详情面板的画布预览就在同一个
- *  DOM 里），querySelector 命中的是**文档顺序里第一个**，于是本画布用一个
- *  别的容器的宽高去算居中，打开时视口落在内容之外（ISSUE #717）。
- *  `width`/`height` 由 React Flow 自己按本实例容器测量，天然是实例私有的。 */
-function applyFitViewport(
-  container: { width: number; height: number },
-  rf: {
-    fitView: (options?: { padding?: number; duration?: number }) => unknown;
-    setViewport: (
-      viewport: { x: number; y: number; zoom: number },
-      options?: { duration?: number },
-    ) => unknown;
-  },
-  bounds: Bounds | null,
-  zoomBounds: { minZoom: number; maxZoom: number },
-): void {
-  const viewport = computeFitViewport(bounds, container, zoomBounds);
-  if (!viewport) {
-    void rf.fitView({ padding: 0.1, duration: 0 });
-    return;
-  }
-  void rf.setViewport(viewport, { duration: 0 });
-}
 
 /* 外层：创建 3 个 per-instance Zustand store（经 createIOEditStore 等工厂），
  * 再经 <WFStoresProvider> 下发。状态判断逻辑与渲染子树都在这之下。 */
@@ -231,7 +167,7 @@ function WorkflowEditorBody({
    *  成立 —— 关编辑模式一并关预览。两层耦合都写在 store 的
    *  `setIoEditMode` / `setIoPreviewOpen` 里，见那里的注释。 */
   /* 画布设置面板的开关 —— 与 ioPreviewOpen / viewJsonOpen 并列，
-   *  由画布外框上的齿轮按钮打开。默认关闭。 */
+   * 由画布外框上的齿轮按钮打开。默认关闭。 */
   const [canvasSettingsOpen, setCanvasSettingsOpen] = useState(false);
   /* 设置 hook 持有唯一一份「localStorage 持久化」的设置对象，
    *  驱动画布网格、标尺、缩放指示器与小地图。
@@ -366,34 +302,7 @@ function WorkflowEditorBody({
     };
   }, [detail, subgraphStack.length, subgraphRawContext]);
 
-  /* fitView 完成后，把视口锁定到「中间那批真实节点」上
-   *（WorkflowNode / WorkflowSubgraph / wfNote / wfGroup）。做法是：
-   * (a) 调 rf.fitView 时**不**传 `nodes` 过滤 —— 该选项在 React Flow v12 的
-   *     各小版本间表现不稳，会让视口随机把边缘的散落引脚也算进去；
-   * (b) 随后自己算中间节点的包围盒并调 setViewport，
-   *     保证中心一定落在真实工作流上，不受「三段式导轨布局」对画布边界的影响。
-   * 同时把缩放夹在**画布自己的缩放区间**（画布设置里的 minZoom / maxZoom）：
-   * 上级此前额外钉了一层「聚焦下限 0.35」，本意是别让超宽工作流缩成噪点，
-   * 但它与「打开就能看见整份工作流」直接冲突 —— 6700px 宽的图在 0.35 倍下仍有
-   * 大半个在视口外，用户打开后还得自己滚轮缩小（ISSUE #717）。现在聚焦只受画布
-   * 缩放区间约束，下限交给用户在画布设置里自己定；想放大依旧可以滚轮，
-   * 想「一键回到内容处」有右上角的「居中」。
-   * 子工作流导航时也会重跑，让局促的子图同样能放下。 */
   const rf = useReactFlow();
-  /* 本实例的容器尺寸从 React Flow **本实例的 store** 取，不用
-   *  document.querySelector（页面上还有工作流库的画布预览，querySelector 会命中
-   *  文档顺序里的第一个 —— 见 applyFitViewport 的注释）。 */
-  const rfStore = useStoreApi();
-  /* 自动聚焦的记账（详见 subgraph-viewport.ts 的 FitOnceScheduler）：按图的
-   * key（detail.id）记「已下发过聚焦的那份图」，切换子图自然会重新聚焦。
-   * 关键点是**排程与已聚焦分开**：effect 的依赖会抖（节点整批换掉 →
-   * nodes.length 变化），重跑时的 cleanup 会取消还没触发的 rAF；把「已聚焦」
-   * 在排程时就记死，会让被取消的那一次永远补不回来 —— 视口于是停在上一份图
-   * （ISSUE #394：打开子工作流没聚焦到）。 */
-  const fitSchedulerRef = useRef<ReturnType<
-    typeof createFitOnceScheduler
-  > | null>(null);
-  fitSchedulerRef.current ??= createFitOnceScheduler();
   /* 小地图 → 主视口的单击跳转。
    *  与下面 <MiniMap pannable zoomable onClick={onMiniMapJump} /> 配对使用。 */
   const onMiniMapJump = useMiniMapJump(rf);
@@ -402,28 +311,6 @@ function WorkflowEditorBody({
    *  在 fetchDetail 内部自增；响应到达时持有最大编号的那次调用才有权写 state。
    *  这保证缓存键的升级不会落在「后台拉取悄悄更新了存储、界面却还是旧的」之后。 */
   const latestRequestIdRef = useRef(0);
-
-  /* 把视口对准「当前视图里真实有内容的节点」。
-   *
-   *  两个调用方：进入工作流 / 子工作流后的自动聚焦（见下方 effect），
-   *  以及画布右上角「🎯 居中」按钮 —— 作者把节点拖出视野或缩得太小之后
-   *  需要一条回到内容处的出口。纯视口动作：不移动节点、不写库。 */
-  const fitToContent = useCallback(() => {
-    const { width, height } = rfStore.getState();
-    applyFitViewport(
-      { width, height },
-      rf,
-      normalizeBounds(collectFitTargets(rf.getNodes()), FIT_FALLBACK_SIZE),
-      { minZoom: canvasSettings.minZoom, maxZoom: canvasSettings.maxZoom },
-    );
-  }, [rf, rfStore, canvasSettings.minZoom, canvasSettings.maxZoom]);
-
-  /* 「重新居中」按钮。延后一帧再算：React Flow 在下一帧才提交最新的测量
-   *  结果，直接算会用到上一帧的尺寸（对刚展开/折叠过节点的画布尤其明显）。
-   *  调度本身收在 `~/lib/next-frame`（规范 16 §16.2.4.42）。 */
-  const recenterCanvas = useCallback(() => {
-    onNextFrame(() => fitToContent());
-  }, [fitToContent]);
 
   /* 拉取工作流详情（进入子工作流时则拉子图详情）。
    * 性能：按 URL 作键的会话级缓存（sessionStorage）让再次打开的画布
@@ -447,31 +334,22 @@ function WorkflowEditorBody({
       setSubgraphRawContext,
       setSubgraphError,
     });
-  /* 把图转成流程节点。渲染顺序（从后到前）：
-   *  分组框 → 便签注释 → 真实图节点（恒在最上层）。
-   * 真实节点的布局策略按优先级：
-   *   1. **已保存的坐标**（RAW 导入）：原样使用 ComfyUI 里的坐标，
-   *      让画布与用户当初摆的样子完全一致。
-   *   2. **自动布局（按 BFS 分层）**：只给了 API JSON 时用。 */
-  /* 提升到组件作用域的 raw meta 与槽位名表 —— 下面的连线 useEffect 也要用，
-   * 所以放在组件作用域，而不是塞进 initialNodes 的 memo 里。 */
-  /* 单一格式，移除 RAW/API viewMode 与 apiLayoutOverrides 状态 */
 
-  /* 派生查表：raw 节点元数据映射、按视图范围取的详情（RAW / API），
-   * 以及每个节点的输出槽位名。 */
-  const { rawMetaById, scopeDetail, outSlotNameById } =
-    useWorkflowDerivedData(detail);
+  /* 当前视图的宿主（外层封装）节点 id 链 —— 顶层为空串，下钻后是 `4`（或嵌套
+   *  时的 `4:5`）。本层节点都是子图内部节点（id 形如 `1670`），带上它才能在勾选
+   *  时落库「外层 + 内层」两个 id，运行期确定性还原成 `4:1670`（ISSUE #349 后续：
+   *  不再靠「拿裸 id 扫一遍所有子图定义」兜底）。 */
+  const viewHostNodeId = subgraphStack.at(-1)?.nodeId ?? "";
 
-  /* IO 预览的富化数据源。顶层视图直接用服务端产出的 `detail.workflowIO`；
-   * 下钻到子工作流后该字段为空（子图路由不产出它），于是退回「按当前视图
-   * 节点元数据就地派生」——否则修复前落库的槽位名/别名会一直显示
-   * （ISSUE #349）。派生只补齐缺失键，不覆盖服务端已给的富化结果。 */
-  const ioDetailMap = useMemo(() => {
-    if (detail?.workflowIO && Object.keys(detail.workflowIO).length > 0) {
-      return detail.workflowIO;
-    }
-    return enrichFromViewNodes(scopeDetail?.nodes);
-  }, [detail, scopeDetail]);
+  /* 派生管线：raw meta / 按视图范围的详情 / 输出槽位名 / IO 富化数据源 /
+   * 图节点（详见 use-workflow-graph-derivation）。 */
+  const { rawMetaById, scopeDetail, outSlotNameById, ioDetailMap, graphNodes } =
+    useWorkflowGraphDerivation({
+      detail,
+      paramMap,
+      onEnterSubgraph,
+      viewHostNodeId,
+    });
 
   /* P2: 把 detail 派生的查找上下文同步进 viewer / rgthree store，让
    * getNodeJson/getNodeView/getBypass 读到实时 detail（等价于旧 Context
@@ -491,35 +369,6 @@ function WorkflowEditorBody({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail, rawMetaById, subgraphRawContext, subgraphStack.length]);
-
-  /* 当前视图的宿主（外层封装）节点 id 链 —— 顶层为空串，下钻后是 `4`（或嵌套
-   *  时的 `4:5`）。本层节点都是子图内部节点（id 形如 `1670`），带上它才能在勾选
-   *  时落库「外层 + 内层」两个 id，运行期确定性还原成 `4:1670`（ISSUE #349 后续：
-   *  不再靠「拿裸 id 扫一遍所有子图定义」兜底）。 */
-  const viewHostNodeId = subgraphStack.at(-1)?.nodeId ?? "";
-
-  const graphNodes: Node[] = useMemo(
-    () =>
-      buildInitialNodes({
-        detail,
-        scopeDetail,
-        rawMetaById,
-        outSlotNameById,
-        paramMap,
-        onEnterSubgraph,
-        hostNodeId: viewHostNodeId || undefined,
-      }),
-
-    [
-      detail,
-      scopeDetail,
-      rawMetaById,
-      outSlotNameById,
-      paramMap,
-      onEnterSubgraph,
-      viewHostNodeId,
-    ],
-  );
 
   /* ── 对外参数映射：编辑器不碰 ──
    *
@@ -559,59 +408,14 @@ function WorkflowEditorBody({
     setEdges,
   ]);
 
-  /* 每打开一次工作流 / 子工作流就贴合内容一次。放在 `nodes` 之后，
-   * 避免在声明之前引用它（否则触发 react-hooks/immutability 规则）。 */
-  useEffect(() => {
-    if (nodes.length === 0) return;
-    /* nodes 是异步填充的：依赖里若没有 nodes.length，effect 会在数组还空着时
-     * 提前 return，且此后不再触发，画布将永远停在默认缩放。这里按「图的 key」
-     * 记录已经 fit 过的那份图——首次拿到节点、或切到另一份图/子图时才 fit，
-     * 用户后续增删节点不会反复抢走其视角。
-     *
-     * 「已 fit」记的是**下发过视口**的图，不是「排过程」的图：下面的节点同步
-     * effect 会让 nodes.length 变化、进而重跑本 effect，重跑前的 cleanup 取消
-     * 掉还没触发的那一帧 rAF。排程即记账会把这次聚焦吃掉（视口留在上一份图，
-     * 表现就是「打开子工作流没聚焦到」，ISSUE #394）。 */
-    const fitKey = detail?.id ?? "__root__";
-    const scheduler = fitSchedulerRef.current;
-    if (!scheduler?.markPending(fitKey)) return;
-    /* 节点是**分批**测量的：React Flow 先挂载再量 DOM，首帧里只有视口内
-     *  （恰好是被上一个视图带偏的那一块）的节点拿得到 measured，其余仍是 0。
-     *  只在「第一帧 / 第二帧」fit 会把这次测量结果当成整张图的范围 ——
-     *  子图内容在视野外就这么来的（ISSUE #394）。
-     *
-     *  所以每次测量到位都重算一次，收敛到「本次 fit 覆盖的范围不再扩大」为止：
-     *  要么整个 bbox 都被量到（内容完整、范围稳定），要么连续若干次不再增长
-     *  （超大图逐屏挂载，此时以已量到的内容为准）。上限只是护栏。 */
-    const stepper = createFitSettleStepper({
-      fallbackSize: FIT_FALLBACK_SIZE,
-      settleRounds: FIT_SETTLE_ROUNDS,
-      maxAttempts: FIT_MAX_ATTEMPTS,
-    });
-    let raf = 0;
-    const step = () => {
-      const { bounds, done } = stepper.next(() =>
-        collectFitTargets(rf.getNodes()),
-      );
-      const { width, height } = rfStore.getState();
-      applyFitViewport({ width, height }, rf, bounds, {
-        minZoom: canvasSettings.minZoom,
-        maxZoom: canvasSettings.maxZoom,
-      });
-      /* 收敛（测量已稳定、视口已下发）后才把这份图记为「聚焦过」：只排过程
-       * 不算数，否则被 cleanup 取消的那次就补不回来了。提前在首帧记账也不
-       * 行 —— 首帧可能还在量上一份图的节点，会把这帧的范围错当成本图的。
-       * 记账后本 effect 的重跑（增删节点 / 拖动引起的依赖抖动）不再抢视角。 */
-      if (!done) {
-        raf = requestAnimationFrame(step);
-        return;
-      }
-      scheduler.markSettled(fitKey);
-    };
-    /* 延后一帧，等 ReactFlow 量好视口、摆好节点再贴合。 */
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [rf, rfStore, canvasSettings, detail?.id, nodes.length]);
+  /* 视口贴合：自动聚焦的排程 / 收敛 / 「居中」出口收在
+   * use-workflow-viewport-fit（聚焦路径的容器尺寸口径判据也随迁到那里）。 */
+  const { fitToContent, recenterCanvas } = useWorkflowViewportFit({
+    rf,
+    canvasSettings,
+    fitKey: detail?.id ?? "__root__",
+    nodesCount: nodes.length,
+  });
 
   /* 惰性连线交互。画布的 defaultEdgeOptions 把 deletable / reconnectable
    *  都设成 false，未被动过的连线因此保持惰性；某条线第一次被点击时两个标志一起打开
@@ -647,42 +451,29 @@ function WorkflowEditorBody({
     setSaving,
     setError,
     /* 重置布局之后重新拉当前视图：服务端已经把坐标覆盖删掉，重拉拿到的就是
-     *  工作流自带的原始布局。 */
+     * 工作流自带的原始布局。 */
     reloadView: () => forceReloadDetail(viewHostNodeId, true),
     /* 子图视图下把宿主链路传进去：内部节点 id 要拼成 `宿主:内部` 才与
      *  `positions` 列里的键同口径（见 use-workflow-persistence 的说明）。 */
     hostNodeId: viewHostNodeId,
   });
+
+  /* IO 预览面板的「模式集合变更」落库（编排细节见 use-io-modes-commit）。 */
+  const handleModesChange = useIoModesCommit({
+    ioApi,
+    detail,
+    setDetail,
+    savePatch,
+    workflowId,
+  });
+
   /* Loading state */
   if (loading) {
-    return (
-      <FullScreenLayer
-        zClass={zClass("modal")}
-        className="bg-canvas flex items-center justify-center pb-6"
-      >
-        <PageLoading label="加载工作流节点…" />
-      </FullScreenLayer>
-    );
+    return <WorkflowEditorLoadingScreen />;
   }
 
   if (error || !detail) {
-    return (
-      <FullScreenLayer
-        zClass={zClass("modal")}
-        className="bg-canvas flex items-center justify-center pb-6"
-      >
-        <div className="text-center">
-          <p className="text-destructive">{error ?? "未知错误"}</p>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            className="hover:bg-surface-2 mt-3 h-auto px-4 py-2 text-sm"
-          >
-            返回
-          </Button>
-        </div>
-      </FullScreenLayer>
-    );
+    return <WorkflowEditorErrorScreen error={error} onClose={onClose} />;
   }
 
   return (
@@ -710,42 +501,13 @@ function WorkflowEditorBody({
 
       {/* ── Canvas ── */}
       <div className="relative min-h-0 flex-1">
-        {/* 子图下钻 / 上浮遮罩：父图保持完整可见，
-         *  只在上面画一张轻量的居中 spinner 卡片。
-         *  这就是要求的 UX：当前内容不变，然后
-         *  一屏加载，再切到子图内容。 */}
-        {subgraphLoading && (
-          <div className="bg-canvas-deep z-base pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="bg-canvas/90 border-border-strong pointer-events-auto rounded-xl border px-6 py-4 shadow-2xl shadow-black/10 backdrop-blur-sm dark:shadow-black/50">
-              <PageLoading
-                label="加载子工作流…"
-                className="flex-row items-center gap-3"
-              />
-            </div>
-          </div>
-        )}
-        {ioEditMode && (
-          <div className="border-warning/40 bg-warning/15 text-warning-strong z-canvas-ui pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1.5 text-[12px] font-medium shadow-lg backdrop-blur-sm">
-            📌 IO
-            编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
-          </div>
-        )}
-        {/* 子工作流下钻失败：内联错误提示，父图保持可见（绝不回退到工作流库） */}
+        {subgraphLoading && <SubgraphLoadingOverlay />}
+        {ioEditMode && <IoEditModeBanner />}
         {subgraphError && (
-          <div className="z-canvas-max pointer-events-none absolute top-3 left-1/2 -translate-x-1/2">
-            <div className="border-destructive/40 bg-destructive/15 text-danger-strong pointer-events-auto flex items-center gap-3 rounded-lg border px-4 py-2 text-[12px] shadow-lg backdrop-blur-sm">
-              <span>⚠ {subgraphError}</span>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setSubgraphError("")}
-                className="hover:bg-subtle text-danger-strong h-auto w-auto rounded px-1.5 py-0.5"
-                aria-label="关闭"
-              >
-                ×
-              </Button>
-            </div>
-          </div>
+          <SubgraphErrorToast
+            error={subgraphError}
+            onDismiss={() => setSubgraphError("")}
+          />
         )}
         {/* IO 预览侧栏。渲染 CreatePanel / 画布工作流节点
          *  消费的同一个 DynamicWorkflowForm，数据来自**实时的**
@@ -777,37 +539,7 @@ function WorkflowEditorBody({
             detailIOMap={ioDetailMap}
             modes={detail.availableModes ?? []}
             defaultMode={detail.defaultMode ?? null}
-            onModesChange={(modes, defaultMode) => {
-              /* 模式集合变更立即落库（与库详情「类型」同一存储），并同步
-               * 本地 detail 让页签即时反映。被移除的模式在各 IO 条目上的
-               * 覆盖层（modes[mode]）必须一并摘掉——页签栏只跟 modes 走，
-               * 留下的无主覆盖会一直随 workflowIO 落库往返；清理结果随同
-               * 一 PATCH 落库。 */
-              const removedModes = (detail.availableModes ?? []).filter(
-                (m) => !modes.includes(m),
-              );
-              const cleanedIO =
-                removedModes.length > 0
-                  ? ioApi.getState().purgeModeOverrides(removedModes)
-                  : null;
-              setDetail((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      availableModes: modes,
-                      defaultMode,
-                      taskType: defaultMode,
-                    }
-                  : prev,
-              );
-              savePatch.mutate({
-                id: workflowId,
-                modes,
-                defaultMode,
-                taskType: defaultMode,
-                ...(cleanedIO ? { workflowIO: cleanedIO } : {}),
-              });
-            }}
+            onModesChange={handleModesChange}
             onClose={() => setIoPreviewOpen(false)}
           />
         )}
@@ -828,14 +560,7 @@ function WorkflowEditorBody({
           setEdges={setEdges}
           setNodes={setNodes}
         />
-        {/* Floating instruction tooltip —— 这条气泡是「固定暗色清单」条目 1
-           （叠在画布内容上的极小面积叠层），底色恒为 bg-black/60。
-           因此**文字也必须用固定浅色**：此前用随主题的 text-ink-soft，
-           浅色主题下它是深灰 (#52525b)，压在深色气泡上等于深底深字，
-           看不出这条提示（ISSUE #609 红框圈的那块）。 */}
-        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-[11px] text-gray-300 backdrop-blur-sm">
-          点击节点查看详情 · 拖拽移动节点位置 · 滚轮缩放
-        </div>
+        <CanvasHintTooltip />
         {/* 右边缘画布设置抽屉。面板自己把内容 portal 到
          *  document.body，好让它压在
          *  WorkflowCanvasEditor 根遮罩栈（`modal` 档）之上；只在
@@ -866,5 +591,3 @@ function WorkflowEditorBody({
     </FullScreenLayer>
   );
 }
-
-/* ── Public API ── */
