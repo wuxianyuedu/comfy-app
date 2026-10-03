@@ -278,6 +278,86 @@ function checkGateStepIndexRefs() {
   }
 }
 
+/**
+ * §13.1「本地提交前必须通过」那份清单必须与 `.githooks/pre-commit` 的 D 组逐字一致
+ * （ISSUE #1404 顺带收的那格漂移）。
+ *
+ * 为什么要有这条：那份清单是人 / 代理手跑全套门禁的唯一入口，而它已经漂了 ——
+ * 立案时实测：钩子 D 组 27 步，清单里只有 21 步对得上（`check-ps1-consistency.mjs`、
+ * `check-import-alias.cjs`、`check-ui-customizations.cjs`、`check-doc-references.cjs`、
+ * `storybook-check.mjs` 五步进了钩子没进清单）。更要紧的是 **flag 层面的漂移**：
+ * 清单写 `node scripts/check-file-structure.cjs`（不带 `--strict`），而钩子跑的是带它的那一档 ——
+ * 照清单手跑的人会得出「R5 不拦」的结论，而同一节还写着「上面那份清单就是全文」。
+ *
+ * 所以比对的是**整条命令**（含 flag），不是脚本名：只比名字就正好漏掉上面那一格。
+ * 组 0 / A / B / C 那四条命令没有 `  run "<标签>" <命令>` 形态（走 `run_group` 或直接调用），
+ * 它们在清单里、不在 D 组里是事实，所以列进豁免集合，而不是把清单删成只剩 D 组。
+ */
+const HOOK_PATH = ".githooks/pre-commit";
+const GATE_CHECKLIST_DOC = "docs/standards/13-提交与-code-review.md";
+const CHECKLIST_MARKER = "本地提交前必须通过";
+/** D 组之外的四条：组 0 分支守卫、组 A tsc、组 B eslint、组 C 受影响用例启动器。 */
+const NON_D_GROUP_COMMANDS = new Set([
+  "node scripts/check-branch-guard.cjs",
+  "pnpm exec tsc --noEmit",
+  "pnpm run lint",
+  "node scripts/run-affected-tests.mjs",
+]);
+
+/** 钩子 D 组的命令（行首锚定 = 只认真调用，被 `# ` 注掉的行不算在场）。 */
+function hookDGroupCommands(hookText) {
+  return [...hookText.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) =>
+    (m[2] ?? "").replace(/\s+/g, " ").trim(),
+  );
+}
+
+/** §13.1 代码块里 `✅ <命令>  # 说明` 那份清单的命令部分。
+ *  marker 那句「本地提交前必须通过…」本身就写在围栏**里面**，所以取 marker 之后
+ * 遇到的**第一个** ``` 就是这份清单的收尾（别再往回找开围栏，那会切到散文上）。 */
+function checklistCommands(docText) {
+  const start = docText.indexOf(CHECKLIST_MARKER);
+  if (start < 0) return null;
+  const rest = docText.slice(start);
+  const close = rest.indexOf("```");
+  if (close < 0) return null;
+  return rest
+    .slice(0, close)
+    .split("\n")
+    .filter((l) => l.startsWith("✅ "))
+    .map((l) => l.slice(2).split(/ +# /)[0].replace(/\s+/g, " ").trim());
+}
+
+function checkGateChecklistMatchesHook() {
+  if (!exists(HOOK_PATH) || !exists(GATE_CHECKLIST_DOC)) return;
+  const hookCmds = hookDGroupCommands(readText(HOOK_PATH));
+  const docCmds = checklistCommands(readText(GATE_CHECKLIST_DOC));
+  // 读不到清单本身就是红：静默返回 0 条会让这条判据空转
+  // （下一节改了 marker 措辞或代码块形状，它就再也不比对任何东西）。
+  if (!docCmds || docCmds.length === 0) {
+    problems.push(
+      `[${GATE_CHECKLIST_DOC}] 取不到「${CHECKLIST_MARKER}」那份命令清单 —— ` +
+        "§13.1 与钩子的一致性判据没有比对对象。marker / 代码块形状变了就同步改这里。",
+    );
+    return;
+  }
+  const docSet = new Set(docCmds);
+  const hookSet = new Set(hookCmds);
+  for (const cmd of hookCmds) {
+    if (docSet.has(cmd)) continue;
+    problems.push(
+      `[${HOOK_PATH}] 这一步真的在跑 \`${cmd}\`，但 ${GATE_CHECKLIST_DOC} 的 §13.1 清单里没有这条 ` +
+        "（或 flag 与钩子不一致）。清单是手跑全套的唯一入口，漏一格 = 照着清单跑的人以为它不存在。",
+    );
+  }
+  for (const cmd of docCmds) {
+    if (hookSet.has(cmd) || NON_D_GROUP_COMMANDS.has(cmd)) continue;
+    problems.push(
+      `[${GATE_CHECKLIST_DOC}] §13.1 清单写着 \`${cmd}\`，但 ${HOOK_PATH} 的 D 组没有这一步 —— ` +
+        "「上面那份清单就是全文」这句话已经不成立。要么把这一步接回钩子，要么从清单里删掉。",
+    );
+  }
+}
+
 function shouldApplyFactToDoc(f, docPath) {
   // onlyDocs：事实的主适用文档组（未命中即跳过）；otherDocs：额外适用文档，
   // 与主文档组取并集（同一值在另一篇文档里以别的形态出现时用，见 doc-facts.cjs）。
@@ -550,6 +630,7 @@ function main() {
   checkScopeCoverage();
   checkLedgerCommands();
   checkGateStepIndexRefs();
+  checkGateChecklistMatchesHook();
   checkPaths();
   checkAgentsMdDrift();
   for (const doc of SCOPED_DOCS) checkDoc(doc);

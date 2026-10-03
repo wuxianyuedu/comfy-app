@@ -110,6 +110,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 调用点一句 `catch {}` 就咽成空态，全仓库没有一条判据红过）—— 新增一条假地址
   // 与本次暂存改动无关也必须响，所以进固定清单。
   "tests/rest-endpoint-targets.test.ts",
+  // 组件工作台的注入层（`.storybook/data-sources.tsx`）—— story 的**公共依赖**，
+  // 而它守的那条口径（「不给数据依赖型组件 mock 假形态」）恰好最容易悄悄失效：
+  // 往注册表里塞一份手写示例对象，所有依赖它的 story 一起变成「看着正常、真机上
+  // 不对」，画布上完全看不出来。这条同时管点目录有没有进 tsc / eslint 的扫描面
+  //（那是一个「写了没人看」的位置）—— 与本次暂存改动无关也必须响，故进固定清单。
+  "tests/storybook-data-sources.test.ts",
   // 「调用点的形状错误不许被咽掉」（台账 F13）：`as never` 逐处登记 + 投影参数不许是
   // unknown + `.select(… as never)` 这个形状零存在。这一族的实际事故是 `train.cancel`
   // 从 Prisma→Drizzle 迁移起每次 500 而零红 —— 新增一处就是重新装上那个消音器，

@@ -52,10 +52,6 @@ export const NO_STORY_REASON = new Map([
   ],
   ["dialog-width.ts", "纯常量 + 派生函数（弹窗宽度的单一出处），无 DOM"],
   [
-    "form-rhf.tsx",
-    "`react-hook-form` 的 Controller 薄封装，形态由被包的表单基元决定",
-  ],
-  [
     "progress.tsx",
     "shadcn 的 Track/Indicator 薄封装；可见形态由 `ui/progress-bar` 承载（它自己的 story 里就画着 Track）",
   ],

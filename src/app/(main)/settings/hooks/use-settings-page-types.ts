@@ -19,6 +19,7 @@
  */
 import type { RuntimeLogController } from "./use-runtime-log-source";
 import type { OllamaModel } from "~/lib/llm/ollama-client";
+import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
 import type { RemoteProbeResult } from "~/lib/llm/browser";
 import type {
   UsageTaskQueryInput,
@@ -178,6 +179,13 @@ export interface SettingsPageController {
      *  设置页据此隐藏 端口/启动参数 输入。 */
     desktopManaged: boolean;
   } | null;
+  /** 桌面实例的六个存储目录（模型 / 共享模型 / 输入 / 共享输入 / 输出 /
+   *  共享输出）——**只读**。
+   *
+   *  非桌面实例为 null：便携版 / venv 的目录只由启动参数逐次决定，界面拿它回答
+   *  「模型在哪」会是另一套口径。数据来源同 `comfyInstance`（配置路径的函数），
+   *  因此同样在保存偏好 / 启动 ComfyUI 之后各重取一次，不进轮询。 */
+  comfyStorage: DesktopStoragePaths | null;
   comfyStarting: boolean;
   comfyStopping: boolean;
   comfyOpening: boolean;

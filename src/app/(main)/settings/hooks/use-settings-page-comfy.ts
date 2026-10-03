@@ -42,6 +42,11 @@ export function useSettingsComfy(input: {
   const saveSetting = api.setting.save.useMutation();
   const [comfyStarting, setComfyStarting] = useState(false);
   const comfyInstanceQ = api.setting.comfyInstance.useQuery();
+  /* 桌面实例的六个存储目录（只读展示）：同样不进 5s 轮询 —— 它只是配置路径与
+   * yaml 的函数，秒级重取既没有新事实，又让这张卡片变成「一直在算」。 */
+  const comfyStorageQ = api.setting.comfyStorage.useQuery(undefined, {
+    enabled: statusQueriesEnabled,
+  });
   const comfyStatusQ = api.setting.comfyStatus.useQuery(undefined, {
     refetchInterval: 5_000,
     refetchIntervalInBackground: false,
@@ -78,6 +83,7 @@ export function useSettingsComfy(input: {
           await comfyStatusQ.refetch();
           // 启动动作会先把当前草稿（含路径）落库：形态跟着重判定一次。
           await comfyInstanceQ.refetch();
+          await comfyStorageQ.refetch();
           /* 端点返回 `{ ok, detail }` 的信封（服务端自己探过启动结果），
            * 交给出口按同一口径读 —— 调用处不再写 `result.ok ? "ok" : "err"`。 */
           return result;
@@ -94,6 +100,7 @@ export function useSettingsComfy(input: {
     comfyStartM,
     comfyStatusQ,
     comfyInstanceQ,
+    comfyStorageQ,
     showFlash,
     setSaving,
   ]);
@@ -243,6 +250,8 @@ export function useSettingsComfy(input: {
         }
       : null,
     comfyInstance: comfyInstanceQ.data ?? null,
+    /* 桌面实例的六个存储目录；非桌面实例服务端返回 null（不拿别的形态凑数）。 */
+    comfyStorage: comfyStorageQ.data ?? null,
     comfyStarting,
     comfyStopping,
     comfyOpening,
@@ -255,6 +264,10 @@ export function useSettingsComfy(input: {
     /** 「保存偏好」后重判安装形态用（形态依赖刚保存的路径）。 */
     refetchComfyInstance: async () => {
       await comfyInstanceQ.refetch();
+    },
+    /** 同上时机重取存储目录：它与形态同源（都取决于刚保存的 comfyuiPath）。 */
+    refetchComfyStorage: async () => {
+      await comfyStorageQ.refetch();
     },
   };
 }

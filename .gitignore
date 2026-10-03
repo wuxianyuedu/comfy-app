@@ -83,6 +83,12 @@ playwright-report/
 
 # Storybook 静态产物（`pnpm storybook:build` 生成，不入库）
 /storybook-static/
+
+# Storybook 开发期资源与生成件（`scripts/storybook-assets.mjs` 现生成，不入库）：
+# 二进制/矢量夹具进 git 会让「改一张测试图」变成一次无法 diff 的提交；
+# `generated/` 里是**本检出**的解析链端口，入库必然与别人的 checkout 不符。
+/.storybook/assets/
+/.storybook/generated/
 /src/generated/
 
 # Tauri generated assets (rebuilt by scripts/build-desktop.mjs)

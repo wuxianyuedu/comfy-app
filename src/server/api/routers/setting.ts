@@ -17,6 +17,7 @@ import {
   stopComfyUiProcess,
 } from "~/lib/comfyui/lifecycle";
 import { describeComfyInstance } from "~/lib/comfyui/instance-kind";
+import { resolveDesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths.server";
 import {
   decideComfyTabOpen,
   probeComfyEmbeddable,
@@ -92,6 +93,19 @@ export const settingRouter = createTRPCRouter({
    * 同批拉它，保存路径后再 refetch（见 launch-and-build §5）。 */
   comfyInstance: authedProcedure.query(() =>
     describeComfyInstance(getSettingsSync().comfyuiPath),
+  ),
+
+  /** 桌面实例的存储目录（模型 / 共享模型 / 输入 / 输出 / 共享输入输出）——**只读**。
+   *
+   * 数据全部来自实例侧文件与元数据：`extra_model_paths.yaml`（共享目录的唯一
+   * 来源）+ Comfy Desktop 登记的启动参数（`--base-directory` 等会覆盖默认值）。
+   * 与 `comfyInstance` 同为「配置路径的函数」，因此同样不进轮询：它在保存偏好
+   * 与启动 ComfyUI 之后各重取一次。
+   *
+   * 非桌面实例返回 `null`：便携版 / venv 的目录只由启动参数决定，界面拿它来
+   * 回答「模型在哪」会是另一套口径。 */
+  comfyStorage: authedProcedure.query(() =>
+    resolveDesktopStoragePaths(getSettingsSync().comfyuiPath),
   ),
 
   /** ComfyUI 运行状态（设置页状态行 / 启动按钮旁） */

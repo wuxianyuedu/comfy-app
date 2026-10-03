@@ -11,13 +11,15 @@
  * 带进来的真违规）。此前唯一的处理是钩子里那句「升级 eslint 之后先手动删缓存目录」
  * —— 靠人记得删 = 没有执行者，且触发面写窄了（真实触发是任何依赖变化）。
  *
- * 本用例钉住三件事：
+ * 本用例钉住四件事：
  *   ① 判据形状：指纹由「声明要装什么 + 实际装上了什么 + 类型解析口径」三类组成，
  *      且**不含** `eslint.config.js`（它在 eslint 自己的缓存键里）；
  *   ② 两个方向都真跑：指纹变了 → 缓存目录真被删；指纹没变 → 缓存**保留**
  *      （保留是这一层的价值所在：稳态热跑 28.8–46.3s 的代价不能被白付）；
  *   ③ postinstall 入口把它接上了（改 `.githooks/**` 时增量层会放弃收窄，所以这条
- *      必须在固定清单里跑 —— 见 `scripts/affected-tests.mjs` 的注释）。
+ *      必须在固定清单里跑 —— 见 `scripts/affected-tests.mjs` 的注释）；
+ *   ④ 两处「接线 / 同源」不许漂移：清的目录与 `package.json` 的 `--cache-location`
+ *      逐字同源，钩子不把「手动删缓存」当机制（那一刀的全部意义）。
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -203,5 +205,42 @@ describe("postinstall 入口接线（ISSUE #1399）", () => {
     const exitAt = src.lastIndexOf("process.exit(0)");
     expect(fingerprintAt).toBeGreaterThan(-1);
     expect(fingerprintAt).toBeLessThan(exitAt);
+  });
+
+  it("清的必须是 lint 真正在用的那个目录（与 package.json 的 --cache-location 逐字同源）", () => {
+    // 只核 CACHE_DIR_REL 自己的形状不够：改了 `package.json` 的 `--cache-location`
+    // 而脚本还盯着老路径 = 白清（清了个没人读的目录，缓存照旧重放旧判决）。
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    const lintScript = pkg.scripts.lint ?? "";
+    expect(lintScript, "package.json 里没有 lint 脚本？").not.toBe("");
+    const location = /--cache-location\s+(\S+)/.exec(lintScript)?.[1];
+    expect(location, "lint 脚本没带 --cache-location 了？").toBeTruthy();
+    expect(location).toBe(CACHE_DIR_REL);
+  });
+
+  it("钩子把这一步记为「已按指纹自动失效」，且旧的手动指示行已消失", () => {
+    // 判据在场不等于机制在场：注释回到「靠人记得删」= 执行者又没了，而那正是
+    // ISSUE #1399 的根因。
+    //
+    // 不拿 `toContain("手动删缓存")` 当判据 —— 注释里**引用**旧措辞解释「从前是
+    // 这么写的」是正当的，按字面扫会把它一起判红（§13.5.8：在场判据要解析、不要
+    // 字面匹配）。这里锚在**旧提示行本身的形状**上（`# ⚠️ 升级 eslint … 先删掉该
+    // 缓存目录`，行首即 ⚠️、以删除动作为谓语），只有「又把删除当机制写回去」才命中。
+    const hook = fs.readFileSync(
+      path.join(ROOT, ".githooks", "pre-commit"),
+      "utf8",
+    );
+    const oldAdvisory = hook
+      .split("\n")
+      .filter((line) => /^#\s*⚠️.*升级\s*eslint.*先删掉该缓存目录/.test(line));
+    expect(
+      oldAdvisory,
+      `钩子里还留着旧的手动删缓存指示行：\n${oldAdvisory.join("\n")}`,
+    ).toEqual([]);
+    // 自动路径必须在场，且点名的是既有的唯一 postinstall 入口。
+    expect(hook).toMatch(/postinstall/);
+    expect(hook).toContain("scripts/install-git-hooks.mjs");
   });
 });

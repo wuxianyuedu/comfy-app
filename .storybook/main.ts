@@ -24,8 +24,21 @@ const config: StorybookConfig = {
     name: "@storybook/nextjs",
     options: {},
   },
-  // 静态产物落仓库根的 storybook-static/（已 gitignore），不进 next build 的图
-  staticDirs: ["../public"],
+  /* 静态目录：`public/` 之外再加一份**开发期资源**目录。
+   *
+   * `.storybook/assets/` 是注入层（`data-sources.tsx` 的 `media` 值源）用的真图片，
+   * 由 `scripts/build-storybook-assets.mjs` 现生成、**不入库**（同样 gitignore）。
+   * 为什么不放 `public/`：那里会随 `next build` 进 standalone 产物、再被
+   * `build-desktop` 内嵌进桌包（`scripts/check-standalone-contents.cjs` 的顶层
+   * 白名单把它列得一清二楚）；组件工作台的示例资源没有任何理由跟着出厂。
+   * 两份都列进 `staticDirs` 时后者挂同一个站点根，路径不冲突（文件在
+   * `/storybook-assets/` 前缀下）。
+   *
+   * 静态产物落仓库根的 storybook-static/（已 gitignore），不进 next build 的图。 */
+  staticDirs: [
+    "../public",
+    { from: "../.storybook/assets", to: "/storybook-assets" },
+  ],
   typescript: {
     // 类型正确性由仓库的 `tsc --noEmit` 统一保证，故事文件也在 tsconfig 的
     // include 里 —— 这里不重复做一次 react-docgen 的宽松检查。
