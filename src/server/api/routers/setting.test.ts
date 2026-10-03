@@ -40,6 +40,7 @@ const {
   openComfyMock,
   stopComfyMock,
   describeInstanceMock,
+  resolveStorageMock,
   studioProbeMock,
   studioStartingMock,
   studioEnsureMock,
@@ -87,6 +88,11 @@ const {
   describeInstanceMock: vi.fn<() => { kind: string }>(() => ({
     kind: "portable",
   })),
+  /* 存储目录读盘在 `desktop-storage-paths.server` 里（它自己有用例），这里只判
+   * 「用配置路径调它、非桌面如实返回 null」这条接线。 */
+  resolveStorageMock: vi.fn<(dir: string) => Promise<unknown>>(
+    async () => null,
+  ),
   studioProbeMock: vi.fn<(port: number) => Promise<boolean>>(async () => true),
   studioStartingMock: vi.fn<() => boolean>(() => false),
   studioEnsureMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
@@ -143,6 +149,9 @@ vi.mock("~/lib/comfyui/lifecycle", () => ({
 }));
 vi.mock("~/lib/comfyui/instance-kind", () => ({
   describeComfyInstance: describeInstanceMock,
+}));
+vi.mock("~/lib/comfyui/desktop-storage-paths.server", () => ({
+  resolveDesktopStoragePaths: resolveStorageMock,
 }));
 vi.mock("~/lib/drizzle-studio/lifecycle", () => ({
   ensureDrizzleStudioUp: studioEnsureMock,
@@ -390,6 +399,12 @@ describe("setting 的状态读与进程动作", () => {
   it("comfyInstance 用配置里的路径做形态判定（与运行态探测分开，首屏不等端口）", async () => {
     await createCaller(makeCtx()).comfyInstance();
     expect(describeInstanceMock).toHaveBeenCalledWith("C:/ComfyUI");
+  });
+
+  it("comfyStorage：读实例目录用的是配置里的路径，原样透传（非桌面即 null）", async () => {
+    const res = await createCaller(makeCtx()).comfyStorage();
+    expect(resolveStorageMock).toHaveBeenCalledWith("C:/ComfyUI");
+    expect(res).toBeNull();
   });
 
   it("comfyStart：manual=true（用户明确要求），超时上限由调用方给", async () => {

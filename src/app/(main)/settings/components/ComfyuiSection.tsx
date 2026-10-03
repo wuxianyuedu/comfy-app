@@ -21,6 +21,7 @@ import { SettingsCard } from "~/components/ui/settings-card";
 import { StatusButton, Field } from "./SettingsPrimitives";
 import { FieldLabel } from "~/components/ui/field";
 import { RuntimeLogBox } from "./RuntimeLogBox";
+import { ComfyuiStoragePaths } from "./ComfyuiStoragePaths";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 /**
@@ -140,6 +141,10 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           />
         </>
       )}
+      {/* 实例目录：只有桌面实例有「实例根 + 共享目录」这套布局可读（服务端对
+          其它形态返回 null）。只读，不提供编辑 —— 改目录属于 ComfyUI Desktop
+          自己的配置面，写回那边的文件会与本应用下次启动用的参数打架。 */}
+      {desktopManaged && <ComfyuiStoragePaths storage={c.comfyStorage} />}
       <div className="mb-4 flex items-center gap-2">
         <Checkbox
           id="comfyui-autostart"
