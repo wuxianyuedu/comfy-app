@@ -6,7 +6,9 @@ import {
   APP_DEV_ORIGIN,
   APP_DEV_PORT,
   APP_DEV_PORT_SOURCE,
-} from "./generated/app-origin";
+  DEFAULT_APP_ORIGIN,
+  type AppOriginOverride as AppOrigin,
+} from "./app-origin-defaults";
 import { MessageCenterPanel } from "~/components/message-center/MessageCenterPanel";
 import { ToastProvider } from "~/components/studio/ToastProvider";
 import { TooltipProvider } from "~/components/ui/tooltip";
@@ -335,29 +337,54 @@ export function sourceNameArgType(kind: ValueSourceKind) {
  *
  * ## 值从哪来
  *
- * `.storybook/generated/app-origin.ts` —— 由 `scripts/storybook-assets.mjs` 在
- * `pnpm storybook` 启动时**现算**，调的是权威实现 `scripts/app-port.mjs` 的
- * `resolveAppPort()`。为什么不在这里读环境变量：Storybook 的 webpack 把
- * `process.env` 替换成一个**白名单对象**（实测编出来的 bundle 里只有
- * `NODE_ENV` / `NODE_PATH` / `STORYBOOK` / `PUBLIC_URL`），业务变量进不去，
- * 那种「兜底逻辑」实际永远走兜底。这是实测结论，不是推测。
+ * 应用端口按**检出路径**推导（3200~3999），不同 checkout 不同 —— 写死一个值在
+ * 别人的机器上必然错。所以它由 `scripts/storybook-assets.mjs` 在 `pnpm storybook`
+ * 启动时调权威实现 `scripts/app-port.mjs` 的 `resolveAppPort()` **现算**。
+ * 为什么不在这里读环境变量：Storybook 的 webpack 把 `process.env` 替换成一个
+ * **白名单对象**（实测编出来的 bundle 里只有 `NODE_ENV` / `NODE_PATH` /
+ * `STORYBOOK` / `PUBLIC_URL`），业务变量进不去，那种「兜底逻辑」实际永远走兜底。
+ * 这是实测结论，不是推测。
  *
- * 为什么必须是**现算**：应用端口按**检出路径**推导（3200~3999），
- * 不同 checkout 不同 —— 写死一个值在别人的机器上必然错。
+ * 那份值**不入库**，而且**不由本模块 import**（ISSUE #1409）：生成件只在跑过
+ * `pnpm storybook` 之后存在，而 `tsconfig.json` 的 include 显式列着 `.storybook`
+ * 那两条通配（点目录不在 glob 的默认展开范围里，不列就是 tsc 与 eslint 的双重
+ * 盲区）—— 一旦 import 它，没跑过工作台的检出 `tsc --noEmit` 必报 TS2307，而 tsc
+ * 正是提交门槛的 A 组。所以值由 `preview.tsx` 在配置加载期读出来、经 `parameters`
+ * 交到这里；本模块用的是那份入库的缺省值（`app-origin-defaults.ts`），
+ * 也就是「没跑过工作台」这个常态下画布上该显示的东西。
  *
  * ## 在画布上换
  *
  * 工具栏的「应用 origin」旋钮（`preview.tsx` 的 `globalTypes.appOrigin`）。
  * 应用**没起**时不必换 —— 那时画布上就是它真实的降级形态，那也是要看的。
  */
-export const DEFAULT_APP_ORIGIN = APP_DEV_ORIGIN;
-
-/** 工具栏可选的几个 origin：本检出算出来的那个，加上两个常见的手改落点。 */
-export const APP_ORIGIN_CHOICES: Record<string, string> = {
-  [`本检出 ${String(APP_DEV_PORT)}（${APP_DEV_PORT_SOURCE}）`]: APP_DEV_ORIGIN,
-  "静态链兜底 3100": "http://127.0.0.1:3100",
-  "回落候选 +1": `http://127.0.0.1:${String(APP_DEV_PORT + 1)}`,
+export {
+  APP_DEV_ORIGIN,
+  APP_DEV_PORT,
+  APP_DEV_PORT_SOURCE,
+  DEFAULT_APP_ORIGIN,
 };
+
+/**
+ * 工具栏可选的几个 origin：本检出算出来的那个，加上两个常见的手改落点。
+ *
+ * 入参是 `preview.tsx` 读出来的那份（本检出的真值 / 没跑过工作台时的缺省），
+ * 所以旋钮上显示的端口与画布上实际连的是同一个 —— 两处各算一遍必然漂移。
+ */
+export function appOriginChoices(
+  dev: AppOrigin = {
+    APP_DEV_PORT: APP_DEV_PORT,
+    APP_DEV_ORIGIN: APP_DEV_ORIGIN,
+    APP_DEV_PORT_SOURCE: APP_DEV_PORT_SOURCE,
+  },
+): Record<string, string> {
+  return {
+    [`本检出 ${String(dev.APP_DEV_PORT)}（${dev.APP_DEV_PORT_SOURCE}）`]:
+      dev.APP_DEV_ORIGIN,
+    "静态链兜底 3100": "http://127.0.0.1:3100",
+    "回落候选 +1": `http://127.0.0.1:${String(dev.APP_DEV_PORT + 1)}`,
+  };
+}
 
 /** 回环主机写 `127.0.0.1` 不写 `localhost`（规范 §12.14）：SSR 侧 Node fetch 会
  *  先把 `localhost` 解析成 IPv6 `::1` 而 ECONNREFUSED。 */
