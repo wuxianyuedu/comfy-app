@@ -14,6 +14,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { normalizeSlashes } from "~/lib/path-display";
 import {
+  customNodesManifestPath,
+  customNodesManifestStamp,
+} from "~/lib/comfyui/custom-nodes-manifest.server";
+import {
   deriveComfyuiSubdir,
   deriveComfyuiWorkflowsDir,
   getSettingsSync,
@@ -41,10 +45,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MANIFEST = path.join(
-  process.cwd(),
-  "src/generated/customNodes.manifest.json",
-);
+const MANIFEST = customNodesManifestPath();
 const REPORT = path.join(
   process.cwd(),
   "src/generated/customNodes.report.json",
@@ -125,12 +126,7 @@ let manifestSummaryCache: {
 
 /** @returns {string | null} */
 function manifestStamp() {
-  try {
-    const st = fs.statSync(MANIFEST);
-    return `${st.size}:${Math.trunc(st.mtimeMs)}`;
-  } catch {
-    return null;
-  }
+  return customNodesManifestStamp();
 }
 
 /* 汇总磁盘上的 manifest 供界面展示。同时对每个「配了、但还不是叶子包」的父路径
