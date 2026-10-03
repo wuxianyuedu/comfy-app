@@ -993,18 +993,54 @@
       先定口径再动（丢弃 = 静默丢用户数据；保留 = 这处继续不校验）。
       证据：`src/lib/workshop/types.ts`、`src/server/mcp/workshop-mcp.ts`、
       `src/server/mcp/workshop-mcp.test.ts`、`src/lib/workshop/draft-sync-shared.ts`。
-- [ ] **F13″ 草稿同步路径的元素级仍未校验（F13′ 的同族另一处，先定口径再动）**：
+- [x] **F13″ 草稿同步路径的元素级判据（口径已定，本批落地：脏元素留着 + 标出来 + 给界面出口）**：
       `src/lib/workshop/draft-sync-shared.ts` 的 `parseDraftDto` 只判容器
       （`Array.isArray(obj.characters)`），元素是 `as Character[]` / `as Shot[]` 强转 ——
       于是「数组里躺着一个 `styleTags` 是字符串的角色」照样能从 localStorage 进服务端镜像，
       与 F13′ 修掉的 MCP 那一格是同一个洞、不同的门。
-      修法 = 复用 `~/lib/workshop/types` 的 `characterListInputSchema` / `shotListInputSchema`
-      （形状只有一份事实源，不在这里再写一遍 zod，§12.12）。
-      **动手前要先定的不是代码而是口径**：这条路径读的是用户自己的草稿，
-      认不出的元素**丢弃**= 静默丢用户数据、**保留**= 这处继续不校验。
-      建议的第三条路（与 E11 那类「按后果分档」同口径）：逐元素 `safeParse`，
-      认不出的**保留原样但整条草稿标成「需要修复」**并在界面给出口（硬规则 4），
-      既不丢数据也不把脏值当合法喂给 prompt-builder。定了再动，同批补判据。
+      **口径（用户定）**：不丢弃也不放过 —— 认不出的元素**原样保留**，整份草稿标成
+      「需要修复」，并在界面给出口（硬规则 4）。丢弃 = 静默删用户自己的数据且没有撤销；
+      继续不判 = 脏值照样喂进 prompt 拼装与 React key，现场是「生成结果莫名其妙」或
+      「两行卡片长得一模一样」，比丢数据更难归因。
+      落地三件：
+      ① 唯一判据 `src/lib/workshop/draft-integrity.ts` —— 三类元素共一张检查表，
+      **只报「下游无保护解引用会真出事」的字段**（每条 `reason` 写着炸在哪：
+      `styleTags` 非数组 → `.join` 抛错；`prompt` 非文本 → `shot.prompt.trim()` 抛错；
+      缺 `id` → 生成任务回写找不到这一镜；`status` 不在 `SHOT_STATUSES` → 完成度计数
+      算错一边）。**可选字段整体缺席一律不报** —— 否则每条老草稿都被念一遍，
+      提示条三天内就会被人当成噪音关掉（误报一片的判据比没有判据更糟，口径同 E9 那条）。
+      值域直接引 `types.ts` 里那份 `SHOT_STATUSES`（新增一个状态不必改判据）。
+      ② 判据是**读时派生**，不是草稿里的一个字段 —— `workshopDraft` 表一列一字段
+      （`src/server/db/schema.ts` 的 `scenes` / `characters` / `shots` 各是一个
+      `text({ mode: "json" })` 列），往 DTO 顶层加字段**没有落库的家**：`draftToRow`
+      不认识它，写进去就在下一次读时消失。派生还顺带白拿一条性质：结论永远与当下这份
+      数据同版本，不存在「数据修好了而标记还挂着」这种镜像对不上（那正是画布镜像那一族
+      的账，见 `~/lib/project-canvas/sync-notice`）。
+      ③ 出口 `src/components/workshop/DraftIntegrityHint.tsx`：常驻横幅（汇总句 +
+      「是哪几条、坏在哪」的清单 + 跳到那一类元素所在的屏）。刻意**不复用** `notice`
+      那条通道 —— 它说的是「刚发生了什么事」（新提示整条替换旧提示、可关闭），
+      而这里是数据的当前状态，关掉等于把脏数据藏回地毯下；也刻意**不复用** `StageHint`
+      （那块写死「去完成 →」，为省一个文件把「数据坏了」指成「你还没做完」是把话做错）。
+      方向是视图 import lib：判据那一侧不认识页签（`Tab` 属于视图层，硬规则 22），
+      `KIND_TAB` 那张映射表留在组件里。
+      两扇门共用一份判据：服务端镜像（`parseDraftDto`）与浏览器缓存
+      （`draft-store.ts` 的 `parseDraft`）现在都在文件头写着「元素原样留着，形状问题
+      去那儿判」，新增第三种元素或加**必填**字段时判据表要同步。
+      判据面 34 条用例（`draft-integrity.test.ts` 27 + `DraftIntegrityHint.test.tsx` 7）。
+      其中一组是**配对断言**：同一份脏数据喂 `parseDraftDto` 之后，
+      ① 那条元素必须还在原下标上（改成过滤就是红 —— 那是静默删用户数据），
+      ② 它必须同时被 `auditDraftElements` 点名（漏判就是红 —— 那是「保留=不校验」的老路）。
+      两边各红一次才算锁住「留着但不许静默」这条口径。另有双向不挑刺证明：
+      干净草稿（含可选字段缺席、空数组）一条都不报 —— 只测脏的那一半，
+      判据会一路报到把正常数据也念成坏数据。
+      ⚠️ 覆盖：判据本体四维满档；出口组件分支 **87.5 实测 → 门槛 85**，没盖到的那一支是
+      `lines[0]?.tab ?? "script"` 的右半边，**按构造不可达**（`issues` 为空时组件已经早退）。
+      没有为了凑数去 mock 一个「有问题但一条元素都组不出来」的输入形状 ——
+      那测的是今天不存在的输入，数字好看而判据是空的（口径同 §18.6 与上面 `if (!dir)` 那批）。
+      证据：`src/lib/workshop/draft-integrity{.ts,.test.ts}`、
+      `src/components/workshop/DraftIntegrityHint{.tsx,.test.tsx}`、
+      `src/components/workshop/{WorkshopStageBody.tsx,hooks/use-workshop-pipeline.ts}`、
+      `src/lib/workshop/{draft-sync-shared.ts,draft-store.ts}`、`vitest.config.ts`。
 - [ ] **P3 卫生**：无 `.editorconfig`；`package.json` 无 `engines`；tsconfig 缺 `exactOptionalPropertyTypes` 等；`cn@^0.3.0` / `lucide-react:^1.47.0` 版本偏宽；双 TS 版本导致构建/门禁语义不一致；`/api/update-check` 无鉴权回显变更指纹；`comfyapp://` 由外部 helper 实现需单独审计防任意网页利用本机路径。
 
 ## 规范状态

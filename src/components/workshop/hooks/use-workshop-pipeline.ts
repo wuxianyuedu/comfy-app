@@ -36,6 +36,10 @@ import {
   draftHasContent,
   type WorkshopDraftDto,
 } from "~/lib/workshop/draft-sync-shared";
+import {
+  auditDraftElements,
+  type DraftElementIssue,
+} from "~/lib/workshop/draft-integrity";
 import type {
   Character,
   ProjectMeta,
@@ -222,6 +226,8 @@ export interface WorkshopPipelineController {
   apiSettingsOpen: boolean;
   /** 需要引起用户注意的失败/阻断文案（替代 alert，由视图决定怎么渲染）。 */
   notice: string | null;
+  /** 草稿里形状不认识但已原样保留的元素（台账 F13″）：视图据此标「需要修复」。 */
+  integrity: DraftElementIssue[];
 
   // ── 提取会话（角色卡 / 分镜）：busy / progress / 日志 收归 controller ──
   characterExtract: ExtractSession;
@@ -572,6 +578,15 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const clipDoneCount = shots.filter((item) => !!item.clipUrl).length;
   const scriptReady = !!scriptMarkdown.trim() || scenes.length > 0;
 
+  /* 草稿里「形状不认识但仍要留着」的那些元素（台账 F13″）。
+   * 结论是**读时派生**的：`workshopDraft` 表一列一字段，DTO 上加个标记字段没有落库的家
+   * （写进去就在下一次读时消失），而派生还顺带保证了「数据修好了标记就没了」不会失配。
+   * 判据本体在 `~/lib/workshop/draft-integrity`（服务端镜像与本地缓存两扇门共用一份）。 */
+  const integrity = React.useMemo(
+    () => auditDraftElements({ scenes, characters, shots }),
+    [scenes, characters, shots],
+  );
+
   const viewContext: StageViewContext = React.useMemo(
     () => ({
       scriptReady,
@@ -677,6 +692,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     isScriptEditorOpen,
     apiSettingsOpen,
     notice,
+    integrity,
 
     characterExtract,
     characterExtractActions,
