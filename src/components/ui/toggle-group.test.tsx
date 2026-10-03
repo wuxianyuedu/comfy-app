@@ -18,15 +18,15 @@ function renderPair() {
 
 /**
  * 选中档的三层（描边 / 字重 / 抬层）是本仓库在 `ui/toggle-group` 上做的有意定制
- * （规范 16 §16.8 台账）。这里钉住它 —— 因为官方版只有 `data-[pressed]:bg-muted`，
+ * （规范 16 §16.8 台账）。这里钉住它 —— 因为官方版只有 `data-pressed:bg-muted`，
  * 而 `toggleVariants()` 的**悬停档是同一个值**，划过未选中项就会长得像选中项。
  */
 describe("ToggleGroupItem 的选中档", () => {
   it("描边 + 字重挂在 pressed 档上（不与悬停撞），且抬层不被邻项盖住", () => {
     for (const item of renderPair()) {
-      const pressed = (
-        item.className.match(/data-\[pressed\]:\S+/g) ?? []
-      ).join(" ");
+      const pressed = (item.className.match(/data-pressed:\S+/g) ?? []).join(
+        " ",
+      );
       expect(pressed).toContain("ring-1");
       expect(pressed).toContain("ring-primary/45");
       expect(pressed).toContain("font-semibold");

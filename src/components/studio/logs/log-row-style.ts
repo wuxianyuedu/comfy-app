@@ -60,7 +60,7 @@ export const FILTER_SELECTED_STYLES =
  * `ToggleGroupItem` 那一档的选中样式：与上面同一套三层表达（底色 + 描边 + 字重），
  * 唯一差别是底色要加 `!`。
  *
- * 为什么要加：基元 `ui/toggle` 的选中档是 `data-[pressed]:bg-muted`，属性选择器的
+ * 为什么要加：基元 `ui/toggle` 的选中档是 `data-pressed:bg-muted`，属性选择器的
  * 特异性高于裸 utility（`(0,2,0)` vs `(0,1,0)`），不压一层就永远轮到它生效；而
  * `bg-muted` → `--color-subtle` 在浅色主题下与行头底色 `--color-surface-1` 是同一个
  * `#f7f8fa` —— 于是「选中」又变回看不见（ISSUE #609 那条用户反馈的原样）。

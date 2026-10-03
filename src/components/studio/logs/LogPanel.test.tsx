@@ -747,7 +747,7 @@ describe("LogPanel 日志面板", () => {
      * 第 1 条）。判据落在**类**上：底色 + 描边 + 字重三层里至少底色与描边
      * 都换成了主色调，任何一层单独失效仍读得出选中。
      * ⚠️ 这里按**类名 token** 精确比对而不是子串包含：`ui/toggle-group` 会给每个
-     * item 都挂 `data-[pressed]:ring-*` / `data-[pressed]:font-semibold`（规范 16
+     * item 都挂 `data-pressed:ring-*` / `data-pressed:font-semibold`（规范 16
      * §16.8），子串判据分不出「裸类」与「带变体前缀的类」，会把未选中项也判成
      * 「带着这三样」——那是假红，且真正要防的「选中没有区分度」反而被盖住。 */
     const tokensOf = (el: HTMLElement) => new Set(el.className.split(/\s+/));

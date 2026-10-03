@@ -65,7 +65,7 @@ export function ModelLibrary() {
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton
               key={`skeleton-${i}`}
-              className="bg-subtle aspect-[4/3] rounded-xl"
+              className="bg-subtle aspect-4/3 rounded-xl"
             />
           ))}
         </div>
