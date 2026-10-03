@@ -1,4 +1,10 @@
 import type { StorybookConfig } from "@storybook/nextjs";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { APP_ORIGIN_DEFAULTS } from "./app-origin-defaults";
+import { APP_ORIGIN_ENV_KEYS, parseOverride } from "./app-origin-reader";
 
 /**
  * Storybook 主配置。
@@ -10,8 +16,53 @@ import type { StorybookConfig } from "@storybook/nextjs";
  * `stories` 只扫 `src/`：Storybook 描述的是应用内组件，不覆盖 `.storybook/`
  * 自身的辅助件（providers 装饰器不是 Story）。
  */
+/**
+ * 本检出的解析链端口（`pnpm storybook` 启动时由 `scripts/storybook-assets.mjs`
+ * 现算，落一份不入库的 JSON）。
+ *
+ * **读文件这一步必须在 `main.ts`**：它由 Storybook 在 **Node** 里加载，而
+ * `preview.tsx` 会被打进浏览器 bundle —— webpack 在那里把 `node:fs` 换成 stub
+ * （实测编出来的调用是 `node_fs_ignored_default()`），`readFileSync` 必然抛、
+ * 于是永远走兜底，而且看不出来。值经 `env` 交过去（Storybook 在**编译期内联**
+ * 进 bundle，实测是字面量而不是 `process.env` 查找）。
+ *
+ * 读不到（没跑过工作台的新检出）就用入库的缺省值 —— 那是常态，不是错误。
+ * 这也正是本文件与 `preview.tsx` 都不 import 那份生成件的原因（ISSUE #1409）。
+ */
+function readAppOriginEnv(): Record<string, string> {
+  /* ESM 里没有 `__dirname`（Storybook 用 import 加载本文件），按 `import.meta.url`
+     定位 —— 生成件与本文件同在 `.storybook/` 下。 */
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const file = path.join(here, "generated", "app-origin.json");
+  let parsed = null;
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    parsed = parseOverride({
+      APP_DEV_PORT: raw[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT] ?? raw.APP_DEV_PORT,
+      APP_DEV_ORIGIN:
+        raw[APP_ORIGIN_ENV_KEYS.APP_DEV_ORIGIN] ?? raw.APP_DEV_ORIGIN,
+      APP_DEV_PORT_SOURCE:
+        raw[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT_SOURCE] ?? raw.APP_DEV_PORT_SOURCE,
+    });
+  } catch {
+    /* 文件不在 / 读不动：两种情况都退回缺省。 */
+  }
+  const value = parsed ?? APP_ORIGIN_DEFAULTS;
+  return {
+    [APP_ORIGIN_ENV_KEYS.APP_DEV_PORT]: String(value.APP_DEV_PORT),
+    [APP_ORIGIN_ENV_KEYS.APP_DEV_ORIGIN]: value.APP_DEV_ORIGIN,
+    [APP_ORIGIN_ENV_KEYS.APP_DEV_PORT_SOURCE]: value.APP_DEV_PORT_SOURCE,
+  };
+}
+
 const config: StorybookConfig = {
   stories: ["../src/**/*.mdx", "../src/**/*.stories.@(ts|tsx)"],
+  /* `env` 是 Storybook 的编译期常量注入口：这里的值会被内联进浏览器 bundle，
+     所以 `preview.tsx` 读 `process.env[SB_APP_DEV_*]` 拿得到（见上面那段说明）。 */
+  env: (existing) => ({ ...existing, ...readAppOriginEnv() }),
   addons: [
     // 交互测试与 a11y 自动化（补 PRODUCTION-GAPS F6 的 a11y 缺口）
     "@storybook/addon-a11y",

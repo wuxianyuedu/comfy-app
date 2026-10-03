@@ -30,10 +30,10 @@ const mod = require("../scripts/check-tsc-artifact-hint.cjs") as {
     artifactOnly: boolean;
   };
   buildHint: (v: unknown) => string;
-  isNextArtifact: (filePath: string) => boolean;
+  isArtifact: (filePath: string) => boolean;
 };
 
-const { classifyTscErrors, buildHint, isNextArtifact } = mod;
+const { classifyTscErrors, buildHint, isArtifact } = mod;
 
 /** #1182 现场原文（POSIX 形态）：两条都落在生成物上。 */
 const REAL_ARTIFACT_OUTPUT = [
@@ -117,15 +117,43 @@ describe("tsc 生成物报错的点破（#1182）", () => {
   });
 
   it("绝对路径里带 /.next/ 也算生成物（tsc 有时给全路径）", () => {
-    expect(isNextArtifact("/home/u/proj/.next/dev/types/routes.d.ts")).toBe(
-      true,
-    );
-    expect(isNextArtifact("F:\\proj\\.next\\dev\\types\\validator.ts")).toBe(
-      true,
-    );
+    expect(isArtifact("/home/u/proj/.next/dev/types/routes.d.ts")).toBe(true);
+    expect(isArtifact("F:\\proj\\.next\\dev\\types\\validator.ts")).toBe(true);
     // `.nextify/` 这种目录名不算 —— 判据认的是那一个目录段。
-    expect(isNextArtifact("src/.nextify/thinger.ts")).toBe(false);
-    expect(isNextArtifact("src/app/page.ts")).toBe(false);
+    expect(isArtifact("src/.nextify/thinger.ts")).toBe(false);
+    expect(isArtifact("src/app/page.ts")).toBe(false);
+  });
+
+  it("组件的现生成件也算（ISSUE #1409 同族：`.storybook/generated/`）", () => {
+    expect(isArtifact(".storybook/generated/app-origin.ts")).toBe(true);
+    expect(isArtifact("F:\\proj\\.storybook\\generated\\app-origin.json")).toBe(
+      true,
+    );
+    // 同族的另两处**不算**：注入层与主配置是源码（它们报错就是真错，别被点破成生成物）。
+    expect(isArtifact(".storybook/data-sources.tsx")).toBe(false);
+    expect(isArtifact(".storybook/main.ts")).toBe(false);
+    expect(isArtifact(".storybook/generatedness.ts")).toBe(false);
+  });
+
+  it("生成件与源码混在一起时**不**给点破（不能让人忽略真错）", () => {
+    const v = classifyTscErrors(
+      ".storybook/generated/app-origin.ts(1,5): error TS1005: x.\n" +
+        "src/lib/comfyui/executor-ws.ts(12,3): error TS2304: Cannot find name 'foo'.\n",
+    );
+    expect(v.artifactOnly).toBe(false);
+    expect(v.codeFiles).toEqual(["src/lib/comfyui/executor-ws.ts"]);
+  });
+
+  it("两类生成物的处置命令各自给对（别把 .next 的删法套到工作台生成件上）", () => {
+    const sb = buildHint(
+      classifyTscErrors(
+        ".storybook/generated/app-origin.ts(1,5): error TS1005: x.\n",
+      ),
+    );
+    expect(sb).toContain("rm -rf .storybook/generated");
+    expect(sb).toContain("ISSUE #1409");
+    // 只命中工作台生成件时，不该出现 `.next` 专属的防复发话术（那是另一类成因）。
+    expect(sb).not.toContain("别在同一目录双开");
   });
 
   it("CLI 读到不可读的日志时安静退出（附属信息不该制造第二种失败）", () => {
