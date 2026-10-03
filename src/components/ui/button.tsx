@@ -51,6 +51,14 @@ const buttonVariants = cva(
           "bg-success text-primary-foreground hover:bg-success/90 focus-visible:border-success focus-visible:ring-success/30",
         "warning-solid":
           "bg-warning-strong text-primary-foreground hover:bg-warning-strong/90 focus-visible:border-warning-strong focus-visible:ring-warning/30",
+        /* 品牌渐变档：把 `globals.css` 的 `.btn-gradient` 挂上来（三颗星走品牌 token，
+           改品牌色时跟手）。文字固定 `text-on-brand` —— 底是**深色渐变**，浅色主题下
+           再取 `--color-ink` 就成了「深底深字」（§3.6.1 那条「底色固定时文字必须同为
+           一态」的同一形态）。刻意**不带** hover 底色类：hover 观感由 `.btn-gradient`
+           的 brightness 提供，而 utilities 压过 components 层，再叠一层 `hover:bg-*`
+           只会把它的 transition 整条洗掉。尺寸/圆角的差异留给调用处的共享常量
+           （如 `HEADER_ACTION_BTN`）或下面的 size 轴。 */
+        gradient: "btn-gradient text-on-brand",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

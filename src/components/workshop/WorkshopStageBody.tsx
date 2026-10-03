@@ -192,9 +192,9 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                   )}
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="gradient"
                     onClick={openScriptEditor}
-                    className="btn-gradient rounded-lg px-4 py-1.5 text-[11px] font-medium text-white"
+                    className="rounded-lg px-4 py-1.5 text-[11px] font-medium"
                   >
                     编辑剧本
                   </Button>
@@ -229,9 +229,9 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                     </Button>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="gradient"
                       onClick={openScriptEditor}
-                      className="btn-gradient rounded-lg px-4 py-1.5 text-[11px] font-medium text-white"
+                      className="rounded-lg px-4 py-1.5 text-[11px] font-medium"
                     >
                       新建剧本
                     </Button>

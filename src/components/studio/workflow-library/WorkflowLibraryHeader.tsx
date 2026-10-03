@@ -77,7 +77,8 @@ export function WorkflowLibraryHeader({
       <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
         <Button
           onClick={onToggleImport}
-          className={`${HEADER_ACTION_BTN} btn-gradient shadow-primary-500/20 hover:shadow-primary-500/30 text-white shadow-lg`}
+          variant="gradient"
+          className={`${HEADER_ACTION_BTN} shadow-primary-500/20 hover:shadow-primary-500/30 shadow-lg`}
         >
           <FolderInput data-icon="inline-start" size={13} />
           导入工作流
