@@ -149,6 +149,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 并核理由表（NO_STORY_REASON）与磁盘对得上。与本次暂存改动无关也必须响
   // （它是「下一次有人新增组件 / 删 story」的守卫），所以进固定清单。
   "tests/storybook-component-coverage.test.ts",
+  // 「eslint 增量缓存的依赖指纹」：`--cache` 的缓存键不含依赖树，而 `no-unsafe-*`
+  // 是类型化规则 —— 依赖一变旧判决被整片重放，假红拦死提交、假绿洗掉真违规
+  // （ISSUE #1399）。它的执行者是 `postinstall` 那一步，而改 `.githooks/**` 会让
+  // 本层**放弃收窄、只跑固定清单**；接线断掉的那一刻正是这条判据要拦的动作，
+  // 所以必须与本次暂存改动无关也必须响。
+  "tests/eslint-cache-fingerprint.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

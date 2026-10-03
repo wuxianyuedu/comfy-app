@@ -53,9 +53,14 @@ run_group() {
 # 换成 `content`（按内容哈希）后这类抖动不再失效，真实内容改动照常只失效自己那
 # 一条。缓存键含「文件内容 + 解析后的 config」，所以改 eslint.config.js 会自然
 # 失效；缓存放 node_modules/.cache/eslint（已被 gitignore 覆盖，不必登记忽略清单）。
-# ⚠️ 升级 eslint / typescript-eslint **之后**先删掉该缓存目录 —— 插件实现变更不在
-# 缓存键里（这是 --cache 的已知边界，不是本仓的判据问题）；换 cache-location 或
-# cache-strategy 也会导致一次全量重建，属预期。
+# 缓存键**不含依赖树**（`no-unsafe-*` 是类型化规则，要看 AST 上的类型），于是依赖一变
+# 旧判决会被整片重放 —— 假红会拦住从该缓存起的所有提交，假绿会洗掉新依赖带进来的真
+# 违规。这件事以前只有一句 ⚠️「升级 eslint 之后先手动删缓存目录」，靠人记得删 = 没有
+# 执行者（且触发面写窄了：真实触发是**任何**依赖变化）。现在按指纹自动失效：由
+# `postinstall`（`scripts/install-git-hooks.mjs`）比 `pnpm-lock.yaml` +
+# `node_modules/.pnpm/lock.yaml` + `tsconfig.json` 的字节哈希，变了就删该目录
+# （ISSUE #1399 / 规范 §13.5.11）。换 cache-location 或 cache-strategy 仍会导致一次
+# 全量重建，属预期。
 run_group A "tsc --noEmit" sh -c 'pnpm exec tsc --noEmit'
 run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm run lint'
 
