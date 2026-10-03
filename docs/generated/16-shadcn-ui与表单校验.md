@@ -528,6 +528,67 @@ hook（`use-*.ts`）不算（它们没有可看的东西，判据是用例，见
 node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命令出结论
 ```
 
+#### 16.2.3.6 「有数据依赖」不是免票：Args → 数据源的注入层
+
+§16.2.3.5 把「有多少组件被看过」变成了棘轮，但那批**吃数据的组件**仍然没有 story
+—— 当时的判断是「不给它们 mock story，因为假形态的截图比没 story 更糟」，并把它
+记成一条独立的活。这一节收的就是那条活。
+
+**先纠一个词**。复核时发现「有数据依赖」被用得太宽，它其实混了三种东西：
+
+| 形态 | 例子 | 真相 |
+| ---- | ---- | ---- |
+| **纯 props** | `ui/field`、`ui/seed-mode-button`、`ui/option-list-popover`、`ui/segment-popover` | **没有数据依赖**。它们此前没 story 的真实原因是「有几个 ReactNode 参数」（`trigger` / `footer`），而 Args 面板装不下 React 节点 |
+| **结构化入参** | `studio/RequiredSummary`（吃 `WorkflowIOMap`） | 也不是数据依赖。「吃一个类型明确的入参」与「吃一条链路」是两件事 |
+| **真链路 / 运行期** | `studio/LocalComputeCard`、`HomeModelOverview`、`ErrorBoundary` 那一族 | 这一档才是，需要注入层 |
+
+也就是说前两档根本不需要注入层 —— 它们只需要一条口径：**ReactNode 参数走 story 的
+`render`，Args 里只留可序列化的那几个**。第三档才需要真东西。
+
+**注入层的形状**（`.storybook/data-sources.tsx`）：story 声明「我要哪种数据源」，
+注入层负责把它变成**真的**那一份。两种机制，按数据源的形态分 ——
+
+| 形态 | 是什么 | 怎么用 |
+| ---- | ------ | ------ |
+| **值源**（`json` / `media`） | 取一份**值**交给组件的 props | `args.sourceName` + `resolveSource(kind, name)` |
+| **运行期提供者**（`trpc` / 应用外壳） | 一条**真链路** / 一层**真上下文** | `preview.tsx` 全局挂的 `withTrpcApp` / `withAppProviders` |
+
+分两种不是分类爱好：值源是组件的**入参**（必须经 props），运行期提供者是组件的
+**环境**（不经过 props）。把后者硬塞进 args 只会得到一份假客户端。
+
+**三条口径**（与 `docs/guide-storybook.md` 同源）：
+
+1. **数据源是「命名的一种」**，映射只有 `DATA_SOURCES` 一份 —— story 不各写各的
+   示例数据。旋钮做成**组件自己的 args**：Storybook 的 Args 面板只认 args，
+   不认 `parameters` 里的嵌套键（写成嵌套键要么被类型挡住、要么运行期静默不生效）。
+2. **拿不到时画的就是「拿不到」**。`media` 源里留了一个**故意不存在**的
+   `missing.png`（失败兜底那条分支的现场）；名字不认识时 `resolveSource()` 抛错。
+   静默回退到空值会让「源名写错了」与「本来就没有」变成同一件事。
+3. **ReactNode 参数走 `render`，不进 Args**。且 `render` **不是 React 组件** ——
+   要在里面用 hook，把它抽成真组件（`react-hooks/rules-of-hooks` 会当场拦下，
+   那条报错是对的）。
+
+**为什么不用 `vi.mock` / MSW**：测试侧确实有 MSW（`tests/helpers/trpc-msw.ts`），
+但它转发给的是一个**测试 router**（预设数据）——那是测试的正当形态（断言的对象是
+管线，不是界面形态）。story 要的正好相反：「有后端 / 没后端分别长什么样」。所以
+注入层**不拦网络、不预置返回值**。
+
+**跨源这道真门槛写在这里，免得下一个人白查**：工作台与应用不同源（两个端口），
+而应用的 tRPC 端点不回 `Access-Control-Allow-Origin`（它对自己同源，本来就不需要）。
+于是 tRPC 那一族 story 通常给你看的是**降级形态**（controller 静默失败 → 空态）
+或**错误分支**。**刻意不绕**：为一个开发工具去改生产端的安全面（`next.config.js`
+的 headers / `src/proxy.ts`）不划算，`next.config.js` 那侧本仓也早有口径
+（见 `scripts/storybook.mjs` 顶部）。要看有数据的形态，需要应用在跑**并且同源**。
+
+**判据**：`tests/storybook-data-sources.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）
+守注册表接线、媒体名与磁盘**双向**对齐、「`.storybook/**` 进了 tsc / eslint 的
+扫描面」这几件悄悄失效时不会红的事。运行期行为（有没有真的画出来）由**真浏览器
+逐 story 渲染核对** —— 这正是 §16.2.3.4 那轮踩坑（侧栏有故事、画布一片空白）
+换来的教训：构建退出码说明不了这件事。
+
+**同批的覆盖率**：`ui/` 的有 story 组件数 21 → **34**（基线同批改），story 份数
+20 → 34，并新增 `Studio/` 与 `Workshop/` 两个分组。
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，

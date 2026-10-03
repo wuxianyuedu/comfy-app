@@ -20,9 +20,31 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  ensureStorybookAssets,
+  writeStorybookAppOrigin,
+} from "./storybook-assets.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const binName = process.platform === "win32" ? "storybook.cmd" : "storybook";
 const bin = path.join(root, "node_modules", ".bin", binName);
+
+/* 开发期资源（注入层 `media` 值源要指向的真图）在这里现生成。
+ *
+ * 跟着启动走而不是单独的 npm 脚本：那会是**跨平台动作**，要同批登记
+ * `package.json` 与规范 §9.5 的对照表（AGENTS 硬规则 12）；而这件事没有独立的
+ * 入口诉求 —— 它只是启动前的准备步骤，漏掉它的后果是 workbench 里几张图裂开，
+ * 而「资源不在」这件事由 story 自己如实画出来（不静默）。 */
+ensureStorybookAssets(path.join(root, ".storybook", "assets"));
+
+/* 解析链端口同样现算一次：注入层要用它把真 tRPC 客户端指向跑着的应用
+ *（`data-sources.tsx` 的 `DEFAULT_APP_ORIGIN`）—— 端口按检出路径推导，
+ * 写死的值在别人的 checkout 上必然错。口径见 `storybook-assets.mjs` 里
+ * `writeStorybookAppOrigin()` 的注释。 */
+writeStorybookAppOrigin(
+  root,
+  path.join(root, ".storybook", "generated", "app-origin.ts"),
+);
 
 /* 子命令与参数透传：`pnpm storybook` → dev，`pnpm build:storybook` → build。
  * 额外的位置参数原样转交给 storybook（例如 `pnpm build:storybook --quiet`）。 */

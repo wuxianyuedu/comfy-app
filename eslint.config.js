@@ -41,6 +41,11 @@ const LINT_FILES = [
   // 根级工程配置里用 TS 写的那些（vitest / playwright / drizzle；eslint.config.js 自身
   // 是 .js，由下面 `...next` 那块覆盖，与改造前同口径）
   "*.config.{ts,tsx,mts,cts}",
+  /* Storybook 基建（`.storybook/**`）。点目录**不在** glob 的默认展开范围里
+     （TS / ESLint 都会跳过以点开头的目录），所以要显式列 —— 否则这一个目录是
+     tsc 与 eslint 的双重盲区，而它里面的注入层是所有 story 的公共依赖。
+     `tsconfig.json` 的 `include` 同批加了两条，理由写在那里。 */
+  ".storybook/**/*.{ts,tsx,mts,cts}",
 ];
 
 /** 需要兼容包装的插件名：next 聚合配置引来、且仍在调用 ESLint 10 已移除插件 API
