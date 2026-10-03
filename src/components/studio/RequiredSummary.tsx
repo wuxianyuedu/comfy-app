@@ -1,5 +1,4 @@
 "use client";
-/* 抽出的小展示章（原本内联在 WorkflowCanvasEditor.tsx 里）。 */
 import { useMemo } from "react";
 import {
   resolveEntryRequired,

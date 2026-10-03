@@ -6,8 +6,7 @@
  *   - FlowNodeHeader.tsx            （标题栏）
  *   - FlowNodeCollapsedAnchors.tsx  （折叠态圆柱 + 句柄）
  *   - FlowNodePinRows.tsx           （顶部针脚连接行）
- *   - FlowNodeWidgetRows.tsx        （widget / 旋钮行）
- * 原本内联在 WorkflowCanvasEditor.tsx 里。 */
+ *   - FlowNodeWidgetRows.tsx        （widget / 旋钮行） */
 import React, { useState } from "react";
 import { useTheme } from "next-themes";
 import { Handle, Position } from "@xyflow/react";

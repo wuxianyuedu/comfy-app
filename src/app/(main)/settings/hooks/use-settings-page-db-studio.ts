@@ -17,10 +17,9 @@
  * 的「跟随本次启动」联动，返回给主 hook 直接展开到 controller 的
  * `dbStudioLog: { ...log, active }`。
  *
- * 拆分动机：主 hook 曾 900+ 行；这一整块与 ComfyUI 的探测通道**共享同一
- * statusQueriesEnabled 门控**，但状态与动作各自独立、无交叉，是天然的第二块
- * 可拆单元。返回形状与主 hook 原控制器逐字段一致，视图与测试都不感知——
- * §12.18 复用优先，拆包只挪文件、不动契约。
+ * 这一整块与 ComfyUI 的探测通道**共享同一 statusQueriesEnabled 门控**，
+ * 但状态与动作各自独立、无交叉。返回形状与主 hook controller 逐字段一致，
+ * 视图与测试都不感知——§12.18 复用优先，拆包只挪文件、不动契约。
  */
 import { useCallback, useState } from "react";
 import { useExternalAction } from "~/components/ui/use-external-action";

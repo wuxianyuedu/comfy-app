@@ -2,9 +2,8 @@
  * `executor-ws.ts` — WS 连接 / 消息处理 / 看门狗（executor 的通道层）
  * ===========================================================================
  *
- * 从 executor.ts 拆出的「事件通道」模块（batch 4）：负责建立并维持
- * ComfyUI WS 连接、统一消息分发（协议差异交给 comfyProtocol Adapter）、
- * 终态抢占（claimSettle）与活动看门狗（armWatchdog）。
+ * 事件通道层：负责建立并维持 ComfyUI WS 连接、统一消息分发（协议差异交给
+ * comfyProtocol Adapter）、终态抢占（claimSettle）与活动看门狗（armWatchdog）。
  *
  * 消息的终态处理（complete / fail）在 {@link ./executor-finalize}，
  * 派发（领取 + 提交）在 {@link ./executor-dispatch}，本层只做路由。

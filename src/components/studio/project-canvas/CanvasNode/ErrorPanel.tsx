@@ -1,6 +1,6 @@
 "use client";
 
-/* 从 CanvasNode 抽出 —— 可折叠的错误面板。
+/* CanvasNode 的可折叠的错误面板。
  * 负责 errExpanded 开关状态 + shouldAutoExpand / errorSuggestion
  * 两个推导，并渲染整个面板 JSX（展开/收起、复制、重试、
  * 建议）。父组件无条件渲染 <ErrorPanel/>；节点不处于

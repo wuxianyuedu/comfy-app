@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * 取当前选区（浏览器里是 `window.getSelection()`）。
  *

@@ -4,8 +4,8 @@ import { compareText } from "~/lib/ordered-set";
 import { displayValue } from "~/lib/display-value";
 
 // ── 工作室模型库：配置层（规范 17 §17.2 第①层）──────────────────────────────
-// 行类型、纯派生（筛选 / 计数 / 体积格式化）。原先这些逻辑夹在 ModelLibrary.tsx
-// 的 538 行里与 tRPC hook 混写；抽出来后可脱离 React 直接断言。
+// 行类型、纯派生（筛选 / 计数 / 体积格式化）——与 tRPC hook 分开，
+// 可脱离 React 直接断言。
 
 export interface ModelRow {
   id: string;

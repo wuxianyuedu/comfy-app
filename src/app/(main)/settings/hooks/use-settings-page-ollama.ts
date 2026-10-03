@@ -17,10 +17,9 @@
  * baseUrl 与 provider 是否本地由主 hook 从 llmDraft 里取出后传入；sub-hook
  * 不碰 llmDraft 的编辑与持久化——那是主 hook 的边界。
  *
- * 拆分动机：主 hook 曾 900+ 行；Ollama 这一整块与 Comfy / DbStudio **不
- * 共享 state**（三条服务各自的 status/start/stop 都是独立的），是天然第三块
- * 可拆单元。返回形状与主 hook 原控制器逐字段一致，视图与测试都不感知——
- * §12.18 复用优先。
+ * Ollama 这一整块与 Comfy / DbStudio **不共享 state**（三条服务各自的
+ * status/start/stop 都是独立的）。返回形状与主 hook 控制器逐字段一致，
+ * 视图与测试都不感知——§12.18 复用优先。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";

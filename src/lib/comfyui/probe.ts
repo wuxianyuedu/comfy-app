@@ -2,11 +2,11 @@
  * `probe.ts` — 单点可达性探测（执行链/状态判定的**叶子**模块）
  * ===========================================================================
  *
- * 从 `client.ts` 抽出的两个「只发一次请求、不碰会话缓存」的探测单元：
+ * 两个「只发一次请求、不碰会话缓存」的探测单元：
  *   - {@link probeComfyAtPort}  探一个**已知**端口（不做进程表查询 / 端口扫描）
  *   - {@link probeBaseOnce}     对给定地址各发一次 `/system_stats`
  *
- * 抽出的理由是**断环**（规范 12.7）：`status.ts`（状态判定）需要
+ * 本层必须留在叶子的理由是**断环**（规范 12.7）：`status.ts`（状态判定）需要
  * `probeComfyAtPort`，而 `client.ts` 又需要 `instance-port.ts` 的
  * `baseForLocalPort` / `queryInstanceByPath`，`instance-port.ts` 需要
  * `status.ts` 的注册表读取 —— 三方成环。把「零依赖（只有 fetch + 地址拼接）」

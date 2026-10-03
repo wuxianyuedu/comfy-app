@@ -1,6 +1,5 @@
 "use client";
-/* 从 FlowNode（workflow-node.tsx）抽出的输入 / 输出行计算。
- * 从 1276 行的 FlowNode 组件里拆出来，让渲染器只编排布局，
+/* FlowNode 的输入 / 输出行计算：渲染器只编排布局，
  * 条目分桶逻辑归这个 hook 管。 */
 import { useMemo } from "react";
 import { inferOutputTypeAll } from "../workflow-utils";

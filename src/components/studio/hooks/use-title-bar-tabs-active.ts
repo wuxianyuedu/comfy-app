@@ -4,9 +4,10 @@
 // 判据本体在 `~/lib/shell/title-bar-derive`（`shouldUseTitleBarTabs`），这里只解决
 // 「客户端探测怎么接进 React」。
 //
-// 为什么要抽出来：这个答案有两个消费点 —— `ShellTabs` 决定要不要渲染标题行页签栏，
-// `AppShell` 决定要不要在内容列里渲染视图页签栏。两处各写一遍 `useSyncExternalStore`
-// 探测，就会出现「壳里两条栏、浏览器里零条栏」这种两边单独看都自洽的错。
+// 这个答案有两个消费点 —— `ShellTabs` 决定要不要渲染标题行页签栏，
+// `AppShell` 决定要不要在内容列里渲染视图页签栏。两处各写一遍
+// `useSyncExternalStore` 探测，就会出现「壳里两条栏、浏览器里零条栏」这种
+// 两边单独看都自洽的错。
 
 import { useSyncExternalStore } from "react";
 

@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * canvas-render-chain — 项目画布（ProjectCanvas + canvas/*）的「渲染链路模块」规则。
  *

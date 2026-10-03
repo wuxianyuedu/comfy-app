@@ -8,10 +8,9 @@
  * 增删改即时落库（无需再点保存按钮，经注入的 `persistLlmDraft`），失败时
  * 提示条给出可读错误；连通性 / 实际调用测试走服务端代理（apiKey 不直接打远端）。
  *
- * 拆分动机：主 hook 870+ 行；这一块只依赖「当前 llm 草稿 + 草稿编辑 +
- * 持久化」三样（经参数注入），与 ComfyUI / DbStudio / Ollama 无任何共享
- * state，是天然的可拆单元。返回形状与主 hook 原 controller 逐字段一致，
- * 视图与测试都不感知——§12.18 复用优先。
+ * 这一块只依赖「当前 llm 草稿 + 草稿编辑 + 持久化」三样（经参数注入），
+ * 与 ComfyUI / DbStudio / Ollama 无任何共享 state。返回形状与主 hook
+ * controller 逐字段一致，视图与测试都不感知——§12.18 复用优先。
  */
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 

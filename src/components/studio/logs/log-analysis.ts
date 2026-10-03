@@ -1,7 +1,7 @@
 /**
  * 日志面板的**采集 / 解析 / 过滤**纯函数（`log-store` 的拆分件）。
  *
- * 从 `log-store.ts` 抽出：`serialize`、`captureLocation` 一族噪音判据
+ * 这里放 `serialize`、`captureLocation` 一族噪音判据
  * （`isReactQueryLog`、`isNoisyFrameworkLog`、`isNextDevNoise`、
  * `isRoutineRpcTimingLog`、`isRoutineRpcTimingLine`、
  * `isPanelSelfPollingLine`）→ 文件行解析（`parseFileLogs`）→ 时间线合并、
@@ -11,10 +11,9 @@
  * 的 re-export 使用同一批符号，import 路径不变（§12.18 复用优先——
  * 拆包只挪文件、不动契约）。
  *
- * 拆分动机：`log-store.ts` 1557 行超过 §12.6 文件长度棘轮的阈值；这一层的函数**不吃
- * store state、也不写它**，是天然的叶子，让 store 只留「状态 + actions +
- * selector」。方向：本文件 → `log-types`（类型）+ 外部 lib；store → 本文件，
- * 无回环。
+ * 这一层的函数**不吃 store state、也不写它**，是天然的叶子，让 store 只留
+ * 「状态 + actions + selector」。方向：本文件 → `log-types`（类型）+ 外部 lib；
+ * store → 本文件，无回环。
  */
 import { upperToken } from "~/lib/upper-token";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
