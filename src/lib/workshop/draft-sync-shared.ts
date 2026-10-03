@@ -15,7 +15,15 @@ export interface WorkshopDraftDto {
   shots: Shot[];
 }
 
-/** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。 */
+/** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。
+ *
+ * 三类**元素**是刻意原样留着的（`as Character[]` 那一档）：这条路径读的是用户自己的
+ * 草稿，认不出就丢掉等于静默删数据。代价是类型在这里被叫停，所以「哪些元素形状
+ * 不认识」由 `~/lib/workshop/draft-integrity` 的 `auditDraftElements` 在读的那一侧
+ * 判出来（服务端镜像与浏览器缓存两扇门共用一份判据），界面上的出口在
+ * `~/components/workshop/DraftIntegrityHint`（台账 F13″）。
+ * 新增第三种元素或给现有元素加**必填**字段时，判据表要同步 —— 漏判的那一类会
+ * 继续静默流到 prompt 拼装与 React key 那里。 */
 export function parseDraftDto(raw: unknown): WorkshopDraftDto {
   const obj = asRecord(raw) ?? {};
   const meta = asRecord(obj.meta) ?? {};

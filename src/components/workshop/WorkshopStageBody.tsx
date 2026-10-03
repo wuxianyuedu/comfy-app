@@ -17,6 +17,7 @@ import { markdownToHtml } from "~/lib/markdown";
 import type { WorkshopPipelineController } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { SCROLLBAR_VISIBLE_CLASSES } from "~/components/workshop/ScriptMarkdownEditor.parts";
 import { StageHint } from "~/components/workshop/StageHint";
+import { DraftIntegrityHint } from "~/components/workshop/DraftIntegrityHint";
 import { STAGE_DEFS } from "~/components/workshop/stage-config";
 
 // ── 各 stage 组件按需懒加载（named-export → default 包装）──
@@ -103,6 +104,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     characterPortraitActions,
     isScriptEditorOpen,
     notice,
+    integrity,
     rendered,
     generateShot,
     openScriptEditor,
@@ -167,6 +169,11 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           </Button>
         </div>
       )}
+
+      {/* 草稿里有「读不懂但仍要留着」的元素时常驻这一条（台账 F13″）：
+       *  它不进 `notice` 那条通道 —— 那条是「刚发生了什么事」（新提示整条替换旧提示、
+       *  可关闭），而这是**数据的当前状态**，关掉就等于把脏数据藏回地毯下。 */}
+      <DraftIntegrityHint issues={integrity} onGoTo={setTab} />
 
       {/* ── Tab: Script ── */}
       {tab === "script" && (
