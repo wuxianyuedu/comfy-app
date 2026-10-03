@@ -203,6 +203,7 @@ export function AgentOverlay({
             {toolRuns.map((run) => (
               <div key={run.id} className="flex items-center gap-2">
                 <span
+                  data-slot="agent-tool-status-dot"
                   className={`size-1.5 shrink-0 rounded-full ${TOOL_STATUS_COLOR[run.status]}`}
                   style={
                     run.status === "running"

@@ -441,11 +441,11 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 规范 06 §6.7 要求：**所有 `transition` / `animation` 必须有 `prefers-reduced-motion` 降级**；滑入抽屉 200–300ms、不超过 500ms。唯一登记的刻意例外是 AutoAnimate 条目级过渡（`disrespectUserMotionPreference: true`，250ms ease-out，只动 `transform`/`opacity`）。
 
-> ⚠️ 实测本仓库 `src/`、`public/`、`.storybook/` 里 `prefers-reduced-motion` 出现 **0 次**，而 `src/**` 有 **125 行** `transition-*`（其中**只有 13 行**带显式 `duration`，其余 112 行走 Tailwind 默认的 150ms）。这是规范与实现之间的真实缺口，不是笔误——见 Known Gaps。
+> ✅ **已落地（2026-10-03，签字：三档分治）**：`globals.css` 末尾的 `@media (prefers-reduced-motion: reduce)` 块按三档处理——① 7 处循环全部停掉、② 2 处大位移归零位移只留淡入、③ 短程 hover/focus **刻意豁免**。§6.7 的条文同步收窄成这三档（不再写「所有 transition/animation」那种实测做不到的话）。执行者 = `tests/reduced-motion-tiers.test.ts`（在 pre-commit 的 C 组固定清单里），它兼管「组件改了 `data-slot` 名字而降级块仍指旧名」那一类不报错的失效。
 >
-> ⚠️ **同批量到的另一条独立违规**：`src/**` 里有 **8 处动画挂在 layout 属性上**（`ui/progress.tsx:48`、`ui/sidebar.tsx:271/283/462/561`、`ui/navigation-menu.tsx:118/124`、`canvas/RgthreeBodies.tsx:104`），违反规范 02 §2.7「动画只用 transform/opacity，不动画 layout 属性」。它**与 reduced-motion 无关**，别混成一刀。
+> 两处**必须**带 `!important`，不是风格问题：`ui/progress-bar.tsx` 的不确定条与 `workshop/AgentOverlay.tsx` 的运行中圆点都是**内联 `style={{ animation: … }}`**，行内样式压过层外一切规则——不加就是「系统开了减弱动态而这两块照转」，且没有任何东西会报。
 >
-> 真·无限循环动画实测只有 **7 处 / 6 文件**（`ui/spinner.tsx:11`、`ui/sonner.tsx:25`、`ui/skeleton.tsx:7`、`ui/status-dot.tsx:55`、`ui/progress-bar.tsx:140` 的 `progressStripe`、`ui/water-fill-progress.tsx:57` 的 `wf-wave`，另加 `workshop/AgentOverlay.tsx:209` 一处内联 `pulse infinite`）——那才是晕动症的真实来源。**注意 `animate-spin` / `animate-pulse` 各有 4 处文本命中、其中 2 处在注释里**，按 grep 计数会翻倍。
+> ⚠️ **另记一笔不属于本条的账**：实测有 **8 处动画挂在 layout 属性上**（`ui/progress.tsx:48`、`ui/sidebar.tsx:271/283/462/561`、`ui/navigation-menu.tsx:118/124`、`canvas/RgthreeBodies.tsx:104`），违反规范 02 §2.7「动画只用 transform/opacity，不动画 layout 属性」。它**与 reduced-motion 无关**，签字口径明确要求**另开一刀**，别混修。
 
 ---
 
@@ -558,7 +558,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - **随签要定的接缝**：只删那 4 行的话，刻度会变成 `8 / 12 / 16 / 20` 接 **21.6 / 26.4 / 31.2**（后三档仍来自 calc），`xl → 2xl` 只差 **1.6px**、肉眼几乎不分档，而 `rounded-2xl` 有 **73 处**真实消费者。要么把前段的 +4px 线性延伸成 `24 / 28 / 32`，要么明确接受这个接缝。
 - **决策人**：设计/规范 owner。本文件 frontmatter 的 `rounded` 刻度按**①（实测生效值）**写，即 `lg = 12px`。
 
-### 冲突 2：规范 06 §6.7 的 reduced-motion 硬要求，实现里是 0
+### 冲突 2 → 已收口：规范 06 §6.7 的 reduced-motion 硬要求，实现里曾经是 0
 
 - 规范：「所有 `transition` / `animation` 必须有 `prefers-reduced-motion` 降级」，唯一例外是 AutoAnimate。
 - 实测：`src/`、`public/`、`.storybook/` 里 `prefers-reduced-motion` **0 次**；`src/**` 有 **125 行** `transition-*`（仅 13 行带显式时长），真·infinite 循环 **7 处 / 6 文件**，整屏级滑入只有 `ui/sheet.tsx:66` 一处。
