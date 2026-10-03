@@ -4,10 +4,9 @@
  * TaskLogTimeline —— 任务执行日志的「时间线主体」：级别筛选页签（带计数）+
  * 自动滚动 + 虚拟滚动列表 + 底部计数条。
  *
- * 为什么抽出来：这套主体原先在 `workflow-library/WorkflowRunLogModal` 与
- * `project-canvas/GlobalStepLogPanel` 各有一份逐行雷同的实现（与 GlobalStepLogPanel
- * 的差异只在配色档与行渲染器），队列页要再加第三份 —— 按 §12.12 的修法收成
- * 共享组件让各处只留差异，而不是抄第三遍。
+ * 这套主体在 `workflow-library/WorkflowRunLogModal` 与
+ * `project-canvas/GlobalStepLogPanel` 之间只差配色档与行渲染器，队列页还要
+ * 再加第三份 —— 按 §12.12 收成共享组件让各处只留差异，而不是抄第三遍。
  *
  * 形态约定（消费方各自负责的部分）：
  *   · 头部（标题 / 状态徽标 / 取消 / 查看完整输出 / 加宽 / 关闭）与弹窗外壳

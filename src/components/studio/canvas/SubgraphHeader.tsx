@@ -1,7 +1,6 @@
 "use client";
 
-/* 抽出的 SubgraphHeader —— ComfyUI 子图包裹节点的紫色身份标题栏
- *（原本内联在 WorkflowSubgraphNode 里）。
+/* ComfyUI 子图包裹节点的紫色身份标题栏：
  * 收起箭头 + 「S」徽标 + 下钻动作 + IO 编辑复选框 +
  * 节点 id 章。与普通 WorkflowNode 头部同一个 NODE_TITLE_H，
  * 好让带标题的节点在网格上对齐。 */

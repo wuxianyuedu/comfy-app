@@ -3,14 +3,13 @@
 /**
  * 日志面板的「来源筛选下拉」子树（`LogPanel` 的拆分件）。
  *
- * 从 `LogPanel.tsx` 抽出：`OriginSelect` 组件 + 它私有的 `CountColumn` /
- * `asOriginFilter` / `ORIGIN_COLUMNS` / `ORIGIN_LABELS`，以及对外共享的
- * `ORIGIN_TEXT`（页脚与标题徽标也用同一份来源文案）与 `levelSummary` /
- * `optionCountsText` 两个摘要函数。
+ * 这里放 `OriginSelect` 组件 + 它私有的 `CountColumn` / `asOriginFilter` /
+ * `ORIGIN_COLUMNS` / `ORIGIN_LABELS`，以及对外共享的 `ORIGIN_TEXT`（页脚与
+ * 标题徽标也用同一份来源文案）与 `levelSummary` / `optionCountsText` 两个
+ * 摘要函数。
  *
- * 拆分动机：`LogPanel.tsx` 992 行超过 §12.6 文件长度棘轮的阈值，而这块
- * 「来源下拉的排版与文案」与主组件里的虚拟滚动 / 事件处理**没有共享状态**、
- * 只是一次性拿 `value` + `countsByOrigin` 渲染，天然适合拆出去。主组件从
+ * 这块「来源下拉的排版与文案」与主组件里的虚拟滚动 / 事件处理**没有共享
+ * 状态**、只是一次性拿 `value` + `countsByOrigin` 渲染。主组件从
  * `./LogPanelOriginSelect` import `OriginSelect` 与 `ORIGIN_TEXT`；对外语义
  * 不变（消费者仍是 `~/components/studio/logs/LogPanel`）。
  */

@@ -9,10 +9,9 @@
  * （规范 16 §16.2.4.69）：读 `busy` state 是同一次事件循环里判不出的
  * （setState 是异步落状态的），「检测中」点「安装」会并发发出去。
  *
- * 拆分动机：主 hook `useSettingsPage` 曾 900+ 行，把这一整块自更新的 state
- * 与动作沉出去，主 hook 只留「组合 controller」这一层。返回形状与主 hook
- * 之前的 `appUpdate` 对象逐字段一致，控制器与视图不感知——§12.18 复用优先，
- * 拆包只挪文件、不动契约。
+ * 主 hook 只留「组合 controller」这一层，本件承担自更新的 state 与动作。
+ * 返回形状与主 hook 的 `appUpdate` 对象逐字段一致，控制器与视图不感知
+ * ——§12.18 复用优先，拆包只挪文件、不动契约。
  */
 import { useCallback, useState } from "react";
 import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";

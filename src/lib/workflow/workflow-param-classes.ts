@@ -1,7 +1,7 @@
 /**
  * 对外参数分类与 pin 判定（`workflow-param-mapping` 的拆分件）。
  *
- * 从 `workflow-param-mapping.ts` 抽出：**分类模型**（`ParamClass`、
+ * 这里是**分类模型**（`ParamClass`、
  * `PinFamily`、`SIZE_CLASSES`、`SIZE_SUB_IDS`、`ParamEntry`、
  * `ParamOutputPort`）与**判定 / 展示**类纯函数（`nodeIdOfIoKey`、
  * `sizeSubLabel`、`sizeGroupIds`、`pinFamily`、`familyOfClass`、
@@ -13,10 +13,9 @@
  * `applyParamMapping` 运行时落值、卡片布局常量），并从本模块 re-export 上述
  * 符号；消费者 import 路径不变（§12.18 复用优先）。
  *
- * 拆分动机：主文件 1098 行超过 §12.6 文件长度棘轮的阈值。分类模型是**映射**与
- * **UI** 都要用的叶子层，独立出去后主 → 本模块单向、无回环，也顺手让
- * 「参数分类」这件事有一份显式的 owner（画布卡片、wire 流、封装状态都从这里
- * 取，不再各写各的）。
+ * 分类模型是**映射**与 **UI** 都要用的叶子层，独立成件后主 → 本模块单向、
+ * 无回环，也让「参数分类」这件事有一份显式的 owner（画布卡片、wire 流、封装
+ * 状态都从这里取，不再各写各的）。
  */
 import { upperToken } from "~/lib/upper-token";
 import type {

@@ -1,7 +1,6 @@
 "use client";
 /* Widget 输入区 —— 只有旋钮（每个条目都带一个 widgets_values
- * 槽位）。从 workflow-node.tsx 抽出。纯连接端口
- * 住在 FlowNodePinRows；本区渲染标量 / 对象输入
+ * 槽位）。纯连接端口住在 FlowNodePinRows；本区渲染标量 / 对象输入
  * 及其取值，含 STRING 多行 textarea。 */
 import { Handle, Position } from "@xyflow/react";
 import { portColor, inferInputType } from "~/lib/comfyui/types";

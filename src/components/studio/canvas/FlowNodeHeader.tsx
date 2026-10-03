@@ -1,5 +1,5 @@
 "use client";
-/* FlowNode 头部栏 —— 从 workflow-node.tsx 抽出。
+/* FlowNode 头部栏：
  * 收起开关 + 状态圆点 + 标题 + 按节点 IO 复选框 + #id 章
  * + 角色徽标。与 ComfyUI 标题栏一样钉在 NODE_TITLE_H。 */
 import { colorToRgba, NODE_TITLE_H } from "../workflow-utils";

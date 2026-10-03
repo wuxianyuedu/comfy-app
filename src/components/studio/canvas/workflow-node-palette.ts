@@ -1,7 +1,5 @@
-"use client";
-/* 从 workflow-node.tsx 抽出的 FlowNode 配色计算。
- * 纯函数：节点模式（LiteGraph 0/2/4）+ 指定角色 → 卡片颜色。
- * 行为与拆分前内联的常量完全一致，只是**底色**改成了随主题。 */
+/* FlowNode 配色计算 —— 纯函数：节点模式（LiteGraph 0/2/4）+
+ * 指定角色 → 卡片颜色。底色随主题，不再写死深色 hex。 */
 import { mixHex, hexToRgba, lightenHex } from "../workflow-utils";
 import type { WorkflowNodeData } from "../workflow-types";
 

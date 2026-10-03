@@ -1,17 +1,12 @@
 "use client";
 /* ════════════════════════════════════════════════════════════════════════
- *  wf-contexts.tsx — 消费方组件 + 兼容再导出（P2：Context → Zustand）
+ *  wf-contexts.tsx — 消费方组件 + 兼容再导出（Context → Zustand）
  * ────────────────────────────────────────────────────────────────────────
- *  原先这文件承载 3 个 React Context（IOEditContext / RgthreeGroupsContext /
- *  NodeJsonViewerContext）、对应的 Provider、节点 JSON 弹层（NodeJsonPopover）
- *  以及 IoCheckbox / NodeIdChip。
- *
- *  P2 迁移后：
- *   • 状态与动作收进 `wf-stores.ts`（createStore 工厂 + WFStoresContext 载体）。
- *   • NodeJsonPopover 抽到 `wf-node-json-popover.tsx`（打破循环依赖）。
- *   • 本文件保留可复用的消费型组件 IoCheckbox / NodeIdChip（改为经 store hook
- *     读取），并向上再导出 store 的 hook / 选择器 / Provider，让 wf-node /
- *     wf-subgraph-node 等消费方从同一文件取「io 风格」API，改动最小。
+ *  状态与动作住在 `wf-stores.ts`（createStore 工厂 + WFStoresContext 载体），
+ *  节点 JSON 弹层住在 `wf-node-json-popover.tsx`。本文件只保留可复用的消费型
+ *  组件 IoCheckbox / NodeIdChip（经 store hook 读取），并向上再导出 store 的
+ *  hook / 选择器 / Provider，让 wf-node / wf-subgraph-node 等消费方从同一文件
+ *  取「io 风格」API。
  * ════════════════════════════════════════════════════════════════════════ */
 import React from "react";
 import type { IoRef } from "../workflow-types";

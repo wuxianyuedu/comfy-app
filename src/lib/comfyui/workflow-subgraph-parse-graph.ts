@@ -1,17 +1,17 @@
 /**
  * 子图（内层工作流）解析：哨兵边、槽位与 API 图构建（`workflow-subgraph-parse` 的拆分件）。
  *
- * 从 `workflow-subgraph-parse.ts` 抽出：`buildSubgraphGraph`（约 365 行）与它
+ * 本件承担 `buildSubgraphGraph`（约 365 行）与它
  * 私有依赖的 `LOAD_IMAGE_NODE_TYPES` 常量、`resolveInputSlots` / `slotNameAt`
- * 两个 helper，以及一起搬来的**边界事实采集**层（`boundarySlotsByNode` /
+ * 两个 helper，以及**边界事实采集**层（`boundarySlotsByNode` /
  * `parseSubgraphLinks` / `parseSubgraphSlots` 与两个共享 interface
  * `SubgraphLinkEntry` / `BoundaryLinkInfo` / `SubgraphGraphResult`）。
  * 主文件保留边界 pin 解析与注释采集（`parseSubgraphPins` / `buildBoundaryLinks` /
  * `reportDroppedBoundaryLinks` / `runtimeInnerId` / `extractSubgraphAnnotations`），
  * 并从本模块 re-export 上述符号；消费者 import 路径不变。
  *
- * 拆分动机：主文件超过 §12.6 文件长度棘轮的阈值（900 行），`buildSubgraphGraph`
- * 是子图侧最大的函数；把它单拎出来同时缓解文件长度、保持函数体量不变。
+ * `buildSubgraphGraph` 是子图侧最大的函数，把它单拎出来同时缓解文件长度、
+ * 保持函数体量不变。
  * 依赖方向：main → 本模块 → 外部（raw / types / detail-raw 类型），
  * 单向、无回环；§12.7 的 `check-circular-deps` 不看 `import type` 是不是类型层，
  * 因此让 `BoundaryLinkInfo` 与 `SubgraphLinkEntry` 都住在本模块，主文件用

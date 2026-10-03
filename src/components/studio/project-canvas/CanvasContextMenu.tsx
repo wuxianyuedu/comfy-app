@@ -1,7 +1,6 @@
 "use client";
 
-/** 从 ProjectCanvas 抽出的右键上下文菜单（ISSUE #672 / 规范 16 §16.2.4.6
- *  第一档：接 `ui/dropdown-menu`）。
+/** 画布的右键上下文菜单（规范 16 §16.2.4.6 第一档：接 `ui/dropdown-menu`）。
  *
  *  此前是自绘外壳：一层 `fixed` 手定位面板 + 一层自绘遮罩负责关闭，Esc /
  *  方向键 / `role="menu"` 全都没有。现在这些语义由 base-ui 的 `Menu` 给，

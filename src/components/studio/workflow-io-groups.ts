@@ -1,7 +1,7 @@
 /**
  * 工作流 IO 的**分组与预设**（`workflow-io.ts` 的拆分件）。
  *
- * 从主模块抽出 DimensionGroup / VideoGroup 推断、尺寸与视频预设表、
+ * DimensionGroup / VideoGroup 推断、尺寸与视频预设表、
  * `parseRatioFromLabel` / `dimsForRatio` / `pickClarityPreset` 等与「具体
  * 某条对外参数」无关的**表现层聚合规则**。主模块保留 IO 模型与逐条推断
  * （`splitWorkflowIO` / `defaultInputValues` / `reconcileInputValues` /
@@ -12,7 +12,6 @@
  * 依赖方向：本文件 → `./workflow-io-controls`（ControlKind 叶子）、
  * `./workflow-io-keywords`（isDimX / isVideoX 判据）、外部 lib
  * （size-presets / workflow-io-types）。**不**回指主模块，§12.7 单向。
- * 拆分动机：主文件 1060 行超过 §12.6 文件长度棘轮的阈值。
  */
 import {
   CLARITY_SUBGROUP_LABELS,

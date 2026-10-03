@@ -10,9 +10,8 @@
  * 两者都是刚保存的 `comfyuiPath` 的函数，必须在同一次保存里重取，否则界面上
  * 留着改路径之前的旧结论）。
  *
- * 拆分动机（规范 §12.13 函数长度棘轮）：主 hook 的 `useSettingsPage` 已逼近 400
- * 行上限，而这一块是自洽的「保存」职责 —— 只依赖两份草稿、保存指示器、反馈通道
- * 与四个 tRPC 实例，与 ComfyUI / DbStudio / Ollama 的运行态没有共享 state。
+ * 这一块是自洽的「保存」职责 —— 只依赖两份草稿、保存指示器、反馈通道与
+ * 四个 tRPC 实例，与 ComfyUI / DbStudio / Ollama 的运行态没有共享 state。
  * 对外形状逐字段不变（`persistLlmDraft` / `saveLlm` / `savePrefs` 原样透出）。
  */
 import { useCallback } from "react";

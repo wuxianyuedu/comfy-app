@@ -1,8 +1,8 @@
 /**
  * WorkflowLibrary 的纯类型与派生规则（规范 17 §17.2 第①层）。
  *
- * 从 WorkflowLibraryHelpers.tsx 抽出：无 React、无副作用，可直接单测。
- * 视图 / hook 一律从这里取类型与派生，不再各自重算一遍。
+ * 无 React、无副作用，可直接单测；视图 / hook 一律从这里取类型与派生，
+ * 不再各自重算一遍。
  */
 
 import type { WorkflowPreview as WorkflowPreviewT } from "~/lib/comfyui/workflow";

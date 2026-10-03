@@ -1,6 +1,6 @@
 // ── 历史记录列表：派生计算（规范 17 §17.2 第①层：纯函数，无 React）──────────
-// 筛选 / 排序 / 状态计数 / 日期分组 / 分页裁剪，原内联在 HistoryList 组件里，
-// 抽出后可直接单测——这五条规则是「历史记录怎么看」的全部业务。
+// 筛选 / 排序 / 状态计数 / 日期分组 / 分页裁剪——纯函数、可直接单测，
+// 这五条规则是「历史记录怎么看」的全部业务。
 
 import type { FilterKey, SortKey, TaskItem } from "./history-types";
 import { dateBucket } from "./history-utils";

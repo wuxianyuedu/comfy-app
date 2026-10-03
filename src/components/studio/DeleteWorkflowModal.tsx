@@ -1,6 +1,6 @@
 "use client";
 
-/** 从 WorkflowLibrary 的删除确认弹窗抽出。
+/** 工作流库的删除确认弹窗。
  *
  *  此前这里自绘遮罩 + 手写 Esc 的 keydown 监听 + 手搓 danger 图标按钮排布 ——
  *  而 `ui/confirm-dialog` 就是同一件事（圆角卡片、危险色调、确认/取消双按钮、

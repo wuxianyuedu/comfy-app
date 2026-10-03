@@ -1,8 +1,8 @@
 /* ── ComfyUI 启动编排（ISSUE #570 第 1~3 项）──────────────────────────
  *
- * 从 `lifecycle.ts` 拆出的「拉起 + 等待就绪」：`ensureComfyUiReady` 原先是一个
- * 405 行函数，内含 288 行 IIFE 与三个不可测回调。这里保留**机制**，
- * `lifecycle.ts` 只留「取事实 → 判决 → 交付」。
+ * 「拉起 + 等待就绪」的**机制**层：`ensureComfyUiReady` 含一个长 IIFE 与三个
+ * 不可测回调，全塞在一处会既读不动也测不了。这里保留机制，`lifecycle.ts`
+ * 只留「取事实 → 判决 → 交付」。
  *
  * 两条路径（keepAlive / bound）共用 `waitForComfyReady` 的策略注入等待循环：
  * 差别只在探测方式与判死方式，循环体与超时文案只有一份。

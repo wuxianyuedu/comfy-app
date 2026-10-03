@@ -1,5 +1,4 @@
 "use client";
-/* 拆出来的毛玻璃 / 覆盖层组件 —— 原本在 WorkflowCanvasEditor.tsx 里。 */
 import { Z } from "~/lib/shell/overlay-z";
 import { useStore } from "@xyflow/react";
 import { pseudoFrostPalette, hexToRgba } from "../workflow-utils";

@@ -2,8 +2,8 @@
  * `executor.ts` — ComfyUI 执行引擎（barrel 聚合）
  * ===========================================================================
  *
- * batch 4：原 1384 行单文件按职责拆为以下模块，本文件只做聚合与
- * 兼容 re-export，公开 API 与拆分前完全一致，引用方零改动：
+ * 执行链按职责分在以下模块，本文件只做聚合与兼容 re-export
+ *（公开 API 稳定，引用方不必关心各模块的边界）：
  *
  *   • executor-ws.ts        — WS 连接 / 消息分发 / 看门狗（通道层）
  *   • executor-finalize.ts  — complete / fail / finalizeFailure（终态收口层）
