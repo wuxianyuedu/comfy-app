@@ -77,10 +77,15 @@ node scripts/tw4-spacing-canonical.mjs --write
 
 # 全量 canonical 汇总(更名/别名/遗留类,与编辑器 suggestCanonicalClasses 同源:
 # 直接问 design system 的 canonicalizeCandidates「有没有另一种写法生成相同 CSS」)。
-# 与上面那个互补:那条管"任意值↔spacing",这条管 "!x / break-words / flex-shrink /
-# overflow-ellipsis / bg-gradient-to-*" 等。约 10s 扫完 src,默认只读:
+# 与上面那个互补:那条管"任意值↔spacing",这条管 "!x / break-words / data-[x]: /
+# has-[:x]: / flex-shrink / translate-y-[-1px] / aspect-[4/3] / bg-gradient-to-*" 等。
+# 约 15s 扫完 src,默认只读。两类文件它不动:--write 跳过 .snap(排序会变,只能
+# vitest -u 重生成)与 *.test.*(里面的类名多是断言样本,负样本改了会把判据改坏,
+# 报告里单列出来由人判断;确认要同步再加 --with-tests)。没有同名测试文件的
+# 孤儿快照永远跳过——任何用例都不会校验它。
 node scripts/tw4-canonical-report.mjs
-node scripts/tw4-canonical-report.mjs --write   # 落盘(快照仍需 vitest -u)
+node scripts/tw4-canonical-report.mjs --write       # 落盘(快照仍需 vitest -u)
+node scripts/tw4-canonical-report.mjs --with-tests # 连测试文件一起改(自己先看清)
 
 # 检查自定义工具类(如 u-title)是否真的存在于 globals.css,防止拼错类名静默失效
 grep -n "u-title" src/app/globals.css

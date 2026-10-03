@@ -107,7 +107,7 @@ export function ResourceLibrary() {
               <Hint key={scope.id} label={scope.hint} wrap>
                 <ToggleGroupItem
                   value={scope.id}
-                  className="text-ink-muted hover:text-ink-soft data-[pressed]:text-ink-bright after:bg-primary relative h-auto gap-1.5 rounded-none px-0 pb-2.5 text-[13px] font-medium after:absolute after:inset-x-0 after:bottom-[-13px] after:h-0.5 after:opacity-0 after:transition-opacity after:content-[''] data-[pressed]:bg-transparent data-[pressed]:after:opacity-100"
+                  className="text-ink-muted hover:text-ink-soft data-pressed:text-ink-bright after:bg-primary relative h-auto gap-1.5 rounded-none px-0 pb-2.5 text-[13px] font-medium after:absolute after:inset-x-0 after:bottom-[-13px] after:h-0.5 after:opacity-0 after:transition-opacity after:content-[''] data-pressed:bg-transparent data-pressed:after:opacity-100"
                 >
                   {scope.label}
                   {library.scope === scope.id && c.totalCount > 0 ? (

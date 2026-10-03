@@ -106,7 +106,7 @@ export function OptionListPopover({
           aria-hidden
           className={cn(
             "text-ink-icon shrink-0 transition-transform",
-            "group-data-[popup-open]/popover-trigger:rotate-180",
+            "group-data-popup-open/popover-trigger:rotate-180",
           )}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >

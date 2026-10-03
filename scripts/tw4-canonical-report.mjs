@@ -36,14 +36,19 @@ const SRC = path.join(ROOT, "src");
 const argv = process.argv.slice(2);
 const asJson = argv.includes("--json");
 const shouldWrite = argv.includes("--write");
+const withTests = argv.includes("--with-tests");
 const explicit = argv.filter((a) => !a.startsWith("--"));
 
 /** 一批送进 canonicalize 的规模（首次调用要建全量 class list，约 10 秒，之后很快）。 */
 const BATCH = 800;
 /** 字符串字面量（普通串与模板串；模板串里的 `${…}` 作为普通片段保留）。 */
 const STRING_LITERAL = /(["'`])((?:\\[\s\S]|(?!\1)[^\\])*?)\1/g;
-/** 粗筛：像类名的 token 才值得问引擎（省掉把散文喂进去）。 */
-const MAYBE_CLASS = /^[a-zA-Z!@][\w-]*(?::[^\s:]+)*[!/\[\]().,%#-]*$/;
+/** 粗筛：像类名的 token 才值得问引擎（省掉把散文喂进去）。
+ *
+ *  注意别把字符类写窄：早先写成「尾部只允许 `! / [ ] ( ) . , % # -`」时，
+ * `translate-y-[-1px]` 这种**带单位的任意值**（尾部有 `px` 的字母）会被整条丢掉，
+ * 于是报告说 0 条、真机上编辑器却在提示。判据宁可宽、不可漏。 */
+const MAYBE_CLASS = /^[a-zA-Z!@][^\s"'`]*$/;
 
 function read(file) {
   return fs.readFileSync(file, "utf8");
@@ -81,6 +86,12 @@ function* walk(dir) {
   }
 }
 
+/** 测试文件：里面的类名多数是**断言样本**，而负样本改了就把判据改坏了 ——
+ *  真踩过：`parseZClass("z-[200]")` 本是「解析器不认任意值写法」的样本，被批量
+ *  改成 `z-200` 后，同一个文件里另一行又期望 `z-200` 被解析成 200，断言自相矛盾。
+ *  所以 `--write` 默认不碰测试文件（报告里单列），确认过要同步再加 `--with-tests`。 */
+const isTestFile = (file) => /\.(test|spec)\.tsx?$|__tests__[\\/]/.test(file);
+
 const files =
   explicit.length > 0
     ? explicit.map((f) => path.resolve(ROOT, f))
@@ -88,13 +99,22 @@ const files =
 
 /** token → 命中处 */
 const occurrences = new Map();
+/** 孤儿快照：没有同名测试文件，vitest 永远不会校验它（改了也没有用例兜底）。 */
+const orphanSnapshots = new Set();
 for (const file of files) {
   const isSnapshot = file.endsWith(".snap");
+  const isOrphan = isSnapshot && !fs.existsSync(file.replace(/\.snap$/, ""));
+  if (isOrphan) orphanSnapshots.add(file);
   for (const match of read(file).matchAll(STRING_LITERAL)) {
     for (const token of match[2].split(/\s+/)) {
       if (!token || !MAYBE_CLASS.test(token)) continue;
       const hits = occurrences.get(token) ?? [];
-      hits.push({ file, snapshot: isSnapshot });
+      hits.push({
+        file,
+        snapshot: isSnapshot,
+        orphan: isOrphan,
+        test: isTestFile(file),
+      });
       occurrences.set(token, hits);
     }
   }
@@ -124,17 +144,25 @@ for (const token of tokens) {
 console.error(
   `canonicalize 用时 ${Math.round((Date.now() - startedAt) / 1000)}s`,
 );
-/** 一条建议 = 一个 raw，连同它的命中处。 */
-const suggestions = [...canonical.entries()].map(([raw, to]) => {
-  const hits = occurrences.get(raw);
-  return {
+/** 一条建议 = 一个 raw，连同它的命中处（孤儿快照里的不算：无人校验，改了也没用例兜底）。 */
+let orphanHits = 0;
+const suggestions = [];
+for (const [raw, to] of canonical) {
+  const hits = occurrences.get(raw).filter((h) => !h.orphan);
+  orphanHits += occurrences.get(raw).length - hits.length;
+  if (hits.length === 0) continue;
+  const inTests = hits.filter((h) => h.test);
+  suggestions.push({
     raw,
     to,
-    count: hits.length,
+    count: hits.length - inTests.length,
+    inTests: inTests.length,
     snapshots: hits.filter((h) => h.snapshot).length,
     files: [...new Set(hits.map((h) => h.file))],
-  };
-});
+    sourceFiles: [...new Set(hits.filter((h) => !h.test).map((h) => h.file))],
+    testFiles: [...new Set(inTests.map((h) => h.file))],
+  });
+}
 
 if (shouldWrite) {
   /** 只动字符串字面量内、且整 token 相等的出现处。 */
@@ -156,13 +184,21 @@ if (shouldWrite) {
   };
   let changed = 0;
   const targets = new Set(
-    suggestions.flatMap((s) => s.files).filter((f) => !f.endsWith(".snap")),
+    suggestions
+      .flatMap((s) => (withTests ? s.files : s.sourceFiles))
+      .filter((f) => !f.endsWith(".snap")),
   );
   for (const file of targets) if (rewriteFile(file)) changed += 1;
   console.error(
     `已改写 ${changed} 个文件；快照（${suggestions.reduce((n, s) => n + s.snapshots, 0)} 处）` +
       "需另跑 vitest -u 重生成。",
   );
+  if (!withTests && suggestions.some((s) => s.inTests > 0)) {
+    console.error(
+      `测试文件里还有 ${suggestions.reduce((n, s) => n + s.inTests, 0)} 处未改` +
+        "（--with-tests 才写）：正样本要同步、负样本改了会把判据改坏，得人判断。",
+    );
+  }
 }
 
 if (asJson) {
@@ -172,12 +208,14 @@ if (asJson) {
         scannedFiles: files.length,
         candidates: tokens.length,
         suggestions: suggestions
-          .map(({ raw, to, count, snapshots, files: f }) => ({
-            raw,
-            to,
-            count,
-            snapshots,
-            files: f.map((x) => path.relative(ROOT, x)),
+          .map((s) => ({
+            raw: s.raw,
+            to: s.to,
+            count: s.count,
+            inTests: s.inTests,
+            snapshots: s.snapshots,
+            files: s.sourceFiles.map((x) => path.relative(ROOT, x)),
+            testFiles: s.testFiles.map((x) => path.relative(ROOT, x)),
           }))
           .sort((a, b) => b.count - a.count),
       },
@@ -187,16 +225,37 @@ if (asJson) {
   );
 } else {
   const sorted = [...suggestions].sort((a, b) => b.count - a.count);
-  const total = sorted.reduce((n, s) => n + s.count, 0);
+  const mainRows = sorted.filter((s) => s.count > 0);
+  const total = mainRows.reduce((n, s) => n + s.count, 0);
   console.log(
     `扫描 ${files.length} 个文件 / ${tokens.length} 个唯一候选 → ` +
-      `${sorted.length} 条 canonical 建议，共 ${total} 处\n`,
+      `${mainRows.length} 条 canonical 建议，共 ${total} 处\n`,
   );
-  for (const s of sorted) {
+  if (orphanSnapshots.size > 0) {
+    console.log(
+      `跳过孤儿快照 ${orphanSnapshots.size} 个（没有同名测试文件，任何用例都不会校验它，` +
+        `改它没有用例兜底）：${[...orphanSnapshots].map((f) => path.relative(ROOT, f)).join("、")}` +
+        ` —— 里面还有 ${orphanHits} 处\n`,
+    );
+  }
+  for (const s of mainRows) {
     console.log(
       `  ${String(s.count).padStart(4)} 处  ${s.raw}  →  ${s.to}` +
         (s.snapshots ? `（含快照 ${s.snapshots} 处）` : ""),
     );
+  }
+  const testRows = sorted.filter((s) => s.inTests > 0);
+  if (testRows.length > 0) {
+    console.log(
+      "\n测试文件里（--write 默认不改：正样本要同步、负样本改了会把判据改坏，得人判断）：",
+    );
+    for (const s of testRows) {
+      console.log(
+        `  ${String(s.inTests).padStart(4)} 处  ${s.raw}  →  ${s.to}`,
+      );
+      for (const f of s.testFiles)
+        console.log(`        ${path.relative(ROOT, f)}`);
+    }
   }
   console.log("\n按文件：");
   for (const s of sorted) {

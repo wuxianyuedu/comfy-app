@@ -102,7 +102,7 @@ export interface SegmentSection<T extends string = string> {
 
 /** 段内 ToggleGroup 的排布：跨子分组共享一个 `value`（互斥），
  *  每个子分组仍是「flex flex-wrap 横排、子分组间纵向堆叠」。
- *  ToggleGroup 默认 `flex w-fit flex-row items-center gap-[var(--gap)]`
+ *  ToggleGroup 默认 `flex w-fit flex-row items-center gap-(--gap)`
  *  与我们的多行子分组不匹配——用 `flex-col items-stretch gap-0`
  *  顶掉、由内层 subgroup div 各自管横排与间距。 */
 const SECTION_GROUP_CLASS = "flex w-full flex-col items-stretch gap-2";
@@ -116,7 +116,7 @@ const SECTION_GROUP_CLASS = "flex w-full flex-col items-stretch gap-2";
  *  消失，见 `@base-ui/react/toggle` 的 `ToggleDataAttributes`），由它取代旧
  *  的 `selected` 布尔类拼接。 */
 const ITEM_CLASS =
-  "nodrag nopan h-auto min-w-13 flex-col gap-1 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-[11px] font-normal text-ink-muted hover:bg-subtle hover:text-ink-bright data-[pressed]:bg-primary/20 data-[pressed]:text-ink-bright data-[pressed]:ring-1 data-[pressed]:ring-primary/55 data-[pressed]:hover:bg-primary/20";
+  "nodrag nopan h-auto min-w-13 flex-col gap-1 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-[11px] font-normal text-ink-muted hover:bg-subtle hover:text-ink-bright data-pressed:bg-primary/20 data-pressed:text-ink-bright data-pressed:ring-1 data-pressed:ring-primary/55 data-pressed:hover:bg-primary/20";
 
 export function MultiSegmentPopover({
   triggerContent,
