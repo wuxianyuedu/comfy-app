@@ -99,7 +99,9 @@ describe("详情头部：执行日志入口已下沉到各页签", () => {
   });
 
   it("画布节点页签有独立入口，且带 canvas-node 来源过滤", () => {
-    const src = read("WorkflowCanvasNodePreview.tsx");
+    /* 入口按钮随「实际使用」视图拆在 WorkflowPreviewUsePanel（全屏弹窗仍由
+     * WorkflowCanvasNodePreview 挂载）—— 两处同属画布节点页签。 */
+    const src = read("WorkflowPreviewUsePanel.tsx");
     expect(src).toContain("WorkflowRunLogButton");
     expect(src).toContain('source="canvas-node"');
   });
