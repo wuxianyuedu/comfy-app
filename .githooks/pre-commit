@@ -53,9 +53,11 @@ run_group() {
 # 换成 `content`（按内容哈希）后这类抖动不再失效，真实内容改动照常只失效自己那
 # 一条。缓存键含「文件内容 + 解析后的 config」，所以改 eslint.config.js 会自然
 # 失效；缓存放 node_modules/.cache/eslint（已被 gitignore 覆盖，不必登记忽略清单）。
-# ⚠️ 升级 eslint / typescript-eslint **之后**先删掉该缓存目录 —— 插件实现变更不在
-# 缓存键里（这是 --cache 的已知边界，不是本仓的判据问题）；换 cache-location 或
-# cache-strategy 也会导致一次全量重建，属预期。
+# ⚠️ 插件实现与**依赖**都不在缓存键里 —— 装完 / 升完东西，类型化规则会重放旧判决：
+# 假红会拦住每一次提交，假绿会把真违规洗掉（两边都实测到过，见
+# `scripts/invalidate-lint-cache.mjs` 文件头）。这一条现在由 `postinstall` 按
+# 「lockfile + 已装依赖 + tsconfig」的指纹自动失效，不再依赖人记得删目录；
+# 换 cache-location / cache-strategy 仍会导致一次全量重建，属预期。
 run_group A "tsc --noEmit" sh -c 'pnpm exec tsc --noEmit'
 run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm run lint'
 
