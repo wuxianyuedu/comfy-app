@@ -25,10 +25,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  killProcessTreeByImage,
+  killProcessTreeSync,
   killProcessTreeWith,
+  spawnTaskkill,
   windowsKillArgs,
   windowsTaskkillPath,
 } from "./kill-process-tree";
@@ -163,6 +166,82 @@ describe("Windows 分支真跑（注入同名可执行文件）", () => {
   });
 });
 
+/**
+ * 上面那组要真 spawn 得起来，所以在 Windows 上被跳过了（`.cmd` 不能直接起）。
+ * 但**命令本身**的判据不该跟着一起缺席 —— 这一组只看 `via` 里的命令行，
+ * 用 `node` 自己当命令名（它起得来、也立刻退出，只是参数不合它的口味）。
+ */
+describe("Windows 命令行在两端都判得到", () => {
+  it("mode:image 用的是调用方给的映像名，**不许把 pid 塞进 /IM**", async () => {
+    process.env.COMFYAPP_TASKKILL = process.execPath;
+    const result = await killProcessTreeWith(
+      { pid: 1, mode: "image" },
+      { windows: true, image: "ollama.exe" },
+    );
+    /* `/IM 1` 会去杀一个名字恰好叫「1」的映像：静默杀不到、也可能杀错。 */
+    expect(result.via).toContain("/IM ollama.exe /T /F");
+    expect(result.via).not.toContain("/IM 1");
+  });
+
+  it("命令以 0 退出时回调收到 true（派发成功与失败不许混成一句话）", async () => {
+    process.env.COMFYAPP_TASKKILL = process.execPath;
+    const outcomes: boolean[] = [];
+    const via = spawnTaskkill(["--version"], (ok) => outcomes.push(ok));
+    await vi.waitFor(() => expect(outcomes).toEqual([true]));
+    expect(via).toContain("--version");
+  });
+});
+
+/**
+ * 把平台换成 win32 跑一段。
+ *
+ * `killProcessTreeByImage` 与 `killProcessTreeSync` 读的是真实 `process.platform`
+ * （它们没有 `killProcessTreeWith` 那样的平台注入参数），所以在 Linux 上那两条
+ * Windows 分支根本走不到 —— 换掉判据的输入，两端机器判的是同一条结论。
+ */
+function withWindows<T>(run: () => T): T {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", {
+    value: "win32",
+    configurable: true,
+    writable: true,
+  });
+  try {
+    return run();
+  } finally {
+    if (original) Object.defineProperty(process, "platform", original);
+  }
+}
+
+describe("另外两个 Windows 落点（映像名回收 / 同步入口）", () => {
+  /* 这里不数「参数真的送达」—— Windows 上假 taskkill 只能是 `.cmd`，而 Node 自
+   * CVE-2024-27980 起不能直接 spawn 批处理（上面那组已按此分平台）。用 `node` 自己
+   * 当命令名是为了让**命令行构造**这一步在两端都判得到：它立刻以非 0 退出，
+   * 而参数就在 via 里。 */
+  it("按映像名回收发的是 /IM <name> /T /F（不是 /PID，也不能漏掉 /T）", async () => {
+    process.env.COMFYAPP_TASKKILL = process.execPath;
+    const result = await withWindows(() =>
+      killProcessTreeByImage("ollama.exe"),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.via).toBe(`${process.execPath} /IM ollama.exe /T /F`);
+  });
+
+  it("同步入口在 Windows 上同样是 /PID <pid> /T /F，且不等命令结束", () => {
+    process.env.COMFYAPP_TASKKILL = process.execPath;
+    const result = withWindows(() => killProcessTreeSync({ pid: 4321 }));
+    expect(result.ok).toBe(true);
+    expect(result.via).toBe(`${process.execPath} /PID 4321 /T /F`);
+  });
+
+  it("映像名回收在 Windows 上也拒绝空名字（`/IM ` 加空格名会杀到整台机器）", async () => {
+    process.env.COMFYAPP_TASKKILL = process.execPath;
+    const result = await withWindows(() => killProcessTreeByImage("  "));
+    expect(result.ok).toBe(false);
+    expect(result.via).toContain("无映像名");
+  });
+});
+
 describe("回收命令的派发与等待（`wait`）", () => {
   /**
    * 「派发完就退出」的调用方（命令行入口 `scripts/reap-process.mjs`）必须等命令结束：
@@ -196,5 +275,25 @@ describe("回收命令的派发与等待（`wait`）", () => {
     );
     expect(result.ok).toBe(false);
     expect(result.via).toContain("not-a-taskkill /PID 4321 /T /F");
+  });
+
+  it("spawn **同步抛错**那一形态也收成失败（Windows 上 .cmd 走的就是这条）", async () => {
+    /* 两条失败形态不一样：路径不存在 / 不可执行 → `error` 事件（异步）；而 Windows 上
+     * 直接 spawn 一个批处理是 **EINVAL 同步抛**（Node 自 CVE-2024-27980 起禁止）。
+     * 本模块对外承诺「回收失败不抛错」，两端的结论必须落在同一个 ok=false ——
+     * 漏掉同步那条的表现是 taskkill 起不来时**整个收尾调用链被异常打断**。
+     * 同步这条只有 Windows 造得出来（Linux 上同一个文件给的是异步 EACCES），
+     * 所以这里是「两端各测一条形态、共享同一条断言」。 */
+    const dir = tempDir();
+    const exe = join(dir, "taskkill.cmd");
+    /* 故意**不** chmod：让它存在但不可执行。 */
+    writeFileSync(exe, "@echo off\r\nexit /b 0\r\n");
+    process.env.COMFYAPP_TASKKILL = exe;
+    const result = await killProcessTreeWith(
+      { pid: 4321, wait: true },
+      { windows: true },
+    );
+    expect(result.ok).toBe(false);
+    expect(result.via).toContain("非 0");
   });
 });

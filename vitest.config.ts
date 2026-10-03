@@ -390,6 +390,17 @@ export default defineConfig({
         /* 视图页签 刀1 的状态模型（**两处同批**登记）。它是纯函数、判断力全在这里
          * （页签身份、开/关/回落、序列化的"整份可用否则整份放弃"），组件侧只是接线。 */
         "src/components/studio/workspace-tabs.ts",
+        /* 设置页「实例目录（只读）」这一刀的两个新出口（**两处同批**登记）。
+         *   · `comfyui-storage-paths-config` 是六组目录的展示口径（顺序 / 空组 /
+         *     覆盖来源），纯函数、无 React；
+         *   · `ComfyuiStoragePaths.tsx` 是它的纯展示消费者（分支都在 jsdom
+         *     用例里：null 不渲染、斜杠统一、来源与「目录不存在」标注）。
+         * ⚠️ 两处都**不在** `src/lib/**` / `src/components/ui/**` 的通配里，
+         * 只写门槛不进 `include` 会让门槛静默失效（`ui/file-picker.tsx` 的前车之鉴）。
+         * ⚠️ 路由组名 `(main)` 里的括号是 glob 分组语法，必须转义 —— 写成字面量
+         * 时条目**静默不匹配**（同 `\\[...path\\]` 那条动态段）。 */
+        "src/app/\\(main\\)/settings/comfyui-storage-paths-config.ts",
+        "src/app/\\(main\\)/settings/components/ComfyuiStoragePaths.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1177,23 +1188,33 @@ export default defineConfig({
           statements: 75,
           branches: 70,
         },
-        /* process/ 的 `kill-process-tree` 大部分分支要真杀进程（平台相关）。
-         * 这里从 50/60/50/55 降到实测值：棘轮开门那一次全量跑数出来是
-         * 24.4/46.9/26.4/24.6 —— 大头是 `process-launch.ts`（17.9% 行）与
-         * `kill-process-tree.ts`（29.1%），执行宿主那批新代码进来时没配用例，
-         * 而当时没有任何路径判得着这条门槛。欠的课记在台账 E7；补判决面
-         * （而非真起进程）时同批抬回原值。
-         *
-         * 抬一轮（ISSUE #1327）：`executable-resolve.ts` 从 `shell.mjs` 下沉进来时
-         * 同批带了 13 条用例，全量 `--coverage` 实测 69.37/69/79.59/69.91 ——
-         * 门槛按 §18.6「实测值向下取整到 5 的倍数」收紧到 65/65/75/65。
-         * 还差的那截仍由 `process-launch.ts`（17.85% 行，keepAlive 那条要走壳的
-         * 中介进程）顶着，所以**没有**一次抬回原值 50/60/50/55。 */
+        /* process/ 这一档的三次移动，口径都是「按实测登记、只升不降」：
+         *   1) 棘轮开门那一次全量实测 24.4/46.9/26.4/24.6，于是从 50/60/50/55 **降**到
+         *      25/20/45/20 —— 那是欠账的记账位，不是目标（欠的课记在台账 E7）。
+         *      欠账有两个来源：`kill-process-tree.ts` 的 POSIX 判据组整组
+         *      `runIf(!isWindowsPlatform())`，在这台 Windows 机器上一条都不跑；
+         *      `process-launch.ts` 只配了三个纯函数的用例，`spawnManaged` 的四条拉起
+         *      路径与中介 stderr 的读取整段无人执行。
+         *   2) ISSUE #1327 把 `executable-resolve.ts` 从 `shell.mjs` 下沉进来并同批带了
+         *      13 条用例，全量 `--coverage` 实测 69.37/69/79.59/69.91 → 抬到 65/75/65/65；
+         *      当时明写「还差的那截仍由 process-launch.ts（17.85% 行）顶着」，所以没一次抬回原值。
+         *   3) 本批把那截补完：POSIX 那张表改成**判决面**（`ps` 报什么、`process.kill`
+         *      接不接受、该发哪条命令行，全部注入），两端机器判同一个结论；真起进程数残留
+         *      那组留在原文件里照旧。本批两份文件的实测：`process-launch.ts` 100/100/100/100、
+         *      `kill-process-tree.ts` 100/96.05/100/100（原来分别是 19.35/24.07/45.45/17.85
+         *      与 31.39/25/47.61/29.11）。
+         *   4) 登记值取**整目录**的实测（这个 glob 里还有 `executable-resolve.ts`，
+         *      它的欠账由 #1327 / 台账 E12 那一批管，本批不动）：跑 `src/lib/process/` 与
+         *      `src/lib/console/` 全部用例，目录级 93.65/87.08/96.49/94.87
+         *      （语句/分支/函数/行）→ 按实测登记为 93/87/96/94。
+         * ⚠️ 剩下那点分支不是漏网，是平台绑定或走不到的兜底：`taskkill` 以 0 退出时 via 里
+         *      那半句（Linux 的假 taskkill 造得出、Windows 上 `.cmd` 起不来）、`ps` 输出解析里
+         *      那个不可达的兜底，以及 `executable-resolve.ts` 自己的 74.54% 分支。 */
         "src/lib/process/**": {
-          lines: 65,
-          functions: 75,
-          statements: 65,
-          branches: 65,
+          lines: 94,
+          functions: 96,
+          statements: 93,
+          branches: 87,
         },
         "src/lib/shell/**": {
           lines: 60,
@@ -1607,6 +1628,34 @@ export default defineConfig({
           functions: 100,
           statements: 95,
           branches: 90,
+        },
+        /* 桌面实例的六个存储目录（只读展示）这一刀。按 §18.6 取**实测值**向下取整
+         * 到 5 的倍数（只升不降）：
+         *   · `src/lib/comfyui/desktop-storage-paths*.ts` 聚合实测
+         *     99.13 / 86.04 / 90 / 97.43（纯解析 100 行全覆盖；`.server.ts` 的
+         *     functions 77.77 是那组「一次读就抛 ENOENT 换下一个候选」的容错
+         *     闭包，不是判决面）。缺口是没法自然构造的三态：yaml 列表项里带
+         *     空串、`--x=` 空值后跟下一个 flag、以及 base 候选与实例根候选同时
+         *     可读时的取值 —— 为它们造夹具等于给覆盖率买数字。
+         *   · 设置页那两个出口（派生 + 纯展示组件）实测四项皆满，按实测设满档。
+         * ⚠️ 路由组 `(main)` 的括号在 glob 里必须转义，否则条目静默不匹配。 */
+        "src/lib/comfyui/desktop-storage-paths*.ts": {
+          lines: 95,
+          functions: 90,
+          statements: 95,
+          branches: 85,
+        },
+        "src/app/\\(main\\)/settings/comfyui-storage-paths-config.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/app/\\(main\\)/settings/components/ComfyuiStoragePaths.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         /* ⑨ 第五刀 · 产物布局收口（台账 A8 第二段）这四个入口的实测下限
          * （数字来自「只跑这批用例」那一次测量，是**下限**，全量里只会更高）。

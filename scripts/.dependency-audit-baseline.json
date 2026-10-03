@@ -1,4 +1,9 @@
 {
   "ruleVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "key": "braces#1240992",
+      "reason": "上游没有修复版可升：GHSA-vfj7-8cjw-p6xm（deeply nested patterns → 栈耗尽 DoS，high）在 registry 里的 patched_versions 为空、受影响范围 <=3.0.3 正好覆盖当前解析到的 3.0.3 —— 出路 ①（升 / override 到修复版）在这一条上不存在，所以按 §13.5.9 走「确实修不了的进台账并写清原因」，而不是拿 --update 当后门。引入链只有两条：shadcn > fast-glob > micromatch > braces 与 shadcn > ts-morph > @ts-morph/common > fast-glob。暴露面实测三条：① 本仓运行时代码没有一处 import shadcn（src / scripts / tests 全量 grep 零命中，package.json 也没有脚本引用它）——它是按需召唤的组件 CLI；② 出厂件不经它（实测 .next/standalone/node_modules 只有 @libsql / next / pino / react / react-dom / ws 六个，没有 shadcn 链上任何一环）；③ 触发条件是「把攻击者控制的 glob 模式交给 micromatch 解析」，本仓没有这样的路径。复评触发点两条：(a) braces 一旦发布 >3.0.3 的修复版 → 升 / override 并删掉本条（留着会被 stale 判红，这是刻意的双向拦）；(b) 哪天有代码真的 import shadcn、或把外部输入喂给 glob 解析 → 上面那句暴露面判断作废，重评。另一条本轮不做的动作：把 shadcn 从 dependencies 挪到 devDependencies（安装面更干净），但它不消掉这条 advisory（审计看整份 lockfile），所以不混进这一笔。"
+    }
+  ]
 }
