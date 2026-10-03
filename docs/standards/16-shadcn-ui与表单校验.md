@@ -414,6 +414,22 @@ P1~P3 这类判据的**源码侧**由 `check-ui-primitives.cjs` 数（手写 `<b
 用的是 `button-group` / `select-trigger` 两个别的名字），所以这个接管不影响外观，
 只影响「按 `data-slot` 断言身份」的写法。
 
+**同一个 `render` 接管机制还有更狠的一面：外层套一个不转发 props 的组件，会把里层
+触发器的 props 整个吞掉**（ISSUE #1384）。`Menu.Trigger` 这类基元的接管方式是「把
+自身触发 props 灌进 `render` 收到的那个元素」，所以中间夹一层只认自己那几个 props
+的组件（`<Hint>` 只吃 `label` / `side` / `accessibleName` / `wrap` / `children`）
+就等于把这串 props 丢在门口 —— 按钮外观完好、`data-slot` 也照旧是 `tooltip-trigger`
+（**最容易被误读成「接管成功」**），但它 `aria-haspopup` 不在、点开什么都不发生。
+口径两条：
+
+- **顺序：别的 `Trigger` 在内、`Hint` 在外**。两层 `render` 会合并到同一颗子元素上
+  （`<Hint><DropdownMenuTrigger render={<Button />} /></Hint>`），互不吞并；
+- **判据取 `aria-haspopup`，不取 `data-slot`**。前者是渲染结果属性、修前为 `null`、
+  jsdom 就判得了；后者被 tooltip 接管后两种情况一模一样。**「浮层真的弹出来」只能在
+  真浏览器里判**（`e2e/top-bar-app-menu.spec.ts`）：jsdom 下连一个光秃秃的
+  `DropdownMenuTrigger` 都点不开 —— 开合挂在 pointerdown 上，jsdom 的合成事件走不到
+  那一步，在那儿写这条只会得到一条永远绿的假判据。
+
 同一族坑在 P76 / P80 上也各犯过一次：控件换成 `ui/select-menu`（combobox）后，
 按原生 `<select>` 的 `value` + `<option>` 读的断言全部失效；`h-N w-N` 归一成
 `size-N` 后，`toHaveClass("h-2.5", "w-2.5")` 失效。共同形态是**批次改了结构、
@@ -690,7 +706,7 @@ node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命�
 | 模型标签编辑器       | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭）                                                     | `ui/dialog`                                                                               |
 | 属性多选下拉         | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位）                                                       | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner）                            |
 | 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元               | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除                         |
-| 两个设置抽屉         | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/WorkflowCanvasSettings.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`）                                                              |
+| 两个设置抽屉         | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/CanvasSettingsPanel.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc）    | `ui/sheet`（`side="right"`）                                                              |
 
 ### 16.2.4.2 P1 按钮分批的进度与做法
 
@@ -2322,7 +2338,7 @@ TS/TSX 视图，而 **`public/{{shell.splash}}`（启动页源，编译期内嵌
 1. **「整块可点的开关行」不是这个形态**（`<label className="flex cursor-pointer
 items-center justify-between">` 包住一个 `<Switch>`）：标签与控件**并排**、
    点哪都切换，套上块级标签行会改掉那条排布（§16.2.4.2 第 9 条）。
-   `WorkflowCanvasSettings` 的 `LabeledSlider` 同理（标签与**实时读数**并排），
+   `CanvasSettingsPanel` 的 `SliderRow` 同理（标签与**实时读数**并排），
    已按 `EXEMPT_FILES` 显式登记并写明理由。
 2. **「无单一控件」的行可以做纯标签行** —— `children` 可省略，`hint` 承载
    说明文字（工坊「提供方 / 出场角色」这类二选一按钮组、设置页「请求体额外

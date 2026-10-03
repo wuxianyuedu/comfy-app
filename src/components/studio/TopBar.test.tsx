@@ -73,6 +73,20 @@ describe("TopBar", () => {
     expect(screen.getByText("首页")).toBeTruthy();
   });
 
+  /* ISSUE #1384：应用菜单那一颗此前把 `<Hint>` 套在 `DropdownMenuTrigger` 的
+     `render` 里，menu 的触发 props（`aria-haspopup` / pointerdown）全被 `Hint`
+     吞掉 —— 按钮点不开。这里判 `aria-haspopup`：它是**渲染结果的属性**，不依赖
+     pointerdown，所以 jsdom 也拿得到证据（"菜单真的弹出来" 只能在真浏览器里判，
+     见 `e2e/top-bar-app-menu.spec.ts`；jsdom 下连光秃秃的 trigger 都点不开）。
+     `data-slot` 被 tooltip 接管属于已知无害的副作用，不在这里判（规范 16 §16.2.3.2）。 */
+  it("应用菜单是菜单触发按钮：menu 的触发 props 没被外层 Hint 吞掉", () => {
+    renderTopBar("home");
+    expect(screen.getByRole("button", { name: "应用菜单" })).toHaveAttribute(
+      "aria-haspopup",
+      "menu",
+    );
+  });
+
   it("全局搜索按钮回抛 onOpenSearch", () => {
     const onOpenSearch = vi.fn();
     render(

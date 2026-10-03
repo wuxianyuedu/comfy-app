@@ -89,6 +89,25 @@ function restoreText(abs: string, text: string): void {
 }
 
 /**
+ * 门禁口径的扫描面，**与判据同源**：AGENTS.md + 两份索引 + 登记表 + SCOPED_DOCS。
+ * 「哪条判据在哪跑」写在 SCOPED_DOCS 之外的那几份文件里，不显式并入就没人核（§13.5.10 第 ② 条）。
+ */
+async function gateDocs(): Promise<string[]> {
+  const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+    SCOPED_DOCS: string[];
+  };
+  return [
+    ...new Set([
+      "AGENTS.md",
+      "docs/README.md",
+      "README.md",
+      "docs/reference-facts.md",
+      ...mod.SCOPED_DOCS,
+    ]),
+  ];
+}
+
+/**
  * 「这条判据真的被 `main()` 调用了吗」—— 不能用 `toContain(调用文本)`。
  * 把那一行前面加 `// ` 注掉，行里仍含同一段字面量，`toContain` 照样命中（实测：
  * 本文件里四处「已接入 main 流程」的老写法第一次变异全都绿着放过，ISSUE #1374）。
@@ -493,22 +512,6 @@ describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", ()
     }
   }
 
-  /** 扫描面与判据同源：AGENTS.md + 两份索引 + SCOPED_DOCS。 */
-  async function gateDocs(): Promise<string[]> {
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      SCOPED_DOCS: string[];
-    };
-    return [
-      ...new Set([
-        "AGENTS.md",
-        "docs/README.md",
-        "README.md",
-        "docs/reference-facts.md",
-        ...mod.SCOPED_DOCS,
-      ]),
-    ];
-  }
-
   it("已接入 main 流程（不是定义了却没人调用）", () => {
     const script = readFileSync(CHECK, "utf8");
     expect(script).toContain("function checkGateStepIndexRefs()");
@@ -751,5 +754,118 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
     expect(code).not.toBe(0);
     expect(output).toContain("node scripts/zz-pretend-judge.cjs");
     expect(output).toContain("的 D 组没有这一步");
+  });
+});
+
+describe("门禁的步数也不许写进文档（ISSUE #1407，签字口径 (a)）", () => {
+  const COUNT_RE = /[0-9]+\s*步/;
+  const ORDINAL_RE = /第\s*\d+(?:\s*\/\s*\d+)?\s*步/;
+  const GATE_RE = /pre-commit|\.githooks|\bCI\b/;
+  const EXPLAIN_RE =
+    /不写|别再|不要写|禁止|应写|应改|一律|改成|序号|没有唯一|已删|已随|历史|不再|过期/;
+  const DOC11_REL = "docs/standards/11-测试与可观测性.md";
+
+  /** 往一份已登记文档尾部追加一行探针，跑校验，再还原（重试式写入见 `writeText`）。 */
+  function withAppendedProbe(doc: string, appended: string) {
+    const abs = join(REPO_ROOT, doc);
+    const original = readFileSync(abs, "utf8");
+    writeText(abs, `${original}\n${appended}\n`);
+    try {
+      return runCheck();
+    } finally {
+      restoreText(abs, original);
+    }
+  }
+
+  it("已接入 main 流程（定义了却没人调用 = 假判据）", () => {
+    const script = readFileSync(CHECK, "utf8");
+    expect(script).toContain("function checkGateStepCounts()");
+    expect(isCalledInMain(script, "checkGateStepCounts()")).toBe(true);
+  });
+
+  it("量具自己没坏：注释掉的调用不算「已接入」", () => {
+    const wired = "function main() {\n  checkGateStepCounts();\n}\n";
+    const muted = "function main() {\n  // checkGateStepCounts();\n}\n";
+    expect(isCalledInMain(wired, "checkGateStepCounts()")).toBe(true);
+    expect(isCalledInMain(muted, "checkGateStepCounts()")).toBe(false);
+  });
+
+  it("存量 = 0：扫描面上每条「裸计数 + 门禁锚点」同行都带纠正词", async () => {
+    const docs = await gateDocs();
+    let scanned = 0;
+    for (const doc of docs) {
+      if (!existsSync(join(REPO_ROOT, doc))) continue;
+      scanned += 1;
+      docText(doc)
+        .split("\n")
+        .forEach((line, i) => {
+          if (ORDINAL_RE.test(line)) return; // 序号形态归 checkGateStepIndexRefs，不双报
+          if (!COUNT_RE.test(line) || !GATE_RE.test(line)) return;
+          expect(
+            EXPLAIN_RE.test(line),
+            `${doc}:${i + 1} 写了门禁步数且未标注为说明：${line.trim().slice(0, 80)}`,
+          ).toBe(true);
+        });
+    }
+    expect(
+      scanned,
+      "扫描面一份都没读到，这条用例等于什么都没测",
+    ).toBeGreaterThan(20);
+  });
+
+  it("种一条「`.githooks/pre-commit`（24 步）」→ 红，并给出指针形态的改法", () => {
+    const { code, output } = withAppendedProbe(
+      "docs/guides/DEV-QUERIES.md",
+      "临时探针：门禁见 `.githooks/pre-commit`（24 步）。",
+    );
+    expect(code).not.toBe(0);
+    expect(output).toContain("docs/guides/DEV-QUERIES.md:");
+    expect(output).toContain("写了门禁的步数");
+    expect(output).toContain("静默过期");
+    expect(output).toContain("1407");
+  });
+
+  it("同一行是「第 N 步」时只由序号那条报，不双报", () => {
+    const { code, output } = withAppendedProbe(
+      "docs/guides/DEV-QUERIES.md",
+      "临时探针：那一步是 pre-commit 第 41 步。",
+    );
+    expect(code).not.toBe(0);
+    expect(output).toContain("序号没有唯一解释");
+    expect(output).not.toContain("写了门禁的步数");
+  });
+
+  it("描述这条口径本身（同行带纠正词）→ 放行", () => {
+    const { code, output } = withAppendedProbe(
+      "docs/guides/DEV-QUERIES.md",
+      "门禁的步数别再写进文档（`.githooks/pre-commit`（24 步）这种数字会静默过期）。",
+    );
+    expect(code).toBe(0);
+    expect(output).toContain("[doc:check] ✓");
+  });
+
+  it("有主人的过程计数不误伤（`prepare-local-run.ps1` 那种）", () => {
+    const { code, output } = withAppendedProbe(
+      "docs/guides/DEV-QUERIES.md",
+      "临时探针：`prepare-local-run.ps1` 一共 8 步，第 3 步建库。",
+    );
+    expect(code).toBe(0);
+    expect(output).toContain("[doc:check] ✓");
+  });
+
+  it("§11 不许再把钩子清单抄一份回来（副本 = 会漂的那一半）", () => {
+    const text = docText(DOC11_REL);
+    const start = text.indexOf("### 11.7 质量门禁");
+    // 只核「钩子清单的镜像」那一段：本节后面还有一段「需要完整验证时手动跑一遍」
+    // （db:push / build / E2E / 产物护栏），那是 11.7 自己的手动档建议，不是钩子的副本。
+    const end = text.indexOf("需要**完整**验证", start);
+    expect(start, "§11.7 的标题变了，这条钉子要跟着改").toBeGreaterThan(-1);
+    expect(end, "§11.7 里那段手动档建议的位置变了").toBeGreaterThan(start);
+    const slice = text.slice(start, end);
+    expect(
+      /^✅ /m.test(slice),
+      "§11.7 又长出 `✅ …` 那种命令副本了 —— 钩子清单的唯一出处是 §13.1",
+    ).toBe(false);
+    expect(slice).not.toContain("本地提交前必须通过（.githooks/pre-commit，");
   });
 });

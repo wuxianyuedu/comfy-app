@@ -23,7 +23,7 @@ import { StepLogTaskPicker } from "./StepLogTaskPicker";
 import type { StepLogEntry } from "./stepLogCache";
 import { listCachedTaskIds } from "./stepLogCache";
 import { useActiveTaskId } from "./activeTask";
-import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
+import { useCanvasSettings } from "../canvas/hooks/use-canvas-settings";
 import { Hint } from "~/components/ui/hint";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { FieldLabel } from "~/components/ui/field";
