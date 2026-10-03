@@ -2,9 +2,8 @@
   "generatedAt": "2026-10-03",
   "ruleVersion": 3,
   "note": "超过 400 行的函数计数（规范 §12.13，判据版本 3）。棘轮只许下降：新增巨型函数须先拆分，再收紧基线。",
-  "total": 2,
+  "total": 1,
   "files": {
-    "src/components/studio/FilmStudio.tsx": 1,
     "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": 1
   }
 }

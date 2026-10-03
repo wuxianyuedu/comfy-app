@@ -134,33 +134,43 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     ).toBe("");
   });
 
-  it("④ 缺了生成件时 tsc 真的退 0 —— 拿真检出复量，不靠读配置下结论", () => {
-    /* 这一条判的是**结果**：把生成件挪走（= 新检出的形态），tsc 必须退 0。
+  it(
+    "④ 缺了生成件时 tsc 真的退 0 —— 拿真检出复量，不靠读配置下结论",
+    /* 原生 TS7 全仓 --noEmit 跑两遍（缺生成件一遍 + 在位一遍），独立跑 ~9s、
+     * 钩子组 C 的降配 forks 下实测 ~32s —— 贴着全局 30s 上限，给足余量
+     * （与 check-reformat-only 的慢 exec 用例同一档）。 */
+    { timeout: 120_000 },
+    () => {
+      /* 这一条判的是**结果**：把生成件挪走（= 新检出的形态），tsc 必须退 0。
        不读 `exclude` 下结论 —— 实测那条路根本不管用（见下面那组反证）。 */
-    const tsc = resolveTscBin();
-    expect(
-      tsc,
-      "解不出任何可用的 tsc 可执行（@typescript/native / typescript 两个形态都试过了）",
-    ).not.toBeNull();
-    const generatedDir = path.join(ROOT, GENERATED_DIR_REL);
-    const stash = path.join(os.tmpdir(), `sb-generated-${String(process.pid)}`);
-    const existed = fs.existsSync(generatedDir);
-    try {
-      if (existed) fs.renameSync(generatedDir, stash);
-      const without = tsc!.run(["--noEmit"]);
+      const tsc = resolveTscBin();
       expect(
-        without.status,
-        `没有 ${GENERATED_REL} 时 tsc 必须退 0（新检出的形态），实际输出：\n${without.output}`,
-      ).toBe(0);
-    } finally {
-      if (existed) {
-        fs.rmSync(generatedDir, { recursive: true, force: true });
-        fs.renameSync(stash, generatedDir);
+        tsc,
+        "解不出任何可用的 tsc 可执行（@typescript/native / typescript 两个形态都试过了）",
+      ).not.toBeNull();
+      const generatedDir = path.join(ROOT, GENERATED_DIR_REL);
+      const stash = path.join(
+        os.tmpdir(),
+        `sb-generated-${String(process.pid)}`,
+      );
+      const existed = fs.existsSync(generatedDir);
+      try {
+        if (existed) fs.renameSync(generatedDir, stash);
+        const without = tsc!.run(["--noEmit"]);
+        expect(
+          without.status,
+          `没有 ${GENERATED_REL} 时 tsc 必须退 0（新检出的形态），实际输出：\n${without.output}`,
+        ).toBe(0);
+      } finally {
+        if (existed) {
+          fs.rmSync(generatedDir, { recursive: true, force: true });
+          fs.renameSync(stash, generatedDir);
+        }
       }
-    }
-    // 生成件在位时也得是绿的（这一条顺带证明上面那次不是「tsc 根本没跑」）。
-    expect(tsc!.run(["--noEmit"]).status).toBe(0);
-  });
+      // 生成件在位时也得是绿的（这一条顺带证明上面那次不是「tsc 根本没跑」）。
+      expect(tsc!.run(["--noEmit"]).status).toBe(0);
+    },
+  );
 
   it("判据自身可反证：静态 import 生成件会让 tsc 报 TS2307", () => {
     /* 这条反证是 ① 与 ④ 的**前提**：如果「静态 import 一个不存在的模块」并不会
@@ -289,7 +299,12 @@ function resolveTscBin(): {
     const file = path.resolve(path.dirname(pkgJson), bin);
     if (!fs.existsSync(file)) continue;
     const runIn = (cwd: string, args: string[]) => {
-      const r = spawnSync(file, args, { cwd, encoding: "utf8" });
+      /* bin 是带 shebang 的 node 脚本垫片 —— Windows 的 spawnSync 不认
+       * shebang，直接 exec 会 ENOENT（本机实测），必须经 node 启动。 */
+      const r = spawnSync(process.execPath, [file, ...args], {
+        cwd,
+        encoding: "utf8",
+      });
       return { status: r.status, output: `${r.stdout ?? ""}${r.stderr ?? ""}` };
     };
     return { run: (args) => runIn(ROOT, args), runIn };
