@@ -28,8 +28,18 @@ import { resolveAppPort, resolveAppPortWithSource } from "./app-port.mjs";
 
 /** 三张尺寸差异明显的图：横向 / 纵向 / 超宽，覆盖「适应窗口」的不同折算分支。 */
 const IMAGES = [
-  { file: "sample-landscape.svg", width: 1280, height: 720, label: "1280 × 720" },
-  { file: "sample-portrait.svg", width: 720, height: 1280, label: "720 × 1280" },
+  {
+    file: "sample-landscape.svg",
+    width: 1280,
+    height: 720,
+    label: "1280 × 720",
+  },
+  {
+    file: "sample-portrait.svg",
+    width: 720,
+    height: 1280,
+    label: "720 × 1280",
+  },
   { file: "sample-wide.svg", width: 2400, height: 600, label: "2400 × 600" },
 ];
 
@@ -39,6 +49,8 @@ const IMAGES = [
  * 刻意用**固定色值**（不引主题 token）：它是组件工作台的测试夹具，不是应用界面，
  * 而主题色棘轮（规范 03 §3.6.1）管的是 `src/**` —— 夹具跟着 token 走反而会让
  * 「明暗两态下的组件形态」这件事多一个变量。
+ *
+ * @param {number} width @param {number} height @param {string} label
  */
 function figure(width, height, label) {
   const grid = [];
@@ -133,7 +145,9 @@ export function writeStorybookAppOrigin(repoRoot, outFile) {
     "",
   ].join("\n");
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
-  const current = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8") : null;
+  const current = fs.existsSync(outFile)
+    ? fs.readFileSync(outFile, "utf8")
+    : null;
   if (current !== body) fs.writeFileSync(outFile, body, "utf8");
   return { origin, source };
 }

@@ -80,5 +80,44 @@ try {
   say(`警告：eslint 缓存指纹失效这一步被跳过（${String(err)}）`);
 }
 
-// 上面两步都是**开发体验**兜底，不是依赖安装的必要条件：任何一步失败都不阻断安装。
+// ── 顺带补上 Storybook 的类型输入（台账 E15）─────────────────────────────────
+//
+// `tsconfig.json` 的 include **显式列着** `.storybook/**/*.tsx`（点目录不在 glob
+// 的默认展开范围里，不列就是 tsc 与 eslint 的双重盲区，那边注释写着理由），
+// 而注入层读的两样东西都是**现生成且不入库**的：`./generated/app-origin`（端口按
+// 检出路径推导，写死的值在别人的 checkout 上必然错）与 `.storybook/assets/` 那三张
+// 真图（media 值源要指向磁盘上的文件名）。两件事叠在一起的结果：**没跑过
+// `pnpm storybook` 的检出，`pnpm typecheck` 与 `pnpm test` 双双必红** —— 前者报
+// `Cannot find module './generated/app-origin'`，后者报「sample-landscape.svg 不在
+// .storybook/assets/」，两条都指向谁都没碰过的文件，而它们拦住的是从这份基线分出去的
+// **每一个提交**（A 组跑 `tsc --noEmit`、C 组跑用例）。落库时全绿，因为只有作者
+// 的机器上那些文件在。
+//
+// 为什么不改设计（改成 env 注入）：Storybook 的 webpack 把 `process.env` 换成一份
+// **白名单对象**（实测 bundle 里只有 NODE_ENV / NODE_PATH / STORYBOOK / PUBLIC_URL），
+// 业务变量进不去、兜底永远生效 —— 那是 `data-sources.tsx` 文件头记下的实测结论。
+// 输入该存在的时候就得存在，这一步只做「按当前检出算一次」，值随 `pnpm storybook`
+// 每次启动照旧刷新（两个 ensure 都按内容比对写，幂等）。
+//
+// 挂在同一个 postinstall 入口而不是给 `postinstall` 再拼一条命令：那条契约
+// （`launcher-core/node-runner.mjs::checkPostinstall()`）要求逐字以
+// `node scripts/install-git-hooks.mjs` 开头、禁止 `&&`/`||`/`sh`，拦的正是 #636
+// 的形态。失败语义也与上面两步一致：**只提示，绝不让 `pnpm install` 挂掉** ——
+// 这一步缺了只是 tsc 少一份输入，依赖没装坏。
+try {
+  const { ensureStorybookAssets, writeStorybookAppOrigin } =
+    await import("./storybook-assets.mjs");
+  ensureStorybookAssets(path.join(root, ".storybook", "assets"));
+  const { origin, source } = writeStorybookAppOrigin(
+    root,
+    path.join(root, ".storybook", "generated", "app-origin.ts"),
+  );
+  say(`[hooks] Storybook 的开发期输入就绪：${origin}（${source}）`);
+} catch (err) {
+  say(
+    `警告：Storybook 的开发期输入没补上（${String(err)}）—— pnpm storybook 会自己生成`,
+  );
+}
+
+// 上面几步都是**开发体验**兜底，不是依赖安装的必要条件：任何一步失败都不阻断安装。
 process.exit(0);

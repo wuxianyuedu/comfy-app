@@ -25,7 +25,7 @@ import {
 import {
   DEFAULT_CANVAS_SETTINGS,
   type CanvasSettings,
-} from "./canvas/WorkflowCanvasSettings";
+} from "./canvas/canvas-settings-types";
 import {
   GRID_BASE_LAYER_ID,
   GRID_MAJOR_LAYER_ID,

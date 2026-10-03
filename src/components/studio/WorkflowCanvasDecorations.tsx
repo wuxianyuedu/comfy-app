@@ -9,8 +9,10 @@ import {
   Background,
   BackgroundVariant,
 } from "@xyflow/react";
-import type { CanvasSettings } from "./canvas/WorkflowCanvasSettings";
-import { DEFAULT_CANVAS_SETTINGS } from "./canvas/WorkflowCanvasSettings";
+import {
+  DEFAULT_CANVAS_SETTINGS,
+  type CanvasSettings,
+} from "./canvas/canvas-settings-types";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { enterCommit } from "~/components/ui/use-enter-commit";
