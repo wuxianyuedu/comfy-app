@@ -1,48 +1,44 @@
 "use client";
 /* 抽出的 WorkflowSubgraphNode（ComfyUI 子图封装节点的渲染器）。
- * 原本在 WorkflowCanvasEditor.tsx 内部。 */
-import React, { useState } from "react";
-import { clamp } from "~/lib/clamp";
-import { useTheme } from "next-themes";
+ * 原本在 WorkflowCanvasEditor.tsx 内部。
+ *
+ * 本组件是纯渲染的组合层，按视觉区域拆在同目录：
+ *   - SubgraphHeader.tsx             （标题栏）
+ *   - SubgraphCollapsedAnchors.tsx   （折叠态圆柱 + 不可见逐端口 Handle）
+ *   - SubgraphPinRows.tsx            （顶部针脚连接行）
+ *   - SubgraphWidgetRow.tsx          （LABEL | VALUE widget 行，含图片/COMBO 分支）
+ *   - SubgraphWidgetStackedString.tsx（STRING 堆叠块 + 该形态的判定谓词）
+ * 数据预处理（空标签过滤、连线型 / widget 型拆桶）收在下面的 useMemo。 */
+import React, { useMemo, useState } from "react";
 
-import { Handle, Position } from "@xyflow/react";
-import { portColor } from "~/lib/comfyui/types";
-import { Z } from "~/lib/shell/overlay-z";
-import { SelectMenu } from "~/components/ui/select-menu";
-import { MediaThumbnail } from "~/components/ui/media-thumbnail";
-import { mediaPreviewUrl } from "~/lib/media/media-url";
+import { sanitizeComboLabel, NODE_TITLE_H, hexToRgba } from "../workflow-utils";
 import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
-
-/** COMBO 输入额外携带自己的候选清单（由导入管线盖章；
- *  不属于共享的 RawInputMeta 契约）。 */
-type ComboInputMeta = RawInputMeta & { comboOptions?: unknown };
-
-/** 该 widget 槽是否按「上下堆叠」渲染成多行文本框：服务端盖的
- *  `multiline` 章（节点类型声明 `("STRING", {"multiline": true})`）加上
- *  「值很长 / 含换行」两条数据启发式 —— 不按字段名猜。行布局（grid 行轨道
- *  是内容高还是 1fr）与渲染分支都要用它，收口一处。 */
-const stackedStringRow = (inp: RawInputMeta): boolean => {
-  const text = typeof inp.widgetValue === "string" ? inp.widgetValue : "";
-  return (
-    inp.isConnection !== true &&
-    inp.isBoundary !== true &&
-    inp.type === "STRING" &&
-    (inp.multiline === true || text.length >= 32 || text.includes("\n"))
-  );
-};
-import {
-  valueCellColor,
-  renderSubgraphWidgetValue,
-  sanitizeComboLabel,
-  NODE_TITLE_H,
-  hexToRgba,
-} from "../workflow-utils";
 import { FrostLayer } from "./NodeFrost";
-import { StringTextarea } from "../StringTextarea";
-import { useIOEditContext, IoCheckbox } from "./IOEditContext";
+import { useIOEditContext } from "./IOEditContext";
 import { SubgraphHeader } from "./SubgraphHeader";
 import { useHoverElevation } from "../workflow-editor/HoverElevation";
-import { resolveAnchorCylinder } from "./workflow-node-palette";
+import { SubgraphCollapsedAnchors } from "./SubgraphCollapsedAnchors";
+import { SubgraphPinRows } from "./SubgraphPinRows";
+import { SubgraphWidgetRow } from "./SubgraphWidgetRow";
+import {
+  SubgraphWidgetStackedString,
+  stackedStringRow,
+} from "./SubgraphWidgetStackedString";
+
+/* 暴露口的显示名。wrapper 本层槽位名是 ComfyUI 自动编号的别名
+ * （`value_1`），业务名在内部真实字段上（proxyField，服务端由
+ * `properties.proxyWidgets` 解析）。先取内部字段的 label → localized →
+ * 字段名，再回退本层 label/localized/别名——IO 面板用同一条链
+ * （见 workflow-detail-io 的富化），两处逐字一致。 */
+const exposedName = (inp: RawInputMeta): string =>
+  sanitizeComboLabel(inp.proxyField?.label) ||
+  sanitizeComboLabel(inp.proxyField?.localized) ||
+  sanitizeComboLabel(inp.proxyField?.field) ||
+  sanitizeComboLabel(inp.label) ||
+  sanitizeComboLabel(inp.localized) ||
+  inp.name ||
+  "";
+
 export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
   data,
   selected,
@@ -54,9 +50,6 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
   /* 悬浮置顶：与 FlowNode 同一套语义（ISSUE #400）—— 鼠标指着的子图卡片
    *  也要压住连线。状态在本节点内，悬浮进出不影响其余节点。 */
   const { hoverHandlers, hoverRef } = useHoverElevation();
-  /* 收起态的锚柱跟主题联动（浅色下白描白会让锚柱整个消失）。 */
-  const { resolvedTheme } = useTheme();
-  const anchor = resolveAnchorCylinder(resolvedTheme);
 
   /* 这里**不再**订阅视口缩放 —— 见 FlowNode / FrostLayer：
    *  只有磨砂（旁路 / 禁用）节点需要跟缩放。
@@ -83,8 +76,6 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
    *  卡片因此填满 React Flow 的节点框。多行文本框随之接入 flex 链，
    *  填满框内剩余的纵向空间，而不是被钉在一个固定的像素高度上。 */
   const hasSize = !!data.size;
-  const inputsList = data.inputs ?? [];
-  const outputsList = data.outputs ?? [];
 
   /* 用户可切换的折叠状态。与 WorkflowNode 一致：左侧的折叠箭头在
    *  「只有头部」与「完整主体」之间切换。
@@ -96,41 +87,16 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
   );
   const isCollapsed = userCollapsed;
 
-  /* 过滤掉显示标签为空的那些行。
+  /* 过滤掉显示标签为空的那些行，再把封装节点的输入拆成
+   *  WorkflowNode 风格的两个桶（都只依赖 data 上的两个数组，
+   *  收进一个 memo：IO 编辑模式开合等与 data 无关的重渲染不再重算）。
+   *
    *  ComfyUI 有时会在子图封装节点上导出哨兵 / 占位 IO ——
    *  例如 Settings.outputs[11] = `{name:"", type:"*", label:"PREVIEW"}`。
    *  没有这道过滤，画布会渲染出一行 22px 高的空行，
-   *  用户会把它当成渲染 bug。 */
-  /* 暴露口的显示名。wrapper 本层槽位名是 ComfyUI 自动编号的别名
-   *  （`value_1`），业务名在内部真实字段上（proxyField，服务端由
-   *  `properties.proxyWidgets` 解析）。先取内部字段的 label → localized →
-   *  字段名，再回退本层 label/localized/别名——IO 面板用同一条链
-   *  （见 workflow-detail-io 的富化），两处逐字一致。 */
-  const exposedName = (inp: RawInputMeta): string =>
-    sanitizeComboLabel(inp.proxyField?.label) ||
-    sanitizeComboLabel(inp.proxyField?.localized) ||
-    sanitizeComboLabel(inp.proxyField?.field) ||
-    sanitizeComboLabel(inp.label) ||
-    sanitizeComboLabel(inp.localized) ||
-    inp.name ||
-    "";
-
-  const cleanedInputs = inputsList
-    .map((inp) => ({ inp, label: exposedName(inp) }))
-    .filter(({ label }) => label.trim().length > 0);
-
-  const cleanedOutputs = outputsList
-    .map((out) => ({
-      out,
-      display:
-        sanitizeComboLabel(out.label) ||
-        sanitizeComboLabel(out.localized) ||
-        out.name ||
-        "",
-    }))
-    .filter(({ display }) => display.trim().length > 0);
-
-  /* 把封装节点的输入拆成 WorkflowNode 风格的两个桶：
+   *  用户会把它当成渲染 bug。
+   *
+   *  拆桶判据：
    *   - connInputs   —— 纯类型端口（没有 widget 标记）。每个都有左边缘圆点
    *                    （常亮，未接线时也显示），并在顶部 PINS 区与输出成对。
    *                    若某个封装输入**同时**因上游接线带
@@ -148,15 +114,30 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
    *     * 服务端那一趟现在也会为自定义封装节点防御性地盖章）。
    *     * 与 WorkflowNode 的拆分器一致，把每个暴露的 widget 槽都归进 WIDGET 区，
    *     * LABEL | VALUE 行才能渲染成内联 widget。 */
-  const connInputs = cleanedInputs.filter(
-    ({ inp }) => !inp.widget && !inp.isConnection,
-  );
-  const widgetInputs = cleanedInputs.filter(
-    ({ inp }) => !!inp.widget || inp.isConnection === true,
-  );
-  /* 顶部 PINS 行：每个声明的输入端口与每个输出端口各占一行，
-   *  左右拉链式成对、行高 22px（与普通 WorkflowNode 相同）。 */
-  const pinRows = Math.max(connInputs.length, cleanedOutputs.length);
+  const { connInputs, widgetInputs, cleanedOutputs } = useMemo(() => {
+    const cleanedInputs = (data.inputs ?? [])
+      .map((inp) => ({ inp, label: exposedName(inp) }))
+      .filter(({ label }) => label.trim().length > 0);
+    const cleanedOutputs = (data.outputs ?? [])
+      .map((out) => ({
+        out,
+        display:
+          sanitizeComboLabel(out.label) ||
+          sanitizeComboLabel(out.localized) ||
+          out.name ||
+          "",
+      }))
+      .filter(({ display }) => display.trim().length > 0);
+    return {
+      connInputs: cleanedInputs.filter(
+        ({ inp }) => !inp.widget && !inp.isConnection,
+      ),
+      widgetInputs: cleanedInputs.filter(
+        ({ inp }) => !!inp.widget || inp.isConnection === true,
+      ),
+      cleanedOutputs,
+    };
+  }, [data.inputs, data.outputs]);
 
   return (
     <div
@@ -221,228 +202,27 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         }
       />
 
-      {/* 折叠态句柄锚点。子图章展开时隐藏 —— 那时
-       *  改由下面的主体区块渲染。视觉上是同一根圆柱（圆角竖向
-       *  药丸）：连线型边界输入在**左**一根，
-       *  只要包裹声明了输出就在**右**一根。底下坐着
-       *  不可见的每端口 <Handle>，让活连线几何
-       *  在切换前后保持不变。
-       *  折叠 / 展开都走这一套。 */}
-      {isCollapsed &&
-        (() => {
-          const wiredInputs = connInputs.filter(({ inp }) =>
-            data.connectedInputs?.has(inp.name),
-          );
-          const wiredOutputs = cleanedOutputs.filter(({ out }) =>
-            data.connectedOutputs?.has(out.name),
-          );
-          const cylH = (count: number) => clamp(12 + count * 4, 16, 64);
-          return (
-            <>
-              {wiredInputs.length > 0 && (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute"
-                  style={{
-                    left: -3,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    width: 6,
-                    height: cylH(wiredInputs.length),
-                    borderRadius: 999,
-                    background: anchor.gradient,
-                    border: anchor.border,
-                    boxShadow: anchor.boxShadow,
-                    zIndex: Z.base,
-                  }}
-                />
-              )}
-              {cleanedOutputs.length > 0 && (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute"
-                  style={{
-                    right: -3,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    width: 6,
-                    height: cylH(cleanedOutputs.length),
-                    borderRadius: 999,
-                    background: anchor.gradient,
-                    border: anchor.border,
-                    boxShadow: anchor.boxShadow,
-                    zIndex: Z.base,
-                  }}
-                />
-              )}
-              {wiredInputs.map(({ inp, label }, idx) => {
-                const col = portColor(inp.type ?? "*");
-                const total = wiredInputs.length;
-                const offset = total > 1 ? (idx - (total - 1) / 2) * 6 : 0;
-                return (
-                  <Handle
-                    key={`collapsed-sub-in-${inp.name}-${idx}`}
-                    type="target"
-                    position={Position.Left}
-                    id={inp.name}
-                    isConnectable={false}
-                    className="size-2! rounded-full!"
-                    style={{
-                      left: 0,
-                      top: `calc(50% + ${offset}px)`,
-                      background: col,
-                      opacity: 0,
-                    }}
-                    title={`${label} (${inp.type})`}
-                  />
-                );
-              })}
-              {wiredOutputs.map(({ out, display }, idx) => {
-                const col = portColor(out.type ?? "*");
-                const total = wiredOutputs.length;
-                const offset = total > 1 ? (idx - (total - 1) / 2) * 6 : 0;
-                return (
-                  <Handle
-                    key={`collapsed-sub-out-${out.name}-${idx}`}
-                    type="source"
-                    position={Position.Right}
-                    id={`out:${out.name}`}
-                    isConnectable={false}
-                    className="size-2! rounded-full!"
-                    style={{
-                      right: 0,
-                      top: `calc(50% + ${offset}px)`,
-                      background: col,
-                      opacity: 0,
-                    }}
-                    title={`${display} (${out.type})`}
-                  />
-                );
-              })}
-            </>
-          );
-        })()}
+      {/* 折叠态句柄锚点：连线型边界输入在左一根圆柱、声明了输出就在右一根，
+       *  底下坐着不可见的每端口 <Handle>，让活连线几何在切换前后保持不变。 */}
+      {isCollapsed && (
+        <SubgraphCollapsedAnchors
+          connInputs={connInputs}
+          outputs={cleanedOutputs}
+          connectedInputs={data.connectedInputs}
+          connectedOutputs={data.connectedOutputs}
+        />
+      )}
 
-      {/* 顶部针脚区 —— 纯连接型输入端口（左圆点）与暴露出的
-       *  输出端口（右圆点）拉在一行，与普通
-       *  WorkflowNode 完全一致。每个声明过的针脚都常显
-       *  圆点（always-on），未连线的端口也看得见。
+      {/* 顶部针脚区 —— 纯连接型输入端口与暴露出的输出端口拉链式成对；
        *  用户 / 配置把章标成折叠时隐藏。 */}
-      {!isCollapsed && pinRows > 0 && (
-        <div
-          className="border-border-strong border-b py-0.5"
-          style={{ background: "var(--color-subtle)" }}
-        >
-          {Array.from({ length: pinRows }).map((_, rowIdx) => {
-            const inEntry = connInputs[rowIdx];
-            const outEntry = cleanedOutputs[rowIdx];
-            const inInp = inEntry?.inp;
-            const outMeta = outEntry?.out;
-            const inName = inInp?.name;
-            const outName = outMeta?.name;
-            const inType = inInp?.type ?? "*";
-            const outType = outMeta?.type ?? "*";
-            const inCol = portColor(inType);
-            const outCol = portColor(outType);
-            const inLabel = inEntry?.label ?? "";
-            const outDisplay = outEntry?.display ?? "";
-            return (
-              <div
-                key={`subpin-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
-                /* 长的边界端口标签换行到
-                 *                    *  多行换行，而不是被裁到 22px。完整理由见 WorkflowNode 内联分支
-                 *                    *  的注释。 */
-                className="relative flex h-auto min-h-5.5 items-center py-0.5 pr-5 pl-5 text-[11px]"
-                data-sub-pin-input={inName}
-                data-sub-pin-output={outName}
-              >
-                {inEntry && (
-                  <>
-                    <Handle
-                      type="target"
-                      position={Position.Left}
-                      id={inName}
-                      isConnectable={false}
-                      className="border-port-surface! size-2.5! rounded-full! border!"
-                      style={{
-                        left: 5,
-                        background: inCol,
-                        boxShadow: `0 0 6px ${inCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
-                      }}
-                      title={`${inLabel} (${inType})`}
-                    />
-                    {/* 已经从父工作流接进线来的子图边界输入（或本身
-                     *  就是哨兵边界连线）取值来自上游 —— 它们
-                     *  不能被暴露成工作流输入。已连线的槽位
-                     *  跳过复选框。 */}
-                    {io?.ioEditMode &&
-                      inName &&
-                      !inInp?.isConnection &&
-                      !inInp?.isBoundary && (
-                        <IoCheckbox
-                          io={io}
-                          ioRef={{
-                            nodeId: String(data.nodeId),
-                            hostNodeId: data.hostNodeId,
-                            name: inName,
-                            kind: "param",
-                            direction: "input",
-                          }}
-                        />
-                      )}
-                    <span
-                      /* 去掉 `truncate`：让长的边界端口标签
-                       *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
-                       *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
-                       *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
-                      className="text-ink-bright min-w-0 flex-1 text-left text-[11px] wrap-break-word whitespace-normal"
-                      title={`${inLabel} (${inType})`}
-                    >
-                      {inLabel}
-                    </span>
-                  </>
-                )}
-                {outEntry && (
-                  <>
-                    <span
-                      /* 与上面边界输入分支同款换行修正。 */
-                      className="text-ink-bright min-w-0 flex-1 text-right text-[11px] wrap-break-word whitespace-normal"
-                      title={`${outDisplay} (${outType})`}
-                    >
-                      {outDisplay}
-                    </span>
-                    {/* 每端口输出复选框已移除；
-                     *  工作流输出按节点标识。按节点的输出
-                     *  复选框现在住在子图节点的头部。 */}
-                    {/* 输出端点**任何视图模式下都必须挂载** —— 同
-                     *  FlowNodePinRows：它同时是下游 `out:<name>` 边的锚点，
-                     *  条件不渲染会让 React Flow 解析不到 handle 而丢掉整条边
-                     *  （error#008），画布上表现为「输出没有连线」。
-                     *  IO 编辑模式下改用「缩到几乎不可见」代替「不渲染」。 */}
-                    <Handle
-                      type="source"
-                      position={Position.Right}
-                      id={`out:${outName}`}
-                      isConnectable={false}
-                      className="border-port-surface! rounded-full! border!"
-                      style={{
-                        background: outCol,
-                        boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
-                        /* 默认右偏 5px，与左端口那颗的 `left: 5` 对称；IO 编辑模式缩到 4px
-                         *  并贴住右边缘（`right: 0`）。**别把 `right` 提到 spread 之前**：
-                         *  同一属性会被指定两次，TS 报 2783「此扩张将始终覆盖此属性」。 */
-                        ...(io?.ioEditMode
-                          ? { width: 4, height: 4, opacity: 0.35, right: 0 }
-                          : { width: 10, height: 10, right: 5 }),
-                      }}
-                      title={`${outDisplay} (${outType})`}
-                    />
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
+      {!isCollapsed && (
+        <SubgraphPinRows
+          connInputs={connInputs}
+          outputs={cleanedOutputs}
+          io={io}
+          nodeId={data.nodeId}
+          hostNodeId={data.hostNodeId}
+        />
       )}
 
       {/* Widget 区 —— 暴露出的包裹 widget 输入，按 LABEL | VALUE 行排。
@@ -475,237 +255,28 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
             alignContent: "start",
           }}
         >
-          {widgetInputs.map(({ inp, label }, i) => {
-            const v: unknown = inp.widgetValue;
-            const isConn = inp.isConnection === true || inp.isBoundary === true;
-            /* 图片类 widget（IMAGE / MASK / IMAGEUPLOAD）：画布上也要把选中的图
-             *  显示出来 —— 此前这类 widget 只渲染成纯文本值（甚至因为值是 ComfyUI
-             *  的 `{filename,subfolder,type}` 对象 / 数组而显示成 `[object Object]`），
-             *  于是「封装节点选完图在界面上完全看不到」（实测反馈）。这里按类型
-             *  切到缩略图；`mediaPreviewUrl` 同时吃字符串与这两种对象 / 数组形态。 */
-            const isImageType = ["IMAGE", "MASK", "IMAGEUPLOAD"].includes(
-              inp.type ?? "",
-            );
-            const previewUrl = isImageType ? mediaPreviewUrl(v) : null;
-            const typeCol = portColor(inp.type);
-            const stringText: string = typeof v === "string" ? v : "";
-            /* 与 WorkflowNode 保持一致：STRING widget 的判定读服务端盖的
-             *  `multiline`（来自节点类型声明
-             *  `("STRING", {"multiline": true})`），再加上「值很长 / 含换行」
-             *  这两条数据启发式 —— 不按字段名猜。 */
-            const isStringWidget =
-              !isConn &&
-              inp.type === "STRING" &&
-              (inp.multiline === true ||
-                stringText.length >= 32 ||
-                stringText.includes("\n"));
-            const displayValue = isStringWidget
-              ? ""
-              : renderSubgraphWidgetValue(v);
-            return (
-              <div
+          {widgetInputs.map(({ inp, label }, i) =>
+            stackedStringRow(inp) ? (
+              <SubgraphWidgetStackedString
                 key={`sub-w-${inp.name}-${i}`}
-                className={
-                  isStringWidget
-                    ? /* STRING widget 上下堆叠：标签 + 字数章占顶行，
-                       *  textarea 借行轨道的 `1fr` 填满剩余竖向空间。 */
-                      "group relative flex min-h-0 flex-col gap-1.5 py-1.5 pr-2 pl-5 text-[11px]"
-                    : /* 标签 | 值框 两格行；行跨满两列并借用父 grid 的列轨道
-                       * （subgrid），标签列宽 = 全部行里最长参数名，
-                       *  值框起点逐行一致。 */
-                      "group relative grid min-h-5.5 py-0.5 pr-2 pl-5 text-[11px]"
-                }
-                style={
-                  isStringWidget
-                    ? { gridColumn: "1 / -1" }
-                    : {
-                        gridColumn: "1 / -1",
-                        gridTemplateColumns: "subgrid",
-                        alignItems: "center",
-                      }
-                }
-                data-sub-widget-name={inp.name}
-                data-sub-widget-value={String(v)}
-              >
-                {isConn && (
-                  <Handle
-                    type="target"
-                    position={Position.Left}
-                    id={inp.name}
-                    isConnectable={false}
-                    className="border-port-surface! size-2.5! rounded-full! border!"
-                    style={{
-                      left: 5,
-                      background: typeCol,
-                      boxShadow: `0 0 6px ${typeCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
-                    }}
-                    title={`${label} (${inp.type})`}
-                  />
-                )}
-                {/* 工作流输入必须是**未连线**的 —— 已经带线的槽位
-                 *  （isConnection / isBoundary）取值来自上游，
-                 *  把它暴露成工作流输入没有意义。 */}
-                {!isStringWidget && (
-                  <>
-                    {/* 标签格（第 1 列）：IO 复选框 + 标签。列宽由父 grid 的
-                     *  `max-content` 轨道按**所有行里最长的参数名**统一裁决，
-                     *  值框因此共享同一起点 x。IO 复选框只服务**紧凑型**
-                     * （非 STRING）widget —— STRING 在下面堆叠块内部自己渲染，
-                     *  少了 `!isStringWidget` 守卫会出现两个复选框。 */}
-                    <div className="flex min-w-0 items-center gap-1.5">
-                      {io?.ioEditMode && !isConn && (
-                        <IoCheckbox
-                          io={io}
-                          ioRef={{
-                            nodeId: String(data.nodeId),
-                            hostNodeId: data.hostNodeId,
-                            name: inp.name,
-                            kind: "widget",
-                            direction: "input",
-                          }}
-                        />
-                      )}
-                      <span
-                        /* 去掉 `truncate`：让长的封装 widget 标签换成多行
-                         *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
-                        className="min-w-0 text-left text-[11px] wrap-break-word whitespace-normal"
-                        style={{
-                          color: isConn
-                            ? "var(--color-ink-strong)"
-                            : "var(--color-ink-subtle)",
-                        }}
-                        title={label}
-                      >
-                        {label}
-                      </span>
-                    </div>
-                    {isImageType ? (
-                      /* 图片类 widget 在画布上直接渲染缩略图（否则只显示成文本值，
-                       *  且 ComfyUI 把 IMAGE 输入存成 `{filename,subfolder,type}`
-                       *  对象 / 数组时还会显示成 `[object Object]`）—— 封装节点选完图
-                       *  「在界面上完全看不到」（实测反馈）。`src` 为 null 时
-                       *  MediaThumbnail 按 fallback 不渲染任何东西，与「未选图」一致。 */
-                      <MediaThumbnail
-                        src={previewUrl}
-                        alt={label}
-                        fallback="none"
-                        className="border-border-strong bg-canvas-deep mt-0.5 max-h-24 w-full rounded-[5px] border object-contain"
-                      />
-                    ) : inp.type === "COMBO" &&
-                      Array.isArray((inp as ComboInputMeta).comboOptions) &&
-                      ((inp as ComboInputMeta).comboOptions as unknown[])
-                        .length > 0 ? (
-                      /* 工作流画布上的 COMBO widget 渲染成只读的
-                       *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
-                       *  在这里保持禁用（编辑发生在会落盘取值的项目
-                       *  画布表单里）。这个节点是忠实的只读预览，不是编辑器。
-                       *  触发器铺满第 2 列（`fullWidth`），与值框同一坐标。 */
-                      <SelectMenu
-                        value={typeof v === "string" ? v : ""}
-                        onChange={() => undefined}
-                        options={
-                          (inp as ComboInputMeta).comboOptions as string[]
-                        }
-                        disabled
-                        fullWidth
-                        className="h-5.5! min-w-0 py-0! text-[11px]!"
-                        popoverMinWidth={220}
-                      />
-                    ) : (
-                      <span
-                        className="min-w-0 truncate rounded-[5px] px-1.5 text-left text-[10.5px] tabular-nums"
-                        style={{
-                          /* 值框：ComfyUI widget 槽同款「凹陷井」—— 深底 +
-                           *  细描边。宽度 = 第 2 列整格（最小 64px，随节点
-                           *  余宽伸展），文本左对齐，超长省略（只缩略文字，
-                           *  节点宽度仍由用户控制）。颜色按「有没有连线」
-                           *  取两档（见 `valueCellColor`）。 */
-                          display: "flex",
-                          alignItems: "center",
-                          minHeight: 18,
-                          background: "var(--color-canvas-deep)",
-                          border: "1px solid var(--color-border-subtle)",
-                          color: valueCellColor(v, isConn),
-                        }}
-                        title={String(v)}
-                      >
-                        {displayValue}
-                      </span>
-                    )}
-                  </>
-                )}
-                {/* 子图包裹上的 STRING widget 文本框。**堆叠**
-                 *  在 LABEL 行**下方**（与 WorkflowNode 对齐）。行是
-                 *  `flex-col gap-1.5 flex-1`，好让标签 + 字数
-                 *  章占住顶行、下面的 textarea 填满
-                 *  剩下的竖向空间。`flex-row items-start` →
-                 *  `flex-col gap-1.5 flex-1` 迁移与删掉
-                 *  `maxHeight: 96` 的完整理由
-                 *  见 WorkflowNode 分支。
-                 *
-                 *  与 WorkflowNode 分支配对：真正的 <textarea readOnly>
-                 *  让多行提示自动换行，溢出部分原生滚动
-                 *  （不依赖 Tailwind className —— WorkflowNode
-                 *  子树历史上对任意值 className
-                 *  编译不可靠）。子图包裹 widget 用 `mono` 字体
-                 *  （它们通常是系统名 / ID）。值为空时
-                 *  回落到淡淡的「（空）」占位，仍占住
-                 *  flex-1 容器，行布局保持均衡。 */}
-                {isStringWidget && (
-                  <div className="flex min-h-0 flex-1 flex-col">
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {io?.ioEditMode && !isConn && (
-                        <IoCheckbox
-                          io={io}
-                          ioRef={{
-                            nodeId: String(data.nodeId),
-                            hostNodeId: data.hostNodeId,
-                            name: inp.name,
-                            kind: "widget",
-                            direction: "input",
-                          }}
-                        />
-                      )}
-                      <span
-                        /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
-                         *  理由与 WorkflowNode 内联分支相同。 */
-                        className="shrink-0 text-left text-[11px] wrap-break-word whitespace-normal"
-                        style={{
-                          color: isConn
-                            ? "var(--color-ink-strong)"
-                            : "var(--color-ink-subtle)",
-                        }}
-                        title={label}
-                      >
-                        {label}
-                      </span>
-                      {/* 标签与字数之间同样不画分隔线（与 ComfyUI 同款版式）。 */}
-                      <span
-                        className="text-ink-muted text-right text-[10px] tracking-wider uppercase"
-                        title={`STRING · ${stringText.length} chars`}
-                      >
-                        {stringText.length}c
-                      </span>
-                    </div>
-                    {stringText.length > 0 ? (
-                      <StringTextarea
-                        value={stringText}
-                        mono
-                        hasSize={hasSize}
-                      />
-                    ) : (
-                      <div
-                        className="border-border-strong bg-canvas-deep text-ink-fainter flex-1 rounded border px-2 py-1.5 text-[10.5px] leading-snug"
-                        style={{ minHeight: 28 }}
-                      >
-                        （空）
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                inp={inp}
+                label={label}
+                io={io}
+                nodeId={data.nodeId}
+                hostNodeId={data.hostNodeId}
+                hasSize={hasSize}
+              />
+            ) : (
+              <SubgraphWidgetRow
+                key={`sub-w-${inp.name}-${i}`}
+                inp={inp}
+                label={label}
+                io={io}
+                nodeId={data.nodeId}
+                hostNodeId={data.hostNodeId}
+              />
+            ),
+          )}
         </div>
       )}
     </div>
