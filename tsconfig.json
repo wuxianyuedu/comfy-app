@@ -44,6 +44,11 @@
   },
   "include": [
     "next-env.d.ts",
+    /* Storybook 基建：点目录不在 glob 的默认展开范围里（TS 的 **\/*.ts
+       会跳过以点开头的目录），所以必须显式列出 —— 否则这一个目录是 tsc
+       与 eslint 的双重盲区，而它里面的注入层是所有 story 的公共依赖。 */
+    ".storybook/**/*.ts",
+    ".storybook/**/*.tsx",
     "**/*.ts",
     "**/*.tsx",
     "**/*.cjs",

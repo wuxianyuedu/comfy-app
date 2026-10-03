@@ -87,6 +87,80 @@ const VARIANTS: ButtonVariant[] = ["default", "outline" /* … */];
 写 class，而工具栏切换已经覆盖「看两态」这个诉求；再叠一个会多出一条**不同的**
 class 写入路径，日后「应用里是暗的、storybook 里是亮的」这类不一致就很难归因。
 
+## 数据从哪来：`Args → 数据源` 注入层
+
+有一批组件不是「给几个 props 就能看」的：它们吃一张真图、一段真报文，或者吃一条
+真 tRPC 链路。给它们写 story 的最小阻力是**手捏一份假数据**，而那比没有 story 更糟
+—— 假形态的截图会被当成「这个组件长这样」的证据。
+
+注入层（`.storybook/data-sources.tsx`）把这件事换成流程：**story 声明「我要哪种
+数据源」，注入层负责把它变成真的那一份**。两种形态、两套机制：
+
+| 形态 | 是什么 | 怎么用 |
+| ---- | ------ | ------ |
+| **值源**（`json` / `media`） | 取一份**值**交给组件的 props | story 的 `args.sourceName` + `resolveSource(kind, name)` |
+| **运行期提供者**（`trpc` / 应用外壳） | 一条**真链路** / 一层**真上下文**，组件自己 import 单例去读 | `.storybook/preview.tsx` 全局挂的 `withTrpcApp` / `withAppProviders` |
+
+```tsx
+import { resolveSource, sourceNameArgType, type JsonSourceName }
+  from "../../../.storybook/data-sources";
+
+type StoryArgs = Omit<React.ComponentProps<typeof JsonViewer>, "data"> & {
+  sourceName: JsonSourceName;
+};
+
+/** 适配件：把 Args 里那个源名解析成真值再交给真组件。 */
+function JsonViewerWithSource({ sourceName, ...rest }: StoryArgs) {
+  return <JsonViewer {...rest} data={resolveSource("json", sourceName)} />;
+}
+
+const meta = {
+  title: "UI/JsonViewer",
+  component: JsonViewerWithSource,
+  args: { sourceName: "comfy-prompt" },
+  argTypes: { sourceName: sourceNameArgType("json") },
+} satisfies Meta<StoryArgs>;
+```
+
+**三条口径**：
+
+1. **数据源是「命名的一种」**，映射只有 `DATA_SOURCES` 一份 —— story 不各写各的
+   示例数据。名字做成**组件自己的 args**（Args 面板只认 args，不认 `parameters`
+   里的嵌套键）。
+2. **拿不到时画的就是「拿不到」**。`media` 源里留了一个**故意不存在**的
+   `missing.png`；名字不认识时 `resolveSource()` **抛错**（静默回退会让「源名写错
+   了」看不出来）。宁可让你看见「取不到」，也不要一张看着正常、真机上不对的画布。
+3. **ReactNode 参数走 `render`，不进 Args**。`trigger` / `footer` / `children`
+   这类参数由 story 的 `render` 给 —— Args 面板只认可序列化的值。
+   注意 `render` **不是 React 组件**：要在里面用 hook，请把它抽成一个真组件
+   （`react-hooks/rules-of-hooks` 会把这一条当场拦下，那条报错是对的）。
+
+**为什么不用 `vi.mock` / MSW**：测试侧确实有 MSW（`tests/helpers/trpc-msw.ts`），
+但那层的用途是「让 tRPC 的完整管线在无后端时可被断言」——它转发给一个**测试
+router**（预设数据）。那是测试的正当形态：断言的对象是管线，不是界面形态。
+story 要的正好相反 ——「有后端 / 没后端分别长什么样」。所以注入层**不拦网络、
+不预置返回值**：连得上画真数据，连不上画真的连不上。
+
+### 真 tRPC 链路：能到哪一步，以及那道跨源门槛
+
+组件 import 的 `~/trpc/react` / `~/trpc/vanilla` 都按 `getBaseUrl()` 取 origin
+（浏览器里是 `window.location.origin`），而工作台跑在自己的端口上。注入层把它们
+指到**真跑着的应用**：origin 是启动时由 `scripts/app-port.mjs` 现算的**本检出解析链
+端口**（`pnpm storybook` 会把它写进 `.storybook/generated/app-origin.ts`，不入库），
+也可以在工具栏的「应用 origin」旋钮上现场改。
+
+**跨源是一道真门槛**：应用的 tRPC 端点不回 `Access-Control-Allow-Origin`
+（它对自己的前端同源，本来就不需要），所以从工作台直接打过去会被浏览器拦下。
+**这是刻意不绕的** —— 让应用为组件工作台开一个 CORS 口子，等于为一个开发工具去改
+生产端的安全面。于是 tRPC 那一族 story 在画布上通常给你看的是：
+
+- **应用没起** → 各 controller 的拉取失败静默忽略，界面留住它真实的**降级形态**
+  （空态 / 离线点）。这是**默认**会看到的，也是真机上最难复现的那一档；
+- **跨源被拦** → 组件走它的**错误分支**，画布上就是错误态那张脸。
+
+换句话说：**那一族 story 验的是「界面在后端不可用时的形态」**。想看有数据时的样子，
+需要应用在跑**并且同源**（部署问题，不是 story 的问题）。
+
 ## 它不做什么
 
 - **不是像素基线**。组件覆盖率再高也不等于「页面没变样」—— 视觉回归的防线仍是
@@ -94,10 +168,11 @@ class 写入路径，日后「应用里是暗的、storybook 里是亮的」这�
   真实页面的布局/配色/断点。两者互补，都不接 Chromatic。
 - **不进构建产物**。`.storybook/**` 与 `*.stories.tsx` 不在 Next 的模块图上：
   story 只被 Storybook 自己的 webpack 图引用，`pnpm build` 看不到它们。
-  `storybook-static/` 已在 `.gitignore` 与 `tsconfig` 的 exclude 里。
-- **不覆盖业务组件**。`studio/`、`workshop/` 那些依赖 tRPC / 画布运行期的组件
-  要做 story，得先看它们的数据依赖能不能用 Args 注入。（`docs/guides/PRODUCTION-GAPS.md`
-  的 F6 挂着这条账的全貌。）
+  `storybook-static/`、`.storybook/assets/`、`.storybook/generated/` 都在
+  `.gitignore` 里。
+- **不覆盖业务组件**。`studio/` / `workshop/` 有 story 的那几件验的是**降级形态**
+  与**纯形态**；把它们整体覆盖一遍要先把工作台与应用的**同源**问题解决掉
+  （见上一节）。（`docs/guides/PRODUCTION-GAPS.md` 的 F6 挂着这条账的全貌。）
 
 ## 覆盖率：现在是机器判据，不是文档里的一句话
 
@@ -129,10 +204,20 @@ hook（`use-*.ts`）不算（它们没有可看的东西，判据是单测）。
 说的就是它 —— story 是「改完 `ui/` 组件想单独看一眼」的出口，没有 story 的组件
 只能靠「起整个应用点进去找」或者读那串几百字符的 Tailwind class 来判断改得对不对。
 
+**「有数据依赖」不再是一张免票**：注入层（上一节）之后，吃一张图 / 一段报文 /
+一条真链路的组件都有得写。剩下的 `NO_STORY_REASON` 条目因此都收敛到三类 ——
+hook（没有 DOM 形态，判据是用例）、只有出错时才渲染的边界件、被别的基元 import
+的部件（它的形态在调用它的那个基元的 story 里）。**加一行之前先回答
+「没有 story 的代价是什么」**。
+
 ## 相关
 
 - 覆盖率的判据与台账：`tests/storybook-component-coverage.test.ts` +
   `scripts/storybook-checks/coverage-ledger.mjs`（那份额外的理由表就在台账里）。
+- 注入层的契约判据：`tests/storybook-data-sources.test.ts`（进
+  `FIXED_STRUCTURAL_TESTS`）—— 守注册表接线、媒体名与磁盘双向对齐、「点目录进了
+  tsc / eslint 的扫描面」这几件**悄悄失效时不会红**的事。它守的是「接线还在不在」；
+  「有没有真的画出来」由真浏览器逐 story 渲染核对。
 - 枚举来源的判据：`tests/storybook-cva-variant-source.test.ts` 与
   `scripts/storybook-check.mjs`（共用 `scripts/storybook-checks/cva-variant-source.mjs`
   的纯函数，AST 判；详细口径见规范 [16 §16.2.3.4](standards/16-shadcn-ui与表单校验.md#16234-故事里的枚举清单从-props-派生不要从-cva-的返回值上取)）。

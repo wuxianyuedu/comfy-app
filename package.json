@@ -19,7 +19,7 @@
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:ratchet": "node scripts/check-format.cjs",
     "format:reformat-guard": "node scripts/check-reformat-only.cjs",
-    "lint": "eslint src tests scripts e2e tools *.config.{js,mjs,cjs,ts} --max-warnings 0 --cache --cache-location node_modules/.cache/eslint --cache-strategy content",
+    "lint": "eslint src tests scripts e2e tools .storybook *.config.{js,mjs,cjs,ts} --max-warnings 0 --cache --cache-location node_modules/.cache/eslint --cache-strategy content",
     "lint:fix": "pnpm run lint -- --fix",
     "postinstall": "node scripts/install-git-hooks.mjs && node scripts/invalidate-lint-cache.mjs",
     "preview": "node scripts/start.mjs",
