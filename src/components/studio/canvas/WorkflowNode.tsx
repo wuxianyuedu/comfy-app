@@ -15,6 +15,7 @@ import { friendlyNodeTitle } from "~/lib/comfyui/node-titles";
 import { PackageFooter } from "./PackageFooter";
 import { DebugChainFooter } from "../debug/DebugChainFooter";
 import { getWorkflowRenderChainModules } from "./workflow-render-chain";
+import { useCustomNodesRegistryVersion } from "./use-custom-nodes-registry";
 import { useDebugStore } from "../debug/debug-store";
 import { NODE_TITLE_H, resolveNodePackage } from "../workflow-utils";
 import { FrontendOnlyBadge } from "../RequiredSummary";
@@ -97,6 +98,10 @@ export const FlowNode = React.memo(function FlowNode({
     (PORT_ROLES) => PORT_ROLES.key === data.assignedRole,
   );
   const io = useIOEditContext();
+  /* 自定义节点注册表被重新灌入时，这一格要重算：下面的包名页脚与调试态的渲染链
+   * 标签读的是 `~/config/custom-nodes` 里就地替换的 map，而 FlowNode 是 memo 的。
+   * 只调不读返回值是有意的 —— 订阅本身就是「变了」的信号（理由见该 hook 的文件头）。 */
+  useCustomNodesRegistryVersion();
   /* 视口缩放**不再**在这里订阅 —— 缩放的读取
    *  挪进了 <FrostLayer>，缩放时只有磨砂节点重渲染。 */
   const debugMode = useDebugStore((state) => state.debugMode);

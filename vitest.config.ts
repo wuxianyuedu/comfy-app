@@ -401,6 +401,19 @@ export default defineConfig({
          * 时条目**静默不匹配**（同 `\\[...path\\]` 那条动态段）。 */
         "src/app/\\(main\\)/settings/comfyui-storage-paths-config.ts",
         "src/app/\\(main\\)/settings/components/ComfyuiStoragePaths.tsx",
+        /* 台账 E9 这一刀（自定义节点注册表的灌入链）带出的四个出口，**两处同批**
+         * 登记（`coverage.include` + `thresholds`）——只写门槛不进 `include` 会让
+         * 门槛静默失效（本仓已经栽过一次：`ui/file-picker.tsx`）。
+         *   · `custom-nodes-manifest.server.ts` 是清单「路径 + 指纹 + 三相读法」的
+         *     唯一定义，`src/lib/**` 的通配本来就在面上，这里单列是为了给它立门槛；
+         *   · `api/custom-nodes/manifest/route.ts` 是浏览器侧**唯一**的灌入源，
+         *     它在基线迁移时被删掉而没人红 —— 这一层整此前不在覆盖率面上；
+         *   · `src/config/custom-nodes.ts` 与画布那侧的订阅 hook 同理：一个只有
+         *     `console.warn` 的空广播，判据看不见数字就不会动。 */
+        "src/lib/comfyui/custom-nodes-manifest.server.ts",
+        "src/app/api/custom-nodes/manifest/route.ts",
+        "src/config/custom-nodes.ts",
+        "src/components/studio/canvas/use-custom-nodes-registry.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1718,6 +1731,40 @@ export default defineConfig({
           functions: 100,
           statements: 95,
           branches: 90,
+        },
+        /* 台账 E9 这一刀（与上面 `coverage.include` 同批登记）。数值取**这批用例
+         * 实测的下限**（口径同 ⑨ 第五刀那句：只跑这批测出来的是地板，全量只会更高）：
+         *   · 清单读取口的 `unreadable` 那一支原本缺的是「抛上来的 Error 没有 code」，
+         *     补了一条把 `fs.readFileSync` 换成桩的夹具后四维满档 —— 留一档等于
+         *     把「读盘故障冒成冷启动」那格重新打开；
+         *   · `src/config/custom-nodes.ts` 也补到满档：缺的三支是注册表吃外部
+         *     生成 JSON 时的形状回落（整条为 `null` 的节点、没有端口的节点、
+         *     没有 `nodes` 字段的清单），全是解析器版本漂移的真形态，不是凑数。
+         * 这一批敢立 100，是因为这四份文件就是这次事故的现场：判据看不见数字
+         * 就等于没有判据（`/api/custom-nodes/manifest` 被删掉时全绿）。 */
+        "src/lib/comfyui/custom-nodes-manifest.server.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/app/api/custom-nodes/manifest/route.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/config/custom-nodes.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/studio/canvas/use-custom-nodes-registry.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
       },
     },
