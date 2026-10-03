@@ -390,6 +390,17 @@ export default defineConfig({
         /* 视图页签 刀1 的状态模型（**两处同批**登记）。它是纯函数、判断力全在这里
          * （页签身份、开/关/回落、序列化的"整份可用否则整份放弃"），组件侧只是接线。 */
         "src/components/studio/workspace-tabs.ts",
+        /* 设置页「实例目录（只读）」这一刀的两个新出口（**两处同批**登记）。
+         *   · `comfyui-storage-paths-config` 是六组目录的展示口径（顺序 / 空组 /
+         *     覆盖来源），纯函数、无 React；
+         *   · `ComfyuiStoragePaths.tsx` 是它的纯展示消费者（分支都在 jsdom
+         *     用例里：null 不渲染、斜杠统一、来源与「目录不存在」标注）。
+         * ⚠️ 两处都**不在** `src/lib/**` / `src/components/ui/**` 的通配里，
+         * 只写门槛不进 `include` 会让门槛静默失效（`ui/file-picker.tsx` 的前车之鉴）。
+         * ⚠️ 路由组名 `(main)` 里的括号是 glob 分组语法，必须转义 —— 写成字面量
+         * 时条目**静默不匹配**（同 `\\[...path\\]` 那条动态段）。 */
+        "src/app/\\(main\\)/settings/comfyui-storage-paths-config.ts",
+        "src/app/\\(main\\)/settings/components/ComfyuiStoragePaths.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1617,6 +1628,34 @@ export default defineConfig({
           functions: 100,
           statements: 95,
           branches: 90,
+        },
+        /* 桌面实例的六个存储目录（只读展示）这一刀。按 §18.6 取**实测值**向下取整
+         * 到 5 的倍数（只升不降）：
+         *   · `src/lib/comfyui/desktop-storage-paths*.ts` 聚合实测
+         *     99.13 / 86.04 / 90 / 97.43（纯解析 100 行全覆盖；`.server.ts` 的
+         *     functions 77.77 是那组「一次读就抛 ENOENT 换下一个候选」的容错
+         *     闭包，不是判决面）。缺口是没法自然构造的三态：yaml 列表项里带
+         *     空串、`--x=` 空值后跟下一个 flag、以及 base 候选与实例根候选同时
+         *     可读时的取值 —— 为它们造夹具等于给覆盖率买数字。
+         *   · 设置页那两个出口（派生 + 纯展示组件）实测四项皆满，按实测设满档。
+         * ⚠️ 路由组 `(main)` 的括号在 glob 里必须转义，否则条目静默不匹配。 */
+        "src/lib/comfyui/desktop-storage-paths*.ts": {
+          lines: 95,
+          functions: 90,
+          statements: 95,
+          branches: 85,
+        },
+        "src/app/\\(main\\)/settings/comfyui-storage-paths-config.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/app/\\(main\\)/settings/components/ComfyuiStoragePaths.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         /* ⑨ 第五刀 · 产物布局收口（台账 A8 第二段）这四个入口的实测下限
          * （数字来自「只跑这批用例」那一次测量，是**下限**，全量里只会更高）。
