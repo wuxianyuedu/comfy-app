@@ -150,13 +150,15 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 本地提交前必须通过（.githooks/pre-commit；判据按互不依赖分 4 组并行：
 A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
-✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R4/R7-R12（见 §12.6/§12.8/§12.11）
+✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R12 + R5 棘轮硬闸（见 §12.6/§12.8/§12.11）
+✅ node scripts/check-ps1-consistency.mjs  # 跨平台动作对照表：.ps1⇄.mjs 两侧齐全、会静默失效的清单只定义一次（见 launch-and-build §9.5）
 ✅ node scripts/check-react-updater-purity.cjs
 ✅ node scripts/check-title-bar-clearance.cjs
 ✅ pnpm exec tsc --noEmit
 ✅ pnpm run lint
-✅ node scripts/check-ui-logic-separation.cjs
+✅ node scripts/check-ui-logic-separation.cjs --strict # 视图层 IO 棘轮（只许降；治理后指标下降同样阻断，见 17）
 ✅ node scripts/check-changelog-fragments.cjs
+✅ node scripts/check-import-alias.cjs       # import 别名只有一种前缀 `~`（R13，见 §12.8.0）
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
 ✅ node scripts/check-ui-primitives.cjs      # UI 基元复用棘轮（见 16 §16.2.3）
 ✅ node scripts/check-overlay-z.cjs          # 浮层层级刻度棘轮（见 16 §16.2.5）
@@ -181,12 +183,18 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
 ✅ node scripts/check-non-null-assertions.cjs # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）
 ✅ node scripts/check-void-floats.cjs         # src/lib `void someFn(...)` 悬空棘轮（见下 13.5.7）
+✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
+✅ node scripts/check-doc-references.cjs     # 文档引用与权威源一致（= `pnpm doc:check`；序号那条判据见下 13.5.10）
+✅ node scripts/storybook-check.mjs          # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮（见 16 §16.2.3.4）
 ```
 
 > **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /
-> `check-standalone-contents.cjs` / E2E `@critical` / `db:push` / R5 的 `--strict`）：
+> `check-standalone-contents.cjs` / E2E `@critical` / `db:push`）：
 > 它们是「按需召唤」那一层 —— 由人 @ 评审 NPC 唤起，或在改动命中对应范围时手动跑，
 > 逐条登记在 13.5.4。**不要**把它们塞回每次 commit。
+> **R5 的 `--strict` 原来在这份名单里，现已翻档接进钩子**（ISSUE #1404，见上面清单与 13.5 的表）：
+> 它当时的理由是「被拦下的动作要求拆分文件，不适合每次提交都挡一次」，而那一档挂着 11 个存量；
+> 基线归零之后这条前提不再成立，且 #623 之后它一个自动执行者都没有。
 
 **平台侧仍需一步人工动作**：把 `master` 配成**保护分支**（禁直接 push + 要求 PR）。
 **别用** `git create-branch-lock` —— 它锁整分支写入，会把 PR 合并一起拦死（见 13.6.1）。
@@ -357,14 +365,14 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
    下表**按职责写、不写序号**：`​.cnb.yml` 已随 ISSUE #623 删除，那份流水线里的步骤序号
    在今天没有任何主人，写出来只会指到不存在的东西上（详见 13.5.3）。
 
-| 判据                                                                 | 原来的落点（流水线已删，按职责记）                | 现状                                                                                          |
-| -------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| 全量单测 + 覆盖率门槛（`pnpm run test:coverage`，3000+ 用例）        | 平台流水线的「全量单测 + 覆盖率」那一步           | **无自动执行者**。按需手动跑；提交门槛里只有固定清单 + 受影响用例（见 13.5 的 C 组与 13.5.8） |
-| `pnpm run build` + `check-standalone-contents.cjs`（产物级护栏）     | 平台流水线的「构建」+「数产物」那两步             | **无自动执行者**。改构建 / 产物相关的东西后手动跑                                             |
-| E2E `playwright test --grep @critical`                               | 平台流水线的「E2E @critical」那一步               | **无自动执行者**。按需手动跑                                                                  |
-| `db:push` 建库                                                       | 平台流水线的「建库」那一步                        | 只在手动跑 E2E 前需要                                                                         |
-| R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | 平台流水线里带 `--strict` 跑结构检查的那一步      | 本地这一步不带 `--strict`，**棘轮当前无执行者**（`.githooks/pre-commit` 里有 ⚠️ 标注）        |
-| `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑；`pnpm doc:gen` 内部的第一步         | **已在本地钩子里**（D 组「文档引用与权威源一致」，ISSUE #1371 翻掉了旧的「手动档」签字）。旧口径是「改了文档后需手动跑」，而 AGENTS 规定的必跑口令是 `doc:render`（只渲染不校验），空档即由此来 |
+| 判据                                                                 | 原来的落点（流水线已删，按职责记）           | 现状                                                                                                                                                                                            |
+| -------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 全量单测 + 覆盖率门槛（`pnpm run test:coverage`，3000+ 用例）        | 平台流水线的「全量单测 + 覆盖率」那一步      | **无自动执行者**。按需手动跑；提交门槛里只有固定清单 + 受影响用例（见 13.5 的 C 组与 13.5.8）                                                                                                   |
+| `pnpm run build` + `check-standalone-contents.cjs`（产物级护栏）     | 平台流水线的「构建」+「数产物」那两步        | **无自动执行者**。改构建 / 产物相关的东西后手动跑                                                                                                                                               |
+| E2E `playwright test --grep @critical`                               | 平台流水线的「E2E @critical」那一步          | **无自动执行者**。按需手动跑                                                                                                                                                                    |
+| `db:push` 建库                                                       | 平台流水线的「建库」那一步                   | 只在手动跑 E2E 前需要                                                                                                                                                                           |
+| R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | 平台流水线里带 `--strict` 跑结构检查的那一步 | **已在本地钩子里**（D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」这一步带 `--strict`，ISSUE #1404 翻档；旧口径「本地只提醒」的前提「挂着 11 个存量」已不成立，基线现在 `total: 0`）               |
+| `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑；`pnpm doc:gen` 内部的第一步    | **已在本地钩子里**（D 组「文档引用与权威源一致」，ISSUE #1371 翻掉了旧的「手动档」签字）。旧口径是「改了文档后需手动跑」，而 AGENTS 规定的必跑口令是 `doc:render`（只渲染不校验），空档即由此来 |
 
 > 这张表是**有意留下的欠账**，不是遗漏：把全量 3000+ 用例塞进每次 commit 会让本地
 > 提交慢到没人愿意用，而那正是当初把它放去 CI 的原因。**去处不是把配置贴回去**，
@@ -399,7 +407,11 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 全量单测 + 覆盖率门槛 | `@` NPC 跑 `pnpm run test:coverage`                                         | C 组（13.5.8）之外的欠账         |
 | 产物级护栏            | 改动构建 / 产物后 `@` 跑 `pnpm run build` + `check-standalone-contents.cjs` | 欠账条目 2                       |
 | E2E 关键流程          | `@` 跑 `pnpm exec playwright test --grep @critical`（先 `db:push`）         | 欠账条目 3/4                     |
-| R5 行数棘轮           | `@` 跑 `check-file-structure.cjs --strict`                                  | 欠账条目 5                       |
+
+这张表里**原本还有一行**「R5 行数棘轮 → `@` 跑 `check-file-structure.cjs --strict`」，随
+ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前提「挂着 11 个存量」不再成立）之后，
+带 `--strict` 的这一档就写在 pre-commit 的 D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」里，
+每次提交都执行 —— **不再需要召唤**（13.5 的清单同步改了这一行）。
 
 **边界（不要做过头）**：
 
@@ -734,7 +746,7 @@ high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 ma
 比找不到更糟。
 
 **标签从哪来**：`grep -n '^  run "' .githooks/pre-commit` 逐字取，或跑一次提交看 `── check:`
-那些行。D 组当前的 26 条标签里，`文件结构硬规则(R1-R12，R5 只提醒)`、
+那些行。D 组当前的标签里，`文件结构硬规则(R1-R12，R5 棘轮硬闸)`、
 `UI/逻辑分离棘轮(--strict)`、`生成态文档与源同步`、`文档引用与权威源一致` 这几个是最常被引用的。
 
 **判据**：`scripts/check-doc-references.cjs` 的 `checkGateStepIndexRefs()`（= `pnpm doc:check`，
@@ -787,7 +799,6 @@ high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 ma
 
 ### 13.6 分支与合并策略
 
-
 - 功能分支：`feat/<short-desc>`；修复分支：`fix/<issue-id>-<desc>`。
 - 合并方式：优先 **Squash Merge**（保持主干线性、单 PR 单提交）；大型重构可 Rebase。
 - 项目主分支为 **`master`**；禁止直接 push 到 `master`；所有变更走 PR + Review。
@@ -801,9 +812,9 @@ high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 ma
 绕过评审的变更已经躺在所有人的基线里。因此本仓库把「不在 master 上提交」
 做成三层防线（ISSUE #492）：
 
-| 层   | 位置                                                              | 拦什么                                     | 能绕过吗                                  |
-| ---- | ----------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------- |
-| 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR）         | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限）            |
+| 层   | 位置                                                                                    | 拦什么                                     | 能绕过吗                                  |
+| ---- | --------------------------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------- |
+| 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR）                               | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限）            |
 | 本地 | `.githooks/pre-commit` 开头的「master 分支提交守卫」跑 `scripts/check-branch-guard.cjs` | `master` 上的**每一次本地提交**            | 只能 `--no-verify`（进历史，Review 可见） |
 
 > **服务端那两层随 `.cnb.yml` 一起下线了**（ISSUE #623，理由见 13.5.3）。

@@ -60,6 +60,35 @@ function runCheck(): { code: number; output: string } {
 const docText = (rel: string) => readFileSync(join(REPO_ROOT, rel), "utf8");
 
 /**
+ * 探针用的写文件：写完**读回来核对**，被占用或内容不符就重试。
+ * 这些用例会临时改真实文件、跑一次 `doc:check` 子进程、再还原。Windows 上刚被
+ * 子进程读过的文件会短暂占用，实测两次把 `writeFileSync` 直接打抛
+ * （`UNKNOWN: unknown error, open …`）：一次抛在还原那一步，探针文本就**留在了仓库里**
+ * （追加进 `docs/guides/DEV-QUERIES.md` 的那行就是这么来的，还被 `doc:render` 连生成态一起写脏）；
+ * 另一次抛在写入那一步，用例得到一个与判据无关的红。两者都不该由一次瞬时占用决定成败。
+ */
+function writeText(abs: string, text: string): void {
+  let lastError = "";
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      writeFileSync(abs, text, "utf8");
+      if (readFileSync(abs, "utf8") === text) return;
+      lastError = "写回后读回的内容与预期不一致";
+    } catch (err) {
+      lastError = (err as Error).message;
+    }
+  }
+  throw new Error(
+    `写入失败（重试 8 次仍未成功）：${abs} —— ${lastError}。` +
+      "该文件里可能残留探针文本，请手工核对后再提交。",
+  );
+}
+
+function restoreText(abs: string, text: string): void {
+  writeText(abs, text);
+}
+
+/**
  * 「这条判据真的被 `main()` 调用了吗」—— 不能用 `toContain(调用文本)`。
  * 把那一行前面加 `// ` 注掉，行里仍含同一段字面量，`toContain` 照样命中（实测：
  * 本文件里四处「已接入 main 流程」的老写法第一次变异全都绿着放过，ISSUE #1374）。
@@ -277,11 +306,11 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
   } {
     const probe = "docs/guides/DEV-QUERIES.md";
     const original = readFileSync(join(REPO_ROOT, probe), "utf8");
-    writeFileSync(join(REPO_ROOT, probe), `${original}\n${appended}\n`, "utf8");
+    writeText(join(REPO_ROOT, probe), `${original}\n${appended}\n`);
     try {
       return runCheck();
     } finally {
-      writeFileSync(join(REPO_ROOT, probe), original, "utf8");
+      restoreText(join(REPO_ROOT, probe), original);
     }
   }
 
@@ -364,11 +393,11 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
   } {
     const target = join(REPO_ROOT, "AGENTS.md");
     const original = readFileSync(target, "utf8");
-    writeFileSync(target, `${original}\n${appended}\n`, "utf8");
+    writeText(target, `${original}\n${appended}\n`);
     try {
       return runCheck();
     } finally {
-      writeFileSync(target, original, "utf8");
+      restoreText(target, original);
     }
   }
 
@@ -456,11 +485,11 @@ describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", ()
   } {
     const target = join(REPO_ROOT, doc);
     const original = readFileSync(target, "utf8");
-    writeFileSync(target, `${original}\n${appended}\n`, "utf8");
+    writeText(target, `${original}\n${appended}\n`);
     try {
       return runCheck();
     } finally {
-      writeFileSync(target, original, "utf8");
+      restoreText(target, original);
     }
   }
 
@@ -583,5 +612,144 @@ describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", ()
     } finally {
       rmSync(probe, { force: true });
     }
+  });
+});
+
+describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404）", () => {
+  const HOOK_REL = ".githooks/pre-commit";
+  const DOC_REL = "docs/standards/13-提交与-code-review.md";
+  const CHECKLIST_MARKER = "本地提交前必须通过";
+
+  /** 与判据同源的两侧解析（写在测试里 = 双向对照：判据漏解析，这条用例会自己发现）。 */
+  function hookCommands(): string[] {
+    const text = docText(HOOK_REL);
+    return [...text.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) =>
+      (m[2] ?? "").replace(/\s+/g, " ").trim(),
+    );
+  }
+  function docCommands(): string[] {
+    const text = docText(DOC_REL);
+    const start = text.indexOf(CHECKLIST_MARKER);
+    const rest = text.slice(start);
+    const close = rest.indexOf("```");
+    expect(
+      start,
+      "§13.1 的 marker 还在吗？判据与这条用例都要靠它定位",
+    ).toBeGreaterThan(-1);
+    expect(close, "marker 之后找不到围栏收尾").toBeGreaterThan(-1);
+    return rest
+      .slice(0, close)
+      .split("\n")
+      .filter((l) => l.startsWith("✅ "))
+      .map((l) =>
+        (l.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim(),
+      );
+  }
+
+  /** 精确替换一次：命中 0 次或 ≥2 次都直接抛 —— 否则文档一改措辞，探针就静默失效，
+   *  用例得到「意外绿」，而这正是本刀要拦的那个形状。 */
+  function replaceOnce(text: string, from: string, to: string): string {
+    const hits = text.split(from).length - 1;
+    if (hits !== 1) {
+      throw new Error(
+        `探针锚点命中 ${hits} 次（应为 1）：${from.slice(0, 60)}`,
+      );
+    }
+    return text.replace(from, to);
+  }
+
+  function withDocProbe(mutate: () => void): { code: number; output: string } {
+    const abs = join(REPO_ROOT, DOC_REL);
+    const original = readFileSync(abs, "utf8");
+    mutate();
+    try {
+      return runCheck();
+    } finally {
+      restoreText(abs, original);
+    }
+  }
+
+  it("已接入 main 流程（不是定义了却没人调用）", () => {
+    const script = readFileSync(CHECK, "utf8");
+    expect(script).toContain("function checkGateChecklistMatchesHook()");
+    expect(isCalledInMain(script, "checkGateChecklistMatchesHook()")).toBe(
+      true,
+    );
+  });
+
+  it("量具自己没坏：注释掉的调用不算「已接入」", () => {
+    const wired = "function main() {\n  checkGateChecklistMatchesHook();\n}\n";
+    const muted =
+      "function main() {\n  // checkGateChecklistMatchesHook();\n}\n";
+    expect(isCalledInMain(wired, "checkGateChecklistMatchesHook()")).toBe(true);
+    expect(isCalledInMain(muted, "checkGateChecklistMatchesHook()")).toBe(
+      false,
+    );
+  });
+
+  it("存量 = 0：钩子 D 组的每一步都在清单里，且 flag 逐字一致", () => {
+    const hook = hookCommands();
+    const doc = new Set(docCommands());
+    expect(
+      hook.length,
+      "解析不出钩子步骤，这条用例等于什么都没测",
+    ).toBeGreaterThanOrEqual(25);
+    for (const cmd of hook) {
+      expect(doc.has(cmd), `清单里缺这一条（或 flag 不一致）：${cmd}`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("把清单里那一步的 --strict 抹掉 → 红，并点名是哪一步", () => {
+    // 这一条就是本刀的现场：文档写 `check-file-structure.cjs`、钩子跑带 --strict 的那一档。
+    const { code, output } = withDocProbe(() => {
+      const abs = join(REPO_ROOT, DOC_REL);
+      writeText(
+        abs,
+        replaceOnce(
+          readFileSync(abs, "utf8"),
+          "✅ node scripts/check-file-structure.cjs --strict",
+          "✅ node scripts/check-file-structure.cjs",
+        ),
+      );
+    });
+    expect(code).not.toBe(0);
+    expect(output).toContain("node scripts/check-file-structure.cjs --strict");
+    expect(output).toContain("flag 与钩子不一致");
+  });
+
+  it("清单漏登记一步（新增判据忘了同步）→ 红", () => {
+    const { code, output } = withDocProbe(() => {
+      const abs = join(REPO_ROOT, DOC_REL);
+      writeText(
+        abs,
+        replaceOnce(
+          readFileSync(abs, "utf8"),
+          "✅ node scripts/check-title-bar-clearance.cjs\n",
+          "",
+        ),
+      );
+    });
+    expect(code).not.toBe(0);
+    expect(output).toContain("node scripts/check-title-bar-clearance.cjs");
+    expect(output).toContain("§13.1 清单里没有这条");
+  });
+
+  it("清单留着一条钩子已经不跑的命令 → 红（那句「清单就是全文」不许假）", () => {
+    const { code, output } = withDocProbe(() => {
+      const abs = join(REPO_ROOT, DOC_REL);
+      writeText(
+        abs,
+        replaceOnce(
+          readFileSync(abs, "utf8"),
+          "✅ node scripts/check-void-floats.cjs",
+          "✅ node scripts/zz-pretend-judge.cjs\n✅ node scripts/check-void-floats.cjs",
+        ),
+      );
+    });
+    expect(code).not.toBe(0);
+    expect(output).toContain("node scripts/zz-pretend-judge.cjs");
+    expect(output).toContain("的 D 组没有这一步");
   });
 });
