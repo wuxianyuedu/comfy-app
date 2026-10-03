@@ -548,47 +548,6 @@
       收摊用 `scripts/reap-process.mjs` 杀整棵树。
       证据：`tests/helpers/symlink-dir.ts`、`pnpm-workspace.yaml`（overrides）、
       `changelog.d/0-storybook-check-junction-and-wdm.md`。
-- [x] **E15 Storybook 的开发期输入不入库、却被类型程序与用例读着：新检出的第一个提交就被门槛拦下（本批修复 + 保证链判据）**：
-      发现路径与 E12 / E13 同一条：另一批 rebase 之后跑 `pnpm typecheck` 才看见 ——
-      `b9cbd762`（ISSUE #1381 第二批，「Args → 数据源」注入层）落进 master 后，任何**没跑过
-      `pnpm storybook` 的检出**都报 `Cannot find module './generated/app-origin'`，
-      报错指向一份谁都没碰过的文件，而 tsc 正是钩子的 A 组：**它拦住的是从这份基线分出去的每一次提交**。
-      同一根链上还有第二格（这次跑受影响用例时才照到）：`tests/storybook-data-sources.test.ts`
-      的「media 源的名字清单与磁盘上的真文件对得上」同样必红 —— 那三张示例图也是现生成、不入库。
-      成因不是哪一步写错了，是两个各自正确的决定叠出来的：
-      ① 注入层读的应用端口**按检出路径推导**（3200~3999，写死的值在别人的机器上必然错），
-      所以产物落在 `.storybook/generated/app-origin.ts`，由 `scripts/storybook.mjs` 现生成、
-      **整目录 gitignore**；② `tsconfig.json` 的 include **显式列着**这个点目录
-      （点目录不在 glob 的默认展开范围里，不列就是 tsc 与 eslint 的双重盲区）。
-      两边单看都对，合起来 = 「类型程序依赖一份只有跑过工作台才存在的文件」。
-      落库时全绿是因为作者的机器上那份文件在 —— 与 E12 同族（在别人的机器上绿），
-      区别是这次红的不是用例，是**门槛本体**，所以危害按「每一个后续提交」计。
-      修法（不动那条设计）：把两个 ensure 都并进 `postinstall` 的唯一入口
-      `scripts/install-git-hooks.mjs` 内部，复用 `scripts/storybook-assets.mjs` 里现成的
-      `ensureStorybookAssets()` 与 `writeStorybookAppOrigin()`（两者都按内容比对写，幂等；
-      `pnpm storybook` 每次启动照旧刷新值）。
-      **为什么不改成 env 注入**：`data-sources.tsx` 文件头记着实测结论 —— Storybook 的 webpack
-      把 `process.env` 换成一份白名单对象（bundle 里只有 `NODE_ENV` / `NODE_PATH` / `STORYBOOK` /
-      `PUBLIC_URL`），业务变量进不去、那种兜底永远走兜底。**为什么不给 postinstall 再拼一条命令**：
-      `launcher-core/node-runner.mjs::checkPostinstall()` 要求那条逐字以
-      `node scripts/install-git-hooks.mjs` 开头、禁止 `&&`/`||`/`sh`（#636 的形态）。
-      **失败语义**与同入口里的另外两步一致：只提示，绝不让 `pnpm install` 挂掉 ——
-      这一步缺了只是少一份开发期输入，依赖没装坏。
-      判据 `tests/storybook-tsc-input.test.ts`（进固定清单）：它判的是**保证链**而不是
-      「文件此刻在不在」（后者机器相关、干净检出上必红，等于又一处只能在某台机器上绿的判据）——
-      ① 消费方 import 的导出名与生成器实际产出的**同一组**（真把生成器跑到临时目录再解析，
-      桩掉生成器等于拿自己写的期望证明自己）；② `postinstall` 的入口里那句调用**在 try 里、
-      catch 说得出怎么办**（按调用形态判，不是按文件名 —— 解构那行也带同一个标识符）；
-      ③ 两份产物仍然不入库（`.gitignore` 列着 `/.storybook/generated/` 与 `/.storybook/assets/`，
-      且 `git ls-files` 数出它们没被提交）。
-      ②③ 互为前提：哪天那份文件改成入库，② 就该撤 —— 单向陈旧由这两条一起拦。
-      反证两次各红各的：造一份少一个导出名的产物 → ① 红；把入口里那句调用注掉 → ② 红
-      （而「真文件必须有这句」同时在场，挡住反证写成永真）。
-      附带：`scripts/storybook-assets.mjs::figure()` 补了三个 `@param` —— 测试静态 import 那份
-      `.mjs` 之后它就进了类型程序（`checkJs` 是打开的），那三行隐式 any 是本批**新照出来的**，不是旧账。
-      证据：`scripts/install-git-hooks.mjs`、`scripts/storybook-assets.mjs`、
-      `tests/storybook-tsc-input.test.ts`、`scripts/affected-tests.mjs`（固定清单）、
-      `changelog.d/0-storybook-tsc-input-postinstall.md`。
 - [x] **E12 新落地的跨平台判据在开发机上「只能为不可能红而绿」：`executable-resolve` 的 POSIX 那几档（本批修复）**：
       发现路径是台账 E7 那一批 rebase 时撞上的 —— `99323be7`（ISSUE #1327，控制台起进程前先解析可执行形态）
       落进 master 时带着**它自己的 5 条红**：`executable-resolve.test.ts` 4 条 + `console-run.test.ts` 1 条，
@@ -920,31 +879,39 @@
 - [ ] **F4 无离线能力**（无 SW / `onLine` / 离线队列；58 文件手写 localStorage 无 persist）。
 - [ ] **F5 虚拟滚动仅 2 处**；`next/dynamic` 仅 2 处。
 - [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用棘轮 78 条存量违规。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、`scripts/.ui-primitives-baseline.json:18`。剩余的一格：**像素基线**仍是 Playwright `toHaveScreenshot`（规范 11 §11.8），Storybook 不替代它。
-  **已加的两层判据**（同批）：故事文件的**枚举来源**由
-  `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`
-  守着（`cva()` 返回的是函数、运行期没有 `.variants`；以及手写清单漏档）。
-  判据上线时当场抓到 `button.stories.tsx` 漏列 `icon-sm` / `icon-lg` 两档
-  —— 而这两档全库有 46 处在用，口径见规范 16 §16.2.3.4。
-  **组件覆盖率**随后从「写在 `guide-storybook.md` 里的一句话」升成棘轮判据
-  （`tests/storybook-component-coverage.test.ts` + 同一份门禁，台账
-  `scripts/storybook-checks/coverage-ledger.mjs`）：分子只许升不许降，分母
-  （`ui/` 的可预览文件数）变了要同批回答「新增的那个为什么没有 story」。
-  这一格因此**不再是文档里的数字** —— 口径见规范 16 §16.2.3.5。
-  当前覆盖 `scripts/.storybook-coverage-baseline.json` 里的实测值；没有 story 的
-  组件逐条理由（hook / 只有出错时才渲染的边界件 / 被别的基元 import 的部件…）
-  也写在那份台账里，不是一张赦免名单。
-  **「有数据依赖」那一批已收口**（同批）：先搭了「Args → 数据源」的注入层
-  （`.storybook/data-sources.tsx`，口径见规范 16 §16.2.3.6），再给它写 story。
-  复核时纠了一件事 —— 「有数据依赖」此前用得太宽，其中一大半其实是
-  **纯 props，只是有几个 ReactNode 参数**（`field` / `seed-mode-button` /
-  `option-list-popover` / `segment-popover`）或**结构化入参**
-  （`studio/RequiredSummary` 吃 `WorkflowIOMap`）；真正需要注入层的只有
-  「吃一条真链路 / 一层真上下文」那一档。同批新增 `Studio/` 与 `Workshop/`
-  两个 story 分组。`ui/` 有 story 的组件数 21 → 34（棘轮基线同批改）。
-  **注入层刻意不 mock**：拿不到真数据时画的就是「拿不到」（`media` 源留了一个
-  故意不存在的 `missing.png`，名字写错则抛错）。跨源那道门槛（应用不回 CORS）
-  是**刻意不绕**的，写明在 §16.2.3.6 —— 于是 tRPC 那一族 story 在画布上验的
-  是「界面在后端不可用时的形态」，那恰好是真机上最难复现的一档。
+      **已加的两层判据**（同批）：故事文件的**枚举来源**由
+      `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`
+      守着（`cva()` 返回的是函数、运行期没有 `.variants`；以及手写清单漏档）。
+      判据上线时当场抓到 `button.stories.tsx` 漏列 `icon-sm` / `icon-lg` 两档
+      —— 而这两档全库有 46 处在用，口径见规范 16 §16.2.3.4。
+      **组件覆盖率**随后从「写在 `guide-storybook.md` 里的一句话」升成棘轮判据
+      （`tests/storybook-component-coverage.test.ts` + 同一份门禁，台账
+      `scripts/storybook-checks/coverage-ledger.mjs`）：分子只许升不许降，分母
+      （`ui/` 的可预览文件数）变了要同批回答「新增的那个为什么没有 story」。
+      这一格因此**不再是文档里的数字** —— 口径见规范 16 §16.2.3.5。
+      当前覆盖 `scripts/.storybook-coverage-baseline.json` 里的实测值；没有 story 的
+      组件逐条理由（hook / 只有出错时才渲染的边界件 / 被别的基元 import 的部件…）
+      也写在那份台账里，不是一张赦免名单。
+      **「有数据依赖」那一批已收口**（同批）：先搭了「Args → 数据源」的注入层
+      （`.storybook/data-sources.tsx`，口径见规范 16 §16.2.3.6），再给它写 story。
+      复核时纠了一件事 —— 「有数据依赖」此前用得太宽，其中一大半其实是
+      **纯 props，只是有几个 ReactNode 参数**（`field` / `seed-mode-button` /
+      `option-list-popover` / `segment-popover`）或**结构化入参**
+      （`studio/RequiredSummary` 吃 `WorkflowIOMap`）；真正需要注入层的只有
+      「吃一条真链路 / 一层真上下文」那一档。同批新增 `Studio/` 与 `Workshop/`
+      两个 story 分组。`ui/` 有 story 的组件数 21 → 34（棘轮基线同批改）。
+      **注入层刻意不 mock**：拿不到真数据时画的就是「拿不到」（`media` 源留了一个
+      故意不存在的 `missing.png`，名字写错则抛错）。跨源那道门槛（应用不回 CORS）
+      是**刻意不绕**的，写明在 §16.2.3.6 —— 于是 tRPC 那一族 story 在画布上验的
+      是「界面在后端不可用时的形态」，那恰好是真机上最难复现的一档。
+      **`ui/` 的组件覆盖率已到 87/87（全量），理由表清空**（同批）：那 5 条理由
+      逐条都是「补法」而不是「不能写」——`progress`（两个 slot 在 `progress-bar`
+      里看不到）、`sonner`（story 里真调 `toast()`）、`error-boundary`（配一个会抛
+      的 `Boom`）、`dialog-overlay` / `dialog-width`（**出口算出来的字符串就是它的
+      对外面**）。判据随之从「理由表非空」换成一条**双向不变式：表空 ⟺ 覆盖率已满**
+      （原判据会在表真的清空后要求人凑一条假理由）。同批修掉 `cvaVariantKeys`
+      按「整文件同名轴取并集」比较的真缺陷（`ui/item.tsx` 两处 `variant` 会被判成
+      「缺档」而修法无处可去）。口径见规范 16 §16.2.3.7。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。

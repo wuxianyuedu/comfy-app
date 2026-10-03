@@ -38,32 +38,45 @@ export const NOT_A_UI_SURFACE = new Map([
   ],
 ]);
 
-/**
- * 落在分母内（有界面形态）但**当前没有** story 的文件 → 为什么可以先没有。
+/** 理由表：落在分母内（有界面形态）但**当前没有** story 的文件 → 为什么可以先没有。
  *
- * **加一行之前先回答「没有 story 的代价是什么」**：若代价是「改了样子没人看得见」，
- * 它就该有 story（哪怕要用 Args 注入数据），不该进这张表。逐条写清代价与替代。
+ * **加一行之前先回答「没有 story 的代价是什么」**：若代价是「改了样子没人
+ * 看得见」，它就该有 story（哪怕要用 Args 注入数据），不该进这张表。
+ * 逐条写清代价与替代。
+ *
+ * ## 这张表现在是**空的**，而且空是这一批的成果
+ *
+ * 本批之前它有 5 条，逐条都是「它确实没有可看的形态」—— 而 5 条这一批都补上了
+ * story，说明「加一行之前先回答代价」这道门槛是真的会被回头算账的：
+ *
+ * - `progress` 此前记「形态由 `progress-bar` 承载」——只对了一半，
+ *   `ProgressLabel` / `ProgressValue` 两个 slot 在那边看不到；已补「组合形态」
+ *   那一档；
+ * - `sonner` 此前记「只有真出 toast 才画得出东西」——那正是**补法**
+ *   （story 里真调 `toast()`），不是「不能有 story」；
+ * - `error-boundary` 此前记「要靠一个会抛的兄弟组件」——那也正是补法
+ *   （story 里配一个 `Boom`）；
+ * - `dialog-overlay` / `dialog-width` 是**纯常量 / 派生函数模块**（无 DOM），
+ *   按 `ui/media-drag-source` 的先例补齐：出口**算出来的字符串就是它的对外面**，
+ *   把那张串摆在画布上、写清它为什么长这样，比「没有 story」更值。
+ *
+ * 表空之后，「判据在空转」这个信号落回**实测**那一侧 —— 分子分母都非空由
+ * `uiCoverage` 现算、「每个 story 都真的 import 到了组件」由用例核。
+ * `storybook-check.mjs` 因此改成「**表空 ⟺ 覆盖率满**」的双向不变式
+ * （两边单独成立都不合法）。
+ *
+ * ## 为什么写成一个空的 `new Map()` 而不是 `new Map([])`
+ *
+ * 空数组字面量会把 `Map` 推成 `Map<any, any>`，于是用例里读 `reason.length`
+ * 变成 `@typescript-eslint/no-unsafe-member-access`（判据自己的红会拦下所有
+ * 人的提交 —— 本仓发生过）。`@type` 注解必须写在**这个导出**上：写在中间函数
+ * 上 `checkJs` 认、但类型化 eslint 规则读的是导出符号本身的类型。
+ *
+ * 「表为空」是这一批的成果，不是被删空 —— 见上面那段说明。
+ *
+ * @type {Map<string, string>} 文件 → 理由（当前为空）
  */
-export const NO_STORY_REASON = new Map([
-  // ── 被其它基元 import 的部件：它的形态在调用它的基元 story 里已经看得到 ──
-  [
-    "dialog-overlay.ts",
-    "`ui/dialog` 的遮罩类名常量；形态在 dialog 的弹层里，单独一个 story 看不到",
-  ],
-  ["dialog-width.ts", "纯常量 + 派生函数（弹窗宽度的单一出处），无 DOM"],
-  [
-    "progress.tsx",
-    "shadcn 的 Track/Indicator 薄封装；可见形态由 `ui/progress-bar` 承载（它自己的 story 里就画着 Track）",
-  ],
-  [
-    "sonner.tsx",
-    "`Toaster` 容器：只有真出 toast 才画得出东西，属「起整个应用看」那一档",
-  ],
-  [
-    "error-boundary.tsx",
-    "只有子树**抛错**时才渲染，Args 注不进去（要靠一个会抛的兄弟组件）",
-  ],
-]);
+export const NO_STORY_REASON = new Map();
 
 /**
  * 收集 `src/components/**` 下的故事文件。
