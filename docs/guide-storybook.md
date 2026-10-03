@@ -65,6 +65,14 @@ const VARIANTS: ButtonVariant[] = ["default", "outline" /* … */];
 
 `ui/button.stories.tsx` / `ui/badge.stories.tsx` 就是这么写的，照抄它们。
 
+**故事文件自己也受四条判据守着**（`scripts/storybook-checks/story-surface.mjs`）：
+`title` 必须有（缺了 Storybook 按路径自动生成条目，落在侧栏哪个分组取决于推导规则）、
+真组件必须接上（`component:` 直连，或经适配件 —— 但适配件里得真的渲染它）、
+同目录的分组前缀要一致、**新写 / 改过的**故事必须给必填 props 的 `args`
+（不写的话组件在画布上抛 `Cannot read properties of undefined` —— 就是下面
+「侧栏列着故事、画布一片空白」那个形态）。最后一条只挡新增，理由见规范
+[16 §16.2.3.8](standards/16-shadcn-ui与表单校验.md)。
+
 **手写清单必须覆盖每一档，别只列「常用的那几档」**：这条有机器判据兜着
 （`tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`），
 `cva` 里加一档而故事没跟上、或整条轴被漏掉，提交时就会被点出来。判据上线时当场
@@ -241,6 +249,13 @@ hook（没有 DOM 形态，判据是用例）、只有出错时才渲染的边�
   `FIXED_STRUCTURAL_TESTS`）—— 守注册表接线、媒体名与磁盘双向对齐、「点目录进了
   tsc / eslint 的扫描面」这几件**悄悄失效时不会红**的事。它守的是「接线还在不在」；
   「有没有真的画出来」由真浏览器逐 story 渲染核对。
+- 故事面的判据：`scripts/storybook-checks/story-surface.mjs` +
+  `tests/storybook-story-surface.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）—— 守
+  「这份故事到底有没有把那个组件摆出来看」：`title` 缺了会按路径自动分组、
+  真组件没接上就是摆了别的东西、必填 props 没 `args` 会在画布上抛、
+  同目录两套分组前缀则让「按分组浏览」名存实亡。四种错法**构建全绿、画布也画得出
+  东西**，所以只能靠判据。门禁在 `node scripts/storybook-check.mjs --changed`
+  （pre-commit D 组就是这么调它的）。
 - 枚举来源的判据：`tests/storybook-cva-variant-source.test.ts` 与
   `scripts/storybook-check.mjs`（共用 `scripts/storybook-checks/cva-variant-source.mjs`
   的纯函数，AST 判；详细口径见规范 [16 §16.2.3.4](standards/16-shadcn-ui与表单校验.md#16234-故事里的枚举清单从-props-派生不要从-cva-的返回值上取)）。

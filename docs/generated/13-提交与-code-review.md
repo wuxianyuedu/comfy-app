@@ -188,7 +188,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-void-floats.cjs         # src/lib `void someFn(...)` 悬空棘轮（见下 13.5.7）
 ✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
 ✅ node scripts/check-doc-references.cjs     # 文档引用与权威源一致（= `pnpm doc:check`；序号那条判据见下 13.5.10）
-✅ node scripts/storybook-check.mjs          # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮（见 16 §16.2.3.4）
+✅ node scripts/storybook-check.mjs --changed # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮 + 故事面（见 16 §16.2.3.4 / §16.2.3.8）
 ```
 
 > **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /

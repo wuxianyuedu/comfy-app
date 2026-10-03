@@ -19,6 +19,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
@@ -35,6 +36,10 @@ import {
   NO_STORY_REASON,
   uiCoverage,
 } from "./storybook-checks/coverage-ledger.mjs";
+import {
+  missingRequiredArgs,
+  storySurfaces,
+} from "./storybook-checks/story-surface.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const COMPONENTS = path.join(ROOT, "src", "components");
@@ -186,6 +191,127 @@ function coverageViolations() {
   return out;
 }
 
+/**
+ * 故事「面」的盘点与单向阻断（口径见 `storybook-checks/story-surface.mjs` 文件头）。
+ *
+ * 两档刻意分开：
+ *  · **title / 连上真组件 / 同目录分组一致** —— 存量已经全绿（实测只有一份缺
+ *    title 的历史遗留，本批顺手补上），所以它们**无条件**判；
+ *  · **必填 props 有没有 args** —— 存量里有一批正当形态（值在 `render` 里给、
+ *    受控开关由 story 持有、注入层的 `sourceName` 就是它的 args），**逐条给它们
+ *    白名单会把这张表变成第二份赦免名单**。所以这一档只落在**本次提交动过的**
+ *    故事文件上（`--changed`），存量照实盘点、不阻断 —— 口径与「棘轮只挡新增」
+ *    一致，理由写在模块文件头。
+ * @param {string[]} changedFiles 仓库相对路径
+ * @returns {{violations: string[], summary: string}}
+ */
+function surfaceViolations(changedFiles) {
+  const stat = storySurfaces({ componentsRoot: COMPONENTS, repoRoot: ROOT });
+  /** @type {string[]} */
+  const violations = [];
+
+  for (const file of stat.missingTitle) {
+    violations.push(
+      file +
+        " 没有 `title` —— Storybook 会按路径自动生成一个条目，它落在侧栏的哪个\n" +
+        "    分组里取决于推导规则，于是「按 UI/Studio/Workshop 分组浏览」这件事只在\n" +
+        "    每份故事都写了 title 时成立。构建、覆盖率、画布渲染都不会因此报错。",
+    );
+  }
+  for (const file of stat.missingComponent) {
+    violations.push(
+      file +
+        " 没有把**真组件**接上 —— 本目录的组件既没被 import，也没在文件里用到。\n" +
+        "    → 常规写法是 `component: <真组件>`；要用适配件（受控状态 / 值源解析 /\n" +
+        "      把复合件摆成一行）也可以，但适配件里必须真的渲染那个组件 ——\n" +
+        "      口径见 `scripts/storybook-checks/story-surface.mjs` 文件头。",
+    );
+  }
+  for (const d of stat.groupDeviations) {
+    violations.push(
+      "同目录的多数故事把分组写在 `" +
+        d.expected +
+        "/` 下，而 " +
+        d.file +
+        " 写的是 `" +
+        d.group +
+        "` —— 分组靠人写 `title:` 的字符串维系，没有判据时同一目录会长出两套前缀。",
+    );
+  }
+
+  /* 必填 props 这一档：只判本次动过的故事文件（口径见上面的函数注释）。 */
+  const changed = new Set(changedFiles);
+  let argsChecked = 0;
+  for (const story of stat.stories) {
+    if (!changed.has(story.file)) continue;
+    const missing = missingRequiredArgs(
+      path.join(ROOT, story.file),
+      new Set(story.args),
+    );
+    if (missing.length === 0) {
+      argsChecked += 1;
+      continue;
+    }
+    violations.push(
+      story.file +
+        " 没给必填 props 的 `args`：" +
+        missing.join(" / ") +
+        "\n" +
+        "    → 组件在画布上读到 `undefined`（表现与「侧栏有故事、画布一片空白」同形）。\n" +
+        "      给了就是给了：写进 `args`，或在 `render` 里显式传（注入层解析出来的值也算）。",
+    );
+  }
+
+  return {
+    violations,
+    summary:
+      "故事面 " +
+      stat.stories.length +
+      " 份（缺 title " +
+      stat.missingTitle.length +
+      " / 未接真组件 " +
+      stat.missingComponent.length +
+      " / 分组偏离 " +
+      stat.groupDeviations.length +
+      "；本次动过 " +
+      changed.size +
+      " 份里判过 args 的 " +
+      argsChecked +
+      " 份）",
+  };
+}
+
+/**
+ * 本次提交动过的故事文件（仓库相对路径）。
+ *
+ * 默认给空数组（= 只盘点、不阻断 args 那一档）；`.githooks/pre-commit` 用
+ * `--changed` 把暂存区那一份交给它 —— 判据的**执行者**是钩子，钩子里才知道
+ * 「这次改了哪些文件」（口径与其余棘轮的「只挡新增」一致）。
+ * 读法是 `git diff --cached --name-only`：暂存区是提交的**输入**，不是 HEAD 与
+ * 工作区的差 —— 后者在「改了还没 add」时会凭空多出一份不该判的文件。
+ * @returns {string[]}
+ */
+function changedStoryFiles() {
+  if (!process.argv.includes("--changed")) return [];
+  const result = spawnSync(
+    "git",
+    ["diff", "--cached", "--name-only", "--diff-filter=ACM"],
+    { cwd: ROOT, encoding: "utf8" },
+  );
+  if (result.error !== undefined || result.status !== 0) {
+    /* 拿不到清单时退回空：这一档是**增量**层，读不到就退成盘点 ——
+       但要说出来，不能静默（静默的判据比没有判据更糟）。 */
+    process.stderr.write(
+      "[storybook] 读不到暂存区清单，本次只盘点、不判必填 props 那一档\n",
+    );
+    return [];
+  }
+  return String(result.stdout ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.endsWith(".stories.tsx"));
+}
+
 function main() {
   const stories = collectStories(COMPONENTS).sort();
   if (stories.length === 0) {
@@ -309,6 +435,9 @@ function main() {
   }
 
   violations.push(...coverageViolations());
+  const surface = surfaceViolations(changedStoryFiles());
+  violations.push(...surface.violations);
+  process.stdout.write("[storybook] " + surface.summary + "\n");
 
   if (violations.length > 0) {
     process.stderr.write(

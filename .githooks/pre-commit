@@ -195,7 +195,13 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 而 Storybook 在**加载期**抛 `Cannot read properties of undefined`（侧栏有故事、
   # 画布一片空白）。判据还顺带核「手写清单没漏档」——首轮就这么漏了
   # `icon-sm` / `icon-lg` 两档（实测 46 处调用）。
-  run "故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮" node scripts/storybook-check.mjs
+  # 故事面的三件事（规范 16 §16.2.3.8）：`title` 缺了 Storybook 按路径自动生成条目
+  # （落在侧栏哪个分组取决于推导规则）、真组件没接上（画布上摆的是适配件或别的
+  # 东西）与同目录两套分组前缀（分组靠人写 title 维系，没有任何东西会告诉你漂了）。
+  # 第四件「必填 props 没给 args」只判 `--changed`（本次暂存的故事文件）—— 存量里
+  # 有一批正当形态（值在 render 里给 / 受控开关由 story 持有 / 注入层的 sourceName
+  # 就是它的 args），逐条白名单会变成第二份赦免名单，所以口径是「只挡新增」。
+  run "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）" node scripts/storybook-check.mjs --changed
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────

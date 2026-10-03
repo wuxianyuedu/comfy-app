@@ -904,6 +904,17 @@
       故意不存在的 `missing.png`，名字写错则抛错）。跨源那道门槛（应用不回 CORS）
       是**刻意不绕**的，写明在 §16.2.3.6 —— 于是 tRPC 那一族 story 在画布上验的
       是「界面在后端不可用时的形态」，那恰好是真机上最难复现的一档。
+      **故事「面」也补上了判据**（同批）：覆盖率台账只看「文件名 ↔ 故事文件」，
+      于是四种**构建全绿、画布也画得出来**的漏法一个都拦不住 —— 故事缺 `title`
+      （Storybook 按路径自动生成条目，落哪个分组取决于推导规则）、真组件没接上
+      （画布上摆的是别的东西）、新写的故事没给必填 props 的 `args`（组件在画布上抛
+      `Cannot read properties of undefined`，与 §16.2.3.4 那轮踩的坑同形）、
+      同目录两套分组前缀（分组靠人写 `title:` 维系）。判据
+      `scripts/storybook-checks/story-surface.mjs` + `tests/storybook-story-surface.test.ts`
+      （进固定清单），门禁挂在 pre-commit D 组（`--changed`）。第四档**只挡新增**
+      —— 存量那 86 份的必填项多由「子件 + 默认值」或注入层的 `sourceName` 兜住，
+      逐条白名单会变成第二份赦免名单。上线时当场抓到一处真漏档：
+      `ui/simple-key-handler.stories.tsx` 从来没有 `title`。口径见规范 16 §16.2.3.8。
       **`ui/` 的组件覆盖率已到 87/87（全量），理由表清空**（同批）：那 5 条理由
       逐条都是「补法」而不是「不能写」——`progress`（两个 slot 在 `progress-bar`
       里看不到）、`sonner`（story 里真调 `toast()`）、`error-boundary`（配一个会抛
