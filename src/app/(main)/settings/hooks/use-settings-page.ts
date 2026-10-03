@@ -18,11 +18,11 @@ import { useExternalAction } from "~/components/ui/use-external-action";
 /* 默认端口从 `~/lib/endpoints` 取（零依赖常量层）：它同时被设置页视图消费，
  * 而 `app-settings.ts` 顶层 import fs —— 走那条路会让设置页整页 500（ISSUE #282/#317）。 */
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
-import { runAsyncAction } from "~/lib/async-action";
-import { splitExtraModels, type RemoteModelEntry } from "~/lib/llm/types";
+import { splitExtraModels } from "~/lib/llm/types";
 import { api } from "~/trpc/react";
 
 import { useSettingsComfy } from "./use-settings-page-comfy";
+import { useSettingsSave } from "./use-settings-page-save";
 import { useSettingsLoadStatus } from "./use-settings-page-load-status";
 import { useSettingsRemoteModels } from "./use-settings-page-remote-models";
 import { useSettingsAppUpdate } from "./use-settings-page-app-update";
@@ -250,6 +250,7 @@ export function useSettingsPage(): SettingsPageController {
   const {
     comfyStatus,
     comfyInstance,
+    comfyStorage,
     comfyStarting,
     comfyStopping,
     comfyOpening,
@@ -260,6 +261,7 @@ export function useSettingsPage(): SettingsPageController {
     openComfyInBrowser,
     comfyLog,
     refetchComfyInstance,
+    refetchComfyStorage,
   } = useSettingsComfy({
     settingsDraft,
     showFlash,
@@ -296,80 +298,24 @@ export function useSettingsPage(): SettingsPageController {
     [openExternalAction, openExternalM],
   );
 
-  /* ── 保存 ───────────────────────────────────────────────── */
-  /** 把给定草稿落库。远程模型的添加 / 编辑 / 移除即时保存也走这里；
-   *  apiKey 是「留空不改」语义：llmApiKey 为空就不传。 */
-  const persistLlmDraft = useCallback(
-    async (draft: LlmConfig): Promise<{ ok: boolean; error?: string }> => {
-      setSaving(true);
-      /* 这一处**同时**要「反馈通道」与「返回值给调用方继续用」：
-       * 出口的返回值正是为此给的（收口前这里是 `catch` 里再拼一次
-       * `errorMessage` 并 return 一个 `{ok,error}`）。 */
-      try {
-        const result = await runAsyncAction(
-          async () => {
-            // option C：把「本地候选(字符串) + 远端独立模型(对象)」合并成一整份清单
-            // 发给 configSave，由服务端按「字符串 vs 对象」各自写回 llmConfig / remoteModel 表。
-            const payloadExtra: Array<string | RemoteModelEntry> = [
-              ...draft.localCandidates,
-              ...draft.extraModels,
-            ];
-            await saveLlmCfg.mutateAsync({
-              provider: draft.provider,
-              apiKey: llmApiKey || undefined,
-              baseUrl: draft.baseUrl,
-              model: draft.model,
-              extraModels: payloadExtra,
-              temperature: draft.temperature,
-              temperatureByTask: draft.temperatureByTask,
-              maxTokens: draft.maxTokens,
-            });
-            if (llmApiKey) setLlmApiKey("");
-            await llmQ.refetch();
-          },
-          {
-            report: showFlash,
-            failureText: "保存失败",
-            successText: "LLM 配置已保存",
-          },
-        );
-        return result.ok
-          ? { ok: true as const }
-          : { ok: false as const, error: result.detail };
-      } finally {
-        setSaving(false);
-      }
-    },
-    [llmApiKey, saveLlmCfg, llmQ, showFlash],
-  );
-
-  const saveLlm = useCallback(async () => {
-    if (!llmDraft) return;
-    await persistLlmDraft(llmDraft);
-  }, [llmDraft, persistLlmDraft]);
-
-  const savePrefs = useCallback(async () => {
-    if (!settingsDraft) return;
-    setSaving(true);
-    try {
-      await runAsyncAction(
-        async () => {
-          await saveSetting.mutateAsync(settingsDraft);
-          await settingsQ.refetch();
-          // 形态是「配置路径的目录形态」的函数：路径可能刚被改过，立即重判定一次
-          // （不必等 5s 轮询，也不该再走一次秒级运行态探测）。
-          await refetchComfyInstance();
-        },
-        {
-          report: showFlash,
-          failureText: "保存失败",
-          successText: "偏好已保存",
-        },
-      );
-    } finally {
-      setSaving(false);
-    }
-  }, [settingsDraft, saveSetting, settingsQ, refetchComfyInstance, showFlash]);
+  /* ── 保存（沉在 sub-hook）──────────────────────────────────
+   * LLM 落库（含远程模型的即时保存出口）、偏好落库，以及落库后连带重取的
+   * 实例元数据（安装形态 + 桌面实例的六个存储目录）。注入的是两份草稿、保存
+   * 指示器与反馈通道 —— 与 ComfyUI / DbStudio 的运行态无共享 state。 */
+  const { persistLlmDraft, saveLlm, savePrefs } = useSettingsSave({
+    settingsDraft,
+    llmDraft,
+    llmApiKey,
+    setSaving,
+    setLlmApiKey,
+    showFlash,
+    saveSettingM: saveSetting,
+    settingsQ,
+    saveLlmCfgM: saveLlmCfg,
+    llmQ,
+    refetchComfyInstance,
+    refetchComfyStorage,
+  });
 
   /* ── 按任务温度 ─────────────────────────────────────────── */
   const patchLlm = useCallback((patch: Partial<LlmConfig>) => {
@@ -453,6 +399,7 @@ export function useSettingsPage(): SettingsPageController {
     startOllama,
     comfyStatus,
     comfyInstance,
+    comfyStorage,
     comfyStarting,
     comfyStopping,
     comfyOpening,
