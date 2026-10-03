@@ -46,7 +46,12 @@ function draftKeyFor(id: string): string {
   return `comfyapp.workshop.draft.${id}.v1`;
 }
 
-/** 解析并补全一份草稿：逐字段校验类型，损坏则回退成空草稿。 */
+/** 解析并补全一份草稿：逐字段校验类型，损坏则回退成空草稿。
+ *
+ *  与 `~/lib/workshop/draft-sync-shared` 的 `parseDraftDto` 同一条口径：**三类元素
+ *  原样留着**（认不出就丢等于删用户存在本机上的东西）。形状问题由
+ *  `~/lib/workshop/draft-integrity` 的 `auditDraftElements` 在消费侧判、在工坊界面
+ *  报（台账 F13″）—— 这一扇门与那扇门共用一份判据，不各写一遍。 */
 function parseDraft(raw: string | null): WorkshopDraft {
   if (!raw) return emptyWorkshopDraft();
   try {

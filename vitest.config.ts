@@ -414,6 +414,15 @@ export default defineConfig({
         "src/app/api/custom-nodes/manifest/route.ts",
         "src/config/custom-nodes.ts",
         "src/components/studio/canvas/use-custom-nodes-registry.ts",
+        /* 台账 F13″ 这一刀的两个新出口（草稿元素级判据 + 它的界面出口），**两处同批**
+         * 登记（`coverage.include` + `thresholds`）——只写门槛不进 `include` 会让门槛
+         * 静默失效（本仓已经栽过两次：`ui/file-picker.tsx`、上面那批自定义节点出口）。
+         *   · `draft-integrity.ts` 是「哪些元素形状不认识」的唯一判据，服务端镜像与
+         *     浏览器缓存两扇门共用一份；漏判一个字段就是「脏数据照样喂进 prompt 拼装」；
+         *   · `DraftIntegrityHint.tsx` 是它唯一的用户可见出口（硬规则 4）。判据算得再准，
+         *     出口没接上就等于「保留原样但没人知道」。 */
+        "src/lib/workshop/draft-integrity.ts",
+        "src/components/workshop/DraftIntegrityHint.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1765,6 +1774,28 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 台账 F13″ 这一刀的两个新出口（与上面 `coverage.include` 同批登记）。
+         * 判据本体四维满档：27 条用例把「每一种脏法都要被点名」与「干净元素一条都不报」
+         * 两头都钉住，另有一组与 `parseDraftDto` 的**配对**断言 —— 同一条脏元素既要
+         * 还在原处（丢掉=静默删用户数据）、又要被报出来（继续不判=这处仍是洞），
+         * 两边任何一边退化都红。
+         * 出口那块**分支 87.5 实测 → 门槛 85**：没盖到的那一支是 `lines[0]?.tab ?? "script"`
+         * 的右半边 —— 组件在 `issues` 为空时已经早退了，那一支按构造不可达。
+         * 不为了凑数去 mock 一个「有问题但一条都组不出来」的输入形状：那测的是今天
+         * 不存在的输入，数字好看而判据是空的（口径同台账 E8 那批 `if (!dir)` 的处置，
+         * 也同 §18.6「门槛取实测、旧值与原因写在注释里」）。 */
+        "src/lib/workshop/draft-integrity.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/workshop/DraftIntegrityHint.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 85,
         },
       },
     },
