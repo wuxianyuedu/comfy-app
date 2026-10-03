@@ -15,6 +15,8 @@ import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
  */
 const meta = {
   title: "UI/SimpleKeyHandler",
+  /* `component` 是可选的，这里刻意不给：属性包不是组件，连上去只会让人以为它有
+     props 面板 —— 画出形态的是 `Demo` 里那个 `role` 元素，Args 也由它接。 */
   args: { keys: ["Space", "Enter"] as readonly string[] },
 } satisfies Meta<SimpleKeyHandlerProps>;
 
