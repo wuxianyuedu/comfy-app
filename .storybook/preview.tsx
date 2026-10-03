@@ -1,6 +1,13 @@
 import type { Decorator, Preview } from "@storybook/nextjs";
 import { withThemeByClassName } from "@storybook/addon-themes";
 
+import {
+  APP_ORIGIN_CHOICES,
+  DEFAULT_APP_ORIGIN,
+  withAppProviders,
+  withTrpcApp,
+} from "./data-sources";
+
 // 引入应用的全局样式：主题 token（`@theme` / `.dark` 覆盖）与 Tailwind 都在这里，
 // 不引入的话所有组件都会退化成无样式的裸 DOM。
 import "../src/app/globals.css";
@@ -21,8 +28,37 @@ const withTheme: Decorator = withThemeByClassName({
   defaultTheme: "dark",
 });
 
+/**
+ * 工具栏旋钮：真 tRPC 链路指向的应用 origin（见 `data-sources.tsx` 的
+ * `DEFAULT_APP_ORIGIN` 那段注释 —— 为什么它不是一个环境变量）。
+ *
+ * 缺省是**本检出算出来的**那个（启动时由 `scripts/app-port.mjs` 现算，见
+ * `data-sources.tsx` 的 `DEFAULT_APP_ORIGIN`）；想指到别的实例时在这里换。
+ */
+const APP_ORIGIN = "appOrigin";
+
 const preview: Preview = {
-  decorators: [withTheme],
+  globalTypes: {
+    [APP_ORIGIN]: {
+      description: "真 tRPC 链路指向的应用 origin（应用没起也能看降级形态）",
+      toolbar: {
+        icon: "link",
+        title: "应用 origin",
+        items: Object.entries(APP_ORIGIN_CHOICES).map(([title, value]) => ({
+          title: `${title}（${value}）`,
+          value,
+        })),
+        dynamicTitle: true,
+      },
+    },
+  },
+  initialGlobals: {
+    [APP_ORIGIN]: DEFAULT_APP_ORIGIN,
+  },
+  /* 顺序即语义：trpc 提供者在最外层（组件一挂载就要能发请求），应用外壳
+     （toast / 消息中心 / tooltip）在它里层，主题在最内层（只改 `<html>` 的
+     class，与组件树无关）。 */
+  decorators: [withTrpcApp, withAppProviders, withTheme],
   parameters: {
     controls: {
       matchers: {

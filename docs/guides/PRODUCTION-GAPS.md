@@ -844,6 +844,18 @@
       当前覆盖 `scripts/.storybook-coverage-baseline.json` 里的实测值；没有 story 的
       组件逐条理由（hook / 只有出错时才渲染的边界件 / 被别的基元 import 的部件…）
       也写在那份台账里，不是一张赦免名单。
+      **「有数据依赖」那一批已收口**（同批）：先搭了「Args → 数据源」的注入层
+      （`.storybook/data-sources.tsx`，口径见规范 16 §16.2.3.6），再给它写 story。
+      复核时纠了一件事 —— 「有数据依赖」此前用得太宽，其中一大半其实是
+      **纯 props，只是有几个 ReactNode 参数**（`field` / `seed-mode-button` /
+      `option-list-popover` / `segment-popover`）或**结构化入参**
+      （`studio/RequiredSummary` 吃 `WorkflowIOMap`）；真正需要注入层的只有
+      「吃一条真链路 / 一层真上下文」那一档。同批新增 `Studio/` 与 `Workshop/`
+      两个 story 分组。`ui/` 有 story 的组件数 21 → 34（棘轮基线同批改）。
+      **注入层刻意不 mock**：拿不到真数据时画的就是「拿不到」（`media` 源留了一个
+      故意不存在的 `missing.png`，名字写错则抛错）。跨源那道门槛（应用不回 CORS）
+      是**刻意不绕**的，写明在 §16.2.3.6 —— 于是 tRPC 那一族 story 在画布上验的
+      是「界面在后端不可用时的形态」，那恰好是真机上最难复现的一档。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。
