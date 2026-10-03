@@ -11,22 +11,37 @@
  * 此前两头都不管：既没人要求 handler 有用例，也没人要求调用点有 handler
  * （tRPC 那一维有 `trpc-surface-executors.test.ts` 兜着 —— 挂了就欠执行者与消费方）。
  *
- * 判据：`src/**` 里（非测试代码、剥注释后）每个**以引号紧接 `/api/` 开头**的地址字面量，
- * 必须能在 `src/app/…/route.ts` 的目录形状里找到一个落点。
+ * 判据：`src/**` 里（非测试代码、剥注释后）每个**以引号 / 反引号 / `}` 紧接 `/api/`**
+ * 的地址字面量，必须能在 `src/app/…/route.ts` 的目录形状里找到一个落点。
  *  · 段数要对齐：写 `/api/film` 而 handler 是 `/api/film/[id]` ⇒ 报（少一段就是 404）；
  *  · `[x]` 吃一段，`[...x]` 吃掉剩下的全部（也吃零段 —— `/api/trpc` 就是这么被
  *    `api/trpc/[trpc]` 接住的，本机 App Router 的实测行为）；
- *  · 模板串里的 `${…}` 当通配段：它吃什么由运行期决定，这里只保证形状对得上；
- *  · 「引号紧接 `/api/`」把它和**外部服务**的地址分开：
- *    `` `${comfyBaseUrl}/api/prompt` `` 前面是 `}`，那是 ComfyUI 的接口，不归本应用的路由管。
+ *  · 模板串里的 `${…}` 当通配段：它吃什么由运行期决定，这里只保证形状对得上。
  *
- * 两类**长得像地址但不是地址**的字面量必须显式登记在 `NON_REQUEST_ADDRESS`
- * 里（每条带原因，且登记表双向不陈旧：字面量消失了还留着 = 红）：
- *   · `/api/trpc` —— tRPC 的**通道基址**。真实请求一律是 `/api/trpc/<ns.proc>`
- *     （本机实测：`GET /api/trpc/project.list` → 200，而基址本身 404 —— 没人去拿它），
- *     把它当 REST 路径判会永远红在 `src/trpc/**` 这三份客户端配置上。
- *   · `/api/ws` —— **ComfyUI 自己的** WS 路径（拼在 `ws://<comfy host>` 上，
- *     见 `runner-state.ts` 的 `WS_PATHS`），不归本应用的路由表管。
+ * ## 「前一位是 `}`」这一档为什么从豁免改成默认判
+ *
+ * 旧口径把 `}` 形态整个当成外部服务放过，理由写在原来的注释里：
+ * `` `${comfyBaseUrl}/api/prompt` `` 是 ComfyUI 的接口，不归本应用的路由表管。
+ * 这个代理规则**语法上说得通、语义上漏**：`src/config/custom-nodes.ts` 的
+ * `` `${base}/api/custom-nodes/manifest` `` 前一位也是 `}`，而它是本应用的同源地址
+ * ——「解析完注册表恒空」（台账 E9）就是这么躲过整条判据的：handler 在基线迁移时
+ * 被删掉，调用点那句 fetch 因为写成模板形态而**从未被点名**。
+ *
+ * 所以这里改成**默认判、按整条地址登记放行**：`}` 形态一并进扫描面，外部服务由
+ * `UPSTREAM_SERVICE_ADDRESS` 逐条登记并写原因。多花的登记换来的是
+ * 「新写的同源地址一定会被判」—— 少判一条就是本次事故那一格。
+ *
+ *
+ * 两类**长得像地址但不是本应用请求**的字面量必须显式登记，两张表吃同一套陈旧判据
+ * （每条都要还有字面量在用、都要写着原因、都要**确实没有落点** —— 哪天那条路径
+ * 真有了 route handler，登记就红，逼人重看「这条到底是谁的」）：
+ *   · `NON_REQUEST_ADDRESS` —— 是本应用的路径，但那句字符串不是请求
+ *     （`/api/trpc` 是 tRPC 的**通道基址**，真实请求一律是 `/api/trpc/<ns.proc>`，
+ *     本机实测那条 200、基址本身 404，把它当 REST 路径判会永远红在 `src/trpc/**`；
+ *     `/api/ws` 是 ComfyUI 的 WS 路径名，拼在 `ws://<comfy host>` 上，
+ *     见 `runner-state.ts` 的 `WS_PATHS`）。
+ *   · `UPSTREAM_SERVICE_ADDRESS` —— 上游服务自己的接口（本机 ComfyUI / Ollama /
+ *     远端 LLM），本应用不实现它们，也不该被路由表判。
  *
  * 已知边界（写在判据旁边，不假装没有）：
  *  · 只看**整段字面量**。`"/api/" + kind` 这种拼出来的地址抓不到（它没有完整字面量）。
@@ -137,21 +152,64 @@ const NON_REQUEST_ADDRESS: Record<string, string> = {
     "ComfyUI 自己的 WS 路径（`runner-state.ts` 的 `WS_PATHS`，拼在 `ws://<comfy host>` 上）。它是外部服务的地址，不进本应用的路由表。",
 };
 
+/** 上游服务**自己的**接口路径 → 它是谁的、地址是从哪台机器拼出来的。
+ *
+ *  这张表替代的是旧的「前一位是 `}` 就整类豁免」那条语法代理规则 —— 那条规则
+ *  漏掉了 `src/config/custom-nodes.ts` 的同源模板地址（台账 E9）。改成按**整条
+ *  规范地址**登记之后：新写一条 `${...}/api/x` 会先红，再由人决定它是不是上游。
+ *
+ *  段里的 `*` 是模板插值折出来的通配段（`/api/history/*` = `${base}/api/history/${id}`）。
+ *  只能变短：哪天本应用在同名路径上立了 route handler，陈旧判据会把它点名。 */
+const UPSTREAM_SERVICE_ADDRESS: Record<string, string> = {
+  "/api/prompt":
+    "本机 ComfyUI 的提交队列口（`src/server/workshop/comfyui.ts` 把 prompt 图 POST 进去）。上游是 `http://127.0.0.1:<comfy port>`，不是本应用。",
+  "/api/history/*":
+    "本机 ComfyUI 的单条执行历史（`${comfyBase()}/api/history/${promptId}`，`client.ts` 与 `comfyui.ts` 两处）。尾段是 promptId，归上游的路由形状。",
+  "/api/view":
+    "本机 ComfyUI 的产物读取口（`client.ts` / `comfyui.ts`）。本应用对应的那一口刻意叫 `/api/images`，正是为了不与它同名 —— 见 `src/app/api/images/route.ts`。",
+  "/api/upload/image":
+    "本机 ComfyUI 的上传口（`${comfyBase()}/api/upload/image`）。图先落到 ComfyUI 的 input 目录，执行时才用得上。",
+  "/api/interrupt":
+    "本机 ComfyUI 的中断口（`client.ts` 的 `interrupt()`）。停止当前执行是它的进程内状态，本应用没有等价实现。",
+  "/api/object_info":
+    "本机 ComfyUI 的节点类型清单（`raw.ts` 拉整份 object_info 做注册表镜像）。它是 ComfyUI 启动后扫描自定义节点的结果。",
+  "/api/models":
+    "本机 ComfyUI 的模型目录口（`client.ts` 按 folder 列模型，`${comfyBase()}/api/models[/<folder>]`）。",
+  "/api/models/*":
+    "同上，带子目录那一档：`${comfyBase()}/api/models/${encodeURIComponent(folder)}`。登记成两条是因为通配段不是「前缀豁免」——少一段就多一段，多一段就少一段。",
+  "/api/tags":
+    "Ollama 的候选模型清单（`ollama-client.ts` 与 `/api/llm/models` 的 local 分支：把 OpenAI 兼容 base 剥掉 `/v1` 再拼）。远端 LLM 服务商的接口不进本应用的路由表。",
+  "/api/version":
+    "Ollama 的存活探测（`ollama-start` / `ollama-stop` 两个端点用它判「起来了没有」），拼在 `ollamaBaseUrl(port)` 上。",
+};
+
 /** 把地址折成比较用的规范形：丢查询串、丢尾斜杠、段序保持。 */
 function normalizeAddress(literal: string): string {
   return "/" + endpointSegments(literal).join("/");
 }
 
 /** 登记的粒度是**整条地址**，不是前缀：`/api/trpc` 放行，`/api/trpcx` 不放行。 */
-function isRegisteredNonAddress(literal: string): boolean {
-  const norm = normalizeAddress(literal);
-  return Object.hasOwn(NON_REQUEST_ADDRESS, norm);
+function registeredIn(table: Record<string, string>, literal: string): boolean {
+  return Object.hasOwn(table, normalizeAddress(literal));
 }
 
-/** 地址字面量的提取：**引号 / 反引号紧接 `/api/`** 才算本应用的同源地址。
- *  前一位是 `}` 的是外部服务（ComfyUI / Ollama / 远端 LLM）的接口，不归这里判。 */
+function isRegisteredNonAddress(literal: string): boolean {
+  return registeredIn(NON_REQUEST_ADDRESS, literal);
+}
+
+function isUpstreamAddress(literal: string): boolean {
+  return registeredIn(UPSTREAM_SERVICE_ADDRESS, literal);
+}
+
+/** 地址字面量的提取：**引号 / 反引号 / `}` 紧接 `/api/`** 都算一条地址。
+ *
+ *  `}` 那一档是模板形态 `` `${base}/api/x` ``。它以前被整类豁免，理由是「前面是
+ *  `}` 的一定是外部服务」—— 那次豁免放走了一条真事故（见文件头）。现在默认判，
+ *  上游那十条由 `UPSTREAM_SERVICE_ADDRESS` 逐条放行。 */
 function endpointsOf(text: string): string[] {
-  return [...text.matchAll(/["'`]\/api\/[^"'`\s]*/g)].map((m) => m[0].slice(1));
+  return [...text.matchAll(/["'`}]\/api\/[^"'`\s]*/g)].map((m) =>
+    m[0].slice(1),
+  );
 }
 
 describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命中一个 route handler", () => {
@@ -179,6 +237,7 @@ describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命�
       .filter(
         ({ literal }) =>
           !isRegisteredNonAddress(literal) &&
+          !isUpstreamAddress(literal) &&
           !hasRouteFor(endpointSegments(literal), routes),
       )
       .map(({ file, literal }) => `${file} → ${literal}`);
@@ -186,19 +245,43 @@ describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命�
     expect(missing).toEqual([]);
   });
 
+  it("同源地址里确有 `}` 模板形态的一条被判到了（旧口径的漏点）", () => {
+    /* 这一格钉住本批改动的**收益本身**：`src/config/custom-nodes.ts` 的
+     * `` `${base}/api/custom-nodes/manifest` `` 在前一版判据里被整类语法豁免放走，
+     * 于是 handler 被删掉之后没有任何一条门禁知道。现在它进了扫描面，并且
+     * 必须**不被两张登记表放行**（放行它 = 把漏点重新打开）。 */
+    const hit = found.filter(
+      ({ literal }) =>
+        normalizeAddress(literal) === "/api/custom-nodes/manifest",
+    );
+    expect(hit.length).toBeGreaterThan(0);
+    expect(isUpstreamAddress("/api/custom-nodes/manifest")).toBe(false);
+    expect(isRegisteredNonAddress("/api/custom-nodes/manifest")).toBe(false);
+    expect(
+      hasRouteFor(endpointSegments("/api/custom-nodes/manifest"), routes),
+    ).toBe(true);
+  });
+
   it("登记表本身不陈旧：每条都还有字面量在用它、写着原因，且确实没有落点", () => {
     const used = new Set(found.map(({ literal }) => normalizeAddress(literal)));
-    for (const [address, reason] of Object.entries(NON_REQUEST_ADDRESS)) {
-      // 空壳原因（「TODO」这类）等于没有登记表
-      expect(reason.length, `${address} 的登记理由太短`).toBeGreaterThan(30);
-      expect(used, `${address} 已经没有字面量在用了，把登记删掉`).toContain(
-        address,
-      );
-      // 有落点的路径不可能是「非地址」：那说明登记写错了，或这条已经有了 handler
-      expect(
-        hasRouteFor(endpointSegments(address), routes),
-        `${address} 已经有 route handler 了，不该登记成非地址`,
-      ).toBe(false);
+    const tables: Array<[string, Record<string, string>]> = [
+      ["NON_REQUEST_ADDRESS", NON_REQUEST_ADDRESS],
+      ["UPSTREAM_SERVICE_ADDRESS", UPSTREAM_SERVICE_ADDRESS],
+    ];
+    for (const [tableName, table] of tables) {
+      for (const [address, reason] of Object.entries(table)) {
+        // 空壳原因（「TODO」这类）等于没有登记表
+        expect(reason.length, `${address} 的登记理由太短`).toBeGreaterThan(30);
+        expect(
+          used,
+          `${tableName}: ${address} 已经没有字面量在用了，把登记删掉`,
+        ).toContain(address);
+        // 有落点的路径不可能是「非地址」：那说明登记写错了，或这条已经有了 handler
+        expect(
+          hasRouteFor(endpointSegments(address), routes),
+          `${tableName}: ${address} 已经有 route handler 了，不该登记成免判项`,
+        ).toBe(false);
+      }
     }
   });
 
@@ -230,14 +313,26 @@ describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命�
     expect(hasRouteFor(endpointSegments("/api/generated"), table)).toBe(true);
     // 只有注释里出现的地址不进扫描面（先剥注释再提）
     expect(endpointsOf(stripComments('// 见 "/api/nope"'))).toEqual([]);
-    // 外部服务的地址（前面是 `}`）不进扫描面
-    expect(endpointsOf("fetch(`${base}/api/prompt`)")).toEqual([]);
+    /* 模板形态现在**进**扫描面：`}` 不再是整类豁免。这一条就是本次改动的判据面 ——
+     * 上游那一档随后由 `UPSTREAM_SERVICE_ADDRESS` 逐条放行，而不是靠语法。 */
+    expect(endpointsOf("fetch(`${base}/api/prompt`)")).toEqual(["/api/prompt"]);
+    expect(
+      endpointsOf('fetch(`${comfyBase()}/api/view?filename=a.png")'),
+    ).toEqual(["/api/view?filename=a.png"]);
+    // 未登记的上游形态照旧要点名：登记表的粒度是整条地址，不是「有 `${` 就放过」
+    expect(isUpstreamAddress("/api/prompt")).toBe(true);
+    expect(isUpstreamAddress("/api/promptx")).toBe(false);
+    expect(isUpstreamAddress("/api/history/${promptId}")).toBe(true);
+    // 通配段不放宽前缀：`/api/history`（不带 id）没登记过，照样判
+    expect(isUpstreamAddress("/api/history")).toBe(false);
     // 登记表按**整条地址**放行，不是按前缀：`/api/trpcx` 这种长得像的一样要判
     expect(isRegisteredNonAddress("/api/trpc")).toBe(true);
     expect(isRegisteredNonAddress("/api/trpc?batch=1")).toBe(true);
     expect(isRegisteredNonAddress("/api/trpcx")).toBe(false);
     // 少一段就是少一段：登记了基址不等于登记了它下面的每一条
     expect(isRegisteredNonAddress("/api/trpc/project.list")).toBe(false);
+    // 两张表不互相顶：`/api/ws` 在上游表里查不到，它靠 NON_REQUEST 放行
+    expect(isUpstreamAddress("/api/ws")).toBe(false);
   });
 });
 

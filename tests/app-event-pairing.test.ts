@@ -26,6 +26,11 @@
  *   `const SOME_CONST = "a:b"` 解成名字再比）。只认字面量会误报后者 ——
  *   而误报一片的判据会被当噪音关掉，那比没有判据更糟。
  * - **`app-events` 自己不算端**：那是定义处。
+ * - **同一个文件里的派发 + 订阅不算两端**（自环）：自己给自己广播，代码照常执行、
+ *   事件照常派发、什么都没发生 —— 与「订阅方没了」是同一种静默，但这条更危险，
+ *   因为它**长得像**两端齐全。要成对就得有两个不同的模块：派发方只负责把结论
+ *   记下来并喊一声，订阅方住在真正要重算的那一侧（实例见
+ *   `src/config/custom-nodes.ts` 与 `src/components/studio/canvas/use-custom-nodes-registry.ts`）。
  * - 先过 `stripComments`：注释里举例提到某个事件名不是派发。
  *
  * ## 与既有判据的分工（§12.18：新增守卫前先查有没有更强的一条）
@@ -156,6 +161,19 @@ interface PairingRow {
   subscribers: string[];
 }
 
+/**
+ * 两端不齐 —— 含「一端都没有」与「只有自环」两种。
+ *
+ * 判据是「存在一对**不同文件**的派发方与订阅方」，不是「两处都非空」：
+ * 后者会被同一个文件里的 `emitAppEvent(x)` + `subscribeAppEvent(x)` 蒙过去，
+ * 那是自己给自己广播（现场表现与没有订阅方一模一样，而静态上看不出）。
+ */
+function isUnpaired(row: PairingRow): boolean {
+  return !row.emitters.some((emitter) =>
+    row.subscribers.some((subscriber) => subscriber !== emitter),
+  );
+}
+
 function judge(sources: SourceFile[], tableSource: string): PairingRow[] {
   /* 剥注释这一步放在 `judge` 里面而不是采集时：真实扫描与合成反证必须吃同一条
    * 口径，否则「注释里提到某个事件名不算端」这条承诺只是文件头的一句话，
@@ -197,14 +215,13 @@ describe("AppEvents 表的两端成对", () => {
     expect(sources.some((file) => file.rel === TABLE_FILE)).toBe(false);
   });
 
-  it("每一条既有派发方又有订阅方", () => {
-    const broken = rows.filter(
-      (row) => row.emitters.length === 0 || row.subscribers.length === 0,
-    );
+  it("每一条既有派发方又有订阅方，且两端不在同一个文件里", () => {
+    const broken = rows.filter(isUnpaired);
     expect(
       broken.map(
         (row) =>
-          `${row.event} → 派发 ${row.emitters.length} 处 / 订阅 ${row.subscribers.length} 处`,
+          `${row.event} → 派发 ${row.emitters.length} 处 / 订阅 ${row.subscribers.length} 处` +
+          `${row.emitters.length > 0 && row.subscribers.length > 0 ? "（只有自环）" : ""}`,
       ),
     ).toEqual([]);
   });
@@ -215,6 +232,8 @@ describe("AppEvents 表的两端成对", () => {
       '  "only:emit": undefined;',
       '  "only:subscribe": { id: string };',
       '  "both:ways": undefined;',
+      '  "self:loop": undefined;',
+      '  "mixed:ends": undefined;',
       "}",
     ].join("\n");
     const synthetic: SourceFile[] = [
@@ -225,6 +244,10 @@ describe("AppEvents 表的两端成对", () => {
           'const ONLY_EMIT_EVENT = "only:emit";',
           "emitAppEvent(ONLY_EMIT_EVENT);",
           'emitAppEvent("both:ways");',
+          // 派发方自己也订阅一条：不许因此判成「只有自环」——
+          // 判的是「有没有一对不同文件的两端」，不是「这个文件干了两件事」。
+          'emitAppEvent("mixed:ends");',
+          'subscribeAppEvent("mixed:ends", () => {});',
         ].join("\n"),
       },
       {
@@ -232,6 +255,7 @@ describe("AppEvents 表的两端成对", () => {
         text: [
           'subscribeAppEvent("only:subscribe", () => {});',
           'subscribeAppEvent("both:ways", () => {});',
+          'subscribeAppEvent("mixed:ends", () => {});',
         ].join("\n"),
       },
       /* 注释里的名字不算端 —— 判据若把注释当派发，「写清楚为什么没有订阅方」
@@ -239,6 +263,16 @@ describe("AppEvents 表的两端成对", () => {
       {
         rel: "virtual/c.ts",
         text: '/* 曾经还有 subscribeAppEvent("only:emit", …) 的订阅侧 */',
+      },
+      /* 自环：同一文件里派发 + 订阅。跑起来一句「派发成功」，界面上什么都没有 ——
+       * 与「订阅方没了」同一种静默，但静态上**两端计数都非零**，
+       * 不加这一条判据就是「看着齐」的空通道有处可藏。 */
+      {
+        rel: "virtual/e.ts",
+        text: [
+          'emitAppEvent("self:loop");',
+          'subscribeAppEvent("self:loop", () => {});',
+        ].join("\n"),
       },
     ];
     const judged = judge(synthetic, table);
@@ -252,15 +286,19 @@ describe("AppEvents 表的两端成对", () => {
       ["only:emit", 1, 0],
       ["only:subscribe", 0, 1],
       ["both:ways", 1, 1],
+      ["self:loop", 1, 1],
+      ["mixed:ends", 1, 2],
     ]);
 
-    const broken = judged.filter(
-      (row) => row.emitters.length === 0 || row.subscribers.length === 0,
-    );
+    const broken = judged.filter(isUnpaired);
     expect(broken.map((row) => row.event)).toEqual([
       "only:emit",
       "only:subscribe",
+      "self:loop",
     ]);
+    /* `both:ways` 与 `mixed:ends` 必须**不**在名单里：后者是「派发方自己也订阅」
+     * 这一常见形状，误报一片的判据会被当噪音关掉，那比没有判据更糟。 */
+    expect(broken.map((row) => row.event)).not.toContain("mixed:ends");
   });
 
   it("表里有行、但两处调用都不认识的事件名不会蒙混过关", () => {

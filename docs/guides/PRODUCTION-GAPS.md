@@ -704,7 +704,7 @@
       而它的订阅侧 —— 画布的添加节点菜单 —— 已不在库里，`getAllNodeTypes()` 如今零消费方）。
       **本批没修的那一条点名留下**：注册表刷新现在**确实没有**通知通道，
       「从设置面板解析出新节点后，视图要硬刷新才看见」是现状；补它必须连订阅侧一起补
-      （判据会拦只有派发的那一端）。③ 的删除让 `refreshCustomNodes` 的
+      （判据会拦只有派发的那一端）。**→ 已由 E14 补完，且补的时候发现下游还断着一条死地址。**③ 的删除让 `refreshCustomNodes` 的
       `catch { return 0 }` 第一次有了日志 —— 「刷新失败」与「manifest 里零个节点」
       在调用方看来同形，那行 `console.error` 是唯一能分开的痕迹。
       ⚠️ **同时量到 P61 的一处豁免过宽**（本轮没改，属他人判据）：
@@ -713,6 +713,54 @@
       测试里见到这一形态，暂无生产侧实例；精确化方向是「按调用点豁免」而不是「按文件豁免」。
       证据：`src/lib/app-events.ts`、`tests/app-event-pairing.test.ts`、
       `src/config/custom-nodes.ts`、`src/components/studio/{history/hooks/use-history-list,workflow-library/hooks/use-workflow-library}.ts`。
+- [x] **E14 E9 没修的那一条补完了 —— 补的时候才发现它不是「缺通知通道」，是整条灌入链断在一条死地址上（本批修复 + 两条判据精确化）**：
+      E9 点名留下的那格（「注册表刷新确实没有通知通道」）按产品决定要补。动手补订阅侧之前先核了一下
+      `refreshCustomNodes()` 读的那个地址，结果比欠账本身更糟：**`/api/custom-nodes/manifest` 没有 handler** ——
+      它在 `ab12a551` 那次基线迁移里被删掉，而客户端两句 `fetch` 活着留下了，于是
+      `if (!res.ok) return 0` 每天都命中 404，注册表恒空、设置面板的预览卡恒空。
+      **先把灌入源补回来，再谈通道**：没有灌入源，通道只是把「空」广播一遍 —— 这也是 E3‴ 那条判据
+      本该在这里响却没响的原因，见下面第二条。
+      本批做的三件（一件都不能单独算修完）：
+      ① **落点**：`src/app/api/custom-nodes/manifest/route.ts`（要登录 —— 清单里带
+      `packages[*].path` 与 `sources`，那是机器画像，口径同 A13；`private, no-store` ——
+      这条链的正确性就是「刚解析完必须拿到新的一份」，任何中间缓存把旧清单当新答案就是本次事故的形状；
+      `runtime=nodejs` + `dynamic=force-dynamic`）。
+      ② **三相比两相**：新增 `src/lib/comfyui/custom-nodes-manifest.server.ts`，把「路径 + 指纹 + 读法」
+      收成一处（摘要端点与清单端点原本各写一遍就会分叉，同 §12.12 的 `firstframe.ts` 学费），
+      并把旧的「有 / 没有」两相加回第三相：`missing`（还没解析过，正常冷启动 → 404 + 稳定码）
+      / `unreadable`（读盘故障，真故障 → 500 + errno）/ `ok`。
+      客户端按相分档说话：`not-parsed` 不写错误日志（用户的正常首屏不该刷成错误流水），
+      `unauthorized` 与 `unreachable` 必须留痕。**为什么值得单独立一相**：`0` 既是
+      「解析器确实一个自定义节点都没找到」的合法结果，也是「没清单 / 没登录 / 读不到」的返回值，
+      这两类在界面上同形就是本次事故的全部。
+      ③ **通道两端同批**：`comfyapp:custom-nodes-updated` 的派发在 `recordRegistry`（结论没变不广播、
+      失败档不涨版本号），订阅在 `src/components/studio/canvas/use-custom-nodes-registry.ts`
+      （`useSyncExternalStore`，快照读补上「最早那次灌入发生在挂载 effect 里、那一刻订阅还没建立」那一格），
+      接在 `FlowNode` 上 —— 它是 `React.memo` 的，父层重渲染穿不进去，而它下面读的正是那两个
+      **就地替换**的可变 map，所以「解析完不重进页面就不更新」是结构性的。
+      判据侧的两条精确化（都是「判据在场但抓不到」这一族，比缺判据更贵）：
+      ④ `tests/app-event-pairing.test.ts` 原来只要求「派发与订阅两处计数都非零」，
+      于是**同一个文件里自己发自己听**也算两端齐全 —— 现场表现与「订阅方没了」一模一样，而静态上看不出。
+      改成「存在一对**不同文件**的两端」，并留一条不误报的反证（派发方自己也订阅一条是常见形状，
+      只要另有外部订阅者就不许报）。派发与订阅刻意分家就是这条口径的落地形状。
+      ⑤ `tests/rest-endpoint-targets.test.ts` 原来按语法豁免「前一位是 `}`」的地址，理由是「那是 ComfyUI /
+      Ollama 的接口」—— 语法上说得通、语义上漏：`` `${base}/api/custom-nodes/manifest` `` 前一位也是 `}`，
+      而它是同源地址，本次事故正是从这一格躲过去的。改成**默认判、按整条规范地址登记放行**
+      （新增 `UPSTREAM_SERVICE_ADDRESS` 十条：ComfyUI 的 prompt / history / view / upload / interrupt /
+      object_info / models，Ollama 的 tags / version），吃与 `NON_REQUEST_ADDRESS` 同一套双向陈旧判据
+      —— 哪天本应用在同名路径上立了 handler，登记表会红，逼人重看「这条到底是谁的」。
+      **变异证明（两条都是「改了判据必须看得见」）**：把补回的 `manifest/route.ts` 挪走再跑判据
+      → 「每条地址都要有落点」与新增那条「`}` 形态确实被判到了」**双双红**（旧判据下这一步全绿，
+      这正是本次要买的收益）；自环那档由合成反证覆盖（`virtual/e.ts` 一处发一处听 → 报「只有自环」）。
+      覆盖率：四个新出口 `lines/functions/statements/branches` 全 100，`coverage.include` + `thresholds`
+      **两处同批**登记（`custom-nodes.ts` 与读盘那层原本各缺三到四支形状回落 —— 整条为 `null` 的节点、
+      没有端口的节点、没有 `nodes` 字段的清单、抛上来没有 `code` 的 Error，全是解析器版本漂移的真形态，
+      不是凑数）。
+      证据：`src/app/api/custom-nodes/manifest/{route.ts,route.test.ts}`、
+      `src/lib/comfyui/custom-nodes-manifest.server{.ts,.test.ts}`、`src/config/custom-nodes{.ts,.test.ts}`、
+      `src/components/studio/canvas/use-custom-nodes-registry{.ts,.test.tsx}`、
+      `src/components/studio/canvas/WorkflowNode.tsx`、`tests/{app-event-pairing,rest-endpoint-targets}.test.ts`、
+      `vitest.config.ts`。
 - [x] **E10 提交门槛的 C 组「红但不是用例红」：清单顶穿平台命令行上限，vitest 根本没起（本批发现并修）**：
       同一次提交里撞出来的，值得单独立一条 —— C 组原本是 `pnpm exec vitest run --maxWorkers=4 $files`，
       清单是**位置参数**、长度随改动面线性增长。改 22 个文件的那一批算出 **229 个用例 / 10840 字符**，

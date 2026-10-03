@@ -75,6 +75,21 @@ export interface AppEvents {
    * 不得反向依赖视图层（§18 硬规则 22）—— 合法性由订阅侧按已有枚举收敛。
    */
   "workspace:navigate": { view: string };
+  /**
+   * 自定义节点注册表被重新灌入（画布挂载时那一次、以及每次解析收尾后的那一次）。
+   * 载荷：无 —— 结论本身可查（`~/config/custom-nodes` 的
+   * `getCustomNodesRegistryState()`：版本号 / 节点数 / 有没有拿到清单）。
+   *
+   * 为什么读侧**必须**在挂载时先读一次再订阅：本模块不排队重放，而最早的一次灌入
+   * 就发生在画布挂载的 effect 里（`WorkflowEditorInner` 调 `refreshCustomNodes()`），
+   * 那一刻订阅还没建立 —— 只订阅不读表的写法，会让「首屏节点数为 0、再进来才有」
+   * 这类现象永远说不清是谁的锅。
+   *
+   * 曾经这条链上有过一份同名事件、只有派发方没有订阅方（当年的订阅方是画布的
+   * 添加节点菜单，后来那个菜单不在了），于是它是一个「没人听的广播」—— 台账 E9
+   * 记的就是它。现在订阅侧在 `~/components/studio/canvas/use-custom-nodes-registry`。
+   */
+  "comfyapp:custom-nodes-updated": undefined;
 }
 
 /** 应用事件名的联合类型。 */

@@ -21,6 +21,7 @@ import type {
   FieldType,
 } from "~/lib/comfyui/node-config";
 import { errorText } from "~/lib/error-message";
+import { emitAppEvent } from "~/lib/app-events";
 
 /* 把 ComfyUI 的原始分类字符串映射到强调色。对外导出，
  * 好让界面给节点预览卡渲染同一个分类配色，而不必先构建完整的 NodeTypeConfig。 */
@@ -89,6 +90,104 @@ export const CUSTOM_NODE_TYPES: Record<string, NodeTypeConfig> = {};
  * 包目录名（例如 "DaSiWa-Nodes"、"ComfyMath"）。
  * ComfyNode 用它给每个画布节点渲染 ComfyUI 原生的左下角「包来源」页脚。 */
 export const CUSTOM_NODE_PACKAGE: Record<string, string> = {};
+
+/**
+ * 注册表「最近一次灌入」的可查询状态。
+ *
+ * 为什么要把它做成**可读的状态**而不是一句广播：`emitAppEvent` 明确不排队重放
+ * （见 `~/lib/app-events` 的说明），而最早的一次灌入就发生在画布挂载的 effect 里 ——
+ * 那一刻订阅还没建立。所以读侧必须「挂载时先读一次表，再订阅变化」，
+ * 这一格与画布镜像拒收那处（`~/lib/project-canvas/sync-notice`）是同一个形状。
+ *
+ * `loaded` 与 `count` 分开是有意的：0 既可能是「解析出 0 个自定义节点」（合法结果），
+ * 也可能是「清单还没生成」「没登录」「读盘失败」—— 这两类以前在界面上同形，
+ * 而台账 E9 记的「刷新看着没生效」正是被这一格糊住的。
+ */
+export interface CustomNodesRegistryState {
+  /** 每次**成功**灌入 +1：订阅方拿它当「该重渲染了」的凭据。 */
+  version: number;
+  /** 当前表里的自定义节点类型数。 */
+  count: number;
+  /** 最近一次刷新是否真的拿到了清单。 */
+  loaded: boolean;
+  /** `loaded: false` 时给用户看的那句话；`loaded: true` 时为 null。 */
+  detail: string | null;
+}
+
+let registryState: CustomNodesRegistryState = {
+  version: 0,
+  count: 0,
+  loaded: false,
+  detail: null,
+};
+
+/** 读当前状态（订阅侧挂载时的第一口，以及任何想知道「灌没灌进来」的地方）。 */
+export function getCustomNodesRegistryState(): CustomNodesRegistryState {
+  return registryState;
+}
+
+/**
+ * `useSyncExternalStore` 的快照：取**版本号**这个原始值，不取整个状态对象 ——
+ * 取对象的话每次 `Object.is` 都不等，一次广播会变成两轮重渲染。
+ * 服务端也是同一个函数：服务器上不灌入，版本恒 0，与水合期的客户端一致。
+ *
+ * 订阅侧在 `~/components/studio/canvas/use-custom-nodes-registry`（刻意不在本模块：
+ * 派发与订阅同一文件 = 自己给自己广播，两端成对的判据会被这种自环糊过去）。
+ */
+export function getCustomNodesRegistryVersion(): number {
+  return registryState.version;
+}
+
+/**
+ * 记一次灌入结果并按需广播。
+ *
+ * 只在**结论真的变了**时才广播：自动刷新与手动重解析会反复命中同一档失败
+ * （「还没有清单」），不去重就是把同一个提示刷屏（口径同 `sync-notice` 的按原因去重）。
+ */
+function recordRegistry(next: {
+  loaded: boolean;
+  count: number;
+  detail: string | null;
+}): void {
+  const unchanged =
+    registryState.loaded === next.loaded &&
+    registryState.count === next.count &&
+    registryState.detail === next.detail;
+  if (unchanged) return;
+  registryState = {
+    version: next.loaded ? registryState.version + 1 : registryState.version,
+    count: next.count,
+    loaded: next.loaded,
+    detail: next.detail,
+  };
+  emitAppEvent("comfyapp:custom-nodes-updated");
+}
+
+/**
+ * 一次清单读取的失败相。三相比两相多出来的那一档是这条链的关键：
+ * 「还没有清单」是正常冷启动，「未登录」与「取不到」是两种完全不同的修法。
+ */
+type ManifestFailure =
+  | { kind: "not-parsed"; detail: string }
+  | { kind: "unauthorized"; detail: string }
+  | { kind: "unreachable"; detail: string };
+
+/** 把一次非 2xx 的清单响应折成可说的一句话（状态码 → 用户能行动的措辞）。 */
+function classifyManifestFailure(status: number): ManifestFailure {
+  if (status === 404) {
+    return {
+      kind: "not-parsed",
+      detail: "还没有解析过自定义节点清单（在「自定义节点」设置里点解析）",
+    };
+  }
+  if (status === 401 || status === 403) {
+    return { kind: "unauthorized", detail: "未登录或会话已失效" };
+  }
+  return {
+    kind: "unreachable",
+    detail: `读取自定义节点清单失败（HTTP ${status}）`,
+  };
+}
 
 interface RawManifest {
   nodes?: Record<string, ManifestNode>;
@@ -186,11 +285,13 @@ export function isCustomNode(classType: string): boolean {
   return classType in CUSTOM_NODE_TYPES;
 }
 
-/* 注册表刷新后**没有**通知通道：曾经的订阅方（画布的添加节点菜单）已不在库里，
- * `getAllNodeTypes()` 如今零消费方 —— 广播一条没人听的事件等于什么都没做，
- * 而它会让下一个读代码的人以为「视图会自己刷新」。这条欠账记在台账 E9。
- * 判据 `tests/app-event-pairing.test.ts` 要求 `AppEvents` 表里每一条两端都在场，
- * 所以这里不再保留任何「只有派发方」的通道。 */
+/* 注册表刷新**有**通知通道：`comfyapp:custom-nodes-updated`（派发在本模块
+ * `recordRegistry`，订阅在 `~/components/studio/canvas/use-custom-nodes-registry`）。
+ *
+ * 这条曾经是一个「只有派发方的空广播」：当时的订阅方（画布的添加节点菜单）已经不在了，
+ * 而 `getAllNodeTypes()` 零消费方 —— 留着一个没人听的事件比留着「视图会自己刷新」的错觉
+ * 更糟（台账 E9 记的就是这一格，判据 `tests/app-event-pairing.test.ts` 现在会拦两端不齐的
+ * 通道，所以这条与它的订阅侧是同一笔里一起落的）。 */
 
 /* `/api/custom-nodes/manifest.nodes` 里单个节点的原始形状。
  * 自定义节点设置面板直接用它，于是在注册表尚未构建时（例如刚解析完、还没有
@@ -223,7 +324,16 @@ export async function getCustomNodesManifest(
 ): Promise<{ nodes: Record<string, ManifestNodeRaw> } | null> {
   try {
     const res = await fetch(`${base}/api/custom-nodes/manifest`);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const failure = classifyManifestFailure(res.status);
+      /* 只有「取不到」这一档值得写日志：「还没解析过」是首屏的正常态，
+       * 打进控制台会把用户的正常一次打开刷成错误流水（硬规则 4 要的是失败有出口，
+       * 不是正常态冒充失败）。 */
+      if (failure.kind === "unreachable" || failure.kind === "unauthorized") {
+        console.error(`[custom-nodes] ${failure.detail}`);
+      }
+      return null;
+    }
     const data: unknown = await res.json();
     if (
       !data ||
@@ -231,20 +341,50 @@ export async function getCustomNodesManifest(
       !("nodes" in data) ||
       !data.nodes
     ) {
+      console.error(
+        "[custom-nodes] 清单形状不对：响应里没有 nodes 字段（解析器版本与前端不匹配？）",
+      );
       return null;
     }
     return data as { nodes: Record<string, ManifestNodeRaw> };
-  } catch {
+  } catch (e) {
+    console.error(
+      "[custom-nodes] 读取节点清单失败：",
+      errorText(e, "读取自定义节点清单"),
+    );
     return null;
   }
 }
 
-/* 从磁盘上的 manifest（经 /api/custom-nodes/manifest）实时刷新注册表。
+/* 从磁盘上的 manifest 实时刷新注册表（经 /api/custom-nodes/manifest）。
  * 返回当前载入的自定义节点类型数。解析完再调是安全的。 */
 export async function refreshCustomNodes(base = ""): Promise<number> {
+  let res: Response;
   try {
-    const res = await fetch(`${base}/api/custom-nodes/manifest`);
-    if (!res.ok) return 0;
+    res = await fetch(`${base}/api/custom-nodes/manifest`);
+  } catch (e) {
+    /* 请求压根没出去（离线 / dev server 刚重启 / 端口被回收）。 */
+    const detail = `连不上清单端点（${errorText(e, "读取节点清单")}）`;
+    recordRegistry({ loaded: false, count: 0, detail });
+    console.error(`[custom-nodes] ${detail}`);
+    return 0;
+  }
+  if (!res.ok) {
+    const failure = classifyManifestFailure(res.status);
+    recordRegistry({
+      loaded: false,
+      count: 0,
+      detail: failure.detail,
+    });
+    if (failure.kind !== "not-parsed") {
+      /* 「还没有清单」是首屏正常态，不进错误日志；另两档必须留痕，
+       * 否则界面只会显示「节点数为 0」而没有任何地方能查到原因。 */
+      console.error(`[custom-nodes] 刷新注册表失败：${failure.detail}`);
+    }
+    return 0;
+  }
+
+  try {
     const manifest = (await res.json()) as RawManifest;
     const next: Record<string, NodeTypeConfig> = {};
     const nextPackages: Record<string, string> = {};
@@ -257,16 +397,15 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
     for (const k of Object.keys(CUSTOM_NODE_PACKAGE))
       delete CUSTOM_NODE_PACKAGE[k];
     Object.assign(CUSTOM_NODE_PACKAGE, nextPackages);
-    /* 注册表已就地替换完毕；刷新本身**没有**通知通道可广播（见上方
-     * `custom-nodes:updated` 那段说明），消费方下次读取时拿到的就是新的一份。 */
+    /* 表已经换完：把结论记进可读状态并广播一次，让订阅侧（画布的页脚 / 渲染链标注）
+     * 在没有整页刷新的情况下重渲染。`count` 为 0 也算灌入成功 —— 那是「解析器
+     * 确实一个自定义节点都没找到」，与上面的「没拿到清单」是两件事。 */
+    recordRegistry({ loaded: true, count, detail: null });
     return count;
   } catch (e) {
-    /* 返回 0 与「manifest 里确实一个节点都没有」在调用方看来同形，
-     * 所以这一行日志是「解析失败」唯一的痕迹（硬规则 4）。 */
-    console.error(
-      "[custom-nodes] 刷新自定义节点注册表失败：",
-      errorText(e, "读取节点清单"),
-    );
+    const detail = `清单解析失败（${errorText(e, "解析节点清单")}）`;
+    recordRegistry({ loaded: false, count: 0, detail });
+    console.error(`[custom-nodes] ${detail}`);
     return 0;
   }
 }
