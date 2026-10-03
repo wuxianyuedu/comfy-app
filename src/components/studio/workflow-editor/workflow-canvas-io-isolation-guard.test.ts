@@ -65,7 +65,15 @@ describe("编辑器画布只画工作流图", () => {
 
   it("画布节点/连线的来源只有工作流自身", () => {
     const inner = stripComments(readEditor("WorkflowEditorInner.tsx"));
-    for (const allowed of ALLOWED_GRAPH_SOURCES)
+    /* buildInitialNodes 的调用随派生管线收进了 hooks/use-workflow-graph-derivation，
+     * 在那里断言；buildEdges 的连线同步仍留在编辑器本体。 */
+    const derivation = stripComments(
+      readEditor(path.join("hooks", "use-workflow-graph-derivation.ts")),
+    );
+    expect(derivation).toContain("buildInitialNodes");
+    for (const allowed of ALLOWED_GRAPH_SOURCES.filter(
+      (source) => source !== "buildInitialNodes",
+    ))
       expect(inner).toContain(allowed);
     /* 卡片 / 映射线的构建入口已从编辑器移除。 */
     for (const gone of [
