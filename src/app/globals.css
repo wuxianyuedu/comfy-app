@@ -175,6 +175,14 @@
   --color-warning: #d97706; /* 警告 (light default) */
   --color-amber: #d97706; /* 琥珀强调（workshop 徽章/按钮）(light default) */
   --color-accent-soft: #ec4899; /* accent (light default) */
+  /* 品牌渐变的**中间档**（fuchsia-600 同值）：`.btn-gradient` 三段里的 50% 那一颗。
+     两端**不另设 token** —— 起点就是 `--color-primary-600`、终点就是
+     `--color-accent-soft`，渐变因此跟着品牌色走（此前这里抄的是三颗字面量，
+     改一次品牌色渐变不跟手）。**两态同值**：它表达的是「同一条品牌渐变」，
+     随主题改色相会让 CTA 在暗色下变成另一套观感；终点
+     `--color-accent-soft` 自己带深档（`#ff8ac4`），所以暗色下渐变仍会变亮 ——
+     那是终点的语义，不是这一颗。 */
+  --color-accent-deep: #c026d3; /* 品牌渐变中间档（fuchsia-600 同值）(light default) */
   /* 画布浮层投影：浅色下不能再用 55% 黑（看着像脏污），改成中性深灰。 */
   --color-shadow-strong: rgb(0 0 0 / 0.18); /* 浮层重投影 (light default) */
   --color-ring-shadow: rgb(
@@ -352,6 +360,7 @@
   --color-warning: #f59e0b; /* 警告 */
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
+  --color-accent-deep: #c026d3; /* 深色档：刻意与浅色同值（品牌渐变不随主题换色相，理由见 @theme） */
   --color-shadow-strong: rgb(0 0 0 / 0.55); /* 浮层重投影 */
   --color-ring-shadow: rgb(
     255 255 255 / 0.1
@@ -778,10 +787,19 @@ textarea::-webkit-scrollbar {
     letter-spacing: -0.025em;
     color: var(--color-ink);
   }
-  /* 主按钮渐变：紫→粉，用于工作流库、画布生成等关键 CTA。
-     这是扁平规范中的有意例外，回应用户对渐变强调色的偏好。 */
+  /* 主按钮渐变：紫→品红，用于工作流库、画布生成等关键 CTA。
+     这是扁平规范中的有意例外，回应用户对渐变强调色的偏好。
+     三颗星一律取品牌 token（起点 primary-600 / 中间 accent-deep / 终点
+     accent-soft），不再抄字面量 —— 改品牌色时这条渐变跟手。
+     **能用 Button 就用 `variant="gradient"`**（它就是把这一类挂上去的），
+     只有**不是 Button** 的落点（画布节点里的共享 class）才直接写类名。 */
   .btn-gradient {
-    background: linear-gradient(135deg, #7c3aed 0%, #c026d3 50%, #ec4899 100%);
+    background: linear-gradient(
+      135deg,
+      var(--color-primary-600) 0%,
+      var(--color-accent-deep) 50%,
+      var(--color-accent-soft) 100%
+    );
     transition:
       filter 0.15s ease,
       transform 0.15s ease,
