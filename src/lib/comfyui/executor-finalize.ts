@@ -2,7 +2,7 @@
  * `executor-finalize.ts` — 任务终态收口（成功下载 / 失败落库）
  * ===========================================================================
  *
- * 从 executor.ts 拆出的「终态收口」模块（batch 4）：
+ * 终态收口：把一次执行的结束（成功下载 / 失败落库）收到一处。
  *   - {@link complete}         完成入口：抢终态 → completeInner → 兜底失败
  *   - {@link completeInner}    拉 history、收集产物、下载落盘、双写 DB、
  *                              写 manifest / workflow.json 快照

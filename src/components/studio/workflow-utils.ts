@@ -1,6 +1,5 @@
 "use client";
-/* 抽出的纯模块级工具函数 —— 原本声明在 WorkflowCanvasEditor.tsx 内部。
- * 没有 JSX，也不用 React hook。 */
+/* 纯模块级工具函数 —— 没有 JSX，也不用 React hook。 */
 import { getCustomNodePackage } from "~/config/custom-nodes";
 import { displayValue } from "~/lib/display-value";
 import { trimFixed } from "~/lib/number-format";

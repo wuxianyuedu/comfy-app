@@ -1,5 +1,4 @@
 "use client";
-/* 拆出来的画布装饰组件 —— 原本在 WorkflowCanvasEditor.tsx 里。 */
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import { digitsOnly, textHandler } from "~/lib/form-props";
 import { clamp } from "~/lib/clamp";

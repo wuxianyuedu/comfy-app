@@ -1,7 +1,7 @@
 /**
  * RAW 详情构建器的「逐节点输入元数据」路径（`workflow-detail-raw` 的拆分件）。
  *
- * 从 `workflow-detail-raw.ts` 抽出：`buildRawInputs`（约 470 行）与它私有依赖的
+ * 本件承担 `buildRawInputs` 与它私有依赖的
  * `LOAD_IMAGE_NODE_TYPES` 常量 + 5 个 helper（`proxyKey`、
  * `collectProxyWidgetPairs`、`isUuidLikeClassType`、`isWrapperAliasSlot`、
  * `subgraphAuthorLabelsByUid`）。原文件保留另三个 build* 出口
@@ -9,9 +9,8 @@
  * `buildRawView`），并从本模块 re-export `buildRawInputs`；消费者 import
  * 路径不变。
  *
- * 拆分动机：主文件超过 §12.6 文件长度棘轮的阈值（900 行），且 `buildRawInputs`
- * 是全库最大的函数（约 470 行，`check-function-length` 的拆分候选之首），
- * 把它单拎出来同时缓解两个棘轮。共享 interface 下沉到
+ * `buildRawInputs` 是全库最大的函数（约 470 行，`check-function-length`
+ * 的拆分候选之首），单拎出来同时缓解文件与函数两条棘轮。共享 interface 下沉到
  * `./workflow-detail-raw-types.ts` 叶子模块，本模块只从那里 `import type`——
  * §12.7 的 `check-circular-deps` **不看 `import type` 是不是类型层**、只要
  * AST 上有 import 关系就算边，因此只有让类型走独立的叶子模块才能真正

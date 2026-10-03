@@ -1,7 +1,7 @@
 /* ── 工作流节点的「多模式」保存动作（第②层逻辑）───────────────────────
  * 模式列表与默认模式要 PATCH 回 WorkflowTemplate（后端同时把
- * defaultMode 同步到 taskType 列）。这段「乐观更新 + 失败回滚」原先内联在
- * CanvasNode.tsx 的 onModesChange 里，是该组件唯一的 IO 点。
+ * defaultMode 同步到 taskType 列）。本 hook 是 CanvasNode 唯一的 IO 点，
+ * 负责「乐观更新 + 失败回滚」。
  *
  * 为什么失败必须回滚本地 modes：不回滚的话界面上会留一个服务端根本没有的
  * 模式 chip（zombie chip），刷新后消失，用户会以为数据丢了。

@@ -1,6 +1,5 @@
 "use client";
-/* 抽出的 WorkflowSubgraphNode（ComfyUI 子图封装节点的渲染器）。
- * 原本在 WorkflowCanvasEditor.tsx 内部。
+/* ComfyUI 子图封装节点的渲染器。
  *
  * 本组件是纯渲染的组合层，按视觉区域拆在同目录：
  *   - SubgraphHeader.tsx             （标题栏）

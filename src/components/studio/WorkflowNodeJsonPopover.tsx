@@ -1,10 +1,10 @@
 "use client";
 /* ════════════════════════════════════════════════════════════════════════
  *  wf-node-json-popover.tsx — 节点 JSON 查看弹层（纯展示组件）。
- *  从 wf-contexts.tsx 抽出，以打破与 wf-stores.ts 的循环依赖：
- *    wf-stores.ts  →  import { NodeJsonPopover } from 本文件
- *    wf-*-node.tsx →  import store hooks（消费方，无环）
- *  本文件不 import 任何 store / context，只接收 props 渲染。
+ *  不 import 任何 store / context：靠这一条打破与 wf-stores.ts 的循环依赖
+ *    wf-stores.ts   →  import { NodeJsonPopover } from 本文件
+ *    wf-*-node.tsx  →  import store hooks（消费方，无环）
+ *  本文件只接收 props 渲染。
  * ════════════════════════════════════════════════════════════════════════ */
 import { useMemo, useState } from "react";
 import { Hint } from "~/components/ui/hint";

@@ -1,12 +1,11 @@
 /**
  * 日志面板共享类型的**叶子**模块（`log-store` 的拆分件）。
  *
- * 从 `log-store.ts` 抽出：`LogLevel`、`LogEntry`、`LogFilter`、
- * `LogOriginFilter`、`CONSOLE_ORIGIN`、`bucketOf`、`LogLevelCounts`、
- * `LogOriginCounts`、`LOG_PAGE_SIZE`。原本内联在主模块、被主模块与
- * `log-analysis.ts`（拆分件）共同消费；§12.7 的 `check-circular-deps` 不看
- * `import type`、只要 AST 上有 import 边就算环，所以共享类型必须沉到独立
- * 叶子才能真正拉直方向：
+ * 这里放 `LogLevel`、`LogEntry`、`LogFilter`、`LogOriginFilter`、
+ * `CONSOLE_ORIGIN`、`bucketOf`、`LogLevelCounts`、`LogOriginCounts`、
+ * `LOG_PAGE_SIZE` —— 被主模块与 `log-analysis.ts` 共同消费；
+ * §12.7 的 `check-circular-deps` 不看 `import type`、只要 AST 上有 import
+ * 边就算环，所以共享类型必须沉到独立叶子才能真正拉直方向：
  *   `log-analysis.ts` 依赖叶子 `log-types.ts`
  *   `log-store.ts` 依赖叶子 `log-types.ts`（并 re-export 保持既有 import 路径不变）。
  */

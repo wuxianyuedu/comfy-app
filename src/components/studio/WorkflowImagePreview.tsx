@@ -1,5 +1,4 @@
 "use client";
-/* 抽出的图片预览 + 字符串 textarea —— 原本在 WorkflowCanvasEditor.tsx 里。 */
 import { useState } from "react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { comfyImageUrl } from "~/lib/media/media-url";

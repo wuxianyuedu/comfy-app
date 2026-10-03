@@ -1,6 +1,6 @@
 "use client";
 
-/* 从 CanvasNode 抽出 —— workflow 节点的 IO 生命周期。
+/* CanvasNode 的workflow 节点的 IO 生命周期。
  *  负责共享的 wfList / modelTagLib 拉取（带模块级在途去重）、
  *  所选工作流的动态 IO 表 + 模式加载、
  *  ioKey 的渲染期重置、默认值播种 effect 与

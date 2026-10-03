@@ -2,15 +2,15 @@
  * `executor-history.ts` — /history 轮询与队列现场（执行链的**叶子**诊断模块）
  * ===========================================================================
  *
- * 从 `executor-ws.ts` 抽出的两个「只读 ComfyUI、不改状态机」的单元：
+ * 两个「只读 ComfyUI、不改状态机」的单元，也是执行链的叶子：
  *   - {@link fetchHistoryEntry}  轮询 `GET /history/{prompt_id}` 直到拿到结果
  *   - {@link traceComfyQueue}    探测 `/queue` 快照并落 trace
  *   - {@link ComfyHistoryEntry}  最小结构视图（finalize 侧也要用）
  *
- * 抽出的理由是**断环**（规范 12.7）：`executor-finalize` 需要这两个函数，
- * 而 `executor-ws` 需要 finalize 的 `complete` / `fail` —— 两边互相 import
- * 成环。把「谁都不依赖、只依赖 client + runner-state」的部分下沉成本层叶子后，
- * 依赖方向变成单向的 `finalize → history`、`ws → history`。
+ * 本层必须留在叶子位置的理由是**断环**（规范 12.7）：`executor-finalize`
+ * 需要这两个函数，而 `executor-ws` 需要 finalize 的 `complete` / `fail` ——
+ * 两边互相 import 成环。把「谁都不依赖、只依赖 client + runner-state」的
+ * 部分放在叶子后，依赖方向保持单向 `finalize → history`、`ws → history`。
  *
  * 共享类型也在这里（§18：需要被多个 lib 模块共用的类型下沉到类型模块）。
  *

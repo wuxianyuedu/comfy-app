@@ -3,7 +3,7 @@
 /**
  * useProjectPersistence — 项目画布「持久化三件套」hook。
  *
- * 从 CanvasInner 抽出三个相互关联的持久化 effect：
+ * 三个相互关联的持久化 effect：
  *  1. 500ms debounce：nodes / edges / projectName 变化后落盘；
  *  2. 600ms mutation effect：跳过 hydrate 后首轮空写，再落盘；
  *  3. beforeunload + unmount 立即 flush（防止切走标签页丢数据）。

@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * wf-render-chain — 工作流画布（wf-* 系列）的「渲染链路模块」规则。
  *

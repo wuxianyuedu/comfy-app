@@ -1,6 +1,6 @@
 "use client";
 
-/* 从 CanvasNode 抽出 —— 任务运行逻辑。
+/* CanvasNode 的任务运行逻辑。
  *  负责挂载时对账 effect（陈旧 status="running" 的自愈）
  *  与 runGenerate（工作流分支 + 提示词分支，含轮询生命周期、
  *  下游接收节点自动孵化、图片自导入），以及 retryGenerate

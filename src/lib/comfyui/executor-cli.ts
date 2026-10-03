@@ -2,7 +2,7 @@
  * `executor-cli.ts` — comfy-cli 执行路径（**两种格式统一**）
  * ===========================================================================
  *
- * 从 executor.ts 拆出的「comfy-cli 提交路径」模块（batch 4）：
+ * comfy-cli 提交路径。本模块提供：
  *   - {@link cliProcs}          正在运行的 comfy-cli 子进程表（供取消）
  *   - {@link executeViaComfyCli} 工作流提交 + stdout 事件收割
  *   - {@link applyRawOverrides}  把 canvas 的 workflowInputs 注入 raw json

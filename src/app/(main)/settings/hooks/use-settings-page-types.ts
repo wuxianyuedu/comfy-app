@@ -1,21 +1,18 @@
-"use client";
-
 /**
- * 设置页的**共享类型与常量**（`use-settings-page` 的拆分件）。
+ * 设置页的**共享类型与常量**（`use-settings-page` 的叶子依赖）。
  *
- * 从 `use-settings-page.ts` 抽出视图与容器共用的类型：`Settings`、
- * `LlmConfig`、`QueryLlmConfig`、`Section`、`OllamaStatus`、`FlashMessage`、
- * `SettingsPageDrafts`、`SettingsPageController`、`ReadySettingsPageController`，
- * 以及侧边栏分区表 `SETTINGS_SECTIONS`、按任务温度区的 `TEMPERATURE_TASKS`
- * 两个纯配置常量。它们与 `useSettingsPage` hook 的实现体无关,只是被两侧共同
- * 引用;§12.7 `check-circular-deps` 不看 `import type`、只要 AST 上有 import
- * 边就算环,所以类型必须沉到独立叶子文件才能真正把方向拉直:
+ * 视图与容器共用这些类型：`Settings`、`LlmConfig`、`QueryLlmConfig`、
+ * `Section`、`OllamaStatus`、`FlashMessage`、`SettingsPageDrafts`、
+ * `SettingsPageController`、`ReadySettingsPageController`，以及侧边栏分区表
+ * `SETTINGS_SECTIONS`、按任务温度区的 `TEMPERATURE_TASKS` 两个纯配置常量。
+ * 它们与 `useSettingsPage` hook 的实现体无关,只是被两侧共同引用;§12.7
+ * `check-circular-deps` 不看 `import type`、只要 AST 上有 import 边就算环,
+ * 所以类型必须沉在**独立叶子文件**里才能真正把方向拉直:
  *   `use-settings-page-types.ts` ← `use-settings-page.ts`（并 re-export,
  *   消费者 `from "./hooks/use-settings-page"` 的路径不变,§12.18 复用优先）。
  *
- * 拆分动机:`use-settings-page.ts` 1331 行超过 §12.6 文件长度棘轮的阈值。
- * 本次先把类型与常量层拆出去（~260 行）;hook 本体仍 900+ 行、下一轮再按
- * Comfy / Ollama / DbStudio / Update / RemoteModel 五组动作拆 sub-hook。
+ * 本文件只有类型与常量、没有 React —— 不带 `"use client"`，服务端消费者
+ * 也能安全引它。
  */
 import type { RuntimeLogController } from "./use-runtime-log-source";
 import type { OllamaModel } from "~/lib/llm/ollama-client";

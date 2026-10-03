@@ -1,6 +1,6 @@
 "use client";
 
-/* 从 CanvasNode 抽出 —— 文件上传管线。
+/* CanvasNode 的文件上传管线。
  *  三条内聚的上传路径共用本 hook：生成器节点的
  *  图片输入选择器（pickFile + 隐藏 input）、内容载体媒体
  *  选择器（pickMedia/onMediaFile，含原样保留的

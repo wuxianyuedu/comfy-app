@@ -9,10 +9,10 @@
  * 关闭、页签内嵌打开（ISSUE #310 的单窗口语义）、系统浏览器打开（与页签并列）、
  * 以及运行时启动日志的 active 判据。
  *
- * 拆分动机：主 hook 870+ 行；ComfyUI 这一整块与 Ollama / DbStudio 一样是
- * 「状态查询 + 动作 + 日志」的自洽单元，共享的只有「保存草稿」——经参数注入
- * （`settingsDraft` / `showFlash` / `setSaving`）。返回形状与主 hook 原
- * controller 逐字段一致，视图与测试都不感知——§12.18 复用优先。
+ * ComfyUI 这一整块与 Ollama / DbStudio 一样是「状态查询 + 动作 + 日志」的
+ * 自洽单元，共享的只有「保存草稿」——经参数注入（`settingsDraft` /
+ * `showFlash` / `setSaving`）。返回形状与主 hook controller 逐字段一致，
+ * 视图与测试都不感知——§12.18 复用优先。
  */
 import { useCallback, useState } from "react";
 

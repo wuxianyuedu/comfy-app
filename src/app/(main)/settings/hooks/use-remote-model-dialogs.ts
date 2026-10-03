@@ -3,10 +3,9 @@
 /**
  * 远程模型（OpenAI 兼容）管理的交互状态与动作（规范 17 §17.2 第②层）。
  *
- * 之前这些状态与动作内联在 `SettingsPageView.tsx` 里（约 470 行），与 JSX 混在
- * 一个文件：网络侧动作（`probeRemote` / `testModelUsage` / `queryUsageTask` /
- * 增删改模型）本就在 controller，这里只收拢**弹窗交互状态**——表单草稿、
- * 进行态、测试结果、额外字段行编辑——让视图只消费字段、只渲染 JSX。
+ * 网络侧动作（`probeRemote` / `testModelUsage` / `queryUsageTask` / 增删改
+ * 模型）本就在 controller，这里只收拢**弹窗交互状态**——表单草稿、进行态、
+ * 测试结果、额外字段行编辑——让视图只消费字段、只渲染 JSX。
  *
  * 模块级草稿仓库（`usageTestDrafts`）一并搬来：它按 `kind + 条目名` 保留
  * 「关闭再重开」的表单内容，是纯视图偏好，不入库。
