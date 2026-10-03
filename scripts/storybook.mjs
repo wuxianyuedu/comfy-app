@@ -43,7 +43,7 @@ ensureStorybookAssets(path.join(root, ".storybook", "assets"));
  * `writeStorybookAppOrigin()` 的注释。 */
 writeStorybookAppOrigin(
   root,
-  path.join(root, ".storybook", "generated", "app-origin.ts"),
+  path.join(root, ".storybook", "generated", "app-origin.json"),
 );
 
 /* 子命令与参数透传：`pnpm storybook` → dev，`pnpm build:storybook` → build。
