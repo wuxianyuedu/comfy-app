@@ -412,6 +412,22 @@ P1~P3 这类判据的**源码侧**由 `check-ui-primitives.cjs` 数（手写 `<b
 用的是 `button-group` / `select-trigger` 两个别的名字），所以这个接管不影响外观，
 只影响「按 `data-slot` 断言身份」的写法。
 
+**同一个 `render` 接管机制还有更狠的一面：外层套一个不转发 props 的组件，会把里层
+触发器的 props 整个吞掉**（ISSUE #1384）。`Menu.Trigger` 这类基元的接管方式是「把
+自身触发 props 灌进 `render` 收到的那个元素」，所以中间夹一层只认自己那几个 props
+的组件（`<Hint>` 只吃 `label` / `side` / `accessibleName` / `wrap` / `children`）
+就等于把这串 props 丢在门口 —— 按钮外观完好、`data-slot` 也照旧是 `tooltip-trigger`
+（**最容易被误读成「接管成功」**），但它 `aria-haspopup` 不在、点开什么都不发生。
+口径两条：
+
+- **顺序：别的 `Trigger` 在内、`Hint` 在外**。两层 `render` 会合并到同一颗子元素上
+  （`<Hint><DropdownMenuTrigger render={<Button />} /></Hint>`），互不吞并；
+- **判据取 `aria-haspopup`，不取 `data-slot`**。前者是渲染结果属性、修前为 `null`、
+  jsdom 就判得了；后者被 tooltip 接管后两种情况一模一样。**「浮层真的弹出来」只能在
+  真浏览器里判**（`e2e/top-bar-app-menu.spec.ts`）：jsdom 下连一个光秃秃的
+  `DropdownMenuTrigger` 都点不开 —— 开合挂在 pointerdown 上，jsdom 的合成事件走不到
+  那一步，在那儿写这条只会得到一条永远绿的假判据。
+
 同一族坑在 P76 / P80 上也各犯过一次：控件换成 `ui/select-menu`（combobox）后，
 按原生 `<select>` 的 `value` + `<option>` 读的断言全部失效；`h-N w-N` 归一成
 `size-N` 后，`toHaveClass("h-2.5", "w-2.5")` 失效。共同形态是**批次改了结构、

@@ -44,6 +44,18 @@ import {
  * 取元素（`ui/button-group` 用的是 `button-group` / `select-trigger` 两个别的
  * 名字），所以不影响外观；但**按 `data-slot` 断言「这是不是基元按钮」的用例要
  * 同时接受 `tooltip-trigger`**，别把它当成手写 `<button>` 的残留。
+ *
+ * **不要拿本组件当别的触发器的 `render` 承载体**（ISSUE #1384）。`Hint` 只吃上面
+ * 那五个 props、**不转发任意 props**，而 menu / popover / select 那批基元的
+ * `Trigger` 是靠把自身触发 props（`aria-haspopup` / pointerdown / keyboard 处理）
+ * 灌进 `render` 收到的元素来接管子元素的。于是
+ * `render={<Hint label="…"><Button/></Hint>}` 这种写法会把那串 props 丢在 `Hint`
+ * 门口 —— 按钮长着按钮的样子却点不开浮层（`aria-haspopup` 也不在），`data-slot`
+ * 反而照旧是 `tooltip-trigger`，很容易被误读成「接管成功」。
+ * 正确顺序只能是**别的 trigger 在内、`Hint` 在外**：两层 `render` 会**合并**到
+ * 同一颗子元素上（`<Hint><DropdownMenuTrigger render={<Button/>} /></Hint>`），
+ * 互不吞并。回归判据：`TopBar.test.tsx` 的 `aria-haspopup` 断言（jsdom 能判，
+ * 因为它是渲染结果）+ `e2e/top-bar-app-menu.spec.ts`（菜单真的弹出来只能真浏览器判）。
  */
 export interface HintProps {
   /**
