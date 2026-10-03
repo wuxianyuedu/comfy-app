@@ -110,31 +110,50 @@ export interface DetachMediatorOutcome {
 }
 
 /**
+ * 中介句柄**真正被读到的那两样**（不是整包 `ChildProcess`）。
+ *
+ * 写成结构类型有两个理由：其一，这个函数确实只订阅 `exit` 事件与 stderr 流，
+ * 把 stdin / stdio / send / disconnect 全拖进契约里等于承诺了一个它不用的接口；
+ * 其二，用例因此能造出**真形状**的中介句柄，而不是 `as unknown as ChildProcess`
+ * —— 那种cast 会把「调用点到底喂了什么」这一格重新变成 tsc 看不见的地方
+ *（台账 F13 那一族的成因）。真的 `ChildProcess` 天然满足这个形状。
+ */
+export interface DetachMediatorHandle {
+  once(event: "exit", listener: (code: number | null) => void): unknown;
+  stderr?: {
+    on(event: "data", listener: (chunk: Buffer) => void): unknown;
+  } | null;
+}
+
+/**
  * 等 Windows keepAlive 的 powershell 中介退出，带出它的 stderr。
  * Start-Process 参数被拒等拉起失败都发生在中介里（目标进程完全没被拉起、
  * 也没有任何子进程可探测），不读中介就只能靠端口轮询无限等待。
  * 只对 Windows 中介进程使用；POSIX 的 keepAlive child 是真实长驻进程。
  */
 export function waitForDetachMediator(
-  child: ChildProcess,
+  child: DetachMediatorHandle,
   timeoutMs = 5000,
 ): Promise<DetachMediatorOutcome> {
   const chunks: Buffer[] = [];
   child.stderr?.on("data", (d: Buffer) => chunks.push(d));
+  const readSoFar = (): string => decodePowerShellOutput(Buffer.concat(chunks));
+  /* 兜底必须**在超时那一刻**算，不能在这一行算：`withTimeoutResult` 的 fallback
+   * 是值不是工厂（见 ~/lib/with-timeout 的口径），把 `{code:null, stderr:readSoFar()}`
+   * 直接当实参传进去，读到的就是「调用那一刻」的空 chunks —— 超时那一路
+   * 永远回空串。而「中介没退出」恰恰只在超时时发生，被拒的原因也只有这时最需要。 */
   return withTimeoutResult(
-    new Promise<DetachMediatorOutcome>((resolve) => {
+    new Promise<DetachMediatorOutcome | null>((resolve) => {
       child.once("exit", (code) =>
         resolve({
           code: code ?? -1,
-          stderr: decodePowerShellOutput(Buffer.concat(chunks)),
+          stderr: readSoFar(),
         }),
       );
     }),
     timeoutMs,
-    /* 超时不是「失败」而是「未知」：调用方按「继续外部探测」处理，
-     * 故走 `withTimeoutResult` 给哨兵值（`code: null`），不抛。 */
-    { code: null, stderr: decodePowerShellOutput(Buffer.concat(chunks)) },
-  );
+    null,
+  ).then((outcome) => outcome ?? { code: null, stderr: readSoFar() });
 }
 
 /**
@@ -164,11 +183,26 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
 
   // ── keepAlive ─────────────────────────────────────────────
   if (process.platform !== "win32") {
+    /* fd 声明在 try **外面**：半途失败（第二个文件开不出来、spawn 自己抛错）时
+     * 也要把已经开出来的那一个关掉。泄漏的句柄不是「少一个描述符」这么轻 ——
+     * 父进程长期持有日志文件，Windows 上表现为文件锁死（轮转与删除都失败），
+     * 而调用方拿到 error 之后并不知道自己还占着它。 */
+    let outFd: number | undefined;
+    let errFd: number | undefined;
+    const closeOpenedFds = (): void => {
+      for (const fd of [outFd, errFd]) {
+        if (fd === undefined) continue;
+        try {
+          closeSync(fd);
+        } catch {
+          /* 关不掉不改变结论：子进程已经拿到自己的副本，这里是父侧的清理，
+           * 把它当失败上报只会让调用方误判「这次拉起没发生」。 */
+        }
+      }
+    };
     try {
       // 有重定向文件时把文件描述符直接交给 stdio（脱离进程树后依然落盘），
       // 父进程侧的副本用完即关。
-      let outFd: number | undefined;
-      let errFd: number | undefined;
       let stdio: ("ignore" | number)[] = ["ignore", "ignore", "ignore"];
       if (opts.redirectStdoutFile && opts.redirectStderrFile) {
         outFd = openSync(opts.redirectStdoutFile, "w");
@@ -182,10 +216,10 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
         stdio,
       });
       child.unref();
-      if (outFd !== undefined) closeSync(outFd);
-      if (errFd !== undefined) closeSync(errFd);
+      closeOpenedFds();
       return { child };
     } catch (e) {
+      closeOpenedFds();
       return { error: e instanceof Error ? e.message : String(e) };
     }
   }

@@ -503,6 +503,31 @@
       行 29.1%（执行宿主那批新代码 + 平台相关分支）、`src/lib/log/log-file-client.ts` 行 23.5%、
       `src/lib/core/repository-task.ts` 行 70.6%、`src/lib/browser-storage.ts` 行 81.8%。
       补上对应用例后**同批**把门槛抬回旧值（只升不降）。
+      · **process 那两项已清（这一格从「欠账」改成「还掉的方式」）**：低覆盖的原因不是缺用例，
+      而是**用例只有在另一台机器上才跑** —— POSIX 判据组整组 `runIf(!win32)`，
+      而 `process-launch.ts` 的 `spawnManaged` 四条拉起路径从来没被任何用例调过。
+      补的是**判决面**：`ps` 报什么组号、`process.kill` 接不接受这个目标、该发哪条命令行，
+      三件事全部注入，于是同一张表在两端机器上判同一个结论（真起进程数残留那组照旧留着）。
+      本批两份文件实测：`process-launch.ts` 100/100/100/100（原 19.35/24.07/45.45/17.85）、
+      `kill-process-tree.ts` 100/96.05/100/100（原 31.39/25/47.61/29.11）。门槛按**整目录**登记
+      （这个 glob 里还有 #1327 下沉进来的 `executable-resolve.ts`，它的欠账是台账 E12 那一批的事），
+      目录级实测 93.65/87.08/96.49/94.87 → 从 25/20/45/20 抬到 93/87/96/94。
+      这一趟顺手照出并修掉三处「只有落笔时才知道」的事：
+      ① `waitForDetachMediator` 的超时兜底**在调用那一刻就算好了**，于是超时那一路永远读回
+      空 stderr —— 而「中介没退出」恰恰只在超时时发生，`Start-Process` 被拒的原因就只有这一路
+      拿得到（`withTimeoutResult` 的口径写明 fallback 是值不是工厂，本处按口径改成超时后再算）；
+      ② POSIX keepAlive 开重定向文件时，**第二个 `openSync` 抛错就漏掉第一个 fd**：
+      父进程长期持有日志文件句柄（Windows 上表现为轮转与删除全失败），而调用方拿到的只是一句
+      error；现在两条失败路径都关掉已开出来的那些；
+      ③ 「目标的 PGID 与调用者相同 → 禁走组路径」这条防自杀判据，`readOwnPgid()` 的注释承诺
+      「自身组读不到时视同为自身组」，**代码两处都没实现**（ownPgid 为 null 直接放行组信号）——
+      异步版与同步版各抄了一遍这张表，所以一处修好另一处仍是旧的；现在收成
+      `planPosixKill` + `executePosixPlan` 一份定义，两条入口只剩「拿结论发信号」。
+      另记一笔：`killProcessTreeSync` 的 `mode:"image"` 凑出来的是 `/IM <pid>`
+      （这张签名里根本没有映像名），现在明确拒绝并把该走的入口说清楚。
+      余下的欠账：`src/lib/log/log-file-client.ts` 行 23.5%、`src/lib/core/repository-task.ts`
+      行 70.6%、`src/lib/browser-storage.ts` 行 81.8%，以及全库覆盖表里**唯一一个 0% 且有人在调**
+      的 `src/lib/media/video-queue-client.ts`（60 行，消费方是 `VideoQueueModal`）。
       同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
       —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
       按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
