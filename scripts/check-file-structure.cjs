@@ -11,11 +11,12 @@
  *   R3  禁止时间戳备份文件(\d{8}_\d{6} 模式)——版本回退用 git,不进 src
  *   R4  src/lib 下禁止 .tsx(12.5:lib 无 React)
  *   R5  src/ 下超 900 行的文件列入拆分候选。**默认只提醒不阻塞**;
- *       `--strict`(CI)下按棘轮 `scripts/.file-size-baseline.json` 判:**新增**
+ *       `--strict` 下按棘轮 `scripts/.file-size-baseline.json` 判:**新增**
  *       超限文件即阻断(存量的只许降不许升)。
- *       扫描范围是**整个 src/**:页面的纯展示视图在 src/app/(settings/SettingsPageView.tsx
- *       2499 行),逻辑层的大文件在 src/lib/(lifecycle.ts 1041 行)——
- *       只扫 components 会让最大的那几个文件完全落在护栏之外(ISSUE #536)。
+ *       **pre-commit 跑的就是带 `--strict` 的这一档**(ISSUE #1404)——这一档此前
+ *       写在帮助文本里的执行者是「CI」,而那份流水线已随 ISSUE #623 删除。
+ *       扫描范围是**整个 src/**:页面的纯展示视图在 src/app/,逻辑层的大文件在
+ *       src/lib/——只扫 components 会让当时最大的那几个文件完全落在护栏之外(ISSUE #536)。
  *       棘轮的理由(ISSUE #575 第 8 项):「只提醒」挡不住新增长文件 ——
  *       提醒出现在一屏输出里,没有人会因为一行提示去拆文件,于是文件只增不减。
  *   R7  Windows 双击入口一律 .ps1:仓库内禁止新增 .bat/.cmd/.vbs
@@ -63,8 +64,9 @@ const oversizedFiles = {};
 const SPLIT_HINT_LINES = 900;
 
 /* ── R5 棘轮(ISSUE #575):超限文件路径 → 行数 ──
- * 默认(非 strict)只提醒;`--strict`(CI)下「基线里没有的超限文件」即阻断,
- * 「基线里已有但变大了」一并阻断 —— 只许降不许升。 */
+ * 默认(非 strict)只提醒;`--strict` 下「基线里没有的超限文件」即阻断,
+ * 「基线里已有但变大了」一并阻断 —— 只许降不许升。
+ * pre-commit 跑的是带 --strict 的这一档(ISSUE #1404)。 */
 const FILE_SIZE_BASELINE = path.join(__dirname, ".file-size-baseline.json");
 /** R5 棘轮的**判据版本**:只有「数行数的口径」本身变了(例如全库 prettier 治理
  *  拆行、整体抬高行长口径)才允许 `--update` 一次性重记,其余情况数字只许下降。
@@ -842,12 +844,13 @@ const SCAN_EXCLUDED = [
 })();
 
 // ── R5 棘轮(ISSUE #575 第 8 项) ──
-// 默认只提醒;`--strict`(CI)下按 `scripts/.file-size-baseline.json` 判定:
+// 默认只提醒;`--strict` 下按 `scripts/.file-size-baseline.json` 判定:
 //   ① 基线里没有的超限文件 = 新增 → 阻断;
 //   ② 基线里已有但配额(基线行数 × 行数口径换算比)被突破 → 阻断(文件还在长);
 //   ③ 基线里已有但已降到阈值内/行数变小 → 提示收紧基线(不阻断,避免打断提交)。
 // 反模式:只在输出里打一行「建议拆分」。提醒与阻断的区别就是「有没有人为它返工」——
-// 900 行以上的文件在本仓库只增不减(11 个存量),正是「只提醒」的直接结果。
+// 写下那句「只增不减」时本仓有 11 个超限文件,现在基线是 total: 0 / files: {}。
+// pre-commit 从 ISSUE #1404 起跑的就是带 `--strict` 的这一档:再长出一个超限文件即当场拦。
 (function checkFileSizeRatchet() {
   const names = Object.keys(oversizedFiles).sort();
   const prev = fs.existsSync(FILE_SIZE_BASELINE)
@@ -929,7 +932,8 @@ const SCAN_EXCLUDED = [
     return;
   }
 
-  if (!STRICT) return; // 非 strict:只提醒,不判失败(pre-commit 与本地快跑口径)
+  // 非 strict 只提醒、不判失败 —— 那是一步快跑口径;pre-commit 的那一步带 --strict。
+  if (!STRICT) return;
 
   if (!prevFiles) {
     problems.push(
