@@ -654,6 +654,52 @@ node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命�
 里打开** —— 全部渲染出内容、零白板；本批新增的 206 条里只有 1 条有 console 输出
 （`ErrorBoundary` 那条**故意**让子树抛，已用 `parameters.test` 标注预期）。
 
+#### 16.2.3.8 「看过了」的四种漏法：故事面判据
+
+§16.2.3.5 的覆盖率台账只看**文件名 ↔ 故事文件** —— 一个 `ui/x.tsx` 只要被某份
+story `import` 到了，它就计一分。而「看过」有四种漏法，**四种都不报错**：
+
+| # | 漏法 | 后果（都不构建失败、画布也画得出东西） |
+| - | ---- | -------------------------------------- |
+| ① | **没有 `title`** | Storybook 的 `title` 是**可选**的：缺了它按文件路径自动生成条目，落在侧栏哪个分组取决于推导规则。于是「按 UI/Studio/Workshop 分组浏览」这件事只在**每份故事都写了 title** 时成立 |
+| ② | **真组件没接上** | `component:` 缺，或连的是 story 内部自造的适配件、而适配件里也没那个组件 —— 画布上摆的是别的东西，Args 面板与 `addon-docs` 的表格全空 |
+| ③ | **必填 props 一个 `args` 都不给** | 组件在画布上读到 `undefined`（`Cannot read properties of undefined`）—— **与 §16.2.3.4 那轮踩的坑同形**：侧栏有故事、画布一片空白 |
+| ④ | **同目录两套分组前缀** | 分组靠人写 `title:` 的字符串维系，而没有任何东西会告诉你「这份写的是 `UI/JsonViewer`、隔壁写的是 `JsonViewer`」 |
+
+判据在 `scripts/storybook-checks/story-surface.mjs`（纯函数），三处落点共用同一份
+实现：`tests/storybook-story-surface.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）、
+`scripts/storybook-check.mjs` 的 `--changed` 档、pre-commit 的 D 组
+（`run "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）"`）。
+
+**② 的判法值得单独说**：适配件**是正当写法**（受控状态、把值源解析成 props、
+把复合件摆成一行都要它，见 §16.2.3.6），所以判据不看 `component:` 那一行连了谁，
+而是问「**本目录的组件有没有被 import 进来并真的用到**」。
+`meta.file-picker.stories.tsx` 那类「出口是 hook、Meta 的 `component` 只能是装饰器
+组件」的形态因此照旧合法；被拦下的是「画布上摆了东西，而它跟这个组件无关」。
+
+**③ 是单向的，而且必须说清为什么**：它只判**本次提交动过的**故事文件
+（`--changed`），存量 86 份不补。理由不是「来不及」，是这批故事的表达方式**已经是
+对的**：组件大量用「子件 + 默认值」把必填项兜住了（`Badge` 的 `children`、`Card`
+的各 slot、`Dialog` 的 `open`…），早期那批走组件自己的 `argTypes`，真正吃数据的走
+注入层（`args.sourceName` 就是它的 args）。给 86 份逐条补 `args` 是把 337 张画布的
+**输入形状重写一遍**，换来的只是「面板里多几个初始值」；而逐条白名单又会把这张表
+变成**第二份赦免名单**（正是 §16.2.3.5 那道门槛最不该鼓励的事）。判据的价值在
+「下一个新增的故事别漏」，所以口径定成：**盘点照实报，阻断只落在新动过的那一份上**
+—— 与其余棘轮的「只挡新增」一致。
+
+**必填项怎么读**：只认「自己把 props 接口写出来」的那一族 —— 同文件的
+`interface XProps { label: string }`，以及**兄弟模块**里导出的
+`XProps`（`FilePickerProps` 住在 `file-picker.tsx`，组件只解构它的字段；靠
+「字段名在组件文件里出现过」把两者连起来）。包裹过的形态
+（`PropsWithChildren<…>` / `Omit<…>` / `ComponentProps<"div">`）读不到就**不判**：
+判据宁可漏，也不能误伤 —— 误报一次，成员就会把这条判据删掉，那比没有判据更糟。
+
+**上线时抓到的一处真漏档**：`ui/simple-key-handler.stories.tsx` 没有 `title`
+（它落不进取分组）。它同时暴露了 `metaObjectOf` 的一个口径问题 —— 原先要求
+「`title` **与** `component` 都在」才算 `meta`，而 CSF 里 `component` 是可选的
+（纯属性包、复合件那类故事就没有）。改成「两者有一个即可」，缺的那一项交给各自的
+判据点名。
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
