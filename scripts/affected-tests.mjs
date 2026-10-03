@@ -161,6 +161,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 本层**放弃收窄、只跑固定清单**；接线断掉的那一刻正是这条判据要拦的动作，
   // 所以必须与本次暂存改动无关也必须响。
   "tests/eslint-cache-fingerprint.test.ts",
+  // 「类型程序里 import 了一份不入库的生成模块」（台账 E15）：`.storybook/data-sources.tsx`
+  // 读的是按检出路径现算、且整目录 gitignore 的 `./generated/app-origin`。两份决定各自都
+  // 对，叠起来是「没跑过 storybook 的检出 `pnpm typecheck` 必红」—— 而 tsc 正是钩子 A 组，
+  // 于是一份落库时全绿的提交拦住了从它分出去的每一次提交。它同样挂在 `postinstall` 那一步，
+  // 改 `.githooks/**` 时本层只跑固定清单，所以这条也必须无条件响。
+  "tests/storybook-tsc-input.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
