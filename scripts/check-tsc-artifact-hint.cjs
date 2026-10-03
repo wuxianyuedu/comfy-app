@@ -40,11 +40,18 @@ function toPosix(p) {
 }
 
 /**
- * 是不是 Next 的生成物（只有这一类才敢断言「不是你的改动」）。
- * 认的是 `.next/` 这**一个目录段**，不是任何以 `.next` 开头的名字。
+ * 是不是构建/工作台的生成物（只有这一类才敢断言「不是你的改动」）。
+ *
+ * 认的是两个**目录段**，不是任何以它们开头的名字（`.nextify/` 不算）：
+ *  · `.next/` —— Next 的生成物（ISSUE #1182 的现场）；
+ *  · `.storybook/generated/` —— 组件工作台的生成件，由 `scripts/storybook-assets.mjs`
+ *    在 `pnpm storybook` 启动时现算、整目录 gitignore（ISSUE #1409 提到的同族）。
+ *    它今天已不再被任何源码静态 import（那条修法见 ISSUE #1409 的 PR），但
+ *    「生成物里的报错」这一类形态仍然会以组 A 出现，认得出来就能少一轮怀疑自己。
  */
-function isNextArtifact(filePath) {
-  return /(^|\/)\.next\//.test(toPosix(filePath));
+function isArtifact(filePath) {
+  const p = toPosix(filePath);
+  return /(^|\/)\.next\//.test(p) || /(^|\/)\.storybook\/generated\//.test(p);
 }
 
 /**
@@ -62,12 +69,12 @@ function classifyTscErrors(text) {
     const file = m[3] ?? m[2] ?? "";
     if (file) files.push(file);
   }
-  const artifact = files.filter(isNextArtifact);
+  const artifact = files.filter(isArtifact);
   return {
     total,
     files,
     artifactFiles: artifact,
-    codeFiles: files.filter((f) => !isNextArtifact(f)),
+    codeFiles: files.filter((f) => !isArtifact(f)),
     artifactOnly:
       total > 0 && files.length > 0 && artifact.length === files.length,
   };
@@ -80,23 +87,52 @@ function classifyTscErrors(text) {
  */
 function buildHint(v) {
   const unique = [...new Set(v.artifactFiles.map(toPosix))];
+  /* 两类生成物的成因不同，处置命令也不同：只给「两类都成立」的那条通用话术，
+     再按实际命中补各自的具体动作。 */
+  const hasNext = unique.some((f) => f.includes(".next/"));
+  const hasStorybook = unique.some((f) => f.includes(".storybook/generated/"));
   return [
     "",
-    "[组A-提示] 上面这些 tsc 报错**全部落在 Next 的构建生成物里**，不是你本次改的代码：",
+    "[组A-提示] 上面这些 tsc 报错**全部落在构建/工作台的生成物里**，不是你本次改的代码：",
     ...unique.map((f) => `  · ${f}`),
-    "  成因（ISSUE #1182）：同一目录并发起第二个 `next dev` 实例时，两个实例共写同一份",
-    "  `.next/dev/types/`；按硬规则 3 整树回收（SIGKILL）若落在写 `validator.ts` 的窗口里，",
-    "  就留下一行被截断的生成代码 —— 语法错出在生成物上，而 `tsconfig.json` 的 `include`",
-    "  显式列着这个生成目录，于是它以「组 A 红」的形态出现。",
-    "  处置（是生成物，删掉让 Next 重新生成即可，不必动任何源码）：",
+    ...(hasNext
+      ? [
+          "  成因（ISSUE #1182）：同一目录并发起第二个 `next dev` 实例时，两个实例共写同一份",
+          "  `.next/dev/types/`；按硬规则 3 整树回收（SIGKILL）若落在写 `validator.ts` 的窗口里，",
+          "  就留下一行被截断的生成代码 —— 语法错出在生成物上，而 `tsconfig.json` 的 `include`",
+          "  显式列着这个生成目录，于是它以「组 A 红」的形态出现。",
+        ]
+      : []),
+    ...(hasStorybook
+      ? [
+          "  成因（ISSUE #1409 同族）：`.storybook/generated/` 是组件工作台的生成件，由",
+          "  `scripts/storybook-assets.mjs` 在 `pnpm storybook` 启动时现算、整目录 gitignore。",
+          "  它**不该**被源码静态 import（那会让没跑过工作台的检出 tsc 必红），所以现在还能",
+          "  在这里报错，多半是有人重新 `import` 了它，或者半截生成件被写坏了。",
+        ]
+      : []),
+    "  处置（是生成物，删掉让它重新生成即可，不必动任何源码）：",
     ...unique.map((f) => `    POSIX:    rm -f ${f}`),
-    "    整目录形态：rm -rf .next/dev/types   (Windows: Remove-Item -Recurse -Force .next\\dev\\types)",
-    "  删完直接重跑提交即可；起一次 dev / build 会把这份生成物整份重写回来。",
-    "  防复发：**别在同一目录双开 `next dev`**。给第二个实例换一个 `distDir` 会更糟（实测",
-    "  Next 16.3.5：它会把那个实例目录**追加进受版本控制的 `tsconfig.json` 的 `include`**，并把",
-    "  共享的 `next-env.d.ts` 改写成指向它）—— 共写没消除，只是从生成物搬到两个人人都改的文件上，",
-    "  而红照旧（生成目录被 Next 自己写进 include）。要并行验证就走 `git worktree`（§13.6.2），",
-    "  或直接复用已经在跑的那个实例。这条与收法都记在 ISSUE #1182（本提示只做定性）。",
+    ...(hasNext
+      ? [
+          "    整目录形态：rm -rf .next/dev/types   (Windows: Remove-Item -Recurse -Force .next\\dev\\types)",
+        ]
+      : []),
+    ...(hasStorybook
+      ? [
+          "    整目录形态：rm -rf .storybook/generated   (Windows: Remove-Item -Recurse -Force .storybook\\generated)",
+        ]
+      : []),
+    "  删完直接重跑提交即可；起一次 dev / build / `pnpm storybook` 会把那份生成物重写回来。",
+    ...(hasNext
+      ? [
+          "  防复发：**别在同一目录双开 `next dev`**。给第二个实例换一个 `distDir` 会更糟（实测",
+          "  Next 16.3.5：它会把那个实例目录**追加进受版本控制的 `tsconfig.json` 的 `include`**，并把",
+          "  共享的 `next-env.d.ts` 改写成指向它）—— 共写没消除，只是从生成物搬到两个人人都改的文件上，",
+          "  而红照旧（生成目录被 Next 自己写进 include）。要并行验证就走 `git worktree`（§13.6.2），",
+          "  或直接复用已经在跑的那个实例。这条与收法都记在 ISSUE #1182（本提示只做定性）。",
+        ]
+      : []),
     "",
   ].join("\n");
 }
@@ -121,4 +157,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { classifyTscErrors, buildHint, isNextArtifact };
+module.exports = { classifyTscErrors, buildHint, isArtifact };

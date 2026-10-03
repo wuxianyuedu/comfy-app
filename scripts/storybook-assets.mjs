@@ -97,9 +97,9 @@ export function ensureStorybookAssets(outDir) {
 }
 
 /**
- * 把**本检出的解析链端口**写成一个 TypeScript 常量模块，供注入层读。
+ * 把**本检出的解析链端口**写成一份 JSON，供注入层读。
  *
- * 为什么走「现生成一个源文件」这条路（而不是 DefinePlugin / 环境变量）：
+ * 为什么走「现生成一份数据」这条路（而不是 DefinePlugin / 环境变量）：
  *  · **环境变量到不了浏览器**：Storybook 的 webpack 把 `process.env` 换成一个
  *    白名单对象字面量（实测编出来的 bundle 里只有 `NODE_ENV` / `NODE_PATH` /
  *    `STORYBOOK` / `PUBLIC_URL`），业务变量进不去；
@@ -108,6 +108,17 @@ export function ensureStorybookAssets(outDir) {
  *
  * 而应用端口**必须**是当前检出算出来的那一个：它由检出路径推导（3200~3999），
  * 写死一个值在别人的 checkout 上必然错。所以跟着启动脚本现算一次。
+ *
+ * **为什么是 JSON 而不是一份生成的 `.ts` 模块**（ISSUE #1409）：生成件不入库、
+ * 只有跑过 `pnpm storybook` 才存在，而 `tsconfig.json` 的 include 显式列着
+ * `.storybook` 那两条通配（点目录不在 glob 的默认展开范围里，不列就是 tsc 与
+ * eslint 的双重盲区 —— 那条动机是对的）。「类型程序去解析一个只有跑过工作台才
+ * 存在的 gitignored 文件」这件事一旦成立，没跑过的检出 `tsc --noEmit` 就必报
+ * TS2307，而 tsc 正是提交门槛的 A 组 —— 拦的是从那份基线分出去的每一次提交。
+ * 给 JSON 就没有「类型程序要解析的说明符」这回事：消费方（`.storybook/preview.tsx`）
+ * 在 Node 侧读它，缺了就用 `.storybook/app-origin-defaults.ts` 里那份入库的缺省值。
+ * **`exclude` 治不了这个病（实测）**：它只过滤 include 的 glob，拦不住「作为
+ * import 目标被拉进程序」的文件。
  *
  * 用**同一个权威实现** `resolveAppPort()`（不是在这里再推一遍路径哈希 —— 第二份
  * 实现必然漂移，`.env` / 推导算法任一处改动都对不上）。
@@ -120,30 +131,19 @@ export function writeStorybookAppOrigin(repoRoot, outFile) {
   const port = resolveAppPort(repoRoot);
   const origin = `http://127.0.0.1:${String(port)}`;
   const source = resolveAppPortWithSource(repoRoot).source;
-  /* `source` 是 app-port.mjs 的词表（env / derived / fallback）—— 翻成一句人话，
-     画布上那条提示才读得懂。 */
-  const sourceLabel = {
-    env: ".env 里的 COMFYAPP_PORT",
-    derived: "按检出路径推导",
-    fallback: "缺省兜底值",
-  }[source];
-  const body = [
-    "// 本文件由 scripts/storybook-assets.mjs 现生成，**不入库**（见 .gitignore）。",
-    "// 改端口来源请改 scripts/app-port.mjs（权威实现），不要改这里。",
-    "//",
-    "// 这是**本检出**的解析链端口：应用的端口按检出路径推导（3200~3999），",
-    "// 不同 checkout 不同，所以它必须在启动工作台时现算一次。",
-    "",
-    `/** 解析链端口（应用实际监听的端口）。来源：${sourceLabel ?? source}。 */`,
-    `export const APP_DEV_PORT = ${String(port)};`,
-    "",
-    "/** 真 tRPC 链路指向的应用 origin。 */",
-    `export const APP_DEV_ORIGIN = ${JSON.stringify(origin)};`,
-    "",
-    "/** 上面那个值是怎么来的（`env` / `derived` / `fallback`，词表见 app-port.mjs）。 */",
-    `export const APP_DEV_PORT_SOURCE = ${JSON.stringify(source)};`,
-    "",
-  ].join("\n");
+  /* 写 **JSON** 而不是 TS 模块：消费方（`.storybook/preview.tsx`）要的是一份纯数据，
+     它在 Node 侧读文件、再把值交给注入层。于是类型程序里既没有要解析的说明符
+     （那正是 ISSUE #1409：生成件不入库，而 `.storybook` 在 include 里，所以没跑过
+     `pnpm storybook` 的检出 `tsc --noEmit` 必报 TS2307），也不依赖 webpack 怎么处理
+     动态 `require`（实测会被编成 context module、运行期按 glob 找，不保证命中）。
+     缺省值与字段名在 `.storybook/app-origin-defaults.ts`（入库），两侧由
+     `tests/storybook-tsc-input.test.ts` 判「同一组字段」。 */
+  const payload = {
+    APP_DEV_PORT: port,
+    APP_DEV_ORIGIN: origin,
+    APP_DEV_PORT_SOURCE: source,
+  };
+  const body = `${JSON.stringify(payload, null, 2)}\n`;
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   const current = fs.existsSync(outFile)
     ? fs.readFileSync(outFile, "utf8")

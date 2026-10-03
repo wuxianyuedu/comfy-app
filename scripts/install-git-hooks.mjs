@@ -110,7 +110,7 @@ try {
   ensureStorybookAssets(path.join(root, ".storybook", "assets"));
   const { origin, source } = writeStorybookAppOrigin(
     root,
-    path.join(root, ".storybook", "generated", "app-origin.ts"),
+    path.join(root, ".storybook", "generated", "app-origin.json"),
   );
   say(`[hooks] Storybook 的开发期输入就绪：${origin}（${source}）`);
 } catch (err) {
