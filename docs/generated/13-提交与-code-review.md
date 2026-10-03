@@ -755,7 +755,41 @@ high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 ma
 并补一条「量具自己没坏」的对照用例（同一形状的 `wired` / `muted` 两段源码，前者真、后者假）。
 这与 13.5.8 末尾那条「在场判据要解析、不要 `toContain`」是同一条纪律的第二个载体。
 
+#### 13.5.11 eslint 增量缓存按指纹失效（`node scripts/invalidate-lint-cache.mjs`）
+
+**`--cache` 的键里没有「装了什么依赖」**，而类型化规则（`no-unsafe-*` 那一族要看 AST 上的类型）
+恰恰依赖它。于是依赖一变，缓存会**重放旧判决**，两个方向都会错：
+
+- **假红**：实测一次 `pnpm install` 补上 storybook 之后，`pnpm run lint` 仍报 3 条
+  `no-unsafe-assignment`（`src/components/ui/{badge,button,empty-state}.stories.tsx`），
+  而这三个文件 `--no-cache` 重跑 0 条、全仓冷跑也 0 条。组 B 扫的是整个白名单，
+  所以这条红**会拦住之后每一次提交** —— 在无 CI 兜底、又不许 `--no-verify` 的仓库里，
+  最可能被拿去换掉的恰恰是判据本身。
+- **假绿（更要紧的一面）**：新依赖 / 新类型口径带进来的真违规，会被旧缓存直接洗掉 ——
+  判据在，判决是旧的，看起来全绿。
+
+原先这条只写在 `.githooks/pre-commit` 的一句 ⚠️ 里（「升级 eslint 之后先手动删该目录」）。
+**手动步骤既不在缓存键里、也没有执行者**，所以它今天真的咬人了。现在改成自动：
+`postinstall` 跑一次失效器，指纹 = `pnpm-lock.yaml` + `node_modules/.pnpm/lock.yaml` + `tsconfig.json`
+三者字节的哈希（第一份是「声明要装什么」，第二份是「实际装上了什么」——两者本就直接不同形，
+各取一份才不会出现「改了声明但没重装」时的误失效，见 §13.5.9；第三份是类型化 lint 的解析口径）。
+指纹变了就删 `node_modules/.cache/eslint`，没变就留着。`eslint.config.js` 不参与 ——
+它本来就在 eslint 自己的缓存键里。
+
+**代价实测**（同一台机器，全仓）：冷跑 / 无缓存 **316s**；稳态热跑 28.8–46.3s
+（`.githooks/pre-commit` 的组 B 注释里那组数）。也就是说**每次真装依赖之后的第一次提交多等约 4.5 分钟**，
+买回的是「判决来自当前依赖树」而不是「上一次碰巧看到什么」。这笔账划得来：
+一次全仓冷跑 5 分钟，对比一次被假红拦住后滥用 `--no-verify` 的成本。
+
+**它自己的执行者**：`tests/eslint-cache-invalidation.test.ts`（8 条）—— 三样输入逐一改动都必须改变指纹
+（漏掉任何一样，「它参与了指纹」就是空话）、首次保守清一次、同指纹保留、读不到输入只跳过不删、
+入口出错必须咽掉（`postinstall` 非零退出会带走整次 `pnpm install`，见 `scripts/install-git-hooks.mjs` 文件头
+那条 Windows 事故）、`--cache-location` 与失效器盯的目录**逐字同源**（改了参数而失效器还盯着老路径 = 白清），
+以及「确实接在 postinstall 上」。**跑真入口那条用临时根目录**（`COMFYAPP_LINT_CACHE_ROOT`）——
+否则一个测试会在别人机器上清掉热缓存，有副作用的用例不许碰全局状态。
+
 ### 13.6 分支与合并策略
+
 
 - 功能分支：`feat/<short-desc>`；修复分支：`fix/<issue-id>-<desc>`。
 - 合并方式：优先 **Squash Merge**（保持主干线性、单 PR 单提交）；大型重构可 Rebase。
