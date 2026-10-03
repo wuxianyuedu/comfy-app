@@ -9,6 +9,7 @@ colors:
   primary-solid: "#8b5cf6"
   primary-soft: "#f1ecff"
   accent: "#ff5ca8"
+  accent-deep: "#c026d3"
   ink: "#1a1a1f"
   ink-muted: "#6b6b76"
   ink-fainter: "#a1a1aa"
@@ -159,6 +160,11 @@ components:
     typography: "{typography.button-md}"
     rounded: "{rounded.lg}"
     height: 32px
+  button-gradient:
+    textColor: "{colors.on-primary}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.lg}"
+    height: 32px
   button-outline:
     backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
@@ -283,14 +289,15 @@ components:
 | 品牌文字/图标档 | `--color-primary-strong` | `#6d28d9` | `#a78bfa` | 浅底上的品牌紫字（原 `violet-700/400`） |
 | 品牌实心档 | `--color-primary-500` / `-600` | `#8b5cf6` / `#7c3aed` | 同值 | 实心 CTA、spinner 描边 |
 | 品牌浅底 | `--color-primary-soft` | `#f1ecff` | `#221c3a` | 图标托底、选中项底；**也是深底上的浅字档** |
-| 第二品牌 / 品红 | `--color-accent` / `--color-accent-soft` | `#ff5ca8` / `#ec4899` | 同值 / `#ff8ac4` | 指示条渐变终点 |
+| 第二品牌 / 品红 | `--color-accent` / `--color-accent-soft` | `#ff5ca8` / `#ec4899` | 同值 / `#ff8ac4` | 指示条渐变终点、CTA 渐变终点 |
+| 品牌渐变中间档 | `--color-accent-deep` | `#c026d3` | 同值（刻意） | `.btn-gradient` 的 50% 那一段（起点 `--color-primary-600`、终点 `--color-accent-soft`，两端不另设 token） |
 | 品牌实心底上的字 | `--color-on-brand` | `#ffffff` | 同值 | **它由「底」决定，不是独立美术选择** |
 | 正文/前景 | `--color-ink` | `#1a1a1f` | `#ededf2` | `html/body` 前景 |
 | 弱文字 | `--color-ink-muted` | `#6b6b76` | `#9a9aad` | 副说明、`.u-chip` 常态字 |
 | 极弱文字 / 辅助说明 | `--color-ink-fainter` / `-faintest` | `#a1a1aa` / `#b6b6bf` | `#6b7088` / `#5a5f73` | 行号、placeholder、标签 |
 | 页面底 | `--color-bg` | `#ffffff` | `#0a0a0f` | `html, body` 背景 |
 | 卡片/浮层表面 | `--color-surface` / `--color-card` | `#ffffff` | `#16161c` | `bg-card`、`.u-card` |
-| 极浅通用表面 | `--color-subtle` | `#f7f8fa` | `#141419` | `.u-input` 底、hover 底、`.u-avatar` |
+| 极浅通用表面 | `--color-subtle` | `#f7f8fa` | `#141419` | hover 底、`bg-subtle` 类名调用点（⚠️ `.u-input` / `.u-avatar` 虽然 CSS 里引用它，但那批 `.u-*` 类**全仓零消费者**，见 Known Gaps） |
 | 发丝边框 | `--color-border` | `#ececf1` | `#26262e` | 默认描边、`--input` 同源 |
 | 强边框/分隔 | `--color-border-strong` | `#d6d8dd` | `#26262e` | 控件描边、滚动条 thumb |
 | 画布底（编辑器） | `--color-canvas` | `#f6f7f9` | `#0a0a0f` | 工作流/项目画布 |
@@ -430,11 +437,15 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ## Motion
 
-实测到的动效词汇：`transition: … 0.15s ease`（`.u-card-hover` / `.u-input` / `.u-chip` / `.u-ghost`）、`transition-all`（Button）、`active:translate-y-px`（按压下沉）、`animate-spin`（spinner）、`animate-pulse`（skeleton）。两条循环动画：`progressStripe`（不确定进度条）、`wf-wave 6s linear infinite`（生成进度水面）。
+实测到的动效词汇：`transition: … 0.15s ease`（`.u-card-hover` / `.u-input` / `.u-chip` / `.u-ghost` —— ⚠️ 这四条 `.u-*` 规则**全仓零消费者**，它们的 0.15s 目前不参与任何渲染，见 Known Gaps）、`transition-all`（Button 基类 18 处）、`active:translate-y-px`（按压下沉）、`animate-spin`（spinner）、`animate-pulse`（skeleton）。两条自定义循环：`progressStripe`（不确定进度条）、`wf-wave 6s linear infinite`（生成进度水面）。
 
 规范 06 §6.7 要求：**所有 `transition` / `animation` 必须有 `prefers-reduced-motion` 降级**；滑入抽屉 200–300ms、不超过 500ms。唯一登记的刻意例外是 AutoAnimate 条目级过渡（`disrespectUserMotionPreference: true`，250ms ease-out，只动 `transform`/`opacity`）。
 
-> ⚠️ 实测本仓库 `src/`、`public/`、`.storybook/` 里 `prefers-reduced-motion` 出现 **0 次**，而 `src/components` 有 **113 处** `transition-*`。这是规范与实现之间的真实缺口，不是笔误——见 Known Gaps。
+> ⚠️ 实测本仓库 `src/`、`public/`、`.storybook/` 里 `prefers-reduced-motion` 出现 **0 次**，而 `src/**` 有 **125 行** `transition-*`（其中**只有 13 行**带显式 `duration`，其余 112 行走 Tailwind 默认的 150ms）。这是规范与实现之间的真实缺口，不是笔误——见 Known Gaps。
+>
+> ⚠️ **同批量到的另一条独立违规**：`src/**` 里有 **8 处动画挂在 layout 属性上**（`ui/progress.tsx:48`、`ui/sidebar.tsx:271/283/462/561`、`ui/navigation-menu.tsx:118/124`、`canvas/RgthreeBodies.tsx:104`），违反规范 02 §2.7「动画只用 transform/opacity，不动画 layout 属性」。它**与 reduced-motion 无关**，别混成一刀。
+>
+> 真·无限循环动画实测只有 **7 处 / 6 文件**（`ui/spinner.tsx:11`、`ui/sonner.tsx:25`、`ui/skeleton.tsx:7`、`ui/status-dot.tsx:55`、`ui/progress-bar.tsx:140` 的 `progressStripe`、`ui/water-fill-progress.tsx:57` 的 `wf-wave`，另加 `workshop/AgentOverlay.tsx:209` 一处内联 `pulse infinite`）——那才是晕动症的真实来源。**注意 `animate-spin` / `animate-pulse` 各有 4 处文本命中、其中 2 处在注释里**，按 grep 计数会翻倍。
 
 ---
 
@@ -453,6 +464,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 - 软底（tinted）五支：`primary|danger|success|warning|info` = `bg-<色>/10..15` + `text-<色>-strong`。对应视图里 400 处手写 `<button>` 的主流形态。
 - 实心四支：`primary-solid|danger-solid|success-solid|warning-solid` = `bg-<色> text-primary-foreground`。`warning-solid` 用 `bg-warning-strong`——实心琥珀必须取深一档才压得住白字。
+- 品牌渐变一支：`gradient` = `.btn-gradient` + `text-on-brand`。它的**底是一条三段渐变**，压不进 frontmatter 那套只期望色值的 `backgroundColor`，所以底色只在正文记：起点 `{colors.primary-solid}` 的深一档 `--color-primary-600`(`#7c3aed`) → 中间 `{colors.accent-deep}`(`#c026d3`) → 终点 `--color-accent-soft`(浅 `#ec4899` / 深 `#ff8ac4`)。⇒ **暗色下这条渐变会比历史上亮一档**（终点自带深档），那是 token 化的既定后果。hover 观感来自 `.btn-gradient` 的 `filter: brightness(1.08)`，变体刻意不再叠 `hover:bg-*`。
 - size 8 档：`default`(h-8/32px) `xs`(h-6) `sm`(h-7) `lg`(h-9) + `icon`/`icon-xs`/`icon-sm`/`icon-lg`。
 - `ButtonLink`（同目录）渲染成 `next/link`，**共用同一套 variant/size**——Base UI 没有 `asChild`，所以是单独封装而不是包一层。
 
@@ -464,7 +476,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 | 件 | 实现 | 关键约定 |
 | --- | --- | --- |
-| 输入 | **两种形态并存**：`ui/input.tsx`（基元）与 `.u-input`（`globals.css:694` 工具类） | 基元 = `bg-transparent` + `border-input` + `rounded-lg`(12px) + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`；工具类 = 底 `--color-subtle` + `--radius-md`(9.6px)。**同一个「输入框」角色因此有两套圆角和两套底色**，见 Known Gaps。focus 都只换 border，不出阴影 |
+| 输入 | `ui/input.tsx`（唯一形态；`.u-input` 工具类**零消费者**，别当第二套在用） | `bg-transparent` + `border-input` + `rounded-lg`(12px) + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`；focus 只换 border，**不出阴影**。⚠️ 它预设了 `w-full`，与 §3.8.1.1「基础件不预设宽度」有张力，见 Known Gaps |
 | 卡片 | `ui/card.tsx` | `bg-card` + `ring-foreground/10` + `rounded-xl` + `--card-spacing` 两档 |
 | 状态徽标 | `ui/status-badge.tsx`（配色唯一出处）+ `ui/status-dot.tsx`（圆点） | **文案留在调用处**（同一状态在不同界面叫法不同，那是业务文案）。此前七个文件各写一份状态→配色表，同一个「已完成」有三种深浅 |
 | 侧栏导航 | `--color-nav-hover` / `--color-nav-selected`（别名 `--sidebar-accent` / `--sidebar-selected`） | **悬停与选中必须是两档**（浅 1.14:1 / 1.42:1，深 1.35:1 / 1.88:1，相对各自的 `--color-panel-deep` 底）。共用一档 = 结构上不可分辨 |
@@ -539,40 +551,49 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - **`@theme`（`globals.css:242-245`）**：`--radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 20px`
 - **`@theme inline`（`globals.css:1005-1008`）**：同一批名字 = `calc(var(--radius) * 0.6 / 0.8 / — / 1.4)`
 - **实测**（把 `globals.css` 真编译一次，读产物里 `:root` 的声明）：每个名字**只有 1 份声明**，且是 `@theme inline` 的 calc 版本 ⇒ `@theme` 那四行是**死声明**。
-- **直接后果**：`.u-card` 写的是 `border-radius: var(--radius-lg)`，注释与 `@theme` 都说是 16px，**实际渲染 12px**；`.u-input` / `.u-ghost` 的 `var(--radius-md)` 同理是 9.6px 而不是 12px。150 处（去 story/test）Tailwind 半径类走的也是 calc 那套。
+- **直接后果**：`var(--radius-lg)` 的三条 CSS 规则（`.u-card` 等）注释与 `@theme` 都写 16px，**产物里是 12px**；`var(--radius-md)` 同理是 9.6px 而不是 12px。全仓（去 story/test/snap）Tailwind 半径类走 calc 那套的共 **706 处**：`rounded-lg` 364 处（12→16，**+4px 是主力**）、`rounded-md` 224 处（9.6→12）、`rounded-xl` 107 处（16.8→20）、`rounded-sm` 11 处（7.2→8）。
+  > ⚠️ 但 `var(--radius-*)` 那三条规则所在的 `.u-*` 扁平层**全仓零消费者**（见 Known Gaps），所以这一刀里「靠 `var()` 走的那几处」其实看不见变化，**真正会变的全在 706 处类名上**。
 - **为什么没人拦**：规范 03 §3.6.4 的 T2「`@theme inline` 不许重名」判据在 `tests/theme-token-single-source.test.ts:174,180` 里**只匹配 `--color-` 前缀**，圆角命名空间不在覆盖面内。这件事的形状和当年 `--color-muted` 被别名顶掉**一模一样**（浅色下 `var(--color-muted)` 拿到 `#f7f8fa` 表面而不是 `#6b6b76` 文字灰，tsc/eslint/主题扫描全绿），只是换了个命名空间所以判据看不见。
-- **建议**：二选一，都要留痕。① 认定 calc 那套是事实来源 ⇒ **删掉 `@theme` 里那 4 行字面量**（顺带 `--radius-md` 的注释「对应原 --radius-md 12px」要一起改，它会指向一个不存在的值）；② 认定 8/12/16/20 是设计意图 ⇒ 改 `--radius` 基数或去掉 inline 块里的重名，并接受全站观感变化。同时**把 T2 的前缀名单扩到 `--radius-`**（同文件 `KNOWN_PREFIXES` 已经列了这些命名空间，T2 却只比 `--color-`）。
+- **已签字（2026-10-03）**：认 **8/12/16/20 为设计意图** ⇒ 删掉 `@theme inline` 里那 4 行重名、让 `@theme` 生效，并把 T2 的前缀名单扩到 `--radius-` 防回潮。落地方式 = **直接改 + 人眼看一轮**（先不补视觉基线）。
+- **随签要定的接缝**：只删那 4 行的话，刻度会变成 `8 / 12 / 16 / 20` 接 **21.6 / 26.4 / 31.2**（后三档仍来自 calc），`xl → 2xl` 只差 **1.6px**、肉眼几乎不分档，而 `rounded-2xl` 有 **73 处**真实消费者。要么把前段的 +4px 线性延伸成 `24 / 28 / 32`，要么明确接受这个接缝。
 - **决策人**：设计/规范 owner。本文件 frontmatter 的 `rounded` 刻度按**①（实测生效值）**写，即 `lg = 12px`。
 
 ### 冲突 2：规范 06 §6.7 的 reduced-motion 硬要求，实现里是 0
 
 - 规范：「所有 `transition` / `animation` 必须有 `prefers-reduced-motion` 降级」，唯一例外是 AutoAnimate。
-- 实测：`src/`、`public/`、`.storybook/` 里 `prefers-reduced-motion` **0 次**；`src/components` 有 **113 处** `transition-*`，另有两条 `infinite` 循环动画（`wf-wave` 6s、`progressStripe`）。
+- 实测：`src/`、`public/`、`.storybook/` 里 `prefers-reduced-motion` **0 次**；`src/**` 有 **125 行** `transition-*`（仅 13 行带显式时长），真·infinite 循环 **7 处 / 6 文件**，整屏级滑入只有 `ui/sheet.tsx:66` 一处。
+- **已签字（2026-10-03，本轮）**：按**三档分治**收 —— infinite 循环与大位移补降级、112 行默认 150ms 的短程 hover 反馈明确豁免，并把 §6.7 那句「所有 `transition` / `animation`」收窄成这三档。§2.7 的 8 处 layout 动画**另开一笔**，不混修。
 - **这不是文档笔误，是缺口**：要么补一条 `@media (prefers-reduced-motion: reduce)` 全局降级（对 `infinite` 那两条尤其必要），要么把 §6.7 改成「按场景要求」并登记豁免。**别把规范留着当「已达成」**。
 - **决策人**：a11y owner。
 
-### 待定 3：`--font-title` 的首选字体不随包分发
+### 待定 3 → 已签字：`--font-title` 的首选字体不随包分发，且**从来没在任何机器生效过**
 
-`Sarasa Gothic SC` 既没有 `@font-face`、也不在 `next/font` 里（`layout.tsx` 只加载了 Geist）。⇒ 在未安装该字体的机器上，标题会静默回退到 Geist → PingFang/YaHei，而**桌面包正是要发到那种机器上的**。表现为「设计稿的标题粗细和字面宽度对不上」，且没有任何报错。
+`Sarasa Gothic SC` 既没有 `@font-face`、也不在 `next/font` 里（`layout.tsx` 只加载了 Geist）。⚠️ 本机复验把「开发机装了、装机才回退」这个直觉**否掉了**：`C:\Windows\Fonts`（563 个文件，可读）与用户级字体目录里**都没有 Sarasa** ⇒ 那 15 处 `font-title` 调用点一直渲染的是 Geist + 系统 CJK。
 
-选项：随包内嵌字体子集（体积代价）、承认回退并把 `--font-title` 的首选改成实际可用的字体、或让 `--font-title` 与 `--font-sans` 合并。**needs-design-decision**，不在本文件里替你定。
+**已签字（2026-10-03）**：随包**内嵌子集**。这因此不是「恢复设计观感」，而是**首次引入一种新观感** —— 落地前还要定两格：**子集范围**（UI 文案可穷举，但节点标签 / 日志里的用户内容穷举不了，混排会一半有衬一半没有）与**字体许可核对**。另有一条产物关要过：字体文件放 `public/` 会随 `next build` 进 standalone（AGENTS 硬规则 17 那条通道），新增顶层条目要同改两张白名单并回答「谁在运行期读它」。
 
-### 待定 4：`.btn-gradient` 是扁平规范里的有意例外，但它没有 token、也没有变体
+### 待定 4 → 已落地：`.btn-gradient` 三颗星改走品牌 token，并补出 `variant="gradient"`
 
-`globals.css:783-795` 里三条字面量 `#7c3aed → #c026d3 → #ec4899`，注释写明是「回应用户对渐变强调色的偏好」的有意例外。现状是：它**不属于 Button 的任何 variant**，而是被 4 处业务组件各自 `className` 引用（`workshop/WorkshopStageBody.tsx`、`studio/ProjectGate.tsx`、`studio/project-canvas/CanvasNode/CanvasNodePrimitives.tsx`、`studio/workflow-library/WorkflowLibraryHeader.tsx`）。
+原来 `globals.css` 里是三条字面量 `#7c3aed → #c026d3 → #ec4899`，注释写明是「扁平规范中的有意例外」。实测它的**两端与现有 token 逐字同值**（`#7c3aed` = `--color-primary-600`、`#ec4899` = `--color-accent-soft` 的浅档），只有中间那颗没有对应 token。
 
-三个色相和 `--color-primary-600` / `--color-accent` 有重叠但不等值，所以「改品牌色」时这条渐变**不会跟着变**。**needs-design-decision**：把它 token 化（新增一颗具名 token + 一支 `variant="gradient"`，名字待定）还是当独立的品牌资产明确隔离。
+**签字口径 = token 化 + 出一支变体**，本轮已落地：新增 `--color-accent-deep: #c026d3`（**两态同值**，理由写在 `@theme` 那条注释里：品牌渐变不随主题换色相），`.btn-gradient` 三段全改成 `var()` 引用 ⇒ **改品牌色时渐变跟手**；`Button` 补 `variant="gradient"`（= `btn-gradient text-on-brand`，刻意不带 hover 底色类，否则 utilities 层会把 `.btn-gradient` 的 transition 整条洗掉），4 处 `<Button>` 调用点收进变体。
+
+**一处要接受的观感变化**：终点 `--color-accent-soft` 自带深档 `#ff8ac4`，所以**暗色主题下的 CTA 渐变会比以前亮一档**（浅色主题逐字不变）。这是「跟着品牌 token 走」的直接后果，不是笔误。
+
+`CanvasNodePrimitives.tsx` 里那处**不是 Button**（画布节点内的共享 class 常量），仍直接写 `btn-gradient` —— 定义只有一处这件事已经成立，那一档没有可套的变体。
 
 ---
 
 ## Known Gaps
 
 - **Storybook 覆盖 29/83**（有 story 的组件：alert、aspect-ratio、avatar、badge、button、empty-state、field、form-field、form-rhf、image-viewer、json-viewer、kbd、list-badge、media-thumbnail、option-list-popover、page-loading、progress-bar、seed-mode-button、segment-popover、simple-key-handler、skeleton、source-tag、spinner、status-badge、status-dot、task-type-chip、toggle、validation-error-list、water-fill-progress）。核心交互件里 **input、dialog、select、card、tooltip、popover、switch、checkbox、tabs、dropdown-menu、context-menu、menubar、navigation-menu、command** 无 story；其中 dialog/select/tabs/dropdown-menu/card/input/switch/checkbox **同时无 `.test.tsx`**。⇒ 「明暗两态长什么样」这一层契约目前只在那 29 个组件上可核验。
-- **「输入框」有两套形态，且其一与规范条文有张力**。`ui/input.tsx` 走 `bg-transparent` + `rounded-lg`(12px)，`.u-input` 工具类走 `--color-subtle` + `--radius-md`(9.6px)；两者都活着、都在被用，本文件不知道该收敛哪一个——**needs-design-decision**。另外 `ui/input.tsx:12` 预设了 `w-full`，而规范 03 §3.8.1.1 的原文是「基础件里不要预设 `w-full`，宽度是调用处的决定」；对单行输入而言铺满大概是有意为之（该条的事故现场是**并排的下拉**，不是输入框），但**条文没有按角色区分**，所以这里要么给输入框一个明确豁免，要么把 §3.8.1.1 收窄到「会和其它控件排在同一行的件」。**needs-design-decision**。
+- **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一 grep 在 `u-title` 上抓到 51 处、`u-title-page` 18 处，所以这个 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名精确计数：`u-title` 26 处、`u-title-page` 17 处、`u-title-stage` 1 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。
+- **`ui/input.tsx:12` 预设了 `w-full`**，而规范 03 §3.8.1.1 的原文是「基础件里不要预设 `w-full`，宽度是调用处的决定」。对单行输入而言铺满大概是有意为之（该条的事故现场是**并排的下拉**，不是输入框），但**条文没有按角色区分** ⇒ 要么给输入框一个明确豁免，要么把 §3.8.1.1 收窄到「会和其它控件排在同一行的件」。**needs-design-decision**。
+- **全站圆角改档几乎没有现成的视觉能量测得住**（签字「直接改 + 人眼看一轮」时必须知道的那一格）：`toHaveScreenshot` 全仓只有 **2 处**（`e2e/visual/login.visual.spec.ts:49,66`，基线是 `-chromium-win32.png`），而 **playwright 不进 pre-commit**；`e2e/**` 里 `borderRadius` 断言 **0 处**（该套用例只断 `color` / `backgroundColor` / `fill` / `stroke` / `width` / `height`），`tests/visual-baseline-pairing.test.ts` 只核「基线文件齐不齐、名字对不对平台」不比像素。所以 `+4px` 那一刀落地后，**除了登录页那一处，没有任何自动化会告诉你哪里变形了**。规范 03 §3.6.1.1 那句「刻意不比像素」的理由（基线按平台分文件）仍然成立，别顺手把它推翻——要补的是**代表屏的截图用例 + 一个手动跑的入口**。
 - **frontmatter 只能表达一态**，而本库的取值规则是两态。上面的 `colors` / `rounded` / `components` 全部取**浅色档**（因为 `@theme` 写的就是浅色），而**默认主题是 Dark**。任何人拿 frontmatter 当「应用现在的样子」会得出反的结论——两态对照请看 Colors 表。
 - **`--radius-sm` / `--radius-xl` 在真实构建下会被 tree-shake 出 `:root`**（实测：非 static 编译下这两颗声明数为 0，`--radius-md` / `--radius-lg` 因为被 `.u-input` / `.u-card` 引用而存活）。现在没有代码用 `var(--radius-sm)` 去读它，所以还不出事；但**一旦有人在 `style={{}}` 里写 `var(--radius-sm)`，它就是一个幽灵变量**。
 - **两条字面字号住在 `@theme` 之外**：`.json-view.jv-theme-comfy` 的 11px/1.6、`.cb-code-block` 的 11.5px/1.65。它们是**内容尺寸**（等宽代码/JSON 的密度决定可读性），不是排版档，但和 `--text-*` 一样都是「改档要改两处」的形态——本文件把它们记成 `code-md` / `code-json` 两档，落档与否待定。
-- **`--shimmer-` 前缀在 `tests/theme-token-single-source.test.ts:146` 的白名单里登记着，但 `src/` 内没有任何 `--shimmer-*` 声明**（skeleton 现在走 `animate-pulse`）。这条是 §3.6.1.1 讲的「**死豁免 = 负债**」形态：它不报错，只会把今后新写的同名裸变量静默放行。清理时记得和 `--card-spacing`、`--panel-right-width` 那几条一起核。
+- **`--shimmer-` 那条白名单不是「死豁免」，是「读错了文件」**（订正上一版的说法）：`tests/theme-token-single-source.test.ts:146` 登记着 `--shimmer-` 前缀，而它读的是 `src/app/globals.css` 的**源码文本**——那里确实没有 `--shimmer-*`。但**编译产物里有** `--shimmer-angle`（在 `src-tauri/static/.next/static/chunks/*.css` 里可见），来源钉在 `node_modules/shadcn/dist/tailwind.css:620` —— 即 `globals.css:3` 那句 `@import "shadcn/tailwind.css"` 带进来的。所以那条登记**有真实出处、不该按「死豁免 = 负债」删掉**；真正要记的是判据的口径边界：**它只核本文件里的裸声明，看不见依赖带进来的同名变量**。
 
 ---
 
@@ -607,9 +628,18 @@ pnpm theme:check
 # 7. oklch 落 sRGB：两颗 destructive 都超出 sRGB 色域，必须让浏览器自己算
 #    （getComputedStyle 在较新 Chromium 里会把计算值原样序列化回 oklch()，读不到 rgb；
 #     可行做法是 canvas 2d：fillStyle = oklch(...) → getImageData 取回真实字节）
-# 8. 输入框的两套形态
-sed -n '12p' src/components/ui/input.tsx
-grep -n "\.u-input" src/app/globals.css
+# 8. 输入框只有一种形态：`.u-*` 扁平层的消费者计数（八个 0 才是结论）
+for c in u-input u-card u-ghost u-chip u-surface u-avatar; do printf "%s " "$c"; grep -rn "\b$c\b" src --include=*.tsx --include=*.ts | grep -vc globals.css; done
+#    ↑ 先用量具自证：同法在 u-title 上给 26、u-title-page 给 17，所以那排 0 不是解析坏了
+# 9. transition 存量的正确数法（行数、并分开显式时长）
+grep -rn "transition-" src --include=*.tsx --include=*.ts | grep -vc "\.stories\.\|\.test\.\|__snapshots__"   # 125
+grep -rn "duration-[0-9]" src --include=*.tsx | grep -vc "\.stories\.\|\.test\."                              # 显式时长那一小撮
+#    ⚠️ 别只 grep animate-spin / animate-pulse 就报 infinite 存量：四个命中里两个是注释
+# 10. 标题字体到底有没有在任何机器生效过（本机两个目录都查，且要报出目录非空）
+ls /c/Windows/Fonts | wc -l && ls /c/Windows/Fonts | grep -ci sarasa   # 563 / 0
+ls "/c/Users/yuedu/AppData/Local/Microsoft/Windows/Fonts" | grep -ci sarasa
+# 11. --shimmer- 的来源（判据读本文件源码，声明在依赖里）
+grep -rn -- "--shimmer-angle:" node_modules/shadcn/dist/tailwind.css
 ```
 
 **维护约定**：改了 `globals.css` 的 token、或改了 `docs/standards/03`/`06`/`16` 的样式判据，**同步改本文件**。本文件的正文与 frontmatter 若与 CSS 不一致，**以 CSS 为准**，并把它当一次回归来修——这正是它上面那些冲突能被发现的原因。
