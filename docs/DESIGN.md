@@ -561,7 +561,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 `globals.css:783-795` 里三条字面量 `#7c3aed → #c026d3 → #ec4899`，注释写明是「回应用户对渐变强调色的偏好」的有意例外。现状是：它**不属于 Button 的任何 variant**，而是被 4 处业务组件各自 `className` 引用（`workshop/WorkshopStageBody.tsx`、`studio/ProjectGate.tsx`、`studio/project-canvas/CanvasNode/CanvasNodePrimitives.tsx`、`studio/workflow-library/WorkflowLibraryHeader.tsx`）。
 
-三个色相和 `--color-primary-600` / `--color-accent` 有重叠但不等值，所以「改品牌色」时这条渐变**不会跟着变**。**needs-design-decision**：给它一个 token 化的 `--color-brand-gradient` + 一支 `variant="gradient"`，还是把它当独立的品牌资产明确隔离。
+三个色相和 `--color-primary-600` / `--color-accent` 有重叠但不等值，所以「改品牌色」时这条渐变**不会跟着变**。**needs-design-decision**：把它 token 化（新增一颗具名 token + 一支 `variant="gradient"`，名字待定）还是当独立的品牌资产明确隔离。
 
 ---
 
@@ -613,3 +613,5 @@ grep -n "\.u-input" src/app/globals.css
 ```
 
 **维护约定**：改了 `globals.css` 的 token、或改了 `docs/standards/03`/`06`/`16` 的样式判据，**同步改本文件**。本文件的正文与 frontmatter 若与 CSS 不一致，**以 CSS 为准**，并把它当一次回归来修——这正是它上面那些冲突能被发现的原因。
+
+**这条约定有执行者**：`tests/design-md-contract-sync.test.ts`（在 pre-commit 的 C 组固定清单里）核两件事——本文件引用的每一颗裸 `--color-*` 在编译产物里有声明，以及上面那张语义角色表里所有单一 hex 的格子等于产物解析出的两态取值。它管不到的边界写在文件头：frontmatter 的压平值、并列多颗 token 的单元格、`oklch … ⇒ #hex` 那种形态都不做等值断言。
