@@ -244,7 +244,20 @@ function checkLedgerCommands() {
 const STEP_INDEX_RE = /第\s*\d+(?:\s*\/\s*\d+)?\s*步/;
 const GATE_STEP_REF_RE = /pre-commit|\.githooks|\bCI\b/;
 const STEP_INDEX_EXPLAIN_RE =
-  /不写|别再|不要写|禁止|应写|应改|一律|改成|序号|没有唯一|已删|已随|历史/;
+  /不写|别再|不要写|禁止|应写|应改|一律|改成|序号|没有唯一|已删|已随|历史|不再|过期/;
+
+/** 门禁口径的遍历集合：钩子与「哪条判据在哪跑」不只写在 SCOPED_DOCS 里。 */
+function gateReferenceDocs() {
+  return [
+    ...new Set([
+      AGENTS_MD_PATH,
+      "docs/README.md",
+      "README.md",
+      "docs/reference-facts.md",
+      ...SCOPED_DOCS,
+    ]),
+  ];
+}
 
 function checkGateStepIndexRefs() {
   // AGENTS.md 与两份索引（docs/README.md、README.md）都带「哪条判据在哪跑」这类表述，
@@ -253,14 +266,7 @@ function checkGateStepIndexRefs() {
   // `docs/reference-facts.md` 同理：它是**登记表本身**（FACTS 通过
   // `ASCII_ONLY_FACT_DOCS` 读它，不通过 SCOPED_DOCS），而「哪条判据在哪跑」正是写在这份文件里的，
   // 不并进来看不到它自己举例时用的旧序号。
-  const gateDocs = [
-    AGENTS_MD_PATH,
-    "docs/README.md",
-    "README.md",
-    "docs/reference-facts.md",
-    ...SCOPED_DOCS,
-  ];
-  for (const doc of [...new Set(gateDocs)]) {
+  for (const doc of gateReferenceDocs()) {
     if (!exists(doc)) continue;
     const lines = readText(doc).split("\n");
     lines.forEach((line, i) => {
@@ -273,6 +279,40 @@ function checkGateStepIndexRefs() {
           `序号没有唯一解释，追加一步就会整体错位（ISSUE #1374）。` +
           `请改写为标签形态：pre-commit 的 <组>「<标签>」（标签就是日志里 \`── check: <标签>\` 那一行），` +
           `或直接写那一步跑的脚本名；若这一行正是在描述本条口径，补「不写/禁止/序号」等纠正词。`,
+      );
+    });
+  }
+}
+
+/**
+ * 门禁的**步数**也不许写进文档（ISSUE #1407，签字口径 (a)）—— 与 `checkGateStepIndexRefs`
+ * 是同一条纪律的两个载体：序号会整体错位，数字会静默过期。
+ *
+ * 立案现场：`docs/standards/11` 那节写着「`.githooks/pre-commit`（24 步）」并抄了清单的前 6 行。
+ * 那一天钩子的真实形状是 组 0 + A + B + C + D，**D 组 27 条**（这数字由
+ * `tests/doc-check-hook-wiring.test.ts` 与钩子注释逐字核对）。也就是说那句数字不是「将来会过期」，
+ * 是**当场就已经是错的**，而没有任何东西会变红 —— 它既不是序号也不属于任何事实核。
+ *
+ * 与序号那条的分工：命中「第 N 步」的行交给 `checkGateStepIndexRefs` 报（同一行不双报），
+ * 本条只管裸计数形态（「24 步」「共 30 步」）。豁免集合与那条共用，所以描述本口径自身的句子不误伤。
+ */
+const STEP_COUNT_RE = /[0-9]+\s*步/;
+
+function checkGateStepCounts() {
+  for (const doc of gateReferenceDocs()) {
+    if (!exists(doc)) continue;
+    const lines = readText(doc).split("\n");
+    lines.forEach((line, i) => {
+      if (STEP_INDEX_RE.test(line)) return; // 序号形态由 checkGateStepIndexRefs 报，不双报
+      if (!STEP_COUNT_RE.test(line)) return;
+      if (!GATE_STEP_REF_RE.test(line)) return; // 「prepare-local-run.ps1 第 3 步」这类有主人的过程计数
+      if (STEP_INDEX_EXPLAIN_RE.test(line)) return; // 描述这条规则本身，放行
+      const hit = line.match(STEP_COUNT_RE)?.[0] ?? "N 步";
+      problems.push(
+        `[${doc}:${i + 1}] 写了门禁的步数「${hit}」—— 钩子每追加一步这个数字就静默过期，` +
+          `没有任何判据会因此变红（ISSUE #1407，同 13.5.10 的「不写序号」）。` +
+          `请只写「清单的唯一出处是 §13.1 / .githooks/pre-commit」这种指针形态；` +
+          `若这一行正是在描述本条口径，补「不写/别再/不再/过期」等纠正词。`,
       );
     });
   }
@@ -630,6 +670,7 @@ function main() {
   checkScopeCoverage();
   checkLedgerCommands();
   checkGateStepIndexRefs();
+  checkGateStepCounts();
   checkGateChecklistMatchesHook();
   checkPaths();
   checkAgentsMdDrift();
