@@ -122,15 +122,23 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
         <MessageCenterButton />
 
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Hint label="应用菜单">
+          {/* `render` 必须直接收那颗 `<Button>`：`DropdownMenuTrigger` 会把 menu 的
+              触发属性（pointerdown / click / `aria-haspopup`）以 props 形式灌进它收到的
+              那个元素，而 `Hint` 只吃 `label` / `side` / `accessibleName` / `wrap` /
+              `children`、不转发任意 props —— 套在中间（`render={<Hint>…</Hint>}`）等于把
+              这串 props 全丢掉，表现是**按钮点不开菜单**（ISSUE #1384）。
+              顺序只能是「`Hint` 在外、`DropdownMenuTrigger` 在内」：`TooltipTrigger` 与
+              `Menu.Trigger` 都是 `render` 接管同一个子元素，两层 props 会**合并**到那颗
+              `<Button>` 上，互不吞并。 */}
+          <Hint label="应用菜单">
+            <DropdownMenuTrigger
+              render={
                 <Button variant="ghost" size="icon-sm" aria-label="应用菜单">
                   <ChevronDown data-icon="inline-start" />
                 </Button>
-              </Hint>
-            }
-          />
+              }
+            />
+          </Hint>
           <DropdownMenuContent align="end" className="w-44">
             {/* base-ui 的 DropdownMenuLabel 实为 Menu.GroupLabel，必须包在
                 DropdownMenuGroup（或 DropdownMenuRadioGroup）里；否则打开菜单会抛
