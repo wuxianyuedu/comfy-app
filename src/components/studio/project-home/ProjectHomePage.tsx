@@ -19,6 +19,7 @@
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { RunControlBar } from "~/components/agent-run/RunControlBar";
 import { cn } from "~/lib/utils";
 import type { WorkspaceView } from "../NavItems";
@@ -54,74 +55,72 @@ export function ProjectHomePage({
   const { overview, headline, loading } = controller;
 
   return (
-    <div className="bg-canvas text-ink relative flex h-full min-h-0 w-full flex-col overflow-hidden">
-      <AuroraBackground />
+    <DocumentFrame
+      width="narrow"
+      className="flex flex-col gap-6 px-8 py-10"
+      backdrop={<AuroraBackground />}
+    >
+      {/* ── 项目标识 + 一句话进展 ─────────────────────────── */}
+      <header className="flex flex-col gap-2">
+        <h1 className="u-title-page truncate">{projectName}</h1>
+        <p className="text-ink-muted text-sm">
+          {loading ? "正在读取项目状态…" : headline}
+        </p>
+      </header>
 
-      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-240 flex-col gap-6 px-8 py-10">
-          {/* ── 项目标识 + 一句话进展 ─────────────────────────── */}
-          <header className="flex flex-col gap-2">
-            <h1 className="u-title-page truncate">{projectName}</h1>
-            <p className="text-ink-muted text-sm">
-              {loading ? "正在读取项目状态…" : headline}
-            </p>
-          </header>
+      {/* ── 总进度：一条，口径 = 六个完成阶段的等权平均 ────── */}
+      <ProgressBar
+        value={loading ? null : overview.progressPct}
+        label="项目进度"
+        ariaLabel="项目整体完成度"
+        trackClassName="h-1.5"
+      />
 
-          {/* ── 总进度：一条，口径 = 六个完成阶段的等权平均 ────── */}
-          <ProgressBar
-            value={loading ? null : overview.progressPct}
-            label="项目进度"
-            ariaLabel="项目整体完成度"
-            trackClassName="h-1.5"
-          />
+      {/* ── 状态卡：阶段条 + 计数 ─────────────────────────── */}
+      <ProjectHomeStatus
+        overview={overview}
+        loading={loading}
+        onNavigate={onNavigate}
+      />
 
-          {/* ── 状态卡：阶段条 + 计数 ─────────────────────────── */}
-          <ProjectHomeStatus
-            overview={overview}
-            loading={loading}
-            onNavigate={onNavigate}
-          />
-
-          {/* ── AI 自主成片：与工坊 / 画布同一份 run 的操纵台 ──── */}
-          <section className="flex flex-col gap-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 className="u-title">AI 自主成片</h2>
-              <span className="text-ink-faint text-[11px]">
-                从剧本一路跑到合成，可随时叫停或逐步点头
-              </span>
-            </div>
-            {/* RunControlBar 自带容器边框与外层留白由这里给：它是「一条横条」的
+      {/* ── AI 自主成片：与工坊 / 画布同一份 run 的操纵台 ──── */}
+      <section className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="u-title">AI 自主成片</h2>
+          <span className="text-ink-faint text-[11px]">
+            从剧本一路跑到合成，可随时叫停或逐步点头
+          </span>
+        </div>
+        {/* RunControlBar 自带容器边框与外层留白由这里给：它是「一条横条」的
                 形态（工坊里顶在阶段轨上方），放进主页卡片里需要圆角与描边 —— 
                 覆盖在调用处，不动那个被两处共用的组件。 */}
-            <div className="border-border bg-panel overflow-hidden rounded-2xl border">
-              <RunControlBar />
-            </div>
-          </section>
-
-          {/* ── 继续创作的入口 ───────────────────────────────── */}
-          <section className="flex flex-col gap-2">
-            <h2 className="u-title">继续创作</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {ENTRIES.map((entry) => (
-                <Button
-                  key={entry.id}
-                  variant="ghost"
-                  onClick={() => onNavigate(entry.id)}
-                  className={cn(
-                    "border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2",
-                    "flex h-auto flex-col items-start gap-1 rounded-2xl border p-4 text-left font-normal",
-                  )}
-                >
-                  <span className="text-ink-bright text-sm font-medium">
-                    {entry.label}
-                  </span>
-                  <span className="text-ink-muted text-xs">{entry.desc}</span>
-                </Button>
-              ))}
-            </div>
-          </section>
+        <div className="border-border bg-panel overflow-hidden rounded-2xl border">
+          <RunControlBar />
         </div>
-      </div>
-    </div>
+      </section>
+
+      {/* ── 继续创作的入口 ───────────────────────────────── */}
+      <section className="flex flex-col gap-2">
+        <h2 className="u-title">继续创作</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {ENTRIES.map((entry) => (
+            <Button
+              key={entry.id}
+              variant="ghost"
+              onClick={() => onNavigate(entry.id)}
+              className={cn(
+                "border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2",
+                "flex h-auto flex-col items-start gap-1 rounded-2xl border p-4 text-left font-normal",
+              )}
+            >
+              <span className="text-ink-bright text-sm font-medium">
+                {entry.label}
+              </span>
+              <span className="text-ink-muted text-xs">{entry.desc}</span>
+            </Button>
+          ))}
+        </div>
+      </section>
+    </DocumentFrame>
   );
 }
