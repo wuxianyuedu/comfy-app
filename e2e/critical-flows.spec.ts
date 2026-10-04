@@ -1,4 +1,10 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type Route,
+} from "@playwright/test";
 
 /**
  * 关键链路 E2E（ISSUE #317）：把「登录 → 工作区 → 工作流库执行 → 工作台概览」
@@ -572,6 +578,50 @@ test.describe("应用页签与全屏视图 @critical", () => {
      *     计数（`LogFilterBar` 的 `title={…}`）**仍是刻意的原生 `title`**，那几处
      *     `getByTitle` 是对的，别顺手一起换。
      */
+    /** 弹层矩形的四元组（`settleBox` 的返回形状）。 */
+    type Box = { x: number; y: number; width: number; height: number };
+
+    /** 相邻两次量到同一矩形即视为落定（与动画时长解耦）。 */
+    function sameBox(a: Box | null, b: Box | null): boolean {
+      return (
+        a !== null &&
+        b !== null &&
+        Math.abs(b.x - a.x) < 0.5 &&
+        Math.abs(b.y - a.y) < 0.5 &&
+        Math.abs(b.width - a.width) < 0.5 &&
+        Math.abs(b.height - a.height) < 0.5
+      );
+    }
+
+    /**
+     * 等定位元素**几何落定**后再取矩形（`boundingBox()` 不认 CSS transition）。
+     *
+     * 为什么不能直接 `boundingBox()`：带入场动画的浮层在补间期间量到的是被
+     * `scale(.95)` 缩过的矩形（实测 439.6×249 vs 落定后 444×251.5），取点做
+     * `elementFromPoint` 会落到弹层边界之外。
+     * 为什么不能 `waitForTimeout(固定值)`：慢机器上照样量早、快机器上白等，
+     * 而这里要的是「动画结束后那片矩形」这个**状态**，不是一段时长。
+     */
+    async function settleBox(locator: Locator): Promise<Box> {
+      let prev: Box | null = null;
+      let box: Box | null = null;
+      await expect
+        .poll(
+          async () => {
+            const next = await locator.boundingBox();
+            const stable = sameBox(prev, next);
+            prev = next;
+            box = next;
+            return stable;
+          },
+          /* 动画实测 ~280ms；给足余量，但仍是有上限的轮询而非固定 sleep。 */
+          { timeout: 5_000 },
+        )
+        .toBe(true);
+      if (box === null) throw new Error("弹层几何始终量不到，无法判定可点性");
+      return box;
+    }
+
     async function openPanel(page: Page) {
       await page.goto("/workspace");
       await page.getByRole("button", { name: /^日志面板/ }).click();
@@ -597,11 +647,19 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await trigger.click();
       const popup = page.locator('[data-slot="select-content"]');
       await expect(popup).toBeVisible();
-      const popupBox = await popup.boundingBox();
-      expect(popupBox).not.toBeNull();
+      /* 弹层带**入场动画**（base-ui 的 enter transition，`zoom-in-95` 那组
+         class 驱动），从 `scale(.95)` 补间到 1，实测约 280ms 才落定。
+         `boundingBox()` 不认 transition —— 动画没跑完时量到的是**被缩小的
+         矩形**（实测 439.6×249 vs 落定后 444×251.5），拿它去 `elementFromPoint`
+         时右下角那两个取点会落到弹层实际边界**之外**，命中旁边的定位层
+         （`div.z-popup`）而不是弹层子树 → 判据假红（ISSUE #1267 同族：
+         「量在了状态落定之前」）。
+         这里等**几何本身**稳定，而不是 `waitForTimeout(固定值)`：后者在慢机器
+         上仍会量早、在快机器上白等，而这条判据要的正是「落定后的矩形」。 */
+      const popupBox = await settleBox(popup);
 
       const t = triggerBox!;
-      const p = popupBox!;
+      const p = popupBox;
       /* 用户第 2 条诉求的可量化形式：「弹出下拉菜单的最上方和下拉按钮的最下方
        * 对齐」。三条一起断言：
        *   1. 弹层顶边**贴在扳机底边**（允许 ±8px：base-ui 的 alignItemWithTrigger
@@ -614,14 +672,25 @@ test.describe("应用页签与全屏视图 @critical", () => {
       expect(p.y).toBeGreaterThan(t.y);
 
       /* 可点性：弹层矩形内多点 elementFromPoint 必须命中弹层子树，而不是被
-       * 面板遮罩/日志行接走（规范 07 §7.21.4 的判据）。 */
+       * 面板遮罩/日志行接走（规范 07 §7.21.4 的判据）。
+       *
+       * 取点**向内缩 6px** 而不是贴着边（原先取的 4px）：base-ui 的定位层
+       * （`div.z-popup`）与弹层本体**同矩形叠放**，而弹层本体比它唯一的子节点
+       * 宽 2px（实测 444 vs 442）—— 右侧/底部最外那几像素属于弹层自身的空白，
+       * `elementFromPoint` 在那里命中的是**上一层**的定位层，`closest()` 于是
+       * 找不到 `select-content`，判据假红。6px 落在内容区里，不受这圈空白影响。
+       *
+       * 注意这不是「把判据放松」：它守的仍是「弹层这一片能被指针命中、没有被
+       * 遮罩接走」。贴着 0~2px 的边量的是定位层与弹层的盒模型差异，不是可点性 ——
+       * 用户也不会去点弹层边框那 2px 空白。 */
       const hitAllInPopup = await page.evaluate(
         ({ box }) => {
+          const inset = 6;
           const points = [
-            [box.x + 4, box.y + 4],
-            [box.x + box.width - 4, box.y + 4],
-            [box.x + 4, box.y + box.height - 4],
-            [box.x + box.width - 4, box.y + box.height - 4],
+            [box.x + inset, box.y + inset],
+            [box.x + box.width - inset, box.y + inset],
+            [box.x + inset, box.y + box.height - inset],
+            [box.x + box.width - inset, box.y + box.height - inset],
             [box.x + box.width / 2, box.y + box.height / 2],
           ];
           return points.every(([x, y]) => {
@@ -1194,14 +1263,46 @@ test.describe("应用页签与全屏视图 @critical", () => {
        *    同一份 `filteredLogs`（下拉读 `countsByOrigin.all`，页脚读
        *    `counts.all`），口径不同就会「下拉说 4000、页脚说 2000」，而用户
        *    没有任何办法判断哪个对。页脚就在面板底部、弹层盖不到它，所以这一条
-       *    不必先关下拉（关掉之后 option 定位器就失效了）。 */
-      const footerTotal = await page
-        .getByText(/面板共保留 \d+ 条/)
-        .first()
-        .evaluate(
-          (el) => /面板共保留 (\d+) 条/.exec(el.textContent ?? "")?.[1],
-        );
-      expect(Number(footerTotal)).toBe(total);
+       *    不必先关下拉（关掉之后 option 定位器就失效了）。
+       *
+       * **两个数必须在同一个浏览器回合里读**（一次 `evaluate`）：面板开着时轮询
+       * 每 2s 还在往时间线追加（`POLL_MS`），先后两次读会各自落在不同的时间线上
+       * —— 实测整批跑时报 `Expected: 901, Received: 1346`，差的正是两次读之间
+       * 新到的行。同一次 `derive()` 产出的这两个数在任何**同一瞬**都必然相等
+       * （`log-store` 的 `computeCounts` / `computeOriginCounts` 共用 `logs`），
+       * 所以要判的是「同一瞬相等」，而不是「先后两次读相等」。
+       *
+       * 仍用 `expect.poll`：即使同回合读，也可能撞上 React 已提交新时间线、但
+       * DOM 尚未刷完的那一帧 —— 那是可重试的瞬时不一致（ISSUE #1267 同族：量在
+       * 了状态落定之前），重试即稳定相等；而真正的口径分歧会**持续**不等。 */
+      const readTotalsInOneTurn = () =>
+        page.evaluate(() => {
+          const num = (text: string | null | undefined, re: RegExp) =>
+            re.exec(text ?? "")?.[1] ?? "";
+          const option = Array.from(
+            document.querySelectorAll('[role="option"]'),
+          ).find((el) => el.textContent?.includes("全部来源（按条去重）"));
+          const summary = Array.from(option?.querySelectorAll(".sr-only") ?? [])
+            .map((n) => n.textContent?.trim() ?? "")
+            .find((t) => /^\d+ 条/.test(t));
+          /* 页脚那句「… · 面板共保留 N 条」。这个数只在页脚出现一处，直接取
+             最内层命中它的节点即可（祖先会连着把整行文本都带进来，正则仍能取到）。 */
+          const footer = Array.from(
+            document.querySelectorAll("span, div, p"),
+          ).find((el) => /面板共保留 \d+ 条/.test(el.textContent ?? ""));
+          return {
+            dropdown: num(summary, /^(\d+) 条/),
+            footer: num(footer?.textContent, /面板共保留 (\d+) 条/),
+          };
+        });
+      await expect
+        .poll(async () => {
+          const { dropdown, footer } = await readTotalsInOneTurn();
+          /* 两侧都读到才算数（一个还没渲染完时不要判「不等」）。 */
+          if (!dropdown || !footer) return "pending";
+          return dropdown === footer ? "equal" : `${dropdown}≠${footer}`;
+        })
+        .toBe("equal");
       /* 那批无文件来源的行确实有自己的计数（不是 0，也不只计入「全部来源」）。 */
       expect(
         Number(await summaryOf("控制台 / 全局错误")),
