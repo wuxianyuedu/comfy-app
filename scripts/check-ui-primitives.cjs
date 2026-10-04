@@ -25,7 +25,7 @@
  *   —— P1~P3 起初走的是**棘轮**（按文件记账、只许降不许升，与
  *      `check-ui-logic-separation.cjs` / `check-theme-colors.cjs` 同一口径，基线
  *      `scripts/.ui-primitives-baseline.json`）。存量清零后它们与其余判据一样进了
- *      `HARD_GATE_RULES`：**现在 82 条全部须为 0**。棘轮这条路径留着，是给
+ *      `HARD_GATE_RULES`：**现在 84 条全部须为 0**。棘轮这条路径留着，是给
  *      **新引入的判据**起步用的（先冻结存量 → 清零 → 升硬闸，顺序不能反，
  *      见 P82 那条的教训）。
  *
@@ -313,7 +313,7 @@
  *   · `*.test.*` / `__tests__/**` 测试里的 DOM 与 mock 不算视图实现。
  *
  * 用法：
- *   node scripts/check-ui-primitives.cjs            # 检查（82 条硬闸全部须为 0）
+ *   node scripts/check-ui-primitives.cjs            # 检查（84 条硬闸全部须为 0）
  *   node scripts/check-ui-primitives.cjs --strict   # 基线下调也失败（强制收紧）
  *   node scripts/check-ui-primitives.cjs --report   # 只出清单，不判失败（排批次用）
  *   node scripts/check-ui-primitives.cjs --update   # 只给**新引入的棘轮判据**登记起点
@@ -607,6 +607,22 @@ const HOOKS_ALSO_SCANNED = new Set([
  * 用，不是整目录放行；每条都必须写清「为什么这一处不属于该判据」。
  */
 const EXEMPT_FILES = {
+  /* P84（手搓面包屑）：工作流编辑器顶栏那份**不迁** —— 它不是「路径行」，
+   * 是**页头标题本身**：首段 18px 粗体（`font-title` + `text-[18px]`，
+   * 与顶栏别的标题同档）、子图段 14px + 当前段带紫色选中药丸（`border` +
+   * `bg-primary-500/15`）+ 每段包 `Hint` + `title=`。
+   * 迁到 `BreadcrumbPath` 只会让这些外观全部让位给基元默认（§16.2.4.2
+   * 第 9 条：转换的验收标准是**渲染结果不变**），与 §16.2.4.6 里
+   * 「应用级页签不接 `Tabs`」是同一类判断。 */
+  P84: [
+    {
+      re: /^src\/components\/studio\/workflow-editor\/WorkflowEditorTopbar\.tsx$/,
+      reason:
+        "顶栏面包屑是**页头标题**（18px 粗体首段 + 紫色选中药丸 + Hint 包裹），" +
+        "不是「路径行」；接基元会改变外观（§16.2.4.2 第 9 条）。「一段路径 A / B / 当前 C」" +
+        "的通用形态本身仍由 `~/components/ui/breadcrumb-path` 收口。",
+    },
+  ],
   P39: [
     {
       re: /^src\/lib\/next-frame\.ts$/,
@@ -3755,6 +3771,62 @@ const RULES = {
       return n;
     },
   },
+
+  /* ── P84「视图层手搓面包屑」（硬闸，规范 §16.2.4.72）───────────────────
+   * 锚**形态**（「谁在砌一段 `A / B / 当前 C` 的行」），不按名字找
+   * （§16.2.4.6 的教训：按目录名扫会得出「没场景」的误判）。
+   *
+   * 形态是两件同时出现，缺一不算：
+   *   ① 一个**分隔符 span**：JSX 里一段**文本只有 `/`** 的元素
+   *      （`<span …>/</span>`，可带 class / 转义）；
+   *   ② 一个**段数组的 map**：回调里出现末尾判定（`isLast` / 下标与长度比较
+   *      那一族）—— 这只是把「路径段」与任何别的 `.map` 区分开。
+   *
+   * 出口是 `~/components/ui/breadcrumb-path` 的 `<BreadcrumbPath>`
+   * （它自己建在 `ui/breadcrumb` 的整套 slot 上）—— 把 `ol` / `li` 的层级
+   * 与 `aria-current="page"` 一并给到，而手搓的 `span` + `/` 里这两样都没有。
+   */
+  P84: {
+    label:
+      "视图层手搓面包屑（`/` 分隔 span + 段数组 map；应使用 ~/components/ui/breadcrumb-path 的 BreadcrumbPath）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* ① 分隔符 span：`<span …>` 的内容只有 `/`（允许前后空白）。
+       *    属性段放开到 `[^>]*`，但**要求不以 `/` 结尾**（避开自闭合
+       *    `<span … />` 这种不承载文本的形态）。 */
+      const sepRe = /<span\b[^>]*>\s*\/\s*<\/span>/g;
+      if (!sepRe.test(t2)) return 0;
+      /* ② 段数组的 map：回调里有末尾判定。三种常见写法都算。 */
+      const tailRe =
+        /\bisLast\b|\bi\s*===\s*[^\n]*\.length\s*-\s*1\b|\bindex\s*===\s*[^\n]*\.length\s*-\s*1\b/;
+      const mapRe = /\.map\s*\(/g;
+      let m;
+      while ((m = mapRe.exec(t2)) !== null) {
+        /* 看 map 回调这一小段（到下一个 `)` 或 200 字符，够判末尾判定了）。 */
+        const window = t2.slice(m.index, m.index + 400);
+        if (tailRe.test(window)) return 1;
+      }
+      return 0;
+    },
+  },
+
+  /* ── P85「视图层手写 `<table>`」（硬闸，规范 §16.2.4.72）───────────────
+   * 锚 `<table` 标签起始形态（同 P76 对 `<select` 的口径，不误伤
+   * `tableData` / `Table` 组件名 —— 后面必须接空白 / `>` / `/`）。
+   *
+   * 出口是 `~/components/ui/table`：它此前**全库零引用**（`ui/` 里躺着
+   * 一整套 `Table` / `TableHeader` / `TableRow` / `TableCell` / `TableHead`，
+   * 而视图里手写裸 `<table>` + `<thead>` / `<tr>` / `<td>`）。直接写裸标签
+   * 会丢掉基元给的 `data-slot` 与统一排版（边框 / 悬停 / 末行去边框）。
+   */
+  P85: {
+    label:
+      "视图层手写 <table>（应使用 ~/components/ui/table 的 Table / TableHeader / TableRow / TableCell / TableHead）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      return (t2.match(/<table[\s/>]/g) || []).length;
+    },
+  },
 };
 
 /* ── P82 判据：JSX 开标签扫描 + 属性解析 + 五档判定 ────────────────
@@ -4287,6 +4359,16 @@ const HARD_GATE_RULES = new Set([
    * 平衡扫描（`scanJsxAttrs` + `parseJsxProps` + 五档）并升为硬闸：**先让判据
    * 看得见全部存量，再冻结为 0**，顺序反了就会把硬闸建在看不见的存量上。 */
   "P82",
+  /* 本批两条（§16.2.4.72）：**零引用基元按形态复查**接上的两个出口。
+   *   · **P84**（手搓面包屑）—— 收口前 2 处（素材库抽屉 / 资源库页各一份，
+   *     class 串逐字相同）本次迁到 `BreadcrumbPath`；`WorkflowEditorTopbar`
+   *     那份按「外观会变、不动」豁免（见 EXEMPT_FILES.P84 的理由）。
+   *   · **P85**（手写 `<table>`）—— 收口前 1 处（尺寸表弹窗），本次迁到
+   *     `ui/table`；这也是 `ui/table` 全库零引用状态的第一个消费点。
+   * 两条都当批清零、直接进硬闸（与 P4/P5/P6/P7/P9… 同款：棘轮那条路径只给
+   * 「刚引入、存量未清」的新判据起步用）。 */
+  "P84",
+  "P85",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -4521,7 +4603,7 @@ function main() {
 
   /* 「先有基线才能判」只对**棘轮**成立：硬闸的判据是「恒为 0」，跟基线在不在
    * 没关系。把两者绑死会造出一个假前置 —— 全库判据都升成硬闸之后，删掉基线文件
-   * 竟能让门禁报「先跑 --update」而不去数那 82 条（`--update` 此时还会被硬闸拒，
+   * 竟能让门禁报「先跑 --update」而不去数那 84 条（`--update` 此时还会被硬闸拒，
    * 于是门禁自己把自己锁死）。 */
   const hasRatchetRules = Object.keys(RULES).some(
     (id) => !HARD_GATE_RULES.has(id),
