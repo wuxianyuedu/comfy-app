@@ -136,9 +136,10 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
 
   it(
     "④ 缺了生成件时 tsc 真的退 0 —— 拿真检出复量，不靠读配置下结论",
-    /* 原生 TS7 全仓 --noEmit 跑两遍（缺生成件一遍 + 在位一遍），独立跑 ~9s、
-     * 钩子组 C 的降配 forks 下实测 ~32s —— 贴着全局 30s 上限，给足余量
-     * （与 check-reformat-only 的慢 exec 用例同一档）。 */
+    /* 原生 TS7 全仓 --noEmit 一遍（缺生成件那个形态）。本轮实测：串行整条用例
+     * 57s 是「两遍」的价钱 ⇒ 一遍 ~28s；进 pre-commit 组 C 的并发池子（33 个文件
+     * 一起抢 CPU）实测 181s，超 120s 预算 —— 所以第二遍删掉了，见函数体末尾那段。
+     * 预算仍留 120s：一遍在池子里 ~90s，与 check-reformat-only 的慢 exec 同一档。 */
     { timeout: 120_000 },
     () => {
       /* 这一条判的是**结果**：把生成件挪走（= 新检出的形态），tsc 必须退 0。
@@ -181,8 +182,21 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
       } finally {
         if (existed) restoreGeneratedFile(generatedFile, stash);
       }
-      // 生成件在位时也得是绿的（这一条顺带证明上面那次不是「tsc 根本没跑」）。
-      expect(tsc!.run(["--noEmit"]).status).toBe(0);
+      /* 「在位时也得是绿的」不在这里再全仓编第二遍：两遍同量，本机实测 ④ 串行
+         57s、进 pre-commit 组 C 的并发池子要 181s —— 超的是 120s 预算，红的是排期
+         不是判据（串行 8/8 绿）。而这一遍的活儿本来就有执行者在同一趟提交里：
+         组 A 跑的正是「生成件在位 + 全仓 `tsc --noEmit`」。
+         这里只留一条**活性证明**（≈0.3s）：同一个可执行文件报得出版本号 ——
+         上面那次断言的是退出码，万一解出来的是个空壳，`--version` 也会红。 */
+      const alive = tsc!.run(["--version"]);
+      expect(
+        alive.status,
+        `tsc --version 都退非 0，上面那次「退 0」不可信：\n${alive.output}`,
+      ).toBe(0);
+      expect(
+        alive.output.trim().length,
+        "--version 输出为空 —— 那不是真的跑起来了",
+      ).toBeGreaterThan(0);
     },
   );
 
