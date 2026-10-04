@@ -24,6 +24,28 @@
  *   ③ 生成物仍然不入库（端口是**这台机器**按检出路径算的，入库等于把别人的
  *      工作台指向一个不存在的端口 —— 静默的错，比红更难查）；
  *   ④ 「缺了生成件」这条路上 **tsc 真的退 0** —— 拿真检出复量，不靠读配置下结论。
+ *
+ * ## ④ 的输入面：两样现生成、不入库的东西，不是一样
+ *
+ * 同族病的第二个实例（ISSUE 的复算读数）：新检出上除了 `.storybook/generated/`，
+ * 还有一份**根级**的现生成件 `next-env.d.ts`（`next dev` / `next build` 由
+ * `next/dist/lib/typescript/writeAppTypeDeclarations` 写，整文件 gitignore）。
+ * 它那两行 `/// <reference types="next" />` / `next/image-types/global` 才是把
+ * `node_modules/next/types/global.d.ts`（`declare module '*.css' {}` 在那里）拉进
+ * 类型程序的那条链 —— 缺了它，`preview.tsx` 的 `import "../src/app/globals.css"`
+ * 就是 **TS2882**。
+ *
+ * **`.next/dev/types/**` 不是必需的那一样（实测，别按直觉把它一起挪）**：
+ * `next-env.d.ts` 尾部那两条 `import "./.next/..."` 悬空时 tsc 一声不响
+ *（缺生成目录不报错，`skipLibCheck` 下更静），所以四种组合里只有
+ * 「`next-env.d.ts` 不在」会红。把它一并纳入暂存面只会平白多一个
+ * 「并发的 tsc / eslint 正在遍历它」的风险面 —— 正是下面 ④ 里那条
+ * 「目录必须还在」注释记的同一个坑。
+ *
+ * 于是 ④ 的形态不是「多挪一样」，而是**别拿自己保证不了的生成物当地基**：
+ * 它用 Next **自己的导出**现造一份 `next-env.d.ts` 到暂存目录、窄 `include` 指
+ * 过去 —— 与 #1409 的修法（让被引方不依赖生成件）是同一条道理，只是这次
+ * 「被引方」是判据自己。好处是零手抄声明：Next 哪天改了文件头，这里跟着变。
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
@@ -73,33 +95,143 @@ function staticSpecifiers(source: string): string[] {
  * 而报错只可能发生在**解析得到那个模块的文件**身上 —— 也就是 `.storybook` 那三个
  * 被引方（① 点名的就是它们）。全仓那一遍的活儿有组 A 在同一趟提交里干。
  *
+ * **环境声明这份 include 指向 ④ 自己现造的那一份**（见 provisionNextEnv），不是仓库
+ * 根那份 `next-env.d.ts` —— 后者在干净检出上不存在，指过去就是把判据的地基交给一个
+ * 生成物（正是本节要判的病）。`.next/dev/types/**` 不进 include：实测它不是必需的那
+ * 一样（见文件头），而把它拉进来等于给并发的 tsc / eslint 多一个会被搬走的遍历目标。
+ * `types: []` 关掉「按 typeRoots 自动把全部 @types 拉进来」这层噪声 —— 本判据只关心
+ * `.storybook` 三个被引方解析不解析得到它们的 import。
+ *
+ * **`exclude` 必须覆写成「仓库那份去掉 `node_modules`」**（实测踩过）：继承来的那份
+ * `exclude` 列着 `node_modules`，而 ④ 现造的那份环境声明就落在 `node_modules/.cache/`
+ * 下 —— 于是它被自己的 `exclude` 挡在程序外，`--listFilesOnly` 里没有它，`include`
+ * 那一行成了摆设。这不是「配置写错了」而是两个正确决定（暂存点选 `node_modules/.cache`
+ * 以免被并发遍历；仓库 `exclude` 掉 `node_modules` 以免扫依赖）叠起来的必然结果，
+ * 所以在这里显式解开：`include` 是**逐条显式**的（三条通配 + 一个文件），
+ * 去掉 `node_modules` 不会把依赖图拉进来（实测 2425 个文件里 2224 份是 `next` 等
+ * 依赖的 `.d.ts`，那是 `reference types="next"` 本来就该带进来的，与去不去掉无关）。
+ *
  * `incremental: false` 是必须的：真配置开着 incremental，缓存命中时这一跑可以什么都不
  * 检查就退 0 —— 判据会静默空转。宁可每次都真算。
  */
-function narrowTsconfigText(root: string): string {
+function narrowTsconfigText(
+  root: string,
+  envDts: string,
+  inheritedExclude: string[],
+): string {
   const abs = (p: string) => path.join(root, p).split(path.sep).join("/");
   return JSON.stringify(
     {
       extends: abs("tsconfig.json"),
       include: [
-        abs("next-env.d.ts"),
-        abs(".next/dev/types/**/*.ts"),
+        envDts.split(path.sep).join("/"),
         abs(".storybook/**/*.ts"),
         abs(".storybook/**/*.tsx"),
       ],
-      compilerOptions: { incremental: false },
+      exclude: inheritedExclude.filter((entry) => entry !== "node_modules"),
+      compilerOptions: { incremental: false, types: [] },
     },
     null,
     2,
   );
 }
 
-/** 把那份窄配置落到临时目录（只写一个 json，不搬仓库里的任何东西）。 */
-function writeNarrowTsconfig(): { dir: string; cfg: string } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "storybook-narrow-tsc-"));
+/**
+ * 用 **Next 自己的导出**现造一份 `next-env.d.ts`（按包名解析内部模块，不写死
+ * `node_modules/next/dist/...` 的物理路径 —— pnpm 布局下那是一条会随版本变的链接名）。
+ *
+ * 为什么不手抄那两三行：手抄就是第二个事实来源，Next 改文件头（加/删一条 reference）
+ * 时这里静默过期，而判据会继续「绿」在一个已经不算新检出形态的输入上。
+ *
+ * `distDir` 传相对路径：那个 writer 是把 `distDir` 拼成**相对路径字符串**写进 import 的
+ * （实测传绝对路径会写出 `import ".//abs/path/..."` 这种畸形说明符）。而因此产生的
+ * 悬空 import 正是我们要的形态 —— 干净检出上 `.next` 本来就不存在，而它悬空时 tsc
+ * 不报错（见文件头）。
+ */
+async function provisionNextEnv(outDir: string): Promise<string> {
+  const { writeAppTypeDeclarations } = (await import(
+    "next/dist/lib/typescript/writeAppTypeDeclarations.js"
+  )) as {
+    writeAppTypeDeclarations: (options: {
+      baseDir: string;
+      distDir: string;
+      imageImportsEnabled: boolean;
+      hasPagesDir: boolean;
+      hasAppDir: boolean;
+      strictRouteTypes: boolean;
+      typedRoutes: boolean;
+    }) => Promise<void>;
+  };
+  fs.mkdirSync(outDir, { recursive: true });
+  await writeAppTypeDeclarations({
+    baseDir: outDir,
+    distDir: ".next/dev",
+    imageImportsEnabled: true,
+    hasPagesDir: false,
+    hasAppDir: true,
+    strictRouteTypes: false,
+    typedRoutes: false,
+  });
+  const file = path.join(outDir, "next-env.d.ts");
+  expect(
+    fs.existsSync(file),
+    "Next 自己的 writeAppTypeDeclarations 没落成 next-env.d.ts —— 这条判据的输入造不出来",
+  ).toBe(true);
+  return file;
+}
+
+/**
+ * 把窄配置 + 它要的环境声明落到**仓库内**的暂存目录，返回可用的路径。
+ *
+ * 暂存点落 `node_modules/.cache` 的两个理由与 ④ 挪生成件那处同源（见
+ * generatedStashFile 的注释）：git 不看、类型程序与 eslint 都不展开；且与仓库同卷
+ * （Windows 上跨卷 rename / 写入直接失败）。这里多一条：`extends` 用的 `tsconfig.json`
+ * 是**绝对路径**，配置本身放哪儿都不影响它继承到什么。
+ *
+ * `os.tmpdir()` 在这里同样不行 —— 那次事故（详见 generatedStashFile）已经把
+ * 「仓库内的输入 + 仓库外的临时目录」这条组合判死过一回。
+ */
+async function writeNarrowTsconfig(): Promise<{
+  dir: string;
+  cfg: string;
+  envDts: string;
+}> {
+  const dir = fs.mkdtempSync(
+    path.join(ROOT, "node_modules", ".cache", "sb-narrow-tsc-"),
+  );
+  const envDts = await provisionNextEnv(path.join(dir, "env"));
   const cfg = path.join(dir, "tsconfig.json");
-  fs.writeFileSync(cfg, narrowTsconfigText(ROOT));
-  return { dir, cfg };
+  fs.writeFileSync(cfg, narrowTsconfigText(ROOT, envDts, repoExclude()));
+  return { dir, cfg, envDts };
+}
+
+/**
+ * 仓库真那份 `tsconfig.json` 的 `exclude`，读出来（不重抄一份 —— 重抄就是第二个
+ * 事实来源，而这份清单本来就是「只许减不许加」的语境，抄窄了会让窄项目悄悄多扫）。
+ *
+ * 用 `typescript` 自己的解析器而不是手剥注释 + `JSON.parse`：真配置里既有块注释也有
+ * 行注释与尾逗号，手搓的剥离器是第三个事实来源。用 `tsc6` 那份包（与 `resolveTscBin`
+ * 解出的可执行同源）—— 拿到的是**解析后**的清单，`extends` 链也一并展开。
+ */
+function repoExclude(): string[] {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ts = require("typescript") as {
+    readConfigFile: (
+      file: string,
+      read: (p: string) => string | undefined,
+    ) => { config?: { exclude?: string[] } };
+  };
+  const parsed = ts.readConfigFile("tsconfig.json", (f) =>
+    fs.readFileSync(f, "utf8"),
+  );
+  const exclude = parsed.config?.exclude;
+  expect(
+    Array.isArray(exclude) && exclude.length > 0,
+    "读不出仓库 tsconfig.json 的 exclude —— 窄项目无法据此解开 node_modules 这一条",
+  ).toBe(true);
+  /* 上面那条断言已经把 `undefined` / 非数组挡掉了，这里用 `!` 表达「到此已非空」
+     （而不是再写一次 `as` —— 那是同一件事的更啰嗦说法）。 */
+  return exclude!;
 }
 
 describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输入：四条判据", () => {
@@ -180,9 +312,12 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
      * 120s 预算必爆；串行 8/8 绿 ⇒ 争用假红（定性手法见规范 §11.13）。
      * 修法按 §11.13 的口径走「精确化判据」而不是再抬预算：编译面从全仓收到
      * 窄项目（见 narrowTsconfigText），实测 6.9s；预算留 120s 不动，
-     * 现在它离天花板很远。 */
+     * 现在它离天花板很远。
+     *
+     * 输入面多一样（`next-env.d.ts`，见文件头）之后，这一条的时间还要算上
+     * `provisionNextEnv` 现造那份声明（约十几毫秒的 fs 写）—— 无关紧要。 */
     { timeout: 120_000 },
-    () => {
+    async () => {
       /* 这一条判的是**结果**：把生成件挪走（= 新检出的形态），tsc 必须退 0。
        不读 `exclude` 下结论 —— 实测那条路根本不管用（见下面那组反证）。 */
       const tsc = resolveTscBin();
@@ -215,7 +350,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         ).toBe(true);
       }
       try {
-        const { dir, cfg } = writeNarrowTsconfig();
+        const { dir, cfg } = await writeNarrowTsconfig();
         try {
           const without = tsc!.run(["-p", cfg, "--noEmit"]);
           expect(
@@ -243,16 +378,23 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
   );
 
   it(
-    "④ 的窄项目不是空转：三个被引方真的在类型程序里",
+    "④ 的窄项目不是空转：三个被引方与那份环境声明真的在类型程序里",
     /* 把编译面从全仓收到 .storybook 之后，新出现的失效方式是「窄配置根本没把
        被引方纳进来」—— 那样 ④ 会永远绿，而这正是它唯一要判的东西。所以判据换形
        时必须补一条在场证明：拿 `--listFilesOnly` 把类型程序的文件清单打出来，
-       ① 点名的三个被引方一个都不许缺。这条与 ④ 用同一份配置，形状不会分叉。 */
+       ① 点名的三个被引方一个都不许缺。这条与 ④ 用同一份配置，形状不会分叉。
+
+       现在多一个必须点名的：**④ 自己现造的那份 `next-env.d.ts`**。它是 ④ 的地基
+       （缺了它，`preview.tsx` 的 CSS import 就是 TS2882），而它的产生路径要经过
+       Next 的一个内部模块 —— 那条路径哪天断了、或 `include` 里的路径形态写错了，
+       ④ 会**先红**（这比静默更安全）。但反过来也要挡住：`provisionNextEnv` 里那条
+       `existsSync` 只证明文件落了盘，不证明它在**程序**里 —— 清单里点它的名，
+       这条判据才算把「地基在场」判住。 */
     { timeout: 120_000 },
-    () => {
+    async () => {
       const tsc = resolveTscBin();
       expect(tsc, "解不出可用的 tsc，这条无法成立").not.toBeNull();
-      const { dir, cfg } = writeNarrowTsconfig();
+      const { dir, cfg, envDts } = await writeNarrowTsconfig();
       try {
         const listed = tsc!.run(["-p", cfg, "--noEmit", "--listFilesOnly"]);
         expect(
@@ -266,6 +408,11 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
             `${rel} 不在窄类型的文件清单里 —— ④ 那一跑是空转`,
           ).toBe(true);
         }
+        const envRel = path.relative(ROOT, envDts).split(path.sep).join("/");
+        expect(
+          norm.includes(envRel),
+          `④ 现造的那份环境声明（${envRel}）不在窄类型的文件清单里 —— 地基没进程序，④ 是空转`,
+        ).toBe(true);
       } finally {
         fs.rmSync(dir, { recursive: true, force: true });
       }
@@ -334,6 +481,88 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
       const r = tsc!.runIn(dir, ["--noEmit"]);
       expect(r.output).toContain("TS2307");
       expect(r.status, "TS2307 应当让 tsc 非零退出").not.toBe(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("判据自身可反证：缺那份环境声明会让 tsc 报 TS2882", () => {
+    /* 这条反证是本节新增输入面的**前提**，形状与上面那条 TS2307 的同源：
+       如果「缺了 `next-env.d.ts` 那两行 reference」并不会让 tsc 红，那么 ④ 为它
+       专门造一份输入就是多余的仪式，而这条判据也就没有存在理由。
+
+       实测过四种组合（真 tsc6）：只有「`next-env.d.ts` 不在」会红；
+       `next-env.d.ts` 在而 `.next/dev/types/**` 整目录不在时 tsc 退 0 —— 这正是
+       「别按直觉把 `.next` 也一起挪」那条结论的实物证据，一并钉在这里。
+
+       在临时目录里搭最小复现，不动本仓库：`*.css` 的模块声明来自
+       `node_modules/next/types/global.d.ts`，要靠那两行 reference 才进程序。
+       所以这里给一份**只指向仓库 node_modules 的**环境声明，不复制声明本身。 */
+    const tsc = resolveTscBin();
+    expect(tsc, "解不出可用的 tsc，这条反证无法成立").not.toBeNull();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tsc2882-"));
+    try {
+      /* pnpm 布局下 `node_modules/next` 是链接，指向仓库那一份 —— 用符号链接把
+         类型程序接到真 Next 上，不拷贝（拷贝等于把被测对象换成一份快照）。
+         链接建在临时目录里，不改仓库。 */
+      fs.mkdirSync(path.join(dir, "node_modules"), { recursive: true });
+      fs.symlinkSync(
+        path.join(ROOT, "node_modules", "next"),
+        path.join(dir, "node_modules", "next"),
+        "junction",
+      );
+      fs.mkdirSync(path.join(dir, "src", "app"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "src", "app", "globals.css"), "/* x */\n");
+      fs.writeFileSync(
+        path.join(dir, "entry.tsx"),
+        `import "./src/app/globals.css";\nexport const Y = 1;\n`,
+      );
+      const writeCfg = (include: string[]): void => {
+        fs.writeFileSync(
+          path.join(dir, "tsconfig.json"),
+          JSON.stringify(
+            {
+              compilerOptions: {
+                noEmit: true,
+                strict: true,
+                jsx: "react-jsx",
+                moduleResolution: "Bundler",
+                module: "ESNext",
+                skipLibCheck: true,
+              },
+              include: ["entry.tsx", ...include],
+            },
+            null,
+            2,
+          ),
+        );
+      };
+
+      // ① 没有那份环境声明 → TS2882（本条反证要的读数）。
+      writeCfg([]);
+      const bare = tsc!.runIn(dir, ["--noEmit"]);
+      expect(bare.output).toContain("TS2882");
+      expect(bare.status, "TS2882 应当让 tsc 非零退出").not.toBe(0);
+
+      // ② 补上那两行 reference → 退 0（`* .css` 的声明这才进程序）。
+      fs.writeFileSync(
+        path.join(dir, "next-env.d.ts"),
+        `/// <reference types="next" />\n/// <reference types="next/image-types/global" />\nimport "./.next/dev/types/routes.d.ts";\n`,
+      );
+      writeCfg(["next-env.d.ts"]);
+      const withEnv = tsc!.runIn(dir, ["--noEmit"]);
+      expect(
+        withEnv.status,
+        `补上环境声明后必须退 0，实际输出：\n${withEnv.output}`,
+      ).toBe(0);
+      /* 上面那份声明里的 `import "./.next/dev/types/routes.d.ts"` 是**悬空**的
+         （`.next` 根本不存在），而这一跑照样退 0 —— 与仓库里那条长期存在的读数
+         （`check-tsc-artifact-hint.cjs` 的注释也记了）一致。别把这段拆掉换成
+         「把 .next 也造出来」：那会让这条反证依赖一件与结论无关的东西。 */
+      expect(
+        fs.existsSync(path.join(dir, ".next")),
+        "反证的前提是 `.next` 不存在 —— 悬空 import 退 0 才是要钉住的那个事实",
+      ).toBe(false);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
