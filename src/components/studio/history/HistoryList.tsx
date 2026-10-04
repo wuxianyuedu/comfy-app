@@ -5,6 +5,7 @@ import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { HistoryDetailModal } from "./HistoryDetailModal";
 import { HistoryTaskCard } from "./HistoryTaskCard";
 import { AuroraBackground } from "~/components/ui/aurora-background";
+import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -79,141 +80,142 @@ export function HistoryList({
   const c = useHistoryList();
 
   return (
-    <div className="h-full overflow-y-auto">
-      <AuroraBackground />
-      <div className="mx-auto max-w-300 px-4 py-8 sm:px-8 sm:py-10">
-        {/* ── Header ── */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="font-title u-title-page">历史记录</h1>
-            <p className="text-ink-muted mt-1 text-sm">
-              所有生成任务与执行日志，按时间倒序排列。
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <SelectMenu
-              value={c.sort}
-              onChange={(value) => c.setSort(value as SortKey)}
-              options={["newest", "oldest"]}
-              labels={{ newest: "时间倒序", oldest: "时间正序" }}
-              aria-label="排序"
-              className="text-xs"
-            />
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={c.refresh}
-              className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-1.5"
-            >
-              ↻ 刷新
-            </Button>
-          </div>
+    <DocumentFrame
+      width="wide"
+      className="px-4 py-8 sm:px-8 sm:py-10"
+      backdrop={<AuroraBackground />}
+    >
+      {/* ── Header ── */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-title u-title-page">历史记录</h1>
+          <p className="text-ink-muted mt-1 text-sm">
+            所有生成任务与执行日志，按时间倒序排列。
+          </p>
         </div>
+        <div className="flex items-center gap-2">
+          <SelectMenu
+            value={c.sort}
+            onChange={(value) => c.setSort(value as SortKey)}
+            options={["newest", "oldest"]}
+            labels={{ newest: "时间倒序", oldest: "时间正序" }}
+            aria-label="排序"
+            className="text-xs"
+          />
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={c.refresh}
+            className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-1.5"
+          >
+            ↻ 刷新
+          </Button>
+        </div>
+      </div>
 
-        {/* ── 状态筛选 pills ── */}
-        <div className="mb-6 flex flex-wrap gap-2">
-          {FILTERS.map((filterOption) => {
-            const isActive = c.filter === filterOption.key;
-            const count = c.counts[filterOption.key] ?? 0;
-            return (
-              <Button
-                key={filterOption.key}
-                variant="ghost"
-                size="xs"
-                onClick={() => c.switchFilter(filterOption.key)}
-                className={
-                  "h-auto gap-2 rounded-full px-3 py-1.5" +
-                  (isActive
-                    ? "bg-primary-solid text-primary-foreground hover:bg-primary-600 shadow-primary-500/20 shadow-md"
-                    : "border-border bg-card text-ink-strong hover:bg-surface-2 border")
-                }
-              >
-                {filterOption.dotCls && (
-                  <span
-                    className={`size-1.5 rounded-full ${filterOption.dotCls}`}
-                  />
-                )}
-                <span>{filterOption.label}</span>
+      {/* ── 状态筛选 pills ── */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {FILTERS.map((filterOption) => {
+          const isActive = c.filter === filterOption.key;
+          const count = c.counts[filterOption.key] ?? 0;
+          return (
+            <Button
+              key={filterOption.key}
+              variant="ghost"
+              size="xs"
+              onClick={() => c.switchFilter(filterOption.key)}
+              className={
+                "h-auto gap-2 rounded-full px-3 py-1.5" +
+                (isActive
+                  ? "bg-primary-solid text-primary-foreground hover:bg-primary-600 shadow-primary-500/20 shadow-md"
+                  : "border-border bg-card text-ink-strong hover:bg-surface-2 border")
+              }
+            >
+              {filterOption.dotCls && (
                 <span
-                  className={
-                    /* 选中态的计数徽标此前写的是`bg-subtle5 text-white` —— 那个
+                  className={`size-1.5 rounded-full ${filterOption.dotCls}`}
+                />
+              )}
+              <span>{filterOption.label}</span>
+              <span
+                className={
+                  /* 选中态的计数徽标此前写的是`bg-subtle5 text-white` —— 那个
  类**在样式表里不存在**（全库只此一处），背景因此是透明的，
  白字直接压在浅色底的胶囊上（「全部 47」的 47 几乎看不见，
  用户实测）。改成 pill 自身前景色的半透明底：深浅两套主题
  都由语义 token 给出对比度。 */
-                    "rounded-full px-1.5 py-0.5 text-[10px] font-bold" +
-                    (isActive
-                      ? "bg-primary-foreground/20 text-primary-foreground"
-                      : "bg-surface-2 text-ink-faint")
-                  }
-                >
-                  {count}
-                </span>
-              </Button>
-            );
-          })}
-        </div>
-
-        {c.loading ? (
-          <p className="text-ink-muted text-sm">加载中…</p>
-        ) : c.filteredCount === 0 ? (
-          <EmptyState
-            title={c.empty.title}
-            description={c.empty.hint}
-            minHeightClass="min-h-75"
-          />
-        ) : (
-          <div className="flex-col gap-6">
-            {c.visibleGroups.map((group) => (
-              <section key={group.key}>
-                {/* ── 日期分组标题 ── */}
-                <div className="mb-3 flex items-center gap-3">
-                  {/* p71-allow:start brand 渐变 · 日期分组标题左侧竖条 violet→fuchsia 双色（项目品牌视觉）· §3.6.1 */}
-                  <div className="h-4 w-1 rounded-full bg-linear-to-b from-violet-500 to-fuchsia-500" />
-                  {/* p71-allow:end */}
-                  <h2 className="text-ink-strong text-sm font-semibold">
-                    {group.key}
-                  </h2>
-                  <span className="text-ink-fainter text-xs">
-                    {group.items.length} 个任务
-                  </span>
-                  <div className="bg-subtle h-px flex-1" />
-                </div>
-
-                {/* ── 任务列表 ── */}
-                <HistoryGroupTaskList
-                  items={group.items}
-                  progressMap={c.progressMap}
-                  isRetrying={c.isRetrying}
-                  onOpenDetail={c.openDetail}
-                  onCancel={c.cancel}
-                  onRetry={c.retry}
-                  onRemove={c.remove}
-                />
-              </section>
-            ))}
-
-            {/* ── 分页 footer ── */}
-            <div className="border-border-subtle flex items-center justify-center gap-3 border-t pt-6">
-              <span className="text-ink-muted text-xs">
-                已加载 {c.visibleTotal} / {c.filteredCount} 个任务
+                  "rounded-full px-1.5 py-0.5 text-[10px] font-bold" +
+                  (isActive
+                    ? "bg-primary-foreground/20 text-primary-foreground"
+                    : "bg-surface-2 text-ink-faint")
+                }
+              >
+                {count}
               </span>
-              {c.canLoadMore ? (
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={c.loadMore}
-                  className="border-border bg-subtle text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-4 py-1.5"
-                >
-                  加载更多
-                </Button>
-              ) : (
-                <span className="text-ink-fainter text-[11px]">已全部加载</span>
-              )}
-            </div>
-          </div>
-        )}
+            </Button>
+          );
+        })}
       </div>
+
+      {c.loading ? (
+        <p className="text-ink-muted text-sm">加载中…</p>
+      ) : c.filteredCount === 0 ? (
+        <EmptyState
+          title={c.empty.title}
+          description={c.empty.hint}
+          minHeightClass="min-h-75"
+        />
+      ) : (
+        <div className="flex-col gap-6">
+          {c.visibleGroups.map((group) => (
+            <section key={group.key}>
+              {/* ── 日期分组标题 ── */}
+              <div className="mb-3 flex items-center gap-3">
+                {/* p71-allow:start brand 渐变 · 日期分组标题左侧竖条 violet→fuchsia 双色（项目品牌视觉）· §3.6.1 */}
+                <div className="h-4 w-1 rounded-full bg-linear-to-b from-violet-500 to-fuchsia-500" />
+                {/* p71-allow:end */}
+                <h2 className="text-ink-strong text-sm font-semibold">
+                  {group.key}
+                </h2>
+                <span className="text-ink-fainter text-xs">
+                  {group.items.length} 个任务
+                </span>
+                <div className="bg-subtle h-px flex-1" />
+              </div>
+
+              {/* ── 任务列表 ── */}
+              <HistoryGroupTaskList
+                items={group.items}
+                progressMap={c.progressMap}
+                isRetrying={c.isRetrying}
+                onOpenDetail={c.openDetail}
+                onCancel={c.cancel}
+                onRetry={c.retry}
+                onRemove={c.remove}
+              />
+            </section>
+          ))}
+
+          {/* ── 分页 footer ── */}
+          <div className="border-border-subtle flex items-center justify-center gap-3 border-t pt-6">
+            <span className="text-ink-muted text-xs">
+              已加载 {c.visibleTotal} / {c.filteredCount} 个任务
+            </span>
+            {c.canLoadMore ? (
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={c.loadMore}
+                className="border-border bg-subtle text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-4 py-1.5"
+              >
+                加载更多
+              </Button>
+            ) : (
+              <span className="text-ink-fainter text-[11px]">已全部加载</span>
+            )}
+          </div>
+        </div>
+      )}
 
       <HistoryDetailModal
         detailId={c.detailId}
@@ -223,6 +225,6 @@ export function HistoryList({
         modeContracts={c.modeContracts}
         onClose={c.closeDetail}
       />
-    </div>
+    </DocumentFrame>
   );
 }
