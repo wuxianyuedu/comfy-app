@@ -5038,7 +5038,7 @@ import { Button } from "~/components/ui/button";
 
 // 1) schema 单一真相源
 const schema = z.object({
-  email: z.string().email("邮箱格式不正确"),
+  email: z.email("邮箱格式不正确"),
   password: z.string().min(8, "至少 8 位"),
 });
 type LoginValues = z.infer<typeof schema>; // 前后端共用此类型
