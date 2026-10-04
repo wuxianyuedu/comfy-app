@@ -91,6 +91,15 @@ const REQUIRED_CONSUMERS: Record<string, string> = {
    * `onKeyDown` 里判 `"Enter"`）。 */
   "use-enter-commit":
     "模型标签新增与改名、画布缩放、项目重命名、工作流标签、角色名、工坊项目标题、数值输入框、Agent 对话、剧本导入",
+  /* 零引用基元按形态复查接上的两个（规范 16 §16.2.4.6 / §16.2.4.72）：
+   *   · `breadcrumb-path` 落到素材库抽屉与资源库页（两处手搓的 `/` 分隔
+   *     span 已删）。**登记的是它、不是 `breadcrumb`** —— 本清单只认
+   *     「业务侧引用」（`ui/` 内部互相引用不算，`breadcrumb-path` 正是
+   *     `ui/breadcrumb` 的消费方，两者是一层封装的两节）；
+   *   · `table` 落到尺寸表弹窗（手写 `<thead>` / `<tr>` / `<td>` 已删）。
+   * 两条判据 P84 / P85 守着「不许再手搓」。 */
+  "breadcrumb-path": "素材库抽屉与资源库页的路径行（内部走 ui/breadcrumb）",
+  table: "尺寸表配置弹窗的「比例 × 分辨率档」表",
 };
 
 /** 逐文件收集业务侧（非 ui/ 自身、非测试）的 import 说明符。 */

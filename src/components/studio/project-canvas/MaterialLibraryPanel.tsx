@@ -19,6 +19,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { useState } from "react";
 
 import { MaterialLibraryContent } from "./MaterialLibraryContent";
+import { BreadcrumbPath } from "~/components/ui/breadcrumb-path";
 
 import {
   useMaterialLibrary,
@@ -204,38 +205,15 @@ export function MaterialLibraryPanel({
         </Hint>
       </div>
 
-      {/* ── Breadcrumb（多级路径，每段独立可点击）── */}
+      {/* ── Breadcrumb（多级路径，每段独立可点击）──
+          走 `~/components/ui/breadcrumb-path`（规范 16 §16.2.4.72）：
+          这段渲染与资源库页此前各写一份、class 串逐字相同。 */}
       <div className="flex items-center px-4 pb-2">
-        {breadcrumbSegments.map((seg, i) => {
-          const isLast = i === breadcrumbSegments.length - 1;
-          const isCurrent = isLast && !searching;
-          return (
-            <span key={seg.key} className="inline-flex items-center">
-              {i > 0 && (
-                <span className="text-ink-fainter mx-1.5 text-[11px]">/</span>
-              )}
-              {isLast || searching ? (
-                /* 最后一段 / 搜索结果：纯展示 */
-                <span
-                  className={`text-[12px] ${
-                    isCurrent ? "text-ink-bright font-medium" : "text-ink-soft"
-                  }`}
-                >
-                  {seg.label}
-                </span>
-              ) : (
-                /* 中间段：可点击返回该级 */
-                <Button
-                  variant="ghost"
-                  onClick={() => enterFolder(seg.key)}
-                  className="text-ink-muted hover:text-primary-strong h-auto p-0 text-[12px] font-normal hover:bg-transparent hover:underline"
-                >
-                  {seg.label}
-                </Button>
-              )}
-            </span>
-          );
-        })}
+        <BreadcrumbPath
+          segments={breadcrumbSegments}
+          navigable={!searching}
+          onNavigate={enterFolder}
+        />
         {/* 返回按钮：仅在进入某分类且非搜索时显示 */}
         {showItems && !searching && folder && (
           <Button

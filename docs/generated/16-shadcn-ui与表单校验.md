@@ -118,13 +118,13 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 不许升）→ 清零后升为硬闸（恒为 0）**。顺序不能反：把硬闸建在看不见的存量上，就是
 P82 那次「基线写着 78、真存量 157」的形态。
 
-**当前状态：82 条判据全部是硬闸**（`HARD_GATE_RULES`），棘轮基线 `total` 为 0。
+**当前状态：84 条判据全部是硬闸**（`HARD_GATE_RULES`），棘轮基线 `total` 为 0。
 棘轮这条路径**不是死代码** —— 它是**新引入判据的起步形态**：新判据一上来通常有存量，
 先冻结、清完再升硬闸。`--update` 因此只有一种合法用途：给旧基线里从未出现过的
 rule id 登记起点；任何「已有 rule id 上升」都直接拒绝，硬闸未清零时连登记都不给。
 
 ```bash
-pnpm ui:primitives            # 检查（82 条硬闸须为 0；pre-commit D 组「UI 基元复用棘轮」）
+pnpm ui:primitives            # 检查（84 条硬闸须为 0；pre-commit D 组「UI 基元复用棘轮」）
 pnpm ui:primitives:report     # 只出清单（排批次用，不判失败）
 node scripts/check-ui-primitives.cjs --update   # 只给新引入的判据登记起点
 ```
@@ -198,10 +198,13 @@ node scripts/check-ui-primitives.cjs --update   # 只给新引入的判据登记
 | **P64** | 把高频进度回调直接写进 state（`onProgress: (…) => setXxx(`）                                                                                      | `~/components/ui/use-throttled-progress` 的 `useThrottledProgress`（单值）/ `useThrottledProgressMap`（按条目）/ `createThrottleGate`（只借闸门）（见 §16.2.4.68）                                              |
 | **P65** | 一次异步动作的忙碌位复位写在成功路径上（`setX(true)` → `await …` → `setX(false)`，且复位不在 `finally` / `catch` 里）                             | `~/components/ui/use-busy-action` 的 `useBusyAction`（复位绑在 `finally` 上、异常不吞、卸载守卫）；store 级忙碌位见 `~/components/update-check/update-check-store` 的 `runChecking`（见 §16.2.4.71）            |
 | **P66** | 自建「同一时刻只跑一件」的重入闸门（名字带 `busy`/`pending`/`inflight`/`locked`/`running`/`checked` 的 `useRef` + 写一次 + 读两处）               | `~/lib/reentrancy-lock` 的 `useReentrancyLock`（同步 `tryEnter` / `exit`）/ `createReentrancyLock`（跨组件实例、非 hook 场景）（见 §16.2.4.69）                                                                 |
+| **P67~P83** | 见各自的 §16.2.4.x（`ui/` 层自造组件绕开 shadcn 基元、视图层手写 `<input>` / `<label>` / `aria-pressed` / `dark:palette`、缺可访问名、自闭合 `border-*`、空态卡、`<select>`、`w-N h-N`、`<Button>` 图标与 `title=`、屏级标题字阶……） | 逐条见 `pnpm ui:primitives:report` 与对应章节                                                                                                                                                                   |
+| **P84** | 视图层手搓面包屑（`/` 分隔 span + 段数组 `map`；形态锚，不按名字找）                                                                               | `~/components/ui/breadcrumb-path` 的 `BreadcrumbPath`（建在 `ui/breadcrumb` 的整套 slot 上：`nav`+`ol`/`li` 层级与 `aria-current="page"`）（见 §16.2.4.72）                                                    |
+| **P85** | 视图层手写 `<table>`（裸标签，丢掉基元的 `data-slot` 与统一排版）                                                                                  | `~/components/ui/table` 的 `Table` / `TableHeader` / `TableRow` / `TableCell` / `TableHead`（见 §16.2.4.72）                                                                                                    |
 
 **「引入时的起点」不同，不是「性质」不同**：P1/P2/P3 落地时视图里摆着 408 / 10 / 40
 处存量，只能先冻结成棘轮逐批降；P4 之后的大多数判据引入时那个形态已经是 0
-（同批一起清零），所以一上来就是硬闸。**两者现在终点重合：82 条全部是硬闸**。
+（同批一起清零），所以一上来就是硬闸。**两者现在终点重合：84 条全部是硬闸**。
 逐条的名字与实时计数看 `pnpm ui:primitives:report` —— 正文与脚本都不再抄一份清单：
 脚本里那份手写的「P4 自绘滚动条 / … / P66 重入闸门」名字表就漂过一回（写着 66，
 判据早已到 83，而升闸的 12 条一个都没被提到）。
@@ -4890,6 +4893,87 @@ const save = useBusyAction();
 **刻意不数**「复位写在 `finally` 里」的那些 —— 那形态本身是对的
 （`use-workflow-detail-loader` 的竞态令牌、`use-custom-nodes-settings` 的按子包
 忙碌位都属于这一类），数它们只会逼人改坏代码。
+
+### 16.2.4.72 零引用基元再复查一轮：按形态接上两个（P84 / P85 硬闸）
+
+§16.2.4.6 那一轮按形态复查的是 **7 条**（`tabs` / `accordion` / `scroll-area` /
+`avatar` / `alert` / `dropdown-menu` / `form`）。此后 `ui/` 又长出不少基元，
+本批重新数了一遍「业务侧引用数 = 0」的，实测 **20 条**：
+
+```text
+accordion aspect-ratio avatar breadcrumb button-group context-menu empty
+form-rhf hover-card input-group item label menubar native-select
+navigation-menu pagination radio-group scroll-area slider table
+```
+
+**20 条不能整批按 §16.2.4.6 那套「有落点 / 选型未发生 / 外观会变」逐条展开** ——
+其中多数（`menubar` / `navigation-menu` / `hover-card` / `input-group` /
+`button-group` / `item` / `label` / `empty` / `aspect-ratio` / `radio-group` /
+`slider` / `native-select` / `pagination` / `context-menu`）在本应用里**确实没有
+对应形态**（桌面应用的顶栏不是 `Menubar`、没有菜单栏层级导航；`native-select` 的
+零落点是因为唯一那处来源筛选**刻意**用了 `ui/select`，理由写在
+`LogPanelOriginSelect` 里：原生 `<option>` 只收纯文本、排不出四列数字表）。
+把它们逐条展开写进文档，等于把「我没有对应形态」这句话抄 14 遍 —— 那也是一种
+会过期的账。所以本批只**接上真有落点的两条**，其余记录为「按 §16.2.4.6 的形态
+复查口径已复查、无落点」：
+
+| 基元 | 库内实际的对应形态（按形态找，不按名字） | 结论 |
+| ---- | ---------------------------------------- | ---- |
+| `ui/breadcrumb` | **两处**手搓的「路径行」：素材库抽屉 `MaterialLibraryPanel` 与资源库页 `ResourceLibrary`，各自 `breadcrumbSegments.map` + `i > 0 && "/"` + `isLast ? span : Button`，**class 串逐字相同**（只有分隔符的 `mx-1` / `mx-1.5` 不同）；另有 `WorkflowEditorTopbar` 那份**不是路径行**（见下） | ✅ **接上** |
+| `ui/table` | **一处**裸 `<table>` + `<thead>`/`<tr>`/`<td>`：尺寸表配置弹窗 `SizePresetTableModal` 的「比例 × 分辨率档」表 | ✅ **接上** |
+
+#### 出口一：`~/components/ui/breadcrumb-path` 的 `BreadcrumbPath`
+
+「一段路径 `A / B / 当前 C`」的**唯一实现**，建在 `ui/breadcrumb` 的整套 slot 上：
+
+```tsx
+<BreadcrumbPath
+  segments={breadcrumbSegments}   // { label, key }[]，key=null 表示不可导航
+  navigable={!searching}          // 搜索态：层级已失效，全部段不可点
+  onNavigate={enterFolder}
+/>
+```
+
+**收的是语义，不只是排版**：手搓的 `span` + `/` 里既没有 `ol`/`li` 的层级、
+也没有 `aria-current="page"` —— 读屏器读到的是一串无结构的文本。换成基元之后
+这两样跟着来，而调用处的 `class` 一个字没写。
+
+**一处不迁，理由与 §16.2.4.6 的「应用级页签不接 `Tabs`」同类**：
+`WorkflowEditorTopbar` 那份虽也长成 `A / B / 当前 C`，但它是**页头标题本身** ——
+首段 18px 粗体（`font-title` + `text-[18px]`，与顶栏别的标题同档）、子图段 14px、
+**当前段带紫色选中药丸**（`border-primary-500/40` + `bg-primary-500/15`）、每段包
+`Hint` + `title=`。迁过去只会让这些外观全部让位给基元默认（§16.2.4.2 第 9 条：
+验收标准是**渲染结果不变**）。它在脚本的 `EXEMPT_FILES.P84` 里登记并写了理由。
+
+> 「按形态找」的教训在这里复现了一次：如果按名字扫（「有没有出现 `breadcrumb`
+> 这个词」），`MaterialLibraryPanel` / `ResourceLibrary` 两处**一个都不会被数到**
+> —— 它们的变量叫 `breadcrumbSegments`、渲染出来的是 `span` 与 `/`，
+> 全文没有 `Breadcrumb` 这个标识符。这正是 §16.2.4.6 记的「按名字比会误判」。
+
+#### 出口二：`~/components/ui/table`
+
+尺寸表弹窗的裸 `<table>` 换成 `Table` / `TableHeader` / `TableRow` / `TableCell` /
+`TableHead` 一族。**这也是 `ui/table` 全库零引用状态的第一个消费点** ——
+它自己的 story 里早就写着「整族没被用过（零消费点）」，现在那句话可以撤了。
+
+#### 判据：P84 / P85（硬闸，不留存量）
+
+两条都锚**形态**，同批清零后直接进硬闸（存量本就只有 2 处 / 1 处，不像 P1~P3
+那样需要先冻结）：
+
+- **P84** 两件同时出现才算：① 一个**分隔符 span** —— JSX 里一段文本**只有 `/`**
+  的元素；② 一个**段数组的 `map`**，回调里有末尾判定（`isLast` / 下标与长度比较
+  那一族）。只看 `/` 会把分数、除法、路径字面量全算上；只看 `.map(` 会把任何
+  列表算上 —— 两件同现才收窄到「路径行」。
+- **P85** 锚 `<table` 标签起始形态（同 P76 对 `<select` 的口径）：后面必须接
+  空白 / `>` / `/`，`tableData` / `Table` 组件名都不误伤。
+
+两条都带正例用例（`tests/check-ui-primitives.test.ts`：喂一段手搓代码断言它被数到
+并阻断），因为「0」只有在「数得出来」时才可信 —— P82 那次粗锚漏计 79 处的教训。
+
+**「零引用基元」这条账的用法**：下一轮再数「谁零引用」时，**不要**按目录名扫
+「有没有出现这个词」，而要按**形态**找「谁在实现这件事」（本节的两条落点、
+§16.2.4.6 的七条，都是这么找到的）。
 
 ## 16.3 新增一个组件的标准动作
 
