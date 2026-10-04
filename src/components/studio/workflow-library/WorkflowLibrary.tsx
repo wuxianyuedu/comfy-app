@@ -10,6 +10,7 @@ import {
   ResizablePanelGroup,
 } from "~/components/ui/resizable";
 import { ModelTagManager } from "../ModelTagManager";
+import { WorkspaceFrame } from "../ViewContainer";
 import { DeleteWorkflowModal } from "../DeleteWorkflowModal";
 import { WorkflowImportPanel } from "../WorkflowImportPanel";
 import { WorkflowLibraryHeader } from "./WorkflowLibraryHeader";
@@ -60,7 +61,7 @@ export function WorkflowLibrary({
   const c = useWorkflowLibrary(onUse);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <WorkspaceFrame>
       <WorkflowLibraryHeader
         onToggleImport={c.toggleImport}
         sourceFilter={c.sourceFilter}
@@ -188,6 +189,6 @@ export function WorkflowLibrary({
           onClose={() => c.setShowModelManager(false)}
         />
       )}
-    </div>
+    </WorkspaceFrame>
   );
 }

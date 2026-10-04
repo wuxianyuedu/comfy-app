@@ -42,6 +42,20 @@ describe("DocumentFrame（文档型）", () => {
     expect(scrollers).toHaveLength(1);
   });
 
+  it("文档型外框自己带那两颗颜色令牌（收口不改视觉的根据）", () => {
+    /* 从前八个视图要么自己写 `bg-canvas text-ink`，要么不写、靠外壳的
+       `SidebarInset` 兜住 —— 两条路落到屏上是同一个颜色，所以固定在这里是
+       零变化。反过来，工作区型不写（见下面那组）：三个工作区屏本来就不是同一底色。 */
+    const { container } = render(
+      <DocumentFrame>
+        <p>内容</p>
+      </DocumentFrame>,
+    );
+    const frame = frameOf(container, "document");
+    expect(frame.className).toContain("bg-canvas");
+    expect(frame.className).toContain("text-ink");
+  });
+
   it("居中列带 mx-auto + w-full，档位默认 wide", () => {
     const { container } = render(
       <DocumentFrame>
@@ -167,5 +181,17 @@ describe("WorkspaceFrame（工作区型）", () => {
     const frame = frameOf(container, "workspace");
     expect(frame.className).not.toContain("max-w-");
     expect(frame.querySelector('[class*="mx-auto"]')).toBeNull();
+  });
+
+  it("容器自己不写背景：三个工作区屏本来就不是同一个底色", () => {
+    /* 成片 `bg-canvas`、工坊 `bg-bg`、工作流库没写（靠外壳兜）。容器固定一颗
+       就等于偷偷改了其中两屏；而「调用处传 className 覆盖」并不可靠 —— 合并器
+       不保证认得这两颗 token。所以几何统一、颜色留给调用处。 */
+    const { container } = render(
+      <WorkspaceFrame>
+        <div>画布</div>
+      </WorkspaceFrame>,
+    );
+    expect(frameOf(container, "workspace").className).not.toMatch(/\bbg-/);
   });
 });

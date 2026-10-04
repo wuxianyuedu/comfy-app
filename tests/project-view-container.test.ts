@@ -35,6 +35,21 @@ const DOCUMENT_VIEWS = [
   path.join(STUDIO, "ProjectOutputs.tsx"),
 ];
 
+/** 已收口的工作区型视图。
+ *
+ * 画布（`ProjectCanvas`）与成片（`FilmStudio`）**刻意不在清单上**，各有各的理由，
+ * 两处都不是「顺手改一下」：
+ *   · 成片根上挂着一层 `absolute inset-0` 的光斑，它现在锚的是更外层的定位祖先；
+ *     容器带 `relative`，套上去会让那层改锚到外框（少盖住页签条那一条）——
+ *     这是外观决定，得单独看；
+ *   · 画布那一层是 ReactFlow 的尺寸父级兼拖放目标（`onDragOver` / `onDrop` 在它身上），
+ *     它没有重复的形状可收，套壳只是多一层。
+ */
+const WORKSPACE_VIEWS = [
+  path.join(STUDIO, "workflow-library", "WorkflowLibrary.tsx"),
+  path.join("src", "components", "workshop", "WorkshopPipeline.tsx"),
+];
+
 /** 剥注释再判：说明文字里出现 `max-w-300` 不等于有人手写那一层。 */
 function codeOf(rel: string): string {
   return stripComments(readFileSync(path.join(ROOT, rel), "utf8"));
@@ -70,5 +85,39 @@ describe("统一容器的接入约定（文档型）", () => {
       }
     }
     expect(offenders, "这些视图在 className 里写了 max-w").toEqual([]);
+  });
+});
+
+describe("统一容器的接入约定（工作区型）", () => {
+  it("清单不为空，且每一项都还在磁盘上", () => {
+    expect(WORKSPACE_VIEWS.length).toBeGreaterThanOrEqual(2);
+    for (const rel of WORKSPACE_VIEWS) {
+      expect(existsSync(path.join(ROOT, rel)), `${rel} 读不到`).toBe(true);
+    }
+  });
+
+  it.each(WORKSPACE_VIEWS.map((rel) => [rel] as [string]))(
+    "%s 引了 WorkspaceFrame，且不再自己写几何或页面滚动",
+    (rel) => {
+      const code = codeOf(rel);
+      expect(code, `${rel} 没用 WorkspaceFrame`).toContain("WorkspaceFrame");
+      /* `min-h-screen` 在壳里等于又开一个视口高：内容一高就出现「壳的滚动条 +
+         这一屏的滚动条」双层滚动（工坊屏原先正是这个形状）。 */
+      expect(code).not.toMatch(/min-h-screen/);
+      // 容器那串几何不许在视图里再抄一遍。
+      expect(code).not.toMatch(
+        /className="flex h-full[^"]*flex-col overflow-hidden"/,
+      );
+    },
+  );
+
+  it("调用点不再给工作区型包一层滚动容器（双层滚动的另一半）", () => {
+    const page = codeOf(path.join("src", "app", "workspace", "page.tsx"));
+    expect(
+      page,
+      "工坊的滚动条归它自己的容器管，调用点再包一层就是两条叠着",
+    ).not.toMatch(
+      /<div className="h-full overflow-y-auto">\s*<WorkshopPipeline/,
+    );
   });
 });
