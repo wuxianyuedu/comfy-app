@@ -27,7 +27,7 @@
 // §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）——只依赖
 // Node 内建 `fs` + `./proc-detect` 的 type-only import，登记进
 // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
-import fs from "fs";
+import fs from "node:fs";
 import type { PidLookup } from "./proc-detect";
 
 export interface ComfyExitFacts {

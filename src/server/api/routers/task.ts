@@ -149,7 +149,7 @@ export const taskRouter = createTRPCRouter({
       if (task?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
-      const fsPromises = await import("fs/promises");
+      const fsPromises = await import("node:fs/promises");
       /* 目录由 `taskOutputDir()` 一处算：形状会让它落到产物根之外（例如客户端
        * 生成的 projectId 写成 `../../x`）时返回 null → 这里按越界处置。
        * 旧写法在本处内联拼路径 + 内联白名单，与 `delete` 那份已经分叉，见
@@ -209,7 +209,7 @@ export const taskRouter = createTRPCRouter({
       if (task?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
-      const fsPromises = await import("fs/promises");
+      const fsPromises = await import("node:fs/promises");
       /* 产物目录整体删除，目录与落盘侧共用 `taskOutputDir()` 这一份定义。
        *
        * 旧写法在这里有两处各自拼错的拼接，而两条失败都被

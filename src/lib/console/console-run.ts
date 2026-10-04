@@ -31,7 +31,7 @@
 // 变成一团乱麻。所以 `ConsoleRunner` 是**有状态的单槽**：忙时直接拒绝新命令
 // （给出「哪条命令在跑、跑了多久」），而不是排队（排队会让用户以为点了没反应）。
 
-import { spawn } from "child_process";
+import { spawn } from "node:child_process";
 
 import { errorText } from "~/lib/error-message";
 import { fireAndForget } from "~/lib/async-action";

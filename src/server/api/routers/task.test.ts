@@ -1,5 +1,5 @@
 import type * as LoggerModule from "~/lib/core/logger";
-import type * as FsPromises from "fs/promises";
+import type * as FsPromises from "node:fs/promises";
 /**
  * task.router 集成测试。
  *

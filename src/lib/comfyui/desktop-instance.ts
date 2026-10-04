@@ -18,9 +18,9 @@
 // §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）——依赖
 // Node 内建 `fs` / `os` / `path` + 同批已摘 server-only 的 `./instance-kind`。
 // 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { classifyComfyInstall } from "./instance-kind";
 
 /** 桌面实例最终派生出的 headless 启动参数（不含解释器与 main.py 路径）。 */

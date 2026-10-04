@@ -10,9 +10,9 @@
 // 这些规则读代码看不出回归，只有把「事实 → 结论」钉成断言才拦得住。
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 vi.mock("../app-settings/app-settings.server", () => ({
   COMFYUI_DEFAULT_PORT: 8188,

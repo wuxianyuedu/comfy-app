@@ -14,8 +14,8 @@
 // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 // 只用 `child_process.execFile` + `fs` 做本机进程/端口探测，与 lifecycle /
 // runner-state 一样属于「未来 executor host 也要能直接 import」的执行链地基。
-import { execFile } from "child_process";
-import { readdirSync, readlinkSync, readFileSync } from "fs";
+import { execFile } from "node:child_process";
+import { readdirSync, readlinkSync, readFileSync } from "node:fs";
 
 /** 带「成功与否」标记的 execFile 包装：ok=false 表示命令本身失败（超时 /
  *  无法启动 / 非零退出），此时输出不可信——调用方不得把「没查到」当作

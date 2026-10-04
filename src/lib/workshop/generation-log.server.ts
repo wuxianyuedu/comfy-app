@@ -11,8 +11,8 @@ import { errorText } from "~/lib/error-message";
 
 import "server-only";
 
-import { promises as fs } from "fs";
-import path from "path";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 import { createLogger } from "~/lib/core/logger";
 import { WORKSHOP_LOG_DIR } from "~/lib/log/log-paths";

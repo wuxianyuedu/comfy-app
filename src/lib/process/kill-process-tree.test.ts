@@ -16,7 +16,7 @@
 // 第 ② 类缺陷漏过去的原因（`via` 报的 `kill -SIGTERM -2866（进程组）` 看着
 // 完全正确，实际根本没杀到）。
 
-import { execSync, spawn } from "child_process";
+import { execSync, spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import {
   isWindowsPlatform,

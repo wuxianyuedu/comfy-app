@@ -36,7 +36,7 @@
 // 依赖它们等于把「回收失败」变成静默失败。POSIX 进程组用 `ps`（POSIX 必备）
 // 读 PGID，其余走 `process.kill`。
 
-import { execFile, execFileSync, spawn } from "child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 
 /** 回收目标的描述。pid <= 0 一律视为「没有可回收目标」，直接返回 ok。 */
 export interface KillProcessTreeOptions {

@@ -20,9 +20,9 @@
 // §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）——只依赖
 // Node 内建 `fs` / `os` / `path` + 纯函数 `~/lib/path-display`，登记进
 // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { normalizeSlashes } from "~/lib/path-display";
 
 /** pyvenv.cfg 里我们关心的字段：基础解释器所在目录与可执行文件全路径。 */

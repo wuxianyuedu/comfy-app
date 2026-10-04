@@ -29,8 +29,8 @@
 // launch-diagnostics.paths.json 由 tests/launch-diagnostics-paths.test.ts 与
 // Rust 侧逐项核对），因此不存在「同一判据两份会漂的实现」。
 
-import { appendFileSync, mkdirSync, writeFileSync } from "fs";
-import path from "path";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 import { formatLocalStamp } from "~/lib/time-format";
 

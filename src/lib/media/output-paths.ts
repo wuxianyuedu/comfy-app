@@ -38,7 +38,7 @@
  * `executor-finalize.ts` 按它自己头部的约定**不保留任何 server-only 侧静态边**
  * （它的入口在纯 Node 宿主里加载，`server-only` 的入口是 throw）—— 给它挂声明
  * 就等于把「布局只有一处定义」重新拆成两份。 */
-import path from "path";
+import path from "node:path";
 
 import {
   ARTIFACT_ROOT_DIR,

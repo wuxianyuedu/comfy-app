@@ -26,8 +26,8 @@
 // ./executor-continuation 各自还静态引 server-only 侧）留在后续 PR 拆；登记进
 // PURE_NODE_HOSTS 是"标方向 + 消化 scanner unguarded"，**不是**「现在就能在纯
 // Node 里 import 本模块」的承诺。
-import { promises as fs } from "fs";
-import path from "path";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
 import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";

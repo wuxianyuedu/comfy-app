@@ -105,6 +105,11 @@ const LITERAL_ALLOWED: Record<string, string> = {
   "--chart-4": "同上",
   "--chart-5": "同上",
   "--radius": "非颜色刻度（圆角基数）",
+  // 工作区容器的容器查询宽度档位：数值只在 globals.css 一处，
+  // ViewContainer 经 var() 取用（三档各一，不并入颜色 token 族）。
+  "--container-narrow": "非颜色刻度（容器宽度档位）",
+  "--container-medium": "同上",
+  "--container-wide": "同上",
 };
 
 describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672）", () => {
