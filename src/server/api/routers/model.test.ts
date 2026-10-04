@@ -11,7 +11,7 @@
  *
  * mock 边界：`~/server/db`（内存库 + 真 Drizzle，配置行是真的按 userId 过滤）、
  * `~/lib/models` 与 `~/lib/comfyui/client`（会真扫 ComfyUI 目录 / 发 HTTP，换成记账替身）、
- * `global.fetch`（可达性）、`~/server/better-auth`、`~/lib/core/logger`。
+ * `globalThis.fetch`（可达性）、`~/server/better-auth`、`~/lib/core/logger`。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

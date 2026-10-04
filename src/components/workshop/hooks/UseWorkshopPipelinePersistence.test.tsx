@@ -27,7 +27,7 @@ const SCRIPT = "# 我的剧本\n场景一 小满出门";
 beforeEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
-  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = requestUrl(input);
     if (url.includes("/api/workshop/draft")) {
       return new Response(JSON.stringify({ drafts: [], exists: false }), {
