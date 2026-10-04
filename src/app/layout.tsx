@@ -14,6 +14,7 @@ import { ToastProvider } from "~/components/studio/ToastProvider";
 import { BrowserStatusBar } from "~/components/studio/BrowserStatusBar";
 import { UpdateCheckProvider } from "~/components/update-check/UpdateCheckProvider";
 import { CodeUpdateWatcher } from "~/components/code-update/CodeUpdateWatcher";
+import { AppearanceBootstrap } from "~/components/AppearanceBootstrap";
 import { MessageCenterPanel } from "~/components/message-center/MessageCenterPanel";
 
 export const metadata: Metadata = {
@@ -35,6 +36,9 @@ export default function RootLayout({
      * 依据 localStorage 写入，需跳过 SSR 与客户端对 <html> 属性的水合告警。 */
     <html lang="zh-CN" className={`${geist.variable}`} suppressHydrationWarning>
       <body className="font-sans antialiased">
+        {/* 外观偏好（圆角 / 标题字阶）改的是全局 CSS 变量，必须在任何路由下都成立，
+            所以引导挂在根布局而不是设置页内部。 */}
+        <AppearanceBootstrap />
         <ThemeProvider>
           <TooltipProvider>
             <TRPCReactProvider>

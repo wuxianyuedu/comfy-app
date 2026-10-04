@@ -265,10 +265,13 @@
      其余屏级标题在 11 个 h1 上各写一套（18 / 20 / 24 / 34px）——同一个角色在
      不同屏上大小不一。数值提到这里：改档一处全站跟手，`--text-*` 命名空间
      顺带生成 text-section / text-page / text-hero 工具类。 */
-  --text-section: 0.875rem; /* 卡片 / 区块标题（.u-title） */
-  --text-page: 1.5rem; /* 屏级标题（.u-title-page —— 每屏唯一的 h1） */
-  --text-stage: 1.0625rem; /* 段级标题（.u-title-stage，工坊六段当前段的标题） */
-  --text-hero: 2.125rem; /* 首页欢迎区大标题（.u-title-hero，屏级档的唯一例外） */
+  /* 四档都乘 `--font-scale`：基准留在本文件一处，设置页只改那一个数 ——
+     若在 JS 里重算成绝对值，基准就有两个家，改一处漏一处。
+     倍率默认 1（不设置时与从前逐像素相同）。 */
+  --text-section: calc(0.875rem * var(--font-scale, 1)); /* 卡片 / 区块标题（.u-title） */
+  --text-page: calc(1.5rem * var(--font-scale, 1)); /* 屏级标题（.u-title-page —— 每屏唯一的 h1） */
+  --text-stage: calc(1.0625rem * var(--font-scale, 1)); /* 段级标题（.u-title-stage，工坊六段当前段的标题） */
+  --text-hero: calc(2.125rem * var(--font-scale, 1)); /* 首页欢迎区大标题（.u-title-hero，屏级档的唯一例外） */
 
   /* Display / titles — Sarasa Gothic SC Bold preferred, falls back to Noto/PingFang (Ardot #169~#177) */
   --font-title:
@@ -1115,7 +1118,12 @@ textarea::-webkit-scrollbar {
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  /* 圆角总闸：`--radius-sm…4xl` 全部由它 calc 派生（见 @theme inline 那一组）。
+     设置页的「圆角」档只改这一个值 —— 实测运行时改它，卡片与按钮的圆角会
+     按各自系数一起跟着变（21.6px→39.6px / 9.6px→17.6px），所以不需要第二份映射表。 */
   --radius: 0.75rem; /* 对应原 --radius-md 12px */
+  /* 标题字阶总闸（只作用于上面四档标题令牌；正文锚定 13px，不随它变）。 */
+  --font-scale: 1;
 }
 
 @layer base {
