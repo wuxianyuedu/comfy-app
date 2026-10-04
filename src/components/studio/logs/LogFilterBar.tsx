@@ -56,7 +56,7 @@ export const FILTER_LABELS: { label: string; value: LogFilter }[] = [
  */
 function CountChip({ value }: { value: number }) {
   return (
-    <span className="text-ink-fainter w-[4ch] shrink-0 text-right text-[11px] tabular-nums">
+    <span className="text-ink-fainter text-2xs w-[4ch] shrink-0 text-right tabular-nums">
       {value}
     </span>
   );

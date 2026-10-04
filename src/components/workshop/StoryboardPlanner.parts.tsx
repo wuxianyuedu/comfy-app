@@ -22,7 +22,7 @@ export function ShotStatusBadge({ status }: { status: Shot["status"] }) {
       status={status}
       label={SHOT_STATUS_LABEL[status]}
       dot={false}
-      className="px-2 py-0.5 text-[10px]"
+      className="text-3xs px-2 py-0.5"
     />
   );
 }
@@ -174,7 +174,7 @@ export function ShotRow({
                 size="xs"
                 onClick={onPolish}
                 disabled={polishBusy}
-                className="text-primary hover:bg-primary/10 h-auto rounded px-1.5 py-0.5 text-[10px]"
+                className="text-primary hover:bg-primary/10 text-3xs h-auto rounded px-1.5 py-0.5"
               >
                 {polishBusy ? "润色中…" : "✨ AI 润色"}
               </Button>
@@ -185,7 +185,7 @@ export function ShotRow({
           {shot.prompt || "填写描述后自动生成…"}
         </p>
         {polishError && (
-          <p className="text-danger-strong mt-1 text-[11px]">{polishError}</p>
+          <p className="text-danger-strong text-2xs mt-1">{polishError}</p>
         )}
         {linkedChars.length > 0 && (
           <p className="text-primary/70 mt-1 text-xs">

@@ -173,7 +173,7 @@ export function SettingsLoadError({
             </Hint>
           }
         >
-          <pre className="border-border bg-surface-1 custom-scrollbar mt-3 max-h-64 overflow-auto rounded-lg border p-3 text-left font-mono text-[11px] break-all whitespace-pre-wrap">
+          <pre className="border-border bg-surface-1 custom-scrollbar text-2xs mt-3 max-h-64 overflow-auto rounded-lg border p-3 text-left font-mono break-all whitespace-pre-wrap">
             {errorText}
           </pre>
         </Disclosure>

@@ -55,7 +55,7 @@ export function SubgraphPinRows({
             /* 长的边界端口标签换行到
              *                    *  多行换行，而不是被裁到 22px。完整理由见 WorkflowNode 内联分支
              *                    *  的注释。 */
-            className="relative flex h-auto min-h-5.5 items-center py-0.5 pr-5 pl-5 text-[11px]"
+            className="text-2xs relative flex h-auto min-h-5.5 items-center py-0.5 pr-5 pl-5"
             data-sub-pin-input={inName}
             data-sub-pin-output={outName}
           >
@@ -98,7 +98,7 @@ export function SubgraphPinRows({
                    *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
                    *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
                    *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
-                  className="text-ink-bright min-w-0 flex-1 text-left text-[11px] wrap-break-word whitespace-normal"
+                  className="text-ink-bright text-2xs min-w-0 flex-1 text-left wrap-break-word whitespace-normal"
                   title={`${inLabel} (${inType})`}
                 >
                   {inLabel}
@@ -109,7 +109,7 @@ export function SubgraphPinRows({
               <>
                 <span
                   /* 与上面边界输入分支同款换行修正。 */
-                  className="text-ink-bright min-w-0 flex-1 text-right text-[11px] wrap-break-word whitespace-normal"
+                  className="text-ink-bright text-2xs min-w-0 flex-1 text-right wrap-break-word whitespace-normal"
                   title={`${outDisplay} (${outType})`}
                 >
                   {outDisplay}

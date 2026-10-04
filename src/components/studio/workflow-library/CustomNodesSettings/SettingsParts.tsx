@@ -97,7 +97,7 @@ export function WidgetValueChip({
     const on = value === true || value === "true" || value === "True";
     return (
       <span
-        className={`rounded px-1.5 py-px font-mono text-[10px] font-semibold ${
+        className={`text-3xs rounded px-1.5 py-px font-mono font-semibold ${
           on
             ? "bg-success-strong/18 text-success-strong"
             : "bg-destructive/18 text-destructive"
@@ -110,7 +110,7 @@ export function WidgetValueChip({
   if (widget === "select") {
     return (
       <span
-        className="bg-primary/18 text-primary-strong max-w-25 truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
+        className="bg-primary/18 text-primary-strong text-3xs max-w-25 truncate rounded px-1.5 py-px font-mono font-semibold"
         title={widgetValueToText(value)}
       >
         {displayValue(widgetValueToText(value))}
@@ -120,7 +120,7 @@ export function WidgetValueChip({
   if (widget === "number") {
     return (
       <span
-        className="bg-warning/18 text-warning max-w-25 truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
+        className="bg-warning/18 text-warning text-3xs max-w-25 truncate rounded px-1.5 py-px font-mono font-semibold"
         title={widgetValueToText(value)}
       >
         {displayValue(widgetValueToText(value))}
@@ -130,7 +130,7 @@ export function WidgetValueChip({
   // 字符串 / 文本 / 图片 / latent / 未知
   return (
     <span
-      className="bg-canvas-deep text-ink-soft max-w-35 truncate rounded px-1.5 py-px font-mono text-[10px]"
+      className="bg-canvas-deep text-ink-soft text-3xs max-w-35 truncate rounded px-1.5 py-px font-mono"
       title={widgetValueToText(value)}
     >
       {displayValue(widgetValueToText(value))}
@@ -176,7 +176,7 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
             个节点包
             {progress.parent && (
               <span
-                className="text-muted-foreground ml-2 truncate font-mono text-[11px]"
+                className="text-muted-foreground text-2xs ml-2 truncate font-mono"
                 title={progress.parent}
               >
                 · {lastSegments(progress.parent, 2)}
@@ -188,7 +188,7 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
             📦 已发现 <span className="font-mono">{progress.discovered}</span>
             {""}
             个节点包
-            <span className="text-muted-foreground ml-2 text-[11px]">
+            <span className="text-muted-foreground text-2xs ml-2">
               （总数待定，正在扫描…）
             </span>
           </span>
@@ -213,7 +213,7 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
       />
       {progress.msg && (
         <div
-          className="text-muted-foreground mt-1.5 truncate font-mono text-[10px]"
+          className="text-muted-foreground text-3xs mt-1.5 truncate font-mono"
           title={progress.msg}
         >
           {progress.msg}
@@ -251,7 +251,7 @@ export function ParseConsole({
         )}
       </div>
       {logs.length === 0 ? (
-        <div className="border-border bg-bg/30 text-muted-foreground rounded-lg border border-dashed p-3 text-center text-[11px]">
+        <div className="border-border bg-bg/30 text-muted-foreground text-2xs rounded-lg border border-dashed p-3 text-center">
           {parsing
             ? "等待第一条日志…"
             : "点击「解析全部」或「导入此包」后日志会出现在这里。"}
@@ -259,7 +259,7 @@ export function ParseConsole({
       ) : (
         <div
           ref={consoleRef}
-          className="border-border h-48 overflow-y-auto rounded-lg border bg-black/70 p-3 font-mono text-[11px] leading-relaxed"
+          className="border-border text-2xs h-48 overflow-y-auto rounded-lg border bg-black/70 p-3 font-mono leading-relaxed"
         >
           {logs.map((log, idx) => (
             <div
@@ -311,11 +311,11 @@ export function ReportCards({ report }: { report: ParseReport }) {
                       status={pkg.status === "ok" ? "SUCCEEDED" : pkg.status}
                       label={st!.label}
                       dot={false}
-                      className="px-2 py-0.5 text-[11px]"
+                      className="text-2xs px-2 py-0.5"
                     />
                   </div>
                   <div
-                    className="text-muted-foreground truncate font-mono text-[11px]"
+                    className="text-muted-foreground text-2xs truncate font-mono"
                     title={pkg.path}
                   >
                     {/* 绝对路径的**语义在尾部**（哪个目录下的包）—— CSS`truncate`
@@ -327,9 +327,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   <div className="text-ink-bright text-lg font-semibold">
                     {pkg.nodeCount}
                   </div>
-                  <div className="text-muted-foreground text-[11px]">
-                    节点类型
-                  </div>
+                  <div className="text-muted-foreground text-2xs">节点类型</div>
                 </div>
               </div>
               {pkg.nodeTypes?.length > 0 && (
@@ -337,13 +335,13 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   {pkg.nodeTypes.slice(0, 24).map((ct) => (
                     <span
                       key={ct}
-                      className="bg-subtle text-muted-foreground rounded-md px-1.5 py-0.5 font-mono text-[11px]"
+                      className="bg-subtle text-muted-foreground text-2xs rounded-md px-1.5 py-0.5 font-mono"
                     >
                       {ct}
                     </span>
                   ))}
                   {pkg.nodeTypes.length > 24 && (
-                    <span className="bg-subtle text-muted-foreground rounded-md px-1.5 py-0.5 font-mono text-[11px]">
+                    <span className="bg-subtle text-muted-foreground text-2xs rounded-md px-1.5 py-0.5 font-mono">
                       +{pkg.nodeTypes.length - 24}
                     </span>
                   )}
@@ -354,7 +352,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   {pkg.errors.map((er, j) => (
                     <div
                       key={j}
-                      className="text-destructive font-mono text-[11px]"
+                      className="text-destructive text-2xs font-mono"
                     >
                       ⚠ {er.file}: {er.error}
                     </div>

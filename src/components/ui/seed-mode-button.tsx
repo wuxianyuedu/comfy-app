@@ -165,7 +165,7 @@ export function SeedModeButton({
         render={
           <Button
             variant="outline"
-            className="nodrag nopan border-border-strong bg-canvas-deep text-ink-soft hover:bg-canvas-deep hover:border-primary/40 hover:text-ink-bright focus-visible:border-primary/40 h-auto shrink-0 gap-1 rounded-md px-2 py-0 text-[11px] font-medium"
+            className="nodrag nopan border-border-strong bg-canvas-deep text-ink-soft hover:bg-canvas-deep hover:border-primary/40 hover:text-ink-bright focus-visible:border-primary/40 text-2xs h-auto shrink-0 gap-1 rounded-md px-2 py-0 font-medium"
           />
         }
       >

@@ -136,9 +136,7 @@ export function WorksGallery({
                 ({canvasProjects.length})
               </span>
             </h2>
-            <span className="text-ink-fainter text-[11px]">
-              本地 · 可继续编辑
-            </span>
+            <span className="text-ink-fainter text-2xs">本地 · 可继续编辑</span>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {canvasProjects.map((canvasProject) => {
@@ -176,12 +174,12 @@ export function WorksGallery({
                       <p className="text-ink-bright group-hover:text-ink truncate text-sm font-medium">
                         {canvasProject.name || "未命名项目"}
                       </p>
-                      <p className="text-ink-muted mt-1 truncate text-[11px]">
+                      <p className="text-ink-muted text-2xs mt-1 truncate">
                         {nodeCount > 0
                           ? `${nodeCount} 节点 · ${edgeCount} 连线`
                           : "空画布"}
                       </p>
-                      <p className="text-ink-fainter mt-0.5 text-[11px]">
+                      <p className="text-ink-fainter text-2xs mt-0.5">
                         {timeAgo(canvasProject.updatedAt, {
                           suffix: "修改",
                         }) ?? "刚刚修改"}
@@ -200,7 +198,7 @@ export function WorksGallery({
                       event.stopPropagation();
                       setConfirmDeleteId(canvasProject.id);
                     }}
-                    className="text-ink-muted hover:bg-danger/15 hover:text-danger-strong absolute top-2 right-2 h-auto gap-1 rounded-md px-1.5 py-1 text-[11px] opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                    className="text-ink-muted hover:bg-danger/15 hover:text-danger-strong text-2xs absolute top-2 right-2 h-auto gap-1 rounded-md px-1.5 py-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                   >
                     <Trash2 data-icon="inline-start" size={12} />
                     <span>删除</span>

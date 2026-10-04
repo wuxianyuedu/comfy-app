@@ -62,7 +62,7 @@ export function CanvasContextMenu({
             className="from-primary/15 to-accent/10 text-ink-bright focus:from-primary/25 focus:to-accent/15 border-primary/30 flex items-center gap-2 rounded-lg border bg-linear-to-r px-2 py-1.5 text-left text-[12px]"
           >
             <span
-              className="flex size-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
+              className="text-3xs flex size-5 items-center justify-center rounded-md font-bold text-white"
               style={{
                 background: "linear-gradient(135deg, #7C5CFC 0%, #FF5CA8 100%)",
               }}
@@ -71,7 +71,7 @@ export function CanvasContextMenu({
             </span>
             <span className="flex flex-col">
               <span className="font-medium">测试自定义工作流</span>
-              <span className="text-ink-muted text-[10px]">
+              <span className="text-ink-muted text-3xs">
                 纯视觉 · 对齐 Ardot 稿（无运行时）
               </span>
             </span>
@@ -80,7 +80,7 @@ export function CanvasContextMenu({
 
         <DropdownMenuSeparator className="bg-border-strong" />
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-ink-muted px-2 py-1 text-[10px] tracking-wider uppercase">
+          <DropdownMenuLabel className="text-ink-muted text-3xs px-2 py-1 tracking-wider uppercase">
             创建节点
           </DropdownMenuLabel>
           {(Object.keys(NODE_META) as NodeKind[]).map((kind) => {
@@ -99,9 +99,7 @@ export function CanvasContextMenu({
                 />
                 <span className="flex flex-col">
                   <span className="font-medium">{meta.label}</span>
-                  <span className="text-ink-muted text-[10px]">
-                    {meta.desc}
-                  </span>
+                  <span className="text-ink-muted text-3xs">{meta.desc}</span>
                 </span>
               </DropdownMenuItem>
             );

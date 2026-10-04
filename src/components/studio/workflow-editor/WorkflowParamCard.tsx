@@ -185,12 +185,12 @@ export function WorkflowParamCard({
           }}
         />
         <span
-          className="text-ink-bright min-w-0 flex-1 truncate text-[11px] font-semibold"
+          className="text-ink-bright text-2xs min-w-0 flex-1 truncate font-semibold"
           title={`${classLabel} · ${hostNodeId}`}
         >
           {label}
           {idLabel && (
-            <span className="text-ink-faint ml-1 font-mono text-[10px] font-normal">
+            <span className="text-ink-faint text-3xs ml-1 font-mono font-normal">
               {idLabel}
             </span>
           )}

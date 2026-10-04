@@ -48,7 +48,7 @@ export function StyleSwitcher({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-ink-muted shrink-0 text-[10px]">录入方式</span>
+      <span className="text-ink-muted text-3xs shrink-0">录入方式</span>
       <SelectMenu
         value={style}
         options={options.map((option) => option.value)}
@@ -75,7 +75,7 @@ export function Field({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-ink-muted text-[10px]">{label}</span>
+      <span className="text-ink-muted text-3xs">{label}</span>
       {children}
     </div>
   );

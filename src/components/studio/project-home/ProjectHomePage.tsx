@@ -87,7 +87,7 @@ export function ProjectHomePage({
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="u-title">AI 自主成片</h2>
-          <span className="text-ink-faint text-[11px]">
+          <span className="text-ink-faint text-2xs">
             从剧本一路跑到合成，可随时叫停或逐步点头
           </span>
         </div>

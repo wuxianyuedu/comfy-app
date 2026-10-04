@@ -209,7 +209,7 @@ export function CodeBlock({
     return (
       <div className="cb-code-block">
         <div className="cb-line">
-          <span className="cb-code text-[11px] text-rose-700 dark:text-rose-300">
+          <span className="cb-code text-2xs text-rose-700 dark:text-rose-300">
             语法高亮失败：{error}
           </span>
         </div>

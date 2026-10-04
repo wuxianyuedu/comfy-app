@@ -77,7 +77,7 @@ export function WorkshopStageItem({
         </div>
         <div
           className={cn(
-            "text-[11px]",
+            "text-2xs",
             done ? "text-success-strong" : "text-muted-foreground",
           )}
         >

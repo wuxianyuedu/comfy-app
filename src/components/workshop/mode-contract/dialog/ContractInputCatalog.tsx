@@ -68,7 +68,7 @@ export function ContractInputCatalog({
   return (
     <div className="flex-col gap-2">
       <div>
-        <p className="text-muted-foreground mb-1 text-[10px]">
+        <p className="text-muted-foreground text-3xs mb-1">
           全部可用参数（预制）—— 点未加入的即可添加
         </p>
         <div className="flex flex-wrap gap-1">
@@ -99,7 +99,7 @@ export function ContractInputCatalog({
       </div>
 
       <div>
-        <p className="text-muted-foreground mb-1 text-[10px]">
+        <p className="text-muted-foreground text-3xs mb-1">
           自定义参数（自己起名 + 选类型）—— 预制的口不够用时加在这里
         </p>
         <div className="flex-col gap-1">
@@ -121,12 +121,12 @@ export function ContractInputCatalog({
                   if (next !== def.label) onRenameCustom(def.id, next);
                 }}
                 aria-label={`${def.label} 的名称`}
-                className="h-6 min-w-0 flex-1 border-none bg-transparent px-0 text-[11px] shadow-none"
+                className="text-2xs h-6 min-w-0 flex-1 border-none bg-transparent px-0 shadow-none"
               />
-              <span className="text-muted-foreground/70 bg-subtle border-border-strong shrink-0 rounded border px-1.5 py-0.5 text-[10px]">
+              <span className="text-muted-foreground/70 bg-subtle border-border-strong text-3xs shrink-0 rounded border px-1.5 py-0.5">
                 {customInputKindLabel(def.kind)}
               </span>
-              <span className="text-muted-foreground/50 shrink-0 font-mono text-[10px]">
+              <span className="text-muted-foreground/50 text-3xs shrink-0 font-mono">
                 {def.id}
               </span>
               <Button
@@ -156,7 +156,7 @@ export function ContractInputCatalog({
                 })}
                 placeholder="参数名称，如：水彩风格"
                 aria-label="自定义参数名称"
-                className="h-6 w-40 text-[11px]"
+                className="text-2xs h-6 w-40"
               />
               {CUSTOM_INPUT_KINDS.map((item) => (
                 <Hint label={item.hint} key={item.kind}>
@@ -164,7 +164,7 @@ export function ContractInputCatalog({
                     variant="outline"
                     size="xs"
                     onClick={() => setDraftKind(item.kind)}
-                    className={`h-auto rounded px-2 py-0.5 text-[10px] ${
+                    className={`text-3xs h-auto rounded px-2 py-0.5 ${
                       draftKind === item.kind
                         ? "border-primary text-primary bg-primary/10"
                         : "border-border text-muted-foreground"
@@ -179,7 +179,7 @@ export function ContractInputCatalog({
                 size="xs"
                 onClick={submitCustom}
                 disabled={draftName.trim() === ""}
-                className="h-auto rounded px-2 py-0.5 text-[10px]"
+                className="text-3xs h-auto rounded px-2 py-0.5"
               >
                 添加
               </Button>
@@ -187,7 +187,7 @@ export function ContractInputCatalog({
                 variant="ghost"
                 size="xs"
                 onClick={() => setAdding(false)}
-                className="text-muted-foreground h-auto rounded px-2 py-0.5 text-[10px]"
+                className="text-muted-foreground text-3xs h-auto rounded px-2 py-0.5"
               >
                 取消
               </Button>

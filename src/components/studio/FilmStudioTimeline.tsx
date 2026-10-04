@@ -16,9 +16,9 @@ export function FilmStudioTimeline({
     <div className="border-border-subtle bg-panel-deep/90 mt-auto rounded-xl border p-3 backdrop-blur-sm">
       {/* Time ruler */}
       <div className="mb-2 flex items-center justify-between px-1">
-        <span className="text-ink-faintest font-mono text-[10px]">00:00</span>
-        <span className="text-ink-faintest font-mono text-[10px]">00:05</span>
-        <span className="text-ink-faintest font-mono text-[10px]">00:10</span>
+        <span className="text-ink-faintest text-3xs font-mono">00:00</span>
+        <span className="text-ink-faintest text-3xs font-mono">00:05</span>
+        <span className="text-ink-faintest text-3xs font-mono">00:10</span>
       </div>
 
       {/* Tracks container */}
@@ -39,9 +39,7 @@ export function FilmStudioTimeline({
 
         {/* Video track */}
         <div className="bg-subtle flex h-11 items-center gap-2 rounded-md px-2">
-          <span className="text-ink-faint w-12 shrink-0 text-[10px]">
-            视频轨
-          </span>
+          <span className="text-ink-faint text-3xs w-12 shrink-0">视频轨</span>
           <div className="flex flex-1 gap-1.5">
             {VIDEO_CLIPS.map((clip) => (
               <div
@@ -50,7 +48,7 @@ export function FilmStudioTimeline({
                 style={{ width: `${clip.width}px` }}
               >
                 <span
-                  className={`text-[10px] font-semibold ${clip.textColorClass}`}
+                  className={`text-3xs font-semibold ${clip.textColorClass}`}
                 >
                   {clip.label}
                 </span>
@@ -61,7 +59,7 @@ export function FilmStudioTimeline({
 
         {/* Subtitle track */}
         <div className="flex h-9 items-center gap-2 rounded-md px-2">
-          <span className="text-ink-fainter w-12 shrink-0 text-[10px]">
+          <span className="text-ink-fainter text-3xs w-12 shrink-0">
             字幕轨
           </span>
           <div
@@ -76,9 +74,7 @@ export function FilmStudioTimeline({
 
         {/* BGM / 音轨 */}
         <div className="flex h-9 items-center gap-2 rounded-md px-2">
-          <span className="text-ink-fainter w-12 shrink-0 text-[10px]">
-            BGM
-          </span>
+          <span className="text-ink-fainter text-3xs w-12 shrink-0">BGM</span>
           <div
             className="bg-info/20 from-info/20 to-primary-500/20 flex h-6 flex-1 items-center rounded bg-linear-to-r px-2.5"
             style={{ width: "200px" }}

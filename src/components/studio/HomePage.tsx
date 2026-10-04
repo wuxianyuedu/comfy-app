@@ -155,7 +155,7 @@ function ResumeProjectCard({
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
         <div className="flex items-center gap-2">
           <span
-            className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 backdrop-blur-sm ring-inset"
+            className="text-3xs shrink-0 rounded-md px-1.5 py-0.5 font-medium ring-1 backdrop-blur-sm ring-inset"
             style={{
               color: cfg.color,
               backgroundColor: kindTint(cfg.color, 15),
@@ -381,7 +381,7 @@ export function HomePage({
                           {proj.name}
                         </span>
                         <span
-                          className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 backdrop-blur-sm ring-inset"
+                          className="text-3xs shrink-0 rounded-md px-1.5 py-0.5 font-medium ring-1 backdrop-blur-sm ring-inset"
                           style={{
                             color: cfg.color,
                             backgroundColor: kindTint(cfg.color, 15),

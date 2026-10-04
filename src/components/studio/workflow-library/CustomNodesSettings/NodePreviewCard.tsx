@@ -74,7 +74,7 @@ export function NodePreviewCard({
           color: "#fff",
         }}
       >
-        <span className="text-[11px] leading-none">{expanded ? "▾" : "▸"}</span>
+        <span className="text-2xs leading-none">{expanded ? "▾" : "▸"}</span>
         <span
           className="flex-1 truncate text-[11.5px] font-bold"
           style={{ letterSpacing: 0.2 }}
@@ -102,11 +102,11 @@ export function NodePreviewCard({
       </Button>
 
       {!data ? (
-        <div className="text-muted-foreground px-2.5 py-1.5 text-[10px] italic">
+        <div className="text-muted-foreground text-3xs px-2.5 py-1.5 italic">
           清单中未找到该节点（可能解析后未重导入此包）
         </div>
       ) : !expanded ? (
-        <div className="text-ink-muted flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5 text-[10px]">
+        <div className="text-ink-muted text-3xs flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5">
           <span>
             <span className="text-ink-bright font-mono">{typed.length}</span>{" "}
             typed
@@ -186,7 +186,7 @@ export function NodePreviewCard({
                 </div>
               ))}
               {widgets.length > 32 && (
-                <div className="text-muted-foreground pl-3 text-[10px]">
+                <div className="text-muted-foreground text-3xs pl-3">
                   … +{widgets.length - 32} more
                 </div>
               )}
@@ -196,7 +196,7 @@ export function NodePreviewCard({
           {typed.length === 0 &&
             widgets.length === 0 &&
             outputs.length === 0 && (
-              <div className="text-muted-foreground py-1 text-center text-[10px] italic">
+              <div className="text-muted-foreground text-3xs py-1 text-center italic">
                 无输入 / 输出参数
               </div>
             )}

@@ -130,7 +130,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         class="w-3"
       />
       <span
-        class="text-ink-faintest text-[11px]"
+        class="text-ink-faintest text-2xs"
       >
         时间轴缩放
       </span>
@@ -163,7 +163,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
               分镜列表
             </span>
             <span
-              class="text-ink-fainter text-[11px]"
+              class="text-ink-fainter text-2xs"
             >
               3
                镜头
@@ -194,7 +194,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
               type="button"
             >
               <div
-                class="flex h-12 w-14 shrink-0 items-center justify-center rounded-md text-[10px] bg-primary/10 text-primary-strong"
+                class="text-3xs flex h-12 w-14 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary-strong"
               >
                 镜头缩略图
               </div>
@@ -210,17 +210,17 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                   class="mt-1 flex items-center gap-2"
                 >
                   <span
-                    class="text-ink-faintest text-[10px]"
+                    class="text-ink-faintest text-3xs"
                   >
                     00:03.2
                   </span>
                   <span
-                    class="text-ink-faintest text-[10px]"
+                    class="text-ink-faintest text-3xs"
                   >
                     ·
                   </span>
                   <span
-                    class="text-ink-fainter text-[10px]"
+                    class="text-ink-fainter text-3xs"
                   >
                     文生图首帧
                   </span>
@@ -243,7 +243,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
               type="button"
             >
               <div
-                class="flex h-12 w-14 shrink-0 items-center justify-center rounded-md text-[10px] bg-subtle text-ink-faintest"
+                class="text-3xs flex h-12 w-14 shrink-0 items-center justify-center rounded-md bg-subtle text-ink-faintest"
               >
                 镜头缩略图
               </div>
@@ -259,17 +259,17 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                   class="mt-1 flex items-center gap-2"
                 >
                   <span
-                    class="text-ink-faintest text-[10px]"
+                    class="text-ink-faintest text-3xs"
                   >
                     00:05.0
                   </span>
                   <span
-                    class="text-ink-faintest text-[10px]"
+                    class="text-ink-faintest text-3xs"
                   >
                     ·
                   </span>
                   <span
-                    class="text-ink-fainter text-[10px]"
+                    class="text-ink-fainter text-3xs"
                   >
                     图生视频
                   </span>
@@ -292,7 +292,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
               type="button"
             >
               <div
-                class="flex h-12 w-14 shrink-0 items-center justify-center rounded-md text-[10px] bg-subtle text-ink-faintest"
+                class="text-3xs flex h-12 w-14 shrink-0 items-center justify-center rounded-md bg-subtle text-ink-faintest"
               >
                 镜头缩略图
               </div>
@@ -308,17 +308,17 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                   class="mt-1 flex items-center gap-2"
                 >
                   <span
-                    class="text-ink-faintest text-[10px]"
+                    class="text-ink-faintest text-3xs"
                   >
                     00:01.5
                   </span>
                   <span
-                    class="text-ink-faintest text-[10px]"
+                    class="text-ink-faintest text-3xs"
                   >
                     ·
                   </span>
                   <span
-                    class="text-ink-fainter text-[10px]"
+                    class="text-ink-fainter text-3xs"
                   >
                     自动转场
                   </span>
@@ -340,7 +340,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
           class="border-border-subtle bg-canvas-deep relative mb-3 flex min-h-80 flex-1 items-center justify-center overflow-hidden rounded-2xl border"
         >
           <span
-            class="text-ink-faintest bg-canvas-deep absolute top-2.5 left-3 rounded px-2 py-0.5 font-mono text-[10px] backdrop-blur-sm"
+            class="text-ink-faintest bg-canvas-deep text-3xs absolute top-2.5 left-3 rounded px-2 py-0.5 font-mono backdrop-blur-sm"
           >
             16:9 / 1k
              · 
@@ -375,17 +375,17 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             class="mb-2 flex items-center justify-between px-1"
           >
             <span
-              class="text-ink-faintest font-mono text-[10px]"
+              class="text-ink-faintest text-3xs font-mono"
             >
               00:00
             </span>
             <span
-              class="text-ink-faintest font-mono text-[10px]"
+              class="text-ink-faintest text-3xs font-mono"
             >
               00:05
             </span>
             <span
-              class="text-ink-faintest font-mono text-[10px]"
+              class="text-ink-faintest text-3xs font-mono"
             >
               00:10
             </span>
@@ -405,7 +405,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
               class="bg-subtle flex h-11 items-center gap-2 rounded-md px-2"
             >
               <span
-                class="text-ink-faint w-12 shrink-0 text-[10px]"
+                class="text-ink-faint text-3xs w-12 shrink-0"
               >
                 视频轨
               </span>
@@ -417,7 +417,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                   style="width: 180px;"
                 >
                   <span
-                    class="text-[10px] font-semibold text-primary-soft"
+                    class="text-3xs font-semibold text-primary-soft"
                   >
                     开场全景
                   </span>
@@ -427,7 +427,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                   style="width: 220px;"
                 >
                   <span
-                    class="text-[10px] font-semibold text-warning-soft"
+                    class="text-3xs font-semibold text-warning-soft"
                   >
                     人物特写
                   </span>
@@ -438,7 +438,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
               class="flex h-9 items-center gap-2 rounded-md px-2"
             >
               <span
-                class="text-ink-fainter w-12 shrink-0 text-[10px]"
+                class="text-ink-fainter text-3xs w-12 shrink-0"
               >
                 字幕轨
               </span>
@@ -457,7 +457,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
               class="flex h-9 items-center gap-2 rounded-md px-2"
             >
               <span
-                class="text-ink-fainter w-12 shrink-0 text-[10px]"
+                class="text-ink-fainter text-3xs w-12 shrink-0"
               >
                 BGM
               </span>
@@ -512,7 +512,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             role="group"
           >
             <label
-              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-2xs"
               data-slot="field-label"
               for="_r_a_"
             >
@@ -530,7 +530,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             role="group"
           >
             <label
-              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-2xs"
               data-slot="field-label"
               for="_r_b_"
             >
@@ -552,7 +552,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             role="group"
           >
             <label
-              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-2xs"
               data-slot="field-label"
               for="_r_c_"
             >
@@ -571,7 +571,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             role="group"
           >
             <label
-              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-2xs"
               data-slot="field-label"
               for="_r_d_"
             >
@@ -590,7 +590,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             role="group"
           >
             <label
-              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-2xs"
               data-slot="field-label"
               for="_r_e_"
             >
@@ -657,7 +657,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             role="group"
           >
             <label
-              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-2xs"
               data-slot="field-label"
               for="_r_h_"
             >
@@ -679,7 +679,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             role="group"
           >
             <label
-              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-2xs"
               data-slot="field-label"
               for="_r_i_"
             >
@@ -739,7 +739,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             role="group"
           >
             <label
-              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-2xs"
               data-slot="field-label"
               for="_r_m_"
             >
@@ -842,13 +842,13 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
           </label>
           <div>
             <span
-              class="text-ink-faint mb-1.5 block text-[11px]"
+              class="text-ink-faint text-2xs mb-1.5 block"
             >
               背景音乐（可选）
             </span>
             <input
               accept="audio/*"
-              class="text-ink-fainter hover:text-primary-strong file:bg-primary/20 file:text-primary-strong w-full text-[11px] file:mr-2 file:rounded-lg file:border-0 file:px-3 file:py-1.5 file:text-[11px]"
+              class="text-ink-fainter hover:text-primary-strong file:bg-primary/20 file:text-primary-strong text-2xs file:text-2xs w-full file:mr-2 file:rounded-lg file:border-0 file:px-3 file:py-1.5"
               type="file"
             />
           </div>
@@ -862,7 +862,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         class="bg-success shadow-success/40 inline-block size-1.75 rounded-full shadow-sm"
       />
       <span
-        class="text-ink-muted text-[11px]"
+        class="text-ink-muted text-2xs"
       >
         ComfyUI 本地已连接 · Wan I2V 视频模型就绪 · GPU 可用
       </span>

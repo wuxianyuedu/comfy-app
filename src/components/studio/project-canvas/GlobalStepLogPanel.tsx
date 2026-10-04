@@ -157,12 +157,12 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
           variant="outline"
           onClick={() => setOpen(true)}
           data-testid="step-log-trigger"
-          className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
+          className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max text-2xs pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 font-medium shadow-lg backdrop-blur-sm"
         >
           <FileText data-icon="inline-start" size={12} />
           执行日志
           {errorCount > 0 && (
-            <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
+            <span className="bg-destructive/20 text-destructive text-3xs rounded-full px-1">
               {errorCount}
             </span>
           )}
@@ -192,7 +192,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   status={status ?? "IDLE"}
                   label={statusLabel}
                   dot={false}
-                  className="px-1.5 py-px text-[10px]"
+                  className="text-3xs px-1.5 py-px"
                 />
                 <span
                   className={`inline-block size-1.5 shrink-0 rounded-full ${
@@ -276,7 +276,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                         }`}
                       >
                         {option.label}
-                        <span className="text-ink-fainter ml-1 text-[11px]">
+                        <span className="text-ink-fainter text-2xs ml-1">
                           {count}
                         </span>
                       </Button>

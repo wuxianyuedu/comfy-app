@@ -154,7 +154,7 @@ export function RemoteModelDialog({
             </div>
           </FormField>
           {dialog.mode === "edit" && dialog.entry.apiKey && (
-            <p className="text-muted-foreground mb-1 text-[11px]">
+            <p className="text-muted-foreground text-2xs mb-1">
               {d.clearKey ? (
                 <>
                   将清除独立密钥、改用全局 API Key。
@@ -192,7 +192,7 @@ export function RemoteModelDialog({
           )}
           {d.suggestions.length > 0 && (
             <div className="mb-3">
-              <p className="text-muted-foreground mb-1 text-[11px]">
+              <p className="text-muted-foreground text-2xs mb-1">
                 从服务端拉到的模型（点击填入）：
               </p>
               <div className="border-border/50 max-h-28 overflow-y-auto rounded-lg border p-2">
@@ -205,7 +205,7 @@ export function RemoteModelDialog({
                       onClick={() =>
                         d.setAddForm((f) => ({ ...f, model: name }))
                       }
-                      className="text-muted-foreground hover:text-ink h-auto rounded px-2 py-0.5 text-[11px]"
+                      className="text-muted-foreground hover:text-ink text-2xs h-auto rounded px-2 py-0.5"
                     >
                       {name}
                     </Button>

@@ -41,12 +41,12 @@ function StorageDirLine({
         {shown}
       </span>
       {dir.source && (
-        <span className="text-muted-foreground text-[11px]">
+        <span className="text-muted-foreground text-2xs">
           （来自 {dir.source}）
         </span>
       )}
       {!dir.exists && (
-        <span className="text-muted-foreground text-[11px]">· 目录不存在</span>
+        <span className="text-muted-foreground text-2xs">· 目录不存在</span>
       )}
     </li>
   );

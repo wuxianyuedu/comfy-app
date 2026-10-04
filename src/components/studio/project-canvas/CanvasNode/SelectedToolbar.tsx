@@ -119,7 +119,7 @@ export function OutputRowPort({
           {outLabel}
         </span>
         <span
-          className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+          className="bg-border-strong text-ink-muted text-3xs inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"
           style={{ fontFamily: "var(--font-sans)" }}
         >
           {typeDisplay(outType)}

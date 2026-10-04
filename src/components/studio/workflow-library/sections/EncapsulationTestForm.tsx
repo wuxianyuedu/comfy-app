@@ -191,7 +191,7 @@ export function EncapsulationTestForm({
                   disabled={disabled}
                   className="h-7 w-28"
                 />
-                <span className="text-muted-foreground/70 text-[10px]">秒</span>
+                <span className="text-muted-foreground/70 text-3xs">秒</span>
               </div>
             </div>
           );
@@ -251,7 +251,7 @@ export function EncapsulationTestForm({
       })}
 
       {error && (
-        <p className="bg-destructive/10 text-destructive rounded-lg px-3 py-2 text-[11px]">
+        <p className="bg-destructive/10 text-destructive text-2xs rounded-lg px-3 py-2">
           {error}
         </p>
       )}
@@ -265,7 +265,7 @@ export function EncapsulationTestForm({
             {running ? "测试中…" : "执行流程测试"}
           </Button>
         </Hint>
-        <span className="text-muted-foreground text-[11px]">
+        <span className="text-muted-foreground text-2xs">
           会真实调用本机 ComfyUI 生成一张图
         </span>
       </div>
@@ -277,9 +277,9 @@ export function EncapsulationTestForm({
 function FieldLabel({ label, unwired }: { label: string; unwired?: boolean }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-ink-muted text-[11px]">{label}</span>
+      <span className="text-ink-muted text-2xs">{label}</span>
       {unwired && (
-        <span className="text-muted-foreground/70 text-[10px]">
+        <span className="text-muted-foreground/70 text-3xs">
           {UNWIRED_HINT}
         </span>
       )}
@@ -317,13 +317,13 @@ function ImageField({
     <div className="flex-col gap-1">
       <FieldLabel label={entry.label} unwired={entry.targetIoKey === null} />
       <div className="border-border bg-surface flex items-center gap-2 rounded-lg border px-2 py-1.5">
-        <span className="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-[10px]">
+        <span className="text-muted-foreground/70 text-3xs min-w-0 flex-1 truncate font-mono">
           {displayValue(value)}
         </span>
         <Button
           onClick={picker.open}
           disabled={disabled || uploading}
-          className="h-auto rounded-md px-2 py-1 text-[11px]"
+          className="text-2xs h-auto rounded-md px-2 py-1"
         >
           {uploading ? "上传中…" : "选择图片"}
         </Button>

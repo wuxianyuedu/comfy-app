@@ -15,7 +15,7 @@ import { Badge } from "~/components/ui/badge";
  *
  * **PR-4 之后本次 cleanup**：Badge cva 加了 `size` 轴（default / sm /
  * xs），本件从手抄 `CHIP_SHAPE` 常量迁到 `size="sm"`（h-auto /
- * rounded-md / px-1.5 / py-0.5 / text-[10px] 都在 cva 里给）；**只留
+ * rounded-md / px-1.5 / py-0.5 / text-3xs 都在 cva 里给）；**只留
  * 一条 `OUTLINE_RESET` 顶掉 `variant="outline"` 的 `border-border`**
  * ——与 `task-type-chip` 同档（同一列表里两个 chip 并排，圆角 / 高度 /
  * 边框处理必须一致）。

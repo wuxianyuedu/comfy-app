@@ -12,7 +12,7 @@ import { displayValue } from "~/lib/display-value";
  * token → §3.6.1 例外块。 */
 // p71-allow:start "RAW 原件"格式标签 cyan——文件格式类型身份、非状态、无匹配 token
 const RAW_FORMAT_CHIP =
-  "rounded bg-cyan-500/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-cyan-700 ring-1 ring-cyan-500/40 dark:text-cyan-300";
+  "rounded bg-cyan-500/20 px-1.5 py-0.5 font-mono text-3xs font-semibold tracking-wide text-cyan-700 ring-1 ring-cyan-500/40 dark:text-cyan-300";
 // p71-allow:end
 
 /**

@@ -105,7 +105,7 @@ export function QueueTaskLogModal({
                 执行日志
               </span>
               <span
-                className="text-ink-muted max-w-55 truncate text-[11px]"
+                className="text-ink-muted text-2xs max-w-55 truncate"
                 title={task.workflowName ?? undefined}
               >
                 {task.workflowName ?? "（未知工作流）"}
@@ -114,7 +114,7 @@ export function QueueTaskLogModal({
                 status={status}
                 label={taskStatusLabel(status)}
                 dot={false}
-                className="px-1.5 py-px text-[10px]"
+                className="text-3xs px-1.5 py-px"
               />
             </div>
 

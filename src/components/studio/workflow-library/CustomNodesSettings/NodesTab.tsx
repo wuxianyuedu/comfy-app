@@ -42,7 +42,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
             自定义节点目录
           </FieldLegend>
           <span
-            className="bg-success-strong/18 text-success-strong rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+            className="bg-success-strong/18 text-success-strong text-3xs rounded-full px-1.5 py-0.5 font-medium"
             title="解析器只读取这些目录里的 .py、绝不修改其中任何文件"
           >
             🔒 只读
@@ -118,7 +118,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           <span className="text-ink text-sm font-medium">
             可导入的节点包
             {totalAcrossParents.outdated > 0 && (
-              <span className="bg-warning/18 text-warning ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium">
+              <span className="bg-warning/18 text-warning text-3xs ml-2 rounded-full px-2 py-0.5 font-medium">
                 ↻ {totalAcrossParents.outdated} 个有更新
               </span>
             )}
@@ -172,7 +172,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                           {parent}
                         </span>
                       </div>
-                      <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                      <div className="text-muted-foreground text-3xs mt-0.5 flex flex-wrap items-center gap-1.5">
                         <span>{total} 个子包</span>
                         {cnt.loaded > 0 && (
                           <span className="bg-success-strong/18 text-success-strong rounded-full px-1.5 py-0.5">
@@ -219,7 +219,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                           total === 0 ||
                           (parentParsed && cnt.outdated === 0)
                         }
-                        className="border-border bg-bg text-ink hover:bg-subtle h-auto shrink-0 rounded-lg px-3 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                        className="border-border bg-bg text-ink hover:bg-subtle text-2xs h-auto shrink-0 rounded-lg px-3 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {parsing ? "…" : "解析本目录"}
                       </Button>
@@ -277,11 +277,11 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                       : preset.label
                                   }
                                   dot={false}
-                                  className="px-2 py-0.5 text-[10px]"
+                                  className="text-3xs px-2 py-0.5"
                                 />
                               </div>
                               <div
-                                className="text-muted-foreground truncate font-mono text-[10px]"
+                                className="text-muted-foreground text-3xs truncate font-mono"
                                 title={sub.path}
                               >
                                 {/* 同 SettingsParts：路径的语义在尾部，显式取末几段。 */}
@@ -316,7 +316,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                       <div className="text-ink font-mono text-sm font-semibold">
                                         {nodeCount}
                                       </div>
-                                      <div className="text-[10px]">节点</div>
+                                      <div className="text-3xs">节点</div>
                                     </div>
                                   }
                                 />
@@ -325,7 +325,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   <div className="text-ink font-mono text-sm font-semibold">
                                     {nodeCount}
                                   </div>
-                                  <div className="text-[10px]">映射文件</div>
+                                  <div className="text-3xs">映射文件</div>
                                 </div>
                               )}
                               <Button
@@ -359,7 +359,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                               className="flex flex-col gap-1"
                             >
                               {nodeTypeList.length === 0 ? (
-                                <div className="text-muted-foreground text-[10px] italic">
+                                <div className="text-muted-foreground text-3xs italic">
                                   此包的清单中没有列出节点类型
                                 </div>
                               ) : (
@@ -383,7 +383,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                   </TreeChildren>
                 )}
                 {isOpen && subs.length === 0 && (
-                  <div className="border-border bg-surface/50 text-muted-foreground border-t p-3 text-center text-[11px]">
+                  <div className="border-border bg-surface/50 text-muted-foreground text-2xs border-t p-3 text-center">
                     这个目录下没有发现包含 NODE_CLASS_MAPPINGS 的子包
                   </div>
                 )}

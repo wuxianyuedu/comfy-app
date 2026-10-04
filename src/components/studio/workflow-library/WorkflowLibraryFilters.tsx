@@ -52,7 +52,7 @@ const TYPE_LABELS: Record<TypeFilter, string> = {
 /** 计数徽标（ SelectMenu 的 labels 支持 ReactNode）。 */
 function CountBadge({ count }: { count: number }) {
   return (
-    <span className="bg-surface-2 text-ink-faint ml-2 shrink-0 rounded-full px-1.5 text-[11px] tabular-nums">
+    <span className="bg-surface-2 text-ink-faint text-2xs ml-2 shrink-0 rounded-full px-1.5 tabular-nums">
       {count}
     </span>
   );

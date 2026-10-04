@@ -124,7 +124,7 @@ export function DetailHeader({
                   {modes.map((code) => (
                     <span
                       key={code}
-                      className={`rounded px-2 py-0.5 text-[11px] ${
+                      className={`text-2xs rounded px-2 py-0.5 ${
                         code === workflow.defaultMode
                           ? "bg-primary/15 text-primary-strong"
                           : "text-ink-faint"
@@ -144,7 +144,7 @@ export function DetailHeader({
                 /* 边框走 `ring` 而不是 `border`：1px `border` 会把这枚胶囊的
                    盒子撑高 2px，与旁边没有边框的胶囊再不齐 —— 而 `ring` 是
                    box-shadow，不参与布局，视觉上仍是那圈浅描边。 */
-                className="bg-subtle text-ink-faint ring-border rounded-full px-2 py-0.5 text-[10px] ring-1 ring-inset"
+                className="bg-subtle text-ink-faint ring-border text-3xs rounded-full px-2 py-0.5 ring-1 ring-inset"
               >
                 {tag}
               </span>
@@ -152,14 +152,14 @@ export function DetailHeader({
             {/* 两列都为空时提前标注，而不是等用户点了「生成」才报错。
                 正常导入不会落到这里：raw 与 api 地位同等，任一列有内容即可执行。 */}
             {!usable && (
-              <span className="bg-destructive/12 text-destructive rounded px-1.5 py-0.5 text-[10px]">
+              <span className="bg-destructive/12 text-destructive text-3xs rounded px-1.5 py-0.5">
                 无可执行内容
               </span>
             )}
             {canResync && (
               <span
                 className={[
-                  "rounded px-1.5 py-0.5 text-[10px]",
+                  "text-3xs rounded px-1.5 py-0.5",
                   missing
                     ? "bg-destructive/12 text-destructive"
                     : "bg-warning/12 text-warning-strong",

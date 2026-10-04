@@ -207,7 +207,7 @@ export function MultiModeSelect({
             <Button
               variant="ghost"
               disabled={disabled}
-              className={`h-auto gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium hover:brightness-110 ${accent.pill} ${accent.text} ${className}`}
+              className={`text-2xs h-auto gap-1 rounded-md px-2 py-0.5 font-medium hover:brightness-110 ${accent.pill} ${accent.text} ${className}`}
             />
           }
         >
@@ -235,7 +235,7 @@ export function MultiModeSelect({
             variant="ghost"
             onClick={() => setOpen(true)}
             title={`还有 ${plusN} 种其他模式，点击管理`}
-            className="text-ink-faint bg-primary-500/10 hover:bg-primary-500/20 hover:text-primary-strong h-auto rounded-md px-1.5 py-0.5 text-[11px] font-medium"
+            className="text-ink-faint bg-primary-500/10 hover:bg-primary-500/20 hover:text-primary-strong text-2xs h-auto rounded-md px-1.5 py-0.5 font-medium"
           >
             +{plusN}
           </Button>
@@ -282,7 +282,7 @@ export function MultiModeSelect({
               >
                 {CATEGORY_LABEL[cat]}
                 {selCount > 0 && (
-                  <span className={`ml-1 text-[10px] ${CATEGORY_TEXT[cat]}`}>
+                  <span className={`text-3xs ml-1 ${CATEGORY_TEXT[cat]}`}>
                     {selCount}
                   </span>
                 )}
@@ -369,7 +369,7 @@ export function MultiModeSelect({
                       setDraftDefault(item.code);
                     }}
                     title={isDraftDefault ? "当前默认模式" : "设为默认模式"}
-                    className={`h-auto shrink-0 rounded px-1 py-0.5 text-[10px] font-medium ${
+                    className={`text-3xs h-auto shrink-0 rounded px-1 py-0.5 font-medium ${
                       isDraftDefault
                         ? "bg-primary-500/25 text-primary-strong hover:bg-primary-500/25"
                         : "text-ink-muted hover:bg-surface-2 hover:text-ink-strong"
@@ -378,7 +378,7 @@ export function MultiModeSelect({
                     {isDraftDefault ? "★ 默认" : "☆ 默认"}
                   </Button>
                   <span
-                    className={`shrink-0 text-[11px] ${CATEGORY_TEXT[activeTab]} opacity-60`}
+                    className={`text-2xs shrink-0 ${CATEGORY_TEXT[activeTab]} opacity-60`}
                   >
                     {item.code}
                   </span>

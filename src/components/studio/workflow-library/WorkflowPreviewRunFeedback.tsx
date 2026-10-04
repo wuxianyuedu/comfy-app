@@ -53,7 +53,7 @@ export function WorkflowPreviewRunFeedback({
                 {phase.node ? `（${phase.node.value}/${phase.node.max}）` : ""}
               </>
             }
-            className="text-[11px]"
+            className="text-2xs"
             trackClassName="bg-surface-2 h-1.5"
             fillClassName="bg-linear-to-r from-violet-500 to-fuchsia-500 duration-300"
           />
@@ -65,7 +65,7 @@ export function WorkflowPreviewRunFeedback({
             不应展示上一次运行的结果图） ── */}
       {resultUrl && viewMode === "use" && (
         <div className="w-95">
-          <p className="text-ink-faint mb-1 text-[11px]">运行结果</p>
+          <p className="text-ink-faint text-2xs mb-1">运行结果</p>
           {/* 缩略图盒子只有 380px 宽，看细节得点开通用查看器
               （原始大小 / 缩放 / 拖拽平移，见 `ui/image-viewer`）。 */}
           <ViewableImage
@@ -80,7 +80,7 @@ export function WorkflowPreviewRunFeedback({
       {/* ── 错误提示（只在「实际使用」页签显示；编辑对外参数是配置界面，
             不应展示上一次运行的执行错误） ── */}
       {phase.kind === "failed" && viewMode === "use" && (
-        <div className="border-destructive/20 bg-destructive/8 text-destructive w-95 rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
+        <div className="border-destructive/20 bg-destructive/8 text-destructive text-2xs w-95 rounded-lg border px-3 py-2 leading-relaxed">
           {phase.message}
         </div>
       )}
@@ -88,7 +88,7 @@ export function WorkflowPreviewRunFeedback({
       {/* ── 素材上传提示 ── */}
       {uploadNotice && (
         <div
-          className="border-warning/25 bg-warning/10 text-warning-strong w-95 rounded-lg border px-3 py-2 text-[11px] leading-relaxed"
+          className="border-warning/25 bg-warning/10 text-warning-strong text-2xs w-95 rounded-lg border px-3 py-2 leading-relaxed"
           role="status"
           aria-live="polite"
         >
@@ -107,7 +107,7 @@ export function WorkflowPreviewRunFeedback({
         </div>
       )}
       {!running && missingLabels.length > 0 && viewMode === "use" && (
-        <p className="text-warning-strong/80 w-95 text-[11px]">
+        <p className="text-warning-strong/80 text-2xs w-95">
           必填参数未填：{missingLabels.join("、")}
         </p>
       )}

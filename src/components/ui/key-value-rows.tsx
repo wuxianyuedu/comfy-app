@@ -191,7 +191,7 @@ export function KeyValueRows({
             )}
             title={item.title}
           >
-            <span className={cn("text-ink-fainter text-[10px]", keyClassName)}>
+            <span className={cn("text-ink-fainter text-3xs", keyClassName)}>
               {item.key}
             </span>
             <span
@@ -204,7 +204,7 @@ export function KeyValueRows({
               {renderValue(item, false)}
             </span>
             {item.hint !== undefined && (
-              <span className="text-ink-muted/80 text-[10px] leading-tight">
+              <span className="text-ink-muted/80 text-3xs leading-tight">
                 {item.hint}
               </span>
             )}
@@ -225,7 +225,7 @@ export function KeyValueRows({
           className,
         )}
       >
-        <table className="w-full text-[11px]">
+        <table className="text-2xs w-full">
           <tbody>
             {items.map((item) => (
               <tr

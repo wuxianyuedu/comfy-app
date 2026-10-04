@@ -46,9 +46,7 @@ function WorkshopWorkflowSelect({
   const scoped = options.filter((option) => option.category === category);
   return (
     <FieldLabel className="mt-3 block">
-      <span className="text-muted-foreground mb-1 block text-[11px]">
-        {label}
-      </span>
+      <span className="text-muted-foreground text-2xs mb-1 block">{label}</span>
       <Select value={value} onValueChange={(next) => onChange(next ?? "")}>
         <SelectTrigger
           size="sm"
@@ -148,7 +146,7 @@ export function WorkshopAside({
               <span className="text-ink flex-1 text-[12.5px]">
                 {item.label}
               </span>
-              <span className="text-faint text-[11px]">
+              <span className="text-faint text-2xs">
                 {item.done
                   ? "已完成"
                   : item.gap === null

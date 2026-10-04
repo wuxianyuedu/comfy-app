@@ -46,7 +46,7 @@ export function SubgraphWidgetRow({
   const typeCol = portColor(inp.type);
   return (
     <div
-      className="group relative grid min-h-5.5 py-0.5 pr-2 pl-5 text-[11px]"
+      className="group text-2xs relative grid min-h-5.5 py-0.5 pr-2 pl-5"
       style={{
         gridColumn: "1 / -1",
         gridTemplateColumns: "subgrid",
@@ -89,7 +89,7 @@ export function SubgraphWidgetRow({
         <span
           /* 去掉 `truncate`：让长的封装 widget 标签换成多行
            *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
-          className="min-w-0 text-left text-[11px] wrap-break-word whitespace-normal"
+          className="text-2xs min-w-0 text-left wrap-break-word whitespace-normal"
           style={{
             color: isConn
               ? "var(--color-ink-strong)"
@@ -126,7 +126,7 @@ export function SubgraphWidgetRow({
           options={(inp as ComboInputMeta).comboOptions as string[]}
           disabled
           fullWidth
-          className="h-5.5! min-w-0 py-0! text-[11px]!"
+          className="text-2xs! h-5.5! min-w-0 py-0!"
           popoverMinWidth={220}
         />
       ) : (

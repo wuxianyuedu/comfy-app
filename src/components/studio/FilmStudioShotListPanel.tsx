@@ -40,7 +40,7 @@ export function FilmStudioShotListPanel({
           <span className="text-ink-field text-[13px] font-semibold">
             分镜列表
           </span>
-          <span className="text-ink-fainter text-[11px]">
+          <span className="text-ink-fainter text-2xs">
             {listShots.length} 镜头
           </span>
         </div>
@@ -85,7 +85,7 @@ export function FilmStudioShotListPanel({
                   />
                 ) : (
                   <div
-                    className={`flex h-12 w-14 shrink-0 items-center justify-center rounded-md text-[10px] ${
+                    className={`text-3xs flex h-12 w-14 shrink-0 items-center justify-center rounded-md ${
                       isSelected
                         ? "bg-primary/10 text-primary-strong"
                         : "bg-subtle text-ink-faintest"
@@ -103,11 +103,11 @@ export function FilmStudioShotListPanel({
                     {shot.name}
                   </p>
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="text-ink-faintest text-[10px]">
+                    <span className="text-ink-faintest text-3xs">
                       {shot.duration}
                     </span>
-                    <span className="text-ink-faintest text-[10px]">·</span>
-                    <span className="text-ink-fainter text-[10px]">
+                    <span className="text-ink-faintest text-3xs">·</span>
+                    <span className="text-ink-fainter text-3xs">
                       {MODE_LABELS[shot.mode]}
                     </span>
                   </div>

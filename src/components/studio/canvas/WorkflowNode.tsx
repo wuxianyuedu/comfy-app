@@ -79,7 +79,7 @@ export const PORT_ROLES: {
 ];
 
 /* ── 流画布的节点数据（必须满足 Record<string, unknown>，@xyflow/react 要求） ── */
-export const INPUT_ROW_HEIGHT = 22; // px per input row (matches the py-1 + text-[11px] row)
+export const INPUT_ROW_HEIGHT = 22; // px per input row (matches the py-1 + text-2xs row)
 export const HEADER_TOTAL = 60; // header (32) + #id bar (22) + small breathing room (6)
 
 /*（注：以前用这些常量覆盖 `<Handle top: ...>`，好让句柄与行

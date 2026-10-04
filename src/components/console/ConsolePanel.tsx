@@ -72,7 +72,7 @@ export function ConsolePanel({ onClose }: ConsolePanelProps) {
             <span className="text-ink truncate text-[15px] font-semibold">
               控制台
             </span>
-            <span className="text-ink-faint truncate text-[11px]">
+            <span className="text-ink-faint text-2xs truncate">
               在项目根执行命令；命令与其子进程在面板关闭时一并回收
             </span>
           </div>
@@ -89,7 +89,7 @@ export function ConsolePanel({ onClose }: ConsolePanelProps) {
         <div className="flex min-h-0 flex-1">
           {/* ── 左：预设命令 ── */}
           <aside className="border-border bg-surface-1 flex w-56 shrink-0 flex-col border-r">
-            <div className="border-border-subtle text-ink-faint flex h-9 shrink-0 items-center border-b px-3 text-[11px] font-medium">
+            <div className="border-border-subtle text-ink-faint text-2xs flex h-9 shrink-0 items-center border-b px-3 font-medium">
               常用命令（点击填入）
             </div>
             <ConsolePresetList onFill={c.fill} disabled={running} />

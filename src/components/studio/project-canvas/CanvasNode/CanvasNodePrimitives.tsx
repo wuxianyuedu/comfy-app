@@ -47,15 +47,12 @@ export function Field({
                 borderRadius: 9999,
               }}
             />
-            <span
-              className="text-[11px] font-medium"
-              style={{ color: s.color }}
-            >
+            <span className="text-2xs font-medium" style={{ color: s.color }}>
               {s.label}
             </span>
           </>
         )}
-        <span className="text-ink-soft text-[11px] font-medium">{label}</span>
+        <span className="text-ink-soft text-2xs font-medium">{label}</span>
       </div>
 
       {/* Input area */}
@@ -64,10 +61,7 @@ export function Field({
         {port && s && isOut && (
           <>
             <span className="mt-1 flex items-center justify-end gap-1.5">
-              <span
-                className="text-[11px] font-medium"
-                style={{ color: s.color }}
-              >
+              <span className="text-2xs font-medium" style={{ color: s.color }}>
                 {s.label}
               </span>
             </span>
@@ -182,7 +176,7 @@ export function StatusBadge({ status }: { status: CanvasNodeData["status"] }) {
       status={STATUS_BADGE_KEY[status]}
       label={STATUS_LABEL[status]}
       dot={false}
-      className="shrink-0 gap-0 rounded px-1.5 py-0.5 text-[10px]"
+      className="text-3xs shrink-0 gap-0 rounded px-1.5 py-0.5"
     />
   );
 }
@@ -209,7 +203,7 @@ export function NodeChip({
     >
       <span
         className={`flex shrink-0 items-center justify-center rounded-full font-bold ${
-          isSm ? "h-5 w-5 text-[10px]" : "h-6 w-6 text-[11px]"
+          isSm ? "text-3xs h-5 w-5" : "text-2xs h-6 w-6"
         }`}
         style={{
           background: `linear-gradient(135deg, ${meta.color}30 0%, ${meta.color}15 100%)`,
@@ -222,7 +216,7 @@ export function NodeChip({
       </span>
       <span
         className={`text-ink-bright truncate font-semibold ${
-          isSm ? "text-[11px]" : "text-[13px]"
+          isSm ? "text-2xs" : "text-[13px]"
         }`}
       >
         {name}

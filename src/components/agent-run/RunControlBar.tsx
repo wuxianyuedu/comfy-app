@@ -112,7 +112,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
           {[...run.log].reverse().map((step) => (
             <li
               key={step.ts}
-              className="text-ink-fainter flex items-baseline gap-1.5 text-[11px]"
+              className="text-ink-fainter text-2xs flex items-baseline gap-1.5"
             >
               <span
                 className={step.ok ? "text-success-strong" : "text-destructive"}
@@ -141,7 +141,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             placeholder="想拍什么？一句话创意即可（留空则用项目标题）"
             className="border-border bg-subtle text-ink-field max-w-md min-w-55 flex-1 resize-none text-[12px]"
           />
-          <FieldLabel className="flex flex-col gap-1 text-[11px]">
+          <FieldLabel className="text-2xs flex flex-col gap-1">
             <span className="text-ink-faint">确认粒度</span>
             <SelectMenu
               value={c.approvalMode}

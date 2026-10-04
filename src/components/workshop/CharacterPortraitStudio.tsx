@@ -144,7 +144,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             labels={localOptionLabels}
             placeholder="选择本地生图模型"
             disabled={session.busy || session.importing}
-            className="bg-subtle! border-border! text-[11px]"
+            className="bg-subtle! border-border! text-2xs"
             popoverMinWidth={240}
           />
         )}
@@ -155,7 +155,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             options={remoteImageModels}
             placeholder="选择远端生图模型"
             disabled={session.busy || session.importing}
-            className="bg-subtle! border-border! text-[11px]"
+            className="bg-subtle! border-border! text-2xs"
             popoverMinWidth={220}
           />
         )}
@@ -205,14 +205,14 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
 
       {/* 通道门禁提示：说清缺什么、去哪里补，不让按钮无声失效 */}
       {session.channel === "local" && !session.localWorkflowId && (
-        <p className="text-muted-foreground text-[11px]">
+        <p className="text-muted-foreground text-2xs">
           本地通道需要先在上方下拉选一个工作流库模型（需在库里配置好对外参数）。
           没有内置工作流可回落 ——
           工作流库里还没有可用的生图工作流时，可切到「远端 API」通道。
         </p>
       )}
       {session.channel === "remote" && !remoteReady && (
-        <p className="text-warning-strong flex flex-wrap items-center gap-1 text-[11px]">
+        <p className="text-warning-strong text-2xs flex flex-wrap items-center gap-1">
           <Icon name="info" size={11} />
           远端 API 生图未配置 —— 在
           <span className="font-medium">设置 → 模型</span>
@@ -220,7 +220,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           <Button
             variant="link"
             onClick={onOpenApiSettings}
-            className="h-auto p-0 text-[11px] underline underline-offset-2"
+            className="text-2xs h-auto p-0 underline underline-offset-2"
           >
             打开 API 通道设置
           </Button>
@@ -228,7 +228,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         </p>
       )}
       {!hasPrompt && (
-        <p className="text-muted-foreground text-[11px]">
+        <p className="text-muted-foreground text-2xs">
           该角色还没有生成提示词：先在下方补全外貌 /
           服装等信息，提示词会自动合成。
         </p>
@@ -238,7 +238,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         <div className="mt-2 flex flex-col gap-1">
           {busy && (
             <>
-              <p className="text-primary text-[11px]">
+              <p className="text-primary text-2xs">
                 正在用 {session.modelLabel || "当前通道"} 生成定妆照…
               </p>
               <Progress
@@ -250,7 +250,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             </>
           )}
           {session.status && !session.error && (
-            <p role="status" className="text-primary text-[11px]">
+            <p role="status" className="text-primary text-2xs">
               {session.status}
             </p>
           )}
@@ -260,7 +260,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
               /* 行内错误行：保持原有的紧凑尺寸与「无可见边框」观感 ——
  基元只接管「危险色怎么取」（此前写死 bg-red-100 + 深色档
  文字，浅底在深色主题下会与文字糊在一起）。 */
-              className="block rounded-md border-transparent px-2 py-1 text-[11px]"
+              className="text-2xs block rounded-md border-transparent px-2 py-1"
             >
               {session.error}
             </Alert>
@@ -272,12 +272,12 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
              * （旧写法靠`stopPropagation` 掩盖了这一点，React 会报水合错误）。
              * 故改为「触发开关 + 并列动作」一行排布。 */
             <div className="bg-bg/60 rounded-md px-2 py-1">
-              <div className="text-primary flex items-center gap-2 text-[10px]">
+              <div className="text-primary text-3xs flex items-center gap-2">
                 <Disclosure
                   open={busy ? true : undefined}
                   marker="caret"
                   className="min-w-0 items-center gap-2"
-                  panelClassName="text-[10px]"
+                  panelClassName="text-3xs"
                   trigger={`生成过程${
                     session.log.length > 0 ? `（${session.log.length} 条）` : ""
                   }`}
@@ -305,14 +305,14 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                 <Button
                   variant="link"
                   onClick={() => loadHistory()}
-                  className="text-muted-foreground hover:text-primary h-auto shrink-0 p-0 text-[11px] underline underline-offset-2"
+                  className="text-muted-foreground hover:text-primary text-2xs h-auto shrink-0 p-0 underline underline-offset-2"
                 >
                   历史
                 </Button>
               </div>
               {historyOpen && (
                 <div className="border-border/60 mt-1 border-t pt-1">
-                  <p className="text-muted-foreground text-[10px]">
+                  <p className="text-muted-foreground text-3xs">
                     历史日志（含此前会话，保存在 log/workshop/）
                   </p>
                   {history === null ? (
@@ -353,7 +353,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
 
       {/* 候选：历次生成与导入的图都在这里，点一张即定为定妆照 */}
       {candidates.length === 0 ? (
-        <p className="text-muted-foreground mt-2 text-[11px]">
+        <p className="text-muted-foreground text-2xs mt-2">
           还没有定妆照 ——
           生成或导入后可在这里挑一张定为定妆照，后续分镜图会以它作参考图。
         </p>

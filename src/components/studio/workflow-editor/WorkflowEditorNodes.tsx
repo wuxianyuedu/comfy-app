@@ -53,7 +53,7 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
     >
       {data.title ? (
         <div
-          className="absolute top-0 left-2 rounded-b px-1.5 py-0.25 text-[11px] leading-tight font-semibold"
+          className="text-2xs absolute top-0 left-2 rounded-b px-1.5 py-0.25 leading-tight font-semibold"
           style={{
             color: titleCol,
             background: titleBg,
@@ -181,7 +181,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
         {data.title}
       </span>
       {valueStr ? (
-        <span className="text-warning-strong/90 shrink-0 font-mono text-[10px] tabular-nums">
+        <span className="text-warning-strong/90 text-3xs shrink-0 font-mono tabular-nums">
           {valueStr}
         </span>
       ) : null}
@@ -270,7 +270,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
         </div>
       )}
       <div
-        className="wf-markdown min-h-0 flex-1 overflow-auto p-2 text-[11px]"
+        className="wf-markdown text-2xs min-h-0 flex-1 overflow-auto p-2"
         style={{ color: "var(--color-ink-bright)", lineHeight: 1.5 }}
         dangerouslySetInnerHTML={{ __html: html }}
       />

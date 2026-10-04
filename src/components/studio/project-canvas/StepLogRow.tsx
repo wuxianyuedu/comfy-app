@@ -62,7 +62,7 @@ export const StepLogRow = memo(function StepLogRow({
     >
       <span className="text-ink-muted shrink-0">{fmtTime(log.t)}</span>
       <span
-        className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
+        className={`text-2xs shrink-0 rounded border px-1.5 py-0.5 font-medium uppercase ${LEVEL_STYLES[log.level]}`}
       >
         {levelLabel(log.level)}
       </span>
@@ -74,7 +74,7 @@ export const StepLogRow = memo(function StepLogRow({
         {log.msg}
       </span>
       {log.src && (
-        <span className="text-ink-fainter hover:text-ink-soft max-w-50 shrink-0 truncate text-[11px]">
+        <span className="text-ink-fainter hover:text-ink-soft text-2xs max-w-50 shrink-0 truncate">
           {log.src}
         </span>
       )}

@@ -151,10 +151,10 @@ export function ExtractToolbar({
         <Disclosure
           defaultOpen
           marker="caret"
-          className="text-primary bg-bg/60 mt-2 rounded-lg px-3 py-2 text-[11px]"
+          className="text-primary bg-bg/60 text-2xs mt-2 rounded-lg px-3 py-2"
           trigger="提取过程"
         >
-          <pre className="text-muted-foreground mt-1 max-h-40 overflow-y-auto text-[11px] leading-relaxed break-all whitespace-pre-wrap">
+          <pre className="text-muted-foreground text-2xs mt-1 max-h-40 overflow-y-auto leading-relaxed break-all whitespace-pre-wrap">
             {progressText}
           </pre>
         </Disclosure>
@@ -168,7 +168,7 @@ export function ExtractToolbar({
         </p>
       )}
       {extractDisabled && !busy && !errorText && (
-        <p className="text-muted-foreground mt-2 text-[11px]">
+        <p className="text-muted-foreground text-2xs mt-2">
           {extractDisabledReason ?? "从剧本提取暂不可用"}
         </p>
       )}
@@ -180,11 +180,11 @@ export function ExtractToolbar({
          * 基元 trigger 已是`<button>`，嵌套按钮非法（旧写法靠
          *`stopPropagation` 掩盖），故「开关 + 并列动作」一行排布。 */
         <div className="border-border bg-bg/40 mt-2 rounded-lg border px-3 py-2">
-          <div className="text-primary flex items-center gap-2 text-[11px] font-medium">
+          <div className="text-primary text-2xs flex items-center gap-2 font-medium">
             <Disclosure
               open={busy ? true : undefined}
               marker="caret"
-              panelClassName="text-[11px]"
+              panelClassName="text-2xs"
               trigger={`执行日志（${executionLog.length} 条）`}
             >
               <ul className="mt-2 flex flex-col gap-2">
@@ -195,14 +195,14 @@ export function ExtractToolbar({
                   >
                     <div className="flex items-center gap-2">
                       <span
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${logBadge(entry.kind)}`}
+                        className={`text-3xs rounded px-1.5 py-0.5 font-medium ${logBadge(entry.kind)}`}
                       >
                         {logBadgeLabel(entry.kind)}
                       </span>
-                      <span className="text-muted-foreground min-w-0 flex-1 truncate text-[11px] leading-relaxed">
+                      <span className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
                         {entry.summary}
                       </span>
-                      <span className="text-muted-foreground/60 shrink-0 text-[10px]">
+                      <span className="text-muted-foreground/60 text-3xs shrink-0">
                         {formatClock(entry.ts)}
                       </span>
                     </div>
@@ -219,7 +219,7 @@ export function ExtractToolbar({
               <Button
                 variant="link"
                 onClick={() => loadHistory()}
-                className="text-muted-foreground hover:text-primary h-auto shrink-0 p-0 text-[10px] font-normal underline underline-offset-2"
+                className="text-muted-foreground hover:text-primary text-3xs h-auto shrink-0 p-0 font-normal underline underline-offset-2"
               >
                 历史
               </Button>
@@ -227,7 +227,7 @@ export function ExtractToolbar({
           </div>
           {logStage && historyOpen && (
             <div className="border-border/60 mt-2 border-t pt-2">
-              <p className="text-muted-foreground text-[10px]">
+              <p className="text-muted-foreground text-3xs">
                 历史日志（含此前会话，保存在 log/workshop/）
               </p>
               {history === null ? (
@@ -244,13 +244,13 @@ export function ExtractToolbar({
                       className="bg-surface rounded-lg px-2.5 py-2"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="bg-primary-soft text-primary rounded px-1.5 py-0.5 text-[10px] font-medium">
+                        <span className="bg-primary-soft text-primary text-3xs rounded px-1.5 py-0.5 font-medium">
                           {entry.kind}
                         </span>
-                        <span className="text-muted-foreground min-w-0 flex-1 truncate text-[11px] leading-relaxed">
+                        <span className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
                           {entry.summary}
                         </span>
-                        <span className="text-muted-foreground/60 shrink-0 text-[10px]">
+                        <span className="text-muted-foreground/60 text-3xs shrink-0">
                           {formatClock(entry.ts)}
                         </span>
                       </div>

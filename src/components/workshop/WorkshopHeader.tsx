@@ -40,7 +40,7 @@ export function WorkshopHeader({
         </div>
         <div className="flex min-w-0 flex-col leading-tight">
           <h1 className="u-title-page truncate">{title}</h1>
-          <span className="text-muted-foreground text-[11px]">
+          <span className="text-muted-foreground text-2xs">
             工坊 · 全链路项目管线
           </span>
         </div>
@@ -51,7 +51,7 @@ export function WorkshopHeader({
           同一件事说两遍，两处口径不一致时用户先撞上的是矛盾。总数没丢 —— 折成左边
           一个数字；「还差哪几段」仍是右侧胶囊的文字表述（色觉之外还有一条路径）。 */}
       <div className="hidden min-w-0 flex-1 items-center gap-3 lg:flex">
-        <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+        <span className="text-muted-foreground text-2xs shrink-0 tabular-nums">
           总进度 {progressPct}%
         </span>
         <div

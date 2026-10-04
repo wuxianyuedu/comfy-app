@@ -379,7 +379,7 @@ export function AspectMegapixelControl({
         scene={scene}
         onOpen={() => setTableOpen(true)}
         extra={
-          <span className="text-ink-faint text-[10px]">
+          <span className="text-ink-faint text-3xs">
             {currentDims
               ? `${currentDims.width}×${currentDims.height}`
               : resolutionHint}
@@ -434,7 +434,7 @@ export function AspectMegapixelControl({
                       {entry.label ?? entry.name}
                     </span>
                     <span
-                      className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1 py-px text-[10px] font-semibold"
+                      className="bg-border-strong text-ink-muted text-3xs inline-flex shrink-0 items-center rounded-[3px] px-1 py-px font-semibold"
                       style={{ fontFamily: "var(--font-sans)" }}
                     >
                       {typeDisplay(entry.type)}
@@ -448,7 +448,7 @@ export function AspectMegapixelControl({
               data-grouped-box
               className="border-accent/30 bg-accent/4 w-fit max-w-full shrink-0 rounded-lg border p-2"
             >
-              <span className="text-accent text-[10px] font-semibold tracking-wider uppercase">
+              <span className="text-accent text-3xs font-semibold tracking-wider uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="mt-1 w-42 min-w-0">
@@ -475,7 +475,7 @@ export function AspectMegapixelControl({
         ) : (
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-accent shrink-0 text-[10px] font-semibold tracking-wider uppercase">
+              <span className="text-accent text-3xs shrink-0 font-semibold tracking-wider uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="min-w-0 flex-1">

@@ -94,7 +94,7 @@ export function WorkflowPreviewUsePanel({
               )}
               popoverMinWidth={150}
               autoFitFromOptions={false}
-              className="border-border-strong! shrink-0 bg-transparent! text-[11px]"
+              className="border-border-strong! text-2xs shrink-0 bg-transparent!"
             />
           ) : (
             <span className="text-ink-faint shrink-0 text-xs">

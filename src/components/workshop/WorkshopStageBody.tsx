@@ -149,7 +149,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           <h2 className="u-title-stage">{stageTitle}</h2>
           <p className="text-muted-foreground mt-1 text-[12px]">{stageDesc}</p>
         </div>
-        <span className="text-muted-foreground bg-subtle shrink-0 rounded-full px-3 py-1 text-[11px]">
+        <span className="text-muted-foreground bg-subtle text-2xs shrink-0 rounded-full px-3 py-1">
           阶段 {stageIndex} / {STAGE_DEFS.length}
         </span>
       </div>
@@ -186,7 +186,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 <h3 className="text-ink u-title">剧本内容</h3>
                 <div className="flex items-center gap-2">
                   {scenes.length > 0 && (
-                    <span className="text-muted-foreground bg-subtle rounded-lg px-3 py-1 text-[11px]">
+                    <span className="text-muted-foreground bg-subtle text-2xs rounded-lg px-3 py-1">
                       场景 {scenes.length}
                     </span>
                   )}
@@ -194,7 +194,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                     type="button"
                     variant="gradient"
                     onClick={openScriptEditor}
-                    className="rounded-lg px-4 py-1.5 text-[11px] font-medium"
+                    className="text-2xs rounded-lg px-4 py-1.5 font-medium"
                   >
                     编辑剧本
                   </Button>
@@ -231,7 +231,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                       type="button"
                       variant="gradient"
                       onClick={openScriptEditor}
-                      className="rounded-lg px-4 py-1.5 text-[11px] font-medium"
+                      className="text-2xs rounded-lg px-4 py-1.5 font-medium"
                     >
                       新建剧本
                     </Button>
@@ -337,7 +337,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink u-title">生图工具</h3>
-              <span className="text-muted-foreground bg-subtle rounded-lg px-3 py-1 text-[11px]">
+              <span className="text-muted-foreground bg-subtle text-2xs rounded-lg px-3 py-1">
                 图 {imageDoneCount}/{shots.length}
               </span>
             </div>
@@ -370,7 +370,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink u-title">视频工具</h3>
-              <span className="text-muted-foreground bg-subtle rounded-lg px-3 py-1 text-[11px]">
+              <span className="text-muted-foreground bg-subtle text-2xs rounded-lg px-3 py-1">
                 片段 {clipDoneCount}/{shots.length}
               </span>
             </div>

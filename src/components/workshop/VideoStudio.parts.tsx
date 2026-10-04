@@ -156,7 +156,7 @@ export function ClipBadge({
       status={status}
       label={CLIP_STATUS_LABEL[status]}
       dot={false}
-      className="px-2 py-0.5 text-[10px]"
+      className="text-3xs px-2 py-0.5"
     />
   );
 }
@@ -203,11 +203,11 @@ export function ShotCard({
         </span>
         <ClipBadge status={clipStatus} />
         {clipStatus === "running" && (
-          <span className="text-muted-foreground text-[10px]">
+          <span className="text-muted-foreground text-3xs">
             {progress > 0 ? `${Math.round(progress)}%` : "排队中…"}
           </span>
         )}
-        <span className="text-faint ml-auto text-[10px]">
+        <span className="text-faint text-3xs ml-auto">
           {channel === "local" ? "本地" : "API"}
         </span>
       </div>
@@ -240,11 +240,11 @@ export function ShotCard({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-ink line-clamp-2 text-[11px] leading-relaxed wrap-break-word">
+          <p className="text-ink text-2xs line-clamp-2 leading-relaxed wrap-break-word">
             {videoPrompt(shot) || "(提示词为空)"}
           </p>
           <div className="mt-1.5 flex items-center gap-2">
-            <FieldLabel className="flex items-center gap-1 text-[11px]">
+            <FieldLabel className="text-2xs flex items-center gap-1">
               <span className="text-muted-foreground">时长(s)</span>
               <Input
                 type="number"
@@ -260,13 +260,13 @@ export function ShotCard({
                     duration: clamp(Number(e.target.value) || 5, 1, 20),
                   })
                 }
-                className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-0.5 text-[11px]"
+                className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 text-2xs h-auto w-14 rounded-md px-2 py-0.5"
               />
             </FieldLabel>
-            <FieldLabel className="flex items-center gap-1 text-[11px]">
+            <FieldLabel className="text-2xs flex items-center gap-1">
               <span className="text-muted-foreground">运动</span>
               <SelectMenu
-                className="bg-subtle! border-border! text-[11px]"
+                className="bg-subtle! border-border! text-2xs"
                 value={shot.motion ?? "medium"}
                 onChange={(v) => onPatch({ motion: v as MotionLevel })}
                 options={MOTIONS}
@@ -274,7 +274,7 @@ export function ShotCard({
                 placeholder="运动"
               />
             </FieldLabel>
-            <span className="text-faint text-[10px]">
+            <span className="text-faint text-3xs">
               {framesFor(shot, fps)} 帧
             </span>
           </div>
@@ -314,7 +314,7 @@ export function ShotCard({
         <Alert
           variant="danger"
           /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
-          className="mt-2 block rounded-md border-transparent px-2 py-1 text-[11px]"
+          className="text-2xs mt-2 block rounded-md border-transparent px-2 py-1"
         >
           {error}
         </Alert>

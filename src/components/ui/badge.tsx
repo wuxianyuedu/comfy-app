@@ -45,13 +45,13 @@ const badgeVariants = cva(
        *  · `default` = 通用胶囊（base 里的 h-5 / px-2 / py-0.5 / rounded-4xl /
        *    text-xs 全生效，这里不重复给）；
        *  · `sm` = 密集行内元信息档（与已治理的 task-type-chip / source-tag
-       *    同档），h-auto + rounded-md + px-1.5 + py-0.5 + text-[10px]；
+       *    同档），h-auto + rounded-md + px-1.5 + py-0.5 + text-3xs；
        *  · `xs` = 极窄列表行内小徽标档（原 list-badge 的 text-[9px] + px-1 +
        *    py-px + rounded），leading-tight 让行高不撑破列表行基线。
        */
       size: {
         default: undefined,
-        sm: "h-auto rounded-md px-1.5 py-0.5 text-[10px]",
+        sm: "h-auto rounded-md px-1.5 py-0.5 text-3xs",
         xs: "h-auto gap-0 rounded px-1 py-px text-[9px] leading-tight",
       },
       /**

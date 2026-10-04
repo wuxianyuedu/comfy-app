@@ -293,6 +293,27 @@
     2.125rem * var(--font-scale, 1)
   ); /* 首页欢迎区大标题（.u-title-hero，屏级档的唯一例外） */
 
+  /* 微标签 / 元信息两档 —— 它们早就是事实标准，只是从没被命名：
+     实测 `text-[11px]` 350 处、`text-[10px]` 214 处散在 136 个业务文件里
+     （副说明、chip、徽标、密集列表行）。写死在调用点意味着「改一档全站跟手」
+     对这两个尺寸根本不成立，所以提到这里。
+     **刻意不乘 `--font-scale`**：设置页那一档的作用域就是标题（上面的四档），
+     微标签跟着标题缩放会让密集列表在 125% 档下挤成一团 —— 与「正文锚定」同一条
+     口径，e2e/appearance-steps.spec.ts 也按「正文不许变」判。
+     **也不给 `--text-*-line-height` 配对**：Tailwind v4 里一旦配了，生成的类会
+     连带锁 line-height（`text-xs` 就是这么把 12px 的 18px 行高压成 16px 的），
+     而这两档要的是与 `text-[11px]` **逐像素相同** —— 只出 font-size。
+     **档名必须是 t-shirt 尺寸（`2xs` / `3xs`），不能叫 `meta` / `micro`**：
+     `cn()`（`node_modules/cn`，clsx + tailwind-merge 的替代件）把不认识的
+     `text-<名字>` 一律归到**颜色**组 —— 实测 `cn("text-ink-muted","text-micro")`
+     只剩 `text-micro`，同行的状态色被吃掉；`2xs` / `3xs` 命中 t-shirt 模式，
+     归 font-size 组，与颜色并存。
+     ⚠️ 已有的 `text-section` / `text-page` / `text-hero` 是同一个坑的潜伏形态
+     （实测 `cn("text-ink-muted","text-section")` 同样吃颜色），它们目前只在
+     CSS 里经 `.u-title-*` 使用、没进 JSX，所以还没炸 —— 别在 JSX 里用它们。 */
+  --text-2xs: 11px; /* 副说明下的元信息 / 密集列表行（text-2xs） */
+  --text-3xs: 10px; /* 角标 / 极小徽标 / 画布节点第二行（text-3xs） */
+
   /* Display / titles — Sarasa Gothic SC Bold preferred, falls back to Noto/PingFang (Ardot #169~#177) */
   --font-title:
     "Sarasa Gothic SC", var(--font-geist-sans), "PingFang SC",

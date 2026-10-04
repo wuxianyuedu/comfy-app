@@ -104,12 +104,12 @@ export function HistoryTaskCard({
         >
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${st.pillCls}`}
+              className={`text-2xs rounded-full px-2 py-0.5 font-medium ${st.pillCls}`}
             >
               {st.label}
             </span>
             {st.showProgress && (
-              <span className="text-primary-strong text-[10px] tabular-nums">
+              <span className="text-primary-strong text-3xs tabular-nums">
                 {clampPct(progress)}%
               </span>
             )}
@@ -125,19 +125,19 @@ export function HistoryTaskCard({
           </p>
           {task.status === "FAILED" && task.error && (
             <div className="border-destructive/20 bg-destructive/6 mt-2 rounded-md border px-2.5 py-1.5">
-              <p className="text-destructive text-[11px] leading-relaxed">
+              <p className="text-destructive text-2xs leading-relaxed">
                 <span className="font-semibold">错误：</span>
                 {task.error}
               </p>
               {st.failureSuggestion && (
-                <p className="text-warning-strong/90 mt-1 text-[11px] leading-relaxed">
+                <p className="text-warning-strong/90 text-2xs mt-1 leading-relaxed">
                   {st.failureSuggestion(task.error)}
                 </p>
               )}
               {/* 结构化校验错误逐字段列表 */}
               {task.validationErrors && task.validationErrors.length > 0 && (
                 <div className="bg-canvas-deep border-destructive/20 mt-1.5 rounded border px-2 py-1.5">
-                  <div className="text-destructive mb-1 text-[10px] font-semibold">
+                  <div className="text-destructive text-3xs mb-1 font-semibold">
                     节点配置校验（{task.validationErrors.length} 项）
                   </div>
                   <ValidationErrorList

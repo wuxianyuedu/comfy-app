@@ -23,7 +23,7 @@ import {
  * icon slot（`has-data-[icon=inline-start]:pl-1.5`）等契约。PR-4 起
  * Badge cva 加了 `size` 轴（default / sm / xs），本件从手抄 `CHIP_SHAPE`
  * 常量迁到 `size="sm"`（h-auto / rounded-md / px-1.5 / py-0.5 /
- * text-[10px] 都在 cva 里给，`font-medium` 是 Badge base 自带）；
+ * text-3xs 都在 cva 里给，`font-medium` 是 Badge base 自带）；
  * **只留一条 `OUTLINE_RESET` 顶掉 `variant="outline"` 的 `border-border`**
  * （PR-1 时 CHIP_SHAPE 里也带这条、职责不变）。
  */

@@ -15,7 +15,7 @@ function optionLabel(name: string, badge: string): React.ReactNode {
   return (
     <span className="flex w-full items-center">
       <span className="min-w-0 flex-1 truncate">{name}</span>
-      <span className="text-muted-foreground ml-2 shrink-0 text-[10px]">
+      <span className="text-muted-foreground text-3xs ml-2 shrink-0">
         {badge}
       </span>
     </span>
@@ -95,19 +95,19 @@ export function ExtractModelSelect({
     const badge = channel === "local" ? "本地" : "远端";
     if (selChecking) {
       hint = (
-        <p className="text-muted-foreground mt-1 text-[11px]">
+        <p className="text-muted-foreground text-2xs mt-1">
           {badge}服务可用性校验中…
         </p>
       );
     } else if (selAvail?.kind === "ok") {
       hint = (
-        <p className="text-success-strong mt-1 text-[11px]">
+        <p className="text-success-strong text-2xs mt-1">
           {badge}服务可达，可直接使用。
         </p>
       );
     } else if (selAvail?.kind === "err") {
       hint = (
-        <p className="text-destructive mt-1 text-[11px] leading-relaxed">
+        <p className="text-destructive text-2xs mt-1 leading-relaxed">
           {badge}模型不可用：{selAvail.detail}。可先确认对应服务已启动 /
           配置正确后再试。
         </p>
