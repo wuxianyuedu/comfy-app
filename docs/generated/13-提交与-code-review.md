@@ -20,6 +20,7 @@
 - [ ] 无单字母变量新增（循环索引 i/j/k、catch 参数 e、占位 _ 除外）
 - [ ] 新写的逻辑确认过全库无等价实现；属通用能力的已落到地基（`src/lib/<domain>` / `core`）而非埋在 feature 目录，也没为「这次不一样」复制粘贴（见 [12.18](12-代码组织与文件结构.md#1218-复用优先写之前先查缺能力补地基不造第二轮子)）
 - [ ] 注释无作者 / 日期 / 版本流水，只写「当前代码的 Why」（见 [12.4](12-代码组织与文件结构.md#124-注释规范只写当前代码的-why)）
+- [ ] 新增 / 改动的注释是**中文**（只有 `reference-facts` 登记的「纯 ASCII 模块」写英文；由 `node scripts/check-comment-language.cjs` 在 pre-commit 的「注释语言棘轮」一步强制，见 [12.4.6](12-代码组织与文件结构.md#1246-注释语言一律中文只有纯-ascii-模块例外issue-678机器强制)）
 - [ ] 用户可感知的变更已写入 `changelog.d/<issue号>-<slug>.md` 碎片（内部重构/文档修订除外）——**不直接改 `CHANGELOG.md`**，见 [13.10.5](#13105-碎片化落地改-changelogd不改-changelogmd)
 - [ ] 新组件 200 行以内；超过则已拆分（见 [4.1](04-组件设计.md#41-单一职责一个组件干一件事)）
 - [ ] 列表/日志有内存上限（见 [2.1](02-性能规范.md#21-列表日志必须有上限)）
@@ -192,6 +193,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
 ✅ node scripts/check-doc-references.cjs     # 文档引用与权威源一致（= `pnpm doc:check`；序号那条判据见下 13.5.10）
 ✅ node scripts/storybook-check.mjs --changed # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮 + 故事面（见 16 §16.2.3.4 / §16.2.3.8）
+✅ node scripts/check-comment-language.cjs   # 注释语言棘轮：注释一律中文，只有「纯 ASCII 模块」例外（见 12 §12.4.6；§12.4.6 早写着它在钩子里报红，而它一直不在，ISSUE #1451 补齐）
 ```
 
 > **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /
