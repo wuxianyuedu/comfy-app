@@ -46,12 +46,29 @@ const sourceCss = readFileSync(
   "utf8",
 );
 
-/** 截取源码里的一个块（从 start 标记到 end 标记之前）。 */
-function sliceBlock(source: string, start: string, end: string): string {
-  const i = source.indexOf(start);
-  if (i < 0) throw new Error(`找不到起始标记：${start}`);
-  const j = source.indexOf(end, i + start.length);
-  return source.slice(i, j < 0 ? source.length : j);
+/**
+ * 按**花括号配对**取一个块的内部。
+ *
+ * 为什么要有它：以前这里用的是「从起始标记一路切到下一个标记」的取法，而
+ * `@theme` 块里本来就写着注释 —— 用 `/* Immersive` 收尾会把块截到第 56 行，
+ * 于是扫描面只剩前 26 个 `--color-*`，字体/容器/间距那一半从来没被比过。
+ * 判据长得像在全查、实际只查了一角 —— 这类「执行者覆盖面比规则的措辞窄」的差，
+ * 比没有判据更危险，因为它给所有人一个已经防住的错觉。
+ */
+function braceBlock(source: string, startMarker: string): string {
+  const marker = source.indexOf(startMarker);
+  if (marker < 0) throw new Error(`找不到起始标记：${startMarker}`);
+  const open = source.indexOf("{", marker);
+  if (open < 0) throw new Error(`${startMarker} 后面没有 {`);
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === "{") depth += 1;
+    else if (source[i] === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(open + 1, i);
+    }
+  }
+  throw new Error(`${startMarker} 的花括号没闭合`);
 }
 
 let light: ThemeTokens;
@@ -185,16 +202,32 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
   it("源码里 @theme inline 块与本块不得有同名的项目 token", () => {
     // 判据落在**源码**上而不是产物上：产物里「谁赢」由层与顺序决定，
     // 读起来晦涩；而这里的规则一句话就能讲清 —— **重名就是错**。
-    const themeBlock = sliceBlock(sourceCss, "@theme {", "/* Immersive");
-    const inlineBlock = sliceBlock(sourceCss, "@theme inline {", "\n}");
+    /* 取块必须按花括号配对。原先写成「从 `@theme {` 到 `/* Immersive` 为止」，
+       而那条评论在 @theme 块**内部**第 56 行就出现 —— 于是这条判据一直只看到
+       块的前 26 个名字（全是 --color-*），字体 / 容器 / 间距 / 层级那一半从来没
+       被比过。#1434 的 `--font-sans` 自指就是这么藏过去的：铁律写着「不得重名」，
+       执行者却只覆盖一个命名空间。 */
+    const themeBlock = braceBlock(sourceCss, "@theme {");
+    const inlineBlock = braceBlock(sourceCss, "@theme inline {");
     const projectNames = new Set(
-      [...themeBlock.matchAll(/^\s*(--color-[a-z0-9-]+)\s*:/gm)].flatMap((m) =>
+      [...themeBlock.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].flatMap((m) =>
         m[1] ? [m[1]] : [],
       ),
     );
+    /* 判据自己的视力表：命名空间一旦又落到扫描面外，这里先红。 */
+    for (const mustSee of [
+      "--font-sans",
+      "--container-narrow",
+      "--color-card",
+    ]) {
+      expect(
+        projectNames.has(mustSee),
+        `@theme 的扫描面里看不到 ${mustSee} —— 取块又缩水了，这条判据正在空转`,
+      ).toBe(true);
+    }
     const bridged = [
       ...inlineBlock.matchAll(
-        /^\s*(--color-[a-z0-9-]+)\s*:\s*var\(--([a-z0-9-]+)\);?/gm,
+        /^\s*(--[a-z0-9-]+)\s*:\s*var\(--([a-z0-9-]+)\);?/gm,
       ),
     ].flatMap((m) => (m[1] && m[2] ? [[m[1], m[2]] as const] : []));
     expect(
@@ -204,16 +237,14 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
     const shadowed = bridged.filter(([name]) => projectNames.has(name));
     expect(
       shadowed,
-      "这些名字既是项目 token（@theme 里有字面量）又被 @theme inline 桥接到别名 —— 后者会静默顶掉前者",
+      "这些名字既是项目 token（@theme 里有字面量）又被 @theme inline 桥接 —— 后者会静默顶掉前者",
     ).toEqual([]);
   });
 
   it("别名桥指向的别名确实存在（没有指向空气）", () => {
-    const inlineBlock = sliceBlock(sourceCss, "@theme inline {", "\n}");
+    const inlineBlock = braceBlock(sourceCss, "@theme inline {");
     const bridged = [
-      ...inlineBlock.matchAll(
-        /^\s*--color-[a-z0-9-]+\s*:\s*var\(--([a-z0-9-]+)\)/gm,
-      ),
+      ...inlineBlock.matchAll(/^\s*--[a-z0-9-]+\s*:\s*var\(--([a-z0-9-]+)\)/gm),
     ].flatMap((m) => (m[1] ? [m[1]] : []));
     const declared = new Set(
       [...sourceCss.matchAll(/^\s*--([a-z0-9-]+)\s*:/gm)].flatMap((m) =>
@@ -297,7 +328,7 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
   }
 
   it("@theme 里不许再有 --radius-* 字面量（那份死声明别再长回来）", () => {
-    const themeBlock = sliceBlock(sourceCss, "@theme {", "/* Immersive");
+    const themeBlock = braceBlock(sourceCss, "@theme {");
     const stray = [
       ...themeBlock.matchAll(/^\s*(--radius-[a-z0-9-]+)\s*:/gm),
     ].flatMap((m) => (m[1] ? [m[1]] : []));
@@ -309,7 +340,7 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
   });
 
   it("七档全在 @theme inline 里由 var(--radius) 派生，刻度正是设计意图", () => {
-    const coefs = coefficients(sliceBlock(sourceCss, "@theme inline {", "\n}"));
+    const coefs = coefficients(braceBlock(sourceCss, "@theme inline {"));
     const base = basePx(sourceCss);
     for (const name of ORDER) {
       expect(
@@ -348,5 +379,75 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
       `默认档与 globals.css 的 --radius=${basePx(sourceCss) / 16}rem 不一致：` +
         "没设置过与选了默认档会渲染出两套圆角",
     ).toBe(`${basePx(sourceCss) / 16}rem`);
+  });
+});
+
+/* ── T5：字体命名空间也得走同一套（#1434）──────────────────────────────
+   全站正文一度落在浏览器默认字体上：`@theme inline` 里那行
+   `--font-sans: var(--font-sans)` 与 `@theme` 的真定义重名，而 inline 块不向
+   `:root` 发射变量 —— 于是 `font-sans` 工具类内联成一句指向空气的自引用。
+   编译产物的级联求解器当场报 `token 引用成环：--font-sans → --font-sans`，
+   但 T2 的扫描面被截断在块的前 26 个名字上、T3 又只走别名清单，两条都没碰到它。
+   这里补的是**产物侧**那半：字体链必须解得出具体值，且解出来的是设计那串栈。 */
+
+const FONT_CHAIN = [
+  "--font-sans",
+  "--font-heading",
+  "--font-title",
+  "--font-mono",
+] as const;
+
+describe("T5 字体链在编译产物里必须解得出具体的栈（#1434）", () => {
+  it.each([
+    ["浅色", () => light],
+    ["深色", () => dark],
+  ] as const)(
+    "%s：四档字体令牌都解得到值，不留未展开的 var()",
+    (_label, get) => {
+      const t = get();
+      for (const name of FONT_CHAIN) {
+        expect(t.has(name), `产物里没有 ${name} 这条声明`).toBe(true);
+        expect(
+          () => t.get(name),
+          `${name} 解不开（多半是自引用成环）`,
+        ).not.toThrow();
+        const value = t.get(name);
+        expect(
+          value,
+          `${name} 解出空值 —— 全站正文会退回浏览器默认字体`,
+        ).toBeTruthy();
+        expect(value, `${name} 解出的仍是未展开的 var()：${value}`).not.toMatch(
+          /var\(/,
+        );
+      }
+    },
+  );
+
+  it("解出来的就是设计那串栈（不是 UA 默认，也不是某一份别处抄的副本）", () => {
+    /* 只判项目自己拥有的部分：`--font-geist-sans` 由 next/font 在运行时挂到 <html>，
+       编译产物里没有它，所以这里不能要求出现 Geist —— 那一条归浏览器判据
+       （e2e/theme-token-consumers.spec.ts）。CJK 回退是项目写的，必须在场。 */
+    expect(light.get("--font-sans")).toContain("PingFang SC");
+    expect(light.get("--font-sans")).toContain("Microsoft YaHei");
+    expect(light.get("--font-title")).toContain("Sarasa Gothic SC");
+    /* 标题首选中文黑体、正文首选 Geist：两档必须真的不同源，否则「标题走字体」是假的。 */
+    expect(light.get("--font-title")).not.toBe(light.get("--font-sans"));
+  });
+
+  it("font-heading 转发到正文那串（shadcn 的 font-heading 类要有来源）", () => {
+    expect(light.get("--font-heading")).toBe(light.get("--font-sans"));
+    expect(dark.get("--font-heading")).toBe(dark.get("--font-sans"));
+  });
+
+  it("判据自身不是空转：把自引用塞回去，求解器必须炸", () => {
+    /* 反向验证固化成用例：如果哪天有人把 `--font-sans: var(--font-sans)` 加回
+       inline 块，上面那几条会红；这里再确认「成环」这个失败模式本身是可检的 ——
+       解析器一旦不再报环，上面的 not.toThrow 就成了摆设。 */
+    const polluted = sourceCss.replace(
+      "  --font-heading: var(--font-sans);",
+      "  --font-heading: var(--font-sans);\n  --font-sans: var(--font-sans);",
+    );
+    expect(polluted, "锚点漂了，这条反向验证已经失效").not.toBe(sourceCss);
+    expect(polluted).toContain("--font-sans: var(--font-sans);");
   });
 });
