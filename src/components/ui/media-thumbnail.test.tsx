@@ -4,7 +4,7 @@
  *
  * 现场：全库 18 个文件的裸 `<img>` 里，**失败这一侧有四种写法** ——
  * `style.display = "none"`（`HomePage`）、`style.visibility = "hidden"`
- * （`TrainingStudio`）、自持 `useState(failed)` + 方块（`WorkflowImagePreview`）、
+ * （已删的训练工作室）、自持 `useState(failed)` + 方块（`WorkflowImagePreview`）、
  * 长文案说明（`SettingsPrimitives`）；另外 14 处**压根没有兜底**。
  *
  * 这里钉的是「行为不再取决于从哪个面板渲染」这件事，所以断言都落在

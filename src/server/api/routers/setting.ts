@@ -46,15 +46,6 @@ export const settingRouter = createTRPCRouter({
     .input(
       z.object({
         comfyuiPort: z.number().int().min(0).max(65535).optional(),
-        /* 协议白名单判据在 `~/lib/url-scheme`（一处定义）：这里曾各写一份
-         * `/^https?:\/\//`，而那份正则实测两个方向都错 —— 误拒 `HTTPS://x`
-         * （合法地址）、误放行 `http://␣␣`（不是地址，存进设置后每次去连它都
-         * 换回一句难查的连接错误）。 */
-        trainerUrl: z
-          .string()
-          .refine((url) => url === "" || isHttpUrl(url))
-          .optional(),
-        comfyLorasDir: z.string().optional(),
         comfyuiPath: z.string().optional(),
         comfyuiExtraArgs: z.string().optional(),
         /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */
