@@ -36,7 +36,7 @@ const WIDTH_CLASS: Record<DocumentWidth, string> = {
 };
 
 /**
- * 两类共用的外框：吃满父级高度、自己不出滚动条。
+ * 两类共用的外框：**只管几何**（吃满父级、自己不出滚动条），不管颜色。
  *
  * 每一层都带 `min-h-0`：flex 列里的子项默认 `min-height: auto`，不会缩到比内容
  * 还小，于是内容溢出父容器被 `overflow-hidden` 裁掉（首页上下两部分曾经就这么
@@ -58,7 +58,7 @@ function ViewFrame({
     <div
       data-view-container={kind}
       className={cn(
-        "bg-canvas text-ink relative flex h-full min-h-0 w-full flex-col overflow-hidden",
+        "relative flex h-full min-h-0 w-full flex-col overflow-hidden",
         className,
       )}
     >
@@ -88,7 +88,7 @@ export function DocumentFrame({
   children: ReactNode;
 }) {
   return (
-    <ViewFrame kind="document">
+    <ViewFrame kind="document" className="bg-canvas text-ink">
       {backdrop}
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto">
         <div className={cn("mx-auto w-full", WIDTH_CLASS[width], className)}>
@@ -105,6 +105,11 @@ export function DocumentFrame({
  * 内部怎么分栏、哪一栏自己滚，是视图的事。这里的 `overflow-hidden` 是判据的一部分：
  * 工作区型一旦长出外层滚动条，就会出现「整屏滚 + 画布也滚」的双层滚动（工坊屏
  * 原先正是这个形状）。
+ *
+ * 背景**留给调用处**：三个工作区屏本来就不是同一个底色 —— 成片写 `bg-canvas`、
+ * 工坊写 `bg-bg`、工作流库没写（靠外壳的 `SidebarInset` 兜）。容器写死一颗等于
+ * 偷偷改某一屏的颜色；而「调用处传 className 覆盖」也不可靠 —— 合并器不保证认得
+ * 这两颗 token，两份背景并存时谁生效取决于样式表顺序。所以这里干脆不写。
  */
 export function WorkspaceFrame({
   className,
