@@ -1,0 +1,19 @@
+#!/bin/sh
+# 把 LFS 对象随 push 一起上传 —— 本仓库必须有这个文件，而不是指望 git-lfs
+# 自己装的钩子：`core.hooksPath=.githooks`（由 `scripts/install-git-hooks.mjs`
+# 在 postinstall 接上）**整目录覆盖** `.git/hooks`，所以 git-lfs 装在
+# `.git/hooks/pre-push` 的那份一概不会被 git 调用。少了这一步的后果不是报错，
+# 而是「指针进了 git、对象留在本机」——别人克隆下来的 .ttf 就是一段
+# `version https://git-lfs.github.com/spec/v1` 文本，且没有任何地方会喊。
+#
+# 与 `.githooks/pre-commit`（提交门槛）互不影响：git 按事件名找钩子，
+# pre-commit 管提交、pre-push 管推送，两个文件各走各的。
+#
+# 与 `scripts/install-git-hooks.mjs` 里的 `git lfs install --local --manual`
+# 是一对：那条命令注册 `filter.lfs.*`（clean/smudge）但**刻意不带钩子**，
+# 钩子由本文件在版本控制里提供 —— 这样新克隆只需要 `pnpm install` 就两样齐了。
+command -v git-lfs >/dev/null 2>&1 || {
+    printf >&2 '\n仓库里有走 git-lfs 的大文件，但本机找不到 git-lfs 命令。\n先装 git-lfs（或执行 git lfs install），否则推送出去的是打不开的指针。\n\n'
+    exit 2
+}
+git lfs pre-push "$@"
