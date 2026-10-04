@@ -24,7 +24,7 @@
  * 同一格先例：`tests/shell-gate.test.ts` 的「新增门禁脚本必须同时接进 pre-commit」、
  * `tests/no-platform-ci-config.test.ts` 的「平台侧兜底在不在」。
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -184,5 +184,53 @@ describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
       script,
       "头部那句「供 .githooks/pre-commit …调用」是这次事故的判据，别让它消失",
     ).toContain("供 .githooks/pre-commit");
+  });
+});
+
+/**
+ * API 文档生成物与源同步接进 D 组（ISSUE #1329 收尾）。
+ *
+ * 这条与前三条同族但**多一个必须钉住的东西**：它带 `--staged`。这一步的重生成实测
+ * 31s，无条件挂上会给每个前端提交加那 31s（然后所有人开始 `--no-verify`，判据归零）。
+ * 所以「条件触发」不是优化、是这一步能存在的前提 —— 抹掉 `--staged` 这行在本文件里
+ * 与「删掉整步」等价，而同族里没有别的判据会看见这个差异。
+ */
+const DOCS_API = join(REPO_ROOT, "scripts", "check-docs-api.cjs");
+/** 生成物目录（提交进 git，判据对象是它）。 */
+const DOCS_API_OUT = join(REPO_ROOT, "docs", "api");
+
+describe("API 文档生成物与源同步在钩子里（ISSUE #1329 收尾）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = dGroupSteps(hook);
+
+  it("钩子 D 组真的执行这一步，且带 --staged 条件触发", () => {
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/check-docs-api.cjs"),
+    );
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有 docs-api 同步 —— 那 docs/api/** 又回到` +
+        "「进 git + 零判据」的过期面（ISSUE #1329 收尾翻出的真残留）",
+    ).toEqual({
+      label: "API 文档生成物与源同步",
+      cmd: "node scripts/check-docs-api.cjs --staged",
+    });
+  });
+
+  it("生成物仍然提交进 git（判据对象没被 .gitignore 摘掉）", () => {
+    // 判据的整个前提是「产物在仓库里」。若有人把它退回忽略态，这一步会找不到目录
+    // 而报「不存在」—— 那条报错读起来像配置问题，不像「你把判据对象搬走了」。
+    expect(
+      existsSync(DOCS_API_OUT),
+      `docs/api/ 不在仓库里了 —— 本判据的对象是提交进 git 的生成物；` +
+        "要么把它加回来，要么连同这一步一起删（不要留下一个指向空气的判据）",
+    ).toBe(true);
+    const ignore = readFileSync(join(REPO_ROOT, ".gitignore"), "utf8");
+    expect(ignore).not.toContain("docs/api");
+  });
+
+  it("脚本头承诺「供 .githooks/pre-commit 调用」，与钩子里的在场一致", () => {
+    const script = readFileSync(DOCS_API, "utf8");
+    expect(script).toContain("供 .githooks/pre-commit");
   });
 });

@@ -1,0 +1,74 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>comfyui/executor-dispatch — 唯一的派发循环（领取 + 提交） | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="" aria-current="page">comfyui/executor-dispatch — 唯一的派发循环（领取 + 提交）</a></li></ul>
+<h1>Module comfyui/executor-dispatch — 唯一的派发循环（领取 + 提交）</h1></div>
+<section class="tsd-panel tsd-comment">
+<div class="tsd-comment tsd-typography"><h1 id="-唯一的派发循环：从库里领一行，交给-comfy-cli" class="tsd-anchor-link"><code>executor-dispatch.ts</code> — 唯一的派发循环：从库里领一行，交给 comfy-cli<a href="#-唯一的派发循环：从库里领一行，交给-comfy-cli" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<h2 id="为什么只有一条-pull（p3-§5-adr-§14-d1-的第二刀）" class="tsd-anchor-link">为什么只有一条 pull（P3 §5 ADR §14 D1 的第二刀）<a href="#为什么只有一条-pull（p3-§5-adr-§14-d1-的第二刀）" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>这里此前有<strong>两条</strong>派发循环：</p>
+<ul>
+<li>Next 侧 <code>executor-scheduler.ts</code> 的 <code>processQueue()</code> —— 提交方把 Job
+<code>push</code> 进进程内存队列，再由出队 / 3s 心跳往前推；</li>
+<li>host 侧 <code>scripts/executor-host.mjs</code> 的 <code>claimTickOnce()</code> —— 按
+<code>claimedBy</code> 从库里领行。</li>
+</ul>
+<p>两条循环读的是两份真相（内存 vs 库），后果不止「代码重复」：</p>
+<ol>
+<li><code>RUNNING</code> 的含义分裂——host 那片把行领走时库里已经是 <code>RUNNING</code>，而它可能
+还躺在内存队列里等空槽，那段窗口里状态栏的 <code>queued</code> 数出来是 0（4-B2 端到
+端实测到的；inline 那片等待的行仍是 <code>QUEUED</code>，计数没错）；</li>
+<li>冷启动遗留在 <code>QUEUED</code> 的行只有 host 那条 pull 会救回来（inline 那条看不见
+库，只能等回收器按 30s 判死——那条规则本身也已被 ISSUE #1204 收窄）；</li>
+<li>「谁负责起 ComfyUI」挂在内存队列的入队动作上（<code>enqueue()</code> 里那句
+<code>void connect()</code>），改成库驱动后必须一起搬进来，否则没人拉起。</li>
+</ol>
+<p>现在两宿主共用本模块：Next 的 owner 是 <code>inline</code>、host 的是 <code>host</code>，领取谓词
+仍是 impl 里唯一的 <code>ownedBy()</code>。<strong>领之前先确认本进程跑得动</strong>（签字选定的形态）：
+WS 没就绪就不领行，行留在 <code>QUEUED</code>，等就绪的下一拍再领——<code>QUEUED</code> 因此是健康的
+等待态，回收器不会来判死它（死信规则已收窄到「没有任何宿主片会领」的行，
+ISSUE #1204；ComfyUI 冷启动那 30~120s 的窗口原先靠 <code>isComfyStarting()</code> 守卫兜，
+现在整类都不进候选集）。这样 <code>RUNNING</code> 就只剩一个意思：真的在跑。</p>
+<p>启动点是<strong>两处显式调用</strong>（与 reaper 在 §14 D3 之后的形态同构，判据由
+<code>tests/dispatch-startup-points.test.ts</code> 钉）：Next 侧
+<code>src/instrumentation.ts</code> 的 nodejs 分支、host 侧 <code>scripts/executor-host.mjs</code>
+注入链之后。模块加载不起循环，避免「host 进程里也跑一条 inline 心跳」。</p>
+<p>§18.4 三选一：第三类（纯 Node 宿主可加载）——无 <code>server-only</code>、无 Node 内建
+value import；DB 句柄与 owner 由宿主经 <a href="../functions/comfyui_executor-dispatch_—_唯一的派发循环（领取_+_提交）.configureDispatch.html" class="tsd-kind-function">configureDispatch</a> 注入，Next 侧
+未注入时走 dynamic import 兜底（与 reaper / enqueue 同一形态）。</p>
+</div></section>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Variables"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="variables">Variables<a href="#variables" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary><dl class="tsd-member-summaries"><dt class="tsd-member-summary" id="dispatch_tick_ms"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Variable"><use href="../assets/icons.svg#icon-32"></use></svg><a href="../variables/comfyui_executor-dispatch_—_唯一的派发循环（领取_+_提交）.DISPATCH_TICK_MS.html">DISPATCH_TICK_MS</a><a href="#dispatch_tick_ms" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd></dl></details>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Functions"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="functions">Functions<a href="#functions" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary><dl class="tsd-member-summaries"><dt class="tsd-member-summary" id="claimanddispatchonce"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Function"><use href="../assets/icons.svg#icon-64"></use></svg><a href="../functions/comfyui_executor-dispatch_—_唯一的派发循环（领取_+_提交）.claimAndDispatchOnce.html">claimAndDispatchOnce</a><a href="#claimanddispatchonce" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd><dt class="tsd-member-summary" id="configuredispatch"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Function"><use href="../assets/icons.svg#icon-64"></use></svg><a href="../functions/comfyui_executor-dispatch_—_唯一的派发循环（领取_+_提交）.configureDispatch.html">configureDispatch</a><a href="#configuredispatch" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd><dt class="tsd-member-summary" id="startdispatchloop"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Function"><use href="../assets/icons.svg#icon-64"></use></svg><a href="../functions/comfyui_executor-dispatch_—_唯一的派发循环（领取_+_提交）.startDispatchLoop.html">startDispatchLoop</a><a href="#startdispatchloop" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd><dt class="tsd-member-summary" id="stopdispatchloop"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Function"><use href="../assets/icons.svg#icon-64"></use></svg><a href="../functions/comfyui_executor-dispatch_—_唯一的派发循环（领取_+_提交）.stopDispatchLoop.html">stopDispatchLoop</a><a href="#stopdispatchloop" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd></dl></details></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details"><a href="#-唯一的派发循环：从库里领一行，交给-comfy-cli"><span> — 唯一的派发循环：从库里领一行，交给 comfy-<wbr/>cli</span></a><a href="#为什么只有一条-pull（p3-§5-adr-§14-d1-的第二刀）"><span>为什么只有一条 pull（<wbr/>P3 §5 <wbr/>ADR §14 <wbr/>D1 的第二刀）</span></a>
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Variables"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Variables</summary>
+<div><a href="#dispatch_tick_ms"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Variable"><use href="../assets/icons.svg#icon-32"></use></svg><span>DISPATCH_<wbr/>TICK_<wbr/>MS</span></a></div></details>
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Functions"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Functions</summary>
+<div><a href="#claimanddispatchonce"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Function"><use href="../assets/icons.svg#icon-64"></use></svg><span>claim<wbr/>And<wbr/>Dispatch<wbr/>Once</span></a><a href="#configuredispatch"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Function"><use href="../assets/icons.svg#icon-64"></use></svg><span>configure<wbr/>Dispatch</span></a><a href="#startdispatchloop"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Function"><use href="../assets/icons.svg#icon-64"></use></svg><span>start<wbr/>Dispatch<wbr/>Loop</span></a><a href="#stopdispatchloop"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Function"><use href="../assets/icons.svg#icon-64"></use></svg><span>stop<wbr/>Dispatch<wbr/>Loop</span></a></div></details></div></details></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

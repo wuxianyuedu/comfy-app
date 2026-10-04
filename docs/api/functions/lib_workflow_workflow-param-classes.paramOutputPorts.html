@@ -1,0 +1,61 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>paramOutputPorts | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="../modules/lib_workflow_workflow-param-classes.html">lib/workflow/workflow-param-classes</a></li>
+<li><a href="" aria-current="page">paramOutputPorts</a></li></ul>
+<h1>Function paramOutputPorts</h1></div>
+<section class="tsd-panel">
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="paramoutputports"><span class="tsd-kind-call-signature">paramOutputPorts</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">entry</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/lib_workflow_workflow-param-classes.ParamEntry.html" class="tsd-signature-type tsd-kind-interface">ParamEntry</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">io</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_workflow_workflow-io-types.WorkflowIOMap.html" class="tsd-signature-type tsd-kind-type-alias">WorkflowIOMap</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">resolvedTarget</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">displayName</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/lib_workflow_workflow-param-classes.ParamOutputPort.html" class="tsd-signature-type tsd-kind-interface">ParamOutputPort</a><span class="tsd-signature-symbol">[]</span><a href="#paramoutputports" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>一个对外参数卡片的<strong>输出端口</strong>（<strong>一个口一颗点</strong>）。</p>
+<p>卡片只说「这个口对外是什么」（名字 + 类型），<strong>落点由线的另一端声明</strong> —— 拖
+这颗点连到宿主的哪一行，这个口就落到哪一行。与尺寸卡「一行 = 一个形态，落点
+由另一端声明」同构。</p>
+<p>早前这里是「每个候选落点一颗点」（未连线时逐候选列行）：那只在「尺寸」还是
+一个<strong>聚合条目</strong>时成立（候选是宽 / 高 / 比例 / 像素量这些语义不同的行，作者要
+在卡片上挑）；尺寸摊成六个子口之后，普通卡逐候选摆点只会把同一族的行重复列
+一遍，还把 handle id 撞成一堆同名点（用户口径：「提示词不是就应该有一个输出端
+口吗，每个候选落点一颗有什么意义」）。</p>
+<p><code>handleId</code> = <strong>条目 id</strong>：一卡一颗点，条目 id 在同一画布节点内天然唯一（尺寸卡
+的六行各是子口 id，同样唯一）；落点不再需要由 handle id 携带。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">entry</span>: <a href="../interfaces/lib_workflow_workflow-param-classes.ParamEntry.html" class="tsd-signature-type tsd-kind-interface">ParamEntry</a></span></li>
+<li><span><span class="tsd-kind-parameter">io</span>: <a href="../types/lib_workflow_workflow-io-types.WorkflowIOMap.html" class="tsd-signature-type tsd-kind-type-alias">WorkflowIOMap</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">undefined</span></span></li>
+<li><span><span class="tsd-kind-parameter">resolvedTarget</span>: <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">undefined</span></span></li>
+<li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">displayName</span>: <span class="tsd-signature-type">string</span></span>
+<div class="tsd-comment tsd-typography"><p>行上显示的对外参数名。给的是<strong>调用方那一份</strong>（卡片列会先用契约口清单的
+展示名覆盖 <code>entry.label</code>，见 ISSUE #596）—— 两处各取一份会让同一张卡片的
+标题与端口行说两个名字。缺省 = <code>entry.label</code>。</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../interfaces/lib_workflow_workflow-param-classes.ParamOutputPort.html" class="tsd-signature-type tsd-kind-interface">ParamOutputPort</a><span class="tsd-signature-symbol">[]</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/workflow/workflow-param-classes.ts:416</li></ul></aside></div></li></ul></section></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

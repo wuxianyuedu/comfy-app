@@ -11,12 +11,14 @@
 <li><a href="../modules/lib_comfyui_runner-state.html">lib/comfyui/runner-state</a></li>
 <li><a href="" aria-current="page">HISTORY_RETRIES</a></li></ul>
 <h1>Variable HISTORY_RETRIES<code class="tsd-tag">Const</code></h1></div>
-<div class="tsd-signature"><span class="tsd-kind-variable">HISTORY_RETRIES</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">12</span></div>
-<div class="tsd-comment tsd-typography"><p>ComfyUI 先发 <code>executing:null</code> / <code>execution_success</code>，随后才把结果写进 history。
-直接读会拿到空，必须轮询几轮。</p>
+<div class="tsd-signature"><span class="tsd-kind-variable">HISTORY_RETRIES</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">12</span><span class="tsd-signature-symbol"> = HISTORY_READ.maxAttempts</span></div>
+<div class="tsd-comment tsd-typography"><p>ComfyUI 先发 <code>executing:null</code> / <code>execution_success</code>，随后才把结果写进 history。</p>
+<p>直接读会拿到空，必须轮询几轮。</p>
+<p>取值走 <code>~/lib/retry-policy</code> 的 <a href="lib_retry-policy.HISTORY_READ.html" class="tsd-kind-variable">HISTORY_READ</a>（<strong>固定间隔 + 有界次数</strong>：
+对端一定就绪、只是慢一拍，指数退避只会让它更晚拿到结果 —— 见 §16.2.4.49）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/runner-state.ts:19</li></ul></aside></div>
+<li>Defined in lib/comfyui/runner-state.ts:57</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

@@ -1,0 +1,153 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>Z | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="../modules/lib_shell_overlay-z.html">lib/shell/overlay-z</a></li>
+<li><a href="" aria-current="page">Z</a></li></ul>
+<h1>Variable Z<code class="tsd-tag">Const</code></h1></div>
+<div class="tsd-signature"><span class="tsd-kind-variable">Z</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span><br/>    <span class="tsd-kind-property">base</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">10</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-property">canvasMax</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">30</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-property">canvasUi</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">20</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-property">chrome</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">2000</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-property">modal</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">90</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-property">overlay</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">90</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-property">popup</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">100</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-property">toast</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">1000</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol"> = ...</span></div>
+<div class="tsd-comment tsd-typography"><p>浮层层级（z-index）的刻度表 —— 规范 16 §16.2.5。</p>
+<p>背景（ISSUE #672）：同一件事（下拉浮层）曾在 <code>MultiSegmentPopover</code> 是
+<code>9999</code>、<code>WorkflowSeedModeButton</code> 是 <code>9999</code> 配 <code>9998</code> 遮罩、<code>SelectMenu</code>
+又是 <code>9999</code>，而节点 JSON 浮层用 <code>9000</code>/<code>9001</code>，全屏抽屉散落
+<code>10005</code>/<code>10020</code>；状态栏 <code>10000</code>、消息中心 <code>10020</code> —— 谁也说不清「它比谁高」，
+新增一层只能再编一个更大的数。</p>
+<p>P2 先把自搓浮层收拢到 <code>ui/</code> 原语并定下两条刻度；P4 发现<strong>余量仍有 7 处自成
+一档</strong>（<code>9998</code> / <code>z-10000</code> / <code>z-10020</code> / <code>z-80</code> / <code>z-60</code> / <code>studio/logs</code>
+的 <code>z-99</code>+<code>z-200</code>），于是把刻度补成一张<strong>成体系的表</strong>：每一档都对得上一类
+真实存在的浮层关系，而不是「再把魔数换个名字写进对象里」。</p>
+<p>数值同时定义在 <code>src/app/globals.css</code> 的 <code>@theme</code>（供 <code>z-overlay</code> /
+<code>z-popup</code> / <code>z-modal</code> / <code>z-canvas-ui</code> 等工具类使用），两处必须一致 ——
+由 <code>tests/overlay-z-scale.test.ts</code> 钉住。放在 <code>lib/shell</code>：它是<strong>客户端可达</strong>
+的跨端定层常量，<code>lib/core</code> 在 eslint 的 boundaries 里是 element <code>server</code>，
+视图层引不得。</p>
+<p>── 刻度（越小越靠下）────────────────────────────────────────────</p>
+<table>
+<thead>
+<tr>
+<th>档</th>
+<th>值</th>
+<th>谁在这一档</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base</code></td>
+<td>10</td>
+<td>局部叠层下限：画布节点内容 / 子图、卡片内遮罩 —— 参照点</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td>是自己的<strong>定位祖先</strong>，比较对象在容器内部，不进视口刻度</td>
+</tr>
+<tr>
+<td><code>canvasUi</code></td>
+<td>20</td>
+<td>画布 chrome：工具栏 / 侧栏 / 面板 / 角标提示</td>
+</tr>
+<tr>
+<td><code>canvasMax</code></td>
+<td>30</td>
+<td>画布最上层：IO 预览 / 底部工具栏</td>
+</tr>
+<tr>
+<td><code>modal</code></td>
+<td>90</td>
+<td>模态遮罩与抽屉 —— 应用内的「顶」（<code>overlay</code> 是它的旧名）</td>
+</tr>
+<tr>
+<td><code>popup</code></td>
+<td>100</td>
+<td><strong>挂在 body</strong> 的浮层：下拉 / 气泡 / 节点 JSON 浮层</td>
+</tr>
+<tr>
+<td><code>toast</code></td>
+<td>1000</td>
+<td>全局提示，恒在浮层之上</td>
+</tr>
+<tr>
+<td><code>chrome</code></td>
+<td>2000</td>
+<td><strong>应用级 chrome</strong>：窗口标题行（页签 + 最小化/关闭）</td>
+</tr>
+</tbody>
+</table>
+<p>── 四条判据（与规范 §16.2.5 同源）─────────────────────────────</p>
+<ol>
+<li><strong><code>modal</code> 不进 1000~1200</strong>：那是 React Flow 给节点选中态（约 1010）与
+悬浮态（1180，见 <code>globals.css</code>）留的位，应用模态插进去会和节点争层级。</li>
+<li><strong><code>popup</code> &gt; <code>modal</code></strong>：挂在 body 的下拉由<strong>模态内部</strong>的控件打开
+（<code>ui/select</code> / <code>ui/popover</code> / <code>ui/dropdown-menu</code> 都是 portal 到 body），
+低于模态就等于「点得开、点不中」—— 同 §16.2.5 里日志面板那条回归。</li>
+<li><strong>画布内部的层级不属于本表</strong>：指针/事件只在自己容器的层叠上下文里比较，
+与视口浮层不在同一维度；它们从 <code>base</code> 起排是为了「同一个容器内部的关系
+有名字」，而不是「要和模态比高低」。</li>
+<li><strong><code>chrome</code> 严格高于其余所有档</strong>：标题行是<strong>应用级 chrome</strong>，它的<strong>可点性
+由层级保证</strong> —— 几何让位（<code>top-title-bar</code>，规范 12 §12.8.1）只保证「不被
+盖住 / 压暗」，挡不住第三方往 body 注入的整视口遮罩。base-ui 的
+<code>InternalBackdrop</code>（modal 打开时渲染）就是 <code>position: fixed; inset: 0; z-index: auto; pointer-events: auto</code> 的一层，它<strong>不受本仓库让位规则约束</strong>：
+标题行若停在 <code>z-index: auto</code>，后出现的定位元素必然在命中测试里压过它
+（实测：设置页「启动日志」全屏后窗口按钮整排点不动，ISSUE #310 第三次回归）。</li>
+</ol>
+</div>
+<div class="tsd-type-declaration">
+<h4>Type Declaration</h4>
+<ul class="tsd-parameters">
+<li class="tsd-parameter">
+<h5 id="base"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">base</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">10</span></h5>
+<div class="tsd-comment tsd-typography"><p>局部叠层下限：画布节点内容 / 子图、卡片内遮罩。</p>
+</div></li>
+<li class="tsd-parameter">
+<h5 id="canvasmax"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">canvasMax</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">30</span></h5>
+<div class="tsd-comment tsd-typography"><p>画布最上层：IO 预览 / 底部工具栏。</p>
+</div></li>
+<li class="tsd-parameter">
+<h5 id="canvasui"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">canvasUi</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">20</span></h5>
+<div class="tsd-comment tsd-typography"><p>画布 chrome：工具栏 / 侧栏 / 面板 / 角标提示。</p>
+</div></li>
+<li class="tsd-parameter">
+<h5 id="chrome"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">chrome</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">2000</span></h5>
+<div class="tsd-comment tsd-typography"><p>应用级 chrome：窗口标题行（页签 + 窗口按钮），恒在提示之上。</p>
+</div></li>
+<li class="tsd-parameter">
+<h5 id="modal"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">modal</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">90</span></h5>
+<div class="tsd-comment tsd-typography"><p>模态遮罩与抽屉（应用内的「顶」）。</p>
+</div></li>
+<li class="tsd-parameter">
+<h5 id="overlay"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">overlay</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">90</span></h5>
+<div class="tsd-comment tsd-typography"><p>模态档的旧名，值同 <code>modal</code>；新代码写 <code>modal</code>。</p>
+</div></li>
+<li class="tsd-parameter">
+<h5 id="popup"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">popup</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">100</span></h5>
+<div class="tsd-comment tsd-typography"><p>挂在 body 的浮层：下拉 / 气泡 / 节点 JSON 浮层（<strong>在模态之上</strong>）。</p>
+</div></li>
+<li class="tsd-parameter">
+<h5 id="toast"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">toast</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">1000</span></h5>
+<div class="tsd-comment tsd-typography"><p>全局提示（Toast 等），恒在浮层之上。</p>
+</div></li></ul></div><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/shell/overlay-z.ts:50</li></ul></aside></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

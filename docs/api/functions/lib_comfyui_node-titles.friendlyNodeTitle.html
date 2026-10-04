@@ -16,15 +16,14 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="friendlynodetitle"><span class="tsd-kind-call-signature">friendlyNodeTitle</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">classType</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">rawTitle</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">lang</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;zh&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;en&quot;</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><a href="#friendlynodetitle" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Friendly title lookup.</p>
+<div class="tsd-comment tsd-typography"><p>友好标题查询。</p>
 <p>Resolution order:</p>
 <ol>
-<li><strong>User-supplied <code>rawTitle</code></strong> (from ComfyUI's properties dialog —
-e.g. &quot;Save Z-Anime Upscaled&quot;).  Authors explicitly type these
-to disambiguate same-classType siblings, so this intent must
-win over the static map.  A <code>rawTitle</code> that merely echoes the
-classType is treated as missing (no renaming happened).</li>
-<li>Static NODE_TITLES map (covers ~60 well-known core nodes).</li>
+<li><strong>用户自己填的 <code>rawTitle</code></strong>（来自 ComfyUI 的属性对话框，
+例如 &quot;Save Z-Anime Upscaled&quot;）。作者特意写它，就是为了区分
+同 classType 的兄弟节点，因此这个意图必须优先于静态表。
+如果 <code>rawTitle</code> 只是把 classType 原样抄一遍，视为「没改名」。</li>
+<li>静态 NODE_TITLES 表（覆盖约 60 个常见核心节点）。</li>
 <li>Cleaned-up classType (UUID → &quot;子工作流&quot;, FooBarBaz → &quot;Foo Bar Baz&quot;).</li>
 </ol>
 </div>
@@ -33,14 +32,14 @@ classType is treated as missing (no renaming happened).</li>
 <ul class="tsd-parameter-list">
 <li><span><span class="tsd-kind-parameter">classType</span>: <span class="tsd-signature-type">string</span></span></li>
 <li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">rawTitle</span>: <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></span>
-<div class="tsd-comment tsd-typography"><p>— server-side <code>detail.nodes[i].title</code> (ComfyUI's preferred display)</p>
+<div class="tsd-comment tsd-typography"><p>— 服务端给的 <code>detail.nodes[i].title</code>（ComfyUI 的首选显示名）</p>
 </div></li>
 <li><span><span class="tsd-kind-parameter">lang</span>: <span class="tsd-signature-type">&quot;zh&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;en&quot;</span><span class="tsd-signature-symbol"> = &quot;zh&quot;</span></span>
-<div class="tsd-comment tsd-typography"><p>— &quot;zh&quot; | &quot;en&quot;</p>
+<div class="tsd-comment tsd-typography"><p>— &quot;zh&quot; 或 &quot;en&quot;</p>
 </div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/node-titles.ts:112</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/comfyui/node-titles.ts:141</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

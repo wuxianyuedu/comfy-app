@@ -1,0 +1,61 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>AppLogLevel | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="../modules/lib_log_app-runtime-log.html">lib/log/app-runtime-log</a></li>
+<li><a href="" aria-current="page">AppLogLevel</a></li></ul>
+<h1>Type Alias AppLogLevel</h1></div>
+<div class="tsd-signature"><span class="tsd-kind-type-alias">AppLogLevel</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;info&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;warn&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;error&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;debug&quot;</span></div>
+<div class="tsd-comment tsd-typography"><h1 id="应用运行操作日志（面板可见）。" class="tsd-anchor-link">应用运行操作日志（面板可见）。<a href="#应用运行操作日志（面板可见）。" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<p>本日志器解决「中间操作看不到」问题：把应用运行期发生的业务操作
+（tRPC 调用、生成、任务、工作流增删改等）以面板可解析的行格式
+追加到 <code>log/services/app-runtime.log</code>，供应用内「应用日志」面板
+经 <code>GET /api/logs/current?source=app-runtime</code> 实时轮询展示。</p>
+<p>与 comfyui-runtime / drizzle-studio-runtime 同一套「追加写 + 面板轮询」模式，
+但覆盖的是<strong>应用自身操作</strong>而非外部常驻子进程输出。</p>
+<p>行格式 = <code>[YYYY-MM-DD HH:mm:ss.mmm] [LEVEL] [ns] msg</code></p>
+<ul>
+<li>本地时区时间戳（面板展示给本机用户看，UTC 会差 8 小时）</li>
+<li>LEVEL ∈ INFO / WARN / ERROR / DEBUG</li>
+<li>ns 为命名空间（如 <code>trpc</code>、<code>generate</code>、<code>task</code>），可省略</li>
+</ul>
+<p><strong>§18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）</strong>。
+摘掉 <code>import &quot;server-only&quot;</code> 后登记进 <code>tests/lib-node-only-declarations.test.ts</code>
+的 <code>PURE_NODE_HOSTS</code>——上游 log-paths 已在 #1074 摘掉，本模块只依赖 Node 内建
+(<code>node:fs</code> / <code>node:path</code>) + log-paths + time-format，形态与 <code>kill-process-tree</code>
+同族；这一步是把 logger 链最后一层地基纯化：<code>~/lib/core/logger</code> 静态引本模块，
+只要本模块带 server-only，纯 Node 里 <code>await import(&quot;~/lib/core/logger&quot;)</code> 就会
+因这一层 throw 而 reject、comfyui 各模块（#1053 / #1068 / #1071）的 lazy 兜底
+拿不到 logger、只能走 configureXxx 显式注入。摘掉后整链 logger 都能真加载。</p>
+<p>「面板/API 侧只读、不直接碰 DOM」这一层分工保留——它是<strong>消费者侧的约定</strong>
+（API 路由把这份文件读出去给前端轮询），不是「本模块只能是 Next 专属」的意思；
+写入方（Next server 与未来 executor host）都通过本模块，写入失败绝不阻塞业务。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/log/app-runtime-log.ts:37</li></ul></aside></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details"><a href="#应用运行操作日志（面板可见）。"><span>应用运行操作日志（面板可见）。</span></a></div></details></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

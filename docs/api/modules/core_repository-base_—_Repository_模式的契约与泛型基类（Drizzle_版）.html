@@ -1,0 +1,72 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>core/repository-base — Repository 模式的契约与泛型基类（Drizzle 版） | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="" aria-current="page">core/repository-base — Repository 模式的契约与泛型基类（Drizzle 版）</a></li></ul>
+<h1>Module core/repository-base — Repository 模式的契约与泛型基类（Drizzle 版）</h1></div>
+<section class="tsd-panel tsd-comment">
+<div class="tsd-comment tsd-typography"><h1 id="-repository-模式的契约与泛型基类（drizzle-版）" class="tsd-anchor-link"><code>repository-base.ts</code> — Repository 模式的契约与泛型基类（Drizzle 版）<a href="#-repository-模式的契约与泛型基类（drizzle-版）" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<p>子类传入表对象即可获得标准 CRUD；复杂查询在子类中用 <code>db</code> + Drizzle 查询
+构造器实现。</p>
+<p>本模块只做一件事：<strong>把「实体 ↔ 表 ↔ 主键」的关系翻译成 CRUD 的机械动作</strong>。
+它刻意不含日志、不含框架、不含任何领域判断 —— 那三样都不属于基类：</p>
+<p>· <strong>日志</strong>：基类曾对 <code>create</code> 打一条 <code>log.debug(&quot;create&quot;, { id })</code>。但这一行
+是全文件唯一的日志调用，而 <code>create</code> 本身是三步机械动作（insert →
+returning → 取首行），没有任何「值得一提的分支」；它的实际效果是把日志
+口径钉在基类（每个子类想记点更有用的东西时，只能自己另加一条），并让
+这个模块在<strong>没有日志设施</strong>的宿主（测试、纯 Node 脚本）里也必须连带加载
+日志实现（pino + 脱敏 + 写盘镜像）。删除后模块只依赖 <code>db</code> 与表对象，
+可单独加载；需要留痕的写入由<strong>子类</strong>按自己的语义记（例如任务状态机在
+<code>repository-task.ts</code> 里记状态迁移，那才是有信息量的那一行）。
+· <strong>错误类型</strong>：更新不存在的记录抛 <code>NotFoundError</code>。类本身是领域契约、住在
+<code>./errors</code>（没有 re-export），这里只 import 它 —— 调用方要区分这个错误
+必须从定义处取（<code>~/lib/core/errors</code>），避免「基类的实现细节」被当成公开 API。
+· <strong>表名</strong>：findAll / update 这类「按任意条件取行」的方法不保证行序，
+SQL 没有默认顺序。基类因此<strong>不承诺顺序</strong>：需要稳定顺序的查询在子类里
+<code>.orderBy(...)</code>（不在这里按主键排一遍当作「通用规则」——那是先猜后验）。</p>
+<p>基类允许表对象与主键列<strong>不同源</strong>（第二个参数缺省时才回落到 <code>table.id</code>）：
+<code>AnySQLiteTable</code> 与列对象的 <code>T</code> 类型也不保证可比。这里不用
+<code>satisfies DrizzleRepository&lt;T&gt;</code> 之类的断言去「顺便」证明这件事 ——
+实测那类断言碰巧不报错（<code>T</code> 只出现在方法签名与 <code>protected</code> 成员里，没有
+不兼容读操作），会给出一个<strong>假保证</strong>：它证明的只是「类型还能编译」，
+不是「子类传的表与主键列对得上」。真正的判据在行为侧：<code>idColumn</code> 覆盖
+<code>table.id</code> 时能否命中正确的行，由 <code>repository.test.ts</code> 的用例锁住。</p>
+</div></section>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Classes"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="classes">Classes<a href="#classes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary><dl class="tsd-member-summaries"><dt class="tsd-member-summary" id="drizzlerepository"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Class"><use href="../assets/icons.svg#icon-128"></use></svg><a href="../classes/core_repository-base_—_Repository_模式的契约与泛型基类（Drizzle_版）.DrizzleRepository.html">DrizzleRepository</a><a href="#drizzlerepository" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd></dl></details>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Interfaces"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="interfaces">Interfaces<a href="#interfaces" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary><dl class="tsd-member-summaries"><dt class="tsd-member-summary" id="identifiable"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Interface"><use href="../assets/icons.svg#icon-256"></use></svg><a href="../interfaces/core_repository-base_—_Repository_模式的契约与泛型基类（Drizzle_版）.Identifiable.html">Identifiable</a><a href="#identifiable" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd><dt class="tsd-member-summary" id="repository"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Interface"><use href="../assets/icons.svg#icon-256"></use></svg><a href="../interfaces/core_repository-base_—_Repository_模式的契约与泛型基类（Drizzle_版）.Repository.html">Repository</a><a href="#repository" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd></dl></details>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Type Aliases"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="type-aliases">Type Aliases<a href="#type-aliases" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary><dl class="tsd-member-summaries"><dt class="tsd-member-summary" id="taskwithcover"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Type Alias"><use href="../assets/icons.svg#icon-2097152"></use></svg><a href="../types/core_repository-base_—_Repository_模式的契约与泛型基类（Drizzle_版）.TaskWithCover.html">TaskWithCover</a><a href="#taskwithcover" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd></dl></details></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details"><a href="#-repository-模式的契约与泛型基类（drizzle-版）"><span> — <wbr/>Repository 模式的契约与泛型基类（<wbr/>Drizzle 版）</span></a>
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Classes"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Classes</summary>
+<div><a href="#drizzlerepository"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Class"><use href="../assets/icons.svg#icon-128"></use></svg><span>Drizzle<wbr/>Repository</span></a></div></details>
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Interfaces"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Interfaces</summary>
+<div><a href="#identifiable"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Interface"><use href="../assets/icons.svg#icon-256"></use></svg><span>Identifiable</span></a><a href="#repository"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Interface"><use href="../assets/icons.svg#icon-256"></use></svg><span>Repository</span></a></div></details>
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Type Aliases"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Type Aliases</summary>
+<div><a href="#taskwithcover"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Type Alias"><use href="../assets/icons.svg#icon-2097152"></use></svg><span>Task<wbr/>With<wbr/>Cover</span></a></div></details></div></details></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

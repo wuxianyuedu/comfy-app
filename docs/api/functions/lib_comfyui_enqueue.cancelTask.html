@@ -16,13 +16,21 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="canceltask"><span class="tsd-kind-call-signature">cancelTask</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">taskId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span><a href="#canceltask" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>取消一个任务（用户动作的唯一出口，ADR §14 D2）。</p>
+<p>「该不该发全局中断」的依据是<strong>本进程是否握着这个任务的在飞子进程</strong>
+（<code>cliProcs.has(taskId)</code>），而不是去问 ComfyUI 的队列：端到端实测过，
+comfy-cli 提交的 prompt 在整轮执行期间<strong>不出现在</strong> <code>/queue</code> 的
+<code>queue_running</code>（真跑 10s，全程 <code>running=[]</code>），拿它当判据等于「永远不中断」。
+按归属反过来判才是构造性正确的：只有握着子进程的那一侧发全局停，inline 与
+host 各管各的，天然不会误停对侧正在跑的任务。</p>
+</div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li><span><span class="tsd-kind-parameter">taskId</span>: <span class="tsd-signature-type">string</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/enqueue.ts:49</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/comfyui/enqueue.ts:71</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

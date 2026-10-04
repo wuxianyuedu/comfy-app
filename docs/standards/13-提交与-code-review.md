@@ -185,6 +185,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
 ✅ node scripts/check-dead-exports.cjs       # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
+✅ node scripts/check-docs-api.cjs --staged  # API 文档生成物 docs/api 与源一致（见下 13.5.5.1；--staged = 只碰了 typedoc 输入面才重生成）
 ✅ node scripts/check-non-null-assertions.cjs # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）
 ✅ node scripts/check-void-floats.cjs         # src/lib `void someFn(...)` 悬空棘轮（见下 13.5.7）
 ✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
@@ -378,6 +379,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | `db:push` 建库                                                       | 平台流水线的「建库」那一步                   | 只在手动跑 E2E 前需要                                                                                                                                                                           |
 | R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | 平台流水线里带 `--strict` 跑结构检查的那一步 | **已在本地钩子里**（D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」这一步带 `--strict`，ISSUE #1404 翻档；旧口径「本地只提醒」的前提「挂着 11 个存量」已不成立，基线现在 `total: 0`）               |
 | `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑；`pnpm doc:gen` 内部的第一步    | **已在本地钩子里**（D 组「文档引用与权威源一致」，ISSUE #1371 翻掉了旧的「手动档」签字）。旧口径是「改了文档后需手动跑」，而 AGENTS 规定的必跑口令是 `doc:render`（只渲染不校验），空档即由此来 |
+| `docs/api/**` 生成物与源同步（`check-docs-api.cjs`）                 | **平台侧与本地都从不跑**（此前是纯空白）     | **已在本地钩子里**（D 组「API 文档生成物与源同步」，带 `--staged` 条件触发，详见 §13.5.5.1）。翻档前实测 2627 个文件差异、留着指向已删模块的 `lib_comfyui_markdown.html`（ISSUE #1329 收尾） |
 
 > 这张表是**有意留下的欠账**，不是遗漏：把全量 3000+ 用例塞进每次 commit 会让本地
 > 提交慢到没人愿意用，而那正是当初把它放去 CI 的原因。**去处不是把配置贴回去**，
@@ -459,6 +461,53 @@ ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前
 修法：`pnpm doc:render` 后把重渲染结果**一并提交**（不要手改生成物）。比对前把换行
 归一到 LF —— 这条判据问的是「内容是否一致」，行尾由 `.gitattributes` 与 §13.7 负责，
 两件事不混在一处。
+
+##### 13.5.5.1 同族第二处：`docs/api/**` 生成物与源同步（`node scripts/check-docs-api.cjs`）
+
+上一节管的是 `docs/generated/**`（**编辑文档**的渲染产物）。这里管的是另一份**同样
+提交进 git** 的生成物：`docs/api/**`（TypeDoc 产物，2443 个文件），它的源是**代码**。
+
+**为什么它此前是零判据的过期面**：AGENTS 与主规范 §9 都写着它「随构建链更新」，
+而实测**构建链里没有任何一处调用 `pnpm docs`**；`docs/reference-facts.md` 又把它作为
+「TypeDoc 自动生成」显式豁免出文档引用核对；`doc:check` / `doc:render` 只管
+`docs/generated/`；钩子也不跑 typedoc。四条理由叠起来 = 「进 git + 谁都不看」，
+于是产物停在最开始那两次提交上（`ab12a551` / `b2c32994`），之后所有
+`src/lib/**` 增删都没再重生成。ISSUE #1329 收尾时实测：**2627 个文件差异**
+（214 删 / 2229 新增 / 184 改），其中 `docs/api/modules/lib_comfyui_markdown.html`
+指向一个**已不存在**的模块，而新域 `src/lib/markdown/**` 的五个模块零产物。
+
+**它和 #1436「文档里的数字没有判据」是同一族，但更靠里一层**：不是**引用**过期，
+是**生成物本身**过期 —— 下次还会有人照着 `lib_comfyui_markdown` 这个不存在的模块
+去理解代码。
+
+| 方向     | 含义                                       | 典型来因                     |
+| -------- | ------------------------------------------ | ---------------------------- |
+| **落后** | 同名文件 ≠ 用当前源重生成的字节            | 改了 `src/lib/**` 没重生成   |
+| **缺失** | 重生成产出了、`docs/api/` 里没有           | 新增模块忘了重生成           |
+| **多余** | `docs/api/` 里有、重生成不再产出           | 模块删了 / 改名留下的孤儿    |
+
+修法：`pnpm docs` 后把 `docs/api/**` 的重生成结果**一并提交**（不要手改生成物）。
+
+**两个实现口径，都不是可有可无的**：
+
+1. **只比对不写入**（重生成到临时目录）。判据不许污染工作区 —— 否则「跑一次判据」
+   自己就产生一份需要提交的 diff，把提交者逼向 `--no-verify`。这与 13.5.5 的
+   `--check` 同款口径。
+2. **按输入面条件触发**（钩子里带 `--staged`）。重生成实测 **31s**，无条件挂上会给
+   **每个**前端提交加这 31s。触发面 = typedoc `entryPoints` 三条 glob 的直接映射
+   （`src/lib/**` / `src/server/**` / `src/trpc/**`）+ `typedoc.json` + 依赖声明
+   （`package.json` / `pnpm-lock.yaml`：typedoc 与 TS 版本会改变产物形态）——
+   **这不是启发式收窄**，是「产物只由这些输入决定」的同义反复：输入没变产物不可能漂。
+   同款先例见 `scripts/shell-gate.mjs`（只碰了壳才付 Rust 编译那笔钱）。
+   单元用例把两条边界都钉住（宽了会拖慢所有人，窄了判据白挂），见
+   `tests/check-docs-api.test.ts`。
+
+**比对口径**：比内容不比行尾（CRLF 检出不许报两千处假红，行尾归 `.gitattributes`
+与 §13.7）；递归收集**不穿符号链接**（同 §7.3 的减法口径）。
+
+**判据成立的前提是「重生成是确定性的」**，这一点实测过：同源两次重生成逐字节相同；
+在**另一个路径**的 worktree 里重生成，与仓库内结果逐字节相同（产物不含绝对路径、
+不含生成时间戳）—— 所以「重生成到临时目录再比对」才成立。
 
 #### 13.5.6 src 非空断言 `!` 棘轮（`node scripts/check-non-null-assertions.cjs`）
 

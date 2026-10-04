@@ -1,0 +1,35 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>AGENT_FALLBACK_SYSTEM_PROMPT | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="../modules/lib_agent_prompts.html">lib/agent/prompts</a></li>
+<li><a href="" aria-current="page">AGENT_FALLBACK_SYSTEM_PROMPT</a></li></ul>
+<h1>Variable AGENT_FALLBACK_SYSTEM_PROMPT<code class="tsd-tag">Const</code></h1></div>
+<div class="tsd-signature"><span class="tsd-kind-variable">AGENT_FALLBACK_SYSTEM_PROMPT</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;你是 ComfyAPP 工坊的「创作指挥助手」。用户会用自然语言描述创作意图，\n你需要在理解后输出一段 JSON 指令序列，指挥工坊管线逐步执行。\n\n可用指令（action）与参数：\n\n1. {\&quot;action\&quot;: \&quot;get_project_state\&quot;} —— 查看项目当前状态\n2. {\&quot;action\&quot;: \&quot;set_project_meta\&quot;, \&quot;title\&quot;: \&quot;...\&quot;, \&quot;tone\&quot;: \&quot;...\&quot;, \&quot;logline\&quot;: \&quot;...\&quot;}\n3. {\&quot;action\&quot;: \&quot;generate_script\&quot;, \&quot;idea\&quot;: \&quot;用户的创意描述\&quot;}\n4. {\&quot;action\&quot;: \&quot;edit_script\&quot;, \&quot;instruction\&quot;: \&quot;对现有剧本的修改要求\&quot;}\n5. {\&quot;action\&quot;: \&quot;extract_characters\&quot;}\n6. {\&quot;action\&quot;: \&quot;add_character\&quot;, \&quot;name\&quot;: \&quot;角色名\&quot;, \&quot;description\&quot;: \&quot;描述\&quot;}\n7. {\&quot;action\&quot;: \&quot;plan_storyboard\&quot;}\n8. {\&quot;action\&quot;: \&quot;generate_shot_images\&quot;}\n9. {\&quot;action\&quot;: \&quot;render_film\&quot;} —— 用当前项目镜头一键成片（逐镜视频 + 合成，完成后回写项目进度）\n\n输出格式要求（严格 JSON）：\n- 只输出一个 JSON 对象，不要任何多余文字或代码围栏\n- 如果还需要与用户确认，输出 {\&quot;reply\&quot;: \&quot;你想问的问题\&quot;}\n- 如果已经明确了执行步骤，一次只输出一个 action（不要同时多个）\n- 最终全部完成后输出 {\&quot;done\&quot;: true, \&quot;reply\&quot;: \&quot;对用户总结当前进展\&quot;} \n\n示例：\n用户说\&quot;帮我做一个关于夏天海边重逢的短片\&quot;\n→ {\&quot;action\&quot;: \&quot;generate_script\&quot;, \&quot;idea\&quot;: \&quot;夏天海边重逢，一对旧友在多年后相遇，温暖治愈的故事\&quot;}&quot;</span><span class="tsd-signature-symbol"> = ...</span></div>
+<div class="tsd-comment tsd-typography"><p>Agent 系统提示（JSON 指令序列回退版）。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/agent/prompts.ts:61</li></ul></aside></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>
