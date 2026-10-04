@@ -931,6 +931,20 @@
       （原判据会在表真的清空后要求人凑一条假理由）。同批修掉 `cvaVariantKeys`
       按「整文件同名轴取并集」比较的真缺陷（`ui/item.tsx` 两处 `variant` 会被判成
       「缺档」而修法无处可去）。口径见规范 16 §16.2.3.7。
+      **业务目录（`studio/` / `workshop/`）也铺了一轮**（同批）：`ui/` 满覆盖之后
+      那两棵树只有 5 件有 story，本轮补到 **23 件**。铺法**不是按目录扫**，而是先
+      按「数据从哪来」分档再决定怎么写（纯 props / 结构化入参 / 运行期环境），
+      口径与「哪一档刻意不写」见规范 16 §16.2.3.9。两条判据在这一批里反复起作用：
+      · **派生量不许在 story 里手抄** —— 百分比调 `stageProgressPct()`、尺寸摘要调
+        `shotSizeSummary()`、脏数据结论调 `auditDraftElements()`；手抄的数字在改了
+        常量之后**仍然看着正常**，那是这一批最想消掉的假形态；
+      · **同一批部件在两处的形态**（`WorkflowNodeParts`）恰恰是靠 story 才看得见
+        「宽度 340 vs 380、胶囊、圆角全漂移」那条历史故障的形状。
+      顺手修掉一处**由新 story 第一眼看出来**的真缺陷：`EmptyCanvasHint` 的类名串
+      被一次全仓规范化拼成了 `backdrop-bl dark:shadow-black/40ur-md`（`backdrop-blur-md`
+      与 `dark:shadow-black/40` 撞在一起），于是空画布引导卡丢了毛玻璃。Tailwind 对
+      未知类名**不报错**（只是不生成 CSS），所以构建 / tsc / eslint / 既有门禁全绿 ——
+      「类名字符串被拼坏」全仓仍无判据，本批只修实例并记账（见 §16.2.3.9 末尾）。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。
