@@ -257,4 +257,60 @@ describe("跨平台动作的实现契约", () => {
       expect(ps1).toContain(`Name = "${key}"`);
     }
   });
+
+  it("两侧的门禁名集合一致（含只在显式点名时跑的那一档）", () => {
+    // 上一条只核了「三项在不在」。门禁**新增**时只改一侧，后果正是这条防线要拦的形态：
+    // Linux 上 `pnpm check:all` 悄悄多跑了一档、Windows 上双击入口按同样的名字报
+    // 「参数不在可选集合内」，而两侧谁都没有任何东西会红。
+    // 这里按两侧各自的结构取出**全量**名字再比 —— 不写死清单，增减门禁自然被跟上。
+    const ps1 = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "quality-gate.ps1"),
+      "utf8",
+    );
+    const mjs = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "quality-gate.mjs"),
+      "utf8",
+    );
+    const ps1Names = [...ps1.matchAll(/Name = "([A-Za-z]+)"/g)]
+      .map((m) => m[1])
+      .filter((n): n is string => Boolean(n));
+    // `GATES` 的键是 TS 对象里 `key: {` 的形态，取 `GATES = {` 之后到收尾的那一段。
+    const mjsBlock = mjs.slice(
+      mjs.indexOf("const GATES = {"),
+      mjs.indexOf("function parseArgs"),
+    );
+    const mjsNames = [...mjsBlock.matchAll(/^ {2}([A-Za-z]+): \{/gm)]
+      .map((m) => m[1])
+      .filter((n): n is string => Boolean(n));
+
+    expect(ps1Names.length).toBeGreaterThan(0);
+    expect(mjsNames.length).toBeGreaterThan(0);
+    expect([...ps1Names].sort()).toEqual([...mjsNames].sort());
+
+    // 集合相等还不够：**两边一起被删**时它恒绿，而这正是「门禁没接上」最省事的形态。
+    // 所以另钉一条在场地 —— 按**非 `all` 档**（`Run=$false` / `run: false`）取名字，
+    // 它必须非空且两侧一致：这半边是「按需档」唯一的登记处，清零就等于这一层没了。
+    // `.ps1` 的块是 `@{ Name = "x"; …; Run = $false }` 跨 2~3 行，所以按「从 Name 到
+    // 下一个 Name 之间含 Run = $false」来取，而不是钉死行数（钉行数会在有人换行时静默归零）。
+    // `.ps1` 的块是 `@{ … }`（可跨行、行内还带注释），所以按**块切分**而不是按行或前瞻：
+    // 先切出 `@{ … }` 的每一块，再在块内看有没有 `Run = $false`。用前瞻式的正则会在
+    // 「换行 / 注释 / 块尾形态」上静默取错（实测第一版就把 `typecheck` 当成了按需档）。
+    const ps1Blocks = [...ps1.matchAll(/@\{([\s\S]*?)\}/g)].map((m) => m[1] ?? "");
+    const ps1Manual = ps1Blocks
+      .filter((block) => block.includes("Run = $false"))
+      .map((block) => /Name = "([A-Za-z]+)"/.exec(block)?.[1])
+      .filter((n): n is string => Boolean(n));
+
+    // 同一口径取 `.mjs` 侧：`GATES` 的每一项从 `  key: {` 到下一个 `  key: {` 为止。
+    const mjsEntries = [
+      ...mjsBlock.matchAll(/^ {2}([A-Za-z]+): \{([\s\S]*?)(?=^ {2}[A-Za-z]+: \{|^\};)/gm),
+    ].map((m) => ({ name: m[1] ?? "", body: m[2] ?? "" }));
+    const mjsManual = mjsEntries
+      .filter((e) => /\brun: false\b/.test(e.body))
+      .map((e) => e.name)
+      .filter((n) => n.length > 0);
+
+    expect(mjsManual).not.toEqual([]);
+    expect([...ps1Manual].sort()).toEqual([...mjsManual].sort());
+  });
 });
