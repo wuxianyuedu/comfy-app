@@ -22,7 +22,7 @@ export async function openUrlInBrowser(
 ): Promise<{ ok: boolean; detail: string }> {
   /* 协议闸门：只把 http(s) 交给系统浏览器。
    * 这一层的语义是「把控制权交给外部程序」，而调用点里至少有一条
-   * （`setting.openExternal`）的目标地址**来自请求方**、且此前只有 `z.string().url()`
+   * （`setting.openExternal`）的目标地址**来自请求方**、且此前只有 `z.url()`
    * 那一道 —— 它放行 `file:` / `javascript:` / 任意自定义协议。Windows 上
    * `cmd /c start "" <协议>:…` 会直接拉起协议处理器对应的本机程序
    * （`search-ms:` / `ms-msdt:` 这类是有历史利用链的），`file:` 则是读本机文件。

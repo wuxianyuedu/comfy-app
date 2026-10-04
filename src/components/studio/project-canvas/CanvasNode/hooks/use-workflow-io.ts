@@ -228,6 +228,10 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     seededFor.current = d.workflowId ?? null;
     const reconciled = reconcileInputValues(wfIO, d.workflowInputs ?? {});
     patch({ workflowInputs: reconciled });
+    /* `patch` 有意不入依赖：它是 `useCallback([id, setNodes])` 的产物，
+     * 本 hook 每次渲染拿到的都是同一个引用；`seededFor` 也只在
+     * 「workflowId 换了」那一刻放行，与上面那段同口径（规范 §13.4 的
+     * 「规则静态盲区」——按 id 触发的意图，静态推不出来）。 */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wfIO, d.kind, d.workflowId]);
 
@@ -267,6 +271,9 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
       }
     }, 0);
     return () => clearTimeout(t);
+    /* `patch` / `d` / `setTimeout` 之外还读了 `seededFor`（ref，稳定引用）——
+     * 三个筛选条件的变化才是本 effect 的触发点；`d` 是渲染期新对象，
+     * 挂进依赖会让每次节点数据变动都重跑一遍 `setTimeout(0)` 的重置。 */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelFilter, sourceFilter, wfList, d.kind, d.workflowId]);
 

@@ -171,7 +171,7 @@ const configSchema = z.object({
   /* 默认值走 {@link CONFIG_ENV_DEFAULTS}（本机端点的单一事实源）：这里再写一遍
    * 裸地址/裸端口，就会出现「配置兜底值与连接侧/拉起侧各自漂移」的口径分叉
    * （规范 §12.14）。 */
-  comfyuiBaseUrl: z.string().url().default(CONFIG_ENV_DEFAULTS.comfyuiBaseUrl),
+  comfyuiBaseUrl: z.url().default(CONFIG_ENV_DEFAULTS.comfyuiBaseUrl),
   port: z.coerce
     .number()
     .int()

@@ -183,12 +183,8 @@ export const settingRouter = createTRPCRouter({
   comfyEmbeddable: authedProcedure
     .input(
       z.object({
-        base: z
-          .string()
-          .url()
-          .refine(isHttpUrl, { message: "base 必须为 http/https" }),
+        base: z.url().refine(isHttpUrl, { message: "base 必须为 http/https" }),
         hostOrigin: z
-          .string()
           .url()
           .refine(isHttpUrl, { message: "hostOrigin 必须为 http/https" }),
       }),
@@ -229,12 +225,12 @@ export const settingRouter = createTRPCRouter({
    *  打不开，须走 Node 端系统浏览器命令，与「打开查看」语义一致）。
    *  用于生成结果的视频/图片等远程资源在默认浏览器里打开播放。
    *
-   *  ⚠️ 入参是**请求方给的任意地址**，而 `z.string().url()` 只管「是不是一个 URL」
+   *  ⚠️ 入参是**请求方给的任意地址**，而 `z.url()` 只管「是不是一个 URL」
    *  —— 它放行 `file:` / `javascript:` / 自定义协议。协议白名单落在
    *  `openUrlInBrowser()` 里（判据一处定义、覆盖每一个出口），非 http(s) 时
    *  返回 `{ ok: false, detail }` 且**不 spawn**；这一路的前端会原样把 detail 显示出来。 */
   openExternal: authedProcedure
-    .input(z.object({ url: z.string().url() }))
+    .input(z.object({ url: z.url() }))
     .mutation(async ({ input }) => openUrlInBrowser(input.url)),
 
   /** 在系统文件管理器里定位一个本机路径（日志面板里点路径，ISSUE #1365）。

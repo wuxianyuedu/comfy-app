@@ -70,7 +70,6 @@
     /* 构建/运行时产物：非源码，且内含第三方 .js（checkJs 会对它们报大量无关错误） */
     "python-venv",
     "start-tauri",
-    "dev-tools",
     "build-launcher",
     "dist",
     "coverage",
