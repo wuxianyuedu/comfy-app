@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @ts-nocheck -- 提交门槛脚本:注释语言棘轮(供 .githooks/pre-commit 与 CI 调用)
+// @ts-nocheck -- 提交门槛脚本:注释语言棘轮(供 .githooks/pre-commit 的 D 组调用)
 /**
  * 注释语言棘轮 —— 规范见 docs/standards/12-代码组织与文件结构.md §12.4.6。
  *

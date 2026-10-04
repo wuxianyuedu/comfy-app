@@ -1,6 +1,14 @@
 /**
- * pre-commit D 组里两条「接线本身」的在位判据：
- * `doc:check` 那一步（ISSUE #1371）与 R5 棘轮的 `--strict` 硬闸（ISSUE #1404）。
+ * pre-commit D 组里三条「接线本身」的在位判据：
+ * `doc:check` 那一步（ISSUE #1371）、R5 棘轮的 `--strict` 硬闸（ISSUE #1404）
+ * 与注释语言棘轮（ISSUE #1451）。
+ *
+ * 第三条的立案现场：`scripts/check-comment-language.cjs` 头部自称
+ * 「供 `.githooks/pre-commit` 与 CI 调用」、§12.4.6 也写着它在钩子里报红，
+ * 而 `grep -c comment-language .githooks/pre-commit` 一直是 0，CI 又随 ISSUE #623 删除
+ * —— 一条基线为 0 的硬闸**一个执行者都没有，文档却说它在执行**。
+ * 判据本身是对的（`next-code-frame` 按字节切串，中文注释会让 Rust 侧 panic），
+ * 缺的只是执行者，所以这里连着「不准回到那句书面自白」一起钉。
  *
  * 为什么单独成文件、并进 `scripts/affected-tests.mjs` 的 FIXED_STRUCTURAL_TESTS：
  * 这两步的价值都是「每次提交都跑」，而改 `.githooks/**` 会让增量层**放弃收窄、
@@ -131,5 +139,50 @@ describe("R5 棘轮的 --strict 硬闸在钩子里（ISSUE #1404）", () => {
     const script = readFileSync(STRUCTURE, "utf8");
     expect(script).not.toContain("`--strict`(CI)");
     expect(script).not.toContain("900 行以上的文件在本仓库只增不减");
+  });
+});
+
+/**
+ * 注释语言棘轮接进 D 组（ISSUE #1451）。
+ *
+ * 为什么它不是「再抄一遍 §13.1 清单」：这一族要拦的动作恰好是「把某一步摘回手动档 /
+ * 抹掉 flag」，而 §13.1 那份**权威清单自己**就漂过 5 步（见 §13.5.10）——抄一份
+ * 只会更难保持正确。所以断言形状与上面两条同款：解析 D 组步骤、只认真调用。
+ */
+const COMMENT_LANGUAGE = join(
+  REPO_ROOT,
+  "scripts",
+  "check-comment-language.cjs",
+);
+
+describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = dGroupSteps(hook);
+
+  it("钩子 D 组真的执行这一步，且调的就是本脚本（被注释掉的行不算在场）", () => {
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/check-comment-language.cjs"),
+    );
+    // 命令逐字相等，顺带钉住「只接判定档」：`--report` 恒 exit(0)（盘点档，接进来
+    // 等于接了个寂寞）、`--update` 会改基线（人的动作）、`--strict`（基线未收紧即失败）
+    // 在基线已是 total: 0 时属另一类动作 —— 三者都不许混进钩子。
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有注释语言棘轮 —— §12.4.6 写着它在钩子里报红，` +
+        "而拆掉这一步之后它一个执行者都没有（平台流水线已随 ISSUE #623 删除）",
+    ).toEqual({
+      label: "注释语言棘轮",
+      cmd: "node scripts/check-comment-language.cjs",
+    });
+  });
+
+  it("脚本头不许去掉「供 .githooks/pre-commit 调用」这句承诺（它是本次事故的直接判据）", () => {
+    // 反向要求：这句话**现在**是真的（钩子里有这一步）。若有人既拆掉钩子里那一步、
+    // 又把这句删掉，文档与实现会一起闭嘴，而判据消失本身不会有人发现。
+    const script = readFileSync(COMMENT_LANGUAGE, "utf8");
+    expect(
+      script,
+      "头部那句「供 .githooks/pre-commit …调用」是这次事故的判据，别让它消失",
+    ).toContain("供 .githooks/pre-commit");
   });
 });
