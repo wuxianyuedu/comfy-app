@@ -7,8 +7,8 @@ import { RangeSlider } from "~/components/ui/range-slider";
  * `RangeSlider` 是**项目里单值滑块的唯一入口**（`ui/slider` 的薄封装）。
  *
  * 它的存在不是「再包一层」：`ui/slider` 是 base-ui 的**多把手**原语，
- * `value` 始终是数组、`onValueChange` 也回数组 —— 项目里两处消费点
- * （`TrainingStudio` 的 4 个参数、`WorkflowCanvasSettings` 的 SliderRow）
+ * `value` 始终是数组、`onValueChange` 也回数组 —— 项目里消费点
+ * （`WorkflowCanvasSettings` 的 SliderRow）
  * 用的都是**单值 + number 回调**。本件把这一层差异收干净，
  * 于是调用处不必各自写 `value={[v]}` / 从数组里淘第一个。
  *

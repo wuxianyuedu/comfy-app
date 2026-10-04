@@ -274,18 +274,6 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           </>
         }
       />
-      <Field
-        label="训练后端 URL"
-        value={c.drafts.settings.trainerUrl}
-        onChange={(value) => c.patchSettings({ trainerUrl: value })}
-        placeholder="留空则显示「未配置」横幅"
-      />
-      <Field
-        label="LoRA 输出目录"
-        value={c.drafts.settings.comfyLorasDir}
-        onChange={(value) => c.patchSettings({ comfyLorasDir: value })}
-        placeholder="留空使用默认 models/loras"
-      />
       <StatusButton onClick={() => void c.savePrefs()} disabled={c.saving}>
         保存偏好
       </StatusButton>

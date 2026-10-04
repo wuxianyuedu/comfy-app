@@ -125,8 +125,6 @@ const probeMock = vi.mocked(probeOllama);
 const startMock = vi.mocked(startOllama);
 
 const SETTINGS: Settings = {
-  trainerUrl: "",
-  comfyLorasDir: "",
   comfyuiPath: "D:/ComfyUI",
   comfyuiExtraArgs: "",
   comfyCliPython: "",

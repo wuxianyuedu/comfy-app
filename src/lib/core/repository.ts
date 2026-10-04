@@ -21,7 +21,6 @@
  *   模型与用户模型配置仓储（repository-model）、
  *   工作流模型标签仓储（repository-model-tag）、
  *   成片与分镜仓储（repository-film）、技能仓储（repository-skill）、
- *   LoRA 训练任务仓储（repository-lora）、
  *   用户与 LLM 配置仓储（repository-user）—— 各自的类名见对应模块。
  *
  * @module core/repository — Repository 模式统一出口（barrel）
@@ -36,6 +35,5 @@ export * from "./repository-model";
 export * from "./repository-model-tag";
 export * from "./repository-film";
 export * from "./repository-skill";
-export * from "./repository-lora";
 export * from "./repository-user";
 export * from "./repository-post";

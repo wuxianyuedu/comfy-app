@@ -12,7 +12,7 @@ import { isVideo } from "~/lib/media/media";
  *
  *  - `HomePage` 项目缩略图：`event.target.style.display = "none"` —— 直接改
  *    DOM，绕过 React；失败的那一格留下**空洞**（`gap` 还在，缩略图条少一块）；
- *  - `TrainingStudio` 数据集缩略图：`style.visibility = "hidden"` —— 同上，
+ *  - 已删的训练工作室数据集缩略图：`style.visibility = "hidden"` —— 同上，
  *    只是换了个属性名；
  *  - `WorkflowImagePreview`：自己 `useState(failed)` + 「图片不可用」方块 ——
  *    写法是对的，但这段状态机在**每个**需要兜底的落点各写一遍；

@@ -31,8 +31,6 @@ import {
 } from "~/lib/llm/types";
 
 export type Settings = {
-  trainerUrl: string;
-  comfyLorasDir: string;
   comfyuiPath: string;
   comfyuiExtraArgs: string;
   /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */

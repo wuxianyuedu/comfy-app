@@ -15,7 +15,6 @@ import { cn } from "~/lib/utils";
  * | `ProjectOutputs` 的参数表 | 行内左右分布 + 隔行底色 + 外层圆角边框 |
  * | `HistoryDetailModal` 的生成参数卡 | 网格卡片 + 标签在值左侧 + 行下 `hint` |
  * | `HistoryDetailModal` 的参数表 | HTML `<table>` 两列（左列等宽截断） |
- * | `TrainingStudio` 的 Metrics | 网格 + 标签在值上方 |
  * | `BrowserStatusBar` 的显存 / 内存 | 行内 label + value + 尾注 |
  *
  * 同一件事（一行键值）有四种布局语言、五份 `map`，而**「空值显示什么」**

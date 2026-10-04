@@ -119,7 +119,7 @@ test.describe("工作区链路 @critical", () => {
      * id 与顺序由 `src/components/studio/nav-items.test.ts` 钉死）。这里按用户可见的
      * 标签重复一份，而不是 import 那份常量：e2e 的断言应当只看屏幕上有无这些东西，
      * 拿 React 侧常量当数据源会让「常量与渲染不一致」这种真故障变成用例里的自洽。 */
-    for (const label of ["首页", "模型", "历史", "队列", "炼丹", "流程"]) {
+    for (const label of ["首页", "模型", "历史", "队列", "流程"]) {
       await expect(
         page.getByRole("button", { name: label, exact: true }).first(),
       ).toBeVisible();
