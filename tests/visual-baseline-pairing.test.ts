@@ -20,9 +20,14 @@
  *
  * SUPPORTED_PLATFORMS 是**口径**：新增一档执行环境时，先用同一份 spec 在那档上
  * `--update-snapshots` 录出成套 PNG，再同批改这里 —— 只登记平台不录基线、或只录基线不
- * 登记平台，都会让像素层在那一档静默失效。当前只有 win32：`-linux.png` 那两张录于全局
- * 状态栏出现之前、也没有 mask 规则，与本 spec 已经不是同一件界面，留着就是一份对不上
- * 现状的旧账（要恢复 linux 档按上面那条走，不是把旧 PNG 贴回来）。
+ * 登记平台，都会让像素层在那一档静默失效。
+ *   · win32 —— 开发机（本地口径 webServer = `pnpm dev`）。
+ *   · linux —— 容器 / 类 CI 执行环境（`CI` 为真 ⇒ webServer = `pnpm start`，需先
+ *     `pnpm build`）。这一档的两张 PNG 于恢复本档时用同一份 spec 重录，替换掉
+ *     `#6538809` 之前那两张「录于全局状态栏出现之前、也没有 mask 规则」的旧账。
+ *     ⚠️ **基线是按 webServer 口径录的**：dev 指示器那个 mask 目前遮不住（宿主元素
+ *     零尺寸），所以 dev 与 start 两种口径的像素不同 —— linux 档按 start 口径录，
+ *     在该档跑 `pnpm check:visual` 请保持 `CI` 为真（容器里通常是）。
  * 扫描面按 `e2e/visual/` 目录发现，不维护 spec 清单 —— 写死的清单正是会漂的那类东西。
  */
 import { execFileSync } from "node:child_process";
@@ -34,10 +39,11 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const VISUAL_DIR = "e2e/visual";
 
 /**
- * 项目实际会跑像素回归的平台。
- *   · win32 —— 开发机，`pnpm test:visual` 的执行处（实测两次连跑零差异）。
+ * 项目实际会跑像素回归的平台（登记 = 有且仅有这几档在仓库里有一套 PNG）。
+ *   · win32 —— 开发机，`pnpm dev` 口径（实测两次连跑零差异）。
+ *   · linux —— 容器 / 类 CI 环境，`pnpm start` 口径（实测同一命令连跑两次零差异）。
  */
-const SUPPORTED_PLATFORMS = ["win32"];
+const SUPPORTED_PLATFORMS = ["win32", "linux"];
 
 /** `{name}-{projectName}-{platform}.png` —— Playwright 默认的基线文件形态。 */
 const BASENAME_RE = /^(.+)-chromium-(linux|win32|darwin)\.png$/;
@@ -181,10 +187,12 @@ describe("像素基线成对齐全且入库（§11.8）", () => {
     // ③ 平台档位是口径，被悄悄掏空时上面两条会一起恒绿。
     expect(SUPPORTED_PLATFORMS.length).toBeGreaterThan(0);
     expect(SUPPORTED_PLATFORMS).toContain("win32");
-    // ④ 认得 linux 的形状、但不认它进口径 —— 所以「贴回一张旧 linux 基线」会被孤儿那条点名。
+    // ④ linux 现在在口径里（恢复这一档的那次提交：重录成套 PNG + 同批登记）；
+    //    而没登记过的档（darwin）照样被上面几条点名，口径没被掏空。
     expect(parseBaseline("login-desktop-chromium-linux.png")?.platform).toBe(
       "linux",
     );
-    expect(SUPPORTED_PLATFORMS).not.toContain("linux");
+    expect(SUPPORTED_PLATFORMS).toContain("linux");
+    expect(SUPPORTED_PLATFORMS).not.toContain("darwin");
   });
 });

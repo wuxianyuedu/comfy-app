@@ -32,7 +32,10 @@ import {
 async function unstableChromeMasks(page: Page): Promise<Locator[]> {
   const masks = [page.locator('[aria-label="底部状态栏"]')];
   // Next 的 dev 指示器只在 dev 存在；生产构建下给它加 mask 会因为定位不到而报错，
-  // 所以按存在与否决定 —— 判据要能同时在 `pnpm dev` 与 `pnpm start` 下跑。
+  // 所以按存在与否决定（这样 `pnpm dev` 与 `pnpm start` 两种 webServer 都不会因为
+  // 定位不到而出错）。⚠️ **但它其实遮不住**：角标挂在 `nextjs-portal` 的 shadow root 里，
+  // 宿主元素不占位（`boundingBox()` 实测 0×0），而 Playwright 的 mask 按 bounding box 画。
+  // 所以「屏掉 dev chrome」目前靠**不在 dev 口径下录基线**，不是靠这一条；详见 §11.8。
   const devIndicator = page.locator("nextjs-portal");
   if ((await devIndicator.count()) > 0) masks.push(devIndicator);
   return masks;

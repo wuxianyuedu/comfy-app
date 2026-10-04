@@ -131,11 +131,16 @@ pnpm test:e2e
 - 用例放 `e2e/visual/*.visual.spec.ts`，命名带 `.visual` 便于单独筛选（跑哪一层就点名哪一层：
   `pnpm test:visual` 只跑像素基线，`pnpm test:e2e` 含 `e2e/visual`）。
 - 基线 PNG 与 spec 同目录（Playwright 默认 `*-snapshots/`），**提交入库**。
-- ⚠️ **基线文件名带平台，每个真正执行像素回归的环境都要有自己的那一套**：当前只有
-  `-win32.png`（开发机）。缺档时 Playwright 不是「跳过」而是判失败**并把新生成的 PNG 写进
-  目录**，于是留下半套基线；判据见 `tests/visual-baseline-pairing.test.ts`（齐全 / 入库 /
-  无孤儿三头，登记在提交前的固定守护清单，并由 `scripts/visual-gate.mjs` 保证「改像素层的
-  提交一定带着这条判决」）。
+- ⚠️ **基线文件名带平台，每个真正执行像素回归的环境都要有自己的那一套**：当前登记
+  `-win32.png`（开发机，`pnpm dev` 口径）与 `-linux.png`（容器 / 类 CI，`CI` 为真 ⇒
+  `pnpm start` 口径，需先 `pnpm build`）两档。缺档时 Playwright 不是「跳过」而是判失败
+  **并把新生成的 PNG 写进目录**，于是留下半套基线；判据见 `tests/visual-baseline-pairing.test.ts`
+  （齐全 / 入库 / 无孤儿三头，登记在提交前的固定守护清单，并由 `scripts/visual-gate.mjs`
+  保证「改像素层的提交一定带着这条判决」）。**基线按 webServer 口径录**：dev 与 start 的
+  像素不同（dev 指示器那块 mask 目前遮不住），在某一档跑像素时 `CI` 的真假要与该档录制时一致。
+- 要**新加/恢复一档平台**（例如某档已被删过）时，姿势固定是「在该档用**当前** spec
+  `--update-snapshots` 重录成套 PNG + 同批把该平台加进 `SUPPORTED_PLATFORMS`」，
+  **不是把旧 PNG 贴回来**（旧图录于别的界面形态，贴回去就是一份对不上现状的账）。
 - ⚠️ **像素可复现要自己挣**：根布局的全局状态栏带实时帧率与时钟，Next 的 dev 指示器也在
   页面上 —— 这类 chrome 必须 `mask` 掉，否则 fullPage 永远取不到两张稳定截图。写法见
   `e2e/visual/login.visual.spec.ts` 的 `unstableChromeMasks`；验收口径是**同一命令连跑两次
