@@ -429,6 +429,13 @@ export default defineConfig({
         /* 项目内视图的统一容器（**两处同批**登记）。收口后「外层滚动 + 居中列 +
          * 宽度档位」这套形状只有这一处，八个视图都只是调用 —— 值得单独有数字看着。 */
         "src/components/studio/ViewContainer.tsx",
+        /* 壳内应用级页签容器（**两处同批**登记）。它承载 ISSUE #1244 那两条契约：
+         * 可嵌 → 页签里渲染 iframe；不可嵌 → 同一个页签里给可读说明。此前这两条
+         * **没有任何自动化看守**（浏览器形态里它不画应用内页签栏，e2e 量不到），
+         * 于是「塞了一个注定空白的 iframe」或「说明没人渲染」都不会变红。
+         * ⚠️ 不在 `src/lib/**` / `src/components/ui/**` 的通配里，只写门槛不进 `include`
+         * 会让门槛静默失效（`ui/file-picker.tsx` 的前车之鉴）。 */
+        "src/components/studio/ShellTabs.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1536,6 +1543,18 @@ export default defineConfig({
         /* 统一容器（与 `coverage.include` 同批）。隔离实测四项都 100 ——
          * 它是纯形状组件，没有分支藏在数据里，满档不是凑出来的。 */
         "src/components/studio/ViewContainer.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 壳内应用级页签容器（与 `coverage.include` 同批）。隔离实测四项都 100，
+         * 满档不是凑出来的：三分支（有 `blockedReason` / 有 `url` / 两者都没有）、
+         * 壳形态与浏览器形态、页签切换的显隐与 `aria-hidden`、以及说明里那颗
+         * 「复制地址」的成败两条回调，各自都有用例点到（`ShellTabs.test.tsx`）。
+         * 这一格值得被数字看着：它掉一支，用户看到的就是一片空白页签，
+         * 而全仓库不会有任何东西变红（ISSUE #1244 立案时的现场）。 */
+        "src/components/studio/ShellTabs.tsx": {
           lines: 100,
           functions: 100,
           statements: 100,
