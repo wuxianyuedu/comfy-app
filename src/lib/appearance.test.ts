@@ -35,8 +35,8 @@ function fakeElement() {
 }
 
 describe("默认档 = 引入前的原值", () => {
-  it("默认圆角就是 globals.css 里那个 0.75rem", () => {
-    expect(appearanceVars(DEFAULT_APPEARANCE)["--radius"]).toBe("0.75rem");
+  it("默认圆角就是 globals.css 里那个 1rem（卡片 16px）", () => {
+    expect(appearanceVars(DEFAULT_APPEARANCE)["--radius"]).toBe("1rem");
   });
 
   it("默认字阶倍率是 1（不设置时与从前完全相同）", () => {
@@ -84,7 +84,7 @@ describe("applyAppearance", () => {
   it("一次写入两个变量", () => {
     const el = fakeElement();
     applyAppearance({ radius: "lg", fontScale: "125" }, el as never);
-    expect(el.store.get("--radius")).toBe("1rem");
+    expect(el.store.get("--radius")).toBe("1.25rem");
     expect(el.store.get("--font-scale")).toBe("1.25");
   });
 
@@ -133,7 +133,7 @@ describe("readAppearance / saveAppearance", () => {
   it("保存时同步写到 <html> 上（离开设置页也必须成立）", () => {
     saveAppearance({ radius: "lg", fontScale: "110" });
     expect(document.documentElement.style.getPropertyValue("--radius")).toBe(
-      "1rem",
+      "1.25rem",
     );
     expect(
       document.documentElement.style.getPropertyValue("--font-scale"),

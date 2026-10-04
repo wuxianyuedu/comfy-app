@@ -26,7 +26,7 @@ async function openAppearance(page: Page) {
      同步 setState 会被判级联渲染），所以刚进来的那一瞬，选中态还是默认值；
      不等它就点，选中态可能被那次延迟读覆盖回去。 */
   await expect(
-    radiusGroup(page).getByRole("radio", { name: /中 · 12px/ }),
+    radiusGroup(page).getByRole("radio", { name: /中 · 16px/ }),
   ).toHaveAttribute("aria-checked", "true");
   await expect(
     scaleGroup(page).getByRole("radio", { name: /标准 100%/ }),
