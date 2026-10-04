@@ -13,7 +13,7 @@
 <h1>Interface ScannedRoot</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">ScannedRoot</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#abspath">absPath</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#error">error</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#exists">exists</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#files">files</a><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_localWorkflows.LocalWorkflowFile.html" class="tsd-signature-type tsd-kind-interface">LocalWorkflowFile</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#rawpath">rawPath</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/localWorkflows.ts:53</li></ul></aside>
+<li>Defined in lib/comfyui/localWorkflows.ts:49</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -33,37 +33,36 @@
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="abspath"><span>abs<wbr/>Path</span><a href="#abspath" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">absPath</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-<div class="tsd-comment tsd-typography"><p>Normalised absolute path; equal to <code>rawPath</code> when the user already typed
-an absolute path. Used for case-insensitive Windows comparisons.</p>
+<div class="tsd-comment tsd-typography"><p>归一化后的绝对路径；用户本来就输入绝对路径时等于 <code>rawPath</code>。
+用于 Windows 上忽略大小写的比较。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/localWorkflows.ts:58</li></ul></aside></section>
+<li>Defined in lib/comfyui/localWorkflows.ts:54</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="error"><code class="tsd-tag">Optional</code><span>error</span><a href="#error" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">error</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/localWorkflows.ts:64</li></ul></aside></section>
+<li>Defined in lib/comfyui/localWorkflows.ts:59</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="exists"><span>exists</span><a href="#exists" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">exists</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/localWorkflows.ts:59</li></ul></aside></section>
+<li>Defined in lib/comfyui/localWorkflows.ts:55</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="files"><span>files</span><a href="#files" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">files</span><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_localWorkflows.LocalWorkflowFile.html" class="tsd-signature-type tsd-kind-interface">LocalWorkflowFile</a><span class="tsd-signature-symbol">[]</span></div>
-<div class="tsd-comment tsd-typography"><p>Per-file scan result. Empty when the root doesn't exist or contains no
-<code>.json</code> / <code>.workflow</code> files. NEVER an error throw — scan failures are
-reported via <code>error</code> (string, optional).</p>
+<div class="tsd-comment tsd-typography"><p>逐文件的扫描结果。根目录不存在、或里面没有 <code>.json</code> / <code>.workflow</code> 时为空。
+<strong>从不</strong>抛错 —— 扫描失败经 <code>error</code>（可选字符串）上报。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/localWorkflows.ts:63</li></ul></aside></section>
+<li>Defined in lib/comfyui/localWorkflows.ts:58</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="rawpath"><span>raw<wbr/>Path</span><a href="#rawpath" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">rawPath</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-<div class="tsd-comment tsd-typography"><p>Configured root (verbatim), used for display.</p>
+<div class="tsd-comment tsd-typography"><p>配置的根目录（逐字），用于显示。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/localWorkflows.ts:55</li></ul></aside></section></section></details></div>
+<li>Defined in lib/comfyui/localWorkflows.ts:51</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

@@ -1,0 +1,68 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>applySqlitePragmas | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="../modules/sqlite-pragmas.html">sqlite-pragmas</a></li>
+<li><a href="" aria-current="page">applySqlitePragmas</a></li></ul>
+<h1>Function applySqlitePragmas</h1></div>
+<section class="tsd-panel">
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="applysqlitepragmas"><span class="tsd-kind-call-signature">applySqlitePragmas</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">target</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/sqlite-pragmas.SqlitePragmaTarget.html" class="tsd-signature-type tsd-kind-interface">SqlitePragmaTarget</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">pragmas</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-keyword">readonly</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span><a href="#applysqlitepragmas" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>把那份清单应用到一条连接上，<strong>撞锁按预算重试</strong>。</p>
+<p>为什么开机这几条要单独有出口（ISSUE #1282）：
+三处站点（Next 主库、工坊库、执行宿主）此前各自写一遍
+<code>for (const pragma of SQLITE_PRAGMAS) await client.execute(pragma)</code> ——
+循环体逐字相同（§12.18 该收口），而更麻烦的是<strong>它没有容错</strong>：
+<code>PRAGMA journal_mode = WAL</code> 在一份<strong>还没切到 WAL</strong> 的库上要独占锁，
+而 <code>next build</code> 会为 collect-page-data 起 7 个 worker 进程，每个都走一遍这个循环。
+实测（7 个独立进程同时打一份刚建的空库）：<strong>3/8 抛 <code>SQLITE_BUSY</code></strong>，异常从模块顶层
+await 浮出 worker、被 Next 聚合进 <code>Failed to collect page data for /api/trpc/[trpc]</code>
+—— 报错行还落在无关路由上。干净检出上表现为「第一次 <code>pnpm build</code> 必失败、再跑一次就好」，
+而 CI 每次都是干净检出。</p>
+<p>重试只认<strong>锁族</strong>错误（复用 <code>isSqliteBusyError</code>）：认不出原因就原样抛，
+不把「只读挂载 / 磁盘满」一类真故障拖成几次同样的尝试（与 <code>executor-write-retry</code> 同纪律）。</p>
+<p>站在这里而不是各站点自己包一层：三处站点要的是<strong>同一件事</strong>，各写一遍就必然漏一处
+（执行宿主那侧今天有 <code>timeout</code> 预算，Next 两处刻意没有 —— 预算的取舍见文件头，
+与「开机这几条要不要重试」是两个独立决定，后者三处都要）。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">target</span>: <a href="../interfaces/sqlite-pragmas.SqlitePragmaTarget.html" class="tsd-signature-type tsd-kind-interface">SqlitePragmaTarget</a></span>
+<div class="tsd-comment tsd-typography"><p>已建好的连接（<code>@libsql/client</code> 的 <code>Client</code>）。</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">pragmas</span>: <span class="tsd-signature-keyword">readonly</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol"> = SQLITE_PRAGMAS</span></span>
+<div class="tsd-comment tsd-typography"><p>要应用的清单，默认就是本模块那份；只为测试留出注入点。</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4>
+<div class="tsd-comment tsd-typography">
+<div class="tsd-tag-throws">
+<h4 class="tsd-anchor-link" id="throws">Throws<a href="#throws" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h4><p>非锁族错误、或重试穷尽后，抛出原错误（调用方据此失败得看得见）。</p>
+</div></div><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/sqlite-pragmas.ts:111</li></ul></aside></div></li></ul></section></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

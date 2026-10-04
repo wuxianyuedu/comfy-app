@@ -1,0 +1,64 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>decideComfyTabOpen | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="../modules/lib_comfy_comfy-embed.html">lib/comfy/comfy-embed</a></li>
+<li><a href="" aria-current="page">decideComfyTabOpen</a></li></ul>
+<h1>Function decideComfyTabOpen</h1></div>
+<section class="tsd-panel">
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="decidecomfytabopen"><span class="tsd-kind-call-signature">decideComfyTabOpen</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">embeddable</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_comfy_comfy-embed.ComfyTabTarget.html" class="tsd-signature-type tsd-kind-type-alias">ComfyTabTarget</a><a href="#decidecomfytabopen" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>打开 ComfyUI 的目标判决。</p>
+<p><strong>只有两档，且都留在应用内</strong>（ISSUE #310 用户明确要求：「不要打开另一个
+窗口，我只要多页签的形式」）：</p>
+<ul>
+<li>可嵌 → 直接内嵌进页签；</li>
+<li>不可嵌 → 同样把页签打开，但里面渲染一张<strong>应用内的可见说明</strong>（给出
+成因与修复动作），而不是弹第二个窗口、也不是把浏览器的空白错误页
+摆给用户。</li>
+</ul>
+<p>为什么删掉了「壳内独立窗口」这一档：那是绕开 ComfyUI 跨源 403 的兜底，
+而那个开关其实握在我们手里（启动时带 <code>--enable-cors-header</code>，见
+<code>lifecycle-derive.ts</code> 的 <code>withEmbedClearanceFlag</code>）。绕道的代价是用户
+每点一次都多出一个窗口，体验与「像文件管理器那样多页签」的目标相悖。
+保留的 <code>blocked</code> 档只用于「外部实例不受本应用参数控制」这类边缘情形，
+且<strong>仍在同一个窗口里</strong>给出可读的下一步。</p>
+<p>注：早先还有 <code>browser</code>（系统浏览器）一档。它作为<strong>这条决策路径的自动回落</strong>
+已被删除（「点打开查看就跳浏览器」同样把用户从多页签形态里踢出去），但
+「在浏览器打开」作为用户<strong>主动点击</strong>的并列出口保留在设置页
+（<code>setting.comfyOpen</code>，见 <code>docs/standards/12-代码组织与文件结构.md</code> §12.8.3）。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">embeddable</span>: <span class="tsd-signature-type">boolean</span></span>
+<div class="tsd-comment tsd-typography"><p>探测结论：能否内嵌</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/lib_comfy_comfy-embed.ComfyTabTarget.html" class="tsd-signature-type tsd-kind-type-alias">ComfyTabTarget</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/comfy/comfy-embed.ts:212</li></ul></aside></div></li></ul></section></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

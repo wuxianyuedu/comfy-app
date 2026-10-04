@@ -16,10 +16,11 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="scanlocalworkflowchecksums"><span class="tsd-kind-call-signature">scanLocalWorkflowChecksums</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">rawPaths</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_comfyui_localWorkflows.LocalChecksumEntry.html" class="tsd-signature-type tsd-kind-interface">LocalChecksumEntry</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span><a href="#scanlocalworkflowchecksums" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Scan every configured root and return <code>{absPath, checksum, mtimeMs}</code>
-for every readable <code>.json</code> / <code>.workflow</code> file.  Resolves to an empty
-array when no roots are configured (or every scan fails).  Errors
-accessing individual files are swallowed (best-effort).</p>
+<div class="tsd-comment tsd-typography"><p>扫描每个配置的根目录，为每个可读的 <code>.json</code> / <code>.workflow</code> 文件返回
+<code>{absPath, checksum, mtimeMs}</code>。没有配置任何根目录（或每趟扫描都失败）时
+resolve 成空数组。单个文件的访问错误会被吞掉（尽力而为）。</p>
+<p>mtime+size 与上一趟相同的文件直接取记忆里的 checksum，不再读内容 ——
+这是「轮询里同一份数据反复出现」的常规场景（见 <code>checksumCache</code>）。</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
@@ -27,7 +28,7 @@ accessing individual files are swallowed (best-effort).</p>
 <li><span><span class="tsd-kind-parameter">rawPaths</span>: <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_comfyui_localWorkflows.LocalChecksumEntry.html" class="tsd-signature-type tsd-kind-interface">LocalChecksumEntry</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/localWorkflows.ts:274</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/comfyui/localWorkflows.ts:385</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

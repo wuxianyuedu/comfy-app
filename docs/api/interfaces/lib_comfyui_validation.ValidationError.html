@@ -13,7 +13,7 @@
 <h1>Interface ValidationError</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">ValidationError</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#classtype">classType</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#field">field</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#message">message</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#nodeid">nodeId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/validation.ts:26</li></ul></aside>
+<li>Defined in lib/comfyui/validation.ts:55</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -32,31 +32,31 @@
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="classtype"><span>class<wbr/>Type</span><a href="#classtype" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">classType</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-<div class="tsd-comment tsd-typography"><p>Node class_type, e.g. &quot;KSampler&quot;. Empty if unknown.</p>
+<div class="tsd-comment tsd-typography"><p>节点 class_type，例如 &quot;KSampler&quot;；未知时为空串。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/validation.ts:30</li></ul></aside></section>
+<li>Defined in lib/comfyui/validation.ts:59</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="field"><span>field</span><a href="#field" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">field</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-<div class="tsd-comment tsd-typography"><p>Offending input field name. Empty for node-level (non-input) errors.</p>
+<div class="tsd-comment tsd-typography"><p>出错的输入字段名；节点级（非输入）错误时为空串。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/validation.ts:32</li></ul></aside></section>
+<li>Defined in lib/comfyui/validation.ts:61</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="message"><span>message</span><a href="#message" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">message</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>Human-readable reason. Never empty — falls back to &quot;配置错误&quot;.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/validation.ts:34</li></ul></aside></section>
+<li>Defined in lib/comfyui/validation.ts:63</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="nodeid"><span>node<wbr/>Id</span><a href="#nodeid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">nodeId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-<div class="tsd-comment tsd-typography"><p>ComfyUI node id, as a string (matches graph keys).</p>
+<div class="tsd-comment tsd-typography"><p>ComfyUI 的节点 id，字符串形式（与图的键一致）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/validation.ts:28</li></ul></aside></section></section></details></div>
+<li>Defined in lib/comfyui/validation.ts:57</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
