@@ -18,9 +18,17 @@ verifyDepsBeforeRun: false
 allowBuilds:
   "@sentry/cli": true
   unrs-resolver: true
-  # better-sqlite3 含原生模块安装脚本（有 Node 24 预编译包时走 prebuild 下载，
-  # 无需本地 MSVC；仍需批准才允许执行安装脚本）
-  "better-sqlite3": true
+  # better-sqlite3 **显式拒绝**其构建脚本（v12 时这里本是 `true`）。
+  # v13 换了发版形态：`install: prebuild-install || node-gyp rebuild` 那条脚本没了，
+  # 改成**随包附带** `prebuilds/<platform>.node`（8 个平台，含 linux-x64 / win32-x64），
+  # 由 `lib/binding.js` 直接 require —— 运行期根本不需要编译。
+  # 但包仍带 `binding.gyp` 与 `"gypfile": true`，pnpm 据此**隐式**跑 `node-gyp rebuild`：
+  # 在没装 C++ 工具链的环境（本仓的构建容器实测缺 `make`）里那句必然失败，
+  # 整个 `pnpm install` 以 ERR_PNPM_EXECUTOR_LIFECYCLE_SCRIPT_FAILED 中断 ——
+  # 而它要产出的东西包里**本来就有**。故改为拒绝：既不触发未批准构建，
+  # 也不再让一次无谓的编译决定 install 成败。
+  # 判据：`require("better-sqlite3")` 能开库、能建表（实测 13.0.3 / linux-x64 通过）。
+  "better-sqlite3": false
   # MCP SDK 与 tsx 均为纯 JS / 预编译可执行，无原生构建脚本；此处显式批准以防
   # pnpm 对新依赖的 postinstall 校验（与上面策略一致）。
   "@modelcontextprotocol/sdk": true
