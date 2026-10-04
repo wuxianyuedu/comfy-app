@@ -247,7 +247,7 @@ const mockRouter = t.router({
       );
     }),
     /* Drizzle Studio：新增分区拉起的 status 查询与动作，均需有 mock handler，
-     * 否则 onUnhandledRequest:error 会让渲染整个 hook 的用例全挂 */
+     * 否则 onUnhandledFrame:error 会让渲染整个 hook 的用例全挂 */
     dbStudioStatus: t.procedure.query(() => {
       if (behavior.dbStudioStatusError) {
         throw new TRPCError({
@@ -359,12 +359,12 @@ function mockSessionsFor(
   );
 }
 
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 /* 默认「Ollama 运行中」：不设默认值时 vi.fn() 返回 undefined，探测回调会在
  * 上一个用例卸载后跑到，产生「Cannot read properties of undefined」的
  * unhandled rejection（表现为用例绿但文件红）。 */
 /* /api/logs/sessions 默认 handler：设置页挂载就会为三个「启动日志」来源各取一次
- * 会话 + 正文，没有 handler 会以 onUnhandledRequest:error 报 unhandled
+ * 会话 + 正文，没有 handler 会以 onUnhandledFrame:error 报 unhandled
  * rejection（与上面 probeMock 同源问题）。各用例按需覆盖。 */
 beforeEach(() => {
   runtimeLogCalls.length = 0;
