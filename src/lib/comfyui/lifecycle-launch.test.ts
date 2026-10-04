@@ -9,7 +9,7 @@
  * 时间」重置成最后一次轮询的时刻，存活时长就失真了。
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 
@@ -96,6 +96,16 @@ function fakeHost(): LaunchHost {
   };
 }
 
+/** 取最近一次挂上的监督器 deps；没挂上就是 `undefined`（判据不许在空输入上假绿）。
+ *
+ *  返回类型就是 `mock.calls` 那一格的自然类型 —— 桩签名是
+ *  `startComfyExitWatcher: vi.fn(() => ({ stop: vi.fn() }))`，`vi.mocked` 之后
+ *  入参类型即真实 deps，这里不再用 `as` 重复声明一遍（那会被 lint 的
+ *  `no-unnecessary-type-assertion` 判为多余，也确实多余）。 */
+function lastWatcherDeps(): WatcherDeps | undefined {
+  return vi.mocked(startComfyExitWatcher).mock.calls.at(-1)?.[0];
+}
+
 function arm(h: LaunchHost): void {
   ensureKeepAliveWatchOnAdoption({
     host: h,
@@ -104,15 +114,41 @@ function arm(h: LaunchHost): void {
   });
 }
 
+/** 监督器 deps 的形状（只声明用例真正读到的两项）。 */
+type WatcherDeps = {
+  findPid: () => unknown;
+  onExit: (facts: { pid: number; uptimeMs: number }) => void;
+};
+
 describe("ensureKeepAliveWatchOnAdoption —— 接管场景补挂保活退出监督", () => {
   beforeEach(() => {
-    /* 模块里的「已挂监督器」是模块级状态、跨用例累积：不复位的话第 2 个用例
-     * 读到的就是第 1 个用例挂上的那个，「挂上 / 幂等」两类断言都会失真。
-     * 任何一次 onExit 都会把引用清成 null，借它复位到「没挂」的起点。 */
-    const calls = vi.mocked(startComfyExitWatcher).mock.calls;
-    const lastDeps =
-      calls.length > 0 ? calls[calls.length - 1]?.[0] : undefined;
-    lastDeps?.onExit({ pid: 1, uptimeMs: 0 });
+    /* 只设策略 —— 复位**不能**放这儿，见下面 `afterEach` 那段：复位必须发生在
+     * 用例**跑完**之后。 */
+    vi.mocked(getExitPolicy).mockReturnValue({
+      exitKillComfyui: false,
+      exitKillOllama: false,
+    });
+  });
+
+  /* 复位的是**被测模块的模块级状态** `keepAliveExitWatcher`（不是 mock 的调用记录，
+   * 那个由 vitest 的 `clearMocks` 自动管）。它只有一个出口：监督器的 `onExit`
+   * 回调里会把它清成 `null`。
+   *
+   * ⚠️ **必须在 `afterEach`、不能放 `beforeEach`**（升到 vitest 5 时踩到的现场）：
+   * `beforeEach` 里复位完之后**本用例自己的 `arm()` 又会把它挂上**，于是「复位」
+   * 只对这一条用例的开始有效，而模块级引用是跨用例活下来的 —— 下一个用例的
+   * `beforeEach` 一进来就已经是「已挂」状态，「还没挂 → 挂上」那条当场失真。
+   * 上面的写法在 vitest 4 下靠 `mock.calls` 的跨用例残留**碰巧**看得见上一条挂上的
+   * deps（`clearMocks` 默认 false），升到 5（默认 true）记录被清掉，那两读全落空、
+   * 两条用例红；但即便记录还在，`beforeEach` 这个位置本身就是错的。
+   *
+   * 复位动作只在**确认挂着**时才做：`calls` 为空说明这条用例没走到挂载路径
+   * （bound 策略那条就是），那就不必也不该假装退一次。监督器本身是桩
+   * （`startComfyExitWatcher` 返回 `{stop}`），这条不会真起定时器。 */
+  afterEach(() => {
+    const deps = lastWatcherDeps();
+    if (!deps) return;
+    deps.onExit({ pid: 1, uptimeMs: 0 });
     vi.mocked(startComfyExitWatcher).mockClear();
   });
 
@@ -126,22 +162,14 @@ describe("ensureKeepAliveWatchOnAdoption —— 接管场景补挂保活退出�
   });
 
   it("保活策略且还没挂 → 挂上监督器", () => {
-    vi.mocked(getExitPolicy).mockReturnValue({
-      exitKillComfyui: false,
-      exitKillOllama: false,
-    });
     arm(fakeHost());
     expect(startComfyExitWatcher).toHaveBeenCalledTimes(1);
-    const deps = vi.mocked(startComfyExitWatcher).mock.calls[0]?.[0];
-    expect(typeof deps?.findPid).toBe("function");
+    expect(typeof lastWatcherDeps()?.findPid).toBe("function");
   });
 
   it("已经被挂上 → 再调用不重挂（状态轮询反复触发也不重置进程开头时间）", () => {
-    vi.mocked(getExitPolicy).mockReturnValue({
-      exitKillComfyui: false,
-      exitKillOllama: false,
-    });
     const h = fakeHost();
+    arm(h);
     arm(h);
     arm(h);
     arm(h);
@@ -149,13 +177,9 @@ describe("ensureKeepAliveWatchOnAdoption —— 接管场景补挂保活退出�
   });
 
   it("监督器报过退出之后 → 引用清空，下次接管可以重新挂上", () => {
-    vi.mocked(getExitPolicy).mockReturnValue({
-      exitKillComfyui: false,
-      exitKillOllama: false,
-    });
     const h = fakeHost();
     arm(h);
-    const deps = vi.mocked(startComfyExitWatcher).mock.calls[0]?.[0];
+    const deps = lastWatcherDeps();
     expect(deps).toBeDefined();
     // 模拟「保活进程消失了」：监督器自停并清掉引用
     deps?.onExit({ pid: 4242, uptimeMs: 1000 });
