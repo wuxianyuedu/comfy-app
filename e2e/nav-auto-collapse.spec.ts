@@ -1,4 +1,4 @@
-import { expect, test, type Browser } from "@playwright/test";
+import { expect, test, type Browser, type Locator } from "@playwright/test";
 
 /**
  * 左轨让位在真浏览器里的形态（@critical）。
@@ -11,6 +11,13 @@ import { expect, test, type Browser } from "@playwright/test";
  *
  * ⚠️ 状态一律用**可重试断言**取：首帧由服务端快照决定（按非窄窗渲染），客户端对账排在
  * 提交之后 —— 一次性 `getAttribute` 会读在那之前，得到假的「没生效」（实测踩过）。
+ *
+ * 让位要经过两步：**客户端判据成立**（`data-narrow="true"`，即 `useNarrowNavState`
+ * 真的量到了窄窗）→ **生效态落盘**（`data-state="collapsed"`）。两步分开报，红了才
+ * 分得清是「判据没到」（还在水合 / 首帧对账没落地）还是「判据到了而状态没跟着落」
+ * （`resolveRailCollapsed` 那条推导断了）—— 两者修法完全不同（ISSUE #1267）。
+ * 判据那条属性由 `sidebar.tsx` 的 wrapper 出，**不是**给用例看的调试口，
+ * 它同时也是这份状态唯一的可观测出口。
  */
 async function openAtWidth(browser: Browser, width: number) {
   const ctx = await browser.newContext({ viewport: { width, height: 900 } });
@@ -18,17 +25,33 @@ async function openAtWidth(browser: Browser, width: number) {
   await page.goto("/workspace", { waitUntil: "domcontentloaded" });
   const sidebar = page.locator('[data-slot="sidebar"]');
   await expect(sidebar).toBeVisible();
-  return { ctx, page, sidebar };
+  return {
+    ctx,
+    page,
+    sidebar,
+    wrapper: page.locator('[data-slot="sidebar-wrapper"]'),
+  };
+}
+
+/* 客户端判据到位：窄窗这一档必须先能看到 `data-narrow="true"`。 */
+async function expectNarrow(wrapper: Locator, narrow: boolean) {
+  await expect(wrapper).toHaveAttribute(
+    "data-narrow",
+    narrow ? "true" : "false",
+  );
 }
 
 test.describe("左轨按窗宽自动让位 @critical", () => {
   test("宽窗展开、窄窗收起，且收起真的让出宽度", async ({ browser }) => {
     const wide = await openAtWidth(browser, 1500);
+    await expectNarrow(wide.wrapper, false);
     await expect(wide.sidebar).toHaveAttribute("data-state", "expanded");
     const wideWidth = (await wide.sidebar.boundingBox())?.width ?? 0;
     await wide.ctx.close();
 
     const narrow = await openAtWidth(browser, 1100);
+    /* 先判客户端判据到位，再判生效态 —— 顺序即「两步」的语义，红了能定位到哪一步。 */
+    await expectNarrow(narrow.wrapper, true);
     await expect(narrow.sidebar).toHaveAttribute("data-state", "collapsed");
     /* 让位是真的换了宽度，不只是改了属性（收起档 3rem=48px，给余量取 <100）。 */
     await expect
@@ -46,7 +69,8 @@ test.describe("左轨按窗宽自动让位 @critical", () => {
   test("窄窗里用户点开导航就按他的选择展开，再点回收起", async ({
     browser,
   }) => {
-    const { ctx, page, sidebar } = await openAtWidth(browser, 1100);
+    const { ctx, page, sidebar, wrapper } = await openAtWidth(browser, 1100);
+    await expectNarrow(wrapper, true);
     await expect(sidebar).toHaveAttribute("data-state", "collapsed");
 
     const trigger = page
