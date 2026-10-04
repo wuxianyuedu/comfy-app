@@ -115,7 +115,7 @@ export function createLogSink(
 
   /* 缓冲落盘：编排器日志每条一次 `appendFileSync` 是 open/write/close × 每行，
    * 攒进缓冲、满 16KB / 500ms / 进程 exit 时一次落盘。exit 钩子保证
-   * `archiveRunLog`（进程退出前的归档）读到的文件是完整的；
+   * `archiveCurrent`（进程退出前的归档）读到的文件是完整的；
    * 崩溃（kill -9）最多丢一份未满缓冲，对启动日志可接受。 */
   let pending = "";
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -182,30 +182,4 @@ function formatPrefix(runId, tag) {
  */
 export function linePrefix(tag, runId = process.env.COMFYAPP_RUN_ID ?? null) {
   return formatPrefix(runId, tag);
-}
-
-/** 把本次运行的日志追加进按年月归档的文件（**旧布局，随第 4 刀移除**）。
- *
- * 仍被 `dev-launcher.mjs` 的收尾调用，删除时机与替换点见 Issue #1326 第 4 刀：
- * 新布局的归档是 `run.mjs` 的 `archiveCurrent()`，两者并存期间各写各的
- * （旧的是 append 一份合并文件、新的是整目录复制），互不干扰。 */
-/**
- * @param {string} root
- * @param {string} currentLog
- * @param {Date} [at]
- * @returns {string | null} 归档路径（失败返回 null）
- */
-export function archiveRunLog(root, currentLog, at = new Date()) {
-  const month = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}`;
-  // 旧布局（log/archive/<yyyy-MM>/）：本函数随第 4 刀整体移除，因此刻意
-  // **不再往 LOG_DIRS 里加 archive** —— 加了会让读代码的人以为它是现行分区。
-  const dir = path.join(root, "log", "archive", month);
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    const target = path.join(dir, `dev-launcher-${runStamp(at)}.log`);
-    fs.appendFileSync(target, fs.readFileSync(currentLog, "utf8"), "utf8");
-    return target;
-  } catch {
-    return null;
-  }
 }

@@ -33,7 +33,6 @@ import { resolveAppPort } from "./app-port.mjs";
 import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
 import { checkEnvFile } from "./env-preflight.mjs";
 import {
-  archiveRunLog,
   createLogSink,
   currentDirOf,
   localTimestamp,
@@ -786,15 +785,10 @@ export async function shutdown(code) {
   log("正在回收整棵进程树…", "STEP");
   await reapAll();
   try {
-    archiveRunLog(ROOT, currentLog);
-  } catch {
-    /* 归档失败不影响退出 */
-  }
-  try {
     // 一次一包：current/ 整个复制进 runs/，再清空内容。
     archiveCurrent(ROOT, { exitCode: code });
   } catch {
-    /* 见上：归档失败不影响退出 */
+    /* 归档失败不影响退出（下一轮启动的 recoverStaleCurrent 还会再收一次） */
   }
   process.exit(code);
 }
