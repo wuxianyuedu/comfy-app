@@ -119,5 +119,27 @@ try {
   );
 }
 
+// ── 顺带注册 git-lfs 过滤器（字体这类大二进制）───────────────────────────────
+//
+// 为什么必须在这里：`filter.lfs.clean/smudge/diff` 一般由 `git lfs install` 写进
+// **全局**配置，而新克隆、新机器的全局配置没人保证。少了它的后果不是报错，是**两种
+// 静默降级**：提交侧找不到过滤器 ⇒ `*.ttf` 按**原字节**进历史（23 MB 再也摘不干净，
+// 只能重写共享远端的历史）；检出侧 ⇒ 拿回来的是一段 `version https://git-lfs…` 文本。
+// 两种都比红难查，所以这一步与上面几步同构：**失败只提示，绝不阻断 `pnpm install`**。
+//
+// `--manual` 是刻意的：它让 git-lfs **不要**往钩子目录写自己那套 pre-push /
+// post-checkout。本仓库的钩子目录是版本控制里的 `.githooks/`（`core.hooksPath`
+// 指过去，见上面那段），上传由随仓库分发的 `.githooks/pre-push` 承担 —— 比让每个人
+// 各自生成一份本机钩子可靠，也正是本文件一直在做的「接线不靠人记得住」。
+if (git(["rev-parse", "--is-inside-work-tree"]).ok) {
+  const lfs = git(["lfs", "install", "--local", "--manual"]);
+  say(
+    lfs.ok
+      ? "git-lfs 过滤器已按本检出注册（字体等大文件走 LFS）"
+      : "警告：`git lfs install --local --manual` 没跑成（本机没装 git-lfs？）—— " +
+          "此时 .ttf 会按原字节进 git 历史，推送前请先装 git-lfs",
+  );
+}
+
 // 上面几步都是**开发体验**兜底，不是依赖安装的必要条件：任何一步失败都不阻断安装。
 process.exit(0);

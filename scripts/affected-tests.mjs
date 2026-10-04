@@ -190,6 +190,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // **文本**，import 图追不到（改 CSS 不会把它拉进受影响清单），所以与上面那条同因、
   // 必须无条件响；第 ④ 档还兼管「组件改了 data-slot 名字而降级块仍指旧名」那一类静默失效。
   "tests/reduced-motion-tiers.test.ts",
+  // 「内嵌字体这条链有没有静默降级」：LFS 过滤器、`.githooks/pre-push`、postinstall
+  // 里那步 `git lfs install --local --manual`、`@font-face` 的 family 与
+  // `--font-title` 首选是否同名 —— 四环每一环失效都**不报错**，最坏的一种是
+  // `*.ttf` 按原字节进历史（23 MB 摘不干净，只能重写共享远端）。它读的是配置文件
+  // 与 index 形状，import 图一概追不到，所以与上面两条同因、必须无条件响。
+  "tests/embedded-title-font.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
