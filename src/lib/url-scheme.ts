@@ -9,7 +9,7 @@
  * 正则那份有两个实测缺口（两个方向都错）：`HTTPS://x` 被它**误拒**（大小写敏感，
  * 而那是合法的 https 地址），`http://␣␣` 与 `http://x y` 被它**误放行**（前缀匹配
  * 不是解析，串根本不成其为一个地址）—— 实测见 `url-scheme.test.ts` 最后一条。
- * 更要紧的是覆盖面：`z.string().url()` 的入参形态允许 `file:` / `javascript:` /
+ * 更要紧的是覆盖面：`z.url()` 的入参形态允许 `file:` / `javascript:` /
  * 任意自定义协议，而 `setting.openExternal` 这条**把控制权交给系统浏览器**的路径上
  * 谁都没判 —— 请求方给什么协议就往外抛什么（见 `~/lib/shell/open-in-browser`）。
  * 台账 A5 当年补的是「服务端会去 fetch 的那两个地址」，漏了「交给 OS 打开的地址」——

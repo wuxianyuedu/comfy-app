@@ -88,9 +88,15 @@ export function useModelLibrary(): ModelLibraryController {
 
   /* react-query 数据 → 本地行：`models` 是 `listQ.data` 的纯派生（P2：去掉
    * 「prev 引用对比 + 渲染期 setState」的记账 state），不再是独立可变状态。
-   * 手动刷新走 `listQ.refetch()`，同样体现为 `listQ.data` 变化。 */
-  const models = useMemo(
-    () => (listQ.data?.models ?? []) as unknown as ModelRow[],
+   * 手动刷新走 `listQ.refetch()`，同样体现为 `listQ.data` 变化。
+   *
+   * 这里**不需要**断言：服务端返回的是 `Model` 全行（含 `folder` / `source` /
+   * `updatedAt` 等本视图不读的列），而 `ModelRow` 是它的**子集** —— 结构上天然兼容，
+   * 单靠「字段名与类型逐项对上」就能过编译。此前写的 `as unknown as ModelRow[]`
+   * 是双跳断言，它把这份兼容性检查也一起丢掉了：服务端哪天把 `fileName` 改名，
+   * 这里不会红，只会在渲染时静默变 `undefined`。 */
+  const models: ModelRow[] = useMemo(
+    () => listQ.data?.models ?? [],
     [listQ.data],
   );
 

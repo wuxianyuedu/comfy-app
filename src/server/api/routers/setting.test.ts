@@ -319,7 +319,7 @@ describe("setting.openExternal —— 交给系统浏览器之前的协议闸（
     expect(args.at(-1)).toBe("https://example.com/out.mp4");
   });
 
-  /* 这些都能过 `z.string().url()` —— 它们不是「非法 URL」，是「合法的危险协议」。
+  /* 这些都能过 `z.url()` —— 它们不是「非法 URL」，是「合法的危险协议」。
      拦在 spawn 之前才算拦住：发出去就等于本机程序已经被拉起了。 */
   it.each([
     ["file:///C:/Users/me/.env"],

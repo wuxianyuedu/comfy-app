@@ -360,7 +360,12 @@ export function useWorkflowDetailLoader({
     setDetail(null);
     setError("");
     void fetchDetail();
-  }, [workflowId]); // eslint-disable-line react-hooks/exhaustive-deps
+    /* 只认 `workflowId`：本 effect 的职责是「换了一条工作流就整块重建」，
+     * 而 `fetchDetail` 与四个 setter 都是 `useCallback` 的稳定引用
+     * （依赖里没有会逐渲染变化的值），挂上它们不改变触发时机，
+     * 只会掩盖真正的触发条件。属规范 §13.4 的「规则静态盲区」。 */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflowId]);
 
   /* 进入子图：先同步亮出 loading 覆盖层，再用 setTimeout 把新 detail 推到下一个
    *  macrotask，让 React 18 先提交覆盖层再替换 detail。点击展开直接跳进子图。 */
