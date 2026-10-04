@@ -139,7 +139,7 @@ export const PayloadContract: Story = {
       mediaType: "image",
     };
     return (
-      <div className="flex w-[36rem] flex-col gap-2 rounded-lg border p-3">
+      <div className="flex w-xl flex-col gap-2 rounded-lg border p-3">
         <span className="text-ink-muted font-mono text-[11px]">
           dataTransfer MIME = {MEDIA_DRAG_MIME}
         </span>

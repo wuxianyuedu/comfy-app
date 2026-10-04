@@ -232,6 +232,127 @@ export const Probe = ({ label }: ProbeProps) => <div>{label}</div>;
     expect(missingRequiredArgs(storyFile, surface.args)).toEqual([]);
   });
 
+  it("适配件里**显式传了**真组件的必填 props 就不算缺口（`render` 里给也算）", () => {
+    /* 报错文案承诺的口径：写进 `args`，**或在 `render` 里显式传**。判据只统计
+       `args` 时这一整类正当写法会被全判成缺口 —— 实测全仓 6 份有缺口的 story
+       全是这一类（适配件把真组件的必填项在内部喂满了，画布上读得到值）。 */
+    const root = mkdtempSync(join(tmpdir(), "story-surface-"));
+    tempDirs.push(root);
+    const dir = join(root, "src", "components", "ui");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "probe.tsx"),
+      `export interface ProbeProps {
+  label: string;
+  onSelect: (key: string) => void;
+}
+export const Probe = ({ label }: ProbeProps) => <div>{label}</div>;
+`,
+    );
+    const storyFile = join(dir, "probe.stories.tsx");
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+import { Probe } from "./probe";
+
+function ProbeHost({ tone }: { tone: string }) {
+  return <Probe label={tone} onSelect={() => undefined} />;
+}
+
+const meta = {
+  title: "UI/Probe",
+  component: ProbeHost,
+  args: { tone: "标签" },
+} satisfies Meta<typeof ProbeHost>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Default: Story = {};
+`;
+    writeFileSync(storyFile, story);
+    /* `label` 与 `onSelect` 都在适配件里显式传了 → 不该判缺。 */
+    const surface = storySurface(parseSource(storyFile, story));
+    expect(surface.args.has("label")).toBe(false);
+    expect(missingRequiredArgs(storyFile, surface.args)).toEqual([]);
+  });
+
+  it("给 hook / 工厂函数传的必填项同样算给了（不是只有 JSX 属性才算）", () => {
+    /* `useFilePicker({ onPick: … })` 这种：`onPick` 是 hook 的入参，组件在画布上
+       读得到值，而它**不是** JSX 属性。只认 JSX 属性会把这份 story 判成缺口。 */
+    const root = mkdtempSync(join(tmpdir(), "story-surface-"));
+    tempDirs.push(root);
+    const dir = join(root, "src", "components", "ui");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "probe.tsx"),
+      `export interface ProbeProps {
+  onPick: (file: File) => void;
+}
+export function useProbe({ onPick }: ProbeProps) {
+  return onPick;
+}
+`,
+    );
+    const storyFile = join(dir, "probe.stories.tsx");
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+import { useProbe } from "./probe";
+
+function ProbeDemo() {
+  const open = useProbe({ onPick: () => undefined });
+  return <button onClick={open}>选</button>;
+}
+
+const meta = { title: "UI/Probe", component: ProbeDemo } satisfies Meta<
+  typeof ProbeDemo
+>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Default: Story = {};
+`;
+    writeFileSync(storyFile, story);
+    const surface = storySurface(parseSource(storyFile, story));
+    expect(missingRequiredArgs(storyFile, surface.args)).toEqual([]);
+  });
+
+  it("**出参**接口的必填成员不算组件的 props（返回值不是要传进去的东西）", () => {
+    /* `mediaDragSourceProps()` 返回 `MediaDragSourceProps`：它只有 `return` 那一处
+       引用，成员却是必填。把返回值的必填项算成「缺 args」会逼人给组件塞
+       `draggable` / `onDragStart` 这类**它从不消费**的死参数。 */
+    const root = mkdtempSync(join(tmpdir(), "story-surface-"));
+    tempDirs.push(root);
+    const dir = join(root, "src", "components", "ui");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "probe.tsx"),
+      `export interface ProbeProps {
+  draggable: boolean;
+  onDragStart: () => void;
+}
+export function probeProps(): ProbeProps {
+  return { draggable: true, onDragStart: () => undefined };
+}
+`,
+    );
+    const storyFile = join(dir, "probe.stories.tsx");
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+import { probeProps } from "./probe";
+
+function ProbeCard() {
+  return <div {...probeProps()} />;
+}
+
+const meta = { title: "UI/Probe", component: ProbeCard } satisfies Meta<
+  typeof ProbeCard
+>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Default: Story = {};
+`;
+    writeFileSync(storyFile, story);
+    const surface = storySurface(parseSource(storyFile, story));
+    expect(missingRequiredArgs(storyFile, surface.args)).toEqual([]);
+  });
+
   it("读不到 props 接口时**不判**（宁可漏，不可误伤）", () => {
     const root = mkdtempSync(join(tmpdir(), "story-surface-"));
     tempDirs.push(root);
