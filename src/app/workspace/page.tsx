@@ -387,11 +387,7 @@ export default function WorkspacePage() {
         return <ResourceLibrary />;
 
       case "workshop":
-        return (
-          <div className="h-full overflow-y-auto">
-            <WorkshopPipeline />
-          </div>
-        );
+        return <WorkshopPipeline />;
 
       default:
         return null;
