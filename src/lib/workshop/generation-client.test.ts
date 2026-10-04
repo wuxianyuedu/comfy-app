@@ -50,7 +50,7 @@ function mockPrepare(
       status: 200,
     });
   });
-  global.fetch = mock;
+  globalThis.fetch = mock;
   return mock;
 }
 

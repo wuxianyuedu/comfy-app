@@ -167,7 +167,7 @@ export async function resolveComfyBase(): Promise<string> {
   const configuredPort =
     settings.comfyuiPort && settings.comfyuiPort > 0
       ? settings.comfyuiPort
-      : parseInt(url.port) || COMFYUI_DEFAULT_PORT;
+      : Number.parseInt(url.port, 10) || COMFYUI_DEFAULT_PORT;
 
   /* comfyuiPath 已配置：**先问进程事实**，再谈探测（ISSUE #449）。
    *
