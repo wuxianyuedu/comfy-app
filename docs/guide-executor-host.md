@@ -42,12 +42,12 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 > 来领。ISSUE #1204 之后这类行**不再被回收器判失败**，而是留在队列里等一个会领它
 > 的宿主：现象从「30s 后报『请重新执行』」变成「一直不动、排队数一直涨」，行上只有
 > 一句「⏳ 等待…」。**别把它当成卡死去重启应用**，判据是 launcher 控制台有没有
-> 「executor-host 已启动」、`log/services/executor-host.log` 有没有 `mode=runtime`。
+> 「executor-host 已启动」、`log/current/services/executor-host.log` 有没有 `mode=runtime`。
 > 这是灰度期最容易踩的坑。
 
 3. 确认起来了（两处证据）：
    - launcher 控制台：`executor-host 已启动（PID …，COMFY_EXECUTOR=host 灰度中…）`；
-   - `log/services/executor-host.log` 尾部：`mode=runtime` →
+   - `log/current/services/executor-host.log` 尾部：`mode=runtime` →
      `runtime inject-ok seams=…` → `runtime q2-scan hostShardQueued=…`。
 4. 正常用工坊 / 工作流库点「运行」即可；界面观感与 inline 一致（进度 / 日志 /
    产物经 DB 短轮询送达，粒度 ≤3s）。
@@ -85,7 +85,7 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
    得用户自己往安装目录放；**别把它当常规入口**，载荷里根本没有它，写进文档会让人以为
    桌包与 dev 的给法完全同形。
 2. **看的是入口日志，不是 launcher 控制台**（桌包没有 launcher）。壳日志里三行按顺序：
-   `executor mode=host` → `host pid=… out=… err=…` → 之后 `log/services/` 里宿主的
+   `executor mode=host` → `host pid=… out=… err=…` → 之后 `log/current/services/` 里宿主的
    `boot pid=` / `mode=runtime` / `runtime inject-ok`。
 3. **宿主退出不会带走应用**：入口打一行 `host exited code=…`，server 继续跑，任务留在
    队列（#1204 之后的既定语义）。**既不降级回 inline、也不自动重启**——降级会让已经写成
@@ -120,9 +120,9 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
 
 | 通道           | 位置                                                          | 内容                                                                        |
 | -------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| host 编排日志  | `log/services/executor-host.log`                              | boot / 心跳 / `claim-dispatched` / `cancel-reaped` / boot FAILED            |
-| host pino 通道 | `log/services/executor-host-{stdout,stderr}-<启动时间戳>.log` | 执行链内部日志（含 reaper / 进度回写）                                      |
-| 执行 trace     | `log/comfyui/comfyui-trace-host.log`                          | cli 事件 / WS 事件 / history 对账（与 inline 的 trace 分文件，不互串）      |
+| host 编排日志  | `log/current/services/executor-host.log`                              | boot / 心跳 / `claim-dispatched` / `cancel-reaped` / boot FAILED            |
+| host pino 通道 | `log/current/services/executor-host-{stdout,stderr}-<启动时间戳>.log` | 执行链内部日志（含 reaper / 进度回写）                                      |
+| 执行 trace     | `log/current/comfyui/comfyui-trace-host.log`                          | cli 事件 / WS 事件 / history 对账（与 inline 的 trace 分文件，不互串）      |
 | 任务真相       | `db.sqlite` 的 `task` 行                                      | `claimedBy`（归属）、`status/progress/progressNode`、`logs`、`resultImages` |
 
 ## 行为语义速查
