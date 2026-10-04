@@ -13,12 +13,17 @@
  *    2. **自动布局（按 BFS 分层）**：只给了 API JSON 时用。
  * 连线的构建（`buildEdges`）留在编辑器本体——它与 `setEdges` 的同步效应
  * 是同一件事（见 workflow-canvas-io-isolation-guard 的来源判据）。
+ *
+ * 派生结果还会同步进 viewer / rgthree 两个 store（P2：让 getNodeJson /
+ * getNodeView / getBypass 读到实时 detail，等价于旧 Context 每次用新 props
+ * 渲染）——发布动作与派生是同一条管线，收在这里。
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { buildInitialNodes } from "../workflow-editor-build-nodes";
 import { useWorkflowDerivedData } from "../workflow-editor-derived";
 import { enrichFromViewNodes } from "../io-exposure";
+import type { useViewerApi, useRgthreeApi } from "../WorkflowStores";
 import type { useWorkflowDetailLoader } from "./use-workflow-detail-loader";
 import type { WorkflowDetail } from "../../workflow-types";
 
@@ -32,8 +37,26 @@ export function useWorkflowGraphDerivation(params: {
    *  嵌套时的 `4:5`）。带上它才能在勾选时落库「外层 + 内层」两个 id
    *  （ISSUE #349 后续）。 */
   viewHostNodeId: string;
+  workflowId: string;
+  viewerApi: ReturnType<typeof useViewerApi>;
+  rgthreeApi: ReturnType<typeof useRgthreeApi>;
+  subgraphRawContext: {
+    parentRawJson: unknown;
+    subUid: string;
+  } | null;
+  subgraphStackLength: number;
 }) {
-  const { detail, paramMap, onEnterSubgraph, viewHostNodeId } = params;
+  const {
+    detail,
+    paramMap,
+    onEnterSubgraph,
+    viewHostNodeId,
+    workflowId,
+    viewerApi,
+    rgthreeApi,
+    subgraphRawContext,
+    subgraphStackLength,
+  } = params;
   const { rawMetaById, scopeDetail, outSlotNameById } =
     useWorkflowDerivedData(detail);
 
@@ -69,6 +92,25 @@ export function useWorkflowGraphDerivation(params: {
       viewHostNodeId,
     ],
   );
+
+  /* P2: 把 detail 派生的查找上下文同步进 viewer / rgthree store，让
+   * getNodeJson/getNodeView/getBypass 读到实时 detail（等价于旧 Context
+   * 每次用新 props 渲染）。 */
+  useEffect(() => {
+    viewerApi.setState({
+      detail,
+      rawMetaById,
+      positions: detail?.positions ?? null,
+      subgraphRawContext,
+      subgraphStackLength,
+    });
+    rgthreeApi.setState({
+      workflowId,
+      detail,
+      overrides: rgthreeApi.getState().overrides,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail, rawMetaById, subgraphRawContext, subgraphStackLength]);
 
   return { rawMetaById, scopeDetail, outSlotNameById, ioDetailMap, graphNodes };
 }
