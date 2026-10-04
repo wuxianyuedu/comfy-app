@@ -718,6 +718,58 @@ args）。给 86 份逐条补 `args` 是把 337 张画布的**输入形状重写
 （纯属性包、复合件那类故事就没有）。改成「两者有一个即可」，缺的那一项交给各自的
 判据点名。
 
+#### 16.2.3.9 业务目录（`studio/` / `workshop/`）的 story：按「有没有数据依赖」逐件分档
+
+§16.2.3.6–§16.2.3.8 把 `ui/` 铺到了满覆盖，而 `studio/` / `workshop/` 那两棵树上
+**只有 5 件有 story**（§16.2.3.6 那一批的顺带产物）。这一批往那两棵树里铺 18 件，
+做法与 `ui/` 那批**不同**：不是按目录扫，而是**先分档、再决定怎么写**。
+
+**分档的判据是「数据从哪来」，不是「props 多不多」**（§16.2.3.6 校准过的那条）：
+
+| 档 | 判据 | 怎么写 story | 这一批的例子 |
+| -- | ---- | ------------ | ------------ |
+| 纯 props | 入参是可序列化值或回调 | 直接摆，关键是**派生量不手抄** | `WorkshopStageItem` / `StageHint` / `SeedAdvancedField` / `ShotSizePicker` / `MegapixelStepper` |
+| 结构化入参 | 吃一份 lib 里的类型（`WorkflowIOMap` / `Shot[]` / `ProductionProgress`） | 按**真类型**给形状，数值仍调 lib 的派生函数 | `CanvasProgressIndicator` / `DraftIntegrityHint` / `WorkflowNodeParts` |
+| 运行期环境 | 读 tRPC / store / React Flow 上下文 | 注入层（§16.2.3.6）或**明确不写** | 见下 |
+
+**「派生量不手抄」是这一批最常被违反的一条**，而且违反时**画布看着完全正常**：
+`stageProgressPct({ stage, rendered })` 的百分比、`shotSizeSummary(state)` 的
+「832×1216」、`auditDraftElements(draft)` 的问题清单 —— 手抄一份数字/一句话，
+改常量时 story 会继续显示旧口径。所以新增的 18 份里所有这类值都**调组件自己的那个
+出口**（或它调的那个 lib 函数）。
+
+**第二档里有一类必须先把数据「按真判据算出来」**：`DraftIntegrityHint` 的 story
+不是手写一份 `DraftElementIssue[]`，而是先摆一份「坏在哪」的草稿、再调
+`auditDraftElements()`。理由是那份结论本身有聚合口径（「按元素算，不是按问题算」）
+与 5 条上限 —— 手抄的清单把这两条规则在 story 里反过来写了一遍。
+
+**第三档里这一批刻意不碰的**（不是漏了，是判断）：
+· **写 store 的件**（`LogFilterBar` 等）——它的状态住在 `log-panel-layers` 的
+  module-level store 里，story 里要「先按真形状写进 store 再摆」，而那份 store 的
+  读侧与视图耦合；这需要一层 story 侧的 store 注入，是独立的一刀；
+· **吃 React Flow 上下文的件**（`Field` / `PortHandle` 的真渲染）——没有
+  `ReactFlowProvider` 就抛错，而挂一个假 provider 得到的是**假的端点几何**；
+  这一族的形态由 `WorkflowNodeParts`（画布与库**共用**的那份部件）的 story 覆盖，
+  `renderHandle` 在那边是**调用处注入**的，story 给的是同一个形状；
+· **整屏容器**（`AppShell` / `ProjectCanvas` / `WorkshopPipeline`）——它们的
+  「形态」是十几个子件的组合，逐个 story 化等于把应用重搭一遍。
+
+**顺手修掉一处真缺陷（由新 story 的第一眼看出来）**：`EmptyCanvasHint` 的
+`className` 里有一串 `backdrop-bl dark:shadow-black/40ur-md` —— 一次全仓类名规范化
+（`refactor(canvas): 画布与节点编辑器表面改语义 token`）把 `backdrop-blur-md` 与
+`dark:shadow-black/40` **拼坏在了一起**，于是那张「空画布引导卡」既丢了毛玻璃、
+又挂了一条不存在的工具类。`tailwind` 对未知类名**不报错**（只是不生成 CSS），
+所以构建、tsc、eslint、既有门禁**全绿**；是把它摆到 story 画布上才看出来的。
+
+> 这类「类名字符串被拼坏」全仓没有判据：`tw4-canonical-report.mjs` 只回答
+> 「有没有另一种写法生成相同的 CSS」，对**不生成任何 CSS 的类名**无感。
+> 要不要为它立判据（用 design system 的 `getClassList()` 反查）是独立的一刀 ——
+> 本批只修实例、记账，不为它顺手加第三个扫描器。
+
+**这一批的数量**：`studio/` + `workshop/` 的 story 从 5 份 → 23 份，全仓 88 → **108 份**。
+`ui/` 的覆盖率棘轮（89/89）不受影响 —— 它的分母只看 `ui/`，业务目录那两棵树
+**不在那张表里**，理由见 §16.2.3.5 的「分母是什么」。
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
