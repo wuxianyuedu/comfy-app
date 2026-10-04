@@ -570,7 +570,9 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 `Sarasa Gothic SC` 既没有 `@font-face`、也不在 `next/font` 里（`layout.tsx` 只加载了 Geist）。⚠️ 本机复验把「开发机装了、装机才回退」这个直觉**否掉了**：`C:\Windows\Fonts`（563 个文件，可读）与用户级字体目录里**都没有 Sarasa** ⇒ 那 15 处 `font-title` 调用点一直渲染的是 Geist + 系统 CJK。
 
-**已签字（2026-10-03）**：随包**内嵌子集**。这因此不是「恢复设计观感」，而是**首次引入一种新观感** —— 落地前还要定两格：**子集范围**（UI 文案可穷举，但节点标签 / 日志里的用户内容穷举不了，混排会一半有衬一半没有）与**字体许可核对**。另有一条产物关要过：字体文件放 `public/` 会随 `next build` 进 standalone（AGENTS 硬规则 17 那条通道），新增顶层条目要同改两张白名单并回答「谁在运行期读它」。
+**已落地（同批）**：只嵌 **Bold 一档**（`public/fonts/SarasaGothicSC-Bold.ttf`，23,892,196 字节）+ `@font-face`，`font-title` 的全部落点都是 700（`font-bold` 或 `.u-title-page`），没有 600 档在用，所以单档够用；许可 **SIL OFL 1.1**，全文随字体放在 `public/fonts/OFL-Sarasa-Gothic.txt`。文件走 **git-lfs**，接线两条：`.githooks/pre-push`（本仓库 `core.hooksPath=.githooks` 会整目录覆盖 `.git/hooks`，LFS 装在那里的钩子不会被调用）与 `scripts/install-git-hooks.mjs` 里的 `git lfs install --local --manual`（新克隆没有全局 `filter.lfs.*` ⇒ 规则落空、23 MB 按原字节进历史）。执行者 = `tests/embedded-title-font.test.ts`（在 C 组固定清单里），它判四环是否都还接得上，并核 index 里确实是指针、指针 `size` 与工作树字节数一致。
+
+> ⚠️ 订正我先前的一句话：**「换成系统 Noto」不是一条已验证的零成本路**。`NotoSansSC-VF.ttf` 确实在本机字体目录里，但我没有区分它是 Windows 自带还是后来装的——若它是后者的话，「改用 Noto」等于把「从来没生效」换成「装机大概率也没生效」。中文 Windows 必然自带的是微软雅黑，而它**本来就在**回退栈里。结论：**只有内嵌才真正保证观感**。
 
 ### 待定 4 → 已落地：`.btn-gradient` 三颗星改走品牌 token，并补出 `variant="gradient"`
 

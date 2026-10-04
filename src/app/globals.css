@@ -370,6 +370,31 @@
   --color-node-mix-base: #2b2b36; /* 子图标题栏混色基准（与 `--color-node` 同值） */
 }
 
+/* ── 内嵌的中文标题字面（`--font-title` 的首选）─────────────────────
+   `--font-title` 首选 Sarasa Gothic SC 很多年，但它既没有 `@font-face` 也不在
+   `next/font` 里 —— 实测本机字体目录（系统级 + 用户级）**都没有**这个字面，
+   也就是说那一档**从来没有生效过**，15 处调用点一直渲染的是 Geist + 系统 CJK。
+   这里补上真正的字面，让「标题比正文重、字面宽不同」这件事在**任何机器**上都成立
+   （而不是只在某个人的机器上成立 —— 那正是它一直没被发现的原因）。
+
+   · 只嵌 **Bold 一档**：`font-title` 的全部落点都是 700（`font-bold` 或
+     `.u-title-page`，后者字面写着 `font-weight: 700`），没有 600 档在用；
+     单档完整 CJK TTF ≈23 MB，多嵌一档就是再搬 23 MB 进产物与安装包。
+   · 文件走 **git-lfs**（`.gitattributes` 的 `*.ttf`），否则每次克隆都背着它。
+     LFS 的两条接线见 `.githooks/pre-push` 与 `scripts/install-git-hooks.mjs`。
+   · 许可 **SIL OFL 1.1**，全文随字体一起放在 `public/fonts/OFL-Sarasa-Gothic.txt`
+     （OFL 要求再分发时附许可文本，这条不是可选项）。
+   · `font-display: swap`：首帧先用回退栈画出标题、字面到货再换上。桌面壳是本地
+     文件、没有网络往返，但 standalone 首启仍要走一次解压，`block` 会让标题短暂
+     空着 —— 那是可感知的空白，不是「更严谨」。 */
+@font-face {
+  font-family: "Sarasa Gothic SC";
+  src: url("/fonts/SarasaGothicSC-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    固定暗色清单（Fixed-dark inventory）
    ═══════════════════════════════════════════════════════════════════
