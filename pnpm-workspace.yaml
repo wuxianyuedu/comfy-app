@@ -50,12 +50,25 @@ allowBuilds:
   # 不产出任何产物 —— 显式拒绝，避免非交互 install 触发 ERR_PNPM_IGNORED_BUILDS。
   core-js-pure: false
 
-# 安全修复：@esbuild-kit/core-utils 是已废弃的 esm-loader（被 tsx 替代），
-# 其 esbuild@~0.18.20 存在 GHSA-67mh-4wv8-2f99 中危漏洞（serve 功能 CORS 缺陷）。
-# 强制将其 esbuild 依赖升级到 0.25.12（与 drizzle-kit 直接依赖版本对齐），
-# esbuild JS API（transform/transformSync）跨版本保持稳定，兼容无风险。
+# esbuild 安全修复 + 单实例收敛（ISSUE #1319 第二批）：drizzle-kit（当前 latest 0.31.11）
+# 依赖的 @esbuild-kit/esm-loader / @esbuild-kit/core-utils 都已废弃（包里自带
+# `deprecated: Merged into tsx`），而 core-utils 把 esbuild 钉在 `~0.18.20` ——
+# 正是 GHSA-67mh-4wv8-2f99 的受影响区间（serve 功能 CORS 缺陷，修复线 `>=0.25.0`）。
+# 所以这条 override **不能删**：删掉就退回 0.18.20、漏洞复现（drizzle-kit 上游没有
+# 换掉 esm-loader，latest 也是同一形状，没有「升 drizzle-kit 就自然消掉」这条路）。
+#
+# 两条键都把同一份 npm 包顶到顶层那份（package.json 的 devDependency `esbuild`）：
+#   · core-utils>esbuild —— 安全修复，见上；
+#   · drizzle-kit>esbuild —— 它自己声明 `^0.25.4`，range 不含 0.28，不顶就会与
+#     顶层那份**分裂成两个实例**（node_modules 里同时存在 0.25.12 与 0.28.2）。
+# 收敛到一个实例的理由不是省体积：`scripts/build-executor-host.mjs` 直接 require 顶层
+# 那份做打包，而 drizzle-kit 用的是自己的那份 —— 两个版本并存时，「构建期转译行为」
+# 就取决于调用方是谁，出问题无法归因。esbuild JS API（transform/transformSync）跨
+# 0.25→0.28 保持稳定，实测 `pnpm exec tsc --noEmit` + `pnpm build` 全链通过。
+# 判据：`pnpm why esbuild` 应只报 **Found 1 version of esbuild**。
 overrides:
-  '@esbuild-kit/core-utils>esbuild': '0.25.12'
+  '@esbuild-kit/core-utils>esbuild': '0.28.2'
+  'drizzle-kit>esbuild': '0.28.2'
   # 安全修复：deepmerge-ts@7.1.5 存在 CVE-2026-40345（合并递归对象图时栈溢出），
   # 由 prisma 工具链（@better-auth/prisma-adapter 的可选 peer）传递引入。
   # 本项目实际使用 Drizzle/sqlite，schema 已删、从不 import prisma，prisma 系仅为
