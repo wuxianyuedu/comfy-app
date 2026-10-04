@@ -31,8 +31,10 @@ import {
   parseImportedCharacterCards,
 } from "~/lib/workshop/script-parse";
 import type { ParsedCharacterDraft } from "~/lib/workshop/script-parse";
-import type { ExtractChannel } from "~/components/workshop/ExtractToolbar";
-import { parseChannelOption } from "~/components/workshop/ExtractToolbar";
+import {
+  parseChannelOption,
+  type ExtractChannel,
+} from "~/lib/workshop/channel-options";
 import {
   useExtractSession,
   type ExtractSession,

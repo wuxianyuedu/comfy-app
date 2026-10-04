@@ -45,7 +45,7 @@ function ExpansionDemo() {
   /* 初始空表 = 全部未表态 = 全部折叠。 */
   const nodes = useExpansionSet();
   return (
-    <div className="flex w-[30rem] flex-col gap-3">
+    <div className="flex w-120 flex-col gap-3">
       <div className="flex flex-wrap gap-2">
         <button
           className="rounded border px-2 py-1 text-xs"
@@ -107,7 +107,7 @@ export const SeedDefaultsVsReplace: Story = {
 function SeedDemo() {
   const nodes = useExpansionSet({ style_pack: false });
   return (
-    <div className="flex w-[30rem] flex-col gap-3">
+    <div className="flex w-120 flex-col gap-3">
       <div className="flex flex-wrap gap-2">
         <button
           className="rounded border px-2 py-1 text-xs"
@@ -144,7 +144,7 @@ export const HasKeyVsValue: Story = {
 function HasKeyDemo() {
   const nodes = useExpansionSet({ a: true, b: false });
   return (
-    <div className="flex w-[30rem] flex-col gap-3">
+    <div className="flex w-120 flex-col gap-3">
       <pre className="rounded-lg border p-3 font-mono text-xs">
         {JSON.stringify(nodes.map, null, 2)}
       </pre>

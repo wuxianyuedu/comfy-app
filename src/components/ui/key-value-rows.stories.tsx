@@ -48,7 +48,7 @@ const PARAMS: KeyValueItem[] = [
  *  `bordered` / `striped` 是它的两个修饰 —— 参数表那种「扫一眼读数值」。 */
 export const Rows: Story = {
   render: () => (
-    <div className="flex w-[30rem] flex-col gap-6">
+    <div className="flex w-120 flex-col gap-6">
       <div className="flex flex-col gap-1.5">
         <span className="text-ink-muted font-mono text-[11px]">
           rows（默认）
@@ -71,7 +71,7 @@ export const Stacked: Story = {
   render: () => (
     <KeyValueRows
       layout="stacked"
-      className="w-[36rem]"
+      className="w-xl"
       items={PARAMS.map((item) => ({ ...item, hint: "取自最近一次训练" }))}
     />
   ),
@@ -81,7 +81,7 @@ export const Stacked: Story = {
  *  两列参数表（左列等宽截断）的形态，语义比一堆 div 强。 */
 export const TableLayout: Story = {
   render: () => (
-    <KeyValueRows layout="table" className="w-[30rem]" items={PARAMS} />
+    <KeyValueRows layout="table" className="w-120" items={PARAMS} />
   ),
 };
 
@@ -115,7 +115,7 @@ export const AllLayouts: Story = {
           </span>
           <KeyValueRows
             layout={layout}
-            className="w-[34rem]"
+            className="w-136"
             items={PARAMS}
             bordered={layout === "rows"}
           />
@@ -131,7 +131,7 @@ export const AllLayouts: Story = {
 export const ValueVsRaw: Story = {
   render: () => (
     <KeyValueRows
-      className="w-[30rem]"
+      className="w-120"
       bordered
       items={[
         { key: "raw: 数字", raw: 42 },

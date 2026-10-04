@@ -197,7 +197,7 @@ function Shell({
  *  `SidebarGroupLabel` 那两行会隐掉（`-mt-8 opacity-0`）。 */
 export const Default: Story = {
   render: (args) => (
-    <div className="h-[32rem]">
+    <div className="h-128">
       <Shell collapsible={args.children === null ? "icon" : "icon"} />
     </div>
   ),
@@ -207,7 +207,7 @@ export const Default: Story = {
  *  `offcanvas` 整条滑走 / `icon` 收成图标轨 / `none` 永远铺着。 */
 export const CollapsibleOffcanvas: Story = {
   render: () => (
-    <div className="h-[32rem]">
+    <div className="h-128">
       <Shell collapsible="offcanvas" />
     </div>
   ),
@@ -215,7 +215,7 @@ export const CollapsibleOffcanvas: Story = {
 
 export const CollapsibleIcon: Story = {
   render: () => (
-    <div className="h-[32rem]">
+    <div className="h-128">
       <Shell collapsible="icon" />
     </div>
   ),
@@ -223,7 +223,7 @@ export const CollapsibleIcon: Story = {
 
 export const CollapsibleNone: Story = {
   render: () => (
-    <div className="h-[32rem]">
+    <div className="h-128">
       <Shell collapsible="none" />
     </div>
   ),
@@ -234,7 +234,7 @@ export const CollapsibleNone: Story = {
  *  是因为它同时改**两块**的形态（`peer-data-[variant=inset]` 一族）。 */
 export const VariantFloating: Story = {
   render: () => (
-    <div className="h-[32rem]">
+    <div className="h-128">
       <Shell variant="floating" collapsible="icon" />
     </div>
   ),
@@ -242,7 +242,7 @@ export const VariantFloating: Story = {
 
 export const VariantInset: Story = {
   render: () => (
-    <div className="h-[32rem]">
+    <div className="h-128">
       <Shell variant="inset" collapsible="icon" />
     </div>
   ),
@@ -252,7 +252,7 @@ export const VariantInset: Story = {
  *  贴边侧）—— 只看左侧是验不出这一档的。 */
 export const SideRight: Story = {
   render: () => (
-    <div className="h-[32rem]">
+    <div className="h-128">
       <Shell side="right" collapsible="icon" />
     </div>
   ),
@@ -262,7 +262,7 @@ export const SideRight: Story = {
  *  （真实入口由服务端读 cookie 传给 `defaultOpen`，首屏即这一档）。 */
 export const DefaultCollapsed: Story = {
   render: () => (
-    <div className="h-[32rem]">
+    <div className="h-128">
       <Shell collapsible="icon" defaultOpen={false} />
     </div>
   ),

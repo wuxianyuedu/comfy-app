@@ -179,7 +179,21 @@ const NON_ASCII = /[^\x00-\x7F]/;
 const HISTORY_DATE = /\d{4}-\d{2}-\d{2}/;
 const HISTORY_TAG =
   /\bR(?:[-_][A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*|\d{1,4}(?:[-_][A-Za-z]?[A-Za-z0-9]*)?)(?:\s*\/\s*(?:\d{1,4}|[A-Za-z][A-Za-z0-9]*))*/;
-const HISTORY_TASK = /\bT\d{1,3}(?:-\d{1,3})?\b/;
+// 任务批次号两档:`T12-3` 这种带连接号的形式,或裸 `T11`(样式块里整段搬运的
+// 那批曾只写 `— T11`)。**但排除对反模式表 / 规范章节的交叉引用**(`反模式 T5`、
+// `§14 的 T12`)—— 那是「当前代码违反哪一条」的有效指路,不是变更流水。放宽扫到
+// 块注释续行之后这两者会撞形(globals.css 的 CodeBlock 说明里就有一处),因此对
+// **裸** `Tn` 加一条行内上下文豁免:同一行出现 `反模式` 或 `§` 即跳过。带连接号的
+// `T12-3` 不受影响(它没有第二种含义)。
+const HISTORY_TASK_DASHED = /\bT\d{1,3}-\d{1,3}\b/;
+const HISTORY_TASK_BARE = /\bT\d{1,3}\b/;
+const HISTORY_TASK_REF_CONTEXT = /反模式|§/;
+
+// 块注释的闭合标记用**正则字面量**表达,而不写字符串:源码里因此不出现连续的
+// 块注释闭合标记 —— 否则 `tests/gate-hint-targets-exist.test.ts` 的简易
+// `stripComments` 会把它当成真的闭合(它是非贪婪匹配),让后面的字符串字面量
+// 整段错位、判据面莫名其妙多出一条本来就故意不存在的路径。
+const BLOCK_COMMENT_CLOSE = /\*\//;
 
 /* ── R13/R14:src/lib 的域归属纪律(ISSUE #565 / 规范 §12.5.3) ──────────
  *
@@ -738,18 +752,48 @@ const SCAN_EXCLUDED = [
   })("src");
   for (const rel of files) {
     const lines = fs.readFileSync(rel, "utf8").split("\n");
+    /* 逐行找「这一行是不是注释」。**必须带块注释状态**：只按行首形态判
+     * (以 `*` 开头等)会漏掉「块内不以 `*` 开头的续行」—— JSX 注释块里手写的
+     * 多行说明、以及块注释里整段贴进来的旧说明,续行常常顶格或缩进对齐,
+     * 行首既不是 `*` 也不是 `//`。实测 src/ 里有 3 行这样的 `R-ardot` /
+     * 日期标记长期漏在判据之外(见 WorkflowWirePortRows /
+     * ImageGenerationPanel),而它们恰恰是最容易被整段搬运的一类。
+     * 状态机只在注释内判定,不碰字符串字面量里的日期(如用例里的示例文本)。 */
+    let inBlock = false;
     lines.forEach((l, i) => {
       const t = l.trim();
-      const isComment =
+      let isComment = inBlock;
+      // JSX 注释块与普通块注释同形,统一按开闭标记计
+      if (inBlock) {
+        if (BLOCK_COMMENT_CLOSE.test(l)) inBlock = false;
+      } else if (
         t.startsWith("//") ||
         t.startsWith("/*") ||
-        t.startsWith("*") ||
-        t.startsWith("{/*");
+        t.startsWith("{/*") ||
+        t.startsWith("*")
+      ) {
+        isComment = true;
+        // 本行开了块注释、且本行没有把它闭合 → 后续行都在注释里
+        const opensBlock = t.startsWith("/*") || t.startsWith("{/*");
+        if (opensBlock && !BLOCK_COMMENT_CLOSE.test(l)) inBlock = true;
+      }
       if (!isComment) return;
       // 一行里可能同时有日期与编号,逐个报出来,便于一次改干净
       const found = new Set();
-      for (const re of [HISTORY_DATE, HISTORY_TAG, HISTORY_TASK]) {
+      for (const re of [HISTORY_DATE, HISTORY_TAG]) {
         for (const m of l.matchAll(new RegExp(re.source, "g"))) {
+          if (m[0] !== "") found.add(m[0]);
+        }
+      }
+      // 任务批次号两档:带连接号的 `T12-3` 无歧义;裸 `Tn` 在「同行的反模式 /
+      // 规范章节引用」语境下不算流水(理由见 HISTORY_TASK_* 的声明处)。
+      for (const re of [HISTORY_TASK_DASHED]) {
+        for (const m of l.matchAll(new RegExp(re.source, "g"))) {
+          if (m[0] !== "") found.add(m[0]);
+        }
+      }
+      if (!HISTORY_TASK_REF_CONTEXT.test(l)) {
+        for (const m of l.matchAll(new RegExp(HISTORY_TASK_BARE.source, "g"))) {
           if (m[0] !== "") found.add(m[0]);
         }
       }

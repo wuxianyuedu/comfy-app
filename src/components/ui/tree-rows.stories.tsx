@@ -43,7 +43,7 @@ type Story = StoryObj<typeof meta>;
  *  —— 调用处只给 `row` 与子行内容。 */
 export const SingleLevel: Story = {
   render: () => (
-    <div className="w-[30rem] rounded-lg border p-3">
+    <div className="w-120 rounded-lg border p-3">
       <TreeRow row={<span className="text-sm font-medium">节点包</span>}>
         <div className="text-ink-muted text-sm">子行 A</div>
         <div className="text-ink-muted text-sm">子行 B</div>
@@ -57,7 +57,7 @@ export const SingleLevel: Story = {
  *  第三层缩 8px」这种只有深树上才看得出来的错位）。 */
 export const NestedThreeLevels: Story = {
   render: () => (
-    <div className="w-[30rem] rounded-lg border p-3">
+    <div className="w-120 rounded-lg border p-3">
       <TreeRow
         row={<span className="text-sm font-medium">自定义节点目录</span>}
       >
@@ -79,7 +79,7 @@ export const NestedThreeLevels: Story = {
  *  「缩进 + 引导线」。三档并排，看那条虚线从第几层开始出现。 */
 export const IndentSteps: Story = {
   render: () => (
-    <div className="flex w-[30rem] flex-col gap-4">
+    <div className="flex w-120 flex-col gap-4">
       {[0, 1, 2].map((depth) => (
         <div key={depth} className="flex flex-col gap-1">
           <span className="text-ink-muted font-mono text-[11px]">
@@ -105,7 +105,7 @@ export const IndentSteps: Story = {
  *  「一行怎么折」），缩进与子行归属归本件。两层出口各管各的、叠在一起用。 */
 export const WithDisclosure: Story = {
   render: () => (
-    <div className="w-[30rem] rounded-lg border p-3">
+    <div className="w-120 rounded-lg border p-3">
       <Disclosure
         defaultOpen
         trigger={<span className="text-sm font-medium">节点包 A</span>}

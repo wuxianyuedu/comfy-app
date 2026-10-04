@@ -304,10 +304,9 @@ export function WirePortRows({
               {/* control 区 fill 剩余空间（= row 高度 - pt-1.5 - subrow-16 -
  mt-1.5 - pb-1.5 = row 高度 - 34）；textarea 自适应高度 min 28
  / max 120，超长滚动。
- R-ardot21 (2026-08-14): 外层 wrapper 加`overflow: hidden
- min-w-0` 兜底——textarea 的 box 即使 intrinsic content size
- 撑出 wrapper（Chrome`field-sizing:content` 的 width 接管
- 在 R-ardot20 实测不可靠），wrapper 也会视觉裁掉。*/}
+ 外层 wrapper 兜 `overflow: hidden min-w-0`：textarea 的 box 即使被
+ intrinsic content size 撑出 wrapper（Chrome `field-sizing: content`
+ 的 width 接管实测不可靠），wrapper 也会视觉裁掉。*/}
               <div className="mt-1.5 min-h-0 min-w-0 flex-1 overflow-hidden pr-3.5 pl-3.5">
                 {wireInput.control === "textarea" && (
                   <AutoResizeTextarea

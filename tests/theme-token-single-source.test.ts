@@ -138,6 +138,11 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       "--color-", // 项目 token（唯一事实来源）
       "--font-", // 字体
       "--spacing-", // 间距刻度
+      /* 内容列宽度档位（`--container-narrow/medium/wide`）：Tailwind v4 生成
+         `max-w-*` 类的命名空间，与 `--spacing-*` 生成间距类同理 —— 档位名直接
+         当类用（`max-w-narrow`）。三个数值是把原先散在八个视图里的现值收进一处，
+         不是新设计的别名。 */
+      "--container-",
       "--z-index-", // 层级刻度
       "--radius-", // 圆角刻度
       "--text-", // 字阶刻度（.u-title / .u-title-page / .u-title-stage / .u-title-hero）

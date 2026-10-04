@@ -53,7 +53,7 @@ function Demo({
   const [modes, setModes] = useState(initialModes);
   const [defaultMode, setDefaultMode] = useState(initialDefault);
   return (
-    <div className="flex w-[30rem] flex-col gap-3">
+    <div className="flex w-120 flex-col gap-3">
       <div className="flex items-center gap-3 rounded-lg border p-3">
         <span className="text-sm font-medium">角色一致性 · 三视图</span>
         <MultiModeSelect

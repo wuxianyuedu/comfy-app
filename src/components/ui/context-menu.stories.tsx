@@ -69,7 +69,7 @@ export const Default: Story = {
 export const AtPointer: Story = {
   render: () => (
     <ContextMenu>
-      <ContextMenuTrigger className="grid h-40 w-96 grid-cols-2 grid-rows-2 gap-px rounded-lg border bg-[image:repeating-linear-gradient(45deg,transparent_0_8px,var(--color-surface-2)_8px_16px)]">
+      <ContextMenuTrigger className="grid h-40 w-96 grid-cols-2 grid-rows-2 gap-px rounded-lg border bg-[repeating-linear-gradient(45deg,transparent_0_8px,var(--color-surface-2)_8px_16px)]">
         {["左上", "右上", "左下", "右下"].map((corner) => (
           <span
             key={corner}
