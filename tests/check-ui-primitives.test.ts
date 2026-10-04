@@ -91,7 +91,7 @@ function seedBaseline(): void {
  * 把 workdir 里那份脚本改成「这几条仍走棘轮」的形态 —— 只把 rule id 从
  * `HARD_GATE_RULES` 摘掉，判据本身一字不动。
  *
- * 为什么要这样造：现网 82 条**全部**是硬闸，而「冻结存量 → 只许降 → --strict
+ * 为什么要这样造：现网 84 条**全部**是硬闸，而「冻结存量 → 只许降 → --strict
  * 要求收紧 → --update 拒绝放宽」这套棘轮语义是给**新引入的判据**起步用的。
  * 不给它造一个执行者，这条路就没有任何测试覆盖，下次真加新判据时它是坏的也没人知道。
  */
@@ -384,7 +384,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     const { code, output } = run();
     expect(code, output).toBe(0);
-    expect(output).toContain("82 条");
+    expect(output).toContain("84 条");
     expect(output).toContain("0 处命中");
   });
 
@@ -4130,7 +4130,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   it("全是硬闸时，缺基线不再成为假前置（照样数得出命中）", () => {
-    /* 反例形态：82 条全升硬闸之后，「基线缺失」如果仍然先决退出，那么删掉基线
+    /* 反例形态：84 条全升硬闸之后，「基线缺失」如果仍然先决退出，那么删掉基线
      * 文件就能让门禁只报「先跑 --update」而不去数硬闸 —— 而 `--update` 此时又被
      * 硬闸拒收，门禁自己把自己锁死。硬闸的判据是「恒为 0」，与基线在不在无关。 */
     write("src/components/studio/L2.tsx", BUTTON_VIEW);
@@ -5628,6 +5628,127 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         '      <h3 className="text-[10.5px] font-semibold tracking-wider">节点</h3>',
         "    </>",
         "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P84「视图层手搓面包屑」/ P85「视图层手写 <table>」（硬闸）──────────
+   * 判据见 scripts/check-ui-primitives.cjs 里两条的注释。两条都是本批
+   * （§16.2.4.72「零引用基元按形态复查」）随出口一起进硬闸的 ——
+   * 「先让判据看得见存量，再冻结为 0」的反面：存量本就只有 1~2 处，
+   * 同批清零后直接是硬闸（见 HARD_GATE_RULES 里 P84/P85 那段）。 */
+  it("P84 手搓面包屑（`/` 分隔 span + 段数组 map）→ 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P84Handroll.tsx",
+      [
+        "export function V({ segments }: { segments: { label: string }[] }) {",
+        "  return (",
+        "    <div>",
+        "      {segments.map((seg, i) => {",
+        "        const isLast = i === segments.length - 1;",
+        "        return (",
+        "          <span key={seg.label}>",
+        '            {i > 0 && <span className="mx-1.5">/</span>}',
+        "            <span>{seg.label}</span>",
+        "          </span>",
+        "        );",
+        "      })}",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("P84");
+    expect(output).toContain("P84Handroll.tsx");
+  });
+
+  it("P84 出口本身（breadcrumb-path / breadcrumb）不被算作手搓", () => {
+    /* `ui/` 走 EXEMPT_DIRS 天然豁免（基元自身实现）；这一条同时钉住
+     * 「判据不会把出口的 map + 分隔符算成违规」。 */
+    seedBaseline();
+    write(
+      "src/components/ui/breadcrumb-path.tsx",
+      [
+        "export function BreadcrumbPath({ segments }) {",
+        "  return (",
+        "    <ol>",
+        "      {segments.map((seg, i) => {",
+        "        const isLast = i === segments.length - 1;",
+        "        return (",
+        "          <li key={seg.label}>",
+        '            {i > 0 && <li className="mx-1.5">/</li>}',
+        "            <span>{seg.label}</span>",
+        "          </li>",
+        "        );",
+        "      })}",
+        "    </ol>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P85 手写 <table> → 阻断；走 ui/table 基元不计", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P85RawTable.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <table>",
+        "      <thead>",
+        "        <tr><th>比例</th></tr>",
+        "      </thead>",
+        "      <tbody>",
+        "        <tr><td>1:1</td></tr>",
+        "      </tbody>",
+        "    </table>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const blocked = run();
+    expect(blocked.code).toBe(1);
+    expect(blocked.output).toContain("P85");
+    expect(blocked.output).toContain("P85RawTable.tsx");
+
+    rmSync(join(workdir, "src/components/studio/P85RawTable.tsx"));
+    write(
+      "src/components/studio/P85Primitive.tsx",
+      [
+        'import { Table, TableBody, TableRow, TableCell } from "~/components/ui/table";',
+        "export function V() {",
+        "  return (",
+        "    <Table>",
+        "      <TableBody>",
+        "        <TableRow><TableCell>1:1</TableCell></TableRow>",
+        "      </TableBody>",
+        "    </Table>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const ok = run();
+    expect(ok.code, ok.output).toBe(0);
+  });
+
+  it("P85 不误伤同前缀标识符（tableData / Table 组件名）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P85NotATable.tsx",
+      [
+        "const tableData = { rows: 1 };",
+        "const tableView = tableData.rows;",
+        "export function V() {",
+        "  return <div>{tableView}</div>;",
         "}",
       ].join("\n"),
     );

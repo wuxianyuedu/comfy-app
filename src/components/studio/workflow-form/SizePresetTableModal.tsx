@@ -20,6 +20,14 @@ import {
 } from "~/components/ui/dialog";
 import { NumberField } from "~/components/ui/number-field";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import {
   RESOLUTION_TIERS,
   SIZE_RATIO_PRESETS,
   SIZE_SCENE_LABELS,
@@ -100,28 +108,30 @@ export function SizePresetTableModal({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          <table className="w-full border-separate border-spacing-y-1 text-[11px]">
-            <thead>
-              <tr className="text-ink-muted text-left">
-                <th className="w-23 font-medium">比例</th>
+          <Table className="border-separate border-spacing-y-1 text-[11px]">
+            <TableHeader>
+              <TableRow className="text-ink-muted border-0 text-left hover:bg-transparent">
+                <TableHead className="w-23 font-medium">比例</TableHead>
                 {RESOLUTION_TIERS.map((tier) => (
-                  <th key={tier} className="font-medium">
+                  <TableHead key={tier} className="font-medium">
                     {tier.toUpperCase()}（宽 × 高）
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {SIZE_RATIO_PRESETS.map((preset) => (
-                <tr key={preset.label} className="align-middle">
-                  <td className="text-ink-bright pr-2">{preset.label}</td>
+                <TableRow key={preset.label} className="align-middle">
+                  <TableCell className="text-ink-bright pr-2">
+                    {preset.label}
+                  </TableCell>
                   {RESOLUTION_TIERS.map((tier) => {
                     const dims = table[scene]?.[preset.label]?.[tier] ?? {
                       width: 1024,
                       height: 1024,
                     };
                     return (
-                      <td key={tier} className="pr-2">
+                      <TableCell key={tier} className="pr-2">
                         <div className="flex items-center gap-1">
                           <NumberField
                             className="w-24"
@@ -151,13 +161,13 @@ export function SizePresetTableModal({
                             }
                           />
                         </div>
-                      </td>
+                      </TableCell>
                     );
                   })}
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         <div className="border-border-strong flex items-center gap-3 border-t px-4 py-3">
