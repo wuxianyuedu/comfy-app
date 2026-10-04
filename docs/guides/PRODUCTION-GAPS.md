@@ -875,6 +875,14 @@
 - [ ] **E6 无 bundle 体积门禁 / 变异测试 / a11y 自动化**。
 - [ ] **F1 零 i18n**（中文硬编码、`lang` 写死）。证据：`src/app/layout.tsx:36`。
 - [ ] **F2 缺 `global-error.tsx`**；`error.tsx` 仅 1/6；`loading.tsx` 仅全屏；`<Suspense>` 0 处。
+      **其中「站点级过渡」这一格已按 ISSUE #1437 判为「不做，理由记档」**：视图 / 路由切换
+      的整页过渡**前提是页面级骨架**（App Router 只在 `loading.tsx` 存在时才把旧页面留到
+      新页面就绪），而本仓 `loading.tsx` 只有全屏那一个 —— 没有骨架就做过渡，产出是
+      **更长的白屏**而不是更平滑的切换。因此本条**不按「缺动画」记**，按「缺骨架」记：
+      要动它先补页面级 `loading.tsx`。选点与三类「不做」的完整理由见规范
+      [02 §2.7.2](../../standards/02-性能规范.md)。同批落地的是**另一族**——
+      「离开会丢掉用户现场」的提示（`ui/use-exit-reminder`，口径见
+      [10 §10.3.2](../../standards/10-错误处理与降级.md)）。
 - [ ] **F3 `next/image` 0 处且 lint 关闭**。证据：`eslint.config.js:185-192`。
 - [ ] **F4 无离线能力**（无 SW / `onLine` / 离线队列；58 文件手写 localStorage 无 persist）。
 - [ ] **F5 虚拟滚动仅 2 处**；`next/dynamic` 仅 2 处。
@@ -915,7 +923,7 @@
       —— 存量那 86 份的必填项多由「子件 + 默认值」或注入层的 `sourceName` 兜住，
       逐条白名单会变成第二份赦免名单。上线时当场抓到一处真漏档：
       `ui/simple-key-handler.stories.tsx` 从来没有 `title`。口径见规范 16 §16.2.3.8。
-      **`ui/` 的组件覆盖率已到 87/87（全量），理由表清空**（同批）：那 5 条理由
+      **`ui/` 的组件覆盖率已到全量（#1381 那一批是 87/87，本轮新增基元后 88/88），理由表清空**（同批）：那 5 条理由
       逐条都是「补法」而不是「不能写」——`progress`（两个 slot 在 `progress-bar`
       里看不到）、`sonner`（story 里真调 `toast()`）、`error-boundary`（配一个会抛
       的 `Boom`）、`dialog-overlay` / `dialog-width`（**出口算出来的字符串就是它的

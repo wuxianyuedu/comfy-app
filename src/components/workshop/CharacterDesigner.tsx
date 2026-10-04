@@ -34,6 +34,10 @@ import {
 import { channelProviderLabel } from "~/lib/workshop/channel-options";
 import { ExtractToolbar } from "~/components/workshop/ExtractToolbar";
 import { enterCommit } from "~/components/ui/use-enter-commit";
+import {
+  ExitReminder,
+  exitReminderSignal,
+} from "~/components/ui/use-exit-reminder";
 import type {
   ExtractSession,
   ExtractSessionActions,
@@ -154,7 +158,14 @@ export function CharacterDesigner({
   }
 
   return (
-    <div className="flex-col gap-4">
+    /* 容器挂「有会丢的东西」的信号：角色列表非空就说明这一屏有用户敲出来的内容，
+       切到别的阶段 / 别的视图时它们会随之消失。判据在 CSS（`globals.css`
+       的 `[data-exit-reminder]:has(~ [data-dirty])`），这里只负责把信号摆出来 ——
+       组件本身零状态、零定时器（详见 `ui/use-exit-reminder` 的文件头）。 */
+    <div
+      className="flex-col gap-4"
+      {...exitReminderSignal(characters.length > 0)}
+    >
       <div className="flex items-center justify-between">
         <h3 className="u-title">
           角色设计{""}
@@ -171,6 +182,12 @@ export function CharacterDesigner({
           </Button>
         </div>
       </div>
+
+      {/* 提示条是 `[data-dirty]` 的**后继兄弟** —— 选择器用的是 `~`，
+          挂到祖先上就永远命不中（那正是这条判据最容易的静默失效方式）。 */}
+      <ExitReminder className="text-ink-faint px-1 text-[11px] leading-relaxed">
+        切走这一阶段后这里的角色会被清空，需要先导出或复制保留。
+      </ExitReminder>
 
       {/* 用一句话生成角色：独立区块 + 独立执行日志 */}
       <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">

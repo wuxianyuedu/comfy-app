@@ -112,7 +112,14 @@ function TabBlockedNotice({
             onClick={() => copyUrl(url)}
             className="text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto shrink-0 rounded px-2 py-1"
           >
-            {copied.on ? "已复制" : "复制地址"}
+            {/* 文案自己换掉是「已复制」唯一的存在感 —— 而它在密集的工具条里
+                只是一次极轻的字形变化，很容易被当成没反应。闪一下（`value-tick`，
+                规范 06 §6.7 第 ③ 档）把这一格变成「按下去有东西发生」；
+                时长 220ms、位移 0，与 `useFlashState` 的 1.5s 亮起期叠加不冲突。
+                `key` 换值即重播，连点两次就有两次反馈（不必额外做重入判据）。 */}
+            <span key={copied.on ? "done" : "idle"} className="value-tick">
+              {copied.on ? "已复制" : "复制地址"}
+            </span>
           </Button>
         </div>
       )}
