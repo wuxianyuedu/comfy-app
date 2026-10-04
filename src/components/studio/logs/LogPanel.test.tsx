@@ -827,6 +827,37 @@ describe("LogPanel 日志面板", () => {
     }
   });
 
+  it("「打包诊断」POST 到诊断端点并报出路径（与「保存到本地」分工不同）", async () => {
+    /* 两个按钮带走的东西不一样，接线也必须各自独立：
+     *   「保存到本地」= 面板当前筛选到的行（前端手上的文本）；
+     *   「打包诊断」  = 服务端把 current/ + 最近几次 runs/ 打成 zip（run.json
+     *                  与环境信息在面板上根本看不到）。
+     * 这里断言后者走的是它自己的端点、且不需要带 body（服务端自己找现场）。 */
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        path: "F:\\proj\\log\\exports\\diagnostics-20260101-100000-a1b2c3.zip",
+        relativePath: "exports/diagnostics-20260101-100000-a1b2c3.zip",
+        bytes: 1024,
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      seed(2);
+      render(<LogPanel />);
+      const user = userEvent.setup();
+      await user.click(
+        screen.getByRole("button", { name: "打包诊断现场到本地文件" }),
+      );
+      expect(await screen.findByText(/diagnostics-/)).toBeInTheDocument();
+      const [url] = fetchMock.mock.calls[0] as unknown as [string];
+      expect(url).toBe("/api/logs/diagnostics");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("复制失败时如实说失败，不谎报「已复制」", async () => {
     act(() =>
       useLogStore
