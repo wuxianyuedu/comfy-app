@@ -127,7 +127,8 @@ pnpm test:e2e
 - ⚠️ **基线文件名带平台，每个真正执行像素回归的环境都要有自己的那一套**：当前只有
   `-win32.png`（开发机）。缺档时 Playwright 不是「跳过」而是判失败**并把新生成的 PNG 写进
   目录**，于是留下半套基线；判据见 `tests/visual-baseline-pairing.test.ts`（齐全 / 入库 /
-  无孤儿三头，登记在提交前的固定守护清单）。
+  无孤儿三头，登记在提交前的固定守护清单，并由 `scripts/visual-gate.mjs` 保证「改像素层的
+  提交一定带着这条判决」）。
 - ⚠️ **像素可复现要自己挣**：根布局的全局状态栏带实时帧率与时钟，Next 的 dev 指示器也在
   页面上 —— 这类 chrome 必须 `mask` 掉，否则 fullPage 永远取不到两张稳定截图。写法见
   `e2e/visual/login.visual.spec.ts` 的 `unstableChromeMasks`；验收口径是**同一命令连跑两次
@@ -169,7 +170,11 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
 
 - [ ] **没有平台侧兜底**：#623 之后不跑流水线，唯一自动化是本地钩子（`--no-verify` 可绕）。
       口径与出路见规范 §13.5.3 / §13.5.4（按需召唤评审 NPC），别再补「看起来在守门」的配置。
-- [ ] **E2E / 视觉没有自动执行者**：都在本地手动档（`pnpm test:e2e` / `pnpm test:visual`）。
+- [ ] **E2E 没有自动执行者**：在本地手动档（`pnpm test:e2e` / `pnpm test:visual`）。视觉那一层
+      **有本地判据**：`tests/visual-baseline-pairing.test.ts` 在提交前的固定守护清单里，且
+      `scripts/visual-gate.mjs`（pre-commit D 组）在暂存命中 `e2e/visual/**` 时判「这次提交带不带
+      像素判决」—— 但它判的是**基线的齐全/入库/平台登记**，不是「界面像素有没有变形」：
+      真正的像素回归仍要 `pnpm test:visual` 手动跑（规范 §11.8）。
 - [ ] **Rust 壳的 `#[test]` 只在「改了 `.rs`」时被跑**：`scripts/shell-gate.mjs`（pre-commit D 组）
       在暂存改动命中壳输入时跑 `cargo test`、并把硬规则 5「改了壳必须重编」变成判据 ——
       但它**不是全量执行者**：不动壳的提交永远不跑那 37 条 `#[test]`，全量仍要靠
