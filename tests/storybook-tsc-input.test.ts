@@ -149,28 +149,55 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         "解不出任何可用的 tsc 可执行（@typescript/native / typescript 两个形态都试过了）",
       ).not.toBeNull();
       const generatedDir = path.join(ROOT, GENERATED_DIR_REL);
-      const stash = path.join(
-        os.tmpdir(),
-        `sb-generated-${String(process.pid)}`,
-      );
+      const stash = generatedStashDir(ROOT, process.pid);
       const existed = fs.existsSync(generatedDir);
+      if (existed) {
+        /* 先确认「挪得动」再往下跑：挪不动就当场说清是暂存点的问题，别由后面
+           那句还原替它顶罪（跨卷时真因是 EXDEV，报出来的却是 ENOENT）。 */
+        fs.mkdirSync(path.dirname(stash), { recursive: true });
+        fs.renameSync(generatedDir, stash);
+        expect(
+          fs.existsSync(stash) && !fs.existsSync(generatedDir),
+          `生成件没能挪进 ${stash} —— 暂存点必须与仓库同卷（见 generatedStashDir）`,
+        ).toBe(true);
+      }
       try {
-        if (existed) fs.renameSync(generatedDir, stash);
         const without = tsc!.run(["--noEmit"]);
         expect(
           without.status,
           `没有 ${GENERATED_REL} 时 tsc 必须退 0（新检出的形态），实际输出：\n${without.output}`,
         ).toBe(0);
       } finally {
-        if (existed) {
-          fs.rmSync(generatedDir, { recursive: true, force: true });
-          fs.renameSync(stash, generatedDir);
-        }
+        if (existed) restoreGeneratedDir(generatedDir, stash);
       }
       // 生成件在位时也得是绿的（这一条顺带证明上面那次不是「tsc 根本没跑」）。
       expect(tsc!.run(["--noEmit"]).status).toBe(0);
     },
   );
+
+  it("④ 的暂存点形状：在仓库内、与仓库同卷、且不入库", () => {
+    /* 这条是 ④ 的前提，不是装饰：暂存点一旦落回 `os.tmpdir()`，在仓库与临时目录
+       不同卷的开发机上「挪走」这一步就静默失败（Windows 跨卷 rename = EXDEV），
+       而失败表现为「还原时找不到东西」+ 真目录被删。判形状而不是判当前卷：
+       单卷机器上按卷判据不会红，按位置判才会。 */
+    const stash = generatedStashDir(ROOT, 4242);
+    expect(path.relative(ROOT, stash)).not.toMatch(/^\.\./);
+    expect(
+      stash.startsWith(path.join(ROOT, "node_modules") + path.sep),
+      "暂存点只在 node_modules 下面：那里 git 不看、类型程序与 eslint 也不展开",
+    ).toBe(true);
+    expect(
+      path.parse(stash).root,
+      "暂存点与仓库必须同一卷 —— 跨卷 rename 在 Windows 直接失败",
+    ).toBe(path.parse(ROOT).root);
+    expect(
+      execFileSync("git", ["check-ignore", "-q", "--", stash], {
+        cwd: ROOT,
+        encoding: "utf8",
+      }),
+      "暂存点得被 gitignore 盖住，否则一次判据能在仓库里留个未跟踪目录",
+    ).toBe("");
+  });
 
   it("判据自身可反证：静态 import 生成件会让 tsc 报 TS2307", () => {
     /* 这条反证是 ① 与 ④ 的**前提**：如果「静态 import 一个不存在的模块」并不会
@@ -267,6 +294,39 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     }
   });
 });
+
+/** ④ 把生成件**挪走**时的暂存点。
+ *
+ *  必须落在仓库内、且与仓库同一卷：Windows 上目录 `rename` 跨卷直接 EXDEV
+ *  （仓库在 F:、`%TEMP%` 在 C: 是常见开发机形态，本机实测）。原先暂存在
+ *  `os.tmpdir()`，「挪」这一步先失败，`finally` 却照旧把真目录 `rmSync` 掉、
+ *  再去 rename 一个从没存在的暂存点 —— 于是报出来的是 ENOENT（指向还原），
+ *  真因被盖掉，而且每跑一次就把这台机器的开发期输入删一次。
+ *
+ *  选 `node_modules/.cache` 而不是仓库根的临时目录：git 不看这里、类型程序与
+ *  eslint 都不展开这里（免得「缺件」形态变成「件换了个位置」），而 `package.json`
+ *  的 lint 早已把 `.cache` 当缓存目录在用 —— 同一处用途，不再另造一个约定。 */
+function generatedStashDir(root: string, pid: number): string {
+  return path.join(
+    root,
+    "node_modules",
+    ".cache",
+    `sb-generated-${String(pid)}`,
+  );
+}
+
+/** 把暂存的生成件放回原处。放回不了（进程被中断、暂存点没落成）就按本机现生成一份：
+ *  一次判据不该把开发期输入弄丢 —— 丢了之后现象是「跑过 storybook 的机器才开始红」。 */
+function restoreGeneratedDir(generatedDir: string, stash: string): void {
+  if (fs.existsSync(stash)) {
+    if (fs.existsSync(generatedDir)) {
+      fs.rmSync(generatedDir, { recursive: true, force: true });
+    }
+    fs.renameSync(stash, generatedDir);
+    return;
+  }
+  writeStorybookAppOrigin(ROOT, path.join(ROOT, GENERATED_REL));
+}
 
 /** 判据要真跑一次 tsc：从依赖里解出可执行文件，不写死 `node_modules/.bin/tsc`。
  *
