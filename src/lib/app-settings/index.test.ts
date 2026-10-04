@@ -4,8 +4,6 @@ import { migrateExitDefaults, type AppSettings } from "./app-settings.server";
 
 function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
   return {
-    trainerUrl: "",
-    comfyLorasDir: "",
     comfyuiPath: "",
     comfyuiExtraArgs: "",
     comfyCliPython: "",

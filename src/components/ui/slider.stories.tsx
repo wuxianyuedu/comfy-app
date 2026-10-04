@@ -32,8 +32,7 @@ export const Single: Story = {
   ),
 };
 
-/** 区间：长度 2 的数组就是两个把手（`TrainingStudio` 的学习率区间、
- *  时间轴裁切都用这一档）。把手间距过小时会挤在一起 —— 这一条只有画出来
+/** 区间：长度 2 的数组就是两个把手（时间轴裁切这类场景用这一档）。把手间距过小时会挤在一起 —— 这一条只有画出来
  *  才知道该给多少 `minStepsBetweenValues`。 */
 export const Range: Story = {
   render: () => (

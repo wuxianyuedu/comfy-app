@@ -319,8 +319,8 @@ describe("幽灵 token（引用了从未定义的 --color-*）", () => {
  *   · `globals.css` 声明的 111 颗 `--color-*` 里 **24 颗被 shake**，
  *     而这 24 颗在 `src/**` 里连名字都没出现过（= 被 shake 的全是零引用的，判据成立）；
  *   · 拼法命中的那一处（`AuroraGlow` 的 `var(--color-aurora-${tone})`）**今天还在渲染**，
- *     纯属侥幸 —— 那三颗的名字在 `AuroraBackground` 上半段与 `TrainingStudio` 的
- *     `stroke=` 里恰好被整名写过，是别人替它保住了变量。重构掉那几行，光晕当场失色。
+ *     纯属侥幸 —— 那三颗的名字在 `AuroraBackground` 上半段里恰好被整名写过，
+ *     是别人替它保住了变量。重构掉那几行，光晕当场失色。
  */
 describe("拼接 token 名（幽灵判据的补集）", () => {
   it("模板插值拼出 --color- 名字 → 阻断", () => {

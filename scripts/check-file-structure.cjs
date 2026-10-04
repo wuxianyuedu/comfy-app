@@ -273,7 +273,7 @@ const DOMAIN_EXEMPT = new Set([
   /* 异步动作的进度的**数值口径**（ISSUE #672）：视图层（工坊镜头卡、训练页、
    * 影片台、历史卡、自定义节点设置）与 `src/lib` 的服务端 / 客户端执行链
    *（`comfyui/executor-ws` 落库、`project-canvas/canvas-api` 透传、
-   *  `workshop/generation-client` 转发、`core/repository-lora` 写库）**都在用**，
+   *  `workshop/generation-client` 转发）**都在用**，
    * 且两侧必须同一口径（视图按 120 摆宽度而落库已夹到 100，会出现「界面卡在
    *  100% 但数据库还在涨」）。进任何子域都会让另一侧反向依赖它 —— 与
    * `format-bytes` / `display-value` / `list-filter` 同款：顶层单例。 */
@@ -384,8 +384,9 @@ const DOMAIN_EXEMPT = new Set([
   "src/lib/page-window.ts",
   /* 「这个地址能不能交给外部程序（协议只许 http/https）」的唯一判据（台账 A5 复算）：
    * `lib/comfy`（`isHttpOrigin` 转发到它）、`lib/shell`（`openUrlInBrowser` 在发起 IO
-   * 之前拦）、`src/server/api/routers` 的 `setting`（trainerUrl / comfyEmbeddable 两个地址）
-   * 与 `llm`（baseUrl）**都在吃**，而「服务端会去 fetch 的地址」和「交给 OS 打开的地址」
+   * 之前拦）、`src/server/api/routers` 的 `setting`（comfyEmbeddable 的两个地址，
+   * 以及已随炼丹废弃删除的 trainerUrl）与 `llm`（baseUrl）**都在吃**，
+   * 而「服务端会去 fetch 的地址」和「交给 OS 打开的地址」
    * 必须同一口径 —— 分开放就会再次出现「补了 fetch 那两条、漏了 openExternal 那条」。
    * 放进 `comfy` / `shell` 任一侧都会让另一侧反向依赖那个域；收口前它是四份实现
    *（一份按 `new URL()` 解析、三份前缀正则，正则那三份实测两个方向都错）。

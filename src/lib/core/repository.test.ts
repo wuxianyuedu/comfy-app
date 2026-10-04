@@ -34,7 +34,6 @@ import {
 } from "~/lib/core/repository-model";
 import { filmRepository, filmShotRepository } from "~/lib/core/repository-film";
 import { skillRepository } from "~/lib/core/repository-skill";
-import { loraTrainingJobRepository } from "~/lib/core/repository-lora";
 import {
   userRepository,
   llmConfigRepository,
@@ -587,7 +586,7 @@ describe("ModelRepository", () => {
     ).toEqual([]);
   });
 
-  it("countsByFolder 按文件夹计数；registerLora 写入 loras 且可重复", async () => {
+  it("countsByFolder 只数可用项、按文件夹分组", async () => {
     await modelRepository.upsertScanned({
       fileName: "a.safetensors",
       folder: "checkpoints",
@@ -595,35 +594,17 @@ describe("ModelRepository", () => {
       type: "CHECKPOINT",
       baseModel: "SDXL",
     });
-    await modelRepository.registerLora({
-      fileName: "my.safetensors",
-      name: "我的 LoRA",
-      baseModel: "SDXL",
-      triggerWord: "mystyle",
-    });
-
-    expect(await modelRepository.countsByFolder()).toEqual({
-      checkpoints: 1,
-      loras: 1,
-    });
-    const lora = (await modelRepository.findAll()).find(
-      (m) => m.type === "LORA",
-    );
-    expect(lora).toMatchObject({
+    await modelRepository.upsertScanned({
+      fileName: "b.safetensors",
       folder: "loras",
-      category: "USER",
-      isAvailable: true,
-    });
-    expect(lora?.description).toContain("mystyle");
-
-    // 同名同目录重复注册 → UPDATE 而不是插入第二行
-    await modelRepository.registerLora({
-      fileName: "my.safetensors",
-      name: "我的 LoRA v2",
+      name: "B",
+      type: "LORA",
       baseModel: "SDXL",
-      triggerWord: "mystyle",
     });
-    expect(await modelRepository.findAll()).toHaveLength(2);
+    // 不可用的一行不进计数
+    await modelRepository.setAvailabilityByFolder("loras", false);
+
+    expect(await modelRepository.countsByFolder()).toEqual({ checkpoints: 1 });
   });
 
   it("UserModelConfigRepository：addOrEnable / patchForUser 幂等，deleteForUser 只动本人", async () => {
@@ -1103,113 +1084,6 @@ describe("FilmRepository / FilmShotRepository", () => {
       (await filmShotRepository.listByFilm(f.id)).map((s) => s.status),
     ).toEqual(["FAILED", "FAILED", "SUCCEEDED"]);
     expect(await filmShotRepository.listActiveWithTask(f.id)).toEqual([]);
-  });
-});
-
-/* ──────────────────────── LoraTrainingJob ──────────────────────── */
-
-describe("LoraTrainingJobRepository", () => {
-  const QUEUED = {
-    userId: "u1",
-    name: "风格 A",
-    baseModel: "SDXL",
-    triggerWord: "mystyle",
-    datasetImages: ["1.png"],
-    resolution: 512,
-    steps: 1500,
-    batchSize: 4,
-    learningRate: 0.0001,
-    rankDim: 32,
-    networkAlpha: 16,
-    optimizer: "AdamW8bit",
-    scheduler: "cosine",
-    seed: 1,
-  };
-
-  beforeEach(() => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
-    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
-  });
-
-  it("createQueued / listByUser / 归属隔离", async () => {
-    const j = await loraTrainingJobRepository.createQueued(QUEUED);
-    expect(j).toMatchObject({ status: "QUEUED", progress: 0, classWord: null });
-    expect(await loraTrainingJobRepository.listByUser("u1")).toHaveLength(1);
-    expect(await loraTrainingJobRepository.listByUser("u2")).toEqual([]);
-    expect(
-      await loraTrainingJobRepository.findByIdForUser("u2", j.id),
-    ).toBeNull();
-    expect(
-      (await loraTrainingJobRepository.findByIdForUser("u1", j.id))?.name,
-    ).toBe("风格 A");
-  });
-
-  it("findByIdForUser 传 select 走投影分支；findStatusById", async () => {
-    const { loraTrainingJob } = await import("~/server/db/schema");
-    const j = await loraTrainingJobRepository.createQueued(QUEUED);
-
-    const projected = await loraTrainingJobRepository.findByIdForUser(
-      "u1",
-      j.id,
-      { id: loraTrainingJob.id, status: loraTrainingJob.status },
-    );
-    expect(projected).toEqual({ id: j.id, status: "QUEUED" });
-    // 投影分支也保持归属隔离
-    expect(
-      await loraTrainingJobRepository.findByIdForUser("u2", j.id, {
-        id: loraTrainingJob.id,
-      }),
-    ).toBeNull();
-
-    expect(await loraTrainingJobRepository.findStatusById(j.id)).toEqual({
-      status: "QUEUED",
-    });
-    expect(await loraTrainingJobRepository.findStatusById("nope")).toBeNull();
-  });
-
-  it("日志追加与状态机；updateProgress 把进度夹在 0~100", async () => {
-    const j = await loraTrainingJobRepository.createQueued(QUEUED);
-    await loraTrainingJobRepository.appendLog(j.id, {
-      t: 1,
-      level: "info",
-      msg: "炼丹开始",
-    });
-    await loraTrainingJobRepository.appendLog(j.id, {
-      t: 2,
-      level: "progress",
-      msg: "第 1 步",
-    });
-    expect((await loraTrainingJobRepository.findById(j.id))?.logs).toHaveLength(
-      2,
-    );
-
-    await loraTrainingJobRepository.markRunning(j.id);
-    expect(await loraTrainingJobRepository.findStatusById(j.id)).toEqual({
-      status: "RUNNING",
-    });
-
-    await loraTrainingJobRepository.updateProgress(j.id, 150);
-    expect((await loraTrainingJobRepository.findById(j.id))?.progress).toBe(
-      100,
-    );
-    await loraTrainingJobRepository.updateProgress(j.id, -5);
-    expect((await loraTrainingJobRepository.findById(j.id))?.progress).toBe(0);
-
-    await loraTrainingJobRepository.markDone(j.id, "out.safetensors");
-    expect(await loraTrainingJobRepository.findById(j.id)).toMatchObject({
-      status: "DONE",
-      progress: 100,
-      outputName: "out.safetensors",
-    });
-
-    await loraTrainingJobRepository.markFailed(j.id, "炸了");
-    expect((await loraTrainingJobRepository.findById(j.id))?.error).toBe(
-      "炸了",
-    );
-    await loraTrainingJobRepository.markCancelled(j.id);
-    expect((await loraTrainingJobRepository.findById(j.id))?.status).toBe(
-      "CANCELLED",
-    );
   });
 });
 

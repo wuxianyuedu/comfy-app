@@ -7,7 +7,7 @@ import { Slider } from "~/components/ui/slider";
  *
  * 定位：`~/components/ui/slider`（shadcn 官方 Slider、base-ui 版）的薄封装，
  * 把「单值受控 + `onChange` 拿 number」这一常见形态收在一处。消费点
- * （`TrainingStudio` 的 4 处参数、`CanvasSettingsPanel` 的 SliderRow）
+ * （`CanvasSettingsPanel` 的 SliderRow）
  * 只用 `value / min / max / step / onChange / className`，本件的 props
  * 就是这些 + `id / disabled / aria-*` 三件透传。
  *
@@ -45,7 +45,7 @@ import { Slider } from "~/components/ui/slider";
  * aria-label / aria-labelledby` 是 a11y 与测试定位必需、一并留下；如果
  * 后续真要透传更多字段，直接扩 `SliderPrimitive.Root.Props` 上的具体项。
  *
- * 快照：`TrainingStudio` 的 `.snap` 会跟着更新 4 处 DOM 结构
+ * 快照：消费方的 `.snap` 会跟着更新 DOM 结构
  * （`<input type="range">` → base-ui Slider 的 `slider / slider-control
  * / slider-track / slider-range / slider-thumb` 五层）—— 这是**预期**的
  * 快照漂移、不是回归，用 `pnpm exec vitest run -u` 更新。
