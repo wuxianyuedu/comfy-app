@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(29 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(30 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -163,6 +163,16 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 改了编辑文档却不重渲染，生成物就静默过期，而读者看的正是生成物。这里用与
   # doc:render 同一份计算做「只比对不写入」，漂了就阻断并给出修法。
   run "生成态文档与源同步" node scripts/render-doc-placeholders.cjs --check
+  # API 文档生成物与源同步（AGENTS 硬规则 15 / 规范 §13.5.5 同族）：docs/api/** 是
+  # 提交进 git 的 TypeDoc 产物，而 AGENTS 与主规范 §9 都承诺它「随构建链更新」——
+  # 实测构建链里没有任何一处调用 `pnpm docs`，产物停在最开始那两次提交上，`#1329`
+  # 迁走 markdown 渲染器后仍留着指向已删模块的 `lib_comfyui_markdown.html`（ISSUE #1329
+  # 收尾时翻出来的真残留）。这里用与写入模式同一份「源 → 产物」重生成 + 逐文件比对，
+  # 报落后 / 缺失 / 多余三个方向。
+  # ⚠️ 只比对不写入，且**按输入面条件触发**：`--staged` 下暂存改动没碰
+  # src/lib|server|trpc / typedoc.json / 依赖声明时立刻返回 0（重生成实测 31s，
+  # 不能给每个前端提交都挂上）。触发面是 typedoc entryPoints 的直接映射，不是启发式。
+  run "API 文档生成物与源同步" node scripts/check-docs-api.cjs --staged
   # 浮层层级刻度（规范 §16.2.5）：行内数字 zIndex 与任意值写法全库清零（硬闸），
   # 刻度之外的裸数字档按文件记棘轮、只许降不许升。z-index 写错的表现是「时灵时不灵」
   # ——jsdom 不做层叠与命中测试，单测全绿也照样复现，所以判据只能落在源码形态上。
