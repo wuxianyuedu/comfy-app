@@ -102,7 +102,7 @@ beforeEach(() => {
   watchTaskMock.mockReset();
   fetchTaskSnapshotMock.mockReset();
   vi.mocked(cancelLocalTask).mockReset();
-  global.fetch = vi.fn(
+  globalThis.fetch = vi.fn(
     async () =>
       new Response(JSON.stringify({ skills: [], models: [] }), {
         status: 200,
