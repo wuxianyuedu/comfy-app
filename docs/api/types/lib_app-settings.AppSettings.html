@@ -11,9 +11,9 @@
 <li><a href="../modules/lib_app-settings.html">lib/app-settings</a></li>
 <li><a href="" aria-current="page">AppSettings</a></li></ul>
 <h1>Type Alias AppSettings</h1></div>
-<div class="tsd-signature"><span class="tsd-signature-keyword">type</span> <span class="tsd-kind-type-alias">AppSettings</span> <span class="tsd-signature-symbol">=</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#comfylorasdir">comfyLorasDir</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyuiurl">comfyuiUrl</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#defaultvideoworkflow">defaultVideoWorkflow</a><span class="tsd-signature-symbol">:</span> <a href="lib_app-settings.VideoWorkflowPref.html" class="tsd-signature-type tsd-kind-type-alias">VideoWorkflowPref</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#trainerurl">trainerUrl</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
+<div class="tsd-signature"><span class="tsd-signature-keyword">type</span> <span class="tsd-kind-type-alias">AppSettings</span> <span class="tsd-signature-symbol">=</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#autosynclocalworkflow">autoSyncLocalWorkflow</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyclipython">comfyCliPython</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyuiautostart">comfyuiAutoStart</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyuiextraargs">comfyuiExtraArgs</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyuipath">comfyuiPath</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyuiport">comfyuiPort</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#exitkillcomfyui">exitKillComfyui</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#exitkillcomfyuidefaultmigrated">exitKillComfyuiDefaultMigrated</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#exitkillollama">exitKillOllama</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#loginrequired">loginRequired</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/app-settings.ts:16</li></ul></aside>
+<li>Defined in lib/app-settings/index.ts:24</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -21,34 +21,125 @@
 <div class="tsd-accordion-details">
 <section class="tsd-index-section">
 <h3 class="tsd-index-heading tsd-anchor-link" id="properties">Properties<a href="#properties" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-index-list"><a href="#comfylorasdir" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfy<wbr/>Loras<wbr/>Dir</span></a>
-<a href="#comfyuiurl" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfyui<wbr/>Url</span></a>
-<a href="#defaultvideoworkflow" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>default<wbr/>Video<wbr/>Workflow</span></a>
-<a href="#trainerurl" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>trainer<wbr/>Url</span></a>
+<div class="tsd-index-list"><a href="#autosynclocalworkflow" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>auto<wbr/>Sync<wbr/>Local<wbr/>Workflow</span></a>
+<a href="#comfyclipython" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfy<wbr/>Cli<wbr/>Python</span></a>
+<a href="#comfyuiautostart" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfyui<wbr/>Auto<wbr/>Start</span></a>
+<a href="#comfyuiextraargs" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfyui<wbr/>Extra<wbr/>Args</span></a>
+<a href="#comfyuipath" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfyui<wbr/>Path</span></a>
+<a href="#comfyuiport" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfyui<wbr/>Port</span></a>
+<a href="#exitkillcomfyui" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>exit<wbr/>Kill<wbr/>Comfyui</span></a>
+<a href="#exitkillcomfyuidefaultmigrated" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>exit<wbr/>Kill<wbr/>Comfyui<wbr/>Default<wbr/>Migrated?</span></a>
+<a href="#exitkillollama" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>exit<wbr/>Kill<wbr/>Ollama</span></a>
+<a href="#loginrequired" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>login<wbr/>Required</span></a>
 </div></section></div></details></section></section>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="properties-1">Properties<a href="#properties-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
 <section>
 <section class="tsd-panel tsd-member">
-<h3 class="tsd-anchor-link" id="comfylorasdir"><span>comfy<wbr/>Loras<wbr/>Dir</span><a href="#comfylorasdir" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">comfyLorasDir</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
+<h3 class="tsd-anchor-link" id="autosynclocalworkflow"><span>auto<wbr/>Sync<wbr/>Local<wbr/>Workflow</span><a href="#autosynclocalworkflow" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">autoSyncLocalWorkflow</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>查看「绑定到本地文件的工作流」详情时，是否自动把磁盘上的最新内容同步回库。</p>
+<p>默认 false（手动）：进详情只<strong>检出</strong>磁盘有没有更新、不写库，真正的更新入口
+是工作流库里的「同步」按钮（<code>workflow.resync</code>）—— 否则「切界面」就等于
+「同步」，用户还没决定内容就变了、标记也翻回无更新（PR #806 修的就是这个）。</p>
+<p>开启后，「进详情」等价于「点同步」：检出到磁盘有更新就立刻重导入并落库，
+用户无需回到列表点按钮。两种入口复用同一条重导入链路（<code>reimportFromSource</code>），
+产物一致。</p>
+</div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/app-settings.ts:20</li></ul></aside></section>
+<li>Defined in lib/app-settings/index.ts:89</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
-<h3 class="tsd-anchor-link" id="comfyuiurl"><span>comfyui<wbr/>Url</span><a href="#comfyuiurl" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">comfyuiUrl</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
+<h3 class="tsd-anchor-link" id="comfyclipython"><span>comfy<wbr/>Cli<wbr/>Python</span><a href="#comfyclipython" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">comfyCliPython</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>驱动 ComfyUI 的 <strong>comfy-cli Python 解释器</strong>（执行链用它跑 <code>-m comfy_cli run</code>）。</p>
+<p>留空 = 退回 <code>&lt;cwd&gt;/python-venv/comfy-cli/{Scripts|bin}/python(.exe)</code>（开发检出的
+默认落点）。桌包<strong>不随包</strong> Python 与 comfy-cli（百 MB 级环境，且带版本矩阵），
+所以桌面形态要真出图必须由用户自备一个装好 comfy-cli 的解释器，然后在这里指
+路径——与 <code>comfyuiPath</code>「用户自备 + 设置项」同一条形态（ISSUE #1239 的签字口径）。</p>
+<p>默认值取 <code>COMFY_CLI_PYTHON</code>：与 <code>comfyuiPath ← COMFYUI_PATH</code> 同形，即<strong>环境变量是
+这一项的默认值</strong>，设置页里填过的值优先（<code>getSettingsSync</code> 是 <code>{...DEFAULTS, ...文件}</code>）。</p>
+</div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/app-settings.ts:17</li></ul></aside></section>
+<li>Defined in lib/app-settings/index.ts:49</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
-<h3 class="tsd-anchor-link" id="defaultvideoworkflow"><span>default<wbr/>Video<wbr/>Workflow</span><a href="#defaultvideoworkflow" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">defaultVideoWorkflow</span><span class="tsd-signature-symbol">:</span> <a href="lib_app-settings.VideoWorkflowPref.html" class="tsd-signature-type tsd-kind-type-alias">VideoWorkflowPref</a></div><aside class="tsd-sources">
+<h3 class="tsd-anchor-link" id="comfyuiautostart"><span>comfyui<wbr/>Auto<wbr/>Start</span><a href="#comfyuiautostart" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">comfyuiAutoStart</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>提交任务发现 ComfyUI 未运行时，是否自动按 comfyuiPath 启动。</p>
+</div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/app-settings.ts:19</li></ul></aside></section>
+<li>Defined in lib/app-settings/index.ts:51</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
-<h3 class="tsd-anchor-link" id="trainerurl"><span>trainer<wbr/>Url</span><a href="#trainerurl" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">trainerUrl</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
+<h3 class="tsd-anchor-link" id="comfyuiextraargs"><span>comfyui<wbr/>Extra<wbr/>Args</span><a href="#comfyuiextraargs" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">comfyuiExtraArgs</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>传给 ComfyUI <a href="http://main.py">main.py</a> 的额外命令行参数（如 --input-directory ...）。</p>
+</div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/app-settings.ts:18</li></ul></aside></section></section></details></div>
+<li>Defined in lib/app-settings/index.ts:37</li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="comfyuipath"><span>comfyui<wbr/>Path</span><a href="#comfyuipath" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">comfyuiPath</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>ComfyUI 安装目录。
+comfyuiPath 语义（配置的目录可以不是源码根本身）：</p>
+<ul>
+<li>便携版：<path>\python_embeded\python.exe + <path>\main.py</li>
+<li>桌面版：配置「实例根」（如 ComfyUI-Installs\ComfyUI2）——
+<path>\standalone-env\python.exe + <path>\ComfyUI\main.py（解释器 + 源码）
+也可直接配置实例内的 ComfyUI/ 源码根，解释器会向上查找。</li>
+<li>venv：<path>.venv\Scripts\python.exe + <path>\main.py（同上两件）
+配置后任务执行前若 ComfyUI 未运行会自动拉起（comfyuiAutoStart）。</li>
+</ul>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/app-settings/index.ts:35</li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="comfyuiport"><span>comfyui<wbr/>Port</span><a href="#comfyuiport" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">comfyuiPort</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
+<div class="tsd-comment tsd-typography"><p>ComfyUI 监听端口。留空 = 默认 8188；非默认端口会在启动时显式传
+<code>--port</code>，保证「界面显示端口 = 实际端口」。连接地址固定 127.0.0.1
+（ComfyUI 由本应用拉起；远程实例可用环境变量 COMFYUI_BASE 覆盖）。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/app-settings/index.ts:57</li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="exitkillcomfyui"><span>exit<wbr/>Kill<wbr/>Comfyui</span><a href="#exitkillcomfyui" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">exitKillComfyui</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>应用进程退出时是否连带关闭自己拉起的 ComfyUI（进程保活开关，默认 false）。
+语义：桌面壳退出是 taskkill /T /F 杀整棵进程树，被杀进程没有任何清理
+机会，所以这个开关不是「退出时再决定」，而是「拉起时决定是否脱离进程树」。
+true = ComfyUI 挂在应用进程树内，应用退出连带关闭；false = 脱离进程树
+保活，下次打开应用直接复用。仅对本应用拉起的实例生效（外部启动的不归它管）。
+改动会在「下一次拉起」生效。</p>
+<p>默认取「保活」：ComfyUI 冷启动 + 加载模型是分钟级的成本，默认随应用退出
+连杀会让每次打开应用都要重付一遍；且被杀时正在跑的任务没有机会收尾。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/app-settings/index.ts:75</li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="exitkillcomfyuidefaultmigrated"><code class="tsd-tag">Optional</code><span>exit<wbr/>Kill<wbr/>Comfyui<wbr/>Default<wbr/>Migrated</span><a href="#exitkillcomfyuidefaultmigrated" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">exitKillComfyuiDefaultMigrated</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>exitKillComfyui 默认值迁移标记（一次性，非用户可见开关）。
+该开关的历史默认值是 true，而 saveSettings 会把整个对象（含默认值）写盘 ——
+于是老安装的设置文件里都躺着一条 true，光改 DEFAULTS 对它们不生效。
+首次读到没有本标记的文件时把值落成新默认并写标记；之后用户手动勾选不再被覆盖。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/app-settings/index.ts:96</li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="exitkillollama"><span>exit<wbr/>Kill<wbr/>Ollama</span><a href="#exitkillollama" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">exitKillOllama</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>同 exitKillComfyui，作用于应用拉起的 Ollama serve 进程。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/app-settings/index.ts:77</li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="loginrequired"><span>login<wbr/>Required</span><a href="#loginrequired" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">loginRequired</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>是否要求登录才能调用 REST 接口（自定义节点解析 / 素材 / 上传 /
+日志 / LLM 配置等）。false（默认，本机单用户模式）= 未登录自动落到
+演示用户，与 tRPC authedProcedure 的回退一致；true = 严格 401。</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/app-settings/index.ts:63</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -64,7 +155,7 @@
 <h3>On This Page</h3></summary>
 <div class="tsd-accordion-details">
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Properties</summary>
-<div><a href="#comfylorasdir"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfy<wbr/>Loras<wbr/>Dir</span></a><a href="#comfyuiurl"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfyui<wbr/>Url</span></a><a href="#defaultvideoworkflow"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>default<wbr/>Video<wbr/>Workflow</span></a><a href="#trainerurl"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>trainer<wbr/>Url</span></a></div></details></div></details></div>
+<div><a href="#autosynclocalworkflow"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>auto<wbr/>Sync<wbr/>Local<wbr/>Workflow</span></a><a href="#comfyclipython"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfy<wbr/>Cli<wbr/>Python</span></a><a href="#comfyuiautostart"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfyui<wbr/>Auto<wbr/>Start</span></a><a href="#comfyuiextraargs"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfyui<wbr/>Extra<wbr/>Args</span></a><a href="#comfyuipath"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfyui<wbr/>Path</span></a><a href="#comfyuiport"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>comfyui<wbr/>Port</span></a><a href="#exitkillcomfyui"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>exit<wbr/>Kill<wbr/>Comfyui</span></a><a href="#exitkillcomfyuidefaultmigrated"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>exit<wbr/>Kill<wbr/>Comfyui<wbr/>Default<wbr/>Migrated</span></a><a href="#exitkillollama"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>exit<wbr/>Kill<wbr/>Ollama</span></a><a href="#loginrequired"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>login<wbr/>Required</span></a></div></details></div></details></div>
 <div class="site-menu">
 <nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
 <ul class="tsd-small-nested-navigation" id="tsd-nav-container">

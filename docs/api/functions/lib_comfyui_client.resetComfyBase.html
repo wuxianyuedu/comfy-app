@@ -16,15 +16,14 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="resetcomfybase"><span class="tsd-kind-call-signature">resetComfyBase</span><span class="tsd-signature-symbol">()</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">void</span><a href="#resetcomfybase" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Drop the cached probe result so the next resolveComfyBase() re-probes.</p>
-<p>Needed because ComfyUI may restart on a <em>different</em> port (it auto-increments
-when the configured one is busy). Without this the cache pins us to a dead
-port for the whole process lifetime. The runner calls this whenever the
-WebSocket drops, so a reconnect always re-discovers the live port.</p>
+<div class="tsd-comment tsd-typography"><p>丢掉缓存的探测结果，让下一次 resolveComfyBase() 重新探测。</p>
+<p>必需的原因：ComfyUI 重启后可能落在<strong>另一个</strong>端口（配置端口被占用时它会自己 +1）。
+不清缓存就会在整个进程生命周期里钉死在一个已经死掉的端口上。执行器在
+WebSocket 断开时都会调它，因此每次重连都会重新发现活着的是哪个端口。</p>
 </div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/client.ts:107</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/comfyui/client.ts:322</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

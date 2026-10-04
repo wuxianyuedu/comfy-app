@@ -1,0 +1,116 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>core — 架构核心层的**深路径入口别名**（barrel） | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="" aria-current="page">core — 架构核心层的**深路径入口别名**（barrel）</a></li></ul>
+<h1>Module core — 架构核心层的**深路径入口别名**（barrel）</h1></div>
+<section class="tsd-panel tsd-comment">
+<div class="tsd-comment tsd-typography"><h1 id="-架构核心层的深路径入口别名（barrel）" class="tsd-anchor-link"><code>core/index.ts</code> — 架构核心层的<strong>深路径入口别名</strong>（barrel）<a href="#-架构核心层的深路径入口别名（barrel）" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<p>本目录是 Comfy-APP 的<strong>架构基座</strong>，承载跨切面、与业务无关的通用能力：</p>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>提供</th>
+<th>设计模式 / 意图</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>errors</code></td>
+<td><code>AppError</code> 类树 + 归一化 / 错误信封</td>
+<td>统一错误契约</td>
+</tr>
+<tr>
+<td><code>logger</code></td>
+<td>日志唯一实现（pino + 脱敏 + 面板镜像）</td>
+<td>横切关注点</td>
+</tr>
+<tr>
+<td><code>repository</code></td>
+<td><code>Repository</code> 接口 + Drizzle 泛型基类</td>
+<td>Repository 模式</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td>类型契约 + 默认值</td>
+<td>Config 模式</td>
+</tr>
+<tr>
+<td><code>redact-secret</code></td>
+<td>密钥值形状守卫（两条落盘通道共用）</td>
+<td>脱敏单一事实源</td>
+</tr>
+</tbody>
+</table>
+<h2 id="两条取用口径（不要混用）" class="tsd-anchor-link">两条取用口径（<strong>不要混用</strong>）<a href="#两条取用口径（不要混用）" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ol>
+<li><strong>生产代码</strong>一律走<strong>深路径</strong>：<code>~/lib/core/repository</code>、<code>~/lib/core/errors</code>、
+<code>~/lib/core/logger</code>、<code>~/lib/core/config</code>。</li>
+<li><strong>只有在「类型 + 值」都来自同一层、且确实需要它们的合集时</strong>才用本别名
+<code>~/lib/core</code>（现存一处：<code>src/lib/skills-seed.ts</code> 取 <code>SkillSeed</code>）。
+新代码请优先写深路径 —— 别名会让人看不出「这个模块到底依赖了哪一份」。</li>
+</ol>
+<h2 id="为什么本文件不再" class="tsd-anchor-link">为什么本文件不再 <code>export *</code><a href="#为什么本文件不再" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>这里曾是四个 <code>export *</code> 转发的 barrel，注释里还写着「所有 server 端模块统一
+<code>import { ... } from &quot;~/lib/core&quot;</code>」——而实测<strong>全库只有 2 处</strong>真的这样导入，
+其中一处只是借道取一个类型。代价却是实打实的：</p>
+<p>· <strong>一条假承诺</strong>：注释说「都从这里取」，实际口径是深路径，下一个人照着
+注释写就会多出一种取法（与 <code>container</code> 的教训同款：两种取用方式并存，
+只有一种是既成形态）；
+· <strong>一个同层环</strong>：<code>logger.ts</code> → <code>app-runtime-log.ts</code> → <code>log-paths.ts</code>（同层），
+而 <code>log-paths.ts</code> 若从本 barrel 取用就会形成 <code>index → logger → … → index</code>
+的环。环检测（<code>scripts/check-circular-deps.cjs</code>）只认<strong>真实存在的边</strong>，
+所以它此前并不报红 —— 一个「靠没人这么写」才不成立的环，是排查成本最高
+的那一类（症状是 import 顺序变了就 <code>undefined</code>）。
+· <strong>一条静默的加载链</strong>：<code>export *</code> 让每个引用方都强制加载整层（pino + zod +
+Drizzle 表定义 + <code>server-only</code>），与本模块自述的「通用能力出口」相反。</p>
+<p>现在改为<strong>具名转发</strong>，只保留唯一在用的符号，并写明每一份的深路径。新增符号
+必须同时给出消费方 —— 没有消费方的转发正是「零消费导出」判据
+（<code>scripts/check-dead-exports.cjs</code>，规范 §12.16）要拦的那种抽象。</p>
+<h2 id="为什么没有-eventbus" class="tsd-anchor-link">为什么没有 eventBus<a href="#为什么没有-eventbus" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>这里曾有一个类型化领域事件总线（<code>events.ts</code>，Observer / Pub-Sub），注释里
+写着「执行层在关键节点 emit，SSE / 缓存失效 / 审计日志作为 listener 订阅」。
+实测<strong>全库零 <code>publish</code> / 零 <code>subscribe</code></strong>：<code>runner-state</code> 的进度走 SSE 直推、
+任务状态变化走各自的调用点，没有任何一处经过这条总线。所以它连同
+<code>DomainEventMap</code> 一起删除（ISSUE #573）——<strong>留着一条「将来会有人用」的通道，
+只会让后来者以为事件已经被广播出去了</strong>（排查「为什么缓存没失效」时会先看它）。
+需要事件解耦时再引入，并同时给出第一个真实订阅方。</p>
+<h2 id="为什么没有-container" class="tsd-anchor-link">为什么没有 container<a href="#为什么没有-container" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>这里曾有一个 DI 容器（<code>container.ts</code>，Composition Root 模式）。实测它的
+12 个注册项里只有 2 个有消费方（<code>projectRepository</code> / <code>workflowModelTagRepository</code>，
+共 10 处调用），其余 12 个 router 与 route 全部直接 import 单例 —— 同一件事
+两种取用方式并存，而容器是<strong>少数派</strong>。裁决与理由见 ISSUE #568：<strong>移除容器，
+统一直接 import</strong>（判据是「两种方式取到的必须是同一个东西」，而不是注释里
+承诺的「可替换单例」）。</p>
+</div></section>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-References"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="references">References<a href="#references" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary><dl class="tsd-member-summaries"><dt class="tsd-member-summary" id="skillseed"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Interface"><use href="../assets/icons.svg#icon-256"></use></svg><span>SkillSeed</span><span> → </span><a href="../interfaces/core_repository-skill_—_Skill_业务仓储（Drizzle_版）.SkillSeed.html">SkillSeed</a><a href="#skillseed" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd></dl></details></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details"><a href="#-架构核心层的深路径入口别名（barrel）"><span> — 架构核心层的深路径入口别名（barrel）</span></a><a href="#两条取用口径（不要混用）"><span>两条取用口径（不要混用）</span></a><a href="#为什么本文件不再"><span>为什么本文件不再 </span></a><a href="#为什么没有-eventbus"><span>为什么没有 event<wbr/>Bus</span></a><a href="#为什么没有-container"><span>为什么没有 container</span></a>
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-References"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>References</summary>
+<div><a href="#skillseed"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Reference"><use href="../assets/icons.svg#icon-4194304"></use></svg><span>Skill<wbr/>Seed</span></a></div></details></div></details></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

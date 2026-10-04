@@ -12,14 +12,13 @@
 <li><a href="" aria-current="page">FIELD_TO_FOLDERS</a></li></ul>
 <h1>Variable FIELD_TO_FOLDERS<code class="tsd-tag">Const</code></h1></div>
 <div class="tsd-signature"><span class="tsd-kind-variable">FIELD_TO_FOLDERS</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol"> = ...</span></div>
-<div class="tsd-comment tsd-typography"><p>Map a ComfyUI COMBO widget field name to the directory name(s) whose
-on-disk files should be unioned into the canvas dropdown.  Because each
-directory is its own type, the value IS the directory name verbatim.</p>
-<p>The keys are the canonical ComfyUI loader field names; the arrays list the
-real <code>folder_paths</code> directories those fields read from.</p>
+<div class="tsd-comment tsd-typography"><p>把 ComfyUI COMBO 控件的字段名映射到「其磁盘文件应并入画布下拉框」的目录名。
+因为每个目录就是它自己的类型，所以值<strong>就是</strong>目录名原样。</p>
+<p>键是 ComfyUI 加载器里的规范字段名；数组列出这些字段真正读取的
+<code>folder_paths</code> 目录。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/model-types.ts:33</li></ul></aside></div>
+<li>Defined in lib/model-types.ts:31</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

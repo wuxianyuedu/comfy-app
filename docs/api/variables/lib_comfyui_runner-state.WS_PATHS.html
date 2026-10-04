@@ -14,13 +14,17 @@
 <div class="tsd-signature"><span class="tsd-kind-variable">WS_PATHS</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol"> = ...</span></div>
 <div class="tsd-comment tsd-typography"><p>ComfyUI 的 WS 端点路径随版本变化：</p>
 <ul>
-<li>现代版本（v0.20+）：<code>/api/ws?clientId=...</code></li>
-<li>旧版本：<code>/ws?clientId=...</code>（访问 <code>/api/ws</code> 会 404）
-连接阶段失败时按此顺序逐条回退，避免「能提交但收不到事件」。</li>
+<li>
+<p>现代版本（v0.20+）：<code>/api/ws?clientId=...</code></p>
+</li>
+<li>
+<p>旧版本：<code>/ws?clientId=...</code>（访问 <code>/api/ws</code> 会 404）</p>
+</li>
 </ul>
+<p>连接阶段失败时按此顺序逐条回退，避免「能提交但收不到事件」。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/runner-state.ts:32</li></ul></aside></div>
+<li>Defined in lib/comfyui/runner-state.ts:79</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

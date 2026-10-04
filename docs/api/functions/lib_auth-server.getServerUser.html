@@ -14,16 +14,18 @@
 <section class="tsd-panel">
 <ul class="tsd-signatures">
 <li class="">
-<div class="tsd-signature tsd-anchor-link" id="getserveruser"><span class="tsd-kind-call-signature">getServerUser</span><span class="tsd-signature-symbol">()</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/lib_auth-server.ServerUser.html" class="tsd-signature-type tsd-kind-type-alias">ServerUser</a><span class="tsd-signature-symbol">&gt;</span><a href="#getserveruser" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-signature tsd-anchor-link" id="getserveruser"><span class="tsd-kind-call-signature">getServerUser</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">session</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_auth-server.SessionLike.html" class="tsd-signature-type tsd-kind-type-alias">SessionLike</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/lib_auth-server.ServerUser.html" class="tsd-signature-type tsd-kind-type-alias">ServerUser</a><span class="tsd-signature-symbol">&gt;</span><a href="#getserveruser" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Returns the real logged-in user when a session exists; otherwise falls back
-to a lazily-created demo user so the app keeps working in local single-user
-mode (and the smoke scripts that hit the API without a cookie keep passing).</p>
-<p>Uses better-auth's getSession (migrated from NextAuth v5).</p>
+<div class="tsd-comment tsd-typography"><p>已登录 → 真实用户；未登录 → 演示用户（本机单用户模式的兜底）。</p>
+<p>调用方负责把会话读出来传进来（见 <code>~/server/auth/request-user</code>）。</p>
 </div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">session</span>: <a href="../types/lib_auth-server.SessionLike.html" class="tsd-signature-type tsd-kind-type-alias">SessionLike</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/lib_auth-server.ServerUser.html" class="tsd-signature-type tsd-kind-type-alias">ServerUser</a><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/auth-server.ts:22</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/auth-server.ts:87</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

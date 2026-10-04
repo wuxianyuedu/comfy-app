@@ -1,0 +1,97 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>sqlite-pragmas | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="" aria-current="page">sqlite-pragmas</a></li></ul>
+<h1>Module sqlite-pragmas</h1></div>
+<section class="tsd-panel tsd-comment">
+<div class="tsd-comment tsd-typography"><h1 id="-the-settings-every-new-database-connection-needssingle-definition-issue-1250" class="tsd-anchor-link"><code>sqlite-pragmas.ts</code> -- the settings every new database connection needs
+(single definition; ISSUE #1250).<a href="#-the-settings-every-new-database-connection-needssingle-definition-issue-1250" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<p>Why it is collected here: the same two pragmas used to be written out at four
+sites (<code>server/db.ts</code>, <code>server/workshop/db.ts</code>, <code>comfyui/host-runtime.ts</code> and
+the launcher-side <code>scripts/launcher-core/standalone-runtime-env.mjs</code>), and
+&quot;adding one more to each place&quot; means &quot;forgetting one&quot;. In the packaged
+topology the embedded Next server and the executor host write the <em>same</em> WAL
+file, so a momentary write lock comes back as <code>SQLITE_BUSY</code> -- and before
+#1250 a failed terminal write was never retried, which is how a finished task
+stayed &quot;generating&quot; forever.</p>
+<p>TWO FAMILIES, DELIBERATELY SPLIT (measured, two processes, real driver):</p>
+<ol>
+<li><code>journal_mode</code> / <code>foreign_keys</code> describe the <em>database</em>: set once, they
+live in the file, so a PRAGMA at boot is the right shape and it is shared.</li>
+<li>The lock-waiting budget is a <em>connection</em> property, and a PRAGMA is the
+wrong place for it on this driver: <code>createClient({url: &quot;file:&quot;})</code> is a
+connection <strong>pool</strong>, and its size is <code>Math.max(1, config.concurrency)</code> --
+with <code>concurrency</code> unset that is <code>NaN</code>, i.e. &quot;never at the limit&quot;, so the
+pool happily opens a second connection that never saw the boot PRAGMA.
+Measured: boot PRAGMA + one pooled connection busy -&gt; contended write threw
+<code>SQLITE_BUSY</code> after 11 ms (no wait at all), while
+<code>createClient({ timeout })</code> -- which the driver applies when it <em>opens</em>
+every connection -- waited 2221 ms. That is also exactly what the
+packaged host did before this split: 4 retries burned 0.6 s because no
+connection actually had a budget.</li>
+</ol>
+<p>So the budget is exported as <code>SQLITE_BUSY_TIMEOUT_MS</code> and passed as the
+<code>timeout</code> <strong>client option</strong> where it is wanted, and it is deliberately NOT
+put back into <code>SQLITE_PRAGMAS</code>: a PRAGMA there looks like coverage while
+quietly being coverage for one connection only, which is the same silent
+failure this issue is about.</p>
+<p>Budget shape (why 250 and why only the host): libsql runs statements
+synchronously, so waiting for a lock stalls <em>this process's</em> event loop by
+that many milliseconds -- measured: during a 2.2 s wait a 10 ms heartbeat
+fired zero times (it should have fired ~220). The host is the process whose
+terminal write must land and it exists only to run tasks, so it takes the
+250 ms. The Next server answers UI requests and keeps failing fast instead;
+what protects a contended write there is the bounded retry in
+<code>comfyui/executor-write-retry.ts</code>, not a wait.</p>
+<p>The launcher side is a non-TypeScript host and cannot import this module;
+<code>tests/sqlite-pragma-sites.test.ts</code> checks that it runs exactly this list and
+that only <code>host-runtime.ts</code> carries the budget, so the judgement lives in a
+test rather than in someone's memory.</p>
+<p>The list is applied through <code>applySqlitePragmas()</code> rather than a bare
+<code>for</code> loop at each site: the boot loop has to tolerate a <em>concurrent</em> WAL
+switch, and three copies of that tolerance is two places to forget it
+(ISSUE #1282, see the function's own note).</p>
+<p>NOTE (keep this file ASCII-only): <code>src/server/db.ts</code> pulls it into every
+route's module graph, and that file is whitelisted ASCII because a multi-byte
+character inside a rendered code frame panics <code>next build</code>
+(<a href="http://AGENTS.md">AGENTS.md</a> hard rule 16 / launch-and-build sec.5).</p>
+</div></section>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Interfaces"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="interfaces">Interfaces<a href="#interfaces" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary><dl class="tsd-member-summaries"><dt class="tsd-member-summary" id="sqlitepragmatarget"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Interface"><use href="../assets/icons.svg#icon-256"></use></svg><a href="../interfaces/sqlite-pragmas.SqlitePragmaTarget.html">SqlitePragmaTarget</a><a href="#sqlitepragmatarget" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd></dl></details>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Variables"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="variables">Variables<a href="#variables" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary><dl class="tsd-member-summaries"><dt class="tsd-member-summary" id="sqlite_busy_timeout_ms"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Variable"><use href="../assets/icons.svg#icon-32"></use></svg><a href="../variables/sqlite-pragmas.SQLITE_BUSY_TIMEOUT_MS.html">SQLITE_BUSY_TIMEOUT_MS</a><a href="#sqlite_busy_timeout_ms" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd><dt class="tsd-member-summary" id="sqlite_pragmas"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Variable"><use href="../assets/icons.svg#icon-32"></use></svg><a href="../variables/sqlite-pragmas.SQLITE_PRAGMAS.html">SQLITE_PRAGMAS</a><a href="#sqlite_pragmas" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd></dl></details>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Functions"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="functions">Functions<a href="#functions" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary><dl class="tsd-member-summaries"><dt class="tsd-member-summary" id="applysqlitepragmas"><span class="tsd-member-summary-name"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Function"><use href="../assets/icons.svg#icon-64"></use></svg><a href="../functions/sqlite-pragmas.applySqlitePragmas.html">applySqlitePragmas</a><a href="#applysqlitepragmas" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></span></dt><dd class="tsd-member-summary"></dd></dl></details></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details"><a href="#-the-settings-every-new-database-connection-needssingle-definition-issue-1250"><span> --<wbr/> the settings every new database connection needs(single definition; <wbr/>ISSUE #1250).</span></a>
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Interfaces"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Interfaces</summary>
+<div><a href="#sqlitepragmatarget"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Interface"><use href="../assets/icons.svg#icon-256"></use></svg><span>Sqlite<wbr/>Pragma<wbr/>Target</span></a></div></details>
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Variables"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Variables</summary>
+<div><a href="#sqlite_busy_timeout_ms"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Variable"><use href="../assets/icons.svg#icon-32"></use></svg><span>SQLITE_<wbr/>BUSY_<wbr/>TIMEOUT_<wbr/>MS</span></a><a href="#sqlite_pragmas"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Variable"><use href="../assets/icons.svg#icon-32"></use></svg><span>SQLITE_<wbr/>PRAGMAS</span></a></div></details>
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Functions"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Functions</summary>
+<div><a href="#applysqlitepragmas"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Function"><use href="../assets/icons.svg#icon-64"></use></svg><span>apply<wbr/>Sqlite<wbr/>Pragmas</span></a></div></details></div></details></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>
