@@ -179,7 +179,7 @@ export function VideoQueueModal({
             <div className="flex items-center gap-3">
               <h3 className="u-title">视频生成队列</h3>
               {runningCount > 0 && (
-                <span className="bg-warning/15 text-warning-strong rounded-full px-2 py-0.5 text-[11px]">
+                <span className="bg-warning/15 text-warning-strong text-2xs rounded-full px-2 py-0.5">
                   {runningCount} 个进行中
                 </span>
               )}
@@ -187,7 +187,7 @@ export function VideoQueueModal({
                 <Button
                   variant="link"
                   onClick={loadTasks}
-                  className="text-ink-muted hover:text-primary h-auto p-0 text-[11px]"
+                  className="text-ink-muted hover:text-primary text-2xs h-auto p-0"
                 >
                   ↻ 刷新
                 </Button>
@@ -285,12 +285,12 @@ export function VideoQueueModal({
                           >
                             {task.prompt || "（无提示词）"}
                           </p>
-                          <p className="text-ink-fainter mt-0.5 truncate font-mono text-[10px]">
+                          <p className="text-ink-fainter text-3xs mt-0.5 truncate font-mono">
                             {task.workflowName}
                           </p>
                           {task.status === "FAILED" && task.error && (
                             <p
-                              className="text-destructive mt-0.5 truncate text-[10px]"
+                              className="text-destructive text-3xs mt-0.5 truncate"
                               title={task.error}
                             >
                               {task.error}
@@ -310,7 +310,7 @@ export function VideoQueueModal({
                             <a
                               href={task.video}
                               download
-                              className="bg-primary/20 text-primary-strong hover:bg-primary/30 rounded-md px-2.5 py-1 text-[11px] transition-colors"
+                              className="bg-primary/20 text-primary-strong hover:bg-primary/30 text-2xs rounded-md px-2.5 py-1 transition-colors"
                             >
                               下载
                             </a>
@@ -400,7 +400,7 @@ export function VideoQueueModal({
           {/* Footer */}
           {tab === "draft" && (
             <div className="border-border-strong flex items-center justify-between border-t px-5 py-3.5">
-              <span className="text-ink-muted text-[11px]">
+              <span className="text-ink-muted text-2xs">
                 提交后将进入「生成队列」并实时刷新
               </span>
               <Button

@@ -48,7 +48,7 @@ function LabelWithId({ label, id }: { label: string; id: string }) {
   return (
     <>
       {label}
-      <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">
+      <span className="text-muted-foreground/60 text-3xs ml-1 font-mono">
         {id}
       </span>
     </>
@@ -99,7 +99,7 @@ export function WorkshopModelAdapterModal({
           <div className="flex items-center justify-between px-5 pt-4 pb-2">
             <div>
               <h3 className="text-ink-strong u-title">模型适配</h3>
-              <p className="text-muted-foreground mt-0.5 text-[11px]">
+              <p className="text-muted-foreground text-2xs mt-0.5">
                 为远端模型配置工坊各模式下的输入 /
                 输出：统一输入（提示词、宽高比、
                 百万像素、倍数、图片…）映射到该接口请求体的字段名，产物按字段路径提取。
@@ -144,7 +144,7 @@ export function WorkshopModelAdapterModal({
                       }`}
                     >
                       {c.name}
-                      <span className="text-muted-foreground/70 ml-1 text-[10px]">
+                      <span className="text-muted-foreground/70 text-3xs ml-1">
                         {c.kind === "image" ? "生图" : "视频"}
                       </span>
                     </Button>
@@ -200,7 +200,7 @@ export function WorkshopModelAdapterModal({
                         if (modes.length === 0) return null;
                         return (
                           <div key={group.category}>
-                            <p className="text-muted-foreground mb-1 text-[10px]">
+                            <p className="text-muted-foreground text-3xs mb-1">
                               {group.label}
                             </p>
                             <div className="flex flex-wrap gap-1">
@@ -213,7 +213,7 @@ export function WorkshopModelAdapterModal({
                                     addMode(t.code);
                                     setAddModeOpen(false);
                                   }}
-                                  className="border-border text-muted-foreground hover:border-primary hover:text-primary h-auto rounded px-2 py-0.5 text-[11px]"
+                                  className="border-border text-muted-foreground hover:border-primary hover:text-primary text-2xs h-auto rounded px-2 py-0.5"
                                 >
                                   <LabelWithId label={t.label} id={t.code} />
                                 </Button>
@@ -235,11 +235,11 @@ export function WorkshopModelAdapterModal({
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-ink text-xs font-semibold">
                         {modeLabel(a.mode)}
-                        <span className="text-muted-foreground/70 ml-1.5 font-mono text-[10px]">
+                        <span className="text-muted-foreground/70 text-3xs ml-1.5 font-mono">
                           {a.mode}
                         </span>
                       </p>
-                      <span className="text-muted-foreground text-[10px]">
+                      <span className="text-muted-foreground text-3xs">
                         输出：
                         {getWorkflowType(a.mode)?.category === "video"
                           ? "视频（video）"
@@ -249,7 +249,7 @@ export function WorkshopModelAdapterModal({
                     <FormField
                       label="端点路径（拼在模型 Base URL 后）"
                       id={`adapter-endpoint-${a.mode}`}
-                      labelClassName="text-muted-foreground mb-1 text-[10px]"
+                      labelClassName="text-muted-foreground mb-1 text-3xs"
                     >
                       {(a11y) => (
                         <input
@@ -261,11 +261,11 @@ export function WorkshopModelAdapterModal({
                               endpointPath: event.target.value,
                             }))
                           }
-                          className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-[11px] outline-none"
+                          className="border-border bg-bg focus:border-primary text-2xs w-full rounded-lg border px-2.5 py-1.5 font-mono outline-none"
                         />
                       )}
                     </FormField>
-                    <p className="text-muted-foreground mt-2 mb-1 block text-[10px]">
+                    <p className="text-muted-foreground text-3xs mt-2 mb-1 block">
                       输入映射：统一输入类型 → 请求体字段名
                     </p>
                     <div className="flex-col gap-1.5">
@@ -296,9 +296,9 @@ export function WorkshopModelAdapterModal({
                                 `${workshopInputLabel(t.type)}（${t.type}）`,
                               ]),
                             )}
-                            className="w-44 text-[11px]"
+                            className="text-2xs w-44"
                           />
-                          <span className="text-muted-foreground text-[10px]">
+                          <span className="text-muted-foreground text-3xs">
                             →
                           </span>
                           <input
@@ -314,7 +314,7 @@ export function WorkshopModelAdapterModal({
                               }))
                             }
                             placeholder="请求体字段名"
-                            className="border-border bg-bg focus:border-primary flex-1 rounded-lg border px-2 py-1 font-mono text-[11px] outline-none"
+                            className="border-border bg-bg focus:border-primary text-2xs flex-1 rounded-lg border px-2 py-1 font-mono outline-none"
                           />
                           <Button
                             variant="ghost"
@@ -351,7 +351,7 @@ export function WorkshopModelAdapterModal({
                             };
                           })
                         }
-                        className="text-primary hover:bg-primary/10 border-primary/40 h-auto rounded border-dashed px-2 py-0.5 text-[11px]"
+                        className="text-primary hover:bg-primary/10 border-primary/40 text-2xs h-auto rounded border-dashed px-2 py-0.5"
                       >
                         ＋ 添加输入映射
                       </Button>
@@ -359,7 +359,7 @@ export function WorkshopModelAdapterModal({
                     <FormField
                       label="产物字段路径（响应 JSON 内，如 url / data.0.url；留空走通用提取）"
                       id={`adapter-output-${a.mode}`}
-                      labelClassName="text-muted-foreground mt-2 mb-1 text-[10px]"
+                      labelClassName="text-muted-foreground mt-2 mb-1 text-3xs"
                     >
                       {(a11y) => (
                         <input
@@ -372,7 +372,7 @@ export function WorkshopModelAdapterModal({
                             }))
                           }
                           placeholder="url"
-                          className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-[11px] outline-none"
+                          className="border-border bg-bg focus:border-primary text-2xs w-full rounded-lg border px-2.5 py-1.5 font-mono outline-none"
                         />
                       )}
                     </FormField>

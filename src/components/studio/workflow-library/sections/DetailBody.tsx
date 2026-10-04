@@ -86,7 +86,7 @@ export function DetailBody({
               variant="primary"
               size="xs"
               onClick={onEdit}
-              className="h-auto gap-1 rounded-md px-2 py-1 text-[11px]"
+              className="text-2xs h-auto gap-1 rounded-md px-2 py-1"
             >
               <Maximize2 data-icon="inline-start" className="size-3" />
               在编辑器中打开

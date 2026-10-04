@@ -367,7 +367,7 @@ function DimensionSizeControl({
         }
       >
         <div className="flex items-center gap-2">
-          <span className="text-accent shrink-0 text-[10px] font-semibold tracking-wider uppercase">
+          <span className="text-accent text-3xs shrink-0 font-semibold tracking-wider uppercase">
             比例 + 像素
           </span>
           <div className={narrow ? "w-28 min-w-0" : "min-w-0 flex-1"}>
@@ -381,7 +381,7 @@ function DimensionSizeControl({
                   scene={scene}
                   onOpen={() => setTableOpen(true)}
                   extra={
-                    <span className="text-ink-faint text-[10px]">
+                    <span className="text-ink-faint text-3xs">
                       {CLARITY_HINT[clarityKind]}
                     </span>
                   }

@@ -176,7 +176,7 @@ function LogToolbar({
           {title}
         </span>
         {log.active && (
-          <span className="text-success-strong inline-flex shrink-0 items-center gap-1.5 text-[10px] font-normal">
+          <span className="text-success-strong text-3xs inline-flex shrink-0 items-center gap-1.5 font-normal">
             <StatusDot state="up" sizeClass="size-1.5" pulse />
             跟随中
           </span>
@@ -193,14 +193,14 @@ function LogToolbar({
               log.sessions.map((s) => [s.id, formatSessionLabel(s)]),
             )}
             aria-label="切换要查看的启动"
-            className="max-w-55 text-[11px]"
+            className="text-2xs max-w-55"
           />
         )}
         {!follow && (
           <Button
             size="xs"
             onClick={() => onFollowChange(true)}
-            className="h-auto rounded px-2 py-0.5 text-[11px] font-medium"
+            className="text-2xs h-auto rounded px-2 py-0.5 font-medium"
           >
             恢复自动滚动
           </Button>
@@ -209,7 +209,7 @@ function LogToolbar({
           variant="outline"
           size="xs"
           onClick={() => void log.refresh()}
-          className="text-muted-foreground h-auto rounded px-2 py-0.5 text-[11px]"
+          className="text-muted-foreground text-2xs h-auto rounded px-2 py-0.5"
         >
           刷新
         </Button>
@@ -250,7 +250,7 @@ function LogBody({
     <div
       ref={scrollerRef}
       onScroll={scroller.onScroll}
-      className={`bg-canvas-deep text-ink-field custom-scrollbar overflow-y-auto font-mono text-[11px] leading-relaxed ${className}`}
+      className={`bg-canvas-deep text-ink-field custom-scrollbar text-2xs overflow-y-auto font-mono leading-relaxed ${className}`}
     >
       {log.text ? (
         <span className="break-all whitespace-pre-wrap">

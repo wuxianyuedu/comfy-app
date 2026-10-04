@@ -81,7 +81,7 @@ export function RequiredChips({
             data-dimension-pin={pin.ioKey}
           >
             <span
-              className="text-ink-soft max-w-20 truncate text-[10px]"
+              className="text-ink-soft text-3xs max-w-20 truncate"
               title={pin.label ?? pin.name}
             >
               {pin.label ?? pin.name}
@@ -97,7 +97,7 @@ export function RequiredChips({
                 <Button
                   variant={required ? "danger" : "ghost"}
                   onClick={() => onRequiredChange(pin.ioKey, !required)}
-                  className={`nodrag nopan h-auto rounded px-1.5 py-px text-[10px] font-medium ${
+                  className={`nodrag nopan text-3xs h-auto rounded px-1.5 py-px font-medium ${
                     required
                       ? ""
                       : "border-border-strong bg-subtle text-ink-muted border"
@@ -155,7 +155,7 @@ export function SizeTableFooter({
       <Button
         variant="outline"
         onClick={onOpen}
-        className="nodrag nopan border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright h-auto rounded-md px-2 py-1 text-[10px]"
+        className="nodrag nopan border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright text-3xs h-auto rounded-md px-2 py-1"
       >
         尺寸表（{SIZE_SCENE_LABELS[scene]}场景）…
       </Button>

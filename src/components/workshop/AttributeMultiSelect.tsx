@@ -126,7 +126,7 @@ export function AttributeMultiSelect({
             />
           </PopoverTrigger>
           {value.length === 0 && (
-            <span className="text-muted-foreground/60 px-1 text-[11px]">
+            <span className="text-muted-foreground/60 text-2xs px-1">
               {placeholder}
             </span>
           )}
@@ -155,13 +155,13 @@ export function AttributeMultiSelect({
               className="max-h-56 overflow-y-auto px-1 py-1"
             >
               {visibleGroups.length === 0 ? (
-                <p className="text-muted-foreground px-2 py-2 text-[11px]">
+                <p className="text-muted-foreground text-2xs px-2 py-2">
                   未找到匹配项，可在下方添加自定义。
                 </p>
               ) : (
                 visibleGroups.map((g) => (
                   <div key={g.title} className="mb-1">
-                    <p className="text-muted-foreground/70 px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase">
+                    <p className="text-muted-foreground/70 text-3xs px-2 py-0.5 font-medium tracking-wide uppercase">
                       {g.title}
                     </p>
                     {g.options.map((opt) => {

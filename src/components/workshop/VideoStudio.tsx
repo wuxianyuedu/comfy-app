@@ -294,7 +294,7 @@ export function VideoStudio({
       )}
 
       {shots.length > 0 && (
-        <p className="text-muted-foreground text-[11px]">
+        <p className="text-muted-foreground text-2xs">
           已完成 {doneCount}/{shots.length} 片段 —
           片段与首帧会自动进入「成片合成」时间线;可随时回来重跑单个镜头。
         </p>

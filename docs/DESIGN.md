@@ -64,6 +64,18 @@ typography:
     fontWeight: 400
     lineHeight: 1.5
     letterSpacing: 0px
+  meta:
+    fontFamily: "Geist, PingFang SC, Microsoft YaHei, Noto Sans SC, system-ui, sans-serif"
+    fontSize: 11px
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: 0px
+  micro:
+    fontFamily: "Geist, PingFang SC, Microsoft YaHei, Noto Sans SC, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: 0px
   button-md:
     fontFamily: "Geist, PingFang SC, Microsoft YaHei, Noto Sans SC, system-ui, sans-serif"
     fontSize: 14px
@@ -357,6 +369,21 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 | section | `--text-section` | 0.875rem (14px) / 600 / -0.01em | `.u-title` | 卡片/区块小标题 |
 
 正文不是档，是 Tailwind 默认刻度：`text-sm`(14px) 是**应用默认正文**（`card`、`Button` 都落在这档），`text-xs`(12px) 是副说明。**不要在调用点写 `text-[13px]` 这类字面字号**——要更大的字先在 `@theme` 加具名档。
+
+### 微标签两档：`2xs` / `3xs`（低于 `text-xs` 的那一层，之前一直没名字）
+
+| 档 | token | 值 | 类名 | 用在哪 |
+| --- | --- | --- | --- | --- |
+| meta | `--text-2xs` | 11px | `text-2xs` | 副说明下的元信息、chip 文字、密集列表行 |
+| micro | `--text-3xs` | 10px | `text-3xs` | 角标、极小徽标、画布节点上的第二行标签 |
+
+这两档是**从调用点量出来的**，不是新设计：本轮实测 `text-[11px]` 350 处、`text-[10px]` 214 处散在 136 个业务文件里 —— 它们已经是事实标准，只是没有名字，于是「改一处全站跟手」对这两个尺寸根本不成立。
+
+三条刻意的不做，每条都是实测出来的原因：
+
+- **档名必须是 t-shirt 尺寸（`2xs` / `3xs`），不能叫 `meta` / `micro`**。`cn()`（`node_modules/cn`，clsx + tailwind-merge 的替代件）把**不认识的 `text-<名字>` 一律归到颜色组**：实测 `cn("text-ink-muted", "text-micro")` 只剩 `text-micro` —— 同行的状态色被静默吃掉，徽标会失去配色语义；而 `cn("text-ink-muted", "text-2xs")` 两条都留。⚠️ **仓库里已有的 `text-section` / `text-page` / `text-hero` 是同一个坑的潜伏形态**（实测 `cn("text-ink-muted","text-section")` 同样吃颜色），它们目前只在 CSS 里经 `.u-title-*` 使用、没进 JSX，所以还没炸 —— **别在 JSX 里用这几个类名**，标题一律走 `.u-title-*`。
+- **不乘 `--font-scale`**：设置页「标题字阶」那一档的作用域只有上面四档标题。微标签跟着标题缩放，会让密集列表在 125% 档下挤成一团 —— 与「正文不随字阶变」同一条口径，`e2e/appearance-steps.spec.ts` 按后者判。
+- **不配 `--text-*-line-height`**：Tailwind v4 里一旦配对，生成的类会连带锁行高。实测对照：`text-xs` emit `font-size` **加** `line-height: var(--tw-leading, var(--text-xs--line-height))`（= 16px），而 `text-[12px]` 只出 font-size、行高继承 `html` 的 1.5（12px 下是 18px）。所以 **`text-[12px]` → `text-xs` 不是零视觉变化的改写**（107 处留在原地，等一次带视觉复核的独立改动）；`text-2xs` / `text-3xs` 只出 font-size，与替换前的 `text-[11px]` / `text-[10px]` 逐像素相同。
 
 **h2/h3 刻意不入判据**：区块级标题保留 10.5–14px 的几档微排版（画布节点标签、日志小节、属性表列名各一档），并成一档会**压平信息层次**。要更严的约束就写成**该屏自己的守卫**（例：`src/components/workshop/workshop-heading-structure.test.ts`），别升成全局规则。
 

@@ -168,7 +168,7 @@ export function UsageTestDialog({
 
           {(usageTest.kind === "image" || usageTest.kind === "video") && (
             <div className="mb-3">
-              <p className="text-muted-foreground mb-1.5 text-[11px]">
+              <p className="text-muted-foreground text-2xs mb-1.5">
                 固定名称字段可一键添加，无需手输拼错 （images / first_frame /
                 seed 等）：
               </p>
@@ -191,7 +191,7 @@ export function UsageTestDialog({
                         variant="outline"
                         size="xs"
                         onClick={() => d.addPresetField(preset.key)}
-                        className={`h-auto rounded-full px-2 py-1 text-[11px] ${
+                        className={`text-2xs h-auto rounded-full px-2 py-1 ${
                           already
                             ? "bg-primary/5 border-primary/50 text-primary"
                             : "text-muted-foreground hover:text-ink border-border"
@@ -208,7 +208,7 @@ export function UsageTestDialog({
           )}
 
           {(usageTest.kind === "image" || usageTest.kind === "video") && (
-            <p className="bg-warning/10 text-warning-strong mb-3 rounded-lg px-3 py-2 text-[11px]">
+            <p className="bg-warning/10 text-warning-strong text-2xs mb-3 rounded-lg px-3 py-2">
               ⚠ 会真实调用生成接口并消耗提供方额度。
             </p>
           )}
@@ -305,7 +305,7 @@ function UsageVideoModeQuickPick({
             <ToggleGroupItem
               key={m}
               value={m}
-              className="h-auto rounded-full px-2.5 py-1 text-[11px]"
+              className="text-2xs h-auto rounded-full px-2.5 py-1"
             >
               {m}
             </ToggleGroupItem>
@@ -315,10 +315,7 @@ function UsageVideoModeQuickPick({
           if (f.key !== "mode") return null;
           const hint = VIDEO_MODE_HINT[f.value.trim()];
           return hint ? (
-            <p
-              key="mode-hint"
-              className="text-muted-foreground mt-1 text-[11px]"
-            >
+            <p key="mode-hint" className="text-muted-foreground text-2xs mt-1">
               {hint}
             </p>
           ) : null;
@@ -329,7 +326,7 @@ function UsageVideoModeQuickPick({
           return (
             <div
               key="mode-broken"
-              className="border-warning/60 bg-warning/5 text-warning-strong mt-1 rounded-lg border border-dashed px-2 py-1.5 text-[11px]"
+              className="border-warning/60 bg-warning/5 text-warning-strong text-2xs mt-1 rounded-lg border border-dashed px-2 py-1.5"
             >
               <p>
                 ⚠ mode 的值被图片/链接覆盖了——这正是「reference 选中消失」和 400
@@ -341,7 +338,7 @@ function UsageVideoModeQuickPick({
                   variant="outline"
                   size="xs"
                   onClick={() => d.rescueMediaFromMode(i, f.value.trim())}
-                  className="border-warning/60 hover:bg-warning/10 mt-1 h-auto rounded px-2 py-0.5 text-[11px]"
+                  className="border-warning/60 hover:bg-warning/10 text-2xs mt-1 h-auto rounded px-2 py-0.5"
                 >
                   把这张图搬到 images 行，mode 复位为 text
                 </Button>
@@ -350,7 +347,7 @@ function UsageVideoModeQuickPick({
           );
         })}
         {videoModeMissingHint(usageTest.fields) && (
-          <p className="border-warning/60 bg-warning/5 text-warning-strong mt-1 rounded-lg border border-dashed px-2 py-1.5 text-[11px]">
+          <p className="border-warning/60 bg-warning/5 text-warning-strong text-2xs mt-1 rounded-lg border border-dashed px-2 py-1.5">
             ⚠ {videoModeMissingHint(usageTest.fields)}
           </p>
         )}
@@ -370,7 +367,7 @@ function UsageFieldEditor({
   return (
     <>
       {usageTest.fields.length === 0 && (
-        <p className="text-muted-foreground border-border mb-2 rounded-lg border border-dashed px-3 py-3 text-center text-[11px]">
+        <p className="text-muted-foreground border-border text-2xs mb-2 rounded-lg border border-dashed px-3 py-3 text-center">
           还没有额外字段。点下方「添加字段」可按需补 seed / duration /
           first_frame 等。
         </p>
@@ -416,7 +413,7 @@ function UsageFieldEditor({
                 />
                 {f.key === "mode" ? (
                   <span
-                    className="text-muted-foreground/40 border-border/40 shrink-0 cursor-not-allowed rounded-lg border px-2 py-1.5 text-[11px]"
+                    className="text-muted-foreground/40 border-border/40 text-2xs shrink-0 cursor-not-allowed rounded-lg border px-2 py-1.5"
                     title="mode 是模式名（text / keyframe / reference），不能填图片；先添加 images / first_frame 行再传图"
                   >
                     上传
@@ -434,7 +431,7 @@ function UsageFieldEditor({
                         variant="outline"
                         size="xs"
                         onClick={() => d.patchField(i, { value: "https://" })}
-                        className="text-muted-foreground hover:text-ink h-auto shrink-0 rounded-lg px-2 text-[11px]"
+                        className="text-muted-foreground hover:text-ink text-2xs h-auto shrink-0 rounded-lg px-2"
                       >
                         链接
                       </Button>
@@ -516,7 +513,7 @@ function UsageTestResultPanel({
             )}
             {result.savedPath && (
               <p
-                className="border-border/50 bg-surface-1 text-muted-foreground mt-2 rounded-lg border px-3 py-2 text-[11px] break-all"
+                className="border-border/50 bg-surface-1 text-muted-foreground text-2xs mt-2 rounded-lg border px-3 py-2 break-all"
                 title="本次产出的内容已在本地 temp 子目录保存一份"
               >
                 已保存到本地：
@@ -578,7 +575,7 @@ function FieldImageButton({
           variant="outline"
           size="xs"
           onClick={picker.open}
-          className="text-muted-foreground hover:text-ink border-border hover:bg-subtle h-auto shrink-0 gap-1 rounded-lg px-2 text-[11px] transition-colors"
+          className="text-muted-foreground hover:text-ink border-border hover:bg-subtle text-2xs h-auto shrink-0 gap-1 rounded-lg px-2 transition-colors"
         >
           上传
         </Button>

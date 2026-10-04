@@ -137,7 +137,7 @@ export function OptionListPopover({
                 setOpen(false);
               }}
               className={cn(
-                "flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left text-[11px] font-normal transition-colors",
+                "text-2xs flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left font-normal transition-colors",
                 selected
                   ? "bg-primary-500/20 text-primary-strong"
                   : "text-ink-soft hover:bg-subtle",
@@ -155,9 +155,7 @@ export function OptionListPopover({
           );
         })}
         {items.length === 0 && emptyHint != null && (
-          <div className="text-ink-muted px-3 py-2 text-[10px]">
-            {emptyHint}
-          </div>
+          <div className="text-ink-muted text-3xs px-3 py-2">{emptyHint}</div>
         )}
       </PopoverContent>
     </Popover>

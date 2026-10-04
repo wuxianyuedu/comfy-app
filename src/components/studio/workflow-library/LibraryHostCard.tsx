@@ -90,7 +90,7 @@ export function LibraryHostCard({
                 pulse={running}
               />
               <span
-                className="text-ink-soft text-[10px] font-medium"
+                className="text-ink-soft text-3xs font-medium"
                 style={{ fontFamily: "var(--font-sans)" }}
               >
                 {statusLabel}
@@ -107,19 +107,19 @@ export function LibraryHostCard({
           <div className="flex h-7 min-w-0 items-center gap-1">
             <WorkflowStaticChip>
               <span className="bg-success-strong size-1.5 rounded-full" />
-              <span className="text-success-strong text-[11px] font-semibold">
+              <span className="text-success-strong text-2xs font-semibold">
                 本机
               </span>
             </WorkflowStaticChip>
             <WorkflowStaticChip className="min-w-0 flex-1">
-              <span className="text-ink-bright truncate text-[11px] font-semibold">
+              <span className="text-ink-bright text-2xs truncate font-semibold">
                 全部模型
               </span>
             </WorkflowStaticChip>
           </div>
           <div className="flex h-7 min-w-0 items-center gap-1">
             <WorkflowStaticChip className="min-w-0 flex-1" title={workflowName}>
-              <span className="text-ink-bright truncate text-[11px] font-semibold">
+              <span className="text-ink-bright text-2xs truncate font-semibold">
                 {workflowName}
               </span>
             </WorkflowStaticChip>
@@ -134,11 +134,11 @@ export function LibraryHostCard({
                 )}
                 popoverMinWidth={150}
                 autoFitFromOptions={false}
-                className="border-border-strong! shrink-0 bg-transparent! text-[11px]"
+                className="border-border-strong! text-2xs shrink-0 bg-transparent!"
               />
             ) : (
               <WorkflowStaticChip>
-                <span className="text-ink-bright text-[11px] font-medium">
+                <span className="text-ink-bright text-2xs font-medium">
                   {displayValue(effectiveModeLabel)}
                 </span>
               </WorkflowStaticChip>

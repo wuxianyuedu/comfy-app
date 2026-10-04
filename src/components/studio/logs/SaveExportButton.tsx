@@ -80,15 +80,13 @@ export function SaveExportButton({
       {/* 路径就是这次保存的「回执」：没有它，用户只能自己去猜文件在哪。 */}
       {savedPath && (
         <span
-          className="text-ink-fainter max-w-56 truncate text-[11px]"
+          className="text-ink-fainter text-2xs max-w-56 truncate"
           title={savedPath}
         >
           已保存 {savedPath}
         </span>
       )}
-      {failed && (
-        <span className="text-danger-strong text-[11px]">保存失败</span>
-      )}
+      {failed && <span className="text-danger-strong text-2xs">保存失败</span>}
     </span>
   );
 }

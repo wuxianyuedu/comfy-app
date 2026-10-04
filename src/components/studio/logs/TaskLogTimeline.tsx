@@ -129,7 +129,7 @@ export function TaskLogTimeline({
                   }`}
                 >
                   {option.label}
-                  <span className="text-ink-fainter ml-1 text-[11px]">
+                  <span className="text-ink-fainter text-2xs ml-1">
                     {count}
                   </span>
                 </Button>
@@ -190,7 +190,7 @@ function DefaultLogRow({
     >
       <span className="text-ink-muted shrink-0">{fmtTime(log.t)}</span>
       <span
-        className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
+        className={`text-2xs shrink-0 rounded border px-1.5 py-0.5 font-medium uppercase ${LEVEL_STYLES[log.level]}`}
       >
         {levelLabel(log.level)}
       </span>
@@ -198,7 +198,7 @@ function DefaultLogRow({
         {log.msg}
       </span>
       {log.src && (
-        <span className="text-ink-fainter hover:text-ink-faint max-w-50 shrink-0 truncate text-[11px]">
+        <span className="text-ink-fainter hover:text-ink-faint text-2xs max-w-50 shrink-0 truncate">
           {log.src}
         </span>
       )}

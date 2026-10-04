@@ -100,7 +100,7 @@ export function FlowNodePinRows({
             // key 同时含两个名字，好让数字槽端口（"1"、"2" …）
             // 不在数组里撞车。
             key={`pinrow-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
-            className="relative flex h-5.5 items-center pr-5 pl-5 text-[11px]"
+            className="text-2xs relative flex h-5.5 items-center pr-5 pl-5"
             data-pin-input={inName}
             data-pin-output={outName}
             /* 相关行提亮背景：线加粗了、落到的那一行也跟着亮，视线从线落到行上。
@@ -146,7 +146,7 @@ export function FlowNodePinRows({
                     />
                   )}
                 <span
-                  className="min-w-0 flex-1 truncate text-left text-[11px]"
+                  className="text-2xs min-w-0 flex-1 truncate text-left"
                   style={{
                     color: tone.labelColor,
                     fontWeight: tone.labelWeight,
@@ -160,7 +160,7 @@ export function FlowNodePinRows({
             {outEntry && (
               <>
                 <span
-                  className="min-w-0 flex-1 truncate text-right text-[11px]"
+                  className="text-2xs min-w-0 flex-1 truncate text-right"
                   style={{
                     color: tone.labelColor,
                     fontWeight: tone.labelWeight,

@@ -106,7 +106,7 @@ export function SubgraphErrorToast({
    看不出这条提示（ISSUE #609 红框圈的那块）。 */
 export function CanvasHintTooltip() {
   return (
-    <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-[11px] text-gray-300 backdrop-blur-sm">
+    <div className="text-2xs pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-gray-300 backdrop-blur-sm">
       点击节点查看详情 · 拖拽移动节点位置 · 滚轮缩放
     </div>
   );

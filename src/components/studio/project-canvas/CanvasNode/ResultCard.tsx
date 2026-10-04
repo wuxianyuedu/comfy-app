@@ -62,7 +62,7 @@ export function ResultCard({
           <Hint label="字号减小">
             <Button
               variant="ghost"
-              className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-medium"
+              className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-medium"
             >
               A-
             </Button>
@@ -70,7 +70,7 @@ export function ResultCard({
           <Hint label="字号增大">
             <Button
               variant="ghost"
-              className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-medium"
+              className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-medium"
             >
               A+
             </Button>
@@ -79,7 +79,7 @@ export function ResultCard({
           <Hint label="编辑">
             <Button
               variant="ghost"
-              className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
+              className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-normal"
             >
               <Icon
                 data-icon="inline-start"
@@ -96,7 +96,7 @@ export function ResultCard({
               onClick={() => {
                 if (text) copyResult(text);
               }}
-              className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
+              className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-normal"
             >
               <Icon
                 data-icon="inline-start"
@@ -118,7 +118,7 @@ export function ResultCard({
           <Button
             variant="outline"
             onClick={onReplace}
-            className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex h-auto items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-normal ring-1"
+            className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 text-2xs flex h-auto items-center gap-1.5 rounded-full px-3 py-1.5 font-normal ring-1"
           >
             <Icon data-icon="inline-start" name="refresh" size={11} />
             替换
@@ -168,7 +168,7 @@ export function ResultCard({
         <Button
           variant="outline"
           onClick={onReplace}
-          className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex h-auto items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-normal ring-1"
+          className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 text-2xs flex h-auto items-center gap-1.5 rounded-full px-3 py-1.5 font-normal ring-1"
         >
           <Icon data-icon="inline-start" name="refresh" size={11} />
           替换

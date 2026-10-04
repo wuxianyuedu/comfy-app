@@ -85,7 +85,7 @@ export function WidgetInputRow({
    * 悄悄改成 INT/STRING，用户看到的类型与工作流里的定义对不上。 */
   const typeChip = (
     <span
-      className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+      className="bg-border-strong text-ink-muted text-3xs inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"
       style={{ fontFamily: "var(--font-sans)" }}
     >
       {typeDisplay(entry.type, controlTypeFallback(entry.control))}
@@ -126,7 +126,7 @@ export function WidgetInputRow({
               variant={entry.required ? "danger" : "ghost"}
               onClick={() => onRequiredChange(!entry.required)}
               onMouseDown={(event) => event.stopPropagation()}
-              className={`nodrag nopan h-auto shrink-0 rounded px-1.5 py-px text-[10px] font-medium ${
+              className={`nodrag nopan text-3xs h-auto shrink-0 rounded px-1.5 py-px font-medium ${
                 entry.required
                   ? ""
                   : "border-border-strong bg-subtle text-ink-muted border"
@@ -186,7 +186,7 @@ export function WidgetInputRow({
           )}
           <div className="px-3.5 pt-1.5">{labelRow}</div>
           <div className="px-3.5 pt-1 pb-1.5">
-            <span className="text-ink-muted text-[11px]">只接受连线</span>
+            <span className="text-ink-muted text-2xs">只接受连线</span>
           </div>
         </div>
       );
@@ -201,13 +201,13 @@ export function WidgetInputRow({
             className="size-2 shrink-0 rounded-full"
             style={{ background: accent }}
           />
-          <span className="text-ink-soft min-w-0 flex-1 truncate text-[11px]">
+          <span className="text-ink-soft text-2xs min-w-0 flex-1 truncate">
             {label}
           </span>
           {/* link 行同样打印 pin 真实声明的类型：MODEL / CLIP / LATENT /
               IMAGEUPLOAD 等自定义类型一律原样展示，不回退成 "*"。 */}
           <span
-            className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+            className="bg-border-strong text-ink-muted text-3xs inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"
             style={{ fontFamily: "var(--font-sans)" }}
           >
             {typeDisplay(entry.type)}

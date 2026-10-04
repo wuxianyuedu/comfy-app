@@ -71,7 +71,7 @@ export function CanvasPanelToolbar({
               {item.icon}
               {/* Tooltip —— 悬停或激活时显示在按钮右侧 */}
               <span
-                className={`border-border-strong bg-panel/95 text-ink-soft pointer-events-none absolute left-full ml-2.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium whitespace-nowrap shadow-xl shadow-black/40 backdrop-blur-sm transition-opacity ${
+                className={`border-border-strong bg-panel/95 text-ink-soft text-2xs pointer-events-none absolute left-full ml-2.5 rounded-lg border px-2.5 py-1 font-medium whitespace-nowrap shadow-xl shadow-black/40 backdrop-blur-sm transition-opacity ${
                   isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                 }`}
               >

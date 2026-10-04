@@ -93,7 +93,7 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
             size="icon-xs"
             onClick={onClose}
             aria-label="关闭"
-            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md text-[11px]"
+            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs rounded-md"
           >
             ✕
           </Button>
@@ -101,10 +101,10 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          <h3 className="text-ink-soft px-1 text-[11px] font-semibold tracking-wider uppercase">
+          <h3 className="text-ink-soft text-2xs px-1 font-semibold tracking-wider uppercase">
             调试
           </h3>
-          <p className="text-ink-muted mb-3 px-1 text-[11px] leading-relaxed">
+          <p className="text-ink-muted text-2xs mb-3 px-1 leading-relaxed">
             「渲染链路标签」在节点卡片上叠加显示对应本项目代码模块的路径，点击可查看源码；
             「日志面板」在画布右上角显示执行日志入口按钮，点击以弹窗形式查看实时执行日志。两者相互独立。
           </p>
@@ -126,7 +126,7 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Footer */}
-        <div className="border-border-strong text-ink-muted flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3 text-[11px]">
+        <div className="border-border-strong text-ink-muted text-2xs flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3">
           <span>设置保存在本浏览器</span>
         </div>
       </SheetContent>

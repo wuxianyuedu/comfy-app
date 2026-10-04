@@ -173,7 +173,7 @@ export function DynamicWorkflowFormView({
       {/* 上传失败的可读出口：ComfyUI 未运行 / 启动超时 / 素材不合规时给出原因，
  用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}
       {uploadError && (
-        <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-start justify-between gap-2 rounded-md border px-2.5 py-2 text-[11px] leading-relaxed">
+        <div className="border-destructive/30 bg-destructive/10 text-destructive text-2xs flex items-start justify-between gap-2 rounded-md border px-2.5 py-2 leading-relaxed">
           <span className="min-w-0 flex-1">上传失败：{uploadError}</span>
           <Button
             variant="ghost"
@@ -222,7 +222,7 @@ export function DynamicWorkflowFormView({
                  * 下拉上起手会在 dragstart 里被取消）；它自身 pointer-events-none，
                  * 点击会落到下面的输入框上。 */}
                 <div
-                  className="z-base pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 text-[10px] leading-1.5 text-white/30 select-none"
+                  className="z-base text-3xs pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 leading-1.5 text-white/30 select-none"
                   aria-hidden
                 >
                   ⋮⋮

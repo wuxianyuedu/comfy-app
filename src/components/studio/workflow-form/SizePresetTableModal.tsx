@@ -95,20 +95,20 @@ export function SizePresetTableModal({
                 <ToggleGroupItem
                   key={item}
                   value={item}
-                  className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+                  className="text-2xs h-auto rounded-md px-2.5 py-1"
                 >
                   {SIZE_SCENE_LABELS[item]}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
           </div>
-          <span className="text-ink-muted text-[11px]">
+          <span className="text-ink-muted text-2xs">
             1k / 2k / 4k 在该场景下的宽高（图片与视频两套口径）
           </span>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          <Table className="border-separate border-spacing-y-1 text-[11px]">
+          <Table className="text-2xs border-separate border-spacing-y-1">
             <TableHeader>
               <TableRow className="text-ink-muted border-0 text-left hover:bg-transparent">
                 <TableHead className="w-23 font-medium">比例</TableHead>
@@ -175,17 +175,17 @@ export function SizePresetTableModal({
             variant="outline"
             onClick={() => resetScene(scene)}
             disabled={!modified}
-            className="h-auto px-2.5 py-1 text-[11px]"
+            className="text-2xs h-auto px-2.5 py-1"
           >
             恢复默认（{SIZE_SCENE_LABELS[scene]}）
           </Button>
-          <span className="text-ink-faint text-[10px]">
+          <span className="text-ink-faint text-3xs">
             改动即时生效并记住；选择「百万像素」时宽高由倍数对齐，不查这张表。
           </span>
           <Button
             variant="primary-solid"
             onClick={onClose}
-            className="ml-auto h-auto px-3 py-1 text-[11px]"
+            className="text-2xs ml-auto h-auto px-3 py-1"
           >
             完成
           </Button>

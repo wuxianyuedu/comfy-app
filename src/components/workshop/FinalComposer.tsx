@@ -177,11 +177,11 @@ export function FinalComposer({
       {/* Summary row */}
       <div className="border-border bg-surface flex flex-wrap items-center gap-3 rounded-2xl border p-4">
         <span className="text-ink text-[13px] font-semibold">成片时间线</span>
-        <span className="bg-primary/12 text-primary rounded-lg px-3 py-1 text-[11px]">
+        <span className="bg-primary/12 text-primary text-2xs rounded-lg px-3 py-1">
           {timeline.length} 镜 · 片长约 {Math.round(totalDuration)}s
         </span>
         <span
-          className={`rounded-lg px-3 py-1 text-[11px] ${
+          className={`text-2xs rounded-lg px-3 py-1 ${
             clipsDone === timeline.length
               ? "bg-success/15 text-success-strong"
               : "bg-amber/15 text-amber"
@@ -236,7 +236,7 @@ export function FinalComposer({
       {/* Preview player */}
       {playing && current && (
         <div className="border-border bg-surface rounded-2xl border p-4">
-          <div className="text-muted-foreground mb-2 flex items-center justify-between text-[11px]">
+          <div className="text-muted-foreground text-2xs mb-2 flex items-center justify-between">
             <span>
               预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} /{""}
               {String(timeline.length).padStart(2, "0")}
@@ -317,7 +317,7 @@ export function FinalComposer({
               <div className="flex shrink-0 items-center gap-2">
                 <FormField
                   label="时长(s)"
-                  labelClassName="text-muted-foreground mb-0.5 text-[10px]"
+                  labelClassName="text-muted-foreground mb-0.5 text-3xs"
                 >
                   <Input
                     type="number"
@@ -334,7 +334,7 @@ export function FinalComposer({
                 </FormField>
                 <FormField
                   label="转场"
-                  labelClassName="text-muted-foreground mb-0.5 text-[10px]"
+                  labelClassName="text-muted-foreground mb-0.5 text-3xs"
                 >
                   <SelectMenu
                     className="bg-subtle! border-border! text-xs"
@@ -349,7 +349,7 @@ export function FinalComposer({
                 </FormField>
                 <FormField
                   label="运动"
-                  labelClassName="text-muted-foreground mb-0.5 text-[10px]"
+                  labelClassName="text-muted-foreground mb-0.5 text-3xs"
                 >
                   <SelectMenu
                     className="bg-subtle! border-border! text-xs"

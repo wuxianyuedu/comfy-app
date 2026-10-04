@@ -209,7 +209,7 @@ function ModelRowLine({
       }`}
     >
       <span
-        className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${meta.color}`}
+        className={`text-2xs shrink-0 rounded-md px-2 py-0.5 font-medium ${meta.color}`}
       >
         {meta.label}
       </span>
@@ -221,7 +221,7 @@ function ModelRowLine({
       </span>
       {!model.isAvailable && (
         <span
-          className="bg-surface-2 text-ink-faint shrink-0 rounded-md px-1.5 py-0.5 text-[10px]"
+          className="bg-surface-2 text-ink-faint text-3xs shrink-0 rounded-md px-1.5 py-0.5"
           title="当前未在 ComfyUI 扫描结果中"
         >
           不可用
@@ -409,7 +409,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                       <h3 className="text-ink-faint text-xs font-medium tracking-wide uppercase">
                         可添加 · {c.availableRows.length}
                       </h3>
-                      <p className="text-ink-muted text-[11px]">
+                      <p className="text-ink-muted text-2xs">
                         点「启用」加入扫描列表
                       </p>
                     </div>
@@ -467,13 +467,13 @@ function FolderConfigRow({
               {row.folder}
             </span>
             <span
-              className={`cursor-help rounded-md px-2 py-0.5 text-[11px] font-medium ${primaryMeta.color}`}
+              className={`text-2xs cursor-help rounded-md px-2 py-0.5 font-medium ${primaryMeta.color}`}
               title={getFolderTooltip(row.folder)}
             >
               {primaryMeta.label}
             </span>
             {row.count > 0 && (
-              <span className="bg-surface-2 text-ink-faint rounded-md px-1.5 py-0.5 text-[10px]">
+              <span className="bg-surface-2 text-ink-faint text-3xs rounded-md px-1.5 py-0.5">
                 {row.count} 个文件
               </span>
             )}

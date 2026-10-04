@@ -59,12 +59,12 @@ export function LlmRemoteSection({
                     <span className="min-w-0 flex-1 truncate">
                       <span className="text-ink">{entry.name}</span>
                       {entry.baseUrl && (
-                        <span className="text-muted-foreground ml-2 text-[10px]">
+                        <span className="text-muted-foreground text-3xs ml-2">
                           独立接口
                         </span>
                       )}
                       {entry.apiKey && (
-                        <span className="text-muted-foreground ml-1.5 text-[10px]">
+                        <span className="text-muted-foreground text-3xs ml-1.5">
                           独立密钥
                         </span>
                       )}
@@ -78,7 +78,7 @@ export function LlmRemoteSection({
                         size="xs"
                         disabled={!!thisProbe?.running}
                         onClick={() => void d.runEntryConnectionTest(entry)}
-                        className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
+                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
                       >
                         {thisProbe?.running ? "连接测试中…" : "测试连接"}
                       </Button>
@@ -88,7 +88,7 @@ export function LlmRemoteSection({
                         variant="outline"
                         size="xs"
                         onClick={() => d.openUsageTest(kind, entry)}
-                        className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
+                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
                       >
                         测试生成
                       </Button>
@@ -98,7 +98,7 @@ export function LlmRemoteSection({
                         variant="outline"
                         size="xs"
                         onClick={() => d.openEditDialog(entry)}
-                        className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
+                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
                       >
                         编辑
                       </Button>
@@ -117,7 +117,7 @@ export function LlmRemoteSection({
                   </div>
                   {rowMsg && (
                     <div
-                      className={`mr-1 ml-1 rounded border px-2 py-1 text-[11px] ${
+                      className={`text-2xs mr-1 ml-1 rounded border px-2 py-1 ${
                         rowMsg.kind === "ok"
                           ? "border-success/30 bg-success/10 text-success-strong"
                           : "border-destructive/30 bg-destructive/10 text-danger-strong"
@@ -158,7 +158,7 @@ export function LlmRemoteSection({
           "还没有视频模型 —— 点击「添加模型」加入视频生成 API 使用的模型。",
         )}
 
-        <p className="text-muted-foreground mb-4 text-[11px] leading-relaxed">
+        <p className="text-muted-foreground text-2xs mb-4 leading-relaxed">
           此页只维护模型清单，添加 / 编辑 / 移除都会
           <strong className="text-ink/80">即时保存</strong>
           ：「测试连接」按该条目自身配置探测接口连通性（不生成、不耗额度）；「测试生成」按实际用法发起一次真实调用（参数可在弹窗内自定义，图片

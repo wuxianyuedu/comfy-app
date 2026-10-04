@@ -185,7 +185,7 @@ export function CharacterDesigner({
 
       {/* 提示条是 `[data-dirty]` 的**后继兄弟** —— 选择器用的是 `~`，
           挂到祖先上就永远命不中（那正是这条判据最容易的静默失效方式）。 */}
-      <ExitReminder className="text-ink-faint px-1 text-[11px] leading-relaxed">
+      <ExitReminder className="text-ink-faint text-2xs px-1 leading-relaxed">
         切走这一阶段后这里的角色会被清空，需要先导出或复制保留。
       </ExitReminder>
 
@@ -242,10 +242,10 @@ export function CharacterDesigner({
               <Disclosure
                 defaultOpen
                 marker="caret"
-                className="text-primary bg-bg/60 rounded-lg px-3 py-2 text-[11px]"
+                className="text-primary bg-bg/60 text-2xs rounded-lg px-3 py-2"
                 trigger="生成过程"
               >
-                <pre className="text-muted-foreground mt-1 max-h-40 overflow-y-auto text-[11px] leading-relaxed break-all whitespace-pre-wrap">
+                <pre className="text-muted-foreground text-2xs mt-1 max-h-40 overflow-y-auto leading-relaxed break-all whitespace-pre-wrap">
                   {genProgress}
                 </pre>
               </Disclosure>

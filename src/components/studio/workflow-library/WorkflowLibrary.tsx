@@ -103,7 +103,7 @@ export function WorkflowLibrary({
             variant="danger"
             size="xs"
             onClick={c.refresh}
-            className="h-auto shrink-0 rounded-md px-2 py-0.5 text-[11px]"
+            className="text-2xs h-auto shrink-0 rounded-md px-2 py-0.5"
           >
             重试
           </Button>

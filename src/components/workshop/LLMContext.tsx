@@ -293,9 +293,7 @@ function LLMSettingsModal({
                   />
                   <span className="flex-1 truncate">{name}</span>
                   {provider === "local" && (
-                    <span className="text-muted-foreground text-[10px]">
-                      本地
-                    </span>
+                    <span className="text-muted-foreground text-3xs">本地</span>
                   )}
                 </Button>
               ))}

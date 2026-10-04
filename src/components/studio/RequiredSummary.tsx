@@ -26,10 +26,10 @@ export function RequiredSummary({
   }, [io, mode]);
   return (
     <span className="ml-2 inline-flex items-center gap-1.5">
-      <span className="border-destructive/40 bg-destructive/15 text-destructive rounded border px-1.5 py-px font-mono text-[10px]">
+      <span className="border-destructive/40 bg-destructive/15 text-destructive text-3xs rounded border px-1.5 py-px font-mono">
         必填 {counts.required}
       </span>
-      <span className="border-border-strong bg-subtle text-ink-soft rounded border px-1.5 py-px font-mono text-[10px]">
+      <span className="border-border-strong bg-subtle text-ink-soft text-3xs rounded border px-1.5 py-px font-mono">
         可选 {counts.optional}
       </span>
     </span>

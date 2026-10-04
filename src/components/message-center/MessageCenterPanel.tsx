@@ -172,11 +172,11 @@ export function MessageCenterPanel() {
                           {m.title}
                         </h3>
                         {!m.read && (
-                          <span className="bg-primary/20 text-primary-strong rounded-full px-1.5 text-[10px] font-medium">
+                          <span className="bg-primary/20 text-primary-strong text-3xs rounded-full px-1.5 font-medium">
                             新
                           </span>
                         )}
-                        <time className="text-ink-muted ml-auto shrink-0 text-[11px] tabular-nums">
+                        <time className="text-ink-muted text-2xs ml-auto shrink-0 tabular-nums">
                           {fmtTime(m.time)}
                         </time>
                       </div>
@@ -204,7 +204,7 @@ export function MessageCenterPanel() {
         )}
       </div>
 
-      <footer className="border-border-strong text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[11px]">
+      <footer className="border-border-strong text-ink-muted text-2xs flex h-9 shrink-0 items-center justify-between border-t px-4">
         <span>底部状态栏铃铛实时汇总未读消息，点此可全屏查看。</span>
         <Button
           variant="secondary"

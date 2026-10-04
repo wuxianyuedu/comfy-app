@@ -184,7 +184,7 @@ export function WorkflowRunRawCliModal({
               <span className="text-ink truncate text-[15px] font-semibold">
                 comfy-cli 完整输出
               </span>
-              <span className="text-ink-faint text-[11px]">
+              <span className="text-ink-faint text-2xs">
                 {!loaded ? "加载中…" : `${lines.length} 行`}
               </span>
             </div>

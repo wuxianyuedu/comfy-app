@@ -467,7 +467,7 @@ function WorkflowLibraryCanvasInner({
       {flow.dropHint && (
         // p71-allow:start workshop 域 amber 装饰色 · 拖线未落定的临时提示、非状态色（对齐 §3.6.1 与「amber 是 workshop 域专有」）
         <div
-          className="z-canvas-ui pointer-events-none absolute bottom-2 left-2 max-w-105 rounded-lg bg-amber-100 px-2.5 py-1.5 text-[11px] text-amber-800 shadow-sm"
+          className="z-canvas-ui text-2xs pointer-events-none absolute bottom-2 left-2 max-w-105 rounded-lg bg-amber-100 px-2.5 py-1.5 text-amber-800 shadow-sm"
           data-testid="wflib-wire-drop-hint"
         >
           没有连上：{flow.dropHint}
@@ -479,7 +479,7 @@ function WorkflowLibraryCanvasInner({
        * 边不可选、不显示此条。 */}
       {canWire && selectedEdgeIds.size > 0 && (
         <div
-          className="border-primary-500/40 bg-primary-500/15 text-primary-strong z-canvas-ui absolute bottom-2 left-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] shadow-sm backdrop-blur-sm"
+          className="border-primary-500/40 bg-primary-500/15 text-primary-strong z-canvas-ui text-2xs absolute bottom-2 left-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 shadow-sm backdrop-blur-sm"
           data-testid="wflib-edge-delete-hint"
         >
           <span>已选中 {selectedEdgeIds.size} 条线</span>

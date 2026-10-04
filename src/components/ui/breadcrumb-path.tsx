@@ -82,7 +82,7 @@ export function BreadcrumbPath({
           return (
             <React.Fragment key={seg.key ?? `seg-${String(i)}`}>
               {i > 0 && (
-                <BreadcrumbSeparator className="text-ink-fainter mx-1.5 text-[11px] [&>svg]:size-3">
+                <BreadcrumbSeparator className="text-ink-fainter text-2xs mx-1.5 [&>svg]:size-3">
                   /
                 </BreadcrumbSeparator>
               )}

@@ -180,20 +180,18 @@ export function WorkshopEncapsulationPanel({
         />
         <h3 className="text-ink-strong text-sm font-medium">工坊封装</h3>
         {status.ready ? (
-          <span className="bg-success/15 text-success-strong rounded-full px-2 py-0.5 text-[11px]">
+          <span className="bg-success/15 text-success-strong text-2xs rounded-full px-2 py-0.5">
             已配置 · 工坊可用
           </span>
         ) : (
-          <span className="bg-warning/15 text-warning-strong rounded-full px-2 py-0.5 text-[11px]">
+          <span className="bg-warning/15 text-warning-strong text-2xs rounded-full px-2 py-0.5">
             未配置
           </span>
         )}
         {mode && (
-          <span className="text-muted-foreground text-[11px]">
+          <span className="text-muted-foreground text-2xs">
             {getWorkflowType(mode)?.label ?? mode}
-            <span className="font-mono text-[10px]">
-              （{mode.toUpperCase()}）
-            </span>
+            <span className="text-3xs font-mono">（{mode.toUpperCase()}）</span>
           </span>
         )}
         {/* 多模式工作流：在这里换模式逐个测（文生图 / 图生图的封装口不同，
@@ -208,15 +206,15 @@ export function WorkshopEncapsulationPanel({
             )}
             popoverMinWidth={160}
             autoFitFromOptions={false}
-            className="border-border-strong! h-auto bg-transparent! px-2 py-0.5 text-[11px]"
+            className="border-border-strong! text-2xs h-auto bg-transparent! px-2 py-0.5"
           />
         )}
-        <span className="text-muted-foreground text-[11px]">
+        <span className="text-muted-foreground text-2xs">
           {status.resolvedCount}/{status.entries.length} 个对外口已落到端口
         </span>
       </div>
       {!status.ready && (
-        <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-[11px]">
+        <p className="bg-warning/10 text-warning-strong text-2xs rounded-lg px-3 py-2">
           必填口 {status.missingRequired.join("、")}
           还没落到任何端口 —— 工坊（角色卡定妆照 / 镜头生图）无法驱动这条
           工作流。到「画布节点」页签把对应卡片的圆点拖到工作流里承载它的那一行
@@ -224,7 +222,7 @@ export function WorkshopEncapsulationPanel({
         </p>
       )}
       {status.entries.some((e) => !e.required) && (
-        <p className="text-muted-foreground/80 text-[10px]">
+        <p className="text-muted-foreground/80 text-3xs">
           标注「可选」的口不必连到工作流：没有落点就用工作流图内的默认值执行。
         </p>
       )}
@@ -245,7 +243,7 @@ export function WorkshopEncapsulationPanel({
               className="border-border/60 bg-surface rounded-lg border px-3 py-2"
               itemClassName="text-[12px]"
               keyClassName="text-ink flex min-w-0 items-center gap-2 font-medium"
-              valueClassName="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-[10px]"
+              valueClassName="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-3xs"
               items={[
                 {
                   id: entry.id,
@@ -254,7 +252,7 @@ export function WorkshopEncapsulationPanel({
                       {/* 必备 / 可选由**模式契约**判定（`ModeContract.required`），
  不是写死的口名 —— 与「能不能跑」的判据同一份事实。 */}
                       <span
-                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        className={`text-3xs shrink-0 rounded px-1.5 py-0.5 font-medium ${
                           entry.required
                             ? "bg-destructive/15 text-destructive"
                             : "bg-subtle text-muted-foreground/80 border-border-strong border"
@@ -264,7 +262,7 @@ export function WorkshopEncapsulationPanel({
                       </span>
                       {badge && (
                         <span
-                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}
+                          className={`text-3xs shrink-0 rounded px-1.5 py-0.5 font-medium ${badge.className}`}
                         >
                           {badge.label}
                         </span>
@@ -273,7 +271,7 @@ export function WorkshopEncapsulationPanel({
                         {entry.label}
                         {/* 口 id 与中文字面并列：配置 / 日志 / 代码里用的是 id，
  而契约口与适配器口是两套 id，只写中文对不上。 */}
-                        <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">
+                        <span className="text-muted-foreground/60 text-3xs ml-1 font-mono">
                           {entry.id}
                         </span>
                       </span>
@@ -291,7 +289,7 @@ export function WorkshopEncapsulationPanel({
       <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-primary text-xs font-medium">流程测试</p>
-          <span className="text-muted-foreground text-[10px]">
+          <span className="text-muted-foreground text-3xs">
             按工坊口径生成一张图，验证封装可用性
           </span>
         </div>
@@ -321,13 +319,13 @@ export function WorkshopEncapsulationPanel({
             />
           )}
           {test.error && (
-            <p className="bg-destructive/10 text-destructive rounded-lg px-3 py-2 text-[11px]">
+            <p className="bg-destructive/10 text-destructive text-2xs rounded-lg px-3 py-2">
               {test.error}
             </p>
           )}
           {test.resultUrl && (
             <div className="flex flex-col gap-1">
-              <p className="text-primary text-[11px]">
+              <p className="text-primary text-2xs">
                 流程测试通过 —— {displayName} 在工坊中可用。
               </p>
               <MediaThumbnail
@@ -337,7 +335,7 @@ export function WorkshopEncapsulationPanel({
               />
             </div>
           )}
-          <p className="text-muted-foreground/70 text-[10px]">
+          <p className="text-muted-foreground/70 text-3xs">
             工作流图内的其余参数（步数 /
             采样器等）按图内默认值执行，不在工坊对外暴露。
           </p>

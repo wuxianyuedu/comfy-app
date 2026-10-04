@@ -174,7 +174,7 @@ export function FieldImagePreview({ src }: { src: string }) {
       alt="字段图片预览"
       className="border-border/60 max-h-24 w-fit rounded-md border"
       fallback={
-        <p className="text-muted-foreground/70 max-h-24 overflow-hidden rounded-md border border-dashed px-2 py-1 text-[11px] leading-relaxed">
+        <p className="text-muted-foreground/70 text-2xs max-h-24 overflow-hidden rounded-md border border-dashed px-2 py-1 leading-relaxed">
           该地址无法作为图片预览（可能被防盗链、需登录，或非图片地址）。点击行内「链接」替换，或用「上传」选本地图片。
         </p>
       }

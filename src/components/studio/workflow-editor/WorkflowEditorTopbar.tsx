@@ -217,7 +217,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 <Button
                   variant="primary"
                   onClick={onExitSubgraph}
-                  className="ml-2 h-auto rounded-md px-2 py-0.5 text-[11px]"
+                  className="text-2xs ml-2 h-auto rounded-md px-2 py-0.5"
                 >
                   <ArrowLeft
                     data-icon="inline-start"
@@ -237,7 +237,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               <Button
                 variant="danger"
                 onClick={() => forceReloadDetail(viewHostNodeId)}
-                className="ml-1 h-auto rounded-md px-2 py-0.5 text-[11px]"
+                className="text-2xs ml-1 h-auto rounded-md px-2 py-0.5"
               >
                 <RotateCw
                   data-icon="inline-start"
@@ -248,7 +248,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               </Button>
             </Hint>
           </div>
-          <p className="text-ink-soft mt-0.5 truncate text-[11px] font-medium">
+          <p className="text-ink-soft text-2xs mt-0.5 truncate font-medium">
             {detail.nodes.filter((node) => !isNoteType(node.class_type)).length}{" "}
             个节点
             <span className="text-ink-fainter mx-1.5">·</span>
@@ -268,7 +268,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           </p>
           {detail.sourcePath ? (
             detail.sourceMissing ? (
-              <p className="border-destructive/30 bg-destructive/10 text-danger-strong mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]">
+              <p className="border-destructive/30 bg-destructive/10 text-danger-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">本地文件已丢失：</span>
                 <span className="truncate font-mono" title={detail.sourcePath}>
                   {lastSegments(detail.sourcePath, 3)}
@@ -278,7 +278,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 </span>
               </p>
             ) : detail.sourceOutdated ? (
-              <p className="border-warning/30 bg-warning/10 text-warning-strong mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]">
+              <p className="border-warning/30 bg-warning/10 text-warning-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">磁盘文件有更新</span>
                 <span className="opacity-80">
                   · 回工作流库点「同步」拉取最新内容
@@ -292,7 +292,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               </p>
             ) : (
               <p
-                className="border-success/20 bg-success/5 text-success-strong/80 mt-1 truncate rounded-md border px-2 py-1 text-[11px]"
+                className="border-success/20 bg-success/5 text-success-strong/80 text-2xs mt-1 truncate rounded-md border px-2 py-1"
                 title={detail.sourcePath}
               >
                 已连接本地文件 · 文件改动后刷新即可同步
@@ -349,7 +349,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           >
             {ioEditMode ? "✓ 编辑 IO 中" : "📌 编辑 IO"}
             {ioEditMode && Object.keys(workflowIO).length > 0 && (
-              <span className="bg-warning/30 text-warning-strong ml-1 rounded-full px-1.5 text-[11px] font-bold">
+              <span className="bg-warning/30 text-warning-strong text-2xs ml-1 rounded-full px-1.5 font-bold">
                 {Object.keys(workflowIO).length}
               </span>
             )}

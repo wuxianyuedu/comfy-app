@@ -95,10 +95,10 @@ function GroupedControls({
             className="size-2 shrink-0 rounded-full"
             style={{ background: SECTION_ACCENT }}
           />
-          <span className="text-ink-muted text-[10px] font-semibold tracking-wider uppercase">
+          <span className="text-ink-muted text-3xs font-semibold tracking-wider uppercase">
             组合参数
           </span>
-          <span className="bg-surface-2 text-ink-soft rounded-full px-1.5 py-px font-mono text-[10px]">
+          <span className="bg-surface-2 text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">
             {count}
           </span>
           <Separator className="border-border-strong h-0 flex-1 border-t border-dashed bg-transparent" />

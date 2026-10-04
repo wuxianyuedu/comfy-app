@@ -5,7 +5,7 @@ import type { ControlKind } from "../../workflow-io";
  *  `resize-none` 是刻意的：设计稿为固定高度，出现 webkit 缩放把手会破坏
  *  紧凑节点的行高对齐。 */
 export const inputCls =
-  "nodrag nopan w-full resize-none rounded-md bg-canvas-deep p-2.5 text-[11px] leading-relaxed text-ink-soft outline-none transition-colors placeholder:text-ink-placeholder focus:ring-1 focus:ring-primary/40";
+  "nodrag nopan w-full resize-none rounded-md bg-canvas-deep p-2.5 text-2xs leading-relaxed text-ink-soft outline-none transition-colors placeholder:text-ink-placeholder focus:ring-1 focus:ring-primary/40";
 
 /** 按控件类型的强调色 —— 镜像画布端口配色。
  *

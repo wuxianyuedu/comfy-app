@@ -58,7 +58,7 @@ export function CanvasSettingsPanel({
             <span className="text-ink-bright truncate text-[12.5px] font-semibold tracking-wide">
               画布设置
             </span>
-            <span className="bg-subtle text-ink-muted rounded-full px-1.5 py-px font-mono text-[10px]">
+            <span className="bg-subtle text-ink-muted text-3xs rounded-full px-1.5 py-px font-mono">
               v1
             </span>
           </div>
@@ -67,7 +67,7 @@ export function CanvasSettingsPanel({
             size="icon-xs"
             onClick={onClose}
             aria-label="关闭"
-            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md text-[11px]"
+            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs rounded-md"
           >
             ✕
           </Button>
@@ -181,7 +181,7 @@ export function CanvasSettingsPanel({
         </div>
 
         {/* Footer */}
-        <div className="border-border-strong text-ink-muted flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3 text-[11px]">
+        <div className="border-border-strong text-ink-muted text-2xs flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3">
           <span>设置保存在本浏览器</span>
           <Button
             variant="outline"

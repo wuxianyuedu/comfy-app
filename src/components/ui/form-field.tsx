@@ -21,9 +21,9 @@ import { cn } from "~/lib/utils";
  * | 落点 | 标签类 | 错误行 |
  * | --- | --- | --- |
  * | 设置页（`UsageTestDialog` / `RemoteModelDialog` / `LlmLocalSection` / `SettingsPrimitives`） | `text-ink/80 mb-1.5 block text-sm font-medium` | 字段错误挂在控件下方 |
- * | 训练工作室 | `mb-1.5 block text-[11px] font-medium text-ink-faint` | **只有一条整表错误**，不落字段 |
+ * | 训练工作室 | `mb-1.5 block text-2xs font-medium text-ink-faint` | **只有一条整表错误**，不落字段 |
  * | 工作流导入面板 | `text-ink-soft mb-1 block text-xs font-medium` | 无 |
- * | 工坊模型适配弹窗 | `text-muted-foreground mb-1 block text-[10px]` | 无 |
+ * | 工坊模型适配弹窗 | `text-muted-foreground mb-1 block text-3xs` | 无 |
  *
  * 而**真正的病灶不是字号不一致**，是三件事在不同落点被漏掉：
  *
@@ -153,7 +153,7 @@ export function FormField({
       )}
       {typeof children === "function" ? children(a11y) : (children ?? null)}
       {hint != null && (
-        <FieldDescription className="text-[11px] leading-relaxed">
+        <FieldDescription className="text-2xs leading-relaxed">
           {hint}
         </FieldDescription>
       )}
@@ -161,7 +161,7 @@ export function FormField({
         <FieldError
           id={errorId}
           className={cn(
-            "text-danger-strong mt-1 text-[11px] font-normal",
+            "text-danger-strong text-2xs mt-1 font-normal",
             errorClassName,
           )}
         >

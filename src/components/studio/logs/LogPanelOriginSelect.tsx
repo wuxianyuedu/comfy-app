@@ -239,7 +239,7 @@ function OriginSelect({
         {/* 列标题：把「数字是什么」写在一次，行内就不必每格重复「信息 / 警告」 */}
         <div
           aria-hidden
-          className="border-border-strong text-ink-muted flex items-center gap-3 border-b px-2.5 py-1 text-[11px]"
+          className="border-border-strong text-ink-muted text-2xs flex items-center gap-3 border-b px-2.5 py-1"
         >
           <span className="shrink-0">来源</span>
           {ORIGIN_COLUMNS.map((column) => (

@@ -47,7 +47,7 @@ export function MegapixelStepper({
       data-testid="megapixel-stepper"
       className={`flex items-center gap-1.5 ${className ?? ""}`}
     >
-      <span className="text-ink-faint shrink-0 text-[10px]">自定义</span>
+      <span className="text-ink-faint text-3xs shrink-0">自定义</span>
       <NumberField
         value={value}
         onChange={onChange}
@@ -58,7 +58,7 @@ export function MegapixelStepper({
         disabled={disabled}
         className="h-6 w-26"
       />
-      <span className="text-ink-faint shrink-0 text-[10px]">M</span>
+      <span className="text-ink-faint text-3xs shrink-0">M</span>
     </div>
   );
 }

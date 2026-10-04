@@ -40,7 +40,7 @@ export function Field({
 }) {
   return (
     <div className="min-w-0">
-      <dt className="text-ink-fainter truncate text-[11px]">{label}</dt>
+      <dt className="text-ink-fainter text-2xs truncate">{label}</dt>
       <dd className="text-ink-soft min-w-0 truncate tabular-nums">
         {/* 值变了闪一下（`value-tick`，规范 06 §6.7 第 ③ 档）：这一屏每 1s 被
             轮询刷一次，「已跑 12 秒」与「已跑 13 秒」在屏幕上长得一模一样 ——

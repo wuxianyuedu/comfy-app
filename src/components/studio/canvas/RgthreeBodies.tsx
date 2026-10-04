@@ -38,10 +38,10 @@ export function RgthreeFastGroupsBypasserBody({
         return (
           <div
             key={group.id}
-            className="group relative flex h-5.5 items-center gap-1.5 pr-2 pl-2 text-[11px]"
+            className="group text-2xs relative flex h-5.5 items-center gap-1.5 pr-2 pl-2"
           >
             <span
-              className={`min-w-0 shrink truncate text-left text-[11px] ${
+              className={`text-2xs min-w-0 shrink truncate text-left ${
                 bypass ? "text-ink-faint" : "text-ink-subtle"
               }`}
               style={{ flex: "0 1 auto" }}
@@ -158,7 +158,7 @@ export function RgthreePowerLoraLoaderBody({
       {/* Lora 堆栈区头 —— 始终绘制（空堆栈时也与 rgthree
        *  一致，好让作者总能在其下添加一条 lora）。 */}
       <div
-        className="flex items-center justify-between rounded px-1.5 py-0.75 text-[10px] font-medium uppercase"
+        className="text-3xs flex items-center justify-between rounded px-1.5 py-0.75 font-medium uppercase"
         style={{
           background: "var(--color-subtle)",
           color: "var(--color-ink-soft)",
@@ -191,7 +191,7 @@ export function RgthreePowerLoraLoaderBody({
       {/* 逐 lora 行（本工作流里是空占位区）。 */}
       {loras.length === 0 ? (
         <div
-          className="rounded px-1.5 py-3 text-center text-[10px]"
+          className="text-3xs rounded px-1.5 py-3 text-center"
           style={{
             background: "var(--color-subtle)",
             color: "var(--color-ink-muted)",
@@ -220,7 +220,7 @@ export function RgthreePowerLoraLoaderBody({
           return (
             <div
               key={`pll-r-${index}`}
-              className="flex items-center gap-2 rounded px-1.5 py-0.75 text-[11px]"
+              className="text-2xs flex items-center gap-2 rounded px-1.5 py-0.75"
               style={{ background: "var(--color-subtle)" }}
             >
               <span
@@ -259,7 +259,7 @@ export function RgthreePowerLoraLoaderBody({
        *  是只读的，所以是一颗静态药丸（没有点击处理器）。 */}
       <div
         aria-hidden
-        className="mt-1 flex items-center justify-center gap-2 rounded py-1.5 text-[11px] font-medium"
+        className="text-2xs mt-1 flex items-center justify-center gap-2 rounded py-1.5 font-medium"
         style={{
           background: "rgba(139, 92, 246, 0.10)",
           border: "1px solid rgba(139, 92, 246, 0.45)",

@@ -83,7 +83,7 @@ export function EmptyState({
     return (
       <div
         className={cn(
-          "border-border-strong bg-subtle text-ink-soft rounded-lg border border-dashed px-3 py-3 text-[11px] leading-relaxed",
+          "border-border-strong bg-subtle text-ink-soft text-2xs rounded-lg border border-dashed px-3 py-3 leading-relaxed",
           className,
         )}
       >

@@ -55,7 +55,7 @@ export function ProjectHomeStatus({
       <section className="border-border bg-panel flex flex-col gap-2 rounded-2xl border p-4">
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="u-title">制作阶段</h2>
-          <span className="text-ink-faint text-[11px] tabular-nums">
+          <span className="text-ink-faint text-2xs tabular-nums">
             {loading
               ? ""
               : `${overview.doneCount} / ${overview.totalCount} 完成`}
@@ -81,11 +81,11 @@ export function ProjectHomeStatus({
                 {stage.label}
               </span>
               {stage.detail ? (
-                <span className="text-ink-faint shrink-0 text-[11px] tabular-nums">
+                <span className="text-ink-faint text-2xs shrink-0 tabular-nums">
                   {stage.detail}
                 </span>
               ) : null}
-              <span className="text-ink-faint w-14 shrink-0 text-right text-[11px]">
+              <span className="text-ink-faint text-2xs w-14 shrink-0 text-right">
                 {stageStateText(stage.done, stage.current)}
               </span>
             </li>
@@ -125,7 +125,7 @@ export function ProjectHomeStatus({
         <Button
           variant="link"
           onClick={() => onNavigate("workshop")}
-          className="text-ink-muted hover:text-ink-strong h-auto self-start p-0 text-[11px]"
+          className="text-ink-muted hover:text-ink-strong text-2xs h-auto self-start p-0"
         >
           去工坊继续 →
         </Button>

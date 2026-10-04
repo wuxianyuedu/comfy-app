@@ -84,7 +84,7 @@ export function LogPanelFooter(input: {
           也让面板在服务真重启后能自证（时间线已重置）。 */}
         {bootId && (
           <span
-            className="border-border-strong text-ink-muted shrink-0 rounded border px-1.5 py-px text-[11px]"
+            className="border-border-strong text-ink-muted text-2xs shrink-0 rounded border px-1.5 py-px"
             title={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}
           >
             服务 {bootId.split(":").slice(-2).join(":")}

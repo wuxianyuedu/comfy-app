@@ -211,7 +211,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
           trigger={
             <span className="flex-1 text-left">
               按任务类型配置温度
-              <span className="text-muted-foreground ml-2 text-[11px] font-normal">
+              <span className="text-muted-foreground text-2xs ml-2 font-normal">
                 未覆盖的任务按推荐默认生效
               </span>
             </span>
@@ -235,16 +235,16 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                         {meta.label}
                       </span>
                       {isOverridden ? (
-                        <span className="bg-primary/15 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+                        <span className="bg-primary/15 text-primary text-3xs rounded-full px-1.5 py-0.5 font-medium">
                           已覆盖
                         </span>
                       ) : (
-                        <span className="bg-success/10 text-success-strong rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+                        <span className="bg-success/10 text-success-strong text-3xs rounded-full px-1.5 py-0.5 font-medium">
                           推荐
                         </span>
                       )}
                     </div>
-                    <p className="text-muted-foreground text-[11px]">
+                    <p className="text-muted-foreground text-2xs">
                       {meta.desc}（推荐 {meta.hint}）
                     </p>
                   </div>
@@ -257,7 +257,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                           clearTaskEdit(key);
                           c.setTaskTemperature(key, "");
                         }}
-                        className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
+                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
                       >
                         ↺
                       </Button>
