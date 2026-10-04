@@ -56,6 +56,16 @@ export interface ManagedSpawnOptions {
    *  文件描述符交给 stdio。两文件必须不同路径。 */
   redirectStdoutFile?: string;
   redirectStderrFile?: string;
+  /** keepAlive 的两条平台分支的分叉判据。缺省 `process.platform`。
+   *
+   *  **为什么它是一个入参**：`process.platform` 在 POSIX 宿主上是不可覆盖的
+   *  自有属性（实测 descriptor = `{writable:false, configurable:true}`，
+   *  值恒为宿主平台），于是「Windows 中介形态」那组判据在 Linux/CI 上**根本
+   *  进不到被测分支** —— 实测 `spawn` 收到的是 POSIX 形态
+   *  （`{detached:true, stdio:全 ignore}`），而断言写的是 `powershell.exe`，
+   *  五条用例恒红；把判据搬到入参之后，两端机器判的是同一个结论。
+   *  注入的是**判据的输入**，不是把假信号发给真进程。 */
+  platform?: NodeJS.Platform;
 }
 
 /** 把单个参数安全地包进 PowerShell 单引号（' 转义为 ''）。 */
@@ -182,7 +192,7 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
   }
 
   // ── keepAlive ─────────────────────────────────────────────
-  if (process.platform !== "win32") {
+  if ((opts.platform ?? process.platform) !== "win32") {
     /* fd 声明在 try **外面**：半途失败（第二个文件开不出来、spawn 自己抛错）时
      * 也要把已经开出来的那一个关掉。泄漏的句柄不是「少一个描述符」这么轻 ——
      * 父进程长期持有日志文件，Windows 上表现为文件锁死（轮转与删除都失败），
