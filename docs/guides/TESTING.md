@@ -115,12 +115,19 @@ procedure 有没有执行者**与**消费方（这两条已由 `tests/trpc-surfa
 ### 目录与运行
 
 ```bash
-# 仅视觉基线用例
+# 像素档（推荐入口）：跑 e2e/visual + 配对判据同批，默认不落盘
+pnpm check:visual
+# 录基线（显式落盘）：录完请再跑一次上面的命令自证「连跑两次都绿」
+pnpm check:visual:update
+# 只跑像素档、不带配对判据（排查用；结论不完整，别拿它当「基线没问题」）
 pnpm test:visual
 # 全量 E2E（含 e2e/visual，测试全量时用）
 pnpm test:e2e
 ```
 
+- **优先用 `pnpm check:visual`**：它把像素档与「基线成套且入库」那条判据放在**同一次**运行里，
+  并按三条实测形态给红的定性（缺本平台基线 / 逐帧 chrome / 像素 diff 各自的动作不同）。
+  `pnpm test:visual` 仍在，但它的绿**证明不了**基线还在仓库里（两条判据是两次互不相干的运行）。
 - 用例放 `e2e/visual/*.visual.spec.ts`，命名带 `.visual` 便于单独筛选（跑哪一层就点名哪一层：
   `pnpm test:visual` 只跑像素基线，`pnpm test:e2e` 含 `e2e/visual`）。
 - 基线 PNG 与 spec 同目录（Playwright 默认 `*-snapshots/`），**提交入库**。
@@ -135,10 +142,14 @@ pnpm test:e2e
   都绿**，不是 `--update-snapshots` 那一次写成功。
 - 基线变更（合法 UI 改动）重录 + 人工 review：
   ```bash
-  pnpm exec playwright test e2e/visual --update-snapshots
+  pnpm check:visual:update                              # 录基线（等价于 --update-snapshots）
+  pnpm check:visual                                     # 再跑一次自证：连跑两次都要绿
   ```
   重录后在 PR 描述标注「视觉基线已更新：<原因>」。失败 actual/diff 产物在
   `test-results/`（已 gitignore）。
+- 像素档**不在 `pnpm check:all` 里**：它要起 webServer + 浏览器，而结论只在录过基线的那台
+  机器上成立（基线名带平台）—— 要跑就显式点名（Windows 侧同一动作是
+  `scripts/quality-gate.ps1 -Mode visual`，登记在 launch-and-build §9.5 的对照表）。
 
 ### 确定性约束（防 flaky）
 
@@ -170,11 +181,13 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
 
 - [ ] **没有平台侧兜底**：#623 之后不跑流水线，唯一自动化是本地钩子（`--no-verify` 可绕）。
       口径与出路见规范 §13.5.3 / §13.5.4（按需召唤评审 NPC），别再补「看起来在守门」的配置。
-- [ ] **E2E 没有自动执行者**：在本地手动档（`pnpm test:e2e` / `pnpm test:visual`）。视觉那一层
-      **有本地判据**：`tests/visual-baseline-pairing.test.ts` 在提交前的固定守护清单里，且
+- [ ] **E2E 没有自动执行者**：在本地手动档（`pnpm test:e2e`）。视觉那一层**有本地判据**：
+      `tests/visual-baseline-pairing.test.ts` 在提交前的固定守护清单里，且
       `scripts/visual-gate.mjs`（pre-commit D 组）在暂存命中 `e2e/visual/**` 时判「这次提交带不带
       像素判决」—— 但它判的是**基线的齐全/入库/平台登记**，不是「界面像素有没有变形」：
-      真正的像素回归仍要 `pnpm test:visual` 手动跑（规范 §11.8）。
+      真正的像素回归仍要手动跑，入口是 `pnpm check:visual`（规范 §11.8 / §13.5.4）。
+      它不在 `check:all` 里（webServer + 浏览器的代价 + 结论只在录过基线的那台机器上成立），
+      与 E2E 同属按需层，区别是它的触发条件是明确的：**改了会动到像素判决的东西**。
 - [ ] **Rust 壳的 `#[test]` 只在「改了 `.rs`」时被跑**：`scripts/shell-gate.mjs`（pre-commit D 组）
       在暂存改动命中壳输入时跑 `cargo test`、并把硬规则 5「改了壳必须重编」变成判据 ——
       但它**不是全量执行者**：不动壳的提交永远不跑那 37 条 `#[test]`，全量仍要靠
