@@ -145,6 +145,7 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       "--container-",
       "--z-index-", // 层级刻度
       "--radius-", // 圆角刻度
+      "--container-", // 内容列宽度三档（max-w-narrow / -medium / -wide，globals.css 里的现值收口）
       "--text-", // 字阶刻度（.u-title / .u-title-page / .u-title-stage / .u-title-hero）
       "--xy-", // React Flow 变量
       "--json-view-", // json 查看器主题
