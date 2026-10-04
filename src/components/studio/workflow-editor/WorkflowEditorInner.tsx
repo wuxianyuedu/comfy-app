@@ -9,13 +9,7 @@
  * • hooks/use-workflow-graph-derivation.ts  detail → 视图元数据 → 图节点
  * • hooks/use-io-modes-commit.ts        IO 模式集合变更的落库编排
  * 过渡屏与画布浮层在 WorkflowEditorCanvasOverlays.tsx。 */
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   useNodesState,
   useEdgesState,
@@ -26,7 +20,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "~/config/custom-nodes";
 import { SourceModal } from "../SourceModal";
-import type { WorkflowDetail, WorkflowIOParam } from "../workflow-types";
+import type { WorkflowDetail } from "../workflow-types";
 import { buildEdges } from "../workflow-utils";
 import { useMiniMapJump } from "../useMiniMapJump";
 import { CanvasSettingsPanel } from "../canvas/CanvasSettingsPanel";
@@ -52,6 +46,8 @@ import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useWorkflowGraphDerivation } from "./hooks/use-workflow-graph-derivation";
 import { useWorkflowViewportFit } from "./hooks/use-workflow-viewport-fit";
 import { useIoModesCommit } from "./hooks/use-io-modes-commit";
+import { useIoEditActions } from "./hooks/use-io-edit-actions";
+import { useSubgraphSourceModal } from "./hooks/use-subgraph-source-modal";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
@@ -183,33 +179,9 @@ function WorkflowEditorBody({
    *  数据直接从 `detail.graph/rawJson` 读 (缓存里的磁盘已保存版本)，
    *  无需网络请求；当前未保存的画布修改不在内，文案里写明。 */
   const [viewJsonOpen, setViewJsonOpen] = useState(false);
-  const setWorkflowIO = useCallback(
-    (
-      updater:
-        | Record<string, WorkflowIOParam>
-        | ((
-            prev: Record<string, WorkflowIOParam>,
-          ) => Record<string, WorkflowIOParam>),
-    ) => {
-      ioApi.setState((state) => ({
-        workflowIO:
-          typeof updater === "function" ? updater(state.workflowIO) : updater,
-      }));
-    },
-    [ioApi],
-  );
-  /* 预览开关一律走 store 动作：关闭预览时 store 会把 `ioEditMode` 一并关掉、
-   *  打开时一并打开，绕过动作直接写状态就会留下「面板没了、勾选框还在」或
-   *  「面板出来了、勾选框不可用」的两截状态（见 store 里那两个动作的注释）。 */
-  const setIoPreviewOpen = useCallback(
-    (v: boolean | ((prev: boolean) => boolean)) =>
-      ioApi
-        .getState()
-        .setIoPreviewOpen(
-          typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v,
-        ),
-    [ioApi],
-  );
+  /* IOEditStore 的两个受控出口（预览开关必须走 store 动作的判据
+   * 见 use-io-edit-actions 文件头与 workflow-editor-topbar-config）。 */
+  const { setWorkflowIO, setIoPreviewOpen } = useIoEditActions({ ioApi });
   const [error, setError] = useState("");
   /* 挂载时把磁盘上的自定义节点 manifest 同步进内存注册表一次，
    *  让 <PackageFooter> 能解析每个节点的「类型 → 所属包」映射，
@@ -265,42 +237,13 @@ function WorkflowEditorBody({
     detailRef.current = detail;
   }, [detail]);
 
-  /* 「查看源文件」要展示**磁盘上的原始 JSON**，而不是派生的可执行视图
-   *  —— 用户点这个按钮是想核对 ComfyUI 保存的源文件（nodes[] / links[] /
-   *  widgets_values）。所以这里取 `detail.rawJson`。sub 视图同理。 */
-  const sourceModalData = useMemo<{
-    name: string;
-    source: unknown;
-    isSubgraph: boolean;
-  } | null>(() => {
-    if (!detail) return null;
-    const isSubgraphView = subgraphStack.length > 0;
-    const raw: unknown = (() => {
-      if (!isSubgraphView) return detail.rawJson ?? null;
-      /* sub 视图：源文件 = 父 rawJson 的 definitions.subgraphs[subUid]（见上方
-       * subgraphRawContext 的注释）。 */
-      const ctx = subgraphRawContext;
-      if (!ctx) return null;
-      const subs = (
-        ctx.parentRawJson as {
-          definitions?: { subgraphs?: Record<string, unknown> };
-        } | null
-      )?.definitions?.subgraphs;
-      if (!subs) return null;
-      return (
-        subs[ctx.subUid] ??
-        Object.values(subs).find(
-          (s) => (s as { id?: unknown } | null)?.id === ctx.subUid,
-        ) ??
-        null
-      );
-    })();
-    return {
-      name: detail.name ?? "工作流",
-      source: raw,
-      isSubgraph: isSubgraphView,
-    };
-  }, [detail, subgraphStack.length, subgraphRawContext]);
+  /* 「查看源文件」弹窗的源数据派生（sub 视图拼父 rawJson 的 subgraph 项，
+   * 详见 use-subgraph-source-modal）。 */
+  const sourceModalData = useSubgraphSourceModal({
+    detail,
+    subgraphStackLength: subgraphStack.length,
+    subgraphRawContext,
+  });
 
   const rf = useReactFlow();
   /* 小地图 → 主视口的单击跳转。
@@ -342,33 +285,20 @@ function WorkflowEditorBody({
   const viewHostNodeId = subgraphStack.at(-1)?.nodeId ?? "";
 
   /* 派生管线：raw meta / 按视图范围的详情 / 输出槽位名 / IO 富化数据源 /
-   * 图节点（详见 use-workflow-graph-derivation）。 */
-  const { rawMetaById, scopeDetail, outSlotNameById, ioDetailMap, graphNodes } =
+   * 图节点；派生结果同时发布进 viewer / rgthree store
+   * （详见 use-workflow-graph-derivation）。 */
+  const { scopeDetail, outSlotNameById, ioDetailMap, graphNodes } =
     useWorkflowGraphDerivation({
       detail,
       paramMap,
       onEnterSubgraph,
       viewHostNodeId,
-    });
-
-  /* P2: 把 detail 派生的查找上下文同步进 viewer / rgthree store，让
-   * getNodeJson/getNodeView/getBypass 读到实时 detail（等价于旧 Context
-   * 每次用新 props 渲染）。 */
-  useEffect(() => {
-    viewerApi.setState({
-      detail,
-      rawMetaById,
-      positions: detail?.positions ?? null,
+      workflowId,
+      viewerApi,
+      rgthreeApi,
       subgraphRawContext,
       subgraphStackLength: subgraphStack.length,
     });
-    rgthreeApi.setState({
-      workflowId,
-      detail,
-      overrides: rgthreeApi.getState().overrides,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail, rawMetaById, subgraphRawContext, subgraphStack.length]);
 
   /* ── 对外参数映射：编辑器不碰 ──
    *
