@@ -5,6 +5,7 @@ import { taskStatusLabel } from "~/lib/task-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
+import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -135,167 +136,169 @@ export function ProjectOutputs() {
 
   if (!projectId) {
     return (
-      <div className="h-full overflow-y-auto">
-        <AuroraBackground />
-        <div className="mx-auto grid min-h-[60vh] max-w-275 place-items-center px-6 text-center">
-          <div>
-            <p className="text-ink-soft text-lg font-medium">
-              还没有打开任何画布项目
-            </p>
-            <p className="text-ink-muted mt-2 text-sm">
-              请先在「画布」中创建或打开一个项目，生成结果会自动归档到项目目录并在这里展示。
-            </p>
-          </div>
+      <DocumentFrame
+        width="medium"
+        className="grid min-h-[60vh] place-items-center px-6 text-center"
+        backdrop={<AuroraBackground />}
+      >
+        <div>
+          <p className="text-ink-soft text-lg font-medium">
+            还没有打开任何画布项目
+          </p>
+          <p className="text-ink-muted mt-2 text-sm">
+            请先在「画布」中创建或打开一个项目，生成结果会自动归档到项目目录并在这里展示。
+          </p>
         </div>
-      </div>
+      </DocumentFrame>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <AuroraBackground />
-      <div className="mx-auto max-w-275 px-4 py-6 sm:px-8">
-        {/* ── Header ── */}
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <h1 className="font-title u-title-page">
-              {activeProject?.name ?? "未命名项目"}
-            </h1>
-            <span className="bg-primary/15 text-primary-strong rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-              {outputs.length} 个产出
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <SelectMenu
-              value={projectId}
-              onChange={setProjectId}
-              options={projects.map((p) => p.id)}
-              labels={Object.fromEntries(
-                projects.map((p) => [p.id, p.name ?? "未命名项目"]),
-              )}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refetchOutputs}
-              className="border-border-strong text-ink-muted hover:text-ink h-auto rounded-lg px-3 py-2"
-            >
-              ↻ 刷新
-            </Button>
-          </div>
+    <DocumentFrame
+      width="medium"
+      className="px-4 py-6 sm:px-8"
+      backdrop={<AuroraBackground />}
+    >
+      {/* ── Header ── */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="font-title u-title-page">
+            {activeProject?.name ?? "未命名项目"}
+          </h1>
+          <span className="bg-primary/15 text-primary-strong rounded-full px-2.5 py-0.5 text-[11px] font-medium">
+            {outputs.length} 个产出
+          </span>
         </div>
-
-        {/* ── Cover banner ── */}
-        {/* p71-allow:start brand violet/fuchsia · 封面横幅与项目徽章（非状态色），见 §3.6.1 */}
-        <div className="relative mb-6 h-45 overflow-hidden rounded-2xl border border-violet-500/20">
-          {cover ? (
-            <MediaThumbnail
-              src={cover.localPath}
-              alt=""
-              className="h-full w-full object-cover"
-              autoPlay
-              loop
-            />
-          ) : (
-            <div className="text-ink-muted grid h-full place-items-center bg-linear-to-br from-violet-500/10 to-fuchsia-500/10 text-sm">
-              生成结果将作为封面展示在这里
-            </div>
-          )}
-          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-transparent" />
-          <div className="absolute bottom-3 left-4">
-            <span className="rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-semibold text-white">
-              封面
-            </span>
-            <p className="font-title mt-1.5 text-lg font-bold text-white drop-shadow">
-              {activeProject?.name ?? "未命名项目"} · 创作合集
-            </p>
-          </div>
+        <div className="flex items-center gap-2">
+          <SelectMenu
+            value={projectId}
+            onChange={setProjectId}
+            options={projects.map((p) => p.id)}
+            labels={Object.fromEntries(
+              projects.map((p) => [p.id, p.name ?? "未命名项目"]),
+            )}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refetchOutputs}
+            className="border-border-strong text-ink-muted hover:text-ink h-auto rounded-lg px-3 py-2"
+          >
+            ↻ 刷新
+          </Button>
         </div>
-        {/* p71-allow:end */}
+      </div>
 
-        {/* ── Output grid ── */}
-        {loading ? (
-          <p className="text-ink-muted text-sm">加载中…</p>
-        ) : outputs.length === 0 ? (
-          <EmptyState
-            title="还没有产出"
-            description="在画布里跑一次生成，结果会自动归档到本项目目录。"
-            minHeightClass="min-h-70"
+      {/* ── Cover banner ── */}
+      {/* p71-allow:start brand violet/fuchsia · 封面横幅与项目徽章（非状态色），见 §3.6.1 */}
+      <div className="relative mb-6 h-45 overflow-hidden rounded-2xl border border-violet-500/20">
+        {cover ? (
+          <MediaThumbnail
+            src={cover.localPath}
+            alt=""
+            className="h-full w-full object-cover"
+            autoPlay
+            loop
           />
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {outputs.map((output) => {
-              const c = taskCover(output.images);
-              const isVideoOut = c?.mediaType === "video";
-              const active = selectedId === output.id;
-              return (
-                <Button
-                  key={output.id}
-                  variant="ghost"
-                  onClick={() => setSelectedId(output.id)}
-                  className={`group relative h-auto overflow-hidden rounded-2xl border text-left font-normal transition-all hover:shadow-lg hover:shadow-black/6 dark:shadow-black/30 ${
-                    active
-                      ? "border-primary-500/70 ring-primary-500/40 ring-1"
-                      : "border-border-strong hover:border-ink-fainter"
-                  } bg-subtle`}
-                >
-                  <div className="bg-canvas-deep relative aspect-square w-full">
-                    {c ? (
-                      <MediaThumbnail
-                        src={c.localPath}
-                        alt=""
-                        className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
-                        autoPlay
-                        loop
-                      />
-                    ) : (
-                      <div className="text-ink-fainter grid h-full place-items-center text-xs">
-                        {output.status === "FAILED" ? "生成失败" : "无预览"}
-                      </div>
-                    )}
-
-                    {/* p71-allow:start brand violet/fuchsia · 视频产出播放按钮与类型徽章（非状态色） */}
-                    {isVideoOut && (
-                      <span className="ring-border-strong absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2">
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="white"
-                          aria-hidden
-                        >
-                          <path d="M6 4 L16 10 L6 16 Z" />
-                        </svg>
-                      </span>
-                    )}
-                    {isVideoOut && (
-                      <span className="absolute top-2 right-2 rounded-md bg-fuchsia-500/90 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                        视频
-                      </span>
-                    )}
-                    {/* p71-allow:end */}
-                    <StatusBadge
-                      status={output.status}
-                      label={taskStatusLabel(output.status)}
-                      dot={false}
-                      className="absolute top-2 left-2 px-2 py-0.5 text-[11px]"
-                    />
-                  </div>
-                  <div className="p-3">
-                    <p className="text-ink-soft line-clamp-1 text-xs font-medium">
-                      {TYPE_CHIP[output.type] ?? output.type} ·{""}
-                      {displayValue(output.seed)}
-                    </p>
-                    <p className="text-ink-fainter mt-1 text-[11px]">
-                      {displayValue(timeAgo(output.createdAt))}
-                    </p>
-                  </div>
-                </Button>
-              );
-            })}
+          <div className="text-ink-muted grid h-full place-items-center bg-linear-to-br from-violet-500/10 to-fuchsia-500/10 text-sm">
+            生成结果将作为封面展示在这里
           </div>
         )}
+        <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-transparent" />
+        <div className="absolute bottom-3 left-4">
+          <span className="rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-semibold text-white">
+            封面
+          </span>
+          <p className="font-title mt-1.5 text-lg font-bold text-white drop-shadow">
+            {activeProject?.name ?? "未命名项目"} · 创作合集
+          </p>
+        </div>
       </div>
+      {/* p71-allow:end */}
+
+      {/* ── Output grid ── */}
+      {loading ? (
+        <p className="text-ink-muted text-sm">加载中…</p>
+      ) : outputs.length === 0 ? (
+        <EmptyState
+          title="还没有产出"
+          description="在画布里跑一次生成，结果会自动归档到本项目目录。"
+          minHeightClass="min-h-70"
+        />
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {outputs.map((output) => {
+            const c = taskCover(output.images);
+            const isVideoOut = c?.mediaType === "video";
+            const active = selectedId === output.id;
+            return (
+              <Button
+                key={output.id}
+                variant="ghost"
+                onClick={() => setSelectedId(output.id)}
+                className={`group relative h-auto overflow-hidden rounded-2xl border text-left font-normal transition-all hover:shadow-lg hover:shadow-black/6 dark:shadow-black/30 ${
+                  active
+                    ? "border-primary-500/70 ring-primary-500/40 ring-1"
+                    : "border-border-strong hover:border-ink-fainter"
+                } bg-subtle`}
+              >
+                <div className="bg-canvas-deep relative aspect-square w-full">
+                  {c ? (
+                    <MediaThumbnail
+                      src={c.localPath}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
+                      autoPlay
+                      loop
+                    />
+                  ) : (
+                    <div className="text-ink-fainter grid h-full place-items-center text-xs">
+                      {output.status === "FAILED" ? "生成失败" : "无预览"}
+                    </div>
+                  )}
+
+                  {/* p71-allow:start brand violet/fuchsia · 视频产出播放按钮与类型徽章（非状态色） */}
+                  {isVideoOut && (
+                    <span className="ring-border-strong absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2">
+                      <svg
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="white"
+                        aria-hidden
+                      >
+                        <path d="M6 4 L16 10 L6 16 Z" />
+                      </svg>
+                    </span>
+                  )}
+                  {isVideoOut && (
+                    <span className="absolute top-2 right-2 rounded-md bg-fuchsia-500/90 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      视频
+                    </span>
+                  )}
+                  {/* p71-allow:end */}
+                  <StatusBadge
+                    status={output.status}
+                    label={taskStatusLabel(output.status)}
+                    dot={false}
+                    className="absolute top-2 left-2 px-2 py-0.5 text-[11px]"
+                  />
+                </div>
+                <div className="p-3">
+                  <p className="text-ink-soft line-clamp-1 text-xs font-medium">
+                    {TYPE_CHIP[output.type] ?? output.type} ·{""}
+                    {displayValue(output.seed)}
+                  </p>
+                  <p className="text-ink-fainter mt-1 text-[11px]">
+                    {displayValue(timeAgo(output.createdAt))}
+                  </p>
+                </div>
+              </Button>
+            );
+          })}
+        </div>
+      )}
 
       <ProjectOutputsMetadataSheet
         selected={selected}
@@ -306,6 +309,6 @@ export function ProjectOutputs() {
         onExport={handleExport}
         onClose={() => setSelectedId(null)}
       />
-    </div>
+    </DocumentFrame>
   );
 }

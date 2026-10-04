@@ -196,6 +196,17 @@
 
   /* Layout */
   --panel-right-width: 360px;
+  /* 内容列的宽度上限（三档）。`--container-*` 是 tailwind v4 里生成 `max-w-*` 的
+     命名空间（与 `--spacing-*` 生成间距类同理），所以档位名直接当类用（`max-w-narrow`）。
+     数值不是新设计的，而是把原先散在八个视图里的现值（`max-w-240` / `max-w-275` /
+     `max-w-300` = 60 / 68.75 / 75rem）收进一处 —— 同一个角色在两个文件里各写一个数，
+     改一处必然漏一处。narrow 给单栏读内容的屏（首页 / 项目主页），wide 给网格与列表屏
+     （作品库 / 模型库 / 历史 / 队列 / 资源库），medium 目前只有「产出」在用。
+     **medium 与 wide 的分界是继承来的、不是设计出来的**：并档会真的改到那一屏的排版，
+     那是一次独立的布局决定，不塞进「收口容器」这一刀里顺手做。 */
+  --container-narrow: 60rem; /* 960px */
+  --container-medium: 68.75rem; /* 1100px */
+  --container-wide: 75rem; /* 1200px */
   /* 标题行（页签栏）高度。tailwind v4 只有 --spacing-* 命名空间能生成间距类，
      因此用 `--spacing-title-bar` 得到 top-title-bar / h-title-bar；
      TitleBarTabs 的高度与全屏视图层的让位都取这一处

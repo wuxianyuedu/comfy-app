@@ -58,7 +58,9 @@ export function SettingsShell({
         <h1 className="u-title-page">设置</h1>
       </div>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-275 flex-1 gap-6 px-6 pt-6">
+      {/* 宽度取统一档位（`--container-medium` = 从前这里写的 max-w-275）：
+          设置页是「分区导航 + 内容」双栏壳，不并入文档型容器，但同一个数不该有两个家。 */}
+      <div className="max-w-medium mx-auto flex min-h-0 w-full flex-1 gap-6 px-6 pt-6">
         {/* Left sidebar */}
         <nav className="w-48 shrink-0 flex-col gap-1">
           {SETTINGS_SECTIONS.map((item) => (

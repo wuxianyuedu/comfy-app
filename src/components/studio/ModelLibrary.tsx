@@ -13,6 +13,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { EmptyState } from "~/components/ui/empty-state";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
+import { DocumentFrame } from "./ViewContainer";
 import { useModelFolderConfig } from "./hooks/use-model-folder-config";
 import { useModelLibrary } from "./hooks/use-model-library";
 import {
@@ -32,81 +33,82 @@ export function ModelLibrary() {
   const c = useModelLibrary();
 
   return (
-    <div className="h-full overflow-y-auto">
-      <AuroraBackground />
-      <div className="mx-auto max-w-300 px-4 py-8 sm:px-8 sm:py-10">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="font-title u-title-page">模型库</h1>
-            <p className="text-ink-muted mt-1 text-sm">
-              本机 ComfyUI 可用模型，按扫描目录分类 ——
-              每个目录即一种独立的模型类型。
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+    <DocumentFrame
+      width="wide"
+      className="px-4 py-8 sm:px-8 sm:py-10"
+      backdrop={<AuroraBackground />}
+    >
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-title u-title-page">模型库</h1>
+          <p className="text-ink-muted mt-1 text-sm">
+            本机 ComfyUI 可用模型，按扫描目录分类 ——
+            每个目录即一种独立的模型类型。
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => c.setConfigOpen(true)}
+            className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-2"
+          >
+            <Icon data-icon="inline-start" name="settings" size={16} />
+            模型目录配置
+          </Button>
+          <input
+            value={c.q}
+            onChange={textHandler(c.setQ)}
+            placeholder="搜索模型名称…"
+            className="border-border bg-subtle text-ink-bright w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40 sm:w-64"
+          />
+        </div>
+      </div>
+
+      <div className="mb-5 flex flex-wrap gap-2">
+        <FilterChip
+          active={c.filter === ALL_TYPES}
+          onClick={() => c.setFilter(ALL_TYPES)}
+          label={`全部 (${c.models.length})`}
+        />
+        {c.typeChips.map(([t, count]) => {
+          const meta = folderMeta(t);
+          return (
+            <FilterChip
+              key={t}
+              active={c.filter === t}
+              onClick={() => c.setFilter(t)}
+              label={`${meta.label} (${count})`}
+            />
+          );
+        })}
+      </div>
+
+      {c.loading ? (
+        <p className="text-ink-muted text-sm">加载中…</p>
+      ) : c.filtered.length === 0 ? (
+        <EmptyState
+          title="模型库还没有内容"
+          description="没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。"
+          minHeightClass="min-h-75"
+          action={
             <Button
-              variant="outline"
+              variant="primary"
               onClick={() => c.setConfigOpen(true)}
-              className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-2"
+              className="mt-4 h-auto gap-1.5 rounded-lg px-4 py-2"
             >
               <Icon data-icon="inline-start" name="settings" size={16} />
-              模型目录配置
+              去配置目录
             </Button>
-            <input
-              value={c.q}
-              onChange={textHandler(c.setQ)}
-              placeholder="搜索模型名称…"
-              className="border-border bg-subtle text-ink-bright w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40 sm:w-64"
-            />
-          </div>
-        </div>
-
-        <div className="mb-5 flex flex-wrap gap-2">
-          <FilterChip
-            active={c.filter === ALL_TYPES}
-            onClick={() => c.setFilter(ALL_TYPES)}
-            label={`全部 (${c.models.length})`}
-          />
-          {c.typeChips.map(([t, count]) => {
-            const meta = folderMeta(t);
-            return (
-              <FilterChip
-                key={t}
-                active={c.filter === t}
-                onClick={() => c.setFilter(t)}
-                label={`${meta.label} (${count})`}
-              />
-            );
-          })}
-        </div>
-
-        {c.loading ? (
-          <p className="text-ink-muted text-sm">加载中…</p>
-        ) : c.filtered.length === 0 ? (
-          <EmptyState
-            title="模型库还没有内容"
-            description="没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。"
-            minHeightClass="min-h-75"
-            action={
-              <Button
-                variant="primary"
-                onClick={() => c.setConfigOpen(true)}
-                className="mt-4 h-auto gap-1.5 rounded-lg px-4 py-2"
-              >
-                <Icon data-icon="inline-start" name="settings" size={16} />
-                去配置目录
-              </Button>
-            }
-          />
-        ) : (
-          // 紧凑列表 —— 每行是 [类型药丸][文件名][大小]。
-          // 旧的卡片栅格（4 列 + 28px 占位图标 + 重复的 fileName）
-          // 太重；对最终只是「一行文件名 + 大小」的这种负载，
-          // N 行画廊可读性好得多。行数可能上探到三位数（LoRA/ckpt 混放），
-          // 交给 ModelList 做定高虚拟滚动（量不到视口时退回整页渲染）。
-          <ModelList items={c.filtered} />
-        )}
-      </div>
+          }
+        />
+      ) : (
+        // 紧凑列表 —— 每行是 [类型药丸][文件名][大小]。
+        // 旧的卡片栅格（4 列 + 28px 占位图标 + 重复的 fileName）
+        // 太重；对最终只是「一行文件名 + 大小」的这种负载，
+        // N 行画廊可读性好得多。行数可能上探到三位数（LoRA/ckpt 混放），
+        // 交给 ModelList 做定高虚拟滚动（量不到视口时退回整页渲染）。
+        <ModelList items={c.filtered} />
+      )}
 
       {c.configOpen && (
         <ModelConfigModal
@@ -116,7 +118,7 @@ export function ModelLibrary() {
           }}
         />
       )}
-    </div>
+    </DocumentFrame>
   );
 }
 

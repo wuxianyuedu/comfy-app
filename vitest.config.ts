@@ -426,6 +426,9 @@ export default defineConfig({
         /* 外观偏好（圆角 / 标题字阶）的令牌应用点与持久化形状。
          * 「默认档必须与引入前逐像素相同」这条判据就靠它有数字看着。 */
         "src/lib/appearance.ts",
+        /* 项目内视图的统一容器（**两处同批**登记）。收口后「外层滚动 + 居中列 +
+         * 宽度档位」这套形状只有这一处，八个视图都只是调用 —— 值得单独有数字看着。 */
+        "src/components/studio/ViewContainer.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1529,6 +1532,14 @@ export default defineConfig({
           functions: 90,
           statements: 95,
           branches: 85,
+        },
+        /* 统一容器（与 `coverage.include` 同批）。隔离实测四项都 100 ——
+         * 它是纯形状组件，没有分支藏在数据里，满档不是凑出来的。 */
+        "src/components/studio/ViewContainer.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         /* 视图页签条（与 `coverage.include` 同批）。数值取隔离实测向下取整到 5：
          * 未覆盖的 158-160 是「+」菜单里那一行的点击 —— jsdom 里下拉不展开，
