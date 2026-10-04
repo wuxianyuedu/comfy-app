@@ -35,6 +35,8 @@
     "mcp:stdio": "tsx tools/mcp-stdio.ts",
     "mcp:http": "tsx tools/mcp-http.ts",
     "test:visual": "playwright test e2e/visual",
+    "check:visual": "node scripts/pixel-run.mjs",
+    "check:visual:update": "node scripts/pixel-run.mjs --update",
     "storybook": "node scripts/storybook.mjs dev",
     "storybook:build": "node scripts/storybook.mjs build",
     "doc:check": "node scripts/check-doc-references.cjs",

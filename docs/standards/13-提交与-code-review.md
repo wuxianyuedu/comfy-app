@@ -412,6 +412,16 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 全量单测 + 覆盖率门槛 | `@` NPC 跑 `pnpm run test:coverage`                                         | C 组（13.5.8）之外的欠账         |
 | 产物级护栏            | 改动构建 / 产物后 `@` 跑 `pnpm run build` + `check-standalone-contents.cjs` | 欠账条目 2                       |
 | E2E 关键流程          | `@` 跑 `pnpm exec playwright test --grep @critical`（先 `db:push`）         | 欠账条目 3/4                     |
+| 像素回归（§11.8）     | `pnpm check:visual`（或 Windows 双击 `-Mode visual`）——见下面那条            | 不进钩子，但它有**边界明确的触发条件** |
+
+**像素回归这一行为什么与上面三条不同**（ISSUE #1282 的口径）：上面三条是「没有触发条件、
+只能按需召唤」，而像素层的触发条件一直是明确、可观测的 —— **改了会动到像素判决的东西**
+（`e2e/visual/**` / `playwright.config.ts`）。它此前只是缺一个**说清「怎么跑、红算什么」的入口**：
+`pnpm test:visual` 这个脚本存在，但没有任何地方回答「谁来跑、跑出来的红指向什么动作、要不要顺手
+落盘」。现在由 `scripts/pixel-run.mjs` 承担（默认不落盘、与配对判据同批跑、红按三条实测形态定性），
+并由 `scripts/quality-gate.mjs` 的 `GATES.visual`（**`run: false`，不在 `all` 里**）与 `.ps1` 侧
+`-Mode visual` 提供跨平台入口。**「不进钩子」的判断没有变**：起 webServer + 浏览器与钩子里的
+A/B/C/D 抢资源，而且基线名带平台决定了它的结论只在录过基线的那台机器上成立。
 
 这张表里**原本还有一行**「R5 行数棘轮 → `@` 跑 `check-file-structure.cjs --strict`」，随
 ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前提「挂着 11 个存量」不再成立）之后，

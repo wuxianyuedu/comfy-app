@@ -2483,6 +2483,7 @@ sidecar」两种不同形态的失败。
 | 接上提交门槛（`core.hooksPath=.githooks`）                          | `scripts/prepare-local-run.ps1`（由 `pnpm install` 的 postinstall 触发）                            | `scripts/install-git-hooks.mjs`（`node scripts/install-git-hooks.mjs`；postinstall 逐字调用它，契约测试 `tests/postinstall-cross-platform.test.ts`）                           |
 | 组件工作台 Storybook（开发期预览）                                  | `tools/start/storybook.ps1`                                                                         | `scripts/storybook.mjs`（`pnpm storybook` / `pnpm storybook:build`；契约测试 `tests/storybook-config.test.ts`）                                                              |
 | 故事枚举来源 + 组件覆盖率门禁（cva 返回值 / 漏档 / 覆盖率棘轮）     | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/storybook-check.mjs`（`node scripts/storybook-check.mjs`，契约测试 `tests/storybook-check-script.test.ts`、`tests/storybook-component-coverage.test.ts`）              |
+| 像素回归（Playwright 截图 + 基线配对判据，规范 §11.8）              | `scripts/quality-gate.ps1`（`-Mode visual`，按需档、不在 `all` 里）                                 | `scripts/pixel-run.mjs`（`pnpm check:visual` / `node scripts/pixel-run.mjs`，契约测试 `tests/pixel-run.test.ts`）                                                                |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
 而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个
