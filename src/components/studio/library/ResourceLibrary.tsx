@@ -24,6 +24,7 @@ import { Button } from "~/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { EmptyState } from "~/components/ui/empty-state";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
+import { BreadcrumbPath } from "~/components/ui/breadcrumb-path";
 import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
@@ -176,43 +177,15 @@ export function ResourceLibrary() {
         </div>
       </div>
 
-      {/* ── 面包屑：搜索态与分类内都可回落 ── */}
+      {/* ── 面包屑：搜索态与分类内都可回落 ──
+          走 `~/components/ui/breadcrumb-path`（规范 16 §16.2.4.72）。 */}
       {!needsProject && (
-        <div className="mb-3 flex items-center gap-1.5">
-          {library.breadcrumbSegments.map((seg, i) => {
-            const isLast = i === library.breadcrumbSegments.length - 1;
-            const isCurrent = isLast && !library.searching;
-            return (
-              <span
-                key={seg.key ?? `seg-${String(i)}`}
-                className="inline-flex items-center"
-              >
-                {i > 0 && (
-                  <span className="text-ink-fainter mx-1 text-[11px]">/</span>
-                )}
-                {isLast || library.searching ? (
-                  <span
-                    className={`text-[12px] ${
-                      isCurrent
-                        ? "text-ink-bright font-medium"
-                        : "text-ink-soft"
-                    }`}
-                  >
-                    {seg.label}
-                  </span>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    onClick={() => library.enterFolder(seg.key)}
-                    className="text-ink-muted hover:text-primary-strong h-auto p-0 text-[12px] font-normal hover:bg-transparent hover:underline"
-                  >
-                    {seg.label}
-                  </Button>
-                )}
-              </span>
-            );
-          })}
-        </div>
+        <BreadcrumbPath
+          segments={library.breadcrumbSegments}
+          navigable={!library.searching}
+          onNavigate={library.enterFolder}
+          className="mb-3"
+        />
       )}
 
       {/* ── 错误条：拉取与动作失败共用一条（控制器已保证动作错误优先）── */}
