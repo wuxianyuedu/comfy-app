@@ -42,7 +42,14 @@ export function Field({
     <div className="min-w-0">
       <dt className="text-ink-fainter truncate text-[11px]">{label}</dt>
       <dd className="text-ink-soft min-w-0 truncate tabular-nums">
-        {displayValue(children)}
+        {/* 值变了闪一下（`value-tick`，规范 06 §6.7 第 ③ 档）：这一屏每 1s 被
+            轮询刷一次，「已跑 12 秒」与「已跑 13 秒」在屏幕上长得一模一样 ——
+            不动一下的话，用户分不出「它还在动」与「它卡住了」。
+            `key` 换成当前值即触发重挂载：**值没变就不重播**，于是它天然是
+            「变化提示」而不是第二条循环动画。 */}
+        <span key={children} className="value-tick inline-block">
+          {displayValue(children)}
+        </span>
       </dd>
     </div>
   );

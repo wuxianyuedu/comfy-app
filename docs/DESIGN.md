@@ -437,9 +437,16 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ## Motion
 
-实测到的动效词汇：`transition: … 0.15s ease`（`.u-card-hover` / `.u-input` / `.u-chip` / `.u-ghost` —— ⚠️ 这四条 `.u-*` 规则**全仓零消费者**，它们的 0.15s 目前不参与任何渲染，见 Known Gaps）、`transition-all`（Button 基类 18 处）、`active:translate-y-px`（按压下沉）、`animate-spin`（spinner）、`animate-pulse`（skeleton）。两条自定义循环：`progressStripe`（不确定进度条）、`wf-wave 6s linear infinite`（生成进度水面）。
+实测到的动效词汇：`transition: … 0.15s ease`（`.u-card-hover` / `.u-input` / `.u-chip` / `.u-ghost` —— ⚠️ 这四条 `.u-*` 规则**全仓零消费者**，它们的 0.15s 目前不参与任何渲染，见 Known Gaps）、`transition-all`（Button 基类 18 处）、`active:translate-y-px`（按压下沉）、`animate-spin`（spinner）、`animate-pulse`（skeleton）。三条自定义循环：`progressStripe`（不确定进度条）、`wf-wave 6s linear infinite`（生成进度水面）、`tw-shimmer`（**来自依赖** `shadcn/tailwind.css` 的 `@utility shimmer`，本仓 `src/` 零调用点，见 Known Gaps）。一条一次性：`value-tick`（220ms，值变了闪一下 —— 只动 `opacity`、位移为 0，在 §6.7 里按第 ① 档降级，因为它每轮询周期重播一次）。
 
 规范 06 §6.7 要求：**所有 `transition` / `animation` 必须有 `prefers-reduced-motion` 降级**；滑入抽屉 200–300ms、不超过 500ms。唯一登记的刻意例外是 AutoAnimate 条目级过渡（`disrespectUserMotionPreference: true`，250ms ease-out，只动 `transform`/`opacity`）。
+
+> ✅ **动效选点（2026-10-04）**：存量 8 处 layout 动画逐条裁决为「全部保留」（§2.7.1），
+> 并按「表现收益盖过性能代价」加了三件 —— `.value-tick`（值变了闪一下，落在复制反馈
+> 与队列读数上）与 `<ExitReminder>`（`:has()` 驱动的「切走会丢」提示条，落在工坊角色阶段）。
+> **明确不做**：路由 / 视图页签切换的整页过渡（本仓 `loading.tsx` 只有全屏那一个，
+> 过渡态无处安放 ⇒ 做出来是更长的白屏）、列表条目过渡扩到没有「排序换位」交互的队列、
+> 以及给「已过期」这类持续状态加脉冲。三类理由见规范 02 §2.7.2。
 
 > ✅ **已落地（2026-10-03，签字：三档分治）**：`globals.css` 末尾的 `@media (prefers-reduced-motion: reduce)` 块按三档处理——① 7 处循环全部停掉、② 2 处大位移归零位移只留淡入、③ 短程 hover/focus **刻意豁免**。§6.7 的条文同步收窄成这三档（不再写「所有 transition/animation」那种实测做不到的话）。执行者 = `tests/reduced-motion-tiers.test.ts`（在 pre-commit 的 C 组固定清单里），它兼管「组件改了 `data-slot` 名字而降级块仍指旧名」那一类不报错的失效。
 >

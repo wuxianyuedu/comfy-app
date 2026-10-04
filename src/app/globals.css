@@ -279,10 +279,18 @@
   /* 四档都乘 `--font-scale`：基准留在本文件一处，设置页只改那一个数 ——
      若在 JS 里重算成绝对值，基准就有两个家，改一处漏一处。
      倍率默认 1（不设置时与从前逐像素相同）。 */
-  --text-section: calc(0.875rem * var(--font-scale, 1)); /* 卡片 / 区块标题（.u-title） */
-  --text-page: calc(1.5rem * var(--font-scale, 1)); /* 屏级标题（.u-title-page —— 每屏唯一的 h1） */
-  --text-stage: calc(1.0625rem * var(--font-scale, 1)); /* 段级标题（.u-title-stage，工坊六段当前段的标题） */
-  --text-hero: calc(2.125rem * var(--font-scale, 1)); /* 首页欢迎区大标题（.u-title-hero，屏级档的唯一例外） */
+  --text-section: calc(
+    0.875rem * var(--font-scale, 1)
+  ); /* 卡片 / 区块标题（.u-title） */
+  --text-page: calc(
+    1.5rem * var(--font-scale, 1)
+  ); /* 屏级标题（.u-title-page —— 每屏唯一的 h1） */
+  --text-stage: calc(
+    1.0625rem * var(--font-scale, 1)
+  ); /* 段级标题（.u-title-stage，工坊六段当前段的标题） */
+  --text-hero: calc(
+    2.125rem * var(--font-scale, 1)
+  ); /* 首页欢迎区大标题（.u-title-hero，屏级档的唯一例外） */
 
   /* Display / titles — Sarasa Gothic SC Bold preferred, falls back to Noto/PingFang (Ardot #169~#177) */
   --font-title:
@@ -882,6 +890,51 @@ textarea::-webkit-scrollbar {
   animation: wf-wave 6s linear infinite;
 }
 
+/* 状态/进度的「变化」提示：只在数值**真的变了**那一刻播一次，不是循环动画。
+ *
+ * 为什么要有它：日志面板的「跟随中」、队列的运行时长、画布上节点的状态点这些
+ * 位置，数值每 1~2s 被轮询刷新一次，而**旧值和新值在屏幕上长得一模一样** ——
+ * 用户无法分辨「它还在动」与「它卡住了」。一次 220ms 的短程闪烁（位移 0、
+ * 只动透明度）就能把这件事变成看得见的，且不与任何循环动画叠加
+ * （循环动画另有专门机制：`animate-pulse` / `animate-spin` / `wf-wave`）。
+ *
+ * 属于规范 06 §6.7 的第 ③ 档「短程反馈」：位移为 0、时长 220ms、
+ * 一次性触发、可被 `prefers-reduced-motion` 覆盖（见下方降级块 ①）。
+ * 调用方在 JSX 里用 key 变化重挂载来触发（`<span key={value}>`）——
+ * 「值变了才播」这件事因此不需要 JS 侧的定时器或状态位。 */
+@keyframes value-tick {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.value-tick {
+  animation: value-tick 220ms ease-out;
+}
+
+/* ── 「离开这一屏就丢掉现场」的提示条 ──────────────────────────────
+ * 出口是 `ui/use-exit-reminder` 的 `<ExitReminder>`（规范 10.3.1）。
+ * 判据**全在 CSS**：`--exit-reminder-shown` 默认 `none`（整条不在），
+ * 命中信号才摆到 `inline` —— 于是「什么时候该显示」不需要任何 JS 状态，
+ * 也就不存在「路由已经走了、定时器还在跑」那一族缺陷。
+ *
+ * 信号形状是 `[data-dirty]`（由 `exitReminderSignal()` 写），**不是** class：
+ * 属性留给判据读、class 留给样式读，混在一起之后「这条 class 还有没有消费者」
+ * 就再也数不清了。新增落点在这里加一条选择器即可，判据本体不动。
+ *
+ * 用 `:has()` 而不是 JS：`display` 的变化是**同步**的（同一帧内），
+ * 而 React 状态要等一次重渲染 —— 用户在「刚敲下一个字」的下一帧就按导航时，
+ * JS 判据会慢一拍，提示条来不及出现。 */
+[data-exit-reminder] {
+  display: none;
+}
+[data-exit-reminder]:has(~ [data-dirty]),
+[data-exit-reminder][data-dirty] {
+  display: inline-block;
+}
+
 /* react18-json-view 主题 — 与 globals.css token 对齐 (violet/emerald/orange/
    amber/zinc 系)。挂在 `.json-view.jv-theme-comfy` 上避免污染其它地方。
 
@@ -1242,6 +1295,9 @@ textarea::-webkit-scrollbar {
       skeleton / 状态点脉冲 / 不确定进度条 / 生成进度水面 / 代理运行中的圆点。
       停掉之后每一处都还有非动画的等价表达（spinner 仍是环、进度条仍是 1/3 宽块、
       脉冲点仍带颜色语义），不会变成「看不出来在发生什么」。
+      `.value-tick`（数值变了闪一下）严格说是一次性动画、不是循环，但它与这一档
+      同源：**没停下也不会报错**，而它每一秒重播一次，对敏感用户就是一条常驻的
+      亮度变化。停掉之后旧值→新值的切换照常发生（只是没有淡入），信息不丢。
    ② **大位移 → 去掉位移、保留淡入**。抽屉与导航面板的位移只在开合那一瞬，
       晕动症敏感的正是在这 200~350ms 里整块面板横扫。这里只把 `translate` 归零，
       `opacity`/`scale` 那条过渡留着 —— 既保住「它出现了」的反馈，也不再把内容
@@ -1262,6 +1318,7 @@ textarea::-webkit-scrollbar {
   .animate-spin,
   .animate-pulse,
   .wf-wave,
+  .value-tick,
   [data-slot="progress-bar-indeterminate"],
   [data-slot="agent-tool-status-dot"] {
     animation: none !important;
