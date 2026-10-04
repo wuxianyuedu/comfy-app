@@ -12,14 +12,20 @@
  * 两个依赖都替身化：`spawnSchemaSync` mock 掉（真 spawn 会起一个 15~30 秒的
  * drizzle 子进程并改写真实状态文件）；状态文件**读**走 `readFileSync` spy——
  * 不能写真文件：`GET /api/schema` 的测试与本文件并行跑，两份真文件读写会
- * 互相踩（同一份 `log/schema-sync.json` 是它们共同的夹具）。同步本身的判据
+ * 互相踩（同一份 `log/current/tools/schema-sync.json` 是它们共同的夹具）。同步本身的判据
  * 在 tests/db-schema-current.test.ts。
  */
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const statusFile = path.join(process.cwd(), "log", "schema-sync.json");
+const statusFile = path.join(
+  process.cwd(),
+  "log",
+  "current",
+  "tools",
+  "schema-sync.json",
+);
 
 const spawnSchemaSync = vi.hoisted(() => vi.fn());
 
