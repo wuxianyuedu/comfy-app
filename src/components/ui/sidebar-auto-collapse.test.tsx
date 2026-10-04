@@ -116,6 +116,41 @@ describe("窄窗下左轨自动让位", () => {
     expect(isAuto()).toBe("true");
   });
 
+  /* ISSUE #1267 回归：首帧对账不能被「订阅周期」绑住。
+   *
+   * 现场是 React 开发态的**双挂载**（挂载 → 卸载 → 再挂载）：旧实现把
+   * `setTimeout(0)` 补的那次通知挂在订阅的清理函数上，卸载时的 `clearTimeout`
+   * 把它取消了 —— 于是「进页面时窗口就已经是窄窗」这件事再也没有人通知，
+   * `data-state` 停在服务端那份「展开」上，只能等某个无关的重渲染顺带纠正。
+   * 并发跑 E2E 时那次重渲染晚到 5s 之后 ⇒ `e2e/nav-auto-collapse.spec.ts`
+   * 两条在默认并发下必红（`--workers=1` 串行则绿，与报告一致）。
+   *
+   * 这里把「卸载 → 再挂载」显式跑一遍，并**只**让模块级那次通知来做对账：
+   * 期间不派发任何 `change`（模拟「进页面就已经是窄窗」，媒体查询不会再 change）。
+   */
+  it("订阅被卸载再挂载后，首帧对账仍由 store 自己的通知落地", async () => {
+    mount();
+    expect(state()).toBe("expanded");
+
+    /* 窄窗（订阅建立之前就是），不派发 change。 */
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1100,
+      writable: true,
+    });
+
+    /* 双挂载的第二跳：整棵树卸载再挂载，中间那次清理会取消「第一跳」排的通知。 */
+    cleanup();
+    mount();
+
+    /* 宏任务跑到后，对账要自己落地 —— 不靠任何外部重渲染。 */
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(state()).toBe("collapsed");
+    expect(isAuto()).toBe("true");
+  });
+
   it("自动收起不动 cookie：纪律不许把用户偏好写脏", () => {
     const writeSpy = vi.spyOn(document, "cookie", "set");
     mount();
