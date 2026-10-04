@@ -47,10 +47,10 @@ export const env = createEnv({
       process.env.NODE_ENV === "production"
         ? z.string().min(32)
         : z.string().min(32).optional(),
-    BETTER_AUTH_URL: z.string().url().optional(),
+    BETTER_AUTH_URL: z.url().optional(),
     BETTER_AUTH_GITHUB_CLIENT_ID: z.string(),
     BETTER_AUTH_GITHUB_CLIENT_SECRET: z.string(),
-    DATABASE_URL: z.string().url(),
+    DATABASE_URL: z.url(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -58,7 +58,7 @@ export const env = createEnv({
     LOG_LEVEL: z
       .enum(["debug", "info", "warn", "error", "fatal"])
       .default("info"),
-    SENTRY_DSN: z.string().url().optional(),
+    SENTRY_DSN: z.url().optional(),
   },
 
   /**

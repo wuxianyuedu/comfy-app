@@ -1,10 +1,10 @@
 "use client";
 /* ════════════════════════════════════════════════════════════════════════
- *  wf-stores.ts — Zustand 状态层（替代 3 个 React Context）
+ *  WorkflowStores.tsx — Zustand 状态层（3 个画布 store 的唯一出口）
  * ────────────────────────────────────────────────────────────────────────
- *  把 wf-contexts.tsx 里的 3 个画布 Context（IOEditContext、
- *  RgthreeGroupsContext、NodeJsonViewerContext）从 React Context 迁移到
- *  Zustand，同时保留它们原有的「按编辑器实例隔离」语义。
+ *  对外暴露 3 个按编辑器实例隔离的 store（IOEditStore、
+ *  RgthreeGroupsStore、NodeJsonViewerStore），经「薄 React Context 容器」
+ *  下发 —— 语义等价于此前那 3 个并列的 React Context。
  *
  *  为什么不是模块级单例？
  *    工作流编辑器（WorkflowCanvasEditor）与项目画布（ProjectCanvas）都挂载
@@ -19,8 +19,8 @@
  *  这是 zustand v4/v5 官方推荐的组件级作用域 store 写法（非废弃的
  *  zustand/context.createContext：v4 已标记 deprecated，迁移用 createStore）。
  *
- *  Shape 约束：对外暴露的 API 与原 Context value 保持等价，
- *  消费方（wf-node / wf-subgraph-node / NodeIdChip …）无需改动行为。
+ *  Shape 约束：对外暴露的 API 逐字段等价于各 store 的 state，
+ *  消费方（WorkflowNode / WorkflowSubgraphNode / NodeIdChip …）只读不改。
  * ════════════════════════════════════════════════════════════════════════ */
 import React, { createContext, useContext } from "react";
 import {
