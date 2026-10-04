@@ -189,6 +189,10 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 强制条文挂着零执行者，表现是「规范说做了而全绿」。它读的是 `globals.css` 的
   // **文本**，import 图追不到（改 CSS 不会把它拉进受影响清单），所以与上面那条同因、
   // 必须无条件响；第 ④ 档还兼管「组件改了 data-slot 名字而降级块仍指旧名」那一类静默失效。
+  // 本轮（ISSUE #1437）它多守两条**没命中也不会报错**的机制（规范 02 §2.7.2 /
+  // 10 §10.3.2）：`.value-tick` 定义了没人用只是死 CSS；`[data-exit-reminder]` 的
+  // 兄弟组合子若被改成祖先选择器（读起来更合理），提醒就**永远不亮**而样式表里
+  // 那条规则照旧「有定义」—— 两处都只在 CSS 与消费点的文本上，import 图同样追不到。
   "tests/reduced-motion-tiers.test.ts",
   // 「内嵌字体这条链有没有静默降级」：LFS 过滤器、`.githooks/pre-push`、postinstall
   // 里那步 `git lfs install --local --manual`、`@font-face` 的 family 与
