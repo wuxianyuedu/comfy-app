@@ -89,23 +89,16 @@ const callerEnv: NodeJS.ProcessEnv = {
   COMFYAPP_TEST_PORT: "8188",
 };
 
-const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
-
-/** 把平台换成 `linux` 跑一段（`process.platform` 是不可写的自有属性）。 */
-function withLinux<T>(run: () => T): T {
-  Object.defineProperty(process, "platform", {
-    value: "linux",
-    configurable: true,
-    writable: true,
-  });
-  try {
-    return run();
-  } finally {
-    if (originalPlatform) {
-      Object.defineProperty(process, "platform", originalPlatform);
-    }
-  }
-}
+/** 两条 keepAlive 平台分支的**唯一判据**：注入给 `spawnManaged` 的 platform。
+ *
+ * 这里刻意不再用 `Object.defineProperty(process, "platform")` 改宿主平台：
+ * 那个属性在 POSIX 上是 `writable:false` 的自有属性（实测 descriptor
+ * `{writable:false, configurable:true}`），写进去之后**Windows 那组用例在
+ * Linux/CI 上也只会走 POSIX 分支** —— 断言写 `powershell.exe`，实收
+ * `{detached:true, stdio:全 ignore}`，五条恒红且看着像「代码坏了」。
+ * 现在两端机器判同一份输入，两个分支在任何宿主上都有执行者。 */
+const POSIX = "linux" as const;
+const WINDOWS = "win32" as const;
 
 beforeEach(() => {
   /* 登记表按用例清：`spawn` / `openSync` 的调用次数本身就是判据
@@ -124,9 +117,6 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.COMFYAPP_SHELL_EXE;
   delete process.env.COMFYAPP_TASKKILL;
-  if (originalPlatform) {
-    Object.defineProperty(process, "platform", originalPlatform);
-  }
 });
 
 describe("escapePwshSingle", () => {
@@ -275,26 +265,42 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
     const paths: Array<{
       name: string;
       shellExe?: string;
+      platform: NodeJS.Platform;
       run: () => string | undefined;
     }> = [
       {
         name: "POSIX keepAlive",
+        platform: POSIX,
         run: () =>
-          withLinux(
-            () =>
-              spawnManaged({ command: "x", args: [], mode: "keepAlive" }).error,
-          ),
+          spawnManaged({
+            command: "x",
+            args: [],
+            mode: "keepAlive",
+            platform: POSIX,
+          }).error,
       },
       {
         name: "Windows 壳 CLI 中介",
         shellExe: "C:/app/comfyapp.exe",
+        platform: WINDOWS,
         run: () =>
-          spawnManaged({ command: "x", args: [], mode: "keepAlive" }).error,
+          spawnManaged({
+            command: "x",
+            args: [],
+            mode: "keepAlive",
+            platform: WINDOWS,
+          }).error,
       },
       {
         name: "Windows powershell 中介",
+        platform: WINDOWS,
         run: () =>
-          spawnManaged({ command: "x", args: [], mode: "keepAlive" }).error,
+          spawnManaged({
+            command: "x",
+            args: [],
+            mode: "keepAlive",
+            platform: WINDOWS,
+          }).error,
       },
     ];
     for (const path of paths) {
@@ -308,15 +314,19 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
   });
 });
 
+/* 两组平台用例（POSIX / Windows）都由注入的 `platform` 分叉 —— 见文件头
+ * `POSIX` / `WINDOWS` 那段的理由：改宿主平台那套写法在 POSIX 上是**无效**的，
+ * 会让 Windows 那组在 Linux/CI 上悄悄跑 POSIX 分支。 */
 describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
   it("detached:true 后立刻 unref，且默认 stdio 全 ignore（没有可读管道这回事）", () => {
-    withLinux(() => {
+    {
       const res = spawnManaged({
         command: "node",
         args: ["server.js"],
         mode: "keepAlive",
         cwd: "/srv",
         env: callerEnv,
+        platform: POSIX,
       });
       expect(res.error).toBeUndefined();
       const [command, args, options] = lastSpawn();
@@ -328,17 +338,18 @@ describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
       expect(options.env).toBe(callerEnv);
       /* unref 与 detached 是一对：只 detached 不 unref，父进程会被它吊住不退。 */
       expect(spawned.at(-1)?.unref).toHaveBeenCalledTimes(1);
-    });
+    }
   });
 
   it("给了成对的重定向文件 → fd 交给 stdio，**父侧副本用完即关**（两个都关）", () => {
-    withLinux(() => {
+    {
       spawnManaged({
         command: "node",
         args: [],
         mode: "keepAlive",
         redirectStdoutFile: "/log/out.txt",
         redirectStderrFile: "/log/err.txt",
+        platform: POSIX,
       });
       expect(openSyncMock.mock.calls).toEqual([
         ["/log/out.txt", "w"],
@@ -349,20 +360,19 @@ describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
       /* 泄漏的 fd 在 Windows 上等于把日志文件锁住（轮转删不掉），
        * 在两端都是白占一个描述符 —— 子进程已经拿到它了，父侧没有理由留。 */
       expect(closeSyncMock.mock.calls.map((call) => call[0])).toEqual([42, 42]);
-    });
+    }
   });
 
   it("只给一个文件时**一个都不开**：半套重定向会把 undefined 塞进 stdio", () => {
-    withLinux(() => {
-      spawnManaged({
-        command: "node",
-        args: [],
-        mode: "keepAlive",
-        redirectStdoutFile: "/log/out.txt",
-      });
-      expect(openSyncMock).not.toHaveBeenCalled();
-      expect(lastSpawn()[2].stdio).toEqual(["ignore", "ignore", "ignore"]);
+    spawnManaged({
+      command: "node",
+      args: [],
+      mode: "keepAlive",
+      redirectStdoutFile: "/log/out.txt",
+      platform: POSIX,
     });
+    expect(openSyncMock).not.toHaveBeenCalled();
+    expect(lastSpawn()[2].stdio).toEqual(["ignore", "ignore", "ignore"]);
   });
 
   it("第二个文件开失败时，已经开出来的第一个 fd 也要关掉（不留半个句柄）", () => {
@@ -370,46 +380,53 @@ describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
     openSyncMock.mockImplementationOnce(() => {
       throw new Error("EACCES /log/err.txt");
     });
-    withLinux(() => {
+    {
       const res = spawnManaged({
         command: "node",
         args: [],
         mode: "keepAlive",
         redirectStdoutFile: "/log/out.txt",
         redirectStderrFile: "/log/err.txt",
+        platform: POSIX,
       });
       expect(res.error).toContain("EACCES");
       expect(spawnMock).not.toHaveBeenCalled();
       expect(closeSyncMock.mock.calls.map((call) => call[0])).toEqual([7]);
-    });
+    }
   });
 
   it("POSIX 下 spawn 抛错 → error，且不开任何 fd", () => {
     spawnMock.mockImplementationOnce(() => {
       throw new Error("fork failed");
     });
-    withLinux(() => {
-      const res = spawnManaged({ command: "x", args: [], mode: "keepAlive" });
+    {
+      const res = spawnManaged({
+        command: "x",
+        args: [],
+        mode: "keepAlive",
+        platform: POSIX,
+      });
       expect(res.error).toBe("fork failed");
       expect(openSyncMock).not.toHaveBeenCalled();
-    });
+    }
   });
 
   it("两个文件都开成了、spawn 却抛错 → 两个 fd 都要关（失败路径同样不许留句柄）", () => {
     spawnMock.mockImplementationOnce(() => {
       throw new Error("fork failed");
     });
-    withLinux(() => {
+    {
       const res = spawnManaged({
         command: "x",
         args: [],
         mode: "keepAlive",
         redirectStdoutFile: "/log/out.txt",
         redirectStderrFile: "/log/err.txt",
+        platform: POSIX,
       });
       expect(res.error).toBe("fork failed");
       expect(closeSyncMock.mock.calls.map((call) => call[0])).toEqual([42, 42]);
-    });
+    }
   });
 });
 
@@ -422,6 +439,7 @@ describe("spawnManaged —— keepAlive / Windows（两条中介形态）", () =
       command: "C:/ComfyUI/python.exe",
       args: ["main.py", "--port 8188"],
       mode: "keepAlive",
+      platform: WINDOWS,
       ...overrides,
     };
   }
