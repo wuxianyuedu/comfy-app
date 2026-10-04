@@ -12,34 +12,34 @@
 <li><a href="" aria-current="page">ComfySignal</a></li></ul>
 <h1>Type Alias ComfySignal</h1></div>
 <div class="tsd-signature"><span class="tsd-kind-type-alias">ComfySignal</span><span class="tsd-signature-symbol">:</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;activity&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;node-started&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;node-finished&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;progress&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;completion&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;error&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;other&quot;</span></div>
-<div class="tsd-comment tsd-typography"><p>Uniform signal categories the executor reacts to.</p>
+<div class="tsd-comment tsd-typography"><p>执行器会响应的统一信号类别。</p>
 </div>
 <div class="tsd-type-declaration">
 <h4>Type Declaration</h4>
 <ul>
 <li><span class="tsd-signature-type">&quot;activity&quot;</span>
-<div class="tsd-comment tsd-typography"><p>executing / progress — any liveness event that should renew the watchdog.</p>
+<div class="tsd-comment tsd-typography"><p>executing / progress —— 任何应重置看门狗的存活事件。</p>
 </div></li>
 <li><span class="tsd-signature-type">&quot;node-started&quot;</span>
-<div class="tsd-comment tsd-typography"><p>executing with a real node — a node started.</p>
+<div class="tsd-comment tsd-typography"><p>executing 且带真实节点 —— 某节点开始执行。</p>
 </div></li>
 <li><span class="tsd-signature-type">&quot;node-finished&quot;</span>
-<div class="tsd-comment tsd-typography"><p>executing with node === null — the previous node finished.</p>
+<div class="tsd-comment tsd-typography"><p>executing 且 node 为 null —— 上一个节点跑完了。</p>
 </div></li>
 <li><span class="tsd-signature-type">&quot;progress&quot;</span>
-<div class="tsd-comment tsd-typography"><p>progress {value,max} — sampling progress tick.</p>
+<div class="tsd-comment tsd-typography"><p>progress 进度 —— 采样进度跳动。</p>
 </div></li>
 <li><span class="tsd-signature-type">&quot;completion&quot;</span>
-<div class="tsd-comment tsd-typography"><p>task completed (standard <code>executing:null</code> or kaytool <code>execution_success</code>).</p>
+<div class="tsd-comment tsd-typography"><p>任务完成（标准构建的 executing:null 或 kaytool 的 execution_success）。</p>
 </div></li>
 <li><span class="tsd-signature-type">&quot;error&quot;</span>
-<div class="tsd-comment tsd-typography"><p>task failed (<code>execution_error</code>).</p>
+<div class="tsd-comment tsd-typography"><p>任务失败（execution_error）。</p>
 </div></li>
 <li><span class="tsd-signature-type">&quot;other&quot;</span>
-<div class="tsd-comment tsd-typography"><p>anything else — ignore.</p>
+<div class="tsd-comment tsd-typography"><p>其余一律忽略。</p>
 </div></li></ul></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/protocol-adapter.ts:38</li></ul></aside></div>
+<li>Defined in lib/comfyui/protocol-adapter.ts:49</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

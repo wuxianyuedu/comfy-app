@@ -16,14 +16,6 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="parseideatoscenes"><span class="tsd-kind-call-signature">parseIdeaToScenes</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">raw</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">meta</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Pick</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_workshop_types.ProjectMeta.html" class="tsd-signature-type tsd-kind-interface">ProjectMeta</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">&quot;title&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;type&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;tone&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;logline&quot;</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/lib_workshop_types.Scene.html" class="tsd-signature-type tsd-kind-interface">Scene</a><span class="tsd-signature-symbol">[]</span><a href="#parseideatoscenes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Convert a free-form idea / pasted text into a structured scene list.
-Strategy:</p>
-<ul>
-<li>If input looks like a single sentence (no blank lines, &lt; 80 chars),
-expand it into a 3-beat mini structured scene using the project tone.</li>
-<li>Otherwise split on blank lines / &quot;场景&quot; markers into separate scenes.</li>
-</ul>
-</div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
@@ -31,7 +23,7 @@ expand it into a 3-beat mini structured scene using the project tone.</li>
 <li><span><span class="tsd-kind-parameter">meta</span>: <span class="tsd-signature-type">Pick</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_workshop_types.ProjectMeta.html" class="tsd-signature-type tsd-kind-interface">ProjectMeta</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">&quot;title&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;type&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;tone&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;logline&quot;</span><span class="tsd-signature-symbol">&gt;</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <a href="../interfaces/lib_workshop_types.Scene.html" class="tsd-signature-type tsd-kind-interface">Scene</a><span class="tsd-signature-symbol">[]</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/workshop/script-parser.ts:16</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/workshop/script-parser.ts:16</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

@@ -1,0 +1,94 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>errorText | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="../modules/lib_error-message.html">lib/error-message</a></li>
+<li><a href="" aria-current="page">errorText</a></li></ul>
+<h1>Function errorText</h1></div>
+<section class="tsd-panel">
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="errortext"><span class="tsd-kind-call-signature">errorText</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">e</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">action</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">fallback</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><a href="#errortext" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>带<strong>动作前缀</strong>的错误文案：<code>「&lt;动作&gt;：&lt;详情&gt;」</code>。</p>
+<h2 id="这条账的形状（issue-672-规范-16-§162445）" class="tsd-anchor-link">这条账的形状（ISSUE #672 / 规范 16 §16.2.4.45）<a href="#这条账的形状（issue-672-规范-16-§162445）" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p><code>errorMessage</code> 早已是唯一出口，但它只管「详情」那一半 —— 而「<strong>是哪个动作
+失败了</strong>」那一半在收口前有四种写法并存，各自判各的：</p>
+<table>
+<thead>
+<tr>
+<th>写法</th>
+<th>实例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模板串硬拼 <code>：</code></td>
+<td><code>`工作流列表加载失败：${errorMessage(e, &quot;未知错误&quot;)}`</code></td>
+</tr>
+<tr>
+<td><code>+</code> 拼</td>
+<td><code>&quot;无法读取文件：&quot; + errorMessage(e, &quot;未知错误&quot;)</code></td>
+</tr>
+<tr>
+<td><strong>绕开 <code>errorMessage</code></strong></td>
+<td><code>&quot;读取配置失败：&quot; + String(e)</code></td>
+</tr>
+<tr>
+<td>逐处自己写 <code>instanceof</code> 判断</td>
+<td><code>err instanceof Error ? err.message : &quot;未知错误&quot;</code></td>
+</tr>
+</tbody>
+</table>
+<p>第三种才是真正的缺陷：<code>String(e)</code> 对 <code>new Error(&quot;&quot;)</code> 产出 <code>&quot;Error&quot;</code>、对
+tRPC 的对象抛值产出 <code>&quot;[object Object]&quot;</code>，而且<strong>绕过网络层翻译</strong> ——
+同一个文件里其它落点走 <code>errorMessage</code>，于是用户会在同一块面板上看到
+两种质量并存的文案（一边是人话，一边是 <code>[object Object]</code>）。</p>
+<h2 id="口径" class="tsd-anchor-link">口径<a href="#口径" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ul>
+<li><code>action</code> 是<strong>动作名</strong>（「读取配置」「导出日志」），不带标点 —— 分隔符由本
+函数统一给，调用处不必各自决定用全角还是半角、后面带不带空格；</li>
+<li><code>fallback</code> 是详情取不到时的兜底（默认 <code>&quot;未知错误&quot;</code>）。注意它<strong>只兜详情</strong>，
+动作前缀一定会出现在结果里 —— 这正是本函数与裸 <code>errorMessage</code> 的差别：
+裸调时 <code>errorMessage(e, &quot;保存失败&quot;)</code> 在取不到 message 时会把<strong>动作名当详情</strong>，
+于是「保存失败：保存失败」。前缀分开之后那种重复不可能再出现。</li>
+</ul>
+<pre><code class="ts"><span class="hl-0">errorText</span><span class="hl-1">(</span><span class="hl-3">e</span><span class="hl-1">, </span><span class="hl-2">&quot;读取配置&quot;</span><span class="hl-1">)             </span><span class="hl-4">// &quot;读取配置：连接被拒绝或中断，…&quot;</span><br/><span class="hl-0">errorText</span><span class="hl-1">(</span><span class="hl-3">e</span><span class="hl-1">, </span><span class="hl-2">&quot;打开 ComfyUI&quot;</span><span class="hl-1">, </span><span class="hl-2">&quot;启动失败&quot;</span><span class="hl-1">) </span><span class="hl-4">// 详情取不到时 → &quot;打开 ComfyUI：启动失败&quot;</span>
+</code><button type="button">Copy</button></pre>
+
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">e</span>: <span class="tsd-signature-type">unknown</span></span></li>
+<li><span><span class="tsd-kind-parameter">action</span>: <span class="tsd-signature-type">string</span></span></li>
+<li><span><span class="tsd-kind-parameter">fallback</span>: <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol"> = &quot;未知错误&quot;</span></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/error-message.ts:132</li></ul></aside></div></li></ul></section></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details"><a href="#这条账的形状（issue-672-规范-16-§162445）"><span>这条账的形状（<wbr/>ISSUE #672 / 规范 16 §16.2.4.45）</span></a><a href="#口径"><span>口径</span></a></div></details></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

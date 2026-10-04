@@ -47,6 +47,7 @@
     "ui:primitives:report": "node scripts/check-ui-primitives.cjs --report",
     "theme:check": "node scripts/check-theme-colors.cjs",
     "doc:render": "node scripts/render-doc-placeholders.cjs",
+    "docs:check": "node scripts/check-docs-api.cjs",
     "doc:gen": "node scripts/generate-docs.mjs"
   },
   "dependencies": {

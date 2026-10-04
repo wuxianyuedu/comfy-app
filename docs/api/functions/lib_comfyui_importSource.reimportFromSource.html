@@ -16,18 +16,17 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="reimportfromsource"><span class="tsd-kind-call-signature">reimportFromSource</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">tpl</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span><br/>        <span class="tsd-kind-property">existingTaskType</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">sourceChecksum</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">sourceMtime</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">sourcePath</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_comfyui_importSource.ReimportResult.html" class="tsd-signature-type tsd-kind-interface">ReimportResult</a><span class="tsd-signature-symbol">&gt;</span><a href="#reimportfromsource" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Re-read a previously-imported workflow's source file and decide what (if
-anything) changed.  <code>tpl</code> must carry <code>sourcePath</code> + <code>sourceMtime</code>.  Returns:</p>
+<div class="tsd-comment tsd-typography"><p>重新读取此前导入过的工作流的源文件，判断有没有变化、变化了什么。
+<code>tpl</code> 必须带 <code>sourcePath</code> 与 <code>sourceMtime</code>。返回三种之一：</p>
 <ul>
-<li>{ missing: true }   if the file no longer exists</li>
-<li>{ unchanged: true } if mtime matches (fast path, no re-parse)</li>
-<li>{ update: {...} }   if the file changed → normalised fields to persist</li>
+<li>{ missing: true }   文件已不存在</li>
+<li>{ unchanged: true } mtime 一致（快路径，不重新解析）</li>
+<li>{ update: {...} }   文件变了 → 要落库的规整字段</li>
 </ul>
-<p>Note: when <code>update</code> is returned we overwrite graph/rawJson/positions/paramMap
-from the file — the file is the source of truth once it changes, so the
-editor reflects the latest on-disk workflow.  Re-parsing is idempotent on
-identical content, so a mtime tick without content change is harmless.</p>
-<p>R-ardot87 (2026-08-16): taskType 不再自动推断。重导入时若磁盘版本没带
+<p>注意：返回 <code>update</code> 时，rawJson / positions / paramMap 都会被覆盖
+都来自该文件 —— 文件一变它就是唯一事实源，编辑器因此反映最新的磁盘版本。
+对相同内容重复解析是幂等的，所以 mtime 动了但内容没变也无害。</p>
+<p>taskType 不再自动推断。重导入时若磁盘版本没带
 taskType（旧逻辑会重新推断并覆盖用户已手动设置的值），传 <code>existingTaskType</code>
 透传过来 —— 用户的显式选择优先级最高。</p>
 </div>
@@ -49,7 +48,7 @@ taskType（旧逻辑会重新推断并覆盖用户已手动设置的值），传
 <h5><span class="tsd-kind-property">sourcePath</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></h5></li></ul></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_comfyui_importSource.ReimportResult.html" class="tsd-signature-type tsd-kind-interface">ReimportResult</a><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/comfyui/importSource.ts:209</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/comfyui/importSource.ts:198</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

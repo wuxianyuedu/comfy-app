@@ -362,7 +362,7 @@ CHANGELOG 写**对外差异**。完整细则见
 | 命名规范 | 项目 docs 或 output 归档 | 命名规则变更时 |
 | 测试说明 | `docs/guides/TESTING.md` | 测试体系变更时 |
 | 更新日志 | `changelog.d/`（碎片）→ `CHANGELOG.md`（并入） | 用户可感知的变更随 PR 落碎片文件（见 §5.4） |
-| API 文档 | `docs/api`（typedoc 生成） | `pnpm docs` 随构建链更新 |
+| API 文档 | `docs/api`（typedoc 生成，提交进 git） | 改了 `src/lib` / `src/server` / `src/trpc` 后 `pnpm docs` 重生成并同提交；由 `check-docs-api.cjs` 在 pre-commit 核（详见规范 13 §13.5.5.1） |
 
 - 代码行为变更必须同步相关文档；文档与代码同提交。
 - 长文档用目录 + 表格 + 示例，禁止大段无结构文字。

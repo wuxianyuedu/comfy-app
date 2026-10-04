@@ -1,0 +1,83 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>textHandler | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="../modules/lib_form-props.html">lib/form-props</a></li>
+<li><a href="" aria-current="page">textHandler</a></li></ul>
+<h1>Function textHandler</h1></div>
+<section class="tsd-panel">
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="texthandler"><span class="tsd-kind-call-signature">textHandler</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">onValue</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_form-props.ValueHandler.html" class="tsd-signature-type tsd-kind-type-alias">ValueHandler</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">event</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ValueEvent</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><a href="#texthandler" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>文本类控件（<code>input[type=text]</code> / <code>textarea</code> / <code>select</code>）的 <code>onChange</code> 适配器。</p>
+<p>用法：<code>&lt;input value={q} onChange={textHandler(setQ)} /&gt;</code>；
+要就地改写对象则 <code>onChange={textHandler((name) =&gt; patch({ name }))}</code>。</p>
+<p><code>transform</code> 是<strong>显式</strong>的：过滤 / 限长这类转换写在调用处、以具名函数传入，
+而不是塞进箭头函数体 —— 同一件事就不再有两处各自实现的机会。</p>
+<p>两条重载的意义：<code>T = string</code> 时可以省 <code>transform</code>（取到的原值就是最终值）；
+<code>T</code> 是别的类型时<strong>必须</strong>显式给 —— 早期单签 + <code>transform = (raw) =&gt; raw as unknown as T</code>
+的默认值，会让 <code>textHandler&lt;number&gt;(cb)</code> 忘记传 transform 时把 <code>&quot;42&quot;</code> 的字符串
+原文交给 <code>(value: number) =&gt; void</code> 的回调：TypeScript 看不出、运行时下游
+<code>Number.isFinite(str)</code> 一律 false 走 fallback、或者直接落库变字符串。
+「值转换是可选的」在这个模块的定位（全库唯一 props 适配器出口）里就是谎言，
+现在把它从<strong>类型契约</strong>上就掐掉。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">onValue</span>: <a href="../types/lib_form-props.ValueHandler.html" class="tsd-signature-type tsd-kind-type-alias">ValueHandler</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">&gt;</span></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">event</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ValueEvent</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/form-props.ts:52</li></ul></aside></div></li>
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="texthandler-1"><span class="tsd-kind-call-signature">textHandler</span><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#texthandlert">T</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">onValue</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_form-props.ValueHandler.html" class="tsd-signature-type tsd-kind-type-alias">ValueHandler</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#texthandlert">T</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">transform</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">raw</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#texthandlert">T</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">event</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ValueEvent</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><a href="#texthandler-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>文本类控件（<code>input[type=text]</code> / <code>textarea</code> / <code>select</code>）的 <code>onChange</code> 适配器。</p>
+<p>用法：<code>&lt;input value={q} onChange={textHandler(setQ)} /&gt;</code>；
+要就地改写对象则 <code>onChange={textHandler((name) =&gt; patch({ name }))}</code>。</p>
+<p><code>transform</code> 是<strong>显式</strong>的：过滤 / 限长这类转换写在调用处、以具名函数传入，
+而不是塞进箭头函数体 —— 同一件事就不再有两处各自实现的机会。</p>
+<p>两条重载的意义：<code>T = string</code> 时可以省 <code>transform</code>（取到的原值就是最终值）；
+<code>T</code> 是别的类型时<strong>必须</strong>显式给 —— 早期单签 + <code>transform = (raw) =&gt; raw as unknown as T</code>
+的默认值，会让 <code>textHandler&lt;number&gt;(cb)</code> 忘记传 transform 时把 <code>&quot;42&quot;</code> 的字符串
+原文交给 <code>(value: number) =&gt; void</code> 的回调：TypeScript 看不出、运行时下游
+<code>Number.isFinite(str)</code> 一律 false 走 fallback、或者直接落库变字符串。
+「值转换是可选的」在这个模块的定位（全库唯一 props 适配器出口）里就是谎言，
+现在把它从<strong>类型契约</strong>上就掐掉。</p>
+</div>
+<section class="tsd-panel">
+<h4>Type Parameters</h4>
+<ul class="tsd-type-parameter-list">
+<li><span id="texthandlert"><span class="tsd-kind-type-parameter">T</span></span></li></ul></section>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">onValue</span>: <a href="../types/lib_form-props.ValueHandler.html" class="tsd-signature-type tsd-kind-type-alias">ValueHandler</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#texthandlert">T</a><span class="tsd-signature-symbol">&gt;</span></span></li>
+<li><span><span class="tsd-kind-parameter">transform</span>: <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">raw</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#texthandlert">T</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">event</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ValueEvent</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in lib/form-props.ts:55</li></ul></aside></div></li></ul></section></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>
