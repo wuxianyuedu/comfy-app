@@ -454,4 +454,65 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       ).not.toEqual([0, 0, 0]);
     }
   });
+
+  /* ── 字体链（#1434）───────────────────────────────────────────────
+     全站正文一度落在浏览器默认字体上：`@theme inline` 里那行
+     `--font-sans: var(--font-sans)` 与 `@theme` 的真定义重名，而 inline 块不向
+     :root 发射变量 —— `font-sans` 于是内联成一句指向空气的自引用。
+     实测当时的现场：`getComputedStyle(documentElement).getPropertyValue("--font-sans")`
+     返回空串，body 与 h1 的计算字体是 UA 默认的 "Times New Roman"，而 tsc /
+     eslint / 主题色扫描 / 那条「别名不得与项目 token 重名」的判据全都报绿
+     （后者当时只覆盖块的前 26 个 --color-* 名字）。
+     颜色判据在产物侧读不到这件事，字体也一样 —— 只有真浏览器能判「实际用在哪」。 */
+  test("正文与标题真的用上设计那串字体栈（两态各自验）", async ({ page }) => {
+    for (const dark of [false, true]) {
+      await setTheme(page, dark);
+      const label = dark ? "暗色" : "浅色";
+      const fonts = await page.evaluate(() => {
+        const rootStyle = getComputedStyle(document.documentElement);
+        /* 标题档不靠「这一屏恰好有 h1」—— 挂一个用同一个工具类的探针元素，判的是
+           真级联里 `font-title` 解得出什么。（字体族由 `font-title` 带，
+           `.u-title-*` 只管字号/字重/字距/颜色；/login 上没有 h1，实测取到空串。） */
+        const probe = document.createElement("h2");
+        probe.className = "font-title";
+        probe.textContent = "字体探针";
+        document.body.appendChild(probe);
+        const titleFamily = getComputedStyle(probe).fontFamily;
+        probe.remove();
+        return {
+          sansToken: rootStyle.getPropertyValue("--font-sans").trim(),
+          titleToken: rootStyle.getPropertyValue("--font-title").trim(),
+          bodyFamily: getComputedStyle(document.body).fontFamily,
+          titleFamily,
+        };
+      });
+      /* 令牌本身在场且非空 —— 空串就是那次事故的直接形态。 */
+      expect(fonts.sansToken, `${label}：--font-sans 解析为空`).toBeTruthy();
+      expect(fonts.titleToken, `${label}：--font-title 解析为空`).toBeTruthy();
+      /* 计算样式里必须看到项目写进栈里的名字。`Geist` 由 next/font 在运行时挂上
+         <html>，是栈的首选；CJK 回退是项目自己写的，两者都得在。 */
+      expect(fonts.bodyFamily, `${label}：正文没走设计字体栈`).toContain(
+        "Geist",
+      );
+      expect(fonts.bodyFamily).toContain("PingFang SC");
+      expect(
+        fonts.bodyFamily.toLowerCase(),
+        `${label}：正文退回浏览器默认字体`,
+      ).not.toContain("times new roman");
+      /* 标题档：探针元素必须解得出标题首选那颗字体，且与正文不同源
+         （同源就说明「标题走另一颗 token」是假的）。 */
+      expect(
+        fonts.titleFamily,
+        `${label}：探针元素解不出字体（font-title 类没生效）`,
+      ).toBeTruthy();
+      expect(
+        fonts.titleFamily,
+        `${label}：标题档没用到 --font-title 的首选字体`,
+      ).toContain("Sarasa Gothic SC");
+      expect(
+        fonts.titleFamily,
+        `${label}：标题字体与正文一模一样，--font-title 没生效`,
+      ).not.toBe(fonts.bodyFamily);
+    }
+  });
 });
