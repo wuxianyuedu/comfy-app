@@ -118,7 +118,7 @@ function row(overrides: Partial<WorkflowRow> = {}): Record<string, unknown> {
     id: "wf-1",
     name: "demo",
     taskType: "T2I",
-    createdAt: "2026-08-01T00:00:00.000Z",
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
     ...overrides,
   };
 }

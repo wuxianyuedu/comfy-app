@@ -25,6 +25,7 @@ import {
   VALID_TASK_TYPE_CODES,
 } from "~/lib/workflow/workflow-types";
 import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { workflowParamMapInputSchema } from "~/lib/workflow/workflow-param-map";
 import path from "node:path";
 
 import { isWithinAllowedLocalWorkflowRoot } from "./workflow-local-roots";
@@ -193,7 +194,11 @@ export const workflowMutationProcedures = {
         id: z.string(),
         name: z.string().min(1).max(200).optional(),
         rawJson: z.unknown().optional(),
-        paramMap: z.unknown().optional(),
+        /* 走 `paramMap` 列的**权威入参 schema**（`~/lib/workflow/workflow-param-map`）：
+         * 与 `workflow.list` 出口、视图声明同一份形状。此前这里是 `z.unknown()`
+         * ——「相当于无校验」，而 `generate` 那边是 `z.record(z.string(),
+         * z.string())`，两者表达不了同一个形状（ISSUE #1460）。 */
+        paramMap: workflowParamMapInputSchema,
         positions: z.unknown().optional(),
         workflowIO: z.unknown().optional(),
         taskType: z.string().optional(),
