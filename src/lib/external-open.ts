@@ -86,7 +86,7 @@ export function externalFailureText(target: ExternalTarget): string {
 /**
  * 空目标（没地址 / 没路径）时的拦截文案。
  *
- * **必须在发起 IO 之前拦**：`openExternal` 端点的入参是 `z.string().url()`，
+ * **必须在发起 IO 之前拦**：`openExternal` 端点的入参是 `z.url()`，
  * 传空串会在服务端校验处抛错，界面拿到的是一句 zod 的英文报错
  * （「打开资源失败」+ 一段看不懂的类型信息），而不是「没有可打开的资源地址」。
  * 收口前只有设置页那一条路径做了这层拦截。

@@ -326,7 +326,7 @@ CHANGELOG 写**对外差异**。完整细则见
 | exhaustive-deps 三分类处置 | 清理 `react-hooks/exhaustive-deps` 时机械地照规则加减依赖，导致副作用被放大或功能回归 | 先判定属于哪一类再动手：**真缺失**（补上，往往顺带修复潜在 bug——fitView effect 缺 `nodes.length` 会让异步填充的画布永不 fit）、**不必要依赖**（模块级导出 / setState 等恒定引用，直接移除）、**规则静态盲区**（「重算触发器」「按 id 触发」这类无法被静态推断的意图，逐处 `eslint-disable-next-line` 并写明理由，禁止文件级 disable）。补依赖前一律先判断「该依赖每次渲染是否为新引用」（范例：`WorkflowEditorInner.tsx` fitView effect、`GlobalStepLogPanel.tsx` cachedIds） |
 | 规则关闭后的失效指令回收 | 为消除某类告警而在配置层关闭规则后，代码里原有的行内 `eslint-disable` 变成「未使用的 disable 指令」，在 `reportUnusedDisableDirectives` 下又是一批新告警 | 关闭规则与回收失效指令必须**成对进行**：改完配置立刻 `eslint --fix`，否则只是把告警从一类搬到另一类（范例：关闭 `@next/next/no-img-element` 后回收 8 处失效 disable） |
 
-**升级依赖前**：先 grep 全库 API 使用点评估破坏性变更（如 zod 4 移除 `z.string().url()` 等 format 方法、`z.record` 改双参、`.default({})` 类型收窄；zustand 5 迁移 `zustand/react/shallow`），改完必须 `tsc --noEmit` 零错误。
+**升级依赖前**：先 grep 全库 API 使用点评估破坏性变更（如 zod 4 把 `z.string().url()` 等 format 方法**降级为 `@deprecated` 别名**（未移除，故编译器不报——须按上游类型声明的 `@deprecated` 注释主动扫；替代写法是顶层 `z.url()` / `z.email()` / `z.uuid()`）、`z.record` 改双参、`.default({})` 类型收窄；zustand 5 迁移 `zustand/react/shallow`），改完必须 `tsc --noEmit` 零错误。
 
 ---
 

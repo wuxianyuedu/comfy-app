@@ -3,7 +3,7 @@
  *
  * 这一层是台账 A5 那条口径（「URL 协议只许 http(s)」）漏掉的第四个落点，也是
  * 危害最大的一个：`setting.openExternal` 的目标地址**由请求方给**，此前只有
- * `z.string().url()` 那道闸 —— 它管「是不是一个 URL」，`file:` / `javascript:` /
+ * `z.url()` 那道闸 —— 它管「是不是一个 URL」，`file:` / `javascript:` /
  * 自定义协议全都算「是」。Windows 上 `cmd /c start "" <协议>:…` 会直接拉起协议
  * 处理器对应的本机程序，`file:` 则是读本机文件。
  *
@@ -70,7 +70,7 @@ describe("openUrlInBrowser 的协议闸门", () => {
     expect(res.ok).toBe(true);
   });
 
-  /* 每一条都能过 `z.string().url()`，也每一条都必须在这里被拦下。 */
+  /* 每一条都能过 `z.url()`，也每一条都必须在这里被拦下。 */
   it.each([
     ["file:///C:/Users/me/.env"],
     ["file:///etc/passwd"],

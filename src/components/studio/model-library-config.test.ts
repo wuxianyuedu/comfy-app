@@ -18,7 +18,6 @@ function row(partial: Partial<ModelRow> & { id: string }): ModelRow {
     fileName: "unnamed.safetensors",
     isAvailable: true,
     fileSize: null,
-    createdAt: "2026-01-01T00:00:00.000Z",
     ...partial,
   };
 }

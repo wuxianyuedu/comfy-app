@@ -1,7 +1,7 @@
 /**
  * `url-scheme.ts` 单测：「能不能把这个地址交给外部程序」的唯一判据。
  *
- * 分工：正向只两条（http / https），其余全是**会被 `z.string().url()` 放行的形态**
+ * 分工：正向只两条（http / https），其余全是**会被 `z.url()` 放行的形态**
  * —— 这条判据存在的全部理由就是「URL 合法 ≠ 协议安全」，所以用例逐形态钉：
  * 本机文件（`file:`）、可执行文本（`javascript:` / `data:`）、协议处理器
  * （`comfyapp:` / Windows 的 `search-ms:`）与畸形串。
@@ -19,7 +19,7 @@ describe("isHttpUrl", () => {
     expect(isHttpUrl("HTTP://example.com")).toBe(true);
   });
 
-  /* 每一条都能过 `z.string().url()` —— 它们不是「非法 URL」，而是「合法的危险协议」。
+  /* 每一条都能过 `z.url()` —— 它们不是「非法 URL」，而是「合法的危险协议」。
      交给系统浏览器意味着：读本机文件、执行脚本、或拉起协议处理器对应的本机程序。 */
   it.each([
     ["file:///C:/Windows/win.ini"],
