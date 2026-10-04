@@ -19,6 +19,7 @@ import { errorText } from "~/lib/error-message";
 import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 import { logger } from "~/lib/core/logger";
 import { asRawWorkflow, extractPositions } from "~/lib/comfyui/raw";
 import {
@@ -174,7 +175,9 @@ export interface ReimportResult {
   update?: {
     rawJson: unknown;
     positions: Record<string, [number, number]> | null;
-    paramMap: Record<string, string> | null;
+    /* 重导入**不碰**这一列（磁盘文件里没有「作者画的线」），恒为 null ——
+     *  类型按权威形状声明，不写一份自己的窄声明。 */
+    paramMap: WorkflowParamMap | null;
     taskType: string;
     sourceChecksum: string;
     sourceMtime: number;

@@ -13,6 +13,7 @@ import type {
   WorkflowIOModeOverride,
   IOParamSlot,
 } from "~/lib/workflow/workflow-io-types";
+import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /* ── 类型定义 ── */
 export interface RawInputMeta {
@@ -323,7 +324,10 @@ export interface WorkflowDetail {
     positions: Record<string, [number, number]> | null;
     graph: Record<string, ApiWorkflowNode>;
   } | null;
-  paramMap: Record<string, string>;
+  /** `paramMap` JSON 列。形状的唯一出处是 `WorkflowParamMap`（`~/lib/workflow/
+   *  workflow-param-map`）—— 声明成「一层 key → string」曾与运行时不符
+   *  （库里是按模式归拢的三层结构），且没有任何消费点按它读（ISSUE #1460）。 */
+  paramMap: WorkflowParamMap;
   /** 用户挑出来的暴露集合：ioKey → 元数据。ioKey =
    *  `${nodeId}::${kind}::${name}`。只有在用户打开 IO 编辑模式并勾选参数后
    *  才有内容；空对象表示「什么都没暴露」。 */
