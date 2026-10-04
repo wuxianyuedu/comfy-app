@@ -70,7 +70,7 @@ const ONE_MODEL: ModelRow = {
   fileSize: 5120,
 };
 
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
   cleanup();
   behavior = { models: [] };

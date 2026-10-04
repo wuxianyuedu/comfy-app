@@ -59,7 +59,7 @@ export async function forwardForTest(
  *
  * 用法（每个测试文件）：
  *   建 server：const server = setupTrpcServer(mockRouter);
- *   启动：beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+ *   启动：beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
  *   每条用例后重置：afterEach(() => server.resetHandlers());
  *   收尾关闭：afterAll(() => server.close());
  */
