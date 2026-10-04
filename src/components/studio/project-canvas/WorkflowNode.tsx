@@ -165,7 +165,7 @@ export function WorkflowNode({
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-label="类型 工作流"
-            className="text-primary flex size-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold"
+            className="text-primary rounded-node flex size-7 shrink-0 items-center justify-center text-[14px] font-bold"
             style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
           >
             W
@@ -321,7 +321,7 @@ export function WorkflowNode({
         variant="primary-solid"
         disabled={d.status === "running"}
         onClick={onGenerate}
-        className="nodrag nopan from-primary to-accent flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
+        className="nodrag nopan from-primary to-accent rounded-b-node flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}

@@ -442,12 +442,16 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 | `rounded-2xl` | `--radius × 1.5` | 24px |
 | `rounded-3xl` | `--radius × 1.75` | 28px |
 | `rounded-4xl` | `--radius × 2` | 32px |
+| `rounded-node` | `--radius − 2px` | 14px（画布节点卡自己的角） |
+
+- **`rounded-node` 不是第八档刻度，是「节点卡 = 比 lg 小 2px」这一条产品决定的名字**。它此前以 `rounded-[14px]` 抄在 4 个文件里（`CanvasNode` / `project-canvas/WorkflowNode` / `WorkflowNodeArdot` / `WorkflowNodeParts`，含 `rounded-b-[14px]` 共 8 处代码 + 3 处注释），于是设置页改圆角档时节点卡根本不跟手。改成 `calc(var(--radius) - 2px)` 后默认档仍是 14px（逐像素相同），但总闸能传到它 —— 与 `ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 同一族写法。
 
 - **这张表描述的是「默认档」**：设置页 → 外观 → 圆角（`src/lib/appearance.ts` 的 `RADIUS_STEPS`）改的就是那颗基数，四档 12/16/20/24px，整条刻度跟着等比缩放。表里的 px 是**没设置过 / 选了默认档**时的读数，不是常量。
 - **系数必须是派生式，不许写回字面量**：`@theme inline` 才会把 `var(--radius)` 就地内插进工具类，写成 `border-radius: 16px` 的那一档就脱离了总闸（设置页改它不跟手）。这条由 `tests/theme-token-single-source.test.ts` 的 T4 守着（判 `@theme` 里不许再长出 `--radius-*`、七档必须由 `--radius` 派生、基数 × 系数必须等于上面那串整数）。
 - **卡片/浮层用 `rounded-xl`**（默认 20px），**控件（按钮、下拉触发器）用 `rounded-lg`**（16px），**输入框用 `rounded-md`**（12px），**chip/药丸用 `rounded-full`**（9999px）。
 - 小尺寸控件靠**取小**而不是换档：`rounded-[min(var(--radius-md),10px)]`（Button `xs`/`icon-xs`）、`min(var(--radius-md),12px)`（`sm`/`icon-sm`）。`ui/` 里 15 处 `rounded-[...]` 有 11 处是这种**从 token 派生**的写法，只有 3 处是裸值（`rounded-[2px]`×2、`rounded-[4px]`×1）。
 - 两处直接吃基数、不吃档位：`ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 与 `ui/sonner.tsx` 的 `--border-radius`。它们跟着整条刻度走，不是第二份来源。
+- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 21 / 302，只许降）。T4 只管 `globals.css` 的定义侧，看不见调用点，这两条补的就是那一半。
 
 ---
 
@@ -623,6 +627,8 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 ---
 
 ## Known Gaps
+
+- **状态点的发光有两份颜色来源，且不是同一组值**（本轮实测，刻意没顺手改）：`BrowserStatusBar.tsx` 里同一个「状态圆点发光」写了两种形态 —— `fpsDotColor` 表用 `shadow-[0_0_6px_var(--color-success)]`（走 token、α=1），而 devServer 那三元的同位置用 `shadow-[0_0_6px_rgba(52,211,153,0.8)]` / `rgba(251,113,133,0.8)`。关键是**这两组不是同一个颜色**：`rgb(52,211,153)` = `#34d399`（emerald-400）而 `--color-success` = `#0ea472`；`rgb(251,113,133)` = `#fb7185`（rose-400）而 `--color-destructive` = `#e7000b`。所以把它当「裸值改 token」的免费清理做掉，会**同时改掉发光色相与强度** —— 需要一次「状态发光到底用基准色还是用 400 档浅彩」的独立决定。同类裸值还有 11 处（品牌紫 `rgba(124,92,252,…)` 6 处、卡片投影 `rgba(0,0,0,0.55)` 等），清单见 `tests/design-md-contract-sync.test.ts` 的扫描面。**needs-design-decision**。
 
 - **Storybook 覆盖 29/83**（有 story 的组件：alert、aspect-ratio、avatar、badge、button、empty-state、field、form-field、form-rhf、image-viewer、json-viewer、kbd、list-badge、media-thumbnail、option-list-popover、page-loading、progress-bar、seed-mode-button、segment-popover、simple-key-handler、skeleton、source-tag、spinner、status-badge、status-dot、task-type-chip、toggle、validation-error-list、water-fill-progress）。核心交互件里 **input、dialog、select、card、tooltip、popover、switch、checkbox、tabs、dropdown-menu、context-menu、menubar、navigation-menu、command** 无 story；其中 dialog/select/tabs/dropdown-menu/card/input/switch/checkbox **同时无 `.test.tsx`**。⇒ 「明暗两态长什么样」这一层契约目前只在那 29 个组件上可核验。
 - **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一 grep 在 `u-title` 上抓到 51 处、`u-title-page` 18 处，所以这个 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名精确计数：`u-title` 26 处、`u-title-page` 17 处、`u-title-stage` 1 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。

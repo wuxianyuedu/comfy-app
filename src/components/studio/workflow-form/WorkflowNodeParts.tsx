@@ -12,7 +12,7 @@
  * 视觉 token（Ardot 714503087315759 v5）：
  *   卡片宽 380 / 圆角 14 / 边框与底色走语义 token
  *   Header h-8 · W 图标 #2A1F4A r14 28×28 + 右侧胶囊
- *   ActionBtn h-43 渐变 --color-primary→--color-accent，rounded-b-[14px]
+ *   ActionBtn h-43 渐变 --color-primary→--color-accent，rounded-b-node
  */
 
 import React from "react";
@@ -23,7 +23,7 @@ import { ioLabel, typeDisplay } from "~/components/studio/workflow-io";
 import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 
 /** 卡片外壳：与 CanvasNode 持有的外壳完全一致（无 overflow-hidden，
- *  保护端点骑跨；底部按钮自带 rounded-b-[14px] 贴合圆角）。 */
+ *  保护端点骑跨；底部按钮自带 rounded-b-node 贴合圆角）。 */
 export function WorkflowNodeCardShell({
   children,
   className = "",
@@ -33,7 +33,7 @@ export function WorkflowNodeCardShell({
 }) {
   return (
     <div
-      className={`border-border-strong bg-card relative w-95 rounded-[14px] border shadow-xl shadow-black/6 dark:shadow-black/30 ${className}`}
+      className={`border-border-strong bg-card rounded-node relative w-95 border shadow-xl shadow-black/6 dark:shadow-black/30 ${className}`}
     >
       {children}
     </div>
@@ -55,7 +55,7 @@ export function WorkflowNodeHeader({
       <div className="flex min-w-0 items-center gap-2">
         <span
           aria-label="类型 工作流"
-          className="text-primary flex size-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold"
+          className="text-primary rounded-node flex size-7 shrink-0 items-center justify-center text-[14px] font-bold"
           style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
         >
           W
@@ -117,7 +117,7 @@ export function WorkflowStaticChip({
   );
 }
 
-/** 底部渐变按钮（rounded-b-[14px] 贴合 Card 圆角，与画布 ActionBtn 同款）。 */
+/** 底部渐变按钮（rounded-b-node 贴合 Card 圆角，与画布 ActionBtn 同款）。 */
 export function WorkflowNodeActionButton({
   label,
   disabled = false,
@@ -135,7 +135,7 @@ export function WorkflowNodeActionButton({
         variant="ghost"
         disabled={disabled}
         onClick={onClick}
-        className="nodrag nopan from-primary to-accent h-10.75 w-full justify-center gap-2 rounded-t-none rounded-b-[14px] bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] hover:opacity-95"
+        className="nodrag nopan from-primary to-accent rounded-b-node h-10.75 w-full justify-center gap-2 rounded-t-none bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] hover:opacity-95"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}

@@ -342,7 +342,7 @@ export function HomePage({
             variant="ghost"
 
             onClick={onNewProject}
-            className="group border-border bg-surface-1 hover:bg-info/5 flex h-auto flex-col items-center justify-center gap-2.5 rounded-[16px] border border-dashed py-7 font-normal active:scale-[0.98]"
+            className="group border-border bg-surface-1 hover:bg-info/5 flex h-auto flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed py-7 font-normal active:scale-[0.98]"
           >
             <div className="text-info-strong/70 group-hover:text-info-strong flex size-7 items-center justify-center rounded-xl transition-colors">
               <Plus size={24} strokeWidth={1.6} />
@@ -361,7 +361,7 @@ export function HomePage({
                     key={proj.id}
                     variant="ghost"
                     onClick={() => openRecent(proj)}
-                    className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto items-start gap-3 rounded-[16px] border p-3.5 text-left font-normal active:scale-[0.98]"
+                    className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto items-start gap-3 rounded-lg border p-3.5 text-left font-normal active:scale-[0.98]"
                   >
                     {/* Kind icon */}
                     <div
@@ -423,7 +423,7 @@ export function HomePage({
                 return (
                   <div
                     key={kinds[index - 1]}
-                    className="border-border bg-surface-1 flex items-start gap-3 rounded-[16px] border p-3.5 opacity-60"
+                    className="border-border bg-surface-1 flex items-start gap-3 rounded-lg border p-3.5 opacity-60"
                   >
                     <div
                       className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl"

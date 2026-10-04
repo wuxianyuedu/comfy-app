@@ -216,13 +216,13 @@ export function WorkflowNodeArdot() {
   return (
     <div className="relative w-85">
       {/* ── Card 自身（overflow-hidden 保护底部 ActionBtn 圆角）── */}
-      <div className="border-border-strong bg-card relative overflow-hidden rounded-[14px] border">
+      <div className="border-border-strong bg-card rounded-node relative overflow-hidden border">
         {/* ── CardHeader 340×32 ── */}
         <div className="flex h-8 items-center justify-between gap-2.5 pr-3.5 pl-3.5">
           <div className="flex items-center gap-2.5">
             <span
               aria-label="类型 工作流"
-              className="text-primary flex size-7 items-center justify-center rounded-[14px] text-[14px] font-bold"
+              className="text-primary rounded-node flex size-7 items-center justify-center text-[14px] font-bold"
               style={{
                 background: "var(--color-node-accent)",
                 fontFamily: "var(--font-sans)",

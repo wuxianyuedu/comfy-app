@@ -1157,6 +1157,14 @@ textarea::-webkit-scrollbar {
   --radius-2xl: calc(var(--radius) * 1.5);
   --radius-3xl: calc(var(--radius) * 1.75);
   --radius-4xl: calc(var(--radius) * 2);
+  /* 画布节点卡自己的角 —— 它**不是**七档里的某一档，而是「比 lg 小 2px」。
+     此前以 `rounded-[14px]` 的字面量抄在 4 个文件里（`CanvasNode` /
+     `project-canvas/WorkflowNode` / `WorkflowNodeArdot` / `WorkflowNodeParts`，
+     含 `rounded-b-[14px]` 共 8 处代码 + 3 处注释），于是设置页改圆角档时
+     节点卡根本不跟手。用 `calc(var(--radius) - 2px)` 而不是新造一档：
+     默认基数下仍是 16 - 2 = 14px（逐像素相同），但总闸能传到它。
+     与 `ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 同一族写法。 */
+  --radius-node: calc(var(--radius) - 2px);
 }
 
 /* ── shadcn 语义别名：只做 `var()` 转发，不写第二份字面量 ──────────
@@ -1229,7 +1237,10 @@ textarea::-webkit-scrollbar {
      `calc(var(--radius) - 3px)`（9→13px）与 `ui/sonner.tsx` 的 `--border-radius`
      （12→16px）—— 它们跟着整条刻度走，不是第二份来源。 */
   --radius: 1rem;
-  /* 标题字阶总闸（只作用于上面四档标题令牌；正文锚定 13px，不随它变）。 */
+  /* 标题字阶总闸（只作用于上面四档标题令牌；正文与小号文字不随它变 ——
+     实测 body 元素本身是 preflight 的 16px，正文主力档是 text-sm/14px，
+     微标签是 text-2xs / text-3xs。别在这里写「正文 = 某个具体 px」，那会被
+     设置页的文案当真，而它并不成立）。 */
   --font-scale: 1;
 }
 
