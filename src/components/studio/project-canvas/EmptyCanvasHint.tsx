@@ -23,7 +23,7 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
   }
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-      <div className="border-border-strong from-subtle to-canvas-deep backdrop-bl dark:shadow-black/40ur-md rounded-3xl border bg-linear-to-br px-12 py-10 shadow-2xl shadow-black/10">
+      <div className="border-border-strong from-subtle to-canvas-deep rounded-3xl border bg-linear-to-br px-12 py-10 shadow-2xl shadow-black/10 backdrop-blur-md dark:shadow-black/40">
         <div className="mb-3 flex justify-center gap-2">
           <span
             className="inline-block size-10 rounded-xl shadow-lg"
