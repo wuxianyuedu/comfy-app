@@ -37,8 +37,9 @@ const SCRIPT = join(process.cwd(), "scripts", "check-reformat-only.cjs");
 /* prettier 全仓扫描是本套件最慢的用例族：满载下 30s 不够（实测越线）。 */
 /* 本文件的每个用例都要反复 spawn prettier（全仓扫描 + 逐文件格式化）：
    全量满载下 60s 仍不够（实测 683s 跑完 17 例）——这是套件里最重的
-   合法用例族，预算给到 120s。 */
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+   合法用例族；vitest 5 升级后全量并发下「12 文件阻断」单例实测又顶穿
+   120s，预算给到 300s（与 storybook-tsc-input ④ 同档）。 */
+vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
 /**
  * prettier 的 **JS 入口**（不是 `node_modules/.bin/prettier`）。
@@ -190,7 +191,7 @@ function seedEmpty(): void {
   commit("base");
 }
 
-describe("格式化提交与行为改动分离", { timeout: 120_000 }, () => {
+describe("格式化提交与行为改动分离", { timeout: 300_000 }, () => {
   it("一次提交格式化 12 个文件 → 阻断（远超阈值）", () => {
     const files = seedDirty(12);
     for (const f of files) formatInPlace(f);
@@ -256,7 +257,7 @@ describe("格式化提交与行为改动分离", { timeout: 120_000 }, () => {
 
 describe(
   "pre-commit 现场：必须判「暂存区」而不是上一次提交",
-  { timeout: 120_000 },
+  { timeout: 300_000 },
   () => {
     /* 这组用例守的是一条**真实发生过的**失效：脚本接在 pre-commit 里，而
      * pre-commit 在提交对象生成**之前**运行，此时 `HEAD` 仍是上一次提交。
@@ -352,7 +353,7 @@ describe(
 
 describe(
   "判定成本：整批一次 prettier，不按文件各起一次",
-  { timeout: 120_000 },
+  { timeout: 300_000 },
   () => {
     /* 这条用例守的是一条**真实发生过的**失效：早先的实现对每个文件各起一次
      * `prettier --stdin-filepath`，而 prettier 的启动 + 插件加载是主要成本
@@ -422,7 +423,7 @@ describe(
  *
  * 真起 prettier 而不打桩：被锁的正是「谁来给答案」，桩一打就锁不住了。
  */
-describe("批量口径的缺项退回逐文件 stdin 判定", { timeout: 120_000 }, () => {
+describe("批量口径的缺项退回逐文件 stdin 判定", { timeout: 300_000 }, () => {
   /* 「批量结果里没被 prettier 改过」不是一个结论，而是**两件事**叠在一起：
    * 文件本来就规范，或 prettier 自己的忽略规则把它跳过了。只有前者能推出
    * 「这次提交不是纯格式化」—— 判据漏掉后者，纯格式化提交会被放行，
