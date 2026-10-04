@@ -109,7 +109,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       />
       <StepRow
         label="标题字阶"
-        hint="只影响各级标题；正文固定 13px，不随这一档变化。"
+        hint="只影响各级标题；正文与小号文字保持原尺寸，不随这一档变化。"
         steps={FONT_SCALE_STEPS}
         value={prefs.fontScale}
         onChange={(id) => update({ fontScale: id })}
