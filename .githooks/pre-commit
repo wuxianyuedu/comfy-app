@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(27 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(28 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -202,6 +202,12 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 有一批正当形态（值在 render 里给 / 受控开关由 story 持有 / 注入层的 sourceName
   # 就是它的 args），逐条白名单会变成第二份赦免名单，所以口径是「只挡新增」。
   run "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）" node scripts/storybook-check.mjs --changed
+  # 像素层提交必须带一次 vitest 判决（规范 §11.8 那条 ⚠️ 的机器形态）。e2e 的通过数
+  # 证明不了像素层：`--grep @critical` 一条视觉用例都不含（视觉 spec 没有 @critical 标签，
+  # 而 §11.7 按需验证清单点名的正是它）。本步判的是「本次要跑的清单里，像素层的判据在不在」
+  # —— 清单与 C 组同源（`affected-tests.mjs`），所以把那条判据从固定清单里摘掉当场被拦。
+  # 只在暂存改动命中 e2e/visual/** 或 playwright.config.ts 时做事，普通提交零输出。
+  run "像素层提交带像素判决（改了 e2e/visual 才跑）" node scripts/visual-gate.mjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────
