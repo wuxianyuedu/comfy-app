@@ -225,12 +225,7 @@ fn no_status_payload(root: &str, reason: &str) -> String {
   let shell_log = if root.is_empty() {
     String::new()
   } else {
-    std::path::Path::new(root)
-      .join("log")
-      .join("shell")
-      .join("shell.log")
-      .display()
-      .to_string()
+    shell_launch::shell_log_path(root).display().to_string()
   };
   serde_json::json!({
     "phase": "no-status-file",
@@ -703,18 +698,15 @@ fn no_log_guidance(root: &str) -> String {
     ),
     (
       "壳日志（release）",
-      std::path::Path::new(root).join("log").join("shell").join("shell.log"),
+      shell_launch::shell_log_path(root),
     ),
     (
       "编排日志（编排器起来后才有）",
-      std::path::Path::new(root).join("log").join("launcher").join("dev-launcher.log"),
+      shell_launch::launcher_dir(root).join("dev-launcher.log"),
     ),
     (
       "编排错误输出",
-      std::path::Path::new(root)
-        .join("log")
-        .join("launcher")
-        .join("dev-launcher-stderr.log"),
+      shell_launch::launcher_dir(root).join("dev-launcher-stderr.log"),
     ),
     ("启动状态文件", shell_launch::status_file_path(root)),
   ];
@@ -751,7 +743,7 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
     // 至少把根因写出来了。
     return Ok(no_log_guidance(""));
   }
-  let log_dir = std::path::Path::new(&root).join("log").join("launcher");
+  let log_dir = shell_launch::launcher_dir(&root);
   let mut sections: Vec<String> = Vec::new();
 
   let dev_log = std::fs::read_to_string(log_dir.join("dev-launcher-current.txt"))
@@ -783,7 +775,7 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   // 壳自持日志（release 落 log/shell/shell.log；dev 由 launcher 重定向 stderr，
   // 不产生此文件）。启动期壳的导航/看门狗/侧车诊断都经 log:: 打到这份文件，
   // 正式版壳脱离 launcher（standalone 双击）崩溃时仍有可查日志。
-  let shell_log = std::path::Path::new(&root).join("log").join("shell").join("shell.log");
+  let shell_log = shell_launch::shell_log_path(&root);
   // 同上：追加不轮转，靠会话标记只取本次启动的壳自持日志（dev 模式下这份文件
   // 不产生，下面取不到标记会退回空切片，不影响其它段）。
   if let Some(tail) = tail_log_file_since_marker(
@@ -1455,7 +1447,7 @@ fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
   ];
   if !project_root.is_empty() {
-    let shell_log_dir = std::path::Path::new(project_root).join("log").join("shell");
+    let shell_log_dir = shell_launch::shell_log_dir(project_root);
     targets.push(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
       path: shell_log_dir,
       file_name: Some("shell.log".to_string()),

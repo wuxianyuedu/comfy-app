@@ -14,12 +14,16 @@ import path from "node:path";
  * 挡住——见下方 §18.4 第三类登记），后者是 PowerShell（根本读不了 TS）。
  * 它们**不是**本模块的消费方，也不该被本模块「代为声明」。
  *
- * 此前这里额外导出了 `TOOLS_LOG_DIR` / `ARCHIVE_LOG_DIR` /
- * `DEV_LAUNCHER_STDOUT_LOG` / `DEV_LAUNCHER_STDERR_LOG` /
- * `NEXTJS_PANEL_LOG_GLOB` 五个常量，实测全库零消费 —— 真正的写入方是上面那
- * 两套脚本，各自按自己的字面量拼路径。留着它们只会让读代码的人以为「改这里
- * 就能改布局」，实际改了什么也不会发生（§12.15 第二条「保留必须写得出谁在
- * 什么时候会用」，写不出即删）。
+ * 此前这里额外导出了 `ARCHIVE_LOG_DIR` / `DEV_LAUNCHER_STDOUT_LOG` /
+ * `DEV_LAUNCHER_STDERR_LOG` / `NEXTJS_PANEL_LOG_GLOB` 几个常量，实测全库零
+ * 消费 —— 真正的写入方是上面那两套脚本，各自按自己的字面量拼路径。留着它们
+ * 只会让读代码的人以为「改这里就能改布局」，实际改了什么也不会发生（§12.15
+ * 第二条「保留必须写得出谁在什么时候会用」，写不出即删）。
+ *
+ * `TOOLS_LOG_DIR` 曾在同一批里被删掉，ISSUE #1326 又**按同一条判据**加了回来
+ * —— 这次有真消费方（`SCHEMA_SYNC_STATUS_FILE` 的读取者横跨
+ * `scripts/db-schema-state.mjs`（写）与 `src/app/api/schema/route.ts`（读）两个
+ * 进程，路径必须只有一处）。
  *
  * ## §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）
  *
@@ -39,17 +43,32 @@ import path from "node:path";
 /** 日志根目录（<项目根>/log）。 */
 export const LOG_ROOT = path.join(process.cwd(), "log");
 
-/** 双击启动链路：python 启动器 + dev-launcher 编排日志。 */
-export const LAUNCHER_LOG_DIR = path.join(LOG_ROOT, "launcher");
+/* ── 「一次运行一包」的写点：log/current/ ──────────────────────────────────
+ * 进程**始终**写 current/（路径固定，见规范 §4）；退出时由启动编排的
+ * `scripts/launcher-core/run.mjs` 把整个 current/ 复制进 `log/runs/<日期>_<时分秒>-<runId>/`
+ * 再清空内容。因此这一层下面的每一个路径都必须是**固定名** —— 在这里拼时间戳
+ * 目录会让日志库要重配、还容易漏掉早期日志（进程只持有一个句柄）。
+ *
+ * `log/exports/`（面板「保存到本地」的落点）刻意**不在** current/ 下：否则下一次
+ * 归档会把它一趟趟搬进 runs/，包越滚越大（见下方 LOG_EXPORT_DIR）。
+ */
+/** 本次运行的日志目录（进程写这里，退出时整目录归档）。 */
+export const LOG_CURRENT_DIR = path.join(LOG_ROOT, "current");
+
+/** 双击启动链路：dev-launcher 编排日志 + 壳日志重定向。 */
+export const LAUNCHER_LOG_DIR = path.join(LOG_CURRENT_DIR, "launcher");
 
 /** Next.js dev server 原始输出（按次命名，保留最近 5 份）。 */
-export const NEXTJS_LOG_DIR = path.join(LOG_ROOT, "nextjs");
+export const NEXTJS_LOG_DIR = path.join(LOG_CURRENT_DIR, "nextjs");
 
 /** 常驻服务运行时日志（追加写；设置页日志面板跟随读取）。 */
-export const SERVICES_LOG_DIR = path.join(LOG_ROOT, "services");
+export const SERVICES_LOG_DIR = path.join(LOG_CURRENT_DIR, "services");
+
+/** ComfyUI 通信层原始回执（trace）。 */
+export const COMFYUI_LOG_DIR = path.join(LOG_CURRENT_DIR, "comfyui");
 
 /** 工坊生成执行日志（角色卡提取 / 分镜拆解 / 定妆照生成，按天分文件追加）。 */
-export const WORKSHOP_LOG_DIR = path.join(LOG_ROOT, "workshop");
+export const WORKSHOP_LOG_DIR = path.join(LOG_CURRENT_DIR, "workshop");
 
 // ── 启动链路（launcher/）──
 /** 壳自己的启动链路日志：壳把 `[ComfyAPP]` 诊断与编排器输出（`[orchestrator] …`）
@@ -86,11 +105,29 @@ export const OLLAMA_RUNTIME_LOG = path.join(
 
 /** ComfyUI 通信层原始回执（trace）：comfy-cli stdout/stderr、WS 消息、
  *  /history 与 /queue 原始 JSON。诊断通道，追加写（见 comfyui/trace.ts）。 */
-export const COMFYUI_TRACE_DIR = path.join(LOG_ROOT, "comfyui");
+export const COMFYUI_TRACE_DIR = COMFYUI_LOG_DIR;
 /** ISSUE #216：ComfyUI 返回内容完整打印到这一份文件。 */
 export const COMFYUI_TRACE_LOG = path.join(
   COMFYUI_TRACE_DIR,
   "comfyui-trace.log",
+);
+
+/** 构建与工具脚本日志（tools/scripts/Log-Common.ps1、setup 脚本、schema 同步）。 */
+export const TOOLS_LOG_DIR = path.join(LOG_CURRENT_DIR, "tools");
+
+/**
+ * schema 后台同步的状态文件（`log/current/tools/schema-sync.json`）。
+ *
+ * 「双宿主」的**唯一交汇处**：写它的是 `scripts/db-sync.mjs` 子进程，读它的
+ * 是另一个进程里的 Next 服务端（`GET /api/schema`）—— 两者只能靠磁盘通信。
+ *
+ * 此前它孤零零躺在 `log/` 根目录（Issue #1326 点名的孤儿之一）：根目录只该有
+ * `current/` `runs/` `latest.txt` `exports/`，否则时间一长必然变成杂物堆。
+ * 归 `tools/` 是因为它的写入方是工具脚本链（`db-sync.mjs` / `db-schema-state.mjs`）。
+ */
+export const SCHEMA_SYNC_STATUS_FILE = path.join(
+  TOOLS_LOG_DIR,
+  "schema-sync.json",
 );
 
 /** 应用运行期业务操作日志（tRPC 调用/生成/任务/工作流增删改等），供「应用日志」面板轮询。 */

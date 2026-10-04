@@ -347,7 +347,7 @@ pub fn mark_launch_failed(project_root: &str, message: &str) {
     // 那两份此刻恰好为空的编排日志（手验反馈的成因）。
     "diagnostics": {
       "launchLog": launch_log_path(project_root).display().to_string(),
-      "shellLog": std::path::Path::new(project_root).join("log").join("shell").join("shell.log").display().to_string(),
+      "shellLog": shell_log_path(project_root).display().to_string(),
       "statusFile": status_file_path(project_root).display().to_string(),
     },
     "updatedAt": iso_timestamp(),
@@ -365,18 +365,41 @@ pub fn mark_launch_failed(project_root: &str, message: &str) {
   }
 }
 
-/// 编排链路日志（`log/launcher/shell-launch.log`）的绝对路径。
+/// 「一次运行一包」的写点：`log/current/`（规范 §4）。
 ///
-/// 与 `src/lib/shell/launch-diagnostics.ts` 的 `launchPaths().shellLaunchLog`
-/// **逐项同形**（那份的文件名与分段由 `src/lib/shell/launch-diagnostics.test.ts`
-/// 钉住；本模块 `tests::launch_paths_match_node_side` 钉住这一侧）。
-/// 两份不能各自手拼：漂开的表现是「壳写了一份、面板读的是另一份」，而两侧看
-/// 各自都是对的。
+/// 进程**始终**写 current/（路径固定）；退出时由编排器
+/// （`scripts/launcher-core/run.mjs` 的 `archiveCurrent()`）把整个 current/
+/// 复制进 `log/runs/<日期>_<时分秒>-<runId>/` 再清空内容。因此这里往下的每一段
+/// 都必须是**固定名**，不许在代码里拼时间戳目录。
+///
+/// **本模块是 Rust 侧路径的唯一出处**，与 `src/lib/shell/launch-diagnostics.ts`
+/// 的 `launchPaths()` **逐项同形**（那份钉在 `launch-diagnostics.test.ts`，
+/// 这一侧钉在 `tests::launch_paths_match_node_side`）。两份不能各自手拼：漂开的
+/// 表现是「壳写了一份、面板读的是另一份」，而两侧看各自都是对的。
+pub fn current_dir(project_root: &str) -> std::path::PathBuf {
+  std::path::Path::new(project_root).join("log").join("current")
+}
+
+/// 编排链路日志（`log/current/launcher/shell-launch.log`）的绝对路径。
 pub fn launch_log_path(project_root: &str) -> std::path::PathBuf {
-  std::path::Path::new(project_root)
-    .join("log")
+  current_dir(project_root)
     .join("launcher")
     .join("shell-launch.log")
+}
+
+/// 编排日志目录（`log/current/launcher/`）：dev-launcher 与壳 stderr 都落这里。
+pub fn launcher_dir(project_root: &str) -> std::path::PathBuf {
+  current_dir(project_root).join("launcher")
+}
+
+/// 壳自持日志（release，`log/current/shell/shell.log`）。
+pub fn shell_log_dir(project_root: &str) -> std::path::PathBuf {
+  current_dir(project_root).join("shell")
+}
+
+/// 壳自持日志文件的绝对路径。
+pub fn shell_log_path(project_root: &str) -> std::path::PathBuf {
+  shell_log_dir(project_root).join("shell.log")
 }
 
 /// 编排器自己行首的时间戳 + 级别前缀（`[YYYY-MM-DD HH:MM:SS.mmm] [LEVEL ]`）。
@@ -562,14 +585,8 @@ pub fn log_session_start(project_root: &str) {
   // 启动。和 shell-launch.log 共用同一个标记收口，get_launch_log 才能只取本次
   // 启动之后的行——否则「查看日志」里会混进旧启动的 stderr 与壳诊断（用户的
   // 截图里 dev-launcher-stderr.log 还停在 09-20，shell.log 混着 09:58 与本次）。
-  let launcher_dir = std::path::Path::new(project_root)
-    .join("log")
-    .join("launcher");
-  let stderr_log = launcher_dir.join("dev-launcher-stderr.log");
-  let shell_log = std::path::Path::new(project_root)
-    .join("log")
-    .join("shell")
-    .join("shell.log");
+  let stderr_log = launcher_dir(project_root).join("dev-launcher-stderr.log");
+  let shell_log = shell_log_path(project_root);
   for p in [stderr_log, shell_log] {
     if let Err(e) = append_line(&p, &format!("{stamped}\n")) {
       log::warn!("[ComfyAPP] 启动会话标记写入失败（{}）：{e:?}", p.display());
@@ -630,12 +647,7 @@ pub fn write_idle_status(
     "diagnostics": {
       "projectRoot": project_root,
       "launchLog": launch_log_path(project_root).display().to_string(),
-      "shellLog": std::path::Path::new(project_root)
-        .join("log")
-        .join("shell")
-        .join("shell.log")
-        .display()
-        .to_string(),
+      "shellLog": shell_log_path(project_root).display().to_string(),
       "statusFile": status_file_path(project_root).display().to_string(),
     },
     "updatedAt": iso_timestamp(),
@@ -1174,7 +1186,14 @@ mod tests {
     let root = std::path::Path::new("/proj");
     assert_eq!(
       launch_log_path("/proj"),
-      root.join("log").join("launcher").join("shell-launch.log")
+      root.join("log")
+        .join("current")
+        .join("launcher")
+        .join("shell-launch.log")
+    );
+    assert_eq!(
+      shell_log_path("/proj"),
+      root.join("log").join("current").join("shell").join("shell.log")
     );
     assert_eq!(status_file_path("/proj"), root.join("run").join("launch-status.json"));
   }
@@ -1290,12 +1309,8 @@ mod tests {
 
     log_session_start(root);
 
-    let launcher_dir = std::path::Path::new(root).join("log").join("launcher");
-    let stderr_log = launcher_dir.join("dev-launcher-stderr.log");
-    let shell_log = std::path::Path::new(root)
-      .join("log")
-      .join("shell")
-      .join("shell.log");
+    let stderr_log = launcher_dir(root).join("dev-launcher-stderr.log");
+    let shell_log = shell_log_path(root);
     for (label, path) in [
       ("shell-launch.log", launch_log_path(root)),
       ("dev-launcher-stderr.log", stderr_log.clone()),

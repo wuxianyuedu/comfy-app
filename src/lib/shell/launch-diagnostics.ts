@@ -69,7 +69,7 @@ export interface LaunchPaths {
   root: string;
   /** run/launch-status.json：编排器与壳共写的进度文件。 */
   statusFile: string;
-  /** log/launcher/：编排日志目录。 */
+  /** log/current/launcher/：编排日志目录。 */
   launcherDir: string;
   /** 编排器「本次运行」日志（dev-launcher.log）。 */
   orchestratorLog: string;
@@ -91,7 +91,9 @@ export interface LaunchPaths {
  * 表现是「日志明明写了、面板却读不到」—— 而这类漂移在两侧各自看都「是对的」。
  */
 export function launchPaths(root: string): LaunchPaths {
-  const launcherDir = path.join(root, "log", "launcher");
+  // 「一次运行一包」：编排与壳都把本次运行写进 log/current/，退出时整目录
+  // 归档到 log/runs/（见 scripts/launcher-core/run.mjs 与规范 §4）。
+  const launcherDir = path.join(root, "log", "current", "launcher");
   return {
     root,
     statusFile: path.join(root, "run", "launch-status.json"),
@@ -99,7 +101,7 @@ export function launchPaths(root: string): LaunchPaths {
     orchestratorLog: path.join(launcherDir, "dev-launcher.log"),
     orchestratorSentinel: path.join(launcherDir, "dev-launcher-current.txt"),
     orchestratorStderr: path.join(launcherDir, "dev-launcher-stderr.log"),
-    shellLog: path.join(root, "log", "shell", "shell.log"),
+    shellLog: path.join(root, "log", "current", "shell", "shell.log"),
     shellLaunchLog: path.join(launcherDir, "shell-launch.log"),
   };
 }

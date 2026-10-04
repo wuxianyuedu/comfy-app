@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
 
 import { spawnSchemaSync } from "../../../../../scripts/db-schema-state.mjs";
 import { isRecord } from "~/lib/is-record";
+import { SCHEMA_SYNC_STATUS_FILE } from "~/lib/log/log-paths";
 
 /**
  * `POST /api/schema/push` —— 状态栏「立即同步」按钮的执行端。
@@ -15,7 +15,7 @@ import { isRecord } from "~/lib/is-record";
  * 弹窗里知情并确认后，由本端点以 `--force` 口径 spawn 一次同步。
  *
  * 执行者仍是 `scripts/db-sync.mjs`（带 `--force`），结果照旧写状态文件
- * `log/schema-sync.json` —— 页面现有的 2s 轮询链路原样拿到 `syncing → synced /
+ * `log/current/tools/schema-sync.json` —— 页面现有的 2s 轮询链路原样拿到 `syncing → synced /
  * stale` 的迁移，本端点不引入第二条状态通道。
  *
  * 守卫（三层，失败方向都是「不执行」）：
@@ -37,7 +37,7 @@ export async function POST() {
     );
   }
 
-  const file = path.join(process.cwd(), "log", "schema-sync.json");
+  const file = SCHEMA_SYNC_STATUS_FILE;
   let current: unknown = null;
   try {
     current = JSON.parse(fs.readFileSync(file, "utf8"));

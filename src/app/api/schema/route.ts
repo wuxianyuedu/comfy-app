@@ -3,6 +3,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 import { isRecord } from "~/lib/is-record";
+import { SCHEMA_SYNC_STATUS_FILE } from "~/lib/log/log-paths";
 
 /**
  * `GET /api/schema` —— 后台 schema 同步的**只读状态**，供底部状态栏显示
@@ -14,7 +15,7 @@ import { isRecord } from "~/lib/is-record";
  * 旧的，业务请求会 500 —— 页面必须能说出「正在同步，稍候刷新」，否则用户只会
  * 看到一个报错页面，没法判断该等还是该去查别的原因。
  *
- * 状态由那个**子进程**写进 `log/schema-sync.json`（`writeSchemaSyncStatus`），
+ * 状态由那个**子进程**写进 `log/current/tools/schema-sync.json`（`writeSchemaSyncStatus`），
  * 由本进程读出来 —— 两者唯一的交汇处就是磁盘，所以不走内存。
  *
  * 拿不到状态（还没同步过 / 产物里没有这个能力 / 文件被删）一律回
@@ -24,7 +25,7 @@ import { isRecord } from "~/lib/is-record";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const file = path.join(process.cwd(), "log", "schema-sync.json");
+  const file = SCHEMA_SYNC_STATUS_FILE;
   /* 「立即同步」按钮能不能显示：执行件在不在。桌包载荷刻意不带
    * `scripts/db-sync.mjs`（那里没有 drizzle-kit，跑了也没用，见
    * standalone-private-inputs.mjs 的白名单），状态栏据这个能力位回落成
