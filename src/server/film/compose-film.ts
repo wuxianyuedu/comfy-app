@@ -11,9 +11,9 @@
  */
 import "server-only";
 
-import { spawn } from "child_process";
-import { promises as fs } from "fs";
-import path from "path";
+import { spawn } from "node:child_process";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { filmRepository, filmShotRepository } from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
 import { normalizeProductionProgress } from "~/lib/production/progress";

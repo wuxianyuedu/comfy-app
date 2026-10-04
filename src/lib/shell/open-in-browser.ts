@@ -15,7 +15,7 @@
 // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 import { errorText } from "~/lib/error-message";
 import { isHttpUrl } from "~/lib/url-scheme";
-import { spawn } from "child_process";
+import { spawn } from "node:child_process";
 
 export async function openUrlInBrowser(
   url: string,

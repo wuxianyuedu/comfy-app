@@ -29,8 +29,8 @@
 // spawn，只有本模块也摘掉 server-only、lifecycle-launch 才能在纯 Node 里加载。
 // 依赖：`child_process` / `fs` / `~/lib/core/logger`（经 app-runtime-log #1075
 // + log-paths #1074 通链，纯 Node 可加载） / `~/lib/with-timeout`（纯函数）。
-import { spawn, type ChildProcess } from "child_process";
-import { closeSync, openSync } from "fs";
+import { spawn, type ChildProcess } from "node:child_process";
+import { closeSync, openSync } from "node:fs";
 import { logger } from "~/lib/core/logger";
 import { withTimeoutResult } from "~/lib/with-timeout";
 

@@ -15,7 +15,7 @@
 // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 // 只用 `child_process.execFile` 起本机 nvidia-smi，不引任何 server-only 侧模块；
 // P3 executor host 加入后可被 scripts 侧直接 import。
-import { execFile } from "child_process";
+import { execFile } from "node:child_process";
 
 /** nvidia-smi 内存查询的一条结果（MiB → 调用方换算字节）。 */
 export interface NvidiaSmiMem {

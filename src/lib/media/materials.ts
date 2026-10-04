@@ -25,8 +25,8 @@ import {
   isWithinGeneratedRoot,
   materialsRoot as artifactMaterialsRoot,
 } from "~/lib/media/output-paths";
-import { promises as fs } from "fs";
-import path from "path";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 import { kindOf, type MediaKind } from "./media-kind";
 

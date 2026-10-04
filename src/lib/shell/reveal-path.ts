@@ -31,9 +31,9 @@
 // 带着一个词（`F:\a\dev.mjs ` 这种为 `Program Files` 让路的宽判据）。所以这里做
 // 「**最长存在前缀**」解析：从完整候选往回退，第一个存在的路径就是答案。这让
 // 「文本切得不够准」不再是失败 —— 文本负责「像」，文件系统负责「是不是」。
-import { statSync } from "fs";
-import path from "path";
-import { spawn } from "child_process";
+import { statSync } from "node:fs";
+import path from "node:path";
+import { spawn } from "node:child_process";
 
 import { errorText } from "~/lib/error-message";
 

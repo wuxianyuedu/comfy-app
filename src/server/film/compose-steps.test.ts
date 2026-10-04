@@ -5,7 +5,7 @@
  * `subtitles=` 滤镜，其余编码参数必须逐字相同——此前它们是手抄的两段数组，
  * 改一段忘改另一段就会让有无字幕走出不同的编码参数。
  */
-import path from "path";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { generatedRoot } from "~/lib/media/output-paths";

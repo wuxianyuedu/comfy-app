@@ -7,7 +7,7 @@
 // 的封装口径下发 提示词 / 尺寸，其余参数用工作流默认值。
 
 import "server-only";
-import { promises as fs } from "fs";
+import { promises as fs } from "node:fs";
 import type { SizeSpec } from "~/lib/media/size-presets";
 import { artifactDiskPath } from "~/lib/media/output-paths";
 import { FIRST_FRAME_WAIT, backoffDelayMs } from "~/lib/retry-policy";

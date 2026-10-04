@@ -40,8 +40,8 @@ import { errorText } from "~/lib/error-message";
 // `~/lib/core/logger`（经 `app-runtime-log` #1075 + `log-paths` #1074 通链）
 // —— 在前 8 批 comfyui 与 lib 层地基批完成之后**全部**纯 Node 可加载。
 // 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 import { resolveComfyLaunchPlan } from "./launch-path";

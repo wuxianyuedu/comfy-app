@@ -2,7 +2,7 @@
 // / 无效路径四类。夹具根一律用 path.resolve（Windows normalize 不补盘符会让注入
 // 的 exists 永远 miss）。
 
-import path from "path";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { classifyComfyInstall, describeComfyInstance } from "./instance-kind";
 

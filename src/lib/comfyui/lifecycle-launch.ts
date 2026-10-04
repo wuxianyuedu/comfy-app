@@ -19,9 +19,9 @@ import { errorText } from "~/lib/error-message";
 // （经 #1075 app-runtime-log + #1074 log-paths 通链）、`./launch-path` /
 // `./proc-detect` / `./desktop-instance` / `./lifecycle-exit`（叶模块批 #1056 /
 // #1077）、`~/lib/log/log-paths`（#1074）。登记进 `PURE_NODE_HOSTS`。
-import { spawn } from "child_process";
-import fs from "fs";
-import path from "path";
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { getExitPolicy } from "../app-settings/app-settings.server";
 import { COMFYUI_DEFAULT_PORT, comfyUiBaseUrl } from "../endpoints";
 import { INLINE_STDERR_MAX, clampText } from "../text-clamp";

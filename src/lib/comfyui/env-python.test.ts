@@ -8,7 +8,7 @@
 // 夹具一律用 path.resolve 构造（与 launch-path.test.ts 同因：Windows 上
 // normalize 不补盘符，注入的 exists 会永远 miss）。
 
-import path from "path";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   collectComfyPythonCandidates,
