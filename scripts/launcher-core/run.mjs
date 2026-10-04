@@ -104,9 +104,9 @@ export function newRunId() {
  * **不许带冒号**：Windows 下 `:` 是非法文件名字符，带它等于归档在 Windows 上
  * 直接失败（而失败是静默的，用户只看到 runs/ 空着）。这个格式同时保证
  * 字典序 = 时间序，`runs/` 直接 ls 就是时间线。
- * @param {Date} at
- * @param {string} runId
- * @returns {string}
+ * @param {Date} at 归档时刻
+ * @param {string} runId 本次运行的 runId
+ * @returns {string} 归档目录名
  */
 export function runDirName(at, runId) {
   /** @param {number} n @param {number} [width] */
@@ -278,8 +278,8 @@ export function hasCurrentContent(dir) {
 
 /** 递归复制目录（不跟符号链接；日志目录里不该有链接，跟了会走出日志根）。 */
 /**
- * @param {string} from
- * @param {string} to
+ * @param {string} from 源目录
+ * @param {string} to 目标目录
  */
 function copyTree(from, to) {
   fs.mkdirSync(to, { recursive: true });
