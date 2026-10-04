@@ -20,35 +20,39 @@ import { expect, test, type Page, type Route } from "@playwright/test";
  * ——门禁跑起来之后，这类「界面没有可见出口」的退化会在合并前暴露。
  */
 
-/** stub 掉与 ComfyUI / DB 相关的 tRPC 调用，只保留 UI 结构可渲染。 */
+/**
+ * 让与 ComfyUI / DB 相关的 tRPC 调用**不把界面卡住**。
+ *
+ * ⚠️ 它**不喂数据**，一行内容也改不了 —— 这里 fulfill 的是 JSON 数组，而
+ * 客户端（`httpBatchStreamLink`，`src/trpc/link.ts`）按 **JSON Lines**
+ * （`trpc-accept: application/jsonl`）读响应体，数组形态到不了上层
+ * （根因与实测见 `./support/trpc-stub.ts` 的文件头，ISSUE #1442）。
+ *
+ * 它的作用只是把请求**很快答掉**，让首屏不必等 ComfyUI 探测与真实查询；
+ * 断言若依赖数据，请改用 `./support/trpc-stub` 的 `stubTrpc()`
+ * （那条路是真协议形态，`queue-monitor.spec.ts` 的位次用例即消费方）。
+ */
 async function stubBackend(page: Page) {
   await page.route("**/api/trpc/**", async (route: Route) => {
     const url = route.request().url();
-    // tRPC 批量流式端点：按 path 返回最小可用结构，避免页面因等待数据而卡住。
-    let body: unknown = null;
-    if (url.includes("setting.get")) {
-      body = { result: { data: { json: "{}" } } };
-    } else if (url.includes("comfyui.status")) {
-      body = {
-        result: {
-          data: { up: false, base: null, starting: false, stopping: false },
-        },
-      };
-    } else if (url.includes("workflow.list")) {
-      body = {
-        result: { data: { templates: [], total: 0 } },
-      };
-    } else if (url.includes("task.list")) {
-      body = { result: { data: { tasks: [], total: 0 } } };
+    /* 一律回空的 JSON 数组：不卡住、也不冒充数据。 */
+    let handled = false;
+    for (const procedure of [
+      "setting.get",
+      "comfyui.status",
+      "workflow.list",
+      "task.list",
+    ]) {
+      if (url.includes(procedure)) handled = true;
     }
-    if (body === null) {
+    if (!handled) {
       await route.continue();
       return;
     }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(body),
+      body: "[]",
     });
   });
 }
