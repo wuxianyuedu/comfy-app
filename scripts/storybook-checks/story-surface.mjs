@@ -29,7 +29,7 @@
 //     `JsonViewer`」。判据取**多数**当口径、逐条点名偏离项，于是「新写的那一份
 //     与邻居不一致」在提交时就被看见，不需要谁记得住这张表。
 //
-// ## 为什么是「单向」：现有 86 份故事不补 args
+// ## 为什么是「单向」：存量不补 args
 //
 // ③ 只要求**新增 / 新动过**的故事文件满足（`--changed` 那一档），存量不补。
 // 理由不是「来不及」，是这批故事的表达方式**已经是对的**：
@@ -44,6 +44,25 @@
 // 给 86 份文件逐条补 `args` 是把 337 张画布的输入形状**重写一遍**，而它换来的
 // 只是「Args 面板里多几个初始值」。判据的价值在「**下一个**新增的故事别漏」，
 // 所以口径定成：盘点照实报（供人看），阻断只落在新动过的那一份上。
+//
+// ## 口径收紧过一轮：6 处误报 → 0
+//
+// 初版把「缺 args」判在**组件文件**身上，于是**适配件**（§16.2.3.6 的正当写法）
+// 必然误报：全仓盘出 6 份缺口，逐份查完**没有一份是真缺口**，全是这两类 ——
+//
+//  · **在适配件里已经显式传了**（`<ViewTabStrip activeKey={…} />`、
+//    `useFilePicker({ onPick: … })`）：组件在画布上读得到值，而初版只统计
+//    `args` 对象，连报错文案自己承诺的「在 `render` 里显式传也算」都没兑现；
+//  · **接口在出参方向**（`mediaDragSourceProps(): MediaDragSourceProps`）：
+//    它的必填成员不是「要传进去的 props」，算成缺口等于逼人给组件塞三个
+//    它从不消费的死参数。
+//
+// 现在的两条修正分别在 `assignedNamesIn`（赋值点也算给了）与
+// `hasInputSideReference`（只计入参方向的接口）里；两条都有回归用例 +
+// 变异验证（撤掉任一条，对应用例即红）。
+//
+// **误报比漏报难发现**：漏报只是判据不响，误报会让人照着错误的要求改代码，
+// 把脏数据写进本来正当的文件 —— 所以这一档宁可宽。
 //
 // ## 已知边界（刻意不判）
 //
@@ -385,8 +404,140 @@ export function missingRequiredArgs(storyFile, givenArgs) {
       }
     });
   }
-  return [...new Set(required)].filter((name) => !givenArgs.has(name));
+  /* 「给了」不只有 `args` 一种形态：适配件里显式传（`<ViewTabStrip activeKey={…} />`）、
+     给 hook / 工厂函数传（`useFilePicker({ onPick: … })`）同样是给了 —— 那种写法下
+     组件在画布上**读得到值**，报错文案自己承诺的也是这个口径
+     （「写进 `args`，或在 `render` 里显式传」）。只统计 `args` 会把这一整类
+     正当写法全判成缺口（实测：全仓 6 份有缺口的 story 全是这一类）。 */
+  const assigned = assignedNamesIn(storySourceOf(storyFile));
+  return [...new Set(required)].filter(
+    (name) => !givenArgs.has(name) && !assigned.has(name),
+  );
 }
+
+/**
+ * 故事文件里**作为属性名出现过**的名字：JSX 属性、对象字面量的属性与简写、
+ * 解构出来的绑定名。
+ *
+ * 判的是「这个名字在 story 里有没有落点」，**不区分它被传给了谁** ——
+ * 做符号解析要类型程序，而判据的既有边界是「宁可漏，不可误伤」
+ * （见文件头）。宽一点只会让漏报多几处，窄一点就会逼人给不存在的 prop 塞 `args`。
+ * @param {ts.SourceFile | null} source
+ * @returns {Set<string>}
+ */
+function assignedNamesIn(source) {
+  /** @type {Set<string>} */
+  const out = new Set();
+  if (source === null) return out;
+  walk(source, (node) => {
+    if (ts.isJsxAttribute(node) && node.name !== undefined) {
+      out.add(propName(node.name.getText(source)));
+      return;
+    }
+    if (
+      (ts.isPropertyAssignment(node) ||
+        ts.isShorthandPropertyAssignment(node) ||
+        ts.isPropertySignature(node) ||
+        ts.isBindingElement(node)) &&
+      node.name !== undefined
+    ) {
+      out.add(propName(node.name.getText(source)));
+    }
+  });
+  return out;
+}
+
+/**
+ * 读故事文件源码（`missingRequiredArgs` 要按**文件**判「有没有赋值点」，
+ * 而调用方只传路径 —— 只在必要时读一次）。
+ * @param {string} storyFile
+ * @returns {ts.SourceFile | null}
+ */
+function storySourceOf(storyFile) {
+  if (!fs.existsSync(storyFile)) return null;
+  return ts.createSourceFile(
+    storyFile,
+    fs.readFileSync(storyFile, "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+}
+
+/**
+ * 该 `XProps` 名字在组件文件里有没有**入参方向**的引用点。
+ *
+ * 「必填 props」这条判据问的是「组件渲染时读到什么」，所以只有**要传进去**的
+ * 接口才算数。同一个词在两个方向上长得一模一样：
+ *
+ *  · 入参：`function F({…}: XProps)`、`(props: XProps)`、`XProps & Omit<…>`；
+ *  · **出参**：`function f(): XProps`、`const p: XProps = …` 里的返回值注解 ——
+ *    `mediaDragSourceProps()` 的返回类型就是这么定的。
+ *
+ * 出参方向的 `XProps` 成员**不是**组件要读的 props：把它的必填项算进「缺 args」，
+ * 判据就会逼着 story 给那些组件里根本不存在的 prop 塞 `args`
+ * （`media-drag-source.stories.tsx` 那三个 `draggable` / `onDragStart` /
+ * `className` 就是这么来的 —— 它们是返回值，不是入参）。
+ *
+ * 只穿过**包装节点**往上找宿主：`XProps & Omit<…>` 这类交叉 / 联合里的
+ * 引用点仍算入参；一旦宿主是「函数的返回类型注解」就判出参。
+ * @param {ts.SourceFile} file
+ * @param {string} name
+ * @returns {boolean}
+ */
+function hasInputSideReference(file, name) {
+  let found = false;
+  walk(file, (node) => {
+    if (found) return;
+    if (!ts.isIdentifier(node) || node.text !== name) return;
+    if (isReturnTypePosition(node)) return;
+    /* 接口自己的声明不算「引用点」。 */
+    if (ts.isInterfaceDeclaration(node.parent)) return;
+    found = true;
+  });
+  return found;
+}
+
+/**
+ * 类型引用点是否落在**函数返回类型**那一侧。
+ *
+ * 判法是「沿包装节点往上找宿主，宿主是函数且引用点长在它的 `.type` 上」：
+ * `function f(): XProps`、`const f = (): XProps => …` 都命中；而
+ * `(a: XProps)` 与 `const x: XProps = {…}` 的宿主分别是 `Parameter` /
+ * `VariableDeclaration`，不命中。
+ * @param {ts.Node} node `XProps` 那个标识符
+ * @returns {boolean}
+ */
+function isReturnTypePosition(node) {
+  /** @type {ts.Node} */
+  let current = node;
+  while (current.parent !== undefined) {
+    const parent = current.parent;
+    if (
+      ts.isFunctionDeclaration(parent) ||
+      ts.isFunctionExpression(parent) ||
+      ts.isArrowFunction(parent) ||
+      ts.isMethodDeclaration(parent)
+    ) {
+      /* 引用点长在函数的返回类型注解上 → 出参；长在参数上是入参。 */
+      return parent.type === current;
+    }
+    /* 交叉 / 联合 / 括号 / 类型运算符 / 类型引用：继续往上，它们不改变方向。 */
+    if (
+      ts.isIntersectionTypeNode(parent) ||
+      ts.isUnionTypeNode(parent) ||
+      ts.isParenthesizedTypeNode(parent) ||
+      ts.isTypeOperatorNode(parent) ||
+      ts.isTypeReferenceNode(parent)
+    ) {
+      current = parent;
+      continue;
+    }
+    return false;
+  }
+  return false;
+}
+
 
 /**
  * 组件文件里**被引用到的** props 接口名（`XProps` / `ComponentProps<typeof C>`）。
@@ -400,10 +551,14 @@ export function missingRequiredArgs(storyFile, givenArgs) {
 function referencedPropsInterfaces(component, componentFile) {
   /** @type {Set<string>} */
   const out = new Set();
-  /* ① 组件文件里被引用的名字（类型注解、`ComponentProps<…>` 里的实参…）。 */
+  /* ① 组件文件里被引用的名字（类型注解、`ComponentProps<…>` 里的实参…），
+     且**至少有一处在入参方向**——只有返回类型位置出现的是出参接口，不算
+     （判据理由见 `hasInputSideReference`）。 */
   walk(component, (node) => {
     if (!ts.isIdentifier(node)) return;
-    if (TS_PROPS_NAME.test(node.text)) out.add(node.text);
+    if (!TS_PROPS_NAME.test(node.text)) return;
+    if (!hasInputSideReference(component, node.text)) return;
+    out.add(node.text);
   });
   /* ② 同目录里**导出的** props 接口，且它的字段名在组件文件里出现过
      （`FilePickerProps.onPick` 这种：接口在兄弟模块，组件只解构那几个字段）。 */

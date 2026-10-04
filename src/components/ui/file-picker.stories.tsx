@@ -54,7 +54,7 @@ function FilePickerDemo({
     multiple,
   });
   return (
-    <div className="flex w-[30rem] flex-col gap-3">
+    <div className="flex w-120 flex-col gap-3">
       <div className="flex items-center gap-2">
         <Button variant="outline" onClick={picker.open}>
           选择文件
