@@ -109,7 +109,7 @@ function FailurePlaceholder({ className }: { className?: string }) {
     <span
       role="img"
       aria-label="图片不可用"
-      className={`text-ink-fainter bg-canvas-deep flex items-center justify-center text-[10px] ${className ?? ""}`}
+      className={`text-ink-fainter bg-canvas-deep text-3xs flex items-center justify-center ${className ?? ""}`}
     >
       图片不可用
     </span>

@@ -171,13 +171,13 @@ export function AgentOverlay({
       {/* Header */}
       <div className="border-border flex items-center gap-2 border-b px-4 py-3">
         {/* p71-allow:start brand 渐变 · 智能体头像 violet→fuchsia 双色（项目品牌视觉），单档 token 化会失去渐变识别度，见 §3.6.1 */}
-        <span className="flex size-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
+        <span className="text-2xs flex size-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 font-bold text-white">
           <Icon name="bot" size={13} className="text-white" />
         </span>
         {/* p71-allow:end */}
         <div className="flex-1">
           <h3 className="text-ink u-title">创作指挥 Agent</h3>
-          <p className="text-muted-foreground text-[10px]">
+          <p className="text-muted-foreground text-3xs">
             用对话指挥完整工坊流程
           </p>
         </div>
@@ -195,7 +195,7 @@ export function AgentOverlay({
       {/* 工具执行状态面板（有工具跑过时显示在顶部） */}
       {toolRuns.length > 0 && (
         <div className="border-border bg-bg/60 max-h-28 shrink-0 overflow-y-auto border-b px-4 py-2">
-          <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-[10px] font-medium">
+          <div className="text-muted-foreground text-3xs mb-1.5 flex items-center gap-1.5 font-medium">
             <Icon name="loader" size={11} className="inline" />
             工作过程
           </div>
@@ -211,10 +211,10 @@ export function AgentOverlay({
                       : undefined
                   }
                 />
-                <span className="text-muted-foreground min-w-0 flex-1 truncate text-[11px]">
+                <span className="text-muted-foreground text-2xs min-w-0 flex-1 truncate">
                   {run.summary}
                 </span>
-                <span className="text-muted-foreground shrink-0 text-[10px]">
+                <span className="text-muted-foreground text-3xs shrink-0">
                   {TOOL_STATUS_LABEL[run.status]}
                 </span>
               </div>
@@ -245,7 +245,7 @@ export function AgentOverlay({
             if (msg.role === "tool-run") {
               return (
                 <div key={msg.id} className="flex justify-start">
-                  <div className="border-border/60 bg-bg/80 text-muted-foreground max-w-[85%] rounded-xl border px-3 py-1.5 text-[11px]">
+                  <div className="border-border/60 bg-bg/80 text-muted-foreground text-2xs max-w-[85%] rounded-xl border px-3 py-1.5">
                     ⚙ {msg.run.summary}
                   </div>
                 </div>
@@ -294,7 +294,7 @@ export function AgentOverlay({
             variant="primary-solid"
             size="xs"
             onClick={follow.jumpToLatest}
-            className="absolute bottom-3 left-1/2 h-auto -translate-x-1/2 rounded-full px-3 py-1 text-[11px] shadow-lg"
+            className="text-2xs absolute bottom-3 left-1/2 h-auto -translate-x-1/2 rounded-full px-3 py-1 shadow-lg"
           >
             回到最新
           </Button>
@@ -302,7 +302,7 @@ export function AgentOverlay({
       </div>
 
       {error && (
-        <p className="border-border bg-destructive/10 text-destructive border-t px-4 py-1.5 text-[11px]">
+        <p className="border-border bg-destructive/10 text-destructive text-2xs border-t px-4 py-1.5">
           {error}
         </p>
       )}

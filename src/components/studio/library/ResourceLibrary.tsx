@@ -112,7 +112,7 @@ export function ResourceLibrary() {
               >
                 {scope.label}
                 {library.scope === scope.id && c.totalCount > 0 ? (
-                  <span className="text-ink-fainter text-[11px] tabular-nums">
+                  <span className="text-ink-fainter text-2xs tabular-nums">
                     {c.totalCount}
                   </span>
                 ) : null}

@@ -78,7 +78,7 @@ export function ProjectOutputsMetadataSheet({
                   <h3 className="font-title text-ink-bright text-sm font-bold">
                     产出 #{selected.id.slice(-4)}
                   </h3>
-                  <span className="bg-primary/15 text-primary-strong rounded-md px-1.5 py-0.5 text-[10px] font-medium">
+                  <span className="bg-primary/15 text-primary-strong text-3xs rounded-md px-1.5 py-0.5 font-medium">
                     {TYPE_CHIP[selected.type] ?? selected.type}
                   </span>
                 </div>
@@ -116,7 +116,7 @@ export function ProjectOutputsMetadataSheet({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-ink-fainter text-[11px]">
+                    <p className="text-ink-fainter text-2xs">
                       本次生成无参考图（纯文生图）。
                     </p>
                   )}

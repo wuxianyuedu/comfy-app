@@ -87,7 +87,7 @@ function PortChip({ type }: { type: string }) {
         };
   return (
     <span
-      className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+      className="text-3xs inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"
       style={{ fontFamily: "var(--font-sans)", ...style }}
     >
       {type}
@@ -149,7 +149,7 @@ function PortRowString({
         readOnly
         rows={2}
         defaultValue={value}
-        className="bg-canvas-deep text-ink-soft border-border-subtle field-sizing-normal mx-3.5 h-13 min-h-0 resize-none rounded-md border px-2.5 py-2 text-[11px] leading-relaxed focus-visible:ring-0"
+        className="bg-canvas-deep text-ink-soft border-border-subtle field-sizing-normal text-2xs mx-3.5 h-13 min-h-0 resize-none rounded-md border px-2.5 py-2 leading-relaxed focus-visible:ring-0"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </div>
@@ -240,7 +240,7 @@ export function WorkflowNodeArdot() {
           <div className="bg-node-accent flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2">
             <span className="bg-primary size-1.5 rounded-full" />
             <span
-              className="text-ink-soft text-[10px] font-medium"
+              className="text-ink-soft text-3xs font-medium"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               待开始

@@ -183,7 +183,7 @@ export function WorkflowNode({
           title={`项目画布节点 Id：${id}`}
         >
           <span
-            className={`font-mono text-[10px] font-semibold ${NODE_SEQ_CHIP_TEXT}`}
+            className={`text-3xs font-mono font-semibold ${NODE_SEQ_CHIP_TEXT}`}
             style={{ fontFamily: "var(--font-mono)" }}
           >
             {nodeSeq !== null

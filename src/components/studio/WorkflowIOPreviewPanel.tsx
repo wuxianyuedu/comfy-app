@@ -179,7 +179,7 @@ export function WorkflowIoPreviewPanel({
   }, [effectiveMode, workflowIO, ioApi]);
 
   const tabClass = (active: boolean) =>
-    `shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] transition-colors ${
+    `shrink-0 rounded-md border px-1.5 py-0.5 text-2xs transition-colors ${
       active
         ? "border-info/50 bg-info/15 text-info-strong"
         : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
@@ -195,7 +195,7 @@ export function WorkflowIoPreviewPanel({
             <span className="text-ink-bright truncate text-[12px] font-semibold">
               IO 预览
             </span>
-            <span className="bg-subtle text-ink-soft rounded-full px-1.5 py-px font-mono text-[10px]">
+            <span className="bg-subtle text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">
               {Object.keys(workflowIO).length}
             </span>
           </div>
@@ -207,7 +207,7 @@ export function WorkflowIoPreviewPanel({
                 variant="outline"
                 size="xs"
                 onClick={resetActiveModeOverrides}
-                className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md px-1.5 py-0.5 text-[11px]"
+                className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs h-auto rounded-md px-1.5 py-0.5"
               >
                 恢复默认
               </Button>
@@ -218,7 +218,7 @@ export function WorkflowIoPreviewPanel({
               variant="outline"
               size="icon-xs"
               onClick={onClose}
-              className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md text-[11px]"
+              className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs rounded-md"
             >
               ✕
             </Button>
@@ -251,7 +251,7 @@ export function WorkflowIoPreviewPanel({
                       const next = modes.filter((m) => m !== code);
                       onModesChange(next, next[0] ?? "");
                     }}
-                    className="text-ink-muted hover:text-danger-strong rounded text-[10px]"
+                    className="text-ink-muted hover:text-danger-strong text-3xs rounded"
                   >
                     ×
                   </Button>
@@ -271,13 +271,13 @@ export function WorkflowIoPreviewPanel({
 
         <div className="nodrag nopan text-ink-bright flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
           {Object.keys(workflowIO).length === 0 ? (
-            <div className="border-border-strong bg-subtle text-ink-muted rounded-lg border border-dashed px-3 py-4 text-center text-[11px] leading-relaxed">
+            <div className="border-border-strong bg-subtle text-ink-muted text-2xs rounded-lg border border-dashed px-3 py-4 text-center leading-relaxed">
               尚未勾选任何 IO。
               <br />
               在画布上勾选参数后，这里会同步出现对应的表单行；点击变量名称即可就地重命名。
             </div>
           ) : modes.length === 0 ? (
-            <div className="border-warning/30 bg-warning/5 text-warning-strong/80 rounded-lg border border-dashed px-3 py-4 text-center text-[11px] leading-relaxed">
+            <div className="border-warning/30 bg-warning/5 text-warning-strong/80 text-2xs rounded-lg border border-dashed px-3 py-4 text-center leading-relaxed">
               该工作流还没有配置模式 —— 请先在上方「模式」里勾选 （文生图 /
               图生图 / …），之后才能在这里配置参数。
             </div>
@@ -315,7 +315,7 @@ export function WorkflowIoPreviewPanel({
             </div>
           )}
         </div>
-        <div className="border-border-strong text-ink-muted shrink-0 border-t px-3 py-1.5 text-[10px]">
+        <div className="border-border-strong text-ink-muted text-3xs shrink-0 border-t px-3 py-1.5">
           <span className="opacity-80">
             点击变量名称即可重命名；👁 按当前模式保留可见性；「必填 /
             可选」切换是否在运行时强校验。

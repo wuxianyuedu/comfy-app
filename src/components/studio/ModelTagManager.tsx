@@ -136,7 +136,7 @@ export function ModelTagManager({
                   className="border-border-strong bg-subtle rounded-lg border"
                 >
                   {rowError && (
-                    <div className="border-danger/30 text-danger-strong border-b px-3 py-1 text-[11px]">
+                    <div className="border-danger/30 text-danger-strong text-2xs border-b px-3 py-1">
                       {rowError}
                     </div>
                   )}
@@ -173,7 +173,7 @@ export function ModelTagManager({
                       </span>
                     )}
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="bg-surface-2 text-ink-soft rounded-full px-2 py-0.5 text-[11px] tabular-nums">
+                      <span className="bg-surface-2 text-ink-soft text-2xs rounded-full px-2 py-0.5 tabular-nums">
                         {tag.count} 个工作流
                       </span>
                       <Hint

@@ -137,11 +137,11 @@ export function ShotSizePicker({
               variant="outline"
               size="xs"
               onClick={() => setTableOpen(true)}
-              className="border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright h-auto rounded-md px-2 py-1 text-[10px]"
+              className="border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright text-3xs h-auto rounded-md px-2 py-1"
             >
               尺寸表（{SIZE_SCENE_LABELS[scene]}场景）…
             </Button>
-            <span className="text-ink-faint text-[10px]">
+            <span className="text-ink-faint text-3xs">
               {clarityKind === "megapixel"
                 ? "总像素预算，宽高按倍数对齐"
                 : "宽高按场景尺寸表取值"}

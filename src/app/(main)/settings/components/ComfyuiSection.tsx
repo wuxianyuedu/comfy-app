@@ -97,7 +97,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         <div className="-mt-2 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           <span className="text-muted-foreground">安装形态</span>
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+            className={`text-2xs inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
               desktopManaged
                 ? "bg-primary/15 text-primary"
                 : "bg-subtle text-ink/70"

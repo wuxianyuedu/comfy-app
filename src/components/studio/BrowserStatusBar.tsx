@@ -154,7 +154,7 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
       <Hint label={notice.title}>
         <Button
           variant="ghost"
-          className={`h-auto shrink-0 gap-0 rounded px-1 py-0 text-[11px] hover:underline ${tone}`}
+          className={`text-2xs h-auto shrink-0 gap-0 rounded px-1 py-0 hover:underline ${tone}`}
           onClick={() => window.location.reload()}
         >
           {notice.text}
@@ -169,7 +169,7 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
           <Button
             variant="ghost"
             disabled={pushing}
-            className={`h-auto shrink-0 gap-1 rounded px-1 py-0 text-[11px] hover:underline ${tone}`}
+            className={`text-2xs h-auto shrink-0 gap-1 rounded px-1 py-0 hover:underline ${tone}`}
             onClick={() => setConfirming(true)}
           >
             {notice.text}
@@ -261,7 +261,7 @@ export function BrowserStatusBar() {
 
   return (
     <div
-      className="border-border bg-panel/95 text-ink-muted z-toast fixed right-0 bottom-0 left-0 flex h-6 items-center gap-3 border-t px-3 text-[11px] backdrop-blur-sm"
+      className="border-border bg-panel/95 text-ink-muted z-toast text-2xs fixed right-0 bottom-0 left-0 flex h-6 items-center gap-3 border-t px-3 backdrop-blur-sm"
       aria-label="底部状态栏"
     >
       {/* ── 第 1 区：地址栏（固定宽度） ── */}
@@ -343,7 +343,7 @@ export function BrowserStatusBar() {
           <Button
             variant="ghost"
             onClick={toggleOpen}
-            className={`flex h-auto gap-1 rounded px-1.5 py-0.5 text-[11px] ${
+            className={`text-2xs flex h-auto gap-1 rounded px-1.5 py-0.5 ${
               isOpen
                 ? "bg-primary/20 text-primary-strong hover:bg-primary/25"
                 : "text-ink-muted hover:bg-subtle hover:text-ink"
@@ -351,7 +351,7 @@ export function BrowserStatusBar() {
           >
             <FileText data-icon="inline-start" size={12} />
             {counts.error > 0 && (
-              <span className="bg-destructive/20 text-destructive rounded-full px-1 text-[10px]">
+              <span className="bg-destructive/20 text-destructive text-3xs rounded-full px-1">
                 {counts.error}
               </span>
             )}

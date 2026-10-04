@@ -109,14 +109,14 @@ const SECTION_GROUP_CLASS = "flex w-full flex-col items-stretch gap-2";
 
 /** ToggleGroupItem 的视觉档，与旧 `<Button variant="ghost" role="option">`
  *  循环里的两态**逐字对齐**：`min-w-13 flex-col gap-1 rounded-md
- *  px-1.5 py-1.5 text-[11px]`；未选 `text-ink-muted hover:bg-subtle
+ *  px-1.5 py-1.5 text-2xs`；未选 `text-ink-muted hover:bg-subtle
  *  hover:text-ink-bright`；已选 `bg-primary/20 text-ink-bright
  *  ring-primary/55`。base-ui Toggle 的选中态属性是 **`data-pressed`**
  *  （Radix 时代的 `data-[state=on]` 在 base-ui 上永不匹配、会让选中高亮整体
  *  消失，见 `@base-ui/react/toggle` 的 `ToggleDataAttributes`），由它取代旧
  *  的 `selected` 布尔类拼接。 */
 const ITEM_CLASS =
-  "nodrag nopan h-auto min-w-13 flex-col gap-1 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-[11px] font-normal text-ink-muted hover:bg-subtle hover:text-ink-bright data-pressed:bg-primary/20 data-pressed:text-ink-bright data-pressed:ring-1 data-pressed:ring-primary/55 data-pressed:hover:bg-primary/20";
+  "nodrag nopan h-auto min-w-13 flex-col gap-1 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-2xs font-normal text-ink-muted hover:bg-subtle hover:text-ink-bright data-pressed:bg-primary/20 data-pressed:text-ink-bright data-pressed:ring-1 data-pressed:ring-primary/55 data-pressed:hover:bg-primary/20";
 
 export function MultiSegmentPopover({
   triggerContent,
@@ -215,7 +215,7 @@ const Section = React.memo(function Section({
 
   return (
     <div className={first ? "" : "mt-3"}>
-      <div className="text-ink-muted mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
+      <div className="text-ink-muted text-3xs mb-1.5 font-semibold tracking-wider uppercase">
         {section.label}
       </div>
       {/* 整段共享一个 ToggleGroup(单选,`multiple={false}`);跨子分组互斥

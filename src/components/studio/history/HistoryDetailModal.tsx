@@ -122,7 +122,7 @@ export function HistoryDetailModal({
                     if (!current?.id) return;
                     void actions.openFolder(current.id);
                   }}
-                  className="border-border text-ink-strong hover:border-border-strong hover:text-ink h-auto gap-1.5 rounded-md px-2.5 py-1 text-[11px]"
+                  className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto gap-1.5 rounded-md px-2.5 py-1"
                 >
                   <Folder data-icon="inline-start" size={12} />
                   打开目录
@@ -134,7 +134,7 @@ export function HistoryDetailModal({
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-ink-strong text-[11px] font-medium">
+                    <span className="text-ink-strong text-2xs font-medium">
                       📂 在资源管理器中打开
                     </span>
                     <Button
@@ -176,7 +176,7 @@ export function HistoryDetailModal({
                       若浏览器弹出「是否打开外部应用」，点击「打开」即可在资源管理器中打开该目录。
                     </div>
                   )}
-                  <code className="bg-canvas-deep text-success-strong block rounded px-2.5 py-2 text-[11px] leading-relaxed break-all select-all">
+                  <code className="bg-canvas-deep text-success-strong text-2xs block rounded px-2.5 py-2 leading-relaxed break-all select-all">
                     {actions.folderPopover.path}
                   </code>
                   <div className="mt-2 flex flex-wrap justify-end gap-2">
@@ -184,7 +184,7 @@ export function HistoryDetailModal({
                       variant="success"
                       size="xs"
                       onClick={() => actions.copyPath()}
-                      className="h-auto rounded-md px-2.5 py-1 text-[11px]"
+                      className="text-2xs h-auto rounded-md px-2.5 py-1"
                     >
                       📋 复制路径
                     </Button>
@@ -205,13 +205,13 @@ export function HistoryDetailModal({
                         if (!current?.id) return;
                         void actions.downloadWorkflow(current.id);
                       }}
-                      className="border-border text-ink-strong hover:border-border-strong hover:text-ink h-auto rounded-md px-2.5 py-1 text-[11px]"
+                      className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto rounded-md px-2.5 py-1"
                     >
                       下载工作流
                     </Button>
                   </Hint>
                   <span
-                    className="bg-subtle text-ink-muted hidden rounded px-1.5 py-0.5 text-[10px] sm:inline"
+                    className="bg-subtle text-ink-muted text-3xs hidden rounded px-1.5 py-0.5 sm:inline"
                     title={sourceLabel}
                   >
                     {sourceLabel}
@@ -264,7 +264,7 @@ export function HistoryDetailModal({
                         <a
                           href={img.localPath}
                           download
-                          className="bg-surface-2 text-ink hover:bg-surface-2 absolute right-2 bottom-2 rounded px-2 py-0.5 text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
+                          className="bg-surface-2 text-ink hover:bg-surface-2 text-2xs absolute right-2 bottom-2 rounded px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                         >
                           {isVideo(img.localPath) ? "下载视频" : "下载"}
                         </a>
@@ -340,12 +340,12 @@ export function HistoryDetailModal({
                     {topLevelEntries.length > 0 && (
                       <Disclosure
                         marker="caret"
-                        className="border-border-subtle bg-canvas-deep text-ink-muted hover:text-ink-strong rounded-lg border px-3 py-1.5 text-[11px]"
+                        className="border-border-subtle bg-canvas-deep text-ink-muted hover:text-ink-strong text-2xs rounded-lg border px-3 py-1.5"
                         trigger={`原始 JSON · ${
                           topLevelEntries.length + (paramRows.length ? 1 : 0)
                         } 个字段`}
                       >
-                        <pre className="border-border-subtle text-ink-faint max-w-full border-t p-3 text-[11px] break-all whitespace-pre-wrap">
+                        <pre className="border-border-subtle text-ink-faint text-2xs max-w-full border-t p-3 break-all whitespace-pre-wrap">
                           {JSON.stringify(
                             Object.fromEntries(topLevelEntries),
                             null,

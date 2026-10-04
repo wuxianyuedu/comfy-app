@@ -311,7 +311,7 @@ export function ImageViewer({
                 {title}
               </DialogTitle>
               {naturalWidth !== null && naturalHeight !== null && (
-                <span className="text-ink-fainter shrink-0 text-[11px] tabular-nums">
+                <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">
                   {naturalWidth} × {naturalHeight}
                 </span>
               )}
@@ -329,7 +329,7 @@ export function ImageViewer({
                 <Minus data-icon="inline-start" size={14} />
               </Button>
               <span
-                className="text-ink-muted w-12 text-center text-[11px] tabular-nums"
+                className="text-ink-muted text-2xs w-12 text-center tabular-nums"
                 data-testid="image-viewer-percent"
               >
                 {zoom.percent}%
@@ -349,7 +349,7 @@ export function ImageViewer({
                 size="xs"
                 onClick={zoom.fit}
                 aria-pressed={zoom.mode === "fit"}
-                className={`h-auto rounded-md px-2 py-1 text-[11px] ${
+                className={`text-2xs h-auto rounded-md px-2 py-1 ${
                   zoom.mode === "fit"
                     ? "bg-surface-2 text-ink"
                     : "text-ink-muted hover:text-ink"
@@ -362,7 +362,7 @@ export function ImageViewer({
                 size="xs"
                 onClick={zoom.actualSize}
                 aria-pressed={zoom.mode === "actual"}
-                className={`h-auto gap-1 rounded-md px-2 py-1 text-[11px] ${
+                className={`text-2xs h-auto gap-1 rounded-md px-2 py-1 ${
                   zoom.mode === "actual"
                     ? "bg-surface-2 text-ink"
                     : "text-ink-muted hover:text-ink"
@@ -421,7 +421,7 @@ export function ImageViewer({
             </div>
           </div>
 
-          <div className="border-border-subtle text-ink-fainter flex h-8 shrink-0 items-center justify-between gap-3 border-t px-4 text-[11px]">
+          <div className="border-border-subtle text-ink-fainter text-2xs flex h-8 shrink-0 items-center justify-between gap-3 border-t px-4">
             <span className="truncate">
               滚轮缩放 · 按住拖拽平移 · 双击切换适应窗口 / 原始大小
             </span>

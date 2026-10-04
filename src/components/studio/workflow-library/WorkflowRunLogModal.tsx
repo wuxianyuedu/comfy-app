@@ -152,14 +152,14 @@ export function WorkflowRunLogModal({
               </span>
               {run && (
                 <span
-                  className="text-ink-muted max-w-55 truncate text-[11px]"
+                  className="text-ink-muted text-2xs max-w-55 truncate"
                   title={run.workflowName}
                 >
                   {run.workflowName}
                 </span>
               )}
               {run && (
-                <span className="bg-subtle text-ink-faint rounded-full px-1.5 py-px text-[10px] font-medium">
+                <span className="bg-subtle text-ink-faint text-3xs rounded-full px-1.5 py-px font-medium">
                   {runLogSourceLabel(run.source)}
                 </span>
               )}
@@ -168,7 +168,7 @@ export function WorkflowRunLogModal({
                   status={status}
                   label={statusLabel}
                   dot={false}
-                  className="px-1.5 py-px text-[10px]"
+                  className="text-3xs px-1.5 py-px"
                 />
               )}
             </div>

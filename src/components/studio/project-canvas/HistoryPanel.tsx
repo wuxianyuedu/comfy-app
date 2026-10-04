@@ -72,7 +72,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           历史记录
         </h2>
         {activeCount > 0 && (
-          <span className="bg-primary/20 text-primary-strong rounded-full px-2 py-0.5 text-[10px]">
+          <span className="bg-primary/20 text-primary-strong text-3xs rounded-full px-2 py-0.5">
             {activeCount} 进行中
           </span>
         )}
@@ -165,13 +165,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       {/* ── Error banner ── */}
       {error && (
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
-          <span className="text-destructive min-w-0 flex-1 text-[11px] wrap-break-word">
+          <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">
             {error}
           </span>
           <Button
             variant="ghost"
             onClick={refresh}
-            className="text-destructive h-auto shrink-0 text-[11px] underline hover:bg-transparent"
+            className="text-destructive text-2xs h-auto shrink-0 underline hover:bg-transparent"
           >
             重试
           </Button>
@@ -204,7 +204,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
               <Button
                 variant="outline"
                 onClick={() => setScope("all")}
-                className="border-border-strong text-ink-soft hover:bg-subtle hover:text-ink-bright mt-3 h-auto rounded-lg px-3 py-1.5 text-[11px]"
+                className="border-border-strong text-ink-soft hover:bg-subtle hover:text-ink-bright text-2xs mt-3 h-auto rounded-lg px-3 py-1.5"
               >
                 查看全部记录
               </Button>
@@ -248,7 +248,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       {pill.label}
                     </span>
                   )}
-                  <p className="text-ink-soft truncate px-2 py-1.5 text-[11px]">
+                  <p className="text-ink-soft text-2xs truncate px-2 py-1.5">
                     {titleOf(task)}
                   </p>
                   {onUse && task.cover && (
@@ -315,7 +315,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       {titleOf(task)}
                     </p>
                     <div className="mt-0.5 flex items-center gap-1.5">
-                      <span className="text-ink-fainter text-[11px]">
+                      <span className="text-ink-fainter text-2xs">
                         {timeAgo(task.createdAt)}
                       </span>
                       {pill && (
@@ -327,7 +327,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       )}
                       {task.status === "FAILED" && task.error && (
                         <span
-                          className="text-destructive/80 min-w-0 truncate text-[10px]"
+                          className="text-destructive/80 text-3xs min-w-0 truncate"
                           title={task.error}
                         >
                           {task.error}

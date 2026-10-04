@@ -160,7 +160,7 @@ export function ErrorPanel({
                     onClick={() => {
                       void onRetry(errorContext?.request);
                     }}
-                    className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
+                    className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
                   >
                     ↻ 重试
                   </Button>
@@ -173,7 +173,7 @@ export function ErrorPanel({
                 <Button
                   variant="outline"
                   onClick={() => setErrExpanded((value) => !value)}
-                  className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
+                  className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
                 >
                   {errExpanded ? "▲" : "▼"}
                 </Button>
@@ -216,7 +216,7 @@ export function ErrorPanel({
                       ),
                     );
                   }}
-                  className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
+                  className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
                 >
                   {detailCopyFailed ? "复制失败" : "⧉"}
                 </Button>
@@ -228,13 +228,13 @@ export function ErrorPanel({
            * 既有的单行行为，不需要完整上下文的用户
            * 就不用占竖向空间。 */}
           {!errExpanded && (validationErrors?.length ?? 0) > 0 && (
-            <p className="nodrag nopan text-danger-strong mt-1 text-[10px] font-medium">
+            <p className="nodrag nopan text-danger-strong text-3xs mt-1 font-medium">
               发现 {(validationErrors ?? []).length} 项节点配置错误（点击 ▼
               查看明细）
             </p>
           )}
           {!errExpanded && (
-            <p className="nodrag nopan text-danger-strong/80 mt-1 line-clamp-2 text-[10px] wrap-break-word">
+            <p className="nodrag nopan text-danger-strong/80 text-3xs mt-1 line-clamp-2 wrap-break-word">
               {typeof error === "string"
                 ? clampText(error.replace(/\n/g, ""), {
                     maxLength: INLINE_SNIPPET_MAX,
@@ -293,7 +293,7 @@ export function ErrorPanel({
                   {/* 0) 结构化校验错误：精确指出哪个节点哪个字段 */}
                   {(validationErrors?.length ?? 0) > 0 && (
                     <div className="border-destructive/25 bg-destructive/10 rounded border px-2 py-1.5">
-                      <div className="text-danger-strong mb-1 text-[10px] font-semibold">
+                      <div className="text-danger-strong text-3xs mb-1 font-semibold">
                         节点配置校验（{(validationErrors ?? []).length} 项）
                       </div>
                       <ValidationErrorList
@@ -304,7 +304,7 @@ export function ErrorPanel({
                   )}
                   {/* 1) 任务上下文：taskId（可点击复制）+ 时间 */}
                   {hasCtx && (
-                    <div className="bg-canvas-deep border-destructive/15 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border px-1.5 py-1 text-[10px]">
+                    <div className="bg-canvas-deep border-destructive/15 text-3xs grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border px-1.5 py-1">
                       {taskId && (
                         <>
                           <span className="text-danger-strong/60">taskId</span>
@@ -334,7 +334,7 @@ export function ErrorPanel({
                   {errorSuggestion && (
                     <Alert
                       variant="warning"
-                      className="block rounded px-2 py-1 text-[10px] leading-relaxed"
+                      className="text-3xs block rounded px-2 py-1 leading-relaxed"
                     >
                       <span className="mr-1 font-semibold">建议</span>
                       {errorSuggestion}
@@ -346,11 +346,11 @@ export function ErrorPanel({
                     <Disclosure
                       defaultOpen
                       marker="caret"
-                      className="text-danger-strong text-[10px] hover:brightness-110"
-                      panelClassName="text-[10px]"
+                      className="text-danger-strong text-3xs hover:brightness-110"
+                      panelClassName="text-3xs"
                       trigger="请求参数"
                     >
-                      <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] leading-tight whitespace-pre-wrap">
+                      <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 text-3xs mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono leading-tight whitespace-pre-wrap">
                         {typeof errorContext.request === "string"
                           ? errorContext.request
                           : (() => {
@@ -373,11 +373,11 @@ export function ErrorPanel({
                   <Disclosure
                     defaultOpen
                     marker="caret"
-                    className="text-danger-strong text-[10px] hover:brightness-110"
-                    panelClassName="text-[10px]"
+                    className="text-danger-strong text-3xs hover:brightness-110"
+                    panelClassName="text-3xs"
                     trigger="原始错误"
                   >
-                    <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] leading-tight whitespace-pre-wrap">
+                    <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 text-3xs mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono leading-tight whitespace-pre-wrap">
                       {errText}
                     </pre>
                   </Disclosure>

@@ -53,7 +53,7 @@ export function ConsolePresetList({
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{item.label}</span>
-                    <span className="text-ink-fainter block truncate text-[10px]">
+                    <span className="text-ink-fainter text-3xs block truncate">
                       {item.desc}
                     </span>
                   </span>

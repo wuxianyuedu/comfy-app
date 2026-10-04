@@ -219,7 +219,7 @@ export function MaterialLibraryPanel({
           <Button
             variant="ghost"
             onClick={() => enterFolder(null)}
-            className="text-ink-muted hover:bg-subtle hover:text-ink-soft ml-auto h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[11px] font-normal"
+            className="text-ink-muted hover:bg-subtle hover:text-ink-soft text-2xs ml-auto h-auto shrink-0 gap-1 rounded-md px-2 py-1 font-normal"
           >
             <ChevronLeft data-icon="inline-start" size={11} strokeWidth={2.5} />
             返回
@@ -230,13 +230,13 @@ export function MaterialLibraryPanel({
       {/* ── Error banner ── */}
       {error && (
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
-          <span className="text-destructive min-w-0 flex-1 text-[11px] wrap-break-word">
+          <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">
             {error}
           </span>
           <Button
             variant="ghost"
             onClick={refresh}
-            className="text-destructive h-auto shrink-0 p-0 text-[11px] underline hover:bg-transparent"
+            className="text-destructive text-2xs h-auto shrink-0 p-0 underline hover:bg-transparent"
           >
             重试
           </Button>

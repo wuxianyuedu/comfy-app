@@ -17,10 +17,10 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   if (!ref) {
     return (
       <div className="flex flex-col gap-1">
-        <div className="text-ink-soft truncate text-[11px]" title={label}>
+        <div className="text-ink-soft text-2xs truncate" title={label}>
           {label}
         </div>
-        <div className="border-border-strong bg-canvas-deep text-ink-soft flex h-27.5 items-center justify-center rounded-md border border-dashed text-[11px]">
+        <div className="border-border-strong bg-canvas-deep text-ink-soft text-2xs flex h-27.5 items-center justify-center rounded-md border border-dashed">
           需要上传图片
         </div>
       </div>
@@ -29,7 +29,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   const src = comfyImageUrl(ref);
   return (
     <div className="flex flex-col gap-1">
-      <div className="text-ink-soft truncate text-[11px]" title={label}>
+      <div className="text-ink-soft text-2xs truncate" title={label}>
         {label}
       </div>
       <div className="border-border-strong bg-canvas-deep overflow-hidden rounded-md border">
@@ -39,7 +39,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
           alt={ref.filename}
           className="block max-h-27.5 w-full object-contain"
           fallback={
-            <div className="text-ink-muted flex h-27.5 items-center justify-center text-[10px]">
+            <div className="text-ink-muted text-3xs flex h-27.5 items-center justify-center">
               图片不可用
             </div>
           }
@@ -53,7 +53,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
         />
       </div>
       {size && (
-        <div className="text-ink-soft text-right text-[10px] tabular-nums">
+        <div className="text-ink-soft text-3xs text-right tabular-nums">
           {size.width} × {size.height}
         </div>
       )}

@@ -144,7 +144,7 @@ export function HistoryList({
  白字直接压在浅色底的胶囊上（「全部 47」的 47 几乎看不见，
  用户实测）。改成 pill 自身前景色的半透明底：深浅两套主题
  都由语义 token 给出对比度。 */
-                  "rounded-full px-1.5 py-0.5 text-[10px] font-bold" +
+                  "text-3xs rounded-full px-1.5 py-0.5 font-bold" +
                   (isActive
                     ? "bg-primary-foreground/20 text-primary-foreground"
                     : "bg-surface-2 text-ink-faint")
@@ -211,7 +211,7 @@ export function HistoryList({
                 加载更多
               </Button>
             ) : (
-              <span className="text-ink-fainter text-[11px]">已全部加载</span>
+              <span className="text-ink-fainter text-2xs">已全部加载</span>
             )}
           </div>
         </div>

@@ -149,7 +149,7 @@ export function MaterialLibraryContent({
                     </div>
                   )}
                 </div>
-                <p className="text-ink-soft truncate px-2 py-1.5 text-[11px]">
+                <p className="text-ink-soft text-2xs truncate px-2 py-1.5">
                   {item.name}
                 </p>
                 {/* hover 操作 */}
@@ -217,7 +217,7 @@ export function MaterialLibraryContent({
                   <p className="text-ink-bright truncate text-[13px]">
                     {item.name}
                   </p>
-                  <p className="text-ink-fainter mt-0.5 text-[11px]">
+                  <p className="text-ink-fainter text-2xs mt-0.5">
                     {searching ? `${item.folderName} ·` : ""}
                     {displayValue(fmtBytes(item.size))}
                   </p>
@@ -282,7 +282,7 @@ export function MaterialLibraryContent({
                 {folder.name}
               </span>
               {folder.count > 0 && (
-                <span className="text-ink-fainter text-[10px] tabular-nums">
+                <span className="text-ink-fainter text-3xs tabular-nums">
                   {folder.count}
                 </span>
               )}
@@ -306,7 +306,7 @@ export function MaterialLibraryContent({
               <span className="text-ink-bright min-w-0 flex-1 truncate text-[13px]">
                 {folder.name}
               </span>
-              <span className="text-ink-fainter shrink-0 text-[11px] tabular-nums">
+              <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">
                 {folder.count > 0 ? folder.count : ""}
               </span>
               <ChevronRight

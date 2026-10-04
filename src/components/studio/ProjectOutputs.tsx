@@ -165,7 +165,7 @@ export function ProjectOutputs() {
           <h1 className="font-title u-title-page">
             {activeProject?.name ?? "未命名项目"}
           </h1>
-          <span className="bg-primary/15 text-primary-strong rounded-full px-2.5 py-0.5 text-[11px] font-medium">
+          <span className="bg-primary/15 text-primary-strong text-2xs rounded-full px-2.5 py-0.5 font-medium">
             {outputs.length} 个产出
           </span>
         </div>
@@ -207,7 +207,7 @@ export function ProjectOutputs() {
         )}
         <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-transparent" />
         <div className="absolute bottom-3 left-4">
-          <span className="rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-semibold text-white">
+          <span className="text-2xs rounded-md bg-violet-500/90 px-2 py-0.5 font-semibold text-white">
             封面
           </span>
           <p className="font-title mt-1.5 text-lg font-bold text-white drop-shadow">
@@ -273,7 +273,7 @@ export function ProjectOutputs() {
                     </span>
                   )}
                   {isVideoOut && (
-                    <span className="absolute top-2 right-2 rounded-md bg-fuchsia-500/90 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    <span className="text-3xs absolute top-2 right-2 rounded-md bg-fuchsia-500/90 px-1.5 py-0.5 font-semibold text-white">
                       视频
                     </span>
                   )}
@@ -282,7 +282,7 @@ export function ProjectOutputs() {
                     status={output.status}
                     label={taskStatusLabel(output.status)}
                     dot={false}
-                    className="absolute top-2 left-2 px-2 py-0.5 text-[11px]"
+                    className="text-2xs absolute top-2 left-2 px-2 py-0.5"
                   />
                 </div>
                 <div className="p-3">
@@ -290,7 +290,7 @@ export function ProjectOutputs() {
                     {TYPE_CHIP[output.type] ?? output.type} ·{""}
                     {displayValue(output.seed)}
                   </p>
-                  <p className="text-ink-fainter mt-1 text-[11px]">
+                  <p className="text-ink-fainter text-2xs mt-1">
                     {displayValue(timeAgo(output.createdAt))}
                   </p>
                 </div>

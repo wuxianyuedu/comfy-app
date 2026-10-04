@@ -464,7 +464,7 @@ export function ShotStudio({
       )}
 
       {shots.length > 0 && (
-        <p className="text-muted-foreground text-[11px]">
+        <p className="text-muted-foreground text-2xs">
           已生成 {doneCount}/{shots.length} 镜 —
           图片会自动作为下一阶段「视频生成」的首帧;缺失镜头仍可回上一阶段补齐。
         </p>
@@ -482,7 +482,7 @@ function StatusBadge({ status }: { status: Shot["status"] }) {
       status={status}
       label={SHOT_STATUS_LABEL[status]}
       dot={false}
-      className="px-2 py-0.5 text-[10px]"
+      className="text-3xs px-2 py-0.5"
     />
   );
 }
@@ -534,11 +534,11 @@ function ShotCardRow({
         </span>
         <StatusBadge status={shot.status} />
         {busyCount > 0 && shot.status === "running" && (
-          <span className="text-muted-foreground text-[10px]">
+          <span className="text-muted-foreground text-3xs">
             {progress > 0 ? `${Math.round(progress)}%` : "排队中…"}
           </span>
         )}
-        <span className="text-faint ml-auto text-[10px]">
+        <span className="text-faint text-3xs ml-auto">
           {channel === "local" ? "本地" : "API"}
         </span>
       </div>
@@ -565,7 +565,7 @@ function ShotCardRow({
         <Alert
           variant="danger"
           /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
-          className="mt-1 block rounded-md border-transparent px-2 py-1 text-[11px]"
+          className="text-2xs mt-1 block rounded-md border-transparent px-2 py-1"
         >
           {error}
         </Alert>
@@ -603,7 +603,7 @@ function ShotCardRow({
           </Button>
         )}
         {shot.taskId && (
-          <span className="text-faint truncate text-[10px]">
+          <span className="text-faint text-3xs truncate">
             任务 {shot.taskId.slice(0, 12)}…
           </span>
         )}

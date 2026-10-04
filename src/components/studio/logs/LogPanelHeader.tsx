@@ -139,7 +139,7 @@ export function LogPanelHeader(input: {
               }`}
             >
               {copyFailed ? (
-                <span className="text-[10px] whitespace-nowrap">复制失败</span>
+                <span className="text-3xs whitespace-nowrap">复制失败</span>
               ) : copyDone ? (
                 /* 对勾替换掉复制图标是「按下去了」的唯一可见变化 —— 闪一下
                    （`value-tick`）把它从「图标不知什么时候换的」变成一次

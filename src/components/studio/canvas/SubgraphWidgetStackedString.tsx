@@ -55,7 +55,7 @@ export function SubgraphWidgetStackedString({
     <div
       /* STRING widget 上下堆叠：标签 + 字数章占顶行，
        *  textarea 借行轨道的 `1fr` 填满剩余竖向空间。 */
-      className="group relative flex min-h-0 flex-col gap-1.5 py-1.5 pr-2 pl-5 text-[11px]"
+      className="group text-2xs relative flex min-h-0 flex-col gap-1.5 py-1.5 pr-2 pl-5"
       style={{ gridColumn: "1 / -1" }}
       data-sub-widget-name={inp.name}
       data-sub-widget-value={String(v)}
@@ -77,7 +77,7 @@ export function SubgraphWidgetStackedString({
           <span
             /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
              *  理由与 WorkflowNode 内联分支相同。 */
-            className="shrink-0 text-left text-[11px] wrap-break-word whitespace-normal"
+            className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
             style={{
               color: isConn
                 ? "var(--color-ink-strong)"
@@ -89,7 +89,7 @@ export function SubgraphWidgetStackedString({
           </span>
           {/* 标签与字数之间同样不画分隔线（与 ComfyUI 同款版式）。 */}
           <span
-            className="text-ink-muted text-right text-[10px] tracking-wider uppercase"
+            className="text-ink-muted text-3xs text-right tracking-wider uppercase"
             title={`STRING · ${stringText.length} chars`}
           >
             {stringText.length}c

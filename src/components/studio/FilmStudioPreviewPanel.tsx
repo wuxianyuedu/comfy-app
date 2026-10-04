@@ -23,7 +23,7 @@ export function FilmStudioPreviewPanel({
   return (
     <div className="border-border-subtle bg-canvas-deep relative mb-3 flex min-h-80 flex-1 items-center justify-center overflow-hidden rounded-2xl border">
       {/* Resolution hint：写尺寸表达（比例 + 档位），与全项目的尺寸口径一致。 */}
-      <span className="text-ink-faintest bg-canvas-deep absolute top-2.5 left-3 rounded px-2 py-0.5 font-mono text-[10px] backdrop-blur-sm">
+      <span className="text-ink-faintest bg-canvas-deep text-3xs absolute top-2.5 left-3 rounded px-2 py-0.5 font-mono backdrop-blur-sm">
         {sizeSpecSummary(c.size)} · {c.fps}fps
       </span>
 

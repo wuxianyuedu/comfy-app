@@ -145,7 +145,7 @@ export function WorkflowImportPanel({
             onClick={() => setShowHelpTip((value) => !value)}
             aria-label="导入格式说明"
             aria-expanded={showHelpTip}
-            className="border-border-strong bg-subtle text-ink-soft hover:border-primary/40 hover:text-primary size-5 rounded-full text-[11px]"
+            className="border-border-strong bg-subtle text-ink-soft hover:border-primary/40 hover:text-primary text-2xs size-5 rounded-full"
           >
             ?
           </Button>

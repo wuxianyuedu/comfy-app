@@ -94,7 +94,7 @@ export function HomeModelOverview() {
           </p>
         )}
         {(folded > 0 || m.emptyFolderCount > 0) && (
-          <p className="text-ink-fainter mt-2 text-[11px]">
+          <p className="text-ink-fainter text-2xs mt-2">
             {folded > 0 ? `另有 ${folded} 类未列出` : ""}
             {folded > 0 && m.emptyFolderCount > 0 ? " · " : ""}
             {m.emptyFolderCount > 0 ? `${m.emptyFolderCount} 个目录为空` : ""}

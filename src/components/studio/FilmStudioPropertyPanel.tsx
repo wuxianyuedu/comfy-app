@@ -43,7 +43,7 @@ export function FilmStudioPropertyPanel({
         {/* Shot name */}
         <FormField
           label="镜头名称"
-          labelClassName="text-ink-faint mb-1.5 text-[11px]"
+          labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
           <input
             value={selectedShot.name}
@@ -57,7 +57,7 @@ export function FilmStudioPropertyPanel({
         {/* Duration */}
         <FormField
           label="时长 (秒)"
-          labelClassName="text-ink-faint mb-1.5 text-[11px]"
+          labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
           <input
             type="number"
@@ -77,7 +77,7 @@ export function FilmStudioPropertyPanel({
         {/* Mode select */}
         <FormField
           label="生成模式"
-          labelClassName="text-ink-faint mb-1.5 text-[11px]"
+          labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
           <div className="border-border bg-subtle text-ink-field flex h-9 items-center rounded-lg border px-3 text-[13px]">
             图生视频 (Wan I2V)
@@ -87,7 +87,7 @@ export function FilmStudioPropertyPanel({
         {/* Transition */}
         <FormField
           label="转场效果"
-          labelClassName="text-ink-faint mb-1.5 text-[11px]"
+          labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
           <div className="border-border bg-subtle text-ink-strong flex h-9 items-center rounded-lg border px-3 text-[13px]">
             溶解过渡 (Cross Dissolve)
@@ -97,7 +97,7 @@ export function FilmStudioPropertyPanel({
         {/* Prompt textarea */}
         <FormField
           label="提示词 / 描述"
-          labelClassName="text-ink-faint mb-1.5 text-[11px]"
+          labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
           <Textarea
             rows={3}
@@ -143,7 +143,7 @@ export function FilmStudioPropertyPanel({
         </ToggleGroup>
 
         {c.shotSource === "project" ? (
-          <p className="text-ink-fainter bg-canvas/60 border-border rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
+          <p className="text-ink-fainter bg-canvas/60 border-border text-2xs rounded-lg border px-3 py-2 leading-relaxed">
             将使用当前项目的 {c.projectShotCount}
             {""}
             个镜头逐镜生成成片（镜头提示词与风格由工坊产出）。
@@ -153,7 +153,7 @@ export function FilmStudioPropertyPanel({
           /* 全局配置：剧本输入（从原版收起） */
           <FormField
             label="剧本 / 创意"
-            labelClassName="text-ink-faint mb-1.5 text-[11px]"
+            labelClassName="text-ink-faint mb-1.5 text-2xs"
           >
             <Textarea
               value={c.script}
@@ -168,7 +168,7 @@ export function FilmStudioPropertyPanel({
         {/* 逐镜生成用的工作流（内置模板已移除，必须从工作流库选） */}
         <FormField
           label="视频工作流（工作流库）"
-          labelClassName="text-ink-faint mb-1.5 text-[11px]"
+          labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
           <SelectMenu
             value={c.videoWorkflowId}
@@ -195,7 +195,7 @@ export function FilmStudioPropertyPanel({
         {/* 文生视频镜头合成首帧用的图类工作流（镜头自带首帧时不需要） */}
         <FormField
           label="首帧合成工作流（可选，工作流库）"
-          labelClassName="text-ink-faint mb-1.5 text-[11px]"
+          labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
           <SelectMenu
             value={c.imageWorkflowId}
@@ -225,7 +225,7 @@ export function FilmStudioPropertyPanel({
 
         {/* BGM upload */}
         <div>
-          <span className="text-ink-faint mb-1.5 block text-[11px]">
+          <span className="text-ink-faint text-2xs mb-1.5 block">
             背景音乐（可选）
           </span>
           <input
@@ -235,10 +235,10 @@ export function FilmStudioPropertyPanel({
               const f = event.target.files?.[0];
               if (f) void c.uploadBgmFile(f);
             }}
-            className="text-ink-fainter hover:text-primary-strong file:bg-primary/20 file:text-primary-strong w-full text-[11px] file:mr-2 file:rounded-lg file:border-0 file:px-3 file:py-1.5 file:text-[11px]"
+            className="text-ink-fainter hover:text-primary-strong file:bg-primary/20 file:text-primary-strong text-2xs file:text-2xs w-full file:mr-2 file:rounded-lg file:border-0 file:px-3 file:py-1.5"
           />
           {c.bgmName && (
-            <p className="text-primary-strong mt-1 truncate text-[11px]">
+            <p className="text-primary-strong text-2xs mt-1 truncate">
               已选：{c.bgmName}
             </p>
           )}
@@ -246,7 +246,7 @@ export function FilmStudioPropertyPanel({
 
         {/* Error display */}
         {c.film?.error && (
-          <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
+          <div className="border-destructive/30 bg-destructive/10 text-destructive text-2xs rounded-lg border px-3 py-2 leading-relaxed">
             {c.film.error}
             {c.film.status === "FAILED" &&
               c.film.shots.some((shot) => shot.status === "SUCCEEDED") && (
@@ -263,7 +263,7 @@ export function FilmStudioPropertyPanel({
 
         {/* FFmpeg warning */}
         {!c.ffmpegAvailable && (
-          <p className="border-warning/30 bg-warning/10 text-warning-strong rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
+          <p className="border-warning/30 bg-warning/10 text-warning-strong text-2xs rounded-lg border px-3 py-2 leading-relaxed">
             未检测到 ffmpeg，逐镜视频仍可生成，但无法自动拼接成片。
           </p>
         )}

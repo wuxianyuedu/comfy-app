@@ -110,12 +110,12 @@ export function WorkflowLibraryList({
       </div>
 
       {dragActive && (
-        <p className="border-info/30 bg-info/10 text-info-strong border-b px-3 py-1.5 text-center text-[11px]">
+        <p className="border-info/30 bg-info/10 text-info-strong text-2xs border-b px-3 py-1.5 text-center">
           松开即可读取该工作流 JSON
         </p>
       )}
       {fileErr && (
-        <p className="border-destructive/25 bg-destructive/8 text-destructive border-b px-3 py-1.5 text-[11px]">
+        <p className="border-destructive/25 bg-destructive/8 text-destructive text-2xs border-b px-3 py-1.5">
           ⚠ {fileErr}
         </p>
       )}
@@ -150,7 +150,7 @@ export function WorkflowLibraryList({
                 variant="outline"
                 size="sm"
                 onClick={onRefresh}
-                className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-1 text-[11px]"
+                className="border-border text-muted-foreground hover:bg-subtle text-2xs h-auto rounded-lg px-3 py-1"
               >
                 重试
               </Button>
@@ -183,7 +183,7 @@ export function WorkflowLibraryList({
         {/* 未载入的本地工作流排在已载入之后 */}
         {pendingRows.length > 0 && (
           <div className="border-info/25 bg-info/[0.04] mt-3 mb-3 rounded-xl border border-dashed p-2.5">
-            <p className="text-info-strong mb-2 flex items-center gap-1.5 text-[10px] font-medium">
+            <p className="text-info-strong text-3xs mb-2 flex items-center gap-1.5 font-medium">
               {/* 状态点走`ui/status-dot`（全库唯一实现，规范 16 §16.2.4.5）；
 `probing` 表达「还没载入、等待中」。 */}
               <StatusDot state="probing" sizeClass="size-1.5" />
@@ -198,7 +198,7 @@ export function WorkflowLibraryList({
                   <li key={pending.id}>
                     <div className="border-border-subtle bg-subtle flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2">
                       <span
-                        className="text-ink-strong truncate text-[11px]"
+                        className="text-ink-strong text-2xs truncate"
                         title={pending.name}
                       >
                         {pending.name}
@@ -208,7 +208,7 @@ export function WorkflowLibraryList({
                           variant="info"
                           onClick={() => onLoadPending?.(pending)}
                           disabled={loadingPending}
-                          className="h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[10px] whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+                          className="text-3xs h-auto shrink-0 gap-1 rounded-md px-2 py-1 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Download
                             data-icon="inline-start"
@@ -227,7 +227,7 @@ export function WorkflowLibraryList({
       </div>
 
       {/* 底部计数 */}
-      <div className="border-border-subtle text-ink-fainter shrink-0 border-t px-3 py-2 text-[10px]">
+      <div className="border-border-subtle text-ink-fainter text-3xs shrink-0 border-t px-3 py-2">
         共 {workflows.length + pendingRows.length} 个工作流
         {pendingRows.length > 0 ? `（${pendingRows.length} 个未载入）` : ""}
       </div>

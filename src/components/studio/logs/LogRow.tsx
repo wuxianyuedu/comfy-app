@@ -212,7 +212,7 @@ function RevealPathButton({
       >
         {children}
         {hint.on ? (
-          <span className="ml-1 text-[10px] whitespace-nowrap">
+          <span className="text-3xs ml-1 whitespace-nowrap">
             {feedback.outcome === "failed" ? "打开失败" : "已定位"}
           </span>
         ) : null}
@@ -295,7 +295,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
         {outcome === "idle" ? (
           <Copy data-icon="inline-start" size={13} />
         ) : (
-          <span className="text-[11px] whitespace-nowrap">
+          <span className="text-2xs whitespace-nowrap">
             {outcome === "done" ? "已复制" : "复制失败"}
           </span>
         )}
@@ -359,7 +359,7 @@ export const LogRow = memo(function LogRow({
   );
   const levelNode = (
     <span
-      className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_BADGE_STYLES[entry.level]}`}
+      className={`text-2xs shrink-0 rounded border px-1.5 py-0.5 font-medium uppercase ${LEVEL_BADGE_STYLES[entry.level]}`}
     >
       {entry.level}
     </span>
@@ -391,20 +391,16 @@ export const LogRow = memo(function LogRow({
       <Button
         variant="ghost"
         onClick={() => copyLocation(location)}
-        className="text-ink-fainter hover:text-ink-soft h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right text-[11px] font-normal whitespace-nowrap"
+        className="text-ink-fainter hover:text-ink-soft text-2xs h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right font-normal whitespace-nowrap"
       >
         {location}
       </Button>
     </Hint>
   ) : null;
   const sourceNode = entry.origin ? (
-    <span className="text-ink-fainter shrink-0 text-[11px]">
-      {entry.origin}
-    </span>
+    <span className="text-ink-fainter text-2xs shrink-0">{entry.origin}</span>
   ) : entry.source !== "console" ? (
-    <span className="text-ink-fainter shrink-0 text-[11px]">
-      {entry.source}
-    </span>
+    <span className="text-ink-fainter text-2xs shrink-0">{entry.source}</span>
   ) : null;
   /* 复制按钮永远在**最后一列**：它是行的终点，位置固定用户才找得到；
      `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。 */

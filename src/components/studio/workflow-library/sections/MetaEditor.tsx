@@ -72,7 +72,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
           variant="outline"
           size="xs"
           onClick={() => setOpen((value) => !value)}
-          className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink inline-flex h-auto max-w-65 gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px]"
+          className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink text-2xs inline-flex h-auto max-w-65 gap-1.5 rounded-lg px-2.5 py-1.5"
         >
           <span className="truncate">{label}</span>
           <span
@@ -98,7 +98,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
           </DialogHeader>
           <div className="mb-2 flex max-h-56 flex-col gap-1 overflow-y-auto">
             {knownNames.length === 0 && (
-              <p className="text-ink-muted px-2 py-1.5 text-[11px] leading-relaxed">
+              <p className="text-ink-muted text-2xs px-2 py-1.5 leading-relaxed">
                 全局标签库为空，可直接在下方输入新标签（保存时自动入库）。
               </p>
             )}

@@ -50,7 +50,7 @@ export function ShotFilmStrip({
         {/* 不是章节标题，是一行的标签：整条带的可访问名由 section 的 aria-label 给。
             工坊有「标题元素不许硬写字号、档位归一档」的判据，这里本来也不该占一档。 */}
         <span className="text-ink-bright text-xs font-medium">镜头胶片带</span>
-        <span className="text-ink-fainter text-[11px] tabular-nums">
+        <span className="text-ink-fainter text-2xs tabular-nums">
           {doneCount}/{shots.length} 镜成图
           {failedCount > 0 ? ` · ${failedCount} 镜失败` : ""}
         </span>

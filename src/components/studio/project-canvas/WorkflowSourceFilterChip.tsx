@@ -46,7 +46,7 @@ export function WorkflowSourceFilterChip({
             }`}
           />
           <span
-            className={`text-[10px] font-semibold ${
+            className={`text-3xs font-semibold ${
               isLocal ? "text-status-online" : "text-primary-strong"
             }`}
             style={{ fontFamily: "var(--font-sans)" }}

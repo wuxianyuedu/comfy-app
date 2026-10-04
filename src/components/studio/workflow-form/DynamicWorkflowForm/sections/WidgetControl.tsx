@@ -184,7 +184,7 @@ export function WidgetControl({
         <div className={compact ? "" : "mt-1"}>
           <Button
             variant="ghost"
-            className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright gap-1.5 rounded-md px-2.5 text-[11px] ${
+            className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright text-2xs gap-1.5 rounded-md px-2.5 ${
               compact ? "h-[28px] w-full" : "h-auto py-1.5"
             } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
             disabled={disabled || uploading}
