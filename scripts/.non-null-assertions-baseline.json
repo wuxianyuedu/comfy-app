@@ -2,7 +2,7 @@
   "generatedAt": "2026-10-04",
   "ruleVersion": 2,
   "note": "src 生产代码里 `!` 非空断言的数量(棘轮,只许降不许升)。判据:TypeScript AST 的 NonNullExpression。规则版本变了必须同步改脚本常数。",
-  "total": 168,
+  "total": 167,
   "files": {
     "src/app/api/custom-nodes/route.ts": 9,
     "src/app/api/logs/current/route.ts": 1,

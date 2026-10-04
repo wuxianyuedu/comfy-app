@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workflowParamMapInputSchema } from "~/lib/workflow/workflow-param-map";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
@@ -30,7 +31,11 @@ export const GenerateSchema = z.object({
   lastFrame: z.string().optional(),
   /** 视频时长：帧数（按秒表达的口由 workflowInputs 里的 duration 落下）。 */
   frames: z.number().int().min(1).max(1000).optional(),
-  paramMap: z.record(z.string(), z.string()).optional(),
+  /* 走 `paramMap` 列的**权威入参 schema**（`~/lib/workflow/workflow-param-map`）。
+   * 此前这里是 `z.record(z.string(), z.string())` ——「一层 key → string」，
+   * 表达不了库里真实的三层结构（`source.mode:<模式>` 的嵌套），与
+   * `workflow.update` 的 `z.unknown()` 也不是同一个形状。 */
+  paramMap: workflowParamMapInputSchema,
   workflowInputs: z.array(WorkflowInputSchema).optional(),
   projectId: z.string().optional(),
   /** 工坊镜头号：只作归属，不参与执行（执行载荷与它无关）。 */

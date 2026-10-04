@@ -16,7 +16,7 @@ function makeRow(overrides: Partial<WorkflowRow> = {}): WorkflowRow {
     id: "wf-1",
     name: "demo",
     taskType: "t2i",
-    createdAt: "2026-08-01T00:00:00.000Z",
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
     ...overrides,
   };
 }

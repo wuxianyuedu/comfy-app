@@ -12,6 +12,7 @@ import {
   getWorkflowType,
   normalizeTaskType,
 } from "~/lib/workflow/workflow-types";
+import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /** 工作流库页头右侧动作按钮的**统一形态基类**：紧凑、同高度同圆角同字重。
  *  主 / 次按钮只差配色（渐变 vs outline），由调用方各自追加，避免三处各写一份
@@ -62,8 +63,16 @@ export interface WorkflowRow {
   /** 规范默认模式码；必须出现在 `modes` 里。
    *  与 `taskType` 保持同步，供旧版单值筛选用。 */
   defaultMode?: string | null;
-  createdAt: string;
-  paramMap?: Record<string, string> | null;
+  /** 落库时间。**是 `Date` 不是字符串**：`workflow.list` 走 tRPC，
+   *  `src/server/api/trpc.ts` 挂着 `transformer: superjson` —— `Date` 过线
+   *  保持 `Date`（同类错配 `ModelRow.createdAt` 已修）。 */
+  createdAt: Date;
+  /** 这条工作流的 `paramMap` JSON 列（对外参数落点 / 输出取值行）。
+   *  权威类型在 `~/lib/workflow/workflow-param-map`：服务端路由入参与这里
+   *  是**同一份**声明。此前这里是 `Record<string, string>`（一层 key →
+   *  string），而库里真实落的是按模式归拢的三层结构 —— 声明与运行时不符，
+   *  没有任何消费点按它读，只靠双跳断言抹平（ISSUE #1460）。 */
+  paramMap?: WorkflowParamMap | null;
   preview?: WorkflowPreviewT;
   /** 用户维护的对外 IO，由 GET /api/workflows 下发。
    *  没有图谱预览时用它在库里渲染卡片。 */
@@ -89,9 +98,11 @@ export interface WorkflowRow {
    *  （例如在设置
    *  LOCAL_WORKFLOWS_PATH 之前完成的旧导入）。 */
   sourceRoot?: string | null;
-  /** 分类："local" = 绑定磁盘上的文件；"online" = 粘贴导入。
-   *  由有没有 `sourcePath` 推导。 */
-  source?: "local" | "online";
+  /** 分类："local" = 绑定磁盘上的文件；"online" = 粘贴导入；
+   *  "local-pending" = 磁盘上有、但还没导入过的占位行。
+   *  由有没有 `sourcePath` 推导（占位行走 `workflow-local-roots` 的
+   *  `LocalPendingRow`）。 */
+  source?: "local" | "online" | "local-pending";
   /** 手动同步支持。`diskDirty = (diskMtimeSec >
    *  sourceMtimeSec)` 表示磁盘上的文件在上次导入之后被改过；
    *  卡片据此显示「↻ 同步」动作，POST 到
@@ -164,8 +175,14 @@ export interface PendingRow {
   pendingMtime?: number;
 }
 
-/** `source` 字段是服务端可选回填的，缺失时按有无 sourcePath 判定。 */
+/** `source` 字段是服务端可选回填的，缺失时按有无 sourcePath 判定。
+ *
+ *  `"local-pending"`（磁盘上有、还没导入）归入 `"local"`：它按定义**就是**本地
+ *  来源，两态只是给卡片标「未导入」用的。`workflows` 列表里其实不会出现这一档
+ *  （占位行走独立的 `pending`），这里显式收拢是为了让「三档声明 → 两档筛选」
+ *  这条映射写在类型旁边 —— 否则加档时筛选条件会静默漏掉它。 */
 function sourceOf(workflow: WorkflowRow): "local" | "online" {
+  if (workflow.source === "local-pending") return "local";
   return workflow.source ?? (workflow.sourcePath ? "local" : "online");
 }
 
