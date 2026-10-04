@@ -29,8 +29,8 @@
 // （#1074）。这条正是 P3 §5 里之前停在 comfyui 边时点出的「lifecycle 卡在
 // log-paths」——本批随 lib 地基批收口。
 // 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
-import type { spawn } from "child_process";
-import fs from "fs";
+import type { spawn } from "node:child_process";
+import fs from "node:fs";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { probeComfyBase, probeComfyAtPort } from "./client";
 import { logger } from "~/lib/core/logger";

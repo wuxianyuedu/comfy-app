@@ -16,10 +16,10 @@
 
 import { errorText } from "~/lib/error-message";
 import "server-only";
-import { spawn } from "child_process";
-import { connect } from "net";
-import fs from "fs";
-import path from "path";
+import { spawn } from "node:child_process";
+import { connect } from "node:net";
+import fs from "node:fs";
+import path from "node:path";
 import { logger } from "~/lib/core/logger";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { sleep } from "~/lib/with-timeout";

@@ -15,7 +15,7 @@
  * 本文件只留编排与缓存两层。
  */
 import "server-only";
-import fs from "fs";
+import fs from "node:fs";
 import { TRPCError } from "@trpc/server";
 import { workflowTemplateRepository } from "~/lib/core/repository";
 import { getSettingsSync } from "~/lib/app-settings/app-settings.server";

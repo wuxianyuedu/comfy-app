@@ -6,8 +6,8 @@
 // 「没有这一项」处理 —— 目录清单是给用户看的参考信息，读不到不该让设置页报错。
 //
 // §18.4 第二类（`.server.ts`）：同一领域的服务端拆件，客户端只引纯函数那个。
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { classifyComfyInstall } from "./instance-kind";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import {

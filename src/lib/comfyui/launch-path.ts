@@ -5,8 +5,8 @@
 // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。只用 fs / path
 // 做只读探测，不引任何 server-only 侧模块；P3 executor host 加入后可被 scripts
 // 侧直接 import。
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 export type ComfyLaunchPlan = {
   cmd: string;

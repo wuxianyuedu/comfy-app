@@ -10,8 +10,8 @@
  */
 
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { lastSegments } from "~/lib/path-display";
 import { formatCompactStamp } from "~/lib/time-format";
 import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";

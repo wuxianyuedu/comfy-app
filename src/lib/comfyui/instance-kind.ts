@@ -20,8 +20,8 @@
 // `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
 // desktop-instance / launch-path / status 静态引本模块的形态识别，摘掉
 // server-only 是它们能在纯 Node 里加载的前置。
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 export type ComfyInstallKind = "desktop" | "portable" | "venv" | "unknown";
 

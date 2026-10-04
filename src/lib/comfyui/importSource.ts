@@ -16,8 +16,8 @@
 
 import "server-only";
 import { errorText } from "~/lib/error-message";
-import { promises as fs } from "fs";
-import { createHash } from "crypto";
+import { promises as fs } from "node:fs";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { logger } from "~/lib/core/logger";
 import { asRawWorkflow, extractPositions } from "~/lib/comfyui/raw";

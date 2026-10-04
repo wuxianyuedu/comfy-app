@@ -9,9 +9,9 @@
  *      「未运行」，原因一个字都没有。
  */
 import { describe, expect, it, vi } from "vitest";
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import {
   describeComfyExit,

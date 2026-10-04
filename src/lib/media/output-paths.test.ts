@@ -13,9 +13,9 @@
  * 平台中立：期望值一律用 `path.join` / `path.resolve` 现算，不写死 `/` 或 `\`
  * ——用例在 win32 上跑，但判据本身不能只在 win32 成立。
  */
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, afterAll } from "vitest";
 
 import {

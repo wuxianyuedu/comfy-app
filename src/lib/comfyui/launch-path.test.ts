@@ -4,7 +4,7 @@
 // 而 resolveComfyLaunchPlan 内部 path.resolve 会补——两边不一致会让注入的
 // exists 永远 miss（表现为「路径不存在」，在 Windows 上整组用例全红）。
 
-import path from "path";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveComfyLaunchPlan } from "./launch-path";
 

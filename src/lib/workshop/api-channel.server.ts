@@ -11,8 +11,8 @@
 import { upperToken } from "~/lib/upper-token";
 import "server-only";
 
-import { promises as fs, readFileSync } from "fs";
-import path from "path";
+import { promises as fs, readFileSync } from "node:fs";
+import path from "node:path";
 
 import { remoteModelRepository } from "~/lib/core/repository";
 import {

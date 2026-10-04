@@ -6,7 +6,7 @@ import { clampInt } from "~/lib/clamp";
 import { errorText } from "~/lib/error-message";
 import "server-only";
 
-import { promises as fs } from "fs";
+import { promises as fs } from "node:fs";
 
 import { isRecord } from "~/lib/is-record";
 import { artifactDiskPath } from "~/lib/media/output-paths";
