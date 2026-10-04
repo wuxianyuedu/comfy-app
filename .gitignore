@@ -89,6 +89,10 @@ playwright-report/
 # `generated/` 里是**本检出**的解析链端口，入库必然与别人的 checkout 不符。
 /.storybook/assets/
 /.storybook/generated/
+# `tests/storybook-tsc-input` ④ 把 generated 改名成它来复量「缺生成件」的
+# 形态（同盘 rename 原子；不进 Temp——本机实测会被外部清理者移走）。用例
+# finally 会还原，这里只兜异常退出留下的残留。
+/.storybook/generated.stash/
 /src/generated/
 
 # Tauri generated assets (rebuilt by scripts/build-desktop.mjs)

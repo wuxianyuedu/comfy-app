@@ -137,9 +137,9 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
   it(
     "④ 缺了生成件时 tsc 真的退 0 —— 拿真检出复量，不靠读配置下结论",
     /* 原生 TS7 全仓 --noEmit 跑两遍（缺生成件一遍 + 在位一遍），独立跑 ~9s、
-     * 钩子组 C 的降配 forks 下实测 ~32s —— 贴着全局 30s 上限，给足余量
-     * （与 check-reformat-only 的慢 exec 用例同一档）。 */
-    { timeout: 120_000 },
+     * 钩子组 C 的降配 forks 下实测 ~32s、全量 `pnpm test`（8 forks 满载）实测
+     * 能顶穿 120s —— 给到 300s（check-reformat-only 慢用例 120s 的再上一档）。 */
+    { timeout: 300_000 },
     () => {
       /* 这一条判的是**结果**：把生成件挪走（= 新检出的形态），tsc 必须退 0。
        不读 `exclude` 下结论 —— 实测那条路根本不管用（见下面那组反证）。 */
@@ -149,13 +149,18 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         "解不出任何可用的 tsc 可执行（@typescript/native / typescript 两个形态都试过了）",
       ).not.toBeNull();
       const generatedDir = path.join(ROOT, GENERATED_DIR_REL);
-      const stash = path.join(
-        os.tmpdir(),
-        `sb-generated-${String(process.pid)}`,
-      );
+      /* stash 放**仓库内**的同盘兄弟目录（.gitignore 收了它），不放 os.tmpdir：
+       * 本机实测 Temp 里的 stash 会被外部清理者在用例进行中移走，restore 因此
+       * 落空、生成件目录整个丢失；同盘 rename 原子且无人清理。确定性命名 +
+       * 前置清理 = 上一次异常退出留下的残留不致阻断本次。 */
+      const stash = path.join(ROOT, ".storybook", "generated.stash");
       const existed = fs.existsSync(generatedDir);
       try {
-        if (existed) fs.renameSync(generatedDir, stash);
+        if (existed) {
+          if (fs.existsSync(stash))
+            fs.rmSync(stash, { recursive: true, force: true });
+          fs.renameSync(generatedDir, stash);
+        }
         const without = tsc!.run(["--noEmit"]);
         expect(
           without.status,
@@ -163,8 +168,13 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         ).toBe(0);
       } finally {
         if (existed) {
-          fs.rmSync(generatedDir, { recursive: true, force: true });
-          fs.renameSync(stash, generatedDir);
+          /* 先还原、再清理缺省态 —— 顺序反了的话，用例在两步之间被
+           * （超时等）终止会把生成件目录整个丢下，后续每个提交都在
+           * 「目录缺失」的形态上跑。renameSync 对已存在的目标会失败，
+           * 所以还原前必须确保目标不在；rmSync 只兜「有并行残留」这一种。 */
+          if (fs.existsSync(generatedDir))
+            fs.rmSync(generatedDir, { recursive: true, force: true });
+          if (fs.existsSync(stash)) fs.renameSync(stash, generatedDir);
         }
       }
       // 生成件在位时也得是绿的（这一条顺带证明上面那次不是「tsc 根本没跑」）。
