@@ -433,6 +433,9 @@ const DOMAIN_EXEMPT = new Set([
    * —— **九个文件**都在用它，横跨 `project-canvas` / `workflow` / `media` /
    * `workshop` / 视图层，且逻辑层与视图层必须同一口径。与 `file-io` 同款：顶层单例。 */
   "src/lib/browser-storage.ts",
+  /* 外观偏好（圆角 / 标题字阶）：改的是全局 CSS 变量，必须跨路由成立，
+     与 browser-storage 同款顶层单例。 */
+  "src/lib/appearance.ts",
   /* 「把一次异步动作的结果接到反馈通道上」的唯一出口（ISSUE #672）：
    * 设置页（12 个动作）、工作流库（8 个）、历史列表与详情、模型标签、
    * 训练工作室、影片工作室、画布拖放、工坊对话、模型目录配置

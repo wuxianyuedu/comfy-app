@@ -16,8 +16,24 @@ import { StatusButton } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
+  /* 当前版本：`currentVersion` 此前只被拼进 detail 文案，界面从未单独列出 ——
+     用户想知道"我装的是哪一版"时这一屏一个字都没给。没读取过也不留空白，
+     而是说清它从哪来。版本号与「能不能检测更新」是两件事，所以浏览器分支同样给。 */
+  const versionLine = (
+    <p className="text-muted-foreground mb-3 text-sm">
+      当前版本：
+      <span className="text-ink tabular-nums">
+        {c.appUpdate.currentVersion ?? "尚未读取"}
+      </span>
+      {!c.appUpdate.currentVersion
+        ? "（点「检测更新」后由本机应用信息读取）"
+        : ""}
+    </p>
+  );
+
   return (
     <SettingsCard title="应用更新">
+      {versionLine}
       {!c.appUpdate.inShell ? (
         <p className="text-muted-foreground text-sm">
           当前运行在浏览器 / 开发模式，非桌面壳内，无法检测应用更新。

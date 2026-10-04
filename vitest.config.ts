@@ -423,6 +423,9 @@ export default defineConfig({
          *     出口没接上就等于「保留原样但没人知道」。 */
         "src/lib/workshop/draft-integrity.ts",
         "src/components/workshop/DraftIntegrityHint.tsx",
+        /* 外观偏好（圆角 / 标题字阶）的令牌应用点与持久化形状。
+         * 「默认档必须与引入前逐像素相同」这条判据就靠它有数字看着。 */
+        "src/lib/appearance.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -1517,6 +1520,15 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 外观偏好模块（与 coverage.include 同批）。数值取隔离实测向下取整到 5：
+         * 行满档；未走到的两支是「档位表里找不到 id 时的兜底取值」，
+         * 语义上已被「不认就整份回落」那组用例覆盖，不为凑分支数造夹具。 */
+        "src/lib/appearance.ts": {
+          lines: 100,
+          functions: 90,
+          statements: 95,
+          branches: 85,
         },
         /* 视图页签条（与 `coverage.include` 同批）。数值取隔离实测向下取整到 5：
          * 未覆盖的 158-160 是「+」菜单里那一行的点击 —— jsdom 里下拉不展开，
