@@ -52,7 +52,6 @@
     "src/lib/comfyui/workflow-preview.ts": 12,
     "src/lib/core/repository-base.ts": 1,
     "src/lib/core/repository-film.ts": 1,
-    "src/lib/core/repository-lora.ts": 1,
     "src/lib/core/repository-model-tag.ts": 3,
     "src/lib/core/repository-model.ts": 2,
     "src/lib/core/repository-post.ts": 1,

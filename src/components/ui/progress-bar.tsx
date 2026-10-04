@@ -50,7 +50,7 @@ import { cn } from "~/lib/utils";
  * **外部 API 向后兼容**（`value` / `label` / `showValue` / `className`
  * / `trackClassName` / `fillClassName` / `minVisible`）——15 处消费点
  * （`FilmStudio` / `WorkshopHeader` / `WorkshopEncapsulationPanel` /
- * `TrainingStudio` / `CanvasProgressIndicator` 等）零改动。
+ * `CanvasProgressIndicator` 等）零改动。
  *
  * 之后补的唯一新增项 `ariaLabel`（可选）：给**条上没有可见文字**的用法
  * （工坊顶栏那种一段一根细条的分段控件）补可访问名。`label` 是渲染出来的

@@ -5,8 +5,8 @@
 //
 //   api/film/bgm/route.ts        `replace(/[^\w.\-一-龥]/g, "_").slice(0, 60)`
 //                                —— 保留点、保留 CJK、截到 60
-//   lib/comfyui/trainer.ts       `replace(/[^\w一-龥-]+/g, "_")`
-//                                —— 不保留点！（Lora 名里的 `.` 会被吃掉）
+//   （已删的 lib/comfyui/trainer.ts 也曾有一份 —— 不保留点，Lora 名里的 `.`
+//     会被吃掉；该模块随炼丹功能整体废弃删除，此处仅存形态账）
 //   server/workshop/comfyui.ts   两份 `replace(/[^\w.-]/g, "_")`
 //                                —— 保留点、**不吃 CJK**
 //
@@ -47,6 +47,6 @@ export function safeFileNameSegment(raw: string | null | undefined): string {
 export function safeDisplayName(raw: string | null | undefined): string {
   if (!raw) return "";
   /* `\u4e00-\u9fa5` 是「基本汉字区」—— 与全库既有的两处 CJK 判据同口径
-   *（收口前 `bgm` 与 `trainer` 各写了一遍这个区间）。 */
+   *（收口前 `bgm` 与被删的 `trainer` 各写了一遍这个区间）。 */
   return raw.replace(/[^\w.\-\u4e00-\u9fa5]+/g, "_");
 }

@@ -254,34 +254,6 @@ describe("setting.save", () => {
     expect(saveSettingsMock).not.toHaveBeenCalled();
   });
 
-  describe("trainerUrl 的协议白名单（判据在 ~/lib/url-scheme，两个方向都要对）", () => {
-    it.each([
-      [""], // 空串 = 未配置，是合法值（设置页用它清掉这一项）
-      ["http://127.0.0.1:7860"],
-      ["https://x.example/t"],
-      // 大写协议是合法地址：旧的前缀正则大小写敏感，在这里会误拒
-      ["HTTPS://x.example/t"],
-    ])("%j 放行并写进设置", async (url) => {
-      await createCaller(makeCtx()).save({ trainerUrl: url });
-      expect(saveSettingsMock.mock.calls[0]?.[0]).toMatchObject({
-        trainerUrl: url,
-      });
-    });
-
-    it.each([
-      ["file:///C:/Windows"],
-      ["javascript:alert(1)"],
-      // 前缀匹配放得行、但不是合法 URL —— 存进去之后每次连它都换回一句难查的错误
-      ["http://  "],
-      ["not a url"],
-    ])("%j → BAD_REQUEST 且不写", async (url) => {
-      await expect(
-        createCaller(makeCtx()).save({ trainerUrl: url }),
-      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-      expect(saveSettingsMock).not.toHaveBeenCalled();
-    });
-  });
-
   describe("闩锁的清除条件（ISSUE #290 / #335）", () => {
     it("显式重新开启自动启动 → 清掉「手动关闭后不启动」闩锁", async () => {
       await createCaller(makeCtx()).save({ comfyuiAutoStart: true });

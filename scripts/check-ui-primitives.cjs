@@ -178,8 +178,8 @@
  *   P17 视图里自写「键值行」（**硬闸**）—— `~/components/ui/key-value-rows`
  *      的 `KeyValueRows` 是唯一出口。此前全库 **5 处**各写一遍「标签 + 值 +
  *      空值占位」的行，四种布局语言：`ProjectOutputs` 的隔行参数表、
- *      `HistoryDetailModal` 的生成参数卡与 `<table>` 参数表、`TrainingStudio`
- *      的 Metrics 网格、`BrowserStatusBar` 的显存/内存内联项。
+ *      `HistoryDetailModal` 的生成参数卡与 `<table>` 参数表、
+ *      `BrowserStatusBar` 的显存/内存内联项（另含已删的训练工作室 Metrics 网格）。
  *
  *      ⚠️ 判据取「一个 muted/faint 色的标签叶子元素，紧随其后出现**值的
  *      渲染器**（`displayValue(` / `JSON.stringify(` / `typeof x === "string"`）」。
@@ -192,7 +192,7 @@
  *      `~/components/ui/media-thumbnail` 的 `MediaThumbnail` 是唯一出口。
  *      此前全库 **18 个文件**各自裸写 `<img>`，而**加载失败这一侧有四种写法**：
  *      `HomePage` 项目缩略图用 `event.target.style.display = "none"`（绕过 React
- *      直接改 DOM，失败的那一格留下**空洞**）、`TrainingStudio` 数据集缩略图用
+ *      直接改 DOM，失败的那一格留下**空洞**）、已删的训练工作室数据集缩略图用
  *      `style.visibility = "hidden"`（同款）、`WorkflowImagePreview` 自持
  *      `useState(failed)` + 「图片不可用」方块（写法对，但每个落点重写一遍）、
  *      `SettingsPrimitives` 同上换成长文案。**另外 14 处压根没有兜底** ——
@@ -4309,7 +4309,7 @@ const HARD_GATE_RULES = new Set([
    * （CharacterDesigner / FinalComposer / ShotStudio / StoryboardPlanner
    * 两处 / VideoStudio）→ `EmptyState variant="hint"`；本 PR studio /
    * model 六处（`studio/ModelLibrary.tsx` 两处 · `studio/history/HistoryList.tsx`
-   * · `studio/ProjectOutputs.tsx` · `studio/TrainingStudio.tsx`
+   * · `studio/ProjectOutputs.tsx`
    * · `studio/WorksGallery.tsx` · `model/ModelLibrary.tsx`）→
    * `EmptyState`（`page` 档为主、`minHeightClass` 与原 `min-h-[N]` 对齐、
    * `WorksGallery` 的类别装饰色块走已 allow 的 `WORKS_CATEGORY_ICON_BG`

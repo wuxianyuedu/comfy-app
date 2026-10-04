@@ -16,14 +16,12 @@
  * 这样「视图层要一个默认端口」与「服务端要一份设置」走的是两条路，前者
  * 永远碰不到 fs。
  *
- * 设置以 JSON 文件持久化（不占 DB 迁移）：ComfyUI 安装路径、LoRA 训练后端地址、
+ * 设置以 JSON 文件持久化（不占 DB 迁移）：ComfyUI 安装路径、
  * 默认视频工作流等「不属于 Prisma 模型」的偏好。值回落到环境变量；首次读取即
  * 落盘默认值，因此全新安装开箱可用。文件被 git 忽略（本机配置）。
  */
 
 export type AppSettings = {
-  trainerUrl: string;
-  comfyLorasDir: string;
   /**
    * ComfyUI 安装目录。
    * comfyuiPath 语义（配置的目录可以不是源码根本身）：
@@ -99,8 +97,6 @@ export type AppSettings = {
 };
 
 export const DEFAULTS: AppSettings = {
-  trainerUrl: process.env.LORA_TRAINER_URL ?? "",
-  comfyLorasDir: process.env.COMFY_LORAS_DIR ?? "",
   comfyuiPath: process.env.COMFYUI_PATH ?? "",
   comfyuiExtraArgs: "",
   // 环境变量只是这一项的**默认值**（与上面 comfyuiPath 同形）；设置页里填过的值优先。

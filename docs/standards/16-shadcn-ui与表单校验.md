@@ -2067,7 +2067,7 @@ className={`…h-[85vh]… ${wide ? W.width : W.base}`}            // ← ② �
 
 - **数值**（`~/lib/progress`）由视图层**与 `src/lib` 两侧共用** ——
   `comfyui/executor-ws` 落库、`project-canvas/canvas-api` 透传、
-  `workshop/generation-client` 转发、`core/repository-lora` 写库都要
+  `workshop/generation-client` 转发都要
   「值 / 上限 → 百分比」。两侧口径不一致就会出现「界面卡在 100%
   而数据库还在涨」。所以它进 `DOMAIN_EXEMPT`（与 `format-bytes` /
   `display-value` / `list-filter` 同款：唯一持有者 + 任何域消费的顶层单例）。
@@ -3920,12 +3920,12 @@ asRecord(v); // 宽松视图：转成 Record 或 null（调用处接着写 ?.pro
 ### 16.2.4.53 「把一段文本变成安全的文件名片段」有四份正则（P49 硬闸）
 
 同一件「非法字符换成 `_`」在全库有 **四份各不相同的正则**，而**差异没有一处
-写下来**：
+写下来**（其中 `lib/comfyui/trainer.ts` 一份随炼丹功能废弃已删除，下表存形态账）：
 
 | 落点                                 | 正则               | 保留点 | 保留 CJK |
 | ------------------------------------ | ------------------ | ------ | -------- |
 | `api/film/bgm/route.ts`              | `/[^\w.\-一-龥]/g` | ✅     | ✅       |
-| `lib/comfyui/trainer.ts`             | `/[^\w一-龥-]+/g`  | **❌** | ✅       |
+| ~~`lib/comfyui/trainer.ts`~~（已随炼丹废弃删除） | `/[^\w一-龥-]+/g`  | **❌** | ✅       |
 | `server/workshop/comfyui.ts`（两处） | `/[^\w.-]/g`       | ✅     | **❌**   |
 
 差异是**互相矛盾**而不是「覆盖面不同」：同一个中文名在 bgm 上传路径被保留、

@@ -497,43 +497,6 @@ export const skill = sqliteTable(
   ],
 );
 
-export const loraTrainingJob = sqliteTable(
-  "loraTrainingJob",
-  {
-    id: cuid(),
-    userId: text("userId")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    baseModel: text("baseModel").notNull(),
-    triggerWord: text("triggerWord").notNull(),
-    classWord: text("classWord"),
-    datasetImages: text("datasetImages", { mode: "json" }).notNull(),
-    resolution: integer("resolution").notNull().default(512),
-    steps: integer("steps").notNull().default(1500),
-    batchSize: integer("batchSize").notNull().default(4),
-    learningRate: real("learningRate").notNull().default(0.0001),
-    rankDim: integer("rankDim").notNull().default(32),
-    networkAlpha: integer("networkAlpha").notNull().default(16),
-    optimizer: text("optimizer").notNull().default("AdamW8bit"),
-    scheduler: text("scheduler").notNull().default("cosine"),
-    seed: integer("seed").notNull().default(0),
-    status: text("status").notNull().default("QUEUED"),
-    progress: integer("progress").notNull().default(0),
-    outputName: text("outputName"),
-    logs: text("logs", { mode: "json" }),
-    error: text("error"),
-    createdAt: dateNotNull("createdAt")
-      .notNull()
-      .$defaultFn(() => new Date()),
-    updatedAt: dateNotNull("updatedAt")
-      .notNull()
-      .$defaultFn(() => new Date())
-      .$onUpdate(() => new Date()),
-  },
-  (t) => [index("lora_user_created_idx").on(t.userId, t.createdAt)],
-);
-
 export const filmProject = sqliteTable(
   "filmProject",
   {
@@ -757,7 +720,6 @@ export type LlmConfig = InferSelectModel<typeof llmConfig>;
 export type RemoteModel = InferSelectModel<typeof remoteModel>;
 export type RemoteModelInsert = InferInsertModel<typeof remoteModel>;
 export type Skill = InferSelectModel<typeof skill>;
-export type LoraTrainingJob = InferSelectModel<typeof loraTrainingJob>;
 export type FilmProject = InferSelectModel<typeof filmProject>;
 export type FilmShot = InferSelectModel<typeof filmShot>;
 export type AuditLog = InferSelectModel<typeof auditLog>;
@@ -772,6 +734,5 @@ export type UserInsert = InferInsertModel<typeof user>;
 export type TaskInsert = InferInsertModel<typeof task>;
 export type ProjectInsert = InferInsertModel<typeof project>;
 export type SkillInsert = InferInsertModel<typeof skill>;
-export type LoraTrainingJobInsert = InferInsertModel<typeof loraTrainingJob>;
 export type FilmProjectInsert = InferInsertModel<typeof filmProject>;
 export type WorkflowTemplateInsert = InferInsertModel<typeof workflowTemplate>;

@@ -142,36 +142,6 @@ export class ModelRepository extends DrizzleRepository<Model> {
     for (const r of rows) if (r.folder) out[r.folder] = Number(r.count);
     return out;
   }
-
-  async registerLora(input: {
-    fileName: string;
-    name: string;
-    baseModel: string;
-    triggerWord: string;
-  }): Promise<void> {
-    await db
-      .insert(model)
-      .values({
-        name: input.name,
-        type: "LORA",
-        fileName: input.fileName,
-        folder: "loras",
-        baseModel: input.baseModel,
-        category: "USER",
-        source: "LOCAL",
-        isAvailable: true,
-        description: `由炼丹训练产出 · 触发词 ${input.triggerWord}`,
-      })
-      .onConflictDoUpdate({
-        target: [model.fileName, model.folder],
-        set: {
-          isAvailable: true,
-          name: input.name,
-          baseModel: input.baseModel,
-          folder: "loras",
-        },
-      });
-  }
 }
 
 export class UserModelConfigRepository extends DrizzleRepository<UserModelConfig> {

@@ -10,7 +10,7 @@ import {
  * `KeyValueRows` 是「把一个对象渲染成键值行」的**唯一出口**（规范 16 §16.2.4.20）。
  *
  * 它收的是全库 5 处各写一遍的「标签 + 值 + 空值占位」：`ProjectOutputs` 的参数表、
- * `HistoryDetailModal` 的生成参数卡与参数表、`TrainingStudio` 的 Metrics、
+ * `HistoryDetailModal` 的生成参数卡与参数表、
  * `BrowserStatusBar` 的显存/内存。同一件事曾有**四种布局语言、五份 `map`** ——
  * 而「空值显示什么」早就由 `~/lib/display-value` 的 `displayValue` 收口了，
  * 剩下的只有**布局**这一层没被说出来。本组件收的就是这一层。

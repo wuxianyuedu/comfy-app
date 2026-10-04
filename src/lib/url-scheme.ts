@@ -1,11 +1,11 @@
 /* 「这个地址能不能交给外部程序」的协议判据 —— 只允许 http / https，一处定义。
  *
  * 为什么单独一处（规范 §12.18 复用优先 / §12.12 不许跨文件复制实现）：
- * 同一句「协议必须是 http(s)」此前在库里写了四遍，而**该判的地方没判**：
+ * 同一句「协议必须是 http(s)」此前在库里写了多遍，而**该判的地方没判**：
  *   · `~/lib/comfy/comfy-embed.ts` 的 `isHttpOrigin()` —— 用 `new URL()` 解析后比
  *     protocol（唯一一份「按解析结果判」的正确形态）；
- *   · `setting.trainerUrl` / `setting.comfyEmbeddable` 的 `base`+`hostOrigin` /
- *     `llm.baseUrl` —— 三处各写一份 `/^https?:\/\//` 正则。
+ *   · `setting.comfyEmbeddable` 的 `base`+`hostOrigin` / `llm.baseUrl` /
+ *     已删的 `setting.trainerUrl` —— 各写一份 `/^https?:\/\//` 正则。
  * 正则那份有两个实测缺口（两个方向都错）：`HTTPS://x` 被它**误拒**（大小写敏感，
  * 而那是合法的 https 地址），`http://␣␣` 与 `http://x y` 被它**误放行**（前缀匹配
  * 不是解析，串根本不成其为一个地址）—— 实测见 `url-scheme.test.ts` 最后一条。

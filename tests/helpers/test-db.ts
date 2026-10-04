@@ -70,7 +70,6 @@ const TABLES = [
   "workflowModelTag_workflowTemplate",
   "llmConfig",
   "skill",
-  "loraTrainingJob",
   "filmProject",
   "filmShot",
   "auditLog",
@@ -148,14 +147,6 @@ CREATE TABLE IF NOT EXISTS skill (
   category TEXT NOT NULL DEFAULT 'style', promptTemplate TEXT NOT NULL, negativePrompt TEXT, defaultParams TEXT,
   recommendedModel TEXT, tags TEXT DEFAULT '[]', coverUrl TEXT, isBuiltIn INTEGER NOT NULL DEFAULT 0,
   sortOrder INTEGER NOT NULL DEFAULT 0, isActive INTEGER NOT NULL DEFAULT 1, createdAt TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS loraTrainingJob (
-  id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, baseModel TEXT NOT NULL, triggerWord TEXT NOT NULL,
-  classWord TEXT, datasetImages TEXT NOT NULL, resolution INTEGER NOT NULL DEFAULT 512, steps INTEGER NOT NULL DEFAULT 1500,
-  batchSize INTEGER NOT NULL DEFAULT 4, learningRate REAL NOT NULL DEFAULT 0.0001, rankDim INTEGER NOT NULL DEFAULT 32,
-  networkAlpha INTEGER NOT NULL DEFAULT 16, optimizer TEXT NOT NULL DEFAULT 'AdamW8bit', scheduler TEXT NOT NULL DEFAULT 'cosine',
-  seed INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'QUEUED', progress INTEGER NOT NULL DEFAULT 0,
-  outputName TEXT, logs TEXT, error TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS filmProject (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, projectId TEXT, title TEXT NOT NULL, script TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'short_video',

@@ -253,8 +253,9 @@ export default defineConfig({
         "src/lib/media/output-paths.ts",
         /* 体检清单 ⑦ 第三批 · 协议白名单收成一处（台账 A5 复算）：
          *   · `url-scheme.ts` 是「这个地址能不能交给外部程序」的唯一判据，
-         *     四条出口（`setting.trainerUrl` / `comfyEmbeddable` 的两个地址 /
-         *     `llm.baseUrl` / `openUrlInBrowser`）都改吃它 —— 每一支都必须有人判；
+         *     出口（`comfyEmbeddable` 的两个地址 / `llm.baseUrl` /
+         *     `openUrlInBrowser`，以及已随炼丹废弃删除的 `setting.trainerUrl`）
+         *     都改吃它 —— 每一支都必须有人判；
          *   · `routers/setting.ts` 第一次有执行者（34 条）。
          * 与下面 `thresholds` **两处同批**登记。`open-in-browser.ts` 不单列：
          * 它已在 `src/lib/shell/**` 这一组里，而没覆盖到的分支只有 darwin/linux
