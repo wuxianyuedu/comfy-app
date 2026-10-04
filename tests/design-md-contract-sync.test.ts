@@ -26,12 +26,16 @@
  * `var()` 链）。**不要改回 `getComputedStyle`，也不要正则读源码**：jsdom 不解析
  * `var()`，而源码正则看不见 Tailwind 的 tree-shake 与层叠胜负（理由见该文件头部）。
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
+import { parseRadiusScale, renderedRadiusValues } from "./helpers/radius-scale";
+import { stripComments } from "./helpers/strip-comments";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
 
 const DOC_PATH = fileURLToPath(new URL("../docs/DESIGN.md", import.meta.url));
+const ROOT_DIR = fileURLToPath(new URL("..", import.meta.url));
 const COLOR_TOKEN = /^--color-[a-z0-9-]+$/;
 
 /** 抽出「整个行内代码就是一颗 `--color-*`」的引用名（去重、排序）。 */
@@ -77,13 +81,18 @@ function collectHexRows(section: string): HexRow[] {
   const rows: HexRow[] = [];
   for (const line of section.split(/\r?\n/)) {
     if (!line.trimStart().startsWith("|")) continue;
-    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    const cells = line
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
     if (cells.length < 5) continue;
     // slice(1, -1) 已去掉首尾两个空格子 ⇒ 列序是 0 角色 / 1 token / 2 浅色 / 3 深色 / 4 用途
     const token = singleCodeSpan(cells[1] ?? "", COLOR_TOKEN);
     if (!token) continue;
     const light = parseHexCell(cells[2] ?? "");
-    const dark = (cells[3] ?? "").includes("同值") ? light : parseHexCell(cells[3] ?? "");
+    const dark = (cells[3] ?? "").includes("同值")
+      ? light
+      : parseHexCell(cells[3] ?? "");
     if (!light && !dark) continue;
     rows.push({
       token,
@@ -125,8 +134,10 @@ function findHexMismatch(
     for (const state of ["light", "dark"] as const) {
       const doc = row[state];
       if (!doc) continue;
-      const actual = normalizeCssHex(resolve(row.token, state)) ?? "(产物里不是单一 hex)";
-      if (actual !== doc) bad.push(`${row.token} ${state}: 文档 ${doc} / 产物 ${actual}`);
+      const actual =
+        normalizeCssHex(resolve(row.token, state)) ?? "(产物里不是单一 hex)";
+      if (actual !== doc)
+        bad.push(`${row.token} ${state}: 文档 ${doc} / 产物 ${actual}`);
     }
   }
   return bad;
@@ -145,10 +156,14 @@ describe("docs/DESIGN.md 的 token 引用面（幽灵 token 的文档方向）",
   it("引用到的每一颗 --color-* 在编译产物里有声明", () => {
     const cited = collectBareTokenCitations(doc);
     // 取到 0 条 = 判据在空转（同「按 marker 定位再解析」那一族的红法）
-    expect(cited.length, "文档里一颗 token 都没引用到 —— 解析失效").toBeGreaterThan(
-      20,
+    expect(
+      cited.length,
+      "文档里一颗 token 都没引用到 —— 解析失效",
+    ).toBeGreaterThan(20);
+    const unknown = findUnknownTokens(
+      cited,
+      (name) => light.has(name) || dark.has(name),
     );
-    const unknown = findUnknownTokens(cited, (name) => light.has(name) || dark.has(name));
     expect(
       unknown,
       `文档引用了产物里查无此名的 token（改名或删token 时这份契约不会响）：${unknown.join(", ")}`,
@@ -156,21 +171,32 @@ describe("docs/DESIGN.md 的 token 引用面（幽灵 token 的文档方向）",
   });
 
   it("负控制：引用一个不存在的名字必须被判出来（否则上一条绿得没有意义）", () => {
-    const fixture = "底 `--color-canvas` 与假想的 `--color-zprobe-not-a-token`。";
-    expect(findUnknownTokens(collectBareTokenCitations(fixture), (name) =>
-      light.has(name) || dark.has(name),
-    )).toEqual(["--color-zprobe-not-a-token"]);
+    const fixture =
+      "底 `--color-canvas` 与假想的 `--color-zprobe-not-a-token`。";
+    expect(
+      findUnknownTokens(
+        collectBareTokenCitations(fixture),
+        (name) => light.has(name) || dark.has(name),
+      ),
+    ).toEqual(["--color-zprobe-not-a-token"]);
     // 而真存在的名字不许被误报
-    expect(findUnknownTokens(["--color-canvas"], (name) => light.has(name))).toEqual([]);
+    expect(
+      findUnknownTokens(["--color-canvas"], (name) => light.has(name)),
+    ).toEqual([]);
   });
 });
 
 describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
   it("表在、行解析得到（表头漂了要当场响）", () => {
     const section = sectionBetween(doc, "### 语义角色表");
-    expect(section, "找不到「语义角色表」小节 —— 文档结构变了要同步这里的锚点").not.toBeNull();
+    expect(
+      section,
+      "找不到「语义角色表」小节 —— 文档结构变了要同步这里的锚点",
+    ).not.toBeNull();
     const rows = collectHexRows(section ?? "");
-    expect(rows.length, "Colors 表解析到 0 行 —— 判据在空转").toBeGreaterThan(5);
+    expect(rows.length, "Colors 表解析到 0 行 —— 判据在空转").toBeGreaterThan(
+      5,
+    );
   });
 
   it("单一 hex 的格子等于编译产物里该态的取值", () => {
@@ -189,7 +215,9 @@ describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
       "| 弱文字 | `--color-ink-muted` | `#6b6b76` | `#000000` | x |\n" +
       "| 表头 | -- | -- | -- | -- |\n";
     const rows = collectHexRows(fixture);
-    expect(rows).toEqual([{ token: "--color-ink-muted", light: "#6b6b76", dark: "#000000" }]);
+    expect(rows).toEqual([
+      { token: "--color-ink-muted", light: "#6b6b76", dark: "#000000" },
+    ]);
     const bad = findHexMismatch(rows, (name, state) =>
       (state === "light" ? light : dark).get(name),
     );
@@ -204,6 +232,144 @@ describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
         "| 危险 | `--color-destructive` | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | y |",
       ].join("\n"),
     );
-    expect(skip, "一格并列两颗 token / 值不是单一 hex 时不许产生断言").toEqual([]);
+    expect(skip, "一格并列两颗 token / 值不是单一 hex 时不许产生断言").toEqual(
+      [],
+    );
+  });
+});
+
+/* ── 调用侧：契约里的档位必须真的被用上 ──────────────────────────────
+   上面两格判的是「文档说的值 = CSS 定义的值」。这一格补另一半：
+   **调用点有没有真的用档位**。圆角这一刀落地后暴露出缺口 —— T4 只看
+   `globals.css` 的定义，看不见 `className="rounded-[16px]"` 这种「把档位
+   当前渲染值重抄一遍」的写法：它此刻像素正确，但设置页改基数时不跟手，
+   等于在总闸旁边开了个旁通。字号同理（契约 §Typography 明写不要写
+   字面字号，而调用点还有 302 处存量）。 */
+
+const SRC_DIR = fileURLToPath(new URL("../src", import.meta.url));
+const GLOBALS_PATH = fileURLToPath(
+  new URL("../src/app/globals.css", import.meta.url),
+);
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".next",
+  "dist",
+  "coverage",
+  "__snapshots__",
+]);
+
+/** 产品代码面：`.stories.` 与 `.test.` 排除在外 —— 它们不是设计系统的消费者，
+ *  拿像素契约绑住演示件与用例只会逼人往 story 里塞无意义的类名。 */
+function collectProductFiles(dir: string, out: string[] = []): string[] {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      if (!SKIP_DIRS.has(e.name)) collectProductFiles(p, out);
+    } else if (
+      /\.(ts|tsx)$/.test(e.name) &&
+      !/\.stories\.tsx?$/.test(e.name) &&
+      !/\.test\.tsx?$/.test(e.name)
+    ) {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+/** 剥注释后扫一颗全局正则，返回每条命中的「相对路径 + 捕获组 1」。
+ *  行号不报：`stripComments` 会把块注释整段拿掉、行号随之漂移（它自己的文件头
+ *  就写明不是词法分析器）。行尾 `// …` 注释也不去 —— 那需要真词法分析，
+ *  代价是「行尾注释里写字面 px」会被算进棘轮，方向是保守的（只多计不少计）。 */
+function scanProduct(pattern: RegExp): { file: string; value: string }[] {
+  const hits: { file: string; value: string }[] = [];
+  for (const abs of collectProductFiles(SRC_DIR)) {
+    const code = stripComments(readFileSync(abs, "utf8"));
+    const rel = path.relative(ROOT_DIR, abs).split(path.sep).join("/");
+    for (const m of code.matchAll(pattern)) {
+      if (m[1]) hits.push({ file: rel, value: m[1] });
+    }
+  }
+  return hits;
+}
+
+/** 调用点的「字面圆角」形状：rounded- / rounded-b- / rounded-t- 都算。 */
+const RADIUS_LITERAL = /\brounded(?:-[a-z]+)?-\[(\d+(?:\.\d+)?)px\]/g;
+/** 调用点的「字面字号」形状（含 10.5px 这类小数档）。 */
+const TEXT_LITERAL = /\btext-\[(\d+(?:\.\d+)?)px\]/g;
+/** `@theme` 的档名允许的 t-shirt 形状（xs / sm / md / lg / xl 与 2xs…9xl）。 */
+const TSHIRT_NAME = /^(?:xs|sm|md|lg|xl|[2-9](?:xs|sm|md|lg|xl))$/;
+
+describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", () => {
+  /** 棘轮基线：本轮清理后实测的存量，只许降不许升（要升得改用例并写理由）。 */
+  const RADIUS_BASELINE = 21;
+  const TEXT_BASELINE = 302;
+
+  it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
+    const scale = parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8"));
+    const tierPx = new Set(renderedRadiusValues(scale));
+    const offenders = scanProduct(RADIUS_LITERAL).filter((h) =>
+      tierPx.has(Number.parseFloat(h.value)),
+    );
+    expect(
+      offenders,
+      "这些调用点写的字面 px 正好等于某档的当前渲染值，应改用类名" +
+        `（rounded-sm…4xl / rounded-node）：\n${offenders
+          .map((o) => `  ${o.file}  rounded-[${o.value}px]`)
+          .join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("字面圆角与字面字号走棘轮：只许降不许升", () => {
+    const radius = scanProduct(RADIUS_LITERAL);
+    const text = scanProduct(TEXT_LITERAL);
+    expect(
+      radius.length,
+      `调用点字面圆角从 ${RADIUS_BASELINE} 涨到 ${radius.length}；新增的要走档位，` +
+        "确需另立一档的按 docs/DESIGN.md §Shapes 的派生式写法并同批改基线",
+    ).toBeLessThanOrEqual(RADIUS_BASELINE);
+    expect(
+      text.length,
+      `调用点字面字号从 ${TEXT_BASELINE} 涨到 ${text.length}；契约 §Typography ` +
+        "要求先在 @theme 加具名档（档名还得是 t-shirt 形状，见下面那条）",
+    ).toBeLessThanOrEqual(TEXT_BASELINE);
+  });
+
+  it("@theme 的 --text-* 档名必须是 t-shirt 尺寸（否则 cn() 把它当颜色吃掉）", () => {
+    /* 实测：cn("text-ink-muted", "text-micro") 只剩 text-micro —— 不认识的
+       `text-<名字>` 被归进颜色组，同行的语义文字色被静默合并掉（这条是钩子
+       红了 4 条 StatusBadge 用例才暴露的）。t-shirt 形状才落在 font-size 组。
+       豁免那四颗是历史形态：它们只经 `.u-title-*` 在 CSS 里用，从没进过 JSX。 */
+    const EXEMPT = new Set(["section", "page", "stage", "hero"]);
+    const names = [
+      ...readFileSync(GLOBALS_PATH, "utf8").matchAll(
+        /^\s*--text-([a-z0-9]+)\s*:/gm,
+      ),
+    ].flatMap((m) => (m[1] ? [m[1]] : []));
+    expect(
+      names.length,
+      "一颗 --text-* 都没解出来（正则漂了，这条会静默全绿）",
+    ).toBeGreaterThan(4);
+    const bad = names.filter((n) => !TSHIRT_NAME.test(n) && !EXEMPT.has(n));
+    expect(
+      bad,
+      `这些档名会让 cn() 把字号当颜色合并掉，改成 t-shirt 形状：${bad.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("负控制：三形状都真的能被抓（否则上面三条绿得没意义）", () => {
+    const tierPx = renderedRadiusValues(
+      parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8")),
+    );
+    const biggest = Math.max(...tierPx);
+    expect("border rounded-" + `[${biggest}px] h-5`).toMatch(RADIUS_LITERAL);
+    expect("text-[10.5px]").toMatch(TEXT_LITERAL);
+    expect(
+      scanProduct(TEXT_LITERAL).length,
+      "扫描函数在真实代码面上解不出东西",
+    ).toBeGreaterThan(100);
+    expect(TSHIRT_NAME.test("micro"), "非法档名没被识破（形状判据空转）").toBe(
+      false,
+    );
+    expect(TSHIRT_NAME.test("3xs"), "合法 t-shirt 名被误判").toBe(true);
   });
 });

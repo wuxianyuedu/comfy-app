@@ -27,7 +27,7 @@
  * - **T3（无环）**：`var()` 引用链必须无环、且不得漏到未定义的名字。
  *   `--color-X: var(--X)` 配 `--X: var(--color-X)` 会让两边都变成无效值。
  * - **T4（圆角刻度）**：`--radius-*` 只能有一处定义，且必须是 `var(--radius)`
- *   的系数派生。T2 的比对只认 `--color-` 前缀，圆角命名空间一直在它覆盖面
+ *   的系数或 ±px 偏移派生。T2 的比对只认 `--color-` 前缀，圆角命名空间一直在它覆盖面
  *   之外 —— 于是 `@theme` 里那四行字面量被 `@theme inline` 静默顶掉了很久
  *   （注释说 16px、实渲染 12px）。圆角的正确形状是「基数 × 系数表」而不是
  *   `var()` 转发，所以它需要自己的判据，不只是把 T2 的前缀加长。
@@ -40,6 +40,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { DEFAULT_APPEARANCE, RADIUS_STEPS } from "~/lib/appearance";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
+import {
+  parseDerivations,
+  parseRadiusScale,
+  renderRadiusPx,
+} from "./helpers/radius-scale";
 
 const sourceCss = readFileSync(
   path.resolve(__dirname, "../src/app/globals.css"),
@@ -307,25 +312,9 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
     "--radius-4xl",
   ] as const;
 
-  /** 解出各档的系数（`var(--radius)` 记作 1）；写成字面 px 的档位解不出来。 */
-  function coefficients(css: string): Map<string, number> {
-    const out = new Map<string, number>();
-    for (const m of css.matchAll(
-      /^\s*(--radius-[a-z0-9]+)\s*:\s*(?:var\(--radius\)|calc\(var\(--radius\)\s*\*\s*([0-9.]+)\))\s*;/gm,
-    )) {
-      if (m[1]) out.set(m[1], m[2] ? Number.parseFloat(m[2]) : 1);
-    }
-    return out;
-  }
-
-  /** 那颗基数换算成 px（只认 rem/px 两种形态，别的形态直接判不合格）。 */
-  function basePx(css: string): number {
-    const m = /^\s*--radius\s*:\s*([0-9.]+)(rem|px)\s*;/m.exec(css);
-    if (!m?.[1] || !m[2]) throw new Error("globals.css 里找不到 --radius 基数");
-    return m[2] === "rem"
-      ? Number.parseFloat(m[1]) * 16
-      : Number.parseFloat(m[1]);
-  }
+  /* 解析口径住在 tests/helpers/radius-scale.ts —— 定义侧（这里）与调用侧
+     （design-md-contract-sync）要读同一张表，两份解析器迟早会漂。 */
+  const scale = () => parseRadiusScale(sourceCss);
 
   it("@theme 里不许再有 --radius-* 字面量（那份死声明别再长回来）", () => {
     const themeBlock = braceBlock(sourceCss, "@theme {");
@@ -340,19 +329,38 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
   });
 
   it("七档全在 @theme inline 里由 var(--radius) 派生，刻度正是设计意图", () => {
-    const coefs = coefficients(braceBlock(sourceCss, "@theme inline {"));
-    const base = basePx(sourceCss);
+    const { basePx, derivations } = scale();
     for (const name of ORDER) {
       expect(
-        coefs.has(name),
+        derivations.has(name),
         `${name} 不是「由 --radius 派生」的声明（写成字面 px 就断开了总闸）`,
       ).toBe(true);
     }
-    const px = ORDER.map((name) => Math.round(base * (coefs.get(name) ?? 0)));
-    expect(px, `基数 ${base}px × 系数表 ≠ 设计意图那串整数`).toEqual(LADDER);
+    const px = ORDER.map((name) =>
+      renderRadiusPx(derivations.get(name) ?? { coef: 0, offset: 0 }, basePx),
+    );
+    expect(px, `基数 ${basePx}px × 派生表 ≠ 设计意图那串整数`).toEqual(LADDER);
   });
 
-  it("解系数这条判据不是空转（塞一条字面 px 进去必须漏解）", () => {
+  it("节点卡角也由基数派生（默认档 14px，且跟着设置页的圆角档缩放）", () => {
+    const { basePx, derivations } = scale();
+    const node = derivations.get("--radius-node");
+    expect(
+      node,
+      "--radius-node 不是由 --radius 派生的声明 —— 节点卡会脱离设置页的圆角档",
+    ).toBeTruthy();
+    expect(
+      renderRadiusPx(node ?? { coef: 0, offset: 0 }, basePx),
+      `节点卡角在默认基数下应是 14px（实际基数 ${basePx}px）`,
+    ).toBe(14);
+    /* 它必须**不等于**任何一档标准刻度，否则该用档位而不是另立一格。 */
+    const ladder = ORDER.map((name) =>
+      renderRadiusPx(derivations.get(name) ?? { coef: 0, offset: 0 }, basePx),
+    );
+    expect(ladder).not.toContain(14);
+  });
+
+  it("解派生式这条判据不是空转（塞一条字面 px 进去必须漏解）", () => {
     // 反向验证：把「七档齐全 + 2xl 写成 24px」喂给同一个解析器，
     // 必须只解出 6 条且 --radius-2xl 缺席 —— 上一条才会真的把它判红。
     const polluted = [
@@ -363,22 +371,28 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
       "--radius-2xl: 24px;",
       "--radius-3xl: calc(var(--radius) * 1.75);",
       "--radius-4xl: calc(var(--radius) * 2);",
+      "--radius-node: calc(var(--radius) - 2px);",
     ].join("\n");
-    const coefs = coefficients(polluted);
-    expect(coefs.size, "解析器一条都没解出来（正则失效，判据会空转）").toBe(6);
-    expect(coefs.has("--radius-2xl"), "字面 px 的档位被当成了派生值").toBe(
+    const derived = parseDerivations(polluted);
+    expect(derived.size, "解析器一条都没解出来（正则失效，判据会空转）").toBe(
+      7,
+    );
+    expect(derived.has("--radius-2xl"), "字面 px 的档位被当成了派生值").toBe(
       false,
     );
+    /* 偏移族也得真的被解出来（否则上面那条节点判据是空转）。 */
+    expect(derived.get("--radius-node")).toEqual({ coef: 1, offset: -2 });
   });
 
   it("设置页的默认圆角档就是这颗基数（两处必须同批改）", () => {
     const step = RADIUS_STEPS.find((s) => s.id === DEFAULT_APPEARANCE.radius);
     expect(step, "默认档 id 在档位表里找不到").toBeTruthy();
+    const rem = `${scale().basePx / 16}rem`;
     expect(
       step?.value,
-      `默认档与 globals.css 的 --radius=${basePx(sourceCss) / 16}rem 不一致：` +
+      `默认档与 globals.css 的 --radius=${rem} 不一致：` +
         "没设置过与选了默认档会渲染出两套圆角",
-    ).toBe(`${basePx(sourceCss) / 16}rem`);
+    ).toBe(rem);
   });
 });
 

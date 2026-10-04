@@ -114,7 +114,7 @@ export default function LoginPage() {
         className="top-1/3 left-1/2 size-90 opacity-[0.08] blur-[90px] dark:opacity-40"
       />
 
-      <div className="border-border-subtle bg-surface/90 shadow-ink/5 dark:border-border-strong relative w-full max-w-110 rounded-[20px] border p-9 shadow-[0_8px_40px] backdrop-blur-xl">
+      <div className="border-border-subtle bg-surface/90 shadow-ink/5 dark:border-border-strong relative w-full max-w-110 rounded-xl border p-9 shadow-[0_8px_40px] backdrop-blur-xl">
         {/* Brand */}
         <Link
           href="/"
