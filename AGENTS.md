@@ -64,8 +64,8 @@
 1. **包管理只用 pnpm**（`pnpm exec …`）。禁止 npx / npm run——npm 11.19 在本机
    解析 typescript 别名链会崩溃（`Class extends value undefined`）。
 2. **工具链钉死项不可随意改**（改动前必须读规范 §6 并在提交说明里给出理由）：
-   - `pnpm-workspace.yaml`：`minimumReleaseAge: 0`、`allowBuilds`（6 个包）、
-     `verifyDepsBeforeRun: false`
+   - `pnpm-workspace.yaml`：`minimumReleaseAge: 0`、`allowBuilds` 名单（条数以该文件为准；
+     它会随新增依赖变动，别在文档里写死数字）、`verifyDepsBeforeRun: false`
    - `next.config.js`：`experimental.useTypeScriptCli: false`
 3. **进程清理必须杀整棵树，平台判据只收两处**：Node/TS 侧一律经 `src/lib/process/kill-process-tree.ts` 的 `killProcessTree()`；非 TS 宿主走命令行入口 `scripts/reap-process.mjs`；Rust 壳侧起子进程只能用官方 `tauri-plugin-shell` 的 `CommandChild`（退出整树回收同样转交 `reap-process.mjs`）。禁止各处自写 `taskkill` / `process.kill` / `Process.Kill()` / 单杀 leader / `std::process::Command` + `taskkill`（后者在 POSIX 上等于什么都不做）。**POSIX 自建进程组是前提**：`spawn({ detached: true })`。跨平台机制、防自杀判据、孤儿事故根因见 launch-and-build §3.1–§3.3。
 4. **失败路径必须有日志 + 用户可见出口**；日志按规范 §4 的布局落 `log/`，

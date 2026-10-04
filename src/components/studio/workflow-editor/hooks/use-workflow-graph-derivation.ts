@@ -109,6 +109,14 @@ export function useWorkflowGraphDerivation(params: {
       detail,
       overrides: rgthreeApi.getState().overrides,
     });
+    /* `workflowId` / `viewerApi` / `rgthreeApi` 有意不入依赖：
+     *   · 两个 store 是模块级单例（`WorkflowStores` 的 hook 返回稳定引用），
+     *     写进依赖只会让 linter 满意、不改变触发时机；
+     *   · `workflowId` 的取值随 `detail` 一起变 —— loader 就是以它为键取详情，
+     *     所以「detail 变了」已经蕴含「workflowId 到位了」，单独挂它反而会在
+     *     详情尚未落地时先跑一轮，把 store 里的 `workflowId` 提前改成新 id
+     *     而细节还是旧的。
+     * 这条属规范 §13.4「规则静态盲区」那一类：按 id 触发的意图，静态推不出来。 */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail, rawMetaById, subgraphRawContext, subgraphStackLength]);
 

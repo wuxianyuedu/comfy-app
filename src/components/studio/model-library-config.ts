@@ -14,7 +14,6 @@ export interface ModelRow {
   fileName: string;
   isAvailable: boolean;
   fileSize?: number | null;
-  createdAt: string;
 }
 
 /** GET /api/models/config 返回的一行（只保留本视图渲染用到的子集）。 */

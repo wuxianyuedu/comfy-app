@@ -107,6 +107,12 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
    * 读不到上面的步骤）。checkbox 保留为「跟随」的显式开关。 */
   const cachedIds = useMemo(
     () => listCachedTaskIds(),
+    /* 依赖是**重算触发器**，不是 `listCachedTaskIds()` 真实读的输入 ——
+     * 它读的是 `stepLogCache` 的模块级 Map，静态推不出来「什么时候该重算」。
+     * 三条各自对应一次缓存写入：`taskId` 换了（新任务进了缓存）、`logs` 追加了
+     * （缓存内容推进）、`validationErrors` 更新了（同批落进来的新条目）。
+     * 属规范 §13.4 的「规则静态盲区」；去掉任一条件会让面板停在旧清单上
+     * （表现是任务选择器少一条，且不会自愈）。 */
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [logs, validationErrors, taskId],
   );
