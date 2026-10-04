@@ -34,7 +34,7 @@ type Story = StoryObj<typeof meta>;
 
 function OverlayClassDemo() {
   return (
-    <div className="flex w-[46rem] flex-col gap-4">
+    <div className="flex w-184 flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <span className="text-ink-muted font-mono text-[11px]">
           dialogBackdropClass() —— 不传参数
@@ -68,7 +68,7 @@ export const Default: Story = {};
  *  —— 同一份遮罩、只有底色不同，这正是「收口一处」的意义。 */
 export const WithCustomClass: Story = {
   render: () => (
-    <div className="flex w-[46rem] flex-col gap-4">
+    <div className="flex w-184 flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <span className="text-ink-muted font-mono text-[11px]">
           dialogBackdropClass(&quot;bg-black/40&quot;)

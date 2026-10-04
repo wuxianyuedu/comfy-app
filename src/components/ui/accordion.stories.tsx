@@ -35,7 +35,7 @@ type Story = StoryObj<typeof meta>;
  *  只在两项之间出现。 */
 export const Default: Story = {
   render: () => (
-    <Accordion className="w-[32rem]">
+    <Accordion className="w-lg">
       <AccordionItem value="a">
         <AccordionTrigger>输出设置</AccordionTrigger>
         <AccordionContent>
@@ -66,7 +66,7 @@ export const Default: Story = {
  *  但并排看才知道「一组里能同时开几个」是本件的一个开关。 */
 export const MultipleOpen: Story = {
   render: () => (
-    <Accordion className="w-[32rem]" multiple defaultValue={["a", "c"]}>
+    <Accordion className="w-lg" multiple defaultValue={["a", "c"]}>
       <AccordionItem value="a">
         <AccordionTrigger>输出设置</AccordionTrigger>
         <AccordionContent>
@@ -93,7 +93,7 @@ export const MultipleOpen: Story = {
  *  —— 「这一节现在不能改」的形态。 */
 export const WithDisabled: Story = {
   render: () => (
-    <Accordion className="w-[32rem]">
+    <Accordion className="w-lg">
       <AccordionItem value="a">
         <AccordionTrigger>可用</AccordionTrigger>
         <AccordionContent>这一节能展开。</AccordionContent>
@@ -111,7 +111,7 @@ export const WithDisabled: Story = {
  *  但**点开时的高度过渡**就是这条；两态并存可对照收起后的高度为 0。 */
 export const AnimatedContent: Story = {
   render: () => (
-    <Accordion className="w-[32rem]" multiple defaultValue={["a"]}>
+    <Accordion className="w-lg" multiple defaultValue={["a"]}>
       <AccordionItem value="a">
         <AccordionTrigger>展开态（有内容高度）</AccordionTrigger>
         <AccordionContent>

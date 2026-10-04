@@ -46,7 +46,7 @@ export const Vertical: Story = {
 export const BothAxes: Story = {
   render: (args) => (
     <ScrollArea {...args} className="h-40 w-64 rounded-lg border">
-      <div className="flex w-[40rem] flex-col gap-2 p-3">
+      <div className="flex w-160 flex-col gap-2 p-3">
         {Array.from({ length: 12 }, (_, index) => (
           <div
             key={index}

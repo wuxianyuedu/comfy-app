@@ -117,7 +117,7 @@ const bootId =
 const { mode: executorMode, unknown: unknownExecutor } = resolveExecutorMode();
 const runtimeMode = executorMode === "host";
 
-/** `DATABASE_URL` 解析优先级对齐 Next 侧（`src/env.mjs` 先读进程 env、再回退
+/** `DATABASE_URL` 解析优先级对齐 Next 侧（`src/env.js` 先读进程 env、再回退
  *  `.env`）。launcher 拉起本进程时只透传 `process.env`、不会把 `.env` 里的值
  *  导进来，所以宿主必须自己回读 `.env`——否则自定义库路径下，Next 连 A 库、
  *  host 连默认的 `./db.sqlite`（B 库），领取与执行对不上同一份任务表。 */

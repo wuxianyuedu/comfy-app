@@ -2,10 +2,7 @@
 
 import { formatClock } from "~/lib/time-format";
 import React from "react";
-import {
-  ExtractModelSelect,
-  parseChannelOption,
-} from "~/components/workshop/ExtractModelSelect";
+import { ExtractModelSelect } from "~/components/workshop/ExtractModelSelect";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { useFilePicker } from "~/components/ui/file-picker";
@@ -14,9 +11,6 @@ import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-client";
 import { Hint } from "~/components/ui/hint";
-
-/** @deprecated 兼容既有 import：通道类型已迁至 ExtractModelSelect */
-export type { ExtractChannel } from "~/components/workshop/ExtractModelSelect";
 
 /** 提取执行日志的展示样式（按日志类型区分色块，不随组件卸载清空）。
  *  状态色全走语义 token（§4.11.1 / P71）：init→primary（品牌）、
@@ -276,6 +270,3 @@ export function ExtractToolbar({
     </div>
   );
 }
-
-/** 供调用方把选项值还原为通道（保留导出避免散落解析逻辑） */
-export { parseChannelOption };

@@ -84,7 +84,7 @@ export const Default: Story = {
  *  这四档的容器形态差别只有并排才看得出来。 */
 export const Aligns: Story = {
   render: () => (
-    <div className="flex w-[28rem] flex-col gap-6">
+    <div className="flex w-md flex-col gap-6">
       {ALIGNS.map((align) => (
         <div key={align} className="flex flex-col gap-1.5">
           <span className="text-ink-muted font-mono text-[11px]">
@@ -107,7 +107,7 @@ export const Aligns: Story = {
  *  才都生效。 */
 export const BlockLayout: Story = {
   render: () => (
-    <InputGroup className="w-[28rem]">
+    <InputGroup className="w-md">
       <InputGroupAddon align="block-start">
         <InputGroupText>系统提示词</InputGroupText>
       </InputGroupAddon>
@@ -130,7 +130,7 @@ export const BlockLayout: Story = {
  *  两档 `icon-*` 是方的（`p-0` + 固定边长），另两档带文字内边距。 */
 export const ButtonSizes: Story = {
   render: () => (
-    <div className="flex w-[28rem] flex-col gap-4">
+    <div className="flex w-md flex-col gap-4">
       {BUTTON_SIZES.map((size) => (
         <div key={size} className="flex flex-col gap-1.5">
           <span className="text-ink-muted font-mono text-[11px]">
@@ -159,7 +159,7 @@ export const ButtonSizes: Story = {
  *  与直觉不同的设计：**错误态属于容器**，不是属于输入框）。 */
 export const States: Story = {
   render: () => (
-    <div className="flex w-[28rem] flex-col gap-6">
+    <div className="flex w-md flex-col gap-6">
       <InputGroup>
         <InputGroupAddon>
           <InputGroupText>正常</InputGroupText>

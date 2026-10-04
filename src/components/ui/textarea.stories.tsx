@@ -23,14 +23,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  render: (args) => <Textarea {...args} className="w-[28rem]" />,
+  render: (args) => <Textarea {...args} className="w-md" />,
 };
 
 /** `field-sizing-content`：同一份 class，内容一多就长高（不需要 `rows`），
  *  但低于 `min-h-16` 时保持 64px —— 两条一起看才知道「底在哪」。 */
 export const AutoGrowing: Story = {
   render: (args) => (
-    <div className="flex w-[28rem] flex-col gap-4">
+    <div className="flex w-md flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <span className="text-ink-muted font-mono text-[11px]">
           短内容（min-h-16 保底）
@@ -59,7 +59,7 @@ export const AutoGrowing: Story = {
  *  它是**唯一的**错误入口 —— 与 `ui/field` 的 `data-invalid` 是一条链。 */
 export const Invalid: Story = {
   render: (args) => (
-    <div className="flex w-[28rem] flex-col gap-4">
+    <div className="flex w-md flex-col gap-4">
       <Textarea
         {...args}
         aria-label="错误态"
@@ -81,7 +81,7 @@ export const Disabled: Story = {
   render: (args) => (
     <Textarea
       {...args}
-      className="w-[28rem]"
+      className="w-md"
       aria-label="只读回显"
       disabled
       defaultValue="这个工作流的提示词由节点给出，不可在此修改。"

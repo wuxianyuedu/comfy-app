@@ -29,7 +29,7 @@ type Story = StoryObj<typeof meta>;
 /** 左右两栏 + 带把手：最常见的形态（左树 + 右内容区）。 */
 export const Horizontal: Story = {
   render: () => (
-    <ResizablePanelGroup className="h-56 w-[36rem] rounded-lg border">
+    <ResizablePanelGroup className="h-56 w-xl rounded-lg border">
       <ResizablePanel defaultSize="30" minSize="20">
         <div className="text-ink-muted flex h-full items-center justify-center text-sm">
           左栏（30%）
@@ -49,7 +49,7 @@ export const Horizontal: Story = {
  *  与上面那条并排看，才知道 `withHandle` 加的是什么。 */
 export const WithoutHandle: Story = {
   render: () => (
-    <ResizablePanelGroup className="h-56 w-[36rem] rounded-lg border">
+    <ResizablePanelGroup className="h-56 w-xl rounded-lg border">
       <ResizablePanel defaultSize="40">
         <div className="text-ink-muted flex h-full items-center justify-center text-sm">
           40%
@@ -72,7 +72,7 @@ export const Vertical: Story = {
   render: () => (
     <ResizablePanelGroup
       orientation="vertical"
-      className="h-56 w-[30rem] rounded-lg border"
+      className="h-56 w-120 rounded-lg border"
     >
       <ResizablePanel defaultSize="50">
         <div className="text-ink-muted flex h-full items-center justify-center text-sm">
@@ -93,7 +93,7 @@ export const Vertical: Story = {
  *  「两个把手互相约束」（左栏变大时中栏先被压缩）。 */
 export const ThreePanels: Story = {
   render: () => (
-    <ResizablePanelGroup className="h-56 w-[36rem] rounded-lg border">
+    <ResizablePanelGroup className="h-56 w-xl rounded-lg border">
       <ResizablePanel defaultSize="25" minSize="15">
         <div className="text-ink-muted flex h-full items-center justify-center text-sm">
           节点树

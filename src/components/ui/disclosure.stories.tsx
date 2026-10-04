@@ -43,7 +43,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   render: (args) => (
-    <div className="w-[30rem] rounded-lg border p-3">
+    <div className="w-120 rounded-lg border p-3">
       <Disclosure {...args} />
     </div>
   ),
@@ -53,7 +53,7 @@ export const Default: Story = {
  *  `none`（调用处自绘）—— 三档之间的差别只有真展开才看得出。 */
 export const Markers: Story = {
   render: () => (
-    <div className="flex w-[30rem] flex-col gap-3">
+    <div className="flex w-120 flex-col gap-3">
       {MARKERS.map((marker) => (
         <div key={marker} className="rounded-lg border p-3">
           <Disclosure
@@ -88,7 +88,7 @@ export const Controlled: Story = {
 function ControlledDemo() {
   const [open, setOpen] = React.useState(false);
   return (
-    <div className="flex w-[30rem] flex-col gap-3 rounded-lg border p-3">
+    <div className="flex w-120 flex-col gap-3 rounded-lg border p-3">
       <div className="flex items-center gap-2">
         <Button size="xs" variant="outline" onClick={() => setOpen((o) => !o)}>
           外部按钮切换（当前 {open ? "展开" : "折叠"}）
@@ -109,7 +109,7 @@ function ControlledDemo() {
  *  同排要靠 `rootClassName="flex flex-wrap items-center gap-2"`。 */
 export const WithLeadingTrailing: Story = {
   render: () => (
-    <div className="w-[36rem] rounded-lg border p-3">
+    <div className="w-xl rounded-lg border p-3">
       <Disclosure
         rootClassName="flex flex-wrap items-center gap-2"
         panelClassName="basis-full"
@@ -138,7 +138,7 @@ export const WithLeadingTrailing: Story = {
  *  数据没到齐时用它，而不是把这一行藏掉。 */
 export const Disabled: Story = {
   render: (args) => (
-    <div className="w-[30rem] rounded-lg border p-3">
+    <div className="w-120 rounded-lg border p-3">
       <Disclosure {...args} disabled trigger="还没解析出节点（禁用）" />
     </div>
   ),

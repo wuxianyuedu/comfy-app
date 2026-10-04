@@ -43,7 +43,7 @@ type Story = StoryObj<typeof meta>;
 /** 面板外的内联形态：`<Command>` 直接铺在页面里（命令面板也可以不是弹窗）。 */
 export const Inline: Story = {
   render: () => (
-    <div className="w-[32rem] rounded-lg border">
+    <div className="w-lg rounded-lg border">
       <Command>
         <CommandInput placeholder="搜索要执行的命令…" />
         <CommandList>
@@ -117,7 +117,7 @@ function DialogDemo() {
  *  坏了」的唯一出口（规范 10.5）。打开面板后输入 `zzz` 看这一档。 */
 export const Empty: Story = {
   render: () => (
-    <div className="w-[32rem] rounded-lg border">
+    <div className="w-lg rounded-lg border">
       <Command>
         <CommandInput placeholder="输入 zzz 看空态…" />
         <CommandList>
@@ -136,7 +136,7 @@ export const Empty: Story = {
  *  —— 两档并排才看得出这条规则。 */
 export const ShortcutVsChecked: Story = {
   render: () => (
-    <div className="w-[32rem] rounded-lg border">
+    <div className="w-lg rounded-lg border">
       <Command>
         <CommandInput placeholder="看两种项的区别…" />
         <CommandList>
@@ -160,7 +160,7 @@ export const ShortcutVsChecked: Story = {
 /** 禁用项：`disabled` 的项不可选、跳过键盘上下（`data-disabled`）。 */
 export const WithDisabled: Story = {
   render: () => (
-    <div className="w-[32rem] rounded-lg border">
+    <div className="w-lg rounded-lg border">
       <Command>
         <CommandInput placeholder="试试方向键…" />
         <CommandList>

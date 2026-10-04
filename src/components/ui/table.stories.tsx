@@ -41,7 +41,7 @@ type Story = StoryObj<typeof meta>;
  *  悬停底色都是这里才看得到的。 */
 export const Default: Story = {
   render: () => (
-    <Table className="w-[36rem]">
+    <Table className="w-xl">
       <TableCaption>本次运行的对外参数（workflowIO 投影）</TableCaption>
       <TableHeader>
         <TableRow>
@@ -79,7 +79,7 @@ export const Default: Story = {
  *  `whitespace-nowrap` 与行高（`TableHead h-10`、`TableCell p-2`）。 */
 export const WithStatusColumn: Story = {
   render: () => (
-    <Table className="w-[36rem]">
+    <Table className="w-xl">
       <TableHeader>
         <TableRow>
           <TableHead>模型</TableHead>
@@ -116,7 +116,7 @@ export const WithStatusColumn: Story = {
 export const Overflowing: Story = {
   parameters: { layout: "padded" },
   render: () => (
-    <div className="w-[22rem]">
+    <div className="w-88">
       <Table>
         <TableHeader>
           <TableRow>
@@ -147,7 +147,7 @@ export const Overflowing: Story = {
  *  读的人才知道这里**本应有**一张什么表（规范 10.5 的空态口径）。 */
 export const Empty: Story = {
   render: () => (
-    <Table className="w-[36rem]">
+    <Table className="w-xl">
       <TableHeader>
         <TableRow>
           <TableHead>参数</TableHead>

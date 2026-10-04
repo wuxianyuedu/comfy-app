@@ -51,7 +51,7 @@ type Story = StoryObj<typeof meta>;
  *  `page` 档同一形态。 */
 export const Default: Story = {
   render: (args) => (
-    <Empty {...args} className="w-[28rem]">
+    <Empty {...args} className="w-md">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <FolderOpen />
@@ -74,7 +74,7 @@ export const MediaVariants: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
       {MEDIA_VARIANTS.map((variant) => (
-        <Empty key={variant} className="w-[28rem]">
+        <Empty key={variant} className="w-md">
           <EmptyHeader>
             <EmptyMedia variant={variant}>
               <ImageOff />
@@ -94,7 +94,7 @@ export const MediaVariants: Story = {
  *  —— 这是「行内小空态」在设置卡片里的常见形态。 */
 export const TitleOnly: Story = {
   render: (args) => (
-    <Empty {...args} className="w-[28rem]">
+    <Empty {...args} className="w-md">
       <EmptyHeader>
         <EmptyTitle>暂无可选项</EmptyTitle>
       </EmptyHeader>

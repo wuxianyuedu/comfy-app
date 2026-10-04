@@ -229,6 +229,47 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       expect(code).toBe(0);
     });
 
+    it("块注释的续行（不以 * 开头）同样被扫 —— JSX 注释里的编号不再漏网", () => {
+      /* 只按行首形态判会把「块内顶格书写 / JSX 注释块里的多行说明」整段漏掉：
+         实测 src/ 里有 3 行 `R-ardot` / 日期标记长期如此（WorkflowWirePortRows
+         与 ImageGenerationPanel 的多行 JSX 注释块）。 */
+      writeSrc(
+        "e.tsx",
+        [
+          "export const A = () => (",
+          "  <div>",
+          "    {/* 步骤 2：模型",
+          "  R-ardot89: 只显示当前 type 下有工作流的模型标签。 */}",
+          "  </div>",
+          ");",
+          "",
+        ].join("\n"),
+      );
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R10");
+      expect(output).toContain("R-ardot89");
+    });
+
+    it("对反模式表的交叉引用（反模式 T5 / §14 T5）不算流水，放行", () => {
+      /* 块注释续行放宽之后，「反模式 T5」这类**当前有效的指路**会和任务批次号
+         的裸 `T11` 撞形；放宽的判据必须显式排除它，否则会逼人删掉有用的交叉引用。 */
+      mkdirSync(join(workdir, "src", "app"), { recursive: true });
+      writeFileSync(
+        join(workdir, "src", "app", "globals.css"),
+        [
+          "/* ── CodeBlock：行号列 + 代码列 ──",
+          "   违反规范 03 §3.5（反模式 T5：CSS 注入走静态文件）,",
+          "   同类见 §14 的 T12。 */",
+          ".a { color: red; }",
+          "",
+        ].join("\n"),
+      );
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R10");
+    });
+
     it("样式文件（.css）里的流水注释同样被阻断", () => {
       /* 只扫 TS 时 `.css` 是盲区，而样式块恰恰常被整段搬运 —— 收口前
          globals.css 里就有三处（编号 T10 / T11）长期未被发现。 */

@@ -47,7 +47,7 @@ export function summarize(probes: readonly Probe[]): string {
 /** 最常用：一份 TypeScript 源文件。 */
 export const Default: Story = {
   args: { code: SAMPLE_TS, language: "typescript" },
-  render: (args) => <div className="w-[40rem]">{<CodeBlock {...args} />}</div>,
+  render: (args) => <div className="w-160">{<CodeBlock {...args} />}</div>,
 };
 
 /** 行号：这条 story 的判据很直接 —— **每一行左边都有一个数字**。
@@ -60,7 +60,7 @@ export const LineNumbers: Story = {
     ).join("\n"),
     language: "typescript",
   },
-  render: (args) => <div className="w-[40rem]">{<CodeBlock {...args} />}</div>,
+  render: (args) => <div className="w-160">{<CodeBlock {...args} />}</div>,
 };
 
 /**
@@ -85,7 +85,7 @@ export const Languages: Story = {
           <span className="text-ink-muted font-mono text-[11px]">
             {fileName} → extToLanguage() = {extToLanguage(fileName ?? "")}
           </span>
-          <div className="w-[40rem]">
+          <div className="w-160">
             <CodeBlock
               code={code ?? ""}
               language={extToLanguage(fileName ?? "")}
@@ -108,12 +108,12 @@ export const OversizedFallsBackToPlain: Story = {
     ).join("\n"),
     language: "typescript",
   },
-  render: (args) => <div className="w-[40rem]">{<CodeBlock {...args} />}</div>,
+  render: (args) => <div className="w-160">{<CodeBlock {...args} />}</div>,
 };
 
 /** 空代码：`code` 是空串时两段 Span 都不渲染 —— 它是「文件还没选」的形态，
  *  不该看起来像加载中。 */
 export const Empty: Story = {
   args: { code: "", language: "plaintext" },
-  render: (args) => <div className="w-[40rem]">{<CodeBlock {...args} />}</div>,
+  render: (args) => <div className="w-160">{<CodeBlock {...args} />}</div>,
 };
