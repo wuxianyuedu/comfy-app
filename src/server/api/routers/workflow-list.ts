@@ -32,6 +32,8 @@ import {
   parseModesJson,
 } from "~/lib/workflow/workflow-types";
 import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { parseWorkflowParamMap } from "~/lib/workflow/workflow-param-map";
+import type { WorkflowListRow } from "~/lib/workflow/workflow-list-types";
 import { lastSegments } from "~/lib/path-display";
 import {
   findRootFor,
@@ -215,7 +217,10 @@ export const workflowListProcedures = {
       }
 
       // ── 补上类型元数据与紧凑预览 ──
-      const enriched = list.map((list) => {
+      /* 显式标注成**共用行类型**（数据形状的唯一出处）：不标的话对象字面量的
+       *  字面量属性会在 `.map()` 里被推宽成 `string`，于是视图侧那份「三档联合」
+       *  的收窄在出口静默失效 —— 收窄丢在这里，没有任何地方会红（ISSUE #1460）。 */
+      const enriched: WorkflowListRow[] = list.map((list) => {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
         const rawView = asRawWorkflow(list.rawJson);
         const graphObj =
@@ -249,7 +254,9 @@ export const workflowListProcedures = {
           modes: parseModesJson(list.modes),
           defaultMode: list.defaultMode ?? null,
           createdAt: list.createdAt,
-          paramMap: list.paramMap,
+          /* 走权威读边界：这一列的形状有唯一出处（`WorkflowParamMap`），
+           * 路由只负责把它收窄，不在出口再抄一份声明（ISSUE #1460）。 */
+          paramMap: parseWorkflowParamMap(list.paramMap),
           sourcePath: list.sourcePath,
           source: list.sourcePath ? "local" : "online",
           typeLabel: def?.label ?? list.taskType,
@@ -290,7 +297,10 @@ export const workflowListProcedures = {
             taskType: "",
             modes: [],
             defaultMode: null,
-            createdAt: new Date(f.mtimeMs).toISOString(),
+            /* 与已导入行**同一形状**：`createdAt` 是 `Date`（那不是「格式选择」，
+             *  superjson 过线后它就是 `Date`；这里写成 ISO 字符串会让同一份 payload
+             *  里出现两种形状，视图读哪一行都得先判形状）。 */
+            createdAt: new Date(f.mtimeMs),
             paramMap: {},
             sourcePath: f.absPath,
             sourceRoot: f.rootRawPath,
@@ -301,7 +311,10 @@ export const workflowListProcedures = {
             isGenerative: false,
             hasRaw: false,
             usable: false,
-            preview: { nodes: [], edges: [], w: 0, h: 0 },
+            /* 空图预览走**同一个构造器**，不手写一份 `{ nodes, edges, w, h }`
+             *  ——那个字面量的字段名与 `WorkflowPreview`（`total` / `width` /
+             *  `height` / `truncated`）对不上，是同一类「形状各写一份」的错配。 */
+            preview: buildWorkflowPreview({}),
             workflowIO: {},
             modelTags: [],
             pending: true,

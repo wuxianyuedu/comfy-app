@@ -15,7 +15,7 @@ function row(over: Partial<WorkflowRow> = {}): WorkflowRow {
     id: "wf-1",
     name: "演示工作流",
     taskType: "t2i",
-    createdAt: "2026-08-01T00:00:00.000Z",
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
     ...over,
   };
 }
@@ -196,9 +196,8 @@ describe("列表项：名称限长 + 对外参数精简显示", () => {
               type: "INT",
             },
           },
-          /* `WorkflowRow.paramMap` 的声明比库里的真实形状窄（`Record<string,
-             string>`），而派生函数按存库原始形状读 —— 测试要构造真实数据，
-             因此这一处显式放宽类型。 */
+          /* 按 `WorkflowParamMap` 的真实三层形状构造 —— 断言不再需要放宽类型：
+             声明的就是这个形状，夹具写得出就编译得过。 */
           paramMap: {
             source: {
               "mode:T2I": {
@@ -208,7 +207,7 @@ describe("列表项：名称限长 + 对外参数精简显示", () => {
                 "size-height": "3::height",
               },
             },
-          } as unknown as WorkflowRow["paramMap"],
+          },
         }),
       ],
     });

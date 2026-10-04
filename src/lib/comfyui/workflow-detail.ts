@@ -35,6 +35,10 @@ import {
 } from "~/lib/server-cache";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
 import { type IOParamSlot } from "~/lib/workflow/workflow-io-types";
+import {
+  parseWorkflowParamMap,
+  type WorkflowParamMap,
+} from "~/lib/workflow/workflow-param-map";
 import { createObjectInfoResolvers } from "~/lib/comfyui/workflow-detail-combo";
 import { inferIsMultiline } from "~/lib/comfyui/types";
 import {
@@ -125,7 +129,10 @@ export interface WorkflowDetailFull {
   nodes: DetailNodeView[];
   /** 从 rawJson 重新推导出的 RAW 视图包（nodes / positions / graph）。 */
   rawView?: RawViewPacket | null;
-  paramMap: Record<string, string>;
+  /** `paramMap` JSON 列。形状的唯一出处是 `WorkflowParamMap` —— 这里声明成
+   *  「一层 key → string」曾与运行时不符（库里是按模式归拢的三层结构），且没有
+   *  任何消费点按它读（`buildWorkflowDetailJson` 此前靠 `as` 洗白）。 */
+  paramMap: WorkflowParamMap;
   workflowIO: Record<string, WorkflowDetailIOEntry>;
   positions: Record<string, [number, number]> | null;
   groups: WorkflowDetailGroup[];
@@ -298,7 +305,7 @@ async function buildWorkflowDetailJson(input: {
    * subgraph wrapper 整卡，供 RAW 布局与 ComfyUI 自身画布对齐。 */
   const rawView = buildRawView(raw, rawInputsById, sizeById);
 
-  const paramMap = (tpl.paramMap as Record<string, string>) ?? {};
+  const paramMap = parseWorkflowParamMap(tpl.paramMap) ?? {};
   // 用户挑出来的暴露集合：哪些节点参数 / widget / 输出被暴露成工作流的
   // 对外输入输出。（ioKey 是 `${nodeId}::${kind}::${name}`；
   // 见画布编辑器的 IO 编辑模式。）

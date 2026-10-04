@@ -16,7 +16,9 @@ import {
 import { hasRawContent } from "~/lib/comfyui/execution-shape";
 import { readEnvVar } from "~/lib/envfile";
 import { normalizeSlashes } from "~/lib/path-display";
+import type { WorkflowPreview } from "~/lib/comfyui/workflow";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /** 列表行下发给前端的「可执行形态」事实 —— 判据全在
  *  `~/lib/comfyui/execution-shape`（原件是 RAW 才可执行）。
@@ -53,15 +55,20 @@ function pendingId(absPath: string): string {
 
 /* 追加到 `list` 里的「本地待导入」占位行的形状。
  * 刻意与数据库里 `enriched` 出来的行保持结构一致，
- * 让前端的 `LibraryRow` 合并不必做额外适配。 */
+ * 让前端的 `LibraryRow` 合并不必做额外适配。
+ *
+ * `createdAt` / `paramMap` 两处**必须与 `WorkflowListRow` 同形状**：
+ * 同一份 payload 里出现两种形状（一处 `Date` 一处 ISO 串、一处权威类型一处
+ * 泛对象）时，视图读任何一行都得先判形状 —— 那正是 #1460 要消掉的东西。
+ * 两处都是 `Date`（superjson 过线保真）与 `WorkflowParamMap`（同一份读边界）。 */
 interface LocalPendingRow {
   id: string;
   name: string;
   taskType: string;
   modes: string[];
   defaultMode: string | null;
-  createdAt: string;
-  paramMap: Record<string, unknown>;
+  createdAt: Date;
+  paramMap: WorkflowParamMap;
   sourcePath: string;
   sourceRoot: string | undefined;
   source: "local-pending";
@@ -71,7 +78,7 @@ interface LocalPendingRow {
   isGenerative: boolean;
   hasRaw: boolean;
   usable: boolean;
-  preview: { nodes: unknown[]; edges: unknown[]; w: number; h: number };
+  preview: WorkflowPreview;
   workflowIO: WorkflowIOMap;
   modelTags: string[];
   pending: boolean;

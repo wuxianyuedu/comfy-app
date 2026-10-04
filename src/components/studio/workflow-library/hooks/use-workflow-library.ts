@@ -234,7 +234,7 @@ export function useWorkflowLibrary(
     });
     if (snapshot === lastSyncedRef.current) return;
     lastSyncedRef.current = snapshot;
-    setWorkflows((listQ.data.workflows ?? []) as unknown as WorkflowRow[]);
+    setWorkflows(listQ.data.workflows ?? []);
     setLocalPending(listQ.data.localPending ?? []);
     for (const workflow of listQ.data.workflows ?? []) {
       if (workflow.diskRenamed && workflow.diskRenamedTo) {
