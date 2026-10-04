@@ -18,7 +18,7 @@
  * `#f7f8fa`（近白表面），`.u-chip` / `.u-ghost` 与 `WorkflowNodeJsonPopover`
  * 的那些小字在浅色下几乎看不见。
  *
- * 本文件守三条性质，任何一条破了都会让「改一处样式、全站生效」失效：
+ * 本文件守四条性质，任何一条破了都会让「改一处样式、全站生效」失效：
  *
  * - **T1（单向）**：别名不许写字面量 —— 只能是 `var(--color-*)` 转发。
  *   别名自己写死色值时，「改品牌色」要点名到别名这一层。
@@ -26,6 +26,11 @@
  *   重名 = 项目 token 被别名顶掉（上面那个静默 bug 的形状）。
  * - **T3（无环）**：`var()` 引用链必须无环、且不得漏到未定义的名字。
  *   `--color-X: var(--X)` 配 `--X: var(--color-X)` 会让两边都变成无效值。
+ * - **T4（圆角刻度）**：`--radius-*` 只能有一处定义，且必须是 `var(--radius)`
+ *   的系数派生。T2 的比对只认 `--color-` 前缀，圆角命名空间一直在它覆盖面
+ *   之外 —— 于是 `@theme` 里那四行字面量被 `@theme inline` 静默顶掉了很久
+ *   （注释说 16px、实渲染 12px）。圆角的正确形状是「基数 × 系数表」而不是
+ *   `var()` 转发，所以它需要自己的判据，不只是把 T2 的前缀加长。
  *
  * 判据读的是**编译产物**（Tailwind 真编 `globals.css`），不是源码文本 ——
  * 源码文本看不出「同名两处谁赢」，那正是上面那个 bug 逃过所有检查的原因。
@@ -33,6 +38,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { DEFAULT_APPEARANCE, RADIUS_STEPS } from "~/lib/appearance";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
 
 const sourceCss = readFileSync(
@@ -145,6 +151,7 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       "--container-",
       "--z-index-", // 层级刻度
       "--radius-", // 圆角刻度
+      "--container-", // 内容列宽度三档（max-w-narrow / -medium / -wide，globals.css 里的现值收口）
       "--text-", // 字阶刻度（.u-title / .u-title-page / .u-title-stage / .u-title-hero）
       "--xy-", // React Flow 变量
       "--json-view-", // json 查看器主题
@@ -248,5 +255,93 @@ describe("T3 var() 引用链无环、不漏到未定义的名字", () => {
     expect(dark.get("--muted-foreground")).toBe(dark.get("--color-ink-muted"));
     expect(light.get("--muted")).toBe(light.get("--color-subtle"));
     expect(dark.get("--muted")).toBe(dark.get("--color-subtle"));
+  });
+});
+
+describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Shapes）", () => {
+  /** 设计意图：默认档渲染出的整数刻度，sm…4xl 每档 +4px。 */
+  const LADDER = [8, 12, 16, 20, 24, 28, 32];
+  const ORDER = [
+    "--radius-sm",
+    "--radius-md",
+    "--radius-lg",
+    "--radius-xl",
+    "--radius-2xl",
+    "--radius-3xl",
+    "--radius-4xl",
+  ] as const;
+
+  /** 解出各档的系数（`var(--radius)` 记作 1）；写成字面 px 的档位解不出来。 */
+  function coefficients(css: string): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const m of css.matchAll(
+      /^\s*(--radius-[a-z0-9]+)\s*:\s*(?:var\(--radius\)|calc\(var\(--radius\)\s*\*\s*([0-9.]+)\))\s*;/gm,
+    )) {
+      if (m[1]) out.set(m[1], m[2] ? Number.parseFloat(m[2]) : 1);
+    }
+    return out;
+  }
+
+  /** 那颗基数换算成 px（只认 rem/px 两种形态，别的形态直接判不合格）。 */
+  function basePx(css: string): number {
+    const m = /^\s*--radius\s*:\s*([0-9.]+)(rem|px)\s*;/m.exec(css);
+    if (!m?.[1] || !m[2]) throw new Error("globals.css 里找不到 --radius 基数");
+    return m[2] === "rem"
+      ? Number.parseFloat(m[1]) * 16
+      : Number.parseFloat(m[1]);
+  }
+
+  it("@theme 里不许再有 --radius-* 字面量（那份死声明别再长回来）", () => {
+    const themeBlock = sliceBlock(sourceCss, "@theme {", "/* Immersive");
+    const stray = [
+      ...themeBlock.matchAll(/^\s*(--radius-[a-z0-9-]+)\s*:/gm),
+    ].flatMap((m) => (m[1] ? [m[1]] : []));
+    expect(
+      stray,
+      "@theme 里写了圆角字面量：它与 @theme inline 的派生值同名、后者获胜，" +
+        "于是这几行是死声明，且设置页改基数时它们根本不跟手",
+    ).toEqual([]);
+  });
+
+  it("七档全在 @theme inline 里由 var(--radius) 派生，刻度正是设计意图", () => {
+    const coefs = coefficients(sliceBlock(sourceCss, "@theme inline {", "\n}"));
+    const base = basePx(sourceCss);
+    for (const name of ORDER) {
+      expect(
+        coefs.has(name),
+        `${name} 不是「由 --radius 派生」的声明（写成字面 px 就断开了总闸）`,
+      ).toBe(true);
+    }
+    const px = ORDER.map((name) => Math.round(base * (coefs.get(name) ?? 0)));
+    expect(px, `基数 ${base}px × 系数表 ≠ 设计意图那串整数`).toEqual(LADDER);
+  });
+
+  it("解系数这条判据不是空转（塞一条字面 px 进去必须漏解）", () => {
+    // 反向验证：把「七档齐全 + 2xl 写成 24px」喂给同一个解析器，
+    // 必须只解出 6 条且 --radius-2xl 缺席 —— 上一条才会真的把它判红。
+    const polluted = [
+      "--radius-sm: calc(var(--radius) * 0.5);",
+      "--radius-md: calc(var(--radius) * 0.75);",
+      "--radius-lg: var(--radius);",
+      "--radius-xl: calc(var(--radius) * 1.25);",
+      "--radius-2xl: 24px;",
+      "--radius-3xl: calc(var(--radius) * 1.75);",
+      "--radius-4xl: calc(var(--radius) * 2);",
+    ].join("\n");
+    const coefs = coefficients(polluted);
+    expect(coefs.size, "解析器一条都没解出来（正则失效，判据会空转）").toBe(6);
+    expect(coefs.has("--radius-2xl"), "字面 px 的档位被当成了派生值").toBe(
+      false,
+    );
+  });
+
+  it("设置页的默认圆角档就是这颗基数（两处必须同批改）", () => {
+    const step = RADIUS_STEPS.find((s) => s.id === DEFAULT_APPEARANCE.radius);
+    expect(step, "默认档 id 在档位表里找不到").toBeTruthy();
+    expect(
+      step?.value,
+      `默认档与 globals.css 的 --radius=${basePx(sourceCss) / 16}rem 不一致：` +
+        "没设置过与选了默认档会渲染出两套圆角",
+    ).toBe(`${basePx(sourceCss) / 16}rem`);
   });
 });

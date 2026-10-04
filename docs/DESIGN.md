@@ -91,12 +91,13 @@ typography:
 rounded:
   none: 0px
   xs: 2px
-  sm: 7.2px
-  md: 9.6px
-  lg: 12px
-  xl: 16.8px
-  2xl: 21.6px
-  3xl: 26.4px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  xl: 20px
+  2xl: 24px
+  3xl: 28px
+  4xl: 32px
   full: 9999px
 spacing:
   xxs: 4px
@@ -249,7 +250,7 @@ components:
 >
 > **它不是什么**：它**不是** token 的权威源。颜色的权威源是 `src/app/globals.css` 的 `@theme`（规范 03 §3.6.4）。本文件引用 token 名、复述取值，但任何一方改了值，**以 CSS 为准**，本文件跟着改。
 >
-> **取证时间**：2026-10-03，`master` = `648a898e`。frontmatter 里的每个数字都经实测得到（测量方法见文末「取证方法」），不是从命名推的。
+> **取证时间**：2026-10-03，`master` = `648a898e`；圆角刻度与「外观两档」这一格补测于 2026-10-04，`master` = `049307db`。frontmatter 里的每个数字都经实测得到（测量方法见文末「取证方法」），不是从命名推的。
 
 ---
 
@@ -277,9 +278,9 @@ components:
 | **工具类桥** | `@theme inline` 的 `--color-*: var(--别名)`（28 条） | 让 `bg-card` 这类 shadcn 类名编得出来，**只是入口** | 不手写 |
 | **shadcn 别名** | `--card` / `--border` / `--muted` …（`:root`，47 条） | 只做 `var()` 转发，**不写字面量**（除 `--chart-*` 与 `--radius`） | `ui/` 基元 |
 
-三条硬判据由 `tests/theme-token-single-source.test.ts` 守着：**T1 别名不写字面量 / T2 `@theme inline` 不重名 / T3 var() 链无环**。
+四条硬判据由 `tests/theme-token-single-source.test.ts` 守着：**T1 别名不写字面量 / T2 `@theme inline` 不重名 / T3 var() 链无环 / T4 圆角只有「基数 × 系数表」一处**。
 
-> ⚠️ **T2 只匹配 `--color-*`**，圆角刻度不在覆盖面内——见「Conflicts」第一条，那是本文件实测出的一个真实缺口。
+> ⚠️ **T2 只匹配 `--color-*`**，圆角命名空间由同文件的 **T4** 单独守（刻度形状不是 `var()` 转发，套不进 T2）——见「Conflicts」第一条。
 
 ### 语义角色表（浅色值取自 `@theme`，深色值取自 `.dark`）
 
@@ -403,19 +404,23 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ## Shapes
 
-**实际生效的圆角刻度是以 `--radius: 0.75rem`(12px) 为基数的一套倍数**（`@theme inline`，`globals.css:1005-1011`）：
+**圆角只有一处定义**：`--radius`（`:root` 里的基数，`1rem`=16px）× 一张系数表（`@theme inline`）。默认档实测就是一串整数：
 
-| 类名 | 表达式 | 计算值 |
+| 类名 | 表达式 | 默认档 |
 | --- | --- | --- |
-| `rounded-sm` | `--radius × 0.6` | 7.2px |
-| `rounded-md` | `--radius × 0.8` | 9.6px |
-| `rounded-lg` | `--radius` | **12px** |
-| `rounded-xl` | `--radius × 1.4` | 16.8px |
-| `rounded-2xl/3xl/4xl` | `× 1.8 / 2.2 / 2.6` | 21.6 / 26.4 / 31.2px |
+| `rounded-sm` | `--radius × 0.5` | 8px |
+| `rounded-md` | `--radius × 0.75` | 12px |
+| `rounded-lg` | `--radius` | **16px** |
+| `rounded-xl` | `--radius × 1.25` | 20px |
+| `rounded-2xl` | `--radius × 1.5` | 24px |
+| `rounded-3xl` | `--radius × 1.75` | 28px |
+| `rounded-4xl` | `--radius × 2` | 32px |
 
-- **卡片/浮层用 `rounded-xl`**（16.8px），**控件（按钮、下拉触发器）用 `rounded-lg`**（12px），**输入框用 `rounded-md`**（9.6px），**chip/药丸用 `rounded-full`**（999px）。
+- **这张表描述的是「默认档」**：设置页 → 外观 → 圆角（`src/lib/appearance.ts` 的 `RADIUS_STEPS`）改的就是那颗基数，四档 12/16/20/24px，整条刻度跟着等比缩放。表里的 px 是**没设置过 / 选了默认档**时的读数，不是常量。
+- **系数必须是派生式，不许写回字面量**：`@theme inline` 才会把 `var(--radius)` 就地内插进工具类，写成 `border-radius: 16px` 的那一档就脱离了总闸（设置页改它不跟手）。这条由 `tests/theme-token-single-source.test.ts` 的 T4 守着（判 `@theme` 里不许再长出 `--radius-*`、七档必须由 `--radius` 派生、基数 × 系数必须等于上面那串整数）。
+- **卡片/浮层用 `rounded-xl`**（默认 20px），**控件（按钮、下拉触发器）用 `rounded-lg`**（16px），**输入框用 `rounded-md`**（12px），**chip/药丸用 `rounded-full`**（9999px）。
 - 小尺寸控件靠**取小**而不是换档：`rounded-[min(var(--radius-md),10px)]`（Button `xs`/`icon-xs`）、`min(var(--radius-md),12px)`（`sm`/`icon-sm`）。`ui/` 里 15 处 `rounded-[...]` 有 11 处是这种**从 token 派生**的写法，只有 3 处是裸值（`rounded-[2px]`×2、`rounded-[4px]`×1）。
-- ⚠️ `@theme` 里那套 `--radius-sm/md/lg/xl: 8/12/16/20px` **从未生效**，见下方 Conflicts。
+- 两处直接吃基数、不吃档位：`ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 与 `ui/sonner.tsx` 的 `--border-radius`。它们跟着整条刻度走，不是第二份来源。
 
 ---
 
@@ -553,17 +558,14 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ## Conflicts and Open Decisions
 
-### 冲突 1：圆角有两套定义，`@theme` 那套从来没生效
+### 冲突 1：圆角有两套定义，`@theme` 那套从来没生效 —— 已落地
 
-- **`@theme`（`globals.css:242-245`）**：`--radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 20px`
-- **`@theme inline`（`globals.css:1005-1008`）**：同一批名字 = `calc(var(--radius) * 0.6 / 0.8 / — / 1.4)`
-- **实测**（把 `globals.css` 真编译一次，读产物里 `:root` 的声明）：每个名字**只有 1 份声明**，且是 `@theme inline` 的 calc 版本 ⇒ `@theme` 那四行是**死声明**。
-- **直接后果**：`var(--radius-lg)` 的三条 CSS 规则（`.u-card` 等）注释与 `@theme` 都写 16px，**产物里是 12px**；`var(--radius-md)` 同理是 9.6px 而不是 12px。全仓（去 story/test/snap）Tailwind 半径类走 calc 那套的共 **706 处**：`rounded-lg` 364 处（12→16，**+4px 是主力**）、`rounded-md` 224 处（9.6→12）、`rounded-xl` 107 处（16.8→20）、`rounded-sm` 11 处（7.2→8）。
-  > ⚠️ 但 `var(--radius-*)` 那三条规则所在的 `.u-*` 扁平层**全仓零消费者**（见 Known Gaps），所以这一刀里「靠 `var()` 走的那几处」其实看不见变化，**真正会变的全在 706 处类名上**。
-- **为什么没人拦**：规范 03 §3.6.4 的 T2「`@theme inline` 不许重名」判据在 `tests/theme-token-single-source.test.ts:174,180` 里**只匹配 `--color-` 前缀**，圆角命名空间不在覆盖面内。这件事的形状和当年 `--color-muted` 被别名顶掉**一模一样**（浅色下 `var(--color-muted)` 拿到 `#f7f8fa` 表面而不是 `#6b6b76` 文字灰，tsc/eslint/主题扫描全绿），只是换了个命名空间所以判据看不见。
-- **已签字（2026-10-03）**：认 **8/12/16/20 为设计意图** ⇒ 删掉 `@theme inline` 里那 4 行重名、让 `@theme` 生效，并把 T2 的前缀名单扩到 `--radius-` 防回潮。落地方式 = **直接改 + 人眼看一轮**（先不补视觉基线）。
-- **随签要定的接缝**：只删那 4 行的话，刻度会变成 `8 / 12 / 16 / 20` 接 **21.6 / 26.4 / 31.2**（后三档仍来自 calc），`xl → 2xl` 只差 **1.6px**、肉眼几乎不分档，而 `rounded-2xl` 有 **73 处**真实消费者。要么把前段的 +4px 线性延伸成 `24 / 28 / 32`，要么明确接受这个接缝。
-- **决策人**：设计/规范 owner。本文件 frontmatter 的 `rounded` 刻度按**①（实测生效值）**写，即 `lg = 12px`。
+- **原状**：`@theme` 写 `--radius-sm/md/lg/xl: 8/12/16/20px`，`@theme inline` 又用同名写 `calc(var(--radius) * 0.6 / 0.8 / — / 1.4)`。实测（把 `globals.css` 真编译一次，读产物里 `:root` 的声明）每个名字**只有 1 份声明**且是 calc 版本 ⇒ `@theme` 那四行是**死声明**，注释说 16px、渲染 12px。
+- **为什么没人拦**：规范 03 §3.6.4 的 T2「`@theme inline` 不许重名」判据只匹配 `--color-` 前缀，圆角命名空间不在覆盖面内。形状和当年 `--color-muted` 被别名顶掉一模一样（浅色下拿到 `#f7f8fa` 表面而不是 `#6b6b76` 文字灰，tsc/eslint/主题扫描全绿），只是换了个命名空间所以判据看不见。
+- **签字过程**（2026-10-03 签「认 8/12/16/20 为设计意图」→ 2026-10-04 改签「改乘数，不动机制」）：第一次签的做法是**让 `@theme` 的字面量生效**（删掉 `@theme inline` 那几行）。落地前 master 合进了「外观两档」，设置页那颗圆角档靠的正是 `@theme inline` 的派生 —— 删了派生，`--radius` 就变成死控件，`e2e/appearance-steps.spec.ts`（@critical，读 `getComputedStyle`）当场会红。所以机制反过来走：**保留派生，把系数改成让默认档正好落在设计意图那串整数上**。
+- **落地**：基数 `--radius: 1rem`（16px）+ 系数 `0.5 / 0.75 / 1 / 1.25 / 1.5 / 1.75 / 2` ⇒ 默认档实测 **8 / 12 / 16 / 20 / 24 / 28 / 32px**，七档齐、相邻档统一 **+4px**；旧表在基数 12px 下相邻档差得不匀（sm→lg 差 2.4px、lg 之后差 4.8px）且全是小数（7.2 / 9.6 / 16.8 / 21.6…）。若只让 `@theme` 生效、后三档仍走 calc，会得到 `8/12/16/20` 接 `21.6/26.4/31.2` —— `xl → 2xl` 只差 1.6px、肉眼分不出档，那个接缝也一并消掉了。`@theme` 里那四行死字面量删除。设置页四档（12/16/20/24px）改基数，整条刻度等比缩放 —— 这是它原有的能力，这次没被拿走。
+- **影响面**（本轮复量，去 story/test/snap，`src/**` 的 `.ts`/`.tsx`/`.css`）：Tailwind 半径类共 **785 处**跟着挪 —— `rounded-lg` **365**（12→16）、`rounded-md` **224**（9.6→12）、`rounded-xl` **108**（16.8→20）、`rounded-2xl` **73**（21.6→24）、`rounded-sm` **11**（7.2→8）、`rounded-3xl` / `rounded-4xl` 各 **2**（26.4→28 / 31.2→32）。另有直接吃基数的两处：`ui/input-group.tsx` 的 `calc(var(--radius) - 3px)`（9→13px）与 `ui/sonner.tsx` 的 `--border-radius`（12→16px）。
+- **防回潮**：新增 T4 一组判据（`tests/theme-token-single-source.test.ts`），四条各管一件事 —— `@theme` 里不许再长出 `--radius-*`；七档必须由 `var(--radius)` 派生；基数 × 系数必须等于设计意图那串整数；设置页默认档的值必须等于基数（否则「没设置过」与「选了默认档」会渲染出两套圆角）。解系数的正则另配一条反向验证（喂一份「六档派生 + 一档字面 px」的源码，必须只解出六条），防的是判据自己空转。
 
 ### 冲突 2 → 已收口：规范 06 §6.7 的 reduced-motion 硬要求，实现里曾经是 0
 
@@ -598,9 +600,9 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - **Storybook 覆盖 29/83**（有 story 的组件：alert、aspect-ratio、avatar、badge、button、empty-state、field、form-field、form-rhf、image-viewer、json-viewer、kbd、list-badge、media-thumbnail、option-list-popover、page-loading、progress-bar、seed-mode-button、segment-popover、simple-key-handler、skeleton、source-tag、spinner、status-badge、status-dot、task-type-chip、toggle、validation-error-list、water-fill-progress）。核心交互件里 **input、dialog、select、card、tooltip、popover、switch、checkbox、tabs、dropdown-menu、context-menu、menubar、navigation-menu、command** 无 story；其中 dialog/select/tabs/dropdown-menu/card/input/switch/checkbox **同时无 `.test.tsx`**。⇒ 「明暗两态长什么样」这一层契约目前只在那 29 个组件上可核验。
 - **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一 grep 在 `u-title` 上抓到 51 处、`u-title-page` 18 处，所以这个 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名精确计数：`u-title` 26 处、`u-title-page` 17 处、`u-title-stage` 1 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。
 - **`ui/input.tsx:12` 预设了 `w-full`**，而规范 03 §3.8.1.1 的原文是「基础件里不要预设 `w-full`，宽度是调用处的决定」。对单行输入而言铺满大概是有意为之（该条的事故现场是**并排的下拉**，不是输入框），但**条文没有按角色区分** ⇒ 要么给输入框一个明确豁免，要么把 §3.8.1.1 收窄到「会和其它控件排在同一行的件」。**needs-design-decision**。
-- **全站圆角改档几乎没有现成的视觉能量测得住**（签字「直接改 + 人眼看一轮」时必须知道的那一格）：`toHaveScreenshot` 全仓只有 **2 处**（`e2e/visual/login.visual.spec.ts:49,66`，基线是 `-chromium-win32.png`），而 **playwright 不进 pre-commit**；`e2e/**` 里 `borderRadius` 断言 **0 处**（该套用例只断 `color` / `backgroundColor` / `fill` / `stroke` / `width` / `height`），`tests/visual-baseline-pairing.test.ts` 只核「基线文件齐不齐、名字对不对平台」不比像素。所以 `+4px` 那一刀落地后，**除了登录页那一处，没有任何自动化会告诉你哪里变形了**。规范 03 §3.6.1.1 那句「刻意不比像素」的理由（基线按平台分文件）仍然成立，别顺手把它推翻——要补的是**代表屏的截图用例 + 一个手动跑的入口**。
+- **圆角的自动化覆盖是「相对变化」而不是「绝对形状」**：`toHaveScreenshot` 全仓只有 **2 处**（`e2e/visual/login.visual.spec.ts:49,66`，基线 `-chromium-win32.png`），而 **playwright 不进 pre-commit**；读 `borderTopLeftRadius` 的断言有 **4 处**，全在 `e2e/appearance-steps.spec.ts`，判的是「改档之后它变了没 / 刷新后还在不在」—— **变了**这件事有覆盖，**变成什么形状**没有。`tests/visual-baseline-pairing.test.ts` 只核「基线文件齐不齐、名字对不对平台」不比像素。规范 03 §3.6.1.1 那句「刻意不比像素」的理由（基线按平台分文件）仍然成立，别顺手把它推翻——要补的是**代表屏的截图用例 + 一个手动跑的入口**。
 - **frontmatter 只能表达一态**，而本库的取值规则是两态。上面的 `colors` / `rounded` / `components` 全部取**浅色档**（因为 `@theme` 写的就是浅色），而**默认主题是 Dark**。任何人拿 frontmatter 当「应用现在的样子」会得出反的结论——两态对照请看 Colors 表。
-- **`--radius-sm` / `--radius-xl` 在真实构建下会被 tree-shake 出 `:root`**（实测：非 static 编译下这两颗声明数为 0，`--radius-md` / `--radius-lg` 因为被 `.u-input` / `.u-card` 引用而存活）。现在没有代码用 `var(--radius-sm)` 去读它，所以还不出事；但**一旦有人在 `style={{}}` 里写 `var(--radius-sm)`，它就是一个幽灵变量**。
+- **`var(--radius-*)` 在产物里是半个幽灵**：`@theme inline` 的语义是「值内插进工具类，变量本身只在被 `var()` 引用到时才发」，实测真编译下 `:root` 里只有 `--radius-md` / `--radius-lg` 两颗（它们被 `.u-input` / `.u-card` 引用着才存活），`sm` / `xl` / `2xl` / `3xl` / `4xl` **声明数为 0**。现在没有代码去读它们，所以还不出事；但**一旦有人在 `style={{}}` 里写 `var(--radius-xl)`，拿到的是空值** —— 圆角要用就走类名（`rounded-xl`），要写 `var()` 就只能引基数 `var(--radius)`。
 - **两条字面字号住在 `@theme` 之外**：`.json-view.jv-theme-comfy` 的 11px/1.6、`.cb-code-block` 的 11.5px/1.65。它们是**内容尺寸**（等宽代码/JSON 的密度决定可读性），不是排版档，但和 `--text-*` 一样都是「改档要改两处」的形态——本文件把它们记成 `code-md` / `code-json` 两档，落档与否待定。
 - **`--shimmer-` 那条白名单不是「死豁免」，是「读错了文件」**（订正上一版的说法）：`tests/theme-token-single-source.test.ts:146` 登记着 `--shimmer-` 前缀，而它读的是 `src/app/globals.css` 的**源码文本**——那里确实没有 `--shimmer-*`。但**编译产物里有** `--shimmer-angle`（在 `src-tauri/static/.next/static/chunks/*.css` 里可见），来源钉在 `node_modules/shadcn/dist/tailwind.css:620` —— 即 `globals.css:3` 那句 `@import "shadcn/tailwind.css"` 带进来的。所以那条登记**有真实出处、不该按「死豁免 = 负债」删掉**；真正要记的是判据的口径边界：**它只核本文件里的裸声明，看不见依赖带进来的同名变量**。
 
@@ -615,6 +617,9 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 #    （tests/helpers/theme-tokens.ts 的 compiledGlobalsCss() 已经把 globals.css
 #     用 @tailwindcss/postcss 真编译一次；起一条一次性用例读它的产物即可）
 #    实测：每个名字 **1 次**，值来自 @theme inline 的 calc；@theme 那 4 行不在产物里
+#    2026-10-04 复算（基数改 1rem 之后）：:root 里 --radius=1rem，工具类编成
+#    border-radius: calc(var(--radius) * 0.5 / 0.75 / — / 1.25 / 1.5 / 1.75 / 2)
+#    ⇒ 默认档 8/12/16/20/24/28/32px；@theme 里那四行死字面量已删，T4 拦住它长回来
 
 # 2. token 规模（当前 master 实测：@theme 88 / @theme inline 28 / .dark 72 / :root 47 / 唯一 --color-* 名 115）
 awk '/^@theme \{/,/^\}/' src/app/globals.css | grep -cE "^\s+--color-[a-z0-9-]+:"

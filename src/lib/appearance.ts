@@ -27,14 +27,18 @@ export interface AppearanceStep {
 }
 
 /**
- * 圆角档位。`中` 等于 `globals.css` 里 `--radius` 的原值（0.75rem）——
+ * 圆角档位。`中` 就是 `globals.css` 里 `--radius` 那颗基数（1rem）——
  * 默认档必须与"从没设置过"逐像素相同，否则升级后老用户第一眼看到的就是变化。
+ *
+ * 标签里的 px 是**基数** `--radius`（= `--radius-lg`）：整条刻度按系数跟着它缩放
+ * （`ui/card` 走 `rounded-xl`，实际角比标签值大 4px）。改基数或改这里的值，
+ * 两边必须同批 —— 文案说 16px 而实渲染 12px 就是骗用户。
  */
 export const RADIUS_STEPS: AppearanceStep[] = [
-  { id: "sm", label: "小 · 8px", value: "0.5rem" },
-  { id: "md", label: "中 · 12px", value: "0.75rem" },
-  { id: "lg", label: "大 · 16px", value: "1rem" },
-  { id: "xl", label: "特大 · 20px", value: "1.25rem" },
+  { id: "sm", label: "小 · 12px", value: "0.75rem" },
+  { id: "md", label: "中 · 16px", value: "1rem" },
+  { id: "lg", label: "大 · 20px", value: "1.25rem" },
+  { id: "xl", label: "特大 · 24px", value: "1.5rem" },
 ];
 
 /** 标题字阶档位（倍率；基准在 CSS 里）。 */
@@ -50,7 +54,7 @@ export interface AppearancePrefs {
   fontScale: string;
 }
 
-/** 默认值 = 引入本功能之前的原样（0.75rem / ×1）。 */
+/** 默认值 = `globals.css` 里 `--radius` / `--font-scale` 的基数（两者必须同批改）。 */
 export const DEFAULT_APPEARANCE: AppearancePrefs = {
   radius: "md",
   fontScale: "100",

@@ -257,11 +257,12 @@
   --z-index-toast: 1000;
   --z-index-chrome: 2000;
 
-  /* Radii */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  /* Radii —— **本块不放 `--radius-*`**，刻度的唯一定义在 `@theme inline`
+     （由 `--radius` 那颗基数 calc 派生，见 `:root` 里「圆角总闸」那段）。
+     这里曾经有四行字面量（`8/12/16/20px`），它们**从来没生效过**：同名在
+     `@theme inline` 里各有一份 calc 版本，层内靠后的那份获胜，于是注释说
+     16px、实渲染 12px。留字面量还会顺手废掉设置页的圆角档 —— 那个档改的是
+     基数，字面量不跟手。判据见 `tests/theme-token-single-source.test.ts`。 */
 
   /* Body / default — next/font 加载的 Latin 字体 + 系统 CJK 字体回退 */
   --font-sans:
@@ -1112,13 +1113,20 @@ textarea::-webkit-scrollbar {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  /* 圆角刻度 —— 七档的唯一定义。系数让相邻档统一差 4px：
+     基数 16px ⇒ 8 / 12 / 16 / 20 / 24 / 28 / 32px。
+     原先是 `0.6 / 0.8 / 1 / 1.4 / 1.8 / 2.2 / 2.6`（基数 12px ⇒ 7.2 / 9.6 /
+     12 / 16.8 / 21.6 / 26.4 / 31.2），两个毛病：相邻档差得不匀（sm→lg 差 2.4px、
+     lg 之后差 4.8px），而 7.2 / 9.6 这种小数半径在 1px 环上会糊。
+     必须留在 `@theme inline`（不能挪去 `@theme` 写字面量）：inline 才会把
+     `var(--radius)` 就地内插进工具类，设置页的圆角档改基数才能整条刻度跟手。 */
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.5);
+  --radius-3xl: calc(var(--radius) * 1.75);
+  --radius-4xl: calc(var(--radius) * 2);
 }
 
 /* ── shadcn 语义别名：只做 `var()` 转发，不写第二份字面量 ──────────
@@ -1184,8 +1192,13 @@ textarea::-webkit-scrollbar {
   --chart-5: oklch(0.269 0 0);
   /* 圆角总闸：`--radius-sm…4xl` 全部由它 calc 派生（见 @theme inline 那一组）。
      设置页的「圆角」档只改这一个值 —— 实测运行时改它，卡片与按钮的圆角会
-     按各自系数一起跟着变（21.6px→39.6px / 9.6px→17.6px），所以不需要第二份映射表。 */
-  --radius: 0.75rem; /* 对应原 --radius-md 12px */
+     按各自系数一起跟着变，所以不需要第二份映射表。
+     基数就是 `--radius-lg`，取 16px：整条刻度落在 8/12/16/20/24/28/32 这串整数上
+     （docs/DESIGN.md §Shapes）。原先是 0.75rem=12px，渲染出 7.2/9.6/16.8/21.6
+     这串小数半径。另有两处直接吃基数：`ui/input-group.tsx` 的
+     `calc(var(--radius) - 3px)`（9→13px）与 `ui/sonner.tsx` 的 `--border-radius`
+     （12→16px）—— 它们跟着整条刻度走，不是第二份来源。 */
+  --radius: 1rem;
   /* 标题字阶总闸（只作用于上面四档标题令牌；正文锚定 13px，不随它变）。 */
   --font-scale: 1;
 }

@@ -64,6 +64,44 @@ function staticSpecifiers(source: string): string[] {
   return specs;
 }
 
+/**
+ * ④ 用的「窄项目」：`extends` 仓库真那份 tsconfig（`paths` / `jsx` / `strict` 全部
+ * 继承，不重抄一份 —— 重抄就是第二个事实来源），只把 `include` 收到 `.storybook/**`
+ * 与它需要的环境声明上。
+ *
+ * 为什么收这一层就够：本条判的是「没有生成件的那个形态会不会让类型程序报错」，
+ * 而报错只可能发生在**解析得到那个模块的文件**身上 —— 也就是 `.storybook` 那三个
+ * 被引方（① 点名的就是它们）。全仓那一遍的活儿有组 A 在同一趟提交里干。
+ *
+ * `incremental: false` 是必须的：真配置开着 incremental，缓存命中时这一跑可以什么都不
+ * 检查就退 0 —— 判据会静默空转。宁可每次都真算。
+ */
+function narrowTsconfigText(root: string): string {
+  const abs = (p: string) => path.join(root, p).split(path.sep).join("/");
+  return JSON.stringify(
+    {
+      extends: abs("tsconfig.json"),
+      include: [
+        abs("next-env.d.ts"),
+        abs(".next/dev/types/**/*.ts"),
+        abs(".storybook/**/*.ts"),
+        abs(".storybook/**/*.tsx"),
+      ],
+      compilerOptions: { incremental: false },
+    },
+    null,
+    2,
+  );
+}
+
+/** 把那份窄配置落到临时目录（只写一个 json，不搬仓库里的任何东西）。 */
+function writeNarrowTsconfig(): { dir: string; cfg: string } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "storybook-narrow-tsc-"));
+  const cfg = path.join(dir, "tsconfig.json");
+  fs.writeFileSync(cfg, narrowTsconfigText(ROOT));
+  return { dir, cfg };
+}
+
 describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输入：四条判据", () => {
   it("① 被引方都不 import 生成件 —— 那正是 TS2307 的来源", () => {
     /* 三处都可能去读它：注入层（值源）、preview（缺省 origin 与旋钮）、
@@ -136,9 +174,13 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
 
   it(
     "④ 缺了生成件时 tsc 真的退 0 —— 拿真检出复量，不靠读配置下结论",
-    /* 原生 TS7 全仓 --noEmit 跑两遍（缺生成件一遍 + 在位一遍），独立跑 ~9s、
-     * 钩子组 C 的降配 forks 下实测 ~32s —— 贴着全局 30s 上限，给足余量
-     * （与 check-reformat-only 的慢 exec 用例同一档）。 */
+    /* 本机实测（空闲机器、同一份输入，连跑三次全仓 `tsc --noEmit`）：
+     * 20.7s / 26.7s / 131.9s —— 一遍全仓编译自己就有 6 倍的抖动，进 pre-commit
+     * 组 C 的并发池子（--maxWorkers=4，且 A/B/D 同时在跑）实测 181–182s，
+     * 120s 预算必爆；串行 8/8 绿 ⇒ 争用假红（定性手法见规范 §11.13）。
+     * 修法按 §11.13 的口径走「精确化判据」而不是再抬预算：编译面从全仓收到
+     * 窄项目（见 narrowTsconfigText），实测 6.9s；预算留 120s 不动，
+     * 现在它离天花板很远。 */
     { timeout: 120_000 },
     () => {
       /* 这一条判的是**结果**：把生成件挪走（= 新检出的形态），tsc 必须退 0。
@@ -173,16 +215,60 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         ).toBe(true);
       }
       try {
-        const without = tsc!.run(["--noEmit"]);
-        expect(
-          without.status,
-          `没有 ${GENERATED_REL} 时 tsc 必须退 0（新检出的形态），实际输出：\n${without.output}`,
-        ).toBe(0);
+        const { dir, cfg } = writeNarrowTsconfig();
+        try {
+          const without = tsc!.run(["-p", cfg, "--noEmit"]);
+          expect(
+            without.status,
+            `没有 ${GENERATED_REL} 时类型程序必须退 0（新检出的形态），实际输出：\n${without.output}`,
+          ).toBe(0);
+        } finally {
+          fs.rmSync(dir, { recursive: true, force: true });
+        }
       } finally {
         if (existed) restoreGeneratedFile(generatedFile, stash);
       }
-      // 生成件在位时也得是绿的（这一条顺带证明上面那次不是「tsc 根本没跑」）。
-      expect(tsc!.run(["--noEmit"]).status).toBe(0);
+      /* 活性证明（≈0.3s）：同一个可执行文件报得出版本号 —— 上面断言的是退出码，
+         万一解出来的是个空壳，`--version` 也会红。 */
+      const alive = tsc!.run(["--version"]);
+      expect(
+        alive.status,
+        `tsc --version 都退非 0，上面那次「退 0」不可信：\n${alive.output}`,
+      ).toBe(0);
+      expect(
+        alive.output.trim().length,
+        "--version 输出为空 —— 那不是真的跑起来了",
+      ).toBeGreaterThan(0);
+    },
+  );
+
+  it(
+    "④ 的窄项目不是空转：三个被引方真的在类型程序里",
+    /* 把编译面从全仓收到 .storybook 之后，新出现的失效方式是「窄配置根本没把
+       被引方纳进来」—— 那样 ④ 会永远绿，而这正是它唯一要判的东西。所以判据换形
+       时必须补一条在场证明：拿 `--listFilesOnly` 把类型程序的文件清单打出来，
+       ① 点名的三个被引方一个都不许缺。这条与 ④ 用同一份配置，形状不会分叉。 */
+    { timeout: 120_000 },
+    () => {
+      const tsc = resolveTscBin();
+      expect(tsc, "解不出可用的 tsc，这条无法成立").not.toBeNull();
+      const { dir, cfg } = writeNarrowTsconfig();
+      try {
+        const listed = tsc!.run(["-p", cfg, "--noEmit", "--listFilesOnly"]);
+        expect(
+          listed.status,
+          `--listFilesOnly 都退非 0，配置本身有问题：\n${listed.output}`,
+        ).toBe(0);
+        const norm = listed.output.split("\\").join("/");
+        for (const rel of [CONSUMER_REL, PREVIEW_REL, MAIN_REL]) {
+          expect(
+            norm.includes(rel.split("\\").join("/")),
+            `${rel} 不在窄类型的文件清单里 —— ④ 那一跑是空转`,
+          ).toBe(true);
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     },
   );
 
