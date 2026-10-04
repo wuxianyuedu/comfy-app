@@ -427,3 +427,26 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
     }
   });
 });
+
+describe("旧归档机制已移除（只留一处归档实现）", () => {
+  it("dev-launcher 收尾只有 archiveCurrent，没有第二份年月归档", () => {
+    const src = fs.readFileSync(
+      path.join(ROOT, "scripts", "dev-launcher.mjs"),
+      "utf8",
+    );
+    // 旧实现把 dev-launcher.log append 进 log/archive/<yyyy-MM>/，与新布局的
+    // 「整目录复制」是两条互不相干的归档通道 —— 留着它 = 同一件事两个口径。
+    expect(src).not.toContain("archiveRunLog");
+    expect(src).toContain("archiveCurrent(ROOT");
+  });
+
+  it("log.mjs 里不再有年月归档出口与 archive 分区", async () => {
+    const { LOG_DIRS } = await import("../scripts/launcher-core/log.mjs");
+    expect("archive" in LOG_DIRS).toBe(false);
+    const src = fs.readFileSync(
+      path.join(ROOT, "scripts", "launcher-core", "log.mjs"),
+      "utf8",
+    );
+    expect(src).not.toContain("archiveRunLog");
+  });
+});
