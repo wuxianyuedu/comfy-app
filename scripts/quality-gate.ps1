@@ -13,7 +13,14 @@ Usage:
   powershell -File scripts\quality-gate.ps1 -Mode test
   powershell -File scripts\quality-gate.ps1 -Mode all
 
-Mode: typecheck | lint | format | test | dependencyAudit | storybook | all   (default all)
+Mode: typecheck | lint | format | test | dependencyAudit | storybook | visual | all   (default all)
+
+Note on `visual`: it is registered with Run=$false, i.e. NOT part of `all`.
+It starts a webServer plus a browser, and its verdict is only meaningful on a
+machine that actually recorded the baselines (baseline filenames carry the
+platform). Run it explicitly:  -Mode visual
+It goes through scripts\pixel-run.mjs (the cross-platform half of the same
+action), which also runs the baseline-pairing judge in the same pass.
 
 Extend / maintain - how to add a new gate:
   Each gate is one entry in the $Blocks list below:
@@ -28,7 +35,7 @@ Extend / maintain - how to add a new gate:
     entry and it is enforced again.
 #>
 param(
-  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "storybook", "visual", "all")]
   [string]$Mode = "all"
 )
 
@@ -106,6 +113,13 @@ $Blocks = @(
   # `Cannot read properties of undefined` —— 表现是「侧栏列着故事、画布一片空白」。
   @{ Name = "storybook"; Label = "Storybook story enum source (cva return value / missing variants)";
      Cmd = "node"; Args = @("scripts\storybook-check.mjs"); Run = $true }
+  # 像素回归（规范 §11.8）。与 quality-gate.mjs 的 GATES.visual 同批同步。
+  # Run=$false：它要起 webServer + 浏览器，且结论只在录过基线的那台机器上成立
+  # （基线文件名带平台）——不属于 `all` 那一档，要 -Mode visual 显式点名。
+  # 入口是 scripts\pixel-run.mjs：它同时跑像素档与配对判据（两次运行必须同批，
+  # 否则「基线成套且入库」这条判据与像素档互不相干 —— 那正是 #6538809 的形态）。
+  @{ Name = "visual"; Label = "Pixel regression (Playwright screenshots + baseline pairing judge)";
+     Cmd = "node"; Args = @("scripts\pixel-run.mjs"); Run = $false }
 )
 
 # Which gates to run
