@@ -148,7 +148,7 @@ export const Disabled: Story = {
 export const WithFooter: Story = {
   args: { align: "right" },
   render: (args) => (
-    <div className="flex w-[28rem] justify-end">
+    <div className="flex w-md justify-end">
       <div className="border-accent/30 bg-accent/4 w-fit max-w-full rounded-lg border p-2">
         <div className="flex items-center gap-2">
           <span className="text-accent shrink-0 text-[10px] font-semibold tracking-wider uppercase">

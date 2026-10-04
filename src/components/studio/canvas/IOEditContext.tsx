@@ -1,12 +1,16 @@
 "use client";
 /* ════════════════════════════════════════════════════════════════════════
- *  wf-contexts.tsx — 消费方组件 + 兼容再导出（Context → Zustand）
+ *  IOEditContext.tsx — io 风格 API 的单一出口 + 可复用消费型组件
  * ────────────────────────────────────────────────────────────────────────
- *  状态与动作住在 `wf-stores.ts`（createStore 工厂 + WFStoresContext 载体），
- *  节点 JSON 弹层住在 `wf-node-json-popover.tsx`。本文件只保留可复用的消费型
- *  组件 IoCheckbox / NodeIdChip（经 store hook 读取），并向上再导出 store 的
- *  hook / 选择器 / Provider，让 wf-node / wf-subgraph-node 等消费方从同一文件
- *  取「io 风格」API。
+ *  状态与动作住在 `workflow-editor/WorkflowStores.tsx`（createStore 工厂 +
+ *  WFStoresContext 载体），节点 JSON 弹层也在同一支 store 里（`useNodeJsonViewer`）。
+ *  本文件只保留可复用的消费型组件 IoCheckbox / NodeIdChip（经 store hook 读取），
+ *  并把 store 的 hook / 选择器 / Provider 再导出一次，让 WorkflowNode /
+ *  WorkflowSubgraphNode 等消费方从同一文件取「io 风格」API。
+ *
+ *  文件名保留 `IOEditContext` 是有意的：它是 store 状态迁移**之前**的旧名字，
+ *  而 `useIOEditContext()` 这个组合 hook 至今是画布内多处的入口 —— 改名会牵动
+ *  一片调用点，收益只是「名字更贴现状」。真正的单一出口是上方那句再导出。
  * ════════════════════════════════════════════════════════════════════════ */
 import React from "react";
 import type { IoRef } from "../workflow-types";
@@ -26,7 +30,7 @@ import {
 } from "../workflow-editor/WorkflowStores";
 import { Hint } from "~/components/ui/hint";
 
-/* ── 兼容再导出：消费方统一从 ./wf-contexts 取以下符号 ── */
+/* ── 再导出：画布消费方统一从本文件取以下符号（store 的实现不在本文件） ── */
 export {
   WFStoresProvider,
   useIOEditStore,
@@ -40,9 +44,9 @@ export {
   createNodeJsonViewerStore,
 };
 
-/** 与旧 `useContext(IOEditContext)` 等价的值对象 —— 由 store 组合，方便
- *  wf-node / wf-subgraph-node 里的 `const io = useContext(IOEditContext)` 类
- *  调用点零改动替换为 `const io = useIOEditContext()`. */
+/** 画布节点拿到的 io 值对象 —— 由 store 组合成一个对象，调用点一次订阅即可。
+ *  比逐个订阅 store 更省心，代价是这 7 个字段任一变化都会重渲（它们本就同属
+ *  一次 IO 编辑动作，实测不构成热点）。 */
 export function useIOEditContext() {
   const workflowIO = useIOEditStore(selectWorkflowIO);
   const ioEditMode = useIOEditStore(selectIoEditMode);
@@ -65,7 +69,7 @@ export type IOEditContextValue = ReturnType<typeof useIOEditContext>;
 
 /* ────────────────────────────────────────────────────────────────────────
  *  NodeIdChip — 节点头部 `#id` 章，点击弹出 JSON 查看器。
- *  原实现 `useContext(NodeJsonViewerContext)`；现改用 store hook `useNodeJsonViewer`。
+ *  数据来自 store hook `useNodeJsonViewer`（弹层本身的挂点在 WorkflowStores）。
  * ──────────────────────────────────────────────────────────────────────── */
 export function NodeIdChip({
   nodeId,

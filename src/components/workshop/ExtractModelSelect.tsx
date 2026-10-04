@@ -8,15 +8,7 @@ import {
   fetchRemoteModels,
 } from "~/lib/llm/model-catalog-client";
 import { useLLM } from "~/components/workshop/LLMContext";
-import {
-  channelOptionValue,
-  parseChannelOption,
-  type ExtractChannel,
-} from "~/lib/workshop/channel-options";
-
-/** 兼容既有 import：通道编码 / 解析已迁至 lib/workshop/channel-options（纯函数，可单测）。 */
-export { channelOptionValue, parseChannelOption };
-export type { ExtractChannel };
+import { parseChannelOption } from "~/lib/workshop/channel-options";
 
 /** 下拉单行标签：模型名 + 右侧「本地 / 远端」小标 */
 function optionLabel(name: string, badge: string): React.ReactNode {

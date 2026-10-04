@@ -54,7 +54,7 @@ type Story = StoryObj<typeof meta>;
 /** 真实落点：工作流列表的一行（`ItemGroup` + 分隔线 + 尾部动作）。 */
 export const Default: Story = {
   render: (args) => (
-    <ItemGroup className="w-[30rem]">
+    <ItemGroup className="w-120">
       <Item {...args}>
         <ItemMedia variant="icon">
           <FolderOpen />
@@ -90,7 +90,7 @@ export const Default: Story = {
  *  —— 三档的区别只在边框与底色，行高由 `size` 管。 */
 export const Variants: Story = {
   render: () => (
-    <div className="flex w-[30rem] flex-col gap-3">
+    <div className="flex w-120 flex-col gap-3">
       {VARIANTS.map((variant) => (
         <Item key={variant} variant={variant} size="default">
           <ItemContent>
@@ -110,7 +110,7 @@ export const Variants: Story = {
  */
 export const Sizes: Story = {
   render: () => (
-    <div className="flex w-[30rem] flex-col gap-4">
+    <div className="flex w-120 flex-col gap-4">
       {SIZES.map((size) => (
         <Item key={size} size={size} variant="outline">
           <ItemMedia variant="icon">
@@ -134,7 +134,7 @@ export const Sizes: Story = {
  *  `image` 给 `size-10`（`size=sm` 时 8、`xs` 时 6）圆形裁切。 */
 export const MediaVariants: Story = {
   render: () => (
-    <div className="flex w-[30rem] flex-col gap-4">
+    <div className="flex w-120 flex-col gap-4">
       {MEDIA_KINDS.map((variant) => (
         <Item key={variant} variant="outline">
           <ItemMedia variant={variant}>
@@ -155,7 +155,7 @@ export const MediaVariants: Story = {
  *  的历史任务卡。 */
 export const WithHeaderAndFooter: Story = {
   render: (args) => (
-    <Item {...args} className="w-[30rem]">
+    <Item {...args} className="w-120">
       <ItemHeader>
         <ItemTitle>运行 #1043</ItemTitle>
         <ItemDescription>12:04:31</ItemDescription>

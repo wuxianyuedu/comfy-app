@@ -44,7 +44,7 @@ type Story = StoryObj<typeof meta>;
 /** 详情页的真实形状：三个页签 + 各自的面板。 */
 export const Default: Story = {
   render: (args) => (
-    <Tabs {...args} className="w-[32rem]">
+    <Tabs {...args} className="w-lg">
       <TabsList>
         <TabsTrigger value="params">参数</TabsTrigger>
         <TabsTrigger value="nodes">节点</TabsTrigger>
@@ -69,7 +69,7 @@ export const ListVariants: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
       {VARIANTS.map((variant) => (
-        <Tabs key={variant} defaultValue="a" className="w-[32rem]">
+        <Tabs key={variant} defaultValue="a" className="w-lg">
           <span className="text-ink-muted font-mono text-[11px]">
             TabsList variant={variant}
           </span>
@@ -121,7 +121,7 @@ export const Orientations: Story = {
 /** 禁用档：`disabled` 的触发项 `pointer-events-none` + 半透明，键盘也进不去。 */
 export const WithDisabled: Story = {
   render: () => (
-    <Tabs defaultValue="a" className="w-[32rem]">
+    <Tabs defaultValue="a" className="w-lg">
       <TabsList>
         <TabsTrigger value="a">可用</TabsTrigger>
         <TabsTrigger value="b" disabled>

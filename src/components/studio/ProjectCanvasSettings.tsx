@@ -4,7 +4,7 @@
  *
  * **项目**画布（ProjectCanvas）右上角齿轮按钮弹出的轻量
  * 右边缘抽屉。工作流编辑器
- *（`wf-editor-inner.tsx`）已有自己的完整设置抽屉
+ *（`workflow-editor/WorkflowEditorInner.tsx`）已有自己的完整设置抽屉
  *（CanvasSettingsPanel），覆盖网格 / 标尺 / minimap / 缩放 —— 那些
  * 是工作流画布的关切，不是项目画布的，所以这里不
  * 重复它们。

@@ -248,9 +248,13 @@ describe("归属三态 —— visibleMaterialScopes 与 canWriteMaterialScope", 
   it("cross 模式：别人项目里的文件一条都不出现，共享区只补一次", async () => {
     owners.set("proj_mine", "user-a");
     owners.set("proj_theirs", "user-b");
-    put("proj_mine", "ref", "mine.png");
-    put("proj_theirs", "ref", "secret.png");
-    put(SHARED_SCOPE, "ref", "shared.png");
+    /* mtime 显式固定：排序按 `updatedAt` 降序，而同一轮里连写两个文件在
+       粗粒度时钟 / 快速文件系统上会拿到**相同**的 mtime，降序就退化成「谁先
+       谁先」——实测同一份代码在容器里两张图的顺序会翻。断言要的是「共享区 +
+       本项目」这一组内容，不是时钟口径，所以按本文件 `put()` 的约定写死。 */
+    put("proj_mine", "ref", "mine.png", { mtimeMs: 1_700_000_000_000 });
+    put("proj_theirs", "ref", "secret.png", { mtimeMs: 1_700_000_000_000 });
+    put(SHARED_SCOPE, "ref", "shared.png", { mtimeMs: 1_800_000_000_000 });
     const scopes = await visibleMaterialScopes("user-a", {
       cross: true,
       projectId: null,

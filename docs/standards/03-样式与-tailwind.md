@@ -65,6 +65,14 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 `w-K` / `h-K` 合并成 `size-K` —— 那是换算之后才暴露出来的形态（`w-[10px] h-[10px]`
 在方括号里时 P80 数不到）。存量已清零，新代码按编辑器提示写。
 
+> **这条没有自动执行者，会随新代码回潮**：`tw4-spacing-canonical.mjs` /
+> `tw4-canonical-report.mjs` 都**不在** `.githooks/pre-commit`（它们要起 Tailwind
+> 引擎、单次约 6s，且判断的是「CSS 等价改写」而非正确性）。实测的教训：storybook
+> 那批新 stories 一次性带进来 96 处 `w-[30rem]` / `h-[32rem]` 这类缩写候选，
+> 直到手工跑 `pnpm theme:scan` 才浮出来 —— 所以**新增一批视图文件后按需跑一次**
+> `node scripts/tw4-canonical-report.mjs`（只读；确认后 `--write` 落盘，
+> 测试文件默认不动，见脚本头注），别等它自己变红。
+
 **「更名 / 别名 / v3 遗留」那一类**（`!x`、`break-words`、`flex-shrink`、
 `overflow-ellipsis`、`bg-gradient-to-*` …）由 `scripts/tw4-canonical-report.mjs`
 汇总：它直接问 design system 的 `canonicalizeCandidates`「有没有另一种写法生成
