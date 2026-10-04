@@ -180,6 +180,14 @@ function SidebarProvider({
     <SidebarContext.Provider value={contextValue}>
       <div
         data-slot="sidebar-wrapper"
+        /* 客户端算出来的窄窗判据，**与 `data-state` 分开报**：E2E 判的是「左轨有
+           没有真的让位」，而让位要经过「客户端判据成立 → 生效态落盘」两步。两件事
+           只报一个，红了就分不清是判据没到（还在水合 / 客户端没重读快照）还是判据
+           到了而状态没跟着落（`resolveRailCollapsed` 那条推导断了）。
+           它同时也是这份状态唯一的可观测出口 —— 除它之外没有任何地方能看到
+           「客户端到底认没认这是一档窄窗」。 */
+        data-narrow={narrow ? "true" : "false"}
+        data-narrow-crossings={crossings}
         style={
           {
             "--sidebar-width": SIDEBAR_WIDTH,

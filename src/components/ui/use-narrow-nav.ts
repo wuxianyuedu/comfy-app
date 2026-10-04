@@ -8,22 +8,64 @@ import {
 /** 窄窗判据 + 「跨越过阈值的次数」。 */
 export type NarrowNavState = { narrow: boolean; crossings: number };
 
-/* 订阅媒体查询变化。只在客户端被调用 —— 服务端渲染走下面的 `getServerSnapshot`。 */
+/* 已建立的订阅者。通知不发给自己，而是发给这张表 —— 于是「补一次通知」不再
+   绑在某一次订阅的生命周期上（见下方 `scheduleInitialSync` 的说明）。 */
+const listeners = new Set<() => void>();
+
+/* 首帧对账的定时器句柄。模块级、**不受任何一次订阅的退订影响**。 */
+let initialSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * 安排「进页面后补一次通知」—— 这是首帧对账的唯一触发者。
+ *
+ * 为什么需要它：`useSyncExternalStore` 的首帧读的是 `getServerSnapshot`（服务端
+ * 按非窄窗渲染的那一份）。此后只有 store 通知才会让它重读快照，而「进页面时窗口
+ * 就已经是窄窗」这种情况媒体查询**不会再 change** —— 不主动通知一次，`data-state`
+ * 就停在服务端那份「展开」上。
+ *
+ * ⚠️ 两个都不能省的前提：
+ *
+ * 1. **定时器不能挂在订阅的清理函数上**。React 开发态会把 effect 跑两遍
+ *    （挂载 → 卸载 → 再挂载），清理函数里的 `clearTimeout` 会把刚排的通知取消。
+ *    实测（`innerWidth=1100` 首屏）：`setTimeout(0)` 排 5 次、被 `clearTimeout` 取消
+ *    **2** 次，其中第二次正是 store 自己排的通知 —— 于是它**一次都没跑到**，
+ *    `data-state` 只能等某个无关的重渲染（实测是 `model.configList` 的 tRPC 响应）
+ *    顺带读一次快照才纠正。并发跑 E2E 时那次重渲染可以晚到 5s 之后
+ *    ⇒ `nav-auto-collapse` 两条在默认并发下必红。提到模块级后，任何退订都不撤销它。
+ *
+ * 2. **回调里通知不到人就重新排**。双挂载期间那一刻 `listeners` 可能是空的：通知
+ *    发给空气等于没发，而「排过了」的标记若照旧置真就再也不会补 —— 于是又回到
+ *    「靠顺带的重渲染」。所以只有**真的通知到了订阅者**才算完，否则重排一次
+ *    （`initialSyncTimer` 在此兼作「已排/未排」标记）。
+ *
+ * 为什么要等一个宏任务：微任务排在 React 提交完成之前，那次通知会被吞掉
+ * （实测：首屏窄窗仍不收起，而 resize 之后能收起）。宏任务（下一个任务）才落在
+ * 提交之后。
+ */
+function scheduleInitialSync(): void {
+  if (initialSyncTimer !== null) return;
+  initialSyncTimer = setTimeout(() => {
+    /* 惰性取值顺手把 `crossings` 推到正确档位，再通知订阅者重读。 */
+    getSnapshot();
+    const delivered = listeners.size > 0;
+    /* 先清句柄再决定是否重排：重排走的是同一个入口。 */
+    initialSyncTimer = null;
+    for (const listener of listeners) listener();
+    if (!delivered) scheduleInitialSync();
+  }, 0);
+}
+
+/** 订阅媒体查询变化 + 登记进 `listeners`（补一次通知走模块级调度）。 */
 function subscribe(onChange: () => void): () => void {
   const mql = window.matchMedia(NAV_AUTO_COLLAPSE_QUERY);
   /* 回调只负责通知；跨越次数在取值时推进（见 `getSnapshot`）—— 放在这里会漏掉
      「订阅建立之前发生的窗宽变化」，那条跨越就不该算。 */
   const handler = (): void => onChange();
   mql.addEventListener("change", handler);
-  /* ⚠️ 订阅建立后补一次通知：React 的 hydration 首帧读的是 `getServerSnapshot`，
-     之后只有 store 通知才会让它重读快照。而「进页面时窗口就已经是窄窗」这种情况
-     媒体查询不会再 change —— 于是 `data-state` 永远停在服务端那份「展开」上。
-     实测过时机差别：**微任务不行**（排在 React 提交完成之前，那次通知被吞掉，
-     首屏窄窗仍不收起，而 resize 之后能收起）；宏任务（下一个任务）才落在提交之后。
-     `subscribe` 是模块级稳定身份，不会因此形成重订阅循环。 */
-  const sync = setTimeout(onChange, 0);
+  listeners.add(onChange);
+  scheduleInitialSync();
   return () => {
-    clearTimeout(sync);
+    listeners.delete(onChange);
     mql.removeEventListener("change", handler);
   };
 }
