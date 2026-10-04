@@ -74,7 +74,7 @@ export const CustomHeader: Story = {
       <DialogTrigger render={<Button variant="outline" />}>
         自绘 header
       </DialogTrigger>
-      <DialogContent showCloseButton={false} className="w-[28rem]">
+      <DialogContent showCloseButton={false} className="w-md">
         <div className="flex items-center justify-between border-b pb-3">
           <DialogTitle>运行日志</DialogTitle>
           <Button size="xs" variant="ghost">
@@ -90,7 +90,7 @@ export const CustomHeader: Story = {
 };
 
 /** 宽度对比：默认卡片（`w-full` + `max-w-[calc(100%-2rem)]`，不贴满视口两侧）
- *  与调用处给的 `w-[42rem]`。后者能生效正是上面第 1 条 —— 调用处传 `w-*`
+ *  与调用处给的 `w-2xl`。后者能生效正是上面第 1 条 —— 调用处传 `w-*`
  *  跨族才比得过卡片的 `max-w-*`。 */
 export const Widths: Story = {
   render: () => (
@@ -112,7 +112,7 @@ export const Widths: Story = {
         <DialogTrigger render={<Button variant="outline" />}>
           加宽 672px
         </DialogTrigger>
-        <DialogContent className="w-[42rem]">
+        <DialogContent className="w-2xl">
           <DialogHeader>
             <DialogTitle>调用处给 w-[42rem]</DialogTitle>
             <DialogDescription>

@@ -34,7 +34,7 @@ type Story = StoryObj<typeof meta>;
 /** 最简：只给 `value`，`Progress` 会自己补一条默认轨道。 */
 export const Default: Story = {
   render: (args) => (
-    <div className="w-[22rem]">
+    <div className="w-88">
       <Progress {...args} />
     </div>
   ),
@@ -44,7 +44,7 @@ export const Default: Story = {
  *  `tabular-nums` —— 数值逐帧跳动时宽度不会抖，这一条只有并排看才认得出。 */
 export const WithLabelAndValue: Story = {
   render: (args) => (
-    <div className="flex w-[22rem] flex-col gap-2">
+    <div className="flex w-88 flex-col gap-2">
       <Progress {...args}>
         <ProgressLabel>正在解析节点包</ProgressLabel>
         <ProgressValue />
@@ -61,7 +61,7 @@ export const WithLabelAndValue: Story = {
  *  —— 这也正是 `progress-bar` 内部用法（它只换颜色与高度，不换结构）。 */
 export const CustomTrack: Story = {
   render: () => (
-    <div className="flex w-[22rem] flex-col gap-4">
+    <div className="flex w-88 flex-col gap-4">
       <Progress value={68}>
         <ProgressLabel>默认（h-1 bg-muted）</ProgressLabel>
         <ProgressTrack className="h-2" />
@@ -79,7 +79,7 @@ export const CustomTrack: Story = {
 /** 两档极端：`0` 是空条、`100` 是满条。base-ui 会把越界的值夹回 0..100。 */
 export const Bounds: Story = {
   render: () => (
-    <div className="flex w-[22rem] flex-col gap-4">
+    <div className="flex w-88 flex-col gap-4">
       {[0, 100, -10, 130].map((value) => (
         <Progress key={value} value={value}>
           <ProgressLabel>value={value}</ProgressLabel>

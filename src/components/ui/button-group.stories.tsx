@@ -115,7 +115,7 @@ export const Orientations: Story = {
  *  那套选择器按 `[data-slot]` 取元素，不认具体是哪个组件。 */
 export const MixedPrimitives: Story = {
   render: (args) => (
-    <ButtonGroup {...args} className="w-[28rem]">
+    <ButtonGroup {...args} className="w-md">
       <Select defaultValue="t2i">
         <SelectTrigger className="w-32">
           <SelectValue />

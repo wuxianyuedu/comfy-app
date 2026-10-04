@@ -41,7 +41,7 @@ type Story = StoryObj<typeof meta>;
 /** 最小可用组合：标题 + 说明 + 正文。 */
 export const Default: Story = {
   render: (args) => (
-    <Card {...args} className="w-[22rem]">
+    <Card {...args} className="w-88">
       <CardHeader>
         <CardTitle>输出设置</CardTitle>
         <CardDescription>这些取值会写进工作流模板。</CardDescription>
@@ -59,7 +59,7 @@ export const Default: Story = {
  *  （`col-start-2 row-span-2` 让它跨两行，说明文字仍留在第一列）。 */
 export const WithAction: Story = {
   render: (args) => (
-    <Card {...args} className="w-[22rem]">
+    <Card {...args} className="w-88">
       <CardHeader>
         <CardTitle>角色一致性 · 三视图</CardTitle>
         <CardDescription>27 个节点 · 昨天更新</CardDescription>
@@ -80,7 +80,7 @@ export const WithAction: Story = {
  *  页脚自己带 `bg-muted/50` 与上边框，贴住卡片底边才不露一条缝。 */
 export const WithFooter: Story = {
   render: (args) => (
-    <Card {...args} className="w-[22rem]">
+    <Card {...args} className="w-88">
       <CardHeader>
         <CardTitle>删除这个项目？</CardTitle>
         <CardDescription>项目产物与运行记录会一起删掉。</CardDescription>

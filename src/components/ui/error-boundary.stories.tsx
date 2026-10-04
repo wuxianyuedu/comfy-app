@@ -63,7 +63,7 @@ function BoomDemo() {
    * 也是调用处的常见做法（换了数据源就换一个边界）。 */
   const [attempt, setAttempt] = useState(0);
   return (
-    <div className="flex w-[32rem] flex-col gap-3">
+    <div className="flex w-lg flex-col gap-3">
       <div className="flex gap-2">
         <Button
           size="sm"
@@ -107,7 +107,7 @@ export const FallbackWithError: Story = {
     test: { dangerouslyIgnoreUnhandledErrors: true },
   },
   render: () => (
-    <div className="flex w-[32rem] flex-col gap-3">
+    <div className="flex w-lg flex-col gap-3">
       <ErrorBoundary
         fallback={(error) => (
           <div className="border-destructive/30 bg-destructive/5 flex flex-col gap-2 rounded-lg border p-3">
@@ -136,7 +136,7 @@ export const FallbackWithError: Story = {
  *  —— 这条要在，免得有人以为它会包一层容器。 */
 export const PassThrough: Story = {
   render: () => (
-    <div className="w-[32rem] rounded-lg border p-3">
+    <div className="w-lg rounded-lg border p-3">
       <ErrorBoundary>
         <Boom explode={false} />
       </ErrorBoundary>

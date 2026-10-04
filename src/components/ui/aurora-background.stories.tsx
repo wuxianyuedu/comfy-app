@@ -44,7 +44,7 @@ type Story = StoryObj<typeof meta>;
 /** 深色（默认档）：画布默认就是 dark，这一条直接看原始设计的强度。 */
 export const Dark: Story = {
   render: (args) => (
-    <div className="relative h-[24rem] w-full overflow-hidden rounded-lg border">
+    <div className="relative h-96 w-full overflow-hidden rounded-lg border">
       <AuroraBackground className={args.className} />
       <div className="relative flex h-full items-center justify-center">
         <p className="text-ink text-sm">
@@ -83,7 +83,7 @@ export const BlendModesSideBySide: Story = {
  *  `pointer-events-none` 那条就是为这件事给的。 */
 export const DoesNotBlockInteraction: Story = {
   render: () => (
-    <div className="relative h-[16rem] w-full overflow-hidden rounded-lg border">
+    <div className="relative h-64 w-full overflow-hidden rounded-lg border">
       <div className="relative flex h-full flex-col items-center justify-center gap-3">
         <p className="text-ink text-sm">
           下面这排按钮能点，说明装饰层没吃掉指针事件

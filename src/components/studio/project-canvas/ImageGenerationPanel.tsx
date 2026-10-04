@@ -290,8 +290,8 @@ export function ImageGenerationPanel({
       {typeKnown ? (
         <>
           {/* 步骤 2：模型（按模型标签，与 workflow 筛选同源；空值 = 全部）
- R-ardot89: 只显示当前 type 下有工作流的模型标签，避免「文生图」
- 下出现 DaSiwaWan22 这种 video 模型。 */}
+ 只显示当前 type 下有工作流的模型标签，避免「文生图」下出现
+ DaSiwaWan22 这种 video 模型。 */}
           <Field label="模型">
             {modelTagOptions.length ? (
               <SelectMenu

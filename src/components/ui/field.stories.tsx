@@ -59,7 +59,7 @@ type Story = StoryObj<typeof meta>;
  *  `responsive`（容器查询下自动换行 —— 要拖窄画布才看得出差别）。 */
 export const Orientations: Story = {
   render: () => (
-    <div className="flex w-[36rem] flex-col gap-6">
+    <div className="flex w-xl flex-col gap-6">
       {ORIENTATIONS.map((orientation) => (
         <div key={orientation} className="flex flex-col gap-1.5">
           <span className="text-ink-muted font-mono text-[11px]">
@@ -81,7 +81,7 @@ export const Orientations: Story = {
 /** 完整的一组：图例 + 说明 + 两个字段 + 分隔线。这是设置页表单的真实拼法。 */
 export const GroupedSet: Story = {
   render: () => (
-    <FieldSet className="w-[36rem]">
+    <FieldSet className="w-xl">
       <FieldLegend>输出设置</FieldLegend>
       <FieldDescription>
         这里的取值会写进工作流模板，节点上的同名字段以节点为准。
@@ -113,7 +113,7 @@ export const GroupedSet: Story = {
 /** 错误行：`data-invalid` 上色、`FieldError` 承载 `role="alert"`。 */
 export const WithError: Story = {
   render: () => (
-    <FieldSet className="w-[36rem]">
+    <FieldSet className="w-xl">
       <FieldLegend variant="label">两态并列</FieldLegend>
       <FieldGroup>
         <Field data-invalid="true">
@@ -162,7 +162,7 @@ export const ErrorShapes: Story = {
 /** 勾选行：`FieldLabel` 包住 `<Checkbox>` 时整行可点，是画布节点的常见形态。 */
 export const SelectionRow: Story = {
   render: () => (
-    <FieldGroup className="w-[36rem]">
+    <FieldGroup className="w-xl">
       {["本地模型", "工作流库", "项目产物"].map((label, index) => (
         <FieldLabel key={label} htmlFor={`pick-${String(index)}`}>
           <Field orientation="horizontal">
