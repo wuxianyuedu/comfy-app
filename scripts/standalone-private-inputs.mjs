@@ -164,6 +164,9 @@ export const RUNTIME_SCRIPTS = [
   // 运行期 `ERR_MODULE_NOT_FOUND`，表现与「缺一份内部分件」完全一样。
   "launcher-core/command-echo.mjs",
   "launcher-core/log.mjs",
+  // 「一次运行一包」的日志锚点（ISSUE #1326）：runId / run.json / current/ 归档 /
+  // 保留 / 诊断包。dev-launcher.mjs 顶层静态 import 它 —— 缺这份就是编排器起不来。
+  "launcher-core/run.mjs",
   "launcher-core/worktree.mjs",
   "launcher-core/orchestrator.mjs",
   "launcher-core/corepack.mjs",

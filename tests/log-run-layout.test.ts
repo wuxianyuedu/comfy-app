@@ -43,6 +43,9 @@ type RunMeta = {
   startedAt?: string;
 };
 
+/** 仓库根（「源码形态」那几条判据要读真文件，不走 tmpdir）。 */
+const ROOT = path.resolve(import.meta.dirname, "..");
+
 let root: string;
 
 beforeEach(() => {
@@ -369,5 +372,58 @@ describe("log/ 根目录只许那几样", () => {
     expect(fs.readdirSync(logRoot(root)).sort()).toEqual(
       ["current", "exports", "latest.txt", "runs"].sort(),
     );
+  });
+});
+
+describe("布局的单一出处（写方不得自己拼路径）", () => {
+  it("scripts 侧的 current/ 分区与 log-paths.ts 逐项同形", async () => {
+    const { LOG_DIRS } = await import("../scripts/launcher-core/log.mjs");
+    const paths = await import("../src/lib/log/log-paths.ts");
+    // current/ 下的分区：两侧都必须认识同一批名字（少一个 = 那一处写到了别处，
+    // 归档时收不走；多一个 = 有一侧在往不存在的位置写）。
+    const scriptDirs = new Set(Object.values(LOG_DIRS));
+    for (const name of ["launcher", "nextjs", "services", "tools", "comfyui"]) {
+      expect(scriptDirs.has(name), `${name} 不在 scripts 侧分区里`).toBe(true);
+    }
+    const tsCurrent = path.dirname(paths.LAUNCHER_LOG_DIR);
+    expect(path.basename(tsCurrent)).toBe(LOG_LAYOUT.current);
+    expect(paths.NEXTJS_LOG_DIR.startsWith(tsCurrent)).toBe(true);
+    expect(paths.SERVICES_LOG_DIR.startsWith(tsCurrent)).toBe(true);
+    expect(paths.WORKSHOP_LOG_DIR.startsWith(tsCurrent)).toBe(true);
+  });
+
+  it("schema-sync 两个孤儿已归入 current/tools/（根目录不再有它们）", async () => {
+    const paths = await import("../src/lib/log/log-paths.ts");
+    expect(path.basename(path.dirname(paths.SCHEMA_SYNC_STATUS_FILE))).toBe(
+      "tools",
+    );
+    expect(path.dirname(paths.SCHEMA_SYNC_STATUS_FILE)).toBe(paths.TOOLS_LOG_DIR);
+    // 与 scripts/db-schema-state.mjs 的相对路径同形（写方在那边、读方在这边）
+    const { SCHEMA_SYNC_STATUS_FILE } = await import(
+      "../scripts/db-schema-state.mjs"
+    );
+    expect(SCHEMA_SYNC_STATUS_FILE.split(path.sep)).toEqual([
+      "log",
+      "current",
+      "tools",
+      "schema-sync.json",
+    ]);
+  });
+
+  it("log/ 根下的固定名只有那几样 —— 没有第二处拼 'log/xxx' 的地方", () => {
+    // 扫描各写方源码：出现 `"log", "<分区>"` 直连（跳过 current）即违规。
+    const files = [
+      "scripts/dev-launcher.mjs",
+      "scripts/executor-host.mjs",
+      "scripts/standalone-runtime.mjs",
+      "scripts/db-schema-state.mjs",
+    ];
+    for (const rel of files) {
+      const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+      const offenders = src
+        .split("\n")
+        .filter((line) => /"log",\s*"(launcher|nextjs|services|shell|tools|comfyui|workshop)"/.test(line));
+      expect(offenders, `${rel} 里仍有绕过 current/ 的日志路径`).toEqual([]);
+    }
   });
 });
