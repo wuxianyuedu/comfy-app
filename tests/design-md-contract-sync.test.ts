@@ -360,11 +360,15 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   /** 棘轮基线：本轮清理后实测的存量，只许降不许升（要升得改用例并写理由）。
    *  21→12 是类型 chip 收进 `~/components/studio/TypeChip`（10 处调用点各写一份 →
    *  只剩实现里那一处 + `ParamOwnerTag` 那一枚异类）；12→10 是节点右侧胶囊的两处
-   *  手写改走早已存在的 `WorkflowNodePill`（§12.18：有等价实现就先 import）。
+   *  手写改走早已存在的 `WorkflowNodePill`（§12.18：有等价实现就先 import）；
+   *  **10→7 是逐角色判定的收口**：两处 2px 并到 `rounded-xs`（实测产物里
+   *  `--radius-xs: 0.125rem` ⇒ 逐字节同值、零像素），项目卡 18px 并到 `rounded-xl`
+   *  （`studio/HomePage.tsx` 那一页本来就有 7 处用它）。剩下的 7 处每件都有自己的
+   *  理由，枚举在契约 §Shapes，别当漏网清掉。
    *  字号 302→298 是同上的 `text-3xs` 归一；**298→201 是「同一个 12px 有两种行高」
    *  定档**：103 处 `text-[12px]`（12px + 继承的 1.5 ⇒ 18px）统一成 `text-xs`
    *  （12px + 16px，全库 289 处已在用的那一档）。那条归零判据见下面一条。 */
-  const RADIUS_BASELINE = 10;
+  const RADIUS_BASELINE = 7;
   const TEXT_BASELINE = 201;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {

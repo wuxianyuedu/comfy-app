@@ -63,7 +63,7 @@ export function RatioIcon({
   return (
     <span
       aria-hidden
-      className={`inline-block rounded-[2px] border-[1.5px] border-current ${className}`}
+      className={`inline-block rounded-xs border-[1.5px] border-current ${className}`}
       style={{ width: `${width}px`, height: `${height}px` }}
     />
   );
