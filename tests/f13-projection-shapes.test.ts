@@ -1,14 +1,14 @@
 /**
  * 「调用点的形状错误不许被咽掉」判据（台账 F13）。
  *
- * 起因是一次 Prisma→Drizzle 迁移：仓储的投影参数被写成 `select?: unknown`，
- * 交给 Drizzle 时又写 `db.select(select as never)`。于是调用点留着 Prisma 的
+ * 起因是一次数据层迁移：仓储的投影参数被写成 `select?: unknown`，
+ * 交给 Drizzle 时又写 `db.select(select as never)`。于是调用点留着迁移前的
  * 布尔投影（`{ id: true, status: true }`）时 **tsc 一声不响**，运行时生成空投影
  * → SQL 语法错 —— `train.cancel` 从那次迁移起**每次都 500**，而那条 procedure
  * 当时零执行者，所以没有任何一条红过。
  *
  * 同一族的第二处（本批一起修）：`workflowTemplateRepository.findByIdForUserSelect(userId, id, _select?: unknown)`
- * —— 参数名承诺投影，实现里是 `select()` 全列取，三个调用点还在传 Prisma 形状的
+ * —— 参数名承诺投影，实现里是 `select()` 全列取，三个调用点还在传旧工具链形状的
  * `{ id: true, rawJson: true, … }`。这一支的后果是性能而不是 500：详情加载每次
  * 都把 `rawJson` 与 `positions` 两个大 JSON blob 整行拖出来。
  *

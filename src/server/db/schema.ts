@@ -1,20 +1,21 @@
 /**
- * `schema.ts` — Drizzle SQLite schema（替代 prisma/schema.prisma）
+ * `schema.ts` — Drizzle SQLite schema
  * ===========================================================================
  *
- * 表名严格对齐现有 `db.sqlite`（Prisma `@map` / 默认模型名），保证
- * `drizzle-kit push` 以 ALTER 方式同步、**不破坏已有数据**。
+ * 表名严格对齐现有 `db.sqlite`，保证 `drizzle-kit push` 以 ALTER 方式同步、
+ * **不破坏已有数据**。
  *
- * 关键兼容性处理：
- *   - Prisma 在 SQLite 把 `DateTime` 存成 ISO 字符串（TEXT），Drizzle 默认
- *     `integer(timestamp)` 与其不兼容，故用自定义 `text` 列 + ISO 序列化
- *     （dateNotNull / dateNull），保证读写与历史数据一致。
- *   - Boolean 用 `integer(..., { mode: "boolean" })`（Prisma 同样存 0/1）。
- *   - Json 用 `text(..., { mode: "json" })`（Prisma Json 同样存为 TEXT JSON）。
- *   - id 默认用 cuid2（`@paralleldrive/cuid2` 的 createId），贴近 Prisma cuid；
+ * 列形态（**改了就是改库文件格式**，别当风格问题）：
+ *   - `DateTime` 一律 ISO 字符串（TEXT）+ `dateNotNull` / `dateNull` 序列化。
+ *     不用 Drizzle 默认的 `integer(timestamp)` —— 库里已有的行是 ISO 文本，
+ *     换了读写两端对不上（`createdAt` 出现过的「裸毫秒串」就是旧格式残留，
+ *     读取侧由 `dateNotNull.fromDriver` 与 `~/lib/time-format` 统一归一）。
+ *   - `Boolean` 用 `integer(..., { mode: "boolean" })`（列里是 0/1）。
+ *   - `Json` 用 `text(..., { mode: "json" })`（列里是 TEXT JSON）。
+ *   - id 默认 cuid2（`@paralleldrive/cuid2` 的 createId）；
  *     Project 复用客户端 `proj_*` id（无默认）。
  *
- * @module server/db/schema — Drizzle SQLite schema（替代 prisma/schema.prisma）
+ * @module server/db/schema — Drizzle SQLite schema（表定义与行类型）
  */
 import {
   sqliteTable,
@@ -30,7 +31,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { type InferSelectModel, type InferInsertModel } from "drizzle-orm";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
-// ── 自定义 DateTime 列（ISO 字符串，兼容 Prisma 存储）─────────────
+// ── 自定义 DateTime 列（库文件里存 ISO 字符串）──────────────────
 const dateNotNull = customType<{ data: Date; driverData: string }>({
   dataType() {
     return "text";
@@ -52,7 +53,7 @@ const cuid = () =>
     .$defaultFn(() => createId())
     .primaryKey();
 
-// ── Better Auth 表（表名单数，对齐原 Prisma @map）─────────────────
+// ── Better Auth 表（表名单数，对齐 better-auth 的默认命名）─────────
 export const user = sqliteTable("user", {
   id: cuid(),
   name: text("name"),
@@ -395,7 +396,7 @@ export const workflowModelTag = sqliteTable(
   ],
 );
 
-// 显式多对多连接表（替代 Prisma 隐式 m2m；旧关联数据不迁移，影响仅工作流标签）
+// 显式多对多连接表（不用 ORM 隐式 m2m：关联行能直接被查询/批量取用）
 export const workflowModelTagToWorkflowTemplate = sqliteTable(
   "workflowModelTag_workflowTemplate",
   {
@@ -702,7 +703,7 @@ export const filmShotRelations = relations(filmShot, ({ one }) => ({
   }),
 }));
 
-// ── 推断行类型（替代原 generated/prisma 的模型类型）──────────────
+// ── 行类型推断（从表定义推出 select / insert 形状）──────────────
 export type User = InferSelectModel<typeof user>;
 export type Session = InferSelectModel<typeof session>;
 export type Account = InferSelectModel<typeof account>;

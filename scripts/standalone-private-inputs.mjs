@@ -261,7 +261,7 @@ export const RUNTIME_SRC = [
  *
  * 理由与 static 同源（逐项见 `STATIC_ALLOWED_TOPLEVEL`），只少**装配步才产出**的三项
  * （`schema.sql` / `splash.html` / `index.html`）。也没有 `generated/`：规范 §7.2 那句
- * 「Prisma 运行时必需」属于已退役的技术栈（数据层现在是 drizzle + libsql / `node:sqlite`，
+ * 退役技术栈的运行时残留（数据层现在是 drizzle + libsql / `node:sqlite`，
  * 仓库根也不存在 `generated/`）。将来确需多放行一项时，**必须同批改这里与
  * `check-standalone-contents.cjs` 的那份**（两份逐字同源由用例核对），并写清谁在运行期读它。
  */
@@ -469,7 +469,7 @@ export const FORBIDDEN_SHAPES = [
  *
  * 为什么根级清单（PRIVATE_INPUTS）不够：那条只删产物根那层的
  * `.env` / `db.sqlite`，而全项目 tracing 会把藏在子目录里的开发库一起带进来
- * （实测 `check-standalone-contents.cjs` 在 `static` 上报出过 `prisma/db.sqlite`
+ * （实测 `check-standalone-contents.cjs` 在 `static` 上报出过旧布局下的 `db.sqlite`
  * 这一条 —— 判据早就写了「开发库文件绝不能出现」，减法却一直没人做）。
  * 表现不是多个文件，而是**上一台机器的数据成为出厂数据**。
  */

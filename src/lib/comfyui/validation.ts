@@ -21,13 +21,13 @@
 // 我们把 `node_errors` 摊平成 `ValidationError[]`，让界面能渲染出
 //「精确到字段、本地化」的列表（形如「节点 10 (KSampler) · 字段 cfg：…」），
 // 而不是把服务端那句英文摘要直接倒给用户。本模块**只有**类型与一个纯解析器
-// —— 不 import prisma / fs / server-only —— 因此执行器（服务端）与 React
+// —— 不 import fs / server-only —— 因此执行器（服务端）与 React
 // 组件（客户端）都能安全导入。
 
 import { z } from "zod";
 import { asRecord } from "~/lib/is-record";
 
-/* validationErrors 经 Prisma Json 列往返（服务端写入 → 客户端读取），
+/* validationErrors 经任务表的 JSON 列往返（服务端写入 → 客户端读取），
  * 所以读取侧**必须**重新校验：Json 列在类型上是 `unknown`，直接
  * `as ValidationError[]` 是假保险——列里存了别的东西（旧版本格式、被手改、
  * 写入 bug）时下游会以「看起来是数组、元素却缺字段」的形态炸在渲染里。
@@ -39,7 +39,7 @@ const validationErrorSchema = z.object({
   message: z.string(),
 });
 
-/** 校验并收窄 Prisma Json 列里的 validationErrors；不合法返回 undefined。 */
+/** 校验并收窄任务表 JSON 列里的 validationErrors；不合法返回 undefined。 */
 export function parseValidationErrorsJson(
   raw: unknown,
 ): ValidationError[] | undefined {

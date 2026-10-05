@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 import { pushSchema } from "./db-push-core.mjs";
+import { sweepLegacyTimestamps } from "./db-legacy-sweep.mjs";
 import {
   schemaFingerprint,
   writeSchemaFingerprint,
@@ -138,6 +139,19 @@ if (!result.converged) {
 }
 
 process.stdout.write(`[db:push] ✓ schema 已收敛（无待应用变更）\n`);
+
+/* ── 历史时间戳写法归一（幂等，见 db-legacy-sweep.mjs）─────────────────────
+ *
+ * `project` 表里混着裸毫秒串与 ISO 串两种 `createdAt` / `updatedAt`
+ * （ISSUE #1501 现场：4 行里两行是 `1787379642808`）。写入侧早就是 ISO
+ * （`schema.ts` 的 `dateNotNull`），所以那是**读进来就得挡着**的历史痕迹。
+ *
+ * 为什么放在 `db:push` 而不放启动链路：这是数据改写，不是 DDL —— 启动链路
+ * 连「会丢数据的 DDL」都不替用户决定（见 db-schema-state.mjs），更不会顺手
+ * 改数据。放在这里，用户跑过一次 `pnpm db:push` 就顺手清干净了。
+ *
+ * 清洗失败/打不开库都不拦命令：它是整理，不是这一趟的目的。 */
+sweepLegacyTimestamps(dbPath);
 
 /* ── 登记 schema 指纹 ────────────────────────────────────────────────────
  *

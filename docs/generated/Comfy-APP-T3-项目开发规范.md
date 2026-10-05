@@ -62,11 +62,16 @@ lib（纯函数） ← 任意层
 - 所有 procedure 入参必须用 zod 定义 schema 并在 `input()` 中声明，禁止手写 `any` 解析。
 - 返回类型由 `output()` / 推断得出，禁止 `as any` 逃逸类型检查。
 
-### 2.3 Prisma 数据层规范
+### 2.3 数据层规范（Drizzle）
 
-- schema 变更走 `prisma migrate dev` 生成迁移；生产部署走 `prisma migrate deploy`。
-- 查询热点（外键、过滤列）必须建立索引：`@@index` / `@@unique`。
-- **禁止 N+1**：repository 层循环内调用 `prisma.findMany` 必须改为批量查询 + 内存映射。
+- 表定义只在 `src/server/db/schema.ts`；库结构同步走 `pnpm db:push`（判据与
+  自动同步语义见 [launch-and-build.md](launch-and-build.md) §9.1）。
+- 查询热点（外键、过滤列）必须建立索引：`index(...)` / `uniqueIndex(...)`，
+  与表定义写在同一处。
+- **禁止 N+1**：repository 层循环内查询必须改为批量查询 + 内存映射
+  （实例：`workflow-list` 一次取全部模板的标签行再内存分组）。
+- 时间列一律 ISO 文本（`dateNotNull` / `dateNull`）；Boolean 用 0/1、JSON 用
+  TEXT —— 列形态就是库文件格式，改动前先看 `schema.ts` 文件头的说明。
 - 敏感字段（密码哈希、token）禁止 select 到客户端；密码哈希由 better-auth 内置在服务端处理。
 
 ### 2.4 better-auth 会话
@@ -374,7 +379,7 @@ CHANGELOG 写**对外差异**。完整细则见
 ### 10.1 Web 构建
 
 ```bash
-pnpm install        # postinstall 自动 prisma generate
+pnpm install        # postinstall 接上 git hooks（scripts/install-git-hooks.mjs）
 pnpm dev            # 开发（Turbopack localhost:3100）
 pnpm build && pnpm start   # 生产预览
 ```

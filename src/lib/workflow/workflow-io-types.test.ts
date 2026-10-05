@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   isVisibleInMode,
+  parseWorkflowIOMap,
   resolveEntryDefault,
   resolveEntryRequired,
   resolveEntrySeedMode,
@@ -92,5 +93,51 @@ describe("既有多模式解析保持兼容", () => {
       modeOverrides: { t2i: { defaultValue: null } },
     });
     expect(resolveEntryDefault(e, "t2i")).toBe(7);
+  });
+});
+
+describe("parseWorkflowIOMap —— 列边界上的历史键归一", () => {
+  /* 同一个 JSON 列里，`modes` 曾经是模式覆盖层的键名，而工作流级的模式清单也叫
+   * `modes`（在另一张表的另一列）。两种读法必须收在这一处，否则下游会各按各的
+   * 名字读、改一处永远漏一处 —— 那是 ISSUE #1501 收尾时删掉的第二处回退。 */
+  it("历史行把覆盖层存在 `modes` 键下 → 归一到 `modeOverrides`", () => {
+    const map = parseWorkflowIOMap({
+      "94::widget::aspect_ratio": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "94",
+        name: "aspect_ratio",
+        modes: { T2I: { defaultValue: "16:9" } },
+      },
+    });
+    expect(map["94::widget::aspect_ratio"]?.modeOverrides).toEqual({
+      T2I: { defaultValue: "16:9" },
+    });
+    /* 旧键不留下：同一个覆盖层以两个名字在本列里往返，读的人分不清哪个是权威。 */
+    expect(
+      (map["94::widget::aspect_ratio"] as { modes?: unknown }).modes,
+    ).toBeUndefined();
+  });
+
+  it("新键已在时不被旧键覆盖（只在新键缺失时回退）", () => {
+    const map = parseWorkflowIOMap({
+      k: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "1",
+        name: "n",
+        modeOverrides: { T2I: { defaultValue: "new" } },
+        modes: { T2I: { defaultValue: "old" } },
+      },
+    });
+    expect(map.k?.modeOverrides).toEqual({ T2I: { defaultValue: "new" } });
+  });
+
+  it("两个键都不在 / 形状不符 → 空表（下游按空表处理，不抛）", () => {
+    const map = parseWorkflowIOMap({
+      k: { direction: "input", kind: "widget", nodeId: "1", name: "n" },
+    });
+    expect(map.k?.modeOverrides).toBeUndefined();
+    expect(parseWorkflowIOMap("not-an-object")).toEqual({});
   });
 });
