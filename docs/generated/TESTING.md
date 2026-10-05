@@ -198,6 +198,28 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
 **真实产物**（生成物、结构清单）用 `toMatchFileSnapshot`（规范 §11.9「快照形态的选择」
 与 §11.9.1），基线是一份能独立打开、能单独 diff 的真文件。
 
+### 并发档位（`it.concurrent`）：量完决定不铺开
+
+**默认不用并发档**（完整口径与实测矩阵见规范 §11.19）：
+
+- **它不是免费的旋钮**：同一件事（起一个睡 300ms 的子进程）× 24 条 —— 同步
+  `spawnSync` 串行 7.75s → 并发 **7.75s（零收益）**；异步 `execFile` 7.73s → **1.71s**。
+  `it.concurrent` 让出的是 JS 栈，不是被阻塞的线程。本仓库门槛自测那批（58 份）用的
+  正是 `execFileSync`，对它们改并发只换来新的耦合面。
+- **它会踩真资源**：`tests/executor-host.test.ts` 全改并发后红 2 条，报
+  `Unable to open connection to local database` —— 模块级 `tmpDirs` 被**别人的**
+  `afterEach` 整个 `rmSync`，某条用例的 SQLite 临时库没了。不只是内存里的变量。
+- **它与 `expect.poll` 机制互斥**：并发档里若同文件其它用例先让出事件循环，
+  `expect.poll` 报 `must be called inside a test`（实测 20/20 红；两条用例次序反转
+  则 0/20 红）。修法：该条改回串行 `it`，或把等待换成 `vi.waitFor`。
+
+真要用的话，文件里必须写明隔离声明（`scripts/check-test-concurrency.cjs` 在
+pre-commit 强制）：
+
+```ts
+// 并发档：每条用例自建 runner，没有模块级可变状态、不共用临时目录
+```
+
 ### 平台 / 宿主依赖：用 fixture 表达，不用包装函数
 
 「这条用例依赖什么环境」写成 fixture（`tests/helpers/platform-fixtures.ts`），
