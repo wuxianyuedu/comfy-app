@@ -111,6 +111,7 @@ const ALLOWED_SCRIPTS = new Set([
   // shell.mjs / procs.mjs 的命令行回显出口（少这份 = 运行期 ERR_MODULE_NOT_FOUND）
   "launcher-core/command-echo.mjs",
   "launcher-core/log.mjs",
+  "launcher-core/run.mjs",
   "launcher-core/worktree.mjs",
   "launcher-core/orchestrator.mjs",
   "launcher-core/corepack.mjs",

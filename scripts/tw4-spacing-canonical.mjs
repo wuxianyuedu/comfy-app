@@ -17,8 +17,16 @@
  *
  * 用法：
  *   node scripts/tw4-spacing-canonical.mjs              # 扫 src，只列清单（dry-run）
+ *   node scripts/tw4-spacing-canonical.mjs --check      # 棘轮判定：候选数不许超过基线
+ *   node scripts/tw4-spacing-canonical.mjs --update     # 治理后重写基线（须伴随下降）
  *   node scripts/tw4-spacing-canonical.mjs --write      # 落盘
  *   node scripts/tw4-spacing-canonical.mjs <file...>    # 只处理给定文件
+ *
+ * 棘轮（ISSUE #1451 要求 2，与 `tw4-canonical-report.mjs` 同构）：本工具起 Tailwind
+ * 引擎、不进 pre-commit（判的是「CSS 等价改写」而非正确性），但 03 章那句「按需跑一次」
+ * 此前没有任何东西在守。出路 = 按需跑 + 棘轮基线（`scripts/.tw4-spacing-baseline.json`），
+ * `--check` 时只许降不许升。执行者与「为什么不进钩子」登记在
+ * `scripts/.gate-executor-ledger.json`。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -31,7 +39,10 @@ const SRC = path.join(ROOT, "src");
 
 const argv = process.argv.slice(2);
 const shouldWrite = argv.includes("--write");
-const targets = argv.filter((arg) => arg !== "--write");
+const shouldCheck = argv.includes("--check");
+const shouldUpdate = argv.includes("--update");
+const targets = argv.filter((arg) => !arg.startsWith("--"));
+const BASELINE = path.join(ROOT, "scripts", ".tw4-spacing-baseline.json");
 
 /** Tailwind v4 的 spacing 基线：`--spacing` 默认 0.25rem，浏览器默认根字号 16px。 */
 const BASE_SPACING_PX = 0.25 * 16;
@@ -129,15 +140,23 @@ function rewriteStringContent(content, changes) {
   for (const [key, wIndex] of wSlots) {
     const hIndex = hSlots.get(key);
     if (hIndex === undefined) continue;
+    // 值相等才算「同一个 token 的两半」：`w-40 h-40` → `size-40`。中间隔着别的类
+    // 也照样合并（`w-40 x h-40` → `size-40 x`）；`key` 已含 `!`，`w-40! h-40` 不匹配。
     pieces[wIndex] = `size-${key}`;
+    // 被删掉的 token 连同它**前面那个分隔符**一起清空：只留空位会得到
+    // `" size-40"`（前导空格）或 `"size-40 "`（尾随空格），而 `[ \t]{2,}` 压不掉
+    // 单个空格 —— 那会让类名字符串里多出一个空白（`w-40 h-40` 在开头时最明显）。
     pieces[hIndex] = "";
+    if (hIndex > 0) pieces[hIndex - 1] = "";
     merged = true;
     changes.push({ from: `w-${key} + h-${key}`, to: `size-${key}` });
   }
   if (!merged) return pieces.join("");
-  // 被删掉的 token 留下一个空位，把它前面的分隔符一起收掉（只压空格/制表符，
-  // 多行模板串的换行缩进原样保留）。
-  return pieces.join("").replace(/[ \t]{2,}/g, " ");
+  // 多行模板串的换行缩进原样保留（只压空格/制表符），并去掉收尾后的首尾空白。
+  return pieces
+    .join("")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/^[ \t]+|[ \t]+$/g, "");
 }
 
 /** @param {string} text @param {Array<{from:string,to:string}>} changes */
@@ -183,3 +202,57 @@ console.log(
   `\n${shouldWrite ? "已改写" : "待改写"} ${total} 处（${touched.length} 个文件）` +
     (shouldWrite ? "" : "；加 --write 落盘"),
 );
+
+/* ── 棘轮（--check / --update）：候选处数只许降不许升 ───────────────────
+ *
+ * 记账口径 = 按文件记「该文件里待改写的处数」。与 `tw4-canonical-report.mjs`
+ * 的棘轮同构（那个按源文件记 canonical 候选数），两者互补、各扫一类。
+ * 注意：本工具扫全部 `src` 下的 tsx/ts（含测试文件）—— 测试文件里的候选同样进基线，
+ * 因为它的改写是**整 token 等值替换**，不像 canonical 那类会改坏断言样本；
+ * 若某处测试样本确实不该改，把它写进基线的「允许处数」里，别放宽判据。 */
+
+if (shouldUpdate) {
+  const ledger = {};
+  let ledgerTotal = 0;
+  for (const { file, changes } of touched) {
+    const rel = path.relative(ROOT, file);
+    ledger[rel] = changes.length;
+    ledgerTotal += changes.length;
+  }
+  fs.writeFileSync(
+    BASELINE,
+    `${JSON.stringify({ total: ledgerTotal, files: ledger }, null, 2)}\n`,
+  );
+  console.log(`棘轮基线已重写：${path.relative(ROOT, BASELINE)}（total ${ledgerTotal}）`);
+  process.exit(0);
+}
+
+if (shouldCheck) {
+  /** @type {{total: number, files: Record<string, number>}} */
+  const base = fs.existsSync(BASELINE)
+    ? JSON.parse(read(BASELINE))
+    : { total: 0, files: {} };
+  const over = [];
+  for (const { file, changes } of touched) {
+    const rel = path.relative(ROOT, file);
+    const allowed = base.files[rel] ?? 0;
+    if (changes.length > allowed)
+      over.push(`${rel}：${changes.length} 处（基线 ${allowed}）`);
+  }
+  if (over.length > 0 || total > base.total) {
+    console.log(
+      `\nspacing canonical 棘轮：${total} 处 > 基线 ${base.total} 处\n`,
+    );
+    for (const line of over) console.log(`  ✗ ${line}`);
+    console.log(
+      `\n修法：node scripts/tw4-spacing-canonical.mjs --write 落盘，` +
+        `再 --update 收紧基线。别为了让 --check 变绿去放宽基线。`,
+    );
+    process.exit(1);
+  }
+  console.log(
+    `spacing canonical 棘轮：${total} 处 ≤ 基线 ${base.total} 处 ✓` +
+      (total < base.total ? `（比基线少 ${base.total - total} 处，可跑 --update 收紧）` : ""),
+  );
+  process.exit(0);
+}

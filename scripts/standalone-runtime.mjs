@@ -72,7 +72,7 @@ function fail(message) {
  *  是同一个值，否则「按 boot id 跨进程 grep」这条既有能力在桌包里就断了（两次
  *  `runStamp()` 跨秒就会给出不同的值，而这种错配只在日志里看得见）。 */
 function openServerLogFiles(stamp) {
-  const dir = path.join(APP_ROOT, "log", "nextjs");
+  const dir = path.join(APP_ROOT, "log", "current", "nextjs");
   mkdirSync(dir, { recursive: true });
   pruneTimestampedLogs(
     dir,
@@ -90,7 +90,7 @@ function openServerLogFiles(stamp) {
  *  一次会与控制台编码打架（launcher 那份注释里记的就是这个），而且它的逐 tick 输出
  *  会淹没入口自己的 boot 行。 */
 function openHostLogFiles(stamp) {
-  const dir = path.join(APP_ROOT, "log", "services");
+  const dir = path.join(APP_ROOT, "log", "current", "services");
   mkdirSync(dir, { recursive: true });
   pruneTimestampedLogs(
     dir,

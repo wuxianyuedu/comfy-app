@@ -51,7 +51,22 @@ describe("WorkflowSubgraphNode", () => {
     expect(screen.getByText("我的子图")).toBeInTheDocument();
     expect(screen.getByText("#10")).toBeInTheDocument();
     expect(container.querySelector('[data-variant="subgraph"]')).toBeTruthy();
-    expect(container).toMatchSnapshot();
+    /* 按 §11.9 断言**用户能感知的那几件事**，不再 dump 整棵 DOM。这一屏
+     * 值得被钉住的是四条「坏了用户马上看得见」的：
+     *   ① 头部的身份标记（`S` 徽标 + 它的 `title`，「这是子图不是普通节点」）；
+     *   ② 折叠按钮有可访问名（读屏器/键盘用户唯一能按到它）；
+     *   ③ 标题那条 truncate 规则还在（长标题会撑破节点宽度）；
+     *   ④ `#id` 徽标带 `data-node-id-chip` 且标明子图变体（定位/调试靠它认行）。 */
+    expect(container.querySelector('[title="子工作流"]')?.textContent).toBe(
+      "S",
+    );
+    expect(screen.getByLabelText("折叠子图")).toBeInTheDocument();
+    const title = container.querySelector('[title="我的子图"]');
+    expect(title?.className).toMatch(/(^|\s)truncate(\s|$)/);
+    const chip = container.querySelector(
+      '[data-node-id-chip="10"][data-variant="subgraph"]',
+    );
+    expect(chip, "#id 徽标丢了子图变体标记").toBeTruthy();
   });
 
   it("选中态透传 selected 不影响标题渲染", () => {

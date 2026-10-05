@@ -40,15 +40,19 @@ describe("模块级副作用不得在表未就绪时读库", () => {
     // 守卫必须收在单一入口里，而不是散落在各 sweeper 内部
     expect(src).toMatch(/function sweepOnce[\s\S]{0,200}?isSchemaReady\(\)/);
     // 首次调用与定时器都必须经该入口
-    expect(src).toMatch(/sweepOnce\(\);[\s\S]{0,200}?setInterval\(sweepOnce, REAPER_MS\)/);
+    expect(src).toMatch(
+      /sweepOnce\(\);[\s\S]{0,200}?setInterval\(sweepOnce, REAPER_MS\)/,
+    );
     // `void reapStale*Tasks()` 的调用点只允许出现在 sweepOnce 函数体内
     // （裸调会绕过守卫，正是本用例要拦的形态）
     const sweepBody = src.slice(
       src.indexOf("function sweepOnce"),
       src.indexOf("function startReaper"),
     );
-    const allCalls = src.match(/void reapStale(Queued|Running)Tasks\(\);/g) ?? [];
-    const guardedCalls = sweepBody.match(/void reapStale(Queued|Running)Tasks\(\);/g) ?? [];
+    const allCalls =
+      src.match(/void reapStale(Queued|Running)Tasks\(\);/g) ?? [];
+    const guardedCalls =
+      sweepBody.match(/void reapStale(Queued|Running)Tasks\(\);/g) ?? [];
     expect(guardedCalls.length).toBeGreaterThan(0);
     expect(
       guardedCalls.length,
@@ -78,7 +82,7 @@ describe("模块级副作用不得在表未就绪时读库", () => {
 });
 
 describe("构建期模块保持纯 ASCII（next-code-frame panic 规避）", () => {
-  it.each(ASCII_ONLY_MODULES)("%s 无非 ASCII 字符", (rel) => {
+  it.for(ASCII_ONLY_MODULES)("%s 无非 ASCII 字符", (rel) => {
     const offenders = [...read(rel)]
       .map((ch, idx) => ({ ch, idx }))
       .filter(({ ch }) => ch.codePointAt(0)! > 0x7f);

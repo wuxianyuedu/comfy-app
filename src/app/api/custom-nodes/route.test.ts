@@ -198,7 +198,7 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
 
   /* 每一种「让 argv 多长出一个 token / 让 shell 多想一步」的形状都必须被拒。
      值形态取自真实注入面：前缀 -、等号、引号、分片符、命令替换、非字符串、空、超长。 */
-  it.each([
+  it.for([
     ["-u"],
     ["--only-pkgs"],
     ["a=b"],

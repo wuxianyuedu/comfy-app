@@ -33,11 +33,11 @@ describe("Alert", () => {
     expect(alertOf()).toBeInTheDocument();
   });
 
-  it.each(VARIANTS)("variant=%s 可渲染", (variant) => {
+  it.for(VARIANTS)("variant=%s 可渲染", (variant) => {
     expect(alertOf({ variant }).className).toContain("rounded-lg");
   });
 
-  it.each(["warning", "info", "success", "danger"] as const)(
+  it.for(["warning", "info", "success", "danger"] as const)(
     "variant=%s 的边框 / 底色走语义 token",
     (variant) => {
       const cls = alertOf({ variant }).className;
@@ -46,7 +46,7 @@ describe("Alert", () => {
     },
   );
 
-  it.each(VARIANTS)("variant=%s 不落 Tailwind 原生调色板字面量", (variant) => {
+  it.for(VARIANTS)("variant=%s 不落 Tailwind 原生调色板字面量", (variant) => {
     expect(alertOf({ variant }).className).not.toMatch(
       /\b(?:bg|text|border)-(?:violet|red|rose|emerald|amber|cyan|sky|fuchsia|purple|green|blue)-/,
     );

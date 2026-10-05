@@ -37,12 +37,12 @@ function badgeClass(label: string): string {
 }
 
 describe("StatusBadge", () => {
-  it.each(KNOWN)("status=%s 有配色", (status) => {
+  it.for(KNOWN)("status=%s 有配色", (status) => {
     render(<StatusBadge status={status} />);
     expect(badgeClass(status)).toMatch(/\bbg-\S+/);
   });
 
-  it.each(KNOWN)("status=%s 的配色不落原生调色板字面量", (status) => {
+  it.for(KNOWN)("status=%s 的配色不落原生调色板字面量", (status) => {
     render(<StatusBadge status={status} className="bg-x" />);
     const cls = badgeClass(status);
     expect(cls).not.toMatch(

@@ -398,7 +398,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     `${r.stdout ?? ""}${r.stderr ?? ""}`;
   /** 宿主自己的输出通道内容（入口把这两份路径写在 `host pid=` 那一行里）。 */
   function hostStdout() {
-    const dir = path.join(workdir, "log", "services");
+    const dir = path.join(workdir, "log", "current", "services");
     if (!existsSync(dir)) return "";
     return readdirSync(dir)
       .filter((n) => n.startsWith("executor-host-stdout-"))
@@ -414,7 +414,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     expect(text).toMatch(/boot pid=\d+ server=\d+ port=4210/);
     expect(text).toMatch(/schema bootstrap tables=0->2/);
     expect(text).toMatch(/closing \(server exited code=0/);
-    const dir = path.join(workdir, "log", "nextjs");
+    const dir = path.join(workdir, "log", "current", "nextjs");
     const names = readdirSync(dir);
     // 本刀第一版用了带冒号与空格的日志行时间戳，Windows 上直接 ENOENT：钉住文件名形态。
     for (const name of names) {
@@ -455,7 +455,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
   /* ── 宿主半边（3-E2b，ISSUE #1216 收口的那一半）───────────────────────────
    *
    * 判据都落在**真跑**上：桩宿主把自己的 env 打到 stdout（入口已把它重定向到
-   * `log/services/executor-host-stdout-*.log`），于是「开关有没有读到、库是不是同一份、
+   * `log/current/services/executor-host-stdout-*.log`），于是「开关有没有读到、库是不是同一份、
    * boot id 有没有串起来」都是看得见的字，而不是对源码文本的想象。 */
 
   const STUB_HOST_ALIVE =
@@ -505,7 +505,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     expect(out.status, text).toBe(0);
     expect(text).toMatch(/executor mode=inline/);
     expect(text).not.toMatch(/host pid=/);
-    expect(existsSync(path.join(workdir, "log", "services"))).toBe(false);
+    expect(existsSync(path.join(workdir, "log", "current", "services"))).toBe(false);
   });
 
   it("设了 host 而载荷里没有宿主入口 ⇒ 大声说明并留在 host 归属，不偷偷降级", () => {

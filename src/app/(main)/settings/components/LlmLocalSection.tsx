@@ -18,6 +18,7 @@ import {
 } from "../hooks/use-settings-page";
 import type { TaskType } from "~/lib/llm/types";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
 import { Hint } from "~/components/ui/hint";
@@ -235,13 +236,13 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                         {meta.label}
                       </span>
                       {isOverridden ? (
-                        <span className="bg-primary/15 text-primary text-3xs rounded-full px-1.5 py-0.5 font-medium">
+                        <Badge tone="primary" size="pill-sm">
                           已覆盖
-                        </span>
+                        </Badge>
                       ) : (
-                        <span className="bg-success/10 text-success-strong text-3xs rounded-full px-1.5 py-0.5 font-medium">
+                        <Badge tone="success" size="pill-sm">
                           推荐
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     <p className="text-muted-foreground text-2xs">

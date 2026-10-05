@@ -35,8 +35,7 @@ import { describe, expect, it } from "vitest";
 const config = readFileSync(join(process.cwd(), "next.config.js"), "utf8");
 
 /** Next 自带的运行时脚本目录（相对产物根）。 */
-const RUNTIME_DIR =
-  "node_modules/next/dist/compiled/next-server";
+const RUNTIME_DIR = "node_modules/next/dist/compiled/next-server";
 
 /** 必须出现在产物里的运行时脚本（**逐个点名**，不用通配）。 */
 const REQUIRED_RUNTIME_FILES = [
@@ -55,7 +54,9 @@ describe("outputFileTracingIncludes：Next 自带运行时脚本必须显式包�
 
   it("包含 next/dist/compiled/next-server 的运行时脚本", () => {
     expect(
-      config.includes("./node_modules/next/dist/compiled/next-server/*runtime.prod.js"),
+      config.includes(
+        "./node_modules/next/dist/compiled/next-server/*runtime.prod.js",
+      ),
       "缺口就在这里：Turbopack 对动态 require 字符串只追踪到被 middleware 命中的" +
         "那一份，app-route-turbo 不在 nft 里 —— 漏掉后所有 API 路由运行时 500",
     ).toBe(true);
@@ -94,7 +95,7 @@ describe.skipIf(!standaloneExists)(
       expect(files.length).toBeGreaterThan(0);
     });
 
-    it.each(REQUIRED_RUNTIME_FILES)("%s 在产物里", (name) => {
+    it.for(REQUIRED_RUNTIME_FILES)("%s 在产物里", (name) => {
       expect(
         files,
         `缺少 ${name}：所有 App Route 运行时都会 ` +
@@ -113,9 +114,7 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
     join(process.cwd(), "tests", "standalone-runtime-completeness.test.ts"),
     "utf8",
   );
-  const code = source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/.*$/gm, "");
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 
   it("runtimeFiles 的调用必须挂在「产物存在」判据之下，不得裸调", () => {
     expect(code.match(/=\s*runtimeFiles\(\)/g) ?? []).toHaveLength(0);

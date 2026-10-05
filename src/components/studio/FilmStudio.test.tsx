@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { vanillaApi } from "~/trpc/vanilla";
 import { ToastProvider } from "./ToastProvider";
 import { FilmStudio } from "./FilmStudio";
@@ -38,6 +38,27 @@ describe("FilmStudio", () => {
     expect(container).not.toBeEmptyDOMElement();
     await waitFor(() => expect(vanillaApi.skill.list.query).toHaveBeenCalled());
     expect(vanillaApi.film.list.query).toHaveBeenCalled();
-    expect(container).toMatchSnapshot();
+    /* 按 §11.9 断言**用户可见结果**，不再 dump 整棵 49KB 的 DOM 树。
+     * 这一屏要钉住的是「挂载后那些区块真的都在」，按区块各挑一条可失败的
+     * 判据（标题文案 / 可访问名 / 可交互基元的 role）：
+     *   顶栏 → 预览区 → 分镜列表 → 时间轴 → 右侧「镜头属性」。 */
+    for (const [what, text] of [
+      ["顶栏", "· 视频成片工作室"],
+      ["预览区", "未命名成片"],
+      ["分镜列表", "分镜列表"],
+      ["时间轴", "视频轨"],
+      ["时间轴·字幕轨", "字幕轨"],
+      ["属性区", "镜头属性"],
+    ] as const) {
+      expect(screen.getByText(text), `${what}没渲染出来`).toBeInTheDocument();
+    }
+    // 三个带可访问名的图标按钮（撤/重做/新增镜头）是键盘与读屏器唯一入口。
+    for (const name of ["撤销", "重做", "新增镜头"] as const) {
+      expect(screen.getByLabelText(name)).toBeInTheDocument();
+    }
+    // 剧本输入框是这一屏的主动作，空态下也该在。
+    expect(
+      screen.getByPlaceholderText("支持一句话自动分镜…"),
+    ).toBeInTheDocument();
   });
 });

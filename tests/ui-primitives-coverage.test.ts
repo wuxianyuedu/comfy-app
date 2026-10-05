@@ -152,9 +152,9 @@ function consumerCount(name: string): number {
 }
 
 describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
-  it.each(Object.entries(REQUIRED_CONSUMERS))(
+  it.for(Object.entries(REQUIRED_CONSUMERS))(
     "ui/%s 至少有一个业务消费点（%s）",
-    (name) => {
+    ([name]) => {
       expect(
         consumerCount(name),
         `ui/${name} 的引用数回到了 0 —— 它此前已经接上业务（本清单里逐条登记）。` +
@@ -208,7 +208,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * 这两个**字面量**，而绕过的形态可以不含它们（例如自己包一层 `new Blob`
    * 却忘了 revoke、或自己写相对时间阈值）。用例逐个钉住出口模块存在 +
    * 导出的名字 + 至少一处业务引用。 */
-  it.each([
+  it.for([
     ["~/lib/browser-io", ["copyText", "downloadText", "downloadJson"]],
     ["~/lib/time-format", ["timeAgo", "formatClock"]],
     /* 本批三条（规范 16 §16.2.4.54 ~ §16.2.4.56）：P50/P51/P52 是硬闸，
@@ -250,31 +250,36 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       "~/lib/with-timeout",
       ["withTimeout", "withTimeoutResult", "TimeoutError"],
     ],
-  ] as const)("%s 是「按形态收口」的出口，且已被业务引用", (spec, exports) => {
-    const mod = readFileSync(
-      join(SRC, spec.replace("~/", "").replace(/\//g, sep) + ".ts"),
-      "utf8",
-    );
-    for (const name of exports) {
-      /* 导出形式：`export function` / `export const` / `export type` /
-       * `export class`——出口可以是值也可以是类型（`OmitOwnProps` 是类型、
-       * `TimeoutError` 是类），三者都算「接口在这里」。 */
-      expect(mod, `${spec} 应导出 ${name}`).toMatch(
-        new RegExp(
-          `export (?:async )?(?:function|const|type|class|interface) ${name}\\b`,
-        ),
+  ] as const)(
+    "%s 是「按形态收口」的出口，且已被业务引用",
+    ([spec, exports]) => {
+      const mod = readFileSync(
+        join(SRC, spec.replace("~/", "").replace(/\//g, sep) + ".ts"),
+        "utf8",
       );
-    }
-    /* 至少一处业务侧引用（排除自身与测试）。 */
-    let refs = 0;
-    for (const abs of collectImports(SRC)) {
-      const rel = relative(SRC, abs).split(sep).join("/");
-      if (rel.includes(".test.")) continue;
-      if (abs === join(SRC, spec.replace("~/", "") + ".ts")) continue;
-      if (readFileSync(abs, "utf8").includes(`"${spec}"`)) refs++;
-    }
-    expect(refs, `${spec} 没有任何业务引用（收口等于没做）`).toBeGreaterThan(0);
-  });
+      for (const name of exports) {
+        /* 导出形式：`export function` / `export const` / `export type` /
+         * `export class`——出口可以是值也可以是类型（`OmitOwnProps` 是类型、
+         * `TimeoutError` 是类），三者都算「接口在这里」。 */
+        expect(mod, `${spec} 应导出 ${name}`).toMatch(
+          new RegExp(
+            `export (?:async )?(?:function|const|type|class|interface) ${name}\\b`,
+          ),
+        );
+      }
+      /* 至少一处业务侧引用（排除自身与测试）。 */
+      let refs = 0;
+      for (const abs of collectImports(SRC)) {
+        const rel = relative(SRC, abs).split(sep).join("/");
+        if (rel.includes(".test.")) continue;
+        if (abs === join(SRC, spec.replace("~/", "") + ".ts")) continue;
+        if (readFileSync(abs, "utf8").includes(`"${spec}"`)) refs++;
+      }
+      expect(refs, `${spec} 没有任何业务引用（收口等于没做）`).toBeGreaterThan(
+        0,
+      );
+    },
+  );
 
   /**
    * 「隐藏文件选择框」的出口与消费点。
@@ -361,13 +366,13 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * 门槛都刻意留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。
    * `disclosure` 本批迁了 8 处、`option-list-popover` 4 处、`use-interval`
    * 10 处上下。 */
-  it.each([
+  it.for([
     ["disclosure", "tsx", ["Disclosure"], 3],
     ["option-list-popover", "tsx", ["OptionListPopover"], 3],
     ["use-interval", "ts", ["useInterval"], 5],
   ] as const)(
     "ui/%s 是「同一形态的唯一出口」且已被业务引用",
-    (name, ext, exports, min) => {
+    ([name, ext, exports, min]) => {
       const mod = readFileSync(
         join(SRC, "components", "ui", `${name}.${ext}`),
         "utf8",
@@ -388,7 +393,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
   /* `disclosure` / `option-list-popover` 是客户端基元：`"use client"` 必须在
    * 文件首行 —— 缺了它，任何从 Server Component 引用它们的地方会在构建期
    * 报「useState in Server Component」这类难定位的错。 */
-  it.each(["disclosure", "option-list-popover"])(
+  it.for(["disclosure", "option-list-popover"])(
     'ui/%s 是客户端基元（有 "use client"）',
     (name) => {
       const mod = readFileSync(
@@ -408,7 +413,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * 门槛都刻意留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。
    * `list-filter` 本批迁了 8 处、`expansion-set` 3 份映射、`wide-panel` 3 个面板；
    * `progress` / `key-value-rows` 各迁了 10 处与 5 处。 */
-  it.each([
+  it.for([
     [
       "~/lib/list-filter",
       "ts",
@@ -557,7 +562,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     ],
   ] as const)(
     "%s 是「同一形态的唯一出口」且已被业务引用",
-    (spec, ext, exports, min) => {
+    ([spec, ext, exports, min]) => {
       const rel = spec.replace("~/", "");
       const mod = readFileSync(join(SRC, `${rel}.${ext}`), "utf8");
       for (const symbol of exports) {
@@ -597,10 +602,10 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * `useSyncExternalStore`），`"use client"` 必须在文件首行 —— 缺了它，
    * 任何从 Server Component 引用它们的地方会在构建期报
    * 「useState in Server Component」这类难定位的错。 */
-  it.each([
+  it.for([
     ["expansion-set", "ts"],
     ["wide-panel", "tsx"],
-  ])('ui/%s 是客户端模块（有 "use client"）', (name, ext) => {
+  ])('ui/%s 是客户端模块（有 "use client"）', ([name, ext]) => {
     const mod = readFileSync(
       join(SRC, "components", "ui", `${name}.${ext}`),
       "utf8",

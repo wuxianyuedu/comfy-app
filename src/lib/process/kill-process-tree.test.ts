@@ -17,7 +17,7 @@
 // 完全正确，实际根本没杀到）。
 
 import { execSync, spawn } from "node:child_process";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished } from "vitest";
 import {
   isWindowsPlatform,
   killProcessTree,
@@ -25,18 +25,19 @@ import {
   readPgid,
 } from "./kill-process-tree";
 
-/** 等一个条件成立，超时返回 false。 */
+/**
+ * 等一个条件成立。
+ *
+ * 用 `expect.poll` 而不是手搓 `while + setTimeout`：失败时它把**每次轮询的
+ * 实际值**打出来（这里就是还活着的 PID 列表），而手搓版本只会给一句「超时」——
+ * 「孤儿没被收走」的现场恰恰是「剩下哪几个 PID」，那正是要打的东西。
+ */
 async function waitFor(
   check: () => boolean,
   timeoutMs = 4000,
   stepMs = 50,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    if (check()) return true;
-    if (Date.now() > deadline) return false;
-    await new Promise((r) => setTimeout(r, stepMs));
-  }
+): Promise<void> {
+  await expect.poll(check, { timeout: timeoutMs, interval: stepMs }).toBe(true);
 }
 
 function isAlive(pid: number): boolean {
@@ -130,19 +131,24 @@ posixOnly("readPgid（组长归属由 OS 回答）", () => {
     const child = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
     const pid = child.pid!;
     child.unref();
-    await new Promise((r) => setTimeout(r, 400));
+    /* 等它真的成为组长（`pgidOf` 直读 `ps`，与实现无关）。 */
+    await expect.poll(() => pgidOf(pid), { timeout: 4000 }).toBe(pid);
     const pgid = await readPgid(pid);
     expect(pgid).not.toBeNull();
     // detached 拉起 = 自身即组长 ⇒ PGID == PID（与 ps 直读一致）
     expect(pgid).toBe(pgidOf(pid));
     expect(pgid).toBe(pid);
-    await killProcessTree({ pid, force: true });
+    /* 收尾挂到 `onTestFinished`：断言失败提前抛出时也照样回收，
+     * 不会因为一条红用例在机器上留下一小时的 `sleep 300`。 */
+    onTestFinished(async () => {
+      await killProcessTree({ pid, force: true });
+    });
   });
 
   it("目标已退出：返回 null（调用方退回单杀兜底，不抛错）", async () => {
     const child = spawn("true", [], { stdio: "ignore" });
     const pid = child.pid!;
-    await new Promise((r) => setTimeout(r, 500));
+    await expect.poll(() => isAlive(pid), { timeout: 4000 }).toBe(false);
     expect(await readPgid(pid)).toBeNull();
   });
 });
@@ -156,7 +162,13 @@ posixOnly("killProcessTree POSIX 行为", () => {
     });
     const pid = child.pid!;
     child.unref();
-    await new Promise((r) => setTimeout(r, 700));
+    onTestFinished(async () => {
+      await killProcessTree({ pid, force: true, detached: true });
+    });
+    /* 等两个 sleep 真的挂上来（`wait` 让 sh 保持存活），再去数树。 */
+    await expect
+      .poll(() => descendantPids(pid).length, { timeout: 4000 })
+      .toBeGreaterThanOrEqual(2);
 
     const all = [pid, ...descendantPids(pid)];
     expect(all.length).toBeGreaterThanOrEqual(3); // sh + 两个 sleep
@@ -166,9 +178,15 @@ posixOnly("killProcessTree POSIX 行为", () => {
     expect(r.ok).toBe(true);
     expect(r.via).toContain("进程组");
 
-    const gone = await waitFor(() => all.every((p) => !isAlive(p)));
-    expect(gone).toBe(true);
-    expect(all.filter((p) => isAlive(p))).toEqual([]);
+    await waitFor(() => all.every((p) => !isAlive(p)));
+    // 失败时这句话打出的是「还活着的那几个」，就是残留清单本身。
+    await expect
+      .poll(() => all.filter((p) => isAlive(p)), {
+        timeout: 4000,
+        interval: 50,
+        message: "进程组回收后仍有残留（下面列出的就是孤儿）",
+      })
+      .toEqual([]);
   });
 
   it("与调用者同组：禁用组路径，只单杀 leader（防杀到自己）", async () => {
@@ -177,7 +195,7 @@ posixOnly("killProcessTree POSIX 行为", () => {
     // 整个测试进程被 Killed。这里断言「不杀组」，且 leader 仍被回收。
     const child = spawn("sleep", ["300"], { stdio: "ignore" });
     const pid = child.pid!;
-    await new Promise((r) => setTimeout(r, 400));
+    await expect.poll(() => pgidOf(pid), { timeout: 4000 }).not.toBeNull();
 
     const own = pgidOf(process.pid);
     expect(pgidOf(pid)).toBe(own); // 前提成立：同组
@@ -187,8 +205,7 @@ posixOnly("killProcessTree POSIX 行为", () => {
     // 必须走单杀兜底分支并标明「禁杀组」，绝不能是 `kill -SIGTERM -<pgid>`
     expect(r.via).toContain("单进程兜底");
     expect(r.via).toContain("禁杀组");
-    await waitFor(() => !isAlive(pid));
-    expect(isAlive(pid)).toBe(false);
+    await expect.poll(() => isAlive(pid)).toBe(false);
   });
 
   it("【反向验证锚点】detached 标记与实际组不一致时，不得按 pid 猜组长杀组", async () => {
@@ -198,18 +215,18 @@ posixOnly("killProcessTree POSIX 行为", () => {
     // 以 OS 读到的 PGID 为准，绝不走「按 pid 猜」的组路径。
     const child = spawn("sh", ["-c", "sleep 300 & wait"], { stdio: "ignore" });
     const pid = child.pid!;
-    await new Promise((r) => setTimeout(r, 500));
-    expect(pgidOf(pid)).toBe(pgidOf(process.pid));
+    await expect
+      .poll(() => pgidOf(pid), { timeout: 4000 })
+      .toBe(pgidOf(process.pid));
     const r = await killProcessTree({ pid, detached: true });
     expect(r.via).toContain("禁杀组");
-    await waitFor(() => !isAlive(pid));
-    expect(isAlive(pid)).toBe(false);
+    await expect.poll(() => isAlive(pid)).toBe(false);
   });
 
   it("目标已退出：返回 ok=false 而不是抛错（调用方自行探测确认）", async () => {
     const child = spawn("true", [], { stdio: "ignore" });
     const pid = child.pid!;
-    await new Promise((r) => setTimeout(r, 500));
+    await expect.poll(() => isAlive(pid), { timeout: 4000 }).toBe(false);
     const r = await killProcessTree({ pid, detached: false });
     expect(r.ok).toBe(false);
   });
@@ -221,21 +238,24 @@ posixOnly("killProcessTree POSIX 行为", () => {
     });
     const pid = child.pid!;
     child.unref();
-    await new Promise((r) => setTimeout(r, 600));
+    onTestFinished(() => {
+      killProcessTreeSync({ pid, force: true, detached: true });
+    });
+    await expect
+      .poll(() => descendantPids(pid).length, { timeout: 4000 })
+      .toBeGreaterThanOrEqual(2);
     const all = [pid, ...descendantPids(pid)];
     const r = killProcessTreeSync({ pid, detached: true });
     expect(r.via).toContain("进程组");
-    await waitFor(() => all.every((p) => !isAlive(p)));
-    expect(all.filter((p) => isAlive(p))).toEqual([]);
+    await expect.poll(() => all.filter((p) => isAlive(p))).toEqual([]);
   });
 
   it("killProcessTreeSync 同组时同样禁用组路径", async () => {
     const child = spawn("sleep", ["300"], { stdio: "ignore" });
     const pid = child.pid!;
-    await new Promise((r) => setTimeout(r, 400));
+    await expect.poll(() => pgidOf(pid), { timeout: 4000 }).not.toBeNull();
     const r = killProcessTreeSync({ pid, detached: false });
     expect(r.via).toContain("禁杀组");
-    await waitFor(() => !isAlive(pid));
-    expect(isAlive(pid)).toBe(false);
+    await expect.poll(() => isAlive(pid)).toBe(false);
   });
 });

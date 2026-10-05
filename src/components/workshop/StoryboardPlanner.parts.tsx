@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { IndexDot } from "~/components/workshop/IndexDot";
 import { Textarea } from "~/components/ui/textarea";
 import { SHOT_STATUS_LABEL } from "./shot-status-config";
 import type { ShotProgress } from "./useStoryboardPlanner";
@@ -57,12 +58,12 @@ export function ShotRow({
   const linkedChars = characters.filter((character) =>
     shot.characterIds.includes(character.id),
   );
+  /* 本镜头的实时生成进度（ComfyUI 当前节点 + 百分比）。 */
+  const progress = progressByShot?.[shot.id];
   return (
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
-        <span className="bg-primary-soft text-primary grid size-6 place-items-center rounded-full text-xs font-semibold">
-          {shot.index}
-        </span>
+        <IndexDot index={shot.index} />
         <span className="text-muted-foreground text-xs">
           {shot.sceneHeading}
         </span>
@@ -197,22 +198,17 @@ export function ShotRow({
         )}
       </div>
 
-      {/* 节点上的实时生成进度：ComfyUI 当前节点 + 百分比 */}
-      {shot.status === "running" &&
-        (() => {
-          const p = progressByShot?.[shot.id];
-          /* ComfyUI 还没报进度（`pct` 未定义）时是**不确定态**，不是 0%
-             —— 此前 `?? 0` 把它画成空条，看起来像「卡住没动」。 */
-          const pct = p?.pct ?? null;
-          return (
-            <div className="mt-2" aria-live="polite">
-              <ProgressBar
-                value={pct}
-                label={p?.label ? `正在执行 ${p.label}` : "正在生成…"}
-              />
-            </div>
-          );
-        })()}
+      {/* 节点上的实时生成进度：ComfyUI 当前节点 + 百分比。ComfyUI 还没报
+          进度（`pct` 未定义）时是**不确定态**，不是 0% —— 此前 `?? 0`
+          把它画成空条，看起来像「卡住没动」。 */}
+      {shot.status === "running" && (
+        <div className="mt-2" aria-live="polite">
+          <ProgressBar
+            value={progress?.pct ?? null}
+            label={progress?.label ? `正在执行 ${progress.label}` : "正在生成…"}
+          />
+        </div>
+      )}
 
       {/* Generate button */}
       <Button

@@ -178,7 +178,7 @@ describe("闸门顺序：每一种拒绝都发生在碰磁盘之前", () => {
     );
   });
 
-  it.each(["bytes=0-3", "bytes=9999-", "seconds=1-2"])(
+  it.for(["bytes=0-3", "bytes=9999-", "seconds=1-2"])(
     "带 Range 也不许绕过闸（%s）：无会话 401、别人的 404，两次都不打开文件",
     async (range) => {
       loginRequiredMock.mockReturnValue(true);
@@ -373,7 +373,7 @@ describe("Range：三种结论翻成三个状态码", () => {
     expect(res.headers.get("Content-Range")).toBe("bytes */0");
   });
 
-  it.each(["bytes=0-1,2-3", "seconds=1-2", "bytes=abc", "bytes=500-100"])(
+  it.for(["bytes=0-1,2-3", "seconds=1-2", "bytes=abc", "bytes=500-100"])(
     "不认识的形状（%s）→ 忽略并回整份 200，绝不判成 416",
     async (range) => {
       const res = await get(["t1", "a.png"], range);

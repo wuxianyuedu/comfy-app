@@ -434,8 +434,17 @@ export function schemaNotice(result) {
   }
 }
 
-/** 后台同步的状态文件（相对项目根）。服务端 `GET /api/schema` 读它透出给页面。 */
-export const SCHEMA_SYNC_STATUS_FILE = path.join("log", "schema-sync.json");
+/** 后台同步的状态文件（相对项目根）。服务端 `GET /api/schema` 读它透出给页面。
+ *
+ *  归 `log/current/tools/`：它的写入方是本工具链，读取者是 Next 服务端。
+ *  与 `src/lib/log/log-paths.ts` 的 `SCHEMA_SYNC_STATUS_FILE` **同形**（那一份
+ *  是 TS 侧的唯一出处，`db-schema-state.test.ts` 钉住两侧不漂）。 */
+export const SCHEMA_SYNC_STATUS_FILE = path.join(
+  "log",
+  "current",
+  "tools",
+  "schema-sync.json",
+);
 
 /**
  * 写同步状态（`{ phase, detail, at }`）。
@@ -482,7 +491,7 @@ export const SKIP_SCHEMA_SYNC_ENV = "COMFYAPP_SKIP_SCHEMA_SYNC";
  * 「先同步、再起 Next」，用户要盯着空窗等半分钟；现在「先把 Next 拉起来、
  * 同步在后台跑」，等待时间还给用户，期间页面自己会显示「正在同步」。
  *
- * 输出重定向进 `log/schema-sync.log`（本进程通常立刻阻塞在 Next 上，转发不了
+ * 输出重定向进 `log/current/tools/schema-sync.log`（本进程通常立刻阻塞在 Next 上，转发不了
  * 子进程的输出）；真正的对外信号是状态文件。
  *
  * @param {string} root 项目根
@@ -503,7 +512,7 @@ export function spawnSchemaSync(root, options = {}) {
   /** @type {"ignore" | ["ignore", number, number]} */
   let stdio = "ignore";
   try {
-    const dir = path.join(root, "log");
+    const dir = path.join(root, "log", "current", "tools");
     fs.mkdirSync(dir, { recursive: true });
     const fd = fs.openSync(path.join(dir, "schema-sync.log"), "a");
     stdio = ["ignore", fd, fd];

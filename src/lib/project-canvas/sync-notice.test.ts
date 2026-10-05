@@ -46,18 +46,18 @@ afterEach(() => {
 });
 
 describe("isPermanentRefusal：重试有没有用是唯一的那把尺", () => {
-  it.each([
+  it.for([
     ["FORBIDDEN", "该项目 id 已属于其他用户"],
     ["BAD_REQUEST", "name too small"],
     ["UNAUTHORIZED", "未登录"],
     ["CONFLICT", "名字已占用"],
     ["PRECONDITION_FAILED", "缺少前置条件"],
     ["PAYLOAD_TOO_LARGE", "画布过大"],
-  ])("%s 是拒收（服务端明确回了一句不收）", (code, message) => {
+  ] as const)("%s 是拒收（服务端明确回了一句不收）", ([code, message]) => {
     expect(isPermanentRefusal(trpcError(code, message))).toBe(true);
   });
 
-  it.each([
+  it.for([
     ["TIMEOUT", "请求超时"],
     ["TOO_MANY_REQUESTS", "打得太勤"],
     ["INTERNAL_SERVER_ERROR", "no such table"],
@@ -66,7 +66,7 @@ describe("isPermanentRefusal：重试有没有用是唯一的那把尺", () => {
     ["GATEWAY_TIMEOUT", "上游超时"],
     ["PARSE_ERROR", "<!DOCTYPE ...> is not valid JSON"],
     ["CLIENT_CLOSED_REQUEST", "signal is aborted without reason"],
-  ])("%s 是可重试（不许打扰用户）", (code, message) => {
+  ] as const)("%s 是可重试（不许打扰用户）", ([code, message]) => {
     expect(isPermanentRefusal(trpcError(code, message))).toBe(false);
   });
 

@@ -23,6 +23,7 @@ import {
 
 import { useMessageCenterStore } from "./message-center-store";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { useHotkey } from "~/components/ui/use-hotkey";
 
@@ -172,9 +173,9 @@ export function MessageCenterPanel() {
                           {m.title}
                         </h3>
                         {!m.read && (
-                          <span className="bg-primary/20 text-primary-strong text-3xs rounded-full px-1.5 font-medium">
+                          <Badge tone="primary" size="pill-sm">
                             新
-                          </span>
+                          </Badge>
                         )}
                         <time className="text-ink-muted text-2xs ml-auto shrink-0 tabular-nums">
                           {fmtTime(m.time)}
