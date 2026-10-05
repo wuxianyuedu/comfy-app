@@ -215,7 +215,7 @@ export function DynamicWorkflowFormView({
                  * 都画会造成频闪。 */}
                 {isDropTarget && (
                   <div
-                    className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_rgba(124,92,252,0.6)] ${dropPosition === "before" ? "-top-px" : "-bottom-px"}`}
+                    className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary)_60%,transparent)] ${dropPosition === "before" ? "-top-px" : "-bottom-px"}`}
                   />
                 )}
                 {/* 手柄只是视觉提示（真正可拖来自父层的 draggable，且从输入框 /
