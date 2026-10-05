@@ -32,8 +32,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  PENDING_PLATFORMS,
   SUPPORTED_PLATFORMS,
   declaredShotNames,
+  isPlatformPending,
   missingBaselinesForPlatform,
   parseBaseline,
   snapshotsFor,
@@ -59,9 +61,45 @@ describe("像素基线成对齐全且入库（§11.8）", () => {
   it("每个截图名在各支持平台上都有基线", () => {
     const missing: string[] = [];
     for (const platform of SUPPORTED_PLATFORMS) {
+      /* 登记在 `PENDING_PLATFORMS` 上的档**这一轮录不出来**（像素是平台渲染的
+       * 产物，只能在那一档的机器上录），所以它的缺失不在这条里断言 —— 但那条
+       * 账立刻被下面「待录档必须真的还缺」那条反过来盯住，且缺什么由
+       * `docs/standards/11-测试与可观测性.md` §11.8 与本文件的话术点名。 */
+      if (isPlatformPending(platform)) continue;
       missing.push(...missingBaselinesForPlatform(ROOT, platform));
     }
     expect(missing).toEqual([]);
+  });
+
+  it("待录档的账双向不陈旧：登记了就得真的还缺，缺了没登记就红", () => {
+    /* 这一条是「待录」这个状态的全部意义所在。少了它，`PENDING_PLATFORMS` 就成了一张
+     * 赦免名单：有人把基线补齐了、登记还留着，于是**下一次**真丢了基线照样被放行 ——
+     * 那正是 §11.8 判过的「两种半套比没有那一档更费人」。
+     *
+     * 三个方向都拦：
+     *   ① 登记的平台不在 `SUPPORTED_PLATFORMS` 里 = 孤儿登记（改名 / 删档后的残页）；
+     *   ② 登记的平台**已经不缺**任何基线 = 该删登记而没删（补录那一批的漏网）；
+     *   ③ 登记项没写 `reason`（理由写「稍后处理」等于没写，下一个人不知道去哪台机器）。 */
+    const problems: string[] = [];
+    for (const [platform, entry] of Object.entries(PENDING_PLATFORMS)) {
+      if (!SUPPORTED_PLATFORMS.some((p) => p === platform)) {
+        problems.push(
+          `${platform}：登记为待录，但它不在 SUPPORTED_PLATFORMS 里（孤儿登记）`,
+        );
+      }
+      const reason = entry.reason.trim();
+      if (reason.length < 20) {
+        problems.push(
+          `${platform}：登记没写清「谁在哪台机器补」（reason 只有 ${reason.length} 字）`,
+        );
+      }
+      if (missingBaselinesForPlatform(ROOT, platform).length === 0) {
+        problems.push(
+          `${platform}：登记为待录，但它已经不缺任何基线了 —— 补录的那批要把这条登记一起删掉`,
+        );
+      }
+    }
+    expect(problems).toEqual([]);
   });
 
   it("基线 PNG 全部入库（磁盘上有而 git 没跟踪 = 只在本机绿）", () => {

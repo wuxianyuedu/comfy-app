@@ -342,13 +342,28 @@ const SECTION_HEADER_MARKS = [
   /border-t border-dashed bg-transparent/,
 ];
 
+/** 状态发光的浅彩裸值（emerald-400 / rose-400）—— 只能经 `--color-glow-*` 取。
+ *  **不带 `g`**：这里只 `.test()`，而带 `g` 的正则会把 `lastIndex` 留在上一次调用上，
+ *  同一份文件里第二次出现就静默漏判（判据自己变成一台会漏的工具）。
+ *  ⚠️ 判据**只认 `rgba(52,211,153…)` 这一种裸形态**：同一档浅彩还合法地存在于
+ *  别的位置（`canvas-types.ts` 的节点类别色、`HomePage.tsx` 的项目类别色就写着
+ *  `#34D399` / `#FB7185`），第一版把 hex 一并禁掉，当场误报三份与发光无关的文件。
+ *  hex 那种写法只在「被包进 shadow 候选名」时算违规（见 GLOW_HEX_IN_SHADOW）。 */
+const GLOW_RAW =
+  /rgba\(\s*(?:52\s*,\s*211\s*,\s*153|251\s*,\s*113\s*,\s*133)\s*[,/]/;
+/** `shadow-[…#34d399…]`：发光位置直接写 hex 也算回潮。 */
+const GLOW_HEX_IN_SHADOW = /shadow-\[[^\]]*(?:34d399|fb7185)/i;
+
 describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", () => {
   /** 棘轮基线：本轮清理后实测的存量，只许降不许升（要升得改用例并写理由）。
    *  21→12 是类型 chip 收进 `~/components/studio/TypeChip`（10 处调用点各写一份 →
    *  只剩实现里那一处 + `ParamOwnerTag` 那一枚异类）；12→10 是节点右侧胶囊的两处
-   *  手写改走早已存在的 `WorkflowNodePill`（§12.18：有等价实现就先 import）。 */
+   *  手写改走早已存在的 `WorkflowNodePill`（§12.18：有等价实现就先 import）。
+   *  字号 302→298 是同上的 `text-3xs` 归一；**298→201 是「同一个 12px 有两种行高」
+   *  定档**：103 处 `text-[12px]`（12px + 继承的 1.5 ⇒ 18px）统一成 `text-xs`
+   *  （12px + 16px，全库 289 处已在用的那一档）。那条归零判据见下面一条。 */
   const RADIUS_BASELINE = 10;
-  const TEXT_BASELINE = 298;
+  const TEXT_BASELINE = 201;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
     const scale = parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8"));
@@ -378,6 +393,27 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       `调用点字面字号从 ${TEXT_BASELINE} 涨到 ${text.length}；契约 §Typography ` +
         "要求先在 @theme 加具名档（档名还得是 t-shirt 形状，见下面那条）",
     ).toBeLessThanOrEqual(TEXT_BASELINE);
+  });
+
+  it("12px 只有一个名字：调用点不许再写字面量档", () => {
+    /* 这一档不是棘轮、是**归零等式**：`text-xs` 与 `text-[12px]` 字号相同（12px），
+       差别只在行高 —— 前者带 Tailwind 默认的 16px、后者吃继承的 1.5（= 18px）。
+       「同一个字号两种行高」已签字归一到 `text-xs` 那一档（289 处本来就在用它），
+       所以再出现字面量就是重新分裂这一档。要改行高请显式写 `leading-*`，
+       不要再造一个「字号字面量」。 */
+    const twelve = /\btext-\[12px\]/g;
+    const offenders = scanProduct(twelve);
+    expect(
+      offenders,
+      "这些调用点又写了字面 12px —— 用 `text-xs`（行高要不同就再加 `leading-*`）：\n" +
+        `${offenders.map((o) => `  ${o.file}`).join("\n")}`,
+    ).toEqual([]);
+    /* 反向：档位真的存在且真的还是 12px（否则上面那条会因为「这档没了」而空绿，
+       而下一轮的人会把 text-xs 当 14px 用）。 */
+    expect(
+      readFileSync(GLOBALS_PATH, "utf8").includes("--text-xs:"),
+      "globals.css 里给 --text-xs 配了自定义值？本判据假定它就是 Tailwind 默认的 12px",
+    ).toBe(false);
   });
 
   it("@theme 的 --text-* 档名必须是 t-shirt 尺寸（否则 cn() 把它当颜色吃掉）", () => {
@@ -472,6 +508,40 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     }
   });
 
+  it("状态发光的浅彩只有 token 一个出处，调用点不许再写回裸值", () => {
+    /* #1508 那格 needs-design-decision 签完之后落地的防回潮半边：`#34d399` /
+       `#fb7185` 这两档浅彩与基准色 `--color-success` / `--color-destructive`
+       不是同一个颜色，此前以裸值散在三处、看起来像「忘了用 token」。现在的
+       口径是色相走 `--color-glow-*`、强度由调用处 `color-mix(… N%)` 决定，
+       所以**裸值回来就是红**（强度可以各站不同，色相不行）。 */
+    const offenders: string[] = [];
+    for (const abs of collectProductFiles(SRC_DIR)) {
+      const code = stripComments(readFileSync(abs, "utf8"));
+      /* `globals.css` 是 token 的**定义处**，那两颗 hex 只许在那里；
+         其余文件只许经 `var(--color-glow-*)` 取值。 */
+      const rel = path.relative(ROOT_DIR, abs).split(path.sep).join("/");
+      if (rel === "src/app/globals.css") continue;
+      if (GLOW_RAW.test(code) || GLOW_HEX_IN_SHADOW.test(code)) {
+        offenders.push(rel);
+      }
+    }
+    expect(
+      offenders,
+      "状态发光的浅彩又写成裸值了 —— 用 var(--color-glow-success) / " +
+        `var(--color-glow-danger)，强度走 color-mix：\n${offenders
+          .map((o) => `  ${o}`)
+          .join("\n")}`,
+    ).toEqual([]);
+    /* 定义处真的在（否则上面那条会因为「谁都没有」而空绿）。 */
+    const css = readFileSync(GLOBALS_PATH, "utf8");
+    const declValue = (name: string) =>
+      new RegExp(`^\\s*${name}:\\s*([^;]+);`, "m").exec(css)?.[1]?.trim();
+    expect(
+      [declValue("--color-glow-success"), declValue("--color-glow-danger")],
+      "两颗发光 token 不在 globals.css 里（判据的锚没了）",
+    ).toEqual(["#34d399", "#fb7185"]);
+  });
+
   it("负控制：上面每条判据都真的能被抓（否则它们绿得没意义）", () => {
     const tierPx = renderedRadiusValues(
       parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8")),
@@ -493,6 +563,41 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
         `${fam.name}的手抄样本没被自己的标记抓出（这条判据会静默全绿）`,
       ).toBe(true);
     }
+    /* 发光裸值那条：喂回一个旧写法必须被抓，而现在的 token 形态不许被抓。
+       样本一律**拆开拼**（`arbitrary()`）—— Tailwind 的默认源扫描连测试文件与 `.md`
+       一起读，一整条 `prop-[值]` 候选名出现在源文本里就**真的被生成进产物**，
+       于是造出一个「源码没有、产物却有」的死类（契约 §Colors 记了这条实测）。 */
+    const arbitrary = (prop: string, value: string) => `${prop}-[${value}]`;
+    expect(
+      "0 0 6px rgba(52,211,153,0.8)",
+      "回到裸值的发光没被抓住（这条判据空转）",
+    ).toMatch(GLOW_RAW);
+    expect(
+      arbitrary("shadow", "0_0_6px_#34d399"),
+      "发光位置写成 hex 没被抓住",
+    ).toMatch(GLOW_HEX_IN_SHADOW);
+    expect(
+      GLOW_HEX_IN_SHADOW.test(
+        arbitrary("shadow", "0_0_6px_var(--color-glow-success)"),
+      ),
+      "正确的 token 形态被误判成 hex 回潮",
+    ).toBe(false);
+    /* 反向钉住**范围**：这一档浅彩在别处是合法的角色色（节点/项目类别色），
+       判据不许把它们一起抓走 —— 第一版就是这么误报了三个无关文件。 */
+    expect(GLOW_RAW.test(arbitrary("bg", "#34d399"))).toBe(false);
+    expect(
+      GLOW_HEX_IN_SHADOW.test(arbitrary("bg", "#34D399")),
+      "类别色被发光判据误抓（判据越界了）",
+    ).toBe(false);
+    expect(
+      GLOW_RAW.test(
+        arbitrary(
+          "shadow",
+          "0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)",
+        ),
+      ),
+      "正确的 token 形态被误判成裸值（判据太松）",
+    ).toBe(false);
     /* 反向：异类不许被同族标记抓到。`ParamOwnerTag` 那枚带描边的类型标签
        （`py-px` + `font-medium`）与胶囊那枚 11px 的图标方块（`grid size-9`、
        没有 h-5 / gap-1.25）各是其主自己的形状 —— 抓到了说明标记写得太松，
@@ -509,7 +614,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       [
         '<div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">' +
           '<span className="size-2 shrink-0 rounded-full bg-sky-400" />' +
-          '<span className="text-ink-bright truncate text-[12px] font-semibold">' +
+          '<span className="text-ink-bright truncate text-xs font-semibold">' +
           '<span className="bg-subtle text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">',
         "区头（强调圆点 + 大写标签 + 计数胶囊 + 虚线）",
       ],

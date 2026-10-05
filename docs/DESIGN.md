@@ -320,6 +320,8 @@ components:
 | 危险（当底） | `--color-destructive` | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `oklch(0.704 0.191 22.216)` ⇒ `#ff6467` | `bg-destructive`、实心危险按钮 |
 | 危险（浅底上的字） | `--color-danger-strong` | `#b91c1c` | `#fca5a5` | `text-danger-strong` |
 | 成功 | `--color-success` / `--color-success-strong` | `#0ea472` / `#10b981` | `#5be3c4` / `#10b981` | 状态绿 |
+| 状态点**发光**（绿） | `--color-glow-success` | `#34d399` | 同值 | 比 `--color-success` 亮一档的浅彩（400 档）。两态同值是刻意的：原裸值本来就没有 `.dark` 分叉 |
+| 状态点**发光**（红） | `--color-glow-danger` | `#fb7185` | 同值 | 同上，配 `--color-destructive` 的那档浅彩 |
 | 警告 | `--color-warning` / `--color-warning-strong` | `#d97706` / `#b45309` | `#f59e0b` / `#fbbf24` | 待处理/排队 |
 | 信息 | `--color-info` / `--color-info-strong` | `#2563eb` / `#1d4ed8` | `#5bc6ff` / `#7dd3fc` | 链接/提示 |
 | 在线状态 | `--color-status-online` | `#047857` | `#33d499` | 「本机/在线」点与字 |
@@ -383,7 +385,8 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 - **档名必须是 t-shirt 尺寸（`2xs` / `3xs`），不能叫 `meta` / `micro`**。`cn()`（`node_modules/cn`，clsx + tailwind-merge 的替代件）把**不认识的 `text-<名字>` 一律归到颜色组**：实测 `cn("text-ink-muted", "text-micro")` 只剩 `text-micro` —— 同行的状态色被静默吃掉，徽标会失去配色语义；而 `cn("text-ink-muted", "text-2xs")` 两条都留。⚠️ **仓库里已有的 `text-section` / `text-page` / `text-hero` 是同一个坑的潜伏形态**（实测 `cn("text-ink-muted","text-section")` 同样吃颜色），它们目前只在 CSS 里经 `.u-title-*` 使用、没进 JSX，所以还没炸 —— **别在 JSX 里用这几个类名**，标题一律走 `.u-title-*`。
 - **不乘 `--font-scale`**：设置页「标题字阶」那一档的作用域只有上面四档标题。微标签跟着标题缩放，会让密集列表在 125% 档下挤成一团 —— 与「正文不随字阶变」同一条口径，`e2e/appearance-steps.spec.ts` 按后者判。
-- **不配 `--text-*-line-height`**：Tailwind v4 里一旦配对，生成的类会连带锁行高。实测对照：`text-xs` emit `font-size` **加** `line-height: var(--tw-leading, var(--text-xs--line-height))`（= 16px），而 `text-[12px]` 只出 font-size、行高继承 `html` 的 1.5（12px 下是 18px）。所以 **`text-[12px]` → `text-xs` 不是零视觉变化的改写**（107 处留在原地，等一次带视觉复核的独立改动）；`text-2xs` / `text-3xs` 只出 font-size，与替换前的 `text-[11px]` / `text-[10px]` 逐像素相同。
+- **不配 `--text-*-line-height`**：Tailwind v4 里一旦配对，生成的类会连带锁行高。实测对照：`text-xs` emit `font-size` **加** `line-height: var(--tw-leading, var(--text-xs--line-height))`（= 16px），而 `text-[12px]` 只出 font-size、行高继承 `html` 的 1.5（12px 下是 18px）—— **同一个 12px 因此有过两种行高**（289 处 `text-xs` 在 16px、103 处字面量在 18px）。这一档已签字**归一到 `text-xs`**（12px / 16px），103 处字面量换完，并加一条「调用点不许再写 `text-[12px]`」的**归零判据**（不是棘轮）；要更松的行高就显式写 `leading-*`，别再造字号字面量。`text-2xs` / `text-3xs` 仍只出 font-size，与替换前的 `text-[11px]` / `text-[10px]` 逐像素相同。
+  **改前 / 改后的真浏览器抽样**（`/workspace` 的六个可点面，195 个 12px 实例）：改前那 18 个 `text-[12px]` 实例**全都自带 `leading-tight`**，计算行高 15px；改后同一批仍是 15px ⇒ 这一批**逐像素没动**（`leading-*` 走 `--tw-leading`，照样压过 `text-xs` 的默认档）。裁切数改前改后都是 12（既有状态，与本次无关）。**覆盖边界要说清**：剩下约 85 处分布在要数据才渲染的面（项目画布节点、结果卡、若干浮层），本轮量具进不去 —— 它们的预期是行盒 18→16px（收拢不引入裁切），这一句是**推理，不是读数**。
 
 **h2/h3 刻意不入判据**：区块级标题保留 10.5–14px 的几档微排版（画布节点标签、日志小节、属性表列名各一档），并成一档会**压平信息层次**。要更严的约束就写成**该屏自己的守卫**（例：`src/components/workshop/workshop-heading-structure.test.ts`），别升成全局规则。
 
@@ -451,7 +454,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - **卡片/浮层用 `rounded-xl`**（默认 20px），**控件（按钮、下拉触发器）用 `rounded-lg`**（16px），**输入框用 `rounded-md`**（12px），**chip/药丸用 `rounded-full`**（9999px）。
 - 小尺寸控件靠**取小**而不是换档：`rounded-[min(var(--radius-md),10px)]`（Button `xs`/`icon-xs`）、`min(var(--radius-md),12px)`（`sm`/`icon-sm`）。`ui/` 里 15 处 `rounded-[...]` 有 11 处是这种**从 token 派生**的写法，只有 3 处是裸值（`rounded-[2px]`×2、`rounded-[4px]`×1）。
 - 两处直接吃基数、不吃档位：`ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 与 `ui/sonner.tsx` 的 `--border-radius`。它们跟着整条刻度走，不是第二份来源。
-- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 10 / 298，只许降）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`、区头那一行 → `DynamicWorkflowForm/SectionHeader`），四族共用一次目录遍历（写在一张 `FAMILIES` 表里，新增一族只加一行），按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）；反向样本同样在册（`WorkflowIOPreviewPanel` 那枚同形、不同底的计数不许被区头标记抓到 —— 抓到就说明判据在拦一切）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。
+- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 10 / 201，只许降）；**④ 12px 是归零等式而不是棘轮** —— 调用点出现 `text-[12px]` 直接红（它和 `text-xs` 字号相同、只差行高，留着就是重新分裂「同一个字号两种行高」那一档，见 §Typography）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`、区头那一行 → `DynamicWorkflowForm/SectionHeader`），四族共用一次目录遍历（写在一张 `FAMILIES` 表里，新增一族只加一行），按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）；反向样本同样在册（`WorkflowIOPreviewPanel` 那枚同形、不同底的计数不许被区头标记抓到 —— 抓到就说明判据在拦一切）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。
 
 ---
 
@@ -558,7 +561,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 `studio/TypeChip.tsx` 收的是画布节点与参数表单上那枚「类型标签」（`IMAGE` / `FLOAT` / `CLIP`…）。此前同一串类名 `inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold` 散在 **6 个文件的 10 处**（其中 8 处逐字相同）：`CanvasNode/SelectedToolbar`、`project-canvas/WorkflowNode`、`project-canvas/WorkflowNodeArdot`（它自己的 `PortChip` 只留配色逻辑）、`workflow-form/AspectMegapixelControl`、`WorkflowNodeParts`、`WorkflowWirePortRows` 三处、`DynamicWorkflowForm/sections/WidgetInputRow` 两处。
 
-三档字号是按调用点量出来的，不是凑的：`md` = 12px（5 处，画布节点行与 wire 行），`sm` = `text-3xs` 10px（4 处，缺省档），`xs` = 同 10px 但 `px-1 py-px`（1 处，`AspectMegapixelControl` 的组合控件里挤在最右端）。**`md` 里那档故意仍写 `text-[12px]` 而没换成 `text-xs`**：实测 `text-xs` 会连带把 `line-height` 锁成 16px，而这些 chip 现在吃的是继承行高 —— 换成 token 会静默改行高，那是 §Typography 那条「字号与行高解耦」纪律的同一个坑。它因此仍计入字面字号棘轮（12 / 298 的由来），是**已知且刻意**的一处。
+三档字号是按调用点量出来的，不是凑的：`md` = 12px（5 处，画布节点行与 wire 行）走 `text-xs`，`sm` = `text-3xs` 10px（4 处，缺省档），`xs` = 同 10px 但 `px-1 py-px`（1 处，`AspectMegapixelControl` 的组合控件里挤在最右端）。`md` 这档**曾经是 `text-[12px]`**，当时的理由记在 #1499：`text-xs` 会连带把行高锁成 16px，而这些 chip 吃的是继承行高。那条理由在「同一个 12px 归一到 `text-xs`」签字之后不再成立（见 §Typography 那一节），所以这 5 枚 chip 的**行盒从 18px 收到 16px —— 是有意的变化，不是等价替换**。
 
 颜色有**两条来路**，所以 `tone` 必须能整档关掉：`neutral` 给 `bg-border-strong text-ink-muted`（随主题的通用档），`none` 一个颜色类都不加、由调用点的 `style` 全权上色（`portChipStyle()` 那套类型色）。不能靠「行内样式覆盖 class」赌：`chipStyle` 未必把 `background` 与 `color` 都给全，缺哪一项，缺省档就从 class 里漏出来改渲染。
 
@@ -584,6 +587,8 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - ❌ 不要写 `var(--color-ink, #EDEDF2)` 这种带兜底的引用。它是**装饰性 indirection**：谎称随主题，把单一事实来源悄悄换成局部常量，而且下一个人补上声明时这行会**静默改变外观**。需要两态就新增一颗 token 并两态赋值。
 - ❌ **禁止拼 token 名**：`var(--color-aurora-${tone})`、`"--color-" + name`。Tailwind v4 会 tree-shake `@theme` 里没被**字面引用**的变量，拼出来的名字在源码里从没出现过 ⇒ 产物里当场失色、没有任何报错。JS 里按当前主题取色的规定写法是 `useCssColorToken("--color-node-mix-base", "#ffffff")`，**整名写全**。
 - ❌ 不在源码里写 `violet-500` / `emerald-400` / `#rrggbb` 表达表面或文字语义（`pnpm theme:check` 棘轮 + 显式豁免清单）。
+- ⚠️ **文档里引用一个 arbitrary 类名时，别整串照抄 `shadow-[…]` / `text-[…]` 这种完整候选名**：Tailwind 的默认源扫描把 `.md` 也算进去，于是那一条规则**真的被生成进产物**（实测：把某个已迁走的旧裸值类名留在本文里当例子，编译产物里就有它，而源码一处都不剩 —— 会让「按产物数硬编码」的自查读出假阳性）。写值本身（`rgba(52,211,153,0.8)`）不成候选名，安全。
+  **一个刻意留下的例外**：本文讲「12px 只许用 `text-xs`」这条禁令时必须点名被禁的写法，所以产物里会留着一条谁都不用的 12px 字面量规则。它不改渲染、也不在任何组件里，**别为了消掉它把禁令改写成读不懂的样子**；要核对调用点存量就按 `src` 数（判据正是这么做的），别按产物数。
 
 **主题**
 
@@ -663,7 +668,8 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ## Known Gaps
 
-- **状态点的发光有两份颜色来源，且不是同一组值**（本轮实测，刻意没顺手改）：`BrowserStatusBar.tsx` 里同一个「状态圆点发光」写了两种形态 —— `fpsDotColor` 表用 `shadow-[0_0_6px_var(--color-success)]`（走 token、α=1），而 devServer 那三元的同位置用 `shadow-[0_0_6px_rgba(52,211,153,0.8)]` / `rgba(251,113,133,0.8)`。关键是**这两组不是同一个颜色**：`rgb(52,211,153)` = `#34d399`（emerald-400）而 `--color-success` = `#0ea472`；`rgb(251,113,133)` = `#fb7185`（rose-400）而 `--color-destructive` = `#e7000b`。所以把它当「裸值改 token」的免费清理做掉，会**同时改掉发光色相与强度** —— 需要一次「状态发光到底用基准色还是用 400 档浅彩」的独立决定。同类裸值不止这一处（品牌紫 `rgba(124,92,252,…)`、卡片投影 `rgba(0,0,0,0.55)` 等），但**条数不抄在这里**：权威清单由 `pnpm theme:check`（`scripts/check-theme-colors.cjs`）逐文件打印「处数 + 为什么可以留」，未豁免的余量走棘轮（今天实测 0）。这句此前写着「清单见 `tests/design-md-contract-sync.test.ts` 的扫描面」——**指错了执行者**（那份只核 token 名与 Colors 表取值，没有裸色扫描面），而把条数写死也会随别人新增豁免过期（同一族纪律见本文对「数字不属于事实核」的处理）。**needs-design-decision**（决定的只有「状态发光走基准色还是 400 档浅彩」这一格）。
+- **状态点发光的浅彩已收口（决定 = 保住色相、把裸值纳入 token）**：`BrowserStatusBar.tsx` 的 devServer 三元与 `project-canvas/GlobalStepLogPanel.tsx` 的 SSE 点原先写裸值 `rgba(52,211,153,0.8)` / `rgba(251,113,133,0.8)` / `rgba(52,211,153,0.7)`。这两组**不是**基准色：`#34d399`（emerald-400）配 `--color-success` = `#0ea472`，`#fb7185`（rose-400）配 `--color-destructive` = `#e7000b`。所以按「裸值改 token」的免费清理并回基准色会同时改掉色相与深浅 —— 已签的口径是新增 `--color-glow-success` / `--color-glow-danger`（两态同值，原裸值本来没有 `.dark` 分叉），强度仍由调用处经 `color-mix(in srgb, … N%, transparent)` 决定，与 `AuroraGlow`「色相走 token、强度由调用处定」同一条约定。三条调用点零像素变化（编译探针实测：两颗 token 与三条 arbitrary shadow 都真的进产物）。
+  **仍开的一格**：同一行里 `fpsDotColor` 表用的是基准色发光（`var(--color-success)`、α=1），而 devServer 那点用浅彩 —— 两条现在**都有名字**了，但「整条状态栏统一到哪一档」仍是没签的决定。同类裸值不止这一处（品牌紫、卡片投影等），但**条数不抄在这里**：权威清单由 `pnpm theme:check`（`scripts/check-theme-colors.cjs`）逐文件打印「处数 + 为什么可以留」，未豁免的余量走棘轮（今天实测 0）。本仓对「数字不属于事实核」的口径是不写数字、只给指针。
 
 - **Storybook 覆盖 29/83**（有 story 的组件：alert、aspect-ratio、avatar、badge、button、empty-state、field、form-field、form-rhf、image-viewer、json-viewer、kbd、list-badge、media-thumbnail、option-list-popover、page-loading、progress-bar、seed-mode-button、segment-popover、simple-key-handler、skeleton、source-tag、spinner、status-badge、status-dot、task-type-chip、toggle、validation-error-list、water-fill-progress）。核心交互件里 **input、dialog、select、card、tooltip、popover、switch、checkbox、tabs、dropdown-menu、context-menu、menubar、navigation-menu、command** 无 story；其中 dialog/select/tabs/dropdown-menu/card/input/switch/checkbox **同时无 `.test.tsx`**。⇒ 「明暗两态长什么样」这一层契约目前只在那 29 个组件上可核验。
 - **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一 grep 在 `u-title` 上抓到 51 处、`u-title-page` 18 处，所以这个 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名精确计数：`u-title` 26 处、`u-title-page` 17 处、`u-title-stage` 1 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。

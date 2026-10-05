@@ -181,7 +181,7 @@ export function SeedModeButton({
         className="nodrag nopan border-border-strong bg-card w-70 gap-0 overflow-hidden rounded-xl border p-3 shadow-2xl shadow-black/12 dark:shadow-black/60"
       >
         <div className="flex flex-col gap-0.5">
-          <h4 className="text-ink-bright text-[12px] font-semibold">
+          <h4 className="text-ink-bright text-xs font-semibold">
             控件后行为{" "}
             <span className="text-ink-muted">· CONTROL AFTER GENERATE</span>
           </h4>
@@ -212,7 +212,7 @@ export function SeedModeButton({
                   <SeedModeIcon value={item.value} />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-ink-bright text-[12px] font-semibold">
+                  <span className="text-ink-bright text-xs font-semibold">
                     {item.label}
                   </span>
                   <span className="text-ink-muted truncate text-[10.5px] leading-snug">

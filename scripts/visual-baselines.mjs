@@ -39,6 +39,31 @@ export const VISUAL_DIR = "e2e/visual";
  */
 export const SUPPORTED_PLATFORMS = ["win32", "linux"];
 
+/**
+ * 「这一档**登记在案、但当前缺基线**」的平台 → 它的账。
+ *
+ * 为什么需要这个状态：`SUPPORTED_PLATFORMS` 是一句「这几档在仓库里都有一套 PNG」的
+ * 承诺，而新增截图名会让**某一档缺几张**—— 缺的那些只能在**那一档的机器上**录出来
+ * （像素是平台渲染的产物，在 linux 上录一份改名叫 `-win32` 是造假，不做）。
+ * 于是「本机录不全，但另一档仍然必须维护」是一个必然出现、且必须能被提前命名的状态。
+ *
+ * 不写这张表会退化成两种都更坏的形态：① 判据红着而没人知道红的是「待重录」还是
+ * 「真丢了基线上库」；② 干脆把那一档从 `SUPPORTED_PLATFORMS` 删掉 —— 那就是
+ * §11.8 说的「删掉一档」，恢复还得再走一遍「先录再登记」。
+ *
+ * **这张表是负债，不是赦免名单**（与 `scripts/.gate-executor-ledger.json` 同族，
+ * 见 §13.5.12）：登记项一旦在某档补齐，**必须**同批删掉这一条（`missingBaselinesForPlatform`
+ * 返回空而登记还在 ⇒ 判据红）。`reason` 要写清「谁、在哪台机器补」，别写「稍后处理」。
+ */
+export const PENDING_PLATFORMS = {
+  win32: {
+    reason:
+      "本仓库的自动化执行环境（NPC 工作区 / CNB 容器）都是 linux，win32 档" +
+      "只能在 Windows 开发机上录；新增的页面级基线要在那台机器上跑一次 " +
+      "`pnpm check:visual:update`（`CI` 置空以走 dev 口径）并成套提交。",
+  },
+};
+
 /** `{name}-{projectName}-{platform}.png` —— Playwright 默认的基线文件形态。 */
 export const BASENAME_RE = /^(.+)-chromium-(linux|win32|darwin)\.png$/;
 
@@ -146,6 +171,20 @@ export function missingBaselinesForPlatform(root, platform) {
     }
   }
   return missing;
+}
+
+/**
+ * 该平台缺的基线里，**哪些是「已登记待录」**（`PENDING_PLATFORMS`）。
+ *
+ * 判据与前置判决共用它，好处是「待录」这件事只有一处口径：判据据此放行（但要求
+ * 平台上仍有缺失 —— 补齐了还留着登记就红），前置判决据此给出「这档正在待重录」
+ * 而不是「这档没登记过」的话术。
+ *
+ * @param {string} platform
+ * @returns {boolean}
+ */
+export function isPlatformPending(platform) {
+  return Object.hasOwn(PENDING_PLATFORMS, platform);
 }
 
 /**

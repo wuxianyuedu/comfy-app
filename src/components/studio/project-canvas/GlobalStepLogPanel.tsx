@@ -197,7 +197,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <span
                   className={`inline-block size-1.5 shrink-0 rounded-full ${
                     connected
-                      ? "bg-success shadow-[0_0_6px_rgba(52,211,153,0.7)]"
+                      ? "bg-success shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_70%,transparent)]"
                       : "bg-gray-600"
                   }`}
                   title={connected ? "SSE 已连接" : "SSE 未连接"}
@@ -284,7 +284,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   );
                 })}
               </div>
-              <FieldLabel className="text-ink-soft flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
+              <FieldLabel className="text-ink-soft flex cursor-pointer items-center gap-1.5 text-xs select-none">
                 <Checkbox
                   checked={autoscroll}
                   onCheckedChange={(checked) => setAutoscroll(checked === true)}
@@ -315,7 +315,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                         className="text-destructive/95"
                       />
                       {valErrs.length > 12 && (
-                        <div className="text-destructive/80 mt-1 text-[12px]">
+                        <div className="text-destructive/80 mt-1 text-xs">
                           +{valErrs.length - 12} more…
                         </div>
                       )}
@@ -344,7 +344,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             />
 
             {/* Footer */}
-            <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
+            <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-xs">
               <span>
                 显示 {visible.length} / 总计 {visibleAll.length} 条
               </span>

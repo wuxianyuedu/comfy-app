@@ -97,7 +97,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
           {STATUS_LABEL[run.status]}
         </Badge>
         {run.status === "running" || run.status === "awaiting_approval" ? (
-          <span className="text-ink-fainter text-[12px]">
+          <span className="text-ink-fainter text-xs">
             下一步：{actionLabel(c.action)}
           </span>
         ) : null}
@@ -139,7 +139,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             onChange={textHandler(c.setGoal)}
             rows={2}
             placeholder="想拍什么？一句话创意即可（留空则用项目标题）"
-            className="border-border bg-subtle text-ink-field max-w-md min-w-55 flex-1 resize-none text-[12px]"
+            className="border-border bg-subtle text-ink-field max-w-md min-w-55 flex-1 resize-none text-xs"
           />
           <FieldLabel className="text-2xs flex flex-col gap-1">
             <span className="text-ink-faint">确认粒度</span>
@@ -152,7 +152,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
               )}
             />
           </FieldLabel>
-          <FieldLabel className="border-border bg-subtle text-ink-field flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[12px]">
+          <FieldLabel className="border-border bg-subtle text-ink-field flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs">
             <Checkbox
               checked={c.autoReview}
               onCheckedChange={(checked) => c.setAutoReview(checked === true)}
@@ -248,11 +248,9 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
       )}
 
       {run.status === "failed" && run.error ? (
-        <p className="text-destructive text-[12px]">{run.error}</p>
+        <p className="text-destructive text-xs">{run.error}</p>
       ) : null}
-      {c.error ? (
-        <p className="text-destructive text-[12px]">{c.error}</p>
-      ) : null}
+      {c.error ? <p className="text-destructive text-xs">{c.error}</p> : null}
     </div>
   );
 }

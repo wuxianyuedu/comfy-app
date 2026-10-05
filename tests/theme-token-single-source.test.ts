@@ -155,11 +155,15 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
 
   it("别名不按主题分叉（转发一次即两态生效）", () => {
     // 转发形态下，浅/深两态的**声明文本**必须相同；不同就说明又按主题写了两份。
+    /* 软断言：这是一张 30 条别名的清单，逐条判、逐条报 —— 硬断言在第一条不同
+       的别名上就停，剩下 29 条要等下一轮才发现（§11.18）。 */
     for (const name of ALIASES) {
       const rawL = light.raw(name);
       const rawD = dark.raw(name);
       if (rawL === undefined || rawD === undefined) continue;
-      expect(rawL, `${name} 又按主题写了两份（应只转发表达一次）`).toBe(rawD);
+      expect.soft(rawL, `${name} 又按主题写了两份（应只转发表达一次）`).toBe(
+        rawD,
+      );
     }
   });
 
@@ -256,8 +260,9 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
         m[1] ? [m[1]] : [],
       ),
     );
+    /* 软断言：一条桥指向空气时，其余坏的桥也一起报出来（§11.18）。 */
     for (const alias of bridged) {
-      expect(
+      expect.soft(
         declared.has(alias),
         `@theme inline 引用了未声明的 --${alias}`,
       ).toBe(true);
@@ -271,14 +276,16 @@ describe("T3 var() 引用链无环、不漏到未定义的名字", () => {
     ["深色", () => dark],
   ] as const)("%s：每个别名都能解到一个具体值", ([, get]) => {
     const t = get();
+    /* 软断言：这三条是一张 30 条别名的清单上的逐项检查 —— 一条别名成环不该
+       把其余 29 条的结论一起藏起来（§11.18）。 */
     for (const name of ALIASES) {
       if (!t.has(name)) continue;
-      expect(
+      expect.soft(
         () => t.get(name),
         `${name} 解析抛错（多半是成环或缺定义）`,
       ).not.toThrow();
-      expect(t.get(name), `${name} 解不出具体值`).toBeTruthy();
-      expect(t.get(name), `${name} 解出的仍是未展开的 var()`).not.toMatch(
+      expect.soft(t.get(name), `${name} 解不出具体值`).toBeTruthy();
+      expect.soft(t.get(name), `${name} 解出的仍是未展开的 var()`).not.toMatch(
         /var\(/,
       );
     }
@@ -330,8 +337,10 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
 
   it("七档全在 @theme inline 里由 var(--radius) 派生，刻度正是设计意图", () => {
     const { basePx, derivations } = scale();
+    /* 软断言：七档圆角是各自独立的判据 —— 一档写成字面 px 不该遮住其余几档
+       有没有一起断（§11.18）。 */
     for (const name of ORDER) {
-      expect(
+      expect.soft(
         derivations.has(name),
         `${name} 不是「由 --radius 派生」的声明（写成字面 px 就断开了总闸）`,
       ).toBe(true);
@@ -418,19 +427,20 @@ describe("T5 字体链在编译产物里必须解得出具体的栈（#1434）",
   ] as const)("%s：四档字体令牌都解得到值，不留未展开的 var()", ([, get]) => {
     const t = get();
     for (const name of FONT_CHAIN) {
-      expect(t.has(name), `产物里没有 ${name} 这条声明`).toBe(true);
-      expect(
+      expect.soft(t.has(name), `产物里没有 ${name} 这条声明`).toBe(true);
+      expect.soft(
         () => t.get(name),
         `${name} 解不开（多半是自引用成环）`,
       ).not.toThrow();
       const value = t.get(name);
-      expect(
+      expect.soft(
         value,
         `${name} 解出空值 —— 全站正文会退回浏览器默认字体`,
       ).toBeTruthy();
-      expect(value, `${name} 解出的仍是未展开的 var()：${value}`).not.toMatch(
-        /var\(/,
-      );
+      expect.soft(
+        value,
+        `${name} 解出的仍是未展开的 var()：${value}`,
+      ).not.toMatch(/var\(/);
     }
   });
 
