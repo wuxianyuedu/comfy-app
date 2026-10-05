@@ -12,17 +12,17 @@
 <li><a href="" aria-current="page">LogSessionMeta</a></li></ul>
 <h1>Interface LogSessionMeta</h1></div>
 <section class="tsd-panel tsd-comment">
-<div class="tsd-comment tsd-typography"><p>会话元信息（下拉选项 + 选中项；不含正文）。</p>
+<div class="tsd-comment tsd-typography"><p>下拉的一项（一次运行）。</p>
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">LogSessionMeta</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#id">id</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#startedat">startedAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#title">title</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div>
-<section class="tsd-panel tsd-hierarchy" data-refl="7345">
+<section class="tsd-panel tsd-hierarchy" data-refl="7395">
 <h4>Hierarchy (<a href="../hierarchy.html#lib/log/log-sessions.LogSessionMeta">View Summary</a>)</h4>
 <ul class="tsd-hierarchy">
 <li class="tsd-hierarchy-item"><span class="tsd-hierarchy-target">LogSessionMeta</span>
 <ul class="tsd-hierarchy">
-<li class="tsd-hierarchy-item"><a href="lib_log_log-sessions.LogSessionChunk.html" class="tsd-signature-type tsd-kind-interface">LogSessionChunk</a></li></ul></li></ul></section><aside class="tsd-sources">
+<li class="tsd-hierarchy-item"><a href="lib_log_log-run-sessions.RuntimeLogRunOption.html" class="tsd-signature-type tsd-kind-interface">RuntimeLogRunOption</a></li></ul></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:46</li></ul></aside>
+<li>Defined in lib/log/log-sessions.ts:33</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -40,24 +40,26 @@
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="id"><span>id</span><a href="#id" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">id</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-<div class="tsd-comment tsd-typography"><p>会话标识：<code>&lt;起点行号&gt;</code>；无横幅的早期内容为 <code>legacy</code>。</p>
+<div class="tsd-comment tsd-typography"><p>运行标识：<code>run:&lt;包目录名&gt;</code>（历史包）或 <code>run:current</code>（本次运行）。</p>
+<p>前缀 <code>run:</code> 让它与旧实现的行号 id 天然不冲突，也让端点能一眼分辨
+「这是运行包还是别的什么」（见 <code>log-run-sessions.packNameOf</code>）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:48</li></ul></aside></section>
+<li>Defined in lib/log/log-sessions.ts:40</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="startedat"><span>started<wbr/>At</span><a href="#startedat" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">startedAt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
-<div class="tsd-comment tsd-typography"><p>会话内第一条带时刻的行的时刻（毫秒）；读不到为 null。</p>
+<div class="tsd-comment tsd-typography"><p>该次运行的开始时刻（毫秒）；读不到为 null。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:52</li></ul></aside></section>
+<li>Defined in lib/log/log-sessions.ts:44</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="title"><span>title</span><a href="#title" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">title</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-<div class="tsd-comment tsd-typography"><p>横幅标题（已去 ANSI 与首尾空白）。</p>
+<div class="tsd-comment tsd-typography"><p>下拉文案（由端点的 <code>formatRunLabel</code> 拼好：时刻 · 退出形态 · runId）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:50</li></ul></aside></section></section></details></div>
+<li>Defined in lib/log/log-sessions.ts:42</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

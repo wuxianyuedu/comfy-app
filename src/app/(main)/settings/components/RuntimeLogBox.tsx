@@ -6,9 +6,10 @@
  * 三个分区此前各自内联了一份 40 行的同款 JSX（标题 + 跟随中徽标 + 刷新按钮 +
  * 固定 `max-h-44` 的滚动框），改口径要改三处。这里收成一处，并把两件事补齐：
  *
- *   1. **切换每次启动**：`log.sessions` 是服务端按会话横幅切出来的（见
- *      `lib/log/log-sessions`），下拉只在真的有多次启动时出现 —— 多次启动
- *      不再混在一条时间线上，用户能回看某一次启动到底输出了什么；
+ *   1. **切换每次运行**：`log.sessions` 由服务端按「一次运行一包」列出
+ *      （本次运行 + `log/runs/` 各历史包，见 `lib/log/log-run-sessions` 与
+ *      `GET /api/logs/sessions`），下拉标出每项的时刻 / 退出形态 / runId ——
+ *      应用重启过的那几次也能回看，而不只是「这个文件里还没被冲掉的段落」；
  *   2. **全屏查看**：小窗口只有 176px 高，长输出读起来很憋（用户反馈）。
  *      全屏走 `ui/fullscreen-dialog`（铺满标题行下方的内容区），右上角带同一个
  *      下拉与刷新，因此「全屏看」不是另一套只读视图。
@@ -25,7 +26,6 @@ import { StatusDot } from "~/components/ui/status-dot";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { FullScreenDialog } from "~/components/ui/fullscreen-dialog";
-import { formatSessionLabel } from "~/lib/log/log-sessions";
 import { cn } from "~/lib/utils";
 
 import type { RuntimeLogController } from "../hooks/use-runtime-log-source";
@@ -189,8 +189,11 @@ function LogToolbar({
             value={log.sessionId ?? ""}
             onChange={log.selectSession}
             options={log.sessions.map((s) => s.id)}
+            /* 文案用服务端给的 `title`：它已含「时刻 · 退出形态 · runId」
+             * （由端点的 `formatRunLabel` 拼好）。视图不再自己格式化一遍 ——
+             * 两边各拼一次必然有一边先漂（§12.12）。 */
             labels={Object.fromEntries(
-              log.sessions.map((s) => [s.id, formatSessionLabel(s)]),
+              log.sessions.map((s) => [s.id, s.title]),
             )}
             aria-label="切换要查看的启动"
             className="text-2xs max-w-55"
@@ -273,6 +276,9 @@ function LogHint({ log }: { log: RuntimeLogController }) {
   const parts: string[] = [];
   if (log.truncated) parts.push("该次启动的输出过长，只显示最近一段。");
   if (log.windowed) parts.push("日志文件较大，更早的启动不在下拉列表里。");
+  if (log.baselineMissing) {
+    parts.push("这次运行之前那一包已被清理，因此这段含更早的内容。");
+  }
   if (parts.length === 0) return null;
   return (
     <p className="text-ink-fainter px-3 pb-2 text-[10.5px] leading-relaxed">
