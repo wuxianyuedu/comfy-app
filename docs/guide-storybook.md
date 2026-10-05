@@ -104,14 +104,17 @@ class 写入路径，日后「应用里是暗的、storybook 里是亮的」这�
 注入层（`.storybook/data-sources.tsx`）把这件事换成流程：**story 声明「我要哪种
 数据源」，注入层负责把它变成真的那一份**。两种形态、两套机制：
 
-| 形态 | 是什么 | 怎么用 |
-| ---- | ------ | ------ |
-| **值源**（`json` / `media`） | 取一份**值**交给组件的 props | story 的 `args.sourceName` + `resolveSource(kind, name)` |
+| 形态                                  | 是什么                                                      | 怎么用                                                               |
+| ------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| **值源**（`json` / `media`）          | 取一份**值**交给组件的 props                                | story 的 `args.sourceName` + `resolveSource(kind, name)`             |
 | **运行期提供者**（`trpc` / 应用外壳） | 一条**真链路** / 一层**真上下文**，组件自己 import 单例去读 | `.storybook/preview.tsx` 全局挂的 `withTrpcApp` / `withAppProviders` |
 
 ```tsx
-import { resolveSource, sourceNameArgType, type JsonSourceName }
-  from "../../../.storybook/data-sources";
+import {
+  resolveSource,
+  sourceNameArgType,
+  type JsonSourceName,
+} from "../../../.storybook/data-sources";
 
 type StoryArgs = Omit<React.ComponentProps<typeof JsonViewer>, "data"> & {
   sourceName: JsonSourceName;
@@ -168,6 +171,80 @@ story 要的正好相反 ——「有后端 / 没后端分别长什么样」。�
 
 换句话说：**那一族 story 验的是「界面在后端不可用时的形态」**。想看有数据时的样子，
 需要应用在跑**并且同源**（部署问题，不是 story 的问题）。
+
+## 三层注入：store / React Flow / 整屏容器
+
+值源（上一节）解决的是「**props 给什么**」。而 `studio/` / `workshop/` 里还有三族
+组件不吃 props —— 它们吃 **store**、**画布上下文**、**整屏组合**。给它们写 story 时
+最小阻力同样是造假的（手捏一份 store 状态、挂一个假 provider、塞一个占位子件），
+而三种假法的表现都一样：**画布上照样有内容**，只是真机上是另一回事。
+
+所以 `.storybook/` 下另有三份注入层，story 只声明**场景名**：
+
+| 注入层     | 文件                           | story 怎么用                                                   |
+| ---------- | ------------------------------ | -------------------------------------------------------------- |
+| store      | `.storybook/store-sources.tsx` | `parameters.storeScene: "<场景名>"`（装饰器已全局挂）          |
+| React Flow | `.storybook/flow-canvas.tsx`   | 直接摆 `<StorybookFlowCanvas scene={canvasScene("<场景名>")}>` |
+| 整屏容器   | `.storybook/screen-frame.tsx`  | 直接摆 `AppShell` / 工作区框，项目经 `useSeededProjects()` 备  |
+
+```tsx
+/* store：一段真格式的日志原文进 store 自己的解析入口 */
+const meta = {
+  title: "Studio/Logs/LogPanel",
+  component: LogPanel,
+  parameters: { storeScene: "mixed" }, // ← 就这一行
+} satisfies Meta<typeof LogPanel>;
+```
+
+```tsx
+/* React Flow：真画布，节点渲染器由 story 通过 nodeTypes 注入 */
+<StorybookFlowCanvas
+  scene={withNodeType(canvasScene("twoNodes"), "story")}
+  nodeTypes={{ story: MyNode }}
+/>
+```
+
+```tsx
+/* 整屏容器：真 AppShell + 真视图；项目在子树渲染之前就建好 */
+function ShellHarness() {
+  const projects = useSeededProjects({
+    primary: projectScene("namedProject"),
+    extraNames: ["城市夜景"],
+  });
+  return (
+    <AppShell active="works" projects={projects.map((p) => ({ id: p.id, name: p.name }))} …>
+      <WorksGallery />
+    </AppShell>
+  );
+}
+```
+
+**三条口径**：
+
+1. **store 里的条目不手写**。场景收的是**真格式的原文**，由 store 自己的
+   `parseFileLogs()` 解析、经真 action `appendFileLogs()` 落板 —— 于是计数、来源
+   分桶、时间线排序全由生产代码算出来。`useLogStore.setState({ logs: [...] })` 也能
+   让画布有内容，但它把「解析 + 派生」两条链路整个跳过，验的成了「store 能不能
+   存数组」。
+2. **原文按「自己那条通道的格式」分块**。三路日志的正则各不相同（启动链路
+   `[HH:MM:SS]`、应用服务与运行期 ISO 时刻带级别段），一段原文**不能**同时冒充三条
+   通道 —— 全按一个 origin 入库时「来源」那一列会整列同名，分桶与计数等于没验。
+3. **画布与整屏各有各的「真」**。React Flow 层给真 `<ReactFlowProvider>` /
+   `<ReactFlow>`（真转换矩阵、真视口、真 `useNodeId()`），不摆自绘的假画布；
+   整屏层给真 `AppShell` + **真视图**（`WorksGallery` 那种真读 `canvas-store` 的屏），
+   不摆占位 `<div>`。
+
+**一处容易踩的坑**：`ProjectCanvas` / `WorkshopPipeline` 在**挂载那一刻**读
+`getActiveId()`，而 React 的 effect 是子先父后 —— 把「建项目」放 `useEffect` 里，
+子组件读到的是「还没有活跃项目」，工坊标题会落在「未命名项目」上、画布落在空白
+草稿上。`useSeededProjects()` 因此走 `useState` 的**惰性初始化器**。
+
+**另一处容易误读的**：工坊顶栏显示**不是项目名**，而是**草稿**的 `meta.title`
+（新草稿默认「未命名项目」）。已命名项目 + 新草稿时画布上仍是「未命名项目」，
+那是真实行为。
+
+跨源那道门槛与上一节相同：这三层的 story 会真发请求（`/api/production`、
+`/api/workshop/draft`、`project.*`），应用没起时看到的是这些屏真实的**降级形态**。
 
 ## 它不做什么
 

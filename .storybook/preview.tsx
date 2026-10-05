@@ -6,6 +6,7 @@ import {
   withAppProviders,
   withTrpcApp,
 } from "./data-sources";
+import { withStoreScene } from "./store-sources";
 import { readAppOrigin } from "./app-origin-reader";
 
 // 引入应用的全局样式：主题 token（`@theme` / `.dark` 覆盖）与 Tailwind 都在这里，
@@ -62,9 +63,12 @@ const preview: Preview = {
     [APP_ORIGIN]: appOrigin.APP_DEV_ORIGIN,
   },
   /* 顺序即语义：trpc 提供者在最外层（组件一挂载就要能发请求），应用外壳
-     （toast / 消息中心 / tooltip）在它里层，主题在最内层（只改 `<html>` 的
-     class，与组件树无关）。 */
-  decorators: [withTrpcApp, withAppProviders, withTheme],
+     （toast / 消息中心 / tooltip）在它里层，store 场景在组件挂载**之前**写状态
+     （否则首帧读的是空 store），主题在最内层（只改 `<html>` 的 class，
+     与组件树无关）。
+     `withStoreScene` 只在 `parameters.storeScene` 给了名字时动手 —— 没声明的
+     story 走真实 store，不被搅（见 `.storybook/store-sources.tsx`）。 */
+  decorators: [withTrpcApp, withAppProviders, withStoreScene, withTheme],
   parameters: {
     /* 本检出的解析链端口 + 来源：注入层（`data-sources.tsx` 的 `DEFAULT_APP_ORIGIN`）
        读这里，而不是 import 那份生成件 —— 生成件不入库，不该进类型程序。 */
