@@ -26,6 +26,11 @@ import {
   classifyFailure,
   planRuns,
 } from "../scripts/pixel-run.mjs";
+import {
+  checkRecordingEnv,
+  recordingWebserverFor,
+  webserverForEnv,
+} from "../scripts/visual-baselines.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -79,6 +84,41 @@ describe("像素档按需通道：本次要跑什么（§11.8）", () => {
     expect(verdict).toContain("没有登记过像素基线");
     // 判卷要能区分「平台没登记」与「登记了但缺几张」两条分支
     expect(verdict).toContain("SUPPORTED_PLATFORMS");
+  });
+
+  it("本机 `CI` 与本档录制口径一致时放行（真实检出 + 真环境跑一次）", () => {
+    // 与上面那条前置判决同族：用真检出 + 真 `CI` 跑一次。测试环境的 `CI` 与 linux 档
+    // 登记的口径一致，所以这里应当是 null —— 若它是话术，说明**测试环境自己**就在
+    // 一个与我改的东西无关的口径上（那要先定性，别改断言）。
+    expect(
+      checkRecordingEnv({ platform: process.platform, env: process.env }),
+    ).toBeNull();
+  });
+
+  it("口径不符要给出「录的是另一种 chrome」+ 置法，且不指向业务代码", () => {
+    // 这是录基线档此前**完全没校验**的一条：`--update` 刻意不受缺基线那闸拦（那是它的
+    // 本分），而口径跟缺不缺基线无关 —— 两个方向都要拦。录错口径的 PNG 自洽、不会当场红。
+    const verdict = checkRecordingEnv({
+      platform: "win32",
+      env: { CI: "true" },
+    });
+    expect(verdict).toContain("录制口径不一致");
+    expect(verdict).toContain("不会当场红");
+    expect(verdict).toContain("PLATFORM_RECORDING");
+  });
+
+  it("口径表实际落到像素档要用的那个真假判据上（不另立一份）", () => {
+    // `playwright.config.ts` 判 `process.env.CI` 的真假 —— 登记表的口径换算必须与它
+    // 同一条，否则「本机实走哪条」这件事会出现两套答案（§12.12）。
+    for (const platform of ["win32", "linux"] as const) {
+      const expected = recordingWebserverFor(platform);
+      const sameEnv = expected === "dev" ? {} : { CI: "true" };
+      const otherEnv = expected === "dev" ? { CI: "true" } : {};
+      expect(checkRecordingEnv({ platform, env: sameEnv })).toBeNull();
+      expect(checkRecordingEnv({ platform, env: otherEnv })).not.toBeNull();
+      // 补一句：换算函数本身按「真假」判，空串落在 dev 侧（`CI` 空串是踩过的形态）。
+      expect(webserverForEnv(otherEnv)).not.toBe(expected);
+    }
   });
 
   it("像素档目录与 package.json 的 test:visual 同源（两处不许各写一份）", () => {
