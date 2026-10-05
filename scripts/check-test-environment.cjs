@@ -27,6 +27,14 @@
  *      默认档，本脚本核「目录档说 jsdom / 用例头说 node」这类**互相矛盾**的组合。
  *      它守的是「挪目录 / 改档」这类改动的可见性，不替用例决定该跑在哪。
  *
+ *   ③ **冗余文件头**：文件头与它所属的档给出**同一个结论**（两处都在说 jsdom /
+ *      两处都在说 node）—— 同一件事写了两个来源，改一处漏一处无人察觉。
+ *      判据与 ② 同源（同一份解析出来的 glob + 同一个 glob 引擎），
+ *      **不需要跑 vitest**：所属档由 `include` / `exclude` 的匹配直接算出来。
+ *      它把「哪一份头是冗余的」从「谁手工跑一遍 `vitest list` 逐份比」变成钩子里的一次判定
+ *      —— ISSUE #1485 那轮删掉的 147 份就是这么找出来的，但当时**没有判据**，
+ *      于是收尾时漏了 1 份（`tests/sidebar-selected-state.test.tsx`，`.test.tsx` 已由目录档覆盖）。
+ *
  * 用法：
  *   node scripts/check-test-environment.cjs            # 检查
  *   node scripts/check-test-environment.cjs --report   # 只出清单不判失败（盘点用）
@@ -390,15 +398,49 @@ function main() {
     }
   }
 
-  const all = [...problems, ...conflicts];
+  /* ③ 冗余文件头 —— 文件头与所属档给同一个结论，同一件事有两个来源。
+   *
+   * ⚠️ 这一条与 ② 是**互补**的，不是重复：② 抓「两处说了不同的话」（矛盾），
+   * ③ 抓「两处说了同一句话」（冗余）。两者都源于同一个病：**归属声明散在多处**。
+   *
+   * ⚠️ 只判「恰好落在一个档里」的文件。两个档都不匹配（`include` 有缝）或都匹配
+   * （glob 有重叠）时不判 —— 那是配置本身的问题，这里报「冗余」只会误导。
+   * 实测：现状 609 份用例全部恰好落在一个档里（`vitest list` 逐行核对过）。
+   *
+   * ⚠️ 「冗余」这个结论的**权威出处在 vitest 自己**（`vitest list` 的 `[project]`），
+   * 这里用同一套 glob 重新算一遍是**为了能在钩子里离线判**。所以判据必须
+   * 与配置同源（同一份 `JSDOM_TEST_GLOBS`），且**不许自己另写一套匹配规则** ——
+   * ISSUE #1485 那轮就是用手写 glob 引擎算覆盖、把 `src/components/ui` 误判成
+   * 「已覆盖」，删完当场被 `vitest list` 揭穿（§11.17.1.1 记了这件事）。
+   */
+  const redundantHeads = [];
+  for (const { abs, rel } of files) {
+    const env = declaredEnv(fs.readFileSync(abs, "utf8"));
+    if (!env) continue;
+    const inJsdom = matchesAny(rel, globs.jsdomInclude) && !matchesAny(rel, globs.jsdomExclude);
+    const inNode = matchesAny(rel, globs.nodeInclude) && !matchesAny(rel, globs.nodeExclude);
+    if (inJsdom === inNode) continue; // 都不匹配或都匹配 —— 不归这条判据
+    const tierEnv = inJsdom ? "jsdom" : "node";
+    if (env === tierEnv) {
+      redundantHeads.push({
+        rel,
+        kind: "冗余文件头",
+        detail: `目录档已经给出 ${tierEnv} —— 文件头是同一个结论的第二个来源，删掉它（同一件事只留一个来源）`,
+      });
+    }
+  }
+
+  const all = [...problems, ...conflicts, ...redundantHeads];
 
   if (all.length === 0) {
-    if (!REPORT_ONLY) console.log(`[test-env] OK —— ${files.length} 份用例：无环境早退，目录档与文件头一致。`);
+    if (!REPORT_ONLY) console.log(`[test-env] OK —— ${files.length} 份用例：无环境早退，无目录档矛盾，无冗余文件头。`);
     else console.log(`[test-env] 盘点：${files.length} 份用例，无问题。`);
     return 0;
   }
 
-  console.error(`[ERROR] 用例的环境档有 ${all.length} 处问题：\n`);
+  console.error(
+    (REPORT_ONLY ? `[test-env] 盘点：${all.length} 处待办（--report 不判失败）` : `[ERROR] 用例的环境档有 ${all.length} 处问题`) + "：\n",
+  );
   for (const p of all) {
     console.error(`  · ${p.rel}${p.line ? ":" + p.line : ""}  [${p.kind}]`);
     console.error(`      ${p.detail}`);
@@ -410,6 +452,8 @@ function main() {
     "    仓里现成样板：src/lib/app-events.test.ts 的「无 `window` 时订阅给一个空操作…」那条。\n" +
     "  · 「目录档与文件头矛盾」：两者必有一处过时 —— 要么用例挪错了目录，要么文件头该改。\n" +
     "    别只改一边凑绿：那正是这条判据要照出来的改动。\n" +
+    "  · 「冗余文件头」：删掉这一行 `// @vitest-environment …` 即可（目录档已给出同结论）。\n" +
+    "    列清单：`node scripts/check-test-environment.cjs --report`。\n" +
     "  口径见 docs/standards/11-测试与可观测性.md §11.17。",
   );
   return REPORT_ONLY ? 0 : 1;

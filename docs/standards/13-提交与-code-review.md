@@ -194,7 +194,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-comment-language.cjs   # 注释语言棘轮：注释一律中文，只有「纯 ASCII 模块」例外（见 12 §12.4.6；§12.4.6 早写着它在钩子里报红，而它一直不在，ISSUE #1451 补齐）
 ✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红（见下 13.5.12）
 ✅ node scripts/check-ts-duplicate-keys.cjs  # 同一属性被指定两次（编辑器报 ts(2783)、命令行不报）；存量 0，硬闸（见下 13.5.12）
-✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾（见 11 §11.17）
+✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
 ✅ node scripts/check-known-failed-stale.mjs  # 已知基线失败登记过期：登记项必须指向真实文件、且真的还红着（见 11 §11.12；清单为空时零耗时）
 ```
 
