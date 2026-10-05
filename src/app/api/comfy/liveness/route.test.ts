@@ -66,14 +66,14 @@ describe("GET /api/comfy/liveness", () => {
     const reader = res.body!.getReader();
     /* 没有任何帧可读 —— `read()` 会一直挂着。用「已有订阅者」当「流已起来」的
        证据（补发那一句在它之前），比给 `read()` 设超时确定得多。 */
-    await vi.waitFor(() => expect(subscribers).toHaveLength(1));
+    await expect.poll(() => subscribers.length).toBe(1);
     reader.releaseLock();
     await res.body!.cancel();
   });
 
   it("事件一到就推出去", async () => {
     const res = await GET();
-    await vi.waitFor(() => expect(subscribers).toHaveLength(1));
+    await expect.poll(() => subscribers.length).toBe(1);
     const reader = res.body!.getReader();
     const signal = {
       seq: 1,
