@@ -40,6 +40,7 @@ import {
   deleteProject,
   findNextAvailableName,
   getAllProjectNames,
+  getActiveId,
   getProject,
   hydrateFromServer,
   isEmptyDraftName,
@@ -160,6 +161,87 @@ describe("reapAllEmptyDrafts", () => {
     const setItem = vi.spyOn(localStorage, "setItem");
     expect(reapAllEmptyDrafts()).toBe(0);
     expect(setItem).not.toHaveBeenCalled();
+  });
+});
+
+/* ISSUE #1501：回收的两条闸都不许碰「用户此刻站着的那个项目」。
+ *
+ * 首页「新建画布项目」走的 `createProject` 会立刻落一行
+ *「零节点零连线 + 名字 = 未命名」的索引 —— 它**正好命中**空草稿哨兵，
+ * 于是刷新时被 `reapAllEmptyDrafts`（workspace 页面挂载即调）清掉，
+ * active-id 跟着被清，`openableViews` 就不再列那六个项目页签。
+ * 用户视角是「刚点完新建、刷新一下就被踢出项目」。
+ *
+ * 「它是不是空草稿」与「它能不能删」是两件事：前者如实为真，
+ * 后者必须再看一眼它是不是当前活跃项目。 */
+describe("活跃项目不可回收（ISSUE #1501）", () => {
+  it("reapAllEmptyDrafts 不动活跃项目，也不清 active-id", () => {
+    const live = createProject();
+    expect(getActiveId()).toBe(live.id);
+
+    expect(reapAllEmptyDrafts()).toBe(0);
+
+    expect(getActiveId()).toBe(live.id);
+    expect(listProjects().map((p) => p.id)).toEqual([live.id]);
+  });
+
+  it("同一批里非活跃的空草稿照旧被清（新闸没把回收关掉）", () => {
+    seed([{ id: "stale", name: "未命名", updatedAt: 1, nodes: [], edges: [] }]);
+    const live = createProject();
+    /* `createProject` 会把 active 指到它自己，这里挪开 —— 好让上面那行
+     * 陈旧草稿成为「非活跃」的，从而落进清扫范围。 */
+    setActive("other");
+
+    expect(reapAllEmptyDrafts()).toBe(1);
+    expect(listProjects().map((p) => p.id)).toEqual([live.id]);
+    /* active 指向一条索引里没有的悬空 id → 顺手清掉（原有行为不变） */
+    expect(getActiveId()).toBe(null);
+  });
+
+  it("reapEmptyProject 对活跃项目返回 false（不删、不清 active）", () => {
+    const live = createProject();
+    expect(reapEmptyProject(live.id)).toBe(false);
+    expect(getActiveId()).toBe(live.id);
+    expect(listProjects().map((p) => p.id)).toEqual([live.id]);
+  });
+
+  it("createDraftProject 造的草稿本来就不在索引里，清扫碰不到它", () => {
+    const draft = createDraftProject();
+    expect(reapAllEmptyDrafts()).toBe(0);
+    expect(getActiveId()).toBe(draft.id);
+    expect(listProjects()).toHaveLength(0);
+  });
+});
+
+/* 清扫不能只在本地删 —— 否则每清一条，服务端就攒下一行再也指不回的记录
+ *（界面读的是客户端索引 `projects.v1`，不是 `project` 表）。ISSUE #1501 里
+ * 那几行 `未命名` / `未命名_2` / `未命名_3` 就是这么来的。 */
+describe("清扫要连服务端一起删（ISSUE #1501 的孤儿行）", () => {
+  it("reapAllEmptyDrafts 对每条被清的空草稿发一次删除", async () => {
+    seed([
+      { id: "d1", name: "未命名", updatedAt: 3, nodes: [], edges: [] },
+      { id: "d2", name: "未命名", updatedAt: 2, nodes: [], edges: [] },
+      { id: "keep", name: "我的项目", updatedAt: 1, nodes: [], edges: [] },
+    ]);
+    setActive("keep");
+
+    expect(reapAllEmptyDrafts()).toBe(2);
+    await settled();
+
+    expect(projectDeleteMutate.mock.calls.map((call) => call[0])).toEqual([
+      { projectId: "d1" },
+      { projectId: "d2" },
+    ]);
+  });
+
+  it("没有可清的就一条删除都不发", async () => {
+    seed([
+      { id: "keep", name: "我的项目", updatedAt: 1, nodes: [], edges: [] },
+    ]);
+    setActive("keep");
+    expect(reapAllEmptyDrafts()).toBe(0);
+    await settled();
+    expect(projectDeleteMutate).not.toHaveBeenCalled();
   });
 });
 

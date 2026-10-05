@@ -19,10 +19,14 @@
 <div class="tsd-comment tsd-typography"><p>清扫项目索引里遗留的空草稿 —— 可能是旧版编辑器留下的，
 也可能是用户在本次修复前回访时留下的。返回移除的条数。
 画布挂载时调一次，首页挂载时再调一次。</p>
+<p><strong>当前活跃项目不在清扫范围内</strong>（判据见 <code>isReapableEmptyDraft</code>）：
+它是不是「空草稿」与「能不能删」是两件事 —— 用户刚从首页进来、
+还什么都没做的那个项目确实是空的，但把它删掉等于把用户踢出上下文，
+而 active-id 也就跟着没了（ISSUE #1501）。</p>
 </div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/project-canvas/canvas-store.ts:337</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/project-canvas/canvas-store.ts:368</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
