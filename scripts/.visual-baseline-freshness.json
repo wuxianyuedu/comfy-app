@@ -1,0 +1,8 @@
+{
+  "linux": {
+    "platform": "linux",
+    "verifiedAt": "2026-10-05T16:29:24.044Z",
+    "who": "cnb.dQh7kaCfAPA",
+    "how": "CI=true pnpm check:visual"
+  }
+}

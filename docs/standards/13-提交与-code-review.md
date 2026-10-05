@@ -175,10 +175,10 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/visual-gate.mjs              # 像素层门禁：**只在暂存命中 e2e/visual/** 或
    # `playwright.config.ts` 时**才做事 —— 判「本次要跑的清单里 `visual-baseline-pairing.test.ts`
    # 在不在」，不在就阻断（见 11 §11.8）。不另起 vite，清单与 C 组同源
-✅ node scripts/visual-reproduce-gate.mjs    # 换基线领自证欠账：**只在暂存命中基线 PNG** 时
-   # 才做事 —— 判「动过的基线清单逐字等于 `scripts/.visual-reproduce-ledger.json` 里记的那些」
-   # （`--update-snapshots` 总是绿，录一次 ≠ 可复现），对不上就阻断（见 11 §11.8）。
-   # 钩子里**不跑像素**（起 webServer + 浏览器会与 A/B/C/D 抢资源），自证走 `pnpm check:visual`
+✅ node scripts/visual-freshness-gate.mjs    # 像素基线**每档都有主**：判「每一登记档都有一条
+   # 新鲜度记录，且写清谁 / 什么时候 / 按哪条命令复核的」（`scripts/.visual-baseline-freshness.json`）。
+   # 缺几张基线的档由 `PENDING_PLATFORMS` 顶着，不要求新鲜度记录 —— 两张表各管数量与时效。
+   # 钩子里**不跑像素**（起 webServer + 浏览器会与 A/B/C/D 抢资源），记账走 `pnpm check:visual`
 ✅ node scripts/run-affected-tests.mjs       # C 组：结构守护固定清单 + 本次改动
    # 牵扯到的用例，一次 vite（固定清单唯一出处是 `affected-tests.mjs` 里的
    # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
@@ -444,11 +444,12 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 并由 `scripts/quality-gate.mjs` 的 `GATES.visual`（**`run: false`，不在 `all` 里**）与 `.ps1` 侧
 `-Mode visual` 提供跨平台入口。**「不进钩子」的判断没有变**：起 webServer + 浏览器与钩子里的
 A/B/C/D 抢资源，而且基线名带平台决定了它的结论只在录过基线的那台机器上成立。
-**钩子里唯一与它有关的一步是「换了基线要领自证欠账」**（`scripts/visual-reproduce-gate.mjs`，
-ISSUE #1282）：`--update-snapshots` 总是绿（把基线改成当次实况），所以「录了一版、把仓库基线
-换成它」这条路上原本一个判据都没有，而换掉的是**别人那一档**的账 —— 现在动过基线 PNG 的提交
-必须同时带来 `scripts/.visual-reproduce-ledger.json`，且记录的清单要逐字等于本次动过的那些。
-它**不跑像素**，只做「不许静默换基线」这件事（见 §11.8）。
+**钩子里唯一与它有关的一步是「像素基线每档都有主」**（`scripts/visual-freshness-gate.mjs`，
+ISSUE #1282）：`--update-snapshots` 总是绿（把基线改成当次实况），所以「录了一版、此后没人再跑」
+这条路上原本一个判据都没有 —— 现场是入库的 `-linux.png` 有 4 张悄悄过期（与当次环境差 1 像素，
+文字整体下移一行），而没有任何东西记着这一档上次被跑绿是什么时候。现在每一登记档都必须有一条
+**新鲜度记录**（`scripts/.visual-baseline-freshness.json`），由 `pnpm check:visual` 跑绿即记。
+它**不跑像素**，只做「每档都有主」这件事（见 §11.8）。
 
 这张表里**原本还有一行**「canonical 候选 → `@` 跑 `tw4-canonical-report.mjs`」，
 随 ISSUE #1451 摘掉：它们不再靠「人记得跑」，而是各带 `--check` 判定档与棘轮基线

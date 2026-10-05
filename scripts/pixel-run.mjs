@@ -39,17 +39,20 @@
  * 让人先付一遍构建 + 起服务 + 起浏览器的代价、再从 Playwright 的输出里读出来。
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
+  FRESHNESS_LEDGER,
   PENDING_PLATFORMS,
   SUPPORTED_PLATFORMS,
   VISUAL_DIR,
   checkRecordingEnv,
+  freshnessAge,
+  freshnessRecord,
   isPlatformPending,
   isPlatformRegistered,
   missingBaselinesForPlatform,
@@ -275,6 +278,64 @@ function runStep(step) {
 }
 
 /**
+ * 跑绿之后记一次**基线新鲜度**账（`scripts/.visual-baseline-freshness.json`，§11.8）。
+ *
+ * 这一步是「linux 档定期跑一次 `pnpm check:visual`」这条纪律的**落点**：账上的日期就是
+ * 「上一次真跑过」的事实，而不是一句「录过就算数」。此前的状态正是后者 —— 入库的
+ * `-linux.png` 有 4 张悄悄过期（与当次环境差 1 像素），而没有任何东西记着这一档
+ * 上一次被跑绿是什么时候。
+ *
+ * 三条边界：
+ *   · **只有检查档记**（`--update` 不记）：录基线本身**不是**自证 —— 「写成功」与
+ *     「像素可复现」是两件事，这一点 §11.8 反复写着。
+ *   · **只有绿了才记**：红着的时候记一条「我跑过」会把「跑过」与「跑绿过」混成一件
+ *     事，而那正是这条账要防的。
+ *   · **当场打印这一档上次是什么时候**：账的价值在于被**看见**，不是被写下来。
+ *
+ * 写账失败（只读挂载等）不算跑像素的失败 —— 像素的结论已经拿到了，返 1 会把两件事
+ * 混成一句「像素档挂了」。所以这里只提示。
+ *
+ * @param {{platform: string, update: boolean}} args
+ * @returns {string | null} 给输出用的一句读数（不记时不返回内容）
+ */
+export function recordFreshness({ platform, update }) {
+  if (update) return null;
+  const file = path.join(ROOT, FRESHNESS_LEDGER);
+  /** @type {Record<string, unknown>} */
+  let ledger = {};
+  try {
+    const parsed = /** @type {unknown} */ (JSON.parse(readFileSync(file, "utf8")));
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      ledger = /** @type {Record<string, unknown>} */ (parsed);
+    }
+  } catch {
+    ledger = {};
+  }
+  const previous = freshnessAge(ledger[platform]);
+  const who =
+    process.env.GIT_AUTHOR_NAME ||
+    spawnSync("git", ["config", "user.name"], { cwd: ROOT, encoding: "utf8" })
+      .stdout?.trim() ||
+    platform;
+  const how = `CI=${webserverForEnv(process.env) === "start" ? "true" : ""} pnpm check:visual`;
+  ledger[platform] = freshnessRecord({
+    platform,
+    verifiedAt: new Date().toISOString(),
+    who,
+    how,
+  });
+  try {
+    writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+  } catch (err) {
+    return `（记账失败：${err instanceof Error ? err.message : String(err)} —— 像素结论仍然有效，手工补 ${FRESHNESS_LEDGER}）`;
+  }
+  return (
+    `本机 \`${platform}\` 档已记账（上次自证：${previous ?? "无记录"}）—— ` +
+    `改 ${FRESHNESS_LEDGER} 时请连同提交，它是「这一档上次跑绿在什么时候」的唯一事实。`
+  );
+}
+
+/**
  * 入口与平台的定性说明（起不来时打印，免得只留一行读不出来的东西）。
  *
  * @param {{label: string, kind: "playwright" | "vitest", args: string[]}} step
@@ -379,6 +440,10 @@ function main(argv) {
             "并在提交里标注「视觉基线已更新：<原因>」\n"
         : "[pixel-run] ✓ 像素档通过（结论仅对当次检出具名；`--update` 才会写基线）\n",
     );
+    /* 跑绿即记账（§11.8 的基线新鲜度账）：**录基线不记**（写成功不是自证）、
+     * **红着不记**（跑过 ≠ 跑绿过）。这一步让「定期跑一次」有了落点。 */
+    const note = recordFreshness({ platform: process.platform, update });
+    if (note) process.stdout.write(`[pixel-run] ${note}\n`);
     return 0;
   }
   process.stderr.write(
