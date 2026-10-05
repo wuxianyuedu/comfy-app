@@ -58,6 +58,7 @@ import { WorkflowPickChip } from "./WorkflowPickChip";
 import { WorkflowModePickChip } from "./WorkflowModePickChip";
 import { nodeSeqOf } from "./node-seq";
 import { TypeChip } from "~/components/studio/TypeChip";
+import { WorkflowNodePill } from "~/components/studio/workflow-form/WorkflowNodeParts";
 
 /* 共享类型下沉到叶子模块（断环，规范 12.7/18）；按原样 re-export 保住既有导入路径。 */
 export type {
@@ -179,8 +180,8 @@ export function WorkflowNode({
             {meta.label}
           </span>
         </div>
-        <div
-          className="bg-overlay-accent-surface flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2"
+        <WorkflowNodePill
+          className="bg-overlay-accent-surface"
           title={`项目画布节点 Id：${id}`}
         >
           <span
@@ -191,7 +192,7 @@ export function WorkflowNode({
               ? `#${nodeSeq}`
               : `#${id.length > 10 ? id.slice(0, 9) + "…" : id}`}
           </span>
-        </div>
+        </WorkflowNodePill>
       </div>
 
       {/* 分隔线 340×1 #26262E */}

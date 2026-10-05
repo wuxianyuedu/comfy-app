@@ -316,11 +316,25 @@ const TYPE_CHIP_MARKS = [
   /px-1\.5 py-0\.5/,
 ];
 
+/**
+ * 节点头部右侧胶囊的形状标记。`px-2` 后面带 `(?![\w.])` 是必需的：否则
+ * `px-2.5` / `px-2rem` 也算命中（`\b` 在 `2` 与 `.` 之间就是边界，挡不住）。
+ */
+const NODE_PILL_MARKS = [
+  /flex h-5/,
+  /items-center/,
+  /shrink-0/,
+  /gap-1\.25/,
+  /rounded-\[11px\]/,
+  /px-2(?![\w.])/,
+];
+
 describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", () => {
   /** 棘轮基线：本轮清理后实测的存量，只许降不许升（要升得改用例并写理由）。
-   *  21→12 / 302→298 是类型 chip 收进 `~/components/studio/TypeChip` 的读数
-   *  （10 处调用点各写一份 → 只剩实现里那一处 + `ParamOwnerTag` 那一枚异类）。 */
-  const RADIUS_BASELINE = 12;
+   *  21→12 是类型 chip 收进 `~/components/studio/TypeChip`（10 处调用点各写一份 →
+   *  只剩实现里那一处 + `ParamOwnerTag` 那一枚异类）；12→10 是节点右侧胶囊的两处
+   *  手写改走早已存在的 `WorkflowNodePill`（§12.18：有等价实现就先 import）。 */
+  const RADIUS_BASELINE = 10;
   const TEXT_BASELINE = 298;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
@@ -375,49 +389,61 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toEqual([]);
   });
 
-  it("序号圆那串类名只许有一个出处（IndexDot）", () => {
-    /* 抽取的防回潮半边：这串 `bg-primary-soft + grid + size-6/7 + rounded-full +
-       text-xs font-semibold` 曾在工坊五个文件里逐字抄了五份（§12.12 的孪生形态）。
-       现在它是 `~/components/workshop/IndexDot` 的实现细节 —— 再出现第二份就该
-       改用那个件，而不是再抄一遍类名。 */
-    const PARTS = [
-      /bg-primary-soft/,
-      /place-items-center/,
-      /rounded-full/,
-      /text-xs font-semibold/,
-      /\bsize-[67]\b/,
-    ];
-    const owners: string[] = [];
-    for (const abs of collectProductFiles(SRC_DIR)) {
-      const code = stripComments(readFileSync(abs, "utf8"));
-      /* 五个标记**全命中**才算同一枚圆 —— 少一个都不算（类名在源码里的先后顺序
-         不该成为判据的一部分：实现里 size-* 由三元式给、排在 rounded-full 之后）。 */
-      if (PARTS.every((re) => re.test(code))) {
-        owners.push(path.relative(ROOT_DIR, abs).split(path.sep).join("/"));
-      }
-    }
-    expect(
-      owners,
-      "序号圆的类名组合又出现了第二份出处 —— 用 ~/components/workshop/IndexDot",
-    ).toEqual(["src/components/workshop/IndexDot.tsx"]);
-  });
+  /* 「只许有一个出处」判据：抽成基元的那些形状，其类名标记只许出现在实现文件里。
+     三族共用一次目录遍历（923 个文件 × 每族一遍太贵），新增一族只加一行。
+     每族的 `sample` 是**一份手抄**：负控制拿它证明这组标记真的能抓到来抄的人 ——
+     否则标记写漂了就永远全绿，那是比红更糟的失效形态。 */
+  const FAMILIES = [
+    {
+      name: "序号圆",
+      owner: "src/components/workshop/IndexDot.tsx",
+      use: "~/components/workshop/IndexDot",
+      marks: [
+        /bg-primary-soft/,
+        /place-items-center/,
+        /rounded-full/,
+        /text-xs font-semibold/,
+        /\bsize-[67]\b/,
+      ],
+      sample:
+        'className="bg-primary-soft text-primary grid size-6 place-items-center rounded-full text-xs font-semibold"',
+    },
+    {
+      name: "类型 chip",
+      owner: "src/components/studio/TypeChip.tsx",
+      use: "~/components/studio/TypeChip",
+      marks: TYPE_CHIP_MARKS,
+      sample:
+        'className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"',
+    },
+    {
+      name: "节点右侧胶囊",
+      owner: "src/components/studio/workflow-form/WorkflowNodeParts.tsx",
+      use: "WorkflowNodeParts 的 WorkflowNodePill",
+      marks: NODE_PILL_MARKS,
+      sample:
+        'className="bg-node-accent flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2"',
+    },
+  ];
 
-  it("类型 chip 那串类名只许有一个出处（TypeChip）", () => {
-    /* 抽取的防回潮半边：`inline-flex shrink-0 items-center rounded-[3px]
-       px-1.5 py-0.5 font-semibold` 曾在 studio 的 6 个文件里抄了 10 份
-       （§12.12 的孪生形态，也是字面圆角棘轮里最大的一族）。现在它是
-       `~/components/studio/TypeChip` 的实现细节 —— 第二份出现即改用那个件。 */
-    const owners: string[] = [];
-    for (const abs of collectProductFiles(SRC_DIR)) {
-      const code = stripComments(readFileSync(abs, "utf8"));
-      if (TYPE_CHIP_MARKS.every((re) => re.test(code))) {
-        owners.push(path.relative(ROOT_DIR, abs).split(path.sep).join("/"));
+  it("被抽走的三族形状只许有一个出处", () => {
+    const files = collectProductFiles(SRC_DIR);
+    for (const fam of FAMILIES) {
+      const owners: string[] = [];
+      for (const abs of files) {
+        const code = stripComments(readFileSync(abs, "utf8"));
+        /* 全部标记**全命中**才算同一枚 —— 少一个都不算。类名在源码里的先后
+           顺序不进判据：`IndexDot` 的 `size-*` 由三元式给、排在 `rounded-full`
+           之后，顺序判据会漏掉实现自己。 */
+        if (fam.marks.every((re) => re.test(code))) {
+          owners.push(path.relative(ROOT_DIR, abs).split(path.sep).join("/"));
+        }
       }
+      expect(
+        owners,
+        `${fam.name}的类名组合又出现了第二份出处 —— 用 ${fam.use}`,
+      ).toEqual([fam.owner]);
     }
-    expect(
-      owners,
-      "类型 chip 的类名组合又出现了第二份出处 —— 用 ~/components/studio/TypeChip",
-    ).toEqual(["src/components/studio/TypeChip.tsx"]);
   });
 
   it("负控制：上面每条判据都真的能被抓（否则它们绿得没意义）", () => {
@@ -435,20 +461,32 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       false,
     );
     expect(TSHIRT_NAME.test("3xs"), "合法 t-shirt 名被误判").toBe(true);
-    /* 两条「唯一出处」判据的标记集合各自空转过就会全绿：喂一份**手抄**的
-       chip 进去必须全命中，喂 ParamOwnerTag 那枚异类（带描边、`py-px`、
-       font-medium）必须不命中 —— 否则这条是在抓一切，不是在抓这一族。 */
-    const handCopied =
-      'className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"';
-    expect(
-      TYPE_CHIP_MARKS.every((re) => re.test(handCopied)),
-      "手抄的类型 chip 没被标记集合抓出（这条判据会静默全绿）",
-    ).toBe(true);
-    const otherChip =
-      'className="border-primary/30 bg-primary/10 text-primary-strong shrink-0 rounded-[3px] border px-1.5 py-px text-[9.5px] font-medium"';
-    expect(
-      TYPE_CHIP_MARKS.every((re) => re.test(otherChip)),
-      "ParamOwnerTag 那枚异类 chip 被误判成同一族（标记集合太松）",
-    ).toBe(false);
+    for (const fam of FAMILIES) {
+      expect(
+        fam.marks.every((re) => re.test(fam.sample)),
+        `${fam.name}的手抄样本没被自己的标记抓出（这条判据会静默全绿）`,
+      ).toBe(true);
+    }
+    /* 反向：异类不许被同族标记抓到。`ParamOwnerTag` 那枚带描边的类型标签
+       （`py-px` + `font-medium`）与胶囊那枚 11px 的图标方块（`grid size-9`、
+       没有 h-5 / gap-1.25）各是其主自己的形状 —— 抓到了说明标记写得太松，
+       判据就成了「拦下了一切」。 */
+    const lookalikes: [string, (typeof FAMILIES)[number]["name"]][] = [
+      [
+        'className="border-primary/30 bg-primary/10 text-primary-strong shrink-0 rounded-[3px] border px-1.5 py-px text-[9.5px] font-medium"',
+        "类型 chip",
+      ],
+      [
+        'className="grid size-9 place-items-center rounded-[11px] text-[15px] font-bold"',
+        "节点右侧胶囊",
+      ],
+    ];
+    for (const [src, famName] of lookalikes) {
+      const fam = FAMILIES.find((f) => f.name === famName)!;
+      expect(
+        fam.marks.every((re) => re.test(src)),
+        `异类「${src.slice(0, 46)}…」被${famName}的标记误抓（标记集合太松）`,
+      ).toBe(false);
+    }
   });
 });
