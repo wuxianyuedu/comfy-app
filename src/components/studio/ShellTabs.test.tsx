@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 壳内 ComfyUI 页签的**两条契约**（ISSUE #1244）。
  *

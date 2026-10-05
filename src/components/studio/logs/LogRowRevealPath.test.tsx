@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 日志行里「点路径 → 在文件管理器里定位」的可见行为（ISSUE #1365）。
  *

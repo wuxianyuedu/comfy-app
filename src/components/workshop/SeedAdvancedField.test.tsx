@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // SeedAdvancedField：高级区默认折叠，展开后有种子数字输入 + 「随机」清空。
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

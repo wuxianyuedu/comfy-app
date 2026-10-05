@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /* 工作流库画布预览的失败态 UX 回归。
  *
  * 用户两条口径：

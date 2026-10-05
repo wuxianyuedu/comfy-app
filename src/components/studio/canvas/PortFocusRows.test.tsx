@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 选中节点 → 端口行的关注级别：渲染层测试（用户唯一能看见的那一半）。
 //
 // 判据（哪一行属于上游 / 下游 / 无关）已由 flow-focus-ports.test.ts 覆盖；这里验的

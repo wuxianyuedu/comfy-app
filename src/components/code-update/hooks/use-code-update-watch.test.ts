@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 观测器的接线契约：把「构建标识的两类变化 + 进程重启」折叠成对外可见的出口——
 // ① 源码 mtime 变 → 上报一次代码更新；② bootId 变（进程真的重启）→ 回调
 // onDevServerRestart；③ 首探即带 restartReason（启动器自愈重启）→ 也回调一次，

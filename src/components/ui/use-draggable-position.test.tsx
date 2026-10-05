@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 「把一枚悬浮元素拖着摆到任意位置」的判据（`useDraggablePosition`）。
  *

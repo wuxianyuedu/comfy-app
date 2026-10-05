@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // use-shot-review 契约（P8-1b）：评审走 run-client 并写 verdict、失败置 error；
 // 重生成成功后回调刷新 + 成功 toast，失败走 error toast。toast / run-client 均 mock。
 import { act, renderHook, waitFor } from "@testing-library/react";

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 资源库逻辑层：作用域切换、分类计数汇总、跟随活跃项目。
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 //
 // 详情面板页签走 `ui/tabs` 基元的契约（ISSUE #672 / 规范 16 §16.2.4.6 第一档）。
 //

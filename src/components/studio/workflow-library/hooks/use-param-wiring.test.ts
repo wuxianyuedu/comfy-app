@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /* `useParamWiring` 的本地 overlay 覆盖范围 —— 回归：右列（输出落点）也曾延迟。
  *
  * 左列（`source`）一直有 overlay：拖完线立刻画出来。右列的输出落点写在

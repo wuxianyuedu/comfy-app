@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 通用图片查看器的契约：**看全**这件事只允许一处实现。
  *

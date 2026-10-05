@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 资源库页：作用域档、分类渲染、无项目时的引导态。
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 「切走再切回来，这次运行还在」的恢复契约。
  *

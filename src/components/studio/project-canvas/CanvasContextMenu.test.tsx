@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 //
 // 画布右键菜单走 `ui/dropdown-menu` 的契约（ISSUE #672 / 规范 16 §16.2.4.6 第一档）。
 //

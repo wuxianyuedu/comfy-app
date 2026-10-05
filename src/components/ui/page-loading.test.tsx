@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 加载态基元的形态契约。
  *

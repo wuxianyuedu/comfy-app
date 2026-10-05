@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 左轨自动收起的接线判据（窄窗判据 → provider 生效态 → 提示文案的自动/手动之分）。
  *

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /* 工作流库画布预览的运行结果图展示规则回归。
  *
  * 用户口径：

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 进度条基元的形态契约（规范 16 §16.2.4.19）。
  *
