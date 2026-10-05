@@ -966,6 +966,19 @@
       机器上录（在 linux 上录一份改名叫 `-win32` 是造假）。`scripts/visual-baselines.mjs`
       的 `PENDING_PLATFORMS` 把它记成**一条有主的账**，并用双向不变式盯着
       （补齐了还留着登记 ⇒ 红；登记不存在的平台 ⇒ 红；`reason` 太短 ⇒ 红）。
+      **「录得出来 ≠ 录对了」也有判据了**（同批，ISSUE #1381）：`PLATFORM_RECORDING`
+      把「每档录于 `dev` 还是 `start` 口径」登记成**数据**（`SUPPORTED_PLATFORMS`
+      从它派生，两处不会漂），`scripts/pixel-run.mjs` 起 webServer / 浏览器**之前**
+      先核「本机 `CI` 的真假换算出的口径」与「该档登记的口径」——不一致拦下（exit 3）
+      并给出置法。为什么录基线那一档也要拦：口径不符时 `--update` 会**成功**，
+      生成一套看着正常的 PNG，自洽、不当场红，只在以后某次真差异里混进来、指不出是它。
+      而且**待重录的账会在改像素层时被点名**（`scripts/visual-gate.mjs` 打一行，
+      **不阻断** —— 补录只能在那一档的机器上做，阻断等于让所有人卡在一个只有少数人
+      能解的账上）。现有登记：**win32 档缺 4 张**（`login-desktop-light` /
+      `models-empty` / `workspace-desktop-dark` / `workspace-desktop-light`），
+      补录动作是在 Windows 开发机上 `CI= pnpm check:visual:update` 成套提交、
+      **同批删掉那条登记**。⚠️ 这 4 张**不是**「本轮漏了」——是**只能在那一档录**；
+      如实登记比在 linux 上录一份改名成 `-win32` 好（后者是造假，§11.8 判过）。
       **`ui/` 的组件覆盖率已到全量（#1381 那一批是 87/87，本轮新增基元后 88/88），理由表清空**（同批）：那 5 条理由
       逐条都是「补法」而不是「不能写」——`progress`（两个 slot 在 `progress-bar`
       里看不到）、`sonner`（story 里真调 `toast()`）、`error-boundary`（配一个会抛
