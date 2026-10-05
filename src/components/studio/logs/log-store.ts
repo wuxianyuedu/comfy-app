@@ -23,7 +23,11 @@ import { countAfterPage, tailPages, tailWindow } from "~/lib/page-window";
 
 import { create } from "zustand";
 
-import { saveLogExport, type SavedLogExport } from "~/lib/log/log-file-client";
+import {
+  saveDiagnosticsPackage,
+  saveLogExport,
+  type SavedLogExport,
+} from "~/lib/log/log-file-client";
 
 import { copyLogText, downloadLogText } from "./log-export";
 import { formatForClipboard } from "./log-format";
@@ -225,6 +229,8 @@ export interface LogStoreState {
    * 现场要的是「文件确实在、路径说得出」（ISSUE #609 反馈第 3 条）。
    */
   saveExport: (label: string) => Promise<SavedLogExport>;
+  /** 打包整份诊断现场（跑 `current/` + 最近几次 `runs/`，见 log-file-client）。 */
+  saveDiagnostics: () => Promise<SavedLogExport>;
 }
 
 /** 面板渲染一帧需要的全部状态（`LogPanelState` 的别称，视图侧更短的写法）。 */
@@ -721,6 +727,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   download: () => downloadLogText(formatForClipboard(get().filteredLogs)),
   saveExport: (label) =>
     saveLogExport(label, formatForClipboard(get().filteredLogs)),
+  saveDiagnostics: () => saveDiagnosticsPackage(),
 }));
 
 /* ── 分类开关联动：设置页关掉某类日志后，面板实时隐藏对应行 ───────

@@ -33,8 +33,8 @@ const SHELL = join(process.cwd(), "src-tauri", "src", "lib.rs");
 function markersFor(stderrText: string): { abandoned: boolean; crashed: boolean } {
   const dir = mkdtempSync(join(tmpdir(), "comfyapp-markers-"));
   try {
-    mkdirSync(join(dir, "log", "launcher"), { recursive: true });
-    writeFileSync(join(dir, "log", "launcher", "dev-launcher-stderr.log"), stderrText);
+    mkdirSync(join(dir, "log", "current", "launcher"), { recursive: true });
+    writeFileSync(join(dir, "log", "current", "launcher", "dev-launcher-stderr.log"), stderrText);
     const script = `
       import { readShellMarkers } from ${JSON.stringify(pathToFileURL(LAUNCHER).href)};
       process.stdout.write(JSON.stringify(readShellMarkers(${JSON.stringify(dir)})));

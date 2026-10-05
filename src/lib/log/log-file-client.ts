@@ -156,6 +156,30 @@ export async function saveLogExport(
   }
 }
 
+/**
+ * 打包诊断现场：让**服务端**把 `log/current/` + 最近几次 `log/runs/` 打成一个
+ * zip（`POST /api/logs/diagnostics`）。
+ *
+ * 与 {@link saveLogExport} 的分工：那个存的是「面板当前筛选到的行」，这个带走的
+ * 是「诊断要的整份现场」——`run.json`（runId / 版本 / 分支 / commit / pid /
+ * 退出码）、上一次崩溃留下的残留、comfyui 通信层原始回执，都是面板上看不到、
+ * 而报 bug 时最该有的东西（ISSUE #1326）。
+ *
+ * 失败返回 `{ ok: false, error }` 而不是抛错：面板据此显示「打包失败」，
+ * 不阻塞日志面板本身。
+ */
+export async function saveDiagnosticsPackage(): Promise<SavedLogExport> {
+  try {
+    const res = await fetch("/api/logs/diagnostics", { method: "POST" });
+    return (await res.json()) as SavedLogExport;
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "network",
+    };
+  }
+}
+
 /* ── 应用运行日志写入（客户端 → 服务端）──────────────────────────────
  * `src/lib/app-runtime-log.ts` 是 Node-only 模块（顶层 import node:fs），
  * 客户端逻辑层（如设置页）需要把「静默失败」补记进 app-runtime.log 供日志
