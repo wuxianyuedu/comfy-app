@@ -33,11 +33,18 @@ import { resolveAppPort } from "./app-port.mjs";
 import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
 import { checkEnvFile } from "./env-preflight.mjs";
 import {
-  archiveRunLog,
   createLogSink,
+  currentDirOf,
   localTimestamp,
   runStamp,
 } from "./launcher-core/log.mjs";
+import {
+  archiveCurrent,
+  pruneRuns,
+  recordPid,
+  recoverStaleCurrent,
+  startRun,
+} from "./launcher-core/run.mjs";
 import {
   APP_DEV_SCRIPT_MARKER,
   APP_START_SCRIPT_MARKER,
@@ -147,13 +154,28 @@ const READY_TIMEOUT_MS = 180_000;
 const ABANDONED_MARKER = "launch abandoned";
 const NONZERO_EXIT_MARKER = "exiting with non-zero code";
 
-// ── 日志：log/launcher/dev-launcher.log（当前运行，实时读）+ 历史归档 ──
-const launcherLogDir = path.join(ROOT, "log", "launcher");
-const nextjsLogDir = path.join(ROOT, "log", "nextjs");
-fs.mkdirSync(launcherLogDir, { recursive: true });
-fs.mkdirSync(nextjsLogDir, { recursive: true });
+// ── 日志：log/current/<分区>/（路径固定，退出时整目录归档到 runs/）──
+// 顺序很重要：先 recoverStaleCurrent 收走上一次崩掉的残留，再 startRun 写新
+// run.json —— 反过来的话，本次的 run.json 会被当成「残留」一起收走。
+try {
+  recoverStaleCurrent(ROOT);
+} catch {
+  /* 崩溃补做失败不该拦住启动（上一轮的现场留在原地，下次还有机会） */
+}
+const { runId } = startRun(ROOT, {
+  args: process.argv.slice(2),
+  mode: process.env.COMFYAPP_LAUNCH_MODE ?? "",
+});
+/** 本次运行的 runId：行前缀与跨进程传递都用它。 */
+export const RUN_ID = runId;
+// 让被 spawn 的子进程（executor-host / standalone server）也带上同一个 runId ——
+// 「grep runId 一把梭」要求所有通道都写这一列，靠各进程自己生成就散了。
+process.env.COMFYAPP_RUN_ID = runId;
+
+const launcherLogDir = currentDirOf("launcher", ROOT);
+const nextjsLogDir = currentDirOf("nextjs", ROOT);
 const currentLog = path.join(launcherLogDir, "dev-launcher.log");
-const logSink = createLogSink(ROOT, { file: currentLog });
+const logSink = createLogSink(ROOT, { file: currentLog, runId, tag: "launcher" });
 // 供壳侧 get_launch_log 的 sentinel 机制定位本次运行日志（与 .ps1 版同文件）。
 try {
   fs.writeFileSync(
@@ -165,6 +187,8 @@ try {
   /* 见 log 模块注释 */
 }
 const runTimestamp = runStamp();
+// 保留策略异步跑（启动路径上绝不能因为它变慢或挂住）；失败静默。
+void pruneRuns(ROOT).catch(() => {});
 
 /** 写一行日志（stdout + 本次运行日志双写）。 */
 /**
@@ -328,7 +352,7 @@ function walkFiles(dir) {
 /** @param {string} message @param {string} [root] */
 function appendRuntimeWarning(message, root = ROOT) {
   try {
-    const dir = path.join(root, "log", "services");
+    const dir = currentDirOf("services", root);
     fs.mkdirSync(dir, { recursive: true });
     const ts = localTimestamp();
     fs.appendFileSync(
@@ -613,6 +637,7 @@ export function spawnShell(
     },
   });
   spawned.push(child);
+  recordPid(root, "shell", child.pid ?? null);
   try {
     fs.writeFileSync(
       path.join(launcherLogDir, "tauri-shell.pid"),
@@ -632,7 +657,7 @@ export function spawnShell(
  *  回收路径读到它就会去杀不相干的东西。先删 = 窗口期内读不到，语义安全。 */
 export function resetShellPidFile(root = ROOT) {
   try {
-    fs.rmSync(path.join(root, "log", "launcher", "tauri-shell.pid"), {
+    fs.rmSync(path.join(currentDirOf("launcher", root), "tauri-shell.pid"), {
       force: true,
     });
   } catch {
@@ -643,7 +668,7 @@ export function resetShellPidFile(root = ROOT) {
 /** 回收本次拉起的壳（整棵进程树）；PID 取不到/不是数字/已退出都直接返回。 */
 /** @param {string} [root] @returns {Promise<boolean>} */
 export async function killShellFromPidFile(root = ROOT) {
-  const file = path.join(root, "log", "launcher", "tauri-shell.pid");
+  const file = path.join(currentDirOf("launcher", root), "tauri-shell.pid");
   let pid = Number.NaN;
   try {
     pid = Number.parseInt(fs.readFileSync(file, "utf8").trim(), 10);
@@ -684,7 +709,7 @@ export function downstreamExitKind({ shellExited, abandoned, shellCrashed }) {
 /** 取壳侧 stderr 的两个正标记（大小写不敏感）。 */
 /** @param {string} [root] @returns {{ abandoned: boolean, crashed: boolean, file: string }} */
 export function readShellMarkers(root = ROOT) {
-  const file = path.join(root, "log", "launcher", "dev-launcher-stderr.log");
+  const file = path.join(currentDirOf("launcher", root), "dev-launcher-stderr.log");
   return {
     abandoned: fileHasMarker(file, ABANDONED_MARKER),
     crashed: fileHasMarker(file, NONZERO_EXIT_MARKER),
@@ -760,9 +785,10 @@ export async function shutdown(code) {
   log("正在回收整棵进程树…", "STEP");
   await reapAll();
   try {
-    archiveRunLog(ROOT, currentLog);
+    // 一次一包：current/ 整个复制进 runs/，再清空内容。
+    archiveCurrent(ROOT, { exitCode: code });
   } catch {
-    /* 归档失败不影响退出 */
+    /* 归档失败不影响退出（下一轮启动的 recoverStaleCurrent 还会再收一次） */
   }
   process.exit(code);
 }
@@ -943,7 +969,7 @@ export async function run(argv = process.argv.slice(2)) {
   });
 
   // 6) 起 dev server（输出重定向到 log/nextjs/，按次命名后轮转保留 5 份）
-  const nextDir = path.join(ROOT, "log", "nextjs");
+  const nextDir = currentDirOf("nextjs", ROOT);
   pruneTimestampedLogs(nextDir, ["nextjs-stdout-", "nextjs-stderr-"], 5);
   const nextOut = path.join(nextDir, `nextjs-stdout-${runTimestamp}.log`);
   const nextErr = path.join(nextDir, `nextjs-stderr-${runTimestamp}.log`);
@@ -951,6 +977,7 @@ export async function run(argv = process.argv.slice(2)) {
   // dev 用 let：就绪阶段若检测到「路由表 404」的确切信号，会清缓存重启一次
   // （见步骤 9 的有界自愈），届时重新赋值 dev 供常驻循环与回收使用。
   let dev = spawnDevServer(port, args.host, nextOut, nextErr);
+  recordPid(ROOT, "nextjs", dev.pid ?? null);
   log(`dev server 已启动（PID ${dev.pid}，输出见 ${nextOut}）`, "OK");
 
   // 6.5) 可选：拉起 ComfyUI 执行器独立宿主（P3 §5 第 2 期 · Phase 2-C）
@@ -1373,8 +1400,7 @@ export function spawnExecutorHost() {
    * nextjs-stdout/stderr 同族同处理），不接进本控制台：pino 的中文 warn
    * 直接进 Windows 控制台会被按 GBK 解码成乱码（文件通道恒 UTF-8），
    * 且 host 的逐 tick 输出会淹没 launcher 自己的进度行。 */
-  const servicesDir = path.join(ROOT, "log", "services");
-  fs.mkdirSync(servicesDir, { recursive: true });
+  const servicesDir = currentDirOf("services", ROOT);
   pruneTimestampedLogs(
     servicesDir,
     ["executor-host-stdout-", "executor-host-stderr-"],

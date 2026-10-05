@@ -64,11 +64,12 @@ const intervalMs = intervalArg
   ? Number.parseInt(intervalArg.split("=")[1] ?? "", 10)
   : 5_000;
 
-/** 日志路径：默认落 `log/services/executor-host.log`（追加不轮转，与
- *  `comfyui-runtime.log` 同族）。测试用 COMFYAPP_HOST_LOG 指到 tmpdir。 */
+/** 日志路径：默认落 `log/current/services/executor-host.log`（追加不轮转，与
+ *  `comfyui-runtime.log` 同族；current/ 的语义见规范 §4 —— 退出时整目录归档）。
+ *  测试用 COMFYAPP_HOST_LOG 指到 tmpdir。 */
 const logPath =
   process.env.COMFYAPP_HOST_LOG ??
-  path.join(ROOT, "log", "services", "executor-host.log");
+  path.join(ROOT, "log", "current", "services", "executor-host.log");
 
 /** 时间戳与 app-runtime.log 同形：本地时区、毫秒精度。避免在骨架阶段引入
  *  `src/lib/time-format` —— 那是 TS 侧、需要 tsx runtime 才能加载，Phase 2-C
@@ -86,9 +87,13 @@ function localStamp(d = new Date()) {
 function writeLine(msg) {
   try {
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    // runId 行前缀：本进程由编排器 spawn，runId 经 COMFYAPP_RUN_ID 透传。
+    // 「grep runId 一把梭」要求**每个通道**都写这一列，靠各进程自己生成就散了。
+    const runId = process.env.COMFYAPP_RUN_ID;
+    const tag = runId ? `[${runId}][executor-host] ` : "[executor-host] ";
     fs.appendFileSync(
       logPath,
-      `[${localStamp()}] [INFO] [executor-host] ${msg}\n`,
+      `[${localStamp()}] [INFO] ${tag}${msg}\n`,
       "utf-8",
     );
   } catch (err) {
@@ -252,7 +257,7 @@ async function bootRuntime() {
   graph.configureEnqueue({ taskRepo: hostRepo });
   graph.configureTraceLogPath(
     process.env.COMFYAPP_HOST_TRACE ??
-      path.join(ROOT, "log", "comfyui", "comfyui-trace-host.log"),
+      path.join(ROOT, "log", "current", "comfyui", "comfyui-trace-host.log"),
   );
   // 执行链四条 seam（3-B1）：deps 全部复用 Next 侧同一份实现（文件头理由）。
   graph.configureRunner({ taskRepo: hostRepo, log: graph.logger });
