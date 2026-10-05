@@ -1,12 +1,15 @@
 /**
  * `RuntimeLogBox` 的交互契约（设置页「启动日志」框）。
  *
- * 对应两条用户反馈：
+ * 对应三条用户反馈：
  *   1. 小窗口某些时候看着麻烦 → 要有**全屏查看**（且全屏里同样能切换启动）；
- *   2. 多次启动的日志混在一起 → 右上角下拉按「每次启动」切换。
+ *   2. 多次启动的日志混在一起 → 右上角下拉按「每次启动」切换；
+ *   3. 应用重启过的那几次在界面上找不到（ISSUE #1326）→ 下拉列的是
+ *      「本次运行 + `log/runs/` 各历史包」，文案由服务端给（含时刻 / 退出形态 /
+ *      runId），且基准被清理时要说明。
  *
  * 断言对齐可见行为（下拉存不存在 / 选项文案 / 回调参数 / 全屏层出现与消失 /
- * 空态与截断提示），不锁样式类。
+ * 空态与各种截断提示），不锁样式类。
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -28,6 +31,7 @@ function controller(
     sessionId: "12",
     truncated: false,
     windowed: false,
+    baselineMissing: false,
     active: false,
     selectSession: vi.fn(),
     refresh: vi.fn(async () => undefined),
@@ -45,17 +49,24 @@ function renderBox(log: RuntimeLogController) {
   );
 }
 
+/**
+ * 两次运行的可选项（**文案形态与端点 `formatRunLabel` 的输出逐字一致**）。
+ *
+ * 视图直接渲染服务端给的 `title`，因此夹具必须按服务端那套写 —— 手写一个
+ * 「长得像」的字符串，改口径时用例会一起漂过去（与 `log-sessions.test.ts`
+ * 用真实横幅构造器同一条理由）。
+ */
 function twoSessions(): RuntimeLogController["sessions"] {
   return [
     {
-      id: "12",
-      title: "▶ ComfyUI 启动会话",
-      startedAt: new Date(2026, 8, 18, 10, 1, 3).getTime(),
+      id: "run:2026-09-30_100103-a1b2c3",
+      title: "09-30 10:01:03 · 正常退出 · a1b2c3",
+      startedAt: new Date(2026, 8, 30, 10, 1, 3).getTime(),
     },
     {
-      id: "40",
-      title: "▶ ComfyUI 启动会话",
-      startedAt: new Date(2026, 8, 18, 10, 7, 41).getTime(),
+      id: "run:current",
+      title: "09-30 10:07:41 · 本次运行 · ffffff",
+      startedAt: new Date(2026, 8, 30, 10, 7, 41).getTime(),
     },
   ];
 }
@@ -63,14 +74,17 @@ function twoSessions(): RuntimeLogController["sessions"] {
 afterEach(cleanup);
 
 describe("RuntimeLogBox", () => {
-  it("只有一次启动时不显示下拉（选不出别的东西的下拉只是噪声）", () => {
+  it("只有一次运行时不给下拉（选不出别的东西的下拉只是噪声）", () => {
     renderBox(controller());
     expect(screen.queryByLabelText("切换要查看的启动")).toBeNull();
   });
 
-  it("多次启动时下拉按「时刻 · 标题」列出，切换回传会话 id", async () => {
+  it("多次运行时下拉列出「时刻 · 退出形态 · runId」，切换回传该次运行的 id", async () => {
     const user = userEvent.setup();
-    const log = controller({ sessions: twoSessions(), sessionId: "40" });
+    const log = controller({
+      sessions: twoSessions(),
+      sessionId: "run:current",
+    });
     renderBox(log);
 
     /* P76 之后这里不再是原生 `<select>`（裸 `<select>` 已被判据拦下），而是
@@ -81,7 +95,7 @@ describe("RuntimeLogBox", () => {
      * 选项要点**完整指针序列**（Base UI 的提交挂在指针抬起上，裸
      * `fireEvent.click` 只发 click、提交不了）。 */
     const trigger = screen.getByLabelText("切换要查看的启动");
-    expect(trigger.textContent).toContain("10:07:41 · ▶ ComfyUI 启动会话");
+    expect(trigger.textContent).toContain("09-30 10:07:41 · 本次运行 · ffffff");
 
     /* 选项是**异步挂载**的：Base UI 的弹层走 portal，`user.click` 落下时它还没
      * 进 DOM。同步 `getAllByRole` 在空载的事件循环里恰好来得及，CPU 被并行用例
@@ -92,16 +106,18 @@ describe("RuntimeLogBox", () => {
       (option) => option.textContent,
     );
     expect(labels).toEqual([
-      "10:01:03 · ▶ ComfyUI 启动会话",
-      "10:07:41 · ▶ ComfyUI 启动会话",
+      "09-30 10:01:03 · 正常退出 · a1b2c3",
+      "09-30 10:07:41 · 本次运行 · ffffff",
     ]);
 
     const first = (await screen.findAllByRole("option")).find((option) =>
-      option.textContent?.startsWith("10:01:03"),
+      option.textContent?.startsWith("09-30 10:01:03"),
     );
-    if (!first) throw new Error("弹层里没有 10:01:03 那一档会话");
+    if (!first) throw new Error("弹层里没有 10:01:03 那一档运行");
     await user.click(first);
-    expect(log.selectSession).toHaveBeenCalledWith("12");
+    expect(log.selectSession).toHaveBeenCalledWith(
+      "run:2026-09-30_100103-a1b2c3",
+    );
   });
 
   it("刷新按钮触发 refresh", () => {
@@ -127,8 +143,20 @@ describe("RuntimeLogBox", () => {
     ).toBeTruthy();
   });
 
+  it("之前那一包已被清理时说明「这段含更早的内容」", () => {
+    /* 不说出来的后果是把上一轮的输出当成这一轮的 —— 用户会据此得出错误结论，
+     * 而界面上看不出任何异常（硬规则 4：失败路径必须有用户可见出口）。 */
+    renderBox(controller({ baselineMissing: true }));
+    expect(
+      screen.getByText("这次运行之前那一包已被清理，因此这段含更早的内容。"),
+    ).toBeTruthy();
+  });
+
   it("全屏查看：铺满内容区的面板里带同一个下拉，退出后回到小窗口", () => {
-    const log = controller({ sessions: twoSessions(), sessionId: "40" });
+    const log = controller({
+      sessions: twoSessions(),
+      sessionId: "run:current",
+    });
     renderBox(log);
 
     fireEvent.click(screen.getByLabelText("全屏查看"));
@@ -148,7 +176,9 @@ describe("RuntimeLogBox", () => {
   it("点击弹窗外（窗口标题栏）不关闭全屏视图：只能由退出按钮或 Esc 关", () => {
     // 全屏视图铺满标题行下方后，弹窗外唯一可点的就是标题栏；用户点标题栏
     // （想拖动窗口）把全屏视图整个关掉是用户实测反馈，这里钉住不回归。
-    renderBox(controller({ sessions: twoSessions(), sessionId: "40" }));
+    renderBox(
+      controller({ sessions: twoSessions(), sessionId: "run:current" }),
+    );
     fireEvent.click(screen.getByLabelText("全屏查看"));
     expect(screen.getByRole("dialog")).toBeTruthy();
 

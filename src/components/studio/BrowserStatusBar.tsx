@@ -74,10 +74,13 @@ const fpsTextColor: Record<string, string> = {
   unknown: "text-ink-muted",
 };
 
+/* 状态点的光晕：色相走 `--color-glow-*`（两态，理由与对比读数写在 globals.css 那一段），
+ * 强度与同栏的 devServer 点取同一个 80%。此前这三是基准色 α=1 的实心光晕，而隔壁
+ * devServer 那点已经是浅彩档 —— 同一栏里两个同尺寸、同语义的点用两套配方。 */
 const fpsDotColor: Record<string, string> = {
-  ok: "bg-success shadow-[0_0_6px_var(--color-success)]",
-  warn: "bg-warning shadow-[0_0_6px_var(--color-warning)]",
-  bad: "bg-destructive shadow-[0_0_6px_var(--color-destructive)]",
+  ok: "bg-success shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)]",
+  warn: "bg-warning shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-warning)_80%,transparent)]",
+  bad: "bg-destructive shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-danger)_80%,transparent)]",
   unknown: "bg-ink-fainter",
 };
 

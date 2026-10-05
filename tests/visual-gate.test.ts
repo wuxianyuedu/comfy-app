@@ -19,10 +19,12 @@ import { describe, expect, it } from "vitest";
 import {
   PIXEL_JUDGE,
   PIXEL_LAYER_RE,
+  pendingPlatforms,
   plannedTests,
   runGate,
   touchesPixelLayer,
 } from "../scripts/visual-gate.mjs";
+import { PENDING_PLATFORMS } from "../scripts/visual-baselines.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "../scripts/affected-tests.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -137,5 +139,35 @@ describe("像素层提交门禁与仓库现状不漂移", () => {
     // 已经不认它（`hit` 会是 undefined）——「把这一步静音」正是这一族要拦的动作
     // （同 §13.5.8「在场判据要解析、不要 toContain」）。
     expect(hit?.cmd).toBe("node scripts/visual-gate.mjs");
+  });
+});
+
+describe("改像素层时点名「待重录」的账（§11.8 / 不阻断）", () => {
+  it("还缺着就点名：提醒只落在真缺的那些平台上", () => {
+    // 待录登记是**放行**的（那一档缺几张不红），所以改像素层的人不会从任何判据里
+    // 听到「还欠着」—— 提示落在「改了像素层」这个动作上，是它与补录唯一的自然交集。
+    expect(
+      pendingPlatforms({
+        platforms: { win32: {}, linux: {} },
+        missing: (p) => (p === "win32" ? ["a.png"] : []),
+      }),
+    ).toEqual(["win32"]);
+  });
+
+  it("补齐后不再点名（登记删没删由配对判据管，这里只负责别一直吵）", () => {
+    expect(
+      pendingPlatforms({ platforms: { win32: {} }, missing: () => [] }),
+    ).toEqual([]);
+    expect(pendingPlatforms({ platforms: {}, missing: () => ["x"] })).toEqual([]);
+  });
+
+  it("接的是真登记表：仓库当前的待录账非空（这条同时证明提醒没被架空）", () => {
+    // 用真登记表 + 真清点跑一次：若有人把 `pendingPlatforms` 改成恒回空数组，
+    // 上面两条夹具用例照样绿，而这一条会红。
+    const live = pendingPlatforms({
+      platforms: PENDING_PLATFORMS,
+      missing: () => ["sentinel"],
+    });
+    expect(live).toEqual(Object.keys(PENDING_PLATFORMS));
   });
 });
