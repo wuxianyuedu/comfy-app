@@ -926,6 +926,31 @@
       —— 存量那 86 份的必填项多由「子件 + 默认值」或注入层的 `sourceName` 兜住，
       逐条白名单会变成第二份赦免名单。上线时当场抓到一处真漏档：
       `ui/simple-key-handler.stories.tsx` 从来没有 `title`。口径见规范 16 §16.2.3.8。
+      **页面级视觉那一半补上了**（同批，ISSUE #1381）：此前 `e2e/visual/` 只有
+      登录页一页，而规范 11 §11.8 声明的基线范围（深浅两态 / 响应式断点 / 空态 /
+      画布 / 弹窗）里只有「断点」勉强沾边 —— 这一批把**前三条**铺开：
+      登录页暗/亮两档、首页暗/亮两档、模型库空态、移动端断点，
+      公共前置收在 `e2e/visual/support/page-baseline.ts`。两处**数据依赖被钉死**
+      （页面级基线若随「这台机器的 DB / localStorage 里有什么」变，它就不是基线）：
+      `models` 屏用 `stubTrpc` 把 `model.list` 桩成空列表，首页用 `clearProjectIndex`
+      清 localStorage 的项目索引。**画布与弹窗两档仍待补**（进画布要先建项目 +
+      切 `canvas` 视图 + 钉死 React Flow 的转换矩阵与视口，浮层有进出动画与依赖视口的
+      定位，两者同族，是独立的活）。
+      同批纠正一处**过期口径**：`login.visual.spec.ts` 一直写着「登录页为固定深色 UI」，
+      而 `ThemeProvider` 的约定是「**所有**表面跟随主题 token，不存在『暗色品牌页』」——
+      浅色档因此从来没被录过。现在用 `setTheme()` 写 `theme` 偏好切档
+      （不用 `documentElement.classList.add()`：它绕过 `next-themes`、水合时被覆盖，
+      且**表达不出 light 档**）。
+      **「哪件事该由谁做」也有判据了**：`tests/visual-storybook-division.test.ts`
+      （进固定清单）三向拦 —— story 里不许出现 `toHaveScreenshot`、不许引入第二套
+      像素工具（Chromatic 那一族）、§11.8 声明的档（深浅两态 / 断点 / 空态）不得被
+      **减法**清掉。**不判「覆盖几个页面」**：§11.8 已定调「只锁定关键 UI」，
+      数字型门槛会逼着人录一堆脆基线。
+      并且**如实登记了一处录不全的现实**：本仓库的自动化执行环境（NPC 工作区 /
+      CNB 容器）都是 linux，新增截图名会让 win32 档缺那几张，而像素只能在那一档的
+      机器上录（在 linux 上录一份改名叫 `-win32` 是造假）。`scripts/visual-baselines.mjs`
+      的 `PENDING_PLATFORMS` 把它记成**一条有主的账**，并用双向不变式盯着
+      （补齐了还留着登记 ⇒ 红；登记不存在的平台 ⇒ 红；`reason` 太短 ⇒ 红）。
       **`ui/` 的组件覆盖率已到全量（#1381 那一批是 87/87，本轮新增基元后 88/88），理由表清空**（同批）：那 5 条理由
       逐条都是「补法」而不是「不能写」——`progress`（两个 slot 在 `progress-bar`
       里看不到）、`sonner`（story 里真调 `toast()`）、`error-boundary`（配一个会抛
