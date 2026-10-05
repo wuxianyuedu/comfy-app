@@ -87,6 +87,20 @@ function staticSpecifiers(source: string): string[] {
 }
 
 /**
+ * 剥掉说明符末尾的 `.ts` / `.tsx`（也含 `.mts` / `.cts`），让「引的是不是那个
+ * 模块」这件事与**后缀写法**无关。
+ *
+ * 为什么需要它：`.storybook/**` 的相对 import 一律写全后缀（见
+ * `tests/storybook-config.test.ts` 的「相对 import 带后缀」那条判据 —— Storybook
+ * 的 Node loader 见无后缀说明符会打 deprecation）。而本文件要判的是接线关系，
+ * 不该顺带把后缀写法也钉进来：否则修一次告警就得同步改这里的字面量，两处事实
+ * 源反而更容易漂。带后缀是**写法**、剥掉后缀才是**指向**，这里比的是后者。
+ */
+function withoutModuleExt(spec: string): string {
+  return spec.replace(/\.m?tsx?$/, "");
+}
+
+/**
  * ④ 用的「窄项目」：`extends` 仓库真那份 tsconfig（`paths` / `jsx` / `strict` 全部
  * 继承，不重抄一份 —— 重抄就是第二个事实来源），只把 `include` 收到 `.storybook/**`
  * 与它需要的环境声明上。
@@ -252,14 +266,18 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
       "这些文件静态 import 了生成件 —— 没跑过 `pnpm storybook` 的检出上 tsc 会报 TS2307" +
         "（而 tsc 是钩子 A 组：拦的是从这份基线分出去的每一次提交）",
     ).toEqual([]);
-    /* 反向：注入层确实从**入库的**那份读类型（不然上面那条会因为「谁都没引」而空转）。 */
-    expect(staticSpecifiers(read(CONSUMER_REL))).toContain(
-      "./app-origin-defaults",
-    );
-    expect(staticSpecifiers(read(PREVIEW_REL))).toContain(
+    /* 反向：注入层确实从**入库的**那份读类型（不然上面那条会因为「谁都没引」而空转）。
+       比的是剥掉后缀的说明符（见 withoutModuleExt）：要判的是「引的是不是那个模块」，
+       后缀写法由 `tests/storybook-config.test.ts` 那条判据单独守。 */
+    expect(
+      staticSpecifiers(read(CONSUMER_REL)).map(withoutModuleExt),
+    ).toContain("./app-origin-defaults");
+    expect(staticSpecifiers(read(PREVIEW_REL)).map(withoutModuleExt)).toContain(
       "./app-origin-reader",
     );
-    expect(staticSpecifiers(read(MAIN_REL))).toContain("./app-origin-reader");
+    expect(staticSpecifiers(read(MAIN_REL)).map(withoutModuleExt)).toContain(
+      "./app-origin-reader",
+    );
   });
 
   it("② 生成件的字段名与入库类型逐字段对齐（改名 = 静默回落成缺省端口）", () => {

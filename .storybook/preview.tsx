@@ -1,13 +1,16 @@
 import type { Decorator, Preview } from "@storybook/nextjs";
 import { withThemeByClassName } from "@storybook/addon-themes";
 
+/* 相对 import 一律**带文件后缀**，不写 `./x` —— 理由见 `main.ts` 那段说明。
+   本文件由 webpack 打进浏览器 bundle（不吃 Node 那条 loader 的 deprecation），
+   但仍按同一条口径写：`.storybook/**` 只有一种写法，判据也只有一条。 */
 import {
   appOriginChoices,
   withAppProviders,
   withTrpcApp,
-} from "./data-sources";
-import { withStoreScene } from "./store-sources";
-import { readAppOrigin } from "./app-origin-reader";
+} from "./data-sources.tsx";
+import { withStoreScene } from "./store-sources.tsx";
+import { readAppOrigin } from "./app-origin-reader.ts";
 
 // 引入应用的全局样式：主题 token（`@theme` / `.dark` 覆盖）与 Tailwind 都在这里，
 // 不引入的话所有组件都会退化成无样式的裸 DOM。
