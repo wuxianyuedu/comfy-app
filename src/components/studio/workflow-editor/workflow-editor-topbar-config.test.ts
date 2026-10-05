@@ -27,7 +27,7 @@ describe("顶栏按钮：不许变形的三条硬规则（ISSUE #404）", () => 
     "ioPreviewOn",
   ] as const;
 
-  it.each(allTones)("tone=%s 在任何密度下都禁止换行", (tone) => {
+  it.for(allTones)("tone=%s 在任何密度下都禁止换行", (tone) => {
     for (const density of ["regular", "compact"] as const) {
       expect(tokens(topBarButtonClass(tone, density))).toContain(
         "whitespace-nowrap",
@@ -35,13 +35,13 @@ describe("顶栏按钮：不许变形的三条硬规则（ISSUE #404）", () => 
     }
   });
 
-  it.each(allTones)("tone=%s 在任何密度下都禁止被 flex 压扁", (tone) => {
+  it.for(allTones)("tone=%s 在任何密度下都禁止被 flex 压扁", (tone) => {
     for (const density of ["regular", "compact"] as const) {
       expect(tokens(topBarButtonClass(tone, density))).toContain("shrink-0");
     }
   });
 
-  it.each(allTones)("tone=%s 图标与中文同一基线", (tone) => {
+  it.for(allTones)("tone=%s 图标与中文同一基线", (tone) => {
     expect(tokens(topBarButtonClass(tone, "regular"))).toContain(
       "leading-none",
     );
@@ -94,14 +94,14 @@ describe("顶栏按钮：必须覆盖 ui/button 基元的默认外观（ISSUE #6
     "ioPreviewOn",
   ] as const;
 
-  it.each(allTones)("tone=%s 归还高度与圆角给调用处", (tone) => {
+  it.for(allTones)("tone=%s 归还高度与圆角给调用处", (tone) => {
     const cls = tokens(topBarButtonClass(tone, "regular"));
     expect(cls).toContain("h-auto");
     expect(cls).toContain("rounded-none");
     expect(cls).toContain("px-0");
   });
 
-  it.each(allTones)(
+  it.for(allTones)(
     "tone=%s 的圆角与内边距必须排在覆盖串之后（否则 rounded-none 吃掉 tone）",
     (tone) => {
       /* `cn()` 走 tailwind-merge，同一属性**后面的类赢**。覆盖串里的

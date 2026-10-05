@@ -71,7 +71,7 @@ describe("openUrlInBrowser 的协议闸门", () => {
   });
 
   /* 每一条都能过 `z.url()`，也每一条都必须在这里被拦下。 */
-  it.each([
+  it.for([
     ["file:///C:/Users/me/.env"],
     ["file:///etc/passwd"],
     ["javascript:alert(1)"],
@@ -79,7 +79,7 @@ describe("openUrlInBrowser 的协议闸门", () => {
     ["comfyapp://open?path=C:/"],
     ["search-ms:query=x"],
     ["about:blank"],
-  ])("拒绝 %j 且一次都不 spawn", async (url) => {
+  ] as const)("拒绝 %j 且一次都不 spawn", async ([url]) => {
     const res = await openUrlInBrowser(url);
     expect(res.ok).toBe(false);
     expect(res.detail).toContain("http/https");

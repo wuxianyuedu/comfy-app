@@ -49,7 +49,7 @@ describe("taskRepository.updateProgress —— 只在非终态行生效", () => 
     expect(row.status).toBe("RUNNING");
   });
 
-  it.each(["SUCCEEDED", "FAILED", "CANCELLED"])(
+  it.for(["SUCCEEDED", "FAILED", "CANCELLED"])(
     "%s 行：进度回写被丢弃，状态不被改回 RUNNING",
     async (terminal) => {
       seedTask(tdb, { id: "t-done", userId: "u1", status: terminal });
@@ -80,7 +80,7 @@ describe("taskRepository.markRunning —— 只在非终态行生效", () => {
     expect(row.promptId).toBe("pid-1");
   });
 
-  it.each(["SUCCEEDED", "FAILED", "CANCELLED"])(
+  it.for(["SUCCEEDED", "FAILED", "CANCELLED"])(
     "%s 行：promptId 回传被丢弃 —— reaper 已判孤儿就不再复活它",
     async (terminal) => {
       seedTask(tdb, { id: "t-done", userId: "u1", status: terminal });

@@ -104,7 +104,7 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
     ).toContain("useTypeScriptCli");
   });
 
-  it.each([
+  it.for([
     "./src-tauri/**",
     "./python-venv/**",
     "./docs/**",
@@ -218,11 +218,11 @@ describe.skipIf(!standaloneExists)(
       expect(files.some((f) => f.includes("node_modules"))).toBe(true);
     });
 
-    it.each([
+    it.for([
       ["测试文件", /(^|\/)src\/.*\.test\.tsx?$/],
       ["变更碎片", /(^|\/)changelog\.d\/.*\.md$/],
       ["文档目录", /(^|\/)docs\/.*\.md$/],
-    ])("不含%s", (_label, re) => {
+    ] as const)("不含%s", ([, re]) => {
       const hits = files.filter((f) => re.test(f));
       expect(
         hits.slice(0, 10),

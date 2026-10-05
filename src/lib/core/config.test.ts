@@ -69,13 +69,13 @@ describe("默认值", () => {
 });
 
 describe("环境三态", () => {
-  it.each([
+  it.for([
     ["development", true, false, false],
     ["test", false, false, true],
     ["production", false, true, false],
   ] as const)(
     "%s → isDev/isProd/isTest 互斥且正确",
-    async (env, isDev, isProd, isTest) => {
+    async ([env, isDev, isProd, isTest]) => {
       vi.stubEnv("NODE_ENV", env);
       const { config } = await loadConfig();
       expect(config.env).toBe(env);
@@ -92,7 +92,7 @@ describe("环境三态", () => {
 });
 
 describe("logLevel", () => {
-  it.each(["debug", "info", "warn", "error"] as const)(
+  it.for(["debug", "info", "warn", "error"] as const)(
     "%s 合法",
     async (level) => {
       process.env.LOG_LEVEL = level;
@@ -114,7 +114,7 @@ describe("port", () => {
     expect(config.port).toBe(3456);
   });
 
-  it.each(["0", "-1", "70000", "abc", "31.5"])(
+  it.for(["0", "-1", "70000", "abc", "31.5"])(
     "%s 一律 fail-fast",
     async (bad) => {
       process.env.COMFYAPP_PORT = bad;
@@ -153,7 +153,7 @@ describe("开关型配置（按布尔字面量解析，不按 JS 真值）", () 
   /* 这一组曾钉住一个现存缺陷：`z.coerce.boolean()` 等价 `Boolean(value)`，
    * 而 `Boolean("false") === true` —— 按惯例写 `REAPER_ENABLED=false` **关不掉
    * reaper**，且没有任何提示。reaper 会杀进程，误判代价高，故改为字面量解析。 */
-  it.each(["false", "FALSE", " 0 ", "no", "off"])(
+  it.for(["false", "FALSE", " 0 ", "no", "off"])(
     "REAPER_ENABLED=%s 关闭 reaper",
     async (raw) => {
       process.env.REAPER_ENABLED = raw;
@@ -162,7 +162,7 @@ describe("开关型配置（按布尔字面量解析，不按 JS 真值）", () 
     },
   );
 
-  it.each(["true", "TRUE", " 1 ", "yes", "on"])(
+  it.for(["true", "TRUE", " 1 ", "yes", "on"])(
     "REAPER_ENABLED=%s 打开 reaper",
     async (raw) => {
       process.env.REAPER_ENABLED = raw;
@@ -182,7 +182,7 @@ describe("开关型配置（按布尔字面量解析，不按 JS 真值）", () 
     expect(config.features.reaperEnabled).toBe(true);
   });
 
-  it.each(["ture", "enable", "2"])(
+  it.for(["ture", "enable", "2"])(
     "REAPER_ENABLED=%s 拼错即 fail-fast（带字段名），不静默取真值",
     async (raw) => {
       process.env.REAPER_ENABLED = raw;
