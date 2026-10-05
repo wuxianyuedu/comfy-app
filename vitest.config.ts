@@ -493,8 +493,8 @@ export default defineConfig({
         "src/components/studio/ViewTabStrip.tsx",
         /* 体检清单 ⑨ 第二刀 · 四个零执行者的 router（台账 E3 从 7/16 抬到 11/16）：
          * `film` / `train` / `model` / `llm`。这一批照出的不是「闸门弱」而是
-         * **「闸门 procedure 自己就是死的」**：`train.cancel` 的第三参在 Prisma→Drizzle
-         * 迁移期是 `select?: unknown` + `select as never`，调用点写成 Prisma 的布尔投影
+         * **「闸门 procedure 自己就是死的」**：`train.cancel` 的第三参在数据层
+         * 迁移期是 `select?: unknown` + `select as never`，调用点写成旧工具链的布尔投影
          * `{ id: true, status: true }` 时编译器一声不响、运行时生成空投影 → SQL 语法错，
          * 于是「取消训练」自那次迁移起每次 500 —— 路由没有执行者，所以没有任何一条红。
          * 四条全按实测满档登记（52 条用例把归属、数值/协议/枚举闸与「拒绝发生在副作用

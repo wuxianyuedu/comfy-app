@@ -9,7 +9,7 @@ import { z } from "zod";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { HistoryTaskRow } from "./history-panel-types";
 
-/* task.list 的行经 tRPC 传输 + Prisma 投影，客户端拿到的是 unknown 级形状。
+/* task.list 的行经 tRPC 传输 + 服务端投影，客户端拿到的是 unknown 级形状。
  * 逐行 Zod 校验（§05「API 响应一律 Zod 校验」）：不合法行**丢弃而不是硬塞**，
  * 否则下游对 progress/mediaType 的数值/枚举假设会在渲染或排序里炸。
  * 过去这里是一句 `as unknown as HistoryTaskRow[]`——那是假保险：类型说
@@ -46,7 +46,7 @@ export type HistoryListParams = {
 };
 
 /** 拉取任务列表。响应行的 mediaType 由服务端 inferMediaType 给出，
- *  但 Prisma Json 列不可信，这里逐条收窄：缺 mediaType 的行按 image 兜底。 */
+ *  但任务表 JSON 列不可信，这里逐条收窄：缺 mediaType 的行按 image 兜底。 */
 export async function fetchHistoryTasks(
   params: HistoryListParams,
 ): Promise<HistoryTaskRow[]> {

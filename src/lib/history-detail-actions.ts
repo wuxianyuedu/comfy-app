@@ -4,7 +4,7 @@
  *
  * 收口到这里后：
  *   - 视图（.tsx）不再出现 `vanillaApi.task.*`，只是把这两个函数名传给 hook；
- *   - 服务端返回的 Prisma Json / nullable 形状在这里收窄成 hook 需要的窄类型。
+ *   - 服务端返回的 JSON / nullable 形状在这里收窄成 hook 需要的窄类型。
  */
 
 import { vanillaApi } from "~/trpc/vanilla";

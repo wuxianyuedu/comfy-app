@@ -10,14 +10,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  LEGACY_WS_VIEW_KEY,
   WS_TABS_KEY,
   HOME_VIEW,
   closeViewTab,
   findTab,
-  homeTab,
   initialWorkspaceTabs,
-  makeTab,
   openViewTab,
   parseWorkspaceTabs,
   serializeWorkspaceTabs,
@@ -46,16 +43,8 @@ export const WORKSPACE_VIEWS: WorkspaceView[] = [
 function readTabsState(): WorkspaceTabsState | null {
   if (typeof window === "undefined") return null;
   const raw = sessionStorage.getItem(WS_TABS_KEY);
-  if (raw) return parseWorkspaceTabs(raw, WORKSPACE_VIEWS);
-
-  const legacy = sessionStorage.getItem(LEGACY_WS_VIEW_KEY);
-  if (legacy) sessionStorage.removeItem(LEGACY_WS_VIEW_KEY);
-  if (!legacy) return null;
-  const view = WORKSPACE_VIEWS.find((candidate) => candidate === legacy);
-  if (!view || view === HOME_VIEW) return null;
-  const tab = makeTab(view, null);
-  if (!tab) return null;
-  return { tabs: [homeTab(), tab], activeKey: tab.key };
+  if (!raw) return null;
+  return parseWorkspaceTabs(raw, WORKSPACE_VIEWS);
 }
 
 function writeTabsState(state: WorkspaceTabsState): void {
