@@ -15,11 +15,14 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import process from "node:process";
 import { describe, expect, it } from "vitest";
 
 import {
+  CHECK_UPDATE_MODE,
   PIXEL_JUDGE,
   VISUAL_DIR,
+  checkLocalBaselines,
   classifyFailure,
   planRuns,
 } from "../scripts/pixel-run.mjs";
@@ -36,9 +39,17 @@ describe("像素档按需通道：本次要跑什么（§11.8）", () => {
     expect(runs.map((r) => r.kind)).toEqual(["playwright", "vitest"]);
 
     const pixel = runs.find((r) => r.kind === "playwright");
-    expect(pixel?.args).toEqual(["test", VISUAL_DIR]);
-    // 默认**不带** --update：落盘是人的动作。
+    // 默认**不带** `--update-snapshots`：落盘是人的动作。
     expect(pixel?.args).not.toContain("--update-snapshots");
+    // ⚠️ 但「不落盘」必须显式争取：Playwright 的 `updateSnapshots` 默认是 `'missing'`，
+    // 缺基线时**不带开关也会写文件**。检查档因此必须显式关掉（这条断言是那个承诺的判据，
+    // 少了它 `--update-snapshots=none` 被人顺手删掉时不会有任何东西变红）。
+    expect(pixel?.args).toEqual([
+      "test",
+      VISUAL_DIR,
+      `--update-snapshots=${CHECK_UPDATE_MODE}`,
+    ]);
+    expect(CHECK_UPDATE_MODE).toBe("none");
 
     const judge = runs.find((r) => r.kind === "vitest");
     expect(judge?.args).toEqual([PIXEL_JUDGE]);
@@ -48,7 +59,26 @@ describe("像素档按需通道：本次要跑什么（§11.8）", () => {
     const runs = planRuns({ update: true });
     expect(runs.map((r) => r.kind)).toEqual(["playwright", "vitest"]);
     expect(runs[0]?.args).toContain("--update-snapshots");
+    // 录基线档走 preset（`changed`，含创建缺失的那些），不再额外指定档位。
+    expect(runs[0]?.args).not.toContain(`--update-snapshots=${CHECK_UPDATE_MODE}`);
     expect(runs[1]?.args).toEqual([PIXEL_JUDGE]);
+  });
+
+  it("本机这一档齐备时前置判决放行（真实检出上跑一次真清点）", () => {
+    // 用真检出而不是夹具：这条同时证明「前置判决接的是真仓库」，夹具形态在
+    // `tests/visual-baselines.test.ts` 里逐个答案都执行过。
+    const missing = checkLocalBaselines({
+      root: ROOT,
+      platform: process.platform,
+    });
+    expect(missing).toBeNull();
+  });
+
+  it("本机这一档没登记时前置判决拦下并点名（换一档平台就看得见）", () => {
+    const verdict = checkLocalBaselines({ root: ROOT, platform: "darwin" });
+    expect(verdict).toContain("没有登记过像素基线");
+    // 判卷要能区分「平台没登记」与「登记了但缺几张」两条分支
+    expect(verdict).toContain("SUPPORTED_PLATFORMS");
   });
 
   it("像素档目录与 package.json 的 test:visual 同源（两处不许各写一份）", () => {
