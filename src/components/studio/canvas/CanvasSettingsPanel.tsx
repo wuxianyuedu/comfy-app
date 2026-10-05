@@ -7,6 +7,7 @@
 import type { ReactNode } from "react";
 
 import { fixed } from "~/lib/number-format";
+import { Badge } from "~/components/ui/badge";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Button } from "~/components/ui/button";
 import { RangeSlider } from "~/components/ui/range-slider";
@@ -58,9 +59,9 @@ export function CanvasSettingsPanel({
             <span className="text-ink-bright truncate text-[12.5px] font-semibold tracking-wide">
               画布设置
             </span>
-            <span className="bg-subtle text-ink-muted text-3xs rounded-full px-1.5 py-px font-mono">
+            <Badge tone="neutral" size="pill-sm" className="font-mono">
               v1
-            </span>
+            </Badge>
           </div>
           <Button
             variant="outline"

@@ -11,6 +11,7 @@ import {
   Video,
   X,
 } from "lucide-react";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -72,9 +73,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           历史记录
         </h2>
         {activeCount > 0 && (
-          <span className="bg-primary/20 text-primary-strong text-3xs rounded-full px-2 py-0.5">
+          <Badge tone="primary" size="pill-sm">
             {activeCount} 进行中
-          </span>
+          </Badge>
         )}
         <Hint label="刷新" accessibleName>
           <Button

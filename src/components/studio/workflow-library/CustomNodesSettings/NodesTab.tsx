@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { FieldLegend } from "~/components/ui/field";
@@ -41,12 +42,13 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           <FieldLegend variant="label" className="text-ink text-sm font-medium">
             自定义节点目录
           </FieldLegend>
-          <span
-            className="bg-success-strong/18 text-success-strong text-3xs rounded-full px-1.5 py-0.5 font-medium"
+          <Badge
+            tone="success"
+            size="pill-sm"
             title="解析器只读取这些目录里的 .py、绝不修改其中任何文件"
           >
             🔒 只读
-          </span>
+          </Badge>
         </div>
         {savedPaths.length > 0 ? (
           <div className="flex flex-col gap-1">
@@ -118,9 +120,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           <span className="text-ink text-sm font-medium">
             可导入的节点包
             {totalAcrossParents.outdated > 0 && (
-              <span className="bg-warning/18 text-warning text-3xs ml-2 rounded-full px-2 py-0.5 font-medium">
+              <Badge tone="warning" size="pill-sm" className="ml-2">
                 ↻ {totalAcrossParents.outdated} 个有更新
-              </span>
+              </Badge>
             )}
           </span>
           <span className="text-muted-foreground text-xs">
