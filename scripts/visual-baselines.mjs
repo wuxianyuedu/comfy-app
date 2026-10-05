@@ -2,10 +2,12 @@
 /**
  * visual-baselines.mjs — 像素基线的**清点内核**（规范 §11.8 的单一事实源）
  *
- * 同一件事实——「每个截图名 × 每个登记平台都有一套被 git 跟踪的 PNG」——有两个消费方：
+ * 同一件事实——「每个截图名 × 每个登记平台都有一套被 git 跟踪的 PNG」——有三个消费方：
  *   · `tests/visual-baseline-pairing.test.ts`（每次提交都跑的判据）；
  *   · `scripts/pixel-run.mjs` 的**本机前置判决**（起 webServer / 浏览器之前先答
- *     「这台机器有没有基线」）。
+ *     「这台机器有没有基线」）；
+ *   · `scripts/visual-reproduce-gate.mjs`（提交门槛 D 组：**换了基线的提交必须自己领一张
+ *     欠账单**，见下面「可复现欠账」那段）。
  * 两个消费方各抄一份清点代码，就是 §12.12 的孪生对：判据说「基线成套」而像素档说
  * 「本机没有基线」时，两边都得能指出是哪一条、缺哪个文件，而两份实现必然漂。
  * 所以清点只写在这里，两侧 import，各自只留差异（判据还要做「反空转」自证，
@@ -50,7 +52,10 @@ export const VISUAL_DIR = "e2e/visual";
 /** @type {Record<string, {webserver: "dev" | "start", note: string}>} */
 export const PLATFORM_RECORDING = {
   win32: { webserver: "dev", note: "开发机，实测同一命令连跑两次零差异" },
-  linux: { webserver: "start", note: "容器 / 类 CI，`CI` 为真，需先 `pnpm build`" },
+  linux: {
+    webserver: "start",
+    note: "容器 / 类 CI，`CI` 为真，需先 `pnpm build`",
+  },
 };
 
 /**
@@ -237,7 +242,8 @@ export function untrackedBaselines(root) {
     const tracked = new Set(trackedFiles(root, shotDir));
     for (const file of readdirSync(abs)) {
       if (!file.endsWith(".png")) continue;
-      if (!tracked.has(`${shotDir}/${file}`)) untracked.push(`${shotDir}/${file}`);
+      if (!tracked.has(`${shotDir}/${file}`))
+        untracked.push(`${shotDir}/${file}`);
     }
   }
   return untracked;
@@ -289,7 +295,8 @@ export function checkRecordingEnv({ platform, env = process.env }) {
   if (expected === null) return null;
   const actual = webserverForEnv(env);
   if (actual === expected) return null;
-  const want = expected === "dev" ? "`CI` 置空（或不设）" : "`CI` 置为真（如 `CI=true`）";
+  const want =
+    expected === "dev" ? "`CI` 置空（或不设）" : "`CI` 置为真（如 `CI=true`）";
   const got = actual === "dev" ? "当前 `CI` 未设" : "当前 `CI` 为真";
   const fix =
     expected === "dev"
@@ -305,4 +312,144 @@ export function checkRecordingEnv({ platform, env = process.env }) {
     `        ${fix}\n` +
     "      登记表在 scripts/visual-baselines.mjs 的 PLATFORM_RECORDING。"
   );
+}
+
+/**
+ * 「换了基线 ⇒ 必须在那一档的机器上再跑一遍」的**欠账单**（规范 §11.8）。
+ *
+ * 为什么需要它：本轮实测把一条既有的**假绿**翻了出来 —— 入库的 `-linux.png` 那几张
+ * 与当时环境差 **1 像素**（文字整体下移一行），而这**没有任何判据能发现**：
+ *   · `playwright test --update-snapshots` **总是绿**（它把基线改写成当次实况，
+ *     一次「写成功」被读成「像素可复现」）；
+ *   · 配对判据只核「截图名 × 平台成套且入库」，不核「这套 PNG 现在还跑得绿」；
+ *   · `pixel-run.mjs` 的 `--update` 那一档按设计**不拦缺基线**（那是它的本分），
+ *     于是「在没基线 / 口径不符的机器上录了一版、把仓库基线换成它」这条路上
+ *     一个判据都没有 —— 而它换掉的是**别人的档**：真正执行像素回归的那台机器
+ *     下一次一跑就红，红的原因（1 像素）还得现场看图才能定性。
+ *
+ * 判据的形状（**领账 + 记账两半，缺一不可**）：
+ *   ① 暂存改动**命中任何一张基线 PNG**（`changedBaselines`）⇒ 本次提交必须同时
+ *      出现一条欠账记录，否则阻断。这是「换基线的动作」与「自证的代价」之间唯一
+ *      的连接点。
+ *   ② 记录里的基线清单必须**逐字等于**本次动过的那些（`checkReproduceDebt`，
+ *      多列 / 少列都红）——「先领一张空白欠条」这条绕法当场被拦；反向那一格
+ *      （没动基线却留着欠账 = 上一批忘了抹账）同样红。领账与校验共用
+ *      `reproduceDebtRecord` 这一份形状（§12.12：各写一套格式化时，领出来的账
+ *      会被自己的校验判成对不上）。
+ *
+ * 为什么是「欠账」而不是「当场跑一遍」：这条判据挂在**提交门槛**上，而 `pixel-run.mjs`
+ * 的两次运行要起 webServer + 浏览器（会与钩子里的 A/B/C/D 抢资源，§13.5 的并行预算
+ * 是实测敏感项）。所以钩子只做它能做的事：**不许静默换基线** —— 换的人必须留下
+ * 「哪几张、为什么、在哪一档自证」的记录，清理动作由勾子在 PR / Issue 里召唤。
+ */
+/** 欠账单文件（相对仓库根）。 */
+export const REPRODUCE_LEDGER = "scripts/.visual-reproduce-ledger.json";
+
+/**
+ * 本次暂存改动里**换掉的基线 PNG**（相对仓库根的路径，字典序）。
+ *
+ * 只认真正的基线形态（`e2e/visual/<spec>-snapshots/<name>-chromium-<platform>.png`）：
+ * 用 `parseBaseline` 而不是「路径里出现过 snapshots」这类模糊判据 —— 后者会把
+ * 规格文件、`support/**` 与将来新增的目录一起算进来（一个恒真的判据等于没有判据）。
+ *
+ * @param {string[]} staged 暂存改动清单（相对仓库根的 POSIX 路径）
+ * @param {string} root 仓库根（用于按目录发现 spec，与清点内核同一份扫描面）
+ * @returns {string[]}
+ */
+export function changedBaselines(staged, root) {
+  const dirs = new Set(visualSpecs(root).map(({ shotDir }) => shotDir));
+  const changed = new Set();
+  for (const rel of staged) {
+    const dir = rel.slice(0, rel.lastIndexOf("/"));
+    if (!dirs.has(dir)) continue;
+    const file = rel.slice(rel.lastIndexOf("/") + 1);
+    if (parseBaseline(file) === null) continue;
+    changed.add(rel);
+  }
+  return [...changed].sort();
+}
+
+/**
+ * 欠账记录的本体形状（**两侧共用这一份**：领账与校验各写一套格式化必然漂）。
+ *
+ * `baselines` 逐条列出本次换掉的 PNG；`reason` 是「为什么换」（合法 UI 变更必须写清，
+ * 一行「更新基线」等于没写）；`platform` 声明自证发生在哪一档（只能填登记过的那几档）。
+ *
+ * @param {{baselines: string[], reason: string, platform: string}} input
+ * @returns {{baselines: string[], reason: string, platform: string}}
+ */
+export function reproduceDebtRecord({ baselines, reason, platform }) {
+  return {
+    baselines: [...baselines].sort(),
+    reason: reason.trim(),
+    platform,
+  };
+}
+
+/**
+ * 校验欠账记录与本次暂存改动一致（**双向**，只判一边等于留一扇门）。
+ *
+ * 三个方向都拦（与 `PENDING_PLATFORMS` 的双向不变式同族）：
+ *   ① 动了基线而没有任何欠账记录 ⇒ 「静默换基线」，正是这条判据要拦的形态；
+ *   ② 记录里列的基线 ≠ 本次动过的基线（多列 / 少列）⇒ 领了一张对不上的欠条；
+ *   ③ 记录本身缺字段 / `platform` 没登记过 / `reason` 太短 ⇒ 没人能按它去自证
+ *      （「稍后处理」与「以后再说」在这里一律算没写）。
+ *
+ * @param {{changed: string[], debt: unknown}} input
+ * @returns {string[]} 问题清单（空 = 放行）
+ */
+export function checkReproduceDebt({ changed, debt }) {
+  /** @type {string[]} */
+  const problems = [];
+  /* 反向那一格：**没动基线却留着欠账** = 上一批的自证没抹账（负债不清）。
+   * 与 `PENDING_PLATFORMS` 的双向不变式同族：少了这一条，欠账单就退化成
+   * 「一张没人删的赦免名单」，下一个人看到的是一句与本次提交无关的承诺。 */
+  if (changed.length === 0) {
+    if (debt !== null && typeof debt === "object") {
+      problems.push(
+        `本次没动任何基线，但 ${REPRODUCE_LEDGER} 还留着 —— 上一批的自证完成后要把这条账删掉` +
+          "（它是本次提交的凭据，不是常驻配置）。",
+      );
+    }
+    return problems;
+  }
+  if (debt === null || typeof debt !== "object") {
+    problems.push(
+      `本次提交换了 ${changed.length} 张像素基线，但没有 ${REPRODUCE_LEDGER} 的欠账记录：\n` +
+        "        `--update-snapshots` 总是绿（它把基线写成当次实况），所以「录了一次」不等于\n" +
+        "        「像素可复现」——基线换掉的是**别人那一档**的账，得在那一档的机器上自证。",
+    );
+    return problems;
+  }
+  const record = /** @type {Record<string, unknown>} */ (debt);
+  const listed = Array.isArray(record.baselines)
+    ? [.../** @type {string[]} */ (record.baselines)].sort()
+    : [];
+  const missing = changed.filter((f) => !listed.includes(f));
+  const extra = listed.filter((f) => !changed.includes(f));
+  if (missing.length > 0 || extra.length > 0) {
+    problems.push(
+      "欠账记录与本次动过的基线对不上" +
+        (missing.length > 0
+          ? `（少列：${missing.slice(0, 3).join("、")}）`
+          : "") +
+        (extra.length > 0 ? `（多列：${extra.slice(0, 3).join("、")}）` : "") +
+        " —— 领一张对不上的欠条等于没领（先领空白欠条这条绕法就靠这一条拦）。",
+    );
+  }
+  const platform = String(record.platform ?? "");
+  if (!SUPPORTED_PLATFORMS.includes(platform)) {
+    problems.push(
+      `欠账记录里的 platform（${platform || "空"}）不在登记口径里（${SUPPORTED_PLATFORMS.join(" / ")}）` +
+        " —— 自证发生在哪一档是这条记录的全部意义。",
+    );
+  }
+  const reason = String(record.reason ?? "").trim();
+  if (reason.length < 12) {
+    problems.push(
+      `欠账记录的 reason 只有 ${reason.length} 字（要写清「界面为什么变」）—— ` +
+        "下一个人要据它决定「看哪张 diff」还是「当回归去查代码」。",
+    );
+  }
+  return problems;
 }

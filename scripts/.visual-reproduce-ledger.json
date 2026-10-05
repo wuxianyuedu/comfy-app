@@ -1,0 +1,10 @@
+{
+  "baselines": [
+    "e2e/visual/canvas.visual.spec.ts-snapshots/canvas-empty-chromium-linux.png",
+    "e2e/visual/canvas.visual.spec.ts-snapshots/canvas-filled-chromium-linux.png",
+    "e2e/visual/overlay.visual.spec.ts-snapshots/overlay-log-default-chromium-linux.png",
+    "e2e/visual/overlay.visual.spec.ts-snapshots/overlay-log-wide-chromium-linux.png"
+  ],
+  "reason": "重录 linux 档 4 张：既有基线与当前环境的文字渲染差 1 像素（文字整体下移一行），已在本机连跑三次 check:visual 自证",
+  "platform": "linux"
+}

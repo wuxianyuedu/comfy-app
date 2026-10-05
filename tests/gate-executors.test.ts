@@ -347,7 +347,7 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     // 次数漂移，写死就成了下一个人照着它去核的假账（本仓反复吃过这味药）。
     const output = runInRepo(["--report"]);
     const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
-    expect(total, "步骤位置口径下判据是 46 份").toBe(46);
+    expect(total, "步骤位置口径下判据是 47 份").toBe(47);
     for (const name of [
       "x.cjs",
       "xxx.cjs",
