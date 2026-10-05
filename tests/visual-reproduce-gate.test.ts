@@ -13,9 +13,12 @@
  *      （一个恒真的「动过像素层」判据等于没有判据）。
  *   ③ **钩子真的调它**：判据写在文件里而没人跑 = §13.5.12 那个「判据自称在跑」的形态。
  */
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync as fsWriteFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   REPRODUCE_LEDGER,
@@ -23,7 +26,10 @@ import {
   checkReproduceDebt,
   reproduceDebtRecord,
 } from "../scripts/visual-baselines.mjs";
-import { runGate } from "../scripts/visual-reproduce-gate.mjs";
+import {
+  runGate,
+  withMergeHeadBaselines,
+} from "../scripts/visual-reproduce-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -166,5 +172,143 @@ describe("欠账门禁的接线（§11.8 / §13.5.12）", () => {
     // 那条由 test 上面的判决覆盖）。这里只钉一件事：名字与常量一致 —— 改名后
     // 校验会去读一个不存在的文件，而那时的表现是「永远说没领账」，与「真的没领」同形。
     expect(REPRODUCE_LEDGER).toContain("visual-reproduce-ledger");
+  });
+});
+
+describe("合并态下「被合进来那侧带进来的基线」也算改动（withMergeHeadBaselines）", () => {
+  /* 立案现场：PR 拉 master 时，由对方分支带进本次合并的基线 PNG 在
+   * `git diff --cached --name-only` 里**一个字都不出现**（那条命令报的是「相对第一父
+   * 的整份差」）。于是判据读到的是「一张基线都没动，却留着欠账」，把一条**合法的
+   * 合并提交**判成「上一批忘了抹账」永久拦死 —— 话术还指向一个不存在的病因。 */
+  const temps: string[] = [];
+
+  afterEach(() => {
+    for (const dir of temps.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** 建一个临时仓库；返仓库根。`git` 用户名/邮箱按仓库级设，不污染全局。 */
+  function initRepo(): string {
+    const dir = mkdtempSync(path.join(tmpdir(), "visual-reproduce-gate-"));
+    temps.push(dir);
+    const git = (...args: string[]) =>
+      execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "t@t.t");
+    git("config", "user.name", "t");
+    // 本机 / CI 全局可能开了 commit.gpgsign，临时仓库一律关掉（否则造不出提交）。
+    git("config", "commit.gpgsign", "false");
+    return dir;
+  }
+
+  function write(dir: string, rel: string, body: string): void {
+    const full = path.join(dir, rel);
+    execFileSync("mkdir", ["-p", path.dirname(full)]);
+    fsWriteFileSync(full, body);
+  }
+
+  function commit(dir: string, msg: string): void {
+    execFileSync("git", ["-C", dir, "add", "-A"], { stdio: "pipe" });
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", msg], {
+      stdio: "pipe",
+    });
+  }
+
+  /* 用真实规格目录形状，好让 `changedBaselines` 的识别面（读 spec 目录）认它。 */
+  const SHOT =
+    "e2e/visual/login.visual.spec.ts-snapshots/login-desktop-chromium-linux.png";
+  const SPEC = "e2e/visual/login.visual.spec.ts";
+
+  it("非合并态：原样返回，不做任何补全", () => {
+    const dir = initRepo();
+    write(dir, "a.txt", "x");
+    commit(dir, "init");
+    const staged = [SHOT, "src/lib/x.ts"];
+    expect(withMergeHeadBaselines(staged, dir)).toEqual(staged);
+  });
+
+  it("合并态：被合进来那侧换的基线也要进清单（否则合法合并被永久拦死）", () => {
+    const dir = initRepo();
+    // 共同祖先：基线是旧内容 + 规格文件（识别面靠它发现快照目录）
+    write(dir, SPEC, "test('x', () => {})");
+    write(dir, SHOT, "old-baseline");
+    commit(dir, "base");
+    // 我方分支：换基线（这就是本 PR 干的事）
+    write(dir, SHOT, "new-from-branch");
+    commit(dir, "re-record baseline");
+    // 对方分支：只改别处（master 常态）
+    const base = execFileSync("git", ["-C", dir, "rev-parse", "HEAD~1"], {
+      encoding: "utf8",
+    }).trim();
+    execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "other", base], {
+      stdio: "pipe",
+    });
+    write(dir, "src/lib/y.ts", "other-side");
+    commit(dir, "other work");
+    // 回到我方，合并对方 —— `--no-commit` 把合并**停在进行中**（自动提交会清掉 MERGE_HEAD）
+    execFileSync("git", ["-C", dir, "checkout", "-q", "main"], {
+      stdio: "pipe",
+    });
+    execFileSync(
+      "git",
+      ["-C", dir, "merge", "--no-commit", "--no-edit", "other"],
+      { stdio: "pipe" },
+    );
+
+    // 现场形状：`git diff --cached` 相对第一父（我方）看不到这张基线
+    expect(
+      execFileSync("git", ["-C", dir, "diff", "--cached", "--name-only"], {
+        encoding: "utf8",
+      }),
+    ).not.toContain(SHOT);
+    // 补全后它必须在清单里 —— 否则判决会读到「没动基线却留着欠账」
+    const supplemented = withMergeHeadBaselines([], dir);
+    expect(supplemented).toContain(SHOT);
+    expect(changedBaselines(supplemented, dir)).toEqual([SHOT]);
+  });
+
+  it("合并态下与第二父**相同**的基线不算改动（不放松判决面）", () => {
+    const dir = initRepo();
+    write(dir, SPEC, "test('x', () => {})");
+    write(dir, SHOT, "shared-baseline");
+    commit(dir, "base");
+    // 我方：只改前端
+    write(dir, "src/lib/x.ts", "1");
+    commit(dir, "feat");
+    // 对方：也改前端，**不碰基线** —— 合并后该基线两侧都相同
+    const base = execFileSync("git", ["-C", dir, "rev-parse", "HEAD~1"], {
+      encoding: "utf8",
+    }).trim();
+    execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "other", base], {
+      stdio: "pipe",
+    });
+    write(dir, "src/lib/y.ts", "2");
+    commit(dir, "other");
+    execFileSync("git", ["-C", dir, "checkout", "-q", "main"], {
+      stdio: "pipe",
+    });
+    execFileSync(
+      "git",
+      ["-C", dir, "merge", "--no-commit", "--no-edit", "other"],
+      { stdio: "pipe" },
+    );
+
+    // 没动过的基线不该被补进来（补进来会让「没动基线却留着欠账」那格静默放过）
+    expect(withMergeHeadBaselines([], dir)).not.toContain(SHOT);
+  });
+
+  it("`rev-parse` 口径在 worktree 里也成立（`.git` 是文件，拼路径会静默落空）", () => {
+    // `shell-gate.mjs` 用的是 `.git/MERGE_HEAD` 路径 —— 在 worktree / submodule 里
+    // `.git` 是个**文件**，那条路径根本不存在，判据会静默退成「非合并态」。
+    // 本步用 `git rev-parse --verify MERGE_HEAD`，合并态照样认得。
+    const dir = initRepo();
+    write(dir, "a.txt", "x");
+    commit(dir, "init");
+    const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    // 非合并态：rev-parse 拿不到 MERGE_HEAD（退出码非 0）⇒ 原样返回
+    expect(withMergeHeadBaselines(["a.txt"], dir)).toEqual(["a.txt"]);
+    expect(head).toBeTruthy();
   });
 });

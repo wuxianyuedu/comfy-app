@@ -34,6 +34,7 @@ import {
   changedBaselines,
   checkReproduceDebt,
   reproduceDebtRecord,
+  visualSpecs,
 } from "./visual-baselines.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -47,6 +48,49 @@ export function stagedFiles() {
   });
   if (out.status !== 0) return [];
   return out.stdout.split(/\r?\n/).filter(Boolean);
+}
+
+/**
+ * 合并态下补上「被合进来那一侧带进来的基线」。
+ *
+ * `git diff --cached --name-only` 在合并提交里报的是**相对第一父（HEAD）**的整份差 ——
+ * 于是由对方分支（第二父）带进本次合并的基线 PNG 一个字都不出现：本地跑到的结论是
+ * 「一张基线都没动，却留着欠账」，与事实相反（欠账正是那些基线的凭据）。表现是一个
+ * 合法的合并提交被**永久拦死**，且话术指向「上一批忘了抹账」这个不存在的病因。
+ *
+ * 判据与 `shell-gate.mjs` 的 `dropAdoptedShellInputs` 同族（§12.18：不写第二份判
+ * 「合并态下谁算改动」的逻辑）：合并态下**与第二父也不同**的基线同样算法定改动。
+ * 非合并态 / 非基线路径原样返回，判决面一行都不放宽。
+ *
+ * @param {string[]} staged `git diff --cached --name-only` 的结果。
+ * @param {string} [repoRoot] 仓库根（默认本仓库；单测传临时仓库）。
+ * @returns {string[]} 补全后的清单；非合并态原样返回。
+ */
+export function withMergeHeadBaselines(staged, repoRoot = ROOT) {
+  /* 用 `rev-parse` 而不是 `.git/MERGE_HEAD` 路径：worktree / submodule 里 `.git` 是个
+   * 文件，拼路径会静默落空（`shell-gate.mjs` 那处同形，但那条判据只在主工作区跑）。
+   * 读不到 = 非合并态，原样返回。 */
+  const head = spawnSync(
+    "git",
+    ["-C", repoRoot, "rev-parse", "--verify", "MERGE_HEAD"],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  const mergeHead = head.status === 0 ? head.stdout.trim() : "";
+  if (!mergeHead) return staged;
+  const out = new Set(staged);
+  /* 只看基线 PNG 所在的那些目录（与 `changedBaselines` 同一份识别面），不逐文件问 git。 */
+  const dirs = new Set(visualSpecs(repoRoot).map(({ shotDir }) => shotDir));
+  const listed = spawnSync(
+    "git",
+    ["-C", repoRoot, "diff", "--name-only", mergeHead],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  if (listed.status !== 0) return staged;
+  for (const rel of listed.stdout.split(/\r?\n/).filter(Boolean)) {
+    const dir = rel.slice(0, rel.lastIndexOf("/"));
+    if (dirs.has(dir)) out.add(rel);
+  }
+  return [...out];
 }
 
 /** 读欠账记录（不存在 / 读不出 → null，由判决把它当成「没领账」）。 */
@@ -80,7 +124,7 @@ export function runGate({ changed, debt }) {
 
 /** 领账：把本次动过的基线写进欠账单（`--record` 是**给人用的**，不进钩子）。 */
 function record() {
-  const changed = changedBaselines(stagedFiles(), ROOT);
+  const changed = changedBaselines(withMergeHeadBaselines(stagedFiles()), ROOT);
   if (changed.length === 0) {
     console.error(
       "[visual-reproduce-gate] ✗ 暂存区里没有**已修改**的基线 PNG —— 先 `git add <png>`，" +
@@ -116,7 +160,7 @@ function record() {
 
 function main() {
   if (process.argv[2] === "--record") return record();
-  const changed = changedBaselines(stagedFiles(), ROOT);
+  const changed = changedBaselines(withMergeHeadBaselines(stagedFiles()), ROOT);
   const result = runGate({ changed, debt: readDebt() });
   if (result.problem) {
     console.error(

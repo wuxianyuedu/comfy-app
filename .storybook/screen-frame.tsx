@@ -157,8 +157,20 @@ export const PROJECT_SCENES = {
    * **有内容**的项目：画布上摆着四张真节点 + 三条连线。
    *
    * `emptyProject` 摆的是空态引导卡，而「打开一个做过的项目」才是主屏最常见的
-   * 状态。节点走 `canvasNode()`（数据是 `defaultData(kind)` 的真形状），连线
-   * 端点 id 形如 `"1:images"` —— 与真画布同一套（`nodeSeqOf()` 的短序号）。
+   * 状态。节点走 `canvasNode()`（数据是 `defaultData(kind)` 的真形状）。
+   *
+   * ⚠️ **连线端点必须逐条满足真端口几何**，否则 React Flow **静默不渲染**那条边
+   * ——不报错、控制台干净、画布只是少几根线，而这条场景的 `about` 与名字都在说
+   * 「三条连线」。本画布只有两种端口（`CanvasNode.tsx`）：
+   *   · 每个节点**右侧 `output`**（source）；
+   *   · **只有 `kind: "picture"`** 才有**左侧 `inputImage`**（target）。
+   * 所以「谁能当目标」由 kind 决定：`image` / `video` / `movie` 这些**吃不到**
+   * `inputImage`，拿它们当 target 就是那三条不出现的边。第一版写的是
+   * `"1:text"` / `"2:prompt"`（形如真画布的短序号，看着很像），三条全没画出来。
+   *
+   * 这份图与 `e2e/visual/canvas.visual.spec.ts` 的 `canvas-filled` 同形：
+   * `text`（提示词）与 `movie`（成片）各自 `output` → 两张 `picture` 的
+   * `inputImage`。**两处都按端口能力配**，不是各写一份巧合。
    */
   filledProject: {
     about: "一个做过的项目：画布上四张真节点 + 三条连线 + 真视口",
@@ -167,35 +179,40 @@ export const PROJECT_SCENES = {
       {
         id: "1",
         kind: "text",
-        x: 40,
-        y: 60,
+        x: 0,
+        y: 0,
         prompt: "城市夜景，雨后的霓虹街道，电影感打光",
       },
-      { id: "2", kind: "image", x: 360, y: 40 },
-      { id: "3", kind: "video", x: 680, y: 180 },
-      { id: "4", kind: "movie", x: 360, y: 340 },
+      /* 节点卡宽 380（`CanvasNode.tsx` 的 `w-95`），所以横向必须留出**一个整卡宽
+         再加一条缝**：320 那版看起来像排开了，实测卡片是**叠在一起**的 ——
+         截图里「图片」压住「文本」右半边、「视频」压住「图片」。坐标是画布上的
+         版面，真机上它由用户的拖拽决定，这里给的是「一眼能看出是四个节点、
+         三条线各连各的」那种摆法。 */
+      { id: "2", kind: "picture", x: 460, y: -40 },
+      { id: "3", kind: "movie", x: 0, y: 520 },
+      { id: "4", kind: "picture", x: 460, y: 520 },
     ]),
     edges: [
       {
         id: "e1-2",
         source: "1",
         target: "2",
-        sourceHandle: "1:text",
-        targetHandle: "2:prompt",
-      },
-      {
-        id: "e2-3",
-        source: "2",
-        target: "3",
-        sourceHandle: "2:images",
-        targetHandle: "3:images",
+        sourceHandle: "output",
+        targetHandle: "inputImage",
       },
       {
         id: "e2-4",
         source: "2",
         target: "4",
-        sourceHandle: "2:images",
-        targetHandle: "4:images",
+        sourceHandle: "output",
+        targetHandle: "inputImage",
+      },
+      {
+        id: "e3-4",
+        source: "3",
+        target: "4",
+        sourceHandle: "output",
+        targetHandle: "inputImage",
       },
     ],
   },

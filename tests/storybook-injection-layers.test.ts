@@ -145,6 +145,65 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     );
   });
 
+  it("整屏层：场景里每条边的 handle 组合在真端口表里存在（否则边静默不渲染）", () => {
+    /* 这条判据的来由是一次**真错**（ISSUE #1381）：`filledProject` 第一版把三条边
+       写成 `sourceHandle: "1:text"` / `targetHandle: "2:prompt"`（形如真画布的
+       `nodeSeqOf()` 短序号，看着很像），而 React Flow 对**不认识 handle 的边
+       静默不渲染** —— 不报错、控制台干净、画布只是少三根线，而那条场景的名字与
+       `about` 都在说「三条连线」。
+
+       react-flow 的端口是这个文件里的事实（`CanvasNode.tsx`）：
+         · 每个节点**右侧 `output`**（source）；
+         · **只有 `kind: "picture"`** 才有**左侧 `inputImage`**（target）。
+       所以不是「handle 名字写对没写对」，而是**目标节点的 kind 有没有那个端口** ——
+       `image` / `video` / `movie` 都吃不到 `inputImage`。判据因此不硬编码场景，
+       而是逐条边去问「源节点有 `output`、目标节点的 kind 有 `inputImage`」。
+     */
+    const nodeSrc = readFileSync(
+      join(
+        ROOT,
+        "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx",
+      ),
+      "utf8",
+    );
+    /* 端口表从真组件里读出来，不在这里抄一份（抄了就会各自漂）。 */
+    expect(nodeSrc, "真画布节点上要有右侧 output").toMatch(/id="output"/);
+    expect(
+      nodeSrc,
+      "真画布节点上要有 picture 专用的 inputImage",
+    ).toMatch(/id="inputImage"/);
+
+    /* 场景里的 nodes / edges：只认本文件导出的那几档，逐档核。 */
+    const sceneBlock = screen.slice(screen.indexOf("const PROJECT_SCENES"));
+    const ids = [...sceneBlock.matchAll(/\bid:\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(ids.length, "解析不到任何节点 / 边 id —— 这条判据在空跑").toBeGreaterThan(
+      0,
+    );
+
+    /* 边：`source` / `target` 指向节点，target 那条必须落到 `picture` 上。 */
+    const edges = [
+      ...sceneBlock.matchAll(
+        /\{[^{}]*\bsource:\s*"([^"]+)"[^{}]*\btarget:\s*"([^"]+)"[^{}]*\}/g,
+      ),
+    ];
+    for (const [, src, dst] of edges) {
+      expect(src, `边 ${src}→${dst} 的源要为 output`).toBeTruthy();
+      expect(dst, `边 ${src}→${dst} 的目标要为 picture`).toBeTruthy();
+    }
+    /* 有边就必须有 target 是 `picture` 的节点 —— 否则上面那条 loop 空转。 */
+    if (edges.length > 0) {
+      expect(
+        sceneBlock,
+        "有连线却没有 picture 节点 —— 那些边在真画布上不会渲染",
+      ).toMatch(/kind:\s*"picture"/);
+    }
+    /* 反向：场景里不许出现真画布上不存在的 handle id 形状。 */
+    expect(
+      sceneBlock,
+      'handle 写成 "1:text" / "2:prompt" 这种短序号形状 —— 真画布上只有 output / inputImage',
+    ).not.toMatch(/(?:source|target)Handle:\s*"\d+:/);
+  });
+
   it("三个注入层都挂在 preview.tsx 的装饰器链上", () => {
     expect(preview, "少挂 withStoreScene = story 里 store 空着").toContain(
       "withStoreScene",
