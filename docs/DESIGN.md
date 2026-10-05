@@ -451,7 +451,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - **卡片/浮层用 `rounded-xl`**（默认 20px），**控件（按钮、下拉触发器）用 `rounded-lg`**（16px），**输入框用 `rounded-md`**（12px），**chip/药丸用 `rounded-full`**（9999px）。
 - 小尺寸控件靠**取小**而不是换档：`rounded-[min(var(--radius-md),10px)]`（Button `xs`/`icon-xs`）、`min(var(--radius-md),12px)`（`sm`/`icon-sm`）。`ui/` 里 15 处 `rounded-[...]` 有 11 处是这种**从 token 派生**的写法，只有 3 处是裸值（`rounded-[2px]`×2、`rounded-[4px]`×1）。
 - 两处直接吃基数、不吃档位：`ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 与 `ui/sonner.tsx` 的 `--border-radius`。它们跟着整条刻度走，不是第二份来源。
-- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 10 / 298，只许降）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`），三族共用一次目录遍历，按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。
+- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 10 / 298，只许降）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`、区头那一行 → `DynamicWorkflowForm/SectionHeader`），四族共用一次目录遍历（写在一张 `FAMILIES` 表里，新增一族只加一行），按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）；反向样本同样在册（`WorkflowIOPreviewPanel` 那枚同形、不同底的计数不许被区头标记抓到 —— 抓到就说明判据在拦一切）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。
 
 ---
 
@@ -546,7 +546,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 | 类别 | 处数 | 为什么不是徽标 |
 | --- | --- | --- |
-| 纯数字角标（`{count}`、`{n}`、tabular-nums） | 7 | 是**计数器**，形状随容器（有的 `px-1` 无 `py`、有的 `min-w-3.5` 圆形）；`SectionHeader.tsx:23` 与 `GroupedControls.tsx:101` 两处类名**逐字相同** = 孪生，该抽自己的基元而不是塞进 Badge |
+| 纯数字角标（`{count}`、`{n}`、tabular-nums） | 7 | 是**计数器**，形状随容器（有的 `px-1` 无 `py`、有的 `min-w-3.5` 圆形）。其中曾报的一对孪生（`SectionHeader.tsx:23` / `GroupedControls.tsx:101`）**已收**，但收法不是新造基元：`GroupedControls` 手抄的是**整行区头**（圆点 + 大写标签 + 计数 + 虚线），而 `DynamicWorkflowForm/SectionHeader` 本就是那一行的具名件 —— 于是删抄、改成 import。剩下那枚 `WorkflowIOPreviewPanel.tsx:206` 与计数同形只差底色（`bg-subtle` vs `bg-surface-2`，它坐在 `bg-panel` 浮层上），是「同形状、不同表面」的合理分叉，不并 |
 | 序号圆 / 图标圆（`size-6`/`size-7` + `grid place-items-center`） | 6 | 等宽高圆形 + 单个字符或图标。**已抽成 `workshop/IndexDot`**（工坊 5 处逐字相同的迁完）；第 6 处是 `workshop/AttributeMultiSelect.tsx:182` 的**勾选方框**（`size-3.5 rounded` + `Check` 图标 + 选中态换整套底色），不是序号，不并 |
 | 媒体/画布上的浮层字幕（`bg-black/60 … backdrop-blur`、`pointer-events-none absolute`） | 3 | 是叠在图上的字幕条，不参与文档流 |
 | 可点 chip（带 `hover:` / `onClick` / `<Button>`） | 6 | 交互控件，归 Button/选择器家族 |

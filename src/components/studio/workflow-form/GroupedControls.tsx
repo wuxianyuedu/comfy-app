@@ -25,7 +25,7 @@ import {
 import { DimensionControl } from "./DimensionControl";
 import { VideoControl } from "./VideoControl";
 import { SECTION_ACCENT } from "./DynamicWorkflowForm/constants";
-import { Separator } from "~/components/ui/separator";
+import { SectionHeader } from "./DynamicWorkflowForm/SectionHeader";
 
 function GroupedControls({
   dimension,
@@ -90,19 +90,7 @@ function GroupedControls({
   return (
     <>
       {!compact && (
-        <div className="border-border-strong mt-1 flex items-center gap-2 border-t pt-2.5">
-          <span
-            className="size-2 shrink-0 rounded-full"
-            style={{ background: SECTION_ACCENT }}
-          />
-          <span className="text-ink-muted text-3xs font-semibold tracking-wider uppercase">
-            组合参数
-          </span>
-          <span className="bg-surface-2 text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">
-            {count}
-          </span>
-          <Separator className="border-border-strong h-0 flex-1 border-t border-dashed bg-transparent" />
-        </div>
+        <SectionHeader label="组合参数" accent={SECTION_ACCENT} count={count} />
       )}
       <div className="flex-col gap-3">
         {dimension && (
