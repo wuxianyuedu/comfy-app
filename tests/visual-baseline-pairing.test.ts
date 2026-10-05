@@ -18,99 +18,33 @@
  *   3. **名字↔平台双向对得上**：出现没登记的平台后缀（`-darwin` / 手滑的 `-window`），
  *      既说明有人换了执行环境没更新口径，也会让「齐全」两条各数一半。
  *
- * SUPPORTED_PLATFORMS 是**口径**：新增一档执行环境时，先用同一份 spec 在那档上
- * `--update-snapshots` 录出成套 PNG，再同批改这里 —— 只登记平台不录基线、或只录基线不
- * 登记平台，都会让像素层在那一档静默失效。
- *   · win32 —— 开发机（本地口径 webServer = `pnpm dev`）。
- *   · linux —— 容器 / 类 CI 执行环境（`CI` 为真 ⇒ webServer = `pnpm start`，需先
- *     `pnpm build`）。这一档的两张 PNG 于恢复本档时用同一份 spec 重录，替换掉
- *     `#6538809` 之前那两张「录于全局状态栏出现之前、也没有 mask 规则」的旧账。
- *     ⚠️ **基线是按 webServer 口径录的**：dev 指示器那个 mask 目前遮不住（宿主元素
- *     零尺寸），所以 dev 与 start 两种口径的像素不同 —— linux 档按 start 口径录，
- *     在该档跑 `pnpm check:visual` 请保持 `CI` 为真（容器里通常是）。
- * 扫描面按 `e2e/visual/` 目录发现，不维护 spec 清单 —— 写死的清单正是会漂的那类东西。
+ * 清点内核在 `scripts/visual-baselines.mjs`（§12.12：与 `scripts/pixel-run.mjs` 的
+ * **本机前置判决**共用同一份，不各抄一份）。平台登记的口径也搬到了那里 —— 它是两侧
+ * 共同的输入，放在任一消费方里都会让另一方去猜。
+ *
+ * 本判据**只管仓库里那几套基线的形态**，与「本机有没有基线」是两件事：后者问的是
+ * 运行这台机器会不会一跑就红，由 `pixel-run.mjs` 起任何东西之前先答（见其
+ * `checkLocalBaselines`）。把两者混起来会让本判据在没登记过像素平台的机器上红 ——
+ * 那是误报，不是发现。
  */
-import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import {
+  SUPPORTED_PLATFORMS,
+  declaredShotNames,
+  missingBaselinesForPlatform,
+  parseBaseline,
+  snapshotsFor,
+  untrackedBaselines,
+  visualSpecs,
+} from "../scripts/visual-baselines.mjs";
+
 const ROOT = path.resolve(import.meta.dirname, "..");
-const VISUAL_DIR = "e2e/visual";
-
-/**
- * 项目实际会跑像素回归的平台（登记 = 有且仅有这几档在仓库里有一套 PNG）。
- *   · win32 —— 开发机，`pnpm dev` 口径（实测两次连跑零差异）。
- *   · linux —— 容器 / 类 CI 环境，`pnpm start` 口径（实测同一命令连跑两次零差异）。
- */
-const SUPPORTED_PLATFORMS = ["win32", "linux"];
-
-/** `{name}-{projectName}-{platform}.png` —— Playwright 默认的基线文件形态。 */
-const BASENAME_RE = /^(.+)-chromium-(linux|win32|darwin)\.png$/;
-
-/** spec 里 `toHaveScreenshot("x.png")` 声明的截图名（不含扩展名）。 */
-export function declaredShotNames(specText: string): string[] {
-  const names = new Set<string>();
-  for (const m of specText.matchAll(/toHaveScreenshot\(\s*["']([^"']+)["']/g)) {
-    const raw = m[1];
-    if (raw) names.add(raw.replace(/\.png$/i, ""));
-  }
-  return [...names];
-}
-
-/** 一份基线文件名拆出的「截图名 + 平台」；形状不对返回 null（由孤儿判据点名）。 */
-export function parseBaseline(
-  file: string,
-): { name: string; platform: string } | null {
-  const m = BASENAME_RE.exec(file);
-  const name = m?.[1];
-  const platform = m?.[2];
-  return name && platform ? { name, platform } : null;
-}
-
-/** git 跟踪着的该目录下的文件（相对仓库根的路径）。 */
-export function trackedFiles(dir: string): string[] {
-  const out = execFileSync("git", ["ls-files", "--", dir], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
-  return out.split(/\r?\n/).filter(Boolean);
-}
-
-/** 快照目录里的 PNG，按「截图名 → 平台数组」聚合（未跟踪的那些在调用方再判一次）。 */
-function snapshotsFor(shotDir: string): Map<string, string[]> {
-  const byName = new Map<string, string[]>();
-  if (!existsSync(path.join(ROOT, shotDir))) return byName;
-  for (const file of readdirSync(path.join(ROOT, shotDir))) {
-    const parsed = parseBaseline(file);
-    if (!parsed) continue;
-    const list = byName.get(parsed.name) ?? [];
-    list.push(parsed.platform);
-    byName.set(parsed.name, list);
-  }
-  return byName;
-}
-
-/** 扫描面：`e2e/visual/*.visual.spec.ts` 及其同名 `-snapshots` 目录。 */
-function visualSpecs(): Array<{
-  spec: string;
-  shotDir: string;
-  names: string[];
-}> {
-  const dir = path.join(ROOT, VISUAL_DIR);
-  return readdirSync(dir)
-    .filter((f) => f.endsWith(".visual.spec.ts"))
-    .map((f) => ({
-      spec: `${VISUAL_DIR}/${f}`,
-      shotDir: `${VISUAL_DIR}/${f}-snapshots`,
-      names: declaredShotNames(
-        readFileSync(path.join(dir, f), "utf8").replace(/\r\n/g, "\n"),
-      ),
-    }));
-}
 
 describe("像素基线成对齐全且入库（§11.8）", () => {
-  const specs = visualSpecs();
+  const specs = visualSpecs(ROOT);
 
   it("扫描面收到了视觉 spec（不是空数组假装通过）", () => {
     expect(specs.length).toBeGreaterThan(0);
@@ -124,43 +58,28 @@ describe("像素基线成对齐全且入库（§11.8）", () => {
 
   it("每个截图名在各支持平台上都有基线", () => {
     const missing: string[] = [];
-    for (const { spec, names } of specs) {
-      const found = snapshotsFor(`${spec}-snapshots`);
-      for (const name of names) {
-        for (const platform of SUPPORTED_PLATFORMS) {
-          if (!(found.get(name) ?? []).includes(platform)) {
-            missing.push(`${spec} → ${name} 缺 ${platform}`);
-          }
-        }
-      }
+    for (const platform of SUPPORTED_PLATFORMS) {
+      missing.push(...missingBaselinesForPlatform(ROOT, platform));
     }
     expect(missing).toEqual([]);
   });
 
   it("基线 PNG 全部入库（磁盘上有而 git 没跟踪 = 只在本机绿）", () => {
-    const tracked = new Set(trackedFiles(VISUAL_DIR));
-    const untracked: string[] = [];
-    for (const { spec } of specs) {
-      const shotDir = `${spec}-snapshots`;
-      if (!existsSync(path.join(ROOT, shotDir))) continue;
-      for (const file of readdirSync(path.join(ROOT, shotDir))) {
-        if (!file.endsWith(".png")) continue;
-        if (!tracked.has(`${shotDir}/${file}`))
-          untracked.push(`${shotDir}/${file}`);
-      }
-    }
-    expect(untracked).toEqual([]);
+    expect(untrackedBaselines(ROOT)).toEqual([]);
   });
 
   it("没有未登记的平台后缀，也没有查无此名的孤儿基线", () => {
     const orphans: string[] = [];
     for (const { spec, names } of specs) {
       const shotDir = `${spec}-snapshots`;
-      if (!existsSync(path.join(ROOT, shotDir))) continue;
-      for (const file of readdirSync(path.join(ROOT, shotDir))) {
-        if (!file.endsWith(".png")) continue;
+      for (const name of snapshotsFor(ROOT, shotDir).keys()) {
+        if (!names.includes(name)) orphans.push(`${shotDir}/${name}`);
+      }
+      // 平台维度：快照目录里出现没登记的平台后缀（`-darwin` / 手滑的 `-window`），
+      // 既说明有人换了执行环境没更新口径，也会让上面那条「齐全」只数一半。
+      for (const file of snapshotFiles(shotDir)) {
         const parsed = parseBaseline(file);
-        if (!parsed || !names.includes(parsed.name)) {
+        if (!parsed) {
           orphans.push(`${shotDir}/${file}`);
         } else if (!SUPPORTED_PLATFORMS.includes(parsed.platform)) {
           orphans.push(`${shotDir}/${file}（平台 ${parsed.platform} 未登记）`);
@@ -194,5 +113,17 @@ describe("像素基线成对齐全且入库（§11.8）", () => {
     );
     expect(SUPPORTED_PLATFORMS).toContain("linux");
     expect(SUPPORTED_PLATFORMS).not.toContain("darwin");
+    // ⑤ 清点内核**真的接了输入**：没登记的那档必然缺点名（否则「本机没有基线」
+    //    那条前置判决永远说「有」）。
+    expect(
+      missingBaselinesForPlatform(ROOT, "darwin").length,
+    ).toBeGreaterThan(0);
+    expect(missingBaselinesForPlatform(ROOT, "linux")).toEqual([]);
   });
 });
+
+/** 某个快照目录里的文件名（目录不存在时为空）。 */
+function snapshotFiles(shotDir: string): string[] {
+  const abs = path.join(ROOT, shotDir);
+  return existsSync(abs) ? readdirSync(abs) : [];
+}
