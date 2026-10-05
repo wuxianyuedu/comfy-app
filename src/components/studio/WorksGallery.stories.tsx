@@ -64,3 +64,18 @@ export const ManyProjects: Story = {
     />
   ),
 };
+
+/**
+ * 名字很长的项目混在网格里：卡片标题的截断（真机上项目名是一句话描述，
+ * 长名会把网格行高撑乱）。
+ */
+export const LongNames: Story = {
+  render: () => (
+    <GallerHarness
+      projectNames={[
+        "角色一致性 · 三视图 + 首帧逐镜生成（第 2 版）",
+        "城市夜景重制 · 雨后的霓虹街道",
+      ]}
+    />
+  ),
+};

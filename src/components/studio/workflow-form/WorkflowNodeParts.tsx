@@ -21,6 +21,7 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { ioLabel, typeDisplay } from "~/components/studio/workflow-io";
 import { TypeChip } from "~/components/studio/TypeChip";
+import { cn } from "~/lib/utils";
 import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 
 /** 卡片外壳：与 CanvasNode 持有的外壳完全一致（无 overflow-hidden，
@@ -79,17 +80,28 @@ export function WorkflowNodeDivider() {
   return <div className="bg-border-strong h-px" />;
 }
 
-/** 右侧胶囊（h-5 r11 bg --color-node-accent px-2），内容由调用方给。 */
+/** 右侧胶囊（h-5 r11 bg --color-node-accent px-2），内容由调用方给。
+ *
+ * 形状在这里、**底色不在**：画布节点用的是 `--color-overlay-accent-surface`
+ * （「浮层/chip 强调底」）、库卡与 Ardot 还原件用 `--color-node-accent`
+ * （「节点强调底」）。两档浅色只差 1/255（`#f2eeff` vs `#f1edff`）、暗色差得明显
+ * （`#1e1a2e` vs `#241f38`），是两颗语义不同的 token，不该借「去重」并成一颗 ——
+ * 所以差异用 `className` 补，实测 `cn()` 认 `bg-<名>` 为同一组、后写的赢。 */
 export function WorkflowNodePill({
   children,
   title,
+  className,
 }: {
   children: React.ReactNode;
   title?: string;
+  className?: string;
 }) {
   return (
     <div
-      className="bg-node-accent flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2"
+      className={cn(
+        "bg-node-accent flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2",
+        className,
+      )}
       title={title}
     >
       {children}

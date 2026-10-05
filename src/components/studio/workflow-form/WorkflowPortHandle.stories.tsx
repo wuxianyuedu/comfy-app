@@ -205,3 +205,33 @@ export const Single: Story = {
     </div>
   ),
 };
+
+/**
+ * 扇出画布（一个源节点出三条线）：端点几何在**同一节点的多个 handle** 上都成立 ——
+ * 单线场景看不出这件事（连线从哪个 handle 出、落哪个 handle 上，只有真画布算得出）。
+ */
+export const FanOutCanvas: Story = {
+  render: () => (
+    <div className="flex flex-wrap gap-6 p-4">
+      <StorybookFlowCanvas
+        scene={withNodeType(canvasScene("fanOut"), "story")}
+        nodeTypes={NODE_TYPES}
+      />
+    </div>
+  ),
+};
+
+/**
+ * 各 kind 混排（八张节点）：端点类型色的**分辨率** —— 单张节点只出一种色，
+ * 「多类型并排时能不能分辨」是画布上才看得出来的那一维。
+ */
+export const MixedKindsCanvas: Story = {
+  render: () => (
+    <div className="flex flex-wrap gap-6 p-4">
+      <StorybookFlowCanvas
+        scene={withNodeType(canvasScene("mixedKinds"), "story")}
+        nodeTypes={NODE_TYPES}
+      />
+    </div>
+  ),
+};

@@ -31,6 +31,7 @@
  */
 import { upperToken } from "~/lib/upper-token";
 import { TypeChip } from "~/components/studio/TypeChip";
+import { WorkflowNodePill } from "~/components/studio/workflow-form/WorkflowNodeParts";
 import React from "react";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -235,7 +236,7 @@ export function WorkflowNodeArdot() {
               自定义工作流
             </span>
           </div>
-          <div className="bg-node-accent flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2">
+          <WorkflowNodePill>
             <span className="bg-primary size-1.5 rounded-full" />
             <span
               className="text-ink-soft text-3xs font-medium"
@@ -243,7 +244,7 @@ export function WorkflowNodeArdot() {
             >
               待开始
             </span>
-          </div>
+          </WorkflowNodePill>
         </div>
 
         {/* ── Divider 340×1 ── */}
