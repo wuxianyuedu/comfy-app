@@ -18,7 +18,7 @@
 <section class="tsd-panel tsd-hierarchy" data-refl="6307">
 <h4>Hierarchy (<a href="../hierarchy.html#core/repository-workflow-template — WorkflowTemplate 业务仓储（Drizzle 版）.WorkflowTemplateRepository">View Summary</a>)</h4>
 <ul class="tsd-hierarchy">
-<li class="tsd-hierarchy-item"><a href="core_repository-base_—_Repository_模式的契约与泛型基类（Drizzle_版）.DrizzleRepository.html" class="tsd-signature-type tsd-kind-class">DrizzleRepository</a><span class="tsd-signature-symbol">&lt;</span><a href="../types/server_db_schema_—_Drizzle_SQLite_schema（替代_prisma_schema.prisma）.WorkflowTemplate.html" class="tsd-signature-type tsd-kind-type-alias">WorkflowTemplate</a><span class="tsd-signature-symbol">&gt;</span>
+<li class="tsd-hierarchy-item"><a href="core_repository-base_—_Repository_模式的契约与泛型基类（Drizzle_版）.DrizzleRepository.html" class="tsd-signature-type tsd-kind-class">DrizzleRepository</a><span class="tsd-signature-symbol">&lt;</span><a href="../types/server_db_schema_—_Drizzle_SQLite_schema（表定义与行类型）.WorkflowTemplate.html" class="tsd-signature-type tsd-kind-type-alias">WorkflowTemplate</a><span class="tsd-signature-symbol">&gt;</span>
 <ul class="tsd-hierarchy">
 <li class="tsd-hierarchy-item"><span class="tsd-hierarchy-target">WorkflowTemplateRepository</span></li></ul></li></ul></section><aside class="tsd-sources">
 <ul>
@@ -158,7 +158,7 @@
 <div class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>「这条工作流有没有绑着一个本地源文件」那一段元数据 —— <strong>真投影</strong>。</p>
 <p>这里原本是一个 <code>findByIdForUserSelect(userId, id, _select?: unknown)</code>：
-参数名承诺投影、实现里 <code>select()</code> 全列取，三个调用点还在按 Prisma 的
+参数名承诺投影、实现里 <code>select()</code> 全列取，三个调用点还在按迁移前的
 布尔投影写法传 <code>{ id: true, sourcePath: true }</code> —— 类型层一声不响
 （<code>unknown</code> + 调用点不做校验），实际每次详情加载都把 <code>rawJson</code> 与
 <code>positions</code> 这两个大 JSON blob 拖出来一遍（台账 F13：同一个 <code>unknown</code>

@@ -153,7 +153,7 @@ export function useFilmStudio(): FilmStudioController {
    * 自启、跑完再 `stopPoll()` 自停，是「一个异步动作自己管自己的取消」。 */
   const fetchDetail = useCallback(async (id: string) => {
     try {
-      // /api/film/[id] 返回原始 Prisma FilmProject 行（status/logs/shots 比本地
+      // /api/film/[id] 返回原始 FilmProject 行（status/logs/shots 比本地
       // `Film` 视图类型更宽，shape 由路由固定）；经 unknown 收窄为 UI 视图类型。
       const data = await vanillaApi.film.detail.query({ id });
       setFilm(data.film as unknown as Film);

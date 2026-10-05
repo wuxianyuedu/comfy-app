@@ -11,7 +11,7 @@
 <li><a href="../modules/lib_core_repository-task-impl-types.html">lib/core/repository-task-impl-types</a></li>
 <li><a href="" aria-current="page">TaskRepoDb</a></li></ul>
 <h1>Type Alias TaskRepoDb</h1></div>
-<div class="tsd-signature"><span class="tsd-kind-type-alias">TaskRepoDb</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">LibSQLDatabase</span><span class="tsd-signature-symbol">&lt;</span><br/>    <span class="tsd-signature-keyword">typeof</span> <a href="../modules/server_db_schema_—_Drizzle_SQLite_schema（替代_prisma_schema.prisma）.html" class="tsd-signature-type tsd-kind-module">server/db/schema — Drizzle SQLite schema（替代 prisma/schema.prisma）</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">&gt;</span></div>
+<div class="tsd-signature"><span class="tsd-kind-type-alias">TaskRepoDb</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">LibSQLDatabase</span><span class="tsd-signature-symbol">&lt;</span><br/>    <span class="tsd-signature-keyword">typeof</span> <a href="../modules/server_db_schema_—_Drizzle_SQLite_schema（表定义与行类型）.html" class="tsd-signature-type tsd-kind-module">server/db/schema — Drizzle SQLite schema（表定义与行类型）</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>13 个 exec-chain 方法需要的 drizzle 客户端形状。</p>
 <p>为什么写成 <code>LibSQLDatabase&lt;typeof appSchema&gt;</code>：Next 侧 (<code>src/server/db.ts</code>)
 与未来的 executor host（P3 §5 ADR 附录 §11.1）都用 <code>@libsql/client</code> +
