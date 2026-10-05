@@ -85,8 +85,16 @@ export function WorksGallery({
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-title u-title-page">所有项目</h1>
+          {/* 「服务端」这三个字要的是**视觉强调**，不是字面量星号：JSX 文本节点
+              不解析 Markdown，裸写星号会把星号原样印到界面上（ISSUE #1522 收尾
+              时撞到的排版 bug）。
+              词边界也不能交给缩进：JSX 把换行处的空白当内容渲染，中文句子又不该
+              有词间空格 —— 所以外层文本与 `<span>` 之间不留空白、也不把词切开，
+              渲染出来才是「列表以服务端为准」。 */}
           <p className="text-ink-muted mt-1 text-sm">
-            画布项目，按时间倒序排列。列表以**服务端**为准，本地还没同步上去的也一并列出。
+            画布项目，按时间倒序排列。列表以
+            <span className="text-ink-bright font-medium">服务端</span>
+            为准，本地还没同步上去的也一并列出。
           </p>
           {!loading && !serverOk && (
             /* 拉不到服务端那份时明说这一屏此刻是什么：不说的话，「服务端有行、
