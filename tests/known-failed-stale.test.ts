@@ -26,6 +26,10 @@ import {
   checkRegistrations,
   judgeStillFailing,
 } from "../scripts/check-known-failed-stale.mjs";
+import {
+  runGate,
+  touchesMechanism,
+} from "../scripts/known-failed-selftest-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK = ".githooks/pre-commit";
@@ -43,6 +47,21 @@ function dGroupSteps(hookText: string) {
   }));
 }
 
+/**
+ * vitest 报告里的 `testResults[].name` 是**绝对路径**（实测），登记表写的是仓库相对
+ * 路径 —— 判决按绝对路径归一化后比对。夹具必须照这个真实形状给，否则喂出来的绿是假的
+ * （这条曾经就是相对的，于是「清单多条时按整场退出码判」的粗糙口径一直没被照出来）。
+ */
+function evidenceFor(entries: [rel: string, status: string][]) {
+  return {
+    files: entries.map(([rel, status]) => ({
+      name: path.join(ROOT, rel).replaceAll("\\", "/"),
+      status,
+    })),
+    numTotalTests: entries.length,
+  };
+}
+
 /** 一次成功跑完、全部通过的 vitest 结果（status 0 + 有执行证据）。 */
 const RAN_GREEN = {
   status: 0,
@@ -50,17 +69,13 @@ const RAN_GREEN = {
   stderr: "",
   commandLine: "vitest run …",
 };
-const EVIDENCE_GREEN = {
-  files: [{ name: "tests/x.test.ts", status: "passed" }],
-  numTotalTests: 12,
-};
+const EVIDENCE_GREEN = evidenceFor([["tests/x.test.ts", "passed"]]);
 
 /** 一次跑完、有文件红着的结果（status 1 + 有执行证据）。 */
 const RAN_RED = { ...RAN_GREEN, status: 1 };
-const EVIDENCE_RED = {
-  files: [{ name: "tests/theme-dark-token-cascade.test.ts", status: "failed" }],
-  numTotalTests: 18,
-};
+const EVIDENCE_RED = evidenceFor([
+  ["tests/theme-dark-token-cascade.test.ts", "failed"],
+]);
 
 describe("登记项的存在性判决（免费那一维）", () => {
   it("每个登记项都指向真实文件 ⇒ 放行", () => {
@@ -184,5 +199,108 @@ describe("判据与仓库现状、提交链的接线", () => {
     // 已经不认它（`hit` 会是 undefined）——「把这一步静音」正是这一族要拦的动作
     // （同 §13.5.8「在场判据要解析、不要 toContain」）。
     expect(hit?.cmd).toBe("node scripts/check-known-failed-stale.mjs");
+  });
+});
+
+/**
+ * 自证档的**执行者**（`scripts/known-failed-selftest-gate.mjs`，ISSUE #1282 的第二刀）。
+ *
+ * 上一条接线用例钉的是「判据本体接进了 D 组」，而本组钉的是更细的一层：
+ * **判据的「真跑那一档」在空表常态下从没被执行过，它的自证入口原先一个执行者都没有。**
+ * 所以这里既要判「这条门禁真的在钩子里」，也要判它的判决本身真的会拦
+ * （同族先例 ISSUE #1356：源码文本断言不是执行记录）。
+ */
+describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
+  const SELFTEST_GATE = "scripts/known-failed-selftest-gate.mjs";
+  const MECHANISM_INPUTS = [
+    "scripts/quality-gate-shared.mjs",
+    "scripts/check-known-failed-stale.mjs",
+    ".githooks/pre-commit",
+  ];
+
+  it("没碰这套机制 ⇒ 零输出、放行（不给无关提交加时间）", () => {
+    const res = runGate({
+      staged: ["src/lib/x.ts", "tests/y.test.ts"],
+      selfTest: null,
+    });
+    expect(res.exitCode).toBe(0);
+    expect(res.touched).toEqual([]);
+  });
+
+  it("碰了机制但没拿到自证读数 ⇒ 阻断（判不了的形状按不放行）", () => {
+    const res = runGate({
+      staged: ["scripts/quality-gate-shared.mjs"],
+      selfTest: null,
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.problem).toContain("没有拿到自证读数");
+  });
+
+  it("碰了机制、自证绿 ⇒ 放行，并报出命中哪一处", () => {
+    const res = runGate({
+      staged: MECHANISM_INPUTS,
+      selfTest: { status: 0, stdout: "", stderr: "" },
+    });
+    expect(res.exitCode).toBe(0);
+    expect(res.touched).toEqual(MECHANISM_INPUTS);
+  });
+
+  it("碰了机制、自证红 ⇒ 阻断，并把自证的真实输出带出来", () => {
+    // **判据现场的最贵一问**：自证红了说明「真跑那一档」坏了，而它判的是
+    // **下一次别线登记**能不能被正确判过期 —— 只打一句「自证失败」等于把人挡在证据外。
+    const res = runGate({
+      staged: ["scripts/check-known-failed-stale.mjs"],
+      selfTest: {
+        status: 1,
+        stdout: "✗ 自证失败：量具坏了",
+        stderr: "",
+      },
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.problem).toContain("自证红了");
+    expect(res.problem).toContain("自证失败：量具坏了");
+    expect(res.problem).toContain("--self-test");
+  });
+
+  it("起不来（status 为 null 但拿到了读数对象）⇒ 同样阻断", () => {
+    const res = runGate({
+      staged: ["scripts/quality-gate-shared.mjs"],
+      selfTest: { status: null, stdout: "", stderr: "起自证失败：spawn ENOENT" },
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.problem).toContain("自证红了");
+  });
+
+  it("触发面只认这三处输入 —— 别的 `scripts/*.mjs` 不算碰机制", () => {
+    // 窄触发面是这一步的全部代价担保：宽一档就给无关提交加了 ~0.9s。
+    expect(touchesMechanism(["scripts/run-tests.mjs"])).toBe(false);
+    expect(touchesMechanism(["scripts/affected-tests.mjs"])).toBe(false);
+    expect(touchesMechanism(["docs/standards/11-测试与可观测性.md"])).toBe(
+      false,
+    );
+    for (const f of MECHANISM_INPUTS) {
+      expect(touchesMechanism([f]), `${f} 应当算命中`).toBe(true);
+    }
+  });
+
+  it("这一条真的接进了 pre-commit 的 D 组（否则自证还是没有执行者）", () => {
+    const steps = dGroupSteps(read(HOOK));
+    const hit = steps.find((s) => s.cmd.includes(SELFTEST_GATE));
+    expect(hit?.cmd).toBe(`node ${SELFTEST_GATE}`);
+    // 顺序：先判「登记过期」，再判「判据自己还活着」—— 后者的读数解释前者为什么可信。
+    const order = steps.map((s) => s.cmd);
+    expect(order.indexOf(`node ${SELFTEST_GATE}`)).toBeGreaterThan(
+      order.indexOf("node scripts/check-known-failed-stale.mjs"),
+    );
+  });
+
+  it("自证本体确实带**两只探针**（红侧 + 绿侧对照组，缺一即形同虚设）", () => {
+    // 源码文本断言在这里是**够的**：它判的不是「自证跑起来了吗」（那由下面那条真跑的
+    // 用例判），而是「自证的设计里有没有两只探针」这个结构事实 —— 少了一只时，
+    // judgeStillFailing 恒放行也照样绿（实测过）。真跑的判决归下面那条。
+    const src = read("scripts/check-known-failed-stale.mjs");
+    expect(src).toContain("known-failed-stale-probe.test.ts");
+    expect(src).toContain("known-failed-stale-probe-green.test.ts");
+    expect(src).toContain("期望「已过期」");
   });
 });

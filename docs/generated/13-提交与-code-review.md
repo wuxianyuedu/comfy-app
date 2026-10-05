@@ -201,6 +201,10 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
 ✅ node scripts/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
 ✅ node scripts/check-known-failed-stale.mjs  # 已知基线失败登记过期：登记项必须指向真实文件、且真的还红着（见 11 §11.12；清单为空时零耗时）
+✅ node scripts/known-failed-selftest-gate.mjs # 上一条的自证档执行者：**只在暂存命中这套机制
+   # （登记表 / 判据本体 / 钩子接线）时**才做事，跑一次 `--self-test`（红侧 + 绿侧对照组）。
+   # 上一条「清单为空 ⇒ 零耗时」是代价的正确取舍，但它留下的空档是「真跑那一档在干净仓库
+   # 上从没被执行过、自证入口一个执行者都没有」（见 11 §11.12.1）
 ```
 
 > **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /
@@ -954,8 +958,9 @@ eslint 的缓存键 =「**文件内容 + 解析后的 eslint 配置**」—— �
 **扫描面 = 门禁链事实 ∪ 名字族**（ISSUE #1444 残活 A）。旧口径只看名字前缀
 （`check-` / `tw4-` / `report-` / …），于是 **`shell-gate.mjs` / `storybook-check.mjs` /
 `visual-gate.mjs` / `pixel-run.mjs` 这四份真在门禁链里跑的判定型判据不在盘点里** ——
-判据自报「40 份」而真值是 44，漏掉的恰是「最容易被摘掉又没人发现」的那类
-（`storybook-check.mjs` 连 `pnpm check:all` 那一档都在跑）。现在主口径换成**事实**：
+判据自报「40 份」而真值是 44（现读数由判据自己每次打印，**别在文档里写死** ——
+`check-soft-assertions.cjs` 落地后就变成 45 了），漏掉的恰是「最容易被摘掉又没人发现」
+的那类（`storybook-check.mjs` 连 `pnpm check:all` 那一档都在跑）。现在主口径换成**事实**：
 
 | 来源                                   | 取哪个位置                                                        |
 | -------------------------------------- | ----------------------------------------------------------------- |
@@ -970,8 +975,17 @@ eslint 的缓存键 =「**文件内容 + 解析后的 eslint 配置**」—— �
 本节（#1451）的立案现场，所以这条判据自己的覆盖面必须由事实算出来。
 **只读步骤位置、不读文件全文**同样是实测撞出来的：全文匹配会把散文里的占位符
 （`x.cjs` / `xxx.cjs`）与被注释提到 / 被 import 的脚本（`affected-tests.mjs` /
-`install-git-hooks.mjs` / `quality-gate-shared.mjs`）一起打进 —— 份数从 44 涨到 47，
-凭空多出三份不是判据的东西。
+`install-git-hooks.mjs` / `quality-gate-shared.mjs`）一起打进 —— 凭空多出三份不是判据的
+东西（当时 44 涨到 47）。
+
+**这条判据的契约用例也栽过同一个坑**（ISSUE #1444）：`tests/gate-executors.test.ts`
+原先把这个份数写成 `.toBe(44)`，于是 **#1485 新增 `check-soft-assertions.cjs` 时它红了
+—— 而红的原因与「散文举例被误认成判据」毫无关系**（用例本意守的是那个差，不是数字）。
+它是 `FIXED_STRUCTURAL_TESTS` 成员、每次提交都跑，`master` 从那以后一直红着
+（`git worktree` 到 `09aca6df` 复算：基线 12 条全绿 ⇒ 红是 #1485 带进来的）。
+现在份数改成与「名字族 ∪ 门禁链事实」**独立数一遍**来对：新增一份 `check-*` 用例仍绿，
+而口径一旦退化成全文匹配（实测 45 → 48）当场红 —— **两向都咬**。
+**会漂的读数不写死**这条纪律（§12.14）对判据自己的用例同样适用。
 
 **判据（三向，都由本脚本强制）**：
 
