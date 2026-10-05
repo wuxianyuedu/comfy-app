@@ -23,7 +23,7 @@ function readToken(name: string): number {
 }
 
 describe("浮层刻度表（规范 16 §16.2.5）", () => {
-  it.each([
+  it.for([
     ["base", Z.base],
     ["canvas-ui", Z.canvasUi],
     ["canvas-max", Z.canvasMax],
@@ -32,7 +32,7 @@ describe("浮层刻度表（规范 16 §16.2.5）", () => {
     ["overlay", Z.overlay],
     ["toast", Z.toast],
     ["chrome", Z.chrome],
-  ])("globals.css 的 --z-index-%s 与 Z 常量一致", (token, value) => {
+  ] as const)("globals.css 的 --z-index-%s 与 Z 常量一致", ([token, value]) => {
     expect(readToken(token)).toBe(value);
   });
 

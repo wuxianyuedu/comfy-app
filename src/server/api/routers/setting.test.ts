@@ -243,11 +243,11 @@ describe("setting.save", () => {
   });
 
   /* 拒绝发生在写之前：端口这一档此前是「先写库再靠别处兜」，越界值会直接进设置文件。 */
-  it.each([
+  it.for([
     [{ comfyuiPort: -1 }],
     [{ comfyuiPort: 65536 }],
     [{ comfyuiPort: 1.5 }],
-  ])("端口非法 %j → BAD_REQUEST 且一次都不写", async (input) => {
+  ] as const)("端口非法 %j → BAD_REQUEST 且一次都不写", async ([input]) => {
     await expect(createCaller(makeCtx()).save(input)).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
@@ -293,13 +293,13 @@ describe("setting.openExternal —— 交给系统浏览器之前的协议闸（
 
   /* 这些都能过 `z.url()` —— 它们不是「非法 URL」，是「合法的危险协议」。
      拦在 spawn 之前才算拦住：发出去就等于本机程序已经被拉起了。 */
-  it.each([
+  it.for([
     ["file:///C:/Users/me/.env"],
     ["file:///etc/passwd"],
     ["javascript:alert(document.cookie)"],
     ["comfyapp://open?path=C:/"],
     ["search-ms:query=x"],
-  ])("%j → ok:false 且一次都不 spawn", async (url) => {
+  ] as const)("%j → ok:false 且一次都不 spawn", async ([url]) => {
     const res = await createCaller(makeCtx()).openExternal({ url });
     expect(res.ok).toBe(false);
     expect(res.detail).toContain("http/https");
@@ -330,12 +330,12 @@ describe("setting.comfyEmbeddable", () => {
     expect(res.target).toBeTruthy();
   });
 
-  it.each([
+  it.for([
     ["file:///C:/ComfyUI", "http://127.0.0.1:3100"],
     ["http://127.0.0.1:8188", "javascript:alert(1)"],
-  ])(
+  ] as const)(
     "输入层就拒非 http(s)（%j / %j），不发探测请求",
-    async (base, hostOrigin) => {
+    async ([base, hostOrigin]) => {
       await expect(
         createCaller(makeCtx()).comfyEmbeddable({ base, hostOrigin }),
       ).rejects.toMatchObject({ code: "BAD_REQUEST" });

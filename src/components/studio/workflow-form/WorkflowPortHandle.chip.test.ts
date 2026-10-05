@@ -23,7 +23,7 @@ const CASES: [string, string][] = [
 ];
 
 describe("portChipStyle：底色走主题 token，文字仍是类型色", () => {
-  it.each(CASES)("%s 的底色是语义 token", (type, expected) => {
+  it.for(CASES)("%s 的底色是语义 token", ([type, expected]) => {
     expect(portChipStyle(type).background).toBe(expected);
   });
 

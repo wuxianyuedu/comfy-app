@@ -64,9 +64,9 @@ describe("统一容器的接入约定（文档型）", () => {
     }
   });
 
-  it.each(DOCUMENT_VIEWS.map((rel) => [rel] as [string]))(
+  it.for(DOCUMENT_VIEWS.map((rel) => [rel] as [string]))(
     "%s 引了容器，且没再手写那一串形状",
-    (rel) => {
+    ([rel]) => {
       const code = codeOf(rel);
       expect(code, `${rel} 没用 DocumentFrame`).toContain("DocumentFrame");
       expect(code).not.toMatch(/className="h-full overflow-y-auto"/);
@@ -96,9 +96,9 @@ describe("统一容器的接入约定（工作区型）", () => {
     }
   });
 
-  it.each(WORKSPACE_VIEWS.map((rel) => [rel] as [string]))(
+  it.for(WORKSPACE_VIEWS.map((rel) => [rel] as [string]))(
     "%s 引了 WorkspaceFrame，且不再自己写几何或页面滚动",
-    (rel) => {
+    ([rel]) => {
       const code = codeOf(rel);
       expect(code, `${rel} 没用 WorkspaceFrame`).toContain("WorkspaceFrame");
       /* `min-h-screen` 在壳里等于又开一个视口高：内容一高就出现「壳的滚动条 +

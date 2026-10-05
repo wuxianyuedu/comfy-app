@@ -71,29 +71,32 @@ describe("DocumentFrame（文档型）", () => {
     expect(column.className).toContain("max-w-wide");
   });
 
-  it.each([
+  it.for([
     ["narrow", "max-w-narrow"],
     ["medium", "max-w-medium"],
     ["wide", "max-w-wide"],
-  ] as const)("档位 %s ⇒ 只写 %s 这一个类（数值留在令牌里）", (width, cls) => {
-    const { container } = render(
-      <DocumentFrame width={width}>
-        <p>内容</p>
-      </DocumentFrame>,
-    );
-    const column = container.querySelector<HTMLElement>(
-      '[data-view-container="document"] [class*="overflow-y-auto"] > div',
-    );
-    if (!column) throw new Error("没找到居中列");
-    expect(column.className).toContain(cls);
-    // 三个档位名互斥：同时出现两份就等于宽度又有了两个家。
-    const others = ["max-w-narrow", "max-w-medium", "max-w-wide"].filter(
-      (name) => name !== cls,
-    );
-    for (const name of others) {
-      expect(column.className, `不该同时出现 ${name}`).not.toContain(name);
-    }
-  });
+  ] as const)(
+    "档位 %s ⇒ 只写 %s 这一个类（数值留在令牌里）",
+    ([width, cls]) => {
+      const { container } = render(
+        <DocumentFrame width={width}>
+          <p>内容</p>
+        </DocumentFrame>,
+      );
+      const column = container.querySelector<HTMLElement>(
+        '[data-view-container="document"] [class*="overflow-y-auto"] > div',
+      );
+      if (!column) throw new Error("没找到居中列");
+      expect(column.className).toContain(cls);
+      // 三个档位名互斥：同时出现两份就等于宽度又有了两个家。
+      const others = ["max-w-narrow", "max-w-medium", "max-w-wide"].filter(
+        (name) => name !== cls,
+      );
+      for (const name of others) {
+        expect(column.className, `不该同时出现 ${name}`).not.toContain(name);
+      }
+    },
+  );
 
   it("调用处的 className 是追加，不是替换掉居中", () => {
     const { container } = render(

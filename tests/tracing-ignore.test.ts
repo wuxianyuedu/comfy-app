@@ -46,22 +46,25 @@ describe("turbopackIgnore 注解的落位（TS 侧）", () => {
     expect(src).toContain("turbopackIgnore: true");
   });
 
-  it.each(CONSUMERS)("%s 把注解展开进路径表达式（而不是塞在 fs 调用参数里）", (rel) => {
-    const src = read(rel);
-    // ① 引用共享模块（仓库里 ~/ 与 @/ 两个别名都指向 src/，两者都放行）
-    expect(
-      /from "(@|~)\/(lib\/)?(shell\/)?tracing-ignore"/.test(src),
-      `${rel} 未引用共享的 tracing-ignore 模块（注解必须只有一个来源）`,
-    ).toBe(true);
-    // ② 展开进 path.resolve(...) / path.join(...) 的参数列表
-    expect(
-      /path\.(resolve|join)\(\s*\.\.\.tracingIgnoreArgs/.test(src),
-      `${rel} 的 tracingIgnoreArgs 必须展开在 path.resolve/join 的参数列表里` +
-        `（Turbopack 看的是算出路径的那个表达式，塞在 fs 调用参数里会被静默忽略）`,
-    ).toBe(true);
-  });
+  it.for(CONSUMERS)(
+    "%s 把注解展开进路径表达式（而不是塞在 fs 调用参数里）",
+    (rel) => {
+      const src = read(rel);
+      // ① 引用共享模块（仓库里 ~/ 与 @/ 两个别名都指向 src/，两者都放行）
+      expect(
+        /from "(@|~)\/(lib\/)?(shell\/)?tracing-ignore"/.test(src),
+        `${rel} 未引用共享的 tracing-ignore 模块（注解必须只有一个来源）`,
+      ).toBe(true);
+      // ② 展开进 path.resolve(...) / path.join(...) 的参数列表
+      expect(
+        /path\.(resolve|join)\(\s*\.\.\.tracingIgnoreArgs/.test(src),
+        `${rel} 的 tracingIgnoreArgs 必须展开在 path.resolve/join 的参数列表里` +
+          `（Turbopack 看的是算出路径的那个表达式，塞在 fs 调用参数里会被静默忽略）`,
+      ).toBe(true);
+    },
+  );
 
-  it.each(CONSUMERS)("%s 没有沿用「塞在 fs 调用参数里」的失效写法", (rel) => {
+  it.for(CONSUMERS)("%s 没有沿用「塞在 fs 调用参数里」的失效写法", (rel) => {
     const src = read(rel);
     expect(
       /fs\.\w+\((?:\/\/)?[^\n]*turbopackIgnore/.test(src),
@@ -80,7 +83,9 @@ describe("turbopackIgnore 注解的落位（TS 侧）", () => {
   });
 
   it("注解模块保持纯 ASCII（它在构建期模块图上，会被 next-code-frame 渲染）", () => {
-    const offenders = [...read(IGNORE_MODULE)].filter((ch) => ch.codePointAt(0)! > 0x7f);
+    const offenders = [...read(IGNORE_MODULE)].filter(
+      (ch) => ch.codePointAt(0)! > 0x7f,
+    );
     expect(
       offenders,
       `${IGNORE_MODULE} 含非 ASCII 字符：Next 的 code frame 按字节切串，切到多字节字符内部会让 ` +

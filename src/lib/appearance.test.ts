@@ -55,7 +55,7 @@ describe("默认档 = 引入前的原值", () => {
 });
 
 describe("parseAppearance：不认就整份回落", () => {
-  it.each([
+  it.for([
     ["空值", null],
     ["undefined", undefined],
     ["坏 JSON", "{oops"],
@@ -64,7 +64,8 @@ describe("parseAppearance：不认就整份回落", () => {
     ["未知圆角", JSON.stringify({ radius: "huge", fontScale: "100" })],
     ["未知字阶", JSON.stringify({ radius: "md", fontScale: "999" })],
     ["字段类型不对", JSON.stringify({ radius: 8, fontScale: 1 })],
-  ])("%s ⇒ 回落默认", (_name, raw) => {
+  ])("%s ⇒ 回落默认", (_row) => {
+    const [, raw] = _row;
     expect(parseAppearance(raw)).toEqual(DEFAULT_APPEARANCE);
   });
 
