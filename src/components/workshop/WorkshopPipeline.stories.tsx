@@ -47,7 +47,7 @@ function WorkshopPipelineHarness() {
     extraNames: [],
   });
   return (
-    <div className="bg-bg text-ink h-[720px] w-full overflow-hidden">
+    <div className="bg-bg text-ink h-180 w-full overflow-hidden">
       <WorkshopPipeline />
     </div>
   );

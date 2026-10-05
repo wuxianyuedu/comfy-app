@@ -39,7 +39,7 @@ function GallerHarness({ projectNames }: { projectNames: readonly string[] }) {
     extraNames: projectNames,
   });
   return (
-    <div className="bg-bg h-[720px] w-full overflow-hidden">
+    <div className="bg-bg h-180 w-full overflow-hidden">
       {/* `projects` 是 story 侧准备的真项目（真 action 建的），这里给的是
           「有几个」这个事实 —— 视图自己会从 canvas-store 读回同一批。 */}
       <WorksGallery

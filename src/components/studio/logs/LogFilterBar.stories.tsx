@@ -36,7 +36,7 @@ function FilterBarHarness() {
   const originCounts =
     header.countsByOrigin[origin] ?? header.countsByOrigin.all;
   return (
-    <div className="border-border-strong bg-surface-1 flex min-h-14 w-[960px] max-w-full flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
+    <div className="border-border-strong bg-surface-1 flex min-h-14 w-240 max-w-full flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
       <LogFilterBar originCounts={originCounts} />
     </div>
   );

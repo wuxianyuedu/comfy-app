@@ -74,7 +74,7 @@ function FrostCard({
   return (
     <div className="flex flex-col items-center gap-2">
       <div
-        className="relative h-[140px] w-[240px] overflow-hidden rounded-[14px]"
+        className="relative h-35 w-60 overflow-hidden rounded-[14px]"
         style={{
           background: DARK_PALETTE_BASE.body,
           border: `1px solid ${DARK_PALETTE_BASE.borderFallback}`,
@@ -153,7 +153,7 @@ function FrostDemoNode() {
   );
   return (
     <div
-      className="relative h-[110px] w-[220px] overflow-hidden rounded-[14px]"
+      className="relative h-27.5 w-55 overflow-hidden rounded-[14px]"
       style={{ border: `1px solid ${DARK_PALETTE_BASE.borderFallback}` }}
     >
       <FrostLayer color={palette.modeColor} nodeMode={palette.nodeMode} />
