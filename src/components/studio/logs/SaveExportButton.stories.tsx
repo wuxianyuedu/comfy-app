@@ -56,3 +56,11 @@ export const Empty: Story = {
   parameters: { storeScene: "empty" },
   render: () => <SaveExportHarness />,
 };
+
+/**
+ * 2600 条：`total` 是四位数时按钮的悬停提示（存下来的是一整页，不是全部）。
+ */
+export const LongTimeline: Story = {
+  parameters: { storeScene: "longTimeline" },
+  render: () => <SaveExportHarness />,
+};

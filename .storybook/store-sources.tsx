@@ -93,6 +93,62 @@ const APP_RUNTIME_TEXT = [
   "[2026-10-05 08:15:00.002] [INFO] [film] 已按建议降分辨率重试第 5 镜",
 ].join("\n");
 
+/* ── 生成器 ────────────────────────────────────────────────────────────────
+ *
+ * 有两档场景要的行数**远超手抄**（一页 2000 条那种），而「手抄不够就编一段看着
+ * 像日志的文本」正是这一层要防的事。所以这两档用生成器 —— 但生成的是**原文
+ * （文本）**，不是 `LogEntry`：行仍然要过 `parseFileLogs()` 才成为条目，解析、
+ * 分桶、计数、裁剪（`LOG_STORE_MAX`）全都照常由生产代码算。
+ *
+ * 生成器只负责「同样形状的行重复很多遍」这一件事，且**时刻真的递增**：
+ * 同一时刻堆一万行会让「按 (time, seq) 排序」这件事被跳过，而那正是分页与
+ * 虚拟化最依赖的次键。
+ */
+
+/**
+ * 一路应用服务输出的原文（ISO 时刻 + 级别段），行数由调用方给。
+ *
+ * 时刻从 `baseMs` 起按 `stepMs` 递增、级别按 `levels` 轮转 —— 于是「每页多少条」
+ * 「更早 N 条已折叠」这类数字都是**算出来的**，与 `LOG_PAGE_SIZE` / `LOG_STORE_MAX`
+ * 一改就跟着变。
+ */
+function appLines(spec: {
+  count: number;
+  baseMs: number;
+  stepMs: number;
+  levels?: readonly string[];
+  message: (index: number) => string;
+}): string {
+  const levels = spec.levels ?? ["INFO", "INFO", "WARN"];
+  const pad = (value: number, width = 2) => String(value).padStart(width, "0");
+  const lines: string[] = [];
+  for (let index = 0; index < spec.count; index += 1) {
+    const at = new Date(spec.baseMs + index * spec.stepMs);
+    const stamp =
+      `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ` +
+      `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}` +
+      `.${pad(at.getMilliseconds(), 3)}`;
+    const level = levels[index % levels.length] ?? "INFO";
+    lines.push(`[${stamp}] [${level}] ${spec.message(index)}`);
+  }
+  return lines.join("\n");
+}
+
+/** 同一毫秒里堆若干行（`sameMillisecond` 那一档的现场）。 */
+function sameMsLines(spec: {
+  count: number;
+  atMs: number;
+  message: (index: number) => string;
+}): string {
+  return appLines({
+    count: spec.count,
+    baseMs: spec.atMs,
+    /* 步长 0 = 时刻全等：这正是「同一毫秒」那一档要摆的东西（排序要看 seq 次键）。 */
+    stepMs: 0,
+    message: spec.message,
+  });
+}
+
 /**
  * 场景注册表 —— **唯一**一份「名字 → 真日志原文」的映射。
  *
@@ -150,6 +206,106 @@ export const LOG_STORE_SCENES = {
           "[2026-10-05 08:20:03.318] [WARN] [config] 读取配置失败：ENOENT: no such file or directory",
           "[2026-10-05 08:20:04.429] [ERROR] [trpc] history.list 失败：SQLITE_BUSY: database is locked",
         ].join("\n"),
+      },
+    ],
+  },
+  /**
+   * 同一毫秒里挤着十几行 —— 时间线**排序次键**（`(time, seq)`）的现场。
+   *
+   * 真机上这一档很常见：一轮 ComfyUI 提交会在同一毫秒里打出一串子步骤行，
+   * 而只按 `time` 排序时它们的先后是**不稳定的**（同一毫秒内谁在前由 `seq` 定）。
+   * 步长为 0，所以这一段刻意全部同刻 —— 手抄时最容易漏掉的那一维。
+   */
+  sameMillisecond: {
+    about: "同一毫秒里十几行（排序要靠 (time, seq) 次键，只看 time 会乱序）",
+    blocks: [
+      {
+        origin: "app-runtime",
+        text: sameMsLines({
+          count: 14,
+          atMs: new Date("2026-10-05T08:31:00").getTime() + 214,
+          message: (index) =>
+            `[comfyui] 节点 ${index + 1}/14 提交完成（同一毫秒）`,
+        }),
+      },
+    ],
+  },
+  /**
+   * 只有一路来源 —— 切到某个单一来源时的现场。
+   *
+   * `mixed` 摆的是三个来源混在一起，而真机上用户**选中**某一来源看是常态：
+   * 那时级别计数是「该来源自己的数」，来源分桶里其余几桶为 0。这一档要的就是
+   * 那张二维计数表在**一维塌缩**时的形态（手抄计数最容易在这里错）。
+   */
+  singleOrigin: {
+    about: "只有启动链路一路来源（切到单一来源时其余分桶归零的现场）",
+    blocks: [{ origin: "launcher", text: LAUNCHER_TEXT }],
+  },
+  /**
+   * 一整页之外还有货 —— 分页窗口与「更早 N 条已折叠」的现场。
+   *
+   * 条数取 `LOG_STORE_MAX`（5000）**之下、`LOG_PAGE_SIZE`（2000）之上**：
+   * 于是第 1 页取不满全部（翻页可达），而内存上限不触发（还没有行被折叠）。
+   * 两个数字都由 store 的常量定，不在这里手抄 —— 常量改了场景跟着变。
+   */
+  longTimeline: {
+    about: "2600 条应用服务日志（第 1 页之外还有货：翻页与行高窗口的真实负载）",
+    blocks: [
+      {
+        origin: "app",
+        text: appLines({
+          count: 2600,
+          baseMs: new Date("2026-10-05T07:00:00").getTime(),
+          stepMs: 1200,
+          levels: ["INFO", "INFO", "INFO", "WARN", "INFO", "ERROR"],
+          message: (index) =>
+            `[trpc] poll.tick #${index + 1} 完成（${180 + (index % 40)}ms）`,
+        }),
+      },
+    ],
+  },
+  /**
+   * 多条**可展开**的 comfy-cli 原文行 —— 展开集合那一维的现场。
+   *
+   * 与 `rowShapes` 的区别在**数量**：那一段只有一条可展开的行（够看单个形态），
+   * 这里一批都是，于是「展开一条时其余行的高度与折叠态」这件事才在画布上看得
+   * 出来（`useExpansionSet` 是多选集合，不是单选）。
+   *
+   * 命名空间段必须**就是** `[comfy-cli 原始]` 那个前缀（`splitCliLogLine()`
+   * 要求正文以它开头）—— 写成 `[comfyui] [comfy-cli 原始] {}` 会静默退化成
+   * 不可展开的普通行，而画布上只看得出「怎么没折叠」。
+   */
+  cliExpandable: {
+    about: "一批 comfy-cli 原文行（都可展开成 JsonViewer：多选展开集合的现场）",
+    blocks: [
+      {
+        origin: "app-runtime",
+        text: Array.from({ length: 5 }, (_, index) => {
+          const at = new Date(
+            new Date("2026-10-05T08:40:00").getTime() + index * 1500,
+          );
+          const pad = (value: number, width = 2) =>
+            String(value).padStart(width, "0");
+          const stamp =
+            `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ` +
+            `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}` +
+            `.${pad(at.getMilliseconds(), 3)}`;
+          const payload = JSON.stringify({
+            kind: "envelope",
+            node_id: String(index + 1),
+            class_type: index % 2 === 0 ? "KSampler" : "VAEDecode",
+            output: {
+              images: [
+                {
+                  filename: `ComfyUI_${pad(index + 42, 5)}_.png`,
+                  subfolder: "",
+                  type: "output",
+                },
+              ],
+            },
+          });
+          return `[${stamp}] [INFO] [comfy-cli 原始] ${payload}`;
+        }).join("\n"),
       },
     ],
   },

@@ -96,6 +96,115 @@ export const CANVAS_SCENES = {
     ],
     viewport: { x: 0, y: 0, zoom: 1 },
   },
+  /**
+   * 一个源节点**扇出**三条连线 —— 多端点几何与连线路径分叉的现场。
+   *
+   * `twoNodes` 只有一条线，看不出「同一节点的多个源端点各自出线」这件事：
+   * 端点 id 形如 `"1:images"` / `"1:model"`，而连线从哪个 handle 出、落在
+   * 目标哪个 handle 上，是 React Flow 按 handle id 算的路径 —— 假画布给不出。
+   */
+  fanOut: {
+    about: "一个源节点扇出三条连线到三个目标（多端点几何 + 连线路径分叉）",
+    nodes: [
+      { id: "1", position: { x: 40, y: 220 }, data: { label: "加载检查点" } },
+      { id: "2", position: { x: 420, y: 60 }, data: { label: "K采样器" } },
+      { id: "3", position: { x: 420, y: 240 }, data: { label: "VAE 解码" } },
+      { id: "4", position: { x: 420, y: 420 }, data: { label: "保存图像" } },
+    ],
+    edges: [
+      {
+        id: "e1-2",
+        source: "1",
+        target: "2",
+        sourceHandle: "1:model",
+        targetHandle: "2:model",
+      },
+      {
+        id: "e1-3",
+        source: "1",
+        target: "3",
+        sourceHandle: "1:vae",
+        targetHandle: "3:vae",
+      },
+      {
+        id: "e1-4",
+        source: "1",
+        target: "4",
+        sourceHandle: "1:clip",
+        targetHandle: "4:images",
+      },
+    ],
+    viewport: { x: 0, y: 0, zoom: 0.85 },
+  },
+  /**
+   * 各 kind 的节点混排 —— 端点上**五档类型色**同时在场的样子。
+   *
+   * `NodeKind` 有八档（生图 / 生视频 / 剧本 / Agent / 工作流 / 文本 / 图片 /
+   * 视频），而单看一张节点只出一种类型色。「多类型并排时能不能分辨」是画布上
+   * 才看得出来的一维（配色表漂了在单节点 story 里看不出来）。
+   */
+  mixedKinds: {
+    about: "八种业务节点混排（端点类型色与节点类型章并排的分辨率）",
+    nodes: [
+      { id: "1", position: { x: 20, y: 20 }, data: { label: "生图" } },
+      { id: "2", position: { x: 300, y: 20 }, data: { label: "生视频" } },
+      { id: "3", position: { x: 580, y: 20 }, data: { label: "生成剧本" } },
+      { id: "4", position: { x: 20, y: 240 }, data: { label: "Agent 模式" } },
+      {
+        id: "5",
+        position: { x: 300, y: 240 },
+        data: { label: "自定义工作流" },
+      },
+      { id: "6", position: { x: 580, y: 240 }, data: { label: "文本" } },
+      { id: "7", position: { x: 20, y: 460 }, data: { label: "图片" } },
+      { id: "8", position: { x: 300, y: 460 }, data: { label: "视频" } },
+    ],
+    edges: [
+      {
+        id: "e1-2",
+        source: "1",
+        target: "2",
+        sourceHandle: "1:images",
+        targetHandle: "2:images",
+      },
+      {
+        id: "e3-4",
+        source: "3",
+        target: "4",
+        sourceHandle: "3:text",
+        targetHandle: "4:text",
+      },
+    ],
+    viewport: { x: 0, y: 0, zoom: 0.6 },
+  },
+  /**
+   * 密集节点 —— 网格与标尺在**有内容**时的负载（`GRID_FINE_FADE_ZOOM` 之上）。
+   *
+   * `zoomedOut` 摆的是「缩小到网格淡出」那一档，节点少而视口远；这一档反过来：
+   * 节点铺满、缩放还在常规范围内，于是标尺步长与网格间距都按**满负载**现算
+   *（`CanvasRulers` 的标签步长是按「屏幕间距 ≥ 48px」算的，空画布看不出这件事）。
+   */
+  dense: {
+    about: "36 张节点铺满画布（标尺步长与网格间距在满负载下现算）",
+    nodes: Array.from({ length: 36 }, (_, index) => ({
+      id: String(index + 1),
+      position: {
+        x: (index % 6) * 260 + 20,
+        y: Math.floor(index / 6) * 190 + 20,
+      },
+      data: { label: `节点 ${index + 1}` },
+    })),
+    edges: [
+      {
+        id: "edense",
+        source: "1",
+        target: "36",
+        sourceHandle: "1:images",
+        targetHandle: "36:images",
+      },
+    ],
+    viewport: { x: 0, y: 0, zoom: 0.5 },
+  },
   /** 放大档：端点圆点、类型章、网格线在主参考线尺度上的那一档。 */
   zoomedIn: {
     about: "放大到 1.4 倍（细网格与端点圆点的像素尺度都变了）",
