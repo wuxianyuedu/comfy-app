@@ -1,0 +1,12 @@
+{
+  "onDemand": {
+    "tw4-canonical-report.mjs": {
+      "why": "要起 Tailwind 引擎、单次约 6s（1500 文件 / 18000 候选），判的是「CSS 等价改写」而非正确性 —— 挂进每次提交是拿 6s 换一个不会天天变的结论（规范 §13.5.12 的成本判据同 §13.5.4）。它的棘轮判定档是 --check（源文件候选数不许超过 scripts/.tw4-canonical-baseline.json），已归零起步。",
+      "who": "新增一批视图 / story 文件后，或 03 章 §「spacing canonical」那段被触发时：node scripts/tw4-canonical-report.mjs --check（红了就 --write 落盘 + --update 收紧基线）"
+    },
+    "tw4-spacing-canonical.mjs": {
+      "why": "同上：起 Tailwind 引擎、幂等改写器，判的是 px ↔ spacing 倍数的等价性而非正确性。棘轮判定档是 --check（scripts/.tw4-spacing-baseline.json），已归零起步。",
+      "who": "新增一批视图 / story 文件后，或编辑器提示 min-h-[22px] → min-h-5.5 这类时：node scripts/tw4-spacing-canonical.mjs --check（红了就 --write + --update）"
+    }
+  }
+}

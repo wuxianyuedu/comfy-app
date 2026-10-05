@@ -28,7 +28,7 @@ type Story = StoryObj<typeof meta>;
 
 function CanvasShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-canvas-deep border-border-strong relative h-72 w-[36rem] overflow-hidden rounded-xl border">
+    <div className="bg-canvas-deep border-border-strong relative h-72 w-xl overflow-hidden rounded-xl border">
       {children}
     </div>
   );

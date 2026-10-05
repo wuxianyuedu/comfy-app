@@ -67,7 +67,7 @@ const BASELINE = path.join(__dirname, ".comment-language-baseline.json");
  *  会把中文段落里折行的标识符 / 路径 / 类名清单整片判成违规（实测 21 行里 19 行是
  *  这一类），判据因此从「能挡真英文注释」退化成「逼人在引用行上垫中文」。
  */
-const RULE_VERSION = 3;
+const RULE_VERSION = 4;
 const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
@@ -149,12 +149,34 @@ function stripJsdocTypeSyntax(text) {
 }
 
 /**
+ * `@param` 类行的**参数名**位置：`@param {T} name` 里紧跟类型块的那个标识符。
+ * 它必须是**单个**词，且不是 `{T}` 形式的类型块本身。
+ */
+const PARAM_TAG_RE = /@(param|arg|argument)\s+(?:\{[^{}]*\}\s+)?([A-Za-z_$][\w$]*)/;
+
+/**
  * 一行是否**本身就是** JSDoc 结构行（带 `@param` / `@typedef` 等 tag）。
  * 判据：剥掉类型语法后不含英文虚词，且剩余英文词 < 3 个。
+ *
+ * ⚠️ 参数名要**先剥掉再判虚词**：`@param {string} from` / `to` / `at` 这类
+ * 参数名恰好是英文虚词（`from` 在 `JSDOC_PROSE_WORDS_RE` 里），不剥掉就会被
+ * 判成「英文说明句」—— 实测全仓 3 处误报（`scripts/launcher-core/run.mjs` 的
+ * `@param {Date} at` / `@param {string} from` / `@param {string} to`），
+ * 而这三行是**纯类型语法行**、一个英文说明字都没有。
+ * 剥掉名字之后剩下的若真是说明句（`@param {T} x the timeout to use`），
+ * 虚词照旧命中 —— 判据的拦截面没有被放宽。
  */
 function jsdocStructuralOnly(text) {
   if (hasCJK(text)) return false; // 有中文说明 → 本就不计入
-  const rest = stripJsdocTypeSyntax(text);
+  let rest = stripJsdocTypeSyntax(text);
+  const param = PARAM_TAG_RE.exec(text);
+  if (param && param[2]) {
+    // 剥掉参数名那一处（整词），余下才是说明部分。
+    rest = rest.replace(
+      new RegExp(`(^|\\s)${param[2].replace(/[$]/g, "\\$")}(?=\\s|$)`),
+      " ",
+    );
+  }
   if (JSDOC_PROSE_WORDS_RE.test(rest)) return false;
   const words = rest.match(/[A-Za-z]{2,}/g) || [];
   return words.length < 3;

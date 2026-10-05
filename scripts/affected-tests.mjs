@@ -206,6 +206,17 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `*.ttf` 按原字节进历史（23 MB 摘不干净，只能重写共享远端）。它读的是配置文件
   // 与 index 形状，import 图一概追不到，所以与上面两条同因、必须无条件响。
   "tests/embedded-title-font.test.ts",
+  // 「判据有没有执行者」这条纪律自己的执行者（ISSUE #1451 要求 2 / 规范 §13.5.12）。
+  // 它必须进固定清单：与 `tests/doc-check-hook-wiring.test.ts` 同因 —— 改 `.githooks/**`
+  // 会让本层放弃收窄、只跑固定清单，而「有人把 D 组那两步摘掉」与「有人新增一个
+  // 无执行者的判定型脚本」这两次改动恰好都落在那一档上，跟着改动走等于专挑它不在
+  // 的时机跑。它读的是 `.githooks/pre-commit` 与 `scripts/` 两份文本，import 图追不到。
+  "tests/gate-executors.test.ts",
+  // canonical / spacing 两份棘轮基线的形状守卫（ISSUE #1451 要求 2）：两处都
+  // `total: 0`，它们是「零候选起步、只许新增就红」的语义载体 —— 有人为了让
+  // `--check` 变绿去放宽基线（把 total 抬高）正是这一族要拦的动作，而它不在
+  // 任何钩子步骤的 import 面上。与本次暂存改动无关也必须响，所以进固定清单。
+  "tests/tw4-canonical-ratchet.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

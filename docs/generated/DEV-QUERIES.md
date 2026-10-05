@@ -97,10 +97,13 @@ grep -n "u-title" src/app/globals.css
 代码命令行全绿、编辑器标红），所以只能按语法形态扫：
 
 ```bash
-node scripts/report-ts-duplicate-keys.mjs              # 汇总（默认不含 *.test.*）
-node scripts/report-ts-duplicate-keys.mjs --with-tests # 连测试一起扫
-node scripts/report-ts-duplicate-keys.mjs --json
+node scripts/check-ts-duplicate-keys.cjs              # 判定（有命中即退 1；默认不含 *.test.*）
+node scripts/check-ts-duplicate-keys.cjs --report     # 只出清单，不判失败
+node scripts/check-ts-duplicate-keys.cjs --with-tests # 连测试一起扫（不进钩子）
+node scripts/check-ts-duplicate-keys.cjs --json       # 机器可读
 ```
+
+它已接进 `.githooks/pre-commit` 的 D 组「TS 重复属性判定」（实测存量 0，硬闸）。
 
 ## 6. 查看可用脚本
 
