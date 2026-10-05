@@ -200,6 +200,10 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
 ✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
 ✅ node scripts/check-known-failed-stale.mjs  # 已知基线失败登记过期：登记项必须指向真实文件、且真的还红着（见 11 §11.12；清单为空时零耗时）
+✅ node scripts/known-failed-selftest-gate.mjs # 上一条的自证档执行者：**只在暂存命中这套机制
+   # （登记表 / 判据本体 / 钩子接线）时**才做事，跑一次 `--self-test`（红侧 + 绿侧对照组）。
+   # 上一条「清单为空 ⇒ 零耗时」是代价的正确取舍，但它留下的空档是「真跑那一档在干净仓库
+   # 上从没被执行过、自证入口一个执行者都没有」（见 11 §11.12.1）
 ```
 
 > **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /
