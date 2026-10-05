@@ -68,7 +68,7 @@ function LogRowHarness({
     );
   }
   return (
-    <div className="bg-canvas-deep border-border-strong w-[900px] max-w-full overflow-hidden rounded-md border">
+    <div className="bg-canvas-deep border-border-strong w-225 max-w-full overflow-hidden rounded-md border">
       {entries.map((entry) => (
         <LogRow
           key={entry.id}

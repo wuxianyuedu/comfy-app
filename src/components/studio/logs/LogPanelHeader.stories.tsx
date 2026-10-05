@@ -60,7 +60,7 @@ function HeaderHarness({ wrapInitial = false }: { wrapInitial?: boolean }) {
     header.countsByOrigin[origin] ?? header.countsByOrigin.all;
 
   return (
-    <div className="w-[960px] max-w-full">
+    <div className="w-240 max-w-full">
       <LogPanelHeader
         originCounts={originCounts}
         countsByOrigin={header.countsByOrigin}

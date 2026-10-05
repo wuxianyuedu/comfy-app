@@ -71,7 +71,7 @@ function ShellHarness({
   const activeTab = tabs[0];
 
   return (
-    <div className="bg-bg h-[720px] w-full overflow-hidden">
+    <div className="bg-bg h-180 w-full overflow-hidden">
       <AppShell
         active="works"
         onSelect={() => undefined}
