@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 工作流库逻辑层单测：hook 走真实 tRPC React 客户端（api.workflow.* /
 // api.workflowModel.list），由 MSW 转发到可控测试 router —— 因此断言的是
 // **真实管线下的 loading → data → 错误流转**，而不是 vi.mock 的永不 resolve 桩。

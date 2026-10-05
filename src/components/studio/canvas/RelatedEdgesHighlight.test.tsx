@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 选中节点 → 相关连线高亮：接线层集成测试。
 //
 // 纯判据已由 flow-focus-endpoints.test.ts 覆盖；这里验的是「读 React Flow 内部

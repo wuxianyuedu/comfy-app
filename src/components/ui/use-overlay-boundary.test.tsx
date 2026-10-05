@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 锚定浮层的碰撞边界（`useOverlayBoundary`）。
  *

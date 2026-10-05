@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `RuntimeLogBox` 的交互契约（设置页「启动日志」框）。
  *

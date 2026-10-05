@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `OptionListPopover` —— 「一个可滚动的浮层选项列表」的唯一实现
  * （规范 16 §16.2.4.14）。

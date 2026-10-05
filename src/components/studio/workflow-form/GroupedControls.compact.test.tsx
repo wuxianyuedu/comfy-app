@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /* 画布 / 库内的组合参数控件 —— ISSUE #355 复审（第二轮）
  *
  * 用户口径（逐条对照）：

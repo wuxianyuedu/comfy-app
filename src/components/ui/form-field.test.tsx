@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `FormField` —— 「标签 + 控件 + 校验错误」这一行的唯一实现
  * （规范 16 §16.2.4.26）。

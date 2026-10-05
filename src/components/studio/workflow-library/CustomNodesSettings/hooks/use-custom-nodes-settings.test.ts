@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // CustomNodesSettings 逻辑层行为测试（ISSUE #318 的「先补护栏」步骤）。
 //
 // 为什么先补这一层：这个对话框的拆分已经做过一轮（1116 行 → 容器 73 +

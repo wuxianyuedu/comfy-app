@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * 工坊 MCP 服务端的**第一批执行者**（此前 17 条工具零执行者）。
  *

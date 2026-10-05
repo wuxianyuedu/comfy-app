@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `ComfyuiStoragePaths` 的可见行为（设置页「实例目录（只读）」区块）。
  *

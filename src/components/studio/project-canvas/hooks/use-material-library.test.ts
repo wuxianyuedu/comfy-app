@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 素材库逻辑层单测：hook 不发请求（请求在 lib/materials-client），故只 mock 那一层。
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 设置页逻辑层单测：hook 走真实 tRPC React 客户端（api.setting.* / api.llm.*），
 // 由 MSW 转发到可控测试 router。断言的是**编排行为**：
 //   1. 草稿从查询播种（且新的查询结果会重新播种）；

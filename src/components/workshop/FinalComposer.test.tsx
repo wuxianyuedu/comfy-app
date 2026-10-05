@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 //
 // FinalComposer 行为测试：纯客户端合成 stage 的用户可见契约。
 //
