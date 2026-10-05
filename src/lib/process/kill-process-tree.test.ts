@@ -106,6 +106,9 @@ describe("killProcessTree 平台分支", () => {
     // 真跑（含「命令确实发出去了」）见 kill-process-tree.windows.test.ts ——
     // 那里注入一个同名假 taskkill，把 Windows 分支在本机完整跑一遍。
     // 这条只做平台判据的冒烟：非 Windows 上不该走 taskkill 分支。
+    //
+    // 这条**不切平台**：它问的是「在本机这个平台上，`killProcessTree` 走的是哪条
+    // 分支」，两端各自的答案就是判据本身（切了反而在自问自答）。
     if (!isWindowsPlatform()) {
       const r = await killProcessTree({ pid: 999999 });
       expect(r.via).not.toContain("taskkill");
@@ -117,7 +120,13 @@ describe("killProcessTree 平台分支", () => {
   });
 });
 
-describe.runIf(!isWindowsPlatform())("readPgid（组长归属由 OS 回答）", () => {
+/* ⚠️ 这一组与下面那组**必须留在真 POSIX 机器上**：它们问的是「`ps` 报什么」
+ * 与「真信号带不带走整棵树」，两件事都没有注入形态（判据侧要的正是真实回答）。
+ * 对应的**决策**已经在 `kill-process-tree.posix.test.ts` 里用注入的 `ps` 表在
+ * 两端机器上判同一个结论 —— 那边是判决面，这边是「信号真的发出去了」。 */
+const posixOnly = isWindowsPlatform() ? describe.skip : describe;
+
+posixOnly("readPgid（组长归属由 OS 回答）", () => {
   it("读出目标进程的真实 PGID", async () => {
     const child = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
     const pid = child.pid!;
@@ -144,7 +153,7 @@ describe.runIf(!isWindowsPlatform())("readPgid（组长归属由 OS 回答）", 
   });
 });
 
-describe.runIf(!isWindowsPlatform())("killProcessTree POSIX 行为", () => {
+posixOnly("killProcessTree POSIX 行为", () => {
   it("detached 进程组：整棵树 0 残留（禁止留孤儿）", async () => {
     // detached 拉起 = 独立新组，组长是目标自己 ⇒ 组路径可安全使用。
     const child = spawn("sh", ["-c", "sleep 300 & sleep 301 & wait"], {

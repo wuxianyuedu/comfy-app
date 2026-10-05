@@ -300,6 +300,24 @@ export default tseslint.config(
       ],
     },
   },
+  /* ── vitest 的 fixture 层要关掉 react-hooks/rules-of-hooks ──────────────────
+   * `test.extend` 把回调的第二参叫 `use`（`async ({}, use) => { ...; await use(v) }`），
+   * 而 `react-hooks/rules-of-hooks` 按**名字**判 React Hook —— 它在这个文件里
+   * 对着每一个 fixture 报「React Hook "use" is called in function …」。
+   *
+   * 这是**误报**而不是「可以改掉的写法」：`use` 这个名字是 vitest 的 API，
+   * 不能改（改了 `test.extend` 就不认）。文件级 disable 也不合适 —— 那是把
+   * 真规则一起关掉，将来这个文件里真的写了个 React hook 也没人管。
+   *
+   * 所以按**目录**关：`tests/helpers/**` 是测试基建，天然不含 React 组件
+   * （真正的组件渲染基元在 `tests/helpers/renderWithProviders.tsx`，它导出的
+   * 是普通函数而不是 hook）。范围写死到这一格，别的测试文件照旧受规则保护。 */
+  {
+    files: ["tests/helpers/**/*.{ts,tsx}"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
   {
     linterOptions: {
       reportUnusedDisableDirectives: true,
