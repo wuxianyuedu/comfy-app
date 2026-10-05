@@ -57,13 +57,13 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
         <p className="text-ink-bright mt-4 text-[15px] font-semibold">
           右键画布任意位置，开始创建节点
         </p>
-        <p className="text-ink-soft mt-2 text-[12px] leading-relaxed">
+        <p className="text-ink-soft mt-2 text-xs leading-relaxed">
           支持：生图 · 生视频 · 生成剧本 · Agent 模式 · 自定义工作流
         </p>
-        <p className="text-ink-muted mt-1 text-[12px] leading-relaxed">
+        <p className="text-ink-muted mt-1 text-xs leading-relaxed">
           自定义工作流可下拉选用你上传的 ComfyUI 工作流
         </p>
-        <p className="text-primary-strong mt-1 text-[12px] leading-relaxed">
+        <p className="text-primary-strong mt-1 text-xs leading-relaxed">
           <Icon
             name="sparkles"
             size={12}

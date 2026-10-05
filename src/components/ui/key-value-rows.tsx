@@ -273,7 +273,7 @@ export function KeyValueRows({
         <div
           key={item.id ?? itemLabelText(item)}
           className={cn(
-            "flex items-center justify-between gap-3 text-[12px]",
+            "flex items-center justify-between gap-3 text-xs",
             bordered ? "px-3 py-2" : "py-1",
             striped && index % 2 === 0 && "bg-subtle",
             bordered && index > 0 && "border-border-subtle border-t",

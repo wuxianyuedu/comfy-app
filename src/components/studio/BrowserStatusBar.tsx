@@ -216,7 +216,7 @@ function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
       <PopoverTrigger className="text-ink-soft hover:bg-subtle inline-flex max-w-40 cursor-pointer items-center gap-1 rounded px-1 py-0.5 tabular-nums">
         <span className="truncate">{notice.text}</span>
       </PopoverTrigger>
-      <PopoverContent side="top" align="start" className="w-80 text-[12px]">
+      <PopoverContent side="top" align="start" className="w-80 text-xs">
         <div className="flex flex-col gap-1">
           {detailLines.map((line, i) => (
             <span key={i} className="text-ink-soft leading-relaxed">

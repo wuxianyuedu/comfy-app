@@ -108,7 +108,7 @@ export function ResultCard({
             </Button>
           </Hint>
         </div>
-        <div className="text-ink-bright max-h-56 overflow-auto p-3 text-[12px] leading-relaxed">
+        <div className="text-ink-bright max-h-56 overflow-auto p-3 text-xs leading-relaxed">
           {
             // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空字符串也视为无输出，需回退占位
             text || <span className="text-ink-muted">尚无文本输出</span>

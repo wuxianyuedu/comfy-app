@@ -98,7 +98,7 @@ export function FlowNodeHeader({
         }}
       />
       <span
-        className="flex-1 truncate text-[12px] font-medium tracking-wide"
+        className="flex-1 truncate text-xs font-medium tracking-wide"
         style={{ color: palette.titleColor }}
         title={
           data.title && data.title !== displayTitle ? data.title : displayTitle

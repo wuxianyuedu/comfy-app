@@ -385,7 +385,8 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 - **档名必须是 t-shirt 尺寸（`2xs` / `3xs`），不能叫 `meta` / `micro`**。`cn()`（`node_modules/cn`，clsx + tailwind-merge 的替代件）把**不认识的 `text-<名字>` 一律归到颜色组**：实测 `cn("text-ink-muted", "text-micro")` 只剩 `text-micro` —— 同行的状态色被静默吃掉，徽标会失去配色语义；而 `cn("text-ink-muted", "text-2xs")` 两条都留。⚠️ **仓库里已有的 `text-section` / `text-page` / `text-hero` 是同一个坑的潜伏形态**（实测 `cn("text-ink-muted","text-section")` 同样吃颜色），它们目前只在 CSS 里经 `.u-title-*` 使用、没进 JSX，所以还没炸 —— **别在 JSX 里用这几个类名**，标题一律走 `.u-title-*`。
 - **不乘 `--font-scale`**：设置页「标题字阶」那一档的作用域只有上面四档标题。微标签跟着标题缩放，会让密集列表在 125% 档下挤成一团 —— 与「正文不随字阶变」同一条口径，`e2e/appearance-steps.spec.ts` 按后者判。
-- **不配 `--text-*-line-height`**：Tailwind v4 里一旦配对，生成的类会连带锁行高。实测对照：`text-xs` emit `font-size` **加** `line-height: var(--tw-leading, var(--text-xs--line-height))`（= 16px），而 `text-[12px]` 只出 font-size、行高继承 `html` 的 1.5（12px 下是 18px）。所以 **`text-[12px]` → `text-xs` 不是零视觉变化的改写**（107 处留在原地，等一次带视觉复核的独立改动）；`text-2xs` / `text-3xs` 只出 font-size，与替换前的 `text-[11px]` / `text-[10px]` 逐像素相同。
+- **不配 `--text-*-line-height`**：Tailwind v4 里一旦配对，生成的类会连带锁行高。实测对照：`text-xs` emit `font-size` **加** `line-height: var(--tw-leading, var(--text-xs--line-height))`（= 16px），而 `text-[12px]` 只出 font-size、行高继承 `html` 的 1.5（12px 下是 18px）—— **同一个 12px 因此有过两种行高**（289 处 `text-xs` 在 16px、103 处字面量在 18px）。这一档已签字**归一到 `text-xs`**（12px / 16px），103 处字面量换完，并加一条「调用点不许再写 `text-[12px]`」的**归零判据**（不是棘轮）；要更松的行高就显式写 `leading-*`，别再造字号字面量。`text-2xs` / `text-3xs` 仍只出 font-size，与替换前的 `text-[11px]` / `text-[10px]` 逐像素相同。
+  **改前 / 改后的真浏览器抽样**（`/workspace` 的六个可点面，195 个 12px 实例）：改前那 18 个 `text-[12px]` 实例**全都自带 `leading-tight`**，计算行高 15px；改后同一批仍是 15px ⇒ 这一批**逐像素没动**（`leading-*` 走 `--tw-leading`，照样压过 `text-xs` 的默认档）。裁切数改前改后都是 12（既有状态，与本次无关）。**覆盖边界要说清**：剩下约 85 处分布在要数据才渲染的面（项目画布节点、结果卡、若干浮层），本轮量具进不去 —— 它们的预期是行盒 18→16px（收拢不引入裁切），这一句是**推理，不是读数**。
 
 **h2/h3 刻意不入判据**：区块级标题保留 10.5–14px 的几档微排版（画布节点标签、日志小节、属性表列名各一档），并成一档会**压平信息层次**。要更严的约束就写成**该屏自己的守卫**（例：`src/components/workshop/workshop-heading-structure.test.ts`），别升成全局规则。
 
@@ -453,7 +454,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - **卡片/浮层用 `rounded-xl`**（默认 20px），**控件（按钮、下拉触发器）用 `rounded-lg`**（16px），**输入框用 `rounded-md`**（12px），**chip/药丸用 `rounded-full`**（9999px）。
 - 小尺寸控件靠**取小**而不是换档：`rounded-[min(var(--radius-md),10px)]`（Button `xs`/`icon-xs`）、`min(var(--radius-md),12px)`（`sm`/`icon-sm`）。`ui/` 里 15 处 `rounded-[...]` 有 11 处是这种**从 token 派生**的写法，只有 3 处是裸值（`rounded-[2px]`×2、`rounded-[4px]`×1）。
 - 两处直接吃基数、不吃档位：`ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 与 `ui/sonner.tsx` 的 `--border-radius`。它们跟着整条刻度走，不是第二份来源。
-- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 10 / 298，只许降）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`、区头那一行 → `DynamicWorkflowForm/SectionHeader`），四族共用一次目录遍历（写在一张 `FAMILIES` 表里，新增一族只加一行），按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）；反向样本同样在册（`WorkflowIOPreviewPanel` 那枚同形、不同底的计数不许被区头标记抓到 —— 抓到就说明判据在拦一切）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。
+- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 10 / 201，只许降）；**④ 12px 是归零等式而不是棘轮** —— 调用点出现 `text-[12px]` 直接红（它和 `text-xs` 字号相同、只差行高，留着就是重新分裂「同一个字号两种行高」那一档，见 §Typography）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`、区头那一行 → `DynamicWorkflowForm/SectionHeader`），四族共用一次目录遍历（写在一张 `FAMILIES` 表里，新增一族只加一行），按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）；反向样本同样在册（`WorkflowIOPreviewPanel` 那枚同形、不同底的计数不许被区头标记抓到 —— 抓到就说明判据在拦一切）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。
 
 ---
 
@@ -560,7 +561,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 `studio/TypeChip.tsx` 收的是画布节点与参数表单上那枚「类型标签」（`IMAGE` / `FLOAT` / `CLIP`…）。此前同一串类名 `inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold` 散在 **6 个文件的 10 处**（其中 8 处逐字相同）：`CanvasNode/SelectedToolbar`、`project-canvas/WorkflowNode`、`project-canvas/WorkflowNodeArdot`（它自己的 `PortChip` 只留配色逻辑）、`workflow-form/AspectMegapixelControl`、`WorkflowNodeParts`、`WorkflowWirePortRows` 三处、`DynamicWorkflowForm/sections/WidgetInputRow` 两处。
 
-三档字号是按调用点量出来的，不是凑的：`md` = 12px（5 处，画布节点行与 wire 行），`sm` = `text-3xs` 10px（4 处，缺省档），`xs` = 同 10px 但 `px-1 py-px`（1 处，`AspectMegapixelControl` 的组合控件里挤在最右端）。**`md` 里那档故意仍写 `text-[12px]` 而没换成 `text-xs`**：实测 `text-xs` 会连带把 `line-height` 锁成 16px，而这些 chip 现在吃的是继承行高 —— 换成 token 会静默改行高，那是 §Typography 那条「字号与行高解耦」纪律的同一个坑。它因此仍计入字面字号棘轮（12 / 298 的由来），是**已知且刻意**的一处。
+三档字号是按调用点量出来的，不是凑的：`md` = 12px（5 处，画布节点行与 wire 行）走 `text-xs`，`sm` = `text-3xs` 10px（4 处，缺省档），`xs` = 同 10px 但 `px-1 py-px`（1 处，`AspectMegapixelControl` 的组合控件里挤在最右端）。`md` 这档**曾经是 `text-[12px]`**，当时的理由记在 #1499：`text-xs` 会连带把行高锁成 16px，而这些 chip 吃的是继承行高。那条理由在「同一个 12px 归一到 `text-xs`」签字之后不再成立（见 §Typography 那一节），所以这 5 枚 chip 的**行盒从 18px 收到 16px —— 是有意的变化，不是等价替换**。
 
 颜色有**两条来路**，所以 `tone` 必须能整档关掉：`neutral` 给 `bg-border-strong text-ink-muted`（随主题的通用档），`none` 一个颜色类都不加、由调用点的 `style` 全权上色（`portChipStyle()` 那套类型色）。不能靠「行内样式覆盖 class」赌：`chipStyle` 未必把 `background` 与 `color` 都给全，缺哪一项，缺省档就从 class 里漏出来改渲染。
 
@@ -587,6 +588,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - ❌ **禁止拼 token 名**：`var(--color-aurora-${tone})`、`"--color-" + name`。Tailwind v4 会 tree-shake `@theme` 里没被**字面引用**的变量，拼出来的名字在源码里从没出现过 ⇒ 产物里当场失色、没有任何报错。JS 里按当前主题取色的规定写法是 `useCssColorToken("--color-node-mix-base", "#ffffff")`，**整名写全**。
 - ❌ 不在源码里写 `violet-500` / `emerald-400` / `#rrggbb` 表达表面或文字语义（`pnpm theme:check` 棘轮 + 显式豁免清单）。
 - ⚠️ **文档里引用一个 arbitrary 类名时，别整串照抄 `shadow-[…]` / `text-[…]` 这种完整候选名**：Tailwind 的默认源扫描把 `.md` 也算进去，于是那一条规则**真的被生成进产物**（实测：把某个已迁走的旧裸值类名留在本文里当例子，编译产物里就有它，而源码一处都不剩 —— 会让「按产物数硬编码」的自查读出假阳性）。写值本身（`rgba(52,211,153,0.8)`）不成候选名，安全。
+  **一个刻意留下的例外**：本文讲「12px 只许用 `text-xs`」这条禁令时必须点名被禁的写法，所以产物里会留着一条谁都不用的 12px 字面量规则。它不改渲染、也不在任何组件里，**别为了消掉它把禁令改写成读不懂的样子**；要核对调用点存量就按 `src` 数（判据正是这么做的），别按产物数。
 
 **主题**
 

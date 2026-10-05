@@ -132,7 +132,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
            *  截断用 `max-w` + `truncate`，超长名字
            *  收成省略号；全名仍可经
            *  `title` 属性（浏览器原生 tooltip）读到。 */}
-          <div className="flex items-center gap-1.5 text-[12px]">
+          <div className="flex items-center gap-1.5 text-xs">
             <Hint
               label={
                 subgraphStack.length

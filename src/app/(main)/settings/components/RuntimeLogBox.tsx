@@ -127,7 +127,7 @@ export function RuntimeLogBox({
           follow={follow}
           onFollowChange={setFollow}
           emptyHint={emptyHint}
-          className="border-border-subtle flex-1 border-t px-4 py-3 text-[12px]"
+          className="border-border-subtle flex-1 border-t px-4 py-3 text-xs"
         />
         <LogHint log={log} />
       </FullScreenDialog>

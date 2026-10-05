@@ -29,9 +29,7 @@ export function ConsolePresetList({
       {CONSOLE_PRESETS.map((group) => (
         <div key={group.id} className="flex flex-col gap-1.5">
           <div className="flex flex-col">
-            <h3 className="text-ink text-[12px] font-semibold">
-              {group.label}
-            </h3>
+            <h3 className="text-ink text-xs font-semibold">{group.label}</h3>
             <p className="text-ink-fainter text-[10.5px] leading-snug">
               {group.hint}
             </p>
@@ -44,7 +42,7 @@ export function ConsolePresetList({
                   disabled={disabled}
                   onClick={() => onFill(item.command)}
                   data-testid={`console-preset-${item.id}`}
-                  className="group text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto w-full justify-start gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-normal"
+                  className="group text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto w-full justify-start gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-normal"
                 >
                   <ChevronRight
                     data-icon="inline-start"
