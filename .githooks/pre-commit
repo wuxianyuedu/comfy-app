@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(35 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(36 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -268,6 +268,13 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 成本：清单为空是**常态**，此时零耗时零输出退出；非空时才真跑那几份文件
   # （个位数条目，不是全量 —— §13.5.8「跑多少由改动面决定」）。
   run "已知基线失败登记过期（清单为空时零耗时）" node scripts/check-known-failed-stale.mjs
+  # 上一步只在**清单非空**时才真跑，而清单为空是终态/常态 ⇒ 「真跑那一档」在干净仓库上
+  # 从没被执行过，它的自证入口 `--self-test` 更是一个执行者都没有（全仓无调用点）。
+  # 本步补的正是这个执行者，触发面窄（只碰了这套机制本身才做事，普通提交零耗时）：
+  # 改登记表 / 改判据本体 / 改钩子接线时才跑一次自证（实测 ~0.9s，一次真 vitest 冷启）。
+  # 两个实测的洞都只有它接得住：reporter 改名（用例喂夹具、看不到真命令）与
+  # judgeStillFailing 恒放行（旧版自证只有红侧、判据恒放行时它照样绿）。详见脚本文件头。
+  run "已知基线失败登记·自证（碰了这套机制才跑）" node scripts/known-failed-selftest-gate.mjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────

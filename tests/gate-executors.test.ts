@@ -342,7 +342,9 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     // 被钩子注释提到）、`install-git-hooks.mjs`（postinstall，被注释提到）、
     // `run-affected-tests.mjs`（被 `node scripts/run-affected-tests.mjs` 那行调，
     // 但它是 C 组的测试执行器、不是判据）、`quality-gate-shared.mjs`（被 import）。
-    // 实测：把口径退化成全文匹配，份数从 44 涨到 47（多认出这三份）。
+    // 实测：把口径退化成全文匹配，份数会明显上涨（那三份被一并认出）。
+    // ⚠️ 这里只留定性、不写那个上涨后的数字：它随仓库里散文提到 `scripts/x.mjs` 的
+    // 次数漂移，写死就成了下一个人照着它去核的假账（本仓反复吃过这味药）。
     const output = runInRepo(["--report"]);
     const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
     // 这条用例守住的是「步骤位置口径 ≠ 全文匹配」这个**差**，不是某个具体数字 ——
