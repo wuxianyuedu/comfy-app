@@ -90,6 +90,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 收敛掉一份却没收紧台账 = 红。它守的是「这张表还有没有记账能力」，与本次改动无关，
   // 所以必须进固定清单（只在受影响时才跑，等于让下一次复制悄悄过去）。
   "tests/strip-comments-single-source.test.ts",
+  // 软断言的**使用面**（规范 §11.18）：`expect.soft` 只该用在「一张清单逐项判」的
+  // 循环体里，落在循环外会把真正的原因吞掉（软断言失败后下一行照跑、抛 TypeError，
+  // 报告里只剩那条 TypeError）。它同时是判据自己的门禁自测 —— 口径（同行循环、
+  // 折行循环头、循环之后的语句）每一条都得有人钉住，而这些口径是「下一次新增
+  // 一处软断言」时才走得进的路径，所以必须进固定清单（与本次改动无关也照跑）。
+  "tests/soft-assertion-gate.test.ts",
   // router 层的错误信封：裸 `throw new Error` 会被 tRPC 归成 INTERNAL_SERVER_ERROR，
   // 「越权与不存在同形」就只剩一句没有判据的话（台账 E8）。这条同时验 eslint 配置里
   // 那条 selector **真的会响** —— 「配置写在」与「配置在跑」是两件事（§11.7 同源），

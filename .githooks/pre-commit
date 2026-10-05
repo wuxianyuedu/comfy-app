@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(34 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(35 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -240,6 +240,14 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 把 jsdom 档里的文件头改成 node、把 `.test.tsx` 的文件头改成 node、
   # 把判据③（冗余文件头）改永假或放宽成「有头就报」—— 四条都当场红。
   run "用例环境档（环境早退 / 目录档矛盾 / 冗余文件头）" node scripts/check-test-environment.cjs
+  # 软断言（`expect.soft`）用在哪儿（规范 §11.18）。**形状判据**：它必须落在
+  # **循环体里**（一张清单逐项判、一项失败不影响下一项）。落在循环外的软断言
+  # 会把真正的原因吞掉 —— 实测：软断言失败后下一行照跑，依赖前提的语句当场抛
+  # `TypeError`，报告里只剩那条 TypeError，软断言那句「真正的原因」一个字不留。
+  # 判据走**缩进**（prettier 保证 tabWidth 2），不解析花括号：花括号那条路上
+  # 要区分 JSX 自闭合标签 / 箭头函数体直接给正则 / 正则字符类里的 `[\/]`，
+  # 每修一处都要再加一层词法分析 —— 而那与「包着我的那一帧是不是循环」无关。
+  run "软断言用在循环体里（expect.soft）" node scripts/check-soft-assertions.cjs
   # 判据 ⇄ 执行者的双向判据（规范 §13.5.12 / ISSUE #1451 要求 2）：判定型脚本
   # （有 process.exit）无执行者即红 —— 除非登记在 scripts/.gate-executor-ledger.json
   # 的「按需召唤」台账里（含「为什么不能进钩子」+「谁按需跑」）；报告型（0 处
