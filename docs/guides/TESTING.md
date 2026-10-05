@@ -176,9 +176,12 @@ pnpm test:e2e
 ### DOM 快照边界
 
 Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎且非像素退化）。
-存量还剩 4 份结构快照（`WorkflowSubgraphNode` / `WorkflowEditorInner` / `FilmStudio` /
-`TrainingStudio` 的 `__snapshots__/*.snap`），按规范 §11.9 逐步迁成行为断言后删除；
-视觉防退化统一走本节 Playwright 基线。
+存量那几份结构快照（`WorkflowSubgraphNode` / `WorkflowEditorInner` / `FilmStudio`）
+已按规范 §11.9 全部迁成行为断言并删除 `.snap`；视觉防退化统一走本节 Playwright 基线。
+
+**快照本身没被禁** —— 禁的是「拿快照当 DOM 结构基线」。大块且需要人工 review 的
+**真实产物**（生成物、结构清单）用 `toMatchFileSnapshot`（规范 §11.9「快照形态的选择」
+与 §11.9.1），基线是一份能独立打开、能单独 diff 的真文件。
 
 ## API 文档（TypeDoc）
 
@@ -247,7 +250,7 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
       行号），并由 `tests/router-error-envelope.test.ts` 三层验全：存量为零、**扫描面非空**
       （路径写错时「零命中」长得就像「都修好了」）、selector 真的会响（拿 `Linter` 跑两段片段）。
 - [ ] **`DynamicWorkflowForm` / `CanvasNode` 主组件的深度行为测试**（fetch/poll 生命周期）仍开放。
-- [ ] 存量 4 份 `.snap` 结构快照按行为断言迁移（见 §11.9）。
+- [x] 存量 `.snap` 结构快照已按行为断言迁移完并删除（见 §11.9）。
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）。
 - [ ] Tauri 壳冒烟自动化落地：先按规范 §11.10 定壳级清单与边界，壳改动 PR 跑
       `cargo build --release --features custom-protocol` 重编 + 冒烟（Windows 环境）。
