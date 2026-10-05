@@ -71,7 +71,7 @@ describe("postinstall 的宿主契约（ISSUE #636）", () => {
     expect(verdict.reason).toMatch(/sh\/bash/);
   });
 
-  it.each([
+  it.for([
     ["bash scripts/x.sh", /sh\/bash/],
     ["node scripts/install-git-hooks.mjs || true", /POSIX shell/],
     [
@@ -80,7 +80,7 @@ describe("postinstall 的宿主契约（ISSUE #636）", () => {
     ],
     ["npm run hooks", /拒绝 npm/],
     ["node scripts/some-other.mjs", /必须逐字/],
-  ])("违规形态「%s」被拦下", (cmd, expected) => {
+  ] as const)("违规形态「%s」被拦下", ([cmd, expected]) => {
     const verdict = checkPostinstall(cmd);
     expect(verdict.ok, `「${cmd}」不该通过`).toBe(false);
     expect(verdict.reason).toMatch(expected);

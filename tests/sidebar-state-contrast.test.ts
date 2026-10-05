@@ -28,7 +28,8 @@ beforeAll(async () => {
 /** `#rrggbb` → sRGB 三个通道（0~255）。产物里这几颗 token 都是 6 位 hex。 */
 function channels(value: string): [number, number, number] {
   const m = /^#([0-9a-f]{6})$/i.exec(value.trim());
-  if (!m) throw new Error(`期望 6 位 hex 色值，实际是 ${JSON.stringify(value)}`);
+  if (!m)
+    throw new Error(`期望 6 位 hex 色值，实际是 ${JSON.stringify(value)}`);
   const n = Number.parseInt(m[1]!, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
@@ -52,7 +53,10 @@ function contrast(a: string, b: string): number {
 /** 某态下某 token 的解析值；未定义即用例失败（比 `!` 断言给出更好的报错）。 */
 function token(t: ThemeTokens, name: string): string {
   const v = t.get(name);
-  expect(v, `${name} 未解析出值（未声明 / 被 tree-shake / var 链断裂）`).toBeTruthy();
+  expect(
+    v,
+    `${name} 未解析出值（未声明 / 被 tree-shake / var 链断裂）`,
+  ).toBeTruthy();
   return v!;
 }
 
@@ -70,10 +74,10 @@ const MIN_SELECTED_VS_BASE = 1.35;
 const MIN_SELECTED_VS_HOVER = 1.15;
 
 describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）", () => {
-  it.each([
+  it.for([
     ["浅色", () => light],
     ["深色", () => dark],
-  ])("%s：悬停 / 选中底色都明显区别于侧栏底", (_label, get) => {
+  ] as const)("%s：悬停 / 选中底色都明显区别于侧栏底", ([, get]) => {
     const t = get();
     const base = token(t, "--color-panel-deep");
     const hover = token(t, "--color-nav-hover");
@@ -95,16 +99,18 @@ describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）",
     ).toBeGreaterThanOrEqual(MIN_SELECTED_VS_HOVER);
   });
 
-  it.each([
+  it.for([
     ["浅色", () => light],
     ["深色", () => dark],
-  ])("%s：别名确实落到侧栏专用的两级 token 上", (_label, get) => {
+  ] as const)("%s：别名确实落到侧栏专用的两级 token 上", ([, get]) => {
     const t = get();
     // 悬停档必须**不再**是通用表面 token `--color-subtle`：那是本 ISSUE 的根因，
     // 哪天有人「图省事合回去」，这条会当场红。
     expect(token(t, "--sidebar-accent")).not.toBe(token(t, "--color-subtle"));
     expect(token(t, "--sidebar-accent")).toBe(token(t, "--color-nav-hover"));
-    expect(token(t, "--sidebar-selected")).toBe(token(t, "--color-nav-selected"));
+    expect(token(t, "--sidebar-selected")).toBe(
+      token(t, "--color-nav-selected"),
+    );
   });
 
   it("选中底两态各自取值（不是一个值复印两份）", () => {
@@ -113,10 +119,10 @@ describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）",
     );
   });
 
-  it.each([
+  it.for([
     ["浅色", () => light],
     ["深色", () => dark],
-  ])("%s：选中底上的正文与指示条都够亮", (_label, get) => {
+  ] as const)("%s：选中底上的正文与指示条都够亮", ([, get]) => {
     const t = get();
     const selected = token(t, "--color-nav-selected");
     // 正文：底色不是「越亮越好」，压在它上面的文字必须还读得清（WCAG 4.5:1）。

@@ -24,7 +24,7 @@ const SEMANTIC_VARIANTS = [
 ] as const;
 
 describe("Button 语义变体", () => {
-  it.each(SEMANTIC_VARIANTS)(
+  it.for(SEMANTIC_VARIANTS)(
     "variant=%s 产出的类是语义 token 类名",
     (variant) => {
       const cls = buttonVariants({ variant });
@@ -34,7 +34,7 @@ describe("Button 语义变体", () => {
     },
   );
 
-  it.each(SEMANTIC_VARIANTS)(
+  it.for(SEMANTIC_VARIANTS)(
     "variant=%s 不落任何 Tailwind 原生调色板字面量",
     (variant) => {
       const cls = buttonVariants({ variant });

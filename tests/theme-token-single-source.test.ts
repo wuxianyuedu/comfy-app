@@ -135,7 +135,7 @@ const LITERAL_ALLOWED: Record<string, string> = {
 };
 
 describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672）", () => {
-  it.each(ALIASES)("%s 的值是 var(--color-*)", (name) => {
+  it.for(ALIASES)("%s 的值是 var(--color-*)", (name) => {
     const rawL = light.raw(name);
     const rawD = dark.raw(name);
     // 至少有一态声明了它（两态都声明时值应一致 —— 它就是纯转发）
@@ -266,10 +266,10 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
 });
 
 describe("T3 var() 引用链无环、不漏到未定义的名字", () => {
-  it.each([
+  it.for([
     ["浅色", () => light],
     ["深色", () => dark],
-  ] as const)("%s：每个别名都能解到一个具体值", (_label, get) => {
+  ] as const)("%s：每个别名都能解到一个具体值", ([, get]) => {
     const t = get();
     for (const name of ALIASES) {
       if (!t.has(name)) continue;
@@ -412,30 +412,27 @@ const FONT_CHAIN = [
 ] as const;
 
 describe("T5 字体链在编译产物里必须解得出具体的栈（#1434）", () => {
-  it.each([
+  it.for([
     ["浅色", () => light],
     ["深色", () => dark],
-  ] as const)(
-    "%s：四档字体令牌都解得到值，不留未展开的 var()",
-    (_label, get) => {
-      const t = get();
-      for (const name of FONT_CHAIN) {
-        expect(t.has(name), `产物里没有 ${name} 这条声明`).toBe(true);
-        expect(
-          () => t.get(name),
-          `${name} 解不开（多半是自引用成环）`,
-        ).not.toThrow();
-        const value = t.get(name);
-        expect(
-          value,
-          `${name} 解出空值 —— 全站正文会退回浏览器默认字体`,
-        ).toBeTruthy();
-        expect(value, `${name} 解出的仍是未展开的 var()：${value}`).not.toMatch(
-          /var\(/,
-        );
-      }
-    },
-  );
+  ] as const)("%s：四档字体令牌都解得到值，不留未展开的 var()", ([, get]) => {
+    const t = get();
+    for (const name of FONT_CHAIN) {
+      expect(t.has(name), `产物里没有 ${name} 这条声明`).toBe(true);
+      expect(
+        () => t.get(name),
+        `${name} 解不开（多半是自引用成环）`,
+      ).not.toThrow();
+      const value = t.get(name);
+      expect(
+        value,
+        `${name} 解出空值 —— 全站正文会退回浏览器默认字体`,
+      ).toBeTruthy();
+      expect(value, `${name} 解出的仍是未展开的 var()：${value}`).not.toMatch(
+        /var\(/,
+      );
+    }
+  });
 
   it("解出来的就是设计那串栈（不是 UA 默认，也不是某一份别处抄的副本）", () => {
     /* 只判项目自己拥有的部分：`--font-geist-sans` 由 next/font 在运行时挂到 <html>，

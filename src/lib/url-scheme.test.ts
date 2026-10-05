@@ -21,7 +21,7 @@ describe("isHttpUrl", () => {
 
   /* 每一条都能过 `z.url()` —— 它们不是「非法 URL」，而是「合法的危险协议」。
      交给系统浏览器意味着：读本机文件、执行脚本、或拉起协议处理器对应的本机程序。 */
-  it.each([
+  it.for([
     ["file:///C:/Windows/win.ini"],
     ["file:///etc/passwd"],
     ["javascript:alert(1)"],
@@ -31,7 +31,7 @@ describe("isHttpUrl", () => {
     ["search-ms:query=x"],
     ["ms-msdt:/id/foo"],
     ["about:blank"],
-  ])("拒绝 %j", (url) => {
+  ] as const)("拒绝 %j", ([url]) => {
     expect(isHttpUrl(url)).toBe(false);
   });
 

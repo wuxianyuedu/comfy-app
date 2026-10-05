@@ -267,7 +267,7 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
     globToRegExp: (glob: string) => RegExp;
   };
 
-  it.each([
+  it.for([
     ["scripts/check-format.cjs", true],
     ["tests/anything.test.ts", true],
     ["e2e/smoke.spec.ts", true],
@@ -281,7 +281,7 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
     ["src/lib/endpoints.ts", false],
     ["src/components/ui/button.tsx", false],
     ["src/app/api/health/route.ts", false],
-  ])("%s → ignored=%s", (rel, expected) => {
+  ] as const)("%s → ignored=%s", ([rel, expected]) => {
     expect(mod.isIgnored(rel)).toBe(expected);
   });
 
