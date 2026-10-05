@@ -224,6 +224,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `--check` 变绿去放宽基线（把 total 抬高）正是这一族要拦的动作，而它不在
   // 任何钩子步骤的 import 面上。与本次暂存改动无关也必须响，所以进固定清单。
   "tests/tw4-canonical-ratchet.test.ts",
+  // 「用例的环境档」那两条判据（§11.17）的契约测试。它们守的是**下一次有人写用例**：
+  // 「环境早退」是「绿有两种含义」里坏的那一种（用例报绿、一条断言都没跑），
+  // 而它与某一次具体改动无关 —— 只在被改到时才跑等于专挑它不在的时机跑。
+  // 同因：改 `.githooks/**` 会让本层放弃收窄、只跑固定清单。
+  "tests/test-environment-gate.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
