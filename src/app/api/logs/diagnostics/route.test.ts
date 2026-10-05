@@ -53,7 +53,7 @@ print("\\n".join(sorted(z.namelist())))
     { encoding: "utf8" },
   )
     .trim()
-    .split("\n")
+    .split(/\r?\n/)
     .filter(Boolean);
 }
 
