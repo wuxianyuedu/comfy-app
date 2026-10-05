@@ -1,6 +1,115 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
+/**
+ * 两个 project 共用的 `test` 选项 —— **`projects` 不继承**声明方的这一层，
+ * 所以只能显式 spread（只写一处、别处引用）。
+ *
+ * ⚠️ 新增一项 `test` 级配置时先问：它是「每份用例都要的」还是「只对某档有意义」？
+ * 前者放这里（两个 project 都拿），后者写进对应 project 内部 —— 写在根 `test`
+ * 顶层会对 project **静默失效**，那是「配置看着在、实际没跑」那一族
+ * （同 §11.7 的「门槛写着 100、报告里查无此文件」与 §11.13.1）。
+ */
+const SHARED_TEST_OPTIONS = {
+      /* 每条用例的 setupFiles（jest-dom 匹配器 + 限流桶复位）。 */
+      setupFiles: ["tests/setup.ts"],
+      /* 与仓里既有口径一致：不注入 `expect` / `describe` 等全局，用例逐个 import。 */
+      globals: false,
+      /* 超时预算：vitest 的默认值（用例 5s / 钩子 10s）低于本仓库的实测下限。
+       *
+       * 串行隔离跑（`--no-file-parallelism`）的最慢单条用例已经是 5469ms
+       * （`client-bundle-node-builtins` 的全 `src/**`「use client」可达性 DFS），
+       * `db-schema-ready` 4770ms —— 一条贴着默认值、一条在默认值之上，
+       * 也就是**不开并行都会红**。全量并行时再乘一份争用系数：16 逻辑核上
+       * 约 10 个 worker，而门禁用例各条要 `execFileSync` 真起 Node / git /
+       * prettier 子进程，一轮实测 28 条报 `Test timed out in 5000ms`、
+       * 2 个文件报 `Hook timed out in 10000ms`。
+       * 那两份红来自 theme 用例的 `beforeAll` 现编一份 CSS（隔离 7.2s/文件），
+       * 这一项已经从根上去掉了：编译输入源固定后实测 0.13s/文件
+       * （理由与反向判据见 `tests/helpers/theme-tokens.ts` 和
+       * `tests/theme-tokens-compile-source.test.ts`，ISSUE #1336），
+       * 所以这两个预算**没有为它再抬一次**，留给「起子进程」那一类继续用。
+       *
+       * 20s = 最慢实测值 ×3.6；`it()` / `describe()` 上已有的显式预算
+       * （10s / 30s / 60s / 120s 那几处）优先级更高，不受这里影响。
+       * ⚠️ 这是**天花板不是目标**：用例慢到接近 20s 时该优化用例本身
+       * （收窄扫描面、复用子进程），别再往上调这个数 —— 那等于把
+       * 「挂死」的检出时间一起放大。
+       *
+       * 2026-09-27 复测：套件涨到 449 文件后 ×3.6 的余量被吃掉 —— 全量满载下
+       * theme 的 beforeAll（隔离 7.2s）与 LogPanel 渲染双双越过 30s/20s，
+       * 6 文件 / 11 例争用假红（单跑全绿）。抬到 30s / 45s，同样只买余量
+       * 不改用例；下一轮涨套件时按同一条「最慢实测 × 余量」重算。 */
+      testTimeout: 30_000,
+      hookTimeout: 45_000,
+      /* `expect.poll` 的默认预算。vitest 出厂是 1000ms / 50ms —— 那两个数字是给
+       * 「内存里的状态翻转」定的，而本仓库一大批轮询等的是**真的进程动作**：
+       * `spawn` 落地、`sleep` 挂成组长、孙进程被 `taskkill` 收走，实测单次就已
+       * 越过 1s（所以这批用例的入参一直写着 4000ms）。默认值定在这里之后，
+       * 调用点只在确实需要更宽 / 更窄时再写 `{ timeout }`。
+       *
+       * ⚠️ 同 `testTimeout` 那条口径：这是**给真进程留的余量，不是给慢用例兜底**。
+       * 一条 `expect.poll` 走到超时说明被等的事根本没发生 —— 去查它为什么没发生，
+       * 别把这个数往上抬。 */
+      expect: { poll: { timeout: 4000, interval: 50 } },
+      /* 并发上限：16 逻辑核（约 8 物理核）上默认开 ~15 个 worker，而门禁用例每条
+       * 要再起 Node / git / prettier 子进程 —— 超订的那一份直接从「等 CPU」变成
+       * 「等子进程」，于是要测 5s 的用例排到 30s 以上。取 8 的三档实测与推导过程
+       * **只记在规范 §11.13 那张表里**（数字抄到这儿就会和那份表漂移）。
+       * 这一档买到的是「红得少」，**买不到**「红即可归因」：套件涨到 559 份之后，
+       * 8 档还会出争用形态的红（一条 30s 超时的用例，`--no-file-parallelism` 隔离重跑全绿；
+       * 外加一条 `[vitest-pool]: Failed to start forks worker` 把退出码打成非零）。
+       * ⇒ 红仍然要先隔离重跑定性，别把这一档的失败直接当回归，也别靠继续抬预算掩盖。
+       * pre-commit 的 C 组另配 `--maxWorkers=4`（与 A/B/D 并行时要给它们让路），
+       * 那一档全量实测全绿，代价是墙钟 32m35s —— 所以兜底没翻成全量（理由见 §13.5.8）。 */
+      maxWorkers: 8,
+};
+
+/**
+ * `JSDOM_TEST_GLOBS` —— 进 jsdom project 的用例面（§11.17）。
+ *
+ * 只有两种形状**整目录一致**时才按目录声明：① 该目录下全部用例都 jsdom（下面那批，
+ * 实测 26 个目录，逐个核过）；② \`.test.tsx\`。混合目录（同目录下两种都有，实测 20 个）
+ * **不在这里** —— 它们保持 node 档，其中要 jsdom 的继续靠文件头。
+ *
+ * ⚠️ 新增一批 jsdom 用例时：若整个目录都是，就把目录加到这里；只加几份就别动它，
+ * 直接写文件头（`scripts/check-test-environment.cjs` 会核「目录档与文件头矛盾」）。
+ */
+const JSDOM_TEST_GLOBS = [
+  "src/app/(main)/settings/components/**/*.test.{ts,tsx}",
+  "src/app/(main)/settings/hooks/**/*.test.{ts,tsx}",
+  "src/components/agent-run/**/*.test.{ts,tsx}",
+  "src/components/agent-run/hooks/**/*.test.{ts,tsx}",
+  "src/components/code-update/**/*.test.{ts,tsx}",
+  "src/components/code-update/hooks/**/*.test.{ts,tsx}",
+  "src/components/model/hooks/**/*.test.{ts,tsx}",
+  "src/components/studio/library/**/*.test.{ts,tsx}",
+  "src/components/studio/library/hooks/**/*.test.{ts,tsx}",
+  "src/components/studio/project-canvas/**/*.test.{ts,tsx}",
+  "src/components/studio/project-canvas/CanvasNode/**/*.test.{ts,tsx}",
+  "src/components/studio/project-canvas/CanvasNode/hooks/**/*.test.{ts,tsx}",
+  "src/components/studio/project-canvas/hooks/**/*.test.{ts,tsx}",
+  "src/components/studio/project-home/**/*.test.{ts,tsx}",
+  "src/components/studio/queue/hooks/**/*.test.{ts,tsx}",
+  "src/components/studio/workflow-editor/hooks/**/*.test.{ts,tsx}",
+  "src/components/studio/workflow-form/DynamicWorkflowForm/**/*.test.{ts,tsx}",
+  "src/components/studio/workflow-form/DynamicWorkflowForm/hooks/**/*.test.{ts,tsx}",
+  "src/components/studio/workflow-form/DynamicWorkflowForm/sections/**/*.test.{ts,tsx}",
+  "src/components/studio/workflow-library/CustomNodesSettings/hooks/**/*.test.{ts,tsx}",
+  "src/components/studio/workflow-library/hooks/**/*.test.{ts,tsx}",
+  "src/components/studio/workflow-library/sections/**/*.test.{ts,tsx}",
+  "src/components/workshop/hooks/**/*.test.{ts,tsx}",
+  "src/config/**/*.test.{ts,tsx}",
+  "src/lib/markdown/**/*.test.{ts,tsx}",
+  "tests/integration/**/*.test.{ts,tsx}",
+
+  /* `.test.tsx` ⇒ jsdom 是实测出来的完全相关（116/116）。
+   * 扩展名是这套分档里**唯一**一条能整体成立的推导：422 份 `.test.ts` 里另有 68 份要 jsdom，
+   * 那部分靠自己的文件头，别试图从扩展名推。 */
+  "src/**/*.test.tsx",
+  "tests/**/*.test.tsx",
+];
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -15,60 +124,58 @@ export default defineConfig({
     },
   },
   test: {
-    environment: "node",
-    include: ["src/**/*.test.{ts,tsx}", "tests/**/*.test.{ts,tsx}"],
-    globals: false,
-    setupFiles: ["tests/setup.ts"],
-    /* 超时预算：vitest 的默认值（用例 5s / 钩子 10s）低于本仓库的实测下限。
+    /* 环境档：**默认 node，按目录把 jsdom 挂到该用的地方**（§11.17）。
      *
-     * 串行隔离跑（`--no-file-parallelism`）的最慢单条用例已经是 5469ms
-     * （`client-bundle-node-builtins` 的全 `src/**`「use client」可达性 DFS），
-     * `db-schema-ready` 4770ms —— 一条贴着默认值、一条在默认值之上，
-     * 也就是**不开并行都会红**。全量并行时再乘一份争用系数：16 逻辑核上
-     * 约 10 个 worker，而门禁用例各条要 `execFileSync` 真起 Node / git /
-     * prettier 子进程，一轮实测 28 条报 `Test timed out in 5000ms`、
-     * 2 个文件报 `Hook timed out in 10000ms`。
-     * 那两份红来自 theme 用例的 `beforeAll` 现编一份 CSS（隔离 7.2s/文件），
-     * 这一项已经从根上去掉了：编译输入源固定后实测 0.13s/文件
-     * （理由与反向判据见 `tests/helpers/theme-tokens.ts` 和
-     * `tests/theme-tokens-compile-source.test.ts`，ISSUE #1336），
-     * 所以这两个预算**没有为它再抬一次**，留给「起子进程」那一类继续用。
+     * 这里曾经是一条全局 `environment: "node"` + 183 份用例各自在文件头写
+     * `// @vitest-environment jsdom`。两件都是真的，但第二件从来**没人判过**：
+     * 少写一行不报错，只会让用例留在 node 档下跑 —— 真碰 DOM 的当场红（响的），
+     * 而写了 `if (typeof window !== "undefined") return;` 这类**环境早退**的
+     * 照样报绿、**一条断言都没跑**（静默的，见 §11.13.1）。
      *
-     * 20s = 最慢实测值 ×3.6；`it()` / `describe()` 上已有的显式预算
-     * （10s / 30s / 60s / 120s 那几处）优先级更高，不受这里影响。
-     * ⚠️ 这是**天花板不是目标**：用例慢到接近 20s 时该优化用例本身
-     * （收窄扫描面、复用子进程），别再往上调这个数 —— 那等于把
-     * 「挂死」的检出时间一起放大。
+     * ⚠️ **换掉全局档 ≠ 删掉文件头**（实测，vitest 5.0.3）：文件头的
+     * `@vitest-environment` **优先级高于 project 的 environment**，所以
+     * `projects` 只决定「没写文件头时跑在哪」。实测 183 份里摘掉文件头有 178 份
+     * 立刻红 —— 文件头是有承重的，两份东西各管一半，都留着。
      *
-     * 2026-09-27 复测：套件涨到 449 文件后 ×3.6 的余量被吃掉 —— 全量满载下
-     * theme 的 beforeAll（隔离 7.2s）与 LogPanel 渲染双双越过 30s/20s，
-     * 6 文件 / 11 例争用假红（单跑全绿）。抬到 30s / 45s，同样只买余量
-     * 不改用例；下一轮涨套件时按同一条「最慢实测 × 余量」重算。 */
-    testTimeout: 30_000,
-    hookTimeout: 45_000,
-    /* `expect.poll` 的默认预算。vitest 出厂是 1000ms / 50ms —— 那两个数字是给
-     * 「内存里的状态翻转」定的，而本仓库一大批轮询等的是**真的进程动作**：
-     * `spawn` 落地、`sleep` 挂成组长、孙进程被 `taskkill` 收走，实测单次就已
-     * 越过 1s（所以这批用例的入参一直写着 4000ms）。默认值定在这里之后，
-     * 调用点只在确实需要更宽 / 更窄时再写 `{ timeout }`。
+     * 分档判据是**实测出来的目录归属**，不是「按扩展名猜」：`.test.tsx` ⇒ jsdom
+     * 是 116/116 的完全相关，但另有 68 份 `.test.ts` 也要 jsdom（store / hook /
+     * 路由断言里碰 `localStorage`、`document` 的那些），扩展名推不出来。
+     * 所以只在**两种「整目录一致」的形状**上声明目录档：
+     *   ① 该目录下**全部**用例都 jsdom（实测 26 个目录）；
+     *   ② `.test.tsx` —— 实测 116 份全部要 jsdom，读作「渲染用例」这一档。
+     * 混合目录（同目录下两种都有，实测 20 个）**保持 node 档**，其中要 jsdom 的
+     * 那份继续靠自己的文件头 —— 不为了少几行注释把 260 份 node 用例误升进 jsdom
+     *（jsdom 档下跑纯逻辑**不报错、只是变慢**，是「静默跑错档」里坏的那一侧）。
      *
-     * ⚠️ 同 `testTimeout` 那条口径：这是**给真进程留的余量，不是给慢用例兜底**。
-     * 一条 `expect.poll` 走到超时说明被等的事根本没发生 —— 去查它为什么没发生，
-     * 别把这个数往上抬。 */
-    expect: { poll: { timeout: 4000, interval: 50 } },
-    /* 并发上限：16 逻辑核（约 8 物理核）上默认开 ~15 个 worker，而门禁用例每条
-     * 要再起 Node / git / prettier 子进程 —— 超订的那一份直接从「等 CPU」变成
-     * 「等子进程」，于是要测 5s 的用例排到 30s 以上。取 8 的三档实测与推导过程
-     * **只记在规范 §11.13 那张表里**（数字抄到这儿就会和那份表漂移）。
-     * 这一档买到的是「红得少」，**买不到**「红即可归因」：套件涨到 559 份之后，
-     * 8 档还会出争用形态的红（一条 30s 超时的用例，`--no-file-parallelism` 隔离重跑全绿；
-     * 外加一条 `[vitest-pool]: Failed to start forks worker` 把退出码打成非零）。
-     * ⇒ 红仍然要先隔离重跑定性，别把这一档的失败直接当回归，也别靠继续抬预算掩盖。
-     * pre-commit 的 C 组另配 `--maxWorkers=4`（与 A/B/D 并行时要给它们让路），
-     * 那一档全量实测全绿，代价是墙钟 32m35s —— 所以兜底没翻成全量（理由见 §13.5.8）。 */
-    maxWorkers: 8,
-    // 覆盖率棘轮策略(2026-08-29):已覆盖目录按真实水平设硬门槛,随测试增长上调;
-    // 新目录覆盖后加入下表。全库 3% 的整体数字仅作信息参考,不设全局门槛。
+     * 这一档买到的是三件事，都不是「省注释」：
+     *   ① 没写文件头的用例有确定的、按目录判定的归属（而不是一条全局默认值）；
+     *   ② 归属可被门禁核对：`scripts/check-test-environment.cjs`（进 pre-commit D 组）
+     *      判「目录档与文件头矛盾」与「环境早退」两件 —— 前者让「挪目录 / 改档」
+     *      这类改动留下痕迹，后者是这条线索真正的病根；
+     *   ③ 每个 project 可以按自己的代价配并发，而不是全库一个 `maxWorkers`。
+     *
+     * ⚠️ `projects` 里每一档**不继承**声明方 `test` 的选项（实测：写在根
+     * `test` 上而对 project 没生效的项会静默用 vitest 出厂值 —— 超时 5s、
+     * `expect.poll` 1000ms 都会回来）。共享的那几项因此 spread `SHARED_TEST_OPTIONS`。 */
+    projects: [
+      {
+        test: {
+          name: "node",
+          environment: "node",
+          include: ["src/**/*.test.{ts,tsx}", "tests/**/*.test.{ts,tsx}"],
+          exclude: JSDOM_TEST_GLOBS,
+          ...SHARED_TEST_OPTIONS,
+        },
+      },
+      {
+        test: {
+          name: "jsdom",
+          environment: "jsdom",
+          include: JSDOM_TEST_GLOBS,
+          ...SHARED_TEST_OPTIONS,
+        },
+      },
+    ],
     coverage: {
       provider: "v8",
       /* 一条试用例红 → v8 默认**清掉覆盖率数据、不产出报告** —— 于是 `thresholds`
