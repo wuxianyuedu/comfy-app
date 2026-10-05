@@ -57,6 +57,26 @@ describe("WorkflowEditorInner", () => {
     );
 
     expect(screen.getByText("加载工作流节点…")).toBeInTheDocument();
-    expect(container).toMatchSnapshot();
+    /* 按 §11.9 断言**用户可见结果**，不再 dump 整棵 DOM。这里要钉的其实是
+     * ISSUE #310 那条回归（全屏视图盖掉窗口标题行里的页签、用户切不回去）：
+     *   · 加载态有一句可读文案（spinner 的可访问名由基元持有）；
+     *   · 覆盖层是 `FullScreenLayer` —— `top-title-bar`（让出标题行）而不是
+     *     `inset-0`，且 `data-*` 形状与宿主一致；这一条是「用户还能看到页签」。
+     * 用 `startsWith` 而不是 `toContain`：`bottom-0 left-0` 里也含 `top` 子串时
+     * `toContain` 会假绿（判据自己会静默失效的那一类）。 */
+    expect(screen.getByText("加载工作流节点…")).toBeInTheDocument();
+    const layer = container.querySelector<HTMLElement>(
+      '[class*="top-title-bar"]',
+    );
+    expect(
+      layer,
+      "加载态不是 FullScreenLayer（没有 top-title-bar）",
+    ).toBeTruthy();
+    expect(layer?.className, "全屏层必须让出标题行").toMatch(
+      /(^|\s)top-title-bar(\s|$)/,
+    );
+    expect(layer?.className, "不许回到 inset-0（会盖掉页签）").not.toMatch(
+      /(^|\s)inset-0(\s|$)/,
+    );
   });
 });
