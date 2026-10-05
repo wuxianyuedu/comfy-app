@@ -123,8 +123,10 @@ describe("像素层提交门禁与仓库现状不漂移", () => {
       () => null,
     );
     expect(tests).toContain(PIXEL_JUDGE);
+    /* 软断言：固定清单是一串各自独立的条目 —— 掉一条时想看的是「掉了哪几条」，
+       不是「第一条是哪个」（§11.18）。 */
     for (const fixed of FIXED_STRUCTURAL_TESTS) {
-      expect(tests, fixed).toContain(fixed);
+      expect.soft(tests, fixed).toContain(fixed);
     }
   });
 
