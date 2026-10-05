@@ -55,10 +55,21 @@ describe("runWithConcurrency", () => {
         processed.push(item);
       }),
     ).rejects.toThrow("第一条炸了");
-    /* runner2 的队列（2、4）不因 runner1 的抛错而丢 —— 只是调用方不再等待它。 */
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(processed).toContain(2);
-    expect(processed).toContain(4);
+    /* runner2 的队列（2、4）不因 runner1 的抛错而丢 —— 只是调用方不再等待它。
+     * `expect.poll` 在这里比的不是「等了 20ms」而是「最终都处理过了」：
+     * 失败时打出的 `processed` 数组就是缺了哪几条的现场。 */
+    await expect
+      .poll(
+        /* `toEqual` 而不是 `toContain`：失败时打出的 `processed` 数组直接指出
+         *「缺了哪一条、多了哪一条」，而两条 `toContain` 只会说「没找到 4」。 */
+        () => [...processed].sort((a, b) => a - b),
+        {
+          timeout: 2000,
+          interval: 20,
+          message: "短路后其余队列没有跑完（下面是实际处理过的条目）",
+        },
+      )
+      .toContain(4);
   });
 
   it("空列表：直接 resolve，worker 不被调用", async () => {
