@@ -122,6 +122,38 @@ describe("软断言门禁：不该误伤的写法（§11.18）", () => {
     expect(r.ok).toBe(true);
   });
 
+  it("prettier 折行的站点（`expect` 与 `.soft(` 之间换行）也要被扫到", () => {
+    /* 实测踩到的漏报：`console-catalog.test.ts` 的长行被 prettier 折成
+       `expect\n  .soft(…)`，而判据第一版只认字面量 `expect.soft` ——
+       那一处**整片漏出扫描面**（计数从 27 掉到 26，判据照样报 OK）。
+       折行的那半必须认，否则这条闸门对折行后的写法是空的。 */
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", () => {
+  const x = 1;
+  expect
+    .soft(x, "应为 2")
+    .toBe(2);
+});
+`,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("tests/a.test.ts:4");
+  });
+
+  it("折行站点在循环里 → 放过（折行不会把它判到循环外）", () => {
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", () => {
+  for (const n of [1, 2]) {
+    expect
+      .soft(n, "n")
+      .toBe(1);
+  }
+});
+`,
+    });
+    expect(r.ok).toBe(true);
+  });
+
   it("无软断言的文件 → 放过（计数为 0 也要报 OK）", () => {
     const r = gate({
       "tests/a.test.ts": `${HEAD}it("x", () => {

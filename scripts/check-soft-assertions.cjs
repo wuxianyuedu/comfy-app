@@ -223,6 +223,13 @@ function maskNonCode(src) {
 const BATCH_KEYWORD_RE =
   /(?:^|[^\w.$])(?:for|while)\s*\(|\.(?:forEach|map|flatMap|filter|reduce)\s*\(/;
 
+/** 第几行（1 起）：数到某个字符偏移为止的换行数。 */
+function lineOf(src, index) {
+  let n = 1;
+  for (let i = 0; i < index; i++) if (src[i] === "\n") n += 1;
+  return n;
+}
+
 /** 缩进宽度（空格数；tab 按 prettier 的口径不该出现在这些文件里）。 */
 function indentOf(line) {
   const m = /^[ \t]*/.exec(line)[0];
@@ -287,19 +294,31 @@ function isInLoop(lines, siteIndex) {
   return false;
 }
 
+/**
+ * 站点形状：`expect.soft(` **或** `expect` 与 `.soft(` 之间只有空白 / 换行。
+ *
+ * ⚠️ 折行的那半必须认 —— prettier 会把长行折成
+ * `expect\n  .soft(preset.command, …)`，只认字面量 `expect.soft` 时
+ * **这一处会整片漏出扫描面**（本判据第一版就是这样：`console-catalog.test.ts`
+ * 被 prettier 折行之后，扫描计数从 27 掉到 26，而判据照样报 OK）。
+ * 那是「判据在场 ≠ 判据在跑」那一族 —— 比红更坏。
+ */
+const SOFT_SITE_RE = /expect\s*\.\s*soft\s*\(/g;
+
 function scanFile(abs) {
-  const lines = maskNonCode(fs.readFileSync(abs, "utf8")).split("\n");
+  const masked = maskNonCode(fs.readFileSync(abs, "utf8"));
+  const lines = masked.split("\n");
   const sites = [];
-  for (let i = 0; i < lines.length; i++) {
-    /* `expect.soft` 可能出现在行内任意位置（`for (…) { expect.soft(…) }` 同行的
-       形态也认）；一处一行即可，本判据不需要知道一行里有几处。 */
-    const at = lines[i].indexOf("expect.soft");
-    if (at < 0) continue;
+  for (const m of masked.matchAll(SOFT_SITE_RE)) {
+    const start = m.index;
+    const lineNo = lineOf(masked, start);
     /* **同行**的循环头先判：`for (const n of [1, 2]) { expect.soft(n)…; }`
        里循环与站点在同一行，向上走永远看不到那个 `for`（它是本行的前缀）。
        截到站点之前，避免把站点之后（同一行的后续语句）的循环关键字算进来。 */
-    const sameLine = BATCH_KEYWORD_RE.test(lines[i].slice(0, at));
-    sites.push({ line: i + 1, inBatch: sameLine || isInLoop(lines, i) });
+    const lineText = lines[lineNo - 1] ?? "";
+    const col = start - (masked.lastIndexOf("\n", start - 1) + 1);
+    const sameLine = BATCH_KEYWORD_RE.test(lineText.slice(0, col));
+    sites.push({ line: lineNo, inBatch: sameLine || isInLoop(lines, lineNo - 1) });
   }
   return sites;
 }
