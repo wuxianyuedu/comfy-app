@@ -236,9 +236,10 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   #      （同 §11.13.1 的「判据在场 ≠ 判据在跑」）。
   #   ② 「目录档与文件头矛盾」——`vitest.config.ts` 的 `projects` 按目录声明了默认档，
   #      两者互相矛盾时说明有一处过时，让「挪目录 / 改档」这类改动留下痕迹。
-  # 实测（三个变异各核一次）：把 `vi.stubGlobal("window", undefined)` 换成环境早退、
-  # 把 jsdom 档里的文件头改成 node、把 `.test.tsx` 的文件头改成 node —— 三条都当场红。
-  run "用例环境档（环境早退 / 目录档矛盾）" node scripts/check-test-environment.cjs
+  # 实测（四个变异各核一次）：把 `vi.stubGlobal("window", undefined)` 换成环境早退、
+  # 把 jsdom 档里的文件头改成 node、把 `.test.tsx` 的文件头改成 node、
+  # 把判据③（冗余文件头）改永假或放宽成「有头就报」—— 四条都当场红。
+  run "用例环境档（环境早退 / 目录档矛盾 / 冗余文件头）" node scripts/check-test-environment.cjs
   # 判据 ⇄ 执行者的双向判据（规范 §13.5.12 / ISSUE #1451 要求 2）：判定型脚本
   # （有 process.exit）无执行者即红 —— 除非登记在 scripts/.gate-executor-ledger.json
   # 的「按需召唤」台账里（含「为什么不能进钩子」+「谁按需跑」）；报告型（0 处

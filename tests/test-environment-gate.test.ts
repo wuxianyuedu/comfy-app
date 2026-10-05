@@ -13,6 +13,8 @@
  *   ③ **目录档矛盾**只判「jsdom 档里的用例声明 node」，不判「node 档里声明 jsdom」——
  *      后者是完全正当的写法（文件头优先级高于 project）。按后一种口径装上去
  *      当场报 37 处误报。
+ *   ④ **冗余文件头**判「头与所属档给同一个结论」，但不能扩张成「两个档都不匹配 /
+ *      都匹配时也判」—— 那是配置自己有缝 / 有重叠，报「冗余」只会把人带偏。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -175,6 +177,45 @@ describe("用例环境档门禁：目录档与文件头矛盾", () => {
      * 早期口径按「与 project 同名」判，实测一次报 37 处，全是这一类。 */
     const r = gate({
       "src/lib/x.test.ts": `${JSDOM_HEADER}\nit("x", () => {});`,
+    });
+    expect(r.ok, r.output).toBe(true);
+  });
+});
+
+describe("用例环境档门禁：冗余文件头", () => {
+  it("jsdom 档（`.test.tsx`）里再写一遍 jsdom 头 → 拦下（同一件事两个来源）", () => {
+    /* 实测现场：ISSUE #1485 那轮删掉 147 份冗余头之后**漏了 1 份** ——
+     * tests/sidebar-selected-state.test.tsx 已由 `.test.tsx` 那一条目录档收进 jsdom 档，
+     * 头部那行是第二个来源。当时没有这条判据，所以没人发现。 */
+    const r = gate({
+      "src/components/x.test.tsx": `${JSDOM_HEADER}\nit("x", () => {});`,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("冗余文件头");
+  });
+
+  it("node 档里的用例写 node 头 → 同样拦下", () => {
+    const r = gate({
+      "src/lib/x.test.ts": `${NODE_HEADER}\nit("x", () => {});`,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("冗余文件头");
+  });
+
+  it("**承重**头（node 档目录里声明 jsdom）→ 不许误报", () => {
+    /* 这是混合目录里那 36 份的形态：目录档给 node，用例自己要 jsdom，
+     * 文件头是归属的**唯一**声明。判「冗余」把这条也收进去 = 当场删错 36 份。 */
+    const r = gate({
+      "src/lib/x.test.ts": `${JSDOM_HEADER}\nit("x", () => {});`,
+    });
+    expect(r.ok, r.output).toBe(true);
+  });
+
+  it("两个档都不匹配的文件不判冗余（配置有缝不归这条判据）", () => {
+    /* `include` 之外的路径：node 档的 `include` 只写了 `src/**`，这份在 `tests/`。
+     * 它一个档都进不去 —— 若判「冗余 node 头」，报的是**错误的原因**。 */
+    const r = gate({
+      "tests/outside.test.ts": `${NODE_HEADER}\nit("x", () => {});`,
     });
     expect(r.ok, r.output).toBe(true);
   });
