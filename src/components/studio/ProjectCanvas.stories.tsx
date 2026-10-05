@@ -4,6 +4,7 @@ import { ProjectCanvas } from "~/components/studio/ProjectCanvas";
 import {
   projectScene,
   useSeededProjects,
+  type ProjectSceneName,
 } from "../../../.storybook/screen-frame";
 
 /**
@@ -35,11 +36,7 @@ export default meta;
 type Story = StoryObj<typeof ProjectCanvasHarness>;
 
 /** 适配件：备好真项目，再把画布整屏摆出来。 */
-function ProjectCanvasHarness({
-  sceneName,
-}: {
-  sceneName: "emptyProject" | "namedProject";
-}) {
+function ProjectCanvasHarness({ sceneName }: { sceneName: ProjectSceneName }) {
   /* 备好之后画布自己会从 canvas-store 读回同一批（真读，不是 props 传）。 */
   useSeededProjects({ primary: projectScene(sceneName), extraNames: [] });
   return (
@@ -57,4 +54,24 @@ export const EmptyProject: Story = {
 /** 已命名项目：画布标题栏显示真名字（那是它在真机上的形态）。 */
 export const NamedProject: Story = {
   render: () => <ProjectCanvasHarness sceneName="namedProject" />,
+};
+
+/**
+ * **有内容**的项目（`filledProject`）：四张真节点 + 三条连线落在真画布上。
+ *
+ * 与 `EmptyProject` 分开是因为它们看的是两件事：空项目看的是**空态引导卡**
+ *（`EmptyCanvasHint`），这一档看的是**节点本身**在真画布里的形态 —— 端点几何、
+ * 连线路径、状态徽标、类型章。节点数据走 `placeCanvasNode()`（建节点的唯一出口），
+ * 所以画布上摆的是真形状，不是手拼的两个字段。
+ */
+export const FilledProject: Story = {
+  render: () => <ProjectCanvasHarness sceneName="filledProject" />,
+};
+
+/**
+ * 名字很长的项目（`longNameProject`）：画布标题栏要**截断**而不是撑破。
+ * 真机上项目名是用户自己起的一句话，长名是最常见的形态。
+ */
+export const LongNameProject: Story = {
+  render: () => <ProjectCanvasHarness sceneName="longNameProject" />,
 };

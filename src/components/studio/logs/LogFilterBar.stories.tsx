@@ -58,3 +58,20 @@ export const Empty: Story = {
   parameters: { storeScene: "empty" },
   render: () => <FilterBarHarness />,
 };
+
+/**
+ * 只有一路来源：切到单一来源时，级别计数是**该来源自己的数** ——
+ * 其余来源那几桶归零，而总数收敛成这一路。
+ */
+export const SingleOrigin: Story = {
+  parameters: { storeScene: "singleOrigin" },
+  render: () => <FilterBarHarness />,
+};
+
+/**
+ * 2600 条：计数是**真负载下**的四位数（搜索框与级别按钮的宽度是否还够）。
+ */
+export const LongTimeline: Story = {
+  parameters: { storeScene: "longTimeline" },
+  render: () => <FilterBarHarness />,
+};

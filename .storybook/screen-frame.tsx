@@ -6,6 +6,8 @@ import {
   DocumentFrame,
   WorkspaceFrame,
 } from "~/components/studio/ViewContainer";
+import type { Edge } from "@xyflow/react";
+
 import {
   createProject,
   deleteProject,
@@ -14,6 +16,12 @@ import {
   upsertProject,
   type CanvasProject,
 } from "~/lib/project-canvas/canvas-store";
+import { placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
+import {
+  defaultData,
+  type CanvasNodeType,
+  type NodeKind,
+} from "~/lib/project-canvas/canvas-types";
 
 /**
  * 「整屏容器 → story」注入层（ISSUE #1381 的第三批：三层注入之三）。
@@ -70,6 +78,56 @@ export interface ProjectScene {
   /** 这个场景解决什么（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
   readonly name: string;
+  /**
+   * 摆在画布上的节点（可选）。给了它就是「打开一个**有内容**的项目」那一档：
+   * 画布不再落空态引导卡，而是真有节点可看。
+   *
+   * 节点由 `canvasNode()` 造（数据走 `defaultData(kind)` + `asCanvasNodeData()`）——
+   * 手拼一个 `{ kind: "image", status: "idle" }` 只写两个字段会跳过其余默认值，
+   * 而节点渲染器读的是整套（`model` / `size` / `steps` …），少一项就在画布上
+   * 退化成另一种形态。
+   */
+  readonly nodes?: readonly CanvasNodeType[];
+  readonly edges?: readonly Edge[];
+}
+
+/**
+ * 造一批真形状的业务节点 —— 走 `placeCanvasNode()`（建节点的**唯一出口**）。
+ *
+ * 为什么不手写 `{ id, position, data: { kind: "image" } }`：节点渲染器读的是
+ * `defaultData(kind)` 的**整套**默认值（`status` / `model` / `size` / `steps`…），
+ * 少一项画布上就是另一种形态。而「新节点带什么数据」这条域判据生产代码也走过
+ * 同一个函数（`ProjectCanvas` / 右键菜单 / 拖放），照着那条路走才不会各写一份。
+ *
+ * 落点用 `flowPosition`（本就是画布坐标）：`placeCanvasNode` 因此不做屏幕换算，
+ * 场景里写的坐标就是画布上的坐标 —— 摆在哪里是可复现的。
+ */
+export function canvasNodes(
+  specs: readonly {
+    id: string;
+    kind: NodeKind;
+    x: number;
+    y: number;
+    prompt?: string;
+  }[],
+): CanvasNodeType[] {
+  return specs.reduce<CanvasNodeType[]>(
+    (nodes, spec) =>
+      placeCanvasNode({
+        nodes,
+        flowPosition: { x: spec.x, y: spec.y },
+        /* `placeCanvasNode` 只做追加、不读 `flow` 的字段（落点由 `flowPosition`
+           给了），所以这里给一个不会被调用的换算函数即可 —— 与生产代码里
+           「有画布坐标时直接给 `flowPosition`」那条分支同形。 */
+        flow: { screenToFlowPosition: () => ({ x: 0, y: 0 }) },
+        data: {
+          ...defaultData(spec.kind),
+          ...(spec.prompt === undefined ? {} : { prompt: spec.prompt }),
+        },
+        id: spec.id,
+      }),
+    [],
+  );
 }
 
 /** 场景注册表 —— 「名字 → 真项目」的唯一映射。 */
@@ -83,6 +141,63 @@ export const PROJECT_SCENES = {
   namedProject: {
     about: "一个已命名的项目（侧栏与页签都显示这个名字）",
     name: "角色一致性 · 三视图",
+  },
+  /**
+   * 名字很长：侧栏「项目」分组与页签标题都要**截断**。
+   *
+   * 真机上项目名是用户自己起的（一句话描述很常见），而侧栏那一列宽度固定 ——
+   * 长名是它最常见的形态，也是最容易把排版挤坏的一档（截断没做好的话分组
+   * 会把侧栏撑开、或者把右侧的操作按钮推出视口）。
+   */
+  longNameProject: {
+    about: "一个名字很长的项目（侧栏与页签都得截断，不能撑破排版）",
+    name: "角色一致性 · 三视图 + 首帧逐镜生成 + 城市夜景重制（第 2 版）",
+  },
+  /**
+   * **有内容**的项目：画布上摆着四张真节点 + 三条连线。
+   *
+   * `emptyProject` 摆的是空态引导卡，而「打开一个做过的项目」才是主屏最常见的
+   * 状态。节点走 `canvasNode()`（数据是 `defaultData(kind)` 的真形状），连线
+   * 端点 id 形如 `"1:images"` —— 与真画布同一套（`nodeSeqOf()` 的短序号）。
+   */
+  filledProject: {
+    about: "一个做过的项目：画布上四张真节点 + 三条连线 + 真视口",
+    name: "城市夜景 · 逐镜生成",
+    nodes: canvasNodes([
+      {
+        id: "1",
+        kind: "text",
+        x: 40,
+        y: 60,
+        prompt: "城市夜景，雨后的霓虹街道，电影感打光",
+      },
+      { id: "2", kind: "image", x: 360, y: 40 },
+      { id: "3", kind: "video", x: 680, y: 180 },
+      { id: "4", kind: "movie", x: 360, y: 340 },
+    ]),
+    edges: [
+      {
+        id: "e1-2",
+        source: "1",
+        target: "2",
+        sourceHandle: "1:text",
+        targetHandle: "2:prompt",
+      },
+      {
+        id: "e2-3",
+        source: "2",
+        target: "3",
+        sourceHandle: "2:images",
+        targetHandle: "3:images",
+      },
+      {
+        id: "e2-4",
+        source: "2",
+        target: "4",
+        sourceHandle: "2:images",
+        targetHandle: "4:images",
+      },
+    ],
   },
 } satisfies Record<string, ProjectScene>;
 
@@ -116,7 +231,15 @@ export function seedProject(scene: ProjectScene): CanvasProject {
   for (const existing of listProjects()) {
     if (existing.name === scene.name) deleteProject(existing.id);
   }
-  const project = createProject(scene.name);
+  const created = createProject(scene.name);
+  /* 场景给了节点/连线就落进去（`upsertProject` 与生产代码的自动保存同一条路）。
+     `createProject()` 建的一律是空项目，所以「有内容的项目」要靠这一次 upsert —
+     它写入的正是 `ProjectCanvas` 挂载时读回的那一份（`proj.nodes` / `proj.edges`）。 */
+  const project: CanvasProject = {
+    ...created,
+    nodes: scene.nodes ? [...scene.nodes] : created.nodes,
+    edges: scene.edges ? [...scene.edges] : created.edges,
+  };
   upsertProject(project);
   setActive(project.id);
   return project;

@@ -108,3 +108,21 @@ export const NoWrap: Story = {
 export const MixedOrigins: Story = {
   render: () => <LogRowHarness scene="mixed" />,
 };
+
+/** 一批可展开的 comfy-cli 原文行（`cliExpandable`）：全部折叠成一行摘要的形态。 */
+export const CliRowsCollapsed: Story = {
+  render: () => <LogRowHarness scene="cliExpandable" />,
+};
+
+/**
+ * 同一批行里的**第一条**展开：折叠态与展开态在**同一条时间线**上并排 ——
+ * 展开集合是多选集合，不是单选，行高按 id 各自算（对不齐时滚动会错开）。
+ */
+export const CliRowsExpanded: Story = {
+  render: () => <LogRowHarness scene="cliExpandable" expandFirst />,
+};
+
+/** 同一毫秒的多行：`(time, seq)` 邻近行的级别徽标与正文并排的真实负载。 */
+export const SameMillisecond: Story = {
+  render: () => <LogRowHarness scene="sameMillisecond" />,
+};

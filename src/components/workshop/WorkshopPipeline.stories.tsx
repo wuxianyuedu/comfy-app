@@ -41,10 +41,14 @@ export default meta;
 type Story = StoryObj<typeof WorkshopPipelineHarness>;
 
 /** 适配件：备好真项目，再把整屏摆出来。 */
-function WorkshopPipelineHarness() {
+function WorkshopPipelineHarness({
+  extraNames = [],
+}: {
+  extraNames?: readonly string[];
+}) {
   useSeededProjects({
     primary: projectScene("namedProject"),
-    extraNames: [],
+    extraNames,
   });
   return (
     <div className="bg-bg text-ink h-[720px] w-full overflow-hidden">
@@ -61,4 +65,18 @@ function WorkshopPipelineHarness() {
  */
 export const Default: Story = {
   render: () => <WorkshopPipelineHarness />,
+};
+
+/**
+ * 多个项目在场：工坊读的是**活跃项目**（`getActiveId()`，挂载那一刻），
+ * 而侧栏/切换器里还有别的项目 —— 这一档摆的是「活跃 id 与列表里第一个不是
+ * 同一件事」时的形态（备项目时最后把活跃设回第一个，所以这里看到的仍是
+ * `namedProject`，与 `Default` 同源、只是环境里多了几个项目）。
+ */
+export const WithOtherProjects: Story = {
+  render: () => (
+    <WorkshopPipelineHarness
+      extraNames={["城市夜景", "首帧 → 逐镜生成", "片头试验"]}
+    />
+  ),
 };

@@ -67,3 +67,24 @@ export const Empty: Story = {
   parameters: { storeScene: "empty" },
   render: () => <OpenPanelHarness />,
 };
+
+/**
+ * 同一毫秒十几行：排序要看 `(time, seq)` **次键**。
+ *
+ * 只按 `time` 排时同一毫秒内谁在前是不稳定的（每轮重渲染都可能换位），而这条
+ * 时间线上恰恰全是同刻行 —— 那是真机上一轮 ComfyUI 提交打出子步骤行的形态。
+ */
+export const SameMillisecond: Story = {
+  parameters: { storeScene: "sameMillisecond" },
+  render: () => <OpenPanelHarness />,
+};
+
+/**
+ * 2600 条：翻页窗口与行高窗口的真实负载（`LOG_PAGE_SIZE` = 2000，所以第 1 页
+ * 之外还有货）。面板是虚拟化的 —— 这一档让「量不到视口时整页渲染」与「量得到
+ * 时按窗口渲染」两条分支都有真负载可走。
+ */
+export const LongTimeline: Story = {
+  parameters: { storeScene: "longTimeline" },
+  render: () => <OpenPanelHarness />,
+};

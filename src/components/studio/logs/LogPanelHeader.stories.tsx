@@ -108,3 +108,20 @@ export const WrapEnabled: Story = {
    这一行的用意只是把「有哪些场景」在 story 文件里留个可见的入口 ——
    story 自己的场景声明在 `parameters.storeScene` 上（见文件头）。 */
 void logSceneArgType;
+
+/**
+ * 只有一路来源（`singleOrigin`）：来源分桶塌缩成一维时的行头
+ * —— 计数与「全部来源」那一档不相等的那条口径在这看。
+ */
+export const SingleOrigin: Story = {
+  parameters: { storeScene: "singleOrigin" },
+  render: () => <HeaderHarness />,
+};
+
+/**
+ * 2600 条：总数是四位数时行头的宽度（「共 N 条」与作用域标签还不挤在一起）。
+ */
+export const LongTimeline: Story = {
+  parameters: { storeScene: "longTimeline" },
+  render: () => <HeaderHarness />,
+};

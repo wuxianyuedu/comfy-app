@@ -116,3 +116,20 @@ export const ManyProjects: Story = {
 export const WithViewTabs: Story = {
   render: () => <ShellHarness extraProjects={["城市夜景"]} withTabs />,
 };
+
+/**
+ * 名字很长 + 项目很多：侧栏「项目」分组的**截断与折叠**是同一处要看的 ——
+ * 真机上用户起的是「一句描述」那么长的名字，而侧栏宽度固定。
+ */
+export const LongNamesAndMany: Story = {
+  render: () => (
+    <ShellHarness
+      extraProjects={[
+        "角色一致性 · 三视图 + 首帧逐镜生成（第 2 版）",
+        "城市夜景重制 · 雨后的霓虹街道",
+        "片头试验",
+        "分镜草稿",
+      ]}
+    />
+  ),
+};

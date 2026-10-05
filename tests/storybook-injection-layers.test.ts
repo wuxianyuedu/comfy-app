@@ -117,6 +117,34 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     ).not.toMatch(/useEffect\(\(\) => \{\s*const created = seedProjects/);
   });
 
+  it("store 层：量大的场景用生成器产**原文**，不产条目", () => {
+    /* 「手抄不够就编一段看着像日志的文本」与「手抄一份 LogEntry[]」是同一件事的
+       两半：前者仍然过解析，后者跳过解析。所以量大的那两档（分页长线、同毫秒
+       十几行）用生成器 —— 而生成器必须**交出文本**（`join("\n")`），不是数组。 */
+    expect(store, "长线 / 同毫秒场景要有生成器").toMatch(
+      /function (appLines|sameMsLines)\(/,
+    );
+    /* 生成器只负责重复，解析仍归 `parseFileLogs`（上面那条已钉住整体口径）；
+       这里钉的是生成器的**输出形状**：拼成一行文本给 `text` 字段用。 */
+    expect(store, "生成器要拼成原文（join 出行文本），不是产条目数组").toMatch(
+      /lines\.join\("\\n"\)/,
+    );
+  });
+
+  it("整屏层：有内容的项目走 placeCanvasNode（建节点的唯一出口）", () => {
+    /* `filledProject` 那一档要在画布上摆真节点。手写
+       `{ id, position, data: { kind: "image" } }` 只填两个字段，而节点渲染器读的是
+       `defaultData(kind)` 的整套默认值 —— 少一项画布上就是另一种形态。
+       生产代码建节点只有 `placeCanvasNode()` 一个入口（规范 16 §16.2.4.38），
+       所以这里也走它。 */
+    expect(screen, "整屏层要有 placeCanvasNode 这条出口").toContain(
+      "placeCanvasNode(",
+    );
+    expect(screen, "场景里的节点数据要铺在 defaultData 之上").toContain(
+      "defaultData(",
+    );
+  });
+
   it("三个注入层都挂在 preview.tsx 的装饰器链上", () => {
     expect(preview, "少挂 withStoreScene = story 里 store 空着").toContain(
       "withStoreScene",
