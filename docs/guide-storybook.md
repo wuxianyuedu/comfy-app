@@ -234,6 +234,25 @@ function ShellHarness() {
    整屏层给真 `AppShell` + **真视图**（`WorksGallery` 那种真读 `canvas-store` 的屏），
    不摆占位 `<div>`。
 
+**每层有哪些场景**（挑一个之前先看有没有现成的，别再手写一份）：
+
+| 层         | 场景（注册表里的名字）                                                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+| store      | `mixed` / `errorsOnly` / `rowShapes` / `sameMillisecond` / `singleOrigin` / `longTimeline` / `cliExpandable` / `empty` |
+| React Flow | `twoNodes` / `zoomedIn` / `zoomedOut` / `fanOut` / `mixedKinds` / `dense`                                              |
+| 整屏容器   | `emptyProject` / `namedProject` / `longNameProject` / `filledProject`                                                  |
+
+几条选择上的经验（铺场景时踩出来的）：
+
+- **一档一个维度**：`sameMillisecond` 摆的是排序次键（同刻行按 `seq` 定先后）、
+  `longTimeline` 摆的是分页（一页 2000 条之外还有货）、`dense` 摆的是标尺步长在
+  满负载下现算 —— 它们在「最少那几档」里**都看不出来**。
+- **量大的场景用生成器，但生成的是原文**：`appLines()` / `sameMsLines()` 交出的
+  是文本（`join("\n")`），解析仍归 `parseFileLogs()`。时刻真的递增（长线）或真的
+  全等（同毫秒）—— 手写时最容易把「同一毫秒」写成「相邻毫秒」。
+- **有内容的项目要走 `placeCanvasNode()`**（`screen-frame.tsx` 的 `canvasNodes()`）：
+  手写节点对象只填两个字段，而节点渲染器读的是 `defaultData(kind)` 的整套默认值。
+
 **一处容易踩的坑**：`ProjectCanvas` / `WorkshopPipeline` 在**挂载那一刻**读
 `getActiveId()`，而 React 的 effect 是子先父后 —— 把「建项目」放 `useEffect` 里，
 子组件读到的是「还没有活跃项目」，工坊标题会落在「未命名项目」上、画布落在空白
