@@ -13,7 +13,7 @@
  * 被发现）。粒度是**文件**，所以一条红会连同一文件里其他断言一起放行 —— 这是这套
  * 机制已知的粗糙处，登记前先确认那条门禁在别处还有没有更强的执行者（下面每条都注了）。
  *
- * 当前清单为空。本次清空登记的 4 个文件（`tests/check-file-structure.test.ts`、
+ * 当前清单为空。更早一次清空的是 4 个文件（`tests/check-file-structure.test.ts`、
  * `tests/dev-launcher-toolchain-gate.test.ts`、`tests/dev-launcher-downstream-exit.test.ts`、
  * `tests/turbopack-tracing-excludes.test.ts`）逐个串行复跑全部为绿：前两个的根因由
  * #1168（陈旧壳判据措辞与用例回正 + splash 三副本同步）与 `11f302e7`（四类根因分治）
@@ -21,27 +21,41 @@
  * 修好之后一直留在这份清单里 —— 粒度是**文件**，于是门禁回归套件与三条线的用例
  * 被整批从增量层摘掉（比红更糟：红会挡住提交，静默跳过什么都不会说）。
  * （同批被摘的 `tests/theme-token-single-source.test.ts` 已由该线自己删登记，本刀不重复。）
+ * 最近一次登记与删除见下方 `KNOWN_FAILED_FILES` 的注释（ISSUE #1282）。
  *
  * 再要登记前先做两件事：① 按规范 §13.6.2 复算 master 基线（`git worktree add
  * ../.wt-base-check cnb/master` 后在干净基线上跑同一条判据），确证是别线的红、
  * 不是本次改动引入；② 想清楚那条门禁在别处有没有更强的执行者（粒度是文件，
  * 一条红会连同一文件里其它断言一起放行）。修好后**立刻删**，别让它长期静默。
+ * ⚠️ 这条纪律现在**不再只靠人记得**：`scripts/check-known-failed-stale.mjs`（pre-commit
+ * D 组）会判两头 —— 登记项必须指向真实文件（否则排除项永远匹配不到），且必须真的
+ * 还红着（全绿即判「登记已过期」并要求删除）。规范 §11.12 第 3、4 条。
  */
 /**
  * @type {string[]}
  *
- * `tests/theme-dark-token-cascade.test.ts`（2026-10-05 登记，基线红）：
- * `bg-card/bg-popover/border-border 编成 var() 取值` 那一条在**干净 master 基线**
- * 上就红（`git worktree add ../.wt-base-check origin/master` 复算，同一条判据同一条红，
- * 见规范 §13.6.2）。形态是 `.bg-card` 那条规则没出现在固定输入源的产物里 ——
- * 而 `PINNED_UTILITY_CLASSES` 里明明点着 `bg-card`，所以不是「断言依赖的类没被固定住」
- * 那一类，是 `globals.css` 侧 utility 生成路径变了（`--card` 与 `--color-surface` 的
- * 转发关系被改过）。
+ * 空数组（终态）。上一次登记是 `tests/theme-dark-token-cascade.test.ts`
+ * （2026-10-05 登记 → ISSUE #1282 处置后删除），它留下的教训值得单独写在这，
+ * 因为**登记时写的那条理由本身就是错的**：
  *
- * 归属与处置：该判据归**主题 token 线**（ISSUE #609 / #1336 那一族），本次改动
- * （`it.each` → `test.for`）与它无关 —— 登记只为让本线能提交，**修好立刻删**。
- * 粒度是文件，所以这条红会连同该文件里另外 17 条已经绿了的断言一起放行（本文件
- * 的那 17 条在别处没有更强的执行者，属已知的粗糙处）。
+ * 登记词写的是「`.bg-card` 那条规则没出现在固定输入源的产物里」，据此判定「不是
+ * 『断言依赖的类没被固定住』那一类，而是 globals.css 侧 utility 生成路径变了」。
+ * 复算后发现两头都反了：产物里 `.bg-card { background-color: var(--color-card) }`
+ * 一直在（`PINNED_UTILITY_CLASSES` 也一直点着它），真因是**判据自己的白名单漏了
+ * 第三种拼法** —— 正则写的是 `var\(--(card|color-surface)\)`，而 `--color-card`
+ * 成为项目 token 唯一事实来源之后，utility 编出的就是 `var(--color-card)`。
+ * 于是这条断言**在它被写下的那天起就不是「性质」而是「拼法的枚举」**，枚举漏了
+ * 第三种；而白名单漏项与业务回归长得一模一样（都是 `toMatch` 红），所以没有人
+ * 能从那句报错里读出「这是判据自己的问题」。
+ *
+ * 这与上面「第一个被删的 `theme-token-single-source.test.ts`」是同一味药：
+ * **登记理由必须是复算过的事实，不能是「看起来像的原因」** —— 理由写错的例外项
+ * 比没有例外项更糟，它会让下一个人照着一个假根因去修，同时静默放行整个文件的
+ * 其它断言。粒度是文件，本次登记期间该文件另外 17 条已绿的断言一并被摘掉，
+ * 而它们在别处没有更强的执行者（已知的粗糙处）。
+ *
+ * 处置（ISSUE #1282）：判据改成断言**性质**（取值来自 `var()` + 那颗变量两态
+ * 解得出非空值），不再枚举拼法；「登记过期」本身也升成了判据，见
+ * `scripts/check-known-failed-stale.mjs`（pre-commit D 组）与规范 §11.12。
  */
-export const KNOWN_FAILED_FILES = ["tests/theme-dark-token-cascade.test.ts"];
-
+export const KNOWN_FAILED_FILES = [];
