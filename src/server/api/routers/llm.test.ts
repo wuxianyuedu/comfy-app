@@ -23,7 +23,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { llmServer, contracts } = vi.hoisted(() => ({
   llmServer: {
-    ensureRemoteStorageMigrated: vi.fn(async () => undefined),
     getConfigForClient: vi.fn(async () => ({
       provider: "remote",
       hasApiKey: true,
@@ -46,7 +45,6 @@ vi.mock("~/lib/core/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 vi.mock("~/lib/llm/server", () => ({
-  ensureRemoteStorageMigrated: llmServer.ensureRemoteStorageMigrated,
   getConfigForClient: llmServer.getConfigForClient,
 }));
 vi.mock("~/lib/workshop/mode-contract.server", () => ({
@@ -283,10 +281,9 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
   });
 });
 
-describe("configGet —— 迁移与脱敏出口的先后", () => {
-  it("先确保远端存储迁移过，再取脱敏配置（顺序反了老库会读到缺列）", async () => {
+describe("configGet —— 脱敏出口", () => {
+  it("走 getConfigForClient 取脱敏配置，不顺手加载模式契约", async () => {
     await caller().configGet();
-    expect(llmServer.ensureRemoteStorageMigrated).toHaveBeenCalledTimes(1);
     expect(llmServer.getConfigForClient).toHaveBeenCalledTimes(1);
     expect(contracts.loadModeContracts).not.toHaveBeenCalled();
   });

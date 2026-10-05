@@ -71,7 +71,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
   /** 「这条工作流有没有绑着一个本地源文件」那一段元数据 —— **真投影**。
    *
    *  这里原本是一个 `findByIdForUserSelect(userId, id, _select?: unknown)`：
-   *  参数名承诺投影、实现里 `select()` 全列取，三个调用点还在按 Prisma 的
+   *  参数名承诺投影、实现里 `select()` 全列取，三个调用点还在按迁移前的
    *  布尔投影写法传 `{ id: true, sourcePath: true }` —— 类型层一声不响
    *  （`unknown` + 调用点不做校验），实际每次详情加载都把 `rawJson` 与
    *  `positions` 这两个大 JSON blob 拖出来一遍（台账 F13：同一个 `unknown`

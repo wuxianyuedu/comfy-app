@@ -7,7 +7,7 @@ import { fixed } from "~/lib/number-format";
 import { isRecord } from "~/lib/is-record";
 import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
 
-/* ── 类型（与后端 Prisma 行的 UI 视图一致，保持对外 API 不变）──
+/* ── 类型（与后端 FilmProject 行的 UI 视图一致，保持对外 API 不变）──
  * 状态族的一份定义在 `~/lib/film/film-status`（服务端编排与本文件原本各抄一份，
  * §12.12 的形态）。这里 re-export 是为对外 API 一字不变，副本删掉。 */
 
