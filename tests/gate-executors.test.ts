@@ -347,7 +347,27 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     // 次数漂移，写死就成了下一个人照着它去核的假账（本仓反复吃过这味药）。
     const output = runInRepo(["--report"]);
     const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
-    expect(total, "步骤位置口径下判据是 46 份").toBe(46);
+    // 这条用例守住的是「步骤位置口径 ≠ 全文匹配」这个**差**，不是某个具体数字 ——
+    // 原先写死 `.toBe(44)`，于是 ISSUE #1485 新增 `check-soft-assertions.cjs`（44 → 45）
+    // 让它一直红着，而红的原因与「散文举例被误认成判据」毫无关系。
+    // 所以份数改用「名字族 ∪ 门禁链事实」独立数一遍来对（写死数字的回归见本段注释）。
+    const listed = readdirSync(join(REPO_ROOT, "scripts"))
+      .filter((n) => /\.(cjs|mjs)$/.test(n))
+      .filter(
+        (n) =>
+          chainScripts().includes(n) ||
+          [
+            "check-",
+            "tw4-",
+            "report-",
+            "render-doc-placeholders",
+            "lib-node-only-scan",
+          ].some((p) => n.startsWith(p)),
+      );
+    expect(
+      total,
+      "份数 = 「门禁链事实 ∪ 名字族」自己数出来的份数（不写死数字）",
+    ).toBe(listed.length);
     for (const name of [
       "x.cjs",
       "xxx.cjs",
