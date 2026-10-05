@@ -152,7 +152,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             key={filterTab.id}
             variant="ghost"
             onClick={() => setFilter(filterTab.id)}
-            className={`h-auto rounded-full px-3 py-1.5 text-[12px] font-medium ${
+            className={`h-auto rounded-full px-3 py-1.5 text-xs font-medium ${
               filter === filterTab.id
                 ? "bg-surface-2 text-ink-bright ring-border-strong ring-1"
                 : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
@@ -198,7 +198,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           </div>
         ) : tasks.length === 0 ? (
           <div className="px-4 py-12 text-center">
-            <p className="text-ink-fainter text-[12px]">
+            <p className="text-ink-fainter text-xs">
               {scope === "project" ? "本项目还没有生成记录" : "暂无历史记录"}
             </p>
             {scope === "project" && globalCount !== null && globalCount > 0 && (

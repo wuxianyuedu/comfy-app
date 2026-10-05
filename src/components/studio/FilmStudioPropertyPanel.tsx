@@ -102,7 +102,7 @@ export function FilmStudioPropertyPanel({
           <Textarea
             rows={3}
             defaultValue="城市在晨光中苏醒，镜头缓缓推进，展现繁忙街道与远处天际线…"
-            className="border-border bg-subtle text-ink-fainter resize-none rounded-lg text-[12px] leading-relaxed"
+            className="border-border bg-subtle text-ink-fainter resize-none rounded-lg text-xs leading-relaxed"
           />
         </FormField>
 
@@ -160,7 +160,7 @@ export function FilmStudioPropertyPanel({
               onChange={textHandler(c.setScript)}
               rows={3}
               placeholder="支持一句话自动分镜…"
-              className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-[12px] leading-relaxed"
+              className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-xs leading-relaxed"
             />
           </FormField>
         )}

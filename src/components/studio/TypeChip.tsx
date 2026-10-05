@@ -32,8 +32,12 @@ export function TypeChip({
   children?: React.ReactNode;
   /**
    * `xs` = 10px 字 + 最紧内距（1 处）；`sm` = 10px 字（4 处，缺省档）；
-   * `md` = 12px 字（5 处）。字号写 `text-[12px]` 而不是 `text-xs`：后者会连带
-   * 把行高锁成 16px（实测），而这几枚 chip 现在吃的是继承行高。
+   * `md` = 12px 字（5 处），走 `text-xs`。
+   *
+   * 这里原先写的是 `text-[12px]`，理由记在上一轮：「`text-xs` 会连带把行高锁成
+   * 16px，而这几个 chip 吃的是继承行高」。那是在「同一个 12px 有两种行高」还没
+   * 定档之前的取巧。现在 12px 归一到 `text-xs`（16px 行高、全库 289 处已在用的
+   * 那一档）⇒ **这 5 处的行盒从 18px 收到 16px，是有意的变化，不是等价替换**。
    */
   size?: "xs" | "sm" | "md";
   /** `none` = 不加任何颜色类，颜色全部由 `style` 决定。 */
@@ -46,7 +50,7 @@ export function TypeChip({
       className={cn(
         "inline-flex shrink-0 items-center rounded-[3px] font-semibold",
         size === "md"
-          ? "px-1.5 py-0.5 text-[12px]"
+          ? "px-1.5 py-0.5 text-xs"
           : size === "xs"
             ? "text-3xs px-1 py-px"
             : "text-3xs px-1.5 py-0.5",

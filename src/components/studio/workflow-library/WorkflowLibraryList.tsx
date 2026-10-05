@@ -290,7 +290,7 @@ function WorkflowListItem({
           <span
             className={[
               NAME_MAX_WIDTH_CLASS,
-              "shrink truncate text-[12px] leading-tight font-medium",
+              "shrink truncate text-xs leading-tight font-medium",
               isTech ? "text-ink-strong font-mono" : "text-ink-bright",
             ].join("")}
             title={workflow.name}

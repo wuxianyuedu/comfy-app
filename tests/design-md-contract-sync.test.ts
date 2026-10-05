@@ -358,9 +358,12 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   /** 棘轮基线：本轮清理后实测的存量，只许降不许升（要升得改用例并写理由）。
    *  21→12 是类型 chip 收进 `~/components/studio/TypeChip`（10 处调用点各写一份 →
    *  只剩实现里那一处 + `ParamOwnerTag` 那一枚异类）；12→10 是节点右侧胶囊的两处
-   *  手写改走早已存在的 `WorkflowNodePill`（§12.18：有等价实现就先 import）。 */
+   *  手写改走早已存在的 `WorkflowNodePill`（§12.18：有等价实现就先 import）。
+   *  字号 302→298 是同上的 `text-3xs` 归一；**298→201 是「同一个 12px 有两种行高」
+   *  定档**：103 处 `text-[12px]`（12px + 继承的 1.5 ⇒ 18px）统一成 `text-xs`
+   *  （12px + 16px，全库 289 处已在用的那一档）。那条归零判据见下面一条。 */
   const RADIUS_BASELINE = 10;
-  const TEXT_BASELINE = 298;
+  const TEXT_BASELINE = 201;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
     const scale = parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8"));
@@ -390,6 +393,27 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       `调用点字面字号从 ${TEXT_BASELINE} 涨到 ${text.length}；契约 §Typography ` +
         "要求先在 @theme 加具名档（档名还得是 t-shirt 形状，见下面那条）",
     ).toBeLessThanOrEqual(TEXT_BASELINE);
+  });
+
+  it("12px 只有一个名字：调用点不许再写字面量档", () => {
+    /* 这一档不是棘轮、是**归零等式**：`text-xs` 与 `text-[12px]` 字号相同（12px），
+       差别只在行高 —— 前者带 Tailwind 默认的 16px、后者吃继承的 1.5（= 18px）。
+       「同一个字号两种行高」已签字归一到 `text-xs` 那一档（289 处本来就在用它），
+       所以再出现字面量就是重新分裂这一档。要改行高请显式写 `leading-*`，
+       不要再造一个「字号字面量」。 */
+    const twelve = /\btext-\[12px\]/g;
+    const offenders = scanProduct(twelve);
+    expect(
+      offenders,
+      "这些调用点又写了字面 12px —— 用 `text-xs`（行高要不同就再加 `leading-*`）：\n" +
+        `${offenders.map((o) => `  ${o.file}`).join("\n")}`,
+    ).toEqual([]);
+    /* 反向：档位真的存在且真的还是 12px（否则上面那条会因为「这档没了」而空绿，
+       而下一轮的人会把 text-xs 当 14px 用）。 */
+    expect(
+      readFileSync(GLOBALS_PATH, "utf8").includes("--text-xs:"),
+      "globals.css 里给 --text-xs 配了自定义值？本判据假定它就是 Tailwind 默认的 12px",
+    ).toBe(false);
   });
 
   it("@theme 的 --text-* 档名必须是 t-shirt 尺寸（否则 cn() 把它当颜色吃掉）", () => {
@@ -590,7 +614,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       [
         '<div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">' +
           '<span className="size-2 shrink-0 rounded-full bg-sky-400" />' +
-          '<span className="text-ink-bright truncate text-[12px] font-semibold">' +
+          '<span className="text-ink-bright truncate text-xs font-semibold">' +
           '<span className="bg-subtle text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">',
         "区头（强调圆点 + 大写标签 + 计数胶囊 + 虚线）",
       ],

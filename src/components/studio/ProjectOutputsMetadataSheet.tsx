@@ -131,7 +131,7 @@ export function ProjectOutputsMetadataSheet({
                     <p className="text-ink-soft mb-1 text-xs font-semibold">
                       正向提示词
                     </p>
-                    <div className="border-border-strong bg-subtle text-ink-soft max-h-28 overflow-y-auto rounded-lg border p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap">
+                    <div className="border-border-strong bg-subtle text-ink-soft max-h-28 overflow-y-auto rounded-lg border p-2.5 text-xs leading-relaxed whitespace-pre-wrap">
                       {displayValue(selected.prompt)}
                     </div>
                   </div>
@@ -140,7 +140,7 @@ export function ProjectOutputsMetadataSheet({
                       <p className="text-ink-soft mb-1 text-xs font-semibold">
                         反向提示词
                       </p>
-                      <div className="border-border-strong bg-subtle text-ink-muted max-h-24 overflow-y-auto rounded-lg border p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap">
+                      <div className="border-border-strong bg-subtle text-ink-muted max-h-24 overflow-y-auto rounded-lg border p-2.5 text-xs leading-relaxed whitespace-pre-wrap">
                         {selected.negativePrompt}
                       </div>
                     </div>
@@ -179,7 +179,7 @@ export function ProjectOutputsMetadataSheet({
                   <p className="text-ink-soft mb-1 text-xs font-semibold">
                     来源
                   </p>
-                  <p className="text-ink-soft text-[12px]">
+                  <p className="text-ink-soft text-xs">
                     工作流：{displayValue(selected.workflowName)}
                   </p>
                 </section>
@@ -197,7 +197,7 @@ export function ProjectOutputsMetadataSheet({
                       variant="primary-solid"
                       size="sm"
                       onClick={onCopy}
-                      className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
+                      className="h-auto flex-1 rounded-lg px-3 py-2 text-xs"
                     >
                       {copyFailed
                         ? "复制失败"
@@ -210,7 +210,7 @@ export function ProjectOutputsMetadataSheet({
                     variant="outline"
                     size="sm"
                     onClick={onExport}
-                    className="border-border-strong text-ink-soft hover:bg-subtle h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
+                    className="border-border-strong text-ink-soft hover:bg-subtle h-auto flex-1 rounded-lg px-3 py-2 text-xs"
                   >
                     导出 JSON
                   </Button>

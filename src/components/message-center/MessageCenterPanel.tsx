@@ -99,7 +99,7 @@ export function MessageCenterPanel() {
           <span className="text-ink-bright text-[15px] font-semibold">
             消息中心
           </span>
-          <span className="text-ink-muted text-[12px]">
+          <span className="text-ink-muted text-xs">
             {messages.length
               ? `${messages.length} 条 · ${unread} 条未读`
               : "暂无消息"}
@@ -112,7 +112,7 @@ export function MessageCenterPanel() {
             size="xs"
             onClick={markAllRead}
             disabled={unread === 0}
-            className="text-ink-soft hover:bg-subtle hover:text-ink h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-[12px]"
+            className="text-ink-soft hover:bg-subtle hover:text-ink h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-xs"
           >
             <CheckCheck data-icon="inline-start" size={14} />
             全部已读
@@ -122,7 +122,7 @@ export function MessageCenterPanel() {
             size="xs"
             onClick={clear}
             disabled={messages.length === 0}
-            className="text-ink-soft hover:bg-danger/10 hover:text-danger-strong h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-[12px]"
+            className="text-ink-soft hover:bg-danger/10 hover:text-danger-strong h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-xs"
           >
             <Trash2 data-icon="inline-start" size={14} />
             清空

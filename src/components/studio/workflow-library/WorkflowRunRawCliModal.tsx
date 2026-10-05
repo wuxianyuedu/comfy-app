@@ -256,7 +256,7 @@ export function WorkflowRunRawCliModal({
           </div>
 
           {/* Footer */}
-          <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
+          <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-xs">
             <span>
               {copied ? "已复制全部" : "完整、未经截断的 comfy-cli 输出"}
             </span>

@@ -168,7 +168,7 @@ function ResumeProjectCard({
             {proj.name}
           </span>
         </div>
-        <div className="text-ink-fainter flex items-center gap-2 text-[12px]">
+        <div className="text-ink-fainter flex items-center gap-2 text-xs">
           {proj.subtitle && (
             <span className="min-w-0 truncate">{proj.subtitle}</span>
           )}
