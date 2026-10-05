@@ -525,7 +525,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 | 件 | 实现 | 关键约定 |
 | --- | --- | --- |
-| 输入 | `ui/input.tsx`（唯一形态；`.u-input` 工具类**零消费者**，别当第二套在用） | `bg-transparent` + `border-input` + `rounded-lg`(12px) + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`；focus 只换 border，**不出阴影**。⚠️ 它预设了 `w-full`，与 §3.8.1.1「基础件不预设宽度」有张力，见 Known Gaps |
+| 输入 | `ui/input.tsx`（唯一形态；`.u-input` 工具类**零消费者**，别当第二套在用） | `bg-transparent` + `border-input` + `rounded-lg`(12px) + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`；focus 只换 border，**不出阴影**。它预设 `w-full min-w-0` 是**判过的保留**（不是与 §3.8.1.1 的张力）：件里走 `cn()` 合并 ⇒ 调用处的 `w-auto` / `w-56` 必赢，而单行输入框与 `shrink-0` 按钮并排时「`w-full`+`min-w-0`」正是「吃剩余宽、不撑破兄弟」那一格；拆它等于换默认值（所有不传宽度的调用点会一起退成 `<input>` 的固有宽度），要按排版变更处理。机制分野见 03 §3.8.1.1 的两行对照表 |
 | 卡片 | `ui/card.tsx` | `bg-card` + `ring-foreground/10` + `rounded-xl` + `--card-spacing` 两档 |
 | 状态徽标 | `ui/status-badge.tsx`（配色唯一出处）+ `ui/status-dot.tsx`（圆点） | **文案留在调用处**（同一状态在不同界面叫法不同，那是业务文案）。此前七个文件各写一份状态→配色表，同一个「已完成」有三种深浅 |
 | 侧栏导航 | `--color-nav-hover` / `--color-nav-selected`（别名 `--sidebar-accent` / `--sidebar-selected`） | **悬停与选中必须是两档**（浅 1.14:1 / 1.42:1，深 1.35:1 / 1.88:1，相对各自的 `--color-panel-deep` 底）。共用一档 = 结构上不可分辨 |
@@ -572,7 +572,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ### 基元的三条自身纪律（都在规范里，都在事故里）
 
-1. **宽度是调用处的决定，基础件不预设 `w-full`**（03 §3.8.1.1）。`w-full` 与 `w-auto` 同族 utility，编译后按产序决胜，调用处写的那个**不保证赢**。要「铺满」走显式开关（参考 `ui/select-menu.tsx` 的 `fullWidth`，缺省随内容宽）。同理「占满剩余宽」的 `flex-1` 要给**外层**。
+1. **宽度是调用处的决定，基础件不预设 `w-full`**（03 §3.8.1.1）—— 但这条是**取向**，不是物理定律，前提要看件里怎么拼 `className`：裸拼接时 `w-full` 与 `w-auto` 同族、编译后按产序决胜，调用处写的**不保证赢**；而 `cn()` 合并时**调用处必赢**（合并阶段就把前一条删掉，实测 `cn("h-8 w-full min-w-0","w-auto")` → `h-8 min-w-0 w-auto`）。所以「预设宽度」是不是缺陷，取决于有没有第二条那条覆盖通路 —— `ui/input.tsx` 的 `w-full min-w-0` 因此是**判过的保留**，不是漏网（完整理由与「拆掉它等于换默认值」的代价见 §Components 输入行与 03 §3.8.1.1）。要「铺满」走显式开关（参考 `ui/select-menu.tsx` 的 `fullWidth`，缺省随内容宽）。同理「占满剩余宽」的 `flex-1` 要给**外层**。
 2. **靠尺寸表达形态的基元必须自带非行内 `display`**（03 §3.8.1.0）。`width`/`height` 对 `display: inline` 不生效——`<span className="size-6 rounded-full">` 画出来是约 4×20px 的竖线。此前该组件所有落点都在 flex 容器里，尺寸才「碰巧」成立。
 3. **基元里不写带变体的尺寸上限**（`sm:max-w-sm` 会排在所有无变体 utility 之后，调用处永远压不过它）。
 
@@ -681,7 +681,6 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 - **Storybook 覆盖 29/83**（有 story 的组件：alert、aspect-ratio、avatar、badge、button、empty-state、field、form-field、form-rhf、image-viewer、json-viewer、kbd、list-badge、media-thumbnail、option-list-popover、page-loading、progress-bar、seed-mode-button、segment-popover、simple-key-handler、skeleton、source-tag、spinner、status-badge、status-dot、task-type-chip、toggle、validation-error-list、water-fill-progress）。核心交互件里 **input、dialog、select、card、tooltip、popover、switch、checkbox、tabs、dropdown-menu、context-menu、menubar、navigation-menu、command** 无 story；其中 dialog/select/tabs/dropdown-menu/card/input/switch/checkbox **同时无 `.test.tsx`**。⇒ 「明暗两态长什么样」这一层契约目前只在那 29 个组件上可核验。
 - **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一 grep 在 `u-title` 上抓到 51 处、`u-title-page` 18 处，所以这个 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名精确计数：`u-title` 26 处、`u-title-page` 17 处、`u-title-stage` 1 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。
-- **`ui/input.tsx:12` 预设了 `w-full`**，而规范 03 §3.8.1.1 的原文是「基础件里不要预设 `w-full`，宽度是调用处的决定」。对单行输入而言铺满大概是有意为之（该条的事故现场是**并排的下拉**，不是输入框），但**条文没有按角色区分** ⇒ 要么给输入框一个明确豁免，要么把 §3.8.1.1 收窄到「会和其它控件排在同一行的件」。**needs-design-decision**。
 - **圆角的自动化覆盖是「相对变化」而不是「绝对形状」**：`toHaveScreenshot` 全仓只有 **2 处**（`e2e/visual/login.visual.spec.ts:49,66`，基线 `-chromium-win32.png`），而 **playwright 不进 pre-commit**；读 `borderTopLeftRadius` 的断言有 **4 处**，全在 `e2e/appearance-steps.spec.ts`，判的是「改档之后它变了没 / 刷新后还在不在」—— **变了**这件事有覆盖，**变成什么形状**没有。`tests/visual-baseline-pairing.test.ts` 只核「基线文件齐不齐、名字对不对平台」不比像素。规范 03 §3.6.1.1 那句「刻意不比像素」的理由（基线按平台分文件）仍然成立，别顺手把它推翻——要补的是**代表屏的截图用例 + 一个手动跑的入口**。
 - **frontmatter 只能表达一态**，而本库的取值规则是两态。上面的 `colors` / `rounded` / `components` 全部取**浅色档**（因为 `@theme` 写的就是浅色），而**默认主题是 Dark**。任何人拿 frontmatter 当「应用现在的样子」会得出反的结论——两态对照请看 Colors 表。
 - **`var(--radius-*)` 在产物里是半个幽灵**：`@theme inline` 的语义是「值内插进工具类，变量本身只在被 `var()` 引用到时才发」，实测真编译下 `:root` 里只有 `--radius-md` / `--radius-lg` 两颗（它们被 `.u-input` / `.u-card` 引用着才存活），`sm` / `xl` / `2xl` / `3xl` / `4xl` **声明数为 0**。现在没有代码去读它们，所以还不出事；但**一旦有人在 `style={{}}` 里写 `var(--radius-xl)`，拿到的是空值** —— 圆角要用就走类名（`rounded-xl`），要写 `var()` 就只能引基数 `var(--radius)`。
