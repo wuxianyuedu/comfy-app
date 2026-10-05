@@ -30,6 +30,7 @@
  *   字体        Noto Sans SC（中文） / Inter（数字·类型 chip）
  */
 import { upperToken } from "~/lib/upper-token";
+import { TypeChip } from "~/components/studio/TypeChip";
 import React from "react";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -86,12 +87,9 @@ function PortChip({ type }: { type: string }) {
           border: "1px solid var(--color-border-subtle)",
         };
   return (
-    <span
-      className="text-3xs inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"
-      style={{ fontFamily: "var(--font-sans)", ...style }}
-    >
+    <TypeChip tone="none" style={style}>
       {type}
-    </span>
+    </TypeChip>
   );
 }
 

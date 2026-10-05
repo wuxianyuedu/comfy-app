@@ -1,6 +1,7 @@
 "use client";
 
 import { PortHandle } from "~/components/studio/workflow-form/DynamicWorkflowForm";
+import { TypeChip } from "~/components/studio/TypeChip";
 import { Button } from "~/components/ui/button";
 import {
   ioLabel,
@@ -118,12 +119,7 @@ export function OutputRowPort({
         >
           {outLabel}
         </span>
-        <span
-          className="bg-border-strong text-ink-muted text-3xs inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"
-          style={{ fontFamily: "var(--font-sans)" }}
-        >
-          {typeDisplay(outType)}
-        </span>
+        <TypeChip>{typeDisplay(outType)}</TypeChip>
       </div>
       <div className="pb-2" />
     </div>

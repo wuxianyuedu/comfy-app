@@ -19,6 +19,7 @@ import { ACCENT } from "../constants";
 import { controlTypeFallback } from "../dynamic-workflow-form-config";
 import { WidgetControl } from "./WidgetControl";
 import { Hint } from "~/components/ui/hint";
+import { TypeChip } from "~/components/studio/TypeChip";
 
 interface WidgetInputRowProps {
   entry: EnrichedWidget;
@@ -84,12 +85,9 @@ export function WidgetInputRow({
    * normalizeTypeChip 的白名单回退：那会把自定义节点的 IMAGEUPLOAD 之类
    * 悄悄改成 INT/STRING，用户看到的类型与工作流里的定义对不上。 */
   const typeChip = (
-    <span
-      className="bg-border-strong text-ink-muted text-3xs inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"
-      style={{ fontFamily: "var(--font-sans)" }}
-    >
+    <TypeChip>
       {typeDisplay(entry.type, controlTypeFallback(entry.control))}
-    </span>
+    </TypeChip>
   );
 
   /* 标签行：传了 onLabelChange 时标签可单击就地改名（Enter / 失焦提交，Esc
@@ -206,12 +204,7 @@ export function WidgetInputRow({
           </span>
           {/* link 行同样打印 pin 真实声明的类型：MODEL / CLIP / LATENT /
               IMAGEUPLOAD 等自定义类型一律原样展示，不回退成 "*"。 */}
-          <span
-            className="bg-border-strong text-ink-muted text-3xs inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"
-            style={{ fontFamily: "var(--font-sans)" }}
-          >
-            {typeDisplay(entry.type)}
-          </span>
+          <TypeChip>{typeDisplay(entry.type)}</TypeChip>
         </div>
       </div>
     );
