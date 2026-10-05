@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(33 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(34 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -250,6 +250,15 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 命令行全绿、编辑器标红，判据只能落在源码形态上。此前是报告型（0 处 process.exit），
   # 零判定档；收成判定档的前提是实测量产为 0（ISSUE #1451 要求 2）。
   run "TS 重复属性判定" node scripts/check-ts-duplicate-keys.cjs
+  # 「已知基线失败登记过期」判据（规范 §11.12 第 3、4 条 / ISSUE #1282）：
+  # KNOWN_FAILED_FILES 的注释从第一天起就写着「修好立刻删」，而没有任何东西在判
+  # 它有没有过期 —— 现场就是那张表自己（tests/theme-dark-token-cascade.test.ts
+  # 登记后真因没人回头修，同时把该文件另外 17 条已绿的断言一并从增量面摘掉）。
+  # 两头都判：① 登记项必须指向被 git 跟踪的真实文件（否则排除项永远匹配不到，
+  # 是静默失效）；② 登记项必须真的还红着（全绿即判「已过期」并要求删登记）。
+  # 成本：清单为空是**常态**，此时零耗时零输出退出；非空时才真跑那几份文件
+  # （个位数条目，不是全量 —— §13.5.8「跑多少由改动面决定」）。
+  run "已知基线失败登记过期（清单为空时零耗时）" node scripts/check-known-failed-stale.mjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────
