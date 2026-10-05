@@ -7,9 +7,11 @@
  * 追加 / 替换 → 解析 ANSI → 启动期间每秒轮询」的实现，只有来源与解析器不同
  * （判据见规范 12 §12.12：跨文件复制的同一段逻辑会各自漂移）。这里收成一处：
  *
- *   - 数据来自 `GET /api/logs/sessions`（按「每次启动」切分，见 `lib/log/log-sessions`），
- *     一次请求同时拿到**会话列表**与**选中会话的正文** —— 界面因此能提供
- *     「切换第几次启动」的下拉，而不用把整份追加日志读进浏览器；
+ *   - 数据来自 `GET /api/logs/sessions`（按**每一次运行**切分，判据见
+ *     `lib/log/log-run-sessions`），一次请求同时拿到**运行列表**与**选中那一次的
+ *     正文** —— 界面因此能提供「切到哪一次运行」的下拉，而不用把整份日志读进
+ *     浏览器。列表是「本次运行 + `log/runs/` 各历史包」：应用重启过的那几次也
+ *     在其中，而不只是「这个文件里还没被冲掉的段落」（ISSUE #1326）；
  *   - 挂载、切换会话、点「刷新」都会重新取一次；`active`（正在启动）时每秒跟随；
  *   - 轮询回调只读 ref 里的选中项，不因用户切换下拉而重建定时器。
  */
@@ -50,6 +52,11 @@ export interface RuntimeLogSourceState {
   truncated: boolean;
   /** 日志文件过大、服务端只扫了尾部窗口（界面提示「更早的启动不在列表里」）。 */
   windowed: boolean;
+  /**
+   * 这次运行之前那一包已被保留策略清理 —— 正文里含**更早运行**的内容。
+   * 界面必须说出来（硬规则 4）：不说的话用户会把上一轮的输出当成这一轮的。
+   */
+  baselineMissing: boolean;
   /** 切到指定会话并立即重新拉取。 */
   selectSession: (id: string) => void;
   /** 重新拉取当前会话（「刷新」按钮）。 */
@@ -66,6 +73,7 @@ interface Snapshot {
   sessionId: string | null;
   truncated: boolean;
   windowed: boolean;
+  baselineMissing: boolean;
 }
 
 const EMPTY_SNAPSHOT: Snapshot = {
@@ -75,6 +83,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
   sessionId: null,
   truncated: false,
   windowed: false,
+  baselineMissing: false,
 };
 
 /** 解析结果按上限取尾部（与「只看最新一段」的口径一致）。 */
@@ -141,6 +150,7 @@ export function useRuntimeLogSource({
       sessionId: slice.selectedId,
       truncated: slice.truncated,
       windowed: slice.windowed,
+      baselineMissing: slice.baselineMissing,
     });
   }, [source, parse]);
 

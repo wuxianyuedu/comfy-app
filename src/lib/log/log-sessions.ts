@@ -1,67 +1,47 @@
-/* ── 追加写日志的「会话」切分与标签（纯函数，无 IO）────────────────────
+/* ── 设置页「启动日志」的数据契约（两端共用）────────────────────────────
  *
- * 背景：`log/services/` 下的 runtime 日志（comfyui / drizzle-studio / ollama）
- * 都是**追加不轮转**的 —— 本次、上一次、上上一次启动的行全落在同一个文件里。
- * 设置页的「启动日志」小窗口此前只跟随文件尾部，读到的常常是「上一次启动的
- * 结尾」，也无从回看某一次启动到底输出了什么。要能按「每次启动」看，就需要
- * 一个把整份日志切成会话的判据。
+ * 这个模块**只剩契约**：`LogSessionMeta` 与 `LogSessionsPayload`。两端共用的
+ * 类型写在一边（端点或客户端）必然出现「服务端改了字段、客户端还在按旧字段
+ * 读」的静默漂移，因此它独立成一个叶子模块。
  *
- * 判据只有一条，就是**会话横幅**（唯一实现见 `session-banner.server.ts` 的
- * `buildSessionBanner`）：文件的连续三行若是「分隔线 / 标题 / 分隔线」，即为
- * 一条横幅。其中 start（亮绿）是会话**起点**，end（亮黄）只标记终点、不切分
- * —— 进程退出说明可能落在 end 横幅之后，拿它切会多出一个只有一两行的伪会话。
+ * ## 这里曾经有一整套「按文件内横幅切会话」的实现（ISSUE #1326 移除）
  *
- * 纯函数：读文件归调用方（`GET /api/logs/sessions`），本模块不碰 node:fs，
- * 因此可脱离文件系统单测，也能被浏览器侧的标签格式化复用。
+ * 原实现（`parseLogSessions` / `formatSessionLabel` / `LogSessionChunk`）按
+ * `log/current/services/*-runtime.log` 里的 `▶`/`■` 横幅把文件切成段落，让设置页
+ * 的下拉能「切到第几次启动」。它解决的是**同一个文件里**的历史，而那份历史
+ * 的可见性止于**应用退出**：
+ *
+ *   - 进程退出时启动编排把整个 `current/` 复制进
+ *     `log/runs/<日期>_<时分秒>-<runId>/`，再清空 `current/`（规范 §4）；
+ *   - 下一次启动时那个文件从**空**开始重新累积，`runs/` 里那一包**没有界面能
+ *     打开** —— 用户原话「之前能切换的也是历史，不能用 runs 中找吗」。
+ *
+ * 跨运行那一层现在由 `log-run-sessions.ts` 承担（判据是**一次运行一包**：
+ * 本次运行 + `runs/` 各历史包），端点列的是运行而不是横幅段落。于是原实现
+ * 变成**零消费方的死代码** —— 留着它的代价不是行数，而是下一个人会以为
+ * 「横幅切分」仍是有效口径（§12.15 第二条：写不出谁在什么时候用即删）。
+ *
+ * ## 横幅本身**没有**被移除
+ *
+ * `session-banner.server.ts` 照旧在写（`▶ ComfyUI 启动会话` 等）：它的价值是
+ * **人直接打开文件时**看得出边界（一次运行里 ComfyUI 可能被启动/停止好几轮）。
+ * 被移除的只是「服务端按它切会话」这条读取链 —— 写侧的判据与读侧的消费面是
+ * 两件事，写侧的判据不该因为读侧换了口径就跟着消失。
  */
 
-import { BANNER_ANSI, stripAnsi } from "./log-ansi";
-import { formatClock } from "~/lib/time-format";
-
-/**
- * 会话正文的保留上限（字符）。取尾部窗口：一次「保活」会话可能累积几个小时
- * 的输出，整段回传既撑爆响应也撑爆界面；而排障真正要看的是**最新那一段**。
- */
-const MAX_SESSION_CHARS = 400_000;
-
-/** 横幅分隔线：box 字符 U+2500，`buildSessionBanner` 用 72 个（这里放宽到 16+）。 */
-const BANNER_BAR_RE = /^\u2500{16,}$/;
-
-/** 会话**结束**横幅的 ANSI 亮黄 —— 与写侧（`session-banner.server.ts`）
- *  取的是**同一个字面量**（`~/lib/log/log-ansi` 的 `BANNER_ANSI`，规范 16
- *  §16.2.4.58）：收口前两边各写一遍，写侧改色读侧就认不出自己写的横幅。 */
-const BANNER_END_ANSI = BANNER_ANSI.end;
-
-/** 无横幅可依据时（横幅机制上线前写的日志）那条「会话」的标题。 */
-const LEGACY_TITLE = "更早的日志（无会话标记）";
-
-/** 横幅标题为空时的兜底文案（横幅只画出边界、标题没写内容）。 */
-const BANNER_FALLBACK_TITLE = "启动会话";
-
-/** 行内时刻（`YYYY-MM-DD HH:mm:ss` 与带 `T` 的 ISO 形态），用于给会话起可读标签。 */
-const TIMESTAMP_RE =
-  /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?/;
-
-/** 会话元信息（下拉选项 + 选中项；不含正文）。 */
+/** 下拉的一项（一次运行）。 */
 export interface LogSessionMeta {
-  /** 会话标识：`<起点行号>`；无横幅的早期内容为 `legacy`。 */
+  /**
+   * 运行标识：`run:<包目录名>`（历史包）或 `run:current`（本次运行）。
+   *
+   * 前缀 `run:` 让它与旧实现的行号 id 天然不冲突，也让端点能一眼分辨
+   * 「这是运行包还是别的什么」（见 `log-run-sessions.packNameOf`）。
+   */
   id: string;
-  /** 横幅标题（已去 ANSI 与首尾空白）。 */
+  /** 下拉文案（由端点的 `formatRunLabel` 拼好：时刻 · 退出形态 · runId）。 */
   title: string;
-  /** 会话内第一条带时刻的行的时刻（毫秒）；读不到为 null。 */
+  /** 该次运行的开始时刻（毫秒）；读不到为 null。 */
   startedAt: number | null;
-}
-
-/** 会话切分结果：元信息 + 正文切片。 */
-export interface LogSessionChunk extends LogSessionMeta {
-  /** 会话起点行号（含）。 */
-  startLine: number;
-  /** 会话终点行号（不含）。 */
-  endLine: number;
-  /** 会话正文；超过上限时是**尾部窗口**（已掐头对齐到行边界）。 */
-  text: string;
-  /** 正文因超上限被截断（界面据此提示「只看得到最近一段」）。 */
-  truncated: boolean;
 }
 
 /**
@@ -71,125 +51,30 @@ export interface LogSessionChunk extends LogSessionMeta {
  * 出现「服务端改了字段、客户端还在按旧字段读」的静默漂移。
  */
 export interface LogSessionsPayload {
-  /** 可选会话（新→旧按文件行序，最后一项为最新），已按上限裁剪。 */
+  /**
+   * 可选**运行**（新→旧，最新在最上面），已按上限裁剪。
+   *
+   * 列的是「一次运行一包」：本次运行（`current/`）＋ `runs/` 里各历史包。
+   * 列表顺序由 `log-run-sessions.buildRunOptions()` 给（最新在前），
+   * 不再是文件行序。
+   */
   sessions: LogSessionMeta[];
   /** 本次返回的正文属于哪一项；没有可用会话时为 null。 */
   selectedId: string | null;
-  /** 选中会话的正文（可能被 `MAX_SESSION_CHARS` 截断）。 */
+  /** 选中那一项的正文（可能被服务端的字符上限截断）。 */
   content: string;
   /** 正文被截断（界面据此提示只见最近一段）。 */
   truncated: boolean;
-  /** 文件太大，服务端只扫了尾部窗口 —— 更早的启动不在列表里。 */
+  /** 服务端只扫了尾部窗口 —— 前面还有没读到的内容。 */
   windowed: boolean;
-  /** 文件当前字节数（面板页脚展示 / 排障用）。 */
+  /** 该次运行对应文件的字节数（排障与页脚展示）。 */
   size: number;
-}
-
-/** 该行是不是横幅的分隔线（剥掉 ANSI 后只剩 box 字符）。 */
-function isBannerBar(line: string): boolean {
-  return BANNER_BAR_RE.test(stripAnsi(line).trim());
-}
-
-/** 取文本里第一条时刻（会话的「开始时间」）；读不到返回 null。 */
-function firstTimestampMs(text: string): number | null {
-  const matched = TIMESTAMP_RE.exec(text);
-  if (!matched) return null;
-  const [, year, month, day, hour, minute, second, fraction] = matched;
-  const ms = fraction ? Number.parseInt(fraction.padEnd(3, "0"), 10) : 0;
-  const value = new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-    Number(second),
-    ms,
-  ).getTime();
-  return Number.isFinite(value) ? value : null;
-}
-
-/**
- * 会话 → 下拉选项文案：`10:27:51 · ▶ ComfyUI 启动会话`。
- *
- * 时刻在前是必要的：同一通道每次启动的横幅标题逐字相同，**只有时刻能区分**它们。
- */
-export function formatSessionLabel(session: LogSessionMeta): string {
-  const title = session.title.trim();
-  if (session.startedAt === null) return title || BANNER_FALLBACK_TITLE;
-  const clock = formatClock(session.startedAt);
-  return title ? `${clock} · ${title}` : clock;
-}
-
-/** 按行区间切出一个会话（顺带做正文截断与时刻提取）。 */
-function buildChunk(
-  lines: string[],
-  id: string,
-  startLine: number,
-  endLine: number,
-  title: string | null,
-  maxChars: number,
-): LogSessionChunk {
-  const raw = lines.slice(startLine, endLine).join("\n").replace(/\s+$/, "");
-  const truncated = raw.length > maxChars;
-  let text = raw;
-  if (truncated) {
-    /* 掐头对齐到行边界：尾部窗口的一半行会在界面上显示成一条乱码行。 */
-    const tail = raw.slice(raw.length - maxChars);
-    const firstBreak = tail.indexOf("\n");
-    text = firstBreak >= 0 ? tail.slice(firstBreak + 1) : tail;
-  }
-  return {
-    id,
-    title: title ?? LEGACY_TITLE,
-    startedAt: firstTimestampMs(raw),
-    startLine,
-    endLine,
-    text,
-    truncated,
-  };
-}
-
-/**
- * 把一份追加写日志切成「每次启动」的会话（新→旧按行序，最后一项是最新一次）。
- *
- * 只按 start 横幅切分；第一条 start 横幅之前的内容（横幅机制上线前写的行、
- * 或服务端尾窗截断后剩下的半段）单独作为一项，标题为
- * `更早的日志（无会话标记）`——它同样要能看，不能因为「没有横幅」被丢掉。
- *
- * 整份日志里一条横幅都没有时，返回**一个**覆盖全文的会话（标题同上）：
- * 调用方据此退化成「只有一次启动」的展示，而不是空列表。
- */
-export function parseLogSessions(
-  text: string,
-  maxChars: number = MAX_SESSION_CHARS,
-): LogSessionChunk[] {
-  const lines = text.split("\n");
-  const starts: number[] = [];
-  for (let i = 0; i + 2 < lines.length; i += 1) {
-    if (!isBannerBar(lines[i]!) || !isBannerBar(lines[i + 2]!)) continue;
-    /* end 横幅只标记终点：其后还可能有退出说明，切了会多出伪会话。 */
-    if (lines[i]!.includes(BANNER_END_ANSI)) continue;
-    starts.push(i);
-  }
-
-  const chunks: LogSessionChunk[] = [];
-  const firstStart = starts.length > 0 ? starts[0]! : lines.length;
-  if (lines.slice(0, firstStart).some((line) => line.trim() !== "")) {
-    chunks.push(buildChunk(lines, "legacy", 0, firstStart, null, maxChars));
-  }
-  starts.forEach((start, index) => {
-    const end = index + 1 < starts.length ? starts[index + 1]! : lines.length;
-    const title = stripAnsi(lines[start + 1] ?? "").trim();
-    chunks.push(
-      buildChunk(
-        lines,
-        String(start),
-        start,
-        end,
-        title || BANNER_FALLBACK_TITLE,
-        maxChars,
-      ),
-    );
-  });
-  return chunks;
+  /**
+   * 该次运行的正文前缀基准不可得 —— 正文里含**更早运行**的内容。
+   *
+   * 成因是保留策略删掉了它前面那一包（`runs/` 只留最近 20 次或 7 天），于是
+   * 「当前包 − 前一包」这个减法没有基准可减。见 `log-run-sessions.ts` 的
+   * `runSlice()`：那里选择**整份给出并说出来**，而不是猜一个基准把内容切掉。
+   */
+  baselineMissing: boolean;
 }
