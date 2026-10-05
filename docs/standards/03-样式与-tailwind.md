@@ -68,8 +68,9 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 > **这条不进钩子，但不再是一句谁都能忘的人为提醒**：`tw4-spacing-canonical.mjs` /
 > `tw4-canonical-report.mjs` 都**不在** `.githooks/pre-commit`（它们要起 Tailwind
 > 引擎、单次约 6s，且判断的是「CSS 等价改写」而非正确性，成本判据同 §13.5.4）。
-> 实测的教训：storybook 那批新 stories 一次性带进来 96 处 `w-[30rem]` / `h-[32rem]`
-> 这类缩写候选，直到手工跑 `pnpm theme:scan` 才浮出来 —— 那时它只是「没人跑就没人
+> **实测的教训（数字是当时那次事故的账）**：storybook 那批新 stories 一次性带进来
+> 「96 处」`w-[30rem]` / `h-[32rem]` 这类缩写候选（全仓现已各 0 处），直到手工跑
+> `pnpm theme:scan` 才浮出来 —— 那时它只是「没人跑就没人
 > 知道」。现在两者各带一个**棘轮判定档**（ISSUE #1451 要求 2，规范 §13.5.12）：
 >
 > ```bash
