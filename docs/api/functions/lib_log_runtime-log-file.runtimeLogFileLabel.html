@@ -1,4 +1,4 @@
-<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>BANNER_ANSI | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>runtimeLogFileLabel | Comfy-APP-T3 API</title><meta name="description" content="Documentation for Comfy-APP-T3 API"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
 <div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Comfy-APP-T3 API</a>
 <div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
 <ul role="listbox" id="tsd-search-results"></ul>
@@ -8,27 +8,27 @@
 <div class="col-content">
 <div class="tsd-page-title">
 <ul class="tsd-breadcrumb" aria-label="Breadcrumb">
-<li><a href="../modules/lib_log_log-ansi.html">lib/log/log-ansi</a></li>
-<li><a href="" aria-current="page">BANNER_ANSI</a></li></ul>
-<h1>Variable BANNER_ANSI<code class="tsd-tag">Const</code></h1></div>
-<div class="tsd-signature"><span class="tsd-kind-variable">BANNER_ANSI</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">end</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;\u001b[1;33m&quot;</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">reset</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;\u001b[0m&quot;</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">start</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;\u001b[1;32m&quot;</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol"> = ...</span></div>
-<div class="tsd-type-declaration">
-<h4>Type Declaration</h4>
-<ul class="tsd-parameters">
-<li class="tsd-parameter">
-<h5 id="end"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">end</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">&quot;\u001b[1;33m&quot;</span></h5>
-<div class="tsd-comment tsd-typography"><p>会话结束（亮黄）—— 同时也是读侧「这一行是结束横幅」的判据。</p>
-</div></li>
-<li class="tsd-parameter">
-<h5 id="reset"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">reset</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">&quot;\u001b[0m&quot;</span></h5>
-<div class="tsd-comment tsd-typography"><p>收尾复位。</p>
-</div></li>
-<li class="tsd-parameter">
-<h5 id="start"><code class="tsd-tag">Readonly</code><span class="tsd-kind-property">start</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">&quot;\u001b[1;32m&quot;</span></h5>
-<div class="tsd-comment tsd-typography"><p>新会话开始（亮绿）。</p>
-</div></li></ul></div><aside class="tsd-sources">
+<li><a href="../modules/lib_log_runtime-log-file.html">lib/log/runtime-log-file</a></li>
+<li><a href="" aria-current="page">runtimeLogFileLabel</a></li></ul>
+<h1>Function runtimeLogFileLabel</h1></div>
+<section class="tsd-panel">
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="runtimelogfilelabel"><span class="tsd-kind-call-signature">runtimeLogFileLabel</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">file</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/lib_log_runtime-log-file.RuntimeLogFileName.html" class="tsd-signature-type tsd-kind-interface">RuntimeLogFileName</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><a href="#runtimelogfilelabel" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>文件名 → 面板下拉文案：<code>09-30 19:36:12</code>（缺时刻的旧固定名给「更早的日志」）。</p>
+<p>与日志面板的时刻口径同源：日期与时刻都要 —— 只有
+<code>HH:mm:ss</code> 时「昨天那次」与「今天那次」看起来一样。不再带「正常 / 异常退出」：
+这四份日志的<strong>进程生命周期与应用的运行包不是一回事</strong>（应用还开着、ComfyUI
+被重启了三次），把运行包的「退出形态」借过来会给出错误暗示。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">file</span>: <a href="../interfaces/lib_log_runtime-log-file.RuntimeLogFileName.html" class="tsd-signature-type tsd-kind-interface">RuntimeLogFileName</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-ansi.ts:141</li></ul></aside></div>
+<li>Defined in lib/log/runtime-log-file.ts:143</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

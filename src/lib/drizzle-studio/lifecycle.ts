@@ -24,10 +24,10 @@ import { logger } from "~/lib/core/logger";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { sleep } from "~/lib/with-timeout";
 import {
-  DRIZZLE_STUDIO_RUNTIME_LOG,
-  SERVICES_LOG_DIR,
-} from "~/lib/log/log-paths";
-import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
+  openRuntimeLogWriter,
+  pruneRuntimeLogFiles,
+  type RuntimeLogWriter,
+} from "~/lib/log/runtime-log-pack.server";
 import { killProcessTree } from "~/lib/process/kill-process-tree";
 import { formatLocalStamp } from "~/lib/time-format";
 import { DRIZZLE_STOP_PROBE } from "../retry-policy";
@@ -127,24 +127,23 @@ function localTimestamp(): string {
   return formatLocalStamp(new Date());
 }
 
-function appendRuntimeLog(line: string): void {
-  try {
-    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
-    fs.appendFileSync(
-      DRIZZLE_STUDIO_RUNTIME_LOG,
-      `${localTimestamp()} ${line}\n`,
-      "utf-8",
-    );
-  } catch {
-    /* 日志失败不影响主流程 */
-  }
+/** 本次启动的 runtime 日志写入器（`drizzle-studio-runtime-<时刻>.log`）。
+ *
+ * 一次启动一份文件（ISSUE #1326）：`ensureDrizzleStudioUp` 拉起前换一份新的，
+ * 于是「这个文件属于哪一次启动」由文件本身回答，不必再靠横幅分段。为 null
+ * （还没启动过）时写日志静默跳过 —— 状态行本来就会 `note()` 到 logger 与面板。 */
+let runtimeWriter: RuntimeLogWriter | null = null;
+
+/** 开一次启动的日志：先轮转旧文件、再换上新的一份、落首行标题。 */
+function beginRuntimeSession(at: Date = new Date()): string {
+  pruneRuntimeLogFiles();
+  runtimeWriter = openRuntimeLogWriter("drizzle-studio-runtime", at);
+  appendRuntimeLog("▶ Drizzle Studio 启动会话");
+  return runtimeWriter.file;
 }
 
-/** 会话边界横幅（唯一实现见 `src/lib/session-banner.server.ts`）：多次启动累积的
- * drizzle-studio-runtime.log 靠它分清会话边界（两侧各留空行，直接看文件也
- * 能看出本次从哪开始）。 */
-function appendSessionBanner(kind: "start" | "end", title: string): void {
-  appendSessionBannerToFile(DRIZZLE_STUDIO_RUNTIME_LOG, kind, title);
+function appendRuntimeLog(line: string): void {
+  runtimeWriter?.write(`${localTimestamp()} ${line}`);
 }
 
 /** 确保 studio 本地端口就绪：可达则直接返回；否则按解析出的 drizzle-kit 拉起。 */
@@ -187,10 +186,9 @@ export async function ensureDrizzleStudioUp(
     // 含 node_modules 的项目根，保证它能解析自身传递依赖。
     const nodeExe = process.execPath;
     const args = [bin, "studio", "--port", String(port), "--host", "127.0.0.1"];
-    appendSessionBanner(
-      "start",
-      `▶ Drizzle Studio 启动会话  ${localTimestamp()}`,
-    );
+    /* 先换本次启动的日志文件，再写第一条 —— 顺序反了会把本次的头几行写进
+     * 上一次的文件里（表现是「日志看起来少了一次」，没有报错）。 */
+    beginRuntimeSession();
     note(`Drizzle Studio 未运行，按解析路径启动：${nodeExe} ${args.join(" ")}`);
     let child: ReturnType<typeof spawn>;
     try {
@@ -224,7 +222,6 @@ export async function ensureDrizzleStudioUp(
       "exit",
       createChildExitHandler({
         banner: (report) => `■ Drizzle Studio 进程已退出：${report.reason}`,
-        appendSessionBanner: (b) => appendSessionBanner("end", b),
         appendRuntimeLog,
         log: note,
         clearChild: () => {

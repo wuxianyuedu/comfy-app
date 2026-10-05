@@ -2591,15 +2591,16 @@ const RULES = {
    *   · `logs/log-record` 的 `stripSgr` —— 连**残缺颜色码**（只剩 `[90m`）
    *     一起剥，少剥这层会在面板上显示成 `[[OK]【[90m[OK[0m] …`；
    *   · `logs/log-row-style` 的 `hasAnsi` —— 只判不改；
-   *   · `lib/session-banner.server` 与 `log-sessions` —— **写侧与读侧**各持
-   *     一份同样的颜色码字面量（写侧改色、读侧就认不出自己写的横幅）。
+   *   · 会话横幅的写侧与读侧**各持一份**同样的颜色码位字面量（写侧改色、读侧
+   *     就认不出自己写的横幅）—— 那一对已随一次启动一份文件撤掉（ISSUE #1326，
+   *     `BANNER_ANSI` 与 `session-banner.server.ts` 一并移除）。
    *
    * 判据锚**转义符字面量本身**（`\x1b[` 或 `\u001b[`）—— 它只该出现在
    * 出口里。`\x1b` 单独出现（如光标移动）不在此列：那是另一条账。
    */
   P54: {
     label:
-      "视图 / 逻辑 / 服务端里自写 SGR 转义序列（应使用 ~/lib/log/log-ansi 的 hasSgr / stripSgr / stripAnsi / BANNER_ANSI）",
+      "视图 / 逻辑 / 服务端里自写 SGR 转义序列（应使用 ~/lib/log/log-ansi 的 hasSgr / stripSgr / stripAnsi）",
     count: (t) => {
       const t2 = stripComments(t);
       /* 形态：转义符字面量（`\\x1b` 或 `\\u001b`）后面在**同一个序列内**
@@ -4671,7 +4672,7 @@ function main() {
         "  去重合并与区域设置排序 → ~/lib/ordered-set 的 unique / uniqueSorted / uniqueBy / union / compareText；\n" +
         "  拼 data URL / 取回它的载荷 → ~/lib/media/data-url 的 toDataUrl / wrapBase64 / parseDataUrl / base64PayloadOf；\n" +
         "  元素上的键动作 → ~/components/ui/simple-key-handler 的 simpleKeyHandler（键名归一走 ~/lib/keyboard 的 normalizeKeyName / isKeyIn）；\n" +
-        "  剥掉 / 判断 SGR → ~/lib/log/log-ansi 的 hasSgr / stripSgr / stripAnsi（横幅色板取 BANNER_ANSI）；\n" +
+        "  剥掉 / 判断 SGR → ~/lib/log/log-ansi 的 hasSgr / stripSgr / stripAnsi；\n" +
         "  驼峰 ⇄ kebab 换算 → ~/lib/case-token 的 toKebabCase / toCamelCase；\n" +
         "  路径变成展示文本（相对化 / 分隔符归一 / 取末段 / 中段省略）→ ~/lib/path-display 的 toDisplayPath / stripPathPrefix / lastSegments / ellipsisMiddle / normalizeSlashes；\n" +
         "  透传 props 前剔掉自己的私有字段 → ~/lib/dom-props 的 OmitOwnProps（类型表）与 splitDomProps（运行时剥）；\n" +

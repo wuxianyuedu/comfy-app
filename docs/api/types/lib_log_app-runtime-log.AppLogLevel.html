@@ -15,10 +15,10 @@
 <div class="tsd-comment tsd-typography"><h1 id="应用运行操作日志（面板可见）。" class="tsd-anchor-link">应用运行操作日志（面板可见）。<a href="#应用运行操作日志（面板可见）。" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h1>
 <p>本日志器解决「中间操作看不到」问题：把应用运行期发生的业务操作
 （tRPC 调用、生成、任务、工作流增删改等）以面板可解析的行格式
-追加到 <code>log/services/app-runtime.log</code>，供应用内「应用日志」面板
-经 <code>GET /api/logs/current?source=app-runtime</code> 实时轮询展示。</p>
-<p>与 comfyui-runtime / drizzle-studio-runtime 同一套「追加写 + 面板轮询」模式，
-但覆盖的是<strong>应用自身操作</strong>而非外部常驻子进程输出。</p>
+落到 <code>log/current/services/app-runtime-&lt;YYYYMMDD-HHmmss&gt;.log</code>，供应用内
+「应用日志」面板经 <code>GET /api/logs/current?source=app-runtime</code> 实时轮询展示。</p>
+<p>与 comfyui-runtime / drizzle-studio-runtime 同一套「一次启动一份文件 + 面板
+轮询」模式，但覆盖的是<strong>应用自身操作</strong>而非外部常驻子进程输出。</p>
 <p>行格式 = <code>[YYYY-MM-DD HH:mm:ss.mmm] [LEVEL] [ns] msg</code></p>
 <ul>
 <li>本地时区时间戳（面板展示给本机用户看，UTC 会差 8 小时）</li>
@@ -38,7 +38,7 @@
 写入方（Next server 与未来 executor host）都通过本模块，写入失败绝不阻塞业务。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/app-runtime-log.ts:37</li></ul></aside></div>
+<li>Defined in lib/log/app-runtime-log.ts:40</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

@@ -6,10 +6,9 @@
  * 三个分区此前各自内联了一份 40 行的同款 JSX（标题 + 跟随中徽标 + 刷新按钮 +
  * 固定 `max-h-44` 的滚动框），改口径要改三处。这里收成一处，并把两件事补齐：
  *
- *   1. **切换每次运行**：`log.sessions` 由服务端按「一次运行一包」列出
- *      （本次运行 + `log/runs/` 各历史包，见 `lib/log/log-run-sessions` 与
- *      `GET /api/logs/sessions`），下拉标出每项的时刻 / 退出形态 / runId ——
- *      应用重启过的那几次也能回看，而不只是「这个文件里还没被冲掉的段落」；
+ *   1. **切换每次启动**：`log.sessions` 由服务端按「一次启动一份文件」列出
+ *      （见 `lib/log/runtime-log-file` 与 `GET /api/logs/sessions`），下拉标出
+ *      每份的时刻 —— 服务在应用还开着的时候被重启过几次，就有几份可切；
  *   2. **全屏查看**：小窗口只有 176px 高，长输出读起来很憋（用户反馈）。
  *      全屏走 `ui/fullscreen-dialog`（铺满标题行下方的内容区），右上角带同一个
  *      下拉与刷新，因此「全屏看」不是另一套只读视图。
@@ -275,9 +274,12 @@ function LogBody({
 function LogHint({ log }: { log: RuntimeLogController }) {
   const parts: string[] = [];
   if (log.truncated) parts.push("该次启动的输出过长，只显示最近一段。");
-  if (log.windowed) parts.push("日志文件较大，更早的启动不在下拉列表里。");
-  if (log.baselineMissing) {
-    parts.push("这次运行之前那一包已被清理，因此这段含更早的内容。");
+  /* 列表被上限裁过：说清「还有更早的」而不是让用户以为「只启动过这些次」。
+   * 一次启动一份文件之后同一天可能攒几十份，这条提示比过去更常出现。 */
+  if (log.sessions.length < log.total) {
+    parts.push(
+      `该服务一共启动过 ${log.total} 次，下拉只列最近 ${log.sessions.length} 次。`,
+    );
   }
   if (parts.length === 0) return null;
   return (
