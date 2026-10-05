@@ -26,6 +26,16 @@ import {
   shouldAutoExpandError,
 } from "~/lib/comfyui/error-advice";
 
+/** JSON.stringify 的兜底形态：序列化失败（循环引用等）回落 `String()`。
+ *  展示给用户的错误详情永不抛错。 */
+function jsonOrString(value: unknown, pretty = false): string {
+  try {
+    return pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 interface ErrorPanelProps {
   nodeId: string;
   kind: CanvasNodeData["kind"];
@@ -104,6 +114,38 @@ export function ErrorPanel({
     () => adviseOnError(error),
     [error],
   );
+
+  /* 展开态的错误详情派生 —— 防御性转换：`d.error` 的类型是`string`，
+   * 但遗留行 / 较老代码路径可能存过字面量"[object Object]"（例如
+   * buildPromptError 以前用`String(res.error)`），或有结构化对象经竞态
+   * 漏了进来。识别垃圾字符串哨兵 → 真对象 JSON 化 → 兜底通用文案；
+   * 展开的 <pre> 永不显示字面量`[object Object]`。 */
+  const raw = error;
+  let errText = "(no error detail)";
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (
+      trimmed &&
+      trimmed !== "[object Object]" &&
+      trimmed !== "[unserializable error]"
+    ) {
+      errText = trimmed;
+    }
+  } else if (raw && typeof raw === "object") {
+    errText = jsonOrString(raw, true);
+  }
+
+  const rawTs = errorContext?.timestamp;
+  let ts: string | null = null;
+  if (rawTs) {
+    const dt = new Date(rawTs);
+    ts = Number.isNaN(dt.getTime()) ? rawTs : formatLocalStamp(dt);
+  }
+  const hasCtx =
+    Boolean(taskId) ||
+    Boolean(ts) ||
+    Boolean(errorContext?.request) ||
+    Boolean(errorSuggestion);
 
   /* 节点没在显示可行动错误时整体隐藏。放在 hooks 之后
    * （而不是在父级拦住挂载），好让展开 / 重置生命周期
@@ -200,13 +242,7 @@ export function ErrorPanel({
                           error:
                             typeof error === "string"
                               ? error
-                              : (() => {
-                                  try {
-                                    return JSON.stringify(error);
-                                  } catch {
-                                    return String(error);
-                                  }
-                                })(),
+                              : jsonOrString(error),
                           request: errorContext?.request ?? null,
                           ts:
                             errorContext?.timestamp ?? new Date().toISOString(),
@@ -244,146 +280,92 @@ export function ErrorPanel({
             </p>
           )}
 
-          {errExpanded &&
-            (() => {
-              // 重做失败面板，把「执行了什么」结构化展示。
-              //
-              // 防御性转换：`d.error` 的类型是`string`，
-              // 但遗留行 / 较老代码路径可能存过
-              // 字面量"[object Object]"（例如 buildPromptError 以前
-              // 用`String(res.error)`），或有结构化对象经竞态漏了进来。
-              // 我们（1）识别这个垃圾字符串哨兵，（2）把真对象 JSON.stringify，
-              //（3）回落到通用的「无详情」文案。展开的 <pre>
-              // 永不显示字面量`[object Object]`。
-              //
-              const raw = error;
-              let errText = "(no error detail)";
-              if (typeof raw === "string") {
-                const trimmed = raw.trim();
-                if (
-                  trimmed &&
-                  trimmed !== "[object Object]" &&
-                  trimmed !== "[unserializable error]"
-                ) {
-                  errText = trimmed;
-                }
-              } else if (raw && typeof raw === "object") {
-                try {
-                  errText = JSON.stringify(raw, null, 2);
-                } catch {
-                  errText = String(raw);
-                }
-              }
-
-              const ts = (() => {
-                const t = errorContext?.timestamp;
-                if (!t) return null;
-                const dt = new Date(t);
-                if (Number.isNaN(dt.getTime())) return t;
-                return formatLocalStamp(dt);
-              })();
-              const hasCtx =
-                Boolean(taskId) ||
-                Boolean(ts) ||
-                Boolean(errorContext?.request) ||
-                Boolean(errorSuggestion);
-
-              return (
-                <div className="nodrag nopan mt-1.5 flex flex-col gap-1.5">
-                  {/* 0) 结构化校验错误：精确指出哪个节点哪个字段 */}
-                  {(validationErrors?.length ?? 0) > 0 && (
-                    <div className="border-destructive/25 bg-destructive/10 rounded border px-2 py-1.5">
-                      <div className="text-danger-strong text-3xs mb-1 font-semibold">
-                        节点配置校验（{(validationErrors ?? []).length} 项）
-                      </div>
-                      <ValidationErrorList
-                        errors={validationErrors}
-                        className="text-danger-strong/80"
-                      />
-                    </div>
-                  )}
-                  {/* 1) 任务上下文：taskId（可点击复制）+ 时间 */}
-                  {hasCtx && (
-                    <div className="bg-canvas-deep border-destructive/15 text-3xs grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border px-1.5 py-1">
-                      {taskId && (
-                        <>
-                          <span className="text-danger-strong/60">taskId</span>
-                          <Hint label="点击复制 taskId">
-                            <Button
-                              variant="ghost"
-                              onClick={() => copyTaskId(taskId)}
-                              className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
-                            >
-                              {taskId}
-                            </Button>
-                          </Hint>
-                        </>
-                      )}
-                      {ts && (
-                        <>
-                          <span className="text-danger-strong/60">时间</span>
-                          <span className="text-danger-strong/80 truncate">
-                            {ts}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 2) 自动建议 — 正则推断的纠错提示 */}
-                  {errorSuggestion && (
-                    <Alert
-                      variant="warning"
-                      className="text-3xs block rounded px-2 py-1 leading-relaxed"
-                    >
-                      <span className="mr-1 font-semibold">建议</span>
-                      {errorSuggestion}
-                    </Alert>
-                  )}
-
-                  {/* 3) 请求参数快照 */}
-                  {errorContext?.request ? (
-                    <Disclosure
-                      defaultOpen
-                      marker="caret"
-                      className="text-danger-strong text-3xs hover:brightness-110"
-                      panelClassName="text-3xs"
-                      trigger="请求参数"
-                    >
-                      <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 text-3xs mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono leading-tight whitespace-pre-wrap">
-                        {typeof errorContext.request === "string"
-                          ? errorContext.request
-                          : (() => {
-                              try {
-                                return JSON.stringify(
-                                  errorContext.request,
-                                  null,
-                                  2,
-                                );
-                              } catch {
-                                // eslint-disable-next-line @typescript-eslint/no-base-to-string -- request 非字符串且 JSON 序列化失败时兜底展示原始对象
-                                return String(errorContext.request);
-                              }
-                            })()}
-                      </pre>
-                    </Disclosure>
-                  ) : null}
-
-                  {/* 4) 原始错误详情（保持旧版的 <pre> 风格） */}
-                  <Disclosure
-                    defaultOpen
-                    marker="caret"
-                    className="text-danger-strong text-3xs hover:brightness-110"
-                    panelClassName="text-3xs"
-                    trigger="原始错误"
-                  >
-                    <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 text-3xs mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono leading-tight whitespace-pre-wrap">
-                      {errText}
-                    </pre>
-                  </Disclosure>
+          {errExpanded && (
+            <div className="nodrag nopan mt-1.5 flex flex-col gap-1.5">
+              {/* 重做失败面板，把「执行了什么」结构化展示。派生
+               * （errText / ts / hasCtx）在组件体，见 return 之前。 */}
+              {/* 0) 结构化校验错误：精确指出哪个节点哪个字段 */}
+              {(validationErrors?.length ?? 0) > 0 && (
+                <div className="border-destructive/25 bg-destructive/10 rounded border px-2 py-1.5">
+                  <div className="text-danger-strong text-3xs mb-1 font-semibold">
+                    节点配置校验（{(validationErrors ?? []).length} 项）
+                  </div>
+                  <ValidationErrorList
+                    errors={validationErrors}
+                    className="text-danger-strong/80"
+                  />
                 </div>
-              );
-            })()}
+              )}
+              {/* 1) 任务上下文：taskId（可点击复制）+ 时间 */}
+              {hasCtx && (
+                <div className="bg-canvas-deep border-destructive/15 text-3xs grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border px-1.5 py-1">
+                  {taskId && (
+                    <>
+                      <span className="text-danger-strong/60">taskId</span>
+                      <Hint label="点击复制 taskId">
+                        <Button
+                          variant="ghost"
+                          onClick={() => copyTaskId(taskId)}
+                          className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
+                        >
+                          {taskId}
+                        </Button>
+                      </Hint>
+                    </>
+                  )}
+                  {ts && (
+                    <>
+                      <span className="text-danger-strong/60">时间</span>
+                      <span className="text-danger-strong/80 truncate">
+                        {ts}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* 2) 自动建议 — 正则推断的纠错提示 */}
+              {errorSuggestion && (
+                <Alert
+                  variant="warning"
+                  className="text-3xs block rounded px-2 py-1 leading-relaxed"
+                >
+                  <span className="mr-1 font-semibold">建议</span>
+                  {errorSuggestion}
+                </Alert>
+              )}
+
+              {/* 3) 请求参数快照 */}
+              {errorContext?.request ? (
+                <Disclosure
+                  defaultOpen
+                  marker="caret"
+                  className="text-danger-strong text-3xs hover:brightness-110"
+                  panelClassName="text-3xs"
+                  trigger="请求参数"
+                >
+                  <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 text-3xs mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono leading-tight whitespace-pre-wrap">
+                    {typeof errorContext.request === "string"
+                      ? errorContext.request
+                      : jsonOrString(errorContext.request, true)}
+                  </pre>
+                </Disclosure>
+              ) : null}
+
+              {/* 4) 原始错误详情（保持旧版的 <pre> 风格） */}
+              <Disclosure
+                defaultOpen
+                marker="caret"
+                className="text-danger-strong text-3xs hover:brightness-110"
+                panelClassName="text-3xs"
+                trigger="原始错误"
+              >
+                <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 text-3xs mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono leading-tight whitespace-pre-wrap">
+                  {errText}
+                </pre>
+              </Disclosure>
+            </div>
+          )}
         </div>
       </div>
     </div>

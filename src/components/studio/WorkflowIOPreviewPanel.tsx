@@ -185,6 +185,14 @@ export function WorkflowIoPreviewPanel({
         : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
     }`;
 
+  /* seed 模式映射：可编辑条目按当前模式解析（模式覆盖优先，回退条目全局）。
+   * 传给表单的与「勾选后写回」的键空间同源（ioKey）。 */
+  const seedModes: Record<string, string> = {};
+  for (const entry of editableEntries) {
+    const resolved = resolveEntrySeedMode(entry, effectiveMode);
+    if (resolved) seedModes[entry.ioKey] = resolved;
+  }
+
   return (
     <div className="z-canvas-max pointer-events-none absolute top-4 right-4 bottom-4 flex w-130 flex-col">
       {/* p71-allow:start sky · IO 预览面板的 identity 色（这套 UI 里"IO 预览"的既有装饰身份、非状态色、无匹配 token），见 §3.6.1 */}
@@ -293,14 +301,7 @@ export function WorkflowIoPreviewPanel({
                 compact
                 showOutputs
                 showHiddenInMode
-                seedModes={(() => {
-                  const map: Record<string, string> = {};
-                  for (const entry of editableEntries) {
-                    const resolved = resolveEntrySeedMode(entry, effectiveMode);
-                    if (resolved) map[entry.ioKey] = resolved;
-                  }
-                  return map;
-                })()}
+                seedModes={seedModes}
                 onSeedModeChange={setSeedModeForMode}
                 onLabelChange={setIOLabel}
                 /* 必填 / 可选 toggle：按当前模式写覆盖（modes[mode].required）。 */

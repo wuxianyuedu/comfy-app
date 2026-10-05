@@ -189,6 +189,9 @@ export function MultiModeSelect({
     return groupedMap;
   }, [query]);
 
+  /* 当前页签分类下的模式项（无命中时列表区渲染空态）。 */
+  const items = grouped[activeTab] ?? [];
+
   const firstSelected = ALL_WORKFLOW_TYPES.find((type) =>
     modes.includes(type.code),
   );
@@ -301,18 +304,14 @@ export function MultiModeSelect({
           style={{ maxHeight: POPOVER_MAX_H }}
           className="overflow-y-auto py-1"
         >
-          {(() => {
-            const items = grouped[activeTab] ?? [];
-            if (items.length === 0) {
-              return (
-                <div className="text-ink-muted px-3 py-4 text-center text-xs">
-                  {query.trim()
-                    ? "没有匹配的模式"
-                    : `${CATEGORY_LABEL[activeTab]}暂无模式`}
-                </div>
-              );
-            }
-            return items.map((item) => {
+          {items.length === 0 ? (
+            <div className="text-ink-muted px-3 py-4 text-center text-xs">
+              {query.trim()
+                ? "没有匹配的模式"
+                : `${CATEGORY_LABEL[activeTab]}暂无模式`}
+            </div>
+          ) : (
+            items.map((item) => {
               const isSelected = draft.has(item.code);
               const isDraftDefault = draftDefault === item.code;
               return (
@@ -384,8 +383,8 @@ export function MultiModeSelect({
                   </span>
                 </div>
               );
-            });
-          })()}
+            })
+          )}
         </div>
 
         {/* footer */}
