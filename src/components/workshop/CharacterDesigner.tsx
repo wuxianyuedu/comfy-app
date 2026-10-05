@@ -33,6 +33,7 @@ import {
 } from "./hooks/use-character-flows";
 import { channelProviderLabel } from "~/lib/workshop/channel-options";
 import { ExtractToolbar } from "~/components/workshop/ExtractToolbar";
+import { IndexDot } from "~/components/workshop/IndexDot";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import {
   ExitReminder,
@@ -297,9 +298,7 @@ export function CharacterDesigner({
               className="border-border bg-surface rounded-xl border p-4"
             >
               <div className="mb-3 flex items-center gap-2">
-                <span className="bg-primary-soft text-primary grid size-6 place-items-center rounded-full text-xs font-semibold">
-                  {i + 1}
-                </span>
+                <IndexDot index={i + 1} />
                 <input
                   value={character.name}
                   onChange={(event) =>

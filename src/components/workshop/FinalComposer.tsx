@@ -9,6 +9,7 @@ import { fixed } from "~/lib/number-format";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { FormField } from "~/components/ui/form-field";
+import { IndexDot } from "~/components/workshop/IndexDot";
 import { Input } from "~/components/ui/input";
 import {
   MOTION_LABELS,
@@ -285,9 +286,7 @@ export function FinalComposer({
                 active ? "ring-primary/40 ring-1" : ""
               }`}
             >
-              <span className="bg-primary-soft text-primary grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold">
-                {idx + 1}
-              </span>
+              <IndexDot index={idx + 1} size="lg" />
               <div className="bg-elevated h-14 w-20 shrink-0 overflow-hidden rounded-lg">
                 {shot.imageUrl ? (
                   <MediaThumbnail
