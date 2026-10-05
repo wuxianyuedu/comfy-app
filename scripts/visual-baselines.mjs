@@ -29,15 +29,37 @@ import path from "node:path";
 export const VISUAL_DIR = "e2e/visual";
 
 /**
- * 项目实际会跑像素回归的平台（登记 = 有且仅有这几档在仓库里有一套 PNG）。
- *   · win32 —— 开发机，`pnpm dev` 口径（实测两次连跑零差异）。
- *   · linux —— 容器 / 类 CI 环境，`pnpm start` 口径（实测同一命令连跑两次零差异）。
+ * 项目实际会跑像素回归的平台（登记 = 有且仅有这几档在仓库里有一套 PNG），
+ * 以及那一档的基线**录于哪一条 webServer 口径**。
+ *
+ * 口径这一栏不是注释而是**数据**：`playwright.config.ts` 按 `process.env.CI` 的真假
+ * 分流 webServer（假 ⇒ `pnpm dev`、真 ⇒ `pnpm start`），而两个口径下**像素不相同**
+ * （Next 的 dev 指示器挂在 shadow root 里、宿主 bounding box 是 0×0，`mask` 遮不住它——
+ * 见 §11.8 那条实测）。于是「在这档录基线时 `CI` 是真还是假」是**基线身份的一部分**：
+ * 录错了口径，基线看着被成功创建，实际记的是另一种 chrome 之下的界面，而它**不会当场红**
+ * ——只在以后某次真差异里混进来、指不出是它。写进数据是因为口径只写在文档里时，
+ * 校验无从下手（`pixel-run.mjs` 的录基线档此前不校验它）。
+ *
+ *   · `dev`   —— `CI` **不设**时走的口径（`pnpm dev`）。
+ *   · `start` —— `CI` 为真时走的口径（`pnpm start`，要求先有生产构建）。
  *
  * 这是**口径**，不是「有哪些平台存在」：新增一档执行环境时，先用同一份 spec 在那档
  * 上录出成套 PNG，再同批改这里（§11.8）。只登记不录 = 那一档一跑就红；只录不登记 =
  * 被孤儿判据点名。
  */
-export const SUPPORTED_PLATFORMS = ["win32", "linux"];
+/** @type {Record<string, {webserver: "dev" | "start", note: string}>} */
+export const PLATFORM_RECORDING = {
+  win32: { webserver: "dev", note: "开发机，实测同一命令连跑两次零差异" },
+  linux: { webserver: "start", note: "容器 / 类 CI，`CI` 为真，需先 `pnpm build`" },
+};
+
+/**
+ * 登记过的平台名（`PLATFORM_RECORDING` 的键）。
+ *
+ * 从上面那张表**派生**，不另写一份数组：两处各写一份时，「登记了平台」与「知道它
+ * 录于哪个口径」会漂成两件事，而 `isPlatformRegistered` 只认后者时就会漏。
+ */
+export const SUPPORTED_PLATFORMS = Object.keys(PLATFORM_RECORDING);
 
 /**
  * 「这一档**登记在案、但当前缺基线**」的平台 → 它的账。
@@ -59,8 +81,9 @@ export const PENDING_PLATFORMS = {
   win32: {
     reason:
       "本仓库的自动化执行环境（NPC 工作区 / CNB 容器）都是 linux，win32 档" +
-      "只能在 Windows 开发机上录；新增的页面级基线要在那台机器上跑一次 " +
-      "`pnpm check:visual:update`（`CI` 置空以走 dev 口径）并成套提交。",
+      "只能在 Windows 开发机上录。在 Windows 开发机上（`CI` 置空以走 dev 口径，" +
+      "`pixel-run.mjs` 会核这一条）跑 `pnpm check:visual:update` 并成套提交，然后" +
+      "把本登记删掉（配对判据会在补齐后仍然留着登记时红）。",
   },
 };
 
@@ -218,4 +241,68 @@ export function untrackedBaselines(root) {
     }
   }
   return untracked;
+}
+
+/**
+ * 该平台登记的是哪一条 webServer 口径（`dev` / `start`）；未登记返回 null。
+ *
+ * @param {string} platform
+ * @returns {"dev" | "start" | null}
+ */
+export function recordingWebserverFor(platform) {
+  return PLATFORM_RECORDING[platform]?.webserver ?? null;
+}
+/* 注：`PLATFORM_RECORDING` 是 `Record<string, …>`，所以 `recordingWebserverFor`
+ * 对任意平台名都不报类型错 —— 这是刻意的：未登记的平台要能在运行期返回 null
+ * （`darwin` 那一档在用例里就是这么验的），而不是被类型拒之门外。 */
+
+/**
+ * 本机 `CI` 的真假换算出的实际 webServer 口径 —— 与 `playwright.config.ts` 的分流**同一条**。
+ *
+ * `CI` 的判据是**真假**（不是「有没有这个键」）：`playwright.config.ts` 写的是
+ * `process.env.CI ? "pnpm start" : "pnpm dev"`，所以空串同样落在 `pnpm dev` 那侧。
+ * 不在这里另立一套判法（那是 §12.12 的孪生对）。
+ *
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {"dev" | "start"}
+ */
+export function webserverForEnv(env = process.env) {
+  return env.CI ? "start" : "dev";
+}
+
+/**
+ * 「在这一档录／跑基线，`CI` 该怎么置」—— 口径守卫的唯一判据形状（§11.8）。
+ *
+ * 与「本机缺哪张 PNG」是两件事，所以分开：缺基线是**数量**问题（补齐那几张），
+ * 口径不符是**身份**问题（录出来的 PNG 记的是另一种 chrome）。两者混成一句
+ * 「像素档不能跑」会让人用同一个动作去治——而口径不符时补齐只是把错的录得更多。
+ *
+ * ⚠️ 只在**该平台已登记**时有答案：没登记的平台没有「原口径」可比，它走的是
+ * 「先整套录、再同批登记」那一档（`checkLocalBaselines` 的话术），此时由人按
+ * 落地环境选口径并在登记表里写下。
+ *
+ * @param {{platform: string, env?: Record<string, string | undefined>}} args
+ * @returns {string | null} 不符时的话术（含动作），相符或平台未登记返回 null
+ */
+export function checkRecordingEnv({ platform, env = process.env }) {
+  const expected = recordingWebserverFor(platform);
+  if (expected === null) return null;
+  const actual = webserverForEnv(env);
+  if (actual === expected) return null;
+  const want = expected === "dev" ? "`CI` 置空（或不设）" : "`CI` 置为真（如 `CI=true`）";
+  const got = actual === "dev" ? "当前 `CI` 未设" : "当前 `CI` 为真";
+  const fix =
+    expected === "dev"
+      ? "CI= pnpm check:visual:update            # POSIX\n" +
+        "        $env:CI=$null; pnpm check:visual:update  # PowerShell"
+      : "CI=true pnpm check:visual:update";
+  return (
+    `本机 \`CI\` 与 ${platform} 档基线的录制口径不一致：该档录于 \`pnpm ${expected}\` 口径，` +
+    `而 ${got} ⇒ 会走 \`pnpm ${actual}\`。\n` +
+    "      两个口径的像素**不相同**（dev 指示器那块 mask 目前遮不住），按现行 CI 录出的\n" +
+    `      PNG 会被当成 ${platform} 档基线入库 —— 而它**不会当场红**，只在以后某次真差异里\n` +
+    `      混进来、还指不出是它。所以跑之前先把 ${want}：\n` +
+    `        ${fix}\n` +
+    "      登记表在 scripts/visual-baselines.mjs 的 PLATFORM_RECORDING。"
+  );
 }
