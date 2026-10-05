@@ -39,16 +39,22 @@ describe("launchPaths", () => {
       path.join("/proj", "run", "launch-status.json"),
     );
     expect(paths.orchestratorLog).toBe(
-      path.join("/proj", "log", "launcher", "dev-launcher.log"),
+      path.join("/proj", "log", "current", "launcher", "dev-launcher.log"),
     );
     expect(paths.orchestratorStderr).toBe(
-      path.join("/proj", "log", "launcher", "dev-launcher-stderr.log"),
+      path.join(
+        "/proj",
+        "log",
+        "current",
+        "launcher",
+        "dev-launcher-stderr.log",
+      ),
     );
     expect(paths.shellLog).toBe(
-      path.join("/proj", "log", "shell", "shell.log"),
+      path.join("/proj", "log", "current", "shell", "shell.log"),
     );
     expect(paths.shellLaunchLog).toBe(
-      path.join("/proj", "log", "launcher", "shell-launch.log"),
+      path.join("/proj", "log", "current", "launcher", "shell-launch.log"),
     );
   });
 

@@ -8,6 +8,7 @@
 import { Check, Copy, Download, FileText, Trash2, Type, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
+import { DiagnosticsButton } from "./DiagnosticsButton";
 import { SaveExportButton } from "./SaveExportButton";
 import { LogFilterBar } from "./LogFilterBar";
 import { OriginSelect } from "./LogPanelOriginSelect";
@@ -174,6 +175,9 @@ export function LogPanelHeader(input: {
             scopeLabel={scopeLabel}
             total={total}
           />
+          {/* 整份现场打包（见 DiagnosticsButton）：与上面那个分工不同 —— 它带
+              走的是面板上看不到的环境信息与崩溃残留。 */}
+          <DiagnosticsButton />
           <Hint label="清空面板" accessibleName>
             <Button
               variant="ghost"
