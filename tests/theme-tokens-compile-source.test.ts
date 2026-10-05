@@ -99,3 +99,39 @@ describe("theme 编译的输入源固定住了（#1336 的反向判据）", () =
     );
   });
 });
+
+/**
+ * 主题 token 的**完整清单**（规范 11 §11.9 的「大块产物比对人读」那一档）。
+ *
+ * 为什么用 `toMatchFileSnapshot` 而不是 `toEqual([...149 个名字])`：
+ * 内联数组的失败信息是把 149 行挤进 diff，而**人真正想看的是一次改名/删名之后
+ * 清单长什么样**。文件快照把基线写成一份能独立打开、能单独 diff 的真文件
+ * （`tests/__snapshots__/theme-tokens.css-theme-surface.txt`），于是 review 的对象
+ * 变回「产物本身」而不是「测试文件里的一段字面量」。
+ *
+ * 为什么这份清单值得被钉：`@theme` 里少一个声明，表现不是「某个用例红」，而是
+ * **某个 `bg-*` / `text-*` 类编不出来、界面上那处颜色悄悄回退到兜底**。
+ * 上面那条「每个声明都进产物」判的是「有没有掉队」，这条判的是「**这一版到底
+ * 声明了哪些**」—— 后者只有人读得出来，所以它要做成一份可 diff 的文件。
+ */
+describe("主题 token 清单（文件快照，人工 review 的对象）", () => {
+  it("`@theme` 声明的 token 清单与基线一致", async () => {
+    const src = fs.readFileSync(GLOBALS, "utf8");
+    const declared = new Set<string>();
+    for (const block of src.matchAll(
+      /@theme(?:\s+inline)?\s*\{([\s\S]*?)\n\}/g,
+    )) {
+      for (const decl of (block[1] ?? "").matchAll(/(--[A-Za-z0-9-]+)\s*:/g)) {
+        declared.add(decl[1]!);
+      }
+    }
+    /* 一份声明都没有时快照会变成空文件而「照样通过」——先钉住解析本身有效。 */
+    expect(
+      declared.size,
+      "@theme 解析不出声明 —— 这条判据在空跑",
+    ).toBeGreaterThan(50);
+    await expect([...declared].sort().join("\n")).toMatchFileSnapshot(
+      "__snapshots__/theme-tokens.css-theme-surface.txt",
+    );
+  });
+});
