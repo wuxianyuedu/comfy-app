@@ -40,7 +40,7 @@ const EXEC_CHAIN_FILES = [
 ];
 
 describe("进程内事件通道（EventEmitter）已退役", () => {
-  it.each(EXEC_CHAIN_FILES)("%s 里没有 emitter 的构造、持有或投递", (rel) => {
+  it.for(EXEC_CHAIN_FILES)("%s 里没有 emitter 的构造、持有或投递", (rel) => {
     expect(src(rel)).not.toMatch(/emitter/i);
   });
 

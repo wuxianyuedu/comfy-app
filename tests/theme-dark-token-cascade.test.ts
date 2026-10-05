@@ -55,7 +55,7 @@ const ALIASES = [
 const THEME_INVARIANT = ["--primary", "--accent", "--destructive"] as const;
 
 describe("主题别名 token 在两态下各自生效（ISSUE #609）", () => {
-  it.each(ALIASES)("%s 深色档 != 浅色档（别名确实随主题）", (name) => {
+  it.for(ALIASES)("%s 深色档 != 浅色档（别名确实随主题）", (name) => {
     const l = light.get(name);
     const d = dark.get(name);
     expect(l, `${name} 浅色档`).toBeTruthy();
@@ -63,7 +63,7 @@ describe("主题别名 token 在两态下各自生效（ISSUE #609）", () => {
     expect(d).not.toBe(l);
   });
 
-  it.each(THEME_INVARIANT)("%s 两态都有值（取值可以相同）", (name) => {
+  it.for(THEME_INVARIANT)("%s 两态都有值（取值可以相同）", (name) => {
     expect(light.get(name), `${name} 浅色档`).toBeTruthy();
     expect(dark.get(name), `${name} 深色档`).toBeTruthy();
   });

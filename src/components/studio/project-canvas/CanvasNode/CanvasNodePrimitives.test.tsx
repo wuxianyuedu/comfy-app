@@ -51,7 +51,7 @@ describe("Field", () => {
 });
 
 describe("StatusDot", () => {
-  it.each(STATUSES)("status=%s 渲染对应渐变与发光", (status) => {
+  it.for(STATUSES)("status=%s 渲染对应渐变与发光", (status) => {
     const { container } = render(<StatusDot status={status} />);
     const dot = container.firstElementChild as HTMLElement;
     expect(dot.tagName).toBe("SPAN");
@@ -65,12 +65,12 @@ describe("StatusDot", () => {
 describe("StatusBadge", () => {
   /* 配色走 `ui/status-badge` 的语义 token（规范 16 §16.2.4.5）—— 断言 token
    * 类名而不是字面量，否则「改一处状态色」又要点两遍名。 */
-  it.each([
+  it.for([
     ["idle", "待开始", ["bg-subtle", "text-ink-muted"]],
     ["running", "生成中…", ["bg-primary-500/10", "text-primary-strong"]],
     ["done", "运行后生成", ["bg-success/10", "text-success-strong"]],
     ["error", "生成失败", ["bg-destructive/10", "text-destructive"]],
-  ] as const)("status=%s 显示「%s」及对应配色", (status, label, classes) => {
+  ] as const)("status=%s 显示「%s」及对应配色", ([status, label, classes]) => {
     render(<StatusBadge status={status} />);
     const badge = screen.getByText(label);
     expect(badge).toBeInTheDocument();

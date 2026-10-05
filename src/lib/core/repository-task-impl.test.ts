@@ -336,7 +336,7 @@ describe("listStaleUnownedQueued（reaper 的死信扫描：5 条件 AND，ISSUE
       { status: "RUNNING" },
     ],
   ];
-  it.each(broken)("破一条：%s", async (_label, extra) => {
+  it.for(broken)("破一条：%s", async ([, extra]) => {
     await seed({
       status: "QUEUED",
       createdAt: oldDate,

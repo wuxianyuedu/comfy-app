@@ -24,17 +24,17 @@ function dotOf(props: Parameters<typeof StatusDot>[0]): HTMLElement {
 }
 
 describe("StatusDot", () => {
-  it.each(STATES)("state=%s 渲染出圆点", (state) => {
+  it.for(STATES)("state=%s 渲染出圆点", (state) => {
     expect(dotOf({ state }).className).toContain("rounded-full");
   });
 
-  it.each(STATES)("state=%s 的颜色是语义 token 类名", (state) => {
+  it.for(STATES)("state=%s 的颜色是语义 token 类名", (state) => {
     expect(dotOf({ state }).className).toMatch(
       /\bbg-(success|warning|info|destructive)\b/,
     );
   });
 
-  it.each(STATES)("state=%s 不落 Tailwind 原生调色板字面量", (state) => {
+  it.for(STATES)("state=%s 不落 Tailwind 原生调色板字面量", (state) => {
     expect(dotOf({ state }).className).not.toMatch(
       /\bbg-(?:violet|red|rose|emerald|amber|cyan|sky|fuchsia|purple|green|blue)-\d/,
     );

@@ -34,7 +34,7 @@ describe("NODE_TYPE_REGISTRY 的数据契约", () => {
     expect(entries.length).toBeGreaterThan(10);
   });
 
-  it.each(entries)("%s 的字段完整且值域合法", (_classType, cfg) => {
+  it.for(entries)("%s 的字段完整且值域合法", ([, cfg]) => {
     expect(cfg.label).not.toBe("");
     expect(cfg.color).toMatch(/^(#[0-9a-fA-F]{3,8}|var\(--[\w-]+\))$/);
     expect(cfg.width).toBeGreaterThan(0);
@@ -42,9 +42,9 @@ describe("NODE_TYPE_REGISTRY 的数据契约", () => {
     expect(Array.isArray(cfg.defaultFields)).toBe(true);
   });
 
-  it.each(entries)(
+  it.for(entries)(
     "%s 的 icon 是干净的符号（没有多余括号/破损码点）",
-    (_k, cfg) => {
+    ([, cfg]) => {
       expect(
         isCleanIcon(cfg.icon ?? ""),
         `icon=${JSON.stringify(cfg.icon)}`,
@@ -52,7 +52,7 @@ describe("NODE_TYPE_REGISTRY 的数据契约", () => {
     },
   );
 
-  it.each(entries)("%s 的 defaultFields 每项都有 key/label/type", (_k, cfg) => {
+  it.for(entries)("%s 的 defaultFields 每项都有 key/label/type", ([, cfg]) => {
     for (const f of cfg.defaultFields) {
       expect(f.key).not.toBe("");
       expect(f.label).not.toBe("");

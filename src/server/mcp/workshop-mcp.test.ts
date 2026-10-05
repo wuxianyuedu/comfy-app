@@ -160,25 +160,22 @@ describe("工坊 MCP 工具面", () => {
     expect(names.length).toBe(17);
   });
 
-  it.each(Object.keys(TOOL_CALLS))(
-    "%s 翻译到对应的服务端出口",
-    async (tool) => {
-      resetCalls();
-      const result = await client.callTool({
-        name: tool,
-        arguments: TOOL_CALLS[tool],
-      });
-      /* 判 `isError` 而不是匹配文案：MCP 的失败就标在信封上，读文案会把
-       * 「工具报错」与「用例假设错了」混成一团（这条断言把实际文本带进失败信息）。 */
-      expect(result.isError, textOf(result)).toBeFalsy();
-      const target = TOOL_TARGETS[tool];
-      const fn =
-        target === "saveComfySettings"
-          ? saveComfySettings
-          : orchestrator[target as keyof typeof orchestrator];
-      expect(fn).toHaveBeenCalledTimes(1);
-    },
-  );
+  it.for(Object.keys(TOOL_CALLS))("%s 翻译到对应的服务端出口", async (tool) => {
+    resetCalls();
+    const result = await client.callTool({
+      name: tool,
+      arguments: TOOL_CALLS[tool],
+    });
+    /* 判 `isError` 而不是匹配文案：MCP 的失败就标在信封上，读文案会把
+     * 「工具报错」与「用例假设错了」混成一团（这条断言把实际文本带进失败信息）。 */
+    expect(result.isError, textOf(result)).toBeFalsy();
+    const target = TOOL_TARGETS[tool];
+    const fn =
+      target === "saveComfySettings"
+        ? saveComfySettings
+        : orchestrator[target as keyof typeof orchestrator];
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
 
   it("set_characters 在边界上归一并补齐字段：单字符串标签收成数组、提示词由服务端重算", async () => {
     resetCalls();

@@ -260,7 +260,7 @@ describe("预检判据与 src/env.js 同口径", () => {
 describe("dev/start 在起 Next 之前预检", () => {
   const entries = ["scripts/dev.mjs", "scripts/start.mjs"];
 
-  it.each(entries)("%s 调用 exitIfEnvNotReady 且发生在 spawn 之前", (rel) => {
+  it.for(entries)("%s 调用 exitIfEnvNotReady 且发生在 spawn 之前", (rel) => {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
     expect(src).toContain(
       'import { exitIfEnvNotReady } from "./env-preflight.mjs"',
