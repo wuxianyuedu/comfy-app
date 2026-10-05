@@ -314,17 +314,43 @@ export function clearActiveIfDraft(pid: string): void {
   if (getActiveId() === pid) removeStorageItem(ACTIVE_KEY);
 }
 
+/* 「这条能不能回收」的唯一判据，「回收一条」与「清扫一批」共用它 ——
+ * 两份各写一遍时它们已经漂过一次（一处比名字与内容，另一处还多比一项），
+ * 而这里的每一项都是「删掉用户东西」的必要条件（§12.12：抽共享内核，
+ * 两边只留差异）。
+ *
+ * `pid` 是**当前活跃项目**时一律不可回收：用户此刻正站在里面。
+ * 这条是 ISSUE #1501 的根因 —— 首页「新建画布项目」走的 `createProject`
+ * 会立刻落一行「零节点零连线 + 名字 = 未命名」的索引，于是它**正好命中**
+ * 空草稿哨兵，刷新时被这里清掉、连带清掉 active-id，六个项目页签随之消失
+ *（`openableViews` 只在 active 非空时列它们）。而沉淀在 `project` 表里的
+ * 那几行 `未命名*` 也是同一件事的另一半：本机删了索引、服务端那份没人删。
+ *
+ * 注意区分两种「空」：`createDraftProject` 造的是**从不进索引**的草稿
+ *（这里根本没它），而 `createProject` 造的是**真的进了索引**的行 ——
+ * 清扫要对后者负责，但不能对「用户正在用的那一行」负责。 */
+function isReapableEmptyDraft(
+  project: CanvasProject,
+  activeId: string | null,
+): boolean {
+  if (project.id === activeId) return false;
+  if (project.name !== EMPTY_DRAFT_NAME) return false;
+  return (
+    (project.nodes?.length ?? 0) === 0 && (project.edges?.length ?? 0) === 0
+  );
+}
+
 /**
- * 当且仅当该项目是「空 + 默认名」时（见 `EMPTY_DRAFT_NAME`）从索引里移除它。
- * 确实回收了才返回 true。已命名 / 非空的项目**从不**被回收 ——
- * 于是用户特意命名成「空白灵感板」的空画布能在清回收中活下来。
+ * 当且仅当该项目是「空 + 默认名」且**不是当前活跃项目**时从索引里移除它
+ *（见 `EMPTY_DRAFT_NAME`）。确实回收了才返回 true。
+ * 已命名 / 非空的项目**从不**被回收 —— 于是用户特意命名成「空白灵感板」
+ * 的空画布能在清回收中活下来。
  */
 export function reapEmptyProject(pid: string): boolean {
   const all = readIndex();
   const p = all.find((all) => all.id === pid);
   if (!p) return false;
-  if (p.name !== EMPTY_DRAFT_NAME) return false;
-  if ((p.nodes?.length ?? 0) > 0 || (p.edges?.length ?? 0) > 0) return false;
+  if (!isReapableEmptyDraft(p, getActiveId())) return false;
   deleteProject(pid);
   return true;
 }
@@ -333,27 +359,36 @@ export function reapEmptyProject(pid: string): boolean {
  * 清扫项目索引里遗留的空草稿 —— 可能是旧版编辑器留下的，
  * 也可能是用户在本次修复前回访时留下的。返回移除的条数。
  * 画布挂载时调一次，首页挂载时再调一次。
+ *
+ * **当前活跃项目不在清扫范围内**（判据见 `isReapableEmptyDraft`）：
+ * 它是不是「空草稿」与「能不能删」是两件事 —— 用户刚从首页进来、
+ * 还什么都没做的那个项目确实是空的，但把它删掉等于把用户踢出上下文，
+ * 而 active-id 也就跟着没了（ISSUE #1501）。
  */
 export function reapAllEmptyDrafts(): number {
   const all = readIndex();
-  const survivors = all.filter(
-    (project) =>
-      project.name !== EMPTY_DRAFT_NAME ||
-      (project.nodes?.length ?? 0) > 0 ||
-      (project.edges?.length ?? 0) > 0,
+  const activeId = getActiveId();
+  /* 先按当前索引定下要清哪些（判据只算一次，避免边删边看时判据对象变了），
+   * 再**逐条走 `deleteProject`** —— 那是「本机删了、服务端那份也要删」的唯一
+   * 出口（`deleteProjectOnServer`）。此前这里直接 `writeIndex(survivors)` 就算
+   * 完事，于是**每一条被清扫的空草稿都在服务端留下永久的一行**：界面再也指不
+   * 回它（索引里没有它了），而 `project` 表里那几个 `未命名` / `未命名_2` /
+   * `未命名_3` 就是这么攒出来的（ISSUE #1501）。
+   * 逐条删的代价可以忽略：这是挂载时的一次性清扫，且删到最后就是空转。 */
+  const doomed = all.filter((project) =>
+    isReapableEmptyDraft(project, activeId),
   );
-  const removed = all.length - survivors.length;
-  if (removed > 0) {
-    writeIndex(survivors);
-    if (
-      getActiveId() &&
-      !survivors.some((survivor) => survivor.id === getActiveId())
-    ) {
-      removeStorageItem(ACTIVE_KEY);
-    }
-    emitChanged();
+  if (doomed.length === 0) return 0;
+  for (const project of doomed) deleteProject(project.id);
+  /* 活跃项目本身不在 `doomed` 里，所以走到这里它没被删。但 active-id 可能指向
+   * 一条**索引里根本没有的行**（它本来就是个 draft、或索引被外部清过）——
+   * 那种悬空 active 指向谁都不存在，留着只会让上层以为「我有项目」而六个
+   * 项目页签点进去全落空。是活跃项目就保留，否则清掉。 */
+  const survivors = readIndex();
+  if (activeId && !survivors.some((survivor) => survivor.id === activeId)) {
+    removeStorageItem(ACTIVE_KEY);
   }
-  return removed;
+  return doomed.length;
 }
 
 export function setActive(id: string): void {
