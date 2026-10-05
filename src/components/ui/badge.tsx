@@ -53,6 +53,17 @@ const badgeVariants = cva(
         default: undefined,
         sm: "h-auto rounded-md px-1.5 py-0.5 text-3xs",
         xs: "h-auto gap-0 rounded px-1 py-px text-[9px] leading-tight",
+        /* 胶囊形的小两档 —— 从调用点量出来的既有形状（此前 12 处各自手抄
+           `rounded-full px-1.5 py-0.5 text-3xs` 这类串，px 有 1.5 / 2 / 2.5 三种、
+           字号有 2xs / 3xs 两种，同一个角色三种写法）。base 已经是胶囊
+           （`rounded-4xl` 在 h-5 下就是全圆端），这两档只把高度与字号收小，
+           不再换圆角形状 —— 要方圆角用 `sm` / `xs`。
+           **`border-0` 是必需的，不是美化**：base 带 `border border-transparent`，
+           而透明边框**照样占布局** —— 实测同一串字，留 1px 透明边框高 21px、
+           改 `border-0` 高 19px。tone 只给边框色（`border-X/30`）不给宽度，
+           所以 `border-0` 不会被它顶回来，调用点也不必再写 `border-transparent`。 */
+        "pill-sm": "h-auto rounded-full border-0 px-1.5 py-0.5 text-3xs",
+        "pill-md": "h-auto rounded-full border-0 px-2 py-0.5 text-2xs",
       },
       /**
        * 语义色档（P67 治理 PR-4 新加，§4.11.1「映射表里的颜色也必须走语义

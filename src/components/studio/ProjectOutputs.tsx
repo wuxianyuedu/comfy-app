@@ -3,6 +3,7 @@
 import { subscribeAppEvent } from "~/lib/app-events";
 import { taskStatusLabel } from "~/lib/task-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Badge } from "~/components/ui/badge";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
@@ -165,9 +166,9 @@ export function ProjectOutputs() {
           <h1 className="font-title u-title-page">
             {activeProject?.name ?? "未命名项目"}
           </h1>
-          <span className="bg-primary/15 text-primary-strong text-2xs rounded-full px-2.5 py-0.5 font-medium">
+          <Badge tone="primary" size="pill-md">
             {outputs.length} 个产出
-          </span>
+          </Badge>
         </div>
         <div className="flex items-center gap-2">
           <SelectMenu

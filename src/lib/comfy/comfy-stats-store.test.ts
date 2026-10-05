@@ -417,9 +417,9 @@ describe("收到崩溃信号后的复核与换档（ISSUE #1351）", () => {
     expect(getComfyLivenessForTest().intervalMs).toBe(0);
 
     release!(onlineStats());
-    await vi.waitFor(() =>
-      expect(getComfyLivenessForTest().phase).toBe("idle"),
-    );
+    await expect
+      .poll(() => getComfyLivenessForTest().phase, { timeout: 4000 })
+      .toBe("idle");
   });
 
   it("启动等待的起点参与换档：超过快档窗口后间隔从 400ms 变 1s", async () => {

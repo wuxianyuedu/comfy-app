@@ -131,6 +131,13 @@ pnpm test:e2e
 - **优先用 `pnpm check:visual`**：它把像素档与「基线成套且入库」那条判据放在**同一次**运行里，
   并按三条实测形态给红的定性（缺本平台基线 / 逐帧 chrome / 像素 diff 各自的动作不同）。
   `pnpm test:visual` 仍在，但它的绿**证明不了**基线还在仓库里（两条判据是两次互不相干的运行）。
+- **本机没有基线时它不会白跑**：起 webServer / 浏览器之前先答「这台机器这一档有没有成套基线」，
+  没有就退出码 2 并点名缺哪几张、动作是什么（平台没登记 = 先录再同批登记；登记了但缺几张 = 补录）。
+  `pnpm check:visual --dry-run` 也会把这一问答出来（无副作用）。
+- ⚠️ **`--update` 不是唯一会写 PNG 的路**（这句是踩出来的）：Playwright 的 `updateSnapshots`
+  默认是 `'missing'`，缺的基线**不带任何开关也会被创建**。所以检查档显式带
+  `--update-snapshots=none`；看到工作区里多出没提交的 PNG 时，先想「本机是不是缺基线」，
+  而不是「谁动了基线」。
 - 用例放 `e2e/visual/*.visual.spec.ts`，命名带 `.visual` 便于单独筛选（跑哪一层就点名哪一层：
   `pnpm test:visual` 只跑像素基线，`pnpm test:e2e` 含 `e2e/visual`）。
 - 基线 PNG 与 spec 同目录（Playwright 默认 `*-snapshots/`），**提交入库**。
@@ -139,8 +146,11 @@ pnpm test:e2e
   `pnpm start` 口径，需先 `pnpm build`）两档。缺档时 Playwright 不是「跳过」而是判失败
   **并把新生成的 PNG 写进目录**，于是留下半套基线；判据见 `tests/visual-baseline-pairing.test.ts`
   （齐全 / 入库 / 无孤儿三头，登记在提交前的固定守护清单，并由 `scripts/visual-gate.mjs`
-  保证「改像素层的提交一定带着这条判决」）。**基线按 webServer 口径录**：dev 与 start 的
-  像素不同（dev 指示器那块 mask 目前遮不住），在某一档跑像素时 `CI` 的真假要与该档录制时一致。
+  保证「改像素层的提交一定带着这条判决」）。**这判据只在没登记过的机器上会绿**——它答的是
+  「仓库里那几套基线齐不齐」，不是「你正坐的这台能不能跑」；后者由上面那条前置判决答，
+  清点内核同源（`scripts/visual-baselines.mjs`），平台登记口径也在那里。
+  **基线按 webServer 口径录**：dev 与 start 的像素不同（dev 指示器那块 mask 目前遮不住），
+  在某一档跑像素时 `CI` 的真假要与该档录制时一致。
 - 要**新加/恢复一档平台**（例如某档已被删过）时，姿势固定是「在该档用**当前** spec
   `--update-snapshots` 重录成套 PNG + 同批把该平台加进 `SUPPORTED_PLATFORMS`」，
   **不是把旧 PNG 贴回来**（旧图录于别的界面形态，贴回去就是一份对不上现状的账）。

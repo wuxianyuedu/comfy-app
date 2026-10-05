@@ -84,9 +84,9 @@ afterAll(() => {
 });
 
 describe("两侧对同一组向量给出同一判决", () => {
-  it.each(vectors.map((v) => [v.raw, v.mode]))(
+  it.for(vectors.map((v) => [v.raw, v.mode]))(
     "COMFY_EXECUTOR=%j → 两侧同为 %s",
-    (raw, mode) => {
+    ([raw, mode]) => {
       const node = normalizeExecutorMode(raw);
       process.env[EXECUTOR_ENV_KEY] = raw;
       expect(resolveExecutorClaim()).toBe(node.mode);

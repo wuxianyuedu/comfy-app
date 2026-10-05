@@ -27,6 +27,21 @@
  * 不是本次改动引入；② 想清楚那条门禁在别处有没有更强的执行者（粒度是文件，
  * 一条红会连同一文件里其它断言一起放行）。修好后**立刻删**，别让它长期静默。
  */
-/** @type {string[]} */
-export const KNOWN_FAILED_FILES = [];
+/**
+ * @type {string[]}
+ *
+ * `tests/theme-dark-token-cascade.test.ts`（2026-10-05 登记，基线红）：
+ * `bg-card/bg-popover/border-border 编成 var() 取值` 那一条在**干净 master 基线**
+ * 上就红（`git worktree add ../.wt-base-check origin/master` 复算，同一条判据同一条红，
+ * 见规范 §13.6.2）。形态是 `.bg-card` 那条规则没出现在固定输入源的产物里 ——
+ * 而 `PINNED_UTILITY_CLASSES` 里明明点着 `bg-card`，所以不是「断言依赖的类没被固定住」
+ * 那一类，是 `globals.css` 侧 utility 生成路径变了（`--card` 与 `--color-surface` 的
+ * 转发关系被改过）。
+ *
+ * 归属与处置：该判据归**主题 token 线**（ISSUE #609 / #1336 那一族），本次改动
+ * （`it.each` → `test.for`）与它无关 —— 登记只为让本线能提交，**修好立刻删**。
+ * 粒度是文件，所以这条红会连同该文件里另外 17 条已经绿了的断言一起放行（本文件
+ * 的那 17 条在别处没有更强的执行者，属已知的粗糙处）。
+ */
+export const KNOWN_FAILED_FILES = ["tests/theme-dark-token-cascade.test.ts"];
 

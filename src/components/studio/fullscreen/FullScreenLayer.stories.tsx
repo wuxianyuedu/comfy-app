@@ -86,7 +86,7 @@ function ChromeFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-canvas-deep border-border-strong relative h-[26rem] w-full overflow-hidden rounded-xl border">
+    <div className="bg-canvas-deep border-border-strong relative h-104 w-full overflow-hidden rounded-xl border">
       {children}
       <div
         className={`bg-canvas border-border h-title-bar absolute inset-x-0 top-0 flex items-center gap-2 border-b px-3 ${Z_CHROME}`}

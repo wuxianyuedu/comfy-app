@@ -356,6 +356,33 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toEqual([]);
   });
 
+  it("序号圆那串类名只许有一个出处（IndexDot）", () => {
+    /* 抽取的防回潮半边：这串 `bg-primary-soft + grid + size-6/7 + rounded-full +
+       text-xs font-semibold` 曾在工坊五个文件里逐字抄了五份（§12.12 的孪生形态）。
+       现在它是 `~/components/workshop/IndexDot` 的实现细节 —— 再出现第二份就该
+       改用那个件，而不是再抄一遍类名。 */
+    const PARTS = [
+      /bg-primary-soft/,
+      /place-items-center/,
+      /rounded-full/,
+      /text-xs font-semibold/,
+      /\bsize-[67]\b/,
+    ];
+    const owners: string[] = [];
+    for (const abs of collectProductFiles(SRC_DIR)) {
+      const code = stripComments(readFileSync(abs, "utf8"));
+      /* 五个标记**全命中**才算同一枚圆 —— 少一个都不算（类名在源码里的先后顺序
+         不该成为判据的一部分：实现里 size-* 由三元式给、排在 rounded-full 之后）。 */
+      if (PARTS.every((re) => re.test(code))) {
+        owners.push(path.relative(ROOT_DIR, abs).split(path.sep).join("/"));
+      }
+    }
+    expect(
+      owners,
+      "序号圆的类名组合又出现了第二份出处 —— 用 ~/components/workshop/IndexDot",
+    ).toEqual(["src/components/workshop/IndexDot.tsx"]);
+  });
+
   it("负控制：三形状都真的能被抓（否则上面三条绿得没意义）", () => {
     const tierPx = renderedRadiusValues(
       parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8")),

@@ -523,11 +523,34 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 | 卡片 | `ui/card.tsx` | `bg-card` + `ring-foreground/10` + `rounded-xl` + `--card-spacing` 两档 |
 | 状态徽标 | `ui/status-badge.tsx`（配色唯一出处）+ `ui/status-dot.tsx`（圆点） | **文案留在调用处**（同一状态在不同界面叫法不同，那是业务文案）。此前七个文件各写一份状态→配色表，同一个「已完成」有三种深浅 |
 | 侧栏导航 | `--color-nav-hover` / `--color-nav-selected`（别名 `--sidebar-accent` / `--sidebar-selected`） | **悬停与选中必须是两档**（浅 1.14:1 / 1.42:1，深 1.35:1 / 1.88:1，相对各自的 `--color-panel-deep` 底）。共用一档 = 结构上不可分辨 |
-| chip/药丸 | `.u-chip` | `rounded-full` + border hairline + 常态 `--color-ink-muted` 字，hover 才转品牌混色边框 |
+| chip/药丸 | `ui/badge.tsx`（`size="pill-sm" / "pill-md"`） | **`.u-chip` 是死类**（零消费者，见 Known Gaps），别当规范用。胶囊徽标的形状与语义色都在 Badge 的三轴里；两档 pill 自带 `border-0`（tone 只给边框色不给宽度），调用点无需再写描边出口 |
 | 标题指示条 | `.detail-tab-trigger::after` | 品牌双色渐变 `linear-gradient(--color-primary → --color-accent)`；换基元后颜色只有一个出口 |
 | seed 模式图标 | `ui/seed-mode-button.tsx` + `--color-seed-*` | **类型色**：红=固定、绿=增减、骰子=随机。被 SVG `fill=`/`stroke=` 直接引用，变量缺失时 fill 退黑、stroke 退 none，箭头**整条消失且无报错** |
 | 骨架 | `ui/skeleton.tsx` | `bg-muted animate-pulse rounded-md` |
 | 装饰光晕 | `AuroraGlow`（`ui/aurora-background.tsx`） | 色相走 `--color-aurora-*`，**强度由调用处 `alpha` 决定**；`tone` 选色相、`alpha` 定强度，同一装饰不在多处内联重复 |
+
+### 徽标家族：一个基座、三轴、两档胶囊，以及**不是徽标**的那几类
+
+`ui/badge.tsx` 是三轴独立的 cva：`variant`（6 档基线）× `size`（`default` / `sm` / `xs` / **`pill-sm`** / **`pill-md`**）× `tone`（`success` / `warning` / `danger` / `primary` / `neutral`）。`sm` / `xs` 是 P67 治理时加的方圆两档；`pill-*` 是本轮从调用点量出来的胶囊两档（`pill-sm` = `h-auto rounded-full px-1.5 py-0.5 text-3xs`，`pill-md` = 同形但 `px-2 text-2xs`）。
+
+本轮把 **12 处**手抄胶囊迁到基座上（`LlmLocalSection` 已覆盖/推荐、`MessageCenterPanel` 新、`NodesTab` 只读/有更新、`WorkshopEncapsulationPanel` 已配置/未配置、`WorkflowRunLogModal` 来源、`CanvasSettingsPanel` v1、`HistoryPanel` 进行中、`ProjectOutputs` 产出数、`VideoQueueModal` 进行中数）。**颜色归到 tone 表**是签过的口径，实测代价与收益都要如实记下：
+
+- 底色从 α `/15`、`/18`、`/20`、`/30` 统一成 tone 表的 `/10` ⇒ 背景**变浅一档**（品牌紫合成后亮度差约 21–29%），部分字色从 `text-primary` / `text-warning` 换成 `-strong` 档（更深）。`LlmLocalSection` 的「推荐」与 `CanvasSettingsPanel` 的「v1」本来就与 tone 表同值 ⇒ 那两处零变化。
+- **顺带修掉一处不达标的对比度**：`WorkflowRunLogModal` 的来源标签原是 `text-ink-faint`(#a1a1aa) 落在 `bg-subtle`(#f7f8fa) 上，算出来 **2.41:1** —— 连大字号 3:1 都不过；neutral tone 给的 `text-ink-muted`(#6b6b76) 是 **4.95:1**，过 AA 正文。
+- 描边这条我第一版写错了、实测纠正：**`border-transparent` 只去掉颜色，1px 透明边框照样占布局**（同一串字实测 21px vs 19px）。所以两档 pill 自带 `border-0` —— tone 只给边框色（`border-X/30`）不给宽度，`border-0` 不会被顶回来，调用点也不必再写 `border-transparent`。
+- **高度会涨，这是 `inline-flex` 的固有代价，实测数字如下**：`pill-sm` 对旧的 `py-0.5` 站点 **+2px**（17→19px，宽度不变）；`pill-md` 对 `px-2.5` 站点高 **+2.5px**、宽 −4px；两处原本 `py-px` 的极紧站点（`CanvasSettingsPanel` 的 v1、`WorkflowRunLogModal` 的来源标签）**+6px**（13→19px）。那 13px 来自 inline 盒的行盒算法，Badge 是 `inline-flex`，盒子压不到行盒以下 —— 试过补第三档 `pill-xs`（`py-px`）也只能到 17px，为 2 个站点加第 6 档不值，故不补。⚠️ 行会不会跟着变高取决于该行最高的元素，这两处需要人眼看一次（本轮无法带数据复现那两个界面）。
+
+**明确排除的五类**（分诊实测，别当「漏改」清掉）：
+
+| 类别 | 处数 | 为什么不是徽标 |
+| --- | --- | --- |
+| 纯数字角标（`{count}`、`{n}`、tabular-nums） | 7 | 是**计数器**，形状随容器（有的 `px-1` 无 `py`、有的 `min-w-3.5` 圆形）；`SectionHeader.tsx:23` 与 `GroupedControls.tsx:101` 两处类名**逐字相同** = 孪生，该抽自己的基元而不是塞进 Badge |
+| 序号圆 / 图标圆（`size-6`/`size-7` + `grid place-items-center`） | 6 | 等宽高圆形 + 单个字符或图标，`Workshop` 四个文件里类名逐字相同 = 另一个孪生家族，需要自己的 `StepDot` 类基元。**needs-design-decision** |
+| 媒体/画布上的浮层字幕（`bg-black/60 … backdrop-blur`、`pointer-events-none absolute`） | 3 | 是叠在图上的字幕条，不参与文档流 |
+| 可点 chip（带 `hover:` / `onClick` / `<Button>`） | 6 | 交互控件，归 Button/选择器家族 |
+| `avatar` 兜底圆形 | 1 | 组件内部实现 |
+
+> 一处特别值得记的排除：`DetailHeader.tsx:147` 的标签用 `ring-1 ring-inset` 而不是 `border`，**代码注释写明是故意的**（「box-shadow 不参与布局，视觉上仍是那圈浅描边」）。Badge 的 tone 带真边框，迁过去会把它刻意避开的布局位移请回来 —— 这种站点看到「形状像徽标」就改就是错的。
 
 ### 基元的三条自身纪律（都在规范里，都在事故里）
 

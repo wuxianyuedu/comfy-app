@@ -57,7 +57,7 @@ function HintSample({
 }) {
   const issues = auditDraftElements(draft);
   return (
-    <div className="w-[42rem]">
+    <div className="w-2xl">
       <DraftIntegrityHint issues={issues} onGoTo={() => undefined} />
       <p className="text-ink-muted mt-2 font-mono text-[11px]">
         判据算出 {issues.length} 处问题 · 跳转目标由第一条元素的种类决定
