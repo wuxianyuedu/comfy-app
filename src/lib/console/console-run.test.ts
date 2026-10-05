@@ -89,10 +89,13 @@ describe("createConsoleRunner", () => {
       },
       () => undefined,
     );
-    // 让 spawn 落地
-    await new Promise((r) => setTimeout(r, 200));
+    /* 等 spawn 落地、`busy()` 认下这条 run —— 不用「睡 200ms 再赌它起来了」：
+     * `expect.poll` 不成立时会打出每次读到的实际值（这里是 `null`），
+     * 「压根没登记」和「登记晚了」在报错里分得开。 */
+    await expect
+      .poll(() => runner.busy()?.runId, { timeout: 4000 })
+      .toBe("slow");
     const busy = runner.busy();
-    expect(busy?.runId).toBe("slow");
     expect(busy?.command).toBe("node -e sleep");
     await runner.cancel();
     await done;
@@ -113,7 +116,10 @@ describe("createConsoleRunner", () => {
       },
       (event) => events.push(event),
     );
-    await new Promise((r) => setTimeout(r, 300));
+    /* 等进程真的起来再取消：取消一个还没 spawn 的 runner 测的是别的分支。 */
+    await expect
+      .poll(() => runner.busy() !== null, { timeout: 4000 })
+      .toBe(true);
     expect(await runner.cancel()).toBe(true);
     const result = await done;
     expect(result.killed).toBe(true);
@@ -148,21 +154,26 @@ describe("createConsoleRunner", () => {
         if (m) grandchildPid = Number(m[1]);
       },
     );
-    // 等孙进程 PID 出来（最多 5s）
-    for (let i = 0; i < 50 && !grandchildPid; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    expect(grandchildPid).toBeGreaterThan(0);
+    /* 等孙进程的 PID 从 stdout 里出来（最多 5s）。 */
+    await expect
+      .poll(() => grandchildPid, {
+        timeout: 5000,
+        interval: 100,
+        message: "父进程始终没把孙进程 PID 打到 stdout",
+      })
+      .toBeGreaterThan(0);
     expect(isAlive(grandchildPid)).toBe(true);
     await runner.cancel();
     await done;
-    // 回收是异步派发（taskkill / signal），给一点时间并轮询确认。
-    let alive = true;
-    for (let i = 0; i < 40 && alive; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-      alive = isAlive(grandchildPid);
-    }
-    expect(alive, `孙进程 ${grandchildPid} 未被回收`).toBe(false);
+    /* 回收是异步派发（taskkill / signal），轮询确认孙进程消失。
+     * 失败时这句话打出的是那个还活着的 PID —— 孤儿本身。 */
+    await expect
+      .poll(() => isAlive(grandchildPid), {
+        timeout: 4000,
+        interval: 100,
+        message: `孙进程未被回收（残留 PID 见下）`,
+      })
+      .toBe(false);
   }, 30_000);
 
   it("输出超过上限即停发并带截断说明（命令继续跑完）", async () => {

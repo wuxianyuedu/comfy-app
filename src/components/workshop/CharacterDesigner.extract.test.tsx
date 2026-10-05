@@ -64,10 +64,12 @@ describe("CharacterDesigner 提取后回写角色列表", () => {
     // 触发「从剧本提取角色」区块的「提取」按钮（默认本地模型通道）
     fireEvent.click(screen.getByRole("button", { name: "提取" }));
 
-    // 提取为异步流程（streamChat → parse → merge 之后才合并），用 waitFor 等待
-    await vi.waitFor(() => {
-      expect(onCharactersChange).toHaveBeenCalled();
-    });
+    /* 提取为异步流程（streamChat → parse → merge 之后才合并）。
+       用 `expect.poll` 等它落地：失败时它打出每次读到的实际值
+       （这里就是「回调被调用了几次」），而不是 `vi.waitFor` 那句
+       「断言一直不成立，超时了」——后者在「根本没调」与「调得太晚」之间
+       给不出区分。 */
+    await expect.poll(() => onCharactersChange.mock.calls.length).toBe(1);
 
     const listArg = onCharactersChange.mock.calls[0]?.[0] as
       Character[] | undefined;
