@@ -20,7 +20,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Edge } from "@xyflow/react";
 
-import { subscribeAppEvent } from "~/lib/app-events";
 import type { CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 import {
   clearActiveIfDraft,
@@ -28,8 +27,7 @@ import {
   reapEmptyProject,
   upsertProject,
 } from "~/lib/project-canvas/canvas-store";
-import { listSyncNotices } from "~/lib/project-canvas/sync-notice";
-import { useToast } from "../../ToastProvider";
+import { useSyncRefusalNotice } from "./use-sync-refusal-notice";
 
 export interface UseProjectPersistenceParams {
   projectId: string | null;
@@ -38,53 +36,6 @@ export interface UseProjectPersistenceParams {
   projectName: string;
   /** 项目是否已完成首次加载（!hydrating）；false 时不触发持久化。 */
   loaded: boolean;
-}
-
-/**
- * 拒收提示的停留时间（毫秒）。默认的 3.2s 是给「已经保存」这类回执用的；
- * 这一句是**要照着做的**（画布只在本地存住了，得改名字或换 id），
- * 所以按 `useToast` 里 `duration` 那个参数的口径给一档长的。
- */
-const REFUSAL_TOAST_MS = 12_000;
-
-/**
- * 「这份画布没能进服务端」的用户可见出口。
- *
- * 两条通道都要，缺一不可：
- *   · **挂载时先读一次状态** —— 写镜像的入口不止这一页：工作区首页的「新建项目」、
- *     `ProjectGate` 的重名新建、作品画廊的删除都会发镜像，而那些页面上没有提示器。
- *     那一次广播发出去没人接（本模块的事件不排队重放），只订阅不读表的写法
- *     会让它**永远看不见** —— 会在这里红，而不是等用户换端口发现画布是空的。
- *   · **订阅后续变化** —— 用户在画布上改动触发的自动保存，拒收发生在挂载之后。
- *
- * 提示按「同一条画布的同一句原因」去重：自动保存每 500ms 就会再撞一次，
- * 不去重会把界面刷成一串同样的 toast；而**原因变了**（改了名字之后变成另一条
- * 拒收理由）要重新说一次，所以去重的键带上文案而不是只带 id。
- */
-function useSyncRefusalNotice(): void {
-  const toast = useToast();
-  /** 已经提示过的「画布 + 原因」，用于去重。 */
-  const shown = useRef<string[]>([]);
-
-  useEffect(() => {
-    const flush = () => {
-      for (const notice of listSyncNotices()) {
-        /* 键用 JSON 而不是分隔符拼接：项目名与原因文案都可能含任意字符，
-         * 拼出来的键会碰撞（`a|b` 与 `a|`+`b` 同形）——那是「两条不同拒收
-         * 只提示一条」这种很难复现的表现。 */
-        const key = JSON.stringify([notice.projectId, notice.detail]);
-        if (shown.current.includes(key)) continue;
-        shown.current = [...shown.current, key];
-        toast.error(
-          `画布「${notice.projectName}」没有同步到服务端`,
-          notice.detail,
-          REFUSAL_TOAST_MS,
-        );
-      }
-    };
-    flush();
-    return subscribeAppEvent("comfyapp:canvas-sync-changed", flush);
-  }, [toast]);
 }
 
 export function useProjectPersistence({
