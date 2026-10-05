@@ -163,6 +163,28 @@ function gateChainScripts() {
 }
 
 /**
+ * 「步骤位置」口径的**反向判据**：只作散文举例 / 被 import 的脚本不算判据。
+ *
+ * 为什么这条要住在脚本里而不是只住用例里：口径的退化（读全文而不是读步骤行）
+ * **不会**让任何别的判定变红 —— 份数从 46 涨到 49，而涨出来的三份本来就「有执行者」
+ * （它们在门禁链里被别的行提到），于是 `--report` 的「无执行者」那两栏一个字都不变。
+ * 实测：把 `gateChainScripts()` 第一段换成读钩子全文，用例里比总数、比名字**都不响**。
+ * 所以必须在**判据自己算出来的那张表**上反查 —— 那是唯一看得见这个差异的地方。
+ *
+ * 名单是实测来的（散文占位符 + 被 import / 被别的步骤行提到的执行器，见
+ * `tests/gate-executors.test.ts` 的同名用例）。**只作断言、不参与过滤**：
+ * 真实口径是「读步骤行」，这张名单只是它的一面镜子。
+ */
+const PROSE_ONLY_SCRIPTS = [
+  "x.cjs", // 散文里的占位符举例
+  "xxx.cjs",
+  "affected-tests.mjs", // 清单库（C 组的执行器，不是判据）
+  "install-git-hooks.mjs", // postinstall（被注释提到）
+  "run-affected-tests.mjs", // C 组的测试启动器
+  "quality-gate-shared.mjs", // 被 import 的共享常量
+];
+
+/**
  * 是否属于扫描面：**被门禁链调用**（事实）或**名字在前缀族里**（兜底）。
  * @param {string} name
  * @param {Set<string>} chain
@@ -290,6 +312,23 @@ const names = fs
   .filter((e) => e.isFile() && isGateScript(e.name, chainScripts))
   .map((e) => e.name)
   .sort();
+
+/* 扫描面自检放在最前：口径退化成读全文时，下面每一处判定都会**照常通过**
+ * （多出来的那几份本来就「有执行者」），只有这一句看得见它。 */
+{
+  const chain = gateChainScripts();
+  const leaks = PROSE_ONLY_SCRIPTS.filter((n) => isGateScript(n, chain));
+  if (leaks.length > 0) {
+    console.error(
+      `[gate-executors] 扫描面退化了：${leaks.join("、")} 被打进判据表 ——\n` +
+        '  口径是「只读门禁链的**步骤行**」（钩子的 `  run "…" <命令>`、\n' +
+        "  `quality-gate.mjs` 的 `args:` 表项、`quality-gate.ps1` 的 `$Blocks`），\n" +
+        "  不是「读那几份文件的全文」—— 全文会把散文里的占位符举例与被 import 的\n" +
+        "  执行器一起收进来。见 §13.5.12 与 `gateChainScripts()` 的注释。\n",
+    );
+    process.exit(1);
+  }
+}
 
 const problems = [];
 const report = { judgeWithExecutor: [], judgeOrphaned: [], reportClaiming: [] };
