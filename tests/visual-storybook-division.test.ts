@@ -117,12 +117,21 @@ describe("组件级视觉 ⇄ 页面级视觉的分工（§11.8 / #1381）", () 
     }
   });
 
-  it("§11.8 声明的基线范围档档有落点（深浅两态 / 断点 / 空态）", () => {
+  it("§11.8 声明的基线范围档档有落点（深浅两态 / 断点 / 空态 / 画布 / 浮层尺寸）", () => {
     /* 判的是「这一档有没有人管」，不是「录了 == 这一档就对」——后者只有人看基线时判得了。
-     * 三档各自的最小落点形状：
+     * 五档各自的最小落点形状：
      *   · 深浅两态：同一个截图名要有 light 与默认（dark）两份，或 spec 里显式切两档；
      *   · 响应式断点：一处用移动端设备描述符开上下文；
-     *   · 空态：一路把某个空列表 / 空集合钉住的桩（或「空态」字样出现在用例名里）。 */
+     *   · 空态：一路把某个空列表 / 空集合钉住的桩（或「空态」字样出现在用例名里）；
+     *   · xyflow 画布：一处对着 `.react-flow__viewport` 判视口（这条最要紧 —— 不判视口
+     *     的画布截图**照样出得来**，只是逐次不同，红成一张对不上的 diff 而看不出原因）；
+     *   · 弹窗/浮层尺寸：一处量浮层本体的宽度（ISSUE #720 的静默失效正是「宽度没变」，
+     *     只截图的话像素 diff 会说「图不一样」，指不出是尺寸这件事）。
+     *
+     * ⚠️ **后两档是本轮（`canvas.visual.spec.ts` / `overlay.visual.spec.ts`）补上的**：
+     * 在它们之前 §11.8 的「当前落点」表里这两格写着「待补」，而**判据只判前三档** ——
+     * 也就是说这两档根本没被守着，落点表里那两行全靠人记得。这里把清单补齐，
+     * 删掉任一份 spec 都会当场红。 */
     const specs = visualSpecs();
     const allText = specs.map((s) => s.text).join("\n");
     const allNames = specs.flatMap((s) => s.names);
@@ -140,6 +149,20 @@ describe("组件级视觉 ⇄ 页面级视觉的分工（§11.8 / #1381）", () 
     expect(
       allNames.some((n) => n.includes("empty")),
       "空态/空画布提示：`e2e/visual` 里没有任何空态基线（§11.8 基线范围点名了这一档）",
+    ).toBe(true);
+
+    expect(
+      allText.includes(".react-flow__viewport"),
+      "xyflow 画布：没有任何 spec 判 React Flow 的视口 —— " +
+        "不钉视口的画布基线逐次不同，而它照样出得来（§11.8）",
+    ).toBe(true);
+
+    /* 「量过浮层本体的宽度」在落点上就是 `widthOf()` 这个探针（`boundingBox()` 的
+     * 薄封装）—— 判它比判一个宽泛的正则稳：后者会被注释里的一句话骗过去。 */
+    expect(
+      allText.includes("widthOf("),
+      "弹窗/浮层尺寸：没有任何 spec 量浮层本体的宽度 —— " +
+        "ISSUE #720 的静默失效正是「加宽按钮按了、宽度一个字没变」，只截图指不出是尺寸这件事",
     ).toBe(true);
   });
 
@@ -160,6 +183,18 @@ describe("组件级视觉 ⇄ 页面级视觉的分工（§11.8 / #1381）", () 
       true,
     );
     expect(/^(chromatic)$/.test("chromatic")).toBe(true);
+    /* 本轮新加的两档判据同样反向自证：真的认得那种写法（正例命中、反例不命中）。
+     * 少了这一段，两条新断言写错了（比如正则打错）也是恒绿。 */
+    expect(
+      "await page.locator('.react-flow__viewport')".includes(
+        ".react-flow__viewport",
+      ),
+    ).toBe(true);
+    expect(
+      "await page.locator('.react-flow__pane')".includes(".react-flow__viewport"),
+    ).toBe(false);
+    expect("await widthOf(panel)".includes("widthOf(")).toBe(true);
+    expect("await panel.boundingBox()".includes("widthOf(")).toBe(false);
     expect(visualSpecs().length).toBeGreaterThan(0);
   });
 });
