@@ -125,7 +125,7 @@ function ResumeProjectCard({
       variant="ghost"
       onClick={() => onOpen(proj)}
       aria-label={`继续编辑 ${proj.name}`}
-      className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 mt-6 flex h-auto w-full items-stretch gap-4 rounded-[18px] border p-4 text-left font-normal active:scale-[0.995]"
+      className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 mt-6 flex h-auto w-full items-stretch gap-4 rounded-xl border p-4 text-left font-normal active:scale-[0.995]"
     >
       {/* 左：缩略图条；一张图都没有时落回类别图标块（不留空洞） */}
       <div className="flex w-42 shrink-0 gap-1.5 overflow-hidden rounded-xl">
