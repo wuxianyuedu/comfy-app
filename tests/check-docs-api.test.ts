@@ -97,7 +97,15 @@ describe("walk：不穿符号链接", () => {
     writeFileSync(path.join(root, "sub", "b.html"), "b");
     const outside = tempDir("docs-api-outside-");
     writeFileSync(path.join(outside, "secret.html"), "s");
-    symlinkSync(outside, path.join(root, "link"));
+    /* Windows 上普通 symlink 需要特权（实测 EPERM：没开开发者模式的机器上这条
+       判据根本跑不起来）。junction 不需要，且实测 Node 24 的 `Dirent.isSymbolicLink()`
+       对 junction 返回 true、`isDirectory()` 返回 false —— 也就是说「遍历器不许穿过
+       链接」这条性质照旧被检验，不必为了平台降级成 skip。 */
+    symlinkSync(
+      outside,
+      path.join(root, "link"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
 
     const files = [...walk(root).keys()].sort();
     expect(files).toEqual(["a.html", "sub/b.html"]);
