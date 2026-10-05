@@ -25,7 +25,7 @@ const TONES: BadgeTone[] = [
   "primary",
   "neutral",
 ];
-const SIZES: BadgeSize[] = ["default", "sm", "xs"];
+const SIZES: BadgeSize[] = ["default", "sm", "xs", "pill-sm", "pill-md"];
 
 const meta = {
   title: "UI/Badge",

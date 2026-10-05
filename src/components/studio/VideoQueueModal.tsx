@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { textHandler } from "~/lib/form-props";
 import { Trash, X } from "lucide-react";
+import { Badge } from "~/components/ui/badge";
 import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
@@ -179,9 +180,9 @@ export function VideoQueueModal({
             <div className="flex items-center gap-3">
               <h3 className="u-title">视频生成队列</h3>
               {runningCount > 0 && (
-                <span className="bg-warning/15 text-warning-strong text-2xs rounded-full px-2 py-0.5">
+                <Badge tone="warning" size="pill-md">
                   {runningCount} 个进行中
-                </span>
+                </Badge>
               )}
               <Hint label="刷新">
                 <Button
