@@ -428,6 +428,92 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
   });
 });
 
+describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", () => {
+  /** 四个写方。（读方在端点侧，不在这里列。） */
+  const WRITERS = [
+    "src/lib/comfyui/lifecycle.ts",
+    "src/lib/drizzle-studio/lifecycle.ts",
+    "src/app/api/llm/ollama-start/route.ts",
+    "src/app/api/llm/ollama-stop/route.ts",
+    "src/lib/log/app-runtime-log.ts",
+  ];
+
+  it("没有任何写方再用固定名常量（它们已从 log-paths 撤掉）", () => {
+    for (const rel of WRITERS) {
+      const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+      for (const dead of [
+        "COMFYUI_RUNTIME_LOG",
+        "OLLAMA_RUNTIME_LOG",
+        "DRIZZLE_STUDIO_RUNTIME_LOG",
+        "APP_RUNTIME_LOG",
+      ]) {
+        expect(src.includes(dead), `${rel} 仍引 ${dead}`).toBe(false);
+      }
+    }
+  });
+
+  it("写方一律经 runtime-log-pack 拿「本次该写哪一份」，不自己拼名字", () => {
+    /* 这条是**给下一个人**的：新增一个 runtime 写方时忘了走这一层，表现是
+     * 那个来源的文件名不符合 `<来源>-<时刻>.log`，于是在面板的下拉里凭空少掉
+     * —— 静默、只在真实运行里才露头。 */
+    for (const rel of WRITERS) {
+      const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+      expect(
+        src.includes("runtime-log-pack.server"),
+        `${rel} 没经 runtime-log-pack 落盘`,
+      ).toBe(true);
+    }
+  });
+
+  /** 源码里的**代码**部分（剥掉注释）：判据只看「还在不在用」，不看解释文字。
+   *
+   * 不剥注释的话，一段「这里曾经有 X、现在没有」的迁移说明会把判据判红 ——
+   * 而那正是本仓库要求写的东西（§12.4.2 禁止的是日期/编号式的历史流水，不是
+   * 「为什么改」）。 */
+  function code(name: string): string {
+    return name.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  }
+
+  it("log-paths 里不再有那四个固定名常量（一次启动一份，没有单一文件可指）", () => {
+    const src = code(
+      fs.readFileSync(path.join(ROOT, "src/lib/log/log-paths.ts"), "utf8"),
+    );
+    for (const dead of [
+      "COMFYUI_RUNTIME_LOG",
+      "OLLAMA_RUNTIME_LOG",
+      "DRIZZLE_STUDIO_RUNTIME_LOG",
+      "APP_RUNTIME_LOG",
+      "RUNTIME_LOG_FILES",
+    ]) {
+      expect(src.includes(dead), `log-paths 仍导出 ${dead}`).toBe(false);
+    }
+  });
+
+  it("会话横幅的写侧已从这四份日志上撤掉（一次启动一份之后它没有读侧）", () => {
+    /* 横幅当初存在是为了「一份文件里多次启动的行要能分清边界」。文件名本身
+     * 承担这件事之后，写它等于往没人读的地方写字（§12.15 第二条）。
+     *
+     * 连 `session-banner.server.ts` 本身也一并删了：它现在**零消费方**，
+     * 留着会让下一个人以为「横幅仍是有效口径」。 */
+    expect(
+      fs.existsSync(path.join(ROOT, "src/lib/session-banner.server.ts")),
+    ).toBe(false);
+    for (const rel of [
+      "src/lib/comfyui/lifecycle.ts",
+      "src/lib/drizzle-studio/lifecycle.ts",
+      "src/lib/log/capture-streams.server.ts",
+      "src/app/api/llm/ollama-start/route.ts",
+      "src/app/api/llm/ollama-stop/route.ts",
+    ]) {
+      const src = code(fs.readFileSync(path.join(ROOT, rel), "utf8"));
+      expect(
+        src.includes("session-banner"),
+        `${rel} 仍在往 runtime 日志写会话横幅`,
+      ).toBe(false);
+    }
+  });
+});
+
 describe("旧归档机制已移除（只留一处归档实现）", () => {
   it("dev-launcher 收尾只有 archiveCurrent，没有第二份年月归档", () => {
     const src = fs.readFileSync(

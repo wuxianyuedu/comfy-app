@@ -7,12 +7,13 @@
  * 追加 / 替换 → 解析 ANSI → 启动期间每秒轮询」的实现，只有来源与解析器不同
  * （判据见规范 12 §12.12：跨文件复制的同一段逻辑会各自漂移）。这里收成一处：
  *
- *   - 数据来自 `GET /api/logs/sessions`（按**每一次运行**切分，判据见
- *     `lib/log/log-run-sessions`），一次请求同时拿到**运行列表**与**选中那一次的
- *     正文** —— 界面因此能提供「切到哪一次运行」的下拉，而不用把整份日志读进
- *     浏览器。列表是「本次运行 + `log/runs/` 各历史包」：应用重启过的那几次也
- *     在其中，而不只是「这个文件里还没被冲掉的段落」（ISSUE #1326）；
+ *   - 数据来自 `GET /api/logs/sessions`（按**每一次启动**列文件，判据见
+ *     `lib/log/runtime-log-file`），一次请求同时拿到**启动列表**与**选中那一次的
+ *     正文** —— 界面因此能提供「切到哪一次启动」的下拉，而不用把整份日志读进
+ *     浏览器。那四份 runtime 日志现在是**一次启动一份文件**（ISSUE #1326）：
  *   - 挂载、切换会话、点「刷新」都会重新取一次；`active`（正在启动）时每秒跟随；
+ *     ComfyUI 被重启三次就有三份文件，切过去看的是**那一份整份**，不再需要任何
+ *     切分判据；
  *   - 轮询回调只读 ref 里的选中项，不因用户切换下拉而重建定时器。
  */
 
@@ -48,15 +49,17 @@ export interface RuntimeLogSourceState {
   sessions: LogSessionMeta[];
   /** 当前选中会话的 id；没有日志文件时为 null。 */
   sessionId: string | null;
-  /** 选中会话的正文被服务端截断（界面提示「只看得到最近一段」）。 */
+  /** 选中那一份的正文被服务端截断（界面提示「只看得到最近一段」）。 */
   truncated: boolean;
-  /** 日志文件过大、服务端只扫了尾部窗口（界面提示「更早的启动不在列表里」）。 */
+  /** 该份日志过大、服务端只扫了尾部窗口（界面提示「这次启动只显示了一段」）。 */
   windowed: boolean;
   /**
-   * 这次运行之前那一包已被保留策略清理 —— 正文里含**更早运行**的内容。
-   * 界面必须说出来（硬规则 4）：不说的话用户会把上一轮的输出当成这一轮的。
+   * 这个来源一共有几份启动日志（不受下拉上限影响）。
+   *
+   * 界面据此说明「更早的启动不在列表里」（硬规则 4：必须有用户可见出口）——
+   * 一次启动一份文件之后，同一天可能攒几十份，不说的话用户会以为「只启动过这些次」。
    */
-  baselineMissing: boolean;
+  total: number;
   /** 切到指定会话并立即重新拉取。 */
   selectSession: (id: string) => void;
   /** 重新拉取当前会话（「刷新」按钮）。 */
@@ -73,7 +76,7 @@ interface Snapshot {
   sessionId: string | null;
   truncated: boolean;
   windowed: boolean;
-  baselineMissing: boolean;
+  total: number;
 }
 
 const EMPTY_SNAPSHOT: Snapshot = {
@@ -83,7 +86,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
   sessionId: null,
   truncated: false,
   windowed: false,
-  baselineMissing: false,
+  total: 0,
 };
 
 /** 解析结果按上限取尾部（与「只看最新一段」的口径一致）。 */
@@ -150,7 +153,7 @@ export function useRuntimeLogSource({
       sessionId: slice.selectedId,
       truncated: slice.truncated,
       windowed: slice.windowed,
-      baselineMissing: slice.baselineMissing,
+      total: slice.total,
     });
   }, [source, parse]);
 

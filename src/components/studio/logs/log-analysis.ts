@@ -563,14 +563,26 @@ export function lastSeqOf(logs: LogEntry[]): number {
  * 哪些来源的文件**跨运行累积**，因此需要会话起点把它们裁到本次运行。
  *
  * 这是客户端与服务端共享的一条事实（服务端 `resumable` 分支从同一原则推导），
- * 所以单独列出来而不是散在判据里：
- *   - `app-runtime`：**追加写、不轮转**，文件里混着前几次运行的行——只能靠
- *     行时刻裁（见 §7.14）；
- *   - `app`（nextjs-panel-<pid>-<ts>.log）：文件名按进程命名，但服务端取的是
- *     「目录里最新的那一份」，在本次进程还没落盘时会**读到上一个进程的文件**，
- *     因此同样要裁；
+ * 所以单独列出来而不是散在判据里。四个来源现在**都不需要裁**：
+ *   - `app-runtime`：**一次启动一份文件**（`app-runtime-<时刻>.log`，ISSUE #1326），
+ *     文件内容天生只有本次；
+ *   - `app`（nextjs-panel-<pid>-<ts>.log）：文件名按进程命名，服务端取「目录里最新
+ *     的那一份」；本次进程还没落盘时确实可能读到上一个进程的文件，但那份文件里
+ *     的行属于**上一次应用启动**、时刻早于本次会话起点这件事由 `bootId` 的重启
+ *     判据（`/api/logs/current` 的 `mismatch`）处理，比行时刻更准；
  *   - `launcher`（dev-launcher-stderr.log）/ `dev`（dev-launcher.log）：
- *     每次运行**覆盖重建**，文件内容天然只有本次——它们**不需要**裁。
+ *     每次运行**覆盖重建**，文件内容天然只有本次。
+ *
+ * ## ISSUE #1326 之后这个集合空了（机制保留）
+ *
+ * `app-runtime` 曾经是这里唯一的成员：它固定名追加不轮转，上一次运行的行全留在
+ * 同一个文件里，只能靠「行时刻 ≥ 会话起点」把它挡在面板外。现在它**一次启动一份
+ * 文件**（`app-runtime-<时刻>.log`），`app`（应用服务输出转录）也一直是按进程
+ * 命名 —— 两个来源的文件天生只含本次，裁剪不再需要。
+ *
+ * 机制本身留着（`dropStaleEntries` 仍被 store 调用、`sessionStart` 仍在契约里）：
+ * 它是「某个来源将来变成跨运行累积」时的**唯一**出口，删掉它会诱使下一个人
+ * 在面板里再写一遍时间线比较。集合为空时函数恒真、零开销。
  *
  * 为什么必须逐来源判定、而不能拿一个全局 cutoff 往整条时间线上套：
  * 会话起点取自 `dev-launcher.log` 的 mtime，而**壳写下的头几行在它被创建
@@ -582,10 +594,7 @@ export function lastSeqOf(logs: LogEntry[]): number {
  * 写、跨运行累积，但同一条锚点晚于壳的启动报告——按会话裁剪会把「为什么起
  * 不来」的头几行裁掉（见 `/api/logs/current` 的 resolveSourceFile 注释）。
  */
-const SESSION_SCOPED_ORIGINS = new Set<NonNullable<LogEntry["origin"]>>([
-  "app-runtime",
-  "app",
-]);
+const SESSION_SCOPED_ORIGINS = new Set<NonNullable<LogEntry["origin"]>>([]);
 
 /**
  * 该来源的文件是否跨运行累积、需要会话起点裁剪（契约判据，可独立断言）。

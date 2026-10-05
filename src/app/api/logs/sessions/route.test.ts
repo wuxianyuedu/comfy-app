@@ -1,16 +1,22 @@
 /**
- * `GET /api/logs/sessions` 的**跨运行**读取契约（ISSUE #1326）。
+ * `GET /api/logs/sessions` 的**一次启动一份文件**读取契约（ISSUE #1326）。
  *
- * 这一层回答的是用户原话「之前能切换的也是历史，不能用 runs 中找吗」：列表要
- * 列 `runs/` 里的历史包，切过去要能看到**那一次运行**的正文。四条契约：
- *   1. 列表 = 本次运行 + `runs/` 各包（新→旧），只列有这个来源文件的包；
- *   2. 历史包的正文 = 该包文件**减去前一包**（包 N ⊇ 包 N-1，归档是整目录复制）；
- *   3. 基准不可得（前一包被保留策略删了）→ 整份给出且 `baselineMissing: true`；
- *   4. 文件不存在 / 来源不认识 / 包被删光时有**明确的空载荷**，不是 404/500。
+ * 这一层回答的是用户原话：「comfyui-runtime.log / ollama-runtime.log /
+ * drizzle-studio-runtime.log / app-runtime.log 这四份也要改成每个文件只存储
+ * 单次运行的历史，单次里如果执行多次也存放多个文件，这样看起来清晰」。
  *
- * 用例造的是**真的** `runs/` 目录结构（含 `run.json`），不是 mock 出来的
- * 文件长度 —— 「包 N 是包 N-1 的前缀」这条性质来自归档的复制语义，夹具必须
- * 按那个语义造，否则切片用例是自证的。
+ * 四条契约：
+ *   1. 列表 = 该来源在 `services/` 下的单次文件（新→旧），**只列本来源的**
+ *      （同一目录里还有别的来源的文件）；
+ *   2. 正文 = **选中那一份整份**（不再有「减去前一份」这回事 —— 一份文件只属于
+ *      一次启动，这正是本次改造要消掉的那类判据）；
+ *   3. 列表被上限截断时如实回报一共几份（`total`），界面据此说明还有更早的；
+ *   4. 来源不认识 / 一份都没有 / 请求的文件已被清掉时都有**明确的空载荷**，
+ *      不是 404/500。
+ *
+ * 用例造的是**真的目录结构**（按写方的命名规则），不是 mock 出来的内容 ——
+ * 「哪些文件属于这个来源」这条判据来自文件名，夹具必须按那个规则造，否则用例
+ * 是自证的（判据变红时也会先怀疑夹具）。
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
@@ -18,22 +24,17 @@ import os from "node:os";
 import path from "node:path";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "log-sessions-"));
-/** 夹具的项目根：`log/` 的父目录（与 run.mjs 的 root 同口径）。 */
-const projectRoot = path.join(tmp, "root");
-const logRoot = path.join(projectRoot, "log");
-const currentDir = path.join(logRoot, "current");
-const runsDir = path.join(logRoot, "runs");
-/** 各运行包内该来源文件的相对位置（与端点的 SOURCE_REL 同源）。 */
-const SOURCE_REL = path.join("services", "comfyui-runtime.log");
+/** 夹具的日志根（与 `log-paths` 的 `LOG_ROOT` 同口径）。 */
+const logRoot = path.join(tmp, "log");
+/** 四份 runtime 日志的落点（与 `log-paths` 的 `SERVICES_LOG_DIR` 同口径）。 */
+const servicesDir = path.join(logRoot, "current", "services");
 
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
     ...(actual as Record<string, unknown>),
     LOG_ROOT: logRoot,
-    RUNTIME_LOG_FILES: {
-      "comfyui-runtime": path.join(currentDir, SOURCE_REL),
-    },
+    SERVICES_LOG_DIR: servicesDir,
   };
 });
 
@@ -46,7 +47,7 @@ interface Payload {
   truncated: boolean;
   windowed: boolean;
   size: number;
-  baselineMissing: boolean;
+  total: number;
   error?: string;
 }
 
@@ -57,49 +58,15 @@ async function get(query: string): Promise<{ status: number; data: Payload }> {
   return { status: res.status, data: (await res.json()) as Payload };
 }
 
-/** 造一个运行包：`run.json` + 该来源的日志文件（内容由调用方给）。 */
-function makePack(
-  name: string,
-  content: string,
-  meta: { startedAt?: string; crashed?: boolean } = {},
-): void {
-  const dir = path.join(runsDir, name);
-  fs.mkdirSync(path.join(dir, "services"), { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, "run.json"),
-    JSON.stringify({
-      runId: name.slice(-6),
-      startedAt: meta.startedAt ?? "2026-09-30T19:36:12.000Z",
-      crashed: meta.crashed ?? false,
-    }),
-    "utf8",
-  );
-  fs.writeFileSync(path.join(dir, SOURCE_REL), content, "utf8");
-}
-
-/** 写本次运行（`current/`）的日志与 run.json。 */
-function makeCurrent(
-  content: string,
-  meta: Record<string, unknown> = {},
-): void {
-  fs.mkdirSync(path.join(currentDir, "services"), { recursive: true });
-  fs.writeFileSync(
-    path.join(currentDir, "run.json"),
-    JSON.stringify({
-      runId: "ffffff",
-      startedAt: "2026-10-05T09:00:00.000Z",
-      crashed: false,
-      ...meta,
-    }),
-    "utf8",
-  );
-  fs.writeFileSync(path.join(currentDir, SOURCE_REL), content, "utf8");
+/** 造一份某来源的启动日志文件（名字按写方那套规则）。 */
+function makeFile(name: string, content: string): void {
+  fs.mkdirSync(servicesDir, { recursive: true });
+  fs.writeFileSync(path.join(servicesDir, name), content, "utf8");
 }
 
 beforeEach(() => {
-  fs.rmSync(logRoot, { recursive: true, force: true });
-  fs.mkdirSync(currentDir, { recursive: true });
-  fs.mkdirSync(runsDir, { recursive: true });
+  fs.rmSync(servicesDir, { recursive: true, force: true });
+  fs.mkdirSync(servicesDir, { recursive: true });
 });
 
 afterAll(() => {
@@ -114,149 +81,150 @@ describe("来源与空态的明确出口", () => {
     expect(data.sessions).toEqual([]);
   });
 
-  it("什么都没有（第一次运行）→ 200 空载荷（界面显示空态，不是报错）", async () => {
+  it("一份都没有（这个服务从没启动过）→ 200 空载荷（界面显示空态，不是报错）", async () => {
     const { status, data } = await get("source=comfyui-runtime");
     expect(status).toBe(200);
     expect(data.sessions).toEqual([]);
     expect(data.selectedId).toBeNull();
     expect(data.content).toBe("");
+    expect(data.total).toBe(0);
   });
 
-  it("runs/ 里没有这个来源的包 → 不列它们（点开是空窗口的不是「历史」）", async () => {
-    /* 那一包存在，但它没写过这个来源的文件（那台机器上没启动过这个服务）。 */
-    makePack("2026-09-29_100000-aaaaaa", "");
-    fs.rmSync(path.join(runsDir, "2026-09-29_100000-aaaaaa", SOURCE_REL));
-    makeCurrent("本次运行\n");
-
-    const { data } = await get("source=comfyui-runtime");
-    expect(data.sessions.map((s) => s.id)).toEqual(["run:current"]);
-  });
-});
-
-describe("列表：本次 + 历史包，新→旧", () => {
-  it("本次在最上，历史按名字倒序（字典序即时间序）", async () => {
-    makePack("2026-09-28_100000-aaaaaa", "A\n");
-    makePack("2026-09-30_100000-bbbbbb", "B\n");
-    makePack("2026-09-29_100000-cccccc", "C\n");
-    makeCurrent("本次\n");
+  it("只列**本来源**的文件（同一目录里还有别的来源）", async () => {
+    makeFile("comfyui-runtime-20261005-093612.log", "comfy\n");
+    makeFile("ollama-runtime-20261005-093700.log", "ollama\n");
+    makeFile("app-runtime-20261005-093800.log", "app\n");
 
     const { data } = await get("source=comfyui-runtime");
     expect(data.sessions.map((s) => s.id)).toEqual([
-      "run:current",
-      "run:2026-09-30_100000-bbbbbb",
-      "run:2026-09-29_100000-cccccc",
-      "run:2026-09-28_100000-aaaaaa",
+      "comfyui-runtime-20261005-093612.log",
     ]);
-    expect(data.selectedId).toBe("run:current");
   });
 
-  it("下拉文案带时刻 + 退出形态 + runId（报问题时能说清是哪一次）", async () => {
-    makePack("2026-09-30_193612-a1b2c3", "崩之前的现场\n", {
-      crashed: true,
-    });
-    makeCurrent("本次\n");
+  it("不认的日志文件不列（同目录里的 keepalive / trace 之类）", async () => {
+    makeFile("comfyui-keepalive-2026-10-05-09-36-12.out.log", "keepalive\n");
+    makeFile("comfyui-runtime-20261005-093612.log", "comfy\n");
 
     const { data } = await get("source=comfyui-runtime");
-    const history = data.sessions[1]!;
-    expect(history.title).toContain("异常退出");
-    expect(history.title).toContain("a1b2c3");
-    expect(data.sessions[0]!.title).toContain("本次运行");
+    expect(data.sessions.map((s) => s.id)).toEqual([
+      "comfyui-runtime-20261005-093612.log",
+    ]);
+  });
+});
+
+describe("列表：新→旧，正文 = 那一份整份", () => {
+  it("列表最新在最上（写方按旧→新命名，字典序即时间序）", async () => {
+    makeFile("comfyui-runtime-20261005-090000.log", "第一次\n");
+    makeFile("comfyui-runtime-20261005-093612.log", "第二次\n");
+    makeFile("comfyui-runtime-20261005-100000.log", "第三次\n");
+
+    const { data } = await get("source=comfyui-runtime");
+    expect(data.sessions.map((s) => s.id)).toEqual([
+      "comfyui-runtime-20261005-100000.log",
+      "comfyui-runtime-20261005-093612.log",
+      "comfyui-runtime-20261005-090000.log",
+    ]);
+    /* 缺省选最新那一份，正文就是它整份 */
+    expect(data.selectedId).toBe("comfyui-runtime-20261005-100000.log");
+    expect(data.content).toBe("第三次\n");
   });
 
-  it("下拉总共最多 30 项（本次 + 历史），且留下的必须是最新的那些", async () => {
-    for (let i = 1; i <= 35; i += 1) {
-      const day = String(i).padStart(2, "0");
-      makePack(`2026-09-${day}_100000-aaaaaa`, `pack ${i}\n`);
+  it("切到中间那一份 → 拿到的是它**整份**，不含别的启动的内容", async () => {
+    makeFile("comfyui-runtime-20261005-090000.log", "第一次的输出\n");
+    makeFile("comfyui-runtime-20261005-093612.log", "第二次的输出\n");
+
+    const { data } = await get(
+      "source=comfyui-runtime&session=comfyui-runtime-20261005-090000.log",
+    );
+    expect(data.selectedId).toBe("comfyui-runtime-20261005-090000.log");
+    expect(data.content).toBe("第一次的输出\n");
+    /* 关键反向断言：**不再**有「从装应用那天起的全部输出」这回事 */
+    expect(data.content).not.toContain("第二次的输出");
+  });
+
+  it("下拉文案是名字里那个时刻（跨天也能分清）", async () => {
+    makeFile("comfyui-runtime-20261005-093612.log", "x\n");
+    makeFile("comfyui-runtime-20260930-190000.log", "y\n");
+
+    const { data } = await get("source=comfyui-runtime");
+    const titles = data.sessions.map((s) => s.title);
+    expect(titles[0]).toBe("10-05 09:36:12");
+    expect(titles[1]).toBe("09-30 19:00:00");
+    /* startedAt 必须是本地时区解出来的毫秒（界面/排序都靠它） */
+    expect(data.sessions[1]!.startedAt).toBe(
+      new Date(2026, 8, 30, 19, 0, 0).getTime(),
+    );
+  });
+
+  it("迁移前的旧固定名也列出来（排在最旧，没有时刻）", async () => {
+    /* 用户盘上已经有 `<来源>.log`：改名把它丢掉比留着一条「更早的日志」糟得多。 */
+    makeFile("comfyui-runtime.log", "迁移前的全部\n");
+    makeFile("comfyui-runtime-20261005-093612.log", "新的\n");
+
+    const { data } = await get("source=comfyui-runtime");
+    expect(data.sessions.map((s) => s.id)).toEqual([
+      "comfyui-runtime-20261005-093612.log",
+      "comfyui-runtime.log",
+    ]);
+    expect(data.sessions[1]!.startedAt).toBeNull();
+    expect(data.sessions[1]!.title).toBe("更早的日志");
+  });
+
+  it("同一秒内多次启动（名字带 -2 分叉）都列出来", async () => {
+    makeFile("comfyui-runtime-20261005-093612.log", "第一次\n");
+    makeFile("comfyui-runtime-20261005-093612-2.log", "第二次\n");
+
+    const { data } = await get("source=comfyui-runtime");
+    expect(data.sessions).toHaveLength(2);
+  });
+});
+
+describe("列表上限与 total", () => {
+  it("最多列 30 份，但 total 如实报一共几份（界面据此说明还有更早的）", async () => {
+    for (let i = 0; i < 35; i += 1) {
+      const hh = String(Math.floor(i / 60)).padStart(2, "0");
+      const mm = String(i % 60).padStart(2, "0");
+      makeFile(`comfyui-runtime-20261005-${hh}${mm}00.log`, `第 ${i} 份\n`);
     }
-    makeCurrent("本次\n");
 
     const { data } = await get("source=comfyui-runtime");
     expect(data.sessions).toHaveLength(30);
-    expect(data.sessions[0]!.id).toBe("run:current");
-    /* 留下的必须是**最新**那 29 包：最早的 6 包被截掉 */
-    expect(data.sessions.map((s) => s.id)).not.toContain(
-      "run:2026-09-01_100000-aaaaaa",
-    );
-    expect(data.sessions.map((s) => s.id)).toContain(
-      "run:2026-09-35_100000-aaaaaa",
-    );
+    expect(data.total).toBe(35);
+    /* 留下的必须是**最新**那 30 份：最早的 5 份不在了 */
+    const ids = data.sessions.map((s) => s.id);
+    expect(ids).not.toContain("comfyui-runtime-20261005-000000.log");
+    expect(ids[0]).toBe("comfyui-runtime-20261005-003400.log");
+  });
+
+  it("没被截断时 total === 列表长度（界面不显示提示）", async () => {
+    makeFile("comfyui-runtime-20261005-093612.log", "x\n");
+    const { data } = await get("source=comfyui-runtime");
+    expect(data.total).toBe(1);
+    expect(data.sessions).toHaveLength(1);
   });
 });
 
-describe("正文：历史包要减去前一包", () => {
-  it("切到历史包 → 只回那一次新增的内容（不是从装应用那天起的全部）", async () => {
-    /* 归档是「整目录复制」，所以包 2 的文件 = 包 1 的内容 + 本次新增。 */
-    const first = "第一次运行\n输出 A\n";
-    makePack("2026-09-29_100000-aaaaaa", first);
-    makePack("2026-09-30_100000-bbbbbb", `${first}第二次运行\n输出 B\n`);
-
-    const { data } = await get(
-      "source=comfyui-runtime&session=run:2026-09-30_100000-bbbbbb",
-    );
-    expect(data.selectedId).toBe("run:2026-09-30_100000-bbbbbb");
-    expect(data.content).toContain("输出 B");
-    /* 关键：上上次的内容被剪掉了 —— 不剪的话这里会同时含「输出 A」 */
-    expect(data.content).not.toContain("输出 A");
-  });
-
-  it("最早那一包没有基准 → 整份给出，且**不标记**异常（本来就没有基准）", async () => {
-    makePack("2026-09-29_100000-aaaaaa", "最早一包的全部输出\n");
-
-    const { data } = await get(
-      "source=comfyui-runtime&session=run:2026-09-29_100000-aaaaaa",
-    );
-    expect(data.content).toContain("最早一包的全部输出");
-    expect(data.baselineMissing).toBe(false);
-  });
-
-  it("前一包被保留策略删了 → 整份给出 + baselineMissing（界面据此说明）", async () => {
-    /* 「前一包」按**名字**找（排序后的紧邻前一个），中间那包被删了就找不到基准。
-     * 这时不能猜一个基准去切 —— 会把真实内容切掉，比多显示糟得多。 */
-    const first = "很早的一包\n";
-    makePack("2026-09-28_100000-aaaaaa", first);
-    makePack("2026-09-30_100000-cccccc", `${first}最新一包\n`);
-
-    const { data } = await get(
-      "source=comfyui-runtime&session=run:2026-09-30_100000-cccccc",
-    );
-    /* 基准是 09-28 那一包（紧邻的前一个**存在**的包），因此这里其实切得动 ——
-     * 「基准不可得」只发生在该包是 runs/ 里最早那一个时。 */
-    expect(data.content).toContain("最新一包");
-    expect(data.baselineMissing).toBe(false);
-  });
-
-  it("本次运行不减（`current/` 天生只有本次的内容）", async () => {
-    /* 关键对照：历史包里含一行「上一次运行的全部」，而本次运行的正文里
-     * **不能**出现它 —— 本次运行读的是 `current/`，不是归档包。 */
-    makePack("2026-09-29_100000-aaaaaa", "上一次运行的全部\n");
-    makeCurrent("本次运行才写的\n");
+describe("正文窗口与选中项回落", () => {
+  it("正文超上限时取尾部并掐头对齐到行边界（windowed / truncated 一并回报）", async () => {
+    /* 造一份超过 400000 字节的文件：单行 100 字节 × 5000 行。 */
+    const line = `${"x".repeat(98)}\n`; // 99 字节/行
+    makeFile("comfyui-runtime-20261005-093612.log", line.repeat(5000));
 
     const { data } = await get("source=comfyui-runtime");
-    expect(data.selectedId).toBe("run:current");
-    expect(data.content).toBe("本次运行才写的\n");
-    expect(data.content).not.toContain("上一次运行的全部");
-  });
-});
-
-describe("选中项回落", () => {
-  it("请求的包已不在列表里 → 回落本次运行，并在 selectedId 里如实回报", async () => {
-    makeCurrent("本次\n");
-    const { data } = await get(
-      "source=comfyui-runtime&session=run:2026-01-01_000000-ffffff",
-    );
-    expect(data.selectedId).toBe("run:current");
+    expect(data.windowed).toBe(true);
+    expect(data.truncated).toBe(true);
+    expect(data.size).toBe(5000 * 99);
+    /* 尾部窗口对齐到行首：首字符不能是被截断的半行内容 */
+    expect(data.content.startsWith("x".repeat(98))).toBe(true);
+    expect(data.content.endsWith(`${"x".repeat(98)}\n`)).toBe(true);
   });
 
-  it("基准恰好落在行边界上时不丢内容（归档是按完整文件复制的）", async () => {
-    /* 真实形态：前一包 = 包 2 的完整前缀，因此切点天然在行首。这条是**反向
-     * 验证** —— 若实现多掐了一行（把 `from` 也当尾部窗口处理），这里必红。 */
-    const first = "第一次运行\n输出 A\n";
-    makePack("2026-09-29_100000-aaaaaa", first);
-    makePack("2026-09-30_100000-bbbbbb", `${first}第二次运行\n输出 B\n`);
-
+  it("请求的文件已不在列表里（被保留策略删了）→ 回落最新那一份并如实回报", async () => {
+    makeFile("comfyui-runtime-20261005-093612.log", "最新\n");
     const { data } = await get(
-      "source=comfyui-runtime&session=run:2026-09-30_100000-bbbbbb",
+      "source=comfyui-runtime&session=comfyui-runtime-19990101-000000.log",
     );
-    expect(data.content).toBe("第二次运行\n输出 B\n");
+    expect(data.selectedId).toBe("comfyui-runtime-20261005-093612.log");
+    expect(data.content).toBe("最新\n");
   });
 });
