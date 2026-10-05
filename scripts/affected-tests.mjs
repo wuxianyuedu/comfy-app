@@ -170,6 +170,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 上面那三条 storybook 判据对它们都无感。与本次暂存改动无关也必须响
   // （它是「下一次有人写故事」的守卫），所以进固定清单。
   "tests/storybook-story-surface.test.ts",
+  // 「三层注入层的接线」（store / React Flow / 整屏容器，ISSUE #1381 的第三批）：
+  // 前三条 storybook 判据守的是「值源不许是假数据」「故事怎么写」「一个组件被
+  // 看过了没有」，对「吃 store / 吃画布上下文 / 整屏容器」这三族天然无感 ——
+  // 而它们的失效形态全都是「画布上照样有内容」（手捏条目、假 provider、
+  // 占位子件），没有任何构建期或运行期判据会红。与本次暂存改动无关也必须响
+  // （它是「下一次有人写这三族 story」的守卫），所以进固定清单。
+  "tests/storybook-injection-layers.test.ts",
   // 「eslint 增量缓存的依赖指纹」：`--cache` 的缓存键不含依赖树，而 `no-unsafe-*`
   // 是类型化规则 —— 依赖一变旧判决被整片重放，假红拦死提交、假绿洗掉真违规
   // （ISSUE #1399）。它的执行者是 `postinstall` 那一步，而改 `.githooks/**` 会让
