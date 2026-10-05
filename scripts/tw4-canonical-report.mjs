@@ -19,7 +19,17 @@
  * 用法：
  *   node scripts/tw4-canonical-report.mjs          # 汇总（按建议排序）
  *   node scripts/tw4-canonical-report.mjs --json   # 机器可读
+ *   node scripts/tw4-canonical-report.mjs --check  # 棘轮判定：源文件候选数不许超过基线
+ *   node scripts/tw4-canonical-report.mjs --update # 治理后重写基线（须伴随下降）
  *   node scripts/tw4-canonical-report.mjs --write  # 落盘改写（跳过 .snap）
+ *
+ * 棘轮（ISSUE #1451 要求 2）：本工具起 Tailwind 引擎、单次约 6s，**不进 pre-commit**
+ * （判的是「CSS 等价改写」而非正确性），但 03 章那句「新增一批视图文件后按需跑一次」
+ * 此前**没有任何东西在守** —— 实测 storybook 那批一次性带进 96 处 `w-[30rem]`，
+ * 直到手工跑才浮出来。出路 = 保留按需跑，但把「按需」变成**有判据的**：源文件
+ * （测试文件不计，它们的候选是人判断的负样本）的候选总数冻结在
+ * `scripts/.tw4-canonical-baseline.json`，`--check` 时只许降不许升。
+ * 执行者与「为什么不进钩子」登记在 `scripts/.gate-executor-ledger.json`。
  *
  * 快照只统计不写入：类名一改，`prettier-plugin-tailwindcss` 的排序位置会跟着变，
  * 字符串替换同步不了，必须由 `vitest -u` 重生成。
@@ -37,7 +47,10 @@ const argv = process.argv.slice(2);
 const asJson = argv.includes("--json");
 const shouldWrite = argv.includes("--write");
 const withTests = argv.includes("--with-tests");
+const shouldCheck = argv.includes("--check");
+const shouldUpdate = argv.includes("--update");
 const explicit = argv.filter((a) => !a.startsWith("--"));
+const BASELINE = path.join(ROOT, "scripts", ".tw4-canonical-baseline.json");
 
 /** 一批送进 canonicalize 的规模（首次调用要建全量 class list，约 10 秒，之后很快）。 */
 const BATCH = 800;
@@ -262,4 +275,66 @@ if (asJson) {
     console.log(`  ${s.files.length} 个文件：${s.raw} → ${s.to}`);
     for (const f of s.files) console.log(`      ${path.relative(ROOT, f)}`);
   }
+}
+
+/* ── 棘轮（--check / --update）：源文件候选总数只许降不许升 ─────────────
+ *
+ * 记账口径 = **按源文件**（测试文件里的候选不进基线：`--write` 默认不碰它们，
+ * 它们多数是断言样本，改了会把判据改坏，得人逐处判 —— 把它们计进基线等于
+ * 让「人判断」变成「机器冻结」，方向反了）。
+ * 之所以按候选**处数**记账而不是按 raw 种类：一处 raw 换文件、换数量都该被看见，
+ * 而「零候选起步」的语义正是「任何新增都红」。
+ * 排除孤儿快照与测试文件的命中，与原报告口径一致。 */
+
+if (shouldUpdate) {
+  const ledger = {};
+  let total = 0;
+  for (const s of suggestions) {
+    for (const f of s.sourceFiles) {
+      const rel = path.relative(ROOT, f);
+      ledger[rel] = (ledger[rel] ?? 0) + 1;
+      total += 1;
+    }
+  }
+  const data = { total, files: ledger };
+  fs.writeFileSync(BASELINE, `${JSON.stringify(data, null, 2)}\n`);
+  console.log(`棘轮基线已重写：${path.relative(ROOT, BASELINE)}（total ${total}）`);
+  process.exit(0);
+}
+
+if (shouldCheck) {
+  /** @type {{total: number, files: Record<string, number>}} */
+  const base = fs.existsSync(BASELINE)
+    ? JSON.parse(read(BASELINE))
+    : { total: 0, files: {} };
+  const current = {};
+  for (const s of suggestions) {
+    for (const f of s.sourceFiles) {
+      const rel = path.relative(ROOT, f);
+      current[rel] = (current[rel] ?? 0) + 1;
+    }
+  }
+  const over = [];
+  for (const [rel, n] of Object.entries(current)) {
+    const allowed = base.files[rel] ?? 0;
+    if (n > allowed) over.push(`${rel}：${n} 处（基线 ${allowed}）`);
+  }
+  const currentTotal = Object.values(current).reduce((a, b) => a + b, 0);
+  if (over.length > 0 || currentTotal > base.total) {
+    console.log(
+      `canonical 候选棘轮：源文件候选 ${currentTotal} 处 > 基线 ${base.total} 处\n`,
+    );
+    for (const line of over) console.log(`  ✗ ${line}`);
+    console.log(
+      `\n修法：node scripts/tw4-canonical-report.mjs --write 落盘改写（测试文件另判），` +
+        `再 node scripts/tw4-canonical-report.mjs --update 收紧基线。` +
+        `别为了让 --check 变绿去放宽基线 —— 棘轮是给「回潮就响」用的。`,
+    );
+    process.exit(1);
+  }
+  console.log(
+    `canonical 候选棘轮：源文件候选 ${currentTotal} 处 ≤ 基线 ${base.total} 处 ✓` +
+      (currentTotal < base.total ? `（比基线少 ${base.total - currentTotal} 处，可跑 --update 收紧）` : ""),
+  );
+  process.exit(0);
 }

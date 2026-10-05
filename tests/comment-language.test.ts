@@ -244,6 +244,47 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(run().code).toBe(0);
   });
 
+  it("参数名恰好是英文虚词（from / to / at）的结构行不参与统计（实测误报 3 处）", () => {
+    // 判据的真实缺陷：`@param {string} from` 剥掉类型块后剩 `from`，而 `from` 在
+    // 英文虚词表里 —— 于是一条**纯类型语法行**（一个英文说明字都没有）被判成
+    // 「英文说明句」。实测全仓 3 处：`scripts/launcher-core/run.mjs` 的
+    // `@param {Date} at` / `@param {string} from` / `@param {string} to`，
+    // 而该文件当时没有执行者（判据不在钩子里 —— 正是 ISSUE #1451 立案的现场），
+    // 直到它被接进钩子才拦住从 master 分出的每一个提交。
+    // 修法 = 先剥掉「@tag + 类型块 + 参数名」三段再判虚词。
+    write(
+      "src/lib/jsdoc-prose-param-name.ts",
+      [
+        "/**",
+        " * @param {Date} at",
+        " * @param {string} from",
+        " * @param {string} to",
+        " * @returns {void}",
+        " */",
+        "export function copy(from: string, to: string, at: Date): void {",
+        "  void from;",
+        "  void to;",
+        "  void at;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    expect(run().code).toBe(0);
+  });
+
+  it("参数名是虚词、后面**真有**英文说明 → 仍被统计（豁免不放过散文）", () => {
+    // 上一条的反向锚点：剥参数名之后剩下的若真是说明句，虚词照旧命中。
+    write(
+      "src/lib/jsdoc-prose-param-name-prose.ts",
+      "/** @param {string} from the source label */\nexport const a = 1;\n",
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("src/lib/jsdoc-prose-param-name-prose.ts");
+  });
+
   it("JSDoc 结构块的**续行**（多行类型）同样不参与统计", () => {
     // 多行 typedef 只有第一行带 tag，其余行只剩类型语法。
     // 不豁免续行的话，`version: string | null }} ProbeResult` 这类行会被当成英文注释。

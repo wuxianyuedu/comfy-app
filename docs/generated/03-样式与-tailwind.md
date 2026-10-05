@@ -68,13 +68,23 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 `w-K` / `h-K` 合并成 `size-K` —— 那是换算之后才暴露出来的形态（`w-[10px] h-[10px]`
 在方括号里时 P80 数不到）。存量已清零，新代码按编辑器提示写。
 
-> **这条没有自动执行者，会随新代码回潮**：`tw4-spacing-canonical.mjs` /
+> **这条不进钩子，但不再是一句谁都能忘的人为提醒**：`tw4-spacing-canonical.mjs` /
 > `tw4-canonical-report.mjs` 都**不在** `.githooks/pre-commit`（它们要起 Tailwind
-> 引擎、单次约 6s，且判断的是「CSS 等价改写」而非正确性）。实测的教训：storybook
-> 那批新 stories 一次性带进来 96 处 `w-[30rem]` / `h-[32rem]` 这类缩写候选，
-> 直到手工跑 `pnpm theme:scan` 才浮出来 —— 所以**新增一批视图文件后按需跑一次**
-> `node scripts/tw4-canonical-report.mjs`（只读；确认后 `--write` 落盘，
-> 测试文件默认不动，见脚本头注），别等它自己变红。
+> 引擎、单次约 6s，且判断的是「CSS 等价改写」而非正确性，成本判据同 §13.5.4）。
+> 实测的教训：storybook 那批新 stories 一次性带进来 96 处 `w-[30rem]` / `h-[32rem]`
+> 这类缩写候选，直到手工跑 `pnpm theme:scan` 才浮出来 —— 那时它只是「没人跑就没人
+> 知道」。现在两者各带一个**棘轮判定档**（ISSUE #1451 要求 2，规范 §13.5.12）：
+>
+> ```bash
+> node scripts/tw4-canonical-report.mjs --check   # 源文件 canonical 候选数不许超过基线
+> node scripts/tw4-spacing-canonical.mjs --check  # 待改写处数不许超过基线
+> ```
+>
+> 基线 `scripts/.tw4-canonical-baseline.json` / `scripts/.tw4-spacing-baseline.json`
+> 都是 **`total: 0`** 起步（回潮即红）。红了就 `--write` 落盘、再 `--update` 收紧基线；
+> 测试文件里的候选按人判断（`--write` 默认不碰，见脚本头注）。**别为了让 `--check`
+> 变绿去放宽基线** —— 那份基线由 `tests/tw4-canonical-ratchet.test.ts` 守着形状与
+> 判定档在位，执行者与「为什么不进钩子」登记在 `scripts/.gate-executor-ledger.json`。
 
 **「更名 / 别名 / v3 遗留」那一类**（`!x`、`break-words`、`flex-shrink`、
 `overflow-ellipsis`、`bg-gradient-to-*` …）由 `scripts/tw4-canonical-report.mjs`
