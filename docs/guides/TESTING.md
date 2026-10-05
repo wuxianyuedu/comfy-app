@@ -30,6 +30,14 @@ pnpm test:visual        # 只跑像素基线那一层
 - 配置文件：`vitest.config.ts`；扫描面 `src/**/*.test.{ts,tsx}` 与 `tests/**/*.test.{ts,tsx}`
 - 默认环境：node（纯函数/store，不依赖 DOM）
 - 组件渲染：测试文件头 `// @vitest-environment jsdom`
+- **为什么不用 `projects` 按目录分档**（vitest 5 支持，且能省掉那些文件头）：
+  目录与环境的对应关系**不成立**。实测 `src/components/**` + `src/app/**` 共 231 份
+  用例里有 **70 份不带 jsdom 文件头**、且**全是 `*.test.ts`**（配置推导 / store /
+  `src/app/api/**` 路由），它们今天在 node 下跑、也不该被拖进 jsdom；反过来
+  `src/lib/**` 里有 18 份要 jsdom。按目录分档 = 这 70 + 18 份要么被放错环境、
+  要么退回逐文件覆盖，**省下的只是文件头，换来的是一层「目录名改了、环境就悄悄变」
+  的隐式约定**（而且 jsdom 下跑纯逻辑只是变慢，不报错 —— 静默的那一侧）。
+  当前「全局 node + 逐文件 opt-in」与真实依赖一一对应，维持；判据见规范 §11.17。
 - 路径别名：`@/*`、`~/*` → `src/*`；`server-only` 在测试里换成空实现
   （`tests/stubs/server-only.ts`，构建期的硬约束不受影响）
 - 测试文件与源码同目录，命名 `*.test.ts(x)`
