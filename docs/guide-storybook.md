@@ -274,6 +274,11 @@ function ShellHarness() {
   给 story 加 `toHaveScreenshot`、或引入第二套像素工具（Chromatic 那一族）都会红
   —— 那是给同一件事造第二套基线，而两套基线的维护成本正是 §11.8 要避免的。
   这一侧真要看像素时，**写进 `e2e/visual`，不要写进 story**。
+  那一侧的落点至此**五档齐了**（深浅两态 / 响应式断点 / 空态 / xyflow 画布 /
+  弹窗浮层尺寸），`canvas.visual.spec.ts` 与 `overlay.visual.spec.ts` 是后两档
+  —— 它们的钉法各有一条别的屏没有的坑（画布要等 `fitView` 收敛、浮层要量宽度而不是
+  只看截图），写在规范 11 §11.8；判据也从「三档」补到「五档」，那两档此前只有落点表
+  里的一行字、**没有判据守着**。
 - **不进构建产物**。`.storybook/**` 与 `*.stories.tsx` 不在 Next 的模块图上：
   story 只被 Storybook 自己的 webpack 图引用，`pnpm build` 看不到它们。
   `storybook-static/`、`.storybook/assets/`、`.storybook/generated/` 都在
