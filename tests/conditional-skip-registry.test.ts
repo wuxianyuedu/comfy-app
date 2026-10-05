@@ -104,9 +104,9 @@ const REGISTERED: Registration[] = [
   {
     file: "tests/dev-launcher-toolchain-gate.test.ts",
     guard: 'process.platform === "win32"',
-    count: 8,
+    count: 13,
     tier: "platform",
-    why: "经 needsPosixExec 别名：corepack / .ps1 宿主形态那组判据只在 POSIX 上跑",
+    why: "经 needsPosixExec 别名：corepack / .ps1 宿主形态与 pnpm 探测记忆化那组判据只在 POSIX 上跑",
   },
   {
     file: "src/lib/process/kill-process-tree.windows.test.ts",
