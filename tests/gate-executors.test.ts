@@ -342,10 +342,22 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     // 被钩子注释提到）、`install-git-hooks.mjs`（postinstall，被注释提到）、
     // `run-affected-tests.mjs`（被 `node scripts/run-affected-tests.mjs` 那行调，
     // 但它是 C 组的测试执行器、不是判据）、`quality-gate-shared.mjs`（被 import）。
-    // 实测：把口径退化成全文匹配，份数从 44 涨到 47（多认出这三份）。
+    // 实测：把口径退化成全文匹配，会多认出上面点名那几类占位/清单库脚本。
+    // ⚠️ 下面这个数字是**会漂的读数**：加一份或删一份判据都要重跑
+    // `node scripts/check-gate-executors.cjs --report` 并同步这里（写成等式是有意的，
+    // 不是为了让人懒得改而退成 ≤）。本次 44 → 45：`09aca6df` 写下这句之后，
+    // `check-known-failed-stale.mjs`(32bb029e)、`check-test-environment.cjs`(b1f92fab)、
+    // `check-soft-assertions.cjs`(945e8119) 陆续加进钩子，其中被这份口径数进去的那一份
+    // 把真值抬到 45 而常量没跟上（具体是哪一份与本条断言无关，重跑 --report 即得）。
+    // 后果的形状值得记一句：这条红**不在改钩子的那个人身上** —— 平台侧 squash 合并
+    // 不跑本地钩子（#623 之后也没有 CI 兜底），所以它安静躺在 master 上，直到下一个
+    // 改动被 C 组选到这份固定清单邻域的提交替它响。
     const output = runInRepo(["--report"]);
     const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
-    expect(total, "步骤位置口径下判据是 44 份").toBe(44);
+    expect(
+      total,
+      "步骤位置口径下判据是 45 份（改判据就重跑 --report 同步这里）",
+    ).toBe(45);
     for (const name of [
       "x.cjs",
       "xxx.cjs",
