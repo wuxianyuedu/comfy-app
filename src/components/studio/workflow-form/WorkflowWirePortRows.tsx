@@ -11,6 +11,7 @@ import {
   type WorkflowIOEntry,
 } from "../workflow-io";
 import { Button } from "~/components/ui/button";
+import { TypeChip } from "~/components/studio/TypeChip";
 import { NumberField } from "~/components/ui/number-field";
 import { PortHandle, portChipStyle } from "./WorkflowPortHandle";
 import { AutoResizeTextarea } from "./WorkflowFormTextarea";
@@ -238,15 +239,12 @@ export function WirePortRows({
                   onPick={(mode) => onSeedModeChange(wireInput.ioKey, mode)}
                 />
               )}
-              <span
-                className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
-                style={{ fontFamily: "var(--font-sans)", ...chipStyle }}
-              >
+              <TypeChip size="md" tone="none" style={chipStyle}>
                 {typeDisplay(
                   wireInput.type,
                   wireInput.control === "float" ? "FLOAT" : "INT",
                 )}
-              </span>
+              </TypeChip>
             </div>
           );
         }
@@ -294,12 +292,9 @@ export function WirePortRows({
                 >
                   {label}
                 </span>
-                <span
-                  className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
-                  style={{ fontFamily: "var(--font-sans)", ...chipStyle }}
-                >
+                <TypeChip size="md" tone="none" style={chipStyle}>
                   {typeDisplay(wireInput.type)}
-                </span>
+                </TypeChip>
               </div>
               {/* control 区 fill 剩余空间（= row 高度 - pt-1.5 - subrow-16 -
  mt-1.5 - pb-1.5 = row 高度 - 34）；textarea 自适应高度 min 28
@@ -394,12 +389,9 @@ export function WirePortRows({
                 >
                   {label}
                 </span>
-                <span
-                  className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
-                  style={{ fontFamily: "var(--font-sans)", ...chipStyle }}
-                >
+                <TypeChip size="md" tone="none" style={chipStyle}>
                   {typeDisplay(output.type)}
-                </span>
+                </TypeChip>
               </div>
             );
           })}

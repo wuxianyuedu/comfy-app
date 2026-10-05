@@ -20,6 +20,7 @@ import React from "react";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { ioLabel, typeDisplay } from "~/components/studio/workflow-io";
+import { TypeChip } from "~/components/studio/TypeChip";
 import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 
 /** 卡片外壳：与 CanvasNode 持有的外壳完全一致（无 overflow-hidden，
@@ -178,12 +179,7 @@ export function WorkflowNodeOutputsRow({
         >
           {oLabel}
         </span>
-        <span
-          className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
-          style={{ fontFamily: "var(--font-sans)" }}
-        >
-          {typeDisplay(oType)}
-        </span>
+        <TypeChip size="md">{typeDisplay(oType)}</TypeChip>
       </div>
       <div className="pb-2" />
     </div>

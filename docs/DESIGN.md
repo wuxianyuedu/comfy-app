@@ -451,7 +451,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - **卡片/浮层用 `rounded-xl`**（默认 20px），**控件（按钮、下拉触发器）用 `rounded-lg`**（16px），**输入框用 `rounded-md`**（12px），**chip/药丸用 `rounded-full`**（9999px）。
 - 小尺寸控件靠**取小**而不是换档：`rounded-[min(var(--radius-md),10px)]`（Button `xs`/`icon-xs`）、`min(var(--radius-md),12px)`（`sm`/`icon-sm`）。`ui/` 里 15 处 `rounded-[...]` 有 11 处是这种**从 token 派生**的写法，只有 3 处是裸值（`rounded-[2px]`×2、`rounded-[4px]`×1）。
 - 两处直接吃基数、不吃档位：`ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 与 `ui/sonner.tsx` 的 `--border-radius`。它们跟着整条刻度走，不是第二份来源。
-- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 21 / 302，只许降）。T4 只管 `globals.css` 的定义侧，看不见调用点，这两条补的就是那一半。
+- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 12 / 298，只许降）；③④ 两族被抽成基元后各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`），按**标记集合全命中**判、不按类名先后顺序判。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。
 
 ---
 
@@ -524,6 +524,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 | 状态徽标 | `ui/status-badge.tsx`（配色唯一出处）+ `ui/status-dot.tsx`（圆点） | **文案留在调用处**（同一状态在不同界面叫法不同，那是业务文案）。此前七个文件各写一份状态→配色表，同一个「已完成」有三种深浅 |
 | 侧栏导航 | `--color-nav-hover` / `--color-nav-selected`（别名 `--sidebar-accent` / `--sidebar-selected`） | **悬停与选中必须是两档**（浅 1.14:1 / 1.42:1，深 1.35:1 / 1.88:1，相对各自的 `--color-panel-deep` 底）。共用一档 = 结构上不可分辨 |
 | chip/药丸 | `ui/badge.tsx`（`size="pill-sm" / "pill-md"`） | **`.u-chip` 是死类**（零消费者，见 Known Gaps），别当规范用。胶囊徽标的形状与语义色都在 Badge 的三轴里；两档 pill 自带 `border-0`（tone 只给边框色不给宽度），调用点无需再写描边出口 |
+| 类型 chip（端口/参数的类型标签） | `studio/TypeChip.tsx`（`size="xs" / "sm" / "md"` × `tone="neutral" / "none"`） | 方角小片，不是胶囊徽标：`rounded-[3px]` 是这枚件自己的形状细节（3px 不在七档上，也不该成为第八档）。**`tone="none"` 是必需的**，因为四处的颜色由 `portChipStyle()` 的行内样式给全，见下节 |
 | 标题指示条 | `.detail-tab-trigger::after` | 品牌双色渐变 `linear-gradient(--color-primary → --color-accent)`；换基元后颜色只有一个出口 |
 | seed 模式图标 | `ui/seed-mode-button.tsx` + `--color-seed-*` | **类型色**：红=固定、绿=增减、骰子=随机。被 SVG `fill=`/`stroke=` 直接引用，变量缺失时 fill 退黑、stroke 退 none，箭头**整条消失且无报错** |
 | 骨架 | `ui/skeleton.tsx` | `bg-muted animate-pulse rounded-md` |
@@ -545,12 +546,22 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 | 类别 | 处数 | 为什么不是徽标 |
 | --- | --- | --- |
 | 纯数字角标（`{count}`、`{n}`、tabular-nums） | 7 | 是**计数器**，形状随容器（有的 `px-1` 无 `py`、有的 `min-w-3.5` 圆形）；`SectionHeader.tsx:23` 与 `GroupedControls.tsx:101` 两处类名**逐字相同** = 孪生，该抽自己的基元而不是塞进 Badge |
-| 序号圆 / 图标圆（`size-6`/`size-7` + `grid place-items-center`） | 6 | 等宽高圆形 + 单个字符或图标，`Workshop` 四个文件里类名逐字相同 = 另一个孪生家族，需要自己的 `StepDot` 类基元。**needs-design-decision** |
+| 序号圆 / 图标圆（`size-6`/`size-7` + `grid place-items-center`） | 6 | 等宽高圆形 + 单个字符或图标。**已抽成 `workshop/IndexDot`**（工坊 5 处逐字相同的迁完）；第 6 处是 `workshop/AttributeMultiSelect.tsx:182` 的**勾选方框**（`size-3.5 rounded` + `Check` 图标 + 选中态换整套底色），不是序号，不并 |
 | 媒体/画布上的浮层字幕（`bg-black/60 … backdrop-blur`、`pointer-events-none absolute`） | 3 | 是叠在图上的字幕条，不参与文档流 |
 | 可点 chip（带 `hover:` / `onClick` / `<Button>`） | 6 | 交互控件，归 Button/选择器家族 |
 | `avatar` 兜底圆形 | 1 | 组件内部实现 |
 
 > 一处特别值得记的排除：`DetailHeader.tsx:147` 的标签用 `ring-1 ring-inset` 而不是 `border`，**代码注释写明是故意的**（「box-shadow 不参与布局，视觉上仍是那圈浅描边」）。Badge 的 tone 带真边框，迁过去会把它刻意避开的布局位移请回来 —— 这种站点看到「形状像徽标」就改就是错的。
+
+### 类型 chip 家族：一枚形状、三档字号、两条上色来路
+
+`studio/TypeChip.tsx` 收的是画布节点与参数表单上那枚「类型标签」（`IMAGE` / `FLOAT` / `CLIP`…）。此前同一串类名 `inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold` 散在 **6 个文件的 10 处**（其中 8 处逐字相同）：`CanvasNode/SelectedToolbar`、`project-canvas/WorkflowNode`、`project-canvas/WorkflowNodeArdot`（它自己的 `PortChip` 只留配色逻辑）、`workflow-form/AspectMegapixelControl`、`WorkflowNodeParts`、`WorkflowWirePortRows` 三处、`DynamicWorkflowForm/sections/WidgetInputRow` 两处。
+
+三档字号是按调用点量出来的，不是凑的：`md` = 12px（5 处，画布节点行与 wire 行），`sm` = `text-3xs` 10px（4 处，缺省档），`xs` = 同 10px 但 `px-1 py-px`（1 处，`AspectMegapixelControl` 的组合控件里挤在最右端）。**`md` 里那档故意仍写 `text-[12px]` 而没换成 `text-xs`**：实测 `text-xs` 会连带把 `line-height` 锁成 16px，而这些 chip 现在吃的是继承行高 —— 换成 token 会静默改行高，那是 §Typography 那条「字号与行高解耦」纪律的同一个坑。它因此仍计入字面字号棘轮（12 / 298 的由来），是**已知且刻意**的一处。
+
+颜色有**两条来路**，所以 `tone` 必须能整档关掉：`neutral` 给 `bg-border-strong text-ink-muted`（随主题的通用档），`none` 一个颜色类都不加、由调用点的 `style` 全权上色（`portChipStyle()` 那套类型色）。不能靠「行内样式覆盖 class」赌：`chipStyle` 未必把 `background` 与 `color` 都给全，缺哪一项，缺省档就从 class 里漏出来改渲染。
+
+两件**没并进来**的：`workflow-library/ParamOwnerTag.tsx:15` 是同名件自己的形状（带描边、`py-px`、`font-medium`、`text-[9.5px]`、primary 底色 —— 六项标记只命中 `shrink-0` 与 `rounded-[3px]` 两项），以及上表那五类非徽标 chip。防回潮由一条「只许有一个出处」判据守着（标记集合全命中，见 §Shapes），`TypeChip.test.tsx` 五条用例管尺寸的互斥、`tone="none"` 不掺颜色类、`className` 能压过缺省档。
 
 ### 基元的三条自身纪律（都在规范里，都在事故里）
 
