@@ -136,17 +136,22 @@
   --color-seed-dice-bg: #16161c; /* 随机值（骰子底），两态同值 */
   --color-seed-dice-stroke: #9a9aad; /* 随机值（骰子描边），两态同值 */
   --color-seed-dice-pip: #ededf2; /* 随机值（骰面点），两态同值 */
-  /* 状态圆点的「发光」专用浅彩（400 档）。刻意**不**复用 --color-success /
-     --color-destructive：那两颗是基准色（#0ea472 / #e7000b），而这两颗是它们旁边
-     更亮的浅彩（#34d399 / #fb7185）—— 此前这份差别只以 `rgba(52,211,153,…)` 这种
-     裸值散在调用点，看起来像「忘了用 token」，其实是另一档颜色。签下的口径是
-     **保住色相、把裸值纳入管理**，所以补这两颗 token 而不是把它们并回基准色
-     （并回去会同时改掉发光的色相与深浅，那是设计变更不是清理）。
-     两态同值：原来的裸值本来就没有 `.dark` 分叉，加一档暗色等于凭空改渲染。
-     强度不进 token —— 走 `color-mix(… X%, transparent)` 由调用处决定，与
-     `AuroraGlow` 那条「色相走 token、强度由调用处 alpha 决定」同一条约定。 */
-  --color-glow-success: #34d399; /* 状态点发光（绿），两态同值 */
-  --color-glow-danger: #fb7185; /* 状态点发光（红），两态同值 */
+  /* 光晕（halo）专用档。**必须两态**，这一条是量出来的：把两个候选各压到
+     实际背景上算对比（α=0.8，浅色 bar = `--color-panel` #ffffff / 深色 #14141a）——
+       浅色档：基准色 2.53 / 2.51 / 4.11  vs  400 档浅彩 1.71 / 1.51 / 2.23
+       深色档：基准色 4.07 / 4.09 / 2.78  vs  400 档浅彩 6.47 / 7.37 / 4.74
+     （依次为 success / warning / danger）。⇒ 单一取值的「浅彩档」在**某一态必然偏弱**：
+     #34d399 压在白底上只有 1.71:1，光晕等于看不见，而光晕的全部作用就是被看见。
+     所以这里浅色档**直接指回基准色**（写成 `var()` 而不是抄 hex：两档从此不会各自漂移），
+     深色档才用 400 档浅彩。基准色的最差读数是 2.53–2.78，浅彩的最差是 1.51–2.23。
+     ⚠️ 这一条订正了 #1514 当时那句「两态同值：原来的裸值本来没有 `.dark` 分叉」——
+     那句把「旧代码只有一个值」当成了「设计上不需要两个值」，是把事故当设计。
+     强度不进 token —— 走 `color-mix(in srgb, … X%, transparent)` 由调用处决定
+     （状态点 80%、线类元素 60–70%），与 `AuroraGlow` 那条约定同源。 */
+  --color-glow-success: var(--color-success); /* 绿光晕（浅色=基准绿） */
+  --color-glow-warning: var(--color-warning); /* 琥珀光晕（浅色=基准琥珀） */
+  --color-glow-danger: var(--color-destructive); /* 红光晕（浅色=基准红） */
+  --color-glow-brand: var(--color-primary); /* 品牌紫光晕（连线 / 品牌点） */
   --color-border-strong: #d6d8dd; /* 强边框/分隔线 (light default) */
   --color-ink-bright: #18181b; /* 主文字 (light default) */
   --color-ink-field: #27272a; /* 输入控件文字 (light default) */
@@ -413,6 +418,13 @@
   --color-status-online: #33d499; /* 「本机/在线」状态点与文字（深色档 — 即原写死值） */
   --color-encap-pending: #fbbf24; /* 未配置对外参数的文字档 */
   --color-warning: #f59e0b; /* 警告 */
+  /* 光晕的深色档：这一态基准色本身偏暗（success #5be3c4 尚可、warning #f59e0b /
+     destructive 在 #14141a 上只有 4.09 / 2.78），400 档浅彩实测更高（7.37 / 4.74）。
+     两态取值与算法见 `@theme` 里那一段。 */
+  --color-glow-success: #34d399;
+  --color-glow-warning: #fbbf24;
+  --color-glow-danger: #fb7185;
+  --color-glow-brand: #a78bfa;
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
   --color-accent-deep: #c026d3; /* 深色档：刻意与浅色同值（品牌渐变不随主题换色相，理由见 @theme） */

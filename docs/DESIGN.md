@@ -320,8 +320,10 @@ components:
 | 危险（当底） | `--color-destructive` | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `oklch(0.704 0.191 22.216)` ⇒ `#ff6467` | `bg-destructive`、实心危险按钮 |
 | 危险（浅底上的字） | `--color-danger-strong` | `#b91c1c` | `#fca5a5` | `text-danger-strong` |
 | 成功 | `--color-success` / `--color-success-strong` | `#0ea472` / `#10b981` | `#5be3c4` / `#10b981` | 状态绿 |
-| 状态点**发光**（绿） | `--color-glow-success` | `#34d399` | 同值 | 比 `--color-success` 亮一档的浅彩（400 档）。两态同值是刻意的：原裸值本来就没有 `.dark` 分叉 |
-| 状态点**发光**（红） | `--color-glow-danger` | `#fb7185` | 同值 | 同上，配 `--color-destructive` 的那档浅彩 |
+| 状态点**光晕**（绿） | `--color-glow-success` | `#0ea472` | `#34d399` | 浅色档就是 `var(--color-success)` 本体；深色档换 400 档浅彩。**两态都必须有**，理由与对比读数见 Known Gaps 那条 |
+| 状态点**光晕**（琥珀） | `--color-glow-warning` | `#d97706` | `#fbbf24` | 同上，浅色 = `var(--color-warning)` |
+| 状态点**光晕**（红） | `--color-glow-danger` | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `#fb7185` | 同上，浅色 = `var(--color-destructive)`（那颗是超色域 oklch，此格按换算读数写，判据会跳过它 —— 与上方 `--color-destructive` 那一行同格式） |
+| 品牌**光晕**（紫） | `--color-glow-brand` | `#7c5cfc` | `#a78bfa` | 画布设置按钮那颗小点；连线的光晕直接用 `var(--color-primary)`（它本来就是这个色） |
 | 警告 | `--color-warning` / `--color-warning-strong` | `#d97706` / `#b45309` | `#f59e0b` / `#fbbf24` | 待处理/排队 |
 | 信息 | `--color-info` / `--color-info-strong` | `#2563eb` / `#1d4ed8` | `#5bc6ff` / `#7dd3fc` | 链接/提示 |
 | 在线状态 | `--color-status-online` | `#047857` | `#33d499` | 「本机/在线」点与字 |
@@ -668,8 +670,13 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ## Known Gaps
 
-- **状态点发光的浅彩已收口（决定 = 保住色相、把裸值纳入 token）**：`BrowserStatusBar.tsx` 的 devServer 三元与 `project-canvas/GlobalStepLogPanel.tsx` 的 SSE 点原先写裸值 `rgba(52,211,153,0.8)` / `rgba(251,113,133,0.8)` / `rgba(52,211,153,0.7)`。这两组**不是**基准色：`#34d399`（emerald-400）配 `--color-success` = `#0ea472`，`#fb7185`（rose-400）配 `--color-destructive` = `#e7000b`。所以按「裸值改 token」的免费清理并回基准色会同时改掉色相与深浅 —— 已签的口径是新增 `--color-glow-success` / `--color-glow-danger`（两态同值，原裸值本来没有 `.dark` 分叉），强度仍由调用处经 `color-mix(in srgb, … N%, transparent)` 决定，与 `AuroraGlow`「色相走 token、强度由调用处定」同一条约定。三条调用点零像素变化（编译探针实测：两颗 token 与三条 arbitrary shadow 都真的进产物）。
-  **仍开的一格**：同一行里 `fpsDotColor` 表用的是基准色发光（`var(--color-success)`、α=1），而 devServer 那点用浅彩 —— 两条现在**都有名字**了，但「整条状态栏统一到哪一档」仍是没签的决定。同类裸值不止这一处（品牌紫、卡片投影等），但**条数不抄在这里**：权威清单由 `pnpm theme:check`（`scripts/check-theme-colors.cjs`）逐文件打印「处数 + 为什么可以留」，未豁免的余量走棘轮（今天实测 0）。本仓对「数字不属于事实核」的口径是不写数字、只给指针。
+- **光晕（halo）已收口成一族，规则是「色相走 `--color-glow-*`（四颗、两态）、强度由调用处 `color-mix` 定」**：#1514 第一次收的时候把这档定成了**单值浅彩**（`#34d399` / `#fb7185`），理由是「它们与基准色不是同一个颜色，别并回去」。那句话只对了一半 —— 把两个候选各压到真实背景上算对比（α=0.8；bar 底 = `--color-panel`，浅色 `#ffffff` / 深色 `#14141a`）：
+  | 光晕色 | 浅色档 | 深色档 |
+  | --- | --- | --- |
+  | 基准 success / warning / danger | 2.53 / 2.51 / 4.11 | 4.07 / 4.09 / 2.78 |
+  | 400 档浅彩 | **1.71 / 1.51 / 2.23** | 6.47 / 7.37 / 4.74 |
+  ⇒ **单一取值在某一态必然偏弱**：浅彩压在白底上只有 1.5–2.2:1，光晕基本等于看不见，而被看见正是光晕唯一的作用。所以这四颗 token 必须两态，且浅色档**直接写成 `var(--color-…)`**（不是抄一份基准色的 hex —— 抄了就会和源头各自漂移），深色档才用 400 档浅彩。这也是对 #1514 那句「两态同值：原裸值本来没有 `.dark` 分叉」的订正：**把「旧代码只有一个值」当成「设计上不需要两个值」，是拿事故当设计**。
+  顺带收掉的两处：同一栏里 `fpsDotColor` 三档原先是基准色 α=1（隔壁 devServer 那点已经是浅彩）—— 同尺寸、同语义的两个点两套配方，现在都是 80% 走同一族；`canvas/CanvasSettingsButton.tsx` 那颗品牌点与 4 处连线光晕的裸值（`rgba(167,139,250,0.7)` / `rgba(124,92,252,0.6)`）也并进这一族，连线直接用 `var(--color-primary)`（`#7c5cfc` 逐字节就是那个值 ⇒ 零像素）。判据从「禁某两个裸值」升级成**按形状归零**：`shadow-[0_0_…rgba(…)]` 与任何 `shadow-[…#hex]` 都判红，并用反向样本钉住两条边界 —— 投影必有偏移或扩散（`0_0_` 不误伤仓里那 6 处），同一档浅彩在别处是合法的角色色（`#34D399` 当类别色）。其余裸值（卡片投影等）的权威清单不在本文抄条数，由 `pnpm theme:check` 逐文件打印「处数 + 为什么可以留」。
 
 - **Storybook 覆盖 29/83**（有 story 的组件：alert、aspect-ratio、avatar、badge、button、empty-state、field、form-field、form-rhf、image-viewer、json-viewer、kbd、list-badge、media-thumbnail、option-list-popover、page-loading、progress-bar、seed-mode-button、segment-popover、simple-key-handler、skeleton、source-tag、spinner、status-badge、status-dot、task-type-chip、toggle、validation-error-list、water-fill-progress）。核心交互件里 **input、dialog、select、card、tooltip、popover、switch、checkbox、tabs、dropdown-menu、context-menu、menubar、navigation-menu、command** 无 story；其中 dialog/select/tabs/dropdown-menu/card/input/switch/checkbox **同时无 `.test.tsx`**。⇒ 「明暗两态长什么样」这一层契约目前只在那 29 个组件上可核验。
 - **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一 grep 在 `u-title` 上抓到 51 处、`u-title-page` 18 处，所以这个 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名精确计数：`u-title` 26 处、`u-title-page` 17 处、`u-title-stage` 1 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。
