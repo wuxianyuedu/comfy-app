@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 侧栏选中态的**接线**判据（ISSUE #1291）。
  *
