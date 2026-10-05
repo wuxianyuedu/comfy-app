@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { IndexDot } from "~/components/workshop/IndexDot";
 import { Textarea } from "~/components/ui/textarea";
 import { SHOT_STATUS_LABEL } from "./shot-status-config";
 import type { ShotProgress } from "./useStoryboardPlanner";
@@ -60,9 +61,7 @@ export function ShotRow({
   return (
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
-        <span className="bg-primary-soft text-primary grid size-6 place-items-center rounded-full text-xs font-semibold">
-          {shot.index}
-        </span>
+        <IndexDot index={shot.index} />
         <span className="text-muted-foreground text-xs">
           {shot.sceneHeading}
         </span>

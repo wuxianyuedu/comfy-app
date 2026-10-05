@@ -95,7 +95,7 @@ export const ViewableImageGrid: Story = {
   render: () => (
     <div className="flex items-start gap-8">
       <div className="flex flex-col items-center gap-2">
-        <div className="h-40 w-40">
+        <div className="size-40">
           <ViewableImage
             src={String(resolveSource("media", "sample-landscape.svg"))}
             alt="能加载的缩略图"
@@ -108,7 +108,7 @@ export const ViewableImageGrid: Story = {
         </span>
       </div>
       <div className="flex flex-col items-center gap-2">
-        <div className="h-40 w-40">
+        <div className="size-40">
           <ViewableImage
             src={String(resolveSource("media", "missing.png"))}
             alt="加载失败的缩略图"

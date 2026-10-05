@@ -33,6 +33,7 @@ import {
 } from "~/lib/workflow/workflow-run-store";
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
 import { WorkflowRunRawCliModal } from "./WorkflowRunRawCliModal";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { StatusBadge } from "~/components/ui/status-badge";
@@ -159,9 +160,9 @@ export function WorkflowRunLogModal({
                 </span>
               )}
               {run && (
-                <span className="bg-subtle text-ink-faint text-3xs rounded-full px-1.5 py-px font-medium">
+                <Badge tone="neutral" size="pill-sm">
                   {runLogSourceLabel(run.source)}
-                </span>
+                </Badge>
               )}
               {run && (
                 <StatusBadge

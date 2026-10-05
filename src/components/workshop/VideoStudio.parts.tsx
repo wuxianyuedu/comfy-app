@@ -16,6 +16,7 @@ import {
 } from "~/lib/workshop/types";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { IndexDot } from "~/components/workshop/IndexDot";
 import { Input } from "~/components/ui/input";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 
@@ -195,9 +196,7 @@ export function ShotCard({
   return (
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
-        <span className="bg-primary-soft text-primary grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
-          {shot.index}
-        </span>
+        <IndexDot index={shot.index} />
         <span className="text-muted-foreground truncate text-xs">
           {shot.sceneHeading}
         </span>

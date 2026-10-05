@@ -17,6 +17,7 @@
 import { upperToken } from "~/lib/upper-token";
 import React, { useMemo, useState } from "react";
 
+import { Badge } from "~/components/ui/badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -180,13 +181,13 @@ export function WorkshopEncapsulationPanel({
         />
         <h3 className="text-ink-strong text-sm font-medium">工坊封装</h3>
         {status.ready ? (
-          <span className="bg-success/15 text-success-strong text-2xs rounded-full px-2 py-0.5">
+          <Badge tone="success" size="pill-md">
             已配置 · 工坊可用
-          </span>
+          </Badge>
         ) : (
-          <span className="bg-warning/15 text-warning-strong text-2xs rounded-full px-2 py-0.5">
+          <Badge tone="warning" size="pill-md">
             未配置
-          </span>
+          </Badge>
         )}
         {mode && (
           <span className="text-muted-foreground text-2xs">

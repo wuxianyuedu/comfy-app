@@ -71,7 +71,7 @@ function Body({ rows = 24 }: { rows?: number }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border-border-strong h-72 w-[40rem] overflow-hidden rounded-xl border">
+    <div className="border-border-strong h-72 w-160 overflow-hidden rounded-xl border">
       {children}
     </div>
   );

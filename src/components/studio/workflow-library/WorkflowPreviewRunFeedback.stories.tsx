@@ -152,7 +152,7 @@ export const ViewModeMatrix: Story = {
               <span className="text-ink-faint font-mono text-[11px]">
                 phase = {key}
               </span>
-              <div className="border-border-strong bg-surface w-[38rem] rounded-lg border p-2">
+              <div className="border-border-strong bg-surface w-152 rounded-lg border p-2">
                 <WorkflowPreviewRunFeedback
                   {...args}
                   viewMode={viewMode}
