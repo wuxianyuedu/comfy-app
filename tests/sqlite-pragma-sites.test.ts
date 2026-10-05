@@ -161,20 +161,22 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
   });
 
   it("三处 TS 站点都只走共用出口（不许再各写一份字面量、也不许各写一遍循环）", () => {
+    /* 软断言：三处站点 × 四条判据是**十二格独立的**结论 —— 一处回退不该把
+       另外两处的读数一起藏起来（§11.18）。 */
     for (const rel of TS_SITES) {
       const src = code(rel);
       /* 出口是 `applySqlitePragmas`（清单 + 撞锁重试都在它里面，ISSUE #1282）：
        * 三处站点要的是同一件事，各写一遍循环就必然漏一处。 */
-      expect(src, `${rel} 必须 import 共用出口`).toContain(
+      expect.soft(src, `${rel} 必须 import 共用出口`).toContain(
         "applySqlitePragmas",
       );
-      expect(src, `${rel} 不该再自己遍历清单`).not.toContain(
+      expect.soft(src, `${rel} 不该再自己遍历清单`).not.toContain(
         "for (const pragma of SQLITE_PRAGMAS)",
       );
-      expect(src, `${rel} 不该再硬编码 journal_mode`).not.toContain(
+      expect.soft(src, `${rel} 不该再硬编码 journal_mode`).not.toContain(
         '"PRAGMA journal_mode = WAL"',
       );
-      expect(src, `${rel} 不该再硬编码 foreign_keys`).not.toContain(
+      expect.soft(src, `${rel} 不该再硬编码 foreign_keys`).not.toContain(
         '"PRAGMA foreign_keys = ON"',
       );
     }

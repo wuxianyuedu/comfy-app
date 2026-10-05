@@ -238,9 +238,15 @@ describe("跨平台动作的实现契约", () => {
     // package.json 的 `lint` 脚本，两侧门禁脚本只是 `pnpm run lint` 的委托方，
     // 其源码里不再内联这些参数——故这里只核对「两侧都委托同一 lint 命令」，
     // `--max-warnings` 的真实生效改到下面对 package.json 的断言里校验。
+    /* 软断言：五个关键词 × 两侧是十格独立结论 —— 缺一个时想看的是「缺了哪些」，
+       而不是「第一个是哪个」（§11.18）。 */
     for (const needle of ["typecheck", "eslint", "run", "lint", "vitest"]) {
-      expect(squash(ps1), `quality-gate.ps1 缺 ${needle}`).toContain(needle);
-      expect(squash(mjs), `quality-gate.mjs 缺 ${needle}`).toContain(needle);
+      expect.soft(squash(ps1), `quality-gate.ps1 缺 ${needle}`).toContain(
+        needle,
+      );
+      expect.soft(squash(mjs), `quality-gate.mjs 缺 ${needle}`).toContain(
+        needle,
+      );
     }
     // lint 的 `--max-warnings` 唯一真源在 package.json，别让它静默丢失（否则
     // 零警告门禁形同虚设却没人发现）。
@@ -253,8 +259,8 @@ describe("跨平台动作的实现契约", () => {
     ).toContain("--max-warnings");
     // 两侧的三项门禁名必须一致（增减门禁时只改一侧 = 两个平台给出不同结论）
     for (const key of ["typecheck", "lint", "test"]) {
-      expect(mjs).toContain(`${key}:`);
-      expect(ps1).toContain(`Name = "${key}"`);
+      expect.soft(mjs).toContain(`${key}:`);
+      expect.soft(ps1).toContain(`Name = "${key}"`);
     }
   });
 
