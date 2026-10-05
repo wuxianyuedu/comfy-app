@@ -57,6 +57,8 @@ export function UsageTestDialog({
 }) {
   /* 关闭语义（Esc / 点遮罩）交给 `ui/dialog`：此前自绘遮罩 div + 手写
      `onClick`，Esc 与焦点归还都没有。 */
+  /* mode 快捷选择的当前值：fields 里的 mode 值合法（在预设清单内、非坏值）
+   * 才回填 ToggleGroup，否则给空数组（全不选）。 */
   return (
     <Dialog open onOpenChange={(next) => !next && d.closeUsageTest()}>
       {/* 本弹窗自绘关闭按钮（见下方 header）——必须关掉基元的内置那枚，
@@ -274,6 +276,17 @@ function UsageVideoModeQuickPick({
   d: RemoteModelDialogs;
   usageTest: NonNullable<UsageTestDialogState>;
 }) {
+  /* mode 快捷选择的当前值：fields 里的 mode 值合法（在预设清单内、非坏值）
+   * 才回填 ToggleGroup，否则给空数组（全不选）。 */
+  const modeValue = usageTest.fields.find((f) => f.key === "mode")?.value;
+  const trimmedModeValue = modeValue?.trim();
+  const modeValueIsBroken = modeValue != null && isModeValueBroken(modeValue);
+  const modeToggleValue =
+    trimmedModeValue &&
+    !modeValueIsBroken &&
+    VIDEO_MODE_PRESETS.some((p) => p === trimmedModeValue)
+      ? [trimmedModeValue]
+      : [];
   return (
     <>
       <div className="mb-2">
@@ -282,18 +295,7 @@ function UsageVideoModeQuickPick({
         </p>
         <ToggleGroup
           multiple={false}
-          value={(() => {
-            const modeValue = usageTest.fields.find(
-              (f) => f.key === "mode",
-            )?.value;
-            const trimmed = modeValue?.trim();
-            const isBroken = modeValue != null && isModeValueBroken(modeValue);
-            return trimmed &&
-              !isBroken &&
-              VIDEO_MODE_PRESETS.some((p) => p === trimmed)
-              ? [trimmed]
-              : [];
-          })()}
+          value={modeToggleValue}
           onValueChange={(vals) => {
             const next = vals[0];
             if (typeof next === "string") d.setVideoMode(next);
