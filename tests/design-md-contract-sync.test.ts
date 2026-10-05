@@ -342,6 +342,18 @@ const SECTION_HEADER_MARKS = [
   /border-t border-dashed bg-transparent/,
 ];
 
+/** 状态发光的浅彩裸值（emerald-400 / rose-400）—— 只能经 `--color-glow-*` 取。
+ *  **不带 `g`**：这里只 `.test()`，而带 `g` 的正则会把 `lastIndex` 留在上一次调用上，
+ *  同一份文件里第二次出现就静默漏判（判据自己变成一台会漏的工具）。
+ *  ⚠️ 判据**只认 `rgba(52,211,153…)` 这一种裸形态**：同一档浅彩还合法地存在于
+ *  别的位置（`canvas-types.ts` 的节点类别色、`HomePage.tsx` 的项目类别色就写着
+ *  `#34D399` / `#FB7185`），第一版把 hex 一并禁掉，当场误报三份与发光无关的文件。
+ *  hex 那种写法只在「被包进 shadow 候选名」时算违规（见 GLOW_HEX_IN_SHADOW）。 */
+const GLOW_RAW =
+  /rgba\(\s*(?:52\s*,\s*211\s*,\s*153|251\s*,\s*113\s*,\s*133)\s*[,/]/;
+/** `shadow-[…#34d399…]`：发光位置直接写 hex 也算回潮。 */
+const GLOW_HEX_IN_SHADOW = /shadow-\[[^\]]*(?:34d399|fb7185)/i;
+
 describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", () => {
   /** 棘轮基线：本轮清理后实测的存量，只许降不许升（要升得改用例并写理由）。
    *  21→12 是类型 chip 收进 `~/components/studio/TypeChip`（10 处调用点各写一份 →
@@ -472,6 +484,40 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     }
   });
 
+  it("状态发光的浅彩只有 token 一个出处，调用点不许再写回裸值", () => {
+    /* #1508 那格 needs-design-decision 签完之后落地的防回潮半边：`#34d399` /
+       `#fb7185` 这两档浅彩与基准色 `--color-success` / `--color-destructive`
+       不是同一个颜色，此前以裸值散在三处、看起来像「忘了用 token」。现在的
+       口径是色相走 `--color-glow-*`、强度由调用处 `color-mix(… N%)` 决定，
+       所以**裸值回来就是红**（强度可以各站不同，色相不行）。 */
+    const offenders: string[] = [];
+    for (const abs of collectProductFiles(SRC_DIR)) {
+      const code = stripComments(readFileSync(abs, "utf8"));
+      /* `globals.css` 是 token 的**定义处**，那两颗 hex 只许在那里；
+         其余文件只许经 `var(--color-glow-*)` 取值。 */
+      const rel = path.relative(ROOT_DIR, abs).split(path.sep).join("/");
+      if (rel === "src/app/globals.css") continue;
+      if (GLOW_RAW.test(code) || GLOW_HEX_IN_SHADOW.test(code)) {
+        offenders.push(rel);
+      }
+    }
+    expect(
+      offenders,
+      "状态发光的浅彩又写成裸值了 —— 用 var(--color-glow-success) / " +
+        `var(--color-glow-danger)，强度走 color-mix：\n${offenders
+          .map((o) => `  ${o}`)
+          .join("\n")}`,
+    ).toEqual([]);
+    /* 定义处真的在（否则上面那条会因为「谁都没有」而空绿）。 */
+    const css = readFileSync(GLOBALS_PATH, "utf8");
+    const declValue = (name: string) =>
+      new RegExp(`^\\s*${name}:\\s*([^;]+);`, "m").exec(css)?.[1]?.trim();
+    expect(
+      [declValue("--color-glow-success"), declValue("--color-glow-danger")],
+      "两颗发光 token 不在 globals.css 里（判据的锚没了）",
+    ).toEqual(["#34d399", "#fb7185"]);
+  });
+
   it("负控制：上面每条判据都真的能被抓（否则它们绿得没意义）", () => {
     const tierPx = renderedRadiusValues(
       parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8")),
@@ -493,6 +539,41 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
         `${fam.name}的手抄样本没被自己的标记抓出（这条判据会静默全绿）`,
       ).toBe(true);
     }
+    /* 发光裸值那条：喂回一个旧写法必须被抓，而现在的 token 形态不许被抓。
+       样本一律**拆开拼**（`arbitrary()`）—— Tailwind 的默认源扫描连测试文件与 `.md`
+       一起读，一整条 `prop-[值]` 候选名出现在源文本里就**真的被生成进产物**，
+       于是造出一个「源码没有、产物却有」的死类（契约 §Colors 记了这条实测）。 */
+    const arbitrary = (prop: string, value: string) => `${prop}-[${value}]`;
+    expect(
+      "0 0 6px rgba(52,211,153,0.8)",
+      "回到裸值的发光没被抓住（这条判据空转）",
+    ).toMatch(GLOW_RAW);
+    expect(
+      arbitrary("shadow", "0_0_6px_#34d399"),
+      "发光位置写成 hex 没被抓住",
+    ).toMatch(GLOW_HEX_IN_SHADOW);
+    expect(
+      GLOW_HEX_IN_SHADOW.test(
+        arbitrary("shadow", "0_0_6px_var(--color-glow-success)"),
+      ),
+      "正确的 token 形态被误判成 hex 回潮",
+    ).toBe(false);
+    /* 反向钉住**范围**：这一档浅彩在别处是合法的角色色（节点/项目类别色），
+       判据不许把它们一起抓走 —— 第一版就是这么误报了三个无关文件。 */
+    expect(GLOW_RAW.test(arbitrary("bg", "#34d399"))).toBe(false);
+    expect(
+      GLOW_HEX_IN_SHADOW.test(arbitrary("bg", "#34D399")),
+      "类别色被发光判据误抓（判据越界了）",
+    ).toBe(false);
+    expect(
+      GLOW_RAW.test(
+        arbitrary(
+          "shadow",
+          "0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)",
+        ),
+      ),
+      "正确的 token 形态被误判成裸值（判据太松）",
+    ).toBe(false);
     /* 反向：异类不许被同族标记抓到。`ParamOwnerTag` 那枚带描边的类型标签
        （`py-px` + `font-medium`）与胶囊那枚 11px 的图标方块（`grid size-9`、
        没有 h-5 / gap-1.25）各是其主自己的形状 —— 抓到了说明标记写得太松，

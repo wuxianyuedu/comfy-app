@@ -136,6 +136,17 @@
   --color-seed-dice-bg: #16161c; /* 随机值（骰子底），两态同值 */
   --color-seed-dice-stroke: #9a9aad; /* 随机值（骰子描边），两态同值 */
   --color-seed-dice-pip: #ededf2; /* 随机值（骰面点），两态同值 */
+  /* 状态圆点的「发光」专用浅彩（400 档）。刻意**不**复用 --color-success /
+     --color-destructive：那两颗是基准色（#0ea472 / #e7000b），而这两颗是它们旁边
+     更亮的浅彩（#34d399 / #fb7185）—— 此前这份差别只以 `rgba(52,211,153,…)` 这种
+     裸值散在调用点，看起来像「忘了用 token」，其实是另一档颜色。签下的口径是
+     **保住色相、把裸值纳入管理**，所以补这两颗 token 而不是把它们并回基准色
+     （并回去会同时改掉发光的色相与深浅，那是设计变更不是清理）。
+     两态同值：原来的裸值本来就没有 `.dark` 分叉，加一档暗色等于凭空改渲染。
+     强度不进 token —— 走 `color-mix(… X%, transparent)` 由调用处决定，与
+     `AuroraGlow` 那条「色相走 token、强度由调用处 alpha 决定」同一条约定。 */
+  --color-glow-success: #34d399; /* 状态点发光（绿），两态同值 */
+  --color-glow-danger: #fb7185; /* 状态点发光（红），两态同值 */
   --color-border-strong: #d6d8dd; /* 强边框/分隔线 (light default) */
   --color-ink-bright: #18181b; /* 主文字 (light default) */
   --color-ink-field: #27272a; /* 输入控件文字 (light default) */
