@@ -38,6 +38,14 @@
  * （`lib-node-only-scan.mjs` 由 `tests/lib-node-only-declarations.test.ts` 跑），
  * 而它们在 C 组的固定清单里、每次提交都执行 —— 那是真的执行者，不是「文档里写着」。
  *
+ * **扫描面是「事实 ∪ 名字族」，不是只有名字族**（ISSUE #1444 残活 A）：
+ * 旧口径只看名字前缀，于是 `shell-gate.mjs` / `storybook-check.mjs` /
+ * `visual-gate.mjs` / `pixel-run.mjs` 这四份**真在门禁链里跑**的判定型判据
+ * 因名字不叫 `check-` 而不在盘点里 —— 判据自报「40 份」，真值是 44。
+ * 「判据的覆盖面与它自称的不符」正是本脚本的立案现场（#1451），
+ * 所以它自己的覆盖面必须由**门禁链里的事实**算出来（`gateChainScripts()`），
+ * 名字前缀只作兜底（保证「新写的 `check-*` 还没接钩子」当场可见）。
+ *
  * 用法：
  *   node scripts/check-gate-executors.cjs            # 检查（判定型无执行者即红）
  *   node scripts/check-gate-executors.cjs --report   # 只出清单，不判失败（盘点用）
@@ -55,17 +63,36 @@ const LEDGER = path.join(__dirname, ".gate-executor-ledger.json");
 /* ── 扫描范围：`scripts/` 下的判据脚本 ─────────────────────────── */
 
 /**
- * 「判据脚本」的识别口径：`scripts/` 顶层、名字以 `check-` 起头，或属于
- * 已核定的报告型族（`tw4-*` / `report-*` / `lib-node-only-scan` /
- * `render-doc-placeholders`）。不去递归子目录（`launcher-core/**` 是启动编排的
- * 实现件，不是判据；它们的执行者是 `dev-launcher.mjs`，另一条线）。
+ * 「判据脚本」的识别口径 —— **两条来源取并集**，因为单靠名字认不出来。
+ *
+ * ① **被当判据调用的事实**（主口径）：`.githooks/pre-commit` 的 `run` 步骤、
+ *    `quality-gate.mjs` 的 gate 表、`quality-gate.ps1` 的 `$Blocks` 里出现的
+ *    `scripts/<x>` —— 一个脚本被门禁链按名字调起来，它就是判据，与它叫什么无关。
+ * ② **名字族**（兜底）：`check-` / `tw4-` / `report-` / `lib-node-only-scan` /
+ *    `render-doc-placeholders`。覆盖面靠它兜底：新写一个 `check-*.cjs` 还没接进
+ *    钩子时，也当场被这条判据看见（那正是本脚本要拦的形态）。
+ *
+ * **为什么不能只留 ①**：那么「新写一个判定型脚本、没接钩子也没登记」就永远不会
+ * 被看出来 —— 判据的扫描面本身就是「有执行者的东西」，问题却出在没有执行者的那些。
+ * **为什么不能只留 ②**（改名之前的旧口径，实测翻过车）：`shell-gate.mjs` /
+ * `storybook-check.mjs` / `visual-gate.mjs` / `pixel-run.mjs` 四份**真在门禁链里跑**的
+ * 判定型判据，只因名字不叫 `check-` 就不在盘点里 —— 判据自报「40 份判据脚本」而真值
+ * 是 44，且漏掉的恰是最容易被摘掉又没人发现的那类（`storybook-check.mjs` 连
+ * `pnpm check:all` 那一档都在跑。ISSUE #1444 残活 A）。
+ * **这条判据的立案现场（#1451）正是「判据的覆盖面与它自称的不符」**，所以它自己的
+ * 覆盖面必须是**事实**算出来的，不是名字猜出来的。
  *
  * 为什么不按「目录里的所有 .cjs/.mjs」一刀切：`scripts/` 里还有编排器
- * （`dev.mjs` / `build-desktop.mjs`）、一次性工具（`repair-imports.cjs`）与
- * `*.ps1` 入口 —— 它们不是判据，逼它们「要么进钩子要么登记」等于制造噪音，
- * 而噪音会让人整条规则都不看（同 §12.16 的教训）。
+ * （`dev.mjs` / `build-desktop.mjs` / `dev-launcher.mjs`）、一次性工具
+ * （`repair-imports.cjs` / `heal-db.cjs`）与 `*.ps1` 入口 —— 它们不是判据，逼它们
+ * 「要么进钩子要么登记」等于制造噪音，而噪音会让人整条规则都不看（同 §12.16 的教训）。
+ * 用「门禁链里被按名字调起」这条事实把它们分开，比维护一份「哪些文件是判据」的
+ * 手工名单可靠 —— 手工名单会随改名 / 搬目录静默失效。
+ *
+ * 不去递归子目录（`launcher-core/**` 是启动编排的实现件，不是判据；它们的执行者是
+ * `dev-launcher.mjs`，另一条线）。
  */
-const REPORT_TOOL_PREFIXES = [
+const GATE_NAME_PREFIXES = [
   "check-",
   "tw4-",
   "report-",
@@ -73,9 +100,77 @@ const REPORT_TOOL_PREFIXES = [
   "lib-node-only-scan",
 ];
 
-function isGateScript(name) {
+/**
+ * 门禁链里被按名字调起的 `scripts/<x>` 全表（口径 ① 的输入）。
+ *
+ * **只读「门禁步骤位置」，不读文件全文** —— 这一条是实测撞出来的：全文匹配会把
+ * 注释里提到的、被本地 import 的、以及散文里当占位符举例的（`x.cjs` / `xxx.cjs`）
+ * 一网打进，于是 `affected-tests.mjs`（清单库）、`install-git-hooks.mjs`（postinstall）、
+ * `quality-gate.mjs`（编排器）、`quality-gate-shared.mjs`（共享常量）全被当成判据。
+ * 下面三个位置才是「判据被当判据用」的事实：
+ *   · `.githooks/pre-commit` 的 `run "<标签>" node scripts/<x>` 步骤行；
+ *   · `scripts/quality-gate.mjs` 的 `args: ["../scripts/<x>"]` gate 表项；
+ *   · `scripts/quality-gate.ps1` 的 `$Blocks` 表项（`Args` 栏）。
+ * 比对 basename 而不是整条命令：三种写法（`scripts/x`、`../scripts/x`、
+ * `scripts\x`）落点相同，而整条命令一比就会随引号 / 反斜杠 / 参数顺序漂移。
+ * @returns {Set<string>}
+ */
+function gateChainScripts() {
+  const out = new Set();
+  /**
+   * 从一段文本里收 `scripts/<x>` 的 basename。
+   * @param {string} text
+   */
+  const collect = (text) => {
+    for (const m of text.matchAll(
+      /scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g,
+    )) {
+      out.add(m[1]);
+    }
+  };
+
+  // ① 钩子的 `run "<标签>" <命令>` 步骤行（与 tests/doc-check-hook-wiring.test.ts 同款解析）。
+  const hook = path.join(ROOT, ".githooks/pre-commit");
+  if (fs.existsSync(hook)) {
+    for (const m of fs
+      .readFileSync(hook, "utf8")
+      .matchAll(/^ {2}run "[^"]+" (.+)$/gm)) {
+      collect(m[1] ?? "");
+    }
+  }
+
+  // ② `quality-gate.mjs` 的 gate 表项。
+  const qm = path.join(ROOT, "scripts/quality-gate.mjs");
+  if (fs.existsSync(qm)) {
+    for (const m of fs
+      .readFileSync(qm, "utf8")
+      .matchAll(/args:\s*\[([^\]]*)\]/g)) {
+      collect(m[1] ?? "");
+    }
+  }
+
+  // ③ `quality-gate.ps1` 的 `$Blocks` 表项（`Cmd = "node"; Args = @("scripts\x.cjs")`）。
+  const qp = path.join(ROOT, "scripts/quality-gate.ps1");
+  if (fs.existsSync(qp)) {
+    for (const m of fs
+      .readFileSync(qp, "utf8")
+      .matchAll(/Args\s*=\s*@\(([^)]*)\)/g)) {
+      collect(m[1] ?? "");
+    }
+  }
+
+  return out;
+}
+
+/**
+ * 是否属于扫描面：**被门禁链调用**（事实）或**名字在前缀族里**（兜底）。
+ * @param {string} name
+ * @param {Set<string>} chain
+ */
+function isGateScript(name, chain) {
   if (!/\.(cjs|mjs)$/.test(name)) return false;
-  return REPORT_TOOL_PREFIXES.some((p) => name.startsWith(p));
+  if (chain.has(name)) return true;
+  return GATE_NAME_PREFIXES.some((p) => name.startsWith(p));
 }
 
 /* ── 执行者来源（六处；口径见文件头） ─────────────────────────── */
@@ -189,9 +284,10 @@ function readLedger() {
 const ledger = readLedger();
 const executors = executorSources();
 const scriptsDir = path.join(ROOT, "scripts");
+const chainScripts = gateChainScripts();
 const names = fs
   .readdirSync(scriptsDir, { withFileTypes: true })
-  .filter((e) => e.isFile() && isGateScript(e.name))
+  .filter((e) => e.isFile() && isGateScript(e.name, chainScripts))
   .map((e) => e.name)
   .sort();
 
