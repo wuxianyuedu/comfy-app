@@ -51,7 +51,11 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
+import {
+  KNOWN_FAILED_CASES,
+  describeKnownFailedCases,
+  vitestExcludeArgs,
+} from "./quality-gate-shared.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
@@ -232,7 +236,7 @@ export const FIXED_STRUCTURAL_TESTS = [
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
-/** @typedef {{mode: "subset" | "all", tests: string[], reasons: Record<string, string>}} Resolution */
+/** @typedef {{mode: "subset" | "all", tests: string[], reasons: Record<string, string>, excludeArgs?: string[], excludedCases?: string[]}} Resolution */
 
 const WIDE_REASON = {
   config: "全局测试配置（预算 / include / setupFiles）",
@@ -343,7 +347,7 @@ function wideReasonFor(rel) {
  * 核心解析：改动清单 + 测试清单 +（注入的）读文件函数 → 该跑哪些测试。
  * 不碰 git、不碰真实磁盘，便于用例喂夹具。
  *
- * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[]}} input
+ * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailedCases?: import("./quality-gate-shared.mjs").KnownFailedCase[]}} input
  * @returns {Resolution}
  */
 export function resolveAffectedTests({
@@ -351,7 +355,7 @@ export function resolveAffectedTests({
   testFiles,
   sourceFiles,
   readText,
-  knownFailed = [],
+  knownFailedCases = [],
 }) {
   /** @type {Record<string, string>} */
   const reasons = {};
@@ -478,14 +482,21 @@ export function resolveAffectedTests({
     }
   }
 
-  /* 已知基线红（`KNOWN_FAILED_FILES` 单点定义，与 `run-tests.mjs` / 一键门禁同一份）：
-   * 从**增量**面里剔掉，否则别线的红会让无关提交落不了地。固定清单不受影响 ——
-   * 那几条是全库不变量的执行者，没有「先放行」的余地。剔除是被打印出来的，不是静默。 */
-  const skipped = [...picked].filter((t) => knownFailed.includes(t));
-  for (const t of skipped) picked.delete(t);
-
+  /* 已知基线红（登记表单点定义在 `quality-gate-shared.mjs`，与 `run-tests.mjs` /
+   * 一键门禁同一份）：被点名的**用例**要跳掉，否则别线的红会让无关提交落不了地。
+   * 固定清单不受影响 —— 那几条是全库不变量的执行者，没有「先放行」的余地。
+   *
+   * 粒度是**用例**（ISSUE #1282 收尾）：这里**不再把文件从增量面剔掉**，只把
+   * 「要跳哪几条」带给 vitest（`-t '<负前瞻正则>'`）。改之前是 `picked.delete(文件)`，
+   * 一条红会把同文件其余已绿的断言一起从增量面摘走（实测 1 + 17）。剔除是被打印的，
+   * 不是静默的：`__excludedCases` 原样回给调用方，由它打印。 */
+  const excludedCases = knownFailedCases.filter((c) => picked.has(c.file));
   const out = withFixed("subset", picked);
-  if (skipped.length > 0) out.reasons.__skipped = skipped.join(" ");
+  if (excludedCases.length > 0) {
+    out.reasons.__skipped = describeKnownFailedCases(excludedCases).join(" ");
+    out.excludedCases = describeKnownFailedCases(excludedCases);
+    out.excludeArgs = vitestExcludeArgs(excludedCases);
+  }
   return out;
 }
 
@@ -603,6 +614,20 @@ function main() {
     process.stdout.write(FIXED_STRUCTURAL_TESTS.join(" ") + "\n");
     return 0;
   }
+  // `--exclude-args`：只打印「跳过已知基线红用例」要给 vitest 加的 `-t <模式>`。
+  // 单独一个出口是因为调用方（`run-affected-tests.mjs`）的 stdout 协议是
+  // 「一行空格分隔的测试路径」，把参数混进去会让那条协议多一种形态。
+  if (argv.includes("--exclude-args")) {
+    // 每行**一个参数**（`-t` 一行、模式一行），不是空格分隔 —— 模式里必然含空格
+    // （全名用 `" > "` 连接），按空白切会把它拆碎，排除项静默失效。这条协议
+    // 与「测试路径一行」不同，是因为两者的元素形状不同：路径不含空格，模式含。
+    // 模式里包含**全部**登记项，不按本次改动面筛：`-t` 是全局过滤器，模式里每条
+    // 都锚定到唯一全名，没进本次运行面的条目不会匹配到任何东西 —— 于是「打印哪些
+    // 条目」不影响判决，少一层「两条命令算出不同清单」的分叉。
+    const args = vitestExcludeArgs(KNOWN_FAILED_CASES);
+    process.stdout.write(args.length === 0 ? "" : args.join("\n") + "\n");
+    return 0;
+  }
   const ci = argv.indexOf("--changed");
   const changed =
     ci >= 0
@@ -622,7 +647,7 @@ function main() {
           testFiles: inputs.testFiles,
           sourceFiles: inputs.sourceFiles,
           readText,
-          knownFailed: KNOWN_FAILED_FILES,
+          knownFailedCases: KNOWN_FAILED_CASES,
         });
 
   const extra = res.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t));

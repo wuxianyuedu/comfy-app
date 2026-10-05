@@ -31,7 +31,7 @@ Extend / maintain - how to add a new gate:
     无差别拼 .cmd 会让那条门禁连进程都不起却被读成通过 —— 见 ISSUE #1345 与 Invoke-Check。
     解析不到会打 `[FAIL][GATE-NOEXEC]` 并退 127，绝不进 `[OK] ... passed`。
   - New test files under the vitest include pattern are picked up automatically.
-  - Known baseline failures live in KNOWN_FAILED_FILES; once fixed, delete the
+  - Known baseline failures live in KNOWN_FAILED_CASES; once fixed, delete the
     entry and it is enforced again.
 #>
 param(
@@ -45,41 +45,36 @@ $ErrorActionPreference = "Continue"
 # Full vitest excludes them by default so one-click gives a trustworthy green.
 # Remove an entry once it is fixed so it is enforced again.
 #
-# **清单的唯一来源是 scripts/quality-gate-shared.mjs**（Node 侧同一门禁
-# scripts/quality-gate.mjs 也要读它）。此前它写在本文件里、由
-# scripts/run-tests.ps1 用正则解析——那等于把另一门语言的源码当数据源，
-# 改一次写法就会让解析静默返回空数组（排除项悄悄失效，红/绿不再可归因）。
-# 解析失败时**降级为不排除**并显式 WARN，不再假装清单为空是正常情况。
-function Get-KnownFailedFilesFromShared {
-  $shared = Join-Path $PSScriptRoot "quality-gate-shared.mjs"
-  if (-not (Test-Path -LiteralPath $shared)) {
-    Write-Host "  [WARN] 未找到 $shared，已知基线失败清单按「空」处理（不排除任何文件）。" -ForegroundColor Yellow
+# **登记表与参数拼法的唯一来源是 scripts/quality-gate-shared.mjs**（Node 侧同一门禁
+# scripts/quality-gate.mjs 也要读它）。此前它写在本文件里、由 scripts/run-tests.ps1
+# 用正则解析——那等于把另一门语言的源码当数据源，改一次写法就会让解析静默返回空
+# 数组（排除项悄悄失效，红/绿不再可归因）。现在**调 scripts/known-failed-args.mjs**
+# 拿拼好的参数，本文件一个正则都不写。
+#
+# 粒度是**用例**（ISSUE #1282）：跳的是「文件 + 用例全名」那一条，不是整个文件 ——
+# 后者会把同文件里其它已绿的断言一起摘掉（实测 1 条红连带 17 条绿）。
+function Get-VitestKnownFailureArgs {
+  $helper = Join-Path $PSScriptRoot "known-failed-args.mjs"
+  if (-not (Test-Path -LiteralPath $helper)) {
+    Write-Host "  [WARN] 未找到 $helper，已知基线失败登记表按「空」处理（不排除任何用例）。" -ForegroundColor Yellow
     return @()
   }
-  $text = Get-Content -LiteralPath $shared -Raw -Encoding UTF8
-  $m = [regex]::Match($text, '(?s)KNOWN_FAILED_FILES\s*=\s*\[(.*?)\]')
-  if (-not $m.Success) {
-    Write-Host "  [WARN] 无法从 $shared 解析 KNOWN_FAILED_FILES，按「空」处理。" -ForegroundColor Yellow
+  # **每行一个参数**：模式里含空格（用例全名按 `" > "` 连接），`@(& node ...)` 按行
+  # 收进数组正好保住它，别再 join/split 一次（拆碎即静默失效）。
+  $out = @(& node $helper)
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "  [WARN] 调 $helper 失败（exit $LASTEXITCODE），按「空」处理（不排除任何用例）。" -ForegroundColor Yellow
     return @()
   }
-  # 单双引号都要认：Node 侧同一个模块里两种写法都合法。
-  # 这条**必须用单引号字符串**写：PowerShell 里 `\` 不是转义符，双引号串内的 `\"`
-  # 会当场把字符串结束掉，整份脚本从这一行起解析失败（实测 PS 5.1 与 pwsh 7 各报
-  # 3 个 ParserError，`-Mode` 无论给什么都进不了脚本体 —— 也就是说这份一键门禁
-  # 在此形态下是**整份死掉**的，而没有任何自动化执行者会去解析 .ps1，所以红不出来）。
-  # 单引号串里 `"` 是字面量，`''` 才是一个 `'`。
-  return @([regex]::Matches($m.Groups[1].Value, '[''"]([^''"]+)[''"]') | ForEach-Object { $_.Groups[1].Value })
+  return @($out | Where-Object { $_ -ne "" })
 }
 
-$KNOWN_FAILED_FILES = @(Get-KnownFailedFilesFromShared)
-
-# ---- vitest 参数拼装（与 tools\start\run-tests.ps1 共用）----
-# 已知基线失败要作为 `vitest run --exclude <file>` 传给 vitest 原生命令；拼装收敛在此，
-# 供本脚本的 test 门禁与 run-tests.ps1 的 -Full 分支共用，避免两处各写一份漂移。
-function Get-VitestKnownFailureArgs {
-  $excludeArgs = @()
-  foreach ($f in $KNOWN_FAILED_FILES) { $excludeArgs += @("--exclude", $f) }
-  return $excludeArgs
+function Get-KnownFailedDescribe {
+  $helper = Join-Path $PSScriptRoot "known-failed-args.mjs"
+  if (-not (Test-Path -LiteralPath $helper)) { return @() }
+  $out = @(& node $helper --describe 2>&1)
+  if ($LASTEXITCODE -ne 0) { return @() }
+  return @($out | Where-Object { $_ -ne "" })
 }
 
 # ---- Gate list: append a new gate here ----
@@ -164,7 +159,7 @@ function Invoke-Check {
 
   $argsAll = @($Block.Args)
   if ($Block.IsTest) {
-    foreach ($f in $KNOWN_FAILED_FILES) {
+    foreach ($f in @(Get-KnownFailedDescribe)) {
       Write-Host "  skip known failure: $f" -ForegroundColor DarkGray
     }
     # 排除项由 Get-VitestKnownFailureArgs 统一拼装：同一份实现也被

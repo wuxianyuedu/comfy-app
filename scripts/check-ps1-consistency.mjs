@@ -114,7 +114,8 @@ function checkPairs() {
 /**
  * ② 单点定义：会「静默失效」的清单标记不许在别处再定义一份。
  *
- * 判据刻意简单：**出现了 `$KNOWN_FAILED_FILES =` 这个赋值**就算又定义一份。
+ * 判据刻意简单：**出现了 `$KNOWN_FAILED_CASES =` / `$KNOWN_FAILED_FILES =` 这个赋值**
+ * 就算又定义一份。
  * 「从共享模块读进来的」那种写法（`@(Get-KnownFailedFilesFromShared)`）不需要
  * 用变量承接 —— 门禁一上线就先放过自己想要的形态，等于逼人绕开它。真实用法是
  * `Get-KnownFailedFilesFromShared` 直接内联，或读进一个局部变量（局部名不同）。
@@ -124,20 +125,28 @@ function checkPairs() {
  *
  * 只认「等号右边直接是字面量 / 数组字面量」的形态；`@(Get-KnownFailedFilesFromShared)`
  * 这类读取不算 —— 门禁一上线就先误伤正确写法，等于逼人绕开它。
- * 正则里的 `KNOWN_FAILED_FILES` 用拼接写，免得本脚本自己被自己的规则命中。
+ * 两个名字在正则里都用拼接写，免得本脚本自己被自己的规则命中。
  */
 function definesLiteral(text) {
-  const NAME = "KNOWN_" + "FAILED_FILES";
-  const re = new RegExp(`(?:export\\s+const\\s+)?\\$?${NAME}\\s*=\\s*(?:@\\s*\\(\\s*)?[\"']`, "g");
-  return re.test(text);
+  // 两个名字都判：`KNOWN_FAILED_CASES` 是登记表（权威），`KNOWN_FAILED_FILES`
+  // 是从它派生的文件视图。谁在别处重定义一份，排除项都会与共享模块脱钩。
+  const NAMES = ["KNOWN_" + "FAILED_CASES", "KNOWN_" + "FAILED_FILES"];
+  for (const name of NAMES) {
+    const re = new RegExp(
+      `(?:export\\s+const\\s+)?\\$?${name}\\s*=\\s*(?:@\\s*\\(\\s*)?["'\\[]`,
+      "g",
+    );
+    if (re.test(text)) return true;
+  }
+  return false;
 }
 
 function checkSingleSource() {
   const shared = read(SHARED_REL);
   if (shared === null) {
     problems.push(`缺少共享常量模块：${SHARED_REL}`);
-  } else if (!/export\s+const\s+KNOWN_FAILED_FILES\s*=/.test(shared)) {
-    problems.push(`${SHARED_REL} 未导出 KNOWN_FAILED_FILES（单点定义被破坏）`);
+  } else if (!/export\s+const\s+KNOWN_FAILED_CASES\s*=/.test(shared)) {
+    problems.push(`${SHARED_REL} 未导出 KNOWN_FAILED_CASES（单点定义被破坏）`);
   }
   for (const dir of ["scripts", "tools"]) {
     for (const rel of walk(dir)) {
@@ -146,8 +155,8 @@ function checkSingleSource() {
       const text = read(rel) ?? "";
       if (definesLiteral(text)) {
         problems.push(
-          `${rel} 里又定义了一份 KNOWN_FAILED_FILES —— 它会静默失效（漏改一处即红/绿不可归因），` +
-            `必须从 ${SHARED_REL} 读取`,
+          `${rel} 里又定义了一份 KNOWN_FAILED_CASES / KNOWN_FAILED_FILES —— 它会静默失效` +
+            `（漏改一处即红/绿不可归因），必须从 ${SHARED_REL} 读取`,
         );
       }
     }

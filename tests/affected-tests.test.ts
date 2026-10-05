@@ -11,14 +11,16 @@ import {
   specCandidates,
   wideFallbackNote,
 } from "../scripts/affected-tests.mjs";
-import { KNOWN_FAILED_FILES } from "../scripts/quality-gate-shared.mjs";
+import { KNOWN_FAILED_CASES } from "../scripts/quality-gate-shared.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 夹具：`files` 是「仓库相对路径 → 内容」；测试文件当输出候选，其余当 import 图节点。 */
 function harness(
   files: Record<string, string>,
-  opts: { knownFailed?: string[] } = {},
+  opts: {
+    knownFailedCases?: { file: string; fullName: string; why: string }[];
+  } = {},
 ) {
   const keys = Object.keys(files);
   const testFiles = keys.filter(isTestPath);
@@ -28,7 +30,7 @@ function harness(
       changedPaths,
       testFiles,
       sourceFiles,
-      knownFailed: opts.knownFailed,
+      knownFailedCases: opts.knownFailedCases,
       readText: (rel: string) => files[rel] ?? null,
     });
 }
@@ -222,7 +224,10 @@ describe("affected-tests：兜底方向", () => {
     expect(res.tests).toEqual([...FIXED_STRUCTURAL_TESTS].sort());
   });
 
-  it("已知基线红只从增量面剔除，固定清单与其余受影响用例照跑", () => {
+  it("已知基线红**只跳那一条用例**，同文件的其余用例照跑（粒度是用例）", () => {
+    // 旧行为是把整个文件从增量面 `picked.delete` 掉 —— 一条红会把同文件其它
+    // 已绿的断言一起摘走（ISSUE #1282 实测 1 + 17）。现在文件留着，只多一个
+    // `-t` 排除参数，谁跳谁不跳由 vitest 按全名判。
     const RED = "src/a/other-line-red.test.ts";
     const run = harness(
       {
@@ -230,24 +235,35 @@ describe("affected-tests：兜底方向", () => {
         "src/a/green.test.ts": "import { leaf } from '~/a/leaf';",
         [RED]: "import { leaf } from '~/a/leaf';",
       },
-      { knownFailed: [RED] },
+      {
+        knownFailedCases: [
+          { file: RED, fullName: "outer > the red one", why: "夹具" },
+        ],
+      },
     );
     const res = run(["src/a/leaf.ts"]);
     expect(res.tests).toContain("src/a/green.test.ts");
-    expect(res.tests).not.toContain(RED);
-    // 剔除必须留痕：调用方（钩子）把它打印出来，不静默。
-    expect(res.reasons.__skipped).toContain(RED);
+    // 文件**在**跑单里（旧行为是它被整个剔除）。
+    expect(res.tests).toContain(RED);
+    // 跳的是那一条用例，且必须留痕：调用方（钩子）把它打印出来，不静默。
+    expect(res.excludeArgs?.[0]).toBe("-t");
+    expect(res.excludeArgs?.[1]).toContain("outer > the red one");
+    expect(res.reasons.__skipped).toContain("outer > the red one");
     for (const fixed of FIXED_STRUCTURAL_TESTS)
       expect(res.tests).toContain(fixed);
   });
 
-  it("固定清单里的文件就算被登记为基线红也不剔除", () => {
-    // 那几条是全库不变量的唯一执行者，没有「先放行」的余地。
+  it("固定清单里的文件就算被登记为基线红也照跑（只跳登记的那条用例）", () => {
+    // 那几条是全库不变量的唯一执行者，没有「先放行」的余地 —— 文件必须在跑单里。
     const pinned = "tests/single-logger-channel.test.ts";
     expect(FIXED_STRUCTURAL_TESTS).toContain(pinned);
     const run = harness(
       { [UI_TEST]: "it('x', () => {});" },
-      { knownFailed: [pinned] },
+      {
+        knownFailedCases: [
+          { file: pinned, fullName: "outer > red", why: "夹具" },
+        ],
+      },
     );
     expect(run(["docs/README.md"]).tests).toContain(pinned);
   });
@@ -275,8 +291,10 @@ describe("affected-tests：与仓库现状的漂移守卫", () => {
   it("登记的已知基线红指向真实存在的文件", () => {
     // 写错一个路径 = 这一条**永远命中不了**，于是它挡住的东西悄悄放行，而清单看着
     // 还在。机制本身静默失效比少一条登记更难查，所以按存在性钉住。
-    const missing = KNOWN_FAILED_FILES.filter(
-      (rel) => !fs.existsSync(path.join(ROOT, rel)),
+    // （全名/唯一性/「真的还红」那三条由 `check-known-failed-stale.mjs` 在
+    // pre-commit 判，见 tests/known-failed-stale.test.ts —— 这里只做免费的这一条。）
+    const missing = KNOWN_FAILED_CASES.filter(
+      (c) => !fs.existsSync(path.join(ROOT, c.file)),
     );
     expect(missing).toEqual([]);
   });

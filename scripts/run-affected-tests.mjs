@@ -101,11 +101,15 @@ export function resolveVitestEntry(cwd = process.cwd()) {
   return entry;
 }
 
-/** 调 `affected-tests.mjs` 拿清单（它的 stdout 只有空格分隔的路径一行）。 */
-function collectList() {
+/**
+ * 调 `affected-tests.mjs` 拿 stdout（脚本自己的说明走 stderr）。
+ * @param {string[]} args
+ * @returns {string}
+ */
+function affectedStdout(args) {
   const res = spawnSync(
     process.execPath,
-    [path.join(process.cwd(), "scripts", "affected-tests.mjs")],
+    [path.join(process.cwd(), "scripts", "affected-tests.mjs"), ...args],
     { encoding: "utf8" },
   );
   if (res.status !== 0) {
@@ -114,10 +118,29 @@ function collectList() {
       `[affected-launch] 清单解析失败（退出码 ${res.status ?? "信号"}）`,
     );
   }
-  // 清单脚本自己的说明走 stderr，stdout 只有那一行路径；按空白切最稳。
-  return String(res.stdout ?? "")
+  return String(res.stdout ?? "");
+}
+
+/** 清单（它的 stdout 只有空格分隔的路径一行）。 */
+function collectList() {
+  return affectedStdout([])
     .split(/\s+/)
     .filter(Boolean);
+}
+
+/**
+ * 「跳过已知基线红用例」要给 vitest 加的 `-t <模式>`，空清单时是 `[]`。
+ *
+ * **每行一个参数**，不按空白切：模式里必然含空格（用例全名用 `" > "` 连接），
+ * 按空白切会把模式拆碎 ⇒ 排除项静默失效（那正是这套机制存在的理由，不能再犯）。
+ *
+ * 每次启动**都要带上**：粒度是用例（ISSUE #1282 收尾），跳的是全名，而模式不按
+ * 本次改动面筛（见 `affected-tests.mjs --exclude-args` 的注释）。
+ */
+function collectExcludeArgs() {
+  return affectedStdout(["--exclude-args"])
+    .split(/\r?\n/)
+    .filter((line) => line.length > 0);
 }
 
 function main(argv) {
@@ -130,9 +153,18 @@ function main(argv) {
     );
     return 1;
   }
+  const excludeArgs = collectExcludeArgs();
+  const reserve = excludeArgs.reduce((n, a) => n + a.length + 1, 0);
+  if (excludeArgs.length > 0) {
+    process.stderr.write(
+      `[affected-launch] 跳过已知基线红用例（-t 模式 ${excludeArgs[1].length} 字符）\n`,
+    );
+  }
   let chunks;
   try {
-    chunks = planLaunches(files);
+    // 把「固定段」（`-t <模式>`）从预算里先扣掉：它每块都要带，不扣就等于
+    // 每块都可能顶穿命令行上限（§13.5.8 的「宁可多起一次，不许丢用例」）。
+    chunks = planLaunches(files, SAFE_ARGV_BUDGET - reserve);
   } catch (e) {
     process.stderr.write(
       `[affected-launch] ${e instanceof Error ? e.message : String(e)}\n`,
@@ -156,7 +188,13 @@ function main(argv) {
     }
     const res = spawnSync(
       process.execPath,
-      [entry, "run", `--maxWorkers=${MAX_WORKERS}`, ...chunk],
+      [
+        entry,
+        "run",
+        `--maxWorkers=${MAX_WORKERS}`,
+        ...excludeArgs,
+        ...chunk,
+      ],
       { stdio: "inherit" },
     );
     if (res.error || res.status !== 0) {

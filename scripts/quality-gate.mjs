@@ -30,7 +30,11 @@ import {
   formatCommandLine,
 } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
-import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
+import {
+  KNOWN_FAILED_CASES,
+  describeKnownFailedCases,
+  vitestExcludeArgs,
+} from "./quality-gate-shared.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -225,11 +229,14 @@ function runGate(pnpm, key) {
     return code;
   }
   const args = [...gate.args];
-  if (key === "test") {
-    for (const f of KNOWN_FAILED_FILES) {
-      console.log(`  skip known failure: ${f}`);
-      args.push("--exclude", f);
+  if (key === "test" && KNOWN_FAILED_CASES.length > 0) {
+    // 粒度是**用例**（规范 §11.12）：一条登记只跳它自己那条，同文件其余用例照跑。
+    // 模式拼装在 `quality-gate-shared.mjs` 一处，与 .ps1 侧共用同一条（见
+    // `scripts/known-failed-args.mjs`）。
+    for (const line of describeKnownFailedCases(KNOWN_FAILED_CASES)) {
+      console.log(`  skip known failure: ${line}`);
     }
+    args.push(...vitestExcludeArgs(KNOWN_FAILED_CASES));
   }
   console.log("");
   console.log(`==> ${gate.label}`);
