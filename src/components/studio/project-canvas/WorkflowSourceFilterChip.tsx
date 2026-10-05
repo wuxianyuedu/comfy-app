@@ -37,7 +37,7 @@ export function WorkflowSourceFilterChip({
       triggerTitle="工作流来源筛选"
       align="start"
       contentClassName="w-40"
-      triggerClassName="border-primary/35 bg-overlay-accent-surface h-6 shrink-0 rounded-lg border px-2.5 text-[12px]"
+      triggerClassName="border-primary/35 bg-overlay-accent-surface h-6 shrink-0 rounded-lg border px-2.5 text-xs"
       trigger={
         <>
           <span

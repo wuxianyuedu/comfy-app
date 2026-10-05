@@ -59,7 +59,7 @@ export function CanvasContextMenu({
           <DropdownMenuItem
             data-canvas-node-kind="workflow-ardot"
             onClick={onPickTest}
-            className="from-primary/15 to-accent/10 text-ink-bright focus:from-primary/25 focus:to-accent/15 border-primary/30 flex items-center gap-2 rounded-lg border bg-linear-to-r px-2 py-1.5 text-left text-[12px]"
+            className="from-primary/15 to-accent/10 text-ink-bright focus:from-primary/25 focus:to-accent/15 border-primary/30 flex items-center gap-2 rounded-lg border bg-linear-to-r px-2 py-1.5 text-left text-xs"
           >
             <span
               className="text-3xs flex size-5 items-center justify-center rounded-md font-bold text-white"
@@ -90,7 +90,7 @@ export function CanvasContextMenu({
                 key={kind}
                 data-canvas-node-kind={kind}
                 onClick={() => onPick(kind)}
-                className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px]"
+                className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
               >
                 <Icon
                   name={meta.icon}

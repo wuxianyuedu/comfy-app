@@ -64,7 +64,7 @@ export function BreadcrumbPath({
   if (segments.length === 0) return null;
   return (
     <Breadcrumb aria-label={label} className={className}>
-      <BreadcrumbList className="gap-0 text-[12px]">
+      <BreadcrumbList className="gap-0 text-xs">
         {segments.map((seg, i) => {
           const isLast = i === segments.length - 1;
           /* 末段（当前所在处）与「整体不可导航」都渲染成纯展示：
@@ -91,14 +91,14 @@ export function BreadcrumbPath({
                   <Button
                     variant="ghost"
                     onClick={() => onNavigate(navKey)}
-                    className="text-ink-muted hover:text-primary-strong h-auto p-0 text-[12px] font-normal hover:bg-transparent hover:underline"
+                    className="text-ink-muted hover:text-primary-strong h-auto p-0 text-xs font-normal hover:bg-transparent hover:underline"
                   >
                     {seg.label}
                   </Button>
                 ) : (
                   <BreadcrumbPage
                     className={cn(
-                      "text-[12px]",
+                      "text-xs",
                       isLast && navigable
                         ? "text-ink-bright font-medium"
                         : "text-ink-soft",

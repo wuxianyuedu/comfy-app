@@ -21,7 +21,7 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
         aria-label="画布设置"
         className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-base pointer-events-auto absolute top-12 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
       >
-        <span aria-hidden className="mr-1 align-baseline text-[12px]">
+        <span aria-hidden className="mr-1 align-baseline text-xs">
           ⚙
         </span>
         设置

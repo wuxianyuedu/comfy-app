@@ -87,7 +87,7 @@ function FrostCard({
           nodeMode={palette.nodeMode}
         />
         <div
-          className={`relative ${zClass("base")} p-3 text-[12px]`}
+          className={`relative ${zClass("base")} p-3 text-xs`}
           style={{ color: DARK_PALETTE_BASE.titleFallback }}
         >
           {label}
@@ -158,7 +158,7 @@ function FrostDemoNode() {
     >
       <FrostLayer color={palette.modeColor} nodeMode={palette.nodeMode} />
       <div
-        className={`relative ${zClass("base")} p-3 text-[12px]`}
+        className={`relative ${zClass("base")} p-3 text-xs`}
         style={{ color: DARK_PALETTE_BASE.titleFallback }}
       >
         KSampler（旁路 · 缩放来自 store）

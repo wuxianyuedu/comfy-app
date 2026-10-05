@@ -160,7 +160,7 @@ export function ResourceLibrary() {
             value={library.search}
             onChange={textHandler(library.setSearch)}
             placeholder={library.folder ? "在当前分类搜索" : "搜索全部素材"}
-            className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[12px] focus-visible:ring-0"
+            className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
           />
           {library.search ? (
             <Hint label="清空" accessibleName>
@@ -191,13 +191,13 @@ export function ResourceLibrary() {
       {/* ── 错误条：拉取与动作失败共用一条（控制器已保证动作错误优先）── */}
       {library.error && (
         <div className="border-destructive/30 bg-destructive/10 mb-4 flex items-start gap-2 rounded-lg border px-3 py-2">
-          <span className="text-destructive min-w-0 flex-1 text-[12px] wrap-break-word">
+          <span className="text-destructive min-w-0 flex-1 text-xs wrap-break-word">
             {library.error}
           </span>
           <Button
             variant="ghost"
             onClick={library.refresh}
-            className="text-destructive h-auto shrink-0 p-0 text-[12px] underline hover:bg-transparent"
+            className="text-destructive h-auto shrink-0 p-0 text-xs underline hover:bg-transparent"
           >
             重试
           </Button>

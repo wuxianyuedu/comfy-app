@@ -109,7 +109,7 @@ export function SubgraphHeader({
        *  回车聚焦不再触发进入子工作流（见 WorkflowSubgraphNode 双击移除
        *  同一决策），避免用户误触。标题保持纯文本，禁止选中。 */}
       <span
-        className="text-ink-bright min-w-0 flex-1 truncate text-[12px] font-semibold tracking-wide select-none"
+        className="text-ink-bright min-w-0 flex-1 truncate text-xs font-semibold tracking-wide select-none"
         title={title || "子工作流"}
       >
         {title || "子工作流"}

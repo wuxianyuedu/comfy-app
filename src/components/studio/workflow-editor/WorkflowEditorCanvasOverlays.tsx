@@ -66,7 +66,7 @@ export function SubgraphLoadingOverlay() {
 /** IO 编辑模式的顶部提示气泡。 */
 export function IoEditModeBanner() {
   return (
-    <div className="border-warning/40 bg-warning/15 text-warning-strong z-canvas-ui pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1.5 text-[12px] font-medium shadow-lg backdrop-blur-sm">
+    <div className="border-warning/40 bg-warning/15 text-warning-strong z-canvas-ui pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1.5 text-xs font-medium shadow-lg backdrop-blur-sm">
       📌 IO
       编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
     </div>
@@ -83,7 +83,7 @@ export function SubgraphErrorToast({
 }) {
   return (
     <div className="z-canvas-max pointer-events-none absolute top-3 left-1/2 -translate-x-1/2">
-      <div className="border-destructive/40 bg-destructive/15 text-danger-strong pointer-events-auto flex items-center gap-3 rounded-lg border px-4 py-2 text-[12px] shadow-lg backdrop-blur-sm">
+      <div className="border-destructive/40 bg-destructive/15 text-danger-strong pointer-events-auto flex items-center gap-3 rounded-lg border px-4 py-2 text-xs shadow-lg backdrop-blur-sm">
         <span>⚠ {error}</span>
         <Button
           variant="ghost"

@@ -148,7 +148,7 @@ export function MultiSegmentPopover({
             variant="ghost"
             /* h-auto 覆盖基元写死的 h-8；`hover:bg-*` 交给基元的 ghost，
                其余边框 / 底色沿用本控件原来的形态。 */
-            className="nodrag nopan border-primary/35 bg-canvas-deep text-ink-bright hover:bg-canvas-deep hover:border-primary/70 focus-visible:border-primary/70 h-auto w-full justify-between gap-2 rounded-lg border px-3 py-2 text-left text-[12px]"
+            className="nodrag nopan border-primary/35 bg-canvas-deep text-ink-bright hover:bg-canvas-deep hover:border-primary/70 focus-visible:border-primary/70 h-auto w-full justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs"
           />
         }
       >

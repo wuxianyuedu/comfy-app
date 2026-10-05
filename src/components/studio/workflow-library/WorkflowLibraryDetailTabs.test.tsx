@@ -36,7 +36,7 @@ function TabHarness({ onValueChange }: { onValueChange?: () => void }) {
           <TabsTrigger
             key={tab.key}
             value={tab.key}
-            className="detail-tab-trigger h-auto flex-none rounded-none px-3 py-2.5 text-[12px] font-medium"
+            className="detail-tab-trigger h-auto flex-none rounded-none px-3 py-2.5 text-xs font-medium"
           >
             {tab.label}
           </TabsTrigger>
