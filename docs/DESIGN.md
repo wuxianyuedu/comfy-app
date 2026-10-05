@@ -451,7 +451,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - **卡片/浮层用 `rounded-xl`**（默认 20px），**控件（按钮、下拉触发器）用 `rounded-lg`**（16px），**输入框用 `rounded-md`**（12px），**chip/药丸用 `rounded-full`**（9999px）。
 - 小尺寸控件靠**取小**而不是换档：`rounded-[min(var(--radius-md),10px)]`（Button `xs`/`icon-xs`）、`min(var(--radius-md),12px)`（`sm`/`icon-sm`）。`ui/` 里 15 处 `rounded-[...]` 有 11 处是这种**从 token 派生**的写法，只有 3 处是裸值（`rounded-[2px]`×2、`rounded-[4px]`×1）。
 - 两处直接吃基数、不吃档位：`ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 与 `ui/sonner.tsx` 的 `--border-radius`。它们跟着整条刻度走，不是第二份来源。
-- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 12 / 298，只许降）；③④ 两族被抽成基元后各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`），按**标记集合全命中**判、不按类名先后顺序判。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。
+- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 10 / 298，只许降）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`），三族共用一次目录遍历，按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。
 
 ---
 
@@ -525,6 +525,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 | 侧栏导航 | `--color-nav-hover` / `--color-nav-selected`（别名 `--sidebar-accent` / `--sidebar-selected`） | **悬停与选中必须是两档**（浅 1.14:1 / 1.42:1，深 1.35:1 / 1.88:1，相对各自的 `--color-panel-deep` 底）。共用一档 = 结构上不可分辨 |
 | chip/药丸 | `ui/badge.tsx`（`size="pill-sm" / "pill-md"`） | **`.u-chip` 是死类**（零消费者，见 Known Gaps），别当规范用。胶囊徽标的形状与语义色都在 Badge 的三轴里；两档 pill 自带 `border-0`（tone 只给边框色不给宽度），调用点无需再写描边出口 |
 | 类型 chip（端口/参数的类型标签） | `studio/TypeChip.tsx`（`size="xs" / "sm" / "md"` × `tone="neutral" / "none"`） | 方角小片，不是胶囊徽标：`rounded-[3px]` 是这枚件自己的形状细节（3px 不在七档上，也不该成为第八档）。**`tone="none"` 是必需的**，因为四处的颜色由 `portChipStyle()` 的行内样式给全，见下节 |
+| 节点头部右侧胶囊 | `workflow-form/WorkflowNodeParts.tsx` 的 `WorkflowNodePill`（`h-5` + `rounded-[11px]` + `px-2` + `gap-1.25`） | **形状一处、底色两档**：库卡与 Ardot 还原件用 `--color-node-accent`（节点强调底），画布节点用 `--color-overlay-accent-surface`（浮层强调底）—— 两档浅色只差 1/255、暗色 `#1e1a2e` vs `#241f38` 差得明显，语义不同、**不借去重并成一颗**，差异走 `className`。该模块文件头本就写明「两侧只允许组合、不允许复刻」 |
 | 标题指示条 | `.detail-tab-trigger::after` | 品牌双色渐变 `linear-gradient(--color-primary → --color-accent)`；换基元后颜色只有一个出口 |
 | seed 模式图标 | `ui/seed-mode-button.tsx` + `--color-seed-*` | **类型色**：红=固定、绿=增减、骰子=随机。被 SVG `fill=`/`stroke=` 直接引用，变量缺失时 fill 退黑、stroke 退 none，箭头**整条消失且无报错** |
 | 骨架 | `ui/skeleton.tsx` | `bg-muted animate-pulse rounded-md` |
