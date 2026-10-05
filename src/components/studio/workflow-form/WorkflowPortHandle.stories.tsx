@@ -83,7 +83,7 @@ function PortRow({
      那是画布节点卡片表面的唯一出处（类型色则经 `portChipStyle()` 取，同源）。 */
   return (
     <div
-      className="relative w-[320px]"
+      className="relative w-80"
       style={{ background: DARK_PALETTE_BASE.body }}
     >
       <div className="flex h-9 items-center justify-between px-3.5">
@@ -115,7 +115,7 @@ function PortDemoNode() {
   );
   return (
     <div
-      className="w-[320px] rounded-[14px] py-2"
+      className="w-80 rounded-[14px] py-2"
       style={{
         background: DARK_PALETTE_BASE.body,
         border: `1px solid ${DARK_PALETTE_BASE.borderFallback}`,
@@ -177,7 +177,7 @@ export const OutsideCanvas: Story = {
           内半边（与画布节点的 `overflow-hidden` 包一层 `absolute inset-0` 兄弟层
           是同一个原因 —— 卡片自己 overflow 裁的必须是内容，不是端点）。 */}
       <div
-        className="w-[320px] rounded-[14px]"
+        className="w-80 rounded-[14px]"
         style={{ border: `1px solid ${DARK_PALETTE_BASE.borderFallback}` }}
       >
         {PORT_ROWS.map((row) => (
@@ -194,7 +194,7 @@ export const Single: Story = {
     <div className="flex flex-wrap items-start gap-4 p-4">
       {PORT_ROWS.map((row) => (
         <div key={row.id} className="flex flex-col items-center gap-1">
-          <div className="w-[180px]">
+          <div className="w-45">
             <PortRow portId={row.id} dir={row.dir} type={row.type} />
           </div>
           <span className="text-ink-muted text-2xs font-mono">

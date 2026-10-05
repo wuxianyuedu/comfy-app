@@ -43,7 +43,7 @@ function ProjectCanvasHarness({
   /* 备好之后画布自己会从 canvas-store 读回同一批（真读，不是 props 传）。 */
   useSeededProjects({ primary: projectScene(sceneName), extraNames: [] });
   return (
-    <div className="bg-canvas h-[720px] w-full overflow-hidden">
+    <div className="bg-canvas h-180 w-full overflow-hidden">
       <ProjectCanvas />
     </div>
   );
