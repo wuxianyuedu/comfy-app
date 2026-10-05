@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // RunControlBarView 各状态渲染（Phase 6 · P6-3）：纯展示，喂假 controller 断按钮/文案。
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";

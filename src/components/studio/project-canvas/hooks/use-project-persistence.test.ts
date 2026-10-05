@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 「镜像被拒」那条提示的用户可见出口。
  *

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 //
 // 「打开工作流 / 子工作流时聚焦到内容」的调度行为 —— ISSUE #394 第二轮。
 //

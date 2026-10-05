@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `~/components/ui/tree-rows` 的契约（ISSUE #672 / 规范 16 §16.2.4.39）。
  *

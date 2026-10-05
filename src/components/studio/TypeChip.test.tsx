@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 类型 chip —— 从 studio 六个文件里逐字抄了十份的那一枚。
  *

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 前端集成层自检：验证「MSW 拦截 /api/trpc → 测试 router」能驱动真实 tRPC client
  * 走完整数据态流转，而非「永不 resolve」桩。用自建 tRPC React 实例 + 自建 router +

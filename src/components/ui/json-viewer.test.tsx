@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `JsonViewer` 的首屏折叠契约。
  *

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 序号圆 —— 从工坊五个界面里逐字相同的那一枚抽出来的件。
  *

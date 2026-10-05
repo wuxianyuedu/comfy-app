@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 //
 // 工坊「失联任务恢复 + 30 分钟安全阀」回归测试。
 //

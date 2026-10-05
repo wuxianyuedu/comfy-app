@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 状态栏视图的可见行为：断言用户能看到什么，不断言内部 state/hook 调用细节
 // （规范 11.2 行为测试优先）。依赖 useComfyReadiness（指标）/ useDevServerStatus
 // （应用服务那一格）/ useFps（FPS 归属），逐个换桩。

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 提示气泡与窗口边缘之间的安全边距（ISSUE #1295）。
  *

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 项目状态卡渲染测试：阶段行状态/计数、加载态给占位符（不是假的 0）、入口回抛。
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

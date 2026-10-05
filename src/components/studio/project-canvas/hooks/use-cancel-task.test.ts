@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 「强制取消」动作单测。三条关键回归：
 //   1. 取消失败必须走到 onFailed（否则按钮会一直挂在 running，用户再点无效）；
 //   2. cancelling 态在成功与失败两条路径上都要复位；

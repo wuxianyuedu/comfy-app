@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 //
 // 回归测试 ISSUE #202 问题1：从剧本「提取/导入」角色卡成功后，并入结果必须
 // 经 onCharactersChange 回写到父级状态，否则卡片不出现在下方列表中。

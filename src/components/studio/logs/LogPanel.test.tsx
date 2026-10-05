@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 应用日志面板的**可见行为**（ISSUE #262）。
  *

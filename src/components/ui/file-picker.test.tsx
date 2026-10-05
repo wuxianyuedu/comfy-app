@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 隐藏 `<input type=file>` 的出口（规范 16 §16.2.4）。
  *

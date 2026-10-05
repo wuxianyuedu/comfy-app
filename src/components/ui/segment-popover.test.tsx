@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `MultiSegmentPopover` 的**选中态契约**：面板照常开关、点击照常有回调的
  * 前提下，选中高亮是唯一会「静默消失」的一环 —— 它完全由 Tailwind 的

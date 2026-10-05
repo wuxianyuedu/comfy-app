@@ -69,15 +69,23 @@ const SHARED_TEST_OPTIONS = {
  * `JSDOM_TEST_GLOBS` —— 进 jsdom project 的用例面（§11.17）。
  *
  * 只有两种形状**整目录一致**时才按目录声明：① 该目录下全部用例都 jsdom（下面那批，
- * 实测 26 个目录，逐个核过）；② \`.test.tsx\`。混合目录（同目录下两种都有，实测 20 个）
- * **不在这里** —— 它们保持 node 档，其中要 jsdom 的继续靠文件头。
+ * 实测 26 个目录，逐个核过）；② \`.test.tsx\`。混合目录（同目录下两种都有）**不在这里**
+ * —— 它们保持 node 档，其中要 jsdom 的继续靠文件头（当前 36 份，是它们归属的唯一声明）。
+ *
+ * ⚠️ **路径里的 `(main)` 这类路由组括号必须转义成 `\\(main\\)`** —— 括号是 glob 的
+ * 分组语法，写成字面量时 `src/app/(main)/…` 会被翻成「匹配 `src/app/main/…`」，
+ * 条目**静默不匹配**（下面覆盖率那批的注释里早就写了这条，本清单曾漏掉两条：
+ * `settings/components` 与 `settings/hooks` 实际一个都没进来，那 3 份 `.test.ts`
+ * 一直在靠文件头撑着）。同 §11.7「门槛写着 100、报告里查无此文件」那一族：
+ * 清单条目失效不报错，只是不见了。
  *
  * ⚠️ 新增一批 jsdom 用例时：若整个目录都是，就把目录加到这里；只加几份就别动它，
  * 直接写文件头（`scripts/check-test-environment.cjs` 会核「目录档与文件头矛盾」）。
+ * **不要为了省几行文件头去 `exclude` 少数派** —— 见上面 `projects` 的注释。
  */
 const JSDOM_TEST_GLOBS = [
-  "src/app/(main)/settings/components/**/*.test.{ts,tsx}",
-  "src/app/(main)/settings/hooks/**/*.test.{ts,tsx}",
+  "src/app/\\(main\\)/settings/components/**/*.test.{ts,tsx}",
+  "src/app/\\(main\\)/settings/hooks/**/*.test.{ts,tsx}",
   "src/components/agent-run/**/*.test.{ts,tsx}",
   "src/components/agent-run/hooks/**/*.test.{ts,tsx}",
   "src/components/code-update/**/*.test.{ts,tsx}",
@@ -134,8 +142,10 @@ export default defineConfig({
      *
      * ⚠️ **换掉全局档 ≠ 删掉文件头**（实测，vitest 5.0.3）：文件头的
      * `@vitest-environment` **优先级高于 project 的 environment**，所以
-     * `projects` 只决定「没写文件头时跑在哪」。实测 183 份里摘掉文件头有 178 份
-     * 立刻红 —— 文件头是有承重的，两份东西各管一半，都留着。
+     * `projects` 只决定「没写文件头时跑在哪」。摘掉全部 183 份头有 178 份立刻红 ——
+     * 但那是「文件头有作用」，推不出「每份都有作用」：**按「它有没有替目录档兜底」
+     * 逐份判，147 份是纯冗余（目录档已给出同结论）、36 份承重**（混合目录里归属的
+     * 唯一声明）。147 份已删，剩 36 份继续留 —— 同一件事只留一个来源。
      *
      * 分档判据是**实测出来的目录归属**，不是「按扩展名猜」：`.test.tsx` ⇒ jsdom
      * 是 116/116 的完全相关，但另有 68 份 `.test.ts` 也要 jsdom（store / hook /
@@ -143,9 +153,18 @@ export default defineConfig({
      * 所以只在**两种「整目录一致」的形状**上声明目录档：
      *   ① 该目录下**全部**用例都 jsdom（实测 26 个目录）；
      *   ② `.test.tsx` —— 实测 116 份全部要 jsdom，读作「渲染用例」这一档。
-     * 混合目录（同目录下两种都有，实测 20 个）**保持 node 档**，其中要 jsdom 的
+     * 混合目录（同目录下两种都有）**保持 node 档**，其中要 jsdom 的
      * 那份继续靠自己的文件头 —— 不为了少几行注释把 260 份 node 用例误升进 jsdom
      *（jsdom 档下跑纯逻辑**不报错、只是变慢**，是「静默跑错档」里坏的那一侧）。
+     *
+     * ⚠️ **混合目录别试着用 `exclude` 摘少数派**（实测否决）：想让 `src/components/ui`
+     * 这种目录进 jsdom 档，就得把它的少数 node 用例从 jsdom 档 `exclude` 掉 ——
+     * 可 **node 档的 `exclude` 正是同一份 `JSDOM_TEST_GLOBS`**，于是那些用例
+     * **两个 project 都不跑**。实测：给 jsdom 档加 exclude 之后
+     * `vitest list <那份文件>` 输出**为空**（一个档都没接住）—— 静默消失，
+     * 比多写一行文件头坏得多。要修就得把 node 档的 exclude 拆成逐条清单、
+     * 与 jsdom 档手工对齐，那是把「一处 glob 两处用」换成「两处清单要同步」。
+     * **文件头就是这一档的正确机制**：它天然只影响自己那一份，不动别人的归属。
      *
      * 这一档买到的是三件事，都不是「省注释」：
      *   ① 没写文件头的用例有确定的、按目录判定的归属（而不是一条全局默认值）；
