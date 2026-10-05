@@ -8,6 +8,7 @@ import {
 import {
   StorybookFlowCanvas,
   canvasScene,
+  type CanvasSceneName,
 } from "../../../.storybook/flow-canvas";
 import { DEFAULT_CANVAS_SETTINGS } from "~/components/studio/canvas/canvas-settings-types";
 
@@ -38,11 +39,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** 三块装饰层一起挂在真画布上（`ZoomIndicator` / `CanvasRulers` 自带定位）。 */
-function DecoratedCanvas({
-  sceneName,
-}: {
-  sceneName: "twoNodes" | "zoomedIn" | "zoomedOut";
-}) {
+function DecoratedCanvas({ sceneName }: { sceneName: CanvasSceneName }) {
   return (
     <StorybookFlowCanvas scene={canvasScene(sceneName)}>
       <CanvasGrid />
@@ -96,6 +93,18 @@ export const GridOff: Story = {
         />
         <CanvasRulers />
       </StorybookFlowCanvas>
+    </div>
+  ),
+};
+
+/**
+ * 密集画布（36 张节点）：标尺标签步长按「屏幕间距 ≥ 48px」现算 ——
+ * 空画布看不出这件事，这一档才有得比（缩小后标签会不会糊成一片）。
+ */
+export const DenseGrid: Story = {
+  render: () => (
+    <div className="p-4">
+      <DecoratedCanvas sceneName="dense" />
     </div>
   ),
 };
