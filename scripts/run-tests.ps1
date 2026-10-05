@@ -23,11 +23,13 @@ Usage:
   想复现那两个历史失败文件、或想用 vitest 自己的参数（-t / -u / --reporter）
   时，它都不合适——本脚本补这一条路径。
 
--Full 的语义（与 quality-gate.ps1 / quality-gate.mjs 共用同一份 KNOWN_FAILED_FILES 清单）:
-  默认排除已知基线失败文件（task / generate 两个 router 测试），保证单跑时的
-  红/绿能直接归因到本次改动；-Full 反其道而行，保留这些文件，用来复现基线失败。
-  清单的唯一来源在 scripts\quality-gate-shared.mjs（Node 侧 scripts/quality-gate.mjs
-  也读它），本脚本解析它而不是抄一份，避免「修好了却只在一处解禁」的漂移。
+-Full 的语义（与 quality-gate.ps1 / quality-gate.mjs 共用同一份 KNOWN_FAILED_CASES 登记表）:
+  默认排除已知基线失败**用例**（粒度是用例，见规范 11.12），保证单跑时的红/绿能
+  直接归因到本次改动；-Full 反其道而行，保留它们，用来复现基线失败。
+  登记表与参数拼法的唯一来源在 scripts\quality-gate-shared.mjs（Node 侧
+  scripts/quality-gate.mjs 也读它），本脚本**调 scripts/known-failed-args.mjs** 拿
+  拼好的参数而不是自己解析源码——从 `.mjs` 源码里抠字符串字面量等于把另一门语言
+  的文件当数据源，改一次写法就会静默抠出空数组（ISSUE #1282 的同族现场）。
 #>
 [CmdletBinding()]
 param(
@@ -69,44 +71,57 @@ if (-not (Test-Path -LiteralPath (Join-Path $root "node_modules\.bin"))) {
 $passthrough = @()
 if ($Remaining) { $passthrough = @($Remaining | Where-Object { $_ -ne "--" }) }
 
-# ── 2) 已知基线失败清单：读 scripts/quality-gate-shared.mjs，不另抄一份 ──
-# 清单的唯一来源是那个纯数据模块（Node 侧 scripts/quality-gate.mjs 也 import 它）。
-# 此前清单写在本仓库的 quality-gate.ps1 里、由本文件用正则解析 .ps1 源码——那等于
-# 把另一门语言的文件当数据源，改一次写法就会静默返回空数组。解析失败时显式
-# WARN 并降级为「不排除」，不再让「清单读不到」看起来像「本来就没有基线失败」。
-function Get-KnownFailedFiles {
-  $shared = Join-Path $root "scripts\quality-gate-shared.mjs"
-  if (-not (Test-Path -LiteralPath $shared)) {
-    Say-Err "未找到 scripts\quality-gate-shared.mjs（已知基线失败清单的唯一来源）；本次不排除任何文件。"
+# ── 2) 已知基线失败登记表：调 scripts/known-failed-args.mjs，不自己解析源码 ──
+# 登记表与「参数怎么拼」的唯一来源是 scripts/quality-gate-shared.mjs（Node 侧
+# scripts/quality-gate.mjs 也 import 它）。本文件**调那个 Node 出口**拿拼好的
+# 参数，而不是拿正则去 `.mjs` 源码文本里抠字符串字面量——后者等于把另一门语言的
+# 文件当数据源，改一次写法就静默抠出空数组（ISSUE #1282 的同族现场）。
+# 拿不到时显式报错并降级为「不排除」，不让「读不到」看起来像「本来就没有基线失败」。
+function Get-KnownFailedDescribe {
+  $helper = Join-Path $root "scripts\known-failed-args.mjs"
+  if (-not (Test-Path -LiteralPath $helper)) {
+    Say-Err "未找到 scripts\known-failed-args.mjs（已知基线失败登记表的出口）；本次不排除任何用例。"
     return @()
   }
-  $text = Get-Content -LiteralPath $shared -Raw -Encoding UTF8
-  $m = [regex]::Match($text, '(?s)KNOWN_FAILED_FILES\s*=\s*\[(.*?)\]')
-  if (-not $m.Success) {
-    Say-Err "无法从 scripts\quality-gate-shared.mjs 解析 KNOWN_FAILED_FILES；本次不排除任何文件。"
+  $out = @(& node $helper --describe 2>&1)
+  if ($LASTEXITCODE -ne 0) {
+    Say-Err "读已知基线失败登记表失败（exit $LASTEXITCODE）；本次不排除任何用例。"
     return @()
   }
-  return @([regex]::Matches($m.Groups[1].Value, "['""]([^'""]+)['""]") | ForEach-Object { $_.Groups[1].Value })
+  return @($out | Where-Object { $_ -ne "" })
+}
+
+function Get-KnownFailedArgs {
+  $helper = Join-Path $root "scripts\known-failed-args.mjs"
+  if (-not (Test-Path -LiteralPath $helper)) { return @() }
+  # **每行一个参数**：模式里含空格（用例全名按 `" > "` 连接），`@(& node ...)` 按行
+  # 收进数组正好保住它，别再 join/split 一次。
+  $out = @(& node $helper)
+  if ($LASTEXITCODE -ne 0) {
+    Say-Err "拼已知基线失败排除参数失败（exit $LASTEXITCODE）；本次不排除任何用例。"
+    return @()
+  }
+  return @($out | Where-Object { $_ -ne "" })
 }
 
 # ── 3) 组装 vitest 参数 ─────────────────────────────────────
 $vitestArgs = @("exec", "vitest", "run")
 
 if ($passthrough.Count -gt 0) {
-    # 用户显式指定了测试文件/参数：此时不再追加排除项——传了具体文件还去 --exclude
+    # 用户显式指定了测试文件/参数：此时不再追加排除项——传了具体用例还去排除它
     # 只会让「我明明指定了它却不跑」更难理解，判定权交回给调用方。
     Say-Info "透传参数：$($passthrough -join ' ')（指定了文件的这一次不再追加已知基线失败排除项）"
     $vitestArgs += $passthrough
 } else {
-    $known = @(Get-KnownFailedFiles)
+    $describe = @(Get-KnownFailedDescribe)
     if ($Full) {
-        if ($known.Count -gt 0) {
-            Say-Info "全量模式：已知基线失败文件一并运行（$($known -join ' / ')），用于复现基线失败。"
+        if ($describe.Count -gt 0) {
+            Say-Info "全量模式：已知基线失败用例一并运行（$($describe -join ' / ')），用于复现基线失败。"
         }
-    } elseif ($known.Count -gt 0) {
-        Say-Info "排除已知基线失败文件（与本改动无关的历史失败）：$($known -join ' / ')"
+    } elseif ($describe.Count -gt 0) {
+        Say-Info "排除已知基线失败用例（与本改动无关的历史失败，粒度是用例）：$($describe -join ' / ')"
         Say-Info "想连它们一起跑，用 -Full（或双击 tools\start\run-tests.ps1 时加 -Full）。"
-        foreach ($f in $known) { $vitestArgs += @("--exclude", $f) }
+        $vitestArgs += Get-KnownFailedArgs
     }
 }
 

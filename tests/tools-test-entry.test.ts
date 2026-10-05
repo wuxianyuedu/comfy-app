@@ -6,7 +6,8 @@
  * 规范：docs/standards/11-测试与可观测性.md §11.12、launch-and-build.md §8
  *   - 入口只做「定位项目根 → 调用逻辑脚本 → 收尾」，逻辑在 scripts/ 下；
  *   - 参数要能透传给 vitest（指定单个文件 / 复现基线失败用 -Full）；
- *   - 已知基线失败清单只有一份来源（scripts/quality-gate.ps1），不许在两处各抄一份。
+ *   - 已知基线失败登记表只有一份来源（scripts/quality-gate-shared.mjs），两侧都调
+ *     scripts/known-failed-args.mjs 拿参数，不许在两处各抄一份、也不许各自解析源码。
  *
  * 无 pwsh 的环境（Linux CI）只做文本与结构断言：入口/逻辑是否存在、参数是否透传、
  * 清单是否共用。真实执行在 Windows 侧。
@@ -40,39 +41,50 @@ describe("tools 里的 vitest 单跑入口", () => {
   });
 
   it("透传参数时不再追加排除项", () => {
-    // 传了具体文件还去 --exclude，会变成「我明明指定了它却不跑」
+    // 传了具体用例还去排除它，会变成「我明明指定了它却不跑」
     const branch = logic.slice(
       logic.indexOf("if ($passthrough.Count -gt 0)"),
-      logic.indexOf("$known = @(Get-KnownFailedFiles)"),
+      logic.indexOf("$describe = @(Get-KnownFailedDescribe)"),
     );
     expect(branch).toContain("$vitestArgs += $passthrough");
-    // 注释里提到 --exclude 说明「为何不排除」，别把说明文字当成实现在排除
+    // 注释里提到排除说明「为何不排除」，别把说明文字当成实现在排除
     expect(branch).not.toMatch(/\$vitestArgs \+= @\("-\\-exclude"/);
+    expect(branch).not.toContain("Get-KnownFailedArgs");
   });
 
-  it("已知基线失败清单只有一处来源：解析 quality-gate.ps1，不另抄一份", () => {
-    // 两处各存一份清单，修好其中一个文件时只会在一处解禁，另一处继续静默跳过
-    expect(logic).toContain("Get-KnownFailedFiles");
-    expect(logic).toMatch(/quality-gate\.ps1/);
+  it("已知基线失败登记表只有一处来源：调 Node 出口，不自己解析源码", () => {
+    // 两处各存一份清单，修好其中一个文件时只会在一处解禁，另一处继续静默跳过。
+    // 而「从 .mjs 源码里正则抠字符串」是同一族的静默失效（改一次写法就返回空数组）。
+    for (const text of [logic, gate]) {
+      expect(text).toContain("known-failed-args.mjs");
+      // 不许再出现「正则解析共享模块」的形态。
+      expect(text).not.toMatch(/\[regex\]::Match\(\$text, '[^']*KNOWN_FAILED/);
+    }
     expect(logic).not.toContain('"src/server/api/routers/task.test.ts"');
     expect(logic).not.toContain('"src/server/api/routers/generate.test.ts"');
-    // 被解析的那份声明必须真实存在，否则解析恒为空、排除悄悄失效
-    expect(gate).toContain("$KNOWN_FAILED_FILES = @(");
+    // 登记表的权威定义在共享模块里（不是从某份 .ps1 源码解析出来的）。
+    expect(gate).toContain("known-failed-args.mjs");
   });
 
-  it("排除参数拼装与门禁共用同一份实现（Get-VitestKnownFailureArgs）", () => {
+  it("排除参数拼装与门禁共用同一份实现（两侧都调 Node 出口）", () => {
     expect(gate).toContain("function Get-VitestKnownFailureArgs");
     expect(gate).toContain("$argsAll += @(Get-VitestKnownFailureArgs)");
+    // 粒度是用例：参数由 Node 侧拼（`-t <模式>`），`.ps1` 只转交。
+    expect(gate).not.toMatch(/\$excludeArgs \+= @\("-\-exclude"/);
   });
 
-  it("-Full 保留基线失败文件，默认才排除", () => {
-    const fullBranch = logic.slice(
-      logic.indexOf("if ($Full)"),
-      logic.indexOf("# ── 4)"),
-    );
-    expect(fullBranch).toContain("已知基线失败文件一并运行");
+  it("-Full 保留基线失败用例，默认才排除", () => {
+    // `-Full` 与默认分支是同一个 if/elseif 的两支：从 `if ($Full)` 切到 `elseif`，
+    // 免得把默认分支的排除参数当成 `-Full` 也在排除（旧版的切法就踩了这个）。
+    const start = logic.indexOf("if ($Full)");
+    const end = logic.indexOf("} elseif ($describe.Count -gt 0)", start);
+    const fullBranch = logic.slice(start, end);
+    expect(fullBranch).toContain("已知基线失败用例一并运行");
     // -Full 分支只打印说明，不追加排除参数
     expect(fullBranch).not.toMatch(/\$vitestArgs \+= @\("-\\-exclude"/);
+    expect(fullBranch).not.toContain("Get-KnownFailedArgs");
+    // 而默认分支必须有排除参数（否则「默认跳过已知失败」这条承诺是空的）。
+    expect(logic.slice(end)).toContain("$vitestArgs += Get-KnownFailedArgs");
   });
 
   it("含中文的 .ps1 以 UTF-8 BOM 保存（R8，否则 PS 5.1 按 GBK 解码）", () => {

@@ -7,9 +7,11 @@
  * 就绪等待与收尾命名四项都与 POSIX 侧不同，而「记得同步另一侧」全靠自觉。
  *
  * 本条把`新增动作必须两侧都在`机器化，另加一条：会「静默失效」的清单标记
- * （`KNOWN_FAILED_FILES`）不许各写一份 —— 此前它定义在 `quality-gate.ps1` 里、
- * 由 `run-tests.ps1` 正则解析 `.ps1` 源码，改一次写法就静默返回空数组，
- * 而「排除项悄悄为空」看起来就像「本来就没有基线失败」（红/绿不再可归因）。
+ * （`KNOWN_FAILED_CASES`，及从它派生的 `KNOWN_FAILED_FILES`）不许各写一份 ——
+ * 此前它定义在 `quality-gate.ps1` 里、由 `run-tests.ps1` 正则解析 `.ps1` 源码，
+ * 改一次写法就静默返回空数组，而「排除项悄悄为空」看起来就像「本来就没有基线失败」
+ * （红/绿不再可归因）。现在两侧连「读取」都改调 `scripts/known-failed-args.mjs`，
+ * 本条的判据仍只看「谁又定义了一份」。
  *
  * 两种验证都做：正向（真仓库通过）+ 反向（临时仓库改坏后必失败）。
  */
@@ -156,49 +158,66 @@ describe("跨平台动作对照表（规范 §9.5）", () => {
   });
 });
 
-describe("KNOWN_FAILED_FILES 的单点定义（规范 §9.5）", () => {
-  it("共享模块导出该常量（单点定义存在）", () => {
+describe("KNOWN_FAILED_CASES 的单点定义（规范 §9.5）", () => {
+  it("共享模块导出登记表（单点定义存在）", () => {
     const shared = fs.readFileSync(
       path.join(process.cwd(), "scripts", "quality-gate-shared.mjs"),
       "utf8",
     );
-    expect(shared).toMatch(/export\s+const\s+KNOWN_FAILED_FILES\s*=/);
+    expect(shared).toMatch(/export\s+const\s+KNOWN_FAILED_CASES\s*=/);
   });
 
   it("两侧的门禁脚本只是**读取**它，不各自再定义一份", () => {
     for (const rel of ["scripts/quality-gate.ps1", "scripts/run-tests.ps1"]) {
       const text = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
-      // 读取形态：从共享模块解析（不写死清单字面量）
-      expect(text).toContain("quality-gate-shared.mjs");
-      // 不许出现「赋一个字面量清单」
+      // 读取形态：调 Node 出口拿参数（不写死登记表，也不去正则解析源码）
+      expect(text).toContain("known-failed-args.mjs");
+      // 不许出现「赋一个字面量登记表」
+      expect(text).not.toMatch(/\$KNOWN_FAILED_CASES\s*=\s*@\(\s*["']/);
       expect(text).not.toMatch(/\$KNOWN_FAILED_FILES\s*=\s*@\(\s*["']/);
     }
   });
 
-  it("在 .ps1 里再定义一份字面量清单 → 失败（漏改一处就红/绿不可归因）", () => {
+  it("两侧都不再拿正则解析共享模块的源码（那等于把另一门语言当数据源）", () => {
+    for (const rel of ["scripts/quality-gate.ps1", "scripts/run-tests.ps1"]) {
+      const text = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+      const parsesSharedByRegex =
+        text.includes("quality-gate-shared.mjs") &&
+        text.includes("[regex]::Match");
+      expect(parsesSharedByRegex, `${rel} 又用正则解析共享模块源码`).toBe(
+        false,
+      );
+    }
+  });
+
+  it("在 .ps1 里再定义一份字面量登记表 → 失败（漏改一处就红/绿不可归因）", () => {
     const gate = fs.readFileSync(
       path.join(process.cwd(), "scripts", "quality-gate.ps1"),
       "utf8",
     );
-    const broken = `${gate}\n$KNOWN_FAILED_FILES = @("src/lib/media.test.ts")\n`;
+    const broken = `${gate}\n$KNOWN_FAILED_CASES = @("src/lib/media.test.ts")\n`;
     const out = runGuard({
       [path.join("scripts", "quality-gate.ps1")]: broken,
     });
     expect(out).toContain("CODE=1");
-    expect(out).toContain("又定义了一份 KNOWN_FAILED_FILES");
+    expect(out).toContain("又定义了一份 KNOWN_FAILED_CASES");
   });
 
-  it("Node 侧门禁与共享模块读同一份清单（不许各写一套排除项）", () => {
-    const mjs = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "quality-gate.mjs"),
-      "utf8",
-    );
-    expect(mjs).toContain('from "./quality-gate-shared.mjs"');
-    const runner = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "run-tests.mjs"),
-      "utf8",
-    );
-    expect(runner).toContain('from "./quality-gate-shared.mjs"');
+  it("Node 侧门禁与共享模块读同一份登记表（不许各写一套排除项）", () => {
+    for (const rel of ["scripts/quality-gate.mjs", "scripts/run-tests.mjs"]) {
+      const text = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+      expect(text).toContain('from "./quality-gate-shared.mjs"');
+      // 排除参数的拼装只在共享模块一处（转义也在那），消费方不许自己写 `--exclude`。
+      expect(
+        text.includes("vitestExcludeArgs"),
+        `${rel} 没走共享的排除参数出口`,
+      ).toBe(true);
+      // 粒度是用例：不许再出现 `--exclude` 的拼装（那会把粒度退回文件）。
+      expect(
+        text.includes('"--exclude"'),
+        `${rel} 仍在拼 --exclude（粒度会退回文件）`,
+      ).toBe(false);
+    }
   });
 });
 

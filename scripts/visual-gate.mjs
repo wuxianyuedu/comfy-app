@@ -37,7 +37,7 @@ import {
   isTestPath,
   resolveAffectedTests,
 } from "./affected-tests.mjs";
-import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
+import { KNOWN_FAILED_CASES } from "./quality-gate-shared.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -137,7 +137,7 @@ export function plannedTests(staged, inputs, readText) {
     testFiles: inputs.testFiles,
     sourceFiles: inputs.sourceFiles,
     readText,
-    knownFailed: KNOWN_FAILED_FILES,
+    knownFailedCases: KNOWN_FAILED_CASES,
   }).tests;
 }
 

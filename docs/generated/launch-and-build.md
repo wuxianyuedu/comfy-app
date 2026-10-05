@@ -2552,11 +2552,14 @@ sidecar」两种不同形态的失败。
 提交防线）核两件事：
 
 1. 本表登记的每个脚本**真实存在**（表被删空、或登记了不存在的路径 → 失败）；
-2. **会「静默失效」的清单不许各写一份**：`KNOWN_FAILED_FILES`（已知基线失败）
-   只能定义在 `scripts/quality-gate-shared.mjs`，两侧的 `.ps1` 只能是**读取**它。
-   此前它定义在 `quality-gate.ps1` 里、由 `run-tests.ps1` 正则解析 `.ps1` 源码
-   —— 那等于把另一门语言的源码当数据源，改一次写法就静默返回空数组，而
+2. **会「静默失效」的清单不许各写一份**：`KNOWN_FAILED_CASES`（已知基线失败
+   登记表）只能定义在 `scripts/quality-gate-shared.mjs`，两侧的 `.ps1` 只能是
+   **读取**它。此前它定义在 `quality-gate.ps1` 里、由 `run-tests.ps1` 正则解析
+   `.ps1` 源码 —— 那等于把另一门语言的源码当数据源，改一次写法就静默返回空数组，而
    「排除项悄悄为空」看起来就像「本来就没有基线失败」（红/绿不再可归因）。
+   **现在连「读取」也不靠正则**：两侧都调 `scripts/known-failed-args.mjs`，由
+   `quality-gate-shared.mjs` 自己把 vitest 参数拼好、Node 打出来（每行一个参数，
+   模式里含空格，按空白切会拆碎 ⇒ 静默失效）。判据仍只看「谁又定义了一份」。
 
 回归测试见 `tests/ps1-consistency.test.ts`。
 

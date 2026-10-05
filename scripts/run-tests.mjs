@@ -30,7 +30,11 @@ import { fileURLToPath } from "node:url";
 
 import { formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
-import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
+import {
+  KNOWN_FAILED_CASES,
+  describeKnownFailedCases,
+  vitestExcludeArgs,
+} from "./quality-gate-shared.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -60,16 +64,20 @@ function main() {
     );
     args.push(...passthrough);
   } else if (full) {
-    if (KNOWN_FAILED_FILES.length > 0) {
+    if (KNOWN_FAILED_CASES.length > 0) {
       console.log(
-        `[INFO] 全量模式：已知基线失败文件一并运行（${KNOWN_FAILED_FILES.join(" / ")}）。`,
+        `[INFO] 全量模式：已知基线失败用例一并运行（${describeKnownFailedCases(KNOWN_FAILED_CASES).join(" / ")}）。`,
       );
     }
-  } else if (KNOWN_FAILED_FILES.length > 0) {
+  } else if (KNOWN_FAILED_CASES.length > 0) {
+    // 粒度是**用例**（规范 §11.12）：`-t '<负前瞻正则>'` 只跳登记的那几条，
+    // 同文件其余用例照跑。过去这里是 `--exclude <文件>`，一条红会把整份文件摘掉
+    //（ISSUE #1282 实测：1 条红连带 17 条已绿的断言一起消失）。模式的拼法只在
+    // `quality-gate-shared.mjs` 一处（`vitestExcludeArgs`），别在这里手写正则。
     console.log(
-      `[INFO] 排除已知基线失败文件：${KNOWN_FAILED_FILES.join(" / ")}`,
+      `[INFO] 排除已知基线失败用例：${describeKnownFailedCases(KNOWN_FAILED_CASES).join(" / ")}`,
     );
-    for (const f of KNOWN_FAILED_FILES) args.push("--exclude", f);
+    args.push(...vitestExcludeArgs(KNOWN_FAILED_CASES));
   }
 
   console.log("");
