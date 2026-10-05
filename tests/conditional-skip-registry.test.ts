@@ -110,10 +110,10 @@ const REGISTERED: Registration[] = [
   },
   {
     file: "src/lib/process/kill-process-tree.windows.test.ts",
-    guard: 'process.platform === "win32"',
+    guard: "ON_WINDOWS",
     count: 2,
     tier: "platform",
-    why: "POSIX 兜底分支在 Windows 上不判（平台判据收在两处，见 launch-and-build §3.1）",
+    why: "假 taskkill 得是 Node 能直接 spawn 的 shebang 脚本（Windows 上只能是 .cmd，而 Node 自 CVE-2024-27980 起禁止直接 spawn 批处理）—— 这两条在 Windows 上没有等价的可注入形态。守卫取 `tests/helpers/platform-fixtures` 的共享常量，档位与理由同源",
   },
   {
     file: "tests/standalone-runtime-completeness.test.ts",
@@ -131,8 +131,17 @@ const REGISTERED: Registration[] = [
   },
 ];
 
-/** 语句起始位置的条件 skip：`it.skipIf(g)(` / `describe.skip(` / `test.skipIf(g)(`。 */
-const DIRECT_SITE_RE = /^\s*(?:it|test|describe)\.skip(?:If\(([^)]*)\))?\(/;
+/**
+ * 语句起始位置的条件 skip：`it.skipIf(g)(` / `describe.skip(` / `test.skipIf(g)(`。
+ *
+ * ⚠️ 标识符那一格是 `\w+` 而不是写死的 `it|test|describe`，为的是认得**从
+ * `test.extend` 派生出来的 test**（`platformTest` / `dbTest` 这类，见
+ * `tests/helpers/platform-fixtures.ts`）。写成白名单时那些派生对象的 skip 站点
+ * 会**整个漏出扫描面** —— 表现不是「这里红」而是「一条静默不跑的用例没人登记」，
+ * 正是本文件开头说的那种病。放宽的代价是可能把某个同名普通函数算成站点，
+ * 但那会在「登记项不陈旧」那条上报出来（多一条没人登记 = 红），不会静默。
+ */
+const DIRECT_SITE_RE = /^\s*\w+\.skip(?:If\(([^)]*)\))?\(/;
 /** 别名定义：`const needsPosixExec = it.skipIf(<guard>);` */
 const ALIAS_DEF_RE =
   /^\s*const\s+(\w+)\s*=\s*(?:it|test)\.skipIf\(([^)]*)\)\s*;?\s*$/;
@@ -259,6 +268,16 @@ describe("条件性 skip 的登记表（§11.7 的「绿有两种含义」）", 
       "tests/turbopack-tracing-excludes.test.ts",
     );
     expect(artifactFile.get("!standaloneExists")).toBe(1);
+    /* ③′ **派生 test 对象**上的 skip 站点也要被扫到。
+     * `tests/helpers/platform-fixtures.ts` 给出的 `platformTest` 来自
+     * `test.extend`，调用点写成 `platformTest.skipIf(...)`。标识符写成白名单
+     * （只认 it/test/describe）时这一格会**整个漏出扫描面** —— 表现不是「这里红」，
+     * 而是「一条静默不跑的用例没人登记」，比红更糟。这条是那个放宽的执行者。 */
+    expect(
+      skipSitesIn("src/lib/process/kill-process-tree.windows.test.ts").get(
+        "ON_WINDOWS",
+      ),
+    ).toBe(2);
     // ④ 扫描面本身不许是空的（掏空了前三条判据一起恒绿）
     expect(measured.size).toBeGreaterThanOrEqual(REGISTERED.length);
     expect(TIERS).toHaveLength(4);

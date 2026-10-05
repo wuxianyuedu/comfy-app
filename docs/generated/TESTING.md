@@ -173,6 +173,26 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
 `TrainingStudio` 的 `__snapshots__/*.snap`），按规范 §11.9 逐步迁成行为断言后删除；
 视觉防退化统一走本节 Playwright 基线。
 
+### 平台 / 宿主依赖：用 fixture 表达，不用包装函数
+
+「这条用例依赖什么环境」写成 fixture（`tests/helpers/platform-fixtures.ts`），
+平台与宿主形态是用例签名里的入参：
+
+```ts
+platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
+  asPlatform("win32");
+  // …
+});
+```
+
+三条要点（完整口径见规范 §11.16）：
+
+- **能注入就不切平台** —— `process.platform` 是全局状态，只在被测代码自己读它时切。
+- **不可满足的依赖显式 skip**，守卫用 fixture 模块导出的共享常量（`ON_WINDOWS`），
+  不要各处散写裸表达式（`conditional-skip-registry` 按守卫文本归组计数）。
+- **fixture 的收尾要有执行者**（本仓库用 `test.fails` 故意抛一条，见
+  `tests/helpers/platform-fixtures.failure.test.ts`）。
+
 ## API 文档（TypeDoc）
 
 - 配置：`typedoc.json`
