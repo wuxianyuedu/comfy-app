@@ -58,6 +58,39 @@ const PROBE_TIMEOUT_MS = 30_000;
 /** corepack prepare 需要联网下载对应版本，给足时间（与编排器的 .ps1 时代同量级）。 */
 const PREPARE_TIMEOUT_MS = 600_000;
 
+/* ── 一次启动里 `pnpm -v` 只探一次 ────────────────────────────────────────────
+ *
+ * 编排器的两步都要问「pnpm 现在什么版本」：工具链门禁（`orchestratePnpm`）与
+ * 版本一致性对齐（`reconcilePnpmVersion`）。实测（ISSUE #1516 的启动日志）两次
+ * 之间隔着 2.8s —— 那不是编排在算别的东西，而是**第二次 spawnSync 冷启 pnpm
+ * shim**（Windows 上是 corepack shim 起 node 再起 pnpm，单次 1~3s）。
+ *
+ * 两次问的是同一个问题，而答案在被问的这段时间里不会自己变：唯一能让它变的动作
+ * （`corepack prepare` 切版本）就在本模块里，因此由 prepare 显式弃用缓存。缓存键
+ * 带上 root / PATH / 平台 —— 换检出、换 PATH、跨平台模拟（测试里给 `platform`）
+ * 都是**真的不同的命令**，不能互相顶掉结论。
+ */
+const probeMemo = new Map();
+
+/**
+ * 缓存键：同一份「命令 + 环境 + 平台」才算同一个问题。三个字段都已解析成实参
+ * （调用方负责把 `ProbeOptions` 的缺省值填上），这里不做二次兜底。
+ * @param {string} root 检出根
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env 环境变量表
+ * @param {NodeJS.Platform} platform 平台
+ * @returns {string}
+ */
+function probeKey(root, env, platform) {
+  /* 分隔符用 \u0000（转义写法，源码里不留真字节 —— 见 §12.11）：PATH 里不会出现
+   * 它，所以「platform + root + PATH」的三段拼接不可能被用户内容撞成同一条键。 */
+  return [platform, root, env.PATH ?? ""].join("\u0000");
+}
+
+/** 丢掉所有探测结论。任何可能改变「pnpm 是什么版本」的动作之后都要调一次。 */
+export function clearPnpmProbeCache() {
+  probeMemo.clear();
+}
+
 /** package.json 里声明的 pnpm 版本（`packageManager: "pnpm@12.4.1"` → `"12.4.1"`）。
  *  解析不到返回 null —— 调用方据此跳过修复，而不是拿一个空版本号去 prepare。 */
 /**
@@ -102,11 +135,18 @@ function reasonText(key) {
  * @returns {ProbeResult} 探测结论
  */
 export function probePnpm({ root = process.cwd(), env = process.env, platform = process.platform } = {}) {
+  const key = probeKey(root, env, platform);
+  const cached = probeMemo.get(key);
+  if (cached) return cached;
   const candidate = whichCommand("pnpm", { env, platform });
-  if (!candidate) {
-    return failed(null, "not-found", "", null);
-  }
-  return probeCommand(candidate, { root, env, platform });
+  /* 结论是**完整对象**，调用方会就地读字段（`orchestratePnpm` 把它塞进返回结构
+   * 与 tip）；这里没有可变共享状态，唯一会过期的只有时间，而时间的正确处置就是
+   * 「谁能让它变、谁负责弃用整条缓存」（见 `clearPnpmProbeCache`）。 */
+  const result = candidate
+    ? probeCommand(candidate, { root, env, platform })
+    : failed(null, "not-found", "", null);
+  probeMemo.set(key, result);
+  return result;
 }
 
 /** 用同一条判据探任意命令（`probePnpm` 与 corepack 复核共用）。 */
@@ -209,6 +249,10 @@ export function preparePnpm({ root = process.cwd(), expected = null, env = proce
   // 注入 `{ env, platform }`：corepack 在 Windows 上也可能是 `.cmd` 形态，回退到
   // 旁边的 `.ps1` 时要用**同一个**平台判据（否则模拟平台与真实平台不一致）。
   const { command, prefixArgs } = commandInvocation(candidate, ["--version"], { env, platform });
+  /* 这一步会**换掉 pnpm 的激活版本**，也就是让所有已缓存的探测结论当场过期
+   * （缓存的存在理由见文件上方的 `probeMemo`）。必须在 spawn 之前弃用：否则
+   * prepare 之后的复核会拿到「准备之前」的那份结论，通过与否都是错的。 */
+  clearPnpmProbeCache();
   // 重建动作会联网下载，耗时以分钟计：先回显再执行，用户才知道这几分钟在跑什么。
   echoCommandLine(command, [...prefixArgs, "prepare", `pnpm@${version}`, "--activate"]);
   const result = spawnSync(command, [...prefixArgs, "prepare", `pnpm@${version}`, "--activate"], {
