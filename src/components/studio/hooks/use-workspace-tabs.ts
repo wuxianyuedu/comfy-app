@@ -38,6 +38,7 @@ export const WORKSPACE_VIEWS: WorkspaceView[] = [
   "film",
   "workflows",
   "outputs",
+  "console",
 ];
 
 function readTabsState(): WorkspaceTabsState | null {
