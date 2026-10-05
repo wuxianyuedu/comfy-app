@@ -8,7 +8,7 @@ import {
   APP_DEV_PORT_SOURCE,
   DEFAULT_APP_ORIGIN,
   type AppOriginOverride as AppOrigin,
-} from "./app-origin-defaults";
+} from "./app-origin-defaults.ts";
 import { MessageCenterPanel } from "~/components/message-center/MessageCenterPanel";
 import { ToastProvider } from "~/components/studio/ToastProvider";
 import { TooltipProvider } from "~/components/ui/tooltip";

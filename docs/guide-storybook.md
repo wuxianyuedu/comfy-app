@@ -351,7 +351,13 @@ hook（没有 DOM 形态，判据是用例）、只有出错时才渲染的边�
 - 配置契约的判据：`tests/storybook-config.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）
   —— 它守的是那四种「**构建全都成功**」的错法：`stories` glob 写错（侧栏空着）、
   漏引 `globals.css`（无样式裸 DOM）、漏主题装饰器（只剩 dark 一态）、启动器漏
-  `SKIP_ENV_VALIDATION`（崩在 `env.js` 却看不出与配置有关）。
+  `SKIP_ENV_VALIDATION`（崩在 `env.js` 却看不出与配置有关）。另有一条判的是
+  **加载链路**：`.storybook/**` 里的相对 import 一律要带文件后缀。Storybook 10 用一个
+  Node ESM loader 加载 `main.ts`（ESM 要求完整说明符），无后缀时它会替我们补上并**每
+  补一次打一条 deprecation**；能跑，但告警会遮蔽真正的启动报错，且下个大版本会变成
+  硬错误。那条判据直接调 Storybook 自己的 `addExtensionsToRelativeImports`
+  （`storybook/internal/bin/loader`）点一遍 `.storybook/**` —— 它「要改写源码」就等价
+  于「启动会打那条 deprecation」，规则随 Storybook 变，不另抄一份正则。
 - 为什么启动要经 `scripts/storybook.mjs`：`@storybook/nextjs` 会加载仓库根的
   `next.config.js`，而它第一行就是 `import "./src/env.js"`。组件预览不需要
   `BETTER_AUTH_SECRET` / `DATABASE_URL`，所以注入 `SKIP_ENV_VALIDATION=1` 绕开

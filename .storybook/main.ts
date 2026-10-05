@@ -3,8 +3,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { APP_ORIGIN_DEFAULTS } from "./app-origin-defaults";
-import { APP_ORIGIN_ENV_KEYS, parseOverride } from "./app-origin-reader";
+/* 相对 import 一律**带文件后缀**（`.ts` / `.tsx`），不写 `./x`。
+ *
+ * 原因在加载链路上：Storybook 用一个 Node ESM loader 加载本文件，而 ESM 的解析
+ * 规则要求完整说明符 —— loader 会替我们把 `./x` 补成 `./x.ts`，但每补一次就
+ * 打一条 deprecation（"One or more extensionless imports detected"，
+ * https://storybook.js.org/docs/faq#extensionless-imports-in-storybookmaints-and-required-ts-extensions ）。
+ * 那是**每加载一个文件一次**的噪音：真正的报错会被它盖住，而它自己会在下一个
+ * Storybook 大版本里变成硬错误。写全后缀在两侧都合法（Node loader 原样放行，
+ * webpack 两种写法都解析得到），所以这里只有一种写法。
+ *
+ * 判据：`tests/storybook-config.test.ts` 的「相对 import 带后缀」那条，用 Storybook
+ * 自己的 loader 函数点一遍名（它要改写就会红），不是另抄一份正则。 */
+import { APP_ORIGIN_DEFAULTS } from "./app-origin-defaults.ts";
+import { APP_ORIGIN_ENV_KEYS, parseOverride } from "./app-origin-reader.ts";
 
 /**
  * Storybook 主配置。
