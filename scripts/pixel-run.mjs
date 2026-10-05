@@ -49,9 +49,12 @@ import {
   PENDING_PLATFORMS,
   SUPPORTED_PLATFORMS,
   VISUAL_DIR,
+  checkRecordingEnv,
   isPlatformPending,
   isPlatformRegistered,
   missingBaselinesForPlatform,
+  recordingWebserverFor,
+  webserverForEnv,
 } from "./visual-baselines.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -304,6 +307,26 @@ function main(argv) {
     );
     return 2;
   }
+  /* 第二问（与缺基线**并列**、不互相替代）：「本机 `CI` 与这一档基线的录制口径一致吗」。
+   *
+   * 为什么录基线档也要拦：口径不符时 `--update` 会**成功**——生成一套看着正常的 PNG。
+   * 它自洽、不会当场红，只在以后某次真差异里混进来、还指不出是它。录基线这一路此前
+   * 正是这层开着的口子（`--update` 刻意不受缺基线那闸拦，那是它的本分；但口径这一条
+   * 跟缺不缺基线无关，两个方向都要拦）。
+   * 检查档同样拦：口径不符时报的 diff 是 dev 指示器那一块，而 `classifyFailure` 只认
+   * 三条实测形态、认不出它，会把人引去改业务代码。 */
+  const envProblem = checkRecordingEnv({
+    platform: process.platform,
+    env: process.env,
+  });
+  if (envProblem) {
+    process.stderr.write(
+      `[pixel-run] ✗ 本机（${process.platform}）的 webServer 口径与该档基线不一致 —— 未启动 webServer / 浏览器\n` +
+        `        定性：${envProblem}\n` +
+        "        规范：docs/standards/11-测试与可观测性.md §11.8\n",
+    );
+    return 3;
+  }
   const runs = planRuns({ update });
   if (dryRun) {
     for (const step of runs) {
@@ -322,10 +345,17 @@ function main(argv) {
     // webServer 走哪条由 `playwright.config.ts` 按 CI 的真假分流，而这条分流决定了
     // 本步要不要先有生产构建 —— 把它打在台面上，省掉一次「先构建」的试错
     // （实测：容器/流水线里 `CI=true` 是常态，人会以为自己没在 CI 上）。
+    // webServer 走哪条由 `playwright.config.ts` 按 CI 的真假分流，而这条分流决定了
+    // 本步要不要先有生产构建、以及**报出来的差异算不算数**（口径不符时的 diff 是
+    // dev 指示器那块，不是界面变形）。把它连「与本档登记口径是否一致」一起打在台面上。
     process.stdout.write(
       process.env.CI
         ? "[pixel-run] webServer：按 CI 口径 → `pnpm start`（需要先有生产构建）\n"
         : "[pixel-run] webServer：本地口径 → `pnpm dev`（无需先构建）\n",
+    );
+    process.stdout.write(
+      `[pixel-run] 口径核对：${process.platform} 档登记为 \`pnpm ${recordingWebserverFor(process.platform) ?? "（未登记）"}\`，` +
+        `本机实走 \`pnpm ${webserverForEnv(process.env)}\`\n`,
     );
     return 0;
   }

@@ -158,7 +158,11 @@ pnpm test:e2e
   「仓库里那几套基线齐不齐」，不是「你正坐的这台能不能跑」；后者由上面那条前置判决答，
   清点内核同源（`scripts/visual-baselines.mjs`），平台登记口径也在那里。
   **基线按 webServer 口径录**：dev 与 start 的像素不同（dev 指示器那块 mask 目前遮不住），
-  在某一档跑像素时 `CI` 的真假要与该档录制时一致。
+  在某一档跑像素时 `CI` 的真假要与该档录制时一致。**这条现在有数据和判据**：每档录于哪条
+  口径登记在 `scripts/visual-baselines.mjs` 的 `PLATFORM_RECORDING`（win32 = `dev`、
+  linux = `start`），`pnpm check:visual` 起任何东西之前先核本机 `CI` 与它一致不一致
+  （不一致直接拦下、给出置法；`--dry-run` 会把两侧都打出来）。先在 Windows 上按 `dev` 口径
+  录 win32 那几张，再成套提交。
 - 要**新加/恢复一档平台**（例如某档已被删过）时，姿势固定是「在该档用**当前** spec
   `--update-snapshots` 重录成套 PNG + 同批把该平台加进 `SUPPORTED_PLATFORMS`」，
   **不是把旧 PNG 贴回来**（旧图录于别的界面形态，贴回去就是一份对不上现状的账）。
