@@ -270,6 +270,10 @@ function ShellHarness() {
 - **不是像素基线**。组件覆盖率再高也不等于「页面没变样」—— 视觉回归的防线仍是
   `e2e/visual` 的 Playwright `toHaveScreenshot`（规范 11 §11.8），那个判的是
   真实页面的布局/配色/断点。两者互补，都不接 Chromatic。
+  **这条分工现在有机器判据**（`tests/visual-storybook-division.test.ts`，进固定清单）：
+  给 story 加 `toHaveScreenshot`、或引入第二套像素工具（Chromatic 那一族）都会红
+  —— 那是给同一件事造第二套基线，而两套基线的维护成本正是 §11.8 要避免的。
+  这一侧真要看像素时，**写进 `e2e/visual`，不要写进 story**。
 - **不进构建产物**。`.storybook/**` 与 `*.stories.tsx` 不在 Next 的模块图上：
   story 只被 Storybook 自己的 webpack 图引用，`pnpm build` 看不到它们。
   `storybook-static/`、`.storybook/assets/`、`.storybook/generated/` 都在

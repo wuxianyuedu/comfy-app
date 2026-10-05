@@ -46,8 +46,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
+  PENDING_PLATFORMS,
   SUPPORTED_PLATFORMS,
   VISUAL_DIR,
+  isPlatformPending,
   isPlatformRegistered,
   missingBaselinesForPlatform,
 } from "./visual-baselines.mjs";
@@ -147,6 +149,14 @@ export function checkLocalBaselines({ root, platform }) {
   const missing = missingBaselinesForPlatform(root, platform);
   if (missing.length === 0) return null;
   const listed = missing.map((f) => `      · ${f}`).join("\n");
+  if (isPlatformPending(platform)) {
+    return (
+      `本机平台 \`${platform}\` 的基线**登记为待重录**（${Object.keys(PENDING_PLATFORMS).join(" / ")}）——\n` +
+      `      这一档缺的是新增的截图名，只能在**这一档的机器上**录：\n` +
+      `        pnpm check:visual:update   # 需先把 \`CI\` 置成与该档基线录制时一致\n` +
+      `      录完连同 \`scripts/visual-baselines.mjs\` 的 PENDING_PLATFORMS 登记一起删掉。缺这几张：\n${listed}`
+    );
+  }
   if (!isPlatformRegistered(platform)) {
     return (
       `本机平台 \`${platform}\` 没有登记过像素基线（仓库登记的是 ${SUPPORTED_PLATFORMS.join(" / ")}）——\n` +

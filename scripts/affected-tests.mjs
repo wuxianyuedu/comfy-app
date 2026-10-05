@@ -79,6 +79,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 像素基线按平台分文件：少一档不是「那一档没跑」，而是判失败并顺手生成半套未入库的
   // PNG。这条守的是「视觉层在真正执行它的那台机器上到底有没有基线」，与本次改动无关。
   "tests/visual-baseline-pairing.test.ts",
+  // 「组件级视觉归 Storybook、页面级视觉归 Playwright」这条分工本身：
+  // `e2e/visual/**` 与 `.storybook/**` 里都不该出现对方那一侧该做的事（截图断言 / 第二套
+  // 像素工具），而 §11.8 声明的基线范围档（深浅两态 / 断点 / 空态）不得被**减法**清掉 ——
+  // 删掉东西比加东西更容易过 review，这条只在改像素层时才跑就等于形同虚设。
+  "tests/visual-storybook-division.test.ts",
   // 条件性 skip 的登记表：全绿里的 `N skipped` 不说明「绿的是哪一种」，尤其产物级探针
   // （没构建过的检出上整块不判）。这条守住「每个暗掉的站点都有人登记它为什么暗」。
   "tests/conditional-skip-registry.test.ts",
