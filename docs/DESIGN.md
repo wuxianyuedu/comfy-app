@@ -320,6 +320,8 @@ components:
 | 危险（当底） | `--color-destructive` | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `oklch(0.704 0.191 22.216)` ⇒ `#ff6467` | `bg-destructive`、实心危险按钮 |
 | 危险（浅底上的字） | `--color-danger-strong` | `#b91c1c` | `#fca5a5` | `text-danger-strong` |
 | 成功 | `--color-success` / `--color-success-strong` | `#0ea472` / `#10b981` | `#5be3c4` / `#10b981` | 状态绿 |
+| 状态点**发光**（绿） | `--color-glow-success` | `#34d399` | 同值 | 比 `--color-success` 亮一档的浅彩（400 档）。两态同值是刻意的：原裸值本来就没有 `.dark` 分叉 |
+| 状态点**发光**（红） | `--color-glow-danger` | `#fb7185` | 同值 | 同上，配 `--color-destructive` 的那档浅彩 |
 | 警告 | `--color-warning` / `--color-warning-strong` | `#d97706` / `#b45309` | `#f59e0b` / `#fbbf24` | 待处理/排队 |
 | 信息 | `--color-info` / `--color-info-strong` | `#2563eb` / `#1d4ed8` | `#5bc6ff` / `#7dd3fc` | 链接/提示 |
 | 在线状态 | `--color-status-online` | `#047857` | `#33d499` | 「本机/在线」点与字 |
@@ -584,6 +586,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - ❌ 不要写 `var(--color-ink, #EDEDF2)` 这种带兜底的引用。它是**装饰性 indirection**：谎称随主题，把单一事实来源悄悄换成局部常量，而且下一个人补上声明时这行会**静默改变外观**。需要两态就新增一颗 token 并两态赋值。
 - ❌ **禁止拼 token 名**：`var(--color-aurora-${tone})`、`"--color-" + name`。Tailwind v4 会 tree-shake `@theme` 里没被**字面引用**的变量，拼出来的名字在源码里从没出现过 ⇒ 产物里当场失色、没有任何报错。JS 里按当前主题取色的规定写法是 `useCssColorToken("--color-node-mix-base", "#ffffff")`，**整名写全**。
 - ❌ 不在源码里写 `violet-500` / `emerald-400` / `#rrggbb` 表达表面或文字语义（`pnpm theme:check` 棘轮 + 显式豁免清单）。
+- ⚠️ **文档里引用一个 arbitrary 类名时，别整串照抄 `shadow-[…]` / `text-[…]` 这种完整候选名**：Tailwind 的默认源扫描把 `.md` 也算进去，于是那一条规则**真的被生成进产物**（实测：把某个已迁走的旧裸值类名留在本文里当例子，编译产物里就有它，而源码一处都不剩 —— 会让「按产物数硬编码」的自查读出假阳性）。写值本身（`rgba(52,211,153,0.8)`）不成候选名，安全。
 
 **主题**
 
@@ -663,7 +666,8 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ## Known Gaps
 
-- **状态点的发光有两份颜色来源，且不是同一组值**（本轮实测，刻意没顺手改）：`BrowserStatusBar.tsx` 里同一个「状态圆点发光」写了两种形态 —— `fpsDotColor` 表用 `shadow-[0_0_6px_var(--color-success)]`（走 token、α=1），而 devServer 那三元的同位置用 `shadow-[0_0_6px_rgba(52,211,153,0.8)]` / `rgba(251,113,133,0.8)`。关键是**这两组不是同一个颜色**：`rgb(52,211,153)` = `#34d399`（emerald-400）而 `--color-success` = `#0ea472`；`rgb(251,113,133)` = `#fb7185`（rose-400）而 `--color-destructive` = `#e7000b`。所以把它当「裸值改 token」的免费清理做掉，会**同时改掉发光色相与强度** —— 需要一次「状态发光到底用基准色还是用 400 档浅彩」的独立决定。同类裸值不止这一处（品牌紫 `rgba(124,92,252,…)`、卡片投影 `rgba(0,0,0,0.55)` 等），但**条数不抄在这里**：权威清单由 `pnpm theme:check`（`scripts/check-theme-colors.cjs`）逐文件打印「处数 + 为什么可以留」，未豁免的余量走棘轮（今天实测 0）。这句此前写着「清单见 `tests/design-md-contract-sync.test.ts` 的扫描面」——**指错了执行者**（那份只核 token 名与 Colors 表取值，没有裸色扫描面），而把条数写死也会随别人新增豁免过期（同一族纪律见本文对「数字不属于事实核」的处理）。**needs-design-decision**（决定的只有「状态发光走基准色还是 400 档浅彩」这一格）。
+- **状态点发光的浅彩已收口（决定 = 保住色相、把裸值纳入 token）**：`BrowserStatusBar.tsx` 的 devServer 三元与 `project-canvas/GlobalStepLogPanel.tsx` 的 SSE 点原先写裸值 `rgba(52,211,153,0.8)` / `rgba(251,113,133,0.8)` / `rgba(52,211,153,0.7)`。这两组**不是**基准色：`#34d399`（emerald-400）配 `--color-success` = `#0ea472`，`#fb7185`（rose-400）配 `--color-destructive` = `#e7000b`。所以按「裸值改 token」的免费清理并回基准色会同时改掉色相与深浅 —— 已签的口径是新增 `--color-glow-success` / `--color-glow-danger`（两态同值，原裸值本来没有 `.dark` 分叉），强度仍由调用处经 `color-mix(in srgb, … N%, transparent)` 决定，与 `AuroraGlow`「色相走 token、强度由调用处定」同一条约定。三条调用点零像素变化（编译探针实测：两颗 token 与三条 arbitrary shadow 都真的进产物）。
+  **仍开的一格**：同一行里 `fpsDotColor` 表用的是基准色发光（`var(--color-success)`、α=1），而 devServer 那点用浅彩 —— 两条现在**都有名字**了，但「整条状态栏统一到哪一档」仍是没签的决定。同类裸值不止这一处（品牌紫、卡片投影等），但**条数不抄在这里**：权威清单由 `pnpm theme:check`（`scripts/check-theme-colors.cjs`）逐文件打印「处数 + 为什么可以留」，未豁免的余量走棘轮（今天实测 0）。本仓对「数字不属于事实核」的口径是不写数字、只给指针。
 
 - **Storybook 覆盖 29/83**（有 story 的组件：alert、aspect-ratio、avatar、badge、button、empty-state、field、form-field、form-rhf、image-viewer、json-viewer、kbd、list-badge、media-thumbnail、option-list-popover、page-loading、progress-bar、seed-mode-button、segment-popover、simple-key-handler、skeleton、source-tag、spinner、status-badge、status-dot、task-type-chip、toggle、validation-error-list、water-fill-progress）。核心交互件里 **input、dialog、select、card、tooltip、popover、switch、checkbox、tabs、dropdown-menu、context-menu、menubar、navigation-menu、command** 无 story；其中 dialog/select/tabs/dropdown-menu/card/input/switch/checkbox **同时无 `.test.tsx`**。⇒ 「明暗两态长什么样」这一层契约目前只在那 29 个组件上可核验。
 - **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一 grep 在 `u-title` 上抓到 51 处、`u-title-page` 18 处，所以这个 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名精确计数：`u-title` 26 处、`u-title-page` 17 处、`u-title-stage` 1 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。

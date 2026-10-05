@@ -382,10 +382,10 @@ export function BrowserStatusBar() {
             pulse={devServer.state === "starting"}
             className={
               devServer.state === "online"
-                ? "shadow-[0_0_6px_rgba(52,211,153,0.8)]"
+                ? "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)]"
                 : devServer.state === "starting"
                   ? "bg-ink-fainter"
-                  : "shadow-[0_0_6px_rgba(251,113,133,0.8)]"
+                  : "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-danger)_80%,transparent)]"
             }
           />
           <span className="hidden sm:inline">{devServer.label}</span>
