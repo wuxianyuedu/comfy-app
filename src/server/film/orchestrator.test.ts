@@ -537,12 +537,9 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     /* 零镜头 = 「markGenerating 之后、逐镜提交之前」崩的那一格。它只有扫描会捡起来
      * （原先监看只由 startFilm 起，那时 shots 必然非空），所以必须判掉而不是
      * 拿 `0/0` 的 NaN 进度去合成一条空时间线。 */
-    await vi.waitFor(() =>
-      expect(filmRepo.markFailed).toHaveBeenCalledWith(
-        "f-gen",
-        "没有可继续的镜头",
-      ),
-    );
+    await expect
+      .poll(() => filmRepo.markFailed, { message: "markFailed 的调用现场" })
+      .toHaveBeenCalledWith("f-gen", "没有可继续的镜头");
     const msgs = filmRepo.appendLog.mock.calls.map((c) => c[1]?.msg ?? "");
     expect(msgs.some((m) => m.includes("进程重启后续跑监看"))).toBe(true);
   });
@@ -615,20 +612,21 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
 
     await resumeStalledFilms();
 
-    await vi.waitFor(() =>
-      expect(filmRepo.updateProgress).toHaveBeenCalledWith("f-term", 100),
-    );
+    await expect
+      .poll(() => filmRepo.updateProgress, {
+        message: "updateProgress 的调用现场",
+      })
+      .toHaveBeenCalledWith("f-term", 100);
     /* 钉「循环走到了 `pending === 0` 那一支」：确实去调了合成，而合成给出的第一个
      * 判决就是「没有可用的镜头视频」。 */
-    await vi.waitFor(() =>
-      expect(filmRepo.markComposing).toHaveBeenCalledWith("f-term"),
-    );
-    await vi.waitFor(() =>
-      expect(filmRepo.markFailed).toHaveBeenCalledWith(
-        "f-term",
-        "没有可用的镜头视频",
-      ),
-    );
+    await expect
+      .poll(() => filmRepo.markComposing, {
+        message: "markComposing 的调用现场",
+      })
+      .toHaveBeenCalledWith("f-term");
+    await expect
+      .poll(() => filmRepo.markFailed, { message: "markFailed 的调用现场" })
+      .toHaveBeenCalledWith("f-term", "没有可用的镜头视频");
   });
 
   it("表还没建就整轮不查（与回收器同一口径）", async () => {

@@ -366,9 +366,11 @@ describe("事件驱动 + 连续失败阈值（ISSUE #1351）", () => {
       l({ seq: 1, at: 0, reason: "exit 1", userStopped: false }),
     );
 
-    await vi.waitFor(() =>
-      expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore),
-    );
+    await expect
+      .poll(() => fetchMock.mock.calls.length, {
+        message: "退出信号触发的复核次数",
+      })
+      .toBeGreaterThan(callsBefore);
   });
 
   it("阶段与间隔按 `~/lib/comfyui/liveness` 给（没有可观测数据时用空闲档节奏）", () => {
@@ -411,9 +413,9 @@ describe("收到崩溃信号后的复核与换档（ISSUE #1351）", () => {
         }),
     );
     emitExit();
-    await vi.waitFor(() =>
-      expect(getComfyLivenessForTest().phase).toBe("verifying"),
-    );
+    await expect
+      .poll(() => getComfyLivenessForTest().phase, { message: "复核期间档位" })
+      .toBe("verifying");
     expect(getComfyLivenessForTest().intervalMs).toBe(0);
 
     release!(onlineStats());
@@ -449,9 +451,9 @@ describe("收到崩溃信号后的复核与换档（ISSUE #1351）", () => {
     );
     /* 复核本身仍会发一次（事件那一路不依赖订阅），但不该把表拉起来：
        `reschedule` 见到「没有表」就该早退。 */
-    await vi.waitFor(() =>
-      expect(fetchMock.mock.calls.length).toBeGreaterThan(1),
-    );
+    await expect
+      .poll(() => fetchMock.mock.calls.length, { message: "复核是否照跑" })
+      .toBeGreaterThan(1);
     expect(startCalls.started).toBe(startedAfterOff);
   });
 

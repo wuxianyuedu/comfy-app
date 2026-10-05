@@ -25,7 +25,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 /* 平台切换改由 fixture 提供（`tests/helpers/platform-fixtures.ts`）：原来是本文件
  * 手写的 `withWindows()` + try/finally。fixture 的收益是**用例中途 throw 也照样
  * 恢复**，且「这条依赖哪个平台」在用例签名里看得见而不是散在包装函数里。 */
@@ -201,7 +201,9 @@ describe("Windows 命令行在两端都判得到", () => {
     process.env.COMFYAPP_TASKKILL = process.execPath;
     const outcomes: boolean[] = [];
     const via = spawnTaskkill(["--version"], (ok) => outcomes.push(ok));
-    await vi.waitFor(() => expect(outcomes).toEqual([true]));
+    await expect
+      .poll(() => outcomes, { message: "taskkill 退出回调收到的成败序列" })
+      .toEqual([true]);
     expect(via).toContain("--version");
   });
 });
