@@ -244,7 +244,7 @@ describe("docs/DESIGN.md 的 Colors 表与两态取值", () => {
    `globals.css` 的定义，看不见 `className="rounded-[16px]"` 这种「把档位
    当前渲染值重抄一遍」的写法：它此刻像素正确，但设置页改基数时不跟手，
    等于在总闸旁边开了个旁通。字号同理（契约 §Typography 明写不要写
-   字面字号，而调用点还有 302 处存量）。 */
+   字面字号，而调用点还有几百处存量）。 */
 
 const SRC_DIR = fileURLToPath(new URL("../src", import.meta.url));
 const GLOBALS_PATH = fileURLToPath(
@@ -299,10 +299,29 @@ const TEXT_LITERAL = /\btext-\[(\d+(?:\.\d+)?)px\]/g;
 /** `@theme` 的档名允许的 t-shirt 形状（xs / sm / md / lg / xl 与 2xs…9xl）。 */
 const TSHIRT_NAME = /^(?:xs|sm|md|lg|xl|[2-9](?:xs|sm|md|lg|xl))$/;
 
+/**
+ * 类型 chip 的形状标记 —— 六个标记**全命中**才算同一枚 chip。
+ *
+ * 为什么按标记集合、不按先后顺序：和序号圆那条同理（类名在源码里的排列是实现
+ * 细节，`px-* py-*` 由 size 三元式给、就排在 `font-semibold` 之后）；也正因为
+ * 要「全命中」，`ParamOwnerTag` 那枚带描边的 `px-1.5 py-px font-medium` 不会被
+ * 误抓 —— 它本来就是一枚不同的东西，故意没并进来。
+ */
+const TYPE_CHIP_MARKS = [
+  /inline-flex/,
+  /items-center/,
+  /shrink-0/,
+  /rounded-\[3px\]/,
+  /font-semibold/,
+  /px-1\.5 py-0\.5/,
+];
+
 describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", () => {
-  /** 棘轮基线：本轮清理后实测的存量，只许降不许升（要升得改用例并写理由）。 */
-  const RADIUS_BASELINE = 21;
-  const TEXT_BASELINE = 302;
+  /** 棘轮基线：本轮清理后实测的存量，只许降不许升（要升得改用例并写理由）。
+   *  21→12 / 302→298 是类型 chip 收进 `~/components/studio/TypeChip` 的读数
+   *  （10 处调用点各写一份 → 只剩实现里那一处 + `ParamOwnerTag` 那一枚异类）。 */
+  const RADIUS_BASELINE = 12;
+  const TEXT_BASELINE = 298;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
     const scale = parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8"));
@@ -383,7 +402,25 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toEqual(["src/components/workshop/IndexDot.tsx"]);
   });
 
-  it("负控制：三形状都真的能被抓（否则上面三条绿得没意义）", () => {
+  it("类型 chip 那串类名只许有一个出处（TypeChip）", () => {
+    /* 抽取的防回潮半边：`inline-flex shrink-0 items-center rounded-[3px]
+       px-1.5 py-0.5 font-semibold` 曾在 studio 的 6 个文件里抄了 10 份
+       （§12.12 的孪生形态，也是字面圆角棘轮里最大的一族）。现在它是
+       `~/components/studio/TypeChip` 的实现细节 —— 第二份出现即改用那个件。 */
+    const owners: string[] = [];
+    for (const abs of collectProductFiles(SRC_DIR)) {
+      const code = stripComments(readFileSync(abs, "utf8"));
+      if (TYPE_CHIP_MARKS.every((re) => re.test(code))) {
+        owners.push(path.relative(ROOT_DIR, abs).split(path.sep).join("/"));
+      }
+    }
+    expect(
+      owners,
+      "类型 chip 的类名组合又出现了第二份出处 —— 用 ~/components/studio/TypeChip",
+    ).toEqual(["src/components/studio/TypeChip.tsx"]);
+  });
+
+  it("负控制：上面每条判据都真的能被抓（否则它们绿得没意义）", () => {
     const tierPx = renderedRadiusValues(
       parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8")),
     );
@@ -398,5 +435,20 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       false,
     );
     expect(TSHIRT_NAME.test("3xs"), "合法 t-shirt 名被误判").toBe(true);
+    /* 两条「唯一出处」判据的标记集合各自空转过就会全绿：喂一份**手抄**的
+       chip 进去必须全命中，喂 ParamOwnerTag 那枚异类（带描边、`py-px`、
+       font-medium）必须不命中 —— 否则这条是在抓一切，不是在抓这一族。 */
+    const handCopied =
+      'className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 font-semibold"';
+    expect(
+      TYPE_CHIP_MARKS.every((re) => re.test(handCopied)),
+      "手抄的类型 chip 没被标记集合抓出（这条判据会静默全绿）",
+    ).toBe(true);
+    const otherChip =
+      'className="border-primary/30 bg-primary/10 text-primary-strong shrink-0 rounded-[3px] border px-1.5 py-px text-[9.5px] font-medium"';
+    expect(
+      TYPE_CHIP_MARKS.every((re) => re.test(otherChip)),
+      "ParamOwnerTag 那枚异类 chip 被误判成同一族（标记集合太松）",
+    ).toBe(false);
   });
 });

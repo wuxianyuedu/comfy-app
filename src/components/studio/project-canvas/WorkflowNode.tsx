@@ -57,6 +57,7 @@ import { WorkflowModelFilterChip } from "./WorkflowModelFilterChip";
 import { WorkflowPickChip } from "./WorkflowPickChip";
 import { WorkflowModePickChip } from "./WorkflowModePickChip";
 import { nodeSeqOf } from "./node-seq";
+import { TypeChip } from "~/components/studio/TypeChip";
 
 /* 共享类型下沉到叶子模块（断环，规范 12.7/18）；按原样 re-export 保住既有导入路径。 */
 export type {
@@ -301,12 +302,7 @@ export function WorkflowNode({
                   >
                     {oLabel}
                   </span>
-                  <span
-                    className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
-                    style={{ fontFamily: "var(--font-sans)" }}
-                  >
-                    {typeDisplay(oType)}
-                  </span>
+                  <TypeChip size="md">{typeDisplay(oType)}</TypeChip>
                 </div>
                 {/* 下沿留 pb-2 让节点呼吸——与 inputs controlRow 末端的 pb-1.5 保持视觉等距 */}
                 <div className="pb-2" />

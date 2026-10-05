@@ -51,6 +51,7 @@ import {
   type SegmentSection,
 } from "~/components/ui/segment-popover";
 import { SizePresetTableModal } from "./SizePresetTableModal";
+import { TypeChip } from "~/components/studio/TypeChip";
 import { MegapixelStepper } from "./MegapixelStepper";
 import { useSizePresetTable } from "./hooks/use-size-preset-table";
 import { PortHandle } from "./WorkflowFormControls";
@@ -433,12 +434,7 @@ export function AspectMegapixelControl({
                     >
                       {entry.label ?? entry.name}
                     </span>
-                    <span
-                      className="bg-border-strong text-ink-muted text-3xs inline-flex shrink-0 items-center rounded-[3px] px-1 py-px font-semibold"
-                      style={{ fontFamily: "var(--font-sans)" }}
-                    >
-                      {typeDisplay(entry.type)}
-                    </span>
+                    <TypeChip size="xs">{typeDisplay(entry.type)}</TypeChip>
                   </div>
                 ))}
             </div>
