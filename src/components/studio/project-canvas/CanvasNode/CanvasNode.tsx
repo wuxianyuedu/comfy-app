@@ -272,6 +272,10 @@ export const CanvasNode = React.memo(function CanvasNode({
     );
   }
 
+  /* 资产节点（text/picture/movie）不参与运行态：头部不渲染状态徽标与删除按钮。 */
+  const isAssetNode =
+    d.kind === "text" || d.kind === "picture" || d.kind === "movie";
+
   return (
     /* 选中态边框 — Card 在 selected 时加 2px 紫色
  outline + 4px offset + 紫光晕投影；非选中态保持 1px border + 低调黑
@@ -348,35 +352,29 @@ export const CanvasNode = React.memo(function CanvasNode({
         />
       ) : (
         <>
-          {(() => {
-            /* 资产节点（text/picture/movie）
-             * 是「内容载体」，不参与运行态，状态徽标/关闭按钮与画布语义无关 →
-             * 头部只留 NodeChip。无障碍与误删保护由 SelectedToolbar 的
-             * ⌫ 按钮统一承担。*/
-            const isAsset =
-              d.kind === "text" || d.kind === "picture" || d.kind === "movie";
-            return (
-              <div className="border-border-strong flex items-center justify-between gap-2 border-b px-3.5 py-2.5">
-                <NodeChip kind={d.kind} name={meta.label} />
-                {!isAsset && (
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <StatusDot status={d.status} />
-                    <StatusBadge status={d.status} />
-                    <Hint label="删除节点" accessibleName>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={deleteSelf}
-                        className="text-ink-muted hover:text-destructive ml-1 h-auto p-0 hover:bg-transparent"
-                      >
-                        <Icon data-icon="inline-start" name="close" size={14} />
-                      </Button>
-                    </Hint>
-                  </div>
-                )}
+          {/* 资产节点（text/picture/movie）
+           * 是「内容载体」，不参与运行态，状态徽标/关闭按钮与画布语义无关 →
+           * 头部只留 NodeChip。无障碍与误删保护由 SelectedToolbar 的
+           * ⌫ 按钮统一承担。*/}
+          <div className="border-border-strong flex items-center justify-between gap-2 border-b px-3.5 py-2.5">
+            <NodeChip kind={d.kind} name={meta.label} />
+            {!isAssetNode && (
+              <div className="flex shrink-0 items-center gap-1.5">
+                <StatusDot status={d.status} />
+                <StatusBadge status={d.status} />
+                <Hint label="删除节点" accessibleName>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={deleteSelf}
+                    className="text-ink-muted hover:text-destructive ml-1 h-auto p-0 hover:bg-transparent"
+                  >
+                    <Icon data-icon="inline-start" name="close" size={14} />
+                  </Button>
+                </Hint>
               </div>
-            );
-          })()}
+            )}
+          </div>
           <div className="px-3.5 py-2.5">{body}</div>
         </>
       )}
