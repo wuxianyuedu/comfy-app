@@ -79,19 +79,52 @@ describe("主题别名 token 在两态下各自生效（ISSUE #609）", () => {
     expect(light.get("--background")).toBe("#ffffff");
     expect(light.get("--border")).toBe("#ececf1");
   });
+});
 
-  it("bg-card/bg-popover/border-border 编成 var() 取值，本用例覆盖真实取值路径", () => {
-    // 收口后 utility 可能直接指向项目 token（`var(--color-border)`），也可能
-    // 指向别名（`var(--card)` → 别名再转发）—— 两种都是「解得到主题值」的
-    // 正确形态，所以这里断言的是**性质**（取值来自 var()）而不是某一种写法。
-    expect(css).toMatch(
-      /\.bg-card\s*{[^}]*background-color:\s*var\(--(card|color-surface)\)/,
-    );
-    expect(css).toMatch(
-      /\.bg-popover\s*{[^}]*background-color:\s*var\(--(popover|color-surface)\)/,
-    );
-    expect(css).toMatch(
-      /\.border-border\s*{[^}]*border-color:\s*var\(--(border|color-border)\)/,
-    );
-  });
+/* 三条 utility 的「取值来自哪里」：声明的属性名 + 它编成了什么。
+ *
+ * **别把这些断言写回「允许哪几种拼法」的白名单** —— 这里量的性质是「取值来自
+ * `var()`、且那颗变量在本态解得出主题值」，而白名单是这条性质的**实现细节**。
+ * 历史上它们正是枚举写法（`var(--(card|color-surface))`），而 utility 编出的
+ * 变量名跟着取值来源走：`--color-card` 成为项目 token 唯一事实来源之后，
+ * `bg-card` 编的是 `var(--color-card)`，白名单里的第三种写法没人补 ⇒ 断言变成
+ * 假性红、被登记进 `KNOWN_FAILED_FILES` 整个文件静默跳过（ISSUE #1282）。
+ * 复用优先（规范 §12.18）：项目 token 是唯一事实来源，凡是 `--color-*` 形态都该
+ * 天然被接受，不需要在判据里再养一份会过期的名字清单。 */
+const UTILITY_SOURCES = [
+  { cls: "bg-card", prop: "background-color" },
+  { cls: "bg-popover", prop: "background-color" },
+  { cls: "border-border", prop: "border-color" },
+] as const;
+
+describe("utility 的取值路径：编成 var() 且解得到主题值", () => {
+  it.for(UTILITY_SOURCES)(
+    ".$cls 的 $prop 来自 var()（不写死色值）",
+    ({ cls, prop }) => {
+      const rule = new RegExp(`\\.${cls}\\s*\\{[^}]*\\}`).exec(css)?.[0];
+      expect(
+        rule,
+        `产物里应有 .${cls} 规则（类名没被固定住？见 theme-tokens.ts）。` +
+          " 若产物里确实没有它，是判据依赖的类没进固定输入源，不是业务回归。",
+      ).toBeTruthy();
+      const decl = new RegExp(`${prop}:\\s*([^;]+);`).exec(rule ?? "")?.[1];
+      expect(decl, `.${cls} 应声明 ${prop}`).toBeTruthy();
+      // 性质一：值必须来自 var()（写死色值会让主题切换失效）。
+      expect(decl?.trim()).toMatch(/^var\(--[a-zA-Z0-9-]+\)$/);
+    },
+  );
+
+  it.for(UTILITY_SOURCES)(
+    ".$cls 引用的变量在两态都解得出非空主题值",
+    ({ cls, prop }) => {
+      const rule = new RegExp(`\\.${cls}\\s*\\{[^}]*\\}`).exec(css)?.[0];
+      const decl = new RegExp(`${prop}:\\s*([^;]+);`).exec(rule ?? "")?.[1];
+      const name = /var\((--[a-zA-Z0-9-]+)\)/.exec(decl ?? "")?.[1];
+      expect(name, `.${cls} 的 ${prop} 应当引用一颗变量`).toBeTruthy();
+      // 性质二：那颗变量在浅/深两态都解得出非空值。只判 var() 形态的话，
+      // 指向一颗**不存在的** token 也照样绿 —— 那正是「编译得过、渲染是空」的形态。
+      expect(light.get(name ?? ""), `${name} 浅色档`).toBeTruthy();
+      expect(dark.get(name ?? ""), `${name} 深色档`).toBeTruthy();
+    },
+  );
 });
