@@ -33,6 +33,11 @@ vi.mock("~/lib/project-canvas/canvas-store", () => ({
 }));
 
 import { recordSyncFailure } from "~/lib/project-canvas/sync-notice";
+import {
+  clearActiveIfDraft,
+  isEmptyDraftName,
+  reapEmptyProject,
+} from "~/lib/project-canvas/canvas-store";
 import { useProjectPersistence } from "./use-project-persistence";
 
 function args() {
@@ -138,5 +143,54 @@ describe("镜像被拒的提示", () => {
     expect(calls).toHaveLength(2);
     expect(String(calls[1]?.[1])).toContain("重新登录");
     unmount();
+  });
+});
+
+/* ISSUE #1501：空草稿的「回收」是**两件事一起做或一起不做**。
+ *
+ * 此前 persistNow 先 `clearActiveIfDraft` 再 `reapEmptyProject` —— 于是当
+ * `reapEmptyProject` 拒绝回收（活跃项目它会拒绝）时，active-id 已经被清了，
+ * 界面留下「项目还在、上下文没了」的半截状态。顺序反过来才对。 */
+describe("空草稿回收：先问能不能收，再决定清不清 active", () => {
+  const mockedIsEmptyDraftName = vi.mocked(isEmptyDraftName);
+  const mockedReap = vi.mocked(reapEmptyProject);
+  const mockedClearActive = vi.mocked(clearActiveIfDraft);
+
+  beforeEach(() => {
+    mockedIsEmptyDraftName.mockReturnValue(true);
+    mockedReap.mockReset();
+    mockedClearActive.mockReset();
+  });
+
+  afterEach(() => {
+    mockedIsEmptyDraftName.mockReturnValue(false);
+  });
+
+  function flushNow(projectId: string) {
+    const { result, unmount } = renderHook(() =>
+      useProjectPersistence({
+        projectId,
+        nodes: [],
+        edges: [],
+        projectName: "未命名",
+        loaded: true,
+      }),
+    );
+    /* unmount 的清理里会立刻 flush 一次（防抖还没到点也要落盘）。 */
+    unmount();
+    return result;
+  }
+
+  it("回收被拒时不动 active（否则用户被留在「项目在、上下文没了」）", () => {
+    mockedReap.mockReturnValue(false);
+    flushNow("proj_live");
+    expect(mockedReap).toHaveBeenCalledWith("proj_live");
+    expect(mockedClearActive).not.toHaveBeenCalled();
+  });
+
+  it("回收成功时才清 active", () => {
+    mockedReap.mockReturnValue(true);
+    flushNow("proj_stale");
+    expect(mockedClearActive).toHaveBeenCalledWith("proj_stale");
   });
 });

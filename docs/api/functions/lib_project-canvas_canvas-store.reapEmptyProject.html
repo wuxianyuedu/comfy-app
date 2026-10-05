@@ -16,9 +16,10 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="reapemptyproject"><span class="tsd-kind-call-signature">reapEmptyProject</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">pid</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><a href="#reapemptyproject" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>当且仅当该项目是「空 + 默认名」时（见 <code>EMPTY_DRAFT_NAME</code>）从索引里移除它。
-确实回收了才返回 true。已命名 / 非空的项目<strong>从不</strong>被回收 ——
-于是用户特意命名成「空白灵感板」的空画布能在清回收中活下来。</p>
+<div class="tsd-comment tsd-typography"><p>当且仅当该项目是「空 + 默认名」且<strong>不是当前活跃项目</strong>时从索引里移除它
+（见 <code>EMPTY_DRAFT_NAME</code>）。确实回收了才返回 true。
+已命名 / 非空的项目<strong>从不</strong>被回收 —— 于是用户特意命名成「空白灵感板」
+的空画布能在清回收中活下来。</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
@@ -26,7 +27,7 @@
 <li><span><span class="tsd-kind-parameter">pid</span>: <span class="tsd-signature-type">string</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/project-canvas/canvas-store.ts:322</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/project-canvas/canvas-store.ts:349</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

@@ -121,8 +121,13 @@ export function useProjectPersistence({
     const nameLive = nameOverride ?? liveName;
     const isEmpty = liveNodes.length === 0 && liveEdges.length === 0;
     if (isEmpty && isEmptyDraftName(nameLive)) {
-      clearActiveIfDraft(pid);
-      reapEmptyProject(pid);
+      /* 顺序是「先问能不能回收，再决定要不要清 active」——此前反过来：
+       * 先 `clearActiveIfDraft` 再 `reapEmptyProject`，于是活跃项目被
+       * `reapEmptyProject` 拒绝回收时（ISSUE #1501 起它会拒绝）active 已经
+       * 被清了，界面留下「项目还在、上下文没了」的半截状态。
+       * 回收真正的语义是「这一条既不在索引里、也不在 active 上」，
+       * 两件事要一起做、或者一起不做。 */
+      if (reapEmptyProject(pid)) clearActiveIfDraft(pid);
       return;
     }
     upsertProject({
