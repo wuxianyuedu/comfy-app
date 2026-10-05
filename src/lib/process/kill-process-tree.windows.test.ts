@@ -26,6 +26,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+/* 平台切换改由 fixture 提供（`tests/helpers/platform-fixtures.ts`）：原来是本文件
+ * 手写的 `withWindows()` + try/finally。fixture 的收益是**用例中途 throw 也照样
+ * 恢复**，且「这条依赖哪个平台」在用例签名里看得见而不是散在包装函数里。 */
+import {
+  ON_WINDOWS,
+  test as platformTest,
+} from "../../../tests/helpers/platform-fixtures";
 
 import {
   killProcessTreeByImage,
@@ -119,12 +126,19 @@ describe("Windows 回收命令构造（唯一出处）", () => {
 });
 
 describe("Windows 分支真跑（注入同名可执行文件）", () => {
-  // 假 taskkill 在 Windows 上只能是 `.cmd`，而 Node 自 CVE-2024-27980 起**不能直接
-  // spawn 批处理**（EINVAL，必须经 cmd.exe）—— 这两条要的「参数真的发出去了」在
-  // Windows 上没有等价的可注入形态（需要真编一个 exe），因此它们在 Linux CI
-  // （shebang 脚本）上真跑，Windows 本地跳过。参数构造本身不依赖平台，由上面
-  // 「命令构造」用例在两端守着。
-  it.skipIf(process.platform === "win32")(
+  /* 下面三条的依赖是**真宿主**（一个能被 Node 直接 spawn 的 shebang 脚本），不是
+   * 「平台」—— 假 taskkill 在 Windows 上只能是 `.cmd`，而 Node 自 CVE-2024-27980
+   * 起不能直接 spawn 批处理（EINVAL，必须经 cmd.exe）。所以在 Windows 上没有
+   * 等价的可注入形态（要真编一个 exe），这三条在 Linux CI 上真跑、Windows 本地跳过。
+   *
+   * 依赖用 fixture 表达（`platformTest(..., { onWindows })`）：**跳过是显式的**，
+   * 而不是靠一个散在用例里的裸 `process.platform === "win32"`。参数构造本身不依赖
+   * 平台，由上面「命令构造」用例在两端守着。
+   *
+   * ⚠️ 跳过的那几条在本机**就是零执行者**（台账 E7 记的形状）。这里不动它们，
+   * 是因为它们问的是「命令真的被 spawn 出去了吗」——那件事没有注入形态；
+   * 而「该构造什么命令」这一半已经由上面的纯函数用例在两端判过。 */
+  platformTest.skipIf(ON_WINDOWS)(
     "真的以 /PID <pid> /T /F 调起 taskkill",
     async () => {
       const dir = tempDir();
@@ -140,7 +154,7 @@ describe("Windows 分支真跑（注入同名可执行文件）", () => {
     },
   );
 
-  it.skipIf(process.platform === "win32")(
+  platformTest.skipIf(ON_WINDOWS)(
     "image 模式真的以 /IM <name> /T /F 调起 taskkill（Ollama 走这条）",
     async () => {
       const dir = tempDir();
@@ -192,54 +206,47 @@ describe("Windows 命令行在两端都判得到", () => {
   });
 });
 
-/**
- * 把平台换成 win32 跑一段。
- *
- * `killProcessTreeByImage` 与 `killProcessTreeSync` 读的是真实 `process.platform`
- * （它们没有 `killProcessTreeWith` 那样的平台注入参数），所以在 Linux 上那两条
- * Windows 分支根本走不到 —— 换掉判据的输入，两端机器判的是同一条结论。
- */
-function withWindows<T>(run: () => T): T {
-  const original = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", {
-    value: "win32",
-    configurable: true,
-    writable: true,
-  });
-  try {
-    return run();
-  } finally {
-    if (original) Object.defineProperty(process, "platform", original);
-  }
-}
-
 describe("另外两个 Windows 落点（映像名回收 / 同步入口）", () => {
   /* 这里不数「参数真的送达」—— Windows 上假 taskkill 只能是 `.cmd`，而 Node 自
    * CVE-2024-27980 起不能直接 spawn 批处理（上面那组已按此分平台）。用 `node` 自己
    * 当命令名是为了让**命令行构造**这一步在两端都判得到：它立刻以非 0 退出，
    * 而参数就在 via 里。 */
-  it("按映像名回收发的是 /IM <name> /T /F（不是 /PID，也不能漏掉 /T）", async () => {
-    process.env.COMFYAPP_TASKKILL = process.execPath;
-    const result = await withWindows(() =>
-      killProcessTreeByImage("ollama.exe"),
-    );
-    expect(result.ok).toBe(true);
-    expect(result.via).toBe(`${process.execPath} /IM ollama.exe /T /F`);
-  });
+  /* 这三条要的是「Windows 分支被走到」，而 `killProcessTreeByImage` /
+   * `killProcessTreeSync` 读的是真实 `process.platform`（它们没有
+   * `killProcessTreeWith` 那样的平台注入参数）—— 所以把平台切成 win32 跑一段。
+   * 收尾由 fixture 负责：用例中途 throw 也照样恢复。 */
+  platformTest(
+    "按映像名回收发的是 /IM <name> /T /F（不是 /PID，也不能漏掉 /T）",
+    async ({ asPlatform }) => {
+      asPlatform("win32");
+      process.env.COMFYAPP_TASKKILL = process.execPath;
+      const result = await killProcessTreeByImage("ollama.exe");
+      expect(result.ok).toBe(true);
+      expect(result.via).toBe(`${process.execPath} /IM ollama.exe /T /F`);
+    },
+  );
 
-  it("同步入口在 Windows 上同样是 /PID <pid> /T /F，且不等命令结束", () => {
-    process.env.COMFYAPP_TASKKILL = process.execPath;
-    const result = withWindows(() => killProcessTreeSync({ pid: 4321 }));
-    expect(result.ok).toBe(true);
-    expect(result.via).toBe(`${process.execPath} /PID 4321 /T /F`);
-  });
+  platformTest(
+    "同步入口在 Windows 上同样是 /PID <pid> /T /F，且不等命令结束",
+    ({ asPlatform }) => {
+      asPlatform("win32");
+      process.env.COMFYAPP_TASKKILL = process.execPath;
+      const result = killProcessTreeSync({ pid: 4321 });
+      expect(result.ok).toBe(true);
+      expect(result.via).toBe(`${process.execPath} /PID 4321 /T /F`);
+    },
+  );
 
-  it("映像名回收在 Windows 上也拒绝空名字（`/IM ` 加空格名会杀到整台机器）", async () => {
-    process.env.COMFYAPP_TASKKILL = process.execPath;
-    const result = await withWindows(() => killProcessTreeByImage("  "));
-    expect(result.ok).toBe(false);
-    expect(result.via).toContain("无映像名");
-  });
+  platformTest(
+    "映像名回收在 Windows 上也拒绝空名字（`/IM ` 加空格名会杀到整台机器）",
+    async ({ asPlatform }) => {
+      asPlatform("win32");
+      process.env.COMFYAPP_TASKKILL = process.execPath;
+      const result = await killProcessTreeByImage("  ");
+      expect(result.ok).toBe(false);
+      expect(result.via).toContain("无映像名");
+    },
+  );
 });
 
 describe("回收命令的派发与等待（`wait`）", () => {

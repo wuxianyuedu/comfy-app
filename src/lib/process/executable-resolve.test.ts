@@ -14,6 +14,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+/* POSIX 宿主探针改由 fixture 提供（`tests/helpers/platform-fixtures.ts`）——
+ * 原来本文件自己写了一份 `posixHost()`，与 `kill-process-tree` 那边同形。
+ * fixture 版是同一份实现，改一处两边都动。 */
+import { test as platformTest } from "../../../tests/helpers/platform-fixtures";
 
 import {
   clearWhichCommandCache,
@@ -51,29 +55,6 @@ const WIN_ENV = (dir: string) => ({
 function writeExec(file: string, content: string) {
   fs.writeFileSync(file, content);
   fs.chmodSync(file, 0o755);
-}
-
-/**
- * 一台「POSIX 语义」的宿主探针：名单里的路径带执行位、且真起得来。
- *
- * 为什么必须注入而不是照旧真探测（本机实测，Windows 开发机）：
- *   · `fs.accessSync(X_OK)` 对 0o755 / 0o644 / 0o444 / 0o000 **一律通过** ——
- *     「文件在但没有执行位」这一档在 Windows 上压根造不出来；
- *   · 把真 `.exe` 改名成无扩展名再 spawn 得到的是 `ENOENT`（CreateProcess 不认）——
- *     「内核解析 shebang，所以脚本跑得起来」这一档也造不出来。
- * 于是 POSIX 那几档判定在本机只剩两个下场：整组 `runIf(!win32)`（这台机器上零执行者，
- * 正是台账 E7 记的那个形状），或者**为「它本来就不可能红」而绿**（更糟：假绿灯）。
- * 注入之后这张表在两端机器上判同一个结论。Windows 那几档不注入 —— 批处理不起、
- * `.ps1` 落宿主、MZ 头当二进制，这些在本机是真造得出来的，照旧问真机器。
- */
-function posixHost(usable: string[]): UsabilityProbe {
-  const set = new Set(usable);
-  return {
-    access: (candidate) => {
-      if (!set.has(candidate)) throw new Error("EACCES: permission denied");
-    },
-    spawn: () => null,
-  };
 }
 
 /** 有执行位、但这台机器的内核起不来的形态（没有 `#!` 行的纯文本脚本）。 */
@@ -150,19 +131,22 @@ describe("executableKind：读内容形态，不看扩展名", () => {
 });
 
 describe("resolveCommandInvocation：控制台起进程前的那一问", () => {
-  it("POSIX：PATH 上找到就用绝对路径（这就是那条 ENOENT 的解法）", () => {
-    const dir = freshDir();
-    const bin = path.join(dir, "mytool");
-    writeExec(bin, "#!/bin/sh\necho ok\n");
-    const r = resolveCommandInvocation("mytool", ["--flag"], {
-      env: { PATH: dir },
-      platform: "linux",
-      probe: posixHost([bin]),
-    });
-    expect(r.resolved).toBe(true);
-    expect(r.command).toBe(bin);
-    expect(r.args).toEqual(["--flag"]);
-  });
+  platformTest(
+    "POSIX：PATH 上找到就用绝对路径（这就是那条 ENOENT 的解法）",
+    ({ makeHost }) => {
+      const dir = freshDir();
+      const bin = path.join(dir, "mytool");
+      writeExec(bin, "#!/bin/sh\necho ok\n");
+      const r = resolveCommandInvocation("mytool", ["--flag"], {
+        env: { PATH: dir },
+        platform: "linux",
+        probe: makeHost([bin]),
+      });
+      expect(r.resolved).toBe(true);
+      expect(r.command).toBe(bin);
+      expect(r.args).toEqual(["--flag"]);
+    },
+  );
 
   it("查无此命令：不改写、`resolved: false`（调用方据此给可读出口）", () => {
     const dir = freshDir();
@@ -216,73 +200,85 @@ describe("resolveCommandInvocation：控制台起进程前的那一问", () => {
 });
 
 describe("whichCommand：只认「真的能跑」的候选", () => {
-  it("前一个目录里的同名候选没有执行位 → 跳过去找后面那个能跑的", () => {
-    /* 「扫到一个同名文件」不等于「能跑」—— 这条判据存在的全部理由。两个目录都在
-     * PATH 上，前一个里的 `mytool` 没执行位（POSIX 上是常态：装了一半、软链指错），
-     * 按「见到就用」就会把一个起不来的路径交出去，而调用方只会看到一句新的错。 */
-    const dirA = freshDir();
-    const dirB = freshDir();
-    const noPerm = path.join(dirA, "mytool");
-    const runnable = path.join(dirB, "mytool");
-    writeExec(noPerm, "#!/bin/sh\necho a\n");
-    writeExec(runnable, "#!/bin/sh\necho b\n");
-    expect(
-      whichCommand("mytool", {
-        env: { PATH: [dirA, dirB].join(path.delimiter) },
+  platformTest(
+    "前一个目录里的同名候选没有执行位 → 跳过去找后面那个能跑的",
+    ({ makeHost }) => {
+      /* 「扫到一个同名文件」不等于「能跑」—— 这条判据存在的全部理由。两个目录都在
+       * PATH 上，前一个里的 `mytool` 没执行位（POSIX 上是常态：装了一半、软链指错），
+       * 按「见到就用」就会把一个起不来的路径交出去，而调用方只会看到一句新的错。 */
+      const dirA = freshDir();
+      const dirB = freshDir();
+      const noPerm = path.join(dirA, "mytool");
+      const runnable = path.join(dirB, "mytool");
+      writeExec(noPerm, "#!/bin/sh\necho a\n");
+      writeExec(runnable, "#!/bin/sh\necho b\n");
+      expect(
+        whichCommand("mytool", {
+          env: { PATH: [dirA, dirB].join(path.delimiter) },
+          platform: "linux",
+          probe: makeHost([runnable]),
+        }),
+      ).toBe(runnable);
+    },
+  );
+
+  platformTest(
+    "候选存在但不可执行：判否，返回 null（不许返回一个注定失败的路径）",
+    ({ makeHost }) => {
+      const dir = freshDir();
+      const bin = path.join(dir, "mytool");
+      writeExec(bin, "#!/bin/sh\n");
+      expect(
+        whichCommand("mytool", {
+          env: { PATH: dir },
+          platform: "linux",
+          probe: makeHost([]),
+        }),
+      ).toBeNull();
+    },
+  );
+
+  platformTest(
+    "「没执行权限」与「形态起不来」是两句不同的话（排查方向完全不一样）",
+    ({ makeHost }) => {
+      /* 前者是 chmod / 软链 / 挂载选项这一类本机配置问题，后者是「Node 起不了这个形态」
+       * ——混成一句就会把人带去修错的地方，所以 reason 要分开报。 */
+      const dir = freshDir();
+      const noPerm = path.join(dir, "x");
+      writeExec(noPerm, "#!/bin/sh\n");
+      expect(
+        usableCommand(noPerm, ["-v"], {
+          platform: "linux",
+          probe: makeHost([]),
+        }).reason,
+      ).toBe("no-exec-permission");
+
+      const badKind = path.join(dir, "y");
+      writeExec(badKind, "print('没有 #! 行，也不是本机认得的形态')\n");
+      const reported = usableCommand(badKind, ["-v"], {
         platform: "linux",
-        probe: posixHost([runnable]),
-      }),
-    ).toBe(runnable);
-  });
+        probe: unusableKind(),
+      });
+      expect(reported.ok).toBe(false);
+      expect(reported.reason).toBe("ENOEXEC");
+    },
+  );
 
-  it("候选存在但不可执行：判否，返回 null（不许返回一个注定失败的路径）", () => {
-    const dir = freshDir();
-    const bin = path.join(dir, "mytool");
-    writeExec(bin, "#!/bin/sh\n");
-    expect(
-      whichCommand("mytool", {
-        env: { PATH: dir },
-        platform: "linux",
-        probe: posixHost([]),
-      }),
-    ).toBeNull();
-  });
-
-  it("「没执行权限」与「形态起不来」是两句不同的话（排查方向完全不一样）", () => {
-    /* 前者是 chmod / 软链 / 挂载选项这一类本机配置问题，后者是「Node 起不了这个形态」
-     * ——混成一句就会把人带去修错的地方，所以 reason 要分开报。 */
-    const dir = freshDir();
-    const noPerm = path.join(dir, "x");
-    writeExec(noPerm, "#!/bin/sh\n");
-    expect(
-      usableCommand(noPerm, ["-v"], {
-        platform: "linux",
-        probe: posixHost([]),
-      }).reason,
-    ).toBe("no-exec-permission");
-
-    const badKind = path.join(dir, "y");
-    writeExec(badKind, "print('没有 #! 行，也不是本机认得的形态')\n");
-    const reported = usableCommand(badKind, ["-v"], {
-      platform: "linux",
-      probe: unusableKind(),
-    });
-    expect(reported.ok).toBe(false);
-    expect(reported.reason).toBe("ENOEXEC");
-  });
-
-  it("记忆化按 env 分键：换 PATH 必须换结论（不许串扰）", () => {
-    const a = freshDir();
-    const b = freshDir();
-    const binA = path.join(a, "tool");
-    writeExec(binA, "#!/bin/sh\necho a\n");
-    const probe = posixHost([binA]);
-    expect(
-      whichCommand("tool", { env: { PATH: a }, platform: "linux", probe }),
-    ).toBe(binA);
-    // b 里没有这个命令 —— 若缓存只看名字，这里会错误地回 a 的路径。
-    expect(
-      whichCommand("tool", { env: { PATH: b }, platform: "linux", probe }),
-    ).toBeNull();
-  });
+  platformTest(
+    "记忆化按 env 分键：换 PATH 必须换结论（不许串扰）",
+    ({ makeHost }) => {
+      const a = freshDir();
+      const b = freshDir();
+      const binA = path.join(a, "tool");
+      writeExec(binA, "#!/bin/sh\necho a\n");
+      const probe = makeHost([binA]);
+      expect(
+        whichCommand("tool", { env: { PATH: a }, platform: "linux", probe }),
+      ).toBe(binA);
+      // b 里没有这个命令 —— 若缓存只看名字，这里会错误地回 a 的路径。
+      expect(
+        whichCommand("tool", { env: { PATH: b }, platform: "linux", probe }),
+      ).toBeNull();
+    },
+  );
 });
