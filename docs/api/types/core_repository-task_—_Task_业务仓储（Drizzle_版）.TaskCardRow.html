@@ -11,7 +11,7 @@
 <li><a href="../modules/core_repository-task_—_Task_业务仓储（Drizzle_版）.html">core/repository-task — Task 业务仓储（Drizzle 版）</a></li>
 <li><a href="" aria-current="page">TaskCardRow</a></li></ul>
 <h1>Type Alias TaskCardRow</h1></div>
-<div class="tsd-signature"><span class="tsd-kind-type-alias">TaskCardRow</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Omit</span><span class="tsd-signature-symbol">&lt;</span><a href="server_db_schema_—_Drizzle_SQLite_schema（替代_prisma_schema.prisma）.Task.html" class="tsd-signature-type tsd-kind-type-alias">Task</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">&quot;workflowSnapshot&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;logs&quot;</span><span class="tsd-signature-symbol">&gt;</span></div>
+<div class="tsd-signature"><span class="tsd-kind-type-alias">TaskCardRow</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Omit</span><span class="tsd-signature-symbol">&lt;</span><a href="server_db_schema_—_Drizzle_SQLite_schema（表定义与行类型）.Task.html" class="tsd-signature-type tsd-kind-type-alias">Task</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">&quot;workflowSnapshot&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;logs&quot;</span><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>列表卡的行形状：<code>task.list</code> 的映射只需要十来个字段，而 <code>workflowSnapshot</code>
 （整份工作流 JSON）与 <code>logs</code>（全量日志）单行就能到数 MB —— take=60 的列表页
 会把它们整批拉回来、反序列化、然后立刻丢弃。列表查询排除这两列。</p>

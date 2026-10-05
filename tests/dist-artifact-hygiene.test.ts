@@ -418,8 +418,8 @@ describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
       // 嵌套的变更碎片（根级那份由 DEV_ARTIFACTS 整目录删）
       "src-tauri/static/changelog.d/a.md",
       // 命中：藏在子目录里的开发库与密钥文件（PRIVATE_INPUTS 只删产物根那一层，
-      // 实测 check-standalone-contents.cjs 在 static 上报出过 prisma/db.sqlite）
-      "prisma/db.sqlite",
+      // 实测 check-standalone-contents.cjs 在 static 上报出过旧布局下嵌着的 db.sqlite）
+      "legacy-dir/db.sqlite",
       "src/lib/db.sqlite-wal",
       "node_modules/some-app/.env.production",
     ];

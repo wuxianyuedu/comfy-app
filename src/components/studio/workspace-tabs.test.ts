@@ -2,7 +2,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  LEGACY_WS_VIEW_KEY,
   WS_TABS_KEY,
   closeViewTab,
   dropProjectTabs,
@@ -239,8 +238,7 @@ describe("持久化：整份可用，否则整份放弃", () => {
     expect(parseWorkspaceTabs(null, VIEWS)).toBeNull();
   });
 
-  it("新键与旧单值键不是同一个（旧键只用于一次性迁移后即删）", () => {
-    expect(WS_TABS_KEY).not.toBe(LEGACY_WS_VIEW_KEY);
+  it("键名带形状版本号（形状变了要换键，不能让两份形状共用一个键）", () => {
     expect(WS_TABS_KEY).toContain("v2");
   });
 });
