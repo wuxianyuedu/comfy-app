@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 节点 JSON 浮层的行为回归（ISSUE #717）。
  *

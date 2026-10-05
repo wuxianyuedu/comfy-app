@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `SelectMenu` 的**弹层定位口径**：弹层位置必须与「选中了哪一项」无关。
  *

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // use-character-review 契约：评审走 run-client 写 verdict、失败置 error、无 projectId 不发请求。
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";

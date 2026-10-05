@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 保存 mutation 的窄接口单测。存在的意义不是测 tRPC，而是锁住两件事：
 //   1. 视图层拿到的是 WorkflowSaver（窄接口），不是 tRPC mutation 对象
 //      —— 这样 useWorkflowPersistence 可以塞假实现跑测试；

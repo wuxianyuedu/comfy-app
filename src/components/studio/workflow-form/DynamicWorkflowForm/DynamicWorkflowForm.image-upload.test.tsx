@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // 回归护栏：LoadImage 的「选择文件上传」槽（ComfyUI frontend 类型 IMAGEUPLOAD）
 // 必须在工作流表单里渲染成上传控件，标签用作者写的 label，类型徽章如实打印。
 import { afterEach, describe, expect, it, vi } from "vitest";

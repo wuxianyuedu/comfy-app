@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 「全局快捷键」只允许一处实现的契约（ISSUE #672 §16.2.4.23）。
  *

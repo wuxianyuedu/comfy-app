@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // DynamicWorkflowForm 逻辑层行为测试（ISSUE #319 的「先补护栏」步骤）。
 //
 // 这个表单是工作流库运行与画布生成共用的入口，改坏了影响面大，但 261 行的

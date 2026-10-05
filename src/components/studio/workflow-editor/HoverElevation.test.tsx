@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 //
 // 悬浮置顶（ISSUE #400）：鼠标指着的节点必须压住连线。
 //

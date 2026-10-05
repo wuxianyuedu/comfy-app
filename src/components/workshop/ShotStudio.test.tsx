@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 //
 // ShotStudio 行为测试：镜头生图 stage 的门禁、预填、并发出口与提示接线。
 //

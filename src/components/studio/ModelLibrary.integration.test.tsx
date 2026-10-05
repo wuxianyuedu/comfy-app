@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import { TRPCError } from "@trpc/server";

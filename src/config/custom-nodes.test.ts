@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 浏览器侧自定义节点注册表的灌入与广播（台账 E9 的那条通道）。
  *

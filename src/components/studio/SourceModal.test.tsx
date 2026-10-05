@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 「查看源文件」弹窗的关闭语义回归。
  *

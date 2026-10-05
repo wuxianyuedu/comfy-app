@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 「当前视口多大」这个读数（`useViewportSize`）。
  *

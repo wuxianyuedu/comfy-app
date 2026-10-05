@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 「控件后行为」面板的行为回归（ISSUE #349 / #672）。
  *

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `SheetContent` 必须套一层 `SheetPrimitive.Portal`（`sheet.tsx` 曾经漏掉）：
  * Base UI 的 `Dialog.Popup` 不像 Radix 那样允许省略 Portal —— 缺了会直接抛

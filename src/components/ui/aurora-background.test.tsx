@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `AuroraGlow` 的色相映射回归（规范 03 §3.6.1.1「拼接 token 名」判据的配套用例）。
  *

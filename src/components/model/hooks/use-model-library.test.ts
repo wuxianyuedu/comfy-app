@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // /models 页模型卡片库逻辑层单测：整体替换 vanillaApi，断言的是
 // 筛选即重新查询、sync 后按当前筛选刷新这两条编排契约。
 

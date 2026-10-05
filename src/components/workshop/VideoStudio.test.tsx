@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 //
 // VideoStudio 行为测试：视频生成 stage 的双通道出口与门禁。
 //

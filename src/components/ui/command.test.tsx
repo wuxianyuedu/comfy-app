@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `CommandDialog` 必须套一层 `Command`（`command.tsx` 曾经漏掉）：`CommandInput`
  * / `CommandList` / `CommandItem` / `CommandGroup` / `CommandEmpty` 全从 `Command`

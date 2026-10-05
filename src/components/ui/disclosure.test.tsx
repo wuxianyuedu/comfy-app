@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * `Disclosure` —— 「点一行标题、把一段内容折叠 / 展开」的唯一实现
  * （规范 16 §16.2.4.13）。

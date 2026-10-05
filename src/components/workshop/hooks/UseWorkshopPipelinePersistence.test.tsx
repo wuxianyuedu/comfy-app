@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 //
 // 工坊持久化回归测试（Phase 2 重写）。
 //

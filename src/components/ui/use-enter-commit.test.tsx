@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * 「Enter 提交 / Esc 取消」的判据（规范 16 §16.2.4.29）。
  *
