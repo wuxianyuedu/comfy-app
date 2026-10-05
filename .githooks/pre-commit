@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(37 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(38 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -218,6 +218,15 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # —— 清单与 C 组同源（`affected-tests.mjs`），所以把那条判据从固定清单里摘掉当场被拦。
   # 只在暂存改动命中 e2e/visual/** 或 playwright.config.ts 时做事，普通提交零输出。
   run "像素层提交带像素判决（改了 e2e/visual 才跑）" node scripts/visual-gate.mjs
+  # 每一档像素基线都要**有主**（规范 §11.8）。上一步判的是「带不带像素判决」，它**不跑像素**，
+  # 所以「录一版、就再没人碰过」这条路上一个判据都没有 —— 现场是入库的 `-linux.png` 有 4 张
+  # 与当次环境差 1 像素（文字整体下移一行），而没有任何东西记着这一档上次被跑绿是什么时候。
+  # 本步判「每一登记档都有一条新鲜度记录，且写清谁 / 什么时候 / 按哪条命令复核的」
+  # （`scripts/.visual-baseline-freshness.json`；缺几张基线的档由 `PENDING_PLATFORMS` 顶着，
+  # 不要求新鲜度记录 —— 两张表各管数量与时效）。**刻意不做墙钟阻断**：像素结论只在录过基线的
+  # 那台机器上成立，win32 档的复核只能在那台 Windows 机器上做，拿时钟去阻断等于让所有人卡在
+  # 一个只有少数人能解的账上。记账走 `pnpm check:visual`（跑绿即记），钩子里不跑像素。
+  run "像素基线每档都有主（新鲜度账）" node scripts/visual-freshness-gate.mjs
   # 注释语言棘轮（规范 §12.4.6）：注释一律中文，只有「会被 next-code-frame 渲染到」
   # 的构建期模块例外（Next 的 code frame 按字节切串，命中多字节字符内部时 Rust 侧
   # 直接 panic 把 `next build` 打死，偏移敏感、报错指不出业务原因）。判据本身一直是对的，

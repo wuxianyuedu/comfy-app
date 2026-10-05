@@ -174,6 +174,14 @@ pnpm test:e2e
   ```
   重录后在 PR 描述标注「视觉基线已更新：<原因>」。失败 actual/diff 产物在
   `test-results/`（已 gitignore）。
+- ⚠️ **每一档基线都要有主**（`scripts/.visual-baseline-freshness.json`）：`--update-snapshots`
+  **总是绿**（它把基线改成当次实况），所以「录了一次」不等于「像素可复现」—— 而「录过一次就
+  再没人碰过」也完全可能（实测：入库的 `-linux.png` 有 4 张悄悄过期，与当次环境差 1 像素）。
+  现在每一**登记**档都有一条新鲜度记录，写清**谁 / 什么时候 / 按哪条命令复核的**，
+  由 `pnpm check:visual` **跑绿即记**（`--update` 不记：写成功不是自证）。pre-commit 的
+  `visual-freshness-gate.mjs` 判「每档都有主、且写得清」；缺几张基线的档由
+  `PENDING_PLATFORMS` 顶着、不要求这条记录。钩子**不跑像素**（起 webServer + 浏览器会与
+  A/B/C/D 抢资源）。
 - 像素档**不在 `pnpm check:all` 里**：它要起 webServer + 浏览器，而结论只在录过基线的那台
   机器上成立（基线名带平台）—— 要跑就显式点名（Windows 侧同一动作是
   `scripts/quality-gate.ps1 -Mode visual`，登记在 launch-and-build §9.5 的对照表）。

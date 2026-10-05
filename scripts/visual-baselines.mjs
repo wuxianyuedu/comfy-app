@@ -2,10 +2,12 @@
 /**
  * visual-baselines.mjs — 像素基线的**清点内核**（规范 §11.8 的单一事实源）
  *
- * 同一件事实——「每个截图名 × 每个登记平台都有一套被 git 跟踪的 PNG」——有两个消费方：
+ * 同一件事实——「每个截图名 × 每个登记平台都有一套被 git 跟踪的 PNG」——有三个消费方：
  *   · `tests/visual-baseline-pairing.test.ts`（每次提交都跑的判据）；
  *   · `scripts/pixel-run.mjs` 的**本机前置判决**（起 webServer / 浏览器之前先答
- *     「这台机器有没有基线」）。
+ *     「这台机器有没有基线」）；
+ *   · `scripts/pixel-run.mjs` 的**自证记账**（跑绿之后把「哪一档、谁、什么时候复核过」
+ *     写进 `scripts/.visual-baseline-freshness.json`，见下面「基线新鲜度」那段）。
  * 两个消费方各抄一份清点代码，就是 §12.12 的孪生对：判据说「基线成套」而像素档说
  * 「本机没有基线」时，两边都得能指出是哪一条、缺哪个文件，而两份实现必然漂。
  * 所以清点只写在这里，两侧 import，各自只留差异（判据还要做「反空转」自证，
@@ -50,7 +52,10 @@ export const VISUAL_DIR = "e2e/visual";
 /** @type {Record<string, {webserver: "dev" | "start", note: string}>} */
 export const PLATFORM_RECORDING = {
   win32: { webserver: "dev", note: "开发机，实测同一命令连跑两次零差异" },
-  linux: { webserver: "start", note: "容器 / 类 CI，`CI` 为真，需先 `pnpm build`" },
+  linux: {
+    webserver: "start",
+    note: "容器 / 类 CI，`CI` 为真，需先 `pnpm build`",
+  },
 };
 
 /**
@@ -237,7 +242,8 @@ export function untrackedBaselines(root) {
     const tracked = new Set(trackedFiles(root, shotDir));
     for (const file of readdirSync(abs)) {
       if (!file.endsWith(".png")) continue;
-      if (!tracked.has(`${shotDir}/${file}`)) untracked.push(`${shotDir}/${file}`);
+      if (!tracked.has(`${shotDir}/${file}`))
+        untracked.push(`${shotDir}/${file}`);
     }
   }
   return untracked;
@@ -289,7 +295,8 @@ export function checkRecordingEnv({ platform, env = process.env }) {
   if (expected === null) return null;
   const actual = webserverForEnv(env);
   if (actual === expected) return null;
-  const want = expected === "dev" ? "`CI` 置空（或不设）" : "`CI` 置为真（如 `CI=true`）";
+  const want =
+    expected === "dev" ? "`CI` 置空（或不设）" : "`CI` 置为真（如 `CI=true`）";
   const got = actual === "dev" ? "当前 `CI` 未设" : "当前 `CI` 为真";
   const fix =
     expected === "dev"
@@ -305,4 +312,146 @@ export function checkRecordingEnv({ platform, env = process.env }) {
     `        ${fix}\n` +
     "      登记表在 scripts/visual-baselines.mjs 的 PLATFORM_RECORDING。"
   );
+}
+
+/**
+ * 基线**新鲜度**账（`scripts/.visual-baseline-freshness.json`，规范 §11.8）。
+ *
+ * 为什么需要它：`PLATFORM_RECORDING` 只是一句「这几档在仓库里有一套 PNG」的承诺，
+ * 而「那一套 PNG **现在还跑得绿**」是**另一件事** —— 本轮实测的现场是入库的
+ * `-linux.png` 有 4 张与当前环境差 1 像素（文字整体下移一行），而三个既有判据
+ * （`--update-snapshots` 总是绿 / 配对判据只核「成套且入库」/ `--update` 档不拦缺基线）
+ * 一个都看不见它。**「录过一次」与「一直绿」是两件事**，而当时 linux 档的状态是
+ * 「录过就算数」：没有一条账说清谁在什么时候复核过、下一次该由谁再跑一遍。
+ *
+ * 与 `PENDING_PLATFORMS` 的分工（两者都是「有主的欠条」，但欠的东西不同）：
+ *   · `PENDING_PLATFORMS` 记的是**数量**欠账 —— 某一档缺哪几张 PNG（补录的账）；
+ *   · 本表记的是**时效**欠账 —— 某一档的成套基线**上次被实证跑绿是什么时候**。
+ * 一档可以「一张不缺、但三个月没人碰过」—— 那正是本条要治的形态，
+ * 而 `PENDING_PLATFORMS` 对它一个字都说不出。
+ *
+ * ⚠️ **「过期」这条判据刻意不做墙钟阻断**：像素回归的结论只在**录过基线的那台机器上**
+ * 成立（基线名带平台），而本仓库的自动化执行环境都是 linux —— win32 档的复核只能在
+ * Windows 开发机上做。拿墙钟去阻断等于让所有人卡在一个**只有少数人能解**的账上，
+ * 那正是 §11.8 里 `PENDING_PLATFORMS`「只提醒、不阻断」已经判过的那味药。
+ * 所以纪律收在**可观测的形状**上，而不是收在时钟上：
+ *   ① 每一档**都必须有一条**记录（没有 = 这一档还停在「录过就算数」）；
+ *   ② 记录必须写得清「谁 / 什么时候 / 按哪条命令复核的」（空着或写「稍后」都算没写）；
+ *   ③ 记录**不许**挂在不存在的档上（删了平台的档，账要同批抹掉，与 `PENDING_PLATFORMS`
+ *      的双向不变式同族）。
+ * 「多久没跑算旧」由**人**按上面的读数决定 —— 判据把它算出来、摆在每次跑像素的输出里，
+ * 但不下一个会随机器与运气变化的阈值。
+ *
+ * 谁写它：`scripts/pixel-run.mjs` 在**当次检出自证跑绿**之后（`--update` 那一档除外 ——
+ * 录基线本身不是自证）把这一档的记录刷新一次。也就是说**跑一次就记一次账**，
+ * 「定期跑」这件事因此有了落点：账上的日期就是「上次真跑过」的事实。
+ */
+/** 新鲜度账文件（相对仓库根）。 */
+export const FRESHNESS_LEDGER = "scripts/.visual-baseline-freshness.json";
+
+/**
+ * 新鲜度记录的形状（**读写共用这一份**：各写一套时记出来的会被自己的校验判成缺字段）。
+ *
+ * @param {{platform: string, verifiedAt: string, who: string, how: string}} input
+ * @returns {{platform: string, verifiedAt: string, who: string, how: string}}
+ */
+export function freshnessRecord({ platform, verifiedAt, who, how }) {
+  return {
+    platform,
+    verifiedAt: verifiedAt.trim(),
+    who: who.trim(),
+    how: how.trim(),
+  };
+}
+
+/**
+ * 校验新鲜度账（`{平台 → 记录}`）。空 = 放行。
+ *
+ * 三个方向都拦：缺档（还停在「录过就算数」）/ 记录写不全（没人能按它去复核）/
+ * 挂在非登记档上（删平台不抹账，账就退化成一份没人认领的名单）。
+ *
+ * @param {Record<string, unknown>} ledger
+ * @param {{required: string[], registered: string[]}} scope
+ *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）
+ * @returns {string[]} 问题清单
+ */
+export function checkFreshnessLedger(ledger, { required, registered }) {
+  /** @type {string[]} */
+  const problems = [];
+  for (const platform of required) {
+    const entry = ledger[platform];
+    if (entry === undefined || entry === null) {
+      problems.push(
+        `${platform} 档没有基线新鲜度记录 —— 这一档现在是「录过就算数」：` +
+          "没有任何东西说清它上一次被实证跑绿是什么时候、按哪条命令。" +
+          `在那一档跑一次 \`pnpm check:visual\`（绿即可记账，见 scripts/pixel-run.mjs），` +
+          `或在 ${FRESHNESS_LEDGER} 里手工补一条。`,
+      );
+      continue;
+    }
+    if (typeof entry !== "object" || Array.isArray(entry)) {
+      problems.push(`${platform} 档的新鲜度记录不是对象 —— 形状见 freshnessRecord。`);
+      continue;
+    }
+    const rec = /** @type {Record<string, unknown>} */ (entry);
+    /* 每一栏的下限只挡「空着 / 明显是占位」的形状，不拿字数去判「写得好不好」：
+     * `who` 是个人名（"月读" 两个字完全够用），拿统一的字数门槛会把合法值判红 ——
+     * 而一个会误杀合法输入的判据，下场是被人整条绕开。`how` 要的是**能照着重跑**的命令，
+     * 所以它另有一档下限（一条真命令不会短于几字符）。 */
+    /** @type {Array<[string, number]>} */
+    const minChars = [
+      ["verifiedAt", 4],
+      ["who", 2],
+      ["how", 6],
+    ];
+    for (const [field, min] of minChars) {
+      const value = String(rec[field] ?? "").trim();
+      if (value.length < min) {
+        problems.push(
+          `${platform} 档的新鲜度记录里 ${field} 没写清（"${value}"）—— ` +
+            (field === "how"
+              ? "这一栏要写**能照着重跑的那条命令**（写「稍后」「已复核」等于没写）。"
+              : "这一栏是这条账存在的全部意义：谁、什么时候、按哪条命令复核的。"),
+        );
+      }
+    }
+    const at = String(rec.verifiedAt ?? "").trim();
+    if (at && Number.isNaN(Date.parse(at))) {
+      problems.push(
+        `${platform} 档的 verifiedAt（"${at}"）不是一个能解析的日期 —— ` +
+          "记账要能算「多久没跑」，写「最近」等于没写。",
+      );
+    }
+  }
+  for (const platform of Object.keys(ledger)) {
+    if (!registered.includes(platform)) {
+      problems.push(
+        `新鲜度账里记着 ${platform} 档，但它不在登记口径里（${registered.join(" / ")}）—— ` +
+          "删掉平台的档就要同批抹账，否则这张表会退化成一份没人认领的名单。",
+      );
+    }
+  }
+  return problems;
+}
+
+/**
+ * 「这一档上次被跑绿距今多久」—— 给输出用的一句读数（**不是判据**）。
+ *
+ * 只在记录写得全、日期解得开时给；否则返回 null（缺日期时算一个天数毫无意义，
+ * 而把 null 当 0 天读会把「没记」显示成「刚刚跑过」）。
+ *
+ * @param {unknown} entry
+ * @param {Date} [now] 便于用例喂固定时钟
+ * @returns {string | null}
+ */
+export function freshnessAge(entry, now = new Date()) {
+  if (entry === null || typeof entry !== "object") return null;
+  const at = String(
+    /** @type {Record<string, unknown>} */ (entry).verifiedAt ?? "",
+  ).trim();
+  const ms = Date.parse(at);
+  if (Number.isNaN(ms)) return null;
+  const days = Math.floor((now.getTime() - ms) / 86_400_000);
+  if (days < 0) return null;
+  return days === 0 ? "今天" : `${days} 天前`;
 }
