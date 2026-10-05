@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(35 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(36 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -248,6 +248,21 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 要区分 JSX 自闭合标签 / 箭头函数体直接给正则 / 正则字符类里的 `[\/]`，
   # 每修一处都要再加一层词法分析 —— 而那与「包着我的那一帧是不是循环」无关。
   run "软断言用在循环体里（expect.soft）" node scripts/check-soft-assertions.cjs
+  # 并发档位（`it.concurrent` / `describe.concurrent`）用在哪儿（规范 §11.19）。
+  # 判两件，都是**纯文本、零网络、实测 < 1s**：
+  #   ① 并发档里不许出现 `expect.poll` —— 实测两者互斥（vitest 5.0.3：
+  #      并发档里若同文件其它用例先让出事件循环，`expect.poll` 报
+  #      `must be called inside a test`，20/20 红；把两条用例次序反转则 0/20 红 ——
+  #      阈值卡在 20ms 那一档，也就是说**同一份代码换台机器就换一个结论**）。
+  #      而上一轮（§11.14）刚把全仓的等待统一收成 `expect.poll`，两者在同一个
+  #      用例里互斥；`vi.waitFor` 在同一形状下实测不受影响。
+  #   ② 并发档的文件必须给出隔离声明（`// 并发档：<为什么没有共享可变状态>`）——
+  #      共享是跨模块的（模块级变量 / 全局单例 / 临时目录 / 真库 / 端口），
+  #      静态判会误报一片，所以判「有没有声明」而不判「有没有共享」。
+  #      反例实测：`tests/executor-host.test.ts` 全改并发后红 2 条，报
+  #      `Unable to open connection to local database`（模块级 `tmpDirs` 被
+  #      别人的 `afterEach` 整个 rmSync 掉）。
+  run "并发档位用法（it.concurrent）" node scripts/check-test-concurrency.cjs
   # 判据 ⇄ 执行者的双向判据（规范 §13.5.12 / ISSUE #1451 要求 2）：判定型脚本
   # （有 process.exit）无执行者即红 —— 除非登记在 scripts/.gate-executor-ledger.json
   # 的「按需召唤」台账里（含「为什么不能进钩子」+「谁按需跑」）；报告型（0 处

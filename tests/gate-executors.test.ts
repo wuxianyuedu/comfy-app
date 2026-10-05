@@ -342,10 +342,44 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     // 被钩子注释提到）、`install-git-hooks.mjs`（postinstall，被注释提到）、
     // `run-affected-tests.mjs`（被 `node scripts/run-affected-tests.mjs` 那行调，
     // 但它是 C 组的测试执行器、不是判据）、`quality-gate-shared.mjs`（被 import）。
-    // 实测：把口径退化成全文匹配，份数从 44 涨到 47（多认出这三份）。
+    // 实测：把口径退化成全文匹配时，下面这六份里会多认出三份
+    // （`affected-tests.mjs` / `install-git-hooks.mjs` / `quality-gate-shared.mjs`）。
+    //
+    // ⚠️ 这里**不写死份数**：份数会随「新写一份 `check-*.cjs` 还没接钩子」而正当变动
+    // （那正是名字族兜底要它可见的东西），把它冻成一个数字等于给下一份新判据留一道
+    // 无谓的红 —— 而规范 §13.5.10 的「步数不写、读数不写死」说的就是这件事。
+    //
+    // 口径（步骤位置 vs 全文）的差异**不体现为「名单里出现没出现」**：判据退化成
+    // 读全文时份数 46 → 49，而多出来的三份本来就「有执行者」，`--report` 那份点名
+    // 清单一个字都不变（实测：比总数、比名字都不响）。所以真正的执行者在
+    // **`check-gate-executors.cjs` 的 `PROSE_ONLY_SCRIPTS` 自检**里 ——
+    // 它在判据自己算出来的那张表上反查，那是唯一看得见这个差异的地方。
+    // 这里只补两件**与口径无关**的事实，保证那个自检不是空转：
+    //   ① 扫描面非空（口径坏掉时会退成 0，而 0 份照样「无违规」）。
+    //   ② 那份自检的名单与这里的名单**逐字同源**（两处各写一份就会漂）。
     const output = runInRepo(["--report"]);
     const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
-    expect(total, "步骤位置口径下判据是 44 份").toBe(44);
+    expect(
+      total,
+      "扫描面空转（退成 0 时下面每一条都照样报 OK）",
+    ).toBeGreaterThan(40);
+    const gateSrc = readFileSync(
+      join(REPO_ROOT, "scripts", SCRIPT_NAME),
+      "utf8",
+    );
+    for (const name of [
+      "x.cjs",
+      "xxx.cjs",
+      "affected-tests.mjs",
+      "install-git-hooks.mjs",
+      "run-affected-tests.mjs",
+      "quality-gate-shared.mjs",
+    ]) {
+      expect(
+        gateSrc,
+        `${name} 不在判据的 PROSE_ONLY_SCRIPTS 自检名单里 —— 口径退化时没人看得见`,
+      ).toContain(`"${name}"`);
+    }
     for (const name of [
       "x.cjs",
       "xxx.cjs",
