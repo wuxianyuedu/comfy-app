@@ -195,6 +195,8 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-doc-references.cjs     # 文档引用与权威源一致（= `pnpm doc:check`；序号那条判据见下 13.5.10）
 ✅ node scripts/storybook-check.mjs --changed # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮 + 故事面（见 16 §16.2.3.4 / §16.2.3.8）
 ✅ node scripts/check-comment-language.cjs   # 注释语言棘轮：注释一律中文，只有「纯 ASCII 模块」例外（见 12 §12.4.6；§12.4.6 早写着它在钩子里报红，而它一直不在，ISSUE #1451 补齐）
+✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红（见下 13.5.12）
+✅ node scripts/check-ts-duplicate-keys.cjs  # 同一属性被指定两次（编辑器报 ts(2783)、命令行不报）；存量 0，硬闸（见下 13.5.12）
 ```
 
 > **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /
@@ -204,6 +206,10 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 > **R5 的 `--strict` 原来在这份名单里，现已翻档接进钩子**（ISSUE #1404，见上面清单与 13.5 的表）：
 > 它当时的理由是「被拦下的动作要求拆分文件，不适合每次提交都挡一次」，而那一档挂着 11 个存量；
 > 基线归零之后这条前提不再成立，且 #623 之后它一个自动执行者都没有。
+> **`tw4-canonical-report` / `tw4-spacing-canonical` 也不在这份清单里，但它们「不进钩子」不再等于
+> 「没人管」**（ISSUE #1451 要求 2，见下 13.5.12）：两者各带 `--check` 棘轮判定档
+> （基线两份都 `total: 0`），并按「按需召唤」登记在 `scripts/.gate-executor-ledger.json` 里 ——
+> 那份台账本身由 `check-gate-executors.cjs` 在 D 组强制，**登记了却其实有执行者**同样拦。
 
 **平台侧仍需一步人工动作**：把 `master` 配成**保护分支**（禁直接 push + 要求 PR）。
 **别用** `git create-branch-lock` —— 它锁整分支写入，会把 PR 合并一起拦死（见 13.6.1）。
@@ -383,6 +389,8 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | 平台流水线里带 `--strict` 跑结构检查的那一步 | **已在本地钩子里**（D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」这一步带 `--strict`，ISSUE #1404 翻档；旧口径「本地只提醒」的前提「挂着 11 个存量」已不成立，基线现在 `total: 0`）               |
 | `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑；`pnpm doc:gen` 内部的第一步    | **已在本地钩子里**（D 组「文档引用与权威源一致」，ISSUE #1371 翻掉了旧的「手动档」签字）。旧口径是「改了文档后需手动跑」，而 AGENTS 规定的必跑口令是 `doc:render`（只渲染不校验），空档即由此来 |
 | `docs/api/**` 生成物与源同步（`check-docs-api.cjs`）                 | **平台侧与本地都从不跑**（此前是纯空白）     | **已在本地钩子里**（D 组「API 文档生成物与源同步」，带 `--staged` 条件触发，详见 §13.5.5.1）。翻档前实测 2627 个文件差异、留着指向已删模块的 `lib_comfyui_markdown.html`（ISSUE #1329 收尾） |
+| `tw4-canonical-report` / `tw4-spacing-canonical`（CSS 等价改写汇总） | 从不跑（03 章只写着「按需跑一次」，那句话没有任何东西在守） | **按需召唤 + 棘轮**：两者都起 Tailwind 引擎（~6s）、判的是「CSS 等价改写」而非正确性，故不进钩子；各带 `--check` 判定档与「零候选起步」基线，并登记 `scripts/.gate-executor-ledger.json`（详见 §13.5.12） |
+| `report-ts-duplicate-keys`（同一属性指定两次）                        | 从不跑（此前是报告型、零判定档）             | **已收成判定档**：`check-ts-duplicate-keys.cjs` 接进 D 组「TS 重复属性判定」。实测 1027 文件 0 处，按硬闸落、不走棘轮（ISSUE #1451） |
 
 > 这张表是**有意留下的欠账**，不是遗漏：把全量 3000+ 用例塞进每次 commit 会让本地
 > 提交慢到没人愿意用，而那正是当初把它放去 CI 的原因。**去处不是把配置贴回去**，
@@ -427,6 +435,12 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 并由 `scripts/quality-gate.mjs` 的 `GATES.visual`（**`run: false`，不在 `all` 里**）与 `.ps1` 侧
 `-Mode visual` 提供跨平台入口。**「不进钩子」的判断没有变**：起 webServer + 浏览器与钩子里的
 A/B/C/D 抢资源，而且基线名带平台决定了它的结论只在录过基线的那台机器上成立。
+
+这张表里**原本还有一行**「canonical 候选 → `@` 跑 `tw4-canonical-report.mjs`」，
+随 ISSUE #1451 摘掉：它们不再靠「人记得跑」，而是各带 `--check` 判定档与棘轮基线
+（`scripts/.tw4-canonical-baseline.json` / `scripts/.tw4-spacing-baseline.json`，两份
+都 `total: 0` 起步），并登记在 `scripts/.gate-executor-ledger.json` 的按需召唤台账里 ——
+**「按需」从此是有判据的**（详见 §13.5.12），不再是一句谁都能忘的人为提醒。
 
 这张表里**原本还有一行**「R5 行数棘轮 → `@` 跑 `check-file-structure.cjs --strict`」，随
 ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前提「挂着 11 个存量」不再成立）之后，
@@ -914,6 +928,66 @@ eslint 的缓存键 =「**文件内容 + 解析后的 eslint 配置**」—— �
 **没变 → 保留**；反向验证：把 `runFingerprint` 改成永远不删，前一组的「缓存已消失」
 即失败），并登记在 `scripts/affected-tests.mjs` 的固定清单里 —— 改 `.githooks/**`
 会让增量层放弃收窄，而「接线断掉」正是它要拦的动作。
+
+#### 13.5.12 判据 ⇄ 执行者的双向判据（`node scripts/check-gate-executors.cjs`，ISSUE #1451 要求 2）
+
+`scripts/check-comment-language.cjs` 头部自称「提交门槛脚本，供 `.githooks/pre-commit`
+调用」、§12.4.6 也写着它在钩子里报红 —— 而 `grep -c comment-language .githooks/pre-commit`
+一直是 **0**，CI 又随 ISSUE #623 删除：**一条基线为 0 的硬闸一个执行者都没有，而文档
+说它在执行**。这类事故比漏报更难发现 —— 漏报只是判据不响，「自称在跑」会让所有人
+以为有人在守。所以「判据有没有执行者」这件事本身要有机器判据。
+
+**「这类」分两种，别再混成一句「没有自动执行者」**：
+
+| 形态                              | 含义                               | 失效表现                                     |
+| --------------------------------- | ---------------------------------- | -------------------------------------------- |
+| **报告档**（0 处 `process.exit`） | 只出清单、不判失败                 | 接进钩子 = 接一个恒 `exit(0)` 的东西（接了个寂寞） |
+| **判定档**（有 `process.exit`）   | 有能力以非零退出阻断某次运行       | 判据在场、没人敲它，文档却可能说它在跑       |
+
+判定档**没有执行者**才是真空白；报告档按定义不该有判定者。`check-gate-executors.cjs`
+只对**判定型**要求「要么有执行者、要么登记按需召唤」，对报告型只拦「自称在跑」。
+
+**判据（三向，都由本脚本强制）**：
+
+1. **判定型脚本无执行者** ⇒ 红，除非显式登记在 `scripts/.gate-executor-ledger.json`
+   的「按需召唤」台账里（每条含「为什么不能进钩子」+「谁按需跑」）。
+2. **报告型脚本自称「供 pre-commit 调用」** ⇒ 红。报告档恒 `exit(0)`，那句承诺必然
+   是假的（`check-comment-language.cjs` 的事故就是这句话本身）。判定面只看脚本
+   **文件头 20 行** —— 那是脚本自我介绍的位置，也避开正文里「不要接 pre-commit」这类
+   否定句被误读成自白。
+3. **台账双向拦**：登记了却其实有执行者 ⇒ 红（台账是负债，不是赦免名单）；
+   登记了一个不存在的脚本 ⇒ 红（改名 / 删除后留下的孤儿条目）。
+
+**「执行者」的口径**（只认直接调用，不做跨文件传递闭包推断 —— 闭包会把
+「A 调用 B、B 调用 C」的间接链一路上溯，误报一片、也会随重构静默失效）：
+`.githooks/pre-commit`、`scripts/quality-gate.mjs`、`package.json` 的 `scripts`、
+`scripts/build-desktop.mjs`、`scripts/standalone-private-inputs.mjs`、`tests/**`。
+把 `tests/**` 算执行者，因为本仓库多条判据的**唯一**执行者就是契约测试
+（`lib-node-only-scan.mjs` 由 `tests/lib-node-only-declarations.test.ts` 跑），而它们在
+C 组的固定清单里、每次提交都执行 —— 那是真的执行者，不是「文档里写着」。
+
+**两类来源的取证宽度不同**（判据自身踩过的坑）：命令型来源「出现脚本名即算」；
+测试型来源**必须同一文件里既有该脚本名、又有子进程调用 API**
+（`execFileSync` / `spawnSync` / `execFile` / `spawn`）。理由是「读它的文本」与
+「跑它」是两件事 —— 新增一份只 `readFileSync` 判据源码、断言 `--check` 分支还在的
+形态用例之后，那两个 canonical 棘轮一度被判成「有执行者」，于是台账双向判定把
+两条正当的按需召唤登记报成负债。
+
+**当前台账（两条，都是 canonical 棘轮）**：`tw4-canonical-report.mjs` 与
+`tw4-spacing-canonical.mjs` 都起 Tailwind 引擎、单次约 6s，判的是「CSS 等价改写」
+而非正确性（成本判据同 §13.5.4 给 `doc:check` 翻档那条）。它们不进钩子，但**「按需」
+不再是人为提醒**：各自带一个棘轮判定档 `--check`（基线
+`scripts/.tw4-canonical-baseline.json` / `scripts/.tw4-spacing-baseline.json`，
+两份都 **`total: 0`** 起步 = 只许新增就红），红了就 `--write` 落盘 + `--update` 收紧。
+**别为了让 `--check` 变绿去放宽基线** —— 棘轮是给「回潮就响」用的，`tests/tw4-canonical-ratchet.test.ts`
+把这条钉住（基线形状 + 判定档在位 + 台账登记，三向各一组）。
+
+**还有一条**：`scripts/check-ts-duplicate-keys.cjs` 此前是报告型
+（`scripts/report-ts-duplicate-keys.mjs`，0 处 `process.exit`）、**零判定档** ——
+而它判的正是「命令行全绿、编辑器标红」那一族（项目钉的 `typescript6` 对重复属性不报，
+editor 的 TS 服务报 `ts(2783)`），判据只能落在源码形态上。收成判定档的前提是
+**实测量产为 0**（本机实测 1027 文件 0 处），所以按**硬闸**落、不走棘轮，
+并接进 D 组「TS 重复属性判定」。`--with-tests` 不进判定档：测试里的重复多半是有意夹具。
 
 ### 13.6 分支与合并策略
 
