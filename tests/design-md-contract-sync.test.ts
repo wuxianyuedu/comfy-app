@@ -329,6 +329,19 @@ const NODE_PILL_MARKS = [
   /px-2(?![\w.])/,
 ];
 
+/**
+ * 区头那一行的标记。刻意**不**单拿计数胶囊当判据：`WorkflowIOPreviewPanel.tsx:206`
+ * 也有一枚同款计数，只是底色走 `bg-subtle`（它坐在 `bg-panel` 的浮层上）—— 那是
+ * 「同一形状、不同表面」的合理分叉，不是要收的孪生。这四枚标记要**全命中**才认，
+ * 于是只描述那一行，不误伤那一枚孤立的计数。
+ */
+const SECTION_HEADER_MARKS = [
+  /size-2 shrink-0 rounded-full/,
+  /text-3xs font-semibold tracking-wider uppercase/,
+  /rounded-full px-1\.5 py-px font-mono/,
+  /border-t border-dashed bg-transparent/,
+];
+
 describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", () => {
   /** 棘轮基线：本轮清理后实测的存量，只许降不许升（要升得改用例并写理由）。
    *  21→12 是类型 chip 收进 `~/components/studio/TypeChip`（10 处调用点各写一份 →
@@ -424,9 +437,22 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       sample:
         'className="bg-node-accent flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2"',
     },
+    {
+      name: "区头（强调圆点 + 大写标签 + 计数胶囊 + 虚线）",
+      owner:
+        "src/components/studio/workflow-form/DynamicWorkflowForm/SectionHeader.tsx",
+      use: "~/components/studio/workflow-form/DynamicWorkflowForm/SectionHeader",
+      marks: SECTION_HEADER_MARKS,
+      sample:
+        '<div className="border-border-strong mt-1 flex items-center gap-2 border-t pt-2.5">' +
+        '<span className="size-2 shrink-0 rounded-full" style={{ background: ACCENT }} />' +
+        '<span className="text-ink-muted text-3xs font-semibold tracking-wider uppercase">' +
+        '<span className="bg-surface-2 text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">' +
+        '<Separator className="border-border-strong h-0 flex-1 border-t border-dashed bg-transparent" />',
+    },
   ];
 
-  it("被抽走的三族形状只许有一个出处", () => {
+  it(`被抽走的 ${FAMILIES.length} 族形状只许有一个出处`, () => {
     const files = collectProductFiles(SRC_DIR);
     for (const fam of FAMILIES) {
       const owners: string[] = [];
@@ -479,6 +505,13 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       [
         'className="grid size-9 place-items-center rounded-[11px] text-[15px] font-bold"',
         "节点右侧胶囊",
+      ],
+      [
+        '<div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">' +
+          '<span className="size-2 shrink-0 rounded-full bg-sky-400" />' +
+          '<span className="text-ink-bright truncate text-[12px] font-semibold">' +
+          '<span className="bg-subtle text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">',
+        "区头（强调圆点 + 大写标签 + 计数胶囊 + 虚线）",
       ],
     ];
     for (const [src, famName] of lookalikes) {
