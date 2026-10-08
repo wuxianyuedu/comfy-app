@@ -1,8 +1,9 @@
 {
   "linux": {
-    "platform": "linux",
-    "verifiedAt": "2026-10-05T16:29:24.044Z",
+    "key": "linux",
+    "verifiedAt": "2026-10-08T12:56:06.567Z",
     "who": "cnb.dQh7kaCfAPA",
-    "how": "CI=true pnpm check:visual"
+    "how": "pnpm check:visual",
+    "trackedBy": "visual"
   }
 }
