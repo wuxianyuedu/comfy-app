@@ -116,3 +116,12 @@ overrides:
   #     在场）；`storybook:build` 出件；`pnpm why webpack-dev-middleware` 只剩 7.4.5 一个版本。
   #     哪天 storybook dev 起不来，先回看这一条。
   'webpack-dev-middleware@6': '7.4.5'
+  # 安全修复（ISSUE #1326 存量红收尾）：三条 high/critical 全是**传递依赖**，
+  # 且三条的父包 range 都允许修复版（所以走 overrides 而不是升级顶层依赖）：
+  #   · proxy-addr 2.0.7 → 2.0.8（`@modelcontextprotocol/sdk > express > proxy-addr`，
+  #     express@5.2.1 声明 `^2.0.7`，2.0.8 在 range 内）
+  #   · sharp 0.35.4 → 0.35.5（`next > sharp`，next 声明 `^0.35.4`）
+  #   · source-map-js 1.2.1 → 1.2.2（`postcss > source-map-js`，postcss 声明 `^1.2.2`）
+  'proxy-addr': '2.0.8'
+  'sharp': '0.35.5'
+  'source-map-js': '1.2.2'
