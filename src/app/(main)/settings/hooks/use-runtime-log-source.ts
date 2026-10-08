@@ -45,7 +45,7 @@ export interface RuntimeLogSourceState {
   text: string;
   /** 正文解析出的带样式片段（视图只渲染它）。 */
   segments: AnsiSegment[];
-  /** 可切换的会话（新→旧，最后一项是本次启动）；不足两条时界面不显示下拉。 */
+  /** 可切换的会话（**新→旧，第一项就是最新**）；不足两条时界面不显示下拉。 */
   sessions: LogSessionMeta[];
   /** 当前选中会话的 id；没有日志文件时为 null。 */
   sessionId: string | null;
@@ -127,9 +127,14 @@ export function useRuntimeLogSource({
     let slice = await fetchLogSessions(source, sessionRef.current);
     if (slice && seq === seqRef.current) {
       /* 新的一次启动出现 → 自动切到最新（用户预期是「启动后自动看最新日志」，
-       * 不能停在旧会话里等他手动换下拉）。判据用会话开始时刻而不是行号 id
-       * （见 latestStartedAtRef）；正在展示的已是最新则不用动。 */
-      const latest = slice.sessions[slice.sessions.length - 1] ?? null;
+       * 不能停在旧会话里等他手动换下拉）。判据用会话开始时刻而不是文件名
+       * （见 latestStartedAtRef）；正在展示的已是最新则不用动。
+       *
+       * **第一项就是最新**：这是 `GET /api/logs/sessions` 的契约（`sessions`
+       * 新→旧，与 `selectedId` 的缺省值同为 `sessions[0]`）。跨包之后列表变长了，
+       * 取错一端会让「自动跟随」永远停在最旧那一份上 —— 方向只在契约里定义一次，
+       * 取法也只在契约里说一次。 */
+      const latest = slice.sessions[0] ?? null;
       const isNewStart =
         latest !== null &&
         latest.startedAt !== null &&

@@ -145,20 +145,117 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     );
   });
 
-  it("整屏层：场景里每条边的 handle 组合在真端口表里存在（否则边静默不渲染）", () => {
-    /* 这条判据的来由是一次**真错**（ISSUE #1381）：`filledProject` 第一版把三条边
-       写成 `sourceHandle: "1:text"` / `targetHandle: "2:prompt"`（形如真画布的
-       `nodeSeqOf()` 短序号，看着很像），而 React Flow 对**不认识 handle 的边
-       静默不渲染** —— 不报错、控制台干净、画布只是少三根线，而那条场景的名字与
-       `about` 都在说「三条连线」。
+  it("画布层：场景里每条边引用的 handle，在该档真正的节点渲染器上真的挂着", () => {
+    /* 这条判据的来由是**两处同族真错**（ISSUE #1381）：
+       ① `screen-frame.tsx` 的 `filledProject` 第一版把三条边写成
+          `sourceHandle: "1:text"` / `targetHandle: "2:prompt"`（形如真画布的
+          `nodeSeqOf()` 短序号，看着很像）；
+       ② `flow-canvas.tsx` 的 `twoNodes` / `fanOut` / `mixedKinds` 三档一直写着
+          `"1:model"` / `"2:images"` 这种**既不是输出端 `out:<name>`、也不是输入端
+          `ioKey`** 的第三种形状 —— 于是那三档在画布上**一条线都没画出来**，
+          而 `fanOut` 的名字与 `about` 一直在说「一个源节点扇出三条连线」。
 
-       react-flow 的端口是这个文件里的事实（`CanvasNode.tsx`）：
-         · 每个节点**右侧 `output`**（source）；
-         · **只有 `kind: "picture"`** 才有**左侧 `inputImage`**（target）。
-       所以不是「handle 名字写对没写对」，而是**目标节点的 kind 有没有那个端口** ——
-       `image` / `video` / `movie` 都吃不到 `inputImage`。判据因此不硬编码场景，
-       而是逐条边去问「源节点有 `output`、目标节点的 kind 有 `inputImage`」。
+       React Flow 对**不认识 handle 的边是静默丢弃**：不报错、控制台干净、画布
+       只是少几条线。所以它必须由判据守着 —— 构建退出码与 tsc 都说明不了这件事。
+
+       ## 判法：两侧**现算交集**，不抄第三份端口表
+       上一条版本按「一张手写的真端口表」判，只认 `output` / `inputImage` 那对
+       条件端口 —— 它拦住了 ①（写错端口名），却完整漏掉 ②（整个换成另一套 handle
+       口径），因为后者根本不在那张表的取值域里。**把端口表当事实源，就是这次漏掉
+       一半的原因。** 现在改成问两侧各自的事实：
+         · 场景侧：`flow-canvas.tsx` 里每条边声明的 `sourceHandle` / `targetHandle`；
+         · 渲染器侧：消费这份场景的 story 文件里，节点渲染器实际挂的 `<PortHandle id>`。
+       两侧取值必须对得上，且**都得非空**（空集会让 `every` 恒真 = 判据空转）。
+       前缀常量取自真出处（`OUTPUT_PORT_HANDLE_PREFIX`），不另写字面量。
      */
+    const prefixSrc = readFileSync(
+      join(ROOT, "src/components/studio/canvas/flow-focus-endpoints.ts"),
+      "utf8",
+    );
+    const prefixMatch = /OUTPUT_PORT_HANDLE_PREFIX\s*=\s*"([^"]+)"/.exec(prefixSrc);
+    expect(
+      prefixMatch,
+      "找不到输出端口前缀常量 —— 判据失去了唯一事实源，别在这里抄一份字面量",
+    ).not.toBeNull();
+    const outPrefix = prefixMatch?.[1] ?? "";
+
+    /* ── 两侧都现算 ─────────────────────────────────────────────── */
+
+    /* 场景侧：`CANVAS_SCENES` 里带边的档，逐条取 handle。 */
+    const sceneBlock = flow.slice(
+      flow.indexOf("export const CANVAS_SCENES = {"),
+      flow.indexOf("} satisfies Record<string, CanvasScene>;"),
+    );
+    const sceneHandles = [
+      ...sceneBlock.matchAll(/(?:source|target)Handle:\s*"([^"]+)"/g),
+    ].map((m) => m[1]);
+    expect(
+      sceneHandles.length,
+      "画布场景里一条边都没有 —— 这条判据在空跑",
+    ).toBeGreaterThan(0);
+
+    /* 渲染器侧：消费这些场景的 story 文件里，节点渲染器实际挂的 handle id。 */
+    const storySrc = readFileSync(
+      join(
+        ROOT,
+        "src/components/studio/workflow-form/WorkflowPortHandle.stories.tsx",
+      ),
+      "utf8",
+    );
+    /* 渲染器挂的端口写在它的 `rows` 里（`useMemo` 那一份），锚在那一段上取 ——
+       取整份文件会把 `PORT_ROWS`（画布**外**那一档的清单）也算进来，
+       那就会把「画布外也挂得上」误当成「画布上挂着」。 */
+    const nodeStart = storySrc.indexOf("function PortDemoNode()");
+    expect(
+      nodeStart,
+      "找不到 PortDemoNode —— 判据失去了被核对象",
+    ).toBeGreaterThan(-1);
+    const rowsStart = storySrc.indexOf("const rows = useMemo(", nodeStart);
+    expect(
+      rowsStart,
+      "找不到 PortDemoNode 的 rows —— 判据在空跑",
+    ).toBeGreaterThan(-1);
+    const nodeBlock = storySrc.slice(rowsStart, storySrc.indexOf("],", rowsStart));
+    const mountedHandles = [...nodeBlock.matchAll(/id: "([^"]+)"/g)].map(
+      (m) => m[1] ?? "",
+    );
+    expect(
+      mountedHandles.length,
+      "解析不到节点渲染器挂的 handle —— 这条判据在空跑",
+    ).toBeGreaterThan(0);
+
+    /* ── 交集判 ─────────────────────────────────────────────────── */
+
+    for (const handle of sceneHandles) {
+      expect(
+        mountedHandles,
+        `边引用的 handle "${handle}" 在该档的节点渲染器上一个都没挂 —— React Flow 会静默丢掉这条边（画布上少一根线，构建与 tsc 全绿）`,
+      ).toContain(handle);
+    }
+    /* 输出端必须真带 `out:` 前缀（前缀是 React Flow 找锚点的键的一部分，
+       少了它就连不上任何真输出端口）。 */
+    const sceneSourceHandles = [
+      ...sceneBlock.matchAll(/sourceHandle:\s*"([^"]+)"/g),
+    ].map((m) => m[1] ?? "");
+    expect(
+      sceneSourceHandles.length,
+      "画布场景里没有 sourceHandle —— 这条判据在空跑",
+    ).toBeGreaterThan(0);
+    for (const handle of sceneSourceHandles) {
+      expect(
+        handle.startsWith(outPrefix),
+        `输出端的 handle "${handle}" 没有 "${outPrefix}" 前缀 —— 真画布的输出端口就是这么挂的`,
+      ).toBe(true);
+    }
+  });
+
+  it("整屏层：场景里每条边的 handle 组合在真端口表里存在（否则边静默不渲染）", () => {
+    /* 与上一条同族，判的是**另一层**（整屏容器）的端口条件性：真画布节点的
+       端口不是「名字写对没写对」，而是**目标节点的 kind 有没有那个端口** ——
+       `image` / `video` / `movie` 都吃不到 `inputImage`（见 `CanvasNode.tsx`）。
+       所以这一条不硬编码场景，逐条边去问「源节点有 `output`、目标的 kind 有
+       `inputImage`」。 */
+
     const nodeSrc = readFileSync(
       join(
         ROOT,

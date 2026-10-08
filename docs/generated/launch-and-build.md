@@ -1109,14 +1109,14 @@ log/
 | `run/launch-status.json`                                                    | dev-launcher.mjs（进度）+ 壳（常驻快照与失败出口，`write_idle_status` / `mark_launch_failed`） | 结构化启动进度，splash 页展示。壳写两种：**常驻快照**（`fallback: true`，编排器写第一份之前的那 1~2 秒，见 §1.5.1）与**失败**（`phase=error` + 可行动作 + `diagnostics` 路径）；编排器写则权威，`ready === true` 才是就绪判据                                                                                                                                                                                                                                                                                                                                                                                                                                             | —                                                              |
 | 启动页「查看日志」面板                                                      | splash 前端轮询 `get_launch_log`                                                               | dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log（含 `[orchestrator] …`）+ log/current/shell/shell.log（release）的尾部（去 ANSI、限长），启动页实时看执行到哪一步                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | —                                                              |
 | `.next/dev/logs/next-development.log`                                       | Next dev server                                                                                | dev server 内部日志（含锁冲突提示）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Next 自管                                                      |
-| `log/current/services/comfyui-runtime-<YYYYMMDD>-<HHmmss>.log`                                          | Next server（src/lib/comfyui/lifecycle.ts）                                                    | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间。**一次启动一份文件**（ISSUE #1326）：`beginRuntimeSession()` 在拉起前换一份新的，因此「这个文件属于哪一次启动」由文件本身回答 —— 不再有会话横幅，也不再需要「跨运行累积」那套判据；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/sessions?source=comfyui-runtime` 列出各份并跟随最新那份。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长）                                                                                                                                                                                                                                     | 每个来源留最近 20 份（`pruneRuntimeLogFiles`，启动时静默清）；接口回正文时取尾部窗口（40 万字符，按行对齐，见 §4.1） |
+| `log/current/services/comfyui-runtime-<YYYYMMDD>-<HHmmss>.log`                                          | Next server（src/lib/comfyui/lifecycle.ts）                                                    | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间。**一次启动一份文件**（ISSUE #1326）：`beginRuntimeSession()` 在拉起前换一份新的，因此「这个文件属于哪一次启动」由文件本身回答 —— 不再有会话横幅，也不再需要「跨运行累积」那套判据；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/sessions?source=comfyui-runtime` 列出各份（**跨包**：本次运行在前、各历史包在后）并跟随最新那份。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长）                                                                                                                                                                                                                                     | 每个来源留最近 20 份（`pruneRuntimeLogFiles`，启动时静默清）；接口回正文时取尾部窗口（40 万字符，按行对齐，见 §4.1） |
 | `log/current/services/comfyui-keepalive-<ts>.out/.err.log`                          | dev-launcher 保活中介（Start-Process 重定向）                                                  | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进本次启动那一份 runtime 日志                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 按次命名，不自动清理                                           |
 | `log/current/services/drizzle-studio-runtime-<YYYYMMDD>-<HHmmss>.log` `log/current/services/ollama-runtime-<YYYYMMDD>-<HHmmss>.log` | Next server（对应 lifecycle / api 路由）                                                       | Drizzle Studio / Ollama 拉起与子进程输出，设置页日志面板跟随（同 comfyui-runtime 模式，一次启动一份文件）。**关闭动作写进最近一次启动那一份**（`[action] 关闭 Ollama`）—— 它是另一个请求，没有「本次启动」的句柄，新开一份会产出一份只有两行的空文件                                                                                                                                                                                                                                                                                                                                                                                                              | 每个来源留最近 20 份                                           |
 | `log/current/services/app-runtime-<YYYYMMDD>-<HHmmss>.log`                                              | Next server（src/lib/app-runtime-log.ts）                                                      | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11）。**一次应用运行一份文件**：句柄在首次写入时按时刻定下来（应用运行日志的「一次运行」就是本进程的生命周期），**不再需要会话起点裁剪** —— 面板侧 `isSessionScopedOrigin` 的集合因此空了（机制保留，见 §4.1） | 每个来源留最近 20 份                                           |
 | `log/current/comfyui/comfyui-trace.log`                                             | Next server（`src/lib/comfyui/trace.ts`）                                                      | **ComfyUI 通信层原始回执**（诊断通道，ISSUE #216）：comfy-cli 全部 stdout 原始 chunk 与解析后的 JSON 事件、stderr 原始 chunk 与退出时的完整 errBuf、本任务的全部 WS 帧、`/history` 与 `/queue` 的原始 JSON、以及各终局结论（「未找到生成结果」时附带 promptId 与 /queue 快照）。行格式 `[本地时间] [INFO] [trace] <channel> [<taskId>] <内容>`，channel ∈ `cli`/`ws`/`http`/`history`/`session`；单行上限 8000 字符（超出标注 `…(truncated)`），写入失败静默跳过（诊断通道不得把生成带崩）。**只在应用内「创作后端 → 启动日志」之外单独查看**，不参与日志面板轮询（避免大体量原文刷屏，见 §4.2）                                                                          | 追加不轮转                                                     |
 | `log/current/tools/*.log`                                                           | tools/scripts（Log-Common.ps1）与 setup 脚本                                                   | 构建/打包/工具运行日志（build-tauri-release、build-standalone、build-launcher、rebuild-static、comfy-cli-setup 等）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 每次运行覆盖                                                   |
 | `log/current/workshop/generation-<yyyy-mm-dd>.log`                                  | Next server（`/api/workshop/logs`，工坊前端在日志追加时异步上报）                              | **工坊生成执行日志**（JSONL，按天分文件）：角色卡提取 / 分镜提取与 AI 拆镜 / 定妆照生成的发起、模型输入输出、结果与错误。界面上各环节的「执行日志」面板即时展示本次会话，「历史」入口按需拉取落盘记录（跨刷新 / 重启可回看）；写入失败静默，绝不影响生成流程                                                                                                                                                                                                                                                                                                                                                                                                              | 按天分文件（自然轮转）                                         |
-| `log/runs/<日期>_<时分秒>-<runId>/`                                          | dev-launcher.mjs 收尾（`archiveCurrent`）                                                       | **一次运行一个包**：退出时把整个 `current/` 复制过来，再清空 `current/` 的内容（目录本身留着 —— 进程手里的路径不能消失）。包内 `run.json` 是完整的（收尾补上 `endedAt` / `durationMs` / `exitCode` / `crashed`）                                                                                                                                                                                                                                                                                                                                                                                       | 留最近 20 次**或** 7 天内；超 32MB 的单包先压 zip 再删（启动时异步清） |
+| `log/runs/<日期>_<时分秒>-<runId>/`                                          | dev-launcher.mjs 收尾（`archiveCurrent`）                                                       | **一次运行一个包**：退出时把整个 `current/` 复制过来，再清空 `current/` 的内容（目录本身留着 —— 进程手里的路径不能消失）。包内 `run.json` 是完整的（收尾补上 `endedAt` / `durationMs` / `exitCode` / `crashed`）。**包内结构与 `current/` 逐字同构** —— 设置页「启动日志」的下拉据此跨包列各份（§4.1.1）                                                                                                                                                                                                                                                                                                                                     | 留最近 20 次**或** 7 天内；超 32MB 的单包先压 zip 再删（启动时异步清） |
 | `log/latest.txt`                                                            | dev-launcher.mjs 收尾                                                                          | 最近一次**正常完成**的运行目录名。崩溃补做**不覆盖**它 —— 这一栏的语义是「上一次好好结束的是哪一包」，改成崩溃那次的目录名反而让排障的人走错方向                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 每次正常退出覆盖                                               |
 | `log/current/run.json`                                                      | dev-launcher.mjs 启动写、各进程补字段                                                          | 本次运行的环境快照：runId / 启动时刻 / 应用版本 / branch / commit（读 `.git/HEAD`，不 spawn git）/ 启动参数 / 各进程 pid / 结束时刻 / 耗时 / 退出码 / `crashed`。**用户反馈 bug 时第一个要看的文件**（§4.0）                                                                                                                                                                                                                                                                                                                                                                                              | 每次运行覆盖                                                   |
 
@@ -1158,22 +1158,49 @@ ComfyUI 被反复启动」不同）。
 进程，它没有「本次启动」的句柄 —— 新开一份会产出一份只有两行 `[action] 关闭` 的
 空文件，而用户要看的「为什么关得掉 / 关不掉」本该和那次启动的输出连在一起。
 
-#### 4.1.1 面板读取：列表 = 文件，正文 = 整份
+#### 4.1.1 面板读取：列表 = 文件（**跨包**），正文 = 整份
 
-`GET /api/logs/sessions?source=…` 列出该来源在 `services/` 下的各份（新→旧，
-上限 30 份并如实回报 `total`），正文是**选中那一份整份**（超长时取尾部窗口并
-按行对齐）。设置页「启动日志」的下拉切的就是这些份。
+`GET /api/logs/sessions?source=…` 列出该来源的各份（新→旧，上限 30 份并如实回报
+`total`），正文是**选中那一份整份**（超长时取尾部窗口并按行对齐）。
+设置页「启动日志」的下拉切的就是这些份。
+
+**列表跨两处**：
+
+```text
+<最新>  comfyui-runtime-20261005-093612.log                         ← current/（本次运行）
+        comfyui-runtime-20261005-090000.log                         ← current/（本次第 1 次启动）
+        2026-10-04_140000-bbbbbb/comfyui-runtime-20261004-140000.log ← runs/（历史包）
+        2026-10-03_100000-aaaaaa/comfyui-runtime-20261003-100000.log
+<最旧>
+```
 
 | 口径 | 判据 / 理由 |
 | --- | --- |
 | **只列本来源的文件** | 一个目录里四个来源并存，按名字过滤。不按「目录里有什么」 |
-| **上限 30 份 + 如实回报 `total`** | 同一天可能攒几十份（服务被反复重启），下拉列不完。不说 `total` 的话用户会以为「只启动过这些次」—— 界面上看不出任何异常（硬规则 4） |
+| **本次运行恒在最前**（即使某个历史包的时刻更晚） | 这一栏的语义是「**正在写的这一次**」，位置固定比时刻准确更重要 —— 用户按「最上面那一项」找到当下，是这条下拉最高频的用法 |
+| **其后按次运行分组，包名倒序** | 不是把两边混成一条扁平的时刻序：那会让「本次运行的第 1 次启动」夹在「上一包的第 3 次」与「上一包的第 2 次」之间。用户是拿这个下拉**定位一次运行**的（runId 是 `grep` 的入口、退出形态是「该不该看」的第一判据），分组语义比全局时刻序更有用 |
+| **归档份的 id 带包名**（`<包名>/<文件名>`） | 两个包里同名文件（同一秒内两次启动的 `-2`、迁移前的旧固定名）不带包名会撞成一个 id |
+| **没有该来源份的包不列** | 一台机器上 ComfyUI 可能一直没装（那几次运行根本没有它的份），列进下拉、点开每一项都是空窗口 —— 那不是历史，是噪声 |
+| **上限 30 份 + 如实回报 `total`** | 同一天可能攒几十份（服务被反复重启），跨包之后只会更多。不说 `total` 的话用户会以为「只启动过这些次」—— 界面上看不出任何异常（硬规则 4） |
 | **旧固定名给「更早的日志」文案** | 退回文件名会让 `comfyui-runtime.log` 读起来像是「现在那一份」，而它实际是所有新份之前的全部历史 |
+| **文案三段：时刻 · 退出形态 · runId** | 同一次运行里多次启动的份只有**时刻**能区分；崩溃那次的日志形态与正常退出完全不同（末尾是断的），先标出来用户才知道在看什么；runId 是 `grep <runId> log/current log/runs/` 的**唯一入口**（§4.0 第三条使用姿势），界面上不给就说不清是哪一次 |
+| **`.zip` 形态的包不列** | 保留策略对超 32MB 的包先压再删，读它要解压，而解压的入口在诊断包那一侧。列进来只会让下拉出现一堆点开就报错的项 —— 因此**明确不列** |
 
-**这一层不再有任何「切分」判据**：上一版按**应用运行包**（`log/runs/…`）列表、
-正文用「当前包 − 前一包」的长度减法去切（依赖「包 N ⊇ 包 N-1」这条来自归档复制
-语义的性质）。改成一次启动一份文件之后，「文件是谁」不依赖任何假设 ——
-`log-run-sessions.ts`（判据）与 `log-run-packs.server.ts`（IO）随之删除。
+**这一层只有一处判据：文件是谁。** 上一版按**应用运行包**列表、正文用
+「当前包 − 前一包」的长度减法去切（依赖「包 N ⊇ 包 N-1」这条来自归档复制语义的
+性质）。改成一次启动一份文件之后，「文件是谁」不依赖任何假设 —— 跨包这一层
+**复用的正是这条**，一条减法都没加回来。
+
+**路径不在端点里拼**：`current/` 那边取 `log-paths` 的 `SERVICES_LOG_DIR` 与
+`listRuntimeLogFiles()`，`runs/` 那边取 `scripts/launcher-core/run.mjs` 的
+`runsDir()`（归档写方的唯一定义）。读方自己拼一遍，两边一旦漂开表现是「归档了但
+界面看不到」——而两边各自都「看起来是对的」（§12.14）。
+
+**顺序判据收在一处**（`runtime-log-file.ts` 的 `compareRuntimeLogFiles`）：
+`current/` 下的份与包里的份**必须**同序，两边各写一遍必然漂。它顺带管住一条真错序：
+同一秒的第二份叫 `…-093612-2.log`，而 `.`（46）比 `-`（45）大一位，**按名字比会把
+它排到第一份前面** ——「启动 → 秒退 → 再启动」在本仓库很常见，那两份的顺序正好被
+读反（用户看到的「第一次的失败现场」实际是第二次的）。
 
 #### 4.1.2 应用日志面板的会话起点：集合空了，机制保留
 
