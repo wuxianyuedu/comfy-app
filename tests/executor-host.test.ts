@@ -67,14 +67,19 @@ function runHost(args: string[], logPath: string) {
   });
 }
 
-/** 轮询直到谓词为真，或超时。避免测试靠 sleep 猜时序。 */
-async function waitFor(predicate: () => boolean, timeoutMs = 5_000) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (predicate()) return;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  throw new Error("waitFor 超时");
+/**
+ * 轮询直到谓词为真 —— 用 `expect.poll` 而不是手搓 `while + await setTimeout`（规范 §11.14）。
+ *
+ * 手搓版本失败时只留一句「waitFor 超时」、拿不到现场；`expect.poll` 会把
+ * **最后一次尝试的实际值**打出来（这里的谓词读的是日志文件，现场就是它当时的内容
+ * —— 那正是「为什么没等到 heartbeat」要看的东西），且条件成立即返回、不必等满预算。
+ */
+async function waitFor(
+  predicate: () => boolean,
+  message = "条件未在预算内成立",
+  timeoutMs = 5_000,
+): Promise<void> {
+  await expect.poll(predicate, { timeout: timeoutMs, message }).toBe(true);
 }
 
 describe("scripts/executor-host.mjs 骨架", () => {
@@ -105,10 +110,12 @@ describe("scripts/executor-host.mjs 骨架", () => {
       stdio: ["ignore", "pipe", "pipe"],
     });
     try {
-      await waitFor(() => {
-        if (!fs.existsSync(logPath)) return false;
-        return fs.readFileSync(logPath, "utf-8").includes("heartbeat");
-      });
+      await waitFor(
+        () =>
+          fs.existsSync(logPath) &&
+          fs.readFileSync(logPath, "utf-8").includes("heartbeat"),
+        "executor-host 应该打出至少一次 heartbeat",
+      );
       child.kill("SIGTERM");
       const exitCode = await new Promise<number | null>((resolve) => {
         child.on("exit", (c) => resolve(c));
