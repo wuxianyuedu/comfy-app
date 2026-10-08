@@ -133,6 +133,46 @@ export function legacyRuntimeLogFileName(source: RuntimeLogSource): string {
 }
 
 /**
+ * 两份「一次启动一份文件」的先后（**旧→新**）。
+ *
+ * 三级判据，缺一个都会在真实盘上给出错序：
+ *
+ *   1. **旧固定名（`startedAt === null`）永远排最前** —— 「更早」是对它的定义
+ *      （它是迁移前的全部历史，没有时刻）；
+ *   2. **时刻升序** —— 正常的先后；
+ *   3. **同一秒内按序号升序** —— 这一步是必需的而不是美化：同一秒里的第二份
+ *      名字是 `…-093612-2.log`，而 `.` 的码位（46）比 `-`（45）大一位，所以
+ *      **按名字比会把它排到 `…-093612.log` 前面** ——「启动 → 秒退 → 再启动」
+ *      在这个仓库里很常见，那两份的顺序正好被读反（用户看到的「第一次的失败
+ *      现场」实际是第二次的）。
+ *
+ * 收在这里一处而不是各调用点自己写 `sort`：`current/` 下的份与运行包里的份
+ * **必须**同序，两边各写一遍必然漂，而漂开的表现只是「某些项顺序不对」——
+ * 不容易被注意到。
+ */
+export function compareRuntimeLogFiles(
+  a: { name: string; startedAt: number | null },
+  b: { name: string; startedAt: number | null },
+): number {
+  if (a.startedAt === null || b.startedAt === null) {
+    if (a.startedAt === null && b.startedAt === null) {
+      return a.name.localeCompare(b.name);
+    }
+    return a.startedAt === null ? -1 : 1;
+  }
+  return (
+    a.startedAt - b.startedAt ||
+    ordinalOf(a.name) - ordinalOf(b.name) ||
+    a.name.localeCompare(b.name)
+  );
+}
+
+/** 名字里的「同秒第几份」（无后缀 = 1；非本形态回 1）。 */
+function ordinalOf(name: string): number {
+  return parseRuntimeLogFileName(name)?.ordinal ?? 1;
+}
+
+/**
  * 文件名 → 面板下拉文案：`09-30 19:36:12`（缺时刻的旧固定名给「更早的日志」）。
  *
  * 与日志面板的时刻口径同源：日期与时刻都要 —— 只有
