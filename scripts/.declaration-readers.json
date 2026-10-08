@@ -90,6 +90,28 @@
       "section": "11.20"
     },
     {
+      "id": "annotate-consumer",
+      "name": "ctx.annotate 的消费方在场",
+      "declaredAt": "用例里的 ctx.annotate(...) 站点 + scripts/.annotate-consumers.json",
+      "reader": "scripts/check-annotate-consumer.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "注解消费方（ctx.annotate）"
+      },
+      "section": "11.21"
+    },
+    {
+      "id": "task-meta-consumer",
+      "name": "ctx.task.meta 的消费方在场",
+      "declaredAt": "用例里的 task.meta 属性链站点 + scripts/.task-meta-consumers.json",
+      "reader": "scripts/check-task-meta-consumer.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "元数据消费方（task.meta）"
+      },
+      "section": "11.22"
+    },
+    {
       "id": "soft-assertion",
       "name": "软断言的批量语义",
       "declaredAt": "用例里的 expect.soft(...) 站点",
