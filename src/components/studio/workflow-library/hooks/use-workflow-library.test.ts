@@ -8,7 +8,7 @@
 //   3. §17.5.4：动作失败的错误不会被后台刷新吞掉（只有 refresh 才清）。
 
 import { createElement, type ReactNode } from "react";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
@@ -177,7 +177,7 @@ describe("useWorkflowLibrary", () => {
       wrapper: makeWrapper(),
     });
 
-    await waitFor(() => expect(result.current.workflows).toHaveLength(2));
+    await expect.poll(() => result.current.workflows).toHaveLength(2);
     expect(result.current.pendingRows).toHaveLength(1);
     expect(result.current.sourceCounts).toEqual({
       all: 3,
@@ -207,7 +207,7 @@ describe("useWorkflowLibrary", () => {
     const { result } = renderHook(() => useWorkflowLibrary(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.workflows).toHaveLength(2));
+    await expect.poll(() => result.current.workflows).toHaveLength(2);
 
     const callsBefore = listCalls;
     act(() => result.current.setTypeFilter("video"));
@@ -242,7 +242,7 @@ describe("useWorkflowLibrary", () => {
     const { result } = renderHook(() => useWorkflowLibrary(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.workflows).toHaveLength(2));
+    await expect.poll(() => result.current.workflows).toHaveLength(2);
 
     act(() => result.current.setSelectedId("2"));
     expect(result.current.selectedRow?.name).toBe("Beta");
@@ -263,15 +263,13 @@ describe("useWorkflowLibrary", () => {
       wrapper: makeWrapper(),
     });
 
-    await waitFor(() =>
-      expect(result.current.loadError).toContain("数据库不可用"),
-    );
+    await expect.poll(() => result.current.loadError).toContain("数据库不可用");
 
     behavior = { workflows: [row()], localPending: [], tags: [] };
     await act(async () => {
       result.current.load();
     });
-    await waitFor(() => expect(result.current.loadError).toBeNull());
+    await expect.poll(() => result.current.loadError).toBeNull();
   });
 
   it("§17.5.4：动作失败的错误不会被随后的列表刷新吞掉", async () => {
@@ -284,7 +282,7 @@ describe("useWorkflowLibrary", () => {
     const { result } = renderHook(() => useWorkflowLibrary(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.workflows).toHaveLength(1));
+    await expect.poll(() => result.current.workflows).toHaveLength(1);
 
     await act(async () => {
       await result.current.confirmDelete("1");
@@ -297,7 +295,7 @@ describe("useWorkflowLibrary", () => {
     await act(async () => {
       result.current.load();
     });
-    await waitFor(() => expect(result.current.workflows).toHaveLength(1));
+    await expect.poll(() => result.current.workflows).toHaveLength(1);
     expect(result.current.actionError).toBe("删除失败：文件被占用");
 
     // 只有用户点「重试」才清
@@ -312,7 +310,7 @@ describe("useWorkflowLibrary", () => {
     const { result } = renderHook(() => useWorkflowLibrary(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.workflows).toHaveLength(1));
+    await expect.poll(() => result.current.workflows).toHaveLength(1);
 
     await act(async () => {
       await result.current.confirmDelete("1");

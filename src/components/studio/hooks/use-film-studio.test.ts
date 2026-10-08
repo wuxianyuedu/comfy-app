@@ -128,14 +128,14 @@ afterEach(cleanup);
 describe("useFilmStudio", () => {
   it("挂载即拉取技能与近期成片，并带上 ffmpeg 可用性", async () => {
     renderHook(() => useFilmStudio());
-    await waitFor(() => expect(vanilla.skill.list.query).toHaveBeenCalled());
+    await expect.poll(() => vanilla.skill.list.query).toHaveBeenCalled();
     expect(vanilla.film.list.query).toHaveBeenCalled();
   });
 
   it("元信息拉取失败不影响成片生成（静默，不弹错误）", async () => {
     vanilla.film.list.query.mockRejectedValue(new Error("500"));
     renderHook(() => useFilmStudio());
-    await waitFor(() => expect(vanilla.skill.list.query).toHaveBeenCalled());
+    await expect.poll(() => vanilla.skill.list.query).toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
   });
 
@@ -267,13 +267,13 @@ describe("useFilmStudio", () => {
       shots: [{ id: "a" }, { id: "b" }],
     });
     const { result } = renderHook(() => useFilmStudio());
-    await waitFor(() => expect(result.current.shotSource).toBe("project"));
+    await expect.poll(() => result.current.shotSource).toBe("project");
     expect(result.current.projectShotCount).toBe(2);
   });
 
   it("无活跃项目 / 无镜头时回落剧本模式", async () => {
     const { result } = renderHook(() => useFilmStudio());
-    await waitFor(() => expect(vanilla.skill.list.query).toHaveBeenCalled());
+    await expect.poll(() => vanilla.skill.list.query).toHaveBeenCalled();
     expect(result.current.shotSource).toBe("script");
     expect(result.current.projectShotCount).toBe(0);
   });
@@ -282,7 +282,7 @@ describe("useFilmStudio", () => {
     getActiveIdMock.mockReturnValue("proj_9");
     fetchProductionMock.mockResolvedValue({ shots: [{ id: "a" }] });
     const { result } = renderHook(() => useFilmStudio());
-    await waitFor(() => expect(result.current.shotSource).toBe("project"));
+    await expect.poll(() => result.current.shotSource).toBe("project");
 
     await act(async () => {
       await result.current.createFromProject();

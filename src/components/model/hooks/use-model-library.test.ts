@@ -1,7 +1,7 @@
 // /models 页模型卡片库逻辑层单测：整体替换 vanillaApi，断言的是
 // 筛选即重新查询、sync 后按当前筛选刷新这两条编排契约。
 
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -61,7 +61,7 @@ describe("useModelLibrary", () => {
   it("挂载即拉取，loading 由 true 收敛到 false", async () => {
     const { result } = renderHook(() => useModelLibrary());
     expect(result.current.loading).toBe(true);
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.models).toHaveLength(2);
     // 无筛选时后端收到空参数
     expect(vanilla.model.list.query).toHaveBeenCalledWith({});
@@ -69,41 +69,41 @@ describe("useModelLibrary", () => {
 
   it("切换类型即重新查询，参数只带 type", async () => {
     const { result } = renderHook(() => useModelLibrary());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
 
     await act(async () => {
       result.current.setType("LORA");
     });
-    await waitFor(() =>
-      expect(vanilla.model.list.query).toHaveBeenLastCalledWith({
+    await expect
+      .poll(() => vanilla.model.list.query)
+      .toHaveBeenLastCalledWith({
         type: "LORA",
-      }),
-    );
+      });
   });
 
   it("搜索关键字参与查询，且与 type 是叠加关系", async () => {
     const { result } = renderHook(() => useModelLibrary());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
 
     await act(async () => {
       result.current.setType("LORA");
       result.current.setQ("xl");
     });
-    await waitFor(() =>
-      expect(vanilla.model.list.query).toHaveBeenLastCalledWith({
+    await expect
+      .poll(() => vanilla.model.list.query)
+      .toHaveBeenLastCalledWith({
         type: "LORA",
         q: "xl",
-      }),
-    );
+      });
   });
 
   it("sync：先同步再按当前筛选重新拉取，syncing 收敛回 false", async () => {
     const { result } = renderHook(() => useModelLibrary());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     await act(async () => {
       result.current.setType("LORA");
     });
-    await waitFor(() => expect(result.current.type).toBe("LORA"));
+    await expect.poll(() => result.current.type).toBe("LORA");
 
     await act(async () => {
       await result.current.sync();
@@ -116,7 +116,7 @@ describe("useModelLibrary", () => {
   it("sync 失败：错误向外抛（调用方决定怎么提示），syncing 必须收敛", async () => {
     vanilla.model.sync.mutate.mockRejectedValue(new Error("ComfyUI 未启动"));
     const { result } = renderHook(() => useModelLibrary());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
 
     await act(async () => {
       await expect(result.current.sync()).rejects.toThrow("ComfyUI 未启动");
@@ -126,13 +126,13 @@ describe("useModelLibrary", () => {
 
   it("list 失败：保留上一次列表、loading 收敛（不让页面弹空白）", async () => {
     const { result } = renderHook(() => useModelLibrary());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
 
     vanilla.model.list.query.mockRejectedValue(new Error("500"));
     await act(async () => {
       result.current.setType("VAE");
     });
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.models).toHaveLength(2);
   });
 });
