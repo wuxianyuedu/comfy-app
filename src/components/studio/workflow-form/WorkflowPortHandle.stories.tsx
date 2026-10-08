@@ -103,13 +103,37 @@ function PortRow({
 /**
  * 真节点渲染器：**从 `nodeTypes` 进画布**，所以 `useNodeId()` 拿得到宿主 id、
  * `<Handle>` 走真分支。这一份刻意只放端点列 —— 它要验的就是端点本身。
+ *
+ * ## 端点 id 必须与真画布同口径（否则场景里的连线一条都画不出来）
+ *
+ * handle id **不是**随手取的短序号，而是 React Flow 找锚点的唯一凭据：
+ * 找不到就会**静默丢弃整条边**（不报错、控制台干净、画布只是少几条线）。
+ * 真画布上两套口径各管一侧（`FlowNodePinRows.tsx` / `WorkflowNode.tsx`）：
+ *
+ *  · **输出端** → `` `out:${outName}` ``（前缀常量是 `OUTPUT_PORT_HANDLE_PREFIX`）；
+ *  · **输入端** → `ioKey`（这里用端口名本身，正是那份动态表单的键）。
+ *
+ * 所以这份渲染器的 `id` 与 `flow-canvas.tsx` 场景里每条边的
+ * `sourceHandle` / `targetHandle` 是**对着写的**，改一侧必须同批改另一侧。
+ * 判据 `tests/storybook-injection-layers.test.ts` 按两侧交集现算，不靠人记。
  */
 function PortDemoNode() {
+  /* 行数压到「真节点那个量级」：真画布上一张卡挂几个端口，而这份 story 的框是
+     定高 560px —— 摆十行会把卡撑出画布、也把场景里的节点间距挤爆。
+     这几行够把两套 id 口径各显一遍（输入 = `ioKey`，输出 = `out:<name>`），
+     也正是 `flow-canvas.tsx` 那几档场景的边引用到的全部端口。 */
   const rows = useMemo(
     () => [
-      { id: "3:model", dir: "in" as const, type: "MODEL" },
-      { id: "3:images", dir: "out" as const, type: "IMAGE" },
-      { id: "12:video", dir: "out" as const, type: "VIDEO" },
+      { id: "model", dir: "in" as const, type: "MODEL" },
+      { id: "out:model", dir: "out" as const, type: "MODEL" },
+      { id: "vae", dir: "in" as const, type: "VAE" },
+      { id: "out:vae", dir: "out" as const, type: "VAE" },
+      { id: "clip", dir: "in" as const, type: "CLIP" },
+      { id: "out:clip", dir: "out" as const, type: "CLIP" },
+      { id: "images", dir: "in" as const, type: "IMAGE" },
+      { id: "out:images", dir: "out" as const, type: "IMAGE" },
+      { id: "text", dir: "in" as const, type: "STRING" },
+      { id: "out:text", dir: "out" as const, type: "STRING" },
     ],
     [],
   );
