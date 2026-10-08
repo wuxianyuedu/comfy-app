@@ -73,10 +73,15 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
 
     /* 刷新。缺陷就在这一步：active-id 被挂载时的清扫清掉，下面这六个消失。 */
     await page.reload();
-    /* reload 后要等界面重新稳定（侧栏 + 「＋」都到位），否则点的是旧 DOM。 */
-    await expect(
-      page.getByRole("heading", { name: "灵感从这里开始" }),
-    ).toBeVisible();
+
+    /* reload 后要等界面重新稳定，否则点的是旧 DOM。
+     *
+     * 等的是**项目页签重新装好**（`主页·未命名`），不是首页那颗标题 —— 这正是本
+     * 用例的关键：修复生效时用户**不回首页**，首页的「灵感从这里开始」在 reload
+     * 后根本不该出现。判据写成「等首页标题」等于把断言钉在缺陷态上：修复一落地
+     * 它反而红（判据成了缺陷的墓碑）。所以等的是「用户仍在项目里」这件事本身，
+     * 它同时也是下面那条断言的主体。 */
+    await expect(page.getByRole("tab", { name: /^主页/ })).toBeVisible();
 
     const afterReload = await openViewMenuItems(page);
     for (const label of PROJECT_VIEWS) expect(afterReload).toContain(label);
@@ -99,10 +104,11 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
       .not.toBeNull();
 
     await page.reload();
-    /* reload 之后仍在**项目视图**（用户没被退回首页）—— 这条本身也是判据的一半：
-     * 缺陷会把人留在首页，因为 active 没了、项目类视图全部落到 ProjectGate。
-     * 用「＋」菜单等界面重新装好，再读存储。 */
-    await expect(page.getByRole("button", { name: "新页签" })).toBeVisible();
+    /* reload 之后界面要先把「用户仍在项目里」表达出来，再读存储：
+     * 缺陷态下 active 没了 ⇒ `openableViews` 收起项目类视图 ⇒ 「主页」这颗
+     * 项目页签与 active-id 一起消失。等这颗页签回来（而不是等某个恰好也存在的
+     * 标题），读到的才是挂载后的稳定值，而不是中途的中间态。 */
+    await expect(page.getByRole("tab", { name: /^主页/ })).toBeVisible();
 
     const stored = await page.evaluate(() => ({
       active: localStorage.getItem("comfyapp.canvas.active.v1"),
