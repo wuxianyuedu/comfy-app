@@ -124,12 +124,12 @@
     },
     {
       "id": "visual-baseline-freshness",
-      "name": "像素基线的档与新鲜度",
-      "declaredAt": "SUPPORTED_PLATFORMS / PENDING_PLATFORMS / scripts/.visual-baseline-freshness.json",
+      "name": "像素基线与全量 e2e 的档与新鲜度",
+      "declaredAt": "SUPPORTED_PLATFORMS / PENDING_PLATFORMS / scripts/.visual-baseline-freshness.json / scripts/.e2e-freshness.json（FRESHNESS_TRACKS）",
       "reader": "scripts/visual-freshness-gate.mjs",
       "executor": {
         "kind": "hook-step",
-        "label": "像素基线每档都有主（新鲜度账）"
+        "label": "每档都有主（新鲜度账：像素档 + 全量 e2e）"
       },
       "section": "11.8"
     },
