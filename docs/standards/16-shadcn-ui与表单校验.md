@@ -920,6 +920,47 @@ module-level store 里，story 里要「先按真形状写进 store 再摆」，
   逐张看过截图。整屏层那几份日志里的 `TRPCClientError: Failed to fetch` 是**已知
   边界**（§16.2.3.10 的跨源一节），不是新问题。
 
+#### 16.2.3.12 画布层的 handle id：两侧口径对着写，判据按交集现算
+
+§16.2.3.11 铺完之后，`flow-canvas.tsx` 的 `twoNodes` / `fanOut` / `mixedKinds`
+三档在画布上**一条连线都没画出来** —— 而它们的场景名与 `about` 一直在讲「连线」，
+`fanOut` 那句更是「一个源节点扇出三条连线」。
+
+**根因不是「名字写错」，是没有事实源。** React Flow 找锚点靠的是 handle id，
+而真画布上两套口径各管一侧（`FlowNodePinRows.tsx` / `WorkflowNode.tsx`）：
+
+| 侧 | 真 handle id | 出处 |
+| --- | --- | --- |
+| 输出（source） | `` `out:${name}` `` | `OUTPUT_PORT_HANDLE_PREFIX`（`flow-focus-endpoints.ts`） |
+| 输入（target） | `ioKey` | 工作流节点动态表单的端口键 |
+
+那份场景写的是 `"1:model"` / `"2:images"` —— **第三种形状，两侧都不匹配**。
+React Flow 对这种边**静默丢弃**：不报错、控制台干净、`tsc` / `eslint` / 构建 /
+既有门禁全绿，画布只是少几条线（真浏览器数 `.react-flow__edge` 量到 `0`）。
+
+> **为什么上一批的判据没拦住它。** §16.2.3.10 那条端口判据按**一张手写的真端口表**
+> 判（只认 `output` / `inputImage` 那对条件端口）—— 它守住了 `filledProject`
+> 「把边连到 `picture` 才有的端口上」，却完整漏掉这三档，因为后者的 handle 形状
+> **根本不在那张表的取值域里**。**把一张手写的端口表当事实源，就是漏掉一半的原因。**
+
+**现在的判据**（`tests/storybook-injection-layers.test.ts`）按**两侧现算交集**：
+场景侧取 `flow-canvas.tsx` 里每条边声明的 handle，渲染器侧取
+`WorkflowPortHandle.stories.tsx` 的 `PortDemoNode` 实际挂的 `<PortHandle id>`
+（锚在它的 `rows` 上取 —— 取整份文件会把画布**外**那一档的 `PORT_ROWS` 也算进来，
+把「画布外挂得上」误当成「画布上挂着」）；两侧必须对得上，且**都得非空**
+（空集会 `every` 恒真 = 判据空转）。前缀取自真出处常量，不另抄字面量。
+
+**两条连带口径**：
+
+- **消费方不传 `nodeTypes` 的场景必须 `edges: []`**。`dense` 那档摆的是装饰层
+  （网格 / 标尺 / 缩放条），消费方 `WorkflowCanvasDecorations.stories.tsx` 不传
+  `nodeTypes` → 节点走 React Flow 默认外观、身上没有业务端口。留一条边就是
+  「场景说有连线、画布上没有」的假形态，所以刻意清空并写明理由。
+- **改一侧必须同批改另一侧**。这份渲染器的 `id` 与场景里每条边的
+  `sourceHandle` / `targetHandle` 是**对着写的**，判据不是替代品、是保险丝。
+
+变异三向实测全拦下：输出端写回旧形状 / 渲染器少挂一个端口 / 前缀常量改掉。
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
