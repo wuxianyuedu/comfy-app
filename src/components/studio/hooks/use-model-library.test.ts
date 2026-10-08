@@ -301,6 +301,10 @@ describe("useModelLibrary 卸载后不再 setState", () => {
       unmount();
       after = scheduleReads;
       release();
+      /* 这一处是**「等一个不会发生的事」**：放行回包之后，判定「不再有任何新的
+       * 调度读取」。条件轮询只能表达「某件事发生了」，而这条判据要证明的是
+       * 「回包之后一个都没多」——只能给真时间让它有机会发生（§11.14 的合法逃逸口）。 */
+      // sleep-ok: 等一个「不会发生的事」——放行后不得再出现更新调度读取。
       await new Promise((r) => setTimeout(r, 150));
     } finally {
       if (realWindow) Object.defineProperty(globalThis, "window", realWindow);

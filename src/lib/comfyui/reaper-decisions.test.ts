@@ -627,6 +627,7 @@ describe("防抖定时器不跨用例泄漏", () => {
     schedulePersistLogs("leak-probe");
     cancelPersistLogs("leak-probe");
     // 等过两个防抖窗口：若取消没生效，persistLogs 会在这里触发并打 mock
+    // sleep-ok: 等一个「不会发生的事」：等防抖窗口内不再有决策落地 —— §11.14 明写的合法逃逸口。
     await new Promise((r) => setTimeout(r, 300));
     // 取消是幂等的重复调用也安全
     expect(() => cancelPersistLogs("leak-probe")).not.toThrow();

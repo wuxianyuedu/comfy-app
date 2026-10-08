@@ -137,12 +137,8 @@ pnpm check:visual
 pnpm check:visual:update
 # 只跑像素档、不带配对判据（排查用；结论不完整，别拿它当「基线没问题」）
 pnpm test:visual
-# 全量 E2E（含 e2e/visual，测试全量时用；**不记账**，排查用）
+# 全量 E2E（含 e2e/visual，测试全量时用）
 pnpm test:e2e
-# 全量 E2E 的推荐入口：跑绿即记一条「每日自证」凭证（见下）
-pnpm check:e2e
-# 本次不跑、但把理由写进账（「有人回答过」与「没回答」要长得不一样）
-node scripts/e2e-run.mjs --skip "本次只改文档"
 ```
 
 - **优先用 `pnpm check:visual`**：它把像素档与「基线成套且入库」那条判据放在**同一次**运行里，
@@ -194,6 +190,11 @@ node scripts/e2e-run.mjs --skip "本次只改文档"
   `visual-freshness-gate.mjs` 判「每档都有主、且写得清」；缺几张基线的档由
   `PENDING_PLATFORMS` 顶着、不要求这条记录。钩子**不跑像素**（起 webServer + 浏览器会与
   A/B/C/D 抢资源）。
+- **全量 e2e 那一档多一条「每天首次自证」**（`scripts/.e2e-freshness.json`）：它不像像素档
+  那样只判「有主、写清」，而是按本地日历日判「**当天的第一次提交**带没带一次自证」——
+  出路两条：`pnpm test:e2e` 跑绿即记，或 `node scripts/e2e-run.mjs --skip "<理由>"`
+  记一条写明理由的豁免（占位理由被拦）。当天已有凭证 ⇒ 零输出放行；账文件还没入库时
+  只提醒、不阻断。口径与四条边界见规范 §11.8。
 - 像素档**不在 `pnpm check:all` 里**：它要起 webServer + 浏览器，而结论只在录过基线的那台
   机器上成立（基线名带平台）—— 要跑就显式点名（Windows 侧同一动作是
   `scripts/quality-gate.ps1 -Mode visual`，登记在 launch-and-build §9.5 的对照表）。
@@ -267,23 +268,15 @@ platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
 ## 已知边界（当前真实状态）
 
 **已经有自动化**：提交前钩子（分支守卫 + tsc + eslint 零警告 + 20 多条静态判据 + 固定守护
-清单与受影响用例）；`pnpm check:all` 的全量 + 覆盖率棘轮；29 条 `@critical` E2E（按需入口
-`pnpm check:e2e` + 每日自证凭证）；win32 像素基线。
+清单与受影响用例）；`pnpm check:all` 的全量 + 覆盖率棘轮；29 条 `@critical` E2E；win32 像素基线。
 
 **没有自动化 / 仍开放**（细节与优先级见 `docs/guides/PRODUCTION-GAPS.md`）：
 
 - [ ] **没有平台侧兜底**：#623 之后不跑流水线，唯一自动化是本地钩子（`--no-verify` 可绕）。
       口径与出路见规范 §13.5.3 / §13.5.4（按需召唤评审 NPC），别再补「看起来在守门」的配置。
-- [x] **全量 e2e 有「每日自证」**（ISSUE #1282 收尾）：入口 `pnpm check:e2e`
-      （= `scripts/e2e-run.mjs`，跑绿即往 `scripts/.e2e-freshness.json` 记一条凭证），
-      而 pre-commit D 组的 `scripts/e2e-freshness-gate.mjs` 判「**今天的第一次提交**带没带
-      凭证」—— 当天已有凭证（跑绿，或 `--skip "<理由>"` 记一条写明理由的豁免）就零输出放行。
-      **钩子里不跑 e2e**（起 webServer + 真浏览器 + 假 ComfyUI，十几分钟量级），
-      所以它买到的是「一天里一次都没跑」从「没人知道」变成「提交被拦下」，
-      而不是「每次提交都跑一遍」。四条边界（日历日 / 只拦第一次 / 宽限期 / 豁免不是绕过）
-      见规范 §11.8.1。
-- [ ] **E2E 没有**「每次提交都跑」的**执行者**：它在本地手动档（`pnpm check:e2e` /
-      `pnpm test:e2e`），上面那条每日自证只保证「一天至少有人跑过一次」。视觉那一层**有本地判据**：
+- [ ] **E2E 没有**「每次提交都跑」的**执行者**：在本地手动档（`pnpm test:e2e`）；
+      全量 e2e 那条「每天首次自证」（上面 §「每一档基线都要有主」那一节）只保证
+      「一天至少有人跑过一次」，不等于每次提交都跑。视觉那一层**有本地判据**：
       `tests/visual-baseline-pairing.test.ts` 在提交前的固定守护清单里，且
       `scripts/visual-gate.mjs`（pre-commit D 组）在暂存命中 `e2e/visual/**` 时判「这次提交带不带
       像素判决」—— 但它判的是**基线的齐全/入库/平台登记**，不是「界面像素有没有变形」：

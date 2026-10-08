@@ -13,7 +13,7 @@ Usage:
   powershell -File scripts\quality-gate.ps1 -Mode test
   powershell -File scripts\quality-gate.ps1 -Mode all
 
-Mode: typecheck | lint | format | test | dependencyAudit | storybook | visual | e2e | all   (default all)
+Mode: typecheck | lint | format | test | dependencyAudit | storybook | visual | all   (default all)
 
 Note on `visual`: it is registered with Run=$false, i.e. NOT part of `all`.
 It starts a webServer plus a browser, and its verdict is only meaningful on a
@@ -21,13 +21,6 @@ machine that actually recorded the baselines (baseline filenames carry the
 platform). Run it explicitly:  -Mode visual
 It goes through scripts\pixel-run.mjs (the cross-platform half of the same
 action), which also runs the baseline-pairing judge in the same pass.
-
-Note on `e2e`: same story as `visual` - Run=$false, NOT part of `all`. It starts
-a webServer, a real browser and the fake ComfyUI, and its wall clock is in the
-ten-minute range. Run it explicitly:  -Mode e2e
-It goes through scripts\e2e-run.mjs, which records a daily freshness receipt
-(scripts\.e2e-freshness.json) when it passes - that receipt is what the
-pre-commit step "full e2e daily self-证" checks.
 
 Extend / maintain - how to add a new gate:
   Each gate is one entry in the $Blocks list below:
@@ -42,7 +35,7 @@ Extend / maintain - how to add a new gate:
     entry and it is enforced again.
 #>
 param(
-  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "storybook", "visual", "e2e", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "storybook", "visual", "all")]
   [string]$Mode = "all"
 )
 
@@ -127,13 +120,6 @@ $Blocks = @(
   # 否则「基线成套且入库」这条判据与像素档互不相干 —— 那正是 #6538809 的形态）。
   @{ Name = "visual"; Label = "Pixel regression (Playwright screenshots + baseline pairing judge)";
      Cmd = "node"; Args = @("scripts\pixel-run.mjs"); Run = $false }
-  # 全量 e2e（规范 §11.8）。与 quality-gate.mjs 的 GATES.e2e 同批同步。
-  # Run=$false：它要起 webServer + 真浏览器 + 假 ComfyUI，墙钟是十几分钟量级 ——
-  # 不属于 `all` 那一档，要 -Mode e2e 显式点名。入口是 scripts\e2e-run.mjs：
-  # 跑绿即记一条「每日自证」的凭证（scripts\.e2e-freshness.json），
-  # 而 pre-commit 的「全量 e2e 每日自证」那一步判的正是它。
-  @{ Name = "e2e"; Label = "Full E2E (Playwright, all specs) + daily freshness ledger";
-     Cmd = "node"; Args = @("scripts\e2e-run.mjs"); Run = $false }
 )
 
 # Which gates to run

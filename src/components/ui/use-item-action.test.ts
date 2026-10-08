@@ -49,6 +49,7 @@ describe("useItemAction", () => {
   it("同一条重复点只发一次请求（同步判重入，不等 setState）", async () => {
     const { result } = renderHook(() => useItemAction());
     const action = vi.fn(async () => {
+      // sleep-ok: mock 内部延迟：拿「接口慢一拍」暴露重入 / 竞态语义，不是等某个条件收敛。
       await new Promise((r) => setTimeout(r, 5));
       return "done";
     });

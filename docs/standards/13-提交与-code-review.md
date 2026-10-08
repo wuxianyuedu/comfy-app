@@ -175,14 +175,13 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/visual-gate.mjs              # 像素层门禁：**只在暂存命中 e2e/visual/** 或
    # `playwright.config.ts` 时**才做事 —— 判「本次要跑的清单里 `visual-baseline-pairing.test.ts`
    # 在不在」，不在就阻断（见 11 §11.8）。不另起 vite，清单与 C 组同源
-✅ node scripts/visual-freshness-gate.mjs    # 像素基线**每档都有主**：判「每一登记档都有一条
-   # 新鲜度记录，且写清谁 / 什么时候 / 按哪条命令复核的」（`scripts/.visual-baseline-freshness.json`）。
-   # 缺几张基线的档由 `PENDING_PLATFORMS` 顶着，不要求新鲜度记录 —— 两张表各管数量与时效。
-   # 钩子里**不跑像素**（起 webServer + 浏览器会与 A/B/C/D 抢资源），记账走 `pnpm check:visual`
-✅ node scripts/e2e-freshness-gate.mjs       # 全量 e2e 的**每日自证**：判「今天的第一次提交带没带
-   # 全量 e2e 的凭证」（`scripts/.e2e-freshness.json`）。当天已有凭证 ⇒ 零输出、放行；
-   # 跑绿即记账（`pnpm check:e2e`），或 `node scripts/e2e-run.mjs --skip "<理由>"` 记一条写清理由的
-   # 豁免。钩子里**不跑 e2e**（起 webServer + 真浏览器与 A/B/C/D 抢资源，墙钟十几分钟）
+✅ node scripts/visual-freshness-gate.mjs    # 每一档都有主（**两份同形的账**，见 11 §11.8）：像素基线
+   # （`scripts/.visual-baseline-freshness.json`）与**全量 e2e**（`scripts/.e2e-freshness.json`）——
+   # 判「每一档都有一条新鲜度记录，且写清谁 / 什么时候 / 按哪条命令复核的」。缺几张基线的档由
+   # `PENDING_PLATFORMS` 顶着，不要求新鲜度记录（两张表各管数量与时效）。全量 e2e 那一档
+   # **多判一条「今天自证过没有」**（每天只拦第一次提交；`--skip "<理由>"` 记一条豁免也能放行；
+   # 账文件还没入库时只提醒、不阻断）。钩子里**不跑**像素 / e2e（起 webServer + 浏览器会与
+   # A/B/C/D 抢资源），记账走 `pnpm check:visual` / `pnpm test:e2e`
 ✅ node scripts/run-affected-tests.mjs       # C 组：结构守护固定清单 + 本次改动
    # 牵扯到的用例，一次 vite（固定清单唯一出处是 `affected-tests.mjs` 里的
    # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
@@ -201,12 +200,15 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/storybook-check.mjs --changed # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮 + 故事面（见 16 §16.2.3.4 / §16.2.3.8）
 ✅ node scripts/check-comment-language.cjs   # 注释语言棘轮：注释一律中文，只有「纯 ASCII 模块」例外（见 12 §12.4.6；§12.4.6 早写着它在钩子里报红，而它一直不在，ISSUE #1451 补齐）
 ✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红（见下 13.5.12）
+✅ node scripts/check-declaration-readers.cjs # 声明 ⇄ 读者索引：本仓库每一种「声明」（判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 / 类型断言执行者 / 软断言语义 / 像素档…）都必须答出「谁在读它 + 执行者在哪」——读者丢了、执行者从门禁链里被摘掉、索引自己静默降级，都红（见 11 §11.23）
 ✅ node scripts/check-ts-duplicate-keys.cjs  # 同一属性被指定两次（编辑器报 ts(2783)、命令行不报）；存量 0，硬闸（见下 13.5.12）
 ✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
 ✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
 ✅ node scripts/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
+✅ node scripts/check-test-sleep.cjs        # 测试层裸 sleep 的净数棘轮：`await new Promise(r => setTimeout(r, N))` 不许涨（正当形态逐站点声明 `sleep-ok`；见 11 §11.14）
 ✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
 ✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
+✅ node scripts/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）
 ✅ node scripts/check-known-failed-stale.mjs  # 已知基线失败登记过期：登记项必须指向真实文件、且真的还红着（见 11 §11.12；清单为空时零耗时）
 ✅ node scripts/known-failed-selftest-gate.mjs # 上一条的自证档执行者：**只在暂存命中这套机制
    # （登记表 / 判据本体 / 钩子接线）时**才做事，跑一次 `--self-test`（红侧 + 绿侧对照组）。
@@ -399,7 +401,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | -------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 全量单测 + 覆盖率门槛（`pnpm run test:coverage`，3000+ 用例）        | 平台流水线的「全量单测 + 覆盖率」那一步      | **无自动执行者**。按需手动跑；提交门槛里只有固定清单 + 受影响用例（见 13.5 的 C 组与 13.5.8）                                                                                                   |
 | `pnpm run build` + `check-standalone-contents.cjs`（产物级护栏）     | 平台流水线的「构建」+「数产物」那两步        | **无自动执行者**。改构建 / 产物相关的东西后手动跑                                                                                                                                               |
-| E2E `playwright test --grep @critical` / 全量 `pnpm test:e2e`        | 平台流水线的「E2E @critical」那一步          | **按需 + 每天一次的自证**（ISSUE #1282 收尾）：入口 `pnpm check:e2e`，跑绿即记凭证；pre-commit D 组「全量 e2e 每日自证（凭证账）」判「今天的第一次提交带没带凭证」（§11.8.1）。钩子**不跑 e2e**（墙钟十几分钟） |
+| E2E `playwright test --grep @critical`                               | 平台流水线的「E2E @critical」那一步          | **无自动执行者**。按需手动跑                                                                                                                                                                    |
 | `db:push` 建库                                                       | 平台流水线的「建库」那一步                   | 只在手动跑 E2E 前需要                                                                                                                                                                           |
 | R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | 平台流水线里带 `--strict` 跑结构检查的那一步 | **已在本地钩子里**（D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」这一步带 `--strict`，ISSUE #1404 翻档；旧口径「本地只提醒」的前提「挂着 11 个存量」已不成立，基线现在 `total: 0`）               |
 | `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑；`pnpm doc:gen` 内部的第一步    | **已在本地钩子里**（D 组「文档引用与权威源一致」，ISSUE #1371 翻掉了旧的「手动档」签字）。旧口径是「改了文档后需手动跑」，而 AGENTS 规定的必跑口令是 `doc:render`（只渲染不校验），空档即由此来 |
@@ -439,9 +441,9 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 代码评审（语义判断）  | 在 PR / Issue 里 `@` 评审 NPC                                               | 不在机器清单里，是**人**的那一层 |
 | 全量单测 + 覆盖率门槛 | `@` NPC 跑 `pnpm run test:coverage`                                         | C 组（13.5.8）之外的欠账         |
 | 产物级护栏            | 改动构建 / 产物后 `@` 跑 `pnpm run build` + `check-standalone-contents.cjs` | 欠账条目 2                       |
-| E2E 关键流程          | `@` 跑 `pnpm exec playwright test --grep @critical`（先 `db:push`）         | 欠账条目 3/4                     |
+| E2E 关键流程          | `@` 跑 `pnpm exec playwright test --grep @critical`，或 `pnpm test:e2e --grep @critical`（先 `db:push`） | 欠账条目 3/4                     |
 | 像素回归（§11.8）     | `pnpm check:visual`（或 Windows 双击 `-Mode visual`）——见下面那条            | 不进钩子，但它有**边界明确的触发条件** |
-| 全量 e2e（§11.8.1）   | `pnpm check:e2e`（或 Windows 双击 `-Mode e2e`）——见下面那条                 | 不进钩子，但有**每天一次的自证**       |
+| 全量 E2E（§11.8）     | `pnpm test:e2e`（跑绿即记一笔新鲜度账，见下面那条）                          | 不进钩子，但有**每天首次的自证** |
 
 **像素回归这一行为什么与上面三条不同**（ISSUE #1282 的口径）：上面三条是「没有触发条件、
 只能按需召唤」，而像素层的触发条件一直是明确、可观测的 —— **改了会动到像素判决的东西**
@@ -451,24 +453,31 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 并由 `scripts/quality-gate.mjs` 的 `GATES.visual`（**`run: false`，不在 `all` 里**）与 `.ps1` 侧
 `-Mode visual` 提供跨平台入口。**「不进钩子」的判断没有变**：起 webServer + 浏览器与钩子里的
 A/B/C/D 抢资源，而且基线名带平台决定了它的结论只在录过基线的那台机器上成立。
-**钩子里唯一与它有关的一步是「像素基线每档都有主」**（`scripts/visual-freshness-gate.mjs`，
+**钩子里唯一与它有关的一步是「每档都有主」**（`scripts/visual-freshness-gate.mjs`，
 ISSUE #1282）：`--update-snapshots` 总是绿（把基线改成当次实况），所以「录了一版、此后没人再跑」
 这条路上原本一个判据都没有 —— 现场是入库的 `-linux.png` 有 4 张悄悄过期（与当次环境差 1 像素，
 文字整体下移一行），而没有任何东西记着这一档上次被跑绿是什么时候。现在每一登记档都必须有一条
 **新鲜度记录**（`scripts/.visual-baseline-freshness.json`），由 `pnpm check:visual` 跑绿即记。
 它**不跑像素**，只做「每档都有主」这件事（见 §11.8）。
 
-**全量 e2e 这一行为什么单独有一条「每日自证」**（ISSUE #1282 收尾的口径）：它与上面
-「没有触发条件、只能按需召唤」那三条同族 —— 全量 Playwright（含 `@critical`）没有
-「改了哪个目录就该跑」这种可观测的触发条件，而它的墙钟是十几分钟量级（起 webServer +
-真浏览器 + 假 ComfyUI），进钩子不现实。但它也不是「躺着等有人 `@`」：入库的 linux 档
-基线曾经被别线的产品改动（`#1327` 改导航顺序）作废、**躺了两天**，唯一的发现方式是
-「有人在 Issue 里点头让 NPC 跑一遍」。所以它的出路是**每天首次提交带一次凭证**：
-`pnpm check:e2e` 跑绿即往 `scripts/.e2e-freshness.json` 记一条，或
-`node scripts/e2e-run.mjs --skip "<理由>"` 记一条写明理由的豁免 —— pre-commit 的
-「全量 e2e 每日自证（凭证账）」那一步判的正是它（`scripts/e2e-freshness-gate.mjs`，
-口径与四条边界见 §11.8.1）。它与像素档**互补**：那一档守「基线有没有被换掉」，
-这一档守「功能链路上一次绿是什么时候」。
+**「全量 E2E」这一行为什么是新加的、以及它与像素那一行的关系**（ISSUE #1545 / #1547）：
+像素档的触发条件是**嵌套在全量 e2e 里**的 —— `playwright.config.ts` 的 `testMatch` 把
+`*.visual.spec.ts` 与普通 spec 收进**同一次** `playwright test`，而 `pnpm check:visual`
+只跑 `e2e/visual` 那半边。于是「像素档红了」有两种到达路径，两种此前都没有账：一条是
+`pnpm check:visual`（有人按触发面跑），另一条是 `pnpm test:e2e`（**人记得就跑**）。
+实测的形态正是后者 —— linux 档基线过期**两天**没被发现（`#1327` 改了导航顺序、基线未同批
+重录），而**没有任何东西守 `pnpm test:e2e` 上一次是绿的**；那次是靠人手动把这条入口跑了一遍
+才发现的。现在 `pnpm test:e2e` 走 `scripts/e2e-run.mjs`，跑绿即记 `scripts/.e2e-freshness.json`
+（与像素档**同形而不同键**，见 §13.5.12 的同款纪律与 §11.8 的两账对照表），并由钩子那一步
+在每一次提交里把它的日期打出来 —— 「这一档上次真跑绿是什么时候」从此是被看见的读数。
+
+**全量 e2e 那一行为什么还有「每天一次」这条判据**（ISSUE #1282）：像素档只要求「有主、写清」，
+把「多久没跑算旧」留给人看读数 —— 因为它的结论只在录过基线的那台机器上成立，时钟阻断会让所有人
+卡在一条只有少数人能解的账上。全量 e2e 不是那种情况：`pnpm test:e2e` **人人都跑得动**，
+它缺的只是「有人跑」。所以它按本地日历日多判一条 —— 当天的第一次提交必须伴着一次自证，
+出路有两条：`pnpm test:e2e` 跑绿即记，或 `node scripts/e2e-run.mjs --skip "<理由>"`
+记一条写明理由的豁免（占位理由被拦，豁免不是绕过）。账文件还没入库时**只提醒、不阻断**
+（平台侧 squash 合并不跑本地钩子，硬规则 6）。四条边界见 §11.8。
 
 这张表里**原本还有一行**「canonical 候选 → `@` 跑 `tw4-canonical-report.mjs`」，
 随 ISSUE #1451 摘掉：它们不再靠「人记得跑」，而是各带 `--check` 判定档与棘轮基线
@@ -1048,12 +1057,31 @@ C 组的固定清单里、每次提交都执行 —— 那是真的执行者，�
 **别为了让 `--check` 变绿去放宽基线** —— 棘轮是给「回潮就响」用的，`tests/tw4-canonical-ratchet.test.ts`
 把这条钉住（基线形状 + 判定档在位 + 台账登记，三向各一组）。
 
+**姊妹维度：声明 ⇄ 读者（`scripts/check-declaration-readers.cjs`，规范 §11.23）。**
+本节判的是**脚本**有没有执行者（`process.exit` 那条线）；它不覆盖另一种同样常见的
+声明 —— 「我在读某份数据 / 我声明了某个契约」。后者的索引是
+`scripts/.declaration-readers.json`：每一种声明都必须答出「谁在读它 + 执行者在哪」，
+读者丢了、执行者从门禁链里被摘掉、或索引自己静默降级，都红。两节维度不同、**互不替代**
+（本节判「判据在场 ≠ 判据在跑」里的**脚本**那一半，§11.23 判**声明**那一半）。
+
 **还有一条**：`scripts/check-ts-duplicate-keys.cjs` 此前是报告型
 （`scripts/report-ts-duplicate-keys.mjs`，0 处 `process.exit`）、**零判定档** ——
 而它判的正是「命令行全绿、编辑器标红」那一族（项目钉的 `typescript6` 对重复属性不报，
 editor 的 TS 服务报 `ts(2783)`），判据只能落在源码形态上。收成判定档的前提是
 **实测量产为 0**（落地时全仓 0 处；读数由它自己每次打印，见上），所以按**硬闸**落、不走棘轮，
 并接进 D 组「TS 重复属性判定」。`--with-tests` 不进判定档：测试里的重复多半是有意夹具。
+
+**同一族的第二条教训：两条同形的账必须能被分开**（ISSUE #1547）。`freshness-gate.mjs` 现在判
+**两份同形的账**（像素基线 / 全量 e2e，见 §11.8 的两账对照表），而「同形」这件事本身带来了一个
+新的静默失效面：把 e2e 的绿抄进像素档的账，**账面上完全正常** —— 日期合法、人名合法、命令是
+一条真命令，只有「这条记录由哪个跑法证出来」这一件事被搞错了。所以记录多了一栏 `trackedBy`，
+判据逐条比对它；两份账的读写（`readFreshnessLedgerAt` / `writeFreshness`）与记录形状
+（`freshnessRecord`）收在 `scripts/visual-baselines.mjs` **一份实现**里，两条跑法脚本只留
+「怎么算口径 / 什么时候不记」（§12.12）。
+
+**这条纪律与前一条同源**：`check-gate-executors.cjs` 判的是「判据有没有执行者」，
+而本族判的是「账有没有**说清自己是哪一档的账**」。两者都在收同一个形状的洞 ——
+**一份看着正常的记录，指的却是另一件事**。
 
 ### 13.6 分支与合并策略
 

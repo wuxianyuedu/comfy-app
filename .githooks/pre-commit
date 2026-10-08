@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(41 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(43 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -226,17 +226,11 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 不要求新鲜度记录 —— 两张表各管数量与时效）。**刻意不做墙钟阻断**：像素结论只在录过基线的
   # 那台机器上成立，win32 档的复核只能在那台 Windows 机器上做，拿时钟去阻断等于让所有人卡在
   # 一个只有少数人能解的账上。记账走 `pnpm check:visual`（跑绿即记），钩子里不跑像素。
-  run "像素基线每档都有主（新鲜度账）" node scripts/visual-freshness-gate.mjs
-  # 全量 e2e 的**每日自证**（规范 §11.8）。与上一步同族不同职：上一步判的是
-  # 「每一档像素基线都有主」，这一步判的是「今天的第一次提交带没带全量 e2e 的凭证」。
-  # 为什么它值得有一条判据：`pnpm test:e2e` 是 §13.5.4「按需召唤」那一层的成员，
-  # 而「按需」在它身上一直是**一句没有执行者的话** —— 现场是入库的 linux 档基线被
-  # 别线的产品改动作废、躺了两天，唯一的发现方式是「有人在 Issue 里点头让 NPC 手动跑」。
-  # 判据**每天只拦第一次提交**：当天已有凭证（`pnpm check:e2e` 跑绿即记，或
-  # `node scripts/e2e-run.mjs --skip "<理由>"` 记一条写清理由的豁免）⇒ 零输出、放行。
-  # 它刻意**不跑 e2e**：起 webServer + 真浏览器与钩子里的 A/B/C/D 抢资源，且墙钟是
-  # 十几分钟量级 —— 钩子只做它做得到的那件事（把「没人跑」变成「提交被拦下」）。
-  run "全量 e2e 每日自证（凭证账）" node scripts/e2e-freshness-gate.mjs
+  # 全量 e2e 那一档还多一条「**今天**自证过没有」（ISSUE #1282）：`pnpm test:e2e` 跑绿即记，
+  # 或 `node scripts/e2e-run.mjs --skip "<理由>"` 记一条写明理由的豁免（占位理由被拦）。
+  # 它按本地日历日只拦**当天的第一次**提交，当天已有凭证 ⇒ 零输出、放行；账文件还没入库时
+  # 只提醒、不阻断（平台侧 squash 合并不跑本地钩子）。
+  run "每档都有主（新鲜度账：像素档 + 全量 e2e 每日自证）" node scripts/visual-freshness-gate.mjs
   # 注释语言棘轮（规范 §12.4.6）：注释一律中文，只有「会被 next-code-frame 渲染到」
   # 的构建期模块例外（Next 的 code frame 按字节切串，命中多字节字符内部时 Rust 侧
   # 直接 panic 把 `next build` 打死，偏移敏感、报错指不出业务原因）。判据本身一直是对的，
@@ -252,7 +246,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   #   ① 「环境早退」——`if (typeof window !== "undefined") return;` 这类写法把用例的
   #      结论挂在**环境的一个全局默认值**上，于是换个默认档（或挪进另一个 project）
   #      之后它照样报绿、**一条断言都没跑**。这是「绿有两种含义」里坏的那一种
-  #      （同 §11.13.1 的「判据在场 ≠ 判据在跑」）。
+  #      （同 §11.23 的「声明 ⇄ 读者」）。
   #   ② 「目录档与文件头矛盾」——`vitest.config.ts` 的 `projects` 按目录声明了默认档，
   #      两者互相矛盾时说明有一处过时，让「挪目录 / 改档」这类改动留下痕迹。
   # 实测（四个变异各核一次）：把 `vi.stubGlobal("window", undefined)` 换成环境早退、
@@ -301,6 +295,15 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 照直觉传对象当 type 会被当成附件并抛 `Test attachment requires "body" or "path"`；
   # 而它**不改结论**（红照样红、退出码照样非零），所以替代不了「先摘掉再跑」那类机制。
   run "注解消费方（ctx.annotate）" node scripts/check-annotate-consumer.cjs
+  # `ctx.task.meta` 写下的数据**有读的人在**（规范 §11.22）。它是相邻那两条
+  # （`expectTypeOf` §11.20 / `annotate` §11.21）里**唯一**能从 CLI 那侧读到的通道：
+  # 实测自定义键原样落进 `--reporter=json` 的报告、**绿的用例也带**（`annotate` 只有
+  # 失败时可见），两个 reporter 还能同时给（人读的 text 照旧）。但门禁链跑 vitest
+  # 的参数里**没有** `--reporter=json`、没有 `--outputFile` —— 写了没人读，数据落进空气，
+  # 而表面上代码写得像「已经登记了」。判据因此只判一件事：有站点就必须登记消费方。
+  # ⚠️ 认的是 `task.meta` 这条**属性链**而不是裸 `meta`：本仓库另有大量 `<meta>` /
+  # `meta.name` 的写法，放宽会误报一片，而误报的判据活不过一次评审（§11.18.4）。
+  run "元数据消费方（task.meta）" node scripts/check-task-meta-consumer.cjs
   # 判据 ⇄ 执行者的双向判据（规范 §13.5.12 / ISSUE #1451 要求 2）：判定型脚本
   # （有 process.exit）无执行者即红 —— 除非登记在 scripts/.gate-executor-ledger.json
   # 的「按需召唤」台账里（含「为什么不能进钩子」+「谁按需跑」）；报告型（0 处
@@ -308,6 +311,17 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 立案现场就是 check-comment-language.cjs：头部自称供钩子调用、§12.4.6 也写着
   # 它在报红，而它一个执行者都没有 —— 文档说谎而全绿比漏报更难发现。
   run "判据执行者台账" node scripts/check-gate-executors.cjs
+  # 声明 ⇄ 读者的索引（规范 §11.23）。本仓库的「声明机制」是一个一个事故里长出来的
+  # （判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 /
+  # 类型断言执行者 / 软断言语义 / 像素档……），每种都自带台账与判据，而**没有任何一处
+  # 说得出「本仓库一共有哪些声明、各自的读者是谁」** —— 于是第 5 个人加一种新机制时
+  # 无处可查「我该登记什么」。这一步把 scripts/.declaration-readers.json 当成索引核：
+  #   ① 每一行点名的读者存在（脚本 / 用例丢了即红）；
+  #   ② 每一行的执行者真在门禁链里（钩子步骤被摘掉、用例离开 C 组固定清单，都红）；
+  #   ③ 索引自己不许静默降级（解析不出 / carriers 为空 / 行数低于地板即判失败）。
+  # 上一步（判据执行者台账）管的是**脚本**有没有执行者；这一步管的是**声明**有没有读者，
+  # 两者维度不同、互不替代（前者判 process.exit，后者判「读者 + 执行者在场」）。
+  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs
   # 同一属性被指定两次（编辑器报 ts(2783)、项目钉的 typescript6 命令行不报）：
   # 命令行全绿、编辑器标红，判据只能落在源码形态上。此前是报告型（0 处 process.exit），
   # 零判定档；收成判定档的前提是实测量产为 0（ISSUE #1451 要求 2）。
@@ -328,6 +342,17 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 两个实测的洞都只有它接得住：reporter 改名（用例喂夹具、看不到真命令）与
   # judgeStillFailing 恒放行（旧版自证只有红侧、判据恒放行时它照样绿）。详见脚本文件头。
   run "已知基线失败登记·自证（碰了这套机制才跑）" node scripts/known-failed-selftest-gate.mjs
+  # 测试层裸 sleep 的净数（规范 §11.14）。§11.14 早就把
+  # `await new Promise(r => setTimeout(r, N))` 定为第一层反模式，执行者写的是
+  # 「新增时由 review 拦下」，而实测这句话两头都落空：上一轮清掉的 6 个文件是**抽样**、
+  # 口径没有钉住，于是同一个数在两次盘点里从 20 变成 38；`grep -c test-sleep` 在
+  # 这个钩子里一直是 0、CI 又随 ISSUE #623 删除 —— 「review 拦下」是唯一的执行者，
+  # 而 review 是人、人会漏（同 §13.5.12 的立案现场：判据自称在跑、实际一个执行者都没有）。
+  # 判的是**净数不许涨**（棘轮，`scripts/.test-sleep-baseline.json`，只许降）而不是
+  # 「零容忍」—— 宏任务排空 / 判据自己的夹具 / mock 内部延迟 / 必须真挂钟这四类都是
+  # 正当形态，逐站点写一条 `// sleep-ok: <理由>` 登记豁免，不进棘轮。
+  # 成本实测：纯文本扫描 624 份用例约 0.25s、零网络、零子进程（照 §13.5.4 的成本判据）。
+  run "测试层裸 sleep 棘轮（§11.14）" node scripts/check-test-sleep.cjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────

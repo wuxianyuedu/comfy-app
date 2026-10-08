@@ -126,6 +126,23 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 台账解析不了）每一条都得有人钉住，而它们是「下一次有人挂注释」时才走得进的路径，
   // 所以必须进固定清单（与本次改动无关也照跑）。
   "tests/annotate-consumer-gate.test.ts",
+  // `ctx.task.meta` 写下的数据**有读的人在**（规范 §11.22）：它是相邻那两条里唯一
+  // 能从 CLI 那侧读到的通道（实测自定义键原样落进 `--reporter=json` 的报告、绿的用例
+  // 也带），但门禁链跑 vitest 没带 `--reporter=json` / `--outputFile` —— 写了没人读，
+  // 数据落进空气而表面上像「已经登记了」。判据只判一件事：有站点就必须登记消费方。
+  // 它同时是判据自己的门禁自测 —— 该放的（零站点 / 台账在场 / 无关的 meta 用法 /
+  // 夹具字符串里）与该拦的（台账缺 / 折行站点 / 台账解析不了）每一条都得有人钉住，
+  // 而它们是「下一次有人往报告里塞事实」时才走得进的路径，所以必须进固定清单。
+  "tests/task-meta-consumer-gate.test.ts",
+  // 测试层裸 sleep 的**使用面**（规范 §11.14）：它是「升级后把新写法当默认」这一档
+  // 里唯一**没有执行者**的一条 —— §11.14 写的执行者是「review 拦下」，而上一轮清掉的
+  // 6 个文件是抽样：同一个数在两次盘点里从 20 变成 38，不是「修完又长回来」，而是没有
+  // 判据在数（同族先例：check-comment-language.cjs 自称在钩子里跑、实际一个执行者都没有）。
+  // 它同时是判据自己的门禁自测 —— 该拦的（赌时间 / 空声明 / 棘轮上涨 / --update 放水）
+  // 与该放的（声明豁免 / 折行站点 / 夹具字符串 / 没被 await 的 Promise / 声明作用半径）
+  // 每一条都得有人钉住，而它们是「下一次有人在用例里等异步」时才走得进的路径，
+  // 所以必须进固定清单（与本次改动无关也照跑）。
+  "tests/test-sleep-gate.test.ts",
   // 配置的**共享项有没有真的落到两档上**（规范 §11.17.3）：这一档的口径在本仓库
   // 写反过一次（「`projects` 不继承声明方 `test` 的选项」），共享项因此被复制成
   // 两份 spread；本轮复现那次实测、订正口径并让共享项回到根 `test`。
@@ -280,15 +297,22 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `scripts/quality-gate.mjs` / `.ps1` 两份**文本**（那两份都自跑自退、import 不进来，
   // 所以 import 图追不到），与本次暂存改动无关也必须响，故进固定清单。
   "tests/pixel-run.test.ts",
-  // 「全量 e2e 每天首次提交要有凭证」（§11.8）。与 `visual-gate.mjs` 那两条同因：
-  // 它的触发面与三向判决都是**下一次新增/删**时才响的守卫，而它自己挂的钩子步骤
-  // 与 `pixel-run.mjs` 的按需档一样读的是两份**文本**（`quality-gate.mjs` /
-  // `.ps1` 自跑自退，import 不进来）—— import 图追不到，与本次暂存改动无关也必须响。
+  // 「全量 e2e 也有主」（ISSUE #1545 / #1547）：`pnpm test:e2e` 此前是「人记得就跑」，
+  // 而**像素档的触发条件恰好嵌套在它里面**（`playwright.config.ts` 的 `testMatch` 把
+  // `*.visual.spec.ts` 与普通 spec 收进同一次 `playwright test`，而 `pnpm check:visual`
+  // 只跑 `e2e/visual` 那半边）—— 实测的形态是 linux 档基线过期两天没被发现，靠人手动
+  // 跑一遍才照出来。现在 `pnpm test:e2e` 走 `scripts/e2e-run.mjs`，跑绿即记一条与像素档
+  // **同形而不同键**的账；这条判据钉的是记账语义、两条账不接错、以及钩子那一步真判了它。
+  // 它读的是 `scripts/e2e-run.mjs` / `scripts/visual-baselines.mjs` 与两处接线文本，
+  // import 图追不到，故进固定清单（与本次暂存改动无关也必须响）。
   "tests/e2e-run.test.ts",
-  // 上面那份的**判决本体**（`e2e-freshness-gate.mjs` 的 `runGate` 与凭证语义）。
-  // 同因进固定清单：把这一步从 D 组摘掉、或把「每天首次」放宽成「永远放行」的那次
-  // 改动，恰好落在 `.githooks/**` / 这两份脚本上 —— 跟着改动走等于专挑它不在的时机跑。
-  "tests/e2e-freshness.test.ts",
+  // 「声明 ⇄ 读者」索引的契约测试（规范 §11.23）：本仓库的声明机制是一个一个事故里
+  // 长出来的，每一种自带台账与判据，而没有任何一处说得出「一共有哪些声明、各自的读者
+  // 是谁」。这一步把 scripts/.declaration-readers.json 当索引核（读者存在 + 执行者在
+  // 门禁链里），它的判定口径（读者丢了 / 钩子步骤被摘掉 / 用例离开固定清单 / 索引静默
+  // 降级 / 字段不全 / id 重复）都是「下一次有人加一种新声明机制」时才走得进的路径 ——
+  // 只在被改到时才跑，等于专挑它不在的时机跑，故进固定清单。
+  "tests/declaration-readers-gate.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
