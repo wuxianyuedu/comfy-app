@@ -1008,6 +1008,17 @@
       `tests/pixel-run.test.ts` 按**入口**（`args` 里那个 `pixel-run.mjs`，不按门禁名）钉住
       两侧，并附「解析器不是空转」；解析器与 `ps1-consistency` 共用
       `tests/helpers/quality-gate-gates.ts`。口径见规范 11 §11.8。
+      **画布层注入的 handle id 全局口径**也补齐了（同批续，ISSUE #1381）：`flow-canvas.tsx`
+      的 `twoNodes` / `fanOut` / `mixedKinds` 三档一度**一条连线都没画出来** ——
+      场景把 handle 写成 `"1:model"` 这种「看着很像」的短序号，而真画布上两套口径
+      各管一侧（输出端 `` `out:${name}` ``（`OUTPUT_PORT_HANDLE_PREFIX`）、输入端
+      `ioKey`），第三种形状两侧都不匹配 → React Flow **静默丢弃整条边**（不报错、
+      控制台干净、构建与门禁全绿，真浏览器数 `.react-flow__edge` 量到 `0`）。
+      旧判据按**一张手写的真端口表**判，只认 `output` / `inputImage` 那对条件端口 ——
+      它守住了 `filledProject`，却完整漏掉这三档，因为后者的形状不在那张表的取值域里。
+      现在按**两侧现算交集**判（场景侧取边声明的 handle，渲染器侧取 `PortDemoNode`
+      实挂的 `<PortHandle id>`，锚在它的 `rows` 上取），且两侧都得非空。口径见
+      规范 16 §16.2.3.12。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。
