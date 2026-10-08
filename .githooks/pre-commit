@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(39 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(40 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -281,6 +281,16 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 判据还认折行站点（prettier 折开 `expectTypeOf(` 之后仍要被扫出来 ——
   # 只认行内字面量会整片漏出扫描面，同 §11.18.3.1 那条）。
   run "类型层断言的执行者（expectTypeOf）" node scripts/check-type-assertion-executor.cjs
+  # `ctx.annotate` 的**消费方在场**（规范 §11.21）。它写下的注释只有**失败时**
+  # 在 text reporter 里可见；`--reporter=json` 的产物里一个字都没有（实测逐键核过：
+  # 既无顶层 `annotations`、`assertionResults[].meta` 也是空的），唯一的读数通道是
+  # programmatic API `createVitest()` 的 `task.annotations()` —— 而门禁链跑 vitest
+  # 用的是 CLI spawn，两者天然不兼容。所以「挂一把没人读的注释」比不写更坏：
+  # 它让人以为这件事有人管。判据只做一件事：有站点就必须登记消费方。
+  # ⚠️ 顺带两条实测写在这里，免得下一个人重新踩：签名是 `(message, type?: string, attachment?)`，
+  # 照直觉传对象当 type 会被当成附件并抛 `Test attachment requires "body" or "path"`；
+  # 而它**不改结论**（红照样红、退出码照样非零），所以替代不了「先摘掉再跑」那类机制。
+  run "注解消费方（ctx.annotate）" node scripts/check-annotate-consumer.cjs
   # 判据 ⇄ 执行者的双向判据（规范 §13.5.12 / ISSUE #1451 要求 2）：判定型脚本
   # （有 process.exit）无执行者即红 —— 除非登记在 scripts/.gate-executor-ledger.json
   # 的「按需召唤」台账里（含「为什么不能进钩子」+「谁按需跑」）；报告型（0 处
