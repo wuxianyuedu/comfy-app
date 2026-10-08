@@ -286,9 +286,13 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     } as never);
     vi.mocked(findPidForMainPy).mockResolvedValue(null);
     const pending = ensureComfyUiReady({ manual: true, timeoutMs: 250 });
-    // 等一拍让 st.starting 落位。
-    await new Promise((r) => setTimeout(r, 60));
-    expect((await getComfyUiStatus()).starting).toBe(true);
+    /* 等 `starting` 落位 —— 条件轮询（规范 §11.14）而不是「睡一拍再断状态」：
+     * 落位即返回，落不了位时打出的是**当时的状态快照**而不是一句「超时」。 */
+    await expect
+      .poll(async () => (await getComfyUiStatus()).starting, {
+        message: "起手后 starting 应该落位为 true",
+      })
+      .toBe(true);
     const r = await pending;
     expect(r.ok).toBe(false);
     // 收尾后单飞锁释放：下一次调用能重新开始（不会永久卡在「启动中」）。
@@ -541,8 +545,12 @@ describe("getComfyUiStatus 的 TTL 缓存（#346）", () => {
     vi.mocked(findPidForMainPy).mockResolvedValue(null);
 
     const pending = ensureComfyUiReady({ manual: true, timeoutMs: 250 });
-    await new Promise((r) => setTimeout(r, 60));
-    expect((await getComfyUiStatus()).starting).toBe(true);
+    /* 同上：等 `starting` 落位用条件轮询（规范 §11.14）。 */
+    await expect
+      .poll(async () => (await getComfyUiStatus()).starting, {
+        message: "起手后 starting 应该落位为 true",
+      })
+      .toBe(true);
 
     await pending;
     expect((await getComfyUiStatus()).starting).toBe(false);

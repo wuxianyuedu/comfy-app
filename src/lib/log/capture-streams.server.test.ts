@@ -63,13 +63,21 @@ async function readCaptureWhenFilled(
   needle: string,
   timeoutMs = 3_000,
 ): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const text = readCapture(filePath);
-    if (text.includes(needle)) return text;
-    if (Date.now() > deadline) return text;
-    await new Promise((resolve) => setTimeout(resolve, 25));
+  /* 轮询用 `expect.poll`（规范 §11.14）：读的是同一份文件，条件成立即返回。
+   * 超时这一档**刻意不抛** —— 老版本的语义是「原样返回，让调用点的断言读成红」，
+   * 于是「压根没落盘」的报错里带着文件当时的内容（比一句「等超时」有用得多）；
+   * 所以这里包一层，把 poll 的失败还原成同一个返回值。 */
+  try {
+    await expect
+      .poll(() => readCapture(filePath).includes(needle), {
+        timeout: timeoutMs,
+        interval: 25,
+      })
+      .toBe(true);
+  } catch {
+    /* 超时：交给调用点断言，报错里就是文件当前的内容。 */
   }
+  return readCapture(filePath);
 }
 
 let originalStdoutWrite: typeof process.stdout.write;
