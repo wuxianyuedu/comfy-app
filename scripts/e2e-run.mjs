@@ -23,10 +23,16 @@
  * 它替代不了「现在这一跑绿不绿」，它的价值是把 `pnpm test:e2e` 从「人记得就跑」
  * 变成一条**每次提交都能被看见的读数**。
  *
+ * 这一档还多一条**每日自证**（ISSUE #1282）：`pnpm test:e2e` 跑绿即记，或
+ * `--skip "<理由>"` 记一条写明理由的豁免 —— 两者都能让「**当天的第一次提交**带没带
+ * 一次凭证」那条判据放行（`visual-freshness-gate.mjs` 的 `track.daily`）。
+ * 豁免不是绕过：它留下的是一条能被复核的事实（占位词与过短的理由都被拦）。
+ *
  * 用法：
  *   node scripts/e2e-run.mjs --dry-run   只打印本次会起什么（无副作用）
  *   node scripts/e2e-run.mjs             跑全量 e2e，绿了记一笔账
  *   node scripts/e2e-run.mjs --grep @critical   传给 Playwright 的额外参数（透传）
+ *   node scripts/e2e-run.mjs --skip "<理由>"     不跑，记一条写明理由的豁免账
  *
  * **不落盘**：本档不产基线（那是像素档的 `--update` 档），所以这里没有「录」这一路。
  */
@@ -37,7 +43,12 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { freshnessTrack, writeFreshness } from "./visual-baselines.mjs";
+import {
+  freshnessTrack,
+  isUsableSkipReason,
+  writeFreshness,
+  writeSkipRecord,
+} from "./visual-baselines.mjs";
 import { gitUser } from "./pixel-run.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -108,11 +119,60 @@ export function shouldRecord({ exitCode, dryRun }) {
 }
 
 /**
+ * 从 argv 里读出「这次是不是记一条豁免」—— 抽成纯入口，好让「给了 `--skip` 就不再起
+ * Playwright」与「理由不合用就退回去」这两条边界能被真跑一次。
+ *
+ * 三条形状：
+ *   · 没有 `--skip` ⇒ `{skipped: false}`；
+ *   · `--skip <可用理由>` ⇒ `{skipped: true, reason}`；
+ *   · `--skip <缺失 | 占位 | 过短>` ⇒ `{skipped: true, reason: null}`（调用方按退出码 2 处理）。
+ *
+ * @param {string[]} argv
+ * @returns {{skipped: boolean, reason: string | null}}
+ */
+export function parseSkip(argv) {
+  const index = argv.indexOf("--skip");
+  if (index === -1) return { skipped: false, reason: null };
+  const raw = argv[index + 1];
+  return {
+    skipped: true,
+    reason: isUsableSkipReason(raw) ? String(raw).trim() : null,
+  };
+}
+
+/**
  * @param {string[]} argv
  * @returns {number}
  */
 function main(argv) {
   const dryRun = argv.includes("--dry-run");
+  /* `--skip "<理由>"` 是**另一条出路**，不是绕过：它写的是一条有人回答过的账
+   * （理由要能被复核），判据照样放行。两者都不是「什么都不做」。
+   * 与 `--dry-run` 互斥地先处理：给了 `--skip` 就不该再去起 Playwright。 */
+  const skip = parseSkip(argv);
+  if (skip.skipped) {
+    if (skip.reason === null) {
+      const raw = argv[argv.indexOf("--skip") + 1];
+      process.stderr.write(
+        `[e2e-run] ✗ 豁免理由（"${String(raw ?? "").trim()}"）不算「有人回答过」—— ` +
+          "写清这次为什么不跑（占位词与过短的理由都被拦）。\n" +
+          '        用法：node scripts/e2e-run.mjs --skip "本次只改文档，不动功能链路"\n',
+      );
+      return 2;
+    }
+    if (dryRun) {
+      process.stdout.write(`[e2e-run] 本次不跑、只记豁免：${skip.reason}\n`);
+      return 0;
+    }
+    const { note } = writeSkipRecord({
+      root: ROOT,
+      kind: "e2e",
+      who: gitUser(TRACK.key),
+      reason: skip.reason,
+    });
+    process.stdout.write(`[e2e-run] ✓ 已记一条豁免\n[e2e-run] ${note}\n`);
+    return 0;
+  }
   const extra = argv.filter((a) => a !== "--dry-run");
   const run = planRun(extra);
   if (dryRun) {
