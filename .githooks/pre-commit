@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(41 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(42 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -242,7 +242,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   #   ① 「环境早退」——`if (typeof window !== "undefined") return;` 这类写法把用例的
   #      结论挂在**环境的一个全局默认值**上，于是换个默认档（或挪进另一个 project）
   #      之后它照样报绿、**一条断言都没跑**。这是「绿有两种含义」里坏的那一种
-  #      （同 §11.13.1 的「判据在场 ≠ 判据在跑」）。
+  #      （同 §11.23 的「声明 ⇄ 读者」）。
   #   ② 「目录档与文件头矛盾」——`vitest.config.ts` 的 `projects` 按目录声明了默认档，
   #      两者互相矛盾时说明有一处过时，让「挪目录 / 改档」这类改动留下痕迹。
   # 实测（四个变异各核一次）：把 `vi.stubGlobal("window", undefined)` 换成环境早退、
@@ -307,6 +307,17 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 立案现场就是 check-comment-language.cjs：头部自称供钩子调用、§12.4.6 也写着
   # 它在报红，而它一个执行者都没有 —— 文档说谎而全绿比漏报更难发现。
   run "判据执行者台账" node scripts/check-gate-executors.cjs
+  # 声明 ⇄ 读者的索引（规范 §11.23）。本仓库的「声明机制」是一个一个事故里长出来的
+  # （判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 /
+  # 类型断言执行者 / 软断言语义 / 像素档……），每种都自带台账与判据，而**没有任何一处
+  # 说得出「本仓库一共有哪些声明、各自的读者是谁」** —— 于是第 5 个人加一种新机制时
+  # 无处可查「我该登记什么」。这一步把 scripts/.declaration-readers.json 当成索引核：
+  #   ① 每一行点名的读者存在（脚本 / 用例丢了即红）；
+  #   ② 每一行的执行者真在门禁链里（钩子步骤被摘掉、用例离开 C 组固定清单，都红）；
+  #   ③ 索引自己不许静默降级（解析不出 / carriers 为空 / 行数低于地板即判失败）。
+  # 上一步（判据执行者台账）管的是**脚本**有没有执行者；这一步管的是**声明**有没有读者，
+  # 两者维度不同、互不替代（前者判 process.exit，后者判「读者 + 执行者在场」）。
+  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs
   # 同一属性被指定两次（编辑器报 ts(2783)、项目钉的 typescript6 命令行不报）：
   # 命令行全绿、编辑器标红，判据只能落在源码形态上。此前是报告型（0 处 process.exit），
   # 零判定档；收成判定档的前提是实测量产为 0（ISSUE #1451 要求 2）。

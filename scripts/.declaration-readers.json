@@ -1,0 +1,148 @@
+{
+  "why": "声明载体 ⇄ 读者 ⇄ 执行者的索引（规范 §11.23）。新增一种「声明」机制时同批加一行：要么答出「谁在读它 + 执行者是谁、在哪」，要么承认它没有读者（那它就不该存在）。判据 scripts/check-declaration-readers.cjs 核：读者脚本/用例文件存在、执行者真在门禁链里，双向。",
+  "carriers": [
+    {
+      "id": "declaration-index-itself",
+      "name": "本索引自己（声明 ⇄ 读者）在位",
+      "declaredAt": "scripts/.declaration-readers.json 与规范 §11.23.3 的那张表",
+      "reader": "scripts/check-declaration-readers.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "声明 ⇄ 读者索引"
+      },
+      "section": "11.23"
+    },
+    {
+      "id": "gate-executor-claim",
+      "name": "判据自称在跑 / 按需召唤台账",
+      "declaredAt": "脚本头注释、scripts/.gate-executor-ledger.json",
+      "reader": "scripts/check-gate-executors.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "判据执行者台账"
+      },
+      "section": "13.5.12"
+    },
+    {
+      "id": "conditional-skip",
+      "name": "条件性 skip 登记",
+      "declaredAt": "tests/conditional-skip-registry.test.ts 的 REGISTERED",
+      "reader": "tests/conditional-skip-registry.test.ts",
+      "executor": {
+        "kind": "fixed-test",
+        "file": "tests/conditional-skip-registry.test.ts"
+      },
+      "section": "11.12"
+    },
+    {
+      "id": "known-failed",
+      "name": "已知基线失败登记",
+      "declaredAt": "KNOWN_FAILED_FILES（scripts/quality-gate-shared.mjs）",
+      "reader": "scripts/check-known-failed-stale.mjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "已知基线失败登记过期（清单为空时零耗时）"
+      },
+      "section": "11.12"
+    },
+    {
+      "id": "known-failed-selftest",
+      "name": "已知基线失败登记机制的自证",
+      "declaredAt": "scripts/check-known-failed-stale.mjs --self-test",
+      "reader": "scripts/known-failed-selftest-gate.mjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "已知基线失败登记·自证（碰了这套机制才跑）"
+      },
+      "section": "11.12.1"
+    },
+    {
+      "id": "test-environment",
+      "name": "用例的环境归属",
+      "declaredAt": "文件头 @vitest-environment + vitest.config.ts 的 projects",
+      "reader": "scripts/check-test-environment.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "用例环境档（环境早退 / 目录档矛盾 / 冗余文件头）"
+      },
+      "section": "11.17"
+    },
+    {
+      "id": "test-concurrency",
+      "name": "并发档的隔离声明",
+      "declaredAt": "用例文件内的 `// 并发档：…`",
+      "reader": "scripts/check-test-concurrency.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "并发档位用法（it.concurrent）"
+      },
+      "section": "11.19"
+    },
+    {
+      "id": "expect-type-of",
+      "name": "类型层断言的执行者",
+      "declaredAt": "用例里的 expectTypeOf / assertType 站点",
+      "reader": "scripts/check-type-assertion-executor.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "类型层断言的执行者（expectTypeOf）"
+      },
+      "section": "11.20"
+    },
+    {
+      "id": "annotate-consumer",
+      "name": "ctx.annotate 的消费方在场",
+      "declaredAt": "用例里的 ctx.annotate(...) 站点 + scripts/.annotate-consumers.json",
+      "reader": "scripts/check-annotate-consumer.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "注解消费方（ctx.annotate）"
+      },
+      "section": "11.21"
+    },
+    {
+      "id": "task-meta-consumer",
+      "name": "ctx.task.meta 的消费方在场",
+      "declaredAt": "用例里的 task.meta 属性链站点 + scripts/.task-meta-consumers.json",
+      "reader": "scripts/check-task-meta-consumer.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "元数据消费方（task.meta）"
+      },
+      "section": "11.22"
+    },
+    {
+      "id": "soft-assertion",
+      "name": "软断言的批量语义",
+      "declaredAt": "用例里的 expect.soft(...) 站点",
+      "reader": "scripts/check-soft-assertions.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "软断言用在循环体里（expect.soft）"
+      },
+      "section": "11.18"
+    },
+    {
+      "id": "visual-baseline-freshness",
+      "name": "像素基线与全量 e2e 的档与新鲜度",
+      "declaredAt": "SUPPORTED_PLATFORMS / PENDING_PLATFORMS / scripts/.visual-baseline-freshness.json / scripts/.e2e-freshness.json（FRESHNESS_TRACKS）",
+      "reader": "scripts/visual-freshness-gate.mjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "每档都有主（新鲜度账：像素档 + 全量 e2e）"
+      },
+      "section": "11.8"
+    },
+    {
+      "id": "pixel-out-of-check-all",
+      "name": "像素档不进 check:all",
+      "declaredAt": "quality-gate.mjs 的 run: false + quality-gate.ps1 的 Run = $false",
+      "reader": "tests/pixel-run.test.ts",
+      "executor": {
+        "kind": "fixed-test",
+        "file": "tests/pixel-run.test.ts"
+      },
+      "section": "11.8"
+    }
+  ]
+}

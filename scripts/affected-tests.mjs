@@ -297,6 +297,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 它读的是 `scripts/e2e-run.mjs` / `scripts/visual-baselines.mjs` 与两处接线文本，
   // import 图追不到，故进固定清单（与本次暂存改动无关也必须响）。
   "tests/e2e-run.test.ts",
+  // 「声明 ⇄ 读者」索引的契约测试（规范 §11.23）：本仓库的声明机制是一个一个事故里
+  // 长出来的，每一种自带台账与判据，而没有任何一处说得出「一共有哪些声明、各自的读者
+  // 是谁」。这一步把 scripts/.declaration-readers.json 当索引核（读者存在 + 执行者在
+  // 门禁链里），它的判定口径（读者丢了 / 钩子步骤被摘掉 / 用例离开固定清单 / 索引静默
+  // 降级 / 字段不全 / id 重复）都是「下一次有人加一种新声明机制」时才走得进的路径 ——
+  // 只在被改到时才跑，等于专挑它不在的时机跑，故进固定清单。
+  "tests/declaration-readers-gate.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
