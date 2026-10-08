@@ -68,8 +68,23 @@ export const CANVAS_SCENES = {
   /**
    * 两张业务节点 + 一条连线：端点几何、node 序号、连线路径三件都在场。
    *
-   * 节点 id 用 `"1"` / `"2"` 这样的**纯数字串**，因为真画布就是这么发的
-   *（`nodeSeqOf()` 把下标 + 1 当短序号，而端点 id 形如 `"1:images"`）。
+   * ## 边引用的是 handle id，不是节点 id
+   *
+   * 节点 id 用 `"1"` / `"2"` 这样的**纯数字串**（真画布由 `nodeSeqOf()` 发），
+   * 而 `sourceHandle` / `targetHandle` 是**另一件事** —— 它们是 React Flow 在
+   * handleBounds 里找锚点的键，两套口径由真画布各管一侧：
+   *
+   *  · **输出端** → `` `out:${name}` ``（常量 `OUTPUT_PORT_HANDLE_PREFIX`）；
+   *  · **输入端** → `ioKey`（工作流节点动态表单里那一份端口键）。
+   *
+   * 写错时 React Flow **静默丢弃整条边** —— 不报错、控制台干净、画布只是少几条线。
+   * 这份文件曾经把两侧都写成 `"1:model"` 这种「看着很像」的短序号，于是三个带边的
+   * 场景（含 `fanOut` 那句「扇出三条线」）在画布上**一条线都没有**，而
+   * tsc / eslint / 构建 / 既有门禁全绿 —— 是逐 story 数 DOM 上的
+   * `.react-flow__edge` 才量出来的。判据见 `tests/storybook-injection-layers.test.ts`。
+   *
+   * 消费方若**不传 `nodeTypes`**（节点走 React Flow 默认外观，身上没有业务端口），
+   * 这一档就必须 `edges: []` —— 否则边引用的 handle 谁也不挂。
    */
   twoNodes: {
     about: "两张业务节点 + 一条连线（端点几何与节点序号的真实现场）",
@@ -81,7 +96,7 @@ export const CANVAS_SCENES = {
       },
       {
         id: "2",
-        position: { x: 420, y: 200 },
+        position: { x: 480, y: 240 },
         data: { label: "K采样器" },
       },
     ],
@@ -90,8 +105,8 @@ export const CANVAS_SCENES = {
         id: "e1-2",
         source: "1",
         target: "2",
-        sourceHandle: "1:model",
-        targetHandle: "2:model",
+        sourceHandle: "out:model",
+        targetHandle: "model",
       },
     ],
     viewport: { x: 0, y: 0, zoom: 1 },
@@ -100,41 +115,44 @@ export const CANVAS_SCENES = {
    * 一个源节点**扇出**三条连线 —— 多端点几何与连线路径分叉的现场。
    *
    * `twoNodes` 只有一条线，看不出「同一节点的多个源端点各自出线」这件事：
-   * 端点 id 形如 `"1:images"` / `"1:model"`，而连线从哪个 handle 出、落在
-   * 目标哪个 handle 上，是 React Flow 按 handle id 算的路径 —— 假画布给不出。
+   * 一个节点上挂着多个 `out:<name>` 输出端口，而连线从哪个 handle 出、落在目标
+   * 哪个 handle 上，是 React Flow 按 **handle id** 算的路径 —— 假画布给不出。
+   *
+   * 这一档也是上面那处缺陷的证据现场：三条边曾经因为 handle 名写错而**一条都不画**，
+   * 而场景名与 `about` 一直在说「扇出三条线」。
    */
   fanOut: {
     about: "一个源节点扇出三条连线到三个目标（多端点几何 + 连线路径分叉）",
     nodes: [
-      { id: "1", position: { x: 40, y: 220 }, data: { label: "加载检查点" } },
-      { id: "2", position: { x: 420, y: 60 }, data: { label: "K采样器" } },
-      { id: "3", position: { x: 420, y: 240 }, data: { label: "VAE 解码" } },
-      { id: "4", position: { x: 420, y: 420 }, data: { label: "保存图像" } },
+      { id: "1", position: { x: 40, y: 160 }, data: { label: "加载检查点" } },
+      { id: "2", position: { x: 480, y: -60 }, data: { label: "K采样器" } },
+      { id: "3", position: { x: 480, y: 160 }, data: { label: "VAE 解码" } },
+      { id: "4", position: { x: 480, y: 380 }, data: { label: "保存图像" } },
     ],
     edges: [
       {
         id: "e1-2",
         source: "1",
         target: "2",
-        sourceHandle: "1:model",
-        targetHandle: "2:model",
+        sourceHandle: "out:model",
+        targetHandle: "model",
       },
       {
         id: "e1-3",
         source: "1",
         target: "3",
-        sourceHandle: "1:vae",
-        targetHandle: "3:vae",
+        sourceHandle: "out:vae",
+        targetHandle: "vae",
       },
       {
         id: "e1-4",
         source: "1",
         target: "4",
-        sourceHandle: "1:clip",
-        targetHandle: "4:images",
+        sourceHandle: "out:clip",
+        targetHandle: "clip",
       },
     ],
-    viewport: { x: 0, y: 0, zoom: 0.85 },
+    viewport: { x: 60, y: 150, zoom: 0.72 },
   },
   /**
    * 各 kind 的节点混排 —— 端点上**五档类型色**同时在场的样子。
@@ -147,32 +165,32 @@ export const CANVAS_SCENES = {
     about: "八种业务节点混排（端点类型色与节点类型章并排的分辨率）",
     nodes: [
       { id: "1", position: { x: 20, y: 20 }, data: { label: "生图" } },
-      { id: "2", position: { x: 300, y: 20 }, data: { label: "生视频" } },
-      { id: "3", position: { x: 580, y: 20 }, data: { label: "生成剧本" } },
-      { id: "4", position: { x: 20, y: 240 }, data: { label: "Agent 模式" } },
+      { id: "2", position: { x: 410, y: 20 }, data: { label: "生视频" } },
+      { id: "3", position: { x: 800, y: 20 }, data: { label: "生成剧本" } },
+      { id: "4", position: { x: 20, y: 320 }, data: { label: "Agent 模式" } },
       {
         id: "5",
-        position: { x: 300, y: 240 },
+        position: { x: 410, y: 320 },
         data: { label: "自定义工作流" },
       },
-      { id: "6", position: { x: 580, y: 240 }, data: { label: "文本" } },
-      { id: "7", position: { x: 20, y: 460 }, data: { label: "图片" } },
-      { id: "8", position: { x: 300, y: 460 }, data: { label: "视频" } },
+      { id: "6", position: { x: 800, y: 320 }, data: { label: "文本" } },
+      { id: "7", position: { x: 20, y: 620 }, data: { label: "图片" } },
+      { id: "8", position: { x: 410, y: 620 }, data: { label: "视频" } },
     ],
     edges: [
       {
         id: "e1-2",
         source: "1",
         target: "2",
-        sourceHandle: "1:images",
-        targetHandle: "2:images",
+        sourceHandle: "out:images",
+        targetHandle: "images",
       },
       {
         id: "e3-4",
         source: "3",
         target: "4",
-        sourceHandle: "3:text",
-        targetHandle: "4:text",
+        sourceHandle: "out:text",
+        targetHandle: "text",
       },
     ],
     viewport: { x: 0, y: 0, zoom: 0.6 },
@@ -194,15 +212,12 @@ export const CANVAS_SCENES = {
       },
       data: { label: `节点 ${index + 1}` },
     })),
-    edges: [
-      {
-        id: "edense",
-        source: "1",
-        target: "36",
-        sourceHandle: "1:images",
-        targetHandle: "36:images",
-      },
-    ],
+    /* 这一档摆的是**装饰层**（网格 / 标尺 / 缩放条）在满负载下的样子，
+       消费方 `WorkflowCanvasDecorations.stories.tsx` **不传 `nodeTypes`** ——
+       节点走 React Flow 的默认外观，身上没有业务端口。所以这里刻意**不放边**：
+       边只会引用一个本档不存在的 handle，被 React Flow 静默丢弃，
+       留着就是「场景说有连线、画布上没有」的那种假形态。 */
+    edges: [],
     viewport: { x: 0, y: 0, zoom: 0.5 },
   },
   /** 放大档：端点圆点、类型章、网格线在主参考线尺度上的那一档。 */
