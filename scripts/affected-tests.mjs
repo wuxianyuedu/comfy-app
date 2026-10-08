@@ -109,6 +109,15 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 折行站点）每一条都得有人钉住，而它们是「下一次有人想给用例加并发」时才
   // 走得进的路径，所以必须进固定清单（与本次改动无关也照跑）。
   "tests/test-concurrency-gate.test.ts",
+  // 类型层断言（`expectTypeOf` / `assertType`）的**执行者在场**（规范 §11.20）：
+  // 这两者在 vitest 里**没有牙**（实测 `expectTypeOf<string>().toEqualTypeOf<number>()`
+  // 跑 `vitest run` 是 Tests 1 passed），唯一执行者是 `tsc --noEmit`，而 tsc 只按
+  // `tsconfig.json` 的 include 面收文件。所以判据钉的是「站点落在 include 面里吗」——
+  // 站点一旦出界，全仓断言**同时变装饰品且没有任何一处报错**（实测收窄 include 之后
+  // tsc 与 vitest 双双报绿）。它同时是判据自己的门禁自测 —— 该放的（`.test-d.ts` /
+  // 零站点 / 夹具字符串里）与该拦的（出界 / 折行站点 / 解析失败）每一条都得有人钉住，
+  // 而它们是「下一次有人加类型层断言」时才走得进的路径，所以必须进固定清单。
+  "tests/type-assertion-gate.test.ts",
   // 配置的**共享项有没有真的落到两档上**（规范 §11.17.3）：这一档的口径在本仓库
   // 写反过一次（「`projects` 不继承声明方 `test` 的选项」），共享项因此被复制成
   // 两份 spread；本轮复现那次实测、订正口径并让共享项回到根 `test`。
