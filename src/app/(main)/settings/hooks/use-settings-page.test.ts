@@ -346,7 +346,8 @@ function mockSessionsFor(
       }
       return HttpResponse.json({
         sessions,
-        selectedId: sessions[sessions.length - 1]?.id ?? null,
+        /* 契约：`sessions` 新→旧，缺省选中第一项（最新那一份）。 */
+        selectedId: sessions[0]?.id ?? null,
         content: payload.content,
         truncated: payload.truncated ?? false,
         windowed: payload.windowed ?? false,
@@ -971,9 +972,10 @@ describe("useSettingsPage", () => {
   /* 用户反馈第 2 条：多次启动的日志不能混在一起 —— 下拉切到某一次启动时，
    * 请求要带上那次的会话 id，界面只显示那一次。 */
   it("切换启动会话：按会话 id 重新拉取，并把选中项与截断提示同步到状态", async () => {
+    /* 契约：新→旧（第一项是最新那一份）。 */
     const sessions = [
-      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: null },
       { id: "40", title: "▶ ComfyUI 启动会话", startedAt: null },
+      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: null },
     ];
     server.use(
       http.get("*/api/logs/sessions", ({ request }) => {
@@ -1021,7 +1023,8 @@ describe("useSettingsPage", () => {
       http.get("*/api/logs/sessions", ({ request }) => {
         const url = new URL(request.url);
         const session = url.searchParams.get("session");
-        const latestId = sessions[sessions.length - 1]!.id;
+        /* 契约：新→旧，第一项即最新。 */
+        const latestId = sessions[0]!.id;
         const selectedId = sessions.some((s) => s.id === session)
           ? session
           : latestId;
@@ -1044,9 +1047,10 @@ describe("useSettingsPage", () => {
       expect(result.current.comfyLog.text).toBe("第一次启动的输出"),
     );
 
+    /* 新→旧：新一轮启动排在**最上面**（与真实端点同序）。 */
     sessions = [
-      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
       { id: "40", title: "▶ ComfyUI 启动会话", startedAt: 2_000 },
+      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
     ];
     await act(async () => {
       await result.current.comfyLog.refresh();
@@ -1062,9 +1066,10 @@ describe("useSettingsPage", () => {
   });
 
   it("没有新启动时保持用户选中的旧会话，不因轮询被顶回最新", async () => {
+    /* 契约：新→旧（第一项是最新那一份）。 */
     const sessions = [
-      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
       { id: "40", title: "▶ ComfyUI 启动会话", startedAt: 2_000 },
+      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
     ];
     server.use(
       http.get("*/api/logs/sessions", ({ request }) => {
