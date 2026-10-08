@@ -50,7 +50,12 @@ import {
 } from "./status";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { sleep } from "~/lib/with-timeout";
-import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log/log-paths";
+import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
+import {
+  openRuntimeLogWriter,
+  pruneRuntimeLogFiles,
+  type RuntimeLogWriter,
+} from "~/lib/log/runtime-log-pack.server";
 import {
   describeStaleSession,
   type ComfyExitReport,
@@ -59,7 +64,6 @@ import {
 import { formatLocalStamp } from "~/lib/time-format";
 import { COMFY_STOP_PROBE } from "../retry-policy";
 import { noteComfyExit } from "./liveness-signal";
-import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import {
   decideEnsureLaunch,
   decideStop,
@@ -286,9 +290,10 @@ export async function stopComfyUiProcess(): Promise<{
   if (outcome.ok) {
     appendRuntimeLog("[stop] ComfyUI 已关闭");
     markComfyNotRunningProven();
-    // 非 bound（keepAlive / 接管场景）没有 child.on("exit") 会落会话结束
-    // 横幅——这里补一条，保持「每次会话都有 start/end 分隔」的一致性。
-    if (!child) appendSessionBanner("end", "■ ComfyUI 已手动关闭");
+    /* 非 bound（keepAlive / 接管场景）没有 `child.on("exit")` 会落退出行 ——
+     * 这里补一条，让每一份启动日志都有自己的收尾（文件里读到的最后一行就是
+     * 「为什么结束」）。 */
+    if (!child) appendRuntimeLog("■ ComfyUI 已手动关闭");
     clearComfyStopping();
     return outcome;
   }
@@ -639,35 +644,33 @@ function warnStaleComfySession(
   if (stale !== null) note(`⚠ ${stale}`);
 }
 
-function appendRuntimeLog(line: string): void {
-  try {
-    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
-    fs.appendFileSync(
-      COMFYUI_RUNTIME_LOG,
-      `${localTimestamp()} ${line}\n`,
-      "utf-8",
-    );
-  } catch {
-    /* 日志失败不影响主流程 */
-  }
-}
+/** 本次启动的 runtime 日志写入器（`comfyui-runtime-<时刻>.log`）。
+ *
+ * 一次启动一份文件（ISSUE #1326）：句柄**跟着这一次启动走**，启动时由
+ * `beginRuntimeSession()` 换一份新的，因此「这个文件属于哪一次启动」不再需要
+ * 靠行时刻或横幅去推断 —— 它就是文件本身。
+ *
+ * 为 null（还没启动过任何一次）时写日志静默跳过：状态行 / 启动流程本来就会
+ * 各自 `note()` 到 logger 与面板，缺一份文件不该把流程带崩。 */
+let runtimeWriter: RuntimeLogWriter | null = null;
 
 /**
- * 在 comfyui-runtime.log 写一条会话边界横幅。
- * comfyui-runtime.log 是追加不轮转的，多次启动的日志会一直累积——新一次
- * 启动的 `[spawn]`/`[out]` 行接在上次启动结尾后面，日志面板里难以分辨
- * 会话边界。横幅用 box 字符 + ANSI 亮色（面板解析后渲染成高亮）划出清晰的
- * 分隔线，**两侧各留一个空行**，因此直接看文件的用户也能一眼分出「本次从哪
- * 开始」（唯一实现见 `src/lib/session-banner.server.ts`）。
+ * 开一次启动的日志：轮转旧文件 → 换上新的一份 → 落首行标题。
  *
- * 横幅正文**不带时刻**：时刻只留在每条行首（`appendRuntimeLog` 的统一口径），
- * 横幅里再写一遍会与紧随其后的行首时刻只差 1 秒，用户把两条读成一个，于是
- * 「ComfyUI 明明起来并写了新行，看着却像没有新增」（ISSUE #346 的同源困惑）。
- * @param kind start（绿）= 新会话开始；end（黄）= 会话结束
- * @param title 横幅中间的信息行（会话说明 / exit code 等，不含时刻）
+ * **必须在写第一条业务行之前调用**（`runEnsureLaunch` 拉起前那一步）：
+ * 顺序反了会把本次的头几行写进上一次的文件里，而那正是「日志看起来少了一次」
+ * 的现场（没有报错、只是归属错了）。同秒内重复启动由写入器自己分叉
+ * （`-2` / `-3`），不会覆盖前一次的现场。
  */
-function appendSessionBanner(kind: "start" | "end", title: string): void {
-  appendSessionBannerToFile(COMFYUI_RUNTIME_LOG, kind, title);
+export function beginRuntimeSession(at: Date = new Date()): string {
+  pruneRuntimeLogFiles();
+  runtimeWriter = openRuntimeLogWriter("comfyui-runtime", at);
+  appendRuntimeLog("▶ ComfyUI 启动会话");
+  return runtimeWriter.file;
+}
+
+function appendRuntimeLog(line: string): void {
+  runtimeWriter?.write(`${localTimestamp()} ${line}`);
 }
 
 /**
@@ -711,7 +714,7 @@ export async function ensureComfyUiReady(
   const host: LaunchHost = {
     st,
     appendRuntimeLog,
-    appendSessionBanner,
+    beginRuntimeSession,
     clearComfyStopping,
     localTimestamp,
     probeComfyUi,

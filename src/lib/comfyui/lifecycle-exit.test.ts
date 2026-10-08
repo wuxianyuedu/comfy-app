@@ -230,12 +230,10 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
     );
     fs.writeFileSync(outFile, "started ok\n");
     const runtime: string[] = [];
-    const banners: string[] = [];
     reportKeepAliveExit({
       facts: { pid: 149720, uptimeMs: 26 * 60_000 + 13_000 },
       stopRequested: false,
       keepAliveLogs: { out: outFile, err: errFile },
-      appendSessionBanner: (b) => banners.push(b),
       appendRuntimeLog: (l) => runtime.push(l),
       log: vi.fn(),
     });
@@ -243,7 +241,9 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
     const tailOut = runtime.filter((l) => l.startsWith("[exit][out]"));
     expect(tailErr.some((l) => l.includes("ValueError: boom"))).toBe(true);
     expect(tailOut.some((l) => l.includes("started ok"))).toBe(true);
-    expect(banners[0]).toContain("进程消失");
+    /* 退出横幅走 runtime 日志通道（一次启动一份文件之后不再有独立的横幅
+     * 出口）：它必须是写进文件的第一条「为什么结束」。 */
+    expect(runtime[0]).toContain("进程消失");
   });
 
   it("没有 keepAliveLogs 时不带尾部（向后兼容）", () => {
@@ -251,7 +251,6 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
     reportKeepAliveExit({
       facts: { pid: 1, uptimeMs: 1000 },
       stopRequested: false,
-      appendSessionBanner: vi.fn(),
       appendRuntimeLog: (l) => runtime.push(l),
       log: vi.fn(),
     });

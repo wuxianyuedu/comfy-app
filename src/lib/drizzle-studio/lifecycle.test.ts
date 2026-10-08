@@ -37,14 +37,12 @@ vi.mock("~/lib/shell/open-in-browser", () => ({
   openUrlInBrowser: openUrlMock,
 }));
 
-/* 日志：落盘路径换到临时目录，且别让运行日志真的写进仓库 log/。 */
-vi.mock("~/lib/log/log-paths", () => ({
-  DRIZZLE_STUDIO_RUNTIME_LOG:
-    "/tmp/drizzle-studio-test/drizzle-studio-runtime.log",
-  SERVICES_LOG_DIR: "/tmp/drizzle-studio-test",
-}));
-vi.mock("~/lib/session-banner.server", () => ({
-  appendSessionBanner: vi.fn(),
+/* 日志：落盘路径换到临时目录，且别让运行日志真的写进仓库 log/。
+ * 一次启动一份文件（ISSUE #1326）之后 `log-paths` 只剩目录常量，文件名由
+ * `runtime-log-pack` 按时刻拼 —— 因此这里 mock 那一个的写入器。 */
+vi.mock("~/lib/log/runtime-log-pack.server", () => ({
+  openRuntimeLogWriter: () => ({ file: "/tmp/x.log", write: vi.fn() }),
+  pruneRuntimeLogFiles: () => 0,
 }));
 vi.mock("~/lib/core/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },

@@ -2,12 +2,14 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import fs from "node:fs";
-import path from "node:path";
-import { OLLAMA_RUNTIME_LOG } from "~/lib/log/log-paths";
+import {
+  latestRuntimeLogFile,
+  openRuntimeLogWriter,
+  type RuntimeLogWriter,
+} from "~/lib/log/runtime-log-pack.server";
 import { formatLocalStamp } from "~/lib/time-format";
 import { OLLAMA_STOP_PROBE } from "~/lib/retry-policy";
 import { sleep } from "~/lib/with-timeout";
-import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import { OLLAMA_DEFAULT_PORT, ollamaBaseUrl } from "~/lib/endpoints";
 import { killProcessTreeByImage } from "~/lib/process/kill-process-tree";
 
@@ -28,24 +30,40 @@ function localTimestamp(): string {
   return formatLocalStamp(new Date());
 }
 
-/** 追加一行到 ollama-runtime.log（失败不影响主流程）。 */
-function appendOllamaLog(line: string): void {
+/**
+ * 关闭动作落进**哪一份文件**：最近一次启动的那份。
+ *
+ * 「关闭」是另一个请求、甚至可能是另一个进程，它没有「本次启动」的句柄 ——
+ * 因此不能自己新开一份（那会产出一份只有 `[action] 关闭` 两行的空文件，
+ * 而用户要看的「为什么关得掉 / 关不掉」本该和那次启动的输出连在一起）。
+ * 找不到任何既有文件时（跨重启来关一个别处拉起的实例）退回新建一份。
+ */
+function writerForStop(): RuntimeLogWriter {
+  const latest = latestRuntimeLogFile("ollama-runtime");
+  if (latest) {
+    return {
+      file: latest.file,
+      write: (line) => appendTo(latest.file, `${localTimestamp()} ${line}`),
+    };
+  }
+  const created = openRuntimeLogWriter("ollama-runtime");
+  return {
+    file: created.file,
+    write: (line) => created.write(`${localTimestamp()} ${line}`),
+  };
+}
+
+function appendTo(file: string, line: string): void {
   try {
-    fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
-    fs.appendFileSync(
-      OLLAMA_RUNTIME_LOG,
-      `${localTimestamp()} ${line}\n`,
-      "utf-8",
-    );
+    fs.appendFileSync(/*turbopackIgnore: true*/ file, `${line}\n`, "utf-8");
   } catch {
     /* 日志失败不影响主流程 */
   }
 }
 
-/** 会话边界横幅（唯一实现见 `src/lib/session-banner.server.ts`）：区分多次启动累积的
- * ollama-runtime.log（两侧各留空行，直接看文件也能看出本次从哪开始）。 */
-function appendOllamaBanner(kind: "start" | "end", title: string): void {
-  appendSessionBannerToFile(OLLAMA_RUNTIME_LOG, kind, title);
+/** 追加一行到本次（或最近一次）启动的文件（失败不影响主流程）。 */
+function appendOllamaLog(line: string): void {
+  writerForStop().write(line);
 }
 
 async function ollamaUp(): Promise<boolean> {
@@ -86,7 +104,7 @@ export async function POST(_req: NextRequest) {
   // `~/lib/retry-policy` 的 OLLAMA_STOP_PROBE（10 次 × 500ms = 5s，见 §16.2.4.49）。
   for (let i = 0; i < OLLAMA_STOP_PROBE.maxAttempts; i++) {
     if (!(await ollamaUp())) {
-      appendOllamaBanner("end", "■ Ollama 已手动关闭");
+      appendOllamaLog("■ Ollama 已手动关闭");
       appendOllamaLog("[state] Ollama 已关闭");
       return NextResponse.json({ ok: true, detail: "Ollama 已关闭" });
     }

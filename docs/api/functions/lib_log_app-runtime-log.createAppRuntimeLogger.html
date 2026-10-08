@@ -14,18 +14,20 @@
 <section class="tsd-panel">
 <ul class="tsd-signatures">
 <li class="">
-<div class="tsd-signature tsd-anchor-link" id="createappruntimelogger"><span class="tsd-kind-call-signature">createAppRuntimeLogger</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">namespace</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">filePath</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/lib_log_app-runtime-log.AppRuntimeLogger.html" class="tsd-signature-type tsd-kind-interface">AppRuntimeLogger</a><a href="#createappruntimelogger" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-signature tsd-anchor-link" id="createappruntimelogger"><span class="tsd-kind-call-signature">createAppRuntimeLogger</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">namespace</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">file</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/lib_log_app-runtime-log.AppRuntimeLogger.html" class="tsd-signature-type tsd-kind-interface">AppRuntimeLogger</a><a href="#createappruntimelogger" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>创建应用运行日志器。各模块 <code>export const log = createAppRuntimeLogger(&quot;module&quot;)</code>。</p>
+<p><code>file</code> 只在测试里传（指向自己的临时目录）：真实调用方一律走内部的
+<code>writerFor()</code> 命名规则，别在别处拼 <code>app-runtime-*.log</code>。</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li><span><span class="tsd-kind-parameter">namespace</span>: <span class="tsd-signature-type">string</span></span></li>
-<li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">filePath</span>: <span class="tsd-signature-type">string</span></span></li></ul></div>
+<li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">file</span>: <span class="tsd-signature-type">string</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <a href="../interfaces/lib_log_app-runtime-log.AppRuntimeLogger.html" class="tsd-signature-type tsd-kind-interface">AppRuntimeLogger</a></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/app-runtime-log.ts:123</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/log/app-runtime-log.ts:128</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

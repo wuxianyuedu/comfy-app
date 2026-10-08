@@ -167,10 +167,8 @@ export function createRecentOutputLedger(maxLines = 60): RecentOutputLedger {
 }
 
 export interface ChildExitDeps {
-  /** 会话结束横幅文案（含 ANSI）。 */
+  /** 退出横幅文案（含 ANSI）。 */
   banner: (report: ComfyExitReport) => string;
-  /** 写会话横幅。 */
-  appendSessionBanner: (banner: string) => void;
   /** 写运行日志（`[exit] ...` 那两行落这里，与 `[out]/[err]` 同一个文件，
    *  这样「它退出前最后说了什么」与「为什么退出」挨在一起）。 */
   appendRuntimeLog: (line: string) => void;
@@ -202,7 +200,7 @@ export function createChildExitHandler(
 ): (code: number | null, signal: NodeJS.Signals | null) => void {
   return (code: number | null, signal: NodeJS.Signals | null = null) => {
     const report = describeComfyExit({ code, signal, ...deps.context() });
-    deps.appendSessionBanner(deps.banner(report));
+    deps.appendRuntimeLog(deps.banner(report));
     deps.appendRuntimeLog(`[exit] ${report.reason}（${report.detail}）`);
     if (report.advice !== null)
       deps.appendRuntimeLog(`[exit] ↩ ${report.advice}`);

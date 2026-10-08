@@ -4,9 +4,9 @@
  * 对应三条用户反馈：
  *   1. 小窗口某些时候看着麻烦 → 要有**全屏查看**（且全屏里同样能切换启动）；
  *   2. 多次启动的日志混在一起 → 右上角下拉按「每次启动」切换；
- *   3. 应用重启过的那几次在界面上找不到（ISSUE #1326）→ 下拉列的是
- *      「本次运行 + `log/runs/` 各历史包」，文案由服务端给（含时刻 / 退出形态 /
- *      runId），且基准被清理时要说明。
+ *   3. 服务在应用还开着的时候被重启过几次，日志全堆在同一个文件里（ISSUE
+ *      #1326）→ 那四份 runtime 日志改成**一次启动一份文件**，下拉列的就是这些
+ *      份，文案由服务端给（时刻）；列表被上限截断时要说明还有更早的。
  *
  * 断言对齐可见行为（下拉存不存在 / 选项文案 / 回调参数 / 全屏层出现与消失 /
  * 空态与各种截断提示），不锁样式类。
@@ -27,11 +27,17 @@ function controller(
   return {
     text: "[spawn] pid=1\n",
     segments: [{ text: "[spawn] pid=1\n" }],
-    sessions: [{ id: "12", title: "▶ ComfyUI 启动会话", startedAt: null }],
-    sessionId: "12",
+    sessions: [
+      {
+        id: "comfyui-runtime-20260930-100741.log",
+        title: "09-30 10:07:41",
+        startedAt: new Date(2026, 8, 30, 10, 7, 41).getTime(),
+      },
+    ],
+    sessionId: "comfyui-runtime-20260930-100741.log",
     truncated: false,
     windowed: false,
-    baselineMissing: false,
+    total: 1,
     active: false,
     selectSession: vi.fn(),
     refresh: vi.fn(async () => undefined),
@@ -53,19 +59,18 @@ function renderBox(log: RuntimeLogController) {
  * 两次运行的可选项（**文案形态与端点 `formatRunLabel` 的输出逐字一致**）。
  *
  * 视图直接渲染服务端给的 `title`，因此夹具必须按服务端那套写 —— 手写一个
- * 「长得像」的字符串，改口径时用例会一起漂过去（与 `log-sessions.test.ts`
- * 用真实横幅构造器同一条理由）。
+ * 「长得像」的字符串，改口径时用例会一起漂过去。
  */
 function twoSessions(): RuntimeLogController["sessions"] {
   return [
     {
-      id: "run:2026-09-30_100103-a1b2c3",
-      title: "09-30 10:01:03 · 正常退出 · a1b2c3",
+      id: "comfyui-runtime-20260930-100103.log",
+      title: "09-30 10:01:03",
       startedAt: new Date(2026, 8, 30, 10, 1, 3).getTime(),
     },
     {
-      id: "run:current",
-      title: "09-30 10:07:41 · 本次运行 · ffffff",
+      id: "comfyui-runtime-20260930-100741.log",
+      title: "09-30 10:07:41",
       startedAt: new Date(2026, 8, 30, 10, 7, 41).getTime(),
     },
   ];
@@ -79,23 +84,23 @@ describe("RuntimeLogBox", () => {
     expect(screen.queryByLabelText("切换要查看的启动")).toBeNull();
   });
 
-  it("多次运行时下拉列出「时刻 · 退出形态 · runId」，切换回传该次运行的 id", async () => {
+  it("多次启动时下拉列出每份的时刻，切换回传那一份的文件名", async () => {
     const user = userEvent.setup();
     const log = controller({
       sessions: twoSessions(),
-      sessionId: "run:current",
+      sessionId: "comfyui-runtime-20260930-100741.log",
     });
     renderBox(log);
 
     /* P76 之后这里不再是原生 `<select>`（裸 `<select>` 已被判据拦下），而是
      * `ui/select-menu` 的 combobox：当前值在触发器的可见文字里，选项要**点开**
      * 才存在于 DOM。所以定位从 `value` + `<option>` 改成 combobox 的可见文字 +
-     * 弹层里的 `role="option"` —— 用例锁的口径没变（列出「时刻 · 标题」、切换
-     * 回传会话 id），只是换成新控件的读法。
+     * 弹层里的 `role="option"` —— 用例锁的口径没变（列出每份的时刻、切换回传
+     * 那一份的文件名），只是换成新控件的读法。
      * 选项要点**完整指针序列**（Base UI 的提交挂在指针抬起上，裸
      * `fireEvent.click` 只发 click、提交不了）。 */
     const trigger = screen.getByLabelText("切换要查看的启动");
-    expect(trigger.textContent).toContain("09-30 10:07:41 · 本次运行 · ffffff");
+    expect(trigger.textContent).toContain("09-30 10:07:41");
 
     /* 选项是**异步挂载**的：Base UI 的弹层走 portal，`user.click` 落下时它还没
      * 进 DOM。同步 `getAllByRole` 在空载的事件循环里恰好来得及，CPU 被并行用例
@@ -105,18 +110,15 @@ describe("RuntimeLogBox", () => {
     const labels = (await screen.findAllByRole("option")).map(
       (option) => option.textContent,
     );
-    expect(labels).toEqual([
-      "09-30 10:01:03 · 正常退出 · a1b2c3",
-      "09-30 10:07:41 · 本次运行 · ffffff",
-    ]);
+    expect(labels).toEqual(["09-30 10:01:03", "09-30 10:07:41"]);
 
     const first = (await screen.findAllByRole("option")).find((option) =>
       option.textContent?.startsWith("09-30 10:01:03"),
     );
-    if (!first) throw new Error("弹层里没有 10:01:03 那一档运行");
+    if (!first) throw new Error("弹层里没有 10:01:03 那一档启动");
     await user.click(first);
     expect(log.selectSession).toHaveBeenCalledWith(
-      "run:2026-09-30_100103-a1b2c3",
+      "comfyui-runtime-20260930-100103.log",
     );
   });
 
@@ -134,28 +136,27 @@ describe("RuntimeLogBox", () => {
     ).toBeTruthy();
   });
 
-  it("截断 / 尾窗时给出可见说明（不让用户以为日志本来就长这样）", () => {
+  it("正文被截断时给出可见说明（不让用户以为日志本来就长这样）", () => {
     renderBox(controller({ truncated: true, windowed: true }));
     expect(
-      screen.getByText(
-        "该次启动的输出过长，只显示最近一段。日志文件较大，更早的启动不在下拉列表里。",
-      ),
+      screen.getByText("该次启动的输出过长，只显示最近一段。"),
     ).toBeTruthy();
   });
 
-  it("之前那一包已被清理时说明「这段含更早的内容」", () => {
-    /* 不说出来的后果是把上一轮的输出当成这一轮的 —— 用户会据此得出错误结论，
-     * 而界面上看不出任何异常（硬规则 4：失败路径必须有用户可见出口）。 */
-    renderBox(controller({ baselineMissing: true }));
+  it("列表被上限截断时说明「还有更早的几次」", () => {
+    /* 一次启动一份文件之后同一天可能攒几十份（服务被反复重启），下拉列不完。
+     * 不说出来的后果是用户以为「这个服务只启动过这些次」—— 而界面上看不出任何
+     * 异常（硬规则 4：失败路径必须有用户可见出口）。 */
+    renderBox(controller({ sessions: twoSessions(), total: 12 }));
     expect(
-      screen.getByText("这次运行之前那一包已被清理，因此这段含更早的内容。"),
+      screen.getByText("该服务一共启动过 12 次，下拉只列最近 2 次。"),
     ).toBeTruthy();
   });
 
   it("全屏查看：铺满内容区的面板里带同一个下拉，退出后回到小窗口", () => {
     const log = controller({
       sessions: twoSessions(),
-      sessionId: "run:current",
+      sessionId: "comfyui-runtime-20260930-100741.log",
     });
     renderBox(log);
 
@@ -177,7 +178,10 @@ describe("RuntimeLogBox", () => {
     // 全屏视图铺满标题行下方后，弹窗外唯一可点的就是标题栏；用户点标题栏
     // （想拖动窗口）把全屏视图整个关掉是用户实测反馈，这里钉住不回归。
     renderBox(
-      controller({ sessions: twoSessions(), sessionId: "run:current" }),
+      controller({
+        sessions: twoSessions(),
+        sessionId: "comfyui-runtime-20260930-100741.log",
+      }),
     );
     fireEvent.click(screen.getByLabelText("全屏查看"));
     expect(screen.getByRole("dialog")).toBeTruthy();

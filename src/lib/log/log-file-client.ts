@@ -74,18 +74,23 @@ export async function fetchFileLogSlice(
   return (await res.json()) as FileLogSlice;
 }
 
-/* ── 常驻服务 runtime 日志的「会话视图」（设置页启动日志）───────────────
- * 这些文件追加不轮转，多次启动的行混在一条时间线上。`/api/logs/sessions` 按
- * 会话横幅把它们切开，一次只回**一份**正文；设置页因此能提供「切换每次启动」
- * 的下拉，而不用把整份文件读进浏览器。切分判据见 `lib/log/log-sessions`。
+/* ── 常驻服务 runtime 日志的「每一次启动」（设置页启动日志）─────────────
+ * 这四份日志**一次启动一份文件**（`<来源>-<时刻>.log`，ISSUE #1326），因此
+ * `/api/logs/sessions` 只做两件事：列出该来源有哪些份（新→旧）、回选中那一份
+ * 的正文。设置页因此能提供「切换每次启动」的下拉，而不用把整份文件读进浏览器。
+ * 命名与判据见 `lib/log/runtime-log-file`。
  */
 
-/** 可做会话切分的来源（`RUNTIME_LOG_FILES` 里的常驻服务三条通道）。 */
+/**
+ * 可做「切到某一次启动」的来源（`log-paths` 的 `RUNTIME_LOG_SOURCES` 的三条服务
+ * 通道）。**不含 `app-runtime`**：它跟的是应用自身生命周期，没有「用户点了启动」
+ * 这个动作，界面上没有可切的东西；它的历史由日志面板自己那一路覆盖。
+ */
 export type RuntimeLogSourceKind =
   "comfyui-runtime" | "drizzle-studio-runtime" | "ollama-runtime";
 
 /**
- * 拉取某来源的会话列表 + 指定会话（缺省取最新一次）的正文。
+ * 拉取某来源的启动列表 + 指定一次（缺省取最新那一份）的正文。
  *
  * 服务端未就绪 / 网络失败时返回 null（与 `fetchFileLogSlice` 的约定不同：
  * 它抛错，因为它跑在「已经很确定服务端在」的面板轮询里；本函数在设置页

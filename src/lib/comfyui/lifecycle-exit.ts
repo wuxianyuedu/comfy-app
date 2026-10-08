@@ -331,7 +331,6 @@ function readTailLines(
 export function reportKeepAliveExit(opts: {
   facts: { pid: number | null; uptimeMs: number | null };
   stopRequested: boolean;
-  appendSessionBanner: (banner: string) => void;
   appendRuntimeLog: (line: string) => void;
   log: (msg: string) => void;
   /** 本次会话保活拉起时重定向到的 stdout / stderr 文件；传入则把其末尾带进
@@ -346,7 +345,7 @@ export function reportKeepAliveExit(opts: {
     uptimeMs: opts.facts.uptimeMs,
     mode: "keepAlive",
   });
-  opts.appendSessionBanner(`■ ComfyUI 保活进程已退出：${report.reason}`);
+  opts.appendRuntimeLog(`■ ComfyUI 保活进程已退出：${report.reason}`);
   opts.appendRuntimeLog(`[exit] ${report.reason}（${report.detail}）`);
   if (report.advice !== null) {
     opts.appendRuntimeLog(`[exit] ↩ ${report.advice}`);

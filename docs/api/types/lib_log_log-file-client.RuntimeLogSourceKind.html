@@ -12,10 +12,12 @@
 <li><a href="" aria-current="page">RuntimeLogSourceKind</a></li></ul>
 <h1>Type Alias RuntimeLogSourceKind</h1></div>
 <div class="tsd-signature"><span class="tsd-kind-type-alias">RuntimeLogSourceKind</span><span class="tsd-signature-symbol">:</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;comfyui-runtime&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;drizzle-studio-runtime&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;ollama-runtime&quot;</span></div>
-<div class="tsd-comment tsd-typography"><p>可做会话切分的来源（<code>RUNTIME_LOG_FILES</code> 里的常驻服务三条通道）。</p>
+<div class="tsd-comment tsd-typography"><p>可做「切到某一次启动」的来源（<code>log-paths</code> 的 <code>RUNTIME_LOG_SOURCES</code> 的三条服务
+通道）。<strong>不含 <code>app-runtime</code></strong>：它跟的是应用自身生命周期，没有「用户点了启动」
+这个动作，界面上没有可切的东西；它的历史由日志面板自己那一路覆盖。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-file-client.ts:84</li></ul></aside></div>
+<li>Defined in lib/log/log-file-client.ts:89</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

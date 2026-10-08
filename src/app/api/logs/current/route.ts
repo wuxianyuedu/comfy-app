@@ -10,9 +10,13 @@ import { launchPaths } from "~/lib/shell/launch-diagnostics";
 import {
   DEV_LAUNCHER_CURRENT_SENTINEL,
   DEV_LAUNCHER_LOG,
-  RUNTIME_LOG_FILES,
   LAUNCHER_SHELL_LOG,
 } from "~/lib/log/log-paths";
+import {
+  RUNTIME_LOG_SOURCES,
+  type RuntimeLogSource,
+} from "~/lib/log/runtime-log-file";
+import { latestRuntimeLogFile } from "~/lib/log/runtime-log-pack.server";
 
 const LAUNCHER_LOG_FILE = LAUNCHER_SHELL_LOG;
 const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;
@@ -198,9 +202,20 @@ function readLogSlice(
 function resolveSourceFile(
   source: string,
 ): { file: string; resumable: boolean } | null {
-  /* 追加写来源（应用运行日志 / 常驻服务）保留历史内容 → 需要会话起点截断。 */
-  if (source in RUNTIME_LOG_FILES) {
-    return { file: RUNTIME_LOG_FILES[source]!, resumable: true };
+  /* 四份 runtime 日志（comfyui / drizzle-studio / ollama / app-runtime）现在是
+   * **一次启动一份文件**（ISSUE #1326），因此这里取「最新那一份」：
+   *   - 面板要跟随的是**正在写的那一份** —— 最新就是它（正在写的 mtime 最大，
+   *     而本模块按名字里的时刻取，两者在「同一秒内多次启动」时才可能不一致，
+   *     那时取的也是最后开的那一份，与「本次」一致）；
+   *   - `resumable: false`：**一个文件只属于一次启动**，因此没有「跨运行累积的
+   *     历史行」要裁 —— 会话起点这条机制对本族消失（此前它读
+   *     `dev-launcher.log` 的 mtime 当起点，锚点比真实启动时刻晚，会把启动早期的
+   *     行误判成历史，见 §4.1 的四审）。 */
+  if ((RUNTIME_LOG_SOURCES as readonly string[]).includes(source)) {
+    const latest = latestRuntimeLogFile(source as RuntimeLogSource);
+    return latest
+      ? { file: latest.file, resumable: false }
+      : { file: "", resumable: false };
   }
   /* 「应用服务输出」：Next dev server 的 stdout/stderr 转录（本次进程一份）。 */
   if (source === "app") {
@@ -237,6 +252,18 @@ export async function GET(request: Request) {
 
   try {
     const resolved = resolveSourceFile(source);
+    if (resolved?.file === "") {
+      /* 该来源本机一次也没启动过：**明确的空切片**（不是 404/500）——
+       * 面板据此显示「还没有输出」，与「接口挂了」分开。 */
+      return NextResponse.json({
+        content: "",
+        size: 0,
+        offset: 0,
+        sessionStart: null,
+        bootId,
+        mismatch,
+      });
+    }
     if (!resolved) {
       /* 来源暂时没有文件（如应用服务转录尚未落盘）：回一个**明确的空切片**，
        * 而不是 404/500——面板据此区分「本次运行确实还没有输出」与「接口挂了」。 */
