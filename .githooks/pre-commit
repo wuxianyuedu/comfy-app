@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(41 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(42 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -327,6 +327,17 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 两个实测的洞都只有它接得住：reporter 改名（用例喂夹具、看不到真命令）与
   # judgeStillFailing 恒放行（旧版自证只有红侧、判据恒放行时它照样绿）。详见脚本文件头。
   run "已知基线失败登记·自证（碰了这套机制才跑）" node scripts/known-failed-selftest-gate.mjs
+  # 测试层裸 sleep 的净数（规范 §11.14）。§11.14 早就把
+  # `await new Promise(r => setTimeout(r, N))` 定为第一层反模式，执行者写的是
+  # 「新增时由 review 拦下」，而实测这句话两头都落空：上一轮清掉的 6 个文件是**抽样**、
+  # 口径没有钉住，于是同一个数在两次盘点里从 20 变成 38；`grep -c test-sleep` 在
+  # 这个钩子里一直是 0、CI 又随 ISSUE #623 删除 —— 「review 拦下」是唯一的执行者，
+  # 而 review 是人、人会漏（同 §13.5.12 的立案现场：判据自称在跑、实际一个执行者都没有）。
+  # 判的是**净数不许涨**（棘轮，`scripts/.test-sleep-baseline.json`，只许降）而不是
+  # 「零容忍」—— 宏任务排空 / 判据自己的夹具 / mock 内部延迟 / 必须真挂钟这四类都是
+  # 正当形态，逐站点写一条 `// sleep-ok: <理由>` 登记豁免，不进棘轮。
+  # 成本实测：纯文本扫描 624 份用例约 0.25s、零网络、零子进程（照 §13.5.4 的成本判据）。
+  run "测试层裸 sleep 棘轮（§11.14）" node scripts/check-test-sleep.cjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────

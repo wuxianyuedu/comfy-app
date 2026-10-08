@@ -1349,6 +1349,7 @@ describe("PostRepository", () => {
     expect(await postRepository.getLatest()).toBeNull();
 
     await postRepository.create({ name: "旧公告", createdById: "u1" });
+    // sleep-ok: 必须走真挂钟：要 createdAt / updatedAt 拉开真实的毫秒差，假定时器会把被测的时间戳逻辑一起冻住。
     await new Promise((r) => setTimeout(r, 5));
     const latest = await postRepository.create({
       name: "新公告",

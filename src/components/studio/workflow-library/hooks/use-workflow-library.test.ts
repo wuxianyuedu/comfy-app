@@ -69,6 +69,7 @@ const mockRouter = t.router({
     list: t.procedure.query(async () => {
       listCalls += 1;
       if (behavior.listDelayMs && behavior.listDelayMs > 0) {
+        // sleep-ok: mock 内部延迟：tRPC mock 的 listDelayMs 是给用例制造「列表慢一拍」的现场（行为开关），不是等条件。
         await new Promise((resolve) =>
           setTimeout(resolve, behavior.listDelayMs),
         );

@@ -156,6 +156,7 @@ describe("updateProgress（compare-and-set：终态行不改写）", () => {
     expect(claimedMs(id)).not.toBeNull();
     const first = claimedMs(id);
 
+    // sleep-ok: 必须走真挂钟：要让 createdAt 与 claimedAt 之间拉开真实的时间差，假定时器冻住被测逻辑。
     await new Promise((resolve) => setTimeout(resolve, 5));
     await impl.updateProgress(id, 20, { id: "2", value: 2, max: 10 });
     /* COALESCE 而不是无条件覆写：进度帧每几秒一发，跟着刷就等于「已运行」永远
@@ -187,6 +188,7 @@ describe("markRunning（同族 compare-and-set）", () => {
     const other = await seed({ status: "QUEUED" });
     await impl.updateProgress(other, 10, { id: "1", value: 1, max: 10 });
     const fromProgress = claimedMs(other);
+    // sleep-ok: 必须走真挂钟：要让「进度帧定格的时间」与「markRunning 那一刻」拉开真实差值，假定时器冻住被测逻辑。
     await new Promise((resolve) => setTimeout(resolve, 5));
     /* raw 路径的 promptId 常常整轮跑完才回传（#1184 实测），若这里无条件覆写，
      * 状态栏的耗时会从收尾那一刻重新开始。 */
