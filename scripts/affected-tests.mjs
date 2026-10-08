@@ -109,6 +109,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 折行站点）每一条都得有人钉住，而它们是「下一次有人想给用例加并发」时才
   // 走得进的路径，所以必须进固定清单（与本次改动无关也照跑）。
   "tests/test-concurrency-gate.test.ts",
+  // 配置的**共享项有没有真的落到两档上**（规范 §11.17.3）：这一档的口径在本仓库
+  // 写反过一次（「`projects` 不继承声明方 `test` 的选项」），共享项因此被复制成
+  // 两份 spread；本轮复现那次实测、订正口径并让共享项回到根 `test`。
+  // 判据用 vitest 自己的 `createVitest()` 读**解析后**的配置逐档核 ——
+  // 「口径改对了」不等于「以后不会写回去」，而这条判据的对象正是那一步。
+  // 它同时钉住两件解析值判不出来的事（`globals: false` 删掉解析值不变、
+  // `environment` 不许抬到根级），所以与本次暂存改动无关也照跑，进固定清单。
+  "tests/test-config-inheritance.test.ts",
   // router 层的错误信封：裸 `throw new Error` 会被 tRPC 归成 INTERNAL_SERVER_ERROR，
   // 「越权与不存在同形」就只剩一句没有判据的话（台账 E8）。这条同时验 eslint 配置里
   // 那条 selector **真的会响** —— 「配置写在」与「配置在跑」是两件事（§11.7 同源），

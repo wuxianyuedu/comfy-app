@@ -30,13 +30,14 @@ const SCRIPT = path.resolve(__dirname, "../scripts/check-test-environment.cjs");
  * 这里给的是**与真实配置同形**的最小版。
  */
 const CONFIG = [
-  "const SHARED = { setupFiles: [\"tests/setup.ts\"], globals: false };",
   "const JSDOM_TEST_GLOBS = [",
   '  "src/dom/**/*.test.{ts,tsx}",',
   '  "src/**/*.test.tsx",',
   "];",
   "export default {",
   "  test: {",
+  "    setupFiles: [\"tests/setup.ts\"],",
+  "    globals: false,",
   "    projects: [",
   "      {",
   "        test: {",
@@ -44,7 +45,6 @@ const CONFIG = [
   '          environment: "node",',
   '          include: ["src/**/*.test.{ts,tsx}"],',
   "          exclude: JSDOM_TEST_GLOBS,",
-  "          ...SHARED,",
   "        },",
   "      },",
   "      {",
@@ -52,7 +52,6 @@ const CONFIG = [
   '          name: "jsdom",',
   '          environment: "jsdom",',
   "          include: JSDOM_TEST_GLOBS,",
-  "          ...SHARED,",
   "        },",
   "      },",
   "    ],",
@@ -245,5 +244,45 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
     }
     expect(ok).toBe(false);
     expect(output).toContain("解析 `vitest.config.ts` 的 `projects` 失败");
+  });
+
+  /**
+   * **注释里出现 `projects:` 不能把解析带偏**。
+   *
+   * 这条是改配置那一步**当场撞出来的**：`vitest.config.ts` 的解释性注释里写了一句
+   * 「inline project（`projects: [{ test: {…} }]`）」，而解析器原先直接在**原文**上
+   * `indexOf("projects:")` —— 命中的是注释里那一处，两个档一个都解析不出来。
+   * 当时是 `found < 2` 那条兜底把它拦下的（说明兜底是承重的）；
+   * 但若没有兜底，它会退回「没有目录档」＝判据②静默消失、照样报 OK。
+   * 修法是在**抹掉注释、偏移不变**的文本上定位（`blankComments()`）。
+   *
+   * ⚠️ 这一格必须**改注释本身**才有执行者：把干扰放在 `test: {` 之前的最上方，
+   * 逼解析器在原文与「去注释文本」上给出不同答案。只把 `projects:` 换个写法的变异
+   * 测试**抓不到**这一条（它会照样绿）。
+   */
+  it("注释里写出 `projects: [...]` → 解析仍认真正的那个键，不判失败", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "test-env-comment-"));
+    mkdirSync(path.join(root, "scripts"), { recursive: true });
+    copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+    writeFileSync(
+      path.join(root, "vitest.config.ts"),
+      [
+        "/* 讲解：inline project 的形状是 projects: [{ test: {…} }]，注意这里的 [ 与 } */",
+        "// 行注释里也来一处：projects: [假的]",
+        CONFIG,
+      ].join("\n"),
+    );
+    mkdirSync(path.join(root, "src/lib"), { recursive: true });
+    writeFileSync(
+      path.join(root, "src/lib/x.test.ts"),
+      'it("x", () => { expect(1).toBe(1); });\n',
+    );
+    const output = execFileSync(
+      process.execPath,
+      [path.join(root, "scripts", path.basename(SCRIPT))],
+      { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+    expect(output).toContain("OK");
+    expect(output).not.toContain("解析 `vitest.config.ts` 的 `projects` 失败");
   });
 });
