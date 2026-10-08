@@ -211,7 +211,10 @@ describe("reaper 模块级副作用", () => {
      * 而表还没就绪时不读库」。 */
     const reaper = await import("./comfyui/reaper");
     reaper.startReaper();
-    // 首扫是 fire-and-forget：给异步 sweeper 一点时间落定
+    /* 首扫是 fire-and-forget，而本用例判的是**它一次都没读库** ——
+     * 「等一个不会发生的事」，条件轮询表达不了（§11.14 的合法逃逸口）。
+     * 给够一拍让异步 sweeper 有机会真去读，没读才算这条结论成立。 */
+    // sleep-ok: 等一个「不会发生的事」——表未就绪时首扫不得读库。
     await new Promise((r) => setTimeout(r, 50));
 
     expect(listStaleUnownedQueued).not.toHaveBeenCalled();

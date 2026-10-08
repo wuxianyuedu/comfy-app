@@ -15,3 +15,11 @@
   没人敲它」。故同批把该条目的 `name` / `declaredAt` / `executor.label` 对齐到新口径
   （`declaredAt` 补上 `scripts/.e2e-freshness.json`）。
   这类冲突 git 不会报：两侧改的甚至不是同一个文件，是**同一条口径的两半**。
+- 并入 `master`（`91edd3fc`「裸 sleep 收口」ISSUE #1498）：文本层无冲突，但它落在
+  `FIXED_STRUCTURAL_TESTS` 与 `.githooks/pre-commit` 这两处本 PR 也动过的地方 ——
+  前者的三条条目（裸 sleep / 全量 e2e / 声明索引）已同处一清单、逐条各守一件事；
+  后者是**它自己漏记的一笔账**：新增 `scripts/check-test-sleep.cjs` 后钩子 D 组从
+  42 步变成 43 步，而注释里的「`D(42 个判据脚本)`」没跟着改
+  （该注释自己就写着「新增判据时必须同步这个数字」，核它的是
+  `tests/doc-check-hook-wiring.test.ts`）。在 `91edd3fc` 干净基线上复算过 ——
+  这条红**不是本 PR 引入的**（§13.6.2 的别线红），判据不放宽，只把数字改对。
