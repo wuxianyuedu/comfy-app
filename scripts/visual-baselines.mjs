@@ -360,7 +360,14 @@ export function checkRecordingEnv({ platform, env = process.env }) {
  * （账文件 / 键 / 名字 / 「怎么跑」那条命令），把差异写成分支就得到一份带两个开关的实现，
  * 而开关会随「第三档」的加入变成三向分支 —— 那正是 §12.12 要拦的孪生对。
  *
- * @type {Record<string, {ledger: string, key: string, label: string, run: string}>}
+ * `daily` / `skipHow` 是两条账**真正的**差异所在，其余四栏两条同形：
+ *   · `daily` —— 这一档是否按「每天首次提交带一次凭证」判（只有全量 e2e 是）。像素档
+ *     不做墙钟阻断的理由见 `visual-freshness-gate.mjs` 文件头：它的结论只在录过基线的
+ *     那台机器上成立，拿日历日去卡等于让所有人卡在一条只有少数人能解的账上。
+ *   · `skipHow` —— 记一条「写明理由的豁免」那条命令（同样只有 e2e 有）。它是**另一条
+ *     出路**而不是绕过：留下的是一条能复核的事实。
+ *
+ * @type {Record<string, {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}>}
  */
 export const FRESHNESS_TRACKS = {
   visual: {
@@ -368,12 +375,16 @@ export const FRESHNESS_TRACKS = {
     key: "linux",
     label: "linux 档像素基线",
     run: "pnpm check:visual",
+    daily: false,
+    skipHow: null,
   },
   e2e: {
     ledger: "scripts/.e2e-freshness.json",
     key: "e2e",
     label: "全量 e2e",
     run: "pnpm test:e2e",
+    daily: true,
+    skipHow: 'node scripts/e2e-run.mjs --skip "<理由>"',
   },
 };
 
@@ -411,14 +422,54 @@ export function freshnessTrack(kind) {
  * @param {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string}} input
  * @returns {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string}}
  */
-export function freshnessRecord({ key, verifiedAt, who, how, trackedBy }) {
-  return {
+export function freshnessRecord({ key, verifiedAt, who, how, trackedBy, skippedReason }) {
+  /** @type {Record<string, string>} */
+  const record = {
     key: key.trim(),
     verifiedAt: verifiedAt.trim(),
     who: who.trim(),
     how: how.trim(),
     trackedBy: trackedBy.trim(),
   };
+  /* `skippedReason` 只在**豁免**那一条出路上出现：它把「今天不跑」写成一句能被复核的话，
+   * 而不是让账面上出现一个与「跑绿过」长得一样的日期。核对它的是 `isUsableSkipReason`。 */
+  if (typeof skippedReason === "string" && skippedReason.trim()) {
+    record.skippedReason = skippedReason.trim();
+  }
+  return record;
+}
+
+/**
+ * 豁免理由的下限 —— 「有人回答过」与「没回答」要长得不一样。
+ *
+ * 占位词（「稍后」「待定」「TBD」…）与过短的理由都判不可用：豁免不是绕过，它留下的
+ * 是一条**能被复核的事实**，而「稍后」什么都没留下。
+ *
+ * @param {unknown} reason
+ * @returns {boolean}
+ */
+export function isUsableSkipReason(reason) {
+  const text = String(reason ?? "").trim();
+  if (text.length < 8) return false;
+  return !/^(稍后|待定|下次|回头|todo|tbd|na|n\/a)$/i.test(text);
+}
+
+/**
+ * 「同一个**日历日**」的判据 —— 「每天首次提交」按本地时区日界判，不按 24 小时窗口。
+ *
+ * 人的记忆与工作节奏都是按日历日走的（「今天提交过了吗」），而滚动窗口会把昨天 23:00
+ * 与今天 08:00 算成连续两次，于是今天早晨的第一次被静默跳过。
+ *
+ * @param {Date} a
+ * @param {Date} b
+ * @returns {boolean}
+ */
+export function isSameLocalDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
 /**
@@ -433,12 +484,13 @@ export function freshnessRecord({ key, verifiedAt, who, how, trackedBy }) {
  * @param {{required: string[], registered: string[], track: {ledger: string, label: string, run: string}, kind: string}} scope
  *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）；
  *   `track` = 这一份账的登记（话术里要给出「去哪个文件补、按哪条命令跑」）；
- *   `kind` = 这一份账属于哪个跑法（`trackedBy` 的比对基准）
+ *   `kind` = 这一份账属于哪个跑法（`trackedBy` 的比对基准）；
+ *   `now` = 判「今天有没有自证」用的时钟（`track.daily` 那一档才读它；用例可注入）
  * @returns {string[]} 问题清单
  */
 export function checkFreshnessLedger(
   ledger,
-  { required, registered, track, kind },
+  { required, registered, track, kind, now = new Date() },
 ) {
   /** @type {string[]} */
   const problems = [];
@@ -497,6 +549,32 @@ export function checkFreshnessLedger(
           `而这份账属于「${kind}」—— 两条新鲜度账同形，抄混之后账面上完全正常，` +
           "只有这一栏能把它们分开。",
       );
+    }
+    /* 「每天首次」那一档多一条判据：这一次自证必须是**今天**的（或一条写明理由的豁免）。
+     * 它只判日历日，不判「多久算旧」—— 阈值仍然不写进判据（像素档那句同样的取舍）。
+     * 记录写不清时上面已经拦过，这里只在形状成立时才比日期，免得同一件事报两遍。 */
+    if (track.daily) {
+      if (typeof rec.skippedReason === "string" && rec.skippedReason.trim()) {
+        if (!isUsableSkipReason(rec.skippedReason)) {
+          problems.push(
+            `${track.label}（${key}）的豁免理由（"${rec.skippedReason.trim()}"）不算「有人回答过」—— ` +
+              `豁免留下的是一条能被复核的事实，占位词与过短的理由什么都没留下。` +
+              `写清这次为什么不跑，或直接跑一次 \`${track.run}\`。`,
+          );
+        }
+      } else {
+        const ms = Date.parse(String(rec.verifiedAt ?? ""));
+        if (!Number.isNaN(ms) && !isSameLocalDay(new Date(ms), now)) {
+          problems.push(
+            `${track.label}（${key}）今天还没有自证 —— 上一次跑绿在 ` +
+              `"${String(rec.verifiedAt ?? "").trim()}"，不是今天。` +
+              `\n        记账：跑一次 \`${track.run}\`（跑绿即记），` +
+              (track.skipHow
+                ? `\n              或记一条写明理由的豁免：\`${track.skipHow}\`。`
+                : ""),
+          );
+        }
+      }
     }
   }
   for (const key of Object.keys(ledger)) {
@@ -578,6 +656,59 @@ export function writeFreshness({ root, kind, who }) {
     note:
       `${track.label}已记账（上次自证：${previous ?? "无记录"}）—— ` +
       `改 ${track.ledger} 时请连同提交，它是「这一档上次跑绿在什么时候」的唯一事实。`,
+  };
+}
+
+/**
+ * 把一档的**豁免**写进它那份账 —— 「今天不跑，但理由有人回答过」。
+ *
+ * 与 `writeFreshness` 的唯一区别是记的形状：那一份带的是「跑绿的日期」，这一份带的是
+ * `skippedReason`。两者都能让「每天首次」那条判据放行，但**读起来不一样** ——
+ * 账面上因此看得出「今天跑过」和「今天说好不跑」不是同一件事（豁免不是绕过）。
+ *
+ * 理由不合用（过短 / 占位）时**抛**，由调用方转成退出码：与其记一条没有信息的账
+ * 让人以为「已经处理过」，不如当场把这条命令退回去。
+ *
+ * @param {{root: string, kind: string, who: string, reason: unknown}} args
+ * @returns {{note: string, previous: string | null}}
+ */
+export function writeSkipRecord({ root, kind, who, reason }) {
+  const track = freshnessTrack(kind);
+  if (!track.skipHow) {
+    throw new Error(`[visual-baselines] ${kind} 档没有「豁免」这条出路`);
+  }
+  if (!isUsableSkipReason(reason)) {
+    throw new Error(
+      `[visual-baselines] 豁免理由（"${String(reason ?? "").trim()}"）不算「有人回答过」—— ` +
+        "写清这次为什么不跑（占位词与过短的理由都被拦）。",
+    );
+  }
+  const file = path.join(root, track.ledger);
+  const ledger = readFreshnessLedgerAt(root, track.ledger);
+  const previous = freshnessAge(ledger[track.key]);
+  ledger[track.key] = freshnessRecord({
+    key: track.key,
+    verifiedAt: new Date().toISOString(),
+    who,
+    how: track.run,
+    trackedBy: kind,
+    skippedReason: String(reason).trim(),
+  });
+  try {
+    writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+  } catch (err) {
+    return {
+      previous,
+      note:
+        `（记账失败：${err instanceof Error ? err.message : String(err)} —— ` +
+        `手工补 ${track.ledger}）`,
+    };
+  }
+  return {
+    previous,
+    note:
+      `${track.label}已记一条豁免（上次自证：${previous ?? "无记录"}）—— ` +
+      `理由写在 ${track.ledger} 的 skippedReason 里，改它时请连同提交。`,
   };
 }
 
