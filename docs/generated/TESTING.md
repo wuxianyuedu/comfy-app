@@ -33,14 +33,19 @@ pnpm test:visual        # 只跑像素基线那一层
 - 配置文件：`vitest.config.ts`；扫描面 `src/**/*.test.{ts,tsx}` 与 `tests/**/*.test.{ts,tsx}`
 - 默认环境：node（纯函数/store，不依赖 DOM）
 - 组件渲染：测试文件头 `// @vitest-environment jsdom`
-- **为什么不用 `projects` 按目录分档**（vitest 5 支持，且能省掉那些文件头）：
-  目录与环境的对应关系**不成立**。实测 `src/components/**` + `src/app/**` 共 231 份
-  用例里有 **70 份不带 jsdom 文件头**、且**全是 `*.test.ts`**（配置推导 / store /
-  `src/app/api/**` 路由），它们今天在 node 下跑、也不该被拖进 jsdom；反过来
-  `src/lib/**` 里有 18 份要 jsdom。按目录分档 = 这 70 + 18 份要么被放错环境、
-  要么退回逐文件覆盖，**省下的只是文件头，换来的是一层「目录名改了、环境就悄悄变」
-  的隐式约定**（而且 jsdom 下跑纯逻辑只是变慢，不报错 —— 静默的那一侧）。
-  当前「全局 node + 逐文件 opt-in」与真实依赖一一对应，维持；判据见规范 §11.17。
+- **环境档：`projects` 按目录声明两档（node / jsdom）**，要 DOM 的用例继续在文件头写
+  `// @vitest-environment jsdom`（文件头**优先级更高**，只决定自己那一份）。
+  ⚠️ 这里曾经写着「为什么不用 `projects` 分档 …… 当前全局 node + 逐文件 opt-in 与真实
+  依赖一一对应，维持」—— 那是**上一轮的结论，已被采纳的那次改动推翻**：分档做了，
+  但**没有**按目录一刀切（那会把 260 份 node 用例误升进 jsdom，而 jsdom 下跑纯逻辑
+  不报错、只是变慢，是静默的那一侧）。保留文件头正是「不按目录一刀切」那一半。
+  完整账（147 份冗余头已删 / 37 份承重留、静默失效的 glob 两条、
+  `scripts/check-test-environment.cjs` 的三条判据）见规范 §11.17。
+- **两个 project 共用的那几项写在根 `test` 上，由 inline project 默认继承**
+  （`setupFiles` 漏了就是整仓 `toBeInTheDocument` 全变 `Invalid Chai property`）——
+  vitest 5 的 inline project 默认继承本文件 `test` 这一层，`extends: false` 才是关掉它的
+  开关。**不要**再把共享项复制成两份 spread；口径、负对照与验收手法见规范 §11.17.3，
+  判据是 `tests/test-config-inheritance.test.ts`。
 - 路径别名：`@/*`、`~/*` → `src/*`；`server-only` 在测试里换成空实现
   （`tests/stubs/server-only.ts`，构建期的硬约束不受影响）
 - 测试文件与源码同目录，命名 `*.test.ts(x)`

@@ -142,6 +142,56 @@ function stripCommentsAndStrings(src) {
   return out;
 }
 
+/**
+ * 把**注释**换成等长空白（字符串原样保留）—— 给「必须按原文偏移去切配置」的那一步用。
+ *
+ * 为什么必须有这一步（实测撞出来的形状）：`parseProjectGlobs()` 原来直接在**原文**上
+ * `indexOf("projects:")`。本轮把共享项从 `SHARED_TEST_OPTIONS` 搬回根 `test` 时，
+ * 那段解释性注释里写了一句「inline project（`projects: [{ test: {…} }]`）」——
+ * 于是 `indexOf` 命中的是**注释里那一处**、`[` 也落在注释里，
+ * 两个 project 一个都解析不出来。
+ * 表现不是「判据报错」而是**判据判失败**（`found < 2` 那条兜底救了它）：
+ * 如果没有那条兜底，它会退回「没有目录档」＝判据②静默消失、照样报 OK ——
+ * 正是本仓库反复踩的那一族（§11.13.1「判据在场 ≠ 判据在跑」）。
+ *
+ * ⚠️ 不能用上面那个 `stripCommentsAndStrings()`：它把字符串换成 `""` 占位，
+ * **偏移会变**，而下面要拿 `indexOf` 的偏移去切数组、还要读 `include: JSDOM_TEST_GLOBS`
+ * 这种标识符与字符串条目。所以这里是「只表注释、长度不变」的那一版。
+ */
+function blankComments(src) {
+  const chars = [...src];
+  let i = 0;
+  const n = src.length;
+  let state = "code"; // code | line | block | str | tpl
+  let open = "";
+  while (i < n) {
+    const c = src[i];
+    const c2 = src.slice(i, i + 2);
+    if (state === "code") {
+      if (c2 === "//") { state = "line"; chars[i] = " "; chars[i + 1] = " "; i += 2; continue; }
+      if (c2 === "/*") { state = "block"; chars[i] = " "; chars[i + 1] = " "; i += 2; continue; }
+      if (c === '"' || c === "'") { state = "str"; open = c; i += 1; continue; }
+      if (c === "`") { state = "tpl"; open = c; i += 1; continue; }
+      i += 1; continue;
+    }
+    if (state === "line") {
+      if (c === "\n") { state = "code"; i += 1; continue; }
+      chars[i] = " "; i += 1; continue;
+    }
+    if (state === "block") {
+      if (c2 === "*/") { state = "code"; chars[i] = " "; chars[i + 1] = " "; i += 2; continue; }
+      if (c !== "\n") chars[i] = " ";
+      i += 1; continue;
+    }
+    /* str / tpl：原样保留，只处理转义与闭合 */
+    if (c === "\\") { i += 2; continue; }
+    const closer = state === "str" ? (open === '"' ? '"' : "'") : "`";
+    if (c === closer) { state = "code"; }
+    i += 1;
+  }
+  return chars.join("");
+}
+
 function walk(dir, out = []) {
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
@@ -176,7 +226,10 @@ function declaredEnv(text) {
  *   ③ 数组里的条目必须都是字符串字面量，否则同样判失败。
  */
 function parseProjectGlobs() {
-  const text = fs.readFileSync(path.join(ROOT, "vitest.config.ts"), "utf8");
+  const raw = fs.readFileSync(path.join(ROOT, "vitest.config.ts"), "utf8");
+  /* ⚠️ 在**抹掉注释**的文本上找 `projects:`（偏移不变，字符串照旧）——
+   * 解释性注释里正当会出现 `projects:` 这个词，直接在原文上找会命中注释那一处。 */
+  const text = blankComments(raw);
   const globs = { jsdomInclude: [], jsdomExclude: [], nodeInclude: [], nodeExclude: [] };
   const marker = "projects:";
   const at = text.indexOf(marker);
