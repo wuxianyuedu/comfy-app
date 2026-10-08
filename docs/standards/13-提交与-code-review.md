@@ -197,6 +197,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/storybook-check.mjs --changed # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮 + 故事面（见 16 §16.2.3.4 / §16.2.3.8）
 ✅ node scripts/check-comment-language.cjs   # 注释语言棘轮：注释一律中文，只有「纯 ASCII 模块」例外（见 12 §12.4.6；§12.4.6 早写着它在钩子里报红，而它一直不在，ISSUE #1451 补齐）
 ✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红（见下 13.5.12）
+✅ node scripts/check-declaration-readers.cjs # 声明 ⇄ 读者索引：本仓库每一种「声明」（判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 / 类型断言执行者 / 软断言语义 / 像素档…）都必须答出「谁在读它 + 执行者在哪」——读者丢了、执行者从门禁链里被摘掉、索引自己静默降级，都红（见 11 §11.23）
 ✅ node scripts/check-ts-duplicate-keys.cjs  # 同一属性被指定两次（编辑器报 ts(2783)、命令行不报）；存量 0，硬闸（见下 13.5.12）
 ✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
 ✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
@@ -1029,6 +1030,13 @@ C 组的固定清单里、每次提交都执行 —— 那是真的执行者，�
 两份都 **`total: 0`** 起步 = 只许新增就红），红了就 `--write` 落盘 + `--update` 收紧。
 **别为了让 `--check` 变绿去放宽基线** —— 棘轮是给「回潮就响」用的，`tests/tw4-canonical-ratchet.test.ts`
 把这条钉住（基线形状 + 判定档在位 + 台账登记，三向各一组）。
+
+**姊妹维度：声明 ⇄ 读者（`scripts/check-declaration-readers.cjs`，规范 §11.23）。**
+本节判的是**脚本**有没有执行者（`process.exit` 那条线）；它不覆盖另一种同样常见的
+声明 —— 「我在读某份数据 / 我声明了某个契约」。后者的索引是
+`scripts/.declaration-readers.json`：每一种声明都必须答出「谁在读它 + 执行者在哪」，
+读者丢了、执行者从门禁链里被摘掉、或索引自己静默降级，都红。两节维度不同、**互不替代**
+（本节判「判据在场 ≠ 判据在跑」里的**脚本**那一半，§11.23 判**声明**那一半）。
 
 **还有一条**：`scripts/check-ts-duplicate-keys.cjs` 此前是报告型
 （`scripts/report-ts-duplicate-keys.mjs`，0 处 `process.exit`）、**零判定档** ——
