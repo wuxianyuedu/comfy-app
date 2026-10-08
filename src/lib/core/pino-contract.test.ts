@@ -40,7 +40,12 @@ function capture(): { dest: Writable; lines: () => string[] } {
   return { dest, lines: () => chunks.join("").trim().split("\n") };
 }
 
-/** 等到 pino 异步落盘完成（pino 底层异步写，给一小段时间）。 */
+/**
+ * 等到 pino 异步落盘完成 —— 必须走真挂钟（规范 §11.14 明写的逃逸口）：
+ * pino 的底层写是**真异步 I/O**，假定时器会把它一起冻住（advanceTimersByTime 推不动
+ * 真文件写入），所以这里只能等真时间。这是日志层的 flush helper，等的是「写完了」。
+ */
+// sleep-ok: 必须走真挂钟：pino 底层异步 I/O，假定时器推不动真落盘。
 const flush = () => new Promise((r) => setTimeout(r, 30));
 
 afterEach(() => {

@@ -457,6 +457,7 @@ describe("useSettingsPage", () => {
     /* 探测是 setTimeout(…, 0) 里触发的，切到远端后要等一个宏任务再断言，
      * 确认没有新的探测被排进去。 */
     await act(async () => {
+      // sleep-ok: 等宏任务排空：探测是 setTimeout(0) 里触发的，这里确认切换后没有新的探测被排进去。
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
     expect(probeMock).toHaveBeenCalledTimes(callsAfterLocalProbe);
