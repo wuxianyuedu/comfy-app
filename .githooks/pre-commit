@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(38 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(39 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -272,6 +272,15 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   #      `Unable to open connection to local database`（模块级 `tmpDirs` 被
   #      别人的 `afterEach` 整个 rmSync 掉）。
   run "并发档位用法（it.concurrent）" node scripts/check-test-concurrency.cjs
+  # 类型层断言（`expectTypeOf` / `assertType`）的**执行者在场**（规范 §11.20）。
+  # 这两者在 **vitest 里没有牙**：实测 `expectTypeOf<string>().toEqualTypeOf<number>()`
+  # 跑 `vitest run` 是 **Tests 1 passed**（vitest 只擦类型、不做类型检查）。
+  # 它们唯一的执行者是 `tsc --noEmit`（A 组），而 tsc 按 `tsconfig.json` 的 include 面收文件 ——
+  # 所以站点一旦落到 include 面之外，全仓的断言会**同时变成装饰品且没有任何一处报错**
+  # （实测：把 include 从 `**/*.ts` 收窄成 `src/**/*.ts`，tsc 与 vitest 双双报绿）。
+  # 判据还认折行站点（prettier 折开 `expectTypeOf(` 之后仍要被扫出来 ——
+  # 只认行内字面量会整片漏出扫描面，同 §11.18.3.1 那条）。
+  run "类型层断言的执行者（expectTypeOf）" node scripts/check-type-assertion-executor.cjs
   # 判据 ⇄ 执行者的双向判据（规范 §13.5.12 / ISSUE #1451 要求 2）：判定型脚本
   # （有 process.exit）无执行者即红 —— 除非登记在 scripts/.gate-executor-ledger.json
   # 的「按需召唤」台账里（含「为什么不能进钩子」+「谁按需跑」）；报告型（0 处
