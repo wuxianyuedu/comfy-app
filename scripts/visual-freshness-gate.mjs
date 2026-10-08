@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 /**
- * visual-freshness-gate.mjs — 「每一档像素基线都有主」的提交门禁（规范 §11.8）
+ * freshness-gate.mjs — 「每一档都有主」的提交门禁（规范 §11.8 / §13.5.4）
  *
+ * 守**两份同形的账**（`FRESHNESS_TRACKS`）：像素基线（`scripts/.visual-baseline-freshness.json`，
+ * 键 `linux`）与**全量 e2e**（`scripts/.e2e-freshness.json`，键 `e2e`，ISSUE #1547）。
+ * 两份都由本脚本在 pre-commit 的 D 组判，命令名仍是 `visual-freshness-gate.mjs`
+ * （改名要同批动钩子、§13.1 清单与引用它的文档，而这一步的语义没有变——
+ * 它判的一直是「这一档上次被实证跑绿是什么时候」，只是现在有第二档要判）。
  * 补的是本轮实测翻出来的另一条：**「录过一次」与「一直绿」是两件事**，而 linux 档
  * 此前的状态是「录过就算数」—— 入库的 `-linux.png` 有 4 张与当次环境差 1 像素
  * （文字整体下移一行），而没有任何东西记着这一档上一次被跑绿是什么时候、下一次该由谁跑。
@@ -35,34 +40,54 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
-  FRESHNESS_LEDGER,
   PENDING_PLATFORMS,
   SUPPORTED_PLATFORMS,
   checkFreshnessLedger,
   freshnessAge,
+  freshnessTrack,
+  readFreshnessLedgerAt,
 } from "./visual-baselines.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 
 /**
- * 读新鲜度账（不存在 / 读不出 → `{}`，由判决把它当成「一档都没记」）。
+ * 读一份新鲜度账（不存在 / 读不出 → `{}`，由判决把它当成「一档都没记」）。
  *
+ * 读写语义都在 `visual-baselines.mjs`（`readFreshnessLedgerAt` / `writeFreshness`）：
+ * 两条账各写一份「读不出怎么办」时，一边会把坏 JSON 当成空账（判红，话术正确）、
+ * 另一边会静默放行 —— 而后者不报错，只是少守一条。
+ *
+ * @param {string} kind `FRESHNESS_TRACKS` 的键
  * @param {string} [root]
  * @returns {Record<string, unknown>}
  */
-export function readFreshnessLedger(root = ROOT) {
-  try {
-    const parsed = JSON.parse(
-      fs.readFileSync(path.join(root, FRESHNESS_LEDGER), "utf8"),
-    );
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-    return parsed;
-  } catch {
-    return {};
-  }
+export function readFreshnessLedger(kind = "visual", root = ROOT) {
+  return readFreshnessLedgerAt(root, freshnessTrack(kind).ledger);
+}
+
+/**
+ * 两份账各自的判决口径 —— **数据，不是分支**。
+ *
+ * `scopeOf` 是唯一与「这一档有哪些平台」有关的部分：像素档按平台分档，而「哪几档要
+ * 有记录」还要减去 `PENDING_PLATFORMS`（那一档缺几张基线，记「上次跑绿」是句不成立的
+ * 话）；全量 e2e 只有一档、也没有「待补录」这个状态，所以 `pending` 恒空。
+ *
+ * 这么写而不是在 `main` 里 `if (kind === "visual")`：那样「第三档」会变成三分支，
+ * 而三处分支里若只有一处忘了减 pending，表现是**那一档永远被判红**（或永远被判绿），
+ * 不会有任何东西告诉你哪一处漏了。
+ *
+ * @returns {Array<{kind: string, platforms: string[], pending: string[]}>}
+ */
+function trackScopes() {
+  return [
+    {
+      kind: "visual",
+      platforms: SUPPORTED_PLATFORMS,
+      pending: Object.keys(PENDING_PLATFORMS),
+    },
+    { kind: "e2e", platforms: ["e2e"], pending: [] },
+  ];
 }
 
 /**
@@ -71,15 +96,17 @@ export function readFreshnessLedger(root = ROOT) {
  * 抽成纯入口是为了让**判决可被执行**（同 `visual-gate.mjs` 的 `runGate` 先例）：
  * 不接输入的话，「永远说没问题」这一层静默退化不会有任何东西红。
  *
- * @param {{ledger: Record<string, unknown>, platforms?: string[], pending?: string[], now?: Date}} input
+ * @param {{ledger: Record<string, unknown>, kind?: string, platforms?: string[], pending?: string[], now?: Date}} input
  * @returns {{exitCode: number, problems: string[], ages: string[]}}
  */
 export function runGate({
   ledger,
+  kind = "visual",
   platforms = SUPPORTED_PLATFORMS,
   pending = Object.keys(PENDING_PLATFORMS),
   now = new Date(),
 }) {
+  const track = freshnessTrack(kind);
   /* 两张表各管一件事：`PENDING_PLATFORMS` 管**数量**（那一档缺几张、只能在那档机器上补录），
    * 新鲜度管**时效**（那一档上次被实证跑绿是什么时候）。缺基线的档连一套完整的 PNG 都没有，
    * 「上次自证」对它是句不成立的话 —— 强行要求一条只会逼人填假读数。所以：
@@ -89,7 +116,12 @@ export function runGate({
    * 任何东西红 —— 而它恰好是「有人把 win32 从 pending 摘掉」时第一个该有反应的地方。
    */
   const required = platforms.filter((p) => !pending.includes(p));
-  const problems = checkFreshnessLedger(ledger, { required, registered: platforms });
+  const problems = checkFreshnessLedger(ledger, {
+    required,
+    registered: platforms,
+    track,
+    kind,
+  });
   const ages = required.map(
     (p) => `${p}：${freshnessAge(ledger[p], now) ?? "无记录"}`,
   );
@@ -100,25 +132,36 @@ export function runGate({
 }
 
 function main() {
-  const ledger = readFreshnessLedger();
-  const result = runGate({ ledger, platforms: SUPPORTED_PLATFORMS });
-  const stamp = `上次自证 —— ${result.ages.join("；")}`;
-  if (process.argv.includes("--ledger")) {
-    process.stdout.write(`[visual-freshness] ${stamp}\n`);
-    return 0;
+  const ledgerOnly = process.argv.includes("--ledger");
+  let failed = 0;
+  for (const scope of trackScopes()) {
+    const track = freshnessTrack(scope.kind);
+    const ledger = readFreshnessLedger(scope.kind);
+    const result = runGate({
+      ledger,
+      kind: scope.kind,
+      platforms: scope.platforms,
+      pending: scope.pending,
+    });
+    const stamp = `上次自证 —— ${result.ages.join("；")}`;
+    if (ledgerOnly) {
+      process.stdout.write(`[freshness] ${track.label}：${stamp}\n`);
+      continue;
+    }
+    if (result.exitCode !== 0) {
+      failed = 1;
+      process.stderr.write(
+        `[freshness-gate] ✗ ${track.label} 的新鲜度账不完整：\n      · ` +
+          result.problems.join("\n      · ") +
+          `\n        记账：跑一次 \`${track.run}\`（跑绿即记），` +
+          `\n              或在 ${track.ledger} 里手工补一条。\n` +
+          "        规范：docs/standards/11-测试与可观测性.md §11.8\n",
+      );
+      continue;
+    }
+    process.stdout.write(`  [ok] ${track.label}：每档都有主（${stamp}）\n`);
   }
-  if (result.exitCode !== 0) {
-    process.stderr.write(
-      "[visual-freshness-gate] ✗ 像素基线的新鲜度账不完整：\n      · " +
-        result.problems.join("\n      · ") +
-        "\n        记账：在那一档跑一次 `pnpm check:visual`（跑绿即记，见 scripts/pixel-run.mjs），" +
-        `\n              或在 ${FRESHNESS_LEDGER} 里手工补一条。\n` +
-        "        规范：docs/standards/11-测试与可观测性.md §11.8\n",
-    );
-    return 1;
-  }
-  process.stdout.write(`  [ok] 像素基线新鲜度：每档都有主（${stamp}）\n`);
-  return 0;
+  return failed;
 }
 
 if (

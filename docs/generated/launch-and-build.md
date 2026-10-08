@@ -2611,6 +2611,7 @@ sidecar」两种不同形态的失败。
 | 组件工作台 Storybook（开发期预览）                                  | `tools/start/storybook.ps1`                                                                         | `scripts/storybook.mjs`（`pnpm storybook` / `pnpm storybook:build`；契约测试 `tests/storybook-config.test.ts`）                                                              |
 | 故事枚举来源 + 组件覆盖率门禁（cva 返回值 / 漏档 / 覆盖率棘轮）     | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/storybook-check.mjs`（`node scripts/storybook-check.mjs`，契约测试 `tests/storybook-check-script.test.ts`、`tests/storybook-component-coverage.test.ts`）              |
 | 像素回归（Playwright 截图 + 基线配对判据，规范 §11.8）              | `scripts/quality-gate.ps1`（`-Mode visual`，按需档、不在 `all` 里）                                 | `scripts/pixel-run.mjs`（`pnpm check:visual` / `node scripts/pixel-run.mjs`，契约测试 `tests/pixel-run.test.ts`）                                                                |
+| 全量 E2E（普通 spec + 像素档同批，跑绿即记新鲜度账，规范 §11.8）    | `scripts/quality-gate.ps1`（暂无 Windows 入口：它是按需档，`pnpm test:e2e` 在两侧同形）             | `scripts/e2e-run.mjs`（`pnpm test:e2e` / `node scripts/e2e-run.mjs`，契约测试 `tests/e2e-run.test.ts`）                                                                        |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
 而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个

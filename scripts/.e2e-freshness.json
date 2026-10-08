@@ -1,0 +1,9 @@
+{
+  "e2e": {
+    "key": "e2e",
+    "verifiedAt": "2026-10-08T13:51:32.184Z",
+    "who": "cnb.dQh7kaCfAPA",
+    "how": "pnpm test:e2e",
+    "trackedBy": "e2e"
+  }
+}
