@@ -35,6 +35,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
+  FRESHNESS_FIX,
   FRESHNESS_LEDGER,
   PENDING_PLATFORMS,
   SUPPORTED_PLATFORMS,
@@ -89,7 +90,13 @@ export function runGate({
    * 任何东西红 —— 而它恰好是「有人把 win32 从 pending 摘掉」时第一个该有反应的地方。
    */
   const required = platforms.filter((p) => !pending.includes(p));
-  const problems = checkFreshnessLedger(ledger, { required, registered: platforms });
+  // 校验本体在 `scripts/fresh-ledger.mjs`（全量 e2e 档共用同一份，§12.12）；
+  // 「补记命令」两侧不同，所以由调用方注入而不是写死在内核里。
+  const problems = checkFreshnessLedger(ledger, {
+    required,
+    registered: platforms,
+    fix: FRESHNESS_FIX,
+  });
   const ages = required.map(
     (p) => `${p}：${freshnessAge(ledger[p], now) ?? "无记录"}`,
   );

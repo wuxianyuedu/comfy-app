@@ -22,6 +22,12 @@
  *
  * 扫描面按 `e2e/visual/*.visual.spec.ts` 目录发现，**不维护 spec 清单** ——
  * 写死的清单正是会漂的那类东西。
+ *
+ * ⚠️ 「新鲜度账」那一族（记录形状 / 三个方向的校验 / 年龄读数）**已下沉到
+ * `scripts/fresh-ledger.mjs`**：全量 e2e 档（`scripts/e2e-freshness-gate.mjs` /
+ * `scripts/e2e-run.mjs`）要的是同一件事，各写一份就是 §12.12 的孪生对 ——
+ * 届时两张同名的账会给出两种结论。本文件用 `export … from` 转出，保持既有消费方
+ * （`scripts/pixel-run.mjs` / `scripts/visual-freshness-gate.mjs` / 用例）的 import 面不变。
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -349,109 +355,13 @@ export function checkRecordingEnv({ platform, env = process.env }) {
 /** 新鲜度账文件（相对仓库根）。 */
 export const FRESHNESS_LEDGER = "scripts/.visual-baseline-freshness.json";
 
-/**
- * 新鲜度记录的形状（**读写共用这一份**：各写一套时记出来的会被自己的校验判成缺字段）。
- *
- * @param {{platform: string, verifiedAt: string, who: string, how: string}} input
- * @returns {{platform: string, verifiedAt: string, who: string, how: string}}
- */
-export function freshnessRecord({ platform, verifiedAt, who, how }) {
-  return {
-    platform,
-    verifiedAt: verifiedAt.trim(),
-    who: who.trim(),
-    how: how.trim(),
-  };
-}
+/* 记录形状 / 三个方向的校验 / 年龄读数**都住在 `scripts/fresh-ledger.mjs`**
+ * （全量 e2e 档要的是同一件事，见文件头；各写一份 = §12.12 的孪生对）。
+ * 这里转出，既有消费方（`pixel-run.mjs` / `visual-freshness-gate.mjs` / 用例）
+ * 的 import 面一个字都不用改。 */
+export { freshnessRecord, checkFreshnessLedger, freshnessAge } from "./fresh-ledger.mjs";
 
-/**
- * 校验新鲜度账（`{平台 → 记录}`）。空 = 放行。
- *
- * 三个方向都拦：缺档（还停在「录过就算数」）/ 记录写不全（没人能按它去复核）/
- * 挂在非登记档上（删平台不抹账，账就退化成一份没人认领的名单）。
- *
- * @param {Record<string, unknown>} ledger
- * @param {{required: string[], registered: string[]}} scope
- *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）
- * @returns {string[]} 问题清单
- */
-export function checkFreshnessLedger(ledger, { required, registered }) {
-  /** @type {string[]} */
-  const problems = [];
-  for (const platform of required) {
-    const entry = ledger[platform];
-    if (entry === undefined || entry === null) {
-      problems.push(
-        `${platform} 档没有基线新鲜度记录 —— 这一档现在是「录过就算数」：` +
-          "没有任何东西说清它上一次被实证跑绿是什么时候、按哪条命令。" +
-          `在那一档跑一次 \`pnpm check:visual\`（绿即可记账，见 scripts/pixel-run.mjs），` +
-          `或在 ${FRESHNESS_LEDGER} 里手工补一条。`,
-      );
-      continue;
-    }
-    if (typeof entry !== "object" || Array.isArray(entry)) {
-      problems.push(`${platform} 档的新鲜度记录不是对象 —— 形状见 freshnessRecord。`);
-      continue;
-    }
-    const rec = /** @type {Record<string, unknown>} */ (entry);
-    /* 每一栏的下限只挡「空着 / 明显是占位」的形状，不拿字数去判「写得好不好」：
-     * `who` 是个人名（"月读" 两个字完全够用），拿统一的字数门槛会把合法值判红 ——
-     * 而一个会误杀合法输入的判据，下场是被人整条绕开。`how` 要的是**能照着重跑**的命令，
-     * 所以它另有一档下限（一条真命令不会短于几字符）。 */
-    /** @type {Array<[string, number]>} */
-    const minChars = [
-      ["verifiedAt", 4],
-      ["who", 2],
-      ["how", 6],
-    ];
-    for (const [field, min] of minChars) {
-      const value = String(rec[field] ?? "").trim();
-      if (value.length < min) {
-        problems.push(
-          `${platform} 档的新鲜度记录里 ${field} 没写清（"${value}"）—— ` +
-            (field === "how"
-              ? "这一栏要写**能照着重跑的那条命令**（写「稍后」「已复核」等于没写）。"
-              : "这一栏是这条账存在的全部意义：谁、什么时候、按哪条命令复核的。"),
-        );
-      }
-    }
-    const at = String(rec.verifiedAt ?? "").trim();
-    if (at && Number.isNaN(Date.parse(at))) {
-      problems.push(
-        `${platform} 档的 verifiedAt（"${at}"）不是一个能解析的日期 —— ` +
-          "记账要能算「多久没跑」，写「最近」等于没写。",
-      );
-    }
-  }
-  for (const platform of Object.keys(ledger)) {
-    if (!registered.includes(platform)) {
-      problems.push(
-        `新鲜度账里记着 ${platform} 档，但它不在登记口径里（${registered.join(" / ")}）—— ` +
-          "删掉平台的档就要同批抹账，否则这张表会退化成一份没人认领的名单。",
-      );
-    }
-  }
-  return problems;
-}
-
-/**
- * 「这一档上次被跑绿距今多久」—— 给输出用的一句读数（**不是判据**）。
- *
- * 只在记录写得全、日期解得开时给；否则返回 null（缺日期时算一个天数毫无意义，
- * 而把 null 当 0 天读会把「没记」显示成「刚刚跑过」）。
- *
- * @param {unknown} entry
- * @param {Date} [now] 便于用例喂固定时钟
- * @returns {string | null}
- */
-export function freshnessAge(entry, now = new Date()) {
-  if (entry === null || typeof entry !== "object") return null;
-  const at = String(
-    /** @type {Record<string, unknown>} */ (entry).verifiedAt ?? "",
-  ).trim();
-  const ms = Date.parse(at);
-  if (Number.isNaN(ms)) return null;
-  const days = Math.floor((now.getTime() - ms) / 86_400_000);
-  if (days < 0) return null;
-  return days === 0 ? "今天" : `${days} 天前`;
-}
+/** 视觉档缺记录时的那条修法（注入 `checkFreshnessLedger` —— 两侧命令不同）。 */
+export const FRESHNESS_FIX =
+  "在那一档跑一次 `pnpm check:visual`（绿即可记账，见 scripts/pixel-run.mjs），" +
+  `或在 ${FRESHNESS_LEDGER} 里手工补一条。`;

@@ -182,6 +182,10 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
    # 新鲜度记录，且写清谁 / 什么时候 / 按哪条命令复核的」（`scripts/.visual-baseline-freshness.json`）。
    # 缺几张基线的档由 `PENDING_PLATFORMS` 顶着，不要求新鲜度记录 —— 两张表各管数量与时效。
    # 钩子里**不跑像素**（起 webServer + 浏览器会与 A/B/C/D 抢资源），记账走 `pnpm check:visual`
+✅ node scripts/e2e-freshness-gate.mjs       # 全量 e2e 的**每日自证**：判「今天的第一次提交带没带
+   # 全量 e2e 的凭证」（`scripts/.e2e-freshness.json`）。当天已有凭证 ⇒ 零输出、放行；
+   # 跑绿即记账（`pnpm check:e2e`），或 `node scripts/e2e-run.mjs --skip "<理由>"` 记一条写清理由的
+   # 豁免。钩子里**不跑 e2e**（起 webServer + 真浏览器与 A/B/C/D 抢资源，墙钟十几分钟）
 ✅ node scripts/run-affected-tests.mjs       # C 组：结构守护固定清单 + 本次改动
    # 牵扯到的用例，一次 vite（固定清单唯一出处是 `affected-tests.mjs` 里的
    # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
@@ -398,7 +402,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | -------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 全量单测 + 覆盖率门槛（`pnpm run test:coverage`，3000+ 用例）        | 平台流水线的「全量单测 + 覆盖率」那一步      | **无自动执行者**。按需手动跑；提交门槛里只有固定清单 + 受影响用例（见 13.5 的 C 组与 13.5.8）                                                                                                   |
 | `pnpm run build` + `check-standalone-contents.cjs`（产物级护栏）     | 平台流水线的「构建」+「数产物」那两步        | **无自动执行者**。改构建 / 产物相关的东西后手动跑                                                                                                                                               |
-| E2E `playwright test --grep @critical`                               | 平台流水线的「E2E @critical」那一步          | **无自动执行者**。按需手动跑                                                                                                                                                                    |
+| E2E `playwright test --grep @critical` / 全量 `pnpm test:e2e`        | 平台流水线的「E2E @critical」那一步          | **按需 + 每天一次的自证**（ISSUE #1282 收尾）：入口 `pnpm check:e2e`，跑绿即记凭证；pre-commit D 组「全量 e2e 每日自证（凭证账）」判「今天的第一次提交带没带凭证」（§11.8.1）。钩子**不跑 e2e**（墙钟十几分钟） |
 | `db:push` 建库                                                       | 平台流水线的「建库」那一步                   | 只在手动跑 E2E 前需要                                                                                                                                                                           |
 | R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | 平台流水线里带 `--strict` 跑结构检查的那一步 | **已在本地钩子里**（D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」这一步带 `--strict`，ISSUE #1404 翻档；旧口径「本地只提醒」的前提「挂着 11 个存量」已不成立，基线现在 `total: 0`）               |
 | `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑；`pnpm doc:gen` 内部的第一步    | **已在本地钩子里**（D 组「文档引用与权威源一致」，ISSUE #1371 翻掉了旧的「手动档」签字）。旧口径是「改了文档后需手动跑」，而 AGENTS 规定的必跑口令是 `doc:render`（只渲染不校验），空档即由此来 |
@@ -440,6 +444,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 产物级护栏            | 改动构建 / 产物后 `@` 跑 `pnpm run build` + `check-standalone-contents.cjs` | 欠账条目 2                       |
 | E2E 关键流程          | `@` 跑 `pnpm exec playwright test --grep @critical`（先 `db:push`）         | 欠账条目 3/4                     |
 | 像素回归（§11.8）     | `pnpm check:visual`（或 Windows 双击 `-Mode visual`）——见下面那条            | 不进钩子，但它有**边界明确的触发条件** |
+| 全量 e2e（§11.8.1）   | `pnpm check:e2e`（或 Windows 双击 `-Mode e2e`）——见下面那条                 | 不进钩子，但有**每天一次的自证**       |
 
 **像素回归这一行为什么与上面三条不同**（ISSUE #1282 的口径）：上面三条是「没有触发条件、
 只能按需召唤」，而像素层的触发条件一直是明确、可观测的 —— **改了会动到像素判决的东西**
@@ -455,6 +460,18 @@ ISSUE #1282）：`--update-snapshots` 总是绿（把基线改成当次实况）
 文字整体下移一行），而没有任何东西记着这一档上次被跑绿是什么时候。现在每一登记档都必须有一条
 **新鲜度记录**（`scripts/.visual-baseline-freshness.json`），由 `pnpm check:visual` 跑绿即记。
 它**不跑像素**，只做「每档都有主」这件事（见 §11.8）。
+
+**全量 e2e 这一行为什么单独有一条「每日自证」**（ISSUE #1282 收尾的口径）：它与上面
+「没有触发条件、只能按需召唤」那三条同族 —— 全量 Playwright（含 `@critical`）没有
+「改了哪个目录就该跑」这种可观测的触发条件，而它的墙钟是十几分钟量级（起 webServer +
+真浏览器 + 假 ComfyUI），进钩子不现实。但它也不是「躺着等有人 `@`」：入库的 linux 档
+基线曾经被别线的产品改动（`#1327` 改导航顺序）作废、**躺了两天**，唯一的发现方式是
+「有人在 Issue 里点头让 NPC 跑一遍」。所以它的出路是**每天首次提交带一次凭证**：
+`pnpm check:e2e` 跑绿即往 `scripts/.e2e-freshness.json` 记一条，或
+`node scripts/e2e-run.mjs --skip "<理由>"` 记一条写明理由的豁免 —— pre-commit 的
+「全量 e2e 每日自证（凭证账）」那一步判的正是它（`scripts/e2e-freshness-gate.mjs`，
+口径与四条边界见 §11.8.1）。它与像素档**互补**：那一档守「基线有没有被换掉」，
+这一档守「功能链路上一次绿是什么时候」。
 
 这张表里**原本还有一行**「canonical 候选 → `@` 跑 `tw4-canonical-report.mjs`」，
 随 ISSUE #1451 摘掉：它们不再靠「人记得跑」，而是各带 `--check` 判定档与棘轮基线

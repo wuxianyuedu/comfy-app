@@ -37,6 +37,7 @@
     "test:visual": "playwright test e2e/visual",
     "check:visual": "node scripts/pixel-run.mjs",
     "check:visual:update": "node scripts/pixel-run.mjs --update",
+    "check:e2e": "node scripts/e2e-run.mjs",
     "storybook": "node scripts/storybook.mjs dev",
     "storybook:build": "node scripts/storybook.mjs build",
     "doc:check": "node scripts/check-doc-references.cjs",

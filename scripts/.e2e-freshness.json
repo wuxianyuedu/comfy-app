@@ -1,0 +1,8 @@
+{
+  "e2e": {
+    "tier": "e2e",
+    "verifiedAt": "2026-10-08T14:08:30.699Z",
+    "who": "cnb.dQh7kaCfAPA",
+    "how": "pnpm check:e2e"
+  }
+}

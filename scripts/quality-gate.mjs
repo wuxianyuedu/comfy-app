@@ -128,6 +128,28 @@ const GATES = {
     args: ["../scripts/pixel-run.mjs"],
     run: false,
   },
+  /**
+   * 全量 e2e（规范 §11.8，ISSUE #1282 的口径）。
+   *
+   * **也不在 `all` 里**（`run: false`），理由与 `visual` 同族但更硬：它要起 webServer +
+   * 真浏览器 + 假 ComfyUI，墙钟是十几分钟量级（像素档是分钟量级）。它是 §13.5.4
+   * 「按需召唤」那一层的**显式入口**：`pnpm check:e2e` / `--mode e2e` / 双击入口
+   * `-Mode e2e`，而不是每次 `check:all` 都付这一笔。
+   *
+   * 与 `visual` 的分工是**互补**而非替代：全量 e2e 覆盖功能链路（含 `@critical`），
+   * 像素档覆盖「界面有没有变形」。`--grep @critical` 一条视觉用例都不含，
+   * 所以它绿推不出像素层没事；反过来也一样。
+   *
+   * 而「按需」在它身上一直是**一句没有执行者的话**（现场：入库的 linux 档基线被别线的
+   * 产品改动作废、躺了两天）。所以除了这个入口，另有一条**每日自证**的判据在钩子里：
+   * `scripts/e2e-freshness-gate.mjs` 判「今天的第一次提交带没带全量 e2e 的凭证」——
+   * 跑绿即记账（`--mode e2e` 走的这一档就是记账那一档），或显式记一条写清理由的豁免。
+   */
+  e2e: {
+    label: "Full E2E (Playwright, all specs) + daily freshness ledger",
+    args: ["../scripts/e2e-run.mjs"],
+    run: false,
+  },
 };
 
 function parseArgs(argv) {

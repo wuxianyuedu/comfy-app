@@ -280,6 +280,15 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `scripts/quality-gate.mjs` / `.ps1` 两份**文本**（那两份都自跑自退、import 不进来，
   // 所以 import 图追不到），与本次暂存改动无关也必须响，故进固定清单。
   "tests/pixel-run.test.ts",
+  // 「全量 e2e 每天首次提交要有凭证」（§11.8）。与 `visual-gate.mjs` 那两条同因：
+  // 它的触发面与三向判决都是**下一次新增/删**时才响的守卫，而它自己挂的钩子步骤
+  // 与 `pixel-run.mjs` 的按需档一样读的是两份**文本**（`quality-gate.mjs` /
+  // `.ps1` 自跑自退，import 不进来）—— import 图追不到，与本次暂存改动无关也必须响。
+  "tests/e2e-run.test.ts",
+  // 上面那份的**判决本体**（`e2e-freshness-gate.mjs` 的 `runGate` 与凭证语义）。
+  // 同因进固定清单：把这一步从 D 组摘掉、或把「每天首次」放宽成「永远放行」的那次
+  // 改动，恰好落在 `.githooks/**` / 这两份脚本上 —— 跟着改动走等于专挑它不在的时机跑。
+  "tests/e2e-freshness.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
