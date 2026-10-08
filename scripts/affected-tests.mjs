@@ -248,6 +248,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 而它与某一次具体改动无关 —— 只在被改到时才跑等于专挑它不在的时机跑。
   // 同因：改 `.githooks/**` 会让本层放弃收窄、只跑固定清单。
   "tests/test-environment-gate.test.ts",
+  // 「像素档留在按需层、不进 `check:all`」（§11.8 / §13.5.4）。这条此前只是文档里
+  // 的一句话：`GATES.visual` 带 `run: false`、`.ps1` 那侧带 `Run = $false`，而
+  // 没有任何判据按名字钉住它 —— 把它挪进默认档（并顺手新增任意一个按需档）\
+  // 全仓判据照样全绿，代价是每次一键门禁都起 webServer + 浏览器。它读的是
+  // `scripts/quality-gate.mjs` / `.ps1` 两份**文本**（那两份都自跑自退、import 不进来，
+  // 所以 import 图追不到），与本次暂存改动无关也必须响，故进固定清单。
+  "tests/pixel-run.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

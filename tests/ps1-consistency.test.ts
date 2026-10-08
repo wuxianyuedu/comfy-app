@@ -19,6 +19,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { parseMjsGates, parsePs1Gates } from "./helpers/quality-gate-gates";
+
 const GUARD = path.join(process.cwd(), "scripts", "check-ps1-consistency.mjs");
 const SPEC = path.join("docs", "standards", "launch-and-build.md");
 
@@ -241,12 +243,12 @@ describe("跨平台动作的实现契约", () => {
     /* 软断言：五个关键词 × 两侧是十格独立结论 —— 缺一个时想看的是「缺了哪些」，
        而不是「第一个是哪个」（§11.18）。 */
     for (const needle of ["typecheck", "eslint", "run", "lint", "vitest"]) {
-      expect.soft(squash(ps1), `quality-gate.ps1 缺 ${needle}`).toContain(
-        needle,
-      );
-      expect.soft(squash(mjs), `quality-gate.mjs 缺 ${needle}`).toContain(
-        needle,
-      );
+      expect
+        .soft(squash(ps1), `quality-gate.ps1 缺 ${needle}`)
+        .toContain(needle);
+      expect
+        .soft(squash(mjs), `quality-gate.mjs 缺 ${needle}`)
+        .toContain(needle);
     }
     // lint 的 `--max-warnings` 唯一真源在 package.json，别让它静默丢失（否则
     // 零警告门禁形同虚设却没人发现）。
@@ -277,44 +279,25 @@ describe("跨平台动作的实现契约", () => {
       path.join(process.cwd(), "scripts", "quality-gate.mjs"),
       "utf8",
     );
-    const ps1Names = [...ps1.matchAll(/Name = "([A-Za-z]+)"/g)]
-      .map((m) => m[1])
-      .filter((n): n is string => Boolean(n));
-    // `GATES` 的键是 TS 对象里 `key: {` 的形态，取 `GATES = {` 之后到收尾的那一段。
-    const mjsBlock = mjs.slice(
-      mjs.indexOf("const GATES = {"),
-      mjs.indexOf("function parseArgs"),
-    );
-    const mjsNames = [...mjsBlock.matchAll(/^ {2}([A-Za-z]+): \{/gm)]
-      .map((m) => m[1])
-      .filter((n): n is string => Boolean(n));
+    // 解析器是共享件（`tests/helpers/quality-gate-gates`）：同一条 `$Blocks` / `GATES`
+    // 形状在本文件与 `tests/pixel-run.test.ts`（像素档是否留在按需层）两处都要读，
+    // 各写一份会在「换行 / 注释 / 块尾形态」上漂成两个口径（§12.18）。
+    const ps1Entries = parsePs1Gates(ps1);
+    const mjsEntries = parseMjsGates(mjs);
+    const ps1Names = ps1Entries.map((e) => e.name);
+    const mjsNames = mjsEntries.map((e) => e.name);
 
     expect(ps1Names.length).toBeGreaterThan(0);
     expect(mjsNames.length).toBeGreaterThan(0);
     expect([...ps1Names].sort()).toEqual([...mjsNames].sort());
 
     // 集合相等还不够：**两边一起被删**时它恒绿，而这正是「门禁没接上」最省事的形态。
-    // 所以另钉一条在场地 —— 按**非 `all` 档**（`Run=$false` / `run: false`）取名字，
+    // 所以另钉一条在场地 —— 按**非 `all` 档**（`Run = $false` / `run: false`）取名字，
     // 它必须非空且两侧一致：这半边是「按需档」唯一的登记处，清零就等于这一层没了。
-    // `.ps1` 的块是 `@{ Name = "x"; …; Run = $false }` 跨 2~3 行，所以按「从 Name 到
-    // 下一个 Name 之间含 Run = $false」来取，而不是钉死行数（钉行数会在有人换行时静默归零）。
-    // `.ps1` 的块是 `@{ … }`（可跨行、行内还带注释），所以按**块切分**而不是按行或前瞻：
-    // 先切出 `@{ … }` 的每一块，再在块内看有没有 `Run = $false`。用前瞻式的正则会在
-    // 「换行 / 注释 / 块尾形态」上静默取错（实测第一版就把 `typecheck` 当成了按需档）。
-    const ps1Blocks = [...ps1.matchAll(/@\{([\s\S]*?)\}/g)].map((m) => m[1] ?? "");
-    const ps1Manual = ps1Blocks
-      .filter((block) => block.includes("Run = $false"))
-      .map((block) => /Name = "([A-Za-z]+)"/.exec(block)?.[1])
-      .filter((n): n is string => Boolean(n));
-
-    // 同一口径取 `.mjs` 侧：`GATES` 的每一项从 `  key: {` 到下一个 `  key: {` 为止。
-    const mjsEntries = [
-      ...mjsBlock.matchAll(/^ {2}([A-Za-z]+): \{([\s\S]*?)(?=^ {2}[A-Za-z]+: \{|^\};)/gm),
-    ].map((m) => ({ name: m[1] ?? "", body: m[2] ?? "" }));
-    const mjsManual = mjsEntries
-      .filter((e) => /\brun: false\b/.test(e.body))
-      .map((e) => e.name)
-      .filter((n) => n.length > 0);
+    // 块切分与「哪一档带 Run = $false」的取法都在共享件里（`.ps1` 的块可跨行、行内还带
+    // 注释，用前瞻式正则会静默取错 —— 实测第一版就把 `typecheck` 当成了按需档）。
+    const ps1Manual = ps1Entries.filter((e) => e.onDemand).map((e) => e.name);
+    const mjsManual = mjsEntries.filter((e) => e.onDemand).map((e) => e.name);
 
     expect(mjsManual).not.toEqual([]);
     expect([...ps1Manual].sort()).toEqual([...mjsManual].sort());

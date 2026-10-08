@@ -1000,6 +1000,14 @@
       与 `dark:shadow-black/40` 撞在一起），于是空画布引导卡丢了毛玻璃。Tailwind 对
       未知类名**不报错**（只是不生成 CSS），所以构建 / tsc / eslint / 既有门禁全绿 ——
       「类名字符串被拼坏」全仓仍无判据，本批只修实例并记账（见 §16.2.3.9 末尾）。
+      **「像素档不进 `check:all`」这条口径也补上了执行者**（同批）：此前它只是两侧注释里的
+      一句话（`GATES.visual` 的 `run: false` / `.ps1` 的 `Run = $false`），而
+      `tests/ps1-consistency.test.ts` 盯的是「按需档集合非空、且两侧一致」—— 只要还剩
+      任意一个按需档就成立。实测漏法：把像素档挪进默认档、同时新增一个按需档，全仓判据
+      照样全绿，代价是每次 `pnpm check:all` 都起 webServer + 浏览器。现在由
+      `tests/pixel-run.test.ts` 按**入口**（`args` 里那个 `pixel-run.mjs`，不按门禁名）钉住
+      两侧，并附「解析器不是空转」；解析器与 `ps1-consistency` 共用
+      `tests/helpers/quality-gate-gates.ts`。口径见规范 11 §11.8。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。
