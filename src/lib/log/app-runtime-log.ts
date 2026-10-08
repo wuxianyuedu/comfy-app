@@ -1,7 +1,10 @@
 import fs from "node:fs";
-import path from "node:path";
 
-import { APP_RUNTIME_LOG } from "~/lib/log/log-paths";
+import {
+  openRuntimeLogWriter,
+  pruneRuntimeLogFiles,
+  type RuntimeLogWriter,
+} from "~/lib/log/runtime-log-pack.server";
 import { formatLocalStamp } from "~/lib/time-format";
 
 /**
@@ -9,11 +12,11 @@ import { formatLocalStamp } from "~/lib/time-format";
  * =========================================================
  * 本日志器解决「中间操作看不到」问题：把应用运行期发生的业务操作
  * （tRPC 调用、生成、任务、工作流增删改等）以面板可解析的行格式
- * 追加到 `log/services/app-runtime.log`，供应用内「应用日志」面板
- * 经 `GET /api/logs/current?source=app-runtime` 实时轮询展示。
+ * 落到 `log/current/services/app-runtime-<YYYYMMDD-HHmmss>.log`，供应用内
+ * 「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询展示。
  *
- * 与 comfyui-runtime / drizzle-studio-runtime 同一套「追加写 + 面板轮询」模式，
- * 但覆盖的是**应用自身操作**而非外部常驻子进程输出。
+ * 与 comfyui-runtime / drizzle-studio-runtime 同一套「一次启动一份文件 + 面板
+ * 轮询」模式，但覆盖的是**应用自身操作**而非外部常驻子进程输出。
  *
  * 行格式 = `[YYYY-MM-DD HH:mm:ss.mmm] [LEVEL] [ns] msg`
  * - 本地时区时间戳（面板展示给本机用户看，UTC 会差 8 小时）
@@ -67,47 +70,44 @@ function stringify(fields?: Record<string, unknown>): string {
   }
 }
 
-const MAX_LOG_BYTES = 10 * 1024 * 1024;
-const KEEP_LOG_BACKUPS = 3;
+/**
+ * 本次应用运行那一份日志文件的写入器。
+ *
+ * **惰性创建 + 进程内单例**：应用运行日志的「一次运行」就是**本进程的生命周期**
+ * （Next server 进程起来 → 退出），所以句柄在第一次写入时定下来即可 ——
+ * 没有第二个「启动事件」需要切分，也不必由宿主显式开一次（与 comfyui 那种
+ * 「同一个应用进程里 ComfyUI 被反复启动」不同）。
+ *
+ * 句柄定下来之后**不再变**：改名 / 搬走正在写的文件会让已缓存 fd 指向不存在的
+ * 路径，早期日志静默丢失（同 §4.0「进程只持有一个固定路径的句柄」那条）。
+ */
+let writer: RuntimeLogWriter | null = null;
 
-/** 体积超限时轮转：当前文件改名 `.1`，旧的 `.i` 依次后移，最多保留 KEEP_LOG_BACKUPS 份。 */
-function rotateIfNeeded(filePath: string): void {
+function appendTo(file: string, line: string): void {
   try {
-    const st = fs.statSync(/*turbopackIgnore: true*/ filePath);
-    if (st.size <= MAX_LOG_BYTES) return;
-    for (let i = KEEP_LOG_BACKUPS - 1; i >= 1; i--) {
-      const cur = `${filePath}.${i}`;
-      const nxt = `${filePath}.${i + 1}`;
-      if (fs.existsSync(/*turbopackIgnore: true*/ cur)) {
-        fs.renameSync(/*turbopackIgnore: true*/ cur, nxt);
-      }
-    }
-    fs.renameSync(/*turbopackIgnore: true*/ filePath, `${filePath}.1`);
+    fs.appendFileSync(/*turbopackIgnore: true*/ file, `${line}\n`, "utf-8");
   } catch {
-    // 轮转失败绝不阻塞业务
+    // 日志写入失败绝不阻塞业务主流程
   }
 }
 
-function makeLogger(
-  ns: string,
-  filePath: string = APP_RUNTIME_LOG,
-): AppRuntimeLogger {
+/** 首次写入时开本次运行的文件；轮转同族的旧文件（每个来源留最近若干份）。 */
+function writerFor(): RuntimeLogWriter {
+  if (writer) return writer;
+  pruneRuntimeLogFiles();
+  writer = openRuntimeLogWriter("app-runtime");
+  return writer;
+}
+
+function makeLogger(ns: string, file?: string): AppRuntimeLogger {
   const emit = (
     level: AppLogLevel,
     msg: string,
     fields?: Record<string, unknown>,
   ) => {
-    try {
-      const dir = path.dirname(filePath);
-      if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      const line = `[${localTimestamp()}] [${LEVEL_TAG[level]}]${ns ? ` [${ns}]` : ""} ${msg}${stringify(fields)}\n`;
-      rotateIfNeeded(filePath);
-      fs.appendFileSync(/*turbopackIgnore: true*/ filePath, line, "utf-8");
-    } catch {
-      // 日志写入失败绝不阻塞业务主流程
-    }
+    const line = `[${localTimestamp()}] [${LEVEL_TAG[level]}]${ns ? ` [${ns}]` : ""} ${msg}${stringify(fields)}`;
+    const target = file ?? writerFor().file;
+    appendTo(target, line);
   };
 
   return {
@@ -115,16 +115,21 @@ function makeLogger(
     warn: (message, fields) => emit("warn", message, fields),
     error: (message, fields) => emit("error", message, fields),
     debug: (message, fields) => emit("debug", message, fields),
-    child: (childNs) => makeLogger(ns ? `${ns}:${childNs}` : childNs, filePath),
+    child: (childNs) => makeLogger(ns ? `${ns}:${childNs}` : childNs, file),
   };
 }
 
-/** 创建应用运行日志器。各模块 `export const log = createAppRuntimeLogger("module")`。 */
+/**
+ * 创建应用运行日志器。各模块 `export const log = createAppRuntimeLogger("module")`。
+ *
+ * `file` 只在测试里传（指向自己的临时目录）：真实调用方一律走内部的
+ * `writerFor()` 命名规则，别在别处拼 `app-runtime-*.log`。
+ */
 export function createAppRuntimeLogger(
   namespace: string,
-  filePath?: string,
+  file?: string,
 ): AppRuntimeLogger {
-  return makeLogger(namespace, filePath);
+  return makeLogger(namespace, file);
 }
 
 /** 全局默认应用运行日志器（命名空间 `app`）。 */

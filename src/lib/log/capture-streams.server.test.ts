@@ -29,10 +29,7 @@ vi.mock("~/lib/log/log-paths", async () => {
   return {
     ...(actual as Record<string, unknown>),
     NEXTJS_LOG_DIR: tmp,
-    /* 同时把 app-runtime.log 也指到临时目录：installStreamCapture 会往它写一条
-     * 会话边界横幅（ISSUE #592），不 mock 就会往仓库真实的 log/services/ 写字
-     * （硬规则：测试必须给自己的临时目录）。 */
-    APP_RUNTIME_LOG: path.join(tmp, "app-runtime.log"),
+    SERVICES_LOG_DIR: tmp,
   };
 });
 
@@ -116,20 +113,20 @@ describe("installStreamCapture", () => {
     expect(text).toContain("FATAL: An unexpected Turbopack error occurred");
   });
 
-  it("每次安装都会往 app-runtime.log 写一条会话边界横幅（两侧留空行）", async () => {
+  it("转录不再往 app-runtime 写会话横幅（一次启动一份文件之后没有它的位置）", async () => {
+    /* 横幅当初存在是为了「一份文件里多次启动的行要能分清边界」（ISSUE #592）。
+     * 四份 runtime 日志改成一次启动一份文件之后，边界就是文件名本身，因此这里
+     * 不该再产出横幅 —— 产出也没人读（读侧不再按横幅切分），而「没人读的写法」
+     * 正是要被清掉的那一类（ISSUE #1326）。
+     *
+     * 判据落在 `SERVICES_LOG_DIR`（= 本用例的 tmp）下**任何** app-runtime 文件
+     * 上：写横幅会写成固定名 `app-runtime.log`，而新的命名规则产出的是
+     * `app-runtime-<时刻>.log` —— 两者都不该由本模块产出（它只转录 nextjs
+     * 面板那一份）。 */
     await freshInstall();
-    const text = readCapture(path.join(tmp, "app-runtime.log"));
-    /* 横幅本体：box 字符分隔线 + 会话说明；两侧各留一个空行（ISSUE #592：
-     * 「一个文件记录多次日志，每次启动之间需要行空白」）。 */
-    expect(text).toContain("─".repeat(72));
-    expect(text).toContain("应用运行日志（本次运行）");
-    const lines = text.split("\n");
-    const titleAt = lines.findIndex((l) => l.includes("应用运行日志"));
-    expect(titleAt).toBeGreaterThan(0);
-    expect(lines[titleAt - 1]).toContain("─");
-    expect(lines[titleAt - 2]).toBe(""); // 横幅上方的空行
-    // 横幅以空行收口，下一次 append 的内容不会粘在分隔线上
-    expect(text.endsWith("─\x1b[0m\n\n")).toBe(true);
+    expect(
+      fs.readdirSync(tmp).filter((n) => n.startsWith("app-runtime")),
+    ).toEqual([]);
   });
 
   it("原输出行为不变（转录是额外落一份，不接管）", async () => {

@@ -471,132 +471,47 @@ describe("appendFileLogs 批量追加", () => {
   });
 });
 
-/* ── 会话边界：面板只显示本次运行 ─────────────────────────── */
+/* ── 会话边界：裁剪机制（ISSUE #1326 之后本集合为空）───────────
+ *
+ * 这套机制回答的是「某个来源的文件里混着前几次运行的行，面板怎么只显示本次」。
+ * 四份 runtime 日志改成**一次启动一份文件**之后，`app-runtime` 不再混历史，
+ * `app`（按进程命名的转录）也一直是每进程一份 —— 集合因此空了。
+ *
+ * 留着的理由不是「以后可能用」，而是它是「来源变成跨运行累积」时的**唯一**
+ * 出口：删掉它，下一个人只会在面板里再写一遍时间线比较（那正是 §16.2.4.16
+ * 这类判据要防的分叉）。因此这里断言的是**机制本身还在且口径正确**，
+ * 而不是「哪个来源现在需要裁」——后者是上面那条空集合的属性。
+ */
 
-describe("dropStaleEntries 丢弃上一次运行的残留行", () => {
+describe("dropStaleEntries 的口径（机制保留）", () => {
   const cutoff = 1_700_000_000_000;
-
-  it("跨运行累积来源里，行时刻早于会话起点即判为历史", () => {
-    const entries = [
-      makeStale({ id: "old", time: cutoff - 60_000 }),
-      makeStale({ id: "new", time: cutoff + 1_000 }),
-    ];
-    expect(idsOf(dropStaleEntries(entries, cutoff))).toEqual(["new"]);
-  });
 
   it("起点未知（null）时不做时间线截断", () => {
-    const entries = [makeStale({ id: "any", time: cutoff - 60_000 })];
+    const entries = [makeEntry({ id: "any", time: cutoff - 60_000 })];
     expect(idsOf(dropStaleEntries(entries, null))).toEqual(["any"]);
   });
-});
 
-describe("appendFileLogs 按会话起点过滤", () => {
-  const cutoff = 1_700_000_000_000;
-
-  it("未设会话起点时全部收下", () => {
-    useLogStore
-      .getState()
-      .appendFileLogs([makeStale({ id: "old", time: cutoff - 60_000 })]);
-    expect(idsOf(useLogStore.getState().logs)).toEqual(["old"]);
-  });
-
-  it("设了会话起点后跨运行来源的历史行进不了面板", () => {
-    useLogStore.getState().setSessionStart(cutoff);
-    useLogStore
-      .getState()
-      .appendFileLogs([
-        makeStale({ id: "old", time: cutoff - 60_000 }),
-        makeStale({ id: "new", time: cutoff + 5_000 }),
-      ]);
-    expect(idsOf(useLogStore.getState().logs)).toEqual(["new"]);
-  });
-
-  it("全部是历史行时面板不新增任何条目", () => {
-    useLogStore.getState().setSessionStart(cutoff);
-    useLogStore
-      .getState()
-      .appendFileLogs([makeStale({ id: "old", time: cutoff - 1 })]);
-    expect(idsOf(useLogStore.getState().logs)).toEqual([]);
+  it("集合为空时任何来源都不参与裁剪（行时刻多老都保留）", () => {
+    const entries = [
+      makeEntry({
+        id: "old",
+        time: cutoff - 60_000,
+        origin: "app-runtime",
+      }),
+      makeEntry({ id: "new", time: cutoff + 1_000, origin: "app-runtime" }),
+    ];
+    expect(idsOf(dropStaleEntries(entries, cutoff))).toEqual(["old", "new"]);
   });
 });
 
-describe("会话起点不得裁掉「每次运行覆盖重建」的来源（ISSUE #262 复审：启动/启动器日志丢失）", () => {
-  const cutoff = 1_700_000_000_000;
-
-  /* 真实现场：会话起点取自 dev-launcher.log 的 mtime，而启动器进程（launcher）
-   * 在它被创建**之前**就写下了自己的头几行（python/exe/cwd/探测 Node…）。若
-   * 拿这个起点去裁 launcher 的整段内容，本次启动最早、最该被看到的那些行会被
-   * 静默丢掉——用户读到的就是「启动和启动器日志丢失」。 */
-  it("launcher / dev 的行早于会话起点也保留：这两个文件每次运行覆盖重建", () => {
-    const entries = [
-      makeEntry({
-        id: "launcher-head",
-        time: cutoff - 45_000,
-        origin: "launcher",
-      }),
-      makeEntry({ id: "dev-step", time: cutoff - 15_000, origin: "dev" }),
-    ];
-    expect(idsOf(dropStaleEntries(entries, cutoff))).toEqual([
-      "launcher-head",
-      "dev-step",
-    ]);
-  });
-
-  it("运行期生成的条目（console / tauri / system）不受起点影响", () => {
-    const entries = [
-      makeEntry({ id: "console", time: cutoff - 60_000, source: "console" }),
-      makeEntry({ id: "tauri", time: cutoff - 60_000, source: "tauri" }),
-      makeEntry({ id: "system", time: cutoff - 60_000, source: "system" }),
-    ];
-    expect(idsOf(dropStaleEntries(entries, cutoff))).toHaveLength(3);
-  });
-
-  it("同一次 batch 里两类来源各按各的规则：只裁跨运行来源", () => {
-    const batch = [
-      makeEntry({
-        id: "stale-runtime",
-        time: cutoff - 30_000,
-        origin: "app-runtime",
-      }),
-      makeEntry({
-        id: "fresh-runtime",
-        time: cutoff + 1_000,
-        origin: "app-runtime",
-      }),
-      makeEntry({
-        id: "launcher-head",
-        time: cutoff - 45_000,
-        origin: "launcher",
-      }),
-    ];
-    const kept = idsOf(dropStaleEntries(batch, cutoff));
-    expect(kept).not.toContain("stale-runtime");
-    expect(kept).toContain("fresh-runtime");
-    expect(kept).toContain("launcher-head");
-  });
-
-  it("appendFileLogs 走同一条规则：起点设好之后 launcher 的早期行照样进面板", () => {
-    useLogStore.getState().setSessionStart(cutoff);
-    useLogStore.getState().appendFileLogs([
-      makeEntry({
-        id: "launcher-head",
-        time: cutoff - 45_000,
-        origin: "launcher",
-      }),
-      makeEntry({
-        id: "stale-runtime",
-        time: cutoff - 45_000,
-        origin: "app-runtime",
-      }),
-    ]);
-    expect(idsOf(useLogStore.getState().logs)).toEqual(["launcher-head"]);
-  });
-
-  it("isSessionScopedOrigin 是这条规则的唯一事实来源", () => {
-    /* 跨运行累积（可能拿到上一进程的内容）→ 要裁 */
-    expect(isSessionScopedOrigin("app-runtime")).toBe(true);
-    expect(isSessionScopedOrigin("app")).toBe(true);
-    /* 每次运行覆盖重建 → 不裁：拿起点去裁只会把本次启动早期的行误判成历史 */
+describe("isSessionScopedOrigin 是这条规则的唯一事实来源", () => {
+  it("四个来源都不再需要裁剪（一次启动一份文件 / 每次运行覆盖重建）", () => {
+    /* `app-runtime`：一次启动一份文件（ISSUE #1326），文件内容天生只有本次。 */
+    expect(isSessionScopedOrigin("app-runtime")).toBe(false);
+    /* `app`（nextjs-panel-<pid>-<ts>.log）：文件名按进程命名，同样是每进程一份。 */
+    expect(isSessionScopedOrigin("app")).toBe(false);
+    /* 每次运行覆盖重建 → 拿起点去裁只会把本次启动早期的行误判成历史
+     * （ISSUE #262 复审：「启动和启动器日志丢失」）。 */
     expect(isSessionScopedOrigin("launcher")).toBe(false);
     expect(isSessionScopedOrigin("dev")).toBe(false);
     /* 壳侧两路虽然也是追加写累积，但锚点晚于壳的启动报告——裁剪会把
@@ -608,9 +523,12 @@ describe("会话起点不得裁掉「每次运行覆盖重建」的来源（ISSU
   });
 });
 
-describe("setSessionStart 收拢迟到的时间线", () => {
-  it("会话起点比首帧晚到时清掉已混入的历史行", () => {
-    const cutoff = 1_700_000_000_000;
+describe("setSessionStart（机制保留，集合为空时它是幂等的空操作）", () => {
+  const cutoff = 1_700_000_000_000;
+
+  it("集合为空时起点不裁任何行，但起点本身照常记下来", () => {
+    /* 起点仍在契约里（服务端仍会在响应里带 `sessionStart`），只是当前没有任何
+     * 来源认它。把它丢掉会让「将来某个来源变成累积」时少一条可用通道。 */
     useLogStore.setState({
       logs: [
         makeStale({ id: "old", time: cutoff - 60_000 }),
@@ -618,14 +536,12 @@ describe("setSessionStart 收拢迟到的时间线", () => {
       ],
     });
     useLogStore.getState().setSessionStart(cutoff);
-    const { logs, counts, sessionStart } = useLogStore.getState();
-    expect(idsOf(logs)).toEqual(["new"]);
-    expect(counts.all).toBe(1);
+    const { logs, sessionStart } = useLogStore.getState();
+    expect(idsOf(logs)).toEqual(["old", "new"]);
     expect(sessionStart).toBe(cutoff);
   });
 
   it("重复设置同一个起点是幂等的", () => {
-    const cutoff = 1_700_000_000_000;
     useLogStore.setState({
       logs: [makeStale({ id: "new", time: cutoff + 1 })],
     });
@@ -1707,39 +1623,22 @@ describe("captureLocation", () => {
   });
 });
 
-/* ── 会话边界契约补全（ISSUE #321）─────────────────────────────────────
- * 规范 07 §7.14 把「面板只显示本次运行」定为契约，并写明三条硬规则：
- *   ①不做字节级跳过（按行时刻比较即可）；
- *   ②读不到起点就不截断（多显示几条历史，好过丢掉本次日志）；
- *   ③setSessionStart 幂等（页面重载不回退起点）。
- * 上面已有用例覆盖主干；这一段补**边界与不变量**——它们是「改坏了不会立刻
- * 被用户发现，但会在某次启动后突然显示上次日志」的那类回归。
+/* ── 会话边界契约（ISSUE #321 / #1326）───────────────────────────────
+ * 规范 07 §7.14 把「面板只显示本次运行」定为契约。ISSUE #1326 之后，这条契约
+ * 由**文件本身**回答（四份 runtime 日志一次启动一份文件），因此不再有任何来源
+ * 需要按行时刻裁剪 —— 但三条硬规则里仍有两条是活的，它们与「哪个来源要裁」
+ * 无关，而是**接口契约**：
+ *
+ *   ① 不做字节级跳过（按行时刻比较即可）；
+ *   ② 读不到起点就不截断（多显示几条历史，好过丢掉本次日志）；
+ *   ③ `setSessionStart` 幂等（页面重载不回退起点）。
+ *
+ * 上一版这里还有一批「累积来源的旧行被裁」的用例 —— 夹具用的 `app-runtime`
+ * 现在已经不是累积来源，那批用例断言的是**不会再发生的现象**。留着它们等于
+ * 把「实现当前碰巧怎么做」当成契约，而这正是 §12.15 第二条要清的那类判据。
  */
 
-/** 哪类来源需要在轮询响应里带会话起点（规范 07 §7.14 的契约判据）。 */
-function needsSessionStart(source: string): boolean {
-  return (
-    source === "app-runtime" ||
-    source === "comfyui-runtime" ||
-    source === "drizzle-studio-runtime" ||
-    source === "ollama-runtime"
-  );
-}
-
-describe("会话边界：时间线比较的边界与不变量（规范 07 §7.14）", () => {
-  it("行时刻恰好等于起点 → 保留（>= 而非 >，边界同一毫秒不能丢）", () => {
-    const cutoff = 1_700_000_000_000;
-    const entries = [
-      entry("at-cutoff", cutoff),
-      entry("just-before", cutoff - 1),
-      entry("just-after", cutoff + 1),
-    ];
-    expect(idsOf(dropStaleEntries(entries, cutoff))).toEqual([
-      "at-cutoff",
-      "just-after",
-    ]);
-  });
-
+describe("会话边界：接口契约与边界（规范 07 §7.14）", () => {
   it("起点为 undefined 同样不截断（与 null 等价，调用方漏传不能变成空面板）", () => {
     const entries = [entry("old", 1), entry("new", 2)];
     expect(idsOf(dropStaleEntries(entries, undefined))).toHaveLength(2);
@@ -1753,22 +1652,6 @@ describe("会话边界：时间线比较的边界与不变量（规范 07 §7.14
     expect(idsOf(dropStaleEntries(entries, 0))).toEqual(["a", "b"]);
   });
 
-  it("origin 决定该行是否参与裁剪：覆盖重建的来源（dev）全保留，累积来源按时刻裁", () => {
-    const cutoff = 100;
-    const entries = [
-      { ...entry("dev-old", 50), origin: "dev" as const },
-      { ...entry("runtime-old", 60), origin: "app-runtime" as const },
-      { ...entry("dev-new", 150), origin: "dev" as const },
-      { ...entry("runtime-new", 160), origin: "app-runtime" as const },
-    ];
-    const kept = dropStaleEntries(entries, cutoff);
-    /* dev 的行早于起点也保留（dev-launcher.log 每次运行覆盖重建，本次启动最早
-     * 那几行正是用户要看的）；app-runtime 的旧行被裁。 */
-    expect(idsOf(kept)).toEqual(["dev-old", "dev-new", "runtime-new"]);
-    // origin 字段被原样保留（视图要显示来源）
-    expect(kept.map((e) => e.origin)).toEqual(["dev", "dev", "app-runtime"]);
-  });
-
   it("重复应用同一起点结果不变（幂等：轮询每来一批都过滤一次也不会累积漂移）", () => {
     const cutoff = 100;
     const entries = [entry("old", 50), entry("new", 150)];
@@ -1777,120 +1660,16 @@ describe("会话边界：时间线比较的边界与不变量（规范 07 §7.14
     expect(idsOf(twice)).toEqual(idsOf(once));
   });
 
-  it("乱序到达（旧行晚于新行）时结果稳定：只按时刻判定，与顺序无关", () => {
+  it("过滤只摘行、不重排（顺序是 mergeTimeline 的事，两处混一起会互相打架）", () => {
     const cutoff = 100;
     const outOfOrder = [entry("new", 200), entry("old", 50), entry("mid", 150)];
-    const filtered = dropStaleEntries(outOfOrder, cutoff);
-    // 顺序保持原样（本函数只过滤、不重排），但历史行被摘掉
-    expect(idsOf(filtered)).toEqual(["new", "mid"]);
-  });
-});
-
-describe("会话起点迟到：混入的历史行必须被收拢（不变量）", () => {
-  it("起点到达前的历史行全部被清掉，且计数同步重算（不留幽灵计数）", () => {
-    const cutoff = 1_000;
-
-    // 起点未知（null）时先收下一批历史行 —— 这正是真实时序：
-    // 首次轮询先于 sessionStart 下发。
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([
-          entry("stale-1", cutoff - 500),
-          entry("stale-2", cutoff - 100),
-        ]),
-    );
-    expect(useLogStore.getState().logs.some((l) => l.id === "stale-1")).toBe(
-      true,
-    );
-
-    // 起点到达：清历史 + 计数重算
-    act(() => useLogStore.getState().setSessionStart(cutoff));
-
-    const state = useLogStore.getState();
-    expect(state.logs.some((l) => l.id === "stale-1")).toBe(false);
-    expect(state.logs.some((l) => l.id === "stale-2")).toBe(false);
-    expect(state.counts.all).toBe(state.logs.length);
-  });
-
-  it("起点到达时保留本次运行的行（不能连本次日志一起丢）", () => {
-    const cutoff = 1_000;
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([
-          entry("stale", cutoff - 1),
-          entry("current", cutoff + 1),
-        ]),
-    );
-    act(() => useLogStore.getState().setSessionStart(cutoff));
-    expect(idsOf(useLogStore.getState().logs)).toContain("current");
-    expect(idsOf(useLogStore.getState().logs)).not.toContain("stale");
-  });
-
-  it("起点从 null 变为具体值后不回退：再设 null 也不会把已丢的历史行找回来", () => {
-    const cutoff = 1_000;
-    act(() =>
-      useLogStore.getState().appendFileLogs([entry("stale", cutoff - 1)]),
-    );
-    act(() => useLogStore.getState().setSessionStart(cutoff));
-    expect(idsOf(useLogStore.getState().logs)).not.toContain("stale");
-
-    act(() => useLogStore.getState().setSessionStart(null));
-    // 已被丢弃的行不会复活（它们不在 store 里了）——这是「不回退」的实际含义
-    expect(idsOf(useLogStore.getState().logs)).not.toContain("stale");
-  });
-
-  it("页面重载（store 重建）后用同一起点重放：结果与首次一致", () => {
-    const cutoff = 1_000;
-    const batch = [entry("stale", cutoff - 1), entry("current", cutoff + 1)];
-
-    // 第一次会话
-    act(() => useLogStore.getState().setSessionStart(cutoff));
-    act(() => useLogStore.getState().appendFileLogs(batch));
-    const first = idsOf(useLogStore.getState().logs);
-
-    // 模拟重载：清空后重放同一个起点与同一批数据
-    useLogStore.setState({
-      logs: [],
-      sessionStart: null,
-      revision: 0,
-      viewRevision: 0,
-      viewSeenIds: new Set<string>(),
-      counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
-    });
-    act(() => useLogStore.getState().setSessionStart(cutoff));
-    act(() => useLogStore.getState().appendFileLogs(batch));
-    const second = idsOf(useLogStore.getState().logs);
-
-    expect(second).toEqual(first);
-  });
-});
-
-describe("轮询响应契约：会话起点随追加写来源下发（/api/logs/current）", () => {
-  /* 规范 07 §7.14 的「起点下发」环节：追加写来源必须在响应里带 sessionStart，
-   * 而 dev 来源天然只有本次内容、不需要它。这条契约靠客户端与服务端约定，
-   * 改坏了表现为「面板又开始混着上次的日志」——没有测试就会静默回归。
-   *
-   * 这里以「来源 → 是否应带 sessionStart」的判据表锁住，而不是去起 HTTP 服务：
-   * 判据表是契约本身，实现改动只要仍满足它即可。 */
-
-  const APPEND_WRITE_SOURCES = [
-    "app-runtime",
-    "comfyui-runtime",
-    "drizzle-studio-runtime",
-    "ollama-runtime",
-  ] as const;
-
-  it("四类追加写来源都判定为「需要会话起点」", () => {
-    for (const source of APPEND_WRITE_SOURCES) {
-      expect(needsSessionStart(source)).toBe(true);
-    }
-  });
-
-  it("dev（dev-launcher 日志）不需要会话起点：它每次运行都覆盖重建，天然只有本次", () => {
-    expect(needsSessionStart("dev-launcher")).toBe(false);
-    expect(needsSessionStart("dev")).toBe(false);
+    /* 集合为空 → 这一轮什么也没摘，但**顺序也没被动过**：这是本用例要锁的那条
+     * 分工（过滤不排序），与「谁需要被过滤」是两件事。 */
+    expect(idsOf(dropStaleEntries(outOfOrder, cutoff))).toEqual([
+      "new",
+      "old",
+      "mid",
+    ]);
   });
 
   it("读不到锚点时起点为 null，客户端据此退化为不截断（规则②）", () => {
