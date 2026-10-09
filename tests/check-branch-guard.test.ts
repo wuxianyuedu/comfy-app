@@ -23,115 +23,83 @@
  *   - 源分支与目标分支完全同步       → 阻断(平台允许创建 source=master 的 PR)
  */
 import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
+import { vi } from "vitest";
 
-/* 这些用例每条都要**真跑 git**（init / add / commit / merge，beforeEach 里还有
- * 一次 init + 文件拷贝），负载高的机器上 5s 的用例超时与 10s 的钩子超时经常都
+/* 这些用例每条都要**真跑 git**（init / add / commit / merge，夹具里还有一次
+ * init + 文件拷贝），负载高的机器上 5s 的用例超时与 10s 的钩子超时经常都
  * 不够（实测单条 7~16s）—— 文件级放宽到 30s，只影响本文件。 */
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const SCRIPT = join(process.cwd(), "scripts", "check-branch-guard.cjs");
 
-let workdir = "";
-
-function run(args: string[] = []): { code: number; output: string } {
-  try {
-    const output = execFileSync(
-      process.execPath,
-      [join(workdir, "check-branch-guard.cjs"), ...args],
-      {
-        cwd: workdir,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    return { code: 0, output };
-  } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
-    return {
-      code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
-    };
-  }
-}
-
-function git(args: string[]): void {
-  execFileSync("git", args, { cwd: workdir, stdio: "ignore" });
-}
-
-beforeEach(() => {
-  workdir = mkdtempSync(join(tmpdir(), "branch-guard-"));
-  copyFileSync(SCRIPT, join(workdir, "check-branch-guard.cjs"));
-  // 临时仓库自成一体:身份与签名都就地配置,不读宿主的 gitconfig
-  // (宿主可能开了 commit.gpgsign,会让这里的 commit 直接失败)。
-  git(["init", "-q", "-b", "master", "."]);
-  git(["config", "user.email", "gate@example.com"]);
-  git(["config", "user.name", "gate"]);
-  git(["config", "commit.gpgsign", "false"]);
-  writeFileSync(join(workdir, "seed.txt"), "seed\n");
-  git(["add", "."]);
-  git(["commit", "-qm", "chore: seed"]);
-});
-
-afterEach(() => {
-  rmSync(workdir, { recursive: true, force: true });
+const { test, expect } = defineGateRepo({
+  script: "check-branch-guard.cjs",
+  /* 脚本用 `process.cwd()` 定位扫描根 —— 落哪都一样，选 root。 */
+  dir: "root",
+  /* 夹具就绪后 `git init` 一个「master 上已有一个提交」的仓库：本判据的
+   * 被测输入就是**提交拓扑**，没有提交历史它无从判起。 */
+  setup: (repo: GateRepo) => {
+    repo.git("init", "-q", "-b", "master", ".");
+    repo.git("config", "user.email", "gate@example.com");
+    repo.git("config", "user.name", "gate");
+    repo.git("config", "commit.gpgsign", "false");
+    repo.write("seed.txt", "seed\n");
+    repo.git("add", ".");
+    repo.commit("chore: seed");
+  },
 });
 
 describe("check-branch-guard.cjs（提交门槛）", () => {
-  it("master 上直接提交 → 阻断,并给出搬迁出口", () => {
-    const { code, output } = run();
+  test("master 上直接提交 → 阻断,并给出搬迁出口", ({ repo }) => {
+    const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("master");
     expect(output).toContain("git checkout -b");
     expect(output).toContain("git reset --hard origin/master");
   });
 
-  it("工作分支上提交 → 放行", () => {
-    git(["checkout", "-q", "-b", "feat/branch-guard"]);
-    const { code, output } = run();
+  test("工作分支上提交 → 放行", ({ repo }) => {
+    repo.git("checkout", "-q", "-b", "feat/branch-guard");
+    const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("[branch-guard] OK");
   });
 
-  it("master 上的合并提交 → 放行(PR 合并不被本地门槛二次阻挡)", () => {
-    git(["checkout", "-q", "-b", "feat/merge-me"]);
-    writeFileSync(join(workdir, "feature.txt"), "feature\n");
-    git(["add", "."]);
-    git(["commit", "-qm", "feat: feature"]);
-    git(["checkout", "-q", "master"]);
+  test("master 上的合并提交 → 放行(PR 合并不被本地门槛二次阻挡)", ({
+    repo,
+  }) => {
+    repo.git("checkout", "-q", "-b", "feat/merge-me");
+    repo.write("feature.txt", "feature\n");
+    repo.git("add", ".");
+    repo.git("commit", "-qm", "feat: feature");
+    repo.git("checkout", "-q", "master");
     // --no-ff 造一个真实的合并提交(两个父),等价于平台侧合并 PR 的形态
-    git(["merge", "--no-ff", "--no-edit", "-q", "feat/merge-me"]);
-    const { code, output } = run();
+    repo.git("merge", "--no-ff", "--no-edit", "-q", "feat/merge-me");
+    const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("合并提交");
   });
 
-  it("--status 只做体检,不在 master 上阻断", () => {
-    const { code, output } = run(["--status"]);
+  test("--status 只做体检,不在 master 上阻断", ({ repo }) => {
+    const { code, output } = repo.run(["--status"]);
     expect(code).toBe(0);
     expect(output).toContain("master");
   });
 
-  it("非 git 目录里不崩(裸目录 / tarball 解包场景)", () => {
+  test("非 git 目录里不崩(裸目录 / tarball 解包场景)", () => {
+    /* 这一条要的正是**没有 git** 的工作区，所以不走共享夹具（它的 `setup`
+     * 会 init 一个仓库）—— 自己造一个裸目录，与「这条要验的形态」一一对应。 */
     const bare = mkdtempSync(join(tmpdir(), "branch-guard-nogit-"));
     try {
       copyFileSync(SCRIPT, join(bare, "check-branch-guard.cjs"));
       const output = execFileSync(
         process.execPath,
         [join(bare, "check-branch-guard.cjs")],
-        {
-          cwd: bare,
-          encoding: "utf8",
-        },
+        { cwd: bare, encoding: "utf8" },
       );
       // 取不到分支名(空) ≠ master,判据无从命中,放行而非报错
       expect(output).toContain("[branch-guard] OK");
@@ -142,108 +110,122 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
 
   /* ── --pr-check:服务端复核 ─────────────────────────────────────────── */
 
-  it("--pr-check:源分支领先目标分支 → 放行(正常 PR)", () => {
-    git(["checkout", "-q", "-b", "feat/pr"]);
-    writeFileSync(join(workdir, "feature.txt"), "feature\n");
-    git(["add", "."]);
-    git(["commit", "-qm", "feat: feature"]);
-    const { code, output } = run(["--pr-check", "--target", "master"]);
+  test("--pr-check:源分支领先目标分支 → 放行(正常 PR)", ({ repo }) => {
+    repo.git("checkout", "-q", "-b", "feat/pr");
+    repo.write("feature.txt", "feature\n");
+    repo.git("add", ".");
+    repo.git("commit", "-qm", "feat: feature");
+    const { code, output } = repo.run(["--pr-check", "--target", "master"]);
     expect(code).toBe(0);
     expect(output).toContain("不在 master 上");
   });
 
-  it("--pr-check:目标分支还在推进、源分支已归并它(CNB 预合并形态)→ 放行", () => {
-    git(["checkout", "-q", "-b", "feat/pr"]);
-    writeFileSync(join(workdir, "feature.txt"), "feature\n");
-    git(["add", "."]);
-    git(["commit", "-qm", "feat: feature"]);
-    git(["checkout", "-q", "master"]);
-    writeFileSync(join(workdir, "advance.txt"), "advance\n");
-    git(["add", "."]);
-    git(["commit", "-qm", "chore: advance"]);
-    git(["checkout", "-q", "feat/pr"]);
-    git(["merge", "--no-ff", "--no-edit", "-q", "master"]);
-    const { code, output } = run(["--pr-check", "--target", "master"]);
+  test("--pr-check:目标分支还在推进、源分支已归并它(CNB 预合并形态)→ 放行", ({
+    repo,
+  }) => {
+    repo.git("checkout", "-q", "-b", "feat/pr");
+    repo.write("feature.txt", "feature\n");
+    repo.git("add", ".");
+    repo.git("commit", "-qm", "feat: feature");
+    repo.git("checkout", "-q", "master");
+    repo.write("advance.txt", "advance\n");
+    repo.git("add", ".");
+    repo.git("commit", "-qm", "chore: advance");
+    repo.git("checkout", "-q", "feat/pr");
+    repo.git("merge", "--no-ff", "--no-edit", "-q", "master");
+    const { code, output } = repo.run(["--pr-check", "--target", "master"]);
     expect(code).toBe(0);
     expect(output).toContain("[branch-guard] OK");
   });
 
-  it("--pr-check:源分支没有任何超出目标分支的提交 → 阻断(源分支就是 master)", () => {
+  test("--pr-check:源分支没有任何超出目标分支的提交 → 阻断(源分支就是 master)", ({
+    repo,
+  }) => {
     // 平台允许创建 source=master 的 PR,这正是本条要拦的场景。
-    git(["checkout", "-q", "-b", "sync-with-master"]);
-    const { code, output } = run(["--pr-check", "--target", "master"]);
+    repo.git("checkout", "-q", "-b", "sync-with-master");
+    const { code, output } = repo.run(["--pr-check", "--target", "master"]);
     expect(code).toBe(1);
     expect(output).toContain("源分支就是 master");
     expect(output).toContain("git checkout -b");
   });
 
-  it("--pr-check:取不到目标分支 → 保守放行,不误报", () => {
-    const { code, output } = run(["--pr-check", "--target", "release/nope"]);
+  test("--pr-check:取不到目标分支 → 保守放行,不误报", ({ repo }) => {
+    const { code, output } = repo.run([
+      "--pr-check",
+      "--target",
+      "release/nope",
+    ]);
     expect(code).toBe(0);
     expect(output).toContain("保守放行");
   });
 
-  it("--pr-check 缺省目标分支是 master(不靠环境变量,参数缺省也判得动)", () => {
-    git(["checkout", "-q", "-b", "feat/pr"]);
-    writeFileSync(join(workdir, "feature.txt"), "feature\n");
-    git(["add", "."]);
-    git(["commit", "-qm", "feat: feature"]);
-    const { code, output } = run(["--pr-check"]);
+  test("--pr-check 缺省目标分支是 master(不靠环境变量,参数缺省也判得动)", ({
+    repo,
+  }) => {
+    repo.git("checkout", "-q", "-b", "feat/pr");
+    repo.write("feature.txt", "feature\n");
+    repo.git("add", ".");
+    repo.git("commit", "-qm", "feat: feature");
+    const { code, output } = repo.run(["--pr-check"]);
     expect(code).toBe(0);
     expect(output).toContain("目标分支 master");
   });
 
   /* ── --merge-commit:master 的 push 事件复核 ───────────────────────── */
 
-  it("--merge-commit:master 上的合并提交 → 放行(push 事件上 HEAD 就是合并提交)", () => {
-    git(["checkout", "-q", "-b", "feat/merge-me"]);
-    writeFileSync(join(workdir, "feature.txt"), "feature\n");
-    git(["add", "."]);
-    git(["commit", "-qm", "feat: feature"]);
-    git(["checkout", "-q", "master"]);
-    git(["merge", "--no-ff", "--no-edit", "-q", "feat/merge-me"]);
-    const { code, output } = run(["--merge-commit"]);
+  test("--merge-commit:master 上的合并提交 → 放行(push 事件上 HEAD 就是合并提交)", ({
+    repo,
+  }) => {
+    repo.git("checkout", "-q", "-b", "feat/merge-me");
+    repo.write("feature.txt", "feature\n");
+    repo.git("add", ".");
+    repo.git("commit", "-qm", "feat: feature");
+    repo.git("checkout", "-q", "master");
+    repo.git("merge", "--no-ff", "--no-edit", "-q", "feat/merge-me");
+    const { code, output } = repo.run(["--merge-commit"]);
     expect(code).toBe(0);
     expect(output).toContain("PR 合并提交");
   });
 
-  it("--merge-commit:squash 合并(单父 + PR 关联)→ 放行", () => {
+  test("--merge-commit:squash 合并(单父 + PR 关联)→ 放行", ({ repo }) => {
     // 本仓库规范 §13.6 优先 Squash Merge。squash 提交只有 1 个父,与「直连主干」
     // 在拓扑上同形 —— 拿「父提交数 > 1」当判据会把每一次正常合并都判红
     // (此前 master 的 push 流水线**每一次都是红的**,就是这么来的)。
     // 平台在合并提交信息里写下 PR 关联,这是可核实的「走过 PR」的痕迹。
-    git(["checkout", "-q", "-b", "feat/squash-me"]);
-    writeFileSync(join(workdir, "feature.txt"), "feature\n");
-    git(["add", "."]);
-    git(["commit", "-qm", "feat: feature"]);
-    git(["checkout", "-q", "master"]);
+    repo.git("checkout", "-q", "-b", "feat/squash-me");
+    repo.write("feature.txt", "feature\n");
+    repo.git("add", ".");
+    repo.git("commit", "-qm", "feat: feature");
+    repo.git("checkout", "-q", "master");
     // squash 等价形态:把分支改动并成 master 上的单个提交,并带上平台的 PR 关联。
-    git(["merge", "--squash", "-q", "feat/squash-me"]);
-    git(["commit", "-qm", "feat: feature\n\nPR-URL: #646"]);
-    const { code, output } = run(["--merge-commit"]);
+    repo.git("merge", "--squash", "-q", "feat/squash-me");
+    repo.git("commit", "-qm", "feat: feature\n\nPR-URL: #646");
+    const { code, output } = repo.run(["--merge-commit"]);
     expect(code).toBe(0);
     expect(output).toContain("squash/rebase");
     expect(output).toContain("PR 关联");
   });
 
-  it("--merge-commit:单父且无 PR 关联 → 保守放行(不误报,直推拦截在平台分支保护)", () => {
+  test("--merge-commit:单父且无 PR 关联 → 保守放行(不误报,直推拦截在平台分支保护)", ({
+    repo,
+  }) => {
     // 拓扑同形时判据无从命中,按「保守放行」处理 —— 与 --pr-check 的
     // 「取不到目标分支 → 保守放行」同一口径。真正拦直推的是平台分支保护
     // (规范 §13.6.1),这里不再叠加一条会误报的判据。
-    const { code, output } = run(["--merge-commit"]);
+    const { code, output } = repo.run(["--merge-commit"]);
     expect(code).toBe(0);
     expect(output).toContain("保守放行");
   });
 
-  it("--merge-commit:工作分支上提交 → 放行(不误报)", () => {
-    git(["checkout", "-q", "-b", "feat/push"]);
-    const { code } = run(["--merge-commit"]);
+  test("--merge-commit:工作分支上提交 → 放行(不误报)", ({ repo }) => {
+    repo.git("checkout", "-q", "-b", "feat/push");
+    const { code } = repo.run(["--merge-commit"]);
     expect(code).toBe(0);
   });
 
-  it("pre-commit 钩子把守卫放在第一步(顺序错了会先跑一堆必然白费的门禁)", () => {
+  /* 这一条判的是**本仓库的钩子文件**，不搭临时仓库。 */
+  test("pre-commit 钩子把守卫放在第一步(顺序错了会先跑一堆必然白费的门禁)", () => {
     const hookPath = join(process.cwd(), ".githooks", "pre-commit");
-    copyFileSync(hookPath, join(workdir, "pre-commit"));
     const text = readFileSync(hookPath, "utf8");
     const guardAt = text.indexOf("check-branch-guard.cjs");
     const structureAt = text.indexOf("check-file-structure.cjs");

@@ -322,6 +322,16 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 降级 / 字段不全 / id 重复）都是「下一次有人加一种新声明机制」时才走得进的路径 ——
   // 只在被改到时才跑，等于专挑它不在的时机跑，故进固定清单。
   "tests/declaration-readers-gate.test.ts",
+  // 门禁自测**别再手搓临时仓库样板**（规范 §11.16.1）：60 余份门禁自测判的是同一件事
+  // （把 scripts/ 下的判据脚本当黑盒，在只放被测文件的临时仓库里跑一次），此前每份都
+  // 手抄一遍 mkdtemp + workdir + 自己写的 run(args) + afterEach rmSync。这套四件套已收进
+  // `tests/helpers/gate-repo.ts`，但**收口本身没有判据** —— 下一个人再写一份时，模板就在
+  // 隔壁文件里、抄一遍照样全绿，而抄错的形态是静默的（少写 cwd / status 当 1 兜底 /
+  // 忘了 stdio: pipe）。
+  // 它同时是判据自己的门禁自测 —— 该拦的（手搓样板 / 棘轮上涨 / --update 放水）与该放的
+  // （用了共享夹具 / 只造临时目录 / 拉别的可执行文件 / 夹具文件）每一条都得有人钉住，
+  // 而它们是「下一次有人写门禁自测」时才走得进的路径，所以必须进固定清单。
+  "tests/gate-repo-boilerplate-gate.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
