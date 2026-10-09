@@ -425,11 +425,13 @@ export function freshnessTrack(kind) {
  *     「今天跑过」与「今天说好不跑」—— 这是 `verifiedAt` 之外的第二种合法形状，
  *     所以本函数返回的**不是**一份固定五栏的记录。
  *
+ * `skippedReason` 是**可选**的第五栏：只有「写明理由的豁免」这条路会带上它（见下方）。
+ *
  * @param {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: unknown}} input
- * @returns {Record<string, string>} 五栏必在、`skippedReason` 按输入可选
+ * @returns {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string}}
  */
 export function freshnessRecord({ key, verifiedAt, who, how, trackedBy, skippedReason }) {
-  /** @type {Record<string, string>} */
+  /** @type {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string}} */
   const record = {
     key: key.trim(),
     verifiedAt: verifiedAt.trim(),
@@ -437,7 +439,7 @@ export function freshnessRecord({ key, verifiedAt, who, how, trackedBy, skippedR
     how: how.trim(),
     trackedBy: trackedBy.trim(),
   };
-  /* `skippedReason` 只在**豁免**那一条出路上出现：它把「今天不跑」写成一句能被复核的话，
+  /* `skippedReason` 只在**豁免**那条出路上出现：它把「今天不跑」写成一句能被复核的话，
    * 而不是让账面上出现一个与「跑绿过」长得一样的日期。核对它的是 `isUsableSkipReason`。 */
   if (typeof skippedReason === "string" && skippedReason.trim()) {
     record.skippedReason = skippedReason.trim();

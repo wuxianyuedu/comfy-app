@@ -122,6 +122,8 @@ export function decide(staged) {
  *
  * 回退面刻意**只收 rustup 的三处**（CARGO_HOME/bin、~/.cargo/bin、~/.rustup/），
  * 不做 PATH 式的目录递归 —— 判据越宽，越可能选中一个不该用的 cargo。
+ *
+ * @returns {string | null} cargo 的绝对路径；PATH 与三处安装位都没有 = `null`
  */
 export function findCargo() {
   const onPath = whichCommand("cargo");
@@ -145,6 +147,7 @@ export function findCargo() {
     if (dir.endsWith("toolchains")) {
       // rustup 的每个工具链各有一份 cargo：取版本号最大的那个（字典序即版本序，
       // 1.10 与 1.9 这种少见形态不在此纠偏 —— 只认「挑不到就继续找下一处」。
+      /** @type {string[]} */
       let versions = [];
       try {
         versions = fs.readdirSync(dir).sort().reverse();
