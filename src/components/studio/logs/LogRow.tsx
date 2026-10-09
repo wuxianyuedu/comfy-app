@@ -417,7 +417,7 @@ export const LogRow = memo(function LogRow({
     return (
       <div
         style={style}
-        className="border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 py-1 font-mono text-sm leading-snug"
+        className="border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 py-1 font-mono text-[13px] leading-snug"
       >
         {timeNode}
         {levelNode}
@@ -435,7 +435,7 @@ export const LogRow = memo(function LogRow({
   return (
     <div
       style={style}
-      className="border-border-subtle hover:bg-subtle/60 group overflow-hidden border-b font-mono text-sm leading-snug"
+      className="border-border-subtle hover:bg-subtle/60 group overflow-hidden border-b font-mono text-[13px] leading-snug"
     >
       <Disclosure
         open={expanded}

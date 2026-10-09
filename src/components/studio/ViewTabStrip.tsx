@@ -92,6 +92,7 @@ export function ViewTabStrip({
         const active = tab.key === activeKey;
         const label = viewTabLabel(tab.view, projectNameOf?.(tab.projectId));
         return (
+          /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：键出口是 `simpleKeyHandler` 的展开。 */
           <div
             key={tab.key}
             role="tab"

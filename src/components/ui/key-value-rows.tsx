@@ -196,7 +196,7 @@ export function KeyValueRows({
             </span>
             <span
               className={cn(
-                "text-ink-field truncate text-sm font-medium",
+                "text-ink-field truncate text-[13px] font-medium",
                 valueClassName,
                 item.valueClassName,
               )}

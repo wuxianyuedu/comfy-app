@@ -177,6 +177,7 @@ function PortRowInt({
       <input
         readOnly
         defaultValue={value}
+        aria-label={label}
         className="border-border-strong bg-canvas-deep text-ink-bright h-5.25 w-35 rounded border px-2 text-right text-xs tabular-nums outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
@@ -339,7 +340,7 @@ export function WorkflowNodeArdot() {
         {/* ── ActionBtn 340×43（紧贴端口行下沿，0 间距） ── */}
         <Button
           variant="primary-solid"
-          className="from-primary to-accent flex h-10.75 w-full items-center justify-center gap-2 rounded-none bg-linear-to-r text-sm font-bold text-white hover:opacity-90"
+          className="from-primary to-accent flex h-10.75 w-full items-center justify-center gap-2 rounded-none bg-linear-to-r text-[13px] font-bold text-white hover:opacity-90"
           style={{
             fontFamily: "var(--font-sans)",
             boxShadow:

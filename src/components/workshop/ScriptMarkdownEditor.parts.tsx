@@ -273,7 +273,7 @@ export function EditorBody({
     <main className="relative flex min-w-0 flex-1 flex-col">
       {showPreview ? (
         <div
-          className={`${SCROLLBAR_VISIBLE_CLASSES} bg-canvas text-ink min-h-0 flex-1 p-6 text-sm leading-7`}
+          className={`${SCROLLBAR_VISIBLE_CLASSES} bg-canvas text-ink min-h-0 flex-1 p-6 text-[13px] leading-7`}
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />
       ) : (
@@ -306,7 +306,7 @@ export function EditorBody({
           }}
           spellCheck={false}
           placeholder="# 剧本标题\n\n## 第一场\n\n（在此处编写完整剧本……）"
-          className={`${SCROLLBAR_VISIBLE_CLASSES} field-sizing-normal bg-canvas text-ink-bright placeholder:text-ink-fainter min-h-0 flex-1 resize-none rounded-none border-0 p-6 font-mono text-sm leading-7 focus-visible:ring-0`}
+          className={`${SCROLLBAR_VISIBLE_CLASSES} field-sizing-normal bg-canvas text-ink-bright placeholder:text-ink-fainter min-h-0 flex-1 resize-none rounded-none border-0 p-6 font-mono text-[13px] leading-7 focus-visible:ring-0`}
           style={{ tabSize: 2 }}
         />
       )}

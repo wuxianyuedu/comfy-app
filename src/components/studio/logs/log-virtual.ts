@@ -21,11 +21,8 @@
  * | 不换行（`truncate`）| `LOG_ROW_SINGLE`（1 行） |
  * | 换行 + N 行       | `LOG_ROW_LINE × N`       |
  *
- * 单行高度来自 `text-sm leading-snug`（1.375 × 14 ≈ 19.25）加 `py-1`
- * （上下各 4px）与 `border-b`（1px）= **28px**；多行时每多一行加 19px。
- * 字号只可能是 `text-sm` 而不是 13px 的字面量档，这一点由 `docs/DESIGN.md`
- * §Typography 的归零判据守着（12px / 13px 各只有一个名字）——上面的算式
- * 吃的正是那一档的自带行高。
+ * 单行高度来自 `text-[13px] leading-snug`（1.375 × 13 ≈ 17.9）加 `py-1`
+ * （上下各 4px）与 `border-b`（1px）= **27px**；多行时每多一行加 18px。
  * 这两条是本模块导出的常量，视图的 class 与它们对齐（见 §7.28 的口径），
  * **改行内字号 / 行距要同时改这里**，否则滚动位置会与内容错位。
  *
@@ -43,15 +40,15 @@
  */
 
 /**
- * 一行（未换行）的像素高度：`text-sm` + `leading-snug` + `py-1` + 1px 下边框。
+ * 一行（未换行）的像素高度：`text-[13px]` + `leading-snug` + `py-1` + 1px 下边框。
  * 必须与 `LogRow` 的 class 对齐。
  */
 import { clamp } from "~/lib/clamp";
 
-export const LOG_ROW_SINGLE = 28;
+export const LOG_ROW_SINGLE = 27;
 
-/** 换行显示时，**每一行文字**的像素高度（`leading-snug` 下的 14px 行高 = 19.25）。 */
-export const LOG_ROW_LINE = 19;
+/** 换行显示时，**每一行文字**的像素高度（`leading-snug` 下的 13px 行高）。 */
+export const LOG_ROW_LINE = 18;
 
 /**
  * **展开**的日志行高度（常量，不是量出来的）。
@@ -60,7 +57,7 @@ export const LOG_ROW_LINE = 19;
  * 与内部滚动 —— 于是树的展开、搜索命中跳转都不改变**行**高，行高只由这个常量
  * 决定。这正是虚拟滚动要的「可枚举」：{@link layoutRows} 不必测 DOM 就能给出
  * 位置，滚动位置与内容不会错开（见本模块文件头对「为什么不能 measureElement」
- * 的说明）。取 360 ≈ 单行(28) + 一份够用的 JSON 视口。
+ * 的说明）。取 360 ≈ 单行(27) + 一份够用的 JSON 视口。
  */
 export const LOG_ROW_EXPANDED = 360;
 

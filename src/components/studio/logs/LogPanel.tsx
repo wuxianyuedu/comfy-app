@@ -413,7 +413,7 @@ export function LogPanel() {
             className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
           >
             {pageLogs.length === 0 ? (
-              <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm">
+              <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
                 <FileText size={32} strokeWidth={1.5} className="opacity-30" />
                 {total === 0 ? "暂无匹配的日志" : "本页无内容"}
               </div>

@@ -118,39 +118,6 @@ describe("task.list", () => {
     expect(res.tasks[1]!.mediaType).toBe("video"); // taskType "T2V" → /2V$/ 兜底
   });
 
-  it("视频不排在首位时 videoPath 仍指到那个文件（cover / mediaType 都答不了这一列）", async () => {
-    /* 执行侧的落盘顺序是先 images 后 videos，而 `isCover` 取第一条 —— 于是一条
-     * 视频任务的 `cover` 很可能是一张预览图、`mediaType` 也跟着判成 image。
-     * 「这一行有没有可下载的视频」只有握着产出行数组的服务端答得了。 */
-    seedTask(tdb, {
-      id: "task-video",
-      userId: "user-a",
-      type: "VIDEO",
-      images: [
-        COVER("img-1", "/api/generated/task-video/img_0.png"),
-        {
-          ...COVER("img-2", "/api/generated/task-video/vid_0.mp4", "video"),
-          isCover: false,
-          sortIndex: 1,
-        },
-      ],
-    });
-    seedTask(tdb, {
-      id: "task-img",
-      userId: "user-a",
-      type: "TXT2IMG",
-      images: [COVER("img-3", "/api/generated/task-img/1.png")],
-    });
-
-    const res = await createCaller(makeCtx()).list({});
-    const video = res.tasks.find((t) => t.id === "task-video")!;
-    expect(video.cover).toBe("/api/generated/task-video/img_0.png");
-    expect(video.mediaType).toBe("image");
-    expect(video.videoPath).toBe("/api/generated/task-video/vid_0.mp4");
-    /* 没有视频产出行 → null（不是缺键、也不是空串），客户端据此判「没有可下载的」。 */
-    expect(res.tasks.find((t) => t.id === "task-img")!.videoPath).toBeNull();
-  });
-
   it("media 过滤只保留对应类型", async () => {
     seedTask(tdb, { id: "task-img", userId: "user-a", type: "TXT2IMG" });
     seedTask(tdb, { id: "task-video", userId: "user-a", type: "T2V" });

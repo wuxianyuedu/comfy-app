@@ -89,7 +89,7 @@ export function ShotFilmStrip({
                 ) : (
                   /* 还没有成图：给出镜号本身，而不是一个灰块 —— 空帧也要说得出
                      「这是第几镜、还没出图」。 */
-                  <span className="text-ink-fainter flex size-full items-center justify-center text-sm tabular-nums">
+                  <span className="text-ink-fainter flex size-full items-center justify-center text-[13px] tabular-nums">
                     {formatShotIndex(shot.index)}
                   </span>
                 )}

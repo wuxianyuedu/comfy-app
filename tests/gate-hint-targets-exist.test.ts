@@ -107,9 +107,29 @@ const PRODUCT_ROOT_LITERALS: Array<{
  *
  * 与上面那张产物根表不同形：产物根那份是「文件由构建期生成，仓库里本来没有」；
  * 这份是「文件是**台账 / 登记表**，只在有站点时才需要，零站点时它本就不该存在」。
- * 实测撞上的两条：`check-annotate-consumer.cjs` / `check-task-meta-consumer.cjs`
- * 的 `LEDGER` 常量 —— 两个门禁的判定口径明写「零站点 → 通过，本判据是纯闸门」，
- * 而本判据只问「这个字面量在仓库里存不存在」，问不出「它是不是条件路径」。
+ *
+ * ── 这份表现在是**空的**，而空是它当前唯一正确的状态 ──────────────────────
+ *
+ * 它原本登记着两条：`check-annotate-consumer.cjs` / `check-task-meta-consumer.cjs`
+ * 的 `LEDGER` 常量（`scripts/.annotate-consumers.json` /
+ * `scripts/.task-meta-consumers.json`）—— 当时那两份台账**还不存在**，两个门禁的
+ * 判定口径又明写「零站点 → 通过，本判据是纯闸门」。
+ *
+ * 后来台账按 §11.21 / §11.22 的固化形状**落库了**（零站点这个结论要由
+ * 「台账在、只是 `consumers` 为空」担保，而不是由「文件根本没有」担保 ——
+ * 后者在第一次有人挂注释时就分叉，那一侧此前没有任何执行者）。台账一旦在仓库里，
+ * 这两条就不再是「条件路径」了：它们是**真文件**，该回到被上面那条判据正常管着的
+ * 状态。表里留着它们，本条用例的第三问（`existsSync` 必须为 false）就会红 ——
+ * 这正是本条用例存在的意义，而它就真的红过：那次改动**没有同批删这两条例外**，
+ * 于是这条红在 `master` 上躺到下一次有人跑全量（平台侧 squash 合并不跑本地钩子，
+ * §13.6.2 那族）。
+ *
+ * 空表现在是合法状态，但**合法性由「机制还活着」担保，不由「清单为空」担保** ——
+ * 这就是不在本用例里写 `expect(CONDITIONAL_PATHS.length).toBeGreaterThan(0)` 的理由：
+ * 那条断言会把「表空了」判成故障，而表空恰恰是当前的事实；而放宽成「空就跳过」
+ * 又会把「哪天有人把这三问整段删掉」也一起放行（同 §11.21「零站点通过由
+ * 『台账在』担保」那条口径，换到这里就是「零例外由『例外机制可复算』担保」）。
+ * 下面那条 `条件路径例外机制还在（负对照）` 用例承担这件事。
  *
  * **登记的代价是下面那条用例真的去跑一次**：本表不算「声明即放行」，每一条都要
  * 复算三件事，缺一条红（`reason` 本身不参与判定，只给人看）：
@@ -134,20 +154,7 @@ const CONDITIONAL_PATHS: Array<{
   path: string;
   /** 为什么「不存在」是它的正常状态之一 */
   reason: string;
-}> = [
-  {
-    script: "scripts/check-annotate-consumer.cjs",
-    path: "scripts/.annotate-consumers.json",
-    reason:
-      "台账：有 `ctx.annotate` 站点才需要登记消费方，零站点时本判据是纯闸门（零站点 → 退 0）。",
-  },
-  {
-    script: "scripts/check-task-meta-consumer.cjs",
-    path: "scripts/.task-meta-consumers.json",
-    reason:
-      "台账：有 `task.meta` 站点才需要登记消费方，零站点时本判据是纯闸门（零站点 → 退 0）。",
-  },
-];
+}> = [];
 
 /** 读一份仓库内脚本的源码（读不到即返回空串，让断言去报「指不到东西」）。 */
 function sourceOf(rel: string): string {
@@ -263,7 +270,11 @@ describe("门禁脚本里的路径字面量必须存在", () => {
    * 这是「不存在不是缺陷」的机器判据，也是这张表不是「免检名单」的原因。
    */
   it("条件路径例外项还在守东西：三条登记理由都能复算", () => {
-    expect(CONDITIONAL_PATHS.length).toBeGreaterThan(0);
+    /* **本表当前为空，而空是合法状态** —— 所以这里刻意**不写**
+       `expect(CONDITIONAL_PATHS.length).toBeGreaterThan(0)`：那条断言会把
+       「表空」判成故障，而表空恰恰是事实（那两条台账已落库、回归正常管辖）。
+       但也不能就此跳过 —— 那样「哪天有人把这三问整段删掉」与「表本来就是空的」
+       在读数上完全一样。所以「机制还在」由下面那条负对照用例担保。 */
     /* 软断言：一张例外表逐条复算 —— 过期的条目要一次全列出，
        否则「删一条、再发现下一条」（§11.18）。 */
     for (const entry of CONDITIONAL_PATHS) {
@@ -281,6 +292,46 @@ describe("门禁脚本里的路径字面量必须存在", () => {
         `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从条件路径例外表里删掉`,
       ).toBe(false);
     }
+  });
+
+  /**
+   * **条件路径例外机制还在（负对照）** —— 上面那条用例在表为空时是个空转的循环。
+   *
+   * 表空是当前事实，但「空」不许让整套机制跟着消失：本用例把**三条判定各自反过来**
+   * 走一遍（拿三份真文件当假定例外项），证明这套判据真的能拦住过期条目 ——
+   * 而它拦的正是那两条台账曾经触发过的形态（`existsSync` 由 false 变 true）。
+   *
+   * 为什么不用「把表临时改成非空再跑」：那要改被测数据，代价与收益不成比例，
+   * 而这里要证的是「判定逻辑在」，不是「表里有东西」。
+   */
+  it("条件路径例外机制还在（三条判定各有一个反向执行者）", () => {
+    /* ① 登记方脚本里必须有那个字面量 —— 反过来用一份不存在的路径，
+       与上面的 `toContain` 同口径（不同路径不同脚本）。 */
+    expect(
+      quotedRepoPaths(sourceOf("scripts/check-annotate-consumer.cjs")),
+      "登记方脚本里认不出台账字面量了：招牌由这句『路径必须被真读』撑着",
+    ).toContain("scripts/.annotate-consumers.json");
+
+    /* ② 判定②问的是「脚本对『路径不存在』站得下吗」。本仓库现在站得下 ——
+       用的是真脚本、真仓库（同上面那几个 `exitCodeOfGate` 调用）。 */
+    expect(
+      exitCodeOfGate("scripts/check-annotate-consumer.cjs"),
+      "零站点那条快路径坏了：台账在、脚本仍须退 0（条件路径的登记理由已不成立）",
+    ).toBe(0);
+
+    /* ③ 判定③是这套机制里唯一会**随现实漂**的一问：`existsSync` 必须为 false。
+       反向执行者 = 拿一份**真存在**的路径走同一条判定，必须判成「该从表里删掉」
+       （台账落库那次，这一问就是这样红的 —— 那两条例外当时没被同批删掉）。 */
+    const wouldPassAsConditional = (p: string) =>
+      !existsSync(path.join(ROOT, p));
+    expect(
+      wouldPassAsConditional("scripts/check-annotate-consumer.cjs"),
+      "真存在的路径被判成『条件路径』了：这一问再也不会拦住过期例外",
+    ).toBe(false);
+    expect(
+      wouldPassAsConditional("scripts/.definitely-absent-probe.json"),
+      "不存在的路径判不成『条件路径』了：机制整个失效",
+    ).toBe(true);
   });
 
   it("假路径判为不存在、真路径判为存在（上面那条不是空转）", () => {

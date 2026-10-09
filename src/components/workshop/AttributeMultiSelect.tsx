@@ -8,8 +8,8 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
-import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 import { filterGroupsByKeyword } from "~/lib/list-filter";
 import type { OptionGroup } from "~/lib/workshop/character-options";
 
@@ -168,13 +168,15 @@ export function AttributeMultiSelect({
                     {g.options.map((opt) => {
                       const on = selected.has(opt);
                       return (
+                        /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开（`tabIndex` 本轮已补）。 */
                         <div
                           key={opt}
                           role="option"
                           aria-selected={on}
-                          /* 行可聚焦 + Enter/Space 切换：此前只有 `onClick`，
-                           * 连 `tabIndex` 都没有 —— 键盘用户完全进不来
-                           *（§16.2.4.57 的元素级键出口）。 */
+                          /* `interactive-supports-focus`：`role="option"` 是
+                           * 交互角色，必须可聚焦 —— 此前连 `tabIndex` 都没有，
+                           * 键盘用户根本进不来这一组（§6.8「自定义控件实现
+                           * 键盘可达」）。键动作走 `simpleKeyHandler`（行尾）。 */
                           tabIndex={0}
                           onClick={() => toggle(opt)}
                           {...simpleKeyHandler(["Space", "Enter"], () =>
