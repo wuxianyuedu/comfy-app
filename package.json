@@ -57,7 +57,8 @@
     "theme:check": "node scripts/check-theme-colors.cjs",
     "doc:render": "node scripts/render-doc-placeholders.cjs",
     "docs:check": "node scripts/check-docs-api.cjs",
-    "doc:gen": "node scripts/generate-docs.mjs"
+    "doc:gen": "node scripts/generate-docs.mjs",
+    "check:merged-side-loss": "node scripts/check-merged-side-loss.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
