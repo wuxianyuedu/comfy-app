@@ -2698,6 +2698,49 @@ items-center justify-between">` 包住一个 `<Switch>`）：标签与控件**�
    说明文字（工坊「提供方 / 出场角色」这类二选一按钮组、设置页「请求体额外
    字段」这类行编辑器）。
 
+#### 16.2.4.26.1 `htmlFor` 只在 render-prop 形态下兑现（`check-form-field-wiring.cjs`）
+
+上面那句「要拿 ARIA 用 render-prop 形式」是一条**能力说明**，不是一条**纪律** ——
+而两种调用形态长得很像，第二种静默地只兑现一半：
+
+| 调用形态                            | `fieldId` 去了哪                                                                        | 后果                                                                        |
+| ----------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `{(field) => <Input {...field} />}` | 由调用处 spread 到控件上，`<FieldLabel htmlFor={fieldId}>` 指得着                        | 点标签聚焦控件、读屏器读出「标签 + 控件」                                   |
+| `<Input />`（普通子节点）           | 谁都没拿到 —— `fieldId` 由 `useId()` 兜底生成，`htmlFor` 指向 **DOM 里不存在的 id** | 点标签不聚焦；读屏器读到的是一段**孤立标签文本**，控件本身没有可访问名 |
+
+第二档正是本节开头那张表里「`htmlFor` / `id` 关联 —— 15 处里**没有一处**做过」
+那个病灶的**同形复发**，只是换了个位置：从「各写一份标签行」挪到「用了 `FormField`
+但没接 `a11y`」。而且**没有任何东西会报** —— `jsx-a11y/control-has-associated-label`
+只认**同一 JSX 子树**里的可见文本，被 `<FormField>` 包一层再传进去的控件不在它的靶子里。
+
+判据 `scripts/check-form-field-wiring.cjs`（进 pre-commit 的 D 组）：**棘轮**，
+基线 `scripts/.form-field-wiring-baseline.json`（只许降，`--update` 拒绝上涨）。
+这一批收口前实测 **35 处** plain-children 站点，其中 **22 处是真控件**
+（收口后归零，基线只剩 3 处合法形态）。
+
+```tsx
+// ❌ 箭头悬空：fieldId 谁都没拿到
+<FormField label="镜头名称">
+  <input value={v} onChange={…} />
+</FormField>
+
+// ✅ a11y 落到控件上
+<FormField label="镜头名称">
+  {(field) => <input {...field} value={v} onChange={…} />}
+</FormField>
+```
+
+**三条边界**（都由 `tests/form-field-wiring-gate.test.ts` 的 14 条自测钉着）：
+
+- **不带 `label` 的站点不是靶子**：`label` 不给、或给成 `{null}` 时 `FormField`
+  不渲染标签行（`label != null` 才渲染），没有箭头可悬空；
+- **「标签行只作小标题」是合法形态**：控件是**多个**按钮（工坊「提供方」的二选一）
+  或纯展示节点（训练工作室的只读「生成模式 / 转场效果」），没有一个能被 `htmlFor`
+  指到。这几处记在基线里，且 `FormField` 自己也兜住 —— 它**只在 `children`
+  是函数时才给 `htmlFor`**，所以第二档不会留下悬空箭头；
+- **子节点是「函数调用返回的节点」也算站点**（`{renderControl()}`）——
+  它同样拿不到 `a11y`，要拿就得传函数本身。
+
 #### 本批顺带修正的一条域判据
 
 `training-studio-config.ts` 的 `validateTrainForm` 此前返回**第一条错误的文案**
