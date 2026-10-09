@@ -55,6 +55,7 @@ import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
+import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import {
   Popover,
@@ -322,11 +323,17 @@ export function MultiModeSelect({
                       ? "bg-primary-500/10 text-primary-strong"
                       : "text-ink-strong hover:bg-subtle"
                   }`}
-                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`）——
-                   * Enter/Space 由 `ui/option-list-popover` 的键盘契约承担，
-                   * 这里不再自绘一份（此前本文件在 `onKeyDown` 里复刻了浏览器
-                   * 对原生按钮的默认行为，6 处同类写法之一，见 §16.2.4.29）。 */
+                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`：
+                   * 这一行里还有「点 label 选、点默认星切默认」两个动作，合成
+                   * 一个 button 会把后者的键语义一起吞掉）。`tabIndex={0}` 让
+                   * 行可聚焦，Enter/Space 由 `simpleKeyHandler` 给 —— 此前这里
+                   * 只写了 `onClick`，注释还写着「键盘由 `option-list-popover`
+                   * 承担」，而本组件**并没有**用那个基元：能聚焦、点了没反应
+                   *（§16.2.4.57 的出口就是为这一档存在的）。 */
                   onClick={() => toggle(item.code)}
+                  {...simpleKeyHandler(["Space", "Enter"], () =>
+                    toggle(item.code),
+                  )}
                   tabIndex={0}
                   role="checkbox"
                   aria-checked={isSelected}
