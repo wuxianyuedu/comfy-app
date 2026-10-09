@@ -37,6 +37,7 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "status">): QueueRow {
     cover: null,
     checkpoint: null,
     mediaType: "image",
+    videoPath: null,
     projectId: null,
     progress: over.progress ?? 0,
     error: over.error ?? null,

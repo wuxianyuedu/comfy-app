@@ -55,6 +55,7 @@ import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
+import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import {
   Popover,
@@ -323,10 +324,15 @@ export function MultiModeSelect({
                       : "text-ink-strong hover:bg-subtle"
                   }`}
                   /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`）——
-                   * Enter/Space 由 `ui/option-list-popover` 的键盘契约承担，
-                   * 这里不再自绘一份（此前本文件在 `onKeyDown` 里复刻了浏览器
-                   * 对原生按钮的默认行为，6 处同类写法之一，见 §16.2.4.29）。 */
+                   * 因此**必须**自带键盘等价物：ARIA 的 `checkbox` 角色承诺
+                   * 「Space 可切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」。
+                   * 键判据走 `simpleKeyHandler`（§16.2.4.57 的唯一出口：归一
+                   * 键名 + `preventDefault` 显式），不在这里手写第二份
+                   * `event.key === " "` —— 那正是这条账要消除的形态。 */
                   onClick={() => toggle(item.code)}
+                  {...simpleKeyHandler(["Space", "Enter"], () =>
+                    toggle(item.code),
+                  )}
                   tabIndex={0}
                   role="checkbox"
                   aria-checked={isSelected}

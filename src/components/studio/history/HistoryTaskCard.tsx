@@ -98,8 +98,15 @@ export function HistoryTaskCard({
         </Button>
 
         {/* ── 主体信息 ── */}
-        <div
-          className="min-w-0 flex-1 cursor-pointer"
+        {/* 整块可点 → **原生按钮**，不是「加了 onClick 的 div」：非原生元素挂
+         * `onClick` 时键盘用户根本进不来（鼠标点得开、Tab 到不了、Enter 没反应）。
+         * 原生 `<button>` 的键语义由浏览器给，等于这条判据唯一的正解 —— 再挂一个
+         * `simpleKeyHandler` 反而是复刻浏览器默认行为（§16.2.4.57 的账要消除的
+         * 那种写法）。`text-left` 与 `p` → `span.block` 是因为 `<button>` 里不能嵌
+         * 块级元素，而它的默认排版是居中。 */}
+        <Button
+          variant="ghost"
+          className="h-auto min-w-0 flex-1 justify-start rounded-xl p-0 text-left font-normal hover:bg-transparent"
           onClick={() => onOpenDetail(task.id)}
         >
           <div className="flex flex-wrap items-center gap-2">
@@ -120,9 +127,9 @@ export function HistoryTaskCard({
               · {timeAgo(task.createdAt)}
             </span>
           </div>
-          <p className="text-ink-strong mt-1 line-clamp-1 text-sm">
+          <span className="text-ink-strong mt-1 line-clamp-1 block text-sm">
             {task.prompt || "（无提示词）"}
-          </p>
+          </span>
           {task.status === "FAILED" && task.error && (
             <div className="border-destructive/20 bg-destructive/6 mt-2 rounded-md border px-2.5 py-1.5">
               <p className="text-destructive text-2xs leading-relaxed">
@@ -148,7 +155,7 @@ export function HistoryTaskCard({
               )}
             </div>
           )}
-        </div>
+        </Button>
 
         {/* ── 操作按钮（永远可见） ── */}
         <div className="flex shrink-0 flex-col items-end gap-2">

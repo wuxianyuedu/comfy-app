@@ -8,44 +8,91 @@
  *   - 「任务 → 视频行」的形状收窄集中一处，别处要复用时直接 import。
  */
 
-import { isVideo } from "~/lib/media/media";
+import { z } from "zod";
+
 import { vanillaApi } from "~/trpc/vanilla";
-import type { RouterInputs, RouterOutputs } from "~/trpc/react";
+import type { RouterInputs } from "~/trpc/react";
 
 /** Wire type of the generate mutation input。 */
 export type GenerateInput = RouterInputs["generate"]["generate"];
 
-/** task.list 的一行。路由 mapper 已不携带旧 `images` 数组（今天恒读 undefined）——
- *  这里保持 optional，让现有查找行为逐字不变。 */
-type TaskListItem = RouterOutputs["task"]["list"]["tasks"][number] & {
-  images?: { localPath: string }[];
-};
+/**
+ * `task.list` 一行在本模块的**镜像**（§05「API 响应一律 Zod 校验」）。
+ *
+ * ## 为什么必须逐行校验，而不是一句 `as`
+ *
+ * 此前这里是 `RouterOutputs["task"]["list"]["tasks"][number] & { images?: … }`
+ * —— 交叉类型只会**加**列，发现不了「镜像声明的列线上从来不发」。它标成
+ * optional 之后，「取视频产物路径」那句读到的永远是 `undefined`，`video` 于是
+ * 恒为 `null`：表现不是报错，而是「封面永远是占位图标、下载按钮一次都没出现过」，
+ * 而 tsc / eslint / 全量用例 / 覆盖率门槛**全绿**（ISSUE #1579）。
+ *
+ * ## 镜子照的是什么
+ *
+ * `videoPath` 是**服务端投影**算出来的列（封面是预览图时，`cover` / `mediaType`
+ * 都答不出成片在哪）。这一行由 `tests/task-list-wire-contract.test.ts` 从真
+ * router 出发经一次 JSON 传输反向核对：镜像声明的每一列，线上都在发。
+ */
+export const videoTaskRowSchema = z.object({
+  id: z.string(),
+  type: z.string().default("VIDEO"),
+  status: z.string().default("QUEUED"),
+  prompt: z.string().default(""),
+  workflowName: z.string().default(""),
+  /**
+   * 成片的本地路径；没有视频产出的任务为 **null**（不是缺键、也不是空串）。
+   *
+   * **刻意不给 `.default(null)`**：缺这一列就等于契约分叉（线上少发一列），
+   * 整行必须被判掉、让列表变空**看得见**；补一个兜底会把分叉抹成「每个任务
+   * 都没有视频」—— 那正是这一族此前静默坏掉的方式（见文件头的契约说明，
+   * 反向验证在 `tests/task-list-wire-contract.test.ts`）。
+   */
+  videoPath: z.string().nullable(),
+  error: z.string().nullable().default(null),
+});
 
+/** 视图消费的行（只留它真会读的几样）。 */
 export interface VideoTask {
   id: string;
   status: string;
   prompt: string;
   workflowName: string;
-  video?: string | null; // 产出视频的本地路径
-  error?: string | null;
+  video: string | null;
+  error: string | null;
+}
+
+/**
+ * 把 tRPC 响应里的行收窄成 `VideoTask[]`，**非法行整行丢弃**。
+ *
+ * 丢弃而不是兜底：`videoPath` 缺失时若退回「没有视频」，契约分叉就被抹成
+ * 「每个任务都没有视频」—— 那是**静默**的那种坏。列表变空看得见。
+ * `id` 非法（比如是数字）同样整行丢掉，而不是把 `undefined` 硬塞给视图。
+ */
+export function parseVideoRows(raw: unknown): VideoTask[] {
+  if (!Array.isArray(raw)) return [];
+  const out: VideoTask[] = [];
+  for (const item of raw) {
+    const parsed = videoTaskRowSchema.safeParse(item);
+    if (!parsed.success) continue;
+    /* 只要 VIDEO 类任务进这张表（图片任务由画布历史那一路管）。判据在 `type`：
+     * 它也在镜像里，因此「过滤」这一步有契约兜着，不是拿视图的猜测。 */
+    if (parsed.data.type !== "VIDEO") continue;
+    out.push({
+      id: parsed.data.id,
+      status: parsed.data.status,
+      prompt: parsed.data.prompt,
+      workflowName: parsed.data.workflowName,
+      video: parsed.data.videoPath,
+      error: parsed.data.error,
+    });
+  }
+  return out;
 }
 
 /** 拉取当前用户的 VIDEO 类任务并按时间倒序展示所需的窄形状。 */
 export async function fetchVideoTasks(): Promise<VideoTask[]> {
   const data = await vanillaApi.task.list.query({ take: 200 });
-  const all: TaskListItem[] = data.tasks ?? [];
-  return all
-    .filter((task) => task.type === "VIDEO")
-    .map((task) => ({
-      id: task.id,
-      status: task.status,
-      prompt: task.prompt,
-      workflowName: task.workflowName,
-      video:
-        (task.images ?? []).find((im) => isVideo(im.localPath))?.localPath ??
-        null,
-      error: task.error ?? null,
-    }));
+  return parseVideoRows(data.tasks);
 }
 
 /** 提交一条生成；成功返回 taskId（由调用方决定怎么提示/刷新）。 */

@@ -9,6 +9,7 @@ import {
 } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
+import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { filterGroupsByKeyword } from "~/lib/list-filter";
 import type { OptionGroup } from "~/lib/workshop/character-options";
 
@@ -172,6 +173,12 @@ export function AttributeMultiSelect({
                           role="option"
                           aria-selected={on}
                           onClick={() => toggle(opt)}
+                          /* `role="option"` 承诺「Space / Enter 可选中」—— 只挂
+                           * `onClick` 就是「鼠标点得开、键盘进不来」。键判据走
+                           * §16.2.4.57 的唯一出口，不手写第二份 `event.key` 比较。 */
+                          {...simpleKeyHandler(["Space", "Enter"], () =>
+                            toggle(opt),
+                          )}
                           className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs transition-colors ${
                             on
                               ? "bg-primary-soft text-primary"

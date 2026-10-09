@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(48 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(50 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -414,6 +414,18 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # `FormField` 自己也兜住（只在 `children` 是函数时才给 `htmlFor`）。
   # 走 TypeScript AST（JSX 结构用正则判不准），与 check-non-null-assertions 同档。
   run "FormField 标签⇄控件接线（§16.2.4.26）" node scripts/check-form-field-wiring.cjs
+  # 「鼠标点得开、键盘点不开」（规范 06 §6.11、16 §16.2.4.29 / §16.2.4.57）：非原生
+  # 可交互元素挂 `onClick` 而没有键盘等价物。这条此前**有判据没有执行者** ——
+  # `check-click-keyboard.cjs` 写好了、基线清零了、UI 也收口了，却没人把它接进
+  # 任何一步：它的 5 处站点与 3 条用例因此长期红着而无人知（判据执行者台账在
+  # 别处点名，这里补齐执行者）。走 TypeScript AST 扫 `src/**` 的 `.tsx`，
+  # 与 check-form-field-wiring 同档（实测 < 1s）。
+  run "非原生元素点击的键盘等价物（§6.11）" node scripts/check-click-keyboard.cjs
+  # 依赖新鲜度（ISSUE #1569）：远端改过依赖版本、本地还在旧的上面干活 —— 结论看
+  # 起来一切正常，其实判据的版本已经不是远端那份了。`--staged` 只在暂存改了依赖面
+  # （package.json / pnpm-lock.yaml / pnpm-workspace.yaml）时才判定（实测 0.4s），
+  # 其余提交立刻返回 0；**绝不 fetch**（网络不能进钩子，§13.5.4）。
+  run "依赖新鲜度（远端 ⇄ 基线 ⇄ 本机）" node scripts/check-deps-freshness.mjs --staged
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────

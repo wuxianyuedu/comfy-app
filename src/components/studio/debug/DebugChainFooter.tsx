@@ -51,6 +51,9 @@ export interface RenderChainModule {
 }
 
 const PILL_STYLE: CSSProperties = {
+  /* 原生 `<button>` 的默认外观在这里一律还原给药丸样式 —— 换语义不带视觉变化。
+   * `font: inherit` 是必需的：`<button>` 默认不继承字体族。 */
+  font: "inherit",
   cursor: "pointer",
   userSelect: "none",
   fontFamily: "var(--font-mono)",
@@ -179,14 +182,19 @@ export function DebugChainFooter({
           {title}
         </span>
         {group.map((module) => (
-          <span
-            key={module.file}
-            title={`${module.file}（点击查看源码）`}
-            onClick={(event) => pillClick(event, module)}
-            style={PILL_STYLE}
-          >
-            {module.label}
-          </span>
+          /* 药丸是**按钮**，不是「挂了 onClick 的 span」：非原生元素上的点击
+           * 键盘用户根本进不来（Tab 到不了、Enter 没反应）。原生 `<button>` 的
+           * 键语义由浏览器给 —— 这才是这条判据唯一的正解，再挂一个
+           * `simpleKeyHandler` 反而是复刻浏览器默认行为（§16.2.4.57）。 */
+          <Hint key={module.file} label={`${module.file}（点击查看源码）`}>
+            <Button
+              variant="ghost"
+              onClick={(event) => pillClick(event, module)}
+              style={PILL_STYLE}
+            >
+              {module.label}
+            </Button>
+          </Hint>
         ))}
       </div>
     );
