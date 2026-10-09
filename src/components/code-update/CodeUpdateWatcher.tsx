@@ -23,8 +23,15 @@ import { useCodeUpdateWatch } from "./hooks/use-code-update-watch";
 /** 消息中心的类型：属于「代码更新 / 运行态」这一族，与本地更新检测同色。 */
 const MESSAGE_KIND = "update";
 
-/** 把启动器注入的重启原因翻成用户可读的标题 + 正文。 */
-function describeDevServerRestart(reason: string | null): {
+/**
+ * 把启动器注入的重启原因翻成用户可读的标题 + 正文。
+ *
+ * 导出是给组件工作台的注入层用的（`.storybook/message-center-sources.tsx`）：
+ * 消息中心里那条「应用服务已重启」的文案**住在这里**，story 侧现算它、
+ * 不手抄第二份（同一份文案两处各写一遍，改一处就漂）。这不是为了 story 而
+ * 改生产代码的行为 —— 只是把一个本来就该被复用的纯函数露出来。
+ */
+export function describeDevServerRestart(reason: string | null): {
   title: string;
   body: string;
 } {

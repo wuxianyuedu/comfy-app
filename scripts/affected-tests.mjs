@@ -270,6 +270,16 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 「装不装得下」），所以单独一份。与本次暂存改动无关也必须响（它是「下一次有人
   // 用自定义渲染器摆画布」的守卫），所以进固定清单。
   "tests/storybook-fit-viewport.test.ts",
+  // 「消息中心注入层」（ISSUE #1381 的第四批）：`message-center/` 那两个组件的入参
+  // 只有 `children`，数据**不经过 props**（住在 zustand store 里）—— 前几条 storybook
+  // 判据对它们天然无感，而它们的失效形态全是「画布上照样有内容」：手捏 `MessageRecord[]`
+  // 跳过 `push()` 的 id 生成与条数裁剪（那条 id 生成曾经就是「删一条把另一条一起删了」
+  // 的根因）、只推消息不置 `open` 让面板 `return null`（同 §16.2.3.4 那个「侧栏有故事、
+  // 画布一片空白」）、`allRead` 逐条写 `read: true` 摆末态而验不到动作本身。
+  // 本批实测还抓到一处真缺陷（标记已读那颗按钮缺 `h-auto`，定高 32px 吞掉多段正文、
+  // 溢出卡片下沿 39px）—— 那是这一类 story 的**直接产物**。与本次暂存改动无关也必须响
+  // （它是「下一次有人写这一族 story」的守卫），所以进固定清单。
+  "tests/storybook-message-center-sources.test.ts",
   // 「eslint 增量缓存的依赖指纹」：`--cache` 的缓存键不含依赖树，而 `no-unsafe-*`
   // 是类型化规则 —— 依赖一变旧判决被整片重放，假红拦死提交、假绿洗掉真违规
   // （ISSUE #1399）。它的执行者是 `postinstall` 那一步，而改 `.githooks/**` 会让
