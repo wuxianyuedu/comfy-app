@@ -43,12 +43,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import {
-  freshnessTrack,
-  isUsableSkipReason,
-  writeFreshness,
-  writeSkipRecord,
-} from "./visual-baselines.mjs";
+import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
+import { freshnessTrack, writeFreshness } from "./visual-baselines.mjs";
 import { gitUser } from "./pixel-run.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -119,25 +115,19 @@ export function shouldRecord({ exitCode, dryRun }) {
 }
 
 /**
- * 从 argv 里读出「这次是不是记一条豁免」—— 抽成纯入口，好让「给了 `--skip` 就不再起
- * Playwright」与「理由不合用就退回去」这两条边界能被真跑一次。
+ * 从 argv 里读出「这次是不是记一条豁免」—— 「给定开关 → 读理由 → 判合不合用」那三步
+ * 收在 `scripts/daily-run.mjs` 的 `parseLedgerFlag`（四档共用一份，§12.12）。
  *
- * 三条形状：
- *   · 没有 `--skip` ⇒ `{skipped: false}`；
- *   · `--skip <可用理由>` ⇒ `{skipped: true, reason}`；
- *   · `--skip <缺失 | 占位 | 过短>` ⇒ `{skipped: true, reason: null}`（调用方按退出码 2 处理）。
+ * 这一层只是**把返回值映射回本档历史的形状**（`{skipped, reason}`）：`parseSkip` 自
+ * ISSUE #1282 起被 `tests/e2e-run.test.ts` 直接断言，而形状变了没有任何东西会红 ——
+ * 那条边界（缺理由 / 占位理由 / 没给）值得留着。
  *
  * @param {string[]} argv
  * @returns {{skipped: boolean, reason: string | null}}
  */
 export function parseSkip(argv) {
-  const index = argv.indexOf("--skip");
-  if (index === -1) return { skipped: false, reason: null };
-  const raw = argv[index + 1];
-  return {
-    skipped: true,
-    reason: isUsableSkipReason(raw) ? String(raw).trim() : null,
-  };
+  const { mode, reason } = parseLedgerFlag(argv, "--skip");
+  return { skipped: mode === "skip", reason };
 }
 
 /**
@@ -164,14 +154,12 @@ function main(argv) {
       process.stdout.write(`[e2e-run] 本次不跑、只记豁免：${skip.reason}\n`);
       return 0;
     }
-    const { note } = writeSkipRecord({
+    return writeLedgerNote({
       root: ROOT,
       kind: "e2e",
-      who: gitUser(TRACK.key),
+      mode: "skip",
       reason: skip.reason,
     });
-    process.stdout.write(`[e2e-run] ✓ 已记一条豁免\n[e2e-run] ${note}\n`);
-    return 0;
   }
   const extra = argv.filter((a) => a !== "--dry-run");
   const run = planRun(extra);

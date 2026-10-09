@@ -306,6 +306,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 它读的是 `scripts/e2e-run.mjs` / `scripts/visual-baselines.mjs` 与两处接线文本，
   // import 图追不到，故进固定清单（与本次暂存改动无关也必须响）。
   "tests/e2e-run.test.ts",
+  // 「每天首次自证」从一档扩到四档（ISSUE #1282 的续）：平台流水线删掉（ISSUE #623）之后，
+  // **全量单测 + 覆盖率**与**产物级护栏（build + 数产物）**是两条一直没有执行者的判定档
+  // （§13.5.3 的欠账表里只写着「按需手动跑」，而那句话没有任何东西在守）。它们被接进同一份
+  // 判决里（`FRESHNESS_TRACKS` 的 `daily` / `dirty` 两栏），判据是「**改了就当天跑**」而不是
+  // 「每天一次仪式」—— 十分钟量级的两档没必要每天都跑。
+  // 这条判据读的是 `scripts/full-suite-run.mjs` / `scripts/artifact-run.mjs` /
+  // `scripts/daily-run.mjs` 与钩子接线文本，import 图追不到，故进固定清单。
+  "tests/daily-tracks.test.ts",
   // 「声明 ⇄ 读者」索引的契约测试（规范 §11.23）：本仓库的声明机制是一个一个事故里
   // 长出来的，每一种自带台账与判据，而没有任何一处说得出「一共有哪些声明、各自的读者
   // 是谁」。这一步把 scripts/.declaration-readers.json 当索引核（读者存在 + 执行者在

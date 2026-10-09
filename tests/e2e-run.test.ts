@@ -82,13 +82,16 @@ describe("全量 e2e 的记账语义（§11.8）", () => {
 
 describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
   it("四个值各就各位：账文件 / 键 / 名字 / 命令", () => {
-    expect(Object.keys(FRESHNESS_TRACKS).sort()).toEqual(["e2e", "visual"]);
-    expect(freshnessTrack("e2e")).toEqual({
-      ledger: "scripts/.e2e-freshness.json",
-      key: "e2e",
-      label: "全量 e2e",
-      run: "pnpm test:e2e",
-    });
+    /* 只核**本档的两栏与关键字**，不再核「`FRESHNESS_TRACKS` 一共几个键」——
+     * 那份清单是 `tests/daily-tracks.test.ts` 的事（它判四档全在、且互不重名）。
+     * 在这里写死一份档名清单的形态会在**每次新增一档**时红，而红的原因与「e2e 的账
+     * 有没有写对」毫无关系 —— 那种「与本测试无关的红」正是 §13.5.12 记过的坑
+     * （`tests/gate-executors.test.ts` 把份数写死 `.toBe(44)` 的那次）。 */
+    expect(Object.keys(FRESHNESS_TRACKS)).toContain("e2e");
+    expect(freshnessTrack("e2e").ledger).toBe("scripts/.e2e-freshness.json");
+    expect(freshnessTrack("e2e").key).toBe("e2e");
+    expect(freshnessTrack("e2e").label).toBe("全量 e2e");
+    expect(freshnessTrack("e2e").run).toBe("pnpm test:e2e");
     expect(freshnessTrack("visual").ledger).toBe(
       "scripts/.visual-baseline-freshness.json",
     );
