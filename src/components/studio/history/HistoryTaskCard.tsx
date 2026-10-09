@@ -101,8 +101,10 @@ export function HistoryTaskCard({
         {/* 整块「点开详情」用原生 `<Button variant="ghost">`：左侧缩略图是同
          * 一个动作的另一个落点（那是 `<Button aria-label="查看任务详情">`），
          * 而此前这一块只是 `div + onClick` —— 鼠标点得开、键盘点不开，同一
-         * 件事的两条路径里有一条不通（§6.10）。`ghost` 的底色/文字色由
-         * `className` 接管，观感与收口前一致（§16.2.4.2 第 5 条）。 */}
+         * 件事的两条路径里有一条不通（§6.10）。原生 `<button>` 的 Enter/Space
+         * 与焦点语义由浏览器给 —— 再挂一个 `simpleKeyHandler` 反而是复刻
+         * 浏览器默认行为（§16.2.4.57）。`ghost` 的底色/文字色由 `className`
+         * 接管，观感与收口前一致（§16.2.4.2 第 5 条）。 */}
         <Button
           variant="ghost"
           onClick={() => onOpenDetail(task.id)}
@@ -126,9 +128,9 @@ export function HistoryTaskCard({
               · {timeAgo(task.createdAt)}
             </span>
           </div>
-          <p className="text-ink-strong mt-1 line-clamp-1 text-sm">
+          <span className="text-ink-strong mt-1 line-clamp-1 block text-sm">
             {task.prompt || "（无提示词）"}
-          </p>
+          </span>
           {task.status === "FAILED" && task.error && (
             <div className="border-destructive/20 bg-destructive/6 mt-2 rounded-md border px-2.5 py-1.5">
               <p className="text-destructive text-2xs leading-relaxed">

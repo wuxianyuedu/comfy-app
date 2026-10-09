@@ -7,14 +7,16 @@
  * `defineGateRepo`（§11.16.1），`setup` 里把它 `git init` 好、造一次提交、
  * 再把那条远端引用指过去。
  *
- * 覆盖的七条分界（都是「一眼看着该红、其实绿」或反过来的那种）：
+ * 覆盖的八条分界（都是「一眼看着该红、其实绿」或反过来的那种）：
  *   1. 远端改了 `package.json` 的版本声明 → 红，且话术里有可执行出口；
  *   2. 远端改了 lockfile 的**解析结果** → 红，且明细指到具体包与版本；
  *   3. 远端只动 lockfile 的注释 / 顺序 → **不报**（实质 diff，不是字符串比）；
  *   4. 没有远端引用 / 没有取证时间 → `[未校验]`，**不给出**「一致」这个结论；
  *   5. `--offline` 不读 git → 只判本地自洽那一层；
  *   6. 不是 git 检出 → exit 2（环境故障，不是「依赖没问题」）；
- *   7. `--staged` 的触发面：没碰依赖面 → 零输出退 0；碰了 → 照判并点出文件名。
+ *   7. `--staged` 的触发面：没碰依赖面 → 零输出退 0；碰了 → 照判并点出文件名；
+ *   8. **合并已解完、提交还没落地**（`MERGE_HEAD` 在场）→ ② 不判（远端那份依赖面就在
+ *      这次合并里），而不是给解冲突的人一条**永远解不开**的红。
  *
  * 外加一条**基准**用例：分叉之后自己在分支上加依赖，不算「远端改过依赖」——
  * 那正是 ② 取分叉点而不取 `origin/master` 的理由（拿后者会反向误报）。
@@ -230,6 +232,58 @@ describe("check-deps-freshness 契约", () => {
     expect(code).toBe(1);
     expect(output).toContain("pnpm-workspace.yaml");
     expect(output).toContain("动了依赖面");
+  });
+
+  test("合并已解完、尚未落地（MERGE_HEAD 在场）→ ② 不判，话术说清是「已合并」而非「未校验」", ({
+    repo,
+  }) => {
+    /* 立案现场：解冲突的人把 `origin/master` 合了进来、依赖面与远端逐字一致，
+     * 提交却被这条判据拦下 —— 出口让他「把 origin/master 合并进来」，而他刚做完
+     * 那件事。根因是 `git commit` 落地前 HEAD **还没动**，`--is-ancestor` 看不见
+     * 远端已进来、`merge-base` 回的仍是合并前的分叉点。 */
+    /* 造一个**真要合并**的现场（`merge --no-commit` 只在两侧都有各自的新提交时
+     * 才留下 `MERGE_HEAD`）：远端从分叉点往前一步、本地也在自己这边往前走一步，
+     * 于是它们真的分叉了，合并必须产生一个合并提交。
+     * 远端那一步**只动一个与依赖无关的文件** —— ② 要判的是「远端有没有改依赖」，
+     * 这次没有；把它设成「远端改了依赖」会让 ② 本来就该报红，测不出 MERGE_HEAD 那一态。 */
+    repo.git("checkout", "-q", "-b", "remote-side", "fork-point");
+    repo.write("docs/remote.md", "远端往前一步\n");
+    repo.git("add", "-A");
+    repo.commit("远端：只改文档，不动依赖面");
+    repo.git("update-ref", "refs/remotes/origin/master", "HEAD");
+    repo.git("checkout", "-q", "master");
+    repo.write("docs/local.md", "本地往前一步\n");
+    repo.git("add", "-A");
+    repo.commit("本地：自己这边也往前一步");
+    // `--no-ff` 在这里是必需的（两侧都有新提交，本来也快进不了；写出来是把
+    // 「这次合并必须留 MERGE_HEAD」这条意图钉在用例里）。
+    repo.git("merge", "--no-ff", "--no-commit", "remote-side");
+    // 只判 ② 那一层：夹具里没装 node_modules，③ 必红（`code` 整体是 1）——
+    // 拿它当判据会把「② 修好了」与「③ 也装好了」混成同一件事（同本文件里
+    // 「只动了 lockfile 的注释」那条的口径）。
+    // 反向对照：没有 MERGE_HEAD 时这同一条比对是会红的（见下面那条用例的现场）。
+    expect(parseReport(repo.run(["--json"]).output).remoteDrifts).toEqual([]);
+    // 话术在人读的那一档（`--json` 只出数据、不出散文）。
+    const { output } = repo.run();
+    expect(output).toContain("已合并");
+    // 「没看」与「远端已经在本次合并里」必须在输出形态上分得开（同 ④ 那条口径）。
+    expect(output).not.toContain("未校验");
+  });
+
+  test("MERGE_HEAD 不在场时这一态不生效（自己改依赖照旧要判 ②）", ({ repo }) => {
+    // 反向对照：同一个「远端停在分叉点」的现场，只是没有在合并 —— `remoteDrifts`
+    // 为空是因为**远端真没动依赖**，不是因为把 ② 关掉了。这里让远端前进过依赖，
+    // 预期仍然报出来。
+    repo.git("reset", "--hard", "fork-point");
+    repo.write("package.json", PKG_REMOTE);
+    repo.git("add", "-A");
+    repo.commit("远端：升级依赖");
+    repo.git("update-ref", "refs/remotes/origin/master", "HEAD");
+    repo.git("reset", "--hard", "fork-point");
+    const { output } = repo.run(["--json"]);
+    expect(parseReport(output).remoteDrifts.map((d) => d.file)).toContain(
+      "package.json",
+    );
   });
 
   test("分叉之后自己在分支上加依赖 → 不算「远端改过依赖」（基准是分叉点）", ({
