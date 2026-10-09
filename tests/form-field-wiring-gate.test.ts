@@ -18,11 +18,11 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { symlinkDir } from "./helpers/symlink-dir";
 import { describe, expect, it } from "vitest";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
@@ -43,11 +43,12 @@ function gate(
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
   /* 判据 `require("typescript")` 走 TypeScript AST —— 临时仓库里没有解析链，
-   * 把它指回本仓库那份（同 `check-non-null-assertions.cjs` 类判据的自测手法）。 */
-  symlinkSync(
+   * 把它指回本仓库那份（同 `check-non-null-assertions.cjs` 类判据的自测手法）。
+   * Windows 上裸 `symlinkSync(..., "dir")` 普通权限必 EPERM，统一走
+   * `symlinkDir`（win32 用 junction，见 `tests/helpers/symlink-dir.ts`）。 */
+  symlinkDir(
     path.resolve(__dirname, "../node_modules"),
     path.join(root, "node_modules"),
-    "dir",
   );
   if (baseline) {
     writeFileSync(

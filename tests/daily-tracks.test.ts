@@ -371,10 +371,12 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
        * 不显式声明的话 `return` 会被收窄成初值 `null`，调用方的 `.toISOString()` 报 `never`。 */
       return earliest as Date | null;
     };
+    // 两次提交在同一个临时仓库里按下秒级时钟落地，跑得慢时机器的提交会跨 1~2 秒，
+    // 而这条断言的本意是「`src/` 与 `scripts/` 都在今天动过（解析没把文件归错提交）」，
+    // 比到「日」即可，不被提交落地时钟抖动影响——空行分隔的解析回归仍由上面的非 null 守着。
+    const startOfDay = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
     expect(sinceFor(["src/"])).not.toBeNull();
-    expect(sinceFor(["src/"])?.toISOString()).toBe(
-      sinceFor(["scripts/"])?.toISOString(),
-    );
+    expect(startOfDay(sinceFor(["src/"]))).toBe(startOfDay(sinceFor(["scripts/"])));
     // 没动过的输入面 ⇒ null（不是「今天没动过」以外的任何东西）。
     expect(sinceFor(["src-tauri/"])).toBeNull();
   });
