@@ -342,6 +342,38 @@ const SECTION_HEADER_MARKS = [
   /border-t border-dashed bg-transparent/,
 ];
 
+/**
+ * 面板里铺满居中的轻量占位（`EmptyState` 的第四档）。
+ *
+ * 这一族的标记**只许按单行判**（下面 `scope: "line"`），这是量出来的、不是洁癖：
+ * 这七枚标记每一枚都很常见，按整文件全命中判会误抓三处无关文件
+ * （实测整文件口径命中 9 个文件，其中 `HistoryPanel.tsx` 的 `flex h-full` 在第 69 行、
+ * `justify-center` 在第 230 行；`ProjectGate.tsx` 命中的 `text-ink-fainter` 其实是
+ * `placeholder:text-ink-fainter`；`ShellTabs.tsx` 那一处是页签诊断卡、不是空态）。
+ * 收到「同一枚 class 字符串」上，实测严格同形正好 5 处、零误抓 —— 判据描述的形状
+ * 与「一个人手抄会抄下的东西」同宽：手抄的人抄的就是这一整串。
+ */
+const PANEL_MARKS = [
+  /\btext-ink-fainter\b/,
+  /\bflex h-full\b/,
+  /\bflex-col\b/,
+  /\bitems-center\b/,
+  /\bjustify-center\b/,
+  /gap-2(?![\w.])/,
+  /\btext-sm\b/,
+];
+
+/** 一族的标记在给定文本里是否算「同一枚形状」。`scope: "line"` 逐行判，其余整段判。
+ *  判据与它的负控制共用这一个出口 —— 否则负控制测的是另一套逻辑，红了也证明不了判据。 */
+function familyHits(
+  fam: { marks: RegExp[]; scope?: "file" | "line" },
+  text: string,
+): boolean {
+  return fam.scope === "line"
+    ? text.split(/\r?\n/).some((line) => fam.marks.every((re) => re.test(line)))
+    : fam.marks.every((re) => re.test(text));
+}
+
 /** 光晕（halo）里的裸色。`0_0_` 前缀本身就是判据：光晕在几何上没有偏移也没有扩散，
  *  投影一定有 —— 所以这条不会误伤仓里那 6 处 `shadow-[0_18px_40px_rgba(0,0,0,…)]`
  *  一类的投影（实测：按 `0_0_` 判 0 处，按「任意 shadow 带 rgba」判 6 处）。 */
@@ -459,10 +491,18 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
   });
 
   /* 「只许有一个出处」判据：抽成基元的那些形状，其类名标记只许出现在实现文件里。
-     三族共用一次目录遍历（923 个文件 × 每族一遍太贵），新增一族只加一行。
+     各族共用一次目录遍历（923 个文件 × 每族一遍太贵），新增一族只加一行。
      每族的 `sample` 是**一份手抄**：负控制拿它证明这组标记真的能抓到来抄的人 ——
-     否则标记写漂了就永远全绿，那是比红更糟的失效形态。 */
-  const FAMILIES = [
+     否则标记写漂了就永远全绿，那是比红更糟的失效形态。
+     `scope: "line"` 的族把命中收窄到**同一枚 class 字符串**上（理由见下面那一族的注释）。 */
+  const FAMILIES: {
+    name: string;
+    owner: string;
+    use: string;
+    marks: RegExp[];
+    sample: string;
+    scope?: "file" | "line";
+  }[] = [
     {
       name: "序号圆",
       owner: "src/components/workshop/IndexDot.tsx",
@@ -506,6 +546,15 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
         '<span className="bg-surface-2 text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">' +
         '<Separator className="border-border-strong h-0 flex-1 border-t border-dashed bg-transparent" />',
     },
+    {
+      name: "面板内铺满居中的占位",
+      owner: "src/components/ui/empty-state.tsx",
+      use: '~/components/ui/empty-state 的 <EmptyState variant="panel">',
+      marks: PANEL_MARKS,
+      scope: "line",
+      sample:
+        'className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm"',
+    },
   ];
 
   it(`被抽走的 ${FAMILIES.length} 族形状只许有一个出处`, () => {
@@ -517,7 +566,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
         /* 全部标记**全命中**才算同一枚 —— 少一个都不算。类名在源码里的先后
            顺序不进判据：`IndexDot` 的 `size-*` 由三元式给、排在 `rounded-full`
            之后，顺序判据会漏掉实现自己。 */
-        if (fam.marks.every((re) => re.test(code))) {
+        if (familyHits(fam, code)) {
           owners.push(path.relative(ROOT_DIR, abs).split(path.sep).join("/"));
         }
       }
@@ -571,7 +620,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     expect(TSHIRT_NAME.test("3xs"), "合法 t-shirt 名被误判").toBe(true);
     for (const fam of FAMILIES) {
       expect(
-        fam.marks.every((re) => re.test(fam.sample)),
+        familyHits(fam, fam.sample),
         `${fam.name}的手抄样本没被自己的标记抓出（这条判据会静默全绿）`,
       ).toBe(true);
     }
@@ -624,11 +673,28 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
           '<span className="bg-subtle text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">',
         "区头（强调圆点 + 大写标签 + 计数胶囊 + 虚线）",
       ],
+      /* 面板占位那一族的三个「看着像」：`ProjectGate` 那处是整页容器（自带
+         `bg-canvas` / `p-6`，里面坐的是一张卡）、`ShellTabs` 那处是**页签诊断卡**
+         （标题 + 原因 + 地址行 + 按钮，不是「这里是空的」），消息中心那处是同族
+         但自带更松的间距（`gap-3`，迁移后走 `className` 覆写）——
+         三者都不该被这套标记抓到，否则判据就成了「拦下了一切」。 */
+      [
+        'className="bg-canvas text-ink flex h-full w-full items-center justify-center p-6"',
+        "面板内铺满居中的占位",
+      ],
+      [
+        'className="flex h-full flex-col items-center justify-center gap-4 p-8"',
+        "面板内铺满居中的占位",
+      ],
+      [
+        'className="text-ink-fainter flex h-full flex-col items-center justify-center gap-3"',
+        "面板内铺满居中的占位",
+      ],
     ];
     for (const [src, famName] of lookalikes) {
       const fam = FAMILIES.find((f) => f.name === famName)!;
       expect(
-        fam.marks.every((re) => re.test(src)),
+        familyHits(fam, src),
         `异类「${src.slice(0, 46)}…」被${famName}的标记误抓（标记集合太松）`,
       ).toBe(false);
     }

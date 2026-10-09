@@ -24,6 +24,7 @@ import {
   scrollHeightOf,
   visibleRange,
 } from "./log-virtual";
+import { EmptyState } from "~/components/ui/empty-state";
 import { useWidePanel } from "~/components/ui/wide-panel";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { modalWidth } from "~/components/ui/dialog-width";
@@ -413,10 +414,11 @@ export function LogPanel() {
             className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
           >
             {pageLogs.length === 0 ? (
-              <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm">
-                <FileText size={32} strokeWidth={1.5} className="opacity-30" />
-                {total === 0 ? "暂无匹配的日志" : "本页无内容"}
-              </div>
+              <EmptyState
+                variant="panel"
+                icon={FileText}
+                title={total === 0 ? "暂无匹配的日志" : "本页无内容"}
+              />
             ) : (
               /* 虚拟窗口：外层撑出**估算总高**（滚动条长度与真实内容一致），
                内层 `translateY` 到当前窗口的起点——只挂视口内的行。 */

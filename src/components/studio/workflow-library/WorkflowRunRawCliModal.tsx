@@ -23,6 +23,7 @@ import { Copy, FileJson, RefreshCw, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { EmptyState } from "~/components/ui/empty-state";
 import { FieldLabel } from "~/components/ui/field";
 import { Hint } from "~/components/ui/hint";
 import { JsonViewer } from "~/components/ui/json-viewer";
@@ -229,22 +230,15 @@ export function WorkflowRunRawCliModal({
             className="custom-scrollbar bg-panel-deep/60 flex-1 gap-3 overflow-y-auto p-3"
           >
             {lines.length === 0 ? (
-              <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm">
-                {!loaded ? (
-                  "加载中…"
-                ) : (
-                  <>
-                    <FileJson
-                      size={32}
-                      strokeWidth={1.5}
-                      className="opacity-30"
-                    />
-                    <span>
-                      暂无完整输出（旧任务或服务端重启后内存缓冲已清空）
-                    </span>
-                  </>
-                )}
-              </div>
+              <EmptyState
+                variant="panel"
+                icon={loaded ? FileJson : undefined}
+                title={
+                  loaded
+                    ? "暂无完整输出（旧任务或服务端重启后内存缓冲已清空）"
+                    : "加载中…"
+                }
+              />
             ) : (
               /* 服务端缓冲只从**尾部**追加、到上限后从头部裁，所以除裁切那一轮外
                  下标与行的对应关系稳定；配上行内 `memo`（按 `entry` 身份跳过），

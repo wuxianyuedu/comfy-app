@@ -24,6 +24,7 @@ import type { StepLogEntry } from "./stepLogCache";
 import { listCachedTaskIds } from "./stepLogCache";
 import { useActiveTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/hooks/use-canvas-settings";
+import { EmptyState } from "~/components/ui/empty-state";
 import { Hint } from "~/components/ui/hint";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { FieldLabel } from "~/components/ui/field";
@@ -332,14 +333,13 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 </>
               }
               emptySlot={
-                <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm">
-                  <FileText
-                    size={32}
-                    strokeWidth={1.5}
-                    className="opacity-30"
-                  />
-                  {taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
-                </div>
+                <EmptyState
+                  variant="panel"
+                  icon={FileText}
+                  title={
+                    taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"
+                  }
+                />
               }
             />
 
