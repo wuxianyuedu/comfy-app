@@ -134,6 +134,36 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
     expect(revealButtons()).toHaveLength(0);
   });
 
+  it("带空格的路径是**整条**一个按钮（启动器回显 pwsh/pnpm 的那行）", () => {
+    /* 这一条钉的是「上色层与可点层同源」。上色层（`log-row-style`）此前自己持
+     * 一份路径正则且 `[^\s]*` 吃到第一个空格就停，于是分片是 `C:\Program` 与
+     * ` Files\…` 两段；而识别在**分片之内**做（`PathLinkedText`），切碎的路径
+     * 等于认不出来 —— 面板于是给出一个指向 `C:\Program` 的按钮，而它不是存在的
+     * 目录（点了只会得到「找不到可在文件管理器里打开的路径」）。
+     * 现在上色层直接用 `findLogPathTokens` 的区间，一条路径恒在一个分片里。 */
+    renderRow(
+      '>>> "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" -NoProfile -File "D:\\Program Files\\nodejs\\pnpm.ps1" -v',
+    );
+    expect(revealButtons().map((el) => el.getAttribute("aria-label"))).toEqual([
+      "在文件管理器里定位 C:\\Program Files\\PowerShell\\7\\pwsh.EXE",
+      "在文件管理器里定位 D:\\Program Files\\nodejs\\pnpm.ps1",
+    ]);
+  });
+
+  it("点带空格的路径，参数是整条（不是截断的 C:\\Program）", async () => {
+    mutateMock.mockResolvedValue({ ok: true, detail: "已在文件管理器里定位" });
+    const user = userEvent.setup();
+    renderRow('>>> "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" -NoProfile');
+    await user.click(
+      screen.getByRole("button", {
+        name: "在文件管理器里定位 C:\\Program Files\\PowerShell\\7\\pwsh.EXE",
+      }),
+    );
+    await expect
+      .poll(() => mutateMock.mock.calls[0]?.[0] as { path: string } | undefined)
+      .toEqual({ path: "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" });
+  });
+
   it("点一下发一次请求，参数是扫出来的那段路径", async () => {
     mutateMock.mockResolvedValue({ ok: true, detail: "已在文件管理器里定位" });
     const user = userEvent.setup();
