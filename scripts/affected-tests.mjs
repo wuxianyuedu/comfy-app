@@ -372,6 +372,37 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 低于地板 / 缺字段）每一档都得有人钉住，都是「下一次新增一条按需档」时才走得进的
   // 路径，所以必须进固定清单（与本次改动无关也照跑）。
   "tests/on-demand-duties-gate.test.ts",
+  // 「`@theme` 声明的 token 清单」那份**文件快照**（规范 §11.9.1 / #1490 落地）：
+  // `toMatchFileSnapshot` 把清单写成一份能独立打开、能单独 diff 的真文件，
+  // 而它与源码之间的同步**没有任何机器判据** —— 它自己那条用例读的是
+  // `src/app/globals.css` 的**文本**（正则扫 `@theme` 块），CSS 不在 import 图上，
+  // 所以「改了 globals.css 而不带它」正好是它不在的时机。
+  // 实测（本轮）：#1558 往 `@theme` 加了一颗 `--gradient-brand`（品牌渐变收成 token），
+  // 基线没同批更新，这条红**直接落进 master 并留了一周**，期间从它分出去的每一次提交
+  // 都带着它 —— 表现不是「某处坏了」，而是「一份人工 review 的产物与源码已经不一致，
+  // 没有任何人被告知」。同因（读文本、import 图追不到、与本次改动无关也必须响），
+  // 故进固定清单。
+  "tests/theme-tokens-compile-source.test.ts",
+  // 「前端响应镜像 ↔ 线上真实列」的契约（台账 E4 第一格）：镜像声明的每一列线上必须
+  // 真的在发。交叉类型 `RouterOutputs[...] & { images?: … }` 补出来的字段，tsc 只查它
+  // 存在、永远查不出服务端没发它 —— 于是那句读取恒为 `undefined`，而类型上是 optional
+  // 连可选链都不会红，表现是界面上那一格永远空着而全绿（视频队列的封面与下载入口就是这么挂的）。
+  // 它守的是「下一次任一侧改动」，而改 `task.list` 的 mapper 只会被 router 自己的用例拉进
+  // C 组 —— 契约这一侧必须无条件响，所以进固定清单。
+  "tests/task-list-wire-contract.test.ts",
+  // 「全局 setup 里的 RTL 逐用例卸载真的注册上了吗」（ISSUE #1282 本轮 / §12.18）：
+  // 这行注册在本仓库**长期是死的** —— `@testing-library/react` 只在
+  // `typeof afterEach === "function"` 时注册自动清理，而本仓库 `globals: false`
+  // ⇒ 那行 `if` 从不成立。后果是被打的不是任何一条断言，而是全量跑的
+  // **unhandled error**（React scheduler 的活在 jsdom 环境拆掉后落地 ⇒
+  // `window is not defined`）把退出码打非零 —— 现场读起来像「某份用例红了」，
+  // 其实用例全绿，正是「红指向的东西不是判据」那一族。
+  // 它同时是判据自己的门禁自测：本判据**真起一份探针用例**去跑（「setup 文件里
+  // 出现过 cleanup」与「清理真的注册上了」是两件事，前者在把注册挪进永远不执行的
+  // 分支里时照样为真），而它的输入是 `tests/setup.ts` / `vitest.config.ts` 两份
+  // 文本 + 一次子进程，import 图一概追不到 —— 与本次暂存改动无关也必须响，
+  // 故进固定清单。
+  "tests/global-setup-cleanup.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
