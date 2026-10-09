@@ -236,7 +236,7 @@ export function AgentOverlay({
             if (msg.role === "user") {
               return (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="bg-primary/90 max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap text-white">
+                  <div className="bg-primary/90 max-w-[85%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap text-white">
                     {msg.content}
                   </div>
                 </div>
@@ -254,7 +254,7 @@ export function AgentOverlay({
             // assistant
             return (
               <div key={msg.id} className="flex justify-start">
-                <div className="bg-subtle text-ink max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap">
+                <div className="bg-subtle text-ink max-w-[85%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap">
                   {msg.content}
                 </div>
               </div>
@@ -329,7 +329,7 @@ export function AgentOverlay({
           })}
           rows={1}
           placeholder="描述你的创作想法… (Enter 发送)"
-          className="field-sizing-normal border-border bg-subtle text-ink placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 flex-1 resize-none rounded-xl px-3 py-2 text-sm"
+          className="field-sizing-normal border-border bg-subtle text-ink placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 flex-1 resize-none rounded-xl px-3 py-2 text-[13px]"
         />
         <Button
           variant="primary-solid"

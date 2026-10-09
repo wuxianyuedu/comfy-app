@@ -14,12 +14,16 @@
  *   ⑥ 非 `FormField` 的同名子节点（如 `<FormFieldRow>`）不算站点
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-
-import { symlinkDir } from "./helpers/symlink-dir";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
 const SCRIPT = path.join(SCRIPTS_DIR, "check-form-field-wiring.cjs");
@@ -39,13 +43,11 @@ function gate(
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
   /* 判据 `require("typescript")` 走 TypeScript AST —— 临时仓库里没有解析链，
-   * 把它指回本仓库那份（同 `check-non-null-assertions.cjs` 类判据的自测手法）。
-   * 必须走 `tests/helpers/symlink-dir.ts`：Windows 上 `symlinkSync(…, "dir")`
-   * 需要开发者模式或管理员令牌，普通开发者 100% EPERM（同一族已收口三次，
-   * 见那份 helper 的文件头与台账 E13）。 */
-  symlinkDir(
+   * 把它指回本仓库那份（同 `check-non-null-assertions.cjs` 类判据的自测手法）。 */
+  symlinkSync(
     path.resolve(__dirname, "../node_modules"),
     path.join(root, "node_modules"),
+    "dir",
   );
   if (baseline) {
     writeFileSync(

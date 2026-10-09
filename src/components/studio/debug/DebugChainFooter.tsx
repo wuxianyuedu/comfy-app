@@ -14,7 +14,12 @@
  *   用法：把 modules 传成 getWorkflowRenderChainModules(classType) 的结果
  */
 
-import { useCallback, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
 import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
 import { Hint } from "~/components/ui/hint";
 import {
@@ -136,10 +141,7 @@ export function DebugChainFooter({
     a.remove();
   }, []);
 
-  const pillClick = (
-    e: { stopPropagation: () => void; preventDefault: () => void },
-    module: RenderChainModule,
-  ) => {
+  const pillClick = (e: MouseEvent, module: RenderChainModule) => {
     e.stopPropagation();
     e.preventDefault();
     void openSource(module.file);
@@ -177,21 +179,14 @@ export function DebugChainFooter({
           {title}
         </span>
         {group.map((module) => (
-          /* `<Button>` 而不是 `<span onClick>`：span 既不可聚焦、也没有
-           *  Enter/Space —— 鼠标点得开、键盘点不开（§6.1：交互元素必须真的
-           *  可交互）。悬停说明走 `<Hint>`（P82：视图层的 `<Button>` 不许用
-           *  原生 `title=`，读屏器对它的支持长期不一致）。`PILL_STYLE` 的视觉
-           *  照旧，`ghost` 变体的底色/文字色由它接管（§16.2.4.2 第 5 条）。 */
-          <Hint key={module.file} label={`${module.file}（点击查看源码）`}>
-            <Button
-              variant="ghost"
-              onClick={(event) => pillClick(event, module)}
-              style={PILL_STYLE}
-              className="h-auto gap-0 px-0 font-normal hover:bg-transparent"
-            >
-              {module.label}
-            </Button>
-          </Hint>
+          <span
+            key={module.file}
+            title={`${module.file}（点击查看源码）`}
+            onClick={(event) => pillClick(event, module)}
+            style={PILL_STYLE}
+          >
+            {module.label}
+          </span>
         ))}
       </div>
     );

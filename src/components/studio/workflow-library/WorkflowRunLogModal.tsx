@@ -247,7 +247,7 @@ export function WorkflowRunLogModal({
             listClassName="bg-panel-deep/60"
             topSlot={
               run?.errorMessage ? (
-                <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
+                <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-[13px]">
                   <div className="wrap-break-word whitespace-pre-wrap">
                     {run.errorMessage}
                   </div>

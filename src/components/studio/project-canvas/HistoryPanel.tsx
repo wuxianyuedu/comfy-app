@@ -133,7 +133,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
               key={scopeItem.id}
               variant="ghost"
               onClick={() => setScope(scopeItem.id)}
-              className={`h-auto rounded-none px-0 pb-2.5 text-sm font-medium hover:bg-transparent ${
+              className={`h-auto rounded-none px-0 pb-2.5 text-[13px] font-medium hover:bg-transparent ${
                 scope === scopeItem.id
                   ? "border-accent text-ink-bright border-b-2"
                   : "text-ink-muted hover:text-ink-soft"
@@ -312,7 +312,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   )}
 
                   <div className="min-w-0 flex-1">
-                    <p className="text-ink-bright truncate text-sm">
+                    <p className="text-ink-bright truncate text-[13px]">
                       {titleOf(task)}
                     </p>
                     <div className="mt-0.5 flex items-center gap-1.5">

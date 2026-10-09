@@ -307,7 +307,7 @@ export function ImageViewer({
                 className="text-ink-muted shrink-0"
                 aria-hidden="true"
               />
-              <DialogTitle className="text-ink min-w-0 truncate text-sm font-semibold">
+              <DialogTitle className="text-ink min-w-0 truncate text-[13px] font-semibold">
                 {title}
               </DialogTitle>
               {naturalWidth !== null && naturalHeight !== null && (
