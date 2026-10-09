@@ -154,6 +154,28 @@
         "label": "门禁自测临时仓库样板（§11.16.1）"
       },
       "section": "11.16.1"
+    },
+    {
+      "id": "base-check-recompute",
+      "name": "「被门禁拦下先复算 master 基线」的执行者（§13.6.2 第 1 步）",
+      "declaredAt": "docs/standards/13-提交与-code-review.md §13.6.2 的处置口径 + scripts/base-check.mjs",
+      "reader": "tests/base-check.test.ts",
+      "executor": {
+        "kind": "fixed-test",
+        "file": "tests/base-check.test.ts"
+      },
+      "section": "13.6.2"
+    },
+    {
+      "id": "on-demand-duties",
+      "name": "「不进钩子」的按需档 ⇄ 执行者",
+      "declaredAt": "scripts/.on-demand-duties.json（事实从 FRESHNESS_TRACKS / quality-gate 的 run:false / 按需召唤台账现算）",
+      "reader": "scripts/check-on-demand-duties.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "按需档 ⇄ 执行者索引"
+      },
+      "section": "13.5.4"
     }
   ]
 }

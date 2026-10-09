@@ -208,6 +208,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-comment-language.cjs   # 注释语言棘轮：注释一律中文，只有「纯 ASCII 模块」例外（见 12 §12.4.6；§12.4.6 早写着它在钩子里报红，而它一直不在，ISSUE #1451 补齐）
 ✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红（见下 13.5.12）
 ✅ node scripts/check-declaration-readers.cjs # 声明 ⇄ 读者索引：本仓库每一种「声明」（判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 / 类型断言执行者 / 软断言语义 / 像素档…）都必须答出「谁在读它 + 执行者在哪」——读者丢了、执行者从门禁链里被摘掉、索引自己静默降级，都红（见 11 §11.23）
+✅ node scripts/check-on-demand-duties.cjs   # 「不进钩子」的按需档 ⇄ 执行者索引：每一行的机器事实仍在（新鲜度档键 / 门禁 run:false / 按需召唤条目，全部现算）+ 每一个机器事实都被登记（新增一档忘了登记 ⇒ 那一档谁都不判）（见 13.5.4）
 ✅ node scripts/check-ts-duplicate-keys.cjs  # 同一属性被指定两次（编辑器报 ts(2783)、命令行不报）；存量 0，硬闸（见下 13.5.12）
 ✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
 ✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
@@ -412,8 +413,8 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | -------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 全量单测 + 覆盖率门槛（`pnpm run test:coverage`，3000+ 用例）        | 平台流水线的「全量单测 + 覆盖率」那一步      | **逐日自证 + 改了就当天跑**（`pnpm run test:coverage` 走 `scripts/full-suite-run.mjs`，账在 `scripts/.full-suite-freshness.json`，钩子 D 组「每档都有主」那一步判；见 13.5.4 与 11 §11.8）。提交门槛里仍只有固定清单 + 受影响用例（见 13.5 的 C 组与 13.5.8） |
 | `pnpm run build` + `check-standalone-contents.cjs`（产物级护栏）     | 平台流水线的「构建」+「数产物」那两步        | **逐日自证 + 改了就当天跑**（`pnpm run build` 走 `scripts/artifact-run.mjs`，账在 `scripts/.artifact-freshness.json`；同样由钩子那一步判。`pnpm run build` 内部已经串了 `next build` → 剥私有输入 → 数产物 → 冒烟，不另拼一遍）                                       |
-| E2E `playwright test --grep @critical`                               | 平台流水线的「E2E @critical」那一步          | **无自动执行者**。按需手动跑                                                                                                                                                                    |
-| `db:push` 建库                                                       | 平台流水线的「建库」那一步                   | 只在手动跑 E2E 前需要                                                                                                                                                                           |
+| E2E `playwright test --grep @critical`                               | 平台流水线的「E2E @critical」那一步          | **被全量 e2e 那一档覆盖**：`--grep @critical` 走的是 `scripts/e2e-run.mjs`（同一入口），而那一档有「每天首次自证」判据（账在 `scripts/.e2e-freshness.json`，钩子 D 组「每档都有主」）。它是全量 e2e 的**子集**，所以子集不另立一档（旧口径「无自动执行者」已作废）。**注意**：它证明不了像素层 —— 视觉 spec 没有 `@critical` 标签（见 §11.8） |
+| `db:push` 建库                                                       | 平台流水线的「建库」那一步                   | 只在手动跑 E2E 前需要；启动链路本身由 `ensureSchemaCurrent` 自动建表（§9.1），所以它**不是**一条独立的人为纪律                                                                                  |
 | R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | 平台流水线里带 `--strict` 跑结构检查的那一步 | **已在本地钩子里**（D 组「文件结构硬规则(R1-R12，R5 棘轮硬闸)」这一步带 `--strict`，ISSUE #1404 翻档；旧口径「本地只提醒」的前提「挂着 11 个存量」已不成立，基线现在 `total: 0`）               |
 | `pnpm doc:check`（文档引用与权威源一致）                             | 平台侧从不跑；`pnpm doc:gen` 内部的第一步    | **已在本地钩子里**（D 组「文档引用与权威源一致」，ISSUE #1371 翻掉了旧的「手动档」签字）。旧口径是「改了文档后需手动跑」，而 AGENTS 规定的必跑口令是 `doc:render`（只渲染不校验），空档即由此来 |
 | `docs/api/**` 生成物与源同步（`check-docs-api.cjs`）                 | **平台侧与本地都从不跑**（此前是纯空白）     | **已在本地钩子里**（D 组「API 文档生成物与源同步」，带 `--staged` 条件触发，详见 §13.5.5.1）。翻档前实测 2627 个文件差异、留着指向已删模块的 `lib_comfyui_markdown.html`（ISSUE #1329 收尾） |
@@ -462,13 +463,27 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 而它**不回答「那谁在什么时候跑它」**。缝里漏掉的正是代价最高的那几条 —— 它们曾经只有一句
 「按需手动跑」，而那句话没有任何东西在守（同 §13.5.12 的立案现场）。现在每一条都答得出：
 
-| 档 | 不进钩子的理由（代价） | 谁在什么时候跑它 |
-| --- | --- | --- |
-| 全量 e2e（`pnpm test:e2e`） | 起 webServer + 浏览器，十几分钟量级 | 钩子 D 组「每档都有主」判**每天首次自证**（`track.daily` + `dirty` 为空） |
-| 全量单测 + 覆盖率（`pnpm run test:coverage`） | 十分钟量级；覆盖率门槛只在全量档判（§11.7） | 同上，判**改了就当天跑**（吃 `src/`+`tests/`，`graceMs` 兜底） |
-| 产物级护栏（`pnpm run build`） | 分钟量级（`next build` + 起 sidecar 冒烟） | 同上，判**改了就当天跑**（吃产物链那几个文件） |
-| 像素回归（`pnpm check:visual`） | 起 webServer + 浏览器；结论只在录过基线的那台机器上成立 | `visual-gate.mjs` 判「带不带像素判决」+ 新鲜度账（钩子 D 组） |
-| 依赖漏洞扫描（`check-dependency-audit.mjs`） | 网络请求（离线 / registry 抖动不该变成提交失败） | `pnpm check:all` 的默认档（`quality-gate.mjs` 的 `dependencyAudit`） |
+**这张表现在是机器判的**（ISSUE #1569 收尾）：它的机器可读形态是
+`scripts/.on-demand-duties.json`，由 `scripts/check-on-demand-duties.cjs` 在 pre-commit
+的 D 组**双向**核对 —— 上一轮补的是**散文**，而写进文档的表格不会自己响：
+
+- **每一行点名的机器事实仍然存在**（档被删 / 改名 / 已接进 `check:all` ⇒ 过期承诺）；
+- **每一个机器事实都被本索引登记**（新增一个新鲜度档却忘了登记 ⇒ **那一档谁都不判** ——
+  判据的覆盖面与它自称的不符，正是 §13.5.12 的立案现场）。
+
+事实**从既有出处现算**、不抄第二份清单：新鲜度档键取 `FRESHNESS_TRACKS`、
+「不进 `all`」取 `quality-gate.mjs` 的 `run: false`、按需召唤条目取
+`scripts/.gate-executor-ledger.json`。这条纪律与 §13.5.4 那句「判决面由
+`FRESHNESS_TRACKS` 现算，不另抄一份档名清单」同源。
+
+| 档 | 不进钩子的理由（代价） | 谁在什么时候跑它 | 机器事实的出处 |
+| --- | --- | --- | --- |
+| 全量 e2e（`pnpm test:e2e`） | 起 webServer + 浏览器，十几分钟量级 | 钩子 D 组「每档都有主」判**每天首次自证**（`track.daily` + `dirty` 为空） | `FRESHNESS_TRACKS.e2e` |
+| 全量单测 + 覆盖率（`pnpm run test:coverage`） | 十分钟量级；覆盖率门槛只在全量档判（§11.7） | 同上，判**改了就当天跑**（吃 `src/`+`tests/`，`graceMs` 兜底） | `FRESHNESS_TRACKS.full` |
+| 产物级护栏（`pnpm run build`） | 分钟量级（`next build` + 起 sidecar 冒烟） | 同上，判**改了就当天跑**（吃产物链那几个文件） | `FRESHNESS_TRACKS.artifact` |
+| 像素回归（`pnpm check:visual`） | 起 webServer + 浏览器；结论只在录过基线的那台机器上成立 | `visual-gate.mjs` 判「带不带像素判决」+ 新鲜度账（钩子 D 组） | `FRESHNESS_TRACKS.visual` + `quality-gate.mjs` 的 `run:false` |
+| 依赖漏洞扫描（`check-dependency-audit.mjs`） | 网络请求（离线 / registry 抖动不该变成提交失败） | `pnpm check:all` 的默认档（`quality-gate.mjs` 的 `dependencyAudit`） | `quality-gate.mjs` 的 `dependencyAudit` |
+| `tw4-canonical-report` / `tw4-spacing-canonical` | 起 Tailwind 引擎（~6s），判的是 CSS 等价改写而非正确性 | 按需召唤 + `--check` 棘轮 | `.gate-executor-ledger.json` 的 `onDemand` |
 
 三档「每天首次自证」的口径不同、判据一份（`FRESHNESS_TRACKS` 的 `daily` / `dirty` /
 `graceMs`）：全量 e2e 按本地日历日；另两档按「当天动过输入面没有」。**理由**：前者人人
@@ -1216,17 +1231,32 @@ git push origin HEAD                  # 推送并创建 PR
 
 **处置口径（按序做，不要跳）**：
 
-1. **先复算基线，再怀疑自己**：在干净的上游提交上开一个临时 worktree 跑同一条门禁——
+1. **先复算基线，再怀疑自己**：把拦住你的那条门禁在干净的上游提交上再跑一遍——
+   **这一条现在有执行者**（`node scripts/base-check.mjs`，ISSUE #1569 收尾）：
 
    ```bash
-   git fetch cnb --prune
-   git worktree add ../.wt-base-check cnb/master
-   (cd ../.wt-base-check && node scripts/check-ui-primitives.cjs)   # 换成拦住你的那条
-   git worktree remove ../.wt-base-check --force
+   node scripts/base-check.mjs check-ui-primitives          # 换成拦住你的那条（钩子标签 / 脚本名 / 整条命令都认）
+   node scripts/base-check.mjs --fetch "UI 基元复用棘轮"     # 先 fetch 再复算
+   node scripts/base-check.mjs --json node scripts/check-ui-primitives.cjs   # 机器可读（碎片里要贴的那句事实）
    ```
 
-   干净基线上同样命中 = 别线的红，与你的改动无关（**不许**为它放宽判据、也不许
-   `--no-verify` 换一条干净历史）。
+   它给你**四态之一**，每一态的下一动作不同（下面的口径就是它的话术）：
+
+   | 结论 | 含义 | 动作 |
+   | --- | --- | --- |
+   | `baseline-red` | 干净基线上**同样命中** ⇒ 别线的红，与你的改动无关 | 挡路的就地修掉；不挡路的按 §11.12 登记。**不许**为它放宽判据，也不许 `--no-verify` |
+   | `yours` | 基线上绿、你的检出红 ⇒ 你的改动引入的 | 修你自己的代码，别去动基线 |
+   | `current-green` | 你的检出上已经不红了 | 没什么可复算的（已修 / 判据只在别的输入面上触发） |
+   | `inconclusive` | 命令在某一侧**没跑起来**（127） | **不构成证据**。常见成因是那条判据只存在本检出的未提交改动里（基线是干净的上游快照，看不到工作区文件 —— 这是正确语义，不是缺陷）；先让它真能跑再复算 |
+
+   **为什么「没跑起来」要单独一态**：Node 找不到模块时的退出码是 **1**，与「判据跑了
+   且红」逐字同形 —— 只读退出码必然把后者读成前者，而这两件事的下一动作完全相反
+   （一个去修代码、一个去查命令为什么不存在）。所以这一档由**目标存不存在**判，
+   不由退出码判（实测踩过）。
+
+   **它刻意不做的事**：不 `git fetch`（网络是人的动作）、不替你决定「挡不挡路」、
+   不自动登记 `KNOWN_FAILED_FILES`、不自动改判据 —— 那是判断，判据只保证**事实**
+   这一半可复算。临时 worktree 建在系统临时目录、跑完即删（`--keep` 保留人工排查）。
 
 2. **判断它挡不挡路**：挡路（硬闸类，所有人都提交不了）就地修掉；不挡路（棘轮类、
    或测试基线红）按 §11.12 登记进 `KNOWN_FAILED_FILES` 并写清归属与「别处更强的执行者」。
@@ -1239,9 +1269,18 @@ git push origin HEAD                  # 推送并创建 PR
 「修法的机械性」＋「不修就没人能提交」。反例：别线的**测试断言红**不许这样处理
 （那要判据的作者决定并档还是改判据，见 §11.12 的「每一条都写归属与谁来修」）。
 
-**这一条本身还没有机器判据**：能拦的只有「PR 合并前的服务端检查」，而平台侧流水线
-已下线。所以现在的兜底是**流程**——合并前本地跑一遍 `pnpm check:all`（或至少跑
-受影响的那条门禁）再点合并；重启 CI 时应把硬闸类排为合并前置（13.5.3）。
+**这条纪律的执行者在哪**（ISSUE #1569 收尾前它是「还没有机器判据」的）：
+
+- **第 1 步（复算基线）**：`node scripts/base-check.mjs <被你拦下的那条>` —— 见上面
+  那张四态表。它把「哪个上游提交、命中几处」这句碎片必须写的事实**算出来**，
+  而不是让人凭记忆复述。
+- **第 2 步（挡不挡路）**：仍由人判（硬闸类 vs 棘轮类），判据不代替这个判断。
+- **第 3 步（修了写清归属）**：`check-changelog-fragments.cjs` 在钩子里守着碎片的
+  形态；「这条不是本 PR 引入的」这句话本身没法机器判（它是叙述），但它引用的
+  **复算证据**由 `base-check.mjs --json` 给出，可被复核。
+- **合并前跑一遍 `pnpm check:all`**：这一条没有自动执行者（「点合并」是平台侧的动作，
+  而平台侧流水线已下线），所以它只留在这句流程里。重启 CI 时应把硬闸类排为合并前置
+  （13.5.3）。
 
 ### 13.7 换行符与提交噪声（LF，对齐主规范 §11.2）
 
