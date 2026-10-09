@@ -132,6 +132,35 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     expect(code).toBe(0);
   });
 
+  it("R9：根目录的 git 临时状态文件被阻断（ISSUE #1586）", () => {
+    // 实测形态：`.merge_msg` 曾随一次 squash 合并进 master（27 行合并说明）。
+    // 名字不区分大小写，带不带前导点都认 —— 这一族唯一的稳定特征就是名字。
+    for (const name of [
+      ".merge_msg",
+      "MERGE_MSG",
+      "SQUASH_MSG",
+      "COMMIT_EDITMSG",
+    ]) {
+      rmSync(join(workdir, name), { force: true });
+      writeFileSync(join(workdir, name), "合并说明\n");
+      const { code, output } = run();
+      expect(code, `${name} 应被阻断`).toBe(1);
+      expect(output).toContain("R9");
+      expect(output).toContain("git 临时状态文件");
+      expect(output).toContain(name);
+    }
+  });
+
+  it("R9：同名的工程配置不受约束（判据认名不认后缀之外的形态）", () => {
+    // 反面对照：判据是「名字在这一族里」而不是「根目录有额外文件」。
+    // 曾经存在的 `.merge_msg` 被删掉之后，仓库里别的根文件一个都不该被牵连。
+    writeFileSync(join(workdir, "merge-msg-notes.md"), "设计说明\n");
+    writeFileSync(join(workdir, ".prettierignore"), "dist\n");
+    const { code, output } = run();
+    expect(output).toContain("[structure] OK");
+    expect(code).toBe(0);
+  });
+
   it("R7：新增 .bat 入口被阻断", () => {
     writeFileSync(join(workdir, "scripts", "foo.bat"), "@echo off\r\n");
     const { code, output } = run();
