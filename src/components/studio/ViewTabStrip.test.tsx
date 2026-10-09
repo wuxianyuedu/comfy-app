@@ -133,10 +133,10 @@ function codeOf(rel: string): string {
 }
 
 describe("两类页签共用一套选中态（壳内形态 e2e 到不了）", () => {
-  it.each([
+  it.for([
     "src/components/studio/ViewTabStrip.tsx",
     "src/components/studio/TitleBarTabs.tsx",
-  ])("%s 的 active 分支只走 u-tab-active，不自己写背景", (rel) => {
+  ] as const)("%s 的 active 分支只走 u-tab-active，不自己写背景", (rel) => {
     const code = codeOf(rel);
     expect(
       /active\s*\?\s*"[^"]*u-tab-active[^"]*"/.test(code),
