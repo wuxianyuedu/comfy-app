@@ -117,10 +117,10 @@ const REGISTERED: Registration[] = [
   },
   {
     file: "tests/standalone-runtime-completeness.test.ts",
-    guard: "!standaloneExists",
+    guard: "!artifactUsable",
     count: 1,
     tier: "artifact",
-    why: "没有 .next/standalone 时整块不跑：必须先 pnpm build，否则「绿」不含产物级判据",
+    why: "产物根不在、或根在但里面那份 `next` 已悬（standalone 的 `node_modules/<pkg>` 是指向 pnpm store 的链接，任何一次 `pnpm install` 都会让它悬空）时整块不跑：这两种都只意味着「这台机器没有可用的产物」，必须先 pnpm build，否则「绿」不含产物级判据 —— 而把悬壳断言成「缺 app-route-turbo、接口全 500」是一条会把人引去改坏 `outputFileTracingIncludes` 的误报（守卫形状由本文件「守卫要同时判…」那条结构用例钉住，「有没有真的构建过」另有 `.artifact-freshness.json` 那一档每日自证）",
   },
   {
     file: "tests/turbopack-tracing-excludes.test.ts",
