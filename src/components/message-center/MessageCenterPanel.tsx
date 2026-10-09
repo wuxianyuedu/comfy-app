@@ -25,6 +25,7 @@ import { useMessageCenterStore } from "./message-center-store";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { EmptyState } from "~/components/ui/empty-state";
 import { useHotkey } from "~/components/ui/use-hotkey";
 
 const KIND_META: Record<
@@ -142,10 +143,12 @@ export function MessageCenterPanel() {
       {/* 消息列表 */}
       <div className="custom-scrollbar flex-1 overflow-y-auto">
         {messages.length === 0 ? (
-          <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-3">
-            <Inbox size={44} strokeWidth={1.2} className="opacity-30" />
-            <p className="text-sm">暂无系统消息</p>
-          </div>
+          <EmptyState
+            variant="panel"
+            className="gap-3"
+            icon={<Inbox size={44} strokeWidth={1.2} className="opacity-30" />}
+            title="暂无系统消息"
+          />
         ) : (
           <ul className="mx-auto flex w-full max-w-3xl flex-col gap-2.5 px-4 py-5">
             {messages.map((m) => {
@@ -174,7 +177,14 @@ export function MessageCenterPanel() {
                     <Button
                       variant="ghost"
                       onClick={() => markRead(m.id)}
-                      className="flex min-w-0 flex-1 items-start justify-start gap-3 rounded-lg p-0 text-left font-normal whitespace-normal hover:bg-transparent"
+                      /* `h-auto` 是必须的，不是风格：`size` 的缺省档带 `h-8`（32px
+                       * 定高），而这条按钮的内容是「标题 + 正文」——正文可能是**多段**
+                       *（陈旧实例那条就是：正文含换行、`whitespace-pre-wrap` 会照实
+                       * 换行）。定高 32px 之下正文溢出按钮盒、穿过 `<li>` 的下沿压到
+                       * 下一条消息上，而 `<li>` 的高度仍按 32px 算 ⇒ 画布上两张卡片
+                       * 叠在一起，tsc / eslint / 构建全绿。同文件另外两颗按钮也带
+                       * `h-auto`，这里此前漏了。 */
+                      className="flex h-auto min-w-0 flex-1 items-start justify-start gap-3 rounded-lg p-0 text-left font-normal whitespace-normal hover:bg-transparent"
                     >
                       <span
                         className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}

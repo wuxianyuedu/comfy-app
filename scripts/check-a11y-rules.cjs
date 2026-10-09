@@ -62,9 +62,12 @@
  *   · 该脚本是 **CJS**，于是 `require()` 它拿到的是**同一个模块实例**、`import()`
  *     也只求值一次 —— 门禁自测因此把「十来次真求值」收成**一次共享加载**
  *     （`tests/helpers/a11y-effective-config.ts`）；本脚本对应地把那几张表
- *     导出去，并顺手给 `main()` 加一个不读 `process.argv` 的显式入参。
- *   · `main()` 返回**退出码**（不再自己 `process.exit()`），自测才能在共进程里
- *     拿到与「真子进程退出码」逐字同义的读数；`process.exit` 只在 bin 形态下发生。
+ *     导出去，并给 `judge()` 一个不读 `process.argv` 的显式入参。
+ *   · 四张表**共用** `configFacts()` 那一份单飞缓存：它们读的是同一份配置，
+ *     各自 `import()` + `flat()` 一遍等于把成本乘四（判据本体没得选，次数有得选）。
+ *   · `judge()` 返回**判决结果**（`{ problems, summary, effective }`、与真子进程那一条
+ *     逐字同义），`main()` 再把它翻成退出码 —— 自测因此在共进程里拿到与「真子进程
+ *     退出码 / stdout」同义的读数；`process.exit` 只在 bin 形态下发生。
  *
  * 用法：
  *   node scripts/check-a11y-rules.cjs                    # 检查（进 pre-commit D 组）
@@ -211,9 +214,14 @@ async function officialRecommended() {
 /**
  * 台账里登记为「本仓刻意改档」的规则名 —— 只认**理由与 keeper 都写全**的那些。
  * 写不全的条目仍要在 ① 里红（它没有资格豁免官方那一条）。
+ *
+ * ⚠️ 入参是**已归一形状的台账对象**（`Ledger`），不是路径：`judge()` 只认显式入参，
+ * 这里再各自去找文件的话，「同一份判决里的台账」就有了两个来源 —— 少一处会静默
+ * 退回真台账（正是 `--ledger` 那个口子要堵的失效形态）。读盘只发生在边界上
+ * （bin 形态的 `readLedger(CLI_ARGS.LEDGER)`、自测的调用点）。
  */
-function registeredDialectRules(ledgerPath) {
-  const { dialect } = readLedger(ledgerPath);
+function registeredDialectRules(ledger) {
+  const { dialect } = ledger;
   const out = new Set();
   for (const entry of dialect) {
     if (!entry || typeof entry.rule !== "string") continue;
@@ -322,31 +330,51 @@ function normalize(setting) {
 }
 
 /**
- * 判一次：入参全是显式的（台账路径 / 只出清单）,返回值就是退出码。
+ * 配置事实的**每进程一次**缓存（单飞：并发调用共享同一个在途 Promise）。
+ *
+ * 为什么要有：`effectiveRules` / `officialRecommended` / `officialRuleMap` /
+ * `rulesInNeitherConfig` 四处各自 `await import()` 同一份 `eslint.config.js` ——
+ * 模块求值 Node 会缓存，但 `flat()` 与那三次插件遍历不会（本机实测每进程 ~9s，
+ * 机器满载时 ~20s）。CLI 一次跑只付一遍，代价本来看不见；门禁自测在**一个进程里
+ * 判 12 份台账**之后，这 12×4 次遍历就成了本文件墙钟的绝大部分。
+ *
+ * 失败**不进缓存**这一条不需要特判：四个读取函数读不到配置时是**抛**（fail-closed，
+ * §11.23.3 同款），而缓存里存的是那个 rejected promise —— 每个等它的用例都会拿到
+ * 同一条真故障，红得起来，也不会退化成「读到 0 条规则于是全绿」。
+ */
+let factsPromise = null;
+
+async function configFacts() {
+  if (!factsPromise) {
+    factsPromise = (async () => ({
+      effective: await effectiveRules(),
+      recommended: await officialRecommended(),
+      official: await officialRuleMap(),
+      inNeither: await rulesInNeitherConfig(),
+    }))();
+  }
+  return factsPromise;
+}
+
+/**
+ * 判一次：入参全是显式的（**台账对象** / 只出清单），返回值就是判决结果。
  *
  * 这个形状存在的唯一理由是**自测**：`--ledger <path>` 那批用例要拿十来份台账各判
  * 一次，而每条用例起一个子进程 = 十来次 `eslint.config.js` 求值（冷检出上 40s+
- * 一次）。改成本函数在进程内被调十来次、配置只求值一次，省下来的正是那笔钱；
- * 而「退出码」这个读数与真子进程那一条**逐字同义**（`main()` 只是把它交给
- * `process.exit`），所以断言不用分成两套写法。
+ * 一次，本机实测单进程 ~9s）。改成本函数在进程内被调十来次、配置只求值一次，
+ * 省下来的正是那笔钱；而「问题清单 + 汇总」这个读数与真子进程那一条**逐字同义**
+ * （`main()` 只是把它翻成退出码），所以断言不用分成两套写法。
  *
- * ⚠️ 入参**不读 `process.argv`**：那是 bin 形态才有的东西，让一个可被进程内调用的
- * 函数去读它，等于把「用例以为在判自己的夹具、其实在判真库」换成另一种静默失效。
+ * ⚠️ 入参**不读 `process.argv`**、也不自己去找台账文件：那是 bin 形态才有的东西，
+ * 让一个可被进程内调用的函数去读它，等于把「用例以为在判自己的夹具、其实在判真库」
+ * 换成另一种静默失效。台账由调用方读好（bin 形态读真台账，自测读自己的夹具）。
  *
- * @param {{ledger?: string, report?: boolean}} [opts]
- * @returns {Promise<number>} 0 = 通过，1 = 阻断
+ * @param {{dialect: any[], inlineExemptions: any[]}} ledger 台账（已由 `readLedger` 归一形状）
+ * @returns {Promise<{problems: string[], summary: string, effective: Record<string, any>}>}
  */
-async function judge(opts = {}) {
-  const LEDGER = opts.ledger
-    ? path.resolve(ROOT, opts.ledger)
-    : path.join(__dirname, ".a11y-rule-ledger.json");
-  const REPORT_ONLY = opts.report === true;
-  const effective = await effectiveRules();
-  const recommended = await officialRecommended();
-  const official = await officialRuleMap();
-  const inNeither = await rulesInNeitherConfig();
-  const ledger = readLedger(LEDGER);
-  const registered = registeredDialectRules(LEDGER);
+async function judge(ledger) {
+  const { effective, recommended, official, inNeither } = await configFacts();
+  const registered = registeredDialectRules(ledger);
   const isRegisteredDialect = (name) => registered.has(name);
 
   const problems = [];
@@ -484,7 +512,22 @@ async function judge(opts = {}) {
     `方言 ${ledger.dialect.length} 条、就地豁免 ${ledger.inlineExemptions.length} 条；` +
     `官方两份都没提到且未废弃 ${undecidedCount} 条（已逐条裁决）。`;
 
-  if (REPORT_ONLY) {
+  return { problems, summary, effective };
+}
+
+/**
+ * bin 形态：读真台账、判一次、把结果翻成退出码。
+ *
+ * 这里读 `CLI_ARGS.LEDGER`（`--ledger <path>` 那一档）与 `CLI_ARGS.REPORT_ONLY`；
+ * 两者都缺省成「真台账 / 正常检查」—— 默认行为与加 `--ledger` 口子之前一个字不差。
+ * `--ledger` 的用法错（缺路径）已经在 `parseArgs` 里退 2，进不到这里。
+ */
+async function main() {
+  const { problems, summary, effective } = await judge(
+    readLedger(CLI_ARGS.LEDGER),
+  );
+
+  if (CLI_ARGS.REPORT_ONLY) {
     console.log(summary);
     for (const [name, setting] of Object.entries(effective).sort()) {
       console.log(
@@ -508,19 +551,11 @@ async function judge(opts = {}) {
   return 0;
 }
 
-/**
- * bin 形态：把 CLI 那两个入参交给 `judge()`，退出码照传。
- *
- * `--ledger` 的用法错（缺路径）已经在 `parseArgs` 里退 2 —— 那一档不进这里。
- */
-async function main() {
-  return judge({ ledger: CLI_ARGS.LEDGER, report: CLI_ARGS.REPORT_ONLY });
-}
-
 /** 本脚本对外公开的面（`module.exports` 的键），逐条给「谁在用」—— 自查用。 */
 const VERIFIED_SURFACES = Object.freeze({
   judge: "门禁自测（共进程判十来份台账）+ bin 形态",
-  normalize: "门禁自测（规则档位的归一：`\"error\"` 与 `[\"error\"]` 同义）",
+  readLedger: "bin 形态（读 `--ledger <path>`）与门禁自测（台账归一形状）",
+  normalize: '门禁自测（规则档位的归一：`"error"` 与 `["error"]` 同义）',
   loadEslintConfig: "门禁自测（`eslint.config.js` 求值失败时的失败路径）",
   effectiveRules: "门禁自测（真配置里的 jsx-a11y 档位表）",
   officialRecommended: "门禁自测（官方 recommended 的有效集合，从插件对象算）",
@@ -529,7 +564,7 @@ const VERIFIED_SURFACES = Object.freeze({
 });
 
 /**
- * 导出面 —— **判据本体**（`judge` 与它那几张表）+ 三个纯函数。
+ * 导出面 —— **判据本体**（`judge` 与它那几张表）+ 四个纯函数。
  *
  * 为什么要导：门禁自测（`tests/a11y-rules-gate.test.ts`）在**同一个进程里**拿十来份
  * 台账各判一次，于是 `eslint.config.js` 的求值从「每条用例一次」塌成「整个文件一次」
@@ -537,14 +572,16 @@ const VERIFIED_SURFACES = Object.freeze({
  * —— eslint 那一侧的成本（求值配置）判据本体没得选。
  *
  * 导出之后**每一格都要有执行者**：那一份执行者是
- * `tests/a11y-rules-gate.test.ts` 自己，测试夹具与字面量**同批**写出来
- * （没有夹具的键 = 补一个，而不是删键）—— 否则「导出」就成了「零消费导出」
- * （§12.16 那一族）。**这一格现在有判据**：`check-tsc-diagnostic-executors.cjs`
- * 的台账里，本文件那条目已写明它核的第一样东西就是这张表 ⇄ 夹具逐字同源。
+ * `tests/a11y-rules-gate.test.ts` 与 `tests/check-a11y-rules.test.ts` 自己，
+ * 测试夹具与字面量**同批**写出来（没有夹具的键 = 补一个，而不是删键）—— 否则
+ * 「导出」就成了「零消费导出」（§12.16 那一族）。**这一格现在有判据**：
+ * `check-tsc-diagnostic-executors.cjs` 的台账里，本文件那条目已写明它核的第一样
+ * 东西就是这张表 ⇄ 夹具逐字同源。
  */
 module.exports = {
   normalize,
   judge,
+  readLedger,
   effectiveRules,
   officialRecommended,
   officialRuleMap,

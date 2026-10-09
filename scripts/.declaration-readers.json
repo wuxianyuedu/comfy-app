@@ -14,12 +14,23 @@
     },
     {
       "id": "commit-message-claims",
-      "name": "提交信息里的机械可核声明（§x.y「照旧保留」）",
-      "declaredAt": "某次提交的信息里（如「master 新增的 §13.5.13 / §13.6.3 两节…照旧保留」）",
+      "name": "提交信息里的机械可核声明（章节保留 / 路径没动 / 计数归零）",
+      "declaredAt": "提交信息正文（那次提交的 `%B`，如「master 新增的 §13.5.13 / §13.6.3 两节…照旧保留」）",
       "reader": "scripts/check-commit-claims.mjs",
       "executor": {
         "kind": "npm-script",
         "script": "check:claims"
+      },
+      "section": "11.23.5"
+    },
+    {
+      "id": "merged-side-loss",
+      "name": "合并里「整份取一侧 / 退回成基线之前的版本」",
+      "declaredAt": "某次合并 / squash 提交的树（如 ad81a912 退回 bfeb33f0 之前的版本）",
+      "reader": "scripts/check-merged-side-loss.mjs",
+      "executor": {
+        "kind": "npm-script",
+        "script": "check:merged-side-loss"
       },
       "section": "11.23.5"
     },

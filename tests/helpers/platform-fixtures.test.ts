@@ -9,30 +9,57 @@
 import { describe, expect } from "vitest";
 import { test } from "./platform-fixtures";
 
+/**
+ * 与**这台宿主都不同**的两个平台名。
+ *
+ * 为什么不能写死 `"win32"`：本文件钉的是「`asPlatform` 真的把值切走了」，而
+ * 在 Windows 开发机上 `asPlatform("win32")` 是一次**空切** —— 于是「读到新值」那两条
+ * 恒真（假绿灯），「不等于真平台」那条恒假（在唯一能修它的机器上直接红）。
+ * 两头都是本文件头那条纪律的形状：「不可能红的绿」比 skip 更糟。
+ * 平台维度要的从来是「与宿主不同」，那这个「不同」就必须由宿主推出来。
+ */
+function foreignPair(
+  real: NodeJS.Platform,
+): [NodeJS.Platform, NodeJS.Platform] {
+  const pool: NodeJS.Platform[] = ["win32", "linux", "darwin"];
+  const rest = pool.filter((p) => p !== real);
+  const [first = "win32", second = "linux"] = rest;
+  return [first, second];
+}
+
 describe("asPlatform", () => {
-  test("切过去之后被测代码读到的是新值", ({ asPlatform }) => {
-    asPlatform("win32");
-    expect(process.platform).toBe("win32");
+  test("切过去之后被测代码读到的是新值", ({ asPlatform, realPlatform }) => {
+    const [other] = foreignPair(realPlatform);
+    asPlatform(other);
+    expect(process.platform).toBe(other);
   });
 
-  test("两次切换后读到的是最后一次（可以切多段）", ({ asPlatform }) => {
-    asPlatform("win32");
-    expect(process.platform).toBe("win32");
-    asPlatform("linux");
-    expect(process.platform).toBe("linux");
+  test("两次切换后读到的是最后一次（可以切多段）", ({
+    asPlatform,
+    realPlatform,
+  }) => {
+    const [first, second] = foreignPair(realPlatform);
+    asPlatform(first);
+    expect(process.platform).toBe(first);
+    asPlatform(second);
+    expect(process.platform).toBe(second);
+    /* 两个值都必须与宿主不同：否则第二次是空切，「最后一次生效」就等于没被判过
+     * （读到的值既可能是切换成功的结果，也可能是压根没动过）。 */
+    expect(first).not.toBe(realPlatform);
+    expect(second).not.toBe(realPlatform);
   });
 
   test("正常结束时平台已恢复（否则会污染同文件后面的用例）", ({
     asPlatform,
     realPlatform,
   }) => {
-    asPlatform("win32");
+    asPlatform(foreignPair(realPlatform)[0]);
     expect(process.platform).not.toBe(realPlatform);
     /* 收尾是 vitest 在用例返回之后跑的，所以这里只能靠**下一条**用例来看；
      * 这一条的价值是「切换确实生效了」，恢复由下面那条钉。 */
   });
 
-  test("上一条切过 win32，这一条读到的仍是真平台", ({ realPlatform }) => {
+  test("上一条切过外来平台，这一条读到的仍是真平台", ({ realPlatform }) => {
     expect(process.platform).toBe(realPlatform);
   });
 });

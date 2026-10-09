@@ -51,9 +51,32 @@ export const SCRIPT = path.resolve(
 export const REAL_ROOT = path.resolve(__dirname, "../..");
 
 /** 判据的导出面（`scripts/check-a11y-rules.cjs` 的 `module.exports`）。 */
+/** 判据归一的台账形状（`readLedger` 的产物，也是 `judge` 的入参）。 */
+export interface Ledger {
+  dialect: { rule: string; decision: string; why: string; keeper: string }[];
+  inlineExemptions: {
+    rule: string;
+    file: string;
+    why: string;
+    keeper: string;
+  }[];
+}
+
+/** `judge()` 的判决结果（bin 形态再把它翻成退出码）。 */
+export interface JudgeVerdict {
+  /** 问题清单（空 = 通过）。 */
+  problems: string[];
+  /** 那句一行汇总。 */
+  summary: string;
+  /** 生效的 jsx-a11y 规则表（`--report` 那一支要逐条打印它）。 */
+  effective: Record<string, unknown>;
+}
+
 export interface A11yJudgeModule {
-  /** 判一次，返回退出码（0 = 通过 / 1 = 阻断）—— 与真子进程的退出码逐字同义。 */
-  judge: (opts?: { ledger?: string; report?: boolean }) => Promise<number>;
+  /** 判一份台账，返回问题清单与汇总 —— bin 形态再用它算退出码。 */
+  judge: (ledger: Ledger) => Promise<JudgeVerdict>;
+  /** 读一份台账文件并归一到 `Ledger`（读不到 = 空台账，`--ledger` 的路径由调用方给）。 */
+  readLedger: (ledgerPath: string) => Ledger;
   /** 规则档位的归一（`"error"` 与 `["error"]` 同义、`["error", 5]` 不同）。 */
   normalize: (setting: unknown) => string;
   /** 读一次真的 `eslint.config.js`（扁平配置数组）。 */

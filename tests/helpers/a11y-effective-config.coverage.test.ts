@@ -24,7 +24,7 @@
  * 覆盖面判据的形状是「正面清单 + 两侧对账」：新增一个导出却忘了补账本、或补了账本
  * 却没人用，都会在这里红。它不判「该不该共进程」（那是收益判断，要实测）。
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { loadJudgeModule, REAL_ROOT } from "./a11y-effective-config";
@@ -33,8 +33,8 @@ import { loadJudgeModule, REAL_ROOT } from "./a11y-effective-config";
 const SCRIPTS = [
   {
     script: "scripts/check-a11y-rules.cjs",
-    /** 谁在用这份模块的导出（覆盖率那两个字段里两边都要点名）。 */
-    usedBy: "tests/a11y-rules-gate.test.ts（12 条 / 逐条 judge）",
+    /** 谁在用这份模块的导出（那一格里点名的用例文件都要真实存在）。 */
+    usedBy: ["tests/a11y-rules-gate.test.ts", "tests/check-a11y-rules.test.ts"],
     /**
      * 公开面（`module.exports` 的键）→ 谁在用。
      *
@@ -43,18 +43,20 @@ const SCRIPTS = [
      */
     surfaces: {
       judge: "tests/a11y-rules-gate.test.ts 全部 12 条（共进程判十来份台账）",
+      readLedger:
+        "tests/a11y-rules-gate.test.ts（bin 形态读 `--ledger <path>` 那一格）与 tests/check-a11y-rules.test.ts（台账归一形状）",
       normalize:
         'tests/a11y-rules-gate.test.ts（规则档位归一："error" 与 ["error"] 同义）',
       loadEslintConfig:
-        "tests/a11y-rules-gate.test.ts 的「真加载」那两条（配置求值 + 失败路径）",
-      effectiveRules: "tests/a11y-rules-gate.test.ts（生效档位表）",
+        "tests/check-a11y-rules.test.ts 的「真加载」那两条（配置求值 + 失败路径）",
+      effectiveRules: "tests/check-a11y-rules.test.ts（生效档位表）",
       officialRecommended:
-        "tests/a11y-rules-gate.test.ts（官方 recommended 有效集合）",
-      officialRuleMap: "tests/a11y-rules-gate.test.ts（插件规则 + 废弃标记）",
+        "tests/check-a11y-rules.test.ts（官方 recommended 有效集合）",
+      officialRuleMap: "tests/check-a11y-rules.test.ts（插件规则 + 废弃标记）",
       rulesInNeitherConfig:
-        "tests/a11y-rules-gate.test.ts（两份配置都没提到的非废弃规则）",
+        "tests/check-a11y-rules.test.ts（两份配置都没提到的非废弃规则）",
       VERIFIED_SURFACES:
-        "tests/a11y-effective-config.coverage.test.ts（导出面 ⇄ 账本那一格）",
+        "tests/helpers/a11y-effective-config.coverage.test.ts（导出面 ⇄ 账本那一格）",
     },
   },
 ] as const;
@@ -89,9 +91,28 @@ test("每个在进程内跑的判据脚本，它的每个导出都有人用（�
         );
       }
     }
-    expect(entry.usedBy, `${entry.script} 要有 import 它的用例文件`).toContain(
-      ".test.ts",
-    );
+    expect(
+      entry.usedBy.length,
+      `${entry.script} 要有 import 它的用例文件`,
+    ).toBeGreaterThan(0);
+    for (const file of entry.usedBy) {
+      expect(
+        existsSync(path.join(REAL_ROOT, file)),
+        `${entry.script} 的「谁在用」里 \`${file}\` 不存在`,
+      ).toBe(true);
+    }
+    /* 账本里每个面的「谁在用」都必须落在一个真实存在的用例文件上。 */
+    for (const [key, usedBy] of Object.entries(entry.surfaces)) {
+      const file = /tests\/(?:[\w.-]+\/)*[\w.-]+\.test\.ts/.exec(usedBy)?.[0];
+      expect(
+        file,
+        `账本里 \`${key}\` 的「谁在用」要点名一个用例文件`,
+      ).toBeTruthy();
+      expect(
+        existsSync(path.join(REAL_ROOT, file!)),
+        `账本里 \`${key}\` 指向的 \`${file}\` 不存在`,
+      ).toBe(true);
+    }
   }
   expect(problems, problems.join("\n")).toEqual([]);
 });

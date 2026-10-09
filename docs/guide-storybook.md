@@ -181,11 +181,12 @@ story 要的正好相反 ——「有后端 / 没后端分别长什么样」。�
 
 所以 `.storybook/` 下另有三份注入层，story 只声明**场景名**：
 
-| 注入层     | 文件                           | story 怎么用                                                   |
-| ---------- | ------------------------------ | -------------------------------------------------------------- |
-| store      | `.storybook/store-sources.tsx` | `parameters.storeScene: "<场景名>"`（装饰器已全局挂）          |
-| React Flow | `.storybook/flow-canvas.tsx`   | 直接摆 `<StorybookFlowCanvas scene={canvasScene("<场景名>")}>` |
-| 整屏容器   | `.storybook/screen-frame.tsx`  | 直接摆 `AppShell` / 工作区框，项目经 `useSeededProjects()` 备  |
+| 注入层     | 文件                                    | story 怎么用                                                          |
+| ---------- | --------------------------------------- | --------------------------------------------------------------------- |
+| store      | `.storybook/store-sources.tsx`          | `parameters.storeScene: "<场景名>"`（装饰器已全局挂）                 |
+| React Flow | `.storybook/flow-canvas.tsx`            | 直接摆 `<StorybookFlowCanvas scene={canvasScene("<场景名>")}>`        |
+| 整屏容器   | `.storybook/screen-frame.tsx`           | 直接摆 `AppShell` / 工作区框，项目经 `useSeededProjects()` 备         |
+| 消息中心   | `.storybook/message-center-sources.tsx` | `parameters.messageScene: "<场景名>"`（装饰器已全局挂）               |
 
 ```tsx
 /* store：一段真格式的日志原文进 store 自己的解析入口 */
@@ -244,6 +245,7 @@ function ShellHarness() {
 | store      | `mixed` / `errorsOnly` / `rowShapes` / `sameMillisecond` / `singleOrigin` / `longTimeline` / `cliExpandable` / `empty` |
 | React Flow | `twoNodes` / `zoomedIn` / `zoomedOut` / `fanOut` / `mixedKinds` / `dense`                                              |
 | 整屏容器   | `emptyProject` / `namedProject` / `longNameProject` / `filledProject`                                                  |
+| 消息中心   | `mixed` / `singleUnread` / `overflowingUnread` / `allRead` / `empty` / `closed`                                        |
 
 几条选择上的经验（铺场景时踩出来的）：
 
@@ -262,6 +264,22 @@ function ShellHarness() {
   **被测对象就是那个缩放的档**（`zoomedIn` / `zoomedOut` / `dense`，注册表里带
   `pinZoom`）反过来**不能**传 `fit` —— 缩走就不是那一档了。判据见
   `tests/storybook-fit-viewport.test.ts`（规范 16 §16.2.3.13）。
+
+```tsx
+/* 消息中心：声明「哪一处生产方在生产」，文案由生产方现算 */
+const meta = {
+  title: "MessageCenter/Panel",
+  component: MessageCenterPanel,
+  parameters: { messageScene: "mixed" }, // ← 就这一行
+} satisfies Meta<...>;
+```
+
+**消息中心那一层有一处与前三层不同的接线点**：`MessageCenterPanel` 是**全屏**的
+（`fixed` + `top-title-bar`），而外壳（`withAppProviders`）**全局**挂它 —— 于是
+「消息中心开着」的场景里，`MessageCenterButton` 自己那几档 story 会被面板整个盖住，
+画布上是「面板 + 左上角露出来的半颗铃铛」，**要看的角标与色调根本不在画面上**。
+要看按钮那一侧时显式声明 `parameters.messagePanelHidden: true`（外壳不挂面板，
+组件照常从 store 读到 `open`）。刻意不是全局默认 —— 面板在真机上就是常驻的。
 
 **一处容易踩的坑**：`ProjectCanvas` / `WorkshopPipeline` 在**挂载那一刻**读
 `getActiveId()`，而 React 的 effect 是子先父后 —— 把「建项目」放 `useEffect` 里，
@@ -371,10 +389,16 @@ hook（没有 DOM 形态，判据是用例）、只有出错时才渲染的边�
 
 - 覆盖率的判据与台账：`tests/storybook-component-coverage.test.ts` +
   `scripts/storybook-checks/coverage-ledger.mjs`（那份额外的理由表就在台账里）。
-- 注入层的契约判据：`tests/storybook-data-sources.test.ts`（进
-  `FIXED_STRUCTURAL_TESTS`）—— 守注册表接线、媒体名与磁盘双向对齐、「点目录进了
-  tsc / eslint 的扫描面」这几件**悄悄失效时不会红**的事。它守的是「接线还在不在」；
+- 注入层的契约判据：`tests/storybook-data-sources.test.ts`（值源）、
+  `tests/storybook-injection-layers.test.ts`（store / React Flow / 整屏容器）、
+  `tests/storybook-message-center-sources.test.ts`（消息中心）—— 都进
+  `FIXED_STRUCTURAL_TESTS`。它们守注册表接线、媒体名与磁盘双向对齐、「点目录进了
+  tsc / eslint 的扫描面」这几件**悄悄失效时不会红**的事。守的是「接线还在不在」；
   「有没有真的画出来」由真浏览器逐 story 渲染核对。
+- **写这类判据时，否定/在场断言一律「剥了注释 + 定位到具体那一处」**：实测四条
+  断言自己先假绿过（`toContain` 被 import 行满足、被解释口径的注释满足、
+  非贪婪正则从更前面那颗同标签起匹配）。规范 16 §16.2.3.14 记了完整的四种形状，
+  改这一族判据前先看它。
 - 故事面的判据：`scripts/storybook-checks/story-surface.mjs` +
   `tests/storybook-story-surface.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）—— 守
   「这份故事到底有没有把那个组件摆出来看」：`title` 缺了会按路径自动分组、

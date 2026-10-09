@@ -107,13 +107,20 @@ test("bin 形态：`--report` 走真子进程仍退 0，且摘要里点名生效
 
 test("bin 形态的脚本头两块注释与事实同源（成本那一节的判据还在）", () => {
   /* 结构判据：文件头「成本」一节是这一支改造的**理由说明**，不是散文 ——
-   * 判据的 `--ledger` 口子、`judge()` 的显式入参、CJS 这一条都必须能在源码里
-   * 找到（口径与 §13.5.14「声明 ⇄ 读者」同族）。 */
+   * 判据的 `--ledger` 口子、`judge(ledger)` 的显式入参、CJS 这一条都必须能在源码里
+   * 找到（口径与 §13.5.14「声明 ⇄ 读者」同族）。
+   *
+   * ⚠️ `judge()` 的入参形状是**合并了两侧**之后的产物：master 侧那笔把配置事实收成
+   * 每进程一次（`configFacts()`），本笔把台账收成显式对象（`judge(ledger)`）。
+   * 所以这里钉的是那条**组合起来的**形状：配置只从 `configFacts()` 来、台账只从入参来。 */
   const src = readFileSync(
     path.join(REAL_ROOT, "scripts", "check-a11y-rules.cjs"),
     "utf8",
   );
   expect(src).toContain("--ledger <path>");
-  expect(src).toContain("async function judge(opts = {})");
+  expect(src).toContain("async function judge(ledger)");
+  expect(src).toContain("await configFacts()");
+  /* 配置读面只留一个：四个读点不许再各自 `import()` 一遍（那正是成本被乘的地方）。 */
+  expect(src.match(/function configFacts\(/g)).toHaveLength(1);
   expect(src).toContain("loadEslintConfig");
 });
