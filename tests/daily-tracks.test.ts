@@ -292,7 +292,14 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     for (const rel of ["scripts/e2e-run.mjs", "scripts/full-suite-run.mjs", "scripts/artifact-run.mjs"]) {
       expect(readText(rel), rel).toContain("daily-run.mjs");
     }
-    expect(readText("scripts/daily-run.mjs")).toContain("writeFreshness");
+    // `daily-run.mjs` 是**两条出路**（`--skip` / `--dirty`）的共用入口，它自己不记账、
+    // 只把两者翻译成 `writeSkipRecord` 的内核调用。这里断言的是**它接了哪个内核**，
+    // 不是某个导入名 —— 早先这条写的是 `toContain("writeFreshness")`，而它当时命中的
+    // 是一处**从未被调用的导入**（`writeFreshness` 在 daily-run 里没有任何调用点，
+    // 另外三档各自直接导入）：那种断言在「把无人用的导入删掉」时会红，而被盯住的东西
+    // 一个字都没变 —— 一条测「有没有这个字符串」的用例，值是零。
+    expect(readText("scripts/daily-run.mjs")).toContain("writeSkipRecord");
+    expect(readText("scripts/daily-run.mjs")).toContain("visual-baselines.mjs");
     // `--dirty` 这条出路也必须走共用内核，不是各写一份。
     expect(readText("scripts/daily-run.mjs")).toContain("--dirty");
   });
@@ -321,7 +328,7 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
      *
      * 用临时仓库造现场（不是读本仓库的提交历史）：本仓库今天动过什么随提交变化，
      * 拿它当夹具的用例会在某个平常的提交上自己变红。 */
-    const dir = mkdtempSync(join(tmpdir(), "dirty-since-"));
+    const dir = mkdtempSync(path.join(tmpdir(), "dirty-since-"));
     workdir = dir;
     const git = (...args: string[]) =>
       execFileSync("git", args, { cwd: dir, encoding: "utf8" });
@@ -329,12 +336,12 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
     git("config", "user.email", "t@example.com");
     git("config", "user.name", "t");
     git("config", "commit.gpgsign", "false");
-    mkdirSync(join(dir, "src"), { recursive: true });
-    writeFileSync(join(dir, "src", "a.ts"), "x\n");
+    mkdirSync(path.join(dir, "src"), { recursive: true });
+    writeFileSync(path.join(dir, "src", "a.ts"), "x\n");
     git("add", "-A");
     git("commit", "-qm", "touch src");
-    mkdirSync(join(dir, "scripts"), { recursive: true });
-    writeFileSync(join(dir, "scripts", "x.mjs"), "y\n");
+    mkdirSync(path.join(dir, "scripts"), { recursive: true });
+    writeFileSync(path.join(dir, "scripts", "x.mjs"), "y\n");
     git("add", "-A");
     git("commit", "-qm", "touch scripts");
 
@@ -345,7 +352,11 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
     /* 状态机与 `dirtySinceToday` 逐字同源（那条函数读的是真仓库，没法在夹具上跑）。
      * 复刻它的唯一目的是让「空行怎么处理」这条边界**可被执行** —— 它是这段实现里
      * 唯一出错不会红的地方。 */
-    const sinceFor = (prefixes: string[]) => {
+    /* 返回类型**显式写上**：不写时 TS 会把闭包里的 `earliest` 按初始化式的 `null`
+     * 收窄成 `never`（它不追踪「在 `flush` 里被重新赋值」这件事），于是
+     * `sinceFor(...)?.toISOString()` 报「never 上没有 toISOString」——
+     * 一个看着像实现错了、其实是类型推断边界的错。 */
+    const sinceFor = (prefixes: string[]): Date | null => {
       let earliest: Date | null = null;
       let stamp: string | null = null;
       let hit = false;

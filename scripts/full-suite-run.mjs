@@ -31,7 +31,11 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
+import {
+  LEDGER_FLAGS,
+  parseLedgerFlag,
+  writeLedgerNote,
+} from "./daily-run.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 import { freshnessTrack, writeFreshness } from "./visual-baselines.mjs";
 import { gitUser } from "./pixel-run.mjs";
@@ -75,7 +79,7 @@ export function shouldRecord({ exitCode, dryRun }) {
 function main(argv) {
   const dryRun = argv.includes("--dry-run");
   /* 两条「不跑」的出路互斥地先处理：给了它们就不该再去起 vitest。 */
-  for (const flag of ["--skip", "--dirty"]) {
+  for (const flag of LEDGER_FLAGS) {
     const parsed = parseLedgerFlag(argv, flag);
     if (parsed.mode === "run") continue;
     if (parsed.reason === null) {

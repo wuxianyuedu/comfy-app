@@ -434,9 +434,13 @@ export const FRESHNESS_LEDGER = freshnessTrack("visual").ledger;
  * 登记」表现成「按键名当档名」而照样跑绿）。
  *
  * @param {keyof typeof FRESHNESS_TRACKS | string} kind
- * @returns {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}}
- *   与 `FRESHNESS_TRACKS[*]` 同形 —— 两条账的差异（`daily` / `skipHow`）也在里面，
- *   调用方据此决定要不要判「每天首次」、以及话术里给不给豁免那条出路。
+ * @returns {(typeof FRESHNESS_TRACKS)[keyof typeof FRESHNESS_TRACKS]}
+ *   就是 `FRESHNESS_TRACKS[*]` 本身 —— **刻意不在这里再抄一份栏位清单**：抄一份就多
+ *   一个会漂的事实源，而它漂起来的样子是「消费方按旧栏位写、类型检查却过」，直到有人
+ *   给登记处加第五栏时才突然红一片（本文件这条注释的前身正是那样：写死了六栏，
+ *   后来 `dirty` / `dirtyHow` / `graceMs` 三栏加进来，于是三份消费方与一份用例同时报错，
+ *   而报的都不是「谁忘了更新 JSDoc」）。这里把那句「与 `FRESHNESS_TRACKS[*]` 同形」
+ *   的承诺变成类型上真成立的事。
  */
 export function freshnessTrack(kind) {
   const track = FRESHNESS_TRACKS[kind];
@@ -493,10 +497,15 @@ export function freshnessRecord({
    * 两栏各管一件事：`skippedReason` = 今天故意不跑；`dirtyReason` = 这次改动不吃这一档。
    * 两者都要能复核（同一份 `isUsableSkipReason` 核对），区别只在**读起来不一样**
    * —— 混成一栏之后，「这一档三个月没跑」与「这三个月每次都声明不吃它」长得一模一样。 */
-  for (const [field, value] of [
+  /* 两栏的键名写成 `keyof` 的元组、不是松散数组：松散数组里 `field` 会退化成
+   * `string`，`record[field]` 于是报「unknown 不能当索引」—— 这个类型错是**有用的**，
+   * 它顺带钉住「只往 `record` 真有的栏位里写」，别用 `any` 把它按下去。 */
+  /** @type {Array<[("skippedReason" | "dirtyReason"), unknown]>} */
+  const optionalFields = [
     ["skippedReason", skippedReason],
     ["dirtyReason", dirtyReason],
-  ]) {
+  ];
+  for (const [field, value] of optionalFields) {
     if (typeof value === "string" && value.trim()) record[field] = value.trim();
   }
   return record;
@@ -628,10 +637,18 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
  * 「跑过一次」与「跑过的是哪一个」会变成两件事，而账面上看着完全正常）。
  *
  * @param {Record<string, unknown>} ledger
- * @param {{required: string[], registered: string[], track: {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}, kind: string, now?: Date}} scope
+ * @param {{
+ *   required: string[],
+ *   registered: string[],
+ *   track: (typeof FRESHNESS_TRACKS)[keyof typeof FRESHNESS_TRACKS],
+ *   kind: string,
+ *   now?: Date,
+ *   dirtySince?: Date | null,
+ * }} scope
  *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）；
  *   `track` = 这一份账的登记（话术里要给出「去哪个文件补、按哪条命令跑」，
- *   它同时决定 `daily` / `skipHow` 那两条分叉）；
+ *   它同时决定 `daily` / `skipHow` / `dirty` 那几条分叉）。**类型上取登记处的真形状**，
+ *   不在这里再抄一份栏位清单 —— 抄一份就多一个会漂的事实源（同 `freshnessTrack` 那条注释）；
  *   `kind` = 这一份账属于哪个跑法（`trackedBy` 的比对基准）；
  *   `now` = 判「今天有没有自证」用的时钟（`track.daily` 那一档才读它；用例可注入）；
  *   `dirtySince` = **今天动过这一档输入面**的那个提交时刻（没有则 null）。只有

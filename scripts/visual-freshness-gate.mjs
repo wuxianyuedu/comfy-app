@@ -202,7 +202,9 @@ export function dirtySinceToday(track, now = new Date()) {
     { cwd: ROOT, encoding: "utf8" },
   );
   if (res.error || res.status !== 0 || typeof res.stdout !== "string") return null;
+  /** @type {Date | null} */
   let earliest = null;
+  /** @type {string | null} */
   let stamp = null;
   let hit = false;
   const flush = () => {

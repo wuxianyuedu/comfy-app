@@ -21,10 +21,27 @@ import process from "node:process";
 import {
   freshnessTrack,
   isUsableSkipReason,
-  writeFreshness,
   writeSkipRecord,
 } from "./visual-baselines.mjs";
 import { gitUser } from "./pixel-run.mjs";
+
+/**
+ * @typedef {"--skip" | "--dirty"} LedgerFlag `parseLedgerFlag` 认得的那两个开关
+ */
+
+/**
+ * `parseLedgerFlag` 认得的那两个开关。
+ *
+ * 提到函数外面、并在这个模块导出，是为了让调用方**共用同一个口径**：四档里有两档
+ * 是「把两个开关都试一遍」（`artifact-run` / `full-suite-run`），写成
+ * `for (const flag of ["--skip", "--dirty"])` 时数组会退化成 `string[]`，
+ * 传进收窄联合的 `parseLedgerFlag` 是一处类型错位 —— 这个错位是**有用的**，
+ * 它顺带钉住「这里试的就是那两个开关」，所以不去放宽 `parseLedgerFlag` 的入参，
+ * 而是让调用方带上这个口径。
+ *
+ * @type {ReadonlyArray<LedgerFlag>}
+ */
+export const LEDGER_FLAGS = ["--skip", "--dirty"];
 
 /**
  * 从 argv 里读出「这次是不是记一条豁免 / 一条『不吃这一档』」—— 抽成纯入口，
@@ -40,7 +57,7 @@ import { gitUser } from "./pixel-run.mjs";
  * —— 正是要覆盖的形状。声明成 `string[]` 会把这条边界挪到每个调用方去绕。
  *
  * @param {unknown[]} argv
- * @param {"--skip" | "--dirty"} flag
+ * @param {LedgerFlag} flag
  * @returns {{mode: "run" | "skip" | "dirty", reason: string | null}}
  */
 export function parseLedgerFlag(argv, flag) {

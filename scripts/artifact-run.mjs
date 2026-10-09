@@ -28,7 +28,11 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
+import {
+  LEDGER_FLAGS,
+  parseLedgerFlag,
+  writeLedgerNote,
+} from "./daily-run.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 import { freshnessTrack, writeFreshness } from "./visual-baselines.mjs";
 import { gitUser } from "./pixel-run.mjs";
@@ -73,7 +77,7 @@ export function shouldRecord({ exitCode, dryRun }) {
  */
 function main(argv) {
   const dryRun = argv.includes("--dry-run");
-  for (const flag of ["--skip", "--dirty"]) {
+  for (const flag of LEDGER_FLAGS) {
     const parsed = parseLedgerFlag(argv, flag);
     if (parsed.mode === "run") continue;
     if (parsed.reason === null) {
