@@ -23,7 +23,7 @@
 - [ ] 列表/日志有内存上限（见 [2.1](02-性能规范.md#21-列表日志必须有上限)）
 - [ ] 高频状态用 Zustand 而非 Context（见 [1.1](01-架构与状态管理.md#11-全局高频状态禁止用-react-context)）
 - [ ] 图标用 `lucide-react`，无新增内联 SVG（装饰性除外）
-- [ ] 可交互元素有 `aria-label`；模态/抽屉有焦点管理
+- [ ] 可交互元素有 `aria-label`；模态/抽屉有焦点管理；**非原生元素（`div` / `li` / `span`）上的 `onClick` 有键等价物**（换原生可交互元素，或补 `simpleKeyHandler`；由 `node scripts/check-click-keyboard.cjs` 在 pre-commit 强制，见 [06 §6.11](06-无障碍访问-a11y.md#611-非原生元素上的点击必须有键等价物check-click-keyboardcjs)）
 - [ ] 无 monkey-patch（`history.pushState` 等）→ 改用 `usePathname`（见 [8.4](08-异步与副作用.md#84-禁止-monkey-patch-全局-api)）
 - [ ] 代码行为变更已同步文档（文档与代码同提交，见主规范 §9）
 - [ ] Review 中发现的**可复用改进模式已归档**（见 [13.9](#139-优化点归档强制)）
@@ -214,6 +214,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮：`it/test/describe.each` 净数不许涨（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
 ✅ node scripts/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
 ✅ node scripts/check-form-field-wiring.cjs # `<FormField>` 的标签 ⇄ 控件接线：plain-children 形态下 `htmlFor` 指向不存在的 id（点标签不聚焦、控件没有可访问名），净数不许涨（见 16 §16.2.4.26.1）
+✅ node scripts/check-click-keyboard.cjs    # 非原生元素上的「鼠标专属」点击：`div`/`li`/`span` 挂了 `onClick` 却没有键等价物（鼠标点得开、键盘进不来），净数不许涨（见 06 §6.11）
 ✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
 ✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
 ✅ node scripts/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）

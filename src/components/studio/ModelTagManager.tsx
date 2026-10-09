@@ -6,6 +6,7 @@ import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
+import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 import { useModelTags, type TagItem } from "./hooks/use-model-tags";
@@ -164,10 +165,20 @@ export function ModelTagManager({
                         className="bg-canvas-deep text-ink-bright border-primary/50 focus:border-primary min-w-0 flex-1 rounded-md border px-2 py-0.5 text-sm outline-none"
                       />
                     ) : (
+                      /* 改名此前只有「双击」这一条路径 —— 双击是鼠标专属手势，
+                       *  键盘用户没有任何入口（§6.10「交互元素必须真的可交互」
+                       *  的反面：不是「点了没反应」，是根本进不来）。这里保留双击
+                       *  作为快捷方式，同时补上焦点与 Enter/F2 —— F2 是各平台通用
+                       *  的「重命名」键，Enter 是 `role="button"` 的默认激活键。 */
                       <span
+                        role="button"
+                        tabIndex={0}
                         onDoubleClick={() => beginEdit(tag.id, tag.name)}
-                        title="双击重命名"
-                        className="text-ink-bright hover:bg-subtle hover:text-ink-bright cursor-text truncate rounded-sm px-0.5 text-sm select-none"
+                        {...simpleKeyHandler(["Enter", "F2"], () =>
+                          beginEdit(tag.id, tag.name),
+                        )}
+                        title="双击（或 Enter / F2）重命名"
+                        className="text-ink-bright hover:bg-subtle hover:text-ink-bright focus-visible:ring-primary/40 cursor-text truncate rounded-sm px-0.5 text-sm select-none focus-visible:ring-2 focus-visible:outline-none"
                       >
                         {tag.name}
                       </span>
