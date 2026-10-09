@@ -213,13 +213,22 @@ function walk(dir, out = []) {
 }
 
 /**
- * 读台账。**解析失败一律抛**（由调用方判失败）——
- * 静默退回「没有台账」＝ 有站点时判据空转，与 §11.18.3 首版那个
- * `include: []` 却退 0 的 bug 同族。
+ * 读台账。**缺失 / 解析失败一律抛**（由调用方判失败）。
+ *
+ * ⚠️ 「缺失」与「解析失败」同等对待，这一条是补出来的 —— 原先写的是
+ * `if (!fs.existsSync(abs)) return null`，把「文件不在」静默退回成「没有台账」，
+ * 而判据零站点时在那之前就 return 了、根本走不到这里：表现是全绿，绿的却是
+ * 「台账压根不存在」。这正是本判据要拦的形状（§11.23「声明 ⇄ 读者」）。
+ * 纯闸门的「零站点通过」必须由**台账在场、只是没内容**来说。
  */
 function readLedger() {
   const abs = path.join(ROOT, LEDGER);
-  if (!fs.existsSync(abs)) return null;
+  if (!fs.existsSync(abs)) {
+    throw new Error(
+      `${LEDGER} 不存在。它不该缺席 —— 「零站点通过」要由「台账在、只是没内容」` +
+        "来说，不是由「台账根本没有」来说（口径见 §11.23）。",
+    );
+  }
   let json;
   try {
     json = JSON.parse(fs.readFileSync(abs, "utf8"));
@@ -246,19 +255,23 @@ function main() {
     }
   }
 
-  if (sites.length === 0) {
-    console.log(
-      "[task-meta] OK —— 0 处 `task.meta` 站点（本判据是纯闸门：对象是「下一次有人往报告里塞事实」）。",
-    );
-    return 0;
-  }
-
+  /* 台账先读、哪怕零站点：`readLedger()` 缺失即抛，于是「零站点通过」这个结论
+     由「台账在、只是没内容」担保，而不是由「台账根本没有」担保
+     （原先零站点直接 return 0，台账从没被碰过 —— §11.23 那个形状）。 */
   let consumers;
   try {
     consumers = readLedger();
   } catch (e) {
     console.error(`[ERROR] ${e.message}`);
     return 1;
+  }
+
+  if (sites.length === 0) {
+    console.log(
+      "[task-meta] OK —— 0 处 `task.meta` 站点" +
+        `（本判据是纯闸门：对象是「下一次有人往报告里塞事实」；台账在场，${consumers.length} 条登记）。`,
+    );
+    return 0;
   }
 
   if (consumers === null || consumers.length === 0) {
