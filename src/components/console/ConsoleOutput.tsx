@@ -64,7 +64,7 @@ export function ConsoleOutput({
             {output}
           </pre>
         ) : (
-          <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
+          <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm">
             {running ? (
               <>
                 <Spinner className="size-5 opacity-60" />

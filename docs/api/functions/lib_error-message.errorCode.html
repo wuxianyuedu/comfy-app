@@ -21,7 +21,7 @@
 <strong>码</strong>回答「我该不该再试」—— 前者是给人读的，后者是代码要分支的。全库此前只有
 <a href="lib_error-message.rawErrorDetail.html" class="tsd-kind-function">rawErrorDetail</a> 在读码，而它把码拼进日志字符串就丢掉了，于是调用方想分
 「服务端确定不收这个内容」与「此刻拿不到服务端」两种失败时，只能去<strong>匹配文案</strong>
-——文案一改判决就错。§11.2.1 第七条给服务端侧定了同一条口径（闸门要判整个信封、
+——文案一改判决就错。§11.2.1「错误码是判据的一个独立维度」给服务端侧定了同一条口径（闸门要判整个信封、
 含码），客户端侧此前没有对应的取值出口。</p>
 <p>取值优先级与 <a href="lib_error-message.rawErrorDetail.html" class="tsd-kind-function">rawErrorDetail</a> 共用一条链（<code>data.code</code> → <code>shape.code</code> →
 <code>code</code>）：tRPC 客户端把码放在 <code>data</code>，服务端 <code>shape</code> 里也有一份，裸 <code>Error</code> 上

@@ -229,7 +229,7 @@ export function WorkflowRunRawCliModal({
             className="custom-scrollbar bg-panel-deep/60 flex-1 gap-3 overflow-y-auto p-3"
           >
             {lines.length === 0 ? (
-              <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
+              <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm">
                 {!loaded ? (
                   "加载中…"
                 ) : (

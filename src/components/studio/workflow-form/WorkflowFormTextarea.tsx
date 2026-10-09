@@ -61,7 +61,7 @@ export function AutoResizeTextarea({
       placeholder={placeholder}
       rows={1}
       onChange={textHandler(onChange)}
-      className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder field-sizing-normal block w-full min-w-0 resize-none overflow-x-hidden rounded-md border-0 py-2 pr-3 pl-2.5 text-[13px] leading-relaxed focus-visible:ring-0"
+      className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder field-sizing-normal block w-full min-w-0 resize-none overflow-x-hidden rounded-md border-0 py-2 pr-3 pl-2.5 text-sm leading-relaxed focus-visible:ring-0"
       style={{
         fontFamily: "var(--font-sans)",
         boxSizing: "border-box",
