@@ -48,6 +48,35 @@ function dGroupSteps(hookText: string) {
   }));
 }
 
+/** §13.1「本地提交前必须通过」代码块里的命令（`✅ <命令>  # 说明` 的那部分）。 */
+const GATE_CHECKLIST_DOC = join(
+  REPO_ROOT,
+  "docs",
+  "standards",
+  "13-提交与-code-review.md",
+);
+
+/**
+ * 读 §13.1 清单里的命令集合。marker 那句写在围栏**里面**，所以取 marker 之后遇到的
+ * 第一个 ``` 就是这份清单的收尾（与 `check-doc-references.cjs` 同一份解析，不写第二份）。
+ * @returns {Set<string>}
+ */
+function readChecklistCommands() {
+  const text = readFileSync(GATE_CHECKLIST_DOC, "utf8");
+  const start = text.indexOf("本地提交前必须通过");
+  if (start < 0) return new Set();
+  const rest = text.slice(start);
+  const close = rest.indexOf("```");
+  if (close < 0) return new Set();
+  return new Set(
+    rest
+      .slice(0, close)
+      .split("\n")
+      .filter((l) => l.startsWith("✅ "))
+      .map((l) => (l.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim()),
+  );
+}
+
 describe("doc:check 接进 pre-commit（ISSUE #1371 翻档的在位判据）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = dGroupSteps(hook);
@@ -232,5 +261,62 @@ describe("API 文档生成物与源同步在钩子里（ISSUE #1329 收尾）", 
   it("脚本头承诺「供 .githooks/pre-commit 调用」，与钩子里的在场一致", () => {
     const script = readFileSync(DOCS_API, "utf8");
     expect(script).toContain("供 .githooks/pre-commit");
+  });
+});
+
+/**
+ * 桌面壳门禁接进 D 组（ISSUE #1597）。
+ *
+ * 立案现场：`shell-gate.mjs` 在钩子里**确实**有一步，但那一格「专守它」的判据没有 ——
+ * `tests/shell-gate.test.ts` 只有 `expect(hook).toContain("node scripts/shell-gate.mjs")`，
+ * 而 `toContain` 对**注释行**同样命中（同一段字面在注释里也出现）。§13.1 清单与钩子
+ * 的双向对账（`scripts/check-doc-references.cjs`）也拦不住：它是「钩子 ⇄ 清单」两份
+ * 手抄的互核，把两份**同时**抹掉（顺手把 `D(N)` 计数一起改小）就两边一致、全绿。
+ *
+ * 于是「把这步摘回手动档」这个动作会静默通过。本条与上面三条同款：解析 D 组步骤、
+ * 只认真调用 —— 上面那几条都只钉自己那一步，`shell-gate` 是同一个洞里的第四格。
+ *
+ * 为什么它值一条判据：这一步是 AGENTS 硬规则 5（改了壳必须重编）的**唯一执行者**，
+ * 也是 `src-tauri/src/**` 里那批 `#[test]` 全仓唯一的执行者；静音它 = 回归「判据在
+ * 文档里、没人跑」。
+ */
+const SHELL_GATE = join(REPO_ROOT, "scripts", "shell-gate.mjs");
+
+describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = dGroupSteps(hook);
+
+  it("钩子 D 组真的执行这一步，且调的就是本脚本（被注释掉的行不算在场）", () => {
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/shell-gate.mjs"),
+    );
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有桌面壳门禁 —— AGENTS 硬规则 5「改了壳必须重编」` +
+        "与壳里那批 #[test] 都没有别的执行者",
+    ).toEqual({
+      label: "桌面壳（改了 src-tauri 才跑）",
+      cmd: "node scripts/shell-gate.mjs",
+    });
+  });
+
+  it("§13.1 清单里也有它（对账的两份手抄不构成执行者，这里显式钉一份）", () => {
+    // 判据是「清单里有没有这条命令」本身，不是「清单与钩子一致」——后者两份一起抹
+    // 掉就一致了（这正是 check-doc-references.cjs 那条双向对账的边界）。
+    const checklist = readChecklistCommands();
+    expect(
+      checklist.has("node scripts/shell-gate.mjs"),
+      "§13.1「本地提交前必须通过」清单里没有桌面壳门禁 —— 照清单手跑的人会以为它不存在",
+    ).toBe(true);
+  });
+
+  it("脚本头那句「由 .githooks/pre-commit 的 D 组调用」是本次事故的判据，别让它消失", () => {
+    // 反向要求：这句话**现在**是真的（钩子里有这一步）。若有人既拆掉钩子里那一步、
+    // 又把这句删掉，文档与实现会一起闭嘴，而判据消失本身不会有人发现。
+    const script = readFileSync(SHELL_GATE, "utf8");
+    expect(
+      script,
+      "头部那句「由 `.githooks/pre-commit` 的 D 组调用」是这次事故的判据，别让它消失",
+    ).toContain("由 `.githooks/pre-commit` 的 D 组调用");
   });
 });
