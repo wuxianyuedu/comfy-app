@@ -19,7 +19,8 @@ import { cn } from "~/lib/utils";
  * （居中虚线卡片）、`studio/ui/EmptyState.tsx`（图标方块 + 警告色 + min-h
  * 变体）、`DynamicWorkflowForm/sections/EmptyStateHint.tsx`（行内小提示条）。
  * props 与形态都不一样，「改一处空态样式」要改三处。第一次收口按**取并集**
- * 收敛为单一 `EmptyState` 组件、三档 `variant`：`page` / `hint` / `error`。
+ * 收敛为单一 `EmptyState` 组件、三档 `variant`：`page` / `hint` / `error`
+ * （第四档 `panel` 由这次治理新加，见下）。
  *
  * **P67 治理**（§16.2.3 / §12.18）：`page` / `error` 两档的骨架（居中 +
  * flex-col + 图标 + 标题 + 说明 + 操作）本来就是 shadcn 官方 `Empty` 系
@@ -33,11 +34,24 @@ import { cn } from "~/lib/utils";
  * 挂在按钮组或段落区里说「这里为什么是空的、下一步做什么」），硬套 `Empty`
  * 反而丢语义。但本文件已 `import Empty`，P67 d 子判据短路透零、不再计入。
  *
+ * `panel` 档是**面板里铺满居中的轻量占位**（日志面板 / 控制台输出 / CLI 原文
+ * 模态 / 消息中心那一族 —— 收口前 6 处调用点各抄一份同样的类名）。它同样
+ * 自绘 `<div>`，理由与 `hint` 同源且更硬：`Empty` 的骨架自带 `p-6` /
+ * `rounded-xl` / `border-dashed` / `text-balance`，而这一档要的正是
+ * **不带框、不带内距、不改换行**的铺满态 —— 套上去要覆写的类比它带来的还多，
+ * 而 `text-balance` 会把长提示（「运行生成后此处会显示执行步骤日志」那一类）
+ * 的折行改形，那是改外观、不是收口。
+ *
+ * 弱化程度由这一档自己定：图标 30% 透明、文案 `text-sm` + `text-ink-fainter`。
+ * 需要更松的间距或更大图标的调用点走 `className` / 传已渲染节点（`cn()` 让
+ * 调用处取胜），**不要再抄整串类名**（`tests/design-md-contract-sync.test.ts`
+ * 的「只许有一个出处」判据按同一枚 class 字符串全命中抓）。
+ *
  * **API 完全不变**：`title` / `description` / `icon` / `variant` /
  * `action` / `minHeightClass` / `className`；两处调用点
  * （`DetailHeader.tsx` / `WorkflowLibraryList.tsx` 等）零改动。
  */
-export type EmptyStateVariant = "page" | "error" | "hint";
+export type EmptyStateVariant = "page" | "error" | "hint" | "panel";
 
 export interface EmptyStateProps {
   /** 主文案：一句话说明当前是什么状态（如「未找到匹配的工作流」）。 */
@@ -93,6 +107,7 @@ export function EmptyState({
   }
 
   const error = variant === "error";
+  const panel = variant === "panel";
   /* 传节点时原样渲染，传 lucide 组件时按统一尺寸渲染（历史两种调用都有，
    * 取并集才不会逼调用方先看一遍 props）。 */
   let renderedIcon: ReactNode = null;
@@ -102,9 +117,27 @@ export function EmptyState({
      * 「非法子节点」并抛错 —— 而它 `typeof` 恰好是 `"object"`，
      * `typeof icon === "function"` 的判据接不住它。 */
     const Icon = icon;
-    renderedIcon = <Icon size={32} aria-hidden />;
+    renderedIcon = panel ? (
+      <Icon size={32} strokeWidth={1.5} aria-hidden className="opacity-30" />
+    ) : (
+      <Icon size={32} aria-hidden />
+    );
   } else if (icon) {
     renderedIcon = icon;
+  }
+
+  if (panel) {
+    return (
+      <div
+        className={cn(
+          "text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm",
+          className,
+        )}
+      >
+        {renderedIcon}
+        {title ?? description}
+      </div>
+    );
   }
 
   return (

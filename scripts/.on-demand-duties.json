@@ -5,57 +5,91 @@
       "id": "visual-freshness",
       "name": "像素回归（Playwright 截图 + 基线配对）",
       "notInHook": "起 webServer + 浏览器；结论只在录过基线的那台机器上成立（基线名带平台）",
-      "fact": { "kind": "freshness-track", "key": "visual" },
+      "fact": {
+        "kind": "freshness-track",
+        "key": "visual"
+      },
       "executor": "visual-gate.mjs 判「带不带像素判决」+ 新鲜度账（钩子 D 组「每档都有主」）"
     },
     {
       "id": "e2e-freshness",
       "name": "全量 e2e（Playwright：普通 spec + e2e/visual 像素档）",
       "notInHook": "起 webServer + 浏览器，十几分钟量级；且是像素档的超集",
-      "fact": { "kind": "freshness-track", "key": "e2e" },
+      "fact": {
+        "kind": "freshness-track",
+        "key": "e2e"
+      },
       "executor": "钩子 D 组「每档都有主」判**每天首次自证**（track.daily，dirty 为空）"
     },
     {
       "id": "full-suite-freshness",
       "name": "全量单测 + 覆盖率门槛",
       "notInHook": "十分钟量级；覆盖率门槛只在全量那一档判（§11.7）",
-      "fact": { "kind": "freshness-track", "key": "full" },
+      "fact": {
+        "kind": "freshness-track",
+        "key": "full"
+      },
       "executor": "钩子 D 组「每档都有主」判**改了就当天跑**（吃 src/ + tests/，graceMs 兜底）"
     },
     {
       "id": "artifact-freshness",
       "name": "产物级护栏（next build + 剥私有输入 + 数产物 + 冒烟）",
       "notInHook": "分钟量级（next build + 起 sidecar 冒烟）",
-      "fact": { "kind": "freshness-track", "key": "artifact" },
+      "fact": {
+        "kind": "freshness-track",
+        "key": "artifact"
+      },
       "executor": "钩子 D 组「每档都有主」判**改了就当天跑**（吃产物链那几个文件）"
     },
     {
       "id": "pixel-gate-entry",
       "name": "像素回归的 check:all 入口（显式点名才跑）",
       "notInHook": "与上面 visual 同一条通道的**入口**那一半：它在 quality-gate.mjs 里被标 run:false",
-      "fact": { "kind": "gate-not-in-all", "gate": "visual" },
+      "fact": {
+        "kind": "gate-not-in-all",
+        "gate": "visual"
+      },
       "executor": "pnpm check:visual / `--mode visual` / 双击入口（pixel-run.mjs）"
     },
     {
       "id": "dependency-audit",
       "name": "依赖漏洞扫描（pnpm audit 棘轮）",
       "notInHook": "网络请求（离线 / registry 抖动不该变成提交失败）",
-      "fact": { "kind": "gate-in-all", "gate": "dependencyAudit" },
+      "fact": {
+        "kind": "gate-in-all",
+        "gate": "dependencyAudit"
+      },
       "executor": "pnpm check:all 的默认档（quality-gate.mjs 的 dependencyAudit）"
     },
     {
       "id": "tw4-canonical-report",
       "name": "CSS 等价改写汇总（canonical 候选）",
       "notInHook": "要起 Tailwind 引擎、单次约 6s；判的是「CSS 等价改写」而非正确性",
-      "fact": { "kind": "on-demand-ledger", "script": "tw4-canonical-report.mjs" },
+      "fact": {
+        "kind": "on-demand-ledger",
+        "script": "tw4-canonical-report.mjs"
+      },
       "executor": "按需召唤 + 棘轮（scripts/.tw4-canonical-baseline.json 的 --check）"
     },
     {
       "id": "tw4-spacing-canonical",
       "name": "px ↔ spacing 倍数等价改写",
       "notInHook": "同 tw4-canonical-report：起 Tailwind 引擎、幂等改写器",
-      "fact": { "kind": "on-demand-ledger", "script": "tw4-spacing-canonical.mjs" },
+      "fact": {
+        "kind": "on-demand-ledger",
+        "script": "tw4-spacing-canonical.mjs"
+      },
       "executor": "按需召唤 + 棘轮（scripts/.tw4-spacing-baseline.json 的 --check）"
+    },
+    {
+      "id": "commit-claims-vs-facts",
+      "name": "提交信息里的声明 ⇄ 那次提交的事实",
+      "notInHook": "**本地钩子连形态都看不到**：声明说的是某一次提交的树（「§x.y 照旧保留」），而丢失发生在**平台侧 squash** 那一刻（实测 ad81a912 / bdabd26f / b9bedd37 在 master 上都是单亲，信息里却带 Merge 字样）。判据必须手上有那次提交的事实",
+      "fact": {
+        "kind": "base-check-chained",
+        "script": "scripts/check-commit-claims.mjs"
+      },
+      "executor": "pnpm check:base:batch（= node scripts/base-check.mjs --base）的 CHAINED_STEPS —— 合并前 / 事后盘点，人点一次就跑一次"
     }
   ]
 }

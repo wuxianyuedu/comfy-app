@@ -1149,6 +1149,24 @@
   现在按**两侧现算交集**判（场景侧取边声明的 handle，渲染器侧取 `PortDemoNode`
   实挂的 `<PortHandle id>`，锚在它的 `rows` 上取），且两侧都得非空。口径见
   规范 16 §16.2.3.12。
+  **business 目录的第四层注入：消息中心**（同批续，ISSUE #1381）：
+  `MessageCenterButton` / `MessageCenterPanel` 的入参只有 `children`，从 props
+  那侧看是纯展示件 —— 而数据住在 `message-center-store`（zustand）里。
+  `.storybook/message-center-sources.tsx` 让 story 声明**「哪一处生产方在生产」**
+  （更新检测 / dev server 重启 / 陈旧实例），文案由生产方**现算**、条目走真
+  action `push()`（不 `setState({ messages })` —— 那条 id 生成曾经就是
+  「删一条把另一条一起删了」的根因）。与前三层不同的一个接线点：面板是全屏的
+  而外壳**全局**挂它，于是「面板开着」的场景会把按钮自己的 story 整个盖住 ——
+  出口是 `parameters.messagePanelHidden: true`。口径见规范 16 §16.2.3.14。
+  **同批由新 story 的截图抓到一处真缺陷**：那颗「标记已读」的 `<Button>` 缺
+  `h-auto`，落进缺省档的 `h-8`（32px **定高**），而它的内容是「标题 + 正文」
+  且正文可能多段（陈旧实例那条 `body` 就含换行）—— 实测 `<li>` 高 62px、
+  正文底 205px，**超出卡片下沿 39px**、两张卡片叠在一起；修后 117px。
+  `tsc` / `eslint` / 构建 / 既有门禁全绿，只有截图看得出来。
+  判据 `tests/storybook-message-center-sources.test.ts`（7 条，进固定清单）。
+  ⚠️ 写它的过程中有**四处**断言自己先假绿过（`toContain` 被 import 行满足、
+  被解释口径的注释满足、非贪婪正则从更前面那颗同标签起匹配）—— 四条现在都按
+  「剥注释 + 定位到具体那一处」判，并做了七向变异实测，形状记在 §16.2.3.14。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。
