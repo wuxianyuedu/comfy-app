@@ -371,10 +371,18 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
        * 不显式声明的话 `return` 会被收窄成初值 `null`，调用方的 `.toISOString()` 报 `never`。 */
       return earliest as Date | null;
     };
-    expect(sinceFor(["src/"])).not.toBeNull();
-    expect(sinceFor(["src/"])?.toISOString()).toBe(
-      sinceFor(["scripts/"])?.toISOString(),
-    );
+    /* 两个提交各自命中自己那一行、各自解出一个时刻。
+     * ⚠️ **不许拿「两者相等」当判据**：夹具是背靠背两次提交，而 `%cI` 的精度是
+     * **秒** —— 它们只在**恰好落在同一秒**时才相等，跨秒就红（实测：全量并行档
+     * 偶发，隔离重跑必绿）。那量的是机器的调度，不是状态机。
+     * 这里改判**顺序关系**（`src/` 先提交 ⇒ 不晚于 `scripts/`），它不依赖两笔
+     * 提交是否同秒 —— 而「空行没把 stamp 提前清掉」这件事照样被钉住：
+     * 若 stamp 在文件行到达前被清，两边都会是 null。 */
+    const srcAt = sinceFor(["src/"]);
+    const scriptsAt = sinceFor(["scripts/"]);
+    expect(srcAt).not.toBeNull();
+    expect(scriptsAt).not.toBeNull();
+    expect(srcAt!.getTime()).toBeLessThanOrEqual(scriptsAt!.getTime());
     // 没动过的输入面 ⇒ null（不是「今天没动过」以外的任何东西）。
     expect(sinceFor(["src-tauri/"])).toBeNull();
   });
