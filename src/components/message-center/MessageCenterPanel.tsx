@@ -152,6 +152,9 @@ export function MessageCenterPanel() {
               const meta = KIND_META[m.kind] ?? KIND_META.info!;
               const Icon = meta.icon;
               return (
+                /* 行级动作「点一下标记已读」是真病灶，键等价物由 **PR #1574**
+                   收口（整行换原生 `<Button>`）；本批只对齐规则开关。 */
+                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 键等价物由 PR #1574 收口 */
                 <li
                   key={m.id}
                   onClick={() => markRead(m.id)}

@@ -251,6 +251,7 @@ export function FilmStudioPropertyPanel({
           <input
             type="file"
             accept="audio/*"
+            aria-label="背景音乐（可选）"
             onChange={(event) => {
               const f = event.target.files?.[0];
               if (f) void c.uploadBgmFile(f);

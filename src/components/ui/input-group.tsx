@@ -52,6 +52,9 @@ function InputGroupAddon({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
   return (
+    /* `onClick` 是**点击代理** —— 把焦点转给同组里的 `<input>`（可聚焦、可输入的
+       是那个 input）；`role="group"` 的容器本身不该可聚焦。 */
+    /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 点击代理容器，不是交互本体 */
     <div
       role="group"
       data-slot="input-group-addon"

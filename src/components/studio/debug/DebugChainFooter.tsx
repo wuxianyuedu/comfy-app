@@ -179,6 +179,9 @@ export function DebugChainFooter({
           {title}
         </span>
         {group.map((module) => (
+          /* `title=` + `onClick` 是「点击查看源码」药丸 —— 真病灶，键等价物由
+           **PR #1574** 收口成原生 `<Button>`；本批只对齐规则开关，不重复改同一行。 */
+          /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- 「点击查看源码」药丸（键等价物由 PR #1574 收口） */
           <span
             key={module.file}
             title={`${module.file}（点击查看源码）`}
@@ -194,6 +197,9 @@ export function DebugChainFooter({
 
   return (
     <>
+      {/* `onPointerDown` / `onMouseDown` / `onDragStart` 都是
+          `stopPropagation` / `preventDefault` **守卫**，不是交互。 */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- 三个都是守卫，不是交互 */}
       <div
         style={{
           display: "flex",
