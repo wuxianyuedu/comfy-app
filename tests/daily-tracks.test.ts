@@ -17,7 +17,13 @@
  *   ④ **接线在位**：四档各自的跑法脚本走同一份记账内核，钩子那一步真判了它们。
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -93,7 +99,9 @@ describe("四档的登记形状（§11.8）", () => {
     for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
       // 账文件 / 键 / 名字 / 命令是每条账的存在意义，缺一个这条记录就退化成一句空话。
       for (const field of ["ledger", "key", "label", "run"] as const) {
-        expect(String(track[field]).length, `${kind}.${field}`).toBeGreaterThan(0);
+        expect(String(track[field]).length, `${kind}.${field}`).toBeGreaterThan(
+          0,
+        );
       }
       expect(track.ledger.endsWith(".json"), `${kind}.ledger`).toBe(true);
     }
@@ -136,9 +144,13 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
 
   it("**今天动过输入面**而账还停在改动之前 ⇒ 拦（这正是「改了就当天跑」）", () => {
     const old = { ...GOOD, verifiedAt: "2026-10-06T00:30:00.000Z" };
-    const result = gate("full", { full: old }, {
-      dirtySince: new Date("2026-10-09T05:00:00.000Z"),
-    });
+    const result = gate(
+      "full",
+      { full: old },
+      {
+        dirtySince: new Date("2026-10-09T05:00:00.000Z"),
+      },
+    );
     expect(result.exitCode).toBe(1);
     // 话术要同时给出「动了哪个目录」与「两条出路」——只说「要跑一次」等于把定位成本推走。
     const text = result.problems.join("\n");
@@ -163,35 +175,68 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
     /* 两种顺序都是正当的 —— 早上跑完全量、下午再改代码，账不该在下午变成「没自证」。
      * 少这一条的话，「今天动过」会被实现成只看日界、把先跑后改的人全部误判。 */
     expect(
-      gate("full", { full: GOOD }, {
-        dirtySince: new Date("2026-10-09T00:00:10.000Z"),
-      }).exitCode,
+      gate(
+        "full",
+        { full: GOOD },
+        {
+          dirtySince: new Date("2026-10-09T00:00:10.000Z"),
+        },
+      ).exitCode,
     ).toBe(0);
   });
 
   it("全量 e2e 那一档**不看** dirty：它的结论与改了哪几个文件无关，按日历日判", () => {
-    const yesterday = { ...GOOD, key: "e2e", how: "pnpm test:e2e", trackedBy: "e2e", verifiedAt: "2026-10-08T00:30:00.000Z" };
+    const yesterday = {
+      ...GOOD,
+      key: "e2e",
+      how: "pnpm test:e2e",
+      trackedBy: "e2e",
+      verifiedAt: "2026-10-08T00:30:00.000Z",
+    };
     const result = gate("e2e", { e2e: yesterday });
     expect(result.exitCode).toBe(1);
     expect(result.problems.join("\n")).toContain("今天还没有自证");
     // 传了 dirtySince 也不改变结论（它不读那个输入）。
-    expect(gate("e2e", { e2e: yesterday }, { dirtySince: new Date(0) }).exitCode).toBe(1);
+    expect(
+      gate("e2e", { e2e: yesterday }, { dirtySince: new Date(0) }).exitCode,
+    ).toBe(1);
   });
 
   it("`freshnessVerdict` 三种形态各自可被执行（判决抽成纯入口的意义）", () => {
     const track = freshnessTrack("full");
     const at = new Date("2026-10-06T00:30:00.000Z");
-    expect(freshnessVerdict({ track, at: GOOD.verifiedAt ? new Date("2026-10-09T00:30:00.000Z") : at, now: SAME_DAY, dirtySince: null })).toBeNull();
-    expect(freshnessVerdict({ track, at, now: SAME_DAY, dirtySince: null })).toBeNull();
-    expect(freshnessVerdict({ track, at, now: SAME_DAY, dirtySince: new Date("2026-10-09T05:00:00.000Z") })).not.toBeNull();
+    expect(
+      freshnessVerdict({
+        track,
+        at: GOOD.verifiedAt ? new Date("2026-10-09T00:30:00.000Z") : at,
+        now: SAME_DAY,
+        dirtySince: null,
+      }),
+    ).toBeNull();
+    expect(
+      freshnessVerdict({ track, at, now: SAME_DAY, dirtySince: null }),
+    ).toBeNull();
+    expect(
+      freshnessVerdict({
+        track,
+        at,
+        now: SAME_DAY,
+        dirtySince: new Date("2026-10-09T05:00:00.000Z"),
+      }),
+    ).not.toBeNull();
   });
 });
 
 describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", () => {
   it("`--skip` / `--dirty` 的解析：没给 / 可用理由 / 占位理由三种形状", () => {
     // 两个开关共用一份解析（`daily-run.mjs` 的 `parseLedgerFlag`），所以边界只测一遍。
-    expect(parseLedgerFlag(["node", "x"], "--skip")).toEqual({ mode: "run", reason: null });
-    expect(parseLedgerFlag(["--dirty", "本次只改文档，不动产物链"], "--dirty")).toEqual({
+    expect(parseLedgerFlag(["node", "x"], "--skip")).toEqual({
+      mode: "run",
+      reason: null,
+    });
+    expect(
+      parseLedgerFlag(["--dirty", "本次只改文档，不动产物链"], "--dirty"),
+    ).toEqual({
       mode: "dirty",
       reason: "本次只改文档，不动产物链",
     });
@@ -199,7 +244,9 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
       expect(parseLedgerFlag(["--skip", bad], "--skip").reason).toBe(null);
     }
     // 两个开关**互不串档**：给了 `--dirty` 时 `--skip` 仍是「没给」。
-    expect(parseLedgerFlag(["--dirty", "本次只改文档，不动产物链"], "--skip").mode).toBe("run");
+    expect(
+      parseLedgerFlag(["--dirty", "本次只改文档，不动产物链"], "--skip").mode,
+    ).toBe("run");
   });
 
   it("账里的两种「不跑」互不等于：豁免与「不吃这一档」各占一栏", () => {
@@ -269,17 +316,25 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     };
     // 按**入口**判而不是按命令长得像什么：裸 `vitest run --coverage` 也能跑出同样的用例，
     // 只有走这一层才会记账 —— 而「账上有没有日期」正是这一档存在的全部意义。
-    expect(pkg.scripts?.["test:coverage:tracked"]).toContain("scripts/full-suite-run.mjs");
-    expect(pkg.scripts?.["build:tracked"]).toContain("scripts/artifact-run.mjs");
+    expect(pkg.scripts?.["test:coverage:tracked"]).toContain(
+      "scripts/full-suite-run.mjs",
+    );
+    expect(pkg.scripts?.["build:tracked"]).toContain(
+      "scripts/artifact-run.mjs",
+    );
     expect(pkg.scripts?.["test:coverage:dry"]).toContain("--dry-run");
     expect(pkg.scripts?.["build:tracked:dry"]).toContain("--dry-run");
   });
 
   it("钩子那一步真判了这几档（标签要点名 e2e，否则红出来会读成别人的事）", () => {
     const steps = [
-      ...readText(".githooks/pre-commit").matchAll(/^ {2}run "([^"]+)" (.+)$/gm),
+      ...readText(".githooks/pre-commit").matchAll(
+        /^ {2}run "([^"]+)" (.+)$/gm,
+      ),
     ].map((m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }));
-    const hit = steps.find((s) => s.cmd.includes("scripts/visual-freshness-gate.mjs"));
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/visual-freshness-gate.mjs"),
+    );
     expect(hit?.cmd).toBe("node scripts/visual-freshness-gate.mjs");
     expect(hit?.label).toContain("e2e");
     // 标签要说清它现在判的是**几档** —— 只写「像素基线」时，另三档红出来会被读成像素的事。
@@ -289,7 +344,11 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("四档的记账走**同一份内核**（§12.12：不造第二轮子）", () => {
     // 「绿才记」「豁免下限」「账的形状」三条各被一条用例钉住，抄一份就多一处能悄悄漂的地方，
     // 而漂了不会红（账面上仍是合法的日期 + 人名 + 命令）。
-    for (const rel of ["scripts/e2e-run.mjs", "scripts/full-suite-run.mjs", "scripts/artifact-run.mjs"]) {
+    for (const rel of [
+      "scripts/e2e-run.mjs",
+      "scripts/full-suite-run.mjs",
+      "scripts/artifact-run.mjs",
+    ]) {
       expect(readText(rel), rel).toContain("daily-run.mjs");
     }
     expect(readText("scripts/daily-run.mjs")).toContain("writeSkipRecord");
@@ -301,7 +360,10 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     // 各写一套时会出现「这一档记的是环境变量、那一档记的是 git config」，
     // 于是同一个人的四条记录名字不一样。
     expect(typeof gitUser("full")).toBe("string");
-    for (const rel of ["scripts/full-suite-run.mjs", "scripts/artifact-run.mjs"]) {
+    for (const rel of [
+      "scripts/full-suite-run.mjs",
+      "scripts/artifact-run.mjs",
+    ]) {
       expect(readText(rel), rel).toContain("gitUser");
     }
   });
@@ -352,7 +414,8 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
       const flush = () => {
         if (hit && stamp) {
           const at = new Date(stamp);
-          if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest)) earliest = at;
+          if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest))
+            earliest = at;
         }
         hit = false;
       };
@@ -372,8 +435,21 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
       return earliest as Date | null;
     };
     expect(sinceFor(["src/"])).not.toBeNull();
-    expect(sinceFor(["src/"])?.toISOString()).toBe(
-      sinceFor(["scripts/"])?.toISOString(),
+    expect(sinceFor(["scripts/"])).not.toBeNull();
+    /* ⚠️ 这里原先断的是 `sinceFor(["src/"]) === sinceFor(["scripts/"])` —— 那是一条
+     * **撞秒界就会红**的断言：夹具里两次提交只隔几十毫秒（mkdir + write + add + commit），
+     * 而 `%cI` 只到秒，两个前缀各自命中的是不同的一条提交，所以「相等」只在两次提交
+     * 落进同一秒时成立。它判的不是「空行怎么处理」这件事，判的是这台机器那一刻的时钟。
+     * 换成**按提交自身的确切时刻**判：每个前缀都必须给出「碰过它的那条提交」的时间，
+     * 这是同一条边界更强的说法（提前清段会让两边都变 null，命中错的提交会给出错的时刻），
+     * 而且与秒边界无关。 */
+    const stampOf = (prefix: string): string =>
+      new Date(
+        git("log", "-1", "--format=%cI", "--", prefix).trim(),
+      ).toISOString();
+    expect(sinceFor(["src/"])?.toISOString(), "src/").toBe(stampOf("src/"));
+    expect(sinceFor(["scripts/"])?.toISOString(), "scripts/").toBe(
+      stampOf("scripts/"),
     );
     // 没动过的输入面 ⇒ null（不是「今天没动过」以外的任何东西）。
     expect(sinceFor(["src-tauri/"])).toBeNull();
