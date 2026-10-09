@@ -1,6 +1,6 @@
 // 资源库页：作用域档、分类渲染、无项目时的引导态。
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { setActive } from "~/lib/project-canvas/canvas-store";
@@ -69,10 +69,8 @@ describe("ResourceLibrary", () => {
     expect(await screen.findByText("还没有打开的项目")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "看跨项目素材" }));
 
-    await waitFor(() =>
-      expect(
-        fetchMock.mock.calls.map((call) => String(call[0])).join(" "),
-      ).toContain("scope=cross"),
-    );
+    await expect
+      .poll(() => fetchMock.mock.calls.map((call) => String(call[0])).join(" "))
+      .toContain("scope=cross");
   });
 });

@@ -1,6 +1,6 @@
 // use-shot-review 契约（P8-1b）：评审走 run-client 并写 verdict、失败置 error；
 // 重生成成功后回调刷新 + 成功 toast，失败走 error toast。toast / run-client 均 mock。
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { reviewShot, regenerateShot } = vi.hoisted(() => ({
@@ -70,7 +70,7 @@ describe("useShotReview.regenerate", () => {
     });
     expect(regenerateShot).toHaveBeenCalledWith("proj_1", "s1", "gacha");
     expect(toast.success).toHaveBeenCalled();
-    await waitFor(() => expect(onRegenerated).toHaveBeenCalledTimes(1));
+    await expect.poll(() => onRegenerated).toHaveBeenCalledTimes(1);
   });
 
   it("失败 → error toast，不触发刷新回调", async () => {

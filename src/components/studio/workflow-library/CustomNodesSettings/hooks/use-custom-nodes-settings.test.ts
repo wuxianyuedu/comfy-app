@@ -8,7 +8,7 @@
 // 本文件只测逻辑层（renderHook），不渲染视图——视图由 SettingsParts.test.tsx
 // 与 NodesTab 承担。用例名直接写出「什么行为 → 什么可见结果」。
 
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("~/config/custom-nodes", () => ({
@@ -96,9 +96,9 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
 
     // 完成信号是「数据落地」而不是 loading：loading 初值就是 false，
     // 用它会立刻通过、根本等不到请求回来（这是一类常见的空断言陷阱）。
-    await waitFor(() =>
-      expect(result.current.savedPaths).toEqual(["D:/comfy/custom_nodes"]),
-    );
+    await expect
+      .poll(() => result.current.savedPaths)
+      .toEqual(["D:/comfy/custom_nodes"]);
     // 首次拉取是 GET（无第二个参数）：读 /api/custom-nodes
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/custom-nodes");
     expect(mockedManifest).toHaveBeenCalled();
@@ -111,7 +111,7 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await waitFor(() => expect(result.current.savedPaths).toHaveLength(2));
+    await expect.poll(() => result.current.savedPaths).toHaveLength(2);
     expect(result.current.parentExpansion.isExpanded("D:/a")).toBe(true);
     expect(result.current.parentExpansion.isExpanded("D:/b")).toBe(true);
   });
@@ -120,7 +120,7 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
     fetchMock.mockResolvedValue(settingsBlob());
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() => expect(result.current.savedPaths).toHaveLength(1));
+    await expect.poll(() => result.current.savedPaths).toHaveLength(1);
 
     act(() =>
       result.current.parentExpansion.set("D:/comfy/custom_nodes", false),
@@ -144,9 +144,9 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await waitFor(() =>
-      expect(result.current.saveErr).toContain("ComfyUI 路径未配置"),
-    );
+    await expect
+      .poll(() => result.current.saveErr)
+      .toContain("ComfyUI 路径未配置");
     // 错误必须是可读文案，不是 "Cannot read properties of undefined"
     expect(result.current.saveErr).not.toContain("undefined");
   });
@@ -156,7 +156,7 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await waitFor(() => expect(result.current.saveErr).toBeTruthy());
+    await expect.poll(() => result.current.saveErr).toBeTruthy();
     expect(result.current.saveErr).toMatch(/读取失败|HTTP 500/);
   });
 
@@ -165,7 +165,7 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await waitFor(() => expect(result.current.saveErr).toBeTruthy());
+    await expect.poll(() => result.current.saveErr).toBeTruthy();
     expect(result.current.saveErr).toContain("读取配置失败");
     expect(result.current.loading).toBe(false);
   });
@@ -180,7 +180,7 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await waitFor(() => expect(result.current.saveErr).toBeTruthy());
+    await expect.poll(() => result.current.saveErr).toBeTruthy();
     expect(result.current.saveErr).toBe("扫描失败：目录不存在");
   });
 });
@@ -233,9 +233,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
@@ -280,9 +280,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
@@ -290,7 +290,7 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     /* 等「服务端结果覆盖流里那份」这件事成立 —— 条件轮询（规范 §11.14），
      * 前面那拍「睡 20ms 再断」拿掉：条件下面的 `waitFor` 本来就在等。 */
-    await waitFor(() => expect(result.current.report).toEqual(serverReport));
+    await expect.poll(() => result.current.report).toEqual(serverReport);
   });
 
   it("解析失败（请求抛错）→ saveErr 有原因，parsing 归位", async () => {
@@ -302,9 +302,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
@@ -323,9 +323,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseSingle("D:/pkg/a");
@@ -341,9 +341,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
     fetchMock.mockResolvedValue(settingsBlob());
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAllParent("D:/empty");
@@ -365,9 +365,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
@@ -421,7 +421,7 @@ describe("useCustomNodesSettings — 派生数据（parentBlocks / 合计）", (
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() => expect(result.current.parentBlocks).toHaveLength(1));
+    await expect.poll(() => result.current.parentBlocks).toHaveLength(1);
 
     const block = result.current.parentBlocks[0]!;
     expect(block.parent).toBe("D:/p");
@@ -484,7 +484,7 @@ describe("useCustomNodesSettings — 派生数据（parentBlocks / 合计）", (
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() => expect(result.current.parentBlocks.length).toBe(2));
+    await expect.poll(() => result.current.parentBlocks.length).toBe(2);
 
     expect(result.current.totalAcrossParents.total).toBe(2);
     expect(result.current.totalAcrossParents.loaded).toBe(1);

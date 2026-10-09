@@ -2,7 +2,7 @@
 //   1. 只有 >1 张图才启用相册（单图仍走节点主体的常规预览）；
 //   2. 拉取失败**静默** —— 单图模式必须照常显示，不能整节点变错误态。
 
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchTaskImages } from "~/lib/media/task-images-client";
@@ -28,7 +28,7 @@ describe("useContentAssetGallery", () => {
     const { result } = renderHook(() =>
       useContentAssetGallery({ taskId: "t-1", enabled: true }),
     );
-    await waitFor(() => expect(result.current.images).toHaveLength(2));
+    await expect.poll(() => result.current.images).toHaveLength(2);
     expect(mockedFetch).toHaveBeenCalledWith("t-1");
   });
 
@@ -39,7 +39,7 @@ describe("useContentAssetGallery", () => {
     const { result } = renderHook(() =>
       useContentAssetGallery({ taskId: "t-1", enabled: true }),
     );
-    await waitFor(() => expect(mockedFetch).toHaveBeenCalled());
+    await expect.poll(() => mockedFetch).toHaveBeenCalled();
     expect(result.current.images).toBeNull();
   });
 
@@ -64,7 +64,7 @@ describe("useContentAssetGallery", () => {
     const { result } = renderHook(() =>
       useContentAssetGallery({ taskId: "t-1", enabled: true }),
     );
-    await waitFor(() => expect(mockedFetch).toHaveBeenCalled());
+    await expect.poll(() => mockedFetch).toHaveBeenCalled();
     expect(result.current.images).toBeNull();
   });
 
@@ -78,7 +78,7 @@ describe("useContentAssetGallery", () => {
         useContentAssetGallery({ taskId, enabled: true }),
       { initialProps: { taskId: "t-1" } },
     );
-    await waitFor(() => expect(result.current.images).toHaveLength(2));
+    await expect.poll(() => result.current.images).toHaveLength(2);
 
     mockedFetch.mockResolvedValue([]);
     rerender({ taskId: "t-2" });
@@ -93,7 +93,7 @@ describe("useContentAssetGallery", () => {
     const { result } = renderHook(() =>
       useContentAssetGallery({ taskId: "t-1", enabled: true }),
     );
-    await waitFor(() => expect(result.current.images).toHaveLength(2));
+    await expect.poll(() => result.current.images).toHaveLength(2);
 
     act(() => result.current.setOpen(true));
     expect(result.current.open).toBe(true);

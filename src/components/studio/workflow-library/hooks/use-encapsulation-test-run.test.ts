@@ -6,7 +6,7 @@
  * 累积进去、终态写回登记表。网络与 SSE 打桩。 */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { cleanup, renderHook } from "@testing-library/react";
 
 const watchSettle = {
   ok: true as boolean,
@@ -65,10 +65,8 @@ describe("useEncapsulationTestRun", () => {
       }),
     );
     result.current.run({ prompt: "一只猫" });
-    await waitFor(() => expect(result.current.running).toBe(false));
-    await waitFor(() =>
-      expect(result.current.resultUrl).toBe("/generated/a.png"),
-    );
+    await expect.poll(() => result.current.running).toBe(false);
+    await expect.poll(() => result.current.resultUrl).toBe("/generated/a.png");
     const meta = getWorkflowRun("task-test");
     expect(meta?.source).toBe("encapsulation-test");
     expect(meta?.status).toBe("done");
@@ -86,7 +84,7 @@ describe("useEncapsulationTestRun", () => {
       }),
     );
     result.current.run({});
-    await waitFor(() => expect(result.current.error).toBe("未找到生成结果"));
+    await expect.poll(() => result.current.error).toBe("未找到生成结果");
     const meta = getWorkflowRun("task-test");
     expect(meta?.status).toBe("failed");
     expect(meta?.errorMessage).toBe("未找到生成结果");
@@ -102,7 +100,7 @@ describe("useEncapsulationTestRun", () => {
     );
     result.current.run({});
     result.current.run({});
-    await waitFor(() => expect(result.current.running).toBe(false));
+    await expect.poll(() => result.current.running).toBe(false);
     const { startLocalGenerate } =
       await import("~/lib/workshop/generation-client");
     expect(vi.mocked(startLocalGenerate)).toHaveBeenCalledTimes(1);

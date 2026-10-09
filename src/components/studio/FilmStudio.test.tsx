@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { vanillaApi } from "~/trpc/vanilla";
 import { ToastProvider } from "./ToastProvider";
 import { FilmStudio } from "./FilmStudio";
@@ -35,7 +35,7 @@ describe("FilmStudio", () => {
     );
 
     expect(container).not.toBeEmptyDOMElement();
-    await waitFor(() => expect(vanillaApi.skill.list.query).toHaveBeenCalled());
+    await expect.poll(() => vanillaApi.skill.list.query).toHaveBeenCalled();
     expect(vanillaApi.film.list.query).toHaveBeenCalled();
     /* 按 §11.9 断言**用户可见结果**，不再 dump 整棵 49KB 的 DOM 树。
      * 这一屏要钉住的是「挂载后那些区块真的都在」，按区块各挑一条可失败的

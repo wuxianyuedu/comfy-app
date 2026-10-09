@@ -16,7 +16,7 @@
  * `<button ref=…>` 上（不是手动调它 —— 那是渲染期 setState）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import {
   DRAG_EDGE_GAP_PX,
   DRAG_SLOP_PX,
@@ -178,21 +178,19 @@ function drag(
 describe("useDraggablePosition", () => {
   it("没存过时落在默认偏移上", async () => {
     const { controller } = setup();
-    await waitFor(() => expect(controller().offset).toEqual(DEFAULT));
+    await expect.poll(() => controller().offset).toEqual(DEFAULT);
   });
 
   it("拖动之后位置写进 storage，重新挂载时读得回来", async () => {
     const first = setup();
-    await waitFor(() => expect(first.controller().offset).not.toBeNull());
+    await expect.poll(() => first.controller().offset).not.toBeNull();
     /* 往左上拖 200/100：右侧更远 → `right` 变大，下侧更远 → `bottom` 变大。 */
     drag(
       first.controller().handleProps,
       { x: 900, y: 700 },
       { x: 700, y: 600 },
     );
-    await waitFor(() =>
-      expect(window.localStorage.getItem(KEY)).not.toBeNull(),
-    );
+    await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
     const saved = JSON.parse(window.localStorage.getItem(KEY)!) as {
       right: number;
       bottom: number;
@@ -203,7 +201,7 @@ describe("useDraggablePosition", () => {
 
     /* 重新挂载 = 用户下次打开应用：落点应与上次一致。 */
     const second = setup();
-    await waitFor(() => expect(second.controller().offset).toEqual(saved));
+    await expect.poll(() => second.controller().offset).toEqual(saved);
   });
 
   /* 回归：元素**首轮还没挂上**这条时序 —— 真实调用处正是这样（按「量到位置了
@@ -220,31 +218,32 @@ describe("useDraggablePosition", () => {
     /* 第一态：元素不在 DOM 里。这里**仍要给出位置** —— 调用处按「有没有偏移」
      * 决定要不要渲染被拖的元素，不给值它永远不渲染、也就永远挂不上（死结）。
      * 此时按零尺寸的占位盒子夹取，读到的已是 storage 里那个值。 */
-    await waitFor(() =>
-      expect(controller().offset).toEqual({ right: 500, bottom: 300 }),
-    );
+    await expect
+      .poll(() => controller().offset)
+      .toEqual({ right: 500, bottom: 300 });
 
     /* 第二态：元素挂上 —— 位置**不该跳变**（这一条正是第一版丢掉记住位置时
      * 会红的地方：挂上后它拿默认值去夹，图标倏地跳回右下角）。 */
     act(() => attach(true));
-    await waitFor(() =>
-      expect(controller().offset).toEqual({ right: 500, bottom: 300 }),
-    );
+    await expect
+      .poll(() => controller().offset)
+      .toEqual({ right: 500, bottom: 300 });
   });
 
   it("拖出视口时被夹住——元素整体留在视口内", async () => {
     const { controller } = setup();
-    await waitFor(() => expect(controller().offset).not.toBeNull());
+    await expect.poll(() => controller().offset).not.toBeNull();
     /* 往右下角拖出屏幕很远：夹取后仍要留出通行留白。 */
     drag(controller().handleProps, { x: 100, y: 100 }, { x: 5000, y: 5000 });
-    await waitFor(() => {
-      expect(controller().offset!.right).toBeGreaterThanOrEqual(
-        DRAG_EDGE_GAP_PX,
-      );
-      expect(controller().offset!.bottom).toBeGreaterThanOrEqual(
-        DRAG_EDGE_GAP_PX,
-      );
-    });
+    /* 一个回调里两条**下限**读取（`waitFor` 的老形态）。`expect.poll` 一次只
+     * 挂一条断言，这里轮询「两条里较小的那条」——它不满足下限时，报错打出来的
+     * 正是越界的那个数（比原来两条 `expect` 各说一半更准）。 */
+    await expect
+      .poll(
+        () => Math.min(controller().offset!.right, controller().offset!.bottom),
+        { message: "夹取后右下都要留出通行留白" },
+      )
+      .toBeGreaterThanOrEqual(DRAG_EDGE_GAP_PX);
     const { right, bottom } = controller().offset!;
     expect(right).toBeLessThanOrEqual(1000 - 40 - DRAG_EDGE_GAP_PX);
     expect(bottom).toBeLessThanOrEqual(800 - 40 - DRAG_EDGE_GAP_PX);
@@ -257,34 +256,42 @@ describe("useDraggablePosition", () => {
       JSON.stringify({ right: 900, bottom: 700 }),
     );
     const { controller } = setup();
-    await waitFor(() => expect(controller().offset).not.toBeNull());
+    await expect.poll(() => controller().offset).not.toBeNull();
     act(() => {
       window.dispatchEvent(new Event("resize"));
     });
-    await waitFor(() => {
-      const { right, bottom } = controller().offset!;
-      expect(right).toBeLessThanOrEqual(1000 - 40 - DRAG_EDGE_GAP_PX);
-      expect(bottom).toBeLessThanOrEqual(800 - 40 - DRAG_EDGE_GAP_PX);
-    });
+    /* 同上，这两条是**上限**：轮询「超出视口最多的那一边」，越界时它就是正数。 */
+    await expect
+      .poll(
+        () => {
+          const { right, bottom } = controller().offset!;
+          return Math.max(
+            right - (1000 - 40 - DRAG_EDGE_GAP_PX),
+            bottom - (800 - 40 - DRAG_EDGE_GAP_PX),
+          );
+        },
+        { message: "缩窗后落点要被动回视口内" },
+      )
+      .toBeLessThanOrEqual(0);
   });
 
   it("位移没超阈值 = 点击（交给 onClick），不写 storage", async () => {
     const onClick = vi.fn();
     const { controller } = setup({ onClick });
-    await waitFor(() => expect(controller().offset).not.toBeNull());
+    await expect.poll(() => controller().offset).not.toBeNull();
     drag(
       controller().handleProps,
       { x: 900, y: 700 },
       { x: 900 + DRAG_SLOP_PX - 1, y: 700 },
     );
-    await waitFor(() => expect(onClick).toHaveBeenCalledTimes(1));
+    await expect.poll(() => onClick).toHaveBeenCalledTimes(1);
     expect(window.localStorage.getItem(KEY)).toBeNull();
   });
 
   it("真的拖过之后**不**触发 onClick（松手不会顺手把面板打开）", async () => {
     const onClick = vi.fn();
     const { controller } = setup({ onClick });
-    await waitFor(() => expect(controller().offset).not.toBeNull());
+    await expect.poll(() => controller().offset).not.toBeNull();
     drag(
       controller().handleProps,
       { x: 900, y: 700 },
@@ -295,7 +302,7 @@ describe("useDraggablePosition", () => {
 
   it("只接主键：右键按下不启动拖动", async () => {
     const { controller } = setup();
-    await waitFor(() => expect(controller().offset).not.toBeNull());
+    await expect.poll(() => controller().offset).not.toBeNull();
     const before = controller().offset;
     act(() => {
       controller().handleProps.onPointerDown({
