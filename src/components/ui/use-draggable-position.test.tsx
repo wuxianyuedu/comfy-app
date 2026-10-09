@@ -97,6 +97,9 @@ function Harness({
   if (!elementShown) return null;
   return (
     <button
+      /* 夹具按钮（元素几何被桩掉，jsdom 里不可见）—— 给它一个可访问名，
+       * 免得 `jsx-a11y/control-has-associated-label` 把夹具本身算成真站点。 */
+      aria-label="被测按钮"
       ref={(el) => {
         /* 让这个按钮的尺寸可预期（jsdom 不做布局，真按钮量出来恒为 0）。 */
         if (el) el.getBoundingClientRect = stubRect;

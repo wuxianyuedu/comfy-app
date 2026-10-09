@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import {
   DEFAULT_APPEARANCE,
   FONT_SCALE_STEPS,
@@ -50,9 +51,15 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         选择应用的主题外观：深色（Dark）或浅色（Light）。切换即时生效并自动保存，
         也可通过顶部导航栏的太阳/月亮按钮随时切换。
       </p>
-      <div
-        role="radiogroup"
+      {/* `role="radiogroup"` / `role="radio"` 由 `RadioGroup` 基元下发 —— 不手写：
+          手写只给了「读屏知道这是个单选组」，**方向键契约没人给**（本批之前
+          这两处正是「能聚焦、Tab 进得来、但组内方向键没反应」）。基元同时
+          负责 roving tabindex（组内只有选中项 `tabIndex=0`）与
+          ArrowUp/Down/Left/Right 的「移动 + 选中」。 */}
+      <RadioGroup
         aria-label="主题外观"
+        value={c.theme}
+        onValueChange={(v) => c.setTheme(v as "dark" | "light")}
         className="grid max-w-md grid-cols-2 gap-3"
       >
         {(
@@ -70,33 +77,32 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
               hint: "明亮、高对比",
             },
           ] as const
-        ).map(({ value, label, Icon, hint }) => {
-          const active = c.theme === value;
-          return (
+        ).map(({ value, label, Icon, hint }) => (
+          <RadioGroupItem
+            key={value}
+            value={value}
             /* 主题卡是「整卡可点」的选项，不是动作按钮：基元的高度/内边距/
                字号全部归还给调用处（`h-auto justify-start whitespace-normal`），
-               只借用基元的可点目标语义与 focus-visible 焦点环。 */
-            <Button
-              key={value}
-              variant="ghost"
-              role="radio"
-              aria-checked={active}
-              onClick={() => c.setTheme(value)}
-              className={`h-auto flex-col items-start justify-start gap-1.5 rounded-xl border p-4 text-left whitespace-normal transition-colors ${
-                active
-                  ? "bg-primary-soft text-ink border-primary"
-                  : "bg-surface-1 text-muted-foreground hover:border-border-strong hover:text-ink border-border"
-              }`}
-            >
-              <span className="flex items-center gap-2 text-sm font-semibold">
-                <Icon size={18} className={active ? "text-primary" : ""} />
-                {label}
-              </span>
-              <span className="text-xs opacity-80">{hint}</span>
-            </Button>
-          );
-        })}
-      </div>
+               只借用基元的可点目标语义与 focus-visible 焦点环。
+               `nativeButton` 必给：渲染目标就是我们自己的 `<Button>`（真
+               `<button>`），不给会按「非原生按钮」加一层 role/aria-disabled
+               适配、并当场告警。 */
+            nativeButton
+            render={
+              <Button
+                variant="ghost"
+                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-ink data-unchecked:bg-surface-1 data-unchecked:text-muted-foreground data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink data-unchecked:border-border h-auto flex-col items-start justify-start gap-1.5 rounded-xl border p-4 text-left whitespace-normal transition-colors"
+              />
+            }
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              <Icon size={18} className="text-primary" />
+              {label}
+            </span>
+            <span className="text-xs opacity-80">{hint}</span>
+          </RadioGroupItem>
+        ))}
+      </RadioGroup>
 
       {/* 圆角与标题字阶各只改一个全局 CSS 变量（--radius / --font-scale）；
           具体数值留在 globals.css 一处，这里不重复定义基准。 */}
@@ -143,32 +149,30 @@ function StepRow({
         <span className="text-ink text-sm font-semibold">{label}</span>
         <span className="text-muted-foreground text-xs">{hint}</span>
       </div>
-      <div
-        role="radiogroup"
+      {/* 同主题卡：单选组的方向键契约由 `RadioGroup` 基元给（见上面那段注释）。 */}
+      <RadioGroup
         aria-label={label}
+        value={value}
+        onValueChange={onChange}
         className="flex flex-wrap gap-2"
       >
-        {steps.map((step) => {
-          const active = step.id === value;
-          return (
-            <Button
-              key={step.id}
-              variant="ghost"
-              size="sm"
-              role="radio"
-              aria-checked={active}
-              onClick={() => onChange(step.id)}
-              className={`h-auto rounded-lg border px-3 py-1.5 text-xs ${
-                active
-                  ? "bg-primary-soft text-primary border-primary"
-                  : "text-muted-foreground border-border hover:border-border-strong hover:text-ink"
-              }`}
-            >
-              {step.label}
-            </Button>
-          );
-        })}
-      </div>
+        {steps.map((step) => (
+          <RadioGroupItem
+            key={step.id}
+            value={step.id}
+            nativeButton
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-primary data-unchecked:text-muted-foreground data-unchecked:border-border data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink h-auto rounded-lg border px-3 py-1.5 text-xs"
+              />
+            }
+          >
+            {step.label}
+          </RadioGroupItem>
+        ))}
+      </RadioGroup>
     </div>
   );
 }
