@@ -281,12 +281,48 @@ function normalize(setting) {
   return JSON.stringify(setting);
 }
 
-async function main() {
-  const effective = await effectiveRules();
-  const recommended = await officialRecommended();
-  const official = await officialRuleMap();
-  const inNeither = await rulesInNeitherConfig();
-  const ledger = readLedger();
+/**
+ * 配置事实的**每进程一次**缓存（单飞：并发调用共享同一个在途 Promise）。
+ *
+ * 为什么要有：`effectiveRules` / `officialRecommended` / `officialRuleMap` /
+ * `rulesInNeitherConfig` 四处各自 `await import()` 同一份 `eslint.config.js` ——
+ * 模块求值 Node 会缓存，但 `flat()` 与那三次插件遍历不会（本机实测每进程 ~9s，
+ * 机器满载时 ~20s）。CLI 一次跑只付一遍，代价本来看不见；门禁自测在**一个进程里
+ * 判 12 份台账**之后，这 12×4 次遍历就成了本文件墙钟的绝大部分。
+ *
+ * 失败**不进缓存**这一条不需要特判：四个读取函数读不到配置时是**抛**（fail-closed，
+ * §11.23.3 同款），而缓存里存的是那个 rejected promise —— 每个等它的用例都会拿到
+ * 同一条真故障，红得起来，也不会退化成「读到 0 条规则于是全绿」。
+ */
+let factsPromise = null;
+
+async function configFacts() {
+  if (!factsPromise) {
+    factsPromise = (async () => ({
+      effective: await effectiveRules(),
+      recommended: await officialRecommended(),
+      official: await officialRuleMap(),
+      inNeither: await rulesInNeitherConfig(),
+    }))();
+  }
+  return factsPromise;
+}
+
+/**
+ * 判决本身：配置事实 + **给定的一份台账** ⇒ 问题清单与那句汇总。
+ *
+ * 拆出来只为一件事：**配置求值每进程只付一次**。实测这台机器上单个子进程 ~9s
+ * （`eslint.config.js` 连同 `eslint-config-next` 的求值），门禁自测的 12 份台账
+ * 若各起一次进程就是 133s 首尾相接，而 12 个重进程并发起则在别人的机器上顶穿
+ * 用例的 30s 预算（实测 90.1s / 11 条超时 —— 红的不是判据，是排队）。
+ * 于是自测 import 这一个入口、一个进程里判完，真跑 CLI 的那几条只留给**接线形状**
+ * （退出码、`--ledger` 缺值那一档 —— 那些形态只有起进程才成立）。
+ *
+ * @param {{dialect: any[], inlineExemptions: any[]}} ledger 台账（已由 `readLedger` 归一形状）
+ * @returns {Promise<{problems: string[], summary: string, effective: Record<string, any>}>}
+ */
+async function judge(ledger) {
+  const { effective, recommended, official, inNeither } = await configFacts();
   const registered = registeredDialectRules();
   const isRegisteredDialect = (name) => registered.has(name);
 
@@ -425,6 +461,12 @@ async function main() {
     `方言 ${ledger.dialect.length} 条、就地豁免 ${ledger.inlineExemptions.length} 条；` +
     `官方两份都没提到且未废弃 ${undecidedCount} 条（已逐条裁决）。`;
 
+  return { problems, summary, effective };
+}
+
+async function main() {
+  const { problems, summary, effective } = await judge(readLedger());
+
   if (REPORT_ONLY) {
     console.log(summary);
     for (const [name, setting] of Object.entries(effective).sort()) {
@@ -449,7 +491,7 @@ async function main() {
   return 0;
 }
 
-module.exports = { normalize };
+module.exports = { normalize, judge, readLedger };
 
 if (require.main === module) {
   main().then(
