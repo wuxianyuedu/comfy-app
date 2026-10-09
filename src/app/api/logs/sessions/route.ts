@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
+import path from "node:path";
 
+import { LOG_DIRS } from "../../../../../scripts/launcher-core/log.mjs";
+import {
+  LOG_LAYOUT,
+  runsDir,
+} from "../../../../../scripts/launcher-core/run.mjs";
 import { apiErrorBody } from "~/lib/api-error";
 import { clamp } from "~/lib/clamp";
-import { tailWindow } from "~/lib/page-window";
-import type {
-  LogSessionMeta,
-  LogSessionsPayload,
-} from "~/lib/log/log-sessions";
+import { LOG_ROOT } from "~/lib/log/log-paths";
+import type { LogSessionsPayload } from "~/lib/log/log-sessions";
+import {
+  buildRunScopedOptions,
+  parsePackScopedId,
+  type PackLogFile,
+} from "~/lib/log/log-run-packs";
+import { scanRunPacks } from "~/lib/log/log-run-packs.server";
 import {
   RUNTIME_LOG_SOURCES,
   parseRuntimeLogFileName,
@@ -20,42 +29,49 @@ import {
 } from "~/lib/log/runtime-log-pack.server";
 
 /**
- * `GET /api/logs/sessions` —— 列出某个来源的**每一次启动**的日志，并回指定一次
- * 的正文。
+ * `GET /api/logs/sessions` —— 列出某个来源**每一次启动**的日志（**跨运行包**），
+ * 并回指定一次的正文。
  *
  * 供设置页「启动日志」小窗口与它的全屏视图：那里要的是「切到某一次启动」。
  *
- * ## ISSUE #1326：这一层从「运行包切分」退化成「列文件」
+ * ## 用户原话（ISSUE #1587）：「日志会归档到 runs 中，但应用内缺少入口查看」
  *
- * 上一版把**应用运行包**（`log/runs/<日期>_<时分秒>-<runId>/`）当列表：一次
- * 应用运行一个包，包里的 runtime 文件要**减去前一包**才是「那一次」的内容
- * （因为文件追加不轮转、而归档是整目录复制）。用户随后提了更彻底的口径
- * ——「这四份也要改成每个文件只存储单次运行的历史」—— 文件本身改成
- * **一次启动一份**之后，这一层不再需要任何切分判据：
+ * 应用**退出时**会把整个 `log/current/` 归档进 `log/runs/<日期>_<时分秒>-<runId>/`
+ * （`archiveCurrent`），于是「上一次运行的启动日志」在归档之后**没有任何界面能打开**
+ * —— 用户只能自己去文件管理器里翻 `log/runs/`。本端点因此列**两处**：
  *
- *   - 列表 = `log/current/services/` 下该来源的单次文件（新→旧）；
- *   - 正文 = **那一份文件整份**。
+ *   - 本次运行：`log/current/services/` 下该来源的份（新→旧，恒在最前）；
+ *   - 历史归档：各运行包里这一来源的份（包名倒序 = 时间倒序）。
  *
- * 于是上一版的 `runSlice` / `baselineMissing` / `scanRunPacks` 全部退场，
- * 连 `log/run-run-sessions` 的跨运行减法定理一起 —— 判据从「长度相减」变成
- * 「文件是谁」，而后者不依赖任何假设。这是「把查询能力绑在目录结构上」
- * 换成「绑在文件名上」，两边都成立，但后者少一整类静默出错的机会。
+ * ## 这一层只有一处判据：**文件是谁**
  *
- * ## 两条仍然成立的边界
+ * 上一版按**应用运行包**列表、正文用「当前包 − 前一包」的长度减法去切（依赖
+ * 「包 N ⊇ 包 N-1」这条来自归档复制语义的性质）。改成一次启动一份文件之后，
+ * 「文件是谁」不依赖任何假设 —— 跨包这一层**复用的正是这条**，一条减法都没加回来：
+ * 归档是整目录复制，**包内结构与 `current/` 逐字同构**，所以跨包就是「把各包里的
+ * 文件排成一条时间线」，与包内那层共用同一份顺序判据（`compareRuntimeLogFiles`）。
  *
- *   1. **只列真属于该来源的文件**：一个来源一份目录里可能同时有 comfyui 与
- *      ollama 的文件（同目录），按名字过滤，不按「目录里有什么」；
- *   2. **上限**（{@link MAX_FILES}）：一次启动一份文件之后，同一天可能攒几十
- *      份（服务被反复重启），下拉列不完。取最近的，并如实回报一共有几份
- *      （`total`），界面据此说明「更早的不在列表里」。
+ * ## 跨包那几件判据不在本文件里
  *
- * 鉴权口径与 `current` 一致（同为本地日志文件的读取通道，且是同一批调用方），
- * 不额外要求登录态。
+ * 包目录名怎么解析、id 怎么编码、下拉怎么排、文案怎么拼在 `lib/log/log-run-packs.ts`
+ * （纯判据，能脱离磁盘单测）；列 `runs/` 与读 `run.json` 在
+ * `lib/log/log-run-packs.server.ts`。端点只做四件必须在这里做的事：判来源白名单、
+ * 取两处路径、定位选中那一份、读正文（尾部窗口）。
  *
- * 参数：
+ * ## 路径不在端点里拼（§12.14）
+ *
+ * `current/` 那边取 `log-paths` 的 `SERVICES_LOG_DIR` 与 `listRuntimeLogFiles()`；
+ * `runs/` 那边取 `run.mjs` 的 `runsDir()`（归档写方的唯一定义），包内相对目录与
+ * `run.json` 的名字分别取 `log.mjs` 的 `LOG_DIRS.services` 与 `run.mjs` 的
+ * `LOG_LAYOUT.runJson`。读方自己拼一遍，两边一旦漂开表现是「归档了但界面看不到」
+ * ——而两边各自都「看起来是对的」。
+ *
+ * ## 参数
+ *
  *   - `source`：`RUNTIME_LOG_SOURCES` 里的一项；
- *   - `session`（可选）：要读的文件名。缺省或已不在列表里时回落**最新那一份**，
- *     实际选中项放进 `selectedId` 回给客户端 —— 客户端据此同步下拉，而不是自己猜。
+ *   - `session`（可选）：要读的份。两种**已登记**形态 —— `current/` 的份是裸文件名
+ *     （`comfyui-runtime-20261005-093612.log`），归档份是 `<包名>/<文件名>`。
+ *     其余形态（含 `..` 一类穿越形态）一律回落最新那一份，不拿它去拼路径。
  */
 
 /** 单次请求最多返回的正文字节数（约 40 万字符量级）。 */
@@ -63,6 +79,15 @@ const MAX_TEXT_BYTES = 400_000;
 
 /** 下拉最多列多少次启动：再老的翻不到，列出来只是噪声。 */
 const MAX_FILES = 30;
+
+/**
+ * 最多翻几个运行包。
+ *
+ * 与 `MAX_FILES` 同一量级：跨包 + 包内很容易超出 30 条，反正最终列表会被
+ * `MAX_FILES` 裁到 30 条（`buildRunScopedOptions` 的 `max`），这里只管「别为了
+ * 凑满 30 条去读上百个包的目录」。`runs/` 的保留策略本来就只留 20 包。
+ */
+const MAX_PACKS = 20;
 
 /** 空载荷（与 `current` 同口径：不给 404/500，界面据此显示空态而不是报错）。 */
 function emptyPayload(error?: string): LogSessionsPayload & { error?: string } {
@@ -122,21 +147,39 @@ function readTail(
   };
 }
 
-/** 文件条目 → 下拉项（时刻来自文件名，形态判据在 `runtime-log-file.ts`）。
+/** `current/` 下的一份 → 跨包列表的一项。
  *
  * 旧固定名（迁移前留下的 `<来源>.log`）解析不出时刻：它**必须**有一个说得通的
  * 文案，不能退回文件名 —— 在那条下拉里 `comfyui-runtime.log` 读起来像是「现在的
  * 那一份」，而它实际是所有新份之前的全部历史。`runtimeLogFileLabel` 对
  * `startedAt: null` 给「更早的日志」，正好是它的语义。 */
-function toOption(entry: RuntimeLogFileEntry): LogSessionMeta {
+function toPackFile(entry: RuntimeLogFileEntry): PackLogFile {
   const parsed = parseRuntimeLogFileName(entry.name);
   return {
-    id: entry.name,
+    name: entry.name,
+    startedAt: entry.startedAt,
     title: runtimeLogFileLabel(
       parsed ?? { source: "", startedAt: null, ordinal: 1 },
     ),
-    startedAt: entry.startedAt,
   };
+}
+
+/**
+ * 归档份的绝对路径：`<包名>/<文件名>` → `runs/<包名>/<来源目录>/<文件名>`。
+ *
+ * 形态判据走 `parsePackScopedId`（包名必须是真实包名形态、文件名不许再含分隔符），
+ * 端点**不自己拆** —— 脏 id（客户端缓存过、或人手敲的）必须在这里被挡掉，而不是
+ * 拿它去拼路径。拆不出来时返回 null，调用方回落最新那一份。
+ */
+function resolveArchivedFile(sessionId: string, root: string): string | null {
+  const parsed = parsePackScopedId(sessionId);
+  if (!parsed) return null;
+  return path.join(
+    runsDir(root),
+    parsed.packName,
+    LOG_DIRS.services,
+    parsed.fileName,
+  );
 }
 
 export async function GET(request: Request) {
@@ -151,16 +194,33 @@ export async function GET(request: Request) {
   }
 
   try {
-    /* 目录与命名规则都从写方那一侧拿（`runtime-log-pack.server`）——
-     * 读方自己拼 `log/current/services/<source>-*.log` 就会与写方漂开，而
-     * 漂开的表现是「日志在磁盘上、界面上看不到」（两边各自都「看起来是对的」）。 */
-    const all = listRuntimeLogFiles(source as RuntimeLogSource);
-    /* 列表新→旧（写方按旧→新给，这里翻转）：用户几乎总是要找**最近**那几次。
-     * 取尾部 N 条走 `~/lib/page-window` 的 `tailWindow`（§16.2.4.67 的唯一出口：
-     * 它把「size ≥ 长度时整份返回」与「负数 / NaN 不许变成 `slice(-0)`」这两条
-     * 边界一并管住，手写 `slice(-n)` 会把 `-0` 变成「从头取」这种静默反向）。 */
-    const recent = tailWindow(all, MAX_FILES);
-    const sessions = recent.map(toOption).reverse();
+    /* 本次运行：目录与命名规则都从写方那一侧拿（`runtime-log-pack.server`）——
+     * 读方自己拼 `log/current/services/<source>-*.log` 就会与写方漂开，而漂开的
+     * 表现是「日志在磁盘上、界面上看不到」（两边各自都「看起来是对的」）。 */
+    const currentEntries = listRuntimeLogFiles(source as RuntimeLogSource);
+
+    /* 历史归档：`runs/` 与包内相对目录同样从写方那一侧取，端点不写 `log/runs`
+     * 字面量。交给 `scanRunPacks` 的是**日志根的父目录**（`runsDir()` 自己拼
+     * `log/runs`）—— 与 `POST /api/logs/diagnostics` 把 `path.dirname(LOG_ROOT)`
+     * 交给 `exportDiagnostics()` 是同一手法。 */
+    const root = path.dirname(LOG_ROOT);
+    const { packs, total: archivedTotal } = scanRunPacks({
+      runsDir: runsDir(root),
+      sourceDir: LOG_DIRS.services,
+      runJsonName: LOG_LAYOUT.runJson,
+      maxPacks: MAX_PACKS,
+      source: source as RuntimeLogSource,
+    });
+
+    /* 分组、顺序、文案全在纯判据那一层：端点只把两边的数据递进去，不自己拼列表
+     * —— 「本次运行恒在最前」「其后按次运行分组」「文案三段」是**用户侧契约**，
+     * 写在端点或视图里都会与另一处漂开（§12.12）。 */
+    const { sessions, total } = buildRunScopedOptions(
+      currentEntries.map(toPackFile),
+      packs,
+      MAX_FILES,
+      currentEntries.length + archivedTotal,
+    );
     if (sessions.length === 0) return NextResponse.json(emptyPayload());
 
     const selectedId =
@@ -169,20 +229,27 @@ export async function GET(request: Request) {
       null;
     /* 请求的那一份已被保留策略删掉（或客户端缓存了旧列表）时回落最新那一份，
      * 并把实际选中项如实回报 —— 客户端据此同步下拉，不去猜。 */
-    const selected = recent.find((entry) => entry.name === selectedId);
+    const selected = sessions.find((session) => session.id === selectedId);
     if (!selected) return NextResponse.json(emptyPayload());
 
-    const { text, windowed, size } = readTail(selected.file, MAX_TEXT_BYTES);
+    /* 本次运行的份按**文件名**定位（它就在 `services/` 下）；归档份要按包名进包找
+     * —— 裸文件名找不到它（那是另一个目录里的同名文件）。 */
+    const file =
+      currentEntries.find((entry) => entry.name === selected.id)?.file ??
+      resolveArchivedFile(selected.id, root);
+    if (!file) return NextResponse.json(emptyPayload());
+
+    const { text, windowed, size } = readTail(file, MAX_TEXT_BYTES);
     return NextResponse.json({
       sessions,
-      selectedId: selected.name,
+      selectedId: selected.id,
       content: text,
       truncated: windowed,
       windowed,
       size,
       /* 一共几份（不受 MAX_FILES 影响）：界面据此说明「更早的启动不在列表里」，
-       * 而不是让用户以为「这个来源只启动过这些次」。 */
-      total: all.length,
+       * 而不是让用户以为「这个来源只启动过这些次」—— 跨包之后这个数只会更大。 */
+      total,
     } satisfies LogSessionsPayload);
   } catch (error) {
     return NextResponse.json(
