@@ -202,7 +202,11 @@ export function dirtySinceToday(track, now = new Date()) {
     { cwd: ROOT, encoding: "utf8" },
   );
   if (res.error || res.status !== 0 || typeof res.stdout !== "string") return null;
+  /* 两栏都显式标类型：它们在闭包 `flush()` 里被赋值，TS 的控制流分析看不进去 ——
+   * 不标的话会被收窄成初值 `null`，下面每次比较都报「隐式 any」。 */
+  /** @type {Date | null} */
   let earliest = null;
+  /** @type {string | null} */
   let stamp = null;
   let hit = false;
   const flush = () => {

@@ -73,7 +73,7 @@ export function shouldRecord({ exitCode, dryRun }) {
  */
 function main(argv) {
   const dryRun = argv.includes("--dry-run");
-  for (const flag of ["--skip", "--dirty"]) {
+  for (const flag of /** @type {const} */ (["--skip", "--dirty"])) {
     const parsed = parseLedgerFlag(argv, flag);
     if (parsed.mode === "run") continue;
     if (parsed.reason === null) {

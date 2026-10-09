@@ -21,7 +21,6 @@ import process from "node:process";
 import {
   freshnessTrack,
   isUsableSkipReason,
-  writeFreshness,
   writeSkipRecord,
 } from "./visual-baselines.mjs";
 import { gitUser } from "./pixel-run.mjs";

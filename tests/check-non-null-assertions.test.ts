@@ -12,83 +12,40 @@
  * 一次报 100+、评审全是噪声;不开又挡不住下一轮病灶长出。基线棘轮是
  * 与 §12.13 函数长度同构的合理路径。
  */
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
-const SCRIPT = join(process.cwd(), "scripts", "check-non-null-assertions.cjs");
-
-let workdir = "";
-
-function run(args: string[] = []): { code: number; output: string } {
-  try {
-    const output = execFileSync(
-      process.execPath,
-      [join(workdir, "scripts", "check-non-null-assertions.cjs"), ...args],
-      {
-        cwd: workdir,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-        env: {
-          ...process.env,
-          NODE_PATH: join(process.cwd(), "node_modules"),
-        },
-      },
-    );
-    return { code: 0, output };
-  } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
-    return {
-      code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
-    };
-  }
-}
-
-function writeSrcFile(rel: string, body: string): void {
-  const abs = join(workdir, "src", rel);
-  mkdirSync(abs.slice(0, abs.lastIndexOf("/")), { recursive: true });
-  writeFileSync(abs, body, "utf8");
-}
-
-beforeEach(() => {
-  workdir = mkdtempSync(join(tmpdir(), "non-null-gate-"));
-  mkdirSync(join(workdir, "scripts"), { recursive: true });
-  copyFileSync(
-    SCRIPT,
-    join(workdir, "scripts", "check-non-null-assertions.cjs"),
-  );
-  mkdirSync(join(workdir, "src"), { recursive: true });
+const { test, expect } = defineGateRepo({
+  script: "check-non-null-assertions.cjs",
+  dirs: ["src"],
+  /* 判据走 TS AST，要能解析 typescript —— 临时工作区旁边没有 node_modules。 */
+  env: { NODE_PATH: join(process.cwd(), "node_modules") },
 });
 
-afterEach(() => {
-  rmSync(workdir, { recursive: true, force: true });
-});
+/** 在 `src/` 下写一个文件（判据跳过测试与 `.d.ts`，只扫生产代码）。 */
+function writeSrcFile(repo: GateRepo, rel: string, body: string): void {
+  repo.write(join("src", rel), body);
+}
 
 describe("check-non-null-assertions AST 判据", () => {
-  it("认 arr[i]! 与 match[N]! 这两种 noUncheckedIndexedAccess 惯用法", () => {
+  test("认 arr[i]! 与 match[N]! 这两种 noUncheckedIndexedAccess 惯用法", ({
+    repo,
+  }) => {
     writeSrcFile(
+      repo,
       "lib/sample.ts",
       `function pick(arr: string[], i: number): string { return arr[i]!; }
 function grab(re: RegExp, s: string): string { const m = re.exec(s); return m ? m[1]! : ""; }
 export { pick, grab };`,
     );
-    const r = run(["--report"]);
+    const r = repo.run(["--report"]);
     expect(r.code).toBe(0);
     expect(r.output).toMatch(/总数 2|total 2|2 处/);
   });
 
-  it("不误伤 !== / !x / 行注释与块注释里的裸 `!`", () => {
+  test("不误伤 !== / !x / 行注释与块注释里的裸 `!`", ({ repo }) => {
     writeSrcFile(
+      repo,
       "lib/clean.ts",
       `// 这里 ! 只在注释里! 举例
 /* 块注释也不该被算! */
@@ -98,45 +55,51 @@ export function ok(a: string | null): boolean {
 }
 `,
     );
-    const r = run(["--report"]);
+    const r = repo.run(["--report"]);
     expect(r.code).toBe(0);
     expect(r.output).toMatch(/0 处/);
   });
 
-  it("跳过 .test.ts / __tests__ / .d.ts,只扫 src 生产代码", () => {
+  test("跳过 .test.ts / __tests__ / .d.ts,只扫 src 生产代码", ({ repo }) => {
     writeSrcFile(
+      repo,
       "lib/a.test.ts",
       `const x = [1] as (number | undefined)[]; expect(x[0]!).toBe(1);`,
     );
     writeSrcFile(
+      repo,
       "lib/b.d.ts",
       `declare const v: { n?: number }; export declare const w: number; void (v.n!);`,
     );
-    mkdirSync(join(workdir, "src", "lib", "__tests__"), { recursive: true });
-    writeFileSync(
-      join(workdir, "src", "lib", "__tests__", "c.ts"),
+    repo.mkdir("src/lib/__tests__");
+    repo.write(
+      "src/lib/__tests__/c.ts",
       `const arr = [1] as (number | undefined)[]; export const x = arr[0]!;`,
-      "utf8",
     );
-    const r = run(["--report"]);
+    const r = repo.run(["--report"]);
     expect(r.code).toBe(0);
     expect(r.output).toMatch(/0 处/);
   });
 
-  it("v2 起扫描覆盖到 src/components / src/app / src/server(视图与服务端不再是盲区)", () => {
+  test("v2 起扫描覆盖到 src/components / src/app / src/server(视图与服务端不再是盲区)", ({
+    repo,
+  }) => {
     writeSrcFile(
+      repo,
       "components/one.ts",
       `const a: (string | undefined)[] = ["x"]; export const v = a[0]!;`,
     );
     writeSrcFile(
+      repo,
       "app/api/route.ts",
       `const b: (number | undefined)[] = [1]; export const w = b[0]!;`,
     );
     writeSrcFile(
+      repo,
       "server/svc.ts",
       `const c: (boolean | undefined)[] = [true]; export const z = c[0]!;`,
     );
-    const r = run(["--report"]);
+    const r = repo.run(["--report"]);
     expect(r.code).toBe(0);
     // 三处 `!` 分布在三个新盲区里,都要被看见
     expect(r.output).toMatch(/3 处/);
@@ -147,71 +110,72 @@ export function ok(a: string | null): boolean {
 });
 
 describe("check-non-null-assertions 棘轮", () => {
-  it("--update 建立基线;此后同数量 OK、新增阻断、下降允许", () => {
+  test("--update 建立基线;此后同数量 OK、新增阻断、下降允许", ({ repo }) => {
     writeSrcFile(
+      repo,
       "lib/mod.ts",
       `const arr: (number | undefined)[] = [1];
 export const a = arr[0]!;
 export const b = arr[0]!;`,
     );
     // 无基线:提示先 --update
-    const first = run();
+    const first = repo.run();
     expect(first.code).toBe(0);
     expect(first.output).toMatch(/基线未建立/);
     // 建立基线
-    const upd = run(["--update"]);
+    const upd = repo.run(["--update"]);
     expect(upd.code).toBe(0);
     const baseline = JSON.parse(
-      readFileSync(
-        join(workdir, "scripts", ".non-null-assertions-baseline.json"),
-        "utf8",
-      ),
+      repo.read("scripts/.non-null-assertions-baseline.json"),
     ) as { ruleVersion: number; total: number; files: Record<string, number> };
     expect(baseline.total).toBe(2);
     expect(baseline.files["src/lib/mod.ts"]).toBe(2);
     // 同数量:OK
-    const ok = run();
+    const ok = repo.run();
     expect(ok.code).toBe(0);
     expect(ok.output).toMatch(/OK/);
     // 新增第三处:阻断
     writeSrcFile(
+      repo,
       "lib/mod.ts",
       `const arr: (number | undefined)[] = [1];
 export const a = arr[0]!;
 export const b = arr[0]!;
 export const c = arr[0]!;`,
     );
-    const bad = run();
+    const bad = repo.run();
     expect(bad.code).toBe(1);
     expect(bad.output).toMatch(/基线 2 → 当前 3/);
     // --update 拒绝放宽
-    const refuse = run(["--update"]);
+    const refuse = repo.run(["--update"]);
     expect(refuse.code).toBe(1);
     expect(refuse.output).toMatch(/拒绝 --update/);
     // 下降到 1 处:通过、提示可 --update 收紧
     writeSrcFile(
+      repo,
       "lib/mod.ts",
       `const arr: (number | undefined)[] = [1];
 export const a = arr[0]!;`,
     );
-    const down = run();
+    const down = repo.run();
     expect(down.code).toBe(0);
     expect(down.output).toMatch(/较基线 2 降 1/);
   });
 
-  it("判据版本变了必须同步改脚本常数,否则 --update 拒绝", () => {
+  test("判据版本变了必须同步改脚本常数,否则 --update 拒绝", ({ repo }) => {
     writeSrcFile(
+      repo,
       "lib/mod.ts",
       `const arr: (number | undefined)[] = [1];
 export const a = arr[0]!;`,
     );
-    run(["--update"]);
+    repo.run(["--update"]);
     // 手改基线的 ruleVersion 到未来版本
-    const p = join(workdir, "scripts", ".non-null-assertions-baseline.json");
-    const json = JSON.parse(readFileSync(p, "utf8")) as { ruleVersion: number };
+    const baselinePath = "scripts/.non-null-assertions-baseline.json";
+    const json = JSON.parse(repo.read(baselinePath)) as { ruleVersion: number };
     json.ruleVersion = 999;
-    writeFileSync(p, JSON.stringify(json, null, 2) + "\n", "utf8");
-    const r = run();
+    repo.write(baselinePath, JSON.stringify(json, null, 2) + "\n");
+    const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toMatch(/基线判据版本不一致/);
   });
