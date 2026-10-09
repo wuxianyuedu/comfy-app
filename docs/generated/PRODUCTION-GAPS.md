@@ -573,10 +573,22 @@
       同批装机照出一条判据撞判据：那份契约测试要 import 真实 router，写在
       `src/lib/media/` 下会被 `tests/lib-server-imports.test.ts`（lib 不得依赖 server）拦下 ——
       正解是把它搬到 `tests/`，**不是往豁免清单里加一项**。
-      仍欠的两格（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts` 的
-      **GET 侧**（manifest / report 读取 + 按 (size, mtime) 指纹的摘要缓存）门槛仍在 35/35/45/40；
-      `src/lib/workshop/media-source.server.ts` 的 http(s) 拉取与 `resolveMediaDataUrl`
-      两族实测 36.95/31.57/33.33/39.47。
+      仍欠的一格（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts` 的
+      **GET 侧**（manifest / report 读取 + 按 (size, mtime) 指纹的摘要缓存）门槛仍在 35/35/45/40。
+      · `src/lib/workshop/media-source.server.ts` 36.95/31.57/33.33/39.47 → **已清，并照出一条
+      真缺陷**：`mimeForExt` 收的是**扩展名**，而两个分支都把**整条路径**喂了进去
+      （`mimeForExt(abs)` / `mimeForExt(new URL(src).pathname)`）—— 查表必然落空，于是
+      这一层的 MIME **此前恒为 `image/png`**：一张 webp / jpeg 的参考图会被标成 png
+      拼进 data URL 发给远程通道。它为什么藏这么久：唯一那一条本地用例的文件恰好就叫
+      `img_0.png`，错误值与正确值撞在一起，**看着像测过了**（§11.2.1 第九条说的正是这一格）。
+      修法两支都改成先 `extOfPath()` 取扩展名再查表（与 `contentTypeForPath` 同一把尺）；
+      新增用例把「非 png 的产物」与「类型头缺失 / 不是图时按扩展名回落」钉住，
+      另补 http 分支的超时信号、状态码文案、非 Error 的 reject 回落「未知错误」、
+      24MB 上限、`file:` 之类 scheme 的拒绝、
+      `readUpstreamJson` 的片段有界、`strField` / `intField` 的守卫档 →
+      27 条、实测 95.65/92.1/100/100（两支按构造走不到的兜底没有凑数，理由写在门槛注释里）。
+      变异五刀各红各的（把路径交给 `mimeForExt` 两支各一刀、摘掉 `clampText`、
+      去掉超时信号、摘掉尺寸检查）。
 - [x] **E13 Storybook 落地时自带的两条红：夹具在普通权限下必 EPERM + 一条 high 传递依赖（本批修复）**：
       发现路径与 E12 同一条 —— 另一批 rebase 之后跑 `check:all` 才看见：`tests/storybook-check-script.test.ts`
       七条**全红**，而红的不是判据是夹具：`symlinkSync(<仓库>/node_modules, <临时目录>/node_modules, "dir")`
