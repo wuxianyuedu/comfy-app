@@ -495,6 +495,148 @@ describe("批量口径的缺项退回逐文件 stdin 判定", { timeout: 300_000
   });
 });
 
+/**
+ * `--write <目录>` 的逐行输出是**三档不同语义**（脚本文件头那张表）：改写 /
+ * 未改写的结论 / 没有结论。「没有结论」这一档必须退回逐文件 stdin（忽略路径下的
+ * 源码被格式化过就是历史先例）；而 `(unchanged)` **是结论**、不许退回 —— 退回去
+ * 等于让每一个「本来就规范」的文件都白起一次 prettier，而实际提交里绝大多数文件
+ * 都在这一档（实测 59 个改动文件里 49 个 `(unchanged)`）。
+ *
+ * 这组用例锁的就是「三档有没有被分对」，判据是**prettier 被起了几次**而不是耗时：
+ * 次数在负载波动下是确定的，耗时不是。
+ *
+ * 计数走**子进程调用计数**（把 `spawnSync` 打点），而不是包装 prettier 入口：
+ * 后者要靠「向上找 node_modules」命中 wrapper，而这里脚本是从真仓库加载的
+ * （HERE 就是真仓库），换不掉。打点的是「起没起子进程」，正是成本本体。
+ *
+ * 真起 prettier 而不打桩：被锁的正是「谁来给答案」。
+ */
+describe("批量输出的三档语义：改写 / 未改写的结论 / 没有结论", { timeout: 300_000 }, () => {
+  /**
+   * 数 prettier 起了几次：把「prettier 入口」的解析结果换成一个自增计数后
+   * 转发给真入口的 wrapper。
+   *
+   * 每个用例在自己的**临时仓库**里跑（`workdir/scripts/` 下的脚本副本 +
+   * `workdir/node_modules/prettier`）：脚本按「从自己所在目录向上找
+   * node_modules」解析 prettier，命中 wrapper 即等于「prettier 被起了一次」。
+   * 这正是上面那条「调用次数」用例的手法 —— 换不掉真仓库的 prettier，就换掉
+   * 「被检查的那份脚本」所在的位置。
+   */
+  function instrumentPrettier(): () => number {
+    const real = require.resolve("prettier/bin/prettier.cjs", {
+      paths: [process.cwd()],
+    });
+    const counter = join(configDir, "prettier-called.txt");
+    writeFileSync(counter, "");
+    const wrapper = join(configDir, "prettier-instrumented.cjs");
+    writeFileSync(
+      wrapper,
+      [
+        'const { appendFileSync } = require("node:fs");',
+        `appendFileSync(${JSON.stringify(counter)}, "call\\n");`,
+        `require(${JSON.stringify(real)});`,
+      ].join("\n"),
+    );
+    rmSync(join(workdir, "node_modules"), { recursive: true, force: true });
+    mkdirSync(join(workdir, "node_modules", "prettier", "bin"), {
+      recursive: true,
+    });
+    copyFileSync(
+      wrapper,
+      join(workdir, "node_modules", "prettier", "bin", "prettier.cjs"),
+    );
+    symlinkDir(
+      join(process.cwd(), "node_modules", "prettier-plugin-tailwindcss"),
+      join(workdir, "node_modules", "prettier-plugin-tailwindcss"),
+    );
+    writeFileSync(
+      join(workdir, "node_modules", "prettier", "package.json"),
+      JSON.stringify({ name: "prettier", version: "0.0.0" }),
+    );
+    return () =>
+      readFileSync(counter, "utf8").split("\n").filter(Boolean).length;
+  }
+
+  /**
+   * 在临时仓库里加载**那一份**脚本（而不是真仓库的），再把一批文件喂给它 ——
+   * 于是 wrapper 命中、计数有意义。
+   */
+  function verdictViaTempRepo(
+    entries: Array<{ file: string; before: string; after: string }>,
+  ): Set<string> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const tempMod = require(join(workdir, "scripts", "check-reformat-only.cjs")) as {
+      classifyReformatOnly: typeof entries extends never ? never : (
+        e: typeof entries,
+      ) => Set<string>;
+    };
+    return tempMod.classifyReformatOnly(entries);
+  }
+
+  it("`(unchanged)` 是结论：本来就规范的文件不再起 stdin（整批口径只起一次）", () => {
+    seedEmpty();
+    const before = "export const P = { a: 1, b: 2 };\n";
+    const after = "export const P = { a: 1, b: 3 };\n";
+
+    const calls = instrumentPrettier();
+    const value = verdictViaTempRepo([
+      { file: "src/lib/keep-clean.ts", before, after },
+    ]);
+
+    expect([...value], "改动后不是它的规范形态 → 不是纯格式化").toEqual([]);
+    expect(
+      calls(),
+      "整批 `--write` 一次就够：`(unchanged)` 已经是结论，再起 stdin 是白付" +
+        "（实际提交里绝大多数文件都在这一档）",
+    ).toBe(1);
+  });
+
+  it("没有结论的那一档仍退回 stdin（忽略路径下的源码不许被放行）", () => {
+    seedEmpty();
+    write(".gitignore", "node_modules\n.workbuddy\n");
+    commit("ignore the dir");
+
+    // `.workbuddy/` 被 `.gitignore` 命中 ⇒ prettier 连显式点名的路径也跳过，
+    // `--write` 输出里**没有它这一行** = 没有结论。而 stdin 口径明明白白给出
+    // 「prettier 会把它改成下面那样」。真结论是后者。
+    const before = "export const P={a:1,\n\n\n  b:2};\n";
+    const after = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
+    write(".workbuddy/skipped.ts", before);
+
+    const calls = instrumentPrettier();
+    const value = verdictViaTempRepo([
+      { file: ".workbuddy/skipped.ts", before, after },
+    ]);
+
+    expect(
+      [...value],
+      "它没出现在整批输出里 —— 那不代表「本来就规范」，仍要按 stdin 口径判",
+    ).toEqual([".workbuddy/skipped.ts"]);
+    expect(
+      calls(),
+      "整批那一次之外，还要为「没有结论」的这一个文件补一次 stdin",
+    ).toBe(2);
+  });
+
+  it("被改写的那一档：规范形态取自 prettier 写完的正文，不再起 stdin", () => {
+    seedEmpty();
+    const messy = "export const P={a:1,\n\n\n  b:2};\n";
+    const tidy = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
+
+    const calls = instrumentPrettier();
+    const value = verdictViaTempRepo([
+      { file: "src/lib/messy.ts", before: messy, after: tidy },
+    ]);
+
+    expect([...value], "改动后正是 prettier 给出的形态 → 纯格式化").toEqual([
+      "src/lib/messy.ts",
+    ]);
+    expect(calls(), "改写过的文件由整批那一次给出结论，不必再起 stdin").toBe(
+      1,
+    );
+  });
+});
+
 describe("补丁解析（纯函数，不跑 git）", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mod = require("../scripts/check-reformat-only.cjs") as {
