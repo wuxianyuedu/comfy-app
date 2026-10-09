@@ -53,8 +53,16 @@
  * 零子进程。照 §13.5.4 的成本判据该进钩子。
  *
  * 用法：
- *   node scripts/check-a11y-rules.cjs            # 检查（进 pre-commit D 组）
- *   node scripts/check-a11y-rules.cjs --report   # 只出清单不判失败（盘点用）
+ *   node scripts/check-a11y-rules.cjs                    # 检查（进 pre-commit D 组）
+ *   node scripts/check-a11y-rules.cjs --report           # 只出清单不判失败（盘点用）
+ *   node scripts/check-a11y-rules.cjs --ledger <path>    # 换一份台账来判（自测用）
+ *
+ * `--ledger <path>` 是**纯增量口子**：默认行为一个字不变（不传就是仓库里那份
+ * `scripts/.a11y-rule-ledger.json`），传了就拿它当台账读。它存在的原因只有一个 ——
+ * 门禁自测（`tests/a11y-rules-gate.test.ts`）要拿**十来份不同的台账**各判一次，
+ * 而没有这个口子时用例只能「备份真台账 → 覆盖 → 跑 → 还原」：那是**共享可变状态**，
+ * 于是那些用例既不能并发（互相踩），也无法在失败时保证还原（§11.19.2 那一族）。
+ * 台账路径是**被测输入**，就该像 `check-format.cjs` 的 `NODE_PATH` 一样是个显式入参。
  *
  * 退出码 0 = 通过，1 = 阻断。
  */
@@ -63,11 +71,38 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const ROOT = path.resolve(__dirname, "..");
-const ARGS = new Set(process.argv.slice(2));
-const REPORT_ONLY = ARGS.has("--report");
+const { REPORT_ONLY, LEDGER } = parseArgs(process.argv.slice(2));
 
-const LEDGER = path.join(__dirname, ".a11y-rule-ledger.json");
 const ESLINT_CONFIG = path.join(ROOT, "eslint.config.js");
+
+/**
+ * 解析命令行：`--report` 与 `--ledger <path>`。
+ *
+ * `--ledger` 取**下一个参数**当路径（不认 `--ledger=…` 那种形态：调用点只有
+ * 门禁自测一处，不为一种用不上的写法多留一条分支）。缺值 = 用法错，直接退 2 ——
+ * 静默退回真台账是最坏的结果：用例以为在判自己的夹具，其实在判真库（绿得毫无意义）。
+ */
+function parseArgs(argv) {
+  let ledger = path.join(__dirname, ".a11y-rule-ledger.json");
+  let report = false;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--report") report = true;
+    else if (argv[i] === "--ledger") {
+      const next = argv[i + 1];
+      if (
+        typeof next !== "string" ||
+        next.trim() === "" ||
+        next.startsWith("--")
+      ) {
+        console.error("[a11y-rules] --ledger 后面要跟一个台账文件路径。");
+        process.exit(2);
+      }
+      ledger = path.resolve(ROOT, next);
+      i += 1;
+    }
+  }
+  return { REPORT_ONLY: report, LEDGER: ledger };
+}
 
 /** 规则名前缀 —— 只盘点这个插件。 */
 const PREFIX = "jsx-a11y/";
@@ -142,7 +177,8 @@ function registeredDialectRules() {
     if (!entry || typeof entry.rule !== "string") continue;
     if (entry.decision !== "off") continue;
     if (typeof entry.why !== "string" || entry.why.trim() === "") continue;
-    if (typeof entry.keeper !== "string" || entry.keeper.trim() === "") continue;
+    if (typeof entry.keeper !== "string" || entry.keeper.trim() === "")
+      continue;
     out.add(entry.rule);
   }
   return out;
@@ -271,7 +307,9 @@ async function main() {
       );
       continue;
     }
-    const want = normalize(options === undefined ? "error" : ["error", options]);
+    const want = normalize(
+      options === undefined ? "error" : ["error", options],
+    );
     const got = normalize(effective[name]);
     if (got !== want) {
       problems.push(
@@ -291,7 +329,9 @@ async function main() {
     }
     dialectByRule.set(entry.rule, entry);
     if (typeof entry.why !== "string" || entry.why.trim() === "") {
-      problems.push(`台账 dialect 的 ${entry.rule} 没写「为什么」—— 空理由没有记账价值。`);
+      problems.push(
+        `台账 dialect 的 ${entry.rule} 没写「为什么」—— 空理由没有记账价值。`,
+      );
     }
     if (typeof entry.keeper !== "string" || entry.keeper.trim() === "") {
       problems.push(
@@ -351,7 +391,11 @@ async function main() {
 
   /* ④ 就地豁免的文件与理由都要在。 */
   for (const entry of ledger.inlineExemptions) {
-    if (!entry || typeof entry.rule !== "string" || typeof entry.file !== "string") {
+    if (
+      !entry ||
+      typeof entry.rule !== "string" ||
+      typeof entry.file !== "string"
+    ) {
       problems.push("台账 inlineExemptions 里有一条缺 `rule` 或 `file` 字段。");
       continue;
     }
@@ -384,7 +428,9 @@ async function main() {
   if (REPORT_ONLY) {
     console.log(summary);
     for (const [name, setting] of Object.entries(effective).sort()) {
-      console.log(`  ${setting === "off" ? "·" : "*"} ${name} = ${normalize(setting)}`);
+      console.log(
+        `  ${setting === "off" ? "·" : "*"} ${name} = ${normalize(setting)}`,
+      );
     }
     console.log("\n[a11y-rules] --report 模式：只出清单，不判失败 ✓");
     return 0;
