@@ -10,7 +10,6 @@ import {
 import { Button } from "~/components/ui/button";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { enterCommit } from "~/components/ui/use-enter-commit";
-import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { filterGroupsByKeyword } from "~/lib/list-filter";
 import type { OptionGroup } from "~/lib/workshop/character-options";
 
