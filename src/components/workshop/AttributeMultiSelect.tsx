@@ -173,10 +173,9 @@ export function AttributeMultiSelect({
                           key={opt}
                           role="option"
                           aria-selected={on}
-                          /* `interactive-supports-focus`：`role="option"` 是
-                           * 交互角色，必须可聚焦 —— 此前连 `tabIndex` 都没有，
-                           * 键盘用户根本进不来这一组（§6.8「自定义控件实现
-                           * 键盘可达」）。键动作走 `simpleKeyHandler`（行尾）。 */
+                          /* 行可聚焦 + Enter/Space 切换：此前只有 `onClick`，
+                           * 连 `tabIndex` 都没有 —— 键盘用户完全进不来
+                           *（§16.2.4.57 的元素级键出口）。 */
                           tabIndex={0}
                           onClick={() => toggle(opt)}
                           {...simpleKeyHandler(["Space", "Enter"], () =>

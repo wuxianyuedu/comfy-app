@@ -13,8 +13,11 @@ import type { HistoryTaskRow } from "./history-panel-types";
  * 逐行 Zod 校验（§05「API 响应一律 Zod 校验」）：不合法行**丢弃而不是硬塞**，
  * 否则下游对 progress/mediaType 的数值/枚举假设会在渲染或排序里炸。
  * 过去这里是一句 `as unknown as HistoryTaskRow[]`——那是假保险：类型说
- * 「一定有 prompt」，实际可能是 undefined。 */
-const historyTaskRowSchema = z.object({
+ * 「一定有 prompt」，实际可能是 undefined。
+ *
+ * 导出给 `tests/task-list-wire-contract.test.ts` 用：那份判据拿这份镜像的**列名**
+ * 去核对服务端真实产出的行，镜像与线上分叉（多一列 / 少一列）当场红。 */
+export const historyTaskRowSchema = z.object({
   id: z.string(),
   type: z.string().default("image"),
   workflowName: z.string().default(""),
