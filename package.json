@@ -38,6 +38,7 @@
     "check:all": "node scripts/quality-gate.mjs",
     "check:deps-freshness": "node scripts/check-deps-freshness.mjs",
     "check:base": "node scripts/base-check.mjs",
+    "check:commit-claims": "node scripts/check-commit-claims.mjs",
     "check:base:batch": "node scripts/base-check.mjs --base",
     "test:coverage": "vitest run --coverage",
     "mcp:stdio": "tsx tools/mcp-stdio.ts",

@@ -82,7 +82,9 @@ function readLedger() {
   }
   const duties = parsed?.duties;
   if (!Array.isArray(duties) || duties.length === 0) {
-    problems.push("索引里没有 duties（空索引 = 没有任何档要查，等于把门禁关掉）");
+    problems.push(
+      "索引里没有 duties（空索引 = 没有任何档要查，等于把门禁关掉）",
+    );
     return null;
   }
   if (duties.length < MIN_DUTIES) {
@@ -93,7 +95,9 @@ function readLedger() {
   }
   for (const [i, d] of duties.entries()) {
     if (!d?.id || !d?.name || !d?.fact?.kind || !d?.executor) {
-      problems.push(`第 ${i + 1} 行缺字段（id / name / fact.kind / executor 都要有）`);
+      problems.push(
+        `第 ${i + 1} 行缺字段（id / name / fact.kind / executor 都要有）`,
+      );
     }
   }
   return duties;
@@ -163,6 +167,19 @@ async function main() {
         return gates.all.has(fact.gate);
       case "on-demand-ledger":
         return onDemand.includes(fact.script);
+      case "base-check-chained":
+        /* 事实从 `scripts/base-check/chained-steps.mjs` 的 `CHAINED_STEPS` 现算
+         * （成员写成 `{ script: "…" }`）—— 不在这里抄第二份清单（同 `qualityGateModes`）。 */
+        return [
+          ...fs
+            .readFileSync(
+              path.join(__dirname, "base-check", "chained-steps.mjs"),
+              "utf8",
+            )
+            .matchAll(/\{ script: "([^"]+)" \}/g),
+        ]
+          .map((m) => m[1])
+          .includes(fact.script);
       default:
         return false;
     }
@@ -212,6 +229,8 @@ function factKey(fact) {
       return `gate-in-all:${fact.gate}`;
     case "on-demand-ledger":
       return `on-demand-ledger:${fact.script}`;
+    case "base-check-chained":
+      return `base-check-chained:${fact.script}`;
     default:
       return `unknown:${JSON.stringify(fact)}`;
   }
@@ -223,9 +242,7 @@ function finish() {
       `[on-demand-duties] ✓ 按需档 ⇄ 执行者索引在场（${report.length} 行，双向核对通过）\n`,
     );
     if (REPORT_ONLY) {
-      process.stdout.write(
-        `${report.map((l) => `  ${l}`).join("\n")}\n`,
-      );
+      process.stdout.write(`${report.map((l) => `  ${l}`).join("\n")}\n`);
     }
     return 0;
   }

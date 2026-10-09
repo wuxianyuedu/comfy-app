@@ -491,8 +491,11 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 
 事实**从既有出处现算**、不抄第二份清单：新鲜度档键取 `FRESHNESS_TRACKS`、
 「不进 `all`」取 `quality-gate.mjs` 的 `run: false`、按需召唤条目取
-`scripts/.gate-executor-ledger.json`。这条纪律与 §13.5.4 那句「判决面由
-`FRESHNESS_TRACKS` 现算，不另抄一份档名清单」同源。
+`scripts/.gate-executor-ledger.json`、**「挂在 `--base` 链上」取 `base-check.mjs` 的
+`scripts/base-check/chained-steps.mjs` 的 `CHAINED_STEPS`**（第四类事实，`fact.kind = base-check-chained`，ISSUE #1605 —— 它登记
+的是「**有执行者、但执行者不是钩子步骤**」那一格，与上面那条「没有执行者、只能人手召唤」
+是两件事，别混）。这条纪律与 §13.5.4 那句「判决面由 `FRESHNESS_TRACKS` 现算，
+不另抄一份档名清单」同源。
 
 | 档                                               | 不进钩子的理由（代价）                                  | 谁在什么时候跑它                                                          | 机器事实的出处                                                |
 | ------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -502,6 +505,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 像素回归（`pnpm check:visual`）                  | 起 webServer + 浏览器；结论只在录过基线的那台机器上成立 | `visual-gate.mjs` 判「带不带像素判决」+ 新鲜度账（钩子 D 组）             | `FRESHNESS_TRACKS.visual` + `quality-gate.mjs` 的 `run:false` |
 | 依赖漏洞扫描（`check-dependency-audit.mjs`）     | 网络请求（离线 / registry 抖动不该变成提交失败）        | `pnpm check:all` 的默认档（`quality-gate.mjs` 的 `dependencyAudit`）      | `quality-gate.mjs` 的 `dependencyAudit`                       |
 | `tw4-canonical-report` / `tw4-spacing-canonical` | 起 Tailwind 引擎（~6s），判的是 CSS 等价改写而非正确性  | 按需召唤 + `--check` 棘轮                                                 | `.gate-executor-ledger.json` 的 `onDemand`                    |
+| 提交信息里的声明 ⇄ 事实（§11.23.5）              | **本地钩子连形态都看不到**（丢失发生在平台侧 squash）   | `pnpm check:base:batch` 的 `CHAINED_STEPS`（合并前 / 事后盘点，人点一次） | `base-check/chained-steps.mjs` 的 `CHAINED_STEPS`             |
 
 三档「每天首次自证」的口径不同、判据一份（`FRESHNESS_TRACKS` 的 `daily` / `dirty` /
 `graceMs`）：全量 e2e 按本地日历日；另两档按「当天动过输入面没有」。**理由**：前者人人
@@ -1518,6 +1522,34 @@ squash 合并把 `master` 上几批修复整体回退的现场：解冲突时 `g
   （§13.5.4 的「按需召唤」那一层，不 `@` 就不跑）。`pnpm check:all` 仍是**更宽**的那一档
   （它另外跑全量单测 + 覆盖率 + 依赖漏洞扫描），两者不互相替代：`--base` 判的是
   「**这批全仓判据**在合并后会不会红」，`check:all` 判的是「整条质量面」。
+
+  **这批判据的第二个来源：`CHAINED_STEPS`**（ISSUE #1605）。上面那一段说的是「面从
+  钩子步骤现算」—— 而有一族判据**天然进不了钩子、却同样属于「合并前该算一遍」**：
+  首发成员是 `scripts/check-commit-claims.mjs`（提交信息里的声明 ⇄ 那次提交的事实，
+  口径见 11 §11.23.5）。理由是**本地看不到那个形态**：声明说的是某一次提交的树
+  （「§x.y 照旧保留」），而丢失发生在**平台侧 squash** 那一刻 —— 实测 `ad81a912` /
+  `bdabd26f` / `b9bedd37` 在 `master` 上都是**单亲**，信息里却带 `Merge origin/master
+  into …` 字样，所以 `check-merge-parents`（§13.6.1）在 squash 之后判不出来（单亲
+  是它的**正常形态**）。硬塞进钩子只会让人学会绕开它。
+
+  这一族的成员表在 **`scripts/base-check/chained-steps.mjs` 的 `CHAINED_STEPS`**
+  （**事实从它现算**，不在这里抄第二份清单）；它单独成模块有一条具体的理由：
+  `scripts/.tsc-diagnostic-executors.json` 把 `base-check.mjs` 的**声明行数**当零增量
+  棘轮管（§13.5.14），而这一族的答案在 `--base` 那条链上 —— 写在同目录的这份模块里，
+  **棘轮的对象与答案才落在同一个地方**。两条口径：
+
+  - **`baseSide: false`** —— 它**不在基线那一侧跑**：它的对象是本检出这条线上的提交
+    对象，而基线快照里没有那些提交（两侧问的不是同一问题）。不排除的后果实测过：
+    新判据在基线上必然 `MODULE_NOT_FOUND` ⇒ 127 ⇒ `summarizeRows` 把**整批**压成
+    `inconclusive`，而这一批里其它几十条的读数本来是好的。它红的时候只可能是
+    「这次提交的声明与它自己的树矛盾」⇒ 纯粹的 `yours`，故另给了 `judgeOneSide`，
+    不硬塞进四态的 `judge`（`baseCode === null` 在 `judge` 里会被读成 `baseline-red`，
+    也就是**把这条红甩给别线**）。
+  - **判的是「本检出相对基线的那些提交」**（`<ref>..HEAD`）—— 与 `--base` 问的
+    「并进去之后会不会红」同源；没有待并提交时给空，不报假红。
+
+  新增这一族的成员时，`scripts/.on-demand-duties.json` 里那行也同批加（`fact.kind`
+  是 `base-check-chained`，`check-on-demand-duties.cjs` 双向核对会当场发现漏登记）。
 
 #### 13.6.3 「环境里跑不到门禁」不是结论 —— 先 `pnpm install`（ISSUE #1568）
 

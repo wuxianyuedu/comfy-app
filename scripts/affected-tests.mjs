@@ -438,6 +438,15 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 而这些都是「下一次有人写一处新声明」时才走得进的路径 —— 跟着改动走等于专挑它
   // 不在的时机跑。它读的是两份台账 + 目录扫描，import 图一概追不到，故进固定清单。
   "tests/tsc-diagnostic-executors.test.ts",
+  // 「提交信息里的声明 ⇄ 事实」（ISSUE #1605 / 规范 §11.23）：`ad81a912` 那次 squash
+  // 的提交信息自称「§13.5.13 / §13.6.3 两节照旧保留」，而两节一次都不出现 —— 62 份
+  // 文件被退回。这一族的执行者是 `--base` 那条链（`pnpm check:base:batch`，本地钩子
+  // **天然看不到**：丢失发生在平台侧 squash 那一刻），而这条用例守的是**口径**：
+  // 三种句式各拦什么 / 窗口只许连接物（第一版自由窗口在真历史上 8 处误报）/
+  // 「只扫改动文件」与 `ls-tree` 的路径转义各是一处**静默少查**（实测各贡献 2 处假红）。
+  // 这些都是「下一次有人想加一种句式」时才走得进的路径，跟着改动走等于专挑它不在的
+  // 时机跑；它读的是真 git 历史，import 图追不到，故进固定清单。
+  "tests/check-commit-claims.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
