@@ -82,10 +82,16 @@ describe("全量 e2e 的记账语义（§11.8）", () => {
 
 describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
   it("四个值各就各位：账文件 / 键 / 名字 / 命令", () => {
-    expect(Object.keys(FRESHNESS_TRACKS).sort()).toEqual(["e2e", "visual"]);
-    /* 只挑这四栏比，不用 `toEqual` 比整条登记 —— 整条比等于顺手断言「形状刚好四栏」，
-     * 而那是一条登记表会长的假约束：`daily` / `skipHow` 进来时它会把一次**新增**报成
-     * 一次**抄错**（ISSUE #1553 合并后就是这个形态）。差异那两栏各判各的，见下一条。 */
+    /* 只核**本档的两栏与关键字**，不核「`FRESHNESS_TRACKS` 一共几个键」——
+     * 那份清单是 `tests/daily-tracks.test.ts` 的事（它判四档全在、且互不重名），
+     * 在这里再写一份会在**每次新增一档**时红，而红的原因与「e2e 的账有没有写对」
+     * 毫无关系（`tests/gate-executors.test.ts` 把份数写死 `.toBe(44)` 那次同族）。
+     *
+     * 同理，四栏用**挑出来比**而不是 `toEqual` 比整条登记：整条比等于顺手断言
+     * 「形状刚好这几栏」，而登记表**会**长栏 —— `daily` / `skipHow` / `dirty` /
+     * `dirtyHow` / `graceMs` 进来时它把一次**新增**报成一次**抄错**（ISSUE #1553
+     * 合并后就是这个形态）。差异那几栏各判各的，见下一条。 */
+    expect(Object.keys(FRESHNESS_TRACKS)).toContain("e2e");
     const { ledger, key, label, run } = freshnessTrack("e2e");
     expect({ ledger, key, label, run }).toEqual({
       ledger: "scripts/.e2e-freshness.json",

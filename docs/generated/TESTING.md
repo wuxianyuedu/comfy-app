@@ -17,8 +17,10 @@ pnpm test:coverage      # 同一套全量 + v8 覆盖率与棘轮门槛
 pnpm check:all          # 一键完整门禁：typecheck / eslint 零警告 / 格式棘轮 / 全量+覆盖率
 pnpm typecheck          # tsc --noEmit
 pnpm test:file <文件>   # 只跑指定文件（跨平台入口，见 tools/start/run-tests.ps1）
-pnpm test:e2e           # Playwright 全量 E2E（含 e2e/visual）
+pnpm test:e2e           # Playwright 全量 E2E（含 e2e/visual），跑绿即记「每天首次」账
 pnpm test:visual        # 只跑像素基线那一层
+pnpm run test:coverage  # 全量单测 + 覆盖率棘轮（走 full-suite-run.mjs，跑绿即记）
+pnpm run build          # 产物级护栏（build + 剥私有输入 + 数产物 + 冒烟，跑绿即记）
 ```
 
 - **别默认用 `--no-file-parallelism` 跑全量**：串行要 2~3 小时。它的正确用途是给一条红
@@ -190,11 +192,19 @@ pnpm test:e2e
   `visual-freshness-gate.mjs` 判「每档都有主、且写得清」；缺几张基线的档由
   `PENDING_PLATFORMS` 顶着、不要求这条记录。钩子**不跑像素**（起 webServer + 浏览器会与
   A/B/C/D 抢资源）。
-- **全量 e2e 那一档多一条「每天首次自证」**（`scripts/.e2e-freshness.json`）：它不像像素档
-  那样只判「有主、写清」，而是按本地日历日判「**当天的第一次提交**带没带一次自证」——
-  出路两条：`pnpm test:e2e` 跑绿即记，或 `node scripts/e2e-run.mjs --skip "<理由>"`
-  记一条写明理由的豁免（占位理由被拦）。当天已有凭证 ⇒ 零输出放行；账文件还没入库时
-  只提醒、不阻断。口径与四条边界见规范 §11.8。
+- **「每天首次自证」现在守着三档**（全量 e2e / 全量单测 + 覆盖率 / 产物级护栏），
+  它们此前只有一句「按需手动跑」，而那句话没有任何东西在守：
+  - **全量 e2e**（`scripts/.e2e-freshness.json`）按本地日历日判「**当天的第一次提交**
+    带没带一次自证」：跑 `pnpm test:e2e` 跑绿即记，或
+    `node scripts/e2e-run.mjs --skip "<理由>"` 记一条豁免（占位理由被拦）。
+  - **全量单测 + 覆盖率**（`scripts/.full-suite-freshness.json`，`pnpm run test:coverage`
+    走 `scripts/full-suite-run.mjs`）与**产物级护栏**（`scripts/.artifact-freshness.json`，
+    `pnpm run build` 走 `scripts/artifact-run.mjs`）判的是「**改了就当天跑**」：
+    当天提交动过它们的输入面（`src/`+`tests/` / 产物链那几个文件）就必须今天自证，
+    没动过以 7 天为宽限 —— 十分钟量级的两档没必要每天都跑。
+    出路三条：跑一次（跑绿即记）/ `--skip "<理由>"` / `--dirty "<理由>"`（这次改动不吃这一档）。
+  - 两种「不跑」互不等于（`skippedReason` vs `dirtyReason`）；「先跑后改」也放行。
+    当天已有凭证 ⇒ 零输出放行；账文件还没入库时只提醒、不阻断。口径与边界见规范 §11.8。
 - 像素档**不在 `pnpm check:all` 里**：它要起 webServer + 浏览器，而结论只在录过基线的那台
   机器上成立（基线名带平台）—— 要跑就显式点名（Windows 侧同一动作是
   `scripts/quality-gate.ps1 -Mode visual`，登记在 launch-and-build §9.5 的对照表）。
