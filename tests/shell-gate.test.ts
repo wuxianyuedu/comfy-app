@@ -14,6 +14,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -531,8 +532,21 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       const bin = mkdtempSync(path.join(tmpdir(), "shell-gate-pathbin-"));
       temps.push(bin);
       const onPath = path.join(bin, cargoName);
-      writeFileSync(onPath, "#!/bin/sh\nexit 0\n");
-      if (process.platform !== "win32") chmodSync(onPath, 0o755);
+      /* PATH 那一支与安装位那几支**判据不同层**：安装位只查「那条路径在不在」，
+       * 而 PATH 走 `whichCommand()`，它会**真起一次**确认（`spawnSync` + `--version`）。
+       * 所以这里造的那份必须在本机真的起得来 —— Windows 上 Node 不解析 shebang
+       * （libuv 直接把路径交给 CreateProcess），写一个 `#!/bin/sh` 的假 cargo 只会被
+       * 判成「起不来」，于是 PATH 那份永远命中不了、判据落回假 home，
+       * 表现是「这条在 POSIX 绿、在 Windows 恒红」（台账 E12 / E13 记的正是这一族：
+       * 红的不是判据，是夹具在这台机器上根本搭不起来）。
+       * 借当前宿主造一份真能起的二进制：`process.execPath` 必然在场、必然可 spawn，
+       * 而判据只看「拿到的是不是 PATH 目录里那一份」，与它是什么程序无关。 */
+      if (process.platform === "win32") {
+        copyFileSync(process.execPath, onPath);
+      } else {
+        writeFileSync(onPath, "#!/bin/sh\nexit 0\n");
+        chmodSync(onPath, 0o755);
+      }
 
       const savedPath = process.env.PATH;
       const savedHome = process.env.HOME;

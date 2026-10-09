@@ -214,7 +214,7 @@ export function MaterialLibraryContent({
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-ink-bright truncate text-[13px]">
+                  <p className="text-ink-bright truncate text-sm">
                     {item.name}
                   </p>
                   <p className="text-ink-fainter text-2xs mt-0.5">
@@ -303,7 +303,7 @@ export function MaterialLibraryContent({
               >
                 <Folder size={18} strokeWidth={1.8} />
               </div>
-              <span className="text-ink-bright min-w-0 flex-1 truncate text-[13px]">
+              <span className="text-ink-bright min-w-0 flex-1 truncate text-sm">
                 {folder.name}
               </span>
               <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">

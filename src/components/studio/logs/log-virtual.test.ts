@@ -130,8 +130,12 @@ describe("可见区间", () => {
   it("只给视口内的那一段，上下各留 overscan 行", () => {
     const { start, end } = visibleRange(rows, 0, 600);
     expect(start).toBe(0);
-    /* 600px / 27px = 22 行整（第 22 行起点 594 落在视口内）+ overscan */
-    expect(end).toBe(23 + LOG_VIRTUAL_OVERSCAN);
+    /* 视口 600px 装得下几行单高行：`i × LOG_ROW_SINGLE < 600` 的 i 的个数
+       （行是等高的，所以就是 ⌊600 / 行高⌋ + 1），再加上下 overscan。
+       写死「23」的话，任何一次行内字号/行距调整都会把它变成假红 ——
+       13px 并到 text-sm 那一轮就真的把它变红了（27 → 28px），故按常量推。 */
+    const fitting = Math.floor(600 / LOG_ROW_SINGLE) + 1;
+    expect(end).toBe(fitting + LOG_VIRTUAL_OVERSCAN);
   });
 
   it("滚到中间时区间跟着走，且长度恒定（DOM 节点数不随页大小增长）", () => {
@@ -143,7 +147,9 @@ describe("可见区间", () => {
   });
 
   it("滚到底时区间末尾钳在行数上（不会 slice 出 undefined）", () => {
-    const { start, end } = visibleRange(rows, 2000 * 27, 600);
+    /* 用常量而不是写死像素：这条的意图是「滚到 2000 行之底」，行高变了它
+       仍然该成立 —— 写死 27 会让下一次字号调整把它变成假红。 */
+    const { start, end } = visibleRange(rows, 2000 * LOG_ROW_SINGLE, 600);
     expect(end).toBe(2000);
     expect(start).toBeLessThan(2000);
   });

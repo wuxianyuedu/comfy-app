@@ -149,7 +149,7 @@ export function LogFilterBar({
           value={search}
           onChange={textHandler(setSearch)}
           placeholder="搜索日志（支持命中高亮）..."
-          className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus-visible:border-primary-500/40 focus-visible:ring-primary/30 h-8 rounded-lg pr-7 pl-8 text-[13px]"
+          className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus-visible:border-primary-500/40 focus-visible:ring-primary/30 h-8 rounded-lg pr-7 pl-8 text-sm"
         />
         {search && (
           <Button
