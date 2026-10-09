@@ -15,7 +15,11 @@ function RadioGroup({ className, ...props }: RadioGroupPrimitive.Props) {
   );
 }
 
-function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
+function RadioGroupItem({
+  className,
+  children,
+  ...props
+}: RadioPrimitive.Root.Props) {
   return (
     <RadioPrimitive.Root
       data-slot="radio-group-item"
@@ -31,6 +35,12 @@ function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
       >
         <span className="bg-primary-foreground absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full" />
       </RadioPrimitive.Indicator>
+      {/* 调用方给的内容（选项文字、图标行）**必须显式渲染**：它是
+          `props.children`，而上面的 indicator 是同一位置的 JSX children ——
+          JSX children 会整个盖掉 `props.children`。表现是 radio 还在、
+          可访问名为空、选项文字全不见（`getByRole("radio", { name: … })`
+          一条也匹配不到），而 `role` / `aria-checked` 照旧正确、单测全绿。 */}
+      {children}
     </RadioPrimitive.Root>
   );
 }
