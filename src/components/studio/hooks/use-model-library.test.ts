@@ -265,9 +265,17 @@ describe("useModelLibrary 卸载后不再 setState", () => {
     const { result, unmount } = renderHook(() => useModelLibrary(), {
       wrapper: makeWrapper(),
     });
-    await expect.poll(() => listBlocked).toBe(true);
-    // 前提成立：回包确实被卡住，finally 还没跑
-    expect(result.current.loading).toBe(true);
+    /* 前提：**查询真的在飞、且回包被卡住**。两件事要等到同一个时刻再断言 ——
+     * `listBlocked` 由 msw 处理器置位（服务端那一侧），而 `loading` 是 React
+     * 提交渲染后才读得到的客户端状态；只等 `listBlocked` 就紧接着读 `loading`，
+     * 满载时会在 React 提交之前读到 `false`（实测：全量档偶发、隔离重跑必绿）。
+     * 等 `loading` 也从 `false` 转过来，判的是「这一刻两者都成立」。 */
+    await expect
+      .poll(() => listBlocked && result.current.loading, {
+        message:
+          "前提：查询在飞、回包被卡住（loading 与 listBlocked 同时成立）",
+      })
+      .toBe(true);
 
     /* 记账替身：透传真实 window（react-query 会调它的方法，返回假对象会
      * 抛 `window.removeEventListener is not a function`），只计数。 */

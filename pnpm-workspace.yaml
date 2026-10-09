@@ -130,3 +130,11 @@ overrides:
   #       它带预编译二进制（`@img/sharp-*`），升版要确认 install 仍不触发本地编译 ——
   #       实测 `pnpm install` 不报 ERR_PNPM_IGNORED_BUILDS，`pnpm why sharp` 只剩 0.35.5。
   'sharp@0.35': '0.35.5'
+  #   · handlebars 4.7.9 → 4.7.10（`eslint-plugin-boundaries > @boundaries/elements >
+  #     handlebars` 与 `eslint-plugin-boundaries > handlebars` 两条路径，advisory
+  #     #1241677 / #1241678 均 critical：受影响范围 `>=4.0.0 <=4.7.9`）。只在 lint
+  #     工具链里出现、不进运行时不进产物；4.7.10 正是 advisory 给的最小可达修复版。
+  #     ⚠️ 这条是**回填**：此前已有一条同键 override，被上游改动整条删掉之后版本落回
+  #     4.7.9，而新 advisory 的范围恰好把它包进去 —— 也就是「同一个坑被填了两次」。
+  #     删 override 等于把修复一起删掉，别再删它。
+  'handlebars@4': '4.7.10'
