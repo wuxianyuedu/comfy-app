@@ -906,6 +906,191 @@ describe("TaskRepository", () => {
   });
 });
 
+/* ─────────────── Task：状态栏两格 / 分页装载 / 领取三口 ─────────────── */
+
+/**
+ * 这一组补的是 `repository-task.ts` 里**只有类入口才走得到**的那几行。
+ *
+ * 为什么单独一组（而不是接着上面那条写）：上面那批已经用真 SQL 覆盖了 12 个
+ * delegate 与四套 LIMIT/OFFSET 形状，剩下没执行者的恰好都是「另一个消费者」在用 ——
+ * 底部状态栏那两格（刻意跨归属）、成片监看的批量进度、SSE 轮询的轻投影，
+ * 以及执行宿主的领取 / 只读窥视 / 载荷读。全库覆盖表里
+ * `countQueuedForStatusBar` 整块空白就是这一组补的。
+ */
+describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
+  const queued = {
+    userId: "u1",
+    type: "TXT2IMG",
+    prompt: "一条镜头",
+    params: {},
+    workflowName: "wf-wire",
+  };
+
+  beforeEach(() => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+  });
+
+  it("includeImages 且只给 skip：第二页照样装着 images（LIMIT -1 OFFSET 那条语法）", async () => {
+    /* `task.list` 每次都带 includeImages，而 media 过滤那条路径是按 skip 补页的 ——
+     * 这一条走的不是 `db.query` 关系装载，而是「普通 select 取页 + 按 id 装载」。
+     * 上一条用例里那条路只跑到「这一页是空的」，于是 attachImages 的真实装载
+     * 一次都没被执行过：那条分支要是写成不带 images，界面上只是少一张封面，
+     * 而 SQL 一声不响。 */
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const t = await taskRepository.createQueued({
+        ...queued,
+        prompt: `第 ${i} 条`,
+      });
+      await taskRepository.createImages(t.id, [
+        {
+          localPath: `${t.id}.png`,
+          sortIndex: 0,
+          isCover: true,
+          mediaType: "image",
+          seed: null,
+        },
+      ]);
+      ids.push(t.id);
+    }
+
+    const all = await taskRepository.listByUser("u1", { includeImages: true });
+    expect(all).toHaveLength(3);
+    const page = await taskRepository.listByUser("u1", {
+      includeImages: true,
+      skip: 1,
+    });
+    expect(page).toHaveLength(2);
+    /*  createdAt 同刻时哪一条被跳过由 SQL 决定，所以按集合判；
+     *  但「少一条」与「每行都带 images」这两件事必须当场成立。 */
+    for (const row of page) {
+      expect(ids).toContain(row.id);
+      expect(row.images.map((image) => image.localPath)).toEqual([
+        `${row.id}.png`,
+      ]);
+    }
+    expect(new Set(page.map((row) => row.id)).size).toBe(2);
+    expect(
+      all.filter((row) => !page.some((p) => p.id === row.id)),
+    ).toHaveLength(1);
+  });
+
+  it("状态栏两格跨归属：host 那条也计入排队数、也认作「当前在跑」", async () => {
+    const inlineTask = await taskRepository.createQueued(queued);
+    const hostTask = await taskRepository.createQueued({
+      ...queued,
+      claimedBy: "host",
+    });
+    /* 这一格答的是「本应用」而不是「我这个片区」：判据里刻意没有归属条件，
+     * 一旦有人补上 owner，host 执行的队列在这格上就永远是 0。 */
+    expect(await taskRepository.countQueuedForStatusBar()).toBe(2);
+
+    await taskRepository.claimNextQueued("host", 1);
+    const bar = await taskRepository.findRunningForStatusBar();
+    expect(bar?.id).toBe(hostTask.id);
+    expect(bar?.claimedAt).toBeInstanceOf(Date);
+    expect(bar?.workflowName).toBe("wf-wire");
+    /* 大列不拉：状态栏 2s 一轮，取的是那条小载荷（主模型要从图里认）。 */
+    expect(bar).not.toHaveProperty("workflowSnapshot");
+    expect(bar).not.toHaveProperty("logs");
+    expect(bar).toHaveProperty("execPayload");
+
+    expect(await taskRepository.countQueuedForStatusBar()).toBe(1);
+    /* inline 那条还排着队 → 在跑的只有 host 那一条。 */
+    expect(await taskRepository.findStatusById(inlineTask.id)).toMatchObject({
+      status: "QUEUED",
+    });
+  });
+
+  it("findExecutionProgressMany：一条 IN 拿到多条进度；空数组短路", async () => {
+    const a = await taskRepository.createQueued(queued);
+    const b = await taskRepository.createQueued({
+      ...queued,
+      prompt: "另一条",
+    });
+    await taskRepository.updateProgress(a.id, 30);
+
+    const got = await taskRepository.findExecutionProgressMany([
+      a.id,
+      b.id,
+      "nope",
+    ]);
+    expect(got).toHaveLength(2);
+    expect(got.find((row) => row.id === a.id)).toMatchObject({
+      status: "RUNNING",
+      progress: 30,
+    });
+    expect(got.find((row) => row.id === b.id)).toMatchObject({ progress: 0 });
+    /* 空数组不发 SQL：成片监看每 4s 一轮，镜头为空的轮次不该打一条 `IN ()`。 */
+    expect(await taskRepository.findExecutionProgressMany([])).toEqual([]);
+  });
+
+  it("findSseSnapshot：轮询要的列都在，唯独 workflowSnapshot 不拉", async () => {
+    const t = await taskRepository.createQueued({
+      ...queued,
+      workflowSnapshot: { nodes: [1] },
+    });
+    await taskRepository.replaceLogs(t.id, [{ level: "info", msg: "起图" }]);
+    await taskRepository.replaceRawCli(t.id, ["CLI 第一行", "第二行"]);
+
+    const snap = await taskRepository.findSseSnapshot(t.id);
+    expect(snap).toMatchObject({
+      status: "QUEUED",
+      progress: 0,
+      error: null,
+      workflowName: "wf-wire",
+      logs: [{ level: "info", msg: "起图" }],
+    });
+    /* 「轻投影」的边界是不含 workflowSnapshot（整份工作流，单行可达数 MB），
+     * 而 progressNode / logs 是 3-C 之后轮询要读的。写成整行查询不报错，
+     * 只是每条 SSE 连接每 3s 白拉一份工作流。 */
+    expect(snap).not.toHaveProperty("workflowSnapshot");
+    expect(snap).toHaveProperty("progressNode");
+    /* rawCli 是同一条轮询要的另一列：写进去读得回来，未知行给 null。 */
+    expect(await taskRepository.findRawCli(t.id)).toEqual([
+      "CLI 第一行",
+      "第二行",
+    ]);
+    expect(await taskRepository.findRawCli("nope")).toBeNull();
+    expect(await taskRepository.findSseSnapshot("nope")).toBeNull();
+  });
+
+  it("领取三口：只读窥视不改状态、领取按归属分片、载荷读只认自己那片", async () => {
+    const nullShard = await taskRepository.createQueued(queued);
+    const hostShard = await taskRepository.createQueued({
+      ...queued,
+      claimedBy: "host",
+    });
+
+    /* 只读窥视：给出 id 而**不领走**（领了不跑正是这一刀要消灭的形态）。 */
+    expect(await taskRepository.listQueuedIds("inline", 5)).toEqual([
+      nullShard.id,
+    ]);
+    expect(await taskRepository.listQueuedIds("host", 5)).toEqual([
+      hostShard.id,
+    ]);
+    expect(await taskRepository.findStatusById(nullShard.id)).toMatchObject({
+      status: "QUEUED",
+    });
+
+    const claimed = await taskRepository.claimNextQueued("inline", 1);
+    expect(claimed).toEqual([nullShard.id]);
+    expect(await taskRepository.findStatusById(nullShard.id)).toMatchObject({
+      status: "RUNNING",
+    });
+    expect(await taskRepository.findStatusById(hostShard.id)).toMatchObject({
+      status: "QUEUED",
+    });
+
+    /* `findExecJob` 用的是**绑片**的归属谓词（本进程的 impl 是 inline）：
+     * 这条读出来的就是要交给 ComfyUI 执行的图，跨片读到别人的载荷等于替别的宿主起跑。 */
+    expect(await taskRepository.findExecJob(hostShard.id)).toBeNull();
+    expect(await taskRepository.findExecJob(nullShard.id)).toMatchObject({
+      workflowName: "wf-wire",
+    });
+  });
+});
+
 /* ─────────────────────────────── Film ─────────────────────────────── */
 
 describe("FilmRepository / FilmShotRepository", () => {
