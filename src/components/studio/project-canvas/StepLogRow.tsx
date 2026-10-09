@@ -58,7 +58,7 @@ export const StepLogRow = memo(function StepLogRow({
     <div
       data-testid="log-line"
       data-level={log.level}
-      className="border-border-subtle hover:bg-subtle/60 flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
+      className="border-border-subtle hover:bg-subtle/60 flex items-start gap-2.5 border-b px-4 py-1 font-mono text-sm leading-snug"
     >
       <span className="text-ink-muted shrink-0">{fmtTime(log.t)}</span>
       <span

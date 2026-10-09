@@ -126,10 +126,10 @@ export function WorkshopAside({
       {/* Missing materials */}
       <div className="border-border bg-surface rounded-2xl border p-4">
         <div className="mb-3 flex items-center gap-2">
-          <span className="bg-amber/20 text-amber grid size-5.5 place-items-center rounded-lg text-[13px] font-bold">
+          <span className="bg-amber/20 text-amber grid size-5.5 place-items-center rounded-lg text-sm font-bold">
             !
           </span>
-          <span className="text-ink text-[13px] font-semibold">
+          <span className="text-ink text-sm font-semibold">
             缺失素材 / 下一步
           </span>
         </div>
@@ -168,7 +168,7 @@ export function WorkshopAside({
 
       {/* 生成资源：本地 ComfyUI 链路唯一可执行来源 = 工作流库工作流 */}
       <div className="border-border bg-surface rounded-2xl border p-4">
-        <div className="text-ink mb-3 flex items-center justify-between text-[13px] font-semibold">
+        <div className="text-ink mb-3 flex items-center justify-between text-sm font-semibold">
           生成资源
           <span className="text-faint text-[10.5px]">
             {anyChannelConfigured ? "远端模型已适配" : "远端模型未适配"}
@@ -194,7 +194,7 @@ export function WorkshopAside({
 
       {/* Resource library */}
       <div className="border-border bg-surface rounded-2xl border p-4">
-        <div className="text-ink mb-3 text-[13px] font-semibold">资源库</div>
+        <div className="text-ink mb-3 text-sm font-semibold">资源库</div>
         <div className="gap-3">
           {resourceRows.map(([name, tag]) => (
             <div key={name} className="flex items-center gap-3">

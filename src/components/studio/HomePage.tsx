@@ -377,7 +377,7 @@ export function HomePage({
                     {/* Info */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-ink-bright group-hover:text-ink truncate text-[13px] font-medium transition-colors">
+                        <span className="text-ink-bright group-hover:text-ink truncate text-sm font-medium transition-colors">
                           {proj.name}
                         </span>
                         <span

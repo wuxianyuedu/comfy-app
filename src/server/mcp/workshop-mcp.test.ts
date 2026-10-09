@@ -283,7 +283,7 @@ describe("工坊 MCP 工具面", () => {
     const modern = payloadOf();
     /* 判的是「两种表达等价」这条**语义**（老口径 `"1024x1024"` 必须换算成与新口径
      * 同一个 SizeSpec，AI 客户端仍会这么写），而不是去钉某个像素值 ——
-     * 把 `{width: 1024}` 写进断言就是照实现抄期望（§11.2.1 第九条）。 */
+     * 把 `{width: 1024}` 写进断言就是照实现抄期望（§11.2.1「用例的期望值要从语义推，不能从实现抄」）。 */
     expect(oldStyle.size).toBeDefined();
     expect(oldStyle.size).toEqual(modern.size);
 

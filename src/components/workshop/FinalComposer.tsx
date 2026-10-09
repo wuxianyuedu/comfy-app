@@ -177,7 +177,7 @@ export function FinalComposer({
     <div className="flex-col gap-5">
       {/* Summary row */}
       <div className="border-border bg-surface flex flex-wrap items-center gap-3 rounded-2xl border p-4">
-        <span className="text-ink text-[13px] font-semibold">成片时间线</span>
+        <span className="text-ink text-sm font-semibold">成片时间线</span>
         <span className="bg-primary/12 text-primary text-2xs rounded-lg px-3 py-1">
           {timeline.length} 镜 · 片长约 {Math.round(totalDuration)}s
         </span>

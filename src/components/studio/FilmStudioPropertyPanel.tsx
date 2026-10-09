@@ -33,9 +33,7 @@ export function FilmStudioPropertyPanel({
     <aside className="border-border-subtle bg-panel-deep/85 flex w-70 shrink-0 flex-col border-l backdrop-blur-sm">
       {/* Header */}
       <div className="border-border-subtle flex h-11 items-center border-b px-4">
-        <span className="text-ink-field text-[13px] font-semibold">
-          镜头属性
-        </span>
+        <span className="text-ink-field text-sm font-semibold">镜头属性</span>
       </div>
 
       {/* Form fields */}
@@ -52,7 +50,7 @@ export function FilmStudioPropertyPanel({
               onChange={textHandler((name) =>
                 onPatchShot(selectedShotId, { name }),
               )}
-              className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:ring-1"
+              className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-sm outline-none focus:ring-1"
             />
           )}
         </FormField>
@@ -75,7 +73,7 @@ export function FilmStudioPropertyPanel({
                   duration: formatShotDuration(Number(event.target.value)),
                 })
               }
-              className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:ring-1"
+              className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-sm outline-none focus:ring-1"
             />
           )}
         </FormField>
@@ -85,7 +83,7 @@ export function FilmStudioPropertyPanel({
           label="生成模式"
           labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
-          <div className="border-border bg-subtle text-ink-field flex h-9 items-center rounded-lg border px-3 text-[13px]">
+          <div className="border-border bg-subtle text-ink-field flex h-9 items-center rounded-lg border px-3 text-sm">
             图生视频 (Wan I2V)
           </div>
         </FormField>
@@ -95,7 +93,7 @@ export function FilmStudioPropertyPanel({
           label="转场效果"
           labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
-          <div className="border-border bg-subtle text-ink-strong flex h-9 items-center rounded-lg border px-3 text-[13px]">
+          <div className="border-border bg-subtle text-ink-strong flex h-9 items-center rounded-lg border px-3 text-sm">
             溶解过渡 (Cross Dissolve)
           </div>
         </FormField>
