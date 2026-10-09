@@ -24,6 +24,7 @@
  *      放行，**并且例外项自己也要能被复算**（见「例外项还在守东西」那条用例）——
  *      否则这张表就退化成「谁都能往里加一条」。
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -101,6 +102,53 @@ const PRODUCT_ROOT_LITERALS: Array<{
   },
 ];
 
+/**
+ * **「读得到就用、读不到就站下」的条件路径**：仓库里查不到**不是缺陷**。
+ *
+ * 与上面那张产物根表不同形：产物根那份是「文件由构建期生成，仓库里本来没有」；
+ * 这份是「文件是**台账 / 登记表**，只在有站点时才需要，零站点时它本就不该存在」。
+ * 实测撞上的两条：`check-annotate-consumer.cjs` / `check-task-meta-consumer.cjs`
+ * 的 `LEDGER` 常量 —— 两个门禁的判定口径明写「零站点 → 通过，本判据是纯闸门」，
+ * 而本判据只问「这个字面量在仓库里存不存在」，问不出「它是不是条件路径」。
+ *
+ * **登记的代价是下面那条用例真的去跑一次**：本表不算「声明即放行」，每一条都要
+ * 复算三件事，缺一条红（`reason` 本身不参与判定，只给人看）：
+ *   ① 登记方脚本里这个字面量还在（不在了 = 这条例外是空账，该删）；
+ *   ② **该脚本在一条真仓库里对「这个路径不存在」是站得下的**（退出码 0）——
+ *      这正是「它不是缺陷」的机器判据。哪天有人把零站点那条快路径改成先读台账，
+ *      这条会当场红，而不是让本判据悄悄放行一个真失效；
+ *   ③ 仓库里仍然**没有**这个文件（哪天它入库了，就该从本表删掉，回到被本判据
+ *      正常管着的状态）。
+ *
+ * 为什么不做成「以 `scripts/.` 开头的一律放行」或「按 `existsSync` 邻近判断」：
+ * 前者的洞开得比它拦下的东西大（`check-theme-colors.cjs` 那次静默失效的豁免项
+ * 就是 `scripts/` 之外的源码路径，而这类清单里最会犯的错恰好是把路径抄错）；
+ * 后者是拿源码形状当语义 —— 一行 `existsSync` 相距多远都算「条件」，而
+ * `check-annotate-consumer.cjs` 里真有一处 `if (!fs.existsSync(abs)) return null;`，
+ * 判据会连它旁边那条**真**该存在的路径一起放走。
+ */
+const CONDITIONAL_PATHS: Array<{
+  /** 把这条路径当字面量写下来的那份门禁脚本 */
+  script: string;
+  /** 字面量本身（相对仓库根） */
+  path: string;
+  /** 为什么「不存在」是它的正常状态之一 */
+  reason: string;
+}> = [
+  {
+    script: "scripts/check-annotate-consumer.cjs",
+    path: "scripts/.annotate-consumers.json",
+    reason:
+      "台账：有 `ctx.annotate` 站点才需要登记消费方，零站点时本判据是纯闸门（零站点 → 退 0）。",
+  },
+  {
+    script: "scripts/check-task-meta-consumer.cjs",
+    path: "scripts/.task-meta-consumers.json",
+    reason:
+      "台账：有 `task.meta` 站点才需要登记消费方，零站点时本判据是纯闸门（零站点 → 退 0）。",
+  },
+];
+
 /** 读一份仓库内脚本的源码（读不到即返回空串，让断言去报「指不到东西」）。 */
 function sourceOf(rel: string): string {
   const abs = path.join(ROOT, rel);
@@ -109,6 +157,31 @@ function sourceOf(rel: string): string {
 
 function isProductRootLiteral(script: string, p: string): boolean {
   return PRODUCT_ROOT_LITERALS.some((e) => e.script === script && e.path === p);
+}
+
+function isConditionalPath(script: string, p: string): boolean {
+  return CONDITIONAL_PATHS.some((e) => e.script === script && e.path === p);
+}
+
+/**
+ * 在仓库根跑一份门禁脚本，返回退出码。
+ *
+ * 跑的是**真脚本、真仓库**（不是夹具）：本判据要证的正是「它在仓库当前这个状态下
+ * 站得下」，而那个状态就是「台账不在」。跑不起来（脚本被删 / 起不来）按**非 0** 记 ——
+ * 让断言去红，而不是让异常把一个真问题变成「跳过」。
+ */
+function exitCodeOfGate(rel: string): number {
+  try {
+    execFileSync(process.execPath, [path.join(ROOT, rel)], {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 60_000,
+    });
+    return 0;
+  } catch (error) {
+    const code = (error as { status?: number | null }).status;
+    return typeof code === "number" ? code : -1;
+  }
 }
 
 /** 排除「产物根」命名空间之后，某份门禁脚本里真正该存在的仓库路径字面量。 */
@@ -135,6 +208,9 @@ describe("门禁脚本里的路径字面量必须存在", () => {
       // 不是缺陷）；它们由下面那条用例反向守着，不许变成免检洞
       for (const p of all) {
         if (isProductRootLiteral(rel, p)) continue;
+        // 「条件路径」（台账类：零站点时本就不该存在）同样不参与 —— 它们由下面
+        // 那条用例**真跑一次**反向守着，不是声明即放行
+        if (isConditionalPath(rel, p)) continue;
         if (!existsSync(path.join(ROOT, p))) dead.push(`${rel} → ${p}`);
       }
     }
@@ -178,6 +254,31 @@ describe("门禁脚本里的路径字面量必须存在", () => {
       expect.soft(
         existsSync(path.join(ROOT, entry.path)),
         `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从产物根例外表里删掉`,
+      ).toBe(false);
+    }
+  });
+
+  /**
+   * 条件路径例外表：每条都要复算三件事，**其中 ② 是真跑一次脚本** ——
+   * 这是「不存在不是缺陷」的机器判据，也是这张表不是「免检名单」的原因。
+   */
+  it("条件路径例外项还在守东西：三条登记理由都能复算", () => {
+    expect(CONDITIONAL_PATHS.length).toBeGreaterThan(0);
+    /* 软断言：一张例外表逐条复算 —— 过期的条目要一次全列出，
+       否则「删一条、再发现下一条」（§11.18）。 */
+    for (const entry of CONDITIONAL_PATHS) {
+      expect.soft(
+        quotedRepoPaths(sourceOf(entry.script)),
+        `例外失效：${entry.script} 里已经没有字面量 ${entry.path} —— 把这条例外从表里删掉`,
+      ).toContain(entry.path);
+      expect.soft(
+        exitCodeOfGate(entry.script),
+        `${entry.script} 在这个仓库里没站下（台账不在本该是它的正常状态）—— ` +
+          "要么它已经不是条件路径了（该从本表删掉），要么零站点那条快路径坏了",
+      ).toBe(0);
+      expect.soft(
+        existsSync(path.join(ROOT, entry.path)),
+        `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从条件路径例外表里删掉`,
       ).toBe(false);
     }
   });
