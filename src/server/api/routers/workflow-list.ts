@@ -110,7 +110,7 @@ export const workflowListProcedures = {
         orderBy: [desc(workflowTemplate.createdAt)],
       });
 
-      // 批量取出每个模板的模型标签名（替代 Prisma modelTags 关系投影）
+      // 批量取出每个模板的模型标签名（一次性取全部模板的标签，避免逐条查）
       const wfIds = list.map((w) => w.id);
       const tagRows =
         await workflowModelTagRepository.getTemplateTagRows(wfIds);

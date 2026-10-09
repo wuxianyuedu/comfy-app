@@ -127,17 +127,15 @@ describe("createChildExitHandler（退出回调可单测）", () => {
     stopRequested?: boolean;
     onBanner?: (b: string) => void;
   }) {
-    const banners: string[] = [];
     const lines: string[] = [];
     const logs: string[] = [];
     let cleared = 0;
     const onExit = createChildExitHandler({
       banner: (report) => `■ ComfyUI 进程已退出：${report.reason}`,
-      appendSessionBanner: (b) => {
-        banners.push(b);
-        over.onBanner?.(b);
+      appendRuntimeLog: (l) => {
+        lines.push(l);
+        if (l.startsWith("■")) over.onBanner?.(l);
       },
-      appendRuntimeLog: (l) => lines.push(l),
       log: (m) => logs.push(m),
       clearChild: () => {
         cleared++;
@@ -149,20 +147,29 @@ describe("createChildExitHandler（退出回调可单测）", () => {
         mode: "bound",
       }),
     });
-    return { onExit, banners, lines, logs, cleared: () => cleared };
+    return {
+      onExit,
+      lines,
+      logs,
+      cleared: () => cleared,
+      /* 「横幅」在实现里是写进 runtime 文件的第一条 —— 这里按同一个形状取，
+       * 让各条断言保持「读一条日志行」的语义（一次启动一份文件之后没有独立的
+       * 横幅出口）。 */
+      banners: () => lines.filter((l) => l.startsWith("■")),
+    };
   }
 
   it("横幅写「为什么退出」而不是只写 code，并落 [exit] 明细 + 清句柄", () => {
     const h = handler({});
     h.onExit(137, null);
-    expect(h.banners[0]).toBe("■ ComfyUI 进程已退出：异常退出（exit 137）");
+    expect(h.banners()[0]).toBe("■ ComfyUI 进程已退出：异常退出（exit 137）");
     // 结构化明细要能事后 grep：pid / 存活 / code / signal / 模式 都在
-    expect(h.lines[0]).toContain("[exit] 异常退出（exit 137）");
-    expect(h.lines[0]).toContain("pid=4242");
-    expect(h.lines[0]).toContain("存活=2m17s");
-    expect(h.lines[0]).toContain("signal=null");
+    expect(h.lines[1]).toContain("[exit] 异常退出（exit 137）");
+    expect(h.lines[1]).toContain("pid=4242");
+    expect(h.lines[1]).toContain("存活=2m17s");
+    expect(h.lines[1]).toContain("signal=null");
     // 可行动作单独一行（规范 §9.2 第 3 条：失败要有出口）
-    expect(h.lines[1]).toContain("[exit] ↩");
+    expect(h.lines[2]).toContain("[exit] ↩");
     expect(h.logs[0]).toContain("异常退出");
     expect(h.cleared()).toBe(1);
   });
@@ -170,20 +177,20 @@ describe("createChildExitHandler（退出回调可单测）", () => {
   it("被信号杀掉时以信号为准（退出码是派生物，不是原因）", () => {
     const h = handler({});
     h.onExit(null, "SIGKILL");
-    expect(h.banners[0]).toContain("SIGKILL");
-    expect(h.lines[0]).toContain("signal=SIGKILL");
+    expect(h.banners()[0]).toContain("SIGKILL");
+    expect(h.lines[1]).toContain("signal=SIGKILL");
   });
 
   it("用户主动关闭：不报「莫名退出」", () => {
     const h = handler({ stopRequested: true });
     h.onExit(0, null);
-    expect(h.banners[0]).toContain("用户主动关闭");
+    expect(h.banners()[0]).toContain("用户主动关闭");
   });
 
   it("code 与 signal 都拿不到时如实说「拿不到」，不编一个 0", () => {
     const h = handler({});
     h.onExit(null, null);
-    expect(h.banners[0]).toContain("拿不到退出码");
-    expect(h.banners[0]).not.toContain("exit 0");
+    expect(h.banners()[0]).toContain("拿不到退出码");
+    expect(h.banners()[0]).not.toContain("exit 0");
   });
 });

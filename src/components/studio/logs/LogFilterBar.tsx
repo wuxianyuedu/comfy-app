@@ -120,7 +120,7 @@ export function LogFilterBar({
              * `LEVEL_LABEL_STYLES` 留在 className 里，因为「info/warn/error
              * 三档文字色」是 **level-specific 语义色**（黄=警告、红=错误…）、
              * 不是 active 视觉。P77 二批统一的是 active 的载体、不是这个。 */
-            className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${LEVEL_LABEL_STYLES[option.value]} ${
+            className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-xs leading-none transition-colors ${LEVEL_LABEL_STYLES[option.value]} ${
               option.value === filter ? FILTER_SELECTED_ITEM_STYLES : ""
             }`}
             title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}

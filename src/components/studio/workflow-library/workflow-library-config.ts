@@ -57,8 +57,7 @@ export interface WorkflowRow {
   /** 一条工作流可以同时声明多个模式。为空或缺省时，
    *  UI 退回用 `[taskType]` 展示（兼容老数据）。`modes` 与
    *  `defaultMode` 由 GET /api/workflows 下发，落库在
-   *  prisma.WorkflowTemplate 的 modes /
-   *  .defaultMode 两个字段。 */
+   *  `WorkflowTemplate` 的 `modes` / `defaultMode` 两列。 */
   modes?: string[];
   /** 规范默认模式码；必须出现在 `modes` 里。
    *  与 `taskType` 保持同步，供旧版单值筛选用。 */

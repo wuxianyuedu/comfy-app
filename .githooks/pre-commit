@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(34 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(45 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -218,6 +218,19 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # —— 清单与 C 组同源（`affected-tests.mjs`），所以把那条判据从固定清单里摘掉当场被拦。
   # 只在暂存改动命中 e2e/visual/** 或 playwright.config.ts 时做事，普通提交零输出。
   run "像素层提交带像素判决（改了 e2e/visual 才跑）" node scripts/visual-gate.mjs
+  # 每一档像素基线都要**有主**（规范 §11.8）。上一步判的是「带不带像素判决」，它**不跑像素**，
+  # 所以「录一版、就再没人碰过」这条路上一个判据都没有 —— 现场是入库的 `-linux.png` 有 4 张
+  # 与当次环境差 1 像素（文字整体下移一行），而没有任何东西记着这一档上次被跑绿是什么时候。
+  # 本步判「每一登记档都有一条新鲜度记录，且写清谁 / 什么时候 / 按哪条命令复核的」
+  # （`scripts/.visual-baseline-freshness.json`；缺几张基线的档由 `PENDING_PLATFORMS` 顶着，
+  # 不要求新鲜度记录 —— 两张表各管数量与时效）。**刻意不做墙钟阻断**：像素结论只在录过基线的
+  # 那台机器上成立，win32 档的复核只能在那台 Windows 机器上做，拿时钟去阻断等于让所有人卡在
+  # 一个只有少数人能解的账上。记账走 `pnpm check:visual`（跑绿即记），钩子里不跑像素。
+  # 全量 e2e 那一档还多一条「**今天**自证过没有」（ISSUE #1282）：`pnpm test:e2e` 跑绿即记，
+  # 或 `node scripts/e2e-run.mjs --skip "<理由>"` 记一条写明理由的豁免（占位理由被拦）。
+  # 它按本地日历日只拦**当天的第一次**提交，当天已有凭证 ⇒ 零输出、放行；账文件还没入库时
+  # 只提醒、不阻断（平台侧 squash 合并不跑本地钩子）。
+  run "每档都有主（新鲜度账：像素档 + 全量 e2e 每日自证）" node scripts/visual-freshness-gate.mjs
   # 注释语言棘轮（规范 §12.4.6）：注释一律中文，只有「会被 next-code-frame 渲染到」
   # 的构建期模块例外（Next 的 code frame 按字节切串，命中多字节字符内部时 Rust 侧
   # 直接 panic 把 `next build` 打死，偏移敏感、报错指不出业务原因）。判据本身一直是对的，
@@ -233,13 +246,64 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   #   ① 「环境早退」——`if (typeof window !== "undefined") return;` 这类写法把用例的
   #      结论挂在**环境的一个全局默认值**上，于是换个默认档（或挪进另一个 project）
   #      之后它照样报绿、**一条断言都没跑**。这是「绿有两种含义」里坏的那一种
-  #      （同 §11.13.1 的「判据在场 ≠ 判据在跑」）。
+  #      （同 §11.23 的「声明 ⇄ 读者」）。
   #   ② 「目录档与文件头矛盾」——`vitest.config.ts` 的 `projects` 按目录声明了默认档，
   #      两者互相矛盾时说明有一处过时，让「挪目录 / 改档」这类改动留下痕迹。
   # 实测（四个变异各核一次）：把 `vi.stubGlobal("window", undefined)` 换成环境早退、
   # 把 jsdom 档里的文件头改成 node、把 `.test.tsx` 的文件头改成 node、
   # 把判据③（冗余文件头）改永假或放宽成「有头就报」—— 四条都当场红。
   run "用例环境档（环境早退 / 目录档矛盾 / 冗余文件头）" node scripts/check-test-environment.cjs
+  # 软断言（`expect.soft`）用在哪儿（规范 §11.18）。**形状判据**：它必须落在
+  # **循环体里**（一张清单逐项判、一项失败不影响下一项）。落在循环外的软断言
+  # 会把真正的原因吞掉 —— 实测：软断言失败后下一行照跑，依赖前提的语句当场抛
+  # `TypeError`，报告里只剩那条 TypeError，软断言那句「真正的原因」一个字不留。
+  # 判据走**缩进**（prettier 保证 tabWidth 2），不解析花括号：花括号那条路上
+  # 要区分 JSX 自闭合标签 / 箭头函数体直接给正则 / 正则字符类里的 `[\/]`，
+  # 每修一处都要再加一层词法分析 —— 而那与「包着我的那一帧是不是循环」无关。
+  run "软断言用在循环体里（expect.soft）" node scripts/check-soft-assertions.cjs
+  # 并发档位（`it.concurrent` / `describe.concurrent`）用在哪儿（规范 §11.19）。
+  # 判两件，都是**纯文本、零网络、实测 < 1s**：
+  #   ① 并发档里不许出现 `expect.poll` —— 实测两者互斥（vitest 5.0.3：
+  #      并发档里若同文件其它用例先让出事件循环，`expect.poll` 报
+  #      `must be called inside a test`，20/20 红；把两条用例次序反转则 0/20 红 ——
+  #      阈值卡在 20ms 那一档，也就是说**同一份代码换台机器就换一个结论**）。
+  #      而上一轮（§11.14）刚把全仓的等待统一收成 `expect.poll`，两者在同一个
+  #      用例里互斥；`vi.waitFor` 在同一形状下实测不受影响。
+  #   ② 并发档的文件必须给出隔离声明（`// 并发档：<为什么没有共享可变状态>`）——
+  #      共享是跨模块的（模块级变量 / 全局单例 / 临时目录 / 真库 / 端口），
+  #      静态判会误报一片，所以判「有没有声明」而不判「有没有共享」。
+  #      反例实测：`tests/executor-host.test.ts` 全改并发后红 2 条，报
+  #      `Unable to open connection to local database`（模块级 `tmpDirs` 被
+  #      别人的 `afterEach` 整个 rmSync 掉）。
+  run "并发档位用法（it.concurrent）" node scripts/check-test-concurrency.cjs
+  # 类型层断言（`expectTypeOf` / `assertType`）的**执行者在场**（规范 §11.20）。
+  # 这两者在 **vitest 里没有牙**：实测 `expectTypeOf<string>().toEqualTypeOf<number>()`
+  # 跑 `vitest run` 是 **Tests 1 passed**（vitest 只擦类型、不做类型检查）。
+  # 它们唯一的执行者是 `tsc --noEmit`（A 组），而 tsc 按 `tsconfig.json` 的 include 面收文件 ——
+  # 所以站点一旦落到 include 面之外，全仓的断言会**同时变成装饰品且没有任何一处报错**
+  # （实测：把 include 从 `**/*.ts` 收窄成 `src/**/*.ts`，tsc 与 vitest 双双报绿）。
+  # 判据还认折行站点（prettier 折开 `expectTypeOf(` 之后仍要被扫出来 ——
+  # 只认行内字面量会整片漏出扫描面，同 §11.18.3.1 那条）。
+  run "类型层断言的执行者（expectTypeOf）" node scripts/check-type-assertion-executor.cjs
+  # `ctx.annotate` 的**消费方在场**（规范 §11.21）。它写下的注释只有**失败时**
+  # 在 text reporter 里可见；`--reporter=json` 的产物里一个字都没有（实测逐键核过：
+  # 既无顶层 `annotations`、`assertionResults[].meta` 也是空的），唯一的读数通道是
+  # programmatic API `createVitest()` 的 `task.annotations()` —— 而门禁链跑 vitest
+  # 用的是 CLI spawn，两者天然不兼容。所以「挂一把没人读的注释」比不写更坏：
+  # 它让人以为这件事有人管。判据只做一件事：有站点就必须登记消费方。
+  # ⚠️ 顺带两条实测写在这里，免得下一个人重新踩：签名是 `(message, type?: string, attachment?)`，
+  # 照直觉传对象当 type 会被当成附件并抛 `Test attachment requires "body" or "path"`；
+  # 而它**不改结论**（红照样红、退出码照样非零），所以替代不了「先摘掉再跑」那类机制。
+  run "注解消费方（ctx.annotate）" node scripts/check-annotate-consumer.cjs
+  # `ctx.task.meta` 写下的数据**有读的人在**（规范 §11.22）。它是相邻那两条
+  # （`expectTypeOf` §11.20 / `annotate` §11.21）里**唯一**能从 CLI 那侧读到的通道：
+  # 实测自定义键原样落进 `--reporter=json` 的报告、**绿的用例也带**（`annotate` 只有
+  # 失败时可见），两个 reporter 还能同时给（人读的 text 照旧）。但门禁链跑 vitest
+  # 的参数里**没有** `--reporter=json`、没有 `--outputFile` —— 写了没人读，数据落进空气，
+  # 而表面上代码写得像「已经登记了」。判据因此只判一件事：有站点就必须登记消费方。
+  # ⚠️ 认的是 `task.meta` 这条**属性链**而不是裸 `meta`：本仓库另有大量 `<meta>` /
+  # `meta.name` 的写法，放宽会误报一片，而误报的判据活不过一次评审（§11.18.4）。
+  run "元数据消费方（task.meta）" node scripts/check-task-meta-consumer.cjs
   # 判据 ⇄ 执行者的双向判据（规范 §13.5.12 / ISSUE #1451 要求 2）：判定型脚本
   # （有 process.exit）无执行者即红 —— 除非登记在 scripts/.gate-executor-ledger.json
   # 的「按需召唤」台账里（含「为什么不能进钩子」+「谁按需跑」）；报告型（0 处
@@ -247,6 +311,17 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 立案现场就是 check-comment-language.cjs：头部自称供钩子调用、§12.4.6 也写着
   # 它在报红，而它一个执行者都没有 —— 文档说谎而全绿比漏报更难发现。
   run "判据执行者台账" node scripts/check-gate-executors.cjs
+  # 声明 ⇄ 读者的索引（规范 §11.23）。本仓库的「声明机制」是一个一个事故里长出来的
+  # （判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 /
+  # 类型断言执行者 / 软断言语义 / 像素档……），每种都自带台账与判据，而**没有任何一处
+  # 说得出「本仓库一共有哪些声明、各自的读者是谁」** —— 于是第 5 个人加一种新机制时
+  # 无处可查「我该登记什么」。这一步把 scripts/.declaration-readers.json 当成索引核：
+  #   ① 每一行点名的读者存在（脚本 / 用例丢了即红）；
+  #   ② 每一行的执行者真在门禁链里（钩子步骤被摘掉、用例离开 C 组固定清单，都红）；
+  #   ③ 索引自己不许静默降级（解析不出 / carriers 为空 / 行数低于地板即判失败）。
+  # 上一步（判据执行者台账）管的是**脚本**有没有执行者；这一步管的是**声明**有没有读者，
+  # 两者维度不同、互不替代（前者判 process.exit，后者判「读者 + 执行者在场」）。
+  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs
   # 同一属性被指定两次（编辑器报 ts(2783)、项目钉的 typescript6 命令行不报）：
   # 命令行全绿、编辑器标红，判据只能落在源码形态上。此前是报告型（0 处 process.exit），
   # 零判定档；收成判定档的前提是实测量产为 0（ISSUE #1451 要求 2）。
@@ -260,6 +335,47 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 成本：清单为空是**常态**，此时零耗时零输出退出；非空时才真跑那几份文件
   # （个位数条目，不是全量 —— §13.5.8「跑多少由改动面决定」）。
   run "已知基线失败登记过期（清单为空时零耗时）" node scripts/check-known-failed-stale.mjs
+  # 上一步只在**清单非空**时才真跑，而清单为空是终态/常态 ⇒ 「真跑那一档」在干净仓库上
+  # 从没被执行过，它的自证入口 `--self-test` 更是一个执行者都没有（全仓无调用点）。
+  # 本步补的正是这个执行者，触发面窄（只碰了这套机制本身才做事，普通提交零耗时）：
+  # 改登记表 / 改判据本体 / 改钩子接线时才跑一次自证（实测 ~0.9s，一次真 vitest 冷启）。
+  # 两个实测的洞都只有它接得住：reporter 改名（用例喂夹具、看不到真命令）与
+  # judgeStillFailing 恒放行（旧版自证只有红侧、判据恒放行时它照样绿）。详见脚本文件头。
+  run "已知基线失败登记·自证（碰了这套机制才跑）" node scripts/known-failed-selftest-gate.mjs
+  # 测试层裸 sleep 的净数（规范 §11.14）。§11.14 早就把
+  # `await new Promise(r => setTimeout(r, N))` 定为第一层反模式，执行者写的是
+  # 「新增时由 review 拦下」，而实测这句话两头都落空：上一轮清掉的 6 个文件是**抽样**、
+  # 口径没有钉住，于是同一个数在两次盘点里从 20 变成 38；`grep -c test-sleep` 在
+  # 这个钩子里一直是 0、CI 又随 ISSUE #623 删除 —— 「review 拦下」是唯一的执行者，
+  # 而 review 是人、人会漏（同 §13.5.12 的立案现场：判据自称在跑、实际一个执行者都没有）。
+  # 判的是**净数不许涨**（棘轮，`scripts/.test-sleep-baseline.json`，只许降）而不是
+  # 「零容忍」—— 宏任务排空 / 判据自己的夹具 / mock 内部延迟 / 必须真挂钟这四类都是
+  # 正当形态，逐站点写一条 `// sleep-ok: <理由>` 登记豁免，不进棘轮。
+  # 成本实测：纯文本扫描 624 份用例约 0.25s、零网络、零子进程（照 §13.5.4 的成本判据）。
+  run "测试层裸 sleep 棘轮（§11.14）" node scripts/check-test-sleep.cjs
+  # 测试层「等异步落定」的写法边界（规范 §11.14.3）。`check-test-sleep.cjs` 管住了
+  # 裸 sleep 那一半，而更大量的那一半没人在数：全仓 `await waitFor(...)`
+  # （`@testing-library/react` 那个）实测 211 处 / 30 份文件，一条判据都不认识它 ——
+  # 两次盘点从 206 变成 211，又一次是「没有执行者」的形态。
+  # 判的是**边界**而不是「有没有 waitFor」：它没被废弃，且有两处 `expect.poll`
+  # 替代不了的能力 —— ① 等 DOM 出现/消失（jest-dom 匹配器与 `expect.poll` 类型
+  # 不兼容，eslint 的 await-thenable 当场报红）；② 站点落在假定时器窗口内
+  # （只有 waitFor 会每轮自动 advanceTimersByTime）。这两种形态**由判据自己认出来**，
+  # 其余一切 `await waitFor` 都是越界（等的是某个值 → 改 `expect.poll`）。
+  # 只认从 `@testing-library/react` 导入的 waitFor，本地同名 helper 不在此列。
+  # 成本实测：纯文本扫描 624 份用例约 0.3s、零网络、零子进程。
+  run "测试层 waitFor 边界（§11.14.3）" node scripts/check-test-waitfor.cjs
+  # 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮（规范 §11.15）。§11.15 那句
+  # 「本仓库已全部转换完」此前**没有任何东西在守**（grep -c each scripts/check-*.cjs = 0、
+  # CI 又随 ISSUE #623 删除），于是它只是规范里的一句话、不会自己响：
+  # `c9f349ca` 收口 63 处之后实测又长出 2 处（`describe.each` 被那轮漏掉一处、
+  # PR #1558 新写一处）—— 同 check-test-sleep 那次（20 → 38）是同一种病。
+  # 判的是**净数不许涨**（棘轮，`scripts/.test-it-each-baseline.json`，只许降，
+  # `--update` 拒绝上涨，当前 0 处）。`it.each` / `test.each` / `describe.each`
+  # 一视同仁（按名字收窄就会漏，① 号站点就是这么来的）；本地同名 helper 不看
+  # （认 import 事实，不是名字）；夹具字符串由 maskNonCode 挡住。
+  # 成本实测：纯文本扫描 624 份用例约 0.3s、零网络、零子进程。
+  run "测试层 it.each 存量棘轮（§11.15）" node scripts/check-test-it-each.cjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────

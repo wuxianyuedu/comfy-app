@@ -17,6 +17,7 @@ const GLOBAL_IDS: WorkspaceView[] = [
   "history",
   "queue",
   "workflows",
+  "console",
 ];
 const PROJECT_TAB_IDS: WorkspaceView[] = [
   "project",
@@ -78,19 +79,19 @@ describe("NAV_ITEMS（全量注册表）", () => {
 });
 
 describe("OVERLAY_NAV_ITEMS（全局浮层入口）", () => {
-  it("恰好三项、按序：模型适配 / 模式契约 / 控制台", () => {
+  it("恰好两项、按序：模型适配 / 模式契约", () => {
     /* 「恰好 + 按序」是刻意的强度：新增一个全局浮层入口时必须显式改这里，
-       不能悄悄多出一个侧栏项。`aa3ee904` 加了「控制台」却没回头改这条，
-       于是它在主干上确定性红 —— 补全的同时不降判据。 */
+       不能悄悄多出一个侧栏项。
+       控制台**不在**这里（ISSUE #1327 反馈）：它是**视图**、不是浮层 —— 跑一条
+       `pnpm test` 是分钟级的事，浮层一关就断连回收命令，用户因此不敢跑长命令。
+       它现在是全局项里的 `console` 视图，与历史 / 队列同形。 */
     expect(OVERLAY_NAV_ITEMS.map((i) => i.overlay)).toEqual([
       "model-adapters",
       "mode-contract",
-      "console",
     ]);
     expect(OVERLAY_NAV_ITEMS.map((i) => i.label)).toEqual([
       "模型适配",
       "模式契约",
-      "控制台",
     ]);
   });
 
@@ -104,10 +105,12 @@ describe("OVERLAY_NAV_ITEMS（全局浮层入口）", () => {
     }
   });
 
-  it("位置紧跟「流程」：全局项末尾之后就是它们", () => {
+  it("位置在「流程」之后的收尾段：浮层入口不与其它全局项混排", () => {
     /* 契约口清单是工作流库配落点的依据、适配器是远端模型的字段映射，两件事都服务
-       「流程」这条链路 —— 所以它们的入口贴着「流程」，不与其它全局项混排。 */
+       「流程」这条链路 —— 所以它们在全局项之后紧跟着排，不与其它全局项混排。
+       控制台（`console`）作为第三个全局视图也在这条链路之后：它跑的就是这两件事
+       的门禁（见 `NAV_ITEMS` 里那一项的说明）。 */
     const ids = [...globalNavItems().map((i) => i.id)];
-    expect(ids[ids.length - 1]).toBe("workflows");
+    expect(ids.slice(-2)).toEqual(["workflows", "console"]);
   });
 });

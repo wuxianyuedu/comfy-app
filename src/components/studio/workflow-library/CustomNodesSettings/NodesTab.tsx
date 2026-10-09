@@ -168,7 +168,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                       <div className="flex items-center gap-2">
                         <span className="text-ink font-medium">📁</span>
                         <span
-                          className="text-ink truncate font-mono text-[12px]"
+                          className="text-ink truncate font-mono text-xs"
                           title={parent}
                         >
                           {parent}

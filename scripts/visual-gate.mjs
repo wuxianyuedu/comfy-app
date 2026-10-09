@@ -38,6 +38,10 @@ import {
   resolveAffectedTests,
 } from "./affected-tests.mjs";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
+import {
+  PENDING_PLATFORMS,
+  missingBaselinesForPlatform,
+} from "./visual-baselines.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -104,6 +108,19 @@ export function runGate({ staged, tests }) {
       "        修法：把这条判据放回 scripts/affected-tests.mjs 的 FIXED_STRUCTURAL_TESTS\n" +
       "        （它是「每次提交都跑」那份清单的成员），或按 §13.5.8 重跑一次 C 组。",
   };
+}
+
+/**
+ * 登记为「待重录」但仍缺基线的那些平台 —— 提醒用（**不阻断**）。
+ *
+ * 抽成纯入口是为了可被执行（同 `runGate` 的先例）：这一句最可能的退化是「永远说没有」，
+ * 那样它就静默消失、与没有它一样。
+ *
+ * @param {{platforms: Record<string, unknown>, missing: (p: string) => string[]}} args
+ * @returns {string[]}
+ */
+export function pendingPlatforms({ platforms, missing }) {
+  return Object.keys(platforms).filter((p) => missing(p).length > 0);
 }
 
 /** 读测试清单与 import 图节点（与 affected-tests 同一份口径，不另立收窄规则）。 */
@@ -179,6 +196,27 @@ function main() {
   console.log(
     `  [ok] 本次清单含 ${PIXEL_JUDGE}（C 组会跑它；e2e 的通过数不作为像素层结论）`,
   );
+  /* 「待重录」的账在这里被点名 —— 只提醒、不阻断。
+   *
+   * 这张登记表是**放行**（那一档缺几张不红，因为只能在那一档的机器上录），所以改
+   * 像素层的人不会从任何判据里听到「还欠着」。缺的账只剩 `PENDING_PLATFORMS` 里一句
+   * `reason`——而它是给人读的文档，不是会被推到你眼前的提醒。提示落在「改了像素层」
+   * 这个动作上，是它与补录动作唯一的自然交集。
+   *
+   * **不阻断**是刻意的：补录只能在那一档的机器上做（本仓库的自动化执行环境都是
+   * linux），阻断等于让所有人卡在一个只有少数人能解的账上 —— 那比漏掉更费人。
+   * 登记项一旦补齐，配对判据会要求同批删掉它（双向不变式），所以这里不会一直吵。 */
+  const pending = pendingPlatforms({
+    platforms: PENDING_PLATFORMS,
+    missing: (platform) => missingBaselinesForPlatform(ROOT, platform),
+  });
+  if (pending.length > 0) {
+    console.log(
+      `  [!!] 另有登记为「待重录」的平台：${pending.join(" / ")} —— 这几档缺的基线只能` +
+        "在那一档的机器上录（`pnpm check:visual:update`，口径见 PLATFORM_RECORDING）；" +
+        "补齐后连同 PENDING_PLATFORMS 那条登记一起删掉。明细：`pnpm check:visual --dry-run`",
+    );
+  }
   return 0;
 }
 

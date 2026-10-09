@@ -88,9 +88,9 @@ comfy-cli 展开子图后的节点 id 是 <code>4:1670</code>（宿主 id + 内�
 <div class="tsd-signature"><span class="tsd-kind-property">modeOverrides</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <a href="lib_workflow_workflow-io-types.WorkflowIOModeOverride.html" class="tsd-signature-type tsd-kind-interface">WorkflowIOModeOverride</a><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
 存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。
-键名 <code>modeOverrides</code> 刻意与 <code>WorkflowDetail.availableModes</code>（工作流级模式清单）
-区分开——两者同名 <code>modes</code> 是历史命名地雷；旧数据仍是 <code>modes</code> 键，由
-<code>parseWorkflowIOMap</code> 与 <code>enrichWorkflowIO</code> 在读边界回退归一。</p>
+键名 <code>modeOverrides</code> 刻意与 <code>WorkflowTemplate.modes</code>（工作流级模式清单）
+区分开 —— 两者都叫 <code>modes</code> 时是同一个 JSON 列里的两种含义，读的人分不清，
+所以<strong>只有一个名字</strong>（历史列里那个 <code>modes</code> 键由 <code>parseWorkflowIOMap</code> 归一）。</p>
 </div><aside class="tsd-sources">
 <ul>
 <li>Defined in lib/workflow/workflow-io-types.ts:38</li></ul></aside></section>

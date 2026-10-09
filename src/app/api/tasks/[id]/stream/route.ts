@@ -46,7 +46,7 @@ export async function GET(
         .findById(id)
         .then((task) => {
           if (task) {
-            // logs 是 Prisma Json 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
+            // logs 是任务表的 JSON 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
             const existing: unknown[] = Array.isArray(task.logs)
               ? task.logs
               : [];

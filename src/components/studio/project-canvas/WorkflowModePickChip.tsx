@@ -78,7 +78,7 @@ export function WorkflowModePickChip({
         align="start"
         contentClassName="w-60 rounded-xl"
         disabled={disabled}
-        triggerClassName="border-primary/55 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-[12px] disabled:opacity-50"
+        triggerClassName="border-primary/55 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs disabled:opacity-50"
         trigger={
           <span
             className={`font-semibold ${hasModes ? "text-ink-bright" : "text-ink-muted"}`}

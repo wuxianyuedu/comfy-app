@@ -87,7 +87,7 @@ function fakeHost(): LaunchHost {
   return {
     st: { stopRequested: false },
     appendRuntimeLog: vi.fn(),
-    appendSessionBanner: vi.fn(),
+    beginRuntimeSession: () => "/tmp/comfyui-runtime-test.log",
     clearComfyStopping: vi.fn(),
     localTimestamp: () => "stamp",
     markSessionStart: vi.fn(),
@@ -287,7 +287,7 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     const host: LaunchHost = {
       st: { stopRequested: false },
       appendRuntimeLog: vi.fn(),
-      appendSessionBanner: vi.fn(),
+      beginRuntimeSession: () => "/tmp/comfyui-runtime-test.log",
       clearComfyStopping: vi.fn(),
       localTimestamp: () => "stamp",
       markSessionStart: vi.fn(),

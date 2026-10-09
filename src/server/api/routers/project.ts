@@ -108,7 +108,7 @@ export const projectRouter = createTRPCRouter({
         input.projectId,
       );
       const outputs = tasks.map((task) => {
-        // params 是 Prisma Json 列:非对象(标量)时所有属性读取均为 undefined,与原
+        // params 是任务表的 JSON 列:非对象(标量)时所有属性读取均为 undefined,与原
         // `(task.params ?? {}) as Record<string, any>` 的读取结果一致。
         const rawParams: unknown = task.params ?? {};
         const params: Record<string, unknown> = asRecord(rawParams) ?? {};

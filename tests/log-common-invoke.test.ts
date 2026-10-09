@@ -123,15 +123,17 @@ describe("内核的失败形态要分开（静态）", () => {
   it("三个入口都读内核的结论，没有一个在 Invoke-Logged 之后另起一份 $LASTEXITCODE 判决", () => {
     // 这条不是洁癖：#1350 的实测里 `rebuild-static.ps1` 就是**第二个读者**（直接读
     // `$LASTEXITCODE`）。两份读者意味着同一步可能给出两个结论 —— 而陈旧码那一侧永远是绿的。
+    /* 软断言：三个入口 × 各自的若干站点是**互不相关**的结论 —— 第一个入口
+       的毛病不该遮住另外两个的（§11.18）。 */
     for (const rel of READERS) {
       const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
-      expect(text, `${rel} 必须读 $script:LAST_INVOKE_CODE`).toContain(
+      expect.soft(text, `${rel} 必须读 $script:LAST_INVOKE_CODE`).toContain(
         "$script:LAST_INVOKE_CODE",
       );
       const afterInvoke = text.split("Invoke-Logged").slice(1);
       for (const chunk of afterInvoke) {
         const head = chunk.split(/\r?\n/).slice(1, 3).join("\n");
-        expect(
+        expect.soft(
           /\$LASTEXITCODE\s*-ne\s*0/.test(head),
           `${rel} 在 Invoke-Logged 之后直接判 $LASTEXITCODE（那份可能是陈旧值）`,
         ).toBe(false);

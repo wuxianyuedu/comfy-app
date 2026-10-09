@@ -51,15 +51,20 @@ function countMarkedProcesses(marker: string): number {
     .length;
 }
 
+/**
+ * 等一个条件成立 —— 用 `expect.poll` 而不是手搓 `while + await setTimeout`（规范 §11.14）。
+ *
+ * 手搓版本失败时只留一个 `false`、拿不到现场，而这里等的是**真进程动作**
+ * （`spawn` 落地、孙进程被 taskkill 收走）：失败时最该看到的就是当时还剩下
+ * 哪几个 PID，那正是 `expect.poll` 会打出来的实际值。判据是「等的是一个条件」，
+ * 所以两边都读同一个 `check`：先轮询等它成立，再把**最终读数**交回调用点
+ * （调用点自己仍用 `toBe(true)` 判结论，报错文案里保留各自的语义）。
+ */
 async function waitUntil(
   check: () => boolean,
   timeoutMs = 5000,
 ): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (check()) return true;
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  await expect.poll(check, { timeout: timeoutMs, interval: 100 }).toBe(true);
   return check();
 }
 

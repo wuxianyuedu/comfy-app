@@ -4,6 +4,8 @@
 //   · 首页那一页不给关闭按钮（可关性是 workspace-tabs 的规则，视图只问不判）。
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { ViewTabStrip, viewTabLabel } from "./ViewTabStrip";
 import { HOME_VIEW, initialWorkspaceTabs, openViewTab } from "./workspace-tabs";
@@ -109,5 +111,52 @@ describe("ViewTabStrip", () => {
     expect(tab.getAttribute("aria-selected")).toBe("true");
     expect(tab.textContent).toContain("首页");
     expect(HOME_VIEW).toBe("home");
+  });
+});
+
+/**
+ * 选中态的源码级判据。
+ *
+ * 为什么落在源码而不是渲染：壳里那条标题行形态（`inTitleBar` 与 iframe 页签）在
+ * 浏览器/dev 下**不存在**，e2e 走不到；而当初的缺陷恰好只在那条路径上 —— 选中态给
+ * `bg-canvas/70`（#0a0a0f），压在 #0f0f16 的标题行上**比底还暗**，与未选中只差一档
+ * 文字色，肉眼读不出当前页。渲染判据管不到的那一半，至少要有人钉住形状。
+ */
+const ROOT = path.resolve(__dirname, "../../..");
+
+/** 剥块注释再判：说明文字里提到 `bg-canvas` 不算有人这么写。 */
+function codeOf(rel: string): string {
+  return readFileSync(path.join(ROOT, rel), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+}
+
+describe("两类页签共用一套选中态（壳内形态 e2e 到不了）", () => {
+  it.for([
+    "src/components/studio/ViewTabStrip.tsx",
+    "src/components/studio/TitleBarTabs.tsx",
+  ] as const)("%s 的 active 分支只走 u-tab-active，不自己写背景", (rel) => {
+    const code = codeOf(rel);
+    expect(
+      /active\s*\?\s*"[^"]*u-tab-active[^"]*"/.test(code),
+      `${rel} 的选中分支没有走 .u-tab-active`,
+    ).toBe(true);
+    /* 选中分支里自带背景类 = 那一处会脱离工具类单独漂移。当初就是这个形状。 */
+    expect(
+      /active\s*\?\s*"[^"]*\bbg-/.test(code),
+      `${rel} 在选中分支里直接写了背景类`,
+    ).toBe(false);
+  });
+
+  it(".u-tab-active 不是空类：给了更亮的表面，也给了一条品牌色条", () => {
+    const css = codeOf("src/app/globals.css");
+    const block = /\.u-tab-active\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    const bar = /\.u-tab-active::after\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(block, "缺背景（或没取 surface token）").toContain(
+      "var(--color-surface)",
+    );
+    expect(bar, "缺顶部色条的高度").toContain("height: 2px");
+    expect(bar, "色条没取品牌渐变 token").toContain("var(--gradient-brand)");
   });
 });

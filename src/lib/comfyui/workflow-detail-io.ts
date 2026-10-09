@@ -430,12 +430,10 @@ export async function enrichWorkflowIO(
      *  重建时就地对齐（见 reconcileOptionValue），保证 UI 显示与提交的候选值与
      *  服务器一致。不回写入参（可能被共享），清洗只作用于本次响应；用户保存后
      *  PATCH 自然落库清洗结果。
-     *  源键优先读 `modeOverrides`，旧数据仍是 `modes` 键时回退归一（避免旧工作流
-     *  的模式覆盖层在改名后整片丢失）。 */
-    const legacyModes = (v as unknown as Record<string, unknown>).modes;
-    const modeOverridesSource =
-      v.modeOverrides ??
-      (legacyModes as Record<string, WorkflowIOModeOverride> | undefined);
+     *  模式覆盖层只读 `modeOverrides`：本函数的上游是 GET 详情，而
+     *  `parseWorkflowIOMap` 已经在列边界把历史列里的 `modes` 键归一到这个名字
+     *  （同一个 JSON 列里的两种读法必须收在一处）。 */
+    const modeOverridesSource = v.modeOverrides;
     let cleanedModes: Record<string, WorkflowIOModeOverride> | undefined;
     if (
       modeOverridesSource != null &&

@@ -31,12 +31,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import {
-  APP_RUNTIME_LOG,
-  NEXTJS_LOG_DIR,
-  NEXTJS_PANEL_LOG_PREFIX,
-} from "~/lib/log/log-paths";
-import { appendSessionBanner } from "~/lib/session-banner.server";
+import { NEXTJS_LOG_DIR, NEXTJS_PANEL_LOG_PREFIX } from "~/lib/log/log-paths";
 
 /** 转录文件的绝对路径（单例，模块仅执行一次）。 */
 let target: string | null = null;
@@ -205,13 +200,10 @@ export function installStreamCapture(): void {
     }
     pruneOldFiles();
     safeAppend(filePath, "----- 应用服务输出（本次运行）-----\n");
-    /* app-runtime.log 是**追加不轮转**的：上一次、上上一次运行的行全留在同一
-     * 个文件里。面板侧靠会话起点裁剪（log-session-scope），但**文件本身**还要
-     * 能被人读懂——用户打开 log/services/app-runtime.log 排查时，最新一次运行的
-     * 头几行接着上一次的尾几行，分不清本次从哪开始（ISSUE #592）。
-     * 这里在每次应用服务启动时写一条会话边界横幅（两侧各留空行），与其他
-     * runtime 通道（comfyui / drizzle-studio / ollama）口径一致。 */
-    appendSessionBanner(APP_RUNTIME_LOG, "start", "▶ 应用运行日志（本次运行）");
+    /* app-runtime 的会话横幅**已随一次启动一份文件撤销**（ISSUE #1326）：日志
+     * 句柄由 `app-runtime-log.ts` 在首次写入时按 <时刻> 命名建文件，一份文件
+     * 就是一个进程的一次启动，不再需要横幅划边界。这里不再写它 —— 写了也没人
+     * 读（读侧不再按横幅切分），而「没人读的写法」正是要被清掉的那一类。 */
   } catch {
     /* 目录建不出来就不再转录（退化为原行为，不影响应用） */
   }

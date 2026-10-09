@@ -128,10 +128,11 @@ export function ModeContractEditorView({
               为每个口配落点，远端模型在「模型适配」里为每个口配请求字段）
             </p>
             <p className="text-muted-foreground/80 text-3xs">
-              「必备」表示这条模式**少不得**这个口：本地工作流缺它的落点时，
-              「工坊封装」会判为未配置（工坊驱动不起来）。哪些口必备按模式配，
-              不写死在代码里 ——
-              例如纯文生图把「提示词」勾必备、「负向提示词」不勾。
+              「必备」表示这条模式
+              <span className="text-foreground/90 font-medium">少不得</span>
+              这个口：本地工作流缺它的落点时，「工坊封装」会判为未配置（工坊驱动
+              不起来）。哪些口必备按模式配，不写死在代码里 —— 例如纯文生图把
+              「提示词」勾必备、「负向提示词」不勾。
             </p>
             <p className="text-muted-foreground/80 text-3xs">
               「尺寸」是两类等价的写法，在尺寸选择器里任选其一：比例 +

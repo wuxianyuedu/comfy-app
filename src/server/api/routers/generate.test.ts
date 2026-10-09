@@ -2,7 +2,7 @@ import type * as LoggerModule from "~/lib/core/logger";
 /**
  * generate.router 集成测试。
  *
- * mock 边界：~/server/db（内存 Prisma 替身）、~/server/better-auth、
+ * mock 边界：~/server/db（内存数据库替身）、~/server/better-auth、
  * ~/lib/core/logger（静音）、~/lib/comfyui/enqueue（enqueue 整体 mock——
  * 真模块 import 时会启动 reaper 定时器并连 ComfyUI WS）、
  * repository 走真实实现（内置模板 + token 替换已移除，故不再 mock

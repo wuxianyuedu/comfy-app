@@ -38,6 +38,7 @@ import {
   createDraftProject,
   createProject,
   deleteProject,
+  deleteProjectEverywhere,
   findNextAvailableName,
   getAllProjectNames,
   getActiveId,
@@ -46,6 +47,7 @@ import {
   isEmptyDraftName,
   isProjectNameTaken,
   listProjects,
+  listProjectsWithServer,
   reapAllEmptyDrafts,
   reapEmptyProject,
   setActive,
@@ -471,5 +473,103 @@ describe("setActive", () => {
   it("写入 active key", () => {
     setActive("p-x");
     expect(localStorage.getItem("comfyapp.canvas.active.v1")).toBe("p-x");
+  });
+});
+
+/* ── ISSUE #1522：服务端独有行的可见性与删除入口 ────────────────────────
+ *
+ * 现场：`project` 表里有 4 行 `未命名*`，而「所有项目」那一屏显示「还没有画布
+ * 项目」—— 那一屏只读客户端索引，服务端独有行既看不见、也没有任何删除入口。
+ * 下面这几条守的是那两句新承诺：**并集可见** + **索引里没有也删得掉**。
+ */
+describe("listProjectsWithServer（并集 + 出处标注）", () => {
+  it("服务端独有行也在列表里，标 origin=server", async () => {
+    seed([
+      { id: "proj_local", name: "本地的", updatedAt: 2, nodes: [], edges: [] },
+    ]);
+    projectListQuery.mockResolvedValue([
+      { id: "proj_orphan", name: "未命名", updatedAt: 3, nodes: [], edges: [] },
+    ]);
+    const { entries, ok } = await listProjectsWithServer();
+    expect(ok).toBe(true);
+    expect(entries.map((entry) => entry.id)).toEqual([
+      "proj_orphan",
+      "proj_local",
+    ]);
+    expect(entries.find((e) => e.id === "proj_orphan")?.origin).toBe("server");
+    expect(entries.find((e) => e.id === "proj_local")?.origin).toBe("local");
+  });
+
+  it("两侧都有的同一 id 只出现一行，取较新的一侧，标 origin=both", async () => {
+    seed([
+      { id: "proj_both", name: "旧的", updatedAt: 1, nodes: [], edges: [] },
+    ]);
+    projectListQuery.mockResolvedValue([
+      { id: "proj_both", name: "新的", updatedAt: 9, nodes: [], edges: [] },
+    ]);
+    const { entries } = await listProjectsWithServer();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.name).toBe("新的");
+    expect(entries[0]?.origin).toBe("both");
+  });
+
+  it("本地更新时以本地为准（不把用户刚改的名字冲回去）", async () => {
+    seed([
+      { id: "proj_b", name: "我刚改的", updatedAt: 9, nodes: [], edges: [] },
+    ]);
+    projectListQuery.mockResolvedValue([
+      { id: "proj_b", name: "服务端旧的", updatedAt: 1, nodes: [], edges: [] },
+    ]);
+    const { entries } = await listProjectsWithServer();
+    expect(entries[0]?.name).toBe("我刚改的");
+    expect(entries[0]?.origin).toBe("both");
+  });
+
+  it("拉不到服务端时 ok=false 且照常列本地项目（不是空列表）", async () => {
+    seed([
+      { id: "proj_off", name: "离线也有", updatedAt: 1, nodes: [], edges: [] },
+    ]);
+    projectListQuery.mockRejectedValue(new Error("ECONNREFUSED"));
+    const { entries, ok } = await listProjectsWithServer();
+    expect(ok).toBe(false);
+    expect(entries.map((entry) => entry.id)).toEqual(["proj_off"]);
+  });
+});
+
+describe("deleteProjectEverywhere（索引里没有那一行也删得掉）", () => {
+  it("只存在于服务端的行：删服务端那一份（这正是 #1522 缺的那个口子）", async () => {
+    projectDeleteMutate.mockResolvedValue({ ok: true });
+    deleteProjectEverywhere("proj_orphan", "未命名");
+    await settled();
+    expect(projectDeleteMutate).toHaveBeenCalledWith({
+      projectId: "proj_orphan",
+    });
+  });
+
+  it("索引里有这行时走既有出口：本地清掉 + 服务端也删", async () => {
+    seed([
+      { id: "proj_has", name: "有的", updatedAt: 1, nodes: [], edges: [] },
+    ]);
+    projectDeleteMutate.mockResolvedValue({ ok: true });
+    deleteProjectEverywhere("proj_has", "有的");
+    await settled();
+    expect(listProjects()).toHaveLength(0);
+    expect(projectDeleteMutate).toHaveBeenCalledWith({ projectId: "proj_has" });
+  });
+
+  it("删服务端独有行时，悬空的 active-id 一并清掉", () => {
+    setActive("proj_orphan");
+    projectDeleteMutate.mockResolvedValue({ ok: true });
+    deleteProjectEverywhere("proj_orphan", "未命名");
+    expect(getActiveId()).toBeNull();
+  });
+
+  it("服务端拒收 → 说的是「没能从服务端删掉」，不是静默", async () => {
+    projectDeleteMutate.mockImplementationOnce(() => {
+      throw trpcError("FORBIDDEN", "不属于当前用户");
+    });
+    deleteProjectEverywhere("proj_orphan", "未命名");
+    await settled();
+    expect(noticesFor("proj_orphan")[0]).toContain("没能从服务端删掉");
   });
 });

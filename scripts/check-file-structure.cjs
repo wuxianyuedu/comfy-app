@@ -409,7 +409,6 @@ const DOMAIN_EXEMPT = new Set([
   "src/lib/history-detail-actions.ts",
   "src/lib/envfile.ts",
   // 服务端装配与运维
-  "src/lib/session-banner.server.ts",
   "src/lib/task-cancel-client.ts",
   /* 任务状态的终态判据：执行器（server）、SSE 关流（app/api）、仓储 SQL
    * 条件（server）与**视图层**（日志面板决定终态帧怎么呈现）共用的纯逻辑。

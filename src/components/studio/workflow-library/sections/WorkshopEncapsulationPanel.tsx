@@ -242,7 +242,7 @@ export function WorkshopEncapsulationPanel({
             <KeyValueRows
               key={entry.id}
               className="border-border/60 bg-surface rounded-lg border px-3 py-2"
-              itemClassName="text-[12px]"
+              itemClassName="text-xs"
               keyClassName="text-ink flex min-w-0 items-center gap-2 font-medium"
               valueClassName="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-3xs"
               items={[
@@ -268,7 +268,7 @@ export function WorkshopEncapsulationPanel({
                           {badge.label}
                         </span>
                       )}
-                      <span className="text-ink text-[12px] font-medium">
+                      <span className="text-ink text-xs font-medium">
                         {entry.label}
                         {/* 口 id 与中文字面并列：配置 / 日志 / 代码里用的是 id，
  而契约口与适配器口是两套 id，只写中文对不上。 */}

@@ -70,7 +70,7 @@ export function ContentAssetBody({
       <div className="relative">
         <Textarea
           ref={textareaRef}
-          className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 focus-visible:border-primary/40 h-65 w-full resize-none rounded-xl border px-3 py-2.5 text-[12px] leading-relaxed transition-colors"
+          className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 focus-visible:border-primary/40 h-65 w-full resize-none rounded-xl border px-3 py-2.5 text-xs leading-relaxed transition-colors"
           value={data.content ?? ""}
           placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
           onChange={textHandler((content) => onPatch({ content }))}
@@ -171,7 +171,7 @@ export function ContentAssetBody({
             size={38}
             className="opacity-60"
           />
-          <span className="text-[12px]">
+          <span className="text-xs">
             {isPic ? "拖入上传图片" : "拖入上传视频"}
           </span>
         </div>

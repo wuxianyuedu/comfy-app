@@ -67,7 +67,7 @@ export function LogPanelFooter(input: {
   } = input;
 
   return (
-    <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
+    <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-xs">
       <span className="flex items-center gap-2">
         <span>
           {pageSummary(safePage, totalPages, pageSize, total, totalAll, search)}

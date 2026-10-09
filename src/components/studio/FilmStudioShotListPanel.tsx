@@ -98,7 +98,7 @@ export function FilmStudioShotListPanel({
                 {/* Info */}
                 <div className="min-w-0 flex-1">
                   <p
-                    className={`truncate text-[12px] font-medium ${isSelected ? "text-ink-field" : "text-ink-strong"}`}
+                    className={`truncate text-xs font-medium ${isSelected ? "text-ink-field" : "text-ink-strong"}`}
                   >
                     {shot.name}
                   </p>

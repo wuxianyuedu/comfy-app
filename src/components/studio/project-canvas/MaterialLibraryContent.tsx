@@ -104,7 +104,7 @@ export function MaterialLibraryContent({
               {searching ? "没有匹配的素材" : "暂无内容"}
             </p>
             {!searching && (
-              <div className="text-ink-fainter mt-4 flex-col gap-2 text-[12px]">
+              <div className="text-ink-fainter mt-4 flex-col gap-2 text-xs">
                 <Button
                   variant="ghost"
                   onClick={onOpenUploadPicker}
@@ -278,7 +278,7 @@ export function MaterialLibraryContent({
               >
                 <Folder size={22} strokeWidth={1.8} />
               </div>
-              <span className="text-ink-soft min-w-0 truncate text-center text-[12px]">
+              <span className="text-ink-soft min-w-0 truncate text-center text-xs">
                 {folder.name}
               </span>
               {folder.count > 0 && (

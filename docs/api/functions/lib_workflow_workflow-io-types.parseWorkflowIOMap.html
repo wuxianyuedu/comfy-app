@@ -17,9 +17,11 @@
 <div class="tsd-signature tsd-anchor-link" id="parseworkflowiomap"><span class="tsd-kind-call-signature">parseWorkflowIOMap</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">value</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_workflow_workflow-io-types.WorkflowIOMap.html" class="tsd-signature-type tsd-kind-type-alias">WorkflowIOMap</a><a href="#parseworkflowiomap" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>解析 workflowIO 列（DB JSON 列）；非对象 / 形状不符 → 空表。</p>
-<p>旧数据把模式覆盖层写作 <code>modes</code> 键；统一回退到新键 <code>modeOverrides</code>，这样下游
-助手（isVisibleInMode / resolveEntryDefault …）与消费方只读一个名字。回退只在
-新键缺失时生效，不覆盖已经用新键落库的数据。</p>
+<p>列里可能留着把模式覆盖层写作 <code>modes</code> 键的行（该键与工作流级的
+<code>WorkflowTemplate.modes</code> 同名、含义完全不同，是同一列里的两种读法）。
+这里把这<strong>最后一道列边界</strong>归一到 <code>modeOverrides</code>，下游助手
+（isVisibleInMode / resolveEntryDefault …）与消费方只读那一个名字。
+回退只在新键缺失时生效，不覆盖已经用新键落库的数据。</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
@@ -27,7 +29,7 @@
 <li><span><span class="tsd-kind-parameter">value</span>: <span class="tsd-signature-type">unknown</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <a href="../types/lib_workflow_workflow-io-types.WorkflowIOMap.html" class="tsd-signature-type tsd-kind-type-alias">WorkflowIOMap</a></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-io-types.ts:100</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/workflow/workflow-io-types.ts:102</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

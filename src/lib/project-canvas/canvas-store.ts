@@ -138,6 +138,43 @@ export function deleteProject(id: string): void {
   if (removed) deleteProjectOnServer(removed);
 }
 
+/** 服务端 `project` 表的一行（`project.list` 的出口形状）。 */
+export interface ServerProjectRow {
+  id: string;
+  name: string;
+  /** tRPC 走 SuperJSON 给 Date，REST 那路给 ISO 串 */
+  updatedAt: string | Date;
+  nodes?: unknown;
+  edges?: unknown;
+}
+
+/**
+ * 读服务端的项目列表（按用户，`project.list`）。
+ *
+ * 单独抽出来是因为它有**两个读侧**：`hydrateFromServer` 的对账，与「所有项目」
+ * 那一屏的并集（`listProjectsWithServer`）。此前只有前者，于是服务端独有行
+ * 除了「被对账搬进索引」以外没有任何界面可见路径 —— 那一屏读的是索引，
+ * 看不出两侧的差集（ISSUE #1522）。
+ *
+ * 归一收在这里：服务端两路（tRPC 的 SuperJSON Date / REST 的 ISO 串）进来的是
+ * 同一列的两个形状，调用方要的只是一个能比较的毫秒数。
+ */
+export async function fetchServerProjects(): Promise<ServerProjectRow[]> {
+  const rows = (await vanillaApi.project.list.query()) as ServerProjectRow[];
+  return Array.isArray(rows) ? rows : [];
+}
+
+/** 把一行服务端记录归一成本地索引用的 `CanvasProject`。 */
+function toCanvasProject(row: ServerProjectRow): CanvasProject {
+  return {
+    id: row.id,
+    name: row.name,
+    updatedAt: new Date(row.updatedAt).getTime(),
+    nodes: (row.nodes as CanvasProject["nodes"]) ?? [],
+    edges: (row.edges as CanvasProject["edges"]) ?? [],
+  };
+}
+
 /* 拉取服务端的项目列表，并与 localStorage 对账：
  *   - 服务端项目的 `updatedAt` 比本地新时以服务端为准
  *    （覆盖「换端口 / 换设备后本地为空或是旧数据」的情形）。
@@ -152,27 +189,15 @@ export async function hydrateFromServer(): Promise<void> {
   if (hydrated) return;
   hydrated = true;
   try {
-    const serverProjects = (await vanillaApi.project.list.query()) as Array<{
-      id: string;
-      name: string;
-      updatedAt: string | Date; // Date via SuperJSON / ISO from REST
-      nodes?: unknown;
-      edges?: unknown;
-    }>;
+    const serverProjects = await fetchServerProjects();
     const localAll = readIndex();
     const byId = new Map(localAll.map((localAll) => [localAll.id, localAll]));
     let changed = false;
     for (const sp of serverProjects) {
-      const serverTime = new Date(sp.updatedAt).getTime();
       const local = byId.get(sp.id);
-      if (!local || serverTime >= local.updatedAt) {
-        byId.set(sp.id, {
-          id: sp.id,
-          name: sp.name,
-          updatedAt: serverTime,
-          nodes: (sp.nodes as CanvasProject["nodes"]) ?? [],
-          edges: (sp.edges as CanvasProject["edges"]) ?? [],
-        });
+      const serverCopy = toCanvasProject(sp);
+      if (!local || serverCopy.updatedAt >= local.updatedAt) {
+        byId.set(sp.id, serverCopy);
         changed = true;
       }
     }
@@ -397,4 +422,128 @@ export function setActive(id: string): void {
 
 export function getActiveId(): string | null {
   return readStorageItem(ACTIVE_KEY);
+}
+
+/* ── 「所有项目」那一屏的事实源（ISSUE #1522）─────────────────────────────
+ *
+ * 服务端为准 + 并集：这一屏此前只读客户端索引（`listProjects()`），而索引是
+ * `hydrateFromServer` 对账**之后**的本地副本 —— 于是「服务端有一行、索引里没有」
+ * 的分叉一旦出现，那一行在界面上**彻底不可见，也没有任何删除入口**。
+ * 实测现场就是 `project` 表里那几行 `未命名*`：`reapAllEmptyDrafts` 早期版本
+ * 只清索引、不清服务端（ISSUE #1501 修的是这半边），留下的一批行既进不了列表、
+ * 又删不掉。
+ *
+ * 现在改读**两侧的并集**，并给每一行标出处：
+ *   · `server` —— 只存在于服务端（索引里没有它）。界面因此看得见、也能删。
+ *   · `local`  —— 只存在于本地索引（刚建、还没推上去，或推送被拒）。仍然显示，
+ *                 否则「刚建好的画布」会在这一屏消失（`persistProjectToServer`
+ *                 是 fire-and-forget，落定之前必然会有一段这样的窗口）。
+ *   · `both`   —— 两侧都有（正常行）。
+ *
+ * 为什么不干脆只读服务端：本地索引是**离线时唯一有的那一份**，而这一屏有一条
+ * 明确的承诺「本地 · 可继续编辑」（见 `WorksGallery`）。只读服务端会让 dev
+ * server 未起 / 拉取失败时这一屏直接清空，把「看不见」换成「全都看不见」。
+ * 并集 + 标注是信息最全的那一支，代价（两套语义）由 `origin` 这一个字段承担。
+ */
+
+/** 一行在「所有项目」屏里的出处。 */
+export type ProjectOrigin = "server" | "local" | "both";
+
+export interface ProjectListEntry {
+  id: string;
+  name: string;
+  /** 毫秒时间戳（本地索引与 `fetchServerProjects` 归一后的同一口径）。 */
+  updatedAt: number;
+  nodes: CanvasProject["nodes"];
+  edges: CanvasProject["edges"];
+  origin: ProjectOrigin;
+}
+
+/**
+ * 这一屏要显示的**全部**项目行：本地索引 ∪ 服务端，按 `updatedAt` 倒序。
+ *
+ * 同名 id 以 `updatedAt` 较新的一侧为准（与 `hydrateFromServer` 的对账口径一致）
+ * —— 不这样的话，同一份画布会在列表里出现两行。
+ *
+ * 拉取失败返回 `ok: false` + 本地索引那一份：视图据此照常列出本地项目，
+ * 并给一句「服务端那份没拉到」的说法（不是把一个空列表端上去）。
+ */
+export async function listProjectsWithServer(): Promise<{
+  entries: ProjectListEntry[];
+  ok: boolean;
+}> {
+  const localAll = readIndex();
+  const byId = new Map<string, ProjectListEntry>();
+  for (const project of localAll) {
+    byId.set(project.id, {
+      ...project,
+      nodes: project.nodes ?? [],
+      edges: project.edges ?? [],
+      origin: "local",
+    });
+  }
+  try {
+    const serverProjects = await fetchServerProjects();
+    for (const row of serverProjects) {
+      const serverCopy = toCanvasProject(row);
+      const local = byId.get(row.id);
+      if (!local) {
+        byId.set(row.id, { ...serverCopy, origin: "server" });
+        continue;
+      }
+      const newer =
+        serverCopy.updatedAt >= local.updatedAt ? serverCopy : local;
+      byId.set(row.id, { ...newer, origin: "both" });
+    }
+    return { entries: sortByUpdated(byId), ok: true };
+  } catch (e) {
+    /* 「服务端那份没拉到」与「服务端确实没有这一行」是两件事，读侧要能分辨
+     * （`ok: false` ⇒ 界面别把「看不到」说成「不存在」）。日志照旧走
+     * `sync-notice` 那一条诊断口 —— 本文件不许自己写 console。 */
+    logSyncIssue("读取服务端项目列表失败，本屏只列出本地项目", e);
+    return { entries: sortByUpdated(byId), ok: false };
+  }
+}
+
+function sortByUpdated(
+  byId: Map<string, ProjectListEntry>,
+): ProjectListEntry[] {
+  return [...byId.values()].sort(
+    (left, right) => right.updatedAt - left.updatedAt,
+  );
+}
+
+/**
+ * 删**任何一行**（含索引里没有、只在服务端的那一种）。
+ *
+ * 与 `deleteProject` 的分工是判据而不是便利：`deleteProject` 的名字要在
+ * **索引里**找，找不到就只剩「本机无操作」—— 服务端那一行留在原地、界面上
+ * 也没有别的入口（这正是 ISSUE #1522 问的那个口子）。这里反过来以 `id` 为准：
+ * 本机有就一并清（连带 active-id），服务端那份则照旧走
+ * `deleteProjectOnServer` 那一条出口（失败按「重试有没有用」分两档处置）。
+ *
+ * `name` 由调用方给：索引里有就取索引的，索引里没有的那一行只有服务端给的
+ * 名字可作提示文案（`SyncNotice.projectName` 要的是用户认得出的那个词）。
+ */
+export function deleteProjectEverywhere(id: string, name?: string): void {
+  const local = readIndex().find((project) => project.id === id);
+  if (local) {
+    /* 索引里有 → 交给原有出口：它已经实现「清索引 + 清 active-id + 删服务端」
+     * 这三件事，不在这里重抄一遍（§12.12）。 */
+    deleteProject(id);
+    return;
+  }
+  /* 索引里没有这行：本机无状态可清，只删服务端那一份。active-id 指向它的
+   * 概率极低（索引都没有它），但真指向了就得一起清 —— 否则上层以为「我有
+   * 一个项目」，六个项目页签点进去全落空（与 `reapAllEmptyDrafts` 尾部
+   * 那条悬空 active 的处理同一口径）。 */
+  if (getActiveId() === id) removeStorageItem(ACTIVE_KEY);
+  deleteProjectOnServer({
+    id,
+    name: name ?? "",
+    updatedAt: Date.now(),
+    nodes: [],
+    edges: [],
+  });
+  emitChanged();
 }

@@ -18,12 +18,17 @@ import { describe, expect, it } from "vitest";
 
 import { checkLocalBaselines } from "../scripts/pixel-run.mjs";
 import {
+  PLATFORM_RECORDING,
+  SUPPORTED_PLATFORMS,
+  checkRecordingEnv,
   declaredShotNames,
   isPlatformRegistered,
   missingBaselinesForPlatform,
   parseBaseline,
+  recordingWebserverFor,
   untrackedBaselines,
   visualSpecs,
+  webserverForEnv,
 } from "../scripts/visual-baselines.mjs";
 
 /**
@@ -186,5 +191,56 @@ describe("「本机有没有基线」前置判决（§11.8）", () => {
     expect(verdict).toContain("demo-mobile-chromium-linux.png");
     expect(verdict).not.toContain("没有登记过像素基线");
     fs.rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe("平台录制口径（§11.8：基线按 webServer 口径录）", () => {
+  it("每档登记的平台都要写清录于哪条口径，口径只有 dev / start 两种", () => {
+    // 登记表是**数据**不是注释：口径只写在文档里时，录基线那一档无从校验（见
+    // `checkRecordingEnv`）。`SUPPORTED_PLATFORMS` 从它派生，所以两处不会漂。
+    expect(SUPPORTED_PLATFORMS).toEqual(Object.keys(PLATFORM_RECORDING));
+    for (const [platform, entry] of Object.entries(PLATFORM_RECORDING)) {
+      expect(["dev", "start"], `${platform} 的口径只能是 dev / start`).toContain(
+        entry.webserver,
+      );
+      // note 不是必填，但写了就得说点东西（「稍后补」等于没写）。
+      if (entry.note !== undefined) {
+        expect(entry.note.trim().length).toBeGreaterThan(4);
+      }
+    }
+    // 实测口径两档各占一条：win32 开发机走 dev、linux 容器走 start。被悄悄改成同一条
+    // 时这条会红 —— 那时「两档像素不同」这件事就从数据里消失了。
+    expect(recordingWebserverFor("win32")).toBe("dev");
+    expect(recordingWebserverFor("linux")).toBe("start");
+    expect(recordingWebserverFor("darwin")).toBeNull();
+  });
+
+  it("本机 `CI` 的真假换算成 webServer 口径（与 playwright.config.ts 同一条判法）", () => {
+    // `playwright.config.ts` 判的是**真假**，所以空串同样落在 dev 那侧。
+    expect(webserverForEnv({ CI: "true" })).toBe("start");
+    expect(webserverForEnv({ CI: "" })).toBe("dev");
+    expect(webserverForEnv({})).toBe("dev");
+  });
+
+  it("口径相符 → 放行；不符 → 说清「录的是另一种 chrome」并给出置法", () => {
+    // win32 录于 dev：`CI` 未设才相符。
+    expect(checkRecordingEnv({ platform: "win32", env: {} })).toBeNull();
+    const wrong = checkRecordingEnv({ platform: "win32", env: { CI: "true" } });
+    // 这条红**不能**指向业务代码：它是「录出来的 PNG 记的是另一种 chrome」。
+    expect(wrong).toContain("录制口径不一致");
+    expect(wrong).toContain("pnpm dev");
+    expect(wrong).toContain("pnpm start");
+    expect(wrong).toContain("CI=");
+    // linux 录于 start：`CI` 为真才相符。
+    expect(checkRecordingEnv({ platform: "linux", env: { CI: "1" } })).toBeNull();
+    expect(
+      checkRecordingEnv({ platform: "linux", env: {} }),
+    ).toContain("CI=true");
+  });
+
+  it("没登记过的平台不谈口径（它走「先整套录、再同批登记」那一档）", () => {
+    // 没有「原口径」可比时给答案 = 编一条口径出来。这一档的动作在前置判决那边。
+    expect(checkRecordingEnv({ platform: "darwin", env: {} })).toBeNull();
+    expect(checkRecordingEnv({ platform: "darwin", env: { CI: "x" } })).toBeNull();
   });
 });

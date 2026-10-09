@@ -7,10 +7,13 @@
  * 追加 / 替换 → 解析 ANSI → 启动期间每秒轮询」的实现，只有来源与解析器不同
  * （判据见规范 12 §12.12：跨文件复制的同一段逻辑会各自漂移）。这里收成一处：
  *
- *   - 数据来自 `GET /api/logs/sessions`（按「每次启动」切分，见 `lib/log/log-sessions`），
- *     一次请求同时拿到**会话列表**与**选中会话的正文** —— 界面因此能提供
- *     「切换第几次启动」的下拉，而不用把整份追加日志读进浏览器；
+ *   - 数据来自 `GET /api/logs/sessions`（按**每一次启动**列文件，判据见
+ *     `lib/log/runtime-log-file`），一次请求同时拿到**启动列表**与**选中那一次的
+ *     正文** —— 界面因此能提供「切到哪一次启动」的下拉，而不用把整份日志读进
+ *     浏览器。那四份 runtime 日志现在是**一次启动一份文件**（ISSUE #1326）：
  *   - 挂载、切换会话、点「刷新」都会重新取一次；`active`（正在启动）时每秒跟随；
+ *     ComfyUI 被重启三次就有三份文件，切过去看的是**那一份整份**，不再需要任何
+ *     切分判据；
  *   - 轮询回调只读 ref 里的选中项，不因用户切换下拉而重建定时器。
  */
 
@@ -42,14 +45,21 @@ export interface RuntimeLogSourceState {
   text: string;
   /** 正文解析出的带样式片段（视图只渲染它）。 */
   segments: AnsiSegment[];
-  /** 可切换的会话（新→旧，最后一项是本次启动）；不足两条时界面不显示下拉。 */
+  /** 可切换的会话（**新→旧，第一项就是最新**）；不足两条时界面不显示下拉。 */
   sessions: LogSessionMeta[];
   /** 当前选中会话的 id；没有日志文件时为 null。 */
   sessionId: string | null;
-  /** 选中会话的正文被服务端截断（界面提示「只看得到最近一段」）。 */
+  /** 选中那一份的正文被服务端截断（界面提示「只看得到最近一段」）。 */
   truncated: boolean;
-  /** 日志文件过大、服务端只扫了尾部窗口（界面提示「更早的启动不在列表里」）。 */
+  /** 该份日志过大、服务端只扫了尾部窗口（界面提示「这次启动只显示了一段」）。 */
   windowed: boolean;
+  /**
+   * 这个来源一共有几份启动日志（不受下拉上限影响）。
+   *
+   * 界面据此说明「更早的启动不在列表里」（硬规则 4：必须有用户可见出口）——
+   * 一次启动一份文件之后，同一天可能攒几十份，不说的话用户会以为「只启动过这些次」。
+   */
+  total: number;
   /** 切到指定会话并立即重新拉取。 */
   selectSession: (id: string) => void;
   /** 重新拉取当前会话（「刷新」按钮）。 */
@@ -66,6 +76,7 @@ interface Snapshot {
   sessionId: string | null;
   truncated: boolean;
   windowed: boolean;
+  total: number;
 }
 
 const EMPTY_SNAPSHOT: Snapshot = {
@@ -75,6 +86,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
   sessionId: null,
   truncated: false,
   windowed: false,
+  total: 0,
 };
 
 /** 解析结果按上限取尾部（与「只看最新一段」的口径一致）。 */
@@ -115,9 +127,14 @@ export function useRuntimeLogSource({
     let slice = await fetchLogSessions(source, sessionRef.current);
     if (slice && seq === seqRef.current) {
       /* 新的一次启动出现 → 自动切到最新（用户预期是「启动后自动看最新日志」，
-       * 不能停在旧会话里等他手动换下拉）。判据用会话开始时刻而不是行号 id
-       * （见 latestStartedAtRef）；正在展示的已是最新则不用动。 */
-      const latest = slice.sessions[slice.sessions.length - 1] ?? null;
+       * 不能停在旧会话里等他手动换下拉）。判据用会话开始时刻而不是文件名
+       * （见 latestStartedAtRef）；正在展示的已是最新则不用动。
+       *
+       * **第一项就是最新**：这是 `GET /api/logs/sessions` 的契约（`sessions`
+       * 新→旧，与 `selectedId` 的缺省值同为 `sessions[0]`）。跨包之后列表变长了，
+       * 取错一端会让「自动跟随」永远停在最旧那一份上 —— 方向只在契约里定义一次，
+       * 取法也只在契约里说一次。 */
+      const latest = slice.sessions[0] ?? null;
       const isNewStart =
         latest !== null &&
         latest.startedAt !== null &&
@@ -141,6 +158,7 @@ export function useRuntimeLogSource({
       sessionId: slice.selectedId,
       truncated: slice.truncated,
       windowed: slice.windowed,
+      total: slice.total,
     });
   }, [source, parse]);
 

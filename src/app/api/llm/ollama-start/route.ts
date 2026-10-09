@@ -6,13 +6,14 @@ import {
   spawnManaged,
   waitForDetachMediator,
 } from "~/lib/process/process-launch";
-import { OLLAMA_RUNTIME_LOG } from "~/lib/log/log-paths";
+import {
+  openRuntimeLogWriter,
+  pruneRuntimeLogFiles,
+  type RuntimeLogWriter,
+} from "~/lib/log/runtime-log-pack.server";
 import { formatLocalStamp } from "~/lib/time-format";
 import { INLINE_STDERR_MAX, clampText } from "~/lib/text-clamp";
-import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import { spawn } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
 import { OLLAMA_DEFAULT_PORT, ollamaBaseUrl } from "~/lib/endpoints";
 import { withTimeoutResult } from "~/lib/with-timeout";
 import { errorMessage } from "~/lib/error-message";
@@ -56,24 +57,28 @@ function localTimestamp(): string {
   return formatLocalStamp(new Date());
 }
 
-/** 追加一行到 ollama-runtime.log（失败不影响主流程）。 */
-function appendOllamaLog(line: string): void {
-  try {
-    fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
-    fs.appendFileSync(
-      OLLAMA_RUNTIME_LOG,
-      `${localTimestamp()} ${line}\n`,
-      "utf-8",
-    );
-  } catch {
-    /* 日志失败不影响主流程 */
-  }
+/** 本次启动的 runtime 日志写入器（`ollama-runtime-<时刻>.log`）。
+ *
+ * 一次启动一份文件（ISSUE #1326）：拉起前换一份新的，于是「这个文件属于哪一次
+ * 启动」由文件本身回答。为 null（还没启动过）时写日志静默跳过 —— 状态行本来
+ * 就会走响应体给出口。
+ *
+ * 这个模块**每次调用都会重新分配**吗？不会：句柄挂在模块作用域上，一次
+ * 「启动 Ollama」的整个流程（含 stdout/stderr 回调与退出回调）共用同一份；
+ * 下一次启动（用户再点一次）才换新的。 */
+let runtimeWriter: RuntimeLogWriter | null = null;
+
+/** 开一次启动的日志：轮转旧文件 → 换上新的一份 → 落首行标题。 */
+function beginOllamaSession(at: Date = new Date()): string {
+  pruneRuntimeLogFiles();
+  runtimeWriter = openRuntimeLogWriter("ollama-runtime", at);
+  appendOllamaLog("▶ Ollama 启动会话");
+  return runtimeWriter.file;
 }
 
-/** 会话边界横幅（唯一实现见 `src/lib/session-banner.server.ts`）：区分多次启动累积的
- * ollama-runtime.log（两侧各留空行，直接看文件也能看出本次从哪开始）。 */
-function appendOllamaBanner(kind: "start" | "end", title: string): void {
-  appendSessionBannerToFile(OLLAMA_RUNTIME_LOG, kind, title);
+/** 追加一行到本次启动的文件（失败不影响主流程）。 */
+function appendOllamaLog(line: string): void {
+  runtimeWriter?.write(`${localTimestamp()} ${line}`);
 }
 
 /** 探测 Ollama 是否已就绪（HTTP 200 = 服务在监听）。 */
@@ -233,10 +238,7 @@ async function spawnOllamaServe(
 
         // 进程在观察期内退出 = 启动秒退（端口被占 / 配置错误 / 安装不完整）
         child.on("exit", (code, signal) => {
-          appendOllamaBanner(
-            "end",
-            `■ Ollama 进程已退出（code=${code ?? "null"}）`,
-          );
+          appendOllamaLog(`■ Ollama 进程已退出（code=${code ?? "null"}）`);
           appendOllamaLog(
             `[exit] code=${code ?? "null"} signal=${signal ?? "none"}`,
           );
@@ -314,7 +316,8 @@ export async function POST(_req: NextRequest) {
     const ollama = await resolveOllamaExe();
     // 退出策略决定拉起方式：false（保活）时脱离进程树，应用退出不连带关闭。
     const keepAlive = getExitPolicy().exitKillOllama === false;
-    appendOllamaBanner("start", `▶ Ollama 启动会话  ${localTimestamp()}`);
+    /* 先换本次启动的日志文件再写第一条（同上）。 */
+    beginOllamaSession();
     appendOllamaLog(
       `[action] 启动 Ollama：exe=${ollama} keepAlive=${keepAlive}${keepAlive ? "（保活模式：应用退出后不关闭）" : ""}`,
     );

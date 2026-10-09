@@ -1,0 +1,273 @@
+/**
+ * 「测试层裸 sleep 用在哪儿」门禁自测（规范 §11.14）。
+ *
+ * 判据的价值全在**判定口径**上，所以这里跑的是**真脚本**（临时仓库 + 只放被测文件），
+ * 断言「该拦的拦、不该误伤的放过」。六条口径各有执行者：
+ *
+ *   ① **赌时间**（该拦）：`await new Promise(r => setTimeout(r, 50))` 单独成句，
+ *      等的是状态落定 —— 条件成立时照样等满、不成立时只留一句「超时」。
+ *   ② **声明豁免**（该放）：站点上方写着 `// sleep-ok: <理由>` —— 这是「等一个
+ *      不会发生的事」/「mock 内部延迟」/「必须真挂钟」三类的登记方式。
+ *   ③ **空声明**（该拦）：只有标签、后面空着，与没有声明等价（同 §11.19 的口径）。
+ *   ④ **字符串 / 注释里的站点**（该放）：本站自己的自测夹具里就写着这个形态 ——
+ *      判据去判自己的夹具是 §11.18.3.1 记过的坑（走 `maskNonCode`）。
+ *   ⑤ **没被 await 的 Promise**（该放）：站点不是「等这条语句过去」，而是别的东西
+ *      （例如丢给 `Promise.all` 的填充项）。
+ *   ⑥ **棘轮**：当前 > 基线即阻断、`--update` 不许把数字往上涨。
+ *
+ * ⚠️ 本文件自己**不进扫描面**（`FIXTURE_SKIP`）：它是喂给判据的被测字符串，
+ * 判它等于判自己的量具 —— 与 `tests/test-concurrency-gate.test.ts` 同一取舍。
+ */
+import { execFileSync } from "node:child_process";
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
+const SCRIPT = path.join(SCRIPTS_DIR, "check-test-sleep.cjs");
+/** 判据复用 `check-test-concurrency.cjs` 导出的 `maskNonCode`，临时仓库要一起带上。 */
+const DEP = path.join(SCRIPTS_DIR, "check-test-concurrency.cjs");
+
+/**
+ * 在临时仓库里跑真脚本（cwd = 临时仓库根，只放被测文件 + 判据依赖）。
+ *
+ * @param files 相对路径 → 内容
+ * @param baseline 基线（不传则写一份 total:0 的空基线）
+ * @param args 额外参数（如 --update / --report）
+ */
+function gate(
+  files: Record<string, string>,
+  baseline: { total: number; files?: Record<string, number> } = { total: 0 },
+  args: string[] = [],
+): { ok: boolean; output: string } {
+  const root = mkdtempSync(path.join(tmpdir(), "test-sleep-"));
+  mkdirSync(path.join(root, "scripts"), { recursive: true });
+  for (const src of [SCRIPT, DEP]) {
+    copyFileSync(src, path.join(root, "scripts", path.basename(src)));
+  }
+  writeFileSync(
+    path.join(root, "scripts", ".test-sleep-baseline.json"),
+    `${JSON.stringify({ total: baseline.total, files: baseline.files ?? {} }, null, 2)}\n`,
+  );
+  for (const [rel, content] of Object.entries(files)) {
+    const abs = path.join(root, rel);
+    mkdirSync(path.dirname(abs), { recursive: true });
+    writeFileSync(abs, content);
+  }
+  const entry = path.join(root, "scripts", "check-test-sleep.cjs");
+  try {
+    return {
+      ok: true,
+      output: execFileSync(process.execPath, [entry, ...args], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
+    };
+  } catch (error) {
+    const e = error as { stdout?: string; stderr?: string };
+    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+  }
+}
+
+const HEAD = 'import { expect, it } from "vitest";\n';
+
+describe("裸 sleep 门禁：该拦的形状（§11.14）", () => {
+  it("① 赌时间：裸 sleep 超过基线 → 阻断，并点名站点", () => {
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", async () => {
+  await new Promise((r) => setTimeout(r, 50));
+  expect(1).toBe(1);
+});
+`,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("测试层裸 sleep 上涨");
+    expect(r.output).toContain("tests/a.test.ts: 1 处");
+    expect(r.output).toContain("§11.14");
+  });
+
+  it("③ 空声明：`// sleep-ok:` 后面空着 → 与没有声明等价（阻断）", () => {
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", async () => {
+  // sleep-ok:
+  await new Promise((r) => setTimeout(r, 50));
+});
+`,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("测试层裸 sleep 上涨");
+  });
+
+  it("⑥ 棘轮：当前 > 基线 → 阻断；--update 不许把数字往上涨", () => {
+    const files = {
+      "tests/a.test.ts": `${HEAD}it("x", async () => {
+  await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 20));
+});
+`,
+    };
+    const blocked = gate(files, { total: 1 });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.output).toContain("1 → 2 处");
+
+    const refused = gate(files, { total: 1 }, ["--update"]);
+    expect(refused.ok).toBe(false);
+    expect(refused.output).toContain("拒绝收紧");
+  });
+});
+
+describe("裸 sleep 门禁：该放的形状（§11.14）", () => {
+  it("② 声明豁免：站点上方有理由 → 不计入棘轮", () => {
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", async () => {
+  // sleep-ok: 等一个「不会发生的事」——确认放行后不再有新的调度读取。
+  await new Promise((r) => setTimeout(r, 50));
+});
+`,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.output).toContain("声明豁免 1 处");
+    expect(r.output).toContain("裸 sleep 0 处");
+  });
+
+  it("② 折行站点也要认：prettier 折开 `new Promise((r) =>` 之后仍可豁免", () => {
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", async () => {
+  // sleep-ok: mock 内部延迟：给用例制造「接口慢一拍」的现场。
+  await new Promise((resolve) =>
+    setTimeout(resolve, 20),
+  );
+});
+`,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.output).toContain("裸 sleep 0 处");
+  });
+
+  it("② `setTimeout(…, 0)` 不算：它是让出一轮宏任务，没有时间预算可赌", () => {
+    /* 判据**自己**认「0 不算」，而不是让这 7 处各写一条 `sleep-ok` —— 纯噪音会把
+     * 「所有站点都得声明」变成一句空话（同 §12.16 的教训：噪音让人整条规则都不看）。 */
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", async () => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((r) => setTimeout(r, 0));
+});
+`,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.output).toContain("裸 sleep 0 处");
+  });
+
+  it("② 变量延时算站点：`setTimeout(r, behavior.delayMs)` 是预算，只是运行时才知道", () => {
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", async () => {
+  if (behavior.delayMs) await new Promise((r) => setTimeout(r, behavior.delayMs));
+});
+`,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("测试层裸 sleep 上涨");
+  });
+
+  it("④ 字符串 / 注释里的站点不算：判据不去判自己的夹具", () => {
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", () => {
+  const fixture = "await new Promise((r) => setTimeout(r, 50))";
+  // await new Promise((r) => setTimeout(r, 50))
+  expect(fixture.length).toBeGreaterThan(0);
+});
+`,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.output).toContain("裸 sleep 0 处");
+  });
+
+  it("⑤ 没被 await 的 Promise 不算：它不是「等这条语句过去」", () => {
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", () => {
+  const pending = [1, 2].map(
+    (n) => new Promise((r) => setTimeout(r, n)),
+  );
+  expect(pending.length).toBe(2);
+});
+`,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.output).toContain("裸 sleep 0 处");
+  });
+
+  it("② 声明只在紧邻站点时生效：隔开代码的声明不豁免下面的站点", () => {
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", async () => {
+  // sleep-ok: 只能管紧邻的那一处。
+  const unrelated = 1;
+  await new Promise((r) => setTimeout(r, 50));
+  expect(unrelated).toBe(1);
+});
+`,
+    });
+    /* 这条钉的是「声明的作用半径」：中间隔了非注释代码就断开。
+     * 判据若把声明做成「整块/整文件生效」，下一个人会以为只要写一条就全豁免了。 */
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("测试层裸 sleep 上涨");
+  });
+
+  it("② 声明可以跨过「包着我的那一句的开头」：vi.mocked(…)( 之上两行的声明仍生效", () => {
+    const r = gate({
+      "tests/a.test.ts": `${HEAD}it("x", () => {
+  // sleep-ok: mock 内部延迟：模拟一个 5s 的慢查询。
+  vi.mocked(findPort).mockImplementation(
+    () => new Promise((r) => setTimeout(() => r(8188), 5000)),
+  );
+});
+`,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.output).toContain("裸 sleep 0 处");
+  });
+
+  it("② 零参箭头 helper 算站点，带参箭头回调不算（自测第 ⑤ 条的边界）", () => {
+    /* 零参箭头（`const flush = () => new Promise(…)`）是一条独立的「等 N 毫秒」
+     * helper —— 漏掉它会让它的 `sleep-ok` 声明变成摆设；而带参箭头是回调，
+     * 属「造一个慢东西丢进集合」，不在本判据的靶子里。 */
+    const helper = gate({
+      "tests/a.test.ts": `${HEAD}const flush = () => new Promise((r) => setTimeout(r, 30));
+it("x", async () => {
+  await flush();
+});
+`,
+    });
+    expect(helper.ok).toBe(false);
+    expect(helper.output).toContain("测试层裸 sleep 上涨");
+
+    const callback = gate({
+      "tests/a.test.ts": `${HEAD}it("x", () => {
+  const pending = [1, 2].map(
+    (n) => new Promise((r) => setTimeout(r, n)),
+  );
+  expect(pending.length).toBe(2);
+});
+`,
+    });
+    expect(callback.ok).toBe(true);
+    expect(callback.output).toContain("裸 sleep 0 处");
+  });
+
+  it("⑥ 棘轮：当前 ≤ 基线 → 通过（并提示可以收紧）", () => {
+    const files = {
+      "tests/a.test.ts": `${HEAD}it("x", async () => {
+  await new Promise((r) => setTimeout(r, 10));
+});
+`,
+    };
+    const ok = gate(files, { total: 1 });
+    expect(ok.ok).toBe(true);
+
+    const shrunk = gate(files, { total: 5 });
+    expect(shrunk.ok).toBe(true);
+    expect(shrunk.output).toContain("比基线少 4 处");
+    expect(shrunk.output).toContain("--update");
+  });
+});

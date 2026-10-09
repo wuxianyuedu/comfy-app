@@ -32,9 +32,9 @@ export interface WorkflowIOEntry {
   seedMode?: string;
   /** 多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
    *  存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。
-   *  键名 `modeOverrides` 刻意与 `WorkflowDetail.availableModes`（工作流级模式清单）
-   *  区分开——两者同名 `modes` 是历史命名地雷；旧数据仍是 `modes` 键，由
-   *  `parseWorkflowIOMap` 与 `enrichWorkflowIO` 在读边界回退归一。 */
+   *  键名 `modeOverrides` 刻意与 `WorkflowTemplate.modes`（工作流级模式清单）
+   *  区分开 —— 两者都叫 `modes` 时是同一个 JSON 列里的两种含义，读的人分不清，
+   *  所以**只有一个名字**（历史列里那个 `modes` 键由 `parseWorkflowIOMap` 归一）。 */
   modeOverrides?: Record<string, WorkflowIOModeOverride>;
   /** 宿主（外层封装）节点 id，**仅在「下钻到子工作流内部」勾选时**写入。
    *
@@ -94,17 +94,24 @@ const WorkflowIOMapSchema = z.record(z.string(), WorkflowIOEntrySchema);
 
 /** 解析 workflowIO 列（DB JSON 列）；非对象 / 形状不符 → 空表。
  *
- *  旧数据把模式覆盖层写作 `modes` 键；统一回退到新键 `modeOverrides`，这样下游
- *  助手（isVisibleInMode / resolveEntryDefault …）与消费方只读一个名字。回退只在
- *  新键缺失时生效，不覆盖已经用新键落库的数据。 */
+ *  列里可能留着把模式覆盖层写作 `modes` 键的行（该键与工作流级的
+ *  `WorkflowTemplate.modes` 同名、含义完全不同，是同一列里的两种读法）。
+ *  这里把这**最后一道列边界**归一到 `modeOverrides`，下游助手
+ *（isVisibleInMode / resolveEntryDefault …）与消费方只读那一个名字。
+ *  回退只在新键缺失时生效，不覆盖已经用新键落库的数据。 */
 export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
   const parsed = WorkflowIOMapSchema.safeParse(value);
   if (!parsed.success) return {};
   const data = parsed.data;
   for (const entry of Object.values(data)) {
     if (!entry || typeof entry !== "object") continue;
-    const legacy = (entry as Record<string, unknown>).modes as
+    const rec = entry as Record<string, unknown>;
+    /* 旧键先删掉、再按需落新键：留着它等于让同一份覆盖层以两个名字在本列里
+     * 往返 —— 下游读哪个都能读通，于是「谁是权威」永远说不清（而 `.loose()`
+     * 会让它一路透传回写库）。 */
+    const legacy = rec.modes as
       Record<string, WorkflowIOModeOverride> | undefined;
+    delete rec.modes;
     if (entry.modeOverrides === undefined && legacy !== undefined) {
       entry.modeOverrides = legacy;
     }

@@ -10,13 +10,7 @@
 //     editedRef 保证（这里验「空提示词会被预填」这半条）。
 // 网络层整体 mock（generation-client），组件的编排与状态写回保持真实。
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { ShotStudio } from "./ShotStudio";
@@ -197,7 +191,7 @@ describe("ShotStudio 门禁", () => {
 describe("ShotStudio 自动预填", () => {
   it("空提示词的镜头在挂载后从场景 + 角色卡回填", async () => {
     const { onShotsChange } = renderStudio({ shots: [makeShot()] });
-    await waitFor(() => expect(onShotsChange).toHaveBeenCalled());
+    await expect.poll(() => onShotsChange).toHaveBeenCalled();
     const patched = lastPatchedShot(onShotsChange);
     /* 预填文案来自 prompt-builder 的拼装：景别 + 场景要素 + 角色卡特征。 */
     expect(patched.prompt).toContain("小满");
@@ -220,10 +214,10 @@ describe("ShotStudio 生图出口", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "生成此镜头" }));
-    await waitFor(() => expect(mockedStart).toHaveBeenCalled());
-    await waitFor(() =>
-      expect(onNotice).toHaveBeenCalledWith(expect.stringContaining("种子")),
-    );
+    await expect.poll(() => mockedStart).toHaveBeenCalled();
+    await expect
+      .poll(() => onNotice)
+      .toHaveBeenCalledWith(expect.stringContaining("种子"));
   });
 
   it("进行中且有本机任务 id 的镜头显示「取消」，点击接 onCancelShot", () => {
@@ -257,7 +251,7 @@ describe("ShotStudio 生图出口", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "生成此镜头" }));
-    await waitFor(() => expect(onShotsChange).toHaveBeenCalled());
+    await expect.poll(() => onShotsChange).toHaveBeenCalled();
     /* watchShot 的产物回写经 onShotsChange 的函数式补丁发生 */
     const calls = vi.mocked(onShotsChange).mock.calls;
     const wroteImage = calls.some((call) => {

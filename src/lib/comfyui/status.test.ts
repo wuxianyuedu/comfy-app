@@ -252,6 +252,7 @@ describe("配置端口抢跑 — 不让 Get-NetTCPConnection 一个人占满首�
       failed: false,
     });
     vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
+    // sleep-ok: mock 内部延迟：权威查询（Get-NetTCPConnection）在真机上是 ~2.5s 的慢查询，这里用 5s 模拟它 —— 判据是「不被它拖住」（dt < 2000）。
     vi.mocked(findPidListeningPort).mockImplementation(
       () => new Promise((r) => setTimeout(() => r(8188), 5000)),
     );
@@ -406,6 +407,7 @@ describe("候选查询并发化 — 冷启动等待不叠成 N 倍（ISSUE #339 
         inFlight += 1;
         peak = Math.max(peak, inFlight);
         // 每个查询都「慢」一拍，串行实现下峰值只能是 1。
+        // sleep-ok: mock 内部延迟：每个候选查询慢一拍，用来暴露「串行实现峰值只能是 1」。
         await new Promise((r) => setTimeout(r, 20));
         inFlight -= 1;
         // 只有最后一个候选命中：前面几级都必须问过，判据链才完整。
@@ -433,6 +435,7 @@ describe("候选查询并发化 — 冷启动等待不叠成 N 倍（ISSUE #339 
       // 让**后**发出的请求先返回：并发实现若按「谁先返回」取结论，
       // 这里就会取到错误的那一个。
       const delay = call === 1 ? 40 : 5;
+      // sleep-ok: mock 内部延迟：让后发出的请求先返回，用来暴露「并发实现按谁先返回取结论」这个错误形状。
       await new Promise((r) => setTimeout(r, delay));
       return { pid: 100 + call, failed: false };
     });

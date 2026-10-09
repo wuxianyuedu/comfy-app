@@ -79,6 +79,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 像素基线按平台分文件：少一档不是「那一档没跑」，而是判失败并顺手生成半套未入库的
   // PNG。这条守的是「视觉层在真正执行它的那台机器上到底有没有基线」，与本次改动无关。
   "tests/visual-baseline-pairing.test.ts",
+  // 「组件级视觉归 Storybook、页面级视觉归 Playwright」这条分工本身：
+  // `e2e/visual/**` 与 `.storybook/**` 里都不该出现对方那一侧该做的事（截图断言 / 第二套
+  // 像素工具），而 §11.8 声明的基线范围档（深浅两态 / 断点 / 空态）不得被**减法**清掉 ——
+  // 删掉东西比加东西更容易过 review，这条只在改像素层时才跑就等于形同虚设。
+  "tests/visual-storybook-division.test.ts",
   // 条件性 skip 的登记表：全绿里的 `N skipped` 不说明「绿的是哪一种」，尤其产物级探针
   // （没构建过的检出上整块不判）。这条守住「每个暗掉的站点都有人登记它为什么暗」。
   "tests/conditional-skip-registry.test.ts",
@@ -90,6 +95,78 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 收敛掉一份却没收紧台账 = 红。它守的是「这张表还有没有记账能力」，与本次改动无关，
   // 所以必须进固定清单（只在受影响时才跑，等于让下一次复制悄悄过去）。
   "tests/strip-comments-single-source.test.ts",
+  // 软断言的**使用面**（规范 §11.18）：`expect.soft` 只该用在「一张清单逐项判」的
+  // 循环体里，落在循环外会把真正的原因吞掉（软断言失败后下一行照跑、抛 TypeError，
+  // 报告里只剩那条 TypeError）。它同时是判据自己的门禁自测 —— 口径（同行循环、
+  // 折行循环头、循环之后的语句）每一条都得有人钉住，而这些口径是「下一次新增
+  // 一处软断言」时才走得进的路径，所以必须进固定清单（与本次改动无关也照跑）。
+  "tests/soft-assertion-gate.test.ts",
+  // 并发档位的**使用面**（规范 §11.19）：`it.concurrent` 不是免费的旋钮 ——
+  // 同步阻塞的用例改它零收益（实测 7.75s → 7.75s），真起进程的用例改它要和
+  // 真资源（临时目录 / 库 / 端口）的隔离一起改（实测红 2 条），而它与上一轮
+  // 刚收口的 `expect.poll` **机制上互斥**（实测 20/20 红、次序反转 0/20 红）。
+  // 它同时是判据自己的门禁自测 —— 三条口径（并发 × poll / 缺隔离声明 /
+  // 折行站点）每一条都得有人钉住，而它们是「下一次有人想给用例加并发」时才
+  // 走得进的路径，所以必须进固定清单（与本次改动无关也照跑）。
+  "tests/test-concurrency-gate.test.ts",
+  // 类型层断言（`expectTypeOf` / `assertType`）的**执行者在场**（规范 §11.20）：
+  // 这两者在 vitest 里**没有牙**（实测 `expectTypeOf<string>().toEqualTypeOf<number>()`
+  // 跑 `vitest run` 是 Tests 1 passed），唯一执行者是 `tsc --noEmit`，而 tsc 只按
+  // `tsconfig.json` 的 include 面收文件。所以判据钉的是「站点落在 include 面里吗」——
+  // 站点一旦出界，全仓断言**同时变装饰品且没有任何一处报错**（实测收窄 include 之后
+  // tsc 与 vitest 双双报绿）。它同时是判据自己的门禁自测 —— 该放的（`.test-d.ts` /
+  // 零站点 / 夹具字符串里）与该拦的（出界 / 折行站点 / 解析失败）每一条都得有人钉住，
+  // 而它们是「下一次有人加类型层断言」时才走得进的路径，所以必须进固定清单。
+  "tests/type-assertion-gate.test.ts",
+  // `ctx.annotate` 的**消费方在场**（规范 §11.21）：它写下的注释只有失败时在 text
+  // reporter 里可见，`--reporter=json` 的产物里一个字都没有，唯一读数通道是
+  // programmatic API —— 所以「挂一把没人读的注释」比不写更坏（让人以为有人管）。
+  // 判据因此只判一件事：有站点就必须登记消费方。它同时是判据自己的门禁自测 ——
+  // 该放的（零站点 / 台账在场 / 夹具字符串里）与该拦的（台账缺 / 折行站点 /
+  // 台账解析不了）每一条都得有人钉住，而它们是「下一次有人挂注释」时才走得进的路径，
+  // 所以必须进固定清单（与本次改动无关也照跑）。
+  "tests/annotate-consumer-gate.test.ts",
+  // `ctx.task.meta` 写下的数据**有读的人在**（规范 §11.22）：它是相邻那两条里唯一
+  // 能从 CLI 那侧读到的通道（实测自定义键原样落进 `--reporter=json` 的报告、绿的用例
+  // 也带），但门禁链跑 vitest 没带 `--reporter=json` / `--outputFile` —— 写了没人读，
+  // 数据落进空气而表面上像「已经登记了」。判据只判一件事：有站点就必须登记消费方。
+  // 它同时是判据自己的门禁自测 —— 该放的（零站点 / 台账在场 / 无关的 meta 用法 /
+  // 夹具字符串里）与该拦的（台账缺 / 折行站点 / 台账解析不了）每一条都得有人钉住，
+  // 而它们是「下一次有人往报告里塞事实」时才走得进的路径，所以必须进固定清单。
+  "tests/task-meta-consumer-gate.test.ts",
+  // 测试层裸 sleep 的**使用面**（规范 §11.14）：它是「升级后把新写法当默认」这一档
+  // 里唯一**没有执行者**的一条 —— §11.14 写的执行者是「review 拦下」，而上一轮清掉的
+  // 6 个文件是抽样：同一个数在两次盘点里从 20 变成 38，不是「修完又长回来」，而是没有
+  // 判据在数（同族先例：check-comment-language.cjs 自称在钩子里跑、实际一个执行者都没有）。
+  // 它同时是判据自己的门禁自测 —— 该拦的（赌时间 / 空声明 / 棘轮上涨 / --update 放水）
+  // 与该放的（声明豁免 / 折行站点 / 夹具字符串 / 没被 await 的 Promise / 声明作用半径）
+  // 每一条都得有人钉住，而它们是「下一次有人在用例里等异步」时才走得进的路径，
+  // 所以必须进固定清单（与本次改动无关也照跑）。
+  "tests/test-sleep-gate.test.ts",
+  // `waitFor` / `expect.poll` 的**边界**（规范 §11.14.3）：`check-test-sleep.cjs` 管住了
+  // 裸 sleep 那一半，而更大量的一半（全仓 211 处 `await waitFor`）此前一条判据都不认识。
+  // 判的不是「有没有 waitFor」（它没被废弃），是「两种正当形态之外都不许有」：
+  // 等 DOM（jest-dom 匹配器与 expect.poll 类型不兼容）与假定时器窗口内，两者由判据
+  // 自己认出来；其余一切等值的 `await waitFor` 都是越界。
+  // 它同时是判据自己的门禁自测 —— 该拦的（等值）与该放的（等 DOM / 假定时器 / 本地同名
+  // helper / 夹具文件）每一条都得有人钉住，都是「下一次有人写等待」时才走得进的路径，
+  // 所以必须进固定清单（与本次改动无关也照跑）。
+  "tests/test-waitfor-gate.test.ts",
+  // 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮（规范 §11.15）：§11.15 那句
+  // 「本仓库已全部转换完」此前没有执行者，实测又长出 2 处 —— 同 check-test-sleep 的病。
+  // 它同时是判据自己的门禁自测 —— 该拦的（`it.each` / `describe.each` / `test.each` /
+  // `--update` 上涨）与该放的（棘轮内 / 本地同名 helper / 夹具字符串 / 夹具文件）
+  // 每一条都得有人钉住，都是「下一次有人写参数化用例」时才走得进的路径，
+  // 所以必须进固定清单（与本次改动无关也照跑）。
+  "tests/test-it-each-gate.test.ts",
+  // 配置的**共享项有没有真的落到两档上**（规范 §11.17.3）：这一档的口径在本仓库
+  // 写反过一次（「`projects` 不继承声明方 `test` 的选项」），共享项因此被复制成
+  // 两份 spread；本轮复现那次实测、订正口径并让共享项回到根 `test`。
+  // 判据用 vitest 自己的 `createVitest()` 读**解析后**的配置逐档核 ——
+  // 「口径改对了」不等于「以后不会写回去」，而这条判据的对象正是那一步。
+  // 它同时钉住两件解析值判不出来的事（`globals: false` 删掉解析值不变、
+  // `environment` 不许抬到根级），所以与本次暂存改动无关也照跑，进固定清单。
+  "tests/test-config-inheritance.test.ts",
   // router 层的错误信封：裸 `throw new Error` 会被 tRPC 归成 INTERNAL_SERVER_ERROR，
   // 「越权与不存在同形」就只剩一句没有判据的话（台账 E8）。这条同时验 eslint 配置里
   // 那条 selector **真的会响** —— 「配置写在」与「配置在跑」是两件事（§11.7 同源），
@@ -121,7 +198,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   "tests/storybook-data-sources.test.ts",
   // 「调用点的形状错误不许被咽掉」（台账 F13）：`as never` 逐处登记 + 投影参数不许是
   // unknown + `.select(… as never)` 这个形状零存在。这一族的实际事故是 `train.cancel`
-  // 从 Prisma→Drizzle 迁移起每次 500 而零红 —— 新增一处就是重新装上那个消音器，
+  // 数据层迁移之后每次 500 而零红 —— 新增一处就是重新装上那个消音器，
   // 与本次暂存改动无关也必须响，所以进固定清单。
   "tests/f13-projection-shapes.test.ts",
   // 「判据自己有没有执行者」：`doc:check` 接进 pre-commit D 组之后的在位判据。
@@ -177,6 +254,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 占位子件），没有任何构建期或运行期判据会红。与本次暂存改动无关也必须响
   // （它是「下一次有人写这三族 story」的守卫），所以进固定清单。
   "tests/storybook-injection-layers.test.ts",
+  // 「画布帧的视口口径」（装不下要显式认账）：框架是**一个常量**（560px），而节点
+  // 渲染器的尺寸是消费方的事 —— 渲染器比框高、又没传 `fit` 时，钉住的视口会把内容
+  // 切掉一截（实测 `fanOut` 切 151px、`twoNodes` 切 79px、`mixedKinds` 切 51px），
+  // 而 tsc / eslint / 构建 / 上面那条注入层判据全绿、只有画布上少一块。它与「三层
+  // 注入的接线」是两件事（那条判的是「给的是不是真的那一份」，这条判的是
+  // 「装不装得下」），所以单独一份。与本次暂存改动无关也必须响（它是「下一次有人
+  // 用自定义渲染器摆画布」的守卫），所以进固定清单。
+  "tests/storybook-fit-viewport.test.ts",
   // 「eslint 增量缓存的依赖指纹」：`--cache` 的缓存键不含依赖树，而 `no-unsafe-*`
   // 是类型化规则 —— 依赖一变旧判决被整片重放，假红拦死提交、假绿洗掉真违规
   // （ISSUE #1399）。它的执行者是 `postinstall` 那一步，而改 `.githooks/**` 会让
@@ -229,6 +314,29 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 而它与某一次具体改动无关 —— 只在被改到时才跑等于专挑它不在的时机跑。
   // 同因：改 `.githooks/**` 会让本层放弃收窄、只跑固定清单。
   "tests/test-environment-gate.test.ts",
+  // 「像素档留在按需层、不进 `check:all`」（§11.8 / §13.5.4）。这条此前只是文档里
+  // 的一句话：`GATES.visual` 带 `run: false`、`.ps1` 那侧带 `Run = $false`，而
+  // 没有任何判据按名字钉住它 —— 把它挪进默认档（并顺手新增任意一个按需档）\
+  // 全仓判据照样全绿，代价是每次一键门禁都起 webServer + 浏览器。它读的是
+  // `scripts/quality-gate.mjs` / `.ps1` 两份**文本**（那两份都自跑自退、import 不进来，
+  // 所以 import 图追不到），与本次暂存改动无关也必须响，故进固定清单。
+  "tests/pixel-run.test.ts",
+  // 「全量 e2e 也有主」（ISSUE #1545 / #1547）：`pnpm test:e2e` 此前是「人记得就跑」，
+  // 而**像素档的触发条件恰好嵌套在它里面**（`playwright.config.ts` 的 `testMatch` 把
+  // `*.visual.spec.ts` 与普通 spec 收进同一次 `playwright test`，而 `pnpm check:visual`
+  // 只跑 `e2e/visual` 那半边）—— 实测的形态是 linux 档基线过期两天没被发现，靠人手动
+  // 跑一遍才照出来。现在 `pnpm test:e2e` 走 `scripts/e2e-run.mjs`，跑绿即记一条与像素档
+  // **同形而不同键**的账；这条判据钉的是记账语义、两条账不接错、以及钩子那一步真判了它。
+  // 它读的是 `scripts/e2e-run.mjs` / `scripts/visual-baselines.mjs` 与两处接线文本，
+  // import 图追不到，故进固定清单（与本次暂存改动无关也必须响）。
+  "tests/e2e-run.test.ts",
+  // 「声明 ⇄ 读者」索引的契约测试（规范 §11.23）：本仓库的声明机制是一个一个事故里
+  // 长出来的，每一种自带台账与判据，而没有任何一处说得出「一共有哪些声明、各自的读者
+  // 是谁」。这一步把 scripts/.declaration-readers.json 当索引核（读者存在 + 执行者在
+  // 门禁链里），它的判定口径（读者丢了 / 钩子步骤被摘掉 / 用例离开固定清单 / 索引静默
+  // 降级 / 字段不全 / id 重复）都是「下一次有人加一种新声明机制」时才走得进的路径 ——
+  // 只在被改到时才跑，等于专挑它不在的时机跑，故进固定清单。
+  "tests/declaration-readers-gate.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

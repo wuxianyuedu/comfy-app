@@ -147,7 +147,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="u-title-stage">{stageTitle}</h2>
-          <p className="text-muted-foreground mt-1 text-[12px]">{stageDesc}</p>
+          <p className="text-muted-foreground mt-1 text-xs">{stageDesc}</p>
         </div>
         <span className="text-muted-foreground bg-subtle text-2xs shrink-0 rounded-full px-3 py-1">
           阶段 {stageIndex} / {STAGE_DEFS.length}

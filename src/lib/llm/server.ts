@@ -57,10 +57,9 @@ export async function getLLMConfig(
       if (row.provider) cfg.provider = row.provider as LLMProviderType;
       if (row.baseUrl) cfg.baseUrl = row.baseUrl;
       if (row.model) cfg.model = row.model;
-      // option C：llmConfig.extraModels 只存本地 ollama 候选（纯名字，无 apiKey）；
-      // 远端独立模型改存 remoteModel 表。读取时合并两者，保证下游（运行时按名
-      // 找 baseUrl/apiKey、设置页候选清单、工坊分组）行为不变。
-      // 直接吃 DB 原始值（llmConfig.extraModels 里字符串=本地候选，对象=遗留/远端）
+      // 两类候选分开存：`llmConfig.extraModels` 是本地 ollama 候选（纯名字，无
+      // apiKey），远端独立模型在 `remoteModel` 表。读取时合并两者，保证下游
+      //（运行时按名找 baseUrl/apiKey、设置页候选清单、工坊分组）行为不变。
       const split = splitExtraModels(
         (row as Record<string, unknown>).extraModels,
       );
@@ -71,7 +70,9 @@ export async function getLLMConfig(
         apiKey: r.apiKey,
         kind: (r.kind as RemoteModelKind) ?? null,
       }));
-      // 合并三来源：本地候选名 + 表内远端条目 + 遗留(尚未迁表)的远端对象
+      // 合并两来源：本地候选名 + 远端表条目。`split.remoteEntries` 在列里不该再
+      // 出现（写入侧只落字符串），仍一并合并是因为**读侧不假设写入侧守规矩**——
+      // 列里真混进对象时把它当远端条目读出来，总好过把整份候选清单判成畸形丢掉。
       cfg.extraModels = [
         ...split.localNames.map((n) => ({
           name: n,
@@ -84,7 +85,7 @@ export async function getLLMConfig(
       ];
       if (row.apiKey) cfg.apiKey = row.apiKey;
       if (row.temperature != null) cfg.temperature = row.temperature;
-      // temperatureByTask 是 Json 字段，prisma generate 后类型会自动包含；先用 any 绕过
+      // temperatureByTask 是 json 列，读出来是 unknown —— 形状由 resolveTaskTemperature 消费，
       const raw = row as Record<string, unknown>;
       if (raw.temperatureByTask)
         cfg.temperatureByTask = raw.temperatureByTask as Record<
@@ -123,32 +124,6 @@ export async function getLLMConfig(
   return cfg;
 }
 
-/**
- * option C 的存量迁移（幂等）：把历史遗留、混在 llmConfig.extraModels 里的远端
- * 条目对象搬到独立 remoteModel 表，并把 llmConfig.extraModels 收窄成纯本地候选名。
- * 在 configGet / configSave 读配置前调用一次即可；已迁移后再次调用是空操作。
- */
-export async function ensureRemoteStorageMigrated(): Promise<void> {
-  const row = await llmConfigRepository.findSingleton();
-  if (!row) return;
-  const raw = (row as Record<string, unknown>).extraModels;
-  if (!Array.isArray(raw)) return;
-  const split = splitExtraModels(raw);
-  if (split.remoteEntries.length === 0) return; // 无遗留远端条目，无需迁移
-  // 迁移前先做本地/远端归并：历史对象形态里指向本机回环、且不带 apiKey 的条目是
-  // 「误存的本地 ollama」，应折回本地候选，绝不能搬进 remoteModel 表当远端 —— 否则
-  // 工坊下拉会把本机 ollama 挂成「远端」小标。
-  const folded = foldRemoteToLocal(
-    split.remoteEntries,
-    split.localNames,
-    row.baseUrl,
-  );
-  await remoteModelRepository.replaceAll(folded.remoteEntries);
-  await llmConfigRepository.upsertSingleton({
-    extraModels: folded.localNames,
-  });
-}
-
 /** 客户端可读写形状（configGet 出口）：
  *  extraModels 保持类型区分 —— 本地 ollama 候选为字符串、远端独立模型为条目对象，
  *  这样设置页保存时 configSave 能按「字符串 vs 对象」把它们各自写回正确的地方，
@@ -171,8 +146,8 @@ export async function getConfigForClient() {
       apiKey: r.apiKey,
       kind: (r.kind as RemoteModelKind) ?? null,
     }));
-    // 读取层兜底归并：即便 remoteModel 表里还残留误存的本地 ollama（本地回环 +
-    // 无 apiKey，历史迁移/误配置带入），也折回本地候选字符串下发 —— 工坊下拉与设置页
+    // 读取层兜底归并：`remoteModel` 表里若存着指向本机回环、且不带 apiKey 的条目，
+    // 那是「本地 ollama 被错存成了远端」，折回本地候选字符串下发 —— 工坊下拉与设置页
     // 因此不会再把它挂「远端」小标。
     const folded = foldRemoteToLocal(
       [...tableEntries, ...split.remoteEntries],

@@ -116,3 +116,17 @@ overrides:
   #     在场）；`storybook:build` 出件；`pnpm why webpack-dev-middleware` 只剩 7.4.5 一个版本。
   #     哪天 storybook dev 起不来，先回看这一条。
   'webpack-dev-middleware@6': '7.4.5'
+  #   · ISSUE #1282 第三批（advisory 库更新后新出现的三条，全部传递依赖、全部有最小可达
+  #     修复版，所以按 §13.5.9 走出路 ① 而不是登记进基线）：
+  #     proxy-addr 2.0.7 → 2.0.8（`shadcn > @modelcontextprotocol/sdk > express`，
+  #       critical：`X-Forwarded-For` 解析可被构造出畸形 IP）。本仓运行时不启 express，
+  #       shadcn 是按需召唤的组件 CLI，但既然是同 major 补丁版就一并升掉、不留待办。
+  'proxy-addr@2': '2.0.8'
+  #     source-map-js 1.2.1 → 1.2.2（`next > postcss`、`@sentry/nextjs > … > webpack`，
+  #       high）。只影响 sourcemap 解析，升版无 API 变化。
+  'source-map-js@1': '1.2.2'
+  #     sharp 0.35.4 → 0.35.5（`next > sharp` 与 `better-auth > next > sharp`，high）。
+  #       sharp 是 next 的**可选依赖**，next 自己声明 `^0.35.x`，所以这是它认可的补丁版；
+  #       它带预编译二进制（`@img/sharp-*`），升版要确认 install 仍不触发本地编译 ——
+  #       实测 `pnpm install` 不报 ERR_PNPM_IGNORED_BUILDS，`pnpm why sharp` 只剩 0.35.5。
+  'sharp@0.35': '0.35.5'

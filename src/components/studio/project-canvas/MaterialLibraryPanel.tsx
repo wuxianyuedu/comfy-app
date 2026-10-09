@@ -165,7 +165,7 @@ export function MaterialLibraryPanel({
             value={search}
             onChange={textHandler(setSearch)}
             placeholder={folder ? "在当前分类搜索" : "搜索全部素材"}
-            className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[12px] focus-visible:ring-0"
+            className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
           />
           {search && (
             <Hint label="清空" accessibleName>

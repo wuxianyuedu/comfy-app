@@ -96,7 +96,7 @@ export function WorkflowLibrary({
       {/* 动作失败提示：只有用户点「重试」才消失（§17.5.4），
        *  否则防抖期内的后台拉取一成功就会把它吞掉。 */}
       {c.actionError && (
-        <div className="border-destructive/25 bg-destructive/8 text-destructive flex items-start gap-2 border-b px-5 py-2.5 text-[12px]">
+        <div className="border-destructive/25 bg-destructive/8 text-destructive flex items-start gap-2 border-b px-5 py-2.5 text-xs">
           <span className="font-semibold">⚠</span>
           <span className="min-w-0 flex-1">{c.actionError}</span>
           <Button
@@ -111,7 +111,7 @@ export function WorkflowLibrary({
       )}
 
       {c.loadError && !c.actionError && (
-        <div className="border-warning/25 bg-warning/8 text-warning-strong flex items-start gap-2 border-b px-5 py-2.5 text-[12px]">
+        <div className="border-warning/25 bg-warning/8 text-warning-strong flex items-start gap-2 border-b px-5 py-2.5 text-xs">
           <span className="font-semibold">⚠</span>
           <span className="min-w-0 flex-1">{c.loadError}</span>
         </div>

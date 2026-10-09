@@ -113,7 +113,7 @@ export function OutputRowPort({
       />
       <div className="flex h-5 items-center justify-end gap-1.5 px-3.5 pt-1.5">
         <span
-          className="text-ink-bright min-w-0 truncate text-[12px] font-semibold"
+          className="text-ink-bright min-w-0 truncate text-xs font-semibold"
           style={{ fontFamily: "var(--font-sans)" }}
           title={`IO 输出 · ${outLabel}${outType ? ` · ${outType}` : ""}`}
         >

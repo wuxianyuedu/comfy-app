@@ -109,10 +109,12 @@ describe("预设命令表", () => {
     /* 判据是**这一条坑真的踩过**：`node -v && pnpm -v` 在解析器眼里是
      * `node` 带上 `-v` `&&` `pnpm` `-v` 四个参数 —— node 会报「找不到模块 &&」，
      * 而界面上它长得完全正常。预设是给人点的，点下去必须真的跑通。 */
+    /* 软断言：逐条预设各自独立 —— 一次把**所有**带控制符的预设都报出来，
+       而不是修一条、再发现有下一条（§11.18）。 */
     for (const preset of allPresets()) {
-      expect(preset.command, `预设 ${preset.id} 含 shell 控制符`).not.toMatch(
-        /[;|&><]|\$\{?\w|%\(/,
-      );
+      expect
+        .soft(preset.command, `预设 ${preset.id} 含 shell 控制符`)
+        .not.toMatch(/[;|&><]|\$\{?\w|%\(/);
     }
   });
 

@@ -16,7 +16,7 @@
 <li class="">
 <div class="tsd-signature tsd-anchor-link" id="fetchlogsessions"><span class="tsd-kind-call-signature">fetchLogSessions</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">source</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_log_log-file-client.RuntimeLogSourceKind.html" class="tsd-signature-type tsd-kind-type-alias">RuntimeLogSourceKind</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">sessionId</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_log_log-sessions.LogSessionsPayload.html" class="tsd-signature-type tsd-kind-interface">LogSessionsPayload</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">&gt;</span><a href="#fetchlogsessions" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>拉取某来源的会话列表 + 指定会话（缺省取最新一次）的正文。</p>
+<div class="tsd-comment tsd-typography"><p>拉取某来源的启动列表 + 指定一次（缺省取最新那一份）的正文。</p>
 <p>服务端未就绪 / 网络失败时返回 null（与 <code>fetchFileLogSlice</code> 的约定不同：
 它抛错，因为它跑在「已经很确定服务端在」的面板轮询里；本函数在设置页
 挂载时就会调用一次，用户可能正处在服务重启的窗口期，报错只会污染控制台）。</p>
@@ -28,7 +28,7 @@
 <li><span><code class="tsd-tag">Optional</code><span class="tsd-kind-parameter">sessionId</span>: <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_log_log-sessions.LogSessionsPayload.html" class="tsd-signature-type tsd-kind-interface">LogSessionsPayload</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-file-client.ts:94</li></ul></aside></div></li></ul></section></div>
+<li>Defined in lib/log/log-file-client.ts:99</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

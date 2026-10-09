@@ -202,7 +202,6 @@ export const workflowMutationProcedures = {
         positions: z.unknown().optional(),
         workflowIO: z.unknown().optional(),
         taskType: z.string().optional(),
-        thumb: z.string().optional(),
         modes: z.array(z.string()).optional(),
         defaultMode: z.string().nullable().optional(),
         modelTags: z.array(z.string()).optional(),
@@ -229,7 +228,6 @@ export const workflowMutationProcedures = {
       // patch 为显式字段构造（不含 ...rest 展开），故 mergePositions / groups /
       // notes 无需在此排除——它们的读取走下方具名变量。
       const { id, modelTags, mergePositions, groups, notes, ...rest } = input;
-      // WorkflowTemplate 无 thumb 列（旧遗留字段，留在 rest 不透传进 set()）
       const patch: Partial<WorkflowTemplate> = {
         name: rest.name,
         taskType: rest.taskType,

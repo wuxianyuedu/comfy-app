@@ -254,7 +254,13 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
     expect(modes.T2I!.defaultValue).toBe("16:9");
   });
 
-  it("旧数据用 `modes` 键存储时仍被读取并归一到 `modeOverrides`", async () => {
+  it("喂给它的载荷只带 `modeOverrides` —— 历史 `modes` 键的归一不在这里", async () => {
+    /* 历史列里那个 `modes` 键由 `parseWorkflowIOMap` 在**列边界**归一
+     *（`workflow-detail.ts` 读 `tpl.workflowIO` 的那一步），本函数只认归一后的
+     * 名字。这条用例钉住的是「不在这里再读一遍旧键」——两处各读一次的话，
+     * 同一个 JSON 列就有两个入口，改一处永远漏一处。
+     *
+     * 归一本身由 `workflow-detail.test.ts` 从列那侧判（它喂的就是列里的原始值）。 */
     const result = await enrichWorkflowIO(
       comboParams({
         "94::widget::aspect_ratio": {
@@ -262,16 +268,13 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          // 历史命名：覆盖层挂在 `modes` 而非 `modeOverrides`。
           modes: { T2I: { defaultValue: "4:3 (Standard)" } },
         },
       }),
     );
     const entry = result["94::widget::aspect_ratio"]!;
-    /* 旧键被回退归一：客户端只读 `modeOverrides` 也能拿到覆盖层。 */
-    expect(entry.modeOverrides?.T2I?.defaultValue).toBe("4:3 (Standard)");
-    /* 旧键不应原样下发，避免同一份覆盖层以两个名字落库往返。 */
-    expect((entry as { modes?: unknown }).modes).toBeUndefined();
+    /* 未归一的载荷在这里读不到覆盖层 —— 这正是「列边界那一步不能省」的证据。 */
+    expect(entry.modeOverrides).toBeUndefined();
   });
 });
 

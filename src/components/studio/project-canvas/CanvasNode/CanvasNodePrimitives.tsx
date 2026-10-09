@@ -11,7 +11,7 @@ import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badg
 
 /* ── 小型共享 UI 原语 ── */
 export const btnCls =
-  "rounded-md btn-gradient px-2.5 py-1 text-[12px] font-medium text-white disabled:opacity-40";
+  "rounded-md btn-gradient px-2.5 py-1 text-xs font-medium text-white disabled:opacity-40";
 
 export function Field({
   label,

@@ -34,7 +34,10 @@ import {
   cachePeek,
 } from "~/lib/server-cache";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
-import { type IOParamSlot } from "~/lib/workflow/workflow-io-types";
+import {
+  parseWorkflowIOMap,
+  type IOParamSlot,
+} from "~/lib/workflow/workflow-io-types";
 import {
   parseWorkflowParamMap,
   type WorkflowParamMap,
@@ -309,10 +312,13 @@ async function buildWorkflowDetailJson(input: {
   // 用户挑出来的暴露集合：哪些节点参数 / widget / 输出被暴露成工作流的
   // 对外输入输出。（ioKey 是 `${nodeId}::${kind}::${name}`；
   // 见画布编辑器的 IO 编辑模式。）
-  const workflowIORaw = (asRecord(tpl.workflowIO) ?? {}) as Record<
-    string,
-    WorkflowIORawEntry
-  >;
+  /* 列边界在这里过一道 `parseWorkflowIOMap`：它把历史列里那个 `modes` 键
+   * （与工作流级的 `WorkflowTemplate.modes` 同名、含义完全不同）归一到
+   * `modeOverrides`——下游 `enrichWorkflowIO` 与客户端都只读后者。
+   * 少了这一步，同一个 JSON 列就会被两处各按各的名字读。 */
+  const workflowIORaw = parseWorkflowIOMap(
+    asRecord(tpl.workflowIO) ?? {},
+  ) as Record<string, WorkflowIORawEntry>;
 
   const nodeTitleById: Record<string, string> = {};
   for (const n of nodes) nodeTitleById[n.id] = n.title ?? n.class_type;
@@ -501,7 +507,7 @@ export async function buildWorkflowDetailFull(
 
   /* ?_bust=1 查询参数强制内存 LRU 被
    *  bypassed (deleted + re-built) so the 顶栏 🔄 强制重载按钮 can pull
-   *  绕过，强制从 Prisma 现读一份序列化结果。没有它，客户端即使带
+   *  绕过，强制从库里现读一份序列化结果。没有它，客户端即使带
    *  cache:"no-store"，仍会从服务端内存里拿到一份已陈旧 60 秒的、预先序列化好的
    *  JSON。这个标记刻意只作为客户端私有 token —— **从不打日志**。 */
   if (opts.bust) {
@@ -544,7 +550,7 @@ export async function buildWorkflowDetailFull(
   }
 
   /* 热路径：如果预序列化好的 detail 已在缓存里，直接返回 ——
-   * 既跳过对（很大的）rawJson 的 Prisma 读取，也省掉每次请求的 JSON.stringify。
+   * 既跳过对（很大的）rawJson 的数据库读取，也省掉每次请求的 JSON.stringify。
    * 反复打开能压到 50ms 以内靠的就是这一步。
    * （缓存在 PATCH / DELETE 时失效；404 从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
@@ -629,7 +635,7 @@ export async function buildSubgraphDetail(
 ): Promise<WorkflowDetailFull> {
   const cacheKey = `sg:${userId}:${id}:${uid}:${hostId}`;
 
-  /* 热路径：原样返回预序列化的子图详情，跳过 Prisma 读取与转换。
+  /* 热路径：原样返回预序列化的子图详情，跳过数据库读取与转换。
    * （下面 400 / 404 那两种情况从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {

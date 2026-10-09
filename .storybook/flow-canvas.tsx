@@ -51,12 +51,39 @@ export interface CanvasScene {
   /**
    * 初始视口（受控）。`zoom` 会真的进转换矩阵 —— 「细网格在 0.3 以下淡出」
    * 这类判据看的就是它。
+   *
+   * 消费方传 `fit` 时它会**被忽略**（React Flow 自己算一个缩到装得下的视口）。
    */
   readonly viewport: { x: number; y: number; zoom: number };
+  /**
+   * 这一档的**被测对象就是那个缩放**（细网格在阈值下淡出、端点圆点在放大档的
+   * 像素尺度、密集负载下现算的标尺步长）。
+   *
+   * 于是它**不能**被 `fit` 缩走 —— 缩到装得下会把要看的那个缩放一起改掉，
+   * 而 story 上看着仍然「一切正常」（只是看的不是那一档了）。所以传 `nodeTypes`
+   * 的消费方要么传 `fit`、要么用带本标记的场景，判据 `tests/storybook-fit-viewport.test.ts`。
+   */
+  readonly pinZoom?: true;
 }
 
-/** 画布铺底的尺寸：够摆一张卡片与它周围的留白，又不至于把侧栏挤走。 */
+/**
+ * 画布铺底的尺寸：够摆一张卡片与它周围的留白，又不至于把侧栏挤走。
+ *
+ * **它是「框」，不是「内容」**：框高固定，而节点渲染器的尺寸由消费方决定 ——
+ * 于是同一档场景（如 `twoNodes`）在两种消费方下内容高度可以差一倍。内容比框高时
+ * （见 `StorybookFlowCanvas` 的 `fit`）必须由消费方显式声明「装不下、请缩到装得下」，
+ * 否则下沿会把最后一张卡切掉，而构建 / tsc / eslint 全绿、只有画布上少一截。
+ */
 export const CANVAS_FRAME_CLASS = "h-[560px] w-full";
+
+/**
+ * `fit` 档的留白（React Flow `fitViewOptions.padding`，比例值）。
+ *
+ * 0.1 = 内容四周各留 ~10%。与 `ProjectCanvas` 工具栏那颗「适应视图」用的
+ * `padding: 0.2` 不是同一个用途：那颗是**交互后**的复位（要更多呼吸感），
+ * 这份是「一开始就装进框里」，留白太大会把节点缩得很小、10px 的端点行更难认。
+ */
+const FIT_VIEW_PADDING = 0.1;
 
 /**
  * 场景注册表 —— **唯一**一份「名字 → 真画布」的映射。
@@ -68,8 +95,23 @@ export const CANVAS_SCENES = {
   /**
    * 两张业务节点 + 一条连线：端点几何、node 序号、连线路径三件都在场。
    *
-   * 节点 id 用 `"1"` / `"2"` 这样的**纯数字串**，因为真画布就是这么发的
-   *（`nodeSeqOf()` 把下标 + 1 当短序号，而端点 id 形如 `"1:images"`）。
+   * ## 边引用的是 handle id，不是节点 id
+   *
+   * 节点 id 用 `"1"` / `"2"` 这样的**纯数字串**（真画布由 `nodeSeqOf()` 发），
+   * 而 `sourceHandle` / `targetHandle` 是**另一件事** —— 它们是 React Flow 在
+   * handleBounds 里找锚点的键，两套口径由真画布各管一侧：
+   *
+   *  · **输出端** → `` `out:${name}` ``（常量 `OUTPUT_PORT_HANDLE_PREFIX`）；
+   *  · **输入端** → `ioKey`（工作流节点动态表单里那一份端口键）。
+   *
+   * 写错时 React Flow **静默丢弃整条边** —— 不报错、控制台干净、画布只是少几条线。
+   * 这份文件曾经把两侧都写成 `"1:model"` 这种「看着很像」的短序号，于是三个带边的
+   * 场景（含 `fanOut` 那句「扇出三条线」）在画布上**一条线都没有**，而
+   * tsc / eslint / 构建 / 既有门禁全绿 —— 是逐 story 数 DOM 上的
+   * `.react-flow__edge` 才量出来的。判据见 `tests/storybook-injection-layers.test.ts`。
+   *
+   * 消费方若**不传 `nodeTypes`**（节点走 React Flow 默认外观，身上没有业务端口），
+   * 这一档就必须 `edges: []` —— 否则边引用的 handle 谁也不挂。
    */
   twoNodes: {
     about: "两张业务节点 + 一条连线（端点几何与节点序号的真实现场）",
@@ -81,7 +123,7 @@ export const CANVAS_SCENES = {
       },
       {
         id: "2",
-        position: { x: 420, y: 200 },
+        position: { x: 480, y: 240 },
         data: { label: "K采样器" },
       },
     ],
@@ -90,8 +132,8 @@ export const CANVAS_SCENES = {
         id: "e1-2",
         source: "1",
         target: "2",
-        sourceHandle: "1:model",
-        targetHandle: "2:model",
+        sourceHandle: "out:model",
+        targetHandle: "model",
       },
     ],
     viewport: { x: 0, y: 0, zoom: 1 },
@@ -100,41 +142,44 @@ export const CANVAS_SCENES = {
    * 一个源节点**扇出**三条连线 —— 多端点几何与连线路径分叉的现场。
    *
    * `twoNodes` 只有一条线，看不出「同一节点的多个源端点各自出线」这件事：
-   * 端点 id 形如 `"1:images"` / `"1:model"`，而连线从哪个 handle 出、落在
-   * 目标哪个 handle 上，是 React Flow 按 handle id 算的路径 —— 假画布给不出。
+   * 一个节点上挂着多个 `out:<name>` 输出端口，而连线从哪个 handle 出、落在目标
+   * 哪个 handle 上，是 React Flow 按 **handle id** 算的路径 —— 假画布给不出。
+   *
+   * 这一档也是上面那处缺陷的证据现场：三条边曾经因为 handle 名写错而**一条都不画**，
+   * 而场景名与 `about` 一直在说「扇出三条线」。
    */
   fanOut: {
     about: "一个源节点扇出三条连线到三个目标（多端点几何 + 连线路径分叉）",
     nodes: [
-      { id: "1", position: { x: 40, y: 220 }, data: { label: "加载检查点" } },
-      { id: "2", position: { x: 420, y: 60 }, data: { label: "K采样器" } },
-      { id: "3", position: { x: 420, y: 240 }, data: { label: "VAE 解码" } },
-      { id: "4", position: { x: 420, y: 420 }, data: { label: "保存图像" } },
+      { id: "1", position: { x: 40, y: 160 }, data: { label: "加载检查点" } },
+      { id: "2", position: { x: 480, y: -60 }, data: { label: "K采样器" } },
+      { id: "3", position: { x: 480, y: 160 }, data: { label: "VAE 解码" } },
+      { id: "4", position: { x: 480, y: 380 }, data: { label: "保存图像" } },
     ],
     edges: [
       {
         id: "e1-2",
         source: "1",
         target: "2",
-        sourceHandle: "1:model",
-        targetHandle: "2:model",
+        sourceHandle: "out:model",
+        targetHandle: "model",
       },
       {
         id: "e1-3",
         source: "1",
         target: "3",
-        sourceHandle: "1:vae",
-        targetHandle: "3:vae",
+        sourceHandle: "out:vae",
+        targetHandle: "vae",
       },
       {
         id: "e1-4",
         source: "1",
         target: "4",
-        sourceHandle: "1:clip",
-        targetHandle: "4:images",
+        sourceHandle: "out:clip",
+        targetHandle: "clip",
       },
     ],
-    viewport: { x: 0, y: 0, zoom: 0.85 },
+    viewport: { x: 60, y: 150, zoom: 0.72 },
   },
   /**
    * 各 kind 的节点混排 —— 端点上**五档类型色**同时在场的样子。
@@ -147,32 +192,32 @@ export const CANVAS_SCENES = {
     about: "八种业务节点混排（端点类型色与节点类型章并排的分辨率）",
     nodes: [
       { id: "1", position: { x: 20, y: 20 }, data: { label: "生图" } },
-      { id: "2", position: { x: 300, y: 20 }, data: { label: "生视频" } },
-      { id: "3", position: { x: 580, y: 20 }, data: { label: "生成剧本" } },
-      { id: "4", position: { x: 20, y: 240 }, data: { label: "Agent 模式" } },
+      { id: "2", position: { x: 410, y: 20 }, data: { label: "生视频" } },
+      { id: "3", position: { x: 800, y: 20 }, data: { label: "生成剧本" } },
+      { id: "4", position: { x: 20, y: 320 }, data: { label: "Agent 模式" } },
       {
         id: "5",
-        position: { x: 300, y: 240 },
+        position: { x: 410, y: 320 },
         data: { label: "自定义工作流" },
       },
-      { id: "6", position: { x: 580, y: 240 }, data: { label: "文本" } },
-      { id: "7", position: { x: 20, y: 460 }, data: { label: "图片" } },
-      { id: "8", position: { x: 300, y: 460 }, data: { label: "视频" } },
+      { id: "6", position: { x: 800, y: 320 }, data: { label: "文本" } },
+      { id: "7", position: { x: 20, y: 620 }, data: { label: "图片" } },
+      { id: "8", position: { x: 410, y: 620 }, data: { label: "视频" } },
     ],
     edges: [
       {
         id: "e1-2",
         source: "1",
         target: "2",
-        sourceHandle: "1:images",
-        targetHandle: "2:images",
+        sourceHandle: "out:images",
+        targetHandle: "images",
       },
       {
         id: "e3-4",
         source: "3",
         target: "4",
-        sourceHandle: "3:text",
-        targetHandle: "4:text",
+        sourceHandle: "out:text",
+        targetHandle: "text",
       },
     ],
     viewport: { x: 0, y: 0, zoom: 0.6 },
@@ -186,6 +231,7 @@ export const CANVAS_SCENES = {
    */
   dense: {
     about: "36 张节点铺满画布（标尺步长与网格间距在满负载下现算）",
+    pinZoom: true,
     nodes: Array.from({ length: 36 }, (_, index) => ({
       id: String(index + 1),
       position: {
@@ -194,20 +240,18 @@ export const CANVAS_SCENES = {
       },
       data: { label: `节点 ${index + 1}` },
     })),
-    edges: [
-      {
-        id: "edense",
-        source: "1",
-        target: "36",
-        sourceHandle: "1:images",
-        targetHandle: "36:images",
-      },
-    ],
+    /* 这一档摆的是**装饰层**（网格 / 标尺 / 缩放条）在满负载下的样子，
+       消费方 `WorkflowCanvasDecorations.stories.tsx` **不传 `nodeTypes`** ——
+       节点走 React Flow 的默认外观，身上没有业务端口。所以这里刻意**不放边**：
+       边只会引用一个本档不存在的 handle，被 React Flow 静默丢弃，
+       留着就是「场景说有连线、画布上没有」的那种假形态。 */
+    edges: [],
     viewport: { x: 0, y: 0, zoom: 0.5 },
   },
   /** 放大档：端点圆点、类型章、网格线在主参考线尺度上的那一档。 */
   zoomedIn: {
     about: "放大到 1.4 倍（细网格与端点圆点的像素尺度都变了）",
+    pinZoom: true,
     nodes: [
       {
         id: "1",
@@ -226,6 +270,7 @@ export const CANVAS_SCENES = {
    */
   zoomedOut: {
     about: "缩到 0.25（细网格已淡出，但底色必须还在）",
+    pinZoom: true,
     nodes: [
       {
         id: "1",
@@ -294,13 +339,26 @@ export function canvasSceneArgType() {
  * `nodes` / `edges` 由场景给，`children` 是 story 自己的节点渲染器
  *（业务节点就是通过它挂进来的 —— 于是 `useNodeId()` 拿到的是真宿主 id）。
  *
- * 视口是**受控**的（`viewport` + `onViewportChange` 空实现）：初始缩放真的进
+ * ## 视口：两种口径，由消费方选（`fit`）
+ *
+ * 默认是**受控**的（`viewport` + `onViewportChange` 空实现）：初始缩放真的进
  * 转换矩阵，而用户拖拽不改变它 —— story 要的是「在某个缩放下长什么样」这一个
  * 被钉住的现场，不是一块可交互的沙盒（要交互请用 `ProjectCanvas` 那一层的 story）。
+ *
+ * 而当消费方的节点渲染器**比框高**时（框架 `CANVAS_FRAME_CLASS` 是固定的 560px，
+ * 渲染器尺寸却是消费方的事），钉住的视口会把最后一张卡的下沿切掉 —— 那是真机上
+ * 不存在的形态，且构建 / tsc / eslint 全绿、只有画布上少一截。此时消费方传 `fit`，
+ * 交回 React Flow 自己的 `fitView`（`ProjectCanvas` 也是这套机制）：把整个场景
+ * 缩到框里，**不裁内容**。
+ *
+ * 两种口径**互斥**：`fit` 时 React Flow 忽略 `viewport`（它自己算一个），所以
+ * 「钉住某个缩放的语义档」（细网格淡出、放大档的像素尺度）**不能**传 `fit` ——
+ * 那些档要看的就是那个缩放，不是「内容装得下」。
  */
 export function StorybookFlowCanvas({
   scene,
   nodeTypes,
+  fit = false,
   children,
 }: {
   scene: CanvasScene;
@@ -314,6 +372,13 @@ export function StorybookFlowCanvas({
    * 渲染器缺席时静默退成白框、看起来像「节点坏了」）。
    */
   nodeTypes?: NodeTypes;
+  /**
+   * 把整场缩到框里（`fitView`），而不是用场景里钉住的视口。
+   *
+   * 传它的判据只有一条：**我的节点渲染器装不进 560px 的框**。装得下就照旧钉住
+   * 视口 —— 缩放本身是有些档的被测对象。
+   */
+  fit?: boolean;
   children?: ReactNode;
 }) {
   return (
@@ -323,8 +388,17 @@ export function StorybookFlowCanvas({
           nodes={[...scene.nodes]}
           edges={[...scene.edges]}
           nodeTypes={nodeTypes}
-          viewport={scene.viewport}
-          onViewportChange={() => undefined}
+          /* 两种视口口径互斥：`fit` 时 React Flow 自己算视口、`viewport` 不传
+             （传了也不会被用，但留着会让人以为「钉住 + 自适应」能同时成立）。 */
+          {...(fit
+            ? {
+                fitView: true,
+                fitViewOptions: { padding: FIT_VIEW_PADDING },
+              }
+            : {
+                viewport: scene.viewport,
+                onViewportChange: () => undefined,
+              })}
           proOptions={{ hideAttribution: true }}
           nodesDraggable={false}
           nodesConnectable={false}

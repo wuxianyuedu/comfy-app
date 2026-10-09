@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import {
-  ensureRemoteStorageMigrated,
-  getConfigForClient,
-} from "~/lib/llm/server";
+import { getConfigForClient } from "~/lib/llm/server";
 import { splitExtraModels } from "~/lib/llm/types";
 import { isHttpUrl } from "~/lib/url-scheme";
 import { remoteModelRepository } from "~/lib/core/repository";
@@ -57,7 +54,6 @@ const extraModelsSchema = z.array(
 export const llmRouter = createTRPCRouter({
   /* GET /api/llm/config —— 读 */
   configGet: authedProcedure.query(async () => {
-    await ensureRemoteStorageMigrated();
     const cfg = await getConfigForClient();
     return { config: cfg };
   }),
@@ -168,8 +164,7 @@ export const llmRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const { llmConfigRepository, remoteModelRepository } =
         await import("~/lib/core/repository");
-      await ensureRemoteStorageMigrated();
-      // option C：远端模型与本地候选分开存。把提交的候选清单按类型拆分：
+      // 远端模型与本地候选分开存。把提交的候选清单按类型拆分：
       //   字符串 → llmConfig.extraModels（本地候选，无 apiKey）
       //   对象   → remoteModel 表（远端独立模型）
       const split = splitExtraModels(input.extraModels);

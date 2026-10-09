@@ -8,7 +8,7 @@
 // 本文件只测逻辑层（renderHook），不渲染视图——视图由 SettingsParts.test.tsx
 // 与 NodesTab 承担。用例名直接写出「什么行为 → 什么可见结果」。
 
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("~/config/custom-nodes", () => ({
@@ -80,7 +80,10 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
   it("默认关闭且不请求：对话框没打开就不该打接口", async () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     expect(result.current.open).toBe(false);
-    // 给 effect 的 setTimeout 一轮时间
+    /* 给 effect 的 setTimeout 一轮时间。这一处是**「等一个不会发生的事」**：
+     * 断言的是「没有请求被发出」，条件轮询表达不了「某件事一直没有发生」
+     * （§11.14 明写的合法逃逸口），只能是真时间。 */
+    // sleep-ok: 等一个「不会发生的事」——确认 open=false 时没有请求被排出去。
     await act(async () => await new Promise((r) => setTimeout(r, 5)));
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -93,9 +96,9 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
 
     // 完成信号是「数据落地」而不是 loading：loading 初值就是 false，
     // 用它会立刻通过、根本等不到请求回来（这是一类常见的空断言陷阱）。
-    await waitFor(() =>
-      expect(result.current.savedPaths).toEqual(["D:/comfy/custom_nodes"]),
-    );
+    await expect
+      .poll(() => result.current.savedPaths)
+      .toEqual(["D:/comfy/custom_nodes"]);
     // 首次拉取是 GET（无第二个参数）：读 /api/custom-nodes
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/custom-nodes");
     expect(mockedManifest).toHaveBeenCalled();
@@ -108,7 +111,7 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await waitFor(() => expect(result.current.savedPaths).toHaveLength(2));
+    await expect.poll(() => result.current.savedPaths).toHaveLength(2);
     expect(result.current.parentExpansion.isExpanded("D:/a")).toBe(true);
     expect(result.current.parentExpansion.isExpanded("D:/b")).toBe(true);
   });
@@ -117,7 +120,7 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
     fetchMock.mockResolvedValue(settingsBlob());
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() => expect(result.current.savedPaths).toHaveLength(1));
+    await expect.poll(() => result.current.savedPaths).toHaveLength(1);
 
     act(() =>
       result.current.parentExpansion.set("D:/comfy/custom_nodes", false),
@@ -141,9 +144,9 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await waitFor(() =>
-      expect(result.current.saveErr).toContain("ComfyUI 路径未配置"),
-    );
+    await expect
+      .poll(() => result.current.saveErr)
+      .toContain("ComfyUI 路径未配置");
     // 错误必须是可读文案，不是 "Cannot read properties of undefined"
     expect(result.current.saveErr).not.toContain("undefined");
   });
@@ -153,7 +156,7 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await waitFor(() => expect(result.current.saveErr).toBeTruthy());
+    await expect.poll(() => result.current.saveErr).toBeTruthy();
     expect(result.current.saveErr).toMatch(/读取失败|HTTP 500/);
   });
 
@@ -162,7 +165,7 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await waitFor(() => expect(result.current.saveErr).toBeTruthy());
+    await expect.poll(() => result.current.saveErr).toBeTruthy();
     expect(result.current.saveErr).toContain("读取配置失败");
     expect(result.current.loading).toBe(false);
   });
@@ -177,7 +180,7 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
 
-    await waitFor(() => expect(result.current.saveErr).toBeTruthy());
+    await expect.poll(() => result.current.saveErr).toBeTruthy();
     expect(result.current.saveErr).toBe("扫描失败：目录不存在");
   });
 });
@@ -189,10 +192,16 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
     );
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    // 本用例的响应本来就「没有目录」，等不到 savedPaths —— 改为等首次拉取完成
-    // （fetch 已被调用 + 后续微任务排空）。
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    await act(async () => await new Promise((r) => setTimeout(r, 10)));
+    /* 本用例的响应本来就「没有目录」，等不到 savedPaths —— 改为等首次拉取完成。
+     * 用 `expect.poll` 读**调用次数**（规范 §11.14）：条件成立即返回，
+     * 不必赌那 10ms 够不够后续微任务排空。 */
+    await act(async () => {
+      await expect
+        .poll(() => fetchMock.mock.calls.length, {
+          message: "首次拉取应该已经被发出去",
+        })
+        .toBeGreaterThan(0);
+    });
 
     const callsBefore = fetchMock.mock.calls.length;
     await act(async () => {
@@ -224,15 +233,25 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
-      // readNdjson 用 `void onDone(...)` 触发收尾（不阻塞解析循环），
-      // 这里给收尾链（refresh + reloadFromServer）一拍时间。
-      await new Promise((r) => setTimeout(r, 20));
+      /* readNdjson 用 `void onDone(...)` 触发收尾（不阻塞解析循环），所以
+       * `onParseAll` 返回时收尾链还没跑完。等它落地的判据就是本用例要断的那件事
+       * ——`parsing` 归位、`report` 有值（规范 §11.14：等条件，不赌时间）。 */
+      await expect
+        .poll(() => result.current.parsing, {
+          message: "解析收尾链应该已经跑完（parsing 归位 false）",
+        })
+        .toBe(false);
+      await expect
+        .poll(() => result.current.report !== null, {
+          message: "收尾后 report 应该有值（视图据此渲染报告卡）",
+        })
+        .toBe(true);
     });
 
     // 不留死状态：解析结束必须回 false，否则按钮永远显示「解析中」
@@ -261,16 +280,17 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
-      await new Promise((r) => setTimeout(r, 20));
     });
 
-    await waitFor(() => expect(result.current.report).toEqual(serverReport));
+    /* 等「服务端结果覆盖流里那份」这件事成立 —— 条件轮询（规范 §11.14），
+     * 前面那拍「睡 20ms 再断」拿掉：条件下面的 `waitFor` 本来就在等。 */
+    await expect.poll(() => result.current.report).toEqual(serverReport);
   });
 
   it("解析失败（请求抛错）→ saveErr 有原因，parsing 归位", async () => {
@@ -282,9 +302,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
@@ -303,9 +323,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseSingle("D:/pkg/a");
@@ -321,9 +341,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
     fetchMock.mockResolvedValue(settingsBlob());
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAllParent("D:/empty");
@@ -345,9 +365,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() =>
-      expect(result.current.savedPaths.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.savedPaths.length)
+      .toBeGreaterThan(0);
 
     await act(async () => {
       await result.current.onParseAll();
@@ -401,7 +421,7 @@ describe("useCustomNodesSettings — 派生数据（parentBlocks / 合计）", (
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() => expect(result.current.parentBlocks).toHaveLength(1));
+    await expect.poll(() => result.current.parentBlocks).toHaveLength(1);
 
     const block = result.current.parentBlocks[0]!;
     expect(block.parent).toBe("D:/p");
@@ -464,7 +484,7 @@ describe("useCustomNodesSettings — 派生数据（parentBlocks / 合计）", (
 
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
-    await waitFor(() => expect(result.current.parentBlocks.length).toBe(2));
+    await expect.poll(() => result.current.parentBlocks.length).toBe(2);
 
     expect(result.current.totalAcrossParents.total).toBe(2);
     expect(result.current.totalAcrossParents.loaded).toBe(1);

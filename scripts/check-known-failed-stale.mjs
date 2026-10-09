@@ -91,8 +91,13 @@ export function checkRegistrations(registered, exists) {
  * 「这条登记还红着吗」的判决（真跑那一维）。
  *
  * **三问，顺序即优先级**：① 量具起没起来；② 有没有执行证据（真跑了几个用例）；
- * ③ 跑完的结论红不红。第 ② 问不可省：退出码同时承载「跑完且红」与「压根没跑」，
- * 只读它就会把后者读成前者（本脚本第一版就栽在这，见 `resultFile()` 的注释）。
+ * ③ **这次登记的这些文件**里，有没有还是红的。第 ② 问不可省：退出码同时承载
+ * 「跑完且红」与「压根没跑」，只读它就会把后者读成前者（见 `resultFile()` 的注释）。
+ *
+ * 第 ③ 问**按文件读状态，不读整场退出码** —— 这一条是 ISSUE #1282 补对照组时才看清的：
+ * 清单非空时它是**多条**，而整场退出码是「有没有任意一条红」的粗糙代理。一条红会让
+ * 同批里已经全绿的登记也被判成「还红着」，于是**「该删的过期登记」正好判不出来** ——
+ * 与这条判据的立案动机（判「登记过期」）正面冲突。per-file 的 `status` 才是精确读数。
  *
  * @param {string[]} registered 登记表内容
  * @param {{status: number | null, stdout: string, stderr: string, error?: Error}} runResult
@@ -137,23 +142,40 @@ export function judgeStillFailing(
     return { exitCode: 1, problems, failedFiles: [] };
   }
 
-  // ③ 跑完了，看结论。全绿 = 这张登记已经过期。
-  if (runResult.status === 0) {
+  // ③ 跑完了，**逐份**看这些登记文件自己的状态（不是整场退出码，见函数头注）。
+  // 归一化比较：vitest 写的是绝对路径，登记表写的是仓库相对路径。
+  const byAbs = new Map(
+    (evidence.files ?? []).map((f) => [f.name.replaceAll("\\", "/"), f.status]),
+  );
+  const failures = [];
+  for (const rel of registered) {
+    const abs = path.join(ROOT, rel).replaceAll("\\", "/");
+    const status = byAbs.get(abs);
+    if (status === "failed") continue;
+    // 没被这一场跑到（或跑到但绿了）：两者都是「这条登记没在红」。
+    failures.push({ rel, status: status ?? "未跑到" });
+  }
+
+  if (failures.length > 0) {
+    const detail = failures.map((f) => `${f.rel}（${f.status}）`).join("、");
     problems.push(
-      `登记项全部跑绿了（真跑了 ${ranTests} 条用例，0 失败）—— ` +
-        "这张登记表**已经过期**，它现在只是在把整个文件从增量面摘掉。\n" +
+      `下列登记项**没有红**：${detail} —— 真跑了 ${ranTests} 条用例。\n` +
+        "        也就是说：这张登记表里这些条目**已经过期**（登记之所以有资格存在，\n" +
+        "        仅因为它复现得出别线的红）。\n" +
+        "        「这条登记还红着」是它存在的唯一资格；一旦变绿，「留着」就只剩\n" +
+        "        把整个文件从增量面摘掉这一个效果（静默跳过比红更糟：红会挡住提交）。\n" +
         "        规范 §11.12 第 3 条：既有失败被修复后，把该文件从 KNOWN_FAILED_FILES 删除，\n" +
         "        让它回到门禁里被强制拦截，避免悄悄退化。\n" +
-        `        修法：编辑 scripts/quality-gate-shared.mjs（${registered.join(" / ")}），\n` +
-        "        删掉已修好的条目；若列表清空，`KNOWN_FAILED_FILES` 应为空数组。",
+        "        修法：编辑 scripts/quality-gate-shared.mjs，删掉已修好的条目；\n" +
+        "        若列表清空，`KNOWN_FAILED_FILES` 应为空数组。",
     );
     return { exitCode: 1, problems, failedFiles: [] };
   }
 
-  // 红着 = 登记有资格存在。顺带把「红的是不是它」记进日志：粒度是文件，
-  // 一条红会放行同文件里其它断言（已知的粗糙处），读的人应当看得到几条红。
-  const failed = (evidence.files ?? []).filter((f) => f.status === "failed");
-  return { exitCode: 0, problems, failedFiles: failed.map((f) => f.name) };
+  // 红着 = 登记有资格存在。粒度是文件，一条红会放行同文件里其它断言（已知的粗糙处）。
+  // 回吐**登记表那份路径**（仓库相对），不吐 vitest 的绝对路径 —— 读的人要能直接
+  // 定位到 `quality-gate-shared.mjs` 里那一行。
+  return { exitCode: 0, problems, failedFiles: [...registered] };
 }
 
 /**
@@ -272,26 +294,62 @@ function main() {
   }
 
   if (argv.includes("--self-test")) {
-    // 「量具没坏」：造一条必然红的假登记，确认判据①说它在、判据②说它还红着；
-    // 再用一条必然绿的当对照组。缺这一步时，判据在「vitest 起不来」也会沉默地绿。
+    // 「量具没坏」——**两侧都要，缺一即形同虚设**。
+    //
+    // 红侧：造一条必然红的探针，判据必须说它「还红着」（exit 0）。
+    // 绿侧（**对照组**）：造一条必然绿的探针，判据必须说它「已经过期」（exit 1）。
+    //
+    // 为什么必须有绿侧：判据退化成**恒放行**（`return { exitCode: 0, … }`）时，
+    // 红侧照样绿 —— 而那时整个判据已经什么都不判了。红侧只能证明「判据会放行」，
+    // 放行是它的默认动作；**能证明它还会拦的，只有一条它必须拦下来的输入**。
+    // 两侧在同一次真跑里取（两个探针文件一起跑），代价不翻倍。
     const red = "tests/known-failed-stale-probe.test.ts";
+    const green = "tests/known-failed-stale-probe-green.test.ts";
     fs.writeFileSync(
       path.join(ROOT, red),
       'import { expect, it } from "vitest";\nit("probe", () => expect(1).toBe(2));\n',
       "utf8",
     );
+    fs.writeFileSync(
+      path.join(ROOT, green),
+      'import { expect, it } from "vitest";\nit("probe", () => expect(1).toBe(1));\n',
+      "utf8",
+    );
     try {
-      const r = runRegistered([red]);
-      const j = judgeStillFailing([red], r, r.commandLine, readEvidence());
-      const ok = j.exitCode === 0;
+      // 一次真跑同时产出两个读数（红的非零退出 + 绿的那份文件记 passed）。
+      const r = runRegistered([red, green]);
+      const evidence = readEvidence();
+
+      // 红侧：单独把它当登记项 ⇒ 期望「还红着」（exit 0）。
+      const redJudge = judgeStillFailing([red], r, r.commandLine, evidence);
+      // 绿侧：单独把绿的当登记项 ⇒ 期望「已过期」（exit 1）。
+      const greenJudge = judgeStillFailing([green], r, r.commandLine, evidence);
+
+      const problems = [];
+      if (redJudge.exitCode !== 0) {
+        problems.push(
+          "真红的登记没被判成「还红着」（判据把该放行的拦了 / 量具起不来）：\n" +
+            redJudge.problems.join("\n"),
+        );
+      }
+      if (greenJudge.exitCode === 0) {
+        problems.push(
+          "一条**全绿**的登记没被判成「已经过期」—— 判据已经不拦任何东西了" +
+            "（退化成恒放行）。\n" +
+            "        这一侧是本自证里唯一能证明「判据还会拦」的读数：放行是它的默认动作，\n" +
+            "        没有对照组时，`judgeStillFailing` 改成 `return { exitCode: 0 }` 也照样绿。",
+        );
+      }
+      const ok = problems.length === 0;
       console.log(
         ok
-          ? "  [ok] 自证：一条真红的登记被判为「还红着」（量具没坏）"
-          : `  ✗ 自证失败：真红的登记没被判成「还红着」（量具坏了）——\n${j.problems.join("\n")}`,
+          ? "  [ok] 自证：真红的登记被判「还红着」、全绿的登记被判「已过期」（量具两侧都在）"
+          : `  ✗ 自证失败：量具坏了 ——\n         ${problems.join("\n         ")}`,
       );
       return ok ? 0 : 1;
     } finally {
       fs.rmSync(path.join(ROOT, red), { force: true });
+      fs.rmSync(path.join(ROOT, green), { force: true });
     }
   }
 

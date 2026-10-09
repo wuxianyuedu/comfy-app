@@ -7,7 +7,7 @@
 //   5. openExternalUrl 把生成结果交给系统默认浏览器打开（桌面壳替代外链）。
 
 import { createElement, type ReactNode } from "react";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
@@ -346,7 +346,8 @@ function mockSessionsFor(
       }
       return HttpResponse.json({
         sessions,
-        selectedId: sessions[sessions.length - 1]?.id ?? null,
+        /* 契约：`sessions` 新→旧，缺省选中第一项（最新那一份）。 */
+        selectedId: sessions[0]?.id ?? null,
         content: payload.content,
         truncated: payload.truncated ?? false,
         windowed: payload.windowed ?? false,
@@ -399,7 +400,7 @@ describe("useSettingsPage", () => {
       wrapper: makeWrapper(),
     });
 
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
     expect(result.current.drafts?.llm.model).toBe("qwen3:14b");
     expect(result.current.drafts?.settings.comfyuiPath).toBe("D:/ComfyUI");
   });
@@ -420,7 +421,7 @@ describe("useSettingsPage", () => {
     const first = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(qc),
     });
-    await waitFor(() => expect(first.result.current.drafts).not.toBeNull());
+    await expect.poll(() => first.result.current.drafts).not.toBeNull();
     // 关闭（卸载），缓存保留
     first.unmount();
 
@@ -428,7 +429,7 @@ describe("useSettingsPage", () => {
     const second = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(qc),
     });
-    await waitFor(() => expect(second.result.current.drafts).not.toBeNull());
+    await expect.poll(() => second.result.current.drafts).not.toBeNull();
     expect(second.result.current.drafts?.llm.model).toBe("qwen3:14b");
     expect(second.result.current.drafts?.settings.comfyuiPath).toBe(
       "D:/ComfyUI",
@@ -446,8 +447,8 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
-    await waitFor(() => expect(result.current.ollamaStatus).toBe("up"));
+    await expect.poll(() => result.current.drafts).not.toBeNull();
+    await expect.poll(() => result.current.ollamaStatus).toBe("up");
     expect(result.current.ollamaModels).toHaveLength(1);
     expect(probeMock).toHaveBeenCalledWith("http://localhost:11434/v1");
 
@@ -456,6 +457,7 @@ describe("useSettingsPage", () => {
     /* 探测是 setTimeout(…, 0) 里触发的，切到远端后要等一个宏任务再断言，
      * 确认没有新的探测被排进去。 */
     await act(async () => {
+      // sleep-ok: 等宏任务排空：探测是 setTimeout(0) 里触发的，这里确认切换后没有新的探测被排进去。
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
     expect(probeMock).toHaveBeenCalledTimes(callsAfterLocalProbe);
@@ -470,8 +472,8 @@ describe("useSettingsPage", () => {
       wrapper: makeWrapper(),
     });
     const baseline = probeMock.mock.calls.length;
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
-    await waitFor(() => expect(result.current.ollamaStatus).toBe("down"));
+    await expect.poll(() => result.current.drafts).not.toBeNull();
+    await expect.poll(() => result.current.ollamaStatus).toBe("down");
     // 远端 provider 不该触发本地 Ollama 探测
     expect(probeMock).toHaveBeenCalledTimes(baseline);
   });
@@ -486,7 +488,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.ollamaStatus).toBe("down"));
+    await expect.poll(() => result.current.ollamaStatus).toBe("down");
     expect(result.current.ollamaStarting).toBe(false);
 
     vi.useFakeTimers();
@@ -515,7 +517,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.ollamaStatus).toBe("down"));
+    await expect.poll(() => result.current.ollamaStatus).toBe("down");
 
     vi.useFakeTimers();
     try {
@@ -551,13 +553,13 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() =>
-      expect(
+    await expect
+      .poll(() =>
         (runtimeLogCalls as unknown as Array<{ level: string }>).some(
           (c) => c.level === "error",
         ),
-      ).toBe(true),
-    );
+      )
+      .toBe(true);
     /* llm.configGet 失败、setting.get 成功 → 草稿仍为空（一份都不齐）。
      * 本次运行没有成功读过的配置 → 没有兜底可用，必须落整页降级 UI 拿到重试与
      * 日志出口，而不是 「配置数据未就绪」死角（见下方 ISSUE #304 的专项回归）。 */
@@ -594,7 +596,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.hasError).toBe(true));
+    await expect.poll(() => result.current.hasError).toBe(true);
 
     // setting.get 成功、llm.configGet 失败；本次运行没有读成过 → 无兜底
     expect(result.current.drafts).toBeNull();
@@ -616,7 +618,7 @@ describe("useSettingsPage", () => {
     const first = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(first.result.current.drafts).not.toBeNull());
+    await expect.poll(() => first.result.current.drafts).not.toBeNull();
     const cached = first.result.current.drafts;
     expect(cached).not.toBeNull();
     first.unmount();
@@ -628,7 +630,7 @@ describe("useSettingsPage", () => {
       wrapper: makeWrapper(),
     });
 
-    await waitFor(() => expect(second.result.current.drafts).not.toBeNull());
+    await expect.poll(() => second.result.current.drafts).not.toBeNull();
     // 界面可用：不是整页错误、也不是「未就绪」死角
     expect(second.result.current.hasError).toBe(false);
     expect(second.result.current.notReady).toBe(false);
@@ -651,14 +653,14 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.hasError).toBe(true));
-    await waitFor(() =>
-      expect(
+    await expect.poll(() => result.current.hasError).toBe(true);
+    await expect
+      .poll(() =>
         (runtimeLogCalls as unknown as Array<{ level: string }>).some(
           (c) => c.level === "error",
         ),
-      ).toBe(true),
-    );
+      )
+      .toBe(true);
 
     const entry = (
       runtimeLogCalls as unknown as Array<{
@@ -680,14 +682,14 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.hasError).toBe(true));
-    await waitFor(() =>
-      expect(
+    await expect.poll(() => result.current.hasError).toBe(true);
+    await expect
+      .poll(() =>
         (runtimeLogCalls as unknown as Array<{ level: string }>).some(
           (c) => c.level === "error",
         ),
-      ).toBe(true),
-    );
+      )
+      .toBe(true);
 
     const entry = (
       runtimeLogCalls as unknown as Array<{
@@ -705,7 +707,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.startOllama();
@@ -721,7 +723,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     act(() => result.current.setTaskTemperature("code", "0.1"));
     expect(result.current.drafts?.llm.temperatureByTask).toEqual({ code: 0.1 });
@@ -745,7 +747,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     // 设置页只做配置：初始清单 = 候选条目（不含「当前模型」虚拟行）
     expect(result.current.remoteModelList.map((e) => e.name)).toEqual([]);
@@ -806,7 +808,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     let out: { ok: boolean; error?: string } = { ok: false };
     await act(async () => {
@@ -821,7 +823,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.addRemoteModel({
@@ -851,7 +853,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     act(() => result.current.setLlmApiKey("sk-test"));
     await act(async () => {
@@ -870,7 +872,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.savePrefs();
@@ -890,7 +892,7 @@ describe("useSettingsPage", () => {
       wrapper: makeWrapper(),
     });
 
-    await waitFor(() => expect(result.current.comfyInstance).not.toBeNull());
+    await expect.poll(() => result.current.comfyInstance).not.toBeNull();
     expect(result.current.comfyInstance?.instanceType).toBe("portable");
     expect(result.current.comfyInstance?.pathConfigured).toBe(true);
     // 运行态那份还没落地 —— 正是它此前会把形态一起拖住
@@ -902,7 +904,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.startComfy();
@@ -921,7 +923,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.comfyLog.refresh();
@@ -938,7 +940,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.dbStudioLog.refresh();
@@ -958,7 +960,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.ollamaLog.refresh();
@@ -971,9 +973,10 @@ describe("useSettingsPage", () => {
   /* 用户反馈第 2 条：多次启动的日志不能混在一起 —— 下拉切到某一次启动时，
    * 请求要带上那次的会话 id，界面只显示那一次。 */
   it("切换启动会话：按会话 id 重新拉取，并把选中项与截断提示同步到状态", async () => {
+    /* 契约：新→旧（第一项是最新那一份）。 */
     const sessions = [
-      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: null },
       { id: "40", title: "▶ ComfyUI 启动会话", startedAt: null },
+      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: null },
     ];
     server.use(
       http.get("*/api/logs/sessions", ({ request }) => {
@@ -992,16 +995,16 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
-    await waitFor(() => expect(result.current.comfyLog.text).not.toBe(""));
+    await expect.poll(() => result.current.drafts).not.toBeNull();
+    await expect.poll(() => result.current.comfyLog.text).not.toBe("");
     expect(result.current.comfyLog.sessions).toHaveLength(2);
 
     await act(async () => {
       result.current.comfyLog.selectSession("12");
     });
-    await waitFor(() =>
-      expect(result.current.comfyLog.text).toBe("第一次启动的输出"),
-    );
+    await expect
+      .poll(() => result.current.comfyLog.text)
+      .toBe("第一次启动的输出");
     expect(result.current.comfyLog.sessionId).toBe("12");
     expect(result.current.comfyLog.truncated).toBe(true);
     expect(result.current.comfyLog.windowed).toBe(true);
@@ -1021,7 +1024,8 @@ describe("useSettingsPage", () => {
       http.get("*/api/logs/sessions", ({ request }) => {
         const url = new URL(request.url);
         const session = url.searchParams.get("session");
-        const latestId = sessions[sessions.length - 1]!.id;
+        /* 契约：新→旧，第一项即最新。 */
+        const latestId = sessions[0]!.id;
         const selectedId = sessions.some((s) => s.id === session)
           ? session
           : latestId;
@@ -1039,21 +1043,22 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
-    await waitFor(() =>
-      expect(result.current.comfyLog.text).toBe("第一次启动的输出"),
-    );
+    await expect.poll(() => result.current.drafts).not.toBeNull();
+    await expect
+      .poll(() => result.current.comfyLog.text)
+      .toBe("第一次启动的输出");
 
+    /* 新→旧：新一轮启动排在**最上面**（与真实端点同序）。 */
     sessions = [
-      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
       { id: "40", title: "▶ ComfyUI 启动会话", startedAt: 2_000 },
+      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
     ];
     await act(async () => {
       await result.current.comfyLog.refresh();
     });
-    await waitFor(() =>
-      expect(result.current.comfyLog.text).toBe("第二次启动的输出"),
-    );
+    await expect
+      .poll(() => result.current.comfyLog.text)
+      .toBe("第二次启动的输出");
     expect(result.current.comfyLog.sessionId).toBe("40");
     expect(sessionLogRequests).toContainEqual({
       source: "comfyui-runtime",
@@ -1062,9 +1067,10 @@ describe("useSettingsPage", () => {
   });
 
   it("没有新启动时保持用户选中的旧会话，不因轮询被顶回最新", async () => {
+    /* 契约：新→旧（第一项是最新那一份）。 */
     const sessions = [
-      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
       { id: "40", title: "▶ ComfyUI 启动会话", startedAt: 2_000 },
+      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
     ];
     server.use(
       http.get("*/api/logs/sessions", ({ request }) => {
@@ -1083,13 +1089,13 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
     await act(async () => {
       result.current.comfyLog.selectSession("12");
     });
-    await waitFor(() =>
-      expect(result.current.comfyLog.text).toBe("第一次启动的输出"),
-    );
+    await expect
+      .poll(() => result.current.comfyLog.text)
+      .toBe("第一次启动的输出");
 
     await act(async () => {
       await result.current.comfyLog.refresh();
@@ -1104,9 +1110,9 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
-    await waitFor(() => expect(result.current.dbStudioStatus).toBeNull());
+    await expect.poll(() => result.current.dbStudioStatus).toBeNull();
     /* 状态降级为 null（等同「未运行」）：启动不被锁死，可正常发起 */
     await act(async () => {
       await result.current.startDbStudio();
@@ -1122,7 +1128,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     expect(result.current.saving).toBe(false);
     await act(async () => {
@@ -1137,7 +1143,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.addRemoteModel({ name: "gpt-4o", apiKey: "sk-1" });
@@ -1202,7 +1208,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
     const entryOf = (name: string) =>
       result.current.remoteModelList.find((e) => e.name === name);
 
@@ -1235,7 +1241,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     // llm.model 初始 = "qwen3:14b"，候选为空 —— 不再虚拟「当前模型」行可编辑
     let out: { ok: boolean; error?: string } = { ok: false };
@@ -1269,7 +1275,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     expect(result.current.section).toBe("llmLocal");
     act(() => result.current.setSection("comfyui"));
@@ -1280,7 +1286,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.openExternalUrl("https://example.com/video.mp4");
@@ -1295,7 +1301,7 @@ describe("useSettingsPage", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.openExternalUrl("");
@@ -1326,7 +1332,7 @@ describe("打开查看 ComfyUI — 页签形态（ISSUE #310）", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.openComfy();
@@ -1349,7 +1355,7 @@ describe("打开查看 ComfyUI — 页签形态（ISSUE #310）", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.openComfy();
@@ -1371,7 +1377,7 @@ describe("打开查看 ComfyUI — 页签形态（ISSUE #310）", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.openComfy();
@@ -1405,11 +1411,11 @@ describe("打开查看 ComfyUI — 浏览器形态走新浏览器页签", () => 
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
     // 等状态查询落定，让缓存 base 就绪（浏览器分支优先用缓存、同步开窗）。
-    await waitFor(() =>
-      expect(result.current.comfyStatus?.base).toBe("http://127.0.0.1:8188"),
-    );
+    await expect
+      .poll(() => result.current.comfyStatus?.base)
+      .toBe("http://127.0.0.1:8188");
 
     await act(async () => {
       await result.current.openComfy();
@@ -1433,7 +1439,7 @@ describe("打开查看 ComfyUI — 浏览器形态走新浏览器页签", () => 
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.openComfy();
@@ -1463,7 +1469,7 @@ describe("在浏览器打开 ComfyUI — 与页签并列的出口", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.openComfyInBrowser();
@@ -1485,7 +1491,7 @@ describe("在浏览器打开 ComfyUI — 与页签并列的出口", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.openComfyInBrowser();
@@ -1505,7 +1511,7 @@ describe("在浏览器打开 ComfyUI — 与页签并列的出口", () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
       await result.current.openComfyInBrowser();

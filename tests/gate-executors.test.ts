@@ -89,7 +89,10 @@ function run(args: string[] = []): { code: number; output: string } {
     return { code: 0, output };
   } catch (err) {
     const e = err as { status?: number; stdout?: string; stderr?: string };
-    return { code: e.status ?? -1, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    return {
+      code: e.status ?? -1,
+      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+    };
   }
 }
 
@@ -191,7 +194,9 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     expect(code).toBe(1);
     expect(output, "只读文本的测试不算执行者").toContain("check-probe-a.cjs");
     // b 有真 spawn 的测试 ⇒ 有执行者 ⇒ 不点名
-    expect(output, "真起子进程的测试算执行者").not.toContain("check-probe-b.cjs");
+    expect(output, "真起子进程的测试算执行者").not.toContain(
+      "check-probe-b.cjs",
+    );
   });
 
   it("台账里的孤儿条目（脚本已不存在）⇒ 红", () => {
@@ -243,7 +248,9 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
 
   it("「TS 重复属性判定」这一步真在 D 组里", () => {
     expect(
-      steps().find((s) => s.cmd.includes("scripts/check-ts-duplicate-keys.cjs")),
+      steps().find((s) =>
+        s.cmd.includes("scripts/check-ts-duplicate-keys.cjs"),
+      ),
     ).toEqual({
       label: "TS 重复属性判定",
       cmd: "node scripts/check-ts-duplicate-keys.cjs",
@@ -254,5 +261,147 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
     // `report-ts-duplicate-keys.mjs` 已收成判定档 `check-ts-duplicate-keys.cjs`。
     // 旧名残留会让「按文档跑」的人跑一个不存在的文件。
     expect(hook()).not.toContain("report-ts-duplicate-keys");
+  });
+});
+
+/**
+ * 扫描面本身（ISSUE #1444 残活 A）。
+ *
+ * 这条靶子是**判据自己的覆盖面**：旧口径只看名字前缀，于是四份真在门禁链里跑的
+ * 判定型判据（`shell-gate.mjs` / `storybook-check.mjs` / `visual-gate.mjs` /
+ * `pixel-run.mjs`）因名字不叫 `check-` 而不在盘点里 —— 判据自报的份数与真值不符。
+ * 而「判据的覆盖面与它自称的不符」正是 #1451 的立案现场，所以这里逐份把
+ * **门禁链事实**钉住。
+ *
+ * ⚠️ 这几条**必须在真仓库根跑**：临时区里没有 `.githooks/` / `quality-gate.*`，
+ * 链口径恒为空 —— 在那里测这件事等于测「前缀口径还在不在」。
+ */
+describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", () => {
+  /** 在**真仓库根**跑判据（不经临时区）。 */
+  const runInRepo = (args: string[] = []): string =>
+    execFileSync(
+      process.execPath,
+      [join(REPO_ROOT, "scripts", SCRIPT_NAME), ...args],
+      { cwd: REPO_ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+
+  /**
+   * 门禁链「步骤位置」里出现的 `scripts/<x>` basename（三个来源，与判据同口径）。
+   * 只读步骤位置、不读全文 —— 全文会把散文里的 `x.cjs` 占位符也带进来。
+   */
+  const chainScripts = (): string[] => {
+    const out = new Set<string>();
+    const collect = (text: string): void => {
+      for (const mm of text.matchAll(
+        /scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g,
+      )) {
+        out.add(mm[1] ?? "");
+      }
+    };
+    const read = (rel: string): string =>
+      readFileSync(join(REPO_ROOT, rel), "utf8");
+    for (const m of read(".githooks/pre-commit").matchAll(
+      /^ {2}run "[^"]+" (.+)$/gm,
+    )) {
+      collect(m[1] ?? "");
+    }
+    for (const m of read("scripts/quality-gate.mjs").matchAll(
+      /args:\s*\[([^\]]*)\]/g,
+    )) {
+      collect(m[1] ?? "");
+    }
+    for (const m of read("scripts/quality-gate.ps1").matchAll(
+      /Args\s*=\s*@\(([^)]*)\)/g,
+    )) {
+      collect(m[1] ?? "");
+    }
+    return [...out];
+  };
+
+  it("四份「名字不叫 check- 但在门禁链里跑」的判据确实被数进去了", () => {
+    const output = runInRepo(["--report"]);
+    // 份数必须 > 纯前缀口径的 40 —— 差额就是「链里认出、前缀认不出」的那几份。
+    const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
+    expect(total, "扫描面必须含门禁链认出的判据").toBeGreaterThan(40);
+    const chain = chainScripts();
+    for (const name of [
+      "shell-gate.mjs",
+      "storybook-check.mjs",
+      "visual-gate.mjs",
+      "pixel-run.mjs",
+    ]) {
+      expect(chain, `${name} 应当出现在钩子的门禁步骤位置`).toContain(name);
+      // 名字不在「无执行者 / 报告型自称在跑」这两份点名清单里 ⇒ 已被认作判据且执行者在场。
+      expect(output.includes(name), `${name} 不该被点名`).toBe(false);
+    }
+  });
+
+  it("只作散文举例 / 被 import 的脚本不算判据（步骤位置口径）", () => {
+    // 只读「门禁步骤位置」而非文件全文的原因：全文匹配会把这些一起打进 ——
+    // `x.cjs` / `xxx.cjs`（散文里的占位符举例）、`affected-tests.mjs`（清单库，
+    // 被钩子注释提到）、`install-git-hooks.mjs`（postinstall，被注释提到）、
+    // `run-affected-tests.mjs`（被 `node scripts/run-affected-tests.mjs` 那行调，
+    // 但它是 C 组的测试执行器、不是判据）、`quality-gate-shared.mjs`（被 import）。
+    // 实测：把口径退化成全文匹配时，下面这六份里会多认出几份（那几份本来
+    // 「有执行者」，所以 `--report` 的点名清单一个字都不变）。
+    //
+    // ⚠️ 这里**不写死份数**：份数会随「新写一份 `check-*.cjs` 还没接钩子」而正当变动
+    // （那正是名字族兜底要它可见的东西），把它冻成一个数字等于给下一份新判据留一道
+    // 无谓的红 —— 而规范 §13.5.10 的「步数不写、读数不写死」说的就是这件事。
+    // 上涨后的数字同样不写：它随仓库里散文提到 `scripts/x.mjs` 的次数漂移，
+    // 写死就成了下一个人照着它去核的假账（§12.14）。
+    //
+    // 口径（步骤位置 vs 全文）的差异**不体现为「名单里出现没出现」**：判据退化成
+    // 读全文时多出来的几份本来就「有执行者」，所以真正的执行者在
+    // **`check-gate-executors.cjs` 的 `PROSE_ONLY_SCRIPTS` 自检**里 ——
+    // 它在判据自己算出来的那张表上反查，那是唯一看得见这个差异的地方。
+    // 这里只钉三件**与口径无关**的事实（保证那个自检不是空转，且读数不写死）：
+    //   ① 扫描面非空（口径坏掉时会退成 0，而 0 份照样「无违规」）。
+    //   ② 份数 = 「门禁链事实 ∪ 名字族」独立数一遍来对（不随正当变动漂）。
+    //   ③ 那份自检的名单与这里的名单**逐字同源**（两处各写一份就会漂）。
+    const output = runInRepo(["--report"]);
+    const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
+    expect(
+      total,
+      "扫描面空转（退成 0 时下面每一条都照样报 OK）",
+    ).toBeGreaterThan(40);
+    const listed = readdirSync(join(REPO_ROOT, "scripts"))
+      .filter((n) => /\.(cjs|mjs)$/.test(n))
+      .filter(
+        (n) =>
+          chainScripts().includes(n) ||
+          GATE_PREFIXES.some((p) => n.startsWith(p)),
+      );
+    expect(
+      total,
+      "份数 = 「门禁链事实 ∪ 名字族」自己数出来的份数（不写死数字）",
+    ).toBe(listed.length);
+    const gateSrc = readFileSync(
+      join(REPO_ROOT, "scripts", SCRIPT_NAME),
+      "utf8",
+    );
+    for (const name of [
+      "x.cjs",
+      "xxx.cjs",
+      "affected-tests.mjs",
+      "install-git-hooks.mjs",
+      "run-affected-tests.mjs",
+      "quality-gate-shared.mjs",
+    ]) {
+      expect(
+        gateSrc,
+        `${name} 不在判据的 PROSE_ONLY_SCRIPTS 自检名单里 —— 口径退化时没人看得见`,
+      ).toContain(`"${name}"`);
+    }
+    for (const name of [
+      "x.cjs",
+      "xxx.cjs",
+      "affected-tests.mjs",
+      "install-git-hooks.mjs",
+      "run-affected-tests.mjs",
+      "quality-gate-shared.mjs",
+    ]) {
+      expect(output.includes(name), `${name} 不该被当成判据`).toBe(false);
+    }
   });
 });

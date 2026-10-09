@@ -154,7 +154,7 @@ export function WidgetControl({
           aria-checked={value === true}
           disabled={disabled}
           onClick={() => onValueChange(!value)}
-          className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep ${compact ? "h-[28px] px-2.5" : "mt-1 h-7.5 px-3"} w-full justify-between rounded-md text-[12px] ${
+          className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep ${compact ? "h-[28px] px-2.5" : "mt-1 h-7.5 px-3"} w-full justify-between rounded-md text-xs ${
             value ? "text-success-strong" : "text-ink-muted"
           } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
         >

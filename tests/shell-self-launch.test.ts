@@ -256,8 +256,9 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
     expect(rust).toMatch(/pub fn session_start_marker\(/);
     const body = fnBody(rust, "pub fn session_start_marker(");
+    /* 软断言：三个词是各自独立的判据，缺哪个一次就能看全（§11.18）。 */
     for (const phrase of ["会话边界", "壳已接手", "编排器"]) {
-      expect(body, `标记里应说清「${phrase}」：${body}`).toContain(phrase);
+      expect.soft(body, `标记里应说清「${phrase}」：${body}`).toContain(phrase);
     }
     // 前缀是面板裁剪历史日志的判据，一个字都不能改。
     expect(rust).toMatch(
@@ -292,7 +293,7 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     expect(stamps.length, `时刻只能取一次：${startFn}`).toBe(1);
     // 三份写的是**同一个变量**，不许各自 format! 一遍。
     for (const write of ["launch_log_path", "stderr_log", "shell_log"]) {
-      expect(startFn, `${write} 的写入点没在函数里`).toContain(write);
+      expect.soft(startFn, `${write} 的写入点没在函数里`).toContain(write);
     }
     // 三份文件的写入点都在这个函数里（`shell-launch.log` 一次 + 两文件 for 循环一次），
     // 且两处写的都是**同一个** `stamped` 变量 —— 各自 format! 一遍就是三个时刻。

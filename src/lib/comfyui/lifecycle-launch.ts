@@ -78,10 +78,16 @@ export interface LaunchHost {
     childDetached?: boolean;
     stopRequested?: boolean;
   };
-  /** 写 comfyui-runtime.log 一行。 */
+  /** 写本次启动的 runtime 日志一行。 */
   appendRuntimeLog: (line: string) => void;
-  /** 写会话边界横幅。 */
-  appendSessionBanner: (kind: "start" | "end", title: string) => void;
+  /**
+   * 开一次启动的日志文件（`comfyui-runtime-<时刻>.log`），返回它的路径。
+   *
+   * 由拉起**之前**那一步调用 —— 一次启动一份文件之后，「本次启动的日志在哪」
+   * 是文件本身回答的（不在是同一份文件里靠横幅分段）。同秒内重复启动由写入器
+   * 分叉出 `-2` / `-3`，不会覆盖前一次的现场。
+   */
+  beginRuntimeSession: () => string;
   /** 清掉「关闭中」标记（进程已确认退出 / 用户重新点了启动）。 */
   clearComfyStopping: () => void;
   /** 本地时间戳（保活重定向文件名用）。 */
@@ -161,9 +167,9 @@ export async function runEnsureLaunch(input: {
   // 机会再决定）。
   const keepAlive =
     resolveLaunchPolicy(getExitPolicy().exitKillComfyui) === "keepAlive";
-  // 每次启动先在日志里落一条明显的会话分隔横幅（ANSI 亮绿），
-  // 让日志面板能一眼分清「上次启动的结尾」和「这次启动的开头」。
-  host.appendSessionBanner("start", "▶ ComfyUI 启动会话");
+  /* 先换一份新的日志文件再写下第一条 —— 顺序反了会把本次的头几行写进上一次
+   * 的文件里，而那正是「日志看起来少了一次」的现场（没有报错、只是归属错了）。 */
+  host.beginRuntimeSession();
   note(
     `ComfyUI 未运行，按配置路径启动：${plan.cmd} ${args.join(" ")}${keepAlive ? "（保活模式：应用退出后不关闭）" : ""}`,
   );
@@ -267,8 +273,7 @@ async function launchKeepAliveMode(
   ctx: EnsureCtx,
 ): Promise<EnsureResult> {
   const { note, plan, args, stdioEnv, deadline, timeoutDetail } = ctx;
-  const { st, appendRuntimeLog, appendSessionBanner, clearComfyStopping } =
-    host;
+  const { st, appendRuntimeLog, clearComfyStopping } = host;
   // 保活：脱离进程树。没有直连 stdio/exit，但把 stdout/stderr 重定向到
   // 按次命名的文件里，等待循环会增量跟随进 comfyui-runtime.log ——
   // 保活模式下「启动日志」面板不再空白，完整输出也留得下文件。
@@ -364,8 +369,7 @@ async function launchKeepAliveMode(
     readyDetail: "ComfyUI 已启动并就绪（保活模式）",
     onReady: (base) => note(`ComfyUI 已就绪（保活）：${base}`),
     onDead: (detail) => {
-      // 保活进程已消失：落一条会话结束横幅，标记该会话终点。
-      appendSessionBanner("end", "■ ComfyUI 保活进程已退出");
+      appendRuntimeLog("■ ComfyUI 保活进程已退出");
       note(detail);
     },
     earlyExit: () => {
@@ -473,7 +477,6 @@ function startKeepAliveWatch(params: {
       const report = reportKeepAliveExit({
         facts,
         stopRequested: params.isStopped(),
-        appendSessionBanner: (b) => params.host.appendSessionBanner("end", b),
         appendRuntimeLog: params.host.appendRuntimeLog,
         log: params.note,
         keepAliveLogs: params.logs,
@@ -596,8 +599,7 @@ async function launchBoundMode(
   ctx: EnsureCtx,
 ): Promise<EnsureResult> {
   const { note, plan, args, stdioEnv, deadline, timeoutDetail } = ctx;
-  const { st, appendRuntimeLog, appendSessionBanner, clearComfyStopping } =
-    host;
+  const { st, appendRuntimeLog, clearComfyStopping } = host;
   let child: ReturnType<typeof spawn>;
   try {
     child = spawn(plan.cmd, args, {
@@ -643,7 +645,6 @@ async function launchBoundMode(
       /* 横幅直接写「为什么退出」：此前只有 `code=...`，而用户的问题是
        * 「它是由什么退出的」—— 结论该出现在日志里，不该留给读者去推。 */
       banner: (report) => `■ ComfyUI 进程已退出：${report.reason}`,
-      appendSessionBanner: (b) => appendSessionBanner("end", b),
       appendRuntimeLog,
       log: note,
       clearChild: () => {

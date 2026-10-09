@@ -21,7 +21,7 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
         aria-label="画布设置"
         className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-base pointer-events-auto absolute top-12 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
       >
-        <span aria-hidden className="mr-1 align-baseline text-[12px]">
+        <span aria-hidden className="mr-1 align-baseline text-xs">
           ⚙
         </span>
         设置
@@ -30,7 +30,7 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
         {hasOverrides && (
           <span
             aria-hidden
-            className="bg-primary ml-1 inline-block size-1.5 -translate-y-px rounded-full align-middle shadow-[0_0_6px_rgba(167,139,250,0.7)]"
+            className="bg-primary ml-1 inline-block size-1.5 -translate-y-px rounded-full align-middle shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-brand)_70%,transparent)]"
           />
         )}
       </Button>

@@ -185,7 +185,7 @@ node scripts/check-ui-primitives.cjs --update   # 只给新引入的判据登记
 | **P51**     | 自写去重合并与区域设置排序（`.sort((…, …) => ….localeCompare(`）                                                                                                                                                                     | `~/lib/ordered-set` 的 `unique` / `uniqueSorted` / `uniqueBy` / `union` / `compareText`（见 §16.2.4.55）                                                                                                        |
 | **P52**     | 自拼或自切 data URL（`data:${…};base64,${…}` / `indexOf(",")` / `split(",")` 与 `data:` 同现）                                                                                                                                       | `~/lib/media/data-url` 的 `isDataUrl` / `isInlineMedia` / `toDataUrl` / `wrapBase64` / `toBase64` / `parseDataUrl` / `base64PayloadOf`（见 §16.2.4.56）                                                         |
 | **P53**     | 元素上自写键盘键判据（`.key === "…"` 之类的字面量比对）                                                                                                                                                                              | `~/components/ui/simple-key-handler` 的 `simpleKeyHandler`（元素上的那一个 `onKeyDown`）+ `~/lib/keyboard` 的 `normalizeKeyName` / `isKeyIn`（键名归一，两处共用一份，见 §16.2.4.57）                           |
-| **P54**     | 自写 SGR 转义序列字面量（`\x1b[` / `\u001b[` 打头的形态）                                                                                                                                                                            | `~/lib/log/log-ansi` 的 `hasSgr` / `stripSgr` / `stripAnsi`（剥与判两条账）+ `BANNER_ANSI`（横幅色板，写侧与读侧同一份，见 §16.2.4.58）                                                                         |
+| **P54**     | 自写 SGR 转义序列字面量（`\x1b[` / `\u001b[` 打头的形态）                                                                                                                                                                            | `~/lib/log/log-ansi` 的 `hasSgr` / `stripSgr` / `stripAnsi`（剥与判两条账，见 §16.2.4.58）                                                                         |
 | **P55**     | 自写驼峰 ⇄ kebab 换算（`replace(/[A-Z]/g, …)` 带插值）                                                                                                                                                                               | `~/lib/case-token` 的 `toKebabCase` / `toCamelCase`（见 §16.2.4.59）                                                                                                                                            |
 | **P56**     | 手工把路径变成展示文本（`path.relative(` 当展示用 / `.split(/[\\/]/).pop()` 取末段 / `.replace(/\\/g, "/")` 归一分隔符）                                                                                                             | `~/lib/path-display` 的 `toDisplayPath` / `stripPathPrefix` / `lastSegments` / `ellipsisMiddle` / `normalizeSlashes`（见 §16.2.4.60）                                                                           |
 | **P57**     | 自写「剔掉私有 prop 再透传」的剔除表（`Omit<React.ComponentProps<…>, "a" \| "b">`）                                                                                                                                                  | `~/lib/dom-props` 的 `OmitOwnProps`（类型侧）/ `splitDomProps`（运行时剥）/ `commonOwnProps`（两表取交集，不是并集）（见 §16.2.4.61）                                                                           |
@@ -608,7 +608,7 @@ node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命�
 **同批的覆盖率**：`ui/` 的有 story 组件数 21 → **34**（基线同批改），story 份数
 20 → 34，并新增 `Studio/` 与 `Workshop/` 两个分组。
 
-#### 16.2.3.7 覆盖率的终点：`ui/` 满覆盖（当前 88/88），理由表清空
+#### 16.2.3.7 覆盖率的终点：`ui/` 满覆盖，理由表清空
 
 §16.2.3.5 把「有多少组件被看过」做成了棘轮，§16.2.3.6 把「吃数据的组件」补上了一
 半。第三批做的是**把剩下的逐个补完，一直补到 100%** —— 结论是**理由表可以清空**，
@@ -640,8 +640,13 @@ node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命�
 「判据在空转」这个信号因此落回**实测**那一侧（分子分母都非空由 `uiCoverage`
 现算、「每个 story 都真的 import 到了组件」由用例核）—— 它本来就在那儿。
 
-**同批的覆盖率**：`ui/` 的有 story 组件数 34 → **全量**（此后随新增组件按批抬基线），story 份数
-34 → **86 份 / 337 条**（含既有 `studio/` `workshop/`），理由表 5 条 → **0 条**。
+**同批的覆盖率**：`ui/` 的有 story 组件数 34 → **全量**（此后随新增组件按批抬基线），
+story 份数 34 → **当时的 86 份 / 337 条**（含既有 `studio/` `workshop/`），理由表 5 条 → **0 条**。
+
+> **那两个数说的是「当时」**：此后 `studio/` / `workshop/` 两批（§16.2.3.9、§16.2.3.10）与
+> `UI/` 那批又各带进来一批故事，现读数由 `node scripts/storybook-check.mjs` 现算（它打印
+> 「故事面 N 份」与「组件覆盖率 N/N」），**不要在文档里回填一个新数字** —— 回填的那个
+> 下个月还会漂（同 §12.14 的口径：会漂的读数不写死）。
 
 **判据修的一处真缺陷**：`cvaVariantKeys` 原先把一个组件文件里**所有** `cva()`
 的同名轴**取并集** —— 而 `ui/item.tsx` 有两处（`itemVariants.variant` 是
@@ -651,7 +656,7 @@ node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命�
 分组**（`cvaVariantKeysByBinding`），story 与**其中任意一处**逐字对上即通过。
 `ui/input-group.tsx` 是同一族的第二例（`align` / `size` 两处轴名不同、当时侥幸没暴露）。
 
-**运行期核对**：`pnpm storybook:build` 成功后，**337 条 story 逐条在无头 Chromium
+**运行期核对**：`pnpm storybook:build` 成功后，**当时那 337 条 story 逐条在无头 Chromium
 里打开** —— 全部渲染出内容、零白板；本批新增的 206 条里只有 1 条有 console 输出
 （`ErrorBoundary` 那条**故意**让子树抛，已用 `parameters.test` 标注预期）。
 
@@ -682,7 +687,7 @@ story `import` 到了，它就计一分。而「看过」有四种漏法，**四
 理由不是「来不及」，是这批故事的表达方式**已经是对的**：组件大量用「子件 + 默认值」
 把必填项兜住了（`Badge` 的 `children`、`Card` 的各 slot、`Dialog` 的 `open`…），
 早期那批走组件自己的 `argTypes`，真正吃数据的走注入层（`args.sourceName` 就是它的
-args）。给 86 份逐条补 `args` 是把 337 张画布的**输入形状重写一遍**，换来的只是
+args）。给当时那 86 份逐条补 `args` 是把 337 张画布的**输入形状重写一遍**，换来的只是
 「面板里多几个初始值」；而逐条白名单又会把这张表变成**第二份赦免名单**
 （正是 §16.2.3.5 那道门槛最不该鼓励的事）。判据的价值在「下一个新增的故事别漏」，
 所以口径定成：**盘点照实报，阻断只落在新动过的那一份上** —— 与其余棘轮的
@@ -767,7 +772,7 @@ module-level store 里，story 里要「先按真形状写进 store 再摆」，
 > 本批只修实例、记账，不为它顺手加第三个扫描器。
 
 **这一批的数量**：`studio/` + `workshop/` 的 story 从 5 份 → 23 份，全仓 88 → **108 份**。
-`ui/` 的覆盖率棘轮（89/89）不受影响 —— 它的分母只看 `ui/`，业务目录那两棵树
+`ui/` 的覆盖率棘轮（`ui/` 满覆盖，读数以 `scripts/.storybook-coverage-baseline.json` 为准）不受影响 —— 它的分母只看 `ui/`，业务目录那两棵树
 **不在那张表里**，理由见 §16.2.3.5 的「分母是什么」。
 
 #### 16.2.3.10 三层注入（store / React Flow / 整屏容器）：业务目录故事的最后一道门槛
@@ -913,6 +918,110 @@ module-level store 里，story 里要「先按真形状写进 store 再摆」，
   逐张看过截图。整屏层那几份日志里的 `TRPCClientError: Failed to fetch` 是**已知
   边界**（§16.2.3.10 的跨源一节），不是新问题。
 
+#### 16.2.3.12 画布层的 handle id：两侧口径对着写，判据按交集现算
+
+§16.2.3.11 铺完之后，`flow-canvas.tsx` 的 `twoNodes` / `fanOut` / `mixedKinds`
+三档在画布上**一条连线都没画出来** —— 而它们的场景名与 `about` 一直在讲「连线」，
+`fanOut` 那句更是「一个源节点扇出三条连线」。
+
+**根因不是「名字写错」，是没有事实源。** React Flow 找锚点靠的是 handle id，
+而真画布上两套口径各管一侧（`FlowNodePinRows.tsx` / `WorkflowNode.tsx`）：
+
+| 侧 | 真 handle id | 出处 |
+| --- | --- | --- |
+| 输出（source） | `` `out:${name}` `` | `OUTPUT_PORT_HANDLE_PREFIX`（`flow-focus-endpoints.ts`） |
+| 输入（target） | `ioKey` | 工作流节点动态表单的端口键 |
+
+那份场景写的是 `"1:model"` / `"2:images"` —— **第三种形状，两侧都不匹配**。
+React Flow 对这种边**静默丢弃**：不报错、控制台干净、`tsc` / `eslint` / 构建 /
+既有门禁全绿，画布只是少几条线（真浏览器数 `.react-flow__edge` 量到 `0`）。
+
+> **为什么上一批的判据没拦住它。** §16.2.3.10 那条端口判据按**一张手写的真端口表**
+> 判（只认 `output` / `inputImage` 那对条件端口）—— 它守住了 `filledProject`
+> 「把边连到 `picture` 才有的端口上」，却完整漏掉这三档，因为后者的 handle 形状
+> **根本不在那张表的取值域里**。**把一张手写的端口表当事实源，就是漏掉一半的原因。**
+
+**现在的判据**（`tests/storybook-injection-layers.test.ts`）按**两侧现算交集**：
+场景侧取 `flow-canvas.tsx` 里每条边声明的 handle，渲染器侧取
+`WorkflowPortHandle.stories.tsx` 的 `PortDemoNode` 实际挂的 `<PortHandle id>`
+（锚在它的 `rows` 上取 —— 取整份文件会把画布**外**那一档的 `PORT_ROWS` 也算进来，
+把「画布外挂得上」误当成「画布上挂着」）；两侧必须对得上，且**都得非空**
+（空集会 `every` 恒真 = 判据空转）。前缀取自真出处常量，不另抄字面量。
+
+**两条连带口径**：
+
+- **消费方不传 `nodeTypes` 的场景必须 `edges: []`**。`dense` 那档摆的是装饰层
+  （网格 / 标尺 / 缩放条），消费方 `WorkflowCanvasDecorations.stories.tsx` 不传
+  `nodeTypes` → 节点走 React Flow 默认外观、身上没有业务端口。留一条边就是
+  「场景说有连线、画布上没有」的假形态，所以刻意清空并写明理由。
+- **改一侧必须同批改另一侧**。这份渲染器的 `id` 与场景里每条边的
+  `sourceHandle` / `targetHandle` 是**对着写的**，判据不是替代品、是保险丝。
+
+变异三向实测全拦下：输出端写回旧形状 / 渲染器少挂一个端口 / 前缀常量改掉。
+
+#### 16.2.3.13 画布帧的视口：装不下要显式认账（`fit` / `pinZoom`）
+
+§16.2.3.12 把边画了出来，接着逐张看截图时发现另一件事：**框装不下内容**。
+
+`StorybookFlowCanvas` 的框高是**一个常量**（`CANVAS_FRAME_CLASS` = `h-[560px]`），
+而节点渲染器的尺寸是**消费方**的事 —— 于是同一档场景在不同消费方下内容高度可以差
+一倍：`twoNodes` 摆十行端点的 `PortDemoNode` 是 399px 高，摆 React Flow 默认外观
+（`WorkflowCanvasDecorations` 的 `GridOff` 那档）只有 ~80px。
+
+消费方的渲染器比框高时，**钉住的视口会把内容切掉**。真浏览器量 `.react-flow__node`
+的下沿与框下沿：
+
+| story | 场景 | 渲染器 | 切掉 |
+| --- | --- | --- | --- |
+| `WorkflowPortHandle--FanOutCanvas` | `fanOut` | `PortDemoNode` | **151px** |
+| `WorkflowPortHandle--InCanvas` | `twoNodes` | `PortDemoNode` | **79px** |
+| `WorkflowPortHandle--MixedKindsCanvas` | `mixedKinds` | `PortDemoNode` | **51px** |
+| `WorkflowPortHandle--OutsideCanvas` 等画布外几档 | — | — | 0（不在框里） |
+| `NodeFrost--InCanvas` / `Decorations--*`（5 档） | `zoomedIn` / `dense` 等 | 自己的渲染器 | 0（本来就装得下） |
+
+`mixedKinds` 最直白：八张卡分三行，**整个第三行**（两张卡）在框外，而场景名与
+`about` 一直在讲「八种业务节点混排」。这与 §16.2.3.12 同族 —— **画布上照样有内容、
+构建 / tsc / eslint / 既有门禁全绿**，只有逐张截图才看得出来。
+
+**修法：两种视口口径，由消费方选。**
+
+| 口径 | 谁用 | 它给什么 |
+| --- | --- | --- |
+| 钉住的 `viewport`（默认） | 被测对象**就是那个缩放**的档 | 初始缩放真的进转换矩阵（细网格在 0.3 下淡出、放大档的端点像素尺度、密集负载下现算的标尺步长） |
+| `fit`（消费方显式传） | 渲染器**装不进 560px** 的档 | 交回 React Flow 自己的 `fitView`（`ProjectCanvas` 的「适应视图」也是这套机制），把整场缩到框里 |
+
+关键取舍：
+
+- **`fit` 是消费方的声明，不是场景的属性**。同一个 `twoNodes` 在
+  `WorkflowPortHandle`（十行卡）下装不下、在 `WorkflowCanvasDecorations` 的
+  `GridOff`（默认外观）下装得下 —— 装不装得下取决于**渲染器**，而渲染器由消费方
+  经 `nodeTypes` 注入。把 `fit` 写进场景就会把 `GridOff` 一起缩走。
+- **两种口径互斥**：`fit` 时 React Flow 忽略 `viewport`（它自己算一个），所以代码里
+  是 `? { fitView, fitViewOptions } : { viewport, onViewportChange }` —— 不并列传，
+  免得下一个人以为「钉住 + 自适应」能同时成立。
+- **`pinZoom` 标记反过来钉住另一半**。`zoomedIn` / `zoomedOut` / `dense` 三档的被测
+  对象就是那个缩放，**不能被 `fit` 缩走** —— 缩到装得下会把要看的缩放一起改掉，
+  而 story 上看着仍然「一切正常」（只是看的不是那一档了）。
+- **不手写每档帧高**。「三档各自要 655 / 727 / 627px」是**实测读数**，写进代码就是
+  第二个会漂的事实源（摆一张卡就过期）；`fit` 让 React Flow 现算，没有数字要维护。
+  同理不手搓缩放公式 —— `fitViewOptions.padding` 的 0.1 是唯一的自定参数。
+
+**判据**（`tests/storybook-fit-viewport.test.ts`，进 `FIXED_STRUCTURAL_TESTS`）：
+**传了 `nodeTypes`（尺寸未知）的消费方，要么传 `fit`、要么用带 `pinZoom` 的场景。**
+两者都没有 = 没人回答过「装得下吗」，而那正是切掉一截的形态。不传 `nodeTypes` 的
+消费方不受约束（节点走 React Flow 默认外观，高度是它自己的口径）。
+
+判据按 **AST** 判不按正则：`<StorybookFlowCanvas>` 的属性顺序与换行不固定，正则会
+在「属性写在另一行」时整片漏掉。另一处实测教训单独记着：`<X … />` 是
+**`JsxSelfClosingElement`**、`<X …>…</X>` 才是 `JsxOpeningElement` —— 只看后者时
+本仓的用法全是自闭合，扫出来是**空集**（判据空转）；所以用例里有一条「解析器不是
+空转」的在场证明，四向变异（去掉 fit / pinZoom 场景被 fit / 删受控视口 /
+`fitView` 换成手搓 zoom）全部实测拦下。
+
+> 这条与 §16.2.3.12 合起来是一句话：**「接线对了」不等于「画布上看得对」**。
+> handle 错 → 边不画；框小了 → 内容被切。两者的共同点是构建期全绿、只有真渲染
+> 才看得出来，所以每轮都必须同时做「真浏览器逐 story 量」这另一半。
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
@@ -985,7 +1094,7 @@ module-level store 里，story 里要「先按真形状写进 store 再摆」，
 | 去重合并与排序           | ~~`[...new Set(xs)]` 与 `Array.from(new Set(xs))` 混用，而比选型更要紧的是**排序口径也不一**：`localeCompare` 与手写 `for` 循环挑字段做键并存。四种形状差的是**判据**：① 去重保留首次出现；② 去重 + 字典序（`localeCompare` 与 `<` 不是同一判据 —— 前者 `"apple" < "Zebra"`、后者 `"Zebra" < "apple"`）；③ 去重**同时按字段做键**（键与值是两件事，收口前各写一遍 `for` 循环）；④ 两路来源取并集（`specOpts` 优先）~~                                                                                                                                                                                                                                                                                                 | `~/lib/ordered-set` 的 `unique`（首次出现）/ `uniqueSorted`（字典序）/ `uniqueBy`（按字段）/ `union`（先到先得）/ `compareText`（区域设置比较器，全库唯一）；**顺序是显式参数**；**P51 硬闸**                                                                             | ✅ **见 §16.2.4.55**                        |
 | data URL                 | ~~`data:${mime};base64,${…}` **手拼 3 处**，读回的一侧 **6 处**各写一遍「找第一个逗号、后面就是 base64」。三处读法互相矛盾：`slice(indexOf(",") + 1)` 在缺逗号时把**整串**当 base64（解码器跳过非法字符）→ 静默解出垃圾字节；`split(",")` 至少判了逗号但多分配一份数组；只有一处真去读了 `;base64` 之前的 meta（因此只有它能给出 MIME）。另有**非 base64 的 data URL**（`data:text/plain,hello`）被无条件按 base64 解 → 乱码~~                                                                                                                                                                                                                                                                                        | `~/lib/media/data-url` 的 `isDataUrl` / `isInlineMedia`（要不要走网络）/ `toDataUrl`（字节）/ `wrapBase64`（已有 base64 串）/ `toBase64`（含浏览器侧分块）/ `parseDataUrl`（给 `{ mime, base64 }`）/ `base64PayloadOf`；**畸形输入给 `null`，不静默解垃圾**；**P52 硬闸** | ✅ **见 §16.2.4.56**                        |
 | 键盘键判据               | ~~**3 处**各写一遍「按键就做一件事」，而它们对三件事各判各的：**键名叫什么**（`" "` 还是 `"Space"`、要不要大小写归一 —— 无修饰单键的 `event.key` 是**带 Shift 的大写字符**，`Shift+Space` 给 `" "`）、**要不要 `preventDefault`**（混在同一个 `if` 里，看不出谁决定的）、**`event.repeat` 收不收**（按住空格会连发，对「切换一次」等于按了十几次）~~                                                                                                                                                                                                                                                                                                                                                                  | `~/components/ui/simple-key-handler` 的 `simpleKeyHandler`（`preventDefault` 与 `ignoreRepeat` 都是显式选项）+ `~/lib/keyboard` 的 `normalizeKeyName` / `isKeyIn`（**两个落点共用一份归一规则**，不再各记一份键名表）；**P53 硬闸**                                       | ✅ **见 §16.2.4.57**                        |
-| SGR 转义序列             | ~~同一条形态 `\x1b\[[0-9;:]*m` 在 **4 处**各写一遍，而**判据不同**：`log-ansi` 的 `SGR_RE`（转义符必须在）、`logs/log-record` 的 `stripSgr`（连**残缺颜色码**一起剥 —— 少剥这层会在面板上显示成 `[[OK]【[90m[OK[0m] …`）、`logs/log-row-style` 的 `hasAnsi`（只判不改）、`session-banner.server` 与 `log-sessions` **写侧与读侧**各持一份同样的颜色码字面量（写侧改色，读侧就认不出自己写的横幅）；且「要不要连残缺码一起剥」这条差异**没有任何一处写下来**~~                                                                                                                                                                                                                                                         | `~/lib/log/log-ansi` 的 `hasSgr`（只判）/ `stripSgr(text, { includePartial })`（判据成为**显式参数**）/ `stripAnsi` + `BANNER_ANSI`（写侧取色、读侧比对，同一个字面量）；**P54 硬闸**                                                                                     | ✅ **见 §16.2.4.58**                        |
+| SGR 转义序列             | ~~同一条形态 `\x1b\[[0-9;:]*m` 在 **4 处**各写一遍，而**判据不同**：`log-ansi` 的 `SGR_RE`（转义符必须在）、`logs/log-record` 的 `stripSgr`（连**残缺颜色码**一起剥 —— 少剥这层会在面板上显示成 `[[OK]【[90m[OK[0m] …`）、`logs/log-row-style` 的 `hasAnsi`（只判不改）、`session-banner.server` 与 `log-sessions` **写侧与读侧**各持一份同样的颜色码字面量（写侧改色，读侧就认不出自己写的横幅；那一对已随 ISSUE #1326「一次启动一份文件」撤掉）；且「要不要连残缺码一起剥」这条差异**没有任何一处写下来**~~                                                                                                                                                                                                                                                         | `~/lib/log/log-ansi` 的 `hasSgr`（只判）/ `stripSgr(text, { includePartial })`（判据成为**显式参数**）/ `stripAnsi`（色板 `BANNER_ANSI` 已随会话横幅撤掉）；**P54 硬闸**                                                                                     | ✅ **见 §16.2.4.58**                        |
 | 驼峰 ⇄ kebab 换算        | ~~全库只有 **1 处**（`lib/shell/overlay-z` 的 `zClass`），但判据写在**表达式里**：`replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)` —— 而它派生的 5 个工具类名（`z-canvas-ui` / `z-canvas-max` …）必须与 `globals.css` 的 `@theme` 逐字一致，**写错时静默**（Tailwind 找不到类名不报错，只是那一层没有 `z-index`）~~                                                                                                                                                                                                                                                                                                                                                                                                  | `~/lib/case-token` 的 `toKebabCase`（逐字符，不猜词边界、不抹前导下划线）/ `toCamelCase`（与它成对收在同一处）；**P55 硬闸**                                                                                                                                              | ✅ **见 §16.2.4.59**                        |
 | 路径变成展示一行         | ~~**18 个文件**各写各的，对三件事各判各的：**相对谁**（`path.relative(LOG_ROOT,…)` / `(PROJECT_ROOT,…)` / `(REPO_ROOT,…)` / 原样绝对路径）、**分隔符**（`.replace(/\\/g,"/")` ×8 / `.split(path.sep).join("/")` ×2 / 不归一）、**超长怎么办**（视图清一色 `truncate` **只留头部** —— 而路径的语义在尾部，用户看到的恰好是被切掉的那一段）~~                                                                                                                                                                                                                                                                                                                                                                           | `~/lib/path-display` 的 `toDisplayPath`（相对化 + 归一）/ `stripPathPrefix`（剥命名前缀）/ `lastSegments`（取末 N 段，按「段」不按字符）/ `ellipsisMiddle`（中段省略，与 `clampText` 的分工是「保两头 vs 保一头」）/ `normalizeSlashes`；**P56 硬闸**                     | ✅ **见 §16.2.4.60**                        |
 | props 剔透传             | ~~**4 个基元**各写一份表，而**类型侧 `Omit<…, "a" \| "b">` 与运行时解构是两份**，必须逐字一致却无任何机器判据 —— 表里有、解构里漏，该字段**静默透传给 DOM**（React 19 只给一条 console 警告）；`value` / `onChange` 漏掉的表现是「界面有值但状态没变」~~                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `~/lib/dom-props` 的 `OmitOwnProps`（类型）/ `splitDomProps`（运行时，同一份表）/ `commonOwnProps`（两表取**交集**，并集会把只属于一侧的字段也剔掉）；**P57 硬闸**                                                                                                        | ✅ **见 §16.2.4.61**                        |
@@ -4366,14 +4475,16 @@ isKeyIn(event.key, [KEY.Space, KEY.Enter]);
 | `lib/log/log-ansi` 的 `SGR_RE`           | 剥 SGR，用于解析成带样式片段       | 转义符**必须在**（`\x1b[`）                                       |
 | `logs/log-record` 的 `stripSgr`          | 切记录**之前**剥残留颜色码         | 连**残缺颜色码**（只剩 `[90m` / `[0m`，转义符在管道里丢了）一起剥 |
 | `logs/log-row-style` 的 `hasAnsi`        | 决定「按 ANSI 上色还是走词法上色」 | **只判不改**                                                      |
-| `session-banner.server` + `log-sessions` | 画横幅 / 认横幅                    | **写侧与读侧**各持一份同样的颜色码字面量                          |
+| `session-banner.server` + `log-sessions`（均已随 #1326 撤掉） | 画横幅 / 认横幅 | **写侧与读侧**各持一份同样的颜色码字面量（教训：同一件事的输入与判据不该各存一份） |
 
 三件事此前**没有一处写下来**：
 
 1. **要不要连残缺码一起剥** —— `stripSgr` 剥了，`SGR_RE` 没剥。少剥那一层
    的表现是面板上显示成 `[[OK]【[90m[OK[0m] …`；
 2. **读侧与写侧用的是同一个颜色** —— 写侧改了横幅色、读侧就**认不出自己写的
-   横幅**（会话切分会把那条边界当成普通文本行）；
+   横幅**（会话切分会把那条边界当成普通文本行）。这一对已随 ISSUE #1326
+   「一次启动一份文件」撤掉（边界由文件名承担），但**教训留着**：它当年不是
+   「重复代码」，而是同一件事的输入与判据分成两处；
 3. **「只判」与「剥掉」是两条账** —— 混在一个函数里会让「谁在剥、谁在看」
    只能靠读实现去猜。
 
@@ -4383,14 +4494,15 @@ isKeyIn(event.key, [KEY.Space, KEY.Enter]);
 hasSgr(text); // 只判：有没有完整 SGR
 stripSgr(text, { includePartial }); // 剥；`includePartial` 默认 true
 stripAnsi(text); // 剥全部（含光标 / 清屏序列）
-BANNER_ANSI; // 横幅色板：start / end / reset（写侧取色、读侧比对）
 ```
+
+（`BANNER_ANSI` 横幅色板已随会话横幅一起撤掉 —— 它零消费方，见上一条。）
 
 - **`includePartial` 是显式参数**：那个分歧此前只存在于 `stripSgr` 的实现
   里，现在它是调用处能看见的决定（默认取「剥得更全」那一档 —— 留在正文里的
   `[90m` 会原样显示给用户）；
-- **`BANNER_ANSI` 一份字面量供两侧**：这是本条账里最容易被忽略的一条 ——
-  它不是「重复代码」，而是**同一件事的输入与判据分开两处**；
+- **同一件事的输入与判据不许分两处**（`BANNER_ANSI` 当年的教训）：色板撤了，
+  但「写侧取的那个字面量 = 读侧比的那个字面量」这条要求在别处仍成立；
 - **转义符字面量只在本模块写**：其余三处都从它取。
 
 #### 判据：P54（硬闸）

@@ -194,7 +194,7 @@ export function WirePortRows({
             >
               {isDropTarget && (
                 <div
-                  className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_rgba(124,92,252,0.6)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}
+                  className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary)_60%,transparent)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}
                 />
               )}
               <PortHandle
@@ -273,7 +273,7 @@ export function WirePortRows({
               draggingKey &&
               draggingKey !== wireInput.ioKey && (
                 <div
-                  className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_rgba(124,92,252,0.6)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}
+                  className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary)_60%,transparent)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}
                 />
               )}
             <PortHandle
@@ -369,7 +369,7 @@ export function WirePortRows({
                   draggingKey &&
                   draggingKey !== output.ioKey && (
                     <div
-                      className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_rgba(124,92,252,0.6)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}
+                      className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary)_60%,transparent)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}
                     />
                   )}
                 <PortHandle

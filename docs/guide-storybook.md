@@ -197,10 +197,13 @@ const meta = {
 ```
 
 ```tsx
-/* React Flow：真画布，节点渲染器由 story 通过 nodeTypes 注入 */
+/* React Flow：真画布，节点渲染器由 story 通过 nodeTypes 注入。
+   渲染器比 560px 的框高时加 `fit` —— 否则钉住的视口会把内容切掉一截
+   （见下面「框架装不下」那条）。 */
 <StorybookFlowCanvas
   scene={withNodeType(canvasScene("twoNodes"), "story")}
   nodeTypes={{ story: MyNode }}
+  fit
 />
 ```
 
@@ -252,6 +255,13 @@ function ShellHarness() {
   全等（同毫秒）—— 手写时最容易把「同一毫秒」写成「相邻毫秒」。
 - **有内容的项目要走 `placeCanvasNode()`**（`screen-frame.tsx` 的 `canvasNodes()`）：
   手写节点对象只填两个字段，而节点渲染器读的是 `defaultData(kind)` 的整套默认值。
+- **框架装不下就传 `fit`**：`StorybookFlowCanvas` 的框高是固定的 560px，而渲染器
+  尺寸是你的事。你自己的节点渲染器比框高、又没传 `fit` 时，钉住的视口会把最后一张
+  卡的下沿切掉 —— 构建 / tsc / eslint 全绿，只有画布上少一截（实测 `fanOut` 切
+  151px、`mixedKinds` 切 51px）。传 `fit` 就交回 React Flow 的 `fitView` 缩到框里；
+  **被测对象就是那个缩放的档**（`zoomedIn` / `zoomedOut` / `dense`，注册表里带
+  `pinZoom`）反过来**不能**传 `fit` —— 缩走就不是那一档了。判据见
+  `tests/storybook-fit-viewport.test.ts`（规范 16 §16.2.3.13）。
 
 **一处容易踩的坑**：`ProjectCanvas` / `WorkshopPipeline` 在**挂载那一刻**读
 `getActiveId()`，而 React 的 effect 是子先父后 —— 把「建项目」放 `useEffect` 里，
@@ -270,6 +280,15 @@ function ShellHarness() {
 - **不是像素基线**。组件覆盖率再高也不等于「页面没变样」—— 视觉回归的防线仍是
   `e2e/visual` 的 Playwright `toHaveScreenshot`（规范 11 §11.8），那个判的是
   真实页面的布局/配色/断点。两者互补，都不接 Chromatic。
+  **这条分工现在有机器判据**（`tests/visual-storybook-division.test.ts`，进固定清单）：
+  给 story 加 `toHaveScreenshot`、或引入第二套像素工具（Chromatic 那一族）都会红
+  —— 那是给同一件事造第二套基线，而两套基线的维护成本正是 §11.8 要避免的。
+  这一侧真要看像素时，**写进 `e2e/visual`，不要写进 story**。
+  那一侧的落点至此**五档齐了**（深浅两态 / 响应式断点 / 空态 / xyflow 画布 /
+  弹窗浮层尺寸），`canvas.visual.spec.ts` 与 `overlay.visual.spec.ts` 是后两档
+  —— 它们的钉法各有一条别的屏没有的坑（画布要等 `fitView` 收敛、浮层要量宽度而不是
+  只看截图），写在规范 11 §11.8；判据也从「三档」补到「五档」，那两档此前只有落点表
+  里的一行字、**没有判据守着**。
 - **不进构建产物**。`.storybook/**` 与 `*.stories.tsx` 不在 Next 的模块图上：
   story 只被 Storybook 自己的 webpack 图引用，`pnpm build` 看不到它们。
   `storybook-static/`、`.storybook/assets/`、`.storybook/generated/` 都在

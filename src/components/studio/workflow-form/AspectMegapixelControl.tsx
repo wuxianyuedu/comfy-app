@@ -429,7 +429,7 @@ export function AspectMegapixelControl({
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />
                     <span
-                      className="text-ink-bright min-w-0 truncate text-[12px] font-medium"
+                      className="text-ink-bright min-w-0 truncate text-xs font-medium"
                       style={{ fontFamily: "var(--font-sans)" }}
                     >
                       {entry.label ?? entry.name}

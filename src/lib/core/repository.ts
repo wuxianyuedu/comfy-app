@@ -14,8 +14,8 @@
  *
  * 模块划分：
  *   - {@link ./repository-base}            契约接口 + 泛型基类（Identifiable /
- *                                          Repository / PrismaDelegate /
- *                                          PrismaRepository / TaskWithCover）
+ *                                          Repository / DrizzleRepository /
+ *                                          TaskWithCover）
  *   项目仓储（repository-project）、任务仓储（repository-task）、
  *   工作流模板仓储（repository-workflow-template）、
  *   模型与用户模型配置仓储（repository-model）、

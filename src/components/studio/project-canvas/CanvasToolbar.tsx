@@ -12,7 +12,7 @@ interface CanvasToolbarProps {
 
 /** 悬浮工具条上的三个文字动作共用同一套「幽灵」外观。 */
 const ghostTool =
-  "text-ink-soft hover:bg-subtle h-auto rounded-full px-3 py-1 text-[12px] font-normal transition-colors";
+  "text-ink-soft hover:bg-subtle h-auto rounded-full px-3 py-1 text-xs font-normal transition-colors";
 
 export function CanvasToolbar({
   onFitView,

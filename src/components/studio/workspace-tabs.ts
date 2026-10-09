@@ -143,13 +143,11 @@ export function initialWorkspaceTabs(): WorkspaceTabsState {
 
 /* ── 持久化（sessionStorage 的唯一一份视图状态）─────────────────────────
  *
- * 旧键 `comfyapp:workspace-view-v1` 存的是**单个视图**。这里换成 v2 的列表，
- * 并在读到时**一次性迁移 + 删掉旧键** —— 不留两个名字指同一件事（§12.14），
- * 也不允许出现"两个键各存一半、恢复时看谁先到"的状态。 */
+ * 键里存的是**页签列表**（形状见 `serializeWorkspaceTabs`）。这里只有一个键：
+ * 历史上并存过一个只存单个视图的旧键，它早在迁移窗口内就被「读到即删」清掉了，
+ * 保留读取分支只会让一份没人再生产的形状继续占着恢复路径（§12.15）。 */
 
 export const WS_TABS_KEY = "comfyapp:workspace-tabs-v2";
-/** 旧单值键；只用于一次性迁移，读到即删。 */
-export const LEGACY_WS_VIEW_KEY = "comfyapp:workspace-view-v1";
 
 export function serializeWorkspaceTabs(state: WorkspaceTabsState): string {
   return JSON.stringify({

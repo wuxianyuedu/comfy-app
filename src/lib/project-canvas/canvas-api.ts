@@ -143,7 +143,7 @@ export interface TaskResult {
 }
 
 /* `pollTask` 在服务端任务没产出结果就结束时返回它
- *（FAILED / CANCELLED / ERROR / TIMEOUT）。它带上 `prisma.task.error` 里
+ *（FAILED / CANCELLED / ERROR / TIMEOUT）。它带上任务行 `error` 列里
  * 底层后端的错误信息，好让界面给出有意义的解释，
  * 而不是一句通用的「生成失败或无结果」。 */
 export interface TaskFailure {
@@ -151,7 +151,7 @@ export interface TaskFailure {
   status: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT";
   /** 后端 / ComfyUI 的原始错误信息，已解码成纯文本。 */
   error: string;
-  /** 原始请求载荷的快照（来自 `prisma.task.params`），
+  /** 原始请求载荷的快照（任务行 `params` 列），
    *  好让错误界面把「发了什么」和「哪里失败了」并排展示。 */
   params?: unknown;
   /** 结构化的 ComfyUI /prompt 校验错误（摊平后的 `node_errors`），
@@ -199,7 +199,7 @@ export async function pollTask(
       }
       const st = task?.status as string | undefined;
       if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
-        /* 防御性归一：`task.error` 在 Prisma 里类型是 `String?`，
+        /* 防御性归一：`task.error` 在库里是可空文本列，
          * 但历史数据行 / 更早的代码路径（例如 buildPromptError 曾用
          * `String(res.error)`）可能把字面量 "[object Object]" 存了进来。
          * 这里既把结构化对象剥成 JSON，也识别那个垃圾字符串哨兵，
@@ -230,11 +230,11 @@ export async function pollTask(
             : trimmed,
           /* 失败也回传请求 payload 快照，前端用于在失败面板里
            *  展示「执行了哪些参数」。task.params 由 /api/generate route.ts
-           *  写入（Prisma JSON 列）。 */
+           *  写入（任务表的 JSON 列）。 */
           params: task?.params ?? undefined,
           /* 把 /api/tasks/[id] 的 task.validationErrors 里的结构化校验错误
            * 带进失败结果，让 CanvasNode 能渲染出精确到字段的列表。 */
-          /* validationErrors 存在 Prisma Json 列里，类型上是 unknown——
+          /* validationErrors 存在任务表的 JSON 列里，类型上是 unknown——
            *  直接 `as ValidationError[]` 只是假保险（列里存了别的东西时
            *  会在渲染期炸）。按 §05「API 响应一律 Zod 校验」收口成真校验。 */
           validationErrors: parseValidationErrorsJson(task?.validationErrors),

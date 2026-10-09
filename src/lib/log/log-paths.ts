@@ -61,7 +61,21 @@ export const LAUNCHER_LOG_DIR = path.join(LOG_CURRENT_DIR, "launcher");
 /** Next.js dev server 原始输出（按次命名，保留最近 5 份）。 */
 export const NEXTJS_LOG_DIR = path.join(LOG_CURRENT_DIR, "nextjs");
 
-/** 常驻服务运行时日志（追加写；设置页日志面板跟随读取）。 */
+/**
+ * 常驻服务运行时日志（**一次启动一份文件**；设置页日志面板跟随读取）。
+ *
+ * 这里**只有目录**，没有「某个来源的固定文件名」——四份 runtime 日志
+ * （comfyui / drizzle-studio / ollama / app-runtime）现在是
+ * `<来源>-<日期>_<时分秒>.log`，同名规则与解析收在 `runtime-log-file.ts`，
+ * 「本次该写哪一份」收在 `runtime-log-pack.server.ts`。
+ *
+ * 此前这里是 `COMFYUI_RUNTIME_LOG` / `OLLAMA_RUNTIME_LOG` /
+ * `DRIZZLE_STUDIO_RUNTIME_LOG` / `APP_RUNTIME_LOG` 四个**固定名**常量，写方
+ * 直接追加进同一个文件（ISSUE #1326 的用户原话：「这四份也要改成每个文件只
+ * 存储单次运行的历史，单次里如果执行多次也存放多个文件，这样看起来清晰」）。
+ * 固定名一撤，`RUNTIME_LOG_FILES`（面板的「来源键 → 文件」表）也随之失去意义
+ * —— 现在一个来源对应**一目录下的多份**，那一层是 `listRuntimeLogFiles()`。
+ */
 export const SERVICES_LOG_DIR = path.join(LOG_CURRENT_DIR, "services");
 
 /** ComfyUI 通信层原始回执（trace）。 */
@@ -84,23 +98,6 @@ export const DEV_LAUNCHER_LOG = path.join(LAUNCHER_LOG_DIR, "dev-launcher.log");
 export const DEV_LAUNCHER_CURRENT_SENTINEL = path.join(
   LAUNCHER_LOG_DIR,
   "dev-launcher-current.txt",
-);
-
-// ── 常驻服务（services/）──
-/** ComfyUI 拉起/等待与子进程输出的运行时日志。 */
-export const COMFYUI_RUNTIME_LOG = path.join(
-  SERVICES_LOG_DIR,
-  "comfyui-runtime.log",
-);
-/** Drizzle Studio 运行时日志。 */
-export const DRIZZLE_STUDIO_RUNTIME_LOG = path.join(
-  SERVICES_LOG_DIR,
-  "drizzle-studio-runtime.log",
-);
-/** Ollama 运行时日志。 */
-export const OLLAMA_RUNTIME_LOG = path.join(
-  SERVICES_LOG_DIR,
-  "ollama-runtime.log",
 );
 
 /** ComfyUI 通信层原始回执（trace）：comfy-cli stdout/stderr、WS 消息、
@@ -129,26 +126,6 @@ export const SCHEMA_SYNC_STATUS_FILE = path.join(
   TOOLS_LOG_DIR,
   "schema-sync.json",
 );
-
-/** 应用运行期业务操作日志（tRPC 调用/生成/任务/工作流增删改等），供「应用日志」面板轮询。 */
-export const APP_RUNTIME_LOG = path.join(SERVICES_LOG_DIR, "app-runtime.log");
-
-/**
- * 追加写 runtime 日志的「来源键 → 文件」映射。
- *
- * 两个读取端点的**同一份**来源表：`GET /api/logs/current`（增量跟随）与
- * `GET /api/logs/sessions`（按会话切分）。分开放会各自漂移 —— 新增一个
- * runtime 通道时只补一侧，另一侧就静默读不到（而两处都「看起来是对的」）。
- *
- * 键即接口上的 `source` 查询值（与 `src/lib/log/log-file-client.ts` 的
- * `LogSourceKind` 一一对应），因此值一律取上面那些常量，不在这里另拼路径。
- */
-export const RUNTIME_LOG_FILES: Record<string, string> = {
-  "comfyui-runtime": COMFYUI_RUNTIME_LOG,
-  "drizzle-studio-runtime": DRIZZLE_STUDIO_RUNTIME_LOG,
-  "ollama-runtime": OLLAMA_RUNTIME_LOG,
-  "app-runtime": APP_RUNTIME_LOG,
-};
 
 /**
  * 日志面板「保存到本地」的落盘目录（`log/exports/`，按次命名）。

@@ -81,19 +81,30 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
 });
 
-/** 等假 taskkill 把参数写下来（异步派发，需要给一小段窗口）。 */
+/**
+ * 等假 taskkill 把参数写下来（异步派发，需要给一小段窗口）——
+ * 用 `expect.poll` 而不是手搓 `while + await setTimeout`（规范 §11.14）：
+ * 条件成立即返回，且失败时打出**最后一次读到的内容**（空串 / 半截参数）。
+ *
+ * 超时这一档刻意不抛、还原成空串：调用点的语义是「没写下来 → 断言读到空」，
+ * 报错里带着当时的读数比一句「等超时」有用。
+ */
 async function readArgs(logFile: string, timeoutMs = 3000): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
+  const readOnce = (): string => {
     try {
-      const text = readFileSync(logFile, "utf8").trim();
-      if (text) return text;
+      return readFileSync(logFile, "utf8").trim();
     } catch {
-      /* 还没写 */
+      return "";
     }
-    if (Date.now() > deadline) return "";
-    await new Promise((r) => setTimeout(r, 25));
+  };
+  try {
+    await expect
+      .poll(() => readOnce().length > 0, { timeout: timeoutMs, interval: 25 })
+      .toBe(true);
+  } catch {
+    /* 超时：交给调用点断言（读到的就是空串）。 */
   }
+  return readOnce();
 }
 
 describe("Windows 回收命令构造（唯一出处）", () => {

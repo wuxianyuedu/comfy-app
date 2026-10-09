@@ -129,24 +129,14 @@ export function stripSgr(text: string, { includePartial = true } = {}): string {
   return includePartial ? withoutFull.replace(PARTIAL_SGR_RE, "") : withoutFull;
 }
 
-/* ── 写日志时给「会话边界横幅」上色用的 ANSI 码 ──────────────────────
+/* ── 会话横幅的色板曾在这里（ISSUE #1326 之后随写侧一并移除）─────────
  *
- * 收口前同一条 `\x1b[1;33m` 在**两个**模块各写一遍（`log-sessions` 用它判
- * 「这一行是不是 end 横幅」、`session-banner.server` 用它画横幅）——
- * 而两者恰好是**读侧与写侧**：写侧改了颜色、读侧就认不出自己写的横幅。
- * 这不是「重复代码」，是**同一件事的输入与判据分开两处**（规范 12 §12.12.1）。
- *
- * 因此颜色码只在本模块写：写侧取色、读侧比对，用的是同一份字面量。
+ * `BANNER_ANSI`（start 亮绿 / end 亮黄）此前供两个消费方：写侧
+ * `session-banner.server.ts` 画横幅、读侧按颜色判「这一行是不是结束横幅」。
+ * 四份 runtime 日志改成**一次启动一份文件**之后，边界由文件名承担 —— 写侧与
+ * 读侧同时失去消费方，色板随之撤掉（`log()` 里那些给终端看的颜色仍走 SGR，
+ * 与本模块的 `stripSgr` / `stripAnsi` 无关）。
  */
-export const BANNER_ANSI = {
-  /** 新会话开始（亮绿）。 */
-  start: "\x1b[1;32m",
-  /** 会话结束（亮黄）—— 同时也是读侧「这一行是结束横幅」的判据。 */
-  end: "\x1b[1;33m",
-  /** 收尾复位。 */
-  reset: "\x1b[0m",
-} as const;
-
 /** 剥掉全部 ANSI 转义序列（含非 SGR 的光标 / 清屏序列），保留纯文本。 */
 export function stripAnsi(text: string): string {
   return text

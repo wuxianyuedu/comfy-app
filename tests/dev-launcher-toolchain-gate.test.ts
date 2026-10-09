@@ -45,8 +45,10 @@ import {
 } from "../scripts/launcher-core/shell.mjs";
 import {
   buildTip,
+  clearPnpmProbeCache,
   orchestratePnpm,
   packageManagerVersion,
+  preparePnpm,
   probeCommand,
   probePnpm,
   shouldRepair,
@@ -58,9 +60,10 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "toolchain-gate-"));
-  // `whichCommand` 现在有进程内记忆化，而本文件的用例会在**同一个 tmp 路径**
-  // 上覆写重造 pnpm 形态 —— 每个用例先清缓存，避免读到上一个用例的旧结论。
+  // `whichCommand` 与 `probePnpm` 都有进程内记忆化，而本文件的用例会在**同一个
+  // tmp 路径**上覆写重造 pnpm 形态 —— 每个用例先清缓存，避免读到上一个用例的旧结论。
   clearWhichCommandCache();
+  clearPnpmProbeCache();
 });
 
 afterEach(() => {
@@ -790,5 +793,116 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     expect(code, "status 为 null 必须与非零退出分开").toContain(
       "result.status === null",
     );
+  });
+});
+
+
+/**
+ * 一次启动里 `pnpm -v` 只探一次（ISSUE #1516）。
+ *
+ * 现场：启动日志里「端口检查」到「pnpm 版本匹配」之间空了 **2.77s**，用户框出来
+ * 问「这段能不能优化」。那 2.77s 不是编排在算什么，而是**第二次 spawnSync 冷启
+ * pnpm shim** —— 工具链门禁（`orchestratePnpm`）刚问过同一个问题，稍后版本一致性
+ * 对齐（`reconcilePnpmVersion`）又原样问了一遍。Windows 上 corepack shim 要经
+ * node 中转到 pnpm，单次 1~3s，等于白付两遍。
+ *
+ * 判据是「问几次」而不是「多快」：用计数脚本当 pnpm，数它被 spawn 了几次。
+ * 反向验证：去掉 `probeMemo`，第一条用例立刻变 2 次、必红。
+ */
+describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
+  /** 造一个「每次被 spawn 就往计数文件追加一行」的假 pnpm。 */
+  function makeCountingPnpm(dirName: string, body: string) {
+    const dir = path.join(tmp, dirName);
+    fs.mkdirSync(dir, { recursive: true });
+    const counter = path.join(tmp, dirName + "-calls.txt");
+    const script = path.join(dir, "pnpm");
+    // 逐行拼装，避免源码里出现跨行的字符串字面量。
+    const lines = ["#!/bin/sh", `echo x >> "${counter}"`, body, ""];
+    fs.writeFileSync(script, lines.join("\n"));
+    fs.chmodSync(script, 0o755);
+    return {
+      dir,
+      calls: () =>
+        fs.existsSync(counter)
+          ? fs.readFileSync(counter, "utf8").split("\n").filter(Boolean).length
+          : 0,
+    };
+  }
+
+  needsPosixExec("同一环境问两次只 spawn 一次", () => {
+    const { dir, calls } = makeCountingPnpm("count-a", "echo 12.4.1");
+    const env = { PATH: dir };
+    const first = probePnpm({ env, platform: "linux" });
+    const afterFirst = calls();
+    const second = probePnpm({ env, platform: "linux" });
+    expect(first.ok).toBe(true);
+    expect(second.version).toBe("12.4.1");
+    /* 判据是「第二次有没有多起一次进程」，而不是绝对次数：`whichCommand` 自己也会
+     * 真起一次候选来验可用性（见 executable-resolve 的记忆化注释）。绝对次数会随
+     * 那张缓存的实现漂，而「再问一遍 = 不再 spawn」正是要钉的契约。 */
+    expect(calls(), "第二次必须命中缓存、不再 spawn").toBe(afterFirst);
+  });
+
+  needsPosixExec("同一环境下返回的就是同一个结论对象（快照式取用）", () => {
+    const { dir } = makeCountingPnpm("count-b", "echo 12.4.1");
+    const env = { PATH: dir };
+    const first = probePnpm({ env, platform: "linux" });
+    expect(probePnpm({ env, platform: "linux" })).toBe(first);
+  });
+
+  needsPosixExec("失败结论同样被记住（坏掉的 pnpm 不必问第二遍）", () => {
+    const dir = path.join(tmp, "count-c");
+    fs.mkdirSync(dir, { recursive: true });
+    // 首行 shebang 指向不存在的解释器：脚本根本起不来（spawn-error 一档）。
+    const script = path.join(dir, "pnpm");
+    fs.writeFileSync(script, ["#!/nonexistent/sh", "exit 0", ""].join("\n"));
+    fs.chmodSync(script, 0o755);
+    const env = { PATH: dir };
+    const first = probePnpm({ env, platform: "linux" });
+    const second = probePnpm({ env, platform: "linux" });
+    expect(first.ok).toBe(false);
+    expect(second.reason).toBe(first.reason);
+    expect(second).toBe(first);
+  });
+
+  needsPosixExec("换 PATH 就是另一个问题：不许互相顶掉结论", () => {
+    const a = makeCountingPnpm("count-d", "echo 12.4.1");
+    const b = makeCountingPnpm("count-e", "echo 9.9.9");
+    expect(probePnpm({ env: { PATH: a.dir }, platform: "linux" }).version).toBe("12.4.1");
+    expect(probePnpm({ env: { PATH: b.dir }, platform: "linux" }).version).toBe("9.9.9");
+  });
+
+  needsPosixExec("换 root 也是另一个问题（键里带 root）", () => {
+    const { dir } = makeCountingPnpm("count-f", "echo 12.4.1");
+    const otherRoot = path.join(tmp, "other-root");
+    fs.mkdirSync(otherRoot, { recursive: true });
+    const env = { PATH: dir };
+    const first = probePnpm({ root: tmp, env, platform: "linux" });
+    const second = probePnpm({ root: otherRoot, env, platform: "linux" });
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(probePnpm({ root: tmp, env, platform: "linux" })).toBe(first);
+    expect(probePnpm({ root: otherRoot, env, platform: "linux" })).toBe(second);
+  });
+
+  it("prepare 之前必须弃用缓存：它换的就是 pnpm 的激活版本", () => {
+    // 判据是「调用顺序」而不是「结果」：prepare 若在 spawn 之后才清缓存，
+    // 复核拿到的就是准备之前的结论。源码级断言（真实 prepare 要联网下载）。
+    const raw = fs.readFileSync(
+      path.join(ROOT, "scripts", "launcher-core", "corepack.mjs"),
+      "utf8",
+    );
+    const body = raw.slice(raw.indexOf("export function preparePnpm"));
+    const clearAt = body.indexOf("clearPnpmProbeCache()");
+    const spawnAt = body.indexOf("spawnSync(command");
+    expect(clearAt, "preparePnpm 必须显式弃用探测缓存").toBeGreaterThan(-1);
+    expect(spawnAt).toBeGreaterThan(-1);
+    expect(clearAt, "弃用必须发生在 spawn **之前**").toBeLessThan(spawnAt);
+  });
+
+  it("拿不到 corepack 时 prepare 只回说明，不抛错（缓存不改变这条契约）", () => {
+    const result = preparePnpm({ root: ROOT, env: { PATH: tmp }, platform: "linux" });
+    expect(result.ran).toBe(false);
+    expect(typeof result.description).toBe("string");
   });
 });

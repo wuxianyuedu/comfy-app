@@ -17,7 +17,7 @@
 <div class="tsd-signature tsd-anchor-link" id="fetchhistorytasks"><span class="tsd-kind-call-signature">fetchHistoryTasks</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">params</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_project-canvas_history-panel-client.HistoryListParams.html" class="tsd-signature-type tsd-kind-type-alias">HistoryListParams</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/lib_project-canvas_history-panel-types.HistoryTaskRow.html" class="tsd-signature-type tsd-kind-interface">HistoryTaskRow</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span><a href="#fetchhistorytasks" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>拉取任务列表。响应行的 mediaType 由服务端 inferMediaType 给出，
-但 Prisma Json 列不可信，这里逐条收窄：缺 mediaType 的行按 image 兜底。</p>
+但任务表 JSON 列不可信，这里逐条收窄：缺 mediaType 的行按 image 兜底。</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>

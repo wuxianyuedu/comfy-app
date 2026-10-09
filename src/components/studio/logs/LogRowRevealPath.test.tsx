@@ -16,7 +16,7 @@
  * mock 掉它等于把「渲染出来的到底是不是路径」这件事从用例里删掉。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const { mutateMock } = vi.hoisted(() => ({ mutateMock: vi.fn() }));
@@ -159,11 +159,9 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
         name: "在文件管理器里定位 C:\\Program Files\\PowerShell\\7\\pwsh.EXE",
       }),
     );
-    await waitFor(() =>
-      expect(mutateMock).toHaveBeenCalledWith({
-        path: "C:\\Program Files\\PowerShell\\7\\pwsh.EXE",
-      }),
-    );
+    await expect
+      .poll(() => mutateMock.mock.calls[0]?.[0] as { path: string } | undefined)
+      .toEqual({ path: "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" });
   });
 
   it("点一下发一次请求，参数是扫出来的那段路径", async () => {
@@ -173,7 +171,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
     await user.click(
       screen.getByRole("button", { name: `在文件管理器里定位 ${ROOT}` }),
     );
-    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+    await expect.poll(() => mutateMock).toHaveBeenCalledTimes(1);
     expect(mutateMock).toHaveBeenCalledWith({ path: ROOT });
   });
 
@@ -185,7 +183,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
       name: `在文件管理器里定位 ${ROOT}`,
     });
     await user.click(button);
-    await waitFor(() => expect(button.textContent).toContain("已定位"));
+    await expect.poll(() => button.textContent).toContain("已定位");
   });
 
   it("失败时改口「打开失败」，悬停提示里给出服务端那句原因（硬规则 4）", async () => {
@@ -199,7 +197,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
       name: `在文件管理器里定位 ${ROOT}`,
     });
     await user.click(button);
-    await waitFor(() => expect(button.textContent).toContain("打开失败"));
+    await expect.poll(() => button.textContent).toContain("打开失败");
     expect(await hintText(user, button)).toContain(
       "找不到可在文件管理器里打开的路径",
     );
@@ -213,7 +211,7 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
       name: `在文件管理器里定位 ${ROOT}`,
     });
     await user.click(button);
-    await waitFor(() => expect(button.textContent).toContain("打开失败"));
+    await expect.poll(() => button.textContent).toContain("打开失败");
     expect(await hintText(user, button)).toContain("boom");
   });
 

@@ -25,7 +25,7 @@ export function WorkflowModelFilterChip({
       triggerTitle={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
       align="start"
       contentClassName="w-72"
-      triggerClassName="border-accent/35 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-[12px]"
+      triggerClassName="border-accent/35 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs"
       trigger={
         <>
           <span

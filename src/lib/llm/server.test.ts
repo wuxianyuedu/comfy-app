@@ -21,7 +21,6 @@ vi.mock("~/server/db", async () => {
 import {
   getLLMConfig,
   getConfigForClient,
-  ensureRemoteStorageMigrated,
   describeFetchFailure,
   completeLLM,
   streamLLM,
@@ -308,67 +307,6 @@ describe("getConfigForClient", () => {
 
     const out = await getConfigForClient();
     expect(out.extraModels).toEqual(["misplaced"]);
-  });
-});
-
-describe("ensureRemoteStorageMigrated（option C 存量迁移，幂等）", () => {
-  it("把遗留远端对象搬到 remoteModel 表，并把 extraModels 收窄成纯本地名", async () => {
-    await llmConfigRepository.upsertSingleton({
-      baseUrl: "https://global/v1",
-      extraModels: [
-        "local-a",
-        {
-          name: "remote-b",
-          baseUrl: "https://b/v1",
-          apiKey: "sk-b",
-          kind: "image",
-        },
-      ],
-    });
-
-    await ensureRemoteStorageMigrated();
-
-    const { remoteModelRepository, llmConfigRepository: repo } =
-      await import("~/lib/core/repository-user");
-    expect((await remoteModelRepository.list()).map((r) => r.name)).toEqual([
-      "remote-b",
-    ]);
-    expect((await repo.findSingleton())?.extraModels).toEqual(["local-a"]);
-  });
-
-  it("指向回环、无密钥的「远端」条目折回本地候选，不搬进表", async () => {
-    await llmConfigRepository.upsertSingleton({
-      baseUrl: "https://global/v1",
-      extraModels: [
-        "local-a",
-        { name: "secretly-local", baseUrl: "http://localhost:11434/v1" },
-      ],
-    });
-
-    await ensureRemoteStorageMigrated();
-
-    const { remoteModelRepository, llmConfigRepository: repo } =
-      await import("~/lib/core/repository-user");
-    expect(await remoteModelRepository.list()).toEqual([]);
-    expect((await repo.findSingleton())?.extraModels).toEqual([
-      "local-a",
-      "secretly-local",
-    ]);
-  });
-
-  it("无单例行 / extraModels 非数组 / 无遗留远端条目 → 全是空操作", async () => {
-    await expect(ensureRemoteStorageMigrated()).resolves.toBeUndefined();
-
-    await llmConfigRepository.upsertSingleton({ extraModels: ["only-local"] });
-    await expect(ensureRemoteStorageMigrated()).resolves.toBeUndefined();
-
-    const { remoteModelRepository } =
-      await import("~/lib/core/repository-user");
-    expect(await remoteModelRepository.list()).toEqual([]);
-
-    // 幂等：再跑一次结果不变
-    await ensureRemoteStorageMigrated();
-    expect(await remoteModelRepository.list()).toEqual([]);
   });
 });
 

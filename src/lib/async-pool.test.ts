@@ -15,6 +15,7 @@ describe("runWithConcurrency", () => {
     await runWithConcurrency([1, 2, 3, 4, 5, 6], 2, async (item) => {
       inFlight += 1;
       peak = Math.max(peak, inFlight);
+      // sleep-ok: mock 内部延迟：拿「每个条目慢一拍」暴露并发峰值（判据是 peak === 2），换成条件轮询会把要量的并发语义拆掉。
       await new Promise((resolve) => setTimeout(resolve, 5));
       inFlight -= 1;
       processed.push(item);
@@ -27,6 +28,7 @@ describe("runWithConcurrency", () => {
   it("limit=1 退化为串行：严格按序执行", async () => {
     const processed: number[] = [];
     await runWithConcurrency([3, 1, 2], 1, async (item) => {
+      // sleep-ok: mock 内部延迟：同上，limit=1 时用「慢」暴露严格串行的顺序语义。
       await new Promise((resolve) => setTimeout(resolve, 5));
       processed.push(item);
     });

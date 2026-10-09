@@ -85,15 +85,13 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
     // loading 态：未回包前出现加载文案（sync 尚在飞、list 未回）
     expect(screen.getByText("加载中…")).toBeInTheDocument();
 
-    // data 态：MSW 返回后出现模型文件名行
+    // data 态：MSW 返回后出现模型文件名行（等 DOM 用 waitFor，见 §11.14）
     await waitFor(
       () =>
         expect(
           screen.getByText("dreamshaper-xl.safetensors"),
         ).toBeInTheDocument(),
-      {
-        timeout: 3000,
-      },
+      { timeout: 3000 },
     );
     // 模型库标题区域
     expect(screen.getByText("模型库")).toBeInTheDocument();

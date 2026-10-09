@@ -12,10 +12,20 @@
 <li><a href="" aria-current="page">SERVICES_LOG_DIR</a></li></ul>
 <h1>Variable SERVICES_LOG_DIR<code class="tsd-tag">Const</code></h1></div>
 <div class="tsd-signature"><span class="tsd-kind-variable">SERVICES_LOG_DIR</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol"> = ...</span></div>
-<div class="tsd-comment tsd-typography"><p>常驻服务运行时日志（追加写；设置页日志面板跟随读取）。</p>
+<div class="tsd-comment tsd-typography"><p>常驻服务运行时日志（<strong>一次启动一份文件</strong>；设置页日志面板跟随读取）。</p>
+<p>这里<strong>只有目录</strong>，没有「某个来源的固定文件名」——四份 runtime 日志
+（comfyui / drizzle-studio / ollama / app-runtime）现在是
+<code>&lt;来源&gt;-&lt;日期&gt;_&lt;时分秒&gt;.log</code>，同名规则与解析收在 <code>runtime-log-file.ts</code>，
+「本次该写哪一份」收在 <code>runtime-log-pack.server.ts</code>。</p>
+<p>此前这里是 <code>COMFYUI_RUNTIME_LOG</code> / <code>OLLAMA_RUNTIME_LOG</code> /
+<code>DRIZZLE_STUDIO_RUNTIME_LOG</code> / <code>APP_RUNTIME_LOG</code> 四个<strong>固定名</strong>常量，写方
+直接追加进同一个文件（ISSUE #1326 的用户原话：「这四份也要改成每个文件只
+存储单次运行的历史，单次里如果执行多次也存放多个文件，这样看起来清晰」）。
+固定名一撤，<code>RUNTIME_LOG_FILES</code>（面板的「来源键 → 文件」表）也随之失去意义
+—— 现在一个来源对应<strong>一目录下的多份</strong>，那一层是 <code>listRuntimeLogFiles()</code>。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-paths.ts:65</li></ul></aside></div>
+<li>Defined in lib/log/log-paths.ts:79</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

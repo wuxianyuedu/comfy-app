@@ -234,7 +234,7 @@ export function DebugChainFooter({
                 ◈
               </span>
               <code
-                className="text-ink-bright truncate font-mono text-[12px]"
+                className="text-ink-bright truncate font-mono text-xs"
                 title={viewedFile}
               >
                 {/* 路径的语义在尾部（哪个文件）—— CSS `truncate` 只留头部，
@@ -307,13 +307,10 @@ export function DebugChainFooter({
           {/* 内容区 */}
           <div className="bg-canvas-deep min-h-0 flex-1 overflow-auto p-0">
             {sourceBusy.busy && (
-              <PageLoading
-                label="正在读取源码…"
-                className="py-10 text-[12px]"
-              />
+              <PageLoading label="正在读取源码…" className="py-10 text-xs" />
             )}
             {!sourceBusy.busy && loadError && (
-              <div className="text-destructive px-4 py-6 text-[12px]">
+              <div className="text-destructive px-4 py-6 text-xs">
                 读取失败：{loadError}
               </div>
             )}

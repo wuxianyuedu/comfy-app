@@ -46,10 +46,16 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
+  PENDING_PLATFORMS,
   SUPPORTED_PLATFORMS,
   VISUAL_DIR,
+  checkRecordingEnv,
+  isPlatformPending,
   isPlatformRegistered,
   missingBaselinesForPlatform,
+  recordingWebserverFor,
+  webserverForEnv,
+  writeFreshness,
 } from "./visual-baselines.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -147,6 +153,14 @@ export function checkLocalBaselines({ root, platform }) {
   const missing = missingBaselinesForPlatform(root, platform);
   if (missing.length === 0) return null;
   const listed = missing.map((f) => `      · ${f}`).join("\n");
+  if (isPlatformPending(platform)) {
+    return (
+      `本机平台 \`${platform}\` 的基线**登记为待重录**（${Object.keys(PENDING_PLATFORMS).join(" / ")}）——\n` +
+      `      这一档缺的是新增的截图名，只能在**这一档的机器上**录：\n` +
+      `        pnpm check:visual:update   # 需先把 \`CI\` 置成与该档基线录制时一致\n` +
+      `      录完连同 \`scripts/visual-baselines.mjs\` 的 PENDING_PLATFORMS 登记一起删掉。缺这几张：\n${listed}`
+    );
+  }
   if (!isPlatformRegistered(platform)) {
     return (
       `本机平台 \`${platform}\` 没有登记过像素基线（仓库登记的是 ${SUPPORTED_PLATFORMS.join(" / ")}）——\n` +
@@ -262,6 +276,64 @@ function runStep(step) {
 }
 
 /**
+ * 跑绿之后记一次**基线新鲜度**账（`scripts/.visual-baseline-freshness.json`，§11.8）。
+ *
+ * 这一步是「linux 档定期跑一次 `pnpm check:visual`」这条纪律的**落点**：账上的日期就是
+ * 「上一次真跑过」的事实，而不是一句「录过就算数」。此前的状态正是后者 —— 入库的
+ * `-linux.png` 有 4 张悄悄过期（与当次环境差 1 像素），而没有任何东西记着这一档
+ * 上一次被跑绿是什么时候。
+ *
+ * 三条边界：
+ *   · **只有检查档记**（`--update` 不记）：录基线本身**不是**自证 —— 「写成功」与
+ *     「像素可复现」是两件事，这一点 §11.8 反复写着。
+ *   · **只有绿了才记**：红着的时候记一条「我跑过」会把「跑过」与「跑绿过」混成一件
+ *     事，而那正是这条账要防的。
+ *   · **当场打印这一档上次是什么时候**：账的价值在于被**看见**，不是被写下来。
+ *
+ * 真正的读写落在 `scripts/visual-baselines.mjs` 的 `writeFreshness` —— **全量 e2e 那一档
+ * 用的是同一个形状**（`scripts/e2e-run.mjs`，账文件 `scripts/.e2e-freshness.json`，
+ * ISSUE #1547）。两条账各留一份「怎么读、怎么算 who、写哪儿」的实现在这里曾经是本仓库
+ * §12.12 的孪生对，而它们的漂移形态很难看：一边把坏 JSON 当成空账（判红、话术正确），
+ * 另一边静默少守一条。这里只留**与像素有关的那两件事**：口径怎么算（`CI` 的真假）、
+ * 以及——`--update` 不记。
+ *
+ * 写账失败（只读挂载等）不算跑像素的失败 —— 像素的结论已经拿到了，返 1 会把两件事
+ * 混成一句「像素档挂了」。所以这里只提示。
+ *
+ * @param {{platform: string, update: boolean}} args
+ * @returns {string | null} 给输出用的一句读数（不记时不返回内容）
+ */
+export function recordFreshness({ platform, update }) {
+  if (update) return null;
+  const { note } = writeFreshness({
+    root: ROOT,
+    kind: "visual",
+    who: gitUser(platform),
+  });
+  const how = `CI=${webserverForEnv(process.env) === "start" ? "true" : ""} pnpm check:visual`;
+  return `${note}（本次口径：\`${how}\`）`;
+}
+
+/**
+ * 记账要用的人名：优先 `GIT_AUTHOR_NAME`（提交身份），退回 `git config user.name`，
+ * 都拿不到就用档名 —— 空着会让这一栏被判红，而它恰好是这条账存在的意义。
+ *
+ * 两条新鲜度账共用同一份推导（与 `writeFreshness` 同因）：各写一套时会出现「像素档记
+ * 的是环境变量、e2e 档记的是 git config」，于是同一个人的两条记录名字不一样。
+ *
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function gitUser(fallback) {
+  return (
+    process.env.GIT_AUTHOR_NAME ||
+    spawnSync("git", ["config", "user.name"], { cwd: ROOT, encoding: "utf8" })
+      .stdout?.trim() ||
+    fallback
+  );
+}
+
+/**
  * 入口与平台的定性说明（起不来时打印，免得只留一行读不出来的东西）。
  *
  * @param {{label: string, kind: "playwright" | "vitest", args: string[]}} step
@@ -294,6 +366,26 @@ function main(argv) {
     );
     return 2;
   }
+  /* 第二问（与缺基线**并列**、不互相替代）：「本机 `CI` 与这一档基线的录制口径一致吗」。
+   *
+   * 为什么录基线档也要拦：口径不符时 `--update` 会**成功**——生成一套看着正常的 PNG。
+   * 它自洽、不会当场红，只在以后某次真差异里混进来、还指不出是它。录基线这一路此前
+   * 正是这层开着的口子（`--update` 刻意不受缺基线那闸拦，那是它的本分；但口径这一条
+   * 跟缺不缺基线无关，两个方向都要拦）。
+   * 检查档同样拦：口径不符时报的 diff 是 dev 指示器那一块，而 `classifyFailure` 只认
+   * 三条实测形态、认不出它，会把人引去改业务代码。 */
+  const envProblem = checkRecordingEnv({
+    platform: process.platform,
+    env: process.env,
+  });
+  if (envProblem) {
+    process.stderr.write(
+      `[pixel-run] ✗ 本机（${process.platform}）的 webServer 口径与该档基线不一致 —— 未启动 webServer / 浏览器\n` +
+        `        定性：${envProblem}\n` +
+        "        规范：docs/standards/11-测试与可观测性.md §11.8\n",
+    );
+    return 3;
+  }
   const runs = planRuns({ update });
   if (dryRun) {
     for (const step of runs) {
@@ -312,10 +404,17 @@ function main(argv) {
     // webServer 走哪条由 `playwright.config.ts` 按 CI 的真假分流，而这条分流决定了
     // 本步要不要先有生产构建 —— 把它打在台面上，省掉一次「先构建」的试错
     // （实测：容器/流水线里 `CI=true` 是常态，人会以为自己没在 CI 上）。
+    // webServer 走哪条由 `playwright.config.ts` 按 CI 的真假分流，而这条分流决定了
+    // 本步要不要先有生产构建、以及**报出来的差异算不算数**（口径不符时的 diff 是
+    // dev 指示器那块，不是界面变形）。把它连「与本档登记口径是否一致」一起打在台面上。
     process.stdout.write(
       process.env.CI
         ? "[pixel-run] webServer：按 CI 口径 → `pnpm start`（需要先有生产构建）\n"
         : "[pixel-run] webServer：本地口径 → `pnpm dev`（无需先构建）\n",
+    );
+    process.stdout.write(
+      `[pixel-run] 口径核对：${process.platform} 档登记为 \`pnpm ${recordingWebserverFor(process.platform) ?? "（未登记）"}\`，` +
+        `本机实走 \`pnpm ${webserverForEnv(process.env)}\`\n`,
     );
     return 0;
   }
@@ -339,6 +438,10 @@ function main(argv) {
             "并在提交里标注「视觉基线已更新：<原因>」\n"
         : "[pixel-run] ✓ 像素档通过（结论仅对当次检出具名；`--update` 才会写基线）\n",
     );
+    /* 跑绿即记账（§11.8 的基线新鲜度账）：**录基线不记**（写成功不是自证）、
+     * **红着不记**（跑过 ≠ 跑绿过）。这一步让「定期跑一次」有了落点。 */
+    const note = recordFreshness({ platform: process.platform, update });
+    if (note) process.stdout.write(`[pixel-run] ${note}\n`);
     return 0;
   }
   process.stderr.write(

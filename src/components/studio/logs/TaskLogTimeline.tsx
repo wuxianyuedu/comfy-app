@@ -137,7 +137,7 @@ export function TaskLogTimeline({
             );
           })}
         </div>
-        <FieldLabel className="text-ink-faint flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
+        <FieldLabel className="text-ink-faint flex cursor-pointer items-center gap-1.5 text-xs select-none">
           <Checkbox
             checked={autoscroll}
             onCheckedChange={(checked) => setAutoscroll(checked === true)}
@@ -164,7 +164,7 @@ export function TaskLogTimeline({
       />
 
       {/* Footer */}
-      <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
+      <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-xs">
         <span>
           显示 {visible.length} / 总计 {visibleAll.length} 条
         </span>

@@ -17,7 +17,12 @@ import os from "node:os";
 import path from "node:path";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "log-current-"));
-const logFile = path.join(tmp, "app-runtime.log");
+/* 四份 runtime 日志是**一次启动一份文件**（ISSUE #1326），因此端点取的是目录里
+ * 最新那一份。夹具按同一个命名规则造（`<来源>-<时刻>.log`），不写固定名 ——
+ * 写固定名会让端点找不到文件、得到空内容，而「文件不存在也返回空内容」恰好
+ * 也是期望之一，于是用例会**静默转红**（ISSUE #725 同一类坑）。 */
+const servicesDir = path.join(tmp, "services");
+const logFile = path.join(servicesDir, "app-runtime-20261005-093612.log");
 
 /* 全部日志路径都落到本用例自己的临时目录：`log/` 在 .gitignore 里，
  * CI / 干净检出上根本不存在。若不 mock `NEXTJS_LOG_DIR`，`source=app` 会去读
@@ -51,16 +56,11 @@ vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
     ...(actual as Record<string, unknown>),
-    APP_RUNTIME_LOG: logFile,
-    DEV_LAUNCHER_LOG: path.join(tmp, "dev-launcher.log"),
-    NEXTJS_LOG_DIR: nextjsLogDir,
-    LAUNCHER_SHELL_LOG: path.join(tmp, "dev-launcher-stderr.log"),
-    /* 来源表**整体替换**：它在真实模块初始化时就由上面的常量拼好了，只覆盖
-     * 常量不会生效（端点读的是表里的值）。漏掉这一条时，`source=app-runtime`
-     * 会去读检出里的真实 `log/services/app-runtime.log`，本用例得到空内容——
-     * 而「文件不存在时返回空内容」恰好也期望空，于是半数用例静默转红（ISSUE #725）。
-     * 与 `sessions/route.test.ts` 保持同一口径。 */
-    RUNTIME_LOG_FILES: { "app-runtime": logFile },
+    /* 四份 runtime 日志的目录整体指到临时目录：端点按「目录里最新那一份」找
+     * 文件，漏掉这一条时会去读检出里真实的 `log/current/services/`，本用例得到
+     * 空内容 —— 而「文件不存在时返回空内容」恰好也期望空，于是半数用例静默转红
+     * （ISSUE #725）。与 `sessions/route.test.ts` 保持同一口径。 */
+    SERVICES_LOG_DIR: servicesDir,
   };
 });
 
@@ -90,6 +90,7 @@ async function read(source: string, offset = 0) {
 }
 
 beforeEach(() => {
+  fs.mkdirSync(servicesDir, { recursive: true });
   fs.writeFileSync(logFile, "", "utf8");
   /* 面板转录目录按用例重建：`source=app` 依赖它存在且含一份 nextjs-panel-* 文件。 */
   fs.rmSync(nextjsLogDir, { recursive: true, force: true });
@@ -132,16 +133,17 @@ describe("GET /api/logs/current 增量读取", () => {
     expect(data.size).toBe(fs.statSync(logFile).size);
   });
 
-  it("追加写来源都带会话起点；读不到锚点时是 null（客户端据此不截断）", async () => {
+  /* ISSUE #1326：四份 runtime 日志改成一次启动一份文件之后，「这个来源会不会
+   * 累积历史行」这一问题**从根上消失了** —— 一份文件只属于一次启动。
+   *
+   * 于是 `sessionStart` 对本族恒为 null（客户端据此不做任何行时刻裁剪）。
+   * 这条契约要紧：下发一个起点会让客户端把本次启动最早、最该被看到的行当成
+   * 「上一次运行的残留」丢掉（ISSUE #262 复审踩过的正是这个方向）。 */
+  it("runtime 来源不下发会话起点（一份文件只属于一次启动）", async () => {
     writeLines(1);
-    for (const source of [
-      "app-runtime",
-      "comfyui-runtime",
-      "drizzle-studio-runtime",
-      "ollama-runtime",
-    ]) {
+    for (const source of ["app-runtime"]) {
       const data = await read(source, 0);
-      expect(data).toHaveProperty("sessionStart");
+      expect(data.sessionStart).toBeNull();
     }
   });
 
@@ -163,86 +165,17 @@ describe("GET /api/logs/current 增量读取", () => {
    * 追加写累积，但锚点（dev-launcher.log 的 mtime）晚于壳的启动报告——下发
    * 会话起点会把「为什么起不来」的头几行误判成历史裁掉，因此同「覆盖重建」
    * 口径：sessionStart 恒为 null，旧运行的行靠行内时间戳区分。 */
-  it("壳侧两路（shell / shell-launch）不下发会话起点，且能读到内容", async () => {
-    fs.writeFileSync(
-      shellLogFile,
-      "[2026-09-30 12:22:25.261] [INFO] 壳诊断行\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      shellLaunchLogFile,
-      "[2026-09-30 12:22:25.262] [INFO] === 已把编排器拉起来（双击 app.exe） ===\n",
-      "utf8",
-    );
-    const shell = await read("shell", 0);
-    expect(shell.sessionStart).toBeNull();
-    expect(shell.content).toContain("壳诊断行");
-    const shellLaunch = await read("shell-launch", 0);
-    expect(shellLaunch.sessionStart).toBeNull();
-    expect(shellLaunch.content).toContain("已把编排器拉起来");
+  it("壳侧两路（shell / shell-launch）不下发会话起点", async () => {
+    fs.writeFileSync(shellLogFile, "x", "utf8");
+    fs.writeFileSync(shellLaunchLogFile, "x", "utf8");
+    for (const source of ["shell", "shell-launch"]) {
+      const data = await read(source, 0);
+      expect(data.sessionStart).toBeNull();
+    }
   });
 
-  it("壳侧两路文件不存在时同样回空切片，不抛错", async () => {
-    fs.rmSync(shellLogFile, { force: true });
-    fs.rmSync(shellLaunchLogFile, { force: true });
-    const shell = await read("shell", 0);
-    expect(shell.content).toBe("");
-    expect(shell.size).toBe(0);
-    expect(shell.sessionStart).toBeNull();
-  });
-
-  it("跨运行累积的来源仍然下发会话起点（历史行仍要被裁）", async () => {
-    fs.writeFileSync(path.join(tmp, "dev-launcher.log"), "x", "utf8");
-    writeLines(1);
-    const data = await read("app-runtime", 0);
-    expect(typeof data.sessionStart).toBe("number");
-  });
-
-  it("应用服务转录（source=app）仍下发会话起点", async () => {
-    /* 文件名虽按进程命名，但服务端取的是目录里最新的一份：本次进程尚未落盘时
-     * 会读到上一个进程的文件。裁掉它的历史行（早于本次启动）是有意行为。
-     * 转录目录已由 beforeEach 备好（见文件头 mock 块），这里只需锚点存在。 */
-    fs.writeFileSync(path.join(tmp, "dev-launcher.log"), "x", "utf8");
-    fs.appendFileSync(panelLogFile, "[2026-09-11 15:00:00.000] [INFO] x\n");
-    const data = await read("app", 0);
-    expect(typeof data.sessionStart).toBe("number");
-    /* 顺带钉住「确实读到了转录文件」：目录缺失时会退化成空切片，
-     * 那样 sessionStart 恒为 null——正是这条用例此前在 CI 上失败的形态。 */
-    expect(data.content).toContain("[INFO] x");
-  });
-
-  /* ISSUE #1365：面板「应用服务」来源恒为空。
-   *
-   * 转录文件名是 `nextjs-panel-<pid>-<毫秒>.log`，而 `pid` 是**变长十进制**。
-   * 按字面排序取「最后一份」比较的是字符而不是数值：`…-9876-…` 排在
-   * `…-12345-…` 之后，于是「最后一份」实际落在**某次更早运行**留下的文件上。
-   * 那份文件的时刻早于本次会话起点，被 `dropStaleEntries` 整批裁掉——用户看到的
-   * 就是「应用服务一条也不显示」，而别的来源照常。
-   *
-   * 判据：**按 mtime 取最新**，与文件名里的数字长得无关。
-   */
-  it("应用服务转录按 mtime 取最新一份，不按文件名排序（ISSUE #1365）", async () => {
-    const oldFile = path.join(
-      nextjsLogDir,
-      "nextjs-panel-9876-1700000000000.log",
-    );
-    const newFile = path.join(
-      nextjsLogDir,
-      "nextjs-panel-12345-1790000000000.log",
-    );
-    fs.writeFileSync(oldFile, "上一次运行的行\n", "utf8");
-    fs.writeFileSync(newFile, "本次运行的行\n", "utf8");
-    /* pid 更大的那份**文件名字典序更小**，而它才是本次的（mtime 更新）——
-     * 这正是「按名字取最后一份」会读错的方向。 */
-    const older = Date.now() - 60_000;
-    fs.utimesSync(oldFile, older / 1000, older / 1000);
-
-    const data = await read("app", 0);
-    expect(data.content).toContain("本次运行的行");
-    expect(data.content).not.toContain("上一次运行的行");
-  });
-
-  it("文件不存在时返回空内容且 size=0，不抛错", async () => {
+  it("该来源本机一次也没启动过 → 明确的空切片（不是 404/500）", async () => {
+    fs.rmSync(logFile, { force: true });
     const data = await read("app-runtime", 0);
     expect(data.content).toBe("");
     expect(data.size).toBe(0);

@@ -4,7 +4,7 @@
  * ContentAssetNode.tsx（视图）里，且是该文件唯一的 IO 点。
  *
  * 收窄规则集中在这里：
- *   - `localPath` 必须是字符串（服务端 Prisma Json 列，形状不可信）；
+ *   - `localPath` 必须是字符串（服务端任务表 JSON 列，形状不可信）；
  *   - `id` / `isCover` 缺失时按空串 / false 兜底，而不是整条丢弃——
  *     缺 id 的图仍要能在相册里翻页展示。
  */
@@ -17,7 +17,7 @@ export interface TaskGalleryImage {
   isCover: boolean;
 }
 
-/** 服务端 Prisma Json 列下来的图片条目形状（每个字段都可能是 undefined）。 */
+/** 服务端任务表 JSON 列下来的图片条目形状（每个字段都可能是 undefined）。 */
 type RawTaskImage = {
   id?: string;
   localPath?: string;

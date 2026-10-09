@@ -38,6 +38,10 @@
 --color-edge-hub-dot
 --color-encap-pending
 --color-foreground
+--color-glow-brand
+--color-glow-danger
+--color-glow-success
+--color-glow-warning
 --color-info
 --color-info-strong
 --color-ink

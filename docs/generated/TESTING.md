@@ -33,14 +33,19 @@ pnpm test:visual        # 只跑像素基线那一层
 - 配置文件：`vitest.config.ts`；扫描面 `src/**/*.test.{ts,tsx}` 与 `tests/**/*.test.{ts,tsx}`
 - 默认环境：node（纯函数/store，不依赖 DOM）
 - 组件渲染：测试文件头 `// @vitest-environment jsdom`
-- **为什么不用 `projects` 按目录分档**（vitest 5 支持，且能省掉那些文件头）：
-  目录与环境的对应关系**不成立**。实测 `src/components/**` + `src/app/**` 共 231 份
-  用例里有 **70 份不带 jsdom 文件头**、且**全是 `*.test.ts`**（配置推导 / store /
-  `src/app/api/**` 路由），它们今天在 node 下跑、也不该被拖进 jsdom；反过来
-  `src/lib/**` 里有 18 份要 jsdom。按目录分档 = 这 70 + 18 份要么被放错环境、
-  要么退回逐文件覆盖，**省下的只是文件头，换来的是一层「目录名改了、环境就悄悄变」
-  的隐式约定**（而且 jsdom 下跑纯逻辑只是变慢，不报错 —— 静默的那一侧）。
-  当前「全局 node + 逐文件 opt-in」与真实依赖一一对应，维持；判据见规范 §11.17。
+- **环境档：`projects` 按目录声明两档（node / jsdom）**，要 DOM 的用例继续在文件头写
+  `// @vitest-environment jsdom`（文件头**优先级更高**，只决定自己那一份）。
+  ⚠️ 这里曾经写着「为什么不用 `projects` 分档 …… 当前全局 node + 逐文件 opt-in 与真实
+  依赖一一对应，维持」—— 那是**上一轮的结论，已被采纳的那次改动推翻**：分档做了，
+  但**没有**按目录一刀切（那会把 260 份 node 用例误升进 jsdom，而 jsdom 下跑纯逻辑
+  不报错、只是变慢，是静默的那一侧）。保留文件头正是「不按目录一刀切」那一半。
+  完整账（147 份冗余头已删 / 37 份承重留、静默失效的 glob 两条、
+  `scripts/check-test-environment.cjs` 的三条判据）见规范 §11.17。
+- **两个 project 共用的那几项写在根 `test` 上，由 inline project 默认继承**
+  （`setupFiles` 漏了就是整仓 `toBeInTheDocument` 全变 `Invalid Chai property`）——
+  vitest 5 的 inline project 默认继承本文件 `test` 这一层，`extends: false` 才是关掉它的
+  开关。**不要**再把共享项复制成两份 spread；口径、负对照与验收手法见规范 §11.17.3，
+  判据是 `tests/test-config-inheritance.test.ts`。
 - 路径别名：`@/*`、`~/*` → `src/*`；`server-only` 在测试里换成空实现
   （`tests/stubs/server-only.ts`，构建期的硬约束不受影响）
 - 测试文件与源码同目录，命名 `*.test.ts(x)`
@@ -158,7 +163,11 @@ pnpm test:e2e
   「仓库里那几套基线齐不齐」，不是「你正坐的这台能不能跑」；后者由上面那条前置判决答，
   清点内核同源（`scripts/visual-baselines.mjs`），平台登记口径也在那里。
   **基线按 webServer 口径录**：dev 与 start 的像素不同（dev 指示器那块 mask 目前遮不住），
-  在某一档跑像素时 `CI` 的真假要与该档录制时一致。
+  在某一档跑像素时 `CI` 的真假要与该档录制时一致。**这条现在有数据和判据**：每档录于哪条
+  口径登记在 `scripts/visual-baselines.mjs` 的 `PLATFORM_RECORDING`（win32 = `dev`、
+  linux = `start`），`pnpm check:visual` 起任何东西之前先核本机 `CI` 与它一致不一致
+  （不一致直接拦下、给出置法；`--dry-run` 会把两侧都打出来）。先在 Windows 上按 `dev` 口径
+  录 win32 那几张，再成套提交。
 - 要**新加/恢复一档平台**（例如某档已被删过）时，姿势固定是「在该档用**当前** spec
   `--update-snapshots` 重录成套 PNG + 同批把该平台加进 `SUPPORTED_PLATFORMS`」，
   **不是把旧 PNG 贴回来**（旧图录于别的界面形态，贴回去就是一份对不上现状的账）。
@@ -173,6 +182,19 @@ pnpm test:e2e
   ```
   重录后在 PR 描述标注「视觉基线已更新：<原因>」。失败 actual/diff 产物在
   `test-results/`（已 gitignore）。
+- ⚠️ **每一档基线都要有主**（`scripts/.visual-baseline-freshness.json`）：`--update-snapshots`
+  **总是绿**（它把基线改成当次实况），所以「录了一次」不等于「像素可复现」—— 而「录过一次就
+  再没人碰过」也完全可能（实测：入库的 `-linux.png` 有 4 张悄悄过期，与当次环境差 1 像素）。
+  现在每一**登记**档都有一条新鲜度记录，写清**谁 / 什么时候 / 按哪条命令复核的**，
+  由 `pnpm check:visual` **跑绿即记**（`--update` 不记：写成功不是自证）。pre-commit 的
+  `visual-freshness-gate.mjs` 判「每档都有主、且写得清」；缺几张基线的档由
+  `PENDING_PLATFORMS` 顶着、不要求这条记录。钩子**不跑像素**（起 webServer + 浏览器会与
+  A/B/C/D 抢资源）。
+- **全量 e2e 那一档多一条「每天首次自证」**（`scripts/.e2e-freshness.json`）：它不像像素档
+  那样只判「有主、写清」，而是按本地日历日判「**当天的第一次提交**带没带一次自证」——
+  出路两条：`pnpm test:e2e` 跑绿即记，或 `node scripts/e2e-run.mjs --skip "<理由>"`
+  记一条写明理由的豁免（占位理由被拦）。当天已有凭证 ⇒ 零输出放行；账文件还没入库时
+  只提醒、不阻断。口径与四条边界见规范 §11.8。
 - 像素档**不在 `pnpm check:all` 里**：它要起 webServer + 浏览器，而结论只在录过基线的那台
   机器上成立（基线名带平台）—— 要跑就显式点名（Windows 侧同一动作是
   `scripts/quality-gate.ps1 -Mode visual`，登记在 launch-and-build §9.5 的对照表）。
@@ -193,6 +215,28 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
 **快照本身没被禁** —— 禁的是「拿快照当 DOM 结构基线」。大块且需要人工 review 的
 **真实产物**（生成物、结构清单）用 `toMatchFileSnapshot`（规范 §11.9「快照形态的选择」
 与 §11.9.1），基线是一份能独立打开、能单独 diff 的真文件。
+
+### 并发档位（`it.concurrent`）：量完决定不铺开
+
+**默认不用并发档**（完整口径与实测矩阵见规范 §11.19）：
+
+- **它不是免费的旋钮**：同一件事（起一个睡 300ms 的子进程）× 24 条 —— 同步
+  `spawnSync` 串行 7.75s → 并发 **7.75s（零收益）**；异步 `execFile` 7.73s → **1.71s**。
+  `it.concurrent` 让出的是 JS 栈，不是被阻塞的线程。本仓库门槛自测那批（58 份）用的
+  正是 `execFileSync`，对它们改并发只换来新的耦合面。
+- **它会踩真资源**：`tests/executor-host.test.ts` 全改并发后红 2 条，报
+  `Unable to open connection to local database` —— 模块级 `tmpDirs` 被**别人的**
+  `afterEach` 整个 `rmSync`，某条用例的 SQLite 临时库没了。不只是内存里的变量。
+- **它与 `expect.poll` 机制互斥**：并发档里若同文件其它用例先让出事件循环，
+  `expect.poll` 报 `must be called inside a test`（实测 20/20 红；两条用例次序反转
+  则 0/20 红）。修法：该条改回串行 `it`，或把等待换成 `vi.waitFor`。
+
+真要用的话，文件里必须写明隔离声明（`scripts/check-test-concurrency.cjs` 在
+pre-commit 强制）：
+
+```ts
+// 并发档：每条用例自建 runner，没有模块级可变状态、不共用临时目录
+```
 
 ### 平台 / 宿主依赖：用 fixture 表达，不用包装函数
 
@@ -230,7 +274,9 @@ platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
 
 - [ ] **没有平台侧兜底**：#623 之后不跑流水线，唯一自动化是本地钩子（`--no-verify` 可绕）。
       口径与出路见规范 §13.5.3 / §13.5.4（按需召唤评审 NPC），别再补「看起来在守门」的配置。
-- [ ] **E2E 没有自动执行者**：在本地手动档（`pnpm test:e2e`）。视觉那一层**有本地判据**：
+- [ ] **E2E 没有**「每次提交都跑」的**执行者**：在本地手动档（`pnpm test:e2e`）；
+      全量 e2e 那条「每天首次自证」（上面 §「每一档基线都要有主」那一节）只保证
+      「一天至少有人跑过一次」，不等于每次提交都跑。视觉那一层**有本地判据**：
       `tests/visual-baseline-pairing.test.ts` 在提交前的固定守护清单里，且
       `scripts/visual-gate.mjs`（pre-commit D 组）在暂存命中 `e2e/visual/**` 时判「这次提交带不带
       像素判决」—— 但它判的是**基线的齐全/入库/平台登记**，不是「界面像素有没有变形」：

@@ -87,6 +87,13 @@ const WorkflowLibrary = dynamic(
   () => import("~/components/studio").then((mod) => mod.WorkflowLibrary),
   { ssr: false },
 );
+/* 控制台（ISSUE #1327）：与历史 / 队列同族（都是「项目无关的全局视图」），
+ * 只在进入该视图时才拉。 */
+const ConsoleView = dynamic(
+  () =>
+    import("~/components/console/ConsoleView").then((mod) => mod.ConsoleView),
+  { ssr: false },
+);
 
 /* 客户端上懒加载更重的画布 / 影片编辑器（ReactFlow 等）。 */
 const FilmStudio = dynamic(
@@ -379,6 +386,9 @@ export default function WorkspacePage() {
 
       case "workflows":
         return <WorkflowLibrary onUse={handleUseWorkflow} />;
+
+      case "console":
+        return <ConsoleView />;
 
       case "outputs":
         return <ProjectOutputs />;

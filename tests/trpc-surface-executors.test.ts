@@ -8,7 +8,7 @@
  * （project / task / setting / material / film / model / llm / skill /
  * workflowModel / generate / run），反复撞见同一个断层 —— **router 挂了、
  * 也能调通、但没有任何东西调用过它**。这种口坏掉时全绿：
- *  · `train.cancel`（炼丹功能已整体废弃删除）自 Prisma→Drizzle 迁移起每次都 500
+ *  · `train.cancel`（炼丹功能已整体废弃删除）自数据层迁移起每次都 500
  *    （台账 F13），而它零执行者，所以那句 500 从来没有变成任何一条红；
  *  · `customNode.list` 把 `nodes` 写死成 `[]`、还顺手把整个 settings 回给客户端
  *    （本机路径与开关状态），零执行者、零消费方；

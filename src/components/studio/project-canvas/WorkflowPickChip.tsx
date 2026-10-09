@@ -40,7 +40,7 @@ export function WorkflowPickChip({
       triggerTitle="选择工作流"
       align="start"
       contentClassName="w-70 py-1"
-      triggerClassName="border-primary/35 bg-node-accent h-6 min-w-0 flex-1 rounded-lg border px-2.5 text-[12px]"
+      triggerClassName="border-primary/35 bg-node-accent h-6 min-w-0 flex-1 rounded-lg border px-2.5 text-xs"
       trigger={
         <span
           className="text-ink-bright min-w-0 flex-1 truncate text-left font-semibold"

@@ -137,7 +137,7 @@ function PortRowString({
     <div className="flex h-21.5 flex-col gap-1.5 py-1.5">
       <div className="flex h-4 items-center justify-between gap-2.5 pr-3.5 pl-3.5">
         <span
-          className="text-ink-bright text-[12px] font-medium"
+          className="text-ink-bright text-xs font-medium"
           style={{ fontFamily: "var(--font-sans)" }}
         >
           {label}
@@ -168,7 +168,7 @@ function PortRowInt({
   return (
     <div className="flex h-8.25 items-center gap-2.5 pr-3.5 pl-3.5">
       <span
-        className="text-ink-bright text-[12px] font-medium"
+        className="text-ink-bright text-xs font-medium"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
@@ -177,7 +177,7 @@ function PortRowInt({
       <input
         readOnly
         defaultValue={value}
-        className="border-border-strong bg-canvas-deep text-ink-bright h-5.25 w-35 rounded border px-2 text-right text-[12px] tabular-nums outline-none"
+        className="border-border-strong bg-canvas-deep text-ink-bright h-5.25 w-35 rounded border px-2 text-right text-xs tabular-nums outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
       <PortChip type={type} />
@@ -191,7 +191,7 @@ function PortRowOutput({ label, type }: { label: string; type: string }) {
     <div className="flex h-7 items-center gap-2.5 pr-3.5 pl-3.5">
       <div className="flex-1" />
       <span
-        className="text-ink-bright text-[12px] font-medium"
+        className="text-ink-bright text-xs font-medium"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
@@ -256,7 +256,7 @@ export function WorkflowNodeArdot() {
           {/* Chip 1：本机（位置）· 绿点+本机+▾ */}
           <Button
             variant="outline"
-            className="border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-normal"
+            className="border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-normal"
           >
             <span
               aria-hidden
@@ -279,7 +279,7 @@ export function WorkflowNodeArdot() {
           {/* Chip 2：image_z_image_int8（具体工作流名）· flex-1 撑满中间 */}
           <Button
             variant="outline"
-            className="border-primary/35 bg-node-accent flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-normal"
+            className="border-primary/35 bg-node-accent flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-normal"
           >
             <span
               className="text-ink-bright min-w-0 flex-1 truncate text-left font-semibold"
@@ -298,7 +298,7 @@ export function WorkflowNodeArdot() {
           {/* Chip 3：T2I（类型，单独下拉，最右）· 紫描边加深强调可切换 */}
           <Button
             variant="outline"
-            className="border-primary/55 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-normal"
+            className="border-primary/55 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-normal"
           >
             <span
               className="text-ink-bright font-medium"

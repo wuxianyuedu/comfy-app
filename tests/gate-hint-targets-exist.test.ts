@@ -163,17 +163,19 @@ describe("门禁脚本里的路径字面量必须存在", () => {
    */
   it("产物根例外项还在守东西：三条登记理由都能复算", () => {
     expect(PRODUCT_ROOT_LITERALS.length).toBeGreaterThan(0);
+    /* 软断言：一张例外表逐条复算 —— 过期的条目要一次全列出，
+       否则「删一条、再发现下一条」（§11.18）。 */
     for (const entry of PRODUCT_ROOT_LITERALS) {
       const basename = path.posix.basename(entry.path);
-      expect(
+      expect.soft(
         quotedRepoPaths(sourceOf(entry.script)),
         `例外失效：${entry.script} 里已经没有字面量 ${entry.path} —— 把这条例外从表里删掉`,
       ).toContain(entry.path);
-      expect(
+      expect.soft(
         sourceOf(entry.generatedBy),
         `例外失效：${entry.generatedBy} 已经不再产出 ${basename} —— 登记理由不成立`,
       ).toContain(basename);
-      expect(
+      expect.soft(
         existsSync(path.join(ROOT, entry.path)),
         `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从产物根例外表里删掉`,
       ).toBe(false);

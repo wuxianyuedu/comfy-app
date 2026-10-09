@@ -7,7 +7,7 @@ import type * as ImportSourceModule from "~/lib/comfyui/importSource";
 /**
  * workflow.router 集成测试。
  *
- * mock 边界：~/server/db（内存 Prisma 替身，见 tests/helpers/test-db.ts）、
+ * mock 边界：~/server/db（内存数据库替身，见 tests/helpers/test-db.ts）、
  * ~/server/better-auth（getSession）、~/lib/core/logger（静音）、
  * ~/lib/envfile（屏蔽真实 .env 的 LOCAL_WORKFLOWS_PATH）、
  * ~/lib/comfyui/importSource（本地文件导入/重导入，避免真实磁盘依赖）、

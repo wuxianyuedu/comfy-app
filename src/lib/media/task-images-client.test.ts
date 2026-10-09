@@ -1,4 +1,4 @@
-// 任务产物图片列表的收窄规则单测。Prisma Json 列形状不可信，这里的
+// 任务产物图片列表的收窄规则单测。任务表 JSON 列形状不可信，这里的
 // 「缺 id 的图仍要能翻页」「localPath 非字符串的行整条丢弃」是硬规则。
 
 import { afterEach, describe, expect, it, vi } from "vitest";

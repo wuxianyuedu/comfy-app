@@ -736,6 +736,15 @@ throw，由 dev-launcher 把结论写进 `run/launch-status.json`（启动页显
    > 本步与 §2.1 门禁共用 `corepack.mjs` 的探测与重建（规范 §9.5「一份逻辑两端复用」）：
    > 探测失败**不在这里二次解释** —— 门禁已给过「不可用 + 怎么修」，这里不再叠一句。
    > 若已先经过 §2.1 门禁，此处通常到不了该分支。
+   >
+   > **本步不再真的再问一次 pnpm**（ISSUE #1516）：`probePnpm()` 带进程内记忆化
+   > （`probeMemo`，键 = 平台 + root + PATH），上面 §2.1 门禁刚问过的结论直接复用。
+   > 此前两步各 `spawnSync` 一次 `pnpm -v`，Windows 上 corepack shim 冷启要经 node
+   > 中转到 pnpm，**白付 1~3s**（实测日志：「端口检查」到「pnpm 版本匹配」空 2.77s）。
+   > 唯一能让结论作废的动作是 `preparePnpm()`（它换的就是 pnpm 的激活版本），
+   > 由它在 spawn **之前**调 `clearPnpmProbeCache()` —— 否则对齐后的复核会拿到
+   > 「准备之前」的结论。新增任何「问 pnpm 版本」的步骤都走 `probePnpm()`，不要
+   > 自己 `spawnSync`。
 5. **node_modules 健康检查 + 补装（编排器侧）**：`.modules.yaml` 与 `.bin/next` 缺失，
    或关键依赖目录（`typescript`、`@typescript/native`、`next`）**存在但为空**
    （pnpm 策略拒装/中断安装的典型残留——空目录会让 tsc 垫片找不到入口），即视为残缺。
@@ -1046,7 +1055,10 @@ log/
 │  ├─ nextjs/                   Next dev server 原始输出（按次命名，保留 5 份）
 │  │                            + 应用服务输出转录 nextjs-panel-<boot>.log（面板「应用服务」那一路）
 │  ├─ shell/                    Tauri 壳自持日志（release）
-│  ├─ services/                 常驻服务运行时日志（comfyui / drizzle-studio / ollama，追加写）
+│  ├─ services/                 常驻服务运行时日志（comfyui / drizzle-studio / ollama /
+│  │                            app-runtime）。**一次启动一份文件**：
+│  │                            <来源>-<YYYYMMDD>-<HHmmss>.log（同秒内多次启动再加 -2/-3），
+│  │                            每个来源留最近 20 份（见 §4.1）
 │  ├─ comfyui/                  ComfyUI 通信层原始回执（trace：comfy-cli stdout/stderr、
 │  │                            WS 帧、/history 与 /queue 原文，追加写，见 §4.2）
 │  ├─ tools/                    构建与工具脚本日志、schema-sync.json / schema-sync.log
@@ -1097,41 +1109,121 @@ log/
 | `run/launch-status.json`                                                    | dev-launcher.mjs（进度）+ 壳（常驻快照与失败出口，`write_idle_status` / `mark_launch_failed`） | 结构化启动进度，splash 页展示。壳写两种：**常驻快照**（`fallback: true`，编排器写第一份之前的那 1~2 秒，见 §1.5.1）与**失败**（`phase=error` + 可行动作 + `diagnostics` 路径）；编排器写则权威，`ready === true` 才是就绪判据                                                                                                                                                                                                                                                                                                                                                                                                                                             | —                                                              |
 | 启动页「查看日志」面板                                                      | splash 前端轮询 `get_launch_log`                                                               | dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log（含 `[orchestrator] …`）+ log/current/shell/shell.log（release）的尾部（去 ANSI、限长），启动页实时看执行到哪一步                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | —                                                              |
 | `.next/dev/logs/next-development.log`                                       | Next dev server                                                                                | dev server 内部日志（含锁冲突提示）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Next 自管                                                      |
-| `log/current/services/comfyui-runtime.log`                                          | Next server（src/lib/comfyui/lifecycle.ts）                                                    | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间；每次启动/停止前会写一条 **ANSI 亮色会话横幅**（`▶`/`■` box 分隔线），使多次启动累积的日志能一眼分清会话边界；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/current?source=comfyui-runtime` 实时跟随。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长）                                                                                                                                                                                                                                     | 追加不轮转；接口首次打开只回尾部窗口（1MB，按行对齐，见 §4.1） |
-| `log/current/services/comfyui-keepalive-<ts>.out/.err.log`                          | dev-launcher 保活中介（Start-Process 重定向）                                                  | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进 runtime.log                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 按次命名，不自动清理                                           |
-| `log/current/services/drizzle-studio-runtime.log` `log/current/services/ollama-runtime.log` | Next server（对应 lifecycle / api 路由）                                                       | Drizzle Studio / Ollama 拉起与子进程输出，设置页日志面板跟随（同 comfyui-runtime 模式）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 追加不轮转                                                     |
-| `log/current/services/app-runtime.log`                                              | Next server（src/lib/app-runtime-log.ts）                                                      | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11）。**面板只显示本次运行**：本文件追加不轮转，服务端在轮询响应里带回「会话起点」（dev-launcher.log 的 mtime），面板据此丢弃早于起点的历史行（`src/lib/log-session-scope.ts`，见 §4.1）。**文件侧也有会话边界**：每次应用服务启动时由 `installStreamCapture` 写一条会话分隔横幅（两侧留空行，`src/lib/session-banner.server.ts`），用户直接看文件也能看出本次从哪开始（ISSUE #592） | 追加不轮转                                                     |
+| `log/current/services/comfyui-runtime-<YYYYMMDD>-<HHmmss>.log`                                          | Next server（src/lib/comfyui/lifecycle.ts）                                                    | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间。**一次启动一份文件**（ISSUE #1326）：`beginRuntimeSession()` 在拉起前换一份新的，因此「这个文件属于哪一次启动」由文件本身回答 —— 不再有会话横幅，也不再需要「跨运行累积」那套判据；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/sessions?source=comfyui-runtime` 列出各份（**跨包**：本次运行在前、各历史包在后）并跟随最新那份。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长）                                                                                                                                                                                                                                     | 每个来源留最近 20 份（`pruneRuntimeLogFiles`，启动时静默清）；接口回正文时取尾部窗口（40 万字符，按行对齐，见 §4.1） |
+| `log/current/services/comfyui-keepalive-<ts>.out/.err.log`                          | dev-launcher 保活中介（Start-Process 重定向）                                                  | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进本次启动那一份 runtime 日志                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 按次命名，不自动清理                                           |
+| `log/current/services/drizzle-studio-runtime-<YYYYMMDD>-<HHmmss>.log` `log/current/services/ollama-runtime-<YYYYMMDD>-<HHmmss>.log` | Next server（对应 lifecycle / api 路由）                                                       | Drizzle Studio / Ollama 拉起与子进程输出，设置页日志面板跟随（同 comfyui-runtime 模式，一次启动一份文件）。**关闭动作写进最近一次启动那一份**（`[action] 关闭 Ollama`）—— 它是另一个请求，没有「本次启动」的句柄，新开一份会产出一份只有两行的空文件                                                                                                                                                                                                                                                                                                                                                                                                              | 每个来源留最近 20 份                                           |
+| `log/current/services/app-runtime-<YYYYMMDD>-<HHmmss>.log`                                              | Next server（src/lib/app-runtime-log.ts）                                                      | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11）。**一次应用运行一份文件**：句柄在首次写入时按时刻定下来（应用运行日志的「一次运行」就是本进程的生命周期），**不再需要会话起点裁剪** —— 面板侧 `isSessionScopedOrigin` 的集合因此空了（机制保留，见 §4.1） | 每个来源留最近 20 份                                           |
 | `log/current/comfyui/comfyui-trace.log`                                             | Next server（`src/lib/comfyui/trace.ts`）                                                      | **ComfyUI 通信层原始回执**（诊断通道，ISSUE #216）：comfy-cli 全部 stdout 原始 chunk 与解析后的 JSON 事件、stderr 原始 chunk 与退出时的完整 errBuf、本任务的全部 WS 帧、`/history` 与 `/queue` 的原始 JSON、以及各终局结论（「未找到生成结果」时附带 promptId 与 /queue 快照）。行格式 `[本地时间] [INFO] [trace] <channel> [<taskId>] <内容>`，channel ∈ `cli`/`ws`/`http`/`history`/`session`；单行上限 8000 字符（超出标注 `…(truncated)`），写入失败静默跳过（诊断通道不得把生成带崩）。**只在应用内「创作后端 → 启动日志」之外单独查看**，不参与日志面板轮询（避免大体量原文刷屏，见 §4.2）                                                                          | 追加不轮转                                                     |
 | `log/current/tools/*.log`                                                           | tools/scripts（Log-Common.ps1）与 setup 脚本                                                   | 构建/打包/工具运行日志（build-tauri-release、build-standalone、build-launcher、rebuild-static、comfy-cli-setup 等）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 每次运行覆盖                                                   |
 | `log/current/workshop/generation-<yyyy-mm-dd>.log`                                  | Next server（`/api/workshop/logs`，工坊前端在日志追加时异步上报）                              | **工坊生成执行日志**（JSONL，按天分文件）：角色卡提取 / 分镜提取与 AI 拆镜 / 定妆照生成的发起、模型输入输出、结果与错误。界面上各环节的「执行日志」面板即时展示本次会话，「历史」入口按需拉取落盘记录（跨刷新 / 重启可回看）；写入失败静默，绝不影响生成流程                                                                                                                                                                                                                                                                                                                                                                                                              | 按天分文件（自然轮转）                                         |
-| `log/runs/<日期>_<时分秒>-<runId>/`                                          | dev-launcher.mjs 收尾（`archiveCurrent`）                                                       | **一次运行一个包**：退出时把整个 `current/` 复制过来，再清空 `current/` 的内容（目录本身留着 —— 进程手里的路径不能消失）。包内 `run.json` 是完整的（收尾补上 `endedAt` / `durationMs` / `exitCode` / `crashed`）                                                                                                                                                                                                                                                                                                                                                                                       | 留最近 20 次**或** 7 天内；超 32MB 的单包先压 zip 再删（启动时异步清） |
+| `log/runs/<日期>_<时分秒>-<runId>/`                                          | dev-launcher.mjs 收尾（`archiveCurrent`）                                                       | **一次运行一个包**：退出时把整个 `current/` 复制过来，再清空 `current/` 的内容（目录本身留着 —— 进程手里的路径不能消失）。包内 `run.json` 是完整的（收尾补上 `endedAt` / `durationMs` / `exitCode` / `crashed`）。**包内结构与 `current/` 逐字同构** —— 设置页「启动日志」的下拉据此跨包列各份（§4.1.1）                                                                                                                                                                                                                                                                                                                                     | 留最近 20 次**或** 7 天内；超 32MB 的单包先压 zip 再删（启动时异步清） |
 | `log/latest.txt`                                                            | dev-launcher.mjs 收尾                                                                          | 最近一次**正常完成**的运行目录名。崩溃补做**不覆盖**它 —— 这一栏的语义是「上一次好好结束的是哪一包」，改成崩溃那次的目录名反而让排障的人走错方向                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 每次正常退出覆盖                                               |
 | `log/current/run.json`                                                      | dev-launcher.mjs 启动写、各进程补字段                                                          | 本次运行的环境快照：runId / 启动时刻 / 应用版本 / branch / commit（读 `.git/HEAD`，不 spawn git）/ 启动参数 / 各进程 pid / 结束时刻 / 耗时 / 退出码 / `crashed`。**用户反馈 bug 时第一个要看的文件**（§4.0）                                                                                                                                                                                                                                                                                                                                                                                              | 每次运行覆盖                                                   |
 
-### 4.1 面板「只显示本次运行」的会话边界
+### 4.1 四份常驻服务日志：一次启动一份文件（ISSUE #1326）
 
-`log/current/services/` 下的 runtime 日志（comfyui / drizzle-studio / ollama）与
-`app-runtime.log` 都是**追加不轮转**的：上一次、上上一次运行的内容全留在文件里。
-「应用日志」面板若照单全收，用户打开面板看到的一屏里混着历史运行的行，分不清
-哪条属于本次启动。会话边界由三处配合划定：
+`log/current/services/` 下的四份日志（`comfyui-runtime` / `drizzle-studio-runtime` /
+`ollama-runtime` / `app-runtime`）**一次启动一份文件**：
 
-| 环节     | 位置                                                                  | 职责                                                                                                                                   |
-| -------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 粒度起点 | `dev-launcher.log` 的 mtime                                           | 每次运行都覆盖重建该文件，mtime 即本次启动时刻；读不到（非编排链路）时面板退化为不做截断，多显示几条历史也好过凭空丢掉本次日志         |
-| 起点下发 | `GET /api/logs/current` 的 `sessionStart` 字段                        | **只有跨运行累积的来源**（`app-runtime` / `app`）在响应里带回起点，客户端无需额外请求；覆盖重建的来源（`launcher` / `dev`）恒为 `null` |
-| 行级截断 | `src/lib/log-session-scope.ts` + `log-store.ts` 的 `dropStaleEntries` | **逐来源**判定：只有 `isSessionScopedOrigin` 认的来源比较行时刻，其余一律保留；`setSessionStart` 幂等，页面重载不会把起点往后推        |
+```text
+comfyui-runtime-20261005-093612.log        一次启动一份
+comfyui-runtime-20261005-093612-2.log      同一秒内的第二次启动（-2 / -3 …）
+comfyui-runtime.log                        迁移前的旧固定名（读侧认，排在最旧）
+```
 
-时间戳只能回答「文件有没有在本次运行期间被写过」，回答不了「本次内容从第几个
-字节开始」，因此**不做字节级跳过**——线格式自带毫秒时间戳，按行比较即可精确切分。
-面板每行右侧标注来源（`dev` / `launcher` / `app` / `app-runtime`），便于对照文件排查。
+用户原话：「这四份也要改成每个文件只存储单次运行的历史，单次里如果执行多次也
+存放多个文件，这样看起来清晰。」
 
-**裁剪必须逐来源判定，不能整条时间线一刀切**（ISSUE #262 四审）：会话起点取自
-`dev-launcher.log` 的 mtime，而壳与启动脚本写在它被创建**之前**的行（python / exe /
-cwd / 探测 Node）同样属于本次运行。整条时间线一刀切会把这些行当成历史丢掉——
-用户读到的就是「启动和启动器日志丢失」。覆盖重建的来源不存在「历史行」，
-因此不参与裁剪；完整判据表见规范 07 §7.23.1。
+| 决定 | 理由 |
+| --- | --- |
+| 名字 `<来源>-<YYYYMMDD>-<HHmmss>.log`，**不带冒号** | Windows 下 `:` 非法 —— 按时间戳原样写会让 `appendFileSync` 静默失败（用户只看到文件一直没出现）。字典序 = 时间序，`ls` 一眼就是时间线（与 `runs/` 目录名同一条判据） |
+| 同一秒内第二次启动分叉 `-2` / `-3` | 「启动 → 秒退 → 再启动」在这四份日志上都很常见（端口被占、依赖缺失、用户连点两下）。覆盖会让第一次的失败现场直接消失，而那次恰恰最该看 |
+| 每个来源留最近 **20** 份 | 数据来源从 `runs/` 的保留策略换到了这一条：文件不再随运行包归档（一个运行包里同一个来源可能几十份 —— ComfyUI 被重启多次），跟着 `runs/` 走会让包体量随「服务重启次数」线性膨胀。启动时**异步静默**清（`pruneRuntimeLogFiles`） |
+| 旧固定名 `<来源>.log` 读侧照认 | 用户盘上已经有它。改名迁移把它丢掉比留着一条「更早的日志」糟得多 |
+| **会话横幅（`▶` / `■`）整条撤掉** | 横幅当初解决的是「一份文件里多次启动的行要能分清边界」（ISSUE #592）。边界现在由**文件名**承担，写它等于往没人读的地方写字（§12.15 第二条）。写侧 `session-banner.server.ts` 与色板 `BANNER_ANSI` 一并删除 —— 它们已零消费方 |
 
-**行形态也是契约**（ISSUE #262 六审）：面板把 `dev` / `launcher` 的行按
+**唯一实现**：命名与解析在 `src/lib/log/runtime-log-file.ts`（纯函数），
+「本次该写哪一份」在 `src/lib/log/runtime-log-pack.server.ts`（`openRuntimeLogWriter`
+/ `listRuntimeLogFiles` / `pruneRuntimeLogFiles`）。四个写方
+（`comfyui/lifecycle`、`drizzle-studio/lifecycle`、两条 ollama 路由、
+`app-runtime-log`）**都经这一层**，不自己拼名字 —— 各自拼必然漂（有人写日期、
+有人写时分秒、有人忘掉同秒分叉），而漂开的表现是「日志列表里少了一次启动」。
+`tests/log-run-layout.test.ts` 有一条形态判据扫这四个写方。
+
+**`app-runtime` 的「一次运行」= 本进程的生命周期**：它没有「用户点了启动」这个
+动作，句柄在首次写入时按时刻定下来即可（与 comfyui 那种「同一个应用进程里
+ComfyUI 被反复启动」不同）。
+
+**关停动作写进最近一次启动那一份**：ollama 的停止路由是另一个请求、可能还是另一个
+进程，它没有「本次启动」的句柄 —— 新开一份会产出一份只有两行 `[action] 关闭` 的
+空文件，而用户要看的「为什么关得掉 / 关不掉」本该和那次启动的输出连在一起。
+
+#### 4.1.1 面板读取：列表 = 文件（**跨包**），正文 = 整份
+
+`GET /api/logs/sessions?source=…` 列出该来源的各份（新→旧，上限 30 份并如实回报
+`total`），正文是**选中那一份整份**（超长时取尾部窗口并按行对齐）。
+设置页「启动日志」的下拉切的就是这些份。
+
+**列表跨两处**：
+
+```text
+<最新>  comfyui-runtime-20261005-093612.log                         ← current/（本次运行）
+        comfyui-runtime-20261005-090000.log                         ← current/（本次第 1 次启动）
+        2026-10-04_140000-bbbbbb/comfyui-runtime-20261004-140000.log ← runs/（历史包）
+        2026-10-03_100000-aaaaaa/comfyui-runtime-20261003-100000.log
+<最旧>
+```
+
+| 口径 | 判据 / 理由 |
+| --- | --- |
+| **只列本来源的文件** | 一个目录里四个来源并存，按名字过滤。不按「目录里有什么」 |
+| **本次运行恒在最前**（即使某个历史包的时刻更晚） | 这一栏的语义是「**正在写的这一次**」，位置固定比时刻准确更重要 —— 用户按「最上面那一项」找到当下，是这条下拉最高频的用法 |
+| **其后按次运行分组，包名倒序** | 不是把两边混成一条扁平的时刻序：那会让「本次运行的第 1 次启动」夹在「上一包的第 3 次」与「上一包的第 2 次」之间。用户是拿这个下拉**定位一次运行**的（runId 是 `grep` 的入口、退出形态是「该不该看」的第一判据），分组语义比全局时刻序更有用 |
+| **归档份的 id 带包名**（`<包名>/<文件名>`） | 两个包里同名文件（同一秒内两次启动的 `-2`、迁移前的旧固定名）不带包名会撞成一个 id |
+| **没有该来源份的包不列** | 一台机器上 ComfyUI 可能一直没装（那几次运行根本没有它的份），列进下拉、点开每一项都是空窗口 —— 那不是历史，是噪声 |
+| **上限 30 份 + 如实回报 `total`** | 同一天可能攒几十份（服务被反复重启），跨包之后只会更多。不说 `total` 的话用户会以为「只启动过这些次」—— 界面上看不出任何异常（硬规则 4） |
+| **旧固定名给「更早的日志」文案** | 退回文件名会让 `comfyui-runtime.log` 读起来像是「现在那一份」，而它实际是所有新份之前的全部历史 |
+| **文案三段：时刻 · 退出形态 · runId** | 同一次运行里多次启动的份只有**时刻**能区分；崩溃那次的日志形态与正常退出完全不同（末尾是断的），先标出来用户才知道在看什么；runId 是 `grep <runId> log/current log/runs/` 的**唯一入口**（§4.0 第三条使用姿势），界面上不给就说不清是哪一次 |
+| **`.zip` 形态的包不列** | 保留策略对超 32MB 的包先压再删，读它要解压，而解压的入口在诊断包那一侧。列进来只会让下拉出现一堆点开就报错的项 —— 因此**明确不列** |
+
+**这一层只有一处判据：文件是谁。** 上一版按**应用运行包**列表、正文用
+「当前包 − 前一包」的长度减法去切（依赖「包 N ⊇ 包 N-1」这条来自归档复制语义的
+性质）。改成一次启动一份文件之后，「文件是谁」不依赖任何假设 —— 跨包这一层
+**复用的正是这条**，一条减法都没加回来。
+
+**路径不在端点里拼**：`current/` 那边取 `log-paths` 的 `SERVICES_LOG_DIR` 与
+`listRuntimeLogFiles()`，`runs/` 那边取 `scripts/launcher-core/run.mjs` 的
+`runsDir()`（归档写方的唯一定义）。读方自己拼一遍，两边一旦漂开表现是「归档了但
+界面看不到」——而两边各自都「看起来是对的」（§12.14）。
+
+**顺序判据收在一处**（`runtime-log-file.ts` 的 `compareRuntimeLogFiles`）：
+`current/` 下的份与包里的份**必须**同序，两边各写一遍必然漂。它顺带管住一条真错序：
+同一秒的第二份叫 `…-093612-2.log`，而 `.`（46）比 `-`（45）大一位，**按名字比会把
+它排到第一份前面** ——「启动 → 秒退 → 再启动」在本仓库很常见，那两份的顺序正好被
+读反（用户看到的「第一次的失败现场」实际是第二次的）。
+
+#### 4.1.2 应用日志面板的会话起点：集合空了，机制保留
+
+「应用日志」面板（`/api/logs/current` 那一路）此前靠「行时刻 ≥ 会话起点」把
+`app-runtime` 的历史行挡在面板外。一次启动一份文件之后：
+
+- `app-runtime` 的文件天生只含本次运行；
+- `app`（`nextjs-panel-<pid>-<ts>.log` 转录）一直是每进程一份；
+- 本次进程还没落盘时读到上一个进程文件的情形，由 `bootId` 的**重启判据**
+  （`/api/logs/current` 的 `mismatch`）处理，比行时刻更准。
+
+因此 `isSessionScopedOrigin` 的集合为空，`sessionStart` 对本族恒为 `null`。
+**机制本身保留**（`dropStaleEntries` / `setSessionStart` / 契约字段）：它是「某个
+来源将来变成跨运行累积」时的唯一出口，删掉它会诱使下一个人在面板里再写一遍时间线
+比较。集合为空时函数恒真、零开销，回归用例锁的是**口径**（null/0/undefined 的边界、
+不重排、幂等），而不是「哪个来源现在需要裁」。
+
+覆盖重建的来源（`launcher` / `dev`）与壳侧两路（`shell` / `shell-launch`）**从来就不
+参与裁剪**：会话起点取自 `dev-launcher.log` 的 mtime，而壳与启动脚本写在它被创建
+**之前**的行（python / exe / cwd / 探测 Node）同样属于本次运行 —— 整条时间线一刀切
+会把这些行当成历史丢掉，用户读到的就是「启动和启动器日志丢失」（ISSUE #262 复审）。
+
+**行形态仍是契约**（ISSUE #262 六审）：面板把 `dev` / `launcher` 的行按
 `[时刻] [级别] 正文` 解析，**解析不出来时整行会以原文落板**（级别标记变成正文，
 用户读到的就是「启动 / 启动器两项还是没有日志内容」）。两个来源的行形态因此各自
 写死如下，改 `dev-launcher.mjs` 的 `log()` 时必须同步 `LOG_LINE_RE` / `LAUNCHER_LOG_RE`：
@@ -1144,34 +1236,10 @@ cwd / 探测 Node）同样属于本次运行。整条时间线一刀切会把这
 | `launcher` | 启动脚本 / 壳写下的裸文本           | `[2026-09-13 10:22:24.723] === launcher started ===` | `LAUNCHER_LOG_RE`（时刻即写入时刻，级别恒 info） |
 
 **读取窗口**（`GET /api/logs/current` 的尾部窗口）：追加写文件积累数月后可能是
-几十 MB，首帧只回尾部一段。窗口 1MB（约 7000~12000 行）且**按行对齐**——起点被
-截断时跳过第一个半行。窗口太窄会让面板「越读越旧、时间线从中间开始」，这条踩过
-一次（ISSUE #262），回归用例见 `src/app/api/logs/current/route.test.ts`。
+几十 MB，首帧只回尾部一段。窗口 1MB（约 7000~12000 行）且**按行对齐** —— 起点被
+截断时跳过第一个半行。窗口太窄会让面板「越读越旧、时间线从中间开始」，这条踩过一
+次（ISSUE #262），回归用例见 `src/app/api/logs/current/route.test.ts`。
 合并后的时间线口径（按时刻排序、跨来源去重）见规范 07 §7.17。
-
-> 服务页「创作后端 → 启动日志」「数据库工具 → 启动日志」跟随的是
-> comfyui-runtime / drizzle-studio-runtime，**不在**该机制覆盖范围内：它们是
-> 单个服务的会话视图，靠会话横幅（`▶`/`■`）区分边界，由用户主动点「刷新」。
-
-排障顺序（**先看壳自己写的那份**——编排器还没起来时只有它有内容，见 §1.5.1）：
-`log/current/launcher/shell-launch.log`（壳侧编排链路：启动报告 + `[orchestrator] …`）→
-`log/current/launcher/dev-launcher-stderr.log`（壳层报错 + `[orchestrator] …`）→
-`log/current/launcher/dev-launcher.log`（编排步骤走到哪）→
-`log/current/nextjs/nextjs-stderr-<ts>.log`（dev server 报错）→
-`log/current/shell/shell.log`（壳自持日志，release）。启动页「查看日志」面板已包含前三者的尾部。
-
-**这四样都在 `current/` 下 = 它们全是本次运行的**（路径不用猜）。三条使用姿势：
-
-| 你要做什么 | 去哪 |
-| --- | --- |
-| 看**本次**出了什么问题 | 直接看 `log/current/`，从头读即可 —— 里面没有别人运行留下的行 |
-| **复盘历史上某一次** | `ls log/runs/`（字典序即时间序，最新在最后）→ 进那一包；`log/latest.txt` 是最近一次**正常完成**的目录名。每包里的 `run.json` 自带环境（版本 / 分支 / commit / 参数 / 各 pid / 退出码 / 耗时），**先读它再读日志** |
-| **跨多次运行**找某个现场 | `grep <runId> log/current/ log/runs/` 一把梭 —— 每行都带 `[runId]` 前缀，这是不依赖目录结构的查询入口（§4.0） |
-
-崩溃过的那一包，`run.json` 里的 `crashed: true` / `exitCode: null` 就是判据：它由
-**下一次启动**的 `recoverStaleCurrent()` 补做归档时写下（进程崩了来不及自己归档）。
-用户报 bug 时让他点日志面板的「打包诊断」，拿到的是一个 zip（`current/` + 最近 3 次
-`runs/`），不必再教他挑文件。
 
 ### 4.2 ComfyUI 原始回执通道（trace）与「未找到生成结果」的定位路径
 
@@ -1341,8 +1409,10 @@ zustand 队列，而不是再加一个模块级单例。
 
 | 症状                                                                                                                                                                                                                                                                                                                | 根因（历史案例）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 对策                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **启动日志里有一段没解释的 2~3 秒空档**（用户框出「端口检查」到「pnpm 版本匹配」之间，ISSUE #1516） | **同一次启动里 `pnpm -v` 被问了两遍**：§2.1 工具链门禁（`orchestratePnpm`）问过 pnpm 的版本，两秒后 §9.2 第 4 步的版本一致性对齐（`reconcilePnpmVersion`）又原样问一遍。两次都是 `spawnSync` 冷启 pnpm shim，Windows 上 corepack shim 要经 node 中转到 pnpm，单次 1~3s ⇒ 白付一遍 | 已修：`probePnpm()` 带进程内记忆化（`probeMemo`，键 = 平台 + root + PATH，见 §9.2 第 4 步）。唯一能让结论作废的 `preparePnpm()` 在 spawn 之前 `clearPnpmProbeCache()`。**新增任何「问 pnpm 版本」的步骤都走 `probePnpm()`，不要自己 `spawnSync`**。回归 `tests/dev-launcher-toolchain-gate.test.ts` 的「pnpm 探测的记忆化」一组 |
 | **「配置了 ComfyUI 端口却像没配」**：设置里 `comfyuiPort` 留空 / 填了一个值，应用却连到了**另一个** ComfyUI 实例上——现象是上传素材失败、任务「未找到生成结果」、端口在日志里漂移，而地址栏/探测看起来一切正常（ISSUE #534 P1）                                                                                      | **同一个事实（默认端口）有多份实现**：连接侧 `resolveComfyBase()` 把 `comfyuiPort: 0` 判为「未配置」并用**硬编码**的 8188 作为探测起点；拉起侧 `resolveEffectiveLaunch()` → `buildSpawnArgs()` 同样把 `0` 当「未配置」，**不传 `--port`**，于是 ComfyUI 以它自己的默认端口启动；`lib/core/config.ts` 的 schema 默认值与错误文案里又各写了一遍 8188。四处都写 8188 看着一致，但**没有任何断言把它们绑在一起** —— 单独改一处不会有测试变红。「连错实例」比「连不上」难查得多：8188 上往往真有个别的实例在应答（Comfy Desktop 常驻），`client.ts` 的兜底探测链最后一项正是窗口地址 :8000                                                                                                                                                                                   | 已修（门禁 + 收口）：① 默认端口单点定义在 `src/lib/app-settings.ts` 的 `COMFYUI_DEFAULT_PORT`，连接侧与拉起侧一律 import；② `lib/core/config.ts` 的 ComfyUI 兜底地址改由 `endpoints.ts` 的 `comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)` 拼出，不再写裸地址；③ 设置页 placeholder / 说明文案与错误建议里的端口改为运行时取值（不再各写一遍数字）；④ 新增可失败断言 `scripts/check-comfyui-port-contract.cjs`（pre-commit 与 CI）+ `tests/comfyui-port-contract.test.ts`、`tests/check-comfyui-port-contract.test.ts`。口径见 §9.2 第 5 条                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **Linux / macOS 上 `cargo build --release --features custom-protocol` 报 `error[E0425]: cannot find type IMarshal in module windows_core::imp`（×12）**                                                                                                                                                             | `Cargo.toml` 的 `windows` crate 是**无条件依赖**，`mod single_instance` 也没 `#[cfg(windows)]` 门控 —— 非 Windows 上整棵 windows 树都会参与编译，而 `windows-future` 子 crate 在那边没有该 COM 接口实现。跨平台构建立刻死在编译期，看不出与「壳的单实例保护」有关（ISSUE #489）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 已修：`windows` 挪进 `[target.'cfg(windows)'.dependencies]`；`single_instance.rs` 拆 `#[cfg(windows)]` / `#[cfg(not(windows))]` 双实现（POSIX 用检出内锁文件 + `kill(pid,0)` 存活探测 + `SIGUSR1` 唤起），模块声明不做 cfg、调用点因此不分叉。见 §9.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Linux（含容器版 CI）上改 `src-tauri/src/*.rs` 提交被 `shell-gate` 拦下，提示写「找不到 cargo —— 装了 rustup」**（ISSUE #1555） | 门禁的探针是 `whichCommand("cargo")`，**只问 PATH**；而 CI / 容器镜像的 PATH 是**精修过**的，`~/.cargo/bin` 常常不在 —— 实测本仓开发容器里 `which cargo` 为空，同一台机器上 `~/.cargo/bin/cargo` 与 `~/.rustup/toolchains/<版本>/bin/cargo` 都在。表现是「编不了」，真因是「探针比 cargo 装得更苛刻」 | 已修（ISSUE #1555）：`scripts/shell-gate.mjs` 的 `findCargo()` **PATH 优先、工具链默认安装位兜底**（`CARGO_HOME/bin` → `~/.cargo/bin` → `~/.rustup/toolchains/`，多工具链取版本号最大的）；回退面刻意只收这三处、不许退化成递归磁盘。文案补上「已装却探不到」的指路（PATH 里加上 `$CARGO_HOME/bin`）。见 11 §11.10.4 第 3 项，回归 `tests/shell-gate.test.ts` 的「cargo 寻址」一组 |
 | **`cargo build` 报 ``resource path `binaries/node-x86_64-unknown-linux-gnu` doesn't exist``**                                                                                                                                                                                                                       | `bundle.externalBin` 声明的是「无后缀 basename」，打包器按目标三元组找 `node-<triple>[.exe]`，而 `build-desktop.mjs` 只产出 `.exe`（历史实现按 Windows 单一平台写的）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 已修：`scripts/build-desktop.mjs` 的 `sidecarFileName()` 与 Rust 侧 `sidecar_binary_name()` 同一平台判据（非 Windows 无后缀 + 补可执行位）。见 §9.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **双击 `target\release\app.exe`：启动页写着「项目根未推导出来（`COMFYAPP_PROJECT_ROOT` 为空）」、进度停在 0% 不动**（ISSUE #784 手验反馈·第二轮）                                                                                                                                                         | 项目根推导只查 `exe.parent()`（= `target\release`）一层，而唯一入口的落位让 `package.json` 在**上溯三级**的地方 → 「按文档落位双击」这条路径**永远**推不出项目根。它是壳内所有编排决策的锚点（编排器路径 / 状态文件 / `log/` / 端口推导），一处失败全部落空                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 已修（§1.5.2）：`find_project_root_from()` 从起点**逐级上溯**找检出根（认 `package.json` + `scripts/dev-launcher.mjs`），并在 `run()` 里把结果回填进 `COMFYAPP_PROJECT_ROOT`，让单实例与端口推导锚在同一份检出上。提示也改成可行动（附 exe 位置 / 当前目录 / 检出标志）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **启动页一直转圈、`log/current/shell/` 为空**                                                                                                                                                                                                                                                                               | `resolve_project_root()` 的判据绑在 Windows 专属文件（历史上的 `scripts/dev-launcher.ps1`）上 → POSIX 上恒返回空串。表现完全不像「路径判据错了」，像「启动页坏了」或「日志没写」                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 已修：改判 `package.json` + **编排器的唯一实现** `scripts/dev-launcher.mjs`（`looks_like_project_root`）。见 §9.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -2542,6 +2612,7 @@ sidecar」两种不同形态的失败。
 | 组件工作台 Storybook（开发期预览）                                  | `tools/start/storybook.ps1`                                                                         | `scripts/storybook.mjs`（`pnpm storybook` / `pnpm storybook:build`；契约测试 `tests/storybook-config.test.ts`）                                                              |
 | 故事枚举来源 + 组件覆盖率门禁（cva 返回值 / 漏档 / 覆盖率棘轮）     | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/storybook-check.mjs`（`node scripts/storybook-check.mjs`，契约测试 `tests/storybook-check-script.test.ts`、`tests/storybook-component-coverage.test.ts`）              |
 | 像素回归（Playwright 截图 + 基线配对判据，规范 §11.8）              | `scripts/quality-gate.ps1`（`-Mode visual`，按需档、不在 `all` 里）                                 | `scripts/pixel-run.mjs`（`pnpm check:visual` / `node scripts/pixel-run.mjs`，契约测试 `tests/pixel-run.test.ts`）                                                                |
+| 全量 E2E（普通 spec + 像素档同批，跑绿即记新鲜度账，规范 §11.8）    | `scripts/quality-gate.ps1`（暂无 Windows 入口：它是按需档，`pnpm test:e2e` 在两侧同形）             | `scripts/e2e-run.mjs`（`pnpm test:e2e` / `node scripts/e2e-run.mjs`，契约测试 `tests/e2e-run.test.ts`）                                                                        |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
 而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个

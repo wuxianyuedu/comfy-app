@@ -201,7 +201,7 @@ function OriginSelect({
         size="sm"
         aria-label="按来源筛选"
         title="按来源筛选：展开后每项都标出该类别的条数与本机上的信息 / 警告 / 错误"
-        className="border-border-strong bg-canvas-deep text-ink-field h-8 rounded-lg text-[12px]"
+        className="border-border-strong bg-canvas-deep text-ink-field h-8 rounded-lg text-xs"
       >
         {/* 只写来源名：具体多少条、多少警告在左侧级别按钮与标题徽标上，
             这里再报一遍既不增加信息量，又把本就不宽的行头再挤掉一块。 */}
@@ -256,7 +256,7 @@ function OriginSelect({
                 <SelectItem
                   key={origin}
                   value={origin}
-                  className="gap-0 py-1 pr-7 pl-1.5 text-[12px]"
+                  className="gap-0 py-1 pr-7 pl-1.5 text-xs"
                 >
                   <span className="flex items-center gap-3">
                     <span className="text-ink-bright shrink-0">

@@ -19,11 +19,11 @@ describe("TypeChip", () => {
     const { rerender } = render(<TypeChip>INT</TypeChip>);
     const sm = screen.getByText("INT");
     expect(sm).toHaveClass("text-3xs", "px-1.5", "py-0.5");
-    expect(sm).not.toHaveClass("text-[12px]", "px-1");
+    expect(sm).not.toHaveClass("text-xs", "px-1");
 
     rerender(<TypeChip size="md">FLT</TypeChip>);
     const md = screen.getByText("FLT");
-    expect(md).toHaveClass("text-[12px]", "px-1.5", "py-0.5");
+    expect(md).toHaveClass("text-xs", "px-1.5", "py-0.5");
     expect(md).not.toHaveClass("text-3xs");
 
     rerender(<TypeChip size="xs">IMG</TypeChip>);
