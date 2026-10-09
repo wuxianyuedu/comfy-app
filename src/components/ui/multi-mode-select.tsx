@@ -327,10 +327,9 @@ export function MultiModeSelect({
                   /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`：
                    * 这一行里还有「点 label 选、点默认星切默认」两个动作，合成
                    * 一个 button 会把后者的键语义一起吞掉）。`tabIndex={0}` 让
-                   * 行可聚焦，Enter/Space 由 `simpleKeyHandler` 给 —— 此前这里
-                   * 只写了 `onClick`，注释还写着「键盘由 `option-list-popover`
-                   * 承担」，而本组件**并没有**用那个基元：能聚焦、点了没反应
-                   *（§16.2.4.57 的出口就是为这一档存在的）。 */
+                   * 行可聚焦，Enter/Space 由 `simpleKeyHandler` 给
+                   *（§16.2.4.57 的唯一出口：ARIA 的 `checkbox` 承诺「Space 可
+                   * 切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」）。 */
                   onClick={() => toggle(item.code)}
                   {...simpleKeyHandler(["Space", "Enter"], () =>
                     toggle(item.code),

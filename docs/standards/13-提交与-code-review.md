@@ -217,8 +217,8 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-test-waitfor.cjs      # 测试层 `waitFor` 的边界：只有「等 DOM」与「假定时器窗口内」两种形态该留 `waitFor`，其余等值的一律 `expect.poll`（见 11 §11.14.3）
 ✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮：`it/test/describe.each` 净数不许涨（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
 ✅ node scripts/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
-✅ node scripts/check-click-keyboard.cjs    # 非原生元素上的「鼠标专属」点击：`div`/`li`/`span` 挂了 `onClick` 却没有键等价物（鼠标点得开、键盘进不来），净数不许涨（见 06 §6.11）
 ✅ node scripts/check-form-field-wiring.cjs # `<FormField>` 的标签 ⇄ 控件接线：plain-children 形态下 `htmlFor` 指向不存在的 id（点标签不聚焦、控件没有可访问名），净数不许涨（见 16 §16.2.4.26.1）
+✅ node scripts/check-click-keyboard.cjs    # 非原生元素上的「鼠标专属」点击：`div`/`li`/`span` 挂了 `onClick` 却没有键等价物（鼠标点得开、键盘进不来），净数不许涨（见 06 §6.11 / 16 §16.2.4.29·§16.2.4.57）
 ✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
 ✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
 ✅ node scripts/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）
@@ -1176,6 +1176,18 @@ editor 的 TS 服务报 `ts(2783)`），判据只能落在源码形态上。收�
 改动不进 ② —— 那是你自己的改动，不是「忘了同步」。拿不到分叉点时 ② **判不了**，
 按「未校验」处理，**不是**「无差异」。
 
+**② 有一态是「没什么要查」而不是「判不了」：合并已解完、提交还没落地**（ISSUE #1587 的
+解冲突现场）。`git commit` 落地之前 HEAD **还没动**，于是 `merge-base HEAD origin/master`
+回的仍是**合并前那个分叉点**（合并只是多一个父提交，不移动分叉点），`--is-ancestor` 也看不见
+「远端已经在我的历史里」—— 结果是：解冲突的人把 `origin/master` 合了进来、依赖面与远端
+**逐字一致**，提交却被拦下，而出口让他做的事（「把 `origin/master` 合并进来」）他**刚做完**，
+形成死循环。
+判据取「本次提交是不是一个待落地的合并提交」= `$GIT_DIR/MERGE_HEAD` 在场（git 自己写的
+状态文件，也是「这次提交将有两个父提交、第二个就是被合并的 rev」的唯一权威信号 —— 前面两条
+近似都看不出来，而「暂存区里有 `package.json`」更是无关：自己改依赖也是这个形态）。
+命中时 ② **不判**，且话术打的是 `[已合并]`（「远端那份依赖面就在这次合并里」）而**不是**
+`[未校验]`（那是「没看」，两者读起来正好相反）。
+
 **③ 走 `lockfileDrift`（`launcher-core/worktree.mjs`）这一个出处**，与启动器、
 `quality-gate.mjs` 的依赖预检共用同一份「实质差异」口径。`quality-gate.mjs` 里那份
 自己拼 `diffLockfiles` 的实现已在本条落地时收口 —— 三处边界（「直接读安装时 lockfile」
@@ -1209,11 +1221,13 @@ lockfile 推上去。判据的口径与代价都收在脚本文件头。
 `pnpm install` → 重跑一次本判据。要删 `node_modules` 重装的情形见
 [`../guides/sync-after-pull.md`](../guides/sync-after-pull.md)。
 
-**契约测试**：`tests/deps-freshness-gate.test.ts`（10 条）。它在真 git 仓库上跑
+**契约测试**：`tests/deps-freshness-gate.test.ts`（12 条）。它在真 git 仓库上跑
 （「远端」就是一条引用加一条 reflog，不是可 mock 的模块），覆盖 ② 的正反两向
 （远端改过 → 红 + 明细；远端只改注释 → 不报）、① 的两档（无引用 / 无 reflog 都打
 `[未校验]` 且**不给**「一致」这个结论）、③、`--offline`、`--staged` 的触发面、
-非 git 检出判 2，以及**基准那条**（分叉后自己在分支上加依赖不误报）。
+非 git 检出判 2、**基准那条**（分叉后自己在分支上加依赖不误报），以及**合并那一态**
+（`MERGE_HEAD` 在场 → ② 不判、话术是 `[已合并]`；再补一条反向对照：不在合并时同一比对
+照旧报红，证明放行的是那一态而不是把 ② 关掉了）。
 
 ### 13.6 分支与合并策略
 

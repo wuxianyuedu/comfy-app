@@ -12,17 +12,20 @@
 <li><a href="" aria-current="page">videoTaskRowSchema</a></li></ul>
 <h1>Variable videoTaskRowSchema<code class="tsd-tag">Const</code></h1></div>
 <div class="tsd-signature"><span class="tsd-kind-variable">videoTaskRowSchema</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ZodObject</span><span class="tsd-signature-symbol">&lt;</span><br/>    <span class="tsd-signature-symbol">{</span><br/>        <span class="tsd-kind-property">error</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ZodDefault</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ZodNullable</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ZodString</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">id</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ZodString</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">prompt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ZodDefault</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ZodString</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">status</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ZodString</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">type</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ZodString</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">videoPath</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ZodNullable</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ZodString</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">workflowName</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">ZodDefault</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ZodString</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-signature-type">$strip</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol"> = ...</span></div>
-<div class="tsd-comment tsd-typography"><p><code>task.list</code> 响应行中本客户端要读的那几列（服务端 mapper 的镜像）。</p>
-<p>逐行 Zod 校验（规范 §05「API 响应一律 Zod 校验」，同 <code>history-panel-client</code>）：
-视图对 <code>prompt</code> / <code>workflowName</code> 有字符串假设（<code>.trim()</code>、直接渲染），而这些
-值经的是网络，类型声明在这里不构成任何保证。</p>
-<p><strong><code>videoPath</code> 刻意不给默认值</strong>：这一列判的是「有没有可下载的视频产物」。
-服务端哪天不发它，整行会被丢弃 → 列表变空（用户看得见、且
-<code>tests/task-list-wire-contract.test.ts</code> 当场红）；写成 <code>.default(null)</code> 则
-退化成「每一行都没有封面、也没有下载按钮」——那是用户读不出来的坏法。</p>
+<div class="tsd-comment tsd-typography"><p><code>task.list</code> 一行在本模块的<strong>镜像</strong>（§05「API 响应一律 Zod 校验」）。</p>
+<h2 id="为什么必须逐行校验，而不是一句" class="tsd-anchor-link">为什么必须逐行校验，而不是一句 <code>as</code><a href="#为什么必须逐行校验，而不是一句" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>此前这里是 <code>RouterOutputs[&quot;task&quot;][&quot;list&quot;][&quot;tasks&quot;][number] &amp; { images?: … }</code>
+—— 交叉类型只会<strong>加</strong>列，发现不了「镜像声明的列线上从来不发」。它标成
+optional 之后，「取视频产物路径」那句读到的永远是 <code>undefined</code>，<code>video</code> 于是
+恒为 <code>null</code>：表现不是报错，而是「封面永远是占位图标、下载按钮一次都没出现过」，
+而 tsc / eslint / 全量用例 / 覆盖率门槛<strong>全绿</strong>（ISSUE #1579）。</p>
+<h2 id="镜子照的是什么" class="tsd-anchor-link">镜子照的是什么<a href="#镜子照的是什么" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p><code>videoPath</code> 是<strong>服务端投影</strong>算出来的列（封面是预览图时，<code>cover</code> / <code>mediaType</code>
+都答不出成片在哪）。这一行由 <code>tests/task-list-wire-contract.test.ts</code> 从真
+router 出发经一次 JSON 传输反向核对：镜像声明的每一列，线上都在发。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/media/video-queue-client.ts:25</li></ul></aside></div>
+<li>Defined in lib/media/video-queue-client.ts:32</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -33,7 +36,10 @@
 <ul id="tsd-filter-options">
 <li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
 <li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
-<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details"><a href="#为什么必须逐行校验，而不是一句"><span>为什么必须逐行校验，而不是一句 </span></a><a href="#镜子照的是什么"><span>镜子照的是什么</span></a></div></details></div>
 <div class="site-menu">
 <nav class="tsd-navigation"><a href="../index.html">Comfy-APP-T3 API</a>
 <ul class="tsd-small-nested-navigation" id="tsd-nav-container">

@@ -8,8 +8,8 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
-import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { enterCommit } from "~/components/ui/use-enter-commit";
+import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { filterGroupsByKeyword } from "~/lib/list-filter";
 import type { OptionGroup } from "~/lib/workshop/character-options";
 
@@ -174,10 +174,20 @@ export function AttributeMultiSelect({
                           role="option"
                           aria-selected={on}
                           /* 行可聚焦 + Enter/Space 切换：此前只有 `onClick`，
-                           * 连 `tabIndex` 都没有 —— 键盘用户完全进不来
-                           *（§16.2.4.57 的元素级键出口）。 */
+                           * 连 `tabIndex` 都没有 —— 键盘用户完全进不来。
+                           * `role="option"` 承诺「Space / Enter 可选中」，键判据
+                           * 走 §16.2.4.57 的唯一出口，不手写第二份 `event.key`
+                           * 比较（`simpleKeyHandler` 是属性展开，a11y 规则按
+                           * 字面量找 `onKeyDown` 找不到，豁免登记在
+                           * `scripts/.a11y-rule-ledger.json`）。 */
                           tabIndex={0}
                           onClick={() => toggle(opt)}
+                          /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`：
+                           * 这一行里还有「点 label 选、点默认星切默认」两个动作，合成
+                           * 一个 button 会把后者的键语义一起吞掉）。`tabIndex={0}` 让
+                           * 行可聚焦，Enter/Space 由 `simpleKeyHandler` 给
+                           *（§16.2.4.57 的唯一出口：ARIA 的 `checkbox` 承诺「Space 可
+                           * 切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」）。 */
                           {...simpleKeyHandler(["Space", "Enter"], () =>
                             toggle(opt),
                           )}
