@@ -124,14 +124,17 @@ export function WorkflowImportPanel({
           id="workflow-import-mode"
           labelClassName={IMPORT_LABEL_CLASS}
         >
-          <MultiModeSelect
-            modes={importModes}
-            defaultMode={importDefaultMode}
-            onChange={(ms, def) => {
-              setImportModes(ms);
-              setImportDefaultMode(def);
-            }}
-          />
+          {(field) => (
+            <MultiModeSelect
+              {...field}
+              modes={importModes}
+              defaultMode={importDefaultMode}
+              onChange={(ms, def) => {
+                setImportModes(ms);
+                setImportDefaultMode(def);
+              }}
+            />
+          )}
         </FormField>
       </div>
 

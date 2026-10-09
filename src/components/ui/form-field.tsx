@@ -133,11 +133,21 @@ export function FormField({
     ...(errorId ? { "aria-describedby": errorId } : {}),
   };
 
+  /* `htmlFor` 只在**真的接得上**时才给：`children` 是 render-prop 时，
+   * `fieldId` 由调用处 spread 到控件上，箭头指得到；否则箭头会悬空
+   * （标签点不动、读屏器读出孤立标签文本），比不给 `htmlFor` 更坏。
+   *
+   * 这一档存在的理由是「标签行 + 说明文字，控件在别处」——如
+   * `FilmStudioPropertyPanel` 的只读展示行、`LLMContext` 的按钮组
+   * （控件是多个按钮，没有一个能被 `htmlFor` 指到）。这类场景的
+   * `label` 是**小标题**不是字段标签，语义上也不该带 `htmlFor`。 */
+  const wiresControl = typeof children === "function";
+
   return (
     <Field className={cn("min-w-0 gap-0", className)}>
       {label != null && (
         <FieldLabel
-          htmlFor={fieldId}
+          {...(wiresControl ? { htmlFor: fieldId } : {})}
           className={cn(
             "text-ink/80 mb-1.5 block w-full text-sm font-medium",
             labelClassName,

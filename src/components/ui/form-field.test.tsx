@@ -80,19 +80,35 @@ describe("FormField", () => {
     );
   });
 
-  it("children 可以是普通节点（非 render-prop 的落点）", () => {
+  /* 「小标题」形态：控件在别处（或多个控件，如按钮组），没有一个能被
+   * `htmlFor` 指到。这一档下**不许**给 `htmlFor` —— 给了就是一个指向
+   * DOM 里不存在的 id 的悬空箭头，比不给更坏（读屏器读出孤立标签文本）。
+   * 判据 `scripts/check-form-field-wiring.cjs` 把这一档记在基线里。 */
+  it("children 是普通节点时不给 htmlFor（箭头会悬空）", () => {
     render(
       <FormField label="用途" id="k">
         <div data-testid="ctl" />
       </FormField>,
     );
     expect(screen.getByTestId("ctl")).toBeTruthy();
+    // 标签渲染出来了，但没有 `htmlFor` —— 它指不到任何控件。
+    expect(screen.getByText("用途").getAttribute("for")).toBeNull();
   });
 
-  it("可省略 children：标签行 + hint 的小标题形态（行编辑器落点）", () => {
+  it("可省略 children：标签行 + hint 的小标题形态不给 htmlFor", () => {
     render(<FormField label="请求体额外字段" hint="值可为文本 / 数字" />);
     expect(screen.getByText("请求体额外字段")).toBeTruthy();
     expect(screen.getByText("值可为文本 / 数字")).toBeTruthy();
+    expect(screen.getByText("请求体额外字段").getAttribute("for")).toBeNull();
+  });
+
+  it("render-prop 形态下**必须**给 htmlFor（箭头真的指得着）", () => {
+    render(
+      <FormField label="用途" id="wired">
+        {(field) => <input {...field} />}
+      </FormField>,
+    );
+    expect(screen.getByText("用途").getAttribute("for")).toBe("wired");
   });
 
   it("required 只加一个装饰星号，不改 aria-required（必填语义由调用处给）", () => {
