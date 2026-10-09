@@ -1,5 +1,5 @@
 /**
- * 「每一档像素基线都有主」的判据（规范 §11.8）。
+ * 「每一档都有主」的判据（规范 §11.8）—— **两份同形的账**：像素基线 / 全量 e2e。
  *
  * 立案现场是本轮实测翻出来的另一条：**「录过一次」与「一直绿」是两件事**。入库的
  * `-linux.png` 有 4 张与当次环境差 1 像素（文字整体下移一行），而 linux 档此前的状态是
@@ -12,6 +12,8 @@
  *      只会生产假读数（那是本节最不想有的东西）；
  *   ③ **记账可被观测**：`pixel-run.mjs` 跑绿即记、`--update` 不记、红着不记；
  *   ④ **钩子真的调它**：判据写在文件里而没人跑 = §13.5.12 那个「判据自称在跑」的形态。
+ *   ⑤ **两条账不接错**：读接口只差一个 `kind`，接错的表现是「两档共用一条日期」
+ *      （ISSUE #1547）—— 全量 e2e 那一档的判据在 `tests/e2e-run.test.ts`。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -22,16 +24,20 @@ import {
   freshnessAge,
   freshnessRecord,
 } from "../scripts/visual-baselines.mjs";
-import { runGate } from "../scripts/visual-freshness-gate.mjs";
+import {
+  readFreshnessLedger,
+  runGate,
+} from "../scripts/visual-freshness-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 一条写得全的记录（各条用例只改它要测的那一栏）。 */
 const GOOD = freshnessRecord({
-  platform: "linux",
+  key: "linux",
   verifiedAt: "2026-10-05T00:00:00.000Z",
   who: "月读",
-  how: "CI=true pnpm check:visual",
+  how: "pnpm check:visual",
+  trackedBy: "visual",
 });
 
 const NOW = new Date("2026-10-06T00:00:00.000Z");
@@ -58,16 +64,17 @@ describe("像素基线新鲜度判决（§11.8）", () => {
   it("一档都没有记录 ⇒ 阻断，话术指到「在那一档跑一次」与账文件", () => {
     const result = runGate({ ledger: {}, platforms: ["linux"], now: NOW });
     expect(result.exitCode).toBe(1);
-    expect(result.problems.join("\n")).toContain("录过就算数");
+    expect(result.problems.join("\n")).toContain("录过一次就算数");
     expect(result.problems.join("\n")).toContain(FRESHNESS_LEDGER);
   });
 
   it("记录写不全（who / how 空着）⇒ 各判一条 —— 「稍后补」在这里等于没写", () => {
     const short = freshnessRecord({
-      platform: "linux",
+      key: "linux",
       verifiedAt: "2026-10-05T00:00:00.000Z",
       who: "",
       how: "稍后",
+      trackedBy: "visual",
     });
     const result = runGate({
       ledger: { linux: short },
@@ -118,19 +125,20 @@ describe("像素基线新鲜度判决（§11.8）", () => {
 });
 
 describe("新鲜度账本身在仓库里（§11.8）", () => {
-  it("仓库当前的账能通过自己的判决", async () => {
-    const { readFreshnessLedger } = await import(
-      "../scripts/visual-freshness-gate.mjs"
-    );
+  it("仓库当前的账能通过自己的判决", () => {
     expect(runGate({ ledger: readFreshnessLedger() }).exitCode).toBe(0);
   });
 
-  it("linux 档在账里（它是本仓库唯一能自证的档）", async () => {
-    const { readFreshnessLedger } = await import(
-      "../scripts/visual-freshness-gate.mjs"
-    );
-    const ledger = readFreshnessLedger();
-    expect(Object.keys(ledger)).toContain("linux");
+  it("linux 档在账里（它是本仓库唯一能自证的档）", () => {
+    expect(Object.keys(readFreshnessLedger())).toContain("linux");
+  });
+
+  it("读的是**这一档的**账文件，不是另一份（两条账同形，最容易接错的一处）", () => {
+    /* 两条账（像素档 / 全量 e2e）的读接口只差一个 `kind`，而接错的表现是
+     * 「两档共用一条日期」—— 账面上完全正常，只是其中一个的日期来自另一次跑法。 */
+    expect(Object.keys(readFreshnessLedger("visual"))).toContain("linux");
+    expect(Object.keys(readFreshnessLedger("e2e"))).toContain("e2e");
+    expect(Object.keys(readFreshnessLedger("e2e"))).not.toContain("linux");
   });
 });
 

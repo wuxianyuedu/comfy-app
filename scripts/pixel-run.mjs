@@ -39,25 +39,23 @@
  * 让人先付一遍构建 + 起服务 + 起浏览器的代价、再从 Playwright 的输出里读出来。
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
-  FRESHNESS_LEDGER,
   PENDING_PLATFORMS,
   SUPPORTED_PLATFORMS,
   VISUAL_DIR,
   checkRecordingEnv,
-  freshnessAge,
-  freshnessRecord,
   isPlatformPending,
   isPlatformRegistered,
   missingBaselinesForPlatform,
   recordingWebserverFor,
   webserverForEnv,
+  writeFreshness,
 } from "./visual-baselines.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -292,6 +290,13 @@ function runStep(step) {
  *     事，而那正是这条账要防的。
  *   · **当场打印这一档上次是什么时候**：账的价值在于被**看见**，不是被写下来。
  *
+ * 真正的读写落在 `scripts/visual-baselines.mjs` 的 `writeFreshness` —— **全量 e2e 那一档
+ * 用的是同一个形状**（`scripts/e2e-run.mjs`，账文件 `scripts/.e2e-freshness.json`，
+ * ISSUE #1547）。两条账各留一份「怎么读、怎么算 who、写哪儿」的实现在这里曾经是本仓库
+ * §12.12 的孪生对，而它们的漂移形态很难看：一边把坏 JSON 当成空账（判红、话术正确），
+ * 另一边静默少守一条。这里只留**与像素有关的那两件事**：口径怎么算（`CI` 的真假）、
+ * 以及——`--update` 不记。
+ *
  * 写账失败（只读挂载等）不算跑像素的失败 —— 像素的结论已经拿到了，返 1 会把两件事
  * 混成一句「像素档挂了」。所以这里只提示。
  *
@@ -300,38 +305,31 @@ function runStep(step) {
  */
 export function recordFreshness({ platform, update }) {
   if (update) return null;
-  const file = path.join(ROOT, FRESHNESS_LEDGER);
-  /** @type {Record<string, unknown>} */
-  let ledger = {};
-  try {
-    const parsed = /** @type {unknown} */ (JSON.parse(readFileSync(file, "utf8")));
-    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-      ledger = /** @type {Record<string, unknown>} */ (parsed);
-    }
-  } catch {
-    ledger = {};
-  }
-  const previous = freshnessAge(ledger[platform]);
-  const who =
+  const { note } = writeFreshness({
+    root: ROOT,
+    kind: "visual",
+    who: gitUser(platform),
+  });
+  const how = `CI=${webserverForEnv(process.env) === "start" ? "true" : ""} pnpm check:visual`;
+  return `${note}（本次口径：\`${how}\`）`;
+}
+
+/**
+ * 记账要用的人名：优先 `GIT_AUTHOR_NAME`（提交身份），退回 `git config user.name`，
+ * 都拿不到就用档名 —— 空着会让这一栏被判红，而它恰好是这条账存在的意义。
+ *
+ * 两条新鲜度账共用同一份推导（与 `writeFreshness` 同因）：各写一套时会出现「像素档记
+ * 的是环境变量、e2e 档记的是 git config」，于是同一个人的两条记录名字不一样。
+ *
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function gitUser(fallback) {
+  return (
     process.env.GIT_AUTHOR_NAME ||
     spawnSync("git", ["config", "user.name"], { cwd: ROOT, encoding: "utf8" })
       .stdout?.trim() ||
-    platform;
-  const how = `CI=${webserverForEnv(process.env) === "start" ? "true" : ""} pnpm check:visual`;
-  ledger[platform] = freshnessRecord({
-    platform,
-    verifiedAt: new Date().toISOString(),
-    who,
-    how,
-  });
-  try {
-    writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
-  } catch (err) {
-    return `（记账失败：${err instanceof Error ? err.message : String(err)} —— 像素结论仍然有效，手工补 ${FRESHNESS_LEDGER}）`;
-  }
-  return (
-    `本机 \`${platform}\` 档已记账（上次自证：${previous ?? "无记录"}）—— ` +
-    `改 ${FRESHNESS_LEDGER} 时请连同提交，它是「这一档上次跑绿在什么时候」的唯一事实。`
+    fallback
   );
 }
 

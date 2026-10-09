@@ -24,7 +24,7 @@
  * 写死的清单正是会漂的那类东西。
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 /** 像素层 spec 所在目录（与 `package.json` 的 `test:visual` 同一处落点）。 */
@@ -315,7 +315,8 @@ export function checkRecordingEnv({ platform, env = process.env }) {
 }
 
 /**
- * 基线**新鲜度**账（`scripts/.visual-baseline-freshness.json`，规范 §11.8）。
+ * **新鲜度账**（规范 §11.8）：`scripts/.visual-baseline-freshness.json` 记像素档、
+ * `scripts/.e2e-freshness.json` 记全量 e2e —— **同形而不同键**。
  *
  * 为什么需要它：`PLATFORM_RECORDING` 只是一句「这几档在仓库里有一套 PNG」的承诺，
  * 而「那一套 PNG **现在还跑得绿**」是**另一件事** —— 本轮实测的现场是入库的
@@ -345,52 +346,169 @@ export function checkRecordingEnv({ platform, env = process.env }) {
  * 谁写它：`scripts/pixel-run.mjs` 在**当次检出自证跑绿**之后（`--update` 那一档除外 ——
  * 录基线本身不是自证）把这一档的记录刷新一次。也就是说**跑一次就记一次账**，
  * 「定期跑」这件事因此有了落点：账上的日期就是「上次真跑过」的事实。
+ *
+ * ⚠️ **键是「哪一档」而不是「哪个平台」**（ISSUE #1547）：同一个形状后来被**全量 e2e**
+ * 那一档复用（`scripts/e2e-run.mjs`，账文件 `scripts/.e2e-freshness.json`）——
+ * 两处的「一档」都恰好只有一个值（`linux` / `e2e`），但那是**数据**、不是形状的一部分。
+ * 分辨它们的是 `trackedBy` 那一栏：它写清这条记录是**哪一个跑法**证出来的，
+ * 于是把两条账抄混（e2e 的绿被记成像素档的自证）当场能被看见，而不是悄悄成立。
  */
-/** 新鲜度账文件（相对仓库根）。 */
-export const FRESHNESS_LEDGER = "scripts/.visual-baseline-freshness.json";
+/**
+ * 一档新鲜度账的**登记处**：账文件 + 那一档的键 + 可读的名字。
+ *
+ * `runs` 是**数据**而不是 `if (kind === "visual")` 的分支：两条账的唯一区别就是这四个值
+ * （账文件 / 键 / 名字 / 「怎么跑」那条命令），把差异写成分支就得到一份带两个开关的实现，
+ * 而开关会随「第三档」的加入变成三向分支 —— 那正是 §12.12 要拦的孪生对。
+ *
+ * `daily` / `skipHow` 是两条账**真正的**差异所在，其余四栏两条同形：
+ *   · `daily` —— 这一档是否按「每天首次提交带一次凭证」判（只有全量 e2e 是）。像素档
+ *     不做墙钟阻断的理由见 `visual-freshness-gate.mjs` 文件头：它的结论只在录过基线的
+ *     那台机器上成立，拿日历日去卡等于让所有人卡在一条只有少数人能解的账上。
+ *   · `skipHow` —— 记一条「写明理由的豁免」那条命令（同样只有 e2e 有）。它是**另一条
+ *     出路**而不是绕过：留下的是一条能复核的事实。
+ *
+ * @type {Record<string, {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}>}
+ */
+export const FRESHNESS_TRACKS = {
+  visual: {
+    ledger: "scripts/.visual-baseline-freshness.json",
+    key: "linux",
+    label: "linux 档像素基线",
+    run: "pnpm check:visual",
+    daily: false,
+    skipHow: null,
+  },
+  e2e: {
+    ledger: "scripts/.e2e-freshness.json",
+    key: "e2e",
+    label: "全量 e2e",
+    run: "pnpm test:e2e",
+    daily: true,
+    skipHow: 'node scripts/e2e-run.mjs --skip "<理由>"',
+  },
+};
+
+/** 迁移期的兼容出口：像素档那一份账的路径（= `FRESHNESS_TRACKS.visual.ledger`）。 */
+export const FRESHNESS_LEDGER = freshnessTrack("visual").ledger;
+
+/**
+ * 取一档的登记（未知的 kind 是**编码错误**，抛而不是回落 —— 回落会让「新加一档却忘了
+ * 登记」表现成「按键名当档名」而照样跑绿）。
+ *
+ * @param {keyof typeof FRESHNESS_TRACKS | string} kind
+ * @returns {{ledger: string, key: string, label: string, run: string}}
+ */
+export function freshnessTrack(kind) {
+  const track = FRESHNESS_TRACKS[kind];
+  if (!track) {
+    throw new Error(
+      `[visual-baselines] 未登记的新鲜度档：${kind}（可选：${Object.keys(FRESHNESS_TRACKS).join(" / ")}）`,
+    );
+  }
+  return track;
+}
 
 /**
  * 新鲜度记录的形状（**读写共用这一份**：各写一套时记出来的会被自己的校验判成缺字段）。
  *
- * @param {{platform: string, verifiedAt: string, who: string, how: string}} input
- * @returns {{platform: string, verifiedAt: string, who: string, how: string}}
+ * 四栏各管一件事，缺一栏这条账就退化：
+ *   · `key` —— 是**哪一档**（像素按平台分档，故这一栏在那边是 `linux`；全量 e2e 那边是
+ *     `e2e`）。写成通用名而不是 `platform`，是因为第二条账的「档」不是平台。
+ *   · `verifiedAt` / `who` —— 「上一次被实证跑绿是什么时候、谁跑的」。
+ *   · `how` —— **能照着重跑的那条命令**（这就是你要写 `pnpm test:e2e` 而不是「跑过了」的原因）。
+ *   · `trackedBy` —— 这条记录属于**哪一个跑法**（`FRESHNESS_TRACKS` 的键）。它是两条账
+ *     唯一的形状差异，作用是把「e2e 的绿被记进像素档的账」这类抄混当场照出来。
+ *
+ * @param {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string}} input
+ * @returns {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string}}
  */
-export function freshnessRecord({ platform, verifiedAt, who, how }) {
-  return {
-    platform,
+export function freshnessRecord({ key, verifiedAt, who, how, trackedBy, skippedReason }) {
+  /** @type {Record<string, string>} */
+  const record = {
+    key: key.trim(),
     verifiedAt: verifiedAt.trim(),
     who: who.trim(),
     how: how.trim(),
+    trackedBy: trackedBy.trim(),
   };
+  /* `skippedReason` 只在**豁免**那一条出路上出现：它把「今天不跑」写成一句能被复核的话，
+   * 而不是让账面上出现一个与「跑绿过」长得一样的日期。核对它的是 `isUsableSkipReason`。 */
+  if (typeof skippedReason === "string" && skippedReason.trim()) {
+    record.skippedReason = skippedReason.trim();
+  }
+  return record;
 }
 
 /**
- * 校验新鲜度账（`{平台 → 记录}`）。空 = 放行。
+ * 豁免理由的下限 —— 「有人回答过」与「没回答」要长得不一样。
  *
- * 三个方向都拦：缺档（还停在「录过就算数」）/ 记录写不全（没人能按它去复核）/
- * 挂在非登记档上（删平台不抹账，账就退化成一份没人认领的名单）。
+ * 占位词（「稍后」「待定」「TBD」…）与过短的理由都判不可用：豁免不是绕过，它留下的
+ * 是一条**能被复核的事实**，而「稍后」什么都没留下。
+ *
+ * @param {unknown} reason
+ * @returns {boolean}
+ */
+export function isUsableSkipReason(reason) {
+  const text = String(reason ?? "").trim();
+  if (text.length < 8) return false;
+  return !/^(稍后|待定|下次|回头|todo|tbd|na|n\/a)$/i.test(text);
+}
+
+/**
+ * 「同一个**日历日**」的判据 —— 「每天首次提交」按本地时区日界判，不按 24 小时窗口。
+ *
+ * 人的记忆与工作节奏都是按日历日走的（「今天提交过了吗」），而滚动窗口会把昨天 23:00
+ * 与今天 08:00 算成连续两次，于是今天早晨的第一次被静默跳过。
+ *
+ * @param {Date} a
+ * @param {Date} b
+ * @returns {boolean}
+ */
+export function isSameLocalDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * 校验一份新鲜度账（`{档 → 记录}`）。空 = 放行。
+ *
+ * 四个方向都拦：缺档（还停在「录过就算数」）/ 记录写不全（没人能按它去复核）/
+ * 挂在非登记档上（删平台不抹账，账就退化成一份没人认领的名单）/
+ * **记录被写错了跑法**（`trackedBy` 与这份账不是同一个 —— 两条账抄混时，
+ * 「跑过一次」与「跑过的是哪一个」会变成两件事，而账面上看着完全正常）。
  *
  * @param {Record<string, unknown>} ledger
- * @param {{required: string[], registered: string[]}} scope
- *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）
+ * @param {{required: string[], registered: string[], track: {ledger: string, label: string, run: string}, kind: string}} scope
+ *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）；
+ *   `track` = 这一份账的登记（话术里要给出「去哪个文件补、按哪条命令跑」）；
+ *   `kind` = 这一份账属于哪个跑法（`trackedBy` 的比对基准）；
+ *   `now` = 判「今天有没有自证」用的时钟（`track.daily` 那一档才读它；用例可注入）
  * @returns {string[]} 问题清单
  */
-export function checkFreshnessLedger(ledger, { required, registered }) {
+export function checkFreshnessLedger(
+  ledger,
+  { required, registered, track, kind, now = new Date() },
+) {
   /** @type {string[]} */
   const problems = [];
-  for (const platform of required) {
-    const entry = ledger[platform];
+  for (const key of required) {
+    const entry = ledger[key];
     if (entry === undefined || entry === null) {
       problems.push(
-        `${platform} 档没有基线新鲜度记录 —— 这一档现在是「录过就算数」：` +
+        `${track.label}（${key}）没有新鲜度记录 —— 这一档现在是「录过一次就算数」：` +
           "没有任何东西说清它上一次被实证跑绿是什么时候、按哪条命令。" +
-          `在那一档跑一次 \`pnpm check:visual\`（绿即可记账，见 scripts/pixel-run.mjs），` +
-          `或在 ${FRESHNESS_LEDGER} 里手工补一条。`,
+          `跑一次 \`${track.run}\`（绿即可记账，见 scripts 下对应的跑法脚本），` +
+          `或在 ${track.ledger} 里手工补一条。`,
       );
       continue;
     }
     if (typeof entry !== "object" || Array.isArray(entry)) {
-      problems.push(`${platform} 档的新鲜度记录不是对象 —— 形状见 freshnessRecord。`);
+      problems.push(
+        `${track.label}（${key}）的新鲜度记录不是对象 —— 形状见 freshnessRecord。`,
+      );
       continue;
     }
     const rec = /** @type {Record<string, unknown>} */ (entry);
@@ -408,7 +526,7 @@ export function checkFreshnessLedger(ledger, { required, registered }) {
       const value = String(rec[field] ?? "").trim();
       if (value.length < min) {
         problems.push(
-          `${platform} 档的新鲜度记录里 ${field} 没写清（"${value}"）—— ` +
+          `${track.label}（${key}）的新鲜度记录里 ${field} 没写清（"${value}"）—— ` +
             (field === "how"
               ? "这一栏要写**能照着重跑的那条命令**（写「稍后」「已复核」等于没写）。"
               : "这一栏是这条账存在的全部意义：谁、什么时候、按哪条命令复核的。"),
@@ -418,20 +536,180 @@ export function checkFreshnessLedger(ledger, { required, registered }) {
     const at = String(rec.verifiedAt ?? "").trim();
     if (at && Number.isNaN(Date.parse(at))) {
       problems.push(
-        `${platform} 档的 verifiedAt（"${at}"）不是一个能解析的日期 —— ` +
+        `${track.label}（${key}）的 verifiedAt（"${at}"）不是一个能解析的日期 —— ` +
           "记账要能算「多久没跑」，写「最近」等于没写。",
       );
     }
-  }
-  for (const platform of Object.keys(ledger)) {
-    if (!registered.includes(platform)) {
+    /* 跑法必须对得上：两条账同形，抄混一次就会让「这一档被证过绿」变成一句
+     * 不成立的话，而账面上看不出任何异常（都是合法的日期 + 人名 + 命令）。 */
+    const by = String(rec.trackedBy ?? "").trim();
+    if (by !== kind) {
       problems.push(
-        `新鲜度账里记着 ${platform} 档，但它不在登记口径里（${registered.join(" / ")}）—— ` +
-          "删掉平台的档就要同批抹账，否则这张表会退化成一份没人认领的名单。",
+        `${track.label}（${key}）的记录写着它由「${by || "(空)"}」跑法证出来，` +
+          `而这份账属于「${kind}」—— 两条新鲜度账同形，抄混之后账面上完全正常，` +
+          "只有这一栏能把它们分开。",
+      );
+    }
+    /* 「每天首次」那一档多一条判据：这一次自证必须是**今天**的（或一条写明理由的豁免）。
+     * 它只判日历日，不判「多久算旧」—— 阈值仍然不写进判据（像素档那句同样的取舍）。
+     * 记录写不清时上面已经拦过，这里只在形状成立时才比日期，免得同一件事报两遍。 */
+    if (track.daily) {
+      if (typeof rec.skippedReason === "string" && rec.skippedReason.trim()) {
+        if (!isUsableSkipReason(rec.skippedReason)) {
+          problems.push(
+            `${track.label}（${key}）的豁免理由（"${rec.skippedReason.trim()}"）不算「有人回答过」—— ` +
+              `豁免留下的是一条能被复核的事实，占位词与过短的理由什么都没留下。` +
+              `写清这次为什么不跑，或直接跑一次 \`${track.run}\`。`,
+          );
+        }
+      } else {
+        const ms = Date.parse(String(rec.verifiedAt ?? ""));
+        if (!Number.isNaN(ms) && !isSameLocalDay(new Date(ms), now)) {
+          problems.push(
+            `${track.label}（${key}）今天还没有自证 —— 上一次跑绿在 ` +
+              `"${String(rec.verifiedAt ?? "").trim()}"，不是今天。` +
+              `\n        记账：跑一次 \`${track.run}\`（跑绿即记），` +
+              (track.skipHow
+                ? `\n              或记一条写明理由的豁免：\`${track.skipHow}\`。`
+                : ""),
+          );
+        }
+      }
+    }
+  }
+  for (const key of Object.keys(ledger)) {
+    if (!registered.includes(key)) {
+      problems.push(
+        `新鲜度账里记着 ${key}，但它不在这一份账的登记口径里（${registered.join(" / ")}）—— ` +
+          "删掉某一档就要同批抹账，否则这张表会退化成一份没人认领的名单。",
       );
     }
   }
   return problems;
+}
+
+/**
+ * 读一份新鲜度账；读不出（不存在 / 坏 JSON / 不是对象）返回 `{}`。
+ *
+ * 抽在这里而不是每个跑法脚本各写一份：两条账要**同一套**「读不出就等于一档都没记」
+ * 的语义 —— 各写一份时，一边把坏 JSON 当成空账（判红、话术正确），另一边把它当成
+ * 「解析失败但先放行」，而后者不报错、只是静默少守一条。
+ *
+ * @param {string} root 仓库根
+ * @param {string} rel 账文件相对路径（`FRESHNESS_TRACKS[*].ledger`）
+ * @returns {Record<string, unknown>}
+ */
+export function readFreshnessLedgerAt(root, rel) {
+  try {
+    const parsed = /** @type {unknown} */ (
+      JSON.parse(readFileSync(path.join(root, rel), "utf8"))
+    );
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return /** @type {Record<string, unknown>} */ (parsed);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 把一档的**跑绿**写进它那份账（返回给输出用的一句读数）。
+ *
+ * 三条边界（与 `pixel-run.mjs` 原本内联的那段逐字一致，只是搬到这里由两条账共用）：
+ *   · **只有「检查档」记**：录基线 / 录快照本身**不是**自证。
+ *   · **只有绿了才记**：红着的时候记一条「我跑过」会把「跑过」与「跑绿过」混成一件
+ *     事，而那正是这条账要防的。
+ *   · **写账失败不算跑法失败**：像素 / e2e 的结论已经拿到了，返非零会把两件事混成一句
+ *     「跑法挂了」。所以只提示、由调用方决定。
+ *
+ * 返回 `{ note, previous }`：`note` 是给人读的一句（写盘失败时也带着失败原因），
+ * `previous` 是**写之前**那一档上次自证距今多久（账的价值在于被看见，不是被写下来）。
+ *
+ * @param {{root: string, kind: string, who: string}} args
+ * @returns {{note: string, previous: string | null}}
+ */
+export function writeFreshness({ root, kind, who }) {
+  const track = freshnessTrack(kind);
+  const file = path.join(root, track.ledger);
+  const ledger = readFreshnessLedgerAt(root, track.ledger);
+  const previous = freshnessAge(ledger[track.key]);
+  ledger[track.key] = freshnessRecord({
+    key: track.key,
+    verifiedAt: new Date().toISOString(),
+    who,
+    how: track.run,
+    trackedBy: kind,
+  });
+  try {
+    writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+  } catch (err) {
+    return {
+      previous,
+      note:
+        `（记账失败：${err instanceof Error ? err.message : String(err)} —— ` +
+        `${track.label}的结论仍然有效，手工补 ${track.ledger}）`,
+    };
+  }
+  return {
+    previous,
+    note:
+      `${track.label}已记账（上次自证：${previous ?? "无记录"}）—— ` +
+      `改 ${track.ledger} 时请连同提交，它是「这一档上次跑绿在什么时候」的唯一事实。`,
+  };
+}
+
+/**
+ * 把一档的**豁免**写进它那份账 —— 「今天不跑，但理由有人回答过」。
+ *
+ * 与 `writeFreshness` 的唯一区别是记的形状：那一份带的是「跑绿的日期」，这一份带的是
+ * `skippedReason`。两者都能让「每天首次」那条判据放行，但**读起来不一样** ——
+ * 账面上因此看得出「今天跑过」和「今天说好不跑」不是同一件事（豁免不是绕过）。
+ *
+ * 理由不合用（过短 / 占位）时**抛**，由调用方转成退出码：与其记一条没有信息的账
+ * 让人以为「已经处理过」，不如当场把这条命令退回去。
+ *
+ * @param {{root: string, kind: string, who: string, reason: unknown}} args
+ * @returns {{note: string, previous: string | null}}
+ */
+export function writeSkipRecord({ root, kind, who, reason }) {
+  const track = freshnessTrack(kind);
+  if (!track.skipHow) {
+    throw new Error(`[visual-baselines] ${kind} 档没有「豁免」这条出路`);
+  }
+  if (!isUsableSkipReason(reason)) {
+    throw new Error(
+      `[visual-baselines] 豁免理由（"${String(reason ?? "").trim()}"）不算「有人回答过」—— ` +
+        "写清这次为什么不跑（占位词与过短的理由都被拦）。",
+    );
+  }
+  const file = path.join(root, track.ledger);
+  const ledger = readFreshnessLedgerAt(root, track.ledger);
+  const previous = freshnessAge(ledger[track.key]);
+  ledger[track.key] = freshnessRecord({
+    key: track.key,
+    verifiedAt: new Date().toISOString(),
+    who,
+    how: track.run,
+    trackedBy: kind,
+    skippedReason: String(reason).trim(),
+  });
+  try {
+    writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+  } catch (err) {
+    return {
+      previous,
+      note:
+        `（记账失败：${err instanceof Error ? err.message : String(err)} —— ` +
+        `手工补 ${track.ledger}）`,
+    };
+  }
+  return {
+    previous,
+    note:
+      `${track.label}已记一条豁免（上次自证：${previous ?? "无记录"}）—— ` +
+      `理由写在 ${track.ledger} 的 skippedReason 里，改它时请连同提交。`,
+  };
 }
 
 /**

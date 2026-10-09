@@ -306,6 +306,15 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `scripts/quality-gate.mjs` / `.ps1` 两份**文本**（那两份都自跑自退、import 不进来，
   // 所以 import 图追不到），与本次暂存改动无关也必须响，故进固定清单。
   "tests/pixel-run.test.ts",
+  // 「全量 e2e 也有主」（ISSUE #1545 / #1547）：`pnpm test:e2e` 此前是「人记得就跑」，
+  // 而**像素档的触发条件恰好嵌套在它里面**（`playwright.config.ts` 的 `testMatch` 把
+  // `*.visual.spec.ts` 与普通 spec 收进同一次 `playwright test`，而 `pnpm check:visual`
+  // 只跑 `e2e/visual` 那半边）—— 实测的形态是 linux 档基线过期两天没被发现，靠人手动
+  // 跑一遍才照出来。现在 `pnpm test:e2e` 走 `scripts/e2e-run.mjs`，跑绿即记一条与像素档
+  // **同形而不同键**的账；这条判据钉的是记账语义、两条账不接错、以及钩子那一步真判了它。
+  // 它读的是 `scripts/e2e-run.mjs` / `scripts/visual-baselines.mjs` 与两处接线文本，
+  // import 图追不到，故进固定清单（与本次暂存改动无关也必须响）。
+  "tests/e2e-run.test.ts",
   // 「声明 ⇄ 读者」索引的契约测试（规范 §11.23）：本仓库的声明机制是一个一个事故里
   // 长出来的，每一种自带台账与判据，而没有任何一处说得出「一共有哪些声明、各自的读者
   // 是谁」。这一步把 scripts/.declaration-readers.json 当索引核（读者存在 + 执行者在

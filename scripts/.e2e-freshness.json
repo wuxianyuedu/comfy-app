@@ -1,0 +1,10 @@
+{
+  "e2e": {
+    "key": "e2e",
+    "verifiedAt": "2026-10-08T16:55:04.236Z",
+    "who": "cnb.dQh7kaCfAPA",
+    "how": "pnpm test:e2e",
+    "trackedBy": "e2e",
+    "skippedReason": "本轮只解决合并冲突与文档同步，未动功能链路"
+  }
+}

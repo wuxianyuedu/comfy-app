@@ -39,6 +39,7 @@
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -108,9 +109,60 @@ export function decide(staged) {
   };
 }
 
-/** 跑 `cargo test`；返回退出码（cargo 不在 PATH 时返回 null，由调用方给指路）。 */
+/**
+ * cargo 的寻址判据：**PATH 优先，回退到工具链的默认安装位**。
+ *
+ * 为什么不能只认 PATH（ISSUE #1555）：CI / 容器镜像是**精修过 PATH** 的 ——
+ * `~/.cargo/bin` 常常不在（实测本仓开发容器里 `which cargo` 为空，而同一台机器上
+ * `~/.cargo/bin/cargo` 与 `~/.rustup/toolchains/<版本>/bin/cargo` 都在）。那种机器上
+ * 改一行 Rust 就被判成「编不了」，而真因只是「探针比 cargo 装得更苛刻」。
+ * 单独认安装位也不行：PATH 上那份**才是**要跑的那份（用户可能自选工具链、
+ * 或用 distro 包管理器装的那份），越过 PATH 去猜 rustup 的目录 = 拿另一个
+ * 版本编壳。两条并成一条判据：先问 PATH，问不到才回退。
+ *
+ * 回退面刻意**只收 rustup 的三处**（CARGO_HOME/bin、~/.cargo/bin、~/.rustup/），
+ * 不做 PATH 式的目录递归 —— 判据越宽，越可能选中一个不该用的 cargo。
+ */
+export function findCargo() {
+  const onPath = whichCommand("cargo");
+  if (onPath) return onPath;
+  const home = os.homedir();
+  const candidates = [
+    process.env.CARGO_HOME && path.join(process.env.CARGO_HOME, "bin"),
+    path.join(home, ".cargo", "bin"),
+    path.join(home, ".rustup", "toolchains"),
+  ].filter((dir) => typeof dir === "string" && dir.length > 0);
+
+  for (const dir of candidates) {
+    if (dir.endsWith("toolchains")) {
+      // rustup 的每个工具链各有一份 cargo：取版本号最大的那个（字典序即版本序，
+      // 1.10 与 1.9 这种少见形态不在此纠偏 —— 只认「挑不到就继续找下一处」。
+      let versions = [];
+      try {
+        versions = fs.readdirSync(dir).sort().reverse();
+      } catch {
+        continue; // 目录不存在 = 这一处没有，接着看下一处（不是「探到但不可用」）
+      }
+      for (const version of versions) {
+        const exe = path.join(dir, version, "bin", cargoExeName());
+        if (fs.existsSync(exe)) return exe;
+      }
+      continue;
+    }
+    const exe = path.join(dir, cargoExeName());
+    if (fs.existsSync(exe)) return exe;
+  }
+  return null;
+}
+
+/** cargo 的文件名（Windows 上带 .exe；其余平台无后缀）。 */
+function cargoExeName() {
+  return process.platform === "win32" ? "cargo.exe" : "cargo";
+}
+
+/** 跑 cargo test；返回退出码（找不到 cargo 时返回 null，由调用方给指路）。 */
 function runCargoTest() {
-  const cargo = whichCommand("cargo");
+  const cargo = findCargo();
   if (!cargo) return null;
   const r = spawnSync(cargo, ["test"], {
     cwd: path.join(ROOT, "src-tauri"),
@@ -227,8 +279,9 @@ function linesFor(result) {
         out.push({
           to: "err",
           text:
-            "[shell-gate] PATH 上找不到 cargo —— 改了 Rust 壳却编不了，等于没验证。\n" +
-            "        装 Rust 工具链：https://rustup.rs/（或换一台能编壳的机器提交）",
+            "[shell-gate] 找不到 cargo（PATH 与 rustup 的默认安装位都没有）—— 改了 Rust 壳却编不了，等于没验证。\n" +
+            "        装 Rust 工具链：https://rustup.rs/（或换一台能编壳的机器提交）\n" +
+            "        已装却仍探不到时：PATH 里加上 $CARGO_HOME/bin（rustup 默认 <home>/.cargo/bin）",
         });
       } else if (step.state === "failed") {
         out.push({
