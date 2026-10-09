@@ -1,7 +1,11 @@
 import { expect, test } from "@playwright/test";
 
 import { stubTrpc } from "../support/trpc-stub";
-import { settle, unstableChromeMasks } from "./support/page-baseline";
+import {
+  hideDevChrome,
+  settle,
+  unstableChromeMasks,
+} from "./support/page-baseline";
 
 /**
  * 模型库（`/models`）像素基线 —— 「空态」这一档（§11.8）。
@@ -23,6 +27,7 @@ test.describe("模型库空态视觉基线", () => {
   test("空库下的空态全页基线", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await stubTrpc(page, { "model.list": { models: [] } });
+    await hideDevChrome(page);
     await page.goto("/models");
     await settle(page, "暂无可用的本地模型");
     await expect(page).toHaveScreenshot("models-empty.png", {
