@@ -125,6 +125,7 @@
 --font-mono
 --font-sans
 --font-title
+--gradient-brand
 --panel-right-width
 --radius-2xl
 --radius-3xl

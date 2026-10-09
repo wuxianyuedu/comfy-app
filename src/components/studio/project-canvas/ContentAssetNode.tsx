@@ -136,6 +136,9 @@ export function ContentAssetBody({
          *  - dragover 高亮 + 加深边框颜色给用户视觉反馈。
          *  文件选择器现在**只**能从右下角 FAB 触发（onPickMedia）。
          *  历史：曾用 button + nodrag 三件套做点击触发；本次反向修复。 */
+        /* 拖放落点（`onDrop` / `onDragOver` / `onDragLeave`）—— HTML5 DnD 规范
+           要求的是**提供替代路径**（右下角 FAB 选文件），不是给容器加个键。 */
+        /* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- DnD 落点，不是点击交互 */
         <div
           onDrop={(event) => {
             event.preventDefault();

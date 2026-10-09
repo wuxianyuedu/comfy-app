@@ -145,6 +145,9 @@ export function WorkflowParamCard({
   const disabled = !canWire || readOnly;
 
   return (
+    /* `onSelect` 只做**选中高亮**（真正可交互的是 React Flow 的边），卡片是
+       鼠标便捷落点 —— 卡上的动作按钮是 `<Button>`（§6.11 的 EXEMPT_SITES）。 */
+    /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- 选中高亮的便捷落点，不是交互本体 */
     <div
       className="bg-card shadow-card relative flex flex-col rounded-lg border"
       style={{

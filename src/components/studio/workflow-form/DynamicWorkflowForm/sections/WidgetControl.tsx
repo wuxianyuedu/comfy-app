@@ -74,6 +74,7 @@ export function WidgetControl({
         <textarea
           className={`${inputCls} mt-1.5 min-h-13 ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
           rows={4}
+          aria-label={`${label}${requiredHint}`}
           value={typeof value === "string" ? value : ""}
           disabled={disabled}
           placeholder={placeholder}
@@ -92,6 +93,7 @@ export function WidgetControl({
               : ""
           }
           disabled={disabled}
+          aria-label={`${label}${requiredHint}`}
           placeholder={`输入 ${label}${requiredHint}`}
           onChange={textHandler(onValueChange)}
         />
