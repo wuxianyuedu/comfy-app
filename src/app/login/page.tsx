@@ -322,22 +322,25 @@ function LoginFieldRow({
 }) {
   return (
     <FormField label={label}>
-      <div className="relative">
-        <input
-          type={type}
-          value={value}
-          onChange={textHandler(onChange)}
-          placeholder={placeholder}
-          autoComplete={autoComplete}
-          required
-          className="border-border-strong bg-subtle text-ink placeholder:text-ink-fainter focus:border-primary/50 w-full rounded-xl border px-3.5 py-3 pr-11 text-sm focus:outline-none"
-        />
-        {right && (
-          <div className="absolute top-1/2 right-1.5 -translate-y-1/2">
-            {right}
-          </div>
-        )}
-      </div>
+      {(field) => (
+        <div className="relative">
+          <input
+            {...field}
+            type={type}
+            value={value}
+            onChange={textHandler(onChange)}
+            placeholder={placeholder}
+            autoComplete={autoComplete}
+            required
+            className="border-border-strong bg-subtle text-ink placeholder:text-ink-fainter focus:border-primary/50 w-full rounded-xl border px-3.5 py-3 pr-11 text-sm focus:outline-none"
+          />
+          {right && (
+            <div className="absolute top-1/2 right-1.5 -translate-y-1/2">
+              {right}
+            </div>
+          )}
+        </div>
+      )}
     </FormField>
   );
 }

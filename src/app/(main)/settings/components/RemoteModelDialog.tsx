@@ -72,35 +72,41 @@ export function RemoteModelDialog({
             id="remote-model-provider"
             className="mb-3"
           >
-            <SelectMenu
-              className="text-sm"
-              fullWidth
-              value="custom"
-              onChange={() => undefined}
-              options={["custom"]}
-              labels={{ custom: "◇ 自定义" }}
-              disabled
-              popoverMinWidth={160}
-              autoFitFromOptions={false}
-            />
+            {(field) => (
+              <SelectMenu
+                {...field}
+                className="text-sm"
+                fullWidth
+                value="custom"
+                onChange={() => undefined}
+                options={["custom"]}
+                labels={{ custom: "◇ 自定义" }}
+                disabled
+                popoverMinWidth={160}
+                autoFitFromOptions={false}
+              />
+            )}
           </FormField>
 
           <FormField label="用途" id="remote-model-kind" className="mb-3">
-            <SelectMenu
-              className="text-sm"
-              fullWidth
-              value={d.addForm.kind}
-              onChange={(kind) =>
-                d.setAddForm((f) => ({
-                  ...f,
-                  kind: kind as RemoteModelKind,
-                }))
-              }
-              options={[...REMOTE_MODEL_KINDS]}
-              labels={REMOTE_MODEL_KIND_LABELS}
-              popoverMinWidth={160}
-              autoFitFromOptions={false}
-            />
+            {(field) => (
+              <SelectMenu
+                {...field}
+                className="text-sm"
+                fullWidth
+                value={d.addForm.kind}
+                onChange={(kind) =>
+                  d.setAddForm((f) => ({
+                    ...f,
+                    kind: kind as RemoteModelKind,
+                  }))
+                }
+                options={[...REMOTE_MODEL_KINDS]}
+                labels={REMOTE_MODEL_KIND_LABELS}
+                popoverMinWidth={160}
+                autoFitFromOptions={false}
+              />
+            )}
           </FormField>
 
           <FormField
@@ -124,34 +130,37 @@ export function RemoteModelDialog({
           </FormField>
 
           <FormField label="API Key" id="remote-model-api-key">
-            <div className="mb-1 flex gap-2">
-              <Input
-                type="password"
-                value={d.addForm.apiKey}
-                onChange={(event) => {
-                  d.setAddForm({
-                    ...d.addForm,
-                    apiKey: event.target.value,
-                  });
-                  /* 输入新密钥即撤销「清除」标记 */
-                  if (event.target.value) d.setClearKey(false);
-                }}
-                placeholder={
-                  dialog.mode === "edit" && dialog.entry.apiKey
-                    ? "已设置独立密钥，留空保持不变"
-                    : "留空则使用全局 API Key"
-                }
-                className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
-              />
-              <Button
-                variant="outline"
-                onClick={() => void d.testConnection()}
-                disabled={d.testing}
-                className="text-muted-foreground h-auto shrink-0 rounded-lg px-3 py-2 text-sm"
-              >
-                {d.testing ? "测试中…" : "测试连接"}
-              </Button>
-            </div>
+            {(a11y) => (
+              <div className="mb-1 flex gap-2">
+                <Input
+                  {...a11y}
+                  type="password"
+                  value={d.addForm.apiKey}
+                  onChange={(event) => {
+                    d.setAddForm({
+                      ...d.addForm,
+                      apiKey: event.target.value,
+                    });
+                    /* 输入新密钥即撤销「清除」标记 */
+                    if (event.target.value) d.setClearKey(false);
+                  }}
+                  placeholder={
+                    dialog.mode === "edit" && dialog.entry.apiKey
+                      ? "已设置独立密钥，留空保持不变"
+                      : "留空则使用全局 API Key"
+                  }
+                  className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => void d.testConnection()}
+                  disabled={d.testing}
+                  className="text-muted-foreground h-auto shrink-0 rounded-lg px-3 py-2 text-sm"
+                >
+                  {d.testing ? "测试中…" : "测试连接"}
+                </Button>
+              </div>
+            )}
           </FormField>
           {dialog.mode === "edit" && dialog.entry.apiKey && (
             <p className="text-muted-foreground text-2xs mb-1">

@@ -96,43 +96,52 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             label="类型"
             labelClassName="text-muted-foreground mb-1 text-xs"
           >
-            <SelectMenu
-              className="bg-subtle! border-border! text-sm"
-              value={meta.type}
-              onChange={(value) =>
-                onMetaChange({ ...meta, type: value as ProjectType })
-              }
-              options={PROJECT_TYPES}
-              labels={PROJECT_TYPE_LABELS as Record<string, string>}
-              placeholder="选择类型"
-            />
+            {(field) => (
+              <SelectMenu
+                {...field}
+                className="bg-subtle! border-border! text-sm"
+                value={meta.type}
+                onChange={(value) =>
+                  onMetaChange({ ...meta, type: value as ProjectType })
+                }
+                options={PROJECT_TYPES}
+                labels={PROJECT_TYPE_LABELS as Record<string, string>}
+                placeholder="选择类型"
+              />
+            )}
           </FormField>
           <FormField
             label="基调 / 情绪"
             labelClassName="text-muted-foreground mb-1 text-xs"
           >
-            <input
-              value={meta.tone}
-              onChange={(event) =>
-                onMetaChange({ ...meta, tone: event.target.value })
-              }
-              className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
-              placeholder="温暖治愈 / 悬疑紧张 / 史诗感"
-            />
+            {(field) => (
+              <input
+                {...field}
+                value={meta.tone}
+                onChange={(event) =>
+                  onMetaChange({ ...meta, tone: event.target.value })
+                }
+                className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                placeholder="温暖治愈 / 悬疑紧张 / 史诗感"
+              />
+            )}
           </FormField>
           <FormField
             label="一句话梗概"
             labelClassName="text-muted-foreground mb-1 text-xs"
             className="sm:col-span-2"
           >
-            <input
-              value={meta.logline}
-              onChange={(event) =>
-                onMetaChange({ ...meta, logline: event.target.value })
-              }
-              className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
-              placeholder="一个关于…的故事"
-            />
+            {(field) => (
+              <input
+                {...field}
+                value={meta.logline}
+                onChange={(event) =>
+                  onMetaChange({ ...meta, logline: event.target.value })
+                }
+                className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                placeholder="一个关于…的故事"
+              />
+            )}
           </FormField>
         </div>
       </section>

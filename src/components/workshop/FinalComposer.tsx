@@ -318,48 +318,61 @@ export function FinalComposer({
                   label="时长(s)"
                   labelClassName="text-muted-foreground mb-0.5 text-3xs"
                 >
-                  <Input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={entry.duration}
-                    onChange={(event) =>
-                      updateShot(shot.id, {
-                        duration: clamp(Number(event.target.value) || 4, 1, 20),
-                      })
-                    }
-                    className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
-                  />
+                  {(field) => (
+                    <Input
+                      {...field}
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={entry.duration}
+                      onChange={(event) =>
+                        updateShot(shot.id, {
+                          duration: clamp(
+                            Number(event.target.value) || 4,
+                            1,
+                            20,
+                          ),
+                        })
+                      }
+                      className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
+                    />
+                  )}
                 </FormField>
                 <FormField
                   label="转场"
                   labelClassName="text-muted-foreground mb-0.5 text-3xs"
                 >
-                  <SelectMenu
-                    className="bg-subtle! border-border! text-xs"
-                    value={shot.transition ?? "cut"}
-                    onChange={(value) =>
-                      updateShot(shot.id, { transition: value as Transition })
-                    }
-                    options={TRANSITIONS}
-                    labels={TRANSITION_LABELS}
-                    placeholder="转场"
-                  />
+                  {(field) => (
+                    <SelectMenu
+                      {...field}
+                      className="bg-subtle! border-border! text-xs"
+                      value={shot.transition ?? "cut"}
+                      onChange={(value) =>
+                        updateShot(shot.id, { transition: value as Transition })
+                      }
+                      options={TRANSITIONS}
+                      labels={TRANSITION_LABELS}
+                      placeholder="转场"
+                    />
+                  )}
                 </FormField>
                 <FormField
                   label="运动"
                   labelClassName="text-muted-foreground mb-0.5 text-3xs"
                 >
-                  <SelectMenu
-                    className="bg-subtle! border-border! text-xs"
-                    value={shot.motion ?? "medium"}
-                    onChange={(value) =>
-                      updateShot(shot.id, { motion: value as MotionLevel })
-                    }
-                    options={MOTIONS}
-                    labels={MOTION_LABELS}
-                    placeholder="运动"
-                  />
+                  {(field) => (
+                    <SelectMenu
+                      {...field}
+                      className="bg-subtle! border-border! text-xs"
+                      value={shot.motion ?? "medium"}
+                      onChange={(value) =>
+                        updateShot(shot.id, { motion: value as MotionLevel })
+                      }
+                      options={MOTIONS}
+                      labels={MOTION_LABELS}
+                      placeholder="运动"
+                    />
+                  )}
                 </FormField>
               </div>
             </div>
