@@ -22,6 +22,8 @@
   - 修法 = 按 `§13.5.9` 走出路 ①（有最小可达修复版就别登记进基线）：把 `'handlebars@4': '4.7.10'` 加回 `pnpm-workspace.yaml` 的 overrides，并在注释里写清「这条是回填、删 override 等于把修复一起删掉」。
   - 实测：`check-dependency-audit.mjs` 改前 2 条红 → 改后 ✓ 无基线外新增；`pnpm why handlebars` 只剩 1 个版本；`pnpm install` 无 `ERR_PNPM_IGNORED_BUILDS`；lockfile 改动只含 handlebars 相关行。**在干净基线 worktree 上复算过同样红**（§13.6.2），不是我引入的。
 
+- **`tests/daily-tracks.test.ts` 的「空行分隔」用例拿『两笔背靠背提交时间相等』当判据**（ISSUE #1282）。`%cI` 的精度是**秒**，而夹具是两次连续 `git commit` —— 它们只在**恰好落在同一秒**时才相等，跨秒就红（实测：全量并行档偶发，隔离重跑必绿）。那量的是机器调度，不是状态机。改成判**顺序关系**（`src/` 先提交 ⇒ 不晚于 `scripts/`），而「空行没把 `stamp` 提前清掉」这条边界照样被钉住（stamp 被提前清 ⇒ 两边都 null）。变异核过：把状态机改回「遇空行清 stamp」⇒ 该条仍红。
+
 ## Docs
 
 - 规范 §11.17.6（新增）：全局 setup 的 RTL 逐用例卸载 —— 「注册在那一刻的 `if` 里」的失效形态、为什么修法在地基、以及判据为什么必须**真跑探针**而不能纯文本判。
