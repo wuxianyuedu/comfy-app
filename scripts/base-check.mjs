@@ -88,6 +88,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { chainedSteps } from "./base-check/chained-steps.mjs";
 
 /**
  * 「被复算的那份检出」= **调用时的 cwd**，不是脚本自己的位置。
@@ -127,7 +128,8 @@ const HOOK = path.join(ROOT, ".githooks", "pre-commit");
  */
 export function resolveUpstreamRef(cwd = ROOT) {
   /** @param {string} ref */
-  const tryRef = (ref) => git(["rev-parse", "--verify", "--quiet", ref], cwd).ok;
+  const tryRef = (ref) =>
+    git(["rev-parse", "--verify", "--quiet", ref], cwd).ok;
   const upstream = git(
     ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
     cwd,
@@ -168,7 +170,8 @@ export function resolveUpstreamRef(cwd = ROOT) {
  */
 export function resolveMergeBaseRef(cwd = ROOT) {
   /** @param {string} ref */
-  const tryRef = (ref) => git(["rev-parse", "--verify", "--quiet", ref], cwd).ok;
+  const tryRef = (ref) =>
+    git(["rev-parse", "--verify", "--quiet", ref], cwd).ok;
   const remotes = git(["remote"], cwd);
   if (remotes.ok) {
     for (const remote of remotes.stdout.split("\n").map((s) => s.trim())) {
@@ -329,7 +332,7 @@ export function resolveGateCommand(input, hookPath = HOOK) {
  *
  * @param {string[]} input 用户显式点名的命令（为空 ⇒ 用上面算出来的那一批）
  * @param {string} [hookPath]
- * @returns {{ok: true, commands: Array<{argv: string[], label: string}>} | {ok: false, error: string}}
+ * @returns {{ok: true, commands: Array<{argv: string[], label: string, baseSide?: boolean}>} | {ok: false, error: string}}
  */
 export function resolveMergeBatch(input = [], hookPath = HOOK) {
   if (input.length > 0) {
@@ -353,9 +356,46 @@ export function resolveMergeBatch(input = [], hookPath = HOOK) {
       error: "钩子里没有一条「可在干净快照上判决」的判据 —— 复算不出任何事实",
     };
   }
-  return { ok: true, commands };
+  /* **第二个来源**：挂在 `--base` 这批里、但不在钩子步骤上的判据（见
+   * `scripts/base-check/chained-steps.mjs` 的头注释 —— 那一族天然进不了钩子的理由、
+   * 两条口径与事实来源都写在那里，不在本文件里复述，免得两处各说一遍）。 */
+  return {
+    ok: true,
+    commands: [
+      ...commands,
+      ...chainedSteps({ root: ROOT, resolveBaseRef: resolveMergeBaseRef, git }),
+    ],
+  };
 }
 
+/**
+ * **挂在 `--base` 这批里、但不在 `.githooks/pre-commit` 步骤上的**判据。
+ *
+ * 为什么这一族不能由 `readHookSteps` 收上来：它们**天然进不了钩子**，而理由与
+ * 「代价高」无关 —— 是**本地看不到那个形态**。首发成员是
+ * `scripts/check-commit-claims.mjs`（「提交信息里的声明 ⇄ 那次提交的事实」）：
+ *
+ *   · 声明说的是**某一次提交**的树（「§x.y 照旧保留」），核对必须手上有那次提交的
+ *     事实；而丢失发生在**平台侧 squash** 那一刻，本地钩子跑的时候那次提交还没诞生
+ *     （实测：`ad81a912` / `bdabd26f` / `b9bedd37` 在 `master` 上都是**单亲**，
+ *     信息里却带 `Merge origin/master into …` 字样 —— `check-merge-parents` 在
+ *     squash 之后判不出来，因为单亲是它的正常形态）；
+ *   · 硬塞进钩子只会让人学会绕开它（§13.6.2 的边界原话）。
+ *
+ * 而 `--base` 正是「合并前 / 事后盘点，人点一次就跑一次」那一档：它手上有上游引用、
+ * 有干净快照，本来就是「对着一批提交算事实」的地方 —— 挂在这里**零新通道**
+ * （§13.6.2 / §13.5.4 的按需召唤）。
+ *
+ * **判什么、判在哪一次提交**：合并前那档的语义是「**这一批准备并进去的提交**」，
+ * 所以给的是**本检出相对基线的那些提交**（`<ref>..HEAD`）—— 与 `--base` 问的
+ * 「并进去之后会不会红」同源。没有待并提交时（已在基线上）给空，判据自己报 0 次
+ * 提交，不报假红。
+ *
+ * 每条都要带 `label`（行表里点名用），并走 `mayDecideOnCleanSnapshot` 的同一套
+ * 排除理由 —— 它**不依赖暂存区**（判的是提交对象），所以照收。
+ *
+ * @returns {Array<{argv: string[], label: string}>}
+ */
 /**
  * 钩子里 `run_group <id> "<说明>" sh -c '<命令>'` 那四条 —— **A 组与 B 组是它们**。
  *
@@ -513,9 +553,12 @@ export function normalizeRun(r) {
  */
 export function commandTargetState(argv, cwd) {
   const [cmd, first] = argv;
-  if (cmd !== "node" || !first || first.startsWith("-")) return { kind: "unknown" };
+  if (cmd !== "node" || !first || first.startsWith("-"))
+    return { kind: "unknown" };
   const target = path.resolve(cwd, first);
-  return fs.existsSync(target) ? { kind: "ok" } : { kind: "missing", target: first };
+  return fs.existsSync(target)
+    ? { kind: "ok" }
+    : { kind: "missing", target: first };
 }
 
 /**
@@ -533,7 +576,10 @@ export function runGate(argv, cwd) {
   const state = commandTargetState(argv, cwd);
   if (state.kind === "missing") {
     // 127 是本脚本自己的「没跑起来」哨兵（`normalizeRun` 用同一个码）。
-    return { code: 127, output: `[base-check] 目标不存在于该工作目录：${state.target}` };
+    return {
+      code: 127,
+      output: `[base-check] 目标不存在于该工作目录：${state.target}`,
+    };
   }
   const [cmd, ...rest] = argv;
   if (cmd === undefined) {
@@ -558,12 +604,16 @@ export function runGate(argv, cwd) {
  * 跑起来时非零退出码与「跑了且红」同形 —— 只读退出码必然把后者读成前者，而这两件事
  * 的下一动作完全相反（一个去修代码，一个去查命令为什么不存在）。所以先判这一档。
  *
- * @param {{currentCode: number, baseCode: number | null}} input
+ * @param {{currentCode: number, baseCode: number | null}} input（`null` = 这条只在单侧跑）
  * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours"}
  */
 export function judge({ currentCode, baseCode }) {
   if (currentCode === 0) return "current-green";
   if (currentCode === 127 || baseCode === 127) return "inconclusive";
+  /* `baseCode === null` = **这一条只在单侧跑**（`baseSide: false`）：它的对象是本检出
+   * 这条线上的提交对象，基线快照里没有它们，所以「没比较过」不是「别线上也红」。
+   * 它红的时候唯一的可能是「这次提交的声明与它自己的树矛盾」⇒ 纯粹的 `yours`。 */
+  if (baseCode === null) return "yours";
   return baseCode !== 0 ? "baseline-red" : "yours";
 }
 
@@ -576,7 +626,9 @@ export function judge({ currentCode, baseCode }) {
  */
 export function nextSteps(verdict, { ref }) {
   if (verdict === "current-green") {
-    return ["你的检出上这条判据已经是绿的（已修 / 或它只在别的输入面上触发）—— 无需复算。"];
+    return [
+      "你的检出上这条判据已经是绿的（已修 / 或它只在别的输入面上触发）—— 无需复算。",
+    ];
   }
   if (verdict === "inconclusive") {
     return [
@@ -642,10 +694,16 @@ export function baseCheck({ argv, label, ref, keep = false, json = false }) {
  *   · 有红、且红的那些在基线上**同样命中** ⇒ `baseline-red`（别线的红，逐条列出）；
  *   · 有红、但基线上绿 ⇒ `yours`（本检出的红）。
  *
- * @param {{commands: Array<{argv: string[], label: string}>, ref: string, keep?: boolean, json?: boolean, shape?: "single" | "batch"}} input
+ * @param {{commands: Array<{argv: string[], label: string, baseSide?: boolean}>, ref: string, keep?: boolean, json?: boolean, shape?: "single" | "batch"}} input
  * @returns {number} 退出码（0 = 事实已复算；1 = 复算过程失败）
  */
-export function baseCheckMany({ commands, ref, keep = false, json = false, shape = "batch" }) {
+export function baseCheckMany({
+  commands,
+  ref,
+  keep = false,
+  json = false,
+  shape = "batch",
+}) {
   /* 本检出那一侧：**先跑、先收**（不建 worktree 就能判掉的情形不付这笔 —— 同
    * `baseCheck` 的旧口径）。 */
   /** @type {Array<{code: number, output: string}>} */
@@ -716,14 +774,23 @@ export function baseCheckMany({ commands, ref, keep = false, json = false, shape
     const commit = git(["rev-parse", "--short", "HEAD"], worktreePath).stdout;
     const rows = [];
     for (const [i, c] of commands.entries()) {
-      const base = runGate(c.argv, worktreePath);
       const cur = current[i]?.code ?? 127;
+      /* `baseSide: false` ⇒ **不在快照上跑**（理由见 `CHAINED_STEPS` 那条注释）：
+       * 它的 `baseCode` 记 `null`（= 未跑），判决只看本检出那一侧。 */
+      const base = c.baseSide === false ? null : runGate(c.argv, worktreePath);
       rows.push({
         label: c.label,
         currentCode: cur,
-        baseCode: base.code,
-        verdict: judge({ currentCode: cur, baseCode: base.code }),
-        baseOutputTail: base.code === 0 ? undefined : tail(base.output),
+        baseCode: base === null ? null : base.code,
+        /* `base === null` ⇒ 这一条只在单侧跑（`baseSide: false`）：`judge` 认得
+         * `null`，把它读成 `yours`（「没比较过」不是「别线上也红」）。 */
+        verdict: judge({
+          currentCode: cur,
+          baseCode: base === null ? null : base.code,
+        }),
+        ...(base && base.code !== 0
+          ? { baseOutputTail: tail(base.output) }
+          : {}),
       });
     }
     return reportMany(
@@ -827,7 +894,9 @@ export function nextStepsMany(summary, reds, { ref }) {
  * @returns {string}
  */
 function tail(text, lines = 20) {
-  const all = String(text ?? "").trimEnd().split("\n");
+  const all = String(text ?? "")
+    .trimEnd()
+    .split("\n");
   return all.slice(-lines).join("\n");
 }
 
@@ -988,6 +1057,9 @@ function main(argv) {
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+if (
+  process.argv[1] &&
+  fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+) {
   process.exit(main(process.argv.slice(2)));
 }

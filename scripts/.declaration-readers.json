@@ -14,8 +14,8 @@
     },
     {
       "id": "commit-message-claims",
-      "name": "提交信息里的机械可核声明（§x.y「照旧保留」）",
-      "declaredAt": "某次提交的信息里（如「master 新增的 §13.5.13 / §13.6.3 两节…照旧保留」）",
+      "name": "提交信息里的机械可核声明（章节保留 / 路径没动 / 计数归零）",
+      "declaredAt": "提交信息正文（那次提交的 `%B`，如「master 新增的 §13.5.13 / §13.6.3 两节…照旧保留」）",
       "reader": "scripts/check-commit-claims.mjs",
       "executor": {
         "kind": "npm-script",
