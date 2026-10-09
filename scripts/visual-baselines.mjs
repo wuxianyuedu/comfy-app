@@ -367,7 +367,7 @@ export function checkRecordingEnv({ platform, env = process.env }) {
  *   · `skipHow` —— 记一条「写明理由的豁免」那条命令（同样只有 e2e 有）。它是**另一条
  *     出路**而不是绕过：留下的是一条能复核的事实。
  *
- * @type {Record<string, {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}>}
+ * @type {Record<string, {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}>}
  */
 export const FRESHNESS_TRACKS = {
   visual: {
@@ -377,6 +377,9 @@ export const FRESHNESS_TRACKS = {
     run: "pnpm check:visual",
     daily: false,
     skipHow: null,
+    dirty: [],
+    dirtyHow: null,
+    graceMs: 0,
   },
   e2e: {
     ledger: "scripts/.e2e-freshness.json",
@@ -385,6 +388,41 @@ export const FRESHNESS_TRACKS = {
     run: "pnpm test:e2e",
     daily: true,
     skipHow: 'node scripts/e2e-run.mjs --skip "<理由>"',
+    /* 这一档**不吃输入面**（`dirty` 为空）：它的结论与改了哪几个文件无关 ——
+     * 同一份 spec 在任何改动上都该绿。所以它没有「这次改动不吃这一档」那条出路
+     * （`dirtyHow` 即 null），也不需要宽限（按日历日判）。 */
+    dirty: [],
+    dirtyHow: null,
+    graceMs: 0,
+  },
+  full: {
+    ledger: "scripts/.full-suite-freshness.json",
+    key: "full",
+    label: "全量单测 + 覆盖率门槛",
+    run: "pnpm run test:coverage",
+    daily: true,
+    skipHow: 'node scripts/full-suite-run.mjs --skip "<理由>"',
+    dirty: ["src/", "tests/"],
+    dirtyHow: 'node scripts/full-suite-run.mjs --dirty "<理由>"',
+    graceMs: 7 * 86_400_000,
+  },
+  artifact: {
+    ledger: "scripts/.artifact-freshness.json",
+    key: "artifact",
+    label: "产物级护栏（build + 数产物）",
+    run: "pnpm run build",
+    daily: true,
+    skipHow: 'node scripts/artifact-run.mjs --skip "<理由>"',
+    dirty: [
+      "next.config.js",
+      "src-tauri/",
+      "scripts/build-desktop.mjs",
+      "scripts/standalone-private-inputs.mjs",
+      "scripts/standalone-runtime.mjs",
+      "scripts/build-executor-host.mjs",
+    ],
+    dirtyHow: 'node scripts/artifact-run.mjs --dirty "<理由>"',
+    graceMs: 7 * 86_400_000,
   },
 };
 
@@ -397,6 +435,8 @@ export const FRESHNESS_LEDGER = freshnessTrack("visual").ledger;
  *
  * @param {keyof typeof FRESHNESS_TRACKS | string} kind
  * @returns {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}}
+ *   与 `FRESHNESS_TRACKS[*]` 同形 —— 两条账的差异（`daily` / `skipHow`）也在里面，
+ *   调用方据此决定要不要判「每天首次」、以及话术里给不给豁免那条出路。
  */
 export function freshnessTrack(kind) {
   const track = FRESHNESS_TRACKS[kind];
@@ -411,19 +451,33 @@ export function freshnessTrack(kind) {
 /**
  * 新鲜度记录的形状（**读写共用这一份**：各写一套时记出来的会被自己的校验判成缺字段）。
  *
- * 四栏各管一件事，缺一栏这条账就退化：
+ * 五栏必在（各管一件事，缺一栏这条账就退化），末栏按输入可选：
  *   · `key` —— 是**哪一档**（像素按平台分档，故这一栏在那边是 `linux`；全量 e2e 那边是
  *     `e2e`）。写成通用名而不是 `platform`，是因为第二条账的「档」不是平台。
  *   · `verifiedAt` / `who` —— 「上一次被实证跑绿是什么时候、谁跑的」。
  *   · `how` —— **能照着重跑的那条命令**（这就是你要写 `pnpm test:e2e` 而不是「跑过了」的原因）。
  *   · `trackedBy` —— 这条记录属于**哪一个跑法**（`FRESHNESS_TRACKS` 的键）。它是两条账
  *     唯一的形状差异，作用是把「e2e 的绿被记进像素档的账」这类抄混当场照出来。
+ *   · `skippedReason` / `dirtyReason` —— **两栏都可选**，各回答一件不同的事：
+ *     `skippedReason` 是「今天故意不跑」，`dirtyReason` 是「这次改动不吃这一档」。
+ *     各把一句话写进账面（核对它们的是同一份 `isUsableSkipReason`），
+ *     它们合起来让账面上分得开「今天跑过」「今天说好不跑」「这次不吃它」三件事
+ *     —— 混成一栏之后，「这一档三个月没跑」与「这三个月每次都声明不吃它」长得一模一样。
+ *     所以本函数返回的**不是**一份固定栏数的记录。
  *
- * @param {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string}} input
- * @returns {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string}}
+ * @param {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: unknown, dirtyReason?: unknown}} input
+ * @returns {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string, dirtyReason?: string}}
  */
-export function freshnessRecord({ key, verifiedAt, who, how, trackedBy, skippedReason }) {
-  /** @type {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string}} */
+export function freshnessRecord({
+  key,
+  verifiedAt,
+  who,
+  how,
+  trackedBy,
+  skippedReason,
+  dirtyReason,
+}) {
+  /** @type {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string, dirtyReason?: string}} */
   const record = {
     key: key.trim(),
     verifiedAt: verifiedAt.trim(),
@@ -431,10 +485,19 @@ export function freshnessRecord({ key, verifiedAt, who, how, trackedBy, skippedR
     how: how.trim(),
     trackedBy: trackedBy.trim(),
   };
-  /* `skippedReason` 只在**豁免**那一条出路上出现：它把「今天不跑」写成一句能被复核的话，
-   * 而不是让账面上出现一个与「跑绿过」长得一样的日期。核对它的是 `isUsableSkipReason`。 */
-  if (typeof skippedReason === "string" && skippedReason.trim()) {
-    record.skippedReason = skippedReason.trim();
+  /* 两栏「不跑」的理由都在这里透传 —— **两栏都得列**：只透传 `skippedReason` 时，
+   * `--dirty` 写下的那句会**在这一步被静默丢掉**（`freshnessRecord` 只搬它认识的键），
+   * 于是账面上剩一条没有任何理由的记录、而 `verifiedAt` 是今天 ⇒ 判据当它「今天自证过」
+   * 放行。那正是本条最不能有的形态：一个看着正常的记录指的是另一件事。
+   *
+   * 两栏各管一件事：`skippedReason` = 今天故意不跑；`dirtyReason` = 这次改动不吃这一档。
+   * 两者都要能复核（同一份 `isUsableSkipReason` 核对），区别只在**读起来不一样**
+   * —— 混成一栏之后，「这一档三个月没跑」与「这三个月每次都声明不吃它」长得一模一样。 */
+  for (const [field, value] of [
+    ["skippedReason", skippedReason],
+    ["dirtyReason", dirtyReason],
+  ]) {
+    if (typeof value === "string" && value.trim()) record[field] = value.trim();
   }
   return record;
 }
@@ -473,6 +536,90 @@ export function isSameLocalDay(a, b) {
 }
 
 /**
+ * 「这一档的输入面**今天**被改过」的判据 —— 三档「每天首次」里代价高的那两档读它。
+ *
+ * 为什么要有它（而不是一律按日历日判）：全量 e2e 人人都跑得动、结论与改了哪几个文件
+ * 无关，所以「当天第一次提交带一次凭证」是句正当的话；而全量单测 + 覆盖率（10 分钟量级）
+ * 与产物级护栏（`next build` + 数产物）**没必要每天都跑** —— 没碰 `src/` 的一天跑一遍，
+ * 换来的是十分钟墙钟与一个不会变的结论。那两档真正想要的是「**改了就当天跑**」。
+ *
+ * 口径：`track.dirty` 是**路径前缀**（不是 glob）—— 前缀足够表达「这一档吃哪个目录」，
+ * 而 glob 会把「为什么这条没命中」变成一处要现场调试的正则。空数组 = 这一档不改输入面
+ * （= 每天都得自证），与 `dirty` 缺省同义。
+ *
+ * `at` 是**账上那次自证的时刻**：它比 `now` 早或同在 `dirtySince` 之后，就算这一档
+ * 已经被今天的改动自证过了。比 `now` 早是常态（改动与自证之间隔着几小时）。
+ *
+ * @param {{dirty?: string[]}} track
+ * @param {string[]} changed 当天改动过的文件（相对仓库根、POSIX 分隔符）
+ * @returns {boolean}
+ */
+export function dirtiesTrack(track, changed) {
+  const prefixes = track.dirty ?? [];
+  if (prefixes.length === 0) return false;
+  return changed.some((rel) => prefixes.some((p) => rel.startsWith(p)));
+}
+
+/**
+ * 「每天首次」那一档的判决话术（三档共用一份，差异由 `track` 的数据决定）。
+ *
+ * 抽成纯函数是为了让**每一档的每一条边界**都能被真跑一次：`checkFreshnessLedger`
+ * 里那段内联实现此前只服务一档，参数化之后若还写在里面，「dirty 档在没动输入面的那天
+ * 放行」这条边界就永远不会被任何东西走到（那是 §11.18.3.1 那族的静默漏报）。
+ *
+ * 三种形态，每一种对应一句**可执行**的话：
+ *   · 今天已有自证（`at` 不早于今天日界，或晚于 `dirtySince`）⇒ 放行；
+ *   · 今天动过输入面而账还停在改动之前 ⇒ 拦，动作是「现在跑一次」；
+ *   · 没动输入面但已经旧过 `graceMs` ⇒ 拦，动作是「跑一次，或记一条 `--dirty` 说明」。
+ *
+ * @param {{track: {label: string, run: string, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}, at: Date, now: Date, dirtySince: Date | null}} input
+ * @returns {string | null} 拦下时给一句问题；放行时 null
+ */
+export function freshnessVerdict({ track, at, now, dirtySince }) {
+  /* `dirtySince` 只对**吃输入面**的那几档有意义（`track.dirty` 非空）。不吃的那一档
+   * （全量 e2e）收到一个非 null 的 `dirtySince` 时**必须忽略它** —— 否则「今天动过一次
+   * 任何文件」会被读成「这一档已经被自证了」，于是「每天首次」那条判据在有人动过代码的
+   * 日子里**整个失效**（而账面上看不出任何异常）。 */
+  const since = (track.dirty ?? []).length > 0 ? dirtySince : null;
+  const dirtyHows = [
+    `跑一次 \`${track.run}\`（跑绿即记）`,
+    track.skipHow ? `记一条写明理由的豁免：\`${track.skipHow}\`` : null,
+  ].filter(Boolean);
+  const how = `\n        记账：${dirtyHows.join("，或")}。`;
+  /* 今天已经自证过：日界比一次（`at` 落在今天），或这次自证的时刻晚于当天的第一次
+   * 改动 —— 后者是「先改后跑」与「先跑后改」两种顺序都要放行的那一条边界。 */
+  if (isSameLocalDay(at, now)) return null;
+  if (since && at.getTime() >= since.getTime()) return null;
+  if ((track.dirty ?? []).length === 0) {
+    return (
+      `今天还没有自证 —— 上一次跑绿在 "${at.toISOString()}"，不是今天。` + how
+    );
+  }
+  if (since) {
+    return (
+      `今天的提交动过这一档的输入面（${track.dirty.join(" / ")}），而它还没有自证 —— ` +
+      `上一次跑绿在 "${at.toISOString()}"，早于当天的第一次改动。` +
+      how +
+      (track.dirtyHow
+        ? `\n              若这次改动确实不吃这一档：\`${track.dirtyHow}\`。`
+        : "")
+    );
+  }
+  const days = Math.floor((now.getTime() - at.getTime()) / 86_400_000);
+  if (track.graceMs > 0 && now.getTime() - at.getTime() <= track.graceMs) {
+    return null;
+  }
+  return (
+    `已经 ${days} 天没有自证（上一次跑绿在 "${at.toISOString()}"），` +
+    `超过了 ${Math.round(track.graceMs / 86_400_000)} 天的宽限。` +
+    how +
+    (track.dirtyHow
+      ? `\n              若近期改动确实不吃这一档：\`${track.dirtyHow}\`。`
+      : "")
+  );
+}
+
+/**
  * 校验一份新鲜度账（`{档 → 记录}`）。空 = 放行。
  *
  * 四个方向都拦：缺档（还停在「录过就算数」）/ 记录写不全（没人能按它去复核）/
@@ -481,17 +628,19 @@ export function isSameLocalDay(a, b) {
  * 「跑过一次」与「跑过的是哪一个」会变成两件事，而账面上看着完全正常）。
  *
  * @param {Record<string, unknown>} ledger
- * @param {{required: string[], registered: string[], track: {ledger: string, label: string, run: string, daily: boolean, skipHow: string | null}, kind: string, now?: Date}} scope
+ * @param {{required: string[], registered: string[], track: {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}, kind: string, now?: Date}} scope
  *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）；
  *   `track` = 这一份账的登记（话术里要给出「去哪个文件补、按哪条命令跑」，
- *     以及 `daily` / `skipHow` 这两栏 —— 它们是两条账真正的差异，不是可选装饰）；
+ *   它同时决定 `daily` / `skipHow` 那两条分叉）；
  *   `kind` = 这一份账属于哪个跑法（`trackedBy` 的比对基准）；
- *   `now` = 判「今天有没有自证」用的时钟（`track.daily` 那一档才读它；用例可注入）
+ *   `now` = 判「今天有没有自证」用的时钟（`track.daily` 那一档才读它；用例可注入）；
+ *   `dirtySince` = **今天动过这一档输入面**的那个提交时刻（没有则 null）。只有
+ *     `track.dirty` 非空的档读它 —— 那两档按「改了就当天跑」判，而不是「每天一次仪式」。
  * @returns {string[]} 问题清单
  */
 export function checkFreshnessLedger(
   ledger,
-  { required, registered, track, kind, now = new Date() },
+  { required, registered, track, kind, now = new Date(), dirtySince = null },
 ) {
   /** @type {string[]} */
   const problems = [];
@@ -553,27 +702,40 @@ export function checkFreshnessLedger(
     }
     /* 「每天首次」那一档多一条判据：这一次自证必须是**今天**的（或一条写明理由的豁免）。
      * 它只判日历日，不判「多久算旧」—— 阈值仍然不写进判据（像素档那句同样的取舍）。
-     * 记录写不清时上面已经拦过，这里只在形状成立时才比日期，免得同一件事报两遍。 */
+     * 记录写不清时上面已经拦过，这里只在形状成立时才比日期，免得同一件事报两遍。
+     *
+     * 三档「每天首次」**不等价**，差异全在 `track.dirty` 上（数据，不是分支）：
+     *   · `dirty` 为空（全量 e2e）—— 这一档的代价最低（人人都跑得动），而且它的结论
+     *     与「改了哪几个文件」没有关系（同一份 spec 在任何改动上都该绿）。所以直接按
+     *     日历日判：当天第一次提交必须带一次凭证。
+     *   · `dirty` 非空（全量单测 + 覆盖率 / 产物级护栏）—— 这两档**没必要每天都跑**：
+     *     没碰 `src/` 的一天跑一遍全量单测，换来的是 10 分钟墙钟与一个不会变的结论。
+     *     所以它按「**当天有没有提交动过这一档的输入面**」判（`dirtyCoveredOnDay`）：
+     *     动过才要今天自证；没动过则以 `graceMs` 为宽限 —— 超过宽限、或当天动过而没自证
+     *     ⇒ 两头都拦。这条把「每日执行」从「每天一次仪式」改成了「**改了就当天跑**」，
+     *     而后者才是这三档真正想要的。 */
     if (track.daily) {
-      if (typeof rec.skippedReason === "string" && rec.skippedReason.trim()) {
-        if (!isUsableSkipReason(rec.skippedReason)) {
+      /* 「不跑」有两种，形状各自成立、**互不等于**：`skippedReason`（今天故意不跑）与
+       * `dirtyReason`（这次改动不吃这一档）。两者都放行，但都要能复核 —— 混成一栏之后，
+       * 账面上就分不出「这一档一直没人跑」与「每次都声明不吃它」。 */
+      const waiver = ["skippedReason", "dirtyReason"].find(
+        (f) => typeof rec[f] === "string" && rec[f].trim(),
+      );
+      if (waiver) {
+        if (!isUsableSkipReason(rec[waiver])) {
           problems.push(
-            `${track.label}（${key}）的豁免理由（"${rec.skippedReason.trim()}"）不算「有人回答过」—— ` +
-              `豁免留下的是一条能被复核的事实，占位词与过短的理由什么都没留下。` +
+            `${track.label}（${key}）的${waiver === "dirtyReason" ? "「不吃这一档」" : "豁免"}理由` +
+              `（"${String(rec[waiver]).trim()}"）不算「有人回答过」—— ` +
+              `留下的是一条能被复核的事实，占位词与过短的理由什么都没留下。` +
               `写清这次为什么不跑，或直接跑一次 \`${track.run}\`。`,
           );
         }
       } else {
         const ms = Date.parse(String(rec.verifiedAt ?? ""));
-        if (!Number.isNaN(ms) && !isSameLocalDay(new Date(ms), now)) {
-          problems.push(
-            `${track.label}（${key}）今天还没有自证 —— 上一次跑绿在 ` +
-              `"${String(rec.verifiedAt ?? "").trim()}"，不是今天。` +
-              `\n        记账：跑一次 \`${track.run}\`（跑绿即记），` +
-              (track.skipHow
-                ? `\n              或记一条写明理由的豁免：\`${track.skipHow}\`。`
-                : ""),
-          );
+        if (!Number.isNaN(ms)) {
+          const at = new Date(ms);
+          const stale = freshnessVerdict({ track, at, now, dirtySince });
+          if (stale) problems.push(`${track.label}（${key}）${stale}`);
         }
       }
     }
@@ -670,17 +832,23 @@ export function writeFreshness({ root, kind, who }) {
  * 理由不合用（过短 / 占位）时**抛**，由调用方转成退出码：与其记一条没有信息的账
  * 让人以为「已经处理过」，不如当场把这条命令退回去。
  *
- * @param {{root: string, kind: string, who: string, reason: unknown}} args
+ * @param {{root: string, kind: string, who: string, reason: unknown, field?: "skippedReason" | "dirtyReason"}} args
+ *   `field` 缺省是「豁免」（`skippedReason`）；`dirtyReason` 是「这次改动不吃这一档」。
  * @returns {{note: string, previous: string | null}}
  */
-export function writeSkipRecord({ root, kind, who, reason }) {
+export function writeSkipRecord({ root, kind, who, reason, field }) {
   const track = freshnessTrack(kind);
-  if (!track.skipHow) {
+  /* `field` 区分**两种**「不跑」：`skippedReason`（今天故意不跑，理由要能复核）与
+   * `dirtyReason`（这次改动确实不吃这一档）。两者都让判据放行，但账面上必须看得出
+   * 它们不是同一件事 —— 混成一栏之后，「这一档三个月没跑」与「这三个月每次都说不吃它」
+   * 会长得一模一样，而那正是这张账要防的形态。 */
+  const written = field ?? "skippedReason";
+  if (written === "skippedReason" && !track.skipHow) {
     throw new Error(`[visual-baselines] ${kind} 档没有「豁免」这条出路`);
   }
   if (!isUsableSkipReason(reason)) {
     throw new Error(
-      `[visual-baselines] 豁免理由（"${String(reason ?? "").trim()}"）不算「有人回答过」—— ` +
+      `[visual-baselines] 理由（"${String(reason ?? "").trim()}"）不算「有人回答过」—— ` +
         "写清这次为什么不跑（占位词与过短的理由都被拦）。",
     );
   }
@@ -693,7 +861,7 @@ export function writeSkipRecord({ root, kind, who, reason }) {
     who,
     how: track.run,
     trackedBy: kind,
-    skippedReason: String(reason).trim(),
+    [written]: String(reason).trim(),
   });
   try {
     writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
@@ -708,8 +876,8 @@ export function writeSkipRecord({ root, kind, who, reason }) {
   return {
     previous,
     note:
-      `${track.label}已记一条豁免（上次自证：${previous ?? "无记录"}）—— ` +
-      `理由写在 ${track.ledger} 的 skippedReason 里，改它时请连同提交。`,
+      `${track.label}已记一条${written === "skippedReason" ? "豁免" : "「不吃这一档」"}（上次自证：` +
+      `${previous ?? "无记录"}）—— 理由写在 ${track.ledger} 的 ${written} 里，改它时请连同提交。`,
   };
 }
 

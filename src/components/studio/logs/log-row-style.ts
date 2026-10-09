@@ -17,6 +17,7 @@ import {
   parseAnsiSegments,
   type AnsiStyleKey,
 } from "~/lib/log/log-ansi";
+import { findLogPathTokens } from "~/lib/log/log-path-tokens";
 
 /** 行文本里识别出的词法分片。`style` 为空 = 按级别默认色渲染。 */
 export interface RowToken {
@@ -88,9 +89,18 @@ export function hasAnsi(text: string): boolean {
 /**
  * 无 ANSI 时的词法上色：启动转录里 `Write-Host` 的颜色不会进文件，
  * 面板按 token 复原终端观感（时间戳调暗、`[OK]` 绿、URL 蓝、路径紫）。
+ *
+ * **路径那一档的区间不在这条正则里**（此前在，且用 `[^\s]*` 吃到第一个空格就停）：
+ * 区间取自 `findLogPathTokens`（`~/lib/log/log-path-tokens`），即**与「点一下定位到
+ * 文件管理器」那一层同一个判据**。两份路径判据必然漂移过一次 —— 用户贴图那行回显
+ * `>>> "C:\Program Files\PowerShell\7\pwsh.EXE" …` 被上成 `C:\Program` +
+ * `\PowerShell\7\pwsh.EXE"` 两段紫字（后者还是条假路径：单个 `\` 开头不是路径），
+ * 而可点那一层在分片之内做识别，于是点得到的是 `C:\Program` —— 一个不存在的目录。
+ * 现在两层同源：一条路径恒在**一个**分片里完整落地（判据见 `log-row-style.test.ts`
+ * 的「词法上色里的路径区间」，渲染那一半见 `LogRowRevealPath.test.tsx`）。
  */
 const TOKEN_RE =
-  /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+|\b(?:[A-Z]:\\|\\)[^\s]*)/gi;
+  /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+)/gi;
 
 const TOKEN_STYLES: { pattern: RegExp; style: AnsiStyleKey }[] = [
   { pattern: /^\[\d{2}:\d{2}:\d{2}\]$/, style: "gray" },
@@ -101,18 +111,73 @@ const TOKEN_STYLES: { pattern: RegExp; style: AnsiStyleKey }[] = [
   { pattern: /^\[INFO\]$/, style: "gray" },
   { pattern: /^PID\s*[:：]/i, style: "magenta" },
   { pattern: /^https?:\/\//i, style: "blue-bright" },
-  { pattern: /^(?:[A-Z]:\\|\\)/i, style: "magenta-bright" },
 ];
 
-/** 按 `TOKEN_RE` 把一行切成若干分片，命中的分片带上语义样式。 */
+/** 路径那一档的样式键（与 `LogRow` 里那个可点按钮的常态色同源，见那里的说明）。 */
+const PATH_STYLE: AnsiStyleKey = "magenta-bright";
+
+/** 行里被命中的一段（半开区间 `[start, end)`）。 */
+interface StyledSpan {
+  start: number;
+  end: number;
+  style: AnsiStyleKey;
+}
+
+/** 一段命中文本 → 它的语义样式键；不命中任何一档回 `undefined`（按级别默认色渲染）。 */
+function styleOfToken(text: string): AnsiStyleKey | undefined {
+  for (const token of TOKEN_STYLES) {
+    if (token.pattern.test(text)) return token.style;
+  }
+  return undefined;
+}
+
+/**
+ * 一行里所有该上色的区间（按起点排序、互不重叠）。
+ *
+ * 顺序是「**路径先占位**」：路径区间最长、且是用户真正要点的对象，其余词法 token
+ * 落在路径区间内就让位（`C:\a\[OK]\b` 这种目录名不该把路径切成三段）。让位判据是
+ * 区间相交，不依赖 TOKEN_RE 的分支顺序 —— 那个顺序只对「同级竞争」有意义。
+ */
+function styledSpans(text: string): StyledSpan[] {
+  const spans: StyledSpan[] = findLogPathTokens(text).map((token) => ({
+    start: token.start,
+    end: token.end,
+    style: PATH_STYLE,
+  }));
+  for (const match of text.matchAll(TOKEN_RE)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    const style = styleOfToken(match[0]);
+    if (style === undefined) continue;
+    const inside = spans.some((span) => start < span.end && end > span.start);
+    if (inside) continue;
+    spans.push({ start, end, style });
+  }
+  return spans.sort((a, b) => a.start - b.start);
+}
+
+/**
+ * 把一行切成若干分片，命中的分片带上语义样式。
+ *
+ * 切点全部来自 `styledSpans`（一份区间表），不再用「按正则 split 再逐段试样式」——
+ * 那种做法下「切点」与「样式」是两件事，于是新增路径形态时最容易漏掉的是**切点**
+ * （切错 ⇒ 颜色断在半截，且下层按片段识别路径时直接认不出来）。
+ */
 export function tokenizeRow(text: string): RowToken[] {
-  const parts = text.split(TOKEN_RE).filter((part) => part !== "");
-  return parts.map((part) => {
-    for (const token of TOKEN_STYLES) {
-      if (token.pattern.test(part)) return { text: part, style: token.style };
+  const parts: RowToken[] = [];
+  let cursor = 0;
+  for (const span of styledSpans(text)) {
+    /* 同一段文本可能被两档同时命中（路径里带 `[OK]` 之类）；已消费的区间跳过，
+     * 不把同一段文字画两遍。 */
+    if (span.start < cursor) continue;
+    if (span.start > cursor) {
+      parts.push({ text: text.slice(cursor, span.start) });
     }
-    return { text: part };
-  });
+    parts.push({ text: text.slice(span.start, span.end), style: span.style });
+    cursor = span.end;
+  }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor) });
+  return parts;
 }
 
 /**

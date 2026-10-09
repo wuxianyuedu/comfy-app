@@ -152,6 +152,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // helper / 夹具文件）每一条都得有人钉住，都是「下一次有人写等待」时才走得进的路径，
   // 所以必须进固定清单（与本次改动无关也照跑）。
   "tests/test-waitfor-gate.test.ts",
+  // 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮（规范 §11.15）：§11.15 那句
+  // 「本仓库已全部转换完」此前没有执行者，实测又长出 2 处 —— 同 check-test-sleep 的病。
+  // 它同时是判据自己的门禁自测 —— 该拦的（`it.each` / `describe.each` / `test.each` /
+  // `--update` 上涨）与该放的（棘轮内 / 本地同名 helper / 夹具字符串 / 夹具文件）
+  // 每一条都得有人钉住，都是「下一次有人写参数化用例」时才走得进的路径，
+  // 所以必须进固定清单（与本次改动无关也照跑）。
+  "tests/test-it-each-gate.test.ts",
   // 配置的**共享项有没有真的落到两档上**（规范 §11.17.3）：这一档的口径在本仓库
   // 写反过一次（「`projects` 不继承声明方 `test` 的选项」），共享项因此被复制成
   // 两份 spread；本轮复现那次实测、订正口径并让共享项回到根 `test`。
@@ -247,6 +254,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 占位子件），没有任何构建期或运行期判据会红。与本次暂存改动无关也必须响
   // （它是「下一次有人写这三族 story」的守卫），所以进固定清单。
   "tests/storybook-injection-layers.test.ts",
+  // 「画布帧的视口口径」（装不下要显式认账）：框架是**一个常量**（560px），而节点
+  // 渲染器的尺寸是消费方的事 —— 渲染器比框高、又没传 `fit` 时，钉住的视口会把内容
+  // 切掉一截（实测 `fanOut` 切 151px、`twoNodes` 切 79px、`mixedKinds` 切 51px），
+  // 而 tsc / eslint / 构建 / 上面那条注入层判据全绿、只有画布上少一块。它与「三层
+  // 注入的接线」是两件事（那条判的是「给的是不是真的那一份」，这条判的是
+  // 「装不装得下」），所以单独一份。与本次暂存改动无关也必须响（它是「下一次有人
+  // 用自定义渲染器摆画布」的守卫），所以进固定清单。
+  "tests/storybook-fit-viewport.test.ts",
   // 「eslint 增量缓存的依赖指纹」：`--cache` 的缓存键不含依赖树，而 `no-unsafe-*`
   // 是类型化规则 —— 依赖一变旧判决被整片重放，假红拦死提交、假绿洗掉真违规
   // （ISSUE #1399）。它的执行者是 `postinstall` 那一步，而改 `.githooks/**` 会让
@@ -315,6 +330,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 它读的是 `scripts/e2e-run.mjs` / `scripts/visual-baselines.mjs` 与两处接线文本，
   // import 图追不到，故进固定清单（与本次暂存改动无关也必须响）。
   "tests/e2e-run.test.ts",
+  // 「每天首次自证」从一档扩到四档（ISSUE #1282 的续）：平台流水线删掉（ISSUE #623）之后，
+  // **全量单测 + 覆盖率**与**产物级护栏（build + 数产物）**是两条一直没有执行者的判定档
+  // （§13.5.3 的欠账表里只写着「按需手动跑」，而那句话没有任何东西在守）。它们被接进同一份
+  // 判决里（`FRESHNESS_TRACKS` 的 `daily` / `dirty` 两栏），判据是「**改了就当天跑**」而不是
+  // 「每天一次仪式」—— 十分钟量级的两档没必要每天都跑。
+  // 这条判据读的是 `scripts/full-suite-run.mjs` / `scripts/artifact-run.mjs` /
+  // `scripts/daily-run.mjs` 与钩子接线文本，import 图追不到，故进固定清单。
+  "tests/daily-tracks.test.ts",
   // 「声明 ⇄ 读者」索引的契约测试（规范 §11.23）：本仓库的声明机制是一个一个事故里
   // 长出来的，每一种自带台账与判据，而没有任何一处说得出「一共有哪些声明、各自的读者
   // 是谁」。这一步把 scripts/.declaration-readers.json 当索引核（读者存在 + 执行者在

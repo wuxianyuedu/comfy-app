@@ -118,10 +118,12 @@ function PortRow({
  * 判据 `tests/storybook-injection-layers.test.ts` 按两侧交集现算，不靠人记。
  */
 function PortDemoNode() {
-  /* 行数压到「真节点那个量级」：真画布上一张卡挂几个端口，而这份 story 的框是
-     定高 560px —— 摆十行会把卡撑出画布、也把场景里的节点间距挤爆。
-     这几行够把两套 id 口径各显一遍（输入 = `ioKey`，输出 = `out:<name>`），
-     也正是 `flow-canvas.tsx` 那几档场景的边引用到的全部端口。 */
+  /* 十行 = 把两套 id 口径各显一遍（输入 = `ioKey`，输出 = `out:<name>`），也正是
+     `flow-canvas.tsx` 那几档场景的边引用到的全部端口。
+     代价是这张卡**比框架（`CANVAS_FRAME_CLASS`，560px）高** —— 所以摆它的三份
+     story 都传 `fit` 让 React Flow 缩到装得下。不传的话下沿会把最后一张卡切掉，
+     而构建 / tsc / eslint 全绿、只有画布上少一截（真浏览器量过：`fanOut` 切 151px、
+     `twoNodes` 切 79px、`mixedKinds` 切 51px）。 */
   const rows = useMemo(
     () => [
       { id: "model", dir: "in" as const, type: "MODEL" },
@@ -173,7 +175,10 @@ function PortDemoNode() {
 
 const NODE_TYPES = { story: PortDemoNode };
 
-/** 真画布里的端点：`useNodeId()` 拿到宿主 id，`<Handle>` 真渲染（能连线的那一档）。 */
+/** 真画布里的端点：`useNodeId()` 拿到宿主 id，`<Handle>` 真渲染（能连线的那一档）。
+ *
+ * `fit`：这份卡片渲染器（十行端点）比框架高，交给 React Flow 自己缩到框里 ——
+ * 缩放不是这一档的被测对象（要看的是端点几何与连线），装得下才算摆对。 */
 export const InCanvas: Story = {
   /* 这份 story 走 `render` 摆整块画布；`args` 由 meta 兜底（单枚端点的旋钮）。 */
   render: () => (
@@ -181,6 +186,7 @@ export const InCanvas: Story = {
       <StorybookFlowCanvas
         scene={withNodeType(canvasScene("twoNodes"), "story")}
         nodeTypes={NODE_TYPES}
+        fit
       />
     </div>
   ),
@@ -233,6 +239,8 @@ export const Single: Story = {
 /**
  * 扇出画布（一个源节点出三条线）：端点几何在**同一节点的多个 handle** 上都成立 ——
  * 单线场景看不出这件事（连线从哪个 handle 出、落哪个 handle 上，只有真画布算得出）。
+ *
+ * `fit` 同上（这一档是四张卡，不缩就把最下面那张切掉一半）。
  */
 export const FanOutCanvas: Story = {
   render: () => (
@@ -240,6 +248,7 @@ export const FanOutCanvas: Story = {
       <StorybookFlowCanvas
         scene={withNodeType(canvasScene("fanOut"), "story")}
         nodeTypes={NODE_TYPES}
+        fit
       />
     </div>
   ),
@@ -248,6 +257,8 @@ export const FanOutCanvas: Story = {
 /**
  * 各 kind 混排（八张节点）：端点类型色的**分辨率** —— 单张节点只出一种色，
  * 「多类型并排时能不能分辨」是画布上才看得出来的那一维。
+ *
+ * `fit` 同上（八张卡分三行，不缩的话整个第三行都在框外）。
  */
 export const MixedKindsCanvas: Story = {
   render: () => (
@@ -255,6 +266,7 @@ export const MixedKindsCanvas: Story = {
       <StorybookFlowCanvas
         scene={withNodeType(canvasScene("mixedKinds"), "story")}
         nodeTypes={NODE_TYPES}
+        fit
       />
     </div>
   ),

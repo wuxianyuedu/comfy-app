@@ -122,32 +122,32 @@ export function decide(staged) {
  *
  * 回退面刻意**只收 rustup 的三处**（CARGO_HOME/bin、~/.cargo/bin、~/.rustup/），
  * 不做 PATH 式的目录递归 —— 判据越宽，越可能选中一个不该用的 cargo。
+ *
+ * @returns {string | null} cargo 的绝对路径；PATH 与三处安装位都没有 = `null`
  */
 export function findCargo() {
   const onPath = whichCommand("cargo");
   if (onPath) return onPath;
   const home = os.homedir();
+  /* 三处候选**按条件拼**（而不是先塞一个 `false` 再 filter 掉）：`CARGO_HOME` 未设时
+   * `process.env.CARGO_HOME && …` 求值成 `false`，数组就成了 `(string | false)[]`，
+   * 而 `.mjs` 里写不了 `dir is string` 这种谓词（TS8010：类型注解只许出现在 `.ts`），
+   * tsc 也不会从 `typeof dir === "string" && dir.length > 0` 里推 —— 结果是下面整段
+   * 都带着 `string | undefined` 用。改成按条件拼之后类型本身就是 `string[]`，
+   * 不用靠注解断言。 */
   /** @type {string[]} */
-  const candidates = [
-    process.env.CARGO_HOME && path.join(process.env.CARGO_HOME, "bin"),
-    path.join(home, ".cargo", "bin"),
-    path.join(home, ".rustup", "toolchains"),
-  ].filter(
-    /**
-     * `checkJs` 下 `typeof x === "string"` 这条守卫**不自动收窄**数组元素类型
-     * （先把三项收成 `(string | false | undefined)[]`、filter 的返回值仍是它）——
-     * 于是下面 `path.join(dir, …)` 会报「`dir` 可能是 undefined」。显式标成类型谓词，
-     * 让 `candidates` 就是 `string[]`：这一条不再是「多写一句好看」，
-     * 它是 A 组硬闸（tsc --noEmit）通过的条件。
-     * @type {(dir: string | false | undefined) => dir is string}
-     */
-    (dir) => typeof dir === "string" && dir.length > 0,
-  );
+  const candidates = [];
+  if (process.env.CARGO_HOME) {
+    candidates.push(path.join(process.env.CARGO_HOME, "bin"));
+  }
+  candidates.push(path.join(home, ".cargo", "bin"));
+  candidates.push(path.join(home, ".rustup", "toolchains"));
 
   for (const dir of candidates) {
     if (dir.endsWith("toolchains")) {
       // rustup 的每个工具链各有一份 cargo：取版本号最大的那个（字典序即版本序，
       // 1.10 与 1.9 这种少见形态不在此纠偏 —— 只认「挑不到就继续找下一处」。
+      /** @type {string[]} */
       let versions = [];
       try {
         versions = fs.readdirSync(dir).sort().reverse();

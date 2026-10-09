@@ -1,0 +1,257 @@
+#!/usr/bin/env node
+// @ts-nocheck -- 提交门槛脚本:`it.each` 存量棘轮与新增拦截(供 .githooks/pre-commit 的 D 组调用)
+/**
+ * 参数化用例：`it.for` ⇄ `it.each` 的存量棘轮 —— 规范见
+ * docs/standards/11-测试与可观测性.md §11.15。
+ *
+ * ── 立案现场：同一件事第三次「没有执行者」 ────────────────────────────
+ *
+ * §11.15 的口径是「新增参数化用例一律写 `test.for`；`it.each` 属 vitest 3 时代的
+ * 写法」。它**明说**存量按本节逐步收口 —— 而 `c9f349ca` 那轮确实收口完了 63 处，
+ * §11.15 也就此写死一句「本仓库已全部转换完」。
+ *
+ * 问题出在这句话**没有任何东西在守**：
+ *   · `scripts/check-*.cjs` 里没有一条认识 `it.each`（`grep -c each scripts/check-*.cjs` = 0）；
+ *   · CI 随 ISSUE #623 删除；
+ *   · 于是「已全部转换完」这句规范文本，是它唯一的执行者 —— 而规范文本不会自己响。
+ *
+ * 实测：本轮复算 `.each(` 扫 src / tests / e2e 得 **2 处**，都是那句话之后长出来的：
+ *
+ *   ① `tests/tw4-canonical-ratchet.test.ts:46` 的 `describe.each` ——
+ *      `c9f349ca` 那轮漏掉的（它用的是 `describe.each`，而收口时只扫了 `it.each`）；
+ *   ② `src/components/studio/ViewTabStrip.test.tsx:136` 的 `it.each` ——
+ *      PR #1558 新写的，就在收口之后四天。
+ *
+ * 这与 `check-test-sleep.cjs`（20 → 38）、`check-test-waitfor.cjs`（206 → 211）
+ * 是**同一种病**：口径写在规范里、数字漂在盘点里，中间没有执行者。
+ * 所以本判据不判「有没有 `it.each`」这句口号，判**净数不许涨**。
+ *
+ * ── 它判什么、不判什么 ────────────────────────────────────────────────
+ *
+ * 判**棘轮**：越界站点数不许超过 `scripts/.test-it-each-baseline.json` 的基线
+ * （`--update` 收紧，且**拒绝把数字往上涨**）。基线归零之后，任何一个新增的
+ * `.each(` 都会被拦下。
+ *
+ * **不判**（明写在案，别当成漏报）：
+ *   · `describe.each` 与 `it.each` / `test.each` **一视同仁** —— §11.15 收口时
+ *     只扫了 `it.each`、把 `describe.each` 漏在门外，那正是 ① 号站点的来历。
+ *     一条口径按名字收窄就会漏，所以这里按**同一个对象身上的 `.each` 方法**认。
+ *   · **字符串 / 注释 / 模板串里的 `.each(`** 由 `maskNonCode` 自然挡住
+ *     （§11.14.2）。判据自测文件里的夹具字符串同理，不必逐条声明。
+ *   · 判据自己的夹具不进扫描面（`FIXTURE_SKIP`），同 §11.14.2 的通用口径。
+ *   · **本地同名 helper**（自己写的 `function it(...)` / `const test = ...`）不在此列：
+ *     本判据只认**从 `vitest` 导入**的那几个名字（同 §11.20 那条「判据认的是 import
+ *     事实、不是名字」）—— 先看 import 语句，没导入就整文件跳过。
+ *
+ * ── 成本 ──────────────────────────────────────────────────────────────
+ *
+ * 纯文本扫描 624 份用例，与 `check-test-sleep.cjs` / `check-test-waitfor.cjs` 同档
+ * （各约 0.3s、零网络、零子进程）—— 照 §13.5.4 的成本判据，这个量级该进钩子。
+ *
+ * 用法：
+ *   node scripts/check-test-it-each.cjs            # 检查（进 pre-commit D 组）
+ *   node scripts/check-test-it-each.cjs --report   # 只出清单不判失败（盘点用）
+ *   node scripts/check-test-it-each.cjs --update   # 收口后收紧基线（拒绝上涨）
+ *
+ * 退出码 0 = 通过，1 = 阻断。
+ */
+const fs = require("node:fs");
+const path = require("node:path");
+const { maskNonCode } = require("./check-test-concurrency.cjs");
+
+const ROOT = path.resolve(__dirname, "..");
+const ARGS = new Set(process.argv.slice(2));
+const REPORT_ONLY = ARGS.has("--report");
+const SHOULD_UPDATE = ARGS.has("--update");
+
+const BASELINE = path.join(__dirname, ".test-it-each-baseline.json");
+
+/** 扫描范围：与 `vitest.config.ts` 的 `include` 同口径。 */
+const SCAN_DIRS = ["src", "tests", "e2e"];
+const TEST_FILE_RE = /\.test\.tsx?$/;
+
+/**
+ * 判据自己的夹具**不进扫描面**：它是喂给本判据的被测字符串，判它等于判自己的量具
+ * （§11.14.2 的通用口径）。
+ */
+const FIXTURE_SKIP = new Set(["tests/test-it-each-gate.test.ts"]);
+
+/**
+ * 参数化用例的宿主名字。**三个一视同仁**：`c9f349ca` 那轮只收 `it.each`，
+ * 把 `describe.each` 漏在门外（① 号站点的来历）—— 按名字收窄就会漏。
+ */
+const HOSTS = ["it", "test", "describe"];
+
+/** 站点：宿主对象上的 `.each(` 方法调用。 */
+const SITE_RE = new RegExp(
+  `(?<![\\w.$])(${HOSTS.join("|")})\\s*\\.\\s*each\\s*\\(`,
+  "g",
+);
+
+function walk(dir) {
+  const out = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      if (e.name === "node_modules") continue;
+      out.push(...walk(p));
+    } else if (TEST_FILE_RE.test(e.name)) {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+function lineOf(src, index) {
+  let line = 1;
+  for (let i = 0; i < index; i++) if (src[i] === "\n") line++;
+  return line;
+}
+
+/**
+ * 这个文件里的宿主名字是不是从 `vitest` 导入的？不是就整文件跳过 ——
+ * 本地同名 helper（自己写的 `it` / `test` / `describe`）不在本判据的靶子里。
+ *
+ * ⚠️ 判的是**原文**不是 `maskNonCode` 之后的串：来源路径是字符串字面量，
+ * mask 之后 `from "vitest"` 会变成 `from` + 一串空格，于是每一份用例都「没导入」、
+ * 判据静默返回 0 处 —— 形同不在跑（同 `check-test-waitfor.cjs` 踩过的那个坑）。
+ */
+function importsVitestHosts(raw) {
+  for (const m of raw.matchAll(/import\s*\{[^}]*\}\s*from\s*["'][^"']+["']/g)) {
+    if (!/from\s*["']vitest["']/.test(m[0])) continue;
+    const names = m[0].match(/\{([^}]*)\}/)[1];
+    for (const host of HOSTS) {
+      if (new RegExp(`(?<![\\w$])${host}\\s*(?:,|$)`).test(names)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 扫一个文件，返回它命中的站点。
+ * @returns {{line:number,text:string}[]}
+ */
+function scanFile(abs) {
+  const raw = fs.readFileSync(abs, "utf8");
+  if (!importsVitestHosts(raw)) return [];
+  const masked = maskNonCode(raw);
+  const rawLines = raw.split("\n");
+  const sites = [];
+  for (const m of masked.matchAll(SITE_RE)) {
+    const line = lineOf(masked, m.index);
+    sites.push({
+      line,
+      text: (rawLines[line - 1] ?? "").trim().replace(/\s+/g, " ").slice(0, 110),
+    });
+  }
+  return sites;
+}
+
+function collect() {
+  const files = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)));
+  const sites = new Map();
+  for (const abs of files) {
+    const rel = path.relative(ROOT, abs).split(path.sep).join("/");
+    if (FIXTURE_SKIP.has(rel)) continue;
+    const hit = scanFile(abs);
+    if (hit.length) sites.set(rel, hit);
+  }
+  return sites;
+}
+
+function readBaseline() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
+    return {
+      total: typeof raw.total === "number" ? raw.total : 0,
+      files: raw.files && typeof raw.files === "object" ? raw.files : {},
+    };
+  } catch {
+    return { total: 0, files: {} };
+  }
+}
+
+function main() {
+  const sites = collect();
+  const total = [...sites.values()].reduce((n, v) => n + v.length, 0);
+
+  if (SHOULD_UPDATE) {
+    const base = readBaseline();
+    if (total > base.total) {
+      console.error(
+        `[ERROR] --update 拒绝把基线往上涨（${base.total} → ${total}）。\n` +
+          "  收紧基线的前提是**先收口**：把下面这些站点改成 `it.for` / `describe.for` 再来。",
+      );
+      for (const [rel, list] of [...sites.entries()].sort()) {
+        console.error(`  · ${rel}: ${list.length} 处`);
+      }
+      return 1;
+    }
+    const files = {};
+    for (const [rel, list] of [...sites.entries()].sort()) files[rel] = list.length;
+    fs.writeFileSync(BASELINE, `${JSON.stringify({ total, files }, null, 2)}\n`);
+    console.log(`[test-it-each] 基线已收紧到 ${total} 处（${BASELINE}）。`);
+    return 0;
+  }
+
+  if (REPORT_ONLY) {
+    console.log(`[test-it-each] 盘点：${total} 处 / ${sites.size} 份文件。`);
+    for (const [rel, list] of [...sites.entries()].sort()) {
+      console.log(
+        `  · ${rel}: ${list.length} 处（第 ${list.map((s) => s.line).join(",")} 行）`,
+      );
+    }
+    return 0;
+  }
+
+  const base = readBaseline();
+  if (total > base.total) {
+    console.error(
+      `[ERROR] 测试层 \`it.each\` 存量涨了：${total} 处 > 基线 ${base.total} 处。\n` +
+        "\n  §11.15：新增参数化用例一律写 **`test.for`**（`describe` 组用 `describe.for`）。" +
+        "\n  参数化数据一行是**一个参数**，元组由回调自己解构 —— 没有 `it.each` 的隐式摊开；" +
+        "\n  并且**记得加 `as const`**，否则解构出的每一项都带 `undefined`（`tsc` 会报）。\n" +
+        "\n" +
+        "\n  // ❌ 旧写法：元素被隐式摊开成多个参数" +
+        "\n  it.each([[a, b]])('%s %s', (a, b) => {});" +
+        "\n  // ✅ 新写法：一行原样进、回调自己解构" +
+        "\n  it.for([[a, b]] as const)('%s %s', ([a, b]) => {});" +
+        "\n" +
+        "\n  （收口后跑 `node scripts/check-test-it-each.cjs --update` 收紧基线。）" +
+        "\n" +
+        "\n  下方是本轮站点，指针**新增**的那些：",
+    );
+    for (const [rel, list] of [...sites.entries()].sort()) {
+      const was = base.files[rel] ?? 0;
+      const mark = list.length > was ? " ← 涨了" : "";
+      console.error(
+        `  · ${rel}: ${list.length} 处（基线 ${was}）${mark}\n` +
+          list
+            .slice(0, 8)
+            .map((s) => `      ${s.line}: ${s.text}`)
+            .join("\n"),
+      );
+    }
+    console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.15。");
+    return 1;
+  }
+
+  console.log(`[test-it-each] OK —— ${total} 处 ≤ 基线 ${base.total} 处。`);
+  if (total < base.total) {
+    console.log(
+      `  比基线还少了 ${base.total - total} 处：跑 \`--update\` 把基线收紧。`,
+    );
+  }
+  return 0;
+}
+
+/* 自测（`tests/test-it-each-gate.test.ts`）钉的是**站点识别口径**。 */
+module.exports = { scanFile, importsVitestHosts, collect, FIXTURE_SKIP, HOSTS };
+
+if (require.main === module) process.exit(main());

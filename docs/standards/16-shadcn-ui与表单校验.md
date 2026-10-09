@@ -961,6 +961,69 @@ React Flow 对这种边**静默丢弃**：不报错、控制台干净、`tsc` / 
 
 变异三向实测全拦下：输出端写回旧形状 / 渲染器少挂一个端口 / 前缀常量改掉。
 
+#### 16.2.3.13 画布帧的视口：装不下要显式认账（`fit` / `pinZoom`）
+
+§16.2.3.12 把边画了出来，接着逐张看截图时发现另一件事：**框装不下内容**。
+
+`StorybookFlowCanvas` 的框高是**一个常量**（`CANVAS_FRAME_CLASS` = `h-[560px]`），
+而节点渲染器的尺寸是**消费方**的事 —— 于是同一档场景在不同消费方下内容高度可以差
+一倍：`twoNodes` 摆十行端点的 `PortDemoNode` 是 399px 高，摆 React Flow 默认外观
+（`WorkflowCanvasDecorations` 的 `GridOff` 那档）只有 ~80px。
+
+消费方的渲染器比框高时，**钉住的视口会把内容切掉**。真浏览器量 `.react-flow__node`
+的下沿与框下沿：
+
+| story | 场景 | 渲染器 | 切掉 |
+| --- | --- | --- | --- |
+| `WorkflowPortHandle--FanOutCanvas` | `fanOut` | `PortDemoNode` | **151px** |
+| `WorkflowPortHandle--InCanvas` | `twoNodes` | `PortDemoNode` | **79px** |
+| `WorkflowPortHandle--MixedKindsCanvas` | `mixedKinds` | `PortDemoNode` | **51px** |
+| `WorkflowPortHandle--OutsideCanvas` 等画布外几档 | — | — | 0（不在框里） |
+| `NodeFrost--InCanvas` / `Decorations--*`（5 档） | `zoomedIn` / `dense` 等 | 自己的渲染器 | 0（本来就装得下） |
+
+`mixedKinds` 最直白：八张卡分三行，**整个第三行**（两张卡）在框外，而场景名与
+`about` 一直在讲「八种业务节点混排」。这与 §16.2.3.12 同族 —— **画布上照样有内容、
+构建 / tsc / eslint / 既有门禁全绿**，只有逐张截图才看得出来。
+
+**修法：两种视口口径，由消费方选。**
+
+| 口径 | 谁用 | 它给什么 |
+| --- | --- | --- |
+| 钉住的 `viewport`（默认） | 被测对象**就是那个缩放**的档 | 初始缩放真的进转换矩阵（细网格在 0.3 下淡出、放大档的端点像素尺度、密集负载下现算的标尺步长） |
+| `fit`（消费方显式传） | 渲染器**装不进 560px** 的档 | 交回 React Flow 自己的 `fitView`（`ProjectCanvas` 的「适应视图」也是这套机制），把整场缩到框里 |
+
+关键取舍：
+
+- **`fit` 是消费方的声明，不是场景的属性**。同一个 `twoNodes` 在
+  `WorkflowPortHandle`（十行卡）下装不下、在 `WorkflowCanvasDecorations` 的
+  `GridOff`（默认外观）下装得下 —— 装不装得下取决于**渲染器**，而渲染器由消费方
+  经 `nodeTypes` 注入。把 `fit` 写进场景就会把 `GridOff` 一起缩走。
+- **两种口径互斥**：`fit` 时 React Flow 忽略 `viewport`（它自己算一个），所以代码里
+  是 `? { fitView, fitViewOptions } : { viewport, onViewportChange }` —— 不并列传，
+  免得下一个人以为「钉住 + 自适应」能同时成立。
+- **`pinZoom` 标记反过来钉住另一半**。`zoomedIn` / `zoomedOut` / `dense` 三档的被测
+  对象就是那个缩放，**不能被 `fit` 缩走** —— 缩到装得下会把要看的缩放一起改掉，
+  而 story 上看着仍然「一切正常」（只是看的不是那一档了）。
+- **不手写每档帧高**。「三档各自要 655 / 727 / 627px」是**实测读数**，写进代码就是
+  第二个会漂的事实源（摆一张卡就过期）；`fit` 让 React Flow 现算，没有数字要维护。
+  同理不手搓缩放公式 —— `fitViewOptions.padding` 的 0.1 是唯一的自定参数。
+
+**判据**（`tests/storybook-fit-viewport.test.ts`，进 `FIXED_STRUCTURAL_TESTS`）：
+**传了 `nodeTypes`（尺寸未知）的消费方，要么传 `fit`、要么用带 `pinZoom` 的场景。**
+两者都没有 = 没人回答过「装得下吗」，而那正是切掉一截的形态。不传 `nodeTypes` 的
+消费方不受约束（节点走 React Flow 默认外观，高度是它自己的口径）。
+
+判据按 **AST** 判不按正则：`<StorybookFlowCanvas>` 的属性顺序与换行不固定，正则会
+在「属性写在另一行」时整片漏掉。另一处实测教训单独记着：`<X … />` 是
+**`JsxSelfClosingElement`**、`<X …>…</X>` 才是 `JsxOpeningElement` —— 只看后者时
+本仓的用法全是自闭合，扫出来是**空集**（判据空转）；所以用例里有一条「解析器不是
+空转」的在场证明，四向变异（去掉 fit / pinZoom 场景被 fit / 删受控视口 /
+`fitView` 换成手搓 zoom）全部实测拦下。
+
+> 这条与 §16.2.3.12 合起来是一句话：**「接线对了」不等于「画布上看得对」**。
+> handle 错 → 边不画；框小了 → 内容被切。两者的共同点是构建期全绿、只有真渲染
+> 才看得出来，所以每轮都必须同时做「真浏览器逐 story 量」这另一半。
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，

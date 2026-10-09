@@ -77,7 +77,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(45 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(46 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -226,11 +226,19 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 不要求新鲜度记录 —— 两张表各管数量与时效）。**刻意不做墙钟阻断**：像素结论只在录过基线的
   # 那台机器上成立，win32 档的复核只能在那台 Windows 机器上做，拿时钟去阻断等于让所有人卡在
   # 一个只有少数人能解的账上。记账走 `pnpm check:visual`（跑绿即记），钩子里不跑像素。
-  # 全量 e2e 那一档还多一条「**今天**自证过没有」（ISSUE #1282）：`pnpm test:e2e` 跑绿即记，
-  # 或 `node scripts/e2e-run.mjs --skip "<理由>"` 记一条写明理由的豁免（占位理由被拦）。
-  # 它按本地日历日只拦**当天的第一次**提交，当天已有凭证 ⇒ 零输出、放行；账文件还没入库时
-  # 只提醒、不阻断（平台侧 squash 合并不跑本地钩子）。
-  run "每档都有主（新鲜度账：像素档 + 全量 e2e 每日自证）" node scripts/visual-freshness-gate.mjs
+  # 「每天首次自证」那一层现在有**四档**（ISSUE #1282 起逐档接上）：除了全量 e2e，
+  # 还有平台流水线删掉（ISSUE #623）之后一直没有执行者的两条判定档 —— **全量单测 + 覆盖率**
+  # 与**产物级护栏（build + 数产物）**。它们此前只写在 §13.5.3 的欠账表里（「按需手动跑」），
+  # 而那句话没有任何东西在守。
+  #   四档的形状由 `FRESHNESS_TRACKS` 的数据决定，判据一份实现：
+  #   · 全量 e2e —— 代价最低、结论与改了哪几个文件无关，按**本地日历日**判：当天第一次提交
+  #     要带一次凭证；跑绿记（`pnpm test:e2e`），或 `--skip "<理由>"` 记一条豁免。
+  #   · 全量单测 + 覆盖率 / 产物级护栏 —— 十分钟量级、**没必要每天都跑**，按「**改了就当天跑**」
+  #     判（吃 `src/`+`tests/` / 产物链那几个文件）：当天动过输入面就必须今天自证；没动过以
+  #     七天为宽限。出路同样是两条：跑一次，或 `--dirty "<理由>"` 声明「这次改动不吃这一档」。
+  # 占位理由一律被拦（豁免不是绕过）；账文件还没入库时只提醒、不阻断（平台侧 squash 合并
+  # 不跑本地钩子，硬规则 6）。
+  run "每档都有主（新鲜度账：像素档 + e2e / 全量单测 / 产物三档每日自证）" node scripts/visual-freshness-gate.mjs
   # 注释语言棘轮（规范 §12.4.6）：注释一律中文，只有「会被 next-code-frame 渲染到」
   # 的构建期模块例外（Next 的 code frame 按字节切串，命中多字节字符内部时 Rust 侧
   # 直接 panic 把 `next build` 打死，偏移敏感、报错指不出业务原因）。判据本身一直是对的，
@@ -365,6 +373,17 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 只认从 `@testing-library/react` 导入的 waitFor，本地同名 helper 不在此列。
   # 成本实测：纯文本扫描 624 份用例约 0.3s、零网络、零子进程。
   run "测试层 waitFor 边界（§11.14.3）" node scripts/check-test-waitfor.cjs
+  # 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮（规范 §11.15）。§11.15 那句
+  # 「本仓库已全部转换完」此前**没有任何东西在守**（grep -c each scripts/check-*.cjs = 0、
+  # CI 又随 ISSUE #623 删除），于是它只是规范里的一句话、不会自己响：
+  # `c9f349ca` 收口 63 处之后实测又长出 2 处（`describe.each` 被那轮漏掉一处、
+  # PR #1558 新写一处）—— 同 check-test-sleep 那次（20 → 38）是同一种病。
+  # 判的是**净数不许涨**（棘轮，`scripts/.test-it-each-baseline.json`，只许降，
+  # `--update` 拒绝上涨，当前 0 处）。`it.each` / `test.each` / `describe.each`
+  # 一视同仁（按名字收窄就会漏，① 号站点就是这么来的）；本地同名 helper 不看
+  # （认 import 事实，不是名字）；夹具字符串由 maskNonCode 挡住。
+  # 成本实测：纯文本扫描 624 份用例约 0.3s、零网络、零子进程。
+  run "测试层 it.each 存量棘轮（§11.15）" node scripts/check-test-it-each.cjs
   # 门禁自测「别再手搓临时仓库样板」（规范 §11.16.1）。60 余份门禁自测判的是同一件事
   # （把 scripts/ 下的判据脚本当黑盒，在只放被测文件的临时仓库里跑一次），此前每份都
   # 手抄一遍 mkdtemp + workdir + 自己写的 run(args) + afterEach rmSync —— 这套四件套已

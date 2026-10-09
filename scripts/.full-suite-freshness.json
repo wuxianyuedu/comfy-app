@@ -1,0 +1,10 @@
+{
+  "full": {
+    "key": "full",
+    "verifiedAt": "2026-10-09T06:14:12.116Z",
+    "who": "cnb.dQh7kaCfAPA",
+    "how": "pnpm run test:coverage",
+    "trackedBy": "full",
+    "dirtyReason": "本 PR 只接三档每日自证的机制（scripts/ + tests/ + docs），未动 src/ 功能链路"
+  }
+}

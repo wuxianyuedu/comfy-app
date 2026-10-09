@@ -124,12 +124,12 @@
     },
     {
       "id": "visual-baseline-freshness",
-      "name": "像素基线与全量 e2e 的档与新鲜度",
-      "declaredAt": "SUPPORTED_PLATFORMS / PENDING_PLATFORMS / scripts/.visual-baseline-freshness.json / scripts/.e2e-freshness.json（FRESHNESS_TRACKS 的 daily / skipHow）",
+      "name": "像素基线与三档每日自证（e2e / 全量单测 + 覆盖率 / 产物级护栏）的档与新鲜度",
+      "declaredAt": "SUPPORTED_PLATFORMS / PENDING_PLATFORMS / scripts/.visual-baseline-freshness.json / scripts/.e2e-freshness.json / scripts/.full-suite-freshness.json / scripts/.artifact-freshness.json（FRESHNESS_TRACKS 的 daily / dirty / dirtyHow / graceMs）",
       "reader": "scripts/visual-freshness-gate.mjs",
       "executor": {
         "kind": "hook-step",
-        "label": "每档都有主（新鲜度账：像素档 + 全量 e2e 每日自证）"
+        "label": "每档都有主（新鲜度账：像素档 + e2e / 全量单测 / 产物三档每日自证）"
       },
       "section": "11.8"
     },

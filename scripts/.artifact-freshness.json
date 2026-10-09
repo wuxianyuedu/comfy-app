@@ -1,0 +1,10 @@
+{
+  "artifact": {
+    "key": "artifact",
+    "verifiedAt": "2026-10-09T06:14:12.191Z",
+    "who": "cnb.dQh7kaCfAPA",
+    "how": "pnpm run build",
+    "trackedBy": "artifact",
+    "dirtyReason": "本 PR 只接三档每日自证的机制，未动产物链（next.config.js / src-tauri / 组装脚本）"
+  }
+}
