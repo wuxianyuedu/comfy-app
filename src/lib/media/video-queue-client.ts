@@ -1,11 +1,7 @@
 /* ── 视频队列的网络客户端（第②层的网络部分）─────────────────────────────
  * VideoQueueModal 需要「只列出 VIDEO 类型的任务」与「批量提交新生成」。
- * 此前两处 vanillaApi 调用（task.list / generate.generate）直接写在视图里，
- * 且 VIDEO 过滤 + images 映射逻辑散在 loadTasks 内联函数中。
- *
- * 收口到这里后：
- *   - 视图（.tsx）不再出现 `vanillaApi.task.list` / `vanillaApi.generate.generate`；
- *   - 「任务 → 视频行」的形状收窄集中一处，别处要复用时直接 import。
+ * 两处 tRPC 调用（task.list / generate.generate）集中到这里后视图（.tsx）零 IO，
+ * 「任务 → 视频行」的形状收窄也只有一份，别处要复用时直接 import。
  */
 
 import { z } from "zod";
@@ -35,8 +31,11 @@ export type GenerateInput = RouterInputs["generate"]["generate"];
  */
 export const videoTaskRowSchema = z.object({
   id: z.string(),
-  type: z.string().default("VIDEO"),
-  status: z.string().default("QUEUED"),
+  /* `type` / `status` 刻意**不给默认值**：这两个是「这一行是不是视频任务」
+   * 的判据（下方 `parseVideoRows` 按 `type` 过滤），补一个兜底会把「线上
+   * 没发这一列」伪装成一条正常行 —— 同 `videoPath` 的理由，见下。 */
+  type: z.string(),
+  status: z.string(),
   prompt: z.string().default(""),
   workflowName: z.string().default(""),
   /**
@@ -50,6 +49,8 @@ export const videoTaskRowSchema = z.object({
   videoPath: z.string().nullable(),
   error: z.string().nullable().default(null),
 });
+
+export type VideoTaskRow = z.infer<typeof videoTaskRowSchema>;
 
 /** 视图消费的行（只留它真会读的几样）。 */
 export interface VideoTask {
@@ -89,7 +90,7 @@ export function parseVideoRows(raw: unknown): VideoTask[] {
   return out;
 }
 
-/** 拉取当前用户的 VIDEO 类任务并按时间倒序展示所需的窄形状。 */
+/** 拉取当前用户的 VIDEO 类任务（顺序由服务端按创建时间倒序给出）。 */
 export async function fetchVideoTasks(): Promise<VideoTask[]> {
   const data = await vanillaApi.task.list.query({ take: 200 });
   return parseVideoRows(data.tasks);

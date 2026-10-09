@@ -4,6 +4,21 @@ import next from "eslint-config-next/core-web-vitals";
 import unusedImports from "eslint-plugin-unused-imports";
 import boundaries from "eslint-plugin-boundaries";
 
+/* `eslint-plugin-jsx-a11y` 不是本仓的直接依赖（它在 `eslint-config-next` 的
+ * `dependencies` 里），pnpm 的严格布局下顶层与 `import.meta.resolve` 都解析
+ * 不到（符号链接的**真实路径**不在解析链上）。所以从 `next` 配置里已经装好的
+ * 那个插件对象取 —— 那是 ESLint 眼中**同一个**实例（同名插件重定义会
+ * ConfigError，见 `COMPAT_PLUGIN_NAMES` 那段）。用途见 `a11yRecommendedRules()`。 */
+const jsxA11y = (() => {
+  for (const config of next) {
+    if (config.plugins?.["jsx-a11y"]) return config.plugins["jsx-a11y"];
+  }
+  throw new Error(
+    "eslint-config-next 没带 jsx-a11y 插件 —— 它换结构了？" +
+      "本配置的 a11yRecommendedRules() 依赖它算「官方 recommended 集合」。",
+  );
+})();
+
 /* ── 扫描范围：**白名单**（Include > Exclude）──
  *
  * 「哪些文件被 lint」由两处决定，都不随业务目录增长而维护：
@@ -32,6 +47,52 @@ import boundaries from "eslint-plugin-boundaries";
  * 升级 eslint / typescript-eslint 之后要手动删一次 `node_modules/.cache/eslint`
  *（插件实现变更不在缓存键里，这是 `--cache` 的已知边界）。
  */
+/**
+ * `eslint-plugin-jsx-a11y` 官方 `recommended` 集合 → 本仓的扁平配置形态。
+ *
+ * **为什么要从插件对象里读、而不是在这里抄一份规则表**：抄一份就会漂
+ *（插件升版加了新规则，我们这边一个字都不会变），而这份清单的**含义**
+ * 就是「跟官方 recommended 对齐」—— 那就必须由官方那份数据算出来。
+ *
+ * 插件对象从 `next` 配置里已经装好的那一个取：它在本仓不是直接依赖，pnpm 的
+ * 严格布局下顶层 `require()` / `import.meta.resolve` 都解析不到 —— 而
+ * `next` 的 plugins 里那个正是 ESLint 眼中的**同一个**实例
+ *（同名插件重定义会 ConfigError，见上面 `COMPAT_PLUGIN_NAMES` 那段）。
+ *
+ * 三处刻意的处理：
+ *   · 官方给 `"off"` 的（如 `anchor-ambiguous-text` / `label-has-for`）**不带
+ *     进来** —— 带进来会在「开了没有」的判据里被算成「开着」；
+ *   · 需要参数的规则（`control-has-associated-label` / `interactive-supports-focus`
+ *     等）**原样带上官方那份 options** —— 少了它规则会退回默认档、结论不同；
+ *   · 全部**升成 `error`**：本仓 `lint` 脚本带 `--max-warnings 0`，两者等价，
+ *     但编辑器里 `error` 更醒目，且不会有人以为「warn 可以先放着」。
+ */
+function a11yRecommendedRules() {
+  /* 第三方包的 `configs` 联合类型里含数组形态（legacy / flat 两套并存），
+   * TS 从 `.rules` 上读不出它 —— 这里**只从 recommended 那一支**取，
+   * 并就地收窄。收窄失败即配置出错，直接抛（不是静默给空表：那会让整条账
+   * 变成「零规则全绿」，正是本批要修的那种形态）。 */
+  const config = /** @type {{ rules: Record<string, unknown> }} */ (
+    /** @type {unknown} */ (jsxA11y.configs?.recommended)
+  );
+  if (!config || typeof config.rules !== "object" || config.rules === null) {
+    throw new Error(
+      "jsx-a11y 的 configs.recommended 结构变了（读不到 .rules）——" +
+        "本配置的 a11yRecommendedRules() 从它算出官方 recommended 集合。",
+    );
+  }
+  /* 规则键是 `"<plugin>/<rule>"`，官方那份就是这个名字，直接用。 */
+  const recommended = config.rules;
+  return Object.fromEntries(
+    Object.entries(recommended)
+      .filter(([, setting]) => setting !== "off")
+      .map(([name, setting]) => [
+        name,
+        Array.isArray(setting) ? ["error", setting[1]] : "error",
+      ]),
+  );
+}
+
 const LINT_FILES = [
   "src/**/*.{ts,tsx,mts,cts}",
   "tests/**/*.{ts,tsx,mts,cts}",
@@ -196,6 +257,61 @@ export default tseslint.config(
        *  图片处理开销。故在此关闭本规则——新增静态资源图（logo、插图）时仍应
        *  优先使用 next/image。 */
       "@next/next/no-img-element": "off",
+
+      /* ── jsx-a11y：对齐插件官方的 `recommended` 集合（规范 06 §6.12）────────
+       *
+       * `eslint-config-next` 只给 6 条（且全是 `warn`），而插件**装着 39 条**、
+       * 官方 `recommended` 有 34 条。此前 28 条是关着的 —— 于是一批真形态
+       * （锚点没内容、`<video>` 没字幕轨、`autoFocus`、非原生元素上的交互）
+       * 一条判据都没有，属「装了没用」那一档。本批**按官方 recommended 对齐**、
+       * 并把其中能拦真站点的升成 `error`（`--max-warnings 0` 下两者等价，
+       * 但 `error` 在编辑器里更醒目）。
+       *
+       * ⚠️ **本仓库的方言只在这里收口**（`no-autofocus` 在桌面应用里是刻意
+       *   要的：对话框一打开就该把光标放进输入框；`media-has-caption` 对
+       *   本基元的静音预览媒体不成立）。方言每收口一条都要登记进
+       *   `scripts/.a11y-rule-ledger.json` —— 由 `scripts/check-a11y-rules.cjs`
+       *   双向核对（开了没登记 = 判据睡着；登记了却没开 = 假声明）。
+       *
+       * 数字口径：**别在这里写死规则条数**（会漂），要看实时读数跑
+       * `node scripts/check-a11y-rules.cjs --report`。
+       */
+      ...a11yRecommendedRules(),
+      /* 第三档：**官方两份配置谁都没提到**的非废弃规则（本批补）。
+       *
+       * 立案现场：插件的 `recommended` / `strict` 是 `lib/index.js` 里**手写的
+       * 静态清单**，不是「除废弃外全开」。实测 39 条里**有 5 条两边都没被提到**，
+       * 其中两条是官方标了 ❌ deprecated（`accessible-emoji` / `no-onchange`，
+       * 不提是对的），剩下三条**既非 deprecated、也非明写 off** ——
+       * 也就是说「该不该开」**从来没有人决定过**，它们只是被两边的清单漏掉了。
+       * 这与「recommended 里被悄悄关掉」是同一个洞的另一面：
+       * 「没列进来」同样等于「没人守」。
+       *
+       * 三条各自的裁决（逐条登记在 scripts/.a11y-rule-ledger.json）：
+       *  · `lang` 与 `no-aria-hidden-on-focusable` —— **开**。全仓实测 0 处
+       *    （`layout.tsx` 已是 `<html lang="zh-CN">`、没有 aria-hidden 落在可聚焦
+       *    元素上的形态），开是**零成本的真判据**：它防的是「新增一处写错」，
+       *    而不是「现存有多少」。判据生效性当场核过（植入违规会报）。
+       *  · `prefer-tag-over-role` —— **不开**，且不是「误报就完事」：它实测 27 处，
+       *    绝大多数是 ARIA 复合控件 pattern（Base UI 的 `role="combobox"` /
+       *    `listbox` / `option`、shadcn 的 `role="list"` 修 Safari 的列表语义、
+       *    `role="status"` 的 live region），换成它建议的原生标签**会把控件改坏**。
+       *    但它**照出了一个真缺陷族**：`role="radiogroup"` 声明了却没有方向键契约
+       *    （`AppearanceSection` 两处）—— 那一族由本批收口 + §6.12 的
+       *    「复合控件 ⇄ 键盘契约」口径守，不是关掉这条就了事。 */
+      "jsx-a11y/lang": "error",
+      "jsx-a11y/no-aria-hidden-on-focusable": "error",
+      "jsx-a11y/prefer-tag-over-role": "off",
+
+      /* 方言两档（见 §6.12 的裁决表，逐条登记在 scripts/.a11y-rule-ledger.json）：
+       *  ① 项目形态与官方默认冲突 —— 桌面应用里「打开就把光标放进唯一的输入位」
+       *     是要的（官方那条针对的是**页面加载时**抢焦点，会把移动端键盘顶起来）；
+       *  ② 规则看不穿本仓库的转发通道 —— `Label` 的 `htmlFor` 经 `{...props}`
+       *     落到 `<label>` 上，规则只读那一处 JSX，看到的永远是「没关联」。
+       * 两条都由 `check-form-field-wiring.cjs`（§16.2.4.26）与 §6.12 的裁决表
+       * 分别守着，不是「关掉不管」。 */
+      "jsx-a11y/no-autofocus": "off",
+      "jsx-a11y/label-has-associated-control": "off",
     },
   },
   // ── 分层边界（2026-09-02）：用 eslint-plugin-boundaries 强制 前端/数据/逻辑 分层 ──

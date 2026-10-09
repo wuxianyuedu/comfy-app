@@ -78,8 +78,9 @@ export const taskRouter = createTRPCRouter({
           /* 视频落点**只有服务端答得了**：封面（`images[0]`）通常是预览图，
            * 它的 `cover` / `mediaType` 都指向那张图，看不出成片在哪。执行侧落盘
            * 顺序是「先 images 后 videos」，因此成片不在首位 —— 必须单独找。
-           * `isVideo` 按**磁盘上的事实**（扩展名 + 子表 mediaType）判，见
-           * `lib/media/media-kind`。 */
+           * 判据按**磁盘上的事实**：扩展名（`isVideo`，见 `lib/media/media-kind`）
+           * **或**产物子表的 `mediaType` —— 后者管住「落盘名不带视频扩展名、但
+           * 执行侧记了它是视频」的那一档，只看扩展名会把它漏成 `null`。 */
           const videoPath =
             task.images.find(
               (image) =>

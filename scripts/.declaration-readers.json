@@ -156,6 +156,28 @@
       "section": "11.16.1"
     },
     {
+      "id": "test-todo-consumer",
+      "name": "未完成用例声明（test.todo）的消费方在场",
+      "declaredAt": "用例里的 `test.todo` / `it.todo` / `describe.todo` 站点 + scripts/.test-todo-consumers.json",
+      "reader": "scripts/check-test-todo.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "未完成用例声明（test.todo）"
+      },
+      "section": "11.24"
+    },
+    {
+      "id": "a11y-rule-switch",
+      "name": "jsx-a11y 的规则开关（哪条开着 / 关着 / 就地豁免）",
+      "declaredAt": "eslint.config.js 的 a11yRecommendedRules() + 方言两档 + scripts/.a11y-rule-ledger.json",
+      "reader": "scripts/check-a11y-rules.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "jsx-a11y 规则开关⇄判据（§6.12）"
+      },
+      "section": "6.12"
+    },
+    {
       "id": "base-check-recompute",
       "name": "「被门禁拦下先复算 master 基线」的执行者（§13.6.2 第 1 步）",
       "declaredAt": "docs/standards/13-提交与-code-review.md §13.6.2 的处置口径 + scripts/base-check.mjs",

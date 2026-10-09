@@ -316,6 +316,7 @@ export function MultiModeSelect({
               const isSelected = draft.has(item.code);
               const isDraftDefault = draftDefault === item.code;
               return (
+                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开。 */
                 <div
                   key={item.code}
                   className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
@@ -323,12 +324,12 @@ export function MultiModeSelect({
                       ? "bg-primary-500/10 text-primary-strong"
                       : "text-ink-strong hover:bg-subtle"
                   }`}
-                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`）——
-                   * 因此**必须**自带键盘等价物：ARIA 的 `checkbox` 角色承诺
-                   * 「Space 可切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」。
-                   * 键判据走 `simpleKeyHandler`（§16.2.4.57 的唯一出口：归一
-                   * 键名 + `preventDefault` 显式），不在这里手写第二份
-                   * `event.key === " "` —— 那正是这条账要消除的形态。 */
+                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`：
+                   * 这一行里还有「点 label 选、点默认星切默认」两个动作，合成
+                   * 一个 button 会把后者的键语义一起吞掉）。`tabIndex={0}` 让
+                   * 行可聚焦，Enter/Space 由 `simpleKeyHandler` 给
+                   *（§16.2.4.57 的唯一出口：ARIA 的 `checkbox` 承诺「Space 可
+                   * 切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」）。 */
                   onClick={() => toggle(item.code)}
                   {...simpleKeyHandler(["Space", "Enter"], () =>
                     toggle(item.code),
@@ -362,7 +363,7 @@ export function MultiModeSelect({
                       </svg>
                     )}
                   </span>
-                  <span className="flex-1 truncate text-[13px] font-medium">
+                  <span className="flex-1 truncate text-sm font-medium">
                     {item.label}
                   </span>
                   {/* 默认模式标记：点星星把该模式设为默认（未选中会顺带勾上） */}
