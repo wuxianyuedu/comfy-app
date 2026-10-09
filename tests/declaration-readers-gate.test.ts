@@ -16,6 +16,9 @@
  *      本判据会空转、照样报 OK（同族：§11.18.3 首版 `include: []` 却退 0）。
  *   ⑦ **行内字段不全 / id 重复**（该拦）。
  *   ⑧ **每条必须点名规范节**（该拦）：`section` 空 = 「这条声明归哪个节管」还是没答案。
+ *   ⑨ **`npm-script` 执行者的入口被删 / `package.json` 解析不出**（该拦）：
+ *      按需召唤那一档的执行者就是 `pnpm <名>` 入口本身，入口没了那条声明再没有
+ *      东西能兑现（§11.23.2）；解析不出 `scripts` = 判据静默降级。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -73,6 +76,8 @@ type Fixture = {
   ledger?: unknown;
   hook?: string;
   affected?: string;
+  /** `package.json` 的内容；默认给一份带 `check:claims` 的（供 npm-script 那一格）。 */
+  pkg?: string;
   files?: Record<string, string>;
 };
 
@@ -82,6 +87,10 @@ const DEFAULT_HOOK =
   ) + '  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n';
 const DEFAULT_AFFECTED =
   'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/fixed.test.ts",\n];\n';
+const DEFAULT_PKG = JSON.stringify({
+  name: "fixture",
+  scripts: { "check:claims": "node scripts/check-commit-claims.mjs" },
+});
 
 /** 在临时仓库里跑真脚本（cwd = 临时仓库根）。 */
 function gate(fx: Fixture): { ok: boolean; output: string } {
@@ -107,6 +116,7 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
     path.join(root, "scripts", "affected-tests.mjs"),
     fx.affected ?? DEFAULT_AFFECTED,
   );
+  writeFileSync(path.join(root, "package.json"), fx.pkg ?? DEFAULT_PKG);
   // 默认给一个存在着的读者 → 「读者存在」那一格不误报
   writeFileSync(path.join(root, "scripts", "reader.cjs"), "// 读者\n");
   writeFileSync(path.join(root, "tests", "fixed.test.ts"), "// 固定清单用例\n");
@@ -241,7 +251,43 @@ describe("声明 ⇄ 读者门禁：该拦的形状（§11.23）", () => {
     expect(r.output).toContain("字段不全");
   });
 
-  it("⑨ 索引文件不存在 → 阻断", () => {
+  it("⑨ npm-script 执行者的入口被删 → 阻断（按需召唤的入口就是执行者）", () => {
+    const list = carriers();
+    list[1] = {
+      ...list[1],
+      executor: { kind: "npm-script", script: "check:claims" },
+    };
+    const gone = gate({
+      ledger: { carriers: list },
+      pkg: JSON.stringify({ scripts: { "check:other": "node x.mjs" } }),
+    });
+    expect(gone.ok).toBe(false);
+    expect(gone.output).toContain("check:claims");
+
+    const there = gate({ ledger: { carriers: list } });
+    expect(there.ok).toBe(true);
+  });
+
+  it("⑨b package.json 解析不出 → 阻断（不许静默降级）", () => {
+    const list = carriers();
+    list[1] = {
+      ...list[1],
+      executor: { kind: "npm-script", script: "check:claims" },
+    };
+    const r = gate({ ledger: { carriers: list }, pkg: "{ 这不是 JSON" });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("package.json");
+  });
+
+  it("⑨c 未知的 executor.kind → 阻断（口径收在三种里）", () => {
+    const list = carriers();
+    list[1] = { ...list[1], executor: { kind: "whatever" } };
+    const r = gate({ ledger: { carriers: list } });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("hook-step / fixed-test / npm-script");
+  });
+
+  it("⑩ 索引文件不存在 → 阻断", () => {
     const r = gate({});
     expect(r.ok).toBe(false);
     expect(r.output).toContain("索引不存在");
