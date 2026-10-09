@@ -45,6 +45,20 @@ function read(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8");
 }
 
+/**
+ * D 组步骤 = 钩子里 `  run "<标签>" <命令>` 那些行（行首锚定只认真调用：
+ * `run() { … }` 的函数定义、被 `#` 注掉的行都不算）。
+ * 与 `tests/doc-check-hook-wiring.test.ts` 的 `dGroupSteps` 同一份形态。
+ * @param {string} hookText
+ * @returns {{label: string, cmd: string}[]}
+ */
+function dGroupSteps(hookText: string) {
+  return [...hookText.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
+    label: m[1] ?? "",
+    cmd: m[2] ?? "",
+  }));
+}
+
 /** 从 `shellStaleWarning` 的 `const targets = [...]` 里抠出它盯的文件/目录名。 */
 function launcherTargetNames(): string[] {
   const body = read(LAUNCHER);
@@ -134,8 +148,15 @@ describe("桌面壳提交门禁的触发面（§11.10.4 / 硬规则 5）", () =>
   });
 
   it("新增的门禁脚本必须同时接进 pre-commit（§11.7 那条规则）", () => {
-    const hook = read(HOOK);
-    expect(hook).toContain("node scripts/shell-gate.mjs");
+    // 解析 D 组步骤而不是 `toContain(那一行)`：把这一步前面加 `# ` 注掉之后，
+    // `toContain` 在注释行上照样命中（同一段字面也在注释里），只有计数那条会红。
+    // 「把这一步静音」正是要拦的动作 —— 与 `tests/doc-check-hook-wiring.test.ts`
+    // 同一族（那一族里 `shell-gate` 这一格见该文件 `ISSUE #1597` 那组）。
+    const steps = dGroupSteps(read(HOOK));
+    expect(
+      steps.some((s) => s.cmd.includes("scripts/shell-gate.mjs")),
+      `D 组 ${steps.length} 步里没有这一步（被注释掉的行不算在场）`,
+    ).toBe(true);
   });
 
   it("cargo 缺失时的话术要能指路（**退出码那一半改由 runGate 的用例真跑**）", () => {
