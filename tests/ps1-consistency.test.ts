@@ -24,6 +24,40 @@ import { parseMjsGates, parsePs1Gates } from "./helpers/quality-gate-gates";
 const GUARD = path.join(process.cwd(), "scripts", "check-ps1-consistency.mjs");
 const SPEC = path.join("docs", "standards", "launch-and-build.md");
 
+/** 入口清单的两份权威（判据 ③）：README 的入口表 + `tools/README.md` 的全目录视图。 */
+const README = "README.md";
+const TOOLS_INDEX = path.join("tools", "README.md");
+
+/**
+ * 真实仓库里 `tools/**` 下的双击入口（相对路径）。
+ *
+ * 为什么临时仓库要照抄这份清单：判据 ③ 的「磁盘 → 清单」那一半要枚举入口，
+ * 而临时仓库里若一个入口都没有，那半边就恒为空、**永远不响** —— 正是这道判据
+ * 要防的「静默失效」。所以从真仓库现读，而不是在用例里手抄一份。
+ */
+function realEntryPaths(): string[] {
+  const tools = path.join(process.cwd(), "tools");
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!e.name.endsWith(".ps1")) continue;
+      const rel = path.relative(process.cwd(), full).split(path.sep).join("/");
+      // 与判据同口径：逻辑层不算入口。
+      if (rel.startsWith("tools/scripts/") || rel.endsWith(".logic.ps1")) {
+        continue;
+      }
+      out.push(rel);
+    }
+  };
+  walk(tools);
+  return out;
+}
+
 /** 在临时仓库里跑门禁（只需要被它读的那几个文件）。 */
 function runGuard(overrides: Record<string, string | null>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ps1-consistency-"));
@@ -47,6 +81,22 @@ function runGuard(overrides: Record<string, string | null>): string {
     GUARD,
     path.join(dir, "scripts", "check-ps1-consistency.mjs"),
   );
+  // ── 入口清单那一段（判据 ③）要读的三份文件 ──────────────────────────
+  // 真实文件整体拷过去：判据按「README 的入口表 ⇄ tools/README.md 的全目录视图
+  // ⇄ 磁盘」三向核对，抽掉任何一份都会让那一段变成另一种失败（而不是被测的那一种）。
+  for (const rel of [README, TOOLS_INDEX, "package.json"]) {
+    const src = path.join(process.cwd(), rel);
+    const dst = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(src, dst);
+  }
+  // 磁盘上的 `tools/**` 入口：按真实仓库的**相对路径**在临时仓库里造空文件 ——
+  // 判据判的是「路径有没有被登记」，不读入口的内容。
+  for (const rel of realEntryPaths()) {
+    const dst = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.writeFileSync(dst, "");
+  }
   // 对照表里登记的两侧脚本都要真实存在（门禁会核对存在性）。
   for (const rel of [
     "scripts/dev-launcher.ps1",
@@ -301,5 +351,93 @@ describe("跨平台动作的实现契约", () => {
 
     expect(mjsManual).not.toEqual([]);
     expect([...ps1Manual].sort()).toEqual([...mjsManual].sort());
+  });
+});
+
+/**
+ * 入口清单的判据（判据 ③）——README 那张表此前**一个字都没有判据**。
+ *
+ * 立案的形态：R9 把「根目录不许散落 `.ps1`」机器化了，理由写在它的注释里 ——
+ * 入口一律归 `tools/<分类>/`，**根入口的 discoverability 由 README 的入口清单承担**。
+ * 于是「新加一个入口」有两条腿：放对目录（R9 管）、登记进清单（没人管）。第二条腿
+ * 有三种**都不报错**的失效形态，正是这里要逐个钉住的：
+ *   · 入口改名 / 搬目录后，表里留着旧路径 —— 用户照着双击才发现那里什么都没有；
+ *   · 跨平台表里的 `pnpm xxx` 在 `package.json` 里已经不存在 —— 读起来像一条能跑的命令；
+ *   · 新入口默默可用而**没人知道它存在** —— 与 R9 否掉「铺在根目录第一眼看见」之后
+ *     所依赖的那条承诺正好相反。
+ */
+describe("入口清单（README 的「双击入口速查」⇄ tools/README.md 的全目录视图 ⇄ 磁盘）", () => {
+  it("真仓库通过（三向对齐）", () => {
+    const out = execFileSync(process.execPath, [GUARD], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+    expect(out).toContain("OK");
+  });
+
+  it("README 表里的入口路径不存在 → 失败（改名 / 搬目录后表没跟着改）", () => {
+    const readme = fs.readFileSync(path.join(process.cwd(), README), "utf8");
+    const broken = readme.replace(
+      "tools/start/run-tests.ps1",
+      "tools/start/run-test-typo.ps1",
+    );
+    expect(broken).not.toBe(readme);
+    const out = runGuard({ [README]: broken });
+    expect(out).toContain("CODE=1");
+    expect(out).toContain("列了不存在的入口");
+    expect(out).toContain("run-test-typo.ps1");
+  });
+
+  it("跨平台表的 `pnpm` 命令不是真实脚本 → 失败（脚本改名后表里留着旧名）", () => {
+    const readme = fs.readFileSync(path.join(process.cwd(), README), "utf8");
+    const broken = readme.replace("`pnpm doc:gen`", "`pnpm doc:generate`");
+    expect(broken).not.toBe(readme);
+    const out = runGuard({ [README]: broken });
+    expect(out).toContain("CODE=1");
+    expect(out).toContain("doc:generate");
+    expect(out).toContain("package.json");
+  });
+
+  it("两份清单都不收某个入口 → 失败（可用但没人知道它存在）", () => {
+    // 挑一个**只在 tools/README.md 的全目录视图里**登记的入口：README 那张表刻意
+    // 只收日常动作，构建 / Registry / Studio 那几类由它自己那份清单承担 —— 判据判的
+    // 是「至少出现在其中一处」，所以这里必须把两处一起抹掉才构成违规。
+    const index = fs.readFileSync(path.join(process.cwd(), TOOLS_INDEX), "utf8");
+    const lines = index.split("\n");
+    const kept = lines.filter((l) => !l.includes("studio/start-studio.ps1"));
+    expect(kept.length).toBeLessThan(lines.length);
+    const out = runGuard({ [TOOLS_INDEX]: kept.join("\n") });
+    expect(out).toContain("CODE=1");
+    expect(out).toContain("tools/studio/start-studio.ps1");
+    expect(out).toContain("没有登记");
+    // README 那张表里本来就没有它（「只收日常动作」是刻意的），所以违规只能由
+    // 全目录视图那一侧报出来 —— 这条断言钉住「两份清单的分工」本身。
+    const readme = fs.readFileSync(path.join(process.cwd(), README), "utf8");
+    expect(readme).not.toContain("tools/studio/start-studio.ps1");
+  });
+
+  it("README 的入口表整节被删 → 失败（承诺失去落点）", () => {
+    const readme = fs.readFileSync(path.join(process.cwd(), README), "utf8");
+    const broken = readme.replace(
+      "## 双击入口速查（Windows）",
+      "## 入口（改标题即失去锚点）",
+    );
+    expect(broken).not.toBe(readme);
+    const out = runGuard({ [README]: broken });
+    expect(out).toContain("CODE=1");
+    expect(out).toContain("双击入口速查");
+  });
+
+  it("表里列了逻辑脚本（同名不同层的实现）→ 失败", () => {
+    const readme = fs.readFileSync(path.join(process.cwd(), README), "utf8");
+    // `tools/studio/start-studio.logic.ps1` 是入口背后的实现，双开它不是任何人的用法。
+    const broken = readme.replace(
+      "| 构建发行包（release 壳）                          | `tools/build/*.ps1`（见 `tools/README.md`）                                    |",
+      "| 构建发行包（release 壳）                          | `tools/studio/start-studio.logic.ps1`                                          |",
+    );
+    expect(broken).not.toBe(readme);
+    const out = runGuard({ [README]: broken });
+    expect(out).toContain("CODE=1");
+    expect(out).toContain("逻辑脚本");
   });
 });
