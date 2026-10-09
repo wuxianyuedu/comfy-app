@@ -45,13 +45,16 @@ export function FilmStudioPropertyPanel({
           label="镜头名称"
           labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
-          <input
-            value={selectedShot.name}
-            onChange={textHandler((name) =>
-              onPatchShot(selectedShotId, { name }),
-            )}
-            className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:ring-1"
-          />
+          {(field) => (
+            <input
+              {...field}
+              value={selectedShot.name}
+              onChange={textHandler((name) =>
+                onPatchShot(selectedShotId, { name }),
+              )}
+              className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:ring-1"
+            />
+          )}
         </FormField>
 
         {/* Duration */}
@@ -59,19 +62,22 @@ export function FilmStudioPropertyPanel({
           label="时长 (秒)"
           labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
-          <input
-            type="number"
-            step="0.1"
-            min="0.5"
-            max="30"
-            value={parseFloat(selectedShot.duration)}
-            onChange={(event) =>
-              onPatchShot(selectedShotId, {
-                duration: formatShotDuration(Number(event.target.value)),
-              })
-            }
-            className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:ring-1"
-          />
+          {(field) => (
+            <input
+              {...field}
+              type="number"
+              step="0.1"
+              min="0.5"
+              max="30"
+              value={parseFloat(selectedShot.duration)}
+              onChange={(event) =>
+                onPatchShot(selectedShotId, {
+                  duration: formatShotDuration(Number(event.target.value)),
+                })
+              }
+              className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:ring-1"
+            />
+          )}
         </FormField>
 
         {/* Mode select */}
@@ -99,11 +105,14 @@ export function FilmStudioPropertyPanel({
           label="提示词 / 描述"
           labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
-          <Textarea
-            rows={3}
-            defaultValue="城市在晨光中苏醒，镜头缓缓推进，展现繁忙街道与远处天际线…"
-            className="border-border bg-subtle text-ink-fainter resize-none rounded-lg text-xs leading-relaxed"
-          />
+          {(field) => (
+            <Textarea
+              {...field}
+              rows={3}
+              defaultValue="城市在晨光中苏醒，镜头缓缓推进，展现繁忙街道与远处天际线…"
+              className="border-border bg-subtle text-ink-fainter resize-none rounded-lg text-xs leading-relaxed"
+            />
+          )}
         </FormField>
 
         {/* Divider —— 走 ui/separator（规范 16 §16.2.3）：`<hr>` 自带
@@ -155,13 +164,16 @@ export function FilmStudioPropertyPanel({
             label="剧本 / 创意"
             labelClassName="text-ink-faint mb-1.5 text-2xs"
           >
-            <Textarea
-              value={c.script}
-              onChange={textHandler(c.setScript)}
-              rows={3}
-              placeholder="支持一句话自动分镜…"
-              className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-xs leading-relaxed"
-            />
+            {(field) => (
+              <Textarea
+                {...field}
+                value={c.script}
+                onChange={textHandler(c.setScript)}
+                rows={3}
+                placeholder="支持一句话自动分镜…"
+                className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-xs leading-relaxed"
+              />
+            )}
           </FormField>
         )}
 
@@ -170,25 +182,30 @@ export function FilmStudioPropertyPanel({
           label="视频工作流（工作流库）"
           labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
-          <SelectMenu
-            value={c.videoWorkflowId}
-            onChange={c.setVideoWorkflowId}
-            options={c.videoWorkflows.map((wf) => wf.id)}
-            labels={Object.fromEntries(
-              c.videoWorkflows.map((wf) => [wf.id, wf.name]),
-            )}
-            placeholder={
-              c.videoWorkflows.length
-                ? "选择视频工作流…"
-                : "工作流库里还没有视频工作流"
-            }
-            fullWidth
-          />
-          {!c.videoWorkflowId && (
-            <span className="text-ink-fainter mt-1 block text-[10.5px]">
-              没有内置视频工作流可回落 ——
-              请先在工作室「工作流库」导入并配好对外参数。
-            </span>
+          {(field) => (
+            <>
+              <SelectMenu
+                {...field}
+                value={c.videoWorkflowId}
+                onChange={c.setVideoWorkflowId}
+                options={c.videoWorkflows.map((wf) => wf.id)}
+                labels={Object.fromEntries(
+                  c.videoWorkflows.map((wf) => [wf.id, wf.name]),
+                )}
+                placeholder={
+                  c.videoWorkflows.length
+                    ? "选择视频工作流…"
+                    : "工作流库里还没有视频工作流"
+                }
+                fullWidth
+              />
+              {!c.videoWorkflowId && (
+                <span className="text-ink-fainter mt-1 block text-[10.5px]">
+                  没有内置视频工作流可回落 ——
+                  请先在工作室「工作流库」导入并配好对外参数。
+                </span>
+              )}
+            </>
           )}
         </FormField>
 
@@ -197,20 +214,23 @@ export function FilmStudioPropertyPanel({
           label="首帧合成工作流（可选，工作流库）"
           labelClassName="text-ink-faint mb-1.5 text-2xs"
         >
-          <SelectMenu
-            value={c.imageWorkflowId}
-            onChange={c.setImageWorkflowId}
-            options={c.imageWorkflows.map((wf) => wf.id)}
-            labels={Object.fromEntries(
-              c.imageWorkflows.map((wf) => [wf.id, wf.name]),
-            )}
-            placeholder={
-              c.imageWorkflows.length
-                ? "不需要 / 未选择"
-                : "工作流库里还没有图类工作流"
-            }
-            fullWidth
-          />
+          {(field) => (
+            <SelectMenu
+              {...field}
+              value={c.imageWorkflowId}
+              onChange={c.setImageWorkflowId}
+              options={c.imageWorkflows.map((wf) => wf.id)}
+              labels={Object.fromEntries(
+                c.imageWorkflows.map((wf) => [wf.id, wf.name]),
+              )}
+              placeholder={
+                c.imageWorkflows.length
+                  ? "不需要 / 未选择"
+                  : "工作流库里还没有图类工作流"
+              }
+              fullWidth
+            />
+          )}
         </FormField>
 
         {/* Subtitle toggle */}

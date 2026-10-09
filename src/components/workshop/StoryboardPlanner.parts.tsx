@@ -85,18 +85,21 @@ export function ShotRow({
           label="景别"
           labelClassName="text-muted-foreground mb-1 text-xs"
         >
-          <SelectMenu
-            className="bg-subtle! border-border! text-xs"
-            value={shot.shotType}
-            onChange={(value) =>
-              onUpdate(shot.id, { shotType: value as ShotType })
-            }
-            /* 清单的唯一出处是 readonly（类型由它派生），而 `SelectMenu.options` 至今是
-             * 可变 `string[]` —— 这一份浅拷贝是两边口径的接缝，不是新的真相。 */
-            options={[...SHOT_TYPES]}
-            labels={SHOT_TYPE_LABELS as Record<string, string>}
-            placeholder="选择景别"
-          />
+          {(field) => (
+            <SelectMenu
+              {...field}
+              className="bg-subtle! border-border! text-xs"
+              value={shot.shotType}
+              onChange={(value) =>
+                onUpdate(shot.id, { shotType: value as ShotType })
+              }
+              /* 清单的唯一出处是 readonly（类型由它派生），而 `SelectMenu.options` 至今是
+               * 可变 `string[]` —— 这一份浅拷贝是两边口径的接缝，不是新的真相。 */
+              options={[...SHOT_TYPES]}
+              labels={SHOT_TYPE_LABELS as Record<string, string>}
+              placeholder="选择景别"
+            />
+          )}
         </FormField>
 
         {/* Style */}
@@ -104,21 +107,24 @@ export function ShotRow({
           label="风格 Skill"
           labelClassName="text-muted-foreground mb-1 text-xs"
         >
-          <SelectMenu
-            className="bg-subtle! border-border! text-xs"
-            value={shot.skillSlug ?? ""}
-            onChange={(value) =>
-              onUpdate(shot.id, { skillSlug: value || undefined })
-            }
-            options={styles.map((style) => style.slug)}
-            labels={Object.fromEntries(
-              styles.map((style) => [
-                style.slug,
-                `${style.icon} ${style.name}`,
-              ]),
-            )}
-            placeholder="跟随角色/默认"
-          />
+          {(field) => (
+            <SelectMenu
+              {...field}
+              className="bg-subtle! border-border! text-xs"
+              value={shot.skillSlug ?? ""}
+              onChange={(value) =>
+                onUpdate(shot.id, { skillSlug: value || undefined })
+              }
+              options={styles.map((style) => style.slug)}
+              labels={Object.fromEntries(
+                styles.map((style) => [
+                  style.slug,
+                  `${style.icon} ${style.name}`,
+                ]),
+              )}
+              placeholder="跟随角色/默认"
+            />
+          )}
         </FormField>
       </div>
 

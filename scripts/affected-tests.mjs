@@ -159,6 +159,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 每一条都得有人钉住，都是「下一次有人写参数化用例」时才走得进的路径，
   // 所以必须进固定清单（与本次改动无关也照跑）。
   "tests/test-it-each-gate.test.ts",
+  "tests/form-field-wiring-gate.test.ts",
   // 配置的**共享项有没有真的落到两档上**（规范 §11.17.3）：这一档的口径在本仓库
   // 写反过一次（「`projects` 不继承声明方 `test` 的选项」），共享项因此被复制成
   // 两份 spread；本轮复现那次实测、订正口径并让共享项回到根 `test`。
