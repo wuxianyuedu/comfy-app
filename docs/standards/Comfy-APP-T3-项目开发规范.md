@@ -390,7 +390,7 @@ pnpm build && pnpm start   # 生产预览
 
 - 版本迭代：`pnpm tauri build`（首次需验证 WebView2 环境）。
 - 打包前必须：`tsc --noEmit` ✓ + `next build` ✓ + 版本号同步。
-- `src-tauri/static/scripts/dev-launcher.ps1` 为未跟踪副本，**修改 `scripts/dev-launcher.ps1` 后必须手动同步**。
+- `src-tauri/static/scripts/` 是**构建产物**（`.gitignore` 忽略，只随装配生成）。启动编排器与它的运行期依赖由 `scripts/build-desktop.mjs`（第 2.1 步）**自动同步**进去，`tools/build/*.ps1` 与 `tools/scripts/rebuild-static.ps1` 都只是它的入口（清单与 `scripts/standalone-private-inputs.mjs` 的 `RUNTIME_SCRIPTS` 同源，缺一份在装配时直接失败）——**不需要手工拷贝**。旧口径「修改 `scripts/dev-launcher.ps1` 后必须手动同步」已随自动同步作废（那条纪律的失效形态是静默的：漏拷的表现只是桌包里「双击没反应」）。
 
 ### 10.3 发布检查清单
 
