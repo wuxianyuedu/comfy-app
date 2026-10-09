@@ -122,21 +122,27 @@ export function decide(staged) {
  *
  * 回退面刻意**只收 rustup 的三处**（CARGO_HOME/bin、~/.cargo/bin、~/.rustup/），
  * 不做 PATH 式的目录递归 —— 判据越宽，越可能选中一个不该用的 cargo。
+ *
+ * @returns {string | null} cargo 的绝对路径；PATH 与三处安装位都没有 = `null`
  */
 export function findCargo() {
   const onPath = whichCommand("cargo");
   if (onPath) return onPath;
   const home = os.homedir();
+  /* `CARGO_HOME` 未设时给空串占位、随后统一滤掉：写成 `env.X && path.join(...)`
+   * 得到的是 `string | undefined`，而这个 `.filter` 构不成类型收窄。 */
+  /** @type {string[]} */
   const candidates = [
-    process.env.CARGO_HOME && path.join(process.env.CARGO_HOME, "bin"),
+    process.env.CARGO_HOME ? path.join(process.env.CARGO_HOME, "bin") : "",
     path.join(home, ".cargo", "bin"),
     path.join(home, ".rustup", "toolchains"),
-  ].filter((dir) => typeof dir === "string" && dir.length > 0);
+  ].filter((dir) => dir.length > 0);
 
   for (const dir of candidates) {
     if (dir.endsWith("toolchains")) {
       // rustup 的每个工具链各有一份 cargo：取版本号最大的那个（字典序即版本序，
       // 1.10 与 1.9 这种少见形态不在此纠偏 —— 只认「挑不到就继续找下一处」。
+      /** @type {string[]} */
       let versions = [];
       try {
         versions = fs.readdirSync(dir).sort().reverse();

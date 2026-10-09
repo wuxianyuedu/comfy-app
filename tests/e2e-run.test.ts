@@ -88,6 +88,8 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
       key: "e2e",
       label: "全量 e2e",
       run: "pnpm test:e2e",
+      daily: true,
+      skipHow: 'node scripts/e2e-run.mjs --skip "<理由>"',
     });
     expect(freshnessTrack("visual").ledger).toBe(
       "scripts/.visual-baseline-freshness.json",

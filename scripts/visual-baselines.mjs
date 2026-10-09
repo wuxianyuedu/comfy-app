@@ -396,7 +396,7 @@ export const FRESHNESS_LEDGER = freshnessTrack("visual").ledger;
  * 登记」表现成「按键名当档名」而照样跑绿）。
  *
  * @param {keyof typeof FRESHNESS_TRACKS | string} kind
- * @returns {{ledger: string, key: string, label: string, run: string}}
+ * @returns {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}}
  */
 export function freshnessTrack(kind) {
   const track = FRESHNESS_TRACKS[kind];
@@ -419,11 +419,13 @@ export function freshnessTrack(kind) {
  *   · `trackedBy` —— 这条记录属于**哪一个跑法**（`FRESHNESS_TRACKS` 的键）。它是两条账
  *     唯一的形状差异，作用是把「e2e 的绿被记进像素档的账」这类抄混当场照出来。
  *
- * @param {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string}} input
- * @returns {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string}}
+ * `skippedReason` 是**可选**的第五栏：只有「写明理由的豁免」这条路会带上它（见下方）。
+ *
+ * @param {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string}} input
+ * @returns {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string}}
  */
 export function freshnessRecord({ key, verifiedAt, who, how, trackedBy, skippedReason }) {
-  /** @type {Record<string, string>} */
+  /** @type {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string}} */
   const record = {
     key: key.trim(),
     verifiedAt: verifiedAt.trim(),
@@ -431,7 +433,7 @@ export function freshnessRecord({ key, verifiedAt, who, how, trackedBy, skippedR
     how: how.trim(),
     trackedBy: trackedBy.trim(),
   };
-  /* `skippedReason` 只在**豁免**那一条出路上出现：它把「今天不跑」写成一句能被复核的话，
+  /* `skippedReason` 只在**豁免**那条出路上出现：它把「今天不跑」写成一句能被复核的话，
    * 而不是让账面上出现一个与「跑绿过」长得一样的日期。核对它的是 `isUsableSkipReason`。 */
   if (typeof skippedReason === "string" && skippedReason.trim()) {
     record.skippedReason = skippedReason.trim();
@@ -481,7 +483,7 @@ export function isSameLocalDay(a, b) {
  * 「跑过一次」与「跑过的是哪一个」会变成两件事，而账面上看着完全正常）。
  *
  * @param {Record<string, unknown>} ledger
- * @param {{required: string[], registered: string[], track: {ledger: string, label: string, run: string}, kind: string}} scope
+ * @param {{required: string[], registered: string[], track: {ledger: string, label: string, run: string, daily: boolean, skipHow: string | null}, kind: string, now?: Date}} scope
  *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）；
  *   `track` = 这一份账的登记（话术里要给出「去哪个文件补、按哪条命令跑」）；
  *   `kind` = 这一份账属于哪个跑法（`trackedBy` 的比对基准）；
