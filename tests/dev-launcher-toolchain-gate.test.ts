@@ -457,6 +457,68 @@ describe("pnpm check:toolchain 真跑", () => {
     expect(r.stdout).toContain("pnpm 可用");
   });
 
+  it("依赖已装时，结论里点名 tsc / eslint / vitest 都能跑（不是只报「已装」）", () => {
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      { encoding: "utf8" },
+    );
+    expect(r.status, r.stderr).toBe(0);
+    // 这句是判据本身：它把「依赖在」与「三条门禁可跑」连在一起，
+    // 否则读者只会看到「node_modules 已装」这句与门禁无关的话（ISSUE #1568）。
+    expect(r.stdout).toContain("tsc / eslint / vitest 都能跑");
+  });
+
+  /**
+   * 「无 node_modules」这一分支的措辞就是判据（ISSUE #1568）。
+   *
+   * 现场：有人在无依赖容器里读了旧版这一分支的一句 WARN + `pnpm install`，
+   * 得出的结论是「本机跑不了 tsc / eslint / vitest」，跳过三条门禁、把这句话写进
+   * 提交信息 —— 25 条类型错因此落进 `master`。所以这一分支必须正面回答
+   * 「能装 / 装多久 / 装完能跑什么」，并点名「不得据此跳过门禁」。
+   *
+   * `--deps-root` 只换依赖检查的根（不换工具链探测的根，否则会报一个与本检出无关的
+   * pnpm 版本 —— 见脚本里的注释）；给一个空目录即可复现「没装依赖」。
+   */
+  it("依赖未装时：说清「能装 / 装多久 / 装完能跑什么」，并点名禁止据此跳过门禁", () => {
+    const emptyRoot = path.join(tmp, "no-deps");
+    fs.mkdirSync(emptyRoot, { recursive: true });
+    const r = spawnSync(
+      process.execPath,
+      [
+        path.join(ROOT, "scripts", "check-pnpm-available.mjs"),
+        "--deps-root",
+        emptyRoot,
+      ],
+      { encoding: "utf8" },
+    );
+    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+    // 依赖未装只是「还没装」：自检仍以 0 退出（它判的是工具链可用性），
+    // 但必须把可行动作与「可装」这个结论摆出来。
+    expect(r.status, out).toBe(0);
+    expect(out).toContain("可装");
+    expect(out).toContain("公开 registry");
+    expect(out).toContain("pnpm install --frozen-lockfile");
+    // 「装完能跑什么」：具体点名三条门禁，别只写「修复：pnpm install」。
+    expect(out).toContain("tsc --noEmit / eslint / vitest");
+    // 点名那条反模式本身，让下一个读到这句话的人知道它不被接受。
+    expect(out).toContain("本容器无 node_modules");
+    expect(out).toContain("§13.6.3");
+  });
+
+  it("依赖判据与启动器同一个实现（不在自检里留一份弱化副本）", () => {
+    const src = fs.readFileSync(
+      path.join(ROOT, "scripts", "check-pnpm-available.mjs"),
+      "utf8",
+    );
+    // 两份口径并存时「自检说已装、启动器说残缺」是必然的，且会各自漂移：
+    // 旧版这里只查 `.modules.yaml` 一项，而启动器查 .bin/next + 关键依赖目录。
+    expect(src).toContain("checkNodeModules");
+    expect(src).toContain("launcher-core/worktree.mjs");
+    // 不许在本文件里**再定义**一份 `checkNodeModules` 函数（注释里提到判据键没问题）。
+    expect(src).not.toMatch(/function\s+checkNodeModules/);
+  });
+
   it("pnpm 不可用时非零退出，并给出含版本号的修复命令", () => {
     const r = spawnSync(
       process.execPath,
