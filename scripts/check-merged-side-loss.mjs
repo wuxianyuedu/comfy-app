@@ -74,12 +74,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-
-/**
- * 生成物前缀 —— 「退回成旧版」在它们身上是常态（实测 109 份命中里 23 份是产物）。
- * 留着会把真信号淹掉。
- */
-const GENERATED_PREFIXES = ["docs/api/", "docs/generated/"];
+import { findEarlierVersion, isGenerated } from "./merged-side-loss-core.mjs";
 
 /** 一条 git 命令；失败回 `null`（取不到 ≠ 空值，调用方据此判 `2`）。 */
 function git(args) {
@@ -92,11 +87,6 @@ function git(args) {
   } catch {
     return null;
   }
-}
-
-/** 该路径是不是生成物（退回即常态）。 */
-export function isGenerated(file) {
-  return GENERATED_PREFIXES.some((p) => file.startsWith(p));
 }
 
 /** 是不是 git 检出。 */
@@ -160,17 +150,19 @@ export function scan({ sha, baseline }) {
     // 结果里没有这个文件（删除）、或与基线同版（正常前移）→ 不是「取了一侧」。
     if (!result || !atBaseline || result === atBaseline) continue;
 
-    // 基线的历史上，这个文件有没有过**逐字节相同**的版本 —— 有 = 退回了那一版。
-    const history = (git(["log", "--format=%H", "--no-merges", baseline, "--", file]) || "")
+    /* 基线的历史上，这个文件有没有过**逐字节相同**的版本 —— 有 = 退回了那一版。
+     * 判定核心取自共用内核（与 1-2 的提交前档同一份实现，见模块头）。 */
+    const historyShas = (
+      git(["log", "--format=%H", "--no-merges", baseline, "--", file]) || ""
+    )
       .split("\n")
-      .filter(Boolean);
-    for (const older of history) {
-      if (older === baseline) continue;
-      if (git(["rev-parse", `${older}:${file}`]) === result) {
-        lost.push(file);
-        break;
-      }
-    }
+      .filter((sha) => sha && sha !== baseline);
+    const hit = findEarlierVersion({
+      result,
+      historyShas,
+      blobAt: (sha) => git(["rev-parse", `${sha}:${file}`]),
+    });
+    if (hit) lost.push(file);
   }
   return { ok: true, lost };
 }
