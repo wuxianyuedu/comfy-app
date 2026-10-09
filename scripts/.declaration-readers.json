@@ -143,6 +143,17 @@
         "file": "tests/pixel-run.test.ts"
       },
       "section": "11.8"
+    },
+    {
+      "id": "gate-repo-boilerplate",
+      "name": "门禁自测的临时仓库样板（共享件在场）",
+      "declaredAt": "tests/helpers/gate-repo.ts + scripts/.gate-repo-boilerplate-baseline.json（待迁存量）",
+      "reader": "scripts/check-gate-repo-boilerplate.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "门禁自测临时仓库样板（§11.16.1）"
+      },
+      "section": "11.16.1"
     }
   ]
 }

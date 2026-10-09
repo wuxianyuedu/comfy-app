@@ -19,7 +19,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import path from "node:path";
+import path, { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { parseLedgerFlag } from "../scripts/daily-run.mjs";
@@ -292,7 +292,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     for (const rel of ["scripts/e2e-run.mjs", "scripts/full-suite-run.mjs", "scripts/artifact-run.mjs"]) {
       expect(readText(rel), rel).toContain("daily-run.mjs");
     }
-    expect(readText("scripts/daily-run.mjs")).toContain("writeFreshness");
+    expect(readText("scripts/daily-run.mjs")).toContain("writeSkipRecord");
     // `--dirty` 这条出路也必须走共用内核，不是各写一份。
     expect(readText("scripts/daily-run.mjs")).toContain("--dirty");
   });
@@ -367,7 +367,9 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
         if (prefixes.some((p) => t.startsWith(p))) hit = true;
       }
       flush();
-      return earliest;
+      /* `earliest` 在闭包 `flush()` 里被赋值，TS 的控制流分析看不进去 ——
+       * 不显式声明的话 `return` 会被收窄成初值 `null`，调用方的 `.toISOString()` 报 `never`。 */
+      return earliest as Date | null;
     };
     expect(sinceFor(["src/"])).not.toBeNull();
     expect(sinceFor(["src/"])?.toISOString()).toBe(

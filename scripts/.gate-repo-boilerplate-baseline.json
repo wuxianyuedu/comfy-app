@@ -1,0 +1,8 @@
+{
+  "total": 3,
+  "files": {
+    "tests/check-file-structure.test.ts": true,
+    "tests/check-reformat-only.test.ts": true,
+    "tests/gate-executors.test.ts": true
+  }
+}

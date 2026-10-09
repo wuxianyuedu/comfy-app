@@ -11,18 +11,10 @@
  *
  * 规范：docs/standards/13-提交与-code-review.md §13.5
  */
-import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
+import { vi } from "vitest";
 
 /* 每条用例都要在临时工作区里真跑 git（init / add / commit）并**真起 prettier**
  * —— 门禁按 glob 各调一次 `prettier --list-different`，实测单次约 300~550ms。
@@ -30,232 +22,170 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * 是 `Test timed out in 5000ms`，且报错会落在**调度顺序**排在后面的任意一条用例
  * 上（看起来像「某条用例写得慢」，实际是整条固定成本顶着上限跑）。
  *
- * 这一点与 `check-reformat-only.test.ts` 是同一根因、同一处方：那条门禁早先把
- * 「每条用例起十几个 prettier」收敛成「整批一次」，这里没有可收敛的调用数（每个
- * 用例都要建一个独立的仓库 + 基线），所以只能把整文件的超时放宽。放宽只影响本
- * 文件，不掩盖本文件内真实的挂起（30s 仍远小于任何真实死锁的暴露时间）。 */
-/* prettier 全仓扫描是本套件最慢的用例族：满载下 30s 不够（实测越线）。 */
+ * 这一处方与 `check-reformat-only.test.ts` 同源：那里把「每条用例起十几个
+ * prettier」收敛成「整批一次」，这里没有可收敛的调用数（每条用例都要建一个独立
+ * 仓库 + 基线），所以只能放宽整文件的超时。放宽只影响本文件。 */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
-
-const SCRIPT = join(process.cwd(), "scripts", "check-format.cjs");
 
 /** 真实仓里 prettier 的入口（沙箱用例通过 `COMFYAPP_PRETTIER_ENTRY` 借给它）。 */
 const PRETTIER_ENTRY = createRequire(join(process.cwd(), "noop.js")).resolve(
   "prettier/bin/prettier.cjs",
 );
 
-let workdir = "";
-
-function write(rel: string, content: string): void {
-  const full = join(workdir, rel);
-  mkdirSync(join(full, ".."), { recursive: true });
-  writeFileSync(full, content);
-}
-
-/**
- * 跑门禁。`--report` / `--update` 之外的分支都要 `git ls-files` 认得基线，
- * 因此临时工作区必须是一个真的 git 仓库（否则三条用例都会以「基线未被跟踪」
- * 失败 —— 那验的是 git 而不是本脚本的判定）。
- *
- * `COMFYAPP_PRETTIER_ENTRY` 指向**真实仓的 prettier 入口**：沙箱里没有
- * `node_modules`，不给这条接缝就会走「入口解析不到 → exit 2」那一档（那是脚本
- * 的正确 fail-closed 行为，不是本文件要的形态）。旧写法让门禁经 `pnpm exec`
- * 去找 prettier，沙箱里那条命令以「not found」退出 1 且 stdout 为空，
- * 而脚本把「退出 1 + 空清单」读成「全库干净」—— 三条用例就是这么红的，
- * 红的是**门禁的 fail-open**，不是用例写得慢（台账 E11）。
- */
-function run(args: string[] = []): { code: number; output: string } {
-  return runWithEntry(PRETTIER_ENTRY, args);
-}
-
-/**
- * 指定 `COMFYAPP_PRETTIER_ENTRY` 跑门禁。传 `undefined` 就是「沙箱里既没有接缝、
- * 也没有 node_modules」—— 那正是脚本必须 fail-closed 的一档（见下面两条新用例）。
- */
-function runWithEntry(
-  entry: string | undefined,
-  args: string[] = [],
-): { code: number; output: string } {
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  if (entry === undefined) delete env.COMFYAPP_PRETTIER_ENTRY;
-  else env.COMFYAPP_PRETTIER_ENTRY = entry;
-  try {
-    const output = execFileSync(
-      process.execPath,
-      [join(workdir, "scripts", "check-format.cjs"), ...args],
-      {
-        cwd: workdir,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-        env,
-      },
-    );
-    return { code: 0, output };
-  } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
-    return {
-      code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
-    };
-  }
-}
-
-function git(...args: string[]): void {
-  execFileSync("git", args, { cwd: workdir, stdio: "ignore" });
-}
+const { test, expect } = defineGateRepo({
+  script: "check-format.cjs",
+  dirs: ["src/lib"],
+  /* 沙箱里没有 `node_modules`，不借这条接缝就会走「入口解析不到 → exit 2」
+   * 那一档（那是脚本**正确**的 fail-closed 行为，不是本文件要验的形态）。
+   * 「借不到」那一档由 `run(..., { env: { COMFYAPP_PRETTIER_ENTRY: undefined } })`
+   * 单独造（见下面两条 fail-closed 用例）。 */
+  env: { COMFYAPP_PRETTIER_ENTRY: PRETTIER_ENTRY },
+  /* 基线要 `git ls-files` 认得 —— 临时工作区必须是个真的 git 仓库。 */
+  setup: (repo) => {
+    repo.git("init", "-q");
+    repo.git("config", "user.email", "t@local");
+    repo.git("config", "user.name", "t");
+    repo.git("config", "commit.gpgsign", "false");
+    repo.git("config", "tag.gpgsign", "false");
+  },
+});
 
 // 脏内容：多余空格 + 多余空行，prettier 一定会改它。
 const DIRTY = "export const PROBE={a:1,\n\n\n  b:2};\n";
 const CLEAN = "export const PROBE = { a: 1, b: 2 };\n";
 
-beforeEach(() => {
-  workdir = mkdtempSync(join(tmpdir(), "format-gate-"));
-  mkdirSync(join(workdir, "scripts"), { recursive: true });
-  mkdirSync(join(workdir, "src", "lib"), { recursive: true });
-  // 脚本与基线同目录（脚本按 __dirname 找基线），与真实布局 scripts/ 一致。
-  copyFileSync(SCRIPT, join(workdir, "scripts", "check-format.cjs"));
-  /* 这里**不再**拷 `scripts/launcher-core/`：门禁本体已经不经 pnpm 层找 prettier
-   * （改用 node 直起本地入口，见台账 E11），所以夹具不再需要那份形态判据模块。
-   * 沙箱里也没有 `node_modules`，prettier 由 `run()` 用
-   * `COMFYAPP_PRETTIER_ENTRY` 从真实仓借 —— 那是脚本对外的一条接缝，
-   * 「借不到」本身就是下面两条 fail-closed 用例要验的形态。 */
-  git("init", "-q");
-  git("config", "user.email", "t@local");
-  git("config", "user.name", "t");
-  // 本机 / CI 可能全局开着 commit.gpgsign，临时仓库里没有可用密钥；
-  // 测试只关心「基线是否被跟踪」，不需要真的签名。
-  git("config", "commit.gpgsign", "false");
-  git("config", "tag.gpgsign", "false");
-});
-
-afterEach(() => {
-  rmSync(workdir, { recursive: true, force: true });
-});
-
 /** 生成一份基线并让 git 跟踪它（棘轮文件必须入库）。 */
-function seedBaseline(files: string[]): void {
-  writeFileSync(
-    join(workdir, "scripts", ".format-baseline.json"),
+function seedBaseline(repo: GateRepo, files: string[]): void {
+  repo.write(
+    "scripts/.format-baseline.json",
     JSON.stringify(
       { files: Object.fromEntries(files.map((f) => [f, true])) },
       null,
       2,
     ),
   );
-  git("add", "-A");
-  git("commit", "-qm", "baseline");
+  repo.git("add", "-A");
+  repo.commit("baseline");
 }
 
 describe("prettier 格式棘轮", () => {
-  it("存量脏文件在基线内 → 通过（不要求全库已格式化）", () => {
-    write("src/lib/dirty.ts", DIRTY);
-    write("src/lib/keep.ts", CLEAN);
-    seedBaseline(["src/lib/dirty.ts"]);
-    const r = run();
+  test("存量脏文件在基线内 → 通过（不要求全库已格式化）", ({ repo }) => {
+    repo.write("src/lib/dirty.ts", DIRTY);
+    repo.write("src/lib/keep.ts", CLEAN);
+    seedBaseline(repo, ["src/lib/dirty.ts"]);
+    const r = repo.run();
     expect(r.code).toBe(0);
   });
 
-  it("新增未过格式的文件 → 阻断，并指出是哪个文件", () => {
-    write("src/lib/keep.ts", CLEAN);
-    seedBaseline([]);
-    write("src/lib/fresh.ts", DIRTY);
-    const r = run();
+  test("新增未过格式的文件 → 阻断，并指出是哪个文件", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    seedBaseline(repo, []);
+    repo.write("src/lib/fresh.ts", DIRTY);
+    const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("src/lib/fresh.ts");
     expect(r.output).toContain("新增未过 prettier");
   });
 
-  it("把基线内的干净文件弄脏 → 阻断（文件级记账拦得住，计数口径拦不住）", () => {
-    write("src/lib/keep.ts", CLEAN);
-    seedBaseline([]);
-    write("src/lib/keep.ts", DIRTY);
-    const r = run();
+  test("把基线内的干净文件弄脏 → 阻断（文件级记账拦得住，计数口径拦不住）", ({
+    repo,
+  }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    seedBaseline(repo, []);
+    repo.write("src/lib/keep.ts", DIRTY);
+    const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("src/lib/keep.ts");
   });
 
-  it("存量被格式化（基线未收紧）→ 提示；--strict 下阻断", () => {
-    write("src/lib/dirty.ts", CLEAN);
-    seedBaseline(["src/lib/dirty.ts"]);
-    const lenient = run();
+  test("存量被格式化（基线未收紧）→ 提示；--strict 下阻断", ({ repo }) => {
+    repo.write("src/lib/dirty.ts", CLEAN);
+    seedBaseline(repo, ["src/lib/dirty.ts"]);
+    const lenient = repo.run();
     expect(lenient.code).toBe(0);
     expect(lenient.output).toContain("已格式化");
 
-    const strict = run(["--strict"]);
+    const strict = repo.run(["--strict"]);
     expect(strict.code).toBe(1);
     expect(strict.output).toContain("未收紧基线");
   });
 
-  it("--update 只许收紧：新出现的脏文件会被拒绝", () => {
-    write("src/lib/keep.ts", CLEAN);
-    seedBaseline([]);
-    write("src/lib/fresh.ts", DIRTY);
-    const r = run(["--update"]);
+  test("--update 只许收紧：新出现的脏文件会被拒绝", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    seedBaseline(repo, []);
+    repo.write("src/lib/fresh.ts", DIRTY);
+    const r = repo.run(["--update"]);
     expect(r.code).toBe(1);
     expect(r.output).toContain("棘轮只许收紧");
     expect(r.output).toContain("src/lib/fresh.ts");
   });
 
-  it("--update 在基线内文件被修干净时收紧基线", () => {
-    write("src/lib/dirty.ts", CLEAN);
-    seedBaseline(["src/lib/dirty.ts"]);
-    const r = run(["--update"]);
+  test("--update 在基线内文件被修干净时收紧基线", ({ repo }) => {
+    repo.write("src/lib/dirty.ts", CLEAN);
+    seedBaseline(repo, ["src/lib/dirty.ts"]);
+    const r = repo.run(["--update"]);
     expect(r.code).toBe(0);
     expect(r.output).toContain("基线已更新");
     // 收紧后同一状态不再提示「治理有进展」。
-    expect(run().output).not.toContain("已格式化");
+    expect(repo.run().output).not.toContain("已格式化");
   });
 
-  it("prettier 入口取不到 → exit 2，且**不许**读成「全库干净」", () => {
+  test("prettier 入口取不到 → exit 2，且**不许**读成「全库干净」", ({
+    repo,
+  }) => {
     /* 这条钉的是原来的 fail-open（台账 E11）：门禁过去经 `pnpm exec` 找 prettier，
      * 命令找不到时退出 1、stdout 为空，而脚本把「空清单」当成「0 个文件未过」
      * 并打 `[format] OK` 退出 0 —— 依赖缺失 / 形态选错的机器上门禁就这样瞎掉。 */
-    write("src/lib/keep.ts", CLEAN);
-    seedBaseline([]);
-    const r = runWithEntry(undefined);
+    repo.write("src/lib/keep.ts", CLEAN);
+    seedBaseline(repo, []);
+    const r = repo.run([], { env: { COMFYAPP_PRETTIER_ENTRY: undefined } });
     expect(r.code).toBe(2);
     expect(r.output).toContain("找不到 prettier 入口");
     expect(r.output).not.toContain("[format] OK");
   });
 
-  it("prettier 退出 1 却一行都没列出来 → exit 2（「没跑成」与「有差异」分开）", () => {
+  test("prettier 退出 1 却一行都没列出来 → exit 2（「没跑成」与「有差异」分开）", ({
+    repo,
+  }) => {
     /* 沙箱里放一个「只按退出码说话」的假入口：`--list-different` 返回 1 的含义是
      * 「有差异，清单在 stdout」，清单为空就说明这句话不可信。 */
-    write("src/lib/keep.ts", CLEAN);
-    seedBaseline([]);
-    const stub = join(workdir, "scripts", "fake-prettier.cjs");
-    writeFileSync(stub, "process.exit(1);\n");
-    const r = runWithEntry(stub);
+    repo.write("src/lib/keep.ts", CLEAN);
+    seedBaseline(repo, []);
+    const stubRel = "scripts/fake-prettier.cjs";
+    repo.write(stubRel, "process.exit(1);\n");
+    const stub = join(repo.dir, stubRel);
+    const r = repo.run([], { env: { COMFYAPP_PRETTIER_ENTRY: stub } });
     expect(r.code).toBe(2);
     expect(r.output).toContain("不是「全库干净」");
     expect(r.output).not.toContain("[format] OK");
   });
 
-  it("基线未被 git 跟踪 → 阻断（棘轮文件必须入库，否则 CI 上会缺失）", () => {
-    write("src/lib/keep.ts", CLEAN);
-    writeFileSync(
-      join(workdir, "scripts", ".format-baseline.json"),
-      JSON.stringify({ files: {} }),
-    );
-    const r = run();
+  test("基线未被 git 跟踪 → 阻断（棘轮文件必须入库，否则 CI 上会缺失）", ({
+    repo,
+  }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.write("scripts/.format-baseline.json", JSON.stringify({ files: {} }));
+    const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("未被 git 跟踪");
   });
 
-  it("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", () => {
-    seedBaseline([]);
+  test("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({
+    repo,
+  }) => {
+    seedBaseline(repo, []);
     // 白名单是「形态」而不是文件列表：新增的这类文件自动豁免。
-    write("tests/fresh.test.ts", DIRTY);
-    write("scripts/fresh.mjs", DIRTY);
-    write("e2e/fresh.spec.ts", DIRTY);
+    repo.write("tests/fresh.test.ts", DIRTY);
+    repo.write("scripts/fresh.mjs", DIRTY);
+    repo.write("e2e/fresh.spec.ts", DIRTY);
     /* Rust 壳的构建输出：它被**嵌套的** src-tauri/.gitignore 忽略，而 prettier 只
      * 按仓库根读 .gitignore —— 不进白名单就会拿它阻断每一次提交（ISSUE #638 修好
      * pnpm 启动形态后本门禁第一次真正扫到全库时暴露的现象）。 */
-    write(
+    repo.write(
       "src-tauri/target/debug/build/app-1/out/__global-api-script.js",
       DIRTY,
     );
-    const r = run();
+    const r = repo.run();
     expect(r.code).toBe(0);
   });
 });
@@ -267,7 +197,7 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
     globToRegExp: (glob: string) => RegExp;
   };
 
-  it.for([
+  test.for([
     ["scripts/check-format.cjs", true],
     ["tests/anything.test.ts", true],
     ["e2e/smoke.spec.ts", true],
@@ -285,7 +215,7 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
     expect(mod.isIgnored(rel)).toBe(expected);
   });
 
-  it("`*.config.{ts,js}` 这一类花括号展开只匹配一层目录", () => {
+  test("`*.config.{ts,js}` 这一类花括号展开只匹配一层目录", () => {
     expect(mod.isIgnored("prettier.config.js")).toBe(true);
     expect(mod.isIgnored("src/lib/next.config.js")).toBe(false);
   });

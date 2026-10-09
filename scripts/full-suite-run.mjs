@@ -75,7 +75,7 @@ export function shouldRecord({ exitCode, dryRun }) {
 function main(argv) {
   const dryRun = argv.includes("--dry-run");
   /* 两条「不跑」的出路互斥地先处理：给了它们就不该再去起 vitest。 */
-  for (const flag of ["--skip", "--dirty"]) {
+  for (const flag of /** @type {const} */ (["--skip", "--dirty"])) {
     const parsed = parseLedgerFlag(argv, flag);
     if (parsed.mode === "run") continue;
     if (parsed.reason === null) {

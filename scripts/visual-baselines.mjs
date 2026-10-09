@@ -434,9 +434,11 @@ export const FRESHNESS_LEDGER = freshnessTrack("visual").ledger;
  * 登记」表现成「按键名当档名」而照样跑绿）。
  *
  * @param {keyof typeof FRESHNESS_TRACKS | string} kind
- * @returns {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}}
+ * @returns {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}}
  *   与 `FRESHNESS_TRACKS[*]` 同形 —— 两条账的差异（`daily` / `skipHow`）也在里面，
- *   调用方据此决定要不要判「每天首次」、以及话术里给不给豁免那条出路。
+ *   调用方据此决定要不要判「每天首次」、以及话术里给不给豁免那条出路；
+ *   `dirty` / `dirtyHow` / `graceMs` 是「改了就当天跑」那一层读的三栏（输入面清单、
+ *   不吃这一档的那条出路、没动输入面时的宽限）。
  */
 export function freshnessTrack(kind) {
   const track = FRESHNESS_TRACKS[kind];
@@ -493,10 +495,10 @@ export function freshnessRecord({
    * 两栏各管一件事：`skippedReason` = 今天故意不跑；`dirtyReason` = 这次改动不吃这一档。
    * 两者都要能复核（同一份 `isUsableSkipReason` 核对），区别只在**读起来不一样**
    * —— 混成一栏之后，「这一档三个月没跑」与「这三个月每次都声明不吃它」长得一模一样。 */
-  for (const [field, value] of [
+  for (const [field, value] of /** @type {const} */ ([
     ["skippedReason", skippedReason],
     ["dirtyReason", dirtyReason],
-  ]) {
+  ])) {
     if (typeof value === "string" && value.trim()) record[field] = value.trim();
   }
   return record;
@@ -628,7 +630,7 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
  * 「跑过一次」与「跑过的是哪一个」会变成两件事，而账面上看着完全正常）。
  *
  * @param {Record<string, unknown>} ledger
- * @param {{required: string[], registered: string[], track: {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}, kind: string, now?: Date}} scope
+ * @param {{required: string[], registered: string[], track: {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}, kind: string, now?: Date, dirtySince?: Date | null}} scope
  *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）；
  *   `track` = 这一份账的登记（话术里要给出「去哪个文件补、按哪条命令跑」，
  *   它同时决定 `daily` / `skipHow` 那两条分叉）；
