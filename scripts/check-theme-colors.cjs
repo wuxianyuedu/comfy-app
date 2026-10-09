@@ -810,9 +810,21 @@ if (REPORT_ONLY) {
 
 /* ── 模式二：更新基线（棘轮只许下降） ── */
 if (UPDATE) {
+  /* 上面的 `prev` 在 `--update` 这条路上**恒为 null**（它的三元式带着 `!UPDATE`），
+   * 所以这一支要自己读一次基线。判的是「基线在不在」，不是「基线里的数是不是非零」：
+   * 旧写法 `if (before && …)` 在今天这种**已经清到 0 处**的基线上整个短路，
+   * 于是「新写一条色值 + 跑一次 --update」正好在最不该松的时候松着
+   * （同一族已修的先例见 `check-ui-logic-separation.cjs` 的 `diffAgainstBaseline`）。
+   * 首次建立基线（文件还不存在）仍放行，否则新检出无法起步。 */
+  const hadBaseline = fs.existsSync(BASELINE);
+  const prevForUpdate = hadBaseline
+    ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
+    : null;
   const before =
-    (prev?.files && Object.values(prev.files).reduce((a, b) => a + b, 0)) ?? 0;
-  if (before && totalCounted > before) {
+    (prevForUpdate?.files &&
+      Object.values(prevForUpdate.files).reduce((a, b) => a + b, 0)) ??
+    0;
+  if (hadBaseline && totalCounted > before) {
     console.error(
       `[theme-colors] 拒绝放宽基线：${before} → ${totalCounted}（棘轮只许下降）。\n` +
         "  新增写死色值必须先 token 化，不要用 --update 掩盖。",

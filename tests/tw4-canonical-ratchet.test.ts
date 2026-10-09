@@ -11,8 +11,10 @@
  * 断言形状为什么是「读 JSON + 读源码」，而不是「真跑一次 --check」：
  * 真跑要 6s×2，而这条用例每次提交都执行（固定清单）；判据要守的是
  * 「基线没被放宽」与「判定档还在」，两者都是**静态事实**，读文本足够、且不会
- * 因为机器慢而在 CI / 本地超时。真跑红/绿的现场已由本文件的兄弟用例
- * `tests/gate-executors.test.ts` 那族覆盖（用临时工作区造情形，不付引擎成本）。
+ * 因为机器慢而在 CI / 本地超时。真跑红/绿的现场在
+ * `tests/ratchet-update-guards.test.ts`（台账 E5 的横切判据）—— 它把这两家各起一次
+ * 临时工作区、真的跑 `--check` 与 `--update`（付引擎成本，所以那一格按实测登记了
+ * 单次预算）。本文件只守「基线没被放宽」与「判定档还在」这两件静态事实。
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";

@@ -377,8 +377,23 @@ async function main() {
   }
 
   const baseline = readBaseline();
+  const hadBaseline = fs.existsSync(BASELINE);
 
   if (UPDATE) {
+    /* 同 `check-dead-exports` / `check-circular-deps` 那一格：note 里写着「只许降不许升」，
+     * 而这一支此前无条件落盘 —— 新写几行英文注释后跑一次 --update 就把它们收进基线。
+     * 判据升级（RULE_VERSION 变了）是另一件事：那一档允许重写，且必须先改常数。 */
+    const baselineTotal =
+      typeof baseline.total === "number" ? baseline.total : 0;
+    const sameRule = baseline.ruleVersion === RULE_VERSION;
+    if (hadBaseline && sameRule && total > baselineTotal) {
+      console.error(
+        `[comment-language] 拒绝 --update：当前 ${total} 行 > 基线 ${baselineTotal} 行。\n` +
+          `  棘轮只许降不许升：把新增的注释改成中文（规范 §12.4.6），再 --update。\n` +
+          `  若确属判据变更（现为 RULE_VERSION=${RULE_VERSION}），先改脚本里的常数再 --update。`,
+      );
+      process.exit(1);
+    }
     fs.writeFileSync(
       BASELINE,
       `${JSON.stringify(

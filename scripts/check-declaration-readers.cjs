@@ -22,7 +22,10 @@
  *      · `hook-step`：该标签必须出现在 `.githooks/pre-commit` 的 `run "…"` 步骤上
  *        （摘掉那一步 ⇒ 红，那正是「判据在场、没人敲它」）；
  *      · `fixed-test`：该文件必须在 `scripts/affected-tests.mjs` 的
- *        `FIXED_STRUCTURAL_TESTS` 里（离开固定清单 ⇒ 只在碰到它时才跑，不再是执行者）。
+ *        `FIXED_STRUCTURAL_TESTS` 里（离开固定清单 ⇒ 只在碰到它时才跑，不再是执行者）；
+ *      · `npm-script`：`package.json` 的 `scripts` 里必须有这个入口名（入口被删 ⇒
+ *        那条「按需召唤」的承诺没有任何东西能兑现 —— 与 `check-gate-executors.cjs`
+ *        认 `package.json` 入口为执行者同口径，§11.23.2 第 1 条的「按需召唤」那一半）。
  *   ③ **索引自己不许静默降级** —— 解析不出 / 结构不对 / `carriers` 为空
  *      / 行数比记录的基线少 ⇒ 判失败，而不是「没有载体要查、于是放过」。
  *      同族先例：§11.18.3 首版那个 `include: []` 却退 0、§11.20.5 的同类口径。
@@ -48,6 +51,7 @@ const REPORT_ONLY = ARGS.has("--report");
 const LEDGER = path.join(__dirname, ".declaration-readers.json");
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
 const AFFECTED = path.join(ROOT, "scripts", "affected-tests.mjs");
+const PACKAGE_JSON = path.join(ROOT, "package.json");
 
 /**
  * 索引行数的下限 —— 它不是「正确值」，是**静默降级的地板**：
@@ -144,6 +148,30 @@ function fixedStructuralTests() {
   return new Set([...body.matchAll(/"([^"\n]+)"/g)].map((x) => x[1]));
 }
 
+/**
+ * `package.json` 的 `scripts` 入口名全表 —— 「按需召唤」那一类执行者的取证。
+ *
+ * 为什么它算执行者：§11.23.2 认的执行者之一就是「按需召唤」那一层（`pnpm <名>`
+ * 入口）—— 它不是一个「文档里写着」的承诺，而是一条**真的能敲下去**的命令。
+ * 入口名被删 / 被改名 ⇒ 那条声明再没有东西能兑现，与钩子步骤被摘掉同罪。
+ *
+ * 取不到 `package.json` 或它没有 `scripts` ⇒ 返回 `null`，由调用点判「判据不许
+ * 静默降级」（不是「没有入口要查、于是放过」）。
+ *
+ * @returns {Set<string> | null}
+ */
+function npmScripts() {
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(PACKAGE_JSON, "utf8"));
+  } catch {
+    return null;
+  }
+  const scripts = parsed?.scripts;
+  if (!scripts || typeof scripts !== "object") return null;
+  return new Set(Object.keys(scripts));
+}
+
 /* ── 主流程 ──────────────────────────────────────────────────── */
 
 const carriers = readLedger();
@@ -151,10 +179,16 @@ const carriers = readLedger();
 if (carriers) {
   const labels = hookStepLabels();
   const fixed = fixedStructuralTests();
+  const scripts = npmScripts();
   if (fixed === null) {
     problems.push(
       "解析不出 `FIXED_STRUCTURAL_TESTS`（scripts/affected-tests.mjs）—— " +
         "判据不许静默降级（§11.23.3）",
+    );
+  }
+  if (scripts === null) {
+    problems.push(
+      "解析不出 `package.json` 的 `scripts` —— 判据不许静默降级（§11.23.3）",
     );
   }
 
@@ -196,14 +230,25 @@ if (carriers) {
             "C 组固定清单里的用例才算执行者（§11.23.2）",
         );
       }
+    } else if (ex.kind === "npm-script") {
+      if (scripts === null) {
+        // 上面已经报过解析失败，这里只跳过
+      } else if (!scripts.has(ex.script)) {
+        problems.push(
+          `「${c.name}」登记的执行者是 package.json 入口「${ex.script}」，` +
+            "而它不在 `scripts` 里 —— 按需召唤的入口没了，那条声明再没有东西能兑现（§11.23.2）",
+        );
+      }
     } else {
       problems.push(
-        `「${c.name}」的 executor.kind 只能是 hook-step / fixed-test`,
+        `「${c.name}」的 executor.kind 只能是 hook-step / fixed-test / npm-script`,
       );
     }
 
     report.push(
-      `${c.id}\t§${c.section}\t读者 ${c.reader}\t执行者 ${ex.label ?? ex.file}`,
+      `${c.id}\t§${c.section}\t读者 ${c.reader}\t执行者 ${
+        ex.label ?? ex.file ?? `pnpm ${ex.script}`
+      }`,
     );
   }
 }

@@ -211,7 +211,8 @@ function main() {
   }
 
   let baseline = [];
-  if (fs.existsSync(BASELINE)) {
+  const hadBaseline = fs.existsSync(BASELINE);
+  if (hadBaseline) {
     baseline = JSON.parse(fs.readFileSync(BASELINE, "utf8")).cycles || [];
   }
 
@@ -220,6 +221,20 @@ function main() {
   const removed = baseline.filter((c) => !current.includes(c));
 
   if (UPDATE) {
+    /* 与 `check-dead-exports` 同一格：note 里写着「只许降不许升」，而这一支此前
+     * 无条件落盘 —— 新增一组环之后跑一次 --update 就把它收进基线。 */
+    if (hadBaseline && added.length) {
+      console.error(
+        `[circular-deps] 拒绝 --update：新增 ${added.length} 组模块循环依赖` +
+          `（基线 ${baseline.length} → 当前 ${current.length}）。\n` +
+          `  棘轮只许降不许升：先按规范 §12.7 拆环（把共享的那一角下沉 / 改成注入），再 --update。\n` +
+          `  新增的几组：\n${added
+            .slice(0, 10)
+            .map((c) => `    · ${c}`)
+            .join("\n")}`,
+      );
+      process.exit(1);
+    }
     fs.writeFileSync(
       BASELINE,
       `${JSON.stringify(
