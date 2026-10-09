@@ -923,7 +923,7 @@
       它照出的缺陷与三条口径写在 E7 那一段与规范 §11.2.1。
       仍欠的：其余 router / route 的响应没有镜像（`src/lib/**-client.ts` 里只有一部分走 zod，
       其余仍是 `as` 硬转），msw 的使用面也没扩（前端集成那层的 mock 边界见 E16）。
-- [ ] **E16 测试替身里复刻被测实现，而副本已经分叉**（本批装机照出来，没代它改）：
+- [x] **E16 测试替身里复刻被测实现，而副本已经分叉**（本批装机照出来、本批修）：
       `src/app/(main)/settings/hooks/use-settings-page.test.ts` 的
       `vi.mock("~/lib/log/log-file-client")` 不转真模块，而是**手抄一份**
       `fetchFileLogSlice` / `fetchLogSessions`（文件里写的理由是「避免 vitest 别名解析与
@@ -938,6 +938,17 @@
       会话请求的记账改成对真函数 `vi.spyOn`。⚠️ 搬的时候注意 `lib → server` 那条判据：
       契约测试要 import router 就不能住在 `src/lib/**` 下（本批的
       `video-queue-client.test.ts` 就是这么被搬到 `tests/` 的）。
+      **修法与实测**（本批）：`vi.mock` 工厂换成 `importOriginal` 展开真模块 + 只替
+      `postAppRuntimeLog`（那一个才需要记账）；原先那句「避免 vitest 别名解析与模块类型
+      在工厂内部的告警」的理由**实测不成立** —— 仓内已有三份同形态写法在跑（本文件的
+      logger、`tests/sqlite-pragma-sites.test.ts`、`src/server/api/routers/task.test.ts`），
+      类型用 `import type * as X from "..."` + `importOriginal<typeof X>()` 即可
+      （内联 `import()` 类型注解被本仓 eslint 的 `consistent-type-imports` 禁掉）。
+      两份「哪个会话被请求过」的断言不再读副本的记账数组，改成**在 MSW handler 里记
+      真发出去的 URL**（`?source=…&session=…` 由真实现的 `withQuery` 拼）——
+      判的对象从「副本自己写了什么」换成「线上真的发了什么」，这正是副本抹掉的那一维。
+      该文件 42 条在真实现下全绿；两刀变异各红各的（客户端不再发 `bootId` → 红；
+      会话取数忽略 `sessionId` → 红），而修之前这两刀都红不了（副本压根不接这两个参数）。
 - [ ] **E5 棘轮 `--update` 无制衡**。证据：`AGENTS.md:94,97`。
 - [ ] **E6 无 bundle 体积门禁 / 变异测试 / a11y 自动化**。
 - [ ] **F1 零 i18n**（中文硬编码、`lang` 写死）。证据：`src/app/layout.tsx:36`。
