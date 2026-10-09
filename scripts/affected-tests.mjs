@@ -367,6 +367,15 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 没有任何人被告知」。同因（读文本、import 图追不到、与本次改动无关也必须响），
   // 故进固定清单。
   "tests/theme-tokens-compile-source.test.ts",
+  // 「jsx-a11y 的规则开关 ⇄ 判据」（规范 06 §6.12）：这个插件装着 39 条规则、
+  // 而 `eslint-config-next` 只启用 6 条 —— 「半开」这件事此前没有任何东西在数
+  //（`grep -c jsx-a11y eslint.config.js` 是 0，配置在 next 里）。本判据三向核：
+  // 官方 recommended 集合全开、本仓与官方默认的每一处不同都在台账里登记、
+  // 台账双向拦。它同时是判据自己的门禁自测 —— 该拦的（悄悄关掉一条、登记了却
+  // 没关、登记不存在的规则、缺理由 / 缺 keeper、豁免指向不存在的文件）与该放的
+  // （`--report` 恒 0）每一条都得有人钉住。改 `.githooks/**` 会让本层放弃收窄、
+  // 只跑固定清单，而「有人偷偷关掉一条 a11y 规则」正是这类动作，故进固定清单。
+  "tests/a11y-rules-gate.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

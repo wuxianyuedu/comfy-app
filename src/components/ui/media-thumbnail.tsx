@@ -167,8 +167,20 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(
 
   if (as === "video" || (as !== "image" && isVideo(src))) {
     return (
+      /* `aria-label`：`<video>` 没有 `alt`，可访问名只能走 `aria-label` ——
+       * 调用处传的 `alt` 是这个出口里唯一的文字来源，不转写就等于「这条视频
+       * 没有可访问名」。
+       *
+       * ⚠️ `jsx-a11y/media-has-caption` 要求 `<track>`，本基元**刻意不给**：
+       * 它承载的是**缩略图 / 预览**（`muted` 默认 `true`、`autoPlay`、尺寸只有
+       * 几百像素），ComfyUI 产出的 mp4 本来就无音轨 —— 配一个空的
+       * `<track kind="captions">` 只是让规则闭嘴，读屏器会读到一条**假字幕轨**
+       *（§6.9 的口径是「控件可用」，不是「元素上有 track 属性」）。
+       * 真要放带音频的视频时，字幕由调用处另给 `<track>`。 */
+      /* eslint-disable-next-line jsx-a11y/media-has-caption -- 静音预览媒体，无音轨可配字幕（空 <track> 反而给读屏器一条假字幕轨） */
       <video
         src={src}
+        aria-label={alt}
         className={className}
         autoPlay={autoPlay}
         muted={muted}
@@ -185,7 +197,10 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(
   return (
     <img
       src={src}
+      /* 纯装饰缩略图（`alt` 没给）时给 `alt=""` + `aria-hidden`：读屏器跳过它，
+       * 与「这张图不携带信息」一致；给了 `alt` 的按正常可访问名走（规范 §6.9）。 */
       alt={alt}
+      aria-hidden={alt === "" ? true : undefined}
       className={className}
       loading="lazy"
       decoding="async"

@@ -9,6 +9,11 @@
 import { ArrowDownToLine, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+} from "~/components/ui/pagination";
 import { FILTER_LABELS } from "./LogFilterBar";
 import { ORIGIN_TEXT } from "./LogPanelOriginSelect";
 import type { LogFilter, LogOriginFilter } from "./log-types";
@@ -100,74 +105,87 @@ export function LogPanelFooter(input: {
               : "回到最新"}
           </Button>
         )}
-        <span className="flex items-center gap-1">
-          <Hint label="更新的一页" accessibleName wrap>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setPage(safePage - 1)}
-              disabled={safePage <= 1}
-              className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
-            >
-              <ChevronLeft data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-          {/* 当前正看的是哪一段（来源 / 级别 / 搜索词），点任意一项即去掉
+        {/* 翻页控件走 `ui/pagination`（规范 16 §16.2.4.6 / §16.2.4.72 的零引用
+          基元复查）：`Pagination` / `PaginationContent` / `PaginationItem` 给的是
+          `nav[aria-label="pagination"]` + `ol`/`li` 的层级语义与统一排布契约。
+          此前这里是一层裸 `span` 串两个按钮 —— 读屏器读到的是一串孤立按钮，
+          没有任何「这是一组分页控件」的说法。
+          **只借结构、不借 `PaginationLink`**：那个是带 `href` 的页链接，而本
+          面板的页码是**受控状态**（当前页归 `useLogStore`），不是地址。 */}
+        <Pagination className="w-auto flex-1 justify-end">
+          <PaginationContent className="gap-1">
+            <PaginationItem>
+              <Hint label="更新的一页" accessibleName wrap>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => setPage(safePage - 1)}
+                  disabled={safePage <= 1}
+                  className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
+                >
+                  <ChevronLeft data-icon="inline-start" size={14} />
+                </Button>
+              </Hint>
+            </PaginationItem>
+            {/* 当前正看的是哪一段（来源 / 级别 / 搜索词），点任意一项即去掉
             那一层筛选。此处用按钮而不是纯文本：页脚是「说出来我在看什么」
             的位置，回滚动作本来就该在这儿，不必让用户跑回顶部找。 */}
-          <span className="text-ink-soft flex items-center gap-1">
-            <Hint
-              label={origin && origin !== "all" ? "去掉来源筛选" : undefined}
-              wrap
-            >
-              <Button
-                variant="ghost"
-                size="xs"
-                data-testid="logpanel-origin-chip"
-                onClick={() => setOrigin("all")}
-                disabled={!origin || origin === "all"}
-                className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
+            <PaginationItem className="text-ink-soft flex items-center gap-1">
+              <Hint
+                label={origin && origin !== "all" ? "去掉来源筛选" : undefined}
+                wrap
               >
-                {ORIGIN_TEXT[origin ?? "all"]}
-              </Button>
-            </Hint>
-            <Hint label={filter !== "all" ? "去掉级别筛选" : undefined} wrap>
-              <Button
-                variant="ghost"
-                size="xs"
-                data-testid="logpanel-level-chip"
-                onClick={() => setFilter("all")}
-                disabled={filter === "all"}
-                className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
-              >
-                {FILTER_LABELS.find((item) => item.value === filter)?.label}
-              </Button>
-            </Hint>
-            {search.trim() && (
-              <Hint label="清空搜索">
                 <Button
                   variant="ghost"
                   size="xs"
-                  onClick={() => setSearch("")}
-                  className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
+                  data-testid="logpanel-origin-chip"
+                  onClick={() => setOrigin("all")}
+                  disabled={!origin || origin === "all"}
+                  className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
                 >
-                  {`搜索「${search.trim()}」`}
+                  {ORIGIN_TEXT[origin ?? "all"]}
                 </Button>
               </Hint>
-            )}
-          </span>
-          <Hint label="更早的一页" accessibleName wrap>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setPage(safePage + 1)}
-              disabled={safePage >= totalPages}
-              className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
-            >
-              <ChevronRight data-icon="inline-start" size={14} />
-            </Button>
-          </Hint>
-        </span>
+              <Hint label={filter !== "all" ? "去掉级别筛选" : undefined} wrap>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  data-testid="logpanel-level-chip"
+                  onClick={() => setFilter("all")}
+                  disabled={filter === "all"}
+                  className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
+                >
+                  {FILTER_LABELS.find((item) => item.value === filter)?.label}
+                </Button>
+              </Hint>
+              {search.trim() && (
+                <Hint label="清空搜索">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setSearch("")}
+                    className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
+                  >
+                    {`搜索「${search.trim()}」`}
+                  </Button>
+                </Hint>
+              )}
+            </PaginationItem>
+            <PaginationItem>
+              <Hint label="更早的一页" accessibleName wrap>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => setPage(safePage + 1)}
+                  disabled={safePage >= totalPages}
+                  className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
+                >
+                  <ChevronRight data-icon="inline-start" size={14} />
+                </Button>
+              </Hint>
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       </span>
     </div>
   );
