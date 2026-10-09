@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { textHandler } from "~/lib/form-props";
 import { EmptyState } from "~/components/ui/empty-state";
+import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { ModelCard, type ModelCardData } from "./ModelCard";
 import { ModelDetailDialog } from "./ModelDetailDialog";
@@ -44,9 +45,10 @@ export function ModelLibrary() {
             {filter.label}
           </Button>
         ))}
-        <input
+        <Input
           value={c.q}
           onChange={textHandler(c.setQ)}
+          aria-label="搜索模型"
           placeholder="搜索模型…"
           className="border-border bg-surface focus:border-primary ml-auto h-9 w-44 rounded-lg border px-3 text-sm outline-none sm:w-56"
         />

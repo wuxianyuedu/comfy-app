@@ -149,6 +149,7 @@ function VideoField({
       <input
         value={str}
         disabled={disabled}
+        aria-label={label}
         className="nodrag nopan bg-canvas-deep text-ink-soft focus:ring-primary/40 text-2xs w-full rounded-md px-2.5 py-2 outline-none focus:ring-1"
         onChange={textHandler((value) => set(entry.ioKey, value))}
       />

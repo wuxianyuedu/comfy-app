@@ -144,7 +144,7 @@ export function MessageCenterPanel() {
         {messages.length === 0 ? (
           <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-3">
             <Inbox size={44} strokeWidth={1.2} className="opacity-30" />
-            <p className="text-[13px]">暂无系统消息</p>
+            <p className="text-sm">暂无系统消息</p>
           </div>
         ) : (
           <ul className="mx-auto flex w-full max-w-3xl flex-col gap-2.5 px-4 py-5">

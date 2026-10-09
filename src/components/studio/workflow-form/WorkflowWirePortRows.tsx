@@ -317,6 +317,7 @@ export function WirePortRows({
                         ? String(v)
                         : ""
                     }
+                    aria-label={`输入 ${label}`}
                     placeholder={`输入 ${label}`}
                     onChange={textHandler((value) =>
                       set(wireInput.ioKey, value),

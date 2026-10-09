@@ -404,6 +404,7 @@ export function JsonViewer({
           ref={searchRef}
           type="text"
           value={query}
+          aria-label="在 JSON 里搜索"
           onChange={textHandler(setQuery)}
           onKeyDown={onSearchKey}
           placeholder="搜索 key / string / number / bool / null…（⌘F / Ctrl+F）"

@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
+import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { filterGroupsByKeyword } from "~/lib/list-filter";
@@ -168,6 +169,7 @@ export function AttributeMultiSelect({
                     {g.options.map((opt) => {
                       const on = selected.has(opt);
                       return (
+                        /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开（`tabIndex` 本轮已补）。 */
                         <div
                           key={opt}
                           role="option"

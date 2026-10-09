@@ -177,6 +177,7 @@ function PortRowInt({
       <input
         readOnly
         defaultValue={value}
+        aria-label={label}
         className="border-border-strong bg-canvas-deep text-ink-bright h-5.25 w-35 rounded border px-2 text-right text-xs tabular-nums outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
