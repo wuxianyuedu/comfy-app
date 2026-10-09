@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import {
   clearProjectIndex,
+  freezeComfyStats,
+  hideDevChrome,
   setTheme,
   settle,
   unstableChromeMasks,
@@ -20,6 +22,12 @@ import {
  * 取决于 `canvas-store`（localStorage + 服务端对账 hydration）：同一次浏览器上下文
  * 里跑过别的用例就会带上项目。所以进页面前**显式清掉项目索引**，否则基线会随
  * 「这次上下文里有没有项目」变 —— 那不是像素退化，是基线不成立。
+ *
+ * ⚠️ **同样钉死的还有「后端不在」**：「本机算力」卡的显存 / 内存数字来自
+ * `/api/comfy/stats`（服务端代理 ComfyUI `/system_stats`），而 8188 上是不是真
+ * ComfyUI 取决于**这台机器当时在不在跑图**（`reuseExistingServer` 只看有没有人应答）。
+ * 不钉它，这张 PNG 记的是「录基线那台机器的实时资源占用」，换个人跑就红。
+ * 两件同性质：都是「基线成立的前提」，不是「被测界面的一种状态」。
  */
 
 const READY_TEXT = "灵感从这里开始";
@@ -29,6 +37,8 @@ test.describe("首页视觉基线", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await setTheme(page, "dark");
     await clearProjectIndex(page);
+    await hideDevChrome(page);
+    await freezeComfyStats(page);
     await page.goto("/workspace");
     await settle(page, READY_TEXT);
     await expect(page).toHaveScreenshot("workspace-desktop-dark.png", {
@@ -41,6 +51,8 @@ test.describe("首页视觉基线", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await setTheme(page, "light");
     await clearProjectIndex(page);
+    await hideDevChrome(page);
+    await freezeComfyStats(page);
     await page.goto("/workspace");
     await settle(page, READY_TEXT);
     await expect(page).toHaveScreenshot("workspace-desktop-light.png", {

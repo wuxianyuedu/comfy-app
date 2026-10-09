@@ -1,6 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { settle, unstableChromeMasks } from "./support/page-baseline";
+import {
+  hideDevChrome,
+  settle,
+  unstableChromeMasks,
+} from "./support/page-baseline";
 
 /**
  * 弹窗 / 浮层尺寸像素基线 —— §11.8 的「弹窗/浮层尺寸」那一档。
@@ -83,6 +87,7 @@ async function openPinnedLogPanel(page: Page): Promise<Locator> {
     }
   }, WIDE_KEY_PREFIX);
 
+  await hideDevChrome(page);
   await page.goto("/workspace");
   await expect(
     page.getByRole("heading", { name: "灵感从这里开始" }),

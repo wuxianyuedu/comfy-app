@@ -76,6 +76,7 @@ const LEDGER: string[] = [
   "scripts/check-circular-deps.cjs",
   "scripts/check-dead-exports.cjs",
   "scripts/check-overlay-z.cjs",
+  "scripts/check-tsc-diagnostic-executors.cjs",
   "scripts/check-theme-colors.cjs",
   "scripts/check-ui-primitives.cjs",
   "scripts/lib-node-only-scan.mjs",

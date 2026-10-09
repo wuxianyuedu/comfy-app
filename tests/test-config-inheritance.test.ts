@@ -84,11 +84,15 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
     for (const project of vitest.projects) {
       const cfg = project.config as unknown as Record<string, unknown>;
       const prefix = `[${project.name}]`;
-      // setupFiles 在解析后是**绝对路径**，所以比形状（落在为仓库根之下、名字对）。
+      // setupFiles 在解析后是**绝对路径**，所以比形状（落在仓库根之下、名字对）。
       const setupFiles = cfg.setupFiles as string[];
-      expect(setupFiles.map((f) => path.relative(ROOT, f)), prefix).toEqual(
-        SHARED_EXPECTATIONS.setupFiles,
-      );
+      /* 比较前归一分隔符：`path.relative()` 在 win32 上给出 `tests\setup.ts`，而期望
+         值按配置源码写成 POSIX 形式 —— 不归一的话这条判据在每台 Windows 上都红，
+         且红的原因与它要判的事（共享项有没有落到每一档）毫无关系。 */
+      expect(
+        setupFiles.map((f) => path.relative(ROOT, f).split("\\").join("/")),
+        prefix,
+      ).toEqual(SHARED_EXPECTATIONS.setupFiles);
       expect(cfg.globals, prefix).toBe(SHARED_EXPECTATIONS.globals);
       expect(cfg.testTimeout, prefix).toBe(SHARED_EXPECTATIONS.testTimeout);
       expect(cfg.hookTimeout, prefix).toBe(SHARED_EXPECTATIONS.hookTimeout);

@@ -363,6 +363,17 @@ export const FIXED_STRUCTURAL_TESTS = [
   // （用了共享夹具 / 只造临时目录 / 拉别的可执行文件 / 夹具文件）每一条都得有人钉住，
   // 而它们是「下一次有人写门禁自测」时才走得进的路径，所以必须进固定清单。
   "tests/gate-repo-boilerplate-gate.test.ts",
+  // 「`@theme` 声明的 token 清单」那份**文件快照**（规范 §11.9.1 / #1490 落地）：
+  // `toMatchFileSnapshot` 把清单写成一份能独立打开、能单独 diff 的真文件，
+  // 而它与源码之间的同步**没有任何机器判据** —— 它自己那条用例读的是
+  // `src/app/globals.css` 的**文本**（正则扫 `@theme` 块），CSS 不在 import 图上，
+  // 所以「改了 globals.css 而不带它」正好是它不在的时机。
+  // 实测（本轮）：#1558 往 `@theme` 加了一颗 `--gradient-brand`（品牌渐变收成 token），
+  // 基线没同批更新，这条红**直接落进 master 并留了一周**，期间从它分出去的每一次提交
+  // 都带着它 —— 表现不是「某处坏了」，而是「一份人工 review 的产物与源码已经不一致，
+  // 没有任何人被告知」。同因（读文本、import 图追不到、与本次改动无关也必须响），
+  // 故进固定清单。
+  "tests/theme-tokens-compile-source.test.ts",
   // 「jsx-a11y 的规则开关 ⇄ 判据」（规范 06 §6.12）：这个插件装着 39 条规则、
   // 而 `eslint-config-next` 只启用 6 条 —— 「半开」这件事此前没有任何东西在数
   //（`grep -c jsx-a11y eslint.config.js` 是 0，配置在 next 里）。本判据四向核：
@@ -389,17 +400,6 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 低于地板 / 缺字段）每一档都得有人钉住，都是「下一次新增一条按需档」时才走得进的
   // 路径，所以必须进固定清单（与本次改动无关也照跑）。
   "tests/on-demand-duties-gate.test.ts",
-  // 「`@theme` 声明的 token 清单」那份**文件快照**（规范 §11.9.1 / #1490 落地）：
-  // `toMatchFileSnapshot` 把清单写成一份能独立打开、能单独 diff 的真文件，
-  // 而它与源码之间的同步**没有任何机器判据** —— 它自己那条用例读的是
-  // `src/app/globals.css` 的**文本**（正则扫 `@theme` 块），CSS 不在 import 图上，
-  // 所以「改了 globals.css 而不带它」正好是它不在的时机。
-  // 实测（本轮）：#1558 往 `@theme` 加了一颗 `--gradient-brand`（品牌渐变收成 token），
-  // 基线没同批更新，这条红**直接落进 master 并留了一周**，期间从它分出去的每一次提交
-  // 都带着它 —— 表现不是「某处坏了」，而是「一份人工 review 的产物与源码已经不一致，
-  // 没有任何人被告知」。同因（读文本、import 图追不到、与本次改动无关也必须响），
-  // 故进固定清单。
-  "tests/theme-tokens-compile-source.test.ts",
   // 「前端响应镜像 ↔ 线上真实列」的契约（台账 E4 第一格）：镜像声明的每一列线上必须
   // 真的在发。交叉类型 `RouterOutputs[...] & { images?: … }` 补出来的字段，tsc 只查它
   // 存在、永远查不出服务端没发它 —— 于是那句读取恒为 `undefined`，而类型上是 optional
@@ -429,6 +429,15 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 表现不是红而是「那条纪律又回到只写在文档里」。它读的是钩子文本 + git 拓扑，
   // import 图一概追不到。
   "tests/check-merge-parents.test.ts",
+  // 「类型层声明 ⇄ 执行者」（ISSUE #1591 / 规范 §13.5.14）：19 条 tsc 错落进 `master`
+  // 的共同根因是「声明（JSDoc / 类型注解）落后于实现」，而 `tsc` 那条判据缺的是
+  // 「什么时候被敲」。这条把 `scripts/.tsc-diagnostic-executors.json` 当台账核：
+  // 执行者在场 + 与姊妹索引逐行同源 + **声明行计数零增量**。
+  // 它同时是判据自己的门禁自测（该拦的「涨了 / 落点没了 / 两处 reader 不一致 /
+  // 空表 / 对侧读不到」与该放的「降了只提示 / --update 只许降」每一条都得有人钉住），
+  // 而这些都是「下一次有人写一处新声明」时才走得进的路径 —— 跟着改动走等于专挑它
+  // 不在的时机跑。它读的是两份台账 + 目录扫描，import 图一概追不到，故进固定清单。
+  "tests/tsc-diagnostic-executors.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

@@ -16,6 +16,10 @@ const GLOBAL_IDS: WorkspaceView[] = [
   "models",
   "history",
   "queue",
+  /* 设置从「workspace 内的全屏浮层」改成视图后进入全局项清单。排在 queue 之后、
+     workflows 之前：尾部那一组（workflows + console）是「流程」链路的收尾，
+     设置不属于那条链路，不该挤进去。 */
+  "settings",
   "workflows",
   "console",
 ];

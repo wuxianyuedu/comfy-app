@@ -144,7 +144,7 @@ export function MessageCenterPanel() {
         {messages.length === 0 ? (
           <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-3">
             <Inbox size={44} strokeWidth={1.2} className="opacity-30" />
-            <p className="text-sm">暂无系统消息</p>
+            <p className="text-[13px]">暂无系统消息</p>
           </div>
         ) : (
           <ul className="mx-auto flex w-full max-w-3xl flex-col gap-2.5 px-4 py-5">
@@ -165,7 +165,10 @@ export function MessageCenterPanel() {
                      *  而不是 `li` 上的 `onClick`：这条 `<li>` 里还嵌着一个删除
                      *  按钮，两者不能合成同一个 `<button>`（HTML 里按钮套按钮
                      *  非法），而键可达的语义是不能靠「父元素 onClick」白拿的
-                     *  —— 此前键盘用户能 Tab 到删除按钮，却没有任何路径标记已读。
+                     *  —— 此前键盘用户能 Tab 到删除按钮，却没有任何路径标记已读
+                     *  （鼠标点得开、键盘进不来）。原生 `<button>` 的
+                     *  Enter/Space 与焦点语义是免费给的，再挂一个
+                     *  `simpleKeyHandler` 只是复刻浏览器默认行为（§16.2.4.57）。
                      *  `ghost` 变体的底色/文字色由这里接管（§16.2.4.2 第 5 条），
                      *  行外观与收口前一致。 */}
                     <Button
@@ -180,7 +183,7 @@ export function MessageCenterPanel() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline gap-2">
-                          <h3 className="text-ink-bright text-sm font-semibold">
+                          <h3 className="text-ink-bright text-[13px] font-semibold">
                             {m.title}
                           </h3>
                           {!m.read && (

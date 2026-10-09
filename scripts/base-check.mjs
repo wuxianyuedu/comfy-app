@@ -19,6 +19,23 @@
  * 本脚本把第 1 步变成一条命令：**把你被拦住的那条判据，在干净的上游提交上再跑一遍**，
  * 给出可归因的结论，并把碎片里要写的那句事实（哪个上游提交、命中几处）打出来。
  *
+ * ── 第二条入口：合并前那一档（ISSUE #1591）───────────────────────────
+ *
+ * 上面那条是**事后**的（被拦下才知道）。而「最近又提交内容会导致 tsc 红」这件事的
+ * 根子是**事前**那一跳没有人：平台侧 squash 合并**不跑本地钩子**（§13.6.2）、
+ * 而 #623 之后**已无 CI 兜底**（§13.5.3）。于是「我的分支绿」→「`master` 绿」
+ * 之间**没有任何判据**，违规可以直接落进主干 —— §13.6.2 末段那句
+ * 「合并前跑一遍 `pnpm check:all`：这一条没有自动执行者」就是它。
+ *
+ * `--base` 补的就是那一跳，且**不新开一条通道**：它把「被拦下时复算一条」用的
+ * 同一套事实（干净快照 + 四态归属）扩成一批 —— 面从 `.githooks/pre-commit` 的步骤
+ * 里现算（`resolveMergeBatch`），所以不会漂；快照只建一次（50 条判据共用一份
+ * `git worktree`，逐条建等于把同一个快照检十几遍）；快照里链上本检出的
+ * `node_modules`（否则近一半判据会以「红」的形态报错）。
+ *
+ * **顺带的收益**：它不需要 CI、不花核时、零事件 —— 人点合并前跑一次，或在 PR 里
+ * `@` 评审 NPC 唤起一轮（§13.5.4 的「按需召唤」那一层，不 `@` 就不跑）。
+ *
  * ── 它判什么 ──────────────────────────────────────────────────────────
  *
  * 四态，各对应一个明确动作：
@@ -45,6 +62,12 @@
  *   node scripts/base-check.mjs --json <门禁命令…>  # 机器可读（碎片/脚本消费）
  *   node scripts/base-check.mjs --keep <门禁命令…>  # 保留临时 worktree（人工排查）
  *
+ * **合并前那一档**（ISSUE #1591）：
+ *
+ *   node scripts/base-check.mjs --base               # 复算「钩子里那批全仓判据」
+ *   node scripts/base-check.mjs --base --json        # 机器可读（逐条给归属）
+ *   node scripts/base-check.mjs --base "tsc --noEmit" # 只复算点名的那几条
+ *
  * `<门禁命令…>` 是**你被拦住的那一条**，按它在文档/钩子里的写法给，例如：
  *
  *   node scripts/base-check.mjs check-ui-primitives
@@ -66,7 +89,6 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
 /**
  * 「被复算的那份检出」= **调用时的 cwd**，不是脚本自己的位置。
  *
@@ -77,9 +99,20 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  * 这里跟着 cwd 走也最贴近 `git` 本身的口径。
  */
 const ROOT = process.cwd();
-/* 钩子只从**安装位置**读：它是「有哪些门禁步骤」的清单，与复算哪份检出无关
- * （标签 ⇄ 命令的对应关系是仓库级的，不随检出变）。 */
-const HOOK = path.join(HERE, "..", ".githooks", "pre-commit");
+/**
+ * 钩子（「有哪些门禁步骤」的清单）**从被复算的那份检出读** —— 与 `ROOT` 同源。
+ *
+ * 这一条是实测撞出来的：原来锚在**脚本安装位置**（`import.meta.url` 的上一级），理由是
+ * 「标签 ⇄ 命令的对应关系是仓库级的」—— 那个理由对「查标签」成立，对 `--base`
+ * 不成立：`--base` 的语义是「**这批**判据在这份检出上会怎么样」，而「这批」正是
+ * 这份检出的钩子说的。锚在安装位置时，在两个不同的检出上跑同一条命令会各自拿到
+ * **对方那份钩子**，而输出看起来完全正常（实测：临时仓库里报「50 条判据」，那 50
+ * 条来自 `/workspace` 的钩子、在临时仓库里一条都跑不起来 ⇒ 整批假红）。
+ *
+ * 与 `ROOT` 的那条注释是同一个病（「复算谁的基线」不该绑死在安装位置），
+ * 所以处置也同源：跟着 `cwd` 走。
+ */
+const HOOK = path.join(ROOT, ".githooks", "pre-commit");
 
 /**
  * 上游引用的候选顺序 —— **不写死 `cnb/master`**（§13.6.2 的示例里是它，但检出的
@@ -102,6 +135,40 @@ export function resolveUpstreamRef(cwd = ROOT) {
   if (upstream.ok && upstream.stdout && tryRef(upstream.stdout)) {
     return upstream.stdout;
   }
+  const remotes = git(["remote"], cwd);
+  if (remotes.ok) {
+    for (const remote of remotes.stdout.split("\n").map((s) => s.trim())) {
+      if (!remote) continue;
+      const ref = `${remote}/master`;
+      if (tryRef(ref)) return ref;
+    }
+  }
+  if (tryRef("master")) return "master";
+  return null;
+}
+
+/**
+ * **合并前复算要拿哪条当基线** —— 与 `resolveUpstreamRef` 是**两个问题**。
+ *
+ * `resolveUpstreamRef()` 回答的是「我这份检出是从哪来的」（首选 `@{u}`），那对
+ * 「被拦下时复算：这红是不是本来就有的」是对的 —— 与你对比的就是你这条线的上游。
+ *
+ * 但 `--base` 问的是**另一个**问题：「并进 `master` 之后会不会红」。在 PR 分支上
+ * `@{u}` 是**你自己的分支**（推送时就设上了），拿它当基线等于「自己跟自己比」——
+ * 输出是「50 条全绿」，看起来一切正常，而它一个字节都没回答「并进去会怎样」。
+ * （实测撞到的就是这个形态。）
+ *
+ * 所以这一档**只认「要并进去的那条」**：候选是各 remote 的 `master`，再退回本地
+ * `master`。**刻意不退回 `@{u}`** —— 宁可判「取不到基线」让人显式给一条，也不拿
+ * 一个语义不对的引用充数（同 `resolveUpstreamRef` 那句「取不到就报失败，而不是静默
+ * 拿一个错的基」）。
+ *
+ * @param {string} [cwd]
+ * @returns {string | null}
+ */
+export function resolveMergeBaseRef(cwd = ROOT) {
+  /** @param {string} ref */
+  const tryRef = (ref) => git(["rev-parse", "--verify", "--quiet", ref], cwd).ok;
   const remotes = git(["remote"], cwd);
   if (remotes.ok) {
     for (const remote of remotes.stdout.split("\n").map((s) => s.trim())) {
@@ -226,6 +293,128 @@ export function resolveGateCommand(input, hookPath = HOOK) {
     return { ok: true, label: first, argv: ["node", first] };
   }
   return { ok: true, label: input.join(" "), argv: input };
+}
+
+/**
+ * **合并前那一批**：把「这次 PR 准备并进去的判据面」从钩子里现算出来。
+ *
+ * ── 为什么这一档要存在（ISSUE #1591 立案的那个洞）──────────────────────
+ *
+ * 平台侧是 **squash 合并**，那一步**不跑本地钩子**；而 ISSUE #623 之后
+ * **已无 CI 兜底**（§13.5.3）。于是「我的分支绿」到「master 绿」之间那一跳
+ * **没有任何判据**：`tsc` 在本地钩子的 A 组里跑过、在 PR 分支上确实是绿的，
+ * 但推上去 squash 进 `master` 时谁都没再看一眼。§13.6.2 的末段把这件事写成
+ * 「合并前跑一遍 `pnpm check:all`：这一条没有自动执行者」—— 这一条就是那个空位。
+ *
+ * ── 它为什么不是「再抄一份判据清单」────────────────────────────────────
+ *
+ * 待复算的面从 **`.githooks/pre-commit` 的步骤行**里取（`readHookSteps`，同一个
+ * 已存在的解析器），再按下面三条**形态**筛：
+ *
+ *   ① 有 `--staged` 的步骤**不收** —— 它们的语义就是「只看本次暂存改动」，
+ *      拿它去复算上游快照等于问一个它回答不了的问题（上游那份没有你的暂存区）；
+ *   ② 只在**暂存改动命中某个目录**时才做事的步骤（`shell-gate` / `visual-gate` /
+ *      `storybook-check --changed`）不收 —— 同因：它们的判决**依赖本次改动**，
+ *      在干净快照上跑要么立刻返回 0、要么判的是快照自己的形态，两种都不是
+ *      「合并后会不会红」这个问题的答案；
+ *   ③ `base-check` 自己**不收**（那会递归）。
+ *
+ * 剩下的就是 A 组那条 `tsc --noEmit`、B 组那条 `eslint`，与 D 组里一批**全仓判据**
+ * （结构硬规则 / 棘轮 / 复用 / 文档同步）。它们在干净快照上跑出来的红绿，才是
+ * 「并进去之后 `master` 会不会红」的直接读数 —— 与「被拦下时复算一条」用的是
+ * 同一套事实与同一套话术，只是面从一条变成一批。
+ *
+ * **零参数就是「这一批」**：要收窄（比如只关心某几条）就把它们当参数给进来
+ * （钩子标签 / 脚本名 / 整条命令都认，同 `resolveGateCommand`）。
+ *
+ * @param {string[]} input 用户显式点名的命令（为空 ⇒ 用上面算出来的那一批）
+ * @param {string} [hookPath]
+ * @returns {{ok: true, commands: Array<{argv: string[], label: string}>} | {ok: false, error: string}}
+ */
+export function resolveMergeBatch(input = [], hookPath = HOOK) {
+  if (input.length > 0) {
+    const one = resolveGateCommand(input, hookPath);
+    if (!one.ok) return one;
+    return { ok: true, commands: [{ argv: one.argv, label: one.label }] };
+  }
+  const steps = [...groupSteps(hookPath), ...readHookSteps(hookPath)];
+  if (steps.length === 0) {
+    return {
+      ok: false,
+      error:
+        "读不到 .githooks/pre-commit 的步骤 —— 合并前那一批复算不出来，" +
+        "请显式点名要复算的判据（用法见脚本头）",
+    };
+  }
+  const commands = steps.filter((s) => mayDecideOnCleanSnapshot(s.argv));
+  if (commands.length === 0) {
+    return {
+      ok: false,
+      error: "钩子里没有一条「可在干净快照上判决」的判据 —— 复算不出任何事实",
+    };
+  }
+  return { ok: true, commands };
+}
+
+/**
+ * 钩子里 `run_group <id> "<说明>" sh -c '<命令>'` 那四条 —— **A 组与 B 组是它们**。
+ *
+ * 为什么单独解析这一族：`.githooks/pre-commit` 把 tsc 与 eslint 从 D 组的 `run` 步骤
+ * 里拿出来**并行成组**（`run_group A "tsc --noEmit" sh -c 'pnpm exec tsc --noEmit'`），
+ * 于是 `readHookSteps()`（只认 `run "<标签>" <命令>`）**看不见它们** —— 而这两条恰好
+ * 就是 ISSUE #1591 立案的那两条（19 条 tsc 错落进 `master`）。只读 `run` 的解析器
+ * 会让「合并前复算」漏掉最该复算的那两条，且表现为「静默少两行」。
+ *
+ * 只收**单行的** `run_group`（`sh -c '…'` 一行写完的那两条）；C 组那条的 `sh -c` 是
+ * 多行脚本（它自己调 `run-affected-tests.mjs` 拼清单），D 组那条同理 —— 它们不是
+ * 「一条判据一条命令」的形状，取不出可复算的单条命令，故按「解析不到就不收」处理。
+ *
+ * @param {string} hookPath
+ * @returns {Array<{label: string, argv: string[]}>}
+ */
+export function groupSteps(hookPath = HOOK) {
+  let text;
+  try {
+    text = fs.readFileSync(hookPath, "utf8");
+  } catch {
+    return [];
+  }
+  const out = [];
+  /* `run_group <id> "<说明>" sh -c '<命令>'` —— 只认整行闭合的单引号，多行脚本不匹配。 */
+  const re = /^run_group\s+\S+\s+"([^"]+)"\s+sh -c '([^'\n]+)'\s*$/gm;
+  for (const m of text.matchAll(re)) {
+    const label = m[1];
+    const command = m[2];
+    if (!label || !command) continue;
+    out.push({ label, argv: tokenize(command) });
+  }
+  return out;
+}
+
+/**
+ * 一条指令**能不能在干净的上游快照上判决** —— 判据是它的**参数形态**，不是名字。
+ *
+ * 为什么按参数而不按名字：名字是自由的（`check-*` / `*-gate` / `storybook-check`），
+ * 而「这条判据的输入里有没有『本次改动』」是有形态的：
+ *   · `--staged` / `--changed` —— 明说只看暂存 / 本次改动（`check-deps-freshness`
+ *     `--staged`、`storybook-check --changed`）；
+ *   · 只在特定目录有改动时才做事的那几条（`shell-gate` / `visual-gate`）**没有参数
+ *     可认**，所以它们由调用点显式列在下面 —— 这份名单是「名字以外的形态」的兜底，
+ *     新增同类时要一起加（漏了不会静默：那一步在干净快照上返回 0 或判快照自身形态，
+ *     表现为多一条恒绿的行，人看得见）。
+ *
+ * @param {string[]} argv
+ * @returns {boolean}
+ */
+export function mayDecideOnCleanSnapshot(argv) {
+  const joined = argv.join(" ");
+  if (argv.some((a) => a === "--staged" || a === "--changed")) return false;
+  /** 只对「本次改了什么」作答的步骤（它们的判决依赖暂存区，干净快照里没有）。 */
+  const CHANGED_SCOPED = ["scripts/shell-gate.mjs"];
+  if (CHANGED_SCOPED.some((p) => joined.includes(p))) return false;
+  /** `base-check` 自己：复算里再复算会递归。 */
+  if (argv.some((a) => a.endsWith("base-check.mjs"))) return false;
+  return true;
 }
 
 /**
@@ -369,7 +558,7 @@ export function runGate(argv, cwd) {
  * 跑起来时非零退出码与「跑了且红」同形 —— 只读退出码必然把后者读成前者，而这两件事
  * 的下一动作完全相反（一个去修代码，一个去查命令为什么不存在）。所以先判这一档。
  *
- * @param {{currentCode: number, baseCode: number}} input
+ * @param {{currentCode: number, baseCode: number | null}} input
  * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours"}
  */
 export function judge({ currentCode, baseCode }) {
@@ -424,11 +613,59 @@ export function nextSteps(verdict, { ref }) {
  * @returns {number} 退出码（0 = 事实已复算；1 = 复算过程失败）
  */
 export function baseCheck({ argv, label, ref, keep = false, json = false }) {
-  const current = runGate(argv, ROOT);
-  if (current.code === 0) {
-    return report(
-      { label, ref, verdict: "current-green", currentCode: 0, baseCode: null },
-      { json },
+  return baseCheckMany({
+    commands: [{ argv, label }],
+    ref,
+    keep,
+    json,
+    /* 单命令档的输出形状是**既有契约**（`--json` 的三个字段被用例与碎片里的
+     * 那句事实引用着）：一批那条入口给的是行表，这一档仍给
+     * `{label, verdict, currentCode, baseCode, commit}`。 */
+    shape: "single",
+  });
+}
+
+/**
+ * 在**干净的上游快照**上跑一组命令（`baseCheck` 的单命令档是它的一个特例）。
+ *
+ * 为什么要把「建/收临时 worktree」从单命令那档里提出来：合并前的复算面不是一条判据，
+ * 而是**门禁里所有硬闸类**（tsc / eslint / 结构硬规则 / 棘轮…）。每条命令各建一次
+ * worktree 等于把同一个快照 `git worktree add` 十几遍 —— 而 `git worktree add` 的
+ * 代价随检出大小走（本仓库实测每条命令一次是分钟量级）。这里一次建、多条命令共用，
+ * 收尾仍然一次。
+ *
+ * 四种情形（`summary` 逐字对应）：
+ *   · 全部绿 ⇒ `base-green`（上游基线干净，这一批没有要复算的事实）；
+ *   · 任一条**没跑起来**（127）⇒ `inconclusive`，且**整批**不构成证据 ——
+ *     127 与「跑了且红」在退出码上同形（Node 的 `MODULE_NOT_FOUND` 也是 1），
+ *     拿它当「别线的红」是把人往错方向送；
+ *   · 有红、且红的那些在基线上**同样命中** ⇒ `baseline-red`（别线的红，逐条列出）；
+ *   · 有红、但基线上绿 ⇒ `yours`（本检出的红）。
+ *
+ * @param {{commands: Array<{argv: string[], label: string}>, ref: string, keep?: boolean, json?: boolean, shape?: "single" | "batch"}} input
+ * @returns {number} 退出码（0 = 事实已复算；1 = 复算过程失败）
+ */
+export function baseCheckMany({ commands, ref, keep = false, json = false, shape = "batch" }) {
+  /* 本检出那一侧：**先跑、先收**（不建 worktree 就能判掉的情形不付这笔 —— 同
+   * `baseCheck` 的旧口径）。 */
+  /** @type {Array<{code: number, output: string}>} */
+  const current = [];
+  for (const c of commands) current.push(runGate(c.argv, ROOT));
+  if (current.every((r) => r.code === 0)) {
+    return reportMany(
+      {
+        ref,
+        /* 「本检出全绿」这件事本身有两种读法（已修 / 判据只在别的输入面触发），
+         * 由 `nextSteps` 按 `current-green` 的话术说 —— 与单命令档同一个词，
+         * 免得同一个事实在两条入口上说成两回事。 */
+        summary: "current-green",
+        rows: commands.map((c, i) => ({
+          label: c.label,
+          currentCode: current[i]?.code ?? 127,
+          baseCode: null,
+        })),
+      },
+      { json, shape },
     );
   }
 
@@ -463,19 +700,35 @@ export function baseCheck({ argv, label, ref, keep = false, json = false }) {
       fail(`建临时 worktree 失败（${ref}）：两次都没成功`);
       return 1;
     }
-    const base = runGate(argv, worktreePath);
-    const verdict = judge({ currentCode: current.code, baseCode: base.code });
-    return report(
-      {
-        label,
-        ref,
-        verdict,
-        currentCode: current.code,
+    /* 快照里**没有 `node_modules`**（`git worktree` 只检出受版本控制的文件），
+     * 而这一批里有近一半判据要它 —— tsc / eslint / 走 TS AST 的那几条。
+     * 缺了它的表现是**最坏的一种**：`Cannot find module 'typescript'` 退出 1，
+     * 与「判据跑了且红」逐字同形（`commandTargetState` 只认得 `node <相对路径>`
+     * 那一形态，`pnpm exec` 的目标在文件系统上不存在）。实测漏这一手时，
+     * `--base` 全批里有 9 条这样「红」着报出来。
+     *
+     * 处置：把本检出的 `node_modules` **符号链接**进快照。方向是只读那一侧
+     * （判据在快照里跑，不写依赖树），而 pnpm 自己的 `node_modules/<pkg>` 本来就
+     * 是指向 store 的链接 —— 这一手不改变任何既有语义，只是让快照看得见依赖。
+     * 刻意**不**用 `cp`：那是把依赖树整份复制（本仓库实测 GB 量级），而它每次
+     * 复算都要付一遍。 */
+    linkDependencies(ROOT, worktreePath);
+    const commit = git(["rev-parse", "--short", "HEAD"], worktreePath).stdout;
+    const rows = [];
+    for (const [i, c] of commands.entries()) {
+      const base = runGate(c.argv, worktreePath);
+      const cur = current[i]?.code ?? 127;
+      rows.push({
+        label: c.label,
+        currentCode: cur,
         baseCode: base.code,
-        commit: git(["rev-parse", "--short", "HEAD"], worktreePath).stdout,
-        baseOutputTail: tail(base.output),
-      },
-      { json },
+        verdict: judge({ currentCode: cur, baseCode: base.code }),
+        baseOutputTail: base.code === 0 ? undefined : tail(base.output),
+      });
+    }
+    return reportMany(
+      { ref, commit, summary: summarizeRows(rows), rows },
+      { json, shape },
     );
   } finally {
     /* 未成为 worktree 的候选目录（建失败那一次留下的空目录）直接删。 */
@@ -493,6 +746,77 @@ export function baseCheck({ argv, label, ref, keep = false, json = false }) {
       process.stdout.write(`[base-check] 保留临时 worktree：${worktreePath}\n`);
     }
   }
+}
+
+/**
+ * 把本检出的依赖树**链**进干净快照（符号链接，只读方向）。
+ *
+ * 为什么必须有：`git worktree add` 只检出受版本控制的文件，`node_modules`
+ * 不在其中 —— 而 `--base` 那一批里近一半判据要它（tsc / eslint / TS AST 那几条）。
+ * 缺了它不是「跑不了」，而是**跑出一个看起来像红的读数**：Node 找不到模块时退出
+ * 码是 1，与「判据跑了且红」同形，于是「合并后会不会红」这个问题的答案被污染。
+ *
+ * 只链 `node_modules` 这一项：其余缺件（`.env` / `db.sqlite` / `.next`）都在
+ * 「判据自己该不该在快照上跑」的判定里 —— 要它们才跑得动的判据本就不该进这一批。
+ *
+ * 失败（已有同名目录 / 权限）不打红：那是「这一条判据在这个快照上跑不起来」，
+ * 由 `inconclusive` 那一档接管，不是复算过程本身的失败。
+ *
+ * @param {string} from 本检出根
+ * @param {string} to 快照根
+ */
+function linkDependencies(from, to) {
+  const target = path.join(to, "node_modules");
+  const source = path.join(from, "node_modules");
+  if (fs.existsSync(target) || !fs.existsSync(source)) return;
+  try {
+    fs.symlinkSync(source, target, "junction");
+  } catch {
+    try {
+      /* `junction` 是 Windows 上不需要提权的形态（`dir` 要开发者模式）；
+       * POSIX 上没有这个 type，退回默认。 */
+      fs.symlinkSync(source, target);
+    } catch {
+      /* 链不上就让它按「没跑起来」报 —— 由 `inconclusive` 那一档说清楚。 */
+    }
+  }
+}
+
+/**
+ * 一组行 → 整批的结论（纯函数，两向都能被用例钉住）。
+ *
+ * **优先级是 `inconclusive` 最高**，不是「有红就报红」：127 说明这一条**没跑起来**，
+ * 而「没跑起来」与「跑了且红」在退出码上同形 —— 把整批结论落在它上面等于拿一个
+ * 无法归因的读数下判决。
+ *
+ * @param {Array<{currentCode: number, baseCode: number | null}>} rows
+ * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours"}
+ */
+export function summarizeRows(rows) {
+  if (rows.length === 0) return "inconclusive";
+  if (rows.every((r) => r.currentCode === 0)) return "current-green";
+  const verdicts = rows
+    .filter((r) => r.currentCode !== 0)
+    .map((r) => judge({ currentCode: r.currentCode, baseCode: r.baseCode }));
+  if (verdicts.includes("inconclusive")) return "inconclusive";
+  /* 混着「别线的红」与「你的红」时，**按更严重的那一档报**（`yours`）——
+   * 别线的红可以就地收掉或登记，而你自己引入的那条必须改代码，两者都要人看见；
+   * 报成 `baseline-red` 会让人以为整批都与自己无关。 */
+  if (verdicts.includes("yours")) return "yours";
+  return "baseline-red";
+}
+
+/**
+ * 整批结论的「下一动作」话术 —— 与单命令档同源（`nextSteps`），只在有红时点名是哪几条。
+ * @param {"current-green" | "inconclusive" | "baseline-red" | "yours"} summary
+ * @param {Array<{label: string, verdict?: string}>} reds
+ * @param {{ref: string}} context
+ * @returns {string[]}
+ */
+export function nextStepsMany(summary, reds, { ref }) {
+  if (summary === "current-green") return nextSteps("current-green", { ref });
+  const head = reds.map((r) => `${r.label}（${r.verdict}）`);
+  return [`红的那几条：${head.join("、")}。`, ...nextSteps(summary, { ref })];
 }
 
 /**
@@ -517,36 +841,90 @@ function fail(message) {
 }
 
 /**
- * 打印结论 + 返回退出码（四态都是 0 —— 它是**读数**，不是判决）。
+ * 一**批**判据的结论打印（`--base` 那条入口）。
  *
- * @param {{label: string, ref: string, verdict: "current-green" | "inconclusive" | "baseline-red" | "yours", currentCode: number, baseCode: number | null, commit?: string, baseOutputTail?: string}} result
- * @param {{json: boolean}} opts
+ * 逐行列出「本检出码 / 基线码 / 归属」，再给整批的下一动作 —— 合并前要看的是
+ * 「这一批里哪几条会挡路、其中哪几条不是我的」，而不是每一条各自的散文。
+ *
+ * @param {{ref: string, commit?: string, summary: "current-green" | "inconclusive" | "baseline-red" | "yours", rows: Array<{label: string, currentCode: number, baseCode: number | null, verdict?: string, baseOutputTail?: string}>}} result
+ * @param {{json: boolean, shape?: "single" | "batch"}} opts
  * @returns {number}
  */
-function report(result, { json }) {
+function reportMany(result, { json, shape = "batch" }) {
+  const { ref, commit, summary, rows } = result;
+  /* 单命令档：形状与 `baseCheck` 的既有契约逐字一致（见调用点那条注释）。 */
+  if (shape === "single") {
+    const only = rows[0] ?? {
+      label: "（空）",
+      currentCode: 127,
+      baseCode: null,
+    };
+    const single = {
+      label: only.label,
+      ref,
+      verdict: summary,
+      currentCode: only.currentCode,
+      baseCode: only.baseCode,
+      ...(commit ? { commit } : {}),
+      ...(only.baseOutputTail ? { baseOutputTail: only.baseOutputTail } : {}),
+    };
+    if (json) {
+      process.stdout.write(`${JSON.stringify(single, null, 2)}\n`);
+      return 0;
+    }
+    process.stdout.write(`[base-check] 判据：${single.label}\n`);
+    process.stdout.write(
+      `[base-check] 结论：${single.verdict}` +
+        `（本检出 ${single.currentCode}，${ref}${commit ? ` @ ${commit}` : ""} ${
+          single.baseCode === null ? "未跑" : single.baseCode
+        }）\n`,
+    );
+    if (only.baseOutputTail) {
+      process.stdout.write(`[base-check] 基线那次输出的末尾：\n`);
+      process.stdout.write(
+        `${only.baseOutputTail
+          .split("\n")
+          .map((l) => `    ${l}`)
+          .join("\n")}\n`,
+      );
+    }
+    for (const line of nextSteps(single.verdict, { ref })) {
+      process.stdout.write(`[base-check] ${line}\n`);
+    }
+    return 0;
+  }
   if (json) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return 0;
   }
-  const { label, ref, verdict, currentCode, baseCode, commit } = result;
-  process.stdout.write(`[base-check] 判据：${label}\n`);
+  const reds = rows.filter((r) => r.currentCode !== 0);
   process.stdout.write(
-    `[base-check] 结论：${verdict}` +
-      `（本检出 ${currentCode}，${ref}${commit ? ` @ ${commit}` : ""} ${
-        baseCode === null ? "未跑" : baseCode
-      }）\n`,
+    `[base-check] 合并前复算：${rows.length} 条判据 —— ` +
+      `红 ${reds.length} 条（基线 ${ref}${commit ? ` @ ${commit}` : ""}）\n`,
   );
-  if (result.baseOutputTail) {
-    process.stdout.write(`[base-check] 基线那次输出的末尾：\n`);
+  for (const r of rows) {
+    const mark = r.currentCode === 0 ? "绿" : (r.verdict ?? "红");
     process.stdout.write(
-      `${result.baseOutputTail
+      `  · ${mark}  ${r.label}（本检出 ${r.currentCode} / 基线 ${
+        r.baseCode === null ? "未跑" : r.baseCode
+      }）\n`,
+    );
+  }
+  process.stdout.write(`[base-check] 结论：${summary}\n`);
+  for (const line of nextStepsMany(summary, reds, { ref })) {
+    process.stdout.write(`[base-check] ${line}\n`);
+  }
+  /* 基线那次输出的末尾只对**红的**那几条打（全绿时打出来只会把结论挤出屏幕，
+   * 同 `tail()` 那条理由）。 */
+  for (const r of reds) {
+    if (!r.baseOutputTail) continue;
+    process.stdout.write(`[base-check] 「${r.label}」基线输出末尾：\n`);
+    process.stdout.write(
+      `${r.baseOutputTail
         .split("\n")
         .map((l) => `    ${l}`)
         .join("\n")}\n`,
     );
-  }
-  for (const line of nextSteps(verdict, { ref })) {
-    process.stdout.write(`[base-check] ${line}\n`);
   }
   return 0;
 }
@@ -568,12 +946,32 @@ function main(argv) {
       return 1;
     }
   }
-  const ref = resolveUpstreamRef();
+  /* `--base`：**合并前**那一档（空参数 = 「这次 PR 准备并的那一批」）。
+   * 与「被拦下时复算一条」共用同一套事实与话术，只是面从一条变成一批 ——
+   * 连**基线引用**都是两个问题：那一档只认「要并进去的那条」（理由见
+   * `resolveMergeBaseRef`），而事后复算认「我这条线的上游」。 */
+  const isBatch = flags.has("--base");
+  const ref = isBatch ? resolveMergeBaseRef() : resolveUpstreamRef();
   if (!ref) {
     fail(
-      "取不到上游 master 引用 —— 先 `git fetch`（或确认克隆带了远端分支）再复算",
+      isBatch
+        ? "取不到要并进去的那条（各 remote 的 master / 本地 master）—— 先 `git fetch` 再复算"
+        : "取不到上游 master 引用 —— 先 `git fetch`（或确认克隆带了远端分支）再复算",
     );
     return 1;
+  }
+  const base = isBatch ? resolveMergeBatch(args) : null;
+  if (base && !base.ok) {
+    fail(base.error);
+    return 1;
+  }
+  if (base) {
+    return baseCheckMany({
+      commands: base.commands,
+      ref,
+      keep: flags.has("--keep"),
+      json: JSON_OUT,
+    });
   }
   const resolved = resolveGateCommand(args);
   if (!resolved.ok) {

@@ -32,6 +32,8 @@ function controller(
         id: "comfyui-runtime-20260930-100741.log",
         title: "09-30 10:07:41",
         startedAt: new Date(2026, 8, 30, 10, 7, 41).getTime(),
+        scope: "current",
+        crashed: false,
       },
     ],
     sessionId: "comfyui-runtime-20260930-100741.log",
@@ -67,11 +69,15 @@ function twoSessions(): RuntimeLogController["sessions"] {
       id: "comfyui-runtime-20260930-100103.log",
       title: "09-30 10:01:03",
       startedAt: new Date(2026, 8, 30, 10, 1, 3).getTime(),
+      scope: "current",
+      crashed: false,
     },
     {
       id: "comfyui-runtime-20260930-100741.log",
       title: "09-30 10:07:41",
       startedAt: new Date(2026, 8, 30, 10, 7, 41).getTime(),
+      scope: "current",
+      crashed: false,
     },
   ];
 }

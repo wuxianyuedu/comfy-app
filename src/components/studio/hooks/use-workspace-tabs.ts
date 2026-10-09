@@ -39,6 +39,7 @@ export const WORKSPACE_VIEWS: WorkspaceView[] = [
   "workflows",
   "outputs",
   "console",
+  "settings",
 ];
 
 function readTabsState(): WorkspaceTabsState | null {

@@ -46,6 +46,9 @@ export interface RenderChainModule {
 }
 
 const PILL_STYLE: CSSProperties = {
+  /* 原生 `<button>` 的默认外观在这里一律还原给药丸样式 —— 换语义不带视觉变化。
+   * `font: inherit` 是必需的：`<button>` 默认不继承字体族。 */
+  font: "inherit",
   cursor: "pointer",
   userSelect: "none",
   fontFamily: "var(--font-mono)",

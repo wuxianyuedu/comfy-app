@@ -316,7 +316,11 @@ export function MultiModeSelect({
               const isSelected = draft.has(item.code);
               const isDraftDefault = draftDefault === item.code;
               return (
-                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开。 */
+                /* 键出口是 `{...simpleKeyHandler(…)}` 的**属性展开**，而
+                 * `jsx-a11y/click-events-have-key-events` 只读字面量 `onKeyDown`
+                 * —— 规则认不出展开。豁免已在 `scripts/.a11y-rule-ledger.json`
+                 * 的 `inlineExemptions` 登记（守它的是 `check-click-keyboard.cjs`）。 */
+                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 键出口是 simpleKeyHandler 的属性展开，规则读不到 */
                 <div
                   key={item.code}
                   className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
@@ -324,13 +328,12 @@ export function MultiModeSelect({
                       ? "bg-primary-500/10 text-primary-strong"
                       : "text-ink-strong hover:bg-subtle"
                   }`}
-                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`：
-                   * 这一行里还有「点 label 选、点默认星切默认」两个动作，合成
-                   * 一个 button 会把后者的键语义一起吞掉）。`tabIndex={0}` 让
-                   * 行可聚焦，Enter/Space 由 `simpleKeyHandler` 给 —— 此前这里
-                   * 只写了 `onClick`，注释还写着「键盘由 `option-list-popover`
-                   * 承担」，而本组件**并没有**用那个基元：能聚焦、点了没反应
-                   *（§16.2.4.57 的出口就是为这一档存在的）。 */
+                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`）——
+                   * 因此**必须**自带键盘等价物：ARIA 的 `checkbox` 角色承诺
+                   * 「Space 可切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」。
+                   * 键判据走 `simpleKeyHandler`（§16.2.4.57 的唯一出口：归一
+                   * 键名 + `preventDefault` 显式），不在这里手写第二份
+                   * `event.key === " "` —— 那正是这条账要消除的形态。 */
                   onClick={() => toggle(item.code)}
                   {...simpleKeyHandler(["Space", "Enter"], () =>
                     toggle(item.code),

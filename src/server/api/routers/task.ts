@@ -75,14 +75,17 @@ export const taskRouter = createTRPCRouter({
             typeof p.checkpoint === "string" ? p.checkpoint : null;
           const cover = task.images[0]?.localPath ?? null;
           const coverMediaType = task.images[0]?.mediaType ?? null;
-          /* 「这一行的视频产物在哪」只有服务端答得了：产出行是 join 进来的，
-           * 而 `cover` 按 `isCover`（= 落盘顺序第一条）取，一条视频任务完全可能
-           * 先存一张预览图 —— 此时 `cover` / `mediaType` 都是图片，客户端拿不到
-           * `images` 就再也找不到那个 mp4（`video-queue-client` 此前正是在读一个
-           * 线上根本不存在的 `images` 数组，于是「下载」入口永远不出现）。 */
+          /* 视频落点**只有服务端答得了**：封面（`images[0]`）通常是预览图，
+           * 它的 `cover` / `mediaType` 都指向那张图，看不出成片在哪。执行侧落盘
+           * 顺序是「先 images 后 videos」，因此成片不在首位 —— 必须单独找。
+           * 判据按**磁盘上的事实**：扩展名（`isVideo`，见 `lib/media/media-kind`）
+           * **或**产物子表的 `mediaType` —— 后者管住「落盘名不带视频扩展名、但
+           * 执行侧记了它是视频」的那一档，只看扩展名会把它漏成 `null`。 */
           const videoPath =
-            task.images.find((image) => isVideo(image.localPath))?.localPath ??
-            null;
+            task.images.find(
+              (image) =>
+                isVideo(image.localPath) || image.mediaType === "video",
+            )?.localPath ?? null;
           return {
             id: task.id,
             type: task.type,
@@ -92,8 +95,8 @@ export const taskRouter = createTRPCRouter({
             createdAt: task.createdAt,
             cover,
             checkpoint,
-            videoPath,
             mediaType: inferMediaType(cover, coverMediaType, task.type),
+            videoPath,
             projectId: task.projectId ?? null,
             progress: task.progress,
             error: task.error ?? null,
