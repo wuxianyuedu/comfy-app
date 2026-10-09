@@ -355,6 +355,12 @@ const QUOTE_PAIRS = [
  * @param {string} text
  * @returns {boolean[]} 与 text 等长，`true` = 该下标在引号内
  */
+/**
+ * 引号掩码：`mask[i] === true` 表示下标 `i` 落在某一对引号内部。
+ *
+ * @param {string} text
+ * @returns {boolean[]}
+ */
 function quotedMask(text) {
   const mask = new Array(text.length).fill(false);
   for (const [open, close] of QUOTE_PAIRS) {
@@ -404,7 +410,12 @@ export function extractClaims(message, commit) {
   /* 引号内的匹配一律不认（口径见 `QUOTE_PAIRS` 那段）。掩码按**拼回后的** `body`
    * 算，与下面 `matchAll` 的下标同一坐标系。 */
   const mask = quotedMask(body);
-  /** 这个匹配的起点是不是落在引号里。 */
+  /**
+   * 这个匹配的起点是不是落在引号里。
+   *
+   * @param {{index: number}} m
+   * @returns {boolean}
+   */
   const quoted = (m) => mask[m.index] === true;
 
   /* 语序 A 与语序 B 都是「章节保留」这一类声明 —— 同一种 kind、同一条核对，

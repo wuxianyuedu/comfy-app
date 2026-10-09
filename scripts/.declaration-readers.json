@@ -24,6 +24,17 @@
       "section": "11.23.5"
     },
     {
+      "id": "merged-side-loss",
+      "name": "合并里「整份取一侧 / 退回成基线之前的版本」",
+      "declaredAt": "某次合并 / squash 提交的树（如 ad81a912 退回 bfeb33f0 之前的版本）",
+      "reader": "scripts/check-merged-side-loss.mjs",
+      "executor": {
+        "kind": "npm-script",
+        "script": "check:merged-side-loss"
+      },
+      "section": "11.23.5"
+    },
+    {
       "id": "gate-executor-claim",
       "name": "判据自称在跑 / 按需召唤台账",
       "declaredAt": "脚本头注释、scripts/.gate-executor-ledger.json",

@@ -1,0 +1,160 @@
+/**
+ * 「合并取错一侧 / 整份退回」事后复算判据的执行者自测（规范 §11.23.5 / ISSUE #1617）。
+ *
+ * 这条判据的价值全在**判定口径**上 —— 它最容易被写成的样子是一条「天天响的闸」：
+ * 宽一点会把正当的并线差异报成退回（实测反例 `0c38dce0` vs `af589681`），
+ * 窄一点则什么都拦不住（真事故里拓扑形态全对）。所以每一条口径各配一组真样本，
+ * 跑的是**真脚本 + 真 git 仓库**：内存里假装「历史」等于把本判据唯一的输入重新实现一遍。
+ *
+ * 覆盖（对应 ISSUE #1617 的验收标准）：
+ *   ① 该认的：整份取一侧 → 拦（造一次「分支侧覆盖主干侧改动」的合并）。
+ *   ② 该放的：正常前移的提交 → 零命中。
+ *   ③ 分叉线上比较 → 退出码 2（**没跑起来**，不是「红了」）。
+ *   ④ 缺 `--baseline` → 退出码 2 并给出取法。
+ *   ⑤ 生成物排除（`docs/api/**`「退回成旧版」是常态，不该报）。
+ *   ⑥ 非 git 目录 → 退出码 2。
+ *   ⑦ 基线取不到 → 退出码 2。
+ *   ⑧ `--report` 恒 0（盘点档，不判失败）。
+ */
+import { execFileSync } from "node:child_process";
+import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
+
+/** 读一条 git 命令的输出（夹具的 `git()` 只跑不返回 —— 这里要 sha）。 */
+function out(dir: string, ...args: string[]): string {
+  return execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
+}
+
+const { test, expect } = defineGateRepo({
+  script: "check-merged-side-loss.mjs",
+  workdir: "merged-side-loss",
+  setup: (repo: GateRepo) => {
+    repo.git("init", "-q", "-b", "main", ".");
+  },
+});
+
+/** 造一次「主干改过 f、然后分支整份取回旧版」的提交，返回它的 sha。 */
+function revertSideTake(repo: GateRepo): { good: string; bad: string } {
+  repo.write("src/a.ts", "export const a = 1;\n");
+  repo.write("src/b.ts", "export const b = 1;\n");
+  repo.git("add", "-A");
+  repo.git("commit", "-q", "-m", "chore: 初始化");
+
+  // 主干侧前移：a.ts 与 b.ts 都改了。
+  repo.write("src/a.ts", "export const a = 2;\n");
+  repo.write("src/b.ts", "export const b = 2;\n");
+  repo.git("add", "-A");
+  repo.git("commit", "-q", "-m", "feat: 主干前移");
+  const baseline = out(repo.dir, "rev-parse", "HEAD");
+
+  // 一次「取错一侧」的提交：b.ts 整份取回旧版（a.ts 正常前移）。
+  repo.write("src/a.ts", "export const a = 3;\n");
+  repo.write("src/b.ts", "export const b = 1;\n");
+  repo.git("add", "-A");
+  repo.git("commit", "-q", "-m", "merge: 解冲突时 b.ts 整份取了分支侧");
+  return { good: baseline, bad: out(repo.dir, "rev-parse", "HEAD") };
+}
+
+describe("check-merged-side-loss —— 整份退回的事后复算", () => {
+  test("① 整份取一侧 → 拦（立案现场形态）", ({ repo }) => {
+    const { good, bad } = revertSideTake(repo);
+    const { code, output } = repo.run([bad, "--baseline", good]);
+    expect(code).toBe(1);
+    expect(output).toContain("src/b.ts");
+    // a.ts 正常前移（结果版是新写的 3），不该被算成退回。
+    expect(output).not.toContain("src/a.ts");
+  });
+
+  test("② 正常前移的提交 → 零命中", ({ repo }) => {
+    repo.write("src/a.ts", "export const a = 1;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: 初始化");
+    const good = out(repo.dir, "rev-parse", "HEAD");
+    repo.write("src/a.ts", "export const a = 2;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "feat: 正常前移");
+    const head = out(repo.dir, "rev-parse", "HEAD");
+
+    const { code } = repo.run([head, "--baseline", good]);
+    expect(code).toBe(0);
+  });
+
+  test("③ 分叉线上比较 → 2（没跑起来，不是红了）", ({ repo }) => {
+    repo.write("src/a.ts", "export const a = 1;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: 初始化");
+
+    // 从同一点分出两条线。
+    repo.git("checkout", "-q", "-b", "side");
+    repo.write("src/a.ts", "export const a = 2;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "feat: 侧线");
+    const side = out(repo.dir, "rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.write("src/a.ts", "export const a = 3;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "feat: 主线");
+    const main = out(repo.dir, "rev-parse", "HEAD");
+
+    // side 不是 main 的祖先 → 判据必须拒绝比较，而不是报一片差异。
+    const { code, output } = repo.run([main, "--baseline", side]);
+    expect(code).toBe(2);
+    expect(output).toContain("祖先");
+  });
+
+  test("④ 缺 --baseline → 2 并给出取法", ({ repo }) => {
+    repo.write("src/a.ts", "x\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: 初始化");
+    const { code, output } = repo.run(["HEAD"]);
+    expect(code).toBe(2);
+    expect(output).toContain("--baseline");
+  });
+
+  test("⑤ 生成物排除：docs/api 退回成旧版不报", ({ repo }) => {
+    repo.write("docs/api/modules/lib_x.html", "<html>v1</html>\n");
+    repo.write("src/a.ts", "export const a = 1;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: 初始化");
+    const good = out(repo.dir, "rev-parse", "HEAD");
+
+    repo.write("docs/api/modules/lib_x.html", "<html>v2</html>\n");
+    repo.write("src/a.ts", "export const a = 2;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "docs: 重生文档");
+
+    // 结果把产物整份取回 v1（常态），但源文件正常前移 → 不该报。
+    repo.write("docs/api/modules/lib_x.html", "<html>v1</html>\n");
+    repo.write("src/a.ts", "export const a = 3;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "merge: 解冲突");
+    const bad = out(repo.dir, "rev-parse", "HEAD");
+
+    const { code } = repo.run([bad, "--baseline", good]);
+    expect(code).toBe(0);
+  });
+
+  test("⑥ 非 git 目录 → 2", ({ repo }) => {
+    // 夹具已在 setup 里 git init；删掉 .git 造「不是 git 检出」。
+    repo.remove(".git");
+    const { code, output } = repo.run(["HEAD", "--baseline", "HEAD"]);
+    expect(code).toBe(2);
+    expect(output).toContain("没跑起来");
+  });
+
+  test("⑦ 基线取不到 → 2", ({ repo }) => {
+    repo.write("src/a.ts", "x\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: 初始化");
+    const { code, output } = repo.run(["HEAD", "--baseline", "deadbeef"]);
+    expect(code).toBe(2);
+    expect(output).toContain("基线提交取不到");
+  });
+
+  test("⑧ --report 恒 0（盘点档，不判失败）", ({ repo }) => {
+    const { good, bad } = revertSideTake(repo);
+    const { code, output } = repo.run([bad, "--baseline", good, "--report"]);
+    expect(code).toBe(0);
+    expect(output).toContain("src/b.ts");
+  });
+});
