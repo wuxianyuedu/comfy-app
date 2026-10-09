@@ -23,6 +23,7 @@ import { FileText } from "lucide-react";
 
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
+import { EmptyState } from "~/components/ui/empty-state";
 import { FieldLabel } from "~/components/ui/field";
 import { Hint } from "~/components/ui/hint";
 import { VirtualLogList } from "~/components/studio/logs/VirtualLogList";
@@ -208,10 +209,5 @@ function DefaultLogRow({
 
 /** 无日志时的默认占位（消费方不传 `emptySlot` 时兜底，避免空列表静默）。 */
 export function TaskLogEmptyHint({ message }: { message: string }) {
-  return (
-    <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm">
-      <FileText size={32} strokeWidth={1.5} className="opacity-30" />
-      {message}
-    </div>
-  );
+  return <EmptyState variant="panel" icon={FileText} title={message} />;
 }

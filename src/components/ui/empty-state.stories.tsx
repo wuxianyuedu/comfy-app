@@ -42,3 +42,21 @@ export const Hint: Story = {
     title: "该工作流未暴露对外参数",
   },
 };
+
+/**
+ * `panel` 是**面板里铺满居中的轻量占位**（日志面板 / 控制台输出 / CLI 原文模态
+ * 那一族，收口前 6 处调用点各抄一份同样的类名）：无框、无内距、图标 30% 透明。
+ * 它吃的是父级高度，所以这里给一个有高度的框 —— 换个塌成一行的父级，这一档
+ * 的形态根本看不出来（`h-full` 在没有确定高度的父级里不生效）。
+ */
+export const Panel: Story = {
+  render: () => (
+    <div className="bg-canvas-deep h-70 w-md">
+      <EmptyState
+        variant="panel"
+        icon={FolderTree}
+        title="运行生成后此处会显示执行步骤日志"
+      />
+    </div>
+  ),
+};
