@@ -27,6 +27,7 @@ import {
 import { createTestQueryClient } from "../../../../../tests/helpers/renderWithProviders";
 import { createTestTRPC } from "../../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
+import type * as LogFileClientModule from "~/lib/log/log-file-client";
 import { api } from "~/trpc/react";
 import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
 import { probeOllama, startOllama } from "~/lib/llm/ollama-client";
@@ -52,74 +53,43 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
   isDesktopShell: isDesktopShellMock,
 }));
 
-// 客户端逻辑层现经 `postAppRuntimeLog`（走 `/api/logs/app-runtime`）把失败补记到
+// 客户端逻辑层经 `postAppRuntimeLog`（走 `/api/logs/app-runtime`）把失败补记到
 // app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
-// 测试保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），只 spy `postAppRuntimeLog`
-// 并记录调用参数。`runtimeLogCalls` 须用 vi.hoisted 定义，供工厂在提升后引用。
-// 客户端逻辑层现经 `postAppRuntimeLog`（走 `/api/logs/app-runtime`）把失败补记到
-// app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
-// 测试通过 `vi.importActual` 保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），
-// 只 spy `postAppRuntimeLog` 并记录调用参数。
-const { postAppRuntimeLogMock, runtimeLogCalls, sessionLogRequests } =
-  vi.hoisted(() => {
-    const calls: Array<{
-      ns: string;
-      level: string;
-      msg: string;
-      fields?: unknown;
-    }> = [];
-    /** 启动日志「按会话取」的请求记账（来源 + 请求的会话 id） */
-    const logRequests: Array<{ source: string; session: string | null }> = [];
-    return {
-      postAppRuntimeLogMock: vi.fn(
-        (
-          ns: string,
-          level: string,
-          msg: string,
-          fields?: unknown,
-        ): Promise<void> => {
-          calls.push({ ns, level, msg, fields });
-          return Promise.resolve();
-        },
-      ),
-      runtimeLogCalls: calls,
-      sessionLogRequests: logRequests,
-    };
-  });
-vi.mock("~/lib/log/log-file-client", () => {
-  // fetchFileLogSlice / fetchLogSessions 复刻真实实现（走全局 fetch，由 MSW 拦截
-  // 返回日志内容）。之所以不引用 importOriginal：真实实现只是对端点的一次 fetch，
-  // 这里等价转发，避免 vitest 别名解析与模块类型在工厂内部的告警。
-  const fetchFileLogSlice = vi.fn(
-    async (
-      source: string,
-      offset: number,
-    ): Promise<{ content: string; size: number; offset: number } | null> => {
-      const res = await fetch(
-        `/api/logs/current?source=${source}&offset=${offset}`,
-      );
-      if (!res.ok) return null;
-      return (await res.json()) as {
-        content: string;
-        size: number;
-        offset: number;
-      };
-    },
-  );
-  const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
-    sessionLogRequests.push({ source, session: sessionId ?? null });
-    const query = new URLSearchParams({ source });
-    if (sessionId) query.set("session", sessionId);
-    const res = await fetch(`/api/logs/sessions?${query.toString()}`);
-    if (!res.ok) return null;
-    return (await res.json()) as unknown;
-  });
+// 这里**只替需要记账的那一个出口**：`fetchFileLogSlice` / `fetchLogSessions` 走真实现
+// （由 MSW 返回日志内容）。`runtimeLogCalls` 须用 `vi.hoisted` 定义，供工厂在提升后引用。
+/* 为什么不接受「复刻一份真实实现」的写法（台账 E16）：那份副本会在三处与被测面悄悄分叉 ——
+ * 签名少 `bootId` 参数、URL 是手拼（正是 `query-string.ts` 文件头点名要消灭的那种手拼，
+ * 值里带 `&` / `#` 就打到另一个端点上）、回传形状少几栏。后果不是「少测一点」，
+ * 而是**面板「换个进程就重置时间线」那整条链的用例其实没在被测实现上跑** ——
+ * 真实现删掉 `bootId` 这一维，这里一个字都不会红。
+ * 别名与模块类型在工厂里都能解析（同仓已有三份同形态写法：本文件下面那份 logger、
+ * `tests/sqlite-pragma-sites.test.ts`、`src/server/api/routers/task.test.ts`）。 */
+const { postAppRuntimeLogMock, runtimeLogCalls } = vi.hoisted(() => {
+  const calls: Array<{
+    ns: string;
+    level: string;
+    msg: string;
+    fields?: unknown;
+  }> = [];
   return {
-    fetchFileLogSlice,
-    fetchLogSessions,
-    postAppRuntimeLog: postAppRuntimeLogMock,
+    postAppRuntimeLogMock: vi.fn(
+      (
+        ns: string,
+        level: string,
+        msg: string,
+        fields?: unknown,
+      ): Promise<void> => {
+        calls.push({ ns, level, msg, fields });
+        return Promise.resolve();
+      },
+    ),
+    runtimeLogCalls: calls,
   };
 });
+vi.mock("~/lib/log/log-file-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof LogFileClientModule>()),
+  postAppRuntimeLog: postAppRuntimeLogMock,
+}));
 const probeMock = vi.mocked(probeOllama);
 const startMock = vi.mocked(startOllama);
 
@@ -366,7 +336,6 @@ beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
  * rejection（与上面 probeMock 同源问题）。各用例按需覆盖。 */
 beforeEach(() => {
   runtimeLogCalls.length = 0;
-  sessionLogRequests.length = 0;
   /* 兜底缓存（sessionStorage 快照）跨用例共享同一个 jsdom —— 不清会把上一个
    * 用例的成功配置带进来，让「无兜底 → 整页降级」的用例失去意义。 */
   sessionStorage.clear();
@@ -978,10 +947,13 @@ describe("useSettingsPage", () => {
       { id: "40", title: "▶ ComfyUI 启动会话", startedAt: null },
       { id: "12", title: "▶ ComfyUI 启动会话", startedAt: null },
     ];
+    const requested: Array<{ source: string | null; session: string | null }> =
+      [];
     server.use(
       http.get("*/api/logs/sessions", ({ request }) => {
         const url = new URL(request.url);
         const session = url.searchParams.get("session");
+        requested.push({ source: url.searchParams.get("source"), session });
         return HttpResponse.json({
           sessions,
           selectedId: session ?? "40",
@@ -1008,7 +980,7 @@ describe("useSettingsPage", () => {
     expect(result.current.comfyLog.sessionId).toBe("12");
     expect(result.current.comfyLog.truncated).toBe(true);
     expect(result.current.comfyLog.windowed).toBe(true);
-    expect(sessionLogRequests).toContainEqual({
+    expect(requested).toContainEqual({
       source: "comfyui-runtime",
       session: "12",
     });
@@ -1020,10 +992,13 @@ describe("useSettingsPage", () => {
     let sessions = [
       { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
     ];
+    const requested: Array<{ source: string | null; session: string | null }> =
+      [];
     server.use(
       http.get("*/api/logs/sessions", ({ request }) => {
         const url = new URL(request.url);
         const session = url.searchParams.get("session");
+        requested.push({ source: url.searchParams.get("source"), session });
         /* 契约：新→旧，第一项即最新。 */
         const latestId = sessions[0]!.id;
         const selectedId = sessions.some((s) => s.id === session)
@@ -1060,7 +1035,7 @@ describe("useSettingsPage", () => {
       .poll(() => result.current.comfyLog.text)
       .toBe("第二次启动的输出");
     expect(result.current.comfyLog.sessionId).toBe("40");
-    expect(sessionLogRequests).toContainEqual({
+    expect(requested).toContainEqual({
       source: "comfyui-runtime",
       session: "40",
     });
