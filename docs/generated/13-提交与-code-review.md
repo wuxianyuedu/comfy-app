@@ -222,7 +222,6 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
 ✅ node scripts/check-click-keyboard.cjs    # 非原生元素上的「鼠标专属」点击：`div`/`li`/`span` 挂了 `onClick` 却没有键等价物（鼠标点得开、键盘进不来），净数不许涨（见 06 §6.11）
 ✅ node scripts/check-form-field-wiring.cjs # `<FormField>` 的标签 ⇄ 控件接线：plain-children 形态下 `htmlFor` 指向不存在的 id（点标签不聚焦、控件没有可访问名），净数不许涨（见 16 §16.2.4.26.1）
-✅ node scripts/check-click-keyboard.cjs    # 非原生元素上的「鼠标专属」点击：`div`/`li`/`span` 挂了 `onClick` 却没有键等价物（鼠标点得开、键盘进不来），净数不许涨（见 06 §6.11）
 ✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
 ✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
 ✅ node scripts/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）

@@ -179,9 +179,24 @@ describe("转录文件的取最新与轮转（ISSUE #1365）", () => {
   it("latestPanelLogFile 按 mtime 取，不按文件名字典序", async () => {
     const mod = await freshInstall();
     /* pid 更大的那份文件名字典序**更小**（"12345" < "9876"），而它才是最新的：
-     * 这正是按名字取最后一份会读错的方向。 */
-    const older = writePanel(9876, Date.now() - 60_000, "上一次运行\n");
-    const newer = writePanel(12345, Date.now(), "本次运行\n");
+     * 这正是按名字取最后一份会读错的方向。
+     *
+     * ⚠️ **夹具必须在 install 之后「清场」再摆**，不能直接 `Date.now()` 起摆：
+     * `installStreamCapture()` 自己就在 `tmp` 里建了本次运行那一份
+     * （`nextjs-panel-<pid>-<时刻>.log`），它的 mtime 与 `Date.now()` 只差
+     * **亚毫秒**。若用 `Date.now()` 当 newer 的 mtime，两者谁大取决于
+     * `utimesSync` 取时刻与模块写文件谁先落地 —— 于是这条断言**串行也闪**
+     * （实测：模块那份胜出时 `latestPanelLogFile` 返回它，pid 也不是夹具的
+     * `12345`，报错里两个文件名只差 pid 那一段）。
+     *
+     * 摆法：先清掉模块自建那份，再把两份夹具按**明确的时间差**写进一个空目录，
+     * 于是「谁是最新」由夹具自己决定，与调度无关。 */
+    for (const name of fs.readdirSync(tmp)) {
+      fs.rmSync(path.join(tmp, name), { force: true });
+    }
+    const base = Date.now();
+    const older = writePanel(9876, base - 60_000, "上一次运行\n");
+    const newer = writePanel(12345, base, "本次运行\n");
     expect(mod.latestPanelLogFile(tmp)).toBe(newer);
     expect(mod.latestPanelLogFile(tmp)).not.toBe(older);
   });
