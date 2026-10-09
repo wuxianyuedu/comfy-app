@@ -12,6 +12,12 @@
       "decision": "off",
       "why": "规则**看不穿组件化的 label**：`~/components/ui/label` 的 `Label` 把 `htmlFor` 经 `{...props}` 透传给底层 `<label>`，而规则只读这一处 JSX —— 它看到一个既无 `htmlFor` 又无嵌套控件的 `<label>`（加 `labelComponents` 让它认这个名字后，报的正是这条；`assert` 给 `either` / `htmlFor` 都一样）。也就是说它数的不是「关联有没有做」，而是「关联有没有**写在这一处 JSX 上**」。本仓的关联由 `check-form-field-wiring.cjs`（§16.2.4.26，棘轮，D 组）与 `ui/field` 的 Base UI 语义分别守。",
       "keeper": "scripts/check-form-field-wiring.cjs（钩子 D 组「FormField 标签⇄控件接线」）+ 规范 16 §16.2.4.26.1"
+    },
+    {
+      "rule": "jsx-a11y/prefer-tag-over-role",
+      "decision": "off",
+      "why": "这条规则判的是「用了 ARIA role 却没换成原生标签」，而它**给不出能用的替代** —— 实测 27 处逐条看完，全部是「ARIA 语义 vs 原生标签」的**有意取舍**，不是反模式：(1) Base UI 的复合控件 pattern —— `role=\"combobox\"` / `listbox` / `option`（`AttributeMultiSelect` / `option-list-popover`）、`role=\"radio\"`（设置页主题卡与档位行，整卡可点不能用 `<input type=radio>` 的默认外观）、`role=\"checkbox\"`（`multi-mode-select` 的选项行要内嵌「切默认」星，合成一个 `<button>` 在 HTML 里非法）；(2) shadcn 的 `role=\"list\"`（`item` / `ModelLibrary`）—— 那是**修 Safari 的列表语义**：`list-style: none` 会让 Safari 丢掉 list/listitem 角色，官方推荐的修法正是补回 `role=\"list\"`；(3) `role=\"status\"` 的 live region（`spinner` / `use-exit-reminder` / 运行反馈）—— 规则建议换成 `<output>`，但 `<output>` 的语义是「计算结果的输出」，一个不停自转的加载指示器不是它；(4) `role=\"presentation\"` / `role=\"img\"` 的装饰与占位（`breadcrumb` 的 svg、`media-thumbnail` 的失败占位）—— 规则建议的 `<img alt>` 需要 src，这里是纯装饰或纯文本占位。**但「不开」不等于「这一条没问题」**：规则确实**照出了一个真缺陷族** —— `role=\"radiogroup\"` 声明了却没有方向键契约（`AppearanceSection` 两处，本批已收口到 `RadioGroup` 基元，方向键 + roving tabindex 由基元给）。",
+      "keeper": "ARIA 复合控件的键盘契约由基元本身守（`ui/radio-group` 的 Base UI `RadioGroup` 给方向键 + roving tabindex，`ui/option-list-popover` / `ui/multi-mode-select` 给复合控件语义）；声明的形态判据是 `scripts/check-click-keyboard.cjs`（§6.11，非原生元素上的鼠标专属点击，棘轮基线 0）；收口后的契约由 `AppearanceSection.test.tsx` 钉住（改前会红）"
     }
   ],
   "inlineExemptions": [

@@ -162,6 +162,79 @@ function readLedger() {
   }
 }
 
+/**
+ * 插件里**全部规则的元数据**（名字 → `{ deprecated }`）。
+ *
+ * 第三档判据（「官方两份配置谁都没提到」）要区分两件事：
+ *   · 官方**标了废弃**的（`meta.deprecated === true`）—— 不提是对的，
+ *     本仓也不该提；
+ *   · **既没标废弃、又不在任何一份配置里**的 —— 那只是被两份**手写的静态
+ *     清单**漏掉了，「该不该开」从来没有人决定过。
+ * 后者才是要判的。
+ *
+ * 判据**从插件自己的 `meta` 读废弃状态**，不在这里抄一份废弃名单 ——
+ * 抄一份就会漂（插件升版改了 `meta` 我们一个字都不会变），与
+ * `officialRecommended()` 从插件对象算集合是同一个口径。
+ */
+async function officialRuleMap() {
+  const mod = await import(pathToFileURL(ESLINT_CONFIG).href);
+  const flat = mod.default.flat();
+  let plugin = null;
+  for (const config of flat) {
+    if (config.plugins?.["jsx-a11y"]) plugin = config.plugins["jsx-a11y"];
+  }
+  if (!plugin || typeof plugin.rules !== "object" || plugin.rules === null) {
+    throw new Error(
+      "配置里读不到 jsx-a11y 的 rules 表 —— eslint.config.js 的结构变了？" +
+        "本判据从它读每条规则的废弃状态（不手抄废弃名单）。",
+    );
+  }
+  /** @type {Map<string, { deprecated: boolean }>} */
+  const out = new Map();
+  for (const [name, rule] of Object.entries(plugin.rules)) {
+    out.set(`${PREFIX}${name}`, {
+      deprecated: rule && rule.meta ? rule.meta.deprecated === true : false,
+    });
+  }
+  return out;
+}
+
+/**
+ * 官方两份配置（`recommended` / `strict`）**谁都没提到**的规则。
+ *
+ * 立案现场（本批）：`jsx-a11y@6.10.2` 装着 39 条，而这两份是
+ * `lib/index.js` 里**手写的静态清单** —— 实测 **5 条两边都没被提到**，
+ * 其中 3 条官方标了 ❌ deprecated（不提是对的），剩下 **3 条既非废弃、
+ * 也非明写 off**（`lang` / `no-aria-hidden-on-focusable` /
+ * `prefer-tag-over-role`）：它们只是被两份清单漏掉了，于是
+ * 「该不该开」**从来没有人决定过**，也没有任何东西会响。
+ *
+ * 这与「官方 recommended 里被悄悄关掉」是同一个洞的另一面 ——
+ * 本判据原来只堵了前一半（③ 那一向），「没被列进来」那一半一直敞着。
+ */
+async function rulesInNeitherConfig() {
+  const mod = await import(pathToFileURL(ESLINT_CONFIG).href);
+  const flat = mod.default.flat();
+  let plugin = null;
+  for (const config of flat) {
+    if (config.plugins?.["jsx-a11y"]) plugin = config.plugins["jsx-a11y"];
+  }
+  if (!plugin) throw new Error("配置里没有 jsx-a11y 插件对象。");
+  const mentionedBy = (config) => {
+    const rules = config && config.rules ? config.rules : {};
+    return (name) => rules[name] !== undefined;
+  };
+  const inRecommended = mentionedBy(plugin.configs.recommended);
+  const inStrict = mentionedBy(plugin.configs.strict);
+  /** @type {string[]} */
+  const out = [];
+  for (const name of (await officialRuleMap()).keys()) {
+    if (inRecommended(name) || inStrict(name)) continue;
+    out.push(name);
+  }
+  return out;
+}
+
 /** 把规则设置归一成可比较的形状：`"error"` 与 `["error", 5]` 不同、`"error"` 与 `["error"]` 同。 */
 function normalize(setting) {
   if (Array.isArray(setting)) {
@@ -175,6 +248,8 @@ function normalize(setting) {
 async function main() {
   const effective = await effectiveRules();
   const recommended = await officialRecommended();
+  const official = await officialRuleMap();
+  const inNeither = await rulesInNeitherConfig();
   const ledger = readLedger();
   const registered = registeredDialectRules();
   const isRegisteredDialect = (name) => registered.has(name);
@@ -252,6 +327,28 @@ async function main() {
     );
   }
 
+  /* ⑤ **官方两份配置谁都没提到**的非废弃规则，本仓必须有一笔裁决。
+   *
+   * 这是本批补的那一半洞。原来只判「官方 recommended 里被关掉的」（③），
+   * 而「压根没被列进任何一份配置」这件事没人管 —— 实测 5 条，其中 3 条官方
+   * 标了 deprecated（不提是对的，跳过），剩下 3 条要么**开着**（本仓做了决定、
+   * 写进 eslint.config.js 的第三档），要么**在台账里登记为关着**（含 keeper）。
+   * 两条都不满足 = 没有人决定过 —— 与「没登记就关掉一条真判据」同罪。 */
+  for (const name of inNeither) {
+    const meta = official.get(name);
+    if (meta && meta.deprecated) continue;
+    const off = effective[name] === "off";
+    if (!off && name in effective) continue;
+    if (dialectByRule.has(name)) continue;
+    problems.push(
+      `${name} 既不在官方 recommended、也不在官方 strict（而它**没有**被标记废弃）——` +
+        "本仓对它的裁决没有任何痕迹。\n" +
+        "    → 要么在 eslint.config.js 里明确开出这一档，要么在\n" +
+        "      scripts/.a11y-rule-ledger.json 的 dialect 里写明「为什么不开」与「谁在守它」。\n" +
+        "      （新建规则时插件常先不加进两份配置 —— 正是「没人决定过」的高发处。）",
+    );
+  }
+
   /* ④ 就地豁免的文件与理由都要在。 */
   for (const entry of ledger.inlineExemptions) {
     if (!entry || typeof entry.rule !== "string" || typeof entry.file !== "string") {
@@ -275,10 +372,14 @@ async function main() {
     }
   }
 
+  const undecidedCount = inNeither.filter(
+    (n) => !(official.get(n) || {}).deprecated,
+  ).length;
   const onCount = Object.values(effective).filter((v) => v !== "off").length;
   const summary =
     `[a11y-rules] 生效 ${onCount} 条 / 官方 recommended ${Object.keys(recommended).length} 条；` +
-    `方言 ${ledger.dialect.length} 条、就地豁免 ${ledger.inlineExemptions.length} 条。`;
+    `方言 ${ledger.dialect.length} 条、就地豁免 ${ledger.inlineExemptions.length} 条；` +
+    `官方两份都没提到且未废弃 ${undecidedCount} 条（已逐条裁决）。`;
 
   if (REPORT_ONLY) {
     console.log(summary);
