@@ -28,6 +28,7 @@ import {
 } from "../scripts/pixel-run.mjs";
 import {
   checkRecordingEnv,
+  isPlatformPending,
   recordingWebserverFor,
   webserverForEnv,
 } from "../scripts/visual-baselines.mjs";
@@ -76,14 +77,24 @@ describe("像素档按需通道：本次要跑什么（§11.8）", () => {
     expect(runs[1]?.args).toEqual([PIXEL_JUDGE]);
   });
 
-  it("本机这一档齐备时前置判决放行（真实检出上跑一次真清点）", () => {
+  it("本机这一档齐备时前置判决放行；登记为待录时点名待录（真实检出上跑一次真清点）", () => {
     // 用真检出而不是夹具：这条同时证明「前置判决接的是真仓库」，夹具形态在
     // `tests/visual-baselines.test.ts` 里逐个答案都执行过。
     const missing = checkLocalBaselines({
       root: ROOT,
       platform: process.platform,
     });
-    expect(missing).toBeNull();
+    if (isPlatformPending(process.platform)) {
+      /* 本机档「已登记待录」时，期望 `null` 是**错的**答案：那等于前置判决把一台
+       * 还没有基线的机器放过去跑像素档，红会表现为「截图对比失败」而不是
+       * 「这一档没基线、去录」（§11.13 的「红先定性」）。登记本身在
+       * `PENDING_PLATFORMS` 里由配对判据管着 —— 补齐了还留着登记会红。
+       * 所以这里只是把两档分开判，判据一条没放宽，反而多判了「待录话术必须点名」。 */
+      expect(missing).toContain("登记为待重录");
+      expect(missing).toContain("check:visual:update");
+    } else {
+      expect(missing).toBeNull();
+    }
   });
 
   it("本机这一档没登记时前置判决拦下并点名（换一档平台就看得见）", () => {
