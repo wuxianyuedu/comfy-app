@@ -165,6 +165,39 @@
         "label": "未完成用例声明（test.todo）"
       },
       "section": "11.24"
+    },
+    {
+      "id": "a11y-rule-switch",
+      "name": "jsx-a11y 的规则开关（哪条开着 / 关着 / 就地豁免）",
+      "declaredAt": "eslint.config.js 的 a11yRecommendedRules() + 方言两档 + scripts/.a11y-rule-ledger.json",
+      "reader": "scripts/check-a11y-rules.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "jsx-a11y 规则开关⇄判据（§6.12）"
+      },
+      "section": "6.12"
+    },
+    {
+      "id": "base-check-recompute",
+      "name": "「被门禁拦下先复算 master 基线」的执行者（§13.6.2 第 1 步）",
+      "declaredAt": "docs/standards/13-提交与-code-review.md §13.6.2 的处置口径 + scripts/base-check.mjs",
+      "reader": "tests/base-check.test.ts",
+      "executor": {
+        "kind": "fixed-test",
+        "file": "tests/base-check.test.ts"
+      },
+      "section": "13.6.2"
+    },
+    {
+      "id": "on-demand-duties",
+      "name": "「不进钩子」的按需档 ⇄ 执行者",
+      "declaredAt": "scripts/.on-demand-duties.json（事实从 FRESHNESS_TRACKS / quality-gate 的 run:false / 按需召唤台账现算）",
+      "reader": "scripts/check-on-demand-duties.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "按需档 ⇄ 执行者索引"
+      },
+      "section": "13.5.4"
     }
   ]
 }

@@ -216,7 +216,7 @@ export function NodeChip({
       </span>
       <span
         className={`text-ink-bright truncate font-semibold ${
-          isSm ? "text-2xs" : "text-sm"
+          isSm ? "text-2xs" : "text-[13px]"
         }`}
       >
         {name}

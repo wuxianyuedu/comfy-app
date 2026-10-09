@@ -37,7 +37,9 @@ export function FilmStudioShotListPanel({
       {/* Header */}
       <div className="border-border-subtle flex h-11 items-center justify-between border-b px-4">
         <div className="flex items-center gap-2">
-          <span className="text-ink-field text-sm font-semibold">分镜列表</span>
+          <span className="text-ink-field text-[13px] font-semibold">
+            分镜列表
+          </span>
           <span className="text-ink-fainter text-2xs">
             {listShots.length} 镜头
           </span>

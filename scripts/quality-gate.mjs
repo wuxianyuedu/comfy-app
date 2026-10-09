@@ -23,8 +23,8 @@ import { fileURLToPath } from "node:url";
 
 import { spawnSync } from "node:child_process";
 
+import { diffLockfiles, isEmptyDiff } from "./lockfile/lock-diff.mjs";
 import { renderDriftReport } from "./lockfile/render-lock-diff.mjs";
-import { lockfileDrift } from "./launcher-core/worktree.mjs";
 import {
   echoCommandLine,
   formatCommandLine,
@@ -123,26 +123,10 @@ const GATES = {
    * 现在这条通道由 `scripts/pixel-run.mjs` 承担（含红的定性与「与配对判据同批跑」）。
    */
   visual: {
-    label: "Pixel regression (Playwright screenshots + baseline pairing judge)",
+    label:
+      "Pixel regression (Playwright screenshots + baseline pairing judge)",
     args: ["../scripts/pixel-run.mjs"],
     run: false,
-  },
-  /**
-   * 依赖新鲜度：远端改过库的版本而本地还停在旧的那套上（规范 §13.5.13）。
-   *
-   * 与 `format` / `dependencyAudit` 同属「会随时间变坏」的那一类：**昨天的结论推不出
-   * 今天** —— 远端随时可能升依赖，而本地一旦落下就再没有任何东西会说。放在
-   * `check:all`（而不是只在钩子里带 `--staged`）是因为「完整验证」这一档本来就该
-   * 回答「我这套依赖是不是当前基线的」；钩子那档只在**动了依赖面**时判，两档共用
-   * 同一份实现，形态由 `--staged` 决定。
-   *
-   * 它下面紧挨着的 `dependencyDrift()` 预检判的是「装了没装对」，本条判的是
-   * 「该装的是不是远端那一套」——**两层不同，别合并**（依赖一致性预检早就有了，
-   * 而 ISSUE #1569 报的正是它盖不住的那一格）。
-   */
-  depsFreshness: {
-    label: "Dependency freshness (baseline vs origin/master + install sync)",
-    args: ["../scripts/check-deps-freshness.mjs"],
   },
 };
 
@@ -173,21 +157,20 @@ function dependencyDrift() {
   const nm = path.join(ROOT, "node_modules");
   if (!fs.existsSync(nm))
     return { drift: true, reason: "node_modules 完全没装过" };
-  // 判据本身走 `lockfileDrift`（`launcher-core/worktree.mjs`）——**唯一出处**，
-  // 与启动器 / `check-deps-freshness.mjs` 共用同一份"实质差异"口径。此前这里自己
-  // 拼了一遍 `diffLockfiles`，"直接读安装时 lockfile"与"读不到时算不算漂移"
-  // 这两个边界各写各的，已经在三处漂移（ISSUE #1569 收口）。
-  const drift = lockfileDrift(ROOT);
-  if (drift.state === "fresh") return { drift: false, reason: "" };
-  if (drift.state === "no-lockfile") return { drift: false, reason: "" };
-  return {
-    drift: true,
-    reason:
-      drift.state === "no-install"
-        ? "没有 node_modules/.pnpm/lock.yaml（install 中断或残缺）"
-        : "node_modules 与仓库 pnpm-lock.yaml 的实质内容不一致",
-    diff: drift.diff,
-  };
+  const installedLock = path.join(nm, ".pnpm", "lock.yaml");
+  const rootLock = path.join(ROOT, "pnpm-lock.yaml");
+  if (!fs.existsSync(installedLock)) {
+    return {
+      drift: true,
+      reason: "没有 node_modules/.pnpm/lock.yaml（install 中断或残缺）",
+    };
+  }
+  if (!fs.existsSync(rootLock)) return { drift: false, reason: "" };
+  const diff = diffLockfiles(
+    fs.readFileSync(installedLock, "utf8"),
+    fs.readFileSync(rootLock, "utf8"),
+  );
+  return { drift: !isEmptyDiff(diff), diff };
 }
 
 /** 跑一条门禁；返回退出码。 */

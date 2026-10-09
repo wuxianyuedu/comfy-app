@@ -167,14 +167,6 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 所以必须进固定清单（与本次改动无关也照跑）。
   "tests/test-it-each-gate.test.ts",
   "tests/form-field-wiring-gate.test.ts",
-  // 非原生元素上的「鼠标专属点击」（规范 06 §6.11）：`eslint-plugin-jsx-a11y` 装了
-  // 39 条规则、只启用 6 条，剩下那批里最贴本项目形态的三条此前**一条判据都没有** ——
-  // 全仓实测 27 处「有 onClick、没有键盘等价物」，真病灶 6 处（连 tabIndex 都没有的
-  // 选项行也在内）。它同时是判据自己的门禁自测 —— 该拦的（div/li/span 上的 onClick、
-  // 非键盘展开）与该放的（原生标签 / 组件 / onKeyDown / simpleKeyHandler 展开 /
-  // 拖放容器 / stopPropagation 守卫 / 棘轮内）每一条都得有人钉住，
-  // 都是「下一次有人写整行可点」时才走得进的路径，所以必须进固定清单。
-  "tests/click-keyboard-gate.test.ts",
   // 配置的**共享项有没有真的落到两档上**（规范 §11.17.3）：这一档的口径在本仓库
   // 写反过一次（「`projects` 不继承声明方 `test` 的选项」），共享项因此被复制成
   // 两份 spread；本轮复现那次实测、订正口径并让共享项回到根 `test`。
@@ -382,13 +374,31 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 没有任何人被告知」。同因（读文本、import 图追不到、与本次改动无关也必须响），
   // 故进固定清单。
   "tests/theme-tokens-compile-source.test.ts",
-  // 「前端响应镜像 ↔ 线上真实列」的契约（台账 E4 第一格）：镜像声明的每一列线上必须
-  // 真的在发。交叉类型 `RouterOutputs[...] & { images?: … }` 补出来的字段，tsc 只查它
-  // 存在、永远查不出服务端没发它 —— 于是那句读取恒为 `undefined`，而类型上是 optional
-  // 连可选链都不会红，表现是界面上那一格永远空着而全绿（视频队列的封面与下载入口就是这么挂的）。
-  // 它守的是「下一次任一侧改动」，而改 `task.list` 的 mapper 只会被 router 自己的用例拉进
-  // C 组 —— 契约这一侧必须无条件响，所以进固定清单。
-  "tests/task-list-wire-contract.test.ts",
+  // 「jsx-a11y 的规则开关 ⇄ 判据」（规范 06 §6.12）：这个插件装着 39 条规则、
+  // 而 `eslint-config-next` 只启用 6 条 —— 「半开」这件事此前没有任何东西在数
+  //（`grep -c jsx-a11y eslint.config.js` 是 0，配置在 next 里）。本判据三向核：
+  // 官方 recommended 集合全开、本仓与官方默认的每一处不同都在台账里登记、
+  // 台账双向拦。它同时是判据自己的门禁自测 —— 该拦的（悄悄关掉一条、登记了却
+  // 没关、登记不存在的规则、缺理由 / 缺 keeper、豁免指向不存在的文件）与该放的
+  // （`--report` 恒 0）每一条都得有人钉住。改 `.githooks/**` 会让本层放弃收窄、
+  // 只跑固定清单，而「有人偷偷关掉一条 a11y 规则」正是这类动作，故进固定清单。
+  "tests/a11y-rules-gate.test.ts",
+  // 「被门禁拦下先复算 master 基线」的执行者（规范 §13.6.2 第 1 步）：那段
+  // `git worktree add ../.wt-base-check … && node scripts/check-*.cjs … && git worktree
+  // remove` 此前只写在文档与注释里，于是「这一条本身还没有机器判据」是 §13.6.2 自己的
+  // 原话。现在它是 `scripts/base-check.mjs` 的一条命令，判的是**可归因的事实**
+  // （别线的红 / 你的红 / 无从复算 / 没跑起来），而四态的下一动作完全不同 ——
+  // 所以每一条都得有人钉住。它守的是「下一次有人被拦下时，那条纪律还在不在」，
+  // 与本次暂存改动无关，进固定清单。
+  "tests/base-check.test.ts",
+  // 「不进钩子」的按需档 ⇄ 执行者的双向判据（规范 §13.5.4）：判据「不进钩子」是代价
+  // 判据，它不回答「那谁在什么时候跑它」—— 上一轮把五条都补上了执行者，但补的是**散文**
+  // （写进文档的表格不会自己响）。这条把那张表机器化：新增一个新鲜度档却忘了登记
+  // ⇒ 那一档**谁都不判**（§13.5.12 的立案现场）。它同时是判据自己的门禁自测 ——
+  // 双向（过期承诺 / 未登记）+ 判据自己不许静默降级（索引不存在 / 非法 JSON / 空 /
+  // 低于地板 / 缺字段）每一档都得有人钉住，都是「下一次新增一条按需档」时才走得进的
+  // 路径，所以必须进固定清单（与本次改动无关也照跑）。
+  "tests/on-demand-duties-gate.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

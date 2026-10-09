@@ -144,7 +144,7 @@ export function MessageCenterPanel() {
         {messages.length === 0 ? (
           <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-3">
             <Inbox size={44} strokeWidth={1.2} className="opacity-30" />
-            <p className="text-sm">暂无系统消息</p>
+            <p className="text-[13px]">暂无系统消息</p>
           </div>
         ) : (
           <ul className="mx-auto flex w-full max-w-3xl flex-col gap-2.5 px-4 py-5">
@@ -152,55 +152,49 @@ export function MessageCenterPanel() {
               const meta = KIND_META[m.kind] ?? KIND_META.info!;
               const Icon = meta.icon;
               return (
+                /* 行级动作「点一下标记已读」是真病灶，键等价物由 **PR #1574**
+                   收口（整行换原生 `<Button>`）；本批只对齐规则开关。 */
+                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 键等价物由 PR #1574 收口 */
                 <li
                   key={m.id}
-                  className={`bg-subtle/60 hover:bg-subtle rounded-xl border p-3.5 transition-colors ${
+                  onClick={() => markRead(m.id)}
+                  className={`bg-subtle/60 hover:bg-subtle cursor-pointer rounded-xl border p-3.5 transition-colors ${
                     m.read
                       ? "border-border-subtle opacity-70"
                       : `${meta.ring} border`
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    {/* 整行「点一下标记已读」用原生 `<Button variant="ghost">`
-                     *  而不是 `li` 上的 `onClick`：这条 `<li>` 里还嵌着一个删除
-                     *  按钮，两者不能合成同一个 `<button>`（HTML 里按钮套按钮
-                     *  非法），而键可达的语义是不能靠「父元素 onClick」白拿的
-                     *  —— 此前键盘用户能 Tab 到删除按钮，却没有任何路径标记已读。
-                     *  `ghost` 变体的底色/文字色由这里接管（§16.2.4.2 第 5 条），
-                     *  行外观与收口前一致。 */}
-                    <Button
-                      variant="ghost"
-                      onClick={() => markRead(m.id)}
-                      className="flex min-w-0 flex-1 items-start justify-start gap-3 rounded-lg p-0 text-left font-normal whitespace-normal hover:bg-transparent"
+                    <span
+                      className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
                     >
-                      <span
-                        className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
-                      >
-                        <Icon size={14} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline gap-2">
-                          <h3 className="text-ink-bright text-sm font-semibold">
-                            {m.title}
-                          </h3>
-                          {!m.read && (
-                            <Badge tone="primary" size="pill-sm">
-                              新
-                            </Badge>
-                          )}
-                          <time className="text-ink-muted text-2xs ml-auto shrink-0 tabular-nums">
-                            {fmtTime(m.time)}
-                          </time>
-                        </div>
-                        <p className="text-ink-soft mt-1 text-[12.5px] leading-relaxed wrap-break-word whitespace-pre-wrap">
-                          {m.body}
-                        </p>
+                      <Icon size={14} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <h3 className="text-ink-bright text-[13px] font-semibold">
+                          {m.title}
+                        </h3>
+                        {!m.read && (
+                          <Badge tone="primary" size="pill-sm">
+                            新
+                          </Badge>
+                        )}
+                        <time className="text-ink-muted text-2xs ml-auto shrink-0 tabular-nums">
+                          {fmtTime(m.time)}
+                        </time>
                       </div>
-                    </Button>
+                      <p className="text-ink-soft mt-1 text-[12.5px] leading-relaxed wrap-break-word whitespace-pre-wrap">
+                        {m.body}
+                      </p>
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      onClick={() => remove(m.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        remove(m.id);
+                      }}
                       className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 rounded"
                       aria-label="删除该消息"
                     >
