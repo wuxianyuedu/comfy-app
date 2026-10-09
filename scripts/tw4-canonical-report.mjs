@@ -286,40 +286,65 @@ if (asJson) {
  * 而「零候选起步」的语义正是「任何新增都红」。
  * 排除孤儿快照与测试文件的命中，与原报告口径一致。 */
 
-if (shouldUpdate) {
-  const ledger = {};
-  let total = 0;
-  for (const s of suggestions) {
-    for (const f of s.sourceFiles) {
-      const rel = path.relative(ROOT, f);
-      ledger[rel] = (ledger[rel] ?? 0) + 1;
-      total += 1;
-    }
+/* 本轮的账算一次就好：`--check` 与 `--update` 判的是同一份，各算一遍就会分叉。 */
+const current = {};
+for (const s of suggestions) {
+  for (const f of s.sourceFiles) {
+    const rel = path.relative(ROOT, f);
+    current[rel] = (current[rel] ?? 0) + 1;
   }
-  const data = { total, files: ledger };
-  fs.writeFileSync(BASELINE, `${JSON.stringify(data, null, 2)}\n`);
-  console.log(`棘轮基线已重写：${path.relative(ROOT, BASELINE)}（total ${total}）`);
-  process.exit(0);
 }
+const currentTotal = Object.values(current).reduce((a, b) => a + b, 0);
 
-if (shouldCheck) {
-  /** @type {{total: number, files: Record<string, number>}} */
-  const base = fs.existsSync(BASELINE)
-    ? JSON.parse(read(BASELINE))
-    : { total: 0, files: {} };
-  const current = {};
-  for (const s of suggestions) {
-    for (const f of s.sourceFiles) {
-      const rel = path.relative(ROOT, f);
-      current[rel] = (current[rel] ?? 0) + 1;
-    }
-  }
+/** 上一份基线；`null` = 还没有账可记（只有首次记账允许任何存量）。 */
+/** @type {{total: number, files: Record<string, number>} | null} */
+const baseline = fs.existsSync(BASELINE) ? JSON.parse(read(BASELINE)) : null;
+
+/** 比基线高的那些文件（逐文件维度与总数维度互补：换文件躲不过前者，加总量躲不过后者）。 */
+function overFiles(base) {
   const over = [];
   for (const [rel, n] of Object.entries(current)) {
     const allowed = base.files[rel] ?? 0;
     if (n > allowed) over.push(`${rel}：${n} 处（基线 ${allowed}）`);
   }
-  const currentTotal = Object.values(current).reduce((a, b) => a + b, 0);
+  return over;
+}
+
+if (shouldUpdate) {
+  /* **只许降**：基线在场却算出更高的数 → 拒绝写入、基线一个字节都不动。
+   * 上面文件头那句「须伴随下降」此前只是散文，这一支才让它成立。
+   * 例外只有「还没有基线文件」（首次记账）；判据用 `baseline` 在不在，
+   * 不用 `baseline.total` —— 后者治理到 0 之后就是 0，`if (0 && …)` 会把整条
+   * 拒涨短路（台账 E5 记下的共同失效写法）。 */
+  if (baseline) {
+    const over = overFiles(baseline);
+    if (over.length > 0 || currentTotal > baseline.total) {
+      console.error(
+        `canonical 候选棘轮：--update 拒绝写入，源文件候选 ${baseline.total} → ${currentTotal} 是上涨。\n` +
+          `  棘轮只许降不许升 —— 把上涨记进基线等于「跑一次 --update 就收下这批新写法」，` +
+          `这条按需跑的判据就此没有存量口径。`,
+      );
+      for (const line of over) console.error(`  ✗ ${line}`);
+      console.error(
+        `\n修法：先 node scripts/tw4-canonical-report.mjs --write 把这些候选改写成规范写法，` +
+          `再 --update 收紧。别为了让它变绿去放宽基线。`,
+      );
+      process.exit(1);
+    }
+  }
+  fs.writeFileSync(
+    BASELINE,
+    `${JSON.stringify({ total: currentTotal, files: current }, null, 2)}\n`,
+  );
+  console.log(
+    `棘轮基线已重写：${path.relative(ROOT, BASELINE)}（total ${currentTotal}）`,
+  );
+  process.exit(0);
+}
+
+if (shouldCheck) {
+  const base = baseline ?? { total: 0, files: {} };
+  const over = overFiles(base);
   if (over.length > 0 || currentTotal > base.total) {
     console.log(
       `canonical 候选棘轮：源文件候选 ${currentTotal} 处 > 基线 ${base.total} 处\n`,
@@ -334,7 +359,9 @@ if (shouldCheck) {
   }
   console.log(
     `canonical 候选棘轮：源文件候选 ${currentTotal} 处 ≤ 基线 ${base.total} 处 ✓` +
-      (currentTotal < base.total ? `（比基线少 ${base.total - currentTotal} 处，可跑 --update 收紧）` : ""),
+      (currentTotal < base.total
+        ? `（比基线少 ${base.total - currentTotal} 处，可跑 --update 收紧）`
+        : ""),
   );
   process.exit(0);
 }

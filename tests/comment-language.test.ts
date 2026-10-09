@@ -502,9 +502,12 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(r.output).toContain("--update");
   });
 
-  test("--update 写入基线后同一状态通过（棘轮可闭环）", ({ repo }) => {
+  test("--update 建立基线后同一状态通过（棘轮可闭环）", ({ repo }) => {
     repo.write("src/lib/legacy.ts", ENGLISH);
-    seedBaseline(repo, {}, 0);
+    /* 这里**不再**先手写一份 `total: 0` 的基线：那份零基线加一句「--update 必须成功」
+     * 断的正是「把新增的违规收进基线」那扇门 —— 而它现在是判据要拦的行为
+     * （`tests/ratchet-update-guards.test.ts`，台账 E5）。闭环的第一步在生产里长这样：
+     * 基线文件还不存在，`--update` 把它第一次写出来。 */
     expect(repo.run(["--update"]).code).toBe(0);
     expect(repo.run().code).toBe(0);
     const baseline = JSON.parse(
