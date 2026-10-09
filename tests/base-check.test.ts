@@ -32,6 +32,7 @@ import {
   normalizeRun,
   readHookSteps,
   resolveGateCommand,
+  resolveMergeBaseRef,
   resolveMergeBatch,
   resolveUpstreamRef,
   summarizeRows,
@@ -653,6 +654,55 @@ describe("base-check --base —— 真仓库上的端到端", () => {
       expect(hit?.baseCode).toBe(1);
     } finally {
       dropRepo(r);
+    }
+  });
+});
+
+/**
+ * 「合并前复算要拿哪条当基线」与「被拦下时复算」是**两个问题**（ISSUE #1591）。
+ *
+ * 这一条是实测撞出来的：`resolveUpstreamRef()` 的首选是 `@{u}`（我这份检出从哪来），
+ * 那对「这红是不是本来就有的」是对的；而 `--base` 问的是「并进 `master` 之后会不会红」，
+ * 在 PR 分支上 `@{u}` 就是**你自己的分支** —— 拿它当基线等于自己跟自己比，输出
+ * 「50 条全绿」、看起来一切正常，却一个字节都没回答那个问题。
+ */
+describe("base-check --base —— 基线引用只认「要并进去的那条」", () => {
+  test("PR 分支上不拿 `@{u}` 当基线（那是自己的分支）", () => {
+    /* 夹具：远端 master + 一条跟踪它的 feat 分支 —— 这正是 PR 分支的形状。 */
+    const r = makeRepo();
+    try {
+      expect(git(r.work, "rev-parse", "--abbrev-ref", "feat@{u}").trim()).toBe(
+        "up/master",
+      );
+      /* 事后复算那一档：认 `@{u}`（它要答的是「我这条线的上游有没有这个红」）。 */
+      expect(resolveUpstreamRef(r.work)).toBe("up/master");
+      /* 合并前那一档：只认「要并进去的那条」。 */
+      expect(resolveMergeBaseRef(r.work)).toBe("up/master");
+    } finally {
+      dropRepo(r);
+    }
+  });
+
+  test("取不到「要并进去的那条」时**返回 null**，不退回 `@{u}` 充数", () => {
+    /* 一个只有 feature 远端的仓库：`feat` 跟踪 `up/feat`，没有任何 master。 */
+    const bare = mkdtempSync(join(tmpdir(), "base-nobase-bare-"));
+    const work = mkdtempSync(join(tmpdir(), "base-nobase-"));
+    try {
+      git(bare, "init", "-q", "--bare", "-b", "feat", ".");
+      git(work, "init", "-q", "-b", "feat", ".");
+      git(work, "config", "user.email", "gate@example.com");
+      git(work, "config", "user.name", "gate");
+      git(work, "config", "commit.gpgsign", "false");
+      git(work, "remote", "add", "up", bare);
+      writeFileSync(join(work, "a.txt"), "a\n");
+      git(work, "add", ".");
+      git(work, "commit", "-qm", "chore: seed");
+      git(work, "push", "-q", "-u", "up", "feat");
+      /* `@{u}` 解析得出（up/feat），但那条不是「要并进去的」。 */
+      expect(resolveUpstreamRef(work)).toBe("up/feat");
+      expect(resolveMergeBaseRef(work)).toBeNull();
+    } finally {
+      dropRepo({ work, bare });
     }
   });
 });

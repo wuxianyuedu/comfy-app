@@ -148,6 +148,40 @@ export function resolveUpstreamRef(cwd = ROOT) {
 }
 
 /**
+ * **合并前复算要拿哪条当基线** —— 与 `resolveUpstreamRef` 是**两个问题**。
+ *
+ * `resolveUpstreamRef()` 回答的是「我这份检出是从哪来的」（首选 `@{u}`），那对
+ * 「被拦下时复算：这红是不是本来就有的」是对的 —— 与你对比的就是你这条线的上游。
+ *
+ * 但 `--base` 问的是**另一个**问题：「并进 `master` 之后会不会红」。在 PR 分支上
+ * `@{u}` 是**你自己的分支**（推送时就设上了），拿它当基线等于「自己跟自己比」——
+ * 输出是「50 条全绿」，看起来一切正常，而它一个字节都没回答「并进去会怎样」。
+ * （实测撞到的就是这个形态。）
+ *
+ * 所以这一档**只认「要并进去的那条」**：候选是各 remote 的 `master`，再退回本地
+ * `master`。**刻意不退回 `@{u}`** —— 宁可判「取不到基线」让人显式给一条，也不拿
+ * 一个语义不对的引用充数（同 `resolveUpstreamRef` 那句「取不到就报失败，而不是静默
+ * 拿一个错的基」）。
+ *
+ * @param {string} [cwd]
+ * @returns {string | null}
+ */
+export function resolveMergeBaseRef(cwd = ROOT) {
+  /** @param {string} ref */
+  const tryRef = (ref) => git(["rev-parse", "--verify", "--quiet", ref], cwd).ok;
+  const remotes = git(["remote"], cwd);
+  if (remotes.ok) {
+    for (const remote of remotes.stdout.split("\n").map((s) => s.trim())) {
+      if (!remote) continue;
+      const ref = `${remote}/master`;
+      if (tryRef(ref)) return ref;
+    }
+  }
+  if (tryRef("master")) return "master";
+  return null;
+}
+
+/**
  * 会改写「仓库在哪 / 索引在哪」的环境变量 —— 一律剥掉。
  *
  * 为什么：本脚本的语义是「在**这个**检出里，拿**这个**上游引用复算」，而这些变量
@@ -912,18 +946,21 @@ function main(argv) {
       return 1;
     }
   }
-  const ref = resolveUpstreamRef();
+  /* `--base`：**合并前**那一档（空参数 = 「这次 PR 准备并的那一批」）。
+   * 与「被拦下时复算一条」共用同一套事实与话术，只是面从一条变成一批 ——
+   * 连**基线引用**都是两个问题：那一档只认「要并进去的那条」（理由见
+   * `resolveMergeBaseRef`），而事后复算认「我这条线的上游」。 */
+  const isBatch = flags.has("--base");
+  const ref = isBatch ? resolveMergeBaseRef() : resolveUpstreamRef();
   if (!ref) {
     fail(
-      "取不到上游 master 引用 —— 先 `git fetch`（或确认克隆带了远端分支）再复算",
+      isBatch
+        ? "取不到要并进去的那条（各 remote 的 master / 本地 master）—— 先 `git fetch` 再复算"
+        : "取不到上游 master 引用 —— 先 `git fetch`（或确认克隆带了远端分支）再复算",
     );
     return 1;
   }
-  /* `--base`：**合并前**那一档（空参数 = 「这次 PR 准备并的那一批」）。
-   * 与「被拦下时复算一条」共用同一套事实与话术，只是面从一条变成一批。 */
-  const base = flags.has("--base")
-    ? resolveMergeBatch(args)
-    : null;
+  const base = isBatch ? resolveMergeBatch(args) : null;
   if (base && !base.ok) {
     fail(base.error);
     return 1;
