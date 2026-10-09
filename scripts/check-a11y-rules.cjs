@@ -48,9 +48,26 @@
  *
  * ── 成本 ──────────────────────────────────────────────────────────────
  *
- * 纯本地：读 `eslint.config.js`（动态 import，实测 ~0.4s —— 它要经
- * `eslint-config-next` 把整个 next 配置求值一遍）、读台账、比数组。零网络、
- * 零子进程。照 §13.5.4 的成本判据该进钩子。
+ * 纯本地：读 `eslint.config.js`（动态 import）、读台账、比数组。零网络、零子进程。
+ * **但那次求值的量级不是常数，取决于这份检出有没有被起过 Next**：
+ *
+ *   · `next build` / `next dev` 之后 `.next/` 在：Turbopack 的 transform 缓存命中，
+ *     实测 ~1.1–1.7s（这正是它当初按 §13.5.4 的成本判据进钩子的依据）；
+ *   · 干净检出上**首次**求值：同一条链要 40s 以上（用户侧实测，见 §6.12 与本文件
+ *     同批的用例改造记录）—— 于是钩子 D 组这一步、`pnpm check:all` 这一格，
+ *     以及所有「拿十来份台账各判一次」的自测，在冷检出上都成了挂死。
+ *
+ * 判据本身没得再省（这条链就是「生效配置」的定义），能省的是**次数**：
+ *
+ *   · 该脚本是 **CJS**，于是 `require()` 它拿到的是**同一个模块实例**、`import()`
+ *     也只求值一次 —— 门禁自测因此把「十来次真求值」收成**一次共享加载**
+ *     （`tests/helpers/a11y-effective-config.ts`）；本脚本对应地把那几张表
+ *     导出去，并给 `judge()` 一个不读 `process.argv` 的显式入参。
+ *   · 四张表**共用** `configFacts()` 那一份单飞缓存：它们读的是同一份配置，
+ *     各自 `import()` + `flat()` 一遍等于把成本乘四（判据本体没得选，次数有得选）。
+ *   · `judge()` 返回**判决结果**（`{ problems, summary, effective }`、与真子进程那一条
+ *     逐字同义），`main()` 再把它翻成退出码 —— 自测因此在共进程里拿到与「真子进程
+ *     退出码 / stdout」同义的读数；`process.exit` 只在 bin 形态下发生。
  *
  * 用法：
  *   node scripts/check-a11y-rules.cjs                    # 检查（进 pre-commit D 组）
@@ -64,16 +81,46 @@
  * 于是那些用例既不能并发（互相踩），也无法在失败时保证还原（§11.19.2 那一族）。
  * 台账路径是**被测输入**，就该像 `check-format.cjs` 的 `NODE_PATH` 一样是个显式入参。
  *
- * 退出码 0 = 通过，1 = 阻断。
+ * 退出码 0 = 通过，1 = 阻断，2 = 用法错。
  */
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const ROOT = path.resolve(__dirname, "..");
-const { REPORT_ONLY, LEDGER } = parseArgs(process.argv.slice(2));
+/** CLI 形态下的入参：只在 `require.main === module` 那一支被读（见文件尾）。 */
+const CLI_ARGS = parseArgs(process.argv.slice(2));
 
 const ESLINT_CONFIG = path.join(ROOT, "eslint.config.js");
+
+/**
+ * `eslint.config.js` 的**求值缓存**。
+ *
+ * 求值这份配置是本判据全部成本所在：它 import 了整个 `eslint-config-next`。
+ * **首次**求值没有常数可言 —— 用户侧实测（8 核 / 16G、干净检出）40s 以上，
+ * 被 Next 起过之后 ~1.1–1.7s；派生链与「为什么它是这条链上唯一的成本」写在
+ * 规范 §11.19.1 的档 E 里，这里只记结论。
+ *
+ * 于是有两条纪律：
+ *
+ * ① 只留**一个**读面。那份配置的四个读点（生效规则表 / 官方 recommended /
+ *    全部规则元数据 / 「两份配置都没提到」）此前各写一遍 `import()` + `flat()`，
+ *    读代码的人看不出「这四张表来自同一份配置、可以只算一次」。
+ * ② 失败**不进**「已求值」缓存。`import()` 自己会把失败的模块从缓存里摘掉
+ *    （实测：失败后下一次调用会重新求值），所以把失败也缓存成 `null` 等于
+ *    让一次瞬时 I/O 错误把整个进程钉死在自己的错误结论上。
+ */
+let configPromise = null;
+
+/** 读一次真正的 `eslint.config.js`（扁平配置数组，**未** `flat()`）。 */
+function loadEslintConfig() {
+  if (!configPromise) {
+    configPromise = import(pathToFileURL(ESLINT_CONFIG).href).then(
+      (mod) => mod.default,
+    );
+  }
+  return configPromise;
+}
 
 /**
  * 解析命令行：`--report` 与 `--ledger <path>`。
@@ -120,9 +167,8 @@ const PREFIX = "jsx-a11y/";
  * 副作用只有「读几份包」，零网络。
  */
 async function effectiveRules() {
-  const mod = await import(pathToFileURL(ESLINT_CONFIG).href);
   /** @type {{rules?: Record<string, unknown>}[]} */
-  const flat = mod.default.flat();
+  const flat = (await loadEslintConfig()).flat();
   /** 扁平配置按数组顺序合并，**后者覆盖前者** —— 取最后一次出现。 */
   const merged = {};
   for (const config of flat) {
@@ -144,8 +190,7 @@ async function effectiveRules() {
  * 插件对象算 —— 不各抄一份规则表）。
  */
 async function officialRecommended() {
-  const mod = await import(pathToFileURL(ESLINT_CONFIG).href);
-  const flat = mod.default.flat();
+  const flat = (await loadEslintConfig()).flat();
   let plugin = null;
   for (const config of flat) {
     if (config.plugins?.["jsx-a11y"]) plugin = config.plugins["jsx-a11y"];
@@ -169,9 +214,14 @@ async function officialRecommended() {
 /**
  * 台账里登记为「本仓刻意改档」的规则名 —— 只认**理由与 keeper 都写全**的那些。
  * 写不全的条目仍要在 ① 里红（它没有资格豁免官方那一条）。
+ *
+ * ⚠️ 入参是**已归一形状的台账对象**（`Ledger`），不是路径：`judge()` 只认显式入参，
+ * 这里再各自去找文件的话，「同一份判决里的台账」就有了两个来源 —— 少一处会静默
+ * 退回真台账（正是 `--ledger` 那个口子要堵的失效形态）。读盘只发生在边界上
+ * （bin 形态的 `readLedger(CLI_ARGS.LEDGER)`、自测的调用点）。
  */
-function registeredDialectRules() {
-  const { dialect } = readLedger();
+function registeredDialectRules(ledger) {
+  const { dialect } = ledger;
   const out = new Set();
   for (const entry of dialect) {
     if (!entry || typeof entry.rule !== "string") continue;
@@ -184,9 +234,9 @@ function registeredDialectRules() {
   return out;
 }
 
-function readLedger() {
+function readLedger(ledgerPath) {
   try {
-    const raw = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
+    const raw = JSON.parse(fs.readFileSync(ledgerPath, "utf8"));
     return {
       dialect: Array.isArray(raw.dialect) ? raw.dialect : [],
       inlineExemptions: Array.isArray(raw.inlineExemptions)
@@ -213,8 +263,7 @@ function readLedger() {
  * `officialRecommended()` 从插件对象算集合是同一个口径。
  */
 async function officialRuleMap() {
-  const mod = await import(pathToFileURL(ESLINT_CONFIG).href);
-  const flat = mod.default.flat();
+  const flat = (await loadEslintConfig()).flat();
   let plugin = null;
   for (const config of flat) {
     if (config.plugins?.["jsx-a11y"]) plugin = config.plugins["jsx-a11y"];
@@ -249,8 +298,7 @@ async function officialRuleMap() {
  * 本判据原来只堵了前一半（③ 那一向），「没被列进来」那一半一直敞着。
  */
 async function rulesInNeitherConfig() {
-  const mod = await import(pathToFileURL(ESLINT_CONFIG).href);
-  const flat = mod.default.flat();
+  const flat = (await loadEslintConfig()).flat();
   let plugin = null;
   for (const config of flat) {
     if (config.plugins?.["jsx-a11y"]) plugin = config.plugins["jsx-a11y"];
@@ -309,21 +357,24 @@ async function configFacts() {
 }
 
 /**
- * 判决本身：配置事实 + **给定的一份台账** ⇒ 问题清单与那句汇总。
+ * 判一次：入参全是显式的（**台账对象** / 只出清单），返回值就是判决结果。
  *
- * 拆出来只为一件事：**配置求值每进程只付一次**。实测这台机器上单个子进程 ~9s
- * （`eslint.config.js` 连同 `eslint-config-next` 的求值），门禁自测的 12 份台账
- * 若各起一次进程就是 133s 首尾相接，而 12 个重进程并发起则在别人的机器上顶穿
- * 用例的 30s 预算（实测 90.1s / 11 条超时 —— 红的不是判据，是排队）。
- * 于是自测 import 这一个入口、一个进程里判完，真跑 CLI 的那几条只留给**接线形状**
- * （退出码、`--ledger` 缺值那一档 —— 那些形态只有起进程才成立）。
+ * 这个形状存在的唯一理由是**自测**：`--ledger <path>` 那批用例要拿十来份台账各判
+ * 一次，而每条用例起一个子进程 = 十来次 `eslint.config.js` 求值（冷检出上 40s+
+ * 一次，本机实测单进程 ~9s）。改成本函数在进程内被调十来次、配置只求值一次，
+ * 省下来的正是那笔钱；而「问题清单 + 汇总」这个读数与真子进程那一条**逐字同义**
+ * （`main()` 只是把它翻成退出码），所以断言不用分成两套写法。
+ *
+ * ⚠️ 入参**不读 `process.argv`**、也不自己去找台账文件：那是 bin 形态才有的东西，
+ * 让一个可被进程内调用的函数去读它，等于把「用例以为在判自己的夹具、其实在判真库」
+ * 换成另一种静默失效。台账由调用方读好（bin 形态读真台账，自测读自己的夹具）。
  *
  * @param {{dialect: any[], inlineExemptions: any[]}} ledger 台账（已由 `readLedger` 归一形状）
  * @returns {Promise<{problems: string[], summary: string, effective: Record<string, any>}>}
  */
 async function judge(ledger) {
   const { effective, recommended, official, inNeither } = await configFacts();
-  const registered = registeredDialectRules();
+  const registered = registeredDialectRules(ledger);
   const isRegisteredDialect = (name) => registered.has(name);
 
   const problems = [];
@@ -464,10 +515,19 @@ async function judge(ledger) {
   return { problems, summary, effective };
 }
 
+/**
+ * bin 形态：读真台账、判一次、把结果翻成退出码。
+ *
+ * 这里读 `CLI_ARGS.LEDGER`（`--ledger <path>` 那一档）与 `CLI_ARGS.REPORT_ONLY`；
+ * 两者都缺省成「真台账 / 正常检查」—— 默认行为与加 `--ledger` 口子之前一个字不差。
+ * `--ledger` 的用法错（缺路径）已经在 `parseArgs` 里退 2，进不到这里。
+ */
 async function main() {
-  const { problems, summary, effective } = await judge(readLedger());
+  const { problems, summary, effective } = await judge(
+    readLedger(CLI_ARGS.LEDGER),
+  );
 
-  if (REPORT_ONLY) {
+  if (CLI_ARGS.REPORT_ONLY) {
     console.log(summary);
     for (const [name, setting] of Object.entries(effective).sort()) {
       console.log(
@@ -491,7 +551,44 @@ async function main() {
   return 0;
 }
 
-module.exports = { normalize, judge, readLedger };
+/** 本脚本对外公开的面（`module.exports` 的键），逐条给「谁在用」—— 自查用。 */
+const VERIFIED_SURFACES = Object.freeze({
+  judge: "门禁自测（共进程判十来份台账）+ bin 形态",
+  readLedger: "bin 形态（读 `--ledger <path>`）与门禁自测（台账归一形状）",
+  normalize: '门禁自测（规则档位的归一：`"error"` 与 `["error"]` 同义）',
+  loadEslintConfig: "门禁自测（`eslint.config.js` 求值失败时的失败路径）",
+  effectiveRules: "门禁自测（真配置里的 jsx-a11y 档位表）",
+  officialRecommended: "门禁自测（官方 recommended 的有效集合，从插件对象算）",
+  officialRuleMap: "门禁自测（插件全部规则 + 废弃标记）",
+  rulesInNeitherConfig: "门禁自测（官方两份配置都没提到的非废弃规则）",
+});
+
+/**
+ * 导出面 —— **判据本体**（`judge` 与它那几张表）+ 四个纯函数。
+ *
+ * 为什么要导：门禁自测（`tests/a11y-rules-gate.test.ts`）在**同一个进程里**拿十来份
+ * 台账各判一次，于是 `eslint.config.js` 的求值从「每条用例一次」塌成「整个文件一次」
+ * （冷检出上那是 40s × N → 40s × 1，见文件头「成本」）。这是本判据唯一付得起的那一半
+ * —— eslint 那一侧的成本（求值配置）判据本体没得选。
+ *
+ * 导出之后**每一格都要有执行者**：那一份执行者是
+ * `tests/a11y-rules-gate.test.ts` 与 `tests/check-a11y-rules.test.ts` 自己，
+ * 测试夹具与字面量**同批**写出来（没有夹具的键 = 补一个，而不是删键）—— 否则
+ * 「导出」就成了「零消费导出」（§12.16 那一族）。**这一格现在有判据**：
+ * `check-tsc-diagnostic-executors.cjs` 的台账里，本文件那条目已写明它核的第一样
+ * 东西就是这张表 ⇄ 夹具逐字同源。
+ */
+module.exports = {
+  normalize,
+  judge,
+  readLedger,
+  effectiveRules,
+  officialRecommended,
+  officialRuleMap,
+  rulesInNeitherConfig,
+  loadEslintConfig,
+  VERIFIED_SURFACES,
+};
 
 if (require.main === module) {
   main().then(
