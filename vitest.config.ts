@@ -942,11 +942,16 @@ export default defineConfig({
           statements: 100,
           branches: 100,
         },
+        /* 台账 E7 剩下的四档之一，按实测抬回满档（旧值 95/100/90/90 → E2 开门时降到
+         * 80/85/80/85 → 本批 100/100/100/100）。当初没盖到的正是那条注释里点的两格：
+         * `removeItem` 单独被拒（配额满测得到、删失败测不到），以及 `writeCookieItem`
+         * 整支零执行者 —— 后者是 cookie 那条通道的唯一写入口，属性串三件（编码 /
+         * `path=/` / 显式 `max-age`）少任何一件都不报错，只是服务端读不到或关窗即忘。 */
         "src/lib/browser-storage.ts": {
-          lines: 80,
-          functions: 85,
-          statements: 80,
-          branches: 85,
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         "src/components/ui/use-enter-commit.ts": {
           lines: 100,
@@ -1273,11 +1278,17 @@ export default defineConfig({
           statements: 95,
           branches: 90,
         },
+        /* 台账 E7：`repository-task.ts` 补完执行者后的目录实测（原 90/90/90/85 是
+         * E2 开门时的记账位）。抬档的那一截不是「补了几条断言」，而是三格此前**零执行者**
+         * 的入口：底部状态栏那两格（刻意跨归属，补上归属条件就永远读不到 host 那片）、
+         * 成片监看的批量进度、执行宿主的领取 / 只读窥视 / 载荷读；再加「includeImages
+         * 且只给 skip」那条分页 —— 它走的是「普通 select 取页 + 按 id 装载」，
+         * 与此前只跑到「这一页是空的」相比，`attachImages` 的真实装载第一次被执行。 */
         "src/lib/core/**": {
-          lines: 90,
-          functions: 90,
-          statements: 90,
-          branches: 85,
+          lines: 98,
+          functions: 97,
+          statements: 96,
+          branches: 90,
         },
         // 从「全 0」抬到实测值：`lifecycle` 的探测 / 定位 / 启停判决进了用例
         // （端口应答三态、找不到 drizzle-kit、不是本应用拉起的就不乱杀）。
@@ -1364,17 +1375,21 @@ export default defineConfig({
         },
         // log/ 的分母含 `app-runtime-log`（ERROR 镜像，真写盘）与
         // `capture-streams.server`（instrumentation 挂钩）的未覆盖分支。
+        /* 台账 E7：本目录的实测抬档（原 80/70/85/85 那一组是 E2 开门时的欠账记账位）。
+         * `log-file-client.ts` 从 20/0/20/23.52 到四维满档是这一档的主要增量 ——
+         * 它是日志面板与设置页唯一的取数面，四个出口的**失败语义各不同**（抛 / 降级 null /
+         * 收成 {ok:false,error} / 完全静默），此前没有一行判据，任何一档被写成同形都不红。 */
         "src/lib/log/**": {
-          lines: 85,
-          functions: 85,
-          statements: 80,
-          branches: 70,
+          lines: 92,
+          functions: 100,
+          statements: 91,
+          branches: 86,
         },
         "src/lib/media/**": {
-          lines: 80,
-          functions: 75,
-          statements: 75,
-          branches: 70,
+          lines: 98,
+          functions: 97,
+          statements: 95,
+          branches: 87,
         },
         /* process/ 这一档的三次移动，口径都是「按实测登记、只升不降」：
          *   1) 棘轮开门那一次全量实测 24.4/46.9/26.4/24.6，于是从 50/60/50/55 **降**到
@@ -1991,6 +2006,39 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 85,
+        },
+        /* ── 台账 E7 收尾：四档欠账的执行者（门槛按实测登记）───────────────────
+         * 上面 `coverage.include` 里有 `"src/lib/**"`，所以这三条**不需要**再往
+         * include 里补单文件条目（那一条 glob 已经把它们纳进报告了 —— 「两处同批」
+         * 那条坑只在给 `src/app/**`、`src/components/**` 这类不在 glob 里的路径
+         * 设单文件门槛时才会踩到）。
+         *  · `log-file-client.ts` 四维满档：四个出口各自的失败语义 + 游标契约
+         *    （`offset=0` 是真实值、首轮不带 `bootId`）；
+         *  · `video-queue-client.ts` 从**全库唯一那个「0% 而有人在调」**抬到满档：
+         *    它此前一行都没执行过，而消费方（视频队列弹窗）就在那儿显示占位图标；
+         *    契约判据本体在 `tests/task-list-wire-contract.test.ts`（那份要 import
+         *    真实 router，按 `lib → server` 那条判据不能住在 lib 里）；
+         *  · `repository-task.ts` 分支 87.93 实测 → 门槛 87：没盖到的那几支是
+         *    「行不存在 / 列缺值」的兜底（`rows[0] ?? null`、`extra` 不传），
+         *    真机上由上面的仓储不变式保证不会发生 —— 不为了凑 100 去 mock 一种
+         *    今天不存在的输入形状（口径同台账 E8 那批 `if (!dir)` 的处置）。 */
+        "src/lib/log/log-file-client.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/media/video-queue-client.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/core/repository-task.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 87,
         },
       },
     },

@@ -50,6 +50,7 @@ function queuedRow(id: string, workflowName: string): QueueRow {
     createdAt: new Date("2026-01-01T00:00:00Z"),
     cover: null,
     checkpoint: null,
+    videoPath: null,
     mediaType: "image",
     projectId: null,
     progress: 0,
