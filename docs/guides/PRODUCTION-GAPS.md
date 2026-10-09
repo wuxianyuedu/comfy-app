@@ -215,7 +215,8 @@
       顺带修掉同一条路径上的浪费：`parents` 为空批时 `runDiscover([])` 照样按
       python3 → python → py 轮三遍（各带一次超时与一次进程启动），现在空批直接回空结果。
       证据：`src/app/api/custom-nodes/route.ts`、`src/app/api/custom-nodes/route.test.ts`；
-      GET 侧（manifest / report 读取）仍无执行者，门槛按实测登记在 E7。
+      GET 侧（manifest / report 读取 + 摘要缓存指纹）的执行者随 E7 那一批补上，同批照出
+      「数组也被当成清单体」那一处判据用错守卫。
 - [x] **A7 `workflow.create.sourcePath` 读本机任意文件 + 路径回显（已修 + 判据已在）**：
       `8740948` 加了 `isWithinAllowedLocalWorkflowRoot()` —— 只允许配置目录
       （`LOCAL_WORKFLOWS_PATH` / ComfyUI `workflows`）下的文件，闸在 `importFromLocalPath`
@@ -492,7 +493,7 @@
       「带 coverage」这个预算维度（`LogPanel.test.tsx` 45s → 120s，单跑实测 25.0s / 34.4s）。
       开门那一次抓到的 21 条真回退已按实测重基线，**欠的课转 E7**。
       证据：`scripts/quality-gate.mjs`、`scripts/quality-gate.ps1`、`vitest.config.ts`。
-- [ ] **E7 覆盖率棘轮开门即抓到的真回退（补用例清单）**：E2 把门打开的那一次全量跑
+- [x] **E7 覆盖率棘轮开门即抓到的真回退（补用例清单，本批清零）**：E2 把门打开的那一次全量跑
       （465 文件全绿）当场报出 21 条不达标，已按 §18.6 逐条降到「实测向下取整到 5 的倍数」，
       旧值与原因留在 `vitest.config.ts` 的 `coverage.thresholds` 注释块里。这不是并行档抖动：
       同一批文件**单跑**带 `--coverage` 得到一模一样的数字。欠的课按大头排 ——
@@ -522,12 +523,85 @@
       `planPosixKill` + `executePosixPlan` 一份定义，两条入口只剩「拿结论发信号」。
       另记一笔：`killProcessTreeSync` 的 `mode:"image"` 凑出来的是 `/IM <pid>`
       （这张签名里根本没有映像名），现在明确拒绝并把该走的入口说清楚。
-      余下的欠账：`src/lib/log/log-file-client.ts` 行 23.5%、`src/lib/core/repository-task.ts`
-      行 70.6%、`src/lib/browser-storage.ts` 行 81.8%，以及全库覆盖表里**唯一一个 0% 且有人在调**
-      的 `src/lib/media/video-queue-client.ts`（60 行，消费方是 `VideoQueueModal`）。
-      同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
-      —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
-      按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
+      余下的欠账**已清**（这一格从「欠账」改成「还的方式」，与上面 process 那两项同批口径）：
+      按 E7 那一批学到的三分法定性，四档里只有两档是「缺用例」，另外两档各是别的东西 ——
+      · `src/lib/log/log-file-client.ts` 20/0/20/23.52 → **缺用例**（整份模块零同名执行者，
+      它此前只被 `use-settings-page.test.ts` 里一份**手抄的转发副本**间接盖到，见 E16）：
+      补 16 条，四维满档。真正的判据面是**四个出口的四档失败语义**（抛 / 降级 `null` /
+      收成 `{ok:false,error}` / 完全静默）—— 它们此前没有一行判据，任何一档被写成
+      与另一档同形都不红；另钉游标契约（`offset=0` 是真实值而不是缺值、首轮不带 `bootId`）。
+      ⚠️ 抬档的即时效果在本批就被看见：master 随后给同一份文件加了新出口
+      `saveDiagnosticsPackage`，`check:all` 当场报
+      「`log-file-client.ts` 95.23% 行 / 83.33% 分支不达门槛 100」——
+      正解是同批补 4 条把它盖回满档（含「诊断打包不该带请求体」那一半，
+      与 `saveLogExport` 的分工正落在请求形状上），**不是把 100 调回实测**。
+      · `src/lib/media/video-queue-client.ts` 0/0/0/0 → **不是缺用例，是一份写在类型里的
+      假保证**：行类型是 `RouterOutputs["task"]["list"]["tasks"][number] & { images?: … }`，
+      注释还明写「路由 mapper 已不携带旧 `images` 数组（今天恒读 undefined）—— 这里保持
+      optional，让现有查找行为逐字不变」。交叉类型只**加**列、永远不会发现线上少发一列，
+      而它又标成 optional，于是那句 `find(im => isVideo(im.localPath))` 恒为 `undefined`。
+      tsc / eslint / 全量用例 / 覆盖率门槛**全绿**，用户那边是「视频队列每一条都没有封面、
+      下载按钮一次都没出现过」。修法是两端一起动：服务端补发 `videoPath`（「这一行的视频
+      产物在哪」只有握着产出行数组的它答得了 —— 首图按 `isCover` 取而落盘顺序是先 images
+      后 videos，于是 `cover` / `mediaType` 两个字段都答成「图片」），客户端改读线上真实
+      存在的列并逐行走 zod（与同族的 `history-panel-client` 同口径）。
+      契约判据落在 `tests/task-list-wire-contract.test.ts`（已进固定清单）：镜像声明的每列
+      线上必须真在发、期望值来自**同源往返**（真 router → 一次 JSON 传输 → 客户端），
+      且 `videoPath` 少发时整行被判掉而不是 `.default(null)` 退化成「谁都没有视频」。
+      · `src/lib/browser-storage.ts` 92.3/93.75/100/93.93 → **缺用例**两格：`removeItem`
+      单独被拒（门槛注释原话「删失败只有 Safari 隐私模式那一种现场」只对「访问即抛」成立），
+      以及 `writeCookieItem` 的属性串三件（编码 / `path=/` / 显式 `max-age`）此前只被别的
+      用例顺带走过、从没按原文判过。补 6 条 → 四维满档。
+      · `src/lib/core/repository-task.ts` 69.14/70.68/69.44/70.58 → **缺执行者的恰好是
+      「另一个消费者」在用那几格**：状态栏两格（刻意跨归属，补上归属条件就永远读不到 host
+      那片）、批量进度、SSE 轻投影（边界是「不含 `workflowSnapshot`」）、执行宿主的领取 /
+      只读窥视 / 载荷读，以及「includeImages 且只给 skip」那条分页 —— 它此前只跑到
+      「这一页是空的」，于是 `attachImages` 的真实装载一次都没执行过。
+      实测 100/87.93/100/100：没盖到的分支是「行不存在 / 列缺值」的兜底，**没有**为凑 100
+      去 mock 一种今天不存在的输入形状（口径同 E8 那批 `if (!dir)`）。
+      门槛同批抬（只升不降）：`browser-storage` 80/85/80/85 → 100 四维；新增三条单文件门槛
+      `log-file-client` 100、`video-queue-client` 100、`repository-task` 100/87/100/100；
+      目录档 `log/**` 91/86/100/92、`core/**` 96/90/97/98、`media/**` 95/87/97/98。
+      反向验证十条各红各的（服务端不再发 `videoPath` / 镜像补 `.default()` / `source` 不再
+      换名 / 会话那条把异常冒出去 / 导出丢掉原因 / cookie 不编码 / delegate 接错方法 /
+      轻投影拉回大列 / 装载不回 `images` / 排队数补上归属条件）。**其中一条是「非变异」**：
+      `bootId ?? undefined` 改 `bootId ?? ""` 不红是**对的**（`withQuery` 对空串与
+      `undefined` 都省略整个键，两种写法同结果）—— 变异必须自己有语义差别才算证据，
+      这条与镜像列方向那条一起写进规范 §11.2.1。
+      同批装机照出一条判据撞判据：那份契约测试要 import 真实 router，写在
+      `src/lib/media/` 下会被 `tests/lib-server-imports.test.ts`（lib 不得依赖 server）拦下 ——
+      正解是把它搬到 `tests/`，**不是往豁免清单里加一项**。
+      · `src/app/api/custom-nodes/route.ts` 的 **GET 侧** 35/35/45/40 → **已清（E7 到此归零）**：
+      26 条用例钉住 manifest / report 的读取与「按 (size, mtime) 指纹的摘要短路」，
+      实测 77.95/70.96/83.33/80.8（余下没盖到的是 POST `streamParse` 里解析器 stdout 协议那几支，
+      归下一批 —— 不为凑数造假事件）。同批改掉一处**守卫用错**：`isRecord` 认数组，
+      于是根被写成 `[]` 的坏清单会被读成「解析过了、0 个节点」—— 而界面把「清单坏了」与
+      「还没解析过」当两件事（E9 那一族「不同因同形」），`nodes` 写成数组时也不再拿元素数冒充节点数。
+      变异七刀：退回宽松守卫 / `nodes` 按元素数 / 摘掉缓存短路 / **指纹取不到也缓存并命中**
+      （这一刀必须同时改读侧 `stamp &&` 与写侧 `stamp !== null` —— 两者互为兜底，只拆一半
+      行为上看不出差别，那种「变异」不算证据）/ 空扫描根也走热路径 / 报告读不出时伪造一份空报告 /
+      探测缓存 TTL 写成近乎无限。
+      装机时还照出**夹具自己的两处不隔离**：① 模块级 `discoverCache` 跨用例存活（TTL 5 秒），
+      沿用同一个父目录会让后一条用例悄悄落进热路径分支 → 每条用例发一个自己的扫描根；
+      ② `mockImplementationOnce` 的队列不被 `clearAllMocks` 清，上一条排完没用完的假子进程
+      会漏到下一条（表现是「换个顺序就红」）→ 三个替身每条用例显式 `mockReset`。
+      `mtime` 计数器也**不再每条用例归零**：指纹一样会让后一条用例的「第一次读」撞上前一条
+      留下的摘要缓存，断言照样绿而那次读盘根本没发生。
+      · `src/lib/workshop/media-source.server.ts` 36.95/31.57/33.33/39.47 → **已清，并照出一条
+      真缺陷**：`mimeForExt` 收的是**扩展名**，而两个分支都把**整条路径**喂了进去
+      （`mimeForExt(abs)` / `mimeForExt(new URL(src).pathname)`）—— 查表必然落空，于是
+      这一层的 MIME **此前恒为 `image/png`**：一张 webp / jpeg 的参考图会被标成 png
+      拼进 data URL 发给远程通道。它为什么藏这么久：唯一那一条本地用例的文件恰好就叫
+      `img_0.png`，错误值与正确值撞在一起，**看着像测过了**——而 §11.2.1 要的「摘掉判据必须恰好
+      相关用例红」在这一格根本不成立（把路径交给 `mimeForExt`，那条用例一个字都不改仍然绿）。
+      修法两支都改成先 `extOfPath()` 取扩展名再查表（与 `contentTypeForPath` 同一把尺）；
+      新增用例把「非 png 的产物」与「类型头缺失 / 不是图时按扩展名回落」钉住，
+      另补 http 分支的超时信号、状态码文案、非 Error 的 reject 回落「未知错误」、
+      24MB 上限、`file:` 之类 scheme 的拒绝、
+      `readUpstreamJson` 的片段有界、`strField` / `intField` 的守卫档 →
+      27 条、实测 95.65/92.1/100/100（两支按构造走不到的兜底没有凑数，理由写在门槛注释里）。
+      变异五刀各红各的（把路径交给 `mimeForExt` 两支各一刀、摘掉 `clampText`、
+      去掉超时信号、摘掉尺寸检查）。
 - [x] **E13 Storybook 落地时自带的两条红：夹具在普通权限下必 EPERM + 一条 high 传递依赖（本批修复）**：
       发现路径与 E12 同一条 —— 另一批 rebase 之后跑 `check:all` 才看见：`tests/storybook-check-script.test.ts`
       七条**全红**，而红的不是判据是夹具：`symlinkSync(<仓库>/node_modules, <临时目录>/node_modules, "dir")`
