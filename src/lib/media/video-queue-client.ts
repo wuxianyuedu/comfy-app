@@ -50,8 +50,6 @@ export const videoTaskRowSchema = z.object({
   error: z.string().nullable().default(null),
 });
 
-export type VideoTaskRow = z.infer<typeof videoTaskRowSchema>;
-
 /** 视图消费的行（只留它真会读的几样）。 */
 export interface VideoTask {
   id: string;
