@@ -339,7 +339,7 @@ export function WorkflowNodeArdot() {
         {/* ── ActionBtn 340×43（紧贴端口行下沿，0 间距） ── */}
         <Button
           variant="primary-solid"
-          className="from-primary to-accent flex h-10.75 w-full items-center justify-center gap-2 rounded-none bg-linear-to-r text-sm font-bold text-white hover:opacity-90"
+          className="from-primary to-accent flex h-10.75 w-full items-center justify-center gap-2 rounded-none bg-linear-to-r text-[13px] font-bold text-white hover:opacity-90"
           style={{
             fontFamily: "var(--font-sans)",
             boxShadow:

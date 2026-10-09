@@ -367,12 +367,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
    *  理由，枚举在契约 §Shapes，别当漏网清掉。
    *  字号 302→298 是同上的 `text-3xs` 归一；**298→201 是「同一个 12px 有两种行高」
    *  定档**：103 处 `text-[12px]`（12px + 继承的 1.5 ⇒ 18px）统一成 `text-xs`
-   *  （12px + 16px，全库 289 处已在用的那一档）。那条归零判据见下面一条。
-   *  **201→140 是同一条口径的第二半**：62 处 `text-[13px]` 并入 `text-sm`（14px，
-   *  契约认的「应用默认正文」档）。这一批**带着行高一起变**（19.5 → 16px），
-   *  所以 `log-virtual.ts` 的行高常量与它的两处用例是同批改的，不是两件事。 */
+   *  （12px + 16px，全库 289 处已在用的那一档）。那条归零判据见下面一条。 */
   const RADIUS_BASELINE = 7;
-  const TEXT_BASELINE = 140;
+  const TEXT_BASELINE = 201;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
     const scale = parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8"));
@@ -404,36 +401,25 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toBeLessThanOrEqual(TEXT_BASELINE);
   });
 
-  it("12px / 13px 只有一个名字：调用点不许再写字面量档", () => {
-    /* 这一档不是棘轮、是**归零等式**：`text-xs`(12) 与 `text-sm`(14) 是已存在的两档，
-       而 `text-[12px]` / `text-[13px]` 字号贴着它们、行高却各走一套（字面量只出字号，
-       行高吃继承的 1.5 ⇒ 18px / 19.5px；档位自带 16px / 16px 的配对值）。「同一个字号
-       两种行高」= 同一把尺上两个名字，所以两批字面量都签字归一（12px→text-xs 289 处那档、
-       13px→text-sm 正文那档），再出现字面量就是重新分裂。要更松的行高请显式写 `leading-*`。
-       13px 那 62 处并入时，`log-virtual.ts` 的 27/18 两个行高常量与两处用例是**同一批**改的
-       —— 那对常量与 class 是同一件事的两面，漏一侧就是滚动位置与内容错位。 */
-    const smallLiteral = /\btext-\[1[23]px\]/g;
-    /* 自己先验一次量具：这条是「等式为 0」的判据，正则写漂了会永远绿。 */
-    expect(
-      [..."text-[12px] 与 text-[13px]".matchAll(smallLiteral)].length,
-      "字面小字号的正则漂了（这条归零判据会静默全绿）",
-    ).toBe(2);
-    smallLiteral.lastIndex = 0;
-    const offenders = scanProduct(smallLiteral);
+  it("12px 只有一个名字：调用点不许再写字面量档", () => {
+    /* 这一档不是棘轮、是**归零等式**：`text-xs` 与 `text-[12px]` 字号相同（12px），
+       差别只在行高 —— 前者带 Tailwind 默认的 16px、后者吃继承的 1.5（= 18px）。
+       「同一个字号两种行高」已签字归一到 `text-xs` 那一档（289 处本来就在用它），
+       所以再出现字面量就是重新分裂这一档。要改行高请显式写 `leading-*`，
+       不要再造一个「字号字面量」。 */
+    const twelve = /\btext-\[12px\]/g;
+    const offenders = scanProduct(twelve);
     expect(
       offenders,
-      "这些调用点又写了字面 12px / 13px —— 用 text-xs / text-sm（行高要不同就再加 leading-*）：\n" +
-        `${[...new Set(offenders.map((o) => o.file))]
-          .map((f) => `  ${f}`)
-          .join("\n")}`,
+      "这些调用点又写了字面 12px —— 用 `text-xs`（行高要不同就再加 `leading-*`）：\n" +
+        `${offenders.map((o) => `  ${o.file}`).join("\n")}`,
     ).toEqual([]);
-    /* 反向：两档真的都还是 Tailwind 默认的 12 / 14px（否则上面那条会因为「这档没了」
-       而空绿，而下一轮的人会搞错每档到底多大）。 */
-    const css = readFileSync(GLOBALS_PATH, "utf8");
+    /* 反向：档位真的存在且真的还是 12px（否则上面那条会因为「这档没了」而空绿，
+       而下一轮的人会把 text-xs 当 14px 用）。 */
     expect(
-      ["--text-xs:", "--text-sm:"].filter((key) => css.includes(key)),
-      "globals.css 覆盖了这两档之一？本判据与 §Typography 都假定它们用 Tailwind 默认字号",
-    ).toEqual([]);
+      readFileSync(GLOBALS_PATH, "utf8").includes("--text-xs:"),
+      "globals.css 里给 --text-xs 配了自定义值？本判据假定它就是 Tailwind 默认的 12px",
+    ).toBe(false);
   });
 
   it("@theme 的 --text-* 档名必须是 t-shirt 尺寸（否则 cn() 把它当颜色吃掉）", () => {

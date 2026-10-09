@@ -36,7 +36,6 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "status">): QueueRow {
     createdAt: over.createdAt ?? new Date("2026-01-01T00:00:00Z"),
     cover: null,
     checkpoint: null,
-    videoPath: null,
     mediaType: "image",
     projectId: null,
     progress: over.progress ?? 0,

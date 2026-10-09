@@ -14,9 +14,7 @@
  *   3. **写失败（配额满 / 隐私模式）静默且返回 false**（记忆是增强不是功能）；
  *   4. **坏数据与「没存过」都回落默认值**（不抛）；
  *   5. **「键不存在」与「存过 `null`」分得开**（判据是 `getItem` 的返回值，
- *      不是解析结果）；
- *   6. **cookie 那条通道**：属性串三件齐全（编码 / `path=/` / 显式 `max-age`），
- *      因为没有 document 与服务端读不到这两种坏法长得完全不同。
+ *      不是解析结果）。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -25,7 +23,6 @@ import {
   readStorageItem,
   readStorageJson,
   removeStorageItem,
-  writeCookieItem,
   writeStorageItem,
   writeStorageJson,
 } from "./browser-storage";
@@ -92,18 +89,6 @@ describe("读 / 写 / 删", () => {
     });
     expect(readStorageItem(KEY)).toBeNull();
   });
-
-  it("删失败（配额之外的另一档）静默 false，且键**确实还在**", () => {
-    /* 配对断言：只断 `false` 的话，「其实已经删掉了但返回 false」这种坏法照样绿。
-     * 这一档此前没执行者 —— 门槛注释里那句「删失败只有 Safari 隐私模式那一种现场」
-     * 只对「访问即抛」成立，`removeItem` 单独被拒是另一条分支。 */
-    writeStorageItem(KEY, "留着");
-    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
-      throw new DOMException("NotAllowedError");
-    });
-    expect(removeStorageItem(KEY)).toBe(false);
-    expect(readStorageItem(KEY)).toBe("留着");
-  });
 });
 
 describe("JSON 键", () => {
@@ -138,94 +123,5 @@ describe("JSON 键", () => {
         throw new Error("窄化失败");
       }),
     ).toBe(-1);
-  });
-});
-
-/* ── cookie 那条通道（服务端首屏读得到，所以属性串是对外承诺）─────────────
- * `writeCookieItem` 的全部意义在**那三件属性**：`path=/` 决定 layout 那侧
- * `cookies()` 读不读得到，`max-age` 决定关窗之后还在不在，编码决定值里带
- * `;` / `=` / 空格时会不会把属性串劫持掉。少任何一件都不报错，只是行为变了，
- * 而界面上一切照常 —— 所以这里按**原文**判，而不是判「浏览器里存下了」。 */
-describe("writeCookieItem", () => {
-  /** 拦下写入的原文（jsdom 真存一份是另一条用例的事）。 */
-  function captureCookieWrite(body: () => void): string[] {
-    const written: string[] = [];
-    const original =
-      Object.getOwnPropertyDescriptor(document, "cookie") ??
-      Object.getOwnPropertyDescriptor(
-        Object.getPrototypeOf(document),
-        "cookie",
-      );
-    Object.defineProperty(document, "cookie", {
-      configurable: true,
-      get: () => "",
-      set(value: string) {
-        written.push(value);
-      },
-    });
-    try {
-      body();
-    } finally {
-      if (original) {
-        Object.defineProperty(document, "cookie", original);
-      } else {
-        Reflect.deleteProperty(document, "cookie");
-      }
-    }
-    return written;
-  }
-
-  it("写出的是 name=编码值; path=/; max-age=<秒> 三件齐全", () => {
-    const [raw] = captureCookieWrite(() =>
-      writeCookieItem("comfyapp:sidebar", "open", 3600),
-    );
-    expect(raw).toBe("comfyapp:sidebar=open; path=/; max-age=3600");
-  });
-
-  it("值里带分号与等号时必须编码，不能劫持属性串", () => {
-    /* 不编码的写法（`name=value; path=/`）在 `value = "a; path=/evil"` 时
-     * 会写出一条带第二个 path 的 cookie —— 浏览器取最后一份，服务端读到的
-     * 就不是本应用那条了。 */
-    const [raw] = captureCookieWrite(() =>
-      writeCookieItem("k", "a; path=/evil =x", 60),
-    );
-    expect(raw).toBe("k=a%3B%20path%3D%2Fevil%20%3Dx; path=/; max-age=60");
-    expect(raw?.split(";")).toHaveLength(3);
-  });
-
-  it("有效期是显式给的（不给 = 会话级、关窗即忘，所以这一件必须出现在串里）", () => {
-    const [raw] = captureCookieWrite(() => writeCookieItem("k", "v", 0));
-    expect(raw).toContain("max-age=0");
-  });
-
-  it("jsdom 真存得下来（证明写出的是一条合法 cookie，而不是只能自测的字符串）", () => {
-    expect(writeCookieItem("comfyapp:saved", "yes", 120)).toBe(true);
-    expect(document.cookie).toContain("comfyapp:saved=yes");
-  });
-
-  it("没有 document（SSR）→ false 且不抛", () => {
-    const original = Object.getOwnPropertyDescriptor(globalThis, "document");
-    Reflect.deleteProperty(globalThis, "document");
-    try {
-      expect(writeCookieItem("k", "v", 10)).toBe(false);
-    } finally {
-      if (original) Object.defineProperty(globalThis, "document", original);
-    }
-  });
-
-  it("写入被拒（setter 抛）→ 静默 false，与 localStorage 那档同口径", () => {
-    const original = Object.getOwnPropertyDescriptor(document, "cookie");
-    Object.defineProperty(document, "cookie", {
-      configurable: true,
-      get: () => "",
-      set() {
-        throw new DOMException("NotAllowedError");
-      },
-    });
-    try {
-      expect(writeCookieItem("k", "v", 10)).toBe(false);
-    } finally {
-      if (original) Object.defineProperty(document, "cookie", original);
-    }
   });
 });

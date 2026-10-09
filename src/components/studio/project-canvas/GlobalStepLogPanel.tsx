@@ -269,7 +269,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                         variant="ghost"
                         onClick={() => setFilter(option.value)}
                         data-testid={`log-filter-${option.value}`}
-                        className={`h-auto rounded-md px-2.5 py-1 text-sm font-normal ${
+                        className={`h-auto rounded-md px-2.5 py-1 text-[13px] font-normal ${
                           filter === option.value
                             ? "bg-surface-2 text-ink-bright"
                             : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
@@ -307,7 +307,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <>
                   {valErrs.length > 0 && (
                     <div className="border-destructive/40 bg-destructive/8 mb-2 rounded border p-2">
-                      <div className="text-destructive mb-1.5 text-sm font-semibold">
+                      <div className="text-destructive mb-1.5 text-[13px] font-semibold">
                         ⚠ 工作流验证错误（{valErrs.length}）
                       </div>
                       <ValidationErrorList
@@ -323,7 +323,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   )}
 
                   {!valErrs.length && error && (
-                    <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-sm">
+                    <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-[13px]">
                       <div className="wrap-break-word whitespace-pre-wrap">
                         {error}
                       </div>
@@ -332,7 +332,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 </>
               }
               emptySlot={
-                <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm">
+                <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
                   <FileText
                     size={32}
                     strokeWidth={1.5}

@@ -98,15 +98,9 @@ export function HistoryTaskCard({
         </Button>
 
         {/* ── 主体信息 ── */}
-        {/* 整块「点开详情」用原生 `<Button variant="ghost">`：左侧缩略图是同
-         * 一个动作的另一个落点（那是 `<Button aria-label="查看任务详情">`），
-         * 而此前这一块只是 `div + onClick` —— 鼠标点得开、键盘点不开，同一
-         * 件事的两条路径里有一条不通（§6.10）。`ghost` 的底色/文字色由
-         * `className` 接管，观感与收口前一致（§16.2.4.2 第 5 条）。 */}
-        <Button
-          variant="ghost"
+        <div
+          className="min-w-0 flex-1 cursor-pointer"
           onClick={() => onOpenDetail(task.id)}
-          className="flex h-auto min-w-0 flex-1 cursor-pointer flex-col items-stretch justify-start rounded-none p-0 text-left font-normal whitespace-normal hover:bg-transparent"
         >
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -154,7 +148,7 @@ export function HistoryTaskCard({
               )}
             </div>
           )}
-        </Button>
+        </div>
 
         {/* ── 操作按钮（永远可见） ── */}
         <div className="flex shrink-0 flex-col items-end gap-2">

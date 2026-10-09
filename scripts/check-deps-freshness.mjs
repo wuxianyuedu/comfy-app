@@ -214,15 +214,35 @@ export function readAtRev(rev, rel, cwd = ROOT) {
  * 自己加了依赖」这种**正常**工作流里会反向误报（远端没有你新加的包 ⇒ 报成「远端改过
  * 依赖」）。真正要问的是「我分叉之后，远端在依赖面上前进过吗」，所以基准取分叉点。
  *
- * 三种形态各自有意义，不许合并成一个「null」：
+ * 形态各自有意义，不许合并成一个「null」：
  *   · 有分叉点 ⇒ 拿它比（常态）；
  *   · 本地 HEAD **就是** `origin/master` 或在其之前（`merge-base == HEAD`）⇒ 分叉点
  *     就是 HEAD，比出来的是「远端相对你前进的全部依赖改动」，同样成立；
+ *   · **HEAD 是已把远端收进来的合并提交**（下面详述）⇒ 返回 `null`，②这一层不判；
  *   · 无共同祖先 / 拿不到 ⇒ 返回 `null`，调用方按「未校验」处理
  *     （**不是**「无差异」——那会把「查不了」读成「没问题」）。
+ *
+ * **合并提交为什么要单列一态**：`git merge origin/master` 之后，`merge-base HEAD
+ * origin/master` 仍然是**合并前那个分叉点**（合并只是多了一个父提交，不移动分叉点）。
+ * 于是「分叉点 vs 远端」必然报「远端改过依赖」，**哪怕远端那些改动已经被这次合并
+ * 完整收进了工作区** —— 解冲突的人正是这么拿到红的：他把 master 合了进来、依赖面
+ * 与远端逐字一致，判据却说他「在旧的那一套上干活」。出口给的是「把 origin/master
+ * 合并进来」，而他刚做完那件事，形成死循环。
+ *
+ * 判据真正要问的是「**我分叉之后，远端在依赖面上前进过吗**」。合并把远端收进来之后，
+ * 那个问题的答案已经变成「没有待同步的东西了」——所以这一态**不是**「没查到」，
+ * 是「没什么要查」。调用方据此把 ② 跳过（`remoteDrifts` 为空），而 ①（引用新鲜度）
+ * 与 ③（本地自身自洽）照旧各判各的，判据并没有因此变成一句空话。
+ *
+ * 怎么认这一态：远端 rev 是 HEAD 的**祖先**（`merge-base --is-ancestor`）⇒ 远端
+ * 已经在我的历史里了。这在「HEAD == origin/master」时也成立，但那一种由上面第二条
+ * 覆盖（分叉点就是 HEAD，比出来同样成立），两条不冲突、谁先命中都给出正确结果。
  * @returns {string | null}
  */
 export function forkPoint(root, remoteRev = DEFAULT_REMOTE_REV) {
+  // 远端已在 HEAD 的历史里（典型：刚把它 merge 进来）⇒ ② 没有可比的对象。
+  const contained = git(["merge-base", "--is-ancestor", remoteRev, "HEAD"], root);
+  if (contained.ok) return null;
   const r = git(["merge-base", "HEAD", remoteRev], root);
   return r.ok && r.out.trim() ? r.out.trim() : null;
 }

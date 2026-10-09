@@ -18,36 +18,17 @@
 // 只有复核仍不一致才 WARN + 给动作；启动器真正会拒绝的「node_modules 未装」
 // 也一并检查，避免用户按自检的 OK 去启动、却被门禁拦在下一关。
 //
-// 「依赖未装」的措辞是判据的一部分（ISSUE #1568）：它必须同时说清
-// 「能装」与「装完能跑什么」，否则读起来像「本机跑不了门禁」——实测有人据此
-// 跳过 tsc / eslint / vitest 并把结论写进提交信息（见规范 §13.6.3）。
-// 该分支的 node_modules 判据直接 import 启动器的 `checkNodeModules()`，
-// 不再在本文件里维护一份弱化副本（此前只查 `.modules.yaml` 一项，与启动器的
-// 「.modules.yaml + .bin/next + 关键依赖目录」两份口径会各自漂移）。
-//
 // 退出码：0 = pnpm 可用（版本不一致只是 WARN，与启动器一致：不阻断启动）；
 //        1 = 不可用（提示已打印，可直接照做）。
+import fs from "node:fs";
 import process from "node:process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { orchestratePnpm, preparePnpm, probePnpm } from "./launcher-core/corepack.mjs";
 import { commandInvocation } from "./launcher-core/shell.mjs";
-import { checkNodeModules } from "./launcher-core/worktree.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
-/**
- * `--deps-root <path>`：**只给契约测试**用 —— 让用例能指一个「没有 node_modules」的
- * 目录，真跑依赖判据那一分支的退出码与话术（ISSUE #1568 的整条判据就落在措辞上）。
- * **只换依赖检查的根、不换工具链探测的根**：后者要读本检出的 `package.json`
- * 拿 `packageManager`，跟着换会让自检报告一个与本检出无关的 pnpm 版本。
- */
-const depsRootArgIndex = process.argv.indexOf("--deps-root");
-const depsRoot =
-  depsRootArgIndex >= 0 && process.argv[depsRootArgIndex + 1]
-    ? path.resolve(process.argv[depsRootArgIndex + 1])
-    : root;
 
 /** 打印一行结论（纯 ASCII 前缀 + 原文，便于日志检索）。 */
 function say(prefix, message) {
@@ -55,9 +36,26 @@ function say(prefix, message) {
 }
 
 /** 只比数字主体：`v12.4.1` 与 `12.4.1` 是同一个版本（判据与启动器一致）。 */
+/** 比较两个版本串 a、b，返回 a 是否小于 b。 */
 function sameVersion(a, b) {
   if (!a || !b) return false;
   return a.replace(/^v/, "") === b.replace(/^v/, "");
+}
+
+/** node_modules 是否完全未装（`.modules.yaml` 缺失 = 从未正确安装）。
+ *
+ *  与启动器的 `checkNodeModules()` 取**同一个判据键**：自检报 OK 而下一关（完整
+ *  依赖预检）立刻拦下，会让人以为自检在骗人 —— 这里至少把「还没装依赖」点出来。 */
+/** @returns {{ healthy: boolean, detail: string }} */
+function checkNodeModules() {
+  const marker = path.join(root, "node_modules", ".modules.yaml");
+  try {
+    return fs.statSync(marker).isFile()
+      ? { healthy: true, detail: "" }
+      : { healthy: false, detail: "缺 node_modules/.modules.yaml" };
+  } catch {
+    return { healthy: false, detail: "缺 node_modules/.modules.yaml" };
+  }
 }
 
 const result = orchestratePnpm({ root });
@@ -113,30 +111,12 @@ if (result.expected && !sameVersion(result.probe.version, result.expected)) {
 }
 
 // node_modules：启动器的**另一道**门禁，自检不把它藏起来。
-//
-// 「未装依赖」必须与「跑不到门禁」分成两件事说清楚（ISSUE #1568）：本仓库依赖全部
-// 来自公开 registry（`pnpm-workspace.yaml` 里没有任何私有源配置），所以**任何**检出
-// 都能把依赖装上 —— 无 `node_modules` 只是「还没装」，不是「装不了」。此前这里只
-// 打印一句 WARN + `pnpm install`，读起来像「环境不支持」；实测在无依赖容器里据此
-// 得出「走不到 tsc / eslint / vitest」的结论、并把它写进提交信息，于是类型错位绕过
-// 所有门禁落进 `master`（复算：装完依赖后 `tsc --noEmit` / `eslint` / `vitest` 全部
-// 可跑）。所以这一段要正面回答那个被误判的问题：能装、装多久、装完能跑什么。
-const modules = checkNodeModules(depsRoot);
+const modules = checkNodeModules();
 if (modules.healthy) {
-  say("[OK]  ", "node_modules 已装（.modules.yaml + 关键依赖齐全）—— tsc / eslint / vitest 都能跑。");
+  say("[OK]  ", "node_modules 已装（.modules.yaml 存在）。");
 } else {
-  say("[WARN]", `node_modules 未装或不完整（${modules.reasons.join("；")}）—— 启动器会在「完整依赖预检」拦下。`);
-  process.stdout.write(
-    [
-      "         [判据] 依赖**可装**：本仓库依赖全部来自公开 registry，无私有源；",
-      "                无 node_modules 只表示「还没装」，不表示「本机跑不了门禁」。",
-      "         [动作] pnpm install --frozen-lockfile（首次上手先 pnpm env:init 生成 .env）",
-      "                —— 冷装实测约 8 分钟，装完 tsc --noEmit / eslint / vitest 都能跑。",
-      "         [禁止] 以「本容器无 node_modules」为由跳过 tsc / eslint / vitest ——",
-      "                那会把类型 / lint / 用例的红直接放进 master（见规范 §13.6.3）。",
-      "",
-    ].join("\n"),
-  );
+  say("[WARN]", `node_modules 未装或不完整（${modules.detail}）—— 启动器会在「完整依赖预检」拦下。`);
+  process.stdout.write("         修复：pnpm install（首次上手先 pnpm env:init 生成 .env）\n");
 }
 
 process.stdout.write(

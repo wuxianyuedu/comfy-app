@@ -525,71 +525,12 @@
       `planPosixKill` + `executePosixPlan` 一份定义，两条入口只剩「拿结论发信号」。
       另记一笔：`killProcessTreeSync` 的 `mode:"image"` 凑出来的是 `/IM <pid>`
       （这张签名里根本没有映像名），现在明确拒绝并把该走的入口说清楚。
-      余下的欠账**已清**（这一格从「欠账」改成「还的方式」，与上面 process 那两项同批口径）：
-      按 E7 那一批学到的三分法定性，四档里只有两档是「缺用例」，另外两档各是别的东西 ——
-      · `src/lib/log/log-file-client.ts` 20/0/20/23.52 → **缺用例**（整份模块零同名执行者，
-      它此前只被 `use-settings-page.test.ts` 里一份**手抄的转发副本**间接盖到，见 E16）：
-      补 16 条，四维满档。真正的判据面是**四个出口的四档失败语义**（抛 / 降级 `null` /
-      收成 `{ok:false,error}` / 完全静默）—— 它们此前没有一行判据，任何一档被写成
-      与另一档同形都不红；另钉游标契约（`offset=0` 是真实值而不是缺值、首轮不带 `bootId`）。
-      ⚠️ 抬档的即时效果在本批就被看见：master 随后给同一份文件加了新出口
-      `saveDiagnosticsPackage`，`check:all` 当场报
-      「`log-file-client.ts` 95.23% 行 / 83.33% 分支不达门槛 100」——
-      正解是同批补 4 条把它盖回满档（含「诊断打包不该带请求体」那一半，
-      与 `saveLogExport` 的分工正落在请求形状上），**不是把 100 调回实测**。
-      · `src/lib/media/video-queue-client.ts` 0/0/0/0 → **不是缺用例，是一份写在类型里的
-      假保证**：行类型是 `RouterOutputs["task"]["list"]["tasks"][number] & { images?: … }`，
-      注释还明写「路由 mapper 已不携带旧 `images` 数组（今天恒读 undefined）—— 这里保持
-      optional，让现有查找行为逐字不变」。交叉类型只**加**列、永远不会发现线上少发一列，
-      而它又标成 optional，于是那句 `find(im => isVideo(im.localPath))` 恒为 `undefined`。
-      tsc / eslint / 全量用例 / 覆盖率门槛**全绿**，用户那边是「视频队列每一条都没有封面、
-      下载按钮一次都没出现过」。修法是两端一起动：服务端补发 `videoPath`（「这一行的视频
-      产物在哪」只有握着产出行数组的它答得了 —— 首图按 `isCover` 取而落盘顺序是先 images
-      后 videos，于是 `cover` / `mediaType` 两个字段都答成「图片」），客户端改读线上真实
-      存在的列并逐行走 zod（与同族的 `history-panel-client` 同口径）。
-      契约判据落在 `tests/task-list-wire-contract.test.ts`（已进固定清单）：镜像声明的每列
-      线上必须真在发、期望值来自**同源往返**（真 router → 一次 JSON 传输 → 客户端），
-      且 `videoPath` 少发时整行被判掉而不是 `.default(null)` 退化成「谁都没有视频」。
-      · `src/lib/browser-storage.ts` 92.3/93.75/100/93.93 → **缺用例**两格：`removeItem`
-      单独被拒（门槛注释原话「删失败只有 Safari 隐私模式那一种现场」只对「访问即抛」成立），
-      以及 `writeCookieItem` 的属性串三件（编码 / `path=/` / 显式 `max-age`）此前只被别的
-      用例顺带走过、从没按原文判过。补 6 条 → 四维满档。
-      · `src/lib/core/repository-task.ts` 69.14/70.68/69.44/70.58 → **缺执行者的恰好是
-      「另一个消费者」在用那几格**：状态栏两格（刻意跨归属，补上归属条件就永远读不到 host
-      那片）、批量进度、SSE 轻投影（边界是「不含 `workflowSnapshot`」）、执行宿主的领取 /
-      只读窥视 / 载荷读，以及「includeImages 且只给 skip」那条分页 —— 它此前只跑到
-      「这一页是空的」，于是 `attachImages` 的真实装载一次都没执行过。
-      实测 100/87.93/100/100：没盖到的分支是「行不存在 / 列缺值」的兜底，**没有**为凑 100
-      去 mock 一种今天不存在的输入形状（口径同 E8 那批 `if (!dir)`）。
-      门槛同批抬（只升不降）：`browser-storage` 80/85/80/85 → 100 四维；新增三条单文件门槛
-      `log-file-client` 100、`video-queue-client` 100、`repository-task` 100/87/100/100；
-      目录档 `log/**` 91/86/100/92、`core/**` 96/90/97/98、`media/**` 95/87/97/98。
-      反向验证十条各红各的（服务端不再发 `videoPath` / 镜像补 `.default()` / `source` 不再
-      换名 / 会话那条把异常冒出去 / 导出丢掉原因 / cookie 不编码 / delegate 接错方法 /
-      轻投影拉回大列 / 装载不回 `images` / 排队数补上归属条件）。**其中一条是「非变异」**：
-      `bootId ?? undefined` 改 `bootId ?? ""` 不红是**对的**（`withQuery` 对空串与
-      `undefined` 都省略整个键，两种写法同结果）—— 变异必须自己有语义差别才算证据，
-      这条与镜像列方向那条一起写进规范 §11.2.1。
-      同批装机照出一条判据撞判据：那份契约测试要 import 真实 router，写在
-      `src/lib/media/` 下会被 `tests/lib-server-imports.test.ts`（lib 不得依赖 server）拦下 ——
-      正解是把它搬到 `tests/`，**不是往豁免清单里加一项**。
-      仍欠的一格（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts` 的
-      **GET 侧**（manifest / report 读取 + 按 (size, mtime) 指纹的摘要缓存）门槛仍在 35/35/45/40。
-      · `src/lib/workshop/media-source.server.ts` 36.95/31.57/33.33/39.47 → **已清，并照出一条
-      真缺陷**：`mimeForExt` 收的是**扩展名**，而两个分支都把**整条路径**喂了进去
-      （`mimeForExt(abs)` / `mimeForExt(new URL(src).pathname)`）—— 查表必然落空，于是
-      这一层的 MIME **此前恒为 `image/png`**：一张 webp / jpeg 的参考图会被标成 png
-      拼进 data URL 发给远程通道。它为什么藏这么久：唯一那一条本地用例的文件恰好就叫
-      `img_0.png`，错误值与正确值撞在一起，**看着像测过了**——而 §11.2.1 要的「摘掉判据必须恰好
-      相关用例红」在这一格根本不成立（把路径交给 `mimeForExt`，那条用例一个字都不改仍然绿）。
-      修法两支都改成先 `extOfPath()` 取扩展名再查表（与 `contentTypeForPath` 同一把尺）；
-      新增用例把「非 png 的产物」与「类型头缺失 / 不是图时按扩展名回落」钉住，
-      另补 http 分支的超时信号、状态码文案、非 Error 的 reject 回落「未知错误」、
-      24MB 上限、`file:` 之类 scheme 的拒绝、
-      `readUpstreamJson` 的片段有界、`strField` / `intField` 的守卫档 →
-      27 条、实测 95.65/92.1/100/100（两支按构造走不到的兜底没有凑数，理由写在门槛注释里）。
-      变异五刀各红各的（把路径交给 `mimeForExt` 两支各一刀、摘掉 `clampText`、
-      去掉超时信号、摘掉尺寸检查）。
+      余下的欠账：`src/lib/log/log-file-client.ts` 行 23.5%、`src/lib/core/repository-task.ts`
+      行 70.6%、`src/lib/browser-storage.ts` 行 81.8%，以及全库覆盖表里**唯一一个 0% 且有人在调**
+      的 `src/lib/media/video-queue-client.ts`（60 行，消费方是 `VideoQueueModal`）。
+      同批新增的已知欠账（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts`
+      —— POST 的 argv 闸门 35 条已逐分支钉住，**GET 侧**（manifest / report 读取 +
+      按 (size, mtime) 指纹的摘要缓存）仍无执行者，门槛登记在 35/35/45/40。
 - [x] **E13 Storybook 落地时自带的两条红：夹具在普通权限下必 EPERM + 一条 high 传递依赖（本批修复）**：
       发现路径与 E12 同一条 —— 另一批 rebase 之后跑 `check:all` 才看见：`tests/storybook-check-script.test.ts`
       七条**全红**，而红的不是判据是夹具：`symlinkSync(<仓库>/node_modules, <临时目录>/node_modules, "dir")`
@@ -631,15 +572,6 @@
       证据：`src/lib/process/executable-resolve.ts`（`UsabilityProbe` / `onDiskName`）、
       `src/lib/process/executable-resolve.test.ts`（`posixHost`）、`src/lib/console/console-run.test.ts`。
       变异检过两刀：让注入的探针失效（恒问真机器）→ POSIX 那 4 条红；去掉大小写归一 → 控制台那条红。
-      **同族又出现了一次**（这次是「拦住所有人的提交」而不是「静默绿」）：`tests/shell-gate.test.ts`
-      那条「PATH 上有一份 cargo 时**用它**」在 win32 上恒红 —— 夹具给 PATH 写的是 `#!/bin/sh` 脚本，
-      而 PATH 那一支与安装位那几支**判据不同层**：安装位只查路径在不在，PATH 走 `whichCommand()`
-      的「真起一次」。Windows 上 libuv 不解析 shebang → 那份永远被判「起不来」→ 落回假 home，
-      红长得像「优先级判据没生效」。修法没有再开注入点（给壳门禁脚本的 `findCargo()` 加参数
-      是为了测试而改产品面，而这一格想判的恰好是「真机器上 PATH 那份能不能被优先采用」）：
-      win32 档借当前宿主 `copyFileSync(process.execPath, …)` 造一份真能 spawn 的 PE
-      （实测本机一次复制 40 ms / 89 MB，摊在提交门槛里可忽略），POSIX 档照旧写脚本 + 执行位。
-      判据强度没动：把 `if (onPath) return onPath` 短路掉，**恰好**那一条红（串行单跑复核）。
 - [x] **E11 `check-format.cjs` 的 fail-open：prettier 没跑成时被读成「全库干净」（本批修复 + 判据）**：
       发现路径不是「有人投诉格式」，而是另一条批次的提交门槛红了 —— `tests/check-format.test.ts`
       里三条「期望门禁拦住」的用例在钩子的多 worker 批次里稳定红，而**串行单跑全绿**。
@@ -941,39 +873,7 @@
       没有任何一条走完「登录 → 建项目 → 出图」的旅程，所以壳起不来、会话过期、
       中间件改写这类**只在真实 HTTP 栈上成立**的缺陷没有执行者（A13 的产物口就是靠手工
       实测才发现的，见那条）。证据：`e2e/*.spec.ts`；`playwright.config.ts`。
-- [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。**第一格已补**：
-      `tests/task-list-wire-contract.test.ts`（进固定清单）把 `task.list` 的线上真实行与
-      两份前端镜像（`history-panel-client` 与 `video-queue-client` 的 zod schema）逐列对上，
-      期望值来自同源往返（真 router → 一次 JSON 传输 → 客户端），判据方向是**镜像 → 线上**。
-      它照出的缺陷与三条口径写在 E7 那一段与规范 §11.2.1。
-      仍欠的：其余 router / route 的响应没有镜像（`src/lib/**-client.ts` 里只有一部分走 zod，
-      其余仍是 `as` 硬转），msw 的使用面也没扩（前端集成那层的 mock 边界见 E16）。
-- [x] **E16 测试替身里复刻被测实现，而副本已经分叉**（本批装机照出来、本批修）：
-      `src/app/(main)/settings/hooks/use-settings-page.test.ts` 的
-      `vi.mock("~/lib/log/log-file-client")` 不转真模块，而是**手抄一份**
-      `fetchFileLogSlice` / `fetchLogSessions`（文件里写的理由是「避免 vitest 别名解析与
-      模块类型在工厂内部的告警」）。副本与真实现已在三处分叉：签名少了 `bootId` 参数、
-      URL 是手拼 `?source=…&offset=…`（正是 `query-string.ts` 文件头点名要消灭的那种手拼，
-      值里带 `&` / `#` 就打到另一个端点上）、回传形状只有 `{content,size,offset}` ——
-      线上那三档（`sessionStart` / `bootId` / `mismatch`）它压根发不出来。
-      后果不是「少测一点」：**面板「换个进程就重置时间线」那整条链的用例其实没在被测实现上跑**，
-      真实现删掉 `bootId` 也不会红。正解是 `vi.importOriginal` 只替需要记账的
-      `postAppRuntimeLog`（同仓已有三份同形态写法：`tests/sqlite-pragma-sites.test.ts` 的
-      logger、`src/server/api/routers/task.test.ts` 的 fs/promises、上面那份的 logger），
-      会话请求的记账改成对真函数 `vi.spyOn`。⚠️ 搬的时候注意 `lib → server` 那条判据：
-      契约测试要 import router 就不能住在 `src/lib/**` 下（本批的
-      `video-queue-client.test.ts` 就是这么被搬到 `tests/` 的）。
-      **修法与实测**（本批）：`vi.mock` 工厂换成 `importOriginal` 展开真模块 + 只替
-      `postAppRuntimeLog`（那一个才需要记账）；原先那句「避免 vitest 别名解析与模块类型
-      在工厂内部的告警」的理由**实测不成立** —— 仓内已有三份同形态写法在跑（本文件的
-      logger、`tests/sqlite-pragma-sites.test.ts`、`src/server/api/routers/task.test.ts`），
-      类型用 `import type * as X from "..."` + `importOriginal<typeof X>()` 即可
-      （内联 `import()` 类型注解被本仓 eslint 的 `consistent-type-imports` 禁掉）。
-      两份「哪个会话被请求过」的断言不再读副本的记账数组，改成**在 MSW handler 里记
-      真发出去的 URL**（`?source=…&session=…` 由真实现的 `withQuery` 拼）——
-      判的对象从「副本自己写了什么」换成「线上真的发了什么」，这正是副本抹掉的那一维。
-      该文件 42 条在真实现下全绿；两刀变异各红各的（客户端不再发 `bootId` → 红；
-      会话取数忽略 `sessionId` → 红），而修之前这两刀都红不了（副本压根不接这两个参数）。
+- [ ] **E4 msw 仅 7 文件使用**；缺 zod↔API 契约测试。
 - [ ] **E5 棘轮 `--update` 无制衡**。证据：`AGENTS.md:94,97`。
 - [ ] **E6 无 bundle 体积门禁 / 变异测试 / a11y 自动化**。
 - [ ] **F1 零 i18n**（中文硬编码、`lang` 写死）。证据：`src/app/layout.tsx:36`。
@@ -990,138 +890,138 @@
 - [ ] **F4 无离线能力**（无 SW / `onLine` / 离线队列；58 文件手写 localStorage 无 persist）。
 - [ ] **F5 虚拟滚动仅 2 处**；`next/dynamic` 仅 2 处。
 - [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用棘轮 78 条存量违规。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、`scripts/.ui-primitives-baseline.json:18`。剩余的一格：**像素基线**仍是 Playwright `toHaveScreenshot`（规范 11 §11.8），Storybook 不替代它。
-  **已加的两层判据**（同批）：故事文件的**枚举来源**由
-  `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`
-  守着（`cva()` 返回的是函数、运行期没有 `.variants`；以及手写清单漏档）。
-  判据上线时当场抓到 `button.stories.tsx` 漏列 `icon-sm` / `icon-lg` 两档
-  —— 而这两档全库有 46 处在用，口径见规范 16 §16.2.3.4。
-  **组件覆盖率**随后从「写在 `guide-storybook.md` 里的一句话」升成棘轮判据
-  （`tests/storybook-component-coverage.test.ts` + 同一份门禁，台账
-  `scripts/storybook-checks/coverage-ledger.mjs`）：分子只许升不许降，分母
-  （`ui/` 的可预览文件数）变了要同批回答「新增的那个为什么没有 story」。
-  这一格因此**不再是文档里的数字** —— 口径见规范 16 §16.2.3.5。
-  当前覆盖 `scripts/.storybook-coverage-baseline.json` 里的实测值；没有 story 的
-  组件逐条理由（hook / 只有出错时才渲染的边界件 / 被别的基元 import 的部件…）
-  也写在那份台账里，不是一张赦免名单。
-  **「有数据依赖」那一批已收口**（同批）：先搭了「Args → 数据源」的注入层
-  （`.storybook/data-sources.tsx`，口径见规范 16 §16.2.3.6），再给它写 story。
-  复核时纠了一件事 —— 「有数据依赖」此前用得太宽，其中一大半其实是
-  **纯 props，只是有几个 ReactNode 参数**（`field` / `seed-mode-button` /
-  `option-list-popover` / `segment-popover`）或**结构化入参**
-  （`studio/RequiredSummary` 吃 `WorkflowIOMap`）；真正需要注入层的只有
-  「吃一条真链路 / 一层真上下文」那一档。同批新增 `Studio/` 与 `Workshop/`
-  两个 story 分组。`ui/` 有 story 的组件数 21 → 34（棘轮基线同批改）。
-  **注入层刻意不 mock**：拿不到真数据时画的就是「拿不到」（`media` 源留了一个
-  故意不存在的 `missing.png`，名字写错则抛错）。跨源那道门槛（应用不回 CORS）
-  是**刻意不绕**的，写明在 §16.2.3.6 —— 于是 tRPC 那一族 story 在画布上验的
-  是「界面在后端不可用时的形态」，那恰好是真机上最难复现的一档。
-  **故事「面」也补上了判据**（同批）：覆盖率台账只看「文件名 ↔ 故事文件」，
-  于是四种**构建全绿、画布也画得出来**的漏法一个都拦不住 —— 故事缺 `title`
-  （Storybook 按路径自动生成条目，落哪个分组取决于推导规则）、真组件没接上
-  （画布上摆的是别的东西）、新写的故事没给必填 props 的 `args`（组件在画布上抛
-  `Cannot read properties of undefined`，与 §16.2.3.4 那轮踩的坑同形）、
-  同目录两套分组前缀（分组靠人写 `title:` 维系）。判据
-  `scripts/storybook-checks/story-surface.mjs` + `tests/storybook-story-surface.test.ts`
-  （进固定清单），门禁挂在 pre-commit D 组（`--changed`）。第四档**只挡新增**
-  —— 存量那 86 份的必填项多由「子件 + 默认值」或注入层的 `sourceName` 兜住，
-  逐条白名单会变成第二份赦免名单。上线时当场抓到一处真漏档：
-  `ui/simple-key-handler.stories.tsx` 从来没有 `title`。口径见规范 16 §16.2.3.8。
-  **页面级视觉那一半补上了**（同批，ISSUE #1381）：此前 `e2e/visual/` 只有
-  登录页一页，而规范 11 §11.8 声明的基线范围（深浅两态 / 响应式断点 / 空态 /
-  画布 / 弹窗）里只有「断点」勉强沾边 —— 这一批把**前三条**铺开：
-  登录页暗/亮两档、首页暗/亮两档、模型库空态、移动端断点，
-  公共前置收在 `e2e/visual/support/page-baseline.ts`。两处**数据依赖被钉死**
-  （页面级基线若随「这台机器的 DB / localStorage 里有什么」变，它就不是基线）：
-  `models` 屏用 `stubTrpc` 把 `model.list` 桩成空列表，首页用 `clearProjectIndex`
-  清 localStorage 的项目索引。
-  **画布与弹窗两档随后也补齐了**（同批续，ISSUE #1381）：`canvas.visual.spec.ts`
-  补 `canvas-filled`（四张真节点 + 三条真连线）与 `canvas-empty`（空画布引导卡），
-  `overlay.visual.spec.ts` 补 `overlay-log-default` / `overlay-log-wide`
-  （同一浮层的默认档与加宽档）。**两档各踩到一个别人没有的坑，都写进了 spec 与
-  规范 §11.8**：① 画布的视口是 `fitView` 异步算出来的，第一帧是过渡值（实测
-  `matrix(0.99…, 12.07, 10.06)` vs 收敛值 `matrix(0.929…, 118, 100.13)`），
-  所以用例**等它收敛**（连续两次读数相同），而不是读第一帧；且**边能不能画出来
-  取决于端口在节点上真的存在**（本画布只有「右侧 `output`」与「`picture` 左侧
-  `inputImage`」两种，别的组合 React Flow **静默不渲染**那条边），所以边数也
-  钉住。② 浮层那一档的被测对象是**两档宽度**而不是浮层里的内容：日志行逐帧在长
-  （时间戳 / 跑 id / 错误计数），所以打开后把来源切到**恒定 0 行的那一档**、
-  并遮掉**整条定高页脚**（页脚那颗 `服务 <bootId>` 徽标逐次不同**且变宽** ——
-  只遮徽标本身时遮罩带宽度跟着随机串变，实测连续两次跑出 40 像素差异）。
-  两档宽度由 `boundingBox()` 断言（ISSUE #720 的静默失效正是「加宽按了、
-  宽度一个字没变」，只截图指不出是尺寸这件事）。
-  同批纠正一处**过期口径**：`login.visual.spec.ts` 一直写着「登录页为固定深色 UI」，
-  而 `ThemeProvider` 的约定是「**所有**表面跟随主题 token，不存在『暗色品牌页』」——
-  浅色档因此从来没被录过。现在用 `setTheme()` 写 `theme` 偏好切档
-  （不用 `documentElement.classList.add()`：它绕过 `next-themes`、水合时被覆盖，
-  且**表达不出 light 档**）。
-  **「哪件事该由谁做」也有判据了**：`tests/visual-storybook-division.test.ts`
-  （进固定清单）四向拦 —— story 里不许出现 `toHaveScreenshot`、不许引入第二套
-  像素工具（Chromatic 那一族）、§11.8 声明的档不得被**减法**清掉。判据覆盖
-  **五档**（深浅两态 / 断点 / 空态 / xyflow 画布 / 弹窗浮层尺寸）—— 后两档此前
-  写在落点表里、**判据却只判前三档**，也就是那两行全靠人记得；补齐后删掉任一份
-  spec 都会当场红。**不判「覆盖几个页面」**：§11.8 已定调「只锁定关键 UI」，
-  数字型门槛会逼着人录一堆脆基线。
-  并且**如实登记了一处录不全的现实**：本仓库的自动化执行环境（NPC 工作区 /
-  CNB 容器）都是 linux，新增截图名会让 win32 档缺那几张，而像素只能在那一档的
-  机器上录（在 linux 上录一份改名叫 `-win32` 是造假）。`scripts/visual-baselines.mjs`
-  的 `PENDING_PLATFORMS` 把它记成**一条有主的账**，并用双向不变式盯着
-  （补齐了还留着登记 ⇒ 红；登记不存在的平台 ⇒ 红；`reason` 太短 ⇒ 红）。
-  **「录得出来 ≠ 录对了」也有判据了**（同批，ISSUE #1381）：`PLATFORM_RECORDING`
-  把「每档录于 `dev` 还是 `start` 口径」登记成**数据**（`SUPPORTED_PLATFORMS`
-  从它派生，两处不会漂），`scripts/pixel-run.mjs` 起 webServer / 浏览器**之前**
-  先核「本机 `CI` 的真假换算出的口径」与「该档登记的口径」——不一致拦下（exit 3）
-  并给出置法。为什么录基线那一档也要拦：口径不符时 `--update` 会**成功**，
-  生成一套看着正常的 PNG，自洽、不当场红，只在以后某次真差异里混进来、指不出是它。
-  而且**待重录的账会在改像素层时被点名**（`scripts/visual-gate.mjs` 打一行，
-  **不阻断** —— 补录只能在那一档的机器上做，阻断等于让所有人卡在一个只有少数人
-  能解的账上）。**现有登记是 win32 档**，缺几张由 `missingBaselinesForPlatform()`
-  **现算**（本文件刻意不回填数字：这个读数每新增一个截图名就变一次，
-  而「会漂的读数不写死」正是 §12.14 与 §13.5.12 已立过的口径）。补录动作是在
-  Windows 开发机上 `CI= pnpm check:visual:update` 成套提交、**同批删掉那条登记**
-  （配对判据的双向不变式：补齐了还留着登记 ⇒ 红）。⚠️ 缺的那几张**不是**
-  「某轮漏了」——是**只能在那一档录**；如实登记比在 linux 上录一份改名成
-  `-win32` 好（后者是造假，§11.8 判过）。
-  **`ui/` 的组件覆盖率已到全量（#1381 那一批是 87/87，本轮新增基元后 88/88），理由表清空**（同批）：那 5 条理由
-  逐条都是「补法」而不是「不能写」——`progress`（两个 slot 在 `progress-bar`
-  里看不到）、`sonner`（story 里真调 `toast()`）、`error-boundary`（配一个会抛
-  的 `Boom`）、`dialog-overlay` / `dialog-width`（**出口算出来的字符串就是它的
-  对外面**）。判据随之从「理由表非空」换成一条**双向不变式：表空 ⟺ 覆盖率已满**
-  （原判据会在表真的清空后要求人凑一条假理由）。同批修掉 `cvaVariantKeys`
-  按「整文件同名轴取并集」比较的真缺陷（`ui/item.tsx` 两处 `variant` 会被判成
-  「缺档」而修法无处可去）。口径见规范 16 §16.2.3.7。
-  **业务目录（`studio/` / `workshop/`）也铺了一轮**（同批）：`ui/` 满覆盖之后
-  那两棵树只有 5 件有 story，本轮补到 **23 件**。铺法**不是按目录扫**，而是先
-  按「数据从哪来」分档再决定怎么写（纯 props / 结构化入参 / 运行期环境），
-  口径与「哪一档刻意不写」见规范 16 §16.2.3.9。两条判据在这一批里反复起作用：
-  · **派生量不许在 story 里手抄** —— 百分比调 `stageProgressPct()`、尺寸摘要调
-  `shotSizeSummary()`、脏数据结论调 `auditDraftElements()`；手抄的数字在改了
-  常量之后**仍然看着正常**，那是这一批最想消掉的假形态；
-  · **同一批部件在两处的形态**（`WorkflowNodeParts`）恰恰是靠 story 才看得见
-  「宽度 340 vs 380、胶囊、圆角全漂移」那条历史故障的形状。
-  顺手修掉一处**由新 story 第一眼看出来**的真缺陷：`EmptyCanvasHint` 的类名串
-  被一次全仓规范化拼成了 `backdrop-bl dark:shadow-black/40ur-md`（`backdrop-blur-md`
-  与 `dark:shadow-black/40` 撞在一起），于是空画布引导卡丢了毛玻璃。Tailwind 对
-  未知类名**不报错**（只是不生成 CSS），所以构建 / tsc / eslint / 既有门禁全绿 ——
-  「类名字符串被拼坏」全仓仍无判据，本批只修实例并记账（见 §16.2.3.9 末尾）。
-  **「像素档不进 `check:all`」这条口径也补上了执行者**（同批）：此前它只是两侧注释里的
-  一句话（`GATES.visual` 的 `run: false` / `.ps1` 的 `Run = $false`），而
-  `tests/ps1-consistency.test.ts` 盯的是「按需档集合非空、且两侧一致」—— 只要还剩
-  任意一个按需档就成立。实测漏法：把像素档挪进默认档、同时新增一个按需档，全仓判据
-  照样全绿，代价是每次 `pnpm check:all` 都起 webServer + 浏览器。现在由
-  `tests/pixel-run.test.ts` 按**入口**（`args` 里那个 `pixel-run.mjs`，不按门禁名）钉住
-  两侧，并附「解析器不是空转」；解析器与 `ps1-consistency` 共用
-  `tests/helpers/quality-gate-gates.ts`。口径见规范 11 §11.8。
-  **画布层注入的 handle id 全局口径**也补齐了（同批续，ISSUE #1381）：`flow-canvas.tsx`
-  的 `twoNodes` / `fanOut` / `mixedKinds` 三档一度**一条连线都没画出来** ——
-  场景把 handle 写成 `"1:model"` 这种「看着很像」的短序号，而真画布上两套口径
-  各管一侧（输出端 `` `out:${name}` ``（`OUTPUT_PORT_HANDLE_PREFIX`）、输入端
-  `ioKey`），第三种形状两侧都不匹配 → React Flow **静默丢弃整条边**（不报错、
-  控制台干净、构建与门禁全绿，真浏览器数 `.react-flow__edge` 量到 `0`）。
-  旧判据按**一张手写的真端口表**判，只认 `output` / `inputImage` 那对条件端口 ——
-  它守住了 `filledProject`，却完整漏掉这三档，因为后者的形状不在那张表的取值域里。
-  现在按**两侧现算交集**判（场景侧取边声明的 handle，渲染器侧取 `PortDemoNode`
-  实挂的 `<PortHandle id>`，锚在它的 `rows` 上取），且两侧都得非空。口径见
-  规范 16 §16.2.3.12。
+      **已加的两层判据**（同批）：故事文件的**枚举来源**由
+      `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`
+      守着（`cva()` 返回的是函数、运行期没有 `.variants`；以及手写清单漏档）。
+      判据上线时当场抓到 `button.stories.tsx` 漏列 `icon-sm` / `icon-lg` 两档
+      —— 而这两档全库有 46 处在用，口径见规范 16 §16.2.3.4。
+      **组件覆盖率**随后从「写在 `guide-storybook.md` 里的一句话」升成棘轮判据
+      （`tests/storybook-component-coverage.test.ts` + 同一份门禁，台账
+      `scripts/storybook-checks/coverage-ledger.mjs`）：分子只许升不许降，分母
+      （`ui/` 的可预览文件数）变了要同批回答「新增的那个为什么没有 story」。
+      这一格因此**不再是文档里的数字** —— 口径见规范 16 §16.2.3.5。
+      当前覆盖 `scripts/.storybook-coverage-baseline.json` 里的实测值；没有 story 的
+      组件逐条理由（hook / 只有出错时才渲染的边界件 / 被别的基元 import 的部件…）
+      也写在那份台账里，不是一张赦免名单。
+      **「有数据依赖」那一批已收口**（同批）：先搭了「Args → 数据源」的注入层
+      （`.storybook/data-sources.tsx`，口径见规范 16 §16.2.3.6），再给它写 story。
+      复核时纠了一件事 —— 「有数据依赖」此前用得太宽，其中一大半其实是
+      **纯 props，只是有几个 ReactNode 参数**（`field` / `seed-mode-button` /
+      `option-list-popover` / `segment-popover`）或**结构化入参**
+      （`studio/RequiredSummary` 吃 `WorkflowIOMap`）；真正需要注入层的只有
+      「吃一条真链路 / 一层真上下文」那一档。同批新增 `Studio/` 与 `Workshop/`
+      两个 story 分组。`ui/` 有 story 的组件数 21 → 34（棘轮基线同批改）。
+      **注入层刻意不 mock**：拿不到真数据时画的就是「拿不到」（`media` 源留了一个
+      故意不存在的 `missing.png`，名字写错则抛错）。跨源那道门槛（应用不回 CORS）
+      是**刻意不绕**的，写明在 §16.2.3.6 —— 于是 tRPC 那一族 story 在画布上验的
+      是「界面在后端不可用时的形态」，那恰好是真机上最难复现的一档。
+      **故事「面」也补上了判据**（同批）：覆盖率台账只看「文件名 ↔ 故事文件」，
+      于是四种**构建全绿、画布也画得出来**的漏法一个都拦不住 —— 故事缺 `title`
+      （Storybook 按路径自动生成条目，落哪个分组取决于推导规则）、真组件没接上
+      （画布上摆的是别的东西）、新写的故事没给必填 props 的 `args`（组件在画布上抛
+      `Cannot read properties of undefined`，与 §16.2.3.4 那轮踩的坑同形）、
+      同目录两套分组前缀（分组靠人写 `title:` 维系）。判据
+      `scripts/storybook-checks/story-surface.mjs` + `tests/storybook-story-surface.test.ts`
+      （进固定清单），门禁挂在 pre-commit D 组（`--changed`）。第四档**只挡新增**
+      —— 存量那 86 份的必填项多由「子件 + 默认值」或注入层的 `sourceName` 兜住，
+      逐条白名单会变成第二份赦免名单。上线时当场抓到一处真漏档：
+      `ui/simple-key-handler.stories.tsx` 从来没有 `title`。口径见规范 16 §16.2.3.8。
+      **页面级视觉那一半补上了**（同批，ISSUE #1381）：此前 `e2e/visual/` 只有
+      登录页一页，而规范 11 §11.8 声明的基线范围（深浅两态 / 响应式断点 / 空态 /
+      画布 / 弹窗）里只有「断点」勉强沾边 —— 这一批把**前三条**铺开：
+      登录页暗/亮两档、首页暗/亮两档、模型库空态、移动端断点，
+      公共前置收在 `e2e/visual/support/page-baseline.ts`。两处**数据依赖被钉死**
+      （页面级基线若随「这台机器的 DB / localStorage 里有什么」变，它就不是基线）：
+      `models` 屏用 `stubTrpc` 把 `model.list` 桩成空列表，首页用 `clearProjectIndex`
+      清 localStorage 的项目索引。
+      **画布与弹窗两档随后也补齐了**（同批续，ISSUE #1381）：`canvas.visual.spec.ts`
+      补 `canvas-filled`（四张真节点 + 三条真连线）与 `canvas-empty`（空画布引导卡），
+      `overlay.visual.spec.ts` 补 `overlay-log-default` / `overlay-log-wide`
+      （同一浮层的默认档与加宽档）。**两档各踩到一个别人没有的坑，都写进了 spec 与
+      规范 §11.8**：① 画布的视口是 `fitView` 异步算出来的，第一帧是过渡值（实测
+      `matrix(0.99…, 12.07, 10.06)` vs 收敛值 `matrix(0.929…, 118, 100.13)`），
+      所以用例**等它收敛**（连续两次读数相同），而不是读第一帧；且**边能不能画出来
+      取决于端口在节点上真的存在**（本画布只有「右侧 `output`」与「`picture` 左侧
+      `inputImage`」两种，别的组合 React Flow **静默不渲染**那条边），所以边数也
+      钉住。② 浮层那一档的被测对象是**两档宽度**而不是浮层里的内容：日志行逐帧在长
+      （时间戳 / 跑 id / 错误计数），所以打开后把来源切到**恒定 0 行的那一档**、
+      并遮掉**整条定高页脚**（页脚那颗 `服务 <bootId>` 徽标逐次不同**且变宽** ——
+      只遮徽标本身时遮罩带宽度跟着随机串变，实测连续两次跑出 40 像素差异）。
+      两档宽度由 `boundingBox()` 断言（ISSUE #720 的静默失效正是「加宽按了、
+      宽度一个字没变」，只截图指不出是尺寸这件事）。
+      同批纠正一处**过期口径**：`login.visual.spec.ts` 一直写着「登录页为固定深色 UI」，
+      而 `ThemeProvider` 的约定是「**所有**表面跟随主题 token，不存在『暗色品牌页』」——
+      浅色档因此从来没被录过。现在用 `setTheme()` 写 `theme` 偏好切档
+      （不用 `documentElement.classList.add()`：它绕过 `next-themes`、水合时被覆盖，
+      且**表达不出 light 档**）。
+      **「哪件事该由谁做」也有判据了**：`tests/visual-storybook-division.test.ts`
+      （进固定清单）四向拦 —— story 里不许出现 `toHaveScreenshot`、不许引入第二套
+      像素工具（Chromatic 那一族）、§11.8 声明的档不得被**减法**清掉。判据覆盖
+      **五档**（深浅两态 / 断点 / 空态 / xyflow 画布 / 弹窗浮层尺寸）—— 后两档此前
+      写在落点表里、**判据却只判前三档**，也就是那两行全靠人记得；补齐后删掉任一份
+      spec 都会当场红。**不判「覆盖几个页面」**：§11.8 已定调「只锁定关键 UI」，
+      数字型门槛会逼着人录一堆脆基线。
+      并且**如实登记了一处录不全的现实**：本仓库的自动化执行环境（NPC 工作区 /
+      CNB 容器）都是 linux，新增截图名会让 win32 档缺那几张，而像素只能在那一档的
+      机器上录（在 linux 上录一份改名叫 `-win32` 是造假）。`scripts/visual-baselines.mjs`
+      的 `PENDING_PLATFORMS` 把它记成**一条有主的账**，并用双向不变式盯着
+      （补齐了还留着登记 ⇒ 红；登记不存在的平台 ⇒ 红；`reason` 太短 ⇒ 红）。
+      **「录得出来 ≠ 录对了」也有判据了**（同批，ISSUE #1381）：`PLATFORM_RECORDING`
+      把「每档录于 `dev` 还是 `start` 口径」登记成**数据**（`SUPPORTED_PLATFORMS`
+      从它派生，两处不会漂），`scripts/pixel-run.mjs` 起 webServer / 浏览器**之前**
+      先核「本机 `CI` 的真假换算出的口径」与「该档登记的口径」——不一致拦下（exit 3）
+      并给出置法。为什么录基线那一档也要拦：口径不符时 `--update` 会**成功**，
+      生成一套看着正常的 PNG，自洽、不当场红，只在以后某次真差异里混进来、指不出是它。
+      而且**待重录的账会在改像素层时被点名**（`scripts/visual-gate.mjs` 打一行，
+      **不阻断** —— 补录只能在那一档的机器上做，阻断等于让所有人卡在一个只有少数人
+      能解的账上）。**现有登记是 win32 档**，缺几张由 `missingBaselinesForPlatform()`
+      **现算**（本文件刻意不回填数字：这个读数每新增一个截图名就变一次，
+      而「会漂的读数不写死」正是 §12.14 与 §13.5.12 已立过的口径）。补录动作是在
+      Windows 开发机上 `CI= pnpm check:visual:update` 成套提交、**同批删掉那条登记**
+      （配对判据的双向不变式：补齐了还留着登记 ⇒ 红）。⚠️ 缺的那几张**不是**
+      「某轮漏了」——是**只能在那一档录**；如实登记比在 linux 上录一份改名成
+      `-win32` 好（后者是造假，§11.8 判过）。
+      **`ui/` 的组件覆盖率已到全量（#1381 那一批是 87/87，本轮新增基元后 88/88），理由表清空**（同批）：那 5 条理由
+      逐条都是「补法」而不是「不能写」——`progress`（两个 slot 在 `progress-bar`
+      里看不到）、`sonner`（story 里真调 `toast()`）、`error-boundary`（配一个会抛
+      的 `Boom`）、`dialog-overlay` / `dialog-width`（**出口算出来的字符串就是它的
+      对外面**）。判据随之从「理由表非空」换成一条**双向不变式：表空 ⟺ 覆盖率已满**
+      （原判据会在表真的清空后要求人凑一条假理由）。同批修掉 `cvaVariantKeys`
+      按「整文件同名轴取并集」比较的真缺陷（`ui/item.tsx` 两处 `variant` 会被判成
+      「缺档」而修法无处可去）。口径见规范 16 §16.2.3.7。
+      **业务目录（`studio/` / `workshop/`）也铺了一轮**（同批）：`ui/` 满覆盖之后
+      那两棵树只有 5 件有 story，本轮补到 **23 件**。铺法**不是按目录扫**，而是先
+      按「数据从哪来」分档再决定怎么写（纯 props / 结构化入参 / 运行期环境），
+      口径与「哪一档刻意不写」见规范 16 §16.2.3.9。两条判据在这一批里反复起作用：
+      · **派生量不许在 story 里手抄** —— 百分比调 `stageProgressPct()`、尺寸摘要调
+        `shotSizeSummary()`、脏数据结论调 `auditDraftElements()`；手抄的数字在改了
+        常量之后**仍然看着正常**，那是这一批最想消掉的假形态；
+      · **同一批部件在两处的形态**（`WorkflowNodeParts`）恰恰是靠 story 才看得见
+        「宽度 340 vs 380、胶囊、圆角全漂移」那条历史故障的形状。
+      顺手修掉一处**由新 story 第一眼看出来**的真缺陷：`EmptyCanvasHint` 的类名串
+      被一次全仓规范化拼成了 `backdrop-bl dark:shadow-black/40ur-md`（`backdrop-blur-md`
+      与 `dark:shadow-black/40` 撞在一起），于是空画布引导卡丢了毛玻璃。Tailwind 对
+      未知类名**不报错**（只是不生成 CSS），所以构建 / tsc / eslint / 既有门禁全绿 ——
+      「类名字符串被拼坏」全仓仍无判据，本批只修实例并记账（见 §16.2.3.9 末尾）。
+      **「像素档不进 `check:all`」这条口径也补上了执行者**（同批）：此前它只是两侧注释里的
+      一句话（`GATES.visual` 的 `run: false` / `.ps1` 的 `Run = $false`），而
+      `tests/ps1-consistency.test.ts` 盯的是「按需档集合非空、且两侧一致」—— 只要还剩
+      任意一个按需档就成立。实测漏法：把像素档挪进默认档、同时新增一个按需档，全仓判据
+      照样全绿，代价是每次 `pnpm check:all` 都起 webServer + 浏览器。现在由
+      `tests/pixel-run.test.ts` 按**入口**（`args` 里那个 `pixel-run.mjs`，不按门禁名）钉住
+      两侧，并附「解析器不是空转」；解析器与 `ps1-consistency` 共用
+      `tests/helpers/quality-gate-gates.ts`。口径见规范 11 §11.8。
+      **画布层注入的 handle id 全局口径**也补齐了（同批续，ISSUE #1381）：`flow-canvas.tsx`
+      的 `twoNodes` / `fanOut` / `mixedKinds` 三档一度**一条连线都没画出来** ——
+      场景把 handle 写成 `"1:model"` 这种「看着很像」的短序号，而真画布上两套口径
+      各管一侧（输出端 `` `out:${name}` ``（`OUTPUT_PORT_HANDLE_PREFIX`）、输入端
+      `ioKey`），第三种形状两侧都不匹配 → React Flow **静默丢弃整条边**（不报错、
+      控制台干净、构建与门禁全绿，真浏览器数 `.react-flow__edge` 量到 `0`）。
+      旧判据按**一张手写的真端口表**判，只认 `output` / `inputImage` 那对条件端口 ——
+      它守住了 `filledProject`，却完整漏掉这三档，因为后者的形状不在那张表的取值域里。
+      现在按**两侧现算交集**判（场景侧取边声明的 handle，渲染器侧取 `PortDemoNode`
+      实挂的 `<PortHandle id>`，锚在它的 `rows` 上取），且两侧都得非空。口径见
+      规范 16 §16.2.3.12。
 - [ ] **F7 metadata 脚手架默认值**（无 OG/SEO/manifest）。证据：`src/app/layout.tsx:19-23`。
 - [ ] **F8 无 Onboarding**；快捷键仅一处命令面板。
 - [ ] **F9 更新无通道 / 回滚**；`installMode:passive` 失败无回退。

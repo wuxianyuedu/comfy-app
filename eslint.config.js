@@ -295,7 +295,7 @@ export default tseslint.config(
         {
           selector: 'ThrowStatement > NewExpression[callee.name!="TRPCError"]',
           message:
-            "router 里请抛 new TRPCError({ code, message })：裸 Error 会被 tRPC 归成 INTERNAL_SERVER_ERROR，客户端就分不出「不存在 / 越权 / 重名」（规范 §11.2.1「错误码是判据的一个独立维度」、台账 E8）。",
+            "router 里请抛 new TRPCError({ code, message })：裸 Error 会被 tRPC 归成 INTERNAL_SERVER_ERROR，客户端就分不出「不存在 / 越权 / 重名」（规范 §11.2.1 第七条、台账 E8）。",
         },
       ],
     },
