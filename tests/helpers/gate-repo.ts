@@ -58,6 +58,7 @@ import {
   chmodSync,
   copyFileSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -102,6 +103,8 @@ export interface GateRepo {
   ) => GateRunResult;
   /** 从工作区里读回一个文件（判据会就地改文件时用）。 */
   read: (rel: string) => string;
+  /** 工作区里这个路径在不在（判「`--update` 到底有没有落盘」用，不必 `read` 再 catch）。 */
+  exists: (rel: string) => boolean;
   /**
    * 在工作区里跑一次 `git`（`cwd` 已指向它）。
    *
@@ -158,13 +161,17 @@ export interface GateRepoOptions {
 }
 
 /**
- * 造一个带 `repo` fixture 的 `test` —— 每个文件按自己的脚本调用一次。
+ * 命令式地搭一个门禁工作区（`defineGateRepo` 的 fixture 与本模块的调用点共用这一层）。
  *
- * 返回的 `test` 仍是 `test.extend` 的产物，可以继续 `.extend` 出文件自己的夹具。
- * `describe` / `beforeEach` 这些不随 `extend` 变，所以调用点仍需从 vitest 取 ——
- * 本模块把它们**转发导出**，调用点一条 import 就够。
+ * 为什么再开一个出口：跨多个判据的**同形判据**（「每一个棘轮的 `--update` 都拒涨」）
+ * 需要在一个文件里循环换脚本 —— 而 `defineGateRepo` 是「一个文件绑一个脚本」的
+ * （`test.extend` 的产物，按文件配 `script`）。把建工作区/收尾这两步抽成命令式，
+ * fixture 只是它的一层包装，两侧共用同一份实现（抄第二份建法就会漏 `chmod` 那一条，
+ * 表现是「沙箱里 `--update` 落盘 EACCES，用例红成像门禁坏了」）。
+ *
+ * 调用点**必须**在 `finally` 里 `dispose()`，或者用 `defineGateRepo` 那条路让 vitest 代管。
  */
-export function defineGateRepo(options: GateRepoOptions) {
+export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
   const {
     script,
     dir = "scripts",
@@ -180,102 +187,128 @@ export function defineGateRepo(options: GateRepoOptions) {
   const prefix =
     workdir ?? script.replace(/^check-/, "").replace(/\.(c|m)?js$/, "");
 
+  const root = mkdtempSync(path.join(tmpdir(), `${prefix}-gate-`));
+  const scriptDir = path.dirname(path.join(root, scriptRel));
+  mkdirSync(scriptDir, { recursive: true });
+  /* 权限位显式补齐：某些沙箱 / 受限 umask 下新建目录是 `drwxr-xr-x`，
+   * 而门禁脚本会用 `--update` 就地落盘基线 —— 那一步会 EACCES 把用例
+   * 误红成「门禁坏了」。这条理由与 `symlink-dir.ts` 同族（环境噪声，
+   * 不是被测行为），所以收进共用件，而不是留给第十六个人再踩一次。 */
+  chmodSync(scriptDir, 0o777);
+  copyFileSync(scriptSource, path.join(root, scriptRel));
+  chmodSync(path.join(root, scriptRel), 0o755);
+  for (const d of dirs) mkdirSync(path.join(root, d), { recursive: true });
+
+  const abs = (rel: string) => path.join(root, rel);
+  const put = (rel: string, content: string) => {
+    mkdirSync(path.dirname(abs(rel)), { recursive: true });
+    writeFileSync(abs(rel), content);
+  };
+  for (const [rel, content] of Object.entries(files ?? {})) put(rel, content);
+  for (const { from, to } of copy ?? []) {
+    const dest = abs(to);
+    mkdirSync(path.dirname(dest), { recursive: true });
+    cpSync(path.join(REPO_ROOT, from), dest, { recursive: true });
+  }
+
+  const api: GateRepo = {
+    dir: root,
+    write: put,
+    mkdir: (rel) => mkdirSync(abs(rel), { recursive: true }),
+    remove: (rel) => rmSync(abs(rel), { recursive: true, force: true }),
+    read: (rel) => readFileSync(abs(rel), "utf8"),
+    exists: (rel) => existsSync(abs(rel)),
+    git: (...args) => {
+      execFileSync("git", args, { cwd: root, stdio: "ignore" });
+    },
+    commit: (message) => {
+      /* `-c` 就地给身份与禁签名：宿主可能全局开了 `commit.gpgsign`，
+       * 临时仓库里没有可用密钥 —— 那一档失败信息指不到夹具（同
+       * `symlink-dir.ts` 那一族：环境噪声不该被读成被测行为）。 */
+      execFileSync(
+        "git",
+        [
+          "-c",
+          "commit.gpgsign=false",
+          "-c",
+          "user.email=gate@example.com",
+          "-c",
+          "user.name=gate",
+          "commit",
+          "-qm",
+          message,
+        ],
+        { cwd: root, stdio: "ignore" },
+      );
+    },
+    run: (args = [], overrides) => {
+      const callEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        ...env,
+        ...overrides?.env,
+      };
+      for (const [k, v] of Object.entries(overrides?.env ?? {})) {
+        if (v === undefined) delete callEnv[k];
+      }
+      try {
+        const output = execFileSync(
+          process.execPath,
+          [abs(scriptRel), ...args],
+          {
+            cwd: root,
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "pipe"],
+            env: callEnv,
+          },
+        );
+        return { code: 0, output };
+      } catch (error) {
+        const e = error as {
+          status?: number;
+          stdout?: string;
+          stderr?: string;
+        };
+        return {
+          code: typeof e.status === "number" ? e.status : 1,
+          output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+        };
+      }
+    },
+  };
+  setup?.(api);
+
+  return {
+    repo: api,
+    dispose: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+/**
+ * `createGateRepo()` 的返回值：工作区 + **必须调用的收尾**。
+ *
+ * 为什么显式返回一个 `dispose` 而不是只给 `repo`：命令式调用点（跨判据的表驱动用例）
+ * 不在 vitest 的 fixture 生命周期里，临时目录没人清 —— 让「收尾」是返回值的一部分，
+ * 比在文档里写「记得 rmSync」可靠。
+ */
+export interface GateRepoHandle {
+  repo: GateRepo;
+  dispose: () => void;
+}
+
+/**
+ * 造一个带 `repo` fixture 的 `test` —— 每个文件按自己的脚本调用一次。
+ *
+ * 返回的 `test` 仍是 `test.extend` 的产物，可以继续 `.extend` 出文件自己的夹具。
+ * `describe` / `beforeEach` 这些不随 `extend` 变，所以调用点仍需从 vitest 取 ——
+ * 本模块把它们**转发导出**，调用点一条 import 就够。
+ */
+export function defineGateRepo(options: GateRepoOptions) {
   const test = base.extend<{ repo: GateRepo }>({
     repo: async ({}, use) => {
-      const root = mkdtempSync(path.join(tmpdir(), `${prefix}-gate-`));
-      const scriptDir = path.dirname(path.join(root, scriptRel));
-      mkdirSync(scriptDir, { recursive: true });
-      /* 权限位显式补齐：某些沙箱 / 受限 umask 下新建目录是 `drwxr-xr-x`，
-       * 而门禁脚本会用 `--update` 就地落盘基线 —— 那一步会 EACCES 把用例
-       * 误红成「门禁坏了」。这条理由与 `symlink-dir.ts` 同族（环境噪声，
-       * 不是被测行为），所以收进共用件，而不是留给第十六个人再踩一次。 */
-      chmodSync(scriptDir, 0o777);
-      copyFileSync(scriptSource, path.join(root, scriptRel));
-      chmodSync(path.join(root, scriptRel), 0o755);
-      for (const d of dirs) mkdirSync(path.join(root, d), { recursive: true });
-
-      const abs = (rel: string) => path.join(root, rel);
-      const put = (rel: string, content: string) => {
-        mkdirSync(path.dirname(abs(rel)), { recursive: true });
-        writeFileSync(abs(rel), content);
-      };
-      for (const [rel, content] of Object.entries(files ?? {}))
-        put(rel, content);
-      for (const { from, to } of copy ?? []) {
-        const dest = abs(to);
-        mkdirSync(path.dirname(dest), { recursive: true });
-        cpSync(path.join(REPO_ROOT, from), dest, { recursive: true });
-      }
-
-      const api: GateRepo = {
-        dir: root,
-        write: put,
-        mkdir: (rel) => mkdirSync(abs(rel), { recursive: true }),
-        remove: (rel) => rmSync(abs(rel), { recursive: true, force: true }),
-        read: (rel) => readFileSync(abs(rel), "utf8"),
-        git: (...args) => {
-          execFileSync("git", args, { cwd: root, stdio: "ignore" });
-        },
-        commit: (message) => {
-          /* `-c` 就地给身份与禁签名：宿主可能全局开了 `commit.gpgsign`，
-           * 临时仓库里没有可用密钥 —— 那一档失败信息指不到夹具（同
-           * `symlink-dir.ts` 那一族：环境噪声不该被读成被测行为）。 */
-          execFileSync(
-            "git",
-            [
-              "-c",
-              "commit.gpgsign=false",
-              "-c",
-              "user.email=gate@example.com",
-              "-c",
-              "user.name=gate",
-              "commit",
-              "-qm",
-              message,
-            ],
-            { cwd: root, stdio: "ignore" },
-          );
-        },
-        run: (args = [], overrides) => {
-          const callEnv: NodeJS.ProcessEnv = {
-            ...process.env,
-            ...env,
-            ...overrides?.env,
-          };
-          for (const [k, v] of Object.entries(overrides?.env ?? {})) {
-            if (v === undefined) delete callEnv[k];
-          }
-          try {
-            const output = execFileSync(
-              process.execPath,
-              [abs(scriptRel), ...args],
-              {
-                cwd: root,
-                encoding: "utf8",
-                stdio: ["ignore", "pipe", "pipe"],
-                env: callEnv,
-              },
-            );
-            return { code: 0, output };
-          } catch (error) {
-            const e = error as {
-              status?: number;
-              stdout?: string;
-              stderr?: string;
-            };
-            return {
-              code: typeof e.status === "number" ? e.status : 1,
-              output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
-            };
-          }
-        },
-      };
-      setup?.(api);
-
-      await use(api);
-
       /* 收尾挂在 `use` 之后 —— 用例中途 throw 也跑（这是相对手写 `afterEach` 的收益）。 */
-      rmSync(root, { recursive: true, force: true });
+      const handle = createGateRepo(options);
+      await use(handle.repo);
+      handle.dispose();
     },
   });
 

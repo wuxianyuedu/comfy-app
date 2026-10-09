@@ -211,27 +211,18 @@ console.log(
  * 因为它的改写是**整 token 等值替换**，不像 canonical 那类会改坏断言样本；
  * 若某处测试样本确实不该改，把它写进基线的「允许处数」里，别放宽判据。 */
 
-if (shouldUpdate) {
-  const ledger = {};
-  let ledgerTotal = 0;
-  for (const { file, changes } of touched) {
-    const rel = path.relative(ROOT, file);
-    ledger[rel] = changes.length;
-    ledgerTotal += changes.length;
-  }
-  fs.writeFileSync(
-    BASELINE,
-    `${JSON.stringify({ total: ledgerTotal, files: ledger }, null, 2)}\n`,
-  );
-  console.log(`棘轮基线已重写：${path.relative(ROOT, BASELINE)}（total ${ledgerTotal}）`);
-  process.exit(0);
+/* 本轮的账算一次：`--check` 与 `--update` 判的是同一份，各算一遍就会分叉。 */
+const ledger = {};
+for (const { file, changes } of touched) {
+  ledger[path.relative(ROOT, file)] = changes.length;
 }
 
-if (shouldCheck) {
-  /** @type {{total: number, files: Record<string, number>}} */
-  const base = fs.existsSync(BASELINE)
-    ? JSON.parse(read(BASELINE))
-    : { total: 0, files: {} };
+/** 上一份基线；`null` = 还没有账可记（只有首次记账允许任何存量）。 */
+/** @type {{total: number, files: Record<string, number>} | null} */
+const baseline = fs.existsSync(BASELINE) ? JSON.parse(read(BASELINE)) : null;
+
+/** 比基线高的那些文件（逐文件维度与总数维度互补）。 */
+function overFiles(base) {
   const over = [];
   for (const { file, changes } of touched) {
     const rel = path.relative(ROOT, file);
@@ -239,6 +230,42 @@ if (shouldCheck) {
     if (changes.length > allowed)
       over.push(`${rel}：${changes.length} 处（基线 ${allowed}）`);
   }
+  return over;
+}
+
+if (shouldUpdate) {
+  /* **只许降**：基线在场却算出更高的数 → 拒绝写入、基线一个字节都不动。
+   * 上面那句「只许降不许升」此前只是散文，这一支才让它成立。
+   * 例外只有「还没有基线文件」；判据用 `baseline` 在不在，不用 `baseline.total` ——
+   * 治理到 0 之后它是 0，`if (0 && …)` 会把整条拒涨短路（台账 E5 的共同失效写法）。 */
+  if (baseline) {
+    const over = overFiles(baseline);
+    if (over.length > 0 || total > baseline.total) {
+      console.error(
+        `spacing canonical 棘轮：--update 拒绝写入，候选 ${baseline.total} → ${total} 是上涨。\n` +
+          `  棘轮只许降不许升 —— 收下它等于把这一批新写法记成合法存量。`,
+      );
+      for (const line of over) console.error(`  ✗ ${line}`);
+      console.error(
+        `\n修法：先 node scripts/tw4-spacing-canonical.mjs --write 落盘改写，再 --update 收紧。` +
+          `别为了让它变绿去放宽基线。`,
+      );
+      process.exit(1);
+    }
+  }
+  fs.writeFileSync(
+    BASELINE,
+    `${JSON.stringify({ total, files: ledger }, null, 2)}\n`,
+  );
+  console.log(
+    `棘轮基线已重写：${path.relative(ROOT, BASELINE)}（total ${total}）`,
+  );
+  process.exit(0);
+}
+
+if (shouldCheck) {
+  const base = baseline ?? { total: 0, files: {} };
+  const over = overFiles(base);
   if (over.length > 0 || total > base.total) {
     console.log(
       `\nspacing canonical 棘轮：${total} 处 > 基线 ${base.total} 处\n`,
@@ -252,7 +279,9 @@ if (shouldCheck) {
   }
   console.log(
     `spacing canonical 棘轮：${total} 处 ≤ 基线 ${base.total} 处 ✓` +
-      (total < base.total ? `（比基线少 ${base.total - total} 处，可跑 --update 收紧）` : ""),
+      (total < base.total
+        ? `（比基线少 ${base.total - total} 处，可跑 --update 收紧）`
+        : ""),
   );
   process.exit(0);
 }

@@ -438,6 +438,21 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 而这些都是「下一次有人写一处新声明」时才走得进的路径 —— 跟着改动走等于专挑它
   // 不在的时机跑。它读的是两份台账 + 目录扫描，import 图一概追不到，故进固定清单。
   "tests/tsc-diagnostic-executors.test.ts",
+  // 棘轮的 `--update` 拒涨（规范 §11.25 / 台账 E5）：24 个「带 --update 且把基线写回去」
+  // 的判据脚本里，实测有**七家的拒涨那一支从来没生效**，且失效写法有三种 ——
+  // UPDATE 分支无条件写基线（dead-exports / circular-deps / comment-language /
+  // tw4-canonical / tw4-spacing）、
+  // 判断用的 `prev` 在 `--update` 之路上恒为 null（theme-colors，那一支是死代码）、
+  // `if (before && …)` 在**已经清到 0 的基线**上整个短路（theme-colors / overlay-z，
+  // 而今天四家的基线正是 0 处）—— 它们的 `note` 里都逐字写着「只许降不许升」。
+  // 这条必须在**每一次**提交里跑，两个理由都不容让步：① 它读的是 `scripts/` 下脚本的
+  // **行为**，import 图一概追不到（改判据脚本不会把它带进受影响集）；② 它同时是
+  // 判据自己的门禁自测 —— 「新增一个带 --update 的判据却没有归类」「某一家的拒涨被摘掉」
+  // 都只在新增那一次才拦得住，而新增脚本的人不会想到去跑一个名字不相干的测试文件。
+  // 实测成本：13 家 × 两格 + 6 格完整性 = 32 格约 60s（每格建沙箱、跑两到三次判据、
+  // 比对基线字节；其中 tw4-canonical 每次要起 Tailwind 引擎，单家就占 35s，
+  // 所以那一行按实测登记了 120s 预算）。
+  "tests/ratchet-update-guards.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
