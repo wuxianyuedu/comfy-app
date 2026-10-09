@@ -78,7 +78,26 @@ describe("outputFileTracingIncludes：Next 自带运行时脚本必须显式包�
  * 「产物缺失」会从「应当跳过」变成整份文件收不到用例）。
  */
 const standaloneDir = join(process.cwd(), ".next", "standalone");
-const standaloneExists = existsSync(standaloneDir);
+
+/**
+ * 产物根在，**且**里面那份 `next` 够得着 —— 守卫必须判两件事。
+ *
+ * 为什么要加后半截：standalone 的 `node_modules/<pkg>` 是指向 pnpm store 的符号链接
+ * （硬规则 17 的减法正是靠「不穿链接」保住它们），而**任何一次 `pnpm install` 都会
+ * 换掉 store 里那条路径的哈希段** —— 上一次构建留下的壳于是整体悬空：产物根仍然在，
+ * `RUNTIME_DIR` 却数出 0 份。只判「根在」时，这 0 会被断言成
+ * 「缺 `app-route-turbo.runtime.prod.js`，所有接口会 500」—— 那是把「这台机器很久没
+ * 重新构建」说成「产物有缺陷」，而照着那句话去动 `outputFileTracingIncludes`
+ * 只会把本来正确的配置改坏。本机实测就是这个形态（根在、`node_modules/next` 是悬链）。
+ *
+ * 与既有口径一致：产物档在没有产物的检出上**自行跳过**，而「有没有真的构建过」
+ * 由 `scripts/.artifact-freshness.json` 那一档每日自证判（§11.8 / §13.5.4）——
+ * 把「这台机器没构建」变成这里的红，只会让人去改判据而不是去跑构建。
+ */
+const nextReachable = existsSync(
+  join(standaloneDir, "node_modules", "next", "package.json"),
+);
+const artifactUsable = existsSync(standaloneDir) && nextReachable;
 
 /** 列出运行时脚本目录（不存在时返回空数组，绝不裸调）。 */
 function runtimeFiles(): string[] {
@@ -86,10 +105,10 @@ function runtimeFiles(): string[] {
   return existsSync(dir) ? readdirSync(dir) : [];
 }
 
-describe.skipIf(!standaloneExists)(
+describe.skipIf(!artifactUsable)(
   ".next/standalone 里的 Next 运行时脚本不得缺件",
   () => {
-    const files = standaloneExists ? runtimeFiles() : [];
+    const files = artifactUsable ? runtimeFiles() : [];
 
     it("探针自身不空跑（确实数到了运行时脚本目录）", () => {
       expect(files.length).toBeGreaterThan(0);
@@ -121,7 +140,21 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
   });
 
   it("跳过判据先求值成常量再传入 describe.skipIf", () => {
-    expect(code).toMatch(/const\s+standaloneExists\s*=\s*existsSync\(/);
-    expect(code).toMatch(/describe\.skipIf\(!standaloneExists\)/);
+    expect(code).toMatch(/const\s+artifactUsable\s*=/);
+    expect(code).toMatch(/describe\.skipIf\(!artifactUsable\)/);
+  });
+
+  it("守卫要同时判「产物根在」与「那份 next 够得着」（悬壳不许被读成缺件）", () => {
+    /* 这条判的是**守卫自己的形状**，所以在任何机器上都该跑（不随产物在不在 skip）：
+     * 少了 `nextReachable` 那一半时，一份 store 链接已悬掉的旧壳会走进断言、
+     * 数出 0 份运行时脚本，然后报「缺 `app-route-turbo`，所有接口会 500」——
+     * 一个把「没重新构建」冒充成「产物有缺陷」的判据，下一次会被当成真红去查，
+     * 或者被人整个绕开（§11.18.4「会误报的判据活不过一次评审」）。 */
+    expect(code).toMatch(
+      /const\s+nextReachable\s*=\s*existsSync\(\s*join\(\s*standaloneDir,\s*"node_modules",\s*"next",\s*"package\.json"/,
+    );
+    expect(code).toMatch(
+      /const\s+artifactUsable\s*=\s*existsSync\(standaloneDir\)\s*&&\s*nextReachable/,
+    );
   });
 });
