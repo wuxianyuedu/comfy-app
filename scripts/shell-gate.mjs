@@ -127,11 +127,22 @@ export function findCargo() {
   const onPath = whichCommand("cargo");
   if (onPath) return onPath;
   const home = os.homedir();
+  /** @type {string[]} */
   const candidates = [
     process.env.CARGO_HOME && path.join(process.env.CARGO_HOME, "bin"),
     path.join(home, ".cargo", "bin"),
     path.join(home, ".rustup", "toolchains"),
-  ].filter((dir) => typeof dir === "string" && dir.length > 0);
+  ].filter(
+    /**
+     * `checkJs` 下 `typeof x === "string"` 这条守卫**不自动收窄**数组元素类型
+     * （先把三项收成 `(string | false | undefined)[]`、filter 的返回值仍是它）——
+     * 于是下面 `path.join(dir, …)` 会报「`dir` 可能是 undefined」。显式标成类型谓词，
+     * 让 `candidates` 就是 `string[]`：这一条不再是「多写一句好看」，
+     * 它是 A 组硬闸（tsc --noEmit）通过的条件。
+     * @type {(dir: string | false | undefined) => dir is string}
+     */
+    (dir) => typeof dir === "string" && dir.length > 0,
+  );
 
   for (const dir of candidates) {
     if (dir.endsWith("toolchains")) {

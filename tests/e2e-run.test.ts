@@ -251,8 +251,12 @@ describe("全量 e2e 的「每日自证」（ISSUE #1282：每天首次提交带
       skipped: true,
       reason: "本周只解决合并冲突，未动功能链路",
     });
+    /* `undefined` 是**故意**喂进去的：`--skip` 后面没跟参数时 `argv[index + 1]`
+     * 就是 undefined，这条要钉的正是那一档（占位词与过短的理由同族）。
+     * 所以这里按运行期真实情况断言，而不是把 `undefined` 从表里去掉
+     * —— 去掉等于把「漏写理由」这条边界从执行面里删掉。 */
     for (const bad of [undefined, "", "稍后", "TBD", "待定"]) {
-      expect(parseSkip(["--skip", bad]).reason).toBe(null);
+      expect(parseSkip(["--skip", bad!]).reason).toBe(null);
     }
   });
 
