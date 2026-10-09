@@ -11,3 +11,13 @@
 #   · IGNORE_GLOBS = 棘轮白名单：即使有人用 --ignore-path 覆盖忽略规则，
 #     格式棘轮也不会把它算进「未过格式」的账。
 src-tauri/target/
+
+# 门禁自测的**瞬时探针文件**：`tests/global-setup-cleanup.test.ts` 在运行期写一份
+# `tests/.setup-cleanup-probe-*.test.tsx` 进去、跑完立刻删（它必须落在 `tests/` 树内，
+# 因为两个 project 的 `include` 只认 `src/**` 与 `tests/**`）。
+# 它**存在的时间只有一次 `vitest run`**，而 prettier 的扫描是**另起一个进程**跑的：
+# 两者并行时 prettier 会在「列出文件」与「读文件」之间撞上它已被删除，报
+# `ENOENT: no such file or directory` 并以 exit 2 结束 —— 表现是**格式门禁红**，
+# 而原因跟格式毫无关系（实测：`.githooks/pre-commit` 真跑时撞到）。
+# 门禁自测的瞬时产物不该被格式门禁看见：这里按它**自己的名字**忽略，不整目录忽略。
+tests/.setup-cleanup-probe-*.test.tsx

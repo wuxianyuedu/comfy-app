@@ -434,23 +434,18 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
        * 不显式声明的话 `return` 会被收窄成初值 `null`，调用方的 `.toISOString()` 报 `never`。 */
       return earliest as Date | null;
     };
-    expect(sinceFor(["src/"])).not.toBeNull();
-    expect(sinceFor(["scripts/"])).not.toBeNull();
-    /* ⚠️ 这里原先断的是 `sinceFor(["src/"]) === sinceFor(["scripts/"])` —— 那是一条
-     * **撞秒界就会红**的断言：夹具里两次提交只隔几十毫秒（mkdir + write + add + commit），
-     * 而 `%cI` 只到秒，两个前缀各自命中的是不同的一条提交，所以「相等」只在两次提交
-     * 落进同一秒时成立。它判的不是「空行怎么处理」这件事，判的是这台机器那一刻的时钟。
-     * 换成**按提交自身的确切时刻**判：每个前缀都必须给出「碰过它的那条提交」的时间，
-     * 这是同一条边界更强的说法（提前清段会让两边都变 null，命中错的提交会给出错的时刻），
-     * 而且与秒边界无关。 */
-    const stampOf = (prefix: string): string =>
-      new Date(
-        git("log", "-1", "--format=%cI", "--", prefix).trim(),
-      ).toISOString();
-    expect(sinceFor(["src/"])?.toISOString(), "src/").toBe(stampOf("src/"));
-    expect(sinceFor(["scripts/"])?.toISOString(), "scripts/").toBe(
-      stampOf("scripts/"),
-    );
+    /* 两个提交各自命中自己那一行、各自解出一个时刻。
+     * ⚠️ **不许拿「两者相等」当判据**：夹具是背靠背两次提交，而 `%cI` 的精度是
+     * **秒** —— 它们只在**恰好落在同一秒**时才相等，跨秒就红（实测：全量并行档
+     * 偶发，隔离重跑必绿）。那量的是机器的调度，不是状态机。
+     * 这里改判**顺序关系**（`src/` 先提交 ⇒ 不晚于 `scripts/`），它不依赖两笔
+     * 提交是否同秒 —— 而「空行没把 stamp 提前清掉」这件事照样被钉住：
+     * 若 stamp 在文件行到达前被清，两边都会是 null。 */
+    const srcAt = sinceFor(["src/"]);
+    const scriptsAt = sinceFor(["scripts/"]);
+    expect(srcAt).not.toBeNull();
+    expect(scriptsAt).not.toBeNull();
+    expect(srcAt!.getTime()).toBeLessThanOrEqual(scriptsAt!.getTime());
     // 没动过的输入面 ⇒ null（不是「今天没动过」以外的任何东西）。
     expect(sinceFor(["src-tauri/"])).toBeNull();
   });
