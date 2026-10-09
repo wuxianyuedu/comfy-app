@@ -199,6 +199,16 @@
      `--color-accent-soft` 自己带深档（`#ff8ac4`），所以暗色下渐变仍会变亮 ——
      那是终点的语义，不是这一颗。 */
   --color-accent-deep: #c026d3; /* 品牌渐变中间档（fuchsia-600 同值）(light default) */
+  /* 品牌渐变的**组成**（唯一一份）。两端与中间档都引用颜色 token，所以深色下
+     自动跟手（`--color-accent-soft` 自带深档 `#ff8ac4`）。此前这串三段只活在
+     `.btn-gradient` 里，而页签选中态也要用它 —— 在第二处重抄一遍三个 stop，
+     改一次品牌色就有一处跟不上，所以组成本身要有一个名字。 */
+  --gradient-brand: linear-gradient(
+    135deg,
+    var(--color-primary-600) 0%,
+    var(--color-accent-deep) 50%,
+    var(--color-accent-soft) 100%
+  );
   /* 画布浮层投影：浅色下不能再用 55% 黑（看着像脏污），改成中性深灰。 */
   --color-shadow-strong: rgb(0 0 0 / 0.18); /* 浮层重投影 (light default) */
   --color-ring-shadow: rgb(
@@ -886,12 +896,7 @@ textarea::-webkit-scrollbar {
      **能用 Button 就用 `variant="gradient"`**（它就是把这一类挂上去的），
      只有**不是 Button** 的落点（画布节点里的共享 class）才直接写类名。 */
   .btn-gradient {
-    background: linear-gradient(
-      135deg,
-      var(--color-primary-600) 0%,
-      var(--color-accent-deep) 50%,
-      var(--color-accent-soft) 100%
-    );
+    background: var(--gradient-brand);
     transition:
       filter 0.15s ease,
       transform 0.15s ease,
@@ -902,6 +907,27 @@ textarea::-webkit-scrollbar {
   }
   .btn-gradient:active:not(:disabled) {
     transform: translateY(1px);
+  }
+  /* 页签选中态（当前打开的那一页）。
+     为什么不是「换个背景色」就完事：暗色下标题行的底是 `--color-panel-deep`
+     （#0f0f16），而原先选中态给的是 `bg-canvas`（#0a0a0f）—— **比底还暗**，
+     与未选中只差一档文字色，实测肉眼分不出哪张是当前页。所以选中态同时给
+     「更亮的表面」+「顶部一条品牌色条」，两条通道一起表达，不靠颜色深浅单打。
+     做成一个类而不是在两个组件里各写一遍：同一条标题行横条里并列着
+     「应用内视图页签」与「iframe 外部页签」两类（#1324 决策 ④(a)），
+     选中态各长一张脸就是漂移。 */
+  .u-tab-active {
+    background: var(--color-surface);
+    color: var(--color-ink-bright);
+  }
+  .u-tab-active::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0.25rem;
+    top: 0;
+    height: 2px;
+    border-radius: 9999px;
+    background: var(--gradient-brand);
   }
 }
 

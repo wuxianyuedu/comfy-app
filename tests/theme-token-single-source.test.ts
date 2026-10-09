@@ -182,8 +182,12 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       "--container-",
       "--z-index-", // 层级刻度
       "--radius-", // 圆角刻度
-      "--container-", // 内容列宽度三档（max-w-narrow / -medium / -wide，globals.css 里的现值收口）
       "--text-", // 字阶刻度（.u-title / .u-title-page / .u-title-stage / .u-title-hero）
+      /* 品牌渐变的**组成**（`--gradient-brand`）。它不是颜色别名、也不属 `--color-`
+         家族 —— 是把「三段 stop 怎么排」收成一个有名字的东西，落点是 `.btn-gradient`
+         与页签选中态的色条。原先这串组成只活在 `.btn-gradient` 一处，第二处要用就
+         得重抄三个 stop，改一次品牌色就有一处跟不上。 */
+      "--gradient-",
       "--xy-", // React Flow 变量
       "--json-view-", // json 查看器主题
       "--shimmer-", // 骨架微光

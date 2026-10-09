@@ -101,13 +101,13 @@ export function ViewTabStrip({
             onClick={() => onSelect(tab.key)}
             {...simpleKeyHandler(["Space", "Enter"], () => onSelect(tab.key))}
             className={
-              // 标题行内（壳）与应用内（浏览器）共用同一组态：只换背景层级，
-              // 选中/悬停/焦点三态保持一致，避免"壳里好看、浏览器里像坏了"。
-              "text-ink-strong flex max-w-56 min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors select-none " +
+              /* 选中态走 `.u-tab-active`（更亮的表面 + 顶部一条品牌色），两种形态
+                 共用同一套语言 —— 原来标题行里给的是 `bg-canvas/70`，暗色下比
+                 标题行的底还暗，肉眼读不出「哪张是当前页」。
+                 基串带 `relative`：工具类的色条是伪元素，要有定位祖先。 */
+              "relative flex max-w-56 min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors select-none " +
               (active
-                ? inTitleBar
-                  ? "bg-canvas/70 text-ink"
-                  : "bg-primary-soft text-primary"
+                ? "u-tab-active"
                 : inTitleBar
                   ? "text-ink-muted hover:bg-canvas/40"
                   : "text-ink-muted hover:bg-surface-2")
