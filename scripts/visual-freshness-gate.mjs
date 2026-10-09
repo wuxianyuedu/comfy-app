@@ -21,11 +21,18 @@
  *   · 记录**不许**挂在非登记档上（删了平台的档，账要同批抹掉）；
  *   · 每次提交顺带打印各档「上次自证距今多久」——账的价值在于被**看见**。
  *
- * ⚠️ **刻意不做墙钟阻断**（阈值不在判据里）：像素回归的结论只在**录过基线的那台机器上**
+ * ⚠️ **「多久没跑算旧」不进判据**（像素档）：像素回归的结论只在**录过基线的那台机器上**
  * 成立，而本仓库的自动化执行环境都是 linux —— win32 档的复核只能在 Windows 开发机上做。
  * 拿墙钟阻断等于让所有人卡在一个**只有少数人能解**的账上（§11.8 里 `PENDING_PLATFORMS`
- * 「只提醒、不阻断」已经判过这味药）。所以纪律收在**可观测的形状**上：「有主、写清、
- * 不挂空档」是判据，「多久没跑算旧」是人看着读数定的。
+ * 「只提醒、不阻断」已经判过这味药）。所以像素档的纪律只收在**可观测的形状**上：
+ * 「有主、写清、不挂空档」是判据，「多久没跑算旧」是人看着读数定的。
+ *
+ * 唯一例外是 `track.daily` 那一档（全量 e2e）：它多一条「**今天**自证过没有」的判据
+ * （ISSUE #1282）。它不是把像素档的取舍推翻 —— 那一档卡不住的原因是「只有少数人跑得动」，
+ * 而全量 e2e 恰恰是**人人都跑得动的按需入口**（`pnpm test:e2e`），缺的只是「有人跑」。
+ * 所以它按本地日历日判「今天的第一次提交带没带凭证」，并有两条配套出路：
+ * `pnpm test:e2e` 跑绿即记，或 `node scripts/e2e-run.mjs --skip "<理由>"` 记一条
+ * 写明理由的豁免（占位理由被拦 —— 豁免不是绕过）。账文件还没入库时**只提醒、不阻断**。
  *
  * **不在这里跑像素**：`pixel-run.mjs` 要起 webServer + 浏览器，与钩子里的 A/B/C/D 抢资源
  * （§13.5 的并行预算是实测敏感项）。钩子只做它做得到的那件事 —— **每一档都得有主**；
@@ -121,6 +128,7 @@ export function runGate({
     registered: platforms,
     track,
     kind,
+    now,
   });
   const ages = required.map(
     (p) => `${p}：${freshnessAge(ledger[p], now) ?? "无记录"}`,
@@ -148,12 +156,24 @@ function main() {
       process.stdout.write(`[freshness] ${track.label}：${stamp}\n`);
       continue;
     }
+    /* 宽限期：账文件**还没入库**时只提醒、不阻断。这份账是随提交进来的（平台侧 squash
+     * 合并不跑本地钩子，硬规则 6），所以「文件不在」是一个**本人做不到**的状态 ——
+     * 无条件阻断会拦住从它分出的每一次提交。宽限期里那一步照样把「今天该跑一次」打在
+     * 台面上：账面缺席与「这件事已经有人管」不该长得一样。 */
+    if (track.daily && !fs.existsSync(path.join(ROOT, track.ledger))) {
+      process.stdout.write(
+        `  [warn] ${track.label}：还没有账文件（${track.ledger}）—— 宽限期只提醒、不阻断。` +
+          `跑一次 \`${track.run}\` 会留下第一条凭证。\n`,
+      );
+      continue;
+    }
     if (result.exitCode !== 0) {
       failed = 1;
       process.stderr.write(
         `[freshness-gate] ✗ ${track.label} 的新鲜度账不完整：\n      · ` +
           result.problems.join("\n      · ") +
           `\n        记账：跑一次 \`${track.run}\`（跑绿即记），` +
+          (track.skipHow ? `\n              或记一条写明理由的豁免：\`${track.skipHow}\`，` : "") +
           `\n              或在 ${track.ledger} 里手工补一条。\n` +
           "        规范：docs/standards/11-测试与可观测性.md §11.8\n",
       );
