@@ -34,10 +34,12 @@ import {
 
 /* ── 懒加载视图组件，好让初始包体保持小 ── */
 /* 只有 HomePage / WorkspaceNav / ToastProvider / VideoQueueModal 是即时加载的。 */
-const SettingsOverlay = dynamic(
+/* 设置（与历史 / 队列 / 控制台同族，都是「项目无关的全局视图」）：只在进入该
+ * 视图时才拉 —— 它带着全部配置查询与 Ollama 探测，不该摊到别的视图首屏。 */
+const SettingsView = dynamic(
   () =>
-    import("~/components/settings/SettingsOverlay").then(
-      (mod) => mod.SettingsOverlay,
+    import("~/components/settings/SettingsView").then(
+      (mod) => mod.SettingsView,
     ),
   { ssr: false },
 );
@@ -142,12 +144,11 @@ export default function WorkspacePage() {
   // ── 视频队列弹窗 ──
   const [videoQueueOpen, setVideoQueueOpen] = useState(false);
 
-  // ── Settings overlay ──
-  // 设置以 overlay 形式打开（而非跳转 /settings 独立路由），保持 workspace
-  // 组件树常驻——关闭设置后当前视图的选中项/编辑内容原样保留。
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
-  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  // ── 设置：一个视图，不是一个浮层 ──
+  // 「去设置」的几处入口（侧栏、顶栏菜单、队列、首页算力卡）都切到 settings 视图。
+  // 原先是 workspace 内的一层全屏浮层：它会盖住页签条，且「当前在设置里」这件事
+  // 只存在于一个布尔值里 —— 既没有页签，也不能同时开着别处。
+  const openSettings = useCallback(() => navigateTo("settings"), [navigateTo]);
 
   // ── 画布：为 true 时，画布打开一个全新的命名项目
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
@@ -371,6 +372,9 @@ export default function WorkspacePage() {
       case "queue":
         return <QueueMonitor onOpenSettings={openSettings} />;
 
+      case "settings":
+        return <SettingsView fillHeight />;
+
       case "canvas":
         return (
           <ProjectCanvas
@@ -464,9 +468,6 @@ export default function WorkspacePage() {
             router.push(`/create/${id}`);
           }}
         />
-
-        {/* 设置 overlay：仅打开时挂载。置于最顶层，不卸载下方 workspace 组件树。 */}
-        {settingsOpen && <SettingsOverlay onClose={closeSettings} />}
       </>
     </ShellTabs>
   );

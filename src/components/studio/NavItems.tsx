@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   ListChecks,
   Puzzle,
+  Settings,
   Terminal,
 } from "lucide-react";
 
@@ -21,9 +22,11 @@ import {
  *
  * 四个分区（一处定义、多处消费，避免漂移）：
  *   · 全局项（`globalNavItems`）—— 主页侧栏顶部常驻：首页 / 模型 / 历史 / 队列 /
- *     流程 / 控制台。这六件事都是**项目无关**的，走视图页签能开能关 —— 控制台也一样
- *     （它跑的是仓库级脚本命令 `pnpm test` / `drizzle-kit`，与「当前是哪个画布项目」
- *     无关，而同形的视图页签让「跑着长命令时切去别处看一眼」成立）；
+ *     设置 / 流程 / 控制台。这七件事都是**项目无关**的，走视图页签能开能关 ——
+ *     控制台也一样（它跑的是仓库级脚本命令 `pnpm test` / `drizzle-kit`，与「当前是
+ *     哪个画布项目」无关，而同形的视图页签让「跑着长命令时切去别处看一眼」成立）；
+ *     设置同理：它读写的是应用级配置（模型目录、Ollama、数据库、后端路径），
+ *     换项目不该重配一遍 —— 所以它是第七个全局视图，而不是又一个浮层；
  *   · 全局浮层（`OVERLAY_NAV_ITEMS`）—— 点开的是弹窗而不是视图：模型适配 / 模式契约。
  *     这两件事也是**项目无关**的（模式是工作流库定义的、适配器是每个远端模型 ×
  *     每个模式的字段映射），所以它们的入口不进工坊那个项目内视图；
@@ -48,7 +51,8 @@ export type WorkspaceView =
   | "film"
   | "workflows"
   | "outputs"
-  | "console";
+  | "console"
+  | "settings";
 
 export interface NavItem {
   id: WorkspaceView;
@@ -152,6 +156,18 @@ export const NAV_ITEMS: NavItem[] = [
     label: "队列",
     enabled: true,
     icon: <ListChecks size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 设置：与历史 / 队列 / 控制台同形的**视图**，不是浮层。
+     * 原先它是 workspace 里的一层全屏浮层（`SettingsOverlay`）—— 那层会盖住页签条，
+     * 且「当前在设置里」这件事只活在一个布尔值里：既没有页签可关，也不能一边开着
+     * 设置一边看别处。改成视图后，入口、高亮、可关性都和别的视图同一套契约。
+     * 仍归**全局项**而不是项目页签：它读写的是应用级配置（模型目录、Ollama、
+     * 数据库、后端路径），与「当前是哪个画布项目」无关。 */
+    id: "settings",
+    label: "设置",
+    enabled: true,
+    icon: <Settings size={22} strokeWidth={1.8} />,
   },
   {
     id: "workflows",
