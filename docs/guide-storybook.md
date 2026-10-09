@@ -197,10 +197,13 @@ const meta = {
 ```
 
 ```tsx
-/* React Flow：真画布，节点渲染器由 story 通过 nodeTypes 注入 */
+/* React Flow：真画布，节点渲染器由 story 通过 nodeTypes 注入。
+   渲染器比 560px 的框高时加 `fit` —— 否则钉住的视口会把内容切掉一截
+   （见下面「框架装不下」那条）。 */
 <StorybookFlowCanvas
   scene={withNodeType(canvasScene("twoNodes"), "story")}
   nodeTypes={{ story: MyNode }}
+  fit
 />
 ```
 
@@ -252,6 +255,13 @@ function ShellHarness() {
   全等（同毫秒）—— 手写时最容易把「同一毫秒」写成「相邻毫秒」。
 - **有内容的项目要走 `placeCanvasNode()`**（`screen-frame.tsx` 的 `canvasNodes()`）：
   手写节点对象只填两个字段，而节点渲染器读的是 `defaultData(kind)` 的整套默认值。
+- **框架装不下就传 `fit`**：`StorybookFlowCanvas` 的框高是固定的 560px，而渲染器
+  尺寸是你的事。你自己的节点渲染器比框高、又没传 `fit` 时，钉住的视口会把最后一张
+  卡的下沿切掉 —— 构建 / tsc / eslint 全绿，只有画布上少一截（实测 `fanOut` 切
+  151px、`mixedKinds` 切 51px）。传 `fit` 就交回 React Flow 的 `fitView` 缩到框里；
+  **被测对象就是那个缩放的档**（`zoomedIn` / `zoomedOut` / `dense`，注册表里带
+  `pinZoom`）反过来**不能**传 `fit` —— 缩走就不是那一档了。判据见
+  `tests/storybook-fit-viewport.test.ts`（规范 16 §16.2.3.13）。
 
 **一处容易踩的坑**：`ProjectCanvas` / `WorkshopPipeline` 在**挂载那一刻**读
 `getActiveId()`，而 React 的 effect 是子先父后 —— 把「建项目」放 `useEffect` 里，

@@ -84,8 +84,11 @@ describe("Storybook 三层注入层的契约（ISSUE #1381）", () => {
     expect(flow).toContain("export const CANVAS_SCENES");
     expect(flow).toContain("画布场景里没有叫");
     /* 视口是**受控**的：zoom 真的进转换矩阵，否则「细网格在 0.3 以下淡出」
-       那类判据看的是一个 story 临时塞的数。 */
-    expect(flow).toContain("viewport={scene.viewport}");
+       那类判据看的是一个 story 临时塞的数。（`fit` 那条口径与它的互斥、以及
+       「装不下要显式认账」由 `tests/storybook-fit-viewport.test.ts` 判 —— 这里
+       只钉「两条口径都在场」。） */
+    expect(flow).toContain("viewport: scene.viewport");
+    expect(flow, "fit 那条口径也要在场").toContain("fitView: true");
   });
 
   it("整屏容器层：真 AppShell / 真 WorkspaceFrame + 真 action 建项目", () => {
