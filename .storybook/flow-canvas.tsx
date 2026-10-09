@@ -51,12 +51,39 @@ export interface CanvasScene {
   /**
    * 初始视口（受控）。`zoom` 会真的进转换矩阵 —— 「细网格在 0.3 以下淡出」
    * 这类判据看的就是它。
+   *
+   * 消费方传 `fit` 时它会**被忽略**（React Flow 自己算一个缩到装得下的视口）。
    */
   readonly viewport: { x: number; y: number; zoom: number };
+  /**
+   * 这一档的**被测对象就是那个缩放**（细网格在阈值下淡出、端点圆点在放大档的
+   * 像素尺度、密集负载下现算的标尺步长）。
+   *
+   * 于是它**不能**被 `fit` 缩走 —— 缩到装得下会把要看的那个缩放一起改掉，
+   * 而 story 上看着仍然「一切正常」（只是看的不是那一档了）。所以传 `nodeTypes`
+   * 的消费方要么传 `fit`、要么用带本标记的场景，判据 `tests/storybook-fit-viewport.test.ts`。
+   */
+  readonly pinZoom?: true;
 }
 
-/** 画布铺底的尺寸：够摆一张卡片与它周围的留白，又不至于把侧栏挤走。 */
+/**
+ * 画布铺底的尺寸：够摆一张卡片与它周围的留白，又不至于把侧栏挤走。
+ *
+ * **它是「框」，不是「内容」**：框高固定，而节点渲染器的尺寸由消费方决定 ——
+ * 于是同一档场景（如 `twoNodes`）在两种消费方下内容高度可以差一倍。内容比框高时
+ * （见 `StorybookFlowCanvas` 的 `fit`）必须由消费方显式声明「装不下、请缩到装得下」，
+ * 否则下沿会把最后一张卡切掉，而构建 / tsc / eslint 全绿、只有画布上少一截。
+ */
 export const CANVAS_FRAME_CLASS = "h-[560px] w-full";
+
+/**
+ * `fit` 档的留白（React Flow `fitViewOptions.padding`，比例值）。
+ *
+ * 0.1 = 内容四周各留 ~10%。与 `ProjectCanvas` 工具栏那颗「适应视图」用的
+ * `padding: 0.2` 不是同一个用途：那颗是**交互后**的复位（要更多呼吸感），
+ * 这份是「一开始就装进框里」，留白太大会把节点缩得很小、10px 的端点行更难认。
+ */
+const FIT_VIEW_PADDING = 0.1;
 
 /**
  * 场景注册表 —— **唯一**一份「名字 → 真画布」的映射。
@@ -204,6 +231,7 @@ export const CANVAS_SCENES = {
    */
   dense: {
     about: "36 张节点铺满画布（标尺步长与网格间距在满负载下现算）",
+    pinZoom: true,
     nodes: Array.from({ length: 36 }, (_, index) => ({
       id: String(index + 1),
       position: {
@@ -223,6 +251,7 @@ export const CANVAS_SCENES = {
   /** 放大档：端点圆点、类型章、网格线在主参考线尺度上的那一档。 */
   zoomedIn: {
     about: "放大到 1.4 倍（细网格与端点圆点的像素尺度都变了）",
+    pinZoom: true,
     nodes: [
       {
         id: "1",
@@ -241,6 +270,7 @@ export const CANVAS_SCENES = {
    */
   zoomedOut: {
     about: "缩到 0.25（细网格已淡出，但底色必须还在）",
+    pinZoom: true,
     nodes: [
       {
         id: "1",
@@ -309,13 +339,26 @@ export function canvasSceneArgType() {
  * `nodes` / `edges` 由场景给，`children` 是 story 自己的节点渲染器
  *（业务节点就是通过它挂进来的 —— 于是 `useNodeId()` 拿到的是真宿主 id）。
  *
- * 视口是**受控**的（`viewport` + `onViewportChange` 空实现）：初始缩放真的进
+ * ## 视口：两种口径，由消费方选（`fit`）
+ *
+ * 默认是**受控**的（`viewport` + `onViewportChange` 空实现）：初始缩放真的进
  * 转换矩阵，而用户拖拽不改变它 —— story 要的是「在某个缩放下长什么样」这一个
  * 被钉住的现场，不是一块可交互的沙盒（要交互请用 `ProjectCanvas` 那一层的 story）。
+ *
+ * 而当消费方的节点渲染器**比框高**时（框架 `CANVAS_FRAME_CLASS` 是固定的 560px，
+ * 渲染器尺寸却是消费方的事），钉住的视口会把最后一张卡的下沿切掉 —— 那是真机上
+ * 不存在的形态，且构建 / tsc / eslint 全绿、只有画布上少一截。此时消费方传 `fit`，
+ * 交回 React Flow 自己的 `fitView`（`ProjectCanvas` 也是这套机制）：把整个场景
+ * 缩到框里，**不裁内容**。
+ *
+ * 两种口径**互斥**：`fit` 时 React Flow 忽略 `viewport`（它自己算一个），所以
+ * 「钉住某个缩放的语义档」（细网格淡出、放大档的像素尺度）**不能**传 `fit` ——
+ * 那些档要看的就是那个缩放，不是「内容装得下」。
  */
 export function StorybookFlowCanvas({
   scene,
   nodeTypes,
+  fit = false,
   children,
 }: {
   scene: CanvasScene;
@@ -329,6 +372,13 @@ export function StorybookFlowCanvas({
    * 渲染器缺席时静默退成白框、看起来像「节点坏了」）。
    */
   nodeTypes?: NodeTypes;
+  /**
+   * 把整场缩到框里（`fitView`），而不是用场景里钉住的视口。
+   *
+   * 传它的判据只有一条：**我的节点渲染器装不进 560px 的框**。装得下就照旧钉住
+   * 视口 —— 缩放本身是有些档的被测对象。
+   */
+  fit?: boolean;
   children?: ReactNode;
 }) {
   return (
@@ -338,8 +388,17 @@ export function StorybookFlowCanvas({
           nodes={[...scene.nodes]}
           edges={[...scene.edges]}
           nodeTypes={nodeTypes}
-          viewport={scene.viewport}
-          onViewportChange={() => undefined}
+          /* 两种视口口径互斥：`fit` 时 React Flow 自己算视口、`viewport` 不传
+             （传了也不会被用，但留着会让人以为「钉住 + 自适应」能同时成立）。 */
+          {...(fit
+            ? {
+                fitView: true,
+                fitViewOptions: { padding: FIT_VIEW_PADDING },
+              }
+            : {
+                viewport: scene.viewport,
+                onViewportChange: () => undefined,
+              })}
           proOptions={{ hideAttribution: true }}
           nodesDraggable={false}
           nodesConnectable={false}
