@@ -1022,6 +1022,67 @@ React Flow 对这种边**静默丢弃**：不报错、控制台干净、`tsc` / 
 > handle 错 → 边不画；框小了 → 内容被切。两者的共同点是构建期全绿、只有真渲染
 > 才看得出来，所以每轮都必须同时做「真浏览器逐 story 量」这另一半。
 
+#### 16.2.3.14 第四层注入：消息中心（数据在 store 里、而组件「看起来是纯展示件」）
+
+`ui/` 与 `studio/` 铺到头之后，剩下一批组件此前被一句话挡着：**「它们有数据依赖」**。
+这一批只碰其中一族 —— `message-center/`。它的特点是**看起来没有依赖**：
+`MessageCenterButton` 与 `MessageCenterPanel` 的入参只有 `children` 与几个 class，
+从 props 那一侧看完全是纯展示件。而数据住在 module-level 的 zustand store
+（`message-center-store.ts`）里，组件自己 `useMessageCenterStore(...)` 取。
+
+于是只有两条路：手捏 `MessageRecord[]` 塞进 store（假形态），或者先把 store 建起来。
+`message-center-sources.tsx` 做的是后者，形状与前三层同源：
+
+| 口径 | 它挡掉的失效形态 |
+| ---- | ---------------- |
+| 场景声明**「哪一处生产方在生产」**（`update` / `dev-restart` / `stale-store`），文案由生产方**现算** | 手抄一份文案清单 = 第二份会漂的事实源；生产方改了文案、故事还在演旧的 |
+| 条目走真 action `push()`，不 `setState({ messages: […] })` | 跳过 id 生成（`nextId("msg_")`）与 `MAX_MESSAGES` 裁剪 —— 那条 id 生成**曾经就是**「删一条把另一条一起删了」的根因 |
+| `open` 是场景的一部分，装饰器在**渲染期**置好 | 只推消息不置 `open` ⇒ 面板 `return null` ⇒ 画布一片空白（与 §16.2.3.4 那个坑同形） |
+| 「全部已读」走真动作 `markAllRead()`（场景的 `markAllRead: true`），不逐条写 `read: true` | 逐条写末态 = 验不到那个动作本身，而「点了没反应」是这类动作最常见的失效形态 |
+
+**一处必须显式说的**：`MessageKind` 有三档（`update` / `restart` / `info`），而**当前生产
+代码只 push 过 `update`**（三处调用点全在 `CodeUpdateWatcher` / `UpdateCheckProvider`）。
+`mixed` 那一档仍然把三档都摆出来 —— 因为 `KIND_META` 三档的图标 / 色调 / 描边是**组件
+自己的**对外面（改配色表时不摆出来就看不出漂没漂），这与值源那条「任何 JSON 都是
+`JsonViewer` 的真输入」同源。但**不编造生产方**：另外两档的注释照实写「眼下没有生产方」。
+
+**一个与前三层不同的接线点，值得单独记**：`MessageCenterPanel` 会盖住同屏的东西。
+它是全屏的（`fixed` + `top-title-bar`），而外壳（`withAppProviders`）**全局**挂它 ——
+于是「消息中心开着」的场景里，`MessageCenterButton` 自己那几档 story 会被面板整个盖住，
+画布上是「面板 + 左上角露出来的半颗铃铛」，**要看的角标与色调根本不在画面上**。
+出口是 `parameters.messagePanelHidden: true`（外壳不挂那块面板；组件照常从 store
+读到 `open`）。刻意不是全局默认 —— 面板在真机上就是常驻的。
+
+**判据**：`tests/storybook-message-center-sources.test.ts`（7 条，进
+`FIXED_STRUCTURAL_TESTS`）。写它的时候有**四处**判据自己先假绿过 —— 全是「拿名字在场
+当判据」，逐条记在这里，因为它们都是会重犯的形状：
+
+1. `<Button[\s\S]*?onClick={…}` 非贪婪也够不着 —— 从**更前面**那颗 `<Button`
+   （清空 / 全部已读，它们**本来就带 `h-auto`**）起匹配，捕获串里自然含它；
+2. 拿整份文件 `toContain("h-auto")` 同理 —— 文件里另有 4 处；
+3. **不剥注释**也不行 —— 解释「为什么必须 `h-auto`」的注释里就写着 `h-auto`，
+   把真属性拿掉之后判据照样绿（自打自，本仓 §12.4 记过的那族）；
+4. 装饰器判据 `toContain("withMessageScene")` 被 **import 那一行**满足 ——
+   从 `decorators: [` 数组里摘掉之后照样绿。
+
+所以四条否定/在场断言现在都按「**剥了注释 + 定位到具体那一处**」判，并且做了
+**变异实测：七向全拦下**（逐条 `read: true` / `setState` 替代 `push` / 拿掉 `h-auto` /
+preview 摘装饰器 / `messagePanelHidden` 取值摘掉 / 面板恒挂 / story 不声明该参数）。
+
+**本批实测抓到一处真缺陷**（由新 story 的截图看出来，不是推测）：
+
+`MessageCenterPanel` 里那颗「标记已读」的 `<Button>` 没给 `size`，落进缺省档的
+`h-8`（32px **定高**），而它的内容是「标题 + 正文」—— 正文可能是**多段**
+（陈旧实例那条 `body` 就含换行，`whitespace-pre-wrap` 会照实换行）。定高之下正文
+溢出按钮盒、穿过 `<li>` 的下沿压到下一条消息上，而 `<li>` 的高度仍按 32px 算。
+
+真浏览器实测：`<li>` 高 62px、正文底 205px —— **超出卡片下沿 39px**，两张卡片叠在
+一起；修后 `<li>` 117px、正文底 205 落在卡内（221）。`tsc` / `eslint` / 构建 /
+既有门禁**全绿**，只有截图看得出来。修法是 `h-auto`（同文件另外两颗按钮本来就有）。
+
+> 这与 §16.2.3.9 的 `backdrop-bl …ur-md`、§16.2.3.12 的 handle id 是同一族：
+> **构建期全绿、画布上「看着有点不对」**的那种缺陷，只有真渲染 + 逐张看截图能抓到。
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，

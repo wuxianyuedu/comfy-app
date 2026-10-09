@@ -457,22 +457,44 @@ export const withTrpcApp: Decorator = (Story, context) => {
  */
 export function StorybookAppProviders({
   children,
+  hideMessagePanel = false,
 }: {
   children: React.ReactNode;
+  /** 见 `withAppProviders` 的注释：全屏面板会盖住同屏要看的东西时，消费方显式说不挂。 */
+  hideMessagePanel?: boolean;
 }) {
   return (
     <TooltipProvider>
       <ToastProvider>
-        <MessageCenterPanel />
+        {hideMessagePanel ? null : <MessageCenterPanel />}
         {children}
       </ToastProvider>
     </TooltipProvider>
   );
 }
 
-/** 全局装饰器：给每个 story 接上应用外壳（见 `StorybookAppProviders`）。 */
-export const withAppProviders: Decorator = (Story) => (
-  <StorybookAppProviders>
-    <Story />
-  </StorybookAppProviders>
-);
+/**
+ * 全局装饰器：给每个 story 接上应用外壳（见 `StorybookAppProviders`）。
+ *
+ * ## `parameters.messagePanelHidden` 这一档为什么存在
+ *
+ * 外壳里那颗 `MessageCenterPanel` 是**全屏**的（`fixed` + `top-title-bar`），而
+ * 它是全局挂的 —— 于是「消息中心开着」的场景里，面板会把整块视口铺满，连带把
+ * 同屏要看的东西（比如 `MessageCenterButton` 自己）盖在底下。那一档 story 真的
+ * 要看的是**按钮在 `open === true` 时的角标与色调**，而面板挡着它。
+ *
+ * 这一档给消费方一个显式出口：`parameters.messagePanelHidden: true` 时外壳不挂
+ * 面板，组件照常从 store 读到 `open`。**刻意不是全局默认**（面板在真机上就是常驻
+ * 的，默认隐藏会让其余故事少一层真环境），也刻意**不是「隐藏」那个 DOM** ——
+ * 不挂它，就没有第二份面板状态。
+ */
+export const withAppProviders: Decorator = (Story, context) => {
+  const hidePanel =
+    (context.parameters as { messagePanelHidden?: unknown })
+      .messagePanelHidden === true;
+  return (
+    <StorybookAppProviders hideMessagePanel={hidePanel}>
+      <Story />
+    </StorybookAppProviders>
+  );
+};
