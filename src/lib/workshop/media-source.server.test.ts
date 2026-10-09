@@ -3,7 +3,7 @@
  *
  * 这个模块此前**零执行者** —— 本批把它的「地址 → 磁盘」换成共用判据
  * （`~/lib/media/output-paths` 的 `artifactDiskPath`），改了一个判据却没有一份
- * 执行者，就是「修了 ≠ 记了」那个老形状（台账 §11.2.1 第二条）。所以用例按
+ * 执行者，就是「改了判据却没挂执行者」那个老形状（§11.2.1「挂载即欠执行者」）。所以用例按
  * **改了什么就钉什么**来写，重点是那一条边界：
  * 旧实现用 `abs.startsWith(GENERATED_DIR)` 收根，同级的 `generatedX` 目录
  * 前缀相同 → 会被算作根内（`/api/generated/../generatedX/evil.png` 归一后就是它）。
@@ -85,7 +85,7 @@ describe("resolveMediaBytes —— 本地产物地址", () => {
      * `mimeForExt`）在它身上**看不出来**，永远落到 `image/png` 这个默认值上。
      * 换一张 `.jpg` 才判得到：这一支的 MIME 会被 data URL 带进远程通道，
      * 标错就是「webp/jpeg 被声明成 png」。断言值仍来自语义（文件名里的扩展名），
-     * 不是从实现抄（§11.2.1 第九条）。 */
+     * 不是从实现抄（§11.2.1「用例的期望值要从语义推，不能从实现抄」）。 */
     const file = path.join(ROOT, "t-jpg", "img_0.jpg");
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, Buffer.from("fake-jpeg"));
