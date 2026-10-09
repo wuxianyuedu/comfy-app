@@ -277,6 +277,31 @@ export default tseslint.config(
        * `node scripts/check-a11y-rules.cjs --report`。
        */
       ...a11yRecommendedRules(),
+      /* 第三档：**官方两份配置谁都没提到**的非废弃规则（本批补）。
+       *
+       * 立案现场：插件的 `recommended` / `strict` 是 `lib/index.js` 里**手写的
+       * 静态清单**，不是「除废弃外全开」。实测 39 条里**有 5 条两边都没被提到**，
+       * 其中两条是官方标了 ❌ deprecated（`accessible-emoji` / `no-onchange`，
+       * 不提是对的），剩下三条**既非 deprecated、也非明写 off** ——
+       * 也就是说「该不该开」**从来没有人决定过**，它们只是被两边的清单漏掉了。
+       * 这与「recommended 里被悄悄关掉」是同一个洞的另一面：
+       * 「没列进来」同样等于「没人守」。
+       *
+       * 三条各自的裁决（逐条登记在 scripts/.a11y-rule-ledger.json）：
+       *  · `lang` 与 `no-aria-hidden-on-focusable` —— **开**。全仓实测 0 处
+       *    （`layout.tsx` 已是 `<html lang="zh-CN">`、没有 aria-hidden 落在可聚焦
+       *    元素上的形态），开是**零成本的真判据**：它防的是「新增一处写错」，
+       *    而不是「现存有多少」。判据生效性当场核过（植入违规会报）。
+       *  · `prefer-tag-over-role` —— **不开**，且不是「误报就完事」：它实测 27 处，
+       *    绝大多数是 ARIA 复合控件 pattern（Base UI 的 `role="combobox"` /
+       *    `listbox` / `option`、shadcn 的 `role="list"` 修 Safari 的列表语义、
+       *    `role="status"` 的 live region），换成它建议的原生标签**会把控件改坏**。
+       *    但它**照出了一个真缺陷族**：`role="radiogroup"` 声明了却没有方向键契约
+       *    （`AppearanceSection` 两处）—— 那一族由本批收口 + §6.12 的
+       *    「复合控件 ⇄ 键盘契约」口径守，不是关掉这条就了事。 */
+      "jsx-a11y/lang": "error",
+      "jsx-a11y/no-aria-hidden-on-focusable": "error",
+      "jsx-a11y/prefer-tag-over-role": "off",
 
       /* 方言两档（见 §6.12 的裁决表，逐条登记在 scripts/.a11y-rule-ledger.json）：
        *  ① 项目形态与官方默认冲突 —— 桌面应用里「打开就把光标放进唯一的输入位」

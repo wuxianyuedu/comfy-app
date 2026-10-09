@@ -243,8 +243,38 @@ export function forkPoint(root, remoteRev = DEFAULT_REMOTE_REV) {
   // 远端已在 HEAD 的历史里（典型：刚把它 merge 进来）⇒ ② 没有可比的对象。
   const contained = git(["merge-base", "--is-ancestor", remoteRev, "HEAD"], root);
   if (contained.ok) return null;
+  // **合并已解完、提交还没落地**（`MERGE_HEAD` 在场）：HEAD 仍是合并前那个提交，
+  // 上面那条 `--is-ancestor` 因此看不到「远端已经进来了」，而 `merge-base` 回的仍是
+  // 合并前的分叉点 —— 于是解冲突的人会拿到一条**永远解不开**的红（出口让他把远端合并
+  // 进来，而他刚做完那件事）。这不是「没查到」，是「没什么要查」：合并的第二个父提交
+  // 就是远端，它一旦落地，② 立刻走上面那条路径。
+  // 判的是**本次提交**是不是那个待落地的合并（`MERGE_HEAD`），不是「历史上merge过」。
+  if (hasInProgressMerge(root)) return null;
   const r = git(["merge-base", "HEAD", remoteRev], root);
   return r.ok && r.out.trim() ? r.out.trim() : null;
+}
+
+/**
+ * 本次提交是不是一个**待落地的合并提交**（`git merge` 已解完冲突、尚未 commit）。
+ *
+ * 判据是 `$GIT_DIR/MERGE_HEAD` 在场 —— 那是 git 自己在合并过程中写的状态文件，
+ * 也是「`git commit` 将要产生的这次提交有两个父提交、且第二个就是被合并进来的
+ * 那个 rev」的唯一权威信号。**不拿别的近似**：`git merge-base` 看不出来（HEAD
+ * 还没动）、`--is-ancestor` 也看不出来（同上），而「暂存区里有 `package.json`」
+ * 更是无关（自己改依赖也是这个形态）。
+ *
+ * `$GIT_DIR` 通过 `resolveGitDir()` 解析（`--git-dir` 之外还要认链接工作树里
+ * `.git` 是个文件的情形，同 `remoteRefTimestamp` 那条路径的理由）。
+ * @returns {boolean}
+ */
+export function hasInProgressMerge(root) {
+  try {
+    return fs.existsSync(path.join(resolveGitDir(root), "MERGE_HEAD"));
+  } catch {
+    /* 解析不出 git 目录 ⇒ 当作「不是合并提交」，② 照常按分叉点判（保守方向：
+       宁可多判一次，不可把「查不了」读成「没问题」—— 同 `readAtRev` 的口径）。 */
+    return false;
+  }
 }
 
 /**
@@ -398,8 +428,13 @@ export function runFreshnessCheck(root, opts = {}) {
   let remoteChecked = false;
   let remoteAgeMs = null;
   let remoteDrifts = [];
+  /* 合并已解完、尚未落地（`MERGE_HEAD` 在场）：这一态**不是**「没查到」，
+   * 是「没什么要查」—— 被合并进来的那个 rev 即将成为 HEAD 的第二个父提交，
+   * ② 的那条比对在它落地后自然走 `--is-ancestor` 分支。见 `forkPoint` 的说明。 */
+  const merging = !opts.offline && hasInProgressMerge(root);
   if (
     !opts.offline &&
+    !merging &&
     git(["rev-parse", "--verify", "--quiet", rev], root).ok
   ) {
     const stamp = remoteRefTimestamp(root, rev.replace(/^origin\//, ""));
@@ -418,6 +453,14 @@ export function runFreshnessCheck(root, opts = {}) {
   if (opts.offline) {
     lines.push(
       "[未校验] --offline：本次没有核对远端依赖（只看本地自身是否自洽）。",
+    );
+  } else if (merging) {
+    /* 这一行**不能**复用下面那句 `[未校验]` —— 那是「没看」，这是「远端已经在
+     * 本次合并里」，两者读起来正好相反。 */
+    lines.push(
+      `[已合并] 本次是一个待落地的合并提交（MERGE_HEAD 在场）—— ${rev} 即将成为它的第二个父提交，`,
+      "         ② （基线依赖 ⇄ 远端）这一层没有待同步的对象：远端那份依赖面就在这次合并里。",
+      "         合并落地之后 ② 走 `--is-ancestor` 那条路径（见 scripts/check-deps-freshness.mjs 的 forkPoint）。",
     );
   } else if (!remoteChecked) {
     lines.push(
@@ -462,7 +505,9 @@ export function runFreshnessCheck(root, opts = {}) {
     lines.push(
       remoteChecked
         ? "依赖与远端一致、本地安装也自洽。"
-        : "本地安装自洽（远端未校验，见上）。",
+        : merging
+          ? "本地安装自洽；远端那份依赖面已在本次合并里（见上）。"
+          : "本地安装自洽（远端未校验，见上）。",
     );
   }
   return {

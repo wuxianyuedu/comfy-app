@@ -367,7 +367,7 @@ export function MultiModeSelect({
                       </svg>
                     )}
                   </span>
-                  <span className="flex-1 truncate text-[13px] font-medium">
+                  <span className="flex-1 truncate text-sm font-medium">
                     {item.label}
                   </span>
                   {/* 默认模式标记：点星星把该模式设为默认（未选中会顺带勾上） */}

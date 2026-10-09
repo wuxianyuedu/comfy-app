@@ -152,25 +152,30 @@ export function MessageCenterPanel() {
               const meta = KIND_META[m.kind] ?? KIND_META.info!;
               const Icon = meta.icon;
               return (
-                /* 行外壳（`li`）只负责排版：**删除按钮是行按钮的兄弟**，不嵌在
-                 * 它里面 —— 交互元素互相嵌套既非法（HTML）又会把 Tab 焦点搅在
-                 * 一起。行的「点一下标记已读」由右侧那个原生按钮承担。 */
-                <li key={m.id} className="flex items-stretch gap-1.5">
-                  {/* 整行可点 → **原生按钮**：此前是 `<li onClick>`，键盘用户能
-                   * Tab 到删除按钮，却**没有任何路径**标记已读（鼠标点得开、键盘
-                   * 进不来）。原生 `<button>` 的 Enter/Space 与焦点语义是免费给的
-                   * —— 再挂一个 `simpleKeyHandler` 只是复刻浏览器默认行为
-                   * （§16.2.4.57 的账要消除的形态）。 */}
-                  <Button
-                    variant="ghost"
-                    onClick={() => markRead(m.id)}
-                    className={`bg-subtle/60 hover:bg-subtle h-auto flex-1 justify-start rounded-xl border p-3.5 text-left font-normal whitespace-normal ${
-                      m.read
-                        ? "border-border-subtle opacity-70"
-                        : `${meta.ring} border`
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
+                <li
+                  key={m.id}
+                  className={`bg-subtle/60 hover:bg-subtle rounded-xl border p-3.5 transition-colors ${
+                    m.read
+                      ? "border-border-subtle opacity-70"
+                      : `${meta.ring} border`
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* 整行「点一下标记已读」用原生 `<Button variant="ghost">`
+                     *  而不是 `li` 上的 `onClick`：这条 `<li>` 里还嵌着一个删除
+                     *  按钮，两者不能合成同一个 `<button>`（HTML 里按钮套按钮
+                     *  非法），而键可达的语义是不能靠「父元素 onClick」白拿的
+                     *  —— 此前键盘用户能 Tab 到删除按钮，却没有任何路径标记已读
+                     *  （鼠标点得开、键盘进不来）。原生 `<button>` 的
+                     *  Enter/Space 与焦点语义是免费给的，再挂一个
+                     *  `simpleKeyHandler` 只是复刻浏览器默认行为（§16.2.4.57）。
+                     *  `ghost` 变体的底色/文字色由这里接管（§16.2.4.2 第 5 条），
+                     *  行外观与收口前一致。 */}
+                    <Button
+                      variant="ghost"
+                      onClick={() => markRead(m.id)}
+                      className="flex min-w-0 flex-1 items-start justify-start gap-3 rounded-lg p-0 text-left font-normal whitespace-normal hover:bg-transparent"
+                    >
                       <span
                         className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
                       >
@@ -178,9 +183,9 @@ export function MessageCenterPanel() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline gap-2">
-                          <span className="text-ink-bright text-[13px] font-semibold">
+                          <h3 className="text-ink-bright text-[13px] font-semibold">
                             {m.title}
-                          </span>
+                          </h3>
                           {!m.read && (
                             <Badge tone="primary" size="pill-sm">
                               新
@@ -190,21 +195,21 @@ export function MessageCenterPanel() {
                             {fmtTime(m.time)}
                           </time>
                         </div>
-                        <span className="text-ink-soft mt-1 block text-[12.5px] leading-relaxed wrap-break-word whitespace-pre-wrap">
+                        <p className="text-ink-soft mt-1 text-[12.5px] leading-relaxed wrap-break-word whitespace-pre-wrap">
                           {m.body}
-                        </span>
+                        </p>
                       </div>
-                    </div>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => remove(m.id)}
-                    className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 self-start rounded"
-                    aria-label="删除该消息"
-                  >
-                    <Trash2 data-icon="inline-start" size={13} />
-                  </Button>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => remove(m.id)}
+                      className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 rounded"
+                      aria-label="删除该消息"
+                    >
+                      <Trash2 data-icon="inline-start" size={13} />
+                    </Button>
+                  </div>
                 </li>
               );
             })}

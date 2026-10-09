@@ -376,11 +376,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   "tests/theme-tokens-compile-source.test.ts",
   // 「jsx-a11y 的规则开关 ⇄ 判据」（规范 06 §6.12）：这个插件装着 39 条规则、
   // 而 `eslint-config-next` 只启用 6 条 —— 「半开」这件事此前没有任何东西在数
-  //（`grep -c jsx-a11y eslint.config.js` 是 0，配置在 next 里）。本判据三向核：
+  //（`grep -c jsx-a11y eslint.config.js` 是 0，配置在 next 里）。本判据四向核：
   // 官方 recommended 集合全开、本仓与官方默认的每一处不同都在台账里登记、
-  // 台账双向拦。它同时是判据自己的门禁自测 —— 该拦的（悄悄关掉一条、登记了却
-  // 没关、登记不存在的规则、缺理由 / 缺 keeper、豁免指向不存在的文件）与该放的
-  // （`--report` 恒 0）每一条都得有人钉住。改 `.githooks/**` 会让本层放弃收窄、
+  // 官方两份配置谁都没提到又未废弃的规则必须有一笔裁决、台账双向拦。
+  // 它同时是判据自己的门禁自测 —— 该拦的（悄悄关掉一条、登记了却没关、
+  // 登记不存在的规则、缺理由 / 缺 keeper、豁免指向不存在的文件、没人决定过的
+  // 规则）与该放的（`--report` 恒 0）每一条都得有人钉住。改 `.githooks/**` 会让本层放弃收窄、
   // 只跑固定清单，而「有人偷偷关掉一条 a11y 规则」正是这类动作，故进固定清单。
   "tests/a11y-rules-gate.test.ts",
   // 「被门禁拦下先复算 master 基线」的执行者（规范 §13.6.2 第 1 步）：那段
@@ -399,6 +400,35 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 低于地板 / 缺字段）每一档都得有人钉住，都是「下一次新增一条按需档」时才走得进的
   // 路径，所以必须进固定清单（与本次改动无关也照跑）。
   "tests/on-demand-duties-gate.test.ts",
+  // 「前端响应镜像 ↔ 线上真实列」的契约（台账 E4 第一格）：镜像声明的每一列线上必须
+  // 真的在发。交叉类型 `RouterOutputs[...] & { images?: … }` 补出来的字段，tsc 只查它
+  // 存在、永远查不出服务端没发它 —— 于是那句读取恒为 `undefined`，而类型上是 optional
+  // 连可选链都不会红，表现是界面上那一格永远空着而全绿（视频队列的封面与下载入口就是这么挂的）。
+  // 它守的是「下一次任一侧改动」，而改 `task.list` 的 mapper 只会被 router 自己的用例拉进
+  // C 组 —— 契约这一侧必须无条件响，所以进固定清单。
+  "tests/task-list-wire-contract.test.ts",
+  // 「全局 setup 里的 RTL 逐用例卸载真的注册上了吗」（ISSUE #1282 本轮 / §12.18）：
+  // 这行注册在本仓库**长期是死的** —— `@testing-library/react` 只在
+  // `typeof afterEach === "function"` 时注册自动清理，而本仓库 `globals: false`
+  // ⇒ 那行 `if` 从不成立。后果是被打的不是任何一条断言，而是全量跑的
+  // **unhandled error**（React scheduler 的活在 jsdom 环境拆掉后落地 ⇒
+  // `window is not defined`）把退出码打非零 —— 现场读起来像「某份用例红了」，
+  // 其实用例全绿，正是「红指向的东西不是判据」那一族。
+  // 它同时是判据自己的门禁自测：本判据**真起一份探针用例**去跑（「setup 文件里
+  // 出现过 cleanup」与「清理真的注册上了」是两件事，前者在把注册挪进永远不执行的
+  // 分支里时照样为真），而它的输入是 `tests/setup.ts` / `vitest.config.ts` 两份
+  // 文本 + 一次子进程，import 图一概追不到 —— 与本次暂存改动无关也必须响，
+  // 故进固定清单。
+  "tests/global-setup-cleanup.test.ts",
+  // 「合并提交必须双亲」这条门槛的在位判据（ISSUE #1594 / 规范 §13.6.1）。
+  // 它同时是判据自己的门禁自测（真仓库跑拓扑：普通提交放行 / 真合并放行 /
+  // 声明是合并但单亲阻断 / `--amend` 一个合并提交放行 / 正文提到 Merge 不算声明 /
+  // 非 git 目录放行）。必须进固定清单，理由与上面两条同：**改 `.githooks/**` 会让
+  // 本层放弃收窄、只跑固定清单**，而「有人把 `.githooks/prepare-commit-msg` 摘掉 /
+  // 少传 `$1` `$2`」那次改动恰好落在那一档上 —— 跟着改动走等于专挑它不在的时机跑，
+  // 表现不是红而是「那条纪律又回到只写在文档里」。它读的是钩子文本 + git 拓扑，
+  // import 图一概追不到。
+  "tests/check-merge-parents.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

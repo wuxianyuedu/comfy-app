@@ -106,8 +106,8 @@ export function HistoryTaskCard({
          * 块级元素，而它的默认排版是居中。 */}
         <Button
           variant="ghost"
-          className="h-auto min-w-0 flex-1 justify-start rounded-xl p-0 text-left font-normal hover:bg-transparent"
           onClick={() => onOpenDetail(task.id)}
+          className="h-auto min-w-0 flex-1 cursor-pointer justify-start rounded-xl p-0 text-left font-normal whitespace-normal hover:bg-transparent"
         >
           <div className="flex flex-wrap items-center gap-2">
             <span

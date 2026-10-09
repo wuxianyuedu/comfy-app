@@ -1191,10 +1191,20 @@ ComfyUI 被反复启动」不同）。
 性质）。改成一次启动一份文件之后，「文件是谁」不依赖任何假设 —— 跨包这一层
 **复用的正是这条**，一条减法都没加回来。
 
+**端点接线**（ISSUE #1587 —— #1550 只落了这一层的纯判据与 IO，**端点当时还在只列
+`current/`**，于是「归档了但界面看不到」正是用户随后报的那一条）：判据在
+`lib/log/log-run-packs.ts`（分组 / 顺序 / 文案 / id 形态）、IO 在
+`lib/log/log-run-packs.server.ts`（列 `runs/`、读 `run.json`），端点是
+`src/app/api/logs/sessions/route.ts` —— 它只做四件事：判来源白名单、取两处路径、
+定位选中那一份、读正文（尾部窗口）。**归档份要按包名进包找**（`<包名>/<文件名>`
+→ `runs/<包名>/services/<文件名>`），裸文件名找不到它 —— 那是另一个目录里的同名文件。
+
 **路径不在端点里拼**：`current/` 那边取 `log-paths` 的 `SERVICES_LOG_DIR` 与
-`listRuntimeLogFiles()`，`runs/` 那边取 `scripts/launcher-core/run.mjs` 的
-`runsDir()`（归档写方的唯一定义）。读方自己拼一遍，两边一旦漂开表现是「归档了但
-界面看不到」——而两边各自都「看起来是对的」（§12.14）。
+`listRuntimeLogFiles()`；`runs/` 那边取 `scripts/launcher-core/run.mjs` 的
+`runsDir()`（归档写方的唯一定义），包内相对目录与 `run.json` 名字分别取
+`log.mjs` 的 `LOG_DIRS.services` 与 `run.mjs` 的 `LOG_LAYOUT.runJson`。读方自己
+拼一遍，两边一旦漂开表现是「归档了但界面看不到」——而两边各自都「看起来是对的」
+（§12.14）。
 
 **顺序判据收在一处**（`runtime-log-file.ts` 的 `compareRuntimeLogFiles`）：
 `current/` 下的份与包里的份**必须**同序，两边各写一遍必然漂。它顺带管住一条真错序：

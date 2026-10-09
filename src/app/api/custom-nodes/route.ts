@@ -26,7 +26,7 @@ import { readEnvVar } from "~/lib/envfile";
 import { errorText } from "~/lib/error-message";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { AppError } from "~/lib/core/errors";
-import { isRecord } from "~/lib/is-record";
+import { isPlainRecord, isRecord } from "~/lib/is-record";
 import type {
   DiscoveredSubpkg,
   ParseReport,
@@ -140,15 +140,18 @@ function readManifestSummary() {
   if (!fs.existsSync(MANIFEST)) return null;
   try {
     const parsed: unknown = JSON.parse(fs.readFileSync(MANIFEST, "utf-8"));
-    // 标量 JSON 在原 `m.packages` 处会抛 TypeError → catch → null;守卫把该行为显式化。
-    if (!isRecord(parsed)) return null;
+    /* 清单体必须是「JSON 对象」，数组不算：`isRecord` 认数组，于是一份被写坏的清单
+     * （`[]`）会被读成「解析过了，但一个节点都没有」—— 而界面把这两种当两件事：
+     * 前者该提示「清单坏了」，后者是正常冷启动（台账 E9 记的就是这一族「不同因同形」）。
+     * 标量 JSON 在原 `m.packages` 处会抛 TypeError → catch → null；守卫把该行为显式化。 */
+    if (!isPlainRecord(parsed)) return null;
     const m = parsed;
     const pkgs: ManifestPackageSummary[] = [];
-    const pmap: Record<string, unknown> = isRecord(m.packages)
+    const pmap: Record<string, unknown> = isPlainRecord(m.packages)
       ? m.packages
       : {};
     for (const [name, info] of Object.entries(pmap)) {
-      const fields: Record<string, unknown> | undefined = isRecord(info)
+      const fields: Record<string, unknown> | undefined = isPlainRecord(info)
         ? info
         : undefined;
       pkgs.push({
@@ -165,11 +168,10 @@ function readManifestSummary() {
       });
     }
     const sources: string[] = jsonField<string[]>(m, "sources", []);
+    const nodes: unknown = jsonField(m, "nodes", null);
     const summary = {
       generatedAt: jsonField<string | null>(m, "generatedAt", null),
-      totalNodes: Object.keys(
-        jsonField<Record<string, unknown>>(m, "nodes", {}),
-      ).length,
+      totalNodes: isPlainRecord(nodes) ? Object.keys(nodes).length : 0,
       packages: pkgs,
       missingPaths: [] as string[],
       parseErrors: jsonField<unknown[]>(m, "parseErrors", []),
