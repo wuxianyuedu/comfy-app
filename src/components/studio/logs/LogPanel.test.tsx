@@ -11,14 +11,7 @@
  *      点击后回到第 1 页。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  act,
-  cleanup,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { LogPanel } from "./LogPanel";
@@ -374,9 +367,9 @@ describe("LogPanel 日志面板", () => {
     await user.click(screen.getByRole("combobox", { name: "按来源筛选" }));
     /* 选项经 portal 异步挂载，负载下同步读取可能跑在挂载之前——optionOf 的
      * 空串兜底会把「没等到」伪装成「内容不符」。先显式等 option 出现。 */
-    await waitFor(() =>
-      expect(screen.getAllByRole("option").length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => screen.getAllByRole("option").length)
+      .toBeGreaterThan(0);
     const optionOf = (label: string) =>
       screen
         .queryAllByRole("option")

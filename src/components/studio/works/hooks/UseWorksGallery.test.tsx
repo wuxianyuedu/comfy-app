@@ -9,7 +9,7 @@
  * 以及那一层的实现细节（并集口径、两侧一起删）由 `canvas-store.test.ts` 守。
  */
 
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface EntryRow {
@@ -71,7 +71,7 @@ describe("useWorksGallery", () => {
       ok: true,
     });
     const { result } = renderHook(() => useWorksGallery());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(reapAllEmptyDraftsMock).toHaveBeenCalledTimes(1);
     expect(result.current.projects).toHaveLength(1);
     expect(result.current.serverOk).toBe(true);
@@ -83,7 +83,7 @@ describe("useWorksGallery", () => {
       ok: false,
     });
     const { result } = renderHook(() => useWorksGallery());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.serverOk).toBe(false);
     expect(result.current.projects.map((p) => p.id)).toEqual(["proj_local"]);
   });
@@ -94,7 +94,7 @@ describe("useWorksGallery", () => {
       ok: true,
     });
     const { result } = renderHook(() => useWorksGallery());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
 
     act(() => result.current.requestDelete("proj_orphan"));
     expect(result.current.pendingDelete?.id).toBe("proj_orphan");
@@ -120,7 +120,7 @@ describe("useWorksGallery", () => {
       ok: true,
     });
     const { result } = renderHook(() => useWorksGallery());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
 
     act(() => result.current.requestDelete("proj_a"));
     act(() => result.current.cancelDelete());
@@ -131,11 +131,11 @@ describe("useWorksGallery", () => {
   it("refresh 重取一次", async () => {
     listProjectsWithServerMock.mockResolvedValue({ entries: [], ok: true });
     const { result } = renderHook(() => useWorksGallery());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(listProjectsWithServerMock).toHaveBeenCalledTimes(1);
     act(() => result.current.refresh());
-    await waitFor(() =>
-      expect(listProjectsWithServerMock).toHaveBeenCalledTimes(2),
-    );
+    await expect
+      .poll(() => listProjectsWithServerMock)
+      .toHaveBeenCalledTimes(2);
   });
 });

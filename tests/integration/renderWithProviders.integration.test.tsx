@@ -37,9 +37,13 @@ const mockRouter = t.router({
   tag: t.router({
     list: t.procedure.query(async () => {
       if (behavior.listError) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: behavior.listError });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: behavior.listError,
+        });
       }
       // sleep-ok: mock 内部延迟：tRPC mock 的 delayMs 是给用例制造「接口慢一拍」的现场（行为开关），不是等条件。
+      // prettier-ignore -- 保持与上方 `sleep-ok` 声明的紧邻（判据按相邻判作用半径）
       if (behavior.delayMs) await new Promise((r) => setTimeout(r, behavior.delayMs));
       return { tags: behavior.tags };
     }),
@@ -83,7 +87,9 @@ afterAll(() => server.close());
 
 /* ---------- 本地 harness：消费 localApi.tag.list / .add ---------- */
 function TagDemo() {
-  const listQ = localApi.tag.list.useQuery(undefined, { placeholderData: (p) => p });
+  const listQ = localApi.tag.list.useQuery(undefined, {
+    placeholderData: (p) => p,
+  });
   const utils = localApi.useUtils();
   const [err, setErr] = useState<string | null>(null);
 
@@ -127,15 +133,21 @@ describe("前端集成层 · MSW 数据态流转自检", () => {
     renderTagDemo(<TagDemo />);
 
     expect(screen.getByTestId("loading")).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByTestId("loading")).not.toBeInTheDocument());
-    expect(screen.getAllByTestId("tag-item").map((n) => n.textContent)).toEqual(["checkpoint", "lora"]);
+    await waitFor(() =>
+      expect(screen.queryByTestId("loading")).not.toBeInTheDocument(),
+    );
+    expect(screen.getAllByTestId("tag-item").map((n) => n.textContent)).toEqual(
+      ["checkpoint", "lora"],
+    );
   });
 
   it("2. loading→error：router 抛错后进入错误态（不再停留 loading）", async () => {
     behavior = { tags: [], listError: "数据库不可用" };
     renderTagDemo(<TagDemo />);
 
-    await waitFor(() => expect(screen.getByTestId("error")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("error")).toBeInTheDocument(),
+    );
     expect(screen.getByTestId("error").textContent).toContain("数据库不可用");
     expect(screen.queryByTestId("loading")).not.toBeInTheDocument();
   });
@@ -143,13 +155,13 @@ describe("前端集成层 · MSW 数据态流转自检", () => {
   it("3. mutation→invalidate→列表自动新增（缓存失效）", async () => {
     behavior = { tags: ["checkpoint"] };
     renderTagDemo(<TagDemo />);
-    await waitFor(() => expect(screen.getAllByTestId("tag-item").length).toBe(1));
+    await expect.poll(() => screen.getAllByTestId("tag-item").length).toBe(1);
 
     await userEvent.click(screen.getByRole("button", { name: "新增 fresh" }));
 
-    await waitFor(() => {
-      expect(screen.getAllByTestId("tag-item").map((n) => n.textContent)).toContain("fresh");
-    });
+    await expect
+      .poll(() => screen.getAllByTestId("tag-item").map((n) => n.textContent))
+      .toContain("fresh");
     expect(screen.getAllByTestId("tag-item").length).toBe(2);
   });
 });
