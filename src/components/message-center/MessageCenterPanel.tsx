@@ -177,7 +177,14 @@ export function MessageCenterPanel() {
                     <Button
                       variant="ghost"
                       onClick={() => markRead(m.id)}
-                      className="flex min-w-0 flex-1 items-start justify-start gap-3 rounded-lg p-0 text-left font-normal whitespace-normal hover:bg-transparent"
+                      /* `h-auto` 是必须的，不是风格：`size` 的缺省档带 `h-8`（32px
+                       * 定高），而这条按钮的内容是「标题 + 正文」——正文可能是**多段**
+                       *（陈旧实例那条就是：正文含换行、`whitespace-pre-wrap` 会照实
+                       * 换行）。定高 32px 之下正文溢出按钮盒、穿过 `<li>` 的下沿压到
+                       * 下一条消息上，而 `<li>` 的高度仍按 32px 算 ⇒ 画布上两张卡片
+                       * 叠在一起，tsc / eslint / 构建全绿。同文件另外两颗按钮也带
+                       * `h-auto`，这里此前漏了。 */
+                      className="flex h-auto min-w-0 flex-1 items-start justify-start gap-3 rounded-lg p-0 text-left font-normal whitespace-normal hover:bg-transparent"
                     >
                       <span
                         className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
