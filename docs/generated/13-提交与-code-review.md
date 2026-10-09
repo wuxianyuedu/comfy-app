@@ -210,6 +210,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
 ✅ node scripts/check-test-sleep.cjs        # 测试层裸 sleep 的净数棘轮：`await new Promise(r => setTimeout(r, N))` 不许涨（正当形态逐站点声明 `sleep-ok`；见 11 §11.14）
 ✅ node scripts/check-test-waitfor.cjs      # 测试层 `waitFor` 的边界：只有「等 DOM」与「假定时器窗口内」两种形态该留 `waitFor`，其余等值的一律 `expect.poll`（见 11 §11.14.3）
+✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮：`it/test/describe.each` 净数不许涨（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
 ✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
 ✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
 ✅ node scripts/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）

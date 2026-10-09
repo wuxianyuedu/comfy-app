@@ -43,10 +43,10 @@ function readBaseline(file: string) {
   };
 }
 
-describe.each([
+describe.for([
   ["canonical", CANON_BASELINE, CANON_SCRIPT, "--check"],
   ["spacing", SPACING_BASELINE, SPACING_SCRIPT, "--check"],
-])("%s 棘轮基线（ISSUE #1451 要求 2）", (_name, baseline, script, flag) => {
+] as const)("%s 棘轮基线（ISSUE #1451 要求 2）", ([_name, baseline, script, flag]) => {
   it("基线文件在场且形状正确（total 与按文件的账一致）", () => {
     expect(existsSync(baseline), `${baseline} 不在了`).toBe(true);
     const { total, files } = readBaseline(baseline);
