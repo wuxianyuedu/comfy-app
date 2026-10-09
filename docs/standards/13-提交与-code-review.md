@@ -178,8 +178,10 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/visual-freshness-gate.mjs    # 每一档都有主（**两份同形的账**，见 11 §11.8）：像素基线
    # （`scripts/.visual-baseline-freshness.json`）与**全量 e2e**（`scripts/.e2e-freshness.json`）——
    # 判「每一档都有一条新鲜度记录，且写清谁 / 什么时候 / 按哪条命令复核的」。缺几张基线的档由
-   # `PENDING_PLATFORMS` 顶着，不要求新鲜度记录（两张表各管数量与时效）。钩子里**不跑**像素 / e2e
-   # （起 webServer + 浏览器会与 A/B/C/D 抢资源），记账走 `pnpm check:visual` / `pnpm test:e2e`
+   # `PENDING_PLATFORMS` 顶着，不要求新鲜度记录（两张表各管数量与时效）。全量 e2e 那一档
+   # **多判一条「今天自证过没有」**（每天只拦第一次提交；`--skip "<理由>"` 记一条豁免也能放行；
+   # 账文件还没入库时只提醒、不阻断）。钩子里**不跑**像素 / e2e（起 webServer + 浏览器会与
+   # A/B/C/D 抢资源），记账走 `pnpm check:visual` / `pnpm test:e2e`
 ✅ node scripts/run-affected-tests.mjs       # C 组：结构守护固定清单 + 本次改动
    # 牵扯到的用例，一次 vite（固定清单唯一出处是 `affected-tests.mjs` 里的
    # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
@@ -441,7 +443,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 产物级护栏            | 改动构建 / 产物后 `@` 跑 `pnpm run build` + `check-standalone-contents.cjs` | 欠账条目 2                       |
 | E2E 关键流程          | `@` 跑 `pnpm exec playwright test --grep @critical`，或 `pnpm test:e2e --grep @critical`（先 `db:push`） | 欠账条目 3/4                     |
 | 像素回归（§11.8）     | `pnpm check:visual`（或 Windows 双击 `-Mode visual`）——见下面那条            | 不进钩子，但它有**边界明确的触发条件** |
-| 全量 E2E（§11.8）     | `pnpm test:e2e`（跑绿即记一笔新鲜度账，见下面那条）                          | 不进钩子（它**含**像素档，同一量级的代价） |
+| 全量 E2E（§11.8）     | `pnpm test:e2e`（跑绿即记一笔新鲜度账，见下面那条）                          | 不进钩子，但有**每天首次的自证** |
 
 **像素回归这一行为什么与上面三条不同**（ISSUE #1282 的口径）：上面三条是「没有触发条件、
 只能按需召唤」，而像素层的触发条件一直是明确、可观测的 —— **改了会动到像素判决的东西**
@@ -468,6 +470,14 @@ ISSUE #1282）：`--update-snapshots` 总是绿（把基线改成当次实况）
 才发现的。现在 `pnpm test:e2e` 走 `scripts/e2e-run.mjs`，跑绿即记 `scripts/.e2e-freshness.json`
 （与像素档**同形而不同键**，见 §13.5.12 的同款纪律与 §11.8 的两账对照表），并由钩子那一步
 在每一次提交里把它的日期打出来 —— 「这一档上次真跑绿是什么时候」从此是被看见的读数。
+
+**全量 e2e 那一行为什么还有「每天一次」这条判据**（ISSUE #1282）：像素档只要求「有主、写清」，
+把「多久没跑算旧」留给人看读数 —— 因为它的结论只在录过基线的那台机器上成立，时钟阻断会让所有人
+卡在一条只有少数人能解的账上。全量 e2e 不是那种情况：`pnpm test:e2e` **人人都跑得动**，
+它缺的只是「有人跑」。所以它按本地日历日多判一条 —— 当天的第一次提交必须伴着一次自证，
+出路有两条：`pnpm test:e2e` 跑绿即记，或 `node scripts/e2e-run.mjs --skip "<理由>"`
+记一条写明理由的豁免（占位理由被拦，豁免不是绕过）。账文件还没入库时**只提醒、不阻断**
+（平台侧 squash 合并不跑本地钩子，硬规则 6）。四条边界见 §11.8。
 
 这张表里**原本还有一行**「canonical 候选 → `@` 跑 `tw4-canonical-report.mjs`」，
 随 ISSUE #1451 摘掉：它们不再靠「人记得跑」，而是各带 `--check` 判定档与棘轮基线
