@@ -154,6 +154,17 @@
         "label": "门禁自测临时仓库样板（§11.16.1）"
       },
       "section": "11.16.1"
+    },
+    {
+      "id": "test-todo-consumer",
+      "name": "未完成用例声明（test.todo）的消费方在场",
+      "declaredAt": "用例里的 `test.todo` / `it.todo` / `describe.todo` 站点 + scripts/.test-todo-consumers.json",
+      "reader": "scripts/check-test-todo.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "未完成用例声明（test.todo）"
+      },
+      "section": "11.24"
     }
   ]
 }
