@@ -81,18 +81,27 @@ describe("全量 e2e 的记账语义（§11.8）", () => {
 });
 
 describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
-  it("四个值各就各位：账文件 / 键 / 名字 / 命令", () => {
+  it("六个值各就各位：账文件 / 键 / 名字 / 命令 / `daily` / `skipHow`", () => {
     expect(Object.keys(FRESHNESS_TRACKS).sort()).toEqual(["e2e", "visual"]);
+    /* `daily` / `skipHow` 是两条账**真正的**差异所在（其余四栏同形）——
+     * 所以这里把六个值都钉住，而不是只钉那四个同形的：少钉的那两栏正是
+     * 「两条账长得一样」这个错觉的来源。 */
     expect(freshnessTrack("e2e")).toEqual({
       ledger: "scripts/.e2e-freshness.json",
       key: "e2e",
       label: "全量 e2e",
       run: "pnpm test:e2e",
+      daily: true,
+      skipHow: 'node scripts/e2e-run.mjs --skip "<理由>"',
     });
-    expect(freshnessTrack("visual").ledger).toBe(
-      "scripts/.visual-baseline-freshness.json",
-    );
-    expect(freshnessTrack("visual").key).toBe("linux");
+    expect(freshnessTrack("visual")).toEqual({
+      ledger: "scripts/.visual-baseline-freshness.json",
+      key: "linux",
+      label: "linux 档像素基线",
+      run: "pnpm check:visual",
+      daily: false,
+      skipHow: null,
+    });
   });
 
   it("两条账**不共用一个文件**（共用 = e2e 的绿把像素档的自证覆盖掉）", () => {
