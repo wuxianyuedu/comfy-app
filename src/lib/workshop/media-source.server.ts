@@ -11,7 +11,11 @@ import { promises as fs } from "node:fs";
 import { isRecord } from "~/lib/is-record";
 import { artifactDiskPath } from "~/lib/media/output-paths";
 import { isInlineMedia, parseDataUrl, toDataUrl } from "~/lib/media/data-url";
-import { DEFAULT_IMAGE_MIME, mimeForExt } from "~/lib/media/mime-ext";
+import {
+  DEFAULT_IMAGE_MIME,
+  extOfPath,
+  mimeForExt,
+} from "~/lib/media/mime-ext";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 const MAX_BYTES = 24 * 1024 * 1024;
@@ -52,7 +56,10 @@ export async function resolveMediaBytes(
     if (!abs) throw new Error(`无法定位本地生成文件: ${src}`);
     const buffer = await fs.readFile(abs);
     if (buffer.byteLength > MAX_BYTES) throw new Error("图片超过 24MB 上限");
-    return { buffer, mime: mimeForExt(abs) ?? DEFAULT_IMAGE_MIME };
+    /* `mimeForExt` 收的是**扩展名**，不是路径 —— 传整条路径时它永远查不到，
+     * 于是这一支此前**恒**回 `image/png`（webp / jpeg 的产物被标成 png 发给
+     * 远程通道）。取扩展名走 `extOfPath`（与 `contentTypeForPath` 同一把尺）。 */
+    return { buffer, mime: mimeForExt(extOfPath(abs)) ?? DEFAULT_IMAGE_MIME };
   }
 
   if (/^https?:\/\//.test(src)) {
@@ -68,9 +75,11 @@ export async function resolveMediaBytes(
     const mime = res.headers.get("content-type")?.split(";")[0] ?? undefined;
     return {
       buffer,
+      /* 类型头说不是图（网关错误页的 text/html、空类型头）时按 URL 的扩展名回落 ——
+       * 同样要先取扩展名再查表，见上面本地分支那条注释。 */
       mime: mime?.startsWith("image/")
         ? mime
-        : (mimeForExt(new URL(src).pathname) ?? DEFAULT_IMAGE_MIME),
+        : (mimeForExt(extOfPath(src)) ?? DEFAULT_IMAGE_MIME),
     };
   }
 
