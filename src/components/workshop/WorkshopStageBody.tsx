@@ -201,7 +201,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 </div>
               </div>
               <div
-                className={`${SCROLLBAR_VISIBLE_CLASSES} bg-bg text-ink-subtle max-h-120 rounded-xl p-4 text-[13px] leading-7`}
+                className={`${SCROLLBAR_VISIBLE_CLASSES} bg-bg text-ink-subtle max-h-120 rounded-xl p-4 text-sm leading-7`}
                 dangerouslySetInnerHTML={{
                   __html: markdownToHtml(scriptMarkdown),
                 }}
@@ -298,7 +298,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               type="button"
               variant="ghost"
               onClick={() => setTab("shots")}
-              className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-6 py-3 text-[13px] font-semibold"
+              className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-6 py-3 text-sm font-semibold"
             >
               下一阶段 →
             </Button>

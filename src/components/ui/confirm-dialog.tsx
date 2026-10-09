@@ -145,7 +145,7 @@ export function ConfirmDialog({
                 {title}
               </h2>
               {description && (
-                <div className="text-ink-faint mt-1.5 text-[13px] leading-relaxed whitespace-pre-line">
+                <div className="text-ink-faint mt-1.5 text-sm leading-relaxed whitespace-pre-line">
                   {description}
                 </div>
               )}
@@ -160,7 +160,7 @@ export function ConfirmDialog({
               size="lg"
               onClick={onClose}
               disabled={pending}
-              className="focus-visible:ring-foreground/20 text-ink-strong bg-subtle hover:bg-surface-2 px-4 text-[13px] font-medium"
+              className="focus-visible:ring-foreground/20 text-ink-strong bg-subtle hover:bg-surface-2 px-4 text-sm font-medium"
             >
               {cancelLabel}
             </Button>
@@ -170,7 +170,7 @@ export function ConfirmDialog({
               size="lg"
               onClick={onConfirm}
               disabled={pending}
-              className="gap-1.5 px-4 text-[13px] font-semibold"
+              className="gap-1.5 px-4 text-sm font-semibold"
             >
               {/* 内联加载态用 `Spinner`（§16.2.4.2 第 7 条）：它是行内尺寸、
                   继承 `currentColor`，不会把按钮撑高。 */}
