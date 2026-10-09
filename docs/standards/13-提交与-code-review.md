@@ -1308,6 +1308,43 @@ git push origin HEAD                  # 推送并创建 PR
 > （平台允许创建 source=master 的 PR，正是要拦的场景）。判据与分支叫什么名字无关。
 > 三种拓扑（领先 / 预合并 / 完全同步）由 `tests/check-branch-guard.test.ts` 用**真仓库**跑。
 
+**第二个本地钩子：`prepare-commit-msg`（合并提交必须双亲，ISSUE #1594）**
+
+13.6.1 守的是「**在哪儿**提交」，它不回答「这次提交**是不是**合并」。而这正是上一次
+squash 合并把 `master` 上几批修复整体回退的现场：解冲突时 `git checkout`
+（含 `checkout -b`、`branch -f` + `checkout`）会**静默清掉** `.git/MERGE_HEAD`
+与 `.git/MERGE_MSG`（实测退出码 0、不留痕迹），此后 `git commit` 照常把合并结果落成
+**单亲提交** —— 树是对的、拓扑是错的，平台侧认不出「已合并」，PR 一直显示冲突，
+而本地钩子四组全绿。
+
+所以补一条判据，落在 `.githooks/prepare-commit-msg`（入口）→
+`node scripts/check-merge-parents.mjs`（判据本体）：
+
+- **提交信息声明自己是合并**（首行是 git 会写的那几种：`Merge branch` /
+  `Merge remote-tracking` / `Merge tag` / `Merge commit` / `Merge pull request`）
+  **时，本次提交必须真的有两个父**。父数取自 git 自己的事实：`1 + MERGE_HEAD 行数`；
+  `MERGE_HEAD` 不在而消息是合并信息 —— 那就是回退发生的形态，**当场阻断**并给出
+  重建合并的出口（`git reset --soft HEAD^` → `git merge --no-commit <分支>` → `git commit`）。
+- **为什么不在 `pre-commit`**：`pre-commit` **看不到本次的消息** —— 实测
+  `COMMIT_EDITMSG` 在那一刻仍停在**上一条**提交的信息上（git 先跑钩子、后落盘消息）。
+  `prepare-commit-msg` 收到 `$2`（source），能干净地把 `--amend` 排除在判据之外：
+  amend 一个合并提交时消息照样是 `Merge …`、`MERGE_HEAD` 也照样不在，但父提交从
+  `HEAD` **继承**（结果仍是双亲）—— 只看消息 + `MERGE_HEAD` 会把真正来修合并信息的
+  人 100% 拦下。
+- **边界**（都取保守放行，与 13.6.1 同口径：判据无从命中时不该误报）：
+  source 是 `commit`（`--amend` / `-c` / `-C` / cherry-pick / revert）→ 放行；
+  取不到消息 → 放行；非 git 目录 → 放行；合并字样只出现在正文（非首行）→ 放行。
+- 规则自测：`tests/check-merge-parents.test.ts`（真仓库跑拓扑：普通提交放行、
+  真合并提交放行、**声明是合并但单亲阻断并给出出口**、`--amend` 一个合并提交放行、
+  正文提到 `Merge branch` 不算声明、非 git 目录放行，另加钩子入口的 `$1` / `$2` 透传）。
+
+> **`.githooks` 下的两个钩子是两件事**：`pre-commit` 管「提交这一刻的门槛」，
+> `prepare-commit-msg` 管「提交消息与拓扑是否自洽」。两者都由
+> `core.hooksPath=.githooks` 覆盖调用，`scripts/install-git-hooks.mjs` 不必改 ——
+> 但**判据执行者的口径要跟着长**：`scripts/check-gate-executors.cjs` 的
+> `EXECUTOR_SOURCES` 已把 `prepare-commit-msg` 一并收进「谁在跑它」的来源
+> （漏登记 = 那条判据被判成「无执行者」，方向正好反了）。
+
 #### 13.6.2 master 基线可以带着硬闸红 —— 被拦先复算，别以为是自已改坏了
 
 **机制缺口**：本地 `pre-commit` 拦的是**提交**，PR 在平台侧是 **squash 合并**，

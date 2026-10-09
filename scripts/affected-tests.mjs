@@ -400,6 +400,15 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 低于地板 / 缺字段）每一档都得有人钉住，都是「下一次新增一条按需档」时才走得进的
   // 路径，所以必须进固定清单（与本次改动无关也照跑）。
   "tests/on-demand-duties-gate.test.ts",
+  // 「合并提交必须双亲」这条门槛的在位判据（ISSUE #1594 / 规范 §13.6.1）。
+  // 它同时是判据自己的门禁自测（真仓库跑拓扑：普通提交放行 / 真合并放行 /
+  // 声明是合并但单亲阻断 / `--amend` 一个合并提交放行 / 正文提到 Merge 不算声明 /
+  // 非 git 目录放行）。必须进固定清单，理由与上面两条同：**改 `.githooks/**` 会让
+  // 本层放弃收窄、只跑固定清单**，而「有人把 `.githooks/prepare-commit-msg` 摘掉 /
+  // 少传 `$1` `$2`」那次改动恰好落在那一档上 —— 跟着改动走等于专挑它不在的时机跑，
+  // 表现不是红而是「那条纪律又回到只写在文档里」。它读的是钩子文本 + git 拓扑，
+  // import 图一概追不到。
+  "tests/check-merge-parents.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
