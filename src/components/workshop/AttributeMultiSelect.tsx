@@ -9,6 +9,7 @@ import {
 } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
+import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { filterGroupsByKeyword } from "~/lib/list-filter";
 import type { OptionGroup } from "~/lib/workshop/character-options";
 
@@ -171,7 +172,14 @@ export function AttributeMultiSelect({
                           key={opt}
                           role="option"
                           aria-selected={on}
+                          /* 行可聚焦 + Enter/Space 切换：此前只有 `onClick`，
+                           * 连 `tabIndex` 都没有 —— 键盘用户完全进不来
+                           *（§16.2.4.57 的元素级键出口）。 */
+                          tabIndex={0}
                           onClick={() => toggle(opt)}
+                          {...simpleKeyHandler(["Space", "Enter"], () =>
+                            toggle(opt),
+                          )}
                           className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs transition-colors ${
                             on
                               ? "bg-primary-soft text-primary"
