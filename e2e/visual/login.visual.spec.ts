@@ -1,6 +1,7 @@
 import { expect, test, devices } from "@playwright/test";
 
 import {
+  hideDevChrome,
   setTheme,
   settle,
   unstableChromeMasks,
@@ -31,6 +32,7 @@ const READY_TEXT = "登录以同步你的作品";
 test.describe("登录页视觉基线", () => {
   test("暗色档（默认外观）全页基线", async ({ page }) => {
     await setTheme(page, "dark");
+    await hideDevChrome(page);
     await page.goto("/login");
     await settle(page, READY_TEXT);
     await expect(page).toHaveScreenshot("login-desktop.png", {
@@ -41,6 +43,7 @@ test.describe("登录页视觉基线", () => {
 
   test("浅色档全页基线（深浅两态对比）", async ({ page }) => {
     await setTheme(page, "light");
+    await hideDevChrome(page);
     await page.goto("/login");
     await settle(page, READY_TEXT);
     await expect(page).toHaveScreenshot("login-desktop-light.png", {
@@ -55,6 +58,7 @@ test.describe("登录页视觉基线", () => {
       locale: "zh-CN",
     });
     const page = await ctx.newPage();
+    await hideDevChrome(page);
     await page.goto("/login");
     await settle(page, READY_TEXT);
     await expect(page).toHaveScreenshot("login-mobile.png", {

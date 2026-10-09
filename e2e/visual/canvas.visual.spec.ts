@@ -1,6 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { settle, unstableChromeMasks } from "./support/page-baseline";
+import {
+  hideDevChrome,
+  settle,
+  unstableChromeMasks,
+} from "./support/page-baseline";
 
 /**
  * 画布（`ProjectCanvas`）像素基线 —— §11.8 的「xyflow 画布」那一档。
@@ -168,6 +172,7 @@ async function openWorkspaceWithProject(
     });
   });
 
+  await hideDevChrome(page);
   await page.goto("/workspace");
   await expect(
     page.getByRole("heading", { name: "灵感从这里开始" }),
@@ -180,7 +185,14 @@ async function openCanvasView(page: Page) {
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
   await menu.getByRole("menuitem", { name: "画布", exact: true }).click();
-  await expect(page.locator(".react-flow__pane")).toBeVisible();
+  /* 预算给到 30s，与 `e2e/settings-view.spec.ts` 等首屏页签条同一档。
+   * 理由不是「界面慢」，是 **dev 口径下画布那块 chunk 要按需编译**：实测同一轮串行里
+   * 先跑的 `canvas-filled` 在这条上红（5s 内 `.react-flow__pane` 还没进 DOM）、后跑的
+   * `canvas-empty` 绿 —— 两者之间唯一的差别就是那一次编译已经把产物放进缓存了。
+   * 默认 5s 是「元素在不在」的预算，不是「冷编译完没完」的预算；这里要的是后者。 */
+  await expect(page.locator(".react-flow__pane")).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 /**
