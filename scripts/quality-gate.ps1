@@ -35,7 +35,7 @@ Extend / maintain - how to add a new gate:
     entry and it is enforced again.
 #>
 param(
-  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "storybook", "visual", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "visual", "all")]
   [string]$Mode = "all"
 )
 
@@ -120,6 +120,12 @@ $Blocks = @(
   # 否则「基线成套且入库」这条判据与像素档互不相干 —— 那正是 #6538809 的形态）。
   @{ Name = "visual"; Label = "Pixel regression (Playwright screenshots + baseline pairing judge)";
      Cmd = "node"; Args = @("scripts\pixel-run.mjs"); Run = $false }
+  # 依赖新鲜度（ISSUE #1569，规范 §13.5.13）：远端改过库的版本而本地还停在旧的那套上。
+  # 与 quality-gate.mjs 的 GATES.depsFreshness 同批同步。与 dependencyAudit / format
+  # 同属「会随时间变坏」的一类：昨天的结论推不出今天。这条**不做网络请求** ——
+  # 远端引用陈旧只打 [未校验]、不阻断；刷新是人的动作 `git fetch`。
+  @{ Name = "depsFreshness"; Label = "Dependency freshness (baseline vs origin/master + install sync)";
+     Cmd = "node"; Args = @("scripts\check-deps-freshness.mjs"); Run = $true }
 )
 
 # Which gates to run
