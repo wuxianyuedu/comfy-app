@@ -218,7 +218,8 @@
       顺带修掉同一条路径上的浪费：`parents` 为空批时 `runDiscover([])` 照样按
       python3 → python → py 轮三遍（各带一次超时与一次进程启动），现在空批直接回空结果。
       证据：`src/app/api/custom-nodes/route.ts`、`src/app/api/custom-nodes/route.test.ts`；
-      GET 侧（manifest / report 读取）仍无执行者，门槛按实测登记在 E7。
+      GET 侧（manifest / report 读取 + 摘要缓存指纹）的执行者随 E7 那一批补上，同批照出
+      「数组也被当成清单体」那一处判据用错守卫。
 - [x] **A7 `workflow.create.sourcePath` 读本机任意文件 + 路径回显（已修 + 判据已在）**：
       `8740948` 加了 `isWithinAllowedLocalWorkflowRoot()` —— 只允许配置目录
       （`LOCAL_WORKFLOWS_PATH` / ComfyUI `workflows`）下的文件，闸在 `importFromLocalPath`
@@ -495,7 +496,7 @@
       「带 coverage」这个预算维度（`LogPanel.test.tsx` 45s → 120s，单跑实测 25.0s / 34.4s）。
       开门那一次抓到的 21 条真回退已按实测重基线，**欠的课转 E7**。
       证据：`scripts/quality-gate.mjs`、`scripts/quality-gate.ps1`、`vitest.config.ts`。
-- [ ] **E7 覆盖率棘轮开门即抓到的真回退（补用例清单）**：E2 把门打开的那一次全量跑
+- [x] **E7 覆盖率棘轮开门即抓到的真回退（补用例清单，本批清零）**：E2 把门打开的那一次全量跑
       （465 文件全绿）当场报出 21 条不达标，已按 §18.6 逐条降到「实测向下取整到 5 的倍数」，
       旧值与原因留在 `vitest.config.ts` 的 `coverage.thresholds` 注释块里。这不是并行档抖动：
       同一批文件**单跑**带 `--coverage` 得到一模一样的数字。欠的课按大头排 ——
@@ -573,8 +574,22 @@
       同批装机照出一条判据撞判据：那份契约测试要 import 真实 router，写在
       `src/lib/media/` 下会被 `tests/lib-server-imports.test.ts`（lib 不得依赖 server）拦下 ——
       正解是把它搬到 `tests/`，**不是往豁免清单里加一项**。
-      仍欠的一格（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts` 的
-      **GET 侧**（manifest / report 读取 + 按 (size, mtime) 指纹的摘要缓存）门槛仍在 35/35/45/40。
+      · `src/app/api/custom-nodes/route.ts` 的 **GET 侧** 35/35/45/40 → **已清（E7 到此归零）**：
+      26 条用例钉住 manifest / report 的读取与「按 (size, mtime) 指纹的摘要短路」，
+      实测 77.95/70.96/83.33/80.8（余下没盖到的是 POST `streamParse` 里解析器 stdout 协议那几支，
+      归下一批 —— 不为凑数造假事件）。同批改掉一处**守卫用错**：`isRecord` 认数组，
+      于是根被写成 `[]` 的坏清单会被读成「解析过了、0 个节点」—— 而界面把「清单坏了」与
+      「还没解析过」当两件事（E9 那一族「不同因同形」），`nodes` 写成数组时也不再拿元素数冒充节点数。
+      变异七刀：退回宽松守卫 / `nodes` 按元素数 / 摘掉缓存短路 / **指纹取不到也缓存并命中**
+      （这一刀必须同时改读侧 `stamp &&` 与写侧 `stamp !== null` —— 两者互为兜底，只拆一半
+      行为上看不出差别，那种「变异」不算证据）/ 空扫描根也走热路径 / 报告读不出时伪造一份空报告 /
+      探测缓存 TTL 写成近乎无限。
+      装机时还照出**夹具自己的两处不隔离**：① 模块级 `discoverCache` 跨用例存活（TTL 5 秒），
+      沿用同一个父目录会让后一条用例悄悄落进热路径分支 → 每条用例发一个自己的扫描根；
+      ② `mockImplementationOnce` 的队列不被 `clearAllMocks` 清，上一条排完没用完的假子进程
+      会漏到下一条（表现是「换个顺序就红」）→ 三个替身每条用例显式 `mockReset`。
+      `mtime` 计数器也**不再每条用例归零**：指纹一样会让后一条用例的「第一次读」撞上前一条
+      留下的摘要缓存，断言照样绿而那次读盘根本没发生。
       · `src/lib/workshop/media-source.server.ts` 36.95/31.57/33.33/39.47 → **已清，并照出一条
       真缺陷**：`mimeForExt` 收的是**扩展名**，而两个分支都把**整条路径**喂了进去
       （`mimeForExt(abs)` / `mimeForExt(new URL(src).pathname)`）—— 查表必然落空，于是

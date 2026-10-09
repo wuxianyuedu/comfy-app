@@ -392,7 +392,8 @@ export default defineConfig({
         /* 体检清单 ⑦ 第二批 · 并到安全台账 A 系列：这一批的用例是「先写断言、
          * 照出越权、顺手修」，所以门槛登记的是**判据本身**而不是新增行数。
          *   · `custom-nodes/route.ts` —— argv 注入闸门（A6）：POST 那几条出口
-         *     已逐分支钉住，GET 侧（manifest / report 读取）仍是欠账，见台账 E7；
+         *     已逐分支钉住；GET 侧（manifest / report 读取 + 摘要缓存指纹）
+         *     的执行者随台账 E7 收口（本批补的 26 条）；
          *   · `routers/project.ts` —— 归属闸门（A3 + 本批新照出的 upsert 越权写）；
          *   · `routers/task.ts` —— 同一族的归属与越界闸门（A2 快照越权读、
          *     A8 产物目录越界），23 条用例已在跑，此前**从未被门槛判过**；
@@ -1571,15 +1572,19 @@ export default defineConfig({
           branches: 100,
         },
         /* ── 体检清单 ⑦ 第二批 · 并到安全台账 A 系列（按实测登记）────────────
-         * `custom-nodes` 只登记到实测值：35 条用例覆盖的是 POST 的闸门与三态，
-         * GET 侧那套 manifest / report 读取（磁盘探测 + 缓存指纹）仍没有执行者。
-         * 这是**已知欠账**，登记在台账 E7，不许把它当成「这个文件测完了」。
-         * 补上 GET 用例后按 §18.6 上调（只许升）。 */
+         * `custom-nodes`：35 条 POST 闸门用例 + 26 条 GET 只读侧用例（台账 E7 的
+         * 最后一格，本批清掉）。仍登记在实测而不是 100：余下没覆盖的是 POST
+         * `streamParse` 里解析器 stdout 协议的那几支（PROGRESS 行 / 退出码 /
+         * 解释器轮换），由 `scripts/parse_custom_nodes.py` 的输出形态决定，
+         * 归入下一批（不为凑数造假事件）。
+         * 实测命令：`pnpm exec vitest run --no-file-parallelism --coverage.enabled
+         * --coverage.include='src/app/api/custom-nodes/route.ts' src/app/api/custom-nodes/route.test.ts`
+         * → 77.95 / 70.96 / 83.33 / 80.8（本批从 35/35/45/40 升上来，§11.7 只许升）。 */
         "src/app/api/custom-nodes/route.ts": {
-          lines: 40,
-          functions: 45,
-          statements: 35,
-          branches: 35,
+          lines: 80,
+          functions: 83,
+          statements: 77,
+          branches: 70,
         },
         /* `project.ts`：分支 94.44 → 90（余下两处是 `patch` 里「nodes 给了、
          * edges 没给」这类形状组合，与 `params ?? {}` 的另一侧 —— 后者在当前
