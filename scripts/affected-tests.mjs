@@ -429,6 +429,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 表现不是红而是「那条纪律又回到只写在文档里」。它读的是钩子文本 + git 拓扑，
   // import 图一概追不到。
   "tests/check-merge-parents.test.ts",
+<<<<<<< HEAD
   // 「类型层声明 ⇄ 执行者」（ISSUE #1591 / 规范 §13.5.14）：19 条 tsc 错落进 `master`
   // 的共同根因是「声明（JSDoc / 类型注解）落后于实现」，而 `tsc` 那条判据缺的是
   // 「什么时候被敲」。这条把 `scripts/.tsc-diagnostic-executors.json` 当台账核：
@@ -438,6 +439,18 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 而这些都是「下一次有人写一处新声明」时才走得进的路径 —— 跟着改动走等于专挑它
   // 不在的时机跑。它读的是两份台账 + 目录扫描，import 图一概追不到，故进固定清单。
   "tests/tsc-diagnostic-executors.test.ts",
+  // 棘轮的 `--update` 拒涨（规范 §11.25 / 台账 E5）：20 个「基线 + --update 就地落盘」
+  // 的判据脚本里，实测有**五家的拒涨那一支从来没生效**，且失效写法有三种 ——
+  // UPDATE 分支无条件写基线（dead-exports / circular-deps / comment-language）、
+  // 判断用的 `prev` 在 `--update` 之路上恒为 null（theme-colors，那一支是死代码）、
+  // `if (before && …)` 在**已经清到 0 的基线**上整个短路（theme-colors / overlay-z，
+  // 而今天四家的基线正是 0 处）—— 三家的 `note` 里都逐字写着「只许降不许升」。
+  // 这条必须在**每一次**提交里跑，两个理由都不容让步：① 它读的是 `scripts/` 下脚本的
+  // **行为**，import 图一概追不到（改判据脚本不会把它带进受影响集）；② 它同时是
+  // 判据自己的门禁自测 —— 「新增一个带 --update 的判据却没有归类」「某一家的拒涨被摘掉」
+  // 都只在新增那一次才拦得住，而新增脚本的人不会想到去跑一个名字不相干的测试文件。
+  // 实测成本：11 家 × 两格 = 27 格约 15s（每格建沙箱、跑两到三次判据、比对基线字节）。
+  "tests/ratchet-update-guards.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

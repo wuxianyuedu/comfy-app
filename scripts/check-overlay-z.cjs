@@ -223,7 +223,10 @@ function main() {
   if (UPDATE) {
     const before = baseFiles ? total(baseFiles) : 0;
     const after = total(now);
-    if (before && after > before) {
+    /* 「基线在不在」而不是「基线的数是不是非零」：层级这一族已经清到 0 之后，
+     * 旧写法 `before &&` 会整个短路，新写一条内联 z-index 再跑一次 --update
+     * 就把它收进基线（同族已修先例见 check-ui-logic-separation.cjs）。 */
+    if (baseFiles && after > before) {
       console.error(
         `[overlay-z] 拒绝放宽基线：${before} → ${after}（棘轮只许下降）。\n` +
           "  新增的层级请先改走刻度表（z-modal / z-popup / z-canvas-ui / Z.*），不要用 --update 掩盖。",
