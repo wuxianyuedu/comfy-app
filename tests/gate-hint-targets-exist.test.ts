@@ -24,6 +24,7 @@
  *      放行，**并且例外项自己也要能被复算**（见「例外项还在守东西」那条用例）——
  *      否则这张表就退化成「谁都能往里加一条」。
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -101,6 +102,60 @@ const PRODUCT_ROOT_LITERALS: Array<{
   },
 ];
 
+/**
+ * **「读得到就用、读不到就站下」的条件路径**：仓库里查不到**不是缺陷**。
+ *
+ * 与上面那张产物根表不同形：产物根那份是「文件由构建期生成，仓库里本来没有」；
+ * 这份是「文件是**台账 / 登记表**，只在有站点时才需要，零站点时它本就不该存在」。
+ *
+ * ── 这份表现在是**空的**，而空是它当前唯一正确的状态 ──────────────────────
+ *
+ * 它原本登记着两条：`check-annotate-consumer.cjs` / `check-task-meta-consumer.cjs`
+ * 的 `LEDGER` 常量（`scripts/.annotate-consumers.json` /
+ * `scripts/.task-meta-consumers.json`）—— 当时那两份台账**还不存在**，两个门禁的
+ * 判定口径又明写「零站点 → 通过，本判据是纯闸门」。
+ *
+ * 后来台账按 §11.21 / §11.22 的固化形状**落库了**（零站点这个结论要由
+ * 「台账在、只是 `consumers` 为空」担保，而不是由「文件根本没有」担保 ——
+ * 后者在第一次有人挂注释时就分叉，那一侧此前没有任何执行者）。台账一旦在仓库里，
+ * 这两条就不再是「条件路径」了：它们是**真文件**，该回到被上面那条判据正常管着的
+ * 状态。表里留着它们，本条用例的第三问（`existsSync` 必须为 false）就会红 ——
+ * 这正是本条用例存在的意义，而它就真的红过：那次改动**没有同批删这两条例外**，
+ * 于是这条红在 `master` 上躺到下一次有人跑全量（平台侧 squash 合并不跑本地钩子，
+ * §13.6.2 那族）。
+ *
+ * 空表现在是合法状态，但**合法性由「机制还活着」担保，不由「清单为空」担保** ——
+ * 这就是不在本用例里写 `expect(CONDITIONAL_PATHS.length).toBeGreaterThan(0)` 的理由：
+ * 那条断言会把「表空了」判成故障，而表空恰恰是当前的事实；而放宽成「空就跳过」
+ * 又会把「哪天有人把这三问整段删掉」也一起放行（同 §11.21「零站点通过由
+ * 『台账在』担保」那条口径，换到这里就是「零例外由『例外机制可复算』担保」）。
+ * 下面那条 `条件路径例外机制还在（负对照）` 用例承担这件事。
+ *
+ * **登记的代价是下面那条用例真的去跑一次**：本表不算「声明即放行」，每一条都要
+ * 复算三件事，缺一条红（`reason` 本身不参与判定，只给人看）：
+ *   ① 登记方脚本里这个字面量还在（不在了 = 这条例外是空账，该删）；
+ *   ② **该脚本在一条真仓库里对「这个路径不存在」是站得下的**（退出码 0）——
+ *      这正是「它不是缺陷」的机器判据。哪天有人把零站点那条快路径改成先读台账，
+ *      这条会当场红，而不是让本判据悄悄放行一个真失效；
+ *   ③ 仓库里仍然**没有**这个文件（哪天它入库了，就该从本表删掉，回到被本判据
+ *      正常管着的状态）。
+ *
+ * 为什么不做成「以 `scripts/.` 开头的一律放行」或「按 `existsSync` 邻近判断」：
+ * 前者的洞开得比它拦下的东西大（`check-theme-colors.cjs` 那次静默失效的豁免项
+ * 就是 `scripts/` 之外的源码路径，而这类清单里最会犯的错恰好是把路径抄错）；
+ * 后者是拿源码形状当语义 —— 一行 `existsSync` 相距多远都算「条件」，而
+ * `check-annotate-consumer.cjs` 里真有一处 `if (!fs.existsSync(abs)) return null;`，
+ * 判据会连它旁边那条**真**该存在的路径一起放走。
+ */
+const CONDITIONAL_PATHS: Array<{
+  /** 把这条路径当字面量写下来的那份门禁脚本 */
+  script: string;
+  /** 字面量本身（相对仓库根） */
+  path: string;
+  /** 为什么「不存在」是它的正常状态之一 */
+  reason: string;
+}> = [];
+
 /** 读一份仓库内脚本的源码（读不到即返回空串，让断言去报「指不到东西」）。 */
 function sourceOf(rel: string): string {
   const abs = path.join(ROOT, rel);
@@ -109,6 +164,31 @@ function sourceOf(rel: string): string {
 
 function isProductRootLiteral(script: string, p: string): boolean {
   return PRODUCT_ROOT_LITERALS.some((e) => e.script === script && e.path === p);
+}
+
+function isConditionalPath(script: string, p: string): boolean {
+  return CONDITIONAL_PATHS.some((e) => e.script === script && e.path === p);
+}
+
+/**
+ * 在仓库根跑一份门禁脚本，返回退出码。
+ *
+ * 跑的是**真脚本、真仓库**（不是夹具）：本判据要证的正是「它在仓库当前这个状态下
+ * 站得下」，而那个状态就是「台账不在」。跑不起来（脚本被删 / 起不来）按**非 0** 记 ——
+ * 让断言去红，而不是让异常把一个真问题变成「跳过」。
+ */
+function exitCodeOfGate(rel: string): number {
+  try {
+    execFileSync(process.execPath, [path.join(ROOT, rel)], {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 60_000,
+    });
+    return 0;
+  } catch (error) {
+    const code = (error as { status?: number | null }).status;
+    return typeof code === "number" ? code : -1;
+  }
 }
 
 /** 排除「产物根」命名空间之后，某份门禁脚本里真正该存在的仓库路径字面量。 */
@@ -135,6 +215,9 @@ describe("门禁脚本里的路径字面量必须存在", () => {
       // 不是缺陷）；它们由下面那条用例反向守着，不许变成免检洞
       for (const p of all) {
         if (isProductRootLiteral(rel, p)) continue;
+        // 「条件路径」（台账类：零站点时本就不该存在）同样不参与 —— 它们由下面
+        // 那条用例**真跑一次**反向守着，不是声明即放行
+        if (isConditionalPath(rel, p)) continue;
         if (!existsSync(path.join(ROOT, p))) dead.push(`${rel} → ${p}`);
       }
     }
@@ -180,6 +263,75 @@ describe("门禁脚本里的路径字面量必须存在", () => {
         `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从产物根例外表里删掉`,
       ).toBe(false);
     }
+  });
+
+  /**
+   * 条件路径例外表：每条都要复算三件事，**其中 ② 是真跑一次脚本** ——
+   * 这是「不存在不是缺陷」的机器判据，也是这张表不是「免检名单」的原因。
+   */
+  it("条件路径例外项还在守东西：三条登记理由都能复算", () => {
+    /* **本表当前为空，而空是合法状态** —— 所以这里刻意**不写**
+       `expect(CONDITIONAL_PATHS.length).toBeGreaterThan(0)`：那条断言会把
+       「表空」判成故障，而表空恰恰是事实（那两条台账已落库、回归正常管辖）。
+       但也不能就此跳过 —— 那样「哪天有人把这三问整段删掉」与「表本来就是空的」
+       在读数上完全一样。所以「机制还在」由下面那条负对照用例担保。 */
+    /* 软断言：一张例外表逐条复算 —— 过期的条目要一次全列出，
+       否则「删一条、再发现下一条」（§11.18）。 */
+    for (const entry of CONDITIONAL_PATHS) {
+      expect.soft(
+        quotedRepoPaths(sourceOf(entry.script)),
+        `例外失效：${entry.script} 里已经没有字面量 ${entry.path} —— 把这条例外从表里删掉`,
+      ).toContain(entry.path);
+      expect.soft(
+        exitCodeOfGate(entry.script),
+        `${entry.script} 在这个仓库里没站下（台账不在本该是它的正常状态）—— ` +
+          "要么它已经不是条件路径了（该从本表删掉），要么零站点那条快路径坏了",
+      ).toBe(0);
+      expect.soft(
+        existsSync(path.join(ROOT, entry.path)),
+        `${entry.path} 已经在仓库里了：它现在归本判据正常管，该从条件路径例外表里删掉`,
+      ).toBe(false);
+    }
+  });
+
+  /**
+   * **条件路径例外机制还在（负对照）** —— 上面那条用例在表为空时是个空转的循环。
+   *
+   * 表空是当前事实，但「空」不许让整套机制跟着消失：本用例把**三条判定各自反过来**
+   * 走一遍（拿三份真文件当假定例外项），证明这套判据真的能拦住过期条目 ——
+   * 而它拦的正是那两条台账曾经触发过的形态（`existsSync` 由 false 变 true）。
+   *
+   * 为什么不用「把表临时改成非空再跑」：那要改被测数据，代价与收益不成比例，
+   * 而这里要证的是「判定逻辑在」，不是「表里有东西」。
+   */
+  it("条件路径例外机制还在（三条判定各有一个反向执行者）", () => {
+    /* ① 登记方脚本里必须有那个字面量 —— 反过来用一份不存在的路径，
+       与上面的 `toContain` 同口径（不同路径不同脚本）。 */
+    expect(
+      quotedRepoPaths(sourceOf("scripts/check-annotate-consumer.cjs")),
+      "登记方脚本里认不出台账字面量了：招牌由这句『路径必须被真读』撑着",
+    ).toContain("scripts/.annotate-consumers.json");
+
+    /* ② 判定②问的是「脚本对『路径不存在』站得下吗」。本仓库现在站得下 ——
+       用的是真脚本、真仓库（同上面那几个 `exitCodeOfGate` 调用）。 */
+    expect(
+      exitCodeOfGate("scripts/check-annotate-consumer.cjs"),
+      "零站点那条快路径坏了：台账在、脚本仍须退 0（条件路径的登记理由已不成立）",
+    ).toBe(0);
+
+    /* ③ 判定③是这套机制里唯一会**随现实漂**的一问：`existsSync` 必须为 false。
+       反向执行者 = 拿一份**真存在**的路径走同一条判定，必须判成「该从表里删掉」
+       （台账落库那次，这一问就是这样红的 —— 那两条例外当时没被同批删掉）。 */
+    const wouldPassAsConditional = (p: string) =>
+      !existsSync(path.join(ROOT, p));
+    expect(
+      wouldPassAsConditional("scripts/check-annotate-consumer.cjs"),
+      "真存在的路径被判成『条件路径』了：这一问再也不会拦住过期例外",
+    ).toBe(false);
+    expect(
+      wouldPassAsConditional("scripts/.definitely-absent-probe.json"),
+      "不存在的路径判不成『条件路径』了：机制整个失效",
+    ).toBe(true);
   });
 
   it("假路径判为不存在、真路径判为存在（上面那条不是空转）", () => {
