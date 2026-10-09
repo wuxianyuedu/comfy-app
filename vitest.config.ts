@@ -1923,11 +1923,23 @@ export default defineConfig({
           statements: 95,
           branches: 75,
         },
+        /* 台账 E7 的最后一档媒体源解析。旧值 35/30/35/30 只盖到「本地产物地址」那一支，
+         * `http(s)` 拉取、`resolveMediaDataUrl`、`readUpstreamJson` 与两个字段守卫
+         * 全是零执行者 —— 本批补齐（26 条）。
+         * 数字来自**可复现的下界**：`vitest run --coverage
+         * --coverage.include=src/lib/workshop/media-source.server.ts
+         * --coverage.all=false src/lib/workshop/media-source.server.test.ts`
+         * 实测 95.65/92.1/100/100 → 登记 95/92/100/100（口径同 `src/lib/process/**` 那一档：
+         * 说清是哪条命令量的，别让下一个人拿全量数字来比对这一条）。
+         * 仍没盖到的两支是**按构造走不到**的兜底：`data URL 解码为空`（`parseDataUrl`
+         * 在更早一步就把空载荷判掉）与本地支的「磁盘读失败」。
+         * 不为了凑 100 去构造 `base64,====` 那种解析器边角输入，也不 mock 一个读失败的
+         * `fs`（那测的是不存在的输入形状；口径同台账 E8 的 `if (!dir)`）。 */
         "src/lib/workshop/media-source.server.ts": {
-          lines: 35,
-          functions: 30,
-          statements: 35,
-          branches: 30,
+          lines: 100,
+          functions: 100,
+          statements: 95,
+          branches: 92,
         },
         "src/lib/comfyui/firstframe.ts": {
           lines: 100,

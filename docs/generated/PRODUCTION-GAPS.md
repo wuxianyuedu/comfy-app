@@ -573,10 +573,23 @@
       同批装机照出一条判据撞判据：那份契约测试要 import 真实 router，写在
       `src/lib/media/` 下会被 `tests/lib-server-imports.test.ts`（lib 不得依赖 server）拦下 ——
       正解是把它搬到 `tests/`，**不是往豁免清单里加一项**。
-      仍欠的两格（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts` 的
-      **GET 侧**（manifest / report 读取 + 按 (size, mtime) 指纹的摘要缓存）门槛仍在 35/35/45/40；
-      `src/lib/workshop/media-source.server.ts` 的 http(s) 拉取与 `resolveMediaDataUrl`
-      两族实测 36.95/31.57/33.33/39.47。
+      仍欠的一格（本批按实测登记，不是回退）：`src/app/api/custom-nodes/route.ts` 的
+      **GET 侧**（manifest / report 读取 + 按 (size, mtime) 指纹的摘要缓存）门槛仍在 35/35/45/40。
+      · `src/lib/workshop/media-source.server.ts` 36.95/31.57/33.33/39.47 → **已清，并照出一条
+      真缺陷**：`mimeForExt` 收的是**扩展名**，而两个分支都把**整条路径**喂了进去
+      （`mimeForExt(abs)` / `mimeForExt(new URL(src).pathname)`）—— 查表必然落空，于是
+      这一层的 MIME **此前恒为 `image/png`**：一张 webp / jpeg 的参考图会被标成 png
+      拼进 data URL 发给远程通道。它为什么藏这么久：唯一那一条本地用例的文件恰好就叫
+      `img_0.png`，错误值与正确值撞在一起，**看着像测过了**——而 §11.2.1 要的「摘掉判据必须恰好
+      相关用例红」在这一格根本不成立（把路径交给 `mimeForExt`，那条用例一个字都不改仍然绿）。
+      修法两支都改成先 `extOfPath()` 取扩展名再查表（与 `contentTypeForPath` 同一把尺）；
+      新增用例把「非 png 的产物」与「类型头缺失 / 不是图时按扩展名回落」钉住，
+      另补 http 分支的超时信号、状态码文案、非 Error 的 reject 回落「未知错误」、
+      24MB 上限、`file:` 之类 scheme 的拒绝、
+      `readUpstreamJson` 的片段有界、`strField` / `intField` 的守卫档 →
+      27 条、实测 95.65/92.1/100/100（两支按构造走不到的兜底没有凑数，理由写在门槛注释里）。
+      变异五刀各红各的（把路径交给 `mimeForExt` 两支各一刀、摘掉 `clampText`、
+      去掉超时信号、摘掉尺寸检查）。
 - [x] **E13 Storybook 落地时自带的两条红：夹具在普通权限下必 EPERM + 一条 high 传递依赖（本批修复）**：
       发现路径与 E12 同一条 —— 另一批 rebase 之后跑 `check:all` 才看见：`tests/storybook-check-script.test.ts`
       七条**全红**，而红的不是判据是夹具：`symlinkSync(<仓库>/node_modules, <临时目录>/node_modules, "dir")`
@@ -618,6 +631,15 @@
       证据：`src/lib/process/executable-resolve.ts`（`UsabilityProbe` / `onDiskName`）、
       `src/lib/process/executable-resolve.test.ts`（`posixHost`）、`src/lib/console/console-run.test.ts`。
       变异检过两刀：让注入的探针失效（恒问真机器）→ POSIX 那 4 条红；去掉大小写归一 → 控制台那条红。
+      **同族又出现了一次**（这次是「拦住所有人的提交」而不是「静默绿」）：`tests/shell-gate.test.ts`
+      那条「PATH 上有一份 cargo 时**用它**」在 win32 上恒红 —— 夹具给 PATH 写的是 `#!/bin/sh` 脚本，
+      而 PATH 那一支与安装位那几支**判据不同层**：安装位只查路径在不在，PATH 走 `whichCommand()`
+      的「真起一次」。Windows 上 libuv 不解析 shebang → 那份永远被判「起不来」→ 落回假 home，
+      红长得像「优先级判据没生效」。修法没有再开注入点（给壳门禁脚本的 `findCargo()` 加参数
+      是为了测试而改产品面，而这一格想判的恰好是「真机器上 PATH 那份能不能被优先采用」）：
+      win32 档借当前宿主 `copyFileSync(process.execPath, …)` 造一份真能 spawn 的 PE
+      （实测本机一次复制 40 ms / 89 MB，摊在提交门槛里可忽略），POSIX 档照旧写脚本 + 执行位。
+      判据强度没动：把 `if (onPath) return onPath` 短路掉，**恰好**那一条红（串行单跑复核）。
 - [x] **E11 `check-format.cjs` 的 fail-open：prettier 没跑成时被读成「全库干净」（本批修复 + 判据）**：
       发现路径不是「有人投诉格式」，而是另一条批次的提交门槛红了 —— `tests/check-format.test.ts`
       里三条「期望门禁拦住」的用例在钩子的多 worker 批次里稳定红，而**串行单跑全绿**。
