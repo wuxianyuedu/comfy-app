@@ -9,7 +9,7 @@
 //     验证「拉取失败 → offline + 可见降级」（不能静默消失）。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { cleanup, renderHook } from "@testing-library/react";
 
 import type { ComfyStatsPayload } from "~/lib/comfy/comfy-stats-client";
 
@@ -154,7 +154,7 @@ describe("useComfyReadiness（真实轮询失败降级）", () => {
     // 不 mock 网络：jsdom 下 fetch 打相对路径会失败，正是「后端不可达」形态
     const { result } = renderHook(() => useComfyReadiness());
 
-    await waitFor(() => expect(result.current.online).toBe(false));
+    await expect.poll(() => result.current.online).toBe(false);
     expect(result.current.degradedNote).not.toBeNull();
     expect(result.current.cudaVram).toBeNull();
   });

@@ -122,7 +122,10 @@ export function shouldRecord({ exitCode, dryRun }) {
  * ISSUE #1282 起被 `tests/e2e-run.test.ts` 直接断言，而形状变了没有任何东西会红 ——
  * 那条边界（缺理由 / 占位理由 / 没给）值得留着。
  *
- * @param {string[]} argv
+ * 参数收 `unknown[]` 而不是 `string[]`：「`--skip` 后面什么都没给」时那一格读出来就是
+ * `undefined`，正是本判据要覆盖的形状。声明成 `string[]` 会把这条边界挪到调用方去绕。
+ *
+ * @param {unknown[]} argv
  * @returns {{skipped: boolean, reason: string | null}}
  */
 export function parseSkip(argv) {

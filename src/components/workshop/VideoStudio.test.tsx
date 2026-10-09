@@ -10,13 +10,7 @@
 //   • 进行中且有本机任务 id 的片段显示「取消」并接 onCancelShot。
 // 网络层整体 mock（generation-client），轮询用的 sleep 替换为即时（可控节奏）。
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { VideoStudio } from "./VideoStudio";
@@ -173,12 +167,12 @@ describe("VideoStudio API 通道出口", () => {
     mockedSubmit.mockResolvedValue({ url: "/api/materials/clip.mp4" });
 
     await user.click(screen.getByRole("button", { name: "生成片段" }));
-    await waitFor(() =>
-      expect(lastPatchedShot(onShotsChange)).toMatchObject({
+    await expect
+      .poll(() => lastPatchedShot(onShotsChange))
+      .toMatchObject({
         clipStatus: "done",
         clipUrl: "/api/materials/clip.mp4",
-      }),
-    );
+      });
   });
 
   it("API 异步任务：轮询到 url 后落定；中途 pending 不误写", async () => {
@@ -192,12 +186,12 @@ describe("VideoStudio API 通道出口", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "生成片段" }));
-    await waitFor(() =>
-      expect(lastPatchedShot(onShotsChange)).toMatchObject({
+    await expect
+      .poll(() => lastPatchedShot(onShotsChange))
+      .toMatchObject({
         clipStatus: "done",
         clipUrl: "/api/materials/remote.mp4",
-      }),
-    );
+      });
     expect(mockedPoll).toHaveBeenCalledWith("remote-1");
   });
 
@@ -208,9 +202,9 @@ describe("VideoStudio API 通道出口", () => {
     mockedSubmit.mockRejectedValue(new Error("远端限流"));
 
     await user.click(screen.getByRole("button", { name: "生成片段" }));
-    await waitFor(() =>
-      expect(lastPatchedShot(onShotsChange).clipStatus).toBe("failed"),
-    );
+    await expect
+      .poll(() => lastPatchedShot(onShotsChange).clipStatus)
+      .toBe("failed");
     expect(screen.getByText("远端限流")).toBeTruthy();
   });
 });

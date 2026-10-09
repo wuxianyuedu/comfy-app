@@ -4,7 +4,7 @@
 // 断言的是「写操作后必刷新」这条编排契约，以及失败时的错误出口。
 
 import { createElement, type ReactNode } from "react";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
@@ -158,9 +158,7 @@ describe("useModelFolderConfig", () => {
     });
 
     expect(result.current.loading).toBe(true);
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 3000,
-    });
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.totalCount).toBe(2);
     expect(result.current.enabledRows.map((r) => r.folder)).toEqual([
       "checkpoints",
@@ -176,9 +174,7 @@ describe("useModelFolderConfig", () => {
     const { result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 3000,
-    });
+    await expect.poll(() => result.current.loading).toBe(false);
 
     await act(async () => {
       await result.current.toggle("loras", true);
@@ -192,9 +188,7 @@ describe("useModelFolderConfig", () => {
     const { result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 3000,
-    });
+    await expect.poll(() => result.current.loading).toBe(false);
 
     await act(async () => {
       await result.current.add("loras");
@@ -211,9 +205,7 @@ describe("useModelFolderConfig", () => {
     const { result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 3000,
-    });
+    await expect.poll(() => result.current.loading).toBe(false);
 
     await act(async () => {
       await result.current.add("loras");
@@ -228,9 +220,7 @@ describe("useModelFolderConfig", () => {
     const { result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 3000,
-    });
+    await expect.poll(() => result.current.loading).toBe(false);
 
     await act(async () => {
       await result.current.rescan();
@@ -244,9 +234,7 @@ describe("useModelFolderConfig", () => {
     const { result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 3000,
-    });
+    await expect.poll(() => result.current.loading).toBe(false);
 
     behavior.deleteError = "boom";
     await act(async () => {
@@ -260,9 +248,7 @@ describe("useModelFolderConfig", () => {
     const { result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 3000,
-    });
+    await expect.poll(() => result.current.loading).toBe(false);
 
     await act(async () => {
       await result.current.add("loras");
@@ -283,9 +269,7 @@ describe("useModelFolderConfig", () => {
     const { result } = renderHook(() => useModelFolderConfig(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 3000,
-    });
+    await expect.poll(() => result.current.loading).toBe(false);
 
     act(() => result.current.setQ("lora"));
     expect(result.current.enabledRows).toEqual([]);

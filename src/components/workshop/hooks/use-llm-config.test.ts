@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from "react";
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
@@ -73,9 +73,9 @@ describe("useLLMConfig 播种：本地/远端候选拆出", () => {
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await waitFor(() =>
-      expect(result.current.localModels.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.localModels.length)
+      .toBeGreaterThan(0);
     expect(result.current.localModels).toContain("llama3");
     expect(result.current.remoteModels).toContain("gpt-4o");
   });
@@ -85,18 +85,18 @@ describe("useLLMConfig 播种：本地/远端候选拆出", () => {
     const first = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await waitFor(() =>
-      expect(first.result.current.localModels.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => first.result.current.localModels.length)
+      .toBeGreaterThan(0);
     first.unmount();
 
     // 查询缓存仍在，首帧即命中 —— 回归：播种守卫若只比引用会被缓存命中跳过。
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await waitFor(() =>
-      expect(result.current.localModels.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.localModels.length)
+      .toBeGreaterThan(0);
     expect(result.current.localModels).toContain("llama3");
     expect(result.current.remoteModels).toContain("gpt-4o");
   });
@@ -108,9 +108,9 @@ describe("useLLMConfig 远端模型 kind 过滤", () => {
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await waitFor(() =>
-      expect(result.current.remoteModels.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.remoteModels.length)
+      .toBeGreaterThan(0);
 
     // chat kind 与 kind 缺省（null → chat）都应保留
     expect(result.current.remoteModels).toContain("gpt-4o");
@@ -134,9 +134,9 @@ describe("useLLMConfig 远端生图模型清单", () => {
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await waitFor(() =>
-      expect(result.current.remoteImageModels.length).toBeGreaterThan(0),
-    );
+    await expect
+      .poll(() => result.current.remoteImageModels.length)
+      .toBeGreaterThan(0);
     expect(result.current.remoteImageModels).toContain("dall-e-3");
     // chat / video 条目不进生图清单
     expect(result.current.remoteImageModels).not.toContain("gpt-4o");
@@ -159,7 +159,7 @@ describe("useLLMConfig 生效提供方（本机 ollama 误存为「远端」的�
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await waitFor(() => expect(result.current.config).not.toBeNull());
+    await expect.poll(() => result.current.config).not.toBeNull();
     expect(result.current.localModels).toContain("qwen3:14b");
     expect(result.current.remoteModels).not.toContain("qwen3:14b");
     // 徽标 / 页脚等消费 config.provider 的展示点据此显示「本地」
@@ -181,7 +181,7 @@ describe("useLLMConfig 生效提供方（本机 ollama 误存为「远端」的�
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await waitFor(() => expect(result.current.config).not.toBeNull());
+    await expect.poll(() => result.current.config).not.toBeNull();
     expect(result.current.remoteModels).toContain("qwen3:14b");
     expect(result.current.config?.provider).toBe("remote");
   });
@@ -200,7 +200,7 @@ describe("useLLMConfig 生效提供方（本机 ollama 误存为「远端」的�
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await waitFor(() => expect(result.current.config).not.toBeNull());
+    await expect.poll(() => result.current.config).not.toBeNull();
     expect(result.current.remoteModels).toContain("gpt-4o");
     expect(result.current.config?.provider).toBe("remote");
   });

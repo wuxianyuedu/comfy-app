@@ -82,20 +82,49 @@ describe("全量 e2e 的记账语义（§11.8）", () => {
 
 describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
   it("四个值各就各位：账文件 / 键 / 名字 / 命令", () => {
-    /* 只核**本档的两栏与关键字**，不再核「`FRESHNESS_TRACKS` 一共几个键」——
-     * 那份清单是 `tests/daily-tracks.test.ts` 的事（它判四档全在、且互不重名）。
-     * 在这里写死一份档名清单的形态会在**每次新增一档**时红，而红的原因与「e2e 的账
-     * 有没有写对」毫无关系 —— 那种「与本测试无关的红」正是 §13.5.12 记过的坑
-     * （`tests/gate-executors.test.ts` 把份数写死 `.toBe(44)` 的那次）。 */
+    /* 只核**本档的两栏与关键字**，不核「`FRESHNESS_TRACKS` 一共几个键」——
+     * 那份清单是 `tests/daily-tracks.test.ts` 的事（它判四档全在、且互不重名），
+     * 在这里再写一份会在**每次新增一档**时红，而红的原因与「e2e 的账有没有写对」
+     * 毫无关系（`tests/gate-executors.test.ts` 把份数写死 `.toBe(44)` 那次同族）。
+     *
+     * 同理，四栏用**挑出来比**而不是 `toEqual` 比整条登记：整条比等于顺手断言
+     * 「形状刚好这几栏」，而登记表**会**长栏 —— `daily` / `skipHow` / `dirty` /
+     * `dirtyHow` / `graceMs` 进来时它把一次**新增**报成一次**抄错**（ISSUE #1553
+     * 合并后就是这个形态）。差异那几栏各判各的，见下一条。 */
     expect(Object.keys(FRESHNESS_TRACKS)).toContain("e2e");
-    expect(freshnessTrack("e2e").ledger).toBe("scripts/.e2e-freshness.json");
-    expect(freshnessTrack("e2e").key).toBe("e2e");
-    expect(freshnessTrack("e2e").label).toBe("全量 e2e");
-    expect(freshnessTrack("e2e").run).toBe("pnpm test:e2e");
+    const { ledger, key, label, run } = freshnessTrack("e2e");
+    expect({ ledger, key, label, run }).toEqual({
+      ledger: "scripts/.e2e-freshness.json",
+      key: "e2e",
+      label: "全量 e2e",
+      run: "pnpm test:e2e",
+    });
     expect(freshnessTrack("visual").ledger).toBe(
       "scripts/.visual-baseline-freshness.json",
     );
     expect(freshnessTrack("visual").key).toBe("linux");
+  });
+
+  it("两条账**真正的**差异只有 `daily` / `skipHow`（其余四栏同形）", () => {
+    /* 「同形」是有边界的：多出来的这两栏不是随手加的开关，各回答一个问题 ——
+     *   · `daily`：这一档要不要按「每天首次」判（只有全量 e2e 是；像素档不做墙钟
+     *     阻断的理由见 `visual-freshness-gate.mjs` 文件头）；
+     *   · `skipHow`：这一档有没有「写明理由的豁免」那条出路（同样只有 e2e 有），
+     *     它是**另一条出路**而不是绕过。
+     * 两侧一起判：只有一侧变了就说明「同形」这句话已经不成立了。 */
+    expect(freshnessTrack("e2e").daily).toBe(true);
+    expect(freshnessTrack("visual").daily).toBe(false);
+    expect(freshnessTrack("e2e").skipHow).toBe(
+      'node scripts/e2e-run.mjs --skip "<理由>"',
+    );
+    expect(freshnessTrack("visual").skipHow).toBe(null);
+    /* 差异面之外的登记栏位对齐：两条账各有一份账文件、一个键、一条命令。 */
+    for (const kind of ["e2e", "visual"]) {
+      const track = freshnessTrack(kind);
+      expect(track.ledger.length).toBeGreaterThan(0);
+      expect(track.key.length).toBeGreaterThan(0);
+      expect(track.run.length).toBeGreaterThan(0);
+    }
   });
 
   it("两条账**不共用一个文件**（共用 = e2e 的绿把像素档的自证覆盖掉）", () => {
@@ -245,7 +274,12 @@ describe("全量 e2e 的「每日自证」（ISSUE #1282：每天首次提交带
       skipped: true,
       reason: "本周只解决合并冲突，未动功能链路",
     });
-    for (const bad of [undefined, "", "稍后", "TBD", "待定"]) {
+    /* `--skip` 后面什么都没有是**另一种 argv 形状**：`["--skip"]` 里 `argv[i + 1]` 是
+     * `undefined`。它不能靠往 argv 数组里塞一个 `undefined` 来构造 —— 真实 argv 里
+     * 不存在这种元素（`process.argv` 每一项都是 string），那样的用例判的是一份
+     * 不可能出现的输入。 */
+    expect(parseSkip(["--skip"]).reason).toBe(null);
+    for (const bad of ["", "稍后", "TBD", "待定"]) {
       expect(parseSkip(["--skip", bad]).reason).toBe(null);
     }
   });

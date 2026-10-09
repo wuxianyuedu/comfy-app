@@ -2,7 +2,7 @@
 // 模型标签库逻辑层单测：整体替换 vanillaApi（请求），断言的是
 // props 合并规则与三个写动作的成功/失败路径。
 
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -118,12 +118,9 @@ describe("useModelTags", () => {
       name: "z-image",
     });
     expect(result.current.draft).toBe("");
-    await waitFor(() =>
-      expect(result.current.tags.map((t) => t.name)).toEqual([
-        "z-image",
-        "wan2.2",
-      ]),
-    );
+    await expect
+      .poll(() => result.current.tags.map((t) => t.name))
+      .toEqual(["z-image", "wan2.2"]);
     expect(onChanged).toHaveBeenCalled();
   });
 

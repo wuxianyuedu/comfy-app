@@ -434,7 +434,9 @@ export const FRESHNESS_LEDGER = freshnessTrack("visual").ledger;
  * 登记」表现成「按键名当档名」而照样跑绿）。
  *
  * @param {keyof typeof FRESHNESS_TRACKS | string} kind
- * @returns {{ledger: string, key: string, label: string, run: string}}
+ * @returns {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}}
+ *   与 `FRESHNESS_TRACKS[*]` 同形 —— 两条账的差异（`daily` / `skipHow`）也在里面，
+ *   调用方据此决定要不要判「每天首次」、以及话术里给不给豁免那条出路。
  */
 export function freshnessTrack(kind) {
   const track = FRESHNESS_TRACKS[kind];
@@ -449,15 +451,21 @@ export function freshnessTrack(kind) {
 /**
  * 新鲜度记录的形状（**读写共用这一份**：各写一套时记出来的会被自己的校验判成缺字段）。
  *
- * 四栏各管一件事，缺一栏这条账就退化：
+ * 五栏必在（各管一件事，缺一栏这条账就退化），末栏按输入可选：
  *   · `key` —— 是**哪一档**（像素按平台分档，故这一栏在那边是 `linux`；全量 e2e 那边是
  *     `e2e`）。写成通用名而不是 `platform`，是因为第二条账的「档」不是平台。
  *   · `verifiedAt` / `who` —— 「上一次被实证跑绿是什么时候、谁跑的」。
  *   · `how` —— **能照着重跑的那条命令**（这就是你要写 `pnpm test:e2e` 而不是「跑过了」的原因）。
  *   · `trackedBy` —— 这条记录属于**哪一个跑法**（`FRESHNESS_TRACKS` 的键）。它是两条账
  *     唯一的形状差异，作用是把「e2e 的绿被记进像素档的账」这类抄混当场照出来。
+ *   · `skippedReason` / `dirtyReason` —— **两栏都可选**，各回答一件不同的事：
+ *     `skippedReason` 是「今天故意不跑」，`dirtyReason` 是「这次改动不吃这一档」。
+ *     各把一句话写进账面（核对它们的是同一份 `isUsableSkipReason`），
+ *     它们合起来让账面上分得开「今天跑过」「今天说好不跑」「这次不吃它」三件事
+ *     —— 混成一栏之后，「这一档三个月没跑」与「这三个月每次都声明不吃它」长得一模一样。
+ *     所以本函数返回的**不是**一份固定栏数的记录。
  *
- * @param {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string, dirtyReason?: string}} input
+ * @param {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: unknown, dirtyReason?: unknown}} input
  * @returns {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string, dirtyReason?: string}}
  */
 export function freshnessRecord({
@@ -469,7 +477,7 @@ export function freshnessRecord({
   skippedReason,
   dirtyReason,
 }) {
-  /** @type {Record<string, string>} */
+  /** @type {{key: string, verifiedAt: string, who: string, how: string, trackedBy: string, skippedReason?: string, dirtyReason?: string}} */
   const record = {
     key: key.trim(),
     verifiedAt: verifiedAt.trim(),
@@ -620,9 +628,10 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
  * 「跑过一次」与「跑过的是哪一个」会变成两件事，而账面上看着完全正常）。
  *
  * @param {Record<string, unknown>} ledger
- * @param {{required: string[], registered: string[], track: {ledger: string, label: string, run: string}, kind: string}} scope
+ * @param {{required: string[], registered: string[], track: {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null}, kind: string, now?: Date}} scope
  *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）；
- *   `track` = 这一份账的登记（话术里要给出「去哪个文件补、按哪条命令跑」）；
+ *   `track` = 这一份账的登记（话术里要给出「去哪个文件补、按哪条命令跑」，
+ *   它同时决定 `daily` / `skipHow` 那两条分叉）；
  *   `kind` = 这一份账属于哪个跑法（`trackedBy` 的比对基准）；
  *   `now` = 判「今天有没有自证」用的时钟（`track.daily` 那一档才读它；用例可注入）；
  *   `dirtySince` = **今天动过这一档输入面**的那个提交时刻（没有则 null）。只有

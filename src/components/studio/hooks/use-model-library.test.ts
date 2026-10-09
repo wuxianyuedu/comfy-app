@@ -4,7 +4,7 @@
 // **真实管线下的 loading → data 流转**，而不是 vi.mock 的永不 resolve 桩。
 
 import { createElement, type ReactNode } from "react";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { http } from "msw";
@@ -139,9 +139,7 @@ describe("useModelLibrary", () => {
     });
 
     expect(result.current.loading).toBe(true);
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 3000,
-    });
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.models).toHaveLength(1);
     expect(result.current.models[0]?.fileName).toBe(
       "dreamshaper-xl.safetensors",
@@ -153,7 +151,7 @@ describe("useModelLibrary", () => {
     const { result } = renderHook(() => useModelLibrary(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
 
     expect(result.current.filtered).toHaveLength(3);
     // 类型 chips 按数量降序
@@ -181,7 +179,7 @@ describe("useModelLibrary", () => {
     const { result } = renderHook(() => useModelLibrary(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.typeChips).toEqual([["checkpoints", 1]]);
   });
 
@@ -190,9 +188,7 @@ describe("useModelLibrary", () => {
     const { result } = renderHook(() => useModelLibrary(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 3000,
-    });
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.models).toHaveLength(1);
   });
 });
@@ -269,7 +265,7 @@ describe("useModelLibrary 卸载后不再 setState", () => {
     const { result, unmount } = renderHook(() => useModelLibrary(), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(listBlocked).toBe(true));
+    await expect.poll(() => listBlocked).toBe(true);
     // 前提成立：回包确实被卡住，finally 还没跑
     expect(result.current.loading).toBe(true);
 

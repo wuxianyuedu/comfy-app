@@ -1,6 +1,6 @@
 // 素材库逻辑层单测：hook 不发请求（请求在 lib/materials-client），故只 mock 那一层。
 
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -50,7 +50,7 @@ describe("useMaterialLibrary", () => {
       useMaterialLibrary({ projectId: "p-1" }),
     );
     expect(result.current.loading).toBe(true);
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(mockedList).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: "p-1", scope: "project" }),
     );
@@ -61,7 +61,7 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() =>
       useMaterialLibrary({ projectId: "p-1" }),
     );
-    await waitFor(() => expect(result.current.error).toBe("读取素材库失败"));
+    await expect.poll(() => result.current.error).toBe("读取素材库失败");
     expect(result.current.items).toEqual([]);
     expect(result.current.folders).toEqual([]);
     expect(result.current.loading).toBe(false);
@@ -72,22 +72,20 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() =>
       useMaterialLibrary({ projectId: "p-1" }),
     );
-    await waitFor(() => expect(result.current.error).toBe("读取素材库失败"));
+    await expect.poll(() => result.current.error).toBe("读取素材库失败");
   });
 
   it("进入分类后查询带上 folder；showItems 随之翻转", async () => {
     const { result } = renderHook(() =>
       useMaterialLibrary({ projectId: "p-1" }),
     );
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.showItems).toBe(false);
 
     act(() => result.current.enterFolder("ref"));
-    await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith(
-        expect.objectContaining({ folder: "ref" }),
-      ),
-    );
+    await expect
+      .poll(() => mockedList)
+      .toHaveBeenLastCalledWith(expect.objectContaining({ folder: "ref" }));
     expect(result.current.showItems).toBe(true);
   });
 
@@ -96,14 +94,12 @@ describe("useMaterialLibrary", () => {
       useMaterialLibrary({ projectId: "p-1" }),
     );
     act(() => result.current.enterFolder("ref"));
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
 
     act(() => result.current.setSearch("角色"));
-    await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith(
-        expect.objectContaining({ q: "角色" }),
-      ),
-    );
+    await expect
+      .poll(() => mockedList)
+      .toHaveBeenLastCalledWith(expect.objectContaining({ q: "角色" }));
     const lastCall =
       mockedList.mock.calls[mockedList.mock.calls.length - 1]?.[0];
     // 搜索优先于 folder：folder 不参与查询（客户端置 null）
@@ -116,7 +112,7 @@ describe("useMaterialLibrary", () => {
       useMaterialLibrary({ projectId: "p-1" }),
     );
     act(() => result.current.enterFolder("ref"));
-    await waitFor(() => expect(result.current.folder).toBe("ref"));
+    await expect.poll(() => result.current.folder).toBe("ref");
 
     act(() => result.current.setScope("cross"));
     expect(result.current.folder).toBeNull();
@@ -128,7 +124,7 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() =>
       useMaterialLibrary({ projectId: "p-1" }),
     );
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
 
     const file = new File(["x"], "a.png", { type: "image/png" });
     const files = {
@@ -152,7 +148,7 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() =>
       useMaterialLibrary({ projectId: "p-1" }),
     );
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     act(() => result.current.enterFolder("scenes"));
 
     const a = new File(["a"], "a.png");
@@ -188,7 +184,7 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() =>
       useMaterialLibrary({ projectId: "p-1" }),
     );
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
 
     const file = new File(["x"], "a.png");
     const files = { length: 1, 0: file } as unknown as FileList;
@@ -200,7 +196,7 @@ describe("useMaterialLibrary", () => {
     // 上传失败本身不触发刷新；这里再模拟一次并发的后台拉取成功，
     // 拉取成功只清拉取错误，动作错误必须保留到用户点「重试」。
     act(() => result.current.refresh());
-    await waitFor(() => expect(result.current.error).toBeNull());
+    await expect.poll(() => result.current.error).toBeNull();
   });
 
   it("空 FileList / null 不发起任何上传请求", async () => {
@@ -219,7 +215,7 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() =>
       useMaterialLibrary({ projectId: "p-1" }),
     );
-    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    await expect.poll(() => result.current.items).toHaveLength(1);
 
     await act(async () => {
       await result.current.remove(item);
@@ -234,7 +230,7 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() =>
       useMaterialLibrary({ projectId: "p-1" }),
     );
-    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    await expect.poll(() => result.current.items).toHaveLength(1);
 
     await act(async () => {
       await result.current.remove(item);
@@ -248,20 +244,20 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() =>
       useMaterialLibrary({ projectId: "p-1" }),
     );
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.breadcrumbSegments).toEqual([
       { label: "全部", key: null },
     ]);
 
     act(() => result.current.enterFolder("ref"));
-    await waitFor(() => expect(result.current.folder).toBe("ref"));
+    await expect.poll(() => result.current.folder).toBe("ref");
     expect(result.current.breadcrumbSegments).toEqual([
       { label: "全部", key: null },
       { label: "参考素材", key: "ref" },
     ]);
 
     act(() => result.current.setSearch("a"));
-    await waitFor(() => expect(result.current.searching).toBe(true));
+    await expect.poll(() => result.current.searching).toBe(true);
     expect(result.current.breadcrumbSegments[0]?.label).toContain("搜索结果");
   });
 
@@ -269,11 +265,11 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() =>
       useMaterialLibrary({ projectId: "p-1" }),
     );
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect.poll(() => result.current.loading).toBe(false);
     const before = mockedList.mock.calls.length;
     act(() => result.current.refresh());
-    await waitFor(() =>
-      expect(mockedList.mock.calls.length).toBeGreaterThan(before),
-    );
+    await expect
+      .poll(() => mockedList.mock.calls.length)
+      .toBeGreaterThan(before);
   });
 });

@@ -13,6 +13,7 @@
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -30,6 +31,7 @@ import {
   SHELL_INPUT_RE,
   decide,
   dropAdoptedShellInputs,
+  findCargo,
   freshnessProblem,
   runGate,
 } from "../scripts/shell-gate.mjs";
@@ -387,6 +389,161 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     expect(problem).toContain("二进制仍是旧的");
     // 硬规则 5 的关键提醒：feature 不能省，不带它冷启动必现错误页
     expect(problem).toContain("--features custom-protocol");
+  });
+
+  /**
+   * cargo 的寻址判据（ISSUE #1555）。
+   *
+   * 立案现场：CI / 容器镜像**精修过 PATH**，`~/.cargo/bin` 常常不在 —— 本仓开发
+   * 容器实测 `which cargo` 为空，而同一台机器上 `~/.cargo/bin/cargo` 与
+   * `~/.rustup/toolchains/<版本>/bin/cargo` 都在。此时改一行 Rust 会被判成
+   * 「编不了」，真因却只是「探针比 cargo 装得更苛刻」。
+   *
+   * 这一组用一个**假 home**（临时目录里造 `~/.cargo/bin/cargo`）把回退路径真跑出来：
+   * 判据是「找不到就说找不到、找得到就返回那一个」，而不是「源码里有 readdirSync」。
+   */
+  describe("cargo 寻址：PATH 优先、工具链默认安装位兜底（ISSUE #1555）", () => {
+    const temps: string[] = [];
+    afterEach(() => {
+      for (const dir of temps.splice(0))
+        rmSync(dir, { recursive: true, force: true });
+    });
+
+    /** POSIX 上 cargo 无后缀；Windows 上有 `.exe`（与 findCargo 的判据同源）。 */
+    const cargoName = process.platform === "win32" ? "cargo.exe" : "cargo";
+
+    /**
+     * 造一个假 home，按 `dirs` 放 `cargo`。
+     *
+     * 只造文件不造内容：`findCargo` 判的是「这条路径上有没有那个可执行文件」，
+     * 真起不起来由 `runCargoTest` 的注入参数管（那是另一格）。
+     */
+    function fakeHome(dirs: string[]): string {
+      const home = mkdtempSync(path.join(tmpdir(), "shell-gate-cargo-"));
+      temps.push(home);
+      for (const rel of dirs) {
+        const full = path.join(home, rel);
+        mkdirSync(path.dirname(full), { recursive: true });
+        writeFileSync(full, "#!/bin/sh\nexit 0\n");
+      }
+      return home;
+    }
+
+    /** 在受控环境下跑 `findCargo`：假 home + 受控 PATH + 无 CARGO_HOME。 */
+    function findCargoIn(home: string): string | null {
+      const saved = {
+        HOME: process.env.HOME,
+        USERPROFILE: process.env.USERPROFILE,
+        PATH: process.env.PATH,
+        CARGO_HOME: process.env.CARGO_HOME,
+      };
+      // `os.homedir()` 在 POSIX 读 HOME、在 Windows 读 USERPROFILE（两者都设才两端稳）。
+      process.env.HOME = home;
+      process.env.USERPROFILE = home;
+      // PATH 清空 = 「容器里 cargo 不在 PATH 上」那一档；CARGO_HOME 也清掉，
+      // 否则开发机上的真值会把回退判据盖过去。
+      process.env.PATH = "";
+      delete process.env.CARGO_HOME;
+      try {
+        return findCargo();
+      } finally {
+        for (const [k, v] of Object.entries(saved)) {
+          if (v === undefined) delete process.env[k as keyof typeof saved];
+          else process.env[k as keyof typeof saved] = v;
+        }
+      }
+    }
+
+    it("PATH 与安装位都没有：返回 null（调用方据此给 rustup 指路）", () => {
+      expect(findCargoIn(fakeHome([]))).toBeNull();
+    });
+
+    it("PATH 上没有、~/.cargo/bin 有：回退到它（容器镜像的常态）", () => {
+      const home = fakeHome([`.cargo/bin/${cargoName}`]);
+      expect(findCargoIn(home)).toBe(
+        path.join(home, ".cargo", "bin", cargoName),
+      );
+    });
+
+    it("PATH 与 ~/.cargo/bin 都没有、~/.rustup/toolchains 有：再回退一层", () => {
+      const home = fakeHome([
+        `.rustup/toolchains/1.90.0-x86_64-unknown-linux-gnu/bin/${cargoName}`,
+      ]);
+      expect(findCargoIn(home)).toBe(
+        path.join(
+          home,
+          ".rustup",
+          "toolchains",
+          "1.90.0-x86_64-unknown-linux-gnu",
+          "bin",
+          cargoName,
+        ),
+      );
+    });
+
+    it("多个工具链都在：取版本号最大的那个（新版优先，不许挑到旧工具链）", () => {
+      const home = fakeHome([
+        `.rustup/toolchains/1.83.0-x86_64-unknown-linux-gnu/bin/${cargoName}`,
+        `.rustup/toolchains/1.90.0-x86_64-unknown-linux-gnu/bin/${cargoName}`,
+      ]);
+      const found = findCargoIn(home);
+      expect(found).toContain("1.90.0");
+      expect(found).not.toContain("1.83.0");
+    });
+
+    it("回退面不许越界：只收 rustup 的三处，不做 PATH 式目录递归 / 不读 shell 配置", () => {
+      // 这条守的是「判据越宽越可能选中不该用的 cargo」：回退只收 rustup 的三处。
+      const src = read(GATE_SCRIPT);
+      expect(src).toContain('path.join(home, ".cargo", "bin")');
+      expect(src).toContain('path.join(home, ".rustup", "toolchains")');
+      expect(src).toContain("process.env.CARGO_HOME");
+      // 不许为了找 cargo 去递归整个磁盘 / 读 shell 的 rc 文件
+      expect(src).not.toMatch(/readdirSync\(["']\/["']\)/);
+      expect(src).not.toContain(".bashrc");
+      expect(src).not.toContain(".profile");
+    });
+
+    it("PATH 上有一份时**用它**：不许越过它去挑安装位里的（版本可能不同）", () => {
+      // 这条是回退判据的**方向**：回退只在「PATH 上没有」时才发生。
+      // 用真 PATH 造一份假 cargo，同时给假 home 也放一份，判拿到的是 PATH 那份。
+      const home = fakeHome([`.cargo/bin/${cargoName}`]);
+      const bin = mkdtempSync(path.join(tmpdir(), "shell-gate-pathbin-"));
+      temps.push(bin);
+      const onPath = path.join(bin, cargoName);
+      writeFileSync(onPath, "#!/bin/sh\nexit 0\n");
+      if (process.platform !== "win32") chmodSync(onPath, 0o755);
+
+      const savedPath = process.env.PATH;
+      const savedHome = process.env.HOME;
+      const savedProfile = process.env.USERPROFILE;
+      const savedCargoHome = process.env.CARGO_HOME;
+      process.env.PATH = bin;
+      process.env.HOME = home;
+      process.env.USERPROFILE = home;
+      delete process.env.CARGO_HOME;
+      try {
+        const found = findCargo();
+        // `whichCommand` 在各平台会补后缀 / 解析真实路径，所以判「落在 PATH 那个目录里」
+        // 而不是逐字等于 onPath。
+        expect(found?.startsWith(bin)).toBe(true);
+      } finally {
+        if (savedPath === undefined) delete process.env.PATH;
+        else process.env.PATH = savedPath;
+        if (savedHome === undefined) delete process.env.HOME;
+        else process.env.HOME = savedHome;
+        if (savedProfile === undefined) delete process.env.USERPROFILE;
+        else process.env.USERPROFILE = savedProfile;
+        if (savedCargoHome === undefined) delete process.env.CARGO_HOME;
+        else process.env.CARGO_HOME = savedCargoHome;
+      }
+    });
+
+    it("真实宿主上至少要探得出一条路：PATH 或安装位命中即可（空环境那档由上一条判）", () => {
+      // 不假设开发机装了 cargo：只判「探针这向不空转」——PATH 上有就到手，
+      // 没有也不会返回一个不存在的路径。
+      const found = findCargo();
+      if (found !== null) expect(existsSync(found)).toBe(true);
+    });
   });
 
   it("改了 Rust 而 PATH 上没有 cargo：退 1（此前这条只有源码文本断言）", () => {

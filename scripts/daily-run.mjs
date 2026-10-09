@@ -35,7 +35,11 @@ import { gitUser } from "./pixel-run.mjs";
  *   · 给了**可用**理由 ⇒ `{mode: "skip" | "dirty", reason}`；
  *   · 给了缺失 / 占位 / 过短的理由 ⇒ `{mode, reason: null}`（调用方按退出码 2 处理）。
  *
- * @param {string[]} argv
+ * 参数收 `unknown[]` 而不是 `string[]`：四档的入口都在这一处（`e2e-run.mjs` 的
+ * `parseSkip` 就是薄薄一层映射），而「开关后面什么都没给」时那一格读出来是 `undefined`
+ * —— 正是要覆盖的形状。声明成 `string[]` 会把这条边界挪到每个调用方去绕。
+ *
+ * @param {unknown[]} argv
  * @param {"--skip" | "--dirty"} flag
  * @returns {{mode: "run" | "skip" | "dirty", reason: string | null}}
  */

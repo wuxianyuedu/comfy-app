@@ -69,9 +69,9 @@ describe("导入面板的文件入口", () => {
 
     pickFile(jsonFile("my-flow.json", RAW_WF));
 
-    await waitFor(() => {
-      expect(screen.getByDisplayValue("my-flow")).toBeInTheDocument();
-    });
+    await waitFor(() =>
+      expect(screen.getByDisplayValue("my-flow")).toBeInTheDocument(),
+    );
     const textarea =
       screen.getByPlaceholderText<HTMLTextAreaElement>(/last_node_id/);
     expect(textarea.value).toContain("KSampler");
@@ -89,9 +89,9 @@ describe("导入面板的文件入口", () => {
       },
     });
 
-    await waitFor(() => {
-      expect(screen.getByDisplayValue("dropped")).toBeInTheDocument();
-    });
+    await waitFor(() =>
+      expect(screen.getByDisplayValue("dropped")).toBeInTheDocument(),
+    );
   });
 
   it("拖入 API 格式 JSON：给出可见原因，不静默丢弃", async () => {
