@@ -27,7 +27,9 @@
  *
  * 执行者的口径（**只认直接调用**，不做跨文件传递闭包推断 —— 那会把「A 调用 B、
  * B 调用 C」的间接链一路上溯，误报一片、也会随重构静默失效）：
- *   · `.githooks/pre-commit`（唯一本地钩子）
+ *   · `.githooks/pre-commit`（提交门槛）与 `.githooks/prepare-commit-msg`（提交消息门槛）
+ *     —— 后者是 ISSUE #1594 起的第二个本地钩子:「合并提交必须双亲」只能在那里判
+ *     （`pre-commit` 看不到本次的消息），漏了它那条判据会被判成「无执行者」。
  *   · `scripts/quality-gate.mjs`（`pnpm check:all` 的编排）
  *   · `package.json` 的 `scripts`（`pnpm <名>` 入口）
  *   · `scripts/build-desktop.mjs`（打包链）
@@ -195,10 +197,15 @@ function isGateScript(name, chain) {
   return GATE_NAME_PREFIXES.some((p) => name.startsWith(p));
 }
 
-/* ── 执行者来源（六处；口径见文件头） ─────────────────────────── */
+/* ── 执行者来源（七处；口径见文件头） ─────────────────────────── */
 
 const EXECUTOR_SOURCES = [
   ".githooks/pre-commit",
+  // `prepare-commit-msg` 是**第二个**本地钩子（ISSUE #1594）：「合并提交必须双亲」
+  // 只能在这里判 —— `pre-commit` 看不到本次的消息（`COMMIT_EDITMSG` 在那一刻仍停在
+  // 上一条提交上），而 prepare-commit-msg 的 `$2`(source) 能把 `--amend` 排除在外。
+  // 漏登记它 = 那份判据被判成「无执行者」、台账双向拦报成负债 —— 而被拦下的动作
+  // 恰恰是「把它接回钩子」，方向正好反了。
   "scripts/quality-gate.mjs",
   "package.json",
   "scripts/build-desktop.mjs",
