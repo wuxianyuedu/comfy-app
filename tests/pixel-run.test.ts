@@ -28,6 +28,7 @@ import {
 } from "../scripts/pixel-run.mjs";
 import {
   checkRecordingEnv,
+  isPlatformPending,
   recordingWebserverFor,
   webserverForEnv,
 } from "../scripts/visual-baselines.mjs";
@@ -79,11 +80,25 @@ describe("像素档按需通道：本次要跑什么（§11.8）", () => {
   it("本机这一档齐备时前置判决放行（真实检出上跑一次真清点）", () => {
     // 用真检出而不是夹具：这条同时证明「前置判决接的是真仓库」，夹具形态在
     // `tests/visual-baselines.test.ts` 里逐个答案都执行过。
-    const missing = checkLocalBaselines({
+    //
+    // **「齐备」是这条断言的前提，所以按登记分支**：本机平台若在
+    // `PENDING_PLATFORMS` 里（win32 档只能在 Windows 开发机上补录），前置判决
+    // **设计上**就该给出「这一档正在待重录 + 缺哪几张」的话术，而不是 null ——
+    // 那句「设计上」记在 `scripts/visual-baselines.mjs` 的 `isPlatformPending` 注释里
+    // （判据与前置判决共用同一口径）。要求一台录不齐基线的机器给出「齐备」，等于
+    // 让这条用例在**每台 Windows 开发机**上恒红，而它要验的那件事（前置判决接的是
+    // 真仓库）在两条分支上都成立。
+    const verdict = checkLocalBaselines({
       root: ROOT,
       platform: process.platform,
     });
-    expect(missing).toBeNull();
+    if (isPlatformPending(process.platform)) {
+      expect(verdict, "登记为待重录的档位，前置判决要点名缺哪几张").toContain(
+        "登记为待重录",
+      );
+      return;
+    }
+    expect(verdict).toBeNull();
   });
 
   it("本机这一档没登记时前置判决拦下并点名（换一档平台就看得见）", () => {

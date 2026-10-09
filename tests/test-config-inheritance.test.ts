@@ -85,10 +85,14 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       const cfg = project.config as unknown as Record<string, unknown>;
       const prefix = `[${project.name}]`;
       // setupFiles 在解析后是**绝对路径**，所以比形状（落在为仓库根之下、名字对）。
+      // `path.relative` 在 Windows 上吐的是 `tests\setup.ts`、在 POSIX 上是
+      // `tests/setup.ts` —— 不归一化分隔符，这条断言就**只在非 Windows 上成立**
+      // （而本仓库的执行环境全是 linux 容器，Windows 开发机上恒红）。
       const setupFiles = cfg.setupFiles as string[];
-      expect(setupFiles.map((f) => path.relative(ROOT, f)), prefix).toEqual(
-        SHARED_EXPECTATIONS.setupFiles,
-      );
+      expect(
+        setupFiles.map((f) => path.relative(ROOT, f).split(path.sep).join("/")),
+        prefix,
+      ).toEqual(SHARED_EXPECTATIONS.setupFiles);
       expect(cfg.globals, prefix).toBe(SHARED_EXPECTATIONS.globals);
       expect(cfg.testTimeout, prefix).toBe(SHARED_EXPECTATIONS.testTimeout);
       expect(cfg.hookTimeout, prefix).toBe(SHARED_EXPECTATIONS.hookTimeout);
