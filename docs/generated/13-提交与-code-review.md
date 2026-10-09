@@ -27,7 +27,7 @@
 - [ ] 高频状态用 Zustand 而非 Context（见 [1.1](01-架构与状态管理.md#11-全局高频状态禁止用-react-context)）
 - [ ] 图标用 `lucide-react`，无新增内联 SVG（装饰性除外）
 - [ ] 可交互元素有 `aria-label`；模态/抽屉有焦点管理；**非原生元素（`div` / `li` / `span`）上的 `onClick` 有键等价物**（换原生可交互元素，或补 `simpleKeyHandler`；由 `node scripts/check-click-keyboard.cjs` 在 pre-commit 强制，见 [06 §6.11](06-无障碍访问-a11y.md#611-非原生元素上的点击必须有键等价物check-click-keyboardcjs)）
-- [ ] `jsx-a11y` 的规则没有被**悄悄**关掉（关一条要在 `scripts/.a11y-rule-ledger.json` 登记「为什么 + 谁在守它」，由 `node scripts/check-a11y-rules.cjs` 双核，见 [06](06-无障碍访问-a11y.md#612-jsx-a11y-的规则开关官方-recommended-全开方言逐条登记check-a11y-rulescjs)）
+- [ ] `jsx-a11y` 的规则没有被**悄悄**关掉，也没有**没人决定过**的规则（关一条 / 官方两份配置谁都没提到的非废弃规则，都要在 `scripts/.a11y-rule-ledger.json` 登记「为什么 + 谁在守它」，由 `node scripts/check-a11y-rules.cjs` 双核，见 [06](06-无障碍访问-a11y.md#612-jsx-a11y-的规则开关官方-recommended-全开方言逐条登记check-a11y-rulescjs)）
 - [ ] 无 monkey-patch（`history.pushState` 等）→ 改用 `usePathname`（见 [8.4](08-异步与副作用.md#84-禁止-monkey-patch-全局-api)）
 - [ ] 代码行为变更已同步文档（文档与代码同提交，见主规范 §9）
 - [ ] Review 中发现的**可复用改进模式已归档**（见 [13.9](#139-优化点归档强制)）
@@ -235,7 +235,8 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-a11y-rules.cjs         # jsx-a11y 的规则开关 ⇄ 判据（见 06 §6.12）：
    # 官方 recommended 集合全开（从插件自己的数据算，不手抄规则表）、本仓与官方默认的
    # 每一处不同都在 scripts/.a11y-rule-ledger.json 登记（关掉一条 / 就地豁免一个文件，
-   # 都要答出「为什么」+「谁在守它」），台账双向拦
+   # 都要答出「为什么」+「谁在守它」）；**官方两份配置谁都没提到、又没被标记废弃的**
+   # 规则也要有一笔裁决（开着、或登记为不开）—— 台账双向拦
 ```
 
 > **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /

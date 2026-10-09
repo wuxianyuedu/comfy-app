@@ -155,3 +155,38 @@ test("⑥ `--report` 只出清单、不判失败（恒 0）—— 报告档的�
   expect(r.ok, r.output).toBe(true);
   expect(r.output).toContain("--report 模式");
 });
+
+test("⑦ 非废弃、且官方两份配置都没提到的规则：没登记也不开 → 阻断（「没人决定过」）", () => {
+  /* 把 prefer-tag-over-role 那一条从台账里摘掉 —— 它现在就落在
+     「官方 recommended / strict 都没提到、也没被标记废弃」那一格，
+     摘掉登记之后本仓对它就没有任何裁决痕迹了。 */
+  const r = runWithLedger({
+    ...REAL_LEDGER,
+    dialect: REAL_LEDGER.dialect.filter(
+      (d) => d.rule !== "jsx-a11y/prefer-tag-over-role",
+    ),
+  });
+  expect(r.ok).toBe(false);
+  expect(r.output).toContain("既不在官方 recommended、也不在官方 strict");
+  expect(r.output).toContain("prefer-tag-over-role");
+});
+
+test("⑧ 那一格登记齐了 → 放行（本仓真表就是绿的）", () => {
+  /* 与 ⑦ 对照：真台账里 prefer-tag-over-role 已登记，于是这一向不再报它。
+     注意断言的是**这一向**的输出里没有它，不是「整体没红」——
+     整体绿由第 1 条用例守着。 */
+  const r = runWithLedger(REAL_LEDGER);
+  expect(r.ok, r.output).toBe(true);
+  expect(r.output).not.toContain("既不在官方 recommended、也不在官方 strict");
+});
+
+test("⑨ 官方标了 deprecated 的规则不算「没人决定过」（不逼人给废弃规则表态）", () => {
+  /* `accessible-emoji` / `no-onchange` / `label-has-for` 是官方 ❌ deprecated，
+     两边配置不提是对的 —— 判据按插件的 `meta.deprecated` 认出来并跳过。
+     夹具：把台账里所有 dialect 摘空，若判据把废弃规则也算进那一格，
+     这里就会报出一串 deprecated 的名字。 */
+  const r = runWithLedger({ ...REAL_LEDGER, dialect: [] });
+  expect(r.output).not.toContain("accessible-emoji 既不在官方");
+  expect(r.output).not.toContain("no-onchange 既不在官方");
+  expect(r.output).not.toContain("label-has-for 既不在官方");
+});
