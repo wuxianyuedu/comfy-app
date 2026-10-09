@@ -9,6 +9,7 @@ import {
   withAppProviders,
   withTrpcApp,
 } from "./data-sources.tsx";
+import { withMessageScene } from "./message-center-sources.tsx";
 import { withStoreScene } from "./store-sources.tsx";
 import { readAppOrigin } from "./app-origin-reader.ts";
 
@@ -66,12 +67,27 @@ const preview: Preview = {
     [APP_ORIGIN]: appOrigin.APP_DEV_ORIGIN,
   },
   /* 顺序即语义：trpc 提供者在最外层（组件一挂载就要能发请求），应用外壳
-     （toast / 消息中心 / tooltip）在它里层，store 场景在组件挂载**之前**写状态
-     （否则首帧读的是空 store），主题在最内层（只改 `<html>` 的 class，
-     与组件树无关）。
-     `withStoreScene` 只在 `parameters.storeScene` 给了名字时动手 —— 没声明的
-     story 走真实 store，不被搅（见 `.storybook/store-sources.tsx`）。 */
-  decorators: [withTrpcApp, withAppProviders, withStoreScene, withTheme],
+     （toast / 消息中心 / tooltip）在它里层，两个 store 场景装饰器在组件挂载
+     **之前**写状态（否则首帧读的是空 store），主题在最内层（只改 `<html>` 的
+     class，与组件树无关）。
+
+     **两个 store 装饰器都在 `withAppProviders` 里层、且谁先谁后不影响对方**：
+     它们读各自的 `parameters` 键（`storeScene` / `messageScene`），缺席时什么都
+     不做 —— 没声明的 story 走真实 store，不被搅（见 `.storybook/store-sources.tsx`
+     与 `.storybook/message-center-sources.tsx`）。
+
+     ⚠️ 一处容易踩的：`MessageCenterPanel` 的 story 里那个面板**不是** story 自己
+     渲染的，而是 `withAppProviders` 的 `StorybookAppProviders` 挂的（与
+     `src/app/layout.tsx` 同形）。也就是说 `messageScene` 必须写在**能被装饰器
+     读到**的那一层，且 `open` 要在外壳的子树渲染之前置好 —— 否则面板首帧读到
+     `open: false` 直接 `return null`，画布上一片空白。 */
+  decorators: [
+    withTrpcApp,
+    withAppProviders,
+    withStoreScene,
+    withMessageScene,
+    withTheme,
+  ],
   parameters: {
     /* 本检出的解析链端口 + 来源：注入层（`data-sources.tsx` 的 `DEFAULT_APP_ORIGIN`）
        读这里，而不是 import 那份生成件 —— 生成件不入库，不该进类型程序。 */
