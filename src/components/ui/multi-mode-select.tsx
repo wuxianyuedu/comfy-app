@@ -315,6 +315,7 @@ export function MultiModeSelect({
               const isSelected = draft.has(item.code);
               const isDraftDefault = draftDefault === item.code;
               return (
+                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开。 */
                 <div
                   key={item.code}
                   className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${

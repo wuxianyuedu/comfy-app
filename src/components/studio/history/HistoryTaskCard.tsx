@@ -98,6 +98,9 @@ export function HistoryTaskCard({
         </Button>
 
         {/* ── 主体信息 ── */}
+        {/* 整块「点开详情」是真病灶，键等价物由 **PR #1574** 收口成原生
+            `<Button>`；本批只对齐规则开关，刻意不重复改同一行。 */}
+        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- 键等价物由 PR #1574 收口 */}
         <div
           className="min-w-0 flex-1 cursor-pointer"
           onClick={() => onOpenDetail(task.id)}

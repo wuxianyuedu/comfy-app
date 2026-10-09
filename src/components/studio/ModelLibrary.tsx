@@ -6,6 +6,7 @@ import { AuroraBackground } from "~/components/ui/aurora-background";
 import { textHandler } from "~/lib/form-props";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
+import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { FieldLabel } from "~/components/ui/field";
@@ -349,9 +350,10 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
 
           {/* search + filter */}
           <div className="flex items-center gap-3 px-5 py-3">
-            <input
+            <Input
               value={c.q}
               onChange={textHandler(c.setQ)}
+              aria-label="搜索目录名"
               placeholder="搜索目录名…"
               className="border-border bg-subtle text-ink-bright flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
             />

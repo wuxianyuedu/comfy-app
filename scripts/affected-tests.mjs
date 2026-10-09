@@ -356,6 +356,26 @@ export const FIXED_STRUCTURAL_TESTS = [
   // （用了共享夹具 / 只造临时目录 / 拉别的可执行文件 / 夹具文件）每一条都得有人钉住，
   // 而它们是「下一次有人写门禁自测」时才走得进的路径，所以必须进固定清单。
   "tests/gate-repo-boilerplate-gate.test.ts",
+  // 「`@theme` 声明的 token 清单」那份**文件快照**（规范 §11.9.1 / #1490 落地）：
+  // `toMatchFileSnapshot` 把清单写成一份能独立打开、能单独 diff 的真文件，
+  // 而它与源码之间的同步**没有任何机器判据** —— 它自己那条用例读的是
+  // `src/app/globals.css` 的**文本**（正则扫 `@theme` 块），CSS 不在 import 图上，
+  // 所以「改了 globals.css 而不带它」正好是它不在的时机。
+  // 实测（本轮）：#1558 往 `@theme` 加了一颗 `--gradient-brand`（品牌渐变收成 token），
+  // 基线没同批更新，这条红**直接落进 master 并留了一周**，期间从它分出去的每一次提交
+  // 都带着它 —— 表现不是「某处坏了」，而是「一份人工 review 的产物与源码已经不一致，
+  // 没有任何人被告知」。同因（读文本、import 图追不到、与本次改动无关也必须响），
+  // 故进固定清单。
+  "tests/theme-tokens-compile-source.test.ts",
+  // 「jsx-a11y 的规则开关 ⇄ 判据」（规范 06 §6.12）：这个插件装着 39 条规则、
+  // 而 `eslint-config-next` 只启用 6 条 —— 「半开」这件事此前没有任何东西在数
+  //（`grep -c jsx-a11y eslint.config.js` 是 0，配置在 next 里）。本判据三向核：
+  // 官方 recommended 集合全开、本仓与官方默认的每一处不同都在台账里登记、
+  // 台账双向拦。它同时是判据自己的门禁自测 —— 该拦的（悄悄关掉一条、登记了却
+  // 没关、登记不存在的规则、缺理由 / 缺 keeper、豁免指向不存在的文件）与该放的
+  // （`--report` 恒 0）每一条都得有人钉住。改 `.githooks/**` 会让本层放弃收窄、
+  // 只跑固定清单，而「有人偷偷关掉一条 a11y 规则」正是这类动作，故进固定清单。
+  "tests/a11y-rules-gate.test.ts",
   // 「被门禁拦下先复算 master 基线」的执行者（规范 §13.6.2 第 1 步）：那段
   // `git worktree add ../.wt-base-check … && node scripts/check-*.cjs … && git worktree
   // remove` 此前只写在文档与注释里，于是「这一条本身还没有机器判据」是 §13.6.2 自己的
