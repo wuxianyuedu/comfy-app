@@ -327,13 +327,25 @@ function mockSessionsFor(
   source: string,
   payload: {
     content: string;
-    sessions?: Array<{ id: string; title: string; startedAt: number | null }>;
+    sessions?: Array<{
+      id: string;
+      title: string;
+      startedAt: number | null;
+      scope: "current" | "runs";
+      crashed: boolean;
+    }>;
     truncated?: boolean;
     windowed?: boolean;
   },
 ): void {
   const sessions = payload.sessions ?? [
-    { id: "0", title: "▶ 启动会话", startedAt: null },
+    {
+      id: "0",
+      title: "11-05 09:36:12 · 本次运行",
+      startedAt: null,
+      scope: "current" as const,
+      crashed: false,
+    },
   ];
   server.use(
     http.get("*/api/logs/sessions", ({ request }) => {
@@ -975,8 +987,20 @@ describe("useSettingsPage", () => {
   it("切换启动会话：按会话 id 重新拉取，并把选中项与截断提示同步到状态", async () => {
     /* 契约：新→旧（第一项是最新那一份）。 */
     const sessions = [
-      { id: "40", title: "▶ ComfyUI 启动会话", startedAt: null },
-      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: null },
+      {
+        id: "40",
+        title: "11-05 09:36:12 · 本次运行",
+        startedAt: null,
+        scope: "current" as const,
+        crashed: false,
+      },
+      {
+        id: "12",
+        title: "11-05 09:30:00 · 本次运行",
+        startedAt: null,
+        scope: "current" as const,
+        crashed: false,
+      },
     ];
     server.use(
       http.get("*/api/logs/sessions", ({ request }) => {
@@ -1018,7 +1042,13 @@ describe("useSettingsPage", () => {
   it("新一轮启动出现（会话列表多出最新一项）时自动切过去，无需手动换下拉", async () => {
     /* 会话列表可变：先只有一次启动，随后模拟新一次启动写入横幅。 */
     let sessions = [
-      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
+      {
+        id: "12",
+        title: "11-05 09:30:00 · 本次运行",
+        startedAt: 1_000,
+        scope: "current" as const,
+        crashed: false,
+      },
     ];
     server.use(
       http.get("*/api/logs/sessions", ({ request }) => {
@@ -1050,8 +1080,20 @@ describe("useSettingsPage", () => {
 
     /* 新→旧：新一轮启动排在**最上面**（与真实端点同序）。 */
     sessions = [
-      { id: "40", title: "▶ ComfyUI 启动会话", startedAt: 2_000 },
-      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
+      {
+        id: "40",
+        title: "11-05 09:36:12 · 本次运行",
+        startedAt: 2_000,
+        scope: "current" as const,
+        crashed: false,
+      },
+      {
+        id: "12",
+        title: "11-05 09:30:00 · 本次运行",
+        startedAt: 1_000,
+        scope: "current" as const,
+        crashed: false,
+      },
     ];
     await act(async () => {
       await result.current.comfyLog.refresh();
@@ -1066,11 +1108,80 @@ describe("useSettingsPage", () => {
     });
   });
 
+  /* 跨包（ISSUE #1587）：归档份的 id 是 `<包名>/<文件名>`，hook 必须**原样**
+   * 回传 —— 它不解析 id（形态判据只在服务端一处），也不该把它当成文件名拼一遍。 */
+  it("切到归档包里的份：原样带上 `<包名>/<文件名>` 的 id 重新拉取", async () => {
+    const archived =
+      "2026-10-04_140000-bbbbbb/comfyui-runtime-20261004-140000.log";
+    const sessions = [
+      {
+        id: "comfyui-runtime-20261005-093612.log",
+        title: "10-05 09:36:12 · 本次运行",
+        startedAt: 2_000,
+        scope: "current" as const,
+        crashed: false,
+      },
+      {
+        id: archived,
+        title: "10-04 14:00:00 · 正常退出 · bbbbbb",
+        startedAt: 1_000,
+        scope: "runs" as const,
+        crashed: false,
+      },
+    ];
+    server.use(
+      http.get("*/api/logs/sessions", ({ request }) => {
+        const url = new URL(request.url);
+        const session = url.searchParams.get("session");
+        const selectedId = sessions.some((s) => s.id === session)
+          ? session!
+          : sessions[0]!.id;
+        return HttpResponse.json({
+          sessions,
+          selectedId,
+          content: selectedId === archived ? "上一包的内容" : "本次运行的内容",
+          truncated: false,
+          windowed: false,
+          size: 64,
+        });
+      }),
+    );
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await expect
+      .poll(() => result.current.comfyLog.text)
+      .toBe("本次运行的内容");
+
+    await act(async () => {
+      result.current.comfyLog.selectSession(archived);
+    });
+    await expect.poll(() => result.current.comfyLog.text).toBe("上一包的内容");
+    expect(result.current.comfyLog.sessionId).toBe(archived);
+    /* id 原样回传（没有被拆成文件名、也没有被拼上路径） */
+    expect(sessionLogRequests).toContainEqual({
+      source: "comfyui-runtime",
+      session: archived,
+    });
+  });
+
   it("没有新启动时保持用户选中的旧会话，不因轮询被顶回最新", async () => {
     /* 契约：新→旧（第一项是最新那一份）。 */
     const sessions = [
-      { id: "40", title: "▶ ComfyUI 启动会话", startedAt: 2_000 },
-      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
+      {
+        id: "40",
+        title: "11-05 09:36:12 · 本次运行",
+        startedAt: 2_000,
+        scope: "current" as const,
+        crashed: false,
+      },
+      {
+        id: "12",
+        title: "11-05 09:30:00 · 本次运行",
+        startedAt: 1_000,
+        scope: "current" as const,
+        crashed: false,
+      },
     ];
     server.use(
       http.get("*/api/logs/sessions", ({ request }) => {

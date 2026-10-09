@@ -44,22 +44,26 @@
 <div class="tsd-signature"><span class="tsd-kind-property">crashed</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>该次运行异常退出（<code>run.json</code> 的 <code>crashed</code>）；<code>current</code> 恒为 false。</p>
 </div><aside class="tsd-sources">
+<p>Overrides <a href="lib_log_log-sessions.LogSessionMeta.html">LogSessionMeta</a>.<a href="lib_log_log-sessions.LogSessionMeta.html#crashed">crashed</a></p>
 <ul>
 <li>Defined in lib/log/log-run-packs.ts:113</li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-inherited">
 <h3 class="tsd-anchor-link" id="id"><span>id</span><a href="#id" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">id</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-<div class="tsd-comment tsd-typography"><p>文件名（也是下拉的 value），如 <code>comfyui-runtime-20261005-093612.log</code>。</p>
-<p>它就是那一份文件本身，不必再编码一次：文件名唯一，「第几份」由它承载。</p>
+<div class="tsd-comment tsd-typography"><p>份的 id（也是下拉的 value）：<code>current/</code> 的份是文件名
+（<code>comfyui-runtime-20261005-093612.log</code>），归档份是 <code>&lt;包名&gt;/&lt;文件名&gt;</code>。</p>
+<p>它就是那一份文件本身，不必再编码一次；带包名是为了让两个包里的同名份
+（同一秒内两次启动的 <code>-2</code>、迁移前的旧固定名）不撞成一个 id。</p>
 </div><aside class="tsd-sources">
 <p>Inherited from <a href="lib_log_log-sessions.LogSessionMeta.html">LogSessionMeta</a>.<a href="lib_log_log-sessions.LogSessionMeta.html#id">id</a></p>
 <ul>
-<li>Defined in lib/log/log-sessions.ts:29</li></ul></aside></section>
+<li>Defined in lib/log/log-sessions.ts:42</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="scope"><span>scope</span><a href="#scope" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">scope</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;current&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;runs&quot;</span></div>
 <div class="tsd-comment tsd-typography"><p><code>current</code> = 正在写的本次运行；<code>runs</code> = 已归档的历史包。</p>
 </div><aside class="tsd-sources">
+<p>Overrides <a href="lib_log_log-sessions.LogSessionMeta.html">LogSessionMeta</a>.<a href="lib_log_log-sessions.LogSessionMeta.html#scope">scope</a></p>
 <ul>
 <li>Defined in lib/log/log-run-packs.ts:111</li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-inherited">
@@ -69,15 +73,18 @@
 </div><aside class="tsd-sources">
 <p>Inherited from <a href="lib_log_log-sessions.LogSessionMeta.html">LogSessionMeta</a>.<a href="lib_log_log-sessions.LogSessionMeta.html#startedat">startedAt</a></p>
 <ul>
-<li>Defined in lib/log/log-sessions.ts:33</li></ul></aside></section>
+<li>Defined in lib/log/log-sessions.ts:51</li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-inherited">
 <h3 class="tsd-anchor-link" id="title"><span>title</span><a href="#title" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">title</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
-<div class="tsd-comment tsd-typography"><p>下拉文案（<code>09-30 19:36:12</code>，由端点的 <code>runtimeLogFileLabel</code> 拼好）。</p>
+<div class="tsd-comment tsd-typography"><p>下拉文案（<code>09-30 19:36:12 · 正常退出 · a1b2c3</code>，由 <code>lib/log/log-run-packs</code>
+的 <code>formatScopedLabel</code> 拼好）。三段都有必要：同一次运行里多次启动的份只有
+<strong>时刻</strong>能区分、崩溃那次的日志形态与正常退出完全不同（先标出来用户才知道
+在看什么）、runId 是跨包 <code>grep &lt;runId&gt; log/current log/runs/</code> 的唯一入口。</p>
 </div><aside class="tsd-sources">
 <p>Inherited from <a href="lib_log_log-sessions.LogSessionMeta.html">LogSessionMeta</a>.<a href="lib_log_log-sessions.LogSessionMeta.html#title">title</a></p>
 <ul>
-<li>Defined in lib/log/log-sessions.ts:31</li></ul></aside></section></section></details></div>
+<li>Defined in lib/log/log-sessions.ts:49</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
