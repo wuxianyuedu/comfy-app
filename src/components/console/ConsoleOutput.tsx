@@ -14,6 +14,7 @@
 import { useRef } from "react";
 import { AlertTriangle, CheckCircle2, Terminal } from "lucide-react";
 
+import { EmptyState } from "~/components/ui/empty-state";
 import { Spinner } from "~/components/ui/spinner";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { cn } from "~/lib/utils";
@@ -63,20 +64,14 @@ export function ConsoleOutput({
           <pre className="text-ink-strong font-mono text-[12.5px] leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap">
             {output}
           </pre>
+        ) : running ? (
+          <EmptyState
+            variant="panel"
+            icon={<Spinner className="size-5 opacity-60" />}
+            title="命令已提交，等待输出…"
+          />
         ) : (
-          <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm">
-            {running ? (
-              <>
-                <Spinner className="size-5 opacity-60" />
-                <span>命令已提交，等待输出…</span>
-              </>
-            ) : (
-              <>
-                <Terminal size={32} strokeWidth={1.5} className="opacity-30" />
-                <span>{emptyHint}</span>
-              </>
-            )}
-          </div>
+          <EmptyState variant="panel" icon={Terminal} title={emptyHint} />
         )}
       </div>
 

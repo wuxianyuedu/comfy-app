@@ -25,6 +25,7 @@ import { useMessageCenterStore } from "./message-center-store";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { EmptyState } from "~/components/ui/empty-state";
 import { useHotkey } from "~/components/ui/use-hotkey";
 
 const KIND_META: Record<
@@ -142,10 +143,12 @@ export function MessageCenterPanel() {
       {/* 消息列表 */}
       <div className="custom-scrollbar flex-1 overflow-y-auto">
         {messages.length === 0 ? (
-          <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-3">
-            <Inbox size={44} strokeWidth={1.2} className="opacity-30" />
-            <p className="text-sm">暂无系统消息</p>
-          </div>
+          <EmptyState
+            variant="panel"
+            className="gap-3"
+            icon={<Inbox size={44} strokeWidth={1.2} className="opacity-30" />}
+            title="暂无系统消息"
+          />
         ) : (
           <ul className="mx-auto flex w-full max-w-3xl flex-col gap-2.5 px-4 py-5">
             {messages.map((m) => {

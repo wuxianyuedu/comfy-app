@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { Loader2, TriangleAlert } from "lucide-react";
+import { FileText, Loader2, TriangleAlert } from "lucide-react";
 
 import { EmptyState } from "./empty-state";
 
@@ -74,5 +74,64 @@ describe("EmptyState（三合一）", () => {
       <EmptyState title="空" minHeightClass="min-h-40" />,
     );
     expect(container.firstElementChild?.className).toContain("min-h-40");
+  });
+
+  /* ── panel：面板里铺满居中的轻量占位 ──────────────────────────────
+   * 这三条是「只许有一个出处」判据的另一半：判据保证调用点不再手抄，而这里
+   * 保证**被抄进去的那串形状本身**还在（基元一旦被人改掉，判据会因为
+   * 「标记只命中实现文件」而继续全绿，外观却已经换了）。 */
+
+  it("panel：铺满父级的无框形状（不带 page 那档的虚线卡片骨架）", () => {
+    const { container } = render(
+      <EmptyState variant="panel" icon={FileText} title="暂无匹配的日志" />,
+    );
+    const root = container.firstElementChild as HTMLElement;
+    for (const cls of [
+      "flex",
+      "h-full",
+      "flex-col",
+      "items-center",
+      "justify-center",
+      "gap-2",
+      "text-sm",
+      "text-ink-fainter",
+    ]) {
+      expect(root.className, cls).toContain(cls);
+    }
+    // 刻意不是虚线卡片：`Empty` 骨架带来的 `border-dashed` 不该出现在这一档
+    expect(root.className).not.toContain("border-dashed");
+    expect(screen.getByText("暂无匹配的日志")).toBeInTheDocument();
+  });
+
+  it("panel：icon 传 lucide 组件按弱化档渲染（32 / 1.5 / opacity-30）", () => {
+    const { container } = render(
+      <EmptyState variant="panel" icon={FileText} />,
+    );
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("width")).toBe("32");
+    expect(svg?.getAttribute("stroke-width")).toBe("1.5");
+    // lucide 把 className 落在 `<svg>` 自己身上（没有额外包一层），所以查它
+    expect(svg?.getAttribute("class")).toContain("opacity-30");
+    // 纯装饰：占位图标不进无障碍树（文案已经说明状态）
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("panel：className 与已渲染图标节点都听调用点的（差异不必抄整串类名）", () => {
+    render(
+      <EmptyState
+        variant="panel"
+        className="gap-3"
+        icon={<Loader2 data-testid="big-icon" size={44} strokeWidth={1.2} />}
+        title="暂无系统消息"
+      />,
+    );
+    /* 文案是根 div 的直接子节点，所以 `getByText` 拿到的就是那枚根 —— 判「同组
+     * 后者取胜」要落在它身上。实测 `cn("… gap-2 …", "gap-3")` 把 `gap-2` 摘掉：
+     * 调用点覆写是**取胜**而不是靠产物里两条规则的先后（口径见 docs/DESIGN.md
+     * §Components 那条「分机制」的订正）。 */
+    const root = screen.getByText("暂无系统消息");
+    expect(root.className).toContain("gap-3");
+    expect(root.className).not.toContain("gap-2");
+    expect(screen.getByTestId("big-icon").getAttribute("width")).toBe("44");
   });
 });
