@@ -198,6 +198,28 @@
         "label": "按需档 ⇄ 执行者索引"
       },
       "section": "13.5.4"
+    },
+    {
+      "id": "tsc-diagnostic-shape",
+      "name": "本判据自己（类型层声明 ⇄ 执行者）的台账形状与地板",
+      "declaredAt": "scripts/.tsc-diagnostic-executors.json 与规范 §13.5.14 那张表",
+      "reader": "tests/tsc-diagnostic-executors.test.ts",
+      "executor": {
+        "kind": "fixed-test",
+        "file": "tests/tsc-diagnostic-executors.test.ts"
+      },
+      "section": "13.5.14"
+    },
+    {
+      "id": "type-level-declaration-executors",
+      "name": "类型层声明（JSDoc / 类型注解）⇄ 它的执行者（tsc 判决面）",
+      "declaredAt": "scripts/.tsc-diagnostic-executors.json（声明行计数基线 + 每条的执行者）",
+      "reader": "scripts/check-tsc-diagnostic-executors.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "类型层声明 ⇄ 执行者（tsc 判决面，§13.5.14）"
+      },
+      "section": "13.5.14"
     }
   ]
 }
