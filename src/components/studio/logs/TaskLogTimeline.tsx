@@ -122,7 +122,7 @@ export function TaskLogTimeline({
                 <Button
                   variant="ghost"
                   onClick={() => setFilter(option.value)}
-                  className={`h-auto rounded-md px-2.5 py-1 text-[13px] ${
+                  className={`h-auto rounded-md px-2.5 py-1 text-sm ${
                     filter === option.value
                       ? "bg-surface-2 text-ink"
                       : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
@@ -186,7 +186,7 @@ function DefaultLogRow({
     <div
       data-testid={rowTestId}
       data-level={log.level}
-      className="border-border-subtle hover:bg-card flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
+      className="border-border-subtle hover:bg-card flex items-start gap-2.5 border-b px-4 py-1 font-mono text-sm leading-snug"
     >
       <span className="text-ink-muted shrink-0">{fmtTime(log.t)}</span>
       <span
@@ -209,7 +209,7 @@ function DefaultLogRow({
 /** 无日志时的默认占位（消费方不传 `emptySlot` 时兜底，避免空列表静默）。 */
 export function TaskLogEmptyHint({ message }: { message: string }) {
   return (
-    <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
+    <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm">
       <FileText size={32} strokeWidth={1.5} className="opacity-30" />
       {message}
     </div>

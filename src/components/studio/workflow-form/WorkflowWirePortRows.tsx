@@ -321,7 +321,7 @@ export function WirePortRows({
                     onChange={textHandler((value) =>
                       set(wireInput.ioKey, value),
                     )}
-                    className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder h-full w-full rounded-md px-2.5 py-2 text-[13px] outline-none"
+                    className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder h-full w-full rounded-md px-2.5 py-2 text-sm outline-none"
                     style={{ fontFamily: "var(--font-sans)" }}
                   />
                 )}
@@ -330,7 +330,7 @@ export function WirePortRows({
                     variant="ghost"
                     disabled={uploading}
                     onClick={() => pickFile(wireInput.ioKey)}
-                    className="nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright h-full gap-1.5 rounded-md px-2.5 py-1.5 text-[13px]"
+                    className="nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright h-full gap-1.5 rounded-md px-2.5 py-1.5 text-sm"
                   >
                     {uploading && uploadTarget === wireInput.ioKey
                       ? "上传中…"

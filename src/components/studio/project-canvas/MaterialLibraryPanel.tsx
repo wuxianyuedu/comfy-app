@@ -145,7 +145,7 @@ export function MaterialLibraryPanel({
             onClick={() => {
               setScope(scopeItem.id);
             }}
-            className={`h-auto rounded-none px-0 pb-2.5 text-[13px] font-medium hover:bg-transparent ${
+            className={`h-auto rounded-none px-0 pb-2.5 text-sm font-medium hover:bg-transparent ${
               scope === scopeItem.id
                 ? "border-accent text-ink-bright border-b-2"
                 : "text-ink-muted hover:text-ink-soft"
