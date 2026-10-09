@@ -152,7 +152,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R12 + R5 棘轮硬闸（见 §12.6/§12.8/§12.11）
-✅ node scripts/check-ps1-consistency.mjs  # 跨平台动作对照表：.ps1⇄.mjs 两侧齐全、会静默失效的清单只定义一次（见 launch-and-build §9.5）
+✅ node scripts/check-ps1-consistency.mjs  # 跨平台动作对照表：.ps1⇄.mjs 两侧齐全、会静默失效的清单只定义一次、入口清单与磁盘/package.json 三向对齐（见 launch-and-build §9.5）
 ✅ node scripts/check-react-updater-purity.cjs
 ✅ node scripts/check-title-bar-clearance.cjs
 ✅ pnpm exec tsc --noEmit
