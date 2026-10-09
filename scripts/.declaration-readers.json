@@ -13,6 +13,17 @@
       "section": "11.23"
     },
     {
+      "id": "commit-message-claims",
+      "name": "提交信息里的机械可核声明（章节保留 / 路径没动 / 计数归零）",
+      "declaredAt": "提交信息正文（那次提交的 `%B`，如「master 新增的 §13.5.13 / §13.6.3 两节…照旧保留」）",
+      "reader": "scripts/check-commit-claims.mjs",
+      "executor": {
+        "kind": "npm-script",
+        "script": "check:claims"
+      },
+      "section": "11.23.5"
+    },
+    {
       "id": "gate-executor-claim",
       "name": "判据自称在跑 / 按需召唤台账",
       "declaredAt": "脚本头注释、scripts/.gate-executor-ledger.json",
@@ -220,17 +231,6 @@
         "label": "类型层声明 ⇄ 执行者（tsc 判决面，§13.5.14）"
       },
       "section": "13.5.14"
-    },
-    {
-      "id": "commit-message-claims",
-      "name": "提交信息里的可核声明（章节保留 / 路径没动 / 计数归零）",
-      "declaredAt": "提交信息正文（那次提交的 `%B`）",
-      "reader": "scripts/check-commit-claims.mjs",
-      "executor": {
-        "kind": "fixed-test",
-        "file": "tests/check-commit-claims.test.ts"
-      },
-      "section": "11.23"
     }
   ]
 }

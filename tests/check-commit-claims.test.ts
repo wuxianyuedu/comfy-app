@@ -307,6 +307,41 @@ describe("extractClaims 的句式口径", () => {
     expect(extractClaims("# §1.1 照旧保留", NO_TREE)).toHaveLength(0);
   });
 
+  vitestTest("裸「保留」不算声明（解冲突叙述，不是在承诺某一节还在）", () => {
+    /* 真样本：`b3bf69fe` 的「保留共有段落」/ `c3feb00a` 的「保留本分支的
+     * check-click-keyboard.cjs」——「保留」的宾语不是章节号，与 §11.23 无关。 */
+    for (const line of [
+      "处置 = 保留共有段落，其后接 PR 的 §11.9.1。",
+      "- 保留本分支的 check-click-keyboard.cjs（§6.11 键等价物棘轮）",
+    ]) {
+      expect(extractClaims(line, NO_TREE)).toHaveLength(0);
+    }
+  });
+
+  vitestTest("「保留」的宾语必须是那一节（例：例外块照原文保留）", () => {
+    /* 真样本 `23bc80da`：`§3.6.1 的 p71-allow 例外块照原文保留` 说的是那个
+     * lint 例外块被抄过去了，与「§3.6.1 这一节还在」毫无关系。 */
+    expect(
+      extractClaims("（只剩内容区消费，§3.6.1 的 p71-allow 例外块照原文保留）", NO_TREE),
+    ).toHaveLength(0);
+  });
+
+  vitestTest("引号里的复述不算声明（引用致罪那句并当场反驳它）", () => {
+    /* 真样本 `1f629434`：同一行里**引号外**还有正文，所以不能「出现过引号就
+     * 整行跳过」—— 那会把同一行的真声明一起漏掉，而且漏得静默（§11.23.1）。 */
+    const quotedOnly = extractClaims(
+      "它的信息还自称「master 新增的 §13.5.13 / §13.6.3 两节照旧保留」——实测两节都不出现",
+      NO_TREE,
+    );
+    expect(quotedOnly).toHaveLength(0);
+    /* 引号外的同一句式仍要认：引号只屏蔽它自己覆盖的那一段。 */
+    const mixed = extractClaims(
+      "「§1.1 照旧保留」是别人写的，而 §13.6.3 照旧保留",
+      NO_TREE,
+    );
+    expect(mixed.map((c) => c.target)).toEqual(["13.6.3"]);
+  });
+
   vitestTest("窗口外的「保留」不算声明（跨小句 / 跨句号）", () => {
     for (const line of [
       "§16.2.4.57）。 「双击重命名」保留双击",

@@ -56,6 +56,8 @@
  *   node scripts/check-commit-claims.mjs --range <rev>..HEAD    # 核对一段（逐条提交）
  *   node scripts/check-commit-claims.mjs --commit <rev> --json  # 机器可读
  *   node scripts/check-commit-claims.mjs --list --commit <rev>  # 只列声明，不判（盘点用）
+ *   node scripts/check-commit-claims.mjs --report            # 同上（与 §11.23.5 里
+ *                                                          # 「只列命中、不判失败」那个入口名一致）
  *
  * 退出码：`0` = 声明的**事实**已复算（有反事实声明时会同时打印出来）；`1` = 发现了
  * 与事实矛盾的声明；`2` = 核对过程本身失败（不是 git 检出 / 取不到那个提交 / 句式解析
@@ -319,6 +321,58 @@ function gateLineCount(target) {
  */
 
 /**
+ * 成对引号 —— 落在其中任何一对内部的文本是**被人引用的**，不构成声明。
+ *
+ * 这是**吸收自本族第一版实现**的一条口径（`318ad1d3` 的 `quotedMask`），
+ * 它拦的是真历史上的一处误报：`1f629434` 的信息里写着
+ *
+ *   > 它的提交信息还自称「master 新增的 §13.5.13 / §13.6.3 两节照旧保留」——
+ *   > 实测那两节一次都不出现
+ *
+ * —— 那是**引用致罪那句并当场反驳它**，而那正是本机制**想要**的动作。
+ * 把复述读成声明，判据会在「指出别人说反话」这个动作上报红，等于把判据自己的
+ * 用途反过来罚了一遍。所以：引号内的匹配一律不认。
+ *
+ * 刻意**逐对配平**而不是「出现过引号就整行跳过」：实测的反例句同一行里引号外
+ * 还有正文，整行跳过会把「同一行的真声明」一起漏掉，而漏得静默（§11.23.1 的病）。
+ *
+ * @type {Array<[string, string]>}
+ */
+const QUOTE_PAIRS = [
+  ["\u300c", "\u300d"],
+  ["\u300e", "\u300f"],
+  ["\u201c", "\u201d"],
+  ['"', '"'],
+];
+
+/**
+ * 算出「哪些字符下标落在成对引号内部」。
+ *
+ * 引号可以跨行（实测：提交信息里的长引用折行写），所以输入是**拼回后的整段正文**、
+ * 不是逐行。同一对引号出现嵌套时按「先开后闭」配对 —— 提交信息不是程序，够用且
+ * 不会把配平算乱。
+ *
+ * @param {string} text
+ * @returns {boolean[]} 与 text 等长，`true` = 该下标在引号内
+ */
+function quotedMask(text) {
+  const mask = new Array(text.length).fill(false);
+  for (const [open, close] of QUOTE_PAIRS) {
+    let from = 0;
+    for (;;) {
+      const a = text.indexOf(open, from);
+      if (a < 0) break;
+      const b = text.indexOf(close, a + open.length);
+      if (b < 0) break;
+      const end = Math.min(b + close.length - 1, text.length - 1);
+      for (let i = a; i <= end; i++) mask[i] = true;
+      from = b + close.length;
+    }
+  }
+  return mask;
+}
+
+/**
  * 从一份提交信息里抽出**可机械核对的声明**（不做语义理解，只做句式匹配）。
  *
  * @param {string} message
@@ -347,6 +401,11 @@ export function extractClaims(message, commit) {
         .join(" "),
     )
     .join("\n");
+  /* 引号内的匹配一律不认（口径见 `QUOTE_PAIRS` 那段）。掩码按**拼回后的** `body`
+   * 算，与下面 `matchAll` 的下标同一坐标系。 */
+  const mask = quotedMask(body);
+  /** 这个匹配的起点是不是落在引号里。 */
+  const quoted = (m) => mask[m.index] === true;
 
   /* 语序 A 与语序 B 都是「章节保留」这一类声明 —— 同一种 kind、同一条核对，
    * 分开的只是句式（见两个正则各自的注释）。**同一句话被两个正则同时命中时去重**：
@@ -369,21 +428,25 @@ export function extractClaims(message, commit) {
     }
   };
   for (const m of body.matchAll(SECTION_KEEP_AFTER_RE)) {
+    if (quoted(m)) continue;
     /* `… 不出现` 是**反向**断言（「那节一次都不出现」），与「保留」不是同一件事。 */
     pushSection(m[0], m[0], SECTION_ABSENT_HINT.test(m[2] ?? ""));
   }
   for (const m of body.matchAll(SECTION_KEEP_BEFORE_RE)) {
+    if (quoted(m)) continue;
     pushSection(m[0], m[0], false);
   }
   /* 路径声明要过「该提交的树里存在」这一关（理由见 `PATH_UNTOUCHED_RE` 那段）。 */
   const paths = body.matchAll(PATH_UNTOUCHED_RE);
   for (const m of paths) {
+    if (quoted(m)) continue;
     const target = m[1];
     if (target === undefined) continue;
     if (!pathExistsInTree(commit, target)) continue;
     claims.push({ kind: "path", raw: m[0].trim(), target });
   }
   for (const m of body.matchAll(COUNT_ZERO_RE)) {
+    if (quoted(m)) continue;
     const target = m[1];
     if (target === undefined || m[2] === undefined) continue;
     claims.push({ kind: "count", raw: m[0], target, count: Number(m[2]) });
@@ -536,7 +599,11 @@ function main(argv) {
   const args = argv.filter((a) => !a.startsWith("--"));
   const flags = new Set(argv.filter((a) => a.startsWith("--")));
   const JSON_OUT = flags.has("--json");
-  const LIST_ONLY = flags.has("--list");
+  /* 「盘点档」两个入口名都认：`--list` 是本族自己的写法，`--report` 是
+   * §11.23.5 里承诺给用户的那个入口名（`pnpm check:claims -- --report`）。
+   * 同一个档只留一个语义（恒 exit 0、只列不判），两个名字指向它 —— 而不是
+   * 让两边各写一份「只列」的实现（§12.18 复用优先）。 */
+  const LIST_ONLY = flags.has("--list") || flags.has("--report");
 
   if (!git(["rev-parse", "--is-inside-work-tree"])) {
     process.stderr.write("[commit-claims] 当前目录不是 git 检出\n");
@@ -598,7 +665,11 @@ function main(argv) {
     return contradicted.length > 0 ? 1 : 0;
   }
 
-  for (const a of audits) printAudit(a, LIST_ONLY);
+  /* 人读的那一路一律把 `jsonOut` 传 `false` —— 它的第二参是「抑制输出」而不是
+   * 「这是盘点档」。盘点档（`--list` / `--report`）要的恰恰是**把命中列出来**，
+   * 传 `LIST_ONLY` 进去会让 `printAudit` 立刻 return ⇒ 盘点档一个字都不打印
+   * （正是 §11.23.1 第二种入口：声明在跑、输出是空的）。 */
+  for (const a of audits) printAudit(a, false);
   if (LIST_ONLY) return 0;
 
   if (contradicted.length > 0) {

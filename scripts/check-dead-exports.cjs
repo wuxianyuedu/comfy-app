@@ -337,7 +337,8 @@ function main() {
   }
 
   let baseline = [];
-  if (fs.existsSync(BASELINE)) {
+  const hadBaseline = fs.existsSync(BASELINE);
+  if (hadBaseline) {
     baseline = JSON.parse(fs.readFileSync(BASELINE, "utf8")).symbols || [];
   }
   const known = new Set(baseline);
@@ -345,6 +346,19 @@ function main() {
   const removed = baseline.filter((d) => !dead.includes(d));
 
   if (UPDATE) {
+    /* 棘轮的「只许降不许升」必须由这一支自己守住。此前只有「不带 --update 的下一次跑」
+     * 会报新增，于是在新增违规之后跑一次 `--update` 就等于把违规收进基线 ——
+     * 基线 note 里那句「只许降不许升」当时是空的（判据写着、没人判它有没有生效，
+     * 由 tests/ratchet-update-guards.test.ts 现在钉着）。 */
+    if (hadBaseline && added.length) {
+      console.error(
+        `[dead-exports] 拒绝 --update：新增 ${added.length} 个零消费导出` +
+          `（基线 ${baseline.length} → 当前 ${dead.length}）。\n` +
+          `  棘轮只许降不许升：先给这些值导出接上真实消费方（或直接删掉），再 --update。\n` +
+          `  新增的几处：\n${added.slice(0, 10).map((d) => `    · ${d}`).join("\n")}`,
+      );
+      process.exit(1);
+    }
     fs.writeFileSync(
       BASELINE,
       `${JSON.stringify(
