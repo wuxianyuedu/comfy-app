@@ -127,11 +127,19 @@ export function findCargo() {
   const onPath = whichCommand("cargo");
   if (onPath) return onPath;
   const home = os.homedir();
-  const candidates = [
-    process.env.CARGO_HOME && path.join(process.env.CARGO_HOME, "bin"),
-    path.join(home, ".cargo", "bin"),
-    path.join(home, ".rustup", "toolchains"),
-  ].filter((dir) => typeof dir === "string" && dir.length > 0);
+  /* 三处候选**按条件拼**（而不是先塞一个 `false` 再 filter 掉）：`CARGO_HOME` 未设时
+   * `process.env.CARGO_HOME && …` 求值成 `false`，数组就成了 `(string | false)[]`，
+   * 而 `.mjs` 里写不了 `dir is string` 这种谓词（TS8010：类型注解只许出现在 `.ts`），
+   * tsc 也不会从 `typeof dir === "string" && dir.length > 0` 里推 —— 结果是下面整段
+   * 都带着 `string | undefined` 用。改成按条件拼之后类型本身就是 `string[]`，
+   * 不用靠注解断言。 */
+  /** @type {string[]} */
+  const candidates = [];
+  if (process.env.CARGO_HOME) {
+    candidates.push(path.join(process.env.CARGO_HOME, "bin"));
+  }
+  candidates.push(path.join(home, ".cargo", "bin"));
+  candidates.push(path.join(home, ".rustup", "toolchains"));
 
   for (const dir of candidates) {
     if (dir.endsWith("toolchains")) {
