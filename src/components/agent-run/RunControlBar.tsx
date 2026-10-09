@@ -90,7 +90,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
   return (
     <div className="border-border-subtle bg-panel z-base flex flex-col gap-2 border-b px-4 py-2.5">
       <div className="flex items-center gap-2">
-        <span className="text-ink-field text-[13px] font-semibold">
+        <span className="text-ink-field text-sm font-semibold">
           AI 自主成片
         </span>
         <Badge variant={STATUS_BADGE[run.status]}>

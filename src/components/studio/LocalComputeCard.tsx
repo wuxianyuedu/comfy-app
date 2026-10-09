@@ -81,9 +81,7 @@ export function LocalComputeCard() {
       <CardContent>
         <div className="flex items-center gap-2">
           <StatusDot state={dotState} pulse={connecting} />
-          <span className="text-ink-bright text-[13px] font-medium">
-            ComfyUI
-          </span>
+          <span className="text-ink-bright text-sm font-medium">ComfyUI</span>
           {/* 设备名来自同一份采样：读不到就不占一行，不写「未知设备」这种废话占位。 */}
           {stats?.gpuName && (
             <span
