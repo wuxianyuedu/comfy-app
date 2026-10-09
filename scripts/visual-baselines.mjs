@@ -85,10 +85,18 @@ export const SUPPORTED_PLATFORMS = Object.keys(PLATFORM_RECORDING);
 export const PENDING_PLATFORMS = {
   win32: {
     reason:
-      "本仓库的自动化执行环境（NPC 工作区 / CNB 容器）都是 linux，win32 档" +
-      "只能在 Windows 开发机上录。在 Windows 开发机上（`CI` 置空以走 dev 口径，" +
-      "`pixel-run.mjs` 会核这一条）跑 `pnpm check:visual:update` 并成套提交，然后" +
-      "把本登记删掉（配对判据会在补齐后仍然留着登记时红）。",
+      "win32 档**只剩首页那两张**（`workspace-desktop-dark` / `workspace-desktop-light`），" +
+      "其余 8 张已于 Windows 开发机成套补齐。缺的这两张**不是「没录」，是这一屏当前录不出" +
+      "可复现的像素**：首页有三处机器相关数据源没被桩掉 —— ① 模型概览卡的真实目录计数" +
+      "（实测「67 个目录为空」随机器）；② 「最近项目」走 `hydrateFromServer()` 从 DB 拉真项目" +
+      "（`clearProjectIndex` 只清 localStorage，清不掉 hydration）；③ ComfyUI readiness 的" +
+      "「连接中 → 离线」是**时序**而非状态。三处合起来，实测录完立刻串行复跑仍差 4652 像素" +
+      "（差异集中在 y=480..876 那一块），这种 PNG 记的是「录基线那台机器的现场」，不是基线。\n" +
+      "      补齐的动作：先给 `e2e/visual/workspace.visual.spec.ts` 补这三桩（①② 复用" +
+      "`e2e/support/trpc-stub` 与 canvas 档已有的 `project.list` 空桩，③ 在 `settle` 里等到" +
+      "降级文案出现），**且同批在 linux 上重录首页那两张** —— 因为这三桩会改变首页渲染，" +
+      "而已入库的 `-linux.png` 是在「容器里恰好什么都没有」下录的，谁也不能替另一档担保。" +
+      "所以这一条不是 Windows 开发机单方面能关的账。完整现场与验收清单见 ISSUE #1593。",
   },
 };
 

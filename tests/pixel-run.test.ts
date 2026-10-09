@@ -28,6 +28,7 @@ import {
 } from "../scripts/pixel-run.mjs";
 import {
   checkRecordingEnv,
+  missingBaselinesForPlatform,
   recordingWebserverFor,
   webserverForEnv,
 } from "../scripts/visual-baselines.mjs";
@@ -76,14 +77,34 @@ describe("像素档按需通道：本次要跑什么（§11.8）", () => {
     expect(runs[1]?.args).toEqual([PIXEL_JUDGE]);
   });
 
-  it("本机这一档齐备时前置判决放行（真实检出上跑一次真清点）", () => {
-    // 用真检出而不是夹具：这条同时证明「前置判决接的是真仓库」，夹具形态在
-    // `tests/visual-baselines.test.ts` 里逐个答案都执行过。
-    const missing = checkLocalBaselines({
+  it("本机这一档：齐备就放行，缺则必须是「待录」那一支且逐张点名", () => {
+    /* 这里原先断的是 `toBeNull()` —— 那等于把「本机这一档此刻恰好成套」当成不变式。
+       而 `PENDING_PLATFORMS` 存在的意义正是让「某一档缺几张」成为一个**能被命名、
+       且不阻断其它判据**的状态（ISSUE #1593：win32 档首页那两张当前录不出可复现的
+       像素，宁可登记出去、也不把机器指纹入库换一个绿）。所以这条改成判**形状**：
+       ① 齐备 ⇒ 放行；② 缺 ⇒ 话术必须走「登记为待录」那一支，并把缺的每张点名；
+       ③ 无论哪种，真检出上都不许落到「平台没登记」那一支 —— 出现那一支说明登记表
+       被改坏了，而那正是这条判据该抓的事。
+       夹具形态（三种答案逐个执行过）在 `tests/visual-baselines.test.ts`；
+       这条判的是**真仓库**，两者不互相替代。 */
+    const missing = missingBaselinesForPlatform(ROOT, process.platform);
+    const verdict = checkLocalBaselines({
       root: ROOT,
       platform: process.platform,
     });
-    expect(missing).toBeNull();
+    if (missing.length === 0) {
+      expect(verdict).toBeNull();
+      return;
+    }
+    expect(verdict).not.toBeNull();
+    expect(
+      verdict,
+      "缺基线却走到「平台没登记」那一支 = 登记表被改坏",
+    ).toContain("待重录");
+    expect(verdict).not.toContain("没有登记过");
+    for (const file of missing) {
+      expect(verdict, `话术没点名缺的这张：${file}`).toContain(file);
+    }
   });
 
   it("本机这一档没登记时前置判决拦下并点名（换一档平台就看得见）", () => {
