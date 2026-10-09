@@ -384,6 +384,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 规则）与该放的（`--report` 恒 0）每一条都得有人钉住。改 `.githooks/**` 会让本层放弃收窄、
   // 只跑固定清单，而「有人偷偷关掉一条 a11y 规则」正是这类动作，故进固定清单。
   "tests/a11y-rules-gate.test.ts",
+  // 同一判据的**加载与入口**那一半（#1623）：`a11y-rules-gate` 现在共进程判十来份
+  // 台账（配置只求值一次），于是「判据怎么被加载起来」这件事必须有另一份判据守着 ——
+  // 真加载只求值一次、每个导出都可调用、失败路径不吞、bin 形态的 `--report` 仍退 0。
+  // 它同时是 `tests/helpers/a11y-effective-config.coverage.test.ts` 那份
+  // 覆盖度账本的执行者（零消费导出 / 两个清单逐字同源）。
+  "tests/check-a11y-rules.test.ts",
+  "tests/helpers/a11y-effective-config.coverage.test.ts",
   // 「被门禁拦下先复算 master 基线」的执行者（规范 §13.6.2 第 1 步）：那段
   // `git worktree add ../.wt-base-check … && node scripts/check-*.cjs … && git worktree
   // remove` 此前只写在文档与注释里，于是「这一条本身还没有机器判据」是 §13.6.2 自己的

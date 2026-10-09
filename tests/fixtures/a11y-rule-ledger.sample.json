@@ -1,0 +1,25 @@
+{
+  "why": "（夹具）门禁自测用的一小份台账：逐条写全理由与 keeper 的形状样本，**不落盘**。",
+  "dialect": [
+    {
+      "rule": "jsx-a11y/no-autofocus",
+      "decision": "off",
+      "why": "（夹具）这条在真台账里的理由是三段话，夹具只要形状对：关着 + 有理由 + 有 keeper。",
+      "keeper": "（夹具）真台账里的 keeper 逐条点名了替代判据，夹具这里只占位。"
+    },
+    {
+      "rule": "jsx-a11y/label-has-associated-control",
+      "decision": "off",
+      "why": "（夹具）同上：这两条撑起「已登记的方言」那一向，用例再各自往里加减条目。",
+      "keeper": "（夹具）"
+    }
+  ],
+  "inlineExemptions": [
+    {
+      "rule": "jsx-a11y/anchor-has-content",
+      "file": "src/components/ui/pagination.tsx",
+      "why": "（夹具）就地豁免指向一个**真存在**的文件 —— 文件不存在那一档是另一条用例。",
+      "keeper": "（夹具）"
+    }
+  ]
+}

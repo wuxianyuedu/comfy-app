@@ -339,6 +339,62 @@ if (entries) {
     );
   }
 
+  /* ①′ 条目声称的**核验面**必须在它自己的执行者里逐字存在（#1623）。
+   *
+   * 立案现场：条目里写 `"test": "tests/…（C 组固定清单）"` 只是一句**散文** ——
+   * 它说的是「谁在被敲」，但**没有任何东西核对**那份用例是不是真的在核这一条声称的东西。
+   * 于是「台账说是这一份」与「那一份真的能核它」是两件互不相干的事。
+   *
+   * 形状：条目可以给一个 `verifiedSurfaces`（字符串数组），里面是它声称**执行者逐条
+   * 核过**的面；执行者那一侧要把同一份清单具名列出（本仓库的实例是
+   * `scripts/check-a11y-rules.cjs` 的 `VERIFIED_SURFACES` 与
+   * `tests/a11y-effective-config.coverage.test.ts` 的账本）。这里核的是：
+   *
+   *   · `verifiedSurfaces` 里每个名字，都要能在 `reader` 那一份脚本里找到
+   *     **具名出现**（注释里提一句不算 —— 要的是能被调用 / 被列进表的那个名字）；
+   *   · 名字不许重复（重复 = 两份清单开始分叉的早期形态）。
+   *
+   * 它**不判**「那一份用例是不是真在跑那些面」（那是 C 组固定清单与用例自己的事），
+   * 只判「台账这句话在源码里找得到落点」—— 与 §13.5.14 的判据口径同族。 */
+  for (const e of entries) {
+    const faces = e.verifiedSurfaces;
+    if (faces === undefined) continue;
+    if (!Array.isArray(faces) || faces.length === 0) {
+      problems.push(
+        `「${e.name}」的 verifiedSurfaces 必须是非空数组（写了就要核，空数组与没写等价）`,
+      );
+      continue;
+    }
+    const seenFace = new Set();
+    const readerPath = path.join(ROOT, e.reader);
+    let readerSrc = "";
+    try {
+      readerSrc = fs.readFileSync(readerPath, "utf8");
+    } catch (err) {
+      problems.push(
+        `「${e.name}」的 reader（${e.reader}）读不到（${err.message}）——` +
+          "核验面没有落点可对",
+      );
+      continue;
+    }
+    for (const face of faces) {
+      if (typeof face !== "string" || face.trim() === "") {
+        problems.push(`「${e.name}」的 verifiedSurfaces 里有空名字`);
+        continue;
+      }
+      if (seenFace.has(face)) {
+        problems.push(`「${e.name}」的 verifiedSurfaces 里 ${face} 重复了`);
+      }
+      seenFace.add(face);
+      if (!new RegExp(`\\b${face.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(readerSrc)) {
+        problems.push(
+          `「${e.name}」声称核过的面 \`${face}\` 在 ${e.reader} 里找不到 —— ` +
+            "台账的这句话与事实脱钩之后，它只会让人以为有人在守",
+        );
+      }
+    }
+  }
+
   /* ① 与姊妹索引逐行同源：本台账**不是第二份真相来源**。
    * 两处各记一份的形态必然会分叉，而分叉之后「哪一份是真的」没有判据能回答。 */
   if (!fs.existsSync(READERS_LEDGER)) {
