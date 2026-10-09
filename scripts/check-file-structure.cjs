@@ -24,9 +24,12 @@
  *        中文必乱码,历史上被迫做成"不含中文不含逻辑"的哑壳)
  *   R8  scripts/ tools/ 下含中文的 .ps1 必须以 UTF-8 BOM 保存(否则 PowerShell
  *       5.1 按 GBK 解码,与 .bat 乱码同源)
- *   R9  根目录只放工程配置,禁止再散落 .ps1 双击入口(ISSUE #29):入口一律归入
- *       tools/<分类>/;根入口的 discoverability 由 README 的入口清单承担,
- *       不靠"铺在根目录第一眼看见"
+ *   R9  根目录只放工程配置。两种形态同罚:① 散落的 .ps1 双击入口(ISSUE #29)——
+ *       入口一律归入 tools/<分类>/,根入口的 discoverability 由 README 的入口
+ *       清单承担,不靠"铺在根目录第一眼看见";② git 自身的临时状态文件
+ *       (MERGE_MSG / COMMIT_EDITMSG / SQUASH_MSG 一族,ISSUE #1586)——它们归
+ *       `.git/`,落进工作区只说明"用 -F 指了个工作区文件、提交完忘了删",而那个
+ *       文件此后没有任何读者(仓库里真的有过一份 `.merge_msg`)。
  *   R10 注释里禁止「历史流水」:日期(2026-08-17)、改动编号(R-ardot114 / R83 /
  *       R-Next)、任务批次号(T12-3)。这些归 git log,写进注释会随代码搬迁过期
  *       失真(ISSUE #46 / 规范 12.4.2 / 反模式表 G4)。
@@ -716,20 +719,49 @@ const SCAN_EXCLUDED = [
   }
 })(".");
 
-// ── R9:根目录禁止散落 .ps1 双击入口(ISSUE #29) ──
-// 背景:6 个根入口(start-web/run-local/verify-quality/start-tauri/
-// start-desktop/register-comfyapp-protocol)曾平铺在仓库根,与 package.json /
-// tsconfig.json 等工程配置混排,一眼看不出"哪些是入口、哪些是配置"。现统一归入
-// tools/start/,与 tools/build/、tools/registry/、tools/studio/ 同构。
-// 这里只拦 .ps1——其它后缀的根文件(配置/文档)不受约束,避免过度收紧。
+// ── R9:根目录只放工程配置 ──
+// 两种形态同罚,理由是同一个:根目录的那一份名单应当全是"这个项目是什么"
+// (配置/文档),混进"一次操作留下的临时物"之后,第一眼就分不出哪些是工程配置。
+//   ① .ps1 双击入口(ISSUE #29):6 个根入口(start-web/run-local/verify-quality/
+//      start-tauri/start-desktop/register-comfyapp-protocol)曾平铺在仓库根,
+//      与 package.json / tsconfig.json 混排。现统一归入 tools/start/,与
+//      tools/build/、tools/registry/、tools/studio/ 同构。
+//   ② git 自身的临时状态文件(ISSUE #1586):MERGE_MSG / COMMIT_EDITMSG /
+//      SQUASH_MSG 这一族归 `.git/`,它们的**唯一**用途是给一次提交当 message
+//      来源。落进工作区只可能是"用 -F 指了个工作区文件、提交完忘了删",而那个
+//      文件此后没有任何读者 —— 实测仓库里真的有过一份(`.merge_msg`,27 行合并
+//      说明随一次 squash 合并进了 master),它不会报错、不会过期、也没有任何
+//      地方会再读它,只能靠人偶然翻到。判据认"名"不认"内容":内容无法自证是
+//      垃圾(一份合法的设计说明也可以长这样),而名字是这一族唯一的稳定特征。
+// 仍然只拦这两类 —— 其它后缀的根文件(配置/文档/各工具的点文件)不受约束,
+// 避免把一个"根目录该长什么样"的工程习惯变成需要维护的完整白名单。
+/* git 临时状态文件名(不区分大小写;带不带前导点都认)。 */
+const GIT_TRANSIENT_ROOT_FILES = new Set([
+  ".merge_msg",
+  "merge_msg",
+  "mergemsg",
+  "commit_editmsg",
+  "squash_msg",
+  "tag_editmsg",
+  "merge_head",
+]);
 (function checkRootEntries() {
   for (const e of fs.readdirSync(".", { withFileTypes: true })) {
     if (!e.isFile()) continue;
-    if (!e.name.toLowerCase().endsWith(".ps1")) continue;
-    problems.push(
-      "R9 根目录禁止 .ps1 双击入口(请放进 tools/<分类>/,启动类放 tools/start/):" +
-        e.name,
-    );
+    const lower = e.name.toLowerCase();
+    if (lower.endsWith(".ps1")) {
+      problems.push(
+        "R9 根目录禁止 .ps1 双击入口(请放进 tools/<分类>/,启动类放 tools/start/):" +
+          e.name,
+      );
+      continue;
+    }
+    if (GIT_TRANSIENT_ROOT_FILES.has(lower)) {
+      problems.push(
+        "R9 根目录禁止 git 临时状态文件(它归 .git/,写成文件只说明 -F 用完没删):" +
+          e.name,
+      );
+    }
   }
 })();
 
