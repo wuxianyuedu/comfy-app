@@ -130,3 +130,14 @@ overrides:
   #       它带预编译二进制（`@img/sharp-*`），升版要确认 install 仍不触发本地编译 ——
   #       实测 `pnpm install` 不报 ERR_PNPM_IGNORED_BUILDS，`pnpm why sharp` 只剩 0.35.5。
   'sharp@0.35': '0.35.5'
+  #   · ISSUE #1381：handlebars 4.7.9 → 4.7.10（`eslint-plugin-boundaries > handlebars`
+  #     与 `eslint-plugin-boundaries > @boundaries/elements > handlebars` 两条引入路径，
+  #     advisory #1241677 / #1241678 两条 critical）。**引入提交是 `7f5d7542`
+  #     （`eslint-plugin-boundaries` 落地），不是本 ISSUE 的改动** —— 这两条是 advisory
+  #     库更新后才冒出来的存量，所以在「组件工作台」这条线上第一次被 `check:all` 点到。
+  #     两个 advisory 的 `patched_versions` 都是 `>=4.7.10`，取**最小可达修复版**、
+  #     不写 `^4`（range 会让下一次 install 跳到没人复核过的新版本，见本块开头那条口径）。
+  #     handlebars 在本仓只经 eslint 工具链，不在运行期被 require。
+  #     判据：`pnpm why handlebars` 只剩 4.7.10 一个版本，且
+  #     `node scripts/check-dependency-audit.mjs` 不再报这两条。
+  'handlebars@4': '4.7.10'
