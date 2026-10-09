@@ -356,6 +356,17 @@ export const FIXED_STRUCTURAL_TESTS = [
   // （用了共享夹具 / 只造临时目录 / 拉别的可执行文件 / 夹具文件）每一条都得有人钉住，
   // 而它们是「下一次有人写门禁自测」时才走得进的路径，所以必须进固定清单。
   "tests/gate-repo-boilerplate-gate.test.ts",
+  // 「`@theme` 声明的 token 清单」那份**文件快照**（规范 §11.9.1 / #1490 落地）：
+  // `toMatchFileSnapshot` 把清单写成一份能独立打开、能单独 diff 的真文件，
+  // 而它与源码之间的同步**没有任何机器判据** —— 它自己那条用例读的是
+  // `src/app/globals.css` 的**文本**（正则扫 `@theme` 块），CSS 不在 import 图上，
+  // 所以「改了 globals.css 而不带它」正好是它不在的时机。
+  // 实测（本轮）：#1558 往 `@theme` 加了一颗 `--gradient-brand`（品牌渐变收成 token），
+  // 基线没同批更新，这条红**直接落进 master 并留了一周**，期间从它分出去的每一次提交
+  // 都带着它 —— 表现不是「某处坏了」，而是「一份人工 review 的产物与源码已经不一致，
+  // 没有任何人被告知」。同因（读文本、import 图追不到、与本次改动无关也必须响），
+  // 故进固定清单。
+  "tests/theme-tokens-compile-source.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
