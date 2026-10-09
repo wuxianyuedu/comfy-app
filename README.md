@@ -188,8 +188,10 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 生成原文文档                            | `pnpm doc:gen`              | `tools/docs/generate-docs.ps1`    |
 | 起组件工作台                            | `pnpm storybook`            | `tools/start/storybook.ps1`       |
 
-> 这张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 在 pre-commit 与 CI 核对
-> 每个动作两侧的脚本都真实存在 —— **新增动作却只写了一侧会提交失败**。
+> 这两张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 在 pre-commit 与 CI
+> 核对它们与磁盘 / `package.json` 三向对齐 —— 表里的路径与 `pnpm` 命令都真实存在、
+> `tools/**` 下的双击入口至少出现在**这里或 `tools/README.md`**（后者是完整清单，
+> 本表只收日常动作）—— **新入口没登记、或新增动作却只写了一侧，都会提交失败**。
 
 ---
 
