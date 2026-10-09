@@ -14,7 +14,7 @@ import type { HistoryTaskRow } from "./history-panel-types";
  * 否则下游对 progress/mediaType 的数值/枚举假设会在渲染或排序里炸。
  * 过去这里是一句 `as unknown as HistoryTaskRow[]`——那是假保险：类型说
  * 「一定有 prompt」，实际可能是 undefined。 */
-const historyTaskRowSchema = z.object({
+export const historyTaskRowSchema = z.object({
   id: z.string(),
   type: z.string().default("image"),
   workflowName: z.string().default(""),

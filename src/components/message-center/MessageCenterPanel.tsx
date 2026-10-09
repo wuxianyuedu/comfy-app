@@ -152,55 +152,59 @@ export function MessageCenterPanel() {
               const meta = KIND_META[m.kind] ?? KIND_META.info!;
               const Icon = meta.icon;
               return (
-                /* 行级动作「点一下标记已读」是真病灶，键等价物由 **PR #1574**
-                   收口（整行换原生 `<Button>`）；本批只对齐规则开关。 */
-                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 键等价物由 PR #1574 收口 */
-                <li
-                  key={m.id}
-                  onClick={() => markRead(m.id)}
-                  className={`bg-subtle/60 hover:bg-subtle cursor-pointer rounded-xl border p-3.5 transition-colors ${
-                    m.read
-                      ? "border-border-subtle opacity-70"
-                      : `${meta.ring} border`
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
-                    >
-                      <Icon size={14} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <h3 className="text-ink-bright text-[13px] font-semibold">
-                          {m.title}
-                        </h3>
-                        {!m.read && (
-                          <Badge tone="primary" size="pill-sm">
-                            新
-                          </Badge>
-                        )}
-                        <time className="text-ink-muted text-2xs ml-auto shrink-0 tabular-nums">
-                          {fmtTime(m.time)}
-                        </time>
+                /* 行外壳（`li`）只负责排版：**删除按钮是行按钮的兄弟**，不嵌在
+                 * 它里面 —— 交互元素互相嵌套既非法（HTML）又会把 Tab 焦点搅在
+                 * 一起。行的「点一下标记已读」由右侧那个原生按钮承担。 */
+                <li key={m.id} className="flex items-stretch gap-1.5">
+                  {/* 整行可点 → **原生按钮**：此前是 `<li onClick>`，键盘用户能
+                   * Tab 到删除按钮，却**没有任何路径**标记已读（鼠标点得开、键盘
+                   * 进不来）。原生 `<button>` 的 Enter/Space 与焦点语义是免费给的
+                   * —— 再挂一个 `simpleKeyHandler` 只是复刻浏览器默认行为
+                   * （§16.2.4.57 的账要消除的形态）。 */}
+                  <Button
+                    variant="ghost"
+                    onClick={() => markRead(m.id)}
+                    className={`bg-subtle/60 hover:bg-subtle h-auto flex-1 justify-start rounded-xl border p-3.5 text-left font-normal whitespace-normal ${
+                      m.read
+                        ? "border-border-subtle opacity-70"
+                        : `${meta.ring} border`
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span
+                        className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
+                      >
+                        <Icon size={14} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-ink-bright text-[13px] font-semibold">
+                            {m.title}
+                          </span>
+                          {!m.read && (
+                            <Badge tone="primary" size="pill-sm">
+                              新
+                            </Badge>
+                          )}
+                          <time className="text-ink-muted text-2xs ml-auto shrink-0 tabular-nums">
+                            {fmtTime(m.time)}
+                          </time>
+                        </div>
+                        <span className="text-ink-soft mt-1 block text-[12.5px] leading-relaxed wrap-break-word whitespace-pre-wrap">
+                          {m.body}
+                        </span>
                       </div>
-                      <p className="text-ink-soft mt-1 text-[12.5px] leading-relaxed wrap-break-word whitespace-pre-wrap">
-                        {m.body}
-                      </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        remove(m.id);
-                      }}
-                      className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 rounded"
-                      aria-label="删除该消息"
-                    >
-                      <Trash2 data-icon="inline-start" size={13} />
-                    </Button>
-                  </div>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => remove(m.id)}
+                    className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 self-start rounded"
+                    aria-label="删除该消息"
+                  >
+                    <Trash2 data-icon="inline-start" size={13} />
+                  </Button>
                 </li>
               );
             })}

@@ -41,6 +41,7 @@ function row(
     cover: null,
     checkpoint: null,
     mediaType: "image",
+    videoPath: null,
     projectId: null,
     progress: 0,
     error: null,

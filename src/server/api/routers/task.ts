@@ -11,7 +11,7 @@ import { logger } from "~/lib/core/logger";
 import { errorMessage } from "~/lib/error-message";
 import { taskOutputDir } from "~/lib/media/output-paths";
 import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
-import { kindOf } from "~/lib/media/media-kind";
+import { isVideo, kindOf } from "~/lib/media/media-kind";
 
 /* 扩展名判据已收敛到 `media-kind.ts`（ISSUE #571）。此前这里自带一份清单，
  * 且与 `lib/media.ts` 的注释**直接矛盾**——那边明确写「gif 不是视频，`<video>`
@@ -75,6 +75,16 @@ export const taskRouter = createTRPCRouter({
             typeof p.checkpoint === "string" ? p.checkpoint : null;
           const cover = task.images[0]?.localPath ?? null;
           const coverMediaType = task.images[0]?.mediaType ?? null;
+          /* 视频落点**只有服务端答得了**：封面（`images[0]`）通常是预览图，
+           * 它的 `cover` / `mediaType` 都指向那张图，看不出成片在哪。执行侧落盘
+           * 顺序是「先 images 后 videos」，因此成片不在首位 —— 必须单独找。
+           * `isVideo` 按**磁盘上的事实**（扩展名 + 子表 mediaType）判，见
+           * `lib/media/media-kind`。 */
+          const videoPath =
+            task.images.find(
+              (image) =>
+                isVideo(image.localPath) || image.mediaType === "video",
+            )?.localPath ?? null;
           return {
             id: task.id,
             type: task.type,
@@ -85,6 +95,7 @@ export const taskRouter = createTRPCRouter({
             cover,
             checkpoint,
             mediaType: inferMediaType(cover, coverMediaType, task.type),
+            videoPath,
             projectId: task.projectId ?? null,
             progress: task.progress,
             error: task.error ?? null,

@@ -51,6 +51,7 @@ function queuedRow(id: string, workflowName: string): QueueRow {
     cover: null,
     checkpoint: null,
     mediaType: "image",
+    videoPath: null,
     projectId: null,
     progress: 0,
     error: null,
