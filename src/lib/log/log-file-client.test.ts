@@ -20,6 +20,7 @@ import {
   fetchFileLogSlice,
   fetchLogSessions,
   postAppRuntimeLog,
+  saveDiagnosticsPackage,
   saveLogExport,
   type LogSourceKind,
 } from "./log-file-client";
@@ -213,6 +214,53 @@ describe("saveLogExport —— 导出到本机", () => {
       vi.fn(async () => new Response("<html>502</html>", { status: 502 })),
     );
     await expect(saveLogExport("面板", "正文")).resolves.toMatchObject({
+      ok: false,
+    });
+  });
+});
+
+describe("saveDiagnosticsPackage —— 打包整份诊断现场", () => {
+  /* 与 `saveLogExport` 的分工是**两件事**：那个存「面板当前筛选到的行」，
+   * 这个让服务端把 `log/current/` + 最近几次 `log/runs/` 打成 zip。
+   * 差别落在请求形状上：诊断打包没有正文可带（内容由服务端自己收），
+   * 所以「不该发 body、也不该带 Content-Type」是要钉住的那一半。 */
+  it("POST 到诊断端点，不带请求体（现场由服务端自己收）", async () => {
+    const payload = {
+      ok: true,
+      path: "C:\\log\\exports\\diagnostics.zip",
+      relativePath: "exports/diagnostics.zip",
+      bytes: 4096,
+    };
+    const fetchMock = stubFetch({ body: payload });
+    await expect(saveDiagnosticsPackage()).resolves.toEqual(payload);
+    const call = fetchMock.mock.calls[0];
+    expect(urlOf(call)).toBe("/api/logs/diagnostics");
+    expect(methodOf(call)).toBe("POST");
+    expect(call?.[1]?.body).toBeUndefined();
+  });
+
+  it("网络失败收成 { ok:false, error }，与导出同一档（面板显示「打包失败」而不卡住）", async () => {
+    stubFetch({ throws: new Error("ENOSPC 磁盘满") });
+    await expect(saveDiagnosticsPackage()).resolves.toEqual({
+      ok: false,
+      error: "ENOSPC 磁盘满",
+    });
+  });
+
+  it("拒绝的不是 Error 时给兜底原因", async () => {
+    stubFetch({ throws: "boom" });
+    await expect(saveDiagnosticsPackage()).resolves.toEqual({
+      ok: false,
+      error: "network",
+    });
+  });
+
+  it("服务端回了非 JSON（网关的 HTML 错误页）同样收成失败而不是抛", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("<html>504</html>", { status: 504 })),
+    );
+    await expect(saveDiagnosticsPackage()).resolves.toMatchObject({
       ok: false,
     });
   });

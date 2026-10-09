@@ -532,6 +532,11 @@
       补 16 条，四维满档。真正的判据面是**四个出口的四档失败语义**（抛 / 降级 `null` /
       收成 `{ok:false,error}` / 完全静默）—— 它们此前没有一行判据，任何一档被写成
       与另一档同形都不红；另钉游标契约（`offset=0` 是真实值而不是缺值、首轮不带 `bootId`）。
+      ⚠️ 抬档的即时效果在本批就被看见：master 随后给同一份文件加了新出口
+      `saveDiagnosticsPackage`，`check:all` 当场报
+      「`log-file-client.ts` 95.23% 行 / 83.33% 分支不达门槛 100」——
+      正解是同批补 4 条把它盖回满档（含「诊断打包不该带请求体」那一半，
+      与 `saveLogExport` 的分工正落在请求形状上），**不是把 100 调回实测**。
       · `src/lib/media/video-queue-client.ts` 0/0/0/0 → **不是缺用例，是一份写在类型里的
       假保证**：行类型是 `RouterOutputs["task"]["list"]["tasks"][number] & { images?: … }`，
       注释还明写「路由 mapper 已不携带旧 `images` 数组（今天恒读 undefined）—— 这里保持
