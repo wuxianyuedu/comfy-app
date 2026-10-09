@@ -375,6 +375,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 没有任何人被告知」。同因（读文本、import 图追不到、与本次改动无关也必须响），
   // 故进固定清单。
   "tests/theme-tokens-compile-source.test.ts",
+  // 「前端响应镜像 ↔ 线上真实列」的契约（台账 E4 第一格）：镜像声明的每一列线上必须
+  // 真的在发。交叉类型 `RouterOutputs[...] & { images?: … }` 补出来的字段，tsc 只查它
+  // 存在、永远查不出服务端没发它 —— 于是那句读取恒为 `undefined`，而类型上是 optional
+  // 连可选链都不会红，表现是界面上那一格永远空着而全绿（视频队列的封面与下载入口就是这么挂的）。
+  // 它守的是「下一次任一侧改动」，而改 `task.list` 的 mapper 只会被 router 自己的用例拉进
+  // C 组 —— 契约这一侧必须无条件响，所以进固定清单。
+  "tests/task-list-wire-contract.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
