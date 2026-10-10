@@ -19,7 +19,14 @@
  * 判它等于判自己的量具 —— 与 `tests/test-concurrency-gate.test.ts` 同一取舍。
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  writeFileSync,
+} from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -28,6 +35,15 @@ const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
 const SCRIPT = path.join(SCRIPTS_DIR, "check-test-sleep.cjs");
 /** 判据复用 `check-test-concurrency.cjs` 导出的 `maskNonCode`，临时仓库要一起带上。 */
 const DEP = path.join(SCRIPTS_DIR, "check-test-concurrency.cjs");
+
+/**
+ * 「文件在扫描期间消失」那一支只能在**进程内**判：它要的是 `scanFile` 对一份
+ * 读不到的路径返回什么，而临时仓库 + 子进程那条路造不出「列到名字、读时已没」
+ * 这个时刻（造得出就只能靠删文件，那是一次概率窗口，不是判据）。
+ */
+const { scanFile } = createRequire(import.meta.url)(SCRIPT) as {
+  scanFile: (abs: string) => unknown[] | null;
+};
 
 /**
  * 在临时仓库里跑真脚本（cwd = 临时仓库根，只放被测文件 + 判据依赖）。
@@ -269,5 +285,27 @@ it("x", async () => {
     expect(shrunk.ok).toBe(true);
     expect(shrunk.output).toContain("比基线少 4 处");
     expect(shrunk.output).toContain("--update");
+  });
+});
+
+describe("裸 sleep 门禁：扫描期间文件消失（并发探针）", () => {
+  it("读不到的文件返回 null，而不是把整个 D 组带崩", () => {
+    /* 现场：`tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造
+       `.setup-cleanup-probe-<pid>-<ts>.test.tsx` 再删掉。同一份工作树里有两个
+       vitest 在跑时（并行会话，或本钩子的 C 组还没退干净），本判据就会
+       **「列到名字、读时已经没了」** —— 于是 D 组不是报出站点，而是带着一个
+       Node 栈崩掉（`ENOENT … .setup-cleanup-probe-….test.tsx`），表现成
+       「提交被拦下、报错里没有一个字指向改动」。
+       一个已经不存在的文件没有站点可言 ⇒ 返回 null 让调用方计数；
+       计数必须进结论行（`collect` 的 `vanished` 与 OK 那行的「另有 N 份未读」），
+       静默跳过就是 §13.5.12 那一族「判据自称在跑、实际没跑」。 */
+    const gone = path.resolve(
+      __dirname,
+      "..",
+      "tests",
+      `.setup-cleanup-probe-0-0.test.tsx`,
+    );
+    expect(existsSync(gone), "夹具路径本身不该存在").toBe(false);
+    expect(scanFile(gone)).toBeNull();
   });
 });
