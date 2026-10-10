@@ -1,11 +1,12 @@
 // 导航注册表分区的规则单测：全局项 / 项目页签 / 项目入口三者互斥，且项目页签绝不进全局侧栏。
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
   globalNavItems,
   isProjectTab,
   NAV_ITEMS,
-  OVERLAY_NAV_ITEMS,
   PROJECTS_ENTRY,
   projectTabs,
   type WorkspaceView,
@@ -21,6 +22,13 @@ const GLOBAL_IDS: WorkspaceView[] = [
      设置不属于那条链路，不该挤进去。 */
   "settings",
   "workflows",
+  /* 这两个此前不在本清单里 —— 它们是「全局浮层入口」（`OVERLAY_NAV_ITEMS`），
+     点开弹窗、不改视图，所以 `WorkspaceView` 里根本没有这两个值。改成视图页签后
+     它们与别的项同一条渲染路径，于是必须出现在这份**有序**清单的准确位置上：
+     跟在「流程」之后（契约口清单是工作流库配落点的依据、适配器是远端模型的字段
+     映射，两件事都服务这条链路），在「控制台」之前。 */
+  "model-adapters",
+  "mode-contract",
   "console",
 ];
 const PROJECT_TAB_IDS: WorkspaceView[] = [
@@ -82,39 +90,38 @@ describe("NAV_ITEMS（全量注册表）", () => {
   });
 });
 
-describe("OVERLAY_NAV_ITEMS（全局浮层入口）", () => {
-  it("恰好两项、按序：模型适配 / 模式契约", () => {
-    /* 「恰好 + 按序」是刻意的强度：新增一个全局浮层入口时必须显式改这里，
-       不能悄悄多出一个侧栏项。
-       控制台**不在**这里（ISSUE #1327 反馈）：它是**视图**、不是浮层 —— 跑一条
-       `pnpm test` 是分钟级的事，浮层一关就断连回收命令，用户因此不敢跑长命令。
-       它现在是全局项里的 `console` 视图，与历史 / 队列同形。 */
-    expect(OVERLAY_NAV_ITEMS.map((i) => i.overlay)).toEqual([
-      "model-adapters",
-      "mode-contract",
-    ]);
-    expect(OVERLAY_NAV_ITEMS.map((i) => i.label)).toEqual([
-      "模型适配",
-      "模式契约",
-    ]);
+describe("模型适配 / 模式契约：已经是全局视图（此前是浮层入口）", () => {
+  it("两项按序落在「流程」之后、「控制台」之前，标签没漂", () => {
+    /* 「按序 + 标签」是刻意的强度：新增一个全局入口时必须显式改这里，不能悄悄多出一项。
+       这条继承自旧的 `OVERLAY_NAV_ITEMS`「恰好两项、按序」判据 —— 换了建模方式，
+       那份「不许静默增删」的约束不能跟着丢。 */
+    const ids = globalNavItems().map((i) => i.id);
+    expect(
+      ids.slice(ids.indexOf("workflows") + 1, ids.indexOf("console")),
+    ).toEqual(["model-adapters", "mode-contract"]);
+    const labels = Object.fromEntries(
+      globalNavItems().map((i) => [i.id, i.label]),
+    );
+    expect(labels["model-adapters"]).toBe("模型适配");
+    expect(labels["mode-contract"]).toBe("模式契约");
   });
 
-  it("它们不是视图：id 空间与 WorkspaceView 无交集", () => {
-    /* 用 `overlay` 而不是 `id` 建模，就是为了让「当前视图」不出现两个到不了的值。
-       这条钉住两者确实各走各的命名空间 —— 混进 WorkspaceView 会让 TopBar 反查到
-       一个永远不 active 的标题、page.tsx 的视图白名单也要跟着塞两个假值。 */
-    const viewIds: string[] = NAV_ITEMS.map((i) => i.id);
-    for (const item of OVERLAY_NAV_ITEMS) {
-      expect(viewIds).not.toContain(item.overlay);
+  it("旧的「浮层入口」建模已经从 NavItems 的导出面上消失", () => {
+    /* 读源码文本判，而不是只判运行时：`OverlayEntryId` / `OverlayNavItem` /
+       `OVERLAY_NAV_ITEMS` 只要还留着**任意一处**，就还有人可以走第二条路 ——
+       「点开弹窗、不改视图」与「切视图页签」并存时，同一个功能会有两种「开没开」
+       的真相（侧栏那个布尔 vs 页签状态），而那正是这一刀要消掉的形状。
+       运行时判据抓不到「导出了却没人用」，所以这里判字面量。 */
+    const source = readFileSync(
+      path.resolve(import.meta.dirname, "NavItems.tsx"),
+      "utf8",
+    );
+    for (const retired of [
+      "OverlayEntryId",
+      "OverlayNavItem",
+      "OVERLAY_NAV_ITEMS",
+    ]) {
+      expect(source, `NavItems 里还留着 ${retired}`).not.toContain(retired);
     }
-  });
-
-  it("位置在「流程」之后的收尾段：浮层入口不与其它全局项混排", () => {
-    /* 契约口清单是工作流库配落点的依据、适配器是远端模型的字段映射，两件事都服务
-       「流程」这条链路 —— 所以它们在全局项之后紧跟着排，不与其它全局项混排。
-       控制台（`console`）作为第三个全局视图也在这条链路之后：它跑的就是这两件事
-       的门禁（见 `NAV_ITEMS` 里那一项的说明）。 */
-    const ids = [...globalNavItems().map((i) => i.id)];
-    expect(ids.slice(-2)).toEqual(["workflows", "console"]);
   });
 });

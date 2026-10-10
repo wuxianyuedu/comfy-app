@@ -253,7 +253,7 @@ export async function callImageGeneration(
   };
   if (!target.endpoint || target.endpoint === "/images/generations") {
     throw new Error(
-      "远端 API 生图通道未配置 —— 可在设置页「远端模型」里添加生图模型（kind=图片），或打开 API 通道设置填写 Base URL 与 API Key",
+      "远端 API 生图通道未配置 —— 可在设置页「远端模型」里添加生图模型（kind=图片），或到「模型适配」里配置该模型的接口与字段映射",
     );
   }
   let res: Response;

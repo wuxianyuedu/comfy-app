@@ -56,7 +56,7 @@ interface Props {
   projectId: string;
   /** 掩码后的 API 通道配置；图片通道的放行判据来自这里。 */
   apiChannels: ApiChannelsView | null;
-  onOpenApiSettings: () => void;
+  onOpenModelAdapters: () => void;
   /** 镜头列表所有者（WorkshopPipeline setShots）—— 欢迎函数式补丁。 */
   onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
   /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
@@ -139,7 +139,7 @@ export function ShotStudio({
   workflowId,
   projectId,
   apiChannels,
-  onOpenApiSettings,
+  onOpenModelAdapters,
   onShotsChange,
   onNotice,
   onCancelShot,
@@ -363,11 +363,11 @@ export function ShotStudio({
         <Button
           variant="ghost"
           size="xs"
-          onClick={onOpenApiSettings}
+          onClick={onOpenModelAdapters}
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
         >
           <Icon data-icon="inline-start" name="settings" size={12} />
-          API 通道设置
+          模型适配
         </Button>
         {/* 不用 <label> 包住选择器：它内部会挂尺寸表配置弹窗，弹窗里的输入框
  会被 label 的点击行为抢焦点（弹窗开着、背后的下拉被一起触发）。 */}
@@ -420,7 +420,7 @@ export function ShotStudio({
       {channel === "api" && !apiReady && (
         <div className="bg-amber/10 text-amber flex items-center gap-2 rounded-lg px-3 py-2 text-xs">
           <Icon name="info" size={12} />
-          API 生图通道未配置 — 点击上方「API 通道设置」填写 Base URL 与 API Key
+          API 生图通道未配置 — 点击上方「模型适配」配置该模型的接口与字段映射
           后即可使用。
         </div>
       )}

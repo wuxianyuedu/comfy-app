@@ -88,6 +88,7 @@ function renderStudio(options: RenderOptions = {}) {
   const onShotsChange = vi.fn();
   const onNotice = vi.fn();
   const onCancelShot = vi.fn();
+  const onOpenModelAdapters = vi.fn();
   render(
     <VideoStudio
       shots={options.shots ?? [makeShot()]}
@@ -96,7 +97,7 @@ function renderStudio(options: RenderOptions = {}) {
       apiChannels={
         options.apiChannels === undefined ? videoReady : options.apiChannels
       }
-      onOpenApiSettings={() => undefined}
+      onOpenModelAdapters={onOpenModelAdapters}
       onShotsChange={onShotsChange}
       onNotice={onNotice}
       onCancelShot={onCancelShot}
@@ -104,7 +105,7 @@ function renderStudio(options: RenderOptions = {}) {
       onNextStage={() => undefined}
     />,
   );
-  return { onShotsChange, onNotice, onCancelShot };
+  return { onShotsChange, onNotice, onCancelShot, onOpenModelAdapters };
 }
 
 /** onShotsChange 是函数式补丁：折叠成最终一条 patch 里的镜头。 */
@@ -156,6 +157,19 @@ describe("VideoStudio 门禁与空态", () => {
       "disabled",
       true,
     );
+  });
+
+  it("阶段内那枚就近入口：接在 onOpenModelAdapters 上，且名字与落地页一致", async () => {
+    /* 两个判点各治一种静默失效：
+       ① 「点了没反应」—— 这枚按钮的回调此前只被写成 `() => undefined`，没有任何用例
+         断过它被调用；把弹窗改成「切视图」时如果接错线，表现就是按钮变成装饰。
+       ② 「名字对不上东西」—— 它原本写「API 通道设置」，而它要去的那一页标题是
+         「模型适配」（`ModelAdaptersView`）。用户点一个名字与落地页不符的按钮，
+         只能靠猜自己来对地方没有（§12.12）。这条断言把那个名字钉在按钮上。 */
+    const user = userEvent.setup();
+    const { onOpenModelAdapters } = renderStudio({ apiChannels: null });
+    await user.click(screen.getByRole("button", { name: "模型适配" }));
+    expect(onOpenModelAdapters).toHaveBeenCalledTimes(1);
   });
 });
 

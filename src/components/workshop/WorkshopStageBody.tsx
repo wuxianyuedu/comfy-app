@@ -110,7 +110,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     openScriptEditor,
     closeScriptEditor,
     saveScriptEditor,
-    openApiSettings,
+    openModelAdapters,
     markRendered,
     dismissNotice,
     showNotice,
@@ -279,7 +279,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                   actions: characterPortraitActions,
                   apiChannels,
                   workflows: workflowOptions,
-                  onOpenApiSettings: openApiSettings,
+                  onOpenModelAdapters: openModelAdapters,
                 }}
               />
             </React.Suspense>
@@ -350,7 +350,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 workflowId={workflowId}
                 projectId={activeProjectId}
                 apiChannels={apiChannels}
-                onOpenApiSettings={openApiSettings}
+                onOpenModelAdapters={openModelAdapters}
                 onShotsChange={setShots}
                 onNotice={showNotice}
                 onCancelShot={(shot) => void cancelShotTask(shot, "image")}
@@ -380,7 +380,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 workflowId={videoWorkflowId}
                 projectId={activeProjectId}
                 apiChannels={apiChannels}
-                onOpenApiSettings={openApiSettings}
+                onOpenModelAdapters={openModelAdapters}
                 onShotsChange={setShots}
                 onNotice={showNotice}
                 onCancelShot={(shot) => void cancelShotTask(shot, "video")}

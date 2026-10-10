@@ -4,6 +4,7 @@
 // 视图层只消费这里返回的 controller，不持有任何业务规则。
 
 import React from "react";
+import { emitAppEvent } from "~/lib/app-events";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
@@ -223,7 +224,6 @@ export interface WorkshopPipelineController {
   generating: boolean;
   shotProgress: ShotProgressMap;
   isScriptEditorOpen: boolean;
-  apiSettingsOpen: boolean;
   /** 需要引起用户注意的失败/阻断文案（替代 alert，由视图决定怎么渲染）。 */
   notice: string | null;
   /** 草稿里形状不认识但已原样保留的元素（台账 F13″）：视图据此标「需要修复」。 */
@@ -246,8 +246,11 @@ export interface WorkshopPipelineController {
   openScriptEditor: () => void;
   closeScriptEditor: () => void;
   saveScriptEditor: () => void;
-  openApiSettings: () => void;
-  closeApiSettings: () => void;
+  /** 「API 直连未配置 → 去配置」这类就近提示的出口：**切到全局的模型适配视图页签**
+   *  （广播 `workspace:navigate`，与工坊右栏「在资源库中打开」同一条通道）。
+   *  此前它是 `openApiSettings` + 一个 `apiSettingsOpen` 布尔 + 工坊内部一层弹窗 ——
+   *  同一件事现在只有页签那一个落点。 */
+  openModelAdapters: () => void;
   handleApiChannelsSaved: (channels: ApiChannelsView) => void;
   dismissNotice: () => void;
   /** 写一条用户可见的提示（错误 / 门禁 / 未生效警告）：stage 组件内部的
@@ -352,7 +355,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [apiChannels, setApiChannels] = React.useState<ApiChannelsView | null>(
     null,
   );
-  const [apiSettingsOpen, setApiSettingsOpen] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
 
   // ── 提取会话收归 controller：切页签卸载只丢 stage 组件，此处常驻 ──
@@ -633,16 +635,17 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     setIsScriptEditorOpen(false);
   }, [scriptMarkdown]);
 
-  const openApiSettings = React.useCallback(() => setApiSettingsOpen(true), []);
-  const closeApiSettings = React.useCallback(
-    () => setApiSettingsOpen(false),
+  /* 切到全局的「模型适配」视图页签。走 `workspace:navigate` 这条已收口的广播
+     （与 `WorkshopAside` 的「在资源库中打开」同一条、同一份载荷类型），不在这里
+     穿两层 props 去够 workspace 的 `navigateTo`。 */
+  const openModelAdapters = React.useCallback(
+    () => emitAppEvent("workspace:navigate", { view: "model-adapters" }),
     [],
   );
 
   const handleApiChannelsSaved = React.useCallback(
     (channels: ApiChannelsView) => {
       setApiChannels(channels);
-      setApiSettingsOpen(false);
     },
     [],
   );
@@ -690,7 +693,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     generating: generation.generating,
     shotProgress: generation.shotProgress,
     isScriptEditorOpen,
-    apiSettingsOpen,
     notice,
     integrity,
 
@@ -706,8 +708,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     openScriptEditor,
     closeScriptEditor,
     saveScriptEditor,
-    openApiSettings,
-    closeApiSettings,
+    openModelAdapters,
     handleApiChannelsSaved,
     dismissNotice,
     showNotice,

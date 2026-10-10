@@ -46,27 +46,22 @@ export function ModeContractEditorView({
 
   return (
     <>
-      <div className="flex items-start justify-between px-5 pt-4 pb-2">
-        <div>
-          <h3 className="text-ink-strong u-title">模式契约</h3>
-          <p className="text-muted-foreground text-2xs mt-0.5">
-            每种模式的统一输入 / 输出 ——
-            本地工作流按它配落点，远端模型按它建适配器。
-            契约是模式级的全局口径，与具体接口无关（接口字段映射在「模型适配」里配）。
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={controller.onClose}
-          aria-label="关闭"
-          className="text-muted-foreground hover:text-ink"
-        >
-          ✕
-        </Button>
+      {/* 页眉只有标题与说明 —— 不自绘关闭按钮。那枚 ✕ 是弹窗时代的产物（`ui/dialog`
+          的内置关闭在这里被关掉、改由页眉自绘）；契约现在是视图页签，「关」由页签
+          自己的关闭按钮承担，这里再画一枚就是两个入口做同一件事。 */}
+      <div className="px-5 pt-4 pb-2">
+        <h3 className="text-ink-strong u-title">模式契约</h3>
+        <p className="text-muted-foreground text-2xs mt-0.5">
+          每种模式的统一输入 / 输出 ——
+          本地工作流按它配落点，远端模型按它建适配器。
+          契约是模式级的全局口径，与具体接口无关（接口字段映射在「模型适配」里配）。
+        </p>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-5 pb-4">
+      {/* 正文：滚动与高度都交给外层 `DocumentFrame`。这里此前是
+          `min-h-0 flex-1 overflow-auto` —— 那是弹窗时代「卡片有 max-h、内部自己滚」
+          的形状，搬到视图里那三个类既不生效（父层不是定高 flex）又误导。 */}
+      <div className="flex flex-col gap-3 px-5 pb-4">
         <div>
           <p className="text-ink/80 mb-1.5 text-xs font-medium">
             选择要配置的模式（与工作流库同一定义）
