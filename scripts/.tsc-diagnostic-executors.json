@@ -143,7 +143,8 @@
       "markers": [
         "baseline-red",
         "inconclusive",
-        "load-flake"
+        "load-flake",
+        "did-not-run"
       ],
       "reader": "tests/base-check.test.ts",
       "executor": {
@@ -151,7 +152,7 @@
         "test": "tests/base-check.test.ts（C 组固定清单）"
       },
       "baseline": {
-        "scripts/base-check.mjs": 94
+        "scripts/base-check.mjs": 107
       },
       "section": "13.6.2"
     },
