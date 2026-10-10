@@ -2407,7 +2407,7 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
 > 首次建表与增量加表都没有丢数据的语句，无风险；但**当 schema 变更需要丢弃
 > 既有数据时它会直接执行而不询问**——那时请先备份，或改用 `pnpm db:generate`
 >
-> - `pnpm db:migrate` 审阅 SQL 后再应用。
+> - `pnpm db:migrate` 审阅 SQL 后再应用（它是 `scripts/db-migrate.mjs`：先判决 `drizzle/` 里有没有迁移，再跑，最后按库里的真事实复核 —— 不看 drizzle-kit 的退出码）。
 
 **三道防线一起看**（ISSUE #489 实测）：
 
