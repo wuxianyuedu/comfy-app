@@ -1,0 +1,8 @@
+## Changed
+
+- **`@paralleldrive/cuid2` 2.2.2 → 3.3.0、`@types/better-sqlite3` 7.6.0 → 9.6.0（ISSUE #1622，阶段二 2-3）。** 两件都是「把声明面提到与运行时同一档」的收尾账，但**核过之后，立案时写的两条理由各有一处要改** —— 结论不变，理由得说准，否则下一个人会拿着错的前提去动它。
+  - **`cuid2`：「v2/v3 的 `createId` 逐字相同」不成立。** 实测两份 `createId.toString()` 不同 —— v3 把它改成了**惰性初始化 wrapper**（`if (!initialized) initialized = fn(); return initialized()`），v2 是直接构造。真正的安全性依据在**行为面**，实测五条：长度同（24）、字符集同（`^[a-z0-9]+$`）、**双向互认**（v3 生成的能被 `v2.isCuid` 认，反之亦然）、1000 个无重复、`getConstants()` 逐字相同。所以升版安全，**但「逐字相同」这句是错的**（同 §12.4.2 那条：把读数抄到第二个地方、然后副本漂掉）。
+  - **`@types/better-sqlite3`：「类型面比运行时低一个大版本、正在让类型层撒谎」也不成立。** 实测三件：① `7.6.13` 与 `9.6.0` 的 `index.d.ts` **逐字相同、字节数相同**（5626，同一 inode 的硬链接），所以这一步**在类型面上零变化**；② 类型声明承诺的 13 个成员（`prepare` / `exec` / `pragma` / `transaction` / `close` / `backup` / `serialize` / `function` / `aggregate` / `loadExtension` / `table` / `unsafeMode` / `defaultSafeIntegers`）在 `better-sqlite3@13.0.3` 的实例上**逐个都在**；③ 真实的差距是**没有 13.x 的 `@types` 可升** —— DefinitelyTyped 上 `@types/better-sqlite3` 的最新版就是 `9.6.0`，而 `better-sqlite3@13` **不自带 `.d.ts`**（`package.json` 无 `types`/`typings`，包内零 `.d.ts`）。所以 `9.6.0` 是**能到的最优**，不是「差一个大版本没升」。
+  - **因此这次升级的真实收益，是版本声明的自洽（不再声明一个与运行时无关的 `^7.6.0`）与把「还能不能往上升」这个问题一次问到底**，而不是「类型层变真了」。把这条写清楚，比数字好看更重要：**同 `#1623` 那批 moderate 的教训 —— 一条口径挡住的存量，未必是它自称的那一类。**
+  - 暴露面：`better-sqlite3` 在**生产代码里已经不用了**（`src/server/db.ts` 早已换 libsql，库文件头写着「was better-sqlite3」），唯一真实 `import` 在测试基建 `tests/helpers/test-db.ts`（内存测试库）。所以这两件的风险面本来就在测试与声明层，不在运行时。
+  - 验收：`pnpm exec tsc --noEmit` 退 0；`pnpm test` 655 文件 / 8205 通过（24 skip、1 expected fail，**0 Unhandled**）；eslint 零警告；`node scripts/base-check.mjs --base` 51 条判据红 0；`pnpm check:deps-freshness` 绿。**`@types` 变化没有照出任何真问题**（`tsc` 零诊断），所以第 3 条「照出真缺陷逐个定性」不适用 —— 如实写「没照出」，不补一段虚构的发现。
