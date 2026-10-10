@@ -25,7 +25,7 @@
  *   —— P1~P3 起初走的是**棘轮**（按文件记账、只许降不许升，与
  *      `check-ui-logic-separation.cjs` / `check-theme-colors.cjs` 同一口径，基线
  *      `scripts/.ui-primitives-baseline.json`）。存量清零后它们与其余判据一样进了
- *      `HARD_GATE_RULES`：**现在 84 条全部须为 0**。棘轮这条路径留着，是给
+ *      `HARD_GATE_RULES`：**现在 85 条全部须为 0**。棘轮这条路径留着，是给
  *      **新引入的判据**起步用的（先冻结存量 → 清零 → 升硬闸，顺序不能反，
  *      见 P82 那条的教训）。
  *
@@ -313,7 +313,7 @@
  *   · `*.test.*` / `__tests__/**` 测试里的 DOM 与 mock 不算视图实现。
  *
  * 用法：
- *   node scripts/check-ui-primitives.cjs            # 检查（84 条硬闸全部须为 0）
+ *   node scripts/check-ui-primitives.cjs            # 检查（85 条硬闸全部须为 0）
  *   node scripts/check-ui-primitives.cjs --strict   # 基线下调也失败（强制收紧）
  *   node scripts/check-ui-primitives.cjs --report   # 只出清单，不判失败（排批次用）
  *   node scripts/check-ui-primitives.cjs --update   # 只给**新引入的棘轮判据**登记起点
@@ -3828,7 +3828,69 @@ const RULES = {
       return (t2.match(/<table[\s/>]/g) || []).length;
     },
   },
+
+  /* ── P86「视图层手搓屏级页头」（硬闸，规范 §16.2.4.73）───────────────────
+   * 规范 16 的判据表里这一行早就占了编号，而脚本里没有对应实现 ——
+   * 表里紧挨着的一句是「84 条全部是硬闸」，读表的人会得出「P86 是条已存在、
+   * 只是走棘轮的判据」。它既不在硬闸也不在棘轮，是**占了编号的未实现**
+   * （ISSUE #1668；与 §13.5.12 立的案同族：判据自称在跑、实际没有执行者）。
+   *
+   * 出口是 `~/components/ui/page-header` 的 `<PageHeader>`：它一处管三件事
+   * ——屏级 `h1` 走 `.u-title-page` 字阶档、一行副说明走已定档的
+   * `.text-sm` + 语义色、右侧动作组 `shrink-0` 不被压扁。
+   *
+   * ## 判据锚的是形态，不是名字
+   *
+   * 收口当时真正在守的是 `tests/page-name-single-source.test.ts`，但它的
+   * `PAGE_HEADER_CONSUMERS` 是一份**具名文件清单**（7 屏）—— 拦得住
+   * 「这 7 屏退回手抄」，拦不住第 8 个新屏自己拼页头。而 P83 只判「屏级标题
+   * 是不是 `.u-title-page`」，**看不见形状**：手抄照样过 P83。
+   *
+   * 形态是**两件在同一次页头块内同现**，缺一不算：
+   *   ① `.u-title-page` 的屏级标题（P83 已要求的那一档）；
+   *   ② 紧接着一行**副说明**：`.mt-1.text-sm` —— 规范 03 §3.10 末尾给
+   *      「新增一个屏时」写死的那两个类（色类两种写法都算，见下）。
+   *
+   * ## 为什么第二锚敢收得这么窄（实测过的）
+   *
+   * 三处**刻意不迁**的落点（工具条形态页头 / 工作区型屏 / 页头即数据）
+   * 都只有 ①、没有 ② —— 实测 `FilmStudioTopBar` / `WorkflowLibraryHeader` /
+   * `WorkshopHeader` / `ProjectHomePage` / `SettingsShell` 的 `mt-1 text-sm`
+   * 命中数**全是 0**，所以「①+②同现」这一锚恰好只挑出手抄页头、一处不误抓。
+   *
+   * ⚠️ 色类**不写进锚**：手抄样本 `src/app/(main)/models/page.tsx` 用的副说明
+   * 色类是 `text-muted-foreground`，而基元里是 `text-ink-muted` —— 若把
+   * `text-ink-muted` 也写成判据的一部分，这条判据会**恰好漏掉唯一的现成手抄
+   * 样本**、落在 0 上永远绿（正是本仓反复踩的那条：等式为 0 的判据若正则写漂
+   * 会永远绿）。色类归 §3.6.2 的语义 token 口径管，不归这里。
+   *
+   * ## 窗口为什么是「按行邻域」而不是整文件
+   *
+   * 整文件口径下，只要一个文件里**任何地方**有 `mt-1 text-sm`，它里面所有
+   * `.u-title-page` 都会被算上 —— 一个屏里同时有页头与别的说明行时会误抓。
+   * 收成「`.u-title-page` 那一行起、往后 8 行内」后严格同形，反向样本三条
+   * 同批在册（见 tests/check-ui-primitives.test.ts 的 P86 组）。
+   */
+  P86: {
+    label:
+      "视图层手搓屏级页头（`.u-title-page` 标题 + `mt-1 text-sm` 副说明同现；应使用 ~/components/ui/page-header 的 PageHeader）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      const lines = t2.split("\n");
+      let n = 0;
+      for (let i = 0; i < lines.length; i++) {
+        if (!/\bu-title-page\b/.test(lines[i])) continue;
+        /* 那枚标题行起、往后 8 行内（含自身）出现副说明档即算 ——
+         * `mt-1` 与 `text-sm` 同处一枚 class 串，但两枚 token 的先后
+         * 不固定（`mt-1 text-sm` / `text-sm mt-1` 都见过），所以分开判。 */
+        const window = lines.slice(i, i + 9).join("\n");
+        if (/\bmt-1\b/.test(window) && /\btext-sm\b/.test(window)) n++;
+      }
+      return n;
+    },
+  },
 };
+
 
 /* ── P82 判据：JSX 开标签扫描 + 属性解析 + 五档判定 ────────────────
  * 判据的三段拆开写，各管一件事（正则只定位起点，边界交给扫描器）：
@@ -4370,6 +4432,17 @@ const HARD_GATE_RULES = new Set([
    * 「刚引入、存量未清」的新判据起步用）。 */
   "P84",
   "P85",
+  /* P86（规范 §16.2.4.73 · 视图层手搓屏级页头）：
+   * 引入时全库正好 **1 处**真存量（`src/app/(main)/models/page.tsx` 的
+   * `h1.u-title-page` + 一行 `mt-1 text-sm` 副说明 + 右侧动作组 —— 它就是
+   * Issue 说的「第 8 个新屏」，**不在** 那份 7 屏具名清单里，此前没有任何
+   * 东西会响）。本 PR 同批迁到 `ui/page-header` 的 `<PageHeader>` 后清零、
+   * 直接进硬闸（与 P84/P85 同款：存量本就只有一两处，不走棘轮那条路径）。
+   *
+   * 编号此前是**占了位置的未实现**：规范 16 的表里写着 P86 并标注「不进硬闸」，
+   * 而 `scripts/` 对 `\bP86\b` 命中 0、脚本内最大编号 P85。本 PR 把两边对齐
+   * ——判据落成实现、表里那一行改成指向它。 */
+  "P86",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -4604,7 +4677,7 @@ function main() {
 
   /* 「先有基线才能判」只对**棘轮**成立：硬闸的判据是「恒为 0」，跟基线在不在
    * 没关系。把两者绑死会造出一个假前置 —— 全库判据都升成硬闸之后，删掉基线文件
-   * 竟能让门禁报「先跑 --update」而不去数那 84 条（`--update` 此时还会被硬闸拒，
+   * 竟能让门禁报「先跑 --update」而不去数那 85 条（`--update` 此时还会被硬闸拒，
    * 于是门禁自己把自己锁死）。 */
   const hasRatchetRules = Object.keys(RULES).some(
     (id) => !HARD_GATE_RULES.has(id),

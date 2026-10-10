@@ -6,7 +6,9 @@ import { Button } from "~/components/ui/button";
 import { textHandler } from "~/lib/form-props";
 import { EmptyState } from "~/components/ui/empty-state";
 import { Input } from "~/components/ui/input";
+import { PageHeader } from "~/components/ui/page-header";
 import { Skeleton } from "~/components/ui/skeleton";
+import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ModelCard, type ModelCardData } from "./ModelCard";
 import { ModelDetailDialog } from "./ModelDetailDialog";
 import { MODEL_TYPE_FILTERS } from "./model-type-labels";
@@ -29,6 +31,16 @@ export function ModelLibrary() {
 
   return (
     <div>
+      {/* 页头走 `ui/page-header`（规范 16 §16.2.4.73）。它此前手抄在路由壳
+          `app/(main)/models/page.tsx` 里 —— 那是 P86 的唯一存量；而壳是
+          server component、`pageHeaderTitle` 在 `"use client"` 的注册表模块上，
+          **server 调不到它**（build 期 `Attempted to call pageHeaderTitle()
+          from the server`）。所以页头归这里：屏的实现侧，与别的屏同口径。 */}
+      <PageHeader
+        className="mb-6"
+        title={pageHeaderTitle("models")}
+        description="直接调用本机 ComfyUI 已安装的模型，文件名即契约，所见即所得。"
+      />
       <div className="mb-5 flex flex-wrap items-center gap-2">
         {MODEL_TYPE_FILTERS.map((filter) => (
           <Button

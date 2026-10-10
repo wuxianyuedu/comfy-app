@@ -38,7 +38,7 @@ function seedBaseline(repo: GateRepo): void {
  * 把临时工作区里那份脚本改成「这几条仍走棘轮」的形态 —— 只把 rule id 从
  * `HARD_GATE_RULES` 摘掉，判据本身一字不动。
  *
- * 为什么要这样造：现网 84 条**全部**是硬闸，而「冻结存量 → 只许降 → --strict
+ * 为什么要这样造：现网各条**全部**是硬闸，而「冻结存量 → 只许降 → --strict
  * 要求收紧 → --update 拒绝放宽」这套棘轮语义是给**新引入的判据**起步用的。
  * 不给它造一个执行者，这条路就没有任何测试覆盖，下次真加新判据时它是坏的也没人知道。
  */
@@ -56,6 +56,9 @@ function demoteToRatchet(repo: GateRepo, ...ids: string[]): void {
   }
   repo.write(rel, src);
 }
+
+/** 读脚本里 `HARD_GATE_RULES` 的声明段（下面那条用例用它算条数，不写字面量）。 */
+const DECL_RE = /const HARD_GATE_RULES = new Set\(\[([\s\S]*?)\]\);/;
 
 const BUTTON_VIEW =
   'export function V() {\n  return <button type="button">ok</button>;\n}\n';
@@ -333,7 +336,16 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline(repo);
     const { code, output } = repo.run();
     expect(code, output).toBe(0);
-    expect(output).toContain("84 条");
+    /* 条数**不写成字面量**：那条判据守的是「硬闸集覆盖了脚本里每一条判据」
+     * 这个机制，不是某一个数字。写死数字的后果是每加一条判据都要来这里改一次，
+     * 而改的人只会把数字对上、不会去想机制还在不在（ISSUE #1668 的 P86 就是
+     * 「表里占了编号、脚本里没有实现」那一族的实例）。
+     * 判据 = 输出的条数与脚本里 `HARD_GATE_RULES` 的规模自洽。 */
+    const declared = DECL_RE.exec(repo.read("scripts/check-ui-primitives.cjs"))?.[1];
+    expect(declared, "读不到 HARD_GATE_RULES 的声明").toBeTruthy();
+    const size = (declared ?? "").match(/"P\d+"/g)?.length ?? 0;
+    expect(size, "HARD_GATE_RULES 里一条判据都没有").toBeGreaterThan(0);
+    expect(output).toContain(`硬闸判据 ${size} 条`);
     expect(output).toContain("0 处命中");
   });
 
@@ -4236,7 +4248,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("全是硬闸时，缺基线不再成为假前置（照样数得出命中）", ({ repo }) => {
-    /* 反例形态：84 条全升硬闸之后，「基线缺失」如果仍然先决退出，那么删掉基线
+    /* 反例形态：全部判据升硬闸之后，「基线缺失」如果仍然先决退出，那么删掉基线
      * 文件就能让门禁只报「先跑 --update」而不去数硬闸 —— 而 `--update` 此时又被
      * 硬闸拒收，门禁自己把自己锁死。硬闸的判据是「恒为 0」，与基线在不在无关。 */
     repo.write("src/components/studio/L2.tsx", BUTTON_VIEW);
@@ -5936,6 +5948,148 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "const tableView = tableData.rows;",
         "export function V() {",
         "  return <div>{tableView}</div>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P86「视图层手搓屏级页头」（硬闸）─────────────────────────────────
+   * 判据见 scripts/check-ui-primitives.cjs 里 P86 的注释。这条编号此前
+   * **占了位置却没有实现**（规范 16 的表里写着 P86、脚本里最大到 P85），
+   * 本批把两边对齐：判据落成实现 + 唯一存量（`app/(main)/models/page.tsx`）
+   * 同批迁到 `ui/page-header` 后清零、直接进硬闸。
+   *
+   * 正例喂的是**收口前的真实形状**（连同那个 `text-muted-foreground` 色类）——
+   * 不是编的：若把色类也写成判据的一部分，这条正例就会绿着通过、而判据在
+   * 真实仓库上数出 0（「等式为 0 的判据若正则写漂会永远绿」）。 */
+  test("P86 手搓屏级页头（`.u-title-page` + `mt-1 text-sm` 副说明）→ 阻断", ({
+    repo,
+  }) => {
+    seedBaseline(repo);
+    repo.write(
+      "src/components/studio/P86Handroll.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <div>",
+        '      <div className="mb-6 flex items-end justify-between gap-4">',
+        "        <div>",
+        '          <h1 className="u-title-page">模型库</h1>',
+        '          <p className="text-muted-foreground mt-1 text-sm">',
+        "            直接调用本机已安装的模型，文件名即契约。",
+        "          </p>",
+        "        </div>",
+        '        <ButtonLink href="/workspace" size="sm">去创作</ButtonLink>',
+        "      </div>",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("P86");
+    expect(output).toContain("P86Handroll.tsx");
+  });
+
+  test("P86 走 ui/page-header 的 PageHeader 不计（出口侧）", ({ repo }) => {
+    /* `ui/` 走豁免（基元自身实现），而**调用点**是这条账真正要数的位置：
+     * 一个视图引入了 `<PageHeader>`、副说明交给基元渲染，文件里不该再有
+     * `mt-1 text-sm` —— 所以也不该被算上。 */
+    seedBaseline(repo);
+    repo.write(
+      "src/components/studio/P86Primitive.tsx",
+      [
+        'import { PageHeader } from "~/components/ui/page-header";',
+        "export function V() {",
+        "  return (",
+        "    <PageHeader",
+        '      title="模型库"',
+        '      description="直接调用本机已安装的模型。"',
+        "    />",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
+  test("P86 反向样本：只有 `.u-title-page` 的裸标题（三处刻意不迁的形态）不计", ({
+    repo,
+  }) => {
+    /* `FilmStudioTopBar` / `WorkflowLibraryHeader` / `WorkshopHeader` /
+     * `ProjectHomePage` / `SettingsShell` 都是这个形状：只有屏级标题档、
+     * **没有**那一行 `mt-1 text-sm` 副说明（实测这五个文件的 `mt-1 text-sm`
+     * 命中数全是 0）。判据若把它们也算上，就等于逼着工具条形态的页头去套
+     * 文档型结构 —— 那是 §16.2.4.73「三处刻意不迁」明确不要的。 */
+    seedBaseline(repo);
+    repo.write(
+      "src/components/studio/P86ToolbarHeader.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <header className="flex items-center gap-3 border-b px-4 py-2">',
+        '      <h1 className="font-title u-title-page shrink-0">工作流库</h1>',
+        '      <div className="ml-auto flex items-center gap-2">',
+        "        <Button>新建</Button>",
+        "      </div>",
+        "    </header>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
+  test("P86 反向样本：副说明不是 `mt-1` 那一档（`mt-2` / `mt-3`）不计", ({
+    repo,
+  }) => {
+    /* `src/app/error.tsx` 是真实的反向样本：`h1.u-title-page` 后面跟的是
+     * `text-muted-foreground mt-2 max-w-md` —— 那是错误页的说明段、不是页头
+     * 副说明那一档（规范 03 §3.10 给「新增一个屏时」写死的是 `mt-1`）。
+     * 副说明的**档位**是判据的锚，宽一档就不该算。 */
+    seedBaseline(repo);
+    repo.write(
+      "src/components/studio/P86WrongSpacing.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        "    <div>",
+        '      <h1 className="u-title-page">页面出错了</h1>',
+        '      <p className="text-muted-foreground mt-2 max-w-md">',
+        "        发生了一个意外错误，你可以重试。",
+        "      </p>",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
+  test("P86 反向样本：无标题档的一行副说明（`ProjectGate` 那种小卡片）不计", ({
+    repo,
+  }) => {
+    /* 副说明那一行**单独存在**（挂在卡片里的说明段）不是「手搓页头」——
+     * 锚的两件必须同现。只数 `mt-1 text-sm` 会把库内多处说明行一网打尽。 */
+    seedBaseline(repo);
+    repo.write(
+      "src/components/studio/P86CardHint.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <div className="border-border bg-panel rounded-2xl border p-6">',
+        '      <h2 className="font-title text-lg font-bold">先创建项目</h2>',
+        '      <p className="text-ink-muted mt-1 text-sm">',
+        "        画布、工坊与成片都在同一个项目里创作。",
+        "      </p>",
+        "    </div>",
+        "  );",
         "}",
       ].join("\n"),
     );
