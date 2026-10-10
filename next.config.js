@@ -83,12 +83,15 @@ const config = {
   // `app-route-turbo.runtime.prod.js` 加载不到 → **所有 API 路由 500**
   // （`Failed to load external module`），看起来像业务 bug，实际是产物缺口。
   //
-  // 为什么这里加不了东西（A/B 复测，同机同依赖、只有 `distDir` 隔离）：把下面这份
-  // `outputFileTracingIncludes` 整段注释掉再构建，两份产物**逐字节同构** ——
+  // 为什么这份条目今天不承重（A/B 复测，同机同依赖、只有 `distDir` 隔离）：把它整段
+  // 注释掉再构建，两份产物**逐字节同构** ——
   // `standalone/node_modules/next/dist/compiled/next-server/` 两次都是 74 个文件
-  //（= 源目录整份复制），四份 `*-turbo.runtime.prod.js` 都在位。机制与上游源码对得上：
-  // 读这两个 tracing 键的只有 `collect-build-traces`，而它在 `bundler !== Turbopack`
-  // 的分支里整段被跳过（与上面 `outputFileTracingExcludes` 那条同一个原因）。
+  //（= 源目录整份复制），四份 `*-turbo.runtime.prod.js` 都在位。
+  // ⚠️ 原因**不是**「Turbopack 不读这份键」（那句是错的）：这两个键在 Rust 侧按**路由**
+  // 实现（`crates/next-api/src/nft.rs` 用 route glob 匹配 `page_name`，结果由
+  // `nft_json.rs` 写进每路由的 `.nft.json`），JS 那边被跳过的只是 webpack 用的
+  // `collect-build-traces`。真实原因是**重叠**：每路由清单已经自带整份目录（连这颗
+  // glob 给不出的 `*.runtime.prod.js.map` 都在），所以它要补的东西原生追踪都补过了。
   //
   // ⇒ 承重的是**产物层那两处**：`scripts/check-standalone-contents.cjs` 的
   // `REQUIRED_RUNTIME_FILES` 反向数产物，与 `tests/standalone-runtime-completeness.test.ts`
