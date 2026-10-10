@@ -231,6 +231,29 @@ export const LOG_STORE_SCENES = {
     ],
   },
   /**
+   * **同一批启动行躺在两份文件里**（`launcher` 与 `壳侧编排`，逐字同一份原文）——
+   * 跨来源去重那条口径的现场。
+   *
+   * 真机上这是常态：`dev-launcher.log` 转写了 dev 的输出，`shell-launch.log`
+   * 与 launcher 的两份互相重叠。`mergeTimeline()` 按**身份**
+   *（`(time, level, message)`，**不含 origin**）去重，所以同一行**只落一份**。
+   *
+   * 这一档要读者看见的正是「只落一份」的结果：全部来源 = 启动器 = 6，
+   * 而**壳侧编排那一栏是空的** —— 两个来源指向同一批事件时，界面上只有一份行，
+   * 计数也只算一份。把它读成「两份文件各 6 条、合计 12」是这块最容易犯的错，
+   * 而那正是 `computeOriginCounts()` 的 `table.all` 走「按身份计」的原因。
+   *
+   * 原文**逐字相同**（身份判据吃正文与时刻），这里只换通道名。
+   */
+  duplicatedOrigins: {
+    about:
+      "同一批启动行躺在两份文件里（按身份去重：只落一份，来源取先落板的那条）",
+    blocks: [
+      { origin: "launcher", text: LAUNCHER_TEXT },
+      { origin: "shell-launch", text: LAUNCHER_TEXT },
+    ],
+  },
+  /**
    * 只有一路来源 —— 切到某个单一来源时的现场。
    *
    * `mixed` 摆的是三个来源混在一起，而真机上用户**选中**某一来源看是常态：
