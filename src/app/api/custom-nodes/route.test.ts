@@ -1131,25 +1131,29 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     /* 「全失败」这一档的真形状是**三个候选都起过**：少起一个就是退避链断了，
      * 而界面只显示「没有节点」，没人知道是解释器没找着。 */
     expect(interpreterNames()).toEqual(["python3", "python", "py"]);
-    expect(msgOf(progressWith(events, "ENOENT"))).toContain("ENOENT");
+    /* 最后一个候选之后必须仍然给出**一句读得懂的原因** —— 这一句在修可达性之前不可达
+     * （两条退避都写成 `i < pyCandidates.length - 1`，`i` 最大只到 2 就地 resolve），
+     * 真机没装 Python 时界面只剩「0 个节点」。 */
+    expect(
+      events.filter((e) => msgOf(e).includes("未找到 Python 解释器")),
+    ).toHaveLength(1);
     expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
+    /* 全失败**不许**回一个像成功的空收尾：没有解释器就没有 discover_done 这一步事实。 */
+    expect(events.some((e) => e.type === "discover_done")).toBe(false);
   });
 
-  it("三个候选都以 127 退出 → 三个都得起过，流必须收尾（不挂着）", async () => {
+  it("三个候选都以 127 退出 → 同一句「未找到 Python 解释器」，与 ENOENT 那一档同答案", async () => {
     coldRoot();
     for (let attempt = 0; attempt < 3; attempt += 1) {
       queueChild({ closeCode: 127 });
     }
     const events = await getEvents();
     expect(interpreterNames()).toEqual(["python3", "python", "py"]);
+    expect(
+      events.filter((e) => msgOf(e).includes("未找到 Python 解释器")),
+    ).toHaveLength(1);
     expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
-    /* ⚠️ 这一档**刻意没有**断言「未找到 Python 解释器」那句话：实测两条退避
-     * （`error` 的 ENOENT 一支与 `close` 的 127 一支）都在**最后一个候选**上就地收敛
-     * —— `i < pyCandidates.length - 1` 让 `i` 最大只到 2，于是 `tryRun()` 顶上那句
-     * 「未找到 Python 解释器」**不可达**。把「今天没有这句」写成期望等于给缺陷背书
-     * （§11.2.1 第九条：期望值来自语义而不是实现），所以这里只钉成立的那两件事，
-     * 缺的那一条登记在台账（真机上没有 Python 时，界面显示「0 个节点」而不给原因）。 */
-    expect(eventOf(events, "discover_done").packages).toEqual([]);
+    expect(events.some((e) => e.type === "discover_done")).toBe(false);
   });
 
   it("非 ENOENT 的 error（EACCES）不再换解释器，原因当场透成进度", async () => {
