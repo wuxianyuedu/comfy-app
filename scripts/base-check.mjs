@@ -837,7 +837,7 @@ export function nextSteps(verdict, { ref }) {
   if (verdict === "inconclusive") {
     return [
       "命令在其中一侧**没跑起来**，不是「判据红了」——这次不构成「别线的红」的证据。",
-      "两种形态（判据自己会把命中的是哪一种打在 `did-not-run` 那行里）：",
+      "两种形态（判据会点名「哪一侧、哪一种」那一行）：",
       "  · **一条用例都没收集到**（`Tests  no tests` / `Cannot find package|module` /",
       "    `ERR_MODULE_NOT_FOUND`）—— 它退的是 1，与「判据跑了且红」同形，所以只读",
       "    退出码必然误判。最常见于 ① 那条判据只存在**本检出的未提交改动**里",
