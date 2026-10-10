@@ -242,6 +242,17 @@
         "label": "类型层声明 ⇄ 执行者（tsc 判决面，§13.5.14）"
       },
       "section": "13.5.14"
+    },
+    {
+      "id": "premerge-fixed-action",
+      "name": "「合并前的固定动作」这个人的动作（三段合一：复算这一批 + 提交信息声明 + 合并有没有丢一侧）",
+      "declaredAt": "docs/standards/13-提交与-code-review.md §13.6.2 的「合并前跑一遍」+ scripts/.on-demand-duties.json 的 premerge-fixed-action 行",
+      "reader": "scripts/premerge-check.mjs",
+      "executor": {
+        "kind": "npm-script",
+        "script": "check:premerge"
+      },
+      "section": "13.6.2"
     }
   ]
 }

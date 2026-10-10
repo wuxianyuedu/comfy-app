@@ -13,7 +13,7 @@ Usage:
   powershell -File scripts\quality-gate.ps1 -Mode test
   powershell -File scripts\quality-gate.ps1 -Mode all
 
-Mode: typecheck | lint | format | test | dependencyAudit | storybook | visual | all   (default all)
+Mode: typecheck | lint | format | test | dependencyAudit | depsFreshness | storybook | visual | premerge | all   (default all)
 
 Note on `visual`: it is registered with Run=$false, i.e. NOT part of `all`.
 It starts a webServer plus a browser, and its verdict is only meaningful on a
@@ -21,6 +21,15 @@ machine that actually recorded the baselines (baseline filenames carry the
 platform). Run it explicitly:  -Mode visual
 It goes through scripts\pixel-run.mjs (the cross-platform half of the same
 action), which also runs the baseline-pairing judge in the same pass.
+
+Note on `premerge`: it is registered with Run=$false, i.e. NOT part of `all`.
+The platform squashes on merge (the local hook never sees that merge) and there
+has been no CI fallback since ISSUE #623, so the three judges behind "my branch
+is green, is master going to be green" can only run as one human action before
+merging. Its entry is scripts\premerge-check.mjs, which composes the existing
+base-check batch (imported, not reimplemented) plus the two on-demand judges.
+Exit codes are shared with those judges: 0 green / 1 something is red /
+2 something did not run (never read as red). Run it explicitly: -Mode premerge
 
 Extend / maintain - how to add a new gate:
   Each gate is one entry in the $Blocks list below:
@@ -35,7 +44,7 @@ Extend / maintain - how to add a new gate:
     entry and it is enforced again.
 #>
 param(
-  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "visual", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "visual", "premerge", "all")]
   [string]$Mode = "all"
 )
 
@@ -126,6 +135,14 @@ $Blocks = @(
   # 远端引用陈旧只打 [未校验]、不阻断；刷新是人的动作 `git fetch`。
   @{ Name = "depsFreshness"; Label = "Dependency freshness (baseline vs origin/master + install sync)";
      Cmd = "node"; Args = @("scripts\check-deps-freshness.mjs"); Run = $true }
+  # **合并前的固定动作**（规范 §13.6.2；ISSUE #1611 拍板）。与 quality-gate.mjs 的
+  # GATES.premerge 同批同步。Run=$false：平台侧 squash 合并不跑本地钩子、#623 之后
+  # 也无 CI 兜底，所以「我的分支绿 → master 绿」那一跳的三条判据（复算这一批 /
+  # 提交信息里的声明 / 合并有没有丢一侧）**都天然跑不进 pre-commit**，唯一的执行者
+  # 就是合并前敲一次。它的 base 段要建干净 worktree 跑整批判据（分钟量级），
+  # 且它只在「准备合并」那一刻有意义 —— 不属于 `all`。
+  @{ Name = "premerge"; Label = "Pre-merge fixed action (base recompute + commit claims + merge side loss)";
+     Cmd = "node"; Args = @("scripts\premerge-check.mjs"); Run = $false }
 )
 
 # Which gates to run
