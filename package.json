@@ -9,7 +9,7 @@
     "agent:film": "node scripts/agent-film.mjs",
     "check": "pnpm run lint && tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "node scripts/db-migrate.mjs",
     "db:push": "node scripts/db-push.mjs",
     "env:init": "node scripts/env-init.mjs",
     "check:toolchain": "node scripts/check-pnpm-available.mjs",

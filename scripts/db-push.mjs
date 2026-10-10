@@ -28,21 +28,18 @@ import { DatabaseSync } from "node:sqlite";
 import { pushSchema } from "./db-push-core.mjs";
 import { sweepLegacyTimestamps } from "./db-legacy-sweep.mjs";
 import {
+  resolveSqlitePath,
   schemaFingerprint,
   writeSchemaFingerprint,
 } from "./db-schema-state.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** 与 `src/server/db.ts::resolveDbPath` / `src/lib/db-schema-ready.ts` 同一锚点：
- *  `DATABASE_URL` 去 `file:` 前缀后相对**进程 CWD**（也就是项目根）解析。 */
-function resolveDbPath() {
-  const url = process.env.DATABASE_URL ?? "file:./db.sqlite";
-  const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
-  return path.resolve(root, raw);
-}
-
-const dbPath = resolveDbPath();
+/* 库路径的解析**只有一份实现**（`resolveSqlitePath`，与启动链路同源）——
+ * 这里此前自己抄了一遍逐字等价的版本，`db:migrate` 的入口又要同一件事：
+ * 两份副本的下场是「改了一处、另一处继续按旧口径找库」而**没有任何判据会响**
+ * （§12.12 / §12.18）。 */
+const dbPath = resolveSqlitePath(root);
 
 /** 数一遍库里的用户表（排除 sqlite 内部表）。读不到/不是库 → -1。 */
 function countUserTables() {
