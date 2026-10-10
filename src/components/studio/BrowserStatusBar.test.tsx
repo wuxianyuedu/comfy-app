@@ -74,6 +74,8 @@ function devServer(
     label: "应用服务运行中",
     title: "应用服务（dev server）在线：页面查询、保存与任务提交都走它",
     lastRestartAt: null,
+    exitNotice: null,
+    lastExitAt: null,
     ...over,
   };
 }
@@ -165,6 +167,50 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
 
     expect(screen.getByLabelText("应用服务已重启")).toBeInTheDocument();
     expect(screen.getByText(/08:30:00/)).toBeInTheDocument();
+  });
+
+  it("断开且原因已知：把原因作为**可见文字**摆出来，而不是只挂在 hover 上（ISSUE #1692）", () => {
+    /* 悬停不是可发现的动作：用户盯着「已断开」四个字，唯一想问的就是为什么。
+     * 状态栏那一格窄，只放「为什么」这一句，完整三句（为什么 / 这一次的具体
+     * 退出事实 / 现在做什么）在 title 里。 */
+    renderBar(
+      viewModel(),
+      60,
+      devServer({
+        state: "offline",
+        label: "应用服务已断开",
+        title:
+          "本地服务自身退出了。服务被 SIGKILL 结束。看 log/nextjs/ 下最新一份输出。",
+        exitNotice: {
+          why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
+          detail:
+            "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+          action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
+        },
+      }),
+    );
+
+    // 可见：不只是 title 里有（断开那一格自己也带 title，所以这里锁**文字节点**）。
+    const visible = screen.getByText(/本地服务自身退出了/);
+    expect(visible).toBeInTheDocument();
+    // 完整三句挂在它自己的 title 上（悬停能看全：为什么 / 这一次的具体退出事实 / 做什么）。
+    const full = visible.getAttribute("title") ?? "";
+    expect(full).toContain("SIGKILL");
+    expect(full).toContain("重新启动一次");
+  });
+
+  it("没有原因可讲时不占位（不摆一句「原因未知」的噪声）", () => {
+    renderBar(
+      viewModel(),
+      60,
+      devServer({
+        state: "offline",
+        label: "应用服务已断开",
+        title: "应用服务不可达：页面里的查询与保存都会失败。",
+        exitNotice: null,
+      }),
+    );
+    expect(screen.queryByText(/未知/)).toBeNull();
   });
 
   it("FPS 归属：状态栏渲染实时帧率（画布内已无 FpsMeter）", () => {

@@ -15,16 +15,25 @@ import { useDevServerLiveness } from "./use-dev-server-liveness";
 export interface DevServerStatusViewModel extends DevServerStatus {
   /** 最近一次**真正**重启的时刻（页脚弱化展示用）。 */
   lastRestartAt: number | null;
+  /** 上一次结束记录的落盘时刻（毫秒）；无记录为 null。 */
+  lastExitAt: number | null;
 }
 
 export function useDevServerStatus(): DevServerStatusViewModel {
-  const { restarting, lastRestartAt, probeOk, everOnline } =
-    useDevServerLiveness();
+  const {
+    restarting,
+    lastRestartAt,
+    lastExit,
+    lastExitAt,
+    probeOk,
+    everOnline,
+  } = useDevServerLiveness();
   const derived = deriveDevServerStatus({
     everOnline,
     lastProbeOk: probeOk,
     restarted: restarting,
     lastRestartAt,
+    lastExit,
   });
-  return { ...derived, lastRestartAt };
+  return { ...derived, lastRestartAt, lastExitAt };
 }
