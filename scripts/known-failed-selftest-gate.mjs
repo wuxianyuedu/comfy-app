@@ -3,7 +3,7 @@
  * known-failed-selftest-gate.mjs — 改了「已知基线失败登记」这套机制才跑的提交门禁
  * （规范 §11.12 / ISSUE #1282）
  *
- * 补的是这套机制的**第二个空档**，与 `visual-gate.mjs` / `shell-gate.mjs` 同形：
+ * 补的是这套机制的**第二个空档**，与 `shell-gate.mjs` 同形：
  * 机制本体（`check-known-failed-stale.mjs`）在 pre-commit 里有执行者、也真的每次跑，
  * 但**它只在清单非空时才真跑**（空表是终态、是常态 ⇒ 零耗时直接 `return 0`）。
  * 于是「真跑那一档」在干净仓库上**从来没有被执行过**，而它唯一的自证入口
@@ -74,7 +74,7 @@ export function touchesMechanism(staged) {
 /**
  * 判决本体：给定清单与「自证跑出来的结果」，决定退出码与理由。
  *
- * 抽成纯入口是为了让**判决可被执行**（同 `visual-gate.mjs` 的 `runGate`、
+ * 抽成纯入口是为了让**判决可被执行**（同 `shell-gate.mjs` 的 `runGate`、
  * `shell-gate.mjs` 的 `runGate`；先例见 ISSUE #1356：源码文本断言不是执行记录）——
  * 这样用例能直接喂「碰了机制 + 自证红了」这种形状，而不必每次真起 vitest。
  *

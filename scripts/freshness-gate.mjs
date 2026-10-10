@@ -1,45 +1,27 @@
-#!/usr/bin/env node
 /**
  * freshness-gate.mjs — 「每一档都有主」的提交门禁（规范 §11.8 / §13.5.4）
  *
- * 守**两份同形的账**（`FRESHNESS_TRACKS`）：像素基线（`scripts/.visual-baseline-freshness.json`，
- * 键 `linux`）与**全量 e2e**（`scripts/.e2e-freshness.json`，键 `e2e`，ISSUE #1547）。
- * 两份都由本脚本在 pre-commit 的 D 组判，命令名仍是 `visual-freshness-gate.mjs`
- * （改名要同批动钩子、§13.1 清单与引用它的文档，而这一步的语义没有变——
- * 它判的一直是「这一档上次被实证跑绿是什么时候」，只是现在有第二档要判）。
- * 补的是本轮实测翻出来的另一条：**「录过一次」与「一直绿」是两件事**，而 linux 档
- * 此前的状态是「录过就算数」—— 入库的 `-linux.png` 有 4 张与当次环境差 1 像素
- * （文字整体下移一行），而没有任何东西记着这一档上一次被跑绿是什么时候、下一次该由谁跑。
- * 前一档（win32 缺几张）的账有 `PENDING_PLATFORMS` 那条**有主的欠条**，这一档却一条都没有。
+ * 守**三份同形的账**（`FRESHNESS_TRACKS`：全量 e2e / 全量单测 + 覆盖率 / 产物级护栏），
+ * 三份都由本脚本在 pre-commit 的 D 组判。它补的是**「跑过一次」与「一直绿」是两件事**：
+ * 一档可以「看着有主、实际三个月没人碰过」，而账面上一个字都不说。
  *
- * 判据的形状（与 `visual-gate.mjs` / `shell-gate.mjs` 同族：触发面窄、判决可执行）：
- *   · 每一**登记**档都要有一条新鲜度记录（`scripts/.visual-baseline-freshness.json`），
- *     写清「谁 / 什么时候 / 按哪条命令复核的」—— 缺一条 = 这一档还停在「录过就算数」；
- *   · **例外**：`PENDING_PLATFORMS` 里那一档（缺几张、且只能在那档机器上补录）由那张
- *     表自己顶着，不要求新鲜度记录 —— 它现在连一套完整基线都没有，记「上次跑绿」是
- *     一句不存在的话。这两张表各管一件事（新鲜度管**时效**、pending 管**数量**）；
- *   · 记录**不许**挂在非登记档上（删了平台的档，账要同批抹掉）；
+ * 判据的形状（与 `shell-gate.mjs` 同族：触发面窄、判决可执行）：
+ *   · 每一登记档都要有一条新鲜度记录，写清「谁 / 什么时候 / 按哪条命令复核的」
+ *     —— 缺一条 = 这一档还停在「录过就算数」；
+ *   · 记录**不许**挂在非登记档上（删了一档，账要同批抹掉）；
  *   · 每次提交顺带打印各档「上次自证距今多久」——账的价值在于被**看见**。
  *
- * ⚠️ **「多久没跑算旧」不进判据**（像素档）：像素回归的结论只在**录过基线的那台机器上**
- * 成立，而本仓库的自动化执行环境都是 linux —— win32 档的复核只能在 Windows 开发机上做。
- * 拿墙钟阻断等于让所有人卡在一个**只有少数人能解**的账上（§11.8 里 `PENDING_PLATFORMS`
- * 「只提醒、不阻断」已经判过这味药）。所以像素档的纪律只收在**可观测的形状**上：
- * 「有主、写清、不挂空档」是判据，「多久没跑算旧」是人看着读数定的。
+ * 「多久没跑算旧」这条判据**只对按日历日判的档生效**（`track.daily`）：它问的是
+ * 「**今天**自证过没有」，不是拿墙钟去卡一个会随机器与运气变化的阈值。按输入面判的档
+ * （全量单测 / 产物护栏）另外读 `track.dirty`：**改了就当天跑**，没动过的日子以
+ * `graceMs` 为宽限 —— 十分钟量级的那两档没必要每天都跑。
  *
- * 唯一例外是 `track.daily` 那一档（全量 e2e）：它多一条「**今天**自证过没有」的判据
- * （ISSUE #1282）。它不是把像素档的取舍推翻 —— 那一档卡不住的原因是「只有少数人跑得动」，
- * 而全量 e2e 恰恰是**人人都跑得动的按需入口**（`pnpm test:e2e`），缺的只是「有人跑」。
- * 所以它按本地日历日判「今天的第一次提交带没带凭证」，并有两条配套出路：
- * `pnpm test:e2e` 跑绿即记，或 `node scripts/e2e-run.mjs --skip "<理由>"` 记一条
- * 写明理由的豁免（占位理由被拦 —— 豁免不是绕过）。账文件还没入库时**只提醒、不阻断**。
+ * 每一档都有两条出路，且都不是绕过（留下的是一条能复核的事实）：
+ * `run` 那一栏的命令跑绿即记，或 `skipHow` / `dirtyHow` 记一条写明理由的账
+ * （占位理由被拦）。
  *
- * **不在这里跑像素**：`pixel-run.mjs` 要起 webServer + 浏览器，与钩子里的 A/B/C/D 抢资源
- * （§13.5 的并行预算是实测敏感项）。钩子只做它做得到的那件事 —— **每一档都得有主**；
- * 记账仍走 `pnpm check:visual`（跑绿即记，见 `scripts/pixel-run.mjs`）。
- *
- * 用法：`node scripts/visual-freshness-gate.mjs`（由 `.githooks/pre-commit` 的 D 组调用）
- *      `node scripts/visual-freshness-gate.mjs --ledger` 打印当前账（无判决，给人看）
+ * 用法：`node scripts/freshness-gate.mjs`（由 `.githooks/pre-commit` 的 D 组调用）
+ *      `node scripts/freshness-gate.mjs --ledger` 打印当前账（无判决，给人看）
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -49,14 +31,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   FRESHNESS_TRACKS,
-  PENDING_PLATFORMS,
-  SUPPORTED_PLATFORMS,
   checkFreshnessLedger,
+  dirtiesTrack,
   freshnessAge,
   freshnessTrack,
-  dirtiesTrack,
   readFreshnessLedgerAt,
-} from "./visual-baselines.mjs";
+} from "./freshness-ledger.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -64,7 +44,7 @@ const ROOT = path.resolve(HERE, "..");
 /**
  * 读一份新鲜度账（不存在 / 读不出 → `{}`，由判决把它当成「一档都没记」）。
  *
- * 读写语义都在 `visual-baselines.mjs`（`readFreshnessLedgerAt` / `writeFreshness`）：
+ * 读写语义都在 `freshness-ledger.mjs`（`readFreshnessLedgerAt` / `writeFreshness`）：
  * 两条账各写一份「读不出怎么办」时，一边会把坏 JSON 当成空账（判红，话术正确）、
  * 另一边会静默放行 —— 而后者不报错，只是少守一条。
  *
@@ -72,106 +52,65 @@ const ROOT = path.resolve(HERE, "..");
  * @param {string} [root]
  * @returns {Record<string, unknown>}
  */
-export function readFreshnessLedger(kind = "visual", root = ROOT) {
+export function readFreshnessLedger(kind = "e2e", root = ROOT) {
   return readFreshnessLedgerAt(root, freshnessTrack(kind).ledger);
 }
 
 /**
- * 两份账各自的判决口径 —— **从登记表派生，不是分支、也不是一张手抄的清单**。
+ * 各档的判决面 —— **从登记表派生，不是分支、也不是一张手抄的清单**。
  *
- * 这里有几件东西是**只有像素档才有**的：多个平台、`PENDING_PLATFORMS`、`SUPPORTED_PLATFORMS`。
- * 其余每档的唯一「平台」就是它自己的 `key`（`e2e` / `full` / `artifact`）。
+ * 这里要的只有一件事：每一档的账里该有哪些**键**。键的唯一出处是 `track.key`
+ * （`e2e` / `full` / `artifact`）。
  *
- * ⚠️ 这段**曾经是手抄的**（`{kind: "e2e", platforms: ["e2e"], pending: []}`），于是：
- *   · 「新增一档却忘了在这里加一行」⇒ 那一档**谁都不判**（判据的覆盖面与它自称的不符，
- *     正是本节立案现场 #1451 的那条病）—— 而新增档这件事本身不会有任何东西变红；
- *   · 「像素档的 key 改了名」（`FRESHNESS_TRACKS.visual.key` 在
- *     `scripts/.visual-baseline-freshness.json` 里被改成 `darwin`）⇒ 手抄的
- *     `SUPPORTED_PLATFORMS` 照旧要求 `linux` 那一档，于是**账里那条记录变成孤儿**、
- *     而真正要求的档显示「无记录」：两端都红，红的却不是真问题。
- * 现在两处都由 `FRESHNESS_TRACKS` 现算：新增一档自动被纳入判决面，`key` 也只有一个出处。
+ * ⚠️ 这段**曾经是手抄的**，于是「新增一档却忘了在这里加一行」⇒ 那一档**谁都不判**
+ * （判据的覆盖面与它自称的不符，正是本节立案现场那条病），而新增档这件事本身不会有
+ * 任何东西变红。现在由 `FRESHNESS_TRACKS` 现算：新增一档自动被纳入判决面。
  *
- * 为什么不是「在 `main` 里 `if (kind === "visual")`」：那样「第三档」会变成三分支，
- * 而三处分支里若只有一处忘了减 pending，表现是**那一档永远被判红**（或永远被判绿），
- * 不会有任何东西告诉你哪一处漏了。
+ * 为什么不是「在 `main` 里 `if (kind === ...)`」：那样「第四档」会变成四分支，
+ * 而某一处漏了不会有任何东西告诉你。
  *
- * @returns {Array<{kind: string, platforms: string[], pending: string[]}>}
+ * @returns {Array<{kind: string, keys: string[]}>}
  */
 export function trackScopes() {
   return Object.keys(FRESHNESS_TRACKS).map((kind) => {
     const track = freshnessTrack(kind);
-    /* 像素档是唯一「按平台分档、且有待补录状态」的那一档 —— 这两件事都是由那张表
-     * （`PLATFORM_RECORDING` / `PENDING_PLATFORMS`）定义的，而不是由档名定义的。 */
-    const byPlatform = kind === "visual";
-    return {
-      kind,
-      platforms: byPlatform ? SUPPORTED_PLATFORMS : [track.key],
-      pending: byPlatform ? Object.keys(PENDING_PLATFORMS) : [],
-    };
+    return { kind, keys: [track.key] };
   });
 }
 
 /**
  * 判决本体：给定新鲜度账，决定退出码与理由。
  *
- * 抽成纯入口是为了让**判决可被执行**（同 `visual-gate.mjs` 的 `runGate` 先例）：
+ * 抽成纯入口是为了让**判决可被执行**（同 `shell-gate.mjs` 的 `runGate` 先例）：
  * 不接输入的话，「永远说没问题」这一层静默退化不会有任何东西红。
  *
- * @param {{ledger: Record<string, unknown>, kind?: string, platforms?: string[], pending?: string[], now?: Date, dirtySince?: Date | null}} input
+ * @param {{ledger: Record<string, unknown>, kind?: string, keys?: string[], now?: Date, dirtySince?: Date | null}} input
  * @returns {{exitCode: number, problems: string[], ages: string[]}}
  */
 export function runGate({
   ledger,
-  kind = "visual",
-  platforms,
-  pending,
+  kind = "e2e",
+  keys,
   now = new Date(),
   dirtySince = null,
 }) {
   const track = freshnessTrack(kind);
   /* 缺省值与 `trackScopes()` **同源**（那里是判决面的唯一出处）：两个地方各自写一份
-   * 「这一档有哪些平台」时，`main`（走 `trackScopes`）与直接调 `runGate` 的调用方
+   * 「这一档有哪些键」时，`main`（走 `trackScopes`）与直接调 `runGate` 的调用方
    * （走缺省值）会对同一档给出不同答案 —— 而默认值那一侧错了不会红（调用方几乎总是
-   * 显式传，缺省那条路径只在用例里走）。`visual` 缺省是为了兼容既有调用方（它们
-   * 一律省略 `kind`），其余档由 `platforms`/`pending` 的缺省从这一档自身派生。 */
-  const scope = trackScopes().find((s) => s.kind === kind);
-  const [requiredPlatforms, pendingPlatforms] = [
-    platforms ?? scope?.platforms ?? [track.key],
-    pending ?? scope?.pending ?? [],
-  ];
-  /* 两张表各管一件事：`PENDING_PLATFORMS` 管**数量**（那一档缺几张、只能在那档机器上补录），
-   * 新鲜度管**时效**（那一档上次被实证跑绿是什么时候）。缺基线的档连一套完整的 PNG 都没有，
-   * 「上次自证」对它是句不成立的话 —— 强行要求一条只会逼人填假读数。所以：
-   *   · 新鲜度只要求**不在 pending 里的登记档**（`required`）；
-   *   · 孤儿检查仍打在**全部登记档**上（账不许挂在任何非登记档上）。
-   * `pending` 可注入（默认真表）：不接输入的话，「哪些档不需要记录」这层静默退化不会有
-   * 任何东西红 —— 而它恰好是「有人把 win32 从 pending 摘掉」时第一个该有反应的地方。
-   */
-  const required = requiredPlatforms.filter(
-    (p) => !pendingPlatforms.includes(p),
-  );
+   * 显式传，缺省那条路径只在用例里走）。 */
+  const required = keys ?? [track.key];
   const problems = checkFreshnessLedger(ledger, {
     required,
-    registered: requiredPlatforms,
+    registered: required,
     track,
     kind,
     now,
     dirtySince,
-    /* 交给判据的是**整张 pending 表的键**，不是 `pendingPlatforms`（那一份是「本档在
-     * pending 里的平台」）：`dailyDemanded` 问的是「还有档缺成套基线吗」——
-     * 那是**全局**的一句话（像素档缺 win32 那两张，linux 这一档的「每天自证」同样说不
-     * 出口，因为这台机器一跑就会停在缺基线那一步）。两个口径各写一遍必然漂，所以只传
-     * 这一处现算的值。 */
-    pending: pending ?? scope?.pending ?? Object.keys(PENDING_PLATFORMS),
   });
   const ages = required.map(
     (p) => `${p}：${freshnessAge(ledger[p], now) ?? "无记录"}`,
   );
-  for (const p of requiredPlatforms.filter((p) =>
-    pendingPlatforms.includes(p),
-  )) {
-    ages.push(`${p}：待补录（PENDING_PLATFORMS）`);
-  }
   return { exitCode: problems.length === 0 ? 0 : 1, problems, ages };
 }
 
@@ -342,8 +281,7 @@ function main() {
     const result = runGate({
       ledger,
       kind: scope.kind,
-      platforms: scope.platforms,
-      pending: scope.pending,
+      keys: scope.keys,
       now,
       dirtySince: dirtySinceToday(track, now),
     });

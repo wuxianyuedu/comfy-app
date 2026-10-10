@@ -168,9 +168,8 @@ export const PROJECT_SCENES = {
    * `inputImage`，拿它们当 target 就是那三条不出现的边。第一版写的是
    * `"1:text"` / `"2:prompt"`（形如真画布的短序号，看着很像），三条全没画出来。
    *
-   * 这份图与 `e2e/visual/canvas.visual.spec.ts` 的 `canvas-filled` 同形：
-   * `text`（提示词）与 `movie`（成片）各自 `output` → 两张 `picture` 的
-   * `inputImage`。**两处都按端口能力配**，不是各写一份巧合。
+   * 配法：`text`（提示词）与 `movie`（成片）各自 `output` → 两张 `picture` 的
+   * `inputImage`。**按端口能力配**，不是照抄别人的形状。
    */
   filledProject: {
     about: "一个做过的项目：画布上四张真节点 + 三条连线 + 真视口",
