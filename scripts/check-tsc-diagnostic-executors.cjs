@@ -81,7 +81,7 @@ const READERS_LEDGER = path.join(__dirname, ".declaration-readers.json");
  * `**​/*.js` 且 `checkJs: true`，即 `scripts/` 那份 `.mjs` / `.cjs` 也在判决面里）。
  *
  * **`scripts/` 在 tsc 的判决面里**这一点是本判据的前提之一（很多人以为「`.mjs` 是脚本、
- * 类型不收」）：立案那 19 条里有 12 条正是 `scripts/visual-baselines.mjs` 的三处 JSDoc。
+ * 类型不收」）：立案那 19 条里有 12 条正是新鲜度内核那三处 JSDoc。
  */
 const SCAN_DIRS = ["src", "scripts", "tests"];
 const SCAN_EXTS = new Set([

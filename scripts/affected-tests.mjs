@@ -77,14 +77,6 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `.cnb.yml` 不会让任何现有判据变红（规范 §13.5.3 的结论只写在正文里），而它一旦
   // 存在就会被读成「有 CI 兜底」——绿灯可信度的地基不能靠人记得住。
   "tests/no-platform-ci-config.test.ts",
-  // 像素基线按平台分文件：少一档不是「那一档没跑」，而是判失败并顺手生成半套未入库的
-  // PNG。这条守的是「视觉层在真正执行它的那台机器上到底有没有基线」，与本次改动无关。
-  "tests/visual-baseline-pairing.test.ts",
-  // 「组件级视觉归 Storybook、页面级视觉归 Playwright」这条分工本身：
-  // `e2e/visual/**` 与 `.storybook/**` 里都不该出现对方那一侧该做的事（截图断言 / 第二套
-  // 像素工具），而 §11.8 声明的基线范围档（深浅两态 / 断点 / 空态）不得被**减法**清掉 ——
-  // 删掉东西比加东西更容易过 review，这条只在改像素层时才跑就等于形同虚设。
-  "tests/visual-storybook-division.test.ts",
   // 条件性 skip 的登记表：全绿里的 `N skipped` 不说明「绿的是哪一种」，尤其产物级探针
   // （没构建过的检出上整块不判）。这条守住「每个暗掉的站点都有人登记它为什么暗」。
   "tests/conditional-skip-registry.test.ts",
@@ -338,23 +330,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 而它与某一次具体改动无关 —— 只在被改到时才跑等于专挑它不在的时机跑。
   // 同因：改 `.githooks/**` 会让本层放弃收窄、只跑固定清单。
   "tests/test-environment-gate.test.ts",
-  // 「像素档留在按需层、不进 `check:all`」（§11.8 / §13.5.4）。这条此前只是文档里
-  // 的一句话：`GATES.visual` 带 `run: false`、`.ps1` 那侧带 `Run = $false`，而
-  // 没有任何判据按名字钉住它 —— 把它挪进默认档（并顺手新增任意一个按需档）\
-  // 全仓判据照样全绿，代价是每次一键门禁都起 webServer + 浏览器。它读的是
-  // `scripts/quality-gate.mjs` / `.ps1` 两份**文本**（那两份都自跑自退、import 不进来，
-  // 所以 import 图追不到），与本次暂存改动无关也必须响，故进固定清单。
-  "tests/pixel-run.test.ts",
-  // 「全量 e2e 也有主」（ISSUE #1545 / #1547）：`pnpm test:e2e` 此前是「人记得就跑」，
-  // 而**像素档的触发条件恰好嵌套在它里面**（`playwright.config.ts` 的 `testMatch` 把
-  // `*.visual.spec.ts` 与普通 spec 收进同一次 `playwright test`，而 `pnpm check:visual`
-  // 只跑 `e2e/visual` 那半边）—— 实测的形态是 linux 档基线过期两天没被发现，靠人手动
-  // 跑一遍才照出来。现在 `pnpm test:e2e` 走 `scripts/e2e-run.mjs`，跑绿即记一条与像素档
-  // **同形而不同键**的账；这条判据钉的是记账语义、两条账不接错、以及钩子那一步真判了它。
-  // 它读的是 `scripts/e2e-run.mjs` / `scripts/visual-baselines.mjs` 与两处接线文本，
+  // 「全量 e2e 也有主」（ISSUE #1545 / #1547）：`pnpm test:e2e` 此前是「人记得就跑」——
+  // 实测的形态是没人在跑。现在它走 `scripts/e2e-run.mjs`，跑绿即记一条账；这条判据钉的是
+  // 记账语义、几条账不接错、以及钩子那一步真判了它。
+  // 它读的是 `scripts/e2e-run.mjs` / `scripts/freshness-ledger.mjs` 与两处接线文本，
   // import 图追不到，故进固定清单（与本次暂存改动无关也必须响）。
   "tests/e2e-run.test.ts",
-  // 「每天首次自证」从一档扩到四档（ISSUE #1282 的续）：平台流水线删掉（ISSUE #623）之后，
+  // 「每天首次自证」从一档扩到三档（ISSUE #1282 的续）：平台流水线删掉（ISSUE #623）之后，
   // **全量单测 + 覆盖率**与**产物级护栏（build + 数产物）**是两条一直没有执行者的判定档
   // （§13.5.3 的欠账表里只写着「按需手动跑」，而那句话没有任何东西在守）。它们被接进同一份
   // 判决里（`FRESHNESS_TRACKS` 的 `daily` / `dirty` 两栏），判据是「**改了就当天跑**」而不是

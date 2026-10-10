@@ -398,7 +398,7 @@ function renderInstallDrift(drift) {
  *
  * 抽成纯函数（IO 只经入参 `root`）是为了让契约测试能直接喂形状：判据的输入是
  * 「一个仓库目录 + 它的 git 状态」，所以测试只需搭一个真 git 仓库，不必 mock 模块
- * （同 `visual-gate.mjs` 的 `runGate`）。
+ * （同 `shell-gate.mjs` 的 `runGate`）。
  * @param {string} root
  * @param {{ offline?: boolean, now?: number, rev?: string }} [opts]
  * @returns {{ code: number, remoteChecked: boolean, remoteAgeMs: number | null, remoteDrifts: object[], installDrift: object | null, lines: string[] }}

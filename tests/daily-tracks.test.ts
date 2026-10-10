@@ -1,5 +1,5 @@
 /**
- * 「每天首次自证」从一档扩到四档（ISSUE #1282 的续）—— 规范 §11.8 / §13.5.4 / §13.5.12。
+ * 「每天首次自证」从一档扩到三档（ISSUE #1282 的续）—— 规范 §11.8 / §13.5.4 / §13.5.12。
  *
  * 立案现场：平台流水线删掉（ISSUE #623）之后，`§13.5.3` 的欠账表里列着几条「**无自动执行者**」
  * 的判定档，其中两条此前唯一的执行者是文档里那句「按需手动跑」—— 而那句话没有任何东西在守：
@@ -10,12 +10,11 @@
  *     两者都只在**真构建过一次**时才有结论。
  *
  * 判据分四头，缺一头这层就退化成一句好看的话：
- *   ① **档与档的区别是数据**：`FRESHNESS_TRACKS` 的四档都在，四档都按日历日判、
- *      但只有平台档（像素档）吃 `PENDING_PLATFORMS` 那道闸；
+ *   ① **档与档的区别是数据**：`FRESHNESS_TRACKS` 的三档都在，都按日历日判；
  *   ② **「改了就当天跑」**（`dirty` / `graceMs`）：三档「每天首次」的代价各不相同，
  *      十分钟量级的两档没必要每天都跑 —— 动过输入面就必须今天自证，没动过以宽限判；
  *   ③ **两条出路（`--skip` / `--dirty`）都留下能复核的事实**，占位理由一律被拦；
- *   ④ **接线在位**：四档各自的跑法脚本走同一份记账内核，钩子那一步真判了它们。
+ *   ④ **接线在位**：各档的跑法脚本走同一份记账内核，钩子那一步真判了它们。
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -34,7 +33,6 @@ import {
   shouldRecord as artifactRecords,
   planRun as artifactPlan,
 } from "../scripts/artifact-run.mjs";
-import { gitUser } from "../scripts/pixel-run.mjs";
 import {
   shouldRecord as suiteRecords,
   TRACK as SUITE_TRACK,
@@ -42,16 +40,16 @@ import {
 } from "../scripts/full-suite-run.mjs";
 import {
   FRESHNESS_TRACKS,
-  dailyDemanded,
   freshnessRecord,
   freshnessTrack,
   freshnessVerdict,
-} from "../scripts/visual-baselines.mjs";
+  gitUser,
+} from "../scripts/freshness-ledger.mjs";
 import {
   dirtySinceToday,
   runGate,
   trackScopes,
-} from "../scripts/visual-freshness-gate.mjs";
+} from "../scripts/freshness-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -97,20 +95,18 @@ function gate(kind: string, ledger: Record<string, unknown>, extra = {}) {
   return runGate({
     ledger,
     kind,
-    platforms: [freshnessTrack(kind).key],
-    pending: [],
+    keys: [freshnessTrack(kind).key],
     now: SAME_DAY,
     ...extra,
   });
 }
 
-describe("四档的登记形状（§11.8）", () => {
-  it("四档都在，且每一档的六个值都写全", () => {
+describe("三档的登记形状（§11.8）", () => {
+  it("三档都在，且每一档的六个值都写全", () => {
     expect(Object.keys(FRESHNESS_TRACKS).sort()).toEqual([
       "artifact",
       "e2e",
       "full",
-      "visual",
     ]);
     for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
       // 账文件 / 键 / 名字 / 命令是每条账的存在意义，缺一个这条记录就退化成一句空话。
@@ -123,7 +119,7 @@ describe("四档的登记形状（§11.8）", () => {
     }
   });
 
-  it("四份账**不共用一个文件**，四个键也互不相同", () => {
+  it("三份账**不共用一个文件**，三个键也互不相同", () => {
     // 共用 = 跑 A 档的绿把 B 档的自证覆盖掉，而账面上完全正常（同一个日期、同一个人）。
     const ledgers = Object.values(FRESHNESS_TRACKS).map((t) => t.ledger);
     const keys = Object.values(FRESHNESS_TRACKS).map((t) => t.key);
@@ -131,35 +127,22 @@ describe("四档的登记形状（§11.8）", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("像素档**按日历日**判，且多一道「有成套基线才要得起凭证」的闸（ISSUE #1620）", () => {
-    /* 这一条此前判的是「像素档不吃每天首次」（`daily === false`），理由是结论只在录过
-     * 基线的那台机器上成立。那个理由对的，结论错了：它把「谁能解这条账」与「这条账怎么
-     * 被答复」混成了一件事 —— 于是像素档是四档里**唯一**只被判「有主、写清」的那一档，
-     * 「这批基线一直是对的」这句话在那几秒里无人回答，而它是唯一真能把判据跑起来的账。
-     * 现在的形状：按日历日判（与 e2e 同味），但 `PENDING_PLATFORMS` 非空时退回只判形状
-     * —— 缺几张基线的那一档连一套完整基线都没有，「每天跑绿一次」对它说不出口。 */
-    const visual = freshnessTrack("visual");
-    expect(visual.daily).toBe(true);
-    expect(visual.gatedByPending).toBe(true);
-    expect(dailyDemanded({ track: visual, pending: [] })).toBe(true);
-    expect(dailyDemanded({ track: visual, pending: ["win32"] })).toBe(false);
+  it("三档都按日历日判，且都不吃「有成套基线」那道闸", () => {
+    /* 这道闸（`gatedByPending` / `dailyDemanded`）随像素档整档撤掉而消失：它的触发面
+     * 是「还有平台档缺成套基线」，而像素层已经不在仓库里了。三档都按日历日判，
+     * 「这一档今天要不要凭证」现在读的就是 `daily` 那一栏。 */
     for (const kind of ["e2e", "full", "artifact"]) {
       const track = freshnessTrack(kind);
       expect(track.daily, kind).toBe(true);
-      /* 其余三档**不受** `PENDING_PLATFORMS` 影响：像素档缺几张 PNG 与全量 e2e /
-       * 全量单测 / 产物护栏都不是同一件事。这一栏写成数据（而不是「按档名猜」），
-       * 新增一档时它就摆在眼前要回答。 */
-      expect(track.gatedByPending, kind).toBe(false);
-      expect(dailyDemanded({ track, pending: ["win32"] }), kind).toBe(true);
     }
   });
 
-  it("像素档的「今天不跑」那条出路在登记里（`skipHow` 是判据话术的出处）", () => {
-    /* 结算口径：它现在**可能限制当天第一次提交**，所以豁免不是装饰品 —— 没有 `skipHow`
-     * 那一栏时，`writeSkipRecord` 直接抛「这一档没有豁免这条出路」，而钩子在当天第一次
-     * 提交上拦人、却给不出一条出路。 */
-    expect(freshnessTrack("visual").skipHow).toBeTruthy();
-    expect(freshnessTrack("visual").skipHow).toContain("--workers=0");
+  it("每一档「今天不跑」那条出路都在登记里（`skipHow` 是判据话术的出处）", () => {
+    /* 豁免不是装饰品：没有 `skipHow` 那一栏时，`writeSkipRecord` 直接抛「这一档没有
+     * 豁免这条出路」，而钩子在拦人、却给不出一条出路。 */
+    for (const kind of ["e2e", "full", "artifact"]) {
+      expect(freshnessTrack(kind).skipHow, kind).toBeTruthy();
+    }
   });
 
   it("判决面**由登记表派生**：新增一档自动被纳入，不靠手抄一份清单", () => {
@@ -168,11 +151,9 @@ describe("四档的登记形状（§11.8）", () => {
      * 自称的不符，正是 §13.5.12 的立案现场。 */
     const kinds = trackScopes().map((s) => s.kind);
     expect(kinds.sort()).toEqual(Object.keys(FRESHNESS_TRACKS).sort());
-    // 非像素档的「平台面」就是它自己的 key（现算，不是手抄的第二份真值）。
+    // 每一档的「键面」就是它自己的 key（现算，不是手抄的第二份真值）。
     for (const scope of trackScopes()) {
-      if (scope.kind === "visual") continue;
-      expect(scope.platforms).toEqual([freshnessTrack(scope.kind).key]);
-      expect(scope.pending).toEqual([]);
+      expect(scope.keys).toEqual([freshnessTrack(scope.kind).key]);
     }
   });
 });
@@ -475,15 +456,15 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
       ),
     ].map((m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }));
     const hit = steps.find((s) =>
-      s.cmd.includes("scripts/visual-freshness-gate.mjs"),
+      s.cmd.includes("scripts/freshness-gate.mjs"),
     );
-    expect(hit?.cmd).toBe("node scripts/visual-freshness-gate.mjs");
+    expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
     expect(hit?.label).toContain("e2e");
-    // 标签要说清它现在判的是**几档** —— 只写「像素基线」时，另三档红出来会被读成像素的事。
-    expect(hit?.label).toContain("每日自证");
+    // 标签要说清它现在判的是哪几档 —— 只写其中一档时，另一档红出来会被读成别人的事。
+    expect(hit?.label).toContain("自证");
   });
 
-  it("四档的记账走**同一份内核**（§12.12：不造第二轮子）", () => {
+  it("各档的记账走**同一份内核**（§12.12：不造第二轮子）", () => {
     // 「绿才记」「豁免下限」「账的形状」三条各被一条用例钉住，抄一份就多一处能悄悄漂的地方，
     // 而漂了不会红（账面上仍是合法的日期 + 人名 + 命令）。
     for (const rel of [
@@ -498,9 +479,9 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     expect(readText("scripts/daily-run.mjs")).toContain("--dirty");
   });
 
-  it("记账要用的人名推导只有一份（`gitUser`，四档共用）", () => {
+  it("记账要用的人名推导只有一份（`gitUser`，各档共用）", () => {
     // 各写一套时会出现「这一档记的是环境变量、那一档记的是 git config」，
-    // 于是同一个人的四条记录名字不一样。
+    // 于是同一个人的几条记录名字不一样。
     expect(typeof gitUser("full")).toBe("string");
     for (const rel of [
       "scripts/full-suite-run.mjs",
@@ -514,7 +495,6 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
 describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
   it("不吃输入面的档恒为 null（不白起一次 git）", () => {
     expect(dirtySinceToday(freshnessTrack("e2e"))).toBeNull();
-    expect(dirtySinceToday(freshnessTrack("visual"))).toBeNull();
   });
 
   it("**空行分隔的是「时刻与它的文件清单」**，不是两次提交（实测撞出来的一个静默失效）", () => {

@@ -26,20 +26,20 @@
       "id": "visual-baseline-freshness",
       "name": "新鲜度账的声明形状（FRESHNESS_TRACKS 的七栏 + 两种「不跑」的理由）",
       "paths": [
-        "scripts/visual-baselines.mjs"
+        "scripts/freshness-ledger.mjs"
       ],
       "markers": [
         "FRESHNESS_TRACKS",
         "freshnessRecord",
         "trackedBy"
       ],
-      "reader": "scripts/visual-freshness-gate.mjs",
+      "reader": "scripts/freshness-gate.mjs",
       "executor": {
         "kind": "fixed-test",
         "test": "tests/daily-tracks.test.ts（C 组固定清单）"
       },
       "baseline": {
-        "scripts/visual-baselines.mjs": 88
+        "scripts/freshness-ledger.mjs": 88
       },
       "section": "11.8"
     },
