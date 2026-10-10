@@ -38,7 +38,17 @@
 | 手抄存量（单行全命中）| 迁移前 **5** 处 → 迁移后 **1** 处（只剩基元自己）|
 | `.githooks/pre-commit` | 见下方提交 |
 
-**覆盖边界**：`panel` 档**不在像素基线的取景范围内** —— win32 那 8 张基线已补齐（`a4b9b626`），
-但取的是 canvas / 登录 / 模型 / 浮层 / 工作区那几屏，不含这 6 处所在的日志面板、控制台输出、
-CLI 原文模态与消息中心。所以「零像素」的依据是类名逐字同源 + `cn()` 覆写实测 + 单测，
-而不是截图对比；真要出像素判决，得给这几个面板补取景。
+**覆盖边界**（订正：本段此前写「`panel` 档不在像素基线的取景范围内」——那是按屏的名字猜的，
+没读 spec 自己的注释；实测有**一处**在取景里）：
+
+- **在取景里的**：`overlay-log-default/-wide` 这 2 张 ×（`-linux` + `-win32`）= **4 张基线**。
+  `e2e/visual/overlay.visual.spec.ts` 把日志内容钉成**空来源**（它禁的是「随机/时变内容」——
+  日志行逐帧在长），而 `settle(page, "暂无匹配的日志")` 等的那句正文就是
+  `logs/LogPanel` 的 `variant="panel"` 那个分支 ⇒ 这一处的形状有像素判决。
+- **不在取景里的**：其余 5 处（`ConsoleOutput` 两个分支、`TaskLogTimeline`、
+  `GlobalStepLogPanel`、`WorkflowRunRawCliModal`、`MessageCenterPanel`）。其它几张各属别档：
+  `workspace-desktop-dark/-light` 取首页、`models-empty` 取的是 `page` 档、
+  `canvas-empty` 取 `EmptyCanvasHint`（§Shapes 的刻意排除项）。
+
+⇒ 「外观逐像素不变」的依据分两档记：`LogPanel` 那处有截图可比；其余 5 处仍是
+类名逐字同源 + `cn()` 覆写实测 + 单测，要出像素判决得先给这几个面板补取景。
