@@ -65,6 +65,7 @@ const ROOT = path.resolve(HERE, "..");
  * 钩子不再自己抄一遍。
  */
 export const FIXED_STRUCTURAL_TESTS = [
+  "tests/a11y-axe-stories.test.ts",
   "tests/single-logger-channel.test.ts",
   "tests/container-single-access.test.ts",
   "tests/core-spine-single-source.test.ts",
