@@ -55,19 +55,23 @@ export function SettingsView({ fillHeight }: SettingsViewProps) {
   /* 打开即先渲染「外壳 + 分区导航」，内容区走三态；不再用整屏 loading 挡导航。 */
   if (c.isInitialLoad) {
     return (
-      <SettingsShell {...frame}>
-        <PageLoading className="bg-bg min-h-[60vh] pb-6" />
-      </SettingsShell>
+      <SettingsShell
+        {...frame}
+        fallback={<PageLoading className="bg-bg min-h-[60vh] pb-6" />}
+      />
     );
   }
 
   if (c.hasError) {
     return (
-      <SettingsShell {...frame}>
-        <div className="relative">
-          <SettingsLoadError errorText={c.errorText} onRetry={c.retry} />
-        </div>
-      </SettingsShell>
+      <SettingsShell
+        {...frame}
+        fallback={
+          <div className="relative">
+            <SettingsLoadError errorText={c.errorText} onRetry={c.retry} />
+          </div>
+        }
+      />
     );
   }
 
@@ -76,14 +80,17 @@ export function SettingsView({ fillHeight }: SettingsViewProps) {
    *（重试 + 日志面板），不给一句没有下文的冻住文案。 */
   if (!c.drafts) {
     return (
-      <SettingsShell {...frame}>
-        <div className="relative">
-          <SettingsLoadError
-            errorText="配置数据未就绪（查询已结束但未返回可用配置）"
-            onRetry={c.retry}
-          />
-        </div>
-      </SettingsShell>
+      <SettingsShell
+        {...frame}
+        fallback={
+          <div className="relative">
+            <SettingsLoadError
+              errorText="配置数据未就绪（查询已结束但未返回可用配置）"
+              onRetry={c.retry}
+            />
+          </div>
+        }
+      />
     );
   }
 
