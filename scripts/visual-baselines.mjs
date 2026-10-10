@@ -366,7 +366,7 @@ export function checkRecordingEnv({ platform, env = process.env }) {
  *   · `skipHow` —— 记一条「写明理由的豁免」那条命令（同样只有 e2e 有）。它是**另一条
  *     出路**而不是绕过：留下的是一条能复核的事实。
  *
- * @type {Record<string, {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}>}
+ * @type {Record<string, {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number, gatedByPending: boolean}>}
  */
 export const FRESHNESS_TRACKS = {
   visual: {
@@ -374,11 +374,24 @@ export const FRESHNESS_TRACKS = {
     key: "linux",
     label: "linux 档像素基线",
     run: "pnpm check:visual",
-    daily: false,
-    skipHow: null,
+    /* 这一档**按日历日判**，与全量 e2e 同味 —— 但它多一道闸：只在
+     * `PENDING_PLATFORMS` 为空（每一档都有成套基线、每一档都该有执行者）时才要凭证。
+     * 缺几张基线的那一档没有「每天自证」这句话可说（它连一套完整基线都没有），
+     * 那条是**平台**的账、归 `PENDING_PLATFORMS` 那半管；判据在闸门那一侧现算
+     * （`dailyDemanded`），两种缺账因此在台面上分得开。
+     *
+     * 口径是本地日历日：当天第一次提交带一次凭证。出路同样两条 —— 真跑一遍
+     * （跑绿即记，`--workers=N` 照记）、或 `--workers=0` 记一条写明理由的豁免。
+     * 两条都留得下可复核的事实，与「判据放宽」是两件事。 */
+    daily: true,
+    skipHow: 'pnpm check:visual --workers=0 --skip "<理由>"',
     dirty: [],
     dirtyHow: null,
     graceMs: 0,
+    /* 「成套基线还欠着的那几档说这句话（每天自证）说不出口」——**只有一个平台档在
+     * `PENDING_PLATFORMS` 里**这件事，才是这条闸的触发面。全量 e2e 那一档虽然没有输入面，
+     * 却与像素档缺几张 PNG 毫不相干，所以它的这一栏是 `false`（数据，不是分支）。 */
+    gatedByPending: true,
   },
   e2e: {
     ledger: "scripts/.e2e-freshness.json",
@@ -393,6 +406,8 @@ export const FRESHNESS_TRACKS = {
     dirty: [],
     dirtyHow: null,
     graceMs: 0,
+    /* 与像素档缺几张 PNG 无关，所以不受 `PENDING_PLATFORMS` 影响（见 visual 那一档）。 */
+    gatedByPending: false,
   },
   full: {
     ledger: "scripts/.full-suite-freshness.json",
@@ -404,6 +419,7 @@ export const FRESHNESS_TRACKS = {
     dirty: ["src/", "tests/"],
     dirtyHow: 'node scripts/full-suite-run.mjs --dirty "<理由>"',
     graceMs: 7 * 86_400_000,
+    gatedByPending: false,
   },
   artifact: {
     ledger: "scripts/.artifact-freshness.json",
@@ -422,6 +438,7 @@ export const FRESHNESS_TRACKS = {
     ],
     dirtyHow: 'node scripts/artifact-run.mjs --dirty "<理由>"',
     graceMs: 7 * 86_400_000,
+    gatedByPending: false,
   },
 };
 
@@ -429,12 +446,45 @@ export const FRESHNESS_TRACKS = {
 export const FRESHNESS_LEDGER = freshnessTrack("visual").ledger;
 
 /**
+ * 这一档今天到底要不要凭证 —— 从「`daily` 是句什么话」推出来，而不是按档名写死
+ * （新增一档忘了在这里补一条 = 那一档谁都不判，正是 §13.5.12 的立案现场）。
+ *
+ * 它替掉的是此前散在判据里的同一个问题：「这一档按日历日判吗」。此前那处只读
+ * `track.daily` 一个布尔，于是**「这一档每天要凭证」与「这一档现在真的要得起凭证」
+ * 成了同一句话** —— 而像素档证明这两件事得分着问（见下面 `PENDING_PLATFORMS` 那条）。
+ *
+ * 两问，各读一栏数据：
+ *   · `daily === false` ⇒ 不按日判（判据只核「有主、写清」）；
+ *   · `gatedByPending === true`（**只有平台档**是）⇒ 要，但**先看 `PENDING_PLATFORMS`
+ *     空不空** —— 还有档缺成套基线时，「这批基线每天跑绿一次」说不出口（缺的那一档连
+ *     一套完整基线都没有，而它只能在那档机器上补录）。那条是**平台**的账，归
+ *     `PENDING_PLATFORMS` 那半管，与新鲜度账各记一件事。
+ *   `gatedByPending` 写成数据而不是「`key` 是不是平台名」：按档名或形状去猜的那一版
+ *   会把「新增一档该不该吃这道闸」变成一句要现场推理的话，而推理错了不报错。
+ *
+ * ⚠️ **缺基线那一档仍然要求「有主、写清」**（`checkFreshnessLedger` 前面那几条），
+ * 这里松的只是**日历日**那一格 —— 于是当所有档都齐了、`PENDING_PLATFORMS` 真的清空的那
+ * 一刻，这一档自动升成「每天一次」，不需要有人记得回来把某个布尔改成 `true`。
+ *
+ * @param {{track: {daily: boolean, gatedByPending: boolean}, pending?: string[]}} args
+ * @returns {boolean}
+ */
+export function dailyDemanded({ track, pending = [] }) {
+  if (!track.daily) return false;
+  /* 只有**平台档**才吃那道闸：它的「每天自证」与 `PENDING_PLATFORMS` 是同一件事的两面
+   * （还有档缺成套基线 ⇒ 「这批基线每天跑绿一次」说不出口）。其余档那一栏是 `false`，
+   * 所以「新增一档该不该吃这道闸」永远摆在人眼前要回答，而不是靠现场推理（推理错了不报错）。 */
+  if (track.gatedByPending) return pending.length === 0;
+  return true;
+}
+
+/**
  * 取一档的登记（未知的 kind 是**编码错误**，抛而不是回落 —— 回落会让「新加一档却忘了
  * 登记」表现成「按键名当档名」而照样跑绿）。
  *
  * @param {keyof typeof FRESHNESS_TRACKS | string} kind
- * @returns {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}}
- *   与 `FRESHNESS_TRACKS[*]` 同形 —— 两条账的差异（`daily` / `skipHow`）也在里面，
+ * @returns {{ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number, gatedByPending: boolean}}
+ *   与 `FRESHNESS_TRACKS[*]` 同形 —— 两种味道的差异（`daily` / `skipHow` / `gatedByPending`）也在里面，
  *   调用方据此决定要不要判「每天首次」、以及话术里给不给豁免那条出路；
  *   `dirty` / `dirtyHow` / `graceMs` 是「改了就当天跑」那一层读的三栏（输入面清单、
  *   不吃这一档的那条出路、没动输入面时的宽限）。
@@ -629,19 +679,30 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
  * 「跑过一次」与「跑过的是哪一个」会变成两件事，而账面上看着完全正常）。
  *
  * @param {Record<string, unknown>} ledger
- * @param {{required: string[], registered: string[], track: {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number}, kind: string, now?: Date, dirtySince?: Date | null}} scope
+ * @param {{required: string[], registered: string[], track: {ledger: string, key: string, label: string, run: string, daily: boolean, skipHow: string | null, dirty: string[], dirtyHow: string | null, graceMs: number, gatedByPending: boolean}, kind: string, now?: Date, dirtySince?: Date | null, pending?: string[]}} scope
  *   `required` = 必须有记录的档（登记档减去 pending）；`registered` = 全部登记档（孤儿检查）；
  *   `track` = 这一份账的登记（话术里要给出「去哪个文件补、按哪条命令跑」，
  *   它同时决定 `daily` / `skipHow` 那两条分叉）；
  *   `kind` = 这一份账属于哪个跑法（`trackedBy` 的比对基准）；
  *   `now` = 判「今天有没有自证」用的时钟（`track.daily` 那一档才读它；用例可注入）；
  *   `dirtySince` = **今天动过这一档输入面**的那个提交时刻（没有则 null）。只有
- *     `track.dirty` 非空的档读它 —— 那两档按「改了就当天跑」判，而不是「每天一次仪式」。
+ *     `track.dirty` 非空的档读它 —— 那两档按「改了就当天跑」判，而不是「每天一次仪式」；
+ *   `pending` = 还缺成套基线的平台（`PENDING_PLATFORMS` 的键，缺省空）。只有按日历日
+ *     判、且**不吃输入面**的档（像素档）读它 —— 那一档缺几张基线时，「每天自证」这句
+ *     话还说不出口（见 `dailyDemanded`）。
  * @returns {string[]} 问题清单
  */
 export function checkFreshnessLedger(
   ledger,
-  { required, registered, track, kind, now = new Date(), dirtySince = null },
+  {
+    required,
+    registered,
+    track,
+    kind,
+    now = new Date(),
+    dirtySince = null,
+    pending = [],
+  },
 ) {
   /** @type {string[]} */
   const problems = [];
@@ -715,7 +776,11 @@ export function checkFreshnessLedger(
      *     动过才要今天自证；没动过则以 `graceMs` 为宽限 —— 超过宽限、或当天动过而没自证
      *     ⇒ 两头都拦。这条把「每日执行」从「每天一次仪式」改成了「**改了就当天跑**」，
      *     而后者才是这三档真正想要的。 */
-    if (track.daily) {
+    /* 判「这一档今天要不要凭证」的口径收在 `dailyDemanded` 一处：它读的还是数据
+     * （`track.daily` / `track.dirty` / `pending`），只是把「要」与「真的还要得起」
+     * 拆成了两问 —— 像素档就是这两问不同答的那一档（`PENDING_PLATFORMS` 非空时它缺的
+     * 是基线，不是今天的凭证）。 */
+    if (dailyDemanded({ track, pending })) {
       /* 「不跑」有两种，形状各自成立、**互不等于**：`skippedReason`（今天故意不跑）与
        * `dirtyReason`（这次改动不吃这一档）。两者都放行，但都要能复核 —— 混成一栏之后，
        * 账面上就分不出「这一档一直没人跑」与「每次都声明不吃它」。 */

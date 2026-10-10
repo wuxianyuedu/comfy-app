@@ -10,7 +10,8 @@
  *     两者都只在**真构建过一次**时才有结论。
  *
  * 判据分四头，缺一头这层就退化成一句好看的话：
- *   ① **档与档的区别是数据**：`FRESHNESS_TRACKS` 的四档都在，像素档不吃「每天首次」；
+ *   ① **档与档的区别是数据**：`FRESHNESS_TRACKS` 的四档都在，四档都按日历日判、
+ *      但只有平台档（像素档）吃 `PENDING_PLATFORMS` 那道闸；
  *   ② **「改了就当天跑」**（`dirty` / `graceMs`）：三档「每天首次」的代价各不相同，
  *      十分钟量级的两档没必要每天都跑 —— 动过输入面就必须今天自证，没动过以宽限判；
  *   ③ **两条出路（`--skip` / `--dirty`）都留下能复核的事实**，占位理由一律被拦；
@@ -41,6 +42,7 @@ import {
 } from "../scripts/full-suite-run.mjs";
 import {
   FRESHNESS_TRACKS,
+  dailyDemanded,
   freshnessRecord,
   freshnessTrack,
   freshnessVerdict,
@@ -129,11 +131,35 @@ describe("四档的登记形状（§11.8）", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("像素档**不吃**「每天首次」（它不是 daily：结论只在录过基线的那台机器上成立）", () => {
-    expect(freshnessTrack("visual").daily).toBe(false);
+  it("像素档**按日历日**判，且多一道「有成套基线才要得起凭证」的闸（ISSUE #1620）", () => {
+    /* 这一条此前判的是「像素档不吃每天首次」（`daily === false`），理由是结论只在录过
+     * 基线的那台机器上成立。那个理由对的，结论错了：它把「谁能解这条账」与「这条账怎么
+     * 被答复」混成了一件事 —— 于是像素档是四档里**唯一**只被判「有主、写清」的那一档，
+     * 「这批基线一直是对的」这句话在那几秒里无人回答，而它是唯一真能把判据跑起来的账。
+     * 现在的形状：按日历日判（与 e2e 同味），但 `PENDING_PLATFORMS` 非空时退回只判形状
+     * —— 缺几张基线的那一档连一套完整基线都没有，「每天跑绿一次」对它说不出口。 */
+    const visual = freshnessTrack("visual");
+    expect(visual.daily).toBe(true);
+    expect(visual.gatedByPending).toBe(true);
+    expect(dailyDemanded({ track: visual, pending: [] })).toBe(true);
+    expect(dailyDemanded({ track: visual, pending: ["win32"] })).toBe(false);
     for (const kind of ["e2e", "full", "artifact"]) {
-      expect(freshnessTrack(kind).daily, kind).toBe(true);
+      const track = freshnessTrack(kind);
+      expect(track.daily, kind).toBe(true);
+      /* 其余三档**不受** `PENDING_PLATFORMS` 影响：像素档缺几张 PNG 与全量 e2e /
+       * 全量单测 / 产物护栏都不是同一件事。这一栏写成数据（而不是「按档名猜」），
+       * 新增一档时它就摆在眼前要回答。 */
+      expect(track.gatedByPending, kind).toBe(false);
+      expect(dailyDemanded({ track, pending: ["win32"] }), kind).toBe(true);
     }
+  });
+
+  it("像素档的「今天不跑」那条出路在登记里（`skipHow` 是判据话术的出处）", () => {
+    /* 结算口径：它现在**可能限制当天第一次提交**，所以豁免不是装饰品 —— 没有 `skipHow`
+     * 那一栏时，`writeSkipRecord` 直接抛「这一档没有豁免这条出路」，而钩子在当天第一次
+     * 提交上拦人、却给不出一条出路。 */
+    expect(freshnessTrack("visual").skipHow).toBeTruthy();
+    expect(freshnessTrack("visual").skipHow).toContain("--workers=0");
   });
 
   it("判决面**由登记表派生**：新增一档自动被纳入，不靠手抄一份清单", () => {
