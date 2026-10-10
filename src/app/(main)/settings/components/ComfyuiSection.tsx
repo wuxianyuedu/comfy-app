@@ -209,6 +209,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
               旁边的「在浏览器打开」是并列出口，不是替代（见该按钮注释）。 */}
           <StatusButton
             onClick={() => void c.openComfy()}
+            /* 「打开查看」是**看**，不是状态行这一态的主行动：它走软底，
+               主行动的实心档留给「启动 / 关闭」。 */
+            variant="primary"
             /* 只在「明确未运行」时禁用：探测进行中（probing）也允许点一下，
            openComfy 会先取一份新鲜状态再打开（ISSUE #339）。 */
             disabled={
@@ -223,6 +226,8 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
               「打开查看」一致：只看「明确未运行」。 */}
           <StatusButton
             onClick={() => void c.openComfyInBrowser()}
+            variant="outline"
+            className="text-muted-foreground hover:text-ink"
             disabled={
               c.comfyBrowserOpening ||
               (!c.comfyStatus?.up && !c.comfyStatus?.probing)
@@ -230,8 +235,13 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           >
             {c.comfyBrowserOpening ? "打开中…" : "在浏览器打开"}
           </StatusButton>
+          {/* 「启动 / 关闭」是一组互斥的主行动：**当前这一态该按的那一颗**
+              才是实心（未运行时「启动」实心、运行时「关闭」实心），另一颗
+              此时本就被禁用。此前两颗都实心，一屏里两颗同款主按钮、用户
+              无从判断该点哪个。 */}
           <StatusButton
             onClick={() => void c.startComfy()}
+            variant={c.comfyStatus?.up ? "primary" : "primary-solid"}
             disabled={
               c.saving ||
               c.comfyStarting ||
@@ -247,6 +257,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           </StatusButton>
           <StatusButton
             onClick={() => void c.stopComfy()}
+            variant={c.comfyStatus?.up ? "primary-solid" : "primary"}
             disabled={
               c.saving ||
               c.comfyStopping ||
@@ -274,7 +285,11 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           </>
         }
       />
-      <StatusButton onClick={() => void c.savePrefs()} disabled={c.saving}>
+      <StatusButton
+        onClick={() => void c.savePrefs()}
+        variant="primary-solid"
+        disabled={c.saving}
+      >
         保存偏好
       </StatusButton>
     </SettingsCard>

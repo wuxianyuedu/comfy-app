@@ -17,13 +17,13 @@ import {
  * 会重复 11 遍；如果沿用此前 `app/(main)/settings/components/SettingsPrimitives.tsx`
  * 里的自绘 `<section>` + `<h2>`（且带两处 `dark:` 手写覆盖），又等于把 shadcn
  * `ui/card.tsx` 装了不用。本件是这两条之间的中间形态：**内部走官方
- * `Card` 组合、对外只暴露 `{title, children, className}` 三个 prop**——
+ * `Card` 组合、对外只暴露 `{title, description, children, className}`**——
  * 一处收口，视图调用点保持 `<SettingsCard title="…">…</SettingsCard>`。
  *
  * **与 `ui/card.tsx` 的关系**：本件是**薄封装**（`§12.18 复用优先 ·
  * 缺的差异用参数或薄封装补`），不是**平行实现**——底色 / 圆角 / 边框 /
  * padding / 深浅两态全部来自 shadcn `Card` 与 `--color-card` / `--color-border`
- * 语义 token；本件只补两件事：
+ * 语义 token；本件只补三件事：
  *   · 一个**必填的字符串标题**（`Card` 本体没有 title prop，标题走
  *     `CardHeader + CardTitle`，本件把这一层结构固定下来）；
  *   · 一处**外观微调**（`rounded-2xl` + `shadow-sm shadow-black/5` +
@@ -32,29 +32,47 @@ import {
  *     与 `dark:shadow-none dark:shadow-black/2` 是「手写 dark: 覆盖语义
  *     token」——违反 shadcn `styling.md` 原则 4，随本批删除（token 自身
  *     已含浅/深两态，透明度差由 backdrop-blur 吸收）。
+ *
+ * ## 标题行现在收在同一支上（`title` 之下的那一行由本件给）
+ *
+ * 设置页此前每个分区卡片都把标题写成 `text-base`（16px）而正文是 `text-sm`
+ * （14px）—— 相差 2px，于是「标题」看上去只是「稍大一点的正文」，一屏里读不出
+ * 层级。标题改走 `text-sm` + `font-semibold`（`.u-title` 那一档，规范 03 §3.10
+ * 「卡片/区块标题」），层级改由**字重 + 标题下的分隔线**承担：卡片标题不再是
+ * 「更大的字」，而是「一段的起点」。
+ *
+ * `description` 是**可选的**一行副说明，落在标题之下、正文之上（对齐
+ * `ui/page-header` 的口径：只写「答案在别处拿不到的那句话」，与标题同义反复
+ * 就不传 —— 不传就不渲染那一行，卡片立刻矮下来）。
  */
 export function SettingsCard({
   title,
+  description,
   children,
   className,
 }: {
   title: string;
+  /** 可选副说明：写「答案在别处拿不到的那句话」，同义反复就不传。 */
+  description?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <ShadcnCard
       className={cn(
-        "border-border-subtle bg-surface-1 text-ink rounded-2xl border shadow-sm shadow-black/5 backdrop-blur",
+        "border-border-subtle bg-surface-1 text-ink rounded-2xl border py-0 shadow-sm shadow-black/5 backdrop-blur",
         className,
       )}
     >
-      <CardHeader>
-        <CardTitle className="text-ink text-base font-semibold">
-          {title}
-        </CardTitle>
+      {/* 标题行自带下边距与分隔线：把「这一段从哪开始」画出来，而不是靠字号
+          差距（16px vs 14px 的差距在同一屏里读不出来）。 */}
+      <CardHeader className="border-border-subtle border-b py-3">
+        <CardTitle className="u-title">{title}</CardTitle>
+        {description ? (
+          <p className="text-ink-muted text-xs">{description}</p>
+        ) : null}
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className="py-4">{children}</CardContent>
     </ShadcnCard>
   );
 }

@@ -36,13 +36,22 @@ export function LlmRemoteSection({
       (entry) => (entry.kind ?? "chat") === kind,
     );
     return (
-      <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-ink/80 text-sm font-medium">{title}</span>
+      /* 分组头是一行**轻量区头**（标题 + 计数 + 右端动作），不是一个各自套着
+         边框的卡中卡 —— 三个空分组此前各画一圈边框 + 16px 内距，只为装一行
+         「还没有…」和一颗按钮，一屏里长出三个几乎全空的盒子（视觉上比
+         「这里面有什么」更响）。现在分组由**一行区头 + 一组行**构成，
+         空分组只剩那一行提示，边框留给真正的条目。 */
+      <section className="mb-5" aria-label={title}>
+        <div className="border-border-subtle mb-2 flex items-center gap-2 border-b pb-1.5">
+          <h3 className="u-title">{title}</h3>
+          <span className="text-ink-fainter text-2xs tabular-nums">
+            {entries.length}
+          </span>
           <Button
-            size="lg"
+            variant="outline"
+            size="xs"
             onClick={() => d.openAddDialog(kind)}
-            className="h-auto rounded-lg px-3 py-1.5 text-xs font-semibold"
+            className="text-muted-foreground hover:text-ink text-2xs ml-auto h-auto rounded-md px-2 py-1"
           >
             ＋ 添加模型
           </Button>
@@ -131,9 +140,9 @@ export function LlmRemoteSection({
             })}
           </div>
         ) : (
-          <p className="text-muted-foreground text-xs">{emptyHint}</p>
+          <p className="text-muted-foreground text-2xs">{emptyHint}</p>
         )}
-      </div>
+      </section>
     );
   }
 
