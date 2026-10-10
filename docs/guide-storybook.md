@@ -16,7 +16,8 @@ Storybook 把这一步缩成「起一个工作台、点开那个组件」：
 - **左栏**按 `UI/*` 分组列出所有 story；
 - **画布**是组件本身，带 Args 面板可以现场改 props；
 - **工具栏**切 `dark` / `light`（与应用的 `next-themes` 同一条 class 链路）；
-- **a11y 面板**列出这棵树的违规项（补 F6 的 a11y 自动化缺口）。
+- **a11y 面板**列出这棵树的违规项（**人**现场看某一棵树）。台账 E6 那一格的**自动化执行者**不在这里，
+  是 `tests/a11y-axe-stories.test.ts`：把每个故事在 jsdom 里渲染后跑 axe-core。
 
 ## 怎么用
 
@@ -181,12 +182,12 @@ story 要的正好相反 ——「有后端 / 没后端分别长什么样」。�
 
 所以 `.storybook/` 下另有三份注入层，story 只声明**场景名**：
 
-| 注入层     | 文件                                    | story 怎么用                                                          |
-| ---------- | --------------------------------------- | --------------------------------------------------------------------- |
-| store      | `.storybook/store-sources.tsx`          | `parameters.storeScene: "<场景名>"`（装饰器已全局挂）                 |
-| React Flow | `.storybook/flow-canvas.tsx`            | 直接摆 `<StorybookFlowCanvas scene={canvasScene("<场景名>")}>`        |
-| 整屏容器   | `.storybook/screen-frame.tsx`           | 直接摆 `AppShell` / 工作区框，项目经 `useSeededProjects()` 备         |
-| 消息中心   | `.storybook/message-center-sources.tsx` | `parameters.messageScene: "<场景名>"`（装饰器已全局挂）               |
+| 注入层     | 文件                                    | story 怎么用                                                   |
+| ---------- | --------------------------------------- | -------------------------------------------------------------- |
+| store      | `.storybook/store-sources.tsx`          | `parameters.storeScene: "<场景名>"`（装饰器已全局挂）          |
+| React Flow | `.storybook/flow-canvas.tsx`            | 直接摆 `<StorybookFlowCanvas scene={canvasScene("<场景名>")}>` |
+| 整屏容器   | `.storybook/screen-frame.tsx`           | 直接摆 `AppShell` / 工作区框，项目经 `useSeededProjects()` 备  |
+| 消息中心   | `.storybook/message-center-sources.tsx` | `parameters.messageScene: "<场景名>"`（装饰器已全局挂）        |
 
 ```tsx
 /* store：一段真格式的日志原文进 store 自己的解析入口 */
