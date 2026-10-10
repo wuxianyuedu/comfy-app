@@ -12,6 +12,10 @@
  *   missing  → 503 + `db: "empty"`（表还没建，探针必须说得出「为什么」）；
  *   unknown  → 503 + `db: "unknown"`（库文件都不在 / 不是 SQLite，同样不许报 ok）；
  *   探活失败 → 503 + `db: "down"`（前提是真去 await 那条 promise，见对应用例）。
+ *
+ * 另有一组是**跨域面**（D5）：CORS 从 `*` 收窄成启动页那一族源，且响应体里
+ * 不再出现内部文档路径。两条都只在「谁真的在读它」这个前提下才成立，所以判据
+ * 直接按请求头把两个源各问一遍。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,7 +50,7 @@ describe("GET /api/health", () => {
   it("表就绪时返回 200 + db: up", async () => {
     probeSchemaSync.mockReturnValue("ready");
     const { GET } = await import("./route");
-    const res = await GET();
+    const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual(
       expect.objectContaining({ status: "ok", db: "up" }),
@@ -56,7 +60,7 @@ describe("GET /api/health", () => {
   it("表还没建时返回 503 + db: empty（旧实现此处回 db: up，漏报整档）", async () => {
     probeSchemaSync.mockReturnValue("missing");
     const { GET } = await import("./route");
-    const res = await GET();
+    const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(503);
     const body = (await res.json()) as {
       status: string;
@@ -72,7 +76,7 @@ describe("GET /api/health", () => {
   it("库文件缺失 / 不是 SQLite 时返回 503 + db: unknown", async () => {
     probeSchemaSync.mockReturnValue("unknown");
     const { GET } = await import("./route");
-    const res = await GET();
+    const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(503);
     await expect(res.json()).resolves.toEqual(
       expect.objectContaining({ status: "error", db: "unknown" }),
@@ -89,10 +93,73 @@ describe("GET /api/health", () => {
       new Error("SQLITE_CANTOPEN: unable to open"),
     );
     const { GET } = await import("./route");
-    const res = await GET();
+    const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(503);
     await expect(res.json()).resolves.toEqual(
       expect.objectContaining({ status: "error", db: "down" }),
     );
+  });
+});
+
+/* ── 跨域面：白名单收窄 + 响应体不许出现内部路径（D5）──────────────
+ *
+ * 启动页与 dev server 不同源，且它必须走 `mode: "cors"` 才读得到**真实状态码**
+ * （no-cors 的 opaque 响应读不到，那正是历史「过早导航」的根因）——所以这个头
+ * 不是可有可无的装饰。
+ *
+ * 但它此前是 `*`，而 503 的响应体里带着一句含**内部文档路径**的运维提示：那条
+ * 「本端点无敏感信息」的理由不成立。收窄之后，恶意网页一读就被同源策略拒掉，
+ * 而启动页在白名单里照常。
+ */
+describe("GET /api/health 跨域面（D5）", () => {
+  const url = "http://127.0.0.1:3000/api/health";
+
+  it("启动页那三个源都在白名单里（分平台，不分叉）", async () => {
+    probeSchemaSync.mockReturnValue("ready");
+    const { GET } = await import("./route");
+    for (const origin of [
+      "tauri://localhost",
+      "http://tauri.localhost",
+      "https://tauri.localhost",
+    ]) {
+      const res = await GET(new Request(url, { headers: { origin } }));
+      expect(res.headers.get("access-control-allow-origin"), origin).toBe(
+        origin,
+      );
+      /* 回显源 + `Vary` 两件都要：只给前者时，链路上的缓存会把第一个访问者的头
+       * 复用给所有源（白名单形同虚设，且是静默的）。 */
+      expect(res.headers.get("vary"), origin).toBe("Origin");
+    }
+  });
+
+  it("别的源**一个 CORS 头都不给**（回别的值等于放行）", async () => {
+    probeSchemaSync.mockReturnValue("ready");
+    const { GET } = await import("./route");
+    for (const origin of ["https://evil.example", "null"]) {
+      const res = await GET(new Request(url, { headers: { origin } }));
+      expect(res.headers.get("access-control-allow-origin"), origin).toBeNull();
+    }
+  });
+
+  it("没带 Origin（Node 探针 / 容器健康检查）照常 200，且不回 CORS 头", async () => {
+    /* 外部探针（UptimeRobot / Grafana / 容器健康检查）是**服务端**发的请求，
+     * 没有同源策略、也不需要这个头 —— 判据是「收窄不能把它们一起收掉」。 */
+    probeSchemaSync.mockReturnValue("ready");
+    const { GET } = await import("./route");
+    const res = await GET(new Request(url));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("503 的 hint 不含内部文档路径（响应体不给仓库文档当出口）", async () => {
+    probeSchemaSync.mockReturnValue("missing");
+    const { GET } = await import("./route");
+    const body = (await (await GET(new Request(url))).json()) as {
+      hint: string;
+    };
+    expect(body.hint).not.toContain("docs/");
+    expect(body.hint).not.toContain("standards/");
+    /* 但「先说自己会好」那一层要在：桌包首启是常规形态，用户此刻什么都不必做。 */
+    expect(body.hint).toContain("自动建表");
   });
 });

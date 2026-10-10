@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import {
   RUNTIME_LOG_SOURCES,
   legacyRuntimeLogFileName,
+  parseLaunchStamp,
   parseRuntimeLogFileName,
   runtimeLogFileLabel,
   runtimeLogFileName,
@@ -145,5 +146,42 @@ describe("来源键的单一出处", () => {
       "drizzle-studio-runtime",
       "ollama-runtime",
     ]);
+  });
+});
+
+/* ── 本次启动的名字戳（跨进程补齐通道）──────────────────────────────
+ *
+ * `app-runtime` 的预检提醒（壳过期 / pnpm 不匹配）发生在 dev server 就绪**之前**，
+ * 只能由 launcher 自己落盘。它落进去的必须是**同一份** —— 判据就是「同一个戳
+ * 解析出的时刻，喂回 `runtimeLogFileName` 得到同一个名字」。
+ */
+describe("parseLaunchStamp（launcher → dev server 的名字戳）", () => {
+  it("解出与 runtimeLogFileName 同一个名字（两个进程落在同一份上）", () => {
+    const stamp = "20261010-053059";
+    const at = parseLaunchStamp(stamp);
+    expect(at).not.toBeNull();
+    expect(runtimeLogFileName("app-runtime", at!)).toBe(
+      `app-runtime-${stamp}.log`,
+    );
+  });
+
+  it("缺值 / 空串给 null（非双击链路启动：根本没有 launcher 要合并）", () => {
+    expect(parseLaunchStamp(undefined)).toBeNull();
+    expect(parseLaunchStamp("")).toBeNull();
+  });
+
+  it("形态不符给 null —— **不硬拼一个名字**", () => {
+    /* 硬拼的后果是写进一份谁都认不出、也不在本模块轮转清单里的文件：它永远
+     * 不被清理，只在磁盘慢慢涨起来时才被发现（静默）。所以判据是「宁可退回
+     * 当前时刻另开一份，也不拼半个名字」。 */
+    for (const bad of [
+      "2026-10-10-05-30-59", // runStamp 的形态（带分隔符）—— 两个形态别混
+      "20261010-0530", // 缺秒
+      "20261010053 059",
+      "app-runtime-20261010-053059.log",
+      "今晚",
+    ]) {
+      expect(parseLaunchStamp(bad)).toBeNull();
+    }
   });
 });

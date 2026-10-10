@@ -123,6 +123,46 @@ export function parseRuntimeLogFileName(
 }
 
 /**
+ * 环境变量名：**本次启动**的名字戳（`YYYYMMDD-HHmmss`），由 launcher 产出。
+ *
+ * 值的形态就是 {@link runtimeLogFileName} 里那一段 —— 两个进程要落在**同一份**
+ * 文件上就必须用同一个戳，而这个戳只能由「先存在的那个进程」给出：launcher 先于
+ * dev server 存在，它写下的预检提醒（壳过期 / pnpm 不匹配，见规范 07 §7.13）发生
+ * 在 dev server 就绪之前，走不了 `POST /api/logs/app-runtime`。通道本身与
+ * `COMFYAPP_RUN_ID` 同源（launcher 经 `process.env` 透传给被 spawn 的子进程）。
+ */
+export const LAUNCH_STAMP_ENV = "COMFYAPP_LAUNCH_STAMP";
+
+/** 名字戳的形态判据（与 {@link runtimeLogFileName} 产出的那一段同形）。 */
+const LAUNCH_STAMP_RE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
+
+/**
+ * 环境变量里的名字戳 → 可喂给 {@link runtimeLogFileName} 的 `Date`；读不出给 null。
+ *
+ * **读不出就退回 null、由调用方自己取当前时刻**，而不是硬拼一个名字：拼错的
+ * 后果是写进一份「谁都认不出、也不在轮转清单里」的文件（本轮转逻辑不认它，
+ * 于是它永远不被清理）—— 静默、且只在磁盘慢慢涨起来时才被发现。
+ *
+ * 判据刻意**不校验日历合法性**（`20261340-999999` 也能解出 Date）：这个值的
+ * 唯一来源是本仓库自己的 launcher，而它由 `runtimeStamp()` 从真 `Date` 派生。
+ * 多一道日历校验只会给「未来某天加了另一个写方」埋一个静默的降级分支。
+ */
+export function parseLaunchStamp(value: string | undefined): Date | null {
+  const m = value ? LAUNCH_STAMP_RE.exec(value) : null;
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  const at = new Date(
+    Number(y),
+    Number(mo) - 1,
+    Number(d),
+    Number(h),
+    Number(mi),
+    Number(s),
+  );
+  return Number.isFinite(at.getTime()) ? at : null;
+}
+
+/**
  * 旧固定名（`<source>.log`）—— 迁移期要认，以免把用户盘上已有的历史当垃圾。
  *
  * 它为**读取**而存在：面板要能把迁移前留下的那一份也列出来（它只是没有时刻，

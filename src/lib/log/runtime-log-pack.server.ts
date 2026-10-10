@@ -129,6 +129,24 @@ export interface RuntimeLogWriter {
   write(line: string): void;
 }
 
+/** {@link openRuntimeLogWriter} 的可选形态（只为「续写已有那一份」而存在）。 */
+export interface OpenRuntimeLogWriterOptions {
+  /**
+   * 续写 `dir` 下这一份**已经存在**的文件（给**基名**，如
+   * `app-runtime-20261010-053059.log`），而不是按 `at` 另开一份。
+   *
+   * 跨进程补齐通道用它：`app-runtime` 的预检提醒（壳过期 / pnpm 不匹配）由
+   * **launcher** 在 dev server 就绪之前写进本次启动那一份，之后 dev server 的
+   * 写方接手往同一份里继续写。若这里走默认的「挑一个不重名的名字」，它会看到
+   * 文件已存在、按同秒分叉规则退到 `-2`，一行提醒与整段应用日志就此分成两份
+   * （面板看起来两边都正常，而用户永远读不到完整的本次启动）。
+   *
+   * 只收基名、目录由本模块拼：收绝对路径等于把这个「写方各自拼路径必然漂」的
+   * 面重新打开一次（本文件头注的那条理由）。
+   */
+  reuse?: string;
+}
+
 /**
  * 开一次启动的写入器：挑一个不重名的文件、建目录、把句柄定下来。
  *
@@ -140,8 +158,11 @@ export function openRuntimeLogWriter(
   source: RuntimeLogSource,
   at: Date = new Date(),
   dir: string = SERVICES_LOG_DIR,
+  options: OpenRuntimeLogWriterOptions = {},
 ): RuntimeLogWriter {
-  const file = allocateRuntimeLogFile(source, dir, at);
+  const file = options.reuse
+    ? path.join(dir, options.reuse)
+    : allocateRuntimeLogFile(source, dir, at);
   try {
     /* `flag: "a"` 的第一次写就会建文件；这里显式建目录是因为 `mkdir` 的失败
      * 要自己咽掉（日志子系统绝不阻塞业务，见各县志模块的硬约束）。 */
