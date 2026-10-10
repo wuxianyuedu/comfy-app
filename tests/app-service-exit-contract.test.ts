@@ -12,6 +12,13 @@
  *   ② TS 的成因联合类型与写入侧实际会写的取值集合完全一致（不是「包含」——
  *      写入侧能写一个 TS 认不出的取值、或 TS 声明一个没人会写的取值，都是漂移）；
  *   ③ 写入侧真的把这些字段写进了 JSON（字段名与 TS 的读取键同源）。
+ *
+ * 写入侧有**两处**、两种语言：启动编排（`scripts/app-service-exit.mjs`，dev /
+ * prebuilt 链路）与桌面壳（`src-tauri/src/shell_launch.rs`，standalone sidecar
+ * 档——壳活着、内嵌服务没了，正是「窗口还在、页面全连不上」那一档）。Rust 那侧
+ * 同样只有一组字面量可共享，因此同样拿进来核：文件名、字段名、成因取值三者各有
+ * 一条判据。Rust 源码是**读文本**核（本容器无 cargo，编译期保证由 `shell-gate` 的
+ * `cargo test` 在 Windows 侧承担，两边各管一段、都不重复对方的活）。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -28,6 +35,14 @@ const LAUNCHER_MJS = readFileSync(
 );
 const EXIT_TS = readFileSync(
   join(ROOT, "src", "lib", "shell", "app-service-exit.ts"),
+  "utf8",
+);
+const SHELL_LAUNCH_RS = readFileSync(
+  join(ROOT, "src-tauri", "src", "shell_launch.rs"),
+  "utf8",
+);
+const SHELL_LIB_RS = readFileSync(
+  join(ROOT, "src-tauri", "src", "lib.rs"),
   "utf8",
 );
 
@@ -114,5 +129,71 @@ describe("应用服务退出记录：跨侧同源", () => {
   it("启动编排绝不「启动时清掉」这份记录（清掉就等于恢复后读不到）", () => {
     // 这是本设计的核心约束，误加一行 clear 会让整条链静默失效。
     expect(LAUNCHER_MJS).not.toContain("clearAppServiceExit");
+  });
+
+  it("Rust 壳（sidecar 档）写的文件名与 Node 侧逐字相同", () => {
+    // 第三处字面量：`src-tauri/src/shell_launch.rs` 的 `APP_SERVICE_EXIT_FILE`。
+    // Rust 没有 import 那条路，只能各写一次——漂开的表现同样是「壳写的记录界面
+    // 读不懂」，而这一档恰是用户唯一能看到的现场（窗口还在、页面全连不上）。
+    const inRs = /APP_SERVICE_EXIT_FILE: &str = "([^"]+)"/.exec(
+      SHELL_LAUNCH_RS,
+    )?.[1];
+    const inTs = /APP_SERVICE_EXIT_FILE\s*=\s*"([^"]+)"/.exec(EXIT_TS)?.[1];
+    expect(inRs).toBeTruthy();
+    expect(inRs).toBe(inTs);
+    expect(inRs).toBe("app-service-exit.json");
+    // 落点必须与 launch-status.json 同在那个「服务不在也能读」的位置（run/）。
+    expect(SHELL_LAUNCH_RS).toContain('.join("run")');
+  });
+
+  it("Rust 壳写的字段名与 TS 的读取键同源", () => {
+    const writer = /pub fn write_sidecar_exit_record\([\s\S]*?\n\}/.exec(
+      SHELL_LAUNCH_RS,
+    )?.[0];
+    expect(writer).toBeTruthy();
+    for (const field of [
+      "at",
+      "kind",
+      "code",
+      "signal",
+      "reason",
+      "port",
+      "runId",
+    ]) {
+      expect(writer).toContain(`"${field}"`);
+    }
+  });
+
+  it("Rust 壳写的成因取值必须是 TS 认得出的那一个（sidecar 档）", () => {
+    const writer = /pub fn write_sidecar_exit_record\([\s\S]*?\n\}/.exec(
+      SHELL_LAUNCH_RS,
+    )?.[0];
+    const kinds = [...(writer ?? "").matchAll(/"kind":\s*"([a-z-]+)"/g)].map(
+      (m) => m[1]!,
+    );
+    expect(kinds).toEqual(["sidecar"]);
+    // 且这个取值确实在 TS 的联合类型里（不是写一个界面认不出的档）。
+    expect(tsKindUnion()).toContain("sidecar");
+  });
+
+  it("Rust 壳在 sidecar 终止事件里落盘，且拿不到退出码时写 null 不写 0", () => {
+    // 顺序与位置是语义：Terminated 是唯一带着退出码的地方，记录必须在这一支里写
+    // （排到别处就拿不到那一刻的事实）。
+    const terminated =
+      /CommandEvent::Terminated\(payload\) => \{[\s\S]*?\n\s{8}\}/.exec(
+        SHELL_LIB_RS,
+      )?.[0];
+    expect(terminated).toBeTruthy();
+    expect(terminated).toContain("write_sidecar_exit_record");
+    // code 走 `Option<i32>` 原样透传：写侧对 None 落 null——「编不出 0」这条
+    // 判据在 Rust 单测里（`sidecar_exit_record_never_invents_exit_code_zero`）。
+    expect(SHELL_LIB_RS).toContain("payload.code");
+    // 「拿不到就编一个 0」这条误改的判据收在**写侧函数体内**（文件别处有无关的
+    // unwrap_or(0)，拿整份文件当判据只会误报）。
+    const writer = /pub fn write_sidecar_exit_record\([\s\S]*?\n\}/.exec(
+      SHELL_LAUNCH_RS,
+    )?.[0];
+    expect(writer).toBeTruthy();
+    expect(writer).not.toContain("unwrap_or(0)");
   });
 });
