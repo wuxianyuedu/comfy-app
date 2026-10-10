@@ -89,7 +89,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(53 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(54 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -133,6 +133,15 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 改为一件变更一个 changelog.d/ 碎片(见规范 13.10.5)后,这里守住碎片的文件名与
   # 段落标题口径——碎片写歪了会在发版并入时才暴露,那时已难追溯。
   run "CHANGELOG 碎片" node scripts/check-changelog-fragments.cjs
+  # 待发段落([Unreleased])的**来源锚** ⇄ 条目归属(ISSUE #1693 / 规范 §13.10.6)。
+  # 上一行只管碎片**形态**(文件名 / 段落标题),不管它们被并到哪儿 —— 于是「并入没
+  # 走完」是一种静默形态:被后一条推翻的旧条目留在 [Unreleased] 里(实测还在),
+  # 而推翻它的碎片躺在 changelog.d/ 里没有东西提醒该并了。本步判三件:锚写了没有、
+  # 锚解析不解析得开(**写歪比不写更贵**:歪锚会让识别正则回 null、整条判据静默放过)、
+  # 同一 ISSUE 号有没有**跨锚分裂**(既在待发段落里、又在它之前的已发布段落里 ——
+  # 那才是这条账最贵的失效形态:归属被切成两半而两端都没写错)。
+  # 成本实测:纯文本 + 只读 git,零网络,< 0.3s。
+  run "待发段落的来源锚 ⇄ 条目归属" node scripts/check-changelog-versions.cjs
   # import 别名统一（规范 §12.2 / §16.2）：本仓库的别名约定是 `~` 前缀，但
   # tsconfig.json 的 paths 里同时留着 `@/*`（脚手架的历史项）—— 于是 `@/` 也能编译、
   # 也能跑，没有任何反馈，漂移面积自己变大。`shadcn add` 生成的组件默认写 `@/`
