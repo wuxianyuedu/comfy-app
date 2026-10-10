@@ -13,7 +13,10 @@
  *   ③ **红的定性**：三条实测形态（缺这一档平台的基线 / 逐帧 chrome / 像素 diff）各有各的
  *      动作，混成一句「像素档红了」就会把人引去改业务代码（§11.13 那条「红先定性」）。
  */
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import * as nodeFs from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { describe, expect, it } from "vitest";
@@ -42,8 +45,93 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
+/** 本档的账文件（`FRESHNESS_TRACKS.visual.ledger` 的**第二个**出处 —— 这里只读它，
+ * 与真检出上那份同形；写进去的是临时工作区里的那一份）。 */
+const LEDGER = "scripts/.visual-baseline-freshness.json";
+
+/** 一套「本机平台」的基线里的一张 —— 内容无所谓（前置判决只核文件在不在）。 */
+const BASELINE_ONE = `e2e/visual/workspace.visual.spec.ts-snapshots/首页-暗色档-chromium-${process.platform}.png`;
+const BASELINE_TWO = `e2e/visual/workspace.visual.spec.ts-snapshots/首页-浅色档-chromium-${process.platform}.png`;
+
 function read(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8");
+}
+
+/**
+ * 一个只放像素档那几个模块 + 一份 spec 的临时工作区 —— 让 `main` 里那几段分支
+ * （`--skip` 的准入、`--workers=0` 的退回）能被**真跑一次**，而不是靠读源码断言。
+ *
+ * 只拷依赖链上那几件（判据脚本的同级动态导入：`visual-baselines` / `daily-run` /
+ * `pixel-run`），不拷 `node_modules`：这一路走到的分支都在起 Playwright **之前**。
+ */
+function makeRepo({ pending }: { pending: boolean }): {
+  dir: string;
+  write: (rel: string, content: string) => void;
+  read: (rel: string) => string;
+  exists: (rel: string) => boolean;
+  dispose: () => void;
+} {
+  const dir = mkdtempSync(path.join(tmpdir(), "pixel-skip-"));
+  const scripts = path.join(dir, "scripts");
+  const fs = nodeFs;
+  fs.mkdirSync(scripts, { recursive: true });
+  for (const name of ["pixel-run.mjs", "visual-baselines.mjs", "daily-run.mjs"]) {
+    fs.copyFileSync(path.join(ROOT, "scripts", name), path.join(scripts, name));
+  }
+  /* spec 声明了截图名 ⇒ 前置判决据此算「本机缺哪几张」。声明两张、只放一张，
+   * 就是「缺基线」那一档最省的造法（不必手抄截图名清单）。 */
+  const spec = "e2e/visual/workspace.visual.spec.ts";
+  const specPath = path.join(dir, spec);
+  fs.mkdirSync(path.dirname(specPath), { recursive: true });
+  fs.writeFileSync(
+    specPath,
+    'toHaveScreenshot("首页-暗色档.png");\ntoHaveScreenshot("首页-浅色档.png");\n',
+  );
+  const abs = (rel: string) => path.join(dir, rel);
+  const put = (rel: string, content: string) => {
+    fs.mkdirSync(path.dirname(abs(rel)), { recursive: true });
+    fs.writeFileSync(abs(rel), content);
+  };
+  /* `PENDING_PLATFORMS` 只有两种形态值得造：空（本机就该成套齐备、也就要得起凭证）
+   * 与非空（还有档缺基线）。改写登记文件的一次性副本比给入口开测试专用开关干净 ——
+   * 开关自己会变成一条没人删的旁路。 */
+  if (pending) {
+    const file = path.join(scripts, "visual-baselines.mjs");
+    fs.writeFileSync(
+      file,
+      fs
+        .readFileSync(file, "utf8")
+        .replace(
+          "export const PENDING_PLATFORMS = {};",
+          'export const PENDING_PLATFORMS = { win32: { reason: "夹具" } };',
+        ),
+    );
+  }
+  return {
+    dir,
+    write: put,
+    read: (rel) => fs.readFileSync(abs(rel), "utf8"),
+    exists: (rel) => fs.existsSync(abs(rel)),
+    dispose: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+/** 在临时工作区里跑一次真入口，退出码与输出都归一化（照 `gate-repo` 的口径）。 */
+function runEntry(dir: string, args: string[]): { code: number; output: string } {
+  try {
+    const output = execFileSync(
+      process.execPath,
+      [path.join(dir, "scripts", "pixel-run.mjs"), ...args],
+      { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+    return { code: 0, output };
+  } catch (error) {
+    const err = error as { status?: number; stdout?: string; stderr?: string };
+    return {
+      code: err.status ?? 1,
+      output: `${err.stdout ?? ""}${err.stderr ?? ""}`,
+    };
+  }
 }
 
 describe("像素档按需通道：本次要跑什么（§11.8）", () => {
@@ -241,21 +329,85 @@ describe("像素档按需通道：负载假红那条出路（§11.13 / ISSUE #16
     expect(rec?.args).toContain("--workers=2");
   });
 
-  it("--workers 解析：没给 ⇒ null；≥1 整数 ⇒ 那个数；其余一律抛", () => {
+  it("--workers 解析：没给 ⇒ null；≥0 整数 ⇒ 那个数；其余一律抛", () => {
     expect(parseWorkers([])).toBeNull();
     expect(parseWorkers(["--update", "--dry-run"])).toBeNull();
     expect(parseWorkers(["--workers=1"])).toBe(1);
     expect(parseWorkers(["--workers=8"])).toBe(8);
-    // 非正整数 / 非数字 / 空值都**抛**：静默当「没给」是最坏的形态 ——
+    /* `0` 过解析但**只属于 `--skip` 那一路**（今天不跑）—— 由 `main` 分流，
+     * 走不到 Playwright 那里（见下一条用例把两条边界一起钉住）。 */
+    expect(parseWorkers(["--workers=0"])).toBe(0);
+    // 负数 / 非数字 / 空值都**抛**：静默当「没给」是最坏的形态 ——
     // 人会以为自己在降并发跑，实际仍是默认并发、又红一次。
     for (const bad of [
-      "--workers=0",
       "--workers=-1",
       "--workers=abc",
       "--workers=",
       "--workers",
     ]) {
-      expect(() => parseWorkers([bad]), bad).toThrow(/≥1 的整数/);
+      expect(() => parseWorkers([bad]), bad).toThrow(/≥0 的整数/);
+    }
+  });
+
+  it("`--workers=0` 不透给 Playwright —— 它是「今天不跑」那条出口的值", () => {
+    /* 两条边界一起钉：① 0 不能变成 `--workers=0` 交给 Playwright（那边只会回一句
+     * 语焉不详的用法错误）；② 它也不该被当成「没给」（那会让人以为自己已经降过并发）。 */
+    for (const step of planRuns({ workers: 0 })) {
+      expect(step.args, step.label).not.toContain("--workers=0");
+    }
+    expect(planRuns({ workers: 1 })[0]?.args).toContain("--workers=1");
+  });
+
+  it("`--skip` 只在「本机成套齐备」时才落账（缺基线那一档的账是 PENDING_PLATFORMS）", () => {
+    /* 两条边界一起钉：① 缺基线时不给记豁免（这一档要的是**先补一套**，用一条「今天不跑」
+     * 把「还欠几录音集」和「今天决定不跑」混成一句话就再也分不开）；② 占位理由被拦。
+     * 判据本身落在临时工作区里跑真入口 —— 它是 `main` 里的一段分支，纯函数测不到。 */
+    const repo = makeRepo({ pending: false });
+    try {
+      const missing = runEntry(repo.dir, [
+        "--workers=0",
+        "--skip",
+        "本机今天在跑别的重负载，像素档跑不绿",
+      ]);
+      expect(missing.code).toBe(2);
+      expect(missing.output).toContain("缺成套基线");
+
+      repo.write(BASELINE_ONE, "x");
+      repo.write(BASELINE_TWO, "x");
+      const placeholder = runEntry(repo.dir, ["--workers=0", "--skip", "稍后"]);
+      expect(placeholder.code).toBe(4);
+      expect(placeholder.output).toContain("不算「有人回答过」");
+
+      const ok = runEntry(repo.dir, [
+        "--workers=0",
+        "--skip",
+        "本机今天满载，像素档会撞同一批超时",
+      ]);
+      expect(ok.code).toBe(0);
+      const ledger = JSON.parse(repo.read(LEDGER)) as Record<
+        string,
+        { skippedReason?: string; verifiedAt?: string; how?: string }
+      >;
+      /* 记的是**豁免**那一栏 —— 判据据此放行，而账面上它与「跑绿的日期」分得开：
+       * 那一档要么带 `skippedReason`（今天故意不跑）、要么带一条真实的 `verifiedAt` 凭证。 */
+      expect(ledger[process.platform]?.skippedReason).toContain("满载");
+      expect(ledger[process.platform]?.verifiedAt).toBeTruthy();
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it("`--workers=0` 不带 `--skip` ⇒ 当场退回，不说「今天不跑」也不去起浏览器", () => {
+    const repo = makeRepo({ pending: false });
+    try {
+      repo.write(BASELINE_ONE, "x");
+      repo.write(BASELINE_TWO, "x");
+      const res = runEntry(repo.dir, ["--workers=0"]);
+      expect(res.code).toBe(4);
+      expect(res.output).toContain("只与 `--skip");
+      expect(repo.exists(LEDGER)).toBe(false);
+    } finally {
+      repo.dispose();
     }
   });
 

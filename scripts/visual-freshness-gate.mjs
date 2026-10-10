@@ -157,6 +157,12 @@ export function runGate({
     kind,
     now,
     dirtySince,
+    /* 交给判据的是**整张 pending 表的键**，不是 `pendingPlatforms`（那一份是「本档在
+     * pending 里的平台」）：`dailyDemanded` 问的是「还有档缺成套基线吗」——
+     * 那是**全局**的一句话（像素档缺 win32 那两张，linux 这一档的「每天自证」同样说不
+     * 出口，因为这台机器一跑就会停在缺基线那一步）。两个口径各写一遍必然漂，所以只传
+     * 这一处现算的值。 */
+    pending: pending ?? scope?.pending ?? Object.keys(PENDING_PLATFORMS),
   });
   const ages = required.map(
     (p) => `${p}：${freshnessAge(ledger[p], now) ?? "无记录"}`,

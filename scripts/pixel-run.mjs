@@ -33,6 +33,14 @@
  *   node scripts/pixel-run.mjs              跑一次像素档（不落盘）
  *   node scripts/pixel-run.mjs --update     录基线（会写 PNG；落盘后请再跑一次自证）
  *   node scripts/pixel-run.mjs --workers=1  降并发跑（**负载假红**那条出路，见下）
+ *   node scripts/pixel-run.mjs --workers=0 --skip "<理由>"  今天不跑，记一条豁免账
+ *
+ * ⚠️ **这一档现在按日历日自证**（ISSUE #1620）：`PENDING_PLATFORMS` 为空（每一档都有
+ * 成套基线）之后，它和全量 e2e 同味 —— **当天的第一次提交要带一次凭证**，否则
+ * `.githooks/pre-commit` 的 D 组会拦下（`FRESHNESS_TRACKS.visual.daily`，
+ * 判据在 `visual-freshness-gate.mjs`）。所以除了「跑一遍」，这一档也必须有**第二条出路**：
+ * `--workers=0 --skip "<理由>"` —— 机器今天撑不起像素档时，留一条写明理由、当天有效的
+ * 事实，而不是让所有人卡在一个只有少数人能解的账上（§11.8 早就判过那味药）。
  *
  * ⚠️ **`--workers=N` 是「整批因负载失稳」时的出路，不是新的默认口径**（ISSUE #1620）。
  * 判据是 §11.13 那句硬动作：整批红而**降并发（隔离）绿** ⇒ 红的是机器不是像素。
@@ -54,6 +62,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import {
   PENDING_PLATFORMS,
   SUPPORTED_PLATFORMS,
@@ -212,7 +221,9 @@ export function planRuns({ update = false, workers = null } = {}) {
   );
   // 只在显式要求时追加：不写 `--workers` 时走 `playwright.config.ts` 的默认并发，
   // 「默认口径」因此仍是**唯一**的（降并发是一条按需的出路，不是新的默认）。
-  if (workers !== null) playwrightArgs.push(`--workers=${workers}`);
+  // `workers > 0` 是硬条件：`--workers=0 --skip` 那一路（今天不跑）在 `main` 里就被分走了，
+  // 真把 0 透给 Playwright 只会得到一句语焉不详的用法错误。
+  if (workers !== null && workers > 0) playwrightArgs.push(`--workers=${workers}`);
   return [
     {
       label: "像素档（Playwright screenshot）",
@@ -246,10 +257,15 @@ export function parseWorkers(argv) {
   const hit = argv.find((a) => a === "--workers" || a.startsWith("--workers="));
   if (hit === undefined) return null;
   const raw = hit.includes("=") ? hit.slice(hit.indexOf("=") + 1) : "";
-  if (!/^[1-9]\d*$/.test(raw)) {
+  /* `0` 是**只有 `--skip` 那条出口**才允许的值（「今天不跑」），照 §12.11 用可打印的
+   * 形状表达它：它不能去 Playwright（那边 0 个 worker 只回一句语焉不详的用法错误），
+   * 走到 `planRuns` 之前就已经被 `--skip` 分走了 —— 这里只负责让它过解析，
+   * 免得「有没有 `--skip`」这件事要在两个地方各判一次（两只判据必然漂）。 */
+  if (!/^(?:0|[1-9]\d*)$/.test(raw)) {
     throw new Error(
-      `[pixel-run] --workers 需要一个 ≥1 的整数（收到 "${hit}"）—— ` +
-        "它是**降并发**那条出路（整批因负载失稳时用），不是新的默认口径。",
+      `[pixel-run] --workers 需要一个 ≥0 的整数（收到 "${hit}"）—— ` +
+        "给出 ≥1 的数是**降并发**那条出路（整批因负载失稳时用），不是新的默认口径；" +
+        '`--workers=0` 只与 `--skip "<理由>"` 搭档（今天不跑，记一条豁免账）。',
     );
   }
   return Number(raw);
@@ -349,6 +365,10 @@ function runStep(step) {
  * 若把降并发那次记成名义命令 `pnpm check:visual`，账面上就分不出「本机默认跑得动」
  * 与「本机得降并发才跑得动」，下一个人按名义命令复跑必红、却指不出差别在哪。
  *
+ * ⚠️ 「今天不跑」（`--workers=0 --skip "<理由>"`）**走不到这里**：`main` 在起子进程之前
+ * 就把它分给了 `writeLedgerNote` —— 那一路记的是豁免（`skippedReason`）而不是跑绿的
+ * 日期，两者都能让判据放行、但在账面上必须分得开。
+ *
  * @param {{platform: string, update: boolean, workers?: number | null}} args
  * @returns {string | null} 给输出用的一句读数（不记时不返回内容）
  */
@@ -431,7 +451,62 @@ function main(argv) {
   } catch (err) {
     process.stderr.write(
       `${err instanceof Error ? err.message : String(err)}\n` +
-        "        用法：node scripts/pixel-run.mjs [--update] [--dry-run] [--workers=N]\n",
+        "        用法：node scripts/pixel-run.mjs [--update] [--dry-run] [--workers=N]\n" +
+        '              node scripts/pixel-run.mjs --workers=0 --skip "<理由>"\n',
+    );
+    return 4;
+  }
+  /* **今天不跑**那条出路（§11.8）—— 与 `--dry-run` 互斥地先处理：给了它就不该再去
+   * 起 webServer / 浏览器，也不该先跑两道前置判决（它们答的是「这台机器能不能跑」，
+   * 而这一路的前提正是「今天不跑」）。
+   *
+   * `--skip` 只在**这一档按日历日自证**时才有意义：`PENDING_PLATFORMS` 空着但某一档
+   * 缺基线时，判据要的是「先补一套」，那时记豁免是把「先补录」和「今天不跑」混成一句话
+   * —— 所以这里按 `checkLocalBaselines` 现算，缺基线时当场退回、一个字都不落账。 */
+  const skip = parseLedgerFlag(argv, "--skip");
+  if (skip.mode === "skip") {
+    if (skip.reason === null) {
+      process.stderr.write(
+        `[pixel-run] ✗ 豁免理由（"${String(argv[argv.indexOf("--skip") + 1] ?? "").trim()}"）` +
+          "不算「有人回答过」—— 写清今天为什么不跑（占位词与过短的理由都被拦）。\n" +
+          '        用法：node scripts/pixel-run.mjs --workers=0 --skip "本机今天满载，像素档撞同一批超时"\n' +
+          "        规范：docs/standards/11-测试与可观测性.md §11.8\n",
+      );
+      return 4;
+    }
+    const pending = checkLocalBaselines({
+      root: ROOT,
+      platform: process.platform,
+    });
+    if (pending) {
+      process.stderr.write(
+        `[pixel-run] ✗ 本机（${process.platform}）缺成套基线，这一档要的是**先补一套**，` +
+          "不是记一条「今天不跑」——\n" +
+          `        定性：${pending}\n` +
+          "        规范：docs/standards/11-测试与可观测性.md §11.8\n",
+      );
+      return 2;
+    }
+    process.stdout.write(
+      `[pixel-run] 本次不跑、只记一条豁免账：${skip.reason}\n`,
+    );
+    if (dryRun) return 0;
+    return writeLedgerNote({
+      root: ROOT,
+      kind: "visual",
+      mode: "skip",
+      reason: skip.reason,
+      /* 记给**这一档平台**（与 `recordFreshness` 同因）：这台机器没跑成的那一档，
+       * 该由这台机器下一次跑成 —— 记到写死的 `linux` 键上，win32 那台就永远看不到
+       * 自己这一档的账。 */
+      platform: process.platform,
+    });
+  }
+  if (workers === 0) {
+    process.stderr.write(
+      "[pixel-run] ✗ `--workers=0` 只与 `--skip \"<理由>\"` 搭档（今天不跑、记一条豁免账）——\n" +
+        "        真想跑就给它一个 ≥1 的数（降并发那条出路），或什么都不给走默认并发。\n" +
+        '        用法：node scripts/pixel-run.mjs --workers=0 --skip "本机今天满载"\n',
     );
     return 4;
   }
@@ -478,6 +553,14 @@ function main(argv) {
     }
     process.stdout.write(
       "[pixel-run] 说明：默认只在当次检出自证、不落盘；`--update` 才写基线\n",
+    );
+    /* 「这一档还欠当天的凭证吗」提前打出来：它是**当天第一次提交**会被钩子拦下的那份账，
+     * 而人不该先付一遍起服务 + 起浏览器的代价才知道自己欠着它。缺几张基线的那一档
+     * 不算「欠凭证」（那一档的账归 PENDING_PLATFORMS 管，见 §11.8）。 */
+    process.stdout.write(
+      Object.keys(PENDING_PLATFORMS).length > 0
+        ? "[pixel-run] 当日自证：`PENDING_PLATFORMS` 非空（还有档缺成套基线）⇒ 这一档不要求当天的凭证\n"
+        : "[pixel-run] 当日自证：当天第一次提交要带一次凭证（跑绿即记；撑不起就 `--workers=0 --skip \"<理由>\"`）\n",
     );
     // 并发口径打在台面上：`--workers` 是**这次**才生效的，而它也正是「跑绿怎么记」
     // 那一栏的内容（`how` 跟着它走），不说清等于让人从账面上猜。
