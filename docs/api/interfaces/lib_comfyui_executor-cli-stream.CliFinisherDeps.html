@@ -13,7 +13,7 @@
 <h1>Interface CliFinisherDeps</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">CliFinisherDeps</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#complete">complete</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">taskId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">promptId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#fail">fail</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><br/>        <span class="tsd-kind-parameter">taskId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span><br/>        <span class="tsd-kind-parameter">promptId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span><br/>        <span class="tsd-kind-parameter">detail</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span><br/>        <span class="tsd-kind-parameter">validationErrors</span><span class="tsd-signature-symbol">?:</span> <a href="lib_comfyui_validation.ValidationError.html" class="tsd-signature-type tsd-kind-interface">ValidationError</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#log">log</a><span class="tsd-signature-symbol">:</span> <a href="../types/lib_comfyui_executor-cli-stream.LogFn.html" class="tsd-signature-type tsd-kind-type-alias">LogFn</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#patched">patched</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#promptid">promptId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#settle">settle</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#taskid">taskId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/executor-cli-stream.ts:515</li></ul></aside>
+<li>Defined in src/lib/comfyui/executor-cli-stream.ts:515</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -39,47 +39,47 @@
 <code>core/repository</code> 拖进 DB / <code>.env</code>，会让本模块无法脱离环境单测。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/executor-cli-stream.ts:527</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/executor-cli-stream.ts:527</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="fail"><span>fail</span><a href="#fail" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">fail</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">taskId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">promptId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">detail</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">validationErrors</span><span class="tsd-signature-symbol">?:</span> <a href="lib_comfyui_validation.ValidationError.html" class="tsd-signature-type tsd-kind-interface">ValidationError</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></div>
 <div class="tsd-comment tsd-typography"><p>失败收口（第 4 参为结构化校验错误）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/executor-cli-stream.ts:529</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/executor-cli-stream.ts:529</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="log"><span>log</span><a href="#log" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">log</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_comfyui_executor-cli-stream.LogFn.html" class="tsd-signature-type tsd-kind-type-alias">LogFn</a></div>
 <div class="tsd-comment tsd-typography"><p>面板日志。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/executor-cli-stream.ts:518</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/executor-cli-stream.ts:518</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="patched"><code class="tsd-tag">Optional</code><span>patched</span><a href="#patched" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">patched</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>已应用 overrides / 剔除 UI 节点的最终工作流（定位错误节点用）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/executor-cli-stream.ts:520</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/executor-cli-stream.ts:520</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="promptid"><span>prompt<wbr/>Id</span><a href="#promptid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">promptId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>当前 promptId（可能在收口前才拿到，故为取值函数）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/executor-cli-stream.ts:524</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/executor-cli-stream.ts:524</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="settle"><span>settle</span><a href="#settle" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">settle</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>幂等收口守卫：第一次返回 true（并做好清理），重复调用返回 false。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/executor-cli-stream.ts:522</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/executor-cli-stream.ts:522</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="taskid"><span>task<wbr/>Id</span><a href="#taskid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">taskId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/executor-cli-stream.ts:516</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/comfyui/executor-cli-stream.ts:516</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

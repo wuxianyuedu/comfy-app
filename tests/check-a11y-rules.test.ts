@@ -25,6 +25,37 @@ import {
   SCRIPT,
 } from "./helpers/a11y-effective-config";
 
+/**
+ * 本文件里那几条要真读一次仓库根 `eslint.config.js` 的用例的显式预算
+ * （它 import 了整个 `eslint-config-next`）。
+ *
+ * 预算登记的是**实测成本，不是给慢用例兜底**（口径见 §11.13）：进程内首值本机隔离
+ * 实测 **36.4s**（冷检出上 40s+），而「bin 形态」那条真子进程实测 **57.1s** ——
+ * 两笔都顶穿默认 30s 档。这个成本本文件头的注释里一直写着（「冷检出上 40s+」），
+ * 用例却一直没带任何预算 —— 于是「钩子每次提交都是新进程、必然冷」时，红的不是
+ * 判据而是**没记账的成本**（`a11y-rules-gate.test.ts` 同一族，那边也登记过上限）。
+ *
+ * ⚠️ 这条上限**给的是「真求值一次」的钱包，不是「这条用例写了多少断言」**：
+ * 暖机把进程内的那一笔搬到用例计时之外之后，120s 只对**子进程**那一档还有意义 ——
+ * 子进程有它自己的模块缓存，买不到本进程暖机的那份便宜（见 `CLI_BUDGET`）。
+ */
+const CONFIG_BUDGET = { timeout: 120_000 };
+
+/**
+ * 「bin 形态」那条**真起子进程**用例的显式预算。
+ *
+ * 它非起进程不可（判的是 `CLI_ARGS` 从 `process.argv` 取参 → `judge` →
+ * `process.exit(code)` 那一支，进程内调用根本不经过 `process.argv`），而子进程
+ * 里那份配置**没有本进程的缓存可借** —— 每次都是一次真加载：本机热检出实测
+ * 3.5s、满载 11s+，隔离实测 57.1s（`tests/helpers/a11y-effective-config.ts` 顶部）。
+ * 另外它排在收集期暖机之后，那一步已经先把本进程的 36.4s 付掉，两条叠在同一个
+ * 钩子步骤里，所以给足到与 `a11y-rules-gate` 的 `CLI_BUDGET` 同源的量。
+ *
+ * 口径同源（§11.13）：全局 30s 是**给真进程留的余量，不是给慢用例兜底** ——
+ * 这一条删不得也并发不得，所以按实测上限给足，而不是把它撞在默认档上等人来重跑。
+ */
+const CLI_BUDGET = { timeout: 120_000 };
+
 /* 收集期**暖机一次**：把「每进程只付一次」的那回真加载放在**用例计时之外**。
  *
  * 这份文件此前没有这一步，于是谁排在第一条就替全文件付那一次求值 —— 而那条用例
@@ -45,55 +76,57 @@ import {
  */
 await loadJudgeModule().loadEslintConfig();
 
-/**
- * 「bin 形态」那条**真起子进程**用例的显式预算。
- *
- * 它非起进程不可（判的是 `CLI_ARGS` 从 `process.argv` 取参 → `judge` →
- * `process.exit(code)` 那一支，进程内调用根本不经过 `process.argv`），而子进程
- * 里那份配置**没有本进程的缓存可借** —— 每次都是一次真加载：本机热检出实测
- * 3.5s、满载时 11s+，冷检出 40s+（`tests/helpers/a11y-effective-config.ts` 顶部）。
- * 也就是说它与本进程的暖机**买不到同一份便宜**，只能自己登记预算。
- *
- * 口径与 `tests/a11y-rules-gate.test.ts` 的 `CLI_BUDGET` 逐字同源（§11.13）：
- * 全局 30s 是**给真进程留的余量，不是给慢用例兜底** —— 这一条删不得也并发不得，
- * 所以按实测上限给足，而不是把它撞在默认档上等人来重跑。**不是**给慢用例兜底：
- * 它的钱包由「真加载一次」定价，与「这条用例写了多少断言」无关。
- */
-const CLI_BUDGET = { timeout: 120_000 };
+test(
+  "真加载：求值的是仓库根那份 `eslint.config.js`，且只求值一次",
+  CONFIG_BUDGET,
+  async () => {
+    const { loadEslintConfig } = loadJudgeModule();
 
-test("真加载：求值的是仓库根那份 `eslint.config.js`，且只求值一次", async () => {
-  const { loadEslintConfig } = loadJudgeModule();
+    /* 暖机已经在收集期把这一笔付掉了，所以这里的 `firstMs` 通常就是 0ms ——
+     * 它**只**作为下面那条话术的读数，不当断言：首次求值的墙钟是机器读数，
+     * 不是判据的性质（热检出 3.4s、冷检出 40s+、`.next/` 命中 1.1–1.7s）。 */
+    const first = Date.now();
+    const flat = (await loadEslintConfig()) as { rules?: unknown }[];
+    const firstMs = Date.now() - first;
 
-  const flat = (await loadEslintConfig()) as { rules?: unknown }[];
+    // 第二次必须是「同一份」且是常数时间 —— 共进程的全部收益都在这一条上。
+    const second = Date.now();
+    const again = (await loadEslintConfig()) as { rules?: unknown }[];
+    const secondMs = Date.now() - second;
 
-  // 第二次必须是「同一份」且是常数时间 —— 共进程的全部收益都在这一条上。
-  const second = Date.now();
-  const again = (await loadEslintConfig()) as { rules?: unknown }[];
-  const secondMs = Date.now() - second;
+    expect(Array.isArray(flat)).toBe(true);
+    expect(flat.length).toBeGreaterThan(0);
+    expect(again).toBe(flat);
+    /* 第三次拿到的还是同一个实例 —— 「只求值一次」这一半判据是**与机器快慢无关**的：
+     * 去掉记忆化（每次都重新 `import()` 再 flatten）会在这里当场红。
+     * 原先这一格写的是 `firstMs > 0`，它在冷进程里恒真、在暖进程里恒假
+     * （`Date.now()` 粒度下缓存命中的耗时就是 0）—— 一条会随机器状态翻向的断言
+     * 正是本文件要防的形态，而它想证明的「拿到过一份真配置」已由上面两条覆盖。 */
+    expect(await loadEslintConfig()).toBe(flat);
+    /* 第二次不许再走一遍求值：给它一个**很宽**的上限（100ms / 首次通常 40ms–1.7s，
+     * 冷检出上 40s+），只要不是「又一次真加载」就够 —— 这里刻意不把首次的时间
+     * 当成断言（那会把「机器快慢」判成回归）。 */
+    expect(
+      secondMs,
+      `第二次读配置不该再走一遍 import 求值（首值实测 ${firstMs}ms）`,
+    ).toBeLessThan(100);
+  },
+);
 
-  expect(Array.isArray(flat)).toBe(true);
-  expect(flat.length).toBeGreaterThan(0);
-  expect(again).toBe(flat);
-  /* 第二次不许再走一遍求值：给它一个**很宽**的上限（100ms），只要不是「又一次
-   * 真加载」就够。
-   *
-   * ⚠️ 这里**刻意不判第一次的耗时**（这条原本是 `expect(firstMs).toBeGreaterThan(0)`，
-   * 本刀删掉）—— 首次求值的墙钟是**机器读数**，不是判据的性质：热检出 3.4s、
-   * 冷检出 40s+、`.next/` 命中时 1.1–1.7s，而**暖机之后它恰好是 0ms**。
-   * 也就是说那条断言读的不是「判据对不对」，而是「这台机器此刻什么状态」——
-   * 机器一快（或暖机一加）就红，而判据本身一个字没错。这正是 §13.6.4 说的
-   * 「时间型读数不是结论」，只是它长在一条**看起来在判缓存**的用例里。 */
-  expect(secondMs, "第二次读配置不该再走一遍 import 求值").toBeLessThan(100);
-});
-
-test("真加载：那份配置里确实装着 jsx-a11y 插件（判据的四张表都从它读）", async () => {
-  const { officialRuleMap, effectiveRules } = loadJudgeModule();
-  const rules = await officialRuleMap();
-  const effective = await effectiveRules();
-  expect(rules.size).toBeGreaterThan(0);
-  expect([...rules.keys()].every((n) => n.startsWith("jsx-a11y/"))).toBe(true);
-  expect(Object.keys(effective).length).toBeGreaterThan(0);
-});
+test(
+  "真加载：那份配置里确实装着 jsx-a11y 插件（判据的四张表都从它读）",
+  CONFIG_BUDGET,
+  async () => {
+    const { officialRuleMap, effectiveRules } = loadJudgeModule();
+    const rules = await officialRuleMap();
+    const effective = await effectiveRules();
+    expect(rules.size).toBeGreaterThan(0);
+    expect([...rules.keys()].every((n) => n.startsWith("jsx-a11y/"))).toBe(
+      true,
+    );
+    expect(Object.keys(effective).length).toBeGreaterThan(0);
+  },
+);
 
 test("导出面：每个导出都是可调用的（不是「导了没人用」的空壳）", () => {
   const mod = loadJudgeModule() as unknown as Record<string, unknown>;
@@ -107,28 +140,32 @@ test("导出面：每个导出都是可调用的（不是「导了没人用」�
   expect(typeof VERIFIED_SURFACES).toBe("object");
 });
 
-test("失败路径：真加载失败时带给原因冒出去，不吞（更不把半张表当结论）", () => {
-  /* 这一格的**真站点**在 bin 形态里（`.next/` 陈旧、`@eslint/compat` 被删掉这
-   * 类加载错误），但它在**共进程**里没有身份：`createRequire` / `import()` 都走
-   * 该脚本的模块缓存，于是「在子进程必然失败、在缓存之后必然成功」的样本没法在
-   * 同一个进程里两种形态各测一次。
-   *
-   * 所以这里钉的是**判据对本进程那份配置的态度**：`loadEslintConfig()` 要么给它
-   * 一份真的扁平配置、要么抛 —— 不许回一个「空的/半张」配置让上层四向判据
-   * 静默全绿（那正是 §11.23「判据在场 ≠ 判据在跑」的那一族失效）。 */
-  const { loadEslintConfig } = loadJudgeModule();
-  return loadEslintConfig().then(
-    (flat) => {
-      expect(Array.isArray(flat)).toBe(true);
-      expect(flat).not.toHaveLength(0);
-    },
-    (error: unknown) => {
-      // 抛是可以接受的那一支，但**必须**带原因（裸 throw 等于吞掉根因）。
-      expect(error).toBeInstanceOf(Error);
-      expect(String((error as Error).message).length).toBeGreaterThan(0);
-    },
-  );
-});
+test(
+  "失败路径：真加载失败时带给原因冒出去，不吞（更不把半张表当结论）",
+  CONFIG_BUDGET,
+  () => {
+    /* 这一格的**真站点**在 bin 形态里（`.next/` 陈旧、`@eslint/compat` 被删掉这
+     * 类加载错误），但它在**共进程**里没有身份：`createRequire` / `import()` 都走
+     * 该脚本的模块缓存，于是「在子进程必然失败、在缓存之后必然成功」的样本没法在
+     * 同一个进程里两种形态各测一次。
+     *
+     * 所以这里钉的是**判据对本进程那份配置的态度**：`loadEslintConfig()` 要么给它
+     * 一份真的扁平配置、要么抛 —— 不许回一个「空的/半张」配置让上层四向判据
+     * 静默全绿（那正是 §11.23「判据在场 ≠ 判据在跑」的那一族失效）。 */
+    const { loadEslintConfig } = loadJudgeModule();
+    return loadEslintConfig().then(
+      (flat) => {
+        expect(Array.isArray(flat)).toBe(true);
+        expect(flat).not.toHaveLength(0);
+      },
+      (error: unknown) => {
+        // 抛是可以接受的那一支，但**必须**带原因（裸 throw 等于吞掉根因）。
+        expect(error).toBeInstanceOf(Error);
+        expect(String((error as Error).message).length).toBeGreaterThan(0);
+      },
+    );
+  },
+);
 
 test(
   "bin 形态：`--report` 走真子进程仍退 0，且摘要里点名生效条数",

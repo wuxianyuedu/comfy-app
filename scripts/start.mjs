@@ -12,6 +12,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { APP_PORT_ENV_KEY, resolveAppPortWithSource } from "./app-port.mjs";
+import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
@@ -34,6 +35,10 @@ process.stdout.write(`[start.mjs] COMFYAPP_PORT=${port}（来源：${sourceLabel
 // 放在这里的理由见 env-preflight.mjs —— 否则 Next 会先打印「✓ Ready」，
 // 用户看到的是「起来了但报错」，而事实是端口无人监听。
 exitIfEnvNotReady(root);
+
+/* 待恢复的备份：同 `dev.mjs`，**必须**排在起 Next 之前（那时才满足「应用没在
+ * 跑」）。空转是常态。 */
+applyPendingRestoreAtBoot(root);
 
 /* schema 自检 + **后台**同步（与 dev.mjs 同一出口，见 db-schema-state.mjs）：
  * 拉了含 schema 变更的代码之后不必记得跑 `pnpm db:push`；这里不等它，

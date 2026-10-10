@@ -8,10 +8,12 @@
 >
 > **巡检约定**：本清单每季度按 [docs/README.md §7](../../README.md) 的季度巡检流程逐条复核，
 > 已完成项勾掉、过时项改写成现状或删除、仍开放项保留并指向承接它的 Issue。
-> 上次巡检：2026-10-10（ISSUE #1611 阶段三分档：把卡在密钥 / 账号 / 证书上的四条 P0
+> 上次巡检：2026-10-10（ISSUE #1611 阶段三：把卡在密钥 / 账号 / 证书上的四条 P0
 > 改写成「等外部输入（等什么）」；纠正一处台账漂移 —— 阶段计划表里的「自动备份」
-> 在本文档是 P1 段的 D6、不是 P0；D6 改写成「等一个决策」并给出三种待拍口径的建议默认，
-> 同时纠正它原文里一处运行时不存在的方案（better-sqlite3 的 `backup()` → `VACUUM INTO`）。
+> 在本文档是 P1 段的 D6、不是 P0；**D6 拍板「口径照建议默认」并已落地** ——
+> 备份只在 `--force` 同步之前自动做一档、最近 3 份落 `data/backups/`、恢复只登记
+> 而换文件在下次启动；同时纠正它原文里一处运行时不存在的方案
+> （better-sqlite3 的 `backup()` → `VACUUM INTO`）。
 > 差异表见 `docs/README.md` §8.7 本轮条目与该笔 PR 描述；上一轮为 2026-09-27
 > 七维审计台账，原 2026-08-30 台账条目均已闭环或流程化保留）。
 
@@ -556,25 +558,24 @@
 - [ ] **D3 日志不出用户机器**（无上报 / 导出通道）。证据：`src/lib/core/logger.ts:145-154`。
 - [ ] **D4 Sentry 无 release / tags / 用户上下文 / 离线缓存；Edge 缺 beforeSend 脱敏**。证据：`src/sentry.server.config.ts:8-21`；`src/sentry.edge.config.ts:14-18`。
 - [ ] **D5 `/api/health` 仅 `{status,db,t}` 且 `*` CORS + 回显运维命令**。证据：`src/app/api/health/route.ts:27,39,46`。
-- [ ] **D6 无自动备份 / 恢复工具：等一个决策，不是等外部输入**（仅手册。证据：`docs/guide-database-backup.md:37-42`）。
-      **它不属于 P0 那四条「等外部输入」** —— 阶段计划（#1611）的表把它排进阶段三，
-      但那是一条**记错了的对应关系**：本文档里备份是 P1 段的 D6，P0 段没有这一条
-      （P0 段的 6 条是 CI / 更新 / 崩溃 / sourcemap / migrate / 签名）。改档的理由是
-      **它不卡在任何账号或凭据上**，代码全部可写；卡住的是**产品口径没定**，
-      而定它的代价是**用户数据**。
-      **为什么必须由人拍**：`guide-database-backup.md` 那条手工路（关应用 → 复制
-      `db.sqlite` → **只带主库、不带 `-wal` / `-shm`**）今天是对的，但它把
-      **时机与保留**留给了人判。自动化等于替用户默认一个 —— 选错的形态是
+- [x] **D6 自动备份 / 恢复工具（已落地 —— ISSUE #1611 拍板「口径照建议默认」）**。
+      证据：`scripts/db-backup-core.mjs`（唯一实现）、`src/lib/db-backup/backup.ts`
+      （服务端取用面）、`scripts/db-backup.mjs`（`pnpm db:backup` 手动档）、
+      `src/app/(main)/settings/components/BackupSection.tsx`（设置页入口）；
+      判据：`tests/db-backup.test.ts`（29 条）、`tests/db-backup-wiring.test.ts`
+      （13 条，接线）、`src/server/api/routers/setting-backup.test.ts`（6 条）、
+      `src/app/(main)/settings/components/BackupSection.test.tsx`（7 条）。
+      `guide-database-backup.md` 那条手工路（关应用 → 复制 `db.sqlite` →
+      **只带主库、不带 `-wal` / `-shm`**）仍然成立、也仍然是「手动档」的一种，
+      但它把**时机与保留**留给了人判 —— 自动化等于替用户默认一个，而选错的形态是
       **「备份看着有了，真要恢复时那份已经不在或是坏的」**，比今天
-      「知道自己没备份」更危险。
-      **三种待拍口径与建议默认**（每条都对着机器事实，不是偏好；拍板只需答「按建议」
-      或给替换值）：
+      「知道自己没备份」更危险。**所以三种口径先由人拍，再实现**：
 
       · **① 备份什么时候做 —— 建议：只在「会动结构的同步之前」这一档自动做**，
         另保留手动档。
         这是**唯一一次失误不可逆**的时刻：`ensureSchemaCurrent` 的 `--force` 路
         （用户在确认弹窗知情后执行）跑的是**删列 / 重建表**（`db-schema-state.mjs`
-        的 `riskyStatements` 白名单），而它今天**零备份**。
+        的 `riskyStatements` 白名单）。**拍板前它零备份** —— 这正是本条要治的。
         不选「应用退出时」：壳对进程树执行**整树强杀**（`ExitSection.tsx` 与
         `RunEvent::ExitRequested` 的回收路径），被强杀的进程没有清理机会 ——
         备份在「崩溃 / 强杀 / 任务管理器结束进程」这条路上**永远不执行**，
@@ -614,24 +615,39 @@
         命令了，再造一条只是把手册搬到终端；而「回滚时应用正持有 DB」这件事
         没有因为入口是命令就消失，它只是**没人处理**。
 
-      **实现前必须先纠正一处已写错的机制**（本条原文写的方案在**运行时不存在**）：
+      **实现时纠正了一处已写错的机制**（本条原文写的方案在**运行时不存在**）：
       原文说「复用 better-sqlite3 现成的在线 `backup()`」——可是
       **`better-sqlite3` 是 `devDependencies`**（测试基建用），生产运行时走的是
       **`@libsql/client`**（`dependencies`，`src/server/db.ts`），而它**没有
       `backup()`**（`Client` 只有 `execute` / `transaction` / `sync` / `close`）。
-      热备份要用 **`VACUUM INTO`**，本容器实测（真驱动、WAL 模式下）：
+      热备份改用 **`VACUUM INTO`**，两条链都实测过（`@libsql/client` 与
+      `node:sqlite`、WAL 模式下）：
 
       ```
       await c.execute("VACUUM INTO '<path>/backup.db'")
       → 产物单文件、`pragma integrity_check` 回 ok、表数据可读
       ```
 
-      **拿到决策之后**：落一个 `backup.ts`（唯一实现，走 `VACUUM INTO`；`data/backups/`
-      按次命名 + 轮转，不留固定名 —— 硬规则 4）+ `package.json` 入口 + 设置页出口
-      + 启动链在 `--force` 同步前插一档；判据按既有口径三条 —— 备份产物**能被
-      `integrity_check` 读通**（不是「文件存在」）、`-wal` / `-shm` **不进备份**
-      （`VACUUM INTO` 天然如此，要有用例钉住）、库被占用时恢复**给出可见出口
-      而非静默失败**（硬规则 4）。做完这一条按实际收敛位置登记，不预支 P0 的号。
+      **落地形态与拍板的三条一一对应**：
+
+      | 拍板口径 | 落点 |
+      | --- | --- |
+      | ① 只在会动结构的同步之前自动做，另留手动档 | `scripts/db-sync.mjs` 的 `if (force)` 支（`--force` 前）；`pnpm db:backup` |
+      | ② 最近 3 份，落 `<应用根>/data/backups/` | `db-backup-core.mjs` 的 `BACKUP_DIR` / `BACKUP_KEEP` / `pruneBackups` |
+      | ③ 设置页入口（选份 + 确认），换文件在「应用没在跑」那一刻 | `setting.backupRestore` 只写标记；`applyPendingRestoreAtBoot` 在三个启动入口、起 Next 之前 |
+
+      **实现里的三条判据**（全部对着机器事实，「文件存在」一条都答不上来）：
+      产物能被 `integrity_check` **读通**且表数 > 0（不是「文件存在」）；
+      `-wal` / `-shm` **不进备份**（`VACUUM INTO` 天然如此，用例钉住）；
+      库被占用 / 产物读不通时**给出可见出口**（硬规则 4），且备份写**临时名**、
+      验完才改名 —— 中途失败不留一个「看着像备份、其实读不通」的文件。
+
+      **两处刻意不做的事**（写在这里免得被读成漏了）：
+      · **恢复不提供「就地换文件」** —— 运行期有多个进程持有这个库（内嵌 Next
+        server、执行宿主、用户可能开着的 Drizzle Studio），就地覆盖是不可逆的
+        数据事故。所以只有「登记 + 下次启动生效」这一条路；
+      · **换文件之前必先给当前库做一份退路备份**，那一步失败就**不换**
+        （宁可让用户重来，也不要把唯一的退路丢掉）。
 
 - [ ] **D7 版本号三处手工重复（均 0.1.0）** 无同步守卫。证据：`package.json:3` / `tauri.conf.json:4` / `Cargo.toml:3`。
 

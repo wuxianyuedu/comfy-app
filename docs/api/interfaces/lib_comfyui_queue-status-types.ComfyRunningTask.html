@@ -16,7 +16,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">ComfyRunningTask</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#model">model</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#nodetype">nodeType</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#progress">progress</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#startedat">startedAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#taskid">taskId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#workflowname">workflowName</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/queue-status-types.ts:8</li></ul></aside>
+<li>Defined in src/lib/comfyui/queue-status-types.ts:8</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -40,7 +40,7 @@
 <div class="tsd-comment tsd-typography"><p>主模型文件名（从本次实际提交的图里认出来，见 <code>executed-model.ts</code>）；认不出为 null。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/queue-status-types.ts:13</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/queue-status-types.ts:13</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="nodetype"><span>node<wbr/>Type</span><a href="#nodetype" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">nodeType</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
@@ -48,14 +48,14 @@
 comfy-cli 那条进度事件源拿不到 <code>class_type</code>，此时就是 null。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/queue-status-types.ts:21</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/queue-status-types.ts:21</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="progress"><span>progress</span><a href="#progress" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">progress</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>采样步数进度（0~100）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/queue-status-types.ts:18</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/queue-status-types.ts:18</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="startedat"><span>started<wbr/>At</span><a href="#startedat" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">startedAt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
@@ -63,19 +63,19 @@ comfy-cli 那条进度事件源拿不到 <code>class_type</code>，此时就是 
 取自 <code>Task.claimedAt</code>（领取或首条进度帧定格），旧行退化成提交时刻。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/queue-status-types.ts:16</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/queue-status-types.ts:16</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="taskid"><span>task<wbr/>Id</span><a href="#taskid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">taskId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/queue-status-types.ts:9</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/queue-status-types.ts:9</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="workflowname"><span>workflow<wbr/>Name</span><a href="#workflowname" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">workflowName</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>工作流名（来自 <code>Task.workflowName</code>）；查不到时为 null。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/queue-status-types.ts:11</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/comfyui/queue-status-types.ts:11</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

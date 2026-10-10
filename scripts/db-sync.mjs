@@ -16,10 +16,16 @@
 //
 // 输出分两路：人类可读的进度走 stderr（被启动脚本重定向进
 // `log/schema-sync.log`），状态文件走 `log/schema-sync.json`。
+//
+// **`--force` 之前先做一档自动备份**（D6 / ISSUE #1611 的建议默认①）：`--force`
+// 是唯一会跑「删列 / 重建表」的那条路，也是唯一一次失误不可逆的时刻，而它此前
+// **零备份**。备份失败**不阻断**同步（那是用户已经确认过的动作），但会把原因讲
+// 出来 —— 让「这次变更万一丢了数据、目前没有退路」这件事至少是可读的。
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { backupNotice, createBackup } from "./db-backup-core.mjs";
 import {
   ensureSchemaCurrent,
   writeSchemaSyncStatus,
@@ -33,6 +39,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const force = process.argv.includes("--force");
 
 writeSchemaSyncStatus(root, { phase: "syncing" });
+
+/* 只在 `--force` 这一路自动备份：非 `--force`（启动链路的自动同步）按白名单
+ * 只认建表 / 建索引 / 加列，不会丢数据 —— 每次都备份会让 `data/backups/` 被
+ * 「一次正常启动」填满，3 份保留量反而挤掉真正有价值的那几份。 */
+if (force) {
+  const notice = backupNotice(createBackup(root), { why: "执行会丢结构的同步" });
+  for (const line of notice?.lines ?? []) {
+    process.stderr.write(`[db-sync] ${line}\n`);
+  }
+}
 
 const result = ensureSchemaCurrent(root, {
   forward: (chunk) => process.stderr.write(chunk),

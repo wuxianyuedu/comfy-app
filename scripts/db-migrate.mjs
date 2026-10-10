@@ -122,7 +122,9 @@ const beforeTables = countUserTables();
 const beforeApplied = appliedMigrations();
 process.stdout.write(
   `[db:migrate] 应用 ${files.length} 份迁移 → ${dbPath}` +
-    (beforeTables > 0 ? `（当前 ${beforeTables} 张用户表）` : "（库还不存在 / 是空的）") +
+    (beforeTables > 0
+      ? `（当前 ${beforeTables} 张用户表）`
+      : "（库还不存在 / 是空的）") +
     "\n",
 );
 
@@ -165,6 +167,16 @@ if (afterTables <= 0) {
       "",
       `库文件：${dbPath}（${fs.existsSync(dbPath) ? `${fs.statSync(dbPath).size} 字节` : "不存在"}）`,
       "",
+      /* 把 drizzle-kit 自己的话原样带出来 —— 「输出见上」不是一句可行动话术：
+       * 上面转发过的是 **stdout**，而它真正的原因（地址被拒、方言不认识、
+       * 连接失败那一类）在 stderr 里，不接出来就等于把根因丢掉（硬规则 4）。
+       * 退出码也打出来，但**只当证据不当判据**：实测它「报错 + 留一个没动过的库 + 退 0」。 */
+      `drizzle-kit 退出码：${String(run.status)}（它报错时也退 0，所以上面那条结论来自库里的事实，不是这个码）`,
+      "drizzle-kit 的输出（stdout + stderr，真原因常在 stderr）：",
+      output.trim() === ""
+        ? "  (两边都是空的 —— 命令多半没起来)"
+        : output.trim(),
+      "",
       "可行动作：",
       "  · 确认 drizzle.config.ts 的 dbCredentials.url 与 DATABASE_URL 指向同一个库；",
       "  · 手工重跑看完整输出：pnpm exec drizzle-kit migrate",
@@ -182,6 +194,12 @@ if (afterApplied !== files.length) {
       "这不是「差一点」——drizzle 的账本是**逐条**记的，条数不等说明中途停了",
       "（语句报错 / 库被占用 / 进程被杀）。库里现在的结构可能是半途状态，",
       "**别直接起应用**。",
+      "",
+      /* 同一句话术缺口的另一半：中途停了必定有一条真报错，而它也在 stderr。 */
+      "drizzle-kit 的输出（stdout + stderr，真原因常在 stderr）：",
+      output.trim() === ""
+        ? "  (两边都是空的 —— 命令多半没起来)"
+        : output.trim(),
       "",
       "可行动作：",
       "  · 手工重跑：pnpm exec drizzle-kit migrate（它从账本断点继续，可重入）；",

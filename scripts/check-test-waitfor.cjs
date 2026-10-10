@@ -165,11 +165,19 @@ function importsRtlWaitFor(raw) {
 }
 
 /**
- * 扫一个文件，返回它命中的站点。
- * @returns {{line:number,text:string,legit:string|null,dom:boolean,fake:boolean}[]}
+ * 扫一个文件，返回它命中的站点；文件在「列目录 → 读内容」之间消失时返回 `null`。
+ * @returns {{line:number,text:string,legit:string|null,dom:boolean,fake:boolean}[]|null}
  */
 function scanFile(abs) {
-  const raw = fs.readFileSync(abs, "utf8");
+  let raw;
+  try {
+    raw = fs.readFileSync(abs, "utf8");
+  } catch (error) {
+    /* 消失不是判据要判的形态：一个已经不存在的文件里没有站点可言。现场与计数口径
+     * 见 `check-test-sleep.cjs` 的同款注释（同一份并发探针、同一个 D 组）。 */
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
   const masked = maskNonCode(raw);
 
   if (!importsRtlWaitFor(raw)) return [];
@@ -212,12 +220,19 @@ function main() {
   const violations = new Map();
   /** 正当形态的站点（只记账）。 */
   const legit = { dom: 0, "fake-timer": 0 };
+  /** 「列到名字、读时已没」的份数（并发用例的临时探针），必须出现在结论里。 */
+  let vanished = 0;
 
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
     if (FIXTURE_SKIP.has(rel)) continue;
+    const sites = scanFile(abs);
+    if (sites === null) {
+      vanished += 1;
+      continue;
+    }
     const bad = [];
-    for (const s of scanFile(abs)) {
+    for (const s of sites) {
       if (s.legit) legit[s.legit]++;
       else bad.push(s);
     }
@@ -272,6 +287,11 @@ function main() {
 
   console.log(
     `[test-waitfor] OK —— 越界 0 处 / 正当 ${legitTotal} 处` +
+      /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
+         目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
+      (vanished > 0
+        ? `\n  ⚠️ 另有 ${vanished} 份文件在扫描期间消失（并发用例的临时探针），本轮未读`
+        : "") +
       `（等 DOM ${legit.dom} + 假定时器窗口 ${legit["fake-timer"]}）。`,
   );
   return 0;

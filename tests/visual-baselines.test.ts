@@ -19,16 +19,19 @@ import { describe, expect, it } from "vitest";
 import { checkLocalBaselines } from "../scripts/pixel-run.mjs";
 import {
   PLATFORM_RECORDING,
+  freshnessTrack,
   SUPPORTED_PLATFORMS,
   checkRecordingEnv,
   declaredShotNames,
   isPlatformRegistered,
   missingBaselinesForPlatform,
   parseBaseline,
+  readFreshnessLedgerAt,
   recordingWebserverFor,
   untrackedBaselines,
   visualSpecs,
   webserverForEnv,
+  writeFreshness,
 } from "../scripts/visual-baselines.mjs";
 
 /**
@@ -36,10 +39,7 @@ import {
  * 反推的话「新增了截图名而没录」这种形态就造不出来，而它正是要判的）+
  * 若干基线 PNG（内容无所谓，判据只看名字与在不在）。
  */
-function fixtureCheckout(opts: {
-  shots: string[];
-  files: string[];
-}): string {
+function fixtureCheckout(opts: { shots: string[]; files: string[] }): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "visual-baselines-"));
   const spec = "e2e/visual/demo.visual.spec.ts";
   fs.mkdirSync(path.join(root, path.dirname(spec)), { recursive: true });
@@ -72,7 +72,7 @@ describe("像素基线清点内核（§11.8）", () => {
   it("扫的是 spec 里声明的截图名，不是文件名", () => {
     expect(
       declaredShotNames(
-        'toHaveScreenshot("a.png");\ntoHaveScreenshot(\'b.png\', { fullPage: true });',
+        "toHaveScreenshot(\"a.png\");\ntoHaveScreenshot('b.png', { fullPage: true });",
       ),
     ).toEqual(["a", "b"]);
   });
@@ -200,9 +200,10 @@ describe("平台录制口径（§11.8：基线按 webServer 口径录）", () =>
     // `checkRecordingEnv`）。`SUPPORTED_PLATFORMS` 从它派生，所以两处不会漂。
     expect(SUPPORTED_PLATFORMS).toEqual(Object.keys(PLATFORM_RECORDING));
     for (const [platform, entry] of Object.entries(PLATFORM_RECORDING)) {
-      expect(["dev", "start"], `${platform} 的口径只能是 dev / start`).toContain(
-        entry.webserver,
-      );
+      expect(
+        ["dev", "start"],
+        `${platform} 的口径只能是 dev / start`,
+      ).toContain(entry.webserver);
       // note 不是必填，但写了就得说点东西（「稍后补」等于没写）。
       if (entry.note !== undefined) {
         expect(entry.note.trim().length).toBeGreaterThan(4);
@@ -232,15 +233,72 @@ describe("平台录制口径（§11.8：基线按 webServer 口径录）", () =>
     expect(wrong).toContain("pnpm start");
     expect(wrong).toContain("CI=");
     // linux 录于 start：`CI` 为真才相符。
-    expect(checkRecordingEnv({ platform: "linux", env: { CI: "1" } })).toBeNull();
     expect(
-      checkRecordingEnv({ platform: "linux", env: {} }),
-    ).toContain("CI=true");
+      checkRecordingEnv({ platform: "linux", env: { CI: "1" } }),
+    ).toBeNull();
+    expect(checkRecordingEnv({ platform: "linux", env: {} })).toContain(
+      "CI=true",
+    );
   });
 
   it("没登记过的平台不谈口径（它走「先整套录、再同批登记」那一档）", () => {
     // 没有「原口径」可比时给答案 = 编一条口径出来。这一档的动作在前置判决那边。
     expect(checkRecordingEnv({ platform: "darwin", env: {} })).toBeNull();
-    expect(checkRecordingEnv({ platform: "darwin", env: { CI: "x" } })).toBeNull();
+    expect(
+      checkRecordingEnv({ platform: "darwin", env: { CI: "x" } }),
+    ).toBeNull();
+  });
+});
+
+/**
+ * `writeFreshness` 的 `how` 栏（ISSUE #1620）。
+ *
+ * 立案现场：这条账此前只由「整批全绿」写，于是 dev server 在默认并发下失稳的机器
+ * **写不出自己的账**。修法是给一条降并发的出路（§11.13），而它落地的关键就在这一栏 ——
+ * 若把降并发那次记成名义命令，账面上就分不出「本机默认跑得动」与「得降并发才跑得动」，
+ * 下一个人按名义命令复跑必红、却指不出差别在哪。
+ */
+describe("新鲜度记账的 how 栏（§11.8 / ISSUE #1620）", () => {
+  /** 像素档那一份登记 —— 从登记处取，不手抄 ledger/key/run 三栏（§12.12）。 */
+  const TRACK = freshnessTrack("visual");
+
+  function freshLedger(): string {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "freshness-how-"));
+    fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
+    return root;
+  }
+
+  it("不给 how ⇒ 取这一档登记的名义跑法", () => {
+    const root = freshLedger();
+    writeFreshness({ root, kind: "visual", who: "月读" });
+    const ledger = readFreshnessLedgerAt(root, TRACK.ledger);
+    const rec = ledger[TRACK.key] as { how: string };
+    expect(rec.how).toBe(TRACK.run);
+  });
+
+  it("给了 how ⇒ 如实写下（降并发那条出路要靠它留痕）", () => {
+    const root = freshLedger();
+    writeFreshness({
+      root,
+      kind: "visual",
+      who: "月读",
+      how: "pnpm check:visual --workers=1",
+    });
+    const ledger = readFreshnessLedgerAt(root, TRACK.ledger);
+    const rec = ledger[TRACK.key] as { how: string };
+    expect(rec.how).toBe("pnpm check:visual --workers=1");
+    // 其余四栏不受影响：这条只是换了一个「能照着重跑的命令」，不是另一种记录。
+    expect(rec).toMatchObject({
+      key: TRACK.key,
+      who: "月读",
+      trackedBy: "visual",
+    });
+  });
+
+  it("空 / 纯空白的 how 落回名义跑法（别记一条写不出命令的账）", () => {
+    const root = freshLedger();
+    writeFreshness({ root, kind: "visual", who: "月读", how: "   " });
+    const ledger = readFreshnessLedgerAt(root, TRACK.ledger);
+    expect((ledger[TRACK.key] as { how: string }).how).toBe(TRACK.run);
   });
 });

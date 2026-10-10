@@ -23,8 +23,10 @@ import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
+import { PageHeader } from "~/components/ui/page-header";
 import { timeAgo } from "~/lib/time-format";
 import type { ProjectOrigin } from "~/lib/project-canvas/canvas-store";
+import { PROJECTS_ENTRY } from "./NavItems";
 import { useWorksGallery } from "./works/hooks/use-works-gallery";
 
 /* 作品/视频项目卡**类别装饰色**——cyan 在这套 UI 里代表"视频/作品"类别
@@ -82,45 +84,50 @@ export function WorksGallery({
       className="px-4 py-8 sm:px-8 sm:py-10"
       backdrop={<AuroraBackground />}
     >
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-title u-title-page">所有项目</h1>
-          {/* 「服务端」这三个字要的是**视觉强调**，不是字面量星号：JSX 文本节点
-              不解析 Markdown，裸写星号会把星号原样印到界面上（ISSUE #1522 收尾
-              时撞到的排版 bug）。
-              词边界也不能交给缩进：JSX 把换行处的空白当内容渲染，中文句子又不该
-              有词间空格 —— 所以外层文本与 `<span>` 之间不留空白、也不把词切开，
-              渲染出来才是「列表以服务端为准」。 */}
-          <p className="text-ink-muted mt-1 text-sm">
+      <PageHeader
+        className="mb-8"
+        title={`所有${PROJECTS_ENTRY.label}`}
+        /* 「服务端」这三个字要的是**视觉强调**，不是字面量星号：JSX 文本节点
+           不解析 Markdown，裸写星号会把星号原样印到界面上（ISSUE #1522 收尾
+           时撞到的排版 bug）。
+           词边界也不能交给缩进：JSX 把换行处的空白当内容渲染，中文句子又不该
+           有词间空格 —— 所以外层文本与 `<span>` 之间不留空白、也不把词切开，
+           渲染出来才是「列表以服务端为准」。 */
+        description={
+          <>
             画布项目，按时间倒序排列。列表以
             <span className="text-ink-bright font-medium">服务端</span>
             为准，本地还没同步上去的也一并列出。
-          </p>
-          {!loading && !serverOk && (
+          </>
+        }
+        extra={
+          !loading && !serverOk ? (
             /* 拉不到服务端那份时明说这一屏此刻是什么：不说的话，「服务端有行、
               这里看不见」与「本来就没有」在界面上长得一模一样（ISSUE #1522）。 */
             <p className="text-warning-strong mt-1 text-xs">
               服务端列表这一轮没拉到，下面只列出本机已有的项目；刷新可重试。
             </p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={controller.refresh}
-            className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-2"
-          >
-            ↻ 刷新
-          </Button>
-          <Button
-            variant="primary-solid"
-            onClick={() => onOpenTask?.("new")}
-            className="h-auto rounded-lg px-4 py-2"
-          >
-            新建创作
-          </Button>
-        </div>
-      </div>
+          ) : null
+        }
+        actions={
+          <>
+            <Button
+              variant="outline"
+              onClick={controller.refresh}
+              className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-2"
+            >
+              ↻ 刷新
+            </Button>
+            <Button
+              variant="primary-solid"
+              onClick={() => onOpenTask?.("new")}
+              className="h-auto rounded-lg px-4 py-2"
+            >
+              新建创作
+            </Button>
+          </>
+        }
+      />
 
       {loading ? (
         <p className="text-ink-muted py-10 text-center text-sm">

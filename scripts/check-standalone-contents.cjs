@@ -90,6 +90,9 @@ const ALLOWED_SCRIPTS = new Set([
   "env-preflight.mjs",
   "db-schema-state.mjs",
   "db-push-core.mjs",
+  // 备份 / 恢复的唯一实现（D6，ISSUE #1611）：dev-launcher.mjs 顶层静态 import
+  // 它（换文件必须排在起 Next 之前）。与 RUNTIME_SCRIPTS 同源，缺一份即红。
+  "db-backup-core.mjs",
   "reap-process.mjs",
   // ComfyUI 执行器独立宿主（P3 §5 第 2 期 · Phase 2-C）：由 dev-launcher.mjs
   // 的 spawnExecutorHost 在 COMFY_EXECUTOR=host 灰度下起；桌面包里也要能起来。

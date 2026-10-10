@@ -13,7 +13,7 @@
 <h1>Type Alias InstanceQuery</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">type</span> <span class="tsd-kind-type-alias">InstanceQuery</span> <span class="tsd-signature-symbol">=</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#pid">pid</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#port">port</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#running">running</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#source">source</a><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_instance-port.InstanceDiscoverySource.html" class="tsd-signature-type tsd-kind-type-alias">InstanceDiscoverySource</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#unverified">unverified</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#via">via</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/instance-port.ts:32</li></ul></aside>
+<li>Defined in src/lib/comfyui/instance-port.ts:32</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -37,42 +37,42 @@
 <div class="tsd-comment tsd-typography"><p>命中进程的 PID（未命中为 null）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/instance-port.ts:36</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/instance-port.ts:36</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="port"><span>port</span><a href="#port" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">port</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>该进程实际监听的端口（拿不到为 null——可能还在加载、或还没绑定）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/instance-port.ts:38</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/instance-port.ts:38</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="running"><span>running</span><a href="#running" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">running</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>配置的实例是否确有进程在跑（命令行匹配，不靠端口探测）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/instance-port.ts:34</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/instance-port.ts:34</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="source"><span>source</span><a href="#source" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">source</span><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_instance-port.InstanceDiscoverySource.html" class="tsd-signature-type tsd-kind-type-alias">InstanceDiscoverySource</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>哪一条判据命中的（未命中为 null）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/instance-port.ts:40</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/instance-port.ts:40</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="unverified"><span>unverified</span><a href="#unverified" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">unverified</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>进程表查询本身失败（超时 / 无权限）——没命中<strong>不等于</strong>没在跑。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/instance-port.ts:44</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/instance-port.ts:44</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="via"><span>via</span><a href="#via" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">via</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>命中的进程是用什么起的（中文短语，供日志/提示）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/instance-port.ts:42</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/comfyui/instance-port.ts:42</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

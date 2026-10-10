@@ -9,6 +9,7 @@
     "agent:film": "node scripts/agent-film.mjs",
     "check": "pnpm run lint && tsc --noEmit",
     "db:generate": "drizzle-kit generate",
+    "db:backup": "node scripts/db-backup.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:push": "node scripts/db-push.mjs",
     "env:init": "node scripts/env-init.mjs",

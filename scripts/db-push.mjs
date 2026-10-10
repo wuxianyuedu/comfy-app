@@ -93,6 +93,18 @@ if (tables <= 0) {
       "",
       `库文件：${dbPath}（${fs.existsSync(dbPath) ? `${fs.statSync(dbPath).size} 字节` : "不存在"}）`,
       "",
+      /* 「输出见上」要把话兑现：上面转发过的是 stdout，而真原因（地址被 libsql 拒、
+       * 方言不认识、连接失败那一类）在 stderr —— `pushSchema` 已经把两路拼进
+       * `firstOutput`，不接出来等于把根因丢掉（硬规则 4）。同文件下面那条
+       * 「没收敛」的分支就是这么打的，这一条是那一形状漏掉的另一半。
+       * ⚠️ 这里**不**打退出码当结论：它「报错 + 留一个没动过的库 + 退 0」是实测形态。 */
+      "第一次输出的尾部：",
+      ...result.firstOutput
+        .trim()
+        .split("\n")
+        .slice(-12)
+        .map((line) => `  ${line}`),
+      "",
       "可行动作：",
       "  · 确认 drizzle.config.ts 的 dbCredentials.url 与 DATABASE_URL 指向同一个库；",
       "  · 手工重跑看完整输出：pnpm exec drizzle-kit push --force",

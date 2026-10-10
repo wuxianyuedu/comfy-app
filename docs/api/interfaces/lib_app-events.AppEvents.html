@@ -22,7 +22,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">AppEvents</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#canvasproduce">&quot;canvas:produce&quot;</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span><br/>        <span class="tsd-kind-property">id</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">resultMediaType</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>        <span class="tsd-kind-property">resultPath</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyappcanvas-store-changed">&quot;comfyapp:canvas-store-changed&quot;</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyappcanvas-sync-changed">&quot;comfyapp:canvas-sync-changed&quot;</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyappcustom-nodes-updated">&quot;comfyapp:custom-nodes-updated&quot;</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#workspacenavigate">&quot;workspace:navigate&quot;</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">view</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-events.ts:50</li></ul></aside>
+<li>Defined in src/lib/app-events.ts:50</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -45,14 +45,14 @@
 <div class="tsd-comment tsd-typography"><p>某个画布节点产出了结果，读侧据此把输出喂给下游。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-events.ts:62</li></ul></aside></section>
+<li>Defined in src/lib/app-events.ts:62</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="comfyappcanvas-store-changed"><span>comfyapp:canvas-<wbr/>store-<wbr/>changed</span><a href="#comfyappcanvas-store-changed" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">&quot;comfyapp:canvas-store-changed&quot;</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span></div>
 <div class="tsd-comment tsd-typography"><p>画布仓库（项目索引 / 激活项）发生增删改后广播。载荷：无。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-events.ts:52</li></ul></aside></section>
+<li>Defined in src/lib/app-events.ts:52</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="comfyappcanvas-sync-changed"><span>comfyapp:canvas-<wbr/>sync-<wbr/>changed</span><a href="#comfyappcanvas-sync-changed" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">&quot;comfyapp:canvas-sync-changed&quot;</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span></div>
@@ -63,7 +63,7 @@
 那些页面上没有提示器 —— 只靠事件的读侧必然漏掉那一次。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-events.ts:60</li></ul></aside></section>
+<li>Defined in src/lib/app-events.ts:60</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="comfyappcustom-nodes-updated"><span>comfyapp:custom-<wbr/>nodes-<wbr/>updated</span><a href="#comfyappcustom-nodes-updated" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">&quot;comfyapp:custom-nodes-updated&quot;</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span></div>
@@ -79,7 +79,7 @@
 记的就是它。现在订阅侧在 <code>~/components/studio/canvas/use-custom-nodes-registry</code>。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-events.ts:92</li></ul></aside></section>
+<li>Defined in src/lib/app-events.ts:92</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="workspacenavigate"><span>workspace:navigate</span><a href="#workspacenavigate" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">&quot;workspace:navigate&quot;</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">view</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">}</span></div>
@@ -91,7 +91,7 @@
 不得反向依赖视图层（§18 硬规则 22）—— 合法性由订阅侧按已有枚举收敛。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-events.ts:77</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/app-events.ts:77</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

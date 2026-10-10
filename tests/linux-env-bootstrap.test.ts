@@ -288,6 +288,10 @@ describe("dev/start 在起 Next 之前预检", () => {
       "app-port.mjs",
       "db-schema-state.mjs",
       "db-push-core.mjs",
+      // D6（ISSUE #1611）：`dev.mjs` 在预检之后、起 Next 之前调
+      // `applyPendingRestoreAtBoot`，它静态 import 这份唯一实现 —— 少拷一份，
+      // 红出来的就是 ERR_MODULE_NOT_FOUND 而不是预检结论（同下一条注释）。
+      "db-backup-core.mjs",
       "standalone-private-inputs.mjs",
     ];
     for (const name of needed) {
