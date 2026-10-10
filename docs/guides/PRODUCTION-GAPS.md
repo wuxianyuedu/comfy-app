@@ -5,7 +5,10 @@
 >
 > **巡检约定**：本清单每季度按 [docs/README.md §7](../../README.md) 的季度巡检流程逐条复核，
 > 已完成项勾掉、过时项改写成现状或删除、仍开放项保留并指向承接它的 Issue。
-> 上次巡检：2026-09-27（本轮新增七维审计台账，见下方「2026-09-27 全库商业级差距审计」；原 2026-08-30 台账条目均已闭环或流程化保留）。
+> 上次巡检：2026-10-10（ISSUE #1611 阶段三分档：把卡在密钥 / 账号 / 证书上的四条 P0
+> 改写成「等外部输入（等什么）」，并纠正一处台账漂移 —— 阶段计划表里的「自动备份」
+> 在本文档是 P1 段的 D6、不是 P0。差异表见该笔 PR 描述；上一轮为 2026-09-27
+> 七维审计台账，原 2026-08-30 台账条目均已闭环或流程化保留）。
 
 ## P0 — 安全/正确性
 
@@ -91,12 +94,88 @@
 
 ### P0 — 缺了就不算「已发布产品」（阻塞发布）
 
+> **分档（2026-10-10）：「等外部输入」四条 + 两条不同类。** 本段 6 条里
+> **P0-2 / P0-3 / P0-4 / P0-6 是真「等外部输入」** —— 代码那一侧已就位或半就位，
+> 缺的是我们拿不到的密钥、账号与证书。它们**不按「我们没开工」读**：每条都写明
+> 「等什么」与「给到之后我做什么」，拿到输入那天是**接线**、不是从零开始。
+> 另两条不同类：**P0-1（CI）** 不是缺输入，是**额度与策略**（#623 已判：出路是
+> §13.5.4 的按需召唤 —— 不 `@` 就不花核时，且 `tests/no-platform-ci-config.test.ts`
+> 守着「不许悄悄补回一份自动触发的配置」）；**P0-5（版本化迁移）已收**（#1624）。
+> 这条分档同时纠正一处**台账漂移**：阶段计划（#1611）那张表把这 6 条记成了
+> 「更新 / 崩溃 / sourcemap / migrate / 签名 / 自动备份」，与本文档实际条目对不上
+> —— **「自动备份」在本文档里是 P1 段的 D6，不是 P0**；CI 那条反被表漏掉。
+> 现按实际条目归位，D6 那条下方已注明这处修正。
+
 - [ ] **P0-1 CI 流水线**：缺口不是「没写配置」，而是**免费额度用不起**（#623 实测：`cpus: 8` 下一次 PR 近 1 核时，160 核时/月几十次 PR 就见底）。`76275841` 曾补回一份缩水版 `.cnb.yml` 充当「第二执行者」，但它**匹配不到任何事件**（顶层缺分支键与事件键，CNB 的形态是 `分支: { 事件: [流水线] }`）——构建历史里 `push` / `pull_request` 一条都没有，比删除前更彻底地静默失效，已按 ISSUE #1229 删除。出路不是把配置贴回去，而是 13.5.4 的**按需召唤**：在 PR / Issue 里 `@` 评审 NPC 跑一轮全量单测 / 产物护栏 / E2E，不 `@` 就不花核时。「补回一份看起来在守门的配置」这件事此前只有文档口径、没有判据（加回文件不会让任何现有门禁变红），现由 `tests/no-platform-ci-config.test.ts` 守住三头一致：仓库根没有自动触发型 CI 配置 + 规范确实这么写着 + `doc-facts` 不把它登记成 path 类事实；该用例登记在提交前的固定守护清单里，每次提交都跑。证据：`changelog.d/1229-remove-dead-cnb-yml.md`；规范 13.5.3 / 13.5.4；`tests/no-platform-ci-config.test.ts`。
-- [ ] **P0-2 自动更新未接通**：`tauri.conf.json` `updater.endpoints:[]` / `pubkey:""` / 未开 `createUpdaterArtifacts`；能力已开校验全无（填端点即变未验签更新）。需：生成 keypair、配端点、开产物。证据：`src-tauri/tauri.conf.json:34-41,43-67`；`src-tauri/capabilities/remote.json:19`。
-- [ ] **P0-3 客户端崩溃零上报**：缺 `src/sentry.client.config.ts`，`instrumentation.ts` 仅 nodejs/edge 分支；ErrorBoundary 仅 `console.error`。证据：`src/instrumentation.ts:8-24`；`src/components/ui/error-boundary.tsx:31-35`。
-- [ ] **P0-4 无 release / source map 关联**：`next.config.js` 无 `withSentryConfig` / sourceMap 上传，堆栈无法符号化。证据：`next.config.js`（grep sentry/Sentry/sourceMap = 0）。
+- [ ] **P0-2 自动更新：等外部输入 —— 签名密钥对 + 一个能托管更新清单的地址**。
+      **代码那一侧已经通了**：`src/lib/shell/app-update-client.ts`
+      （`check` / `downloadAndInstall` / 重启）、设置页的「应用更新」区、
+      `capabilities/remote.json` 的 `updater:default` + `process:default` 权限
+      都在位；`tauri.conf.json` 的 `plugins.updater.endpoints: []` / `pubkey: ""`
+      / 未开 `createUpdaterArtifacts` 是**三个空格子**，不是半成品。
+      **等什么**：① **minisign 密钥对** —— 私钥由你生成并在发布机 / secret 里保管
+      （我不该也不能替你持有），公钥进 `pubkey`；② **一个 HTTPS 地址**，能托管
+      `latest.json` 与各平台安装包（静态站 / 对象存储 / Release 附件均可）。
+      **给到之后我做什么**：`launch-and-build` §7.1 下「应用自更新
+      （tauri-plugin-updater / tauri-plugin-process）」那一节的三步
+      （生成 keypair → 填 `pubkey` / `endpoints` → 发布时签名并开
+      `createUpdaterArtifacts`）**已经写好**，照它做即可，我不再抄第二份；
+      我这笔要加的是它没覆盖的两件 —— 把发布流程落成一条 `package.json` 入口
+      （签名 → 写 `latest.json`）并按 §9.5 登记跨平台动作对照表；再补一条用例钉
+      「**端点与公钥要么都空、要么都非空**」—— 今天这个组合（端点填了、公钥还空）
+      在运行期会静默变成**未验签更新**，正是「能力已开、校验全无」那一格。
+      证据：`src-tauri/tauri.conf.json`（`plugins.updater`）；`src-tauri/capabilities/remote.json`（`updater:default`）；`src/lib/shell/app-update-client.ts`；`src/app/(main)/settings/hooks/use-settings-page-app-update.ts`。
+- [ ] **P0-3 客户端崩溃上报：等外部输入 —— 一个 Sentry 项目的 DSN**。
+      **服务端与 Edge 两种 runtime 的接线是现成的**
+      （`src/sentry.server.config.ts` / `src/sentry.edge.config.ts`，含
+      `beforeSend` 脱掉 cookie / authorization），`src/env.js` 已收 `SENTRY_DSN`、
+      `.env.example` 留着空位。缺的是**客户端那一份**
+      （`src/sentry.client.config.ts`）与它要读的 DSN —— 而 DSN 得先有一个项目。
+      **等什么**：**一个 Sentry 项目及其 DSN**（自建 / 云端都行）。
+      **与 P0-4 一起给更省事**：source map 上传要的是**组织 slug + 项目 slug +
+      带 `project:releases` 的 auth token**。
+      **给到之后我做什么**：补 `sentry.client.config.ts`，并在
+      `instrumentation.ts` 的 `register()` 里按 `NEXT_RUNTIME === "browser"` 挂上
+      （形状与现有 nodejs / edge 两支一致）；把 ErrorBoundary 的
+      `componentDidCatch` 从只 `console.error` 改成**真上报**
+      （`onError` 那条对外出口保留不动）。两处都要按 07 §7.18.2.1（脱敏）与 launch-and-build §7.3（产物卫生）
+      各审一遍「敏感值不许明文落日志、也不许进包」，且 DSN 走 `NEXT_PUBLIC_` 前缀
+      —— 客户端读不到服务端 env（硬规则 17）。
+      证据：`src/sentry.server.config.ts`；`src/sentry.edge.config.ts`；`src/instrumentation.ts`；`src/components/ui/error-boundary.tsx`（`componentDidCatch`）；`src/env.js`（`SENTRY_DSN`）。
+- [ ] **P0-4 无 release / source map 关联：等外部输入 —— Sentry 组织 / 项目 slug + 上传 token**。
+      **它与 P0-3 是同一个账号的两半**，所以同批做：没有 P0-3 的 DSN，
+      关联上了也没有东西可符号化；没有本条的 token，P0-3 收到的是一堆地址。
+      **等什么**：**组织 slug + 项目 slug + 一个有 `project:releases` 权限的
+      auth token**（放 secret，不入库）。
+      **但要如实说明：这条有一半不卡外部** —— ① release 恒等于 **git sha**、
+      ② `.map` **不随分发包出厂**，这两件现在就能做。所以拿到 token 那天是
+      **「接上传」**，不是从零开始。
+      **给到之后我做什么**：`next.config.js` 外包一层 `withSentryConfig`，release
+      取 git sha（**不取 `package.json` 的 `version`** —— 见下方 D7：版本号三处手工
+      重复且无同步守卫，拿它当 release 会在第一次忘记升版本时把两次发布并成一条）；
+      上传完就删 `.map`，并按硬规则 17 + `launch-and-build` §7.3 确认它没落进
+      standalone 的那两层白名单后随包出厂。
+      证据：`next.config.js`（grep sentry / sourceMap = 0）；`docs/standards/07-日志系统.md` §7.18.2.1（日志脱敏口径）；`docs/standards/launch-and-build.md` §7.3（分发产物卫生：`.map` / `.env` 不许随包出厂）。
 - [x] **P0-5 无版本化 DB 迁移** —— **已收（ISSUE #1624）**。两件事都落地了：① `drizzle/` 有了基线迁移（`0000_*.sql` + `meta/`），`pnpm db:migrate` 成为正路，与 `db:push` 产出的 schema **逐表逐列 + 索引等价**（`tests/db-migrate-equivalence.test.ts`）；② **无 TTY 下不再可能产出 0 字节库** —— 入口换成 `scripts/db-migrate.mjs`，它**在起 drizzle-kit 之前**做前置判决（没有 `.sql` 迁移就直接退非零），因为实测 `drizzle-kit migrate` 的原形态是**先建出库文件、再退 1**（与 P0-5 原先记的 `db:push` 那半是同一族，而 `push` 那半早由 `scripts/db-push.mjs` 修掉、`migrate` 这一路一直没修）。复核依据是**库里的真事实**（用户表数 + `__drizzle_migrations` 账本条数），不是退出码；用例 `tests/db-migrate-noninteractive.test.ts` 五条钉住，含两条变异（拿掉前置判决 / 把 `.sql` 筛换成「目录在不在」）。原先记的两条证据已过期：`package.json` 的 `db:migrate` 不再是裸 `drizzle-kit migrate`。
-- [ ] **P0-6 无代码签名 / 公证**：缺 `certificateThumbprint` / `macOS.signingIdentity` / `publisher` / `licenseFile`。证据：`src-tauri/tauri.conf.json:43-67`；`src-tauri/Cargo.toml:6`。
+- [ ] **P0-6 无代码签名 / 公证：等外部输入 —— 两套签名凭据（缺任一个就有一侧装不上）**。
+      **不是「漏了几行配置」**：`tauri.conf.json` 的 `bundle` 段今天只有
+      `active` / `targets` / `externalBin` / `resources` / `icon` / `android` ——
+      **`windows` 与 `macOS` 两个键根本不存在**（不是存在但为空），因为
+      **没有任何凭据可填**。
+      **等什么**：
+      · **Windows** —— 一张代码签名证书（`.pfx` + 密码），或 Azure Trusted
+        Signing 的账号与证书 profile；
+      · **macOS** —— Apple Developer Program 的 **Developer ID Application
+        证书**（`.p12` + 密码），以及公证要用的 **Apple ID + app-specific
+        password + Team ID**（或 App Store Connect API key）。
+      **给到之后我做什么**：配 `bundle.windows.certificateThumbprint` /
+      `digestAlgorithm` / `timestampUrl` 与 `bundle.macOS.signingIdentity` /
+      `entitlements` / 公证环境变量，凭据全部走 secret、**绝不入库**；再补一条判据钉
+      「**配了签名就不许缺时间戳服务**」—— 无时间戳的签名在证书过期后
+      **连已发出的安装包一起失效**，而这个后果要几年后才显现，没有人会在现场联想到它。
+      顺带把 **D7**（版本号三处手工重复、无同步守卫）一起收：签名与版本号
+      是同一条发布链上的两格，分开做要动两次同一处配置。
+      证据：`src-tauri/tauri.conf.json`（`bundle` 段无 `windows` / `macOS` 键）；`src-tauri/Cargo.toml`（`license` / `publisher` 皆空）。
 
 ### P1 — 安全正确性与运维可见性
 
@@ -472,7 +551,28 @@
 - [ ] **D3 日志不出用户机器**（无上报 / 导出通道）。证据：`src/lib/core/logger.ts:145-154`。
 - [ ] **D4 Sentry 无 release / tags / 用户上下文 / 离线缓存；Edge 缺 beforeSend 脱敏**。证据：`src/sentry.server.config.ts:8-21`；`src/sentry.edge.config.ts:14-18`。
 - [ ] **D5 `/api/health` 仅 `{status,db,t}` 且 `*` CORS + 回显运维命令**。证据：`src/app/api/health/route.ts:27,39,46`。
-- [ ] **D6 无自动备份 / 恢复工具**（仅手册）。证据：`docs/guide-database-backup.md:37-42`。
+- [ ] **D6 无自动备份 / 恢复工具：等一个决策，不是等外部输入**（仅手册。证据：`docs/guide-database-backup.md:37-42`）。
+      **它不属于 P0 那四条「等外部输入」** —— 阶段计划（#1611）的表把它排进阶段三，
+      但那是一条**记错了的对应关系**：本文档里备份是 P1 段的 D6，P0 段没有这一条
+      （P0 段的 6 条是 CI / 更新 / 崩溃 / sourcemap / migrate / 签名）。改档的理由是
+      **它不卡在任何账号或凭据上**，代码全部可写；卡住的是**产品口径没定**，
+      而定它的代价是**用户数据**：
+      · 备份**什么时候**做（应用退出时 / 定时 / 每次 schema 迁移前 / 手动）——
+        退出时做则崩溃就丢，常驻则多一个全程持锁的写手；
+      · **留几份、放哪**（最近 N 份？项目根旁边还是用户目录？会不会被下次构建
+        当残留清掉？）；
+      · **恢复入口给谁**（设置里一个按钮，还是只给一条命令 —— 前者要处理
+        「回滚时应用正持有 DB」这件事）。
+      **为什么必须由人拍**：`guide-database-backup.md` 那条手工路（关应用 → 复制
+      `db.sqlite` → **只带主库、不带 `-wal` / `-shm`**）今天是对的，但它把
+      **时机与保留**留给了人判。自动化等于替用户默认一个 —— 选错的形态是
+      **「备份看着有了，真要恢复时那份已经不在或是坏的」**，比今天
+      「知道自己没备份」更危险。
+      **拿到决策之后**：落一个 `src/lib/db/backup.ts`（唯一实现，复用 better-sqlite3
+      现成的在线 `backup()`，热备份不必停应用）+ `package.json` 入口 + 设置页出口；
+      判据按既有口径三条 —— 备份产物**能被 `integrity_check` 读通**（不是
+      「文件存在」）、`-wal` / `-shm` **不进备份**、库被占用时恢复**给出可见出口
+      而非静默失败**（硬规则 4）。做完这一条按实际收敛位置登记，不预支 P0 的号。
 - [ ] **D7 版本号三处手工重复（均 0.1.0）** 无同步守卫。证据：`package.json:3` / `tauri.conf.json:4` / `Cargo.toml:3`。
 
 ### P2 — 成熟度与体验
