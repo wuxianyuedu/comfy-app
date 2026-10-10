@@ -30,6 +30,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveAppPort } from "./app-port.mjs";
+import { writeAppServiceExit } from "./app-service-exit.mjs";
 import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
 import { checkEnvFile } from "./env-preflight.mjs";
@@ -171,6 +172,15 @@ const { runId } = startRun(ROOT, {
 });
 /** 本次运行的 runId：行前缀与跨进程传递都用它。 */
 export const RUN_ID = runId;
+/* 注意：这里**刻意不**清掉上一次的「应用服务为什么结束」记录（ISSUE #1692）。
+ *
+ * 直觉上「新服务起来了，旧结论该清掉」，但读取侧的时序恰好相反：探活走的是
+ * 应用服务自己的 HTTP，服务不在时那条通道必然不通——界面只能在**服务恢复之后**
+ * 才读得到这份记录，而那一刻如果已经被清掉，用户就永远看不到「刚才为什么断」。
+ *
+ * 陈旧记录不会造成误报：记录带着**结束那一次**的 runId，而本进程的 runId 由
+ * `COMFYAPP_RUN_ID` 透传给 dev server（见下），界面据此判「这份结论说的是不是
+ * 上一次运行」。判据在 `~/lib/shell/app-service-exit` 一处。 */
 // 让被 spawn 的子进程（executor-host / standalone server）也带上同一个 runId ——
 // 「grep runId 一把梭」要求所有通道都写这一列，靠各进程自己生成就散了。
 process.env.COMFYAPP_RUN_ID = runId;
@@ -1218,6 +1228,7 @@ export async function run(argv = process.argv.slice(2)) {
       // 本次运行**自己起的**日志文件，不按名字重找（见函数注释）。
       stdoutFile: nextOut,
       stderrFile: nextErr,
+      port: currentPort,
     });
   }
   if (!ready) {
@@ -1479,7 +1490,8 @@ export function spawnExecutorHost() {
  * @param {{ dev: import("node:child_process").ChildProcess,
  *           shell: import("node:child_process").ChildProcess | null,
  *           heartbeat: NodeJS.Timeout, staleShell: string | null,
- *           stdoutFile: string, stderrFile: string }} ctx
+ *           stdoutFile: string, stderrFile: string,
+ *           port?: number | null }} ctx
  * @returns {Promise<number>}
  */
 async function concludeDownstreamExit({
@@ -1489,6 +1501,7 @@ async function concludeDownstreamExit({
   staleShell,
   stdoutFile,
   stderrFile,
+  port = null,
 }) {
   clearInterval(heartbeat);
   const markers = readShellMarkers(ROOT);
@@ -1506,6 +1519,20 @@ async function concludeDownstreamExit({
     shellPid: shell?.pid,
     stderrFile,
     stdoutFile,
+  });
+  /* 把这次的成因落盘（ISSUE #1692），**在回收整棵树之前**。应用服务此刻已经
+   * 不在了，而探测它的通道正是它自己的 HTTP——事后问不到，只能由旁证人此刻
+   * 写下。用户随后看到的「应用服务已断开」由界面配这句话讲清为什么。
+   *
+   * 退出事实取 dev 的（`kind` 也描述了它如何结束）：信号优先于退出码的取舍在
+   * 读取侧统一做（`summarizeAppServiceExit`），这里只如实带上两者。 */
+  writeAppServiceExit(ROOT, {
+    kind,
+    code: dev.exitCode,
+    signal: dev.signalCode,
+    reason: detail.split("\n")[0] ?? detail,
+    port,
+    runId: RUN_ID,
   });
   if (kind === "abandoned") {
     log(detail, "INFO");
