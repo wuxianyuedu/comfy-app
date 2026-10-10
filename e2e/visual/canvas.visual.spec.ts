@@ -1,7 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { stubTrpc } from "../support/trpc-stub";
 import {
+  freezeProductionShots,
   hideDevChrome,
+  watchRecordingInputs,
   settle,
   unstableChromeMasks,
 } from "./support/page-baseline";
@@ -106,20 +109,40 @@ const NODES = [
 
 /** 三条连线，逐条满足 `output → picture.inputImage`（见文件头的端口几何说明）。 */
 const EDGES = [
-  { id: "e1-2", source: "1", target: "2", sourceHandle: "output", targetHandle: "inputImage" },
-  { id: "e2-4", source: "2", target: "4", sourceHandle: "output", targetHandle: "inputImage" },
-  { id: "e3-4", source: "3", target: "4", sourceHandle: "output", targetHandle: "inputImage" },
+  {
+    id: "e1-2",
+    source: "1",
+    target: "2",
+    sourceHandle: "output",
+    targetHandle: "inputImage",
+  },
+  {
+    id: "e2-4",
+    source: "2",
+    target: "4",
+    sourceHandle: "output",
+    targetHandle: "inputImage",
+  },
+  {
+    id: "e3-4",
+    source: "3",
+    target: "4",
+    sourceHandle: "output",
+    targetHandle: "inputImage",
+  },
 ];
 
 /**
  * 一份真形状的项目（`CanvasProject` 的字段：`id` / `name` / `updatedAt` /
  * `nodes` / `edges`）。`updatedAt` 写死是为了**不让「谁更新」影响这一档**。
  */
-function projectFixture(overrides: Partial<{
-  nodes: unknown[];
-  edges: unknown[];
-  name: string;
-}> = {}) {
+function projectFixture(
+  overrides: Partial<{
+    nodes: unknown[];
+    edges: unknown[];
+    name: string;
+  }> = {},
+) {
   return {
     id: PROJECT_ID,
     name: overrides.name ?? PROJECT_NAME,
@@ -147,31 +170,37 @@ async function openWorkspaceWithProject(
       localStorage.setItem(indexKey, json);
       localStorage.setItem(activeKey, id);
     },
-    [
-      INDEX_KEY,
-      ACTIVE_KEY,
-      JSON.stringify([project]),
-      project.id,
-    ] as const,
+    [INDEX_KEY, ACTIVE_KEY, JSON.stringify([project]), project.id] as const,
   );
 
-  /* 只桩 `project.list`，其余照旧打到真服务端：本档的判据与别的过程无关，
-   * 全桩成空会让画布上那些真形态（工具条、小地图、设置抽屉）一起消失。 */
-  await page.route("**/api/trpc/**", async (route) => {
-    if (!route.request().url().includes("project.list")) {
-      await route.continue();
-      return;
-    }
-    /* 走真协议形态（JSON Lines）—— `route.fulfill` 一个 JSON 数组喂不进
-     * `httpBatchStreamLink`（根因见 `../support/trpc-stub` 的文件头）。 */
-    const { trpcJsonlBody } = await import("../support/trpc-stub");
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: trpcJsonlBody([[]]),
-    });
+  /* 桩三条读本机的过程，一次登记进同一个 map（`stubTrpc` 的契约：同一个 URL 只能
+   * 有一个处理器 —— 分两次调用时后注册那条先应答、对不认识的 URL `continue()`，
+   * 先注册那条根本没机会应答）：
+   *
+   *   · `project.list` —— 空列表。（`hydrateFromServer()` 会用「服务端更新」的那一份
+   *     覆盖本地，不桩的话「本机 DB 里恰好有个更新的同名项目」就能改掉这张图。）
+   *   · `workflow.list` + `workflowModel.list` —— 两条读本机 DB（后者还扫磁盘上的
+   *     本地工作流根目录），喂给节点内部的生成面板与 `workflow` 节点。本档的夹具是
+   *     资产节点、截图前也不选中任何节点，所以它们**当前**进不了像素 —— 但那靠的是
+   *     「夹具里没有 workflow 节点」「没点过节点」两条同时成立，谁加一个 workflow
+   *     节点进去就进了。钉空，不留这个悬念。
+   *
+   * 后两条会**凑在同一批**里发（实测 `/api/trpc/workflow.list,workflowModel.list`），
+   * 而 `stubTrpc` 按 URL 里的过程顺序逐一取结果 —— 批的定义与被回的结果对得上。 */
+  await stubTrpc(page, {
+    "project.list": [],
+    "workflow.list": { workflows: [], total: 0 },
+    "workflowModel.list": { tags: [] },
   });
 
+  /* `/api/production` 是**另一条路径**（不是 tRPC），独立注册不冲突。
+   * 它必须钉：`ProjectCanvas` 挂载时把它返回的 `production.shots` 经
+   * `materializeProductionShots()` 物化成画布节点 —— 有镜头就多节点。
+   * 实测喂两条镜头，本文件的「4 节点 / 3 边」断言当场红（变成 6 个）。
+   * 钉「不存在」是干净环境的真形态（`fetchProduction` 判 `data.exists === true`）。 */
+  await freezeProductionShots(page);
+
+  await watchRecordingInputs(page);
   await hideDevChrome(page);
   await page.goto("/workspace");
   await expect(

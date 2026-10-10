@@ -90,12 +90,67 @@ export function trpcJsonlBody(results: unknown[]): string {
 }
 
 /**
+ * 从 `/api/trpc/<一段>` 里取出本次请求的过程名列表。
+ *
+ * 批请求把多个过程名用逗号拼在同一段路径里（实测
+ * `/api/trpc/workflow.list,workflowModel.list`），而**响应体的槽位顺序必须与这个
+ * 顺序逐一对应** —— 只回一个结果时，第二个过程的槽位会解成 `undefined`，而它
+ * **不抛错**（与文件头那两条「好 JSON 与坏 JSON 表现一致」同源）。
+ *
+ * 不导出：唯一消费者是 {@link stubTrpc}，而这条「按顺序对齐」的约定正是它的私有契约。
+ *
+ * @param rawUrl 请求的完整 URL
+ * @returns 过程名列表（不在 `/api/trpc/` 下返回空数组）
+ */
+function proceduresOf(rawUrl: string): string[] {
+  const { pathname } = new URL(rawUrl);
+  const prefix = "/api/trpc/";
+  if (!pathname.startsWith(prefix)) return [];
+  return pathname.slice(prefix.length).split(",").filter(Boolean);
+}
+
+/**
+ * 一条 tRPC 请求该被回什么 —— `null` 表示「不管它，继续打到真实服务端」。
+ *
+ * 抽成纯函数是为了让它可判：`stubTrpc` 的失效方式是**静默**的（回错了形状前端只是
+ * 拿不到数据，与 #1442 记的那族同形），而「批请求按 URL 里的过程顺序逐一取结果」这条
+ * 约定只能靠用例钉住。导出即可被 `tests/e2e-trpc-stub.test.ts` 直接执行。
+ *
+ * 规则：URL 里每个过程都得在 `handlers` 里找到一条（按 `Object.entries` 顺序**先匹配
+ * 先赢**，所以片段要写具体），按**过程出现的顺序**给出结果数组。**只要有一个过程没有
+ * 主就整条 `null`** —— 半桩的批请求比不桩更坏：另一个过程会拿到 `undefined` 槽位，
+ * 静默、不报错。
+ *
+ * @param rawUrl 请求的完整 URL
+ * @param handlers 过程名片段 → 返回值
+ * @returns 按顺序对齐的结果数组；不该管这条请求时返回 `null`
+ */
+export function planStubResults(
+  rawUrl: string,
+  handlers: Record<string, unknown>,
+): unknown[] | null {
+  const procedures = proceduresOf(rawUrl);
+  if (procedures.length === 0) return null;
+  const results = procedures.map(
+    (procedure) =>
+      Object.entries(handlers).find(([name]) => procedure.includes(name))?.[1],
+  );
+  if (results.some((result) => result === undefined)) return null;
+  return results;
+}
+
+/**
  * 挂 `/api/trpc/**` 桩，把命中过程的响应做成真协议形态（JSON Lines）。
  *
  * @param page Playwright page
  * @param handlers 过程名片段 → 返回值。按 `Object.entries` 顺序**先匹配先赢**，
  *   所以片段要写得够具体（`"setting.get"` 而不是 `"setting"`）。
  *   没命中任何片段时 `route.continue()`，请求照旧打到真实服务端。
+ *
+ * ⚠️ **批请求按「URL 里的过程顺序」逐一取结果**：`/api/trpc/a,b` 会去找 `a` 与 `b`
+ * 各自的 handler，按这个顺序拼响应体。**只要有一个过程没有 handler 就整条
+ * `continue()`** —— 半桩的批请求比不桩更坏（另一个过程拿到的是 `undefined` 槽位，
+ * 静默、不报错，与文件头那两条同源）。
  */
 export async function stubTrpc(
   page: Page,
@@ -103,10 +158,15 @@ export async function stubTrpc(
 ): Promise<void> {
   await page.route("**/api/trpc/**", async (route: Route) => {
     const url = route.request().url();
-    const matched = Object.entries(handlers).find(([procedure]) =>
-      url.includes(procedure),
+    const procedures = proceduresOf(url);
+    /* 每个过程都要有主：缺一个就整条继续打到真实服务端（见函数头）。 */
+    const results = procedures.map(
+      (procedure) =>
+        Object.entries(handlers).find(([name]) =>
+          procedure.includes(name),
+        )?.[1],
     );
-    if (!matched) {
+    if (results.length === 0 || results.some((r) => r === undefined)) {
       await route.continue();
       return;
     }
@@ -116,7 +176,7 @@ export async function stubTrpc(
        * 响应头仍是 `application/json`（`resolveResponse` 里
        * `headers.set("content-type", "application/json")` 那一行），体是 chunked。 */
       contentType: "application/json",
-      body: trpcJsonlBody([matched[1]]),
+      body: trpcJsonlBody(results),
     });
   });
 }

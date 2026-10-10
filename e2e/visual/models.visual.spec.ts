@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import { stubTrpc } from "../support/trpc-stub";
 import {
   hideDevChrome,
+  watchRecordingInputs,
   settle,
   unstableChromeMasks,
 } from "./support/page-baseline";
@@ -27,6 +28,7 @@ test.describe("模型库空态视觉基线", () => {
   test("空库下的空态全页基线", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await stubTrpc(page, { "model.list": { models: [] } });
+    await watchRecordingInputs(page);
     await hideDevChrome(page);
     await page.goto("/models");
     await settle(page, "暂无可用的本地模型");
