@@ -270,3 +270,57 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
     expect(code).toMatch(new RegExp("standaloneExists\\s*\\?\\s*listFiles\\("));
   });
 });
+
+/* ── 构建期配置配对不变式：`useTypeScriptCli: false` ⇔ 解析到的必须是 TS6 ────
+ *
+ * 官方文档（`experimental.useTypeScriptCli`）明写：关掉它、回退到 TypeScript 的
+ * JavaScript 编译器 API 之后，**若 Next 解析到的是 TypeScript 7，`next build` 会直接退出**。
+ * 本仓库把这颗 opt-out 当钉死项（AGENTS 硬规则 2），理由写在 `next.config.js` 旁边：
+ * `typescript` 别名到 `@typescript/typescript6`，其 `bin/` 只有 `tsc6`、没有 `bin/tsc`，
+ * CLI 模式会误报「typescript 未安装」并把 dev server 的所有请求挂死。
+ *
+ * ⇒ 这颗 opt-out 的安全性**寄生在「解析到的 `typescript` 主版本 < 7」上**，而它此前
+ * 没有执行者：把别名翻成 TS7 是一次看起来正常的依赖动作，坏的消息要等到有人真跑
+ * `next build` 才以「进程退出」的形态出现，而那句话完全指不出是这两个值不配对。
+ * 这里把它变成一条点名两侧出口的断言（要么留在 TS6，要么切 TS7 时把这颗 opt-out 去掉）。
+ */
+import { createRequire } from "node:module";
+
+describe("useTypeScriptCli 与解析到的 TypeScript 版本必须配对", () => {
+  const code = stripComments(config);
+  const flag = /useTypeScriptCli:\s*(true|false)/.exec(code);
+  const optedOut = flag?.[1] === "false";
+
+  /** 从仓库根解析 `typescript` 那份包（本仓的 `typescript` 是 pnpm 别名，指向谁由安装态决定）。 */
+  function resolvedTsVersion(): string {
+    const requireFromRoot = createRequire(join(process.cwd(), "noop.js"));
+    const pkg = JSON.parse(
+      readFileSync(requireFromRoot.resolve("typescript/package.json"), "utf8"),
+    ) as { version?: string };
+    return pkg.version ?? "";
+  }
+
+  it("配置里显式写了 useTypeScriptCli 的布尔字面量（缺值等于两侧都判不了）", () => {
+    expect(
+      flag,
+      "next.config.js 里找不到 useTypeScriptCli 的布尔字面量 —— 本判据的前提没了",
+    ).not.toBeNull();
+  });
+
+  it("opt-out 在场时不得同时解析到 TypeScript 7（否则 next build 直接退出）", () => {
+    const version = resolvedTsVersion();
+    // 先卡形状再取主版本：`Number("")` 是 **0** 而不是 NaN，只判 `Number.isInteger`
+    // 会让「版本号读不出来」伪装成合法的 TS0 静默通过。
+    expect(
+      /^\d+\./.test(version),
+      `解析到的 typescript 版本号形状不对（拿到 "${version}"）—— 先跑 pnpm check:toolchain`,
+    ).toBe(true);
+    const major = Number(version.split(".")[0]);
+    expect(
+      optedOut && major >= 7,
+      `useTypeScriptCli:false 与 typescript@${version} 不配对：官方口径下这会让 next build 直接退出` +
+        "（TS7 必须走 CLI 模式）。两条出口选一：把 typescript 留在 TS6（现状），" +
+        "或在切到 TS7 时删掉这颗 opt-out 并按 AGENTS 硬规则 2 说明理由。",
+    ).toBe(false);
+  });
+});
