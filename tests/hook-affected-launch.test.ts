@@ -644,4 +644,34 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
     expect(note).toContain("scripts/run-affected-tests.mjs --full");
     expect(src, "入口不认 --full，话术就指到空气上").toContain('argv.includes("--full")');
   });
+
+  it("`--full` **不是**全量那一档（它不带覆盖率门槛，也不记那份账）", () => {
+    /* 这一条判的是「两条全量通道不许被读成一件事」——它是本轮差点踩进去的坑：
+     * 看到 `--full` 这个名字就顺手让它去写 `scripts/.full-suite-freshness.json`
+     *（甚至替掉 `full-suite-run.mjs`），那条账记的就变成**没跑过覆盖率门槛**的一次了。
+     *
+     * 差异是实的、不是措辞：
+     *   · `pnpm run test:coverage`（= `full-suite-run.mjs`）= 全量用例 **+ `--coverage`
+     *     的 thresholds**（§11.7 明写覆盖率门槛只在这一档判）；
+     *   · `--full` = `runChunk([], …)` → `vitest run`，**没有** `--coverage`。
+     * 所以 `--full` 绿不代表覆盖率门槛过了，它**不该**记账 —— 记了就是把
+     * 「跑过全量」与「过过覆盖率门槛」混成一件（同 `full-suite-run.mjs` 里那句
+     * 「红着记一条『我跑过』会把两件事混成一件」的反面形态）。
+     *
+     * 两侧都判：入口不记账 + 记账通道只挂在 `test:coverage` 上。只判一侧的话，
+     * 另一侧哪天被改就成了「判据看着有、其实只守住了半条缝」。 */
+    expect(
+      src,
+      "`--full` 去写全量新鲜度账 = 用一条不过覆盖率门槛的跑法冒充那一档",
+    ).not.toMatch(/freshness|full-suite-run/);
+
+    const runner = readFileSync(
+      path.join(ROOT, "scripts", "full-suite-run.mjs"),
+      "utf8",
+    );
+    expect(
+      runner,
+      "全量那一档的记账通道必须挂在 test:coverage 上，而不是随便一个 vitest 跑法",
+    ).toContain('"run", "test:coverage"');
+  });
 });
