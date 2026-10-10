@@ -623,6 +623,24 @@ const EXEMPT_FILES = {
         "的通用形态本身仍由 `~/components/ui/breadcrumb-path` 收口。",
     },
   ],
+  /* P67-a（Badge 绕开）的命名形态误报：判据以 `export function \w*(Badge|Chip|Tag)`
+   * 为锚点（shadcn 已装基元内部的 `function AvatarBadge` / `ComboboxChip` 都**不**
+   * 带 `export function`，所以那个锚点能精准避开它们）。
+   * `SelectChip` 命中的是**名字里有 Chip**，而它不是徽标 —— 是 `Button` 之上的
+   * **可点单选控件**：一排里选一个，语义 `role="radio"` + `aria-checked`，
+   * 四种形态带各自的尺寸与圆角档（ISSUE #1423 / §16.2.4）。徽标那一族是
+   * `ui/badge` 的三轴（variant × size × tone）、**不可点**。
+   * 它要迁也不是迁到 Badge，而是靠 `Button`（本文件已 import 并消费）——
+   * 换句话说这条判据想防的「自造徽标」在这里没有对象。 */
+  P67: [
+    {
+      re: /^src\/components\/ui\/select-chip\.tsx$/,
+      reason:
+        "`SelectChip` 是 `Button` 之上的可点单选控件（role=radio + aria-checked，" +
+        "四种形状档），不是徽标；名字里的 Chip 指的是「一排里选一个的可点小片」，" +
+        "与 `ui/badge` 那套不可点的三轴徽标不同族（ISSUE #1423 / §16.2.4）。",
+    },
+  ],
   P39: [
     {
       re: /^src\/lib\/next-frame\.ts$/,
