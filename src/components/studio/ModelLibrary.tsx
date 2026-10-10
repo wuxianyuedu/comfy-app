@@ -12,6 +12,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { FieldLabel } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
 import { EmptyState } from "~/components/ui/empty-state";
+import { PageHeader } from "~/components/ui/page-header";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
 import { DocumentFrame } from "./ViewContainer";
@@ -39,31 +40,29 @@ export function ModelLibrary() {
       className="px-4 py-8 sm:px-8 sm:py-10"
       backdrop={<AuroraBackground />}
     >
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-title u-title-page">模型库</h1>
-          <p className="text-ink-muted mt-1 text-sm">
-            本机 ComfyUI 可用模型，按扫描目录分类 ——
-            每个目录即一种独立的模型类型。
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => c.setConfigOpen(true)}
-            className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-2"
-          >
-            <Icon data-icon="inline-start" name="settings" size={16} />
-            模型目录配置
-          </Button>
-          <input
-            value={c.q}
-            onChange={textHandler(c.setQ)}
-            placeholder="搜索模型名称…"
-            className="border-border bg-subtle text-ink-bright w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40 sm:w-64"
-          />
-        </div>
-      </div>
+      <PageHeader
+        className="mb-6"
+        title="模型库"
+        description="本机 ComfyUI 能用哪些 —— 按扫描目录分类，每个目录即一种独立的模型类型。"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => c.setConfigOpen(true)}
+              className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-2"
+            >
+              <Icon data-icon="inline-start" name="settings" size={16} />
+              模型目录配置
+            </Button>
+            <input
+              value={c.q}
+              onChange={textHandler(c.setQ)}
+              placeholder="搜索模型名称…"
+              className="border-border bg-subtle text-ink-bright w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40 sm:w-64"
+            />
+          </>
+        }
+      />
 
       <div className="mb-5 flex flex-wrap gap-2">
         <FilterChip

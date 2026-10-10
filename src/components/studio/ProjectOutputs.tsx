@@ -4,6 +4,7 @@ import { subscribeAppEvent } from "~/lib/app-events";
 import { taskStatusLabel } from "~/lib/task-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
+import { PageHeader } from "~/components/ui/page-header";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
@@ -160,35 +161,39 @@ export function ProjectOutputs() {
       className="px-4 py-6 sm:px-8"
       backdrop={<AuroraBackground />}
     >
-      {/* ── Header ── */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="font-title u-title-page">
-            {activeProject?.name ?? "未命名项目"}
-          </h1>
-          <Badge tone="primary" size="pill-md">
+      {/* ── Header ──
+          这一屏的标题是**项目名**（数据），不是屏名 —— 所以走 `title` 而不是在
+          旁边再挂一个「产出」（屏名已经在页签上了，重复一遍是 ISSUE #1423 那族
+          「一屏两名」）。数量徽标 + 项目切换器同理进 `extra` / `actions`。 */}
+      <PageHeader
+        className="mb-5"
+        title={activeProject?.name ?? "未命名项目"}
+        extra={
+          <Badge tone="primary" size="pill-md" className="mt-1">
             {outputs.length} 个产出
           </Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <SelectMenu
-            value={projectId}
-            onChange={setProjectId}
-            options={projects.map((p) => p.id)}
-            labels={Object.fromEntries(
-              projects.map((p) => [p.id, p.name ?? "未命名项目"]),
-            )}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refetchOutputs}
-            className="border-border-strong text-ink-muted hover:text-ink h-auto rounded-lg px-3 py-2"
-          >
-            ↻ 刷新
-          </Button>
-        </div>
-      </div>
+        }
+        actions={
+          <>
+            <SelectMenu
+              value={projectId}
+              onChange={setProjectId}
+              options={projects.map((p) => p.id)}
+              labels={Object.fromEntries(
+                projects.map((p) => [p.id, p.name ?? "未命名项目"]),
+              )}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refetchOutputs}
+              className="border-border-strong text-ink-muted hover:text-ink h-auto rounded-lg px-3 py-2"
+            >
+              ↻ 刷新
+            </Button>
+          </>
+        }
+      />
 
       {/* ── Cover banner ── */}
       {/* p71-allow:start brand violet/fuchsia · 封面横幅与项目徽章（非状态色），见 §3.6.1 */}

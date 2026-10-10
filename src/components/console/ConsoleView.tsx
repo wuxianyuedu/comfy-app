@@ -41,6 +41,7 @@ import { Hint } from "~/components/ui/hint";
 import { textHandler } from "~/lib/form-props";
 import { Input } from "~/components/ui/input";
 import { Kbd } from "~/components/ui/kbd";
+import { PageHeader } from "~/components/ui/page-header";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { cn } from "~/lib/utils";
@@ -68,15 +69,12 @@ export function ConsoleView() {
       className="px-4 py-8 sm:px-8 sm:py-10"
       backdrop={<AuroraBackground />}
     >
-      {/* ── 页头：与历史 / 队列 / 模型库同一形状（h1 + 副标题 + 右侧动作）── */}
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="font-title u-title-page">控制台</h1>
-          <p className="text-ink-muted mt-1 text-sm">
-            在项目根执行命令；命令与其子进程在切走视图或点「停止」时一并回收。
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+      {/* ── 页头：与历史 / 队列 / 模型库同一形状，收在 `ui/page-header` ── */}
+      <PageHeader
+        className="mb-6"
+        title="控制台"
+        description="在项目根执行命令；命令与其子进程在切走视图或点「停止」时一并回收。"
+        actions={
           <Hint label="清空输出（保留跑过的命令）">
             <Button
               variant="outline"
@@ -90,8 +88,8 @@ export function ConsoleView() {
               清屏
             </Button>
           </Hint>
-        </div>
-      </header>
+        }
+      />
 
       {/* ── 主体：左预设 + 右输出/输入。高度用 `h-[85vh]`（与全库长内容面板同一
              口径）：终端要有「一次看得见多少行」的稳定预期，让它随内容长短伸缩就

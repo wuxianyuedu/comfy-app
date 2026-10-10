@@ -57,6 +57,18 @@ export type WorkspaceView =
 export interface NavItem {
   id: WorkspaceView;
   label: string;
+  /**
+   * 屏内页头的标题。
+   *
+   * 「侧栏项 / 页签 /（桌面壳）窗口标题」用 `label` —— 那三处是**导航**，短名才排得下、
+   * 也才像导航；屏内页头有整行宽度，写全名更清楚。所以两者本来就该允许不同，
+   * 而允许不同的前提是**写在同一行里**：分居两个文件的后果是同一件事长出两个名字，
+   * 且没人知道哪个才是当前的（ISSUE #1423 的「队列」/「队列与运行」就是这么来的）。
+   *
+   * 不填 = 与 `label` 同字。填了就等于说「这一项的全名是这个」，由
+   * `pageHeaderTitle()` 统一取值 —— 视图里不再出现裸字面量。
+   */
+  viewLabel?: string;
   /** 这个视图的工作是否已上线（驱动 cursor / opacity） */
   enabled?: boolean;
   /**
@@ -154,6 +166,9 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: "queue",
     label: "队列",
+    /* 原先页头写「队列与运行」。它与侧栏 / 页签的「队列」指的是同一件事，
+     * 两个名字只让标题区多占一行（ISSUE #1423）。现在与 `label` 同字 —— 这一条
+     * 就是「一屏只留一个名字」在代码里的落点，由 `viewLabel` 缺省来保证。 */
     enabled: true,
     icon: <ListChecks size={22} strokeWidth={1.8} />,
   },
@@ -249,6 +264,18 @@ export function globalNavItems(): NavItem[] {
   return NAV_ITEMS.filter(
     (item) => !item.projectScoped && item.id !== PROJECTS_ENTRY.id,
   );
+}
+
+/**
+ * 某视图屏内页头的标题 —— 与侧栏 / 页签 / 顶栏标题**同一个出处**。
+ *
+ * 为什么要有这个出口：屏内页头此前是各视图里的裸字面量（`<h1>历史记录</h1>`），
+ * 与 `NAV_ITEMS` 里那一份没有任何判据把它们连起来 —— 于是同一件事长出两个名字
+ * 时没有任何东西会红（ISSUE #1423）。视图改成从这里取，名字就只有一处能改。
+ */
+export function pageHeaderTitle(view: WorkspaceView): string {
+  const item = NAV_ITEMS.find((it) => it.id === view);
+  return item?.viewLabel ?? item?.label ?? view;
 }
 
 /** 项目界面顶部的切换页签（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）。 */
