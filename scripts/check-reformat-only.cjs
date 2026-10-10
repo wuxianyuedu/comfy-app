@@ -136,34 +136,46 @@ function collectChangedFiles(patch) {
 }
 
 /**
- * 批量把「改动前的整份文件」交给 prettier 重排,返回 `路径 → 规范形态`。
+ * 批量口径的**硬约束与三档判据边界**(实现见 `formatMany` 与 `formatOne`)。
  *
- * **为什么是「一次 prettier 调用处理全部文件」而不是逐文件**:
+ * **为什么是「一次 prettier 处理整批文件」而不是逐文件**:
  * prettier 的启动 + 插件加载是主要成本(prettier 与
- * `prettier-plugin-tailwindcss` 各自要跑一遍 ESM 加载,实测单文件约 400ms,
- * 与文件大小几乎无关)。逐文件 stdin 在这条门禁上会线性叠加:一次改动 12 个
+ * `prettier-plugin-tailwindcss` 各自要跑一遍 ESM 加载,实测单次约 120ms,
+ * 与文件大小几乎无关)。逐文件 stdin 在这条门禁上线性叠加:一次改动 12 个
  * 文件 → 约 5s,PR 改了 100 个文件 → 约 40s。真实用户提交的「批量格式化」
  * 提交正好是这种形态,而 CI 的 vitest 默认 testTimeout 是 5s —— 本脚本被
  * `tests/check-reformat-only.test.ts` 以子进程复跑,于是**门禁本身**在 CI 上
  * 偶发超时(现场是 `Test timed out in 5000ms`,看起来像测试写得慢,实际是
  * 每条用例都要起十几个 prettier)。
  *
- * 批量口径必须与逐文件 stdin **等价**,所以不是「就地 --write 原文件」,而是:
- *   ① 把「改动前的内容」(换行符归一成 LF)写进一个临时目录的文件树,保持原
- *      文件的相对路径 —— prettier 按路径选 parser,相对路径丢了等于换了一套判据;
- *   ② 一次 `prettier --write <tmpdir>`(不加 `--list-different`:它只回「改了哪
- *      些」,而这里本来就要回读内容,两个信息源只会多一处漂移);
- *   ③ 回读临时目录里的最终内容,与**归一化后**的改动前内容比对。
- * 与逐文件 stdin 的**唯一**差异在「被跳过」那一档:整体处理意味着 prettier
- * 自己的筛选(无 parser / 自带 ignore 规则)对每个文件都生效,而 stdin 会把
- * 内容无条件当成对应扩展名来格式化(它能格式化 .gitignore 掉的路径)。
- * **判据必须以后者为准** —— 仓库里已经有过「忽略路径下的源码」被格式化一次就
- * 判成「只改格式」的先例(#619 合并提交里的 `.workbuddy/skills/build-guard/
- * guard.js`,删除于 #623/#636)。因此:没出现在批量结果里的文件一律退回逐文件
- * stdin 再判一次,并把结论按「批量是否成功」定级 ——
- *   · 批量成功 → 「没被改过」是 prettier **自己**的结论,采信,不再兜底(常见
- *     路径,一个文件都不会多起进程);
- *   · 批量失败(起不来 / 配置写错)→ 没有结论,全部退回兜底。
+ * 批量口径必须与逐文件 stdin **等价**,所以不是「就地 --write 原文件」,而是
+ * 把「改动前的整份文件」(换行符归一成 LF)写进一个临时目录的文件树、**保持
+ * 原文件的相对路径** —— prettier 按路径选 parser,相对路径丢了等于换了一套
+ * 判据。
+ *
+ * **`--write <目录>` 的逐行输出本身就是判据,三档语义各不相同**(prettier
+ * 3.x 实测,路径可能被 ANSI 灰化):
+ *
+ *   | stdout 那一行长什么样       | 真结论                                  |
+ *   | --------------------------- | --------------------------------------- |
+ *   | `<path> <ms>ms`             | prettier **改写了它** → 规范形态可回读  |
+ *   | `<path> <ms>ms (unchanged)` | prettier 看过它、它**本来就规范**       |
+ *   | **没有这一行**              | **没有结论**(无 parser / 被忽略跳过)  |
+ *
+ * 第三档必须退回逐文件 stdin:忽略规则**以 cwd 为根读 `.gitignore`**,命中目录
+ * 名时连**显式点名**的路径也一并跳过(`--write <file>` 静默返回空输出、退出码
+ * 0),而 stdin 会把内容无条件当成对应扩展名来格式化(它能格式化 `.gitignore`
+ * 掉的路径)。实测三档的分别:忽略路径下的 `probe.ts` 在「整目录」与「显式点名」
+ * 两档**都没有输出行**,`.foo` 这类没有 parser 的路径同样没有,而 stdin 两档都
+ * 给出格式化后的正文。**判据必须以后者为准** —— 仓库里已经有过「忽略路径下的
+ * 源码」被格式化一次就判成「只改格式」的先例(#619 合并提交里的
+ * `.workbuddy/skills/build-guard/guard.js`,删除于 #623/#636)。
+ *
+ * 反过来,「没有输出行就一律退回 stdin」才是旧口径真正贵的地方:**实际提交里
+ * 绝大多数文件本来就规范**(实测 59 个改动文件里 49 个 `(unchanged)`),它们
+ * 全部白跑一次 stdin 兜底 —— 那是 D 组最大头 14.8s 里占 ~13s 的那一段
+ * (ISSUE #1610)。把 `(unchanged)` 读成**结论**、只对「真的没有那一行」兜底,
+ * 成本就从「改动文件数」降到「prettier 不认识的路径数」(正常提交里是 0)。
  *
  * **不能带 `--cache`**:prettier 明确拒绝「stdin + cache」的组合
  * (`--cache cannot be used when formatting stdin`),带上去会拿到空输出 ——
@@ -182,8 +194,8 @@ let runner = undefined;
 /**
  * 找一个能跑 prettier 的入口。
  *
- * 从**脚本所在目录开始向上找**（`node_modules` 的常规解析方式），找到就用仓库
- * 内的 prettier；一路到根都没有时退回 `pnpm exec prettier`。
+ * 从**脚本所在目录开始向上找**(`node_modules` 的常规解析方式),找到就用仓库
+ * 内的 prettier;一路到根都没有时退回 `pnpm exec prettier`。
  */
 function resolveRunner() {
   if (runner !== undefined) return runner;
@@ -242,7 +254,7 @@ function runPrettier(args, cwd, input) {
   }
   if (typeof runPnpmSync !== "function") {
     throw new Error(
-      "pnpm 形态判据未加载（runPnpmSync 不可用）—— 调用方需先 await loadShell()",
+      "pnpm 形态判据未加载(runPnpmSync 不可用)—— 调用方需先 await loadShell()",
     );
   }
   return runPnpmSync([...head, ...args], {
@@ -253,18 +265,39 @@ function runPrettier(args, cwd, input) {
 }
 
 /**
- * 一次 prettier 调用把整批「改动前内容」重排完。
+ * 解析 `--write <目录>` 的 stdout:分拣出「prettier 改写过的」与「给过结论的」
+ * 两批文件(三档语义见文件头那段表)。
  *
- * 返回「**已被 prettier 改写**的 `相对路径 → 规范形态`」;没被改写(它本来就规范)
- * 的文件不出现在结果里,由调用方退回逐文件 stdin 兜底 —— 那里才有「有结论」与
- * 「没结论」的区别。
+ * 颜色码必须先剥掉:prettier 把 `(unchanged)` 那行整段涂灰,带色时
+ * `/\(unchanged\)$/` 永远匹配不上 —— 那一档会被误判成「改写过的」。
  *
- * **换行符在写入前统一成 LF**:临时目录里的副本若保持 CRLF,两个后果叠加 ——
- * ① prettier 会把它改成 LF,于是**每个 CRLF 文件都进结果**,旧口径下这些文件
- * 一律走一遍逐文件兜底(等于把刚收敛掉的成本又放回来);
- * ② git 检出受 `core.autocrlf` 影响(本仓库统一 LF,但浅克隆的临时仓库可以是
- * CRLF),兜底读回的内容与本地文件差一个 `\r`,而判定侧本来就要归一化行尾
- * (§13.7)—— 两端一致才让「由谁给答案」这件事与行尾无关。
+ * 耗时的位置不固定(`<path> <ms>ms` 与 `<path> <ms>ms (unchanged)`),所以从
+ * **行尾**剥它、而不是按固定列取路径。
+ *
+ * @returns {{rewritten: Set<string>, settled: Set<string>}} 绝对路径集合
+ */
+function parseWriteOutput(stdout, cwd) {
+  const rewritten = new Set();
+  const settled = new Set();
+  for (const raw of (stdout ?? "").split(/\r?\n/)) {
+    const line = raw.replace(/\u001b\[[0-9;]*m/g, "").trim();
+    if (!line) continue;
+    const at = line.replace(/\s+\d+ms(?: \(unchanged\))?$/, "");
+    const abs = path.resolve(cwd, at.split(/\s+/)[0] ?? at);
+    settled.add(abs);
+    if (!/\(unchanged\)$/.test(line)) rewritten.add(abs);
+  }
+  return { rewritten, settled };
+}
+
+/**
+ * 一次 prettier 调用处理整批「改动前的内容」,返回两档判决。
+ *
+ * 返回:
+ *   · `ok: false` —— prettier 整批没跑起来 / 配置写错,**没有结论**,调用方
+ *     全部退回 stdin 兜底(退回是把判据降级,不是把它改写成「没格式化」);
+ *   · `ok: true` + `rewritten`(被改写文件的 `相对路径 → 规范形态`)+
+ *     `settled`(prettier 给过结论的相对路径集合)。
  */
 function formatMany(entries) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reformat-ref-"));
@@ -272,32 +305,43 @@ function formatMany(entries) {
     for (const { file, text } of entries) {
       const target = path.join(dir, file);
       fs.mkdirSync(path.dirname(target), { recursive: true });
+      // 归一化行尾的理由见文件头那段:副本保持 CRLF 会让每个 CRLF 文件都进
+      // 「被改写」,等于把成本又放回去。
       fs.writeFileSync(target, text.replace(/\r\n/g, "\n"));
     }
     const { cwd } = runnerPrefix();
     const res = runPrettier(["--write", dir], cwd);
-    // prettier 整批失败(起不来 / 配置写错):返回空列表,调用方全部退回 stdin ——
-    // 退回是把判据降级而不是把它改写成「没格式化」,不会静默放过。
-    const out = new Map();
-    if (res.error || res.status !== 0) return { ok: false, out };
-    for (const { file, text } of entries) {
-      const after = fs.readFileSync(path.join(dir, file), "utf8");
-      // 比的是**已经规范化**的改动前内容:本文件只判「prettier 会不会改动它」,
-      // 行尾差异归判定侧的归一化管(见上)。
-      if (after !== text.replace(/\r\n/g, "\n")) out.set(file, after);
+    if (res.error || res.status !== 0 || typeof res.status !== "number") {
+      return { ok: false, rewritten: new Map(), settled: new Set() };
     }
-    return { ok: true, out };
+
+    const { rewritten, settled } = parseWriteOutput(res.stdout, cwd);
+    const out = new Map();
+    const settledRel = new Set();
+    for (const { file } of entries) {
+      // prettier 报告的是「相对它 cwd 的路径」(临时目录在 cwd 之外,于是带
+      // `../` 前缀),统一解析成绝对路径再比对。
+      const abs = path.join(dir, file);
+      if (!settled.has(abs)) continue;
+      settledRel.add(file);
+      // 只回读**确实被改写**的文件:实际提交里绝大多数文件是「本来就规范」的,
+      // 回读它们纯属白付(旧口径在这里白读了 49 份)。回读的内容就是 prettier
+      // 写完后的正文,正是判定要的「规范形态」。
+      if (rewritten.has(abs)) out.set(file, fs.readFileSync(abs, "utf8"));
+    }
+    return { ok: true, rewritten: out, settled: settledRel };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
 /**
- * 逐文件 stdin 兜底:prettier 整批没跑起来 / 该文件不在批量结果里时用。
+ * 逐文件 stdin 兜底:prettier 整批没跑起来,或某个文件**没拿到结论**时用。
  *
- * 它是**判据的一侧**而不只是性能兜底:批量结果里「没被改写」既可能是「本来就
- * 规范」也可能是「被 prettier 自己的 ignore 规则跳过」,两种情况在批量结果里
- * 长得一样,只有 stdin 口径能把它们分开。
+ * 它是**判据的一侧**而不只是性能兜底:整批口径下 prettier 自己的筛选(无
+ * parser / 自带 ignore 规则)会让一部分文件**根本不出现在输出里**,而 stdin
+ * 会把内容无条件当成对应扩展名来格式化 —— 只有这个口径能把「prettier 不认识
+ * 它」与「它本来就规范」分开。
  */
 function formatOne(text, file) {
   const ext = path.extname(file).slice(1);
@@ -320,26 +364,25 @@ function formatOne(text, file) {
 function classifyReformatOnly(entries) {
   const norm = (s) => s.replace(/\r\n/g, "\n").trimEnd();
   const pending = entries.filter((e) => e.before && e.after);
-  const { ok, out } = formatMany(
+  const { ok, rewritten, settled } = formatMany(
     pending.map((e) => ({ file: e.file, text: e.before })),
   );
 
   const reformatOnly = new Set();
   for (const e of pending) {
-    // 逐文件兜底的触发条件只有两个:批量**自己**说这个文件没被改过,或批量
-    // 整批没跑起来(没有结论)。两次口径必须都是真 prettier —— 见 formatMany
-    // 上方「唯一差异在被跳过那一档」的说明:判据以 stdin 口径为准。
-    //
-    // 「没被改写」听起来像一句确定的结论,但它同时覆盖「本来就规范」与
-    // 「prettier 自己的 ignore 规则把它跳过了」两件不同的事,而只有前者能推出
-    // 「这次提交不是纯格式化」—— 后者根本没有结论,漏掉兜底就会把真实改动放行。
-    const formatted =
-      ok && out.has(e.file) ? out.get(e.file) : formatOne(e.before, e.file);
-    if (formatted === null) continue;
+    // 兜底只在「prettier 没给过结论」时付:整批没跑起来,或这个文件根本没出现
+    // 在输出里(无 parser / 被忽略跳过)。`(unchanged)` 是**结论**(prettier 看过
+    // 它、它本来就规范),不是「不知道」—— 把它当成不知道会让绝大多数提交白付
+    // 一次 stdin,而 stdin 的答案是确定的「原样」(ISSUE #1610 的那 13s)。
+    const known = ok && settled.has(e.file);
+    let formatted = known ? rewritten.get(e.file) : undefined;
+    if (!known) formatted = formatOne(e.before, e.file) ?? undefined;
+    if (formatted === undefined) continue;
     if (norm(formatted) === norm(e.after)) reformatOnly.add(e.file);
   }
   return reformatOnly;
 }
+
 
 /**
  * 收集「建议比对」的一批文件:两侧内容都取得到(新增 / 删除 / 改名不判定 ——
