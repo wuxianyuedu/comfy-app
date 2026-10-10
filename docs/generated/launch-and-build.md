@@ -2072,6 +2072,16 @@ t.exports = e.x(
 `app-route-turbo`，且它**不在任何 `.nft.json` 的 files 里**。于是 standalone 的
 `node_modules/next/dist/compiled/next-server/` 只有 3 个文件，而仓库里是 74 个。
 
+**复测（当前构建链，A/B）**：把 `outputFileTracingIncludes` 整段注释掉再构建，
+两份产物**逐字节同构** —— `next-server/` 两次都是 74 个文件（= 源目录整份复制），
+四份 `*-turbo.runtime.prod.js` 都在位。机制在上游源码里写清了：读
+`outputFileTracingIncludes` / `Excludes` 的只有 `collect-build-traces`，而它挂在
+`if (bundler !== Bundler.Turbopack)` 分支下，Turbopack 构建**整段跳过**它
+（`turbopack-build/impl.js` 只取 `outputFileTracingRoot`）。
+⇒ 上面那份 `includes` 写法在**当前版本上不承重**，它是与 `excludes` 同一格的
+「意图声明」；本节下面的「缺件」在今天的构建链上不会自发重现，但**它的判据必须留着**——
+真正看守的是产物层数文件那一条，而不是这份配置。
+
 **为什么常规门禁抓不到**：
 
 - 构建期**不报错**（缺口是运行期才暴露的），CI 只跑 `pnpm build`；
@@ -2088,10 +2098,14 @@ outputFileTracingIncludes: {
 },
 ```
 
-补上是 26 个文件（≈ +2.6MB），实测 API 路由从「全 500」恢复为 200。
+当年补上的是 26 个文件（≈ +2.6MB），实测 API 路由从「全 500」恢复为 200。
+**但这条写法在当前构建链上不承重**（见上面那段 A/B）：把它摘掉，产物不变。
+今天的正确读法是——**缺件的修法只有一条：产物层数文件**（下面「门禁」那条），
+这份配置只是把意图留在配置旁边；「补一条 includes 就当修好了」和
+「摘了 includes 产物没变，所以数产物的判据可以删」是同一个误读的两侧。
 
-> **方向性提醒**：这条只能靠 `includes` 补。往 `outputFileTracingExcludes` 里
-> 加东西是**反方向**的（excludes 只做减法，补不回缺失的文件）——
+> **方向性提醒**（仍成立）：这一格不许往 `outputFileTracingExcludes` 里写东西——
+> excludes 只做减法，缺件的方向是反的；
 > `tests/standalone-runtime-completeness.test.ts` 有一条用例专门守这个方向。
 
 **门禁**（配置层 + 产物层）：

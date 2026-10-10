@@ -3,9 +3,10 @@
  * ===========================================================================
  *
  * 背景：`next build`（Turbopack）对 `require("next/dist/compiled/next-server/
- * <name>.runtime.prod.js")` 这类**动态 require 字符串**的追踪是**不完整的**。
- * 实测：只有被 middleware 图命中的那一份（`app-page-turbo`）出现在 nft 清单里，
- * `app-route-turbo` 一份都不在 —— 而所有 App Route（`route.js`）都在 require 它。
+ * <name>.runtime.prod.js")` 这类**动态 require 字符串**的追踪在早期构建链上是
+ * **不完整的**。当时的实测：只有被 middleware 图命中的那一份（`app-page-turbo`）
+ * 出现在 nft 清单里，`app-route-turbo` 一份都不在 —— 而所有 App Route（`route.js`）
+ * 都在 require 它。
  *
  * 后果不是「少了个文件」，而是**所有 API 路由 500**：
  *
@@ -24,9 +25,15 @@
  *   · 所以这里做两件事：① 锁 `outputFileTracingIncludes` 条目还在（改坏了先红）；
  *     ② 产物存在时真去数那份文件在不在。
  *
- * 反向验证：把 `outputFileTracingIncludes` 从 next.config.js 摘掉重新 build，
- * `.next/standalone` 里 `app-route-turbo.runtime.prod.js` 消失，本文件的产物用例
- * 失败、`check-standalone-contents.cjs` 也报缺件（见 tests 注释末尾的判据）。
+ * 反向验证（早期构建链）：把 `outputFileTracingIncludes` 从 next.config.js 摘掉
+ * 重新 build，`.next/standalone` 里 `app-route-turbo.runtime.prod.js` 消失，
+ * 本文件的产物用例失败、`check-standalone-contents.cjs` 也报缺件。
+ * ⚠️ 这句在**当前构建链上已复现不出**：A/B（同机同依赖）把那份条目整段注释掉后，
+ * 两份产物逐字节同构（`next-server/` 都是整份 74 个文件）。原因是读这两个 tracing 键的
+ * 只有 `collect-build-traces`，而它在 `bundler !== Turbopack` 的分支里整段跳过 ——
+ * 也就是这份配置条目今天加不出任何东西。所以：本文件里**承重的是下面那组产物探针**，
+ * 上面那组配置断言只守「意图没被人反向写成 excludes」，不许把它读成缺件的防线
+ *（口径与依据见规范 §7.4）。
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -57,8 +64,10 @@ describe("outputFileTracingIncludes：Next 自带运行时脚本必须显式包�
       config.includes(
         "./node_modules/next/dist/compiled/next-server/*runtime.prod.js",
       ),
-      "缺口就在这里：Turbopack 对动态 require 字符串只追踪到被 middleware 命中的" +
-        "那一份，app-route-turbo 不在 nft 里 —— 漏掉后所有 API 路由运行时 500",
+      "缺口就在这里：`route.ts` 都要的 `app-route-turbo.runtime.prod.js` 是动态 " +
+        "require 字符串，历史上确实漏追过（页面 200、接口全 500）。当前构建链上这条 " +
+        "条目不承重（见文件头那段 A/B），真正判缺件的是下面的产物探针与 " +
+        "check-standalone-contents.cjs",
     ).toBe(true);
   });
 
