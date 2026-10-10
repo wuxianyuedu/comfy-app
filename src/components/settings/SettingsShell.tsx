@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 设置页共享外壳（③视图层）—— 标题行 + 分区导航 + 内容滚动容器。
+ * 设置页共享外壳（③视图层）—— 标题行 + 分区导航树 + 内容滚动容器。
  *
  * 「就绪视图」`SettingsPageView` 与「加载 / 错误占位壳」都复用它：设置页打开时
  * 外壳（含分区导航）随首帧立即渲染，用户马上看到界面框架，而不是整屏 spinner
@@ -18,18 +18,16 @@
  * 因此本模块**不再**需要 `onClose`：两个挂载点此前都不传它（那条分支进不去），
  * 按 §12.16 一并删掉，`SettingsView` / `SettingsPageView` 也不用再透传。
  *
- * ## 分区导航是一条分段的横向 chip 行，不是一个 192px 的竖栏
+ * ## 分区导航是左侧一棵**竖向的树**，不是一条横排 chip 带
  *
- * 竖栏是「很多层级的设置」长出来的形状：分组的父项常年只有一个子项，其余 8 项
- * 挤在它下面，分组层级没换来任何导航价值，却先吃掉了四分之一屏宽（内容列因此
- * 常年在 1100px 的上限里被挤成一条）。改成按「模型与后端 / 数据 / 应用 / 诊断」
- * 分段的横向 chip 行之后：
- *   · 内容区拿回那 192px，两个字段并排的表单不再被挤成窄条；
- *   · 顶部一屏之内看得见全部分区，不必先向下滚一遍导航；
- *   · 选中态、键盘语义与原来完全一致（仍是 `<Button aria-current>`，
- *     仍由同一份 `ui/button` 渲染）。
- * 横向溢出交给 `.custom-scrollbar` 那一条具名滚动条，**不换行、不压扁 chip**
- *（规范 03 §3.8.1「一排控件不许被压扁」：窄了就横向滚，不把 chip 折成两行）。
+ * 横排那一版把**分组名**与**分区项**排在同一行、同一种字号里，用户读到的是一串
+ * 平权的词（`模型 本地模型 远程模型 ｜ 后端 创作后端 ｜ …`）—— 哪个是组、哪个能点
+ * 分不出来（ISSUE #1694）。竖排的树把层级还给**缩进 + 引导线**：
+ *   · 分组名是父行（弱一档、不可点），分区项是它的子行（可点、`aria-current`）；
+ *   · 缩进与引导线由 `~/components/ui/tree-rows` 一次给全（§16.2.4.39，P36 硬闸），
+ *     本文件不再手写 `ml-* / border-l-*`；
+ *   · 内容区仍是 `--container-medium` 里的那一列，导航固定宽、不长出滚动竞争。
+ * 左侧这一列**只放导航**，纵向溢出交给它自己的 `.custom-scrollbar`。
  *
  * 导航上方的 `sectionSummary` 是「当前在哪一节、这一节管什么」那一行 —— 它替掉的
  * 是各分区卡片正文开头那段「本分区是什么」的解释性段落（那种段落每节都写一遍，
@@ -37,19 +35,17 @@
  * `settings-section-summary.ts`（纯常量 + 纯派生，可单测）。
  */
 
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import {
   SETTINGS_SECTIONS,
   type Section,
 } from "~/app/(main)/settings/hooks/use-settings-page";
 import { Button } from "~/components/ui/button";
+import { TreeChildren } from "~/components/ui/tree-rows";
 import { cn } from "~/lib/utils";
 
-import {
-  SETTINGS_SECTION_GROUPS,
-  sectionSummary,
-} from "./settings-section-summary";
+import { TREE_GROUPS, sectionSummary } from "./settings-section-summary";
 
 export function SettingsShell({
   section,
@@ -81,12 +77,16 @@ export function SettingsShell({
           </p>
         </header>
 
-        <SettingsSectionNav section={section} onSelect={onSelect} />
+        {/* 导航在左、内容在右：树需要的是**纵向**空间（父行 + 缩进子行），
+            而横排那条带子只能靠分隔符暗示分组 —— 层级读不出来。 */}
+        <div className="flex min-h-0 flex-1 gap-6 pt-4">
+          <SettingsSectionNav section={section} onSelect={onSelect} />
 
-        {/* 内容区：滚动归它，所以主操作按钮仍在各区卡片自己的末尾（卡片不是
-            滚动容器的直接子项，规范 §4.12 的「主操作固定在滚动区外」不适用）。 */}
-        <div className="custom-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto pb-6">
-          {children}
+          {/* 内容区：滚动归它，所以主操作按钮仍在各区卡片自己的末尾（卡片不是
+              滚动容器的直接子项，规范 §4.12 的「主操作固定在滚动区外」不适用）。 */}
+          <div className="custom-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto pb-6">
+            {children}
+          </div>
         </div>
       </div>
     </div>
@@ -94,9 +94,9 @@ export function SettingsShell({
 }
 
 /**
- * 分区导航（横向 chip 行，按 `SETTINGS_SECTIONS` 的段位分组）。
+ * 分区导航（左侧的树，按 `TREE_GROUPS` 分组）。
  *
- * 段名不是第二份分区清单 —— 它只给「哪几项排在一起」起名字，项本身与顺序一律
+ * 分组名不是第二份分区清单 —— 它只给「哪几项挂在一起」起名字，项本身与顺序一律
  * 来自 `SETTINGS_SECTIONS`（§12.18：不许在视图里重抄一遍分区表）。漏登记一项
  * 由 `SettingsShell.test.tsx` 拦下（它按 id 集合双向比对，不按字面量）。
  */
@@ -108,33 +108,29 @@ function SettingsSectionNav({
   onSelect: (section: Section) => void;
 }) {
   return (
-    <nav aria-label="设置分区" className="mt-4 mb-5 shrink-0">
-      {/* 一条**单行**的 chip 带，段之间用一个弱化的小圆点分隔 —— 分行的理由是
-          当初竖栏里那套「父项 + 一堆缩进的子项」，而那套层级在这里并不存在
-          （每一节都是平级的配置区）。四行段位只会把导航撑高到 100px 以上，
-          与它替掉的竖栏一样吃首屏。 */}
-      <div className="custom-scrollbar -mb-1 flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto pb-1">
-        {SETTINGS_SECTION_GROUPS.map((group, groupIndex) => {
-          const items = SETTINGS_SECTIONS.filter((item) =>
-            group.sections.includes(item.id),
-          );
-          if (items.length === 0) return null;
-          return (
-            <Fragment key={group.label}>
-              {groupIndex > 0 && (
-                <span
-                  aria-hidden
-                  className="bg-border-strong mx-1 h-3.5 w-px shrink-0"
-                />
-              )}
-              {/* 段名不进可访问名：读屏按 `aria-current` 与按钮文案导航就够了，
-                  再念一遍「模型 / 后端 / 数据」只会让这一行更长。 */}
-              <span
-                aria-hidden
-                className="text-ink-fainter px-1 text-xs whitespace-nowrap"
-              >
-                {group.label}
-              </span>
+    <nav
+      aria-label="设置分区"
+      className="custom-scrollbar w-40 shrink-0 overflow-y-auto pb-2"
+    >
+      {TREE_GROUPS.map((group) => {
+        const items = SETTINGS_SECTIONS.filter((item) =>
+          group.sections.includes(item.id),
+        );
+        if (items.length === 0) return null;
+        return (
+          <div key={group.label} className="mb-3 last:mb-0">
+            {/* 分组名是父行：弱一档、不可点 —— 它只回答「这几项属于一类」，
+                不是导航目标（点了也不会切到某个分区）。读屏不进可访问名，
+                分区自身由子行的 `aria-current` 表达。 */}
+            <p
+              aria-hidden
+              className="text-ink-fainter px-2 text-xs font-medium"
+            >
+              {group.label}
+            </p>
+            {/* 子行集合走 `TreeChildren`：缩进档 + 引导线一处给全（§16.2.4.39）。
+                `depth=1` 是「父行是分组头」这一档的标准形态。 */}
+            <TreeChildren depth={1} className="flex flex-col gap-0.5">
               {items.map((item) => {
                 const active = section === item.id;
                 return (
@@ -145,7 +141,7 @@ function SettingsSectionNav({
                     aria-current={active ? "true" : undefined}
                     onClick={() => onSelect(item.id)}
                     className={cn(
-                      "h-auto shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium",
+                      "h-auto w-full justify-start rounded-lg px-3 py-1.5 text-sm font-medium",
                       active
                         ? "bg-primary-soft text-primary-strong hover:bg-primary-soft hover:text-primary-strong"
                         : "text-ink-muted hover:text-ink",
@@ -155,10 +151,10 @@ function SettingsSectionNav({
                   </Button>
                 );
               })}
-            </Fragment>
-          );
-        })}
-      </div>
+            </TreeChildren>
+          </div>
+        );
+      })}
     </nav>
   );
 }
