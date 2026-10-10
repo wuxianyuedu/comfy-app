@@ -239,6 +239,9 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
    # 「什么时候被敲」。本步不跑第二遍 tsc（合并前那一跳归 §13.6.2 的 check:base:batch），
    # 判的是那条判据自己的执行者：每条登记项的执行者在场 + 与声明 ⇄ 读者索引逐行同源 +
    # **声明行计数零增量**（新写一处就红，直到你回答「它谁在执行」）
+✅ node scripts/check-app-version.cjs        # 产品版本号三处同步（D7，ISSUE #1611）：package.json /
+   # src-tauri/tauri.conf.json / src-tauri/Cargo.toml 三处逐字相等 + 形态合法（见 launch-and-build §7.1.1）。
+   # 只判相等，刻意不判「该不该升」——那是发布判断
 ✅ node scripts/check-a11y-rules.cjs         # jsx-a11y 的规则开关 ⇄ 判据（见 06 §6.12）：
    # 官方 recommended 集合全开（从插件自己的数据算，不手抄规则表）、本仓与官方默认的
    # 每一处不同都在 scripts/.a11y-rule-ledger.json 登记（关掉一条 / 就地豁免一个文件，

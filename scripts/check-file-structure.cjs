@@ -411,6 +411,17 @@ const DOMAIN_EXEMPT = new Set([
   "src/lib/models.ts",
   // 会话判决:被 server/auth 与视图层共用
   "src/lib/auth-server.ts",
+  /* 产品版本号的**运行时读取面**（ISSUE #1611 阶段三 D7）：权威源是
+   * `package.json` 的 `version`，而另外两处（`src-tauri/tauri.conf.json` /
+   * `src-tauri/Cargo.toml`）由 `scripts/check-app-version.cjs` 守着与它逐字相等。
+   * 消费方是**服务端**（`src/server/mcp/workshop-mcp.ts` 的 MCP `serverInfo.version`）
+   * 与将来任何要显示产品版本的视图 —— 两侧都得能读它，且**浏览器图里不许出现
+   * `process.env.npm_package_version`**（那个变量只在 `pnpm run` 起的进程里有值，
+   * standalone 与桌面壳起的 Node 都没有：本地能读、出厂读不到）。所以它必须是
+   * 一份**两边都能静态 import 的常量**（JSON 静态导入被两个构建器都内联），
+   * 进任何子域都会让另一侧反向依赖那个域 —— 与 `endpoints` / `task-state` 同款：
+   * 「唯一持有者 + 任何域消费」的顶层单例。 */
+  "src/lib/app-version.ts",
   // 应用级特性:skill 种子(与 agent 无关)、更新提醒(与桌面壳无关)
   "src/lib/skills-seed.ts",
   "src/lib/update-check-client.ts",
