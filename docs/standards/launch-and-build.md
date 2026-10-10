@@ -1569,7 +1569,7 @@ zustand 队列，而不是再加一个模块级单例。
 | **打开居中弹窗（应用日志 / 执行日志 / 任务详情 / 模型库…）后，页签与右上角的关闭按钮被挡住** | **同一处回归的第二形态：首轮只改了「全屏视图」，弹窗类浮层仍是 `fixed inset-0`**（ISSUE #310 二次回归）。页签搬到窗口标题行后，任何铺满**整个视口**的浮层都会盖住标题行；而弹窗是全项目最通用的写法（25 个文件），逐个文件手改必然再漏——用户实测：打开「应用日志」后页签与右上角关闭按钮同时不可见、不可点 | 已修（判据与门禁见 12 §12.8）：① 全屏视图与模态弹窗统一经 `overlayClass(kind, extra)` / `fullScreenLayerClass(z, extra)` 取让位定位（顶部 `top-title-bar`），不再手写 `fixed inset-0`；② 接入 21 个浮层（应用日志、执行日志 ×2、任务详情、视频队列、模型库 / 标签、来源、删除工作流、产出预览、调试链路、`ModalDialog`、设置页两个弹窗、工坊 API 渠道 / LLM 上下文、节点设置、右键菜单 / 项目切换 / 种子模式遮罩、工作流库元数据编辑、`ui/dialog` 与 `ui/sheet` 遮罩）；③ **新增硬规则门禁** `scripts/check-title-bar-clearance.cjs`（pre-commit 的 D 组「标题行让位硬规则」；流水线同名那一步已随 ISSUE #623 删除），`src/components/**`、`src/app/**` 里出现 `fixed inset-0` 即阻断，避免再靠人肉逐个文件翻。豁免仅 3 条（判据模块、注释引用、装饰背景层），见脚本内 `EXEMPT`。回归测试见 `src/lib/full-screen-layer.test.ts`、`tests/check-title-bar-clearance.test.ts`、`e2e/critical-flows.spec.ts`（新增「打开应用日志面板后应用页签仍可见可点」，已反向验证：改回 `inset-0` → 用例失败） |
 
 | **安装包里带着开发机的密钥与数据库**（用户/评审都看不出来：构建不报错、CI 全绿、体积护栏也只挡 GB 级） | **产物卫生靠「剔除目录名」的清单，而这两样是文件**（ISSUE #489）：`next build` 把仓库根的 `.env`（Next standalone 的环境加载是**无条件复制**，`outputFileTracingExcludes` 实测删不掉）与 `db.sqlite`（动态路径 tracing）复制进 `.next/standalone`，`scripts/build-desktop.mjs` 的噪声清单只剔目录名 → 随 static 被编译期内嵌进 exe。**CI 不跑 `build-desktop`（也不该跑）**，而触发条件是「开发机有真实 `.env`」——正是 `run-local.ps1` 自动生成 `.env` 的那些机器 | 已修（§7.3）：`outputFileTracingExcludes` 补 `./db.sqlite*`（实测有效）与 `./.env*`（尽力而为）；新增 `scripts/standalone-private-inputs.mjs` 作剔除清单的单一实现，`pnpm build` 收尾与 `build-desktop` 组装后各剥一次；`scripts/check-standalone-contents.cjs` 的禁忌清单补「开发机私有输入 / 开发库文件」并把范围扩到 `src-tauri/static`；门禁见 `tests/dist-artifact-hygiene.test.ts` |
-| **`pnpm build` 走到收尾几步停住**：报 `[standalone] 顶层出现白名单外的条目 N 个`（或「src/ 下出现未逐文件登记的条目」），而代码与依赖都没动（ISSUE #1217） | **不是构建新坏了，是那道判据开始真跑了**：#1217 之前 `scripts/check-standalone-contents.cjs` 只在人手与 `build-desktop` 里出现，而 #623 之后没有 CI 兜底 —— 于是「一条早就写好的产物判据在 master 上红了很久没人看见」本身就是这条 issue 的症状。同时 Turbopack 根本不读 `outputFileTracingExcludes` 的整目录条目（第三件事之二的 A/B：同一份清单在 webpack 下把 40 个顶层条目砍到 10 个、在 Turbopack 一条都不减），所以产物层换成**顶层默认拒绝**之后，以前「没人把它列进黑名单就静默出去」的目录必然被点名 | 先读红话点名的条目，再按它给的两条路走：① 那东西**确实**是运行期要读的 → 同批改两处（剔除侧 `STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL` 与判据侧同名清单，两份逐字同源由 `tests/dist-artifact-hygiene.test.ts` 核对）并写清「谁在运行期读它」；② 不该出去（绝大多数）→ 什么都不用改，跑一次 `node scripts/standalone-private-inputs.mjs` 看它被剔掉即可。**别为了变绿往判据那侧加一项**，也别去补 excludes —— 实测它在这条链上不做减法。口径见 §7.3 |
+| **`pnpm build` 走到收尾几步停住**：报 `[standalone] 顶层出现白名单外的条目 N 个`（或「src/ 下出现未逐文件登记的条目」），而代码与依赖都没动（ISSUE #1217） | **不是构建新坏了，是那道判据开始真跑了**：#1217 之前 `scripts/check-standalone-contents.cjs` 只在人手与 `build-desktop` 里出现，而 #623 之后没有 CI 兜底 —— 于是「一条早就写好的产物判据在 master 上红了很久没人看见」本身就是这条 issue 的症状。同时 Turbopack 这条链上 `outputFileTracingExcludes` 的整目录条目**实测一条都不减**（第三件事之二的 A/B：同一份清单在 webpack 下把 40 个顶层条目砍到 10 个、在 Turbopack 一条都不减；那句旧机制表述「Turbopack 不读这份键」已在同节订正——两个键在 Rust 侧按路由实现，只是本仓这批杂质不走路由 trace 那一路），所以产物层换成**顶层默认拒绝**之后，以前「没人把它列进黑名单就静默出去」的目录必然被点名 | 先读红话点名的条目，再按它给的两条路走：① 那东西**确实**是运行期要读的 → 同批改两处（剔除侧 `STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL` 与判据侧同名清单，两份逐字同源由 `tests/dist-artifact-hygiene.test.ts` 核对）并写清「谁在运行期读它」；② 不该出去（绝大多数）→ 什么都不用改，跑一次 `node scripts/standalone-private-inputs.mjs` 看它被剔掉即可。**别为了变绿往判据那侧加一项**，也别去补 excludes —— 实测它在这条链上不做减法。口径见 §7.3 |
 
 | **面板里的错误日志带着密钥原文**（pino 流里明明是 `[Redacted]`，落盘的 `app-runtime.log` 里却是明文） | **ERROR 镜像是一条独立落盘通道，不受 pino `redact` 保护**（ISSUE #489）：`src/server/lib/logger.ts` 的镜像在取不到 `msg`/`err.message` 时用 `JSON.stringify(payload)` 整包兜底；而 `REDACT_PATHS` 的 `*.secret` 只匹配「属性名恰好叫 `secret`」，`BETTER_AUTH_GITHUB_CLIENT_SECRET` 这类 `*_SECRET` 命名一条都不命中——pino 的通配语义也表达不了「名字含 secret」（`*secret`/`*_SECRET`/`*secret*` 实测全无效，`*` 会把整条记录连 `msg` 打成 `[Redacted]`） | 已修（规范 07 §7.18.2.1）：镜像不再整包透传（无可读文案时只输出键名清单），并新增**值形状守卫** `redactSecretShaped()`——在日志写入边界擦掉 PEM 私钥块 / JWT / 高熵串，不问字段名因而覆盖「名字无法穷举」的密钥；`Error` 保形 |
 | **照文档 `cp .env.example .env` 走完，`pnpm dev` / `pnpm start` 仍然起不来** —— 输出里先出现 `- Local: http://localhost:<port>` 与 `✓ Ready in 77ms`，**之后**才抛 `Failed to load next.config.js` + `Invalid environment variables`（或 `MissingEnvFileError`）；提示里的小贴士还让去「双击 `tools/start/run-local.ps1`」（Linux / macOS 上不存在） | **两层叠加，且失败时机误导**（ISSUE #489）：① `.env.example` 里 `BETTER_AUTH_SECRET` 与两个 `BETTER_AUTH_GITHUB_*` 就是**空串**，而 createEnv 配了 `emptyStringAsUndefined: true` —— 空串等价于「没给」，于是照文档 cp 出来仍是 `Invalid environment variables`，看不出是「值留空」；Windows 侧一直有 `prepare-local-run.ps1` 第 4 步自动补齐，**Linux / macOS 没有任何等价物**。② `src/env.js` 的校验发生在 Next 加载 `next.config.js` 的阶段，而 Next 会**先**打印 Local 地址与 `✓ Ready` —— 用户读到的是「起来了但报错」，真相是端口无人监听。**只探首页会误判**：同族形态里「服务其实没起」比「起来后 500」更难分辨 | 已修（§9.1 / §9.2 第 6 条）：新增 `scripts/env-init.mjs`（`pnpm env:init`，与 `.ps1` 同口径生成随机密钥 + OAuth 占位值，幂等、不覆盖既有配置）与 `scripts/env-preflight.mjs`（`dev.mjs` / `start.mjs` 共用，**在起 Next 之前**判「文件在 + 三项非空」，失败即打印可行动作并非零退出 —— 不再出现「先 ✓ Ready 再崩」）；**同族还有 `scripts/db-schema-state.mjs` 在起 Next 之前探哨兵表**（`.env` 就绪后，schema 未推时同样早退并打印可行动作，两条预检各查各的、并列挂在 `dev.mjs` / `start.mjs`）；缺文件提示里不再夹带任何 `.ps1` 入口。回归测试见 `tests/linux-env-bootstrap.test.ts`（真跑两个脚本；反向验证：还原旧入口 / 去掉预检，对应用例必失败） |
@@ -1805,10 +1805,11 @@ Warning: Dynamic filesystem access causes tracing of the whole project
 > 还是单文件条目都**不做减法**（订正见上表第四行；下一节把它与 webpack 放在一起量了）。
 > 真正的减法只发生在产物层显式删除
 > （`scripts/standalone-private-inputs.mjs`，见下方「第六件事」）。这与 `.env` 那条
-> 已知盲区同源：环境文件是无条件复制的，`./.env` 写什么都删不掉。规范 §7.2 第三件事之二
-> 把「到底是谁不读这份键」量清楚了。
+> 已知盲区同源：环境文件是无条件复制的，`./.env` 写什么都删不掉。规范 §7.2
+> 第三件事之二量清了「这条链上减没减」，并在同处订正了「谁不读这份键」那句
+> 机制表述——两个键在 Turbopack 的 Rust 侧按路由实现，不是没人读。
 
-**第三件事之二：「谁不读这份键」已经量清——是 Turbopack，不是键位写错（ISSUE #1217 的定性）。**
+**第三件事之二：「这条链上不做减法」是实测；但「Turbopack 不读这份键」那句机制表述是错判（ISSUE #1217 量的是效果，定性在此订正）。**
 同一份源码、同一份 `next.config.js`，只换 bundler，各构建一次后**在剥离之前**数产物：
 
 | 构建方式（Next 16.3.5）               | 顶层条目 | 真文件 | `changelog.d` | `docs/*.md` | `src/**/*.test.ts(x)` | `src-tauri` | `python-venv` | `db.sqlite*`   | `.env` | `data/`（含密钥） | `log/`  |
@@ -1818,9 +1819,16 @@ Warning: Dynamic filesystem access causes tracing of the whole project
 
 三条结论，按这次实测的顺序写：
 
-1. **这份 excludes 不是写错了键位，是 Turbopack 不读它**：同一份清单在 webpack 下
+1. **不是键位写错，是这条链上不做减法**：同一份清单在 webpack 下
    `changelog.d` / `docs` / `tests` / `src-tauri` / `python-venv` / `db.sqlite*` / 根级
    `*.config.*` **全部归 0**（40 个顶层条目掉到 10 个），Turbopack 下一条都不减。
+   ⚠️ **但别把这句念成「Turbopack 不读这份键」——那是机制层的错判**：两个键在上游 Rust 侧
+   按**路由**实现（`crates/next-api/src/nft.rs` 用 route glob 匹配 `page_name`，命中后由
+   `nft_json.rs` 写进每路由的 `.nft.json`；官方文档也把键写成 route glob + 项目根相对模式）。
+   为什么这份按路由实现的排除在本仓一条都不减，**尚未逐路量清**；已查实的那一路是
+   `.env` —— 它走 `writeStandaloneDirectory()` 的显式复制（§7.3），与路由 trace 无关。
+   **这处订正不动任何判据**：两侧的结论都是按产物真数文件定的，改的只是那句会把人
+   指错方向的话术（「那就别写 excludes 了」「换 bundler 就能减」都是它的下游误读）。
 2. **但「切成 webpack」不是修法，两条实测理由**：① 它仍然拦不住这次真正要拦的那几样
    （`.env` 照旧 1 份、`data/` 里 `app-settings.json` + `llm-secret.key` 照旧 2 份、
    `log/` 照旧 100 份、`src/generated/*.json` 照旧）——硬规则 17 的密钥面**一点没收窄**；
@@ -2104,12 +2112,13 @@ t.exports = e.x(
 
 **复测（当前构建链，A/B）**：把 `outputFileTracingIncludes` 整段注释掉再构建，
 两份产物**逐字节同构** —— `next-server/` 两次都是 74 个文件（= 源目录整份复制），
-四份 `*-turbo.runtime.prod.js` 都在位。机制在上游源码里写清了：读
-`outputFileTracingIncludes` / `Excludes` 的只有 `collect-build-traces`，而它挂在
-`if (bundler !== Bundler.Turbopack)` 分支下，Turbopack 构建**整段跳过**它
-（`turbopack-build/impl.js` 只取 `outputFileTracingRoot`）。
-⇒ 上面那份 `includes` 写法在**当前版本上不承重**，它是与 `excludes` 同一格的
-「意图声明」；本节下面的「缺件」在今天的构建链上不会自发重现，但**它的判据必须留着**——
+四份 `*-turbo.runtime.prod.js` 都在位。⇒ 它今天**不承重**，但原因**不是**
+「Turbopack 不读这份键」（那句是机制层面的错判，见 §7.2 第三件事之二）：这两个键在上游
+Rust 侧按**路由**实现（`crates/next-api/src/nft.rs` 用 route glob 匹配 `page_name`，
+由 `nft_json.rs` 写进每路由的 `.nft.json`），JS 那边被跳过的只是 webpack 用的
+`collect-build-traces`。不承重的真实原因是**重叠**：每路由清单已自带整份目录，
+证据是里面连着这颗 glob 根本给不出的 `*.runtime.prod.js.map` 一起进来了。
+「原生追踪从哪个版本起自带这份」没有逐版本量清，本节不下这个结论。本节下面的「缺件」在今天的构建链上不会自发重现，但**它的判据必须留着**——
 真正看守的是产物层数文件那一条，而不是这份配置。
 
 **为什么常规门禁抓不到**：
