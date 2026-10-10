@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: Comfy-APP-T3
-description: 桌面端创作工具的设计契约。从 `src/app/globals.css` 的 Tailwind v4 主题、`src/components/ui` 的 83 个基元与 `docs/standards` 的样式/a11y/组件规范反推而来；每一态的取值由 CSS token 负责，本文件记录的是「名字该是谁、值随谁变」。
+description: 桌面端创作工具的设计契约。从 `src/app/globals.css` 的 Tailwind v4 主题、`src/components/ui` 那一批基元（份数随轮次变，本文一律不抄 —— 复算看 §Components 开头那两条命令）与 `docs/standards` 的样式/a11y/组件规范反推而来；每一态的取值由 CSS token 负责，本文件记录的是「名字该是谁、值随谁变」。
 colors:
   primary: "#7c5cfc"
   on-primary: "#ffffff"
@@ -258,7 +258,7 @@ components:
 
 # Comfy-APP-T3 设计契约
 
-> **这份文件是什么**：把散在 `globals.css`、83 个 `ui/` 基元和 `docs/standards/03·04·06·16` 里的设计决定，收成一份「机器可读 + 人可读」的单一契约。它是 `design-qa` / `design-debt-review` / `accessibility-review` / `component-library-alignment` 这几道评审的基准——没有它，那些评审只能拿「代码自己等于自己」当标准，评不出漂移。
+> **这份文件是什么**：把散在 `globals.css`、`src/components/ui/` 那一批基元（份数随轮次变、本文不抄，复算见 §Components 开头）与 `docs/standards/03·04·06·16` 里的设计决定，收成一份「机器可读 + 人可读」的单一契约。它是 `design-qa` / `design-debt-review` / `accessibility-review` / `component-library-alignment` 这几道评审的基准——没有它，那些评审只能拿「代码自己等于自己」当标准，评不出漂移。
 >
 > **它不是什么**：它**不是** token 的权威源。颜色的权威源是 `src/app/globals.css` 的 `@theme`（规范 03 §3.6.4）。本文件引用 token 名、复述取值，但任何一方改了值，**以 CSS 为准**，本文件跟着改。
 >
@@ -368,7 +368,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 | 档 | token | 值 | 类名 | 用在哪 |
 | --- | --- | --- | --- | --- |
 | hero | `--text-hero` | 2.125rem (34px) / 700 / -0.025em | `.u-title-hero` | 首页欢迎区那一个 h1——**屏级档的唯一例外，例外也必须有名字** |
-| page | `--text-page` | 1.5rem (24px) / 700 / -0.02em | `.u-title-page` | **每屏唯一的 h1** |
+| page | `--text-page` | 1.5rem (24px) / 700 / -0.02em | `.u-title-page` | **每屏唯一的 h1** —— 载体件是 `ui/page-header`（见 §Components「屏级页头」），新屏别再手抄这一档 |
 | stage | `--text-stage` | 1.0625rem (17px) / 600 / -0.015em | `.u-title-stage` | 工坊六段当前段标题 |
 | section | `--text-section` | 0.875rem (14px) / 600 / -0.01em | `.u-title` | 卡片/区块小标题 |
 
@@ -457,7 +457,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - 小尺寸控件靠**取小**而不是换档：`rounded-[min(var(--radius-md),10px)]`（Button `xs`/`icon-xs`）、`min(var(--radius-md),12px)`（`sm`/`icon-sm`）。`ui/` 现有 13 处方括号圆角，其中 **11 处是这种从 `--radius` 派生**的写法（`min()` / `calc()`），另两处不是档位问题：一处 `rounded-[inherit]`（本就该继承父级）、一处 checkbox 的 **4px 微角**（见下条）。
 - **微角（≤4px）走 `rounded-xs` 或不走档位，别硬并**：`rounded-xs` 是 Tailwind 默认档，实测产物里 `--radius-xs: 0.125rem` = 2px，且**刻意不参与本库的基数 × 系数** —— 它描述的是「这个元素自己有多小」，不是「这套 UI 有多圆」。据此把 2px 那两处（`ui/tooltip.tsx` 的箭头方块、`ui/segment-popover.tsx` 的色板小条）从字面量换成 `rounded-xs`（编译探针对过：两者逐字节同值 ⇒ 零像素）。**4px / 5px 没有对应的档名**（`rounded-xs`=2、`rounded-sm`=8 都会明显改形），它们留在字面量里是**判定过的结果**而不是漏网：checkbox 的 4px 随 `size-4` 自己定，`canvas/SubgraphWidgetRow.tsx` 的 5px 随缩略图/值框那两格自己定。
 - 两处直接吃基数、不吃档位：`ui/input-group.tsx` 的 `calc(var(--radius) - 3px)` 与 `ui/sonner.tsx` 的 `--border-radius`。它们跟着整条刻度走，不是第二份来源。
-- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 **7** / **140**，只许降。剩下的 7 处**逐角色判定过**：`3px`×2 = `TypeChip` 的实现细节 + `ParamOwnerTag` 那枚异类、`11px`×2 = `WorkflowNodePill` 的实现细节 + `WorkshopStageItem` 的图标方块、`5px`×2 = 子图缩略图与值框、`4px` = checkbox —— 前四处随元素自身尺寸、不跟设置页基数，后几档没有对应的名字。原先那两处 2px 已并到 `rounded-xs`，`studio/HomePage.tsx` 的项目卡从 18px 并到 `rounded-xl`，见上两条）；**④ 12px / 13px 是归零等式而不是棘轮** —— 调用点出现 `text-[12px]` 或 13px 那一档的字面量就直接红（它们与 `text-xs` / `text-sm` 字号相同或相邻、只差在行高上：字面量吃继承的 1.5，档位自带配对值；留着就是重新分裂「同一个字号两种行高」那一档，见 §Typography。判据自己先验一次量具 —— 等式为 0 的判据若正则写漂会永远绿）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`、区头那一行 → `DynamicWorkflowForm/SectionHeader`、面板里铺满居中的占位 → `ui/empty-state` 的 `panel` 档），五族共用一次目录遍历（写在一张 `FAMILIES` 表里，新增一族只加一行），按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）；**每一枚标记都常见的族可以收窄成 `scope: "line"`** —— 只在同一枚 class 字符串上全命中才算，实测整文件口径会误抓三处无关文件（见 §Components「空态四档」）；反向样本同样在册（`WorkflowIOPreviewPanel` 那枚同形、不同底的计数不许被区头标记抓到 —— 抓到就说明判据在拦一切）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。
+- **调用点也在判据射程内**（`tests/design-md-contract-sync.test.ts`，在 pre-commit 的固定清单里）：① 任何 `rounded-[<字面 px>]` 只要**等于某档的当前渲染值**就红 —— 那种写法此刻像素正确、但脱离总闸，是「在闸旁边开旁通」；② 字面圆角与字面字号各走棘轮（基线 **7** / **140**，只许降。剩下的 7 处**逐角色判定过**：`3px`×2 = `TypeChip` 的实现细节 + `ParamOwnerTag` 那枚异类、`11px`×2 = `WorkflowNodePill` 的实现细节 + `WorkshopStageItem` 的图标方块、`5px`×2 = 子图缩略图与值框、`4px` = checkbox —— 前四处随元素自身尺寸、不跟设置页基数，后几档没有对应的名字。原先那两处 2px 已并到 `rounded-xs`，`studio/HomePage.tsx` 的项目卡从 18px 并到 `rounded-xl`，见上两条）；**④ 12px / 13px 是归零等式而不是棘轮** —— 调用点出现 `text-[12px]` 或 13px 那一档的字面量就直接红（它们与 `text-xs` / `text-sm` 字号相同或相邻、只差在行高上：字面量吃继承的 1.5，档位自带配对值；留着就是重新分裂「同一个字号两种行高」那一档，见 §Typography。判据自己先验一次量具 —— 等式为 0 的判据若正则写漂会永远绿）；③ 被抽成基元的形状各有一条「**只许有一个出处**」判据（序号圆 → `workshop/IndexDot`、类型 chip → `studio/TypeChip`、节点右侧胶囊 → `WorkflowNodePill`、区头那一行 → `DynamicWorkflowForm/SectionHeader`、面板里铺满居中的占位 → `ui/empty-state` 的 `panel` 档），五族共用一次目录遍历（写在一张 `FAMILIES` 表里，新增一族只加一行），按**标记集合全命中**判、不按类名先后顺序判，且每族带一份手抄样本作负控制（标记写漂了会静默全绿，那比红更糟）；**每一枚标记都常见的族可以收窄成 `scope: "line"`** —— 只在同一枚 class 字符串上全命中才算，实测整文件口径会误抓三处无关文件（见 §Components「空态四档」）；反向样本同样在册（`WorkflowIOPreviewPanel` 那枚同形、不同底的计数不许被区头标记抓到 —— 抓到就说明判据在拦一切）。T4 只管 `globals.css` 的定义侧，看不见调用点，这几条补的就是那一半。**不在这张表里的**：屏级页头（`ui/page-header`）—— 它由 `tests/page-name-single-source.test.ts` 按形态守着，再开一族就是同一件事两个执行者（分工与「三处刻意不迁」见 §Components「屏级页头」）。
 
 ---
 
@@ -500,7 +500,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ## Components
 
-组件出口只有一个：**`src/components/ui/`**（实测 245 份被跟踪文件 = 83 份 `.stories.tsx` + 39 份 `.test.tsx` + 123 份其余（组件源文件与 `.ts`）；而「组件」这个数在故事面判据里的口径是 **89** —— 复算：`node scripts/storybook-check.mjs` 打出的 `组件覆盖率 x/y`）。`src/app/shadcn/tailwind.css` 是 shadcn CLI 的 `@import` 占位（4 行注释、零条规则），**不是**组件出口，也**不是**演示页。
+组件出口只有一个：**`src/components/ui/`**。**这里不抄份数**：这个目录每一轮都在长（新增件、新增 story、新增单测），抄进来的数下一轮就是错的 —— 要规模就现跑 `git ls-files src/components/ui | wc -l`（故事 / 单测各一档：`git ls-files 'src/components/ui/*.stories.tsx' | wc -l`、`…*.test.tsx`）。而「组件」这个数在故事面判据里的口径**不等于**文件数（故事面按导出计数，见 Known Gaps 那条），复算入口是 `node scripts/storybook-check.mjs` 打出的 `组件覆盖率 x/y`。`src/app/shadcn/tailwind.css` 是 shadcn CLI 的 `@import` 占位（4 行注释、零条规则），**不是**组件出口，也**不是**演示页。
 
 ### Button（`src/components/ui/button.tsx`，15 variant × 8 size）
 
@@ -579,6 +579,32 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 两处**没并进来**的（都在 `studio/ShellTabs.tsx`，按角色判过、别当漏网清掉）：`:93` 是**页签诊断卡**（标题 + 原因 + 可复制的地址行 + 按钮，`gap-4 p-8`）—— 它说的不是「这里是空的」，而是「这里被拦了、为什么、你可以怎么自己验证」，语义归错误类而不归空态；`:221` 是无图标的轻量单行（`text-ink-muted`、吃继承的 16px），收进 `panel` 得把颜色与字号都用 `className` 覆写回去，覆写满之后档名只剩形式、档位不再有约束力。
 
 防回潮分两头：`tests/design-md-contract-sync.test.ts` 的「只许有一个出处」判据里这是**第 5 族**，带 `scope: "line"` —— 标记只在**同一枚 class 字符串**上全命中才算。这不是洁癖，是量出来的：这一族每一枚标记单独看都很常见，整文件口径实测误抓三处无关文件（`HistoryPanel` 的 `flex h-full` 在第 69 行、`justify-center` 在第 230 行；`ProjectGate` 命中的那颗 `text-ink-fainter` 其实是 `placeholder:` 前缀；`ShellTabs` 正是上面那张诊断卡），收到单行后严格同形正好 5 处、零误抓；反向样本三条同批在册。`empty-state.test.tsx` 的三条 panel 用例钉的是**另一半** —— 判据只会因为「标记只命中实现文件」而全绿，基元自己被改掉它也照绿，所以形状、图标弱化档（32 / 1.5 / `opacity-30` / `aria-hidden`）与「调用点覆写取胜」都要有用例执行。
+
+### 屏级页头：`ui/page-header`（「一屏一个名字」的载体件）
+
+**它是三件事的唯一出处**，此前这三件在 11 个屏上各拼一遍、还越拼越不一致（据那份文件头）：
+
+1. 每屏唯一的 `h1` 走 `.u-title-page` 字阶档 + `font-title`（就是上面「字阶只有四档」那张表里的 `page` 档）；
+2. 一行副说明走已定档的那一句 —— `.text-sm text-ink-muted`（规范 03 §3.10 末尾「新增一个屏时」写死的两个类）；
+3. **右侧动作组不被压扁**：`shrink-0` 在动作组上、标题带 `min-w-0 truncate`（规范 03 §3.8.1 的兜底顺序：宽度不够先收标题，不把按钮挤成两行小字）。
+
+`description` **不是「本屏叫什么」的补充说明**，而是「答案在别处拿不到的那句话」（时间口径 / 数据来源 / 能做什么）。写「管理你的模型」「这里可以查看历史记录」这类同义反复等于把标题再写长一遍 —— 此时**传 `undefined`**，不传就不渲染那一行，标题区立刻矮下来。这条是 ISSUE #1423 的真实形态（侧栏「队列」→ 页签「队列」→ 页头 `h1`「队列与运行」→ 副标题再解释一遍轮转，同一屏四个名字）。
+
+**「叫什么」与「长什么样」分两头守，别写重复**：
+
+- 名字只有一个出处 = `NavItems.tsx` 那份注册表（`label` = 导航口径、`viewLabel` = 屏内页头口径、`pageHeaderTitle(view)` = 唯一出口），执行者 = `tests/page-name-single-source.test.ts`（在 `FIXED_STRUCTURAL_TESTS` 里）。它按**形态**取锚（但**扫描面是一份具名文件清单**，覆盖面见 Known Gaps），判的是「页头标题不许是裸字面量」「`viewLabel` 不许与 `label` 只差装饰性后缀」「全库不许再出现『`A` · `B`』连写两个屏名」。
+- 字阶档 = P83（`check-ui-primitives.cjs`），它只管「屏级标题是不是 `.u-title-page`、有没有在 `h1` 上硬写字号」，**看不见形状**。
+- **页头因此不进 §Shapes 那张 `FAMILIES` 表**（不是漏网）：形状回潮这一格如果开一族，就和上面那条测试判同一件事，而本仓的口径是「新增守卫前先查是否已有更强的一条」；两份执行者只会让「谁在守」再次变成读不准的东西。
+
+三处**刻意不迁**（照规范 16 §16.2.4.73 那张表；排除项不写进文档，下一轮就会被当漏网清掉）：
+
+| 不迁的落点 | 为什么 |
+| --- | --- |
+| 工具条形态页头：`WorkshopHeader` / `FilmStudioTopBar` / `WorkflowLibraryHeader` / `WorkflowEditorTopbar` | 标题与工具栏同处一条横杆、四周带边框与内距，套 `justify-between` 的文档型结构只会让每处逐个覆写。**但它们里面那两个「第二套名字」照样删了**（工坊顶栏的「工坊 · 全链路项目管线」、成片顶栏的「· 视频成片工作室」）—— 不迁的是形状，不是名字口径 |
+| 工作区型屏（`WorkspaceFrame` 那一族） | 它们自己管内部滚动，页头形态由各自顶栏承担 |
+| 页头即数据（`ProjectHomePage` / `ProjectOutputs` 用项目名当标题） | 标题是数据不是屏名，但**字阶档与副说明这两件仍走 `PageHeader`**，只是屏名不进标题（它已经在页签上了）—— 这正是「一屏一名」的推论 |
+
+`as` 因此留了 `"h1" | "h2" | "p"` 三档：标题是数据、或屏级 `h1` 在别处时，再写 `h1` 会与所在屏的屏级标题撞成两个（一屏一 `h1` 是读屏跳转的前提）。
 
 ### 基元的三条自身纪律（都在规范里，都在事故里）
 
@@ -692,10 +718,16 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
   ⇒ **单一取值在某一态必然偏弱**：浅彩压在白底上只有 1.5–2.2:1，光晕基本等于看不见，而被看见正是光晕唯一的作用。所以这四颗 token 必须两态，且浅色档**直接写成 `var(--color-…)`**（不是抄一份基准色的 hex —— 抄了就会和源头各自漂移），深色档才用 400 档浅彩。这也是对 #1514 那句「两态同值：原裸值本来没有 `.dark` 分叉」的订正：**把「旧代码只有一个值」当成「设计上不需要两个值」，是拿事故当设计**。
   顺带收掉的两处：同一栏里 `fpsDotColor` 三档原先是基准色 α=1（隔壁 devServer 那点已经是浅彩）—— 同尺寸、同语义的两个点两套配方，现在都是 80% 走同一族；`canvas/CanvasSettingsButton.tsx` 那颗品牌点与 4 处连线光晕的裸值（`rgba(167,139,250,0.7)` / `rgba(124,92,252,0.6)`）也并进这一族，连线直接用 `var(--color-primary)`（`#7c5cfc` 逐字节就是那个值 ⇒ 零像素）。判据从「禁某两个裸值」升级成**按形状归零**：`shadow-[0_0_…rgba(…)]` 与任何 `shadow-[…#hex]` 都判红，并用反向样本钉住两条边界 —— 投影必有偏移或扩散（`0_0_` 不误伤仓里那 6 处），同一档浅彩在别处是合法的角色色（`#34D399` 当类别色）。其余裸值（卡片投影等）的权威清单不在本文抄条数，由 `pnpm theme:check` 逐文件打印「处数 + 为什么可以留」。
 
-- **故事面已经全覆盖，缺口挪到了单元层**（订正：本文件此前写「Storybook 覆盖 29/83、核心交互件里 input/dialog/select/card/… 无 story」—— 那组读数被 `331b38c2` → `b9cbd762` → `82480021` 三连补覆盖否掉了，`82480021` 那次就把理由表清成了 0 条）。现在实测 `node scripts/storybook-check.mjs` = **组件覆盖率 89/89、理由表 0 条、故事面 122 份**（缺 title 0 / 未接真组件 0 / 分组偏离 0）⇒ 「明暗两态长什么样」这一层契约在**每一个**组件上都可以在故事面被核验，不再是 29 个。**「122」这一格别当判据读**：它随新增故事单调漂移（不是覆盖率，只是份数），要复核就现跑上面那条命令，不要引用本文的数字 —— 覆盖率 89/89 有基线顶着，份数没有。
-  剩下的洞不是「没 story」而是**没单测**：`src/components/ui/` 下 **52 个组件没有同名 `.test.tsx`**（含 `card`、`input`、`switch`、`checkbox`、`dropdown-menu`、`context-menu`、`menubar`、`navigation-menu`、`popover`；`dialog` / `select` / `tabs` 三份已补，钉的是开合与定位那些事，见下面那条口径）。
-  那三份各自钉住的、**读源码看不出来**的几件：`dialog` —— 自绘关闭却不传 `showCloseButton={false}` 就是两枚 ✕ 重叠（内置那枚吃点击、间隙成死区），以及**本体并不渲染 Backdrop**（遮罩是要调用处显式铺的另一层，`DialogOverlay` 目前在仓里零消费点；同族的 `SheetContent` 恰恰自带 `<SheetOverlay />` —— 两件同族、行为不同）；`select` —— 层级必须给在 Positioner 上（默认 `z-popup isolate`，给在 Popup 上解决不了「画得出来收不到指针」），且 `SelectValue` 显示的是 **value 本身**而不是选项文案（要显示人话必须调用处映射，`ui/select-menu` 就是在做这件事）；`tabs` —— 键盘是 **manual activation**（方向键只移焦点、Enter 才换选中），且非活动面板**被卸载**（所以调用处不能把表单状态放在面板里）。四处做过变异复核（`alignItemWithTrigger` 默认改回 true、把 `sm:max-w-sm` 加回来、`showCloseButton` 默认改成 false、`tabs-trigger` 改名），每一处都让对应那条当场变红；其余几条（`SelectValue` 显示 value、manual activation、面板卸载、本体无 Backdrop）是**实测读回来的现状**，没有各自的变异 —— 它们证明的是「今天长这样」，不是「有人守着他不变」。**注意口径**：这份清单判的是「有没有**同名** `.test.tsx`」，而故事面判据按组件导出计数 —— 所以 `input` / `switch` / `checkbox` 虽然没有自己的 `.stories.tsx`，仍被算进 89/89（它们的 story 挂在同族的别份里）。复算：对 `git ls-files 'src/components/ui/*.tsx'`（去掉 `.stories` / `.test`）逐个查同名 `.test.tsx` 是否存在。这类组件的行为契约（受控/非受控、焦点、键盘、开合）今天只有故事面能看见，而**故事面不比断言** —— 要补的是交互用例，不是再多加故事。
-- **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一把 grep 在 `u-title` 上抓到 **52** 行、`u-title-page` **19** 行，所以那排 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名 token 精确计数：`u-title` **28** 处、`u-title-page` 19 处、`u-title-stage` 4 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响。**两处数字之间差的是口径不是漏网**：上面那把 `\b` 界定的 grep 里连字符算词边界，所以 `u-title` 的 52 行把三枚兄弟名一起数了（28 + 19 + 4 + 1 = 52，逐 token 精确计数相加正好对上）⇒ 拿它当「`u-title` 单独的量」会虚高，拿逐 token 计数当「grep 跑出来的数」又对不上，两个都要写明；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。
+- **故事面已经全覆盖，缺口挪到了单元层**（订正：本文件此前写「Storybook 覆盖 29/83、核心交互件里 input/dialog/select/card/… 无 story」—— 那组读数被 `331b38c2` → `b9cbd762` → `82480021` 三连补覆盖否掉了，`82480021` 那次就把理由表清成了 0 条）。现在 `node scripts/storybook-check.mjs` 报的是**覆盖率与它自己的基线同值、理由表 0 条**（缺 title 0 / 未接真组件 0 / 分组偏离 0）⇒ 「明暗两态长什么样」这一层契约在**每一个**组件上都可以在故事面被核验。**这里只留形状不留数字**：`x/y` 的分母随新增件变、故事份数随新增 story 变（上一批写下 89/89 与 122 份，同一轮落地后 3 小时就被 `ed881689` 推成 90/90 与 123 份），要读数就现跑那条命令 —— 有基线顶着的是「覆盖率 = 基线」这件事，不是某个具体数。
+  剩下的洞不是「没 story」而是**没单测**。复算（列出还缺同名单测的组件）：
+  ```bash
+  git ls-files src/components/ui | grep '\.tsx$' | grep -v '\.stories\.\|\.test\.' | while read f; do
+    [ -e "${f%.tsx}.test.tsx" ] || echo "$f"; done
+  ```
+  缺名里含 `card`、`input`、`switch`、`checkbox`、`dropdown-menu`、`context-menu`、`menubar`、`navigation-menu`、`popover` 这些交互件；`dialog` / `select` / `tabs` 已在 #1651 补上。**注意口径**：上面那条判的是「有没有**同名** `.test.tsx`」，而故事面判据按组件导出计数 —— 所以 `input` / `switch` / `checkbox` 虽然没有自己的 `.stories.tsx`，仍被算进覆盖率（它们的 story 挂在同族的别份里）。这类组件的行为契约（受控/非受控、焦点、键盘、开合）此前只有故事面能看见，而**故事面不比断言** —— 要补的是交互用例，不是再多加故事。
+  那三份各自钉住的、**读源码看不出来**的几件：`dialog` —— 自绘关闭却不传 `showCloseButton={false}` 就是两枚 ✕ 重叠（内置那枚吃点击、间隙成死区），以及**本体并不渲染 Backdrop**（遮罩是要调用处显式铺的另一层，`DialogOverlay` 目前在仓里零消费点；同族的 `SheetContent` 恰恰自带 `<SheetOverlay />` —— 两件同族、行为不同）；`select` —— 层级必须给在 Positioner 上（默认 `z-popup isolate`，给在 Popup 上解决不了「画得出来收不到指针」），且 `SelectValue` 显示的是 **value 本身**而不是选项文案（要显示人话必须调用处映射，`ui/select-menu` 就是在做这件事）；`tabs` —— 键盘是 **manual activation**（方向键只移焦点、Enter 才换选中），且非活动面板**被卸载**（所以调用处不能把表单状态放在面板里）。四处做过变异复核（`alignItemWithTrigger` 默认改回 true、把 `sm:max-w-sm` 加回来、`showCloseButton` 默认改成 false、`tabs-trigger` 改名），每一处都让对应那条当场变红；其余几条（`SelectValue` 显示 value、manual activation、面板卸载、本体无 Backdrop）是**实测读回来的现状**，没有各自的变异 —— 它们证明的是「今天长这样」，不是「有人守着他不变」。
+- **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一把 grep 在 `u-title` 上抓到 **52** 行、`u-title-page` **19** 行，所以那排 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名 token 精确计数：`u-title` **28** 处、`u-title-page` 19 处、`u-title-stage` 4 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响。**两处数字之间差的是口径不是漏网**：上面那把 `\b` 界定的 grep 里连字符算词边界，所以 `u-title` 的 52 行把三枚兄弟名一起数了（28 + 19 + 4 + 1 = 52，逐 token 精确计数相加正好对上）⇒ 拿它当「`u-title` 单独的量」会虚高，拿逐 token 计数当「grep 跑出来的数」又对不上，两个都要写明。**这几枚数本身随新增屏漂移**，权威口径是本文「取证方法」第 8 条那段循环（跑一次就拿到当前的两个口径），别引用这里的 —— 这一族不变的是那条「逐 token 相加 = 宽松口径」的自证关系，它证明量具没坏，而不是证明某个数；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。
+- **屏级页头的「新屏手搓」这一格没有执行者**（如实记下，别读成「已经收口完了」）：`ui/page-header` 与规范 16 §16.2.4.73 落了之后，真正在守的是 `tests/page-name-single-source.test.ts`，而它的消费者清单是一份**具名文件表**（现列 7 屏）—— 它拦的是「这 7 屏别退回手抄」，**拦不住第 8 个新屏自己拼 `h1` + 副说明 + 动作组**；P83 只判字阶档是不是 `.u-title-page`，手抄照样能过。更要紧的一条对不上：规范 16 的判据表里占着 **P86** 这一行（视图层手搓屏级页头 → 用 `PageHeader`，并标注「不进硬闸」），而 `scripts/check-ui-primitives.cjs` 里的编号**最大到 P85**、全 `scripts/` 对 `\bP86\b` 命中 **0** —— 也就是表里那一行既不是硬闸也不是棘轮，是**占了编号的未实现**。这与 §13.5.12 立的案同族（判据自称在跑、实际没有执行者）。出路两条，都要另拍：① 把 P86 真做成一条按形态取锚的判据（标记集就是那三件：`u-title-page` + `text-ink-muted mt-1 text-sm` + `shrink-0` 动作组，配 `scope: "line"` 与负控制）；② 承认「名字口径已收、形状不收」，把表里那一行改成指向 `page-name-single-source` 并写明覆盖面。**本文档不替那条线选**，只把现场钉在这里。
 - **圆角的自动化覆盖是「相对变化」而不是「绝对形状」**：读 `borderTopLeftRadius` 的断言有 **4 处**，全在 `e2e/appearance-steps.spec.ts`，判的是「改档之后它变了没 / 刷新后还在不在」—— **变了**这件事有覆盖。
   「变成什么形状」这一格此前是空的，现在**部分**补上了，但要看清补的是哪种（订正：本文件上一版写「`toHaveScreenshot` 全仓只有 2 处、要补的是代表屏的截图用例 + 一个手动跑的入口」，那是只剩 login 一份 spec 时的读数）：实测 **5 份视觉 spec / 10 处 `toHaveScreenshot`**（canvas 2、login 3、models 1、overlay 2、workspace 2），基线 **18 份 PNG = `-linux` 10 + `-win32` 8**（`darwin` 0；win32 只差首页那两张，登记在 `scripts/visual-baselines.mjs` 的 `PENDING_PLATFORMS` 里，是欠条不是漏录），手动入口在 `pnpm check:visual` / `check:visual:update`（`scripts/pixel-run.mjs`，跑绿顺带记新鲜度账）。⇒ 绝对形状**只在被取景的那 10 屏上有判据**，而取景是那几块屏的整页形状，不是「逐档圆角各截一张」。
   **为什么仍然不算「有覆盖」**：playwright 不进 pre-commit（钩子里与像素相关的 `visual-gate.mjs` / `visual-freshness-gate.mjs` 两步都刻意不跑像素，只核「提交像素层时带没带一次判决」与「每一档有没有主」），`tests/visual-baseline-pairing.test.ts` 只核「基线文件齐不齐、名字对不对平台」不比像素 ⇒ 结论只在**录过基线的那台机器**上成立。规范 03 §3.6.1.1 那句「刻意不比像素」的理由（基线按平台分文件）仍然成立，别顺手把它推翻。

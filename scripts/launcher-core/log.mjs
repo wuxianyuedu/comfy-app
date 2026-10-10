@@ -75,6 +75,44 @@ export function runStamp(at = new Date()) {
   return localTimestamp(at).replace(/[:. ]/g, "-").slice(0, 19);
 }
 
+/** 「一次启动一份文件」那份 runtime 日志的名字戳（`YYYYMMDD-HHmmss`，无分隔符）。
+ *
+ *  它与 {@link runStamp} 是**两个形态**、不是两次实现：runStamp 带分隔符（`-`）、
+ *  给「文件名必须唯一」的 nextjs stdout/stderr 用；本形态进 `<来源>-<戳>.log`，
+ *  必须与 `src/lib/log/runtime-log-file.ts` 的 `stamp()` 逐字同形 —— 两侧不同形
+ *  的后果是 launcher 写的提醒与 dev server 写的应用日志**落在两份文件上**，
+ *  而面板看起来「两条通道都正常」。
+ *
+ *  分叉点在于谁决定「这是哪一次启动」：launcher 先于 dev server 存在（它拉起
+ *  后者），因此戳由它产出、经 `COMFYAPP_LAUNCH_STAMP` 传给 dev server —— 与
+ *  `COMFYAPP_RUN_ID` 同一条跨进程通道。
+ *
+ * @param {Date} [at] @returns {string} */
+export function runtimeStamp(at = new Date()) {
+  /** @param {number} n @returns {string} */
+  const p = (n) => String(n).padStart(2, "0");
+  return (
+    `${at.getFullYear()}${p(at.getMonth() + 1)}${p(at.getDate())}` +
+    `-${p(at.getHours())}${p(at.getMinutes())}${p(at.getSeconds())}`
+  );
+}
+
+/** `app-runtime` 通道本次启动那一份的文件名（`app-runtime-<戳>.log`）。
+ *
+ *  为什么 launcher 要自己拼这个名字：预检提醒（壳过期 / pnpm 不匹配）发生在
+ *  dev server 就绪**之前**，走不了 `POST /api/logs/app-runtime`，只能自己落盘。
+ *  而落成固定名（`app-runtime.log`）是错的 —— 读侧把固定名当「迁移前的全部历史」
+ *  （`startedAt: null`，排序恒最前），于是 launcher 每轮写下的提醒会被读成
+ *  「更早的日志」、并在保留策略里当**最旧的一份**先删掉，再由下一次写重建：
+ *  「删除 → 重建」交替，正在写的那一份被轮转逻辑当垃圾清掉（静默丢日志）。
+ *  落成与 dev server 同一份之后，它天然是最新的、也是最不会被删的那一份。
+ *
+ *  @param {string} stamp {@link runtimeStamp} 的产物
+ *  @returns {string} */
+export function appRuntimeLogFileName(stamp) {
+  return `app-runtime-${stamp}.log`;
+}
+
 /**
  * 创建一个日志接收器：stdout（终端可见，带 ANSI 颜色）+ 文件（纯文本双写）。
  *

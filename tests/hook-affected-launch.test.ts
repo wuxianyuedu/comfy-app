@@ -26,9 +26,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_MAX_WORKERS,
   isTimeoutShaped,
   loadPerCore,
   planLaunches,
+  resolveMaxWorkers,
   resolveVitestEntry,
   runChunk,
   SAFE_ARGV_BUDGET,
@@ -249,17 +251,33 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
     // 抬预算那一侧的反向判据（这一档的主要敌人，见 §11.13 / §13.6.4）。
     expect(src).not.toMatch(/testTimeout\s*[:=]\s*\d/);
     expect(src).not.toMatch(/hookTimeout\s*[:=]\s*\d/);
-    /* 并发只许有**一处**（复跑档不许另起一个更大的 `--maxWorkers`）：按代码行数，
-     * 剔掉注释行 —— 文件头与说明里也写着 `--maxWorkers=4` 这个形态。 */
-    const workerCodeLines = src
+    /* 判的是「**传给 vitest 的 argv 里**并发只许一处」—— 复跑档不许另起一个更大的
+     * `--maxWorkers`。所以按 `spawn(` / `spawnSync(` 的实参行数，而不是整份文本里
+     * 出现过几次这个字符串：
+     *   · 注释 / 文件头说明里的形态不算（那里本来就有）；
+     *   · 日志话术（`resolveMaxWorkers` 的 `note`）里的同名字符串也不算 ——
+     *     它是给人看的一行提醒，不是并发旋钮，把它算进来会让这条判据变成
+     *     「谁在提示语里提到并发谁就红」，而真正的退化（复跑另给一个更大的并发）
+     *     照样能从 argv 那一行看出来。
+     * 「只许一处」本身不放松：argv 那一行仍是全文件唯一一处。 */
+    const workerArgvLines = src
       .split("\n")
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .filter((line) => /spawn(Sync)?\(/.test(line))
       .filter((line) => line.includes("--maxWorkers="));
     expect(
-      workerCodeLines,
-      `--maxWorkers 只该有一处（复跑必须更隔离，不许在这个方向上调）：${workerCodeLines.join(" | ")}`,
+      workerArgvLines,
+      `传进 vitest 的并发只该有一处（复跑必须更隔离，不许在这个方向上调）：${workerArgvLines.join(" | ")}`,
     ).toHaveLength(1);
-    expect(workerCodeLines[0]).toContain("MAX_WORKERS");
+    // 接线到 `resolveMaxWorkers` 的解析结果（首跑的并发由它决定）。
+    expect(workerArgvLines[0]).toContain("${workers}");
+    // 复跑那一次必须**不含**任何并发旗标（只加隔离，不给旋钮）。
+    const retryLine = src
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .find((line) => /spawn(Sync)?\(/.test(line) && line.includes("--no-file-parallelism"));
+    expect(retryLine, "复跑那一行还在吗？").toBeTruthy();
+    expect(retryLine).not.toContain("--maxWorkers");
   });
 
   it("触发面：不带指纹时**先于复跑**返回（真断言红一次都不复跑）", () => {
@@ -500,5 +518,53 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     const { spawn, calls } = fakeSpawn([TIMEOUT, TIMEOUT, GREEN]);
     await runChunk(CHUNK, { entry: "vitest.mjs", spawn, settle: settledLow });
     expect(calls).toHaveLength(2);
+  });
+});
+
+describe("钩子档并发：默认 4，且有一个只调并发、不碰判据的显式覆盖口", () => {
+  it("默认档是 4（缺省 / 空串都落到它，且不带任何提醒）", () => {
+    for (const raw of [undefined, "", "   "]) {
+      expect(resolveMaxWorkers(raw)).toEqual({
+        workers: DEFAULT_MAX_WORKERS,
+        note: null,
+      });
+    }
+    expect(DEFAULT_MAX_WORKERS).toBe(4);
+  });
+
+  it("环境变量由调用点读入（纯函数不兜底 process.env）", () => {
+    /* 这一格防的是「用例进程自己继承到的环境变量把默认档那一格污染掉」——
+       解析器一旦自己兜底 `process.env`，本文件在 `COMFY_PRECOMMIT_MAX_WORKERS=2`
+       下跑时「不给值＝默认 4」会假红，而那种失效长的样子是「判据真的坏了」。 */
+    const src = readFileSync(LAUNCHER_PATH, "utf8");
+    expect(src).toMatch(
+      /resolveMaxWorkers\(\s*\n?\s*process\.env\.COMFY_PRECOMMIT_MAX_WORKERS/,
+    );
+    // 函数体里不许再出现一次 process.env（那会让它不再纯）。
+    const body = /export function resolveMaxWorkers\(([\s\S]*?)\n\}/.exec(src);
+    expect(body, "解不出 resolveMaxWorkers 的函数体").not.toBeNull();
+    expect(body![1]).not.toContain("process.env");
+  });
+
+  it("显式覆盖生效，且提醒里说清「只调并发」", () => {
+    const r = resolveMaxWorkers("1");
+    expect(r.workers).toBe(1);
+    expect(r.note).toContain("只调并发");
+    // 覆盖成默认值本身不提醒：说了等于没说。
+    expect(resolveMaxWorkers(String(DEFAULT_MAX_WORKERS)).note).toBeNull();
+  });
+
+  it("非法值按默认办并提醒 —— 不许静默降级成 0（那会让 vitest 报错指不到真因）", () => {
+    for (const raw of ["0", "-2", "abc", "2.5", "NaN"]) {
+      const r = resolveMaxWorkers(raw);
+      expect(r.workers, `${raw} 应落回默认`).toBe(DEFAULT_MAX_WORKERS);
+      expect(r.note, `${raw} 应有一条提醒`).toContain("不是 ≥1 的整数");
+    }
+  });
+
+  it("覆盖值真的进了 vitest 的命令行（不是只解析不接线）", () => {
+    const src = readFileSync(LAUNCHER_PATH, "utf8");
+    expect(src).toMatch(/--maxWorkers=\$\{workers\}/);
+    expect(src).not.toMatch(/--maxWorkers=\$\{MAX_WORKERS\}/);
   });
 });

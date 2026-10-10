@@ -1594,12 +1594,14 @@ export default defineConfig({
          * 归入下一批（不为凑数造假事件）。
          * 实测命令：`pnpm exec vitest run --no-file-parallelism --coverage.enabled
          * --coverage.include='src/app/api/custom-nodes/route.ts' src/app/api/custom-nodes/route.test.ts`
-         * → 77.95 / 70.96 / 83.33 / 80.8（本批从 35/35/45/40 升上来，§11.7 只许升）。 */
+         * → 87.87 / 80 / 88.09 / 85.4（抬档前 77.95 / 70.96 / 83.33 / 80.8；四个维度同批只升不降，§11.7）。
+         * 升上来的那一档全部来自「流式探测的进程协议」那 12 条：解释器退避链（异步 ENOENT
+         * 与退出码 127 两条）、stderr 转进度、PROGRESS 行语法的四个分支与跨 chunk 的半行。 */
         "src/app/api/custom-nodes/route.ts": {
-          lines: 80,
-          functions: 83,
-          statements: 77,
-          branches: 70,
+          lines: 87,
+          functions: 87,
+          statements: 85,
+          branches: 79,
         },
         /* `project.ts`：分支 94.44 → 90（余下两处是 `patch` 里「nodes 给了、
          * edges 没给」这类形状组合，与 `params ?? {}` 的另一侧 —— 后者在当前

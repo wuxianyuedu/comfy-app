@@ -141,6 +141,40 @@ describe("列文件", () => {
   });
 });
 
+describe("跨进程补齐：续写同一份（launcher 写提醒 → dev server 接着写）", () => {
+  it("reuse 给定基名时续写它，**不**按同秒分叉退到 -2", () => {
+    /* launcher 在 dev server 就绪之前就把本次启动那一份建好了（并写了预检
+     * 提醒）；dev server 的写方接手时，默认路径会看到文件已存在、按「同秒不
+     * 覆盖」退到 `-2` —— 一行提醒与整段应用日志分成两份，而面板看起来两边都
+     * 正常（用户永远读不到完整的本次启动）。 */
+    const name = "app-runtime-20261005-093612.log";
+    fs.writeFileSync(path.join(dir, name), "预检提醒\n");
+
+    const w = openRuntimeLogWriter("app-runtime", AT, dir, { reuse: name });
+    expect(path.basename(w.file)).toBe(name);
+    w.write("应用日志");
+
+    /* 一份文件、两行都在（顺序就是写入顺序）。 */
+    expect(fs.readFileSync(w.file, "utf8")).toBe("预检提醒\n应用日志\n");
+    expect(countRuntimeLogFiles("app-runtime", dir)).toBe(1);
+  });
+
+  it("不给 reuse 时照旧另开一份（既有四份来源的默认行为一字未改）", () => {
+    const name = "ollama-runtime-20261005-093612.log";
+    fs.writeFileSync(path.join(dir, name), "第一次启动\n");
+    const w = openRuntimeLogWriter("ollama-runtime", AT, dir);
+    expect(path.basename(w.file)).toBe("ollama-runtime-20261005-093612-2.log");
+  });
+
+  it("reuse 的那一份还不在盘上时也照写（目录都没有也能建出来）", () => {
+    const name = "app-runtime-20261005-093612.log";
+    const fresh = path.join(dir, "nested");
+    const w = openRuntimeLogWriter("app-runtime", AT, fresh, { reuse: name });
+    w.write("第一行");
+    expect(fs.readFileSync(w.file, "utf8")).toBe("第一行\n");
+  });
+});
+
 describe("保留策略", () => {
   it("每个来源留最近 N 份，超出的删最旧（一次启动一份之后这是必需的）", () => {
     for (let i = 0; i < RUNTIME_LOG_KEEP_FILES + 5; i += 1) {

@@ -10,9 +10,13 @@
  * 把「复算」这件事重新实现一遍（而它唯一的失效形态正是「假装干净」）。
  *
  * 覆盖：① 三态的判决（纯函数，两向各一组）；② 命令解析（钩子标签 / 裸脚本名 /
- * 完整命令 / 标签歧义）；③ **`inconclusive` 那条边界** —— 只存在未提交改动里的
+ * 完整命令 / 标签歧义）；③ **`inconclusive` 的两条入口** —— 只存在未提交改动里的
  * 判据在基线侧 `MODULE_NOT_FOUND`，退出码与「跑了且红」同形（Node 是 1），
- * 所以「跑不起来」必须由**目标存不存在**判，不能由退出码判（实测踩过）。
+ * 所以「跑不起来」必须由**目标存不存在**判，不能由退出码判（实测踩过）；
+ * 另一条是**一条用例都没收集到**（`Tests  no tests` / `Cannot find package`，
+ * ISSUE #1652）—— 它同样是退出码 1，而「目标存不存在」看不见它（目标在、是它
+ * 运行时的依赖链断了），所以这一族必须由**输出指纹**判，且两向都要钉住
+ * （真红 `1 failed / 3 failed tests` 不许被吞成 `inconclusive`）。
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -23,7 +27,9 @@ import { vi } from "vitest";
 import { describe, expect, test } from "vitest";
 import {
   commandTargetState,
+  didNotRunSide,
   groupSteps,
+  isDidNotRunShaped,
   isGitCheckout,
   isTimeoutShaped,
   judge,
@@ -36,13 +42,21 @@ import {
   resolveMergeBaseRef,
   resolveMergeBatch,
   resolveUpstreamRef,
+  runState,
   summarizeRows,
   tokenize,
 } from "../scripts/base-check.mjs";
 
 /* 每条用例都要真起 git 进程（init / commit / worktree add / 跑一次被判的判据），
- * 负载高的机器上 5s 不够 —— 文件级放宽到 30s，只影响本文件。 */
-vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+ * 负载高的机器上会比「内存里翻转状态」那类慢一个量级 —— 本文件实测单条最慢约 4.9s
+ * （load ≈65 下），所以给它自己的 hook 预算收到 30s（全局 hookTimeout 是 45s，
+ * 那是给 `theme` 那种「真编一遍 CSS」的 beforeAll 留的，本文件用不满）。
+ *
+ * ⚠️ `testTimeout` 这里**不写**：全局已经是 30_000（`vitest.config.ts`），
+ * 再写一遍是同值的死代码 —— 而它上一版就长这样，注释还写着「5s 不够」，
+ * 读起来像「本条把预算放宽了」，实际一个字都没改（口径同 §11.13：
+ * 要写就把**为什么是这个数**写出来，别留一条不生效的声明）。 */
+vi.setConfig({ hookTimeout: 30_000 });
 
 const REPO_ROOT = process.cwd();
 const SCRIPT = join(REPO_ROOT, "scripts", "base-check.mjs");
@@ -105,7 +119,9 @@ function runBaseCheckOnce(
  * 的首选是 `@{u}`（当前分支的上游），而它只有在分支真跟踪某个远端时才解析得出。
  * 手写引用只能覆盖候选顺序的后半段，恰好绕开了最常走的那一条。
  */
-function makeRepo(opts: { markerOnBase?: boolean } = {}): {
+function makeRepo(
+  opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {},
+): {
   work: string;
   bare: string;
 } {
@@ -132,6 +148,19 @@ function makeRepo(opts: { markerOnBase?: boolean } = {}): {
   writeFileSync(join(work, "seed.txt"), "seed\n");
   /* 「违规已经落进主干」那一档：基线上就带着 marker ⇒ 两侧都红。 */
   if (opts.markerOnBase) writeFileSync(join(work, "marker.txt"), "x\n");
+  /* 「基线侧一条用例都没收集到」那一档（ISSUE #1652）：判据脚本在**基线之后**被
+   * 改成会收集用例的形态，于是基线那一版的 `node gate.cjs` 打印一段
+   * vitest 形态的 `Tests  no tests` 并退 **1** —— 与「判据跑了且红」逐字同形。 */
+  if (opts.noTestsOnBase) {
+    writeFileSync(
+      join(work, "gate.cjs"),
+      [
+        'process.stdout.write("Test Files  1 failed (1)\\n     Tests  no tests\\n");',
+        "process.exit(1);",
+        "",
+      ].join("\n"),
+    );
+  }
   git(work, "add", ".");
   git(work, "commit", "-qm", "chore: seed");
   git(work, "push", "-q", "up", "master");
@@ -146,6 +175,21 @@ function makeRepo(opts: { markerOnBase?: boolean } = {}): {
     writeFileSync(join(work, "marker.txt"), "x\n");
     git(work, "add", ".");
     git(work, "commit", "-qm", "feat: marker");
+  }
+  if (opts.noTestsOnBase) {
+    /* 本检出这一版的判据**真跑**（收集到用例、断言真红）：基线那版收集不到、
+     * 这一版真红 ⇒ 两侧退出码同为 1，只有输出分得开。 */
+    writeFileSync(
+      join(work, "gate.cjs"),
+      [
+        'process.stdout.write("Test Files  1 failed (1)\\n     Tests  1 failed (1)\\n");',
+        'process.stdout.write("[gate] 真红\\n");',
+        "process.exit(1);",
+        "",
+      ].join("\n"),
+    );
+    git(work, "add", ".");
+    git(work, "commit", "-qm", "fix(gate): 用真断言代替收集失败");
   }
   return { work, bare };
 }
@@ -202,6 +246,149 @@ describe("base-check —— judge() 判决（纯函数，两向各一组）", ()
       expect(steps.length).toBeGreaterThan(0);
       expect(steps.join("\n")).not.toMatch(/undefined/);
     }
+  });
+});
+
+/* ── inconclusive 的第二条入口：一条用例都没收集到（ISSUE #1652）──────
+ *
+ * 现场（真事）：被 C 组拦下一条 `tests/check-a11y-rules.test.ts` 的 30s 超时，
+ * 按 §13.6.4 去复算，第一次报 `inconclusive`（两侧 127），第二次却报了
+ * `baseline-red`（「别线的红」）—— 依据是基线那一侧这段输出：
+ *
+ *     FAIL  node  tests/check-a11y-rules.test.ts
+ *       `Cannot find package '@adobe/css-tools'`（在 jest-dom 的 matchers-*.mjs 上）
+ *     Test Files  1 failed (1)
+ *          Tests  no tests     ← 这个「收集到 0 条」的读数就是指纹
+ *
+ * 注意最后两行：**一个用例都没收集到**。这不是「判据跑了且红」，是**跑不起来**，
+ * 而它退的是 1（vitest 收集失败），与「跑了且红」逐字同形；`commandTargetState`
+ * 那条静态判据也看不见它（目标文件在，是它运行时的依赖链断了）。
+ *
+ * 走错这一档的代价不是「结论难看」，是**下一动作相反**：`baseline-red` 要人去就地修
+ * 或按 §11.12 登记 `KNOWN_FAILED_FILES`，而这次根本没有「一条有主的账」可登 ——
+ * 下一次它不红，从此没人解释得清它为什么在那儿（同 §13.6.4 反对把负载假红读成
+ * `baseline-red` 的理由，只是换了触发原因）。
+ */
+describe("base-check —— 没收集到用例：inconclusive 的第二条入口", () => {
+  /* 基线那一侧的真实现场（原文形态，不是构造的）。 */
+  const NO_TESTS = [
+    "FAIL  node  tests/check-a11y-rules.test.ts [ tests/check-a11y-rules.test.ts ]",
+    "Error: Cannot find package '@adobe/css-tools' imported from",
+    "  /tmp/x/node_modules/.pnpm/@testing-library+jest-dom@7/node_modules/@testing-library/jest-dom/dist/matchers-abc.mjs",
+    "Test Files  1 failed (1)",
+    "     Tests  no tests",
+  ].join("\n");
+  /* 真红：收集到了用例、断言挂了 —— 这一族**必须**仍是 `baseline-red`。 */
+  const REAL_RED = [
+    "FAIL  node  tests/check-a11y-rules.test.ts > 台账双向",
+    "AssertionError: expected 3 to be 4",
+    "Test Files  1 failed (1)",
+    "     Tests  3 failed | 5 passed (8)",
+  ].join("\n");
+
+  test("基线侧「1 failed / no tests」⇒ inconclusive（不是 baseline-red）", () => {
+    expect(
+      judge({
+        currentCode: 1,
+        baseCode: 1,
+        currentOutput: "AssertionError: 我这条真红",
+        baseOutput: NO_TESTS,
+      }),
+    ).toBe("inconclusive");
+  });
+
+  test("本检出那一侧收集不到 ⇒ 同样 inconclusive（这时问的不是「谁的红」）", () => {
+    expect(
+      judge({
+        currentCode: 1,
+        baseCode: 1,
+        currentOutput: NO_TESTS,
+        baseOutput: REAL_RED,
+      }),
+    ).toBe("inconclusive");
+  });
+
+  test("真红不吞：收集到了用例的那一侧仍判 baseline-red（假阳性闸）", () => {
+    expect(
+      judge({
+        currentCode: 1,
+        baseCode: 1,
+        currentOutput: REAL_RED,
+        baseOutput: REAL_RED,
+      }),
+    ).toBe("baseline-red");
+    expect(isDidNotRunShaped(REAL_RED)).toBe(false);
+  });
+
+  test("runState 把三种形态分开，且指纹优先于退出码", () => {
+    expect(runState({ code: 1, output: NO_TESTS })).toBe("did-not-run");
+    expect(runState({ code: 0, output: "Tests  8 passed" })).toBe("ran");
+    expect(runState({ code: 1, output: REAL_RED })).toBe("ran");
+    expect(runState({ code: 127, output: "" })).toBe("did-not-run");
+    expect(runState({ code: 7, output: "看不懂的输出" })).toBe("unknown");
+  });
+
+  test("指纹表认的是真见到的原文，不含「跑了且红」的形态", () => {
+    for (const sample of [
+      "Tests  no tests",
+      "Test Files  1 failed (1)\n     Tests  no tests",
+      "Error: Cannot find package 'x' imported from y",
+      "Cannot find module 'z'",
+      "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'a'",
+      "Error: Cannot find module 'b'\nRequire stack:\n- /tmp/c.js\n code: 'MODULE_NOT_FOUND'",
+    ]) {
+      expect(isDidNotRunShaped(sample), sample).toBe(true);
+    }
+    for (const sample of [
+      REAL_RED,
+      "Tests  662 passed (662)",
+      "Test Files  1 failed (1)",
+      "× 多了一行 — 3 个文件里 1 处命中",
+      "",
+    ]) {
+      expect(isDidNotRunShaped(sample), JSON.stringify(sample)).toBe(false);
+    }
+    expect(isDidNotRunShaped(undefined)).toBe(false);
+  });
+
+  test("报告点名是哪一侧、哪一种形态（退出码同形，只有输出分得开）", () => {
+    expect(
+      didNotRunSide({
+        cur: 1,
+        curOutput: "ran",
+        base: { code: 1, output: NO_TESTS },
+      }),
+    ).toContain("基线：一条用例都没收集到");
+    expect(
+      didNotRunSide({
+        cur: 127,
+        curOutput: "",
+        base: { code: 0, output: "" },
+      }),
+    ).toContain("本检出：127");
+  });
+
+  test("整批：任一条收集不到用例 ⇒ 整批 inconclusive（压过 baseline-red）", () => {
+    expect(
+      summarizeRows([
+        { currentCode: 1, baseCode: 1, output: REAL_RED, baseOutput: REAL_RED },
+        {
+          currentCode: 1,
+          baseCode: 1,
+          output: "ran",
+          baseOutput: NO_TESTS,
+        },
+      ]),
+    ).toBe("inconclusive");
+  });
+
+  test("这一态的下一步动作给出环境侧出口（依赖链法 / Windows 形态）", () => {
+    const text = nextSteps("inconclusive", { ref: "origin/master" }).join("\n");
+    expect(text).toContain("pnpm install --frozen-lockfile");
+    expect(text).toMatch(/同一(个盘|个根)|--keep/);
+    expect(text).toContain("pnpm");
+    /* 不许把它读成别线的红 —— 那正是这次要修的那一格。 */
+    expect(text).toMatch(/不构成.*别线的红/);
   });
 });
 
@@ -487,6 +674,28 @@ describe("base-check —— 真仓库上的四态", () => {
       expect(stdout, `stderr=${stderr}`).toContain("yours");
       const list = git(r.work, "worktree", "list");
       expect(list.trim().split("\n")).toHaveLength(1);
+    } finally {
+      dropRepo(r);
+    }
+  });
+
+  test("基线侧一条用例都没收集到 ⇒ inconclusive，且报告点名「哪一侧」", () => {
+    /* 端到端那一格：判据在**基线**上收集不到用例（依赖链断在快照里），而本检出上
+     * 它真红着 —— 退出码两侧都是 1，只有输出分得开。修之前这一格报 `baseline-red`
+     * （「别线的红」），于是人拿着一个「基线其实没跑起来」的结论去走
+     * 「就地修 / 登记 KNOWN_FAILED_FILES」那条下一动作（ISSUE #1652）。 */
+    const r = makeRepo({ noTestsOnBase: true });
+    try {
+      const { code, stdout, stderr } = runBaseCheck(r.work, [
+        "node",
+        "gate.cjs",
+      ]);
+      expect(code, `stderr=${stderr}`).toBe(0);
+      expect(stdout).toContain("inconclusive");
+      expect(stdout).toContain("没跑起来：基线：一条用例都没收集到");
+      /* 不许再报成「别线的红」—— 那正是这次要修的那一格。 */
+      expect(stdout).not.toContain("结论：baseline-red");
+      expect(stdout).toContain("pnpm install --frozen-lockfile");
     } finally {
       dropRepo(r);
     }

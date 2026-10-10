@@ -257,7 +257,24 @@ function main() {
   const sites = [];
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    const masked = maskNonCode(fs.readFileSync(abs, "utf8"));
+    let text;
+    try {
+      text = fs.readFileSync(abs, "utf8");
+    } catch (error) {
+      /* 枚举与读取之间文件**消失**了要跳过。门禁读的是工作树，而 `tests/` 里有
+       * 自造自删探针的用例文件（`.setup-cleanup-probe-<pid>-<ts>.test.tsx`）——
+       * 一次提交撞上它的存活期，这里就会以一条 Node 栈崩在
+       * `ENOENT … .setup-cleanup-probe-….test.tsx` 上：报错指向一个谁都没碰过的路径，
+       * 而本判据的结论一个字都没输出，提交被拦下却读不出原因。
+       * 同一族的 `check-test-sleep` / `check-it-each` 已经这样处理过
+       * （`tests/test-sleep-gate.test.ts` / `tests/test-it-each-gate.test.ts` 里有那条），
+       * 本份是那族里漏掉的一个。
+       * ⚠️ 只认「已经不在了」这一种：读得到的失败（权限 / 编码 / 目录形状）照旧冒出去，
+       *    否则这条兜底会把「判据读不到输入」变成静默放行。 */
+      if (error && error.code === "ENOENT" && !fs.existsSync(abs)) continue;
+      throw error;
+    }
+    const masked = maskNonCode(text);
     for (const m of masked.matchAll(ANNOTATE_SITE_RE)) {
       sites.push({
         rel,

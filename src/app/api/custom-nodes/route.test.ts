@@ -988,3 +988,277 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     expect(key.split(path.sep).join("/")).toContain("custom_nodes/foo");
   });
 });
+
+/**
+ * 流式探测那一支的**进程协议**（`runDiscoverStreaming`）。
+ *
+ * 上面那批用例把结果读对了，但**失败与进度的来源**基本没人跑过：
+ * 唯一那条「流内部起进程失败」把 `spawnMock` 排成**同步 throw**，走的是外层 catch，
+ * 而真机上 `spawn("python3")` 缺解释器时**不 throw**，是**异步 `error` 事件（ENOENT）**——
+ * 那个事件才是 `python3 → python → py` 退避链的驱动者，Windows 上这是主路径。
+ * 同族还没执行者的：`close` 码 127 也要换解释器、非 ENOENT 的 error **不许**继续换、
+ * `stderr` 每一行都要转成进度、`PROGRESS::` 那行语法的四个分支（`hash` 的 done/total、
+ * 没有 `msg=` 的旧格式、不成形的行跳过、**一行被 chunk 切断**），
+ * 以及「最后一行 JSON 才算结果」「收尾 JSON 坏了要带退出码」。
+ *
+ * 夹具形状：`queueChild()` 排的是**真形状的事件**（`error` 走 `cp.on("error")`、
+ * `close` 带退出码、data 可以只给半行），一次可排多个子进程 —— 解释器退避链的判据
+ * 就是「第 N 个子进程是谁、argv 落在哪个候选上」。
+ */
+type ChildPlan = {
+  /** 逐行吐（自动补 `\n`），与 `scriptDiscover` 同义。 */
+  lines?: string[];
+  /** 逐 chunk 原样吐（**不**补换行）—— 用来造「一行被切断」。 */
+  chunks?: string[];
+  errChunks?: string[];
+  /** 异步 `error` 事件（真机上缺解释器就是这一形）。给了它默认不再发 close。 */
+  error?: { code: string; message?: string };
+  closeCode?: number | null;
+  /** 显式要求发 close（配合 `error` 用）。 */
+  noClose?: boolean;
+};
+
+function queueChild(plan: ChildPlan): void {
+  spawnMock.mockImplementationOnce(() => {
+    const child: FakeChild = { proc: {}, out: {}, err: {} };
+    const reg = (bag: Record<string, Cb[]>) => (ev: string, cb: Cb) => {
+      (bag[ev] ??= []).push(cb);
+    };
+    const stream = (bag: Record<string, Cb[]>) => ({
+      on: reg(bag),
+      setEncoding: (): void => undefined,
+      resume: (): void => undefined,
+    });
+    const handle = {
+      on: reg(child.proc),
+      stdout: stream(child.out),
+      stderr: stream(child.err),
+      kill: vi.fn(),
+      pid: 9,
+    };
+    children.push(child);
+    const fire = (
+      bag: Record<string, Cb[]>,
+      ev: string,
+      arg: unknown,
+    ): void => {
+      for (const cb of bag[ev] ?? []) cb(arg);
+    };
+    /* 延后一拍：注册必须先于触发（与被测代码同步挂监听这一段配对）。 */
+    setTimeout(() => {
+      for (const c of plan.chunks ?? [])
+        fire(child.out, "data", Buffer.from(c));
+      for (const l of plan.lines ?? [])
+        fire(child.out, "data", Buffer.from(`${l}\n`));
+      for (const e of plan.errChunks ?? [])
+        fire(child.err, "data", Buffer.from(e));
+      if (plan.error) {
+        fire(
+          child.proc,
+          "error",
+          Object.assign(
+            new Error(plan.error.message ?? `spawn ${plan.error.code}`),
+            {
+              code: plan.error.code,
+            },
+          ),
+        );
+      }
+      if (!plan.noClose && (!plan.error || plan.closeCode !== undefined)) {
+        fire(child.proc, "close", plan.closeCode ?? 0);
+      }
+    }, 0);
+    return handle;
+  });
+}
+
+const ONE_PKG_LINE = JSON.stringify({
+  packages: [{ name: "Foo", path: "/tmp/custom_nodes/foo" }],
+});
+
+/** 事件里那句人读文案（不是对象时才当字符串读，`unknown` 不许直接进 String）。 */
+function msgOf(ev: Record<string, unknown>): string {
+  return typeof ev.msg === "string" ? ev.msg : "";
+}
+
+/**
+ * 从进度事件里挑含 `substr` 的那一条。
+ *
+ * 不能取「第一条 progress」：外层流自己会先吐一条 `📂 [1/1] <扫描根>`，
+ * 拿第一条会把外层那条当成解析器发来的进度（实测就是这四条一开始红的原因）。
+ */
+function progressWith(
+  events: Record<string, unknown>[],
+  substr: string,
+): Record<string, unknown> {
+  const hit = events.find(
+    (e) => e.type === "progress" && msgOf(e).includes(substr),
+  );
+  if (!hit) {
+    throw new Error(
+      `进度事件里没有含 "${substr}" 的那条，实到的进度：` +
+        JSON.stringify(events.filter((e) => e.type === "progress")),
+    );
+  }
+  return hit;
+}
+
+/** 本次起的每个子进程用的是哪个解释器候选（按调用顺序）。 */
+function interpreterNames(): string[] {
+  return spawnMock.mock.calls.map((call) => String(call[0]));
+}
+
+describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行语法", () => {
+  it("python3 缺位（异步 ENOENT）→ 退到 python，结果仍然落地", async () => {
+    coldRoot();
+    queueChild({ error: { code: "ENOENT" } });
+    queueChild({ lines: [ONE_PKG_LINE] });
+    const events = await getEvents();
+    expect(interpreterNames()).toEqual(["python3", "python"]);
+    const done = eventOf(events, "discover_done");
+    expect(done.packages).toHaveLength(1);
+    expect(done.cached).toBe(false);
+    /* 退避成功时不许把「未找到解释器」那句念出来 —— 那是全部候选都失败那一档的话。 */
+    expect(JSON.stringify(events)).not.toContain("未找到 Python 解释器");
+  });
+
+  it("三个候选全 ENOENT → 三个都得起过，最后一个的原因当场透出来", async () => {
+    coldRoot();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      queueChild({ error: { code: "ENOENT" } });
+    }
+    const events = await getEvents();
+    /* 「全失败」这一档的真形状是**三个候选都起过**：少起一个就是退避链断了，
+     * 而界面只显示「没有节点」，没人知道是解释器没找着。 */
+    expect(interpreterNames()).toEqual(["python3", "python", "py"]);
+    /* 最后一个候选之后必须仍然给出**一句读得懂的原因** —— 这一句在修可达性之前不可达
+     * （两条退避都写成 `i < pyCandidates.length - 1`，`i` 最大只到 2 就地 resolve），
+     * 真机没装 Python 时界面只剩「0 个节点」。 */
+    expect(
+      events.filter((e) => msgOf(e).includes("未找到 Python 解释器")),
+    ).toHaveLength(1);
+    expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
+    /* 全失败**不许**回一个像成功的空收尾：没有解释器就没有 discover_done 这一步事实。 */
+    expect(events.some((e) => e.type === "discover_done")).toBe(false);
+  });
+
+  it("三个候选都以 127 退出 → 同一句「未找到 Python 解释器」，与 ENOENT 那一档同答案", async () => {
+    coldRoot();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      queueChild({ closeCode: 127 });
+    }
+    const events = await getEvents();
+    expect(interpreterNames()).toEqual(["python3", "python", "py"]);
+    expect(
+      events.filter((e) => msgOf(e).includes("未找到 Python 解释器")),
+    ).toHaveLength(1);
+    expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
+    expect(events.some((e) => e.type === "discover_done")).toBe(false);
+  });
+
+  it("非 ENOENT 的 error（EACCES）不再换解释器，原因当场透成进度", async () => {
+    coldRoot();
+    queueChild({ error: { code: "EACCES", message: "spawn EACCES" } });
+    /* 后面这一份**不该被用到**：继续退避到下一个候选才是这条要拦的错法。 */
+    queueChild({ lines: [ONE_PKG_LINE] });
+    const events = await getEvents();
+    expect(spawnMock.mock.calls).toHaveLength(1);
+    expect(interpreterNames()).toEqual(["python3"]);
+    const progress = events.filter((e) => e.type === "progress");
+    expect(JSON.stringify(progress)).toContain("EACCES");
+    expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
+  });
+
+  it("退出码 127（命令不存在）也要换下一个解释器", async () => {
+    coldRoot();
+    queueChild({ closeCode: 127 });
+    queueChild({ lines: [ONE_PKG_LINE] });
+    const events = await getEvents();
+    expect(interpreterNames()).toEqual(["python3", "python"]);
+    expect(eventOf(events, "discover_done").packages).toHaveLength(1);
+  });
+
+  it("解析器写 stderr 的每一行都转成进度，前面带 ⚠️（警告在界面上要看得见）", async () => {
+    coldRoot();
+    queueChild({
+      errChunks: ["SyntaxWarning: pip is old\n"],
+      lines: [ONE_PKG_LINE],
+    });
+    const events = await getEvents();
+    const hit = events.find((e) => msgOf(e).includes("SyntaxWarning"));
+    expect(
+      hit,
+      `事件流里没有那句 stderr 警告：${JSON.stringify(events)}`,
+    ).toBeTruthy();
+    expect(hit ? msgOf(hit) : "").toContain("⚠️");
+    expect(hit?.phase).toBe("scan");
+  });
+
+  it("PROGRESS::hash 的 done 与 total 两个计数都要在（界面靠它填进度条，不解析中文）", async () => {
+    coldRoot();
+    queueChild({
+      lines: ["PROGRESS::hash|msg=算哈希|done=7|total=20", ONE_PKG_LINE],
+    });
+    const events = await getEvents();
+    expect(progressWith(events, "算哈希")).toMatchObject({
+      phase: "hash",
+      done: 7,
+      total: 20,
+    });
+  });
+
+  it("旧格式（没有 msg=）整段当文案透出去，不许把事件丢掉", async () => {
+    coldRoot();
+    queueChild({
+      lines: ["PROGRESS::scan|正在扫 /tmp/Custom_Nodes", ONE_PKG_LINE],
+    });
+    const events = await getEvents();
+    expect(progressWith(events, "正在扫").msg).toBe("正在扫 /tmp/Custom_Nodes");
+  });
+
+  it("不成形的 PROGRESS:: 行被跳过，但后面的结果行仍然算数", async () => {
+    coldRoot();
+    queueChild({ lines: ["PROGRESS::weird-line", ONE_PKG_LINE] });
+    const events = await getEvents();
+    expect(JSON.stringify(events)).not.toContain("weird-line");
+    expect(eventOf(events, "discover_done").packages).toHaveLength(1);
+  });
+
+  it("一行被 chunk 切断也要拼回来（一次 data 不等于一行）", async () => {
+    coldRoot();
+    queueChild({
+      chunks: ["PROGRESS::scan|msg=前半", "后半段\n", `${ONE_PKG_LINE}\n`],
+    });
+    const events = await getEvents();
+    expect(progressWith(events, "前半后半段").msg).toBe("前半后半段");
+    expect(eventOf(events, "discover_done").packages).toHaveLength(1);
+  });
+
+  it("以最后一行 JSON 为准（解析器中途吐过的 JSON 行不许当结果）", async () => {
+    coldRoot();
+    queueChild({
+      lines: [
+        JSON.stringify({ packages: [{ name: "Old", path: "/tmp/a" }] }),
+        ONE_PKG_LINE,
+      ],
+    });
+    const events = await getEvents();
+    const packages = eventOf(events, "discover_done").packages as {
+      name: string;
+    }[];
+    expect(packages.map((p) => p.name)).toEqual(["Foo"]);
+  });
+
+  it("收尾时最后一行不是合法 JSON → 失败进度里带退出码，流不挂着", async () => {
+    coldRoot();
+    queueChild({ lines: ["{not json at all"], closeCode: 3 });
+    const events = await getEvents();
+    const hit = events.find((e) => msgOf(e).includes("解析失败"));
+    expect(
+      hit,
+      `没有那句带退出码的失败进度：${JSON.stringify(events)}`,
+    ).toBeTruthy();
+    expect(hit ? msgOf(hit) : "").toContain("3");
+    expect(events.map((e) => e.type).slice(-1)[0]).toBe("done");
+  });
+});
