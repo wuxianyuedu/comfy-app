@@ -39,6 +39,7 @@
     "check:deps-freshness": "node scripts/check-deps-freshness.mjs",
     "check:base": "node scripts/base-check.mjs",
     "check:base:batch": "node scripts/base-check.mjs --base",
+    "check:premerge": "node scripts/premerge-check.mjs",
     "check:claims": "node scripts/check-commit-claims.mjs",
     "test:coverage": "vitest run --coverage",
     "mcp:stdio": "tsx tools/mcp-stdio.ts",

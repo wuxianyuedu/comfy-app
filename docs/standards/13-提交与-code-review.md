@@ -518,6 +518,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 依赖漏洞扫描（`check-dependency-audit.mjs`）     | 网络请求（离线 / registry 抖动不该变成提交失败）        | `pnpm check:all` 的默认档（`quality-gate.mjs` 的 `dependencyAudit`）      | `quality-gate.mjs` 的 `dependencyAudit`                       |
 | `tw4-canonical-report` / `tw4-spacing-canonical` | 起 Tailwind 引擎（~6s），判的是 CSS 等价改写而非正确性  | 按需召唤 + `--check` 棘轮                                                 | `.gate-executor-ledger.json` 的 `onDemand`                    |
 | 提交信息里的声明 ⇄ 事实（§11.23.5）              | **本地钩子连形态都看不到**（丢失发生在平台侧 squash）   | `pnpm check:base:batch` 的 `CHAINED_STEPS`（合并前 / 事后盘点，人点一次） | `base-check/chained-steps.mjs` 的 `CHAINED_STEPS`             |
+| **合并前的固定动作**（`pnpm check:premerge`）    | 平台侧 squash 合并**不跑本地钩子**、本地看不到那次合并（§13.6.2 / §11.23.5） | 人合并前敲一次（或在 PR 里 `@` 评审 NPC 唤起一轮）                        | `quality-gate.mjs` 的 `GATES.premerge`（`run: false`）        |
 
 三档「每天首次自证」的口径不同、判据一份（`FRESHNESS_TRACKS` 的 `daily` / `dirty` /
 `graceMs`）：全量 e2e 按本地日历日；另两档按「当天动过输入面没有」。**理由**：前者人人
@@ -1526,8 +1527,8 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
 - **第 3 步（修了写清归属）**：`check-changelog-fragments.cjs` 在钩子里守着碎片的
   形态；「这条不是本 PR 引入的」这句话本身没法机器判（它是叙述），但它引用的
   **复算证据**由 `base-check.mjs --json` 给出，可被复核。
-- **合并前跑一遍 `pnpm check:base:batch`**（= `node scripts/base-check.mjs --base`）：
-  **这一条现在有执行者了**（ISSUE #1591）。
+- **合并前跑一遍 `pnpm check:premerge`**（= `node scripts/premerge-check.mjs`）：
+  **这一条现在有执行者了**（ISSUE #1591 起立、#1611 拍板收成一条命令）。
 
   上面三步全是**事后**的（被拦下才知道基线红）。而「我的分支绿 → `master` 绿」之间
   那**一跳**此前没有任何判据 —— 平台侧 squash 合并**不跑本地钩子**，`#623` 之后
@@ -1603,6 +1604,77 @@ exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#
   **两者都不进本地钩子**（平台侧 squash 本地看不到形态），但差别在**谁在敲**：
   原生那批由**钩子步骤**现算（人在合并前点一次 `--base` 就跑），而声明那一族是
   **`CHAINED_STEPS`** 收上来的第二个来源 —— 同一个入口、同一次敲击，多算一条事实。
+
+  ##### 13.6.2.1 「合并前的固定动作」是**一条命令**，不是三条纪律（ISSUE #1611）
+
+  这一跳此前有三条**都天然跑不进 `pre-commit`** 的判据（本地钩子面前根本没有那次
+  squash 合并）：
+
+  | 判据                       | 核什么                                | 落点                              |
+  | -------------------------- | ------------------------------------- | --------------------------------- |
+  | `--base` 复算（#1591）     | 钩子里那批全仓判据在**干净快照**上红不红 | `base-check.mjs` 的 `baseCheckMany` |
+  | `check:claims`（#1605）    | 提交信息里那句「§x.y 照旧保留」是不是真的 | `check-commit-claims.mjs`          |
+  | 合并面（#1617）            | 合并有没有把**一侧整份覆盖掉**         | `check-merged-side-loss.mjs`       |
+
+  三条各自的判据都不缺，缺的是**「记住跑全」这件事本身**。把它写成文档里的三条命令
+  等于把执行者交给纪律，而纪律的三种漏法（漏跑一步 / 顺序反了 / 只跑了自己记得的那条）
+  **都不报错** —— 这正是 §9.2 第 3 条禁止的静默失败，也是本仓库反复踩的那一族
+  （「声明写得出来不算数，读的人在跑才算」，§11.23）。
+
+  ```bash
+  pnpm check:premerge                 # 三段全跑，人眼看的报告
+  pnpm check:premerge --json          # 机器可读（逐段给结论）
+  pnpm check:premerge --skip-claims   # PR 里还没写合并信息时
+  pnpm check:premerge --only=base     # 只跑一段（排查用）
+  ```
+
+  **它不发明第二套编排**（§12.18 / §12.12）：`base` 段**直接 import** 既有实现的
+  `baseCheckMany` + `resolveMergeBatch`（连「面从钩子里现算」这条都不再抄一份），
+  另外两段是**子进程 + 退出码原样透传**。本入口只做两件事：**筛段**与**合成总码**。
+
+  | 口径           | 做法                                                                     | 不做会怎样                                                     |
+  | -------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------- |
+  | **总码合成**   | **「没跑起来」(2) 压过「红了」(1)**                                      | 拿一个无法归因的读数下判决 —— 正是 §13.6.2 第 1 步那条实测      |
+  | **四态折算**   | `current-green`=0 / `yours`·`baseline-red`=1 / `inconclusive`=2，只在**一处** | 两处各折算一遍 → 漂，且「同一个事实在两条入口上说成两回事」      |
+  | **筛空**       | 三段全被跳过 ⇒ **退 2**，不许报全绿                                       | 「什么都没复算」被读成「复算过且全绿」（静默的绿比没有更坏）    |
+
+  **第三段的锚点由入口自己算**（`resolveLossBaseline()`）：`check-merged-side-loss.mjs`
+  需要一个 `--baseline`，而它在「合并前」这一刻**是算得出来的** —— 就是那条线的
+  **分叉点**：
+
+  ```bash
+  git merge-base <要并进去的那条> HEAD      # = 锚点
+  ```
+
+  语义与判据本身对得上：它问的是「结果版是不是退回了**基线之前**的某一版」，所以
+  「基线」是分叉点，**不是上游的尖端** —— 拿尖端会把分支侧自己的正当改动整片读成
+  差异（那个方向上的误报会让这条判据被学会绕开）。这与 `.githooks/prepare-commit-msg`
+  那条提交前档（#1618）同源，那边用的是 `MERGE_HEAD` + merge-base。
+
+  这一格**不是**「让判据自己算锚点」：那正是 #1605 §4 判过的天真形态（推「被丢的
+  那一侧是谁」，而它在 squash 之后常已不可达，实测 `ad81a912` 上 128 份改动 → 0 命中）。
+  分叉点是另一个问题，由 `merge-base` 直接给出。**算不出时退 2 并说清原因**
+  （无上游引用 / 浅克隆），绝不静默退 0。
+
+  **它回答「不是合并」这种正常形态**：「合并有没有丢一侧」那一格在 HEAD 不是合并时
+  （日常、以及平台侧 squash 出来的提交）**跳过并退 0**，但**要说话**（打印「跳过：…」
+  与原因）—— 这个 0 由「确实没有合并可判」担保，不由「判据没跑」担保。
+  它与「取不到提交 / 浅克隆」是**两档**：后者退 2，绝不与前者混成一档（混了以后
+  「这个动作天天报不构成证据」，真正的故障反而被噪声淹没）。
+
+  > **这一格踩过一次坑，值得记下**：第三段最初写成裸 `script` + `args: []`，于是它
+  > **恒退 2**（缺 `--baseline`）、整个入口**恒报「不构成证据」** —— 一次事实都没
+  > 复算过，而输出看起来像「环境问题」。这正是本仓库反复踩的那一族：**判据在场、
+  > 却什么都不做**。修法不是把判据降级，是把锚点补齐（见上）。
+
+  **它不替代 `pnpm check:all`**：后者是更宽的那一档（另外跑全量单测 + 覆盖率 +
+  依赖漏洞扫描）。`--base` / `premerge` 判的是「这一跳会不会把红带进 `master`」，
+  `check:all` 判的是「整条质量面」。
+
+  跨平台侧照 §9.5 的口径两处同步：`quality-gate.mjs` 的 `GATES.premerge`（`run: false`）
+  与 `quality-gate.ps1` 的 `$Blocks` + `-Mode` 单选值（`check-ps1-consistency.mjs` 在
+  pre-commit 核对）。**登记**：`scripts/.on-demand-duties.json` 的 `premerge-fixed-action`
+  行（机器事实取 `GATES.premerge` 的 `run: false`）+ §11.23.3 索引里的 `premerge-fixed-action`。
 
 #### 13.6.3 「环境里跑不到门禁」不是结论 —— 先 `pnpm install`（ISSUE #1568）
 
