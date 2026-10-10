@@ -34,9 +34,11 @@ import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
 import { checkEnvFile } from "./env-preflight.mjs";
 import {
+  appRuntimeLogFileName,
   createLogSink,
   currentDirOf,
   localTimestamp,
+  runtimeStamp,
   runStamp,
 } from "./launcher-core/log.mjs";
 import {
@@ -176,7 +178,11 @@ process.env.COMFYAPP_RUN_ID = runId;
 const launcherLogDir = currentDirOf("launcher", ROOT);
 const nextjsLogDir = currentDirOf("nextjs", ROOT);
 const currentLog = path.join(launcherLogDir, "dev-launcher.log");
-const logSink = createLogSink(ROOT, { file: currentLog, runId, tag: "launcher" });
+const logSink = createLogSink(ROOT, {
+  file: currentLog,
+  runId,
+  tag: "launcher",
+});
 // 供壳侧 get_launch_log 的 sentinel 机制定位本次运行日志（与 .ps1 版同文件）。
 try {
   fs.writeFileSync(
@@ -188,6 +194,12 @@ try {
   /* 见 log 模块注释 */
 }
 const runTimestamp = runStamp();
+/** `app-runtime` 通道本次启动那一份的名字戳 —— 与 {@link runTimestamp} 同一次
+ *  取时刻（两个形态，不是两次实现），经 `COMFYAPP_LAUNCH_STAMP` 交给 dev server
+ *  的写方，使「launcher 写的预检提醒」与「应用随后写的业务日志」落在同一份
+ *  文件上（见 `appRuntimeLogFileName`）。 */
+export const launchStamp = runtimeStamp();
+process.env.COMFYAPP_LAUNCH_STAMP = launchStamp;
 // 保留策略异步跑（启动路径上绝不能因为它变慢或挂住）；失败静默。
 void pruneRuns(ROOT).catch(() => {});
 
@@ -351,13 +363,17 @@ function walkFiles(dir) {
 /** 把壳/pnpm 提醒补录进应用日志面板可见的 app-runtime 通道。
  *  （此刻 dev server 尚未启动，无法走写入端点，按面板可解析的行格式直接追加。） */
 /** @param {string} message @param {string} [root] */
-function appendRuntimeWarning(message, root = ROOT) {
+export function appendRuntimeWarning(message, root = ROOT) {
   try {
     const dir = currentDirOf("services", root);
     fs.mkdirSync(dir, { recursive: true });
     const ts = localTimestamp();
+    /* 落**本次启动那一份**（与 dev server 随后写的是同一个文件名，见
+     * `appRuntimeLogFileName` 与 `launchStamp`）：固定名会被读侧当成
+     * 「更早的日志」并在轮转里当最旧的一份先删掉，而那正是这条通道的字面
+     * 事故形态。 */
     fs.appendFileSync(
-      path.join(dir, "app-runtime.log"),
+      path.join(dir, appRuntimeLogFileName(launchStamp)),
       `[${ts}] [WARN] [launcher] ${message}\n`,
       "utf8",
     );
@@ -710,7 +726,10 @@ export function downstreamExitKind({ shellExited, abandoned, shellCrashed }) {
 /** 取壳侧 stderr 的两个正标记（大小写不敏感）。 */
 /** @param {string} [root] @returns {{ abandoned: boolean, crashed: boolean, file: string }} */
 export function readShellMarkers(root = ROOT) {
-  const file = path.join(currentDirOf("launcher", root), "dev-launcher-stderr.log");
+  const file = path.join(
+    currentDirOf("launcher", root),
+    "dev-launcher-stderr.log",
+  );
   return {
     abandoned: fileHasMarker(file, ABANDONED_MARKER),
     crashed: fileHasMarker(file, NONZERO_EXIT_MARKER),
@@ -903,8 +922,7 @@ export async function run(argv = process.argv.slice(2)) {
   //      `db.sqlite` 等于在别人握着句柄时换掉文件 —— 这里换是唯一安全的时刻。
   //      空转（没有标记）是绝大多数启动的形态。
   const restore = applyPendingRestoreAtBoot(ROOT, {
-    write: (line) =>
-      log(line.replace(/^\[db-backup\] /, "").trimEnd(), "INFO"),
+    write: (line) => log(line.replace(/^\[db-backup\] /, "").trimEnd(), "INFO"),
   });
   if (restore.status === "restored") {
     log(`数据库已从备份恢复（${restore.from}）`, "OK");
