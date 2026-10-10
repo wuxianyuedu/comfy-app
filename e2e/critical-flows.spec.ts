@@ -6,6 +6,8 @@ import {
   type Route,
 } from "@playwright/test";
 
+import { expectHomeReady } from "./support/home-anchors";
+
 /**
  * 关键链路 E2E（ISSUE #317）：把「登录 → 工作区 → 工作流库执行 → 工作台概览」
  * 四段收进 CI 的 `@critical` 门禁。
@@ -115,10 +117,9 @@ test.describe("工作区链路 @critical", () => {
     await stubBackend(page);
     await page.goto("/workspace");
 
-    // Hero 标题（首页主入口）
-    await expect(
-      page.getByRole("heading", { name: "灵感从这里开始" }),
-    ).toBeVisible();
+    /* 首页主入口（四张入口卡的第一张）。原先钉的是欢迎区大标题，那一块已按
+     * ISSUE #1691 移除 —— 口径与收口理由见 `support/home-anchors`。 */
+    await expectHomeReady(page);
 
     /* 侧栏主干入口齐备：这是「应用能用」的最小结构断言。
      * 名单是导航拆成两类之后的**全局那一类**（`NavItems.tsx` 的 `globalNavItems()`，

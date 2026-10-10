@@ -220,7 +220,9 @@ export function HomePage({
   return (
     <DocumentFrame
       width="narrow"
-      className="px-10 py-16"
+      /* `pt-10`（而不是跟着欢迎区时代的 `py-16`）：上沿现在直接是四张入口卡，
+        64px 的顶留白在整条内容列之上等于又加回半块欢迎区。 */
+      className="px-10 pt-10 pb-16"
       backdrop={
         /* ── 顶部渐隐带（替代原先两团极光光斑）────────────────────
            换掉的理由不是审美偏好，是两条实测：
@@ -241,13 +243,12 @@ export function HomePage({
           此前这里的搜索框是个 `<div>` 假实现（连 input 都不是）、铃铛与头像
           只弹一句 toast 占位，三者本轮一并移除；消息入口改由顶栏复用状态栏
           那个 `MessageCenterButton`。 */}
-      {/* ── Title ── */}
-      <h1 className="u-title-hero mb-3 text-center">灵感从这里开始</h1>
-      <p className="text-ink-faint mb-10 text-center text-sm">
-        用本地 AI 模型，自由创作图像、视频与专属模型
-      </p>
-
-      {/* ── 快捷入口卡片 ── */}
+      {/* ── 快捷入口卡片 ──
+          原先这里还有一块「灵感从这里开始 + 用本地 AI 模型，自由创作图像、视频与
+          专属模型」的欢迎区。移除它的理由只有一条：**它一个信息都不给**。
+          标题是句口号、副标题把四张卡片的说明重说了一遍，两者加起来占掉首屏上沿
+          约 150px（含下方 40px 间距），而首页整屏要回答的问题只有「继续哪个项目 /
+          开哪个入口」—— 首屏上沿正是那一块该在的地方。 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           {

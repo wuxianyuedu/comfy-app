@@ -2,24 +2,46 @@
 /* 工作流编辑器的过渡屏与画布浮层 —— 从 WorkflowEditorInner 的渲染里
  * 按视觉区块拆出的小组件。全部是纯展示：状态经 props 传入，
  * 本文件不持有任何编辑器状态。 */
+import type { ReactNode } from "react";
+
 import { Button } from "~/components/ui/button";
 import { PageLoading } from "~/components/ui/page-loading";
-import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
-import { zClass } from "~/lib/shell/overlay-z";
 
-/** 打开工作流时的整屏加载态（detail 尚未就绪）。 */
-export function WorkflowEditorLoadingScreen() {
+/** 过渡屏（加载 / 失败）的外框：**吃满内容列**，不是整窗浮层。
+ *
+ * 为什么不是 `FullScreenLayer`（ISSUE #1691 第 3 条）：那个基元是 `fixed` 定位、
+ * 从标题行下沿铺到窗口底边 —— 打开工作流的那一两秒里，**侧栏与视图页签整条被
+ * 一张加载屏盖掉**。用户的原话是「点击流程会有一个全屏的加载…加载只覆盖右侧
+ * 部分」：过渡屏该占的是**内容区**，导航留在原位。
+ *
+ * 覆盖范围靠**定位祖先**收窄、不靠 `fixed`：壳的内容列是 `relative`
+ * （`AppShell` 的 `relative flex min-h-0 min-w-0 flex-1 flex-col`），所以
+ * `absolute inset-0` 拿到的是**内容列**那一块 —— `fixed` 才会铺到整窗。
+ *
+ * ⚠️ 别改成 `h-full flex-1` 的流内兄弟：编辑器与工作流库是并列渲染的，两个
+ * `flex-1` 会**平分**内容列 —— 实测那会让加载态嵌在库的下半截、上半截还留着库的
+ * 内容，看上去像「加载卡在了一半」。覆盖式（`absolute`）才是这一段该有的形态。
+ *
+ * 编辑器**加载完之后**仍然走 `FullScreenLayer`（它是有意为之的全屏视图，
+ * ISSUE #310 的口径不变）—— 这里改的只是「还没进得去」那一段的覆盖范围。 */
+function EditorTransitionFrame({ children }: { children: ReactNode }) {
   return (
-    <FullScreenLayer
-      zClass={zClass("modal")}
-      className="bg-canvas flex items-center justify-center pb-6"
-    >
-      <PageLoading label="加载工作流节点…" />
-    </FullScreenLayer>
+    <div className="bg-canvas absolute inset-0 flex flex-col items-center justify-center">
+      {children}
+    </div>
   );
 }
 
-/** 打开失败的整屏错误态（拉取失败或 detail 缺失）。 */
+/** 打开工作流时的加载态（detail 尚未就绪）—— 只覆盖内容列。 */
+export function WorkflowEditorLoadingScreen() {
+  return (
+    <EditorTransitionFrame>
+      <PageLoading label="加载工作流节点…" />
+    </EditorTransitionFrame>
+  );
+}
+
+/** 打开失败的错误态（拉取失败或 detail 缺失）—— 只覆盖内容列。 */
 export function WorkflowEditorErrorScreen({
   error,
   onClose,
@@ -28,10 +50,7 @@ export function WorkflowEditorErrorScreen({
   onClose: () => void;
 }) {
   return (
-    <FullScreenLayer
-      zClass={zClass("modal")}
-      className="bg-canvas flex items-center justify-center pb-6"
-    >
+    <EditorTransitionFrame>
       <div className="text-center">
         <p className="text-destructive">{error ?? "未知错误"}</p>
         <Button
@@ -42,7 +61,7 @@ export function WorkflowEditorErrorScreen({
           返回
         </Button>
       </div>
-    </FullScreenLayer>
+    </EditorTransitionFrame>
   );
 }
 

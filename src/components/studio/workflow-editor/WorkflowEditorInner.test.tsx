@@ -55,27 +55,36 @@ describe("WorkflowEditorInner", () => {
       </ReactFlowProvider>,
     );
 
+    /* 按 §11.9 断言**用户可见结果**，不再 dump 整棵 DOM。这条判据随 ISSUE #1691
+     * 第 3 条翻过一次方向，两侧的来龙去脉都记在这里：
+     *   · 曾经它钉的是「加载态是 `FullScreenLayer`」—— 那一条来自 ISSUE #310
+     *     （全屏视图别盖掉标题行里的页签）。理由是当时编辑器**只有**全屏形态，
+     *     加载态跟着它走最省事；
+     *   · 用户实测的诉求是「点击流程会有一个全屏的加载…加载只覆盖右侧部分」：
+     *     那一两秒里侧栏与视图页签整条被盖住，用户连「换个视图等一下」都做不到。
+     *     过渡屏该占的是**内容列**，而编辑器加载完之后才走全屏层（§310 的口径
+     *     不变）。
+     *
+     * 判据的形状：`absolute inset-0`（由**定位祖先**收窄 —— 壳的内容列是
+     * `relative`）+ **不含 `fixed`**。`fixed` 才是「铺到整窗」那一颗，
+     * 而 `top-title-bar` 是 `FullScreenLayer` 的定位标记、一并排除。
+     * ⚠️ 别再写成「流内兄弟 + `flex-1`」：编辑器与工作流库并列渲染，两个
+     * `flex-1` 会平分内容列 —— 实测那会让加载态嵌在库的下半截
+     * （`/tmp` 那两张截图的形状），覆盖式才是这一段该有的形态。 */
     expect(screen.getByText("加载工作流节点…")).toBeInTheDocument();
-    /* 按 §11.9 断言**用户可见结果**，不再 dump 整棵 DOM。这里要钉的其实是
-     * ISSUE #310 那条回归（全屏视图盖掉窗口标题行里的页签、用户切不回去）：
-     *   · 加载态有一句可读文案（spinner 的可访问名由基元持有）；
-     *   · 覆盖层是 `FullScreenLayer` —— `top-title-bar`（让出标题行）而不是
-     *     `inset-0`，且 `data-*` 形状与宿主一致；这一条是「用户还能看到页签」。
-     * 用 `startsWith` 而不是 `toContain`：`bottom-0 left-0` 里也含 `top` 子串时
-     * `toContain` 会假绿（判据自己会静默失效的那一类）。 */
-    expect(screen.getByText("加载工作流节点…")).toBeInTheDocument();
-    const layer = container.querySelector<HTMLElement>(
-      '[class*="top-title-bar"]',
-    );
+    const layer = container.firstElementChild as HTMLElement | null;
+    expect(layer, "加载态没有渲染出来").toBeTruthy();
     expect(
-      layer,
-      "加载态不是 FullScreenLayer（没有 top-title-bar）",
-    ).toBeTruthy();
-    expect(layer?.className, "全屏层必须让出标题行").toMatch(
-      /(^|\s)top-title-bar(\s|$)/,
+      layer?.className,
+      "过渡屏不许退回 `fixed`（那是整窗浮层，会盖掉侧栏与页签）",
+    ).not.toMatch(/(^|\s)fixed(\s|$)/);
+    expect(
+      layer?.className,
+      "过渡屏不许用 top-title-bar（那是 FullScreenLayer 的定位标记）",
+    ).not.toMatch(/(^|\s)top-title-bar(\s|$)/);
+    expect(layer?.className, "过渡屏要覆盖定位祖先（壳的内容列）").toMatch(
+      /(^|\s)absolute(\s|$)/,
     );
-    expect(layer?.className, "不许回到 inset-0（会盖掉页签）").not.toMatch(
-      /(^|\s)inset-0(\s|$)/,
-    );
+    expect(layer?.className).toMatch(/(^|\s)inset-0(\s|$)/);
   });
 });
