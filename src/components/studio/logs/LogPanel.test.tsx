@@ -410,6 +410,24 @@ describe("LogPanel 日志面板", () => {
     expect(button.className).not.toContain("w-8");
     const group = button.parentElement!;
     expect(group.className).toContain("flex-1");
+    /* ISSUE #1695：容器与按钮的**内容下限**必须同源。
+     *
+     * 用户截到的现象是「错误」的紫色选中底盖住了搜索框左缘与放大镜。根因不在
+     * 选中样式，而在这一组的两条宽度约束**脱节**：
+     *   · 容器挂 `min-w-56`（224px）—— 允许它被压到 **224px**；
+     *   · 每个按钮挂 `min-w-fit` —— 谁都压不到自己的内容宽（五个约 406px）。
+     * 于是容器比内容窄，多出来的那截**溢出盒子**（实测 16~174px，见 PR 里的
+     * 真机数据），而 `overflow` 默认 `visible` ⇒ 直接画到紧邻右侧的搜索框上。
+     * 而且 `flex-wrap` 判的是子项的 flex base size（`basis-0`）、不是溢出的内容，
+     * 所以「放不下」永远不触发换行，只会一直往外压。
+     *
+     * 修法是让容器也取**内容固有宽度**：`min-w-fit`。这里锁住接线 ——
+     * 一旦有人把容器改回固定像素下限，这条断言就红。 */
+    expect(group.className).toContain("min-w-fit");
+    expect(group.className).not.toContain("min-w-56");
+    /* 按键位的内容下限同样必须是 fit（`min-w-0` 会把「警告」切成 `警…`，
+     * ISSUE #262）。两侧同源是这条修复的要点，缺一边都会重新错开。 */
+    expect(button.className).toContain("min-w-fit");
     /* 标签与计数是**两个**子元素、同行排布。 */
     expect(button.children).toHaveLength(2);
     expect(button.children[0]?.textContent).toBe("警告");
