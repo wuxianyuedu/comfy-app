@@ -122,7 +122,7 @@ test("真台账在真落点上判绿（当前状态自查）", ({ repo }) => {
 
 /* ── ② 零增量：未登记的声明不许新增 ────────────────────────── */
 
-test("② 声明行数涨上去 → 阻断并给出收紧基线的出口", ({ repo }) => {
+test("② 声明行数涨上去 → 阻断，且出口必须是**人写得下的动作**", ({ repo }) => {
   repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(20)); // 60 行
   writeBoth(repo, {
     entries: [
@@ -138,8 +138,21 @@ test("② 声明行数涨上去 → 阻断并给出收紧基线的出口", ({ re
   expect(code).toBe(1);
   expect(output).toContain("声明新增");
   expect(output).toContain("从 57 涨到 60");
-  // 出口必须是「收紧基线」，不是「放宽判据」
-  expect(output).toContain("--update");
+  /* 出口必须是**人写得下的动作**，不是一条命令。
+   * 这一格原来断的是 `toContain("--update")` —— 它把一条**做不到的事**当成出路钉住了：
+   * 同一个脚本的 `--update` 那一支对「上涨」是 `exit 2` 拒绝写入（本仓 §11.25 的
+   * 判据就是判这个方向），所以照着红话跑一遍只会再吃一次红，而「谁在敲这条声明」
+   * 这个真问题一次都没被回答。红话与机制相反，比没有红话更糟（§11.18.4）。 */
+  expect(output).toContain("手工");
+  /* 反向断言取的是**那句指令的形状**，不是字面量「--update」：红话里现在会明确写
+   * 「这一步不给 `--update`」，那是在**否认**这条出路，用 `not.toContain("--update")`
+   * 会把这句否认本身判成违规（判据报错了对象，正是 §11.2.1 说的「断言抄的是实现」）。 */
+  expect(output).not.toMatch(
+    /再跑 `node scripts\/check-tsc-diagnostic-executors\.cjs --update`/,
+  );
+  expect(output).toContain("这一步**不给");
+  // 也不许把人推向「放宽判据」那一侧。
+  expect(output).toContain("为了让这一步变绿");
 });
 
 test("② 声明行数降下去 → 不阻断，但提示收紧基线", ({ repo }) => {

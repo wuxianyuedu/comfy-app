@@ -39,7 +39,7 @@
         "test": "tests/daily-tracks.test.ts（C 组固定清单）"
       },
       "baseline": {
-        "scripts/visual-baselines.mjs": 83
+        "scripts/visual-baselines.mjs": 86
       },
       "section": "11.8"
     },

@@ -321,10 +321,12 @@ if (entries) {
         problems.push(
           `声明新增：${rel} 的声明行从 ${e.baseline[rel]} 涨到 ${now}（「${e.name}」）—— ` +
             "新写一处 JSDoc / 类型注解，就要回答「它由谁执行、谁来敲」。" +
-            `\n        出口：把 §${e.section} 与 ${e.reader} 读完、确认这条声明仍会被 tsc 判决面收进去，` +
-            `再跑 \`node scripts/check-tsc-diagnostic-executors.cjs --update\` ` +
-            `（= 把 ${path.relative(ROOT, LEDGER)} 里 \`${e.id}.baseline["${rel}"]\` 收紧到 ${now}）。` +
-            "\n        （**别**为了让这一步变绿去放宽基线 —— 零增量就是这么用的。）",
+            `\n        出口：把 §${e.section} 与 ${e.reader} 读完，确认这条声明真会被 tsc 判决面收进去、` +
+            `并由「${ex.test ?? ex.label ?? ex.kind}」敲到；确认之后**手工**把 ` +
+            `${path.relative(ROOT, LEDGER)} 里 \`${e.id}.baseline["${rel}"]\` 改成 ${now}。` +
+            "\n        （这一步**不给 `--update`**：那一支只许降不许升 —— 上涨的意思是" +
+            "「多了一处没人回答过的声明」，让一个旗标替人回答，这条判据就当场作废。）" +
+            "\n        （也别为了让这一步变绿去把基线写小、或把这条声明摘掉 —— 零增量判的就是这两件事。）",
         );
       } else if (now < e.baseline[rel]) {
         report.push(

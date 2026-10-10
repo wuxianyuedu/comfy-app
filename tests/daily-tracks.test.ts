@@ -68,6 +68,20 @@ const GOOD = freshnessRecord({
 
 const SAME_DAY = new Date("2026-10-09T06:00:00.000Z");
 
+/**
+ * 「今天」与「两天前」两个时刻，都从 `SAME_DAY` **推算**而不是写死日历日。
+ *
+ * 判据比的是 `isSameLocalDay`（**本地**日），而 `SAME_DAY` 是一个 UTC 瞬时：
+ * 写死 `"2026-10-08T23:30:00.000Z"` 在 UTC+8 机器上落成本地 10-09 07:30 ——
+ * 那**就是今天**，「昨天的豁免」这条用例会因为换台机器而结论翻转。
+ * 偏移 -48h 在任何时区都至少跨过一个本地日界，而 +3d 之内仍在那两档的 7 天宽限里。
+ * （这一族是本仓库的老对手：判据与平台/机器绑定、在别处测不出来。）
+ */
+const TODAY_AT = SAME_DAY.toISOString();
+const TWO_DAYS_AGO = new Date(
+  SAME_DAY.getTime() - 48 * 3_600_000,
+).toISOString();
+
 /** 夹具用的临时仓库（每条用例自建、跑完删掉，不动本仓库的提交历史）。 */
 let workdir = "";
 
@@ -272,6 +286,108 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
     const result = gate("artifact", { artifact: placeholder });
     expect(result.exitCode).toBe(1);
     expect(result.problems.join("\n")).toContain("不吃这一档");
+  });
+
+  it("同日 `dirtyReason` 被当天的提交驳倒 ⇒ 拦（那句是**事实声明**，不是决定）", () => {
+    /* 存量现场：`.full-suite-freshness.json` 里有一条「本 PR 只接机制
+     * （scripts/ + tests/ + docs），未动 src/」，而这一档的输入面就是 ["src/","tests/"]。
+     * 旧判据从不拿 `dirtySince` 去核这句话，于是整档当天免跑，而账面上一切正常
+     * （合法日期 + 人名 + 一条读得通的理由）—— §11.23 那一族。 */
+    const contradicted = {
+      ...GOOD,
+      verifiedAt: TODAY_AT,
+      dirtyReason: "只改文档与注释，src/ 与 tests/ 一条没碰",
+    };
+    const result = gate(
+      "full",
+      { full: contradicted },
+      { dirtySince: new Date("2026-10-09T05:00:00.000Z") },
+    );
+    expect(result.exitCode, result.problems.join("\n")).toBe(1);
+    const text = result.problems.join("\n");
+    expect(text).toContain("与事实相反");
+    expect(text).toContain("src/");
+    // 出路要给出**另一条出路**：只改文档时该写的是「今天故意不跑」，不是事实声明。
+    expect(text).toContain("--skip");
+  });
+
+  it("同日 `skippedReason` 就算今天动过输入面也放行（决定不受事实反驳）", () => {
+    /* 与上面那条是一对，缺它就分不出两种出路的分工：`skippedReason` 承认这一档相关、
+     * 只声明今天没跑，代价是**明天要重写一次**；`dirtyReason` 声明的是一个可核的事实。
+     * 把两者都拿去反驳 `dirtySince`，等于把「今天不跑」这条出路也堵死 —— 那会逼人
+     * 去写那句更容易被驳倒的话（§11.18.4：会把人推向坏一侧的判据是有害的判据）。 */
+    const decided = {
+      ...GOOD,
+      verifiedAt: TODAY_AT,
+      skippedReason: "机器此刻满载，跑出来的比例不可归因",
+    };
+    expect(
+      gate(
+        "full",
+        { full: decided },
+        {
+          dirtySince: new Date("2026-10-09T05:00:00.000Z"),
+        },
+      ).exitCode,
+    ).toBe(0);
+  });
+  it("**昨天的豁免不再为今天作证**（豁免是一条关于某一天的话）", () => {
+    /* 立案现场：`scripts/.e2e-freshness.json` 挂着一条 2026-10-08 的 `skippedReason`，
+     * 而判据在这一支从不比 `verifiedAt` —— 一条理由一旦写下就替未来每一天作证，
+     * 「每日自证」在没人跑的日子里一直是绿的。写入侧本来就是把 `verifiedAt` 戳成
+     * 「此刻」（`writeSkipRecord`），`--skip` 的用法原文也写着「**今天**不跑」。 */
+    const yesterdayWaiver = freshnessRecord({
+      key: "e2e",
+      verifiedAt: TWO_DAYS_AGO,
+      who: "月读",
+      how: "pnpm test:e2e",
+      trackedBy: "e2e",
+      skippedReason: "那次只解决合并冲突与文档同步，未动功能链路",
+    });
+    const result = gate("e2e", { e2e: yesterdayWaiver });
+    expect(result.exitCode, result.problems.join("\n")).toBe(1);
+    const text = result.problems.join("\n");
+    // 话术要同时给出「回到自己的口径」与「那是豁免不是凭证」，否则读起来像跑绿过。
+    expect(text).toContain("今天还没有自证");
+    expect(text).toContain("上一条是豁免");
+    expect(text).toContain("不是跑绿的凭证");
+  });
+
+  it("**今天的豁免仍然放行**（这一档不许变成「每天必须跑」的仪式）", () => {
+    const todayWaiver = freshnessRecord({
+      key: "e2e",
+      verifiedAt: TODAY_AT,
+      who: "月读",
+      how: "pnpm test:e2e",
+      trackedBy: "e2e",
+      skippedReason: "本机同机并行会话占着端口与 CPU，今天不跑，明天补",
+    });
+    expect(gate("e2e", { e2e: todayWaiver }).exitCode).toBe(0);
+  });
+
+  it("过期豁免**不是「过期即红」**：吃输入面的那档落回自己的宽限", () => {
+    /* 这一条与上面那条是一对：过期之后判据把这一档**交回 `freshnessVerdict`**，
+     * 于是 `dirty` / `graceMs` 继续说话 —— 全量单测那档两天前跑绿过、今天没动输入面，
+     * 该放行。少了这一条，「豁免要过期」会被做成「每天都必须跑或每天都得写理由」，
+     * 那就把 #1282 收掉的那层（「改了就当天跑」）又推回来了。 */
+    const expired = {
+      ...GOOD,
+      verifiedAt: TWO_DAYS_AGO,
+      skippedReason: "那两天只改文档与脚本注释，没动 src 也没动用例",
+    };
+    expect(gate("full", { full: expired }).exitCode).toBe(0);
+    /* 而同一条过期豁免，在**今天动过输入面**时就要拦 —— 宽限只对「没人动它」成立。 */
+    const dirtied = gate(
+      "full",
+      { full: expired },
+      {
+        dirtySince: new Date("2026-10-09T05:00:00.000Z"),
+      },
+    );
+    expect(dirtied.exitCode).toBe(1);
+    expect(dirtied.problems.join("\n")).toContain(
+      "今天的提交动过这一档的输入面",
+    );
   });
 });
 
