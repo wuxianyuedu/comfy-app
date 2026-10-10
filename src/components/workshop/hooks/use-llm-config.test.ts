@@ -7,7 +7,10 @@ import SuperJSON from "superjson";
 import { describe, expect, it, afterAll, afterEach, beforeAll } from "vitest";
 
 import { createTestQueryClient } from "../../../../tests/helpers/renderWithProviders";
-import { createTestTRPC } from "../../../../tests/helpers/test-trpc";
+import {
+  createTestTRPC,
+  testTrpcEndpoint,
+} from "../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../tests/helpers/trpc-msw";
 import { api } from "~/trpc/react";
 
@@ -49,7 +52,7 @@ function makeWrapper(qc: QueryClient) {
     links: [
       httpBatchStreamLink({
         transformer: SuperJSON,
-        url: "http://localhost:3100/api/trpc",
+        url: testTrpcEndpoint(),
       }),
     ],
   });

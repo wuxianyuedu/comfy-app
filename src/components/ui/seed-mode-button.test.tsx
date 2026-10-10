@@ -1,3 +1,10 @@
+// @vitest-environment jsdom
+/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
+ * 与 `option-list-popover.test.tsx` 同因（同一个 base-ui popover 栈的
+ * `getAnimations` 时钟差异）：happy-dom 不推进动画时钟 ⇒
+ * `useAnimationsFinished` 不 settle ⇒ 面板不卸载，「点选项即收起」那一条
+ * 永远读到还开着的浮层。
+ */
 /**
  * 「控件后行为」面板的行为回归（ISSUE #349 / #672）。
  *

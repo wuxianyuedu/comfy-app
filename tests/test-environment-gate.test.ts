@@ -10,11 +10,20 @@
  *   ② **注释不算** —— 仓里就有注释在**讲解这个反模式**，而剥注释那一步的
  *      字符串处理首版会把 `"undefined"` 删空、于是正则连同哨兵一起失配
  *      （变异测试当场证明它认不出自己最想认的形状）。这两条都得有用例。
- *   ③ **目录档矛盾**只判「jsdom 档里的用例声明 node」，不判「node 档里声明 jsdom」——
+ *   ③ **目录档矛盾**只判「DOM 档里的用例声明 node」，不判「node 档里声明 DOM」——
  *      后者是完全正当的写法（文件头优先级高于 project）。按后一种口径装上去
  *      当场报 37 处误报。
  *   ④ **冗余文件头**判「头与所属档给同一个结论」，但不能扩张成「两个档都不匹配 /
  *      都匹配时也判」—— 那是配置自己有缝 / 有重叠，报「冗余」只会把人带偏。
+ *   ⑤ **三档之后的第五格**：DOM 档（基本档 `happy-dom`）里的用例写 `jsdom` 头是
+ *      **正当例外**（不是矛盾、也不是冗余），判据要列出它们、但不能判红。
+ *      这一格是本轮加档新长出来的，它两侧的邻居都各有一条用例（矛盾 / 冗余），
+ *      所以它自己必须也有 —— 否则「DOM 档的用例声明另一种 DOM 实现」这类改动
+ *      会落在无人判的空隙里（同 §11.23「声明 ⇄ 读者」那一族）。
+ *
+ * ⚠️ 本轮改分档时在本文件**当场漏过一次**：`node` 档里的用例写 `node` 头
+ * 那条冗余判据被 `continue` 提前跳过，14 条里红了 1 条 —— 也就是「新加一档，
+ * 相邻两格的口径要逐个回看」这件事不是理论。改这一档时**先跑本文件**。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -30,13 +39,13 @@ const SCRIPT = path.resolve(__dirname, "../scripts/check-test-environment.cjs");
  * 这里给的是**与真实配置同形**的最小版。
  */
 const CONFIG = [
-  "const JSDOM_TEST_GLOBS = [",
+  "const DOM_TEST_GLOBS = [",
   '  "src/dom/**/*.test.{ts,tsx}",',
   '  "src/**/*.test.tsx",',
   "];",
   "export default {",
   "  test: {",
-  "    setupFiles: [\"tests/setup.ts\"],",
+  '    setupFiles: ["tests/setup.ts"],',
   "    globals: false,",
   "    projects: [",
   "      {",
@@ -44,14 +53,14 @@ const CONFIG = [
   '          name: "node",',
   '          environment: "node",',
   '          include: ["src/**/*.test.{ts,tsx}"],',
-  "          exclude: JSDOM_TEST_GLOBS,",
+  "          exclude: DOM_TEST_GLOBS,",
   "        },",
   "      },",
   "      {",
   "        test: {",
-  '          name: "jsdom",',
-  '          environment: "jsdom",',
-  "          include: JSDOM_TEST_GLOBS,",
+  '          name: "happy-dom",',
+  '          environment: "happy-dom",',
+  "          include: DOM_TEST_GLOBS,",
   "        },",
   "      },",
   "    ],",
@@ -87,10 +96,12 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
 }
 
 const JSDOM_HEADER = "// @vitest-environment jsdom";
+/** DOM 档的**基本**环境（`vitest.config.ts` 里那个 project 的 `environment`）。 */
+const HAPPY_DOM_HEADER = "// @vitest-environment happy-dom";
 const NODE_HEADER = "// @vitest-environment node";
 
 describe("用例环境档门禁：环境早退", () => {
-  it("`typeof window !== \"undefined\"` 后裸 return → 拦下并给出正解", () => {
+  it('`typeof window !== "undefined"` 后裸 return → 拦下并给出正解', () => {
     const r = gate({
       "src/lib/x.test.ts": [
         'it("覆盖 SSR 分支", () => {',
@@ -105,9 +116,10 @@ describe("用例环境档门禁：环境早退", () => {
     expect(r.output).toContain("vi.stubGlobal");
   });
 
-  it("反向守卫（`=== \"undefined\"`）同样拦下", () => {
+  it('反向守卫（`=== "undefined"`）同样拦下', () => {
     const r = gate({
-      "src/lib/x.test.ts": 'it("x", () => {\n  if (typeof document === "undefined") return;\n});',
+      "src/lib/x.test.ts":
+        'it("x", () => {\n  if (typeof document === "undefined") return;\n});',
     });
     expect(r.ok).toBe(false);
     expect(r.output).toContain("环境早退");
@@ -130,7 +142,7 @@ describe("用例环境档门禁：环境早退", () => {
   it("注释里讲解这个反模式 → 不算违规（注释被剥掉）", () => {
     const r = gate({
       "src/lib/x.test.ts": [
-        "/* 反例：不要写 `if (typeof window !== \"undefined\") return;` —— 那是环境早退。 */",
+        '/* 反例：不要写 `if (typeof window !== "undefined") return;` —— 那是环境早退。 */',
         '// if (typeof window !== "undefined") return;',
         'it("x", () => { expect(1).toBe(1); });',
       ].join("\n"),
@@ -143,7 +155,7 @@ describe("用例环境档门禁：环境早退", () => {
       "src/lib/x.test.ts": [
         'it("两个分支各判各的", () => {',
         '  if (typeof window === "undefined") {',
-        "    expect(readCssColorToken(\"--x\")).toBeNull();",
+        '    expect(readCssColorToken("--x")).toBeNull();',
         "    return;",
         "  }",
         '  expect(readCssColorToken("--x")).toBeTruthy();',
@@ -155,7 +167,7 @@ describe("用例环境档门禁：环境早退", () => {
 });
 
 describe("用例环境档门禁：目录档与文件头矛盾", () => {
-  it("jsdom 档（`.test.tsx`）里的文件头写 node → 拦下", () => {
+  it("DOM 档（`.test.tsx`）里的文件头写 node → 拦下", () => {
     const r = gate({
       "src/components/x.test.tsx": `${NODE_HEADER}\nit("x", () => {});`,
     });
@@ -163,7 +175,7 @@ describe("用例环境档门禁：目录档与文件头矛盾", () => {
     expect(r.output).toContain("目录档与文件头矛盾");
   });
 
-  it("jsdom 目录（整目录一致）里的文件头写 node → 拦下", () => {
+  it("DOM 目录（整目录一致）里的文件头写 node → 拦下", () => {
     const r = gate({
       "src/dom/a.test.ts": `${NODE_HEADER}\nit("x", () => {});`,
     });
@@ -181,13 +193,58 @@ describe("用例环境档门禁：目录档与文件头矛盾", () => {
   });
 });
 
-describe("用例环境档门禁：冗余文件头", () => {
-  it("jsdom 档（`.test.tsx`）里再写一遍 jsdom 头 → 拦下（同一件事两个来源）", () => {
-    /* 实测现场：ISSUE #1485 那轮删掉 147 份冗余头之后**漏了 1 份** ——
-     * tests/sidebar-selected-state.test.tsx 已由 `.test.tsx` 那一条目录档收进 jsdom 档，
-     * 头部那行是第二个来源。当时没有这条判据，所以没人发现。 */
+/**
+ * 三档之后的**第五格**：DOM 档（基本档 `happy-dom`）里的用例写 `jsdom` 头。
+ *
+ * 它既不是矛盾（两边说的都对：目录档说「默认跑便宜的 happy-dom」、
+ * 文件头说「这一份要 jsdom 的保真度」），也不是冗余（两句不是同一句话）。
+ * 判据的处置是**列出来、不判红** —— 这一格最难的地方不是判，是
+ * 「不判红的同时别让它悄悄变成违规」，所以两条都要有用例：
+ * 一条钉「不红且被列进例外清单」，一条钉「DOM 档里写 **基本档自己** 的环境仍是冗余」
+ * （换个写法绕开例外清单 = 这一格当场漏掉）。
+ */
+describe("用例环境档门禁：DOM 档的 jsdom 例外（三档之后的第五格）", () => {
+  it("DOM 档里的 jsdom 头 → 不判红，且列进「本档例外」清单", () => {
     const r = gate({
       "src/components/x.test.tsx": `${JSDOM_HEADER}\nit("x", () => {});`,
+    });
+    expect(r.ok, r.output).toBe(true);
+    expect(r.output).toContain("本档例外");
+    expect(r.output).toContain("src/components/x.test.tsx");
+  });
+
+  it("DOM 档里的 jsdom 头**不**算冗余（它改的正是档的环境）", () => {
+    /* 变异判据：若有人把这一格并进「冗余」那条（看着像「两处都写了环境」），
+     * 当场会把仓里那 8 份例外判红 —— 而它们是正当写法。
+     * ⚠️ 断言的是**站点行**（`[冗余文件头]` 那一段带缩进的小标题），
+     * 不是 `toContain("冗余文件头")` —— 结论行里「无…冗余文件头」这句
+     * 本身含这四个字，按后者写会**恒假**（写成本条时当场撞到）。 */
+    const r = gate({
+      "src/components/x.test.tsx": `${JSDOM_HEADER}\nit("x", () => {});`,
+    });
+    expect(r.ok, r.output).toBe(true);
+    expect(r.output).not.toContain("[冗余文件头]");
+    expect(r.output).not.toContain("[目录档与文件头矛盾]");
+  });
+
+  it("DOM 档里的用例写**基本档自己**的环境 → 仍是冗余（换个写法绕不开）", () => {
+    const r = gate({
+      "src/components/x.test.tsx": `${HAPPY_DOM_HEADER}\nit("x", () => {});`,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("冗余文件头");
+  });
+});
+
+describe("用例环境档门禁：冗余文件头", () => {
+  it("DOM 档（`.test.tsx`）里再写一遍**基本档自己**的环境 → 拦下（同一件事两个来源）", () => {
+    /* 实测现场：ISSUE #1485 那轮删掉 147 份冗余头之后**漏了 1 份** ——
+     * tests/sidebar-selected-state.test.tsx 已由 `.test.tsx` 那一条目录档收进 DOM 档，
+     * 头部那行是第二个来源。当时没有这条判据，所以没人发现。
+     * ⚠️ 这里写的是**基本档的环境名**（`happy-dom`），不是 `jsdom` ——
+     * 后者在有 jsdom 例外档之后是另一种写法（见上一条 describe）。 */
+    const r = gate({
+      "src/components/x.test.tsx": `${HAPPY_DOM_HEADER}\nit("x", () => {});`,
     });
     expect(r.ok).toBe(false);
     expect(r.output).toContain("冗余文件头");
@@ -202,8 +259,8 @@ describe("用例环境档门禁：冗余文件头", () => {
   });
 
   it("**承重**头（node 档目录里声明 jsdom）→ 不许误报", () => {
-    /* 这是混合目录里那 36 份的形态：目录档给 node，用例自己要 jsdom，
-     * 文件头是归属的**唯一**声明。判「冗余」把这条也收进去 = 当场删错 36 份。 */
+    /* 这是混合目录里那几十份的形态：目录档给 node，用例自己要 jsdom，
+     * 文件头是归属的**唯一**声明。判「冗余」把这条也收进去 = 当场删错一片。 */
     const r = gate({
       "src/lib/x.test.ts": `${JSDOM_HEADER}\nit("x", () => {});`,
     });
@@ -227,7 +284,7 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
     copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
     writeFileSync(
       path.join(root, "vitest.config.ts"),
-      "export default { test: { environment: \"node\" } };\n",
+      'export default { test: { environment: "node" } };\n',
     );
     let ok = true;
     let output = "";

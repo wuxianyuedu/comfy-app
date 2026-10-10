@@ -33,15 +33,25 @@ pnpm run build          # 产物级护栏（build + 剥私有输入 + 数产物 
 
 - 配置文件：`vitest.config.ts`；扫描面 `src/**/*.test.{ts,tsx}` 与 `tests/**/*.test.{ts,tsx}`
 - 默认环境：node（纯函数/store，不依赖 DOM）
-- 组件渲染：测试文件头 `// @vitest-environment jsdom`
-- **环境档：`projects` 按目录声明两档（node / jsdom）**，要 DOM 的用例继续在文件头写
-  `// @vitest-environment jsdom`（文件头**优先级更高**，只决定自己那一份）。
-  ⚠️ 这里曾经写着「为什么不用 `projects` 分档 …… 当前全局 node + 逐文件 opt-in 与真实
-  依赖一一对应，维持」—— 那是**上一轮的结论，已被采纳的那次改动推翻**：分档做了，
-  但**没有**按目录一刀切（那会把 260 份 node 用例误升进 jsdom，而 jsdom 下跑纯逻辑
-  不报错、只是变慢，是静默的那一侧）。保留文件头正是「不按目录一刀切」那一半。
-  完整账（147 份冗余头已删 / 37 份承重留、静默失效的 glob 两条、
-  `scripts/check-test-environment.cjs` 的三条判据）见规范 §11.17。
+- **环境档：`projects` 按目录声明两档（node / DOM），DOM 档默认 `happy-dom`**。
+  三种落点：
+  - **纯逻辑** → node 档（什么都不用写）；
+  - **大多数组件 / hooks / RTL** → DOM 档的缺省 `happy-dom`（什么都不用写）；
+  - **少数依赖 jsdom 特有行为的文件** → 在那份文件的**头一行**写
+    `// @vitest-environment jsdom`（文件头**优先级更高**，只决定自己那一份）。
+
+  ⚠️ 「jsdom 例外」**不是随手加一行**：那意味着这份用例要付 jsdom 的钱，
+  所以每份的头里都写明了具体是哪一条 API / 哪一个行为在 happy-dom 下不同
+  （`Node.prototype.nodeName` 空串桩 / CSSOM 不认 `color-mix()` /
+  `clientWidth` 不可 spy / `getAnimations()` 不推进时钟）。现状 8 份，
+  清单跑 `node scripts/check-test-environment.cjs` 会打出来。
+  ⚠️ 这里曾经写着「为什么不用 `projects` 分档 …… 维持」—— 那是**上一轮的结论，
+  已被采纳的那次改动推翻**：分档做了，但**没有**按目录一刀切（那会把 260 份
+  node 用例误升进 DOM 档，而 DOM 档下跑纯逻辑不报错、只是变慢，是静默的那一侧）。
+  保留文件头正是「不按目录一刀切」那一半。完整账（147 份冗余头已删、
+  静默失效的 glob 两条、`check-test-environment.cjs` 的判据、
+  两个实现的三族差异与实测收益）见规范 §11.17 / §11.17.2.1。
+
 - **两个 project 共用的那几项写在根 `test` 上，由 inline project 默认继承**
   （`setupFiles` 漏了就是整仓 `toBeInTheDocument` 全变 `Invalid Chai property`）——
   vitest 5 的 inline project 默认继承本文件 `test` 这一层，`extends: false` 才是关掉它的

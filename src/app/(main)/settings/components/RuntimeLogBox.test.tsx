@@ -1,3 +1,9 @@
+// @vitest-environment jsdom
+/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
+ * 与上面两条同因（base-ui 弹层的 `getAnimations` 时钟差异）：全屏查看是一个
+ * 弹层，「退出全屏」之后它在 happy-dom 下不卸载 ⇒ `queryByRole("dialog")`
+ * 非空；jsdom 下同一段代码同步卸载。
+ */
 /**
  * `RuntimeLogBox` 的交互契约（设置页「启动日志」框）。
  *

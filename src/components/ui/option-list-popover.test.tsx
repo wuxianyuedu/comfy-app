@@ -1,3 +1,13 @@
+// @vitest-environment jsdom
+/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
+ * 收起浮层由 base-ui 的 `useAnimationsFinished` 驱动，它调
+ * `element.getAnimations()` 并等每个 `animation.finished`。happy-dom 实现了
+ * `getAnimations`（返回空数组）但**不推进动画时钟**，base-ui 于是停在
+ * 「等动画结束」那一步、面板永不卸载，`queryByRole("option")` 永远非空；
+ * jsdom 下那些 promise 立刻 settle（没有真动画），卸载是同步的。
+ * ⚠️ 这是**基元的机制**差异，不是本组件的语义：点一项即回调那条在两种环境下
+ * 都成立，只有「收起」那一条读不到。
+ */
 /**
  * `OptionListPopover` —— 「一个可滚动的浮层选项列表」的唯一实现
  * （规范 16 §16.2.4.14）。
