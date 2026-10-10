@@ -856,7 +856,9 @@ export function wideFallbackNote(note, count) {
   return (
     `[affected] 放弃收窄（${note}）→ 只跑固定清单 ${count} 个。` +
     "兜底不是全量：wide 这一档跑全量实测要 32m35s，而钩子刻意不接受「空参数=全跑」" +
-    "这种没人筛过的形态（真断言红已经是 0，不是挡路的那件事）。规范 §13.5.8 / §11.13\n"
+    "这种没人筛过的形态（真断言红已经是 0，不是挡路的那件事）。" +
+    "要按名字跑全量（显式档，不受这条限制）：" +
+    "`node scripts/run-affected-tests.mjs --full`。规范 §13.5.8 / §11.13\n"
   );
 }
 
