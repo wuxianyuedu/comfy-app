@@ -25,7 +25,10 @@ import {
 } from "vitest";
 
 import { createTestQueryClient } from "../../../../../tests/helpers/renderWithProviders";
-import { createTestTRPC } from "../../../../../tests/helpers/test-trpc";
+import {
+  createTestTRPC,
+  testTrpcEndpoint,
+} from "../../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
 import { api } from "~/trpc/react";
 import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
@@ -305,7 +308,7 @@ function makeWrapper(queryClient?: QueryClient) {
     links: [
       httpBatchStreamLink({
         transformer: SuperJSON,
-        url: "http://localhost:3100/api/trpc",
+        url: testTrpcEndpoint(),
       }),
     ],
   });

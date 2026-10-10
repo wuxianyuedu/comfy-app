@@ -1,3 +1,11 @@
+// @vitest-environment jsdom
+/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
+ * 与 `render.test.ts` 同因 —— `html.ts` 只是同一个 DOMPurify 实例的另一个出口。
+ * happy-dom 的 `Node.prototype.nodeName` 空串桩会让 `lookupGetter` 拿到空
+ * tagName、消毒退化成「只留文本」：本文件判「白名单内的标签与属性要留下」的
+ * 那几条整片反向失败；更坏的是「剥掉事件处理器 / 危险协议」那几条会因为没有
+ * 元素可剥而报绿，而它们正是本文件存在的理由。
+ */
 import { describe, expect, it } from "vitest";
 
 import { sanitizeHtml } from "./html";

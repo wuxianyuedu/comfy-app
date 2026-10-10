@@ -1,3 +1,14 @@
+// @vitest-environment jsdom
+/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
+ * DOMPurify 取 `nodeName` 用的是「沿原型链找第一个 descriptor」的 `lookupGetter`
+ * （起点是 `Element.prototype`），而 happy-dom 把 `Node.prototype.nodeName`
+ * 实现成一个返回空串的基类桩、真实现落在各子类的 `Element.prototype` 上 ——
+ * 于是 `lookupGetter` 命中的是那个空串，**每一个元素都被判成不允许**，
+ * 整段消毒退化成「只留文本」。表现是 `<h2>` / `<table>` 全被吃掉，而
+ * `javascript:` / `onerror` 那批对抗性断言**照样报绿**（已经没有东西可剥了）——
+ * 也就是消毒在这一档里等于没测。jsdom 的 `Node.prototype.nodeName` 是真实现，
+ * 不存在这个分歧。
+ */
 import { describe, expect, it } from "vitest";
 
 import { markdownToHtml, renderMarkdown } from "./render";

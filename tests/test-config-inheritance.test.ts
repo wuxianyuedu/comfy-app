@@ -61,8 +61,31 @@ const ROOT_ALLOWED_KEYS = new Set([
   "expect",
 ]);
 
-/** 期望分档：按目录声明的两档（§11.17），少一档 / 多一档都要有人解释。 */
-const EXPECTED_PROJECTS = ["jsdom", "node"];
+/**
+ * 期望分档：按目录声明的两档（§11.17），少一档 / 多一档都要有人解释。
+ *
+ * ⚠️ **DOM 档的 `name` 与它的 `environment` 是两个字段**（本轮加档后的口径）：
+ * `name: "happy-dom"` 是**这一档是谁**（也决定了 `vitest list` 打出来的 `[标签]`），
+ * `environment: "happy-dom"` 是**它默认跑在哪个实现上**。两者当前同名，
+ * 但**不是**同一件事 —— 档里的少数用例可以用文件头
+ * `// @vitest-environment jsdom` 改跑在另一个实现上，而档名不变。
+ * 测试下面的 `environment` 断言读的是后者；`EXPECTED_PROJECTS` 读的是前者。
+ */
+const EXPECTED_PROJECTS = ["happy-dom", "node"];
+
+/**
+ * 每档的**默认环境实现**（`environment`）。
+ *
+ * 这一格单独成表而不是从档名推：把 `environment` 写成 `name` 的副本，
+ * 会让「给 DOM 档换一个实现（jsdom ⟷ happy-dom）」这类改动在**不改判据**的
+ * 情况下直接通过 —— 而它正是本档最值得被人看一眼的那次改动（代价与保真度
+ * 都随之整档变化）。§11.17.1.2「同一件事只该有一个来源」的另一面：
+ * 两个字段各自说自己的话，就不许拿一个去顶另一个。
+ */
+const EXPECTED_TIER_ENVIRONMENTS = {
+  node: "node",
+  "happy-dom": "happy-dom",
+} as const;
 
 /** 解析一次就够 —— `createVitest()` 实测 ~260ms，且它只建配置不起 worker。 */
 let cached: Vitest | undefined;
@@ -107,13 +130,14 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
   /**
    * `environment` 是这套分档里**唯一按档分叉**的项，所以它必须留在 project 内部。
    * 这一条判的是「它没被顺手抬到根上」—— 抬上去的表现是两档同环境，
-   * 而 jsdom 档下跑纯逻辑**不报错、只是变慢**（静默的那一侧，§11.17.1）。
+   * 而 DOM 档下跑纯逻辑**不报错、只是变慢**（静默的那一侧，§11.17.1）。
    */
   it("`environment` 按档分叉，没被抬到根级共享（那正是分档要防的事）", async () => {
     const vitest = await resolvedVitest();
     const byName = new Map(vitest.projects.map((p) => [p.name, p.config]));
-    expect(byName.get("node")?.environment).toBe("node");
-    expect(byName.get("jsdom")?.environment).toBe("jsdom");
+    for (const [name, env] of Object.entries(EXPECTED_TIER_ENVIRONMENTS)) {
+      expect(byName.get(name)?.environment, `[${name}]`).toBe(env);
+    }
   });
 
   it("没有一档写 `extends: false` 把自己摘出继承（例外要显式登记）", async () => {

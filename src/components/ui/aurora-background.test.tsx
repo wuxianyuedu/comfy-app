@@ -1,3 +1,12 @@
+// @vitest-environment jsdom
+/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
+ * 本文件断的是**行内 style 里的 `color-mix()` 表达式**，而 happy-dom 的
+ * CSSOM 不认识 `color-mix()`：赋给 `style.background` 时它把整条声明丢掉
+ * （实测读回空串），于是三条用例全部读到 `""`。jsdom 原样保留该函数
+ * （它不对 CSS 值做合法性校验）。
+ * 这是「断言值的**保真度**」差异，不是组件行为差异：色相映射表本身由
+ * `scripts/check-theme-colors.cjs` 的静态判据守着。
+ */
 /**
  * `AuroraGlow` 的色相映射回归（规范 03 §3.6.1.1「拼接 token 名」判据的配套用例）。
  *
