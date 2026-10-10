@@ -24,12 +24,17 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
+/* `vi.spyOn(fs, …)` 要的是可写对象 ⇒ 必须 default 导入
+   （`import * as fs` 在 vitest 5 下是冻结命名空间，spy 会以
+   `Cannot redefine property: readdirSync` 当场炸掉 —— 先例见 `tests/db-backup.test.ts`）。 */
+import fs from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
 const SCRIPT = path.join(SCRIPTS_DIR, "check-test-sleep.cjs");
@@ -41,8 +46,9 @@ const DEP = path.join(SCRIPTS_DIR, "check-test-concurrency.cjs");
  * 读不到的路径返回什么，而临时仓库 + 子进程那条路造不出「列到名字、读时已没」
  * 这个时刻（造得出就只能靠删文件，那是一次概率窗口，不是判据）。
  */
-const { scanFile } = createRequire(import.meta.url)(SCRIPT) as {
+const { scanFile, walk } = createRequire(import.meta.url)(SCRIPT) as {
   scanFile: (abs: string) => unknown[] | null;
+  walk: (dir: string, out?: string[]) => string[];
 };
 
 /**
@@ -307,5 +313,58 @@ describe("裸 sleep 门禁：扫描期间文件消失（并发探针）", () => 
     );
     expect(existsSync(gone), "夹具路径本身不该存在").toBe(false);
     expect(scanFile(gone)).toBeNull();
+  });
+});
+
+describe("裸 sleep 门禁：扫描面在枚举途中消失（同族第 5 条）", () => {
+  it("`walk` 对半路消失的目录降级为空，而不是把整个 D 组带崩", () => {
+    /* `scanFile` 那条挡的是**「列到名字、读时已没」**；这里挡的是同一个竞态的
+       另一个窗口 —— 递归枚举本身（`readdirSync`）撞上条目在两次调用之间被删，
+       抛的是 `ENOENT` 而**不是**从 `readFileSync` 出来的。
+
+       两份都是 `tests/global-setup-cleanup.test.ts` 那份瞬时探针造成的（它在
+       `tests/` 下写 `.setup-cleanup-probe-<pid>-<ts>.test.tsx` 再删）。只补前一个
+       等于把门禁的一半赌在时序上：命中哪个窗口取决于探针被删的那一刻 `walk`
+       走到了第几步，两个窗口都得接住。
+
+       造法：在 `readdirSync` 那一刻把目录删掉。用**真 syscall 竞态**造不稳定
+       （要卡在两次调用之间），所以这里替换掉那一刻的 `readdirSync`，让它在被
+       调用时先把目录删掉、再走原实现 —— 这样复现的是**同一个 ENOENT**，
+       且每次必现。 */
+    const root = mkdtempSync(path.join(tmpdir(), "test-sleep-walk-"));
+    try {
+      const dir = path.join(root, "tests");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "a.test.ts"), HEAD);
+
+      const realReaddir = fs.readdirSync;
+      let removed = false;
+      /* 签名照抄真实重载之一（`withFileTypes: true` 那一支）—— 用 `unknown[]` 的
+         松散签名会让 `mockImplementation` 与被覆盖的重载对不上，`tsc` 当场报
+         `TS2345`（spy 的入参类型必须能接住调用点的那个重载）。 */
+      const spy = vi
+        .spyOn(fs, "readdirSync")
+        .mockImplementation((dirPath, options) => {
+          /* 只在这一层炸一次：删掉目录之后，原实现自己就会抛 ENOENT。 */
+          if (!removed) {
+            removed = true;
+            rmSync(dir, { recursive: true, force: true });
+          }
+          return (
+            realReaddir as (
+              p: typeof dirPath,
+              o: typeof options,
+            ) => ReturnType<typeof realReaddir>
+          )(dirPath, options);
+        });
+      try {
+        expect(walk(dir)).toEqual([]);
+      } finally {
+        spy.mockRestore();
+      }
+      expect(removed, "夹具没跑到删目录那一步，这条用例是假绿").toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
