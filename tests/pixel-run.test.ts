@@ -24,6 +24,8 @@ import {
   VISUAL_DIR,
   checkLocalBaselines,
   classifyFailure,
+  parseWorkers,
+  pixelCommand,
   planRuns,
 } from "../scripts/pixel-run.mjs";
 import {
@@ -200,6 +202,77 @@ describe("像素档按需通道：红的定性（§11.8 / §11.13）", () => {
 
   it("认不出的形态 → 先隔离重跑定性，而不是猜（§11.13 那句硬动作）", () => {
     expect(classifyFailure("something unexpected")).toContain("§11.13");
+  });
+});
+
+/**
+ * **整批因负载失稳时的那条出路**（ISSUE #1620 / 规范 §11.13）。
+ *
+ * 立案现场：win32 开发机的 dev server 在视觉套件的默认并发下会失稳 —— 整批红、
+ * 单 spec 降并发跑就绿。而新鲜度账此前**只有**「整批全绿」一条写入路径，于是这台机器
+ * 写不出自己那一档的账，pre-commit 因此红。修法按 §11.13 那句硬动作走：**降并发（隔离）
+ * 绿才是对它该有的定性**，杠杆是并发而不是阈值/预算 —— 后者正是 §11.13 明令禁止的取巧。
+ *
+ * 三条边界，缺一条这条出路就会变成「偷偷绕开像素回归」：
+ *   ① 不写 `--workers` 时**不许**出现这个开关（默认口径唯一）；
+ *   ② 给了就要真透传，且非法值**当场拦**（静默当「没给」会让人以为在降并发、实际没有）；
+ *   ③ 记账的 `how` 要写出**真实并发**（否则「本机默认跑得动」与「本机得降并发才跑得动」
+ *      在账面上长得一模一样，下一个人按名义命令复跑必红、却指不出差别在哪）。
+ */
+describe("像素档按需通道：负载假红那条出路（§11.13 / ISSUE #1620）", () => {
+  it("不给 --workers 时不追加这个开关（默认口径仍是唯一的那个）", () => {
+    const pixel = planRuns().find((r) => r.kind === "playwright");
+    expect(pixel?.args.some((a) => a.startsWith("--workers"))).toBe(false);
+  });
+
+  it("给了就真透传给 Playwright，并与落盘档位共存", () => {
+    const pixel = planRuns({ workers: 1 }).find((r) => r.kind === "playwright");
+    expect(pixel?.args).toContain("--workers=1");
+    // 两次调用仍然都在（降并发不是「少跑一次判据」的借口）。
+    expect(planRuns({ workers: 1 }).map((r) => r.kind)).toEqual([
+      "playwright",
+      "vitest",
+    ]);
+    // 录基线档 + 降并发：两个开关互不吞掉对方。
+    const rec = planRuns({ update: true, workers: 2 }).find(
+      (r) => r.kind === "playwright",
+    );
+    expect(rec?.args).toContain("--update-snapshots");
+    expect(rec?.args).toContain("--workers=2");
+  });
+
+  it("--workers 解析：没给 ⇒ null；≥1 整数 ⇒ 那个数；其余一律抛", () => {
+    expect(parseWorkers([])).toBeNull();
+    expect(parseWorkers(["--update", "--dry-run"])).toBeNull();
+    expect(parseWorkers(["--workers=1"])).toBe(1);
+    expect(parseWorkers(["--workers=8"])).toBe(8);
+    // 非正整数 / 非数字 / 空值都**抛**：静默当「没给」是最坏的形态 ——
+    // 人会以为自己在降并发跑，实际仍是默认并发、又红一次。
+    for (const bad of [
+      "--workers=0",
+      "--workers=-1",
+      "--workers=abc",
+      "--workers=",
+      "--workers",
+    ]) {
+      expect(() => parseWorkers([bad]), bad).toThrow(/≥1 的整数/);
+    }
+  });
+
+  it("记账的 how 写出真实并发（默认 = 名义命令，降并发带 --workers）", () => {
+    // `how` 是账面上唯一能分清「默认跑得动」与「得降并发才跑得动」的一栏。
+    expect(pixelCommand()).toBe("pnpm check:visual");
+    expect(pixelCommand({ workers: 1 })).toBe("pnpm check:visual --workers=1");
+    // 与这一档登记的名义跑法同源（§12.12：两处各写一份必然漂）。
+    expect(pixelCommand()).toContain("check:visual");
+  });
+
+  it("用法/文件头把这条出路与「不是新默认」写清楚（避免被当成常规跑法）", () => {
+    const src = read("scripts/pixel-run.mjs");
+    expect(src).toContain("--workers=1");
+    expect(src).toContain("§11.13");
+    // 出路的名字要能被搜到，否则下一个人只会看到「整批红」然后去改业务代码。
+    expect(src).toMatch(/负载假红/);
   });
 });
 
