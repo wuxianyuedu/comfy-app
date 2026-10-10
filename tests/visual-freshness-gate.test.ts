@@ -111,11 +111,14 @@ describe("像素基线新鲜度判决（§11.8）", () => {
 
   it("pending 档不被要求新鲜度记录，而以「待补录」出现在读数里", () => {
     /* 这一条是刻意的排除：`PENDING_PLATFORMS` 里那一档缺几张基线、只能在那档机器上录，
-     * 记「上次跑绿」是句不成立的话。强行要求只会逼人填假读数。 */
+     * 记「上次跑绿」是句不成立的话。强行要求只会逼人填假读数。
+     * `pending` / `platforms` 都显式注入而不是依赖真实登记表：这条验的是「pending
+     * 过滤」这个机制本身，不绑死哪一档正好在待录里 —— 否则那一档一关账，这条就跟着红。 */
     const result = runGate({
       ledger: { linux: GOOD },
       now: NOW,
-      platforms: undefined,
+      platforms: ["linux", "win32"],
+      pending: ["win32"],
     });
     expect(result.exitCode).toBe(0);
     expect(result.ages.join("；")).toContain("linux：1 天前");

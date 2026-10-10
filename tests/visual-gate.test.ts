@@ -161,7 +161,7 @@ describe("改像素层时点名「待重录」的账（§11.8 / 不阻断）", (
     expect(pendingPlatforms({ platforms: {}, missing: () => ["x"] })).toEqual([]);
   });
 
-  it("接的是真登记表：仓库当前的待录账非空（这条同时证明提醒没被架空）", () => {
+  it("接的是真登记表：pendingPlatforms 仍接真表（没被改回恒空数组架空）", () => {
     // 用真登记表 + 真清点跑一次：若有人把 `pendingPlatforms` 改成恒回空数组，
     // 上面两条夹具用例照样绿，而这一条会红。
     const live = pendingPlatforms({
