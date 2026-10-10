@@ -23,36 +23,73 @@ import {
   SCRIPT,
 } from "./helpers/a11y-effective-config";
 
-test("真加载：求值的是仓库根那份 `eslint.config.js`，且只求值一次", async () => {
-  const { loadEslintConfig } = loadJudgeModule();
+/**
+ * 本文件里**这四条**用例都要真读一次仓库根那份 `eslint.config.js`（它 import 了整个
+ * `eslint-config-next`）：进程内首值 + `--report` 的那个子进程各付一次。
+ *
+ * 预算登记的是**实测成本，不是给慢用例兜底**（口径见 §11.13）：稳态下这一次 ~1.1s，
+ * 而刚重装过依赖 / 机器满载时，本次隔离重跑（`--no-file-parallelism`，本机）的真值是
+ * **进程内首值那一条 36.4s、`--report` 子进程那一条 57.1s** —— 两条都顶穿了默认 30s 档。
+ * 这个成本本文件头的注释里一直写着（「冷检出上 40s+」），用例却一直没带任何预算 ——
+ * 于是「钩子每次提交都是新进程、必然冷」时，红的不是判据而是**没记账的成本**
+ * （`a11y-rules-gate.test.ts` 同一族，那边已经登记过 4 倍上限）。
+ *
+ * ⚠️ 反向验证过这两条各判什么：把 `configPromise` 的记忆化摘掉（每次重新求值并
+ * 重建数组）时，本文件**只有**「只求值一次」那一条红在实例比对上（`secondMs` 仍然很快，
+ * 所以时间那一半不是承重的）；把记忆化留着、只把 `.then` 里的值改成副本时两条都绿 ——
+ * 因为缓存的是**那个 promise**，改它内部不影响恒同实例。登记的预算同样验过：
+ * 首值那条在默认档下恒红，不是内容问题。
+ */
+const CONFIG_BUDGET = { timeout: 120_000 };
 
-  const first = Date.now();
-  const flat = (await loadEslintConfig()) as { rules?: unknown }[];
-  const firstMs = Date.now() - first;
+test(
+  "真加载：求值的是仓库根那份 `eslint.config.js`，且只求值一次",
+  CONFIG_BUDGET,
+  async () => {
+    const { loadEslintConfig } = loadJudgeModule();
 
-  // 第二次必须是「同一份」且是常数时间 —— 共进程的全部收益都在这一条上。
-  const second = Date.now();
-  const again = (await loadEslintConfig()) as { rules?: unknown }[];
-  const secondMs = Date.now() - second;
+    const first = Date.now();
+    const flat = (await loadEslintConfig()) as { rules?: unknown }[];
+    const firstMs = Date.now() - first;
 
-  expect(Array.isArray(flat)).toBe(true);
-  expect(flat.length).toBeGreaterThan(0);
-  expect(again).toBe(flat);
-  /* 第二次不许再走一遍求值：给它一个**很宽**的上限（100ms / 首次通常 40ms–1.7s，
-   * 冷检出上 40s+），只要不是「又一次真加载」就够 —— 这里刻意不把首次的时间
-   * 当成断言（那会把「机器快慢」判成回归）。 */
-  expect(secondMs, "第二次读配置不该再走一遍 import 求值").toBeLessThan(100);
-  expect(firstMs).toBeGreaterThan(0);
-});
+    // 第二次必须是「同一份」且是常数时间 —— 共进程的全部收益都在这一条上。
+    const second = Date.now();
+    const again = (await loadEslintConfig()) as { rules?: unknown }[];
+    const secondMs = Date.now() - second;
 
-test("真加载：那份配置里确实装着 jsx-a11y 插件（判据的四张表都从它读）", async () => {
-  const { officialRuleMap, effectiveRules } = loadJudgeModule();
-  const rules = await officialRuleMap();
-  const effective = await effectiveRules();
-  expect(rules.size).toBeGreaterThan(0);
-  expect([...rules.keys()].every((n) => n.startsWith("jsx-a11y/"))).toBe(true);
-  expect(Object.keys(effective).length).toBeGreaterThan(0);
-});
+    expect(Array.isArray(flat)).toBe(true);
+    expect(flat.length).toBeGreaterThan(0);
+    expect(again).toBe(flat);
+    /* 第三次拿到的还是同一个实例 —— 「只求值一次」这一半判据是**与机器快慢无关**的：
+     * 去掉记忆化（每次都重新 `import()` 再 flatten）会在这里当场红。
+     * 原先这一格写的是 `firstMs > 0`，它在冷进程里恒真、在暖进程里恒假
+     * （`Date.now()` 粒度下缓存命中的耗时就是 0）—— 一条会随机器状态翻向的断言
+     * 正是本文件要防的形态，而它想证明的「拿到过一份真配置」已由上面两条覆盖。 */
+    expect(await loadEslintConfig()).toBe(flat);
+    /* 第二次不许再走一遍求值：给它一个**很宽**的上限（100ms / 首次通常 40ms–1.7s，
+     * 冷检出上 40s+），只要不是「又一次真加载」就够 —— 这里刻意不把首次的时间
+     * 当成断言（那会把「机器快慢」判成回归）。 */
+    expect(
+      secondMs,
+      `第二次读配置不该再走一遍 import 求值（首值实测 ${firstMs}ms）`,
+    ).toBeLessThan(100);
+  },
+);
+
+test(
+  "真加载：那份配置里确实装着 jsx-a11y 插件（判据的四张表都从它读）",
+  CONFIG_BUDGET,
+  async () => {
+    const { officialRuleMap, effectiveRules } = loadJudgeModule();
+    const rules = await officialRuleMap();
+    const effective = await effectiveRules();
+    expect(rules.size).toBeGreaterThan(0);
+    expect([...rules.keys()].every((n) => n.startsWith("jsx-a11y/"))).toBe(
+      true,
+    );
+    expect(Object.keys(effective).length).toBeGreaterThan(0);
+  },
+);
 
 test("导出面：每个导出都是可调用的（不是「导了没人用」的空壳）", () => {
   const mod = loadJudgeModule() as unknown as Record<string, unknown>;
@@ -66,44 +103,52 @@ test("导出面：每个导出都是可调用的（不是「导了没人用」�
   expect(typeof VERIFIED_SURFACES).toBe("object");
 });
 
-test("失败路径：真加载失败时带给原因冒出去，不吞（更不把半张表当结论）", () => {
-  /* 这一格的**真站点**在 bin 形态里（`.next/` 陈旧、`@eslint/compat` 被删掉这
-   * 类加载错误），但它在**共进程**里没有身份：`createRequire` / `import()` 都走
-   * 该脚本的模块缓存，于是「在子进程必然失败、在缓存之后必然成功」的样本没法在
-   * 同一个进程里两种形态各测一次。
-   *
-   * 所以这里钉的是**判据对本进程那份配置的态度**：`loadEslintConfig()` 要么给它
-   * 一份真的扁平配置、要么抛 —— 不许回一个「空的/半张」配置让上层四向判据
-   * 静默全绿（那正是 §11.23「判据在场 ≠ 判据在跑」的那一族失效）。 */
-  const { loadEslintConfig } = loadJudgeModule();
-  return loadEslintConfig().then(
-    (flat) => {
-      expect(Array.isArray(flat)).toBe(true);
-      expect(flat).not.toHaveLength(0);
-    },
-    (error: unknown) => {
-      // 抛是可以接受的那一支，但**必须**带原因（裸 throw 等于吞掉根因）。
-      expect(error).toBeInstanceOf(Error);
-      expect(String((error as Error).message).length).toBeGreaterThan(0);
-    },
-  );
-});
+test(
+  "失败路径：真加载失败时带给原因冒出去，不吞（更不把半张表当结论）",
+  CONFIG_BUDGET,
+  () => {
+    /* 这一格的**真站点**在 bin 形态里（`.next/` 陈旧、`@eslint/compat` 被删掉这
+     * 类加载错误），但它在**共进程**里没有身份：`createRequire` / `import()` 都走
+     * 该脚本的模块缓存，于是「在子进程必然失败、在缓存之后必然成功」的样本没法在
+     * 同一个进程里两种形态各测一次。
+     *
+     * 所以这里钉的是**判据对本进程那份配置的态度**：`loadEslintConfig()` 要么给它
+     * 一份真的扁平配置、要么抛 —— 不许回一个「空的/半张」配置让上层四向判据
+     * 静默全绿（那正是 §11.23「判据在场 ≠ 判据在跑」的那一族失效）。 */
+    const { loadEslintConfig } = loadJudgeModule();
+    return loadEslintConfig().then(
+      (flat) => {
+        expect(Array.isArray(flat)).toBe(true);
+        expect(flat).not.toHaveLength(0);
+      },
+      (error: unknown) => {
+        // 抛是可以接受的那一支，但**必须**带原因（裸 throw 等于吞掉根因）。
+        expect(error).toBeInstanceOf(Error);
+        expect(String((error as Error).message).length).toBeGreaterThan(0);
+      },
+    );
+  },
+);
 
-test("bin 形态：`--report` 走真子进程仍退 0，且摘要里点名生效条数", () => {
-  /* 为什么这一条非要真子进程：它判的是**入口那一支**（`CLI_ARGS` 从
-   * `process.argv` 取参 → `judge` → `process.exit(code)`），而进程内调用
-   * 根本不经过 `process.argv`。覆盖面见 `tests/helpers/a11y-effective-config.coverage.test.ts`。
-   *
-   * ⚠️ 它要付**一次真加载**（这份配置在最外层进程里的首价）—— 所以整个仓库里
-   * 「起子进程跑本判据」只允许出现在这里与 `--ledger` 缺值那一档（后者在
-   * `process.exit(2)` 上停住、不求值配置）。再加第三条之前先想清楚它付的是什么。 */
-  const stdout = execFileSync(process.execPath, [SCRIPT, "--report"], {
-    cwd: REAL_ROOT,
-    encoding: "utf8",
-  });
-  expect(stdout).toContain("--report 模式");
-  expect(stdout).toContain("[a11y-rules]");
-});
+test(
+  "bin 形态：`--report` 走真子进程仍退 0，且摘要里点名生效条数",
+  CONFIG_BUDGET,
+  () => {
+    /* 为什么这一条非要真子进程：它判的是**入口那一支**（`CLI_ARGS` 从
+     * `process.argv` 取参 → `judge` → `process.exit(code)`），而进程内调用
+     * 根本不经过 `process.argv`。覆盖面见 `tests/helpers/a11y-effective-config.coverage.test.ts`。
+     *
+     * ⚠️ 它要付**一次真加载**（这份配置在最外层进程里的首价）—— 所以整个仓库里
+     * 「起子进程跑本判据」只允许出现在这里与 `--ledger` 缺值那一档（后者在
+     * `process.exit(2)` 上停住、不求值配置）。再加第三条之前先想清楚它付的是什么。 */
+    const stdout = execFileSync(process.execPath, [SCRIPT, "--report"], {
+      cwd: REAL_ROOT,
+      encoding: "utf8",
+    });
+    expect(stdout).toContain("--report 模式");
+    expect(stdout).toContain("[a11y-rules]");
+  },
+);
 
 test("bin 形态的脚本头两块注释与事实同源（成本那一节的判据还在）", () => {
   /* 结构判据：文件头「成本」一节是这一支改造的**理由说明**，不是散文 ——

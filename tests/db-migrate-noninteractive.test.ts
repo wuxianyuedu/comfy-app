@@ -22,10 +22,12 @@
  * 库路径用 `DATABASE_URL` 指到临时目录（与 `db-push-noninteractive.test.ts` 同法）。
  */
 import { spawnSync } from "node:child_process";
+import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveSqlitePath } from "../scripts/db-schema-state.mjs";
 
 let tmp: string;
 let dbFile: string;
@@ -110,7 +112,9 @@ describe("pnpm db:migrate 非交互可用", () => {
 describe("前提不成立时：非零退出，且不产出 0 字节库", () => {
   it("没有迁移文件 → 前置判决拦下，库文件**根本没被创建**", () => {
     moved = hideMigrations();
-    expect(fs.existsSync(REAL_DRIZZLE), "前置条件：迁移目录已被挪开").toBe(false);
+    expect(fs.existsSync(REAL_DRIZZLE), "前置条件：迁移目录已被挪开").toBe(
+      false,
+    );
 
     const r = runMigrate();
 
@@ -128,4 +132,133 @@ describe("前提不成立时：非零退出，且不产出 0 字节库", () => {
     expect(r.status, "建不出库时必须非零退出").not.toBe(0);
     expect(r.stderr).toContain("db:migrate");
   }, 150_000);
+});
+
+/**
+ * 库地址那一档（同一批实测里挖出来的，比「留 0 字节库」更隐蔽）。
+ *
+ * `drizzle.config.ts` 原先无条件 `.replace(/^file:/, "")`，注释写着「drizzle-kit
+ * 需要纯路径」。实测它是**错的**：drizzle-kit@0.31.11 的 sqlite 驱动就是
+ * `@libsql/client`（`connectToSQLite` → `createClient` → `expandConfig`），而 libsql
+ * 把裸字符串按 URL 解析 —— 绝对 Windows 地址 `C:\...\db.sqlite` 被读成
+ * scheme="C:"，当场 `URL_SCHEME_NOT_SUPPORTED`；**并且它报错后仍然 exit 0**
+ * （实测两档都 0），于是这条链路上「静默没建表」只由查库复核抓到。
+ *
+ * 长期没暴露的原因：日常 `.env` 是 `file:./db.sqlite`，剥完是 `./db.sqlite`，
+ * 里面没有冒号。而运行期装配的地址（`launcher-core/standalone-runtime-env.mjs`）
+ * 与本文件的临时库地址都是**绝对**形式 —— 正是被剥坏的那一档。
+ *
+ * 三档各判一件事，缺一档就退回原来的形状：
+ *   1. 地址形状（与机器无关）：五种 `DATABASE_URL` 形态都不许退化成裸盘符，
+ *      且剥完前缀必须落回 `resolveSqlitePath` 说的同一个文件；
+ *   2. 真跑：绝对临时库 + 真 `drizzle/` 必须**真的建出表**（修之前这条恒红）；
+ *   3. 失败话术：非零那一支要把 drizzle 自己的话带出来，「输出见上」不算原因。
+ */
+describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一份", () => {
+  /** 数一遍临时库里的用户表（读不到就返回 -1，让断言自己说清是哪种缺件）。 */
+  function countTables(file: string): number {
+    if (!fs.existsSync(file)) return -1;
+    const db = new DatabaseSync(file, { readOnly: true, open: true });
+    try {
+      const row = db
+        .prepare(
+          "SELECT count(*) AS c FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '__drizzle_migrations'",
+        )
+        .get();
+      return Number(row?.c ?? 0);
+    } finally {
+      db.close();
+    }
+  }
+
+  it("五种 DATABASE_URL 形态都不退化成裸盘符，且与 resolveSqlitePath 同一锚点", async () => {
+    /* 绝对路径取自本用例自己的临时目录（不是写死的 `C:\`）：这样 POSIX 上同样跑得通，
+     * 而盘符那一档要靠**内容里有没有冒号**复现 —— 临时绝对路径在 Windows 上就是
+     * `C:\Users\…`，在 Linux 上是 `/tmp/…`，两种都必须被补成带 scheme 的地址。 */
+    const abs = dbFile;
+    const cases: [string, string][] = [
+      ["file:./db.sqlite", path.resolve(process.cwd(), "db.sqlite")],
+      ["./db.sqlite", path.resolve(process.cwd(), "db.sqlite")],
+      /* 空串这一档不是假想：`SKIP_ENV_VALIDATION=1` 时它就是会出现（`src/server/db.ts`
+       * 为此写了 `url || DEFAULT_DB_FILE`，`tests/db-push-noninteractive.test.ts` 里
+       * 有那一格的源码级判据）。两侧都必须回到同一个默认库，谁兜不住都会分叉。 */
+      ["", path.resolve(process.cwd(), "db.sqlite")],
+      [`file:${abs}`, abs],
+      [abs, abs],
+    ];
+    const previous = process.env.DATABASE_URL;
+    const problems: string[] = [];
+    try {
+      for (const [value, expectedFile] of cases) {
+        process.env.DATABASE_URL = value;
+        /* 配置在 **import 时**读环境变量，所以每一档都要重新求值模块，
+         * 否则第一档的常量会被 module 缓存带到后面四档去（那是自证式的假绿）。 */
+        vi.resetModules();
+        const imported = (await import("../drizzle.config")) as {
+          default?: { dbCredentials?: { url?: string } };
+        };
+        const url = imported.default?.dbCredentials?.url;
+        if (typeof url !== "string" || url === "") {
+          problems.push(
+            `DATABASE_URL="${value}" → 配置里拿不到 dbCredentials.url`,
+          );
+          continue;
+        }
+        if (!url.startsWith("file:")) {
+          problems.push(
+            `DATABASE_URL="${value}" → 配置给出 "${url}"：` +
+              '裸的盘符/绝对路径会被 libsql 读成 scheme="C:" 并抛 URL_SCHEME_NOT_SUPPORTED' +
+              "（而 drizzle-kit 报错后仍然 exit 0）。",
+          );
+        }
+        /* 「同一个库」这件事必须现算，不许两边各自解释：剥掉 scheme 后按项目根/CWD
+         * 解析，要落到期望那个文件，也要与 `resolveSqlitePath`（应用与探测那侧的
+         * 唯一口径）给出同一个路径。 */
+        const fromConfig = path.resolve(
+          process.cwd(),
+          url.startsWith("file:") ? url.slice("file:".length) : url,
+        );
+        if (fromConfig !== path.resolve(expectedFile)) {
+          problems.push(
+            `DATABASE_URL="${value}" → 配置指向 "${fromConfig}"，期望 "${expectedFile}"`,
+          );
+        }
+        const fromResolver = resolveSqlitePath(process.cwd(), value);
+        if (fromConfig !== fromResolver) {
+          problems.push(
+            `DATABASE_URL="${value}" → 两条锚点分叉：配置侧 "${fromConfig}" vs resolveSqlitePath "${fromResolver}"`,
+          );
+        }
+      }
+    } finally {
+      process.env.DATABASE_URL = previous;
+      vi.resetModules();
+    }
+    expect(problems, problems.join("\n")).toEqual([]);
+  });
+
+  it("绝对临时库 + 真 drizzle/ → 迁移真的落地（不是「退 0 而库里没有表」）", () => {
+    /* 这一条判的是**结果**，不看 drizzle-kit 的退出码（它报错时也退 0）：
+     * 修之前 `runMigrate()` 用的是 `file:<绝对临时路径>`，被 config 剥成裸盘符 →
+     * 地址被拒 → 表数 0 → 本条红。 */
+    const r = runMigrate();
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(
+      countTables(dbFile),
+      `迁移说成功了，但 ${dbFile} 里没有用户表（stdout:\n${r.stdout}\n）`,
+    ).toBeGreaterThan(0);
+  }, 300_000);
+
+  it("失败话术里带着 drizzle 自己的输出，「输出见上」不是一句可行动的话", () => {
+    /* 建不出库那一档：上面那条只判「非零」，在地址被拒的旧形态下它也是非零 ——
+     * 于是话术里有没有真原因是**另一件事**，要单独钉。 */
+    const r = runMigrate(`file:${path.join(tmp, "no-such-dir", "db.sqlite")}`);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain("drizzle-kit 的输出");
+    const after = r.stderr.slice(r.stderr.indexOf("drizzle-kit 的输出"));
+    expect(
+      after.split("\n").filter((line) => line.trim().length > 0).length,
+      `失败话术里那一段必须是内容而不是一句标题：\n${r.stderr}`,
+    ).toBeGreaterThan(1);
+  }, 300_000);
 });
