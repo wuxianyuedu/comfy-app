@@ -5,6 +5,11 @@ import {
   pruneRuntimeLogFiles,
   type RuntimeLogWriter,
 } from "~/lib/log/runtime-log-pack.server";
+import {
+  LAUNCH_STAMP_ENV,
+  parseLaunchStamp,
+  runtimeLogFileName,
+} from "~/lib/log/runtime-log-file";
 import { formatLocalStamp } from "~/lib/time-format";
 
 /**
@@ -91,11 +96,29 @@ function appendTo(file: string, line: string): void {
   }
 }
 
-/** 首次写入时开本次运行的文件；轮转同族的旧文件（每个来源留最近若干份）。 */
+/**
+ * 首次写入时开本次运行的文件；轮转同族的旧文件（每个来源留最近若干份）。
+ *
+ * 名字戳优先取 launcher 经环境变量透传的那个（{@link LAUNCH_STAMP_ENV}）：
+ * 预检提醒发生在 dev server 就绪**之前**，只能由 launcher 自己落盘，而它落进去的
+ * 必须是**同一份** —— 否则「壳过期 / pnpm 不匹配」那两句会被拆到另一份文件上
+ * （用户看到的本次启动日志永远缺开头那两句）。
+ *
+ * 拿到戳之后走 `reuse` 而不是默认分配：launcher 已经建好了这个文件，默认路径会
+ * 按「同秒不覆盖」退到 `-2`，同样把两份拆开。
+ *
+ * 读不出戳（非双击链路启动：`pnpm dev`、容器、测试）时退回当前时刻 —— 那是
+ * 正常形态，不是降级：此时根本没有 launcher，也没有提醒要合并。
+ */
 function writerFor(): RuntimeLogWriter {
   if (writer) return writer;
   pruneRuntimeLogFiles();
-  writer = openRuntimeLogWriter("app-runtime");
+  const at = parseLaunchStamp(process.env[LAUNCH_STAMP_ENV]);
+  writer = at
+    ? openRuntimeLogWriter("app-runtime", at, undefined, {
+        reuse: runtimeLogFileName("app-runtime", at),
+      })
+    : openRuntimeLogWriter("app-runtime");
   return writer;
 }
 
