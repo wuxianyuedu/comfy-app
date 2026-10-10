@@ -30,8 +30,11 @@ import { fileURLToPath } from "node:url";
 
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
-import { freshnessTrack, writeFreshness } from "./visual-baselines.mjs";
-import { gitUser } from "./pixel-run.mjs";
+import {
+  freshnessTrack,
+  gitUser,
+  writeFreshness,
+} from "./freshness-ledger.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");

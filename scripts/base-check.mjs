@@ -345,7 +345,7 @@ export function resolveGateCommand(input, hookPath = HOOK) {
  *
  *   ① 有 `--staged` 的步骤**不收** —— 它们的语义就是「只看本次暂存改动」，
  *      拿它去复算上游快照等于问一个它回答不了的问题（上游那份没有你的暂存区）；
- *   ② 只在**暂存改动命中某个目录**时才做事的步骤（`shell-gate` / `visual-gate` /
+ *   ② 只在**暂存改动命中某个目录**时才做事的步骤（`shell-gate` /
  *      `storybook-check --changed`）不收 —— 同因：它们的判决**依赖本次改动**，
  *      在干净快照上跑要么立刻返回 0、要么判的是快照自己的形态，两种都不是
  *      「合并后会不会红」这个问题的答案；
@@ -467,7 +467,7 @@ export function groupSteps(hookPath = HOOK) {
  * 而「这条判据的输入里有没有『本次改动』」是有形态的：
  *   · `--staged` / `--changed` —— 明说只看暂存 / 本次改动（`check-deps-freshness`
  *     `--staged`、`storybook-check --changed`）；
- *   · 只在特定目录有改动时才做事的那几条（`shell-gate` / `visual-gate`）**没有参数
+ *   · 只在特定目录有改动时才做事的那几条（`shell-gate`）**没有参数
  *     可认**，所以它们由调用点显式列在下面 —— 这份名单是「名字以外的形态」的兜底，
  *     新增同类时要一起加（漏了不会静默：那一步在干净快照上返回 0 或判快照自身形态，
  *     表现为多一条恒绿的行，人看得见）。

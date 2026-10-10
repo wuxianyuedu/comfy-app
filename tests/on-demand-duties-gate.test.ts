@@ -27,20 +27,23 @@ const { test, expect } = defineGateRepo({
   dir: "scripts",
   workdir: "on-demand-duties",
   /* 两份「既有出处」要从源码仓库拷进来，判据才知道有哪些机器事实：
-   *   · `visual-baselines.mjs` —— 新鲜度档的键（判据 `import` 它）；
+   *   · `freshness-ledger.mjs` —— 新鲜度档的键（判据 `import` 它）；
    *   · `quality-gate.mjs`    —— `run: false` 的门禁项。
    *
-   * **按需召唤台账刻意不拷真件**：它此刻有两条真实条目（tw4 那两份），
-   * 而本夹具只想要一个空台账（每条用例按需写自己那一份）。拷真件再覆盖的顺序
-   * 由夹具决定（`files` 在后），但那会让「夹具提供了什么」这件事不可读 ——
-   * 直接不拷更清楚。 */
+   * **按需召唤台账刻意不拷真件**：那两份 tw4 条目只需一条在场就够（夹具要的是
+   * 「台账里有东西」这个形状，不是那两份文件本身）。拷真件再覆盖的顺序由夹具决定
+   * （`files` 在后），但那会让「夹具提供了什么」这件事不可读 —— 直接写更清楚。 */
   copy: [
-    { from: "scripts/visual-baselines.mjs", to: "scripts/visual-baselines.mjs" },
+    { from: "scripts/freshness-ledger.mjs", to: "scripts/freshness-ledger.mjs" },
     { from: "scripts/quality-gate.mjs", to: "scripts/quality-gate.mjs" },
   ],
   /* 台账与索引都按用例改写 —— 夹具给一份最小可用的。 */
   files: {
-    "scripts/.gate-executor-ledger.json": JSON.stringify({ onDemand: {} }, null, 2),
+    "scripts/.gate-executor-ledger.json": JSON.stringify(
+      { onDemand: { "tw4-canonical-report.mjs": { why: "起 Tailwind 引擎", who: "按需" } } },
+      null,
+      2,
+    ),
   },
 });
 
@@ -53,7 +56,7 @@ interface DutyRow {
   executor: string;
 }
 
-/** 一份「最小但双向都成立」的索引：六条按需档。 */
+/** 一份「最小但双向都成立」的索引：六条按需档（下限是 5，留一格余量）。 */
 function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
   why: string;
   duties: DutyRow[];
@@ -61,13 +64,6 @@ function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
   return {
     why: "测试夹具",
     duties: [
-      {
-        id: "visual",
-        name: "像素回归",
-        notInHook: "起 webServer + 浏览器",
-        fact: { kind: "freshness-track", key: "visual" },
-        executor: "钩子 D 组",
-      },
       {
         id: "e2e",
         name: "全量 e2e",
@@ -90,14 +86,7 @@ function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
         executor: "钩子 D 组",
       },
       {
-        id: "visual-gate",
-        name: "像素的 check:all 入口",
-        notInHook: "与上面同一条通道的入口",
-        fact: { kind: "gate-not-in-all", gate: "visual" },
-        executor: "pnpm check:visual",
-      },
-      {
-        /* 第六条是**下限的余量**：判据的 `MIN_DUTIES` 是 5，而「方向②」那一条要
+        /* 这一条是**下限的余量**：判据的 `MIN_DUTIES` 是 5，而「方向②」那一条要
          * 删掉一行 —— 删完仍须 ≥ 下限，否则先撞的是「解析坏了」那条，把真正要测的
          * 方向盖住（实测踩过）。 */
         id: "dependency-audit",
@@ -107,7 +96,16 @@ function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
         executor: "pnpm check:all 的默认档",
       },
       {
-        /* 第七行跟着**真 `quality-gate.mjs`** 走（夹具拷的是真件，见 `copy`）：
+        /* 台账类事实：夹具的文件里真有一条（见 `files`）—— 不写它的话，
+         * 这一类事实永远没有行，而判据的方向②要求「每一个机器事实都被登记」。 */
+        id: "tw4-canonical-report",
+        name: "CSS 等价改写汇总",
+        notInHook: "要起 Tailwind 引擎",
+        fact: { kind: "on-demand-ledger", script: "tw4-canonical-report.mjs" },
+        executor: "按需召唤 + 棘轮",
+      },
+      {
+        /* 这一行跟着**真 `quality-gate.mjs`** 走（夹具拷的是真件，见 `copy`）：
          * 那边每新增一个 `run: false` 的档，方向② 就要求这里也有一行 ——
          * 这正是该判据要的形态（「新增一档却忘了登记 ⇒ 那一档谁都不判」），
          * 所以这一行不是补齐夹具，是**夹具跟着事实走**。 */
@@ -130,8 +128,8 @@ const REAL = JSON.parse(
 describe("on-demand-duties —— 双向", () => {
   test("索引与实际机器事实一致 ⇒ 通过", ({ repo }) => {
     /* 把真实索引原样摆进去，但把它的 fact 收窄到本夹具能提供的事实上 ——
-     * 夹具里只有 FRESHNESS_TRACKS 的四档 + quality-gate 的 visual。
-     * 真实索引还登记了 dependencyAudit / tw4 两条（需要真实 quality-gate 与台账），
+     * 夹具里只有 FRESHNESS_TRACKS 的三档 + quality-gate 的 premerge。
+     * 真实索引还登记了 dependencyAudit / tw4 等条目（需要真实 quality-gate 与台账），
      * 所以这里不直接用真索引，而是用最小的那份。 */
     repo.write(
       "scripts/.on-demand-duties.json",

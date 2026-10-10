@@ -21,7 +21,7 @@
  * 的台账同口径）：
  *
  *   ① **每一行点名的机器事实仍然存在** —— 四类事实各自找一个**已有出处**去核：
- *      · `freshness-track`  ⇒ `FRESHNESS_TRACKS` 里有没有这个键（`visual-baselines.mjs`）；
+ *      · `freshness-track`  ⇒ `FRESHNESS_TRACKS` 里有没有这个键（`freshness-ledger.mjs`）；
  *      · `gate-not-in-all`  ⇒ `quality-gate.mjs` 的 `GATES` 里这一项是不是 `run: false`；
  *      · `gate-in-all`      ⇒ 同一张表里有没有这一项（它确实在跑）；
  *      · `on-demand-ledger` ⇒ `scripts/.gate-executor-ledger.json` 的 `onDemand` 里有没有它。
@@ -107,7 +107,7 @@ function readLedger() {
 
 /** 新鲜度档的键（`FRESHNESS_TRACKS`）。 */
 async function freshnessKeys() {
-  const mod = await import("../scripts/visual-baselines.mjs");
+  const mod = await import("../scripts/freshness-ledger.mjs");
   return Object.keys(mod.FRESHNESS_TRACKS ?? {});
 }
 

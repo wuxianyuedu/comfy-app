@@ -14,8 +14,7 @@ pnpm test:coverage      # 同一套全量 + v8 覆盖率与棘轮门槛
 pnpm check:all          # 一键完整门禁：typecheck / eslint 零警告 / 格式棘轮 / 全量+覆盖率
 pnpm typecheck          # tsc --noEmit
 pnpm test:file <文件>   # 只跑指定文件（跨平台入口，见 tools/start/run-tests.ps1）
-pnpm test:e2e           # Playwright 全量 E2E（含 e2e/visual），跑绿即记「每天首次」账
-pnpm test:visual        # 只跑像素基线那一层
+pnpm test:e2e           # Playwright 全量 E2E，跑绿即记「每天首次」账
 pnpm run test:coverage  # 全量单测 + 覆盖率棘轮（走 full-suite-run.mjs，跑绿即记）
 pnpm run build          # 产物级护栏（build + 剥私有输入 + 数产物 + 冒烟，跑绿即记）
 ```
@@ -121,90 +120,35 @@ procedure 有没有执行者**与**消费方（这两条已由 `tests/trpc-surfa
 
 全库整体数字（总行覆盖 ~75%）只作参考，不设全局门槛。
 
-## 视觉回归（Playwright screenshot）
+## 视觉回归（页面级像素基线）：**这一档已撤掉**
 
-> 像素基线捕获布局/配色退化（画布、空态、弹窗、断点、深浅色），见规范
-> [11-测试与可观测性.md](standards/11-测试与可观测性.md#118-视觉回归像素基线)。
-> 方案**只此一套**（`toHaveScreenshot`），不引入 Chromatic / Vitest browser mode。
+> **仓库里没有像素基线了。** `e2e/visual/**`、`scripts/pixel-run.mjs`、基线 PNG、
+> `pnpm check:visual` / `test:visual` 与它的提交门禁全部删除。理由是收益比不成立：
+> 结论只在录过基线的那台机器上成立（基线名带平台，两档就得两套 PNG）、平台名担保不了
+> 字体栈（同一个 `-linux` 名下缺 CJK 字体的容器差 1767 像素）、每屏的录制输入面要显式登记、
+> 每次过期都要人逐张看图定性 —— 而覆盖的是一小撮代表屏。完整口径见规范
+> [11 §11.8](standards/11-测试与可观测性.md)。
+>
+> **「界面有没有变形」现在没有任何自动判据**，靠 review 看图。这是**有意的空白**，
+> 不是漏了；也不要拿 DOM 快照去补（见下面「DOM 快照边界」）。
+> 组件级那一侧仍归 Storybook（见 `guide-storybook.md`），它判的不是同一件事。
 
-### 目录与运行
+### 仍然在跑的：三档「每天首次自证」
 
-```bash
-# 像素档（推荐入口）：跑 e2e/visual + 配对判据同批，默认不落盘
-pnpm check:visual
-# 录基线（显式落盘）：录完请再跑一次上面的命令自证「连跑两次都绿」
-pnpm check:visual:update
-# 只跑像素档、不带配对判据（排查用；结论不完整，别拿它当「基线没问题」）
-pnpm test:visual
-# 全量 E2E（含 e2e/visual，测试全量时用）
-pnpm test:e2e
-```
+这一层与像素无关，继续用（口径与边界见规范 §11.8）：全量 e2e / 全量单测 + 覆盖率 /
+产物级护栏此前各自只有一句「按需手动跑」，而那句话没有任何东西在守。
 
-- **优先用 `pnpm check:visual`**：它把像素档与「基线成套且入库」那条判据放在**同一次**运行里，
-  并按三条实测形态给红的定性（缺本平台基线 / 逐帧 chrome / 像素 diff 各自的动作不同）。
-  `pnpm test:visual` 仍在，但它的绿**证明不了**基线还在仓库里（两条判据是两次互不相干的运行）。
-- **本机没有基线时它不会白跑**：起 webServer / 浏览器之前先答「这台机器这一档有没有成套基线」，
-  没有就退出码 2 并点名缺哪几张、动作是什么（平台没登记 = 先录再同批登记；登记了但缺几张 = 补录）。
-  `pnpm check:visual --dry-run` 也会把这一问答出来（无副作用）。
-- ⚠️ **`--update` 不是唯一会写 PNG 的路**（这句是踩出来的）：Playwright 的 `updateSnapshots`
-  默认是 `'missing'`，缺的基线**不带任何开关也会被创建**。所以检查档显式带
-  `--update-snapshots=none`；看到工作区里多出没提交的 PNG 时，先想「本机是不是缺基线」，
-  而不是「谁动了基线」。
-- 用例放 `e2e/visual/*.visual.spec.ts`，命名带 `.visual` 便于单独筛选（跑哪一层就点名哪一层：
-  `pnpm test:visual` 只跑像素基线，`pnpm test:e2e` 含 `e2e/visual`）。
-- 基线 PNG 与 spec 同目录（Playwright 默认 `*-snapshots/`），**提交入库**。
-- ⚠️ **基线文件名带平台，每个真正执行像素回归的环境都要有自己的那一套**：当前登记
-  `-win32.png`（开发机，`pnpm dev` 口径）与 `-linux.png`（容器 / 类 CI，`CI` 为真 ⇒
-  `pnpm start` 口径，需先 `pnpm build`）两档。缺档时 Playwright 不是「跳过」而是判失败
-  **并把新生成的 PNG 写进目录**，于是留下半套基线；判据见 `tests/visual-baseline-pairing.test.ts`
-  （齐全 / 入库 / 无孤儿三头，登记在提交前的固定守护清单，并由 `scripts/visual-gate.mjs`
-  保证「改像素层的提交一定带着这条判决」）。**这判据只在没登记过的机器上会绿**——它答的是
-  「仓库里那几套基线齐不齐」，不是「你正坐的这台能不能跑」；后者由上面那条前置判决答，
-  清点内核同源（`scripts/visual-baselines.mjs`），平台登记口径也在那里。
-  **基线按 webServer 口径录**：dev 与 start 的像素不同（dev 指示器那块 mask 目前遮不住），
-  在某一档跑像素时 `CI` 的真假要与该档录制时一致。**这条现在有数据和判据**：每档录于哪条
-  口径登记在 `scripts/visual-baselines.mjs` 的 `PLATFORM_RECORDING`（win32 = `dev`、
-  linux = `start`），`pnpm check:visual` 起任何东西之前先核本机 `CI` 与它一致不一致
-  （不一致直接拦下、给出置法；`--dry-run` 会把两侧都打出来）。先在 Windows 上按 `dev` 口径
-  录 win32 那几张，再成套提交。
-- 要**新加/恢复一档平台**（例如某档已被删过）时，姿势固定是「在该档用**当前** spec
-  `--update-snapshots` 重录成套 PNG + 同批把该平台加进 `SUPPORTED_PLATFORMS`」，
-  **不是把旧 PNG 贴回来**（旧图录于别的界面形态，贴回去就是一份对不上现状的账）。
-- ⚠️ **像素可复现要自己挣**：根布局的全局状态栏带实时帧率与时钟，Next 的 dev 指示器也在
-  页面上 —— 这类 chrome 必须 `mask` 掉，否则 fullPage 永远取不到两张稳定截图。写法见
-  `e2e/visual/login.visual.spec.ts` 的 `unstableChromeMasks`；验收口径是**同一命令连跑两次
-  都绿**，不是 `--update-snapshots` 那一次写成功。
-- 基线变更（合法 UI 改动）重录 + 人工 review：
-  ```bash
-  pnpm check:visual:update                              # 录基线（等价于 --update-snapshots）
-  pnpm check:visual                                     # 再跑一次自证：连跑两次都要绿
-  ```
-  重录后在 PR 描述标注「视觉基线已更新：<原因>」。失败 actual/diff 产物在
-  `test-results/`（已 gitignore）。
-- ⚠️ **每一档基线都要有主**（`scripts/.visual-baseline-freshness.json`）：`--update-snapshots`
-  **总是绿**（它把基线改成当次实况），所以「录了一次」不等于「像素可复现」—— 而「录过一次就
-  再没人碰过」也完全可能（实测：入库的 `-linux.png` 有 4 张悄悄过期，与当次环境差 1 像素）。
-  现在每一**登记**档都有一条新鲜度记录，写清**谁 / 什么时候 / 按哪条命令复核的**，
-  由 `pnpm check:visual` **跑绿即记**（`--update` 不记：写成功不是自证）。pre-commit 的
-  `visual-freshness-gate.mjs` 判「每档都有主、且写得清」；缺几张基线的档由
-  `PENDING_PLATFORMS` 顶着、不要求这条记录。钩子**不跑像素**（起 webServer + 浏览器会与
-  A/B/C/D 抢资源）。
-- **「每天首次自证」现在守着三档**（全量 e2e / 全量单测 + 覆盖率 / 产物级护栏），
-  它们此前只有一句「按需手动跑」，而那句话没有任何东西在守：
-  - **全量 e2e**（`scripts/.e2e-freshness.json`）按本地日历日判「**当天的第一次提交**
-    带没带一次自证」：跑 `pnpm test:e2e` 跑绿即记，或
-    `node scripts/e2e-run.mjs --skip "<理由>"` 记一条豁免（占位理由被拦）。
-  - **全量单测 + 覆盖率**（`scripts/.full-suite-freshness.json`，`pnpm run test:coverage`
-    走 `scripts/full-suite-run.mjs`）与**产物级护栏**（`scripts/.artifact-freshness.json`，
-    `pnpm run build` 走 `scripts/artifact-run.mjs`）判的是「**改了就当天跑**」：
-    当天提交动过它们的输入面（`src/`+`tests/` / 产物链那几个文件）就必须今天自证，
-    没动过以 7 天为宽限 —— 十分钟量级的两档没必要每天都跑。
-    出路三条：跑一次（跑绿即记）/ `--skip "<理由>"` / `--dirty "<理由>"`（这次改动不吃这一档）。
-  - 两种「不跑」互不等于（`skippedReason` vs `dirtyReason`）；「先跑后改」也放行。
-    当天已有凭证 ⇒ 零输出放行；账文件还没入库时只提醒、不阻断。口径与边界见规范 §11.8。
-- 像素档**不在 `pnpm check:all` 里**：它要起 webServer + 浏览器，而结论只在录过基线的那台
-  机器上成立（基线名带平台）—— 要跑就显式点名（Windows 侧同一动作是
-  `scripts/quality-gate.ps1 -Mode visual`，登记在 launch-and-build §9.5 的对照表）。
+- **全量 e2e**（`scripts/.e2e-freshness.json`）按本地日历日判「**当天的第一次提交**
+  带没带一次自证」：跑 `pnpm test:e2e` 跑绿即记，或
+  `node scripts/e2e-run.mjs --skip "<理由>"` 记一条豁免（占位理由被拦）。
+- **全量单测 + 覆盖率**（`scripts/.full-suite-freshness.json`，`pnpm run test:coverage`
+  走 `scripts/full-suite-run.mjs`）与**产物级护栏**（`scripts/.artifact-freshness.json`，
+  `pnpm run build` 走 `scripts/artifact-run.mjs`）判的是「**改了就当天跑**」：
+  当天提交动过它们的输入面（`src/`+`tests/` / 产物链那几个文件）就必须今天自证，
+  没动过以 7 天为宽限 —— 十分钟量级的两档没必要每天都跑。
+  出路三条：跑一次（跑绿即记）/ `--skip "<理由>"` / `--dirty "<理由>"`（这次改动不吃这一档）。
+- 两种「不跑」互不等于（`skippedReason` vs `dirtyReason`）；「先跑后改」也放行。
+  当天已有凭证 ⇒ 零输出放行；账文件还没入库时只提醒、不阻断。
 
 ### 确定性约束（防 flaky）
 
@@ -275,21 +219,17 @@ platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
 ## 已知边界（当前真实状态）
 
 **已经有自动化**：提交前钩子（分支守卫 + tsc + eslint 零警告 + 20 多条静态判据 + 固定守护
-清单与受影响用例）；`pnpm check:all` 的全量 + 覆盖率棘轮；29 条 `@critical` E2E；win32 像素基线。
+清单与受影响用例）；`pnpm check:all` 的全量 + 覆盖率棘轮；29 条 `@critical` E2E。
 
 **没有自动化 / 仍开放**（细节与优先级见 `docs/guides/PRODUCTION-GAPS.md`）：
 
 - [ ] **没有平台侧兜底**：#623 之后不跑流水线，唯一自动化是本地钩子（`--no-verify` 可绕）。
       口径与出路见规范 §13.5.3 / §13.5.4（按需召唤评审 NPC），别再补「看起来在守门」的配置。
 - [ ] **E2E 没有**「每次提交都跑」的**执行者**：在本地手动档（`pnpm test:e2e`）；
-      全量 e2e 那条「每天首次自证」（上面 §「每一档基线都要有主」那一节）只保证
-      「一天至少有人跑过一次」，不等于每次提交都跑。视觉那一层**有本地判据**：
-      `tests/visual-baseline-pairing.test.ts` 在提交前的固定守护清单里，且
-      `scripts/visual-gate.mjs`（pre-commit D 组）在暂存命中 `e2e/visual/**` 时判「这次提交带不带
-      像素判决」—— 但它判的是**基线的齐全/入库/平台登记**，不是「界面像素有没有变形」：
-      真正的像素回归仍要手动跑，入口是 `pnpm check:visual`（规范 §11.8 / §13.5.4）。
-      它不在 `check:all` 里（webServer + 浏览器的代价 + 结论只在录过基线的那台机器上成立），
-      与 E2E 同属按需层，区别是它的触发条件是明确的：**改了会动到像素判决的东西**。
+      全量 e2e 那条「每天首次自证」（上面 §「仍然在跑的：三档『每天首次自证』」那一节）
+      只保证「一天至少有人跑过一次」，不等于每次提交都跑。
+- [ ] **页面级视觉回归完全没有执行者**：这一档已整档撤掉（上面 §「视觉回归」那一节），
+      所以「界面有没有变形」现在只由 review 看图负责 —— 不要再把它读成「有那一层兜着」。
 - [ ] **Rust 壳的 `#[test]` 只在「改了 `.rs`」时被跑**：`scripts/shell-gate.mjs`（pre-commit D 组）
       在暂存改动命中壳输入时跑 `cargo test`、并把硬规则 5「改了壳必须重编」变成判据 ——
       但它**不是全量执行者**：不动壳的提交永远不跑那 37 条 `#[test]`，全量仍要靠
