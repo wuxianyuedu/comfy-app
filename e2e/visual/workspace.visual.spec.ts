@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   clearProjectIndex,
+  expectModelOverviewSettled,
   freezeComfyStats,
   freezeModelOverview,
   hideDevChrome,
@@ -10,6 +11,7 @@ import {
   settle,
   unstableChromeMasks,
 } from "./support/page-baseline";
+import { HOME_ENTRY_CARD_LABEL } from "../support/home-anchors";
 
 /**
  * 首页（`/workspace`）像素基线 —— 应用主界面（§11.8）。
@@ -48,7 +50,12 @@ import {
  *     `unstableChromeMasks` 遮着，不进像素。
  */
 
-const READY_TEXT = "灵感从这里开始";
+/* 首页渲染完成的锚点 —— 唯一出处是 `../support/home-anchors`。
+ *
+ * 它此前是这里的 `READY_TEXT = "灵感从这里开始"`（首页欢迎区大标题）。ISSUE #1691
+ * 把那块欢迎区删掉之后，**首页基线、canvas / overlay 两份越屏 spec、三份 e2e
+ * 各红一次** —— 锚点散在四处时，这类改动每次都要逐份追，所以收进了那个模块。 */
+const READY_TEXT = HOME_ENTRY_CARD_LABEL;
 
 test.describe("首页视觉基线", () => {
   test("暗色档（默认外观）全页基线", async ({ page }) => {
@@ -61,6 +68,10 @@ test.describe("首页视觉基线", () => {
     await freezeModelOverview(page);
     await page.goto("/workspace");
     await settle(page, READY_TEXT);
+    /* 这一屏还有一块**异步**内容：「模型概览」卡先渲染骨架、拿到数据后换成空态文案，
+     * 而两态卡高不同 —— 落到哪一拍取决于请求什么时候回来。`settle` 只回答「这一屏
+     * 画出来了」，所以这一步单列（口径见 `expectModelOverviewSettled` 的说明）。 */
+    await expectModelOverviewSettled(page);
     await expect(page).toHaveScreenshot("workspace-desktop-dark.png", {
       fullPage: true,
       mask: await unstableChromeMasks(page),
@@ -77,6 +88,10 @@ test.describe("首页视觉基线", () => {
     await freezeModelOverview(page);
     await page.goto("/workspace");
     await settle(page, READY_TEXT);
+    /* 这一屏还有一块**异步**内容：「模型概览」卡先渲染骨架、拿到数据后换成空态文案，
+     * 而两态卡高不同 —— 落到哪一拍取决于请求什么时候回来。`settle` 只回答「这一屏
+     * 画出来了」，所以这一步单列（口径见 `expectModelOverviewSettled` 的说明）。 */
+    await expectModelOverviewSettled(page);
     await expect(page).toHaveScreenshot("workspace-desktop-light.png", {
       fullPage: true,
       mask: await unstableChromeMasks(page),

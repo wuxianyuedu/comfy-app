@@ -845,7 +845,14 @@ className="
 | 区块 / 卡片标题 | `--text-section`（0.875rem） | `.u-title`       | 面板与卡片的小标题                                      |
 | **屏级标题**    | `--text-page`（1.5rem）      | `.u-title-page`  | **每屏唯一的 h1**                                       |
 | 段级标题        | `--text-stage`（1.0625rem）  | `.u-title-stage` | 工坊六段当前段的标题（屏级与区块之间那一层）            |
-| 首页欢迎区      | `--text-hero`（2.125rem）    | `.u-title-hero`  | 首页那一个 h1 —— 屏级档的唯一例外，**例外也必须有名字** |
+
+**没有「例外档」这一行**（ISSUE #1691）：曾经还有一档 `--text-hero`（2.125rem）/
+`.u-title-hero`，理由是「首页欢迎区那块大标题确实不是屏级标题那一档，但例外必须有名字」。
+首页那块欢迎区（标题「灵感从这里开始」+ 副标题）后来整个删掉了 —— 它一个信息都不给，
+却占掉首屏上沿约 150px —— 于是这一档零消费者，连同 `@theme` 里的声明与
+`globals.css` 里的规则一起退役。**别为「以后可能用得上」留在库里**：留着的代价是
+「唯一档」这句话在后一个想写 `text-[34px]` 的人面前就不成立了（P83 现在只认
+`u-title-page` / `text-page`）。
 
 **为什么要立这条**：`.u-title-page` 在 `globals.css` 里早就注明是「页面级标题（h1）
 统一规范」，可它引入至今**只有 1 处消费者**；屏级标题实际写在 11 个 `h1` 上，尺寸有
@@ -853,7 +860,7 @@ className="
 逐文件点名 —— 与 §3.6.2 治颜色前的问题是同一形态。
 
 **判据**：`scripts/check-ui-primitives.cjs` 的 **P83**（棘轮，基线 0）—— 扫视图层
-`<h1>` 的属性段，必须出现 `u-title-page` / `u-title-hero` / `text-page` / `text-hero`
+`<h1>` 的属性段，必须出现 `u-title-page` / `text-page`
 之一，且不得再叠 `text-lg` / `text-[34px]` 这类硬写字号。属性段走平衡扫描
 （`readJsxAttrsPastTag`），因为 `className={cn("u-title-page", a > b ? … : …)}` 与
 `className={[…] .join(" ")}` 里都有 `>`，粗锚会在这两种形态上漏计（P82 的同一教训）。

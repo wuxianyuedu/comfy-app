@@ -140,7 +140,6 @@
 --spacing-title-bar
 --text-2xs
 --text-3xs
---text-hero
 --text-page
 --text-section
 --text-stage

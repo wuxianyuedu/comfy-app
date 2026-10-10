@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { expectHomeReady } from "./support/home-anchors";
+
 /**
  * 冒烟用例：不依赖 ComfyUI 后端，也不需要登录态。
  * 选择器文本均来自 src/app/login/page.tsx 与 src/components/studio/HomePage.tsx 的真实文案。
@@ -40,10 +42,10 @@ test.describe("首页冒烟", () => {
     // src/app/page.tsx 服务端 redirect("/workspace")
     await expect(page).toHaveURL(/\/workspace$/);
 
-    // 创作台 Hero 标题（无需登录、不依赖 ComfyUI 后端）
-    await expect(
-      page.getByRole("heading", { name: "灵感从这里开始" }),
-    ).toBeVisible();
+    /* 创作台首屏（无需登录、不依赖 ComfyUI 后端）。
+     * 锚点是四张入口卡里的第一张 —— 首页那块欢迎区已按 ISSUE #1691 移除，
+     * 这里改用「用户进首页第一眼要看的那件事」，口径见 `support/home-anchors`。 */
+    await expectHomeReady(page);
   });
 });
 

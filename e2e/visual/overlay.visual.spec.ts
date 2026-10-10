@@ -6,6 +6,7 @@ import {
   settle,
   unstableChromeMasks,
 } from "./support/page-baseline";
+import { expectHomeReady } from "../support/home-anchors";
 
 /**
  * 弹窗 / 浮层尺寸像素基线 —— §11.8 的「弹窗/浮层尺寸」那一档。
@@ -91,9 +92,9 @@ async function openPinnedLogPanel(page: Page): Promise<Locator> {
   await watchRecordingInputs(page);
   await hideDevChrome(page);
   await page.goto("/workspace");
-  await expect(
-    page.getByRole("heading", { name: "灵感从这里开始" }),
-  ).toBeVisible();
+  /* 等首页渲染完成的锚点（口径见 `../support/home-anchors`）：原先钉的是首页
+   * 欢迎区大标题，那一块已按 ISSUE #1691 移除。 */
+  await expectHomeReady(page);
   await page
     .getByRole("button", { name: /日志面板/ })
     .first()

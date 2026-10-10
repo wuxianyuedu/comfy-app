@@ -8,6 +8,7 @@ import {
   settle,
   unstableChromeMasks,
 } from "./support/page-baseline";
+import { expectHomeReady } from "../support/home-anchors";
 
 /**
  * 画布（`ProjectCanvas`）像素基线 —— §11.8 的「xyflow 画布」那一档。
@@ -203,9 +204,9 @@ async function openWorkspaceWithProject(
   await watchRecordingInputs(page);
   await hideDevChrome(page);
   await page.goto("/workspace");
-  await expect(
-    page.getByRole("heading", { name: "灵感从这里开始" }),
-  ).toBeVisible();
+  /* 等首页渲染完成的锚点（口径见 `../support/home-anchors`）：原先钉的是首页
+   * 欢迎区大标题，那一块已按 ISSUE #1691 移除。 */
+  await expectHomeReady(page);
 }
 
 /** 走用户那条路进画布：页签条的「＋」→「画布」。 */

@@ -167,9 +167,8 @@ async function expectRecordingFontCapability(page: Page): Promise<void> {
   /* 判决定义在 `scripts/recording-font-capability.mjs`（与样本串同一处）。
      动态 import 的理由同 `freezeModelOverview`：本模块被 Playwright 的 TS 转换求值，
      静态 import 会把那份 .mjs 一并拉进转换面。 */
-  const { verdictForInk } = await import(
-    "../../../scripts/recording-font-capability.mjs"
-  );
+  const { verdictForInk } =
+    await import("../../../scripts/recording-font-capability.mjs");
   const verdict = verdictForInk(ink);
   expect(verdict, verdict ?? undefined).toBeNull();
 }
@@ -223,6 +222,31 @@ export async function settle(page: Page, readyText: string): Promise<void> {
      （{@link expectRecordingFontCapability}）。同样不是「界面的一种状态」，而是
      「这张 PNG 记的是录制环境还是这台机器的私有事实」这个前提。 */
   await expectRecordingFontCapability(page);
+}
+
+/**
+ * 等首页「模型概览」卡**离开骨架态**。
+ *
+ * 为什么需要独立这一步（ISSUE #1691 第 1 条实测）：那一格的数据经 TanStack Query
+ * 取，`isLoading` 为真时渲染三行 `Skeleton`、为假时渲染空态文案 —— **两态卡高不同**，
+ * 于是首页从那一行往下整段位移。`freezeModelOverview` 钉的是「回来的是什么数据」，
+ * **钉不住「哪一拍回来的」**：截图落在骨架那一拍，基线就记下了那张骨架
+ * （实测差 4652 像素，`#1593` 记过同一格的现场）。
+ *
+ * 为什么现在才暴露：这一屏的「就绪锚点」原先钉的是首页欢迎区那块大标题，它落在
+ * 模型概览**之后**渲染，于是顺带等到了这一格落定 —— 而那个锚点已按 ISSUE #1691
+ * 移除，新锚点（入口卡）渲染得更早，这一格的竞态就露出来了。**修法不是在锚点上
+ * 加回等待，而是把「这一格落定了」写成一条直的判据**：锚点该回答「这一屏画出来了」，
+ * 而「每一块异步内容都到位了」是另一件事，混在一个 helper 里必然再被下一个人拆开。
+ *
+ * 判据取「这块卡里没有 skeleton」而不是「出现了某句文案」：文案会随空态 / 有数据
+ * 两态变（而且它本来就是 `freezeModelOverview` 决定的那一格），而「骨架没了」
+ * 对两态都成立。
+ */
+export async function expectModelOverviewSettled(page: Page): Promise<void> {
+  const card = page.locator('[data-component="home-model-overview"]');
+  await expect(card).toBeVisible();
+  await expect(card.locator('[data-slot="skeleton"]')).toHaveCount(0);
 }
 
 /**
