@@ -113,7 +113,8 @@ export function resolveLossBaseline(cwd = ROOT) {
   if (!ref) {
     return {
       ok: false,
-      reason: "取不到要并进去的那条（各 remote 的 master / 本地 master）—— 先 `git fetch` 再跑",
+      reason:
+        "取不到要并进去的那条（各 remote 的 master / 本地 master）—— 先 `git fetch` 再跑",
     };
   }
   try {
@@ -124,11 +125,17 @@ export function resolveLossBaseline(cwd = ROOT) {
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
     if (!base) {
-      return { ok: false, reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）` };
+      return {
+        ok: false,
+        reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）`,
+      };
     }
     return { ok: true, baseline: base };
   } catch {
-    return { ok: false, reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）` };
+    return {
+      ok: false,
+      reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）`,
+    };
   }
 }
 
@@ -169,8 +176,14 @@ function runScript(script, args) {
    * 由**两路输出全空**（脚本连一行都没打出来）兜一层，再归一成 2。
    * 这条与 `base-check.mjs` 的 `commandTargetState` 是同一族口径（§13.6.2）。 */
   const output = `${r.stdout ?? ""}${r.stderr ?? ""}`;
-  if (typeof r.status !== "number" || (r.status !== 0 && output.trim() === "")) {
-    return { code: 2, output: output || `[premerge] ${script} 没有跑起来（无输出）\n` };
+  if (
+    typeof r.status !== "number" ||
+    (r.status !== 0 && output.trim() === "")
+  ) {
+    return {
+      code: 2,
+      output: output || `[premerge] ${script} 没有跑起来（无输出）\n`,
+    };
   }
   return { code: r.status, output };
 }
@@ -206,7 +219,9 @@ function main(argv) {
     return !skip.has(key);
   });
   if (wanted.length === 0) {
-    process.stderr.write("[premerge] 三段全被跳过 —— 没有任何东西被复算（退 2）\n");
+    process.stderr.write(
+      "[premerge] 三段全被跳过 —— 没有任何东西被复算（退 2）\n",
+    );
     return 2;
   }
 
@@ -230,15 +245,28 @@ function main(argv) {
         });
         continue;
       }
-      const batch = resolveMergeBatch([], path.join(ROOT, ".githooks", "pre-commit"));
+      const batch = resolveMergeBatch(
+        [],
+        path.join(ROOT, ".githooks", "pre-commit"),
+      );
       if (!batch.ok) {
-        results.push({ key, label: seg.label, code: 2, output: `[premerge] ${batch.error}\n` });
+        results.push({
+          key,
+          label: seg.label,
+          code: 2,
+          output: `[premerge] ${batch.error}\n`,
+        });
         continue;
       }
-      /* `baseCheckMany` 自己把四态写进输出、**恒退 0**（「判据红了」是它要报告的事实）。
+      /* `baseCheckMany` 自己把判决写进输出、**恒退 0**（「判据红了」是它要报告的事实）。
        * 合并前这一跳要的却是「红没红」这个**闸门**语义 —— 所以这里按它返回的
-       * `summary` 折算：`current-green` = 0，`yours` / `baseline-red` = 1，
-       * `inconclusive` = 2。折算规则写在这一处，不在别处再算一遍。 */
+       * `summary` 折算：`current-green` = 0，`inconclusive` = 2，其余 = 1。
+       *
+       * `load-flake`（第五态，ISSUE #1641）落在「其余」里，**这是有意的**：它是
+       * 「这一次红了、但归属要隔离复跑才知道」，不是绿 —— 合并前这一跳要的正是
+       * 「干净」这个结论，把它折成 0 等于让一次超时假红**放行**一次合并。它的
+       * 归属与下一步由 `base-check` 自己的报告说清（本入口只拿退出码）。 */
+
       const captured = captureStdout(() =>
         baseCheckMany({
           commands: batch.commands,
@@ -249,7 +277,13 @@ function main(argv) {
       );
       const summary = lastSummary(captured.output);
       const code =
-        summary === "current-green" ? 0 : summary === "inconclusive" ? 2 : summary ? 1 : 2;
+        summary === "current-green"
+          ? 0
+          : summary === "inconclusive"
+            ? 2
+            : summary
+              ? 1
+              : 2;
       results.push({ key, label: seg.label, code, output: captured.output });
       continue;
     }
@@ -280,7 +314,11 @@ function main(argv) {
       `${JSON.stringify(
         {
           code: total,
-          segments: results.map(({ key, label, code }) => ({ key, label, code })),
+          segments: results.map(({ key, label, code }) => ({
+            key,
+            label,
+            code,
+          })),
         },
         null,
         2,

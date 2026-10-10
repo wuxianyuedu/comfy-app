@@ -28,7 +28,7 @@
  * 「合并前跑一遍 `pnpm check:all`：这一条没有自动执行者」就是它。
  *
  * `--base` 补的就是那一跳，且**不新开一条通道**：它把「被拦下时复算一条」用的
- * 同一套事实（干净快照 + 四态归属）扩成一批 —— 面从 `.githooks/pre-commit` 的步骤
+ * 同一套事实（干净快照 + 五态归属）扩成一批 —— 面从 `.githooks/pre-commit` 的步骤
  * 里现算（`resolveMergeBatch`），所以不会漂；快照只建一次（50 条判据共用一份
  * `git worktree`，逐条建等于把同一个快照检十几遍）；快照里链上本检出的
  * `node_modules`（否则近一半判据会以「红」的形态报错）。
@@ -38,7 +38,7 @@
  *
  * ── 它判什么 ──────────────────────────────────────────────────────────
  *
- * 四态，各对应一个明确动作：
+ * 五态，各对应一个明确动作：
  *
  *   · `baseline-red`  —— 干净基线上**同样命中** ⇒ 别线的红，与你的改动无关。
  *     动作：挡路的（硬闸类）就地修掉，不挡路的按 §11.12 登记；**不许**为它放宽
@@ -51,6 +51,11 @@
  *     最典型的成因是那条判据只存在**本检出未提交的改动**里：基线的 worktree 是一个
  *     干净的上游快照，看不到工作区的未提交文件（这是正确语义，不是缺陷 ——
  *     本判据要复算的就是「干净的线上基线」）。此时**不许**把 127 读成「别线的红」。
+ *   · `load-flake`    —— **两侧都红、且两侧的输出都是超时形态** ⇒ 高度疑似
+ *     「机器太满」而不是代码（ISSUE #1641）。它既不是别线的红、也不是你的红，
+ *     是这一刻机器的红 ⇒ **不照 `baseline-red` 的动作走**（那会把一次调度抖动
+ *     登记进历史），而是先隔离复跑定性（`--no-file-parallelism`）。
+ *     指纹见 `TIMEOUT_SIGNATURES`：**指纹不是结论**，命中只说明「值得再验一次」。
  *
  * **不做的事**（都写进 §13.6.2 了）：不替你决定「挡不挡路」、不自动登记
  * `KNOWN_FAILED_FILES`、不自动改判据 —— 那是判断，本脚本只保证**事实**这一半可复算。
@@ -598,29 +603,92 @@ export function runGate(argv, cwd) {
 }
 
 /**
- * 三态判决 —— **纯函数**（好让两向都能被用例钉住）。
+ * **超时形态**：一次「红」的输出里带着「等超了 / 抢不到资源」的指纹。
+ *
+ * 为什么这要单独成一档（ISSUE #1641）：本仓库的门禁用例普遍要**真起子进程**
+ *（Node / git / prettier / vitest worker），而它们的失败有**两种同形的退出码**：
+ * 真断言失败，与「等资源等超了」。后者与负载成正比、与改动无关 —— 实测同一份
+ * 代码、全量 66 个结构判据：8 核空闲时墙钟 31.9s 全绿；把机器压到 load≈26 时
+ * 墙钟 182.8s 仍全绿；压到 load≈42（4 个 vitest worker 之外再叠 60+ 个自旋进程）
+ * 时 `tests/check-a11y-rules.test.ts` 报 `Test timed out in 30000ms` —— **隔离重跑
+ * 立刻全绿**。同一份代码、同一个提交，红的只是「那一刻机器有多满」。
+ *
+ * 于是四态不够用：负载假红在**两侧都会红**，`judge()` 会把它读成 `baseline-red`
+ *（「别线的红」）—— 而它既不是别线的红、也不是你的红，是**这一台机器这一时刻的**
+ * 红。照 `baseline-red` 的动作走（就地修 / 登记 `KNOWN_FAILED_FILES`）等于把
+ * 一次调度抖动**记进历史**，而下一次它又不红 —— 那条登记从此就是一条会静默失效的账。
+ *
+ * ⚠️ 这是**指纹不是结论**：命中只说明「这一条值得按负载假红再验一次」，不说明它
+ * 一定不是真回归（真回归也可能恰好卡在超时上）。所以 `judge()` 只把它降档到
+ * `load-flake`，**不许**据此直接放行；放行的判据是**隔离重跑**（见 `nextSteps`）。
+ *
+ * 各条都是《本仓库实际见到过的原文》，不是从别处抄的形态：
+ *   · vitest：`Test timed out in 30000ms.` / `Hook timed out in 45000ms.`；
+ *   · vitest 池：`Failed to start forks worker` / `Timeout waiting for worker to respond`
+ *     （实测这两种会把**退出码**打成非零，而一条真断言都没红）；
+ *   · node:test / jest 形态：`Exceeded timeout of …` / `Timeout - Async callback`;
+ *   · 本项目门禁自己的话术：`超时（…s）`（`src/lib/with-timeout` 的出口）。
+ */
+const TIMEOUT_SIGNATURES = [
+  /Test timed out in \d+\s*ms/i,
+  /Hook timed out in \d+\s*ms/i,
+  /Failed to start forks worker/i,
+  /Timeout waiting for worker to respond/i,
+  /Exceeded timeout of \d+/i,
+  /Timeout - Async callback/i,
+  /超时（\d+s）/,
+];
+
+/**
+ * 一次「红」的输出是不是**超时形态**（纯函数，两向都能被用例钉住）。
+ *
+ * @param {string} [output]
+ * @returns {boolean}
+ */
+export function isTimeoutShaped(output) {
+  const text = String(output ?? "");
+  return TIMEOUT_SIGNATURES.some((re) => re.test(text));
+}
+
+/**
+ * 判决 —— **纯函数**（好让两向都能被用例钉住）。
  *
  * **「跑不起来」不是「判据红了」**（`baseCode === 127` / `currentCode === 127`）：判据没
  * 跑起来时非零退出码与「跑了且红」同形 —— 只读退出码必然把后者读成前者，而这两件事
  * 的下一动作完全相反（一个去修代码，一个去查命令为什么不存在）。所以先判这一档。
  *
- * @param {{currentCode: number, baseCode: number | null}} input（`null` = 这条只在单侧跑）
- * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours"}
+ * **「等超了」也不是「判据红了」**（ISSUE #1641）：两侧都红、且**两侧的输出都是
+ * 超时形态**时，报 `load-flake` 而不是 `baseline-red` —— 因为负载假红恰好长这样，
+ * 而 `baseline-red` 的下一动作（就地修 / 登记）会把一次调度抖动记进历史。
+ * 两侧都要判：只在单侧超时形态更像「你的改动让它变慢了」这一族，那归 `yours`。
+ *
+ * @param {{currentCode: number, baseCode: number | null, currentOutput?: string, baseOutput?: string}} input
+ *   （`baseCode === null` = 这条只在单侧跑）
+ * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake"}
  */
-export function judge({ currentCode, baseCode }) {
+export function judge({ currentCode, baseCode, currentOutput, baseOutput }) {
   if (currentCode === 0) return "current-green";
   if (currentCode === 127 || baseCode === 127) return "inconclusive";
   /* `baseCode === null` = **这一条只在单侧跑**（`baseSide: false`）：它的对象是本检出
    * 这条线上的提交对象，基线快照里没有它们，所以「没比较过」不是「别线上也红」。
    * 它红的时候唯一的可能是「这次提交的声明与它自己的树矛盾」⇒ 纯粹的 `yours`。 */
   if (baseCode === null) return "yours";
+  /* 两侧都红、且**两侧的输出都带超时指纹** ⇒ 负载假红优先于 `baseline-red`。
+   * 只在单侧超时形态不降这一档（那更像「你让它变慢了」，归 `yours`）。 */
+  if (
+    baseCode !== 0 &&
+    isTimeoutShaped(currentOutput) &&
+    isTimeoutShaped(baseOutput)
+  ) {
+    return "load-flake";
+  }
   return baseCode !== 0 ? "baseline-red" : "yours";
 }
 
 /**
  * 结论的「下一动作」话术 —— 与 §13.6.2 的处置口径逐字对应，不在这里发明新口径。
  *
- * @param {"current-green" | "inconclusive" | "baseline-red" | "yours"} verdict
+ * @param {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake"} verdict
  * @param {{ref: string}} context
  * @returns {string[]}
  */
@@ -637,6 +705,20 @@ export function nextSteps(verdict, { ref }) {
       "  · 那条判据只存在**本检出的未提交改动**里（基线是干净的上游提交，看不到它）；",
       "  · 命令写错 / 路径相对本检出（基线 worktree 在系统临时目录下）。",
       "先让它在本检出里真能跑（提交或修正命令），再复算。",
+    ];
+  }
+  if (verdict === "load-flake") {
+    return [
+      "两侧的红**都是超时形态** ⇒ 高度疑似**负载假红**（机器太满，不是代码）。",
+      "这一条**不是** `baseline-red`：它既不是别线的红、也不是你的红，是这一刻机器的红 ——",
+      "  所以**不要**照 baseline-red 的动作就地修或登记 KNOWN_FAILED_FILES（会把一次调度",
+      "  抖动记进历史，而下一次它又不红，那条登记从此就是一条会静默失效的账）。",
+      "下一步是**隔离复跑定性**（不要抬预算 —— §11.13 那句「看到 60s 都超时不要改成 120s」）：",
+      "  · vitest：`pnpm exec vitest run --no-file-parallelism <那份文件>`；",
+      "  · 仍红 ⇒ 才按真回归处置（这时它是 `yours` 或 `baseline-red`，重跑一次本命令即可复算）；",
+      "  · 绿 ⇒ 就是负载假红：**为它降负载或直接放过**，并在提交说明里点名「这次是负载假红」。",
+      "降负载的杠杆是并发而不是加预算：跑之前把 dev server / ComfyUI / 出图让开，" +
+        "或按 §13.5.8 核对 `--maxWorkers`。",
     ];
   }
   if (verdict === "baseline-red") {
@@ -778,6 +860,16 @@ export function baseCheckMany({
       /* `baseSide: false` ⇒ **不在快照上跑**（理由见 `CHAINED_STEPS` 那条注释）：
        * 它的 `baseCode` 记 `null`（= 未跑），判决只看本检出那一侧。 */
       const base = c.baseSide === false ? null : runGate(c.argv, worktreePath);
+      /* 两侧的输出都要传给 `judge`：`load-flake` 那一档看的正是「两边是不是**都**
+       * 超时形态」—— 本检出那一次的输出原本只在 `current` 里躺着、判完就丢，
+       * 于是这一档在 `--base` 这一批里判不出来（ISSUE #1641）。 */
+      const curOutput = current[i]?.output;
+      const baseOutput = base === null ? undefined : base.output;
+      /* `load-flake` 那一档要看**两侧**的输出，而 `summarizeRows` 会把整批再判
+       * 一遍（它只看「这一行是不是超时形态」，不看上一轮的 `verdict`）—— 所以
+       * 两份输出都要落进行里，不能只在 `judge()` 那一次调用里传一下就丢。
+       * `output` 是**本检出**这一次的全文：行里已经有 `baseOutputTail`（末 20 行），
+       * 但本检出那一侧此前一个字都没留（ISSUE #1641）。 */
       rows.push({
         label: c.label,
         currentCode: cur,
@@ -787,7 +879,11 @@ export function baseCheckMany({
         verdict: judge({
           currentCode: cur,
           baseCode: base === null ? null : base.code,
+          currentOutput: curOutput,
+          baseOutput,
         }),
+        ...(curOutput ? { output: curOutput } : {}),
+        ...(baseOutput ? { baseOutput } : {}),
         ...(base && base.code !== 0
           ? { baseOutputTail: tail(base.output) }
           : {}),
@@ -856,26 +952,41 @@ function linkDependencies(from, to) {
  * 而「没跑起来」与「跑了且红」在退出码上同形 —— 把整批结论落在它上面等于拿一个
  * 无法归因的读数下判决。
  *
- * @param {Array<{currentCode: number, baseCode: number | null}>} rows
- * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours"}
+ * `yours` 压过 `load-flake`：你自己引入的那条必须改代码，而负载假红只需要隔离复跑
+ * 一次 —— 报成 `load-flake` 会让「有一条真红」这件事被一条抖动盖住（同下一条理由）。
+ * `load-flake` 压过 `baseline-red`：混着一批「别线的红」时，若其中也有超时形态的，
+ * 整批报 `baseline-red` 会让人把抖动一起登记进 `KNOWN_FAILED_FILES`。
+ *
+ * @param {Array<{currentCode: number, baseCode: number | null, output?: string, currentOutput?: string, baseOutput?: string}>} rows
+ * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake"}
  */
 export function summarizeRows(rows) {
   if (rows.length === 0) return "inconclusive";
   if (rows.every((r) => r.currentCode === 0)) return "current-green";
   const verdicts = rows
     .filter((r) => r.currentCode !== 0)
-    .map((r) => judge({ currentCode: r.currentCode, baseCode: r.baseCode }));
+    .map((r) =>
+      judge({
+        currentCode: r.currentCode,
+        baseCode: r.baseCode,
+        /* 两个来源都收：行里显式给了 `currentOutput` 就用它，否则回落到
+         * `output`（本检出那一次的全文，见上面 rows.push 的注释）。 */
+        currentOutput: r.currentOutput ?? r.output,
+        baseOutput: r.baseOutput,
+      }),
+    );
   if (verdicts.includes("inconclusive")) return "inconclusive";
   /* 混着「别线的红」与「你的红」时，**按更严重的那一档报**（`yours`）——
    * 别线的红可以就地收掉或登记，而你自己引入的那条必须改代码，两者都要人看见；
    * 报成 `baseline-red` 会让人以为整批都与自己无关。 */
   if (verdicts.includes("yours")) return "yours";
+  if (verdicts.includes("load-flake")) return "load-flake";
   return "baseline-red";
 }
 
 /**
  * 整批结论的「下一动作」话术 —— 与单命令档同源（`nextSteps`），只在有红时点名是哪几条。
- * @param {"current-green" | "inconclusive" | "baseline-red" | "yours"} summary
+ * @param {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake"} summary
  * @param {Array<{label: string, verdict?: string}>} reds
  * @param {{ref: string}} context
  * @returns {string[]}
@@ -915,7 +1026,7 @@ function fail(message) {
  * 逐行列出「本检出码 / 基线码 / 归属」，再给整批的下一动作 —— 合并前要看的是
  * 「这一批里哪几条会挡路、其中哪几条不是我的」，而不是每一条各自的散文。
  *
- * @param {{ref: string, commit?: string, summary: "current-green" | "inconclusive" | "baseline-red" | "yours", rows: Array<{label: string, currentCode: number, baseCode: number | null, verdict?: string, baseOutputTail?: string}>}} result
+ * @param {{ref: string, commit?: string, summary: "current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake", rows: Array<{label: string, currentCode: number, baseCode: number | null, verdict?: string, baseOutputTail?: string}>}} result
  * @param {{json: boolean, shape?: "single" | "batch"}} opts
  * @returns {number}
  */

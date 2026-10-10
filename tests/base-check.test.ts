@@ -25,6 +25,7 @@ import {
   commandTargetState,
   groupSteps,
   isGitCheckout,
+  isTimeoutShaped,
   judge,
   mayDecideOnCleanSnapshot,
   nextSteps,
@@ -69,7 +70,10 @@ function git(cwd: string, ...args: string[]): string {
  * @param {string[]} args
  * @returns {{code: number, stdout: string, stderr: string}}
  */
-function runBaseCheckOnce(cwd: string, args: string[]): {
+function runBaseCheckOnce(
+  cwd: string,
+  args: string[],
+): {
   code: number;
   stdout: string;
   stderr: string;
@@ -101,9 +105,10 @@ function runBaseCheckOnce(cwd: string, args: string[]): {
  * 的首选是 `@{u}`（当前分支的上游），而它只有在分支真跟踪某个远端时才解析得出。
  * 手写引用只能覆盖候选顺序的后半段，恰好绕开了最常走的那一条。
  */
-function makeRepo(
-  opts: { markerOnBase?: boolean } = {},
-): { work: string; bare: string } {
+function makeRepo(opts: { markerOnBase?: boolean } = {}): {
+  work: string;
+  bare: string;
+} {
   const bare = mkdtempSync(join(tmpdir(), "base-check-bare-"));
   git(bare, "init", "-q", "--bare", "-b", "master", ".");
   const work = mkdtempSync(join(tmpdir(), "base-check-gate-"));
@@ -167,7 +172,7 @@ function runBaseCheck(
   return runBaseCheckOnce(cwd, args);
 }
 
-describe("base-check —— judge() 四态（纯函数，两向各一组）", () => {
+describe("base-check —— judge() 判决（纯函数，两向各一组）", () => {
   test("本检出红 + 基线红 ⇒ baseline-red（别线的红）", () => {
     expect(judge({ currentCode: 1, baseCode: 1 })).toBe("baseline-red");
   });
@@ -191,6 +196,7 @@ describe("base-check —— judge() 四态（纯函数，两向各一组）", ()
       "baseline-red",
       "yours",
       "inconclusive",
+      "load-flake",
     ] as const) {
       const steps = nextSteps(verdict, { ref: "origin/master" });
       expect(steps.length).toBeGreaterThan(0);
@@ -199,14 +205,153 @@ describe("base-check —— judge() 四态（纯函数，两向各一组）", ()
   });
 });
 
+/* ── 第五态：负载假红（ISSUE #1641）────────────────────────────────────
+ *
+ * 这一族的现场（实测）：同一份代码、同一个提交，8 核空闲时 66 个结构判据
+ * 31.9s 全绿；把机器压到 load≈42 时 `tests/check-a11y-rules.test.ts` 报
+ * `Test timed out in 30000ms`，隔离重跑立刻全绿。四态里没有它 —— 两侧都红
+ * ⇒ 报 `baseline-red`，而照那个动作走会把一次调度抖动登记进 `KNOWN_FAILED_FILES`。 */
+describe("base-check —— load-flake：时间型判据在负载下的误红", () => {
+  const TIMEOUT = "Test timed out in 30000ms.";
+  const REAL_RED = "AssertionError: expected 3 to be 4";
+
+  test("两侧都红、且两侧输出都是超时形态 ⇒ load-flake（不是 baseline-red）", () => {
+    expect(
+      judge({
+        currentCode: 1,
+        baseCode: 1,
+        currentOutput: TIMEOUT,
+        baseOutput: TIMEOUT,
+      }),
+    ).toBe("load-flake");
+  });
+
+  test("只在单侧出现超时形态 ⇒ 不降这一档（更像「你的改动让它变慢了」）", () => {
+    expect(
+      judge({
+        currentCode: 1,
+        baseCode: 1,
+        currentOutput: TIMEOUT,
+        baseOutput: REAL_RED,
+      }),
+    ).toBe("baseline-red");
+    expect(
+      judge({
+        currentCode: 1,
+        baseCode: 1,
+        currentOutput: REAL_RED,
+        baseOutput: TIMEOUT,
+      }),
+    ).toBe("baseline-red");
+  });
+
+  test("真断言红（两侧都不带超时指纹）⇒ 仍是 baseline-red（假阳性闸）", () => {
+    expect(
+      judge({
+        currentCode: 1,
+        baseCode: 1,
+        currentOutput: REAL_RED,
+        baseOutput: REAL_RED,
+      }),
+    ).toBe("baseline-red");
+  });
+
+  test("`inconclusive` 仍然压过它（127 说明这一条没跑起来）", () => {
+    expect(
+      judge({
+        currentCode: 1,
+        baseCode: 127,
+        currentOutput: TIMEOUT,
+        baseOutput: TIMEOUT,
+      }),
+    ).toBe("inconclusive");
+  });
+
+  test("指纹表认的是本仓库真见过的原文，不是猜的形状", () => {
+    for (const sample of [
+      "Test timed out in 30000ms.",
+      "Hook timed out in 45000ms.",
+      "[vitest-pool]: Failed to start forks worker",
+      "Timeout waiting for worker to respond",
+      "Exceeded timeout of 120000 ms",
+      "Error: Timeout - Async callback was not invoked",
+      "加载超时（25s）",
+    ]) {
+      expect(isTimeoutShaped(sample), sample).toBe(true);
+    }
+  });
+
+  test("真断言的输出不许命中指纹（否则每一族红都会被误降档）", () => {
+    for (const sample of [
+      REAL_RED,
+      "expected [] to deeply equal [ ... ]",
+      "P80：视图层 `w-N` 与 `h-N` 同值应换 `size-N`",
+      "多了一行 — 3 个文件里 1 处命中",
+      "",
+    ]) {
+      expect(isTimeoutShaped(sample), JSON.stringify(sample)).toBe(false);
+    }
+    expect(isTimeoutShaped(undefined)).toBe(false);
+  });
+
+  test("整批优先级：yours 压过 load-flake，load-flake 压过 baseline-red", () => {
+    expect(
+      summarizeRows([
+        { currentCode: 1, baseCode: 0, currentOutput: REAL_RED },
+        {
+          currentCode: 1,
+          baseCode: 1,
+          currentOutput: TIMEOUT,
+          baseOutput: TIMEOUT,
+        },
+      ]),
+    ).toBe("yours");
+    expect(
+      summarizeRows([
+        { currentCode: 1, baseCode: 1, currentOutput: REAL_RED },
+        {
+          currentCode: 1,
+          baseCode: 1,
+          currentOutput: TIMEOUT,
+          baseOutput: TIMEOUT,
+        },
+      ]),
+    ).toBe("load-flake");
+  });
+
+  test("整批：本检出那侧的全文单独也能判（行里只有 `output` 时）", () => {
+    expect(
+      summarizeRows([
+        { currentCode: 1, baseCode: 1, output: TIMEOUT, baseOutput: TIMEOUT },
+      ]),
+    ).toBe("load-flake");
+  });
+
+  test("这一态的下一步动作点名「先隔离复跑」，且不许照 baseline-red 处置", () => {
+    const text = nextSteps("load-flake", { ref: "origin/master" }).join("\n");
+    expect(text).toContain("--no-file-parallelism");
+    expect(text).toContain("KNOWN_FAILED_FILES");
+    expect(text).toMatch(/不要.*baseline-red/);
+  });
+});
+
 describe("base-check —— 命令解析", () => {
   test("裸脚本名补 node", () => {
     const r = resolveGateCommand(["scripts/check-ui-primitives.cjs"]);
-    expect(r).toMatchObject({ ok: true, argv: ["node", "scripts/check-ui-primitives.cjs"] });
+    expect(r).toMatchObject({
+      ok: true,
+      argv: ["node", "scripts/check-ui-primitives.cjs"],
+    });
   });
 
   test("完整命令原样透传", () => {
-    const r = resolveGateCommand(["pnpm", "exec", "vitest", "run", "tests/x.test.ts"]);
+    const r = resolveGateCommand([
+      "pnpm",
+      "exec",
+      "vitest",
+      "run",
+      "tests/x.test.ts",
+    ]);
     expect(r).toMatchObject({
       ok: true,
       argv: ["pnpm", "exec", "vitest", "run", "tests/x.test.ts"],
@@ -250,10 +395,7 @@ describe("base-check —— 命令解析", () => {
 
 describe("base-check —— 目标存在性（127 那条边界）", () => {
   test("相对脚本不存在 ⇒ missing（而不是让它静默退出 1）", () => {
-    const state = commandTargetState(
-      ["node", "绝对不存在.cjs"],
-      REPO_ROOT,
-    );
+    const state = commandTargetState(["node", "绝对不存在.cjs"], REPO_ROOT);
     expect(state.kind).toBe("missing");
   });
 
@@ -289,7 +431,10 @@ describe("base-check —— 真仓库上的四态", () => {
   test("本检出红 / 基线绿 ⇒ yours，且给出上游提交号", () => {
     const r = makeRepo();
     try {
-      const { code, stdout, stderr } = runBaseCheck(r.work, ["node", "gate.cjs"]);
+      const { code, stdout, stderr } = runBaseCheck(r.work, [
+        "node",
+        "gate.cjs",
+      ]);
       expect(code, `stderr=${stderr}`).toBe(0);
       expect(stdout).toContain("yours");
       /* 基线引用由 `@{u}` 解析出来 —— 结论里要点名是**哪一条**基线。 */
@@ -321,9 +466,13 @@ describe("base-check —— 真仓库上的四态", () => {
     try {
       /* 把 marker 删了 —— 判据在两侧都绿。 */
       rmSync(join(r.work, "marker.txt"));
-      const before = git(r.work, "worktree", "list").split("\n").filter(Boolean).length;
+      const before = git(r.work, "worktree", "list")
+        .split("\n")
+        .filter(Boolean).length;
       const { stdout } = runBaseCheck(r.work, ["node", "gate.cjs"]);
-      const after = git(r.work, "worktree", "list").split("\n").filter(Boolean).length;
+      const after = git(r.work, "worktree", "list")
+        .split("\n")
+        .filter(Boolean).length;
       expect(stdout).toContain("current-green");
       expect(after).toBe(before);
     } finally {
@@ -415,24 +564,45 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     expect(byLabel.ok).toBe(true);
     if (byLabel.ok) {
       expect(byLabel.commands).toHaveLength(1);
-      expect(byLabel.commands[0]!.argv).toContain("scripts/check-file-structure.cjs");
+      expect(byLabel.commands[0]!.argv).toContain(
+        "scripts/check-file-structure.cjs",
+      );
     }
     /* 不存在的名字 ⇒ 判失败并列出候选（不许猜，同 `resolveGateCommand`）。 */
     expect(resolveMergeBatch(["这个标签不存在"]).ok).toBe(false);
   });
 
   test("只在「本次改了啥」上作答的判据不进这一批（干净快照里没有暂存区）", () => {
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-deps-freshness.mjs", "--staged"]))
-      .toBe(false);
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/storybook-check.mjs", "--changed"]))
-      .toBe(false);
+    expect(
+      mayDecideOnCleanSnapshot([
+        "node",
+        "scripts/check-deps-freshness.mjs",
+        "--staged",
+      ]),
+    ).toBe(false);
+    expect(
+      mayDecideOnCleanSnapshot([
+        "node",
+        "scripts/storybook-check.mjs",
+        "--changed",
+      ]),
+    ).toBe(false);
     /* 它的判决**依赖暂存改动**：干净快照里它立刻返回 0，那行绿是假绿。 */
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/shell-gate.mjs"])).toBe(false);
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/shell-gate.mjs"])).toBe(
+      false,
+    );
     /* 复算里再复算会递归。 */
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/base-check.mjs", "x"])).toBe(false);
+    expect(
+      mayDecideOnCleanSnapshot(["node", "scripts/base-check.mjs", "x"]),
+    ).toBe(false);
     /* 全仓判据留下。 */
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-file-structure.cjs", "--strict"]))
-      .toBe(true);
+    expect(
+      mayDecideOnCleanSnapshot([
+        "node",
+        "scripts/check-file-structure.cjs",
+        "--strict",
+      ]),
+    ).toBe(true);
   });
 
   test("默认面里不含任何「只在改动上作答」的判据", () => {
@@ -513,9 +683,13 @@ describe("base-check --base —— 整批结论的优先级（纯函数）", () 
       expect(lines.length).toBeGreaterThan(0);
       expect(lines.join("\n")).not.toMatch(/undefined/);
     }
-    const named = nextStepsMany("yours", [{ label: "tsc --noEmit", verdict: "yours" }], {
-      ref: "origin/master",
-    });
+    const named = nextStepsMany(
+      "yours",
+      [{ label: "tsc --noEmit", verdict: "yours" }],
+      {
+        ref: "origin/master",
+      },
+    );
     expect(named[0]).toContain("tsc --noEmit");
   });
 });
@@ -612,7 +786,7 @@ describe("base-check --base —— 真仓库上的端到端", () => {
         [
           'require("node:fs");',
           'const dep = require("fake-dep");',
-          'process.stdout.write(`[gate] dep=${dep}\\n`);',
+          "process.stdout.write(`[gate] dep=${dep}\\n`);",
           "process.exit(dep === 1 ? 0 : 1);",
           "",
         ].join("\n"),
@@ -645,7 +819,11 @@ describe("base-check --base —— 真仓库上的端到端", () => {
       const parsed = JSON.parse(stdout) as {
         summary: string;
         ref: string;
-        rows: Array<{ label: string; verdict: string; baseCode: number | null }>;
+        rows: Array<{
+          label: string;
+          verdict: string;
+          baseCode: number | null;
+        }>;
       };
       expect(parsed.summary).toBe("baseline-red");
       expect(parsed.ref).toMatch(/up\/master/);

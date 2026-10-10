@@ -136,13 +136,14 @@
     },
     {
       "id": "base-check-recompute",
-      "name": "「被门禁拦下先复算 master 基线」的复算口径（四态归属 + 干净快照）",
+      "name": "「被门禁拦下先复算 master 基线」的复算口径（五态归属 + 干净快照）",
       "paths": [
         "scripts/base-check.mjs"
       ],
       "markers": [
         "baseline-red",
-        "inconclusive"
+        "inconclusive",
+        "load-flake"
       ],
       "reader": "tests/base-check.test.ts",
       "executor": {
@@ -150,7 +151,7 @@
         "test": "tests/base-check.test.ts（C 组固定清单）"
       },
       "baseline": {
-        "scripts/base-check.mjs": 89
+        "scripts/base-check.mjs": 94
       },
       "section": "13.6.2"
     },
