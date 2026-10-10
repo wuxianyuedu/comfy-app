@@ -30,6 +30,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
+import {
+  describeAppServiceExit,
+  fetchAppServiceExit,
+  isPreviousRunExit,
+  type AppServiceExitNotice,
+} from "~/lib/shell/app-service-exit";
 
 export const DEV_SERVER_PROBE_MS = 2000;
 
@@ -42,10 +48,17 @@ const LAST_BOOT_ID_KEY = "devServer.lastBootId";
 export interface DevServerLiveness {
   /** true = 本会话刚检测到一次**真正**重启（bootId 变化），短暂高亮。 */
   restarting: boolean;
+  /**
+   * 「上一次应用服务为什么结束」——进程死亡那一刻由启动编排落盘、这里在服务
+   * **恢复应答之后**读回（ISSUE #1692）。null = 没有原因可讲 / 还没读到。
+   */
+  lastExit: AppServiceExitNotice | null;
   /** 最近一次**真正**重启的时刻；本浏览器会话无记录时为 null。 */
   lastRestartAt: number | null;
   /** 最近一次探测成功（进程可达）。首帧（尚未探过）为 false。 */
   probeOk: boolean;
+  /** `lastExit` 对应记录的落盘时刻（毫秒）；无记录为 null。 */
+  lastExitAt: number | null;
   /** 本会话是否曾成功探到过该进程：用于把「还没探通」与「曾经通、现在断」
    *  区分开——只有后者才是「应用服务已断开」。 */
   everOnline: boolean;
@@ -106,6 +119,12 @@ export function useDevServerLiveness(): DevServerLiveness {
    * 初值 false 表示「还没探过」，不代表故障——判据里由 everOnline 区分。 */
   const [probeOk, setProbeOk] = useState(false);
   const [everOnline, setEverOnline] = useState(false);
+  /* 上一次结束的原因（服务恢复应答之后才读得到，见 ~/lib/shell/app-service-exit）。
+   * 只在**换了一个新 bootId** 时取一次，因此同一次故障不会随每次轮询重复读取。 */
+  const [lastExit, setLastExit] = useState<AppServiceExitNotice | null>(null);
+  const [lastExitAt, setLastExitAt] = useState<number | null>(null);
+  /* 已就哪个 bootId 取过原因：轮询每 2s 一次，没有它就等于每拍都打一次这个端点。 */
+  const exitFetchedForBootIdRef = useRef<string | null>(null);
 
   /* 上次已知 bootId（对比基准）。ref 而非 state：探测回调里读取即可，
    * 无需触发渲染。初值置 null：SSR 阶段读不到 sessionStorage（也不应与
@@ -152,6 +171,25 @@ export function useDevServerLiveness(): DevServerLiveness {
 
       lastBootIdRef.current = bootId;
       writeSession(LAST_BOOT_ID_KEY, bootId);
+
+      /* 就这个 bootId 取一次「上一次为什么结束」（ISSUE #1692）。放在成功探测
+       * 之后是必然的：探活走的正是应用服务自己的 HTTP，服务不在时这条端点也
+       * 不通——记录只能在**它恢复应答之后**读回。
+       *
+       * 每个 bootId 只取一次：轮询 2s 一拍，不按 bootId 去重等于每拍都打一次
+       * 这个端点，而答案在整个进程生命周期里不会变。 */
+      if (exitFetchedForBootIdRef.current !== bootId) {
+        exitFetchedForBootIdRef.current = bootId;
+        const probe = await fetchAppServiceExit();
+        if (stoppedRef.current) return;
+        const record = probe.record;
+        /* 只认「说的是上一次运行」的记录：记录带着结束那一次的 runId，与当前
+         * 进程的 runId 一致就说明它描写的不是过去那一次（判据见 lib）。 */
+        if (record && isPreviousRunExit(record, probe.currentRunId)) {
+          setLastExit(describeAppServiceExit(record));
+          setLastExitAt(Date.parse(record.at) || null);
+        }
+      }
     }
     /* 探测失败：不判定重启——这正是本次要排除的误报
      * （显示器关闭 / 后台节流 / 瞬时断网）。也不动 lastRestartAt。 */
@@ -177,5 +215,12 @@ export function useDevServerLiveness(): DevServerLiveness {
    * 节流/断网正是这条判据要排除的误报来源（规范 16 §16.2.4.15）。 */
   useInterval(probe, { ms: DEV_SERVER_PROBE_MS });
 
-  return { restarting, lastRestartAt, probeOk, everOnline };
+  return {
+    restarting,
+    lastRestartAt,
+    lastExit,
+    lastExitAt,
+    probeOk,
+    everOnline,
+  };
 }

@@ -3,29 +3,21 @@
  * e2e-run.mjs — 真正跑一次**全量 e2e** 的那一层，跑绿即记一笔新鲜度账
  * （规范 §13.5.4「按需召唤」的那一层；账的形状见 §11.8）。
  *
- * 为什么这一档也需要一条账（ISSUE #1545 收尾时点名、#1547 落地）：
- * 入库的 linux 像素基线**过期了两天**而没有任何东西报红 —— 它的触发条件是嵌套在
- * 全量 e2e 里的（`playwright.config.ts` 的 `testMatch` 把 `*.visual.spec.ts` 与普通
- * e2e 一起收进同一次 `playwright test`），而 `pnpm test:e2e` 此前是「人记得就跑」：
- * 没有任何东西守它上一次是绿的。那次是靠人手动跑了一遍才发现的。
+ * 为什么这一档需要一条账（ISSUE #1545 收尾时点名、#1547 落地）：`pnpm test:e2e`
+ * 此前是「人记得就跑」—— 没有任何东西守它上一次是绿的，实测的形态是靠人手动跑了
+ * 一遍才发现它已经红了两天。
  *
- * 与像素那一档的分工（两条账**同形而不同键**，见 `visual-baselines.mjs` 的
- * `FRESHNESS_TRACKS`）：
- *   · 像素档（`pnpm check:visual`）判「这一档基线现在还跑得绿」，代价小、有明确触发面
- *     （改了 `e2e/visual/**` 或 `playwright.config.ts`），并且**每次提交都会被点名**
- *     （`scripts/freshness-gate.mjs` 在 D 组判两份账）。
- *   · 本文件是全量 e2e 那一档：它是像素档的**超集**（同一次 `playwright test` 里既跑
- *     spec 也跑像素），代价与「起 webServer + 浏览器 + 全量 spec」一个量级 ——
- *     不可能进钩子（§13.5.4 的成本判据），所以它靠**人按需跑 + 跑绿即记账**。
+ * 代价与「起 webServer + 浏览器 + 全量 spec」一个量级（十几分钟），不可能进钩子
+ * （§13.5.4 的成本判据），所以它靠**人按需跑 + 跑绿即记账**；几档的账同形而不同键，
+ * 见 `freshness-ledger.mjs` 的 `FRESHNESS_TRACKS`。
  *
- * 记账这一步与像素档逐字同形（`writeFreshness`，同一份实现）：**只有绿了才记**、
- * 红着不记（跑过 ≠ 跑绿过），账上的日期因此是「上一次真跑绿」的事实而不是一句承诺。
- * 它替代不了「现在这一跑绿不绿」，它的价值是把 `pnpm test:e2e` 从「人记得就跑」
- * 变成一条**每次提交都能被看见的读数**。
+ * 记账走 `writeFreshness`（同一份实现）：**只有绿了才记**、红着不记（跑过 ≠ 跑绿过），
+ * 账上的日期因此是「上一次真跑绿」的事实而不是一句承诺。它替代不了「现在这一跑绿不绿」，
+ * 它的价值是把 `pnpm test:e2e` 从「人记得就跑」变成一条**每次提交都能被看见的读数**。
  *
  * 这一档还多一条**每日自证**（ISSUE #1282）：`pnpm test:e2e` 跑绿即记，或
  * `--skip "<理由>"` 记一条写明理由的豁免 —— 两者都能让「**当天的第一次提交**带没带
- * 一次凭证」那条判据放行（`visual-freshness-gate.mjs` 的 `track.daily`）。
+ * 一次凭证」那条判据放行（`freshness-gate.mjs` 读的 `track.daily`）。
  * 豁免不是绕过：它留下的是一条能被复核的事实（占位词与过短的理由都被拦）。
  *
  * 用法：
@@ -44,8 +36,11 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
-import { freshnessTrack, writeFreshness } from "./visual-baselines.mjs";
-import { gitUser } from "./pixel-run.mjs";
+import {
+  freshnessTrack,
+  gitUser,
+  writeFreshness,
+} from "./freshness-ledger.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -59,15 +54,13 @@ export const E2E_DIR = "e2e";
 /**
  * 解析 Playwright 的 CLI 入口。
  *
- * 与 `pixel-run.mjs` 同一条理由（§12.12：两处各写一份就会漂）：不写死
+ * 与其余几个跑法脚本同一条理由（§12.12：两处各写一份就会漂）：不写死
  * `node_modules/@playwright/test/cli.js`（pnpm 布局下顶层那个是链接），也不
  * `spawn` 裸 `pnpm exec playwright`（Windows 上那经 `.cmd` shim，Node 直接起会
  * `EINVAL`，规范 §2.1.1 判定过的形态）。
  *
- * ⚠️ 这里确实是第二份实现，但**不是孪生对**：它只解决「入口在哪」这一件事，
- * 而两条跑法真正共享的东西（记账读写、账的形状、档的登记）都在
- * `visual-baselines.mjs`。把这段也抽出去会让 `pixel-run.mjs` 为「别人怎么解析
- * CLI」多背一个出口，而两处的调用形态（一个跑目录、一个跑全量）本来就不一样。
+ * ⚠️ 它只解决「入口在哪」这一件事，而几条跑法真正共享的东西（记账读写、账的形状、
+ * 档的登记）都在 `freshness-ledger.mjs`。
  *
  * @param {string} cwd
  * @returns {string}
@@ -99,7 +92,7 @@ export function resolvePlaywrightCli(cwd = ROOT) {
  */
 export function planRun(extra = []) {
   return {
-    label: "全量 e2e（Playwright：普通 spec + e2e/visual 像素档）",
+    label: "全量 e2e（Playwright）",
     args: ["test", ...extra],
   };
 }
@@ -171,8 +164,7 @@ function main(argv) {
       `[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`,
     );
     process.stdout.write(
-      "[e2e-run] 说明：本档不产基线（那是 `pnpm check:visual --update` 那一档）；" +
-        "跑绿之后会把这一档的**新鲜度**记进账里\n" +
+      "[e2e-run] 说明：跑绿之后会把这一档的**新鲜度**记进账里\n" +
         `[e2e-run] 记账文件：${TRACK.ledger}（键 \`${TRACK.key}\`，跑法 \`${TRACK.run}\`）\n`,
     );
     return 0;

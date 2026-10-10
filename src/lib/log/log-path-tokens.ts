@@ -28,7 +28,32 @@
  * **刻意不认相对路径**（`log/launcher/dev-launcher.log`、`./src/x.ts`）：面板判不了
  * 它是相对**谁**的（项目根？编排器的 cwd？用户主目录？），猜错的代价是「点了打开到
  * 一个不是那里的文件夹」—— 比不可点更糟。日志里要打开的现场（启动报告、各来源的
- * 绝对路径、错误堆栈里的源码位置）本来就是绝对的。
+ * 绝对路径）本来就是绝对的。
+ *
+ * ## `/` 起头的**不等于**磁盘路径（ISSUE #1695）
+ *
+ * 上面那条「POSIX 绝对路径」判据只问形状，于是把**访问日志里的 URL** 也认成了
+ * 路径 —— 而它在日志里出现得比真路径还密，用户看到的就是「满屏紫色的可点片段，
+ * 点开全都说找不到」：
+ *
+ * | 形态 | 例 | 为什么不是磁盘路径 |
+ * | ---- | -- | ------------------ |
+ * | HTTP 请求行里的 URL | `GET /api/schema 200 in 31ms` | 那是 Next dev server 把每个请求打到 stdout 的访问日志（`log-analysis` 的 `isPanelSelfPollingLine` 认的就是同一族行）。URL 是**服务端路由**，磁盘上没有 `/api/schema` 这个文件 |
+ * | Next 的编译行 | `○ Compiling /api/comfy/stats ...` | Next dev 按需编译时打的路由名，同属服务端路由 |
+ * | 框架资源命名空间 | `GET /_next/static/chunks/main.js` | Next 自己的静态资源 URL，同样不在磁盘上 |
+ *
+ * 判据因此收成两条，都只作用于 `/` 起头的候选：
+ *   1. **左侧紧挨着一个动词**（HTTP 方法，或 Next 编译行的 `Compiling`；允许行首的
+ *      时间戳与 `[INFO]` 之类的级别前缀）→ 这一整段是 URL；
+ *   2. **本身就是框架内部命名空间**（`/_next/…`）→ Next 的静态资源 URL。
+ *
+ * 两条都是**形状判据**而不是「把见过的路径抄成清单」：第 1 条问的是「写这行的人是在
+ * 报一个 HTTP 请求吗」，第 2 条问的是「这是不是 Next 自己的资源命名空间」—— 它们不随
+ * 业务新增的路由膨胀（新增一条 `/api/xxx` 不会需要改这里）。
+ *
+ * 顺带记一条**没有**被误判的形态，免得后人再造判据：源码栈帧印的是
+ * `at … (src/lib/core/repository-task.ts:404:18)` —— `src/` 起头**没有**前导斜杠，
+ * 已被上面「刻意不认相对路径」那条挡住，不需要在这里再写一条。
  *
  * ## 尾巴怎么收（判据里最容易写错的一半）
  *
@@ -116,6 +141,61 @@ function countChar(text: string, ch: string): number {
   let n = 0;
   for (const c of text) if (c === ch) n += 1;
   return n;
+}
+
+/**
+ * 「URL 直接跟在某个词之后」的上下文判据。
+ *
+ * 收两类**由框架自己写出来的**行（右侧那个 `/…` 是**路由**、不是磁盘文件）：
+ *
+ * | 形态 | 例 | 出处 |
+ * | ---- | -- | ---- |
+ * | HTTP 请求行 | `GET /api/schema 200 in 31ms` | Next dev server 的访问日志 |
+ * | Next 的编译行 | `○ Compiling /api/comfy/stats ...` | Next dev 的按需编译日志 |
+ *
+ * 两类的共同点是「动词 + 空白 + 紧跟着的那个 `/…` 是 URL」——判据因此写成
+ * 「HTTP 方法 **或** 编译动词」，而不是把见过的路径抄成清单：新增一条
+ * `/api/xxx` 路由不需要动这里（这正是 ISSUE #1695 要的「不随业务膨胀」）。
+ *
+ * 用 `\s+$` 而不是「词 + `\s+` + `/` 前瞻」：候选**就是从那个 `/` 起**的，左侧
+ * 上下文切出来正好停在 `/` 之前，于是「动词 + 空白」必须是这一段的**结尾**
+ * （前瞻在切片上永远看不到那个 `/`，实测撞出来的就是这条）。
+ *
+ * `Compiling` 只认这一个词（`Compiled` / `Ready` 那一族的行不带路由名，不必收）——
+ * 收词表而不是收前缀，是为了让新增形态时改的是**这里一行**、而不是「记得去
+ * 加一条 `/api/…`」。
+ */
+const URL_AFTER_VERB_RE =
+  /(?:^|[\s\]])(?:(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)|(?:Compiling))\s+$/;
+
+/**
+ * 框架内部命名空间：`/_next/…`（Next 的静态资源 URL）。
+ *
+ * 只收这一条前缀 —— 它是**框架自己的**命名空间，与业务路由无关，因此不像
+ * 「把 `/api/…` 抄进来」那样会随新增路由而漏。
+ */
+const FRAMEWORK_URL_NAMESPACE_RE = /^\/_(?:next|nextjs)\//;
+
+/**
+ * 一个 `/` 起头的候选是不是「URL 而不是磁盘路径」。
+ *
+ * 两种形态见模块头「`/` 起头的**不等于**磁盘路径」：
+ *   1. 它是某条框架日志行里的 URL —— 判据是**左邻上下文**里有一个动词紧挨着它
+ *      （`GET /api/schema` / `○ Compiling /api/comfy/stats ...`，见 `URL_AFTER_VERB_RE`）；
+ *   2. 它是框架自己的资源命名空间（`/_next/static/…`）。
+ *
+ * `at` 是候选起点，用它切出左侧上下文 —— 只看候选**前面**那一段，不看后面：
+ * `GET /api/schema 200 in 31ms` 里 `200 in 31ms` 是响应侧，与「这是不是 URL」
+ * 无关，且真实日志里响应侧可以整个缺失。
+ *
+ * 正则用 `\s+$` 而不是「方法 + `\s+` + `/` 前瞻」：候选**就是从那个 `/` 起**的，
+ * 左侧上下文切出来正好停在 `/` 之前，于是「方法 + 空白」必须是这一段的**结尾**
+ * （前瞻在切片上永远看不到那个 `/`，实测撞出来的就是这条）。
+ */
+function isUrlNotDiskPath(text: string, at: number): boolean {
+  const candidate = text.slice(at);
+  if (FRAMEWORK_URL_NAMESPACE_RE.test(candidate)) return true;
+  return URL_AFTER_VERB_RE.test(text.slice(0, at));
 }
 
 /**
@@ -282,7 +362,14 @@ export function findLogPathTokens(text: string): LogPathToken[] {
     const cleaned = trimCandidate(text.slice(start, end));
     /* 收完尾巴仍要过一次形状判据：`C:\`（盘符后什么都没有）这类候选只剩个壳，
      * 认了就是给用户一个点不动的入口。 */
-    if (cleaned.length > 0 && looksLikeAbsolutePath(cleaned)) {
+    if (
+      cleaned.length > 0 &&
+      looksLikeAbsolutePath(cleaned) &&
+      /* URL（HTTP 请求行里的 /api/…、框架的 /_next/…）不是磁盘路径 —— 见模块头
+       * 「`/` 起头的**不等于**磁盘路径」与 `isUrlNotDiskPath`。这一条只挡 `/`
+       * 起头的形态，盘符 / UNC 候选不受影响（它们在 Windows 上不可能是 URL）。 */
+      !(cleaned.startsWith("/") && isUrlNotDiskPath(text, start))
+    ) {
       tokens.push({ start, end: start + cleaned.length, text: cleaned });
     }
     /* 从**候选的原始末尾**继续扫（不是从 `start + cleaned.length`）：被裁掉的

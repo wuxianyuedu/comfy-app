@@ -16,7 +16,7 @@ import { useLogPanel } from "~/components/studio/logs/LogProvider";
  *
  * 要看的是：**选中态不能只靠基元的 `data-pressed:bg-muted`**
  *（它解析到 `--color-subtle`，浅色主题下与行头底色同值 —— 那正是 ISSUE #609），
- * 以及**窄容器下整组折行、标签不被切成竖排单字**（判据是 `min-w-56`）。
+ * 以及**窄容器下整组折行、标签不被切成竖排单字**（判据是容器自己的 `min-w-fit`（内容固有宽度））。
  */
 const meta = {
   title: "Studio/Logs/LogFilterBar",

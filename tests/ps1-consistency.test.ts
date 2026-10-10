@@ -330,8 +330,8 @@ describe("跨平台动作的实现契约", () => {
       "utf8",
     );
     // 解析器是共享件（`tests/helpers/quality-gate-gates`）：同一条 `$Blocks` / `GATES`
-    // 形状在本文件与 `tests/pixel-run.test.ts`（像素档是否留在按需层）两处都要读，
-    // 各写一份会在「换行 / 注释 / 块尾形态」上漂成两个口径（§12.18）。
+    // 形状在本文件与 `tests/daily-tracks.test.ts` 等处都要读，各写一份会在
+    // 「换行 / 注释 / 块尾形态」上漂成两个口径（§12.18）。
     const ps1Entries = parsePs1Gates(ps1);
     const mjsEntries = parseMjsGates(mjs);
     const ps1Names = ps1Entries.map((e) => e.name);

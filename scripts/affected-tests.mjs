@@ -77,14 +77,6 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `.cnb.yml` 不会让任何现有判据变红（规范 §13.5.3 的结论只写在正文里），而它一旦
   // 存在就会被读成「有 CI 兜底」——绿灯可信度的地基不能靠人记得住。
   "tests/no-platform-ci-config.test.ts",
-  // 像素基线按平台分文件：少一档不是「那一档没跑」，而是判失败并顺手生成半套未入库的
-  // PNG。这条守的是「视觉层在真正执行它的那台机器上到底有没有基线」，与本次改动无关。
-  "tests/visual-baseline-pairing.test.ts",
-  // 「组件级视觉归 Storybook、页面级视觉归 Playwright」这条分工本身：
-  // `e2e/visual/**` 与 `.storybook/**` 里都不该出现对方那一侧该做的事（截图断言 / 第二套
-  // 像素工具），而 §11.8 声明的基线范围档（深浅两态 / 断点 / 空态）不得被**减法**清掉 ——
-  // 删掉东西比加东西更容易过 review，这条只在改像素层时才跑就等于形同虚设。
-  "tests/visual-storybook-division.test.ts",
   // 条件性 skip 的登记表：全绿里的 `N skipped` 不说明「绿的是哪一种」，尤其产物级探针
   // （没构建过的检出上整块不判）。这条守住「每个暗掉的站点都有人登记它为什么暗」。
   "tests/conditional-skip-registry.test.ts",
@@ -281,6 +273,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 溢出卡片下沿 39px）—— 那是这一类 story 的**直接产物**。与本次暂存改动无关也必须响
   // （它是「下一次有人写这一族 story」的守卫），所以进固定清单。
   "tests/storybook-message-center-sources.test.ts",
+  // 「工作流运行 → story」注入层（`TaskLogTimeline` 那一族）：它读的是两份**文本**
+  // （`.storybook/workflow-run-sources.tsx` 与 `preview.tsx`，都不进 import 图）——
+  // 只在受影响时跑等于专挑它不在的时机跑。本批它抓到的两处都是「画布上有内容、
+  // 而看的不是真形态」：失败行与整条链路差九个多小时、以及日志绕过 store 去重/截尾。
+  "tests/storybook-workflow-run-sources.test.ts",
   // 「eslint 增量缓存的依赖指纹」：`--cache` 的缓存键不含依赖树，而 `no-unsafe-*`
   // 是类型化规则 —— 依赖一变旧判决被整片重放，假红拦死提交、假绿洗掉真违规
   // （ISSUE #1399）。它的执行者是 `postinstall` 那一步，而改 `.githooks/**` 会让
@@ -333,23 +330,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 而它与某一次具体改动无关 —— 只在被改到时才跑等于专挑它不在的时机跑。
   // 同因：改 `.githooks/**` 会让本层放弃收窄、只跑固定清单。
   "tests/test-environment-gate.test.ts",
-  // 「像素档留在按需层、不进 `check:all`」（§11.8 / §13.5.4）。这条此前只是文档里
-  // 的一句话：`GATES.visual` 带 `run: false`、`.ps1` 那侧带 `Run = $false`，而
-  // 没有任何判据按名字钉住它 —— 把它挪进默认档（并顺手新增任意一个按需档）\
-  // 全仓判据照样全绿，代价是每次一键门禁都起 webServer + 浏览器。它读的是
-  // `scripts/quality-gate.mjs` / `.ps1` 两份**文本**（那两份都自跑自退、import 不进来，
-  // 所以 import 图追不到），与本次暂存改动无关也必须响，故进固定清单。
-  "tests/pixel-run.test.ts",
-  // 「全量 e2e 也有主」（ISSUE #1545 / #1547）：`pnpm test:e2e` 此前是「人记得就跑」，
-  // 而**像素档的触发条件恰好嵌套在它里面**（`playwright.config.ts` 的 `testMatch` 把
-  // `*.visual.spec.ts` 与普通 spec 收进同一次 `playwright test`，而 `pnpm check:visual`
-  // 只跑 `e2e/visual` 那半边）—— 实测的形态是 linux 档基线过期两天没被发现，靠人手动
-  // 跑一遍才照出来。现在 `pnpm test:e2e` 走 `scripts/e2e-run.mjs`，跑绿即记一条与像素档
-  // **同形而不同键**的账；这条判据钉的是记账语义、两条账不接错、以及钩子那一步真判了它。
-  // 它读的是 `scripts/e2e-run.mjs` / `scripts/visual-baselines.mjs` 与两处接线文本，
+  // 「全量 e2e 也有主」（ISSUE #1545 / #1547）：`pnpm test:e2e` 此前是「人记得就跑」——
+  // 实测的形态是没人在跑。现在它走 `scripts/e2e-run.mjs`，跑绿即记一条账；这条判据钉的是
+  // 记账语义、几条账不接错、以及钩子那一步真判了它。
+  // 它读的是 `scripts/e2e-run.mjs` / `scripts/freshness-ledger.mjs` 与两处接线文本，
   // import 图追不到，故进固定清单（与本次暂存改动无关也必须响）。
   "tests/e2e-run.test.ts",
-  // 「每天首次自证」从一档扩到四档（ISSUE #1282 的续）：平台流水线删掉（ISSUE #623）之后，
+  // 「每天首次自证」从一档扩到三档（ISSUE #1282 的续）：平台流水线删掉（ISSUE #623）之后，
   // **全量单测 + 覆盖率**与**产物级护栏（build + 数产物）**是两条一直没有执行者的判定档
   // （§13.5.3 的欠账表里只写着「按需手动跑」，而那句话没有任何东西在守）。它们被接进同一份
   // 判决里（`FRESHNESS_TRACKS` 的 `daily` / `dirty` 两栏），判据是「**改了就当天跑**」而不是
@@ -492,6 +479,20 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 它读的是源码 + 注册表，import 图追不到（改一个视图的标题不会把这条带进
   // 受影响集）—— 跟改动走等于专挑它不在的时机跑，故进固定清单。
   "tests/page-name-single-source.test.ts",
+  // 待发段落的**来源锚**（ISSUE #1693 / 规范 §13.10.6）：这一段从哪个提交起算，
+  // 以及「同一个 ISSUE 号有没有跨锚分裂」。它守的是**下一次写入**（新增一条条目就
+  // 可能把一个号的归属切成两半），而那种改动只会碰 `CHANGELOG.md` / `changelog.d/` ——
+  // import 图一概追不到（这两个路径都不在任何测试的引用链上），跟改动走等于
+  // 专挑它不在的时机跑。它同时是**这条判据自己的门禁自测**：形状判据的三条口径
+  // （歪锚 / 解析不出 / 跨锚分裂）与「带日期的版本段落不算待发段落」这一格
+  // 都只在「下一次有人改这几行」时才走得进，故进固定清单。
+  "tests/changelog-versions-gate.test.ts",
+  // 并入的**落点**（同上一条的另一半）：`merge-changelog-fragments.mjs` 挑哪个待发
+  // 段落、锚刷成什么、锚解析不出时拦不拦 —— 它的执行时机是「人敲那条命令」（并入 /
+  // 发版），而它读的是 `CHANGELOG.md` + `git`，import 图追不到。同族先例：判据与
+  // 它的写入侧必须一起被钉住，否则「判据要求锚、脚本写的却是别的形状」这种分叉
+  // 只有在下一次真并的时候才暴露（那时已经落盘了）。
+  "tests/merge-changelog-anchor.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

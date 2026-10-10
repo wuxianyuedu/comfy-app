@@ -2,7 +2,8 @@
 
 > 一句话：`pnpm storybook` 起一个组件工作台，逐个组件在**受控 props** 下看形态、
 > 切明暗两态、跑 a11y 报告；`pnpm storybook:build` 出静态产物（不入库）。
-> 它**不替代** `e2e/visual` 的 Playwright 像素基线 —— 两者判的不是同一件事。
+> 它**不替代**页面级视觉回归 —— 两者判的不是同一件事（那一层已整档撤掉，见
+> [11 §11.8](standards/11-测试与可观测性.md)）。
 
 ## 它解决什么
 
@@ -180,14 +181,15 @@ story 要的正好相反 ——「有后端 / 没后端分别长什么样」。�
 最小阻力同样是造假的（手捏一份 store 状态、挂一个假 provider、塞一个占位子件），
 而三种假法的表现都一样：**画布上照样有内容**，只是真机上是另一回事。
 
-所以 `.storybook/` 下另有三份注入层，story 只声明**场景名**：
+所以 `.storybook/` 下另有五份注入层，story 只声明**场景名**：
 
-| 注入层     | 文件                                    | story 怎么用                                                   |
-| ---------- | --------------------------------------- | -------------------------------------------------------------- |
-| store      | `.storybook/store-sources.tsx`          | `parameters.storeScene: "<场景名>"`（装饰器已全局挂）          |
-| React Flow | `.storybook/flow-canvas.tsx`            | 直接摆 `<StorybookFlowCanvas scene={canvasScene("<场景名>")}>` |
-| 整屏容器   | `.storybook/screen-frame.tsx`           | 直接摆 `AppShell` / 工作区框，项目经 `useSeededProjects()` 备  |
-| 消息中心   | `.storybook/message-center-sources.tsx` | `parameters.messageScene: "<场景名>"`（装饰器已全局挂）        |
+| 注入层       | 文件                                      | story 怎么用                                                                |
+| ------------ | ----------------------------------------- | --------------------------------------------------------------------------- |
+| store        | `.storybook/store-sources.tsx`            | `parameters.storeScene: "<场景名>"`（装饰器已全局挂）                       |
+| React Flow   | `.storybook/flow-canvas.tsx`              | 直接摆 `<StorybookFlowCanvas scene={canvasScene("<场景名>")}>`              |
+| 整屏容器     | `.storybook/screen-frame.tsx`             | 直接摆 `AppShell` / 工作区框，项目经 `useSeededProjects()` 备               |
+| 消息中心     | `.storybook/message-center-sources.tsx`   | `parameters.messageScene: "<场景名>"`（装饰器已全局挂）                     |
+| 工作流运行   | `.storybook/workflow-run-sources.tsx`     | `parameters.runScene: "<场景名>"`（装饰器已全局挂；执行日志时间线那一族）   |
 
 ```tsx
 /* store：一段真格式的日志原文进 store 自己的解析入口 */
@@ -296,18 +298,11 @@ const meta = {
 
 ## 它不做什么
 
-- **不是像素基线**。组件覆盖率再高也不等于「页面没变样」—— 视觉回归的防线仍是
-  `e2e/visual` 的 Playwright `toHaveScreenshot`（规范 11 §11.8），那个判的是
-  真实页面的布局/配色/断点。两者互补，都不接 Chromatic。
-  **这条分工现在有机器判据**（`tests/visual-storybook-division.test.ts`，进固定清单）：
-  给 story 加 `toHaveScreenshot`、或引入第二套像素工具（Chromatic 那一族）都会红
-  —— 那是给同一件事造第二套基线，而两套基线的维护成本正是 §11.8 要避免的。
-  这一侧真要看像素时，**写进 `e2e/visual`，不要写进 story**。
-  那一侧的落点至此**五档齐了**（深浅两态 / 响应式断点 / 空态 / xyflow 画布 /
-  弹窗浮层尺寸），`canvas.visual.spec.ts` 与 `overlay.visual.spec.ts` 是后两档
-  —— 它们的钉法各有一条别的屏没有的坑（画布要等 `fitView` 收敛、浮层要量宽度而不是
-  只看截图），写在规范 11 §11.8；判据也从「三档」补到「五档」，那两档此前只有落点表
-  里的一行字、**没有判据守着**。
+- **不是像素基线**。组件覆盖率再高也不等于「页面没变样」—— 页面级视觉回归这一层
+  **已经整档撤掉**（见 11 §11.8）：曾经有过 5 份 `e2e/visual/*.visual.spec.ts`
+  + 两档平台基线，理由不成立所以删掉了。⇒ **不要**因为「页面级没人管了」就把截图断言写进
+  story —— 那是给同一件事造第二套基线，而两套基线的维护成本正是当初撤掉它的理由之一。
+  真要看像素时，人的动作是**把页面跑起来看**，不是加一层基线。
 - **不进构建产物**。`.storybook/**` 与 `*.stories.tsx` 不在 Next 的模块图上：
   story 只被 Storybook 自己的 webpack 图引用，`pnpm build` 看不到它们。
   `storybook-static/`、`.storybook/assets/`、`.storybook/generated/` 都在
@@ -320,8 +315,8 @@ const meta = {
 - **不改业务目录**。`ui/` 之外的 story 是**加**在业务组件旁边的，不动组件本身的
   职责划分（规范 16 §16.2.3.9 记了「哪一档怎么写、哪一档刻意不写」）。
 - **组件覆盖率满了也不等于「页面没变样」**。`ui/` 现在是 **88/88**，而那只说明
-  「每个组件都被单独看过一眼」—— 真实页面在真实栈上的布局与配色仍归
-  Playwright 像素基线（规范 11 §11.8）。两者互补，都不接 Chromatic。
+  「每个组件都被单独看过一眼」—— 真实页面在真实栈上的布局与配色**现在没有自动判据**
+  （页面级像素基线已整档撤掉，见规范 11 §11.8），靠 review 看图。组件覆盖率补不了那一格。
 
 ## 覆盖率：现在是机器判据，不是文档里的一句话
 
@@ -392,12 +387,14 @@ hook（没有 DOM 形态，判据是用例）、只有出错时才渲染的边�
   `scripts/storybook-checks/coverage-ledger.mjs`（那份额外的理由表就在台账里）。
 - 注入层的契约判据：`tests/storybook-data-sources.test.ts`（值源）、
   `tests/storybook-injection-layers.test.ts`（store / React Flow / 整屏容器）、
-  `tests/storybook-message-center-sources.test.ts`（消息中心）—— 都进
+  `tests/storybook-message-center-sources.test.ts`（消息中心）、
+  `tests/storybook-workflow-run-sources.test.ts`（工作流运行）—— 都进
   `FIXED_STRUCTURAL_TESTS`。它们守注册表接线、媒体名与磁盘双向对齐、「点目录进了
   tsc / eslint 的扫描面」这几件**悄悄失效时不会红**的事。守的是「接线还在不在」；
   「有没有真的画出来」由真浏览器逐 story 渲染核对。
-- **写这类判据时，否定/在场断言一律「剥了注释 + 定位到具体那一处」**：实测四条
-  断言自己先假绿过（`toContain` 被 import 行满足、被解释口径的注释满足、
+- **写这类判据时，否定/在场断言一律「剥了注释 + 定位到具体那一处」**：实测多条
+  断言自己先假绿过（`toContain` 被 import 行满足、被**子串**匹配满足
+  （`subscribeWorkflowRunStoreX` 包含前者）、被解释口径的注释满足、
   非贪婪正则从更前面那颗同标签起匹配）。规范 16 §16.2.3.14 记了完整的四种形状，
   改这一族判据前先看它。
 - 故事面的判据：`scripts/storybook-checks/story-surface.mjs` +

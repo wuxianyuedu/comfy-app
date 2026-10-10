@@ -22,8 +22,8 @@ import {
   freshnessTrack,
   isUsableSkipReason,
   writeSkipRecord,
-} from "./visual-baselines.mjs";
-import { gitUser } from "./pixel-run.mjs";
+  gitUser,
+} from "./freshness-ledger.mjs";
 
 /**
  * 从 argv 里读出「这次是不是记一条豁免 / 一条『不吃这一档』」—— 抽成纯入口，

@@ -108,26 +108,6 @@ const GATES = {
     args: ["../scripts/storybook-check.mjs"],
   },
   /**
-   * 像素回归（规范 §11.8，ISSUE #1282 的口径）。
-   *
-   * **它不在 `all` 里**（`Run` / `run` 那一档为 `false`）：它要起 webServer + 浏览器，
-   * 与 `test` 那一档的全量 vitest 不是一个量级的代价，而且 `test:visual` 的结论只在
-   * 真正录过基线的那台机器上成立（基线文件名带平台）。所以它是 §13.5.4「按需召唤」
-   * 那一层的**显式入口**：`pnpm check:visual` / `--mode visual` / 双击入口，而不是
-   * 每次 `check:all` 都付这一笔。
-   *
-   * 为什么是「有入口的按需」而不只是文档里一句「按需跑」：按需的种类有两种 ——
-   * 一种是「改了这个目录就该跑」（E2E @critical），一种是「有明确的、可观测的触发条件」
-   * 但代价不允许进钩子。像素属于后者，而它此前**两种都没有**：`pnpm test:visual`
-   * 这个脚本存在，却没有任何地方说清「谁该在什么时候跑它、跑出来的红算什么」。
-   * 现在这条通道由 `scripts/pixel-run.mjs` 承担（含红的定性与「与配对判据同批跑」）。
-   */
-  visual: {
-    label: "Pixel regression (Playwright screenshots + baseline pairing judge)",
-    args: ["../scripts/pixel-run.mjs"],
-    run: false,
-  },
-  /**
    * 依赖新鲜度：远端改过库的版本而本地还停在旧的那套上（规范 §13.5.13）。
    *
    * 与 `format` / `dependencyAudit` 同属「会随时间变坏」的那一类：**昨天的结论推不出

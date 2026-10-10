@@ -146,23 +146,12 @@
     },
     {
       "id": "visual-baseline-freshness",
-      "name": "像素基线与三档每日自证（e2e / 全量单测 + 覆盖率 / 产物级护栏）的档与新鲜度",
-      "declaredAt": "SUPPORTED_PLATFORMS / PENDING_PLATFORMS / scripts/.visual-baseline-freshness.json / scripts/.e2e-freshness.json / scripts/.full-suite-freshness.json / scripts/.artifact-freshness.json（FRESHNESS_TRACKS 的 daily / dirty / dirtyHow / graceMs）",
-      "reader": "scripts/visual-freshness-gate.mjs",
+      "name": "三档每日自证（e2e / 全量单测 + 覆盖率 / 产物级护栏）的档与新鲜度",
+      "declaredAt": "scripts/.e2e-freshness.json / scripts/.full-suite-freshness.json / scripts/.artifact-freshness.json（FRESHNESS_TRACKS 的 daily / dirty / dirtyHow / graceMs）",
+      "reader": "scripts/freshness-gate.mjs",
       "executor": {
         "kind": "hook-step",
-        "label": "每档都有主（新鲜度账：像素档 + e2e / 全量单测 / 产物三档每日自证）"
-      },
-      "section": "11.8"
-    },
-    {
-      "id": "pixel-out-of-check-all",
-      "name": "像素档不进 check:all",
-      "declaredAt": "quality-gate.mjs 的 run: false + quality-gate.ps1 的 Run = $false",
-      "reader": "tests/pixel-run.test.ts",
-      "executor": {
-        "kind": "fixed-test",
-        "file": "tests/pixel-run.test.ts"
+        "label": "每档都有主（新鲜度账：e2e / 全量单测 / 产物三档自证）"
       },
       "section": "11.8"
     },
@@ -242,6 +231,17 @@
         "label": "类型层声明 ⇄ 执行者（tsc 判决面，§13.5.14）"
       },
       "section": "13.5.14"
+    },
+    {
+      "id": "changelog-section-anchors",
+      "name": "待发段落的来源锚（这一段从哪个提交起算）",
+      "declaredAt": "CHANGELOG.md 的待发段落标题下的 `<!-- since: <commit> — <slug> -->`",
+      "reader": "scripts/check-changelog-versions.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "待发段落的来源锚 ⇄ 条目归属"
+      },
+      "section": "13.10.6"
     },
     {
       "id": "premerge-fixed-action",

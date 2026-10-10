@@ -1,5 +1,7 @@
 import { formatClock } from "~/lib/time-format";
 
+import type { AppServiceExitNotice } from "./app-service-exit";
+
 /* ── 「应用服务状态」的单一事实（底部状态栏）────────────────────────────
  * 状态栏这一格回答的问题是**「应用服务（dev server）现在能不能应答」**，
  * 而不是「ComfyUI 能不能收任务」。
@@ -31,6 +33,11 @@ export interface DevServerStatusInput {
   restarted: boolean;
   /** 最近一次真正重启的时刻。 */
   lastRestartAt: number | null;
+  /**
+   * 上一次应用服务为什么结束（进程死的那一刻由启动编排落盘、服务恢复应答后读回，
+   * 见 `~/lib/shell/app-service-exit`）。null = 没有原因可讲。
+   */
+  lastExit?: AppServiceExitNotice | null;
 }
 
 export interface DevServerStatus {
@@ -39,19 +46,28 @@ export interface DevServerStatus {
   label: string;
   /** 悬停 `title`：一句话说明含义与此刻能做什么。 */
   title: string;
+  /** 上一次结束的原因与动作；没有可讲的原因时为 null（视图据此决定要不要开口）。 */
+  exitNotice: AppServiceExitNotice | null;
 }
 
 export function deriveDevServerStatus(
   input: DevServerStatusInput,
 ): DevServerStatus {
   const { everOnline, lastProbeOk, restarted, lastRestartAt } = input;
+  const exitNotice = input.lastExit ?? null;
 
   if (!lastProbeOk && everOnline) {
     return {
       state: "offline",
       label: "应用服务已断开",
-      title:
-        "应用服务（dev server）当前不可达：页面里的查询与保存都会失败。应用窗口重新打开或服务重启后会自动恢复",
+      /* 原因已知就**一定**说出来（规范 §10.3.1：降级不得静默）——用户盯着
+       * 「已断开」四个字，唯一能问的就是「为什么」，而这条原因正躺在磁盘上。
+       * 未知时保留原来那句「怎么恢复」：拿不到原因时至少要给一个出口，不能
+       * 因为没原因可讲就退回一句现象陈述。 */
+      title: exitNotice
+        ? `${exitNotice.why}。${exitNotice.detail}。${exitNotice.action}`
+        : "应用服务（dev server）当前不可达：页面里的查询与保存都会失败。应用窗口重新打开或服务重启后会自动恢复",
+      exitNotice,
     };
   }
 
@@ -60,16 +76,23 @@ export function deriveDevServerStatus(
       state: "starting",
       label: "应用服务连接中",
       title: "正在连接应用服务（dev server）…",
+      exitNotice: null,
     };
   }
 
   if (restarted) {
     const at =
       lastRestartAt === null ? "" : `（${formatClock(lastRestartAt)}）`;
+    /* 重启的原因就在这里：`lastExit` 说的是**上一份**进程怎么结束的，而
+     * 「刚重启」描述的正是那件事的后果。两句合起来才是一条完整的话——
+     * 过去只有后果（「已重启」），用户仍不知道是崩溃还是被顶掉。 */
     return {
       state: "online",
       label: "应用服务已重启",
-      title: `应用服务刚重启过${at}：当时进行中的任务已丢失，需要重新执行`,
+      title: exitNotice
+        ? `应用服务刚重启过${at}：${exitNotice.why}。${exitNotice.detail}。当时进行中的任务已丢失，需要重新执行`
+        : `应用服务刚重启过${at}：当时进行中的任务已丢失，需要重新执行`,
+      exitNotice,
     };
   }
 
@@ -77,5 +100,8 @@ export function deriveDevServerStatus(
     state: "online",
     label: "应用服务运行中",
     title: "应用服务（dev server）在线：页面查询、保存与任务提交都走它",
+    /* 在线且没刚重启过：上一次结束的原因与本格当前状态无关，不挂上去——
+     * 否则一个几小时前的旧结论会一直贴在「运行中」后面。 */
+    exitNotice: null,
   };
 }

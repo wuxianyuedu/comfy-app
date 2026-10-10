@@ -11,6 +11,7 @@ import {
 } from "./data-sources.tsx";
 import { withMessageScene } from "./message-center-sources.tsx";
 import { withStoreScene } from "./store-sources.tsx";
+import { withWorkflowRunScene } from "./workflow-run-sources.tsx";
 import { readAppOrigin } from "./app-origin-reader.ts";
 
 // 引入应用的全局样式：主题 token（`@theme` / `.dark` 覆盖）与 Tailwind 都在这里，
@@ -71,10 +72,11 @@ const preview: Preview = {
      **之前**写状态（否则首帧读的是空 store），主题在最内层（只改 `<html>` 的
      class，与组件树无关）。
 
-     **两个 store 装饰器都在 `withAppProviders` 里层、且谁先谁后不影响对方**：
-     它们读各自的 `parameters` 键（`storeScene` / `messageScene`），缺席时什么都
-     不做 —— 没声明的 story 走真实 store，不被搅（见 `.storybook/store-sources.tsx`
-     与 `.storybook/message-center-sources.tsx`）。
+     **三个 store 装饰器都在 `withAppProviders` 里层、且谁先谁后不影响对方**：
+     它们读各自的 `parameters` 键（`storeScene` / `messageScene` / `runScene`），
+     缺席时什么都不做 —— 没声明的 story 走真实 store，不被搅（见
+     `.storybook/store-sources.tsx`、`.storybook/message-center-sources.tsx`
+     与 `.storybook/workflow-run-sources.tsx`）。
 
      ⚠️ 一处容易踩的：`MessageCenterPanel` 的 story 里那个面板**不是** story 自己
      渲染的，而是 `withAppProviders` 的 `StorybookAppProviders` 挂的（与
@@ -86,6 +88,7 @@ const preview: Preview = {
     withAppProviders,
     withStoreScene,
     withMessageScene,
+    withWorkflowRunScene,
     withTheme,
   ],
   parameters: {
