@@ -41,8 +41,15 @@ import {
 } from "../scripts/base-check.mjs";
 
 /* 每条用例都要真起 git 进程（init / commit / worktree add / 跑一次被判的判据），
- * 负载高的机器上 5s 不够 —— 文件级放宽到 30s，只影响本文件。 */
-vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+ * 负载高的机器上会比「内存里翻转状态」那类慢一个量级 —— 本文件实测单条最慢约 4.9s
+ * （load ≈65 下），所以给它自己的 hook 预算收到 30s（全局 hookTimeout 是 45s，
+ * 那是给 `theme` 那种「真编一遍 CSS」的 beforeAll 留的，本文件用不满）。
+ *
+ * ⚠️ `testTimeout` 这里**不写**：全局已经是 30_000（`vitest.config.ts`），
+ * 再写一遍是同值的死代码 —— 而它上一版就长这样，注释还写着「5s 不够」，
+ * 读起来像「本条把预算放宽了」，实际一个字都没改（口径同 §11.13：
+ * 要写就把**为什么是这个数**写出来，别留一条不生效的声明）。 */
+vi.setConfig({ hookTimeout: 30_000 });
 
 const REPO_ROOT = process.cwd();
 const SCRIPT = join(REPO_ROOT, "scripts", "base-check.mjs");

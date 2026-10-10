@@ -26,7 +26,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_MAX_WORKERS,
   planLaunches,
+  resolveMaxWorkers,
   resolveVitestEntry,
   SAFE_ARGV_BUDGET,
 } from "../scripts/run-affected-tests.mjs";
@@ -153,5 +155,53 @@ describe("受影响用例的启动器", () => {
     const oldBody = cGroupBody(oldShape);
     expect(oldBody).toMatch(/pnpm\s+exec\s+vitest/);
     expect(oldBody).not.toMatch(/node\s+scripts\/run-affected-tests\.mjs/);
+  });
+});
+
+describe("钩子档并发：默认 4，且有一个只调并发、不碰判据的显式覆盖口", () => {
+  it("默认档是 4（缺省 / 空串都落到它，且不带任何提醒）", () => {
+    for (const raw of [undefined, "", "   "]) {
+      expect(resolveMaxWorkers(raw)).toEqual({
+        workers: DEFAULT_MAX_WORKERS,
+        note: null,
+      });
+    }
+    expect(DEFAULT_MAX_WORKERS).toBe(4);
+  });
+
+  it("环境变量由调用点读入（纯函数不兜底 process.env）", () => {
+    /* 这一格防的是「用例进程自己继承到的环境变量把默认档那一格污染掉」——
+       解析器一旦自己兜底 `process.env`，本文件在 `COMFY_PRECOMMIT_MAX_WORKERS=2`
+       下跑时「不给值＝默认 4」会假红，而那种失效长的样子是「判据真的坏了」。 */
+    const src = readFileSync(LAUNCHER_PATH, "utf8");
+    expect(src).toMatch(
+      /resolveMaxWorkers\(\s*\n?\s*process\.env\.COMFY_PRECOMMIT_MAX_WORKERS/,
+    );
+    // 函数体里不许再出现一次 process.env（那会让它不再纯）。
+    const body = /export function resolveMaxWorkers\(([\s\S]*?)\n\}/.exec(src);
+    expect(body, "解不出 resolveMaxWorkers 的函数体").not.toBeNull();
+    expect(body![1]).not.toContain("process.env");
+  });
+
+  it("显式覆盖生效，且提醒里说清「只调并发」", () => {
+    const r = resolveMaxWorkers("1");
+    expect(r.workers).toBe(1);
+    expect(r.note).toContain("只调并发");
+    // 覆盖成默认值本身不提醒：说了等于没说。
+    expect(resolveMaxWorkers(String(DEFAULT_MAX_WORKERS)).note).toBeNull();
+  });
+
+  it("非法值按默认办并提醒 —— 不许静默降级成 0（那会让 vitest 报错指不到真因）", () => {
+    for (const raw of ["0", "-2", "abc", "2.5", "NaN"]) {
+      const r = resolveMaxWorkers(raw);
+      expect(r.workers, `${raw} 应落回默认`).toBe(DEFAULT_MAX_WORKERS);
+      expect(r.note, `${raw} 应有一条提醒`).toContain("不是 ≥1 的整数");
+    }
+  });
+
+  it("覆盖值真的进了 vitest 的命令行（不是只解析不接线）", () => {
+    const src = readFileSync(LAUNCHER_PATH, "utf8");
+    expect(src).toMatch(/--maxWorkers=\$\{workers\}/);
+    expect(src).not.toMatch(/--maxWorkers=\$\{MAX_WORKERS\}/);
   });
 });
