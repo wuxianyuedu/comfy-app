@@ -7,6 +7,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import { APP_VERSION } from "~/lib/app-version";
+
 import {
   sizeSpecFromText,
   toSizeSpec,
@@ -76,8 +78,12 @@ const SERVER_INSTRUCTIONS = `工坊（Workshop）创作流水线工具集。标�
 
 /** 构造并注册全部工坊工具的 MCP server。 */
 export function buildWorkshopMcpServer(): McpServer {
+  /* 版本号不在源码里另写一份：它此前是硬编码的 `"0.1.0"`，而**没有人读它**
+   * （MCP 客户端只把它显示在 `serverInfo` 里），于是它和 package.json 的版本
+   * 各自漂移也无人发现 —— 同 D7（`scripts/check-app-version.cjs`）治的是同一族
+   * 「同一个数手抄多处」的账。这里直接读发布版本，那三处由 D7 守着相等。 */
   const server = new McpServer(
-    { name: "comfy-workshop", version: "0.1.0" },
+    { name: "comfy-workshop", version: APP_VERSION },
     { instructions: SERVER_INSTRUCTIONS },
   );
 
