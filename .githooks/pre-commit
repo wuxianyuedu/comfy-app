@@ -89,7 +89,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(53 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(54 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -482,6 +482,15 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   #   ③ 登记项与事实脱钩即红（落点没了 / 关键词找不到了）。
   # 判据自己不许静默降级（台账读不出 / 空表 / 对侧读不到 ⇒ 判失败，不是「没有站点要查」）。
   run "类型层声明 ⇄ 执行者（tsc 判决面，§13.5.14）" node scripts/check-tsc-diagnostic-executors.cjs
+  # 产品版本号三处同步（ISSUE #1611 阶段三 D7）。同一个版本号手抄在 package.json /
+  # src-tauri/tauri.conf.json / src-tauri/Cargo.toml 三处，而这**不是**「改名麻烦」——
+  # tauri.conf.json 的版本在**编译期**内嵌进壳，也是 tauri-plugin-updater 判「更新新旧」
+  # 的基准：只升 package.json 时安装包与更新判定还停在旧版本，用户看到「已是最新」，
+  # 而三处今天恰好相等 ⇒ 第一次忘记升某处的那一刻起错位永久静默（没有任何东西会红）。
+  # 这也是 P0-4（Sentry release）刻意**不取** package.json version 的同一个理由。
+  # 判据只判「三处逐字相等 + 形态合法」，刻意不判「该不该升」（那是发布判断）。
+  # 成本实测：读三个文件、零网络、零子进程，与 check-app-port-vectors 同档。
+  run "产品版本号三处同步(D7)" node scripts/check-app-version.cjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────

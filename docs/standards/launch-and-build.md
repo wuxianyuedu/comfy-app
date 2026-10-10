@@ -1685,6 +1685,40 @@ zustand 队列，而不是再加一个模块级单例。
 
 > 更新产物与签名、更新服务端部署不在本仓库范围内，属发布运维配置。
 
+#### 7.1.1 产品版本号：三处手工重复，靠判据守相等（ISSUE #1611 阶段三 D7）
+
+同一个「产品版本号」写在**三个文件**里，每一个都得由各自的工具读：
+
+| 文件                          | 谁读它                                                       |
+| ----------------------------- | ------------------------------------------------------------ |
+| `package.json` 的 `version`   | npm / pnpm 生态                                              |
+| `src-tauri/tauri.conf.json`   | tauri-build **在编译期**内嵌进壳；也是 updater 判新旧版本的基准 |
+| `src-tauri/Cargo.toml` 的 `[package] version` | cargo（壳二进制的版本）                       |
+
+**为什么不合成一份来源**：三个文件都得各写各的 —— `package.json` 由 npm 读、
+`tauri.conf.json` 由 tauri-build 在**编译期**读（生成不了 `include!` 之类的东西）、
+`Cargo.toml` 由 cargo 读。让其中一个去 `import` 另一个，是在三个工具各自的清单格式里
+塞第四个语言 —— 省一次改三处，代价是每次升级都要赌那个语法还被支持。所以本仓库的取向是
+**守住相等**（`scripts/check-app-version.cjs`，每次提交判一次），而不是造第二份来源。
+
+**为什么必须有判据**：三处不一致**不报错**，而后果落在更新链上 ——
+`tauri.conf.json` 的版本是编译期内嵌的、也是 `tauri-plugin-updater` 判「更新新旧」的
+基准。只升 `package.json` 时，安装包与更新判定还停在旧版本 ⇒ 用户点「检测更新」看到
+「已是最新」，而实际发布的已经是新构建。三处**现在恰好相等**，所以这个错位今天还看不出来；
+第一次忘记升某处的那一刻起，它就永久静默（没有任何东西会红）。
+
+> 这也是 P0-4（Sentry release / source map）刻意**不取** `package.json` 的 `version`
+> 当 release 的原因 —— release 恒取 git sha。拿一个「三处手工重复、无同步守卫」的数
+> 当发布标识，会在第一次忘记升版本时把两次发布并成一条（见 `PRODUCTION-GAPS.md` 的 P0-4 / D7）。
+
+**判据只判两件**：三处都能读到且**逐字相等**、形态是 `MAJOR.MINOR.PATCH`
+（可带 `-pre` / `+build`）。**刻意不判**「该不该升」「有没有比上次大」「changelog 里
+有没有对应条目」—— 那些是发布判断，不是「同一个数只有一份」这类机器事实（§12.18）。
+
+**入口**：`pnpm check:app-version`（`--report` 只打印三处读数，不判失败）；
+pre-commit D 组「产品版本号三处同步(D7)」每笔提交判一次（零网络、零子进程）。
+契约测试 `tests/check-app-version.test.ts`。
+
 改动 tauri.conf.json、src-tauri/src/**、splash-assets/** 之后**必须重编壳**
 （`cargo build --release --features custom-protocol`，**feature 不能省**），
 否则运行的是旧二进制（预检只会提醒，不会阻止——界面异常先想到这一条）。
@@ -2628,6 +2662,7 @@ sidecar」两种不同形态的失败。
 | 全量 E2E（普通 spec + 像素档同批，跑绿即记新鲜度账，规范 §11.8）    | `scripts/quality-gate.ps1`（暂无 Windows 入口：它是按需档，`pnpm test:e2e` 在两侧同形）             | `scripts/e2e-run.mjs`（`pnpm test:e2e` / `node scripts/e2e-run.mjs`，契约测试 `tests/e2e-run.test.ts`）                                                                        |
 | 全量单测 + 覆盖率（跑绿即记「改了就当天跑」账，规范 §11.8 / §13.5.4） | `scripts/quality-gate.ps1`（暂无 Windows 入口：它是按需档，`pnpm run test:coverage` 在两侧同形）   | `scripts/full-suite-run.mjs`（`pnpm run test:coverage:tracked` / `node scripts/full-suite-run.mjs`，契约测试 `tests/daily-tracks.test.ts`）                                     |
 | 产物级护栏（build + 剥私有输入 + 数产物 + 冒烟，跑绿即记同一份账）  | `scripts/quality-gate.ps1`（暂无 Windows 入口：`pnpm run build` 在两侧同形）                       | `scripts/artifact-run.mjs`（`pnpm run build:tracked` / `node scripts/artifact-run.mjs`，契约测试 `tests/daily-tracks.test.ts`）                                                 |
+| 产品版本号三处同步（D7，规范 §7.1.1）                               | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                                               | `scripts/check-app-version.cjs`（`pnpm check:app-version`，契约测试 `tests/check-app-version.test.ts`）                                                                         |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
 而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个
