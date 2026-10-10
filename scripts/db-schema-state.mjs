@@ -33,14 +33,31 @@ const SCHEMA_DIR = ["src", "server", "db"];
 
 /**
  * `file:` 前缀去掉后相对传入 root 解析（与 src/server/db.ts 同一锚点）。
+ *
+ * 空值兜底与 `src/server/db.ts::resolveDbPath` **同一口径**：`SKIP_ENV_VALIDATION=1`
+ * 时 `DATABASE_URL` 可能是空串而不是未定义，只兜 `null`/`undefined` 会剥出一个空路径，
+ * `path.resolve` 因此回到**项目根目录本身** —— 探测读的是目录（判成 `unknown`），
+ * 而应用连的是默认库文件，两条锚点就此分叉。逐条写明「是不是给了一句真值」，
+ * 不靠行内豁免去压 lint。
  * @param {string} root 项目根（绝对路径）
  * @param {string} [databaseUrl] 形如 `file:./db.sqlite`
  * @returns {string} 绝对路径
  */
 export function resolveSqlitePath(root, databaseUrl) {
-  const url = databaseUrl ?? process.env.DATABASE_URL ?? "file:./db.sqlite";
+  const candidates = [
+    databaseUrl,
+    process.env.DATABASE_URL,
+    "file:./db.sqlite",
+  ];
+  let url = "";
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate !== "") {
+      url = candidate;
+      break;
+    }
+  }
   const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
-  return path.resolve(root, raw);
+  return path.resolve(root, raw === "" ? "./db.sqlite" : raw);
 }
 
 /**

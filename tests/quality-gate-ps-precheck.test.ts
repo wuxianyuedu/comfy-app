@@ -51,6 +51,31 @@ const psExe = (() => {
 const hasPs = psExe !== "";
 
 const tmpDirs: string[] = [];
+
+/**
+ * 从**当前真锁文件**里取一个 `overrides` 条目并把版本号改掉 —— 这是「造一条实质漂移」的变异点。
+ *
+ * 为什么不能把 `"  brace-expansion@1: 1.1.20"` 这种整行写进用例：`String.replace` 找不到时
+ * **静默 no-op** —— 「造一条漂移」变成「什么都没改」，于是红以「`[DEP-DRIFT]` 没出现」这种
+ * 完全指不到根因的形态出现。实测就是这么撞上的：依赖升级把 `brace-expansion@1` 从 1.1.20
+ * 变成 1.1.21（#1638），同一批次里这条用例就红了，而红话在说预检坏了。
+ * 现在找不到键就**当场抛**并写明找的是哪个键 —— 依赖可以升，夹具不许悄悄变成空转。
+ */
+function driftOneOverride(real: string, key: string): string {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const hit = new RegExp(`^  ${escaped}: (\\S+)$`, "m").exec(real);
+  if (!hit?.[1]) {
+    throw new Error(
+      `pnpm-lock.yaml 的 overrides 里找不到 "${key}" —— 变异点必须由内容现取，` +
+        "写死版本号会在依赖升级后静默 no-op（把这条用例改成用别的键，或从现存的键里挑）",
+    );
+  }
+  const bumped = hit[1] === "0.0.0" ? "0.0.1" : "0.0.0";
+  return real.replace(
+    new RegExp(`^  ${escaped}: \\S+$`, "m"),
+    `  ${key}: ${bumped}`,
+  );
+}
 afterAll(() => {
   for (const dir of tmpDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -161,7 +186,7 @@ describe("diff-cli 的退出码契约（纯 Node，跨平台）", () => {
     // 只动 overrides 里的一行版本号 —— importer 表、packages/snapshots 全部原样。
     // 这条正是 #1338 要求补的反向验证：语义比较器读的是哪一份 document、
     // 会不会把「改了 overrides 却没重装」漏掉。
-    const mutated = real.replace("  undici@7: 7.29.1", "  undici@7: 7.99.9");
+    const mutated = driftOneOverride(real, "undici@7");
     expect(mutated).not.toBe(real);
     fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), mutated, "utf8");
     const diff = spawnSync(
@@ -177,6 +202,22 @@ describe("diff-cli 的退出码契约（纯 Node，跨平台）", () => {
     );
     expect(diff.status).toBe(1);
     expect(diff.stdout).toContain("undici@7");
+  });
+
+  it("变异点由内容现取：键不在锁文件里时抛，而不是静默 no-op", () => {
+    /* 这一条钉的是上面那两处 `driftOneOverride` 的**失效形态**本身。
+     * 写死整行的夹具在依赖升级后会「找不到 → 原样返回」，用例于是造不出漂移，
+     * 而红话报的是「预检没打 [DEP-DRIFT]」—— 把人的排查方向整个带偏（实测撞过一次：
+     * #1638 把 brace-expansion@1 从 1.1.20 升到 1.1.21，同一批这条用例就红了）。 */
+    const real = fs.readFileSync(path.join(ROOT, "pnpm-lock.yaml"), "utf8");
+    expect(() => driftOneOverride(real, "no-such-package@9")).toThrow(
+      /静默 no-op/,
+    );
+    // 反向：现存的真键必须能改出差异（不抛，且文本确实变了）。
+    const drifted = driftOneOverride(real, "undici@7");
+    expect(drifted).not.toBe(real);
+    expect(drifted).toContain("undici@7: 0.0.0");
+    expect(real).not.toContain("undici@7: 0.0.0");
   });
 
   it("判据内部意外 → 2（不许顶着一律退 1 被读成「依赖陈旧」）", () => {
@@ -211,10 +252,7 @@ describe.skipIf(!hasPs)("依赖预检真跑（Windows / 有 PowerShell 时）", 
   it("实质差异：判红，且明细点名到具体哪一行变了", () => {
     const real = fs.readFileSync(path.join(ROOT, "pnpm-lock.yaml"), "utf8");
     const { root } = makeFakeRepo({
-      lockfileText: real.replace(
-        "  brace-expansion@1: 1.1.20",
-        "  brace-expansion@1: 1.0.0",
-      ),
+      lockfileText: driftOneOverride(real, "brace-expansion@1"),
     });
     const r = runGate(root);
     expect(r.status).not.toBe(0);
