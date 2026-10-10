@@ -175,7 +175,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("视图里自写「隐藏 file input + 手工触发」直接阻断（规范 P7）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write("src/components/workshop/F.tsx", FILE_INPUT_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -188,7 +187,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * 美化、就地显示已选文件名）—— 它不欠 file-picker 的契约。判据若把它
      * 也算上，唯一的修法是把可见输入框硬改成隐藏 input + 按钮，那是**改坏
      * 外观**去迎合判据。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/G.tsx",
       'export const G = () => <input type="file" className="file:bg-violet-500/20" />;\n',
@@ -198,7 +196,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自写「值不存在显示 —」直接阻断（规范 P8）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/workshop/H.tsx", DASH_FALLBACK_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -208,7 +205,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("用了 displayValue 的地方不含占位符字面量，自然不被 P8 计", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/I.tsx",
       'import { displayValue } from "~/lib/display-value";\nexport const I = ({ v }: { v?: string }) => <span>{displayValue(v)}</span>;\n',
@@ -229,7 +225,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
        都没有**（把遮罩写成一个普通 div）—— 所以它们在 P2 全库清零后依然漏过。
        锚点取 `overlayClass(`：本项目顶层浮层定位的唯一出口，视图里出现它 =
        这个文件在自绘浮层容器。 */
-    seedBaseline(repo);
     repo.write("src/components/workshop/Modal.tsx", MODAL_OVERLAY_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -243,7 +238,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `ui/fullscreen-dialog` 自己也调 `overlayClass`，但它在 `ui/` 豁免目录里；
        视图调用处走的是**基元组件**（`<FullScreenLayer>` / `<Dialog>`），
        不出现这次调用 —— 否则每个用基元的文件都会被误判成「自绘」。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/UsesPrimitive.tsx",
       'import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";\nexport const U = () => <FullScreenLayer zClass="z-modal">x</FullScreenLayer>;\n',
@@ -254,7 +248,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("注释里提到 overlayClass 不算实现（与 P1 同一份剥离）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/Documented.tsx",
       '/* 这里此前是 `overlayClass("modal", …)` 自绘的浮层，已改走 ui/dialog。 */\nexport const Doc = () => null;\n',
@@ -333,7 +326,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* 这一条守的是「机制本身还在」：如果哪天 `ratchetOnly` 或 `HARD_GATE_RULES`
      * 写错，让某条判据既不进硬闸也不进棘轮，它会**两边都不判** —— 静默失效。 */
-    seedBaseline(repo);
     const { code, output } = repo.run();
     expect(code, output).toBe(0);
     /* 条数**不写成字面量**：那条判据守的是「硬闸集覆盖了脚本里每一条判据」
@@ -341,7 +333,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * 而改的人只会把数字对上、不会去想机制还在不在（ISSUE #1668 的 P86 就是
      * 「表里占了编号、脚本里没有实现」那一族的实例）。
      * 判据 = 输出的条数与脚本里 `HARD_GATE_RULES` 的规模自洽。 */
-    const declared = DECL_RE.exec(repo.read("scripts/check-ui-primitives.cjs"))?.[1];
+    const declared = DECL_RE.exec(
+      repo.read("scripts/check-ui-primitives.cjs"),
+    )?.[1];
     expect(declared, "读不到 HARD_GATE_RULES 的声明").toBeTruthy();
     const size = (declared ?? "").match(/"P\d+"/g)?.length ?? 0;
     expect(size, "HARD_GATE_RULES 里一条判据都没有").toBeGreaterThan(0);
@@ -355,7 +349,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* P4 与 P1~P3 不同：它不是「先冻结存量」的棘轮，而是**硬闸** ——
        自绘滚动条外观的唯一出口是 globals.css（`.custom-scrollbar` /
        `.soft-scrollbar`）。所以基线里没有这一条，第一处新增就直接断。 */
-    seedBaseline(repo);
     repo.write("src/components/workshop/E.tsx", SCROLLBAR_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -376,7 +369,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("视图里自写剪贴板写入直接阻断，不进棘轮（规范 P5）", ({ repo }) => {
     /* 与 P4 同性质：`~/lib/browser-io` 的 copyText 是唯一出口（含降级链路），
        所以第一处自写就断，不存在「先冻结存量」的中间态。 */
-    seedBaseline(repo);
     repo.write("src/components/studio/G.tsx", CLIPBOARD_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -385,7 +377,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自写 Blob 下载直接阻断，不进棘轮（规范 P6）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/H.tsx", DOWNLOAD_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -425,7 +416,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * P2 数 `createPortal` 漏掉 16 个自绘模态；P10 若数「用了哪个组件」会漏掉
    * 「用另一种方式做同一件事」。所以这里逐个钉住「正面命中 + 反面不误伤」。 */
   test("视图里原生 <details> 折叠块直接阻断（规范 P10）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/workshop/Accordion.tsx", DETAILS_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -436,7 +426,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("视图里自绘 role=button + ▸/▾ 折叠开关直接阻断（规范 P10）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/Toggle.tsx", ROLE_BUTTON_TOGGLE_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -450,14 +439,12 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * 单看它会把「打开面板」误判成「折起来」（P10）或「手搓浮层」（P11）。
      * 所以 P10 要求 `role="button"` 与标记**同时**出现，P11 要求
      * `PopoverTrigger` 与标记**同时**出现。 */
-    seedBaseline(repo);
     repo.write("src/components/studio/Caret.tsx", CARET_ONLY_VIEW);
     const { code, output } = repo.run();
     expect(code, output).toBe(0);
   });
 
   test("注释里提到 <details> 不算实现（与 P1 同一份剥离）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/DocumentedToggle.tsx",
       "/* 这里此前是原生 `<details>` + `<summary>`，已改走 ui/disclosure。 */\nexport const D = () => null;\n",
@@ -469,7 +456,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("视图里手搓 chip 浮层（PopoverTrigger + ▾）直接阻断（规范 P11）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write("src/components/workshop/MyChip.tsx", CHIP_POPOVER_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -480,7 +466,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("只用 PopoverTrigger 而自己画 ▾ 之外的东西：不被 P11 误伤", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/PlainPopover.tsx",
       "export function P() {\n  return (\n    <Popover>\n      <PopoverTrigger>打开</PopoverTrigger>\n      <PopoverContent>x</PopoverContent>\n    </Popover>\n  );\n}\n",
@@ -490,7 +475,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自写 setInterval 轮询直接阻断（规范 P12）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/Poller.tsx", SET_INTERVAL_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -501,7 +485,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("服务端路由里的 setInterval 不算「视图轮询」（P12 豁免 app/api/**）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/tasks/[id]/stream/route.ts",
       "export async function GET() {\n  const hb = setInterval(() => {}, 15000);\n  return new Response(String(hb));\n}\n",
@@ -520,7 +503,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("视图里自写搜索归一化（trim + 折小写）直接阻断（规范 P13）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/Searchable.tsx", SEARCH_NEEDLE_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -532,7 +514,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* 这是本批最值得记的一条：`AttributeMultiSelect` 收口前只写了 `trim()`，
      * 候选值含拉丁字母时大小写敏感。它**不含** `.trim().toLowerCase()` ——
      * 判据若只数那一种，被拦下的永远只是合规者。 */
-    seedBaseline(repo);
     repo.write("src/components/studio/TrimOnly.tsx", SEARCH_TRIM_ONLY_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -540,7 +521,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("无关的去空白（不是搜索词）不被 P13 误伤", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Cleanup.tsx",
       "export const clean = (line: string) => line.trim();\nexport const key = (s: string) => s.trim();\n",
@@ -552,7 +532,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("服务端路由的参数归一化不算「视图搜索框」（P13 豁免 app/api/**）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/things/route.ts",
       'export async function GET(req: Request) {\n  const q = new URL(req.url).searchParams.get("q")?.trim().toLowerCase();\n  return Response.json({ q });\n}\n',
@@ -562,7 +541,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自写展开集合的翻转样板直接阻断（规范 P14）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/Tree.tsx", EXPANSION_MAP_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -573,7 +551,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("「在跑标记」这类非折叠语义的 Record 不被 P14 误伤", ({ repo }) => {
     /* 边界：`{ ...state, [id]: true }` 是**落位 / 在跑**标记，不是折叠 ——
      * 它没有「翻转」，也不该走 `ExpansionSet`（那会给出一个错误的语义）。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Pending.tsx",
       "export function P({ id }: { id: string }) {\n  const [busy, setBusy] = useState<Record<string, boolean>>({});\n  return <Row onClick={() => setBusy((state) => ({ ...state, [id]: true }))} />;\n}\n",
@@ -583,7 +560,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自写面板加宽档直接阻断（规范 P15）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/WideThing.tsx", WIDE_PANEL_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -592,7 +568,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("普通的 useState(false) 弹窗开关不被 P15 误伤", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Modalish.tsx",
       "export function M() {\n  const [open, setOpen] = useState(false);\n  return <Button onClick={() => setOpen((v) => !v)}>打开</Button>;\n}\n",
@@ -609,7 +584,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    *   · P16 不能把普通的 `style={{ width: "200px" }}`（定宽）算进来；
    *   · P17 不能把「只有小标题、没有值」「只有值、没有标签」算进来。 */
   test("视图里自绘进度条填充直接阻断（规范 P16）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/Progress.tsx", PROGRESS_FILL_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -619,7 +593,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("定宽（px）不算进度条，P16 不误伤", ({ repo }) => {
     /* 边界：`width: "280px"` 是布局，`width: \`${pct}%\`` 才是进度。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Fixed.tsx",
       'export const F = () => <div style={{ width: "280px" }} className="bg-primary" />;\n',
@@ -629,7 +602,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("使用 ProgressBar 的文件不再被 P16 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Ok.tsx",
       'import { ProgressBar } from "~/components/ui/progress-bar";\nexport const O = ({ pct }: { pct: number }) => <ProgressBar value={pct} />;\n',
@@ -639,7 +611,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自写键值行直接阻断（规范 P17，形态 ①）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/Kv.tsx", KEY_VALUE_ROW_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -648,7 +619,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("值的渲染器是 JSON.stringify 时同样被 P17 计（形态 ②）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/KvJson.tsx", KEY_VALUE_JSON_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -656,7 +626,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("只有小标题、没有值的行不被 P17 误伤", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Titled.tsx",
       'export const T = () => (\n  <div>\n    <span className="text-ink-muted">参数</span>\n    <List rows={rows} />\n  </div>\n);\n',
@@ -671,7 +640,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `WorkshopEncapsulationPanel` 的键节点里有个 muted 色的口 id span，
      * 它被作为 `items` 传给 `KeyValueRows` —— 形态判据会把两者连起来误报。
      * 合规者一个都不能误伤，与 P13「更差的那种也要数」是同一枚硬币的两面。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkKv.tsx",
       'import { KeyValueRows } from "~/components/ui/key-value-rows";\nexport const O = () => (\n  <KeyValueRows\n    items={[\n      { key: <span className="text-muted-foreground">id</span>, value: displayValue(x) },\n    ]}\n  />\n);\n',
@@ -686,7 +654,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * P20 取 `addEventListener("keydown"`）—— 前几批的反复教训是「按 API 看
    * 不见那些用另一种方式做同一件事的写法」。每一条都配一个反面用例。 */
   test("视图里裸写 <img> 直接阻断（规范 P18）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/Raw.tsx", RAW_IMG_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -697,7 +664,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("裸写 <video> 同样被 P18 计（出口管的就是图片 / 视频二选一）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/RawVideo.tsx", RAW_VIDEO_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -709,7 +675,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* 判据必须覆盖「已经写了 onError 但自己实现一份」的那一半 ——
      * 只数「没有 onError」的会漏掉这条账里更完整的四分之一。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawFallback.tsx",
       RAW_IMG_WITH_ON_ERROR_VIEW,
@@ -722,7 +687,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("使用 MediaThumbnail 的文件不再被 P18 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkMedia.tsx",
       'import { MediaThumbnail } from "~/components/ui/media-thumbnail";\nexport const O = ({ src }: { src: string }) => <MediaThumbnail src={src} />;\n',
@@ -732,7 +696,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里手写媒体拖拽源直接阻断（规范 P19）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/Drag.tsx", HAND_WRITTEN_DRAG_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -743,14 +706,12 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("组件内拖拽（不带自定义 MIME）不被 P19 误伤", ({ repo }) => {
     /* React Flow 节点与表单行排序都是组件内拖拽 —— 它们不该走「跨组件」
      * 那个出口（出口的载荷形状是给落点解析用的）。 */
-    seedBaseline(repo);
     repo.write("src/components/studio/InnerDrag.tsx", INNER_DRAG_VIEW);
     const { code, output } = repo.run();
     expect(code, output).toBe(0);
   });
 
   test("使用 mediaDragSourceProps 的文件不再被 P19 计", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkDrag.tsx",
       'import { mediaDragSourceProps } from "~/components/ui/media-drag-source";\nexport const O = ({ url }: { url: string }) => (\n  <div {...mediaDragSourceProps({ url, kind: "image" })} />\n);\n',
@@ -760,7 +721,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自己挂 keydown 直接阻断（规范 P20）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write("src/components/studio/Hotkey.tsx", HAND_WRITTEN_HOTKEY_VIEW);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -774,7 +734,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* 与 P13「更差的那种也要数」同源：判据漏掉更差的写法时，被拦下的
      * 永远只是合规者。这里断言的是**形态锚点**（挂 keydown）而不是
      * `metaKey` 有没有 —— 后者正是漏掉那两处的原因。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/HotkeyCtrlOnly.tsx",
       'export function H({ onOpen }: { onOpen: () => void }) {\n  useEffect(() => {\n    const h = (e: KeyboardEvent) => {\n      if (e.ctrlKey && e.key === "k") onOpen();\n    };\n    document.addEventListener("keydown", h);\n    return () => document.removeEventListener("keydown", h);\n  }, [onOpen]);\n  return null;\n}\n',
@@ -785,7 +744,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("使用 useHotkey 的文件不再被 P20 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkHotkey.tsx",
       'import { useHotkey } from "~/components/ui/use-hotkey";\nexport function H({ onOpen }: { onOpen: () => void }) {\n  useHotkey({ key: "l", mod: true, shift: true }, onOpen);\n  return null;\n}\n',
@@ -800,7 +758,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * `window.location.href =` / 裸 `<label className="…block…">` + 输入控件），
    * 每条都配反面用例 —— 判据太宽会逼下一个人改坏外观去迎合它。 */
   test("视图里自写滚动贴底直接阻断（规范 P21）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Follow.tsx",
       'export function F({ text }: { text: string }) {\n  const ref = useRef<HTMLDivElement>(null);\n  useEffect(() => {\n    const el = ref.current;\n    if (el) el.scrollTop = el.scrollHeight;\n  }, [text]);\n  return <div ref={ref} className="overflow-y-auto" />;\n}\n',
@@ -816,7 +773,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* `log-virtual` 的 `pinScrollTop` 只**读**几何、不改 DOM；
      * textarea 自动增高写的是 `style.height`。两者都不是「贴底」这个动作。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Measure.tsx",
       "export function M({ el }: { el: HTMLElement }) {\n  const h = el.scrollHeight - el.clientHeight;\n  const ta = el as unknown as HTMLTextAreaElement;\n  ta.style.height = `${ta.scrollHeight}px`;\n  return <div>{h}</div>;\n}\n",
@@ -828,7 +784,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("使用 useScrollFollow 的文件不再被 P21 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkFollow.tsx",
       'import { useScrollFollow } from "~/components/ui/use-scroll-follow";\nexport function F({ text }: { text: string }) {\n  const follow = useScrollFollow({ watch: text });\n  return <div ref={follow.containerRef} onScroll={follow.onScroll} />;\n}\n',
@@ -838,7 +793,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自写外部目标导航直接阻断（规范 P22）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OpenFolder.tsx",
       "export function O({ url }: { url: string }) {\n  return <div onClick={() => { window.location.href = url; }}>打开</div>;\n}\n",
@@ -852,7 +806,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("对内的路由跳转不被 P22 计（那是 router.push，不是交给外部程序）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/GoPage.tsx",
       'import { useRouter } from "next/navigation";\nexport function G() {\n  const router = useRouter();\n  return <div onClick={() => router.push("/studio")}>去工作室</div>;\n}\n',
@@ -862,7 +815,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自写「标签 + 控件」的表单行直接阻断（规范 P23）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawField.tsx",
       'export function F({ v, on }: { v: string; on: (s: string) => void }) {\n  return (\n    <label className="block">\n      <span className="text-ink-faint mb-1.5 block text-[11px]">名称</span>\n      <input value={v} onChange={(e) => on(e.target.value)} />\n    </label>\n  );\n}\n',
@@ -878,7 +830,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * `FormField` 的块级标签行套上去会改掉那条排布（§16.2.4.2 第 9 条）。
      * P78 升硬闸后本 fixture 会被 P78（视图层裸 `<label>`）拦下、但不是
      * P23 拦的：断言只看「P23 没被计」。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/SwitchRow.tsx",
       'export function S({ v, on }: { v: boolean; on: (b: boolean) => void }) {\n  return (\n    <label className="flex cursor-pointer items-center justify-between gap-2">\n      <span className="text-ink-soft">显示网格</span>\n      <Switch checked={v} onCheckedChange={on} />\n    </label>\n  );\n}\n',
@@ -890,7 +841,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("使用 FormField 的文件不再被 P23 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkField.tsx",
       /* ⚠️ 取值走 `textHandler`：本用例验的是**P23 不误伤**，
@@ -909,7 +859,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * `localStorage.*Item` 调用、`onKeyDown` 里判 `"Enter"`），
    * 每条都配反面用例 —— 判据太宽会逼下一个人改坏代码去迎合它。 */
   test("视图里自写读文件直接阻断（规范 P24）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawRead.tsx",
       [
@@ -931,7 +880,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("手搓 FileReader 的 readAs* 也被 P24 计（两种写法都要数）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawReader.tsx",
       [
@@ -954,7 +902,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("读 fetch 响应体（res.text()）不被 P24 计 —— 那是网络读取", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/FetchText.tsx",
       [
@@ -972,7 +919,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("使用 readFileAsText 的文件不再被 P24 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkRead.tsx",
       [
@@ -987,7 +933,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("自写 localStorage 存取直接阻断（规范 P25）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawStorage.tsx",
       [
@@ -1011,7 +956,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* 单看 `typeof window === "undefined"` 会漏掉这一族 ——
      * 而它们才是这条账里更差的那一种（隐私模式下直接抛）。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawStorage2.tsx",
       [
@@ -1033,7 +977,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("使用 readStorageItem 的文件不再被 P25 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkStorage.tsx",
       [
@@ -1048,7 +991,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自写「Enter 提交」键位判据直接阻断（规范 P26）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawEnter.tsx",
       [
@@ -1070,7 +1012,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("全局快捷键（走 useHotkey）不被 P26 计 —— 那是 P20 的账", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/GlobalKey.tsx",
       [
@@ -1088,7 +1029,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("role=tab 上自己写键判别被 P53 拦下（那是 simpleKeyHandler 的账）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/TabRow.tsx",
       [
@@ -1112,7 +1052,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("使用 enterCommit 的文件不再被 P26 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkEnter.tsx",
       [
@@ -1132,7 +1071,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 属性名、`?key=${`/`&key=${`），每条都配反面用例 —— 判据太宽会逼下
    * 一个人改坏代码去迎合它（本仓库的既有教训）。 */
   test("自写「try/catch + 反馈通道」样板直接阻断（规范 P27）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawAsync.tsx",
       [
@@ -1157,7 +1095,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 runAsyncAction 的动作不再被 P27 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkAsync.tsx",
       [
@@ -1180,7 +1117,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("没有反馈通道的 catch（静默降级）不被 P27 计", ({ repo }) => {
     /* 只判「有 await 的 try/catch」会把「读缓存失败静默回落」那一族算上 ——
      * 它们是合法的降级，根本没有反馈通道可谈。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/SilentFallback.tsx",
       [
@@ -1202,7 +1138,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* P1/P2/P3 豁免 `hooks/`（它们数的是视图实现），但 P27 的存量恰恰
      * 大部分在逻辑层 —— 不扫 hooks 等于对这条账视而不见。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/hooks/use-raw-async.ts",
       [
@@ -1223,7 +1158,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("视图里自己读媒体自然尺寸直接阻断（规范 P28）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawSize.tsx",
       [
@@ -1241,7 +1175,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("视频的 videoWidth / videoHeight 也计 P28（两组读数同一条账）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawVideoSize.tsx",
       [
@@ -1258,7 +1191,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("使用 readNaturalSize 的文件不再被 P28 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkSize.tsx",
       [
@@ -1274,7 +1206,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("手拼查询串直接阻断（规范 P29）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawUrl.tsx",
       [
@@ -1291,7 +1222,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("模板串开头的第一个参数（`?id=${x}`）也被 P29 计", ({ repo }) => {
     /* 前置字符是反引号 / 引号时，`?` 前面**不是**词字符 —— 判据若要求
      * 「前面必须是词字符」，「第一个参数」那条写法能整片溜过。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawFirstParam.tsx",
       [
@@ -1309,7 +1239,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 withQuery / buildQueryString 的文件不再被 P29 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/OkUrl.tsx",
       [
@@ -1328,7 +1257,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* 只数 `?<键名>=` 会把这两族一起算上 —— 判据要求**真有值被内联**
      *（`${` 或引号），这两处都不是。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/StaticHref.tsx",
       [
@@ -1345,7 +1273,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("边 id 的 `${a}?${b}` 拼接不被 P29 计（同形而不同源）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/EdgeId.tsx",
       [
@@ -1413,7 +1340,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 响应体里亲手拼 `error`），每条都配反面用例 —— 判据太宽会逼下一个人
    * 改坏代码去迎合它（本仓库的既有教训，P29 那批踩得最深）。 */
   test("按条目共用一块错误位直接阻断（规范 P30）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/use-planner.ts",
       [
@@ -1441,7 +1367,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `genError`（一句话生成整批角色）/ `aiError`（全片拆镜）/
      * `loadError`（一个弹窗读源码）都是**合法的单槽** —— 它们的写入点
      * 在无参的批量函数里，文件里另外那几个逐条函数与它们无关。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/use-batch.ts",
       [
@@ -1470,7 +1395,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `polishBusyId` / `aiBusyId` 天生就是「当前是哪一条在忙」——
      * 写成单值是**正确**的（同一时刻只有一条在忙）。判据要求变量名带
      * `error` 语义，正是为了不把它们算进来。 */
-    seedBaseline(repo);
     /* 变量名刻意避开「忙碌位」的记号（`…BusyId` / `…retry…Id`）——
      * 本用例要验的是 P30（逐条挂错误），忙碌位那一族归 P37 管；
      * 用 `useState<string | null>` 且不带忙碌记号，才是一次干净的 P30 反面场景。 */
@@ -1493,7 +1417,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 useItemErrors 的错误位不再被 P30 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/use-planner.ts",
       [
@@ -1511,7 +1434,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("自写「这一轮已作废」的守卫样板直接阻断（规范 P31）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/RawFetch.tsx",
       [
@@ -1537,7 +1459,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("只读不改的局部布尔不被 P31 计（缺置位即不算作废标志）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/ReadOnly.tsx",
       [
@@ -1555,7 +1476,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 beginStaleRun 的取数 effect 不再被 P31 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Fresh.tsx",
       [
@@ -1573,7 +1493,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("路由里手拼错误信封直接阻断（规范 P32）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/demo/route.ts",
       [
@@ -1596,7 +1515,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("自己判响应体里 error 的形状也计 P32（读侧同一枚口径）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/raw-reader.ts",
       [
@@ -1615,7 +1533,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `cacheExtractPatch({ error: errorMessage(e, "导入失败") })` 是往缓存里
      * 写一条状态记录，不是 HTTP 响应 —— 判据要求同一片段里出现「构造响应体」
      * 的动作（`NextResponse.json(` / `JSON.stringify(`）。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/State.ts",
       [
@@ -1629,7 +1546,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 apiErrorBody 的路由不再被 P32 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/demo/route.ts",
       [
@@ -1649,7 +1565,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 readApiError 的客户端不再被 P32 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/clean-reader.ts",
       [
@@ -1668,7 +1583,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 代码去迎合它（P29 那批踩得最深；本批的 P33 收窄前后各踩到一次：
    * `Date.now() + 10 * 60 * 1000` 是算截止时刻，不是 id）。 */
   test("手拼「时间戳 + 序号」的 id 直接阻断（规范 P33）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/blank-id.ts",
       [
@@ -1686,7 +1600,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("字符串拼接形态的 id 也计 P33（更差的那一半）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/blank-concat.ts",
       'export const id = "shot-" + Date.now();\n',
@@ -1697,7 +1610,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("只把时刻当值用不算 P33（不是 id：超时截止、SSE 心跳）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/blank-clock.ts",
       [
@@ -1713,7 +1625,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 nextId 的落点不再被 P33 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/clean-id.ts",
       [
@@ -1728,7 +1639,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("自写「ComfyUI 报错 → 建议」词表直接阻断（规范 P34）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/blank-advice.ts",
       [
@@ -1745,7 +1655,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("只是展示报错原文不算 P34（读过原文是对的写法）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/blank-raw-error.ts",
       [
@@ -1760,7 +1669,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 adviseOnError 的落点不再被 P34 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/clean-advice.ts",
       [
@@ -1775,7 +1683,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("亲手拼一个画布节点直接阻断（规范 P35）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/blank-canvas.tsx",
       [
@@ -1798,7 +1705,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("只改 data 的节点更新助手不算 P35（没有 position）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/blank-node-patch.ts",
       [
@@ -1812,7 +1718,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 placeCanvasNode 的落点不再被 P35 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/clean-canvas.tsx",
       [
@@ -1836,7 +1741,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 抓得住（判据漏掉更差的那一半，被拦下的就永远只是合规者）。 */
 
   test("手写「树的缩进档 + 子行集合容器」直接阻断（规范 P36）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/tree-view.tsx",
       [
@@ -1862,7 +1766,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("只有左内边距、没有引导线不算 P36（卡片内边距到处都是）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/card.tsx",
       [
@@ -1882,7 +1785,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("只有引导线、没有展开判据不算 P36（静态缩进列表是合法形态）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/static-list.tsx",
       [
@@ -1902,7 +1804,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 TreeChildren 的落点不再被 P36 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/tree-clean.tsx",
       [
@@ -1927,7 +1828,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("自写「某一条在忙」的执行态直接阻断（规范 P37）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/busy-list.tsx",
       [
@@ -1950,7 +1850,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("控制器里声明的忙碌位也计 P37（声明与比较可能分处两个文件）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/hooks/use-thing.ts",
       [
@@ -1969,7 +1868,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("「当前选中项」不算 P37（useState<string|null> 到处都是合法写法）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/selection.tsx",
       [
@@ -1989,7 +1887,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 useItemAction 的落点不再被 P37 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/workshop/busy-clean.tsx",
       [
@@ -2011,7 +1908,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("手写两个 rect 相减的面板内偏移直接阻断（规范 P38）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/scroll-to.ts",
       [
@@ -2027,7 +1923,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("按行数估行高也计 P38（除数为 0 时给出 Infinity）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/jump-line.ts",
       [
@@ -2045,7 +1940,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("自己接 ResizeObserver 量盒子也计 P38（量测接线各写一遍）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/measure.ts",
       [
@@ -2070,7 +1964,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("只读尺寸不写（对齐检查）不算 P38（更差的一半是先减了再滚）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/audit.ts",
       [
@@ -2088,7 +1981,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("用 ResizeObserver 观测内容变化不算 P38（React Flow 的约定用法）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/wire-flow.ts",
       [
@@ -2104,7 +1996,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 offsetWithin 的落点不再被 P38 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/scroll-clean.ts",
       [
@@ -2129,7 +2020,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 每条都配反面用例。 */
 
   test("裸写 requestAnimationFrame 调度直接阻断（规范 P39）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/after-frame.ts",
       [
@@ -2148,7 +2038,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("帧循环（回调里再次 rAF 自己）不算 P39（那是采样器，不是等一帧）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/hooks/use-fps.ts",
       [
@@ -2169,7 +2058,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 onNextFrame 的落点不再被 P39 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/after-frame.ts",
       [
@@ -2186,7 +2074,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("裸调 copyText 而不接反馈出口直接阻断（规范 P40）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/copy-all.tsx",
       [
@@ -2202,7 +2089,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 useCopyFeedback 的落点不再被 P40 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/copy-all.tsx",
       [
@@ -2218,7 +2104,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("在 lib 层裸调 copyText 也计 P40（这条账横跨两侧）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/media/upload-client.ts",
       [
@@ -2234,7 +2119,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("REST 路由自己定义 isRecord 直接阻断（规范 P41）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/widgets/route.ts",
       [
@@ -2256,7 +2140,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("手写「取 JSON + 400 信封」但不定义 isRecord 也计 P41", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/widgets/route.ts",
       [
@@ -2279,7 +2162,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 readJsonRecord 的 REST 路由不再被 P41 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/widgets/route.ts",
       [
@@ -2302,7 +2184,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 只数 `String(` 会把日志里别的转换算上。 */
 
   test("自拼「动作前缀 + 错误详情」直接阻断（规范 P42）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/workflow-library/hooks/use-import.ts",
       [
@@ -2327,7 +2208,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * `"Error"`、对 tRPC 投出的普通对象产出 `"[object Object]"`，
      * 而且绕过网络层翻译。判据只认「后面跟着一个错误取值动作」这个签名，
      * 两种写法都在内。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/custom-nodes/hooks/use-settings.ts",
       [
@@ -2346,7 +2226,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 errorText 的落点不再被 P42 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/workflow-library/hooks/use-import.ts",
       [
@@ -2368,7 +2247,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("「标题：正文」的普通界面文案不算 P42（判据太宽会逼人改坏文案）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/Hint.tsx",
       [
@@ -2386,7 +2264,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* `errorMessage(e, "保存失败")` 的产物就是「保存失败」，没有拼前缀 ——
      * 它表达不了「动作 + 详情」两段式，但也不是这条账要消灭的写法。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/badge.ts",
       [
@@ -2406,7 +2283,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 判据取固定句的**语义内核**「剪贴板不可用」，而不取标题「复制失败」。 */
 
   test("手写「剪贴板不可用」那一句直接阻断（规范 P43）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/CopyRow.tsx",
       [
@@ -2421,7 +2297,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 copyFailureText 的落点不再被 P43 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/CopyRow.tsx",
       [
@@ -2441,7 +2316,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* 判据太宽会逼人把每处标题都改成同一句 —— 而标题恰恰该保留面板自己的
      * 说法（与 `errorText` 同款：动作前缀是调用处的事）。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/CopyRow.tsx",
       [
@@ -2461,7 +2335,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 来分开这两档。 */
 
   test("手写文本截断（slice + 省略号）直接阻断（规范 P44）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/Title.tsx",
       [
@@ -2476,7 +2349,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 clampText 的落点不再被 P44 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/Title.tsx",
       [
@@ -2496,7 +2368,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* 这是本条判据的**边界**：短码旁边的 `…` 是显示约定，不是「这段被截断」。
      * 判据取 N ≥ 24，就是为把它们分开 —— 太宽会把 20+ 处短码全算成违规。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/Ids.tsx",
       [
@@ -2509,7 +2380,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("注释里提到截断不算实现（与 P1 同一份剥离）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/Documented.tsx",
       "/* 这里此前是 `${p.slice(0, 40)}…`，已改走 text-clamp 的 clampText。 */\nexport const D = () => null;\n",
@@ -2525,7 +2395,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 数它只会逼人把循环写成别的形状去迎合判据）。 */
 
   test("自写指数退避算术直接阻断（规范 P45）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/comfyui/ws-reconnect-extra.ts",
       [
@@ -2540,7 +2409,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 backoffDelayMs 的落点不再被 P45 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/comfyui/ws-reconnect-extra.ts",
       [
@@ -2556,7 +2424,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("普通的平方运算不算退避（P45 只认「2 的幂」这个签名）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/geometry.ts",
       "export const area = (r: number) => Math.PI * 2 * r;\nexport const square = (x: number) => x * x;\n",
@@ -2568,7 +2435,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P46：手拼日期串（规范 §16.2.4.50）────────────────────────────── */
 
   test("手拼日期串直接阻断（规范 P46）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/Day.tsx",
       [
@@ -2583,7 +2449,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 formatDate 家族的落点不再被 P46 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/Day.tsx",
       [
@@ -2599,7 +2464,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("同天判定里的 getMonth()/getDate() 比较不被 P46 误伤（那不是「拼日期串」）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/panels/SameDay.ts",
       [
@@ -2619,7 +2483,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 不数单个 `?? "image/png"` 兜底 —— 那是调用处的域选择。 */
 
   test("自写扩展名 ⇄ MIME 映射表直接阻断（规范 P47）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/thing/route.ts",
       [
@@ -2636,7 +2499,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 mime-ext 出口的落点不再被 P47 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/thing/route.ts",
       [
@@ -2652,7 +2514,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("单个 MIME 兜底字面量不算 P47（那是调用处的域选择，不是一张表）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/thing/route.ts",
       ['export const fallback = (m: string | null) => m ?? "image/png";'].join(
@@ -2670,7 +2531,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 两种形态 —— 「就地读一个字段」与「取反早退守卫」，它们套出口只会更绕。 */
 
   test("自写 unknown → 宽松对象视图直接阻断（规范 P48）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -2687,7 +2547,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 asRecord 出口的落点不再被 P48 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -2704,7 +2563,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `typeof e === "object" && e !== null && "message" in e` 是就地读字段：
      * 套出口要写成 `asRecord(e)?.message` 再判类型，反而多一层。
      * 第一版判据把它算进来，一次报出 24 处，一半是它。 */
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -2723,7 +2581,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("「取反早退」的守卫不算 P48（收窄后立刻用掉，没有视图这回事）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -2745,7 +2602,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("自写「非法字符换下划线」的文件名安全化直接阻断（规范 P49）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/server/thing.ts",
       ['export const safe = (n: string) => n.replace(/[^\\w.-]/g, "_");'].join(
@@ -2758,7 +2614,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 safe-name 出口的落点不再被 P49 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/server/thing.ts",
       [
@@ -2772,7 +2627,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("别的 replace（空格归一 / 去掉尾斜杠）不算 P49", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/server/thing.ts",
       [
@@ -2790,7 +2644,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    *（`Math.round(v * 100) / 100` 那类写法里也必然有一个 `toFixed`）。 */
 
   test("自写数字精度格式化直接阻断（规范 P50）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/settings/thing.tsx",
       ["export const show = (v: number) => `${v.toFixed(2)}px`;"].join("\n"),
@@ -2803,7 +2656,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 number-format 出口的落点不再被 P50 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/settings/thing.tsx",
       [
@@ -2821,7 +2673,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* 判据太宽会逼人改坏代码：`Math.round(x)` 与 `String(n).padStart(2, "0")`
      * 在本仓库大量用在坐标取整与补零上，它们**不是**「按某档精度写数」。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/settings/thing.tsx",
       [
@@ -2836,7 +2687,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P51：去重合并 / 区域设置排序（规范 §16.2.4.55）───────────────── */
 
   test("自写区域设置排序直接阻断（规范 P51）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/settings/thing.tsx",
       [
@@ -2850,7 +2700,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 ordered-set 出口的落点不再被 P51 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/settings/thing.tsx",
       [
@@ -2866,7 +2715,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("数值比较器与不带比较器的 sort（码位序）不算 P51", ({ repo }) => {
     /* 「按当前区域设置」与「按字符串码位」是**两种判据**：后者在不带比较器
      * 的 `.sort()` 里是合法且另有所指的写法，数进来会逼人改坏代码。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/settings/thing.tsx",
       [
@@ -2881,7 +2729,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P52：data URL（规范 §16.2.4.56）──────────────────────────────── */
 
   test("自拼 data URL 直接阻断（规范 P52）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/server/thing.ts",
       [
@@ -2895,7 +2742,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("自切 data URL 载荷（indexOf 逗号）直接阻断（规范 P52）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/server/thing.ts",
       [
@@ -2914,7 +2760,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* 与 P13「只数合规的那种、漏掉更差的那种」同款：判据漏掉更差的写法，
      * 被拦下的就永远只是合规者。但 `split(",")` 另有 CSV 解析的用法，
      * 故要求与 `data:` 前缀同现。 */
-    seedBaseline(repo);
     repo.write(
       "src/server/thing.ts",
       [
@@ -2932,7 +2777,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("CSV 解析里的 split 逗号不算 P52（同文件没有 data: 前缀）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/server/thing.ts",
       [
@@ -2947,7 +2791,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test('SSE 帧前缀 startsWith("data:") 不算 P52（那是流式解析）', ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/llm/thing.ts",
       [
@@ -2962,7 +2805,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 data-url 出口的落点不再被 P52 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/server/thing.ts",
       [
@@ -2980,7 +2822,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P53：键盘键判据（规范 §16.2.4.57）───────────────────────────── */
 
   test("手写 event.key 字面量比对直接阻断（规范 P53）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/key.tsx",
       [
@@ -2997,7 +2838,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("反向比对（!== 字面量）同样计入 P53（同一形态的两半）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/key.tsx",
       [
@@ -3015,7 +2855,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 simpleKeyHandler 的落点不再被 P53 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/key.tsx",
       [
@@ -3033,7 +2872,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 ~/lib/keyboard 归一的落点不再被 P53 计（两个出口共用一个判据）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/key.ts",
       [
@@ -3048,7 +2886,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("入口自身与 use-enter-commit / use-hotkey 不被 P53 误伤（显式豁免）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/keyboard.ts",
       'export const isEnter = (key: string) => key === "Enter";\n',
@@ -3072,7 +2909,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P54：SGR 转义序列（规范 §16.2.4.58）─────────────────────────── */
 
   test("自写 SGR 转义序列直接阻断（规范 P54）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/log/thing.ts",
       [
@@ -3088,7 +2924,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("u001b 转义写法（`\\u001b`）同样计入 P54（同一形态的两种字面量）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write("src/lib/log/thing.ts", 'export const RESET = "\\u001b[0m";\n');
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -3096,7 +2931,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 log-ansi 出口的落点不再被 P54 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/logs/thing.ts",
       [
@@ -3112,7 +2946,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("出口自身（lib/log/log-ansi.ts）不被 P54 误伤（显式豁免）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/log/log-ansi.ts",
       [
@@ -3127,7 +2960,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("单独的 \\x1b（光标移动等，不带 [Nm 形态）不算 P54（另一条账）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/log/thing.ts",
       [
@@ -3141,7 +2973,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P55：书写法换算（规范 §16.2.4.59）───────────────────────────── */
 
   test("自写驼峰 → kebab 换算直接阻断（规范 P55）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/shell/thing.ts",
       [
@@ -3155,7 +2986,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 case-token 出口的落点不再被 P55 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/shell/thing.ts",
       [
@@ -3168,7 +2998,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("别的 [A-Z] 用法不算 P55（大写化 / 校验正则不是本条账）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/shell/thing.ts",
       [
@@ -3183,7 +3012,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P56：路径展示（规范 §16.2.4.60）─────────────────────────────── */
 
   test("服务端手工相对化路径直接阻断（规范 P56）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/logs/list/route.ts",
       [
@@ -3199,7 +3027,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("取末段（split pop）与反斜杠归一都计入 P56（同一形态的两种写法）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3216,7 +3043,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 path-display 出口的落点不再被 P56 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3232,7 +3058,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test('包含判据（startsWith("..") / isAbsolute）不算 P56（那不是展示）', ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/app/api/debug/source/route.ts",
       [
@@ -3250,7 +3075,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P57：props 透传（规范 §16.2.4.61）───────────────────────────── */
 
   test("基元自写 props 剔除表直接阻断（规范 P57）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/thing.tsx",
       [
@@ -3267,7 +3091,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 dom-props 出口的落点不再被 P57 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/thing.tsx",
       [
@@ -3287,7 +3110,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("数据模型的 Omit（Omit<LogEntry, 'seq'>）不算 P57（不是 DOM 属性）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/thing.ts",
       [
@@ -3305,7 +3127,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("Promise.race + setTimeout 的超时样板直接阻断（规范 P58）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3326,7 +3147,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("定时器在回调里结算 Promise（不用 race）也计入 P58", ({ repo }) => {
     /* 这一档**不用** `Promise.race`，靠「谁先结算谁算数」，一样要清定时器、
      * 一样各写各的（`waitForImage` / `runFFmpeg` / `waitForDetachMediator`）。 */
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3347,7 +3167,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("结算助手（finish / settle / done）写法的超时也计入 P58", ({ repo }) => {
     /* `waitForDetachMediator` 把「这一轮结束」收成 `finish()`，定时器到点调它 ——
      * 只看 `resolve(` 会漏掉这一档。 */
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3370,7 +3189,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 with-timeout 出口的落点不再被 P58 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3386,7 +3204,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("两路来源抢跑（Promise.race 但无 setTimeout）不算 P58（那不是超时）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3403,7 +3220,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("看门狗 / 防抖（setTimeout 到点做事、不结算 Promise）不算 P58", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3424,7 +3240,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("手写 Math.min / Math.max 嵌套的夹取直接阻断（规范 P59）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3442,7 +3257,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `clamp(x, min, max)` 与 `clamp(min, max, x)` 都是
      * `(number, number, number) => number` —— 传反了不会报错。
      * 手写版的两种顺序同样都该被数到。 */
-    seedBaseline(repo);
     repo.write(
       "src/lib/a.ts",
       "export const a = (z: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, z));\n",
@@ -3458,7 +3272,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("多行写法与取整混入都计入 P59", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3475,7 +3288,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 clamp 出口的落点不再被 P59 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3493,7 +3305,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* `Math.max(1, 1 / Math.max(zoom, 0.01))` 是取值 —— 只数
      * 「两种不同」的 Math 函数嵌套。 */
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       "export const s = (zoom: number) => Math.max(1, 1 / Math.max(zoom, 0.01));\n",
@@ -3505,7 +3316,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("半个夹取（Math.max(0, x) 只有一个边界）不算 P59", ({ repo }) => {
     /* 那表达的是「不许为负」，不是「放进区间」—— 换成
      * `clamp(x, 0, Infinity)` 只会更绕。 */
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       "export const i = (n: number, len: number) => Math.max(0, len - n);\n",
@@ -3515,7 +3325,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("出口自身的实现（lib/clamp.ts）不被 P59 计", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/clamp.ts",
       [
@@ -3533,7 +3342,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P60：大写归一（规范 §16.2.4.64）─────────────────────────────── */
 
   test('`(x ?? "").toUpperCase()` 形态直接阻断（规范 P60）', ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       "export const t = (mode?: string) => (mode ?? '').toUpperCase();\n",
@@ -3546,7 +3354,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("`.trim().toUpperCase()` 形态也计入 P60（同一条账的另一种写法）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       "export const t = (mode: string) => mode.trim().toUpperCase();\n",
@@ -3559,7 +3366,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("两面都写的形态只计一次（不重复计）", ({ repo }) => {
     /* `(x ?? "").trim().toUpperCase()` 同时命中两个子形态，
      * 去重后应按 1 处记 —— 否则「收紧基线」会把同一行数两遍。 */
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       "export const t = (mode?: string) => (mode ?? '').trim().toUpperCase();\n",
@@ -3570,7 +3376,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 upper-token 出口的落点不再被 P60 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3587,7 +3392,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* 那不是「归一外来串」而是「把已知值画成大写」。数进来会逼人改坏代码
      *（`log-store` 的行内级别、`StyleSwitcher` 的档名展示都是这一档）。 */
-    seedBaseline(repo);
     repo.write(
       "src/lib/thing.ts",
       [
@@ -3602,7 +3406,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("出口自身的实现（lib/upper-token.ts）不被 P60 计", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/upper-token.ts",
       "export const upperToken = (v: unknown) => typeof v === 'string' ? v.trim().toUpperCase() : '';\n",
@@ -3614,7 +3417,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P61：应用事件（规范 §16.2.4.65）─────────────────────────────── */
 
   test("自建 CustomEvent 直接阻断（规范 P61）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Thing.tsx",
       [
@@ -3631,7 +3433,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("订阅带命名空间冒号的事件名也计入 P61", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Thing.tsx",
       [
@@ -3648,7 +3449,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 app-events 出口的落点不再被 P61 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Thing.tsx",
       [
@@ -3665,7 +3465,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* 本条账只认「应用事件」—— `addEventListener('click')` 是 DOM 事件，
      * 换了出口也没地方换。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/Thing.tsx",
       [
@@ -3681,7 +3480,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("出口自身的实现（lib/app-events.ts）不被 P61 计", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/lib/app-events.ts",
       [
@@ -3697,7 +3495,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("src/config 也在扫描范围内（应用事件的派发侧在那里）", ({ repo }) => {
     /* `custom-nodes:updated` 的派发侧住在 `src/config/custom-nodes.ts` ——
      * 只扫前四条根会让这条事件的一半落在扫描面之外。 */
-    seedBaseline(repo);
     repo.write(
       "src/config/thing.ts",
       "export const fire = (count: number) => window.dispatchEvent(new CustomEvent('custom-nodes:updated', { detail: { count } }));\n",
@@ -3710,7 +3507,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P62：事件值 → 值回调的改写样板（规范 §16.2.4.66）───────────── */
 
   test("自写 `e => setX(e.target.value)` 阻断（规范 P62）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P62Value.tsx",
       [
@@ -3727,7 +3523,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("自写 `e => setX(e.target.checked)` 同样阻断（同一条账的另一半）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P62Checked.tsx",
       'export const Thing = ({ on }: { on: (v: boolean) => void }) => (\n  <input type="checkbox" onChange={(e) => on(e.target.checked)} />\n);\n',
@@ -3738,7 +3533,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 form-props 出口的落点不再被 P62 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P62Ok.tsx",
       [
@@ -3764,7 +3558,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("带语句体的 onChange 不算 P62（同一事件里还要做别的事）", ({ repo }) => {
     /* 判据太宽会逼人把那类多步逻辑塞进一个表达式去迎合它。取值仍应走
      * `readTextInput`，但判据够不着、也不该硬够。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P62Block.tsx",
       [
@@ -3785,7 +3578,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P63：分页 / 窗口切片（规范 §16.2.4.67）───────────────────────── */
 
   test("自写倒序分页的偏移算式阻断（规范 P63）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P63Offset.tsx",
       "export const after = (logs: number[], page: number, size: number) => Math.max(0, logs.length - page * size);\n",
@@ -3796,7 +3588,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("自写总页数 / 总块数也计入 P63", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P63Ceil.tsx",
       "export const pages = (all: string[], size: number) => Math.ceil(all.length / size);\n",
@@ -3807,7 +3598,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("尾部窗口的 `.slice(-N)` 同样计入 P63", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P63Tail.tsx",
       "export const tail = (logs: number[], size: number) => logs.slice(-size);\n",
@@ -3818,7 +3608,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("走 page-window 出口的落点不再被 P63 计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P63Ok.tsx",
       [
@@ -3835,7 +3624,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("取短码的 `.slice(-4)` 不算 P63（不是尾部窗口）", ({ repo }) => {
     /* 判据太宽会把 `id.slice(-4)` / `.toString(36).slice(-4)` 这类「取短码」
      * 一并算上，而它们与「取列表尾部 N 条」不是同一件事。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P63Short.tsx",
       "export const short = (id: string) => `#${id.slice(-4)}`;\n",
@@ -3849,7 +3637,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P64：进度回调节流（规范 §16.2.4.68）──────────────────────────── */
 
   test("把高频进度回调直接写进 state 阻断（规范 P64）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P64Raw.tsx",
       [
@@ -3868,7 +3655,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 use-throttled-progress 出口的落点不再被 P64 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P64Ok.tsx",
       [
@@ -3887,7 +3673,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P65：异步动作的忙碌位（规范 §16.2.4.71）─────────────────────── */
 
   test("忙碌位复位写在成功路径上直接阻断（规范 P65）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P65Raw.tsx",
       [
@@ -3908,7 +3693,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("复位写在 `finally` 里不算 P65（那形态本身是对的）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P65Ok.tsx",
       [
@@ -3933,7 +3717,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("复位写在 `catch` 里同样放行（失败路径也有出口）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P65Catch.tsx",
       [
@@ -3961,7 +3744,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 use-busy-action 出口的落点不再被 P65 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P65Export.tsx",
       [
@@ -3979,7 +3761,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("**同步**的开关不算 P65（没有跨 await 的异步边界）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P65Sync.tsx",
       [
@@ -4001,7 +3782,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   /* ── P66：重入闸门（规范 §16.2.4.69）─────────────────────────────── */
 
   test("自建的重入闸门直接阻断（规范 P66）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P66Raw.tsx",
       [
@@ -4028,7 +3808,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("走 reentrancy-lock 出口的落点不再被 P66 计（合规者不误伤）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P66Ok.tsx",
       [
@@ -4053,7 +3832,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("镜像 ref（只读不判重入）不算 P66", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P66Mirror.tsx",
       [
@@ -4075,7 +3853,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("出口自身的实现（components/ui/use-reentrancy-lock.ts）不被 P66 计", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/use-reentrancy-lock.ts",
       [
@@ -4098,7 +3875,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("`onProgress` 写在别处的普通 setter 不算 P64（判据认的是订阅回调）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P64Plain.tsx",
       [
@@ -4124,7 +3900,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* 这是本批最容易踩的一脚：把 `src/lib` 直接加进扫描根，会让
      * `browser-io` / `dom-rect` / `file-io` 这些**出口自身的实现**被判违规
      *（它们本来就该做那件事）。试写一份「出口实现」的形态验一遍。 */
-    seedBaseline(repo);
     repo.write(
       "src/lib/browser-io.ts",
       [
@@ -4148,7 +3923,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("ui/ 基元自身实现放行（Button 里本来就是 <button>）", ({ repo }) => {
     repo.write("src/components/ui/button.tsx", BUTTON_VIEW);
-    seedBaseline(repo);
     const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("0 处");
@@ -4160,7 +3934,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `studio/ui/**` 与 `studio/shared/**` 曾整体豁免（它们是「待合并的
        第二套 UI kit」）。归并完成后豁免必须撤掉 —— 再留一条按目录的模糊
        放行，等于让那两处的新增自实现在这里悄悄溜过。 */
-    seedBaseline(repo);
     repo.write("src/components/studio/workflow-form/D.tsx", BUTTON_VIEW);
     repo.write("src/components/studio/workflow-form/E.tsx", PORTAL_VIEW);
     const { code, output } = repo.run();
@@ -4173,7 +3946,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     repo,
   }) => {
     repo.write("src/components/workshop/hooks/use-x.ts", SPIN_VIEW);
-    seedBaseline(repo);
     const { code } = repo.run();
     expect(code).toBe(0);
   });
@@ -4181,7 +3953,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("测试文件放行（测试里的 DOM 与 mock 不算视图实现）", ({ repo }) => {
     repo.write("src/components/workshop/A.test.tsx", BUTTON_VIEW);
     repo.write("src/components/workshop/__tests__/B.tsx", PORTAL_VIEW);
-    seedBaseline(repo);
     const { code } = repo.run();
     expect(code).toBe(0);
   });
@@ -4322,7 +4093,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P67 a. Badge 绕开：ui/ 里 `export function X(Badge|Chip|Tag)` 未 import Badge → 阻断", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/P67Badge.tsx",
       [
@@ -4339,7 +4109,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P67 a. 已 import Badge 的二次封装 → 合规者不误伤", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/P67BadgeOk.tsx",
       [
@@ -4362,7 +4131,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * `function Foo` + 文件末尾 `export { ..., Foo }` 聚合导出。
      * 判据以 `export function` 为锚点即可精准避开——不用逐个基元走
      * EXEMPT_FILES。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/P67ShadcnInner.tsx",
       [
@@ -4383,7 +4151,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test('P67 b. Progress 绕开：ui/ 里手写 `role="progressbar"` 未 import Progress → 阻断', ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/P67Progress.tsx",
       [
@@ -4404,7 +4171,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P67 b. 已 import Progress 的二次封装 → 合规者不误伤", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/P67ProgressOk.tsx",
       [
@@ -4422,7 +4188,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test('P67 c. Slider 绕开：ui/ 里原生 `<input type="range">` 未 import Slider → 阻断', ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/P67Slider.tsx",
       [
@@ -4442,7 +4207,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P67 d. Empty 绕开：ui/ 里 `export function EmptyState` 未 import Empty → 阻断", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/P67Empty.tsx",
       [
@@ -4463,7 +4227,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* 与 form-field.tsx 的实际写法对齐：a11y 通过 `{ "aria-describedby": id }`
      * 对象透传，不是 JSX 属性 aria-describedby="…"。判据必须吃这一形态，
      * 否则真轮子会漏检。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/P67Field.tsx",
       [
@@ -4490,7 +4253,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P67 e. shadcn form.tsx 用 `<Label htmlFor>` 大写组件（非 `<label>`）→ 不误伤", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/P67FormOk.tsx",
       [
@@ -4519,7 +4281,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * WorkflowPickChip / ShotStatusBadge 等一片会被误伤。
      * **刻意不 import Badge**——否则 sub-signal 内部的 import 短路自己
      * 就命中合规分支，测不到范围收窄本身。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P67ViewChip.tsx",
       [
@@ -4556,7 +4317,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 短路）。 */
 
   test("P68 视图层手写 <input type=text> 阻断（规范 P68）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P68RawInput.tsx",
       [
@@ -4572,7 +4332,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P68 视图层手写 <textarea> 同样阻断", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P68RawTextarea.tsx",
       [
@@ -4588,7 +4347,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P68 已 import ui/input 的落点不再被计（合规者不误伤）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P68OkInput.tsx",
       [
@@ -4608,7 +4366,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* ui/ 层默认被 EXEMPT_DIRS 豁免（P68 不在 UI_ALSO_SCANNED 也不在
      * UI_ONLY_RULES），基元自身的 raw input 不该被算进视图层账。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/P68PrimitiveFilePicker.tsx",
       [
@@ -4624,7 +4381,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P69 视图层手写 <input type=checkbox> 阻断（规范 P69）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P69RawCheckbox.tsx",
       [
@@ -4642,7 +4398,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P71 视图层手写 dark:palette 色计入棘轮（规范 §4.11.1 / P71）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P71DarkPalette.tsx",
       [
@@ -4658,7 +4413,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P71 语义 token（含 dark: 但不带 palette 色名）不误伤", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P71Semantic.tsx",
       [
@@ -4705,7 +4459,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 判据按标签块扫 `<DialogContent>` / `<SheetContent>`，块内既无
    * 对应 Title 组件又无 aria-label/aria-labelledby 即计 1。 */
   test("P72 DialogContent 无 Title/aria-label → 阻断", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P72BareDialog.tsx",
       [
@@ -4728,7 +4481,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P72 SheetContent 无 SheetTitle/aria-label → 阻断", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P72BareSheet.tsx",
       [
@@ -4751,7 +4503,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P72 有 DialogTitle 放行（可以是 sr-only）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P72WithDialogTitle.tsx",
       [
@@ -4773,7 +4524,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P72 有 aria-label 放行（本仓库自绘 header 的主用写法）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P72WithAriaLabel.tsx",
       [
@@ -4796,7 +4546,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P72 有 aria-labelledby 放行（confirm-dialog 类内联 titleId 的写法）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P72WithLabelledBy.tsx",
       [
@@ -4850,7 +4599,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * `~/components/ui/separator` 的 `<Separator>`；含子内容的卡片结构边框
    * 不算（那是容器的一部分）。 */
   test('P73 视图层自闭合 <div className="border-t"> → 阻断', ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P73Hr.tsx",
       [
@@ -4866,7 +4614,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P73 含子内容的卡片结构边框不误伤（那不是分隔线）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P73Footer.tsx",
       [
@@ -4882,7 +4629,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P73 自闭合 div + border-l 也拦（覆盖 {t|b|l|r} 四变体）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P73Vertical.tsx",
       [
@@ -4903,7 +4649,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P75 手搓空态卡（border-dashed + rounded-xl + 内含文本）→ 阻断", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P75Empty.tsx",
       [
@@ -4925,7 +4670,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P75 有 cursor-pointer 的 dashed「添加占位」不误伤（是交互按钮、不是空态卡）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P75AddTile.tsx",
       [
@@ -4943,7 +4687,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P75 内含 onClick 的 dashed 卡不误伤（同上是交互卡）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P75Clickable.tsx",
       [
@@ -4963,7 +4706,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P75 自闭合虚线分隔线不误伤（那是 P73 的账 · 双判据互斥）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P75Divider.tsx",
       [
@@ -4985,7 +4727,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 漏项。合规出口有两个（`ui/native-select` 的 `<NativeSelect>` 或
    * `ui/select-menu` 的 `<SelectMenu>`），本判据只按形态数、不管选哪个。 */
   test("P76 视图层裸 <select> 计入棘轮（相对基线增量 → 阻断）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P76RawSelect.tsx",
       [
@@ -5007,7 +4748,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P76 `ui/native-select.tsx` 是这条账要收口的唯一出口，走 EXEMPT_DIRS 天然豁免", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/native-select.tsx",
       [
@@ -5023,7 +4763,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P76 不误伤同前缀标识符与类名（selectedValue / select-none / onSelect 等）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P76FalsePositive.tsx",
       [
@@ -5042,7 +4781,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 孤立 label）。合规出口：FormField / FieldLabel / Base UI Checkbox 的
    * children。锚点 `<label[\s/>]`，不误伤 labelClassName / label= 同前缀。 */
   test("P78 视图层裸 <label> 计入棘轮（相对基线增量 → 阻断）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P78RawLabel.tsx",
       [
@@ -5060,7 +4798,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P78 ui/label.tsx 与 ui/field.tsx 是这条账要收口的出口，走 EXEMPT_DIRS 天然豁免", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/label.tsx",
       [
@@ -5152,7 +4889,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P77 视图层手写 aria-pressed 计入棘轮（相对基线增量 → 阻断）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P77ManualToggle.tsx",
       [
@@ -5175,7 +4911,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P77 `ui/toggle-group.tsx` 是这条账要收口的唯一出口，走 EXEMPT_DIRS 天然豁免", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/toggle-group.tsx",
       [
@@ -5189,7 +4924,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P77 无 aria-pressed 的普通 <Button> 不误伤", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P77NoToggle.tsx",
       [
@@ -5208,7 +4942,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 半（P71 数带 `dark:` 的、P79 数不带前缀的浅色版），例外块共用一份
    * `p71-allow`。锚点用 `(?!dark:)` 前瞻避免与 P71 双计。 */
   test("P79 视图层 bg-violet-500 无 dark: 前缀 → 计入棘轮", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P79RawPalette.tsx",
       [
@@ -5224,7 +4957,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P79 与 P71 分工：带 dark: 前缀的归 P71 管、不误伤 P79", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P79OnlyDark.tsx",
       [
@@ -5246,7 +4978,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P79 不误伤语义 token（bg-primary / text-ink-muted / border-border-strong）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P79Semantic.tsx",
       [
@@ -5333,7 +5064,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 的 `size-N`（同一份 `w-N h-N` 的简写）。判据按 className 字符串解析、
    * 交集非空即计一处。 */
   test("P80 视图层同 className 里 w-8 + h-8 → 计入棘轮（阻断）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P80EqualWH.tsx",
       [
@@ -5351,7 +5081,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P80 只有一侧（w-8 或 h-8）不误伤；不等值（w-8 h-9）也不算这条账", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P80Asymmetric.tsx",
       [
@@ -5406,7 +5135,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 在文字后）—— shadcn `buttonVariants` 的 `has-data-[icon=*]` 选择器
    * 只吃**直接子级**，故深层嵌套不算这条账。 */
   test("P81 Button 直接子 <Icon name> 无 data-icon → 阻断", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P81Missing.tsx",
       [
@@ -5426,7 +5154,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P81 合规出口：data-icon=inline-start / inline-end 不再计", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P81Ok.tsx",
       [
@@ -5448,7 +5175,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* shadcn 的 `has-data-[icon=*]` 选择器只吃直接子级 —— 那种写法加了
      * data-icon 也不生效、不属本判据的治理面；判据必须显式**不计**它，
      * 否则逼下一个人把外层 span 拆掉去迎合机器（业务不该为判据让步）。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P81Nested.tsx",
       [
@@ -5466,7 +5192,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P81 lucide 后缀 Icon 命名（ChevronLeftIcon 等）与项目自研 Icon/svg 一并算 icon-like", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P81IconSuffix.tsx",
       [
@@ -5511,7 +5236,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test('P82 视图层 <Button title="x"> 直接阻断（硬闸命中行形态）', ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P82RawTitle.tsx",
       [
@@ -5531,7 +5255,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test('P82 多行 <Button\n  title="x"\n> 也计入（跨行属性段仍在开括号里）', ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P82Multiline.tsx",
       [
@@ -5557,7 +5280,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P82 计数不再被属性段里的 > 截断（粗锚曾漏计的三种形态现在全计到）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P82ArrowFn.tsx",
       [
@@ -5585,7 +5307,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P82 data-title= / aria-label=title= 不算原生 title（整名匹配）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P82NotTitle.tsx",
       [
@@ -5609,7 +5330,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P82 空值归 empty、动态值归 dynamic，只有动态值计入违规", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P82Tiers.tsx",
       [
@@ -5640,7 +5360,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P82 {...props} 展开归 unknown，单列人工抽查、不计违规", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P82Spread.tsx",
       [
@@ -5663,7 +5382,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P82 不误伤 <Hint> 与 <Tooltip render={<Button/>}>（两种合规出口）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P82Ok.tsx",
       [
@@ -5689,7 +5407,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P82 注释里的 <Button title=> 不误报（stripComments 已剥掉）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P82Comment.tsx",
       [
@@ -5707,7 +5424,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P82 不误伤同前缀组件（<ButtonLink> / <ButtonGroup> 不算 <Button>）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P82FalsePositive.tsx",
       [
@@ -5729,7 +5445,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 属性段必须出现 u-title-page / u-title-hero / text-page / text-hero 之一，
    * 且不得再叠 text-lg / text-[34px] 这类硬写字号。 */
   test("P83 h1 各屏自写字号 → 阻断", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P83MissingTier.tsx",
       [
@@ -5749,7 +5464,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P83 已走档但再叠硬写字号 → 仍计（档位给数，调用点不补第二套）", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P83DoubleSize.tsx",
       [
@@ -5768,7 +5482,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P83 合规出口：u-title-page / u-title-hero / text-page 都不计", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P83Ok.tsx",
       [
@@ -5793,7 +5506,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `className={[...].join("")}` 与 `cn("u-title-page", a > b ? … : …)` 里都有
      * `>`，用 `[^>]*` 那种粗锚会在表达式中间早停、把这行判成「没有档位要求」，
      * 于是判据在这里静默失效 —— 属性段必须平衡扫描（同 P82 的教训）。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P83ArrayAttrs.tsx",
       [
@@ -5814,7 +5526,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P83 只管屏级标题：h2 / h3 的多档微排版不入本条", ({ repo }) => {
     /* 区块级标题刻意保留 10.5–14px 的几档，并成一档会压平层次；判据越界就会
      * 逼下一个人拆掉合理的排版去迎合机器。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P83Sections.tsx",
       [
@@ -5838,7 +5549,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 「先让判据看得见存量，再冻结为 0」的反面：存量本就只有 1~2 处，
    * 同批清零后直接是硬闸（见 HARD_GATE_RULES 里 P84/P85 那段）。 */
   test("P84 手搓面包屑（`/` 分隔 span + 段数组 map）→ 阻断", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P84Handroll.tsx",
       [
@@ -5870,7 +5580,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* `ui/` 走 EXEMPT_DIRS 天然豁免（基元自身实现）；这一条同时钉住
      * 「判据不会把出口的 map + 分隔符算成违规」。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/ui/breadcrumb-path.tsx",
       [
@@ -5896,7 +5605,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P85 手写 <table> → 阻断；走 ui/table 基元不计", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P85RawTable.tsx",
       [
@@ -5940,7 +5648,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   test("P85 不误伤同前缀标识符（tableData / Table 组件名）", ({ repo }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P85NotATable.tsx",
       [
@@ -5967,7 +5674,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   test("P86 手搓屏级页头（`.u-title-page` + `mt-1 text-sm` 副说明）→ 阻断", ({
     repo,
   }) => {
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P86Handroll.tsx",
       [
@@ -5998,7 +5704,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     /* `ui/` 走豁免（基元自身实现），而**调用点**是这条账真正要数的位置：
      * 一个视图引入了 `<PageHeader>`、副说明交给基元渲染，文件里不该再有
      * `mt-1 text-sm` —— 所以也不该被算上。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P86Primitive.tsx",
       [
@@ -6025,7 +5730,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * **没有**那一行 `mt-1 text-sm` 副说明（实测这五个文件的 `mt-1 text-sm`
      * 命中数全是 0）。判据若把它们也算上，就等于逼着工具条形态的页头去套
      * 文档型结构 —— 那是 §16.2.4.73「三处刻意不迁」明确不要的。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P86ToolbarHeader.tsx",
       [
@@ -6052,7 +5756,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * `text-muted-foreground mt-2 max-w-md` —— 那是错误页的说明段、不是页头
      * 副说明那一档（规范 03 §3.10 给「新增一个屏时」写死的是 `mt-1`）。
      * 副说明的**档位**是判据的锚，宽一档就不该算。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P86WrongSpacing.tsx",
       [
@@ -6077,7 +5780,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   }) => {
     /* 副说明那一行**单独存在**（挂在卡片里的说明段）不是「手搓页头」——
      * 锚的两件必须同现。只数 `mt-1 text-sm` 会把库内多处说明行一网打尽。 */
-    seedBaseline(repo);
     repo.write(
       "src/components/studio/P86CardHint.tsx",
       [

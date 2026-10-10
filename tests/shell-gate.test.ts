@@ -215,7 +215,11 @@ describe("合并提交的壳采纳过滤（dropAdoptedShellInputs）", () => {
 
   function write(dir: string, rel: string, body: string): void {
     const full = path.join(dir, rel);
-    execFileSync("mkdir", ["-p", path.dirname(full)]);
+    /* `mkdirSync` 而不是 `execFileSync("mkdir", ["-p", …])`：后者是 POSIX 形态，
+     * Windows 上没有 `mkdir` 这个可执行文件 —— 三条合并态用例会一起报
+     * `spawnSync mkdir ENOENT`，而那个错读起来像「夹具坏了」而不是「平台形态不对」。
+     * 同一件事在本文件里已有 `mkdirSync` 的用法（cargo 那组），形态保持一致。 */
+    mkdirSync(path.dirname(full), { recursive: true });
     writeFileSync(full, body);
   }
 

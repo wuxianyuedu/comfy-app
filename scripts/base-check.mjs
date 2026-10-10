@@ -68,10 +68,11 @@
  *
  * ── 第三条入口：Windows 上的 `pnpm exec …` 形态（ISSUE #1652 顺带）──────
  *
- * `pnpm` 在 Windows 上是 `.cmd` 垫片，`spawnSync` 不开 `shell` 就找不到它
- * （`ENOENT` ⇒ 127 ⇒ `inconclusive`）。这不算判错（它确实跑不起来），但話术里必须
- * 直接说出口，否则人以为是自己命令写错了。两条出路：改用 `node node_modules/<pkg>/<bin>`
- * 形态，或（判据自己）给非 `node` 的命令开 `shell`（见 `runGate` 的 `NEEDS_SHELL`）。
+ * `pnpm` 在 Windows 上是 `.cmd` 垫片 —— Node 直接 spawn 它必然 `ENOENT` / `EINVAL`
+ * （⇒ 127 ⇒ `inconclusive`）。这不算判错（它确实跑不起来），但话术里必须直接说出口，
+ * 否则人以为是自己命令写错了。出路是**经唯一形态判据** `pnpmInvocation()`
+ * （`runGate` → `resolveGateInvocation`）：它会选中 PowerShell 宿主的 `.ps1` 形态，
+ * 找不到时给一条点名 `pnpm check:toolchain` 的可读出口。
  *
  * **不做的事**（都写进 §13.6.2 了）：不替你决定「挡不挡路」、不自动登记
  * `KNOWN_FAILED_FILES`、不自动改判据 —— 那是判断，本脚本只保证**事实**这一半可复算。
@@ -110,6 +111,13 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { chainedSteps } from "./base-check/chained-steps.mjs";
+/* pnpm 的「怎么起才起得来」全仓只有一个出口（AGENTS 硬规则 24 / §12.18）。
+ * 本文件曾自己写一份 `needsShell()`（`cmd === "pnpm"` 就开 shell）—— 那是
+ * 同一个坑的第 N 份实现，而且它是**错的那一份**：开 `shell: true` 只让 cmd.exe
+ * 去猜 `pnpm`，选中哪个形态不由判据决定；正确的形态判据（`.cmd` 起不来、
+ * 要经 PowerShell 宿主的 `.ps1`）在 `executable-resolve.ts`，由这里的
+ * `pnpmInvocation` 复用 —— 与 `dev.mjs` / `run-tests.mjs` 同一处。 */
+import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 /**
  * 「被复算的那份检出」= **调用时的 cwd**，不是脚本自己的位置。
@@ -583,30 +591,36 @@ export function commandTargetState(argv, cwd) {
 }
 
 /**
- * Windows 上必须经 `cmd.exe` 才起得来的命令 —— 垫片形态（`.cmd` / `.bat`）。
+ * 把一条门禁命令解析成这台机器上**真能 spawn** 的形态（`{command, args}` 或 null）。
  *
- * 为什么要有这条：`pnpm` 在 Windows 上是 `pnpm.cmd`，而 `spawnSync` **默认不开
- * shell**（这是有意的，为了不被命令行注入）—— 于是 `spawnSync("pnpm", …)` 报
- * `ENOENT` ⇒ 归一成 127 ⇒ 整条 `base-check` 变成 `inconclusive`。实测这是 ISSUE
- * #1652 里「Windows 上 `pnpm exec …` 形态一律 inconclusive」的成因，而报告里一个字
- * 都没提，人会以为是自己命令写错了。
+ * 两件事各只有一个出口，这里不重抄：
+ *   · `pnpm` —— `pnpmInvocation()`。它为 `.cmd` 垫片附带 PowerShell 宿主形态、
+ *     并给出可读的「路径上找不到」出口（AGENTS 硬规则 24 / §12.18）。
+ *     此前本文件自己写 `needsShell(cmd) → shell: true`：那是**第二份**形态判据，
+ *     而且与正确判据不一致 —— 「开一层 shell 让 cmd.exe 猜」不等于「经宿主起
+ *     `.ps1`」，`.cmd` 在 `spawnSync("pnpm", …, {shell:true})` 下能跑，可
+ *     `pnpmInvocation` 明确判定它是**不可用形态**（只有 cmd.exe 解释批处理，
+ *     而那条路带引号规则与注入面）。判据只能有一份，所以这里复用。
+ *   · `node` —— 用 `process.execPath`，避免复核环境里 PATH 上是另一套 Node。
  *
- * 只收**这一个**形态：其余命令（`node` / 绝对路径的二进制）在 Windows 上也是可执行
- * 文件，走 shell 只会多一层 cmd.exe 与它自己的引号规则（而参数里可能有含空格的路径）。
- *
- * @param {string} cmd
- * @returns {boolean}
+ * @param {string[]} argv
+ * @returns {{command: string, args: string[]} | null} null = PATH 上找不到（127 那一档）
  */
-function needsShell(cmd) {
-  return process.platform === "win32" && (cmd === "pnpm" || cmd === "npm");
+function resolveGateInvocation(argv) {
+  const [cmd, ...rest] = argv;
+  if (cmd === undefined) return null;
+  if (cmd === "pnpm") {
+    return pnpmInvocation(rest, { env: process.env });
+  }
+  return { command: cmd === "node" ? process.execPath : cmd, args: rest };
 }
 
 /**
  * 在给定工作目录跑一次门禁。**只做「跑 + 收码」**，判决在 `judge()`。
  *
- * `pnpm` 一律经 `pnpm exec`（AGENTS 硬规则 1：禁 npm/npx）；`node` 用当前
- * 可执行文件（`process.execPath`）而不是裸 `node`，避免复核环境里 PATH 上
- * 是另一套 Node。Windows 上的垫片形态经 `needsShell()` 开一层 shell（见它的注释）。
+ * `pnpm` 一律经 `pnpm exec`（AGENTS 硬规则 1：禁 npm/npx）；形态由
+ * `resolveGateInvocation()` 收口（见它的注释）。`shell` 恒 false —— 参数里有
+ * 含空格的路径时，多一层 cmd.exe / sh 就多一层它自己的引号规则。
  *
  * @param {string[]} argv
  * @param {string} cwd
@@ -621,19 +635,25 @@ export function runGate(argv, cwd) {
       output: `[base-check] 目标不存在于该工作目录：${state.target}`,
     };
   }
-  const [cmd, ...rest] = argv;
-  if (cmd === undefined) {
+  if (argv.length === 0) {
     return { code: 127, output: "[base-check] 命令是空的" };
   }
-  const finalCmd = cmd === "node" ? process.execPath : cmd;
-  const r = spawnSync(finalCmd, rest, {
+  const invocation = resolveGateInvocation(argv);
+  if (!invocation) {
+    /* 「没跑起来」而不是「跑了且红」：127 让 `judge()` 归 `inconclusive`，
+     * 与「命令拼不出来/跑不起来」同档 —— 照旧不构成证据。 */
+    return {
+      code: 127,
+      output:
+        `[base-check] PATH 上找不到可用的 ${argv[0]} ` +
+        "（自查：pnpm check:toolchain）",
+    };
+  }
+  const r = spawnSync(invocation.command, invocation.args, {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-    /* Windows 的垫片形态（`pnpm.cmd`）只有 cmd.exe 解释得了 —— 不开 shell 就是
-     * `ENOENT`，而那个读数会被读成「判据没跑起来」，与真实原因（形态不对）差着
-     * 一层。POSIX 上 `needsShell` 恒 false，语义一字不变。 */
-    shell: needsShell(cmd),
+    shell: false,
     /* 同样走干净环境：被判的判据自己也可能是 git 判据（`check-branch-guard` 等），
      * 继承来的 `GIT_*` 会让它判的**不是这个检出**。 */
     env: { ...cleanGitEnv(), CI: "1" },
