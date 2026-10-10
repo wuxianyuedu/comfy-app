@@ -81,7 +81,9 @@ describe("像素基线成对齐全且入库（§11.8）", () => {
      *   ② 登记的平台**已经不缺**任何基线 = 该删登记而没删（补录那一批的漏网）；
      *   ③ 登记项没写 `reason`（理由写「稍后处理」等于没写，下一个人不知道去哪台机器）。 */
     const problems: string[] = [];
-    for (const [platform, entry] of Object.entries(PENDING_PLATFORMS)) {
+    for (const [platform, entry] of Object.entries(
+      /** @type {Record<string, { reason: string }>} */ (PENDING_PLATFORMS),
+    )) {
       if (!SUPPORTED_PLATFORMS.some((p) => p === platform)) {
         problems.push(
           `${platform}：登记为待录，但它不在 SUPPORTED_PLATFORMS 里（孤儿登记）`,
