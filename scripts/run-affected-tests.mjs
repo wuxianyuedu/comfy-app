@@ -25,6 +25,22 @@
  *   · 不兜「空清单」：空集会让 `vitest run` 不带位置参数跑成**全量**，那是更坏的失效，
  *     所以宁可阻断（与收口前钩子里那句 `if [ -z "$files" ]` 同一口径，只是现在有了名字）。
  *
+ * ── 第二条档位：`--full`（显式全量，ISSUE #1393 签字要求的那个前置）──────────
+ *
+ * 上面那条「不兜空清单」讲的是**意外**的全量；而 `--full` 是**按名字**要的全量：
+ * 跳过暂存区解析、不拼位置参数，由 vitest 自己收集全部用例。
+ *
+ * 为什么必须有这一档（不是「装个开关」）：`affected-tests.mjs` 命中公共地基
+ * （`vitest.config.ts` / `tests/setup.ts` / lockfile / `tsconfig.json` / `.githooks/**`）时
+ * **放弃收窄**、只跑固定清单，而这条兜底此前**没有具名出口** —— 规范 §13.5.8 把
+ * 「先造一条显式的全量通道」写成了重开兜底的前置条件，缺的就是本档。有了它：
+ *   · wide 话术与钩子日志能指向一条**跑得响**的命令（不再让人自己猜「全量怎么跑」）；
+ *   · 它与「空参数 = 谁都没筛过」在退出码与日志上都可分辨 —— 后者仍然阻断。
+ *
+ * ⚠️ `--full` **不接进钩子**（钩子里只有增量档）：它是人按需要的那一档，
+ * 埋进每次提交就是把钩子变成半小时的仪式。它复用同一条判决链（超时形态照样
+ * 等负载回落 + `--no-file-parallelism` 隔离复跑），所以「机器太满」不会在这里变成结论。
+ *
  * ── 负载自适应：超时形态的失败要**自动隔离复跑**，不再把提交拦在这里 ────────
  *
  * 现场（实测，8 核容器）：同一份代码、同一个提交，空闲时这批 67 个用例 21s 全绿；
@@ -356,11 +372,42 @@ function collectList() {
 
 async function main(argv) {
   const dryRun = argv.includes("--dry-run");
+  /* ── 显式全量档（`--full`）───────────────────────────────────────────────
+   * 这一档**不是**增量解析的兜底，是它的**反面**：增量档把筛出来的清单当位置参数
+   * 交给 vitest，而这里由调用方**按名字**点名要全部（`vitest run` 不带位置参数即
+   * 全量收集）。两者在退出码与代价上完全不同，所以必须能分辨「我要全量」与
+   * 「谁都没筛过」—— 后者仍然是阻断（见下面那条空清单守卫）。
+   *
+   * 为什么需要它（ISSUE #1393 的签字）：`affected-tests.mjs` 命中公共地基时会
+   * **放弃收窄**，只跑固定清单，而这条兜底此前**没有具名出口** —— 规范里那句
+   * 「翻兜底的前置是先造一条显式的全量通道」说的就是这个洞。档位在场之后，
+   * wide 话术与钩子日志才能指向一条**跑得响**的命令，而不是让提交者自己去猜。
+   */
+  const full = argv.includes("--full");
+  if (full) {
+    const entry = resolveVitestEntry();
+    const { workers, note } = resolveMaxWorkers(
+      process.env.COMFY_PRECOMMIT_MAX_WORKERS,
+    );
+    process.stderr.write(
+      "[affected-launch] --full：按名字要全量（**不经**暂存区解析、不拼位置参数，\n" +
+        "  由 vitest 自己收集全部用例）。这一档买的是「没人能替你保证」的那部分，\n" +
+        "  代价是整份套件的墙钟 —— 常态提交仍走增量档。\n",
+    );
+    if (note) process.stderr.write(`[affected-launch] ${note}\n`);
+    if (dryRun) {
+      process.stdout.write("[affected-launch] --full：会跑全部用例（vitest 自行收集）\n");
+      return 0;
+    }
+    // 空清单在这里是**明确意图**（全量），所以复用同一条判决链（超时形态仍会隔离复跑）。
+    return await runChunk([], { entry, workers });
+  }
   const files = collectList();
   if (files.length === 0) {
     process.stderr.write(
       "[affected-launch] affected 解析没给出清单 —— 宁可阻断，" +
-        "也不让 vitest 不带位置参数跑成全量\n",
+        "也不让 vitest 不带位置参数跑成全量\n" +
+        "  （要按名字跑全量是另一档：`node scripts/run-affected-tests.mjs --full`）\n",
     );
     return 1;
   }
