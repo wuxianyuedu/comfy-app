@@ -112,12 +112,77 @@ node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --ro
 
 ---
 
+## 3.1 更安静的一种：锁文件对得上，而新加的包**解析不到**（ISSUE #1721）
+
+上一节那种「不一致」是**会说出来的** —— 有 `[WARN]` 行、有一份逐项差异。还有一种
+同源故障**什么都不说**，因为它被上面那道判据的取值口径漏掉了：
+
+> 本地 `node_modules` 停在**装某个新直接依赖之前**的那一刻，于是那个包只以**传递依赖**
+> 的**旧版本**存在、并且落在**别的包自己的私有层**里；顶层既没有提升出来的那一份、
+> 也没有任何可解析路径。**两份 lockfile 的实质内容可以逐字一致**（本机装的就是
+> `package.json` 声明的那一套的一部分），所以「依赖与 lockfile 不一致」这套判据判绿，
+> 而报错出现在别处。
+
+### 现场长什么样（实测记录）
+
+`axe-core@4.14.0` 被加进 `package.json` 的 devDependencies 之后，没重装依赖的检出上：
+
+- `pnpm exec tsc --noEmit` / `eslint` 报 `Cannot find module 'axe-core'`（TS2307）——
+  这个包**只在测试文件里**被 import，但类型检查与 lint 是全仓扫的，所以照样红；
+- `node_modules/axe-core` 这个顶层目录**根本不存在**（连「空目录」都不是）；
+- 但它**确实在树里**：`node_modules/@storybook/addon-a11y/node_modules/axe-core`
+  是那个**旧版本 4.13.0** —— 它是 `@storybook/addon-a11y` 的依赖，被放在**那个包自己的
+  私有层**；顶层与祖先目录都解析不到它。这就是「装了、但是装旧了、而且没提升出来」。
+
+### 为什么「删掉重装」不是这里的处方
+
+上一节的两条出口（`pnpm install` / 删 `node_modules` 重装）**都能修好它**，但前提是
+你先知道要修。这一档的麻烦在于**判据不报**：`pnpm install` 之外没有任何东西提醒你，
+于是它会以「一个和本次改动无关的报错」的形态反复出现。**实测处方就是普通的那一条**
+（`pnpm install`，4.14.0 装上、顶层链接恢复、解析正常），真正的改动是让这条故障有判据。
+
+### 现在谁在守它（`pnpm check:deps-freshness`）
+
+这条判据的第二层（③）现在有两块：
+
+| 层       | 判什么                                                   | 判据在哪                                                |
+| -------- | -------------------------------------------------------- | ------------------------------------------------------- |
+| 文本层   | 两份 lockfile 的**实质**差异（上一节那种）               | `node_modules/.pnpm/lock.yaml` ⇄ 仓库 `pnpm-lock.yaml`  |
+| 解析层   | `typescript` / `next` / `axe-core` 这几个包**解析得到吗** | `scripts/launcher-core/worktree.mjs` 的 `unresolvableDeclaredDeps()` |
+
+解析层红了会**单独**说一句话，别把它读成上一节那种「装错了版本」：
+
+```
+这些被声明的依赖在当前 node_modules 里**解析不到**：axe-core
+它们可能只以**别的版本**存在（被某个包当传递依赖拖进来、落在包自己的私有层），
+而顶层既没有提升出来的那一份、也没有任何可解析路径 —— 表现是 tsc / eslint 报
+`Cannot find module`（TS2307），而两份 lockfile 其实是对得上的。
+出口：在项目根执行 pnpm install。（dev server 正在跑时先关掉 —— 原生模块被进程锁住会让安装 EPERM 失败）
+```
+
+判据的入口与触发时机：`pnpm check:deps-freshness`（**开工前 / 评审前**，AI 与人都该先跑
+这一条），`--offline` 只看本地这几层；pre-commit 的 `deps-freshness --staged` 那一档只在
+**本次提交动了依赖面**时才判。整条的判据口径见规范
+[13.5.13](../standards/13-提交与-code-review.md#13513-依赖新鲜度远端改过库的版本本地还在旧的上面干活-node-scriptscheck-deps-freshnessmjsissue-1569)。
+
+> **为什么解析层只点名三个包，而不是扫全部 `package.json`**：判据的代价要付得起。
+> 这三条是跑门禁时**无论如何都会解析到**的包（`tsc` 编译需要 `typescript`、测试 / 构建
+> 需要 `next`、a11y 用例需要 `axe-core`）—— 多解析一次不产生新的工作，而「把所有直接依赖
+> 都解析一遍」会让判据跟着依赖表一起长。**新加依赖时顺手把这条清单补一格**，位置就在
+> `RESOLVE_PROBES`。
+
+> **依赖从来没装过时不报这一条**（`no-install`）：对着一棵不存在的树说「这三个包解析不到」
+> 是准确的噪声，动作一样是重装、结论却读起来完全不同（「没装」vs「装错了」）。
+
+---
+
 ## 4. 快速对照表
 
 | 你的情况 | 要做的事 |
 |---|---|
 | 只是普通拉取（没改依赖/配置） | 无需操作，直接启动 |
 | 拉取后 `pnpm-workspace.yaml` / `pnpm-lock.yaml` 有变更 | `pnpm install` |
+| `tsc` / `eslint` 报 `Cannot find module '某包'`，而两份 lockfile 看起来一致 | `pnpm install`（见 §3.1：新加的依赖没提升出来，旧版本被别的包扣在自己私有层里） |
 | install 报 `ERR_PNPM_IGNORED_BUILDS` / 年龄门槛错误 | 删除 `node_modules` 后重新 `pnpm install` |
 | pnpm 版本与仓库要求（12.4.1）不一致 | `corepack enable` + `corepack prepare pnpm@12.4.1 --activate` |
 | 双击脚本用户，拉取后启动报依赖错误 | 删 `node_modules`，重双击 `run-local.ps1` |

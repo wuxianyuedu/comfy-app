@@ -17,6 +17,10 @@
  *   7. `--staged` 的触发面：没碰依赖面 → 零输出退 0；碰了 → 照判并点出文件名；
  *   8. **合并已解完、提交还没落地**（`MERGE_HEAD` 在场）→ ② 不判（远端那份依赖面就在
  *      这次合并里），而不是给解冲突的人一条**永远解不开**的红。
+ *   9. ③ 的**第二维**（ISSUE #1721）：两份 lockfile 逐字对得上、而某个被声明的包在这棵
+ *      树上**解析不到**（只以传递依赖的旧版本落在包自己的私有层里）→ 红，且话术说的是
+ *      「解析不到」而**不是**「安装记录与声明对不上」（后者会把人送去核对一份本来就对的
+ *      文件）。反向对照两条：依赖压根没装（`no-install`）与依赖树完好时不误报。
  *
  * 外加一条**基准**用例：分叉之后自己在分支上加依赖，不算「远端改过依赖」——
  * 那正是 ② 取分叉点而不取 `origin/master` 的理由（拿后者会反向误报）。
@@ -61,7 +65,7 @@ interface FreshnessReport {
   remoteChecked: boolean;
   remoteAgeMs: number | null;
   remoteDrifts: { file: string; kind: string }[];
-  installDrift: { state: string } | null;
+  installDrift: { state: string; unresolved?: string[] } | null;
 }
 
 /**
@@ -210,6 +214,105 @@ describe("check-deps-freshness 契约", () => {
     repo.remove(".git");
     const { code } = repo.run();
     expect(code).toBe(2);
+  });
+
+  /* ── ③ 的第二维：声明了、却解析不到（ISSUE #1721）──────────────────────────
+   *
+   * 立案现场：本地依赖树停在「装 axe-core 之前」—— 它只以传递依赖的旧版本被
+   * `@storybook/addon-a11y` 拖进来、落在**包自己的私有层**，顶层既没有提升出来的
+   * 那一份、也没有任何可解析路径。而 ③ 原来的口径是**两份 lockfile 的文本 diff**，
+   * 那一格在这种情况下是绿的：`node_modules/.pnpm/lock.yaml` 与仓库那份逐字相同。
+   *
+   * 夹具因此按真实布局摆三层：顶层 `node_modules/`（声明依赖解析的就是它）、
+   * `node_modules/.pnpm/lock.yaml`（③ 文本层的输入）、`node_modules/.modules.yaml`
+   * （「装过」的证据，也是解析层决定要不要表态的开关）。探针包固定是
+   * `typescript` / `next` / `axe-core` 三条，所以要造的正是这三者里**少一个**。
+   */
+
+  /**
+   * 让工作区看起来「装过」，且**两份 lockfile 逐字一致**（③ 的文本层判 fresh）。
+   *
+   * 一致性这一步是这一组用例的前提，不是顺手：③ 的文本层也写 `state`，两侧同时漂移
+   * 时拿到的是 `drift` 而不是 `unresolved` —— 那样测的就是「文本层还在不在」，
+   * 而不是本组要问的「解析层单独能不能报红」。
+   */
+  const markInstalled = (repo: {
+    write: (rel: string, content: string) => void;
+  }) => {
+    repo.write("node_modules/.modules.yaml", "nodeLinker: hoisted\n");
+    repo.write("node_modules/.pnpm/lock.yaml", LOCK_STALE);
+    repo.write("pnpm-lock.yaml", LOCK_STALE);
+  };
+
+  test("声明了却解析不到（lockfile 逐字对得上）→ 红，且说的是「解析不到」不是「对不上」", ({
+    repo,
+  }) => {
+    // 声明与两侧 lockfile 都对齐（`PKG_STALE` / `LOCK_STALE` 是一套）⇒ 文本层不可能
+    // 有实质差异，于是 `installDrift.state` 只可能来自解析层，判据不会与文本层混淆。
+    repo.write("package.json", PKG_STALE);
+    markInstalled(repo);
+    // 只把 `typescript` 与 `next` 放到位：`axe-core` 缺失 = 解析不到。
+    // `installDep` 而不是 `mkdir`：见夹具里那条注释（临时目录的祖先里可能有别人的
+    // `node_modules`，Node 会一路向上找，`mkdir` 顶替会让这条用例测到环境噪声）。
+    repo.installDep("typescript");
+    repo.installDep("next");
+    const { code, output } = repo.run(["--offline"]);
+    expect(code).toBe(1);
+    const report = parseReport(repo.run(["--offline", "--json"]).output);
+    expect(report.installDrift?.state).toBe("unresolved");
+    expect(report.installDrift?.unresolved).toEqual(["axe-core"]);
+    // 话术要点：这一档**不能**说「装的不是你声明的那套」—— 它俩恰好对得上，
+    // 那句话会把读的人送去核对一份本来就对的文件。
+    expect(output).toContain("解析不到");
+    expect(output).toContain("axe-core");
+    expect(output).toContain("pnpm install");
+    expect(output).not.toContain("装不是你当前检出声明的那套依赖");
+  });
+
+  test("依赖压根没装（无 .modules.yaml）→ 仍走 no-install，解析层不抢答", ({
+    repo,
+  }) => {
+    // 对着一棵不存在的树报「这三个包都解析不到」是**准确的噪声**：动作一样是重装，
+    // 但结论读起来完全不同（「没装」vs「装错了」）。这一档归 `no-install`。
+    // 两侧 lockfile 对齐、只去掉 `.pnpm/lock.yaml`（=「安装记录不在」）：
+    // 文档里那个「读过磁盘也确实漂移过、后来才装对」的现场就是这样被定性成没装的。
+    repo.write("pnpm-lock.yaml", LOCK_STALE);
+    const report = parseReport(repo.run(["--offline", "--json"]).output);
+    expect(report.installDrift?.state).toBe("no-install");
+  });
+
+  test("探针清单与 reference-facts 的登记行逐项同源（只有一份权威定义）", async () => {
+    // 两处各记一份必然分叉，而分叉之后「哪一份是真的」没有判据能回答。所以这里
+    // 判的是**同源**：`docs/reference-facts.md` 的 `deps.resolveProbes` 那一行是
+    // 权威定义（`scripts/doc-facts.cjs` 反向解析它），判据里的字面量必须与它逐项相等。
+    // 这条用例同时挡住了「解析器失灵 ⇒ 读出空清单 ⇒ 一切照旧绿」那一档
+    // （§12.16 的同款教训：一个永远返回空数组的解析器会让所有断言全绿）。
+    const facts = (await import("../scripts/doc-facts.cjs")) as unknown as {
+      FACTS: { key: string; extract: () => unknown }[];
+    };
+    const probesFact = facts.FACTS.find((f) => f.key === "deps.resolveProbes");
+    expect(probesFact, "FACTS 里缺 deps.resolveProbes 登记项").toBeDefined();
+    const declared = probesFact?.extract();
+    expect(Array.isArray(declared)).toBe(true);
+    const worktree = (await import(
+      "../scripts/launcher-core/worktree.mjs"
+    )) as unknown as { RESOLVE_PROBES: string[] };
+    expect(worktree.RESOLVE_PROBES).toEqual(declared);
+    // 清单非空也是判据的一部分：空的探针清单会让解析层**永远判绿**，
+    // 而那正是它要拦的那件事。
+    expect(worktree.RESOLVE_PROBES.length).toBeGreaterThan(0);
+  });
+
+  test("依赖树完好（三个探针都在）→ 解析层不误报", ({ repo }) => {
+    // 反向对照：把三条探针都放到位 ⇒ 解析层静默。少了这条，「探针永远返回缺失」
+    // 这种失灵（§12.16 的同款教训：一个永远报红的判据会被学会绕开）测不出来。
+    repo.write("package.json", PKG_STALE);
+    markInstalled(repo);
+    for (const name of ["typescript", "next", "axe-core"]) {
+      repo.installDep(name);
+    }
+    const report = parseReport(repo.run(["--offline", "--json"]).output);
+    expect(report.installDrift).toBeNull();
   });
 
   test("--staged 未命中依赖面 → 零输出退 0（不给无关提交加时间）", ({

@@ -20,6 +20,11 @@
  * | ② 基线依赖 ⇄ 远端 | 分叉点（`merge-base`）的三份依赖文件 vs `origin/master` 的  | 你分叉之后远端改过依赖，基线是旧的 |
  * | ③ 依赖安装 ⇄ 本地 | 仓库 lockfile vs `node_modules/.pnpm/lock.yaml`           | 装了，但装的不是当前检出声明的那套 |
  *
+ * ③ 由两块拼成，因为它们**对不上时是两种病**（ISSUE #1721）：文本层（上面那格）判
+ * 「你的安装记录与声明对得上吗」，解析层（`unresolvableDeclaredDeps`）判「声明里的包
+ * 在这棵树上解析得到吗」。只有文本层会漏掉立案现场 —— 本地依赖树停在装某个新直接依赖
+ * **之前**时，两份 lockfile 可以逐字对得上，而 `tsc` / `eslint` 报 `Cannot find module`。
+ *
  * ①**不判红**：远端引用陈旧只说明「这次校验看不见远端」，`git fetch` 就能解除；
  * 拿它阻断提交等于让离线 / 久未 fetch 的检出寸步难行。但它**不许被静默吞掉** ——
  * 话术里出现「已最新」是禁止的（同 `check-dependency-audit.mjs` 的「未扫描」口径：
@@ -75,7 +80,10 @@ import { fileURLToPath } from "node:url";
 
 import { diffLockfiles, isEmptyDiff } from "./lockfile/lock-diff.mjs";
 import { renderLockDiff } from "./lockfile/render-lock-diff.mjs";
-import { lockfileDrift } from "./launcher-core/worktree.mjs";
+import {
+  lockfileDrift,
+  unresolvableDeclaredDeps,
+} from "./launcher-core/worktree.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -352,24 +360,52 @@ export function detectRemoteDrift(
 }
 
 /**
- * 判据 ③：仓库 lockfile vs 最近一次安装用的那份（包一层既有实现）。
+ * 判据 ③：仓库 lockfile vs 最近一次安装用的那份（包一层既有实现），再叠一层
+ * **声明依赖可解析吗**（ISSUE #1721）。
+ *
+ * 两件事都得说，因为它们是**两种病、两种动作**：
+ *   · lockfile 漂移 —— 两份文本对不上（拉取更新后没重装，或上次 install 被中断）；
+ *   · 解析失败 —— 文本可能**逐字对得上**，而某个被声明的包在这棵树上解析不到。
+ *
+ * 只有前者会漏掉立案现场那一种：本地依赖树停在**装某个新直接依赖之前**，那个包只以
+ * 传递依赖的旧版本落在**包自己的私有层**里 —— 两份 lockfile 实质一致（③ 判绿）、
+ * 启动器的关键依赖（typescript / next）也都在（`brokenKeyDeps` 判绿），
+ * 而 `tsc` / `eslint` 报 `Cannot find module`。
  *
  * 三种非 `fresh` 各自有话说，不能都归成「不一致」：`no-install` 是「压根没装」、
  * `no-lockfile` 是「检出里没有 lockfile」—— 给错动作比不给更坏。
- * @returns {{ state: string, diff?: object } | null} null = 一致
+ * @returns {{ state: string, diff?: object, unresolved?: string[] } | null} null = 一致
  */
 export function detectInstallDrift(root) {
+  const unresolved = unresolvableDeclaredDeps(root);
   const drift = lockfileDrift(root);
-  if (drift.state === "fresh") return null;
-  return { state: drift.state, diff: drift.diff };
+  if (drift.state === "fresh") {
+    return unresolved.length ? { state: "unresolved", unresolved } : null;
+  }
+  return { state: drift.state, diff: drift.diff, unresolved };
 }
 
-/** 把 ③ 的状态渲染成可行动的中文（每种形态给的是**不同的**动作）。 */
+/**
+ * 把 ③ 的状态渲染成可行动的中文（每种形态给的是**不同的**动作）。
+ *
+ * `unresolved` 与 `drift` 是两种病，所以**分开说**：lockfile 对得上而解析不到时，
+ * 只报「你的安装记录和声明对不上」是**错的**（它俩恰好对得上），会把人送去核对一份
+ * 本来就对的文件。这一档要说的是「这个包在树里解析不到」，出口仍然是重装。
+ */
 function renderInstallDrift(drift) {
   if (drift.state === "no-install") {
     return [
       "node_modules 里没有安装记录（缺 .pnpm/lock.yaml）—— 依赖还没装。",
       "出口：在项目根执行 pnpm install。",
+    ];
+  }
+  if (drift.state === "unresolved") {
+    return [
+      `这些被声明的依赖在当前 node_modules 里**解析不到**：${drift.unresolved.join(" / ")}`,
+      "它们可能只以**别的版本**存在（被某个包当传递依赖拖进来、落在包自己的私有层），",
+      "而顶层既没有提升出来的那一份、也没有任何可解析路径 —— 表现是 tsc / eslint 报",
+      "`Cannot find module`（TS2307），而两份 lockfile 其实是对得上的。",
+      "出口：在项目根执行 pnpm install。（dev server 正在跑时先关掉 —— 原生模块被进程锁住会让安装 EPERM 失败）",
     ];
   }
   if (drift.state === "no-lockfile") {
@@ -380,8 +416,15 @@ function renderInstallDrift(drift) {
   }
   const lines = [
     "node_modules 装的不是你当前检出声明的那套依赖（拉取更新后没重装，或上次 install 被中断）。",
-    "出口：在项目根执行 pnpm install。（dev server 正在跑时先关掉 —— 原生模块被进程锁住会让安装 EPERM 失败）",
   ];
+  if (drift.unresolved?.length) {
+    lines.push(
+      `同时这些依赖解析不到：${drift.unresolved.join(" / ")} —— 重装会一并解决。`,
+    );
+  }
+  lines.push(
+    "出口：在项目根执行 pnpm install。（dev server 正在跑时先关掉 —— 原生模块被进程锁住会让安装 EPERM 失败）",
+  );
   const body = drift.diff ? renderLockDiff(drift.diff) : [];
   if (body.length) {
     lines.push(
@@ -557,7 +600,10 @@ function main() {
             kind: d.kind,
           })),
           installDrift: result.installDrift
-            ? { state: result.installDrift.state }
+            ? {
+                state: result.installDrift.state,
+                unresolved: result.installDrift.unresolved ?? [],
+              }
             : null,
         },
         null,

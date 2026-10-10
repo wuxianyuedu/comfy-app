@@ -106,6 +106,19 @@ export interface GateRepo {
   /** 工作区里这个路径在不在（判「`--update` 到底有没有落盘」用，不必 `read` 再 catch）。 */
   exists: (rel: string) => boolean;
   /**
+   * 把一个**已安装依赖**放进工作区（建目录 + 最小 `package.json`）。
+   *
+   * 为什么不能拿 `mkdir` 顶替：临时工作区在 `os.tmpdir()` 下面 —— 它的**祖先目录**
+   * （`/tmp`、`<系统临时目录>`）里可能有任意项目的 `node_modules`，而 Node 的模块解析
+   * 是**一路向上找**的，于是「探针说这个包解析得到」可能是从**工作区外**捡来的
+   * （§12.16 同款：判据的输入边界没封住时，它给出的是环境噪声而不是被测结论）。
+   * 装上 `package.json` 之后这个目录就是一个完整的包根，`require.resolve` 不再上溯。
+   *
+   * 造「声明了却解析不到」那一档时，**不要**把要缺的那一个也装进来 ——
+   * 少了它就是缺件。
+   */
+  installDep: (name: string, version?: string) => void;
+  /**
    * 在工作区里跑一次 `git`（`cwd` 已指向它）。
    *
    * 为什么放在这里：分支守卫 / 格式棘轮这两份判据的**被测输入是 git 状态本身**
@@ -215,6 +228,10 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
     dir: root,
     write: put,
     mkdir: (rel) => mkdirSync(abs(rel), { recursive: true }),
+    installDep: (name, version = "1.0.0") => {
+      mkdirSync(abs(path.join("node_modules", name)), { recursive: true });
+      put(path.join("node_modules", name, "package.json"), `{"name":"${name}","version":"${version}"}\n`);
+    },
     remove: (rel) => rmSync(abs(rel), { recursive: true, force: true }),
     read: (rel) => readFileSync(abs(rel), "utf8"),
     exists: (rel) => existsSync(abs(rel)),
