@@ -1,0 +1,332 @@
+/**
+ * freshness-gate.mjs — 「每一档都有主」的提交门禁（规范 §11.8 / §13.5.4）
+ *
+ * 守**三份同形的账**（`FRESHNESS_TRACKS`：全量 e2e / 全量单测 + 覆盖率 / 产物级护栏），
+ * 三份都由本脚本在 pre-commit 的 D 组判。它补的是**「跑过一次」与「一直绿」是两件事**：
+ * 一档可以「看着有主、实际三个月没人碰过」，而账面上一个字都不说。
+ *
+ * 判据的形状（与 `shell-gate.mjs` 同族：触发面窄、判决可执行）：
+ *   · 每一登记档都要有一条新鲜度记录，写清「谁 / 什么时候 / 按哪条命令复核的」
+ *     —— 缺一条 = 这一档还停在「录过就算数」；
+ *   · 记录**不许**挂在非登记档上（删了一档，账要同批抹掉）；
+ *   · 每次提交顺带打印各档「上次自证距今多久」——账的价值在于被**看见**。
+ *
+ * 「多久没跑算旧」这条判据**只对按日历日判的档生效**（`track.daily`）：它问的是
+ * 「**今天**自证过没有」，不是拿墙钟去卡一个会随机器与运气变化的阈值。按输入面判的档
+ * （全量单测 / 产物护栏）另外读 `track.dirty`：**改了就当天跑**，没动过的日子以
+ * `graceMs` 为宽限 —— 十分钟量级的那两档没必要每天都跑。
+ *
+ * 每一档都有两条出路，且都不是绕过（留下的是一条能复核的事实）：
+ * `run` 那一栏的命令跑绿即记，或 `skipHow` / `dirtyHow` 记一条写明理由的账
+ * （占位理由被拦）。
+ *
+ * 用法：`node scripts/freshness-gate.mjs`（由 `.githooks/pre-commit` 的 D 组调用）
+ *      `node scripts/freshness-gate.mjs --ledger` 打印当前账（无判决，给人看）
+ */
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+import {
+  FRESHNESS_TRACKS,
+  checkFreshnessLedger,
+  dirtiesTrack,
+  freshnessAge,
+  freshnessTrack,
+  readFreshnessLedgerAt,
+} from "./freshness-ledger.mjs";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(HERE, "..");
+
+/**
+ * 读一份新鲜度账（不存在 / 读不出 → `{}`，由判决把它当成「一档都没记」）。
+ *
+ * 读写语义都在 `freshness-ledger.mjs`（`readFreshnessLedgerAt` / `writeFreshness`）：
+ * 两条账各写一份「读不出怎么办」时，一边会把坏 JSON 当成空账（判红，话术正确）、
+ * 另一边会静默放行 —— 而后者不报错，只是少守一条。
+ *
+ * @param {string} kind `FRESHNESS_TRACKS` 的键
+ * @param {string} [root]
+ * @returns {Record<string, unknown>}
+ */
+export function readFreshnessLedger(kind = "e2e", root = ROOT) {
+  return readFreshnessLedgerAt(root, freshnessTrack(kind).ledger);
+}
+
+/**
+ * 各档的判决面 —— **从登记表派生，不是分支、也不是一张手抄的清单**。
+ *
+ * 这里要的只有一件事：每一档的账里该有哪些**键**。键的唯一出处是 `track.key`
+ * （`e2e` / `full` / `artifact`）。
+ *
+ * ⚠️ 这段**曾经是手抄的**，于是「新增一档却忘了在这里加一行」⇒ 那一档**谁都不判**
+ * （判据的覆盖面与它自称的不符，正是本节立案现场那条病），而新增档这件事本身不会有
+ * 任何东西变红。现在由 `FRESHNESS_TRACKS` 现算：新增一档自动被纳入判决面。
+ *
+ * 为什么不是「在 `main` 里 `if (kind === ...)`」：那样「第四档」会变成四分支，
+ * 而某一处漏了不会有任何东西告诉你。
+ *
+ * @returns {Array<{kind: string, keys: string[]}>}
+ */
+export function trackScopes() {
+  return Object.keys(FRESHNESS_TRACKS).map((kind) => {
+    const track = freshnessTrack(kind);
+    return { kind, keys: [track.key] };
+  });
+}
+
+/**
+ * 判决本体：给定新鲜度账，决定退出码与理由。
+ *
+ * 抽成纯入口是为了让**判决可被执行**（同 `shell-gate.mjs` 的 `runGate` 先例）：
+ * 不接输入的话，「永远说没问题」这一层静默退化不会有任何东西红。
+ *
+ * @param {{ledger: Record<string, unknown>, kind?: string, keys?: string[], now?: Date, dirtySince?: Date | null}} input
+ * @returns {{exitCode: number, problems: string[], ages: string[]}}
+ */
+export function runGate({
+  ledger,
+  kind = "e2e",
+  keys,
+  now = new Date(),
+  dirtySince = null,
+}) {
+  const track = freshnessTrack(kind);
+  /* 缺省值与 `trackScopes()` **同源**（那里是判决面的唯一出处）：两个地方各自写一份
+   * 「这一档有哪些键」时，`main`（走 `trackScopes`）与直接调 `runGate` 的调用方
+   * （走缺省值）会对同一档给出不同答案 —— 而默认值那一侧错了不会红（调用方几乎总是
+   * 显式传，缺省那条路径只在用例里走）。 */
+  const required = keys ?? [track.key];
+  const problems = checkFreshnessLedger(ledger, {
+    required,
+    registered: required,
+    track,
+    kind,
+    now,
+    dirtySince,
+  });
+  const ages = required.map(
+    (p) => `${p}：${freshnessAge(ledger[p], now) ?? "无记录"}`,
+  );
+  return { exitCode: problems.length === 0 ? 0 : 1, problems, ages };
+}
+
+/**
+ * 「今天动过这一档的输入面」的那个提交时刻（没有则 null）。
+ *
+ * 只有 `track.dirty` 非空的档读它，而它们对**谁该在什么时候跑**的答案与全量 e2e 不同：
+ * 那两档的代价是十分钟量级，**没必要每天都跑** —— 真正要的是「改了就当天跑」。
+ * 于是判据要能回答「今天这个工作区有没有提交动过 `src/`（或产物链那几个文件）」。
+ *
+ * 用**提交时间**而不是文件 mtime：mtime 会被 `git checkout` / `stash` / 拉取整体刷新
+ * （`--cache-strategy metadata` 那件事的同源坑），于是「今天动过」会变成「今天 checkout 过」。
+ *
+ * ⚠️ 但**只看已提交的**会让这条判据在钩子里系统性放行「正在改的这一笔」：pre-commit 跑在
+ * 提交之前，此刻 `git log` 里还没有这次改动 —— 一笔改了 `tests/` 的提交会被判成
+ * 「今天没动过这一档」，等它落进 master，下一个人第一次提交才立刻红。
+ * 「改了就当天跑」因此退化成「改了由别人补跑」。所以取证面是**今天的提交 ∪ 待提交那一批**
+ * （`git diff --cached --name-only`），合成规则抽成纯函数 `combineEvidence` 让四种组合
+ * 都能被真跑；待提交没有时刻，成立且今天还没有任何提交动过时用 `now` 顶上。
+ *
+ * ⚠️ 拿不到答案时返回 `null`（**不是**「今天没动过」）：`git` 不在 PATH 上、这不是一个
+ * git 检出、或命令超时 —— 三者都让「改了就当天跑」这条判据**无话可说**，而把「问不出来」
+ * 当成「没动过」正是 §9.2 第 3 条禁止的静默失败。退回按 `graceMs` 判（宽松但仍有时限），
+ * 且这一档的账文件不在时另有宽限期兜底。
+ *
+ * @param {{dirty: string[]}} track
+ * @param {Date} now
+ * @returns {Date | null}
+ */
+export function dirtySinceToday(track, now = new Date()) {
+  if (!track.dirty || track.dirty.length === 0) return null;
+  /* 取证面 = **今天的提交 ∪ 待提交的那一批**。
+   *
+   * 只问 `git log` 时这条判据跑在**提交之前**：一笔改了 `tests/` 的提交在钩子里被判成
+   * 「今天没动过这一档」而放行，它落进 master 之后下一个人第一次提交立刻红 ——
+   * 「改了就当天跑」于是退化成「改了由别人补跑」。`git diff --cached` 正是那一刻
+   * 就要进提交的内容，所以把它并进同一个问题里。
+   *
+   * 两半的取法不同：提交带时刻（要的是「今天第一次动它的那一刻」，用来判「先跑后改」），
+   * 待提交没有时刻 —— 它成立时若今天还没有任何提交动过它，就用 `now` 顶上去，
+   * 语义是「此刻正有一批要吃这一档的改动等着提交」。已有更早的提交时**保留更早的那个**：
+   * 结论更严格，且不会把「先跑后改」那一条边界（自证晚于改动即放行）弄丢。 */
+  const committed = committedSinceMidnight(track, now);
+  return combineEvidence(committed, stagedTouchesTrack(track), now);
+}
+
+/**
+ * 两半取证合成一个时刻（抽成纯函数是为了让**四种组合**都能被真跑一次）。
+ *
+ * @param {Date | null} committed 今天的提交里最早动过它的那一刻（null = 没有，或问不出来）
+ * @param {boolean | null} stagedHit 待提交那一批动不动它（null = git 问不出来）
+ * @param {Date} now
+ * @returns {Date | null}
+ */
+export function combineEvidence(committed, stagedHit, now) {
+  // 问不出来时**不新增结论**（也不撤销已有的）：把「问不出」当成「没动过」是 §9.2 第 3 条
+  // 禁的静默失败，反过来凭空造一个时刻又会把「今天其实没人动它」误判成必须跑。
+  if (stagedHit === null) return committed;
+  if (stagedHit && committed === null) return now;
+  // 已有更早的提交时保留更早的那个：结论更严格，且「先跑后改」那条边界仍按真实时刻比。
+  return committed;
+}
+
+/**
+ * 待提交（已 `git add`）的那一批里有没有这一档的输入面。
+ *
+ * @param {{dirty: string[]}} track
+ * @returns {boolean | null} `null` = git 问不出来（**不是**「没动过」—— 与
+ *   `committedSinceMidnight` 同一口径：拿不到答案时不许让这一档白放行，也不许凭空加结论）
+ */
+function stagedTouchesTrack(track) {
+  const res = spawnSync("git", ["diff", "--cached", "--name-only"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (res.error || res.status !== 0 || typeof res.stdout !== "string")
+    return null;
+  return stagedDirtiesTrack(track, res.stdout.split("\n"));
+}
+
+/**
+ * 纯函数那一半：把 `git diff --cached --name-only` 的输出行归一成路径前缀判断。
+ *
+ * 抽出来是为了让**分隔符这一档可被执行**：`git` 在 Windows 上给的是正斜杠，但工作区里
+ * 任何一段路径处理都可能把反斜杠喂进来（本仓在 `path.relative` 上栽过第二次），
+ * 而 `track.dirty` 的前缀全是正斜杠 —— 不归一时「动了 `tests/`」会被读成没动，
+ * 表现正是这条判据静默恒放行。
+ *
+ * @param {{dirty?: string[]}} track
+ * @param {string[]} rawLines
+ * @returns {boolean}
+ */
+export function stagedDirtiesTrack(track, rawLines) {
+  const paths = rawLines
+    .map((line) => line.trim().replace(/\\/g, "/"))
+    .filter(Boolean);
+  return dirtiesTrack(track, paths);
+}
+
+/**
+ * 今天的提交里，最早一个动了这一档输入面的时刻（没有则 null；问不出来也是 null）。
+ *
+ * @param {{dirty: string[]}} track
+ * @param {Date} now
+ * @returns {Date | null}
+ */
+function committedSinceMidnight(track, now) {
+  /* 只看**当天**的提交：`--since` 给午夜，配合 `%cI` 的严格 ISO 时刻。本地日历日
+   * 与 `isSameLocalDay` 同源 —— 两处用不同日界时会出现「账说今天动过、判据说没动」。 */
+  const midnight = new Date(now);
+  midnight.setHours(0, 0, 0, 0);
+  /* `--format=%cI` 与 `--name-only` 的实际形状是「时刻行 · **空行** · 文件行…」：
+   * 空行分隔的是**时刻与它的文件清单**，不是两次提交（实测 `git log` 的输出字节：
+   * `…T14:10:05+08:00\n\nsrc/a.ts\n…`）。所以「遇空行就收段」是错的 ——
+   * 那样 `stamp` 会在文件行到达**之前**被清掉，于是**每一次**都判成「今天没动过这一档」，
+   * 而话术里一个字都不会提（判据静默失效，正是本条要防的形态）。
+   * 正确的状态机：新时刻出现时才把上一段收掉，空行一律忽略。 */
+  const res = spawnSync(
+    "git",
+    [
+      "log",
+      "--since",
+      midnight.toISOString(),
+      "--format=%cI",
+      "--name-only",
+      "--",
+    ],
+    { cwd: ROOT, encoding: "utf8" },
+  );
+  if (res.error || res.status !== 0 || typeof res.stdout !== "string")
+    return null;
+  /* 两栏都显式标类型：它们在闭包 `flush()` 里被赋值，TS 的控制流分析看不进去 ——
+   * 不标的话会被收窄成初值 `null`，下面每次比较都报「隐式 any」。 */
+  /** @type {Date | null} */
+  let earliest = null;
+  /** @type {string | null} */
+  let stamp = null;
+  let hit = false;
+  const flush = () => {
+    if (hit && stamp) {
+      const at = new Date(stamp);
+      if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest))
+        earliest = at;
+    }
+    hit = false;
+  };
+  for (const line of res.stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) {
+      flush();
+      stamp = trimmed;
+      continue;
+    }
+    if (dirtiesTrack(track, [trimmed.replace(/\\/g, "/")])) hit = true;
+  }
+  flush();
+  return earliest;
+}
+
+function main() {
+  const ledgerOnly = process.argv.includes("--ledger");
+  const now = new Date();
+  let failed = 0;
+  for (const scope of trackScopes()) {
+    const track = freshnessTrack(scope.kind);
+    const ledger = readFreshnessLedger(scope.kind);
+    const result = runGate({
+      ledger,
+      kind: scope.kind,
+      keys: scope.keys,
+      now,
+      dirtySince: dirtySinceToday(track, now),
+    });
+    const stamp = `上次自证 —— ${result.ages.join("；")}`;
+    if (ledgerOnly) {
+      process.stdout.write(`[freshness] ${track.label}：${stamp}\n`);
+      continue;
+    }
+    /* 宽限期：账文件**还没入库**时只提醒、不阻断。这份账是随提交进来的（平台侧 squash
+     * 合并不跑本地钩子，硬规则 6），所以「文件不在」是一个**本人做不到**的状态 ——
+     * 无条件阻断会拦住从它分出的每一次提交。宽限期里那一步照样把「今天该跑一次」打在
+     * 台面上：账面缺席与「这件事已经有人管」不该长得一样。
+     * 这一条对**四档一视同仁**（`track.daily` 只是「这一档按日历日/改动面判」，
+     * 与「账还没入库」是两件事 —— 此前把两者写在一起，于是新加的非 daily 档
+     * 在账文件缺席时会直接走 `runGate` 报「没有记录」并阻断本人做不到的事）。 */
+    if (!fs.existsSync(path.join(ROOT, track.ledger))) {
+      process.stdout.write(
+        `  [warn] ${track.label}：还没有账文件（${track.ledger}）—— 宽限期只提醒、不阻断。` +
+          `跑一次 \`${track.run}\` 会留下第一条凭证。\n`,
+      );
+      continue;
+    }
+    if (result.exitCode !== 0) {
+      failed = 1;
+      /* 判决自己已经把「跑哪条命令 / 记哪条豁免」写进每一条问题里了（它要能独立
+       * 被执行 —— `runGate` 的调用方直接读 `problems`）。这里只补它给不出的那一句
+       * **落点**（账文件路径），不再把「记账」整段复述一遍 —— 复述的形态是同一段话
+       * 在同一屏里出现两次，而第二次读起来像两件不同的事。 */
+      process.stderr.write(
+        `[freshness-gate] ✗ ${track.label} 的新鲜度账不完整：\n      · ` +
+          result.problems.join("\n      · ") +
+          `\n        账文件：${track.ledger}（手工补一条也可以，但要写全 who / how / verifiedAt）。\n` +
+          "        规范：docs/standards/11-测试与可观测性.md §11.8\n",
+      );
+      continue;
+    }
+    process.stdout.write(`  [ok] ${track.label}：每档都有主（${stamp}）\n`);
+  }
+  return failed;
+}
+
+if (
+  process.argv[1] &&
+  fs.realpathSync(process.argv[1]) ===
+    fs.realpathSync(fileURLToPath(import.meta.url))
+) {
+  process.exit(main());
+}

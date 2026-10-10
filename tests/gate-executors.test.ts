@@ -267,9 +267,9 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
 /**
  * 扫描面本身（ISSUE #1444 残活 A）。
  *
- * 这条靶子是**判据自己的覆盖面**：旧口径只看名字前缀，于是四份真在门禁链里跑的
- * 判定型判据（`shell-gate.mjs` / `storybook-check.mjs` / `visual-gate.mjs` /
- * `pixel-run.mjs`）因名字不叫 `check-` 而不在盘点里 —— 判据自报的份数与真值不符。
+ * 这条靶子是**判据自己的覆盖面**：旧口径只看名字前缀，于是那几份真在门禁链里跑的
+ * 判定型判据（`shell-gate.mjs` / `storybook-check.mjs` 等）因名字不叫 `check-`
+ * 而不在盘点里 —— 判据自报的份数与真值不符。
  * 而「判据的覆盖面与它自称的不符」正是 #1451 的立案现场，所以这里逐份把
  * **门禁链事实**钉住。
  *
@@ -324,12 +324,7 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
     expect(total, "扫描面必须含门禁链认出的判据").toBeGreaterThan(40);
     const chain = chainScripts();
-    for (const name of [
-      "shell-gate.mjs",
-      "storybook-check.mjs",
-      "visual-gate.mjs",
-      "pixel-run.mjs",
-    ]) {
+    for (const name of ["shell-gate.mjs", "storybook-check.mjs"]) {
       expect(chain, `${name} 应当出现在钩子的门禁步骤位置`).toContain(name);
       // 名字不在「无执行者 / 报告型自称在跑」这两份点名清单里 ⇒ 已被认作判据且执行者在场。
       expect(output.includes(name), `${name} 不该被点名`).toBe(false);

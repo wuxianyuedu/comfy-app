@@ -2,19 +2,9 @@
   "why": "「不进钩子」的按需档 ⇄ 它的机器事实来源 ⇄ 它的执行者（规范 §13.5.4 + §13.5.12）。判据 scripts/check-on-demand-duties.cjs 双向核对：① 每一行点名的机器事实必须仍然存在（新鲜度档键 / 门禁 run:false 项 / 按需召唤台账条目）；② 每一个机器事实都必须被本索引登记（新增一档却忘了登记 ⇒ 那一档谁都不判 —— 判据的覆盖面与它自称的不符，正是 §13.5.12 的立案现场）。新增一条「不进钩子」的档时同批加一行。",
   "duties": [
     {
-      "id": "visual-freshness",
-      "name": "像素回归（Playwright 截图 + 基线配对）",
-      "notInHook": "起 webServer + 浏览器；结论只在录过基线的那台机器上成立（基线名带平台）",
-      "fact": {
-        "kind": "freshness-track",
-        "key": "visual"
-      },
-      "executor": "visual-gate.mjs 判「带不带像素判决」+ 新鲜度账（钩子 D 组「每档都有主」）"
-    },
-    {
       "id": "e2e-freshness",
-      "name": "全量 e2e（Playwright：普通 spec + e2e/visual 像素档）",
-      "notInHook": "起 webServer + 浏览器，十几分钟量级；且是像素档的超集",
+      "name": "全量 e2e（Playwright）",
+      "notInHook": "起 webServer + 浏览器，十几分钟量级",
       "fact": {
         "kind": "freshness-track",
         "key": "e2e"
@@ -40,16 +30,6 @@
         "key": "artifact"
       },
       "executor": "钩子 D 组「每档都有主」判**改了就当天跑**（吃产物链那几个文件）"
-    },
-    {
-      "id": "pixel-gate-entry",
-      "name": "像素回归的 check:all 入口（显式点名才跑）",
-      "notInHook": "与上面 visual 同一条通道的**入口**那一半：它在 quality-gate.mjs 里被标 run:false",
-      "fact": {
-        "kind": "gate-not-in-all",
-        "gate": "visual"
-      },
-      "executor": "pnpm check:visual / `--mode visual` / 双击入口（pixel-run.mjs）"
     },
     {
       "id": "dependency-audit",

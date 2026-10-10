@@ -59,7 +59,8 @@ export function LogPanelHeader(input: {
   return (
     <>
       {/* 行头：宽窗口一行，窄窗口下筛选器整组折到第二行（判据是筛选器容器的
-        `min-w-56`），所以行高用 `min-h`、允许内容把它撑高而不是钉死高度。 */}
+        `min-w-fit`，即它的**内容固有宽度**），所以行高用 `min-h`、允许内容把它
+        撑高而不是钉死高度。 */}
       <div className="border-border-strong bg-surface-1 flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
         <div className="flex shrink-0 items-center gap-2">
           <FileText size={16} className="text-primary-strong shrink-0" />
@@ -86,10 +87,11 @@ export function LogPanelHeader(input: {
            右侧的搜索 / 来源下拉 / 操作按钮也因此被顶到最右，不必再靠一个
            单独的 `flex-1` 空白——多一个 `flex-1` 只会和它平分富余宽度，
            于是「空白又回来了」。
-        2. **`min-w-56` 是折行与否的判据**：可用宽度不足 224px 时它整组落到
-           第二行（`flex-wrap` 的换行单位就是这个容器）并吃掉整行宽度。
+        2. **`min-w-fit` 是折行与否的判据**：宽度不足它的内容固有宽度时，它整组
+           落到第二行（`flex-wrap` 的换行单位就是这个容器）并吃掉整行宽度。
            比「每个按钮各自 min-w 后硬挤」好在：无论多窄，标签都保持可读，
-           不会退化成只剩一列竖字。 */}
+           不会退化成只剩一列竖字。
+           （口径的沿革与 `min-w-56` 为什么是错的，见 `LogFilterBar` 里同一段。） */}
         <LogFilterBar originCounts={originCounts} />
 
         {/* 来源筛选贴最右（用户要求：中间让出来的宽度归左侧的类别与条数）。

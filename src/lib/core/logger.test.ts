@@ -10,6 +10,18 @@ afterEach(() => {
 });
 
 /**
+ * 空转的 ERROR 镜像 —— **每一条用例都必须注入它**。
+ *
+ * 镜像是 `createPinoLogger` 里一条**真实写盘**的副作用：不给 `mirror` 时它落
+ * 真实的 `log/current/services/app-runtime-*.log`（`LOG_ROOT` 由 `process.cwd()`
+ * 推出来，测试的 cwd 正是仓库根）。本文件此前就这么漏了 —— 跑一次
+ * `pnpm exec vitest run src/lib/core/logger.test.ts` 会在仓库根新建 `log/` 并写进
+ * 三行（含 `log.error("e")` 这类用例正文），既是污染也是环境耦合（规范 07 §7.18.2.1
+ * 「写用例时注意」那一段）。收成一个出口，别让每条用例各自记得传。
+ */
+const NOOP_MIRROR = { error: () => undefined };
+
+/**
  * 造一个把 JSON 行写进内存流的日志器。
  *
  * 必须显式传 `destination`：默认目标在 dev 下是 pino-pretty 的 worker transport
@@ -21,7 +33,11 @@ function makeLogger(ns: string) {
   streams.push(stream);
   const chunks: string[] = [];
   stream.on("data", (c: Buffer) => chunks.push(c.toString("utf8")));
-  const log = createLogger(ns, { destination: stream, level: "debug" });
+  const log = createLogger(ns, {
+    destination: stream,
+    level: "debug",
+    mirror: NOOP_MIRROR,
+  });
   const lines = () =>
     chunks
       .join("")
@@ -47,7 +63,11 @@ describe("core/logger — 核心层门面（实现只有一份，就是本模块
     streams.push(stream);
     const chunks: string[] = [];
     stream.on("data", (c: Buffer) => chunks.push(c.toString("utf8")));
-    const log = createLogger("t", { destination: stream, level: "error" });
+    const log = createLogger("t", {
+      destination: stream,
+      level: "error",
+      mirror: NOOP_MIRROR,
+    });
     log.info("i");
     log.error("e");
     const out = chunks

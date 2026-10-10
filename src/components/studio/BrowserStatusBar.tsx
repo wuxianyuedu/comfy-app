@@ -14,6 +14,7 @@ import {
   selectVisibleResourceMetrics,
 } from "./comfy-resource-metrics";
 import { useDevServerStatus } from "./hooks/use-dev-server-status";
+import type { AppServiceExitNotice } from "~/lib/shell/app-service-exit";
 import {
   schemaSyncNotice,
   useSchemaSyncStatus,
@@ -232,6 +233,33 @@ function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
   );
 }
 
+/**
+ * 「应用服务上一次为什么结束」那一格（数据源 `useDevServerStatus` 的 `exitNotice`）。
+ *
+ * 为什么值得占一格里**可见的文字**，而不是只挂在右侧那格的 hover 上：状态栏那一格
+ * 只有 24px 高、右下角位置窄，而这句话恰恰是用户唯一想问的（ISSUE #1692 原话
+ * 「前端需要能知道原因」）。把它塞进 tooltip 等于要求「先猜到自己该悬停」，而
+ * 悬停本来就不是可发现的动作。
+ *
+ * 排版上只放**一句原因**（`why`），把「这一次具体是什么结束的」与「现在该做什么」
+ * 留给 `title`：这一格是弹性的、旁边还有排队信息要共存，完整三句会把它们挤掉。
+ */
+function DevServerExitItem({
+  notice,
+}: {
+  notice: AppServiceExitNotice | null;
+}) {
+  if (notice === null) return null;
+  return (
+    <span
+      className="text-destructive/90 max-w-60 shrink-0 truncate"
+      title={`${notice.why}。${notice.detail}。${notice.action}`}
+    >
+      {notice.why}
+    </span>
+  );
+}
+
 export function BrowserStatusBar() {
   const isOpen = useLogPanel((s) => s.isOpen);
   const toggleOpen = useLogPanel((s) => s.toggleOpen);
@@ -281,6 +309,9 @@ export function BrowserStatusBar() {
 
       {/* ── 第 2 区：ComfyUI 排队/运行信息（弹性，左对齐） ── */}
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+        {/* 服务刚出过事时，原因优先于排队信息占位：排队信息此刻本来也拿不到
+            （它同样要问服务），而原因正是用户唯一想知道的。 */}
+        <DevServerExitItem notice={devServer.exitNotice} />
         <ComfyQueueItem view={comfyQueue} />
         <SchemaSyncItem status={schemaSync} />
       </div>

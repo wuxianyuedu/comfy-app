@@ -123,6 +123,11 @@ export const RUNTIME_SCRIPTS = [
   // 缺一份即整条编排在运行时 ENOENT
   "dev-launcher-session.mjs",
   "app-port.mjs",
+  // 「应用服务为什么结束」的落盘侧（ISSUE #1692）：`dev-launcher.mjs` 顶层静态
+  // import 它的 `writeAppServiceExit`，收尾定性时写 `run/app-service-exit.json`。
+  // 缺这份同样是整个编排器 ENOENT —— 而它恰恰只在「服务已经出过事」时才被用到，
+  // 也就是说漏登记的表现是「正常启动一切照旧，出事之后记录写不出来」。
+  "app-service-exit.mjs",
   // 起 Next 之前的两道预检（`.env` 三项非空、schema 待应用）与执行件：
   // 都在 dev-launcher.mjs 的顶层静态 import 里（见规范 §9.1 / §9.2）。
   "env-preflight.mjs",
