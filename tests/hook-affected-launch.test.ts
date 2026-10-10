@@ -21,10 +21,15 @@
  *    钩子也不再直接拼 `pnpm exec vitest run $files`；
  * 4. 空清单必须被阻断，绝不让 `vitest run` 不带位置参数跑成全量。
  */
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { wideFallbackNote } from "../scripts/affected-tests.mjs";
 import {
   DEFAULT_MAX_WORKERS,
   isTimeoutShaped,
@@ -49,6 +54,7 @@ const waitForLoadToSettle = waitForLoadToSettleRaw as unknown as (options?: {
   now?: () => number;
 }) => Promise<{ load: number; waitedMs: number; settled: boolean }>;
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK_PATH = ".githooks/pre-commit";
 const LAUNCHER_PATH = "scripts/run-affected-tests.mjs";
 
@@ -566,5 +572,76 @@ describe("钩子档并发：默认 4，且有一个只调并发、不碰判据�
     const src = readFileSync(LAUNCHER_PATH, "utf8");
     expect(src).toMatch(/--maxWorkers=\$\{workers\}/);
     expect(src).not.toMatch(/--maxWorkers=\$\{MAX_WORKERS\}/);
+  });
+});
+
+/**
+ * 第二条档位：`--full`（显式全量）。
+ *
+ * 这一档的存在理由不是「多一个开关」，而是规范 §13.5.8 写下的**重开条件**：
+ * `affected-tests.mjs` 命中公共地基时会放弃收窄、只跑固定清单，而这条兜底此前
+ * **没有具名出口**（「翻兜底的前置是先造一条显式的全量通道」）。缺了它，wide 那一档
+ * 遇到 `vitest.config.ts` / lockfile 的改动就只能「跑 68 个、然后没人知道全量怎么跑」。
+ *
+ * 与上面那条空清单守卫是**相反方向**的两件事，所以这里要同时钉住：
+ *   · `--full` 是**按名字**要全量 —— 它必须**不**经暂存区解析、**不**拼位置参数；
+ *   · 「谁都没筛过」的意外空集**仍然阻断** —— 两者绝不许在退出码上同形。
+ */
+describe("受影响用例的启动器 —— 显式全量档（--full）", () => {
+  const src = readFileSync(LAUNCHER_PATH, "utf8");
+
+  it("`--full --dry-run` 走**另一条**分支：真跑一次，输出里没有增量清单的读数", () => {
+    /* 按**行为**判，不按源码文本判：文本判据在 `const full = false && argv.includes("--full")`
+       这种变异下照样绿（字符串还在），而那种变异恰恰就是「这一档被静音」。
+       所以这里真起一次进程，两档各跑一遍，看输出形态。
+       注意用 `--dry-run`：它既走完整条分支选择，又不真起 vitest。 */
+    const full = spawnSync(
+      process.execPath,
+      [LAUNCHER_PATH, "--full", "--dry-run"],
+      { cwd: ROOT, encoding: "utf8" },
+    );
+    expect(full.status, full.stderr).toBe(0);
+    expect(full.stderr).toContain("--full：按名字要全量");
+    // 增量档那句「N 个用例 / M 次启动」在全量档里**不该出现** —— 出现了说明它先解析了清单。
+    expect(full.stdout + full.stderr).not.toMatch(/个用例 \/ \d+ 次启动/);
+
+    const inc = spawnSync(process.execPath, [LAUNCHER_PATH, "--dry-run"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    });
+    expect(inc.status, inc.stderr).toBe(0);
+    expect(inc.stdout, "增量档应当给出清单与启动次数").toMatch(/个用例 \/ \d+ 次启动/);
+    expect(inc.stderr, "两档的话术必须可分辨").not.toContain("--full：按名字要全量");
+  });
+
+  it("`--full` 复用同一条判决链（`runChunk([], …)`）—— 不另写一套跑法", () => {
+    /* 空位置参数在这里是**明确意图**（vitest 自行收集全部），与「谁都没筛过」在代码上
+       就是同一行 `runChunk([])`；这条断言把它钉成「有意的复用」而不是巧合。
+       复用带来的是超时形态的负载自适应仍然在场 —— 全量档不该成为「机器太满」的结论出口。 */
+    expect(src).toMatch(/return await runChunk\(\[\], \{ entry, workers \}\)/);
+  });
+
+  it("意外空集仍阻断，且话术里指出 `--full` 是另一档（两者不许同形）", () => {
+    const guard = /affected 解析没给出清单([\s\S]*?)return 1;/.exec(src)?.[0];
+    expect(guard, "解不出空清单守卫").toBeTruthy();
+    expect(guard).toContain("--full");
+    expect(guard, "空集必须仍然 return 1（不能因为 --full 存在就放行）").toContain("return 1;");
+  });
+
+  it("`--full` **不接进钩子**（钩子只有增量档）", () => {
+    const hook = readFileSync(HOOK_PATH, "utf8");
+    const body = cGroupBody(hook);
+    expect(body).toContain("run-affected-tests.mjs");
+    expect(body, "钩子里不许出现 --full：那会把每次提交变成整份套件的仪式").not.toContain(
+      "--full",
+    );
+  });
+
+  it("wide 话术指名的就是这条命令，且它真的存在于入口（不是写了一段跑不响的话）", () => {
+    /* 两半一起钉才成立：前半是「话术里有这条出口」，后半是「那个出口在入口里认这个旗标」。
+       只钉前半 = 守一句散文；只钉后半 = 守一个没人知道的开关。 */
+    const note = wideFallbackNote("门槛自身", 20);
+    expect(note).toContain("scripts/run-affected-tests.mjs --full");
+    expect(src, "入口不认 --full，话术就指到空气上").toContain('argv.includes("--full")');
   });
 });
