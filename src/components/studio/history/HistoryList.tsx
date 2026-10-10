@@ -8,7 +8,9 @@ import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
+import { PageHeader } from "~/components/ui/page-header";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { pageHeaderTitle } from "../NavItems";
 import { useHistoryList } from "./hooks/use-history-list";
 import { FILTERS, type SortKey, type TaskItem } from "./history-types";
 
@@ -85,33 +87,36 @@ export function HistoryList({
       className="px-4 py-8 sm:px-8 sm:py-10"
       backdrop={<AuroraBackground />}
     >
-      {/* ── Header ── */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-title u-title-page">历史记录</h1>
-          <p className="text-ink-muted mt-1 text-sm">
-            所有生成任务与执行日志，按时间倒序排列。
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <SelectMenu
-            value={c.sort}
-            onChange={(value) => c.setSort(value as SortKey)}
-            options={["newest", "oldest"]}
-            labels={{ newest: "时间倒序", oldest: "时间正序" }}
-            aria-label="排序"
-            className="text-xs"
-          />
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={c.refresh}
-            className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-1.5"
-          >
-            ↻ 刷新
-          </Button>
-        </div>
-      </div>
+      {/* ── Header：标题与侧栏 / 页签同一个出处（`pageHeaderTitle`）。
+             这一屏**没有** `viewLabel`：此前页头写「历史记录」，与侧栏 / 页签的
+             「历史」各占一处 —— 今天多出来的「记录」两个字没多给任何信息，却让
+             同一件事在一屏里有了两个名字（`tests/page-name-single-source.test.ts`
+             的 `viewLabel` 判据就是这么把它抓出来的）。── */}
+      <PageHeader
+        className="mb-6"
+        title={pageHeaderTitle("history")}
+        description="所有生成任务与执行日志，按时间倒序排列。"
+        actions={
+          <>
+            <SelectMenu
+              value={c.sort}
+              onChange={(value) => c.setSort(value as SortKey)}
+              options={["newest", "oldest"]}
+              labels={{ newest: "时间倒序", oldest: "时间正序" }}
+              aria-label="排序"
+              className="text-xs"
+            />
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={c.refresh}
+              className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-1.5"
+            >
+              ↻ 刷新
+            </Button>
+          </>
+        }
+      />
 
       {/* ── 状态筛选 pills ── */}
       <div className="mb-6 flex flex-wrap gap-2">

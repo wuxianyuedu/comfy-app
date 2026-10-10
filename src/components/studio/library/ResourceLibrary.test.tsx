@@ -36,11 +36,13 @@ describe("ResourceLibrary", () => {
     window.localStorage.clear();
   });
 
-  it("页头渲染标题与说明", async () => {
+  it("页头渲染标题与说明（标题取自导航注册表，不是这一屏的裸字面量）", async () => {
     mockFetch(BODY);
     render(<ResourceLibrary />);
     expect(screen.getByRole("heading", { name: "资源库" })).toBeTruthy();
-    expect(screen.getByText(/本项目的全部素材/)).toBeTruthy();
+    /* 说明写的是「这一屏能拿这些素材做什么」—— 不是把标题换个说法再说一遍
+     * （ISSUE #1423：同义的第二行等于把标题又写长一遍）。 */
+    expect(screen.getByText(/可直接拖进画布或工坊/)).toBeTruthy();
   });
 
   it("拉到分类后渲染分类卡", async () => {

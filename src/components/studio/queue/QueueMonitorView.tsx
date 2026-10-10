@@ -4,6 +4,7 @@ import { ListChecks, ListOrdered, RefreshCcw, WifiOff } from "lucide-react";
 
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
+import { viewTabLabel } from "~/components/studio/ViewTabStrip";
 import {
   Alert,
   AlertAction,
@@ -12,6 +13,7 @@ import {
 } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
+import { PageHeader } from "~/components/ui/page-header";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { displayValue } from "~/lib/display-value";
@@ -66,33 +68,35 @@ export function QueueMonitorView({
       className="px-4 py-8 sm:px-8 sm:py-10"
       backdrop={<AuroraBackground />}
     >
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="font-title u-title-page">队列与运行</h1>
-          <p className="text-ink-muted mt-1 text-sm">
-            每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="text-ink-faint text-xs tabular-nums">
-            {`待执行 ${String(c.waitingCount)}`}
-          </span>
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={c.refresh}
-            aria-label="立即重新读取队列"
-            className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
-          >
-            <RefreshCcw
-              data-icon="inline-start"
-              className="size-3"
-              aria-hidden
-            />
-            刷新
-          </Button>
-        </div>
-      </header>
+      {/* 标题走 `NavItems` 注册表那一份（侧栏项 / 页签 / 顶栏用同一个出口）。
+          此前这里写的是「队列与运行」—— 与侧栏、页签的「队列」是同一件事的
+          两个名字，而标题区还因此多占一行（ISSUE #1423）。 */}
+      <PageHeader
+        className="mb-6"
+        title={viewTabLabel("queue")}
+        description="每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。"
+        actions={
+          <>
+            <span className="text-ink-faint text-xs tabular-nums">
+              {`待执行 ${String(c.waitingCount)}`}
+            </span>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={c.refresh}
+              aria-label="立即重新读取队列"
+              className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+            >
+              <RefreshCcw
+                data-icon="inline-start"
+                className="size-3"
+                aria-hidden
+              />
+              刷新
+            </Button>
+          </>
+        }
+      />
 
       {c.loadError ? (
         <EmptyState

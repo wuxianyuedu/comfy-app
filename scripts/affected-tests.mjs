@@ -479,6 +479,15 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 比对基线字节；其中 tw4-canonical 每次要起 Tailwind 引擎，单家就占 35s，
   // 所以那一行按实测登记了 120s 预算）。
   "tests/ratchet-update-guards.test.ts",
+  // 「一屏一个名字」（ISSUE #1423 / 规范 16 §16.2.4.73）：页头标题、侧栏项、页签
+  // 三处说的必须是同一个名字 —— 而它在代码里的失效形态**没有任何构建期或运行期
+  // 判据会红**：屏名被抄成视图里的裸字面量时，tsc / eslint / 渲染用例 / P83
+  // （只管字阶档）全绿，屏上只是多出第二个名字、标题区再吃掉一行。同一条账的
+  // 另一半（文案是否同义反复）只能靠 review，机器守住的是**形态**：页头走同一个
+  // 基元、`viewLabel` 不许只是 `label` 的同义扩写、标题里不许连写两个屏名。
+  // 它读的是源码 + 注册表，import 图追不到（改一个视图的标题不会把这条带进
+  // 受影响集）—— 跟改动走等于专挑它不在的时机跑，故进固定清单。
+  "tests/page-name-single-source.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */

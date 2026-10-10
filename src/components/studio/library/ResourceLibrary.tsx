@@ -27,11 +27,14 @@ import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { BreadcrumbPath } from "~/components/ui/breadcrumb-path";
 import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
+import { PageHeader } from "~/components/ui/page-header";
 import { Spinner } from "~/components/ui/spinner";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { MaterialLibraryContent } from "~/components/studio/project-canvas/MaterialLibraryContent";
 import type { MaterialScope } from "~/components/studio/project-canvas/hooks/use-material-library";
 import { textHandler } from "~/lib/form-props";
+
+import { pageHeaderTitle } from "../NavItems";
 
 import { useResourceLibrary } from "./hooks/use-resource-library";
 
@@ -60,33 +63,31 @@ export function ResourceLibrary() {
   return (
     <DocumentFrame width="wide" className="px-4 py-8 sm:px-8 sm:py-10">
       {/* ── 页头：标题 + 说明 + 动作 ── */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-title u-title-page">资源库</h1>
-          <p className="text-ink-muted mt-1 text-sm">
-            本项目的全部素材 —— 参考图、音效、成片片段等，按分类统一管理，
-            可直接拖入画布或工坊使用。
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <uploadPicker.Input />
-          <Hint label="上传素材" wrap>
-            <Button
-              variant="primary"
-              onClick={uploadPicker.open}
-              disabled={library.uploading || needsProject}
-              className="h-auto gap-1.5 rounded-lg px-4 py-2"
-            >
-              {library.uploading ? (
-                <Spinner className="size-4" />
-              ) : (
-                <Plus data-icon="inline-start" size={16} strokeWidth={1.8} />
-              )}
-              上传素材
-            </Button>
-          </Hint>
-        </div>
-      </div>
+      <PageHeader
+        className="mb-6"
+        title={pageHeaderTitle("library")}
+        description="参考图、音效、成片片段 —— 按分类管，可直接拖进画布或工坊。"
+        actions={
+          <>
+            <uploadPicker.Input />
+            <Hint label="上传素材" wrap>
+              <Button
+                variant="primary"
+                onClick={uploadPicker.open}
+                disabled={library.uploading || needsProject}
+                className="h-auto gap-1.5 rounded-lg px-4 py-2"
+              >
+                {library.uploading ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <Plus data-icon="inline-start" size={16} strokeWidth={1.8} />
+                )}
+                上传素材
+              </Button>
+            </Hint>
+          </>
+        }
+      />
 
       {/* ── 作用域档 + 搜索 ── */}
       <div className="border-border mb-5 flex flex-wrap items-center gap-3 border-b pb-3">
