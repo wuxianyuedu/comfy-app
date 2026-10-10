@@ -8,6 +8,7 @@
 
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 // 两份 lockfile 的**实质**差异（唯一实现，与质量门禁 / diff-cli 同源）。
@@ -24,6 +25,76 @@ export const FINGERPRINT_FILES = [
 
 /** 关键依赖目录（「目录在但内容空」是 pnpm 中断安装的典型残骸）。 */
 const KEY_DEPS = ["typescript", "@typescript/native", "next"];
+
+/**
+ * 顶层必须**可解析**的依赖（ISSUE #1721）。
+ *
+ * 与 `KEY_DEPS` 的分工是两种病、两种动作：那边判「目录在不在、空不空」（安装中断的
+ * 残骸），这边判「**声明了的东西解析得到吗**」—— 依赖树整体完好、`.modules.yaml` 与
+ * `.bin/next` 都在、lockfile 与仓库那份**实质一致**，而某个包就是解析不到。
+ *
+ * 立案现场（axe-core）：本地 `node_modules` 停在**装它之前**的那套依赖树上 ——
+ * `axe-core` 是后来新加的直接依赖，于是它只以**传递依赖**的旧版本（4.13.0）被
+ * `@storybook/addon-a11y` 拖进来、落在**包自己的私有层**里，顶层既没有提升出来的
+ * 那一份、也没有任何 `.pnpm` 目录树能解析到它。表现：
+ *
+ *   - `tsc --noEmit` / `eslint` 报 `Cannot find module 'axe-core'`（TS2307）——
+ *     而这两条**都只信自己的 resolve**，所以只要它们真的跑起来就一定看得见；
+ *     真正的问题是当时的环境里它们根本没跑（§13.6.3 那格的镜像）；
+ *   - `check-deps-freshness.mjs` 的 ③ 与启动器的 lockfile 预检**判绿** ——
+ *     它们比的是两份 lockfile 的**文本**，而文本里没有「谁解析得到」这一栏；
+ *   - `brokenKeyDeps()` 也判绿 —— 它只点名 typescript / next，而那两个恰好没事，
+ *     新加的那个包从来不在这份清单上。
+ *
+ * 所以这一档存在的理由不是「再判一遍依赖装没装」，而是：**上面那三条判据的取值口径
+ * 里都没有「解析」这个维度**。判据自己的代价要付得起 —— 这几条是跑门禁时无论如何
+ * 都要解析到的包，多解析一次不产生新的工作。
+ *
+ * 清单**只定义一次**：权威定义在 `docs/reference-facts.md` 的 `deps.resolveProbes`
+ * 那一行（`scripts/doc-facts.cjs` 反向解析它），这里的字面量由
+ * `tests/deps-freshness-gate.test.ts` 逐项核对 —— 两处各记一份必然分叉，而分叉之后
+ * 「哪一份是真的」没有判据能回答（同 §18「白名单只定义一次」那条口径）。
+ */
+export const RESOLVE_PROBES = ["typescript", "next", "axe-core"];
+
+/**
+ * 逐个探测 `RESOLVE_PROBES` 在**仓库根**的解析结果（数组为空 = 全都能解析）。
+ *
+ * 解析用 `createRequire(<root>/package.json)` 显式定根，而不是 `import.meta.resolve`：
+ * 后者从**本模块**出发，本模块在真实检出里落在 `scripts/launcher-core/`（能上溯到根
+ * `node_modules`，结论碰巧一样），而契约测试把它拷进临时工作区后是否同层全看拷法 ——
+ * 同一份判据在两种布局下给出不同答案，那不是判据、是运气。定根之后探针的语义才唯一：
+ * **「在这个仓库根上 import 这个包」能不能解析**，与 `tsconfig` / eslint 看到的是同一个根。
+ *
+ * 探测**不做类型检查**：`tsc` 那条路要求包带类型声明，这里只问「模块在不在」。
+ * 两者不等价（`@types/*` 在别的包上），但这一档要抓的是「压根解析不到」，
+ * 不是「类型不全」——后者是 tsc 自己的活。
+ *
+ * @param {string} root
+ * @returns {string[]} 解析不到的包名（保持 `RESOLVE_PROBES` 的顺序）
+ */
+export function unresolvableDeclaredDeps(root) {
+  // 依赖从来没装过：`no-install` 那一态有专门的话术与动作，这里不抢答
+  // （对着一棵不存在的树报「这几个包解析不到」是**准确的噪声**）。
+  if (!fs.existsSync(path.join(root, "node_modules", ".modules.yaml"))) {
+    return [];
+  }
+  let req;
+  try {
+    req = createRequire(path.join(root, "package.json"));
+  } catch {
+    return [];
+  }
+  const missing = [];
+  for (const name of RESOLVE_PROBES) {
+    try {
+      req.resolve(`${name}/package.json`);
+    } catch {
+      missing.push(name);
+    }
+  }
+  return missing;
+}
 
 /**
  * 关键配置指纹：逐文件 sha256 + 组合 hash，并保留逐文件明细。
