@@ -358,6 +358,9 @@ export function recordFreshness({ platform, update, workers = null }) {
     root: ROOT,
     kind: "visual",
     who: gitUser(platform),
+    // 记给**这一档平台**（不是写死 `track.key`）：win32 录一次写不进 win32 键，
+    // 这一档就永远「没有记录」——那正是它当初只能靠 `PENDING_PLATFORMS` 顶着的根因。
+    key: platform,
     // 与 `planRuns` 同源拼法（§12.12）：两处各写一遍时，「实际怎么跑的」与「账上记的
     // 怎么跑的」会漂成两件事 —— 而那正是这一栏存在的意义。
     how: pixelCommand({ workers }),
