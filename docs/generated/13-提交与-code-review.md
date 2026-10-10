@@ -1328,6 +1328,7 @@ editor 的 TS 服务报 `ts(2783)`），判据只能落在源码形态上。收�
 | ① 远端引用新鲜度  | `refs/remotes/origin/master` **自己的 reflog** 时间         | ② 可信不可信（**不是**「你落后了」） |
 | ② 基线依赖 ⇄ 远端 | 分叉点（`git merge-base`）的三份依赖文件 vs `origin/master` | 你分叉之后远端改过依赖，基线是旧的   |
 | ③ 依赖安装 ⇄ 本地 | 仓库 lockfile vs `node_modules/.pnpm/lock.yaml`             | 装了，但装的不是当前检出声明的那套   |
+| ③ 的**第二块**    | 声明里的关键包在 `node_modules` 里**解析得到吗**（ISSUE #1721） | 装了、文本也对得上，而某个包解析不到 |
 
 **① 不判红**：远端引用陈旧只说明「这次校验看不见远端」，`git fetch` 就能解除；拿它
 阻断提交等于让离线 / 久未 fetch 的检出寸步难行。但它**不许被静默吞掉** —— 脚本打的是
@@ -1358,6 +1359,30 @@ editor 的 TS 服务报 `ts(2783)`），判据只能落在源码形态上。收�
 自己拼 `diffLockfiles` 的实现已在本条落地时收口 —— 三处边界（「直接读安装时 lockfile」
 与「读不到时算不算漂移」）各写各的，正是 §12.12 说的那种会静默分叉的重复。
 
+**③ 由两块拼成，因为它们对不上时是两种病、两种动作**（ISSUE #1721）：**文本层**
+（上面那句，两份 lockfile 的实质 diff）判「你的安装记录与声明对得上吗」；**解析层**
+（`unresolvableDeclaredDeps()`，同一个模块）判「声明里的关键包在这棵树上解析得到吗」。
+只有文本层会漏掉立案现场：本地 `node_modules` 停在**装某个新直接依赖之前**时，那个包
+只以**传递依赖的旧版本**落在**包自己的私有层**（实例：`node_modules/@storybook/
+addon-a11y/node_modules/axe-core` 是 4.13.0，而声明要的是 4.14.0），顶层既没有提升出来
+的那一份、也没有任何可解析路径 —— 而两份 lockfile 可以**逐字一致**。表现是
+`tsc --noEmit` / `eslint` 报 `Cannot find module`（TS2307），`brokenKeyDeps()` 也判绿
+（它只点名 typescript / next，新加的那个包不在清单上）。解析层红了**单独说一句话**
+（「解析不到」而不是「装的不是你声明的那套」）：后者会把读的人送去核对一份本来就对的
+文件。
+
+解析层**只点名三条探针**（`RESOLVE_PROBES` = typescript / next / axe-core），刻意不扫
+全部 `package.json`：这三条是跑门禁时无论如何都会解析到的包，多解析一次不产生新的工作，
+而「把所有直接依赖都解析一遍」会让这份清单跟着依赖表一起长 —— 每次加依赖都要动判据，
+那正是「会静默失效的清单」的成因（§12.18）。探针按**仓库根**解析
+（`createRequire(<root>/package.json)`，与 `tsconfig` / eslint 同一个根），而不是
+`import.meta.resolve`（那从判据模块自身出发，同一份判据在不同布局下会给出不同答案）。
+**依赖从来没装过时不表态**（无 `.modules.yaml` ⇒ 归 `no-install`）：对着一棵不存在的树
+报「这几个包解析不到」是准确的噪声，动作一样是重装、结论读起来却完全不同。
+
+用户侧的现场、自测命令与「为什么删掉重装不是这里的处方」写在
+[`../guides/sync-after-pull.md`](../guides/sync-after-pull.md) §3.1。
+
 **lockfile 那一路走实质 diff（`diffLockfiles`）而不是字符串比**：注释、空行、条目顺序
 会随 pnpm 版本漂移，字符串比会把「同一份解析结果」报成大改动 —— 而这条判据的每一次
 误报都会教人去 skip 它。三个依赖文件（`package.json` / `pnpm-lock.yaml` /
@@ -1386,13 +1411,16 @@ lockfile 推上去。判据的口径与代价都收在脚本文件头。
 `pnpm install` → 重跑一次本判据。要删 `node_modules` 重装的情形见
 [`../guides/sync-after-pull.md`](../guides/sync-after-pull.md)。
 
-**契约测试**：`tests/deps-freshness-gate.test.ts`（12 条）。它在真 git 仓库上跑
+**契约测试**：`tests/deps-freshness-gate.test.ts`（15 条）。它在真 git 仓库上跑
 （「远端」就是一条引用加一条 reflog，不是可 mock 的模块），覆盖 ② 的正反两向
 （远端改过 → 红 + 明细；远端只改注释 → 不报）、① 的两档（无引用 / 无 reflog 都打
 `[未校验]` 且**不给**「一致」这个结论）、③、`--offline`、`--staged` 的触发面、
 非 git 检出判 2、**基准那条**（分叉后自己在分支上加依赖不误报），以及**合并那一态**
 （`MERGE_HEAD` 在场 → ② 不判、话术是 `[已合并]`；再补一条反向对照：不在合并时同一比对
-照旧报红，证明放行的是那一态而不是把 ② 关掉了）。
+照旧报红，证明放行的是那一态而不是把 ② 关掉了）。③ 的解析层另有三条：命中那一档
+（两侧 lockfile 逐字一致、`axe-core` 解析不到 ⇒ `state: "unresolved"`，且话术**不含**
+「装不是你声明的那套」）＋两条反向对照（无 `.modules.yaml` 仍走 `no-install`；三条探针
+都在位时不误报 —— 少了这条，「探针永远返回缺失」这种失灵测不出来）。
 
 #### 13.5.14 类型层声明 ⇄ 执行者：tsc 判的是哪份文件，谁在敲那条判据（ISSUE #1591）
 
