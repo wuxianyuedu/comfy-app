@@ -143,6 +143,74 @@ describe("日志行路径识别：边界形状", () => {
     expect(paths("drive C:\\ then")).toEqual(["C:\\ then"]);
   });
 
+  /* ISSUE #1695：访问日志里的 URL 与真磁盘路径**同为 `/` 起头**，形状判据分不开，
+   * 于是面板把每条请求行的 URL 都画成紫色的可点片段 —— 用户看到的是「满屏点开都
+   * 说找不到的入口」。这一组的行取自真实 `nextjs-panel` 转录（见 log/current/）。 */
+  it("HTTP 请求行里的 URL 不是磁盘路径（各方法、各前缀形态）", () => {
+    expect(paths("GET /api/schema 200 in 31ms (next.js: 9ms)")).toEqual([]);
+    expect(paths("GET /api/update-check 200 in 65ms")).toEqual([]);
+    expect(paths("GET /api/dev/build-id 200 in 57ms")).toEqual([]);
+    expect(paths("GET /api/comfy/queue 200 in 2.5s")).toEqual([]);
+    expect(paths("GET /api/comfy/stats 200 in 2.5s")).toEqual([]);
+    expect(paths("GET /api/trpc/model.configList 200 in 5ms")).toEqual([]);
+    expect(paths("POST /api/comfy/ensure 200 in 400ms")).toEqual([]);
+    expect(paths("OPTIONS /api/schema 204")).toEqual([]);
+    /* 请求行的**查询串**同样不认：`/api/logs/current?source=…` 是本面板自己的
+     * 轮询端点（与 `isPanelSelfPollingLine` 同一族行）。 */
+    expect(
+      paths("GET /api/logs/current?source=app-runtime 200 in 12ms"),
+    ).toEqual([]);
+  });
+
+  it("带时刻 / 级别前缀的请求行照样不认（面板里就是长这样）", () => {
+    expect(
+      paths(
+        "[18:44:13] [INFO] GET /api/comfy/queue 200 in 2.5s (next.js: 20ms)",
+      ),
+    ).toEqual([]);
+  });
+
+  /* 第二条**真实**形态（实测从 564KB 的 nextjs-panel 转录里扫出来的唯一漏网者）：
+   * Next dev 按需编译时把路由名打在 `Compiling` 后面 —— 这行没有 HTTP 方法，
+   * 只有「动词 + 空格 + 路由」这一条线索。 */
+  it("Next 的 `Compiling <route>` 行不是磁盘路径", () => {
+    expect(paths("○ Compiling /api/comfy/stats ...")).toEqual([]);
+    expect(paths("○ Compiling / ...")).toEqual([]);
+  });
+
+  it("框架资源命名空间不是磁盘路径", () => {
+    expect(paths("GET /_next/static/chunks/main.js 200")).toEqual([]);
+  });
+
+  it("`/` 单独一个（根路由）本来就不认", () => {
+    expect(paths("GET / 200")).toEqual([]);
+  });
+
+  it("**左侧与方法无关**的真磁盘路径照旧认（防这条判据收得过宽）", () => {
+    /* 这几条与上面同样以 `/` 起头、同样出现在日志里，但左侧没有 HTTP 方法 ——
+     * 判据必须只挡请求行，不能把「以 `/` 起头的绝对路径」整类端掉。 */
+    expect(paths("shell log: /workspace/log/launcher/shell.log")).toEqual([
+      "/workspace/log/launcher/shell.log",
+    ]);
+    expect(paths("/var/log/app.log")).toEqual(["/var/log/app.log"]);
+    expect(paths("log at /home/user/data/a.txt")).toEqual([
+      "/home/user/data/a.txt",
+    ]);
+    /* `GET` 出现在**别的**位置（不是紧挨着这个候选）时不该误伤。 */
+    expect(paths("GET 完成，日志在 /workspace/log/x.log")).toEqual([
+      "/workspace/log/x.log",
+    ]);
+  });
+
+  it("盘符 / UNC 不受 URL 判据影响（它们不可能是 URL）", () => {
+    expect(paths("cmd C:\\Program Files\\x.exe")).toEqual([
+      "C:\\Program Files\\x.exe",
+    ]);
+    expect(paths("GET \\\\server\\share\\x.log")).toEqual([
+      "\\\\server\\share\\x.log",
+    ]);
+  });
+
   it("回的是半开区间，切出来与 text 一致", () => {
     const line = `项目根: F:\\AI\\x`;
     for (const token of findLogPathTokens(line)) {
