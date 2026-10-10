@@ -115,8 +115,7 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
     action,
   });
   const envelope = (s: unknown) => ({ result: { data: { json: s } } });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const opts = (over: Record<string, any>) => ({ ...parseArgs([]), ...over });
+  const opts = (over: Record<string, unknown>) => ({ ...parseArgs([]), ...over });
 
   it("start=running → 轮询到 done 停", async () => {
     const request = vi

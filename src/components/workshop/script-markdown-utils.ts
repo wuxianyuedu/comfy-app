@@ -21,7 +21,7 @@ export function normalizeMarkdown(source: string): string {
     const raw = lines[index]!;
     const fenceMatch = /^ {0,3}(`{3,}|~{3,})/.exec(raw);
     if (fenceMatch) {
-      const marker = fenceMatch[1]!.charAt(0);
+      const marker = Array.from(fenceMatch[1]!.trim())[0] ?? "";
       if (!inFence) {
         inFence = true;
         fenceMarker = marker;
