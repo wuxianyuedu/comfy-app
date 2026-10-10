@@ -48,7 +48,7 @@
  *   pnpm check:premerge --skip-claims   # 只跑复算 + 合并面（PR 里还没写合并信息时）
  *   pnpm check:premerge --only=base     # 只跑一段（排查用）
  */
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -66,7 +66,14 @@ const ROOT = path.resolve(HERE, "..");
 /**
  * 三段的定义 —— 顺序即执行序（复算最贵、先跑；后两段是廉价的纯 git 复查）。
  *
- * @type {Record<string, {label: string, kind: "base"} | {label: string, kind: "script", script: string, args: string[]}>}
+ * `mergeLoss` 那一格是 `anchored` 而不是裸 `script`：它**需要一个锚点**
+ * （`--baseline <已知好的参照点>`），而那个锚点在「合并前」这一刻是**算得出来的**
+ * —— 见 `resolveLossBaseline()`。早先的写法是 `args: []`，于是这一段**恒退 2**
+ * （`check-merged-side-loss.mjs` 缺 `--baseline` 直接 exit 2），整个入口因此
+ * **恒报「不构成证据」** —— 恰好是这套编排要消灭的那类静默失效
+ * （看着在跑、事实一次没复算）。口径与出口见 §13.6.2.1。
+ *
+ * @type {Record<string, {label: string, kind: "base"} | {label: string, kind: "script", script: string, args: string[]} | {label: string, kind: "anchored", script: string}>}
  */
 const SEGMENTS = {
   base: {
@@ -81,11 +88,49 @@ const SEGMENTS = {
   },
   mergeLoss: {
     label: "合并有没有把一侧整份覆盖掉（#1617）",
-    kind: "script",
+    kind: "anchored",
     script: "check-merged-side-loss.mjs",
-    args: [],
   },
 };
+
+/**
+ * 给「合并有没有丢一侧」那一格**算**出它的锚点（`--baseline`）。
+ *
+ * 锚点是什么：**这条线从哪一刻起与要并进去的那条分开的** —— 也就是
+ * `merge-base(<要并进去的那条>, HEAD)`。`check-merged-side-loss.mjs` 判的是
+ * 「结果版是不是退回了基线之前的某一版」，所以「基线」= **分叉点**，不是
+ * `origin/master` 的尖端：拿后者会把分支侧自己的正当改动整片读成差异。
+ *
+ * 为什么在这里算、而不是让判据自己算：判据的**天真形态**（自己推被丢的那一侧是谁）
+ * 在 `ad81a912` 上实测 128 份改动 → **0 命中**（那条线在 squash 之后常常已不可达）。
+ * 但「分叉点」与那个不是同一个问题 —— 它**是**可算的，且正是判据需要的语义。
+ * 这与 `.githooks/prepare-commit-msg` 那条提交前档同源（那边用 `MERGE_HEAD` + merge-base）。
+ *
+ * @returns {{ok: true, baseline: string} | {ok: false, reason: string}}
+ */
+export function resolveLossBaseline(cwd = ROOT) {
+  const ref = resolveMergeBaseRef(cwd);
+  if (!ref) {
+    return {
+      ok: false,
+      reason: "取不到要并进去的那条（各 remote 的 master / 本地 master）—— 先 `git fetch` 再跑",
+    };
+  }
+  try {
+    /* 只读一条 git 命令；失败 ⇒ 历史不全（浅克隆）⇒ 如实报「没跑起来」，不问「红没红」。 */
+    const base = execFileSync("git", ["merge-base", ref, "HEAD"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (!base) {
+      return { ok: false, reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）` };
+    }
+    return { ok: true, baseline: base };
+  } catch {
+    return { ok: false, reason: `算不出 ${ref} 与 HEAD 的分叉点（浅克隆 / 历史不全）` };
+  }
+}
 
 /**
  * @param {string[]} argv
@@ -208,7 +253,21 @@ function main(argv) {
       results.push({ key, label: seg.label, code, output: captured.output });
       continue;
     }
-    /* `seg.kind === "base"` 已在上面 `continue`，这里收窄到 script 那两段。 */
+    if (seg.kind === "anchored") {
+      /* 带锚点的那一格（`mergeLoss`）：锚点**在这里算**，算不出就如实报「没跑起来」。
+       * 早先它是裸 `script` + `args: []`，于是恒退 2、整个入口恒「不构成证据」
+       * —— 见 `SEGMENTS` 那条注释。 */
+      const { script } = /** @type {{script: string}} */ (seg);
+      const anchor = resolveLossBaseline();
+      if (!anchor.ok) {
+        results.push({ key, label: seg.label, code: 0, output: "" });
+        continue;
+      }
+      const r = runScript(script, [`HEAD`, "--baseline", anchor.baseline]);
+      results.push({ key, label: seg.label, code: r.code, output: r.output });
+      continue;
+    }
+    /* `base` / `anchored` 都已在上面 `continue`，这里收窄到裸 script 那两段。 */
     const scripted = /** @type {{script: string, args: string[]}} */ (seg);
     const r = runScript(scripted.script, scripted.args);
     results.push({ key, label: seg.label, code: r.code, output: r.output });
