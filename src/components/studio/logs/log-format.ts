@@ -46,11 +46,29 @@ export interface FormattableLog {
   time: number;
   level: string;
   message: string;
+  /** 调用位置（`src/…:123` 或 `pkg → fn`）；无位置的行是 undefined。 */
+  location?: string;
+  /** 来源（`console` / `app-runtime` / …）；缺省则不写进文本。 */
+  origin?: string;
 }
 
-/** 单条日志 → 可复制的文本（行内复制按钮与导出共用这一条口径）。 */
+/**
+ * 单条日志 → 可复制的文本（行内复制按钮与导出共用这一条口径）。
+ *
+ * **位置与来源要带上**（ISSUE #1703）：面板上那一列本来就在，复制 / 导出却把它
+ * 丢掉 —— 用户拿着日志去报障（贴进 issue、发给别人）时，能定位问题的那一半信息
+ * 在粘贴这一步没了，剩下的正文里只有「Encountered two children with the same
+ * key」这种谁都在打的框架文案。位置写在**正文之前**、同一行内：多行正文（堆栈、
+ * JSON）在前时，位置会飘到几十行之后，读的人反而找不到。
+ *
+ * 追加在行尾的字段用 ` · ` 分隔、且只在有值时才出现（无位置 / 无来源的行与旧
+ * 文本逐字相同，既有的复制断言不会因为多出一个空分隔符而变）。
+ */
 export function formatEntryForClipboard(entry: FormattableLog): string {
-  return `${formatTime(entry.time, { alwaysDate: true })} [${entry.level.toUpperCase()}] ${entry.message}`;
+  const head = `${formatTime(entry.time, { alwaysDate: true })} [${entry.level.toUpperCase()}]`;
+  const where = entry.location ? ` <${entry.location}>` : "";
+  const from = entry.origin ? ` · ${entry.origin}` : "";
+  return `${head}${where} ${entry.message}${from}`;
 }
 
 /**
