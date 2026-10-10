@@ -82,23 +82,14 @@ export const SUPPORTED_PLATFORMS = Object.keys(PLATFORM_RECORDING);
  * 见 §13.5.12）：登记项一旦在某档补齐，**必须**同批删掉这一条（`missingBaselinesForPlatform`
  * 返回空而登记还在 ⇒ 判据红）。`reason` 要写清「谁、在哪台机器补」，别写「稍后处理」。
  */
-export const PENDING_PLATFORMS = {
-  win32: {
-    reason:
-      "win32 档**只剩首页那两张**（`workspace-desktop-dark` / `workspace-desktop-light`），" +
-      "其余 8 张已于 Windows 开发机成套补齐。缺的这两张**不是「没录」，是这一屏当前录不出" +
-      "可复现的像素**：首页有三处机器相关数据源没被桩掉 —— ① 模型概览卡的真实目录计数" +
-      "（实测「67 个目录为空」随机器）；② 「最近项目」走 `hydrateFromServer()` 从 DB 拉真项目" +
-      "（`clearProjectIndex` 只清 localStorage，清不掉 hydration）；③ ComfyUI readiness 的" +
-      "「连接中 → 离线」是**时序**而非状态。三处合起来，实测录完立刻串行复跑仍差 4652 像素" +
-      "（差异集中在 y=480..876 那一块），这种 PNG 记的是「录基线那台机器的现场」，不是基线。\n" +
-      "      补齐的动作：先给 `e2e/visual/workspace.visual.spec.ts` 补这三桩（①② 复用" +
-      "`e2e/support/trpc-stub` 与 canvas 档已有的 `project.list` 空桩，③ 在 `settle` 里等到" +
-      "降级文案出现），**且同批在 linux 上重录首页那两张** —— 因为这三桩会改变首页渲染，" +
-      "而已入库的 `-linux.png` 是在「容器里恰好什么都没有」下录的，谁也不能替另一档担保。" +
-      "所以这一条不是 Windows 开发机单方面能关的账。完整现场与验收清单见 ISSUE #1593。",
-  },
-};
+/**
+ * 类型标注意图：即便为空，元素形状也要是 `{ reason: string }` —— `tests/visual-baseline-pairing.test.ts`
+ * 用 `Object.entries` 遍历并读 `entry.reason`；若写成 `const PENDING_PLATFORMS = {}`，TS 会把元素推断成
+ * `unknown`，遍历处 `entry.reason` 直接 TS18046。显式标注后空对象仍保有正确元素类型。
+ *
+ * @type {Record<string, { reason: string }>}
+ */
+export const PENDING_PLATFORMS = {};
 
 /** `{name}-{projectName}-{platform}.png` —— Playwright 默认的基线文件形态。 */
 export const BASENAME_RE = /^(.+)-chromium-(linux|win32|darwin)\.png$/;
@@ -855,23 +846,28 @@ export function readFreshnessLedgerAt(root, rel) {
  * 返回 `{ note, previous }`：`note` 是给人读的一句（写盘失败时也带着失败原因），
  * `previous` 是**写之前**那一档上次自证距今多久（账的价值在于被看见，不是被写下来）。
  *
- * ⚠️ **`how` 记的是「实际跑绿的那条命令」，不是这一档的名义跑法**（ISSUE #1620）。
- * 缺省仍取 `track.run`（绝大多数跑法只有一种形状），但像素档多一种：机器的
- * dev server 在 `fullyParallel` 的默认并发下会因**负载**失稳（实测整批红、降并发就绿，
- * 见 §11.13），而「这条账要证的」是**这一档的基线在本机可复现**——负载假红证的正是它。
- * 那时 `how` 必须写出真实的并发口径（`pnpm check:visual --workers=1`），否则账面上
- * 看不出「这次是在降并发下证的」，下一个人按名义命令复跑又红、却指不出差别在哪。
+* **两件事各是一栏，回答的是两个不同的问题**（缺任一条这层账就退化）：
+ *   · `key` —— **记给哪一档**。缺省回退到 `track.key`；**像素档按平台分档**，必须传
+ *     `process.platform`，否则 win32 录一次只会写进 `linux` 键、win32 这一档永远
+ *     「没有记录」（这正是 win32 当初只能靠 `PENDING_PLATFORMS` 顶着的根因）。
+ *   · `how` —— **「实际跑绿的那条命令」，不是这一档的名义跑法**（ISSUE #1620）。
+ *     缺省仍取 `track.run`（绝大多数跑法只有一种形状），但像素档多一种：机器的
+ *     dev server 在 `fullyParallel` 的默认并发下会因**负载**失稳（实测整批红、降并发就绿，
+ *     见 §11.13），而「这条账要证的」是**这一档的基线在本机可复现**——负载假红证的正是它。
+ *     那时 `how` 必须写出真实的并发口径（`pnpm check:visual --workers=1`），否则账面上
+ *     看不出「这次是在降并发下证的」，下一个人按名义命令复跑又红、却指不出差别在哪。
  *
- * @param {{root: string, kind: string, who: string, how?: string}} args
+ * @param {{root: string, kind: string, who: string, key?: string, how?: string}} args
  * @returns {{note: string, previous: string | null}}
  */
-export function writeFreshness({ root, kind, who, how }) {
+export function writeFreshness({ root, kind, who, key, how }) {
   const track = freshnessTrack(kind);
+  const writeKey = key ?? track.key;
   const file = path.join(root, track.ledger);
   const ledger = readFreshnessLedgerAt(root, track.ledger);
-  const previous = freshnessAge(ledger[track.key]);
-  ledger[track.key] = freshnessRecord({
-    key: track.key,
+  const previous = freshnessAge(ledger[writeKey]);
+  ledger[writeKey] = freshnessRecord({
+    key: writeKey,
     verifiedAt: new Date().toISOString(),
     who,
     how: how && how.trim() ? how.trim() : track.run,
