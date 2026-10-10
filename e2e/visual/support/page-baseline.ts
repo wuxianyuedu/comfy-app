@@ -155,6 +155,52 @@ export async function freezeComfyStats(page: Page): Promise<void> {
 }
 
 /**
+ * 把首页「模型概览」卡的目录计数**钉成空**，让它渲染空态而不是骨架 / 真计数。
+ *
+ * 为什么必须钉：这一格的判据是 `model.configList` 的返回值 —— 服务端拿
+ * `listModelFolders()`（扫本机 ComfyUI 的 `models` 目录）与
+ * `modelCountsByFolder()`（数每个目录里有多少文件）现算。于是同一份 HTML 在
+ * **两台机器上渲染出两张不同的卡**：
+ *   · 开发机装过模型 → 列出「Checkpoints 12 个 / LoRA 40 个…」；
+ *   · 容器 / CI 里什么都没有 → 那句「另有 N 个目录为空」的 `N` 也随本机目录数变。
+ * 两者都不是「界面退化」，而是「基线记的是跑它的那台机器」(#1593 与 #1620 一、
+ * 第 1 项实测的正是这一格)。
+ *
+ * 钉**空**而不是钉一组假计数：空态（`{folders: []}` → 「本机还没有同步到可用
+ * 模型…」）正是容器 / CI 没有 ComfyUI 时的真形态，与 `freezeComfyStats` 钉成降级
+ * 态同一个取向 —— 不复述一台机器的私有事实，只钉「这台机器上什么都没有」。
+ * 「有模型时那块长什么样」不归页面级守，归 Storybook（`HomeModelOverview` 的
+ * stories），与 §11.8 的页面级 / 组件级分工一致。
+ *
+ * ⚠️ 桩的**时机**才是这件事的难点，不是桩本身：`useModelOverview` 走
+ * TanStack Query，`isLoading` 为真时渲染的是三行 `Skeleton` —— 而骨架与空态
+ * **卡高不同**，于是首页从「模型概览」那一行往下整段位移。不桩时截图取到哪一态
+ * 取决于这一拍请求回来了没有（实测差 4652 像素、差异集中在
+ * `bbox=(407,480)-(1289,876)`），所以这一桩同时也是那个「录得出来但复现不了」的
+ * 根因的修法。
+ *
+ * 必须在 `goto` **之前**调（`page.route` 只拦它注册之后发出的请求）。
+ */
+export async function freezeModelOverview(page: Page): Promise<void> {
+  await page.route("**/api/trpc/**", async (route) => {
+    if (!route.request().url().includes("model.configList")) {
+      await route.continue();
+      return;
+    }
+    /* 走真协议形态（JSON Lines）—— `route.fulfill` 一个 JSON 数组喂不进
+     * `httpBatchStreamLink`（根因见 `../../support/trpc-stub` 的文件头）。
+     * 动态 import 是为了让本模块不被 Playwright 的 TS 转换拉进 trpc-stub 的
+     * `superjson` 依赖链（那个包是 ESM-only，静态 import 会在 config 求值期报错）。 */
+    const { trpcJsonlBody } = await import("../../support/trpc-stub");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: trpcJsonlBody([{ folders: [], rows: [], comfyReachable: false }]),
+    });
+  });
+}
+
+/**
  * 清掉 `canvas-store` 的项目索引（localStorage）。
  *
  * 首页「最近项目」区渲染**空态占位卡**还是**真项目卡**，取决于这份索引 ——
