@@ -213,6 +213,13 @@ export default defineConfig({
     ],
     coverage: {
       provider: "v8",
+      /* ⚠️ `thresholds` 里 glob 条目的判定口径（官方 config/coverage.md）：
+       * ① **不继承**全局门槛——条目里没写的那一维不判；
+       * ② 默认判的是**匹配集合的聚合值**，要逐文件各自达标必须显式写 `perFile: true`。
+       * 本文件所有条目都**没有** `perFile`，所以目录档（`src/lib/agent/**` 这类）判的是
+       * 目录聚合 —— 注释里「目录实测」的说法与之一致；而一条 glob 盖多个文件时
+       * （如 `src/lib/comfyui/desktop-storage-paths*.ts`）**不要**按「单个文件隔离实测」
+       * 读它：那个文件掉很低不会红，动它之前先明确要的是聚合还是逐文件。 */
       /* 一条试用例红 → v8 默认**清掉覆盖率数据、不产出报告** —— 于是 `thresholds`
        * 表里的每一条都没被判定，而终端上只看得见那条红。表现不是「门槛没过」，
        * 是**门槛静默缺席**：现场实测 `pnpm test:coverage` 全量 464 文件 / 2 败，

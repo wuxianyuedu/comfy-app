@@ -76,17 +76,24 @@ const config = {
       "./start-tauri*/**",
     ],
   },
-  // standalone 产物**必须显式包含** Next 自带的两份运行时脚本。
+  // standalone 产物里的 Next 自带运行时脚本：**这份条目是意图声明，不是防线**。
   //
-  // 为什么必须显式（实测，ISSUE #489）：Turbopack 的 tracing 对
-  // `require("next/dist/compiled/next-server/app-route-turbo.runtime.prod.js")`
-  // 这类**动态 require 字符串**只追踪到被 middleware 图命中的那一份
-  // （app-page-turbo），app-route-turbo 一份都不在 nft 清单里。
-  // 后果不是少个文件，而是**所有 API 路由 500**：
-  //   `Failed to load external module .../app-route-turbo.runtime.prod.js:
-  //    Cannot find module` —— 只有页面（RSC 渲染）与 middleware 还能工作，
-  //   于是「首页 200、接口全 500」，看起来像业务 bug，实际是产物缺口。
-  // 定位手法见规范 launch-and-build.md §7.4。
+  // 症状（ISSUE #489）：缺那份运行时脚本时，页面（RSC 走 `app-page-turbo`）与
+  // middleware 全正常，而每个 `route.ts` 都要的
+  // `app-route-turbo.runtime.prod.js` 加载不到 → **所有 API 路由 500**
+  // （`Failed to load external module`），看起来像业务 bug，实际是产物缺口。
+  //
+  // 为什么这里加不了东西（A/B 复测，同机同依赖、只有 `distDir` 隔离）：把下面这份
+  // `outputFileTracingIncludes` 整段注释掉再构建，两份产物**逐字节同构** ——
+  // `standalone/node_modules/next/dist/compiled/next-server/` 两次都是 74 个文件
+  //（= 源目录整份复制），四份 `*-turbo.runtime.prod.js` 都在位。机制与上游源码对得上：
+  // 读这两个 tracing 键的只有 `collect-build-traces`，而它在 `bundler !== Turbopack`
+  // 的分支里整段被跳过（与上面 `outputFileTracingExcludes` 那条同一个原因）。
+  //
+  // ⇒ 承重的是**产物层那两处**：`scripts/check-standalone-contents.cjs` 的
+  // `REQUIRED_RUNTIME_FILES` 反向数产物，与 `tests/standalone-runtime-completeness.test.ts`
+  // 的产物探针。别把「往这里补一条」当成修好了缺件，也别因为「摘掉它产物没变」就判
+  // 那份数产物的检查失效 —— 承重的从来是数产物。定位手法见规范 launch-and-build.md §7.4。
   outputFileTracingIncludes: {
     "/**": ["./node_modules/next/dist/compiled/next-server/*runtime.prod.js"],
   },
