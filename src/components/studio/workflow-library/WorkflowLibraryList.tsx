@@ -182,7 +182,7 @@ export function WorkflowLibraryList({
 
         {/* 未载入的本地工作流排在已载入之后 */}
         {pendingRows.length > 0 && (
-          <div className="border-info/25 bg-info/[0.04] mt-3 mb-3 rounded-xl border border-dashed p-2.5">
+          <div className="border-info/25 bg-info/4 mt-3 mb-3 rounded-xl border border-dashed p-2.5">
             <p className="text-info-strong text-3xs mb-2 flex items-center gap-1.5 font-medium">
               {/* 状态点走`ui/status-dot`（全库唯一实现，规范 16 §16.2.4.5）；
 `probing` 表达「还没载入、等待中」。 */}
