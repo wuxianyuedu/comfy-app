@@ -13,6 +13,7 @@ import { FieldLabel } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
+import { pageHeaderTitle } from "./NavItems";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
 import { DocumentFrame } from "./ViewContainer";
@@ -40,9 +41,13 @@ export function ModelLibrary() {
       className="px-4 py-8 sm:px-8 sm:py-10"
       backdrop={<AuroraBackground />}
     >
+      {/* 页头的名字走 `pageHeaderTitle("models")` —— 与侧栏 / 页签同一个出处
+          （注册表 `NavItems.tsx`）。此前这里是裸字面量「模型库」，而注册表里
+          那一项叫「模型」：两名并存，且 `page-name-single-source` 的第 4 条锚的是
+          `<h1>纯文本</h1>`、看不见 prop 里的字面量（ISSUE #1673）。 */}
       <PageHeader
         className="mb-6"
-        title="模型库"
+        title={pageHeaderTitle("models")}
         description="本机 ComfyUI 能用哪些 —— 按扫描目录分类，每个目录即一种独立的模型类型。"
         actions={
           <>
