@@ -24,9 +24,58 @@
  *   · 不在这里算清单 —— 收窄规则的唯一出处仍是 `affected-tests.mjs`，本文件只管启动；
  *   · 不兜「空清单」：空集会让 `vitest run` 不带位置参数跑成**全量**，那是更坏的失效，
  *     所以宁可阻断（与收口前钩子里那句 `if [ -z "$files" ]` 同一口径，只是现在有了名字）。
+ *
+ * ── 负载自适应：超时形态的失败要**自动隔离复跑**，不再把提交拦在这里 ────────
+ *
+ * 现场（实测，8 核容器）：同一份代码、同一个提交，空闲时这批 67 个用例 21s 全绿；
+ * 把机器压到 load≈77 时 `tests/ratchet-update-guards.test.ts` 报
+ * `Test timed out in 120000ms`（`--no-file-parallelism` 隔离复跑立刻全绿）——
+ * 门禁把一次**调度抖动**读成了结论，而提交被拦下了。
+ *
+ * 这件事在规范里**早有口径**（§13.6.4 / `base-check` 的第五态 `load-flake`），
+ * 缺的是执行者：那一节写的下一动作是「隔离复跑定性」，而那一步此前**只有人能跑**
+ * —— 被拦下的人得先想到 `base-check`、再手敲 `--no-file-parallelism`，才知道
+ * 那是不是假红。钩子这一侧没有任何负载自适应：超时就是终局。
+ *
+ * 所以这里给它补上执行者，且**只补「重新测一次」这一半**（判决口径一个字不改）：
+ *
+ *   · 触发面窄：本块失败、**且输出带超时指纹**（`TIMEOUT_SIGNATURES`，与
+ *     `base-check.mjs` 逐条同源）时才复跑。真断言红（`AssertionError`）不带指纹，
+ *     一次都不复跑 —— 那正是这一档要挡的东西。
+ *   · 复跑**只能更隔离，不能更松**：`--no-file-parallelism`（单进程串行）+ 同一份
+ *     清单。**不抬任何预算**（§11.13 那句「看到 60s 都超时不要改成 120s」是本条的
+ *     主要敌人）：抬预算会把「真挂死」的检出时间一起放大，而串行是**降负载**。
+ *   · 复跑的结果**就是本块的结果** —— 绿的算通过（并在 stderr 点名「这次是负载假红」），
+ *     红的照原样阻断。判别式因此与 §13.6.4 第 2、3 步逐字对应，只是执行者从人换成了这一层。
+ *
+ * ── 为什么还要「等负载回落」，而不是「串行跑一次就完事」────────────────
+ *
+ * 实测（同一条命令、同一份代码，8 核容器）：
+ *
+ * | 机器负载                            | 结果                                                       |
+ * | ----------------------------------- | ---------------------------------------------------------- |
+ * | 空闲（load ≈ 0）                    | 21s，691/691 全绿                                          |
+ * | load ≈ 67                           | 205s，全绿                                                 |
+ * | load ≈ 182                          | 4 条 `Test timed out`（30s ×2、120s ×2）                   |
+ * | **load ≈ 300，串行复跑**            | **仍有 1 条 30s 超时**（同一文件、另一条用例）             |
+ * | 负载归零后单独跑那份文件            | 19s，32/32 全绿                                            |
+ *
+ * 也就是说：**串行是一剂药，但不是万能药**。负载到 300 时连单进程都排不上，
+ * 而复跑那一刻机器还是满的 —— 直接判红等于把「这一刻机器有多满」again 读成结论，
+ * 正是这一档要消掉的东西。所以复跑前先**看一眼负载**（`os.loadavg()`），
+ * 高于阈值就**等一下再试**（有上限、每一跳都打日志，不静默 sleep）。
+ *
+ * 等待是**有界**的（`RETRY_BUDGET_MS`）：钩子不能为了「等机器空下来」无限挂着 ——
+ * 那对提交的人同样是坏体验（他看到的是一动不动）。等不到就按真红上报并**把两个出口
+ * 都写清楚**（关掉占资源的东西再提交 / 复算归属），而不是伪造一个绿。
+ *
+ * ⚠️ **这一层不许被读成「放行」**：它只做「在更安静的时刻重测同一批用例」。
+ * 复跑红了就是红；等待超时了也是红。判据口径一个字没动。
  */
 
 import { spawnSync } from "node:child_process";
+import os from "node:os";
+import { setTimeout as sleep } from "node:timers/promises";
 import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -91,6 +140,142 @@ export function resolveMaxWorkers(raw) {
     note: `按 COMFY_PRECOMMIT_MAX_WORKERS 用 --maxWorkers=${parsed}` +
       `（默认 ${DEFAULT_MAX_WORKERS}；这只调并发，不动任何判据）`,
   };
+}
+
+/**
+ * 一次「红」的输出是不是**超时形态**。
+ *
+ * 逐条与 `scripts/base-check.mjs` 的 `TIMEOUT_SIGNATURES` **同源** —— 两份清单是
+ * 同一件事（「这个红首先是一个负载读数」）在两个执行者上的落地：`base-check` 用它
+ * 把复算结果归到第五态 `load-flake`，本文件用它决定要不要隔离复跑。
+ * 改一处必须改另一处：`tests/hook-affected-launch.test.ts` 逐条核对两份清单不漂移。
+ *
+ * 各条都是《本仓库实际见到过的原文》：
+ *   · vitest：`Test timed out in 30000ms.` / `Hook timed out in 45000ms.`
+ *     （本轮实测原文是 `Test timed out in 120000ms.`）；
+ *   · vitest 池：`Failed to start forks worker` / `Timeout waiting for worker to respond`
+ *     （实测这两种会把**退出码**打成非零，而一条真断言都没红）；
+ *   · node:test / jest 形态：`Exceeded timeout of …` / `Timeout - Async callback`；
+ *   · 本项目门禁自己的话术：`超时（…s）`（`src/lib/with-timeout` 的出口）。
+ */
+const TIMEOUT_SIGNATURES = [
+  /Test timed out in \d+\s*ms/i,
+  /Hook timed out in \d+\s*ms/i,
+  /Failed to start forks worker/i,
+  /Timeout waiting for worker to respond/i,
+  /Exceeded timeout of \d+/i,
+  /Timeout - Async callback/i,
+  /超时（\d+s）/,
+];
+
+/**
+ * 输出里有没有超时指纹（纯函数，两向都能被用例钉住）。
+ *
+ * ⚠️ 指纹**不是结论**：命中只说明「值得再验一次」。真回归也可能恰好卡在超时上 ——
+ * 所以本文件拿到指纹后只做一件事：换更隔离的条件**重测**，而不是放行。
+ */
+export function isTimeoutShaped(output) {
+  return TIMEOUT_SIGNATURES.some((re) => re.test(String(output ?? "")));
+}
+
+/**
+ * 复跑/等待的**总预算**（毫秒）。
+ *
+ * 5 分钟：够等一次「占资源的东西」自己退下去（实测从 load≈300 回落到 <8 用了
+ * 约 4 分钟，那是 200 多个自旋进程被 kill 之后），又不至于让提交的人以为指令挂死。
+ * 超了不是「放弃判定」，而是**按真红上报并把两个出口写清楚**（见文件头那节）。
+ */
+const RETRY_BUDGET_MS = 5 * 60 * 1000;
+
+/** 每一跳等多久再重新读负载。 */
+const RETRY_POLL_MS = 5_000;
+
+/**
+ * 「这台机器还剩多少余量」—— **每核负载**（`loadavg[0] / cpus().length`）。
+ *
+ * 为什么不直接看 `loadavg[0]`：阈值必须与核数无关才立得住（8 核上的 load≈16 与
+ * 32 核上的 load≈64 是同一件事：所有核都被占满）。所以归一化成「每核」，
+ * 阈值 `SAFE_LOAD_PER_CORE` 才是一个常数。
+ *
+ * **Windows 上恒为 0**：`os.loadavg()` 在 Windows 返回 `[0, 0, 0]`（Node 的既定行为，
+ * 不是缺陷）。于是那一档退化成「直接复跑、不等待」—— 判据本身仍然完整（复跑绿的照样
+ * 放过、红的照样拦），只是没有「等一等」这层优化。**不许**用「读不到负载」当
+ * 「这个红是假的」：那会把判据变成一条静默放行的路径。
+ *
+ * @param {{loadavg: () => number[], cpus: () => unknown[]}} [probe] 可注入（用例要造负载档）
+ * @returns {number} 每核负载（核数读不到时按 1 核算，宁可高估负载也不低估）
+ */
+export function loadPerCore(probe = { loadavg: os.loadavg, cpus: os.cpus }) {
+  const cores = Math.max(1, probe.cpus().length || 1);
+  return (probe.loadavg()[0] ?? 0) / cores;
+}
+
+/**
+ * 负载在什么档以下才算「复跑有意义」。
+ *
+ * 1.5 的出处：本仓库的实话是**钩子自己就把 8 核吃满**（C 组 4 个 worker + A tsc +
+ * B eslint + D 串行），而本文件跑的时候正是那一刻 —— 所以阈值不能定成「空闲」，
+ * 否则每次超时都会先等一轮（那笔账没人愿意付）。1.5 落在「钩子自己那份占用
+ * （实测约 1.0–1.2/核）」之上一点，只挡「外面还压着一大片」的档。
+ */
+const SAFE_LOAD_PER_CORE = 1.5;
+
+/**
+ * 等到负载回落（有界），返回最终读数。
+ *
+ * **每一跳都打日志**：静默 sleep 是本仓库点名的坏形态（读的人以为挂了）。
+ * 等不到就返回当时的读数、由调用方按真红处置 —— 这一层**不做判定**。
+ *
+ * @param {{budgetMs?: number, pollMs?: number, probe?: object, sleepFn?: (ms: number) => void, now?: () => number}} [options]
+ * @returns {{load: number, waitedMs: number, settled: boolean}}
+ */
+export async function waitForLoadToSettle(options = {}) {
+  const {
+    budgetMs = RETRY_BUDGET_MS,
+    pollMs = RETRY_POLL_MS,
+    probe,
+    /* 默认就是真等待（`timers/promises`）：同步 `Atomics.wait` 会**阻塞主线程**、
+     * 让日志看起来像挂死 —— 而这一层恰恰要让人觉得「它在等，不是死了」。 */
+    sleepFn = async (ms) => sleep(ms),
+    now = Date.now,
+  } = options;
+  const started = now();
+  let load = loadPerCore(probe);
+  let settled = load <= SAFE_LOAD_PER_CORE;
+  while (!settled && now() - started < budgetMs) {
+    process.stderr.write(
+      `[affected-launch] 每核负载 ${load.toFixed(2)}（阈值 ${SAFE_LOAD_PER_CORE}）—— ` +
+        "等它回落再复跑，不让「这一刻机器多满」变成结论\n",
+    );
+    await sleepFn(pollMs);
+    load = loadPerCore(probe);
+    settled = load <= SAFE_LOAD_PER_CORE;
+  }
+  return { load, waitedMs: now() - started, settled };
+}
+
+/**
+ * 跑一次 vitest，**把输出抓在手里**（而不是 `stdio: "inherit"`）。
+ *
+ * 为什么必须抓：这一层的判决依赖「输出里有没有超时指纹」（见文件头那节）。
+ * `inherit` 会把 stdout/stderr 直接接到父进程上，于是这段文本在本进程里**拿不到**
+ * —— 那样就没有任何东西能区分「真断言红」与「机器太满」。
+ *
+ * 抓下来之后仍要**原样回吐**（`process.stdout.write`），否则日志里就看不见失败原因了 ——
+ * 那正是 `run-affected` 当初被造出来要避免的形态（「跑的是 0 个用例、原因读不出」）。
+ *
+ * @returns {{status: number|null, output: string}}
+ */
+function spawnVitest(entry, args) {
+  const res = spawnSync(process.execPath, [entry, ...args], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  const output = `${res.stdout ?? ""}${res.stderr ?? ""}`;
+  process.stdout.write(res.stdout ?? "");
+  process.stderr.write(res.stderr ?? "");
+  if (res.error) throw res.error;
+  return { status: res.status, output };
 }
 
 /**
@@ -169,7 +354,7 @@ function collectList() {
     .filter(Boolean);
 }
 
-function main(argv) {
+async function main(argv) {
   const dryRun = argv.includes("--dry-run");
   const files = collectList();
   if (files.length === 0) {
@@ -207,25 +392,88 @@ function main(argv) {
           `${chunk.length} 个用例（命令行长预算 ${SAFE_ARGV_BUDGET} 字符）\n`,
       );
     }
-    const res = spawnSync(
-      process.execPath,
-      [entry, "run", `--maxWorkers=${workers}`, ...chunk],
-      { stdio: "inherit" },
-    );
-    if (res.error || res.status !== 0) {
-      // 起不来的时候把机制点名，别再留一行读不出来的东西。
-      process.stderr.write(
-        `[affected-launch] vitest 启动失败：${
-          res.error?.message ?? `退出码 ${res.status}`
-        }（入口 ${entry}，本块 ${chunk.length} 个用例，命令行约 ` +
-          `${chunk.join(" ").length} 字符）\n`,
-      );
-      return res.status ?? 1;
-    }
+    // 并发跟着 `resolveMaxWorkers` 走（含 `COMFY_PRECOMMIT_MAX_WORKERS` 那一档）；
+    // 「超时形态 ⇒ 等负载回落 + 隔离复跑」的判决链在 `runChunk` 里，见其文档。
+    const code = await runChunk(chunk, { entry, workers });
+    if (code !== 0) return code;
   }
   return 0;
 }
 
+/**
+ * 跑**一块**清单，返回该块的退出码（0 = 通过）。
+ *
+ * 单独抽出来是为了让「超时形态 ⇒ 等待 + 隔离复跑」这条判决链**可以被用例整个跑一遍**
+ * （注入假的 `spawn` / 假负载即可），而不是只断源码的字面形状 —— 弱化到只断形状的话，
+ * 「复跑绿的算过」与「复跑红的也算过」在文本上长得一样，那正是这一档最该拦住的方向。
+ *
+ * @param {string[]} chunk 本块的用例路径
+ * @param {{entry: string, workers?: number, spawn?: (entry: string, args: string[]) => {status: number|null, output: string}, settle?: () => Promise<{settled: boolean, load: number, waitedMs: number}>}} deps
+ *   `workers` 默认 `DEFAULT_MAX_WORKERS`（调用点由 `resolveMaxWorkers` 给出）——
+ *   这一层**只读它当首跑的并发**，复跑一律 `--no-file-parallelism`（降负载那一半）。
+ * @returns {Promise<number>}
+ */
+export async function runChunk(chunk, deps) {
+  const spawn = deps.spawn ?? spawnVitest;
+  const settle = deps.settle ?? (() => waitForLoadToSettle());
+  const { entry, workers = DEFAULT_MAX_WORKERS } = deps;
+  const res = spawn(entry, ["run", `--maxWorkers=${workers}`, ...chunk]);
+  if (res.status === 0) return 0;
+
+  /* 失败分两档（口径见文件头「负载自适应」那节）：
+   *   · **带超时指纹** ⇒ 这个红首先是一个负载读数（§13.6.4）。换更隔离的条件
+   *     **重测一次**：串行单进程 = 降负载，**不抬任何预算**。
+   *   · 不带指纹（真断言红 / 起不来）⇒ 一次都不复跑，直接阻断。 */
+  if (!isTimeoutShaped(res.output)) {
+    process.stderr.write(
+      `[affected-launch] vitest 失败：${
+        res.status === null ? "被信号终止" : `退出码 ${res.status}`
+      }（入口 ${entry}，本块 ${chunk.length} 个用例，命令行约 ` +
+        `${chunk.join(" ").length} 字符）\n`,
+    );
+    return res.status ?? 1;
+  }
+
+  process.stderr.write(
+    "[affected-launch] 本块的红是**超时形态** —— 按规范 §13.6.4 先当负载读数看，\n" +
+      "  先等负载回落，再用 `--no-file-parallelism` 隔离复跑（降负载，不抬任何预算）…\n",
+  );
+  /* 复跑**前**等一次：复跑那一刻机器还是满的，串行也照样排不上（实测 load≈300 时
+   * 串行仍有 1 条 30s 超时）。等待有界，超了就按真红处置 —— 判据口径不变。 */
+  const settled = await settle();
+  const retry = spawn(entry, ["run", "--no-file-parallelism", ...chunk]);
+  if (retry.status === 0) {
+    process.stderr.write(
+      "[affected-launch] 隔离复跑全绿 ⇒ 刚才那次是**负载假红**（这一步不构成放行依据，\n" +
+        "  是同一批用例在更隔离的条件下重测的结果）。提交继续，\n" +
+        "  但建议在提交说明里点名这次是负载假红（降负载的杠杆是并发，不是预算）。\n",
+    );
+    return 0;
+  }
+  /* 串行仍红：**不再复跑**（复跑第二次只会把钩子变长，不改变结论）——
+   * 但要按「当时机器有多满」分成两种话术，因为下一动作完全不同：
+   *   · 负载仍高于阈值（等待超了）⇒ 这次的红**仍不可归因**，是机器太满；
+   *   · 负载已经回落 ⇒ 连安静档的串行都超时，那是真挂死 / 真回归。 */
+  if (!settled.settled) {
+    process.stderr.write(
+      `[affected-launch] 等了 ${Math.round(settled.waitedMs / 1000)}s，每核负载仍有 ` +
+        `${settled.load.toFixed(2)}（阈值 ${SAFE_LOAD_PER_CORE}）—— 这次的红**归不到代码上**，\n` +
+        "  但它也不是绿（没有更安静的时刻可测）。两个出口，任选一个：\n" +
+        "  · 关掉占资源的东西（dev server / ComfyUI / 出图）后重跑本命令；\n" +
+        "  · 或 `node scripts/base-check.mjs <这条>` 复算归属，按 §13.6.4 处理。\n" +
+        "  **不要**抬 testTimeout，也**不要** --no-verify。\n",
+    );
+    return retry.status ?? 1;
+  }
+  process.stderr.write(
+    "[affected-launch] 负载已回落到每核 " +
+      `${settled.load.toFixed(2)}、隔离复跑仍失败 ⇒ 这不是负载假红，按真红处置：\n` +
+      "  用 `node scripts/base-check.mjs <这条>` 复算归属（你的 / 别线的），\n" +
+      "  再决定修代码还是登记 —— 不要抬 testTimeout。\n",
+  );
+  return retry.status ?? 1;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }
