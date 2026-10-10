@@ -27,6 +27,14 @@ function out(dir: string, ...args: string[]): string {
 const { test, expect } = defineGateRepo({
   script: "check-merged-side-loss.mjs",
   workdir: "merged-side-loss",
+  /* 判据用 `import "./merged-side-loss-core.mjs"` 拉共用内核（与 1-2 的提交前档
+   * 同一份实现）—— 同级动态导入只能靠夹具的 `copy` 带进来。 */
+  copy: [
+    {
+      from: "scripts/merged-side-loss-core.mjs",
+      to: "scripts/merged-side-loss-core.mjs",
+    },
+  ],
   setup: (repo: GateRepo) => {
     repo.git("init", "-q", "-b", "main", ".");
   },
