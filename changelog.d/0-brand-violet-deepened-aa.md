@@ -35,7 +35,13 @@
 
 - **状态色四族**（`success` / `warning` / `danger` / `info`）与 `accent` 第二品牌族 —— 它们不是品牌的附属，是独立语义；换品牌色不该改它们（改了才叫破功）。
 - **内容自身的颜色**：`node-registry` / `custom-nodes` 的类别色对齐 litegraph 官方调色板、`WorkflowNode` 的端口角色色（`#a78bfa` 那一族）—— 这些是「内容色」例外（§3.6.1），与品牌无继承关系，**不跟手**。
-- 视图层没有任何一处写死品牌 hex（`pnpm theme:check`：未豁免 0 处 ≤ 基线 0 处），所以这次**只改 token 就全站生效**，这正是 §3.6.2 那次收口的验收标准。
+- **视图层没有「未登记」的品牌裸值**（`pnpm theme:check`：未豁免 0 处 ≤ 基线 0 处），所以语义化的品牌面
+  **只改 token 就全站跟手** —— 这正是 §3.6.2 那次收口的验收标准。
+  ⚠️ **这句话从前写得太满**（原文是「没有任何一处写死品牌 hex」）。按 §3.6.2 的尺复算，
+  `src/` 里另有 **21 行 / 12 个文件**写着旧品牌值 `#7C5CFC`，它们**登记为内容类型色**（端口色、类别色…），
+  本来就不该跟品牌走 —— `theme:check` 数的是「有没有没登记的」，看不见这些登记**理由里那句
+  「与 `--color-primary` 同值」**已经过期。受影响的 4 处（选中高亮环 / 模型封面渐变 / W 徽标渐变 /
+  `ContentAssetNode` 的注释）已开 **ISSUE #1717** 拍板，本笔不动画布可见配色。
 
 ## 验证
 
@@ -47,8 +53,8 @@
 | `pnpm doc:check` | ✓ |
 | `tests/a11y-axe-stories.test.ts` | 1 passed —— 但**别把它当对比度证据**：jsdom 不解析 Tailwind v4 编译出的 `@theme` 变量，axe 在这条路上算不出真实前景/背景对。上面那些 4.76 / 4.80 / 7.46 是按 WCAG 2.1 相对亮度公式**直接算的**（`L = 0.2126R + 0.7152G + 0.0722B`，sRGB 线性化后），复算脚本口径写在上面的表里 |
 | `pnpm exec tsc --noEmit` | 0 error |
-| `src/components/ui` + `HomePage` | 57 files / 486 passed |
-| `.githooks/pre-commit` | 见下方提交 |
+| `src/components/ui` + `HomePage` | 57 files / 486 passed（**这笔落地的数**是在 `699a8a36` 上量的；推前变基到 `b0ace9cf` 后，`design-md-contract-sync` + `theme-token-single-source` 58 passed、`tsc --noEmit` 0 error 是**在新基上重测的**，其余由重跑的 `.githooks/pre-commit` 覆盖） |
+| `.githooks/pre-commit` | 变基后**重跑过一遍**（`git rebase` 不挂钩子），全部通过 ✓ —— 合并号 #1715、落地 sha `2d5e0761` |
 
 ## 代价与边界（改到当前事实为止）
 
