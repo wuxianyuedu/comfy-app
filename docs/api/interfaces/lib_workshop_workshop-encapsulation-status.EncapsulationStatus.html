@@ -13,7 +13,7 @@
 <h1>Interface EncapsulationStatus</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">EncapsulationStatus</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#entries">entries</a><span class="tsd-signature-symbol">:</span> <a href="lib_workshop_workshop-encapsulation-status.EncapsulationEntryStatus.html" class="tsd-signature-type tsd-kind-interface">EncapsulationEntryStatus</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#missinglabels">missingLabels</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#missingrequired">missingRequired</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#ready">ready</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#resolvedcount">resolvedCount</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workshop-encapsulation-status.ts:55</li></ul></aside>
+<li>Defined in src/lib/workshop/workshop-encapsulation-status.ts:55</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -34,14 +34,14 @@
 <h3 class="tsd-anchor-link" id="entries"><span>entries</span><a href="#entries" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">entries</span><span class="tsd-signature-symbol">:</span> <a href="lib_workshop_workshop-encapsulation-status.EncapsulationEntryStatus.html" class="tsd-signature-type tsd-kind-interface">EncapsulationEntryStatus</a><span class="tsd-signature-symbol">[]</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workshop-encapsulation-status.ts:56</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workshop-encapsulation-status.ts:56</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="missinglabels"><span>missing<wbr/>Labels</span><a href="#missinglabels" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">missingLabels</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>还没落到端口的<strong>全部</strong>口子名（含非必备），供「未配置」清单一览。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workshop-encapsulation-status.ts:66</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workshop-encapsulation-status.ts:66</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="missingrequired"><span>missing<wbr/>Required</span><a href="#missingrequired" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">missingRequired</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></div>
@@ -49,7 +49,7 @@
 未配置的非必备口不算「不能跑」，不在这里 —— 那是提示，不是闸门。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workshop-encapsulation-status.ts:64</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workshop-encapsulation-status.ts:64</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="ready"><span>ready</span><a href="#ready" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">ready</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
@@ -58,12 +58,12 @@
 恒为 ready（没有「缺了它就不能用」的口）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workshop-encapsulation-status.ts:61</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workshop-encapsulation-status.ts:61</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="resolvedcount"><span>resolved<wbr/>Count</span><a href="#resolvedcount" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">resolvedCount</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workshop-encapsulation-status.ts:67</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/workshop/workshop-encapsulation-status.ts:67</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

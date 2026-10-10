@@ -24,7 +24,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">WorkshopExposedValues</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#custom">custom</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#duration">duration</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#firstframe">firstFrame</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#frames">frames</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#lastframe">lastFrame</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#negativeprompt">negativePrompt</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#prompt">prompt</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#referenceimages">referenceImages</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#seed">seed</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#size">size</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">SizeSpecValue</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:56</li></ul></aside>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:56</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -56,7 +56,7 @@
 声明（<code>applyParamMapping</code> 只认作者画的线）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:89</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:89</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="duration"><code class="tsd-tag">Optional</code><span>duration</span><a href="#duration" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">duration</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
@@ -64,14 +64,14 @@
 （<code>duration</code> / <code>seconds</code> / <code>时长</code>）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:73</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:73</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="firstframe"><code class="tsd-tag">Optional</code><span>first<wbr/>Frame</span><a href="#firstframe" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">firstFrame</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>视频：首帧文件名。缺省时回退到 referenceImages[0]。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:68</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:68</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="frames"><code class="tsd-tag">Optional</code><span>frames</span><a href="#frames" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">frames</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
@@ -80,24 +80,24 @@
 （见 VideoStudio 的 framesFor），这里不猜 fps。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:78</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:78</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="lastframe"><code class="tsd-tag">Optional</code><span>last<wbr/>Frame</span><a href="#lastframe" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">lastFrame</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>视频：尾帧文件名（首尾帧工作流用）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:70</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:70</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="negativeprompt"><code class="tsd-tag">Optional</code><span>negative<wbr/>Prompt</span><a href="#negativeprompt" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">negativePrompt</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:58</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:58</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="prompt"><code class="tsd-tag">Optional</code><span>prompt</span><a href="#prompt" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">prompt</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:57</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:57</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="referenceimages"><code class="tsd-tag">Optional</code><span>reference<wbr/>Images</span><a href="#referenceimages" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">referenceImages</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></div>
@@ -106,7 +106,7 @@
 连的那一行；未连线的槽不落。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:66</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:66</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="seed"><code class="tsd-tag">Optional</code><span>seed</span><a href="#seed" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">seed</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
@@ -115,7 +115,7 @@
 seed 配置</strong> —— 实际是否可换由工作流决定。「抽卡重生成」= 给一个新的随机 seed。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:82</li></ul></aside></section>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:82</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="size"><code class="tsd-tag">Optional</code><span>size</span><a href="#size" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">size</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">SizeSpecValue</span></div>
@@ -124,7 +124,7 @@ seed 配置</strong> —— 实际是否可换由工作流决定。「抽卡重�
 百万像素 / 分辨率档 / 对齐倍数）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workshop/workflow-encapsulation.ts:62</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/workshop/workflow-encapsulation.ts:62</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

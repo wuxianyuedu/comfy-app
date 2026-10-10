@@ -13,7 +13,7 @@
 <h1>Type Alias AppSettings</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">type</span> <span class="tsd-kind-type-alias">AppSettings</span> <span class="tsd-signature-symbol">=</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#autosynclocalworkflow">autoSyncLocalWorkflow</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyclipython">comfyCliPython</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyuiautostart">comfyuiAutoStart</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyuiextraargs">comfyuiExtraArgs</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyuipath">comfyuiPath</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyuiport">comfyuiPort</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#exitkillcomfyui">exitKillComfyui</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#exitkillcomfyuidefaultmigrated">exitKillComfyuiDefaultMigrated</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#exitkillollama">exitKillOllama</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#loginrequired">loginRequired</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:24</li></ul></aside>
+<li>Defined in src/lib/app-settings/index.ts:24</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -47,7 +47,7 @@
 产物一致。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:89</li></ul></aside></section>
+<li>Defined in src/lib/app-settings/index.ts:89</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="comfyclipython"><span>comfy<wbr/>Cli<wbr/>Python</span><a href="#comfyclipython" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">comfyCliPython</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
@@ -60,21 +60,21 @@
 这一项的默认值</strong>，设置页里填过的值优先（<code>getSettingsSync</code> 是 <code>{...DEFAULTS, ...文件}</code>）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:49</li></ul></aside></section>
+<li>Defined in src/lib/app-settings/index.ts:49</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="comfyuiautostart"><span>comfyui<wbr/>Auto<wbr/>Start</span><a href="#comfyuiautostart" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">comfyuiAutoStart</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>提交任务发现 ComfyUI 未运行时，是否自动按 comfyuiPath 启动。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:51</li></ul></aside></section>
+<li>Defined in src/lib/app-settings/index.ts:51</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="comfyuiextraargs"><span>comfyui<wbr/>Extra<wbr/>Args</span><a href="#comfyuiextraargs" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">comfyuiExtraArgs</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>传给 ComfyUI <a href="http://main.py">main.py</a> 的额外命令行参数（如 --input-directory ...）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:37</li></ul></aside></section>
+<li>Defined in src/lib/app-settings/index.ts:37</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="comfyuipath"><span>comfyui<wbr/>Path</span><a href="#comfyuipath" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">comfyuiPath</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
@@ -90,7 +90,7 @@ comfyuiPath 语义（配置的目录可以不是源码根本身）：</p>
 </ul>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:35</li></ul></aside></section>
+<li>Defined in src/lib/app-settings/index.ts:35</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="comfyuiport"><span>comfyui<wbr/>Port</span><a href="#comfyuiport" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">comfyuiPort</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
@@ -99,7 +99,7 @@ comfyuiPath 语义（配置的目录可以不是源码根本身）：</p>
 （ComfyUI 由本应用拉起；远程实例可用环境变量 COMFYUI_BASE 覆盖）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:57</li></ul></aside></section>
+<li>Defined in src/lib/app-settings/index.ts:57</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="exitkillcomfyui"><span>exit<wbr/>Kill<wbr/>Comfyui</span><a href="#exitkillcomfyui" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">exitKillComfyui</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
@@ -113,7 +113,7 @@ true = ComfyUI 挂在应用进程树内，应用退出连带关闭；false = 脱
 连杀会让每次打开应用都要重付一遍；且被杀时正在跑的任务没有机会收尾。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:75</li></ul></aside></section>
+<li>Defined in src/lib/app-settings/index.ts:75</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="exitkillcomfyuidefaultmigrated"><code class="tsd-tag">Optional</code><span>exit<wbr/>Kill<wbr/>Comfyui<wbr/>Default<wbr/>Migrated</span><a href="#exitkillcomfyuidefaultmigrated" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">exitKillComfyuiDefaultMigrated</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
@@ -123,14 +123,14 @@ true = ComfyUI 挂在应用进程树内，应用退出连带关闭；false = 脱
 首次读到没有本标记的文件时把值落成新默认并写标记；之后用户手动勾选不再被覆盖。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:96</li></ul></aside></section>
+<li>Defined in src/lib/app-settings/index.ts:96</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="exitkillollama"><span>exit<wbr/>Kill<wbr/>Ollama</span><a href="#exitkillollama" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">exitKillOllama</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>同 exitKillComfyui，作用于应用拉起的 Ollama serve 进程。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:77</li></ul></aside></section>
+<li>Defined in src/lib/app-settings/index.ts:77</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="loginrequired"><span>login<wbr/>Required</span><a href="#loginrequired" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">loginRequired</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
@@ -139,7 +139,7 @@ true = ComfyUI 挂在应用进程树内，应用退出连带关闭；false = 脱
 演示用户，与 tRPC authedProcedure 的回退一致；true = 严格 401。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/app-settings/index.ts:63</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/app-settings/index.ts:63</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

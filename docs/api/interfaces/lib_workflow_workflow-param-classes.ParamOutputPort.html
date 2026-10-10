@@ -16,7 +16,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">ParamOutputPort</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#active">active</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#connected">connected</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#display">display</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#handleid">handleId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#iokey">ioKey</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#name">name</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#targettype">targetType</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#type">type</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-param-classes.ts:309</li></ul></aside>
+<li>Defined in src/lib/workflow/workflow-param-classes.ts:309</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -42,14 +42,14 @@
 <div class="tsd-comment tsd-typography"><p>是否为<strong>当前生效落点</strong>（作者连上的那一颗；未连线时全为 false）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-param-classes.ts:341</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-param-classes.ts:341</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="connected"><span>connected</span><a href="#connected" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">connected</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>是否已经落到了工作流里真实存在的端口。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-param-classes.ts:334</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-param-classes.ts:334</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="display"><code class="tsd-tag">Optional</code><span>display</span><a href="#display" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">display</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
@@ -61,7 +61,7 @@ ComfyUI 里看到的对不上，也会随工作流改版漂移。落点仍在 <c
 里可查（<code>ioKey</code>）。对外<strong>输出</strong>卡片不给（那里端口名就是作者要看的名字）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-param-classes.ts:319</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-param-classes.ts:319</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="handleid"><span>handle<wbr/>Id</span><a href="#handleid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">handleId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
@@ -69,21 +69,21 @@ ComfyUI 里看到的对不上，也会随工作流改版漂移。落点仍在 <c
 同一画布节点内天然唯一）；画布宿主行那一侧的 handle 才是 ioKey。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-param-classes.ts:339</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-param-classes.ts:339</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="iokey"><span>io<wbr/>Key</span><a href="#iokey" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">ioKey</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>落点（工作流内部键 <code>&lt;nodeId&gt;::&lt;kind&gt;::&lt;name&gt;</code>）；<code>&quot;&quot;</code> = 还没落到任何行。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-param-classes.ts:336</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-param-classes.ts:336</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="name"><span>name</span><a href="#name" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">name</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>端口自身的名字（落到哪个 pin）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-param-classes.ts:311</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-param-classes.ts:311</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="targettype"><code class="tsd-tag">Optional</code><span>target<wbr/>Type</span><a href="#targettype" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">targetType</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
@@ -92,7 +92,7 @@ ComfyUI 里看到的对不上，也会随工作流改版漂移。落点仍在 <c
 免得「类型不同」这件事在界面上彻底查不到。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-param-classes.ts:332</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-param-classes.ts:332</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="type"><span>type</span><a href="#type" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">type</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
@@ -104,7 +104,7 @@ ComfyUI 里看到的对不上，也会随工作流改版漂移。落点仍在 <c
 落点那一行的类型仍在（<code>targetType</code>，行 title 里可查）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-param-classes.ts:327</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/workflow/workflow-param-classes.ts:327</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

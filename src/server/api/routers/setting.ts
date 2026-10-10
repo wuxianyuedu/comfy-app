@@ -30,6 +30,12 @@ import {
   stopDrizzleStudio,
   DRIZZLE_STUDIO_DEFAULT_PORT,
 } from "~/lib/drizzle-studio/lifecycle";
+import {
+  createBackup,
+  listBackupEntries,
+  readRestoreRequest,
+  requestRestore,
+} from "~/lib/db-backup/backup";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { isHttpUrl } from "~/lib/url-scheme";
 import { revealPathInFileManager } from "~/lib/shell/reveal-path";
@@ -244,6 +250,43 @@ export const settingRouter = createTRPCRouter({
     .input(z.object({ path: z.string().min(1).max(4096) }))
     .mutation(async ({ input }) => {
       return revealPathInFileManager(input.path, projectScopedProbe());
+    }),
+
+  /* ── D6 数据库备份 / 恢复（ISSUE #1611 的建议默认②③）──────────────────────
+   *
+   * 三条口径落在这一组 procedure 上（完整口径见 `docs/guides/PRODUCTION-GAPS.md`
+   * 的 D6 条目）：
+   *   · 保留**最近 3 份**、落 `<应用根>/data/backups/` —— 由
+   *     `scripts/db-backup-core.mjs` 唯一持有，这里不重复；
+   *   · **恢复入口**给一个设置页入口（选份 + 确认），但**换文件不发生在点按钮
+   *     的那一刻** —— `backupRestore` 只写一个待恢复标记，真正的换文件交给启动链
+   *     （`applyPendingRestoreAtBoot`），那一刻天然满足「应用没在跑」。
+   *     本组**刻意不提供**「就地换文件」的 mutation：运行期有多个进程持有这个库
+   *     （内嵌 Next server、执行宿主、用户可能开着的 Drizzle Studio），在别人握着
+   *     句柄时覆盖 `db.sqlite` 是不可逆的数据事故。
+   */
+
+  /** 备份清单（可选份 + 有没有待恢复的请求），供设置页那一区渲染。 */
+  backupList: authedProcedure.query(async () => {
+    return {
+      backups: listBackupEntries(process.cwd()),
+      pending: readRestoreRequest(process.cwd()),
+    };
+  }),
+
+  /** 立即做一份备份（手动档）。失败**如实返回**原因而不是抛 —— 备份失败是
+   *  可预期的一档（磁盘满 / 库被独占），界面上要能看见「为什么没成」。 */
+  backupCreate: authedProcedure.mutation(async () => {
+    return createBackup(process.cwd());
+  }),
+
+  /** 请求从某一份备份恢复：**只写标记**，真正换文件在下次启动。
+   *  守卫（「不是一份备份的名字」/「读不通」）在 `requestRestore` 里，返回形状
+   *  与备份那条同款，界面据 `ok` 分档。 */
+  backupRestore: authedProcedure
+    .input(z.object({ name: z.string().min(1).max(255) }))
+    .mutation(async ({ input }) => {
+      return requestRestore(process.cwd(), input.name);
     }),
 });
 

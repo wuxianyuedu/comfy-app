@@ -13,7 +13,7 @@
 <h1>Interface ChildExitDeps</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">ChildExitDeps</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#appendruntimelog">appendRuntimeLog</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">line</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#banner">banner</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">report</span><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_lifecycle-exit.ComfyExitReport.html" class="tsd-signature-type tsd-kind-interface">ComfyExitReport</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#clearchild">clearChild</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#context">context</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">Pick</span><span class="tsd-signature-symbol">&lt;</span><br/>        <a href="lib_comfyui_lifecycle-exit.ComfyExitFacts.html" class="tsd-signature-type tsd-kind-interface">ComfyExitFacts</a><span class="tsd-signature-symbol">,</span><br/>        <span class="tsd-signature-type">&quot;pid&quot;</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;uptimeMs&quot;</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;stopRequested&quot;</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;mode&quot;</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#log">log</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">msg</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#onexitreport">onExitReport</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">report</span><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_lifecycle-exit.ComfyExitReport.html" class="tsd-signature-type tsd-kind-interface">ComfyExitReport</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:169</li></ul></aside>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:169</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -38,35 +38,35 @@
 这样「它退出前最后说了什么」与「为什么退出」挨在一起）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:174</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:174</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="banner"><span>banner</span><a href="#banner" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">banner</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">report</span><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_lifecycle-exit.ComfyExitReport.html" class="tsd-signature-type tsd-kind-interface">ComfyExitReport</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>退出横幅文案（含 ANSI）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:171</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:171</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="clearchild"><span>clear<wbr/>Child</span><a href="#clearchild" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">clearChild</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></div>
 <div class="tsd-comment tsd-typography"><p>清掉宿主持有的子进程句柄（仅当仍是同一个 child 时）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:178</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:178</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="context"><span>context</span><a href="#context" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">context</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">Pick</span><span class="tsd-signature-symbol">&lt;</span><br/>    <a href="lib_comfyui_lifecycle-exit.ComfyExitFacts.html" class="tsd-signature-type tsd-kind-interface">ComfyExitFacts</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-signature-type">&quot;pid&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;uptimeMs&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;stopRequested&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;mode&quot;</span><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>退出事实里只有宿主知道的那几样（pid / 存活时长 / 是否用户主动关 / 模式）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:183</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:183</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="log"><span>log</span><a href="#log" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">log</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">msg</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></div>
 <div class="tsd-comment tsd-typography"><p>进入应用日志（pino）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:176</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:176</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="onexitreport"><code class="tsd-tag">Optional</code><span>on<wbr/>Exit<wbr/>Report</span><a href="#onexitreport" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">onExitReport</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">report</span><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_lifecycle-exit.ComfyExitReport.html" class="tsd-signature-type tsd-kind-interface">ComfyExitReport</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></div>
@@ -74,7 +74,7 @@
 应用自己也一起没了的那种情况，只能靠它反推）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:181</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:181</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

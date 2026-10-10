@@ -13,7 +13,7 @@
 <h1>Interface RunAsyncActionOptions</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">RunAsyncActionOptions</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#failuretext">failureText</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> (<span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span>)<span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#readresultenvelope">readResultEnvelope</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#report">report</a><span class="tsd-signature-symbol">:</span> <a href="../types/lib_async-action.ActionReport.html" class="tsd-signature-type tsd-kind-type-alias">ActionReport</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#successtext">successText</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> (<span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">result</span><span class="tsd-signature-symbol">:</span> <a href="lib_async-action.ActionResult.html" class="tsd-signature-type tsd-kind-interface">ActionResult</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span>)<span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/async-action.ts:81</li></ul></aside>
+<li>Defined in src/lib/async-action.ts:81</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -39,7 +39,7 @@
 可以给函数（文案依赖入参时，如「删除「&lt;名字&gt;」失败」）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/async-action.ts:92</li></ul></aside></section>
+<li>Defined in src/lib/async-action.ts:92</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="readresultenvelope"><code class="tsd-tag">Optional</code><span>read<wbr/>Result<wbr/>Envelope</span><a href="#readresultenvelope" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">readResultEnvelope</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
@@ -47,14 +47,14 @@
 只按「有没有抛」判定（用于端点在响应体里带 <code>ok: false</code> 的落点）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/async-action.ts:105</li></ul></aside></section>
+<li>Defined in src/lib/async-action.ts:105</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="report"><span>report</span><a href="#report" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">report</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_async-action.ActionReport.html" class="tsd-signature-type tsd-kind-type-alias">ActionReport</a></div>
 <div class="tsd-comment tsd-typography"><p>反馈通道（必给 —— 这就是本模块存在的理由）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/async-action.ts:83</li></ul></aside></section>
+<li>Defined in src/lib/async-action.ts:83</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="successtext"><code class="tsd-tag">Optional</code><span>success<wbr/>Text</span><a href="#successtext" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">successText</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> (<span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">result</span><span class="tsd-signature-symbol">:</span> <a href="lib_async-action.ActionResult.html" class="tsd-signature-type tsd-kind-interface">ActionResult</a><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">string</span>)</div>
@@ -64,7 +64,7 @@
 参数缺席时这条差别才被真正表达出来。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/async-action.ts:100</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/async-action.ts:100</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

@@ -225,6 +225,13 @@ const DOMAINS = [
    * **面向用户的入口**（谁点了什么、输出给谁看、什么时候回收）。 */
   "console",
   "core",
+  /* 数据库备份 / 恢复（D6，ISSUE #1611）：命名与轮转、`VACUUM INTO` 备份、
+   * `integrity_check` 验证、待恢复标记与换文件。它**不属于 `core`** ——
+   * `core` 是仓储层（SQL 出口），本域是「库文件本身的生死」；也不属于
+   * `drizzle-studio`（那是可视化工具的生命周期）。
+   * 真正的实现在 `scripts/db-backup-core.mjs`（启动链的纯 Node 宿主必须能引它），
+   * 本目录只放服务端取用面与设置页的接线。 */
+  "db-backup",
   "drizzle-studio",
   "film",
   "llm",

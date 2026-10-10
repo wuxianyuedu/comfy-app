@@ -16,7 +16,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">ComfySystemStats</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#gpuname">gpuName</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#online">online</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#ramtotal">ramTotal</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#ramused">ramUsed</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#smivramtotal">smiVramTotal</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#smivramused">smiVramUsed</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#vramfree">vramFree</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#vramtotal">vramTotal</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#vramused">vramUsed</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/client.ts:462</li></ul></aside>
+<li>Defined in src/lib/comfyui/client.ts:462</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -43,61 +43,61 @@
 <div class="tsd-comment tsd-typography"><p>GPU 型号（取第一块可用 GPU）；无 GPU 时为 undefined</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/client.ts:465</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/client.ts:465</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="online"><span>online</span><a href="#online" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">online</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/client.ts:463</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/client.ts:463</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="ramtotal"><span>ram<wbr/>Total</span><a href="#ramtotal" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">ramTotal</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>系统内存总量（字节）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/client.ts:479</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/client.ts:479</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="ramused"><span>ram<wbr/>Used</span><a href="#ramused" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">ramUsed</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>系统内存占用（字节）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/client.ts:477</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/client.ts:477</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="smivramtotal"><code class="tsd-tag">Optional</code><span>smi<wbr/>Vram<wbr/>Total</span><a href="#smivramtotal" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">smiVramTotal</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>nvidia-smi 物理专用显存总量（字节）；不适用/查询失败为 undefined</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/client.ts:475</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/client.ts:475</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="smivramused"><code class="tsd-tag">Optional</code><span>smi<wbr/>Vram<wbr/>Used</span><a href="#smivramused" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">smiVramUsed</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>nvidia-smi 物理专用显存占用（字节）；不适用/查询失败为 undefined</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/client.ts:473</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/client.ts:473</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="vramfree"><span>vram<wbr/>Free</span><a href="#vramfree" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">vramFree</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>显存剩余可用（字节）：ComfyUI 上报的 vram_free 原值</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/client.ts:471</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/client.ts:471</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="vramtotal"><span>vram<wbr/>Total</span><a href="#vramtotal" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">vramTotal</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>显存总量（字节）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/client.ts:469</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/client.ts:469</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="vramused"><span>vram<wbr/>Used</span><a href="#vramused" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">vramUsed</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>显存占用（字节）：vram_total - vram_free 推导</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/client.ts:467</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/comfyui/client.ts:467</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
