@@ -462,15 +462,22 @@ test.describe("应用页签与全屏视图 @critical", () => {
       timeout: 20_000,
     });
 
-    // 关键断言：设置层铺满视口之后，状态栏与视图自己的「返回」出路都还点得到。
+    /* 关键断言：设置层铺满视口之后，状态栏与视图自己的出路都还点得到。
+     *
+     * 这一格**不再拿「返回」按钮当锚**：设置页那枚「← 返回」已按 ISSUE #1423
+     * 的后续删掉（它在一页页签里是第二条退出路径、在独立路由 `/settings` 下
+     * 又是另一个含义，且它唯一确定的作用只是把标题推离左边缘）。现在换成分区
+     * 导航的第一项 —— 那是设置视图内部**一挂载就在**的可点目标，用它判
+     * 「浮层有没有盖住自己」与原来的判据等价，而不再依赖一枚不该存在的按钮。 */
     await expectStatusBarNotCovered(page);
-    const back = page
-      .getByRole("button", { name: "返回", exact: true })
+    const firstSection = page
+      .getByRole("navigation", { name: "设置分区" })
+      .getByRole("button")
       .first();
-    await expect(back).toBeVisible();
+    await expect(firstSection).toBeVisible();
     expect(
-      await centerHitsOwnSubtree(back),
-      "设置视图的「返回」出口被自己的浮层结构盖住了",
+      await centerHitsOwnSubtree(firstSection),
+      "设置视图的分区导航被自己的浮层结构盖上了",
     ).toBe(true);
   });
 

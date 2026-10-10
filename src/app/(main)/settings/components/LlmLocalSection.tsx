@@ -91,6 +91,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
             </span>
             <StatusButton
               onClick={() => void c.stopOllama()}
+              /* 运行中 → 「关闭」是这一态的主行动，实心。与 ComfyUI /
+                 Drizzle Studio 两条状态行同一口径。 */
+              variant="primary-solid"
               disabled={c.ollamaStopping}
               className="ml-auto"
             >
@@ -106,6 +109,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
             </span>
             <StatusButton
               onClick={() => void c.startOllama()}
+              variant="primary-solid"
               disabled={c.ollamaStarting}
               className="ml-auto"
             >
@@ -284,7 +288,11 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         </Disclosure>
       </div>
 
-      <StatusButton onClick={() => void c.saveLlm()} disabled={c.saving}>
+      <StatusButton
+        onClick={() => void c.saveLlm()}
+        variant="primary-solid"
+        disabled={c.saving}
+      >
         保存 LLM 配置
       </StatusButton>
     </SettingsCard>

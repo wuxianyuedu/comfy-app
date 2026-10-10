@@ -30,11 +30,13 @@ function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
 export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
   return (
     <SettingsCard title="数据库（Drizzle Studio）">
-      <p className="text-muted-foreground mb-3 text-sm">
-        可视化浏览本地 SQLite 数据库（schema / 表数据 / 运行 SQL）。 Drizzle
-        Studio 的界面托管在官方远端页面
-        （local.drizzle.studio），本地只起一个回连端口；点「打开查看」
-        会用你的系统默认浏览器打开它。
+      {/* 「本分区是什么」那一段搬进了导航行右侧的说明（`sectionSummary`）——
+          它回答的是导航问题，读一遍就不再需要，留着只会把第一个控件推到折叠线
+          以下。这里只留**答案在别处拿不到的那句**：界面托管在官方远端域名上。 */}
+      <p className="text-muted-foreground mb-3 text-xs">
+        Drizzle Studio 的界面托管在官方远端页面（
+        <code className="text-ink/80">local.drizzle.studio</code>
+        ），本地只起一个回连端口；点「打开查看」会用系统默认浏览器打开它。
       </p>
       <div
         className={`border-border bg-surface-1 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
@@ -60,8 +62,12 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
               等共享标志，卡住时曾把三个按钮一起锁死（#92）。
               状态查询失败（dbStudioStatus 为 null）时按「未运行」
               处理：启动按钮仍可点，用户不会整组被禁用。 */}
+          {/* 三颗的层级与 ComfyUI 那条同款（见 ComfyuiSection 的注释）：
+              「看」走软底、`outline` 给并列出口、**当前这一态该按的那一颗**
+              才是实心。此前三颗都是实心品牌紫，一屏里三颗主按钮。 */}
           <StatusButton
             onClick={() => void c.openDbStudio()}
+            variant="primary"
             disabled={
               c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up
             }
@@ -70,12 +76,14 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
           </StatusButton>
           <StatusButton
             onClick={() => void c.startDbStudio()}
+            variant={c.dbStudioStatus?.up ? "primary" : "primary-solid"}
             disabled={c.dbStudioStarting || c.dbStudioStatus?.up === true}
           >
             {c.dbStudioStarting ? "启动中…" : "启动 Drizzle Studio"}
           </StatusButton>
           <StatusButton
             onClick={() => void c.stopDbStudio()}
+            variant={c.dbStudioStatus?.up ? "primary-solid" : "primary"}
             disabled={c.dbStudioStopping || !c.dbStudioStatus?.up}
           >
             {c.dbStudioStopping ? "关闭中…" : "关闭 Drizzle Studio"}

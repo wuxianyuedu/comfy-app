@@ -27,12 +27,9 @@ import type { ReadySettingsPageController } from "./hooks/use-settings-page";
 
 export function SettingsPageView({
   c,
-  onClose,
   className = "h-[calc(100vh-var(--toolbar-height,48px))]",
 }: {
   c: ReadySettingsPageController;
-  /** overlay 模式下由调用方传入关闭回调；独立路由下由外壳 SettingsShell 用 router.back()。 */
-  onClose?: () => void;
   /** 自定义根容器 class（overlay 模式传 h-full 等覆盖高度）。 */
   className?: string;
 }) {
@@ -43,7 +40,6 @@ export function SettingsPageView({
     <SettingsShell
       section={c.section}
       onSelect={c.setSection}
-      onClose={onClose}
       className={className}
     >
       {c.flash && (

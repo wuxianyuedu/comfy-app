@@ -40,7 +40,7 @@ export function UpdateCheckSection() {
 
   return (
     <SettingsCard title="本地更新检测">
-      <p className="text-muted-foreground mb-4 text-sm">
+      <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         桌面壳开着时，本地源码由 dev server 自动热更（无需提示）。仅当
         <strong className="text-ink/80">改完当前窗口不生效、得重启</strong>
         的文件（Rust 源码 / tauri.conf.json / splash.html —— 需重编壳； .env /

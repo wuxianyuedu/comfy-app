@@ -17,10 +17,12 @@ import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 export function ExitSection({ c }: { c: ReadySettingsPageController }) {
   return (
     <SettingsCard title="退出与后台服务">
-      <p className="text-muted-foreground mb-4 text-sm">
-        桌面壳退出时会对应用进程树执行整树强制关闭（被强杀的进程没有清理机会），
-        因此这些开关是
-        「拉起时」决定后台服务是否脱离进程树，不是退出那一刻再选。 改动后
+      {/* 同样只留「答案在别处拿不到的那句」：时机口径。开关的语义由每一条自己
+          的说明文字讲（它们才是用户真正在选的东西）。 */}
+      <p className="text-muted-foreground mb-4 text-xs">
+        这些开关是
+        <strong className="text-ink/80">拉起的时刻</strong>
+        决定的（退出时壳会对整棵进程树强杀，被强杀的进程没有清理机会），因此改动后
         <strong className="text-ink/80">下一次拉起才生效</strong>。
       </p>
       <div className="mb-4">
@@ -83,7 +85,11 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
         </p>
       </div>
       <div className="flex items-center gap-2">
-        <StatusButton onClick={() => void c.savePrefs()} disabled={c.saving}>
+        <StatusButton
+          onClick={() => void c.savePrefs()}
+          variant="primary-solid"
+          disabled={c.saving}
+        >
           保存偏好
         </StatusButton>
       </div>
