@@ -2,24 +2,39 @@ import { defineConfig } from "vitest/config";
 import path from "node:path";
 
 /**
- * `JSDOM_TEST_GLOBS` —— 进 jsdom project 的用例面（§11.17）。
+ * `DOM_TEST_GLOBS` —— 进 **DOM 档**（`happy-dom`）的用例面（§11.17）。
  *
- * 只有两种形状**整目录一致**时才按目录声明：① 该目录下全部用例都 jsdom（下面那批，
+ * 只有两种形状**整目录一致**时才按目录声明：① 该目录下全部用例都要 DOM（下面那批，
  * 实测 26 个目录，逐个核过）；② \`.test.tsx\`。混合目录（同目录下两种都有）**不在这里**
- * —— 它们保持 node 档，其中要 jsdom 的继续靠文件头（当前 37 份，是它们归属的唯一声明）。
+ * —— 它们保持 node 档，其中要 DOM 的继续靠文件头（是它们归属的唯一声明）。
+ *
+ * ## 为什么 DOM 档默认是 happy-dom 而不是 jsdom
+ *
+ * 两个都是 DOM 实现，差别在**代价**与**保真度**，账是分开记的：
+ *   · happy-dom 启动一个 window 明显更便宜（environment 时间占比是本仓库实测
+ *     最大的一项），大多数「渲染一个组件、断言点了会回调」的用例并不需要 jsdom
+ *     那些边角行为；
+ *   · jsdom 保真度更高：它的 CSSOM 认 `color-mix()`、它的 DOM 节点能在
+ *     `Node.prototype` 上给出 `nodeName`、它的 `Element.prototype.clientWidth`
+ *     是访问器（可 `spyOn`）、它**不做同源检查**。少数用例真的落在这些差异上 ——
+ *     那些文件用**文件头** `// @vitest-environment jsdom` 逐份声明，是本档的例外。
+ *
+ * ⚠️ **例外不是「随手加一行」**：写 jsdom 头的必须有**能被指出的具体理由**
+ * （哪一条 API / 哪一个行为在 happy-dom 下不同），因为这一档的默认值选 happy-dom
+ * 的全部意义就是「只有真的需要 jsdom 时才付它的钱」。判据：
+ * `node scripts/check-test-environment.cjs --report` 会列出每份 jsdom 头的文件。
  *
  * ⚠️ **路径里的 `(main)` 这类路由组括号必须转义成 `\\(main\\)`** —— 括号是 glob 的
  * 分组语法，写成字面量时 `src/app/(main)/…` 会被翻成「匹配 `src/app/main/…`」，
  * 条目**静默不匹配**（下面覆盖率那批的注释里早就写了这条，本清单曾漏掉两条：
- * `settings/components` 与 `settings/hooks` 实际一个都没进来，那 3 份 `.test.ts`
- * 一直在靠文件头撑着）。同 §11.7「门槛写着 100、报告里查无此文件」那一族：
- * 清单条目失效不报错，只是不见了。
+ * `settings/components` 与 `settings/hooks` 实际一个都没进来）。同 §11.7
+ * 「门槛写着 100、报告里查无此文件」那一族：清单条目失效不报错，只是不见了。
  *
- * ⚠️ 新增一批 jsdom 用例时：若整个目录都是，就把目录加到这里；只加几份就别动它，
+ * ⚠️ 新增一批 DOM 用例时：若整个目录都是，就把目录加到这里；只加几份就别动它，
  * 直接写文件头（`scripts/check-test-environment.cjs` 会核「目录档与文件头矛盾」）。
  * **不要为了省几行文件头去 `exclude` 少数派** —— 见上面 `projects` 的注释。
  */
-const JSDOM_TEST_GLOBS = [
+const DOM_TEST_GLOBS = [
   "src/app/\\(main\\)/settings/components/**/*.test.{ts,tsx}",
   "src/app/\\(main\\)/settings/hooks/**/*.test.{ts,tsx}",
   "src/components/agent-run/**/*.test.{ts,tsx}",
@@ -176,11 +191,11 @@ export default defineConfig({
      *
      * ⚠️ **混合目录别试着用 `exclude` 摘少数派**（实测否决）：想让 `src/components/ui`
      * 这种目录进 jsdom 档，就得把它的少数 node 用例从 jsdom 档 `exclude` 掉 ——
-     * 可 **node 档的 `exclude` 正是同一份 `JSDOM_TEST_GLOBS`**，于是那些用例
-     * **两个 project 都不跑**。实测：给 jsdom 档加 exclude 之后
+     * 可 **node 档的 `exclude` 正是同一份 `DOM_TEST_GLOBS`**，于是那些用例
+     * **两个 project 都不跑**。实测：给 DOM 档加 exclude 之后
      * `vitest list <那份文件>` 输出**为空**（一个档都没接住）—— 静默消失，
      * 比多写一行文件头坏得多。要修就得把 node 档的 exclude 拆成逐条清单、
-     * 与 jsdom 档手工对齐，那是把「一处 glob 两处用」换成「两处清单要同步」。
+     * 与 DOM 档手工对齐，那是把「一处 glob 两处用」换成「两处清单要同步」。
      * **文件头就是这一档的正确机制**：它天然只影响自己那一份，不动别人的归属。
      *
      * 这一档买到的是三件事，都不是「省注释」：
@@ -199,15 +214,23 @@ export default defineConfig({
         test: {
           name: "node",
           environment: "node",
+          /* 纯逻辑用例：不碰 DOM 的 store / 判据 / 纯函数。默认档，面最大。 */
           include: ["src/**/*.test.{ts,tsx}", "tests/**/*.test.{ts,tsx}"],
-          exclude: JSDOM_TEST_GLOBS,
+          /* ⚠️ `exclude` 只写 glob、**不写 jsdom 例外那一份**：node 档是
+           * 「两条 DOM glob 都没命中的那一块」，所以 DOM 档的 include 改成什么，
+           * 这里就跟着排掉什么（见下 `DOM_TEST_GLOBS`）。
+           * 写反了（比如这里列 jsdom 目录清单）会让 profile 与 node 档的差集
+           * 出现缝：那些用例一个档都进不去、`vitest list` 里直接消失。 */
+          exclude: DOM_TEST_GLOBS,
         },
       },
       {
+        /* DOM 档。**默认 happy-dom**，落在 jsdom 特有行为上的文件靠文件头
+         * `// @vitest-environment jsdom` 逐份改档（口径见文件顶部那段）。 */
         test: {
-          name: "jsdom",
-          environment: "jsdom",
-          include: JSDOM_TEST_GLOBS,
+          name: "happy-dom",
+          environment: "happy-dom",
+          include: DOM_TEST_GLOBS,
         },
       },
     ],

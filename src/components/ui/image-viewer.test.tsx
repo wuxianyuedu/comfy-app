@@ -1,3 +1,12 @@
+// @vitest-environment jsdom
+/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
+ * 本文件要 `vi.spyOn(Element.prototype, "clientWidth", "get")` —— 给一个
+ * **访问器**打桩。happy-dom 的 `clientWidth` 落在实例上（原型上没有访问器），
+ * vitest 的 `spyOn` 当场以「The property "clientWidth" is not defined on
+ * the object」抛错；jsdom 把它实现为原型上的 getter，可以打桩。
+ * 这条判据要证明的恰恰是「适应窗口**没有**读 clientWidth」，所以那个桩
+ * 必须打得进去 —— 换不了写法。
+ */
 /**
  * 通用图片查看器的契约：**看全**这件事只允许一处实现。
  *

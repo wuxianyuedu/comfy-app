@@ -21,7 +21,7 @@ import { TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
 import { z } from "zod";
 import { setupTrpcServer } from "../helpers/trpc-msw";
-import { createTestTRPC } from "../helpers/test-trpc";
+import { createTestTRPC, testTrpcEndpoint } from "../helpers/test-trpc";
 import { createTestQueryClient } from "../helpers/renderWithProviders";
 
 /* ---------- 可控 behavior ---------- */
@@ -58,7 +58,7 @@ const mockRouter = t.router({
 type MockRouter = typeof mockRouter;
 
 const server = setupTrpcServer(mockRouter);
-const BASE = "http://localhost:3100/api/trpc";
+const BASE = testTrpcEndpoint();
 
 const localApi = createTRPCReact<MockRouter>();
 const localTrpcClient = localApi.createClient({

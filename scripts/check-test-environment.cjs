@@ -24,11 +24,12 @@
  *      另一个 project」—— 那正是这条用例要防的事。
  *
  *   ② **文件头与目录档的一致性**：`vitest.config.ts` 的 `projects` 按目录声明了
- *      默认档，本脚本核「目录档说 jsdom / 用例头说 node」这类**互相矛盾**的组合。
- *      它守的是「挪目录 / 改档」这类改动的可见性，不替用例决定该跑在哪。
+ *      默认档，本脚本核「DOM 档的用例声明 node / node 档的用例声明 DOM」这类
+ *      **互相矛盾**的组合。它守的是「挪目录 / 改档」这类改动的可见性，
+ *      不替用例决定该跑在哪。
  *
- *   ③ **冗余文件头**：文件头与它所属的档给出**同一个结论**（两处都在说 jsdom /
- *      两处都在说 node）—— 同一件事写了两个来源，改一处漏一处无人察觉。
+ *   ③ **冗余文件头**：文件头与它所属的档给出**同一个结论**（两处都说 DOM /
+ *      两处都说 node）—— 同一件事写了两个来源，改一处漏一处无人察觉。
  *      判据与 ② 同源（同一份解析出来的 glob + 同一个 glob 引擎），
  *      **不需要跑 vitest**：所属档由 `include` / `exclude` 的匹配直接算出来。
  *      它把「哪一份头是冗余的」从「谁手工跑一遍 `vitest list` 逐份比」变成钩子里的一次判定
@@ -55,7 +56,7 @@ const TEST_FILE_RE = /\.test\.tsx?$/;
  * 「环境早退」的形状 —— 两种写法都认，因为它们都能让一条用例**不跑也绿**：
  *
  *   · `if (typeof window !== "undefined") return;` —— 在 node 档下早退；
- *   · `if (typeof window === "undefined") return;` —— 在 jsdom 档下早退。
+ *   · `if (typeof window === "undefined") return;` —— 在 DOM 档下早退。
  *
  * ⚠️ **`typeof` 后面只认环境全局那几个名字**，不是任意标识符。首版写成
  * `typeof \w+` 时，`UseWorkshopPipelinePersistence.test.tsx` 的
@@ -64,7 +65,7 @@ const TEST_FILE_RE = /\.test\.tsx?$/;
  * 的下场就是被整条放宽（§12.13 的原话：「清单变噪音，没人会照它排期」），
  * 所以这里的白名单是**判据能立住的前提**，不是优化。
  *
- * 名单的出处是「一个全局在 node 档下不存在、在 jsdom 档下存在」这件事本身：
+ * 名单的出处是「一个全局在 node 档下不存在、在 DOM 档下存在」这件事本身：
  * `window` / `document` / `navigator` / `localStorage` / `sessionStorage` 是
  * jsdom 提供的（`navigator` 在 Node 24 也**存在**，所以它单独列出来是给
  * 「按浏览器语义用它」的用例留的；真要判它请配 `vi.stubGlobal`）。
@@ -155,7 +156,7 @@ function stripCommentsAndStrings(src) {
  * 正是本仓库反复踩的那一族（§11.13.1「判据在场 ≠ 判据在跑」）。
  *
  * ⚠️ 不能用上面那个 `stripCommentsAndStrings()`：它把字符串换成 `""` 占位，
- * **偏移会变**，而下面要拿 `indexOf` 的偏移去切数组、还要读 `include: JSDOM_TEST_GLOBS`
+ * **偏移会变**，而下面要拿 `indexOf` 的偏移去切数组、还要读 `include: DOM_TEST_GLOBS`
  * 这种标识符与字符串条目。所以这里是「只表注释、长度不变」的那一版。
  */
 function blankComments(src) {
@@ -230,28 +231,59 @@ function parseProjectGlobs() {
   /* ⚠️ 在**抹掉注释**的文本上找 `projects:`（偏移不变，字符串照旧）——
    * 解释性注释里正当会出现 `projects:` 这个词，直接在原文上找会命中注释那一处。 */
   const text = blankComments(raw);
-  const globs = { jsdomInclude: [], jsdomExclude: [], nodeInclude: [], nodeExclude: [] };
+  /** 档名 ⇒ `{ include, exclude }`。两个档都得解析出来，缺一个由 `found` 兜住。 */
+  const tiers = new Map();
   const marker = "projects:";
   const at = text.indexOf(marker);
-  if (at < 0) return { globs, found: 0 };
+  if (at < 0) return { tiers, found: 0 };
   /* 从 `projects:` 后的 `[` 开始，按括号配对切出这个数组的**顶层元素**。 */
   const bracket = text.indexOf("[", at);
-  if (bracket < 0) return { globs, found: 0 };
+  if (bracket < 0) return { tiers, found: 0 };
   const items = splitTopLevel(text.slice(bracket + 1));
   let found = 0;
   for (const item of items) {
     const nameM = /name:\s*"([^"]+)"/.exec(item);
     if (!nameM) continue;
     const name = nameM[1];
-    if (name !== "node" && name !== "jsdom") continue;
     const inc = literalArray(item, "include", text);
     const exc = literalArray(item, "exclude", text);
     if (inc === null) continue; // 形状不认识 —— 不计入 found，由 found<2 兜住
     found += 1;
-    globs[name + "Include"] = inc;
-    globs[name + "Exclude"] = exc ?? [];
+    tiers.set(name, { include: inc, exclude: exc ?? [] });
   }
-  return { globs, found };
+  return { tiers, found };
+}
+
+/**
+ * 每个档的 `environment` —— 从**配置源码**读，不写死档名。
+ *
+ * 为什么值得单独一步：②③ 要比对的是「文件头声明的环境 ⇄ 它所属档的环境」。
+ * 把 `jsdom` / `happy-dom` 这些字面量抄进本脚本，就等于让判据持有第二份
+ * 「哪个档是什么环境」的真相 —— 配置里给 DOM 档换个实现时，本判据会因为
+ * **两边已经不同源**而静默放过（判据照旧报 OK，比对的却是旧档名）。
+ * 同族的坑见 §11.17.4「判据自己不许静默降级」。
+ *
+ * ⚠️ 解析的是**抹掉注释**的文本（同 `parseProjectGlobs`）：解释性注释里正当
+ * 会写出 `environment: "jsdom"` 这种字样（本文件与 `vitest.config.ts` 的注释里
+ * 就有），在原文上取第一个命中会读到注释里那一处。
+ *
+ * @returns {Record<string, string>} 档名 ⇒ 环境名；读不到的档不在表里。
+ */
+function parseTierEnvironments() {
+  const text = blankComments(fs.readFileSync(path.join(ROOT, "vitest.config.ts"), "utf8"));
+  const marker = "projects:";
+  const at = text.indexOf(marker);
+  if (at < 0) return {};
+  const bracket = text.indexOf("[", at);
+  if (bracket < 0) return {};
+  /** 档名 ⇒ 环境名。 */
+  const out = {};
+  for (const item of splitTopLevel(text.slice(bracket + 1))) {
+    const nameM = /name:\s*"([^"]+)"/.exec(item);
+    const envM = /environment:\s*"([^"]+)"/.exec(item);
+    if (nameM && envM) out[nameM[1]] = envM[1];
+  }
+  return out;
 }
 
 /** 按括号配对把数组体切成顶层元素（不处理嵌套对象里的逗号）。 */
@@ -287,7 +319,7 @@ function splitTopLevel(body) {
  *
  * 支持两种写法，因为它们各自都好用、且**都必须被认出来**：
  *   · `include: [<字符串字面量>, …]` —— 直接写在一行里；
- *   · `include: JSDOM_TEST_GLOBS`    —— 顶层 `const` 数组（列出 26 个目录用的就是它，
+ *   · `include: DOM_TEST_GLOBS`      —— 顶层 `const` 数组（列出 26 个目录用的就是它，
  *     写成字面量会把两个 project 挤成一坨）。
  * 认不出标识符时**返回 `null`**（判失败），不静默按空数组处理 —— 那正是首版
  * 「`include: []` 却退 0」那个静默消失的形状。
@@ -409,8 +441,8 @@ function main() {
     }
   }
 
-  /* ② 目录档与文件头互相矛盾 —— 守「挪目录 / 改档」的可见性。 */
-  const { globs, found } = parseProjectGlobs();
+  /* ②③ 需要先知道「哪个档负责哪些用例」。 */
+  const { tiers, found } = parseProjectGlobs();
   if (found < 2) {
     console.error(
       "[ERROR] 解析 `vitest.config.ts` 的 `projects` 失败（拿到 " + found + " 个档，期望 2）。\n" +
@@ -419,71 +451,129 @@ function main() {
     );
     return 1;
   }
+  /* 档名 ⇄ 该档的 `environment`。**不写死**：配置里那一行才是权威，
+   * 本脚本只保证「文件头说的环境」与「它所属档的环境」对得上。
+   * 硬编码档名会让「给 DOM 档换一个环境实现」这类改动在不改本脚本的情况下
+   * 静默失效（判据照旧报 OK，而比对的两边已经不同源）。 */
+  const envOfTier = parseTierEnvironments();
+
+  /**
+   * 一份用例**实际**会跑在哪个档：`exclude` 优先，其次按 `include` 命中。
+   * 返回 `null` = 一个档都没命中或命中多个（配置自己有缝 / 有重叠）——
+   * 那两种情况都**不归本判据**（②③ 都是「两个来源有没有打架」的判据，
+   * 配置自己有缝时报任何一条都会把人带偏）。
+   */
+  function tierOf(rel) {
+    const hits = [];
+    for (const [name, g] of tiers) {
+      const included = matchesAny(rel, g.include);
+      const excluded = matchesAny(rel, g.exclude);
+      if (included && !excluded) hits.push(name);
+    }
+    return hits.length === 1 ? hits[0] : null;
+  }
+
   /* ② 目录档与文件头**互相矛盾**。
    *
    * ⚠️ 判据的口径是「**这一档声明了它会跑在 X，而文件头说 X 是错的**」，
    * 不是「文件头与所属 project 不同名」—— 后者会误报一整片：
-   * `projects` 只决定**没写文件头**时跑在哪，所以「node project 里放一份写了
-   * `jsdom` 头的用例」是完全正当的写法（文件头优先级更高，它照样跑在 jsdom）。
+   * `projects` 只决定**没写文件头**时跑在哪，所以「node 档里放一份写了 DOM
+   * 头的用例」是完全正当的写法（文件头优先级更高，它照样跑在 DOM 环境）。
    * 实测：按后一种口径装上去，当场报 37 处「矛盾」，全是混合目录里那些**本来
    * 就该靠文件头指定 jsdom** 的 `.test.ts`（`src/lib/project-canvas/canvas-store`
    * 那些）—— 一条会误报 37 处的判据活不过一次评审。
    *
-   * 真正该拦的是这两种：
-   *   a. **jsdom 档里的用例**声明 `node` —— 那说明它不该在这个档（或文件头过时），
-   *      而 jsdom 档下跑一份 node 用例的后果是「它以为自己在 node 上」；
-   *   b. **node 档 **且** 该目录是「整目录一致」的 jsdom 目录**里的用例声明 `node`
-   *      —— 与 a 同一件事的另一侧（目录里其他人都靠目录档、只有它反着写）。
-   * 判据不去猜「这份用例究竟该跑在哪」，只保证**声明之间不自相矛盾**；
-   * 「该跑在哪」由 `include` 的归属回答，不归这里判。 */
+   * ⚠️ 分档现在是**三档**（`node` 档 + DOM 档，DOM 档基本档是 `happy-dom`、
+   * 允许用文件头改到 `jsdom`），所以「矛盾」与「冗余」的定义跟着细化了一层：
+   *
+   * | 所属档的环境 | 文件头写的 | 判定 |
+   * | ------------ | ---------- | ---- |
+   * | `node`       | 任何 DOM   | **正当**（混合目录的唯一声明，不许收紧） |
+   * | `node`       | `node`     | **冗余**（③） |
+   * | DOM          | `node`     | **矛盾**（②） |
+   * | DOM          | 基本档环境 | **冗余**（③） |
+   * | DOM          | `jsdom`（基本档是别的 DOM 实现时） | **正当例外**，列入清单 |
+   *
+   * 最后一行是本档新增的那一格，也是唯一需要**额外**解释的一格：它既不是
+   * 「两处说不同的话」（文件头在说「这份要 jsdom 的保真度」，目录档在说
+   * 「默认跑便宜的 happy-dom」，两句都对），也不是「两处说同一句话」。
+   * 判据把它**列出来**而不是判它违规 —— 它是正当写法，但必须看得见（见文末）。
+   */
   const conflicts = [];
+  /** 文件头声明了 jsdom 的用例 —— DOM 档的**例外档**，单独点名（见下）。 */
+  const jsdomExceptions = [];
+  const redundantHeads = [];
+
   for (const { abs, rel } of files) {
-    const inJsdom = matchesAny(rel, globs.jsdomInclude) && !matchesAny(rel, globs.jsdomExclude);
-    if (!inJsdom) continue;
+    const tier = tierOf(rel);
+    if (tier === null) continue;
+    const tierEnv = envOfTier[tier];
+    if (tierEnv === undefined) {
+      console.error(
+        `[ERROR] 档 \`${tier}\` 在 \`vitest.config.ts\` 里没有可识别的 \`environment\`。\n` +
+        "        本判据按那个值比对文件头 —— 读不到就判失败，不静默放过（同 §11.17.4）。",
+      );
+      return 1;
+    }
     const env = declaredEnv(fs.readFileSync(abs, "utf8"));
     if (!env) continue;
-    if (env !== "jsdom") {
+
+    if (tierEnv === "node") {
+      /* node 档：只有「文件头也写 node」才是冗余；写 DOM 头是正当写法。
+       * ⚠️ 这里**不能**直接 `continue` —— 那会把「node 档里的 node 头」
+       * 这条冗余漏掉（本轮改分档时当场漏过一次，由门禁自测逮住）。 */
+      if (env === "node") {
+        redundantHeads.push({
+          rel,
+          kind: "冗余文件头",
+          detail: "目录档已经给出 node —— 文件头是同一个结论的第二个来源，删掉它（同一件事只留一个来源）",
+        });
+      }
+      continue;
+    }
+
+    /* 到这里：该用例落在 DOM 档（基本档 `tierEnv`）里。 */
+    if (env === "node") {
       conflicts.push({
         rel,
         kind: "目录档与文件头矛盾",
-        detail: `该用例落在 jsdom 档的 include 里，文件头却写着 ${env}`,
+        detail: `该用例落在 ${tier} 档的 include 里（environment: ${tierEnv}），文件头却写着 node`,
       });
+      continue;
     }
-  }
-
-  /* ③ 冗余文件头 —— 文件头与所属档给同一个结论，同一件事有两个来源。
-   *
-   * ⚠️ 这一条与 ② 是**互补**的，不是重复：② 抓「两处说了不同的话」（矛盾），
-   * ③ 抓「两处说了同一句话」（冗余）。两者都源于同一个病：**归属声明散在多处**。
-   *
-   * ⚠️ 只判「恰好落在一个档里」的文件。两个档都不匹配（`include` 有缝）或都匹配
-   * （glob 有重叠）时不判 —— 那是配置本身的问题，这里报「冗余」只会误导。
-   * 实测：现状 609 份用例全部恰好落在一个档里（`vitest list` 逐行核对过）。
-   *
-   * ⚠️ 「冗余」这个结论的**权威出处在 vitest 自己**（`vitest list` 的 `[project]`），
-   * 这里用同一套 glob 重新算一遍是**为了能在钩子里离线判**。所以判据必须
-   * 与配置同源（同一份 `JSDOM_TEST_GLOBS`），且**不许自己另写一套匹配规则** ——
-   * ISSUE #1485 那轮就是用手写 glob 引擎算覆盖、把 `src/components/ui` 误判成
-   * 「已覆盖」，删完当场被 `vitest list` 揭穿（§11.17.1.1 记了这件事）。
-   */
-  const redundantHeads = [];
-  for (const { abs, rel } of files) {
-    const env = declaredEnv(fs.readFileSync(abs, "utf8"));
-    if (!env) continue;
-    const inJsdom = matchesAny(rel, globs.jsdomInclude) && !matchesAny(rel, globs.jsdomExclude);
-    const inNode = matchesAny(rel, globs.nodeInclude) && !matchesAny(rel, globs.nodeExclude);
-    if (inJsdom === inNode) continue; // 都不匹配或都匹配 —— 不归这条判据
-    const tierEnv = inJsdom ? "jsdom" : "node";
     if (env === tierEnv) {
+      /* ③ 冗余文件头 —— 两处给出**同一个结论**。 */
       redundantHeads.push({
         rel,
         kind: "冗余文件头",
-        detail: `目录档已经给出 ${tierEnv} —— 文件头是同一个结论的第二个来源，删掉它（同一件事只留一个来源）`,
+        detail:
+          `目录档已经给出 ${tierEnv} —— 文件头是同一个结论的第二个来源，删掉它` +
+          `（同一件事只留一个来源）`,
       });
+      continue;
     }
+    /* 剩下的那一格：DOM 档 + 文件头写了另一种 DOM 实现（`jsdom`）。
+     * 这是本档的新增正当写法，**记账不判红**。 */
+    jsdomExceptions.push(rel);
   }
 
   const all = [...problems, ...conflicts, ...redundantHeads];
+
+  /* jsdom 例外清单**不是**待办，是**账**：DOM 档默认 happy-dom 的全部意义就是
+   * 「只有真的需要 jsdom 时才付它的钱」，所以每一份例外都该看得见 ——
+   * 否则它会悄悄涨成「半个套件都在 jsdom 上跑」而没人发现。
+   * `--report` 与常规检查都打出来；**不参与退出码**（它们是正当写法）。 */
+  if (jsdomExceptions.length > 0) {
+    console.log(
+      `\n[test-env] 本档例外：${jsdomExceptions.length} 份用例用文件头改到 jsdom` +
+      `（DOM 档默认 happy-dom）——`,
+    );
+    for (const rel of jsdomExceptions) console.log(`  · ${rel}`);
+    console.log(
+      "  新增例外前先确认「happy-dom 真的做不到」（具体到哪一条 API / 行为），" +
+      "口径见 docs/standards/11-测试与可观测性.md §11.17。",
+    );
+  }
 
   if (all.length === 0) {
     if (!REPORT_ONLY) console.log(`[test-env] OK —— ${files.length} 份用例：无环境早退，无目录档矛盾，无冗余文件头。`);
