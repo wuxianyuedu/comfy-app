@@ -43,6 +43,15 @@ const GOOD = freshnessRecord({
   trackedBy: "visual",
 });
 
+/** 「今天」的凭证 —— 这一档现在按**日历日**判，所以夹具得是当天写的（见 `TODAY` 的用例）。 */
+const TODAY = freshnessRecord({
+  key: "linux",
+  verifiedAt: "2026-10-06T00:00:00.000Z",
+  who: "月读",
+  how: "pnpm check:visual",
+  trackedBy: "visual",
+});
+
 const NOW = new Date("2026-10-06T00:00:00.000Z");
 
 function read(rel: string): string {
@@ -52,16 +61,17 @@ function read(rel: string): string {
 describe("像素基线新鲜度判决（§11.8）", () => {
   it("每档都有写全的记录 ⇒ 放行，并报出「上次自证距今多久」", () => {
     /* `platforms` 喂**夹具**而不是真登记表：真表里 win32 挂在 `PENDING_PLATFORMS` 上
-     * （缺 8 张、只能在那台机器上录），拿它当「非 pending」的样本会与那条登记打架。 */
+     * （缺 8 张、只能在那台机器上录），拿它当「非 pending」的样本会与那条登记打架。
+     * 记录喂的是 `NOW` **当天**的：这一档现在按日历日判（见下面「当天凭证」那条）。 */
     const result = runGate({
-      ledger: { linux: GOOD, win32: GOOD },
+      ledger: { linux: TODAY, win32: TODAY },
       platforms: ["linux", "win32"],
       pending: [],
       now: NOW,
     });
     expect(result.exitCode).toBe(0);
     expect(result.problems).toEqual([]);
-    expect(result.ages).toEqual(["linux：1 天前", "win32：1 天前"]);
+    expect(result.ages).toEqual(["linux：今天", "win32：今天"]);
   });
 
   it("一档都没有记录 ⇒ 阻断，话术指到「在那一档跑一次」与账文件", () => {

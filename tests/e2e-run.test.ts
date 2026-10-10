@@ -105,19 +105,22 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
     expect(freshnessTrack("visual").key).toBe("linux");
   });
 
-  it("两条账**真正的**差异只有 `daily` / `skipHow`（其余四栏同形）", () => {
-    /* 「同形」是有边界的：多出来的这两栏不是随手加的开关，各回答一个问题 ——
-     *   · `daily`：这一档要不要按「每天首次」判（只有全量 e2e 是；像素档不做墙钟
-     *     阻断的理由见 `visual-freshness-gate.mjs` 文件头）；
-     *   · `skipHow`：这一档有没有「写明理由的豁免」那条出路（同样只有 e2e 有），
-     *     它是**另一条出路**而不是绕过。
+  it("两条账**真正的**差异是 `gatedByPending`（其余栏同形，`skipHow` 两档都有）", () => {
+    /* 「同形」是有边界的：差异栏不是随手加的开关，各回答一个问题 ——
+     *   · `daily`：这一档要不要按「每天首次」判（**两档都要**）；
+     *   · `skipHow`：这一档「今天不跑」那条出路长什么样（**两档都有** —— 像素档现在
+     *     也可能限制当天第一次提交，没有这条出路就等于拦人而指不出退路）；
+     *   · `gatedByPending`：这一档的「每天自证」是不是**与成套基线同一件事的两面**
+     *     （只有像素档是：还有档缺基线时那句话说不出口）。
      * 两侧一起判：只有一侧变了就说明「同形」这句话已经不成立了。 */
     expect(freshnessTrack("e2e").daily).toBe(true);
-    expect(freshnessTrack("visual").daily).toBe(false);
+    expect(freshnessTrack("visual").daily).toBe(true);
+    expect(freshnessTrack("e2e").gatedByPending).toBe(false);
+    expect(freshnessTrack("visual").gatedByPending).toBe(true);
     expect(freshnessTrack("e2e").skipHow).toBe(
       'node scripts/e2e-run.mjs --skip "<理由>"',
     );
-    expect(freshnessTrack("visual").skipHow).toBe(null);
+    expect(freshnessTrack("visual").skipHow).toContain("--workers=0");
     /* 差异面之外的登记栏位对齐：两条账各有一份账文件、一个键、一条命令。 */
     for (const kind of ["e2e", "visual"]) {
       const track = freshnessTrack(kind);
@@ -244,7 +247,13 @@ describe("全量 e2e 的「每日自证」（ISSUE #1282：每天首次提交带
     expect(result.problems.join("\n")).toContain("有人回答过");
   });
 
-  it("像素档**不吃**这条判据（它不是 daily：结论只在录过基线的那台机器上成立）", () => {
+  it("像素档**吃**这条判据，但 `PENDING_PLATFORMS` 非空时退回只判形状（ISSUE #1620）", () => {
+    /* 这一条此前判的是「像素档不吃每天首次」——理由是「结论只在录过基线的那台机器上
+     * 成立」。那个理由是对的，结论是错的：它把「谁能解这条账」与「这条账怎么被答复」
+     * 混成了一件事，于是像素档成了四档里唯一只被判「有主、写清」的那一档 ——
+     * 「这批基线一直是对的」这句话在那几秒里无人回答。
+     * 现在的形状：`PENDING_PLATFORMS` 空 ⇒ 与 e2e 同味（要当天的凭证）；非空 ⇒ 退回
+     * 只判形状（缺几张基线的那一档，「每天跑绿一次」说不出口）。 */
     const old = freshnessRecord({
       key: "linux",
       verifiedAt: "2026-01-01T00:00:00.000Z",
@@ -252,14 +261,24 @@ describe("全量 e2e 的「每日自证」（ISSUE #1282：每天首次提交带
       how: "pnpm check:visual",
       trackedBy: "visual",
     });
-    const result = runGate({
+    const complete = runGate({
       ledger: { linux: old },
       kind: "visual",
       platforms: ["linux"],
       pending: [],
       now: SAME_DAY,
     });
-    expect(result.exitCode).toBe(0);
+    expect(complete.exitCode).toBe(1);
+    expect(complete.problems.join("\n")).toContain("今天");
+
+    const stillPending = runGate({
+      ledger: { linux: old },
+      kind: "visual",
+      platforms: ["linux"],
+      pending: ["win32"],
+      now: SAME_DAY,
+    });
+    expect(stillPending.exitCode).toBe(0);
   });
 
   it("`--skip` 的三种形状：没给 / 给了可用理由 / 给了不合用的理由", () => {
