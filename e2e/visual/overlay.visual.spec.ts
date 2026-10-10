@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import {
   hideDevChrome,
+  watchRecordingInputs,
   settle,
   unstableChromeMasks,
 } from "./support/page-baseline";
@@ -87,12 +88,16 @@ async function openPinnedLogPanel(page: Page): Promise<Locator> {
     }
   }, WIDE_KEY_PREFIX);
 
+  await watchRecordingInputs(page);
   await hideDevChrome(page);
   await page.goto("/workspace");
   await expect(
     page.getByRole("heading", { name: "灵感从这里开始" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /日志面板/ }).first().click();
+  await page
+    .getByRole("button", { name: /日志面板/ })
+    .first()
+    .click();
 
   const panel = page.locator('[data-slot="dialog-content"]');
   await expect(panel).toBeVisible();

@@ -5,6 +5,7 @@ import {
   freezeComfyStats,
   freezeModelOverview,
   hideDevChrome,
+  watchRecordingInputs,
   setTheme,
   settle,
   unstableChromeMasks,
@@ -54,6 +55,7 @@ test.describe("首页视觉基线", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await setTheme(page, "dark");
     await clearProjectIndex(page);
+    await watchRecordingInputs(page);
     await hideDevChrome(page);
     await freezeComfyStats(page);
     await freezeModelOverview(page);
@@ -69,6 +71,7 @@ test.describe("首页视觉基线", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await setTheme(page, "light");
     await clearProjectIndex(page);
+    await watchRecordingInputs(page);
     await hideDevChrome(page);
     await freezeComfyStats(page);
     await freezeModelOverview(page);
