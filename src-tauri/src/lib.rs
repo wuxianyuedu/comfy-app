@@ -1783,14 +1783,41 @@ fn claim_project_root_env() -> (String, bool) {
 /// 运行，而同一检出起两份会让两边争同一个库与同一批端口。
 /// 判据必须在**建任何窗口之前**问一次——窗口一出现，第二个壳就已经在打扰用户了。
 fn another_instance_owns_this_checkout() -> bool {
-  if !single_instance::another_instance_running() {
+  if owns_checkout_per_single_instance() {
+    log::info!(
+      "[ComfyAPP] another instance of this checkout is running, focus requested and exiting \
+       (this launch did not start a window; the running instance was brought to front)"
+    );
+    return true;
+  }
+  false
+}
+
+/// 「同一检出已有壳在跑吗」（单实例判定的唯一出口，含自编排短路）。
+///
+/// **起它的人已经把这个问题回答过了**：双击链路是
+/// `app.exe → 编排器 → app.exe`（§1.5），而编排器（`dev-launcher.mjs` 的
+/// `spawnShell`）在起第二个壳之前，刚刚在**同一个检出**上走完了端口族判定
+/// （`reconcilePort`：本端口与 +1/+2 空闲，或占用者已被回收）；编排器与被它起的
+/// 壳同属一次启动，这一次启动里**只可能有这一个壳**——壳自己再问一遍命名互斥量
+/// （Windows `CreateMutexW` / POSIX 锁文件 + `SIGUSR1`）买不到新事实，而它的
+/// 失败面是有的：互斥量名由 `identity_root()`（cwd / 环境块）推导，编排器若
+/// 换了 cwd 起壳，这个名字会与用户的第二次双击（cwd = `System32`）推出的**不是
+/// 同一个** —— 于是「进程名相同、标题相同」的第二个壳被放进同一个检出。
+///
+/// **短路**：只有「编排器亲自起的」那次才有资格跳过（由注入的标记判，不看形态）。
+/// 标记缺席 = 双击链路的**首**壳自己（它是编排者，不是被起的那一个），或
+/// 用户/脚本直接双击壳 —— 两者都必须照常判定，否则单实例保护就没了。
+fn owns_checkout_per_single_instance() -> bool {
+  if shell_launch::is_shell_child() {
+    log::info!(
+      "[ComfyAPP] shell child started by the orchestrator for this very launch: \
+       single-instance check skipped (the orchestrator verified the port family \
+       before spawning this shell, ISSUE #1687)"
+    );
     return false;
   }
-  log::info!(
-    "[ComfyAPP] another instance of this checkout is running, focus requested and exiting \
-     (this launch did not start a window; the running instance was brought to front)"
-  );
-  true
+  single_instance::another_instance_running()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -100,6 +100,23 @@ pub fn is_own(env: &HashMap<String, String>) -> bool {
   env.get(OWNED_ENV).map(String::as_str) == Some("1")
 }
 
+/// 本进程是不是「编排器起来的那一个壳」（= 双击链路的第二个壳，§1.5）。
+///
+/// 判据是**注入的标记**，不是形态：编排器（`dev-launcher.mjs` 的 `spawnShell`）
+/// 起壳时与壳侧 `spawn_orchestrator` 用同一个键名（`COMFYAPP_SHELL_SELF_LAUNCH`，
+/// 与 `OWNED_ENV` 同一族）。标记在两处都只由「起对方的那一方」写，因此它
+/// 恰好等价于「我是被编排器起的」，而不是「命令行里像不像」。
+///
+/// 谁在用：`lib.rs` 的单实例判定短路（`owns_checkout_per_single_instance`）——
+/// 编排器在起这个壳之前刚走完端口族判定，这一次启动里只可能有这一个壳。
+/// **不要在别处按这个标记分叉行为**：它只回答「谁起我的」，不回答「怎么跑」
+/// （跑步模式是 `COMFYAPP_LAUNCH_MODE`，别把两个问题合成一个判据）。
+pub fn is_shell_child() -> bool {
+  std::env::var("COMFYAPP_SHELL_SELF_LAUNCH")
+    .map(|v| v.trim() == "1")
+    .unwrap_or(false)
+}
+
 /// 项目根下的 `scripts/dev-launcher.mjs`（启动编排的唯一实现）。
 pub fn orchestrator_script(project_root: &str) -> Option<std::path::PathBuf> {
   if project_root.is_empty() {
@@ -1483,6 +1500,35 @@ mod tests {
     // 标记是**一行**：多行会把后面的日志挤成「标记的续行」，面板裁掉它时会连着
     // 把第一段真实日志一起裁掉。
     assert!(!marker.contains('\n'), "会话标记必须是单行：{marker}");
+  }
+
+  /// 「编排器起的壳」只由注入的标记决定，不看形态（ISSUE #1687）。
+  ///
+  /// 单实例判定的短路全靠它：判错一侧的代价不对称 —— 误判成「被起的壳」会
+  /// 让一个用户直接双击的壳跳过单实例保护（同一检出起两份、争同一个库与端口），
+  /// 反过来只是多问一次命名互斥量。因此这里同时钉住「标记缺席 = 不是壳的孩子」。
+  #[test]
+  fn shell_child_flag_comes_only_from_the_injected_marker() {
+    // `std::env::set_var` 是进程级全局状态，本文件的用例都需要串行（Rust 测试
+    // 默认多线程）—— 用互斥量把这一段圈起来，别让别的用例读到中间态。
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let key = "COMFYAPP_SHELL_SELF_LAUNCH";
+    let saved = std::env::var(key).ok();
+
+    std::env::remove_var(key);
+    assert!(!is_shell_child(), "标记缺席 = 不是编排器起的壳（首壳必须照常判单实例）");
+
+    std::env::set_var(key, "0");
+    assert!(!is_shell_child(), "只有 \"1\" 才算，别把任何非空值都读成真");
+
+    std::env::set_var(key, " 1 ");
+    assert!(is_shell_child(), "两侧写的就是 \"1\"，空白按等价处理");
+
+    match saved {
+      Some(v) => std::env::set_var(key, v),
+      None => std::env::remove_var(key),
+    }
   }
 
   #[test]

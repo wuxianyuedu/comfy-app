@@ -968,3 +968,69 @@ describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
     expect(typeof result.description).toBe("string");
   });
 });
+/**
+ * 「同一个问题在链路里只问一次」（ISSUE #1687）。
+ *
+ * 现场：用户对着启动日志框出一段 0.46s —— 壳已启动 →「端口检查：<端口> 空闲；<端口+1> 空闲；<端口+2> 空闲」。它不是「3100 空了还非要查后面」（+1/+2 是 Next 静默
+ * 顺延的探测位，属端口族整体判据），而是**同一次启动里同一个问题被问了两遍**：
+ * 壳自编排是 `app.exe → 编排器 → app.exe` 两段，壳自己判定（单实例 + 端口族）
+ * 之后，编排器接手又走了一遍。
+ *
+ * 本组用例钉死短路的两条边界（反向验证：删掉任一条件，对应用例必失败）：
+ *   · 标记必须由「起壳的那一方」注入，且**键名与壳侧同源**；
+ *   · 跳过只对「shell 起的 prebuilt 链路」成立 —— 手工 `pnpm dev` / 别的模式照常查。
+ */
+describe("启动期重复判定的短路（ISSUE #1687）", () => {
+  const launcher = fs.readFileSync(
+    path.join(ROOT, "scripts", "dev-launcher.mjs"),
+    "utf8",
+  );
+  const rust = fs.readFileSync(
+    path.join(ROOT, "src-tauri", "src", "shell_launch.rs"),
+    "utf8",
+  );
+
+  it("编排器起壳时注入自编排标记，且键名与壳侧同一处", () => {
+    // 注入点：spawnShell 的 shellEnv（第二段壳 = 被编排器起的那个）。
+    expect(launcher).toContain('shellEnv: { COMFYAPP_SHELL_SELF_LAUNCH: "1" }');
+    // 同一个键也被传给编排器自己起的 dev server：编排器据此对「壳刚在同一个
+    // 进程里跑完的那次端口族判定」放行。
+    expect(launcher).toContain('COMFYAPP_SHELL_SELF_LAUNCH: "1"');
+    // 壳侧判据读的是同一个键（漂开 = 短路永不生效，而两侧各自看都对）。
+    expect(rust).toContain('"COMFYAPP_SHELL_SELF_LAUNCH"');
+    // 壳起编排器时用的也是它（§1.5 的两段共用这一个标记）。
+    expect(rust).toContain('.env("COMFYAPP_SHELL_SELF_LAUNCH", "1")');
+  });
+
+  it("跳过端口族检查受「壳起的 + prebuilt」双重约束", () => {
+    const body = launcher.slice(
+      launcher.indexOf("const portCheckedByShell"),
+      launcher.indexOf('status("port-ready"'),
+    );
+    expect(body, "必须由标记判、不看形态猜测").toContain(
+      'process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1"',
+    );
+    expect(body, "prebuilt 之外（web / tauri）照常查").toContain(
+      'args.mode === "prebuilt"',
+    );
+    // 不跳过时必须仍走唯一的取消出口（判据只有一处）。
+    expect(body).toContain("await reconcilePort(port, ROOT, {");
+  });
+
+  it("壳侧的单实例短路只在「被编排器起的壳」上成立", () => {
+    const src = fs.readFileSync(
+      path.join(ROOT, "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
+    const body = src.slice(
+      src.indexOf("fn owns_checkout_per_single_instance"),
+      src.indexOf("fn owns_checkout_per_single_instance") + 1200,
+    );
+    expect(body, "标记为真即短路").toContain("shell_launch::is_shell_child()");
+    expect(body, "标记缺席必须落到真正的单实例判定").toContain(
+      "single_instance::another_instance_running()",
+    );
+    // 判据本体在 shell_launch 一处，lib.rs 不许自己 std::env::var 一遍。
+    expect(body).not.toContain("std::env::var");
+  });
+});
