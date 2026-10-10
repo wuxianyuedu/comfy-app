@@ -1,3 +1,11 @@
+// @vitest-environment jsdom
+/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
+ * 与上一条同因（CSSOM 保真度）。本文件断言调用点传进来的行内样式
+ * （`style={{ background: "rgb(1 2 3 / 10%)" }}`）真的落在元素上，而
+ * happy-dom 的 CSSOM 会丢掉它不认的写法（`rgb(r g b / a)` 与 `color-mix()`
+ * 都读回空串），jsdom 会归一后原样给出。
+ * ⚠️ 这里断的是「样式没被组件吃掉」，不是色值本身。
+ */
 /**
  * 类型 chip —— 从 studio 六个文件里逐字抄了十份的那一枚。
  *

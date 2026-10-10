@@ -11,7 +11,10 @@ import { TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { createTestTRPC } from "../../../../tests/helpers/test-trpc";
+import {
+  createTestTRPC,
+  testTrpcEndpoint,
+} from "../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../tests/helpers/trpc-msw";
 import { createTestQueryClient } from "../../../../tests/helpers/renderWithProviders";
 import { z } from "zod";
@@ -123,7 +126,7 @@ function makeWrapper() {
     links: [
       httpBatchStreamLink({
         transformer: SuperJSON,
-        url: "http://localhost:3100/api/trpc",
+        url: testTrpcEndpoint(),
       }),
     ],
   });

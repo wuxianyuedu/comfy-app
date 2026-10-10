@@ -32,7 +32,8 @@ async function forward(req: Request, router: AnyRouter): Promise<Response> {
   return new HttpResponse(body, {
     status: upstream.status,
     headers: {
-      "content-type": upstream.headers.get("content-type") ?? "application/json",
+      "content-type":
+        upstream.headers.get("content-type") ?? "application/json",
       vary: upstream.headers.get("vary") ?? "",
     },
   });
@@ -66,9 +67,11 @@ export async function forwardForTest(
 export function setupTrpcServer(router: AnyRouter) {
   return setupServer(
     // path 不带 host 前缀时，msw 对「绝对 URL 请求」不匹配（连 * 通配段也
-    // 不生效），测试 client 的 httpBatchStreamLink 打的是完整
-    // http://localhost:3100/api/trpc/...。`*` + `/api/trpc/*` 拼出的
-    // `*/api/trpc/*` 与 host 无关，换端口/主机名都不用跟着改。
+    // 不生效），测试 client 的 httpBatchStreamLink 打的是 `testTrpcEndpoint()`
+    // 拼出的完整 URL。`*` + `/api/trpc/*` 拼出的 `*/api/trpc/*` 与 host 无关，
+    // 换端口/主机名都不用跟着改 —— **这条与 host 无关的性质是承重的**：
+    // happy-dom 的 `window.fetch` 会做同源判定，客户端只能拨自己的 origin，
+    // 而 handler 必须照样接得住（见 `test-trpc.ts` 的 `testTrpcEndpoint`）。
     http.all(`*${ENDPOINT}/*`, async ({ request }) => forward(request, router)),
   );
 }
