@@ -431,7 +431,12 @@ function runDiscoverStreaming(
       });
 
       cp.on("error", (e: NodeJS.ErrnoException) => {
-        if (e.code === "ENOENT" && i < pyCandidates.length - 1) {
+        /* 退避的边界是 `i < pyCandidates.length` 而不是 `- 1`：最后一个候选也要**再走一次
+         * `tryRun()` 的顶上那一档**，那句「未找到 Python 解释器」才可达。写成 `- 1` 时
+         * `i` 最大只到 2 就地 resolve，真机没装 Python 的表现是「0 个节点 + 一句原因都没有」
+         * —— 由 `tests/.../route.test.ts` 的「三个候选全 ENOENT」那两条钉住（ISSUE #1664 的
+         * 同批后续）。 */
+        if (e.code === "ENOENT" && i < pyCandidates.length) {
           i += 1;
           tryRun();
           return;
@@ -450,7 +455,10 @@ function runDiscoverStreaming(
 
       cp.on("close", (code) => {
         if (resolved) return;
-        if (code === 127 && i < pyCandidates.length - 1) {
+        /* 与上面 `error` 那一支同一条边界（最后一个候选之后再走一次 `tryRun()` 顶上那一档）：
+         * 127 是「命令不存在」的另一形状（Windows 上没有 `python3` 时可能这样退），
+         * 它必须与 ENOENT 给出**同一句**原因，而不是悄悄回一个空列表。 */
+        if (code === 127 && i < pyCandidates.length) {
           i += 1;
           tryRun();
           return;
