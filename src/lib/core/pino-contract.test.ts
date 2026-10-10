@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 import {
+  createLogger,
   createPinoLogger,
   redactSecretShaped,
   REDACT_PATHS,
@@ -304,6 +305,67 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
     expect(added).toContain("[ERROR]");
     // 键名清单：说明「有字段但没有正文」，而不是空行
     expect(added).toContain("detail");
+  });
+
+  /* ── 调用方的文案不许被当成命名空间（ISSUE #1696）────────────────────
+   * 用户报的两行（面板 `app-runtime`）：
+   *   `[app] 服务端错误 {"ns":"e","level":"error"}`
+   *   `[app] （无可读文案；字段：password, token） {"ns":"login","level":"error"}`
+   * 两行都没有正文。根因是镜像把「第二个字符串参数」当命名空间候选 ——
+   * pino 里这**站不住**：本仓库 `wrap()` 一律以 `(fields, msg)` 调 pino，于是
+   * 镜像看到的 `(obj, msg)` 里第二个字符串就是调用方的文案，被塞进 `ns` 槽后
+   * 正文整条丢失，只剩一个有意义的 `ns` 与一句「无可读文案」。
+   *
+   * 这两条用例走的是**完整调用链**（`createLogger` 门面 → pino），因此能同时
+   * 钉住 `wrap()` 的参数顺序与镜像的解析口径。 */
+  it("(obj, msg) 形态：第二个字符串是文案，不进 ns 槽（ISSUE #1696）", async () => {
+    const { dest } = capture();
+    const log = createLogger("app", {
+      destination: dest,
+      ...makeMirror(),
+    });
+    log.error("login", { password: "p", token: "t" });
+    await flush();
+
+    const added = readMirror();
+    // 正文取到的是调用方给的 `"login"`，不再是「无可读文案；字段：…」
+    expect(added).toContain("[app] login ");
+    expect(added).not.toContain("无可读文案");
+    // `"login"` 不许出现在 ns 槽里；无 `ns`/`event` 字段时回落日志器绑定名
+    expect(added).not.toContain('"ns":"login"');
+    expect(added).toContain('"ns":"app"');
+  });
+
+  it("单字符串形态：正文是那条字符串，ns 回落日志器绑定名而非该字符串", async () => {
+    const { dest } = capture();
+    const log = createLogger("app", {
+      destination: dest,
+      ...makeMirror(),
+    });
+    log.error("e");
+    await flush();
+
+    const added = readMirror();
+    // 正文就是 `"e"`（而不是占位句），ns 也不是 `"e"`
+    expect(added).toContain("[app] e ");
+    expect(added).not.toContain("服务端错误");
+    expect(added).not.toContain('"ns":"e"');
+    expect(added).toContain('"ns":"app"');
+  });
+
+  /* 字段里有正文时仍以字段为准（`(obj, msg)` 里 msg 只是兜底，不是竞位者）：
+   * 裸 pino 形态 `logger.error({ err }, "ctx")` 的 `err.message` 优先于 `"ctx"`。
+   * 用 `createPinoLogger` 而非门面 —— 门面的 `(msg, fields)` 会把这两个参数
+   * 换个位置，这里要钉的正是**镜像看到的 pino 原始形态**。 */
+  it("字段里的 err.message 优先于第二个字符串参数", async () => {
+    const { dest } = capture();
+    const log = createPinoLogger({ destination: dest, ...makeMirror() });
+    log.error({ err: new Error("no such table: llmConfig") }, "trpc_error");
+    await flush();
+
+    const added = readMirror();
+    expect(added).toContain("no such table: llmConfig");
+    expect(added).toContain('"ns":"server"');
   });
 
   /* 镜像**不受 pino redact 保护**（它是另一条落盘通道）：早先这里用

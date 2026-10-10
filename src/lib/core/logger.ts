@@ -105,12 +105,29 @@ export interface PinoLoggerOptions {
 }
 
 /**
+ * 镜像的目标：显式传入者优先；**未传时在测试进程里直接空转**。
+ *
+ * 镜像是真写盘的副作用，而它的默认落点由 `LOG_ROOT = process.cwd()/log` 推出 ——
+ * vitest 的 cwd 就是仓库根，于是「用例忘了传 `mirror`」等于往仓库的 `log/` 里
+ * 写用例正文（规范 07 §7.18.2.1 明写「用例必须传自己的临时目录」，但这条
+ * 纪律此前没有执行者，实测 `logger.test.ts` 就这么漏了几十次提交）。
+ * 要断言镜像行为的用例**一律显式注入** `mirror`（`pino-contract.test.ts` 就是
+ * 这么做的），所以这里对测试进程关掉默认落盘不损失任何判据，只堵住污染。
+ */
+function resolveMirrorTarget(mirror?: PinoLoggerOptions["mirror"]) {
+  if (mirror) return mirror;
+  // `process.env.VITEST` 由 vitest 自己设置（不用 NODE_ENV：本仓库另有它用）。
+  if (process.env.VITEST) return { error: () => undefined };
+  return appRuntimeLog;
+}
+
+/**
  * 构造 pino logger 的工厂——同一份 level/redact 配置，生产与测试共用，
  * 保证「格式/脱敏契约」只在这里一处定义、处处一致。
  */
 export function createPinoLogger(opts: PinoLoggerOptions = {}) {
   const { destination, level, mirror, ns } = opts;
-  const mirrorLog = mirror ?? appRuntimeLog;
+  const mirrorLog = resolveMirrorTarget(mirror);
   const base: LoggerOptions = {
     level: level ?? process.env.LOG_LEVEL ?? "info",
     ...(ns === undefined ? {} : { base: { ns } }),
@@ -130,7 +147,7 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
           try {
             // 先过密钥形状守卫：这条通道不经 pino redact（另一条写入路径），
             // 且字段名无法穷举 —— 只认「值长啥样」（见 redactSecretShaped）。
-            const entry = renderServerLogEntry(args);
+            const entry = renderServerLogEntry(args, ns);
             mirrorLog.error(entry.msg, { ns: entry.ns, level: "error" });
           } catch {
             /* 镜像失败绝不影响日志主流程 */
@@ -186,17 +203,29 @@ export const logger = createPinoLogger();
  * 而仓库里多条真实调用正是字符串形态（自定义 message 更易读，如
  * `logger.error("[upload] 503 ComfyUI unreachable — ...")`）。
  *
- * 现在四种签名都取得到正文：**字符串参数本身就是文案**，对象参数才走字段提取，
- * 对象里还带 `msg` 时（`log.error({ msg: "..." })`）以字段为准。
- * 命名空间依次尝试「字符串形态的第二个参数」与对象里的 `ns` /
- * `event`（结构化埋点两处都见过），都没有才回落 `server`。
+ * **文案与命名空间的分工**（ISSUE #1696 修正）：
+ *   · 文案：对象里的 `msg` / `err.message` > 两参形态的第二个字符串（pino 的
+ *     `(obj, msg)` 里它就是 msg）> 纯字符串形态的第一个参数 > 键名清单 > 占位句；
+ *   · 命名空间：**只认对象里的 `ns` / `event`**，再回落 `server`。
+ *
+ * 曾把「字符串形态的第二个参数」也当命名空间候选，这是一条**站不住的假设**：
+ * 本仓库的 `wrap()` 一律以 `(fields, msg)` 调 pino，于是镜像看到的
+ * `(obj, msg)` 里第二个字符串**就是调用方的文案**，把它塞进 `ns` 槽的后果是
+ * 文案整条丢失、面板只剩 `（无可读文案；字段：…）` 与一个意义不明的 `ns`
+ * （实测 `log.error("e")` → `[app] 服务端错误 {"ns":"e"}`、
+ * `log.error("login", { password, token })` →
+ * `[app] （无可读文案；字段：password, token） {"ns":"login"}`）。
+ * pino 里也没有「(msg, ns)」这种签名：`(msg, extra)` 的第二个参数是格式化实参。
  */
-function renderServerLogEntry(rawArgs: unknown[]): { msg: string; ns: string } {
+function renderServerLogEntry(
+  rawArgs: unknown[],
+  loggerNs?: string,
+): { msg: string; ns: string } {
   // 二次防线（也覆盖直接调用本函数的路径）：先把 payload 里的密钥形状值擦掉再取文案。
   const args = rawArgs.map((a) => redactSecretShaped(a));
   const first = args[0];
   const second = args[1];
-  // 两参形态（pino 的 (obj, msg) / (msg, ns)）：字符串里的正文优先取第二个参数
+  // 两参形态：pino 的 `(obj, msg)` 里第二个字符串**就是 msg**（不是命名空间）
   const stringArg = typeof first === "string" ? first : undefined;
   const secondString = typeof second === "string" ? second : undefined;
   const payload =
@@ -208,23 +237,37 @@ function renderServerLogEntry(rawArgs: unknown[]): { msg: string; ns: string } {
   const firstNonEmpty = (...candidates: (string | undefined)[]) =>
     candidates.find((c) => c !== undefined && c.length > 0);
 
+  // 优先级：字段里的正文 > 调用方给的第二个字符串（pino 的 `(obj, msg)`）>
+  // 键名清单 > 占位句。键名清单排在 `secondString` 之后是关键：它此前藏在
+  // `renderServerLogMessage` 里，于是第二个字符串（真正的文案）永远选不上，
+  // 面板只剩「（无可读文案；字段：…）」。
   const msg = payload
-    ? (firstNonEmpty(renderServerLogMessage(payload), stringArg) ??
-      "服务端错误")
+    ? (firstNonEmpty(
+        renderServerLogMessage(payload),
+        secondString,
+        renderFieldKeyList(payload),
+      ) ?? "服务端错误")
     : // 没有结构化字段：字符串参数就是正文；再没有才回落占位文案
       (firstNonEmpty(stringArg, secondString) ?? "服务端错误");
 
+  // 命名空间只认字段：`ns` / `event`（结构化埋点两处都见过），再回落
+  // **日志器自己的绑定名**（`loggerNs`）—— 它比 `server` 有信息量得多
+  // （`app` / `trpc` / `comfyui`），也没有「把文案当命名空间」的风险。
+  // 第二参数是文案 / 格式化实参，不能当命名空间（见上方 ISSUE #1696 说明）。
   const payloadNs = [payload?.ns, payload?.event].find(
     (v): v is string => typeof v === "string" && v.length > 0,
   );
-  const ns = firstNonEmpty(payloadNs, secondString) ?? "server";
+  const ns = firstNonEmpty(payloadNs, loggerNs) ?? "server";
   return { msg, ns };
 }
 
-/** 从结构化字段里取一句可读文案（优先 msg / err 的 message）。
+/** 从结构化字段里取一句可读文案（优先 `msg` / `err.message`）。
  *
  * 只取文本字段，**不做整包 JSON.stringify 兜底**——镜像通道不受 pino redact
  * 保护，整包兜底等于把任意字段（含未覆盖命名的密钥）写进面板可见的日志文件。
+ * 取不到时返回空串，**键名清单兜底由 {@link renderFieldKeyList} 单独负责**：
+ * 它是「实在没别的文案了」才用的占位，必须排在调用方给的第二个字符串参数之后
+ * （见 `renderServerLogEntry` 的 ISSUE #1696 说明），因此不能在这里顺手返回。
  */
 function renderServerLogMessage(payload?: Record<string, unknown>): string {
   if (!payload) return "";
@@ -234,11 +277,17 @@ function renderServerLogMessage(payload?: Record<string, unknown>): string {
   if (err && typeof err.message === "string" && err.message.length > 0) {
     return err.message;
   }
-  // 没有可读文案：只列键名（键名不是值，不含密钥内容），说明「有字段但没有
-  // 正文」这一事实，而不是把字段值整包倒出来。
-  const keys = Object.keys(payload);
-  if (keys.length === 0) return "";
-  return `（无可读文案；字段：${keys.join(", ")}）`;
+  return "";
+}
+
+/**
+ * 对象里既没有可读文案、又非空时的占位：**只列键名**（键名不是值，不含密钥
+ * 内容），把「有字段但没有正文」这件事说清楚，而不是把字段值整包倒出来。
+ * 没有任何字段时返回空串（调用方据此再回落占位句）。
+ */
+function renderFieldKeyList(payload?: Record<string, unknown>): string {
+  const keys = payload ? Object.keys(payload) : [];
+  return keys.length === 0 ? "" : `（无可读文案；字段：${keys.join(", ")}）`;
 }
 
 /* ── 核心层门面：命名空间拼接语义（调用方零改动）────────────────────────── */
