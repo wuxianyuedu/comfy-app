@@ -162,6 +162,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ pnpm run lint
 ✅ node scripts/check-ui-logic-separation.cjs --strict # 视图层 IO 棘轮（只许降；治理后指标下降同样阻断，见 17）
 ✅ node scripts/check-changelog-fragments.cjs
+✅ node scripts/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
 ✅ node scripts/check-import-alias.cjs       # import 别名只有一种前缀 `~`（R13，见 §12.8.0）
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
 ✅ node scripts/check-ui-primitives.cjs      # UI 基元复用棘轮（见 16 §16.2.3）
@@ -2082,7 +2083,11 @@ git -c filter.lfs.process= -c filter.lfs.required=false commit -m "type(scope): 
 | 环节        | 载体                                                | 谁写                                         |
 | ----------- | --------------------------------------------------- | -------------------------------------------- |
 | 开发中      | `changelog.d/<issue号>-<slug>.md`，一件变更一个文件 | 改代码的人（随 PR 提交）                     |
-| 发版 / 整理 | `CHANGELOG.md` 的 `[Unreleased]` / 版本段落         | `node scripts/merge-changelog-fragments.mjs` |
+| 发版 / 整理 | `CHANGELOG.md` 的待发段落（`[Unreleased]`）        | `node scripts/merge-changelog-fragments.mjs` |
+
+**并入哪一段由「来源锚」决定**（ISSUE #1693，见 [13.10.6](#13106-段落锚待发段落标来源并入时对账)）：
+脚本挑**锚最早**的那个待发段落，并顺手把锚刷新成「本轮条目里最早的那个提交」
+（`--anchor <commit>` 可显式覆盖）。
 
 **碎片写法**（与原先写在 `CHANGELOG.md` 里完全一致，只是搬了地方）：
 
@@ -2105,10 +2110,12 @@ changelog.d/408-changelog-conflict-free.md
 **门禁与工具**
 
 ```bash
-node scripts/check-changelog-fragments.cjs          # 校验碎片形态(pre-commit 自动跑)
-node scripts/merge-changelog-fragments.mjs          # 并入 [Unreleased] 并删除碎片
-node scripts/merge-changelog-fragments.mjs --check  # 只预览,不落盘
-node scripts/merge-changelog-fragments.mjs --release 0.2.0   # 并入并把 [Unreleased] 定版
+node scripts/check-changelog-fragments.cjs            # 校验碎片形态(pre-commit 自动跑)
+node scripts/check-changelog-versions.cjs             # 待发段落的来源锚 ⇄ 条目归属(pre-commit 自动跑)
+node scripts/merge-changelog-fragments.mjs            # 并入带锚的待发段落并删除碎片
+node scripts/merge-changelog-fragments.mjs --check    # 只预览,不落盘
+node scripts/merge-changelog-fragments.mjs --anchor 9321411   # 显式指定本轮最早的那个提交
+node scripts/merge-changelog-fragments.mjs --release 0.2.0    # 并入并把待发段落定版
 ```
 
 **为什么不是「只在发版时统一写」**：那会退回「集中补写」，必然漏项失真
@@ -2118,6 +2125,68 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0   # 并入并把 [Unr
 > **与「一个提交只做一件事」的关系**：碎片文件使「同一 PR 内多人协作同一份
 > 变更记录」成为 git 层面不可能冲突的操作，这是 [13.7](#137-换行符与提交噪声lf)
 > 「禁止无关全文件变更」在 changelog 上的自然延伸 —— 每次改动只碰属于它的那个文件。
+
+#### 13.10.6 段落锚：待发段落标来源、并入时对账（ISSUE #1693）
+
+`[Unreleased]` 的边界此前**只是一句话**（「发版时把它改成版本号」）：条目一路往尾部
+追加，而**没有任何东西记得住这一段从哪儿开始**。实测的现场是两个毛病叠在一起 ——
+
+- `[Unreleased]` 里躺着 9 月 12 日（`9321411`）到 9 月 25 日以后的条目，而
+  `## [0.1.0]` 顶着 **8 月 31 日**的日期、正文只有一句「首个版本基线」：**两个状态
+  没有共同的时间轴**，读的人回答不了「这一条到底进没进 `0.1.0`」；
+- `[Unreleased]` 里**至今写着**一条已被推翻的旧条目（「对外参数在画布上是可连线的
+  节点（ISSUE #355）」，该能力早已由 `changelog.d/0-editor-canvas-no-param-cards.md`
+  推翻，那份碎片自己还专门写了「本条**取代** `[Unreleased]` 里那一节」）——
+  它是**「并入没走完」的残迹**：`0-` 开头的碎片不需要 ISSUE 号，也没有任何东西
+  提醒它「该并入了」（`merge-changelog-fragments.mjs` 只在人敲它的时候跑）。
+
+**做法**：**待发段落**（`## [Unreleased]`，含仓库自己写过的 `## [未发布]`）带一行
+**来源锚**，写「这一段里最早的条目是哪个提交带进来的」。
+
+```
+## [Unreleased]
+<!-- since: 9321411 — 对外参数那一批的最早一条 -->
+```
+
+三条边界（都不许省）：
+
+1. **锚不是每段的必修项，但「歪了」与「没写」必须分开处置**。新开的待发段落会在
+   **第一次并入时**由 `merge-changelog-fragments.mjs` 顺手上锚（它手上正好有那个事实），
+   在此之前它本来就没有来源可言。反过来，**写歪的锚比不写更贵** —— 它看上去像一条
+   来源记录，读的人不会再去想「这里为什么没有锚」，而实际一个字段都核不了。
+   实测过这一格：把提交换成日期之后，识别锚的那条严格正则回 `null`、整份判据**照样
+   全绿**。所以判据另有一条宽松形状（任何 `<!-- since:`），命中宽松、不命中严格 ⇒ 当场红。
+2. **锚必须能在本仓库历史里解析成提交**（`git cat-file -e <rev>^{commit}`）。写一个
+   日期、写一个分支名、写一个不存在的短哈希，都等于**没有锚** —— 锚是给别人复算用的。
+   写入侧（`merge-changelog-fragments.mjs`）在落盘**之前**就用同一条判据拦一次：
+   并进去之后再发现，账上已经多了一条查不到出处的记录。
+3. **只拿它与源码归属对账**：判据核的是「同一个 ISSUE 号有没有**跨锚分裂**」——
+   既出现在待发段落里、又出现在它**之前**（文件里排在它下面）的已发布段落里。那是最贵的
+   失效形态：一条变更的归属被切成两半，而**两端都没写错**（现场就是同一条变更的两种
+   说法同时留在账上）。**刻意不判**「锚是不是真的等于那一段最早条目的提交」—— 条目文本
+   与提交信息之间没有稳定映射（条目是人写的散文，一条提交可能改多条、也可能一条都不进
+   CHANGELOG），拿启发式去对会在第一次「一条提交里混着多个 ISSUE」时误报一片，
+   而误报的判据活不过一次评审（§11.18.4）。
+
+> ⚠️ **「哪些段落算待发」这条口径本身也有一个静默失效面**（同批实测撞到的）：
+> 把带日期的版本段落（`## [x.y.z] - <日期>`）也算成待发，第 3 条那句「锚**之前**的
+> 已发布段落」就**永远是空集** —— 判据会一直绿，而它什么都没核。所以待发段落**只**
+> 是 `[Unreleased]` / `[未发布]`：`--release` 定版那一刻，这一版的条目就归属了那个日期。
+
+**写法侧**（`merge-changelog-fragments.mjs`）：并入的位置**由锚决定**，不由「谁排在
+文件最上面」决定 —— 它把碎片的条目放进**锚最早**的那个待发段落，并顺手把锚刷成
+「本轮新增条目里最早的那一个」（缺省 = 当前 HEAD，`--anchor <commit>` 显式覆盖）。
+于是锚总是「这些条目里最早的那个提交」，而不是写这条的人当时的 HEAD。段落的标题
+在 `--release <版本>` 之外**不动**：`[Unreleased]` 不会因为并一次就长出版本号。
+
+**判据**：`scripts/check-changelog-versions.cjs`（pre-commit 的 D 组「待发段落的来源
+锚 ⇄ 条目归属」）三件事 —— 锚的形状（歪 ⇒ 红）、锚解析不解析得开、ISSUE 号有没有跨锚分裂；
+外加「判据自己不许静默降级」（`CHANGELOG.md` 读不到 / 一个待发段落都解析不出 ⇒ 判失败，
+不是「没有段落要查、于是放过」，§11.23.3 同款）。
+
+**它刻意不做的事**：不判「该不该发版」（那是发布判断 —— 与 `check-app-version.cjs`
+只判三处**逐字相等**、不判「该不该升」同款）、不建派生文件、不替谁决定条目属于哪个
+版本（只保证「归属落下来之后**能被核验**」）。
 
 ### 13.11 随手改与 TODO 记录规范
 

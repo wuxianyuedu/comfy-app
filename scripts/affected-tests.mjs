@@ -497,6 +497,20 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 它读的是源码 + 注册表，import 图追不到（改一个视图的标题不会把这条带进
   // 受影响集）—— 跟改动走等于专挑它不在的时机跑，故进固定清单。
   "tests/page-name-single-source.test.ts",
+  // 待发段落的**来源锚**（ISSUE #1693 / 规范 §13.10.6）：这一段从哪个提交起算，
+  // 以及「同一个 ISSUE 号有没有跨锚分裂」。它守的是**下一次写入**（新增一条条目就
+  // 可能把一个号的归属切成两半），而那种改动只会碰 `CHANGELOG.md` / `changelog.d/` ——
+  // import 图一概追不到（这两个路径都不在任何测试的引用链上），跟改动走等于
+  // 专挑它不在的时机跑。它同时是**这条判据自己的门禁自测**：形状判据的三条口径
+  // （歪锚 / 解析不出 / 跨锚分裂）与「带日期的版本段落不算待发段落」这一格
+  // 都只在「下一次有人改这几行」时才走得进，故进固定清单。
+  "tests/changelog-versions-gate.test.ts",
+  // 并入的**落点**（同上一条的另一半）：`merge-changelog-fragments.mjs` 挑哪个待发
+  // 段落、锚刷成什么、锚解析不出时拦不拦 —— 它的执行时机是「人敲那条命令」（并入 /
+  // 发版），而它读的是 `CHANGELOG.md` + `git`，import 图追不到。同族先例：判据与
+  // 它的写入侧必须一起被钉住，否则「判据要求锚、脚本写的却是别的形状」这种分叉
+  // 只有在下一次真并的时候才暴露（那时已经落盘了）。
+  "tests/merge-changelog-anchor.test.ts",
 ];
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
