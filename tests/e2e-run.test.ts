@@ -1,18 +1,14 @@
 /**
  * 全量 e2e「按需通道 + 新鲜度账」的判据 —— 规范 §11.8 / §13.5.4（ISSUE #1545 / #1547）。
  *
- * 立案现场：**像素档的触发条件是嵌套在全量 e2e 里的**（`playwright.config.ts` 的
- * `testMatch` 把 `*.visual.spec.ts` 与普通 spec 收进同一次 `playwright test`），
- * 而 `pnpm check:visual` 只跑 `e2e/visual` 那半边。于是「像素档红了」有两条到达路径，
- * 两条此前都没有账：实测的形态是 linux 档基线过期**两天**没被发现（`#1327` 改了导航
- * 顺序、基线未同批重录），而**没有任何东西守 `pnpm test:e2e` 上一次是绿的** ——
- * 那次是靠人手动把这条入口跑了一遍才发现的。
+ * 立案现场：`pnpm test:e2e` 此前是「人记得就跑」，而没有**任何东西守它上一次是绿的**
+ * —— 实测的形态是靠人手动把这条入口跑了一遍才发现它已经红了两天。
  *
  * 判据分三头，缺一条这层就退化成一句好看的话：
  *   ① **记账语义**：只有绿了才记、`--dry-run` 不记（记的是「上次真跑绿」这个**状态**，
  *      不是「我跑过」这个**动作**）。
- *   ② **两条账同形但不同键**：`FRESHNESS_TRACKS` 的四个值（账文件 / 键 / 名字 / 命令）
- *      各就各位，且两条账**不共用一个文件**（共用 = e2e 的绿把像素档的自证覆盖掉）。
+ *   ② **几份账同形但不同键**：`FRESHNESS_TRACKS` 的四个值（账文件 / 键 / 名字 / 命令）
+ *      各就各位，且各份账**不共用一个文件**（共用 = A 档的绿把 B 档的自证覆盖掉）。
  *   ③ **接线在位**：`package.json` 的 `test:e2e` 真的走这条通道（否则记账这一步
  *      一个执行者都没有 —— 那是 §13.5.12 的立案形态），且钩子那一步真判了它。
  */
@@ -33,8 +29,8 @@ import {
   freshnessTrack,
   isSameLocalDay,
   readFreshnessLedgerAt,
-} from "../scripts/visual-baselines.mjs";
-import { runGate } from "../scripts/visual-freshness-gate.mjs";
+} from "../scripts/freshness-ledger.mjs";
+import { runGate } from "../scripts/freshness-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -99,41 +95,39 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
       label: "全量 e2e",
       run: "pnpm test:e2e",
     });
-    expect(freshnessTrack("visual").ledger).toBe(
-      "scripts/.visual-baseline-freshness.json",
+    // 另两档各有一份自己的账与键（不是同一个文件里的两个键）。
+    expect(freshnessTrack("full").ledger).toBe("scripts/.full-suite-freshness.json");
+    expect(freshnessTrack("artifact").ledger).toBe(
+      "scripts/.artifact-freshness.json",
     );
-    expect(freshnessTrack("visual").key).toBe("linux");
   });
 
-  it("两条账**真正的**差异是 `gatedByPending`（其余栏同形，`skipHow` 两档都有）", () => {
-    /* 「同形」是有边界的：差异栏不是随手加的开关，各回答一个问题 ——
-     *   · `daily`：这一档要不要按「每天首次」判（**两档都要**）；
-     *   · `skipHow`：这一档「今天不跑」那条出路长什么样（**两档都有** —— 像素档现在
-     *     也可能限制当天第一次提交，没有这条出路就等于拦人而指不出退路）；
-     *   · `gatedByPending`：这一档的「每天自证」是不是**与成套基线同一件事的两面**
-     *     （只有像素档是：还有档缺基线时那句话说不出口）。
-     * 两侧一起判：只有一侧变了就说明「同形」这句话已经不成立了。 */
+  it("各份账的差异都在数据里（`daily` / `skipHow` / 输入面），不是分支", () => {
+    /* 「同形」有边界：差异栏各回答一个问题 ——
+     *   · `daily`：这一档要不要按「每天首次」判；
+     *   · `skipHow`：这一档「今天不跑」那条出路长什么样（每一档都有：没有这条出路
+     *     就等于拦人而指不出退路）；
+     *   · `dirty` / `graceMs`：吃输入面的档按「改了就当天跑」判，不吃的那一档两栏为空。
+     * 逐档一起判：只有一侧变了就说明「同形」这句话已经不成立了。 */
     expect(freshnessTrack("e2e").daily).toBe(true);
-    expect(freshnessTrack("visual").daily).toBe(true);
-    expect(freshnessTrack("e2e").gatedByPending).toBe(false);
-    expect(freshnessTrack("visual").gatedByPending).toBe(true);
     expect(freshnessTrack("e2e").skipHow).toBe(
       'node scripts/e2e-run.mjs --skip "<理由>"',
     );
-    expect(freshnessTrack("visual").skipHow).toContain("--workers=0");
-    /* 差异面之外的登记栏位对齐：两条账各有一份账文件、一个键、一条命令。 */
-    for (const kind of ["e2e", "visual"]) {
+    // e2e 不吃输入面：它的结论与改了哪几个文件无关。
+    expect(freshnessTrack("e2e").dirty).toEqual([]);
+    expect(freshnessTrack("e2e").dirtyHow).toBeNull();
+    // 吃输入面的那两档反过来：有 dirty 清单，也有「不吃这一档」那条出路。
+    for (const kind of ["full", "artifact"]) {
       const track = freshnessTrack(kind);
-      expect(track.ledger.length).toBeGreaterThan(0);
-      expect(track.key.length).toBeGreaterThan(0);
-      expect(track.run.length).toBeGreaterThan(0);
+      expect(track.dirty.length, kind).toBeGreaterThan(0);
+      expect(track.dirtyHow, kind).toBeTruthy();
     }
   });
 
-  it("两条账**不共用一个文件**（共用 = e2e 的绿把像素档的自证覆盖掉）", () => {
+  it("各份账**不共用一个文件**（共用 = 这一档的绿把那一档的自证覆盖掉）", () => {
     const ledgers = Object.values(FRESHNESS_TRACKS).map((t) => t.ledger);
     expect(new Set(ledgers).size).toBe(ledgers.length);
-    // 键也不同：同一个文件里两个键的话，「这一档」在两条账里就不是一个概念。
+    // 键也不同：同一个文件里两个键的话，「这一档」在各份账里就不是一个概念。
     const keys = Object.values(FRESHNESS_TRACKS).map((t) => t.key);
     expect(new Set(keys).size).toBe(keys.length);
   });
@@ -144,21 +138,20 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
     expect(freshnessTrack("e2e").key).toBe(TRACK.key);
   });
 
-  it("`trackedBy` 抄混要被判红：两条账同形，账面上看不出异常", () => {
-    /* 这是两条账唯一的形状差异，也是它们同形之后**新长出来的**静默失效面：
-     * 把 e2e 的绿抄进像素档的账，日期合法、人名合法、命令是一条真命令 ——
+  it("`trackedBy` 抄混要被判红：几份账同形，账面上看不出异常", () => {
+    /* 这是各份账唯一的形状差异，也是它们同形之后**新长出来的**静默失效面：
+     * 把另一档的绿抄进这一档的账，日期合法、人名合法、命令是一条真命令 ——
      * 只有「这条记录由哪个跑法证出来」被搞错了，而账面上完全正常。 */
     const crossed = runGate({
-      ledger: { e2e: { ...GOOD, trackedBy: "visual" } },
+      ledger: { e2e: { ...GOOD, trackedBy: "full" } },
       kind: "e2e",
-      platforms: ["e2e"],
-      pending: [],
+      keys: ["e2e"],
       now: SAME_DAY,
     });
     expect(crossed.exitCode).toBe(1);
     // 话术要同时给出「写的是哪个跑法」与「这份账属于哪个跑法」——
     // 只说「抄混了」等于把定位成本推给下一个人。
-    expect(crossed.problems.join("\n")).toContain("visual");
+    expect(crossed.problems.join("\n")).toContain("full");
     expect(crossed.problems.join("\n")).toContain("e2e");
   });
 
@@ -166,8 +159,7 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
     const result = runGate({
       ledger: { e2e: GOOD },
       kind: "e2e",
-      platforms: ["e2e"],
-      pending: [],
+      keys: ["e2e"],
       now: SAME_DAY,
     });
     expect(result.exitCode).toBe(0);
@@ -180,8 +172,7 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
     const result = runGate({
       ledger: {},
       kind: "e2e",
-      platforms: ["e2e"],
-      pending: [],
+      keys: ["e2e"],
       now: SAME_DAY,
     });
     expect(result.exitCode).toBe(1);
@@ -198,8 +189,7 @@ describe("全量 e2e 的「每日自证」（ISSUE #1282：每天首次提交带
     const result = runGate({
       ledger: { e2e: yesterday },
       kind: "e2e",
-      platforms: ["e2e"],
-      pending: [],
+      keys: ["e2e"],
       now: SAME_DAY,
     });
     expect(result.exitCode).toBe(1);
@@ -219,8 +209,7 @@ describe("全量 e2e 的「每日自证」（ISSUE #1282：每天首次提交带
         }),
       },
       kind: "e2e",
-      platforms: ["e2e"],
-      pending: [],
+      keys: ["e2e"],
       now: SAME_DAY,
     });
     expect(result.exitCode).toBe(0);
@@ -239,46 +228,11 @@ describe("全量 e2e 的「每日自证」（ISSUE #1282：每天首次提交带
         }),
       },
       kind: "e2e",
-      platforms: ["e2e"],
-      pending: [],
+      keys: ["e2e"],
       now: SAME_DAY,
     });
     expect(result.exitCode).toBe(1);
     expect(result.problems.join("\n")).toContain("有人回答过");
-  });
-
-  it("像素档**吃**这条判据，但 `PENDING_PLATFORMS` 非空时退回只判形状（ISSUE #1620）", () => {
-    /* 这一条此前判的是「像素档不吃每天首次」——理由是「结论只在录过基线的那台机器上
-     * 成立」。那个理由是对的，结论是错的：它把「谁能解这条账」与「这条账怎么被答复」
-     * 混成了一件事，于是像素档成了四档里唯一只被判「有主、写清」的那一档 ——
-     * 「这批基线一直是对的」这句话在那几秒里无人回答。
-     * 现在的形状：`PENDING_PLATFORMS` 空 ⇒ 与 e2e 同味（要当天的凭证）；非空 ⇒ 退回
-     * 只判形状（缺几张基线的那一档，「每天跑绿一次」说不出口）。 */
-    const old = freshnessRecord({
-      key: "linux",
-      verifiedAt: "2026-01-01T00:00:00.000Z",
-      who: "月读",
-      how: "pnpm check:visual",
-      trackedBy: "visual",
-    });
-    const complete = runGate({
-      ledger: { linux: old },
-      kind: "visual",
-      platforms: ["linux"],
-      pending: [],
-      now: SAME_DAY,
-    });
-    expect(complete.exitCode).toBe(1);
-    expect(complete.problems.join("\n")).toContain("今天");
-
-    const stillPending = runGate({
-      ledger: { linux: old },
-      kind: "visual",
-      platforms: ["linux"],
-      pending: ["win32"],
-      now: SAME_DAY,
-    });
-    expect(stillPending.exitCode).toBe(0);
   });
 
   it("`--skip` 的三种形状：没给 / 给了可用理由 / 给了不合用的理由", () => {
@@ -334,11 +288,11 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
       ...readText(".githooks/pre-commit").matchAll(/^ {2}run "([^"]+)" (.+)$/gm),
     ].map((m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }));
     const hit = steps.find((s) =>
-      s.cmd.includes("scripts/visual-freshness-gate.mjs"),
+      s.cmd.includes("scripts/freshness-gate.mjs"),
     );
-    expect(hit?.cmd).toBe("node scripts/visual-freshness-gate.mjs");
-    // 标签要说清它现在判两档 —— 标签里只写「像素基线」时，e2e 那一档红出来
-    // 会读成「像素的事」，而两者动作不同。
+    expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
+    // 标签要能让人从这一行读出「判的是哪几档」—— 只写其中一档时，
+    // 另一档红出来会被读成别人的事。
     expect(hit?.label).toContain("e2e");
   });
 
@@ -355,8 +309,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     const result = runGate({
       ledger,
       kind: "e2e",
-      platforms: [TRACK.key],
-      pending: [],
+      keys: [TRACK.key],
     });
     expect(result.problems).toEqual([]);
     expect(result.exitCode).toBe(0);

@@ -1174,11 +1174,10 @@
       `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts`、
       `git show ab12a551^:src/app/api/images/route.ts`。
 - [ ] **E3″ 端到端：80 条 spec（29 条 `@critical`）没有任何自动执行者，且没有真登录态**（E3 的 router 维度已收口；原记「3 spec / 31 用例」的体量早就过时）：
-      现状是 `e2e/*.spec.ts` 17 份 + `e2e/visual/` 5 份、80 条 `test()`，`@critical` 出现在
-      29 条用例与 20 个 `describe` 上。执行者那一格**实测为空**：`playwright test` 唯一的
-      调用点是 `scripts/e2e-run.mjs`（人敲 `pnpm test:e2e`），`quality-gate.mjs` 的 e2e/visual
-      门是 `run: false`，pre-commit 只有读文本的 `visual-gate.mjs` 与 `visual-freshness-gate.mjs`
-      两步、都不起 Playwright，而 #623 之后没有 CI。
+      现状是 `e2e/*.spec.ts` 17 份（像素那 5 份已随整档删除）、80 条 `test()`，`@critical`
+      出现在 29 条用例与 20 个 `describe` 上。执行者那一格**实测为空**：`playwright test`
+      唯一的调用点是 `scripts/e2e-run.mjs`（人敲 `pnpm test:e2e`），pre-commit 只有读文本的
+      `freshness-gate.mjs` 一步、不起 Playwright，而 #623 之后没有 CI。
       **本批把「每日自证」那一档的豁免通道修紧了**（`skippedReason` / `dirtyReason` 此前
       从不比日期，一条理由替未来每一天作证 —— 本机那条 2026-10-08 的豁免让这一档天天报绿而
       80 条 spec 一次没跑；口径与取舍见 §11.8），但那只解决「账面不许冒充」：
@@ -1287,7 +1286,8 @@
 - [ ] **F3 `next/image` 0 处且 lint 关闭**。证据：`eslint.config.js:185-192`。
 - [ ] **F4 无离线能力**（无 SW / `onLine` / 离线队列；58 文件手写 localStorage 无 persist）。
 - [ ] **F5 虚拟滚动仅 2 处**；`next/dynamic` 仅 2 处。
-- [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用棘轮 78 条存量违规。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、`scripts/.ui-primitives-baseline.json:18`。剩余的一格：**像素基线**仍是 Playwright `toHaveScreenshot`（规范 11 §11.8），Storybook 不替代它。
+- [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用棘轮 78 条存量违规。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、`scripts/.ui-primitives-baseline.json:18`。剩余的一格是**页面级视觉回归** —— 这一档已经整档撤掉（规范 11 §11.8），
+  现在**没有任何自动判据**，靠 review 看图；Storybook 本来也不替代它。
   **已加的两层判据**（同批）：故事文件的**枚举来源**由
   `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`
   守着（`cva()` 返回的是函数、运行期没有 `.variants`；以及手写清单漏档）。
@@ -1324,91 +1324,13 @@
   —— 存量那 86 份的必填项多由「子件 + 默认值」或注入层的 `sourceName` 兜住，
   逐条白名单会变成第二份赦免名单。上线时当场抓到一处真漏档：
   `ui/simple-key-handler.stories.tsx` 从来没有 `title`。口径见规范 16 §16.2.3.8。
-  **页面级视觉那一半补上了**（同批，ISSUE #1381）：此前 `e2e/visual/` 只有
-  登录页一页，而规范 11 §11.8 声明的基线范围（深浅两态 / 响应式断点 / 空态 /
-  画布 / 弹窗）里只有「断点」勉强沾边 —— 这一批把**前三条**铺开：
-  登录页暗/亮两档、首页暗/亮两档、模型库空态、移动端断点，
-  公共前置收在 `e2e/visual/support/page-baseline.ts`。两处**数据依赖被钉死**
-  （页面级基线若随「这台机器的 DB / localStorage 里有什么」变，它就不是基线）：
-  `models` 屏用 `stubTrpc` 把 `model.list` 桩成空列表，首页用 `clearProjectIndex`
-  清 localStorage 的项目索引。
-  **画布与弹窗两档随后也补齐了**（同批续，ISSUE #1381）：`canvas.visual.spec.ts`
-  补 `canvas-filled`（四张真节点 + 三条真连线）与 `canvas-empty`（空画布引导卡），
-  `overlay.visual.spec.ts` 补 `overlay-log-default` / `overlay-log-wide`
-  （同一浮层的默认档与加宽档）。**两档各踩到一个别人没有的坑，都写进了 spec 与
-  规范 §11.8**：① 画布的视口是 `fitView` 异步算出来的，第一帧是过渡值（实测
-  `matrix(0.99…, 12.07, 10.06)` vs 收敛值 `matrix(0.929…, 118, 100.13)`），
-  所以用例**等它收敛**（连续两次读数相同），而不是读第一帧；且**边能不能画出来
-  取决于端口在节点上真的存在**（本画布只有「右侧 `output`」与「`picture` 左侧
-  `inputImage`」两种，别的组合 React Flow **静默不渲染**那条边），所以边数也
-  钉住。② 浮层那一档的被测对象是**两档宽度**而不是浮层里的内容：日志行逐帧在长
-  （时间戳 / 跑 id / 错误计数），所以打开后把来源切到**恒定 0 行的那一档**、
-  并遮掉**整条定高页脚**（页脚那颗 `服务 <bootId>` 徽标逐次不同**且变宽** ——
-  只遮徽标本身时遮罩带宽度跟着随机串变，实测连续两次跑出 40 像素差异）。
-  两档宽度由 `boundingBox()` 断言（ISSUE #720 的静默失效正是「加宽按了、
-  宽度一个字没变」，只截图指不出是尺寸这件事）。
-  同批纠正一处**过期口径**：`login.visual.spec.ts` 一直写着「登录页为固定深色 UI」，
-  而 `ThemeProvider` 的约定是「**所有**表面跟随主题 token，不存在『暗色品牌页』」——
-  浅色档因此从来没被录过。现在用 `setTheme()` 写 `theme` 偏好切档
-  （不用 `documentElement.classList.add()`：它绕过 `next-themes`、水合时被覆盖，
-  且**表达不出 light 档**）。
-  **「哪件事该由谁做」也有判据了**：`tests/visual-storybook-division.test.ts`
-  （进固定清单）四向拦 —— story 里不许出现 `toHaveScreenshot`、不许引入第二套
-  像素工具（Chromatic 那一族）、§11.8 声明的档不得被**减法**清掉。判据覆盖
-  **五档**（深浅两态 / 断点 / 空态 / xyflow 画布 / 弹窗浮层尺寸）—— 后两档此前
-  写在落点表里、**判据却只判前三档**，也就是那两行全靠人记得；补齐后删掉任一份
-  spec 都会当场红。**不判「覆盖几个页面」**：§11.8 已定调「只锁定关键 UI」，
-  数字型门槛会逼着人录一堆脆基线。
-  并且**如实登记了一处录不全的现实**：本仓库的自动化执行环境（NPC 工作区 /
-  CNB 容器）都是 linux，新增截图名会让 win32 档缺那几张，而像素只能在那一档的
-  机器上录（在 linux 上录一份改名叫 `-win32` 是造假）。`scripts/visual-baselines.mjs`
-  的 `PENDING_PLATFORMS` 把它记成**一条有主的账**，并用双向不变式盯着
-  （补齐了还留着登记 ⇒ 红；登记不存在的平台 ⇒ 红；`reason` 太短 ⇒ 红）。
-  **「录得出来 ≠ 录对了」也有判据了**（同批，ISSUE #1381）：`PLATFORM_RECORDING`
-  把「每档录于 `dev` 还是 `start` 口径」登记成**数据**（`SUPPORTED_PLATFORMS`
-  从它派生，两处不会漂），`scripts/pixel-run.mjs` 起 webServer / 浏览器**之前**
-  先核「本机 `CI` 的真假换算出的口径」与「该档登记的口径」——不一致拦下（exit 3）
-  并给出置法。为什么录基线那一档也要拦：口径不符时 `--update` 会**成功**，
-  生成一套看着正常的 PNG，自洽、不当场红，只在以后某次真差异里混进来、指不出是它。
-  而且**待重录的账会在改像素层时被点名**（`scripts/visual-gate.mjs` 打一行，
-  **不阻断** —— 补录只能在那一档的机器上做，阻断等于让所有人卡在一个只有少数人
-  能解的账上）。**现有登记是 win32 档**，缺几张由 `missingBaselinesForPlatform()`
-  **现算**（本文件刻意不回填数字：这个读数每新增一个截图名就变一次，
-  而「会漂的读数不写死」正是 §12.14 与 §13.5.12 已立过的口径）。补录动作是在
-  Windows 开发机上 `CI= pnpm check:visual:update` 成套提交、**同批删掉那条登记**
-  （配对判据的双向不变式：补齐了还留着登记 ⇒ 红）。⚠️ 缺的那几张**不是**
-  「某轮漏了」——是**只能在那一档录**；如实登记比在 linux 上录一份改名成
-  `-win32` 好（后者是造假，§11.8 判过）。
-  **`ui/` 的组件覆盖率已到全量（#1381 那一批是 87/87，本轮新增基元后 88/88），理由表清空**（同批）：那 5 条理由
-  逐条都是「补法」而不是「不能写」——`progress`（两个 slot 在 `progress-bar`
-  里看不到）、`sonner`（story 里真调 `toast()`）、`error-boundary`（配一个会抛
-  的 `Boom`）、`dialog-overlay` / `dialog-width`（**出口算出来的字符串就是它的
-  对外面**）。判据随之从「理由表非空」换成一条**双向不变式：表空 ⟺ 覆盖率已满**
-  （原判据会在表真的清空后要求人凑一条假理由）。同批修掉 `cvaVariantKeys`
-  按「整文件同名轴取并集」比较的真缺陷（`ui/item.tsx` 两处 `variant` 会被判成
-  「缺档」而修法无处可去）。口径见规范 16 §16.2.3.7。
-  **业务目录（`studio/` / `workshop/`）也铺了一轮**（同批）：`ui/` 满覆盖之后
-  那两棵树只有 5 件有 story，本轮补到 **23 件**。铺法**不是按目录扫**，而是先
-  按「数据从哪来」分档再决定怎么写（纯 props / 结构化入参 / 运行期环境），
-  口径与「哪一档刻意不写」见规范 16 §16.2.3.9。两条判据在这一批里反复起作用：
-  · **派生量不许在 story 里手抄** —— 百分比调 `stageProgressPct()`、尺寸摘要调
-  `shotSizeSummary()`、脏数据结论调 `auditDraftElements()`；手抄的数字在改了
-  常量之后**仍然看着正常**，那是这一批最想消掉的假形态；
-  · **同一批部件在两处的形态**（`WorkflowNodeParts`）恰恰是靠 story 才看得见
-  「宽度 340 vs 380、胶囊、圆角全漂移」那条历史故障的形状。
-  顺手修掉一处**由新 story 第一眼看出来**的真缺陷：`EmptyCanvasHint` 的类名串
-  被一次全仓规范化拼成了 `backdrop-bl dark:shadow-black/40ur-md`（`backdrop-blur-md`
-  与 `dark:shadow-black/40` 撞在一起），于是空画布引导卡丢了毛玻璃。Tailwind 对
-  未知类名**不报错**（只是不生成 CSS），所以构建 / tsc / eslint / 既有门禁全绿 ——
-  「类名字符串被拼坏」全仓仍无判据，本批只修实例并记账（见 §16.2.3.9 末尾）。
-  **「像素档不进 `check:all`」这条口径也补上了执行者**（同批）：此前它只是两侧注释里的
-  一句话（`GATES.visual` 的 `run: false` / `.ps1` 的 `Run = $false`），而
-  `tests/ps1-consistency.test.ts` 盯的是「按需档集合非空、且两侧一致」—— 只要还剩
-  任意一个按需档就成立。实测漏法：把像素档挪进默认档、同时新增一个按需档，全仓判据
-  照样全绿，代价是每次 `pnpm check:all` 都起 webServer + 浏览器。现在由
-  `tests/pixel-run.test.ts` 按**入口**（`args` 里那个 `pixel-run.mjs`，不按门禁名）钉住
-  两侧，并附「解析器不是空转」；解析器与 `ps1-consistency` 共用
-  `tests/helpers/quality-gate-gates.ts`。口径见规范 11 §11.8。
+  **页面级视觉回归那一半已经整档撤掉**（曾经在 ISSUE #1381 那一批补到 5 份 spec /
+  10 张截图 / 两档平台基线，后被删除）：理由是收益比不成立 —— 结论只在录过基线的那台机器上
+  成立（基线名带平台 ⇒ 两档两套 PNG，而两档的差异落在字形光栅化上）、平台名担保不了字体栈
+  （同一个 `-linux` 名下缺 CJK 字体的容器差 1767 像素）、每屏的录制输入面要显式登记
+  （实测一份只桩了 2 格的首页 spec，真实链路上有 16 个 `/api/**` 由机器在答）、
+  每次过期都要人逐张看图定性 —— 而覆盖的是一小撮代表屏。口径与「撤掉之后归谁」见
+  规范 11 §11.8。**组件级那一侧不受影响**（Storybook 仍在，它判的不是同一件事）。
   **画布层注入的 handle id 全局口径**也补齐了（同批续，ISSUE #1381）：`flow-canvas.tsx`
   的 `twoNodes` / `fanOut` / `mixedKinds` 三档一度**一条连线都没画出来** ——
   场景把 handle 写成 `"1:model"` 这种「看着很像」的短序号，而真画布上两套口径

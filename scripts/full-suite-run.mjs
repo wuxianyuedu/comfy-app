@@ -18,7 +18,7 @@
  *     两层都有出路：跑一次，或 `--dirty "<理由>"` 声明「这次改动确实不吃这一档」。
  *
  * 记账语义与另外三档**逐字同一份实现**（`writeFreshness` / `writeSkipRecord`，
- * `scripts/visual-baselines.mjs`）：只有绿了才记、红着不记（跑过 ≠ 跑绿过）。
+ * `scripts/freshness-ledger.mjs`）：只有绿了才记、红着不记（跑过 ≠ 跑绿过）。
  * `--skip` / `--dirty` 的解析与落账走 `scripts/daily-run.mjs`（四档共用，§12.12）。
  *
  * 用法：
@@ -33,8 +33,11 @@ import { fileURLToPath } from "node:url";
 
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
-import { freshnessTrack, writeFreshness } from "./visual-baselines.mjs";
-import { gitUser } from "./pixel-run.mjs";
+import {
+  freshnessTrack,
+  gitUser,
+  writeFreshness,
+} from "./freshness-ledger.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");

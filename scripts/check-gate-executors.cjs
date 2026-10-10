@@ -42,7 +42,7 @@
  *
  * **扫描面是「事实 ∪ 名字族」，不是只有名字族**（ISSUE #1444 残活 A）：
  * 旧口径只看名字前缀，于是 `shell-gate.mjs` / `storybook-check.mjs` /
- * `visual-gate.mjs` / `pixel-run.mjs` 这四份**真在门禁链里跑**的判定型判据
+ * `shell-gate.mjs` 这几份**真在门禁链里跑**的判定型判据
  * 因名字不叫 `check-` 而不在盘点里 —— 判据自报「40 份」，真值是 44。
  * 「判据的覆盖面与它自称的不符」正是本脚本的立案现场（#1451），
  * 所以它自己的覆盖面必须由**门禁链里的事实**算出来（`gateChainScripts()`），
@@ -77,7 +77,7 @@ const LEDGER = path.join(__dirname, ".gate-executor-ledger.json");
  * **为什么不能只留 ①**：那么「新写一个判定型脚本、没接钩子也没登记」就永远不会
  * 被看出来 —— 判据的扫描面本身就是「有执行者的东西」，问题却出在没有执行者的那些。
  * **为什么不能只留 ②**（改名之前的旧口径，实测翻过车）：`shell-gate.mjs` /
- * `storybook-check.mjs` / `visual-gate.mjs` / `pixel-run.mjs` 四份**真在门禁链里跑**的
+ * `storybook-check.mjs` / `shell-gate.mjs` 几份**真在门禁链里跑**的
  * 判定型判据，只因名字不叫 `check-` 就不在盘点里 —— 判据自报「40 份判据脚本」而真值
  * 是 44，且漏掉的恰是最容易被摘掉又没人发现的那类（`storybook-check.mjs` 连
  * `pnpm check:all` 那一档都在跑。ISSUE #1444 残活 A）。

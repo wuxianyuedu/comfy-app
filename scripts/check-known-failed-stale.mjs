@@ -57,7 +57,7 @@ const ROOT = path.resolve(HERE, "..");
  * 登记项的**存在性**判决（免费那一维）。
  *
  * 抽成纯函数是为了让用例能直接喂形状：判据的「输入」是登记表 + 「这个路径存不存在」，
- * 所以这里只依赖调用方注入的 `exists`，不去碰磁盘（同 `visual-gate.mjs` 的 `runGate`，
+ * 所以这里只依赖调用方注入的 `exists`，不去碰磁盘（同 `shell-gate.mjs` 的 `runGate`，
  * 先例见 ISSUE #1356：源码文本断言不是执行记录）。
  *
  * @param {string[]} registered 登记表内容
