@@ -147,7 +147,9 @@ export function runGate({
    * `pending` 可注入（默认真表）：不接输入的话，「哪些档不需要记录」这层静默退化不会有
    * 任何东西红 —— 而它恰好是「有人把 win32 从 pending 摘掉」时第一个该有反应的地方。
    */
-  const required = requiredPlatforms.filter((p) => !pendingPlatforms.includes(p));
+  const required = requiredPlatforms.filter(
+    (p) => !pendingPlatforms.includes(p),
+  );
   const problems = checkFreshnessLedger(ledger, {
     required,
     registered: requiredPlatforms,
@@ -159,7 +161,9 @@ export function runGate({
   const ages = required.map(
     (p) => `${p}：${freshnessAge(ledger[p], now) ?? "无记录"}`,
   );
-  for (const p of requiredPlatforms.filter((p) => pendingPlatforms.includes(p))) {
+  for (const p of requiredPlatforms.filter((p) =>
+    pendingPlatforms.includes(p),
+  )) {
     ages.push(`${p}：待补录（PENDING_PLATFORMS）`);
   }
   return { exitCode: problems.length === 0 ? 0 : 1, problems, ages };
@@ -175,6 +179,13 @@ export function runGate({
  * 用**提交时间**而不是文件 mtime：mtime 会被 `git checkout` / `stash` / 拉取整体刷新
  * （`--cache-strategy metadata` 那件事的同源坑），于是「今天动过」会变成「今天 checkout 过」。
  *
+ * ⚠️ 但**只看已提交的**会让这条判据在钩子里系统性放行「正在改的这一笔」：pre-commit 跑在
+ * 提交之前，此刻 `git log` 里还没有这次改动 —— 一笔改了 `tests/` 的提交会被判成
+ * 「今天没动过这一档」，等它落进 master，下一个人第一次提交才立刻红。
+ * 「改了就当天跑」因此退化成「改了由别人补跑」。所以取证面是**今天的提交 ∪ 待提交那一批**
+ * （`git diff --cached --name-only`），合成规则抽成纯函数 `combineEvidence` 让四种组合
+ * 都能被真跑；待提交没有时刻，成立且今天还没有任何提交动过时用 `now` 顶上。
+ *
  * ⚠️ 拿不到答案时返回 `null`（**不是**「今天没动过」）：`git` 不在 PATH 上、这不是一个
  * git 检出、或命令超时 —— 三者都让「改了就当天跑」这条判据**无话可说**，而把「问不出来」
  * 当成「没动过」正是 §9.2 第 3 条禁止的静默失败。退回按 `graceMs` 判（宽松但仍有时限），
@@ -186,6 +197,82 @@ export function runGate({
  */
 export function dirtySinceToday(track, now = new Date()) {
   if (!track.dirty || track.dirty.length === 0) return null;
+  /* 取证面 = **今天的提交 ∪ 待提交的那一批**。
+   *
+   * 只问 `git log` 时这条判据跑在**提交之前**：一笔改了 `tests/` 的提交在钩子里被判成
+   * 「今天没动过这一档」而放行，它落进 master 之后下一个人第一次提交立刻红 ——
+   * 「改了就当天跑」于是退化成「改了由别人补跑」。`git diff --cached` 正是那一刻
+   * 就要进提交的内容，所以把它并进同一个问题里。
+   *
+   * 两半的取法不同：提交带时刻（要的是「今天第一次动它的那一刻」，用来判「先跑后改」），
+   * 待提交没有时刻 —— 它成立时若今天还没有任何提交动过它，就用 `now` 顶上去，
+   * 语义是「此刻正有一批要吃这一档的改动等着提交」。已有更早的提交时**保留更早的那个**：
+   * 结论更严格，且不会把「先跑后改」那一条边界（自证晚于改动即放行）弄丢。 */
+  const committed = committedSinceMidnight(track, now);
+  return combineEvidence(committed, stagedTouchesTrack(track), now);
+}
+
+/**
+ * 两半取证合成一个时刻（抽成纯函数是为了让**四种组合**都能被真跑一次）。
+ *
+ * @param {Date | null} committed 今天的提交里最早动过它的那一刻（null = 没有，或问不出来）
+ * @param {boolean | null} stagedHit 待提交那一批动不动它（null = git 问不出来）
+ * @param {Date} now
+ * @returns {Date | null}
+ */
+export function combineEvidence(committed, stagedHit, now) {
+  // 问不出来时**不新增结论**（也不撤销已有的）：把「问不出」当成「没动过」是 §9.2 第 3 条
+  // 禁的静默失败，反过来凭空造一个时刻又会把「今天其实没人动它」误判成必须跑。
+  if (stagedHit === null) return committed;
+  if (stagedHit && committed === null) return now;
+  // 已有更早的提交时保留更早的那个：结论更严格，且「先跑后改」那条边界仍按真实时刻比。
+  return committed;
+}
+
+/**
+ * 待提交（已 `git add`）的那一批里有没有这一档的输入面。
+ *
+ * @param {{dirty: string[]}} track
+ * @returns {boolean | null} `null` = git 问不出来（**不是**「没动过」—— 与
+ *   `committedSinceMidnight` 同一口径：拿不到答案时不许让这一档白放行，也不许凭空加结论）
+ */
+function stagedTouchesTrack(track) {
+  const res = spawnSync("git", ["diff", "--cached", "--name-only"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (res.error || res.status !== 0 || typeof res.stdout !== "string")
+    return null;
+  return stagedDirtiesTrack(track, res.stdout.split("\n"));
+}
+
+/**
+ * 纯函数那一半：把 `git diff --cached --name-only` 的输出行归一成路径前缀判断。
+ *
+ * 抽出来是为了让**分隔符这一档可被执行**：`git` 在 Windows 上给的是正斜杠，但工作区里
+ * 任何一段路径处理都可能把反斜杠喂进来（本仓在 `path.relative` 上栽过第二次），
+ * 而 `track.dirty` 的前缀全是正斜杠 —— 不归一时「动了 `tests/`」会被读成没动，
+ * 表现正是这条判据静默恒放行。
+ *
+ * @param {{dirty?: string[]}} track
+ * @param {string[]} rawLines
+ * @returns {boolean}
+ */
+export function stagedDirtiesTrack(track, rawLines) {
+  const paths = rawLines
+    .map((line) => line.trim().replace(/\\/g, "/"))
+    .filter(Boolean);
+  return dirtiesTrack(track, paths);
+}
+
+/**
+ * 今天的提交里，最早一个动了这一档输入面的时刻（没有则 null；问不出来也是 null）。
+ *
+ * @param {{dirty: string[]}} track
+ * @param {Date} now
+ * @returns {Date | null}
+ */
+function committedSinceMidnight(track, now) {
   /* 只看**当天**的提交：`--since` 给午夜，配合 `%cI` 的严格 ISO 时刻。本地日历日
    * 与 `isSameLocalDay` 同源 —— 两处用不同日界时会出现「账说今天动过、判据说没动」。 */
   const midnight = new Date(now);
@@ -198,10 +285,18 @@ export function dirtySinceToday(track, now = new Date()) {
    * 正确的状态机：新时刻出现时才把上一段收掉，空行一律忽略。 */
   const res = spawnSync(
     "git",
-    ["log", "--since", midnight.toISOString(), "--format=%cI", "--name-only", "--"],
+    [
+      "log",
+      "--since",
+      midnight.toISOString(),
+      "--format=%cI",
+      "--name-only",
+      "--",
+    ],
     { cwd: ROOT, encoding: "utf8" },
   );
-  if (res.error || res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.error || res.status !== 0 || typeof res.stdout !== "string")
+    return null;
   /* 两栏都显式标类型：它们在闭包 `flush()` 里被赋值，TS 的控制流分析看不进去 ——
    * 不标的话会被收窄成初值 `null`，下面每次比较都报「隐式 any」。 */
   /** @type {Date | null} */
@@ -212,7 +307,8 @@ export function dirtySinceToday(track, now = new Date()) {
   const flush = () => {
     if (hit && stamp) {
       const at = new Date(stamp);
-      if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest)) earliest = at;
+      if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest))
+        earliest = at;
     }
     hit = false;
   };
