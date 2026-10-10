@@ -135,7 +135,7 @@ function renderStudio(options: RenderOptions = {}) {
           ? channelsConfigured
           : options.apiChannels
       }
-      onOpenApiSettings={() => undefined}
+      onOpenModelAdapters={() => undefined}
       onShotsChange={onShotsChange}
       onNotice={onNotice}
       onCancelShot={onCancelShot}

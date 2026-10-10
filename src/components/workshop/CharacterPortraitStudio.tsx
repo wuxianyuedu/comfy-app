@@ -42,7 +42,7 @@ export interface CharacterPortraitContext {
   apiChannels: ApiChannelsView | null;
   /** 工作流库可选项（本地通道按模型标签挑选已封装的生图工作流）。 */
   workflows: WorkshopWorkflowOption[];
-  onOpenApiSettings: () => void;
+  onOpenModelAdapters: () => void;
 }
 
 interface Props {
@@ -52,7 +52,7 @@ interface Props {
 
 /** 单张角色卡里的「定妆照」区块：生成 / 导入 / 挑选。 */
 export function CharacterPortraitStudio({ character, portrait }: Props) {
-  const { session, actions, apiChannels, workflows, onOpenApiSettings } =
+  const { session, actions, apiChannels, workflows, onOpenModelAdapters } =
     portrait;
   /* 导入定妆照：隐藏 input + 选完复位收进`ui/file-picker`。 */
   const importPicker = useFilePicker({
@@ -219,10 +219,10 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           里添加一条「图片」类型的远端模型即可直接使用；或
           <Button
             variant="link"
-            onClick={onOpenApiSettings}
+            onClick={onOpenModelAdapters}
             className="text-2xs h-auto p-0 underline underline-offset-2"
           >
-            打开 API 通道设置
+            打开模型适配
           </Button>
           填写 Base URL 与 API Key。
         </p>

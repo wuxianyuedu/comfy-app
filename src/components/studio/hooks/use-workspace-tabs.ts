@@ -40,6 +40,11 @@ export const WORKSPACE_VIEWS: WorkspaceView[] = [
   "outputs",
   "console",
   "settings",
+  /* 这两个此前不是视图（侧栏「全局浮层入口」点开弹窗），所以不在白名单里。
+     改成视图页签后必须登记：漏一个的后果不是报错，而是**这一页开不了也恢复不了**
+     —— `navigateTo` 与 sessionStorage 恢复都按这份白名单收敛未知 id。 */
+  "model-adapters",
+  "mode-contract",
 ];
 
 function readTabsState(): WorkspaceTabsState | null {

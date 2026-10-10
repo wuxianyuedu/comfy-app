@@ -33,7 +33,7 @@ interface Props {
   /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
   projectId: string;
   apiChannels: ApiChannelsView | null;
-  onOpenApiSettings: () => void;
+  onOpenModelAdapters: () => void;
   onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
   /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
   onNotice: (message: string) => void;
@@ -62,7 +62,7 @@ export function VideoStudio({
   workflowId,
   projectId,
   apiChannels,
-  onOpenApiSettings,
+  onOpenModelAdapters,
   onShotsChange,
   onNotice,
   onCancelShot,
@@ -265,7 +265,7 @@ export function VideoStudio({
         pendingCount={pending.length}
         onGenerateBatch={() => void generateBatch()}
         onNextStage={onNextStage}
-        onOpenApiSettings={onOpenApiSettings}
+        onOpenModelAdapters={onOpenModelAdapters}
       />
 
       {shots.length === 0 ? (

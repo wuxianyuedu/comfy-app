@@ -3,7 +3,7 @@
 // ── 工坊「模型适配」：逻辑层（规范 17 §17.2 第②层）────────────────────────
 // 列出设置页配置的远端模型（image / video 类），按模型读取/保存「工坊模式
 // 适配器」——每种模式一份：统一输入类型 → 请求体字段名 + 产物字段路径。
-// 视图（WorkshopModelAdapterModal）只渲染 + 上抛，不直接出现 api.*。
+// 视图（ModelAdaptersView）只渲染 + 上抛，不直接出现 api.*。
 
 import React, { useCallback, useState } from "react";
 import { errorMessage } from "~/lib/error-message";

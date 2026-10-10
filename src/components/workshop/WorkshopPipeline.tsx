@@ -13,7 +13,6 @@ import { AgentFab, AgentOverlay } from "~/components/workshop/AgentOverlay";
 import { WorkspaceFrame } from "~/components/studio/ViewContainer";
 import { useDraggablePosition } from "~/components/ui/use-draggable-position";
 import { useWorkshopAgent } from "~/components/workshop/hooks/use-workshop-agent";
-import { WorkshopModelAdapterModal } from "~/components/workshop/WorkshopModelAdapterModal";
 import { LLMProvider } from "~/components/workshop/LLMContext";
 import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { WorkshopAside } from "~/components/workshop/WorkshopAside";
@@ -111,12 +110,6 @@ export function WorkshopPipeline() {
               onGoScript={() => controller.setTab("script")}
             />
           </div>
-
-          {/* 模型适配的**上下文入口**（「API 直连未配置 → 去配置」）：整幅入口在侧栏
-            （与项目无关），这里只服务阶段内那句就近提示。 */}
-          {controller.apiSettingsOpen && (
-            <WorkshopModelAdapterModal onClose={controller.closeApiSettings} />
-          )}
         </div>
       </WorkspaceFrame>
 
