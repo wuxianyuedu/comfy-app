@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { setupTrpcServer } from "../../../tests/helpers/trpc-msw";
 import { createTestTRPC } from "../../../tests/helpers/test-trpc";
 import { renderWithProviders } from "../../../tests/helpers/renderWithProviders";
+import { pageHeaderTitle } from "./NavItems";
 import { ModelLibrary } from "./ModelLibrary";
 
 /* ModelLibrary 走 api.model.list / api.model.sync 两条真实 tRPC 管线。
@@ -93,7 +94,8 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
         ).toBeInTheDocument(),
       { timeout: 3000 },
     );
-    // 模型库标题区域
-    expect(screen.getByText("模型库")).toBeInTheDocument();
+    // 页头标题：与侧栏 / 页签同一个出处（注册表里这一项叫「模型」，
+    // 不再是此前那个裸字面量「模型库」—— ISSUE #1673）。
+    expect(screen.getByText(pageHeaderTitle("models"))).toBeInTheDocument();
   });
 });
