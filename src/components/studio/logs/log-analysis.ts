@@ -1,7 +1,7 @@
 /**
  * 日志面板的**采集 / 解析 / 过滤**纯函数（`log-store` 的拆分件）。
  *
- * 这里放 `serialize`、`captureLocation` 一族噪音判据
+ * 这里放 `serialize` 一族噪音判据
  * （`isReactQueryLog`、`isNoisyFrameworkLog`、`isNextDevNoise`、
  * `isRoutineRpcTimingLog`、`isRoutineRpcTimingLine`、
  * `isPanelSelfPollingLine`）→ 文件行解析（`parseFileLogs`）→ 时间线合并、
@@ -88,93 +88,111 @@ function serializeOne(a: unknown): string {
   }
 }
 
-export function serialize(args: unknown[]): string {
-  return args.map(serializeOne).join(" ");
+/* ── console 的 printf 风格占位符 ────────────────────────────────────────
+ *
+ * `console.error("… %s …", value)` 的正文里 `%s` 是**格式占位符**，不是日志
+ * 内容：浏览器 / Node 的 console 会把它换成后面的实参再显示。面板此前按 `" "`
+ * 拼接全部实参，于是用户读到的是一条「模板 + `%s` 原样 + 实参挂在尾巴上」的
+ * 怪行 —— 用户报的那条 React key 警告正是这个形态（ISSUE #1703）：正文是
+ * 「`Encountered two children with the same key, \`%s\`. ……`」这一大段模板，
+ * 末尾缀着那条日志真正的实参，而本该换成实参的地方原样留着 `%s`。
+ *
+ * 那条警告真正要说的只有一句话：**`hero-1` 这个 key 重复了**。占位符不展开时
+ * 那句话反而不在日志里（它在尾巴上、与模板隔了 150 个字符）。
+ *
+ * 只认 console 家族真正会消费的四种：`%s`（字符串化）、`%d` / `%i`（数值）、
+ * `%o` / `%O`（对象，走序列化）、`%c`（CSS 样式 —— **消费但不显示**，样式表
+ * 本来就不该进日志正文），以及转义 `%%` → `%`。
+ *
+ * **`%c` 必须被吃掉**：tRPC loggerLink 一族逐帧样式参数用的就是它，旧行为会把
+ * 那段 CSS 原样留在消息里。`isReactQueryLog` 一族噪判据**看的是 `args[0]` 原串**
+ * （不走 `serialize`），因此展开占位符不影响它们的判决 —— 那是有意的分工：
+ * 过滤认「原始形态」，展示认「人读的形态」。
+ */
+
+/** 占位符 → 消费一个实参的方式；`drop` 表示消费但不进正文（`%c` 的样式表）。 */
+const PLACEHOLDER_KINDS: Record<string, "text" | "number" | "object" | "drop"> =
+  {
+    s: "text",
+    d: "number",
+    i: "number",
+    f: "number",
+    o: "object",
+    O: "object",
+    c: "drop",
+  };
+
+/** 按 `kind` 渲染一个实参（`%c` 之外都复用 {@link serializeOne} 的口径）。 */
+function renderArg(kind: string, value: unknown): string {
+  if (kind === "number") {
+    const n = typeof value === "number" ? value : Number(value);
+    return Number.isNaN(n) ? "NaN" : String(n);
+  }
+  return serializeOne(value);
 }
 
 /**
- * 从调用栈中定位真正的业务调用方。
- * 拦截 console.* 时，栈顶是 log-store 自己的包装函数，需要跳过；
- * 再跳过 React / Next.js / Tauri 等框架/编译产物帧，返回第一个**能映射回项目源码**
- * 的业务位置（即以 .ts/.tsx 结尾的 source-map 帧）。
+ * 展开 console 的 printf 风格占位符（`%s` / `%d` / `%i` / `%f` / `%o` / `%O` /
+ * `%c` / `%%`），把实参换进正文。
  *
- * 只认 source-map 帧的原因：Next/webpack/Turbopack 在 dev 期把用户代码 source-map 到
- * `.tsx/.ts`；而框架自身的 console 输出来自被压缩/哈希的编译 chunk（形如
- * `src/00vplg9./.js:1879`）。这类位置对用户没有可读含义——它们并非业务代码打印的。
- * 与其展示一串看不出由来的哈希 chunk 路径，不如不展示（返回 undefined，行上不出现位置列）。
+ * 与浏览器 console 的差异（都是**有意的窄化**，宁可少换也不错换）：
+ *   - 无对应实参的占位符**原样保留**（浏览器会打 `undefined`）——用户看到的
+ *     是「这里本来该有个值」，而不是一句凭空的 `undefined`；
+ *   - 实参多于占位符时，多出来的按旧行为追加在末尾（`" "` 连接），不丢信息；
+ *   - 首参不是字符串时不做任何事（`console.error(err)` 这类没有模板可展开）。
+ *
+ * 不支持的宽度 / 精度修饰（`%.2f`、`%5d`）按**原样保留**处理：它们是正文里
+ * 的字面量，强行解析只会把内容改错。
  */
-export function captureLocation(): string | undefined {
-  try {
-    const stack = new Error().stack;
-    if (!stack) return undefined;
-
-    const loggerSelfRe = /log-(?:store|provider)\.(tsx|ts|jsx|js)/;
-    const frameworkRe =
-      /node_modules|react-dom|react\.production|react\.development|next\/(?:dist|server|client)|@tauri-apps|scheduler|webpack[\/](?:runtime|bootstrap)|\[native code\]/i;
-    // 项目源码以 TS 编写；dev 期只有映射回 .ts/.tsx 的帧才算"可读业务位置"。
-    const sourceRe = /\.(?:tsx?|mts|cts)$/i;
-
-    const lines = stack.split("\n");
-    for (let pass = 0; pass < 2; pass++) {
-      for (const raw of lines) {
-        const line = raw.trim();
-        if (!line?.startsWith("at ")) continue;
-        if (loggerSelfRe.test(line)) continue;
-        if (pass === 0 && frameworkRe.test(line)) continue;
-
-        // 取 frame 中的位置部分：优先用最后一个 (...) 里的内容，否则取整行
-        const parenMatch = /\(([^)]+)\)\s*$/.exec(line);
-        const loc = parenMatch ? parenMatch[1] : line.replace(/^at\s+/, "");
-        if (!loc) continue;
-
-        // 位置段末尾一定是 :line:col，取最后两个冒号分割
-        const lastColon = loc.lastIndexOf(":");
-        if (lastColon <= 0) continue;
-        const secondLastColon = loc.lastIndexOf(":", lastColon - 1);
-        const lineNo =
-          secondLastColon >= 0
-            ? loc.slice(secondLastColon + 1, lastColon)
-            : loc.slice(lastColon + 1);
-        let path =
-          secondLastColon >= 0
-            ? loc.slice(0, secondLastColon)
-            : loc.slice(0, lastColon);
-
-        // 清理常见前缀 / 协议
-        path = path.replace(/^webpack-internal:\/\/\/\.\//, "");
-        path = path.replace(/^webpack-internal:\/+/i, "");
-        path = path.replace(/^file:\/\/\//, "");
-        path = path.replace(/^https?:\/\/[^/]+\/_next\/static\/chunks\//, "");
-        path = path.replace(/^https?:\/\/[^/]+\//, "");
-
-        // Turbopack / 某些 webpack source-map 配置会把模块路径里的 "/" 编码为 "_"，
-        // 形成 "src_components_studio_15hhqk_logs_log-store.ts" 这种标识符。
-        // 在肉眼可读性层面把它还原（heuristic：以 src_ 开头且没有 "/"）。
-        if (!path.includes("/") && path.startsWith("src_")) {
-          path = path.replace(/_/g, "/");
-        }
-
-        // 取 /src/ 之后的路径作为最简可读形式
-        const srcIdx = path.indexOf("/src/");
-        if (srcIdx !== -1) path = path.slice(srcIdx + 1);
-
-        // 只展示能映射回项目源码（.ts/.tsx 系）的位置；编译 chunk（.js/.mjs）或
-        // 框架内部帧看不懂也无需展示——继续向下找真正的业务帧，找不到就返回 undefined。
-        if (
-          path &&
-          sourceRe.test(path) &&
-          /^\d+$/.test(lineNo) &&
-          !/^\d+$/.test(path)
-        ) {
-          return `${path}:${lineNo}`;
-        }
-      }
-    }
-  } catch {
-    // 解析失败不应影响日志记录
+export function formatConsoleArgs(args: unknown[]): string {
+  const first = args[0];
+  /* 首参不是字符串 = 没有模板可展开（`console.error(err)`）→ 原样拼。
+   * **不能顺手在这里按 `args.length === 1` 提前返回**：单参调用里 `%%` 仍要还原
+   * 成 `%`（用户打的就是「百分比」），提前返回会让 `100%%` 原样留在日志里。 */
+  if (typeof first !== "string") {
+    return args.map(serializeOne).join(" ");
   }
-  return undefined;
+  const rest = args.slice(1);
+  let argIndex = 0;
+  /* 逐个扫描而非一次 `String.replace`：占位符是否成立取决于「还剩几个实参」，
+   * 正则回调拿不到这个状态而只能一路消费下去。 */
+  let out = "";
+  for (let i = 0; i < first.length; i += 1) {
+    const ch = first[i];
+    if (ch !== "%" || i === first.length - 1) {
+      out += ch;
+      continue;
+    }
+    const spec = first[i + 1] ?? "";
+    if (spec === "%") {
+      out += "%";
+      i += 1;
+      continue;
+    }
+    const kind = PLACEHOLDER_KINDS[spec];
+    if (!kind || argIndex >= rest.length) {
+      out += ch;
+      continue;
+    }
+    const value = rest[argIndex];
+    argIndex += 1;
+    if (kind !== "drop") out += renderArg(kind, value);
+    i += 1;
+  }
+  for (; argIndex < rest.length; argIndex += 1) {
+    out += ` ${serializeOne(rest[argIndex])}`;
+  }
+  return out;
 }
+
+export function serialize(args: unknown[]): string {
+  return formatConsoleArgs(args);
+}
+
+/* 调用位置采集拆到 `log-callsite`（本文件加完那一族后越过文件长度硬闸）。
+ * 这里原样转出去，`log-store` 那条 `export *` 链路和既有 import 路径都不受影响
+ * （§12.18 复用优先 —— 拆包只挪文件、不动契约）。 */
+export { captureLocation, locateInStack } from "./log-callsite";
 
 /**
  * 过滤 tRPC loggerLink / React Query 内部追踪日志。
