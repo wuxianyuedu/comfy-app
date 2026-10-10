@@ -40,6 +40,8 @@ interface Entry {
   executor: { kind: string; test?: string; label?: string };
   baseline: Record<string, number>;
   section: string;
+  /** 条目声称**执行者逐条核过**的面（选填；写了就要核，见判据的 ①′）。 */
+  verifiedSurfaces?: string[];
 }
 interface Ledger {
   entries: Entry[];
@@ -88,8 +90,14 @@ function writeBoth(repo: GateRepo, ledger: Ledger, readers = REAL_READERS) {
  * 用 `!` 而不是 `as Entry`：断言在这里只是把「`find` 可能返回 undefined」压下去，
  * 而真台账确实有这一条（下面「真台账非空」那条用例兜着它）。
  */
-const SAMPLE = REAL_LEDGER.entries.find(
-  (e) => e.id === "expect-type-of",
+const SAMPLE = REAL_LEDGER.entries.find((e) => e.id === "expect-type-of")!;
+
+/**
+ * 真台账里那条**带 `verifiedSurfaces`** 的条目 —— ①′ 那一组用例要一个真实的
+ * `reader` 路径（临时仓库里要把那份脚本也写出来）。
+ */
+const REAL_SAMPLE = REAL_LEDGER.entries.find(
+  (e) => e.id === "a11y-rule-switch",
 )!;
 
 /* ── 基线：真台账在真文件上应该是绿的 ──────────────────────── */
@@ -191,6 +199,85 @@ test("③ 登记的关键词已经找不到了 → 阻断", ({ repo }) => {
   const { code, output } = repo.run();
   expect(code).toBe(1);
   expect(output).toContain("已经找不到了");
+});
+
+/* ── ①′ 条目声称的「核验面」要在自己的执行者里逐字存在（#1623） ── */
+
+/** 造一份「读者脚本」—— 里面具名出现 `judge` / `normalize`，而 `bogus` 不在。 */
+const READER_SRC =
+  "function judge() {}\nfunction normalize() {}\nmodule.exports = { judge, normalize };\n";
+
+test("①′ 声称核过的面在读者脚本里找不到 → 阻断（台账那句话与事实脱钩）", ({
+  repo,
+}) => {
+  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write(REAL_SAMPLE.reader, READER_SRC);
+  writeBoth(repo, {
+    entries: [
+      {
+        ...SAMPLE,
+        reader: REAL_SAMPLE.reader,
+        paths: ["scripts/check-type-assertion-executor.cjs"],
+        markers: [MARKER],
+        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        verifiedSurfaces: ["judge", "normalize", "这个面根本不存在"],
+      },
+    ],
+  });
+  const { code, output } = repo.run();
+  expect(code).toBe(1);
+  expect(output).toContain("这个面根本不存在");
+  expect(output).toContain("找不到");
+});
+
+test("①′ 声称核过的面都在读者脚本里 → 放过（正面清单不是摆设）", ({ repo }) => {
+  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write(REAL_SAMPLE.reader, READER_SRC);
+  /* 姊妹索引也要认这条 reader —— 不然先在同源核对上红掉，
+   * 就看不见本用例真正要测的那一格（造变异时的常规顺序）。 */
+  writeBoth(
+    repo,
+    {
+      entries: [
+        {
+          ...SAMPLE,
+          reader: REAL_SAMPLE.reader,
+          paths: ["scripts/check-type-assertion-executor.cjs"],
+          markers: [MARKER],
+          baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+          verifiedSurfaces: ["judge", "normalize"],
+        },
+      ],
+    },
+    { carriers: [{ id: SAMPLE.id, reader: REAL_SAMPLE.reader }] },
+  );
+  const { code, output } = repo.run();
+  expect(code, output).toBe(0);
+});
+
+test("①′ 空数组 / 重复名字 → 阻断（写了就要核，重复是两份清单开始分叉）", ({
+  repo,
+}) => {
+  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write(REAL_SAMPLE.reader, READER_SRC);
+  const base = {
+    ...SAMPLE,
+    reader: REAL_SAMPLE.reader,
+    paths: ["scripts/check-type-assertion-executor.cjs"],
+    markers: [MARKER],
+    baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+  };
+  const empty = repo.run();
+  void empty;
+  writeBoth(repo, { entries: [{ ...base, verifiedSurfaces: [] }] });
+  expect(repo.run().code).toBe(1);
+  expect(repo.run().output).toContain("非空数组");
+
+  writeBoth(repo, {
+    entries: [{ ...base, verifiedSurfaces: ["judge", "judge"] }],
+  });
+  expect(repo.run().code).toBe(1);
+  expect(repo.run().output).toContain("重复");
 });
 
 /* ── ① 与姊妹索引逐行同源 ──────────────────────────────────── */
