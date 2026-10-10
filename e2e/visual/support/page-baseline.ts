@@ -1,5 +1,14 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+/* 字体档探针的输入面（样本串）与判决都定义在那一份 .mjs 里 ——
+   静态 import 它会把整份脚本拉进 Playwright 的 TS 转换面，所以只在下面按需
+   动态 import 判决；但这两个**常量**是纯数据，静态取来即可（样本串与判据必须
+   同源，抄一份就是 §12.12 的孪生对）。 */
+import {
+  CJK_PROBE_SAMPLE,
+  GLYPHLESS_PROBE_SAMPLE,
+} from "../../../scripts/recording-font-capability.mjs";
+
 /**
  * 页面级像素基线的公共前置（§11.8）。
  *
@@ -91,6 +100,80 @@ async function expectDevChromeHidden(page: Page): Promise<void> {
   ).toBe(true);
 }
 
+/**
+ * 自检：这台机器**有没有字体覆盖中文**（§11.8）。
+ *
+ * 为什么它不是「界面的一种状态」而是「这张 PNG 成立的前提」：基线文件名带**平台名**
+ * （`-linux.png`），而平台名担保不了**字体栈** —— 实测同一个 linux 平台名下，两个容器
+ * 跑同一份 spec / 基线 / 代码差 1767 像素，差的是整页中文的字形（ISSUE #1620）。
+ * 这一档此前没有任何判据：名字里看不出这台机器录不录得出来，红的时候报的是一堆中文块
+ * 的 diff，`classifyFailure` 认不出、会把人引去改业务代码。
+ *
+ * **判据的形状与话术都在 `scripts/recording-font-capability.mjs`**（§12.12）；
+ * 这里只出**浏览器侧的读数** —— 同一串栈下，中文样本与「保证没有字形的码位」
+ * （Unicode 私用区）各画一次、数非透明像素。两者**相等** ⇒ 中文渲染出来的是
+ * 「缺字」的形状 ⇒ 这台机器没有 CJK 覆盖。
+ *
+ * 为什么不判「声明的字族在不在」（三条都被实测堵死，细节见那份 .mjs 的文件头）：
+ * 清单会静默失效；`PingFang SC` / `Microsoft YaHei` 在**健康的** linux 容器上同样不在
+ * （它靠别的 CJK 字体）；而按族名量 CJK 宽度分不出覆盖 —— 实测同一串中文在
+ * `PingFang SC` / `Noto Sans SC` / `WenQuanYi Zen Hei`（本机真装了）下宽度**都是 120**。
+ * `document.fonts.check()` 也不行：对一个不存在的族照样返 `true`。
+ *
+ * ⚠️ **不导出**：唯一消费者是 {@link settle}，而每份 visual spec 都必经它。
+ */
+async function expectRecordingFontCapability(page: Page): Promise<void> {
+  const ink = await page.evaluate(
+    ([cjk, glyphless, stackVar]: [string, string, string]) => {
+      /* 栈从**解出来的**计算样式取，不照字面量喂给 canvas：`--font-sans` 里有
+         `var(--font-geist-sans)`（next/font 在运行时挂上 `<html>`），照字面量喂过去
+         是喂了一串解析不掉的 var()。 */
+      const stack = getComputedStyle(document.documentElement)
+        .getPropertyValue(stackVar)
+        .trim();
+      if (!stack) return null;
+      const canvas = document.createElement("canvas");
+      canvas.width = 600;
+      canvas.height = 120;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      /** 把一串文字画上 canvas、数非透明像素 —— 就是「这串在这台机器上出了多少墨」。 */
+      const measure = (text: string): number => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.font = `48px ${stack}`;
+        ctx.fillStyle = "#000";
+        ctx.textBaseline = "top";
+        ctx.fillText(text, 4, 4);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let n = 0;
+        for (let i = 3; i < data.length; i += 4) if ((data[i] ?? 0) > 8) n += 1;
+        return n;
+      };
+      return { cjk: measure(cjk), glyphless: measure(glyphless) };
+    },
+    [CJK_PROBE_SAMPLE, GLYPHLESS_PROBE_SAMPLE, "--font-sans"] satisfies [
+      string,
+      string,
+      string,
+    ],
+  );
+
+  expect(
+    ink,
+    "读不到 --font-sans（token 没发射到 :root），字体档判据无法下结论",
+  ).not.toBeNull();
+  if (!ink) return;
+
+  /* 判决定义在 `scripts/recording-font-capability.mjs`（与样本串同一处）。
+     动态 import 的理由同 `freezeModelOverview`：本模块被 Playwright 的 TS 转换求值，
+     静态 import 会把那份 .mjs 一并拉进转换面。 */
+  const { verdictForInk } = await import(
+    "../../../scripts/recording-font-capability.mjs"
+  );
+  const verdict = verdictForInk(ink);
+  expect(verdict, verdict ?? undefined).toBeNull();
+}
+
 /** 主题档：默认是 `dark`（`ThemeProvider` 的 `defaultTheme`），显式切要落 localStorage。 */
 export const THEME_STORAGE_KEY = "theme";
 
@@ -118,11 +201,13 @@ export async function setTheme(
  * 等页面「静下来」再截图：关键文案可见 + 字体就绪 + dev chrome 已藏住 +
  * 打过的接口都登记过。
  *
- * 四件都要。只等文案：字体还在换，字形像素会漂；只等字体：内容可能还没挂上；
+ * 五件都要。只等文案：字体还在换，字形像素会漂；只等字体：内容可能还没挂上；
  * 不查 dev chrome：{@link hideDevChrome} 哪天失效，基线就会安静地把角标烘进去，
  * 等到下一次真差异才混进来、还指不出是谁；不查接口面：链路里新引进的数据源
  * 由跑它的那台机器回答，而这张 PNG 记的是那台机器的现场（见
- * {@link RECORDING_INPUT_CONTRACT}）。
+ * {@link RECORDING_INPUT_CONTRACT}）；不查字体档：这台机器有没有字体覆盖中文 ——
+ * 没有的话中文全是缺字形，而 `-<平台>.png` 这个名字看不出这一点
+ * （见 {@link RecordingFontCapability}）。
  *
  * ⚠️ **前置调用**：{@link watchRecordingInputs} 必须在第一次 `goto` **之前**调，
  * 否则第四件判的是空集、永远绿。
@@ -134,6 +219,10 @@ export async function settle(page: Page, readyText: string): Promise<void> {
   /* 第四件：本屏打过的接口都登记过（{@link expectRecordingInputsDeclared}）。
      它与前三件同性质 —— 都是「这张 PNG 成立的前提」，不是界面的一种状态。 */
   expectRecordingInputsDeclared(page);
+  /* 第五件：这台机器渲染中文用的是不是项目声明的那几族
+     （{@link expectRecordingFontCapability}）。同样不是「界面的一种状态」，而是
+     「这张 PNG 记的是录制环境还是这台机器的私有事实」这个前提。 */
+  await expectRecordingFontCapability(page);
 }
 
 /**
