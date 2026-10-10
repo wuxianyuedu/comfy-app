@@ -5424,8 +5424,11 @@ navigation-menu pagination radio-group scroll-area slider table
   实测把第一版的 `history: label「历史」/ viewLabel「历史记录」` 抓了出来 ——
   多出来的「记录」两个字没多给任何信息，于是那一处**删掉 `viewLabel`**、
   页头与侧栏统一叫「历史」。
-- 与 `label` 真正不同义的全名是允许的（`models` → 「模型」/「模型库」那一类），
-  条件是它得说出点新东西。
+- 与 `label` **不同义**的全名是允许的，条件是它得说出点新东西；而「多出来的字
+  是不是语义」机器判不了，所以判据取的是**形状**上的那一档：`viewLabel` 以
+  `label` 开头就是同义扩写（`模型` → `模型库` 正是这一档 —— 残下的「库」不构成
+  新语义，`models` 因此**不设 `viewLabel`**，页头与侧栏统一叫「模型」，
+  ISSUE #1423/#1673）。真要去掉前缀、换个能多给信息的全名，才走得通。
 
 结构那一侧收进 `ui/page-header`（`PageHeader`）：`h1` 的字阶档 + 一行副说明 +
 右侧动作组，三件一处说清。**它同时把副说明从「没有判据」变成「有形状」**——
@@ -5453,7 +5456,9 @@ navigation-menu pagination radio-group scroll-area slider table
 
 按**形态**取锚（不按名字找，§16.2.4.6 的教训），五条：
 
-1. 用页头的七屏都 import 了 `ui/page-header`（收口没被绕开）；
+1. 用页头的每一屏（`PAGE_HEADER_CONSUMERS` 那几位）都 import 了
+   `ui/page-header`（收口没被绕开）；**清单长度不抄在本文里** —— 它每加一屏就变，
+   实际条数看那份常量（用例名按 `PAGE_HEADER_CONSUMERS.length` 现算）；
 2. `viewLabel` 不许只是 `label` 的同义扩写；
 3. `pageHeaderTitle(view)` 对每一项都给得出非空字符串；
 4. 屏内 `<h1>` 不许再出现裸字面量的屏名 —— 锚 `<h1 …>纯文本</h1>`，
@@ -5487,8 +5492,8 @@ navigation-menu pagination radio-group scroll-area slider table
   （判据自称在跑、实际没有执行者），只是这次的「自称」发生在**逐条点数的编号表**里，比正文写错更贵。
 
 收口当时的真实执行者是上面那份 `page-name-single-source`，但它的
-`PAGE_HEADER_CONSUMERS` 是**一份具名文件清单**（7 屏）—— 拦得住「这 7 屏退回
-手抄」，**拦不住第 8 个新屏自己拼**；而 P83 只判「屏级标题是不是 `.u-title-page`」，
+`PAGE_HEADER_CONSUMERS` 是**一份具名文件清单** —— 拦得住「清单上这几屏退回
+手抄」，**拦不住下一个新屏自己拼**；而 P83 只判「屏级标题是不是 `.u-title-page`」，
 **看不见形状**，手抄照样过 P83。
 
 **P86 的锚是形态，两件必须同现**（缺一不算）：
@@ -5545,6 +5550,52 @@ navigation-menu pagination radio-group scroll-area slider table
 2. **缺省档必须是「不需要强调的那一档」**。设置页三条状态行（ComfyUI / Drizzle Studio / Ollama）各有三个动作，`StatusButton` 的缺省档是 `primary-solid` 时三颗同款品牌紫实心：用户看不出该点哪个，而**置灰的实心只是 50% 不透明度（仍是饱和紫），读起来像「可点但浅一点」而不是「现在不能点」**。现在缺省改成软底 `primary`，「当前这一态该按的那一颗」才由调用处显式提为实心（未运行时「启动」/ 运行时「关闭」），「看」走软底、并列出口走 `outline`。缺省实心会让**每个新加的动作都自动变成主按钮**，而「哪个是主要动作」本来就是调用处的判断。
 
 判据：`src/components/settings/SettingsShell.test.tsx`（3 条 —— 没有「返回」出口 / 分区导航一项不漏不重 / `aria-current` 恰好一项且点击回传分区）；`e2e/critical-flows.spec.ts` 那条「打开设置后底部状态栏与视图出路都不被盖住」的锚从「返回」按钮换成分区导航第一项。
+
+#### 同一屏的第二条路：`studio/ModelLibrary` 的裸字面量（ISSUE #1673）
+
+页头收进基元之后，还留着一处**判据看不见**的同款现场，收在这里以免下一轮重开：
+
+`/workspace` 那条链路的模型屏是 `src/components/studio/ModelLibrary.tsx`
+（路由壳 `src/app/workspace/page.tsx` 按视图 id `models` 动态挂载），
+它的 `PageHeader` 写着 `title="模型库"` —— **既走了基元、又是裸字面量**：
+
+| 判据 | 为什么抓不到它 |
+| --- | --- |
+| P86（形状） | 它**走了** `ui/page-header`：文件里没有 `.u-title-page` + `mt-1 text-sm` 那两件，形态锚天然放行 |
+| `page-name-single-source` 第 4 条 | 锚的是 `<h1 …>纯文本</h1>`。基元之后字面量搬进了 **prop**（`title="模型库"`），锚里根本没有 `<h1>` 这个标签 |
+
+于是「注册表叫『模型』、页头叫『模型库』」这两个名字并存着，而没有任何东西会红
+—— 与 #1423 的根因（名字有四个家）同形，只是这次第二个家藏在 prop 里。
+
+**处置只做一件事：把那一处接回唯一出口** —— `title={pageHeaderTitle("models")}`。
+这也**不是**在给那条线选口径：「`models` 要不要留一个全名」是
+`viewLabel` 那一格的事（见上面「全名比短名多了什么」），而实测那一格
+**只认形状**：`模型库` 以 `label`（`模型`）开头、残下「库」一个字，
+按 `tests/page-name-single-source.test.ts` 的第 2 条就是同义扩写，加不上去。
+所以 `models` 不设 `viewLabel`，页头与侧栏统一叫「模型」—— 这是判据已经定过的事，
+本单只是把那条链路上漏掉的一处接上去。
+
+> **留在这里的缺口（不给出口，只记现场）**：「prop 里的屏名字面量」这一类
+> **当前没有执行者** —— 上面两条判据的分工天然把它漏在中间。
+> 要不要再补一条按 prop 取锚的判据，是**另一条线的口径**，不在本次范围内；
+> 本条只把这一处的现场、两条判据各自的盲区、以及复算入口固定在案。
+> **复算入口**（只认 `<PageHeader>` 的 `title=` —— 别用全库 `title="`，
+> 那会把 `EmptyState` / `Hint` / `Dialog` 的同名 prop 一起捞进来）：
+>
+> ```bash
+> for f in $(grep -rl "PageHeader" src/components src/app --include=*.tsx \
+>            | grep -v '\.test\.' | grep -v '\.stories\.'); do
+>   awk '/<PageHeader/{flag=1} flag&&/title="/{print FILENAME": "$0; flag=0} \
+>        flag&&/title=\{/{flag=0}' "$f"
+> done
+> ```
+>
+> 现还剩**一处**同款 —— `src/components/console/ConsoleView.tsx` 的
+> `title="控制台"`（它与注册表那一项**正好同字**，所以是**同名不同源**：
+> 今天看不出来，注册表改名的那天才会漂）。它与本处同族、同属上面那条缺口，
+> 一并留在现场；两条判据的自查是
+> `node scripts/check-ui-primitives.cjs` 与
+> `pnpm exec vitest run tests/page-name-single-source.test.ts`。
 
 ## 16.3 新增一个组件的标准动作
 
