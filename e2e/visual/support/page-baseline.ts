@@ -108,23 +108,32 @@ export async function setTheme(
   page: Page,
   theme: "light" | "dark",
 ): Promise<void> {
-  await page.addInitScript(
-    ([k, v]) => localStorage.setItem(k, v),
-    [THEME_STORAGE_KEY, theme] as const,
-  );
+  await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [
+    THEME_STORAGE_KEY,
+    theme,
+  ] as const);
 }
 
 /**
- * 等页面「静下来」再截图：关键文案可见 + 字体就绪 + dev chrome 已藏住。
+ * 等页面「静下来」再截图：关键文案可见 + 字体就绪 + dev chrome 已藏住 +
+ * 打过的接口都登记过。
  *
- * 三件都要。只等文案：字体还在换，字形像素会漂；只等字体：内容可能还没挂上；
+ * 四件都要。只等文案：字体还在换，字形像素会漂；只等字体：内容可能还没挂上；
  * 不查 dev chrome：{@link hideDevChrome} 哪天失效，基线就会安静地把角标烘进去，
- * 等到下一次真差异才混进来、还指不出是谁。
+ * 等到下一次真差异才混进来、还指不出是谁；不查接口面：链路里新引进的数据源
+ * 由跑它的那台机器回答，而这张 PNG 记的是那台机器的现场（见
+ * {@link RECORDING_INPUT_CONTRACT}）。
+ *
+ * ⚠️ **前置调用**：{@link watchRecordingInputs} 必须在第一次 `goto` **之前**调，
+ * 否则第四件判的是空集、永远绿。
  */
 export async function settle(page: Page, readyText: string): Promise<void> {
   await expect(page.getByText(readyText).first()).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   await expectDevChromeHidden(page);
+  /* 第四件：本屏打过的接口都登记过（{@link expectRecordingInputsDeclared}）。
+     它与前三件同性质 —— 都是「这张 PNG 成立的前提」，不是界面的一种状态。 */
+  expectRecordingInputsDeclared(page);
 }
 
 /**
@@ -217,4 +226,221 @@ export async function clearProjectIndex(page: Page): Promise<void> {
       if (key.startsWith("comfyapp.canvas.")) localStorage.removeItem(key);
     }
   });
+}
+
+/**
+ * 录制期请求面的**登记表** —— 每一条「这一屏会打的接口」都有明确处置与理由。
+ *
+ * 为什么需要它：{@link freezeComfyStats} / {@link freezeModelOverview} 这类桩是**逐个
+ * 手写**的，而一份 spec 只会桩它「知道自己依赖」的那几格。实测一份只桩了 1 格的首页
+ * spec，真实链路上有 **16 个** `/api/**` 请求——其余由「这台机器的 DB / ComfyUI / 日志
+ * 目录 / 网络」在答。它们现在恰好没进像素（被 mask 遮着、在浮层里），但**没人知道是
+ * 恰好**：谁把某块 chrome 挪出 mask 范围、或让某个降级态改成可见，基线就记住了一台机器
+ * 的现场，而**当场不红** —— 这正是 #1593 / #1620 反复踩的那个形态。
+ *
+ * 所以「这一屏的输入」从**隐含**变成**显式**：{@link settle} 收尾时核一遍本屏打过的每个
+ * 接口都在下表里，**没登记过的当场红并点名它的 URL**。新增一屏 / 改一屏引进了新数据源时，
+ * 人会被当场要求回答一件事：「它进像素吗？」——进就封口，不进就写清为什么。
+ *
+ * 处置三档：
+ *   · `pinned` —— 已由某个桩钉住（`screens` 写明是哪一个），值不再随机器变；
+ *   · `masked` —— 值随机器变，但整块被 {@link unstableChromeMasks} 遮着、不进像素；
+ *   · `offScreen` —— 被它驱动的 UI 不在本档截图的屏内（浮层未打开 / 元素未挂载）。
+ *
+ * ⚠️ `masked` 与 `offScreen` 都**不是**「安全」，是「这一档不判它」。它们随时可能因为
+ * 布局调整而失效，而失效时本表看不出任何变化——所以 `note` 里必须写清「它靠什么不进
+ * 像素」，那是下一个人判断这次改动有没有把它推进像素的唯一线索。
+ */
+export const RECORDING_INPUT_CONTRACT: Record<
+  string,
+  { how: "pinned" | "masked" | "offScreen"; note: string }
+> = {
+  "/api/comfy/stats": {
+    how: "pinned",
+    note: "freezeComfyStats —— 否则是本机实时显存 / 内存（每秒在变、每台机不同）",
+  },
+  "model.list": {
+    how: "pinned",
+    note: "模型库档用 stubTrpc 桩成空列表 —— 否则渲染的是跑它的这台机器上装了哪些模型",
+  },
+  "model.configList": {
+    how: "pinned",
+    note: "freezeModelOverview —— 否则是本机 ComfyUI 目录清单 + DB 里的模型计数",
+  },
+  "/api/comfy/queue": {
+    how: "masked",
+    note: "底部状态栏「排队」那一格，整条状态栏被 unstableChromeMasks 遮住；读本机 DB 的 task 表（容器里无表时它是 500）",
+  },
+  "/api/schema": {
+    how: "masked",
+    note: "底部状态栏「同步」那一格，同上被遮；随本机 DB 有没有建表变",
+  },
+  "/api/comfy/liveness": {
+    how: "masked",
+    note: "底部状态栏的 ComfyUI 探活，同上被遮；读本机进程表",
+  },
+  "/api/logs/current": {
+    how: "masked",
+    note: "LogPanel 的轮询，整块在未打开的浮层里；读本机 log/ 目录内容（每次启动都不同）",
+  },
+  "/api/dev/server-id": {
+    how: "masked",
+    note: "dev 口径的帧率 / 时钟读数所在那一格，同上被遮；dev server 每次启动都换",
+  },
+  "/api/dev/build-id": {
+    how: "masked",
+    note: "「页面还跑着上一版代码」检测，同上被遮；随每次构建变",
+  },
+  "/api/update-check": {
+    how: "masked",
+    note: "版本更新检测的轮询结果，只经 toast 呈现（不在 fullPage 截图里）；且依赖网络",
+  },
+  "project.list": {
+    how: "pinned",
+    note: "画布档用 stubTrpc 桩成空 —— hydrateFromServer() 会用服务端那一份覆盖本地项目",
+  },
+  "/api/production": {
+    how: "pinned",
+    note: "freezeProductionShots —— 否则本机 DB 里这个项目的 production.shots 会物化成画布节点（实测差 2 个节点）",
+  },
+  "workflow.list": {
+    how: "pinned",
+    note: "画布档用 stubTrpc 桩成空 —— 读本机 DB 的工作流模板表，且扫磁盘上的本地工作流根目录",
+  },
+  "workflowModel.list": {
+    how: "pinned",
+    note: "画布档用 stubTrpc 桩成空 —— 读本机 DB 的模型标签库",
+  },
+  "project.upsert": {
+    how: "offScreen",
+    note: "画布落盘时的写回，只写不渲染；本档不判它（它读本机 DB，容器里无表时会 500，但那不进像素）",
+  },
+};
+
+/**
+ * 本屏打过的接口型请求（`/api/**`），规范化成「路径」形态后累积 —— 同一个 URL
+ * 只记一次，`?query` 与 tRPC 的 batch 入参都裁掉（它们逐次不同，却是**同一个**数据源）。
+ *
+ * 挂在 page 上（`WeakMap` 而不是模块级变量）：一个 worker 里多个 page 并发，
+ * 模块级变量会让两份 spec 的请求混在一起，报出来的未声明清单指向别人那一屏。
+ */
+const seenInputs = new WeakMap<Page, Set<string>>();
+
+/**
+ * 规范化一条请求 URL 成「数据源」的形态（**一条请求可能产出多条**）。
+ *
+ * 裁掉 query 与 hash：`/api/logs/current?source=app&offset=0` 与
+ * `…offset=5168432` 是同一个数据源的两拍。
+ *
+ * tRPC 单独处理：批请求把多个过程名用逗号拼在同一段路径里（实测
+ * `/api/trpc/project.list,project.upsert`、`/api/trpc/model.list,model.list`），
+ * 而「哪几个过程被凑进同一批」是**调用时机**的产物，不是数据源的身份 —— 同一个
+ * 数据源单发是 `model.list`、批量是 `model.list,model.list`。所以拆成
+ * **每个过程一条** `/api/trpc/<过程名>`（与 {@link stubTrpc} 的匹配口径同源，
+ * 契约表里直接写过程名即可）。
+ *
+ * 只认 `/api/` 前缀：RSC payload（`?_rsc=…`）、静态资源、`/workspace` 这类导航
+ * 请求不是「数据源」——前者是本次导航的传输形态，后者就是被测页面本身。
+ *
+ * 不导出：唯一消费者是 {@link watchRecordingInputs}，而它判的形态（保留哪一段路径）
+ * 是它自己的私有约定。
+ *
+ * @param rawUrl 请求的完整 URL
+ * @returns 数据源形态（不在 `/api/` 下返回空数组）
+ */
+function normalizeInput(rawUrl: string): string[] {
+  const { pathname } = new URL(rawUrl);
+  if (!pathname.startsWith("/api/")) return [];
+  const trpcPrefix = "/api/trpc/";
+  if (!pathname.startsWith(trpcPrefix)) return [pathname];
+  return pathname
+    .slice(trpcPrefix.length)
+    .split(",")
+    .filter(Boolean)
+    .map((procedure) => `${trpcPrefix}${procedure}`);
+}
+
+/**
+ * 开始记录本屏打过的接口 —— **必须在第一次 `goto` 之前调**。
+ *
+ * `page.on("request")` 只抓注册之后发出的请求，而导航一发起就开始打接口了；在
+ * `goto` 之后调等于漏掉首屏那一批，而那批恰好是环境依赖最重的一批（`model.configList`、
+ * `comfy/stats` 全在里面）。
+ *
+ * 幂等：同一个 page 重复调不会累积两套监听（`WeakMap` 里已有就返回）。
+ */
+export async function watchRecordingInputs(page: Page): Promise<void> {
+  if (seenInputs.has(page)) return;
+  const seen = new Set<string>();
+  seenInputs.set(page, seen);
+  page.on("request", (req) => {
+    for (const input of normalizeInput(req.url())) seen.add(input);
+  });
+}
+
+/**
+ * 自检：本屏打过的接口，每一条都在 {@link RECORDING_INPUT_CONTRACT} 里。
+ *
+ * 判据的形状是「**没登记过的**就红」，不是「没封口的就红」——因为「这一格进不进像素」
+ * 是一个需要人回答的问题（进就封口、不进就写清靠什么不进），不是机器猜得出来的。
+ * 机器能做的是**逼这个问题被回答**，并且把答案留在仓库里。
+ *
+ * 报错里带「怎么处置」的两条出路：封口（新增桩函数并在契约表登记 `pinned`），或
+ * 登记为 `masked` / `offScreen` 并写清理由。两条都比「哦它居然打了这个接口」有用。
+ *
+ * 没调过 {@link watchRecordingInputs} 时**不判**（`settle` 的既有调用方还没有一个
+ * 都接上监听）：沉默地放行不是漏判，是「这一屏还没纳入这条判据」——接上监听那一行
+ * 就是纳入的动作，`tests/visual-recording-inputs.test.ts` 会盯住每份 spec 都接上。
+ */
+export function expectRecordingInputsDeclared(page: Page): void {
+  const seen = seenInputs.get(page);
+  if (!seen) return;
+  const undeclared = [...seen]
+    .filter(
+      (input) =>
+        !Object.keys(RECORDING_INPUT_CONTRACT).some((key) =>
+          input.includes(key),
+        ),
+    )
+    .sort();
+  expect(
+    undeclared,
+    "本屏打过的接口里有没登记的（基线会随跑它的那台机器变）：\n" +
+      undeclared.map((input) => `  · ${input}`).join("\n") +
+      "\n  处置二选一：\n" +
+      "    ① 它进像素 ⇒ 加一个桩把它钉住（如 freezeComfyStats），在\n" +
+      "       e2e/visual/support/page-baseline.ts 的 RECORDING_INPUT_CONTRACT 登记 `pinned`；\n" +
+      "    ② 它不进像素 ⇒ 登记 `masked` / `offScreen`，并在 note 里写清**靠什么**不进\n" +
+      "       （被哪条 mask 遮着 / 为什么不在截图范围里）。",
+  ).toEqual([]);
+}
+
+/**
+ * 把画布的「生产数据」（`/api/production`）钉成**没有镜头**的形态。
+ *
+ * 为什么必须钉（这条是**实测**出来的，不是照着别的屏推的）：`ProjectCanvas` 挂载时
+ * 调 `fetchProduction()`，再把 `production.shots` 经 `materializeProductionShots()`
+ * **物化成画布节点** —— 有镜头就多出对应数量的节点，没有就原样返回。所以这一屏的
+ * 节点数直接由「本机 DB 里这个项目有没有 production 记录」决定。
+ *
+ * 实测：给这一屏临时喂两条镜头，`canvas.visual.spec.ts` 的「4 节点 / 3 边」断言
+ * **当场红**（变成了 6 个节点）——也就是说，在「建过表、且该项目存过生产数据」的机器上
+ * 录这份基线，录出来的会是一张**多两个节点**的图，而容器里是 4 个。
+ *
+ * 钉**不存在**（`{exists: false}`）而不是钉一组假镜头：`fetchProduction` 判的是
+ * `data.exists === true`，非真即 `null` —— 而「没有这一行」正是干净环境（容器 / CI）
+ * 的真形态，与 {@link freezeComfyStats} 钉成降级态同一个取向。「有镜头时画布长什么样」
+ * 不归页面级守，归 Storybook。
+ *
+ * 必须在 `goto` **之前**调（`page.route` 只拦它注册之后发出的请求）。
+ */
+export async function freezeProductionShots(page: Page): Promise<void> {
+  await page.route("**/api/production*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      /* 与真服务端「无该行」分支同形（`src/app/api/production/route.ts` 的 GET）。 */
+      body: JSON.stringify({ exists: false }),
+    }),
+  );
 }
