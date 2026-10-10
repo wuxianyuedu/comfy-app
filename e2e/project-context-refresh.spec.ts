@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { expectHomeReady } from "./support/home-anchors";
+
 /**
  * 「新建画布项目 → 刷新」之后用户仍在项目上下文里（ISSUE #1501）。
  *
@@ -53,9 +55,8 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
   test("新建 → 刷新 → 六个项目页签仍在「＋」菜单里", async ({ page }) => {
     await stubBackend(page);
     await page.goto("/workspace");
-    await expect(
-      page.getByRole("heading", { name: "灵感从这里开始" }),
-    ).toBeVisible();
+    /* 等首页渲染完成（锚点口径见 `support/home-anchors`）。 */
+    await expectHomeReady(page);
 
     /* 刷新前先确认菜单里**只有全局项** —— 否则下面「刷新后还在」可能只是因为
      * 它从一开始就不依赖 active-id，判据就失去意义。 */
@@ -76,8 +77,8 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
 
     /* reload 后要等界面重新稳定，否则点的是旧 DOM。
      *
-     * 等的是**项目页签重新装好**（`主页·未命名`），不是首页那颗标题 —— 这正是本
-     * 用例的关键：修复生效时用户**不回首页**，首页的「灵感从这里开始」在 reload
+     * 等的是**项目页签重新装好**（`主页·未命名`），不是首页那个入口卡 —— 这正是本
+     * 用例的关键：修复生效时用户**不回首页**，首页那四张入口卡在 reload
      * 后根本不该出现。判据写成「等首页标题」等于把断言钉在缺陷态上：修复一落地
      * 它反而红（判据成了缺陷的墓碑）。所以等的是「用户仍在项目里」这件事本身，
      * 它同时也是下面那条断言的主体。 */

@@ -3739,10 +3739,14 @@ const RULES = {
    * 的数值本身也是工具类里的硬编码字面量（规范 03 §3.2 反对的那一类）。
    *
    * 判据只管 **h1（屏级）**：属性段里必须出现屏级档
-   * （`u-title-page` / `u-title-hero` / `text-page` / `text-hero`），且不得再叠
-   * 硬写字号（`text-lg`、`text-[34px]` 这类）。`u-title-hero` 是有意留的第二档：
-   * 首页欢迎区的大标题确实不是屏级标题那一档，但例外必须有名字，不能留成某处
-   * 内联的 `text-[34px]` —— 否则「唯一档」这句话在第一屏就先破了。
+   * （`u-title-page` / `text-page`），且不得再叠硬写字号（`text-lg`、`text-[34px]`
+   * 这类）。
+   *
+   * 曾经还放行一档 `u-title-hero`（首页欢迎区那块大标题）。ISSUE #1691 把首页
+   * 那块欢迎区整个删了（标题是句口号、副标题把四张入口卡的说明重说一遍，两者占掉
+   * 首屏上沿约 150px），`--text-hero` 与 `.u-title-hero` 随之成为零消费者 —— 于是
+   * 这里只剩下唯一那一档。**别把这一档当「以后可能用得上」留着**：留着的代价是
+   * 「唯一档」这句话在后一个想写 `text-[34px]` 的人面前就不成立了。
    *
    * 区块级标题（h2 / h3）**不入本条**：那里刻意保留 10.5–14px 的多档微排版，
    * 并成一档会压平信息层次，那是另一件事，不该由这条判据顺手管。
@@ -3752,7 +3756,7 @@ const RULES = {
    * 粗锚 `[^>]*` 会在这两种写法上漏计。 */
   P83: {
     label:
-      "屏级标题 <h1> 未走字阶档 u-title-page / u-title-hero，或在 h1 上硬写字号（字号由档位给，不在调用点写）",
+      "屏级标题 <h1> 未走字阶档 u-title-page，或在 h1 上硬写字号（字号由档位给，不在调用点写）",
     count: (t) => {
       const t2 = stripComments(t);
       let n = 0;
@@ -3761,8 +3765,7 @@ const RULES = {
       while ((m = re.exec(t2)) !== null) {
         const attrs = readJsxAttrsPastTag(t2, re.lastIndex);
         if (attrs === null) continue;
-        const hasTier =
-          /\b(?:u-title-page|u-title-hero|text-page|text-hero)\b/.test(attrs);
+        const hasTier = /\b(?:u-title-page|text-page)\b/.test(attrs);
         const hardSize =
           /\btext-(?:xs|sm|base|md|lg|xl|2xl|3xl|4xl|5xl)\b|\btext-\[/.test(
             attrs,

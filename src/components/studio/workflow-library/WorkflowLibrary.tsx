@@ -17,8 +17,6 @@ import { WorkflowLibraryHeader } from "./WorkflowLibraryHeader";
 import { WorkflowLibraryList } from "./WorkflowLibraryList";
 import { WorkflowLibraryDetail } from "./WorkflowLibraryDetail";
 import { useWorkflowLibrary } from "./hooks/use-workflow-library";
-import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
-import { zClass } from "~/lib/shell/overlay-z";
 
 /**
  * 懒加载画布编辑器。它是个 7k 行的模块；把它挡在
@@ -32,13 +30,14 @@ const WorkflowCanvasEditor = dynamic(
     ),
   {
     ssr: false,
+    /* 分块还没到时的过渡屏 —— 与编辑器自己的加载态同一口径（ISSUE #1691 第 3 条）：
+     * **吃满内容列、不当整窗浮层**。`FullScreenLayer` 会连同侧栏与视图页签一起盖掉，
+     * 而用户要的是「加载只覆盖右侧部分」。编辑器**加载完成后**仍是全屏视图
+     * （那是它的形态，ISSUE #310），改的只是过渡那一段。 */
     loading: () => (
-      <FullScreenLayer
-        zClass={zClass("modal")}
-        className="bg-bg flex items-center justify-center"
-      >
+      <div className="bg-bg absolute inset-0 flex items-center justify-center">
         <PageLoading label="加载工作流编辑器…" />
-      </FullScreenLayer>
+      </div>
     ),
   },
 );

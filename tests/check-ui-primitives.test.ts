@@ -5442,8 +5442,13 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   /* ── P83「屏级标题不走字阶档 / 在 h1 上硬写字号」（棘轮）差分回归 ──────
    * 判据见 scripts/check-ui-primitives.cjs 里 P83 的注释：只管 h1（屏级），
-   * 属性段必须出现 u-title-page / u-title-hero / text-page / text-hero 之一，
-   * 且不得再叠 text-lg / text-[34px] 这类硬写字号。 */
+   * 属性段必须出现 u-title-page / text-page 之一，且不得再叠 text-lg /
+   * text-[34px] 这类硬写字号。
+   *
+   * 曾经还放行 `u-title-hero`：首页欢迎区那块大标题走的是它，ISSUE #1691 把那
+   * 块欢迎区删掉之后这一档连同 `--text-hero` 一起退役（零消费者）。下面这条
+   * 「合规出口」因此少了它，也**多了一条反例**（退役的档不许再当出口用）——
+   * 两侧都判，才不会出现「档删了、判据还放行」的静默失效。 */
   test("P83 h1 各屏自写字号 → 阻断", ({ repo }) => {
     repo.write(
       "src/components/studio/P83MissingTier.tsx",
@@ -5479,9 +5484,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("P83");
   });
 
-  test("P83 合规出口：u-title-page / u-title-hero / text-page 都不计", ({
-    repo,
-  }) => {
+  test("P83 合规出口：u-title-page / text-page 都不计", ({ repo }) => {
     repo.write(
       "src/components/studio/P83Ok.tsx",
       [
@@ -5489,7 +5492,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "  return (",
         "    <>",
         '      <h1 className="font-title u-title-page">模型库</h1>',
-        '      <h1 className="u-title-hero text-center">把创意变成成片</h1>',
         '      <h1 className="text-page">设置</h1>',
         "    </>",
         "  );",
@@ -5498,6 +5500,25 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     );
     const { code, output } = repo.run();
     expect(code, output).toBe(0);
+  });
+
+  test("P83 退役档不再是出口：h1 只挂 u-title-hero → 仍计", ({ repo }) => {
+    /* ISSUE #1691 把 `--text-hero` / `.u-title-hero` 连同首页欢迎区一起删了。
+     * 这一条钉的是「删干净」的另一半：档退役之后，判据不许还把它当合规出口 ——
+     * 否则下一个人挂一个已被删掉的类，P83 放行、而它根本没有样式（字号退回继承）。 */
+    repo.write(
+      "src/components/studio/P83RetiredTier.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <h1 className="u-title-hero text-center">把创意变成成片</h1>',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P83");
   });
 
   test("P83 数组 / cn(...) 形态的 className 要读得到档位（粗锚会在这里漏计）", ({
