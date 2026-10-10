@@ -32,6 +32,15 @@
  *   node scripts/pixel-run.mjs --dry-run    只打印本次会起什么（无副作用）
  *   node scripts/pixel-run.mjs              跑一次像素档（不落盘）
  *   node scripts/pixel-run.mjs --update     录基线（会写 PNG；落盘后请再跑一次自证）
+ *   node scripts/pixel-run.mjs --workers=1  降并发跑（**负载假红**那条出路，见下）
+ *
+ * ⚠️ **`--workers=N` 是「整批因负载失稳」时的出路，不是新的默认口径**（ISSUE #1620）。
+ * 判据是 §11.13 那句硬动作：整批红而**降并发（隔离）绿** ⇒ 红的是机器不是像素。
+ * 那时按 §11.13/§13.6.4 的口径降负载（杠杆是并发，**不是**抬阈值/加预算）跑一次，
+ * 绿了就照常记账 —— 因为这条账要证的是「这一档的基线在本机可复现」，而降并发那次
+ * 证的正是它。记账的 `how` 会写成 `pnpm check:visual --workers=N`，账面上因此分得开
+ * 「本机默认跑得动」与「本机得降并发才跑得动」。
+ * 这台机器**能稳定跑默认并发**时就不要用它：默认口径是唯一那一条，降并发只治负载。
  *
  * **起任何东西之前**先答一个前置问题（`checkLocalBaselines`）：「本机这个平台有没有
  * 成套基线」。没有就直接给出文件名与动作，且**不启动** webServer / 浏览器 —— 「本机
@@ -50,6 +59,7 @@ import {
   SUPPORTED_PLATFORMS,
   VISUAL_DIR,
   checkRecordingEnv,
+  freshnessTrack,
   isPlatformPending,
   isPlatformRegistered,
   missingBaselinesForPlatform,
@@ -186,16 +196,23 @@ export function checkLocalBaselines({ root, platform }) {
  * 返回 `kind` 而不是命令字符串，是为了让工具解析点只有一处（`runStep`），
  * 用例也只能判「跑哪一步」而不能判「拼出来的命令行长得像什么」。
  *
- * @param {{update?: boolean}} [opts]
+ * `workers` 是**负载假红**那条出路（§11.13，见 `--workers` 的用法）：给了就往
+ * Playwright 追加 `--workers=N`，覆盖 `playwright.config.ts` 的 `fullyParallel`。
+ * 它只降并发、不改断言与阈值 —— 后者是 §11.13 明令禁止的取巧（把「真挂死」一起放过）。
+ *
+ * @param {{update?: boolean, workers?: number | null}} [opts]
  * @returns {Array<{label: string, kind: "playwright" | "vitest", args: string[]}>}
  */
-export function planRuns({ update = false } = {}) {
+export function planRuns({ update = false, workers = null } = {}) {
   const playwrightArgs = ["test", VISUAL_DIR];
   // 检查档**必须**显式关掉落盘：Playwright 的默认是 `'missing'`（缺基线照样写文件），
   // 不写这一档就等于「默认不落盘」只对已有基线成立。
   playwrightArgs.push(
     update ? "--update-snapshots" : `--update-snapshots=${CHECK_UPDATE_MODE}`,
   );
+  // 只在显式要求时追加：不写 `--workers` 时走 `playwright.config.ts` 的默认并发，
+  // 「默认口径」因此仍是**唯一**的（降并发是一条按需的出路，不是新的默认）。
+  if (workers !== null) playwrightArgs.push(`--workers=${workers}`);
   return [
     {
       label: "像素档（Playwright screenshot）",
@@ -208,6 +225,34 @@ export function planRuns({ update = false } = {}) {
       args: [PIXEL_JUDGE],
     },
   ];
+}
+
+/**
+ * `--workers=<n>` 的解析 —— 降并发那条出路（§11.13）的入口。
+ *
+ * 三种答案，各自的动作不同：
+ *   · 没给 ⇒ `null`，走 `playwright.config.ts` 的默认并发（**默认口径不被改**）；
+ *   · 给了合法正整数 ⇒ 那个数，追加 `--workers=N`；
+ *   · 给了但不合法 ⇒ **抛**，由 `main` 转成退出码。静默当成「没给」是最坏的形态：
+ *     人会以为自己在降并发跑，实际仍是默认并发、又红一次，且看不出差别在哪。
+ *
+ * 上界不设：`--workers=64` 是使用者对这机器的判断，判据不该替他猜。下界必须是 ≥1
+ * 的整数 —— Playwright 对 `--workers=0` / 非数字只回一句语焉不详的用法错误。
+ *
+ * @param {string[]} argv
+ * @returns {number | null}
+ */
+export function parseWorkers(argv) {
+  const hit = argv.find((a) => a === "--workers" || a.startsWith("--workers="));
+  if (hit === undefined) return null;
+  const raw = hit.includes("=") ? hit.slice(hit.indexOf("=") + 1) : "";
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new Error(
+      `[pixel-run] --workers 需要一个 ≥1 的整数（收到 "${hit}"）—— ` +
+        "它是**降并发**那条出路（整批因负载失稳时用），不是新的默认口径。",
+    );
+  }
+  return Number(raw);
 }
 
 /**
@@ -264,9 +309,7 @@ function childEnv() {
  */
 function runStep(step) {
   const entry =
-    step.kind === "playwright"
-      ? resolvePlaywrightCli()
-      : resolveVitestEntry();
+    step.kind === "playwright" ? resolvePlaywrightCli() : resolveVitestEntry();
   return spawnSync(process.execPath, [entry, ...step.args], {
     cwd: ROOT,
     env: childEnv(),
@@ -300,18 +343,41 @@ function runStep(step) {
  * 写账失败（只读挂载等）不算跑像素的失败 —— 像素的结论已经拿到了，返 1 会把两件事
  * 混成一句「像素档挂了」。所以这里只提示。
  *
- * @param {{platform: string, update: boolean}} args
+ * ⚠️ **降并发跑出来的绿一样记，但 `how` 必须写出真实的并发**（ISSUE #1620）：
+ * 机器的 dev server 在默认 `fullyParallel` 下会因**负载**失稳（整批红、降并发就绿，
+ * 见 §11.13），而这条账要证的是「这一档的基线在本机可复现」—— 负载假红证的正是它。
+ * 若把降并发那次记成名义命令 `pnpm check:visual`，账面上就分不出「本机默认跑得动」
+ * 与「本机得降并发才跑得动」，下一个人按名义命令复跑必红、却指不出差别在哪。
+ *
+ * @param {{platform: string, update: boolean, workers?: number | null}} args
  * @returns {string | null} 给输出用的一句读数（不记时不返回内容）
  */
-export function recordFreshness({ platform, update }) {
+export function recordFreshness({ platform, update, workers = null }) {
   if (update) return null;
   const { note } = writeFreshness({
     root: ROOT,
     kind: "visual",
     who: gitUser(platform),
+    // 与 `planRuns` 同源拼法（§12.12）：两处各写一遍时，「实际怎么跑的」与「账上记的
+    // 怎么跑的」会漂成两件事 —— 而那正是这一栏存在的意义。
+    how: pixelCommand({ workers }),
   });
-  const how = `CI=${webserverForEnv(process.env) === "start" ? "true" : ""} pnpm check:visual`;
+  const how = `CI=${webserverForEnv(process.env) === "start" ? "true" : ""} ${pixelCommand({ workers })}`;
   return `${note}（本次口径：\`${how}\`）`;
+}
+
+/**
+ * 像素档「能照着重跑」的那条命令 —— **唯一**的拼法出处（`how` 栏与输出都用它）。
+ *
+ * 名义跑法取 `FRESHNESS_TRACKS.visual.run`（`pnpm check:visual`），降并发时把
+ * `--workers=N` 缀在后面。抽出来是为了让「实际跑的」与「账上记的」不可能漂。
+ *
+ * @param {{workers?: number | null}} [opts]
+ * @returns {string}
+ */
+export function pixelCommand({ workers = null } = {}) {
+  const base = freshnessTrack("visual").run;
+  return workers === null ? base : `${base} --workers=${workers}`;
 }
 
 /**
@@ -327,8 +393,10 @@ export function recordFreshness({ platform, update }) {
 export function gitUser(fallback) {
   return (
     process.env.GIT_AUTHOR_NAME ||
-    spawnSync("git", ["config", "user.name"], { cwd: ROOT, encoding: "utf8" })
-      .stdout?.trim() ||
+    spawnSync("git", ["config", "user.name"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    }).stdout?.trim() ||
     fallback
   );
 }
@@ -352,6 +420,18 @@ function describeStep(step) {
 function main(argv) {
   const update = argv.includes("--update");
   const dryRun = argv.includes("--dry-run");
+  /* 降并发那条出路的入参。解析失败时**当场**退出，不静默当「没给」——
+   * 后者会让人以为自己在降并发跑（见 `parseWorkers` 的注释）。 */
+  let workers;
+  try {
+    workers = parseWorkers(argv);
+  } catch (err) {
+    process.stderr.write(
+      `${err instanceof Error ? err.message : String(err)}\n` +
+        "        用法：node scripts/pixel-run.mjs [--update] [--dry-run] [--workers=N]\n",
+    );
+    return 4;
+  }
   // 「本机没有基线」在起任何东西之前先答：它是一个零代价就能命名的状态，让人先付
   // 建服务 + 起浏览器的代价再从 Playwright 输出里读出来，属于白花的那份钱。
   // `--update` 是**录基线**那一路 —— 缺基线正是它要治的病，所以它不受这一闸拦。
@@ -386,13 +466,22 @@ function main(argv) {
     );
     return 3;
   }
-  const runs = planRuns({ update });
+  const runs = planRuns({ update, workers });
   if (dryRun) {
     for (const step of runs) {
-      process.stdout.write(`[pixel-run] ${step.label} → ${describeStep(step)}\n`);
+      process.stdout.write(
+        `[pixel-run] ${step.label} → ${describeStep(step)}\n`,
+      );
     }
     process.stdout.write(
       "[pixel-run] 说明：默认只在当次检出自证、不落盘；`--update` 才写基线\n",
+    );
+    // 并发口径打在台面上：`--workers` 是**这次**才生效的，而它也正是「跑绿怎么记」
+    // 那一栏的内容（`how` 跟着它走），不说清等于让人从账面上猜。
+    process.stdout.write(
+      workers === null
+        ? "[pixel-run] 并发：playwright.config.ts 的默认（`--workers` 未给）\n"
+        : `[pixel-run] 并发：显式降到 ${workers} 个 worker（记账的 how 会写成 \`${pixelCommand({ workers })}\`）\n`,
     );
     // 前置判决的结果也打出来：`--dry-run` 是「无副作用地问一遍这机器能不能跑」，
     // 它若只打印命令行而不答这一问，人还是得真跑一次才知道本机有没有基线。
@@ -440,7 +529,11 @@ function main(argv) {
     );
     /* 跑绿即记账（§11.8 的基线新鲜度账）：**录基线不记**（写成功不是自证）、
      * **红着不记**（跑过 ≠ 跑绿过）。这一步让「定期跑一次」有了落点。 */
-    const note = recordFreshness({ platform: process.platform, update });
+    const note = recordFreshness({
+      platform: process.platform,
+      update,
+      workers,
+    });
     if (note) process.stdout.write(`[pixel-run] ${note}\n`);
     return 0;
   }
