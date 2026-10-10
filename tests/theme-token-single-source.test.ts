@@ -182,7 +182,7 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       "--container-",
       "--z-index-", // 层级刻度
       "--radius-", // 圆角刻度
-      "--text-", // 字阶刻度（.u-title / .u-title-page / .u-title-stage / .u-title-hero）
+      "--text-", // 字阶刻度（.u-title / .u-title-page / .u-title-stage 三档具名）
       /* 品牌渐变的**组成**（`--gradient-brand`）。它不是颜色别名、也不属 `--color-`
          家族 —— 是把「三段 stop 怎么排」收成一个有名字的东西，落点是 `.btn-gradient`
          与页签选中态的色条。原先这串组成只活在 `.btn-gradient` 一处，第二处要用就

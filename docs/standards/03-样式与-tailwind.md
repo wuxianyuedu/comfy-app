@@ -327,7 +327,8 @@ import "@/styles/json-viewer.css";
 表面的颜色」？** 前者可留，后者必改。
 
 > **同一行里的文字色与底色要分开判**：类型 chip 是典型 —— chip 的**文字色**
-> （`#7C5CFC` 等）是端口类型色，属本条可留；chip 的**载体底**（原先写死
+> （`#a78bfa` 等，见 `workflow-param-mapping-ui.ts` 的 `PARAM_CLASS_COLOR`
+> 与 `canvas-types.ts` 的类别色表）是端口类型色，属本条可留；chip 的**载体底**（原先写死
 > `#1E1A2E` / `#331A28`）是「一块承载类型色的表面」，浅色下不能还是近黑，
 > 必须 token 化（`--color-chip-type-image-bg` / `--color-chip-type-video-bg`）。
 > 判据按「这一层画的是什么」逐层过，而不是按「这个文件里是不是类型色」整块放行。
@@ -520,7 +521,7 @@ pnpm theme:check    # 同时含 ①②③ 三条硬闸：命中即 exit 1 并点
 ### 3.6.2 品牌/状态色必须走语义 token（ISSUE #672，机器强制）
 
 「改一处样式、全站生效」的前提是**颜色有单一事实来源**。实测出的反例：
-`--color-primary: #7c5cfc` 定义得好好的，但 `ui/confirm-dialog.tsx` 写死
+`--color-primary`（那时有值 `#7c5cfc`）定义得好好的，但 `ui/confirm-dialog.tsx` 写死
 `violet-500/600` 6 处、`ui/status-badge.tsx` 写死 44 处
 `emerald/violet/amber/red`、`ui/page-loading.tsx` 写死 `border-violet-500` ——
 把 primary 改成蓝色，这些地方仍然是紫的，视觉体系当场破功。
@@ -560,9 +561,13 @@ pnpm theme:check    # 同时含 ①②③ 三条硬闸：命中即 exit 1 并点
 | 节点参数值 | `--color-widget-value` / `--color-widget-value-dim` | 画布节点（WorkflowNode / 子图 / rgthree）参数行的值文本：未连线取主档、已连线取低一档（暗色档=纯白、已连线比纯白暗一档；浅色档不照抄白，否则白底上消失） |
 
 **「同一个原色在两个位置上取不同值」是正常的，别用同一份写死值糊过去**：
-品牌紫 `#7c5cfc` 当底色可以、当浅底上的文字色对比度不够 —— 所以有
-`--color-primary`（底）与 `--color-primary-strong`（字）两颗 token。
-这正是不该写死的原因：写死的那一处无法表达这个区分。状态色同理：
+品牌当**底**与当**字**要两颗 token —— 所以有 `--color-primary`（底）与
+`--color-primary-strong`（字）。这条理由在品牌紫深化之后**更硬而不是更软**：
+旧 `#7c5cfc` 白字压它只有 **4.38**（低于 WCAG AA 正文的 4.5，即实心 CTA 上的白字一直在
+及格线下），深化后的 `#8557de` 是 **4.76**（刚过线），而「当字」那一档单独取 `#6230cc`
+（**7.46**）—— 三个读数都在 `docs/DESIGN.md` 的 Colors 表与那张 WCAG 算式表里可复算。
+写死的那一处无法表达这个区分，也无法让这种「一处改动全站跟手」的修正落到 CTA 上。
+状态色同理：
 `warning` / `success` / `info` / `danger` 各自都有「当底的原色」与
 「浅底上当字的 `*-strong` 档」。
 
