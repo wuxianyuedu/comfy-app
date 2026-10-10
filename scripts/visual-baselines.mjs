@@ -731,21 +731,73 @@ export function checkFreshnessLedger(
       const waiver = ["skippedReason", "dirtyReason"].find(
         (f) => typeof rec[f] === "string" && rec[f].trim(),
       );
-      if (waiver) {
-        if (!isUsableSkipReason(rec[waiver])) {
-          problems.push(
-            `${track.label}（${key}）的${waiver === "dirtyReason" ? "「不吃这一档」" : "豁免"}理由` +
-              `（"${String(rec[waiver]).trim()}"）不算「有人回答过」—— ` +
-              `留下的是一条能被复核的事实，占位词与过短的理由什么都没留下。` +
-              `写清这次为什么不跑，或直接跑一次 \`${track.run}\`。`,
-          );
-        }
-      } else {
-        const ms = Date.parse(String(rec.verifiedAt ?? ""));
+      const waiverUsable =
+        waiver !== undefined && isUsableSkipReason(rec[waiver]);
+      /* **豁免只替它写在的那一天作证。**
+       *
+       * 这不是新口径，是把已有口径接上判据：写入侧 `writeSkipRecord` 把 `verifiedAt`
+       * 戳成「此刻」，`--skip` 的用法原文写着「**今天**不跑，记一条写明理由的豁免」
+       * （`e2e-run.mjs` 的文件头），而那一段注释点名的要防形态正是
+       * 「这一档三个月没跑」与「这三个月每次都说不跑」长得一模一样。
+       * 此前判据在这一支**从不比这个日期** —— 一条理由一旦写下就替未来每一天作证，
+       * 于是「每日自证」这一档在有人懒得跑的日子里其实一直是绿的，而台面上看不出来。
+       * 本机实测：`scripts/.e2e-freshness.json` 挂着一条 2026-10-08 的豁免，
+       * 此后 e2e 那 80 条 spec（29 条 `@critical`）没有一次被自动跑过。
+       *
+       * 过期之后**不另判一种红**，而是把这一档交回它自己的口径：`freshnessVerdict`
+       * 读 `dirty` / `graceMs` / `dirtySince`，所以「不必每天跑」的两档照样有宽限，
+       * 而按日历日判的 e2e 那档当场要今天的凭证 —— 差异仍然全在数据上，不在分支里。 */
+      const waiverMs = waiverUsable ? Date.parse(at) : Number.NaN;
+      const waiverToday =
+        !Number.isNaN(waiverMs) && isSameLocalDay(new Date(waiverMs), now);
+      if (waiver && !waiverUsable) {
+        problems.push(
+          `${track.label}（${key}）的${waiver === "dirtyReason" ? "「不吃这一档」" : "豁免"}理由` +
+            `（"${String(rec[waiver]).trim()}"）不算「有人回答过」—— ` +
+            `留下的是一条能被复核的事实，占位词与过短的理由什么都没留下。` +
+            `写清这次为什么不跑，或直接跑一次 \`${track.run}\`。`,
+        );
+      } else if (
+        waiverToday &&
+        waiver === "dirtyReason" &&
+        dirtySince !== null &&
+        (track.dirty ?? []).length > 0
+      ) {
+        /* 「这次改动不吃这一档」是一句**能被当天的事实驳倒**的话。
+         *
+         * `dirtySince` 就是这一档输入面今天的第一个提交 —— 两者同时成立时那句不成立。
+         * 存量现场：`scripts/.full-suite-freshness.json` 里有一条写着
+         * 「本 PR 只接三档每日自证的机制（scripts/ + tests/ + docs），未动 src/」，
+         * 而这一档的输入面正是 ["src/", "tests/"]：那句话与写下它的那次提交相反。
+         * 旧判据从不拿 `dirtySince` 去核这句，于是整档当天免跑，而账面上完全正常
+         * （合法的日期 + 人名 + 一条读得通的理由）—— 与 §11.23 那一族同形。
+         *
+         * `skippedReason` **不**受这条反驳：它承认这一档相关、只声明今天没跑，
+         * 所以只受日期过期约束（每天都要重写一次）。两条出路的分工正在这里 ——
+         * 一条声明事实（可以被核伪），一条陈述决定（只能过期）。 */
+        problems.push(
+          `${track.label}（${key}）的 \`dirtyReason\` 说这次改动不吃这一档，而今天有提交` +
+            `动过它的输入面（${track.dirty.join(" / ")}，第一个在 "${dirtySince.toISOString()}"）` +
+            " —— 这句话与事实相反。\n" +
+            `        出路：跑一次 \`${track.run}\`（跑绿即记）。` +
+            "确实只改文档、这一档不受影响时不必写 `--dirty`（那条是事实声明）；" +
+            "今天故意不跑就写 `--skip`，那句是决定、只替今天作证。",
+        );
+      } else if (!waiverToday) {
+        const ms = Date.parse(at);
         if (!Number.isNaN(ms)) {
-          const at = new Date(ms);
-          const stale = freshnessVerdict({ track, at, now, dirtySince });
-          if (stale) problems.push(`${track.label}（${key}）${stale}`);
+          const at2 = new Date(ms);
+          const stale = freshnessVerdict({ track, at: at2, now, dirtySince });
+          if (stale) {
+            problems.push(
+              `${track.label}（${key}）${stale}` +
+                (waiver
+                  ? `\n        （上一条是${waiver === "dirtyReason" ? "「不吃这一档」" : "豁免"}、写在 "${at}" —— ` +
+                    `上面那句里的日期是**那次回答的时刻**，不是跑绿的凭证。` +
+                    `豁免只替它写在的那一天作证；过了当天，这一档回到自己的口径上判。）`
+                  : ""),
+            );
+          }
         }
       }
     }
@@ -777,7 +829,11 @@ export function readFreshnessLedgerAt(root, rel) {
     const parsed = /** @type {unknown} */ (
       JSON.parse(readFileSync(path.join(root, rel), "utf8"))
     );
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
       return {};
     }
     return /** @type {Record<string, unknown>} */ (parsed);
