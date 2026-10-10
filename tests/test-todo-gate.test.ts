@@ -16,7 +16,10 @@
  *      静默退回「没有台账」会让有站点时判据空转（§11.18.3 首版那个 `include: []`
  *      却退 0 的 bug 同族；§11.21 建判据时它真的发生过）。
  *   ⑦ `describe.todo` / `test.todo` 同族（该拦）：整块不跑的后果更重，不能只认 `it.todo`。
+ *   ⑧ **文件在扫描期间消失**（该放，且必须数出来）：见下面那条用例的注释。
  */
+import { createRequire } from "node:module";
+import path from "node:path";
 import { describe, expect } from "vitest";
 import { defineGateRepo, type GateRepo } from "./helpers/gate-repo";
 
@@ -41,7 +44,11 @@ const WITH_SITE = `${HEAD}describe("p", () => {
 `;
 
 const LEDGER = `${JSON.stringify(
-  { consumers: [{ who: "scripts/xxx.mjs", how: "读 --reporter=json 的 numTodoTests" }] },
+  {
+    consumers: [
+      { who: "scripts/xxx.mjs", how: "读 --reporter=json 的 numTodoTests" },
+    ],
+  },
   null,
   2,
 )}
@@ -161,5 +168,23 @@ describe("test.todo 消费方门禁：该拦的形状（§11.24）", () => {
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("不是数组");
+  });
+});
+
+/**
+ * ⑧ 「列到名字、读时已没」这一支只能在进程内判：临时仓库 + 子进程那条路造不出
+ * 这个时刻（造得出就只能靠删文件的时机，那是一次概率窗口，判据不许长在上面）。
+ * 现场与口径同 `tests/test-it-each-gate.test.ts` 的同名用例 ——
+ * `tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造探针再删，
+ * 两个 vitest 同跑时本扫描会撞上空档，于是 D 组带着一个 Node 栈崩掉。
+ */
+const { readForScan } = createRequire(import.meta.url)(
+  "../scripts/check-test-todo.cjs",
+) as { readForScan: (abs: string) => string | null };
+
+describe("扫描期间文件消失（并发探针）", () => {
+  test("读不到的文件返回 null，而不是把整个 D 组带崩", () => {
+    const gone = path.resolve(__dirname, ".setup-cleanup-probe-0-0.test.tsx");
+    expect(readForScan(gone)).toBeNull();
   });
 });

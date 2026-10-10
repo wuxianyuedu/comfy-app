@@ -238,12 +238,35 @@ function readLedger() {
   return json.consumers;
 }
 
+/**
+ * 读一份文件；在「列目录 → 读内容」之间消失时返回 `null`。
+ * 现场与口径同 `check-test-it-each.cjs` / `check-test-sleep.cjs` /
+ * `check-test-waitfor.cjs`：`tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造
+ * `.setup-cleanup-probe-*.test.tsx` 再删，两个 vitest 同跑时本扫描就会撞上空档，
+ * 于是 D 组带着一个 Node 栈崩掉（报错里没有一个字指向改动）。
+ * 但**不许静默**：消失数要计数并打印，静默跳过等于让判据在它其实没读过的目录上绿。
+ */
+function readForScan(abs) {
+  try {
+    return fs.readFileSync(abs, "utf8");
+  } catch (error) {
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
 function main() {
   const files = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)));
   const sites = [];
+  let vanished = 0;
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    const masked = maskNonCode(fs.readFileSync(abs, "utf8"));
+    const raw = readForScan(abs);
+    if (raw === null) {
+      vanished += 1;
+      continue;
+    }
+    const masked = maskNonCode(raw);
     for (const m of masked.matchAll(TODO_SITE_RE)) {
       sites.push({
         rel,
@@ -251,6 +274,11 @@ function main() {
       });
     }
   }
+  /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。 */
+  const vanishedNote =
+    vanished > 0
+      ? `\n  ⚠️ 另有 ${vanished} 份文件在扫描期间消失（并发用例的临时探针），本轮未读。`
+      : "";
 
   /* 台账先读、哪怕零站点：`readLedger()` 缺失即抛，于是「零站点通过」这个结论
      由「台账在、只是没内容」担保，而不是由「台账根本没有」担保。 */
@@ -265,7 +293,8 @@ function main() {
   if (sites.length === 0) {
     console.log(
       "[test-todo] OK —— 0 处 `test.todo` 站点" +
-        `（本判据是纯闸门：对象是「下一次有人留一条还没做的用例」；台账在场，${consumers.length} 条登记）。`,
+        `（本判据是纯闸门：对象是「下一次有人留一条还没做的用例」；台账在场，${consumers.length} 条登记）。` +
+        vanishedNote,
     );
     return 0;
   }
@@ -291,9 +320,14 @@ function main() {
   }
 
   console.log(
-    `[test-todo] OK —— ${sites.length} 处 todo 站点，消费方 ${consumers.length} 条登记。`,
+    `[test-todo] OK —— ${sites.length} 处 todo 站点，消费方 ${consumers.length} 条登记。` +
+      vanishedNote,
   );
   return 0;
 }
 
-process.exit(main());
+/* 与 `check-test-it-each.cjs` 同形：只有作为脚本运行才执行并定退出码，
+   被 `require` 时（判据自测要进程内调 `readForScan`）不许把宿主进程一起带走。 */
+if (require.main === module) process.exit(main());
+
+module.exports = { readForScan };
