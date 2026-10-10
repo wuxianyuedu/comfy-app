@@ -3,11 +3,11 @@ version: alpha
 name: Comfy-APP-T3
 description: 桌面端创作工具的设计契约。从 `src/app/globals.css` 的 Tailwind v4 主题、`src/components/ui` 那一批基元（份数随轮次变，本文一律不抄 —— 复算看 §Components 开头那两条命令）与 `docs/standards` 的样式/a11y/组件规范反推而来；每一态的取值由 CSS token 负责，本文件记录的是「名字该是谁、值随谁变」。
 colors:
-  primary: "#7c5cfc"
+  primary: "#8557de"
   on-primary: "#ffffff"
-  primary-strong: "#6d28d9"
-  primary-solid: "#8b5cf6"
-  primary-soft: "#f1ecff"
+  primary-strong: "#6230cc"
+  primary-solid: "#8d50e2"
+  primary-soft: "#f2ecff"
   accent: "#ff5ca8"
   accent-deep: "#c026d3"
   ink: "#1a1a1f"
@@ -144,7 +144,7 @@ components:
     height: 32px
     padding: "0px 10px"
   button-primary-solid-hover:
-    backgroundColor: "#7c3aed"
+    backgroundColor: "#7a3fd0"
     textColor: "{colors.on-primary}"
     rounded: "{rounded.lg}"
     height: 32px
@@ -298,10 +298,10 @@ components:
 
 | 角色 | token | 浅色 | 深色 | 用在哪 |
 | --- | --- | --- | --- | --- |
-| 品牌主色（当**底**） | `--color-primary` | `#7c5cfc` | 同值 | `bg-primary/15`、焦点环、`.btn-gradient` 起点 |
-| 品牌文字/图标档 | `--color-primary-strong` | `#6d28d9` | `#a78bfa` | 浅底上的品牌紫字（原 `violet-700/400`） |
-| 品牌实心档 | `--color-primary-500` / `-600` | `#8b5cf6` / `#7c3aed` | 同值 | 实心 CTA、spinner 描边 |
-| 品牌浅底 | `--color-primary-soft` | `#f1ecff` | `#221c3a` | 图标托底、选中项底；**也是深底上的浅字档** |
+| 品牌主色（当**底**） | `--color-primary` | `#8557de` | 同值 | `bg-primary/15`、焦点环、`.btn-gradient` 起点 |
+| 品牌文字/图标档 | `--color-primary-strong` | `#6230cc` | `#b79bff` | 浅底上的品牌紫字（原 `violet-700/400`） |
+| 品牌实心档 | `--color-primary-500` / `-600` | `#8d50e2` / `#7a3fd0` | 同值 | 实心 CTA、spinner 描边 |
+| 品牌浅底 | `--color-primary-soft` | `#f2ecff` | `#251d40` | 图标托底、选中项底；**也是深底上的浅字档** |
 | 第二品牌 / 品红 | `--color-accent` / `--color-accent-soft` | `#ff5ca8` / `#ec4899` | 同值 / `#ff8ac4` | 指示条渐变终点、CTA 渐变终点 |
 | 品牌渐变中间档 | `--color-accent-deep` | `#c026d3` | 同值（刻意） | `.btn-gradient` 的 50% 那一段（起点 `--color-primary-600`、终点 `--color-accent-soft`，两端不另设 token） |
 | 品牌实心底上的字 | `--color-on-brand` | `#ffffff` | 同值 | **它由「底」决定，不是独立美术选择** |
@@ -323,7 +323,7 @@ components:
 | 状态点**光晕**（绿） | `--color-glow-success` | `#0ea472` | `#34d399` | 浅色档就是 `var(--color-success)` 本体；深色档换 400 档浅彩。**两态都必须有**，理由与对比读数见 Known Gaps 那条 |
 | 状态点**光晕**（琥珀） | `--color-glow-warning` | `#d97706` | `#fbbf24` | 同上，浅色 = `var(--color-warning)` |
 | 状态点**光晕**（红） | `--color-glow-danger` | `oklch(0.577 0.245 27.325)` ⇒ `#e7000b` | `#fb7185` | 同上，浅色 = `var(--color-destructive)`（那颗是超色域 oklch，此格按换算读数写，判据会跳过它 —— 与上方 `--color-destructive` 那一行同格式） |
-| 品牌**光晕**（紫） | `--color-glow-brand` | `#7c5cfc` | `#a78bfa` | 画布设置按钮那颗小点；连线的光晕直接用 `var(--color-primary)`（它本来就是这个色） |
+| 品牌**光晕**（紫） | `--color-glow-brand` | `#8557de` | `#b79bff` | 画布设置按钮那颗小点；连线的光晕直接用 `var(--color-primary)`（它本来就是这个色） |
 | 警告 | `--color-warning` / `--color-warning-strong` | `#d97706` / `#b45309` | `#f59e0b` / `#fbbf24` | 待处理/排队 |
 | 信息 | `--color-info` / `--color-info-strong` | `#2563eb` / `#1d4ed8` | `#5bc6ff` / `#7dd3fc` | 链接/提示 |
 | 在线状态 | `--color-status-online` | `#047857` | `#33d499` | 「本机/在线」点与字 |
@@ -338,7 +338,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ### 「一个色相，两个位置，两个值」是本库的核心语法
 
-`--color-X` 与 `--color-X-strong` **不是重复，是必需的**：品牌紫 `#7c5cfc` 当底色可以，当浅底上的文字色对比度不足。同理 `warning` / `success` / `info` / `danger` 各有「当底的原色」与「浅底上当字的 `*-strong`」。
+`--color-X` 与 `--color-X-strong` **不是重复，是必需的**：品牌紫 `#8557de` 白字压它 4.76、当浅底上的文字色也是 4.76 —— **刚过 AA 的下限**，小字与图标仍偏轻，所以「当字」这一档单独取 `#6230cc`（7.46）。旧值 `#7c5cfc` 是 4.38，**连当底都不达标**（实心 CTA 上的白字一直在及格线下），这一档就是为补那个洞而深化的。同理 `warning` / `success` / `info` / `danger` 各有「当底的原色」与「浅底上当字的 `*-strong`」。
 
 再加一条更细的：**「浅底上的字」与「深底上的字」也是两颗 token**。影片时间轴片段底是深色渐变，上面的浅琥珀字用 `--color-warning-soft`（两态同值）；浅底上的琥珀字用 `--color-warning-strong`（深色下落亮）。两者在深色下取值接近、在浅色下**相反**——**借错了不报错，只是浅色下看不清**。
 
@@ -512,7 +512,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 - 软底（tinted）五支：`primary|danger|success|warning|info` = `bg-<色>/10..15` + `text-<色>-strong`。对应视图里 400 处手写 `<button>` 的主流形态。
 - 实心四支：`primary-solid|danger-solid|success-solid|warning-solid` = `bg-<色> text-primary-foreground`。`warning-solid` 用 `bg-warning-strong`——实心琥珀必须取深一档才压得住白字。
-- 品牌渐变一支：`gradient` = `.btn-gradient` + `text-on-brand`。它的**底是一条三段渐变**，压不进 frontmatter 那套只期望色值的 `backgroundColor`，所以底色只在正文记：起点 `{colors.primary-solid}` 的深一档 `--color-primary-600`(`#7c3aed`) → 中间 `{colors.accent-deep}`(`#c026d3`) → 终点 `--color-accent-soft`(浅 `#ec4899` / 深 `#ff8ac4`)。⇒ **暗色下这条渐变会比历史上亮一档**（终点自带深档），那是 token 化的既定后果。hover 观感来自 `.btn-gradient` 的 `filter: brightness(1.08)`，变体刻意不再叠 `hover:bg-*`。
+- 品牌渐变一支：`gradient` = `.btn-gradient` + `text-on-brand`。它的**底是一条三段渐变**，压不进 frontmatter 那套只期望色值的 `backgroundColor`，所以底色只在正文记：起点 `{colors.primary-solid}` 的深一档 `--color-primary-600`(`#7a3fd0`) → 中间 `{colors.accent-deep}`(`#c026d3`) → 终点 `--color-accent-soft`(浅 `#ec4899` / 深 `#ff8ac4`)。⇒ **暗色下这条渐变会比历史上亮一档**（终点自带深档），那是 token 化的既定后果。hover 观感来自 `.btn-gradient` 的 `filter: brightness(1.08)`，变体刻意不再叠 `hover:bg-*`。
 - size 8 档：`default`(h-8/32px) `xs`(h-6) `sm`(h-7) `lg`(h-9) + `icon`/`icon-xs`/`icon-sm`/`icon-lg`。
 - `ButtonLink`（同目录）渲染成 `next/link`，**共用同一套 variant/size**——Base UI 没有 `asChild`，所以是单独封装而不是包一层。
 

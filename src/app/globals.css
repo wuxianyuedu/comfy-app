@@ -6,18 +6,24 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Brand — refined violet/magenta (liblib-style), kept desaturated, no neon glow */
-  --color-primary: #7c5cfc;
-  --color-primary-hover: #6a47e8;
+  /* Brand — violet，比旧档（#7c5cfc）深一档、艳一档。
+     ⚠️ 这一档是**量出来的**，不是审美选择：旧 `--color-primary` 白字压它 4.38、
+     `--color-primary-500` 4.23，**都不够 WCAG AA 的 4.5** —— 实心 CTA 上的白字
+     一直在及格线下。现在 primary 4.76 / 500 4.80 / 600 6.09 / hover 6.16 全过。
+     色相刻意留在 260° 一带而不是换族：`info` 是蓝(221°)、`success` 绿(160°)、
+     `warning` 琥珀(38°)、`danger` 红(357°)、`accent` 品红(332°)，
+     换蓝/绿/橙都会撞进一个状态语义（§3.6.2 立这条就是为了防这个）。 */
+  --color-primary: #8557de;
+  --color-primary-hover: #7445c6;
   /* 品牌强调档：深紫字（浅色）/ 亮紫字（深色）——徽标文字与图标用。
-     与 `--primary`（品牌原色，浅色下当底色用）分开：同一个原色在浅底上当
-     文字色对比度不足，故「品牌」在两个位置上取的是两个值，而不是各处
-     自己写 `violet-*`（ISSUE #672：改一次品牌色要改 72 个文件）。 */
-  --color-primary-strong: #6d28d9;
-  /* 品牌原色档：浅色下当「实心按钮底」用（violet-500 同值） */
-  --color-primary-500: #8b5cf6;
-  --color-primary-600: #7c3aed;
-  --color-primary-soft: #f1ecff;
+     与 `--primary`（品牌原色，浅色下当底色用）分开：`primary` 现在自己过 AA，
+     但当**小字**仍偏轻（4.76 vs 这一档 7.46），所以「品牌」在两个位置上取的
+     是两个值，而不是各处自己写 `violet-*`（ISSUE #672：改一次品牌色要改 72 个文件）。 */
+  --color-primary-strong: #6230cc;
+  /* 品牌实心档：浅色下当「实心按钮底」用（白字压它 4.80） */
+  --color-primary-500: #8d50e2;
+  --color-primary-600: #7a3fd0;
+  --color-primary-soft: #f2ecff;
   /* 警告色浅底上的文字档（浅色）：`--color-warning-strong` 是「浅底上的琥珀
      文字」，深色下它会变亮；而深色渐变底（影片时间轴片段）需要的是
      「暗底上的浅琥珀字」，与它取的是两侧。 */
@@ -29,7 +35,7 @@
   /* 极光晕的三档色相（装饰性背景，两态同名 —— 浅色下靠外面那层
      `opacity-*` 调低，深色下配 `mix-blend-screen`）。强度由使用处的
      `AuroraGlow` alpha 决定，不在这里再出一份 token。 */
-  --color-aurora-violet: #8b5cf6;
+  --color-aurora-violet: #8d50e2; /* 极光晕的紫档：跟着品牌实心档走 */
   --color-aurora-cyan: #22d3ee;
   --color-aurora-magenta: #ff5ca8;
   /* 画布连线的四色渐变（项目画布与工作流编辑器共用同一套观感）：
@@ -354,11 +360,11 @@
   --color-border: #26262e;
   --color-border-subtle: rgb(255 255 255 / 0.06);
   --color-ink: #ededf2;
-  --color-primary-soft: #221c3a;
+  --color-primary-soft: #251d40;
   --color-warning-soft: #fde8c0; /* 深色档：渐变底上的浅琥珀字（与浅色档同值） */
-  --color-primary-strong: #a78bfa; /* 深色下品牌文字改亮紫（violet-400 同值） */
-  --color-primary-500: #8b5cf6;
-  --color-primary-600: #7c3aed;
+  --color-primary-strong: #b79bff; /* 深色下品牌文字改亮紫（压深底 7.99，旧值 6.74）*/
+  --color-primary-500: #8d50e2;
+  --color-primary-600: #7a3fd0;
   /* ── immersive / editor surface overrides（同上方的 surface 组）── */
   --color-canvas: #0a0a0f; /* 画布/工作区背景 */
   --color-port-surface: #0b0b10; /* 端口圆点的载体色：节点内层面板（深色） */
@@ -431,7 +437,7 @@
   --color-glow-success: #34d399;
   --color-glow-warning: #fbbf24;
   --color-glow-danger: #fb7185;
-  --color-glow-brand: #a78bfa;
+  --color-glow-brand: #b79bff; /* 深色档用浅彩（压 #14141a 有 7.99，旧值 6.74）*/
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
   --color-accent-deep: #c026d3; /* 深色档：刻意与浅色同值（品牌渐变不随主题换色相，理由见 @theme） */
