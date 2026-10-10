@@ -281,6 +281,11 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 溢出卡片下沿 39px）—— 那是这一类 story 的**直接产物**。与本次暂存改动无关也必须响
   // （它是「下一次有人写这一族 story」的守卫），所以进固定清单。
   "tests/storybook-message-center-sources.test.ts",
+  // 「工作流运行 → story」注入层（`TaskLogTimeline` 那一族）：它读的是两份**文本**
+  // （`.storybook/workflow-run-sources.tsx` 与 `preview.tsx`，都不进 import 图）——
+  // 只在受影响时跑等于专挑它不在的时机跑。本批它抓到的两处都是「画布上有内容、
+  // 而看的不是真形态」：失败行与整条链路差九个多小时、以及日志绕过 store 去重/截尾。
+  "tests/storybook-workflow-run-sources.test.ts",
   // 「eslint 增量缓存的依赖指纹」：`--cache` 的缓存键不含依赖树，而 `no-unsafe-*`
   // 是类型化规则 —— 依赖一变旧判决被整片重放，假红拦死提交、假绿洗掉真违规
   // （ISSUE #1399）。它的执行者是 `postinstall` 那一步，而改 `.githooks/**` 会让

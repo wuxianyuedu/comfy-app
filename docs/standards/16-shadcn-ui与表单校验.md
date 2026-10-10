@@ -1086,6 +1086,77 @@ preview 摘装饰器 / `messagePanelHidden` 取值摘掉 / 面板恒挂 / story 
 > 这与 §16.2.3.9 的 `backdrop-bl …ur-md`、§16.2.3.12 的 handle id 是同一族：
 > **构建期全绿、画布上「看着有点不对」**的那种缺陷，只有真渲染 + 逐张看截图能抓到。
 
+#### 16.2.3.15 第五层注入：工作流运行（「纯 props」的组件吃的是 store 派生的数据）
+
+§16.2.3.14 收尾时我把「剩下的自然批次」写成 `studio/logs/` 里与消息中心同族的那三件
+（`VirtualLogList` / `LogPanelOriginSelect` / `TaskLogTimeline`），并说「它们也读 store」。
+**那句话是错的，而错得有价值** —— 逐件核过之后：
+
+| 组件 | 真实形态 | 此前被我说成 |
+| ---- | -------- | ------------ |
+| `VirtualLogList` | **纯 props**（`entries` / `getMessage` / `renderRow` …） | 「读 store」 |
+| `LogPanelOriginSelect` 的 `OriginSelect` | **纯 props**（`value` / `countsByOrigin` / `onChange`） | 「读 store」 |
+| `TaskLogTimeline` | **纯 props**（`logs` …） | 「读 store」 |
+| `DiagnosticsButton` | **真读 store**（`useLogPanel(s => s.saveDiagnostics)`） | 没提到 |
+| `LogPanelFooter` | **纯 props**（十几项数字） | 没提到 |
+
+也就是说这一批真正需要注入层的只有一件（`DiagnosticsButton`，形状与已有的
+`SaveExportButton` 逐字同族，`storeScene` 就够），而**三件「纯 props」里有一件吃的
+不是任意数组**：`TaskLogTimeline` 的 `logs` 在真机上是 `workflow-run-store` 按 SSE 帧
+累积出来的 `TaskLogEntry[]`。手捏一份字面量会跳过 store 的两条真实取舍 ——
+**按 `(t, msg)` 去重**（SSE 重放与增量推送会发同一帧）与 **`MAX_LOGS`(300) 截尾**
+（长任务几千条 progress 行）。两者都直接决定画布上的计数与截尾口。
+
+所以新开了第五层 `workflow-run-sources.tsx`，口径与前四层同源：
+
+| 口径 | 它挡掉的失效形态 |
+| ---- | ---------------- |
+| 场景声明**「哪一次运行」**（步骤序列），时刻由注入层按序算 | 手抄 `TaskLogEntry[]` 会跳过 `appendWorkflowRunLog()` 的去重与截尾 —— 画布上「计数 / 一页多少条」全按这两条算 |
+| 登记与追加走真 action（`registerWorkflowRun()` + `appendWorkflowRunLog()`） | `runs` 是模块私有的 Map，但即便能改也会跳过去重与截尾（同上） |
+| 失败那一档走真入口 `failWorkflowRun()` | 它是唯二写 `errorMessage` 的入口，**同时**把原因补成一条 error 日志行 —— 走别的路会把这层关系在 story 里重抄一遍 |
+| seed 先 `clearAllWorkflowRuns()` | 故事之间共用一个 module-level store，不清则上一份的时间线串进这一份 |
+
+**两处只有真渲染才看得出来的（本批都抓到了）**：
+
+1. **失败行与整条链路差九个多小时。** 第一版把步骤时刻锚在写死的
+   `2026-10-05T09:30`，而 `failWorkflowRun()` 补的那条 error 行用的是它自己的
+   `Date.now()`（生产口径）—— 画布上是「最后一步 09:30、失败行 18:32」，同一次运行
+   差九个多小时，读故事的人会以为哪里算错了。改成锚在 `Date.now() - steps × STEP_MS`
+   （此刻回推），整条链路连失败行都落在同一分钟里。判据钉住「不许写死 ISO 日期」。
+2. **「同一批行躺在两份文件里」的读数与直觉相反。** 新增的 `duplicatedOrigins` 场景把
+   同一份启动原文同时喂给 `launcher` 与 `壳侧编排`；实测下来**全部来源 = 启动器 = 6、
+   壳侧编排那一栏是空的** —— `mergeTimeline()` 按身份（`(time, level, message)`，
+   **不含 origin**）去重，同一行只落一份。这不是缺陷，但它说明「下拉里那几档相加等于
+   全部来源」这个读法是错的，而那正是这张表最容易读错的地方。
+
+**判据**：`tests/storybook-workflow-run-sources.test.ts`（6 条，进
+`FIXED_STRUCTURAL_TESTS`）。写它的过程中**两条断言自己先假绿过**，两条都是本仓反复
+记过的「拿名字在场当判据」，记在这里因为它们是最容易重犯的形状：
+
+1. `expect(story).toContain("getWorkflowRunStoreSnapshot")` 被 **import 那一行**满足
+   —— 把 story 里那两处调用都改名之后判据照样绿；
+2. 换成「取 `useSyncExternalStore(` 的实参串再 `toContain`」**还是绿** —— 因为
+   `toContain` 是**子串**匹配，`subscribeWorkflowRunStoreX` **包含**
+   `subscribeWorkflowRunStore`。改成标识符边界（`\bsubscribeWorkflowRunStore\b`）才拦住。
+
+同一个病因还波及「必须调用某 action」那一族：`toContain("clearAllWorkflowRuns()")`
+被 import 满足，于是「把调用整行删掉」漏了过去。现在统一走一个 `callsIn()` 助手
+（**剥注释** + 排除 `import` 行 + 括号配对走完）；**刻意不要求实参非空** ——
+`clearAllWorkflowRuns()` 本来就是零参调用，拿「有没有实参」当「有没有调用」会把它
+误判成没调用（这一版也是实测踩出来的）。
+
+**变异实测：八向全拦下**（写死日期 / 去掉 clear 调用 / 不用 `registerWorkflowRun` /
+不用 `appendWorkflowRunLog` / 不用 `failWorkflowRun` / 场景名不抛错 / preview 摘装饰器 /
+story 不经 store 读）。
+
+**这一批的数量**：`studio/logs` 从 5 份 story 铺到 10 份（新增 `VirtualLogList` /
+`OriginSelect` / `TaskLogTimeline` / `LogPanelFooter` / `DiagnosticsButton`），
+全仓故事 **123 → 128 份 / 22 条新故事变体**，全部逐条在无头 Chromium 里打开核对
+（22/22 渲染、0 条 console 错误），关键几张逐张看过截图。
+**`LogProvider` 刻意没有 story**：它 `return <>{children}</>`，自己的对外面是两个纯文本
+函数（`describeGlobalError` / `describeUnhandledRejection`），判据在用例里
+（`log-provider-global-errors.test.ts`）—— 给它一份 story 只是把 import 抄一遍。
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
