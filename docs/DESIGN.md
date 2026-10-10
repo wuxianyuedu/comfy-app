@@ -28,12 +28,6 @@ colors:
   warning-strong: "#b45309"
   info: "#2563eb"
 typography:
-  hero-lg:
-    fontFamily: "Geist, PingFang SC, Microsoft YaHei, Noto Sans SC, system-ui, sans-serif"
-    fontSize: 34px
-    fontWeight: 700
-    lineHeight: 1.5
-    letterSpacing: -0.025em
   heading-page:
     fontFamily: "Geist, PingFang SC, Microsoft YaHei, Noto Sans SC, system-ui, sans-serif"
     fontSize: 24px
@@ -131,7 +125,7 @@ components:
     height: 32px
     padding: "0px 10px"
   button-default-hover:
-    backgroundColor: "rgba(124, 92, 252, 0.8)"
+    backgroundColor: "rgba(133, 87, 222, 0.8)"
     textColor: "{colors.on-primary}"
     typography: "{typography.button-md}"
     rounded: "{rounded.lg}"
@@ -149,7 +143,7 @@ components:
     rounded: "{rounded.lg}"
     height: 32px
   button-primary-soft:
-    backgroundColor: "rgba(139, 92, 246, 0.15)"
+    backgroundColor: "rgba(141, 80, 226, 0.15)"
     textColor: "{colors.primary-strong}"
     typography: "{typography.button-md}"
     rounded: "{rounded.lg}"
@@ -333,7 +327,8 @@ components:
 frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现里有两类东西压不进那个形状：
 
 - **`oklch()` 落 sRGB**：`--color-destructive` 两颗都**超出 sRGB 色域**，浏览器会先做 gamut fit（降 chroma）再画。上表的 hex 是用 canvas 读回来的**实际字节**（浅色 `rgb(231,0,11)`、深色 `rgb(255,100,103)`），不是手写 OKLab 矩阵裁剪的结果——后者给的是 `#e7000b` 但**过程是错的**（朴素裁剪恰好撞近同一个值属于巧合，不可复用到别的色相）。**任何人改这颗色都要用同一个办法重取。**
-- **透明度 `/N`**：`bg-primary-500/15` 编译成 `color-mix(in oklab, …)`，frontmatter 里写成等价的 `rgba(139, 92, 246, 0.15)`。混色空间（oklab vs sRGB）会让实际观感有细微差，**以 CSS 为准**。
+- **透明度 `/N`**：`bg-primary-500/15` 编译成 `color-mix(in oklab, …)`，frontmatter 里写成等价的 `rgba(141, 80, 226, 0.15)`。混色空间（oklab vs sRGB）会让实际观感有细微差，**以 CSS 为准**。
+  **这类压平值没有判据能对账**（`tests/design-md-contract-sync.test.ts` 只做两件事：正文引用的裸 `--color-*` 必须在产物里有声明、Colors 那张贴合表里的单一 hex 必须等于解析值 —— 它不读 frontmatter，文末「维护约定」那条把这个边界记在案）：改一次 token 的值，`colors` 那一块靠人跟手，而 `components` 里以 `rgba()` 写出的**带透明度压平值**、以及 `typography` 段整个，**都不会报红**。实测踩到过的两处：品牌紫深化那一刀漏改 `button-default-hover` / `button-primary-soft` 两颗 rgba；首页撤档后 frontmatter 的 `typography` 里还留着已退役的 `hero-lg`（本文件这次删掉了，而**删它没有任何一条判据会证明删对了**）。⇒ **改色或退役档位时，`colors` / `components` / `typography` 三段要点名重读一遍**，不能只跑判据。
 - **正文一律用 CSS token 名（`--color-*`），不用 `{colors.*}` 引用**。DESIGN.md 的惯例是让散文用 `{colors.primary}` 这类引用把内容接回 frontmatter，但本仓库的 frontmatter 名是**角色**（`hairline`）、CSS 名是**事实来源**（`--color-border`），两套名字不同；写引用会把读者的注意力从「去哪儿改」引开。⇒ **frontmatter 是给工具看的压平视图，正文是给改代码的人看的指针**，两边都以 `globals.css` 收口。
 
 ### 「一个色相，两个位置，两个值」是本库的核心语法
@@ -384,8 +379,8 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 三条刻意的不做，每条都是实测出来的原因：
 
-- **档名必须是 t-shirt 尺寸（`2xs` / `3xs`），不能叫 `meta` / `micro`**。`cn()`（`node_modules/cn`，clsx + tailwind-merge 的替代件）把**不认识的 `text-<名字>` 一律归到颜色组**：实测 `cn("text-ink-muted", "text-micro")` 只剩 `text-micro` —— 同行的状态色被静默吃掉，徽标会失去配色语义；而 `cn("text-ink-muted", "text-2xs")` 两条都留。⚠️ **仓库里已有的 `text-section` / `text-page` / `text-hero` 是同一个坑的潜伏形态**（实测 `cn("text-ink-muted","text-section")` 同样吃颜色），它们目前只在 CSS 里经 `.u-title-*` 使用、没进 JSX，所以还没炸 —— **别在 JSX 里用这几个类名**，标题一律走 `.u-title-*`。
-- **不乘 `--font-scale`**：设置页「标题字阶」那一档的作用域只有上面四档标题。微标签跟着标题缩放，会让密集列表在 125% 档下挤成一团 —— 与「正文不随字阶变」同一条口径，`e2e/appearance-steps.spec.ts` 按后者判。
+- **档名必须是 t-shirt 尺寸（`2xs` / `3xs`），不能叫 `meta` / `micro`**。`cn()`（`node_modules/cn`，clsx + tailwind-merge 的替代件）把**不认识的 `text-<名字>` 一律归到颜色组**：实测 `cn("text-ink-muted", "text-micro")` 只剩 `text-micro` —— 同行的状态色被静默吃掉，徽标会失去配色语义；而 `cn("text-ink-muted", "text-2xs")` 两条都留。⚠️ **仓库里已有的 `text-section` / `text-page` 是同一个坑的潜伏形态**（实测 `cn("text-ink-muted","text-section")` 同样吃颜色），它们目前只在 CSS 里经 `.u-title-*` 使用、没进 JSX，所以还没炸 —— **别在 JSX 里用这几个类名**，标题一律走 `.u-title-*`。（这里从前还列着 `--text-hero` 那一档的同名类，它随首页欢迎区一起退役了 —— 见上面「字阶只有三档具名」。）
+- **不乘 `--font-scale`**：设置页「标题字阶」那一档的作用域只有上面三档标题。微标签跟着标题缩放，会让密集列表在 125% 档下挤成一团 —— 与「正文不随字阶变」同一条口径，`e2e/appearance-steps.spec.ts` 按后者判。
 - **不配 `--text-*-line-height`**：Tailwind v4 里一旦配对，生成的类会连带锁行高。实测对照：`text-xs` emit `font-size` **加** `line-height: var(--tw-leading, var(--text-xs--line-height))`（= 16px），而 `text-[12px]` 只出 font-size、行高继承 `html` 的 1.5（12px 下是 18px）—— **同一个 12px 因此有过两种行高**（289 处 `text-xs` 在 16px、103 处字面量在 18px）。这一档已签字**归一到 `text-xs`**（12px / 16px），103 处字面量换完，并加一条「调用点不许再写 `text-[12px]`」的**归零判据**（不是棘轮）；要更松的行高就显式写 `leading-*`，别再造字号字面量。`text-2xs` / `text-3xs` 仍只出 font-size，与替换前的 `text-[11px]` / `text-[10px]` 逐像素相同。
   **改前 / 改后的真浏览器抽样**（`/workspace` 的六个可点面，195 个 12px 实例）：改前那 18 个 `text-[12px]` 实例**全都自带 `leading-tight`**，计算行高 15px；改后同一批仍是 15px ⇒ 这一批**逐像素没动**（`leading-*` 走 `--tw-leading`，照样压过 `text-xs` 的默认档）。裁切数改前改后都是 12（既有状态，与本次无关）。**覆盖边界要说清**：剩下约 85 处分布在要数据才渲染的面（项目画布节点、结果卡、若干浮层），本轮量具进不去 —— 它们的预期是行盒 18→16px（收拢不引入裁切），这一句是**推理，不是读数**。
 
@@ -583,7 +578,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 **它是三件事的唯一出处**，此前这三件在 11 个屏上各拼一遍、还越拼越不一致（据那份文件头）：
 
-1. 每屏唯一的 `h1` 走 `.u-title-page` 字阶档 + `font-title`（就是上面「字阶只有四档」那张表里的 `page` 档）；
+1. 每屏唯一的 `h1` 走 `.u-title-page` 字阶档 + `font-title`（就是上面「字阶只有三档具名」那张表里的 `page` 档）；
 2. 一行副说明走已定档的那一句 —— `.text-sm text-ink-muted`（规范 03 §3.10 末尾「新增一个屏时」写死的两个类）；
 3. **右侧动作组不被压扁**：`shrink-0` 在动作组上、标题带 `min-w-0 truncate`（规范 03 §3.8.1 的兜底顺序：宽度不够先收标题，不把按钮挤成两行小字）。
 
@@ -698,7 +693,8 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ### 待定 4 → 已落地：`.btn-gradient` 三颗星改走品牌 token，并补出 `variant="gradient"`
 
-原来 `globals.css` 里是三条字面量 `#7c3aed → #c026d3 → #ec4899`，注释写明是「扁平规范中的有意例外」。实测它的**两端与现有 token 逐字同值**（`#7c3aed` = `--color-primary-600`、`#ec4899` = `--color-accent-soft` 的浅档），只有中间那颗没有对应 token。
+原来 `globals.css` 里是三条字面量 `#7c3aed → #c026d3 → #ec4899`，注释写明是「扁平规范中的有意例外」。实测它的**两端与当时的 token 逐字同值**（`#7c3aed` = 那时的 `--color-primary-600`、`#ec4899` = `--color-accent-soft` 的浅档，后者至今未变），只有中间那颗没有对应 token。
+**「当时」这一半要紧**：品牌紫深化那一刀把 `--color-primary-600` 改成 `#7a3fd0`，所以这条渐变的**起点像素变了** —— 而正因为这里收成了 `var()`，它是**跟着改的那一处**（改动前若还是字面量，这里就会悄悄留在旧紫上）。这是 token 化的既定收益，不是回归。
 
 **签字口径 = token 化 + 出一支变体**，本轮已落地：新增 `--color-accent-deep: #c026d3`（**两态同值**，理由写在 `@theme` 那条注释里：品牌渐变不随主题换色相），`.btn-gradient` 三段全改成 `var()` 引用 ⇒ **改品牌色时渐变跟手**；`Button` 补 `variant="gradient"`（= `btn-gradient text-on-brand`，刻意不带 hover 底色类，否则 utilities 层会把 `.btn-gradient` 的 transition 整条洗掉），4 处 `<Button>` 调用点收进变体。
 
@@ -716,7 +712,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
   | 基准 success / warning / danger | 2.53 / 2.51 / 4.11 | 4.07 / 4.09 / 2.78 |
   | 400 档浅彩 | **1.71 / 1.51 / 2.23** | 6.47 / 7.37 / 4.74 |
   ⇒ **单一取值在某一态必然偏弱**：浅彩压在白底上只有 1.5–2.2:1，光晕基本等于看不见，而被看见正是光晕唯一的作用。所以这四颗 token 必须两态，且浅色档**直接写成 `var(--color-…)`**（不是抄一份基准色的 hex —— 抄了就会和源头各自漂移），深色档才用 400 档浅彩。这也是对 #1514 那句「两态同值：原裸值本来没有 `.dark` 分叉」的订正：**把「旧代码只有一个值」当成「设计上不需要两个值」，是拿事故当设计**。
-  顺带收掉的两处：同一栏里 `fpsDotColor` 三档原先是基准色 α=1（隔壁 devServer 那点已经是浅彩）—— 同尺寸、同语义的两个点两套配方，现在都是 80% 走同一族；`canvas/CanvasSettingsButton.tsx` 那颗品牌点与 4 处连线光晕的裸值（`rgba(167,139,250,0.7)` / `rgba(124,92,252,0.6)`）也并进这一族，连线直接用 `var(--color-primary)`（`#7c5cfc` 逐字节就是那个值 ⇒ 零像素）。判据从「禁某两个裸值」升级成**按形状归零**：`shadow-[0_0_…rgba(…)]` 与任何 `shadow-[…#hex]` 都判红，并用反向样本钉住两条边界 —— 投影必有偏移或扩散（`0_0_` 不误伤仓里那 6 处），同一档浅彩在别处是合法的角色色（`#34D399` 当类别色）。其余裸值（卡片投影等）的权威清单不在本文抄条数，由 `pnpm theme:check` 逐文件打印「处数 + 为什么可以留」。
+  顺带收掉的两处：同一栏里 `fpsDotColor` 三档原先是基准色 α=1（隔壁 devServer 那点已经是浅彩）—— 同尺寸、同语义的两个点两套配方，现在都是 80% 走同一族；`canvas/CanvasSettingsButton.tsx` 那颗品牌点与 4 处连线光晕的裸值（`rgba(167,139,250,0.7)` / `rgba(124,92,252,0.6)`）也并进这一族，连线直接用 `var(--color-primary)`（收口那一刻 `#7c5cfc` 逐字节就是那个值 ⇒ 零像素；品牌深化后这颗跟着 token 变成 `#8557de` —— **是「跟手」的证据，不是漂移**）。判据从「禁某两个裸值」升级成**按形状归零**：`shadow-[0_0_…rgba(…)]` 与任何 `shadow-[…#hex]` 都判红，并用反向样本钉住两条边界 —— 投影必有偏移或扩散（`0_0_` 不误伤仓里那 6 处），同一档浅彩在别处是合法的角色色（`#34D399` 当类别色）。其余裸值（卡片投影等）的权威清单不在本文抄条数，由 `pnpm theme:check` 逐文件打印「处数 + 为什么可以留」。
 
 - **故事面已经全覆盖，缺口挪到了单元层**（订正：本文件此前写「Storybook 覆盖 29/83、核心交互件里 input/dialog/select/card/… 无 story」—— 那组读数被 `331b38c2` → `b9cbd762` → `82480021` 三连补覆盖否掉了，`82480021` 那次就把理由表清成了 0 条）。现在 `node scripts/storybook-check.mjs` 报的是**覆盖率与它自己的基线同值、理由表 0 条**（缺 title 0 / 未接真组件 0 / 分组偏离 0）⇒ 「明暗两态长什么样」这一层契约在**每一个**组件上都可以在故事面被核验。**这里只留形状不留数字**：`x/y` 的分母随新增件变、故事份数随新增 story 变（上一批写下 89/89 与 122 份，同一轮落地后 3 小时就被 `ed881689` 推成 90/90 与 123 份），要读数就现跑那条命令 —— 有基线顶着的是「覆盖率 = 基线」这件事，不是某个具体数。
   剩下的洞不是「没 story」而是**没单测**。复算（列出还缺同名单测的组件）：

@@ -472,8 +472,10 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     /* 实测：cn("text-ink-muted", "text-micro") 只剩 text-micro —— 不认识的
        `text-<名字>` 被归进颜色组，同行的语义文字色被静默合并掉（这条是钩子
        红了 4 条 StatusBadge 用例才暴露的）。t-shirt 形状才落在 font-size 组。
-       豁免那四颗是历史形态：它们只经 `.u-title-*` 在 CSS 里用，从没进过 JSX。 */
-    const EXEMPT = new Set(["section", "page", "stage", "hero"]);
+       豁免那三颗是历史形态：它们只经 `.u-title-*` 在 CSS 里用，从没进过 JSX。
+       （从前还有第四颗 `hero` —— 首页欢迎区撤掉时它连同 `--text-hero` 一起退役，
+       豁免名单跟着撤：留一个不存在的名字，等于给「以后又加回这一档」预先放行。） */
+    const EXEMPT = new Set(["section", "page", "stage"]);
     const names = [
       ...readFileSync(GLOBALS_PATH, "utf8").matchAll(
         /^\s*--text-([a-z0-9]+)\s*:/gm,
