@@ -183,9 +183,35 @@ const WINDOW_MAX = 300;
  */
 const SLEEP_OK_RE = /\/\/\s*sleep-ok\s*[：:]\s*(\S.*)/;
 
+/**
+ * 枚举扫描面。**目录一旦在建树途中消失，就把这一支整个跳过**。
+ *
+ * 为什么不是「逐个文件容错」就够（`scanFile` 那条）：
+ * `tests/global-setup-cleanup.test.ts` 会往 `tests/` 下写一份
+ * `.setup-cleanup-probe-<pid>-<ts>.test.tsx`、跑完再删。写与删是两次 syscall，
+ * 而中间那一刻 `tests/` 里**多出一个条目** —— 并发的读者（本判据、`--update` 的
+ * 另一次调用）正好在这一刻 `readdirSync` 时，`walk` 是安全的：它只是多列到一个
+ * 名字，随后 `scanFile` 读不到、返回 `null` 记账（见那条的注释）。
+ *
+ * 但**目录级降级**仍要在这里补一层，理由是同一份探针在**另一个删除瞬间**：
+ * 枚举本身是「递归进 `tests/` → 对每个条目做判断」的多次调用，条目在两次调用之间
+ * 被删（探针从「是个文件」变成不存在）时 `readdirSync` 会以 `ENOENT` 抛出 ——
+ * 那**不是**「列到名字、读时已没」，而是枚举当场崩掉，整个判据连同 D 组一起 `exit 1`。
+ * 两份都是同一个竞态的两种窗口，只补后一个等于把门禁的一半赌在时序上。
+ *
+ * 只有 `ENOENT`（已经不在了）降级；权限 / 形状错误照旧冒出去 —— 否则这条兜底会把
+ * 「判据读不到扫描面」变成静默放行（§13.5.12 那一族的反面）。
+ */
 function walk(dir, out = []) {
-  if (!fs.existsSync(dir)) return out;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+  let entries;
+  try {
+    if (!fs.existsSync(dir)) return out;
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (error) {
+    if (error && error.code === "ENOENT") return out;
+    throw error;
+  }
+  for (const e of entries) {
     if (e.name === "node_modules") continue;
     const abs = path.join(dir, e.name);
     if (e.isDirectory()) walk(abs, out);
@@ -386,7 +412,9 @@ function main() {
         `声明豁免 ${exemptTotal} 处。`,
     );
     for (const [rel, sites] of [...live.entries()].sort()) {
-      console.log(`  · ${rel}: ${sites.length} 处（第 ${sites.map((s) => s.line).join(",")} 行）`);
+      console.log(
+        `  · ${rel}: ${sites.length} 处（第 ${sites.map((s) => s.line).join(",")} 行）`,
+      );
     }
     return 0;
   }
@@ -439,7 +467,7 @@ function main() {
 /* 自测（`tests/test-sleep-gate.test.ts`）钉的是**站点识别口径** —— 它是个纯逻辑，
  * 而它的失效形态（只认行内字面量、把宏任务排空也算成赌时间）在临时仓库里
  * 造不出来稳定复现。只导出扫描函数与豁免解析。 */
-module.exports = { scanFile, nearbySleepOk };
+module.exports = { scanFile, nearbySleepOk, walk };
 
 /* 被 import 时（自测）只导出、不执行；被当脚本跑时（钩子）才判。 */
 if (require.main === module) process.exit(main());
