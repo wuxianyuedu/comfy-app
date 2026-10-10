@@ -1,0 +1,117 @@
+{
+  "note": "E6「a11y 自动化」的负债登记表：执行者 `tests/a11y-axe-stories.test.ts`（输入是 `src/components/ui/*.stories.tsx` 的全部故事，逐故事渲染跑 axe-core）。`violations` 每行 = (组件文件, axe 规则) + 当前命中节点数；`unrenderable` = 这一档拿不到状态的故事（需要 Storybook decorator / provider，登记就是为了让「覆盖了几个」这句话有答案）。页面级规则（region / landmark-*）在 `PAGE_SCOPE_RULES_OFF` 里显式关掉：裸渲染一枚组件时它们必然命中，那不是缺陷。**没有 --update**：这张表要人读过再粘贴，判红时测试会把候选清单打到 stdout 与系统临时目录（它自己不写回登记表 —— 判据不许有「跑一下就绿」的出口）。",
+  "violations": [
+    {
+      "component": "button.tsx",
+      "rule": "button-name",
+      "nodes": 6
+    },
+    {
+      "component": "disclosure.tsx",
+      "rule": "button-name",
+      "nodes": 5
+    },
+    {
+      "component": "file-picker.tsx",
+      "rule": "label",
+      "nodes": 3
+    },
+    {
+      "component": "hint.tsx",
+      "rule": "button-name",
+      "nodes": 5
+    },
+    {
+      "component": "native-select.tsx",
+      "rule": "select-name",
+      "nodes": 4
+    },
+    {
+      "component": "number-field.tsx",
+      "rule": "label",
+      "nodes": 4
+    },
+    {
+      "component": "option-list-popover.tsx",
+      "rule": "button-name",
+      "nodes": 2
+    },
+    {
+      "component": "progress-bar.tsx",
+      "rule": "aria-progressbar-name",
+      "nodes": 5
+    },
+    {
+      "component": "progress.tsx",
+      "rule": "aria-progressbar-name",
+      "nodes": 4
+    },
+    {
+      "component": "textarea.tsx",
+      "rule": "label",
+      "nodes": 4
+    },
+    {
+      "component": "toggle.tsx",
+      "rule": "button-name",
+      "nodes": 4
+    }
+  ],
+  "unrenderable": [
+    "breadcrumb-path.tsx > Default",
+    "breadcrumb-path.tsx > Searching",
+    "code-block.tsx > Languages",
+    "image-viewer.tsx > Landscape",
+    "image-viewer.tsx > ViewableImageGrid",
+    "json-viewer.tsx > Default",
+    "json-viewer.tsx > Empty",
+    "json-viewer.tsx > FullyExpanded",
+    "key-value-rows.tsx > AllLayouts",
+    "key-value-rows.tsx > Inline",
+    "key-value-rows.tsx > Rows",
+    "key-value-rows.tsx > Stacked",
+    "key-value-rows.tsx > TableLayout",
+    "key-value-rows.tsx > ValueVsRaw",
+    "media-thumbnail.tsx > Default",
+    "media-thumbnail.tsx > NoSource",
+    "media-thumbnail.tsx > RealSources",
+    "multi-mode-select.tsx > DefaultModeAccent",
+    "multi-mode-select.tsx > Disabled",
+    "multi-mode-select.tsx > HideExtraBadge",
+    "multi-mode-select.tsx > MultipleModes",
+    "multi-mode-select.tsx > SingleMode",
+    "option-list-popover.tsx > ControlledOpen",
+    "option-list-popover.tsx > Default",
+    "option-list-popover.tsx > Disabled",
+    "resizable.tsx > Horizontal",
+    "resizable.tsx > ThreePanels",
+    "resizable.tsx > Vertical",
+    "resizable.tsx > WithoutHandle",
+    "select.tsx > AlignItemWithTriggerOff",
+    "select.tsx > Default",
+    "select.tsx > Grouped",
+    "select.tsx > States",
+    "select.tsx > TriggerSizes",
+    "sidebar.tsx > CollapsibleIcon",
+    "sidebar.tsx > CollapsibleNone",
+    "sidebar.tsx > CollapsibleOffcanvas",
+    "sidebar.tsx > Default",
+    "sidebar.tsx > DefaultCollapsed",
+    "sidebar.tsx > MenuButtonAxes",
+    "sidebar.tsx > SideRight",
+    "sidebar.tsx > VariantFloating",
+    "sidebar.tsx > VariantInset",
+    "simple-key-handler.tsx (meta.component 不是组件)",
+    "sonner.tsx > LoadingThenResolve",
+    "sonner.tsx > Variants",
+    "sonner.tsx > WithDescription",
+    "status-badge.tsx > CustomLabels",
+    "status-badge.tsx > Default",
+    "status-badge.tsx > Tones",
+    "status-badge.tsx > WithoutDot",
+    "tabs.tsx > Default",
+    "tabs.tsx > ListVariants",
+    "tabs.tsx > Orientations",
+    "tabs.tsx > WithDisabled"
+  ]
+}

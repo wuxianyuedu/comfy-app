@@ -76,7 +76,8 @@ const config: StorybookConfig = {
      所以 `preview.tsx` 读 `process.env[SB_APP_DEV_*]` 拿得到（见上面那段说明）。 */
   env: (existing) => ({ ...existing, ...readAppOriginEnv() }),
   addons: [
-    // 交互测试与 a11y 自动化（补 PRODUCTION-GAPS F6 的 a11y 缺口）
+    // 交互测试与 a11y 面板（a11y 的**自动化执行者**在 `tests/a11y-axe-stories.test.ts`，台账 E6；
+    // 这个面板是人现场看某一棵树用的，两者不是同一件事）
     "@storybook/addon-a11y",
     // 深浅色主题切换：与 next-themes 的 class 策略对齐（见 preview.tsx）
     "@storybook/addon-themes",

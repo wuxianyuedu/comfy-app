@@ -168,10 +168,10 @@
       **没有任何凭据可填**。
       **等什么**：
       · **Windows** —— 一张代码签名证书（`.pfx` + 密码），或 Azure Trusted
-        Signing 的账号与证书 profile；
+      Signing 的账号与证书 profile；
       · **macOS** —— Apple Developer Program 的 **Developer ID Application
-        证书**（`.p12` + 密码），以及公证要用的 **Apple ID + app-specific
-        password + Team ID**（或 App Store Connect API key）。
+      证书**（`.p12` + 密码），以及公证要用的 **Apple ID + app-specific
+      password + Team ID**（或 App Store Connect API key）。
       **给到之后我做什么**：配 `bundle.windows.certificateThumbprint` /
       `digestAlgorithm` / `timestampUrl` 与 `bundle.macOS.signingIdentity` /
       `entitlements` / 公证环境变量，凭据全部走 secret、**绝不入库**；再补一条判据钉
@@ -1253,7 +1253,24 @@
       要先把 rule 集合本身钉住才能配拒涨判据）。
       `.gate-executor-ledger.json` 登记为**非计数棘轮**：给它加条目是正常用法，硬要拒涨
       等于把登记流程堵死 —— 这类「`--update` 不拒涨是对的」以后也必须写明理由。
-- [ ] **E6 无 bundle 体积门禁 / 变异测试 / a11y 自动化**。
+- [~] **E6 无 bundle 体积门禁 / 变异测试 / a11y 自动化**。**a11y 自动化那一格已接上执行者**：
+  `tests/a11y-axe-stories.test.ts`（已进 C 组固定清单，唯一出处在
+  `scripts/affected-tests.mjs` 的 `FIXED_STRUCTURAL_TESTS`）把
+  `src/components/ui/*.stories.tsx` 的**每个故事**在 jsdom 里逐个渲染后跑 `axe-core` ——
+  补的是既有那道判据（`scripts/check-a11y-rules.cjs`，规范 06 §6.12）回答不了的一半：
+  那边判「规则开关 ⇄ 台账」，规则开着、代码照样能渲染出一枚没有名字的按钮。
+  违规与「这一档拿不到状态的故事」都登记在 `scripts/.a11y-axe-known.json`，
+  **双向不陈旧**（新违规 ⇒ 红；修好了登记还在 ⇒ 也红），**没有 `--update`** ——
+  判红时打印逐字可粘的候选清单，并把同一份候选写到系统临时目录，但判据自己不写回登记表
+  （不许有「跑一下就绿」的出口）。实测：11 条 `(组件, 规则)` / 4 个规则 /
+  55 个故事需要 Storybook 的 decorator 因而覆盖不到（登记在册、不静默跳过）；单文件 ~20s。
+  页面级规则（`region` / `landmark-*`）显式关掉并写明理由 —— 裸渲染一枚组件时它们必然命中，
+  那不是缺陷；页面级那一档的真落点在 e2e（E3″ 现在连执行者都没有）。
+  另两格仍是空的：bundle **只有分析没有门禁**（`scripts/analyze-bundle.mjs` 靠
+  `@next/bundle-analyzer`、强制 `next build --webpack`、`pnpm analyze` 手动跑；
+  阈值 / 棘轮全库零命中）；变异测试**无任何工具**，仓内现况是「每条判据配人工反向变异并记档」
+  的口径（本条目 E5 那批与 §11.18.4 都是这么做的），自动化变异这一格的落点与成本分层
+  （跑不动进钩子）需要先定口径。
 - [ ] **F1 零 i18n**（中文硬编码、`lang` 写死）。证据：`src/app/layout.tsx:36`。
 - [ ] **F2 缺 `global-error.tsx`**；`error.tsx` 仅 1/6；`loading.tsx` 仅全屏；`<Suspense>` 0 处。
       **其中「站点级过渡」这一格已按 ISSUE #1437 判为「不做，理由记档」**：视图 / 路由切换
