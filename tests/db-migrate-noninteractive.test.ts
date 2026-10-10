@@ -26,14 +26,26 @@ import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { resolveSqlitePath } from "../scripts/db-schema-state.mjs";
+import { acquireRepoDrizzle } from "./helpers/repo-drizzle-lock";
 
 let tmp: string;
 let dbFile: string;
 /** 真仓库里的迁移目录；用例期间可能被临时挪开。 */
 const REAL_DRIZZLE = path.join(process.cwd(), "drizzle");
 let moved: string | null = null;
+/** 本条用例持有真 `drizzle/` 的独占锁的释放函数（见 `tests/helpers/repo-drizzle-lock.ts`）。 */
+let releaseDrizzle: (() => void) | null = null;
 
 /** 把真 `drizzle/` 挪到一边（返回备份路径）；已经在一边时返回 null。 */
 function hideMigrations(): string | null {
@@ -50,6 +62,25 @@ function restoreMigrations(): void {
   }
   moved = null;
 }
+
+/**
+ * 整个文件持有真 `drizzle/` 的独占锁（`tests/helpers/repo-drizzle-lock.ts`）。
+ *
+ * 本文件判「前提不成立」的唯一造法就是**把真迁移目录挪开**，而
+ * `tests/db-migrate-equivalence.test.ts`（两次真起 `db-migrate`）与下面「绝对库真的落表」
+ * 那一档都**要靠它在场**。两个文件在不同 worker 里并行时，实测红法是：
+ * 等价性那份**一条断言都没红**、整个文件在 `beforeAll` 里挂，话术写着「没有可应用的迁移」。
+ * 锁按文件粒度取（不是每条用例一次）：等待只可能发生一次，而 `hookTimeout` 是 45s，
+ * 对面那份文件实测要 ~80s —— 按用例取锁会先把钩子自己顶穿。
+ */
+beforeAll(async () => {
+  releaseDrizzle = await acquireRepoDrizzle("db-migrate-noninteractive");
+}, 480_000);
+
+afterAll(() => {
+  releaseDrizzle?.();
+  releaseDrizzle = null;
+});
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "db-migrate-"));
