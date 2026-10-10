@@ -87,6 +87,8 @@ const ALLOWED_SCRIPTS = new Set([
   "dev-launcher.ps1",
   "dev-launcher-session.mjs",
   "app-port.mjs",
+  // 「应用服务为什么结束」的落盘侧（ISSUE #1692），与 RUNTIME_SCRIPTS 同源。
+  "app-service-exit.mjs",
   "env-preflight.mjs",
   "db-schema-state.mjs",
   "db-push-core.mjs",
@@ -187,7 +189,9 @@ const ALLOWED_SRC_FILES = [
 
 /** 该层允许的顶层条目。 */
 function allowedTopLevelFor(label) {
-  return label === "static" ? STATIC_ALLOWED_TOPLEVEL : STANDALONE_ALLOWED_TOPLEVEL;
+  return label === "static"
+    ? STATIC_ALLOWED_TOPLEVEL
+    : STANDALONE_ALLOWED_TOPLEVEL;
 }
 
 /**
@@ -452,12 +456,12 @@ function checkDir(dir, label) {
           ? `\n  …（其余 ${strayTop.length - 12} 个省略）`
           : "") +
         `\n  允许的就这些：${allowedTop.join(" / ")}（外加逐文件放行的 src/）。` +
-          "\n  新增一项必须**同批**改两处：剔除侧 `standalone-private-inputs.mjs` 与这里" +
-          "（两份清单逐字同源，由 tests/dist-artifact-hygiene.test.ts 核对），并写清" +
-          "「谁在运行期读它」——只补一处会得到「删掉了却仍判违规」或反过来。" +
-          "\n  根因不在 excludes：规范 §7.2 实测 Turbopack 不读 outputFileTracingExcludes" +
-          " 的整目录条目（webpack 那条链才读，而桌包运行时脚本清单点名的是 " +
-          "`*-turbo.runtime.prod.js`，换构建器等于换整条产物链）。",
+        "\n  新增一项必须**同批**改两处：剔除侧 `standalone-private-inputs.mjs` 与这里" +
+        "（两份清单逐字同源，由 tests/dist-artifact-hygiene.test.ts 核对），并写清" +
+        "「谁在运行期读它」——只补一处会得到「删掉了却仍判违规」或反过来。" +
+        "\n  根因不在 excludes：规范 §7.2 实测 Turbopack 不读 outputFileTracingExcludes" +
+        " 的整目录条目（webpack 那条链才读，而桌包运行时脚本清单点名的是 " +
+        "`*-turbo.runtime.prod.js`，换构建器等于换整条产物链）。",
     );
   }
   // `src/` 的叶子逐文件判。只锚**产物根**那一份 `src/`：`node_modules/<pkg>/src/**` 是
@@ -474,7 +478,7 @@ function checkDir(dir, label) {
           ? `\n  …（其余 ${straySrcFiles.length - 8} 个省略）`
           : "") +
         `\n  这一格是「祖先放行、叶子逐文件判」：允许的是 ${ALLOWED_SRC_FILES.join(" / ")}；` +
-          "\n  运行期真要读别的源文件，请同批改剔除侧的 RUNTIME_SRC 与这里的 ALLOWED_SRC_FILES。",
+        "\n  运行期真要读别的源文件，请同批改剔除侧的 RUNTIME_SRC 与这里的 ALLOWED_SRC_FILES。",
     );
   }
   for (const [tag, re] of FORBIDDEN) {
