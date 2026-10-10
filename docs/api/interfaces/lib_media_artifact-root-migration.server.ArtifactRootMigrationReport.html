@@ -16,7 +16,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">ArtifactRootMigrationReport</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#blocked">blocked</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">code</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">name</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#moved">moved</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#skipped">skipped</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#status">status</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;nothing-to-do&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;moved&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;left-behind&quot;</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/media/artifact-root-migration.server.ts:34</li></ul></aside>
+<li>Defined in src/lib/media/artifact-root-migration.server.ts:34</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -38,26 +38,26 @@
 <div class="tsd-comment tsd-typography"><p>没能搬走的条目（被占用 / 权限），名字与 errno 码成对。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/media/artifact-root-migration.server.ts:41</li></ul></aside></section>
+<li>Defined in src/lib/media/artifact-root-migration.server.ts:41</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="moved"><span>moved</span><a href="#moved" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">moved</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>成功搬到新根的顶层条目名。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/media/artifact-root-migration.server.ts:37</li></ul></aside></section>
+<li>Defined in src/lib/media/artifact-root-migration.server.ts:37</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="skipped"><span>skipped</span><a href="#skipped" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">skipped</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>新根里已有同名条目 ⇒ 原样留在原地，绝不覆盖。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/media/artifact-root-migration.server.ts:39</li></ul></aside></section>
+<li>Defined in src/lib/media/artifact-root-migration.server.ts:39</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="status"><span>status</span><a href="#status" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">status</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;nothing-to-do&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;moved&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;left-behind&quot;</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/media/artifact-root-migration.server.ts:35</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/media/artifact-root-migration.server.ts:35</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

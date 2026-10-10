@@ -18,7 +18,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">LogSessionsPayload</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#content">content</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#selectedid">selectedId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#sessions">sessions</a><span class="tsd-signature-symbol">:</span> <a href="lib_log_log-sessions.LogSessionMeta.html" class="tsd-signature-type tsd-kind-interface">LogSessionMeta</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#size">size</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#total">total</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#truncated">truncated</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#windowed">windowed</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:64</li></ul></aside>
+<li>Defined in src/lib/log/log-sessions.ts:64</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -43,14 +43,14 @@
 <div class="tsd-comment tsd-typography"><p>选中那一份的正文（超长时取<strong>尾部窗口</strong>，见 <code>truncated</code> / <code>windowed</code>）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:77</li></ul></aside></section>
+<li>Defined in src/lib/log/log-sessions.ts:77</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="selectedid"><span>selected<wbr/>Id</span><a href="#selectedid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">selectedId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>本次返回的正文属于哪一份文件；没有可用会话时为 null。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:75</li></ul></aside></section>
+<li>Defined in src/lib/log/log-sessions.ts:75</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="sessions"><span>sessions</span><a href="#sessions" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">sessions</span><span class="tsd-signature-symbol">:</span> <a href="lib_log_log-sessions.LogSessionMeta.html" class="tsd-signature-type tsd-kind-interface">LogSessionMeta</a><span class="tsd-signature-symbol">[]</span></div>
@@ -61,14 +61,14 @@
 取的就是 <code>sessions[0]</code>，与端点 <code>selectedId</code> 的缺省值同端。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:73</li></ul></aside></section>
+<li>Defined in src/lib/log/log-sessions.ts:73</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="size"><span>size</span><a href="#size" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">size</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>该份文件的字节数（排障与页脚展示）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:83</li></ul></aside></section>
+<li>Defined in src/lib/log/log-sessions.ts:83</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="total"><span>total</span><a href="#total" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">total</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
@@ -77,21 +77,21 @@
 几十份（服务被反复重启），下拉列不完 —— 不说的话用户会以为「只启动过这些次」。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:90</li></ul></aside></section>
+<li>Defined in src/lib/log/log-sessions.ts:90</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="truncated"><span>truncated</span><a href="#truncated" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">truncated</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>正文被截断（界面据此提示只见最近一段）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:79</li></ul></aside></section>
+<li>Defined in src/lib/log/log-sessions.ts:79</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="windowed"><span>windowed</span><a href="#windowed" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">windowed</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>服务端只扫了尾部窗口 —— 前面还有没读到的内容。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:81</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/log/log-sessions.ts:81</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

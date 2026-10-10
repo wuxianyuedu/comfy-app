@@ -128,6 +128,12 @@ export const RUNTIME_SCRIPTS = [
   "env-preflight.mjs",
   "db-schema-state.mjs",
   "db-push-core.mjs",
+  // 备份 / 恢复的唯一实现（D6，ISSUE #1611）：`dev-launcher.mjs` 顶层静态
+  // import 它的 `applyPendingRestoreAtBoot`（换文件必须排在起 Next 之前）——
+  // 缺这份就是整个编排器 ENOENT，与「缺一份内部分件」表现完全一样。
+  // `db-backup.mjs`（`pnpm db:backup` 的手动档）**不在**这里：它是给人敲的
+  // 命令，桌包里没有它也不影响任何运行时路径。
+  "db-backup-core.mjs",
   // 统一的进程树回收入口：编排器收尾、Python 启动器的兜底补刀、Rust 壳的
   // `kill_sidecar` 补刀都调它（平台判据只此一份，见 AGENTS 硬规则 3），
   // 连同它 import 的 kill-process-tree 一起缺不了。

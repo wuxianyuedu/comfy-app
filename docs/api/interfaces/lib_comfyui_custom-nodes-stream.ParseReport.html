@@ -13,7 +13,7 @@
 <h1>Interface ParseReport</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">ParseReport</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#addednodes">addedNodes</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#errorcount">errorCount</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#generatedat">generatedAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#mode">mode</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;full&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;subset&quot;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#packages">packages</a><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_custom-nodes-stream.PkgReport.html" class="tsd-signature-type tsd-kind-interface">PkgReport</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#parseerrors">parseErrors</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">error</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">file</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#pathcount">pathCount</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#totalnodes">totalNodes</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/custom-nodes-stream.ts:24</li></ul></aside>
+<li>Defined in src/lib/comfyui/custom-nodes-stream.ts:24</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -39,44 +39,44 @@
 <div class="tsd-comment tsd-typography"><p>增量解析时新增节点数（全量报告缺省为 undefined）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/custom-nodes-stream.ts:34</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/custom-nodes-stream.ts:34</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="errorcount"><span>error<wbr/>Count</span><a href="#errorcount" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">errorCount</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/custom-nodes-stream.ts:28</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/custom-nodes-stream.ts:28</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="generatedat"><span>generated<wbr/>At</span><a href="#generatedat" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">generatedAt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/custom-nodes-stream.ts:25</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/custom-nodes-stream.ts:25</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="mode"><code class="tsd-tag">Optional</code><span>mode</span><a href="#mode" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">mode</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;full&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;subset&quot;</span></div>
 <div class="tsd-comment tsd-typography"><p>增量解析报告携带的模式标记（全量报告缺省为 undefined）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/custom-nodes-stream.ts:32</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/custom-nodes-stream.ts:32</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="packages"><span>packages</span><a href="#packages" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">packages</span><span class="tsd-signature-symbol">:</span> <a href="lib_comfyui_custom-nodes-stream.PkgReport.html" class="tsd-signature-type tsd-kind-interface">PkgReport</a><span class="tsd-signature-symbol">[]</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/custom-nodes-stream.ts:29</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/custom-nodes-stream.ts:29</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="parseerrors"><code class="tsd-tag">Optional</code><span>parse<wbr/>Errors</span><a href="#parseerrors" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">parseErrors</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">error</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">file</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">[]</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/custom-nodes-stream.ts:30</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/custom-nodes-stream.ts:30</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="pathcount"><span>path<wbr/>Count</span><a href="#pathcount" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">pathCount</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/custom-nodes-stream.ts:27</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/custom-nodes-stream.ts:27</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="totalnodes"><span>total<wbr/>Nodes</span><a href="#totalnodes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">totalNodes</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/custom-nodes-stream.ts:26</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/comfyui/custom-nodes-stream.ts:26</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

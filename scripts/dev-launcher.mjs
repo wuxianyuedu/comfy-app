@@ -30,6 +30,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveAppPort } from "./app-port.mjs";
+import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
 import { checkEnvFile } from "./env-preflight.mjs";
 import {
@@ -896,6 +897,20 @@ export async function run(argv = process.argv.slice(2)) {
     return 1;
   }
   log("依赖与 lockfile 一致（无需补装）", "OK");
+
+  // 1.6) 待恢复的备份：**必须**排在起任何会打开数据库的东西之前（壳、Next、
+  //      执行宿主、后台 schema 同步）。运行期多个进程持有同一个库，运行期覆盖
+  //      `db.sqlite` 等于在别人握着句柄时换掉文件 —— 这里换是唯一安全的时刻。
+  //      空转（没有标记）是绝大多数启动的形态。
+  const restore = applyPendingRestoreAtBoot(ROOT, {
+    write: (line) =>
+      log(line.replace(/^\[db-backup\] /, "").trimEnd(), "INFO"),
+  });
+  if (restore.status === "restored") {
+    log(`数据库已从备份恢复（${restore.from}）`, "OK");
+  } else if (restore.status === "failed") {
+    log(`数据库恢复没能完成：${restore.reason}`, "WARN");
+  }
 
   // 2) 端口（单一事实源：app-port.mjs，绝不在这里重算）
   const port = portOrNull ?? resolveAppPort(ROOT);

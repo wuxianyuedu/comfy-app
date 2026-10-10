@@ -13,7 +13,7 @@
 <h1>Interface WorkflowTypeDefinition</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">WorkflowTypeDefinition</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#category">category</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;audio&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;video&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;image&quot;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#code">code</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#description">description</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#fullname">fullName</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#hints">hints</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#isgenerative">isGenerative</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#label">label</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#subcategory">subCategory</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-types.ts:23</li></ul></aside>
+<li>Defined in src/lib/workflow/workflow-types.ts:23</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -39,56 +39,56 @@
 <div class="tsd-comment tsd-typography"><p>所属一级分类</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-types.ts:31</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-types.ts:31</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="code"><span>code</span><a href="#code" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">code</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>缩写码，如 T2I / I2V / S2V</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-types.ts:25</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-types.ts:25</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="description"><span>description</span><a href="#description" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">description</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>简短说明（用于 tooltip / 帮助文案）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-types.ts:35</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-types.ts:35</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="fullname"><span>full<wbr/>Name</span><a href="#fullname" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">fullName</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>英文全称</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-types.ts:27</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-types.ts:27</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="hints"><code class="tsd-tag">Optional</code><span>hints</span><a href="#hints" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">hints</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>该类型在 ComfyUI 中常用的节点特征（用于自动推断）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-types.ts:39</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-types.ts:39</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="isgenerative"><span>is<wbr/>Generative</span><a href="#isgenerative" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">isGenerative</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>是否为「生成模式」（true）还是「后处理模式」（false，如 Upscale/Outpaint）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-types.ts:37</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-types.ts:37</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="label"><span>label</span><a href="#label" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">label</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>中文描述</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-types.ts:29</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-types.ts:29</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="subcategory"><code class="tsd-tag">Optional</code><span>sub<wbr/>Category</span><a href="#subcategory" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">subCategory</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>更详细的子分类标签（可选）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-types.ts:33</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/workflow/workflow-types.ts:33</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

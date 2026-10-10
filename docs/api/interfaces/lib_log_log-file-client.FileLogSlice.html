@@ -13,7 +13,7 @@
 <h1>Interface FileLogSlice</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">FileLogSlice</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#bootid">bootId</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#content">content</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#mismatch">mismatch</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#offset">offset</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#sessionstart">sessionStart</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#size">size</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-file-client.ts:13</li></ul></aside>
+<li>Defined in src/lib/log/log-file-client.ts:13</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -38,26 +38,26 @@
 面板据此重置时间线与游标（否则重启前后的行会混成一条线）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-file-client.ts:28</li></ul></aside></section>
+<li>Defined in src/lib/log/log-file-client.ts:28</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="content"><span>content</span><a href="#content" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">content</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-file-client.ts:14</li></ul></aside></section>
+<li>Defined in src/lib/log/log-file-client.ts:14</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="mismatch"><code class="tsd-tag">Optional</code><span>mismatch</span><a href="#mismatch" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">mismatch</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>true = 本轮请求带的服务进程标识与响应不一致（详见 route.ts）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-file-client.ts:30</li></ul></aside></section>
+<li>Defined in src/lib/log/log-file-client.ts:30</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="offset"><span>offset</span><a href="#offset" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">offset</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>本次返回内容在文件中的起点。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-file-client.ts:18</li></ul></aside></section>
+<li>Defined in src/lib/log/log-file-client.ts:18</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="sessionstart"><code class="tsd-tag">Optional</code><span>session<wbr/>Start</span><a href="#sessionstart" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">sessionStart</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
@@ -65,14 +65,14 @@
 null = 读不到锚点（非双击链路启动），面板此时不做时间线截断。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-file-client.ts:23</li></ul></aside></section>
+<li>Defined in src/lib/log/log-file-client.ts:23</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="size"><span>size</span><a href="#size" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">size</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>文件当前总字节数（下一轮增量读取的游标）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-file-client.ts:16</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/log/log-file-client.ts:16</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

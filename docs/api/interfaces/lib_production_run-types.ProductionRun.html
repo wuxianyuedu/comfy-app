@@ -13,7 +13,7 @@
 <h1>Interface ProductionRun</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">ProductionRun</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#approvalmode">approvalMode</a><span class="tsd-signature-symbol">:</span> <a href="../types/lib_production_run-types.ApprovalMode.html" class="tsd-signature-type tsd-kind-type-alias">ApprovalMode</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#autoreview">autoReview</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#awaitingstage">awaitingStage</a><span class="tsd-signature-symbol">:</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;script&quot;</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;video&quot;</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;render&quot;</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;shots&quot;</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;character&quot;</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;storyboard&quot;</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#error">error</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#filmstartedat">filmStartedAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#goal">goal</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#imageworkflowid">imageWorkflowId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#log">log</a><span class="tsd-signature-symbol">:</span> <a href="lib_production_run-types.RunStep.html" class="tsd-signature-type tsd-kind-interface">RunStep</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#processedshotrev">processedShotRev</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#reviewattempts">reviewAttempts</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#reviewedshotrev">reviewedShotRev</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#stage">stage</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;script&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;video&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;render&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;shots&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;character&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;storyboard&quot;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#status">status</a><span class="tsd-signature-symbol">:</span> <a href="../types/lib_production_run-types.RunStatus.html" class="tsd-signature-type tsd-kind-type-alias">RunStatus</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#updatedat">updatedAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#videoworkflowid">videoWorkflowId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:44</li></ul></aside>
+<li>Defined in src/lib/production/run-types.ts:44</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -44,7 +44,7 @@
 <h3 class="tsd-anchor-link" id="approvalmode"><span>approval<wbr/>Mode</span><a href="#approvalmode" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">approvalMode</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_production_run-types.ApprovalMode.html" class="tsd-signature-type tsd-kind-type-alias">ApprovalMode</a></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:46</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:46</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="autoreview"><span>auto<wbr/>Review</span><a href="#autoreview" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">autoReview</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
@@ -52,47 +52,47 @@
 默认 false（不改既有 run 行为）；由 <code>run.start</code> 带入。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:67</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:67</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="awaitingstage"><span>awaiting<wbr/>Stage</span><a href="#awaitingstage" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">awaitingStage</span><span class="tsd-signature-symbol">:</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;script&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;video&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;render&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;shots&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;character&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;storyboard&quot;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>status=awaiting_approval 时，在等哪个阶段被确认。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:52</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:52</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="error"><span>error</span><a href="#error" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">error</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:74</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:74</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="filmstartedat"><span>film<wbr/>Started<wbr/>At</span><a href="#filmstartedat" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">filmStartedAt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>已触发出片的时间戳（非空=已 kick render，引擎下一步只等 rendered、不重复起）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:57</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:57</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="goal"><span>goal</span><a href="#goal" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">goal</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>用户的一句话目标 / 意图（可选，供模型规划参考）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:50</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:50</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="imageworkflowid"><span>image<wbr/>Workflow<wbr/>Id</span><a href="#imageworkflowid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">imageWorkflowId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>逐镜生图 / 出片用的工作流库工作流 id（本地链路唯一来源，由 start 带入、存进 run）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:54</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:54</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="log"><span>log</span><a href="#log" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">log</span><span class="tsd-signature-symbol">:</span> <a href="lib_production_run-types.RunStep.html" class="tsd-signature-type tsd-kind-interface">RunStep</a><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>执行日志（引擎每步追加，有界；见 appendRunStep）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:73</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:73</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="processedshotrev"><span>processed<wbr/>Shot<wbr/>Rev</span><a href="#processedshotrev" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">processedShotRev</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span></div>
@@ -100,43 +100,43 @@
 （换图 / 改提示词 / 退回），规划器据此把该镜重新纳入待办——这是「基于改动续跑」的判据。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:62</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:62</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="reviewattempts"><span>review<wbr/>Attempts</span><a href="#reviewattempts" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">reviewAttempts</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>每个镜头已被自动抽卡重出的次数；达 <code>REVIEW_MAX_RETRY</code> 后保留当前结果、停止返工（避免无限循环）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:71</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:71</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="reviewedshotrev"><span>reviewed<wbr/>Shot<wbr/>Rev</span><a href="#reviewedshotrev" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">reviewedShotRev</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>每个镜头「上次被本 run 评审并定稿（通过 / 达重试上限保留）」时的 rev 快照。当前 rev &gt; 快照 → 该镜需（再）评审。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:69</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:69</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="stage"><span>stage</span><a href="#stage" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">stage</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;script&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;video&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;render&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;shots&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;character&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;storyboard&quot;</span></div>
 <div class="tsd-comment tsd-typography"><p>当前阶段游标（与 progress.stage 同源，run 期间由引擎推进）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:48</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:48</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="status"><span>status</span><a href="#status" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">status</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_production_run-types.RunStatus.html" class="tsd-signature-type tsd-kind-type-alias">RunStatus</a></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:45</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:45</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="updatedat"><span>updated<wbr/>At</span><a href="#updatedat" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">updatedAt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:75</li></ul></aside></section>
+<li>Defined in src/lib/production/run-types.ts:75</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="videoworkflowid"><span>video<wbr/>Workflow<wbr/>Id</span><a href="#videoworkflowid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">videoWorkflowId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/production/run-types.ts:55</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/production/run-types.ts:55</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
