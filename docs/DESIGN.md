@@ -592,9 +592,10 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 **「叫什么」与「长什么样」分两头守，别写重复**：
 
-- 名字只有一个出处 = `NavItems.tsx` 那份注册表（`label` = 导航口径、`viewLabel` = 屏内页头口径、`pageHeaderTitle(view)` = 唯一出口），执行者 = `tests/page-name-single-source.test.ts`（在 `FIXED_STRUCTURAL_TESTS` 里）。它按**形态**取锚（但**扫描面是一份具名文件清单**，覆盖面见 Known Gaps），判的是「页头标题不许是裸字面量」「`viewLabel` 不许与 `label` 只差装饰性后缀」「全库不许再出现『`A` · `B`』连写两个屏名」。
-- 字阶档 = P83（`check-ui-primitives.cjs`），它只管「屏级标题是不是 `.u-title-page`、有没有在 `h1` 上硬写字号」，**看不见形状**。
-- **页头因此不进 §Shapes 那张 `FAMILIES` 表**（不是漏网）：形状回潮这一格如果开一族，就和上面那条测试判同一件事，而本仓的口径是「新增守卫前先查是否已有更强的一条」；两份执行者只会让「谁在守」再次变成读不准的东西。
+- 名字只有一个出处 = `NavItems.tsx` 那份注册表（`label` = 导航口径、`viewLabel` = 屏内页头口径、`pageHeaderTitle(view)` = 唯一出口），执行者 = `tests/page-name-single-source.test.ts`（在 `FIXED_STRUCTURAL_TESTS` 里）。它判的是「页头标题不许是裸字面量」「`viewLabel` 不许与 `label` 只差装饰性后缀」「全库不许再出现『`A` · `B`』连写两个屏名」；⚠️ 它的消费者面是**一份具名文件清单**，所以「新屏没走 `PageHeader`」这件事不归它管。
+- 字阶档 = P83（`check-ui-primitives.cjs`），只管「屏级标题是不是 `.u-title-page`、有没有在 `h1` 上硬写字号」，**看不见形状**。
+- 形状 = **P86**（同一个脚本里的硬闸，ISSUE #1668 之后落地）：锚「`.u-title-page` 的标题」与「`mt-1 text-sm` 的副说明」在 8 行窗口内**同现**，缺一不算 —— 三处刻意不迁的落点都只有前者没有后者，实测一处不误抓。**色类不进锚**（那个唯一手抄样本用 `text-muted-foreground`、基元用 `text-ink-muted`，写进锚会恰好漏掉样本、落在 0 上永远绿）。
+- **页头因此不进 §Shapes 那张 `FAMILIES` 表**（不是漏网）：形状那一半已由 P86 按形态收口，再开一族就是同一件事两个执行者，而本仓的口径是「新增守卫前先查是否已有更强的一条」。
 
 三处**刻意不迁**（照规范 16 §16.2.4.73 那张表；排除项不写进文档，下一轮就会被当漏网清掉）：
 
@@ -736,7 +737,9 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
   执行者** —— 要不要补一条按 prop 取锚的判据是另一条线的口径，本条只留现场与复算入口
   （见规范 16 §16.2.4.73 末段；还有一处同名不同源的 `ConsoleView` 也留在那里）。
 - **圆角的自动化覆盖是「相对变化」而不是「绝对形状」**：读 `borderTopLeftRadius` 的断言有 **4 处**，全在 `e2e/appearance-steps.spec.ts`，判的是「改档之后它变了没 / 刷新后还在不在」—— **变了**这件事有覆盖。
-  「变成什么形状」这一格此前是空的，现在**部分**补上了，但要看清补的是哪种（订正：本文件上一版写「`toHaveScreenshot` 全仓只有 2 处、要补的是代表屏的截图用例 + 一个手动跑的入口」，那是只剩 login 一份 spec 时的读数）：实测 **5 份视觉 spec / 10 处 `toHaveScreenshot`**（canvas 2、login 3、models 1、overlay 2、workspace 2），基线 **18 份 PNG = `-linux` 10 + `-win32` 8**（`darwin` 0；win32 只差首页那两张，登记在 `scripts/visual-baselines.mjs` 的 `PENDING_PLATFORMS` 里，是欠条不是漏录），手动入口在 `pnpm check:visual` / `check:visual:update`（`scripts/pixel-run.mjs`，跑绿顺带记新鲜度账）。⇒ 绝对形状**只在被取景的那 10 屏上有判据**，而取景是那几块屏的整页形状，不是「逐档圆角各截一张」。
+  「变成什么形状」这一格此前是空的，现在**部分**补上了，但要看清补的是哪种（订正：本文件上一版写「`toHaveScreenshot` 全仓只有 2 处、要补的是代表屏的截图用例 + 一个手动跑的入口」，那是只剩 login 一份 spec 时的读数）：实测 **5 份视觉 spec / 10 处 `toHaveScreenshot`**（canvas 2、login 3、models 1、overlay 2、workspace 2），基线两档各成套（复算：`git ls-files 'e2e/*.png' | wc -l` 与按 `-linux` / `-win32` 后缀分档 tally；`darwin` 一直是 0），`scripts/visual-baselines.mjs` 的 `PENDING_PLATFORMS` 现为空表 —— 首页那两张 win32 已随 ISSUE #1593 收尾，**别再照旧文说它挂着欠条**。手动入口在 `pnpm check:visual` / `check:visual:update`（`scripts/pixel-run.mjs`，跑绿顺带记新鲜度账）。⇒ 绝对形状**只在被取景的那 10 屏上有判据**，而取景是那几块屏的整页形状，不是「逐档圆角各截一张」。
+  **win32 档当前实测不绿，而且不是负载造成的**（复算：`node scripts/pixel-run.mjs`，必要时 `--workers=1`）：实测 10 张里 5 张红，**降并发跑与默认并发跑红的是同一批** ⇒ §13.6.4 那条「降并发绿 = 机器问题」的出路在这里不成立。逐张归因：① 首页两张红**只在侧栏三个标签的字形上**（模型适配 / 控制台 / 模式契约），而这三项正是 `2c9adb1b` 重构过的 —— 可 win32 的记账时间比那笔晚 37 分钟却没反映它，最合理解释就是 AGENTS §4.3 的「运行图落后于源码」（录基线的 dev 实例是旧的）；② 模型库那张是**记账之后**又有两笔改了模型屏（`974b622f` / `71426352`），属合法视觉变更、该重录；③ 画布「有内容」那张红在它自己那条固定 id 的 `insert into "project"` 撞已存在行 —— 是**库状态没隔离**，与像素无关；④ 日志面板默认档那张红 1,031 像素、纯字形、稳定复现，**尚未归因**（同一屏的加宽档那张是绿的）。⇒ 结论：**这份账现在不能当「win32 自证过」引用**；要恢复自证得「全新起一份 dev server + 先把 e2e 那个固定 id 的项目隔离掉」再重录，那是像素档那条线（#1620）的动作，本文只记现场。
+
   **为什么仍然不算「有覆盖」**：playwright 不进 pre-commit（钩子里与像素相关的 `visual-gate.mjs` / `visual-freshness-gate.mjs` 两步都刻意不跑像素，只核「提交像素层时带没带一次判决」与「每一档有没有主」），`tests/visual-baseline-pairing.test.ts` 只核「基线文件齐不齐、名字对不对平台」不比像素 ⇒ 结论只在**录过基线的那台机器**上成立。规范 03 §3.6.1.1 那句「刻意不比像素」的理由（基线按平台分文件）仍然成立，别顺手把它推翻。
   **取景范围要按 spec 自己的注释读，别按屏的名字猜**：`overlay.visual.spec.ts` 的头写明它把日志内容钉成**空来源**（理由就是 §11.8 禁「随机/时变内容」——日志行逐帧在长），正文因此是稳定的空态文案 ⇒ `overlay-log-default/-wide` 那两张（× 两档平台）**确实包含** `ui/empty-state` 的 `panel` 档形状——#1626 的提交说明里「取景不含日志面板」那句是错的。
 - **frontmatter 只能表达一态**，而本库的取值规则是两态。上面的 `colors` / `rounded` / `components` 全部取**浅色档**（因为 `@theme` 写的就是浅色），而**默认主题是 Dark**。任何人拿 frontmatter 当「应用现在的样子」会得出反的结论——两态对照请看 Colors 表。
