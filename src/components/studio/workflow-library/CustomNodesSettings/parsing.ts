@@ -1,9 +1,3 @@
-/* eslint-disable @typescript-eslint/prefer-nullish-coalescing --
- * 理由（规范 §11.7 三分类法 · 第 3 类「伪建议」）：本文件比较的都是**服务端
- * 反序列化产物**（manifest / 发现结果），空串与 undefined 在此处同义（都表示
- * 「没有值」）。`??` 会把空串当成「有值」而放行，改动语义 —— 例如
- * `path.replace(...) || ""` 改 `??` 后，空串不再被兜底。因此 `||` 是刻意的
- * 语义选择，不是疏忽。 */
 /* CustomNodesSettings 弹窗的纯辅助函数：路径归一化、行
  * 状态推导、路径列表解析与杂项格式化。无 hook、无 JSX ——
  * 从原来的单文件 CustomNodesSettings.tsx 原样搬来。 */
@@ -39,7 +33,7 @@ export function deriveRowState(
     return { kind: "error", reason };
   }
   if (saved.status === "missing") return { kind: "missing" };
-  const savedHash = saved.contentHash || "";
+  const savedHash = saved.contentHash ?? "";
   if (!savedHash || !sub.contentHash) {
     // 两边都没有哈希信息 —— 仅当已保存侧 status==='ok' 时才当作已加载
     if (saved.status === "ok")
