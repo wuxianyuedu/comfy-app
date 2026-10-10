@@ -118,13 +118,13 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 不许升）→ 清零后升为硬闸（恒为 0）**。顺序不能反：把硬闸建在看不见的存量上，就是
 P82 那次「基线写着 78、真存量 157」的形态。
 
-**当前状态：84 条判据全部是硬闸**（`HARD_GATE_RULES`），棘轮基线 `total` 为 0。
+**当前状态：85 条判据全部是硬闸**（`HARD_GATE_RULES`），棘轮基线 `total` 为 0。
 棘轮这条路径**不是死代码** —— 它是**新引入判据的起步形态**：新判据一上来通常有存量，
 先冻结、清完再升硬闸。`--update` 因此只有一种合法用途：给旧基线里从未出现过的
 rule id 登记起点；任何「已有 rule id 上升」都直接拒绝，硬闸未清零时连登记都不给。
 
 ```bash
-pnpm ui:primitives            # 检查（84 条硬闸须为 0；pre-commit D 组「UI 基元复用棘轮」）
+pnpm ui:primitives            # 检查（85 条硬闸须为 0；pre-commit D 组「UI 基元复用棘轮」）
 pnpm ui:primitives:report     # 只出清单（排批次用，不判失败）
 node scripts/check-ui-primitives.cjs --update   # 只给新引入的判据登记起点
 ```
@@ -199,13 +199,13 @@ node scripts/check-ui-primitives.cjs --update   # 只给新引入的判据登记
 | **P65**     | 一次异步动作的忙碌位复位写在成功路径上（`setX(true)` → `await …` → `setX(false)`，且复位不在 `finally` / `catch` 里）                                                                                                                | `~/components/ui/use-busy-action` 的 `useBusyAction`（复位绑在 `finally` 上、异常不吞、卸载守卫）；store 级忙碌位见 `~/components/update-check/update-check-store` 的 `runChecking`（见 §16.2.4.71）            |
 | **P66**     | 自建「同一时刻只跑一件」的重入闸门（名字带 `busy`/`pending`/`inflight`/`locked`/`running`/`checked` 的 `useRef` + 写一次 + 读两处）                                                                                                  | `~/lib/reentrancy-lock` 的 `useReentrancyLock`（同步 `tryEnter` / `exit`）/ `createReentrancyLock`（跨组件实例、非 hook 场景）（见 §16.2.4.69）                                                                 |
 | **P67~P83** | 见各自的 §16.2.4.x（`ui/` 层自造组件绕开 shadcn 基元、视图层手写 `<input>` / `<label>` / `aria-pressed` / `dark:palette`、缺可访问名、自闭合 `border-*`、空态卡、`<select>`、`w-N h-N`、`<Button>` 图标与 `title=`、屏级标题字阶……） | 逐条见 `pnpm ui:primitives:report` 与对应章节                                                                                                                                                                   |
-| **P86**     | 视图层手搓「`h1` + 副说明 + 右侧动作组」的屏级页头（**这一条不进硬闸**：工具条形态的页头刻意保留各自的实现，见 §16.2.4.73 的「三处刻意不迁」）                                                                                                                                                  | `~/components/ui/page-header` 的 `PageHeader`（标题从 `pageHeaderTitle(view)` 取，一屏不许有第二个名字）（见 §16.2.4.73）                                                                                        |
 | **P84**     | 视图层手搓面包屑（`/` 分隔 span + 段数组 `map`；形态锚，不按名字找）                                                                                                                                                                 | `~/components/ui/breadcrumb-path` 的 `BreadcrumbPath`（建在 `ui/breadcrumb` 的整套 slot 上：`nav`+`ol`/`li` 层级与 `aria-current="page"`）（见 §16.2.4.72）                                                     |
 | **P85**     | 视图层手写 `<table>`（裸标签，丢掉基元的 `data-slot` 与统一排版）                                                                                                                                                                    | `~/components/ui/table` 的 `Table` / `TableHeader` / `TableRow` / `TableCell` / `TableHead`（见 §16.2.4.72）                                                                                                    |
+| **P86**     | 视图层手搓「`h1` + 副说明 + 右侧动作组」的屏级页头（**形态锚**：`.u-title-page` 的标题与 `mt-1 text-sm` 的副说明**在同一段窗口内同现**；色类不进锚，见 §16.2.4.73）                                                                                                                                                  | `~/components/ui/page-header` 的 `PageHeader`（标题从 `pageHeaderTitle(view)` 取，一屏不许有第二个名字）（见 §16.2.4.73）                                                                                        |
 
 **「引入时的起点」不同，不是「性质」不同**：P1/P2/P3 落地时视图里摆着 408 / 10 / 40
 处存量，只能先冻结成棘轮逐批降；P4 之后的大多数判据引入时那个形态已经是 0
-（同批一起清零），所以一上来就是硬闸。**两者现在终点重合：84 条全部是硬闸**。
+（同批一起清零），所以一上来就是硬闸。**两者现在终点重合：85 条全部是硬闸**。
 逐条的名字与实时计数看 `pnpm ui:primitives:report` —— 正文与脚本都不再抄一份清单：
 脚本里那份手写的「P4 自绘滚动条 / … / P66 重入闸门」名字表就漂过一回（写着 66，
 判据早已到 83，而升闸的 12 条一个都没被提到）。
@@ -5472,6 +5472,59 @@ navigation-menu pagination radio-group scroll-area slider table
 这条判据进 `FIXED_STRUCTURAL_TESTS`（规范 11 §11.25 / §13.5.8）：它读的是源码 +
 注册表，import 图一概追不到 —— 改一个视图的标题不会把它带进受影响集，
 跟着改动走等于专挑它不在的时机跑。
+
+#### 形状那一半：P86（`check-ui-primitives.cjs`，硬闸）
+
+上面那份守卫**按名字**收口，而「这一屏的页头长什么样」是另一件事 —— 它此前
+**没有执行者**，而这格在判据表里已经**占了 P86 这个编号**（ISSUE #1668）：
+
+- 表里那行写着 P86 并标注「这一条不进硬闸」，读表的人会得出「P86 是一条已存在、
+  只是走棘轮的判据」；
+- 而 `grep -rn "\bP86\b" scripts/` 命中 **0**、脚本内最大编号是 **P85** ——
+  它既不在硬闸也不在棘轮，是**占了编号的未实现**。这与 §13.5.12 立的案同族
+  （判据自称在跑、实际没有执行者），只是这次的「自称」发生在**逐条点数的编号表**里，比正文写错更贵。
+
+收口当时的真实执行者是上面那份 `page-name-single-source`，但它的
+`PAGE_HEADER_CONSUMERS` 是**一份具名文件清单**（7 屏）—— 拦得住「这 7 屏退回
+手抄」，**拦不住第 8 个新屏自己拼**；而 P83 只判「屏级标题是不是 `.u-title-page`」，
+**看不见形状**，手抄照样过 P83。
+
+**P86 的锚是形态，两件必须同现**（缺一不算）：
+
+| 件 | 形态 | 为什么是它 |
+| --- | --- | --- |
+| ① 屏级标题 | `.u-title-page`（P83 已要求的那一档） | 屏级页头的标题档只有这一档 |
+| ② 副说明 | `mt-1` + `text-sm`，在①之后 **8 行**以内的窗口里 | 规范 03 §3.10 末尾给「新增一个屏时」写死的两个类 |
+
+两条**必须记下来的口径**：
+
+- **色类不进锚**。手抄样本（`src/app/(main)/models/page.tsx`）的副说明色类是
+  `text-muted-foreground`，而基元里是 `text-ink-muted` —— 若把色类也写成判据的
+  一部分，这条判据会**恰好漏掉唯一的现成手抄样本**、落在 0 上永远绿。
+  色类归 §3.6.2 的语义 token 口径管，不归这里。「等式为 0 的判据若正则写漂会
+  永远绿」正是本仓反复踩过的那条（P82 粗锚漏计 79 处、P75 一族）。
+- **窗口按行、不按整文件**。「`.u-title-page` 起往后 8 行」而不是「同文件里
+  有没有 `mt-1 text-sm`」：整文件口径下，一个屏里同时有页头与别的说明行时，
+  它里面所有标题档都会被算上。
+
+三处**刻意不迁**（上面那张表）的落点只有①、没有② —— 实测
+`FilmStudioTopBar` / `WorkflowLibraryHeader` / `WorkshopHeader` /
+`ProjectHomePage` / `SettingsShell` 的 `mt-1 text-sm` 命中数**全是 0**，
+所以「①+②同现」恰好只挑出手抄页头、一处不误抓（判据在真实仓库上数出 1 处，
+就是那个样本）。
+
+引入时全库正好 **1 处**真存量，同批迁到 `ui/page-header` 后清零、**直接进硬闸**
+（与 P84/P85 同款：存量本就只有一两处，不走棘轮那条路径）。正例 / 反向样本
+四条在 `tests/check-ui-primitives.test.ts` 的 P86 组（喂的是**收口前的真实形状**，
+连同那个 `text-muted-foreground`）。
+
+迁的时候撞到一条结构性约束，一并记下：`pageHeaderTitle` 从 `"use client"` 的
+`NavItems` 导出，**server component 调不到它** —— 那个手抄样本在路由壳
+`src/app/(main)/models/page.tsx` 里，而壳是 server（它有 `export const metadata`，
+与 `"use client"` 不能共存）。所以页头落在**屏的实现侧**
+`src/components/model/ModelLibrary.tsx`，壳只留 `metadata` + 挂载。
+「页头写在哪一层」因此不是风格问题：**它得跟调用处同侧**。
+（`pages` / `consumers` 那份具名清单里，这一屏登记的是实现侧文件，不是壳。）
 
 ## 16.3 新增一个组件的标准动作
 

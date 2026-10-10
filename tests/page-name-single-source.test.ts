@@ -51,8 +51,20 @@ const RETIRED_SCREEN_NAMES = [
   "历史记录",
 ] as const;
 
-/** 用页头的四屏（`ui/page-header` 的调用面）。它缺席说明收口被绕开了。 */
+/**
+ * 用 `ui/page-header` 的屏（`ui/page-header` 的调用面）。它缺席说明收口被绕开了。
+ *
+ * ⚠️ **这是一份具名清单，不是「所有屏」** —— 它拦得住「这些屏退回手抄」，
+ * **拦不住第 8 个新屏自己拼页头**。那一半由 P86 按**形态**守
+ * （`scripts/check-ui-primitives.cjs`，见规范 16 §16.2.4.73）：它锚
+ * `.u-title-page` 与 `mt-1 text-sm` 的副说明同现，不看文件在不在清单里。
+ * 两半的分工写在这里，是因为清单的覆盖面必须与「守卫的实际射程」对上 ——
+ * 读这份清单的人不该以为它是全库判据。
+ */
 const PAGE_HEADER_CONSUMERS = [
+  /* 路由壳 `app/(main)/models/page.tsx` 只留 `metadata` + 挂载 —— 页头在
+   * 实现侧（`pageHeaderTitle` 是 client 侧的函数，server 壳调不到它）。 */
+  "src/components/model/ModelLibrary.tsx",
   "src/components/console/ConsoleView.tsx",
   "src/components/studio/ModelLibrary.tsx",
   "src/components/studio/ProjectOutputs.tsx",
@@ -67,7 +79,7 @@ function read(rel: string): string {
 }
 
 describe("屏名只有一个出处（ISSUE #1423）", () => {
-  it("四屏的页头都走同一个基元（收口没被绕开）", () => {
+  it(`清单上的 ${PAGE_HEADER_CONSUMERS.length} 屏页头都走同一个基元（收口没被绕开）`, () => {
     const offenders = PAGE_HEADER_CONSUMERS.filter(
       (rel) => !read(rel).includes('from "~/components/ui/page-header"'),
     );
