@@ -350,6 +350,13 @@ export default defineConfig({
         /* `ui/toggle-group` 的选中档三层是本仓库的定制（规范 16 §16.8），
          * 有用例钉住就得进门槛。同款 **两处同批改**。 */
         "src/components/ui/toggle-group.tsx",
+        /* 「一排里选一个」的 chip（ISSUE #1423 / 规范 16 §16.2.4）：
+         * 它替掉的是全库 20 处**逐字相同**的选中态三元 —— 那些三元只写了
+         * 「未选中之外」的那一半，选中档没钉住悬停值，于是被 `Button` 的
+         * `outline` 变体自带的 `hover:text-foreground` 吃掉（划到已选中的
+         * chip 上字色翻白）。同款 **两处同批改**（`coverage.include` +
+         * `thresholds`）：只写门槛不进 `include` 会让门槛静默失效。 */
+        "src/components/ui/select-chip.tsx",
         /* 左轨让位这笔账（阈值算式 + 三档优先推导）与它的窄窗判据出口。
          * 同款 **两处同批改**（`coverage.include` + `thresholds`）：
          *   · `layout-budget` 是纯函数模块（无 React、无 IO），可逐分支钉死；
@@ -1503,6 +1510,16 @@ export default defineConfig({
          * `data-[pressed]:*` 上、悬停档保持官方版的 `bg-muted`（两条一起才说明
          * 「不是靠改悬停解决的」）、`aria-pressed` 仍由基元持有。实测满档。 */
         "src/components/ui/toggle-group.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「一排里选一个」的 chip（ISSUE #1423）：四种形态的类名档、选中档的
+         * 四层、以及**本次真正要防的那一条** —— 选中档必须自带 hover 覆盖。
+         * 三轴 + 形态 + 语义 + className 压过缺省档，实测四维满档（§18.6：
+         * 门槛按实测值取，只升不降）。 */
+        "src/components/ui/select-chip.tsx": {
           lines: 100,
           functions: 100,
           statements: 100,
