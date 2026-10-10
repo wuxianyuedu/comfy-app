@@ -25,8 +25,11 @@ import {
   freshnessRecord,
 } from "../scripts/visual-baselines.mjs";
 import {
+  combineEvidence,
+  dirtySinceToday,
   readFreshnessLedger,
   runGate,
+  stagedDirtiesTrack,
 } from "../scripts/visual-freshness-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -109,18 +112,28 @@ describe("像素基线新鲜度判决（§11.8）", () => {
   it("pending 档不被要求新鲜度记录，而以「待补录」出现在读数里", () => {
     /* 这一条是刻意的排除：`PENDING_PLATFORMS` 里那一档缺几张基线、只能在那档机器上录，
      * 记「上次跑绿」是句不成立的话。强行要求只会逼人填假读数。 */
-    const result = runGate({ ledger: { linux: GOOD }, now: NOW, platforms: undefined });
+    const result = runGate({
+      ledger: { linux: GOOD },
+      now: NOW,
+      platforms: undefined,
+    });
     expect(result.exitCode).toBe(0);
     expect(result.ages.join("；")).toContain("linux：1 天前");
-    expect(result.ages.join("；")).toContain("win32：待补录（PENDING_PLATFORMS）");
+    expect(result.ages.join("；")).toContain(
+      "win32：待补录（PENDING_PLATFORMS）",
+    );
   });
 
   it("freshnessAge：日期解不开时返回 null（不许把「没记」读成「刚刚跑过」）", () => {
     expect(freshnessAge({ verifiedAt: "最近" }, NOW)).toBeNull();
     expect(freshnessAge(null, NOW)).toBeNull();
-    expect(freshnessAge({ verifiedAt: "2026-10-06T00:00:00Z" }, NOW)).toBe("今天");
+    expect(freshnessAge({ verifiedAt: "2026-10-06T00:00:00Z" }, NOW)).toBe(
+      "今天",
+    );
     // 未来时间（机器时钟漂了）不报一个负数天数 —— 那会读成「负 N 天前」。
-    expect(freshnessAge({ verifiedAt: "2026-10-07T00:00:00Z" }, NOW)).toBeNull();
+    expect(
+      freshnessAge({ verifiedAt: "2026-10-07T00:00:00Z" }, NOW),
+    ).toBeNull();
   });
 });
 
@@ -153,5 +166,63 @@ describe("记账接线（§13.5.12：判据要有人跑）", () => {
     const src = read("scripts/pixel-run.mjs");
     expect(src).toContain("recordFreshness");
     expect(src).toMatch(/if \(update\) return null;/);
+  });
+});
+
+describe("「今天动过这一档」的取证面 = 今天的提交 ∪ 待提交那一批", () => {
+  /* 立案：pre-commit 跑在提交之前，那一刻 `git log` 里还没有这次的改动。
+   * 只问已提交时，一笔改了 `tests/` 的提交被判「今天没动过这一档」而放行，
+   * 它落进 master 之后下一个人第一次提交立刻红 —— 「改了就当天跑」退化成
+   * 「改了由别人补跑」。这一族判的是**取证时机**，不是判定规则本身。 */
+  const FULL = { dirty: ["src/", "tests/"] };
+  const NO_FACE = { dirty: [] };
+
+  it("待提交里有输入面 ⇒ 算动过；只有文档 ⇒ 没动过", () => {
+    expect(stagedDirtiesTrack(FULL, ["tests/a.test.ts", "docs/x.md"])).toBe(
+      true,
+    );
+    expect(stagedDirtiesTrack(FULL, ["docs/x.md"])).toBe(false);
+  });
+
+  it("反斜杠要先归一（Windows 上的静默恒放行形状）", () => {
+    /* 前缀清单全是正斜杠；不 normalize 时 `tests\setup.ts` 会被读成「没动过」，
+     * 而这条判据的失效**不报错**（本仓在 `path.relative` 上栽过的同一族）。 */
+    expect(
+      stagedDirtiesTrack(FULL, [
+        "tests" + String.fromCharCode(92) + "setup.ts",
+      ]),
+    ).toBe(true);
+    expect(stagedDirtiesTrack(FULL, ["src/lib/x.ts"])).toBe(true);
+    // 不吃输入面的档（全量 e2e）恒 false —— 它按日历日判，不看这里。
+    expect(stagedDirtiesTrack(NO_FACE, ["tests/a.test.ts"])).toBe(false);
+  });
+
+  it("空白行与空清单不算动过", () => {
+    expect(stagedDirtiesTrack(FULL, [])).toBe(false);
+    expect(stagedDirtiesTrack(FULL, ["", "   ", "\t"])).toBe(false);
+  });
+
+  it("合成四种取证组合（committed / staged / 都无 / 问不出来）", () => {
+    const now = new Date("2026-10-10T02:00:00.000Z");
+    const earlier = new Date("2026-10-10T00:30:00.000Z");
+    // 今天的提交已经动过 ⇒ 用那个**更早**的时刻（「先跑后改」的边界要按真实时刻比）
+    expect(combineEvidence(earlier, true, now)).toBe(earlier);
+    expect(combineEvidence(earlier, false, now)).toBe(earlier);
+    // 只有待提交动过 ⇒ 用 now 顶上（此刻正有一批要吃这一档的改动等着提交）
+    expect(combineEvidence(null, true, now)).toBe(now);
+    // 两半都说没动过 ⇒ null（这一档退回宽限判）
+    expect(combineEvidence(null, false, now)).toBe(null);
+    /* git 问不出来时**不新增也不撤销结论**：把「问不出」当成「没动过」是 §9.2 第 3 条
+     * 禁的静默失败，反过来凭空造一个时刻又会误伤「今天其实没人动它」。 */
+    expect(combineEvidence(null, null, now)).toBe(null);
+    expect(combineEvidence(earlier, null, now)).toBe(earlier);
+  });
+
+  it("真仓库上跑一次不许抛，且返回的是 Date 或 null", () => {
+    const at = dirtySinceToday({ dirty: ["src/", "tests/"] }, new Date());
+    if (at !== null) {
+      expect(at instanceof Date).toBe(true);
+      expect(Number.isNaN(at.getTime())).toBe(false);
+    }
   });
 });
