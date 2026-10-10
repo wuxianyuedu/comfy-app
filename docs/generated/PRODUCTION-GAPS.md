@@ -685,7 +685,28 @@
       · **换文件之前必先给当前库做一份退路备份**，那一步失败就**不换**
         （宁可让用户重来，也不要把唯一的退路丢掉）。
 
-- [ ] **D7 版本号三处手工重复（均 0.1.0）** 无同步守卫。证据：`package.json:3` / `tauri.conf.json:4` / `Cargo.toml:3`。
+- [x] **D7 版本号三处手工重复（均 0.1.0）—— 已闭合：不改「三处手写」，改为守住三者相等（ISSUE #1611 阶段三 D7）**。
+      证据：`scripts/check-app-version.cjs`（判据）、`pnpm check:app-version`（手动入口）、
+      pre-commit D 组「产品版本号三处同步(D7)」。
+      判据：`tests/check-app-version.test.ts`（12 条：三处相等 / 逐处读不出 / 形态非法 /
+      `[package]` 段外不许命中 / 与 npm script 接线）。
+      **为什么不合成一份来源**（本条原文暗含的那个方向）：三个文件都得各写各的 ——
+      `package.json` 由 npm 读、`src-tauri/tauri.conf.json` 由 tauri-build **在编译期**读、
+      `Cargo.toml` 由 cargo 读。让其中一个去 import 另一个，是在三个工具各自的清单格式里
+      塞第四个语言；收益是省一次改三处，代价是每次升级都要赌那个语法还被支持。
+      所以取向是**守住相等**（判据每次提交判一次），不是造第二份来源。
+      **为什么必须有判据**：三处不一致**不报错**，而后果落在更新链上 ——
+      `tauri.conf.json` 的版本是编译期内嵌的、也是 `tauri-plugin-updater` 判「更新新旧」的
+      基准；只升 `package.json` 时安装包与更新判定还停在旧版本 ⇒ 用户看到「已是最新」，
+      而实际发布的已经是新构建。三处**当时恰好相等**（所以错位还看不出来），第一次忘记升
+      某处的那一刻起它就永久静默。规范见 `launch-and-build` §7.1.1。
+      **判据刻意不判**「该不该升」「有没有比上次大」「changelog 里有没有对应条目」——
+      那些是发布判断（§12.18：不为「该不该升」再写一个启发式扫描器）。
+      顺带收了一处**第四种抄法**：`src/server/mcp/workshop-mcp.ts` 的 MCP
+      `serverInfo.version` 硬编码了一个版本号字面量（= `0.1.0`），而它没有任何读者会核（客户端只把它显示出来）
+      —— 改从 `src/lib/app-version.ts` 的 `APP_VERSION` 取（读 `package.json`），
+      那三处由本判据守着相等。文档侧的第四种抄法由 `doc:check` 的
+      `app.version` 事实拦（本行原文那个版本号就是这么被照出来的）。
 
 ### P2 — 成熟度与体验
 

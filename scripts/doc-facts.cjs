@@ -167,6 +167,20 @@ function extractMcpHttpPort() {
   if (!m) throw new Error("无法从 tools/mcp-http.ts 提取 MCP_HTTP_PORT 默认值");
   return m[1];
 }
+/**
+ * 产品版本号：权威源是 `package.json` 的 `version`（D7 / 规范 launch-and-build §7.1.1）。
+ *
+ * 另两处（`src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`）由
+ * `scripts/check-app-version.cjs` 守着与它逐字相等 —— 所以这里只读一处，
+ * 不在校验脚本里再写一遍「三处怎么比」。
+ */
+function extractAppVersion() {
+  const t = readText("package.json");
+  const m = /^\s*"version"\s*:\s*"([^"]*)"/m.exec(t);
+  if (!m) throw new Error("无法从 package.json 提取 version");
+  return m[1];
+}
+
 function extractComfyUIPort() {
   /* ComfyUI 默认监听端口的权威源是 `src/lib/endpoints.ts` 的常量
    * `COMFYUI_DEFAULT_PORT`（ISSUE #536 P3 之前它散落在 5 个文件里，client.ts
@@ -305,6 +319,25 @@ const FACTS = [
     extract: extractComfyUIPort,
     onlyDocs: ["docs/workshop-mcp.md"],
     otherDocs: ["docs/standards/Comfy-APP-T3-项目开发规范.md"],
+  },
+  // 产品版本号（ISSUE #1611 阶段三 D7 / 规范 launch-and-build §7.1.1）：
+  // 同一个版本号写在三个文件里（package.json / src-tauri/tauri.conf.json /
+  // src-tauri/Cargo.toml），三处相等由 scripts/check-app-version.cjs 守；
+  // 这里守的是**第四种抄法**——在**文档里**再写一遍具体版本号（写死 `0.1.0`
+  // 的那种介绍文字），它会在下一次升版本时静默过期。文档要提版本时写「读
+  // package.json 的 version」或占位符，别写字面量。
+  // 适用面刻意收在「引用产品版本」的那几篇（maintainer 指南与变更规范），
+  // 不放全量：被扫描的文档里允许出现**别的**版本号（依赖 / Node / Rust 版本），
+  // 它们与产品版本无关，把全量文档都判成「提到 0.1.0 就红」会误报一片。
+  {
+    key: "app.version",
+    placeholder: "{{app.version}}",
+    kind: "placeholder",
+    extract: extractAppVersion,
+    onlyDocs: [
+      "docs/guides/PRODUCTION-GAPS.md",
+      "docs/standards/Comfy-APP-T3-项目开发规范.md",
+    ],
   },
   // 注释语言白名单（ISSUE #678 / 规范 12 §12.4.6）：名单本身是权威定义，
   // 由 reference-facts 的一行承载，脚本解析它 —— 两侧只有一份清单。
