@@ -5667,7 +5667,7 @@ navigation-menu pagination radio-group scroll-area slider table
 判据（`SettingsShell.test.tsx` 的第 3 条，随本次落地）：**分组名不在可点目标里**
 （横排那版两者平权，这一条正是为「层级读得出来」而立的）+ **每个分组各带一个
 `[data-slot="tree-children"]` 子行容器**（行与它的子行绑成一对）。
-判据：`src/components/settings/SettingsShell.test.tsx`（**4** 条 —— 没有「返回」出口 / 分区导航一项不漏不重 / **分组名不可点、每段各带一个子行容器**（§16.2.4.73.2）/ `aria-current` 恰好一项且点击回传分区）；`e2e/critical-flows.spec.ts` 那条「打开设置后底部状态栏与视图出路都不被盖住」的锚从「返回」按钮换成分区导航第一项 —— 树形改造后它仍成立（`aria-label="设置分区"` 与按钮语义都没变）。
+判据：`src/components/settings/SettingsShell.test.tsx`（见 §16.2.4.74 的判据表）；`e2e/critical-flows.spec.ts` 那条「打开设置后底部状态栏与视图出路都不被盖住」的锚从「返回」按钮换成分区导航第一项 —— 树形改造后它仍成立（`aria-label="设置分区"` 与按钮语义都没变）。
 
 #### 同一屏的第二条路：`studio/ModelLibrary` 的裸字面量（ISSUE #1673）
 
@@ -5714,6 +5714,101 @@ navigation-menu pagination radio-group scroll-area slider table
 > 一并留在现场；两条判据的自查是
 > `node scripts/check-ui-primitives.cjs` 与
 > `pnpm exec vitest run tests/page-name-single-source.test.ts`。
+
+### 16.2.4.74 设置页「一页到底」：导航是**目录**，滚动跟随是判据（ISSUE #1722）
+
+`16.2.4.73.x` 两节处理的是**导航长什么样**（层级读不读得出来）。这一节处理另一半：
+导航点下去之后**发生什么**。用户反馈：
+
+> 「设置页的界面内容要做成一个滚动条可以从头滚动到尾，然后左侧选中项可以跟随滚动
+> 变化，每一项在右侧展示区也要有对应标题」（ISSUE #1722）
+
+此前是**一屏一节**：导航点一下把右侧换成另一份 JSX
+（`{c.section === "comfyui" && <ComfyuiSection c={c} />}`）。三件事因此做不到：
+
+| 用户要的 | 一屏一节的形态下为什么做不到 |
+| --- | --- |
+| 一根滚动条从头到尾 | 滚动条是**每一节各自**的（`section` 切换 = 内容树换掉，滚动位置归零） |
+| 左侧选中项跟随滚动 | 没有「滚动」这件事可跟 —— 选中项只由点击改 |
+| 每节在右侧有对应标题 | 正文里**一个标题都没有**，只有卡片自己那行 `SettingsCard` 标题；滚到中段没有任何本地线索 |
+
+**现在的形态**（`src/components/settings/SettingsShell.tsx`）：
+
+```text
+┌ h1 设置 ─────────────────────────────────┐
+├ 导航树（目录，w-40）  │ 滚动容器（唯一一根滚动条）        ┤
+│   模型                │   <section id="settings-llmLocal">  │
+│     本地模型 ◀─高亮   │     h2 本地模型 + 一句话说明         │
+│     远程模型          │     …卡片…                          │
+│   后端                │   <section id="settings-comfyui">   │
+│     创作后端          │     h2 创作后端 + 一句话说明         │
+│   …                   │     …                               │
+└───────────────────────┴────────────────────────────────────┘
+```
+
+四件必须一起成立的事，每条都对应一个**静默**的失效模式：
+
+| 事 | 失效模式（都没有报错、没有告警） | 判据 |
+| --- | --- | --- |
+| 全部小节都在同一根滚动容器里 | 少渲染一节 ⇒ 滚动条短一截、导航有一项点了没反应 | `SettingsShell.test.tsx`「全部小节铺在同一页」 |
+| 每节都有 `id` 与 `scroll-mt-*` | 点导航滚过去贴着标题行（无落点补偿） | 同上（`getElementById` 逐个认锚点） |
+| 每节都有**与导航同源**的标题 | 标题手抄一份 ⇒ 改名后导航与正文各说各的 | 同上（`h2` 文案比 `SETTINGS_SECTIONS` 的 label） |
+| 正文顺序 = 目录顺序 | 正文按 `SETTINGS_SECTIONS` 排、导航按分组重排 ⇒ 按目录往下读**跳节** | 同上（DOM 里的 `<section>` 顺序逐个比 `SETTINGS_SCROLL_ORDER`） |
+
+**要点一：滚动跟随的判据是「压过顶线」，而且下沿必须一起收。**
+
+`src/components/settings/use-section-scroll-spy.ts` 用 `IntersectionObserver`，配置是
+
+```text
+rootMargin: -96px 0px -100% 0px      ← 上收一条线 + 下收整屏 = 把可视区压成那一条线
+```
+
+⚠️ **只上收（`-96px 0px 0px 0px`）是个会「看着对」的错**：容器的可视区仍是整屏，
+于是 `isIntersecting` 退化成「看得见」—— 而整屏同时看得见三四个分区，
+「文档顺序最后一个可见的」是**屏幕底部**那一节。实测症状：页面停在最顶上
+（`scrollTop = 0`）而高亮已经跳到第四段（`16.2.4.74` 落地时就是这么发现的）。
+收成一条线之后，一次只有真正压在线上那一节（至多两节交界的瞬间）算进入。
+
+取压过线的那一批里**文档顺序最后一个**作为当前分区，按 `sectionIds` 自己排一遍
+（`entries` 的次序不保证，不能拿浏览器给的那一个当结论）。
+
+**要点二：正文顺序从 `TREE_GROUPS` 派生，不直接拿 `SETTINGS_SECTIONS`。**
+
+`SETTINGS_SECTIONS` 回答「有哪些分区」，`TREE_GROUPS` 回答「哪几项挂在一起」。
+一屏一节时后者只影响导航的视觉分组；**一页到底之后它决定正文的阅读顺序** ——
+所以新增 `SETTINGS_SCROLL_ORDER = TREE_GROUPS.flatMap(g => g.sections)`，
+顺序的唯一定义处是导航树的那一张表（§12.18：同一件事只留一个出处）。
+
+**要点三：外壳的两种形态是判别联合，漏项由类型挡。**
+
+```ts
+type SettingsShellProps = { section; onSelect; className?; banner? } & (
+  | { sections: Record<Section, ReactNode>; fallback?: undefined }   // 就绪
+  | { fallback: ReactNode; sections?: undefined }                    // 加载 / 失败 / 未就绪
+);
+```
+
+- `sections` 收 `Record<Section, ReactNode>` 而不是 `ReactNode`：**少一节只是少渲染
+  一个 `<section>`**，运行时完全静默（滚动条短一点），让类型挡住比再加一条判据直接。
+- 三态走 `fallback`：那三态下每个分区都没有可渲染的正文，铺 9 份同样的占位/错误
+  文案等于把同一句话重复 9 遍（也会把滚动条撑成 9 倍的假长度）。分区**导航仍在**。
+
+**要点四：`IntersectionObserver` 不存在时退化，不假装生效。**
+
+与 `useElementBox` 对 `ResizeObserver` 的口径一致（§16.2.4.41）：环境没有观察器
+就不做跟随，但**点击导航仍可用**（走 `scrollIntoView`，不依赖观察器）。
+不崩、不报错、也不把跟随伪装成可用。
+
+**为什么不用 `scroll` 事件自己算距离**：那要在每次滚动事件里读**所有**分区的
+`getBoundingClientRect`（9 个分区 = 每帧 9 次强制布局），而观察器由浏览器批量回调，
+回答的正是「越没越过那条线」这个原生问题。
+
+判据：`src/components/settings/SettingsShell.test.tsx`（**8** 条 —— 见上表四条 +
+既有的「没有返回出口」「导航一项不漏不重」「分组名不可点且每段各带子行容器」
+「`aria-current` 恰好一项」）；`src/components/settings/use-section-scroll-spy.test.ts`
+（**4** 条，用可控的假 `IntersectionObserver` 钉住「越过顶线的最后一节成为当前分区」
+/「没有一节越线时保留当前值」/「点导航立刻通知并滚到那一节」/「无观察器时退化」）。
+`SettingsShell.stories.tsx` 的 `Long`（每节撑高）与 `LoadingFallback` 两屏供人工复核。
 
 ## 16.3 新增一个组件的标准动作
 

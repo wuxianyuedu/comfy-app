@@ -1,10 +1,8 @@
 /**
- * `SettingsShell` 的三条硬判据。
+ * `SettingsShell` 的判据：外观形态 + **一页到底**（ISSUE #1694 / #1722）。
  *
- * 这一刀改的是**形态**：设置页头部那枚「← 返回」被删掉、分区导航从横排 chip 带
- * 换成左侧一棵竖向的树（ISSUE #1694）。两件事都不会让任何功能断言变红 ——
- * 删掉一个按钮只会让「点得到」的用例少一条，换掉导航布局则什么都不影响。
- * 所以判据直接落在**用户看得见的事实**上：
+ * 这一刀改的是**形态**，两件事都不会让功能断言变红，所以判据直接落在
+ * 用户看得见的事实上：
  *
  *   1. **没有「返回」出口**：设置在本应用里是一页页签，退出交给页签的关闭按钮
  *      与侧栏；多一枚箭头就是第二条退出路径，而它在独立路由 `/settings` 下
@@ -15,7 +13,13 @@
  *      所以按 `SETTINGS_SECTIONS` 的 id 集合双向比对，不写字面量清单；
  *   3. **树的两个层级都在**：分组名是父行（不是可点目标），分区项是子行 ——
  *      这正是 ISSUE #1694 的点（横排那张带子上两者平权，读不出层级）。
- *      判据比的是「父行文案集合 == `TREE_GROUPS` 的 label 集合」，而不是数节点个数。
+ *   4. **一页到底**：全部小节都在同一根滚动容器里（`#settings-<id>` 逐个在位），
+ *      且**每一节都有自己的标题**（ISSUE #1722 的原话：「每一项在右侧展示区也要
+ *      有对应标题」）—— 标题字与导航项同源，漂移不了；
+ *   5. **点导航是滚过去**：`scrollIntoView` 被调到对应那一节上，而不是「换内容」。
+ *      这一条是 #1722 的「跟随滚动变化」里**可判**的那一半 ——
+ *      DOM 档里不存在 `IntersectionObserver`（hook 按不存在时退化），
+ *      由 `use-section-scroll-spy.test.ts` 用假观察器单独覆盖。
  *
  * 不锁样式类：选中态判的是 `aria-current`（读屏与 CSS 同源的那一个属性），
  * 颜色改了不该让用例红。
@@ -29,16 +33,28 @@ import {
   type Section,
 } from "~/app/(main)/settings/hooks/use-settings-page";
 
-import { SettingsShell } from "./SettingsShell";
-import { TREE_GROUPS } from "./settings-section-summary";
+import { SettingsShell, sectionAnchorId } from "./SettingsShell";
+import { SETTINGS_SCROLL_ORDER, TREE_GROUPS } from "./settings-section-summary";
 
 afterEach(cleanup);
 
+/** 每个分区一段可辨识的正文（判「全量渲染」时按它找）。 */
+function sectionsStub() {
+  return Object.fromEntries(
+    SETTINGS_SECTIONS.map((item) => [
+      item.id,
+      <p key={item.id}>正文-{item.id}</p>,
+    ]),
+  ) as Record<Section, React.ReactNode>;
+}
+
 function renderShell(section: Section = "llmLocal", onSelect = vi.fn()) {
   render(
-    <SettingsShell section={section} onSelect={onSelect}>
-      <p>内容</p>
-    </SettingsShell>,
+    <SettingsShell
+      section={section}
+      onSelect={onSelect}
+      sections={sectionsStub()}
+    />,
   );
   return onSelect;
 }
@@ -63,6 +79,24 @@ describe("SettingsShell", () => {
     const expected = SETTINGS_SECTIONS.map((item) => item.label);
     expect(new Set(labels).size).toBe(labels.length);
     expect([...labels].sort()).toEqual([...expected].sort());
+  });
+
+  it("导航树的展开顺序 = 页面滚动顺序，且恰好覆盖全部小节", () => {
+    /* 一页到底之后导航是**目录**：目录的顺序与正文的顺序必须是同一个，否则
+       用户按目录往下读、正文却跳到另一处。`SETTINGS_SCROLL_ORDER` 由
+       `TREE_GROUPS` 派生，这一条把它与 `SETTINGS_SECTIONS` 对齐（不漏、不重）。 */
+    const expected = SETTINGS_SECTIONS.map((item) => item.id);
+    expect(new Set(SETTINGS_SCROLL_ORDER).size).toBe(
+      SETTINGS_SCROLL_ORDER.length,
+    );
+    expect([...SETTINGS_SCROLL_ORDER].sort()).toEqual([...expected].sort());
+
+    /* 文档顺序也真的按它排：逐个读 `<section>` 的 id 与派生根比。 */
+    renderShell();
+    const domOrder = [
+      ...document.querySelectorAll("section[id^=settings-]"),
+    ].map((el) => el.id.replace(/^settings-/, ""));
+    expect(domOrder).toEqual([...SETTINGS_SCROLL_ORDER]);
   });
 
   it("分组名是父行、分区项是子行（树的两层都在，且父行不可点）", () => {
@@ -96,5 +130,52 @@ describe("SettingsShell", () => {
     const database = within(nav()).getByRole("button", { name: "数据库" });
     await userEvent.click(database);
     expect(onSelect).toHaveBeenCalledWith("database");
+  });
+
+  it("全部小节铺在同一页里，每节都有与导航同源的标题", () => {
+    renderShell();
+    /* 「一页到底」的判据：`SETTINGS_SECTIONS` 里每一节都有一个锚点节在位，
+       且这一节里能读到**它自己的名字**（正文标题与导航项同源，都是
+       `SETTINGS_SECTIONS` 的 label）。 */
+    for (const item of SETTINGS_SECTIONS) {
+      const node = document.getElementById(sectionAnchorId(item.id));
+      expect(node).not.toBeNull();
+      /* 标题是这一节里的 `h2`（区块标题档），不带分组名的干扰。 */
+      expect(
+        within(node!).getByRole("heading", { level: 2 }),
+      ).toHaveTextContent(item.label);
+    }
+  });
+
+  it("点导航是「滚过去」而不是「换内容」（scrollIntoView 落在那一节上）", async () => {
+    /* DOM 档里没有 `scrollIntoView` 的实现 —— 不 stub 会直接抛。 */
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const onSelect = renderShell("llmLocal");
+
+    await userEvent.click(within(nav()).getByRole("button", { name: "日志" }));
+
+    const target = document.getElementById(sectionAnchorId("logs"));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    /* `this` 是被滚的那一节 —— 用 mock.instances 认它比读参数更直接。 */
+    expect(scrollIntoView.mock.instances[0]).toBe(target);
+    expect(onSelect).toHaveBeenCalledWith("logs");
+  });
+
+  it("给 fallback 时不渲染分区列表（三态占位只出现一次）", () => {
+    render(
+      <SettingsShell
+        section="llmLocal"
+        onSelect={vi.fn()}
+        fallback={<p>正在读取设置…</p>}
+      />,
+    );
+    /* 导航仍在（外壳这一层照常渲染），右侧换成整块占位 ——
+     * 「铺 9 份同样的占位」正是这一条要挡的形态。 */
+    expect(nav()).toBeTruthy();
+    expect(screen.getAllByText("正在读取设置…")).toHaveLength(1);
+    for (const item of SETTINGS_SECTIONS) {
+      expect(document.getElementById(sectionAnchorId(item.id))).toBeNull();
+    }
   });
 });
