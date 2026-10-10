@@ -38,7 +38,7 @@ export function ChannelSwitch({
   pendingCount,
   onGenerateBatch,
   onNextStage,
-  onOpenApiSettings,
+  onOpenModelAdapters,
 }: {
   channel: Channel;
   onChannelChange: (c: Channel) => void;
@@ -52,7 +52,7 @@ export function ChannelSwitch({
   pendingCount: number;
   onGenerateBatch: () => void;
   onNextStage: () => void;
-  onOpenApiSettings: () => void;
+  onOpenModelAdapters: () => void;
 }) {
   return (
     <>
@@ -87,11 +87,11 @@ export function ChannelSwitch({
         <Button
           variant="ghost"
           size="xs"
-          onClick={onOpenApiSettings}
+          onClick={onOpenModelAdapters}
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
         >
           <Icon data-icon="inline-start" name="settings" size={12} />
-          API 通道设置
+          模型适配
         </Button>
         <FieldLabel className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">帧率</span>
@@ -138,7 +138,7 @@ export function ChannelSwitch({
       {channel === "api" && !apiReady && (
         <div className="bg-amber/10 text-amber flex items-center gap-2 rounded-lg px-3 py-2 text-xs">
           <Icon name="info" size={12} />
-          API 视频通道未配置 — 点击上方「API 通道设置」填写 Base URL 与 API Key
+          API 视频通道未配置 — 点击上方「模型适配」配置该模型的接口与字段映射
           后即可使用。
         </div>
       )}

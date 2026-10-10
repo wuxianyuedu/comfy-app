@@ -301,7 +301,7 @@ flowchart TD
 
 | 维度 | 本地 · ComfyUI 工作流 | API 直连（远端模型） |
 |---|---|---|
-| 可执行来源 | 工作流库工作流（必须已配好对外参数） | 设置页「远端模型」或工坊 API 通道设置 |
+| 可执行来源 | 工作流库工作流（必须已配好对外参数） | 设置页「远端模型」或「模型适配」视图 |
 | 请求入口 | `generate.generate`（tRPC） | `/api/workshop-api/generate`（relay） |
 | 进度 / 日志 | SSE `/api/tasks/:id/stream`（含节点级进度与执行日志） | 一次性响应；异步任务的进度靠轮询 |
 | 参数翻译 | `buildEncapsulatedInputs`（统一输入 → 端口） | 远端模式适配器（统一输入 → 接口字段名） |

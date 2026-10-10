@@ -54,16 +54,9 @@ export interface ModeContractEditorController {
   save: () => Promise<void>;
   /** 本次打开期间是否已成功保存过（视图据此提示「另一处已生效」）。 */
   saved: boolean;
-  /** 关闭弹窗。 */
-  onClose: () => void;
 }
 
-export function useModeContractEditor({
-  onClose,
-}: {
-  /** 关闭弹窗（视图层的关闭按钮与外层遮罩都走它）。 */
-  onClose: () => void;
-}): ModeContractEditorController {
+export function useModeContractEditor(): ModeContractEditorController {
   const registry = useModeContracts();
   const [mode, setMode] = useState<string | null>(null);
   const [draft, setDraft] = useState<ModeContract | null>(null);
@@ -229,6 +222,5 @@ export function useModeContractEditor({
     setOutput,
     save,
     saved,
-    onClose,
   };
 }

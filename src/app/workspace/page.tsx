@@ -44,6 +44,24 @@ const SettingsView = dynamic(
   { ssr: false },
 );
 
+/* 模型适配 / 模式契约：与设置同一族（项目无关的全局配置视图）。它们此前是侧栏点开的
+ * 弹窗、由 `AppShell` 自己 lazy 一份；改成视图页签后懒加载的归属收在这里 —— 别的视图
+ * 都在这里，两处各留一份加载路径必然漂。 */
+const ModelAdaptersView = dynamic(
+  () =>
+    import("~/components/workshop/ModelAdaptersView").then(
+      (mod) => mod.ModelAdaptersView,
+    ),
+  { ssr: false },
+);
+const ModeContractView = dynamic(
+  () =>
+    import("~/components/workshop/mode-contract/ModeContractView").then(
+      (mod) => mod.ModeContractView,
+    ),
+  { ssr: false },
+);
+
 const WorksGallery = dynamic(
   () => import("~/components/studio").then((mod) => mod.WorksGallery),
   { ssr: false },
@@ -374,6 +392,12 @@ export default function WorkspacePage() {
 
       case "settings":
         return <SettingsView fillHeight />;
+
+      case "model-adapters":
+        return <ModelAdaptersView />;
+
+      case "mode-contract":
+        return <ModeContractView />;
 
       case "canvas":
         return (
