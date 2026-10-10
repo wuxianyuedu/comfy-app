@@ -92,18 +92,22 @@ overrides:
   # range 会让下一次 install 悄悄跳到一个没人复核过的新版本。
   #   · js-yaml 4.3.1 → 4.3.2（`shadcn > cosmiconfig > js-yaml`，原型污染 DoS 类）
   'js-yaml@4': '4.3.2'
-  #   · fast-uri 3.1.6 → 3.1.7（`@hookform/resolvers > ajv > fast-uri` 等 20 条路径；
-  #     另一条 advisory 标注受影响版本 `=3.1.6` 且「上游无修复版」—— 离开 3.1.6 即同时消掉，
-  #     这正是「按 advisory 记账」与「按版本记账」会给出不同结论的例子）
-  'fast-uri@3': '3.1.7'
+  #   · fast-uri 3.1.6 → 3.1.8（`@hookform/resolvers > ajv > fast-uri` 等 20 条路径）。
+  #     原值 3.1.7 是 #1331 当时那条 advisory 的最小可达修复版；advisory 库后续把同一个库
+  #     的**另一条**（host 大小写归一不一致，`>=3.0.0 <3.1.8`）的 patched 提到 3.1.8，
+  #     于是 3.1.7 反而落回受影响区间。**override 的版本号是会被新 advisory 追上的**，
+  #     这正是 §13.5.9 那条「按 advisory 记账、不按版本记账」的现实理由（ISSUE #1623）。
+  'fast-uri@3': '3.1.8'
   #   · undici 7.29.0 → 7.29.1（`shadcn > @dotenvx/dotenvx > undici`）
   'undici@7': '7.29.1'
   #   · brace-expansion 有**两条 major 同时中招**，所以键上必须带 major，写一条全局
   #     override 会把 1.x 的消费方（`minimatch@3`）顶到 5.x 的 API 上：
-  #     1.1.18 → 1.1.20（`eslint-config-next > eslint-plugin-* > minimatch@3`）
-  #     5.0.9  → 5.0.11（`@sentry/nextjs > … > glob > minimatch@10`、`shadcn > ts-morph > …`）
-  'brace-expansion@1': '1.1.20'
-  'brace-expansion@5': '5.0.11'
+  #     1.1.18 → 1.1.21（`eslint-config-next > eslint-plugin-* > minimatch@3`）
+  #     5.0.9  → 5.0.12（`@sentry/nextjs > … > glob > minimatch@10`、`shadcn > ts-morph > …`）
+  #     两个 major 都再进了一格：advisory 的 patched 被提到 1.1.21 / 5.0.12（二次多项式
+  #     展开，`{a},b}` 形态的 ReDoS）。同 `fast-uri` 那条 —— **旧 override 会被新 advisory 追上**。
+  'brace-expansion@1': '1.1.21'
+  'brace-expansion@5': '5.0.12'
   #   · webpack-dev-middleware 6.x → 7.4.5（`@storybook/nextjs >
   #     @storybook/builder-webpack5 > webpack-dev-middleware`，advisory #1240027：
   #     `publicPath` 不以 `/` 结尾时的路径穿越）。
@@ -138,3 +142,28 @@ overrides:
   #     4.7.9，而新 advisory 的范围恰好把它包进去 —— 也就是「同一个坑被填了两次」。
   #     删 override 等于把修复一起删掉，别再删它。
   'handlebars@4': '4.7.10'
+  #   · ISSUE #1623 第二批（阶段二 2-4）：advisory 库里**有最小可达修复版**的那批
+  #     moderate 全部升掉，剩下的才留在「不纳入 high/critical 判据」的口径里。
+  #     五条全是**传递依赖**、全是**同 major 补丁版**，各取 registry 给的最小可达修复版。
+  #     这批的规模本身是个读数：9 条 moderate **全部**有修复版 —— 所以「moderate 不判」
+  #     这条口径此前挡住的不是「修不了的噪声」，是「还没人去修的那批」（ISSUE #1623 §一）。
+  #     · markdown-it 14.3.0 → 14.3.1（`typedoc > markdown-it`，linkify 的两条二次路径）。
+  #       只在 `pnpm docs` 这一条链上（devDependency），不进运行时、不进产物。
+  'markdown-it@14': '14.3.1'
+  #     · ip-address 10.7.0 → 10.7.1（`express-rate-limit > ip-address` 与 `socks > ip-address`，
+  #       两条 advisory 同一修复版：`isInSubnet()` 的地址比较、`Address6` 的诊断串构造成本）。
+  #       两条路径都在 `shadcn > @modelcontextprotocol/sdk` 那一支（按需召唤的组件 CLI）。
+  'ip-address@10': '10.7.1'
+  #     · hono 4.13.5 → 4.13.7（`shadcn > @modelcontextprotocol/sdk > hono` /
+  #       `@hono/node-server > hono`，jsx 边界组件的字符串未转义）。运行时没有一处 import，
+  #       但它与 ip-address 同链，一并升掉不留待办。
+  'hono@4': '4.13.7'
+  #     · postcss-selector-parser 7.1.5 → 7.1.6（`@storybook/nextjs > css-loader >
+  #       postcss-modules-*` 与 `shadcn > postcss-selector-parser`，flat selector 解析的
+  #       二次复杂度）。构建期工具链，不进产物。
+  'postcss-selector-parser@7': '7.1.6'
+  #     · fast-copy 4.0.4 → 4.1.0（`pino-pretty > fast-copy`，深拷贝深嵌套对象时栈耗尽）。
+  #       本仓唯一一条**直接依赖链上**的（`pino-pretty` 在 dependencies 里）——
+  #       但它仍只在**日志美化**那一面（`pino-pretty` 是开发期可读输出），
+  #       所以判为同一条口径：补丁版，升掉。
+  'fast-copy@4': '4.1.0'
