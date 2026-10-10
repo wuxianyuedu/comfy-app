@@ -19,16 +19,25 @@
   普通提交零噪声）。
 - **没动扫描面、没动基线、没动任何棘轮数字**：三条判据在本仓当前树上一处站点都不报，
   改的只是「读不到时怎么办」。
-- **只收了这三条**。实测扫描面含 `tests` 的判据共 **15 份**，其中 **9 份**是同一个
-  「`walk()` 列目录 + 裸 `readFileSync(abs)`」形状（`check-annotate-consumer` /
-  `check-dead-exports` / `check-gate-repo-boilerplate` / `check-soft-assertions` /
-  `check-task-meta-consumer` / `check-test-concurrency` / `check-test-environment` /
-  `check-test-todo` / `check-type-assertion-executor`），另 3 份扫 `tests` 但不是这个读法
+- **只收了这三条**。扫描面含 `tests` 的判据共 **15 份**，其中与本轮同形状（`walk()` 列目录 +
+  裸 `readFileSync(abs)`）的有 9 份：`check-annotate-consumer` / `check-dead-exports` /
+  `check-gate-repo-boilerplate` / `check-soft-assertions` / `check-task-meta-consumer` /
+  `check-test-concurrency` / `check-test-environment` / `check-test-todo` /
+  `check-type-assertion-executor`；另 3 份扫 `tests` 但不是这个读法
   （`check-comment-language` / `check-gate-executors` / `check-tsc-diagnostic-executors`）。
   本轮撞上的就是这三条 —— 它们按 `.test.tsx` 命中，而探针恰好叫这个名字。
-  **剩下 9 份一起收进一个共享读取器（`readForScan()`）是另一刀**：那是 9 份文件同一个形状的事，
-  顺手改会把「谁在有证据地拦」糊成一团；要么按现场逐条收，要么一次收完并给那份共享读取器配
-  它自己的判据与用例。两边都得能答出「读不到的时候，谁在数」。
+  **那份清单是会被收短的**：写下 9 之后，`4887f1f1`（#1665）收了 `check-annotate-consumer`、
+  另一笔收了 `check-test-todo`，当前实测剩 **7 份**。所以别引用这个数，现跑：
+  ```bash
+  for f in scripts/check-*.cjs; do
+    grep -q '"tests"' "$f" || continue
+    n=$(grep -c 'readFileSync(abs' "$f"); e=$(grep -c ENOENT "$f")
+    [ "$n" -gt 0 ] && [ "$e" -eq 0 ] && echo "仍裸读: $f ($n 处)"
+  done
+  ```
+  **把这 8 份一起收进共享读取器（`readForScan()`）是另一刀**：那是多份文件同一个形状的事，
+  顺手改会把「谁在有证据地拦」糊成一团；要么按现场逐条收（#1665 走的就是这条），要么一次收完
+  并给那份共享读取器配它自己的判据与用例。两边都得能答出「读不到的时候，谁在数」。
 
 ## 验证
 
