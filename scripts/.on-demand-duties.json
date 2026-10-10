@@ -90,6 +90,16 @@
         "script": "scripts/check-commit-claims.mjs"
       },
       "executor": "pnpm check:base:batch（= node scripts/base-check.mjs --base）的 CHAINED_STEPS —— 合并前 / 事后盘点，人点一次就跑一次"
+    },
+    {
+      "id": "premerge-fixed-action",
+      "name": "合并前的固定动作（三段合一：复算这一批 + 提交信息声明 + 合并有没有丢一侧）",
+      "notInHook": "平台侧是 squash 合并、**那一步不跑本地钩子**，本地钩子面前根本没有那次合并（§13.6.2 / §11.23.5）；「合并有没有丢一侧」按定义就不可能放进 pre-commit",
+      "fact": {
+        "kind": "gate-not-in-all",
+        "gate": "premerge"
+      },
+      "executor": "人合并前敲一次 `pnpm check:premerge`（或在 PR 里 @ 评审 NPC 唤起一轮，§13.5.4 按需召唤那一层；不敲就不跑）"
     }
   ]
 }

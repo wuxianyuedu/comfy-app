@@ -144,6 +144,31 @@ const GATES = {
     label: "Dependency freshness (baseline vs origin/master + install sync)",
     args: ["../scripts/check-deps-freshness.mjs"],
   },
+  /**
+   * **合并前的固定动作**（规范 §13.6.2；ISSUE #1611 拍板）。
+   *
+   * **它不在 `all` 里**（`run: false`）：平台侧是 **squash 合并**、那一步**不跑本地
+   * 钩子**，而 #623 之后**已无 CI 兜底**（§13.5.3）—— 于是「我的分支绿 → `master`
+   * 绿」之间那一跳此前靠人的纪律补，而纪律有三种漏法（漏跑一步 / 顺序反了 / 只跑了
+   * 自己记得的那条），**三种都不报错**（§9.2 第 3 条禁止的静默失败）。
+   *
+   * 这个洞在计划里被拆成三笔，三笔落在**同一个动作**上（`--base` 复算 / 提交信息里的
+   * 机械可核声明 / 合并有没有丢一侧），所以入口只有一个 `scripts/premerge-check.mjs`：
+   * 它**直接 import** `base-check.mjs` 的 `baseCheckMany`，另外两段走既有脚本 ——
+   * 不发明第二套编排（§12.18 / §12.12）。
+   *
+   * 为什么不能进 `all`：它的 `base` 段要建干净 worktree、跑整批判据（分钟量级），
+   * 且它的语义是「**并进去之前**量一次」—— 每一次「完整验证」都跑它没有意义，
+   * 而它要回答的那个问题（会不会把红带进 master）只在合并那一刻成立。
+   *
+   * 它与 `check:all` **不互相替代**：后者是更宽的那一档（全量单测 + 覆盖率 +
+   * 依赖审计），本条判的是这一跳。
+   */
+  premerge: {
+    label: "Pre-merge fixed action (base recompute + commit claims + merge side loss)",
+    args: ["../scripts/premerge-check.mjs"],
+    run: false,
+  },
 };
 
 function parseArgs(argv) {

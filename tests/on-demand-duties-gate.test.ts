@@ -106,6 +106,17 @@ function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
         fact: { kind: "gate-in-all", gate: "dependencyAudit" },
         executor: "pnpm check:all 的默认档",
       },
+      {
+        /* 第七行跟着**真 `quality-gate.mjs`** 走（夹具拷的是真件，见 `copy`）：
+         * 那边每新增一个 `run: false` 的档，方向② 就要求这里也有一行 ——
+         * 这正是该判据要的形态（「新增一档却忘了登记 ⇒ 那一档谁都不判」），
+         * 所以这一行不是补齐夹具，是**夹具跟着事实走**。 */
+        id: "premerge-fixed-action",
+        name: "合并前的固定动作",
+        notInHook: "平台侧 squash 不跑本地钩子",
+        fact: { kind: "gate-not-in-all", gate: "premerge" },
+        executor: "pnpm check:premerge",
+      },
       ...(overrides.extra ?? []),
     ],
   };
