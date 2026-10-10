@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Plus, Settings } from "lucide-react";
+import { LayoutGrid, Plus, Settings } from "lucide-react";
 
 import { useHotkey } from "~/components/ui/use-hotkey";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -16,8 +16,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
   SidebarProvider,
   SidebarRail,
 } from "~/components/ui/sidebar";
@@ -33,6 +31,38 @@ import { type ViewTab } from "./workspace-tabs";
 export interface SidebarProject {
   id: string;
   name: string;
+}
+
+/**
+ * 一条项目的**缩略图标**。
+ *
+ * 为什么每条都要有这一个：侧栏收起成图标轨（`collapsible="icon"`）时，
+ * `SidebarMenuButton` 变成 `size-8` 的方块、名称那一格被 `truncate` 成零宽
+ * —— 没有图标的行就只剩一个空格子，用户既认不出是哪条项目、也点不下去
+ * （ISSUE #1691）。所以「项目列表缩略也要能显示名称」这一条拆成两半：
+ * 缩略态有可辨认的**图形**（这里），名字则交给基元的 `tooltip`（悬停即出）。
+ *
+ * 图形取「画布」那一族而不是文件夹：项目分组里列出的每一条都是画布项目
+ * （`canvas-store` 的 `proj_*`），与 `/workspace` 首页「新建画布」卡同一族。
+ */
+function ProjectGlyph() {
+  return (
+    <svg
+      aria-hidden
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18M9 21V9" />
+      <circle cx="15" cy="15" r="2" />
+    </svg>
+  );
 }
 
 export interface AppShellProps {
@@ -153,8 +183,13 @@ export function AppShell({
           </SidebarGroup>
 
           {/* 「项目」分组：紧跟全局项之后（不再 `mt-auto` 顶到视口最下，避免中间一大片空白）。
-              图标档折叠时整组隐藏 —— 展开式列表在 3rem 图标栏里没有落点，展开侧栏才能选项目。 */}
-          <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+              **图标档（缩略态）不再整组隐藏**（ISSUE #1691）：此前这里挂着
+              `group-data-[collapsible=icon]:hidden`，窗口一窄到自动收起，用户就
+              既看不见项目名、也切不了项目 —— 而「项目」恰恰是这一屏最需要按名字
+              找到的东西。现在缩略态下每一项都落成**带缩略图标 + 名称 tooltip**
+              的方块（与全局项同一套 `SidebarMenuButton` 机制）：名字仍够得着，
+              展开侧栏则照旧是完整列表。 */}
+          <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -164,43 +199,59 @@ export function AppShell({
                     trigger={
                       <>
                         {PROJECTS_ENTRY.icon}
-                        <span>{PROJECTS_ENTRY.label}</span>
+                        <span className="group-data-[collapsible=icon]:hidden">
+                          {PROJECTS_ENTRY.label}
+                        </span>
                       </>
                     }
                     className={cn(
                       "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                       "rounded-md p-2 text-sm font-medium [&_svg]:size-4 [&_svg]:shrink-0",
+                      /* 缩略态：整行落成与全局项同形的 48px 方块 —— 折叠标记
+                         与文字都让位，只留分组图标（否则这一行宽过图标轨、
+                         `overflow-hidden` 把它裁掉一半）。 */
+                      "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center",
+                      "group-data-[collapsible=icon]:[&_[data-slot=disclosure-marker]]:hidden",
                     )}
                     panelClassName="mt-1"
                   >
-                    <SidebarMenuSub>
+                    <SidebarMenu>
                       {projects.map((project) => (
-                        <SidebarMenuSubItem key={project.id}>
+                        <SidebarMenuItem key={project.id}>
                           <SidebarMenuButton
                             size="sm"
                             isActive={project.id === activeProjectId}
                             tooltip={project.name}
                             onClick={() => onOpenProject(project.id)}
                           >
+                            {/* 缩略图标：展开态与缩略态都要有，否则收起后
+                                按钮里只剩一个空格子（名称被 `truncate` 掉）。 */}
+                            <ProjectGlyph />
                             <span>{project.name}</span>
                           </SidebarMenuButton>
-                        </SidebarMenuSubItem>
+                        </SidebarMenuItem>
                       ))}
-                      <SidebarMenuSubItem>
+                      <SidebarMenuItem>
                         <SidebarMenuButton
                           size="sm"
+                          tooltip="查看全部"
                           onClick={onShowAllProjects}
                         >
+                          <LayoutGrid />
                           <span>查看全部</span>
                         </SidebarMenuButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuButton size="sm" onClick={onNewProject}>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          size="sm"
+                          tooltip="新建项目"
+                          onClick={onNewProject}
+                        >
                           <Plus />
                           <span>新建项目</span>
                         </SidebarMenuButton>
-                      </SidebarMenuSubItem>
-                    </SidebarMenuSub>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
                   </Disclosure>
                 </SidebarMenuItem>
               </SidebarMenu>
