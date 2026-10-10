@@ -1,0 +1,10 @@
+## Fixed
+
+- **`db:migrate` 在前提不成立时会留下 0 字节库 —— 现在它先判决、再动手（ISSUE #1624，阶段三 3-4 / `PRODUCTION-GAPS` 的 P0-5）。** 实测形态（无 TTY、`drizzle/` 目录缺失）：`drizzle-kit migrate` **先建出库文件、再退 1** ⇒ `db.sqlite` 是个 0 字节空壳。调用方拿到的是「看起来像迁移失败的退出码 + 一个坏掉的库」，而下一个动作（起应用）才炸成 `no such table`，那时已经看不出是谁干的。这**与 P0-5 原先记的 `db:push` 那半是同一族**，只是 `push` 那半早由 `scripts/db-push.mjs` 修掉、`migrate` 这一路一直没修 —— 那条缺口不存在于「没做」，存在于「只做了一半而没人发现」。
+  - **入口换成 `scripts/db-migrate.mjs`**（`package.json` 的 `db:migrate` 不再是裸 `drizzle-kit migrate`）。它做四件事：**① 前置判决**（`drizzle/` 下按扩展名筛 `.sql`，一份都没有就在起 drizzle-kit **之前**退非零 —— 这才是「不留空库」的机制，事后复核只能发现、不能阻止）；② 跑迁移；③ **按库里的真事实复核**（用户表数 + `__drizzle_migrations` 的已应用条数 == 迁移文件数），**不看退出码**（退出码在这条链路上不可信，实测量过）；④ 失败即非零退出 + 可行动提示。
+  - **判据「账本条数 == 文件数」是这一路独有的、也是它比 `push` 那版更强的地方**：迁移有账本，「应用了几份」精确可查，不像 diff 只能说「看起来一致了」。
+  - **两条变异验证**（这才是「判据真的在判」）：拿掉前置判决 → 「库文件没被创建」那条用例红；把 `.sql` 筛换成「目录在不在」→ 对应用例红；复位全绿。
+- **`drizzle/` 基线迁移落地，`pnpm db:migrate` 成为版本化正路（ISSUE #1624 验收第 2 条）。** `drizzle/0000_*.sql`（23 张表 + 索引）+ `meta/_journal.json` / `meta/0000_snapshot.json`。与 `db:push` 产出的 schema **逐表逐列一致**（列名 / 类型 / NOT NULL / 主键）**且索引集合一致** —— 由 `tests/db-migrate-equivalence.test.ts` 真跑两个库比对，不是「表数相同」（后者挡不住「少一列 / 类型不对 / NOT NULL 丢了」）。另有幂等断言：连跑两次第二次为 no-op 且 exit 0。
+- **顺手收掉一份逐字重复的 `resolveDbPath`（硬规则 24 / §12.12）。** `scripts/db-push.mjs` 里自己写了一份与 `scripts/db-schema-state.mjs` 的 `resolveSqlitePath` **逐字等价**的库路径解析 —— `db:migrate` 的入口又要同一件事，两份副本的下场是「改了一处、另一处继续按旧口径找库」而没有任何判据会响。现在两个入口都 import `resolveSqlitePath`，并导出既有的 `schemaDigest` 供迁移前后比对（不新写第二份「结构摘要」）。
+- **一条既有契约用例改成按意图断言。** `tests/db-push-noninteractive.test.ts` 里那条「db-push 与 db.ts 认同一套默认库文件锚点」此前断言的是「`db-push.mjs` 的**源码里**含 `"file:./db.sqlite"`」—— 那是在**钉住实现所在的位置**而不是意图，锚点一经收口它就红了（而两处其实仍然认同一个锚点）。改成断言三件：共享实现里那份字面量在、两个入口都 import 它、TS 侧默认值逐字相同；并加一条**反向**断言（`db-push.mjs` 不再自带那份默认值）—— 否则这条用例挡不住重复再长回来。
+- **文档同步**：`PRODUCTION-GAPS` 的 P0-5 从 `[ ]` 改成 `[x]` 并写明两件事各自的证据与「原先记的两条证据已过期」；`15-附录.md` 的命令表按实际入口更正（原先三行都写着裸 `drizzle-kit *`，`db:push` 那行也早就不对了）；`launch-and-build.md` §9.1 那句补上入口名与它「不看退出码」的口径。

@@ -98,7 +98,7 @@
 - [ ] **P0-2 自动更新未接通**：`tauri.conf.json` `updater.endpoints:[]` / `pubkey:""` / 未开 `createUpdaterArtifacts`；能力已开校验全无（填端点即变未验签更新）。需：生成 keypair、配端点、开产物。证据：`src-tauri/tauri.conf.json:34-41,43-67`；`src-tauri/capabilities/remote.json:19`。
 - [ ] **P0-3 客户端崩溃零上报**：缺 `src/sentry.client.config.ts`，`instrumentation.ts` 仅 nodejs/edge 分支；ErrorBoundary 仅 `console.error`。证据：`src/instrumentation.ts:8-24`；`src/components/ui/error-boundary.tsx:31-35`。
 - [ ] **P0-4 无 release / source map 关联**：`next.config.js` 无 `withSentryConfig` / sourceMap 上传，堆栈无法符号化。证据：`next.config.js`（grep sentry/Sentry/sourceMap = 0）。
-- [ ] **P0-5 无版本化 DB 迁移**：`drizzle/` 不存在，主推 `db:push`（无 TTY 可「报错 + exit 0 + 留 0 字节库」）。需：`drizzle-kit generate` 落地 + 禁用无 TTY push。证据：`package.json:13`；`src/server/db.ts:41-52`。
+- [x] **P0-5 无版本化 DB 迁移** —— **已收（ISSUE #1624）**。两件事都落地了：① `drizzle/` 有了基线迁移（`0000_*.sql` + `meta/`），`pnpm db:migrate` 成为正路，与 `db:push` 产出的 schema **逐表逐列 + 索引等价**（`tests/db-migrate-equivalence.test.ts`）；② **无 TTY 下不再可能产出 0 字节库** —— 入口换成 `scripts/db-migrate.mjs`，它**在起 drizzle-kit 之前**做前置判决（没有 `.sql` 迁移就直接退非零），因为实测 `drizzle-kit migrate` 的原形态是**先建出库文件、再退 1**（与 P0-5 原先记的 `db:push` 那半是同一族，而 `push` 那半早由 `scripts/db-push.mjs` 修掉、`migrate` 这一路一直没修）。复核依据是**库里的真事实**（用户表数 + `__drizzle_migrations` 账本条数），不是退出码；用例 `tests/db-migrate-noninteractive.test.ts` 五条钉住，含两条变异（拿掉前置判决 / 把 `.sql` 筛换成「目录在不在」）。原先记的两条证据已过期：`package.json` 的 `db:migrate` 不再是裸 `drizzle-kit migrate`。
 - [ ] **P0-6 无代码签名 / 公证**：缺 `certificateThumbprint` / `macOS.signingIdentity` / `publisher` / `licenseFile`。证据：`src-tauri/tauri.conf.json:43-67`；`src-tauri/Cargo.toml:6`。
 
 ### P1 — 安全正确性与运维可见性

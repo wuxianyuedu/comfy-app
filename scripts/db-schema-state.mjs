@@ -161,11 +161,15 @@ export function writeSchemaFingerprint(root, databaseUrl, value) {
  * detected」那十几秒：后者多覆盖的只是「部分语句落地」这一档，而这里要挡的
  * 主要是「报了 applied、其实一点没动」（写锁 / 半途失败）。
  *
+ * **导出**（原为模块私有）：`scripts/db-migrate.mjs` 的「迁移前后库结构变了没有」
+ * 问的是同一个问题，而它是从零建库、没有「之前那份 drizzle 输出」可比 ——
+ * 只有这一份摘要是两边都拿得到的锚点（§12.18：缺能力补地基，不在调用点重抄）。
+ *
  * @param {string} root 项目根（绝对路径）
  * @param {string} [databaseUrl] 形如 `file:./db.sqlite`
  * @returns {string | null} 读不到库时 null
  */
-function schemaDigest(root, databaseUrl) {
+export function schemaDigest(root, databaseUrl) {
   try {
     const db = new DatabaseSync(resolveSqlitePath(root, databaseUrl), {
       readOnly: true,

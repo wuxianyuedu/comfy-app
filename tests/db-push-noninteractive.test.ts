@@ -173,7 +173,21 @@ describe("构建期缺 DATABASE_URL 不得把构建打死", () => {
       path.join(process.cwd(), "src", "server", "db.ts"),
       "utf8",
     );
-    expect(pushSrc).toContain('"file:./db.sqlite"');
+    /* 默认锚点（`file:./db.sqlite`）的**唯一实现**在 `db-schema-state.mjs` 的
+     * `resolveSqlitePath` —— `db-push.mjs` 与 `db-migrate.mjs` 都 import 它。
+     * 本用例此前断言的是「`db-push.mjs` 的源码里含这个字面量」，那是在**钉住
+     * 实现所在的位置**而不是意图：锚点一经收口（ISSUE #1624 顺手收掉了一份
+     * 逐字重复的 `resolveDbPath`），这条就红了 —— 而两处其实仍然认同一个锚点。
+     * 改成按意图断言三件：① 共享实现里那份字面量在；② 两个入口都 import 它；
+     * ③ TS 侧那份默认值逐字相同。 */
+    const stateSrc = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "db-schema-state.mjs"),
+      "utf8",
+    );
+    expect(stateSrc).toContain('"file:./db.sqlite"');
+    expect(pushSrc).toContain("resolveSqlitePath");
+    // db-push 自己**不该**再抄一份默认值（那正是 #1624 收掉的那份重复）。
+    expect(pushSrc).not.toContain('"file:./db.sqlite"');
     expect(dbSrc).toContain('"./db.sqlite"');
   });
 });
