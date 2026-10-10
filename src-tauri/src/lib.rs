@@ -1016,8 +1016,19 @@ fn resolve_standalone_payload(
   Err(missing.into())
 }
 
+/// 生产模式：起内嵌 standalone server（sidecar）。
+///
+/// `project_root_for_exit` 只服务一件事：sidecar **终止**时用它落「应用服务为什么
+/// 结束」的记录（ISSUE #1692），落点在 `run/app-service-exit.json`。为什么记这一笔
+/// 要由壳来写——这一档用户看到的是「窗口还在、页面全连不上」，而探测那一格打的是
+/// 服务自己的 HTTP，服务不在就永远问不到原因；壳持有句柄，是此刻唯一活着的旁证人。
+/// standalone 下项目根可能是空串（安装目录里没有检出）：那种情况写侧静默返回
+/// false，界面退回「没有原因可讲」，不影响启动也不影响回收。
 #[cfg(not(debug_assertions))]
-fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+fn spawn_sidecar(
+  app: &tauri::AppHandle,
+  project_root_for_exit: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
   use tauri_plugin_shell::process::CommandEvent;
   use tauri_plugin_shell::ShellExt;
 
@@ -1050,6 +1061,9 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error
   // sidecar 的 stdout/stderr 必须有人读：shell 插件把输出投递到事件通道，
   // 无人消费时管道写满会让 sidecar 静默卡死（表现为「服务一直不就绪」）。
   // 落进壳日志，也正好补上 standalone 脱离 launcher 时的诊断通道。
+  // 事件循环里还要写「应用服务结束原因」，因此再取一份 project_root（外层那个
+  // 后面还要用）；move 闭包按值捕获，与 tauri 的 'static 要求一致。
+  let exit_root = project_root_for_exit.to_string();
   tauri::async_runtime::spawn(async move {
     while let Some(event) = rx.recv().await {
       match event {
@@ -1060,7 +1074,16 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error
           log::warn!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
         }
         CommandEvent::Terminated(payload) => {
-          log::info!("[sidecar] terminated: {:?}", payload.code)
+          log::info!("[sidecar] terminated: {:?}", payload.code);
+          /* 服务死的那一刻落盘（ISSUE #1692 的 sidecar 档）：探测那一格打的是服务
+           * 自己的 HTTP，服务一不在就永远问不到「为什么没了」——答案只能由此刻
+           * 还活着的壳写下（见 shell_launch::write_sidecar_exit_record）。写在事件回调里
+           * 而不是别处：这个事件是唯一带着退出码的地方。 */
+          shell_launch::write_sidecar_exit_record(
+            &exit_root,
+            payload.code,
+            &shell_launch::sidecar_exit_reason(payload.code),
+          );
         }
         _ => {}
       }
@@ -2336,7 +2359,13 @@ fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::err
   let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
   if launch_mode == "standalone" {
     // standalone（检出里没有编排器）：必须启动内嵌 server（缺失时 spawn_sidecar 会报错）。
-    spawn_sidecar(app.handle())?;
+    // 项目根一并传下去：sidecar 终止时壳要用它落「应用服务结束原因」
+    // （ISSUE #1692）。standalone 下项目根可能就是空串（安装目录里没有检出），
+    // 那种情况记录写不出去——写侧按静默处理，界面退回「没有原因可讲」。
+    spawn_sidecar(
+      app.handle(),
+      &std::env::var("COMFYAPP_PROJECT_ROOT").unwrap_or_default(),
+    )?;
   } else {
     // prebuilt：壳直接加载 COMFYAPP_DEV_URL（由 dev-launcher.mjs 起 dev server），
     // 不启动 standalone sidecar。
