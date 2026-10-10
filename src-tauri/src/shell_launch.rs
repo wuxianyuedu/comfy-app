@@ -484,6 +484,92 @@ pub fn status_file_path(project_root: &str) -> std::path::PathBuf {
   std::path::Path::new(project_root).join("run").join("launch-status.json")
 }
 
+/// 「应用服务为什么结束」的落盘侧（ISSUE #1692），与 Node 侧
+/// `scripts/app-service-exit.mjs` 写的是**同一份文件、同一组字段**。
+///
+/// 为什么壳也要写：这一档用户看到的是「窗口还在、页面全连不上」——壳活着、内嵌的
+/// standalone server 没了。而应用服务探测那一格打的是**服务自己的 HTTP**，服务不在
+/// 这条通道必然不通，「为什么没了」事后根本问不到（与 Node 侧那条链同一个根因）。
+/// 所以答案只能在**服务死的那一刻**由活着的旁证人写下：壳持有 sidecar 句柄，
+/// `CommandEvent::Terminated` 就带着退出码。
+///
+/// 字段名与取值集合**逐字对应** `src/lib/shell/app-service-exit.ts` 的
+/// `AppServiceExitRecord` / `AppServiceExitKind`：漂开的表现是「记录写进去了、
+/// 界面读不懂」，而现场恰好是最需要看清的那一次。Node 侧已有跨侧同源判据，
+/// 这里补齐 Rust 这一头的三项——文件名、字段名、成因取值。
+///
+/// 读的一侧不经这条链：探活只能等服务恢复应答之后走 `GET /api/dev/last-exit`；
+/// 壳这里只负责**写**。
+pub fn app_service_exit_path(project_root: &str) -> std::path::PathBuf {
+  std::path::Path::new(project_root)
+    .join("run")
+    .join(APP_SERVICE_EXIT_FILE)
+}
+
+/// 记录文件名，与 `scripts/app-service-exit.mjs` / `src/lib/shell/app-service-exit.ts`
+/// 的 `APP_SERVICE_EXIT_FILE` 逐字相同（Rust 侧没有 import，只能各写一次，由用例钉住）。
+pub const APP_SERVICE_EXIT_FILE: &str = "app-service-exit.json";
+
+/// 写下「内嵌服务为什么结束」（sidecar 档）。
+///
+/// **写失败一律静默**（与 Node 侧同取向）：这条记录是排障体验，不是启动的必要条件；
+/// 写不进去时界面按「没有原因可讲」处理，不会因为磁盘问题反过来把壳带崩。
+///
+/// `code` 是 `Option<i32>` 而不是「拿不到就给 0」：**0 是「正常退出」这个具体
+/// 结论**，编出来会把故障说成正常（被信号杀掉时 `Terminated` 本就没有退出码）。
+/// 退出事实的取舍——信号优先于退出码、两者都拿不到就说拿不到——在读取侧统一做，
+/// 这里只如实带上壳知道的那一项。
+pub fn write_sidecar_exit_record(
+  project_root: &str,
+  code: Option<i32>,
+  reason: &str,
+) -> bool {
+  if project_root.is_empty() {
+    return false;
+  }
+  let body = serde_json::json!({
+    "at": local_timestamp(),
+    "kind": "sidecar",
+    "code": code,
+    "signal": serde_json::Value::Null,
+    "reason": reason,
+    "port": serde_json::Value::Null,
+    "runId": std::env::var("COMFYAPP_RUN_ID").ok(),
+  })
+  .to_string();
+  let path = app_service_exit_path(project_root);
+  if let Some(dir) = path.parent() {
+    if std::fs::create_dir_all(dir).is_err() {
+      log::warn!("[ComfyAPP] 无法创建 run/，本次不写应用服务结束记录");
+      return false;
+    }
+  }
+  // 无 BOM：走 `fs::write` 而不是带 BOM 分支的任何写法，与 launch-status.json 同口径。
+  // 读取侧是 JSON.parse，BOM 会让它当场失败。
+  match std::fs::write(&path, body.as_bytes()) {
+    Ok(()) => {
+      log::info!("[ComfyAPP] 已记录内嵌服务结束原因：{}", path.display());
+      true
+    }
+    Err(e) => {
+      log::warn!("[ComfyAPP] 写应用服务结束记录失败（{}）：{e}", path.display());
+      false
+    }
+  }
+}
+
+/// 把 sidecar 的终止事实翻译成给用户看的一句话（记录里的 `reason`）。
+///
+/// 与 Node 侧 `describeDownstreamExit` 同一个取向：**只陈述这一次具体是什么结束的**，
+/// 不替用户下结论——「是崩溃还是被顶掉」要看退出码之外的东西，而这里手上只有退出码
+/// 这一个事实。
+pub fn sidecar_exit_reason(code: Option<i32>) -> String {
+  match code {
+    Some(c) => format!("内嵌服务（standalone server）已终止，退出码 {c}"),
+    None => "内嵌服务（standalone server）已终止，未拿到退出码".to_string(),
+  }
+}
+
 /// 把编排链路日志写一行（时间戳 + 级别 + 正文）。
 ///
 /// **为什么必须有这份文件**：release 壳（Windows `windows_subsystem = "windows"`）
@@ -1494,5 +1580,93 @@ mod tests {
     let marker = session_start_marker(1);
     assert_eq!(&marker[..SESSION_START_MARKER.len()], SESSION_START_MARKER);
     assert_eq!(SESSION_START_MARKER, "=== 启动会话开始");
+  }
+
+  /// 造一个隔离的临时项目根（退出记录的用例各自建、各自删）。
+  fn exit_record_fixture(tag: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-app-service-exit-{tag}-{}",
+      std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+  }
+
+  /// 「应用服务为什么结束」的记录落点与形态（ISSUE #1692 的 sidecar 档）。
+  ///
+  /// 这组用例钉的是**跨侧同源**里 Rust 这一头的三项：文件名（与
+  /// `scripts/app-service-exit.mjs` 和 `src/lib/shell/app-service-exit.ts` 逐字相同）、
+  /// 字段名、成因取值。Rust 侧没有 import 那条路，只能各写一次——没有这组断言，
+  /// 「壳写的记录界面读不懂」就是一处静默失效，而现场恰好是最需要看清的那一次。
+  #[test]
+  fn app_service_exit_path_is_run_dir_and_name_matches_node_side() {
+    let root = std::path::Path::new("/proj");
+    assert_eq!(
+      app_service_exit_path("/proj"),
+      root.join("run").join("app-service-exit.json")
+    );
+    // 与 Node 侧两份字面量逐字相同（`scripts/app-service-exit.mjs` 的
+    // `APP_SERVICE_EXIT_FILE` 与 `src/lib/shell/app-service-exit.ts` 同名常量）。
+    assert_eq!(APP_SERVICE_EXIT_FILE, "app-service-exit.json");
+    // 与 launch-status.json 并列：同属「本次运行的现场」，落在 run/ 而不是 log/。
+    assert_eq!(app_service_exit_path("/proj").parent(), status_file_path("/proj").parent());
+  }
+
+  #[test]
+  fn sidecar_exit_record_carries_the_shared_field_names() {
+    let dir = exit_record_fixture("fields");
+    let root = dir.to_str().unwrap();
+    assert!(write_sidecar_exit_record(root, Some(1), "内嵌服务已终止，退出码 1"));
+    let raw = std::fs::read_to_string(app_service_exit_path(root)).unwrap();
+    // 无 BOM：读取侧是 JSON.parse（Node 端点）与 parseAppServiceExitRecord，
+    // BOM 会让它当场失败。
+    assert!(!raw.starts_with('\u{feff}'), "记录不许带 BOM：{raw}");
+    let json: serde_json::Value = serde_json::from_str(&raw).expect("必须是合法 JSON");
+    for field in ["at", "kind", "code", "signal", "reason", "port", "runId"] {
+      assert!(json.get(field).is_some(), "缺字段 {field}：{raw}");
+    }
+    // 成因取值必须是 TS 联合类型认得出的那一个（`AppServiceExitKind` 的 sidecar 档）。
+    assert_eq!(json["kind"], serde_json::json!("sidecar"));
+    assert_eq!(json["code"], serde_json::json!(1));
+    assert_eq!(json["reason"], serde_json::json!("内嵌服务已终止，退出码 1"));
+    // 壳这一侧不知道端口与信号：必须是 null 而不是编一个值出来。
+    assert_eq!(json["signal"], serde_json::Value::Null);
+    assert_eq!(json["port"], serde_json::Value::Null);
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  #[test]
+  fn sidecar_exit_record_never_invents_exit_code_zero() {
+    // 退出码拿不到时写 null，**不写 0**：0 是「正常退出」这个具体结论，
+    // 编出来会把故障说成正常（被信号杀掉时 Terminated 本就没有 code）。
+    let dir = exit_record_fixture("nocode");
+    let root = dir.to_str().unwrap();
+    assert!(write_sidecar_exit_record(root, None, "内嵌服务已终止，未拿到退出码"));
+    let json: serde_json::Value =
+      serde_json::from_str(&std::fs::read_to_string(app_service_exit_path(root)).unwrap())
+        .unwrap();
+    assert_eq!(json["code"], serde_json::Value::Null);
+    assert_eq!(json["reason"], serde_json::json!("内嵌服务已终止，未拿到退出码"));
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  #[test]
+  fn sidecar_exit_record_is_silent_when_root_is_empty() {
+    // 项目根空串（安装目录里没有检出）时**静默返回 false**：这条记录是排障体验，
+    // 不是启动的必要条件，写不出去不该把壳带崩，也不该在别处留下一个半成品文件。
+    assert!(!write_sidecar_exit_record("", Some(1), "x"));
+  }
+
+  #[test]
+  fn sidecar_exit_reason_states_the_fact_without_concluding() {
+    // 只陈述「这一次具体是什么结束的」：手上只有退出码一个事实，不替用户下
+    // 「是崩溃还是被顶掉」的结论（那种结论会把排查引向另一个方向）。
+    let with_code = sidecar_exit_reason(Some(137));
+    assert!(with_code.contains("137"), "{with_code}");
+    let without = sidecar_exit_reason(None);
+    assert!(without.contains("未拿到退出码"), "{without}");
+    // 「拿不到」与「正常退出」必须是两句不同的话。
+    assert_ne!(without, sidecar_exit_reason(Some(0)));
   }
 }
