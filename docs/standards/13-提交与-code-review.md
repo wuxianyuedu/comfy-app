@@ -1419,6 +1419,39 @@ squash 合并把 `master` 上几批修复整体回退的现场：解冲突时 `g
   真合并提交放行、**声明是合并但单亲阻断并给出出口**、`--amend` 一个合并提交放行、
   正文提到 `Merge branch` 不算声明、非 git 目录放行，另加钩子入口的 `$1` / `$2` 透传）。
 
+**同一入口的第二条判据：双亲在、内容丢了一侧（ISSUE #1618）**
+
+上面那条判的是**形态**。而实测丢东西的那两次（`ad81a912` / `bdabd26f`）**形态全对**
+—— 双亲在、消息也像样，只是某个文件**整份取了非 HEAD 那一侧**，把 HEAD 侧已合入的
+改动一笔退回。所以 `.githooks/prepare-commit-msg` 里**一前一后**接了两条判据：
+
+```sh
+node scripts/check-merge-parents.mjs "$1" "$2" || exit 1     # ① 形态档（#1594）
+exec node scripts/check-pending-merge-loss.mjs "$2"          # ② 内容档（#1618）
+```
+
+② 的三条合起来才算命中（缺一条都会误报）：结果版（索引里那一版）**不等于**
+`HEAD` 侧那一版、**等于** `MERGE_HEAD` 侧历史上对那个文件出现过的某一版、
+且 `HEAD` 侧在该文件上**确有还没被取代的改动**（`HEAD` 那一版 ≠ merge-base 那一版）。
+只有「你动了它、对方也有一版、结果取了对方那版」才是整份取一侧；「只有对方动过那个
+文件」是**正当**的，不报。阻断话术指名叫哪几份、并给出口（`git checkout HEAD -- <文件>`
+或 `git checkout --merge <文件>` 重解一次，**别整份 goback**）。
+
+**它与 1-1（事后复算档）共用内核** `scripts/merged-side-loss-core.mjs` 的
+`findEarlierVersion` —— 两个执行者问的是同一件事：「结果里这一版的内容，是不是等于
+某个更早版本的内容」。内核只接**已经取好的事实**（结果 blob、候选历史 sha 清单、
+取某版本的函数），不认识「基线」「HEAD」「MERGE_HEAD」这些业务名词，也不含任何
+传输层代码（§18.4 / §12.12 的分工）。
+
+- **边界**（全取保守放行）：`source=commit`（`--amend` / cherry-pick / revert）→ 放行；
+  **非合并提交 → 零输出、零耗时**（`MERGE_HEAD` 不在时第一行就返回，普通提交每次都
+  会走到它，不能加噪声）；浅克隆 / 取不到 merge-base → 放行并说明；
+  生成物（`docs/api/**`、`docs/generated/**`）→ 不判（退回即常态，同 1-1）。
+- 规则自测：`tests/pending-merge-loss-gate.test.ts`（10 格，真仓库跑合并：整份取一侧
+  → 拦并指名、正确保留两侧 → 放行、非合并 → 零输出、`--amend` → 放行、
+  **只有对方动过那个文件 → 放行**（误报防线）、生成物 → 不报、非 git → 放行、
+  混合 → 只报该报的那一份，另加两条钩子接线与「与 1-1 共用内核」）。
+
 > **`.githooks` 下的两个钩子是两件事**：`pre-commit` 管「提交这一刻的门槛」，
 > `prepare-commit-msg` 管「提交消息与拓扑是否自洽」。两者都由
 > `core.hooksPath=.githooks` 覆盖调用，`scripts/install-git-hooks.mjs` 不必改 ——
