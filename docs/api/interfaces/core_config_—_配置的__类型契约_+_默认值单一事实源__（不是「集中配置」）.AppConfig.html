@@ -16,7 +16,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">AppConfig</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#comfyuibaseurl">comfyuiBaseUrl</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#comfyuiwsurl">comfyuiWsUrl</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#databaseurl">databaseUrl</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#env">env</a><span class="tsd-signature-symbol">:</span> <a href="../types/core_config_—_配置的__类型契约_+_默认值单一事实源__（不是「集中配置」）.NodeEnv.html" class="tsd-signature-type tsd-kind-type-alias">NodeEnv</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#features">features</a><span class="tsd-signature-symbol">:</span> <a href="core_config_—_配置的__类型契约_+_默认值单一事实源__（不是「集中配置」）.FeatureFlags.html" class="tsd-signature-type tsd-kind-interface">FeatureFlags</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#isdev">isDev</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#isprod">isProd</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#istest">isTest</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#loglevel">logLevel</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;info&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;error&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;debug&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;warn&quot;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#port">port</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:62</li></ul></aside>
+<li>Defined in src/lib/core/config.ts:62</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -44,70 +44,70 @@
 <div class="tsd-comment tsd-typography"><p>本机 ComfyUI 的 REST 基础地址（强制 127.0.0.1，见安全约束）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:76</li></ul></aside></section>
+<li>Defined in src/lib/core/config.ts:76</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="comfyuiwsurl"><code class="tsd-tag">Readonly</code><span>comfyui<wbr/>Ws<wbr/>Url</span><a href="#comfyuiwsurl" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">comfyuiWsUrl</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>本机 ComfyUI 的 WebSocket 地址（由 baseUrl 推导）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:78</li></ul></aside></section>
+<li>Defined in src/lib/core/config.ts:78</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="databaseurl"><code class="tsd-tag">Readonly</code><span>database<wbr/>Url</span><a href="#databaseurl" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">databaseUrl</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p><code>DATABASE_URL</code>（SQLite 文件路径或远程连接串）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:74</li></ul></aside></section>
+<li>Defined in src/lib/core/config.ts:74</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="env"><code class="tsd-tag">Readonly</code><span>env</span><a href="#env" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">env</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_config_—_配置的__类型契约_+_默认值单一事实源__（不是「集中配置」）.NodeEnv.html" class="tsd-signature-type tsd-kind-type-alias">NodeEnv</a></div>
 <div class="tsd-comment tsd-typography"><p>当前环境。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:64</li></ul></aside></section>
+<li>Defined in src/lib/core/config.ts:64</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="features"><code class="tsd-tag">Readonly</code><span>features</span><a href="#features" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">features</span><span class="tsd-signature-symbol">:</span> <a href="core_config_—_配置的__类型契约_+_默认值单一事实源__（不是「集中配置」）.FeatureFlags.html" class="tsd-signature-type tsd-kind-interface">FeatureFlags</a></div>
 <div class="tsd-comment tsd-typography"><p>特性开关。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:82</li></ul></aside></section>
+<li>Defined in src/lib/core/config.ts:82</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="isdev"><code class="tsd-tag">Readonly</code><span>is<wbr/>Dev</span><a href="#isdev" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">isDev</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>是否开发环境（快捷判断）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:66</li></ul></aside></section>
+<li>Defined in src/lib/core/config.ts:66</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="isprod"><code class="tsd-tag">Readonly</code><span>is<wbr/>Prod</span><a href="#isprod" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">isProd</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>是否生产环境。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:68</li></ul></aside></section>
+<li>Defined in src/lib/core/config.ts:68</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="istest"><code class="tsd-tag">Readonly</code><span>is<wbr/>Test</span><a href="#istest" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">isTest</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>是否测试环境。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:70</li></ul></aside></section>
+<li>Defined in src/lib/core/config.ts:70</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="loglevel"><code class="tsd-tag">Readonly</code><span>log<wbr/>Level</span><a href="#loglevel" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">logLevel</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;info&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;error&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;debug&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;warn&quot;</span></div>
 <div class="tsd-comment tsd-typography"><p>日志级别（见 ./logger）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:72</li></ul></aside></section>
+<li>Defined in src/lib/core/config.ts:72</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="port"><code class="tsd-tag">Readonly</code><span>port</span><a href="#port" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">port</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>应用开发服务监听端口，取值来自 .env 的 COMFYAPP_PORT。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/core/config.ts:80</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/core/config.ts:80</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

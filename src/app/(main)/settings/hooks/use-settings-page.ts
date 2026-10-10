@@ -26,6 +26,7 @@ import { useSettingsSave } from "./use-settings-page-save";
 import { useSettingsLoadStatus } from "./use-settings-page-load-status";
 import { useSettingsRemoteModels } from "./use-settings-page-remote-models";
 import { useSettingsAppUpdate } from "./use-settings-page-app-update";
+import { useSettingsBackup } from "./use-settings-page-backup";
 import { useSettingsDbStudio } from "./use-settings-page-db-studio";
 import { useSettingsOllama } from "./use-settings-page-ollama";
 
@@ -283,6 +284,19 @@ export function useSettingsPage(): SettingsPageController {
     openDbStudio,
   } = useSettingsDbStudio({ statusQueriesEnabled, showFlash });
 
+  /* ── 数据库备份 / 恢复（D6）：清单 + 手动备份 + 登记恢复 ──
+   * 与 Drizzle Studio 同一门控；「恢复」是两步（写标记 → 下次启动换文件），
+   * 所以产出里有一个 `pending` 供视图说清「重启后生效」。 */
+  const {
+    backups,
+    pending: pendingRestore,
+    loading: backupListLoading,
+    backupBusy,
+    restoreBusy,
+    createBackupNow,
+    restoreFrom,
+  } = useSettingsBackup({ statusQueriesEnabled, showFlash });
+
   /** 用系统默认浏览器打开生成的远程资源（视频 / 公网图片等）。
    *  桌面壳内 target=_blank 外链打不开，统一走服务端 openExternal。 */
   const openExternalAction = useExternalAction({
@@ -415,6 +429,13 @@ export function useSettingsPage(): SettingsPageController {
     startDbStudio,
     stopDbStudio,
     openDbStudio,
+    backups,
+    pendingRestore,
+    backupListLoading,
+    backupBusy,
+    restoreBusy,
+    createBackupNow,
+    restoreFrom,
     openExternalUrl,
     comfyLog,
     dbStudioLog,

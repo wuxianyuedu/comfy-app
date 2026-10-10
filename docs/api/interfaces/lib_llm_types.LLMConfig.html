@@ -13,7 +13,7 @@
 <h1>Interface LLMConfig</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">LLMConfig</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#apikey">apiKey</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#baseurl">baseUrl</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#extramodels">extraModels</a><span class="tsd-signature-symbol">?:</span> <a href="lib_llm_types.RemoteModelEntry.html" class="tsd-signature-type tsd-kind-interface">RemoteModelEntry</a><span class="tsd-signature-symbol">[]</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#maxtokens">maxTokens</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#model">model</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#provider">provider</a><span class="tsd-signature-symbol">:</span> <a href="../types/lib_llm_types.LLMProviderType.html" class="tsd-signature-type tsd-kind-type-alias">LLMProviderType</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#temperature">temperature</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#temperaturebytask">temperatureByTask</a><span class="tsd-signature-symbol">?:</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><br/>            <span class="tsd-signature-type">&quot;code&quot;</span><br/>            <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;chat&quot;</span><br/>            <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;txt2img&quot;</span><br/>            <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;img2video&quot;</span><br/>            <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;creative&quot;</span><span class="tsd-signature-symbol">,</span><br/>            <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span><br/>        <span class="tsd-signature-symbol">&gt;</span><br/>        <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/llm/types.ts:260</li></ul></aside>
+<li>Defined in src/lib/llm/types.ts:260</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -39,7 +39,7 @@
 <div class="tsd-comment tsd-typography"><p>remote 提供方的密钥；与 RemoteModelEntry.apiKey 一样只在服务端参与请求</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/llm/types.ts:269</li></ul></aside></section>
+<li>Defined in src/lib/llm/types.ts:269</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="baseurl"><span>base<wbr/>Url</span><a href="#baseurl" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">baseUrl</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
@@ -47,43 +47,43 @@
 （<code>OLLAMA_DEFAULT_BASE_URL</code>），也可以指向任意远端 <code>https://…/v1</code>。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/llm/types.ts:264</li></ul></aside></section>
+<li>Defined in src/lib/llm/types.ts:264</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="extramodels"><code class="tsd-tag">Optional</code><span>extra<wbr/>Models</span><a href="#extramodels" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">extraModels</span><span class="tsd-signature-symbol">?:</span> <a href="lib_llm_types.RemoteModelEntry.html" class="tsd-signature-type tsd-kind-interface">RemoteModelEntry</a><span class="tsd-signature-symbol">[]</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>候选模型（设置页可配置多个）：本地 Ollama 为纯名字；远端条目可带独立 baseUrl / apiKey</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/llm/types.ts:267</li></ul></aside></section>
+<li>Defined in src/lib/llm/types.ts:267</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="maxtokens"><span>max<wbr/>Tokens</span><a href="#maxtokens" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">maxTokens</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/llm/types.ts:274</li></ul></aside></section>
+<li>Defined in src/lib/llm/types.ts:274</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="model"><span>model</span><a href="#model" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">model</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/llm/types.ts:265</li></ul></aside></section>
+<li>Defined in src/lib/llm/types.ts:265</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="provider"><span>provider</span><a href="#provider" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">provider</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_llm_types.LLMProviderType.html" class="tsd-signature-type tsd-kind-type-alias">LLMProviderType</a></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/llm/types.ts:261</li></ul></aside></section>
+<li>Defined in src/lib/llm/types.ts:261</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="temperature"><span>temperature</span><a href="#temperature" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">temperature</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>全局默认温度（未区分任务类型的调用的 fallback）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/llm/types.ts:271</li></ul></aside></section>
+<li>Defined in src/lib/llm/types.ts:271</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="temperaturebytask"><code class="tsd-tag">Optional</code><span>temperature<wbr/>By<wbr/>Task</span><a href="#temperaturebytask" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">temperatureByTask</span><span class="tsd-signature-symbol">?:</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">&quot;code&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;chat&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;txt2img&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;img2video&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;creative&quot;</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>按任务类型覆盖的温度；缺失某 key 时回退到该任务的推荐默认值</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/llm/types.ts:273</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/llm/types.ts:273</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

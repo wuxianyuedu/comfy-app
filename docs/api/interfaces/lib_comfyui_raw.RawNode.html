@@ -20,7 +20,7 @@
 <div class="tsd-comment tsd-typography"><p>其余动态字段（color 等），按需 typeof 守卫后读取</p>
 </div></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:87</li></ul></aside>
+<li>Defined in src/lib/comfyui/raw.ts:87</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -49,21 +49,21 @@
 <div class="tsd-comment tsd-typography"><p>LiteGraph 运行时 flags（如 collapsed / bypass）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:111</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/raw.ts:111</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="id"><span>id</span><a href="#id" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">id</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>节点 id — ComfyUI 导出为 number，畸形数据可能是 string；统一 String() 后使用</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:89</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/raw.ts:89</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="inputs"><code class="tsd-tag">Optional</code><span>inputs</span><a href="#inputs" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">inputs</span><span class="tsd-signature-symbol">?:</span> <a href="lib_comfyui_raw.RawNodeInput.html" class="tsd-signature-type tsd-kind-interface">RawNodeInput</a><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>部分工作流的 raw 节点也会显式包含 inputs/outputs（用于嵌套连接）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:105</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/raw.ts:105</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="mode"><code class="tsd-tag">Optional</code><span>mode</span><a href="#mode" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">mode</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
@@ -72,52 +72,52 @@ ComfyUI 前端在导出 prompt 时会剔除 2/4 的节点，4 还要把连线「
 提交前的这步收拾见 <code>execution-graph.ts</code>。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:101</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/raw.ts:101</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="outputs"><code class="tsd-tag">Optional</code><span>outputs</span><a href="#outputs" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">outputs</span><span class="tsd-signature-symbol">?:</span> <a href="lib_comfyui_raw.RawNodeOutput.html" class="tsd-signature-type tsd-kind-interface">RawNodeOutput</a><span class="tsd-signature-symbol">[]</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:106</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/raw.ts:106</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="pos"><code class="tsd-tag">Optional</code><span>pos</span><a href="#pos" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">pos</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>画布坐标 [x, y]（LiteGraph 绝对坐标）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:93</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/raw.ts:93</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="properties"><code class="tsd-tag">Optional</code><span>properties</span><a href="#properties" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">properties</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>节点属性，如 title / proxyWidgets</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:108</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/raw.ts:108</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="size"><code class="tsd-tag">Optional</code><span>size</span><a href="#size" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">size</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>节点盒尺寸 [w, h]</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:95</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/raw.ts:95</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="title"><code class="tsd-tag">Optional</code><span>title</span><a href="#title" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">title</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:109</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/raw.ts:109</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="type"><code class="tsd-tag">Optional</code><span>type</span><a href="#type" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">type</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>节点类名（raw 格式没有 class_type）</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:91</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/raw.ts:91</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="widgets_values"><code class="tsd-tag">Optional</code><span>widgets_<wbr/>values</span><a href="#widgets_values" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">widgets_values</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">unknown</span><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>节点控件值的有序数组，含义由 class_type 决定</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/raw.ts:103</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/comfyui/raw.ts:103</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

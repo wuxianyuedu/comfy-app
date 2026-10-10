@@ -15,6 +15,7 @@
  * 也能安全引它。
  */
 import type { RuntimeLogController } from "./use-runtime-log-source";
+import type { BackupEntry, PendingRestore } from "./use-settings-page-backup";
 import type { OllamaModel } from "~/lib/llm/ollama-client";
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
 import type { RemoteProbeResult } from "~/lib/llm/browser";
@@ -88,6 +89,7 @@ export type Section =
   | "llmRemote"
   | "comfyui"
   | "database"
+  | "backup"
   | "exit"
   | "logs";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
@@ -203,6 +205,16 @@ export interface SettingsPageController {
   startDbStudio: () => Promise<void>;
   stopDbStudio: () => Promise<void>;
   openDbStudio: () => Promise<void>;
+  /* 数据库备份 / 恢复（D6）：清单 + 手动备份 + 登记恢复。
+   * 「恢复」是两步 —— `restoreFrom` 只写待恢复标记，换文件在下次启动，
+   * 所以有 `pendingRestore` 这一格要被视图讲出来（见 `use-settings-page-backup`）。 */
+  backups: BackupEntry[];
+  pendingRestore: PendingRestore | null;
+  backupListLoading: boolean;
+  backupBusy: boolean;
+  restoreBusy: boolean;
+  createBackupNow: () => Promise<void>;
+  restoreFrom: (name: string) => Promise<void>;
   /** 用系统默认浏览器打开生成的远程资源（视频等），桌面壳内替代 target=_blank */
   openExternalUrl: (url: string) => Promise<void>;
   /* 启动日志（log/services/*-runtime.log）：三个分区共用同一套「按会话切分 +
@@ -285,6 +297,7 @@ export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
   { id: "llmRemote", label: "远程模型" },
   { id: "comfyui", label: "创作后端" },
   { id: "database", label: "数据库" },
+  { id: "backup", label: "备份与恢复" },
   { id: "exit", label: "退出与后台服务" },
   { id: "logs", label: "日志" },
 ];
