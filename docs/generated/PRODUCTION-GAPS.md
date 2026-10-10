@@ -553,11 +553,47 @@
 - [ ] **C6 生产 CSP 仍 `'unsafe-inline'`**，无 nonce/hash / `object-src 'none'` / `upgrade-insecure-requests` / `report-uri`。证据：`next.config.js:109-112`。
 - [ ] **C7 未关 `poweredByHeader`**；`typescript.ignoreBuildErrors:true`。证据：`next.config.js`（0 命中）/ `:17-19`。
 - [ ] **C8 `shadcn` CLI 错放 `dependencies`**。证据：`package.json:83`。
-- [ ] **D1 日志无轮转无上限**（固定名 `app-runtime.log` 纯 append）。证据：`src/lib/log/app-runtime-log.ts:85`；`log-sessions.ts:5`。
+- [x] **D1 日志无轮转无上限 —— 已闭合，且台账原描述本身是过时的（ISSUE #1611 阶段三 D 段盘点）**。
+      **主通道**在 ISSUE #1326 就闭环了：一次启动一份文件（`<来源>-<YYYYMMDD-HHmmss>.log`）
+      + `pruneRuntimeLogFiles` 每来源留 20 份 + 用例 + 规范 07 §7.29 写明 ——
+      台账那句「固定名 `app-runtime.log` 纯 append」说的**不是**主通道。
+      真正的残留只有一处：`scripts/dev-launcher.mjs` 的 `appendRuntimeWarning()`
+      仍按固定名 `app-runtime.log` 追加（壳过期 / pnpm 不匹配两条预检提醒发生在
+      dev server 就绪**之前**，走不了 `POST /api/logs/app-runtime`）。
+      它比台账写的更别扭，也**更值得修**：读侧把固定名认作 `startedAt: null`
+      =「迁移前的全部历史」、排序恒最前，而保留策略删的是**最旧的那几份** ——
+      于是它被当最旧的一份先删掉、再由下一次 `appendFileSync` 重建：
+      「删除 → 重建」交替，**正在写的那一份被轮转逻辑当垃圾清掉**（静默丢日志）；
+      同来源不足保留份数时它又一直追加、**没有上限**。
+      **已修**：名字戳由 launcher 产出（它先于 dev server 存在）、经
+      `COMFYAPP_LAUNCH_STAMP` 透传，`app-runtime-log.ts` 的 `writerFor()` 走
+      `openRuntimeLogWriter(..., { reuse })` 续写**同一份**。
+      判据：`tests/runtime-log-cross-language.test.ts`（两侧名字对拍 +
+      「launcher 不再写固定名」）、`src/lib/log/runtime-log-pack.server.test.ts`
+      （`reuse` 不让位到 `-2`）、`src/lib/log/runtime-log-file.test.ts`
+      （`parseLaunchStamp` 的形态判据）。规范 07 §7.13 那段**已失真的描述**
+      （说写方是 `scripts/dev-launcher.ps1` 的 `Write-ShellStaleRuntimeLog`，
+      而该函数在代码里根本不存在）一并纠偏。
 - [ ] **D2 日志级别不可运行时调整**。证据：`src/lib/core/logger.ts:115,161`。
 - [ ] **D3 日志不出用户机器**（无上报 / 导出通道）。证据：`src/lib/core/logger.ts:145-154`。
 - [ ] **D4 Sentry 无 release / tags / 用户上下文 / 离线缓存；Edge 缺 beforeSend 脱敏**。证据：`src/sentry.server.config.ts:8-21`；`src/sentry.edge.config.ts:14-18`。
-- [ ] **D5 `/api/health` 仅 `{status,db,t}` 且 `*` CORS + 回显运维命令**。证据：`src/app/api/health/route.ts:27,39,46`。
+- [x] **D5 `/api/health` 的 CORS `*` 与回显运维命令 —— 已收窄（ISSUE #1611 阶段三 D 段）**。
+      收窄的是 `*` 这一半：跨域放行现在只给**启动页那一族源**
+      （`src/lib/shell/splash-origin.ts`，`tauri://localhost` /
+      `http(s)://tauri.localhost`），且回显请求的源 + `Vary: Origin`
+      （只给前者时，链路上的缓存会把第一个访问者的头复用给所有源 —— 白名单形同
+      虚设，且是静默的）。
+      **`*` 不能直接删**：启动页与 dev server 不同源，且它必须走 `mode: "cors"`
+      才读得到**真实状态码**（`no-cors` 的 opaque 响应读不到，那正是历史「过早
+      导航」的根因，注释写在 `src-tauri/splash-assets/index.html:611`）—— 删掉它
+      会直接打坏启动页的就绪判定。所以出路是**白名单**，不是删除。
+      「回显运维命令」那一半也修了：503 的 `hint` 此前带着**内部文档路径**
+      （`docs/standards/launch-and-build.md §9.1`），而它经 `*` 回给任意源；
+      现在改成对**它真正的读者**说的话（先说自己会好 —— 桌包首启的常规形态就是
+      入口在零表时应用随包的 `schema.sql`；再给开发检出的 `pnpm db:push`），
+      内部路径摘掉。判据：`src/lib/shell/splash-origin.test.ts`（6 条，含
+      「回别的值等于放行」「前缀宽容是最经典的失效形态」两条）与
+      `src/app/api/health/route.test.ts` 的跨域面 4 条。
 - [x] **D6 自动备份 / 恢复工具（已落地 —— ISSUE #1611 拍板「口径照建议默认」）**。
       证据：`scripts/db-backup-core.mjs`（唯一实现）、`src/lib/db-backup/backup.ts`
       （服务端取用面）、`scripts/db-backup.mjs`（`pnpm db:backup` 手动档）、
