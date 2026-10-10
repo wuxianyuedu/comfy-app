@@ -134,11 +134,31 @@ function importsVitestHosts(raw) {
 }
 
 /**
- * 扫一个文件，返回它命中的站点。
- * @returns {{line:number,text:string}[]}
+ * 扫一个文件，返回它命中的站点；文件在「列目录 → 读内容」之间消失时返回 `null`。
+ * @returns {{line:number,text:string}[]|null}
  */
 function scanFile(abs) {
-  const raw = fs.readFileSync(abs, "utf8");
+  let raw;
+  try {
+    raw = fs.readFileSync(abs, "utf8");
+  } catch (error) {
+    /**
+     * 消失不是判据要判的形态 —— 一个已经不存在的文件里没有站点可言。
+     *
+     * 现场：`tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造
+     * `.setup-cleanup-probe-<pid>-<ts>.test.tsx` 再删掉（它判的是「全局 setup 真的
+     * 把 RTL 逐用例卸载挂上了」）。同一份工作树里只要有两个 vitest 在跑（并行会话、
+     * 或本钩子自己的 C 组还没退干净），本判据就会**列到这个名字、读时已经没了**，
+     * 于是整个 D 组带着一个 Node 栈崩掉 —— 表现是「提交被拦下」，报错里既没有站点
+     * 也没有文件名可读，指向的不是任何人的改动。
+     *
+     * 但**不许静默**：消失数要计数并打印（见 `main` 的那行汇总）。静默跳过等于
+     * 让判据在一份它其实没读过的目录上假装绿 —— 那是 §13.5.12 那一族「判据自称在跑、
+     * 实际没有」的入口。
+     */
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
   if (!importsVitestHosts(raw)) return [];
   const masked = maskNonCode(raw);
   const rawLines = raw.split("\n");
@@ -156,13 +176,18 @@ function scanFile(abs) {
 function collect() {
   const files = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)));
   const sites = new Map();
+  let vanished = 0;
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
     if (FIXTURE_SKIP.has(rel)) continue;
     const hit = scanFile(abs);
+    if (hit === null) {
+      vanished += 1;
+      continue;
+    }
     if (hit.length) sites.set(rel, hit);
   }
-  return sites;
+  return { sites, vanished };
 }
 
 function readBaseline() {
@@ -178,7 +203,7 @@ function readBaseline() {
 }
 
 function main() {
-  const sites = collect();
+  const { sites, vanished } = collect();
   const total = [...sites.values()].reduce((n, v) => n + v.length, 0);
 
   if (SHOULD_UPDATE) {
@@ -201,7 +226,12 @@ function main() {
   }
 
   if (REPORT_ONLY) {
-    console.log(`[test-it-each] 盘点：${total} 处 / ${sites.size} 份文件。`);
+    console.log(
+      `[test-it-each] 盘点：${total} 处 / ${sites.size} 份文件。` +
+        (vanished > 0
+          ? `\n  ⚠️ 另有 ${vanished} 份在扫描期间消失（并发用例的临时探针），本轮未读。`
+          : ""),
+    );
     for (const [rel, list] of [...sites.entries()].sort()) {
       console.log(
         `  · ${rel}: ${list.length} 处（第 ${list.map((s) => s.line).join(",")} 行）`,
@@ -242,7 +272,14 @@ function main() {
     return 1;
   }
 
-  console.log(`[test-it-each] OK —— ${total} 处 ≤ 基线 ${base.total} 处。`);
+  console.log(
+    `[test-it-each] OK —— ${total} 处 ≤ 基线 ${base.total} 处。` +
+      /* 消失数必须出现在结论里：它等于「这几份文件这一轮没被读过」。静默让判据
+         在没读过的目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
+      (vanished > 0
+        ? `\n  ⚠️ 另有 ${vanished} 份文件在扫描期间消失（并发用例的临时探针），本轮未读。`
+        : ""),
+  );
   if (total < base.total) {
     console.log(
       `  比基线还少了 ${base.total - total} 处：跑 \`--update\` 把基线收紧。`,

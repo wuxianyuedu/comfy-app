@@ -249,12 +249,24 @@ function nearbySleepOk(raw, siteIndex) {
 }
 
 /**
- * 扫一个文件，返回它命中的 sleep 站点。
+ * 扫一个文件，返回它命中的 sleep 站点；文件在「列目录 → 读内容」之间消失时返回 `null`。
  * @param {string} abs
- * @returns {{line: number, text: string, exempt: string | null}[]}
+ * @returns {{line: number, text: string, exempt: string | null}[]|null}
  */
 function scanFile(abs) {
-  const raw = fs.readFileSync(abs, "utf8");
+  let raw;
+  try {
+    raw = fs.readFileSync(abs, "utf8");
+  } catch (error) {
+    /* 消失不是判据要判的形态：一个已经不存在的文件里没有站点可言。
+     * 现场见 `check-test-it-each.cjs` 的同款注释 —— `tests/global-setup-cleanup.test.ts`
+     * 会在 `tests/` 下临时造探针再删，同一工作树里两个 vitest 在跑时，本扫描就会
+     * 「列到名字、读时已没」，整个 D 组带着 Node 栈崩掉。
+     * 但**不许静默**：消失数要计数并打印（见下面 main 的结论行），静默跳过等于让判据
+     * 在它其实没读过的目录上假装绿（§13.5.12 那一族）。 */
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
   const masked = maskNonCode(raw);
   const sites = [];
 
@@ -316,11 +328,17 @@ function main() {
   /** 已豁免站点（只记账，不参与棘轮）。 */
   const exempt = new Map();
   let exemptTotal = 0;
+  /** 「列到名字、读时已没」的份数（并发用例的临时探针），必须出现在结论里。 */
+  let vanished = 0;
 
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
     if (FIXTURE_SKIP.has(rel)) continue;
     const sites = scanFile(abs);
+    if (sites === null) {
+      vanished += 1;
+      continue;
+    }
     const liveSites = sites.filter((s) => !s.exempt);
     const exemptSites = sites.filter((s) => s.exempt);
     if (liveSites.length > 0) live.set(rel, liveSites);
@@ -408,7 +426,12 @@ function main() {
     : "";
   console.log(
     `[test-sleep] OK —— 裸 sleep ${liveTotal} 处（基线 ${baseline.total}）/ ` +
-      `声明豁免 ${exemptTotal} 处${tail}。`,
+      `声明豁免 ${exemptTotal} 处${tail}。` +
+      /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
+         目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
+      (vanished > 0
+        ? `\n  ⚠️ 另有 ${vanished} 份文件在扫描期间消失（并发用例的临时探针），本轮未读。`
+        : ""),
   );
   return 0;
 }
