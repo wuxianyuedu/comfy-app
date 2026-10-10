@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 import { resolveAppPort } from "./scripts/app-port.mjs";
 
@@ -17,6 +19,37 @@ import { resolveAppPort } from "./scripts/app-port.mjs";
  */
 const appPort = resolveAppPort(process.cwd());
 const appOrigin = `http://localhost:${appPort}`;
+
+/**
+ * 假 comfy-cli 的解释器入口（ISSUE #1621）。
+ *
+ * 本应用的任务**只经 comfy-cli 执行**：`executor-cli.ts` 起
+ * `spawn(comfyCliPython, ["-m", "comfy_cli", "run", …])`。要让「出图」这条
+ * 链路在 e2e 里真跑通，这个解释器必须存在且能应答 —— 而它对 CI 的要求只是
+ * `python3`（容器里都有），不是「装好 torch 的 ComfyUI 环境」。
+ *
+ * 注入方式经 `COMFY_CLI_PYTHON` 环境变量：它是设置项 `comfyCliPython` 的
+ * **默认值来源**（见 `src/lib/app-settings/index.ts` 的 DEFAULTS），所以
+ * 不必让用例去写设置文件、也不必给整个仓库留一份本机配置。`webServer.env`
+ * 会随 `pnpm dev` → `next dev` 一路继承到执行器进程。
+ *
+ * 只在能定位到那份 shim 时才注入：**没有它也不该让全套 e2e 起不来**（视觉档、
+ * 冒烟档都不碰执行链路）。缺件时主链路用例会按「执行器起不来」失败，报错指向
+ * 本变量的解析结果。 */
+const fakeComfyCli = path.resolve(
+  process.cwd(),
+  "e2e/support/fake-comfyui/python.sh",
+);
+const executorEnv: Record<string, string> = fs.existsSync(fakeComfyCli)
+  ? {
+      COMFY_CLI_PYTHON: fakeComfyCli,
+      /* 失败路径的触发词（ISSUE #1621 的第二个用例）。假 comfy-cli 只看工作流里
+       * **有没有这个词**：有就回放失败序列。换成一个「只有这条用例才发得出」的
+       * 哨兵而不是固定文案，是为了让「判据真的在判」可以反证 —— 从工作流里删掉
+       * 这个词，那条用例必须转绿。 */
+      E2E_FAKE_CLI_FAIL_SENTINEL: "E2E_FAKE_CLI_FAIL_SENTINEL",
+    }
+  : {};
 
 export default defineConfig({
   testDir: "./e2e",
@@ -56,7 +89,10 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       // Next 16 默认读 .env / .env.production：CI 无真实密钥，跳过 env.js 校验
-      env: { SKIP_ENV_VALIDATION: "1" },
+      /* 除跳过 env 校验外，还要把假 comfy-cli 的解释器注进来（ISSUE #1621）：
+       * 执行器是**服务端**起的子进程，它的 PATH / 解释器都来自这个进程的环境，
+       * 浏览器侧任何拦截都够不到。 */
+      env: { SKIP_ENV_VALIDATION: "1", ...executorEnv },
     },
     {
       // 假 ComfyUI（ISSUE #310）：内嵌能不能成，取决于**被嵌页自己**的响应头
