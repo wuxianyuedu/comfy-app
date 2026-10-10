@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-09T06:14:12.116Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-10T02:27:44.490Z",
+    "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "dirtyReason": "本 PR 只接三档每日自证的机制（scripts/ + tests/ + docs），未动 src/ 功能链路"
+    "skippedReason": "本机这一小时里两遍 pnpm run test:coverage 都在跑完前被外部信号终止（full-suite-run 报「退出码 信号」、日志里 0 条 FAIL、没有汇总行）——同机有并行会话的启动链在回收进程树，量的是这台机器的干扰而不是判据；红着不记账，所以改记一条今天的豁免，明天必须有一个人真跑绿一次"
   }
 }

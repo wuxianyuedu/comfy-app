@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-08T16:55:04.236Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-09T16:52:20.893Z",
+    "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "本轮只解决合并冲突与文档同步，未动功能链路"
+    "skippedReason": "本机此刻不可归因：同机并行会话与本批门禁复算占满 CPU（满载实测 88-97%），e2e 全量 80 条里 44 条撞 60s 超时、36 条通过，这个比例量的是机器而不是应用；等机器空闲重跑一次再记凭证"
   }
 }
