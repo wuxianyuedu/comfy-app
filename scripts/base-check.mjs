@@ -47,15 +47,31 @@
  *     动作：修你自己的代码，别去动基线。
  *   · `current-green` —— 你的检出上已经不红了 ⇒ 没什么可复算的（已修 / 判据只在
  *     特定输入面触发）。
- *   · `inconclusive`  —— 命令在其中一侧**没跑起来**（127）⇒ 不构成证据。
- *     最典型的成因是那条判据只存在**本检出未提交的改动**里：基线的 worktree 是一个
- *     干净的上游快照，看不到工作区的未提交文件（这是正确语义，不是缺陷 ——
- *     本判据要复算的就是「干净的线上基线」）。此时**不许**把 127 读成「别线的红」。
+ *   · `inconclusive`  —— 命令在其中一侧**没跑起来** ⇒ 不构成证据。两条入口：
+ *     ① 退出码 127（找不到模块 / 命令）；② **一条用例都没收集到**（`DID_NOT_RUN_SIGNATURES`，
+ *     ISSUE #1652）：基线那一侧因依赖解析失败时，退出码是 1（vitest 收集失败 / Node 的
+ *     `MODULE_NOT_FOUND`）—— 与「判据跑了且红」逐字同形，只读退出码必然读成
+ *     `baseline-red`。最典型的成因是那条判据只存在**本检出未提交的改动**里：基线的
+ *     worktree 是一个干净的上游快照，看不到工作区的未提交文件（这是正确语义，不是缺陷
+ *     —— 本判据要复算的就是「干净的线上基线」）。两种入口都**不许**读成「别线的红」。
  *   · `load-flake`    —— **两侧都红、且两侧的输出都是超时形态** ⇒ 高度疑似
  *     「机器太满」而不是代码（ISSUE #1641）。它既不是别线的红、也不是你的红，
  *     是这一刻机器的红 ⇒ **不照 `baseline-red` 的动作走**（那会把一次调度抖动
  *     登记进历史），而是先隔离复跑定性（`--no-file-parallelism`）。
  *     指纹见 `TIMEOUT_SIGNATURES`：**指纹不是结论**，命中只说明「值得再验一次」。
+ *
+ * **优先级**（`judge()` 逐条判的顺序，也是整批 `summarizeRows` 的档位高低）：
+ *
+ *     current-green > inconclusive > yours > load-flake > baseline-red
+ *
+ * 即：绿压过一切；「没跑起来」压过一切红（127 与「一条用例都没收集到」都算）。
+ *
+ * ── 第三条入口：Windows 上的 `pnpm exec …` 形态（ISSUE #1652 顺带）──────
+ *
+ * `pnpm` 在 Windows 上是 `.cmd` 垫片，`spawnSync` 不开 `shell` 就找不到它
+ * （`ENOENT` ⇒ 127 ⇒ `inconclusive`）。这不算判错（它确实跑不起来），但話术里必须
+ * 直接说出口，否则人以为是自己命令写错了。两条出路：改用 `node node_modules/<pkg>/<bin>`
+ * 形态，或（判据自己）给非 `node` 的命令开 `shell`（见 `runGate` 的 `NEEDS_SHELL`）。
  *
  * **不做的事**（都写进 §13.6.2 了）：不替你决定「挡不挡路」、不自动登记
  * `KNOWN_FAILED_FILES`、不自动改判据 —— 那是判断，本脚本只保证**事实**这一半可复算。
@@ -567,11 +583,30 @@ export function commandTargetState(argv, cwd) {
 }
 
 /**
+ * Windows 上必须经 `cmd.exe` 才起得来的命令 —— 垫片形态（`.cmd` / `.bat`）。
+ *
+ * 为什么要有这条：`pnpm` 在 Windows 上是 `pnpm.cmd`，而 `spawnSync` **默认不开
+ * shell**（这是有意的，为了不被命令行注入）—— 于是 `spawnSync("pnpm", …)` 报
+ * `ENOENT` ⇒ 归一成 127 ⇒ 整条 `base-check` 变成 `inconclusive`。实测这是 ISSUE
+ * #1652 里「Windows 上 `pnpm exec …` 形态一律 inconclusive」的成因，而报告里一个字
+ * 都没提，人会以为是自己命令写错了。
+ *
+ * 只收**这一个**形态：其余命令（`node` / 绝对路径的二进制）在 Windows 上也是可执行
+ * 文件，走 shell 只会多一层 cmd.exe 与它自己的引号规则（而参数里可能有含空格的路径）。
+ *
+ * @param {string} cmd
+ * @returns {boolean}
+ */
+function needsShell(cmd) {
+  return process.platform === "win32" && (cmd === "pnpm" || cmd === "npm");
+}
+
+/**
  * 在给定工作目录跑一次门禁。**只做「跑 + 收码」**，判决在 `judge()`。
  *
  * `pnpm` 一律经 `pnpm exec`（AGENTS 硬规则 1：禁 npm/npx）；`node` 用当前
  * 可执行文件（`process.execPath`）而不是裸 `node`，避免复核环境里 PATH 上
- * 是另一套 Node。
+ * 是另一套 Node。Windows 上的垫片形态经 `needsShell()` 开一层 shell（见它的注释）。
  *
  * @param {string[]} argv
  * @param {string} cwd
@@ -595,6 +630,10 @@ export function runGate(argv, cwd) {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    /* Windows 的垫片形态（`pnpm.cmd`）只有 cmd.exe 解释得了 —— 不开 shell 就是
+     * `ENOENT`，而那个读数会被读成「判据没跑起来」，与真实原因（形态不对）差着
+     * 一层。POSIX 上 `needsShell` 恒 false，语义一字不变。 */
+    shell: needsShell(cmd),
     /* 同样走干净环境：被判的判据自己也可能是 git 判据（`check-branch-guard` 等），
      * 继承来的 `GIT_*` 会让它判的**不是这个检出**。 */
     env: { ...cleanGitEnv(), CI: "1" },
@@ -651,11 +690,102 @@ export function isTimeoutShaped(output) {
 }
 
 /**
+ * 一次运行的**三种状态**（不是两种）—— 见 `runState()`。
+ * @typedef {"ran" | "did-not-run" | "unknown"} RunState
+ */
+
+/**
+ * **「一条用例都没收集到」的指纹**（ISSUE #1652）。
+ *
+ * 为什么与「127 = 没跑起来」分开：这条路上的退出码是 **1**（vitest 收集失败、
+ * Node 的 `MODULE_NOT_FOUND`），与「判据跑了且红」逐字同形 —— 只读退出码必然把
+ * 后者读成前者。它的现场是在基线快照里：
+ *
+ * ```
+ * FAIL  node  tests/check-a11y-rules.test.ts
+ *   `Cannot find package '@adobe/css-tools'`
+ * Test Files  1 failed (1)
+ *      Tests  no tests     ← 这一行就是指纹（收集到 0 条）
+ * ```
+ *
+ * 「一条用例都没跑」**不可能是一次真实的门禁判决** —— 它在读的是「这一次环境
+ * 配好了没有」，所以它应当压过 `baseline-red`（拿它去走那条下一动作，等于把一次
+ * **环境故障**登记成一条**有主的账**：下一次它不红，从此没人解释得清它为什么在那儿；
+ * 同 §13.6.4 反对把 `load-flake` 读成 `baseline-red` 的理由，只是换了触发原因）。
+ *
+ * 各条都是**原文形态**，不是猜的：
+ *   · vitest：`Tests  no tests` 这一行（收集为 0；有的版本写 `no tests`，有的
+ *     折在 `Test Files  N failed` 后面）；
+ *   · 模块解析：`Cannot find package` / `Cannot find module`（Node 与 vitest 两条路）
+ *     / `ERR_MODULE_NOT_FOUND` / `MODULE_NOT_FOUND`；
+ *   · `0 tests` 那一族。
+ *
+ * ⚠️ 与 `TIMEOUT_SIGNATURES` 一样是**指纹**，但它的**误报面是零**：「收集到用例」
+ * 是任何一次真实判决的前提，不存在「真红却被这条命中」的形态（用例是反向钉住的：
+ * `1 failed / 3 failed tests` 必须仍判 `baseline-red`）。
+ */
+const DID_NOT_RUN_SIGNATURES = [
+  /\bTests\s+no tests\b/i,
+  /\bTest Files\s+\d+\s+failed\b[\s\S]{0,200}?\bTests\s+no tests\b/i,
+  /\bCannot find (?:package|module)\b/,
+  /\bERR_MODULE_NOT_FOUND\b/,
+  /\bMODULE_NOT_FOUND\b/,
+  /\bNo test files found\b/,
+];
+
+/**
+ * 把一次运行归一成**三态**（纯函数，两向都能被用例钉住）。
+ *
+ * 为什么要三态：`runGate` 那边的「目标存不存在」是**静态**判据（`node <相对路径>`
+ * 这一形态），而「目标存在、但运行时依赖解析失败」是**动态**的、静态那一步看不见
+ * —— ISSUE #1652 的立案现场正是这一格（基线快照里 `@testing-library/jest-dom`
+ * 链到了链不上的依赖，vitest 报 `Tests  no tests` 而退出码是 1）。
+ *
+ * `unknown` 只在**两边都看不出来**时给（既不是已知的「跑起来了」，也没有指纹）——
+ * 它不是「跑起来了」的同义词，`judge()` 对它的处置与 `ran` 相同（不许把一次
+ * 归属不明的读数当成判决）。这个区分留着是为了让用例能钉住「哪些输出算看得懂」。
+ *
+ * 判序（**指纹优先于退出码**）是有意的：`Tests  no tests` 出现的那些运行里，
+ * 退出码是 1 还是 2 无关紧要 —— 一条用例都没跑，它就不是判决。
+ *
+ * @param {{code: number, output?: string}} run
+ * @returns {RunState}
+ */
+export function runState(run) {
+  const text = String(run.output ?? "");
+  if (DID_NOT_RUN_SIGNATURES.some((re) => re.test(text))) return "did-not-run";
+  if (run.code === 127) return "did-not-run";
+  if (run.code === 0 || run.code === 1 || run.code === 2) return "ran";
+  /* 其余退出码（含 `-1` / 信号打死 / 别的工具自己的码）—— 这一侧看不出状态。
+   * 与 `ran` 同处置：`judge()` 仍按退出码/指纹走，不额外降档。 */
+  return "unknown";
+}
+
+/**
+ * 一次运行的输出里有没有「一条用例都没收集到」的指纹（`runState` 的公开半边）。
+ *
+ * 单独导出：用例两向钉指纹表，以及别的入口（如 `premerge-check`）想自己看一眼时
+ * 不必抄第二份正则。
+ *
+ * @param {string} [output]
+ * @returns {boolean}
+ */
+export function isDidNotRunShaped(output) {
+  const text = String(output ?? "");
+  return DID_NOT_RUN_SIGNATURES.some((re) => re.test(text));
+}
+
+/**
  * 判决 —— **纯函数**（好让两向都能被用例钉住）。
  *
- * **「跑不起来」不是「判据红了」**（`baseCode === 127` / `currentCode === 127`）：判据没
- * 跑起来时非零退出码与「跑了且红」同形 —— 只读退出码必然把后者读成前者，而这两件事
- * 的下一动作完全相反（一个去修代码，一个去查命令为什么不存在）。所以先判这一档。
+ * **「跑不起来」不是「判据红了」**：判据没跑起来时非零退出码与「跑了且红」同形 ——
+ * 只读退出码必然把后者读成前者，而这两件事的下一动作完全相反（一个去修代码，一个去
+ * 查命令/环境为什么不对）。所以先判这一档，且**两条入口都要**：
+ *   · 退出码 127（找不到模块 / 命令）；
+ *   · **一条用例都没收集到**（`runState()` 的指纹，ISSUE #1652）—— 它退的是 **1**，
+ *     与「判据跑了且红」逐字同形，而静态的「目标存不存在」看不见它（目标在、是它
+ *     运行时的依赖链断了）。基线快照里 `@testing-library/jest-dom` →
+ *     `Cannot find package '@adobe/css-tools'` ⇒ `Tests  no tests` 就是这一格。
  *
  * **「等超了」也不是「判据红了」**（ISSUE #1641）：两侧都红、且**两侧的输出都是
  * 超时形态**时，报 `load-flake` 而不是 `baseline-red` —— 因为负载假红恰好长这样，
@@ -668,7 +798,13 @@ export function isTimeoutShaped(output) {
  */
 export function judge({ currentCode, baseCode, currentOutput, baseOutput }) {
   if (currentCode === 0) return "current-green";
-  if (currentCode === 127 || baseCode === 127) return "inconclusive";
+  /* 「跑不起来」两条入口都在最前面：127（找不到模块 / 命令）与「一条用例都没收集到」。
+   * 两侧都要看 —— 本检出那一侧收集不到时，这一次复算问的根本不是「谁的红」。 */
+  const current = runState({ code: currentCode, output: currentOutput });
+  const base = runState({ code: baseCode ?? 0, output: baseOutput });
+  if (current === "did-not-run" || base === "did-not-run") {
+    return "inconclusive";
+  }
   /* `baseCode === null` = **这一条只在单侧跑**（`baseSide: false`）：它的对象是本检出
    * 这条线上的提交对象，基线快照里没有它们，所以「没比较过」不是「别线上也红」。
    * 它红的时候唯一的可能是「这次提交的声明与它自己的树矛盾」⇒ 纯粹的 `yours`。 */
@@ -700,10 +836,17 @@ export function nextSteps(verdict, { ref }) {
   }
   if (verdict === "inconclusive") {
     return [
-      "命令在其中一侧**没跑起来**（127 = 找不到模块 / 命令），不是「判据红了」——",
-      "  这次不构成「别线的红」的证据。常见原因：",
-      "  · 那条判据只存在**本检出的未提交改动**里（基线是干净的上游提交，看不到它）；",
-      "  · 命令写错 / 路径相对本检出（基线 worktree 在系统临时目录下）。",
+      "命令在其中一侧**没跑起来**，不是「判据红了」——这次不构成「别线的红」的证据。",
+      "两种形态（判据会点名「哪一侧、哪一种」那一行）：",
+      "  · **一条用例都没收集到**（`Tests  no tests` / `Cannot find package|module` /",
+      "    `ERR_MODULE_NOT_FOUND`）—— 它退的是 1，与「判据跑了且红」同形，所以只读",
+      "    退出码必然误判。最常见于 ① 那条判据只存在**本检出的未提交改动**里",
+      "    （基线是干净的上游提交，看不到它）；② 基线 worktree 的依赖链法出了问题",
+      "    （`node_modules` 是**符号链接**过去的，链路断在临时目录那一侧）。",
+      "    先做的动作：`cd` 进那个 worktree 跑一次 `pnpm install --frozen-lockfile`，",
+      "    或把 worktree 建到与目标侧**同一个盘 / 同一个根**下（`--keep` 会把路径打出来）；",
+      "  · **127**（找不到模块 / 命令）—— 命令写错、路径相对本检出，或 Windows 上写的是",
+      "    `pnpm exec …`（`pnpm` 是 `.cmd` 垫片；改用 `node node_modules/<pkg>/<bin>` 形态）。",
       "先让它在本检出里真能跑（提交或修正命令），再复算。",
     ];
   }
@@ -870,20 +1013,27 @@ export function baseCheckMany({
        * 两份输出都要落进行里，不能只在 `judge()` 那一次调用里传一下就丢。
        * `output` 是**本检出**这一次的全文：行里已经有 `baseOutputTail`（末 20 行），
        * 但本检出那一侧此前一个字都没留（ISSUE #1641）。 */
+      const rowVerdict = judge({
+        currentCode: cur,
+        baseCode: base === null ? null : base.code,
+        currentOutput: curOutput,
+        baseOutput,
+      });
       rows.push({
         label: c.label,
         currentCode: cur,
         baseCode: base === null ? null : base.code,
         /* `base === null` ⇒ 这一条只在单侧跑（`baseSide: false`）：`judge` 认得
          * `null`，把它读成 `yours`（「没比较过」不是「别线上也红」）。 */
-        verdict: judge({
-          currentCode: cur,
-          baseCode: base === null ? null : base.code,
-          currentOutput: curOutput,
-          baseOutput,
-        }),
+        verdict: rowVerdict,
         ...(curOutput ? { output: curOutput } : {}),
         ...(baseOutput ? { baseOutput } : {}),
+        /* 127 与「一条用例都没收集到」在退出码上是同形的，行里只看得见那个数字 ——
+         * 所以把「哪一侧、为什么」写进行里（ISSUE #1652），报告才能直接点名，
+         * 而不是让人自己去翻 `baseOutputTail`。 */
+        ...(rowVerdict === "inconclusive"
+          ? { didNotRun: didNotRunSide({ cur, curOutput, base, baseOutput }) }
+          : {}),
         ...(base && base.code !== 0
           ? { baseOutputTail: tail(base.output) }
           : {}),
@@ -946,6 +1096,32 @@ function linkDependencies(from, to) {
 }
 
 /**
+ * 判决是 `inconclusive` 时，**是哪一侧、哪一种形态**（报告用它点名）。
+ *
+ * 单独成函数而不是从 `runState` 反推：那句话要说的是「127」与「一条用例都没收集到」
+ * 的区分，而后者只在**输出**里看得见 —— 报告里给出的是「哪一侧说什么」，不是又一个
+ * 需要人去解读的退出码。
+ *
+ * @param {{cur: number, curOutput?: string, base: {code: number, output?: string} | null, baseOutput?: string}} input
+ * @returns {string}
+ */
+export function didNotRunSide({ cur, curOutput, base, baseOutput }) {
+  const sides = [];
+  if (cur === 127) sides.push("本检出：127（找不到模块 / 命令）");
+  else if (isDidNotRunShaped(curOutput))
+    sides.push("本检出：一条用例都没收集到");
+  /* 基线那一侧的 `runGate` 结果整个传进来（`base.output`），而不是另拿一份
+   * `baseOutput` —— 两个来源曾经在这里错位过一次（报告恒空），只留一条路。 */
+  const baseCode = base ? base.code : null;
+  const baseText = base ? String(base.output ?? "") : String(baseOutput ?? "");
+  if (baseCode === 127) sides.push("基线：127（找不到模块 / 命令）");
+  else if (baseCode !== null && baseCode !== 0 && isDidNotRunShaped(baseText)) {
+    sides.push("基线：一条用例都没收集到");
+  }
+  return sides.join("；");
+}
+
+/**
  * 一组行 → 整批的结论（纯函数，两向都能被用例钉住）。
  *
  * **优先级是 `inconclusive` 最高**，不是「有红就报红」：127 说明这一条**没跑起来**，
@@ -957,7 +1133,7 @@ function linkDependencies(from, to) {
  * `load-flake` 压过 `baseline-red`：混着一批「别线的红」时，若其中也有超时形态的，
  * 整批报 `baseline-red` 会让人把抖动一起登记进 `KNOWN_FAILED_FILES`。
  *
- * @param {Array<{currentCode: number, baseCode: number | null, output?: string, currentOutput?: string, baseOutput?: string}>} rows
+ * @param {Array<{currentCode: number, baseCode: number | null, output?: string, currentOutput?: string, baseOutput?: string, didNotRun?: string}>} rows
  * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake"}
  */
 export function summarizeRows(rows) {
@@ -1026,7 +1202,7 @@ function fail(message) {
  * 逐行列出「本检出码 / 基线码 / 归属」，再给整批的下一动作 —— 合并前要看的是
  * 「这一批里哪几条会挡路、其中哪几条不是我的」，而不是每一条各自的散文。
  *
- * @param {{ref: string, commit?: string, summary: "current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake", rows: Array<{label: string, currentCode: number, baseCode: number | null, verdict?: string, baseOutputTail?: string}>}} result
+ * @param {{ref: string, commit?: string, summary: "current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake", rows: Array<{label: string, currentCode: number, baseCode: number | null, verdict?: string, didNotRun?: string, baseOutputTail?: string}>}} result
  * @param {{json: boolean, shape?: "single" | "batch"}} opts
  * @returns {number}
  */
@@ -1046,6 +1222,7 @@ function reportMany(result, { json, shape = "batch" }) {
       currentCode: only.currentCode,
       baseCode: only.baseCode,
       ...(commit ? { commit } : {}),
+      ...(only.didNotRun ? { didNotRun: only.didNotRun } : {}),
       ...(only.baseOutputTail ? { baseOutputTail: only.baseOutputTail } : {}),
     };
     if (json) {
@@ -1059,6 +1236,9 @@ function reportMany(result, { json, shape = "batch" }) {
           single.baseCode === null ? "未跑" : single.baseCode
         }）\n`,
     );
+    if (only.didNotRun) {
+      process.stdout.write(`[base-check] 没跑起来：${only.didNotRun}\n`);
+    }
     if (only.baseOutputTail) {
       process.stdout.write(`[base-check] 基线那次输出的末尾：\n`);
       process.stdout.write(
@@ -1089,6 +1269,11 @@ function reportMany(result, { json, shape = "batch" }) {
         r.baseCode === null ? "未跑" : r.baseCode
       }）\n`,
     );
+    /* 「没跑起来」的两种形态在退出码上同形，只有输出里的指纹分得开 —— 而这一行
+     * 决定了人是去修代码还是去查环境（ISSUE #1652）。 */
+    if (r.didNotRun) {
+      process.stdout.write(`      ↳ 没跑起来：${r.didNotRun}\n`);
+    }
   }
   process.stdout.write(`[base-check] 结论：${summary}\n`);
   for (const line of nextStepsMany(summary, reds, { ref })) {
