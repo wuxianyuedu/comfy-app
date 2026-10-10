@@ -855,10 +855,17 @@ export function readFreshnessLedgerAt(root, rel) {
  * 返回 `{ note, previous }`：`note` 是给人读的一句（写盘失败时也带着失败原因），
  * `previous` 是**写之前**那一档上次自证距今多久（账的价值在于被看见，不是被写下来）。
  *
- * @param {{root: string, kind: string, who: string}} args
+ * ⚠️ **`how` 记的是「实际跑绿的那条命令」，不是这一档的名义跑法**（ISSUE #1620）。
+ * 缺省仍取 `track.run`（绝大多数跑法只有一种形状），但像素档多一种：机器的
+ * dev server 在 `fullyParallel` 的默认并发下会因**负载**失稳（实测整批红、降并发就绿，
+ * 见 §11.13），而「这条账要证的」是**这一档的基线在本机可复现**——负载假红证的正是它。
+ * 那时 `how` 必须写出真实的并发口径（`pnpm check:visual --workers=1`），否则账面上
+ * 看不出「这次是在降并发下证的」，下一个人按名义命令复跑又红、却指不出差别在哪。
+ *
+ * @param {{root: string, kind: string, who: string, how?: string}} args
  * @returns {{note: string, previous: string | null}}
  */
-export function writeFreshness({ root, kind, who }) {
+export function writeFreshness({ root, kind, who, how }) {
   const track = freshnessTrack(kind);
   const file = path.join(root, track.ledger);
   const ledger = readFreshnessLedgerAt(root, track.ledger);
@@ -867,7 +874,7 @@ export function writeFreshness({ root, kind, who }) {
     key: track.key,
     verifiedAt: new Date().toISOString(),
     who,
-    how: track.run,
+    how: how && how.trim() ? how.trim() : track.run,
     trackedBy: kind,
   });
   try {
