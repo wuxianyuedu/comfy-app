@@ -9,6 +9,12 @@
 // 预制口就那么几类，往后想加一个新口不该再改代码。
 //
 // 本组件不持有契约状态：值从 props 来、动作往上抛（与编辑器其余部分同一条分层）。
+//
+// ── 本次改版（ISSUE #1423）：字号收敛 ──────────────────────────────────
+// 改版前这一块整片是 `text-3xs`(10px) —— 说明行、chip 文案、类型章、id 全在
+// 10–11px。现在：说明行 12px（`text-xs`），可点 chip 走 `ui/select-chip`
+// 的 `compact` 档（11px `text-2xs`，微标签两档的上限），已加入的 chip 不再
+// 靠「灰化」表达，而是**用选中态**表达（已在本契约里 = 选中）。
 
 import { useState } from "react";
 import { textHandler } from "~/lib/form-props";
@@ -16,6 +22,7 @@ import { textHandler } from "~/lib/form-props";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
+import { SelectChip } from "~/components/ui/select-chip";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import type {
   ModeContractCustomInput,
@@ -66,47 +73,52 @@ export function ContractInputCatalog({
   };
 
   return (
-    <div className="flex-col gap-2">
+    <div className="flex flex-col gap-4">
       <div>
-        <p className="text-muted-foreground text-3xs mb-1">
+        <p className="text-muted-foreground mb-2 text-xs">
           全部可用参数（预制）—— 点未加入的即可添加
         </p>
-        <div className="flex flex-wrap gap-1">
+        {/* 预制口是**可选的**一组：这里按 `role="group"` 给组名，
+            每一枚的选中态说的是「它在本契约里」（与上面输入口清单同一件事的
+            另一种入口）—— 同一份状态两个视图，`selected` 都从 `item.added` 来。 */}
+        <div
+          role="group"
+          aria-label="预制参数"
+          className="flex flex-wrap gap-1.5"
+        >
           {catalog.map((item) => (
             <Hint
+              key={item.type}
               label={
                 item.added ? "已在当前契约里" : `添加「${item.label}」到契约`
               }
               wrap
-              key={item.type}
             >
-              <Button
-                variant="outline"
-                size="xs"
+              <SelectChip
+                shape="compact"
+                selected={item.added}
                 disabled={item.added}
                 onClick={() => onAddPredefined(item.type)}
-                className={`h-auto rounded border-dashed px-2 py-0.5 ${
-                  item.added
-                    ? "border-border text-muted-foreground/60 cursor-default"
-                    : "border-primary/40 text-primary hover:bg-primary/10"
-                }`}
+                /* 已加入的保持选中态、**不置灰** —— 10px 灰字 + 40% 透明
+                   是改版前它读起来像「坏了」而不是「已经在里面了」的原因。 */
+                className="disabled:opacity-100"
               >
                 {item.added ? "✓" : "＋"} {item.label}
-              </Button>
+              </SelectChip>
             </Hint>
           ))}
         </div>
       </div>
 
       <div>
-        <p className="text-muted-foreground text-3xs mb-1">
+        <p className="text-muted-foreground mb-2 text-xs">
           自定义参数（自己起名 + 选类型）—— 预制的口不够用时加在这里
         </p>
-        <div className="flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           {customInputs.map((def) => (
             <div
               key={def.id}
-              className="border-border bg-surface flex items-center gap-1.5 rounded-lg border px-2 py-1"
+              className="border-border bg-surface flex items-center gap-2 rounded-lg border px-2.5 py-1.5"
             >
               <Input
                 /* 非受控 + 失焦提交：逐键写回契约会让每次输入都触发一次保存态
@@ -121,17 +133,17 @@ export function ContractInputCatalog({
                   if (next !== def.label) onRenameCustom(def.id, next);
                 }}
                 aria-label={`${def.label} 的名称`}
-                className="text-2xs h-6 min-w-0 flex-1 border-none bg-transparent px-0 shadow-none"
+                className="h-7 min-w-0 flex-1 border-none bg-transparent px-0 text-xs shadow-none"
               />
-              <span className="text-muted-foreground/70 bg-subtle border-border-strong text-3xs shrink-0 rounded border px-1.5 py-0.5">
+              <span className="text-muted-foreground bg-subtle border-border-strong text-2xs shrink-0 rounded border px-1.5 py-0.5">
                 {customInputKindLabel(def.kind)}
               </span>
-              <span className="text-muted-foreground/50 text-3xs shrink-0 font-mono">
+              <span className="text-muted-foreground/50 text-2xs shrink-0 font-mono">
                 {def.id}
               </span>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 onClick={() => onRemoveCustom(def.id)}
                 className="text-muted-foreground/60 hover:text-danger-strong shrink-0"
                 aria-label={`删除自定义参数 ${def.label}`}
@@ -142,7 +154,7 @@ export function ContractInputCatalog({
           ))}
 
           {adding ? (
-            <div className="border-primary-soft bg-primary-soft/20 flex flex-wrap items-center gap-1.5 rounded-lg border px-2 py-1.5">
+            <div className="border-primary-soft bg-primary-soft/20 flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-2">
               <Input
                 autoFocus
                 value={draftName}
@@ -156,30 +168,31 @@ export function ContractInputCatalog({
                 })}
                 placeholder="参数名称，如：水彩风格"
                 aria-label="自定义参数名称"
-                className="text-2xs h-6 w-40"
+                className="h-7 w-44 text-xs"
               />
-              {CUSTOM_INPUT_KINDS.map((item) => (
-                <Hint label={item.hint} key={item.kind}>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={() => setDraftKind(item.kind)}
-                    className={`text-3xs h-auto rounded px-2 py-0.5 ${
-                      draftKind === item.kind
-                        ? "border-primary text-primary bg-primary/10"
-                        : "border-border text-muted-foreground"
-                    }`}
-                  >
-                    {item.label}
-                  </Button>
-                </Hint>
-              ))}
+              <div
+                role="group"
+                aria-label="参数类型"
+                className="flex items-center gap-1.5"
+              >
+                {CUSTOM_INPUT_KINDS.map((item) => (
+                  <Hint key={item.kind} label={item.hint}>
+                    <SelectChip
+                      shape="compact"
+                      selected={draftKind === item.kind}
+                      onClick={() => setDraftKind(item.kind)}
+                    >
+                      {item.label}
+                    </SelectChip>
+                  </Hint>
+                ))}
+              </div>
               <Button
                 variant="primary-solid"
                 size="xs"
                 onClick={submitCustom}
                 disabled={draftName.trim() === ""}
-                className="text-3xs h-auto rounded px-2 py-0.5"
+                className="h-7 rounded-lg px-3 text-xs"
               >
                 添加
               </Button>
@@ -187,20 +200,20 @@ export function ContractInputCatalog({
                 variant="ghost"
                 size="xs"
                 onClick={() => setAdding(false)}
-                className="text-muted-foreground text-3xs h-auto rounded px-2 py-0.5"
+                className="text-muted-foreground h-7 rounded-lg px-2 text-xs"
               >
                 取消
               </Button>
             </div>
           ) : (
-            <Button
-              variant="outline"
-              size="xs"
+            <SelectChip
+              shape="dashed"
+              selected={false}
               onClick={() => setAdding(true)}
-              className="border-primary/40 text-primary hover:bg-primary/10 h-auto rounded border-dashed px-2 py-0.5"
+              className="self-start px-2.5 py-1 text-xs"
             >
               ＋ 新增自定义参数
-            </Button>
+            </SelectChip>
           )}
         </div>
       </div>
