@@ -41,8 +41,57 @@ import path from "node:path";
  */
 export const SAFE_ARGV_BUDGET = 24_000;
 
-/** 钩子档的并发（全量 `pnpm test` 仍走 `vitest.config.ts` 里的 8，不受这里影响）。 */
-const MAX_WORKERS = 4;
+/**
+ * 钩子档的并发（全量 `pnpm test` 仍走 `vitest.config.ts` 里的 8，不受这里影响）。
+ *
+ * 为什么是 4：钩子里 A(tsc)、B(eslint)、D(组内串行的静态判据) 与 C 并行，
+ * 再按配置里的 8 起 forks 就会抢不过来 —— 现场不是用例红而是
+ * `Failed to start forks worker / Timeout waiting for worker to respond`
+ * （几百条全过、退出码非零）。口径与推导见规范 §13.5.8。
+ */
+export const DEFAULT_MAX_WORKERS = 4;
+
+/**
+ * 从环境变量取一个**显式的**并发覆盖（`COMFY_PRECOMMIT_MAX_WORKERS`）。
+ *
+ * 为什么要有这个口子：4 是「8 逻辑核、A/B/D 同时在跑」那一档的实测值，而
+ * **共享机 / 小核 VM / 正在跑 dev server + ComfyUI 的机器**上，这个常数与
+ * 「此刻真有几个核可用」无关 —— 实测同一份 C 组在 load ≈0/16/65/128 下墙钟
+ * 19.7s → 114.5s → 214s → 229s（判定全绿，见规范 §13.6.4 那一族）。
+ * 单条预算（`CLI_BUDGET` 的 120s）能吸收到某个负载为止，再往上就需要**人为降负载** ——
+ * 而 §13.6.4 明写「降负载的杠杆是并发，不是预算」，此前却没有任何一处能把钩子的
+ * 并发调小（注释里那句「机器紧张把 C/D 也挪成串行即可」只是一句话，没有执行者），
+ * 于是唯一的出路变成改钩子或 `--no-verify`（两条都不该是常态）。
+ *
+ * ⚠️ 这个口子**只调并发、不碰任何判据**：候选清单、预算、退出码口径一律不变，
+ * 所以它不能被当成「让慢用例过关的旋钮」（同 §11.13 对 `expect.poll` 的那条口径）。
+ * 传非法值（非整数 / <1）时**按默认值办并提醒**，不静默降级成 0（那会让 vitest
+ * 报一个与真因无关的错）。
+ *
+ * ⚠️ 这一层是**纯函数**：环境变量由调用点读进来（`main` 那一处），不在这里兜底 ——
+ * 否则用例里「不给值 = 走默认」这一格会被用例进程自己继承到的环境变量污染，
+ * 而那种失效是「判据看着跑过、其实测的是外部环境」。
+ */
+export function resolveMaxWorkers(raw) {
+  if (raw === undefined || raw.trim() === "") {
+    return { workers: DEFAULT_MAX_WORKERS, note: null };
+  }
+  const parsed = Number(raw.trim());
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return {
+      workers: DEFAULT_MAX_WORKERS,
+      note: `COMFY_PRECOMMIT_MAX_WORKERS="${raw}" 不是 ≥1 的整数，按默认 ${DEFAULT_MAX_WORKERS} 办`,
+    };
+  }
+  if (parsed === DEFAULT_MAX_WORKERS) {
+    return { workers: DEFAULT_MAX_WORKERS, note: null };
+  }
+  return {
+    workers: parsed,
+    note: `按 COMFY_PRECOMMIT_MAX_WORKERS 用 --maxWorkers=${parsed}` +
+      `（默认 ${DEFAULT_MAX_WORKERS}；这只调并发，不动任何判据）`,
+  };
+}
 
 /**
  * 按命令行长预算把清单切成若干块，**顺序与成员都不变**。
@@ -147,6 +196,10 @@ function main(argv) {
     return 0;
   }
   const entry = resolveVitestEntry();
+  const { workers, note } = resolveMaxWorkers(
+    process.env.COMFY_PRECOMMIT_MAX_WORKERS,
+  );
+  if (note) process.stderr.write(`[affected-launch] ${note}\n`);
   for (const [index, chunk] of chunks.entries()) {
     if (chunks.length > 1) {
       process.stderr.write(
@@ -156,7 +209,7 @@ function main(argv) {
     }
     const res = spawnSync(
       process.execPath,
-      [entry, "run", `--maxWorkers=${MAX_WORKERS}`, ...chunk],
+      [entry, "run", `--maxWorkers=${workers}`, ...chunk],
       { stdio: "inherit" },
     );
     if (res.error || res.status !== 0) {
