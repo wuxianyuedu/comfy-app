@@ -393,8 +393,20 @@ export const LogRow = memo(function LogRow({
       <HighlightedText text={entry.message} keyword={keyword} />
     </span>
   );
+  /* 位置分两态（ISSUE #1703）：`src/…:123` 是可点开的业务位置；`pkg → fn` 是
+   * 「这条日志不是我们写的，是哪个库在哪一层打的」。后者**没有文件可打开**，
+   * 得在提示语里说清「这是库」，否则用户拿着 `react-dom → printWarning`
+   * 去自己的仓库里搜。
+   *
+   * 判据用 `" → "` 而不是「有没有冒号」：冒号分不开两者（Windows 盘符 `C:…`
+   * 就是反例），而 `→` 只有库那一态会产生。 */
+
+  const isLibraryLocation = !!location && location.includes(" → ");
+  const locationHint = isLibraryLocation
+    ? `${location}（库内部打出的日志，不是本项目文件；点击复制）`
+    : `${location}（点击复制）`;
   const locationNode = location ? (
-    <Hint label={`${location}（点击复制）`}>
+    <Hint label={locationHint}>
       <Button
         variant="ghost"
         onClick={() => copyLocation(location)}

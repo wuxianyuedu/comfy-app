@@ -21,6 +21,8 @@ import {
   LOG_STORE_MAX,
   selectFirstPageWindow,
   captureLocation,
+  locateInStack,
+  formatConsoleArgs,
   computeOriginCounts,
   computeFiltered,
   bucketOf,
@@ -1613,13 +1615,117 @@ describe("parseFileLogs 文件日志解析", () => {
   });
 });
 
-/* ── captureLocation ──────────────────────────────────────── */
-
-describe("captureLocation", () => {
-  it("解析失败时安全返回 undefined,成功时以 :行号 结尾", () => {
+/* ── 调用位置采集（ISSUE #1703）──────────────────────────────
+ * 用户报的是：「日志里那条 React key 警告看不到调用堆栈，只凭日志看不出是哪里的
+ * 问题」。两个成因各自锁一条用例：
+ *   ① 业务帧一个都没有时（React 自己发的警告全在 react-dom 里），旧实现返回
+ *      undefined —— 面板那一列空的。现在退回库帧，说出「是哪个库在哪一层打的」。
+ *   ② `console.error("… %s …", key)` 的正文带着没展开的占位符、实参被拼在
+ *      150 个字符之后的尾巴上 —— 这条警告真正要说的话（哪个 key 重了）反而读不到。
+ *
+ * 解析本体收成吃字符串的纯函数（`locateInStack`），栈文本才造得出来；真跑一遍
+ * 没法造出「只有 react-dom 帧」这种现场。 */
+describe("调用位置采集", () => {
+  it("真实调用点解析到本项目源码并以行号结尾（原契约不回归）", () => {
     const loc = captureLocation();
-    // 从测试文件调用时栈帧内容依赖运行器,这里只验证契约不抛异常
-    expect(loc === undefined || /:\d+$/.test(loc)).toBe(true);
+    /* 三种合法形态：业务位置（`src/…:行号`）、库描述（`pkg → fn` / `pkg`）、
+     * 或确实取不到（undefined）。断言留在「不抛错 + 形态正确」这一层 ——
+     * 运行器不同时栈帧内容不同，把具体某一帧写死会让用例跟着运行器版本红。 */
+    expect(
+      loc === undefined || /:\d+$/.test(loc) || /^[@\w][\w./@-]*$/.test(loc),
+    ).toBe(true);
+  });
+
+  it("业务帧优先：栈里同时有业务帧与库帧时取业务帧", () => {
+    const stack = [
+      "Error",
+      "    at onSave (src/components/studio/workflow-editor/hooks/use-workflow-persistence.ts:236:9)",
+      "    at printWarning (/w/node_modules/react-dom/cjs/react-dom-client.development.js:97:15)",
+    ].join("\n");
+    expect(locateInStack(stack)).toBe(
+      "src/components/studio/workflow-editor/hooks/use-workflow-persistence.ts:236",
+    );
+  });
+
+  it("没有业务帧时退回库帧（React 警告现场），不再返回空", () => {
+    const stack = [
+      "Error",
+      "    at printWarning (/w/node_modules/.pnpm/react-dom@19.3.0/node_modules/react-dom/cjs/react-dom-client.development.js:97:15)",
+      "    at warnOnInvalidKey (/w/node_modules/.pnpm/react-dom@19.3.0/node_modules/react-dom/cjs/react-dom-client.development.js:16642:15)",
+      "    at reconcileChildrenArray (/w/node_modules/.pnpm/react-dom@19.3.0/node_modules/react-dom/cjs/react-dom-client.development.js:16798:21)",
+    ].join("\n");
+    /* pnpm 的 `.pnpm/<pkg>@<ver>_<hash>/node_modules/<pkg>/…` 中间那一段不是包名，
+     * 取到它会显示成 `react-dom@19.3.0` 这种带版本号的假包名。 */
+    expect(locateInStack(stack)).toBe("react-dom → printWarning");
+  });
+
+  it("scoped 包名保留 @scope（@xyflow/react 是本次报警的现场）", () => {
+    const stack = [
+      "Error",
+      "    at MiniMapNodes (node_modules/.pnpm/@xyflow+react@12.12.0_a/node_modules/@xyflow/react/dist/esm/index.mjs:4680:60)",
+    ].join("\n");
+    expect(locateInStack(stack)).toBe("@xyflow/react → MiniMapNodes");
+  });
+
+  it("取不到任何可用帧时仍是 undefined（不许编一个位置出来）", () => {
+    expect(locateInStack(undefined)).toBeUndefined();
+    expect(locateInStack("Error\n    at nothingHere")).toBeUndefined();
+  });
+
+  it("拦截层自身的帧被跳过（否则每条日志都指向 log-analysis）", () => {
+    const stack = [
+      "Error",
+      "    at makeLogger (src/components/studio/logs/log-analysis.ts:100:5)",
+      "    at onSave (src/components/studio/workflow-editor/hooks/use-workflow-persistence.ts:236:9)",
+    ].join("\n");
+    expect(locateInStack(stack)).toBe(
+      "src/components/studio/workflow-editor/hooks/use-workflow-persistence.ts:236",
+    );
+  });
+});
+
+/* ── console 占位符展开（ISSUE #1703）────────────────────────
+ * React 的警告用的是 `console.error(FORMAT, key)`：格式串里的 `%s` 是占位符，
+ * 不是正文。面板此前按空格拼接实参，用户读到的是一条「模板 + `%s` 原样 + 实参
+ * 挂在尾巴上」的怪行 —— 真正有用的那个 key 名离它该在的位置隔了 150 个字符。 */
+describe("console 占位符展开", () => {
+  it("用户报的那条 React key 警告：展开后能直接读到重复的 key", () => {
+    const out = formatConsoleArgs([
+      "Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. seed",
+      "group:32",
+    ]);
+    expect(out).toContain("`group:32`. Keys");
+    expect(out).not.toContain("%s");
+  });
+
+  it("%c 的样式表被吃掉、不进正文（tRPC loggerLink 常态）", () => {
+    expect(
+      formatConsoleArgs([
+        "%c<< mutation #43 %cworkflow.update",
+        "color:red",
+        "color:blue",
+      ]),
+    ).toBe("<< mutation #43 workflow.update");
+  });
+
+  it("%d / %i 按数值渲染", () => {
+    expect(formatConsoleArgs(["n=%d", 42])).toBe("n=42");
+  });
+
+  it("%% 还原成单个 %（单参调用也要还原）", () => {
+    expect(formatConsoleArgs(["100%% done"])).toBe("100% done");
+  });
+
+  it("缺实参的占位符原样保留（不凭空造 undefined）", () => {
+    expect(formatConsoleArgs(["a %s b"])).toBe("a %s b");
+  });
+
+  it("实参多于占位符时多出来的追加在末尾，不丢信息", () => {
+    expect(formatConsoleArgs(["a %s", "b", "c"])).toBe("a b c");
+  });
+
+  it("首参不是字符串时按原口径序列化（console.error(err)）", () => {
+    expect(formatConsoleArgs([new Error("boom")])).toContain("boom");
   });
 });
 
@@ -2179,6 +2285,36 @@ describe("formatEntryForClipboard 单行文本", () => {
       makeEntry({ level: "error", message: "boom\n  at foo (bar.ts:1:1)" }),
     );
     expect(text).toContain("\n  at foo (bar.ts:1:1)");
+  });
+
+  /* ISSUE #1703：位置与来源此前**不进复制文本**。用户拿着日志去报障时，面板上
+   * 能定位问题的那一列在粘贴这一步丢了，剩下的是「Encountered two children with
+   * the same key」这类谁都在打的框架文案 —— 于是「只看日志看不出是哪里的问题」。 */
+  it("带上调用位置与来源（报障时贴出去仍能定位）", () => {
+    const text = formatEntryForClipboard(
+      makeEntry({
+        level: "error",
+        message: "boom",
+        location:
+          "src/components/studio/workflow-editor/WorkflowEditorCanvas.tsx:67",
+        origin: "app",
+      }),
+    );
+    expect(text).toContain(
+      "<src/components/studio/workflow-editor/WorkflowEditorCanvas.tsx:67>",
+    );
+    expect(text).toContain("· app");
+  });
+
+  it("无位置 / 无来源的行与旧文本逐字相同（不多个空分隔符）", () => {
+    const text = formatEntryForClipboard(
+      makeEntry({
+        time: new Date(2026, 0, 2, 3, 4, 5, 6).getTime(),
+        level: "info",
+        message: "就绪",
+      }),
+    );
+    expect(text).toBe("01-02 03:04:05.006 [INFO] 就绪");
   });
 });
 
