@@ -1,7 +1,7 @@
 import superjson, { type SuperJSONResult } from "superjson";
 import { describe, expect, it } from "vitest";
 
-import { trpcJsonlBody } from "../e2e/support/trpc-stub";
+import { planStubResults, trpcJsonlBody } from "../e2e/support/trpc-stub";
 
 /**
  * 锁住 E2E 的 tRPC 桩产出**真协议形态**（ISSUE #1442）。
@@ -101,5 +101,45 @@ describe("e2e tRPC 桩产出真 JSON Lines 协议", () => {
     const head = await consume(trpcJsonlBody([{ a: 1 }, { b: 2 }]));
     expect(await unwrap(head[0])).toEqual({ a: 1 });
     expect(await unwrap(head[1])).toEqual({ b: 2 });
+  });
+});
+
+describe("stubTrpc 的批请求对齐（§11.8 的录制输入面依赖它）", () => {
+  /* 这条是**实测**出来的缺口：canvas 屏会发
+     `/api/trpc/workflow.list,workflowModel.list` —— 一个 URL 两个过程。只回一个结果时
+     第二个过程的槽位解成 `undefined`，**不抛错**（与文件头那两条同源）。 */
+
+  it("单发请求回一个结果", () => {
+    expect(
+      planStubResults("http://x/api/trpc/model.list?batch=1&input=%7B%7D", {
+        "model.list": { models: [] },
+      }),
+    ).toEqual([{ models: [] }]);
+  });
+
+  it("批请求按 URL 里的过程顺序给结果（顺序反了就是喂错数据）", () => {
+    const handlers = {
+      "workflow.list": { workflows: [], total: 0 },
+      "workflowModel.list": { tags: [] },
+    };
+    expect(
+      planStubResults(
+        "http://x/api/trpc/workflow.list,workflowModel.list?batch=1&input=%7B%7D",
+        handlers,
+      ),
+    ).toEqual([{ workflows: [], total: 0 }, { tags: [] }]);
+  });
+
+  it("批请求里有一个过程没有主 → 整条不管（半桩比不桩更坏）", () => {
+    expect(
+      planStubResults(
+        "http://x/api/trpc/workflow.list,workflowModel.list?batch=1&input=%7B%7D",
+        { "workflow.list": { workflows: [], total: 0 } },
+      ),
+    ).toBeNull();
+  });
+
+  it("不在 /api/trpc/ 下的请求不管", () => {
+    expect(planStubResults("http://x/api/comfy/stats", {})).toBeNull();
   });
 });
