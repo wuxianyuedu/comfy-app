@@ -680,6 +680,21 @@ export default defineConfig({
           statements: 75,
           branches: 70,
         },
+        /* 数据库备份 / 恢复域（D6，ISSUE #1611）：`VACUUM INTO` 备份、
+         * `integrity_check` 验证、按次命名 + 轮转、待恢复标记与换文件。
+         * 新增域**同批**登记（规范 §12.5.3 R14 / §18.6）—— 本条的数值取自
+         * `pnpm exec vitest run --coverage src/lib/db-backup tests/db-backup.test.ts`
+         * 的实测值（100 / 100 / 100 / 100），只升不降。
+         * 为什么能满档：本目录**只有取用面**，真正的实现在
+         * `scripts/db-backup-core.mjs`（启动链的纯 Node 宿主必须能引它），
+         * 而那 29 条判据全打在**那份实现**上（`tests/db-backup.test.ts`）——
+         * 判据的位置与实现的位置可以不同，但必须指得准。 */
+        "src/lib/db-backup/**": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         /* markdown 渲染域（ISSUE #1329）：`marked` + `DOMPurify` 的接线、消毒
          * 白名单、样式表。新增域**同批**登记（规范 §12.5.3 R14 / §18.6）——
          * 数值取自 `pnpm exec vitest run --coverage src/lib/markdown` 的实测值

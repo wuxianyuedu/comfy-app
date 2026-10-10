@@ -18,14 +18,14 @@
 <strong>不解析它</strong> —— 形态判据只在服务端一处。</p>
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">LogSessionMeta</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#crashed">crashed</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#id">id</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#scope">scope</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;current&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;runs&quot;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#startedat">startedAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#title">title</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div>
-<section class="tsd-panel tsd-hierarchy" data-refl="7370">
+<section class="tsd-panel tsd-hierarchy" data-refl="7378">
 <h4>Hierarchy (<a href="../hierarchy.html#lib/log/log-sessions.LogSessionMeta">View Summary</a>)</h4>
 <ul class="tsd-hierarchy">
 <li class="tsd-hierarchy-item"><span class="tsd-hierarchy-target">LogSessionMeta</span>
 <ul class="tsd-hierarchy">
 <li class="tsd-hierarchy-item"><a href="lib_log_log-run-packs.RunScopedOption.html" class="tsd-signature-type tsd-kind-interface">RunScopedOption</a></li></ul></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:34</li></ul></aside>
+<li>Defined in src/lib/log/log-sessions.ts:34</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -48,7 +48,7 @@
 <div class="tsd-comment tsd-typography"><p>该次运行异常退出（归档包 <code>run.json</code> 的 <code>crashed</code>）；<code>current</code> 恒为 false。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:55</li></ul></aside></section>
+<li>Defined in src/lib/log/log-sessions.ts:55</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="id"><span>id</span><a href="#id" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">id</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
@@ -58,21 +58,21 @@
 （同一秒内两次启动的 <code>-2</code>、迁移前的旧固定名）不撞成一个 id。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:42</li></ul></aside></section>
+<li>Defined in src/lib/log/log-sessions.ts:42</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="scope"><span>scope</span><a href="#scope" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">scope</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;current&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;runs&quot;</span></div>
 <div class="tsd-comment tsd-typography"><p><code>current</code> = 正在写的本次运行；<code>runs</code> = 已归档的历史运行包。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:53</li></ul></aside></section>
+<li>Defined in src/lib/log/log-sessions.ts:53</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="startedat"><span>started<wbr/>At</span><a href="#startedat" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">startedAt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>该次启动的时刻（毫秒）；迁移前的旧固定名读不出时刻，为 null。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:51</li></ul></aside></section>
+<li>Defined in src/lib/log/log-sessions.ts:51</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="title"><span>title</span><a href="#title" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">title</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
@@ -82,7 +82,7 @@
 在看什么）、runId 是跨包 <code>grep &lt;runId&gt; log/current log/runs/</code> 的唯一入口。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-sessions.ts:49</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/log/log-sessions.ts:49</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

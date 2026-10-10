@@ -17,6 +17,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { APP_PORT_ENV_KEY, resolveAppPortWithSource } from "./app-port.mjs";
+import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
 import {
@@ -91,6 +92,11 @@ if (
 // 放在这里的理由见 env-preflight.mjs —— 否则 Next 会先打印「✓ Ready」，
 // 用户看到的是「起来了但报错」，而事实是端口无人监听。
 exitIfEnvNotReady(root);
+
+/* 待恢复的备份：**必须在这里换文件**（Next 起来之前）。运行期有多个进程持有
+ * 这个库，运行期覆盖 `db.sqlite` 等于在别人握着句柄时换掉文件（见
+ * `db-backup-core.mjs` 的「恢复」一节）。本步空转是常态（绝大多数启动没有标记）。 */
+applyPendingRestoreAtBoot(root);
 
 /* schema 自检 + **后台**同步：拉了含 schema 变更的代码之后不必记得跑
  * `pnpm db:push`（判据、自动做到哪一步为止见 db-schema-state.mjs）。

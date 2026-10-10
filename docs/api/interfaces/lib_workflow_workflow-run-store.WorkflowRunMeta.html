@@ -13,7 +13,7 @@
 <h1>Interface WorkflowRunMeta</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">WorkflowRunMeta</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#errormessage">errorMessage</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#logs">logs</a><span class="tsd-signature-symbol">?:</span> <a href="lib_workshop_generation-client.TaskLogEntry.html" class="tsd-signature-type tsd-kind-interface">TaskLogEntry</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#progress">progress</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#resulturl">resultUrl</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#source">source</a><span class="tsd-signature-symbol">?:</span> <a href="../types/lib_workflow_workflow-run-store.WorkflowRunSource.html" class="tsd-signature-type tsd-kind-type-alias">WorkflowRunSource</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#startedat">startedAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#status">status</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;done&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;failed&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;running&quot;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#taskid">taskId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#tasktype">taskType</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#workflowid">workflowId</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#workflowname">workflowName</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:42</li></ul></aside>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:42</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -40,14 +40,14 @@
 <h3 class="tsd-anchor-link" id="errormessage"><code class="tsd-tag">Optional</code><span>error<wbr/>Message</span><a href="#errormessage" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">errorMessage</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:59</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:59</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="logs"><code class="tsd-tag">Optional</code><span>logs</span><a href="#logs" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">logs</span><span class="tsd-signature-symbol">?:</span> <a href="lib_workshop_generation-client.TaskLogEntry.html" class="tsd-signature-type tsd-kind-interface">TaskLogEntry</a><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>累积的执行步骤日志（重开窗口后由 SSE 回放继续补齐）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:61</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:61</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="progress"><code class="tsd-tag">Optional</code><span>progress</span><a href="#progress" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">progress</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
@@ -57,51 +57,51 @@
 证据 —— 只有它进了登记表，恢复出来的界面才不会从 0% 重新开始。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:57</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:57</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="resulturl"><code class="tsd-tag">Optional</code><span>result<wbr/>Url</span><a href="#resulturl" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">resultUrl</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:58</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:58</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="source"><code class="tsd-tag">Optional</code><span>source</span><a href="#source" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">source</span><span class="tsd-signature-symbol">?:</span> <a href="../types/lib_workflow_workflow-run-store.WorkflowRunSource.html" class="tsd-signature-type tsd-kind-type-alias">WorkflowRunSource</a></div>
 <div class="tsd-comment tsd-typography"><p>发起入口（缺省按 <code>canvas-node</code> 处理，兼容早期落库的记录）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:49</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:49</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="startedat"><span>started<wbr/>At</span><a href="#startedat" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">startedAt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:47</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:47</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="status"><code class="tsd-tag">Optional</code><span>status</span><a href="#status" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">status</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;done&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;failed&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;running&quot;</span></div>
 <div class="tsd-comment tsd-typography"><p>终态（done / failed）时由订阅者 patch；running/缺省 = 仍在跑。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:51</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:51</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="taskid"><span>task<wbr/>Id</span><a href="#taskid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">taskId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:43</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:43</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="tasktype"><span>task<wbr/>Type</span><a href="#tasktype" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">taskType</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:46</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:46</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="workflowid"><span>workflow<wbr/>Id</span><a href="#workflowid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">workflowId</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:44</li></ul></aside></section>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:44</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="workflowname"><span>workflow<wbr/>Name</span><a href="#workflowname" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">workflowName</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/workflow/workflow-run-store.ts:45</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/workflow/workflow-run-store.ts:45</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

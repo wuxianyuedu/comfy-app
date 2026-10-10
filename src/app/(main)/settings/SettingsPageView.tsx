@@ -13,6 +13,7 @@ import { Button } from "~/components/ui/button";
 import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
 
 import { AppUpdateSection } from "./components/AppUpdateSection";
+import { BackupSection } from "./components/BackupSection";
 import { AppearanceSection } from "./components/AppearanceSection";
 import { ComfyuiSection } from "./components/ComfyuiSection";
 import { DatabaseSection } from "./components/DatabaseSection";
@@ -107,6 +108,9 @@ export function SettingsPageView({
 
       {/* ═══ 数据库（Drizzle Studio）Section ═══ */}
       {c.section === "database" && <DatabaseSection c={c} />}
+
+      {/* ═══ 备份与恢复 Section（D6）═══ */}
+      {c.section === "backup" && <BackupSection c={c} />}
 
       {c.section === "exit" && <ExitSection c={c} />}
 

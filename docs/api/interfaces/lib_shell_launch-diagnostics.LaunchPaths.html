@@ -13,7 +13,7 @@
 <h1>Interface LaunchPaths</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">LaunchPaths</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#launcherdir">launcherDir</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#orchestratorlog">orchestratorLog</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#orchestratorsentinel">orchestratorSentinel</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#orchestratorstderr">orchestratorStderr</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#root">root</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#shelllaunchlog">shellLaunchLog</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#shelllog">shellLog</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#statusfile">statusFile</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/shell/launch-diagnostics.ts:67</li></ul></aside>
+<li>Defined in src/lib/shell/launch-diagnostics.ts:67</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -39,56 +39,56 @@
 <div class="tsd-comment tsd-typography"><p>log/current/launcher/：编排日志目录。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/shell/launch-diagnostics.ts:73</li></ul></aside></section>
+<li>Defined in src/lib/shell/launch-diagnostics.ts:73</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="orchestratorlog"><span>orchestrator<wbr/>Log</span><a href="#orchestratorlog" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">orchestratorLog</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>编排器「本次运行」日志（dev-launcher.log）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/shell/launch-diagnostics.ts:75</li></ul></aside></section>
+<li>Defined in src/lib/shell/launch-diagnostics.ts:75</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="orchestratorsentinel"><span>orchestrator<wbr/>Sentinel</span><a href="#orchestratorsentinel" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">orchestratorSentinel</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>编排器当前日志的 sentinel（dev-launcher-current.txt）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/shell/launch-diagnostics.ts:77</li></ul></aside></section>
+<li>Defined in src/lib/shell/launch-diagnostics.ts:77</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="orchestratorstderr"><span>orchestrator<wbr/>Stderr</span><a href="#orchestratorstderr" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">orchestratorStderr</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>编排器 stderr 与壳 stderr 共用文件（dev-launcher-stderr.log）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/shell/launch-diagnostics.ts:79</li></ul></aside></section>
+<li>Defined in src/lib/shell/launch-diagnostics.ts:79</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="root"><span>root</span><a href="#root" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">root</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>项目根（<root>/run 与 <root>/log 的锚点）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/shell/launch-diagnostics.ts:69</li></ul></aside></section>
+<li>Defined in src/lib/shell/launch-diagnostics.ts:69</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="shelllaunchlog"><span>shell<wbr/>Launch<wbr/>Log</span><a href="#shelllaunchlog" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">shellLaunchLog</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>壳侧编排链路日志（log/launcher/shell-launch.log）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/shell/launch-diagnostics.ts:83</li></ul></aside></section>
+<li>Defined in src/lib/shell/launch-diagnostics.ts:83</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="shelllog"><span>shell<wbr/>Log</span><a href="#shelllog" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">shellLog</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>壳自持日志（release，log/shell/shell.log）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/shell/launch-diagnostics.ts:81</li></ul></aside></section>
+<li>Defined in src/lib/shell/launch-diagnostics.ts:81</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="statusfile"><span>status<wbr/>File</span><a href="#statusfile" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">statusFile</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>run/launch-status.json：编排器与壳共写的进度文件。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/shell/launch-diagnostics.ts:71</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/shell/launch-diagnostics.ts:71</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

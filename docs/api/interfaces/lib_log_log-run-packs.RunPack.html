@@ -16,7 +16,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">RunPack</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#crashed">crashed</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#files">files</a><span class="tsd-signature-symbol">:</span> <a href="lib_log_log-run-packs.PackLogFile.html" class="tsd-signature-type tsd-kind-interface">PackLogFile</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#name">name</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#startedat">startedAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-run-packs.ts:87</li></ul></aside>
+<li>Defined in src/lib/log/log-run-packs.ts:87</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -38,28 +38,28 @@
 <div class="tsd-comment tsd-typography"><p><code>run.json</code> 的 <code>crashed</code> —— 崩溃现场恰恰最值得看，界面上要标出来。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-run-packs.ts:93</li></ul></aside></section>
+<li>Defined in src/lib/log/log-run-packs.ts:93</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="files"><span>files</span><a href="#files" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">files</span><span class="tsd-signature-symbol">:</span> <a href="lib_log_log-run-packs.PackLogFile.html" class="tsd-signature-type tsd-kind-interface">PackLogFile</a><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>这一包里该来源的份（新→旧）；空数组 = 那次运行没启动过这个服务。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-run-packs.ts:95</li></ul></aside></section>
+<li>Defined in src/lib/log/log-run-packs.ts:95</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="name"><span>name</span><a href="#name" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">name</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>目录名（<code>&lt;日期&gt;_&lt;时分秒&gt;-&lt;runId&gt;</code>），字典序即时间序。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-run-packs.ts:89</li></ul></aside></section>
+<li>Defined in src/lib/log/log-run-packs.ts:89</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="startedat"><span>started<wbr/>At</span><a href="#startedat" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">startedAt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p><code>run.json</code> 的 <code>startedAt</code>（毫秒）；读不到时退回名字里的时刻，再读不到为 null。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/log/log-run-packs.ts:91</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/log/log-run-packs.ts:91</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

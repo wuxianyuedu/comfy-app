@@ -16,7 +16,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">type</span> <span class="tsd-kind-type-alias">ComfyRuntimeSnapshot</span> <span class="tsd-signature-symbol">=</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#didqueryproctable">didQueryProcTable</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#pid">pid</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#port">port</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#running">running</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#source">source</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;bound&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;port&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;process&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;launcher&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;any&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#unverified">unverified</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#via">via</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/status.ts:56</li></ul></aside>
+<li>Defined in src/lib/comfyui/status.ts:56</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -47,28 +47,28 @@
 「端口有人应答」是比进程表更强的证据，不必再枚举一遍进程。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/status.ts:75</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/status.ts:75</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="pid"><span>pid</span><a href="#pid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">pid</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>从进程表定位到的 PID（拿不到为 null）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/status.ts:60</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/status.ts:60</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="port"><span>port</span><a href="#port" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">port</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>PID 正在监听的端口（拿不到为 null）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/status.ts:62</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/status.ts:62</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="running"><span>running</span><a href="#running" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">running</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>有 ComfyUI 进程在跑（本进程拉起的、配置路径的、或任意解释器起的）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/status.ts:58</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/status.ts:58</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="source"><span>source</span><a href="#source" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">source</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">&quot;bound&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;port&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;process&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;launcher&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;any&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
@@ -77,21 +77,21 @@ process=配置路径进程表命中；launcher=setup 登记启动器；any=按�
 （pyvenv.cfg / uv 托管解释器）出来的解释器进程。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/status.ts:79</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/status.ts:79</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="unverified"><span>unverified</span><a href="#unverified" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">unverified</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>进程表查询本身是否失败（超时/无权限）：结果不可信，不得当作「没在跑」。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/status.ts:66</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/status.ts:66</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="via"><span>via</span><a href="#via" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">via</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>该进程用什么起的（中文短语，如「setup 中登记的启动器」），用于状态行提示。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/status.ts:64</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/comfyui/status.ts:64</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

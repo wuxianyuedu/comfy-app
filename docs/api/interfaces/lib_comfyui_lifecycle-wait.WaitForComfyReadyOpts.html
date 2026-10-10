@@ -13,7 +13,7 @@
 <h1>Interface WaitForComfyReadyOpts</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">WaitForComfyReadyOpts</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#deadline">deadline</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#earlyexit">earlyExit</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">base</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">detail</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">ok</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">false</span> <span class="tsd-signature-symbol">}</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#intervalms">intervalMs</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#isdead">isDead</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#ondead">onDead</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">detail</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#onready">onReady</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">base</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#probe">probe</a><span class="tsd-signature-symbol">:</span> <a href="../types/lib_comfyui_lifecycle-wait.ComfyProbe.html" class="tsd-signature-type tsd-kind-type-alias">ComfyProbe</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#readydetail">readyDetail</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#timeoutdetail">timeoutDetail</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:36</li></ul></aside>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:36</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -40,63 +40,63 @@
 <div class="tsd-comment tsd-typography"><p>硬超时绝对时间戳（null = 不设硬超时，一直等）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:44</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:44</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="earlyexit"><code class="tsd-tag">Optional</code><span>early<wbr/>Exit</span><a href="#earlyexit" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">earlyExit</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-symbol">{</span> <span class="tsd-kind-property">base</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">detail</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span> <span class="tsd-kind-property">ok</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">false</span> <span class="tsd-signature-symbol">}</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span></div>
 <div class="tsd-comment tsd-typography"><p>每次轮询前的早退理由；返回非 null 立即结束（用户手动关闭 / 子进程消失）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:42</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:42</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="intervalms"><code class="tsd-tag">Optional</code><span>interval<wbr/>Ms</span><a href="#intervalms" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">intervalMs</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>轮询间隔（默认 2000ms，与既有行为一致）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:48</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:48</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="isdead"><span>is<wbr/>Dead</span><a href="#isdead" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">isDead</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>判死探测；返回非 null 表示「已判死」，其值为可行动的失败文案。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:40</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:40</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="ondead"><code class="tsd-tag">Optional</code><span>on<wbr/>Dead</span><a href="#ondead" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">onDead</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">detail</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></div>
 <div class="tsd-comment tsd-typography"><p>判死时进入日志。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:54</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:54</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="onready"><code class="tsd-tag">Optional</code><span>on<wbr/>Ready</span><a href="#onready" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">onReady</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">base</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></div>
 <div class="tsd-comment tsd-typography"><p>就绪时进入日志（成功文案由调用方决定，如「保活」后缀）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:52</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:52</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="probe"><span>probe</span><a href="#probe" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">probe</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_comfyui_lifecycle-wait.ComfyProbe.html" class="tsd-signature-type tsd-kind-type-alias">ComfyProbe</a></div>
 <div class="tsd-comment tsd-typography"><p>探测一次是否就绪。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:38</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:38</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="readydetail"><code class="tsd-tag">Optional</code><span>ready<wbr/>Detail</span><a href="#readydetail" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">readyDetail</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>就绪时返回的 detail 文案（默认「ComfyUI 已启动并就绪」）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:50</li></ul></aside></section>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:50</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="timeoutdetail"><span>timeout<wbr/>Detail</span><a href="#timeoutdetail" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">timeoutDetail</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>超时未就绪时的可行动文案（<strong>唯一一处</strong>，两条路径共用）。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in lib/comfyui/lifecycle-wait.ts:46</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/comfyui/lifecycle-wait.ts:46</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
