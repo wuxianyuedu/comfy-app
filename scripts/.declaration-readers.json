@@ -201,7 +201,7 @@
     },
     {
       "id": "base-check-recompute",
-      "name": "「被门禁拦下先复算 master 基线」的执行者（§13.6.2 第 1 步 / §13.6.4 第五态）",
+      "name": "「被门禁拦下先复算 master 基线」的执行者（§13.6.2 第 1 步 / §13.6.4 第五态 / §13.6.2 的「没收集到用例」那条入口）",
       "declaredAt": "docs/standards/13-提交与-code-review.md §13.6.2 的处置口径 + scripts/base-check.mjs",
       "reader": "tests/base-check.test.ts",
       "executor": {
