@@ -286,7 +286,7 @@ components:
 
 | 体系 | 名字形态 | 角色 | 谁写它 |
 | --- | --- | --- | --- |
-| **项目 token** | `--color-*`（`@theme`，88 条声明） | **唯一事实来源**，浅/深两态各自赋值 | 产品代码 |
+| **项目 token** | `--color-*`（`@theme`，93 条声明） | **唯一事实来源**，浅/深两态各自赋值 | 产品代码 |
 | **工具类桥** | `@theme inline` 的 `--color-*: var(--别名)`（28 条） | 让 `bg-card` 这类 shadcn 类名编得出来，**只是入口** | 不手写 |
 | **shadcn 别名** | `--card` / `--border` / `--muted` …（`:root`，47 条） | 只做 `var()` 转发，**不写字面量**（除 `--chart-*` 与 `--radius`） | `ui/` 基元 |
 
@@ -500,7 +500,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ## Components
 
-组件出口只有一个：**`src/components/ui/`**（186 个文件 = 83 个组件 + 29 个 `.stories.tsx` + 36 个 `.test.tsx` + 38 个 `.ts`）。`src/app/shadcn/tailwind.css` 是 shadcn CLI 的 `@import` 占位（4 行注释、零条规则），**不是**组件出口，也**不是**演示页。
+组件出口只有一个：**`src/components/ui/`**（实测 245 份被跟踪文件 = 83 份 `.stories.tsx` + 39 份 `.test.tsx` + 123 份其余（组件源文件与 `.ts`）；而「组件」这个数在故事面判据里的口径是 **89** —— 复算：`node scripts/storybook-check.mjs` 打出的 `组件覆盖率 x/y`）。`src/app/shadcn/tailwind.css` 是 shadcn CLI 的 `@import` 占位（4 行注释、零条规则），**不是**组件出口，也**不是**演示页。
 
 ### Button（`src/components/ui/button.tsx`，15 variant × 8 size）
 
@@ -658,7 +658,8 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 - 规范：「所有 `transition` / `animation` 必须有 `prefers-reduced-motion` 降级」，唯一例外是 AutoAnimate。
 - 实测：`src/`、`public/`、`.storybook/` 里 `prefers-reduced-motion` **0 次**；`src/**` 有 **125 行** `transition-*`（仅 13 行带显式时长），真·infinite 循环 **7 处 / 6 文件**，整屏级滑入只有 `ui/sheet.tsx:66` 一处。
 - **已签字（2026-10-03，本轮）**：按**三档分治**收 —— infinite 循环与大位移补降级、112 行默认 150ms 的短程 hover 反馈明确豁免，并把 §6.7 那句「所有 `transition` / `animation`」收窄成这三档。§2.7 的 8 处 layout 动画**另开一笔**，不混修。
-- **这不是文档笔误，是缺口**：要么补一条 `@media (prefers-reduced-motion: reduce)` 全局降级（对 `infinite` 那两条尤其必要），要么把 §6.7 改成「按场景要求」并登记豁免。**别把规范留着当「已达成」**。
+- **这不是文档笔误，是缺口**（这句是**立案时的原话**，留着是为了记「当时它被当成文档笔误」这个动作；两个出路后来**都做了**，别把它读成还敞着的选择题）：要么补一条 `@media (prefers-reduced-motion: reduce)` 全局降级（对 `infinite` 那两条尤其必要），要么把 §6.7 改成「按场景要求」并登记豁免。**别把规范留着当「已达成」**。
+  ⇒ 实际落的是「补降级块 + 同步收窄条文」两件事一起做：`src/app/globals.css:1392` 起那块 `@media (prefers-reduced-motion: reduce)`（`grep -rn prefers-reduced-motion src public .storybook` 现在命中 **3 行**，其中 1 行是 `@media` 本体、2 行是它的说明注释），§6.7 收窄成三档，执行者 `tests/reduced-motion-tiers.test.ts`（在 pre-commit 的 C 组固定清单里）。复算入口见本文「取证方法」第 5 条——它此前还写着「缺口 / 0」，已按当前实测改掉。
 - **决策人**：a11y owner。
 
 ### 待定 3 → 已签字：`--font-title` 的首选字体不随包分发，且**从来没在任何机器生效过**
@@ -691,9 +692,13 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
   ⇒ **单一取值在某一态必然偏弱**：浅彩压在白底上只有 1.5–2.2:1，光晕基本等于看不见，而被看见正是光晕唯一的作用。所以这四颗 token 必须两态，且浅色档**直接写成 `var(--color-…)`**（不是抄一份基准色的 hex —— 抄了就会和源头各自漂移），深色档才用 400 档浅彩。这也是对 #1514 那句「两态同值：原裸值本来没有 `.dark` 分叉」的订正：**把「旧代码只有一个值」当成「设计上不需要两个值」，是拿事故当设计**。
   顺带收掉的两处：同一栏里 `fpsDotColor` 三档原先是基准色 α=1（隔壁 devServer 那点已经是浅彩）—— 同尺寸、同语义的两个点两套配方，现在都是 80% 走同一族；`canvas/CanvasSettingsButton.tsx` 那颗品牌点与 4 处连线光晕的裸值（`rgba(167,139,250,0.7)` / `rgba(124,92,252,0.6)`）也并进这一族，连线直接用 `var(--color-primary)`（`#7c5cfc` 逐字节就是那个值 ⇒ 零像素）。判据从「禁某两个裸值」升级成**按形状归零**：`shadow-[0_0_…rgba(…)]` 与任何 `shadow-[…#hex]` 都判红，并用反向样本钉住两条边界 —— 投影必有偏移或扩散（`0_0_` 不误伤仓里那 6 处），同一档浅彩在别处是合法的角色色（`#34D399` 当类别色）。其余裸值（卡片投影等）的权威清单不在本文抄条数，由 `pnpm theme:check` 逐文件打印「处数 + 为什么可以留」。
 
-- **Storybook 覆盖 29/83**（有 story 的组件：alert、aspect-ratio、avatar、badge、button、empty-state、field、form-field、form-rhf、image-viewer、json-viewer、kbd、list-badge、media-thumbnail、option-list-popover、page-loading、progress-bar、seed-mode-button、segment-popover、simple-key-handler、skeleton、source-tag、spinner、status-badge、status-dot、task-type-chip、toggle、validation-error-list、water-fill-progress）。核心交互件里 **input、dialog、select、card、tooltip、popover、switch、checkbox、tabs、dropdown-menu、context-menu、menubar、navigation-menu、command** 无 story；其中 dialog/select/tabs/dropdown-menu/card/input/switch/checkbox **同时无 `.test.tsx`**。⇒ 「明暗两态长什么样」这一层契约目前只在那 29 个组件上可核验。
-- **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一 grep 在 `u-title` 上抓到 51 处、`u-title-page` 18 处，所以这个 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名精确计数：`u-title` 26 处、`u-title-page` 17 处、`u-title-stage` 1 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。
-- **圆角的自动化覆盖是「相对变化」而不是「绝对形状」**：`toHaveScreenshot` 全仓只有 **2 处**（`e2e/visual/login.visual.spec.ts:49,66`，基线 `-chromium-win32.png`），而 **playwright 不进 pre-commit**；读 `borderTopLeftRadius` 的断言有 **4 处**，全在 `e2e/appearance-steps.spec.ts`，判的是「改档之后它变了没 / 刷新后还在不在」—— **变了**这件事有覆盖，**变成什么形状**没有。`tests/visual-baseline-pairing.test.ts` 只核「基线文件齐不齐、名字对不对平台」不比像素。规范 03 §3.6.1.1 那句「刻意不比像素」的理由（基线按平台分文件）仍然成立，别顺手把它推翻——要补的是**代表屏的截图用例 + 一个手动跑的入口**。
+- **故事面已经全覆盖，缺口挪到了单元层**（订正：本文件此前写「Storybook 覆盖 29/83、核心交互件里 input/dialog/select/card/… 无 story」—— 那组读数被 `331b38c2` → `b9cbd762` → `82480021` 三连补覆盖否掉了，`82480021` 那次就把理由表清成了 0 条）。现在实测 `node scripts/storybook-check.mjs` = **组件覆盖率 89/89、理由表 0 条、故事面 122 份**（缺 title 0 / 未接真组件 0 / 分组偏离 0）⇒ 「明暗两态长什么样」这一层契约在**每一个**组件上都可以在故事面被核验，不再是 29 个。**「122」这一格别当判据读**：它随新增故事单调漂移（不是覆盖率，只是份数），要复核就现跑上面那条命令，不要引用本文的数字 —— 覆盖率 89/89 有基线顶着，份数没有。
+  剩下的洞不是「没 story」而是**没单测**：`src/components/ui/` 下 **55 个组件没有同名 `.test.tsx`**（含 `dialog`、`select`、`tabs`、`card`、`input`、`switch`、`checkbox`、`dropdown-menu`、`context-menu`、`menubar`、`navigation-menu`、`popover`）。**注意口径**：这份清单判的是「有没有**同名** `.test.tsx`」，而故事面判据按组件导出计数 —— 所以 `input` / `switch` / `checkbox` 虽然没有自己的 `.stories.tsx`，仍被算进 89/89（它们的 story 挂在同族的别份里）。复算：对 `git ls-files 'src/components/ui/*.tsx'`（去掉 `.stories` / `.test`）逐个查同名 `.test.tsx` 是否存在。这类组件的行为契约（受控/非受控、焦点、键盘、开合）今天只有故事面能看见，而**故事面不比断言** —— 要补的是交互用例，不是再多加故事。
+- **`.u-*` 扁平工具层全仓零消费者**（实测，量具自证：同一把 grep 在 `u-title` 上抓到 **52** 行、`u-title-page` **19** 行，所以那排 0 不是解析失效）：`u-card` / `u-card-hover` / `u-input` / `u-ghost` / `u-chip` / `u-surface` / `u-border` / `u-avatar` 各 **0** 处，只在 `globals.css` 的 `@layer components` 里有定义。三件后果要如实记下：① 上一版本文件把 `.u-input` 写成「与 `ui/input.tsx` 并存的第二种输入形态」——**错了**，实际输入框只有一种（`ui/input.tsx`：`bg-transparent` + `border-input` + `rounded-lg` + `px-2.5 py-1` + `h-8` + `text-base md:text-sm`）；② 「标题四档」那节的论证依赖 `.u-title*` 在被用，那**一组确实有消费者**（按类名 token 精确计数：`u-title` **28** 处、`u-title-page` 19 处、`u-title-stage` 4 处、`u-title-hero` 1 处），所以 §3.10 的判据不受影响。**两处数字之间差的是口径不是漏网**：上面那把 `\b` 界定的 grep 里连字符算词边界，所以 `u-title` 的 52 行把三枚兄弟名一起数了（28 + 19 + 4 + 1 = 52，逐 token 精确计数相加正好对上）⇒ 拿它当「`u-title` 单独的量」会虚高，拿逐 token 计数当「grep 跑出来的数」又对不上，两个都要写明；③ §3.6.4 讲 T2 重名事故时举的证据是「`.u-chip` / `.u-ghost` 的小字在浅色下几乎看不见」——那两个类今天**不渲染**，该事故的另一半（`WorkflowNodeJsonPopover`）才是可见现场。**别把这几条类当活代码复用**：要用就照 `ui/` 基元的形状来，不要在视图里捡 `.u-*`。
+- **圆角的自动化覆盖是「相对变化」而不是「绝对形状」**：读 `borderTopLeftRadius` 的断言有 **4 处**，全在 `e2e/appearance-steps.spec.ts`，判的是「改档之后它变了没 / 刷新后还在不在」—— **变了**这件事有覆盖。
+  「变成什么形状」这一格此前是空的，现在**部分**补上了，但要看清补的是哪种（订正：本文件上一版写「`toHaveScreenshot` 全仓只有 2 处、要补的是代表屏的截图用例 + 一个手动跑的入口」，那是只剩 login 一份 spec 时的读数）：实测 **5 份视觉 spec / 10 处 `toHaveScreenshot`**（canvas 2、login 3、models 1、overlay 2、workspace 2），基线 **18 份 PNG = `-linux` 10 + `-win32` 8**（`darwin` 0；win32 只差首页那两张，登记在 `scripts/visual-baselines.mjs` 的 `PENDING_PLATFORMS` 里，是欠条不是漏录），手动入口在 `pnpm check:visual` / `check:visual:update`（`scripts/pixel-run.mjs`，跑绿顺带记新鲜度账）。⇒ 绝对形状**只在被取景的那 10 屏上有判据**，而取景是那几块屏的整页形状，不是「逐档圆角各截一张」。
+  **为什么仍然不算「有覆盖」**：playwright 不进 pre-commit（钩子里与像素相关的 `visual-gate.mjs` / `visual-freshness-gate.mjs` 两步都刻意不跑像素，只核「提交像素层时带没带一次判决」与「每一档有没有主」），`tests/visual-baseline-pairing.test.ts` 只核「基线文件齐不齐、名字对不对平台」不比像素 ⇒ 结论只在**录过基线的那台机器**上成立。规范 03 §3.6.1.1 那句「刻意不比像素」的理由（基线按平台分文件）仍然成立，别顺手把它推翻。
+  **取景范围要按 spec 自己的注释读，别按屏的名字猜**：`overlay.visual.spec.ts` 的头写明它把日志内容钉成**空来源**（理由就是 §11.8 禁「随机/时变内容」——日志行逐帧在长），正文因此是稳定的空态文案 ⇒ `overlay-log-default/-wide` 那两张（× 两档平台）**确实包含** `ui/empty-state` 的 `panel` 档形状——#1626 的提交说明里「取景不含日志面板」那句是错的。
 - **frontmatter 只能表达一态**，而本库的取值规则是两态。上面的 `colors` / `rounded` / `components` 全部取**浅色档**（因为 `@theme` 写的就是浅色），而**默认主题是 Dark**。任何人拿 frontmatter 当「应用现在的样子」会得出反的结论——两态对照请看 Colors 表。
 - **`var(--radius-*)` 在产物里是半个幽灵**：`@theme inline` 的语义是「值内插进工具类，变量本身只在被 `var()` 引用到时才发」，实测真编译下 `:root` 里只有 `--radius-md` / `--radius-lg` 两颗（它们被 `.u-input` / `.u-card` 引用着才存活），`sm` / `xl` / `2xl` / `3xl` / `4xl` **声明数为 0**。现在没有代码去读它们，所以还不出事；但**一旦有人在 `style={{}}` 里写 `var(--radius-xl)`，拿到的是空值** —— 圆角要用就走类名（`rounded-xl`），要写 `var()` 就只能引基数 `var(--radius)`。
 - **两条字面字号住在 `@theme` 之外**：`.json-view.jv-theme-comfy` 的 11px/1.6、`.cb-code-block` 的 11.5px/1.65。它们是**内容尺寸**（等宽代码/JSON 的密度决定可读性），不是排版档，但和 `--text-*` 一样都是「改档要改两处」的形态——本文件把它们记成 `code-md` / `code-json` 两档，落档与否待定。
@@ -714,7 +719,12 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 #    border-radius: calc(var(--radius) * 0.5 / 0.75 / — / 1.25 / 1.5 / 1.75 / 2)
 #    ⇒ 默认档 8/12/16/20/24/28/32px；@theme 里那四行死字面量已删，T4 拦住它长回来
 
-# 2. token 规模（当前 master 实测：@theme 88 / @theme inline 28 / .dark 72 / :root 47 / 唯一 --color-* 名 115）
+# 2. token 规模（当前 master 实测：@theme 93 / @theme inline 27 / .dark 77 / :root 49 / 唯一 --color-* 名 120）
+#    ⚠️ 后两条的口径要先看清：globals.css 里有 **三个 `:root {`**（636 / 1015 / 1241）和
+#    **三个 `.dark {`**（350 / 639 / 1045），而 awk 的 `/^X \{/,/^\}/` 区间**会重复起段**
+#    ⇒ 下面这两条 awk 数的是**同名各段之和**，不是「第一个块」。
+#    `:root` 那条数的是块内**全部 `--` 声明**（含非 --color 的那几枚），与 --color 口径不同。
+#    这几个数随新增 token 单调漂移，别引用本文的值，要现跑。
 awk '/^@theme \{/,/^\}/' src/app/globals.css | grep -cE "^\s+--color-[a-z0-9-]+:"
 awk '/^\.dark \{/,/^\}/' src/app/globals.css | grep -cE "^\s+--color-[a-z0-9-]+:"
 
@@ -725,9 +735,11 @@ sed -n '167,192p' tests/theme-token-single-source.test.ts
 grep -rn "@radix-ui" src | wc -l
 grep -rln "@base-ui/react" src/components/ui | wc -l   # 35
 
-# 5. reduced-motion 缺口
-grep -rn "prefers-reduced-motion" src public .storybook | wc -l   # 0
-grep -rn "transition-" src/components | wc -l                     # 113
+# 5. reduced-motion：判「降级块在不在」，不是判「缺口在不在」（订正：这条曾经标成「缺口 / 0」）
+grep -rn "prefers-reduced-motion" src public .storybook | wc -l   # 3（1 行 @media 本体 + 2 行说明注释）
+grep -rn "transition-" src/components | wc -l                     # 122
+#    ⇒ 三档分治那块在 `src/app/globals.css:1392` 起；执行者 = tests/reduced-motion-tiers.test.ts
+#      （登记在 scripts/affected-tests.mjs 的固定清单里），所以这一格不再是「没有执行者」的账
 
 # 6. 视图层写死色的权威结论（不是本文件的估计）
 pnpm theme:check
@@ -735,9 +747,11 @@ pnpm theme:check
 # 7. oklch 落 sRGB：两颗 destructive 都超出 sRGB 色域，必须让浏览器自己算
 #    （getComputedStyle 在较新 Chromium 里会把计算值原样序列化回 oklch()，读不到 rgb；
 #     可行做法是 canvas 2d：fillStyle = oklch(...) → getImageData 取回真实字节）
-# 8. 输入框只有一种形态：`.u-*` 扁平层的消费者计数（八个 0 才是结论）
-for c in u-input u-card u-ghost u-chip u-surface u-avatar; do printf "%s " "$c"; grep -rn "\b$c\b" src --include=*.tsx --include=*.ts | grep -vc globals.css; done
-#    ↑ 先用量具自证：同法在 u-title 上给 26、u-title-page 给 17，所以那排 0 不是解析坏了
+# 8. 输入框只有一种形态：`.u-*` 扁平层的消费者计数（八枚 0 才是结论）
+for c in u-input u-card u-card-hover u-ghost u-chip u-surface u-avatar u-border; do printf "%s " "$c"; grep -rn "\b$c\b" src --include=*.tsx --include=*.ts | wc -l; done
+#    ↑ 先用量具自证：同法在 u-title 上给 52、u-title-page 给 19，所以那排 0 不是解析坏了
+#      （`\b` 把连字符当词边界 ⇒ 52 里含三枚兄弟名，逐 token 精确计数是 28/19/4/1；
+#       别在这条 grep 后面再 `grep -vc globals.css`——`--include` 已经把它挡在外面了）
 # 9. transition 存量的正确数法（行数、并分开显式时长）
 grep -rn "transition-" src --include=*.tsx --include=*.ts | grep -vc "\.stories\.\|\.test\.\|__snapshots__"   # 125
 grep -rn "duration-[0-9]" src --include=*.tsx | grep -vc "\.stories\.\|\.test\."                              # 显式时长那一小撮
