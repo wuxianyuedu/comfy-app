@@ -47,7 +47,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
 
   return (
     <SettingsCard title="外观主题">
-      <p className="text-muted-foreground mb-4 text-sm">
+      <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         选择应用的主题外观：深色（Dark）或浅色（Light）。切换即时生效并自动保存，
         也可通过顶部导航栏的太阳/月亮按钮随时切换。
       </p>

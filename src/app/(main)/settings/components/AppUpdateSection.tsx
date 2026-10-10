@@ -20,7 +20,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
      用户想知道"我装的是哪一版"时这一屏一个字都没给。没读取过也不留空白，
      而是说清它从哪来。版本号与「能不能检测更新」是两件事，所以浏览器分支同样给。 */
   const versionLine = (
-    <p className="text-muted-foreground mb-3 text-sm">
+    <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
       当前版本：
       <span className="text-ink tabular-nums">
         {c.appUpdate.currentVersion ?? "尚未读取"}
@@ -35,13 +35,13 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
     <SettingsCard title="应用更新">
       {versionLine}
       {!c.appUpdate.inShell ? (
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-xs leading-relaxed">
           当前运行在浏览器 / 开发模式，非桌面壳内，无法检测应用更新。
           请使用打包后的桌面版。
         </p>
       ) : (
         <>
-          <p className="text-muted-foreground mb-4 text-sm">
+          <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
             检测 ComfyAPP 应用是否有新版本，需要时可下载并自动安装更新。
             更新源与签名公钥由{" "}
             <code className="text-ink/80">src-tauri/tauri.conf.json</code> 的{" "}
@@ -62,6 +62,9 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
           <div className="flex flex-wrap items-center gap-3">
             <StatusButton
               onClick={() => void c.checkAppUpdate()}
+              /* 卡片的**主行动**：缺省档是软底，「保存 / 检测 / 立即备份」这一族
+                 显式提为实心（缺省不实心是有意的，见 SettingsPrimitives 注释）。 */
+              variant="primary-solid"
               disabled={c.appUpdate.busy !== "idle"}
             >
               {c.appUpdate.busy === "checking" ? (

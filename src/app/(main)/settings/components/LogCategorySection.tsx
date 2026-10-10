@@ -38,7 +38,7 @@ export function LogCategorySection() {
 
   return (
     <SettingsCard title="日志分类开关">
-      <p className="text-muted-foreground mb-4 text-sm">
+      <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         关闭某一类，它的日志就
         <strong className="text-ink/80">不在日志面板里显示</strong>
         （文件照常记录，仅面板隐藏），按来源筛选时也会跳过被关掉的分类。改动即时生效、

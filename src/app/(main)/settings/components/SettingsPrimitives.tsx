@@ -123,25 +123,40 @@ export function Field({
 }
 
 /**
- * 状态行主按钮 —— `ui/button` 的基元 + 本页的排布契约（ISSUE #672 P1）。
+ * 状态行动作按钮（**不是**「状态行主按钮」）—— `ui/button` 的基元 + 本页的
+ * 排布契约（ISSUE #672 P1）。
  *
  * 这里此前是第二个 `<button>` 实现（自拼尺寸类 + 自拼配色）。现在底子是
- * `ui/button`：配色由 `variant`（`primary-solid` 等语义变体）决定，本模块只
- * 负责把状态行的**排布契约**（`statusButtonClass`：不许换行 / 不许被 flex 压
- * 扁 / 行框归位，见 ISSUE #423）叠上去。
+ * `ui/button`：配色由 `variant` 决定，本模块只负责把状态行的**排布契约**
+ *（`statusButtonClass`：不许换行 / 不许被 flex 压扁 / 行框归位，见 ISSUE #423）
+ * 叠上去。
  *
  * 三条覆盖类与工作流编辑器顶栏同一口径（规范 §16.2.4.2 第 3、4 条）：
  *   · `h-auto px-4 py-2` —— 高度与横向内边距归还给本页（基元 `h-8 px-2.5`）；
  *   · `font-semibold`     —— 状态行动作的权重比基元默认高一档；
  *   · `rounded-lg`        —— 与状态行外框同一档圆角。
  * `cn()` 走 tailwind-merge，同一属性后面的类赢，因此覆盖串必须排在最后。
+ *
+ * ## 缺省档从 `primary-solid` 改成 `primary`（软底）
+ *
+ * 这三条状态行（ComfyUI / Drizzle Studio / Ollama）**各有三个动作**：打开 /
+ * 启动 / 关闭。缺省实心时三个都是同一颗品牌紫实心按钮，一屏里没有主次：
+ * 用户看不出「该点哪个」，而在「未运行」时那两个本就点不动的（打开 / 关闭）也
+ * 长着可点的样子 —— 实心档置灰只是 50% 不透明度，仍是饱和紫，读起来像「可点但
+ * 是浅一点」，而不是「现在不能点」。
+ *
+ * 改成软底之后三件事一起成立：① 真正的动作（启动 / 关闭）仍由调用处显式传
+ * `primary-solid` 提为实心，一屏里只剩一颗实心；② 不构成动作的那些（打开 /
+ * 在浏览器打开）走软底或 `outline`，层级立刻分得开；③ 置灰的软底按钮是「淡底淡
+ * 字」，与可点状态一眼可分。**缺省值必须是「不需要强调的那一档」** —— 缺省
+ * 实心会让每个新加的动作都自动变成主按钮，而「哪个是主要动作」是调用处的判断。
  */
 export function StatusButton({
   onClick,
   disabled,
   children,
   className,
-  variant = "primary-solid",
+  variant = "primary",
 }: {
   onClick: () => void;
   disabled?: boolean;
