@@ -724,8 +724,9 @@
       开门那一次抓到的 21 条真回退已按实测重基线，**欠的课转 E7**。
       证据：`scripts/quality-gate.mjs`、`scripts/quality-gate.ps1`、`vitest.config.ts`。
 - [x] **E7 覆盖率棘轮开门即抓到的真回退（补用例清单，本批清零）**：E2 把门打开的那一次全量跑
-      （465 文件全绿）当场报出 21 条不达标，已按 §18.6 逐条降到「实测向下取整到 5 的倍数」，
-      旧值与原因留在 `vitest.config.ts` 的 `coverage.thresholds` 注释块里。这不是并行档抖动：
+      （465 文件全绿）当场报出 21 条不达标，已按 §18.6 逐条降到「实测向下取整到 5 的倍数」
+      （**那一批当时用的口径；这条取整规则后来已撤销，现值一律看 `vitest.config.ts`，
+      复算入口见 §18.6**），旧值与原因留在 `vitest.config.ts` 的 `coverage.thresholds` 注释块里。这不是并行档抖动：
       同一批文件**单跑**带 `--coverage` 得到一模一样的数字。欠的课按大头排 ——
       `src/lib/process/process-launch.ts` 行 17.9%、`src/lib/process/kill-process-tree.ts`
       行 29.1%（执行宿主那批新代码 + 平台相关分支）、`src/lib/log/log-file-client.ts` 行 23.5%、
