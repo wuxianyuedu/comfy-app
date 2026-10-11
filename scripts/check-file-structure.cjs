@@ -57,9 +57,24 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+/* 扫描面的共用读取（`gate-scan-read.cjs`）：门禁读的是**工作树**，而工作区在遍历
+ * 期间不是静止的 —— 别人的进程会清理自己的临时目录（编辑器 / 测试运行器 / 另一个
+ * 代理工作区留下的 `_tmp_*`）。裸 `readdirSync` 撞上那个窗口 = 整个脚本以未捕获的
+ * `ENOENT: … scandir '…'` 退出，判据的真实语义（有违规 / 没有）与执行故障
+ * （环境竞争）被压成同一个退出码。容错口径（只降级 ENOENT、消失数进结论行、
+ * 根不存在 ≠ 条目消失）全在那一份里。 */
+const {
+  dirExists,
+  readBytesForScan,
+  readForScan,
+  readdirForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const problems = [];
 const splitHints = [];
+/** 遍历途中消失的条目数（目录级 + 文件级）。要进结论行，不许静默跳过。 */
+let vanished = 0;
 /** R5 棘轮用:超限文件 → 行数(路径为仓库相对路径,与基线同一口径)。 */
 const oversizedFiles = {};
 
@@ -533,8 +548,15 @@ const DOMAIN_EXEMPT = new Set([
 /** R13/R14 的扫描:只看 `src/lib` 的顶层条目,不递归。 */
 (function checkLibDomainDiscipline() {
   const LIB = "src/lib";
-  if (!fs.existsSync(LIB)) return;
-  for (const e of fs.readdirSync(LIB, { withFileTypes: true })) {
+  /* 根不存在 = 真故障（仓库被切了一半 / 跑错工作目录），静默跳过会得到一个
+   * 「一份输入都没读」的假绿；条目级消失由下面的读取器降级。 */
+  if (!dirExists(LIB)) return;
+  const libEntries = readdirForScan(LIB);
+  if (libEntries === null) {
+    vanished++;
+    return;
+  }
+  for (const e of libEntries) {
     const rel = LIB + "/" + e.name;
     if (e.isDirectory()) {
       if (!DOMAINS.includes(e.name))
@@ -585,7 +607,12 @@ const NEXT_RESERVED = new Set([
 const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
 
 (function walk(dir) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+  const entries = readdirForScan(dir);
+  if (entries === null) {
+    vanished++;
+    return;
+  }
+  for (const e of entries) {
     const p = path.join(dir, e.name).split(path.sep).join("/");
     if (e.isDirectory()) {
       walk(p);
@@ -616,9 +643,14 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
           "R11 Next 约定文件位置错:" + rel + "(须在 " + canonical + ")",
         );
     }
-    if (
+    /* 文件级读取同样走容错版:条目在「列到名字」与「读内容」之间被删时返回 null,
+     * 而那个文件里已无违规可判 —— 「没读到」与「读到了、没有违规」在这条判据上等价,
+     * 但计数要进结论行。 */
+    const head = readForScan(p);
+    if (head === null) vanished++;
+    else if (
       /^\/\* eslint-disable @typescript-eslint\/no-explicit-any/.test(
-        fs.readFileSync(p, "utf8").split("\n")[0] || "",
+        head.split("\n")[0] || "",
       )
     )
       problems.push(
@@ -664,7 +696,12 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
 // 这个管**文件**;两者都只提示,把存量交给排期,把增量交给棘轮。
 (function collectSplitHints() {
   (function walkHints(dir) {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const entries = readdirForScan(dir);
+    if (entries === null) {
+      vanished++;
+      return;
+    }
+    for (const e of entries) {
       const p = path.join(dir, e.name).split(path.sep).join("/");
       if (e.isDirectory()) {
         walkHints(p);
@@ -673,7 +710,12 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
       if (!/\.(ts|tsx|mjs|cjs|js)$/.test(e.name)) continue;
       if (/\.test\.[cm]?[jt]sx?$/.test(e.name) || /\.d\.ts$/.test(e.name))
         continue;
-      const lines = fs.readFileSync(p, "utf8").split("\n").length;
+      const text = readForScan(p);
+      if (text === null) {
+        vanished++;
+        continue;
+      }
+      const lines = text.split("\n").length;
       if (lines > SPLIT_HINT_LINES) {
         splitHints.push(p + " (" + lines + " 行,建议拆分)");
         oversizedFiles[p] = lines;
@@ -703,7 +745,12 @@ const SCAN_EXCLUDED = [
   "src-tauri/static/",
 ];
 (function walkScripts(dir) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+  const entries = readdirForScan(dir);
+  if (entries === null) {
+    vanished++;
+    return;
+  }
+  for (const e of entries) {
     const p = path.join(dir, e.name).split(path.sep).join("/");
     const rel = p.startsWith("./") ? p.slice(2) : p;
     if (e.isDirectory()) {
@@ -720,7 +767,13 @@ const SCAN_EXCLUDED = [
     }
     if (!e.name.toLowerCase().endsWith(".ps1")) continue;
     if (!BOM_REQUIRED_DIRS.some((d) => rel.startsWith(d))) continue;
-    const buf = fs.readFileSync(p);
+    /* BOM 判据要的是**字节**,走共用件的字节版(读不到 = 条目在遍历途中消失,
+     * 那个文件已不存在,不可能是一份「缺 BOM 的现役脚本」)。 */
+    const buf = readBytesForScan(p);
+    if (buf === null) {
+      vanished++;
+      continue;
+    }
     if (
       buf.length >= 3 &&
       buf[0] === 0xef &&
@@ -764,7 +817,12 @@ const GIT_TRANSIENT_ROOT_FILES = new Set([
   "merge_head",
 ]);
 (function checkRootEntries() {
-  for (const e of fs.readdirSync(".", { withFileTypes: true })) {
+  const entries = readdirForScan(".");
+  if (entries === null) {
+    vanished++;
+    return;
+  }
+  for (const e of entries) {
     if (!e.isFile()) continue;
     const lower = e.name.toLowerCase();
     if (lower.endsWith(".ps1")) {
@@ -789,7 +847,12 @@ const GIT_TRANSIENT_ROOT_FILES = new Set([
 (function checkHistoryComments() {
   const files = [];
   (function walkComments(dir) {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const entries = readdirForScan(dir);
+    if (entries === null) {
+      vanished++;
+      return;
+    }
+    for (const e of entries) {
       const p = path.join(dir, e.name).split(path.sep).join("/");
       if (e.isDirectory()) {
         walkComments(p);
@@ -801,7 +864,12 @@ const GIT_TRANSIENT_ROOT_FILES = new Set([
     }
   })("src");
   for (const rel of files) {
-    const lines = fs.readFileSync(rel, "utf8").split("\n");
+    const text = readForScan(rel);
+    if (text === null) {
+      vanished++;
+      continue;
+    }
+    const lines = text.split("\n");
     /* 逐行找「这一行是不是注释」。**必须带块注释状态**：只按行首形态判
      * (以 `*` 开头等)会漏掉「块内不以 `*` 开头的续行」—— JSX 注释块里手写的
      * 多行说明、以及块注释里整段贴进来的旧说明,续行常常顶格或缩进对齐,
@@ -907,7 +975,12 @@ const GIT_TRANSIENT_ROOT_FILES = new Set([
   }
   const files = [];
   (function walkControl(dir) {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const entries = readdirForScan(dir);
+    if (entries === null) {
+      vanished++;
+      return;
+    }
+    for (const e of entries) {
       const p = path.join(dir, e.name).split(path.sep).join("/");
       if (e.isDirectory()) {
         walkControl(p);
@@ -917,7 +990,11 @@ const GIT_TRANSIENT_ROOT_FILES = new Set([
     }
   })("src");
   for (const rel of files) {
-    const text = fs.readFileSync(rel, "utf8");
+    const text = readForScan(rel);
+    if (text === null) {
+      vanished++;
+      continue;
+    }
     const lines = text.split("\n");
     lines.forEach((line, i) => {
       const hits = new Set();
@@ -963,6 +1040,19 @@ const GIT_TRANSIENT_ROOT_FILES = new Set([
   const baseRevMissing = Boolean(prev?.baselineRev) && !BASELINE_REV_USABLE;
 
   if (UPDATE) {
+    /* 「有文件没读到」时一律拒绝重记基线（§11 那一族的棘轮同口径）：把一次不完整的
+     * 读数写进基线，等于让那些条目从此报不出来 —— 下一轮它会以「基线里没有」的形态
+     * 重新变成新增。消失的条目本来就可能是超限文件（读不到行数 ⇒ 不在 `oversizedFiles`
+     * 里 ⇒ 被算成「已修好」），这一支必须关掉。 */
+    if (vanished > 0) {
+      console.error(
+        "[structure] R5 基线拒绝更新:本轮有 " +
+          vanished +
+          " 个条目在遍历期间消失(并发变更),读数不完整 —— 基线里没有它们不代表它们不超限。" +
+          "\n  等扫描面稳定后重跑(理由与同族棘轮一致,见规范 §11 那一族的「棘轮类拒绝 --update」)。",
+      );
+      process.exit(1);
+    }
     const prevTotal = prevFiles ? Object.keys(prevFiles).length : 0;
     /* 棘轮只许下降;唯一例外是判据版本抬升(旧数字与新计数不是同一个量)。 */
     const ruleChanged =
@@ -1105,7 +1195,13 @@ if (splitHints.length) {
   );
 }
 if (problems.length) {
-  console.error("[structure] 违规(阻断提交):\n  " + problems.join("\n  "));
+  /* 消失数两条出口都要给：只在绿色那一行给，等于「判据报红时覆盖范围不可见」——
+   * 而那恰恰是最需要读数的时刻（报红的这一轮到底看全了没有）。 */
+  console.error(
+    "[structure] 违规(阻断提交):\n  " +
+      problems.join("\n  ") +
+      vanishedNote(vanished),
+  );
   console.error(
     "规范见 docs/standards/12-代码组织与文件结构.md §12.6/§12.8/§12.11",
   );
@@ -1114,4 +1210,4 @@ if (problems.length) {
   );
   process.exit(1);
 }
-console.log("[structure] OK");
+console.log("[structure] OK" + vanishedNote(vanished));
