@@ -989,9 +989,12 @@ describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
  * 编排器接手又走了一遍。
  *
  * 本组用例钉死两条边界（反向验证：删掉任一条件，对应用例必失败）：
- *   · 自编排链路里编排器**不再起第二个壳**、也不重复查端口族——判据都是
+ *   · 自编排链路里编排器**不再起第二个壳**——判据是
  *     「本次编排由壳拉起」这一个标记（§1.5：拉起编排器的那只壳就是应用宿主）；
- *   · 标记缺席（手工 `pnpm dev` / 直接 `--mode prebuilt`）照常起壳、照常查。
+ *   · 端口判据（含回收本检出残留）**仍必须每次跑**：壳的单实例判据只认互斥量、
+ *     从不碰端口，跳过它就会撞上一次启动残留的 dev server（ISSUE #1687 的
+ *     「只问一次」前提不含历史残留）；标记缺席（手工 `pnpm dev` / 直接
+ *     `--mode prebuilt`）照常起壳、照常查。
  */
 describe("启动期重复判定的短路（ISSUE #1687）", () => {
   const launcher = fs.readFileSync(
@@ -1025,16 +1028,19 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
     expect(rust).toContain('.env("COMFYAPP_SHELL_SELF_LAUNCH", "1")');
   });
 
-  it("跳过端口族检查受「壳起的 + prebuilt」双重约束", () => {
+  it("端口族残留回收不受自编排影响（reconcilePort 必须始终跑）", () => {
     const body = launcher.slice(
       launcher.indexOf("let portSummary"),
       launcher.indexOf('status("port-ready"'),
     );
-    expect(body, "必须由标记判、不看形态猜测").toContain(
-      "if (launchedByShell)",
-    );
-    // 不跳过时必须仍走唯一的取消出口（判据只有一处）。
-    expect(body).toContain("await reconcilePort(port, ROOT, {");
+    expect(
+      body,
+      "reconcilePort 始终运行：壳的单实例判据只认互斥量、从不碰端口，跳过它会撞上一次残留的 dev server",
+    ).toContain("await reconcilePort(port, ROOT, {");
+    expect(
+      body,
+      "不再有按 launchedByShell 跳过端口判据的分支（ISSUE #1687 的「只问一次」前提不含历史残留）",
+    ).not.toContain("if (launchedByShell)");
   });
 
   it("壳侧单实例判定不再有「被编排器起的壳」短路", () => {

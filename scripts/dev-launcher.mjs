@@ -1004,25 +1004,18 @@ export async function run(argv = process.argv.slice(2)) {
   // 编排器一律显式把端口传给 dev server（Next 不认 COMFYAPP_PORT），因此显式
   // 口上的本仓库应用服务只可能是残留；缺省解析链上则一律不碰（见 reconcilePort）。
   //
-  // **同一个进程里已经查过的不查第二遍**（ISSUE #1687）：壳自编排链路
-  // （双击 {{shell.app.exe}} → 单实例判定 → 拉起本编排器，§1.5）里，壳与它拉起的
-  // 编排器同属**一次启动**，中间没有任何能改变端口归属的事件（§1.7）：这一次
-  // 启动里只可能有本检出这一个实例在跑。再走一遍这条判据链（三个端口各一次
-  // netstat 快照 + 一次批量 CIM 查命令行）买不到新事实，重复的只有探取开销。
-  // **这不是「查了不采纳」**：跳过的只是「本次启动开头那一次」，
-  // 回收语义分毫未动 —— 残留要么在进程启动那一刻就占着端口（那时还没有谁宣过
-  // 「本次启动只我一个」），要么在本次运行期间才出现（由常驻循环与退出回收负责，
-  // §3.3）；别人的进程任何时候都不碰（§1.4）。
-  let portSummary = "";
-  if (launchedByShell) {
-    portSummary = `端口族 ${scanPorts(port).join("/")} 已由壳的单实例判据查过（跳过重复检查）`;
-    log(portSummary, "INFO");
-  } else {
-    portSummary = await reconcilePort(port, ROOT, {
-      explicit: usesExplicitPort(portOrNull),
-    });
-    log(`端口检查：${portSummary}`, "OK");
-  }
+  // **这一步不能因为「壳已查过」而跳过**（ISSUE #1687 的「同一次启动只问一次」前提
+  // 只在「本次启动无历史残留」时成立）。壳的单实例判据（`another_instance_running`
+  // 的命名互斥量，见 `shell_launch.rs`）只认「有没有别的壳在跑」，**从不碰端口**——
+  // 它看不到「上一次启动残留的 dev server 还占着 3790」这种互斥量早已释放、只剩孤儿
+  // 进程的情况（§1.7）。`reconcilePort` 才是回收本检出端口残留的**唯一入口**：跳过它，
+  // 新 dev server 会撞 `EADDRINUSE` 立刻退出，编排器随之 `await [dev]` 解析为 1 整体退出
+  // （一次双击起不来的典型现场：两个窗口没了，应用也起不来）。残留是**上一次**启动的，
+  // 不在这一次启动的单一实例假设里，因此端口族回收必须每次都跑。
+  let portSummary = await reconcilePort(port, ROOT, {
+    explicit: usesExplicitPort(portOrNull),
+  });
+  log(`端口检查：${portSummary}`, "OK");
   status("port-ready", 0.12, "端口已就绪，处理编译缓存…", { staleShell });
 
   // 5) .next 缓存策略（与 .ps1 同一指纹口径）
