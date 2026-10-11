@@ -81,17 +81,18 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
           <RadioGroupItem
             key={value}
             value={value}
-            /* 主题卡是「整卡可点」的选项，不是动作按钮：基元的高度/内边距/
-               字号全部归还给调用处（`h-auto justify-start whitespace-normal`），
-               只借用基元的可点目标语义与 focus-visible 焦点环。
-               `nativeButton` 必给：渲染目标就是我们自己的 `<Button>`（真
-               `<button>`），不给会按「非原生按钮」加一层 role/aria-disabled
-               适配、并当场告警。 */
+            /* 主题卡是「整卡可点」的选项，不是动作按钮：基元的尺寸/高度/内边距/
+               字号全部归还给调用处 —— 基类是「小圆点」形态（`size-4` +
+               `aspect-square`），这里必须连**宽度**与**宽高比**一起还
+               （`size-auto!` / `aspect-auto!`；只还 `h-auto` 的话宽度仍是 16px，
+               卡片被压成竖排单字、内容溢出叠到下一节）。
+               基元自带的「中心圆点」选中指示器是给小圆点形态用的；这里选中态
+               已由边框 + 底色表达，圆点只会叠在文字上，隐藏（见下一条同款）。 */
             nativeButton
             render={
               <Button
                 variant="ghost"
-                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-ink data-unchecked:bg-surface-1 data-unchecked:text-muted-foreground data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink data-unchecked:border-border h-auto flex-col items-start justify-start gap-1.5 rounded-xl border p-4 text-left whitespace-normal transition-colors"
+                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-ink data-unchecked:bg-surface-1 data-unchecked:text-muted-foreground data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink data-unchecked:border-border aspect-auto! size-auto! flex-col items-start justify-start gap-1.5 rounded-xl border p-4 text-left whitespace-normal transition-colors **:data-[slot=radio-group-indicator]:hidden"
               />
             }
           >
@@ -165,7 +166,8 @@ function StepRow({
               <Button
                 variant="ghost"
                 size="sm"
-                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-primary data-unchecked:text-muted-foreground data-unchecked:border-border data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink h-auto rounded-lg border px-3 py-1.5 text-xs"
+                /* 同主题卡：小圆点选中指示器在药丸形态只会叠在文字上，隐藏。 */
+                className="data-checked:border-primary data-checked:bg-primary-soft data-checked:text-primary data-unchecked:text-muted-foreground data-unchecked:border-border data-unchecked:hover:border-border-strong data-unchecked:hover:text-ink aspect-auto! size-auto! rounded-lg border px-3 py-1.5 text-xs **:data-[slot=radio-group-indicator]:hidden"
               />
             }
           >
