@@ -1,5 +1,5 @@
-﻿# Drizzle Studio 启动逻辑（由入口 tools\studio\start-studio.ps1 调用）。
-# 原文件 tools\studio\start-studio.ps1：2026-09-04 起入口改为 .ps1，逻辑下沉为本文件，
+﻿# Drizzle Studio 启动逻辑（由入口 tools\database-studio\start-database-studio.ps1 调用）。
+# 2026-09-04 起入口改为 .ps1，逻辑下沉为本文件（原名 start-studio.logic.ps1），
 # 避免入口与逻辑同名冲突（与 tools\build\*.ps1 ↔ tools\scripts\*.ps1 同构）。
 # 关键修复：先拉起 Studio 服务、等待端口就绪，再打开浏览器前端，
 # 避免「前端界面先打开、服务还没起来」导致页面卡在

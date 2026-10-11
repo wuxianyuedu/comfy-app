@@ -154,17 +154,17 @@ function extractSplash() {
 
 // ---- 扩展：项目自身"值类"端口（独立单值，非 dev 端口族） ----
 function extractRegistryPort() {
-  // shadcn 团队 Registry 服务端口，权威源 tools/scripts/start-registry.ps1 的 $Port = <n>。
-  const t = readText("tools/scripts/start-registry.ps1");
+  // shadcn 团队 Registry 服务端口，权威源 tools/scripts/start-shadcn-registry.ps1 的 $Port = <n>。
+  const t = readText("tools/scripts/start-shadcn-registry.ps1");
   const m = t.match(/\$Port\s*=\s*(\d+)/);
-  if (!m) throw new Error("无法从 tools/scripts/start-registry.ps1 提取 Port");
+  if (!m) throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 Port");
   return m[1];
 }
 function extractMcpHttpPort() {
-  // Workshop MCP HTTP 服务端口，权威源 tools/mcp-http.ts 的 MCP_HTTP_PORT ?? 4300。
-  const t = readText("tools/mcp-http.ts");
+  // Workshop MCP HTTP 服务端口，权威源 tools/workshop-mcp-http.ts 的 MCP_HTTP_PORT ?? 4300。
+  const t = readText("tools/workshop-mcp-http.ts");
   const m = t.match(/MCP_HTTP_PORT\s*\?\?\s*(\d+)/);
-  if (!m) throw new Error("无法从 tools/mcp-http.ts 提取 MCP_HTTP_PORT 默认值");
+  if (!m) throw new Error("无法从 tools/workshop-mcp-http.ts 提取 MCP_HTTP_PORT 默认值");
   return m[1];
 }
 /**
