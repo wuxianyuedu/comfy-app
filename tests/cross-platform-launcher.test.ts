@@ -443,22 +443,33 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
     path.join(process.cwd(), "scripts", "standalone-private-inputs.mjs"),
     "utf8",
   );
+  /* 「怎么起宿主」自 ISSUE #1767 起收进这份共用件：编排 6.5 步、scripts/start.mjs
+   * 的生产链路都要它，两处各写一份的下场是「某一条忘了起」（host 模式下现场是
+   * 任务永远停在队列）。下面几条因此把函数体从 launcher 改到共用件上断。 */
+  const spawnKernelSrc = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "scripts",
+      "launcher-core",
+      "executor-host-spawn.mjs",
+    ),
+    "utf8",
+  );
 
-  it("spawnExecutorHost 走 spawnInGroup（平台判据不自己摸 process.platform）", () => {
-    // 找到 spawnExecutorHost 函数体的起止，断它内部用了 spawnInGroup
-    const start = launcherSrc.indexOf("export function spawnExecutorHost(");
-    expect(start, "spawnExecutorHost 未定义").toBeGreaterThan(-1);
-    const end = launcherSrc.indexOf("\n}", start);
-    const body = launcherSrc.slice(start, end);
+  it("起宿主的实现在共用件里走 spawnInGroup（平台判据不自己摸 process.platform）", () => {
+    const start = spawnKernelSrc.indexOf("export function maybeSpawnExecutorHost(");
+    expect(start, "maybeSpawnExecutorHost 未定义").toBeGreaterThan(-1);
+    const body = spawnKernelSrc.slice(start);
     expect(body).toContain("spawnInGroup(");
     // 反向：不能出现 `spawn(` 直接调（那是绕过进程组语义的形态）。
     expect(body).not.toMatch(/(?<!spawnInGroup\()spawn\(/);
   });
 
-  it("spawnExecutorHost 把 child push 进 spawned 数组（reapAll 才能覆盖）", () => {
+  it("launcher 的 spawnExecutorHost 是薄包装：把 child push 进 spawned（reapAll 才能覆盖）", () => {
     const start = launcherSrc.indexOf("export function spawnExecutorHost(");
     const body = launcherSrc.slice(start, launcherSrc.indexOf("\n}", start));
-    expect(body).toContain("spawned.push(child)");
+    expect(body).toContain("maybeSpawnExecutorHost(");
+    expect(body).toContain("spawned.push(result.child)");
   });
 
   it("run() 以 COMFY_EXECUTOR 门控、默认 inline 不 spawn（Phase 2 只灰度）", () => {
@@ -476,10 +487,9 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
 
   it("4-A4：host 子进程拿到归一化后的 COMFY_EXECUTOR；.env 回读在共享内核里", () => {
     // 显式回写：`.env` 来源时子进程 process.env 里没有这个 key，不传会造成
-    // 「launcher 认为 host 模式、host 起着骨架」的静默错配。
-    const start = launcherSrc.indexOf("export function spawnExecutorHost(");
-    const body = launcherSrc.slice(start, launcherSrc.indexOf("\n}", start));
-    expect(body).toContain("COMFY_EXECUTOR: resolveExecutorMode().mode");
+    // 「launcher 认为 host 模式、host 起着骨架」的静默错配。ISSUE #1767 起这段
+    // 在共用件里（三条链路同一份），归一化后的值仍由它显式写回子进程 env。
+    expect(spawnKernelSrc).toContain("[EXECUTOR_ENV_KEY]: plan.mode");
     // 回读 `.env` 这件事只许有一份实现（纯 Node 层），且复用既有的 parseEnvFile。
     const kernel = fs.readFileSync(
       path.join(process.cwd(), "scripts", "launcher-core", "executor-mode.mjs"),
