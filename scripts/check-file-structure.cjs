@@ -685,7 +685,7 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
 // ── R7/R8:仓库内 Windows 脚本入口扫描 ──
 // 只排除「不可能放仓库入口」的目录:依赖、构建产物、被 gitignore 的打包输出、
 // 以及 target(可能包含第三方 Rust 产物)。用相对路径前缀判断,避免按目录名
-// 误伤 tools/registry 这类同名但受规范的目录。
+// 误伤 tools/shadcn-registry 这类同名但受规范的目录。
 const SCAN_EXCLUDED = [
   "node_modules/",
   ".git/",
@@ -743,7 +743,7 @@ const SCAN_EXCLUDED = [
 //   ① .ps1 双击入口(ISSUE #29):6 个根入口(start-web/run-local/verify-quality/
 //      start-tauri/start-desktop/register-comfyapp-protocol)曾平铺在仓库根,
 //      与 package.json / tsconfig.json 混排。现统一归入 tools/start/,与
-//      tools/build/、tools/registry/、tools/studio/ 同构。
+//      tools/build/、tools/shadcn-registry/、tools/database-studio/ 同构。
 //   ② git 自身的临时状态文件(ISSUE #1586):MERGE_MSG / COMMIT_EDITMSG /
 //      SQUASH_MSG 这一族归 `.git/`,它们的**唯一**用途是给一次提交当 message
 //      来源。落进工作区只可能是"用 -F 指了个工作区文件、提交完忘了删",而那个

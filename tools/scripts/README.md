@@ -19,7 +19,7 @@
 | `build/build-standalone.ps1`          | `build-standalone.ps1`          |
 | `build/build-tauri-release.ps1`       | `build-tauri-release.ps1`       |
 | `build/rebuild-static.ps1`            | `rebuild-static.ps1`            |
-| `registry/start-registry.ps1`         | `start-registry.ps1`            |
+| `shadcn-registry/start-shadcn-registry.ps1` | `start-shadcn-registry.ps1` |
 
 ## 公共库
 

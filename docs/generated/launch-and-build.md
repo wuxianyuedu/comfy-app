@@ -2362,8 +2362,8 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 
 > **根目录不再放双击入口**（ISSUE #29，2026-09-04）：6 个启动入口曾平铺在仓库根，与
 > `package.json` / `tsconfig.json` 等工程配置混排，既看不出「哪些是入口」，也让根目录
-> 随入口增长持续膨胀。现统一归入 `tools/start/`，与 `tools/build/`、`tools/registry/`、
-> `tools/studio/` 同构；根目录只保留工程配置与文档。入口的 discoverability 由 README 的
+> 随入口增长持续膨胀。现统一归入 `tools/start/`，与 `tools/build/`、`tools/shadcn-registry/`、
+> `tools/database-studio/` 同构；根目录只保留工程配置与文档。入口的 discoverability 由 README 的
 > 入口清单承担，不靠「铺在根目录第一眼看见」。该约束由 `scripts/check-file-structure.cjs`
 > 的 R9 规则在 pre-commit 阶段强制（详见 §12.8）。
 
@@ -2380,8 +2380,8 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 | `tools/start/register-comfyapp-protocol.ps1`                          | `scripts/install-comfyapp-helper.ps1`                                                   |
 | `tools/start/start-desktop.ps1`（原 `run-desktop.bat`，自检逻辑内联） | —                                                                                       |
 | `tools/build/*.ps1`                                                   | `tools/scripts/*.ps1`（同名）                                                           |
-| `tools/registry/start-registry.ps1`                                   | `tools/scripts/start-registry.ps1`                                                      |
-| `tools/studio/start-studio.ps1`                                       | `tools/studio/start-studio.logic.ps1`                                                   |
+| `tools/shadcn-registry/start-shadcn-registry.ps1`                     | `tools/scripts/start-shadcn-registry.ps1`                                               |
+| `tools/database-studio/start-database-studio.ps1`                     | `tools/database-studio/start-database-studio.logic.ps1`                                 |
 
 ### 8.3 一次性前置：让双击真的执行 .ps1
 
@@ -2426,13 +2426,13 @@ reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\comman
 | ----------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tools/start/`    | **启动/初始化类**：起 dev server、起桌面壳、环境自检、质量门禁 | `start-web.ps1`、`start-tauri.ps1`（双击即启，直启 `app.exe`）、`start-tauri-dev.ps1`、`start-desktop.ps1`、`run-local.ps1`、`verify-quality.ps1`、`sync-lint.ps1`、`register-comfyapp-protocol.ps1` |
 | `tools/build/`    | **构建打包类**：编译壳、组装 standalone 资源、重建 static      | `build-all.ps1`、`build-standalone.ps1`、`build-tauri-release.ps1`、`rebuild-static.ps1`                                                                                                                       |
-| `tools/registry/` | 团队 shadcn Registry                                           | `start-registry.ps1`                                                                                                                                                                                           |
-| `tools/studio/`   | 数据库工具                                                     | `start-studio.ps1`                                                                                                                                                                                             |
-| `tools/scripts/`  | 上述入口对应的**逻辑脚本**（与入口同名不同层）                 | `build-*.ps1`、`start-registry.ps1`、`Log-Common.ps1`                                                                                                                                                          |
+| `tools/shadcn-registry/` | 团队 shadcn Registry                                    | `start-shadcn-registry.ps1`                                                                                                                                                                                    |
+| `tools/database-studio/` | 数据库工具（Drizzle Studio）                            | `start-database-studio.ps1`                                                                                                                                                                                    |
+| `tools/scripts/`  | 上述入口对应的**逻辑脚本**（与入口同名不同层）                 | `build-*.ps1`、`start-shadcn-registry.ps1`、`Log-Common.ps1`                                                                                                                                                   |
 
 入口与逻辑同名时靠**目录**区分（`tools/build/build-all.ps1` 是入口、
 `tools/scripts/build-all.ps1` 是逻辑）；同目录内无法同名时用后缀区分，如
-`tools/studio/start-studio.logic.ps1`。
+`tools/database-studio/start-database-studio.logic.ps1`。
 
 ### 8.5 排障补充：双击 .ps1 只是打开了记事本
 
@@ -2673,7 +2673,7 @@ sidecar」两种不同形态的失败。
   已支持 POSIX 布局（§9.1）。这是**仍待补的缺口**（该脚本尚未跨平台化），
   不是「设计上不需要」。
 - **打包类入口**（`tools/build/**`）与 **本机固定目录的 Registry**
-  （`tools/registry/start-registry.ps1`）：前者靠 Rust / PyInstaller 工具链且面向
+  （`tools/shadcn-registry/start-shadcn-registry.ps1`）：前者靠 Rust / PyInstaller 工具链且面向
   Windows 分发，POSIX 上按 §7 的等价 `pnpm tauri build` 等命令直接跑；后者指向
   开发机上一个固定路径，没有可移植的语义。
 - **「保活」模式的 POSIX 语义**：`src/lib/process-launch.ts` 的 keepAlive

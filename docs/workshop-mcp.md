@@ -18,7 +18,7 @@
 - `src/server/workshop/db.ts` `llm.ts` `api-channel.ts` — **刻意不依赖 `server-only` /
   `~/env`** 的工坊本地模块，复用同一份 Drizzle schema 与 `llmConfig` 表、API 通道配置，
   因此 stdio（独立 Node 进程）与 Next HTTP 路由都能直接复用。
-- `tools/mcp-stdio.ts` / `tools/mcp-http.ts` — 两个 transport 入口。
+- `tools/workshop-mcp-stdio.ts` / `tools/workshop-mcp-http.ts` — 两个 transport 入口。
 
 > 为什么需要本地模块：原 `api-channel.server.ts`、`llm/server.ts` 顶部 `import "server-only"`，
 > 该包在纯 Node 进程会抛错；所以 MCP 服务端用一套不触碰 `server-only` 的实现复用纯函数
