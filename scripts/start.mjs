@@ -16,6 +16,8 @@ import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
+import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs";
+import { runStamp } from "./launcher-core/log.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -68,6 +70,28 @@ if (!invocation) {
   );
   process.exit(1);
 }
+
+/* 执行器宿主（P3 §5：`COMFY_EXECUTOR=host` 时**必须**有人起它）。
+ *
+ * 为什么这条链路也要有（它是本文件此前的缺口，也是 e2e CI 档全红的根因）：
+ * host 模式下行会被写成 `claimedBy='host'`，而只有宿主会去领它——inline 那一侧
+ * 的回收器刻意不跨片误杀（ISSUE #1204）。于是「本入口不起宿主」的现场是
+ * **两条 @critical 主链路用例各超时 60s 全红**，而报错话术在说「下游替身没应答」
+ * （Playwright 的 CI 档 webServer 跑的就是 `pnpm start`，见 playwright.config.ts）。
+ *
+ * `dev-launcher.mjs` 的编排 6.5 步与 `standalone-runtime.mjs` 的桌包链都有这一步，
+ * 三处共用 `maybeSpawnExecutorHost()` 一份实现（§12.18 / §12.12：不许三处各写一遍）。
+ *
+ * 位置在起 Next **之前**：宿主自己会按节拍去领行，谁先起来都能收敛，但排在前面
+ * 能让「宿主的 boot / inject-ok」先落进 services 日志——e2e 现场排查时那两行与
+ * Next 的启动行在时间上可比。 */
+maybeSpawnExecutorHost({
+  root,
+  runTimestamp: runStamp(),
+  logLine: (message, level = "INFO") =>
+    process.stdout.write(`[start.mjs] ${message}\n`),
+  // level 目前只用于调用方的可读性：本入口的通道是 stdout，不区分级别。
+});
 
 // 与 dev.mjs 同一口径：起服务前先回显真正要跑的那条命令行。
 echoCommandLine(invocation.command, invocation.args);
