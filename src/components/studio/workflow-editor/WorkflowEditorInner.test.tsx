@@ -1,3 +1,4 @@
+import type * as TanStackQuery from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -12,33 +13,42 @@ import { ReactFlowProvider } from "@xyflow/react";
  *   2. 加载态 UI 的渲染结果被快照锁定。
  * 后续拆分时，加载分支（loading 早期返回）可安全抽出，其余分支建议
  * 先补 loaded 态集成测试（或交给 e2e）再动。 */
+/* 新集成下 hub 交出的是「options 工厂」，取数/变更本体在 TanStack 那一侧：
+ * 所以这里替两样 —— `useTRPC` 只给能对上键的工厂，状态由下面 `importOriginal`
+ * 局部替掉的 `useQuery` / `useMutation` 给。本文件的题目仍是「挂载 + 首帧加载态」，
+ * 不测 TanStack（覆盖范围说明见上方那段）。 */
 vi.mock("~/trpc/react", () => ({
-  api: {
+  useTRPC: () => ({
     workflow: {
-      update: {
-        useMutation: () => ({
-          mutate: vi.fn(),
-          mutateAsync: vi.fn().mockResolvedValue({}),
-          isPending: false,
-          isIdle: true,
-          isSuccess: false,
-          isError: false,
-          reset: vi.fn(),
-        }),
-      },
-      detail: {
-        useQuery: () => ({
-          data: undefined,
-          isLoading: false,
-          isFetching: false,
-          isError: false,
-          error: null,
-          refetch: vi.fn(),
-        }),
-      },
+      update: { mutationOptions: (options?: unknown) => options },
+      detail: { queryOptions: () => ({ queryKey: ["workflow", "detail"] }) },
     },
-  },
+  }),
 }));
+
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof TanStackQuery>();
+  return {
+    ...actual,
+    useQuery: () => ({
+      data: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
+    useMutation: () => ({
+      mutate: vi.fn(),
+      mutateAsync: vi.fn().mockResolvedValue({}),
+      isPending: false,
+      isIdle: true,
+      isSuccess: false,
+      isError: false,
+      reset: vi.fn(),
+    }),
+  };
+});
 
 import { ToastProvider } from "../ToastProvider";
 import { WorkflowEditorInner } from "./WorkflowEditorInner";
