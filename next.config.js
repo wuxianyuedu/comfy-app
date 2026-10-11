@@ -147,7 +147,16 @@ const config = {
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
       // ComfyUI 本地服务 / SSE 流 / WebSocket（ws://127.0.0.1:8188）
-      "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* https:",
+      //
+      // `ipc:` / `http://ipc.localhost` 是 **Tauri 事件系统（listen / emit）的
+      // IPC 通道**，不是业务网络请求：缺了它，`@tauri-apps/api/event` 的每一次
+      // `listen` 都会被这条 CSP 挡掉（控制台报 "violates ... connect-src"），
+      // 壳转发的日志进不了前端日志面板（LogProvider 的 log:emit）。
+      // `invoke` 不受影响 —— 它走 postMessage 通道、不经 fetch，**只有事件监听
+      // 受这条约束**，所以「命令能调通但监听静默失效」正是本条漏掉时的症状。
+      // 与 tauri.conf.json 的 connect-src 同口径（两处都要，形态不同各管一半：
+      // dev/prebuilt 走本条，standalone 走 tauri.conf.json 那条）。
+      "connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* ws://127.0.0.1:* https:",
       // 应用级「ComfyUI 页签」以 iframe 内嵌本地 ComfyUI（跨端口即跨源）：
       // frame-src 不写就回退到 default-src 'self'，页签里只剩
       // Edge 的「已阻止此内容」（WebView2 的 --disable-web-security 不豁免
