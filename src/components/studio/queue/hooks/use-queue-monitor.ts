@@ -29,7 +29,7 @@ import {
 import { useCopyResult } from "~/components/ui/use-copy-feedback";
 import { useItemAction } from "~/components/ui/use-item-action";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
-import { openTaskFolder } from "~/lib/history-detail-actions";
+import { revealTaskFolder } from "~/lib/history-detail-actions";
 import { cancelTask } from "~/lib/task-cancel-client";
 import { api } from "~/trpc/react";
 
@@ -172,12 +172,14 @@ export function useQueueMonitor(): QueueMonitorController {
   const openFolder = useCallback(
     async (row: QueueRow) => {
       await action.run(row.id, async () => {
-        const result = await openTaskFolder(row.id);
-        await runAsyncAction(async () => result.opened, {
+        /* 成败与文案都由 `revealTaskFolder` 的 `{ ok, detail }` 表达：detail 是
+         * 服务端探出来的结论（「已在文件管理器里定位：<路径>」/「该任务尚未生成
+         * 文件目录」），调用处不该再抄一遍 —— 此前这里只读 `opened`、把
+         * `comfyappUrl` 丢掉，于是报的是一句与事实无关的成功。 */
+        const result = await revealTaskFolder(row.id);
+        await runAsyncAction(async () => result, {
           report,
-          failureText:
-            result.error ?? "未能打开输出目录，可在任务详情里复制文件路径",
-          successText: "已交给系统打开输出目录",
+          failureText: "未能打开输出目录，可在任务详情里复制文件路径",
         });
       });
     },

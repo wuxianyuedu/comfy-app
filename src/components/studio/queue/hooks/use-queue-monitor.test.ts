@@ -12,7 +12,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as ComfyQueueModule from "~/components/studio/hooks/use-comfy-queue";
-import { openTaskFolder } from "~/lib/history-detail-actions";
+import { revealTaskFolder } from "~/lib/history-detail-actions";
 import { cancelTask } from "~/lib/task-cancel-client";
 
 import type { QueueRow } from "../queue-monitor-config";
@@ -90,13 +90,13 @@ vi.mock("~/components/studio/ToastProvider", () => ({
   useToast: () => toast,
 }));
 vi.mock("~/lib/task-cancel-client", () => ({ cancelTask: vi.fn() }));
-vi.mock("~/lib/history-detail-actions", () => ({ openTaskFolder: vi.fn() }));
+vi.mock("~/lib/history-detail-actions", () => ({ revealTaskFolder: vi.fn() }));
 vi.mock("~/components/ui/use-copy-feedback", () => ({
   useCopyResult: () => copyResult,
 }));
 
 const mockedCancel = vi.mocked(cancelTask);
-const mockedOpen = vi.mocked(openTaskFolder);
+const mockedReveal = vi.mocked(revealTaskFolder);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -190,15 +190,33 @@ describe("useQueueMonitor", () => {
   });
 
   it("打开输出目录：把服务端的失败原因原样给用户", async () => {
-    mockedOpen.mockResolvedValue({
-      opened: false,
-      error: "该任务还没有产出文件",
+    mockedReveal.mockResolvedValue({
+      ok: false,
+      detail: "该任务还没有产出文件",
     });
     const { result } = renderHook(() => useQueueMonitor());
     await act(async () => {
       await result.current.openFolder(queuedRow("late", "后提交的工作流"));
     });
     expect(toast.error).toHaveBeenCalledWith("该任务还没有产出文件");
+  });
+
+  /* 这一条是「点了报成功、资源管理器没动」的回归判据：此前用例只锁了失败路径，
+   * 成功路径把 `comfyappUrl` 丢掉也没人发现 —— 报的是一句与事实无关的成功。 */
+  it("打开输出目录：成功时报的是服务端探出来的定位结论", async () => {
+    mockedReveal.mockResolvedValue({
+      ok: true,
+      detail: "已在文件管理器里定位：F:\\gen\\task-late",
+    });
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.openFolder(queuedRow("late", "后提交的工作流"));
+    });
+    expect(mockedReveal).toHaveBeenCalledWith("late");
+    expect(toast.info).toHaveBeenCalledWith(
+      "已在文件管理器里定位：F:\\gen\\task-late",
+    );
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("在线：waitingCount 是两个排队口径照实相加", () => {
