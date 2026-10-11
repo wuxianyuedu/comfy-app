@@ -599,6 +599,15 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 `description` **不是「本屏叫什么」的补充说明**，而是「答案在别处拿不到的那句话」（时间口径 / 数据来源 / 能做什么）。写「管理你的模型」「这里可以查看历史记录」这类同义反复等于把标题再写长一遍 —— 此时**传 `undefined`**，不传就不渲染那一行，标题区立刻矮下来。这条是 ISSUE #1423 的真实形态（侧栏「队列」→ 页签「队列」→ 页头 `h1`「队列与运行」→ 副标题再解释一遍轮转，同一屏四个名字）。
 
+**上面那一条只说「别写同义反复」，#1693 说的是「屏名与那句都可以不常驻」**：页签写着「队列」、屏内 `h1` 又写一遍「队列」，那一次出现是重复的 —— `title` 不传、屏名退成 `srTitle`（`sr-only`，视觉上那一行没了，读屏仍按标题跳转，所以**不是「没有标题」**）；那句「多久读一次、位次怎么排」不是每次进屏都要读的，写进 `help` 收成悬浮「说明」按钮（`ui/hint` 的唯一出口，句子进 `ui/tooltip` 的 `text-xs` 12px 档）。`description` / `help` **二选一**，同传时 `description` 赢（常驻优先）—— 同一句话在一屏里说两遍正是这条要治的病。判据是「读者需不需要再读一次屏名」：页签条常驻 ⇒ 不需要；工作区型屏没有页签条、顶栏也不一定显示屏名 ⇒ 那一次仍由可见 `h1` 给。两种形态各几屏**别抄数**，复算入口：
+
+```bash
+git grep -c "srTitle=" -- src/components | grep -v page-header        # 屏名退成 sr-only 的
+git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部落点
+```
+
+收成 `help` 之后那句说明落在 tooltip 的 **12px** 档（不是常驻那一行的 14px）—— 悬停读全，代价是那一档封顶 12px，所以「每次进屏都要读」的话仍然该写 `description`。
+
 **「叫什么」与「长什么样」分两头守，别写重复**：
 
 - 名字只有一个出处 = `NavItems.tsx` 那份注册表（`label` = 导航口径、`viewLabel` = 屏内页头口径、`pageHeaderTitle(view)` = 唯一出口），执行者 = `tests/page-name-single-source.test.ts`（在 `FIXED_STRUCTURAL_TESTS` 里）。它判的是「页头标题不许是裸字面量」「`viewLabel` 不许与 `label` 只差装饰性后缀」「全库不许再出现『`A` · `B`』连写两个屏名」；⚠️ 它的消费者面是**一份具名文件清单**，所以「新屏没走 `PageHeader`」这件事不归它管。
