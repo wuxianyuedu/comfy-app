@@ -2,7 +2,7 @@
 // @ts-nocheck -- 提交门槛脚本:待发段落的来源锚 ⇄ 条目归属(供 .githooks/pre-commit 调用)
 /**
  * `check-changelog-versions.cjs` —— 「这条变更落在哪个发布版本里」有据可查
- * （ISSUE #1693 / 规范 docs/standards/13-提交与-code-review.md §13.10.6）。
+ * （规范 docs/standards/13-提交与-code-review.md §13.10.6）。
  *
  * ## 立案现场：`[Unreleased]` 与 `## [0.1.0]` 之间没有共同的时间轴
  *
@@ -235,7 +235,7 @@ if (text !== null) {
   if (unreleasedCount === 0) {
     problems.push(
       "CHANGELOG.md 里没有 `## [Unreleased]` 段落 —— 它不存在时,`merge-changelog-fragments.mjs`" +
-        " 会直接抛错,而碎片会一直堆在 changelog.d/ 里没人并(ISSUE #1693 立案现场的 ①)",
+        " 会直接抛错,而碎片会一直堆在 changelog.d/ 里没人并(立案现场的 ①)",
     );
   }
 
@@ -244,7 +244,7 @@ if (text !== null) {
    * **第一次并入时**由 `merge-changelog-fragments.mjs` 顺手上锚(它手上正好有那个
    * 事实),在此之前它本来就没有来源可言。写成「必须带锚」会拦下所有人,而拦下来
    * 的动作恰好是错的 —— 锚要的是**最早的那一个**提交,手抄当前 HEAD 只会让这一段
-   * 看起来从今天开始(ISSUE #1693 的立案现场 ①)。 */
+   * 看起来从今天开始(立案现场 ①)。 */
 
   /* 版本号的一致性:同一个版本号不许出现两次(一次定版、一次又开一个待发段落)。 */
   const seenVersions = new Map();
@@ -303,7 +303,7 @@ if (text !== null) {
         `「## ${s.title}」与它**之前**的已发布段落同时点名了 ISSUE ${split
           .map((n) => `#${n}`)
           .join(" / ")} —— 同一条变更的归属被切成了两半,而两端都没写错。` +
-          `\n        这是「推翻别人的条目没并入」那一族的形态(ISSUE #1693 的立案现场 ②):` +
+          `\n        这是「推翻别人的条目没并入」那一族的形态(立案现场 ②):` +
           `要么把这条挪到它真正属于的那个版本里,要么把那句反向说明写成一句能被读懂的话` +
           `(「本条取代 <哪里> 的说法」),别让两份互相矛盾的记录同时留在账上(§13.10.6)。`,
       );
