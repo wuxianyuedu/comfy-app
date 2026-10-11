@@ -113,6 +113,9 @@ const ALLOWED_SCRIPTS = new Set([
   // COMFY_EXECUTOR 判据的纯 Node 侧唯一定义（launcher 门控与 executor-host 都
   // 静态 import 它；ADR §14 D5）。缺它时 host 静默跑成骨架。
   "launcher-core/executor-mode.mjs",
+  // 「按开关拉起执行器宿主」的同一份实现（ISSUE #1767）：编排 6.5 步与生产启动
+  // 链路都经它，缺这份 = 编排器加载期 ERR_MODULE_NOT_FOUND。
+  "launcher-core/executor-host-spawn.mjs",
   // shell.mjs / procs.mjs 的命令行回显出口（少这份 = 运行期 ERR_MODULE_NOT_FOUND）
   "launcher-core/command-echo.mjs",
   "launcher-core/log.mjs",

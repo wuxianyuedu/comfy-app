@@ -1,11 +1,10 @@
-import fs from "node:fs";
-import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 import { resolveAppPort } from "./scripts/app-port.mjs";
 import {
   fakeComfyuiEnv,
   fakeComfyuiStatsUrl,
 } from "./e2e/support/fake-comfyui-endpoint.mjs";
+import { fakeExecutorEnv } from "./e2e/support/fake-comfyui-executor-env.mjs";
 
 /**
  * Playwright E2E 配置（AGENTS 硬规则：本仓库只用 pnpm，webServer 用 `pnpm dev`）。
@@ -21,35 +20,33 @@ const appPort = resolveAppPort(process.cwd());
 const appOrigin = `http://localhost:${appPort}`;
 
 /**
- * 假 comfy-cli 的解释器入口（ISSUE #1621）。
+ * 假 comfy-cli 怎么被起（ISSUE #1621；跨平台形态见
+ * `e2e/support/fake-comfyui-executor-env.mjs`）。
  *
  * 本应用的任务**只经 comfy-cli 执行**：`executor-cli.ts` 起
  * `spawn(comfyCliPython, ["-m", "comfy_cli", "run", …])`。要让「出图」这条
  * 链路在 e2e 里真跑通，这个解释器必须存在且能应答 —— 而它对 CI 的要求只是
- * `python3`（容器里都有），不是「装好 torch 的 ComfyUI 环境」。
+ * 「有一个能跑的 Python」，不是「装好 torch 的 ComfyUI 环境」。
  *
  * 注入方式经 `COMFY_CLI_PYTHON` 环境变量：它是设置项 `comfyCliPython` 的
  * **默认值来源**（见 `src/lib/app-settings/index.ts` 的 DEFAULTS），所以
  * 不必让用例去写设置文件、也不必给整个仓库留一份本机配置。`webServer.env`
  * 会随 `pnpm dev` → `next dev` 一路继承到执行器进程。
  *
- * 只在能定位到那份 shim 时才注入：**没有它也不该让全套 e2e 起不来**（视觉档、
- * 冒烟档都不碰执行链路）。缺件时主链路用例会按「执行器起不来」失败，报错指向
- * 本变量的解析结果。 */
-const fakeComfyCli = path.resolve(
-  process.cwd(),
-  "e2e/support/fake-comfyui/python.sh",
-);
-const executorEnv: Record<string, string> = fs.existsSync(fakeComfyCli)
-  ? {
-      COMFY_CLI_PYTHON: fakeComfyCli,
-      /* 失败路径的触发词（ISSUE #1621 的第二个用例）。假 comfy-cli 只看工作流里
-       * **有没有这个词**：有就回放失败序列。换成一个「只有这条用例才发得出」的
-       * 哨兵而不是固定文案，是为了让「判据真的在判」可以反证 —— 从工作流里删掉
-       * 这个词，那条用例必须转绿。 */
-      E2E_FAKE_CLI_FAIL_SENTINEL: "E2E_FAKE_CLI_FAIL_SENTINEL",
-    }
-  : {};
+ * **它此前是一份 `python.sh` shim，而 Windows 上 Node spawn 起不了 `.sh`** ——
+ * 两条 `@critical` 主链路用例在 Windows 开发机上因此必红。现在改喂
+ * `PYTHONPATH` + 一个按平台探测出来的真解释器，两个平台同一条路径。
+ *
+ * 只在替身包与解释器都在时才注入：**没有它也不该让全套 e2e 起不来**（视觉档、
+ * 冒烟档都不碰执行链路）。缺件时主链路用例会按「执行器起不来」失败，`reason`
+ * 会打在开始时的提示里。 */
+const fakeExecutor = fakeExecutorEnv();
+if (fakeExecutor.reason) {
+  process.stdout.write(
+    `[playwright] ⚠ 假 comfy-cli 未注入：${fakeExecutor.reason}\n`,
+  );
+}
+const executorEnv: Record<string, string> = fakeExecutor.env;
 
 export default defineConfig({
   testDir: "./e2e",

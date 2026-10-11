@@ -171,6 +171,11 @@ export const RUNTIME_SCRIPTS = [
   // `COMFY_EXECUTOR` 判据的纯 Node 侧唯一定义（ADR §14 D5）：launcher 的门控与
   // host 脚本的运行时开关都静态 import 它，缺一份就是 host 静默跑成骨架。
   "launcher-core/executor-mode.mjs",
+  // 「按开关拉起执行器宿主」的同一份实现（ISSUE #1767）：编排 6.5 步与桌包/生产
+  // 启动链路都经它，`dev-launcher.mjs` 顶层静态 import —— 缺这份同样是整个编排器
+  // ENOENT，而表现只是「双击没反应」。它自己还 import `shell/log/worktree` 三份，
+  // 那三份各自已在本清单里。
+  "launcher-core/executor-host-spawn.mjs",
   // shell.mjs 与 procs.mjs 都要 import 它（命令行回显的唯一出口）：少这份就是
   // 运行期 `ERR_MODULE_NOT_FOUND`，表现与「缺一份内部分件」完全一样。
   "launcher-core/command-echo.mjs",

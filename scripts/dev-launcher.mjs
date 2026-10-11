@@ -87,6 +87,7 @@ import { echoCommandLine } from "./launcher-core/command-echo.mjs";
 import { syncSplashAssets } from "./launcher-core/splash-assets.mjs";
 // `COMFY_EXECUTOR` 判据的纯 Node 侧唯一定义（与 executor-host.mjs 共用，ADR §14 D5）
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
+import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs";
 import {
   checkNodeModules,
   lockfileDrift,
@@ -1437,70 +1438,29 @@ export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
   return child;
 }
 
-/** 拉起 `scripts/executor-host.mjs`（P3 §5 第 2 期 · Phase 2-C）。
+/**
+ * 拉起 `scripts/executor-host.mjs`（P3 §5 第 2 期 · Phase 2-C）。
  *
- *  为什么**不**走 pnpm：这不是一个「用户命令」，也没有 workspace 脚本要跑；
- *  它就是 launcher 拉一个 `.mjs` 起来。直接 `process.execPath` 起当前 Node 二进
- *  制 + 脚本路径，少一层 corepack/pnpm shim 的探测与启动开销；也避开 Windows 上
- *  pnpm.cmd shim 的 `.ps1` 分叉（AGENTS 硬规则 12）。
+ * 判据与落点全在 `launcher-core/executor-host-spawn.mjs`（§12.18 / §12.12）：
+ * 这条编排 6.5 步、`scripts/start.mjs` 的生产链路、以及桌包外壳那条形态不同的链
+ * 各自都要起宿主，三处各写一遍的下场是「某一条忘了起」——而 host 模式下的现场
+ * 恰恰是「任务永远停在队列、没有失败出口」（`scripts/start.mjs` 缺这一步的实测
+ * 后果见 ISSUE #1767：两条 `@critical` 主链路用例各超时 60s 全红）。
  *
- *  为什么 stdio=inherit：Phase 2-B 骨架里 host 只走 appendFileSync 落
- *  `log/services/executor-host.log`（可通过 COMFYAPP_HOST_LOG 覆盖），stdout/stderr
- *  都是空的；等 Phase 3 主循环真跑起来再补 stdoutFile/stderrFile 按次命名 + 轮转。
+ * 本函数只做编排器这一侧独有的两件事：把子进程记进 `spawned`（回收整树用）、
+ * 把 `reason` 转成编排日志。
  *
  *  为什么不发 COMFYAPP_PORT：host 起 ComfyUI 用的是自己的 lifecycle，与 Next 端
  *  口不共享；Phase 2-C 骨架不 spawn ComfyUI，也就用不上端口。 */
-/** 4-A4（ADR §14 D5）：这里原有的 `resolveComfyExecutorMode()` 已收进
- *  `launcher-core/executor-mode.mjs` —— launcher 与 executor-host 是同一层的两个
- *  纯 Node 宿主，各写一份归一化的结果是「`" host "` 时 Next 写 host 片、host 却
- *  起骨架」这类静默错配。与 Next 侧（TS）那份是否同值，由
- *  `tests/executor-mode-consistency.test.ts` 逐值比对。 */
 export function spawnExecutorHost() {
-  const hostScript = path.join(ROOT, "scripts", "executor-host.mjs");
-  if (!fs.existsSync(hostScript)) {
-    log(
-      `未找到 ${path.relative(ROOT, hostScript)}，跳过 executor-host 拉起（COMFY_EXECUTOR=host 需先合入 Phase 2-B）`,
-      "WARN",
-    );
-    return null;
-  }
-  /* host 的 stdout/stderr 落**按次命名**的文件（与 next dev 的
-   * nextjs-stdout/stderr 同族同处理），不接进本控制台：pino 的中文 warn
-   * 直接进 Windows 控制台会被按 GBK 解码成乱码（文件通道恒 UTF-8），
-   * 且 host 的逐 tick 输出会淹没 launcher 自己的进度行。 */
-  const servicesDir = currentDirOf("services", ROOT);
-  pruneTimestampedLogs(
-    servicesDir,
-    ["executor-host-stdout-", "executor-host-stderr-"],
-    5,
-  );
-  const hostOut = path.join(
-    servicesDir,
-    `executor-host-stdout-${runTimestamp}.log`,
-  );
-  const hostErr = path.join(
-    servicesDir,
-    `executor-host-stderr-${runTimestamp}.log`,
-  );
-  const child = spawnInGroup({
-    command: process.execPath,
-    args: [hostScript],
-    cwd: ROOT,
-    stdoutFile: hostOut,
-    stderrFile: hostErr,
-    env: {
-      ...process.env,
-      /* 显式回写归一化后的值：`.env` 来源时它不在 process.env 里，而 host 自己
-       * 只认 COMFY_EXECUTOR 来决定跑骨架还是运行时链——不传会出现
-       * 「launcher 认为 host 模式、host 起着骨架」的静默错配。 */
-      COMFY_EXECUTOR: resolveExecutorMode().mode,
-      // 编排器把 boot id 传下去，让 host 日志与 launcher 日志能按同一时间戳串起来。
-      COMFYAPP_HOST_BOOT_ID: runTimestamp,
-    },
+  const result = maybeSpawnExecutorHost({
+    root: ROOT,
+    runTimestamp,
+    logLine: (message, level = "INFO") => log(message, level),
   });
-  spawned.push(child);
-  log(`host 输出通道：${hostOut} / ${hostErr}`, "INFO");
-  return child;
+  if (!result) return null;
+  spawned.push(result.child);
+  return result.child;
 }
 /**
  * `stdoutFile` / `stderrFile` 必须是**本次运行**起 dev server 时用的那两份
