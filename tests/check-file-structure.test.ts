@@ -36,6 +36,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { copyGateDeps } from "./helpers/gate-repo";
 
 const SCRIPT = join(process.cwd(), "scripts", "check-file-structure.cjs");
 // 构建前置守卫：断言它真的能认出「路径落在本仓库 src-tauri\target\ 下的 app.exe」，
@@ -70,6 +71,12 @@ function runWith(args: string[]): { code: number; output: string } {
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "structure-gate-"));
   copyFileSync(SCRIPT, join(workdir, "check-file-structure.cjs"));
+  /* 判据走 `require("./gate-scan-read.cjs")` 取扫描面的共用读取器（容错遍历，
+   * 口径见那份文件的文件头）—— 临时仓库只放被测那一份时，跑起来是
+   * `MODULE_NOT_FOUND`，那条红长得像「判据坏了」，实际是夹具少带一个文件。
+   * 这份用例还没迁进 `defineGateRepo`（登记在 `.gate-repo-boilerplate-baseline.json`），
+   * 按 §11.16 的口径手搓的那几份自己调 `copyGateDeps` 补齐同目录依赖。 */
+  copyGateDeps(join(workdir, "check-file-structure.cjs"));
   // 脚本无条件扫描 src/（R1-R6 规则），临时工作区必须存在该目录
   mkdirSync(join(workdir, "src"));
   mkdirSync(join(workdir, "scripts"));

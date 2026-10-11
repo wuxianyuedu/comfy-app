@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 // @ts-nocheck -- 门禁扫描面的共用读取与枚举（被 scripts/check-*.cjs 调用，自己不判成败）
 /**
- * **所有会枚举 `tests/` 的门禁判据共用这一份读取**，别各自再写一遍
+ * **所有会枚举工作区的门禁判据共用这一份读取**，别各自再写一遍
  * `walk()` + 裸 `fs.readFileSync(abs)`。
  *
- * 为什么这是一层地基而不是「每份判据自己兜一下」：`tests/global-setup-cleanup.test.ts`
- * 与几份并发用例会在 `tests/` 下临时造探针文件（`.setup-cleanup-probe-*.test.tsx`、
- * `.it-each-probe-*` 之类）再删。同一工作树里两个 vitest 在跑时，门禁读的是**工作树**，
- * 于是撞上两种窗口 —— 两种都是同一个竞态，只补一种等于把门禁的一半赌在时序上：
+ * 为什么这是一层地基而不是「每份判据自己兜一下」：门禁脚本读的是**工作树**，
+ * 而工作树在扫描期间不是静止的 —— 两个来源都会在遍历途中删目录：
+ *
+ *   · `tests/global-setup-cleanup.test.ts` 与几份并发用例会在 `tests/` 下临时造
+ *     探针文件（`.setup-cleanup-probe-*.test.tsx`、`.it-each-probe-*` 之类）再删；
+ *   · **工作区根上会有活跃的临时目录**（编辑器 / 测试运行器 / 另一个代理工作区留下的
+ *     `_tmp_*`、`.workbuddy/` 一类），清理它们的进程与本脚本毫无关系。
+ *
+ * 两条路撞上的是同一个竞态，只补一种等于把门禁的一半赌在时序上：
  *
  *   ① **列到名字、读时已没**：`readdir` 已经返回了这个条目，`readFileSync` 时它没了。
  *      ⇒ `readForScan()` 返回 `null`（见那条）。
@@ -15,8 +20,10 @@
  *      `ENOENT`。这不是「多列到一个名字」，是枚举这一步崩掉。
  *      ⇒ `readdirForScan()` 返回 `null`、`walkForScan()` 把这一支降级为空。
  *
- * 后果形态是 D 组带着一个 Node 栈崩掉，**报错里没有一个字指向本次改动** ——
- * 撞过的人只会以为是自己的代码写坏了（§13.6.2 那条「报错指向的文件你根本没碰过」）。
+ * 后果形态是门禁带着一个 Node 栈崩掉（`ENOENT: no such file or directory, scandir '…'`），
+ * **报错里没有一个字指向本次改动** —— 撞过的人只会以为是自己的代码写坏了
+ * （§13.6.2 那条「报错指向的文件你根本没碰过」）。判据的真实语义（有违规 / 没有）
+ * 与判据的执行故障（环境竞争）被压成同一个退出码，而这两件事的下一个动作相反。
  *
  * **两条口径不许松**：
  *
@@ -25,12 +32,38 @@
  *     那比崩掉更坏（§13.5.12 立的就是这一族：判据在场 ≠ 判据在跑）。
  *   · **消失数必须进结论行**（`vanishedNote()`）。静默跳过等于让判据在它其实
  *     没读过的文件上假装绿；读数写出来，下一个人才能判断「这一轮到底覆盖了什么」。
+ *
+ * **「条目消失」与「根不存在」是两回事**（这一条是本节最容易写反的地方）：上面降级的
+ * 全是**条目级**消失 —— 那个条目已经不在了，它不可能承载任何违规，「跳过」与「工作区
+ * 静止时遍历到它」等价。但**扫描根自己不存在**是另一回事：那是仓库被切了一半 / 跑错
+ * 工作目录，跳过它会让判据在「其实一份输入都没读」的情况下报绿。所以根的存在性由调用方
+ * 的 `dirExists()` 显式判（判失败即退出，语义见那条）。
  */
 const fs = require("node:fs");
 const path = require("node:path");
 
 /** 默认不进去的目录：依赖与产物。要更多豁免由调用方传 `skipDirs`。 */
 const DEFAULT_SKIP_DIRS = new Set(["node_modules"]);
+
+/**
+ * 判「扫描根在不在」—— **入口级**事实，与条目级消失分开。
+ *
+ * 调用方在开始遍历之前对每个根调一次；返回的布尔由调用方合成判据失败（本件不自己
+ * `process.exit`，它不判成败）。语义与既有的 `if (!fs.existsSync(LIB)) return;` 同类：
+ *
+ *   · **在** ⇒ 正常遍历（遍历途中条目消失由 `walkForScan()` 降级）。
+ *   · **不在** ⇒ 真故障。静默跳过等于让判据在「一份输入都没读」时报绿 ——
+ *     那是 §13.5.12 那一族里最坏的一种（读不到输入被读成没有问题）。
+ *
+ * 为什么不在这里直接抛：不同判据对「根缺失」的出口不同（有的判失败、有的走
+ * `base-check` 的 `inconclusive`），把出口留给调用方，这里只回答「在不在」。
+ *
+ * @param {string} dir 绝对路径
+ * @returns {boolean}
+ */
+function dirExists(dir) {
+  return fs.existsSync(dir);
+}
 
 /**
  * 读一份扫描面上的文件；它在「列目录 → 读内容」之间消失时返回 `null`。
@@ -43,6 +76,24 @@ function readForScan(abs) {
     return fs.readFileSync(abs, "utf8");
   } catch (error) {
     /* 消失不是判据要判的形态：一个已经不存在的文件里没有站点可言。 */
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+/**
+ * 读一份扫描面上的文件的**原始字节**；它在「列目录 → 读内容」之间消失时返回 `null`。
+ *
+ * 与 `readForScan()` 同一件事、只是不解码：有的判据要的是字节本身（BOM 判据看前三个
+ * 字节、控制字符判据要按码位扫），走 `utf8` 会把这两件事都做坏。
+ *
+ * @param {string} abs 绝对路径
+ * @returns {Buffer | null} 文件字节；`null` = 这一轮没读到（调用方必须计数）
+ */
+function readBytesForScan(abs) {
+  try {
+    return fs.readFileSync(abs);
+  } catch (error) {
     if (error && error.code === "ENOENT") return null;
     throw error;
   }
@@ -115,18 +166,25 @@ function walkForScan(dir, fileRe, opts = {}) {
 }
 
 /**
- * 「这一轮有几份文件没被读过」的结论行。没有消失就返回空串，调用方直接拼。
+ * 「这一轮有几个条目没被读到」的结论行。没有消失就返回空串，调用方直接拼。
+ *
+ * 文案只说「工作区并发变更」、不点死「并发用例的探针」：消失者有两个来源
+ * （`tests/` 下自造自删的探针，与工作区根上被别的进程清理的临时目录），
+ * 逐一点名会让下一个人在另一个来源上读到一句对不上的话 ——
+ * 这一行要给的是**读数**（几个），不是归因。
  *
  * @param {number} count 消失的文件数
  * @returns {string}
  */
 function vanishedNote(count) {
   if (!(count > 0)) return "";
-  return `\n  ⚠️ 另有 ${count} 份文件在扫描期间消失（并发用例的临时探针），本轮未读。`;
+  return `\n  ⚠️ 另有 ${count} 个条目在扫描期间消失（工作区并发变更），本轮未读。`;
 }
 
 module.exports = {
   DEFAULT_SKIP_DIRS,
+  dirExists,
+  readBytesForScan,
   readForScan,
   readdirForScan,
   walkForScan,
