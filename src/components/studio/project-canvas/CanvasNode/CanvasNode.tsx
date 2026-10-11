@@ -293,10 +293,10 @@ export const CanvasNode = React.memo(function CanvasNode({
       style={
         selected
           ? {
-              outline: "2px solid #7C5CFC",
+              outline: "2px solid var(--color-primary)",
               outlineOffset: "4px",
               boxShadow:
-                "0 0 0 1px rgba(124,92,252,0.50), 0 4px 24px rgba(124,92,252,0.30)",
+                "0 0 0 1px color-mix(in srgb, var(--color-primary) 50%, transparent), 0 4px 24px color-mix(in srgb, var(--color-primary) 30%, transparent)",
             }
           : {
               boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
