@@ -41,6 +41,21 @@ export const TREE_GROUPS: {
   { label: "诊断", sections: ["logs"] },
 ];
 
+/**
+ * **页面的滚动顺序** = 导航树的展开顺序（分组 → 组内各项）。
+ *
+ * 一页到底之后导航是**目录**，「从头部滚到尾」读到的顺序必须与目录里的顺序一致
+ *（否则用户按目录往下读，正文却跳到另一处）。所以顺序**从 `TREE_GROUPS` 派生**，
+ * 不再直接拿 `SETTINGS_SECTIONS` —— 后者只是「有哪些分区」的清单，它的排列与
+ * 导航的分组无关。
+ *
+ * 两项约束仍由 `SettingsShell.test.tsx` 守住：① 并集恰好等于 `SETTINGS_SECTIONS`
+ *（不许漏 / 不许重）；② 每个分组至少一项（空的父行没有意义）。
+ */
+export const SETTINGS_SCROLL_ORDER: Section[] = TREE_GROUPS.flatMap(
+  (group) => group.sections,
+);
+
 /** 分区 → 一句话说明（导航行右侧那句）。 */
 const SECTION_SUMMARY: Record<Section, string> = {
   llmLocal: "本机 Ollama 的连接、模型与按任务的温度",

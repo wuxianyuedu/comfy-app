@@ -141,9 +141,12 @@ describe("设置页接线", () => {
   it("分区表里有「备份与恢复」，视图里有对应的渲染分支", () => {
     const types = read("src/app/(main)/settings/hooks/use-settings-page-types.ts");
     expect(types).toContain('{ id: "backup", label: "备份与恢复" }');
+    /* 视图的接线形态：一页到底之后不再是 `c.section === "backup"` 的条件渲染，
+     * 而是 `sections` 映射里**按分区 id 取的一格**（ISSUE #1722）。判据仍落在
+     * 「这一节真的被渲染出来」上：`backup:` 那一格存在，且它的值里有
+     * `BackupSection`。 */
     const view = read("src/app/(main)/settings/SettingsPageView.tsx");
-    expect(view).toContain('c.section === "backup"');
-    expect(view).toContain("BackupSection");
+    expect(view).toMatch(/^\s*backup:\s*<BackupSection/m);
   });
 
   it("恢复**不是**「点完就换文件」：界面说的下一步是重启", () => {
