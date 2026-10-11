@@ -31,16 +31,25 @@
 
 ## 预设命令覆盖什么
 
-| 分组       | 例子                                                                        | 什么时候用                     |
-| ---------- | --------------------------------------------------------------------------- | ------------------------------ |
-| 质量门禁   | `pnpm exec tsc --noEmit` · `pnpm run lint` · `pnpm test` · `pnpm check:all` | 提交前自查                     |
-| 数据库     | `pnpm db:generate` · `pnpm db:push` · `pnpm db:studio`                      | 改完 `src/server/db/schema.ts` |
-| 启动与端口 | `pnpm run check:toolchain` · `node scripts/app-port.mjs`                    | 起不来、端口对不上             |
-| 版本库     | `git status -sb` · `git log --oneline -20`                                  | 只读查询                       |
-| 诊断       | 列出 `log/` 各分区文件与体积 · `node -v && pnpm -v`                         | 报环境问题时先看这些           |
+| 分组         | 例子                                                                                                                                       | 什么时候用                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| 质量门禁     | `pnpm exec tsc --noEmit` · `pnpm run check` · `pnpm run lint:fix` · `pnpm check:all` · `pnpm run check:premerge`                           | 提交前自查 / 合并前那一跳        |
+| 数据库       | `pnpm db:generate` · `pnpm db:push` · `pnpm run db:migrate` · `pnpm run db:backup` · `pnpm db:studio`                                      | 改完 `src/server/db/schema.ts`   |
+| 启动与端口   | `pnpm run check:toolchain` · `pnpm run env:init` · `pnpm run check:deps-freshness` · `pnpm run check:app-version`                          | 起不来、环境对不上、开工前先跑   |
+| 版本库       | `git status -sb` · `git diff` · `git log --stat -3` · `git worktree list`                                                                  | 只读的历史与状态查询             |
+| 诊断         | `pnpm run check:base:batch` · `pnpm run ui:primitives` · `pnpm run theme:check` · `node scripts/check-standalone-contents.cjs` · `node -v` | 被判据拦下、产物可疑、报环境问题 |
+| 规范与文档   | `pnpm run doc:check` · `pnpm run docs:check` · `pnpm run ui:overlay-z` · `node scripts/check-file-structure.cjs`                           | 文档引用 / 设计契约的同步判据    |
+| 端到端与产物 | `pnpm run test:e2e:dry` · `pnpm run build:tracked:dry` · `pnpm run analyze`                                                                | 真浏览器那档与构建产物，按需跑   |
 
-预设表在 `src/lib/console/console-catalog.ts`，加一条只需要在那个数组里加一行
-（有一条用例会核对「预设里的 pnpm 脚本真的在 `package.json` 里」，防止按钮点了报错）。
+预设表在 `src/lib/console/console-catalog.ts`，加一条只需要在那个数组里加一行。
+有四条用例会核对：预设能被解析器拆开、只走本仓真实入口（`pnpm` / `git` / `node`，
+不用 `npx`）、不含 shell 控制符（解析器不解释它们，写进去就是一条跑不对的命令）、
+以及预设里的 `pnpm` 脚本真的在 `package.json` 里（防止按钮点了报错）。
+
+**说明小字被截断时怎么办**：左侧一列只有 240px（`lg:w-60`），条目上的展示名与说明
+小字都带 `truncate`。把鼠标停在那一条上，浮层会把**三段都补全**：展示名、说明小字、
+以及点下去会填进输入框的完整命令 —— 界面上从来只显示前两段，而 `pnpm check:all`
+到底跑的是哪个脚本，只有浮层说得清。
 
 ## 能敲什么、不能敲什么
 
@@ -67,8 +76,8 @@
 （`src/lib/process/executable-resolve.ts`）：
 
 - Windows 上 Node 的 `spawn` **不认 PATHEXT** —— PATH 上 `pnpm` 是「无扩展名 shim
-  + `pnpm.cmd` + `pnpm.ps1`」三个形态，裸名字一个都起不来（这就是修之前的
-  `spawn pnpm ENOENT`）；
+  - `pnpm.cmd` + `pnpm.ps1`」三个形态，裸名字一个都起不来（这就是修之前的
+    `spawn pnpm ENOENT`）；
 - 而 `pnpm.cmd` 又是 Node **起不了**的（只有 `cmd.exe` 会解释批处理）—— 真能起的
   是 `pnpm.ps1`，经 PowerShell 宿主加 `-File` 起。输出区顶部的 `$` 行下面是
   「实际跑的是谁」，排障时能看出为什么多了一层。
