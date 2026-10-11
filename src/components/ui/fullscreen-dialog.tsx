@@ -57,11 +57,11 @@ export function FullScreenDialog({
       disablePointerDismissal
     >
       <DialogPrimitive.Portal>
-        {/* 遮罩与 `ui/dialog` 共用同一份 class（`dialog-overlay.ts`）：它同时
-            满足「让出标题行」的硬判据，另写一份必然漂移。 */}
-        <DialogPrimitive.Backdrop
-          className={dialogBackdropClass("bg-black/40")}
-        />
+        {/* 遮罩与 `ui/dialog` / `ui/sheet` **同一份**（`dialog-overlay.ts` 的
+            默认档）：它同时满足「让出标题行」的硬判据（ISSUE #310），另写一份必然
+            漂移 —— 这里此前传 `bg-black/40` 覆盖，于是全屏视图的遮罩比弹窗的更重、
+            且不随主题（同一件事两套底色，ISSUE #1742 收口成 `--color-scrim`）。 */}
+        <DialogPrimitive.Backdrop className={dialogBackdropClass()} />
         <DialogPrimitive.Popup
           data-slot="fullscreen-dialog"
           className={cn(

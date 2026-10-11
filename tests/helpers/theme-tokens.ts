@@ -97,6 +97,9 @@ const PINNED_UTILITY_CLASSES = [
   "bg-card",
   "bg-popover",
   "border-border",
+  /* 模态遮罩的底色（`--color-scrim` → `bg-scrim`）。`dialog-backdrop-contrast`
+     要读「遮罩压在本应用背景上之后还剩多少对比」，就得让这条 utility 真进产物。 */
+  "bg-scrim",
 ] as const;
 
 /**

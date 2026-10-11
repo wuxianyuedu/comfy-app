@@ -13,11 +13,11 @@
  *    （三个日志弹窗的「加宽」按钮长期按了没反应，ISSUE #720）。这条是**类名层**
  *    的哨兵：真实宽度由 Tailwind 产序决定，jsdom 量不到，但「那条带变体的
  *    max-width 有没有长回来」在源码层一眼可判。
- * 3. **本体不渲染遮罩**（实测）：`DialogContent` 只铺 Portal + Popup，遮罩是要调用处
- *    显式渲染的另一层（`DialogOverlay` 目前在仓里只有 story 在用），关不掉背景页面
- *    这件事由基元的 outside-press 兜住。写这条是因为文件头的「遮罩由基元的 Backdrop
- *    负责」很容易被读成「本体自带遮罩」，而 `SheetContent` 恰恰**自带** `<SheetOverlay />`
- *    —— 两件同族、行为不同，靠读注释判不出来。
+ * 3. **本体默认渲染遮罩**（ISSUE #1742）：`DialogContent` 会铺一层带色的
+ *    `DialogOverlay`（base-ui 的 `Backdrop`），弹窗背后因此变暗且点不中；只有显式
+ *    `showOverlay={false}` 才不铺。此前这里只铺 Portal + Popup，靠基元自动注入的
+ *    **无色** `InternalBackdrop` 兜住外部点击 —— 于是绝大多数弹窗背后又亮又像能点。
+ *    写这条是因为它曾经是反的（断言「不渲染 Backdrop」），而两件事读注释判不出来。
  */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -62,12 +62,14 @@ beforeEach(() => {
 
 function Demo({
   showCloseButton,
+  showOverlay,
   popupClassName,
   className,
   onOpenChange,
   open,
 }: {
   showCloseButton?: boolean;
+  showOverlay?: boolean;
   popupClassName?: string;
   className?: string;
   onOpenChange?: (open: boolean) => void;
@@ -79,6 +81,7 @@ function Demo({
         <DialogTrigger>打开设置</DialogTrigger>
         <DialogContent
           showCloseButton={showCloseButton}
+          showOverlay={showOverlay}
           popupClassName={popupClassName}
           className={className}
         >
@@ -173,7 +176,7 @@ describe("ui/dialog 的关闭按钮", () => {
     });
   });
 
-  it("Esc 回传 false（reason=escape-key）；弹窗本体**不渲染遮罩**，点外部由基元的 outside-press 兜住", async () => {
+  it("Esc 回传 false（reason=escape-key）；关掉后重开仍带那层遮罩", async () => {
     const onOpenChange = vi.fn();
     const user = userEvent.setup();
     render(<Demo showCloseButton={false} onOpenChange={onOpenChange} />);
@@ -185,21 +188,16 @@ describe("ui/dialog 的关闭按钮", () => {
       reason: "escape-key",
     });
 
-    /* 重新打开后实测**没有** `[data-slot="dialog-overlay"]` 这个元素：
-       `DialogContent` 只渲染 Portal + Popup，遮罩是**另一层**、要调用处显式铺
-       （导出的 `DialogOverlay` 目前在仓里只有 story 在用；`SheetContent` 才自带
-       `<SheetOverlay />`）。所以「弹窗背后没有变暗的那一层」是现状，不是漏画 ——
-       关闭仍然工作，靠的是基元对「点到 Popup 之外」的判定，而不是点中遮罩。
-       谁要给弹窗补遮罩，先改掉这条：那会同时改掉 `top-title-bar` 让位那一组
-       判据的适用面（见 `dialog-overlay.ts` 的文件头）。 */
+    /* 重新打开后 `[data-slot="dialog-overlay"]` 必须在位 —— 它是「弹窗背后变暗、
+       且背后内容点不中」的那一层（ISSUE #1742 之前缺的就是它）。 */
     await user.click(screen.getByRole("button", { name: "打开设置" }));
     await expect
       .poll(() => document.querySelector(CONTENT_MARK))
       .not.toBeNull();
     expect(
       document.querySelector('[data-slot="dialog-overlay"]'),
-      "现状：DialogContent 不渲染 Backdrop",
-    ).toBeNull();
+      "DialogContent 必须自带 Backdrop",
+    ).not.toBeNull();
 
     onOpenChange.mockClear();
     /* 目标必须是**Popup 之外**的节点：`#host` 里那颗触发器在弹窗开着的时候被
@@ -208,6 +206,24 @@ describe("ui/dialog 的关闭按钮", () => {
     await user.click(document.body);
     expect(lastCall(onOpenChange).nextOpen).toBe(false);
     expect(lastCall(onOpenChange).reason).toBe("outside-press");
+  });
+
+  it("默认铺遮罩；showOverlay={false} 才不铺（极少数内嵌场景）", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<Demo showCloseButton={false} />);
+    await openDialog(user);
+    expect(
+      document.querySelector('[data-slot="dialog-overlay"]'),
+      "默认必须自带遮罩",
+    ).not.toBeNull();
+    unmount();
+
+    render(<Demo showCloseButton={false} showOverlay={false} />);
+    await openDialog(user);
+    expect(
+      document.querySelector('[data-slot="dialog-overlay"]'),
+      "showOverlay={false}：不铺遮罩",
+    ).toBeNull();
   });
 });
 
