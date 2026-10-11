@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   RUNTIME_LOG_SOURCES,
+  compareRuntimeLogFiles,
   legacyRuntimeLogFileName,
   parseLaunchStamp,
   parseRuntimeLogFileName,
@@ -112,6 +113,71 @@ describe("解析", () => {
     expect(
       parseRuntimeLogFileName(legacyRuntimeLogFileName("ollama-runtime")),
     ).toBeNull();
+  });
+});
+
+describe("compareRuntimeLogFiles（旧 → 新，三级判据）", () => {
+  /* 刻意**不**给 `parseRuntimeLogFileName` 的 `!source` / `!sm` 与 `parseLaunchStamp`
+   * 的 `Number.isFinite` 假分支写用例：那三处是防御性写法，按正则构造就走不到
+   * （`FILE_RE` 命中必然让 `STAMP_RE` 命中、四位年也越不出 Date 的表示范围）。
+   * 为它们造夹具等于让覆盖率替假场景作证，红了也说明不了任何真实故障。 */
+
+  /** 条目从**名字**造，不手写 `startedAt`：时刻与序号本来就是 `parse` 的产物，
+   *  抄数字会让「名字形态一改、顺序判据跟着漂」这一格消失。 */
+  const entry = (name: string) => ({
+    name,
+    startedAt: parseRuntimeLogFileName(name)?.startedAt ?? null,
+  });
+  const older = runtimeLogFileName("comfyui-runtime", AT);
+  const newer = runtimeLogFileName(
+    "comfyui-runtime",
+    new Date(2026, 9, 5, 9, 36, 13),
+  );
+  const second = runtimeLogFileName("comfyui-runtime", AT, 2);
+
+  it("时刻不同 ⇒ 时刻升序，与谁的名字更长无关", () => {
+    expect(parseRuntimeLogFileName(older)?.startedAt).not.toBeNull();
+    expect(compareRuntimeLogFiles(entry(older), entry(newer))).toBeLessThan(0);
+    expect(compareRuntimeLogFiles(entry(newer), entry(older))).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("同一秒的两份 ⇒ 第一份在前，**而按名字比会把它排反**", () => {
+    /* 这条是本文件存在的全部理由：`.`（码位 46）比 `-`（45）大一位，所以
+     * `…-093612.log` 按 localeCompare 排在 `…-093612-2.log` **之后** ——
+     * 「启动 → 秒退 → 再启动」在这个仓库里很常见，只看名字的那一份顺序就是错的，
+     * 而用户把它读成「第一次的失败现场」（其实是第二次的）。 */
+    expect(older.localeCompare(second)).toBeGreaterThan(0);
+    expect(compareRuntimeLogFiles(entry(older), entry(second))).toBeLessThan(0);
+    expect(
+      [entry(second), entry(older)]
+        .sort(compareRuntimeLogFiles)
+        .map((e) => e.name),
+    ).toEqual([older, second]);
+  });
+
+  it("旧固定名永远排最前（两个方向都是它在前）", () => {
+    const legacy = legacyRuntimeLogFileName("comfyui-runtime");
+    expect(entry(legacy).startedAt).toBeNull();
+    expect(compareRuntimeLogFiles(entry(legacy), entry(older))).toBeLessThan(0);
+    expect(compareRuntimeLogFiles(entry(older), entry(legacy))).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("两份都没有时刻 ⇒ 退到名字序，而不是返回 0 把它们混在一起", () => {
+    const a = legacyRuntimeLogFileName("comfyui-runtime");
+    const b = legacyRuntimeLogFileName("ollama-runtime");
+    expect(compareRuntimeLogFiles(entry(a), entry(b))).toBe(a.localeCompare(b));
+  });
+
+  it("同刻同序号 ⇒ 第三级落到名字（跨来源排在同一秒时不产生 0）", () => {
+    const cross = runtimeLogFileName("ollama-runtime", AT);
+    expect(parseRuntimeLogFileName(cross)?.startedAt).toBe(
+      parseRuntimeLogFileName(older)?.startedAt,
+    );
+    expect(compareRuntimeLogFiles(entry(older), entry(cross))).toBeLessThan(0);
   });
 });
 

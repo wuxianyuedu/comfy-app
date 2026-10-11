@@ -1,10 +1,9 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-11T00:56:18.309Z",
+    "verifiedAt": "2026-10-11T03:41:39.721Z",
     "who": "yuedu",
     "how": "pnpm run test:coverage",
-    "trackedBy": "full",
-    "skippedReason": "用例那一半今天真跑并全绿（677 files / 8504 passed，两遍同读数），卡住的是覆盖率门槛那一半：src/lib/core/** 的 statements 95.89<96 与 branches 89.95<90、src/lib/log/** 的 functions 98.97<100 与 branches 85.17<86。本笔只动 scripts/ 门禁与 tests/ 夹具，git diff 里 src/** 命中 0、src 与 e2e 与 origin/master 逐字节相同，而那四条门槛按 glob 只统计 src/lib 两个面 ⇒ 不是本笔带出来的；缺口的文件级定位与候选引入笔（d7602043 / 93c658cd / 9ec041cb）都写在 ISSUE #1728 里，最弱的一份是 log/app-runtime-log.ts（语句 75%、分支 57%）。这条豁免不替那四条门槛作证"
+    "trackedBy": "full"
   }
 }
