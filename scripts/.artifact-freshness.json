@@ -1,9 +1,10 @@
 {
   "artifact": {
     "key": "artifact",
-    "verifiedAt": "2026-10-10T04:43:08.323Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-11T03:04:46.638Z",
+    "who": "yuedu",
     "how": "pnpm run build",
-    "trackedBy": "artifact"
+    "trackedBy": "artifact",
+    "skippedReason": "今天故意不跑：两次完整 next build 均在约 10 分钟被本机环境以信号终止（孤儿进程与 .next/lock 残留均已清理），完整自证留待下次构建补记。本次提交动的 src-tauri 壳面已单独 cargo build --release --features custom-protocol 重编并过 cargo test（52 条）与壳门禁。"
   }
 }

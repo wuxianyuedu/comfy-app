@@ -44,6 +44,11 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -193,16 +198,14 @@ function blankComments(src) {
   return chars.join("");
 }
 
-function walk(dir, out = []) {
-  let entries;
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
-  for (const e of entries) {
-    if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name.startsWith(".")) continue;
-      walk(path.join(dir, e.name), out);
-    } else if (TEST_FILE_RE.test(e.name)) out.push(path.join(dir, e.name));
-  }
-  return out;
+/**
+ * 枚举扫描面。**点开头的目录**不进去，但点开头的**文件**照收 —— 并发探针
+ * （`tests/.setup-cleanup-probe-*.test.tsx`）正是后者，跳掉它等于判据在最该看着它的
+ * 那一刻转身不看。消失容错的口径见 `gate-scan-read.cjs`（这一度是本文件自己的一份
+ * `try { readdirSync } catch { return out }` —— 那一份把**所有**错误都吞掉）。
+ */
+function walk(dir) {
+  return walkForScan(dir, TEST_FILE_RE, { skipHiddenDirs: true });
 }
 
 /** 用例文件里声明的环境（文件头 `// @vitest-environment <name>`）。 */
@@ -412,15 +415,32 @@ function matchesAny(rel, globs) {
 function toPosix(p) { return p.split(path.sep).join("/"); }
 
 function main() {
-  const files = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)))
+  const listed = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)))
     .map((abs) => ({ abs, rel: toPosix(path.relative(ROOT, abs)) }))
     .sort((a, b) => a.rel.localeCompare(b.rel));
+
+  /* **每份文件只读一次**：下面三条判据走的是同一张 `files`，各读一遍时一份消失的文件
+   * 会被记成三条「未读」—— 而真正没读的只有一份。收在一处读取顺便去掉重复 IO。
+   * 消失容错、「只降级 ENOENT」与「不许静默」的口径都在 `gate-scan-read.cjs`。 */
+  const rawByRel = new Map();
+  const files = [];
+  let vanished = 0;
+  for (const f of listed) {
+    const raw = readForScan(f.abs);
+    if (raw === null) {
+      vanished += 1;
+      continue;
+    }
+    rawByRel.set(f.rel, raw);
+    files.push(f);
+  }
+  const note = vanishedNote(vanished);
 
   const problems = [];
 
   /* ① 环境早退 —— 判据本体。 */
-  for (const { abs, rel } of files) {
-    const raw = fs.readFileSync(abs, "utf8");
+  for (const { rel } of files) {
+    const raw = rawByRel.get(rel);
     /* 判据跑在**剥过注释**的文本上，但**报错回原文那一行** —— 否则
      * `typeof window !== "undefined"` 会被打成 `typeof window !== ""`
      * （字符串换成占位符的代价），读报错的人得先猜一遍自己的代码长什么样。 */
@@ -504,7 +524,7 @@ function main() {
   const jsdomExceptions = [];
   const redundantHeads = [];
 
-  for (const { abs, rel } of files) {
+  for (const { rel } of files) {
     const tier = tierOf(rel);
     if (tier === null) continue;
     const tierEnv = envOfTier[tier];
@@ -515,7 +535,7 @@ function main() {
       );
       return 1;
     }
-    const env = declaredEnv(fs.readFileSync(abs, "utf8"));
+    const env = declaredEnv(rawByRel.get(rel));
     if (!env) continue;
 
     if (tierEnv === "node") {
@@ -576,8 +596,13 @@ function main() {
   }
 
   if (all.length === 0) {
-    if (!REPORT_ONLY) console.log(`[test-env] OK —— ${files.length} 份用例：无环境早退，无目录档矛盾，无冗余文件头。`);
-    else console.log(`[test-env] 盘点：${files.length} 份用例，无问题。`);
+    if (!REPORT_ONLY)
+      console.log(
+        `[test-env] OK —— ${files.length} 份用例：无环境早退，无目录档矛盾，无冗余文件头。` +
+          note,
+      );
+    else
+      console.log(`[test-env] 盘点：${files.length} 份用例，无问题。` + note);
     return 0;
   }
 
@@ -597,7 +622,7 @@ function main() {
     "    别只改一边凑绿：那正是这条判据要照出来的改动。\n" +
     "  · 「冗余文件头」：删掉这一行 `// @vitest-environment …` 即可（目录档已给出同结论）。\n" +
     "    列清单：`node scripts/check-test-environment.cjs --report`。\n" +
-    "  口径见 docs/standards/11-测试与可观测性.md §11.17。",
+    "  口径见 docs/standards/11-测试与可观测性.md §11.17。" + note,
   );
   return REPORT_ONLY ? 0 : 1;
 }

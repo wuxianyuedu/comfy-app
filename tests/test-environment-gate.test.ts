@@ -30,6 +30,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { copyGateDeps } from "./helpers/gate-repo";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-test-environment.cjs");
 
@@ -74,6 +75,7 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "test-env-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
   writeFileSync(path.join(root, "vitest.config.ts"), CONFIG);
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
@@ -282,6 +284,7 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
     const root = mkdtempSync(path.join(tmpdir(), "test-env-bad-"));
     mkdirSync(path.join(root, "scripts"), { recursive: true });
     copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+    copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
     writeFileSync(
       path.join(root, "vitest.config.ts"),
       'export default { test: { environment: "node" } };\n',
@@ -321,6 +324,7 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
     const root = mkdtempSync(path.join(tmpdir(), "test-env-comment-"));
     mkdirSync(path.join(root, "scripts"), { recursive: true });
     copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+    copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
     writeFileSync(
       path.join(root, "vitest.config.ts"),
       [

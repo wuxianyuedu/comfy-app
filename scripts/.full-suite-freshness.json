@@ -1,10 +1,9 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-11T00:11:49.840Z",
+    "verifiedAt": "2026-10-11T03:41:39.721Z",
     "who": "yuedu",
     "how": "pnpm run test:coverage",
-    "trackedBy": "full",
-    "skippedReason": "本机资源受限，跳过全量单测+覆盖率当日自证；本次改动（history-detail-actions / use-queue-monitor）已由钩子 C 组受影响用例（含 use-queue-monitor 用例）跑绿覆盖，按 11.8 记当日豁免"
+    "trackedBy": "full"
   }
 }

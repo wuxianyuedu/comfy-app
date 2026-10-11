@@ -69,6 +69,13 @@ function setup(): string {
     join(srcScripts, ".gate-executor-ledger.json"),
     join(dstScripts, ".gate-executor-ledger.json"),
   );
+  /* 判据共用的扫描读取器：它以 `gate-` 开头而不以 `check-` 开头，上面那个前缀循环
+   * 不会带它 —— 少带时本判据会以 `MODULE_NOT_FOUND` 崩在临时仓库里，读起来像
+   * 「台账判据坏了」，实际是夹具少一个文件。 */
+  copyFileSync(
+    join(srcScripts, "gate-scan-read.cjs"),
+    join(dstScripts, "gate-scan-read.cjs"),
+  );
   // 空执行者来源：`.githooks/`、`package.json`、`tests/` 都不建。
   return workdir;
 }

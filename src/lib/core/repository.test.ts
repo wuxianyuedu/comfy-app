@@ -20,6 +20,9 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 import { DrizzleRepository } from "~/lib/core/repository-base";
+/** 行类型只作类型用：`import type` 会被擦掉，不影响本文件「先 mock `~/server/db`
+ *  再取 schema」的加载顺序。 */
+import type { Project } from "~/server/db/schema";
 /** `NotFoundError` 从**定义处**导入而不是 `repository-base`：基类只是 import 它
  *  （没有 re-export），`TaskWithCover` 也只经 `repository-task` 可用 —— 见本文件
  *  末尾「零消费导出」那一组断言。 */
@@ -121,6 +124,32 @@ describe("DrizzleRepository 基类", () => {
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     await workflowModelTagRepository.upsertByName("u1", "动漫");
     expect(await repo.findAll()).toHaveLength(1);
+  });
+
+  it("create 落库并 returning 整行：默认列由库补，基类不自己拼", async () => {
+    /* 基类的 create 此前零执行 —— 子类都各自重写 insert（要补自己的语义列），
+     * 于是「基类那套标准 CRUD」实际只有三件套有人跑过。这条钉两件事：`.returning()`
+     * 回的是**落库那一行**（`nodes`/`edges` 由 SQL 默认值补出来，入参里根本没有它们），
+     * 而不是把入参原样吐回去。 */
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    const { project } = await import("~/server/db/schema");
+    const repo = new DrizzleRepository<Project>(project, project.id);
+
+    /* `as Project` 是基类签名自己的形状：`create(entity: T)` 收整行类型，落库却只给
+     * 必填列 —— 想证明「默认列由库补」就必须能少给字段，这里不放宽基类的签名。 */
+    const created = await repo.create({
+      id: "p-create",
+      userId: "u1",
+      name: "基类写入",
+    } as Project);
+
+    expect(created).toMatchObject({ id: "p-create", name: "基类写入" });
+    expect(created.nodes).toBe("[]");
+    expect(created.edges).toBe("[]");
+    expect(created.createdAt).toBeInstanceOf(Date);
+    const raw = tdb.$tables.projects.find((r) => r.id === "p-create");
+    expect(raw?.nodes).toBe("[]");
+    expect((await repo.findById("p-create"))?.name).toBe("基类写入");
   });
 });
 
@@ -1125,6 +1154,49 @@ describe("FilmRepository / FilmShotRepository", () => {
     expect(await filmRepository.listByUser("u2")).toEqual([]);
     expect(f1.status).toBe("PARSING");
     expect(f1.subtitleOn).toBe(true);
+  });
+
+  it("listByStatus 空集合直接返回空数组", async () => {
+    /* 实测（变异复核 M6）：把 `statuses.length === 0` 那道早退摘掉，这条**照样绿** ——
+     * drizzle 对空数组不生成语法错的 SQL，SQLite 数出零行。所以这一格钉的是
+     * **调用方面向的契约**（恢复扫描传空集合拿到空数组、不抛），不是「挡住一条坏 SQL」；
+     * 那道守卫的真实价值是省一次查询 + 不依赖方言对空 `in` 的处理。 */
+    await filmRepository.create(CREATE);
+    expect(await filmRepository.listByStatus([])).toEqual([]);
+  });
+
+  it("listByStatus 按 createdAt 升序（先起先续）、且**刻意不看归属**", async () => {
+    const first = await filmRepository.create({
+      ...CREATE,
+      title: "先落库",
+      userId: "u1",
+    });
+    const second = await filmRepository.create({
+      ...CREATE,
+      title: "后落库",
+      userId: "u2",
+    });
+    await filmRepository.markDone(first.id, "/tmp/a.mp4");
+    await filmRepository.markDone(second.id, "/tmp/b.mp4");
+
+    const queued = await filmRepository.listByStatus(["PARSING", "GENERATING"]);
+    /* 两条都是终态 ⇒ 一条都不该被列出来（这条扫描的语义是「还有哪些行该有人推进」）。 */
+    expect(queued).toEqual([]);
+
+    /* 把**先落库那一行**的时间戳推到更晚：自然扫描顺序（插入序）与 `createdAt`
+     * 序就此相反 —— 少了 `orderBy` 时这条必红（实测 M7），否则它只是碰巧跟着插入序绿。 */
+    await filmRepository.update(first.id, {
+      createdAt: new Date(second.createdAt.getTime() + 60_000),
+    });
+    await filmRepository.markGenerating(first.id);
+    await filmRepository.markGenerating(second.id);
+
+    const resumed = await filmRepository.listByStatus(["GENERATING"]);
+    /* 跨 userId：`first` 属 u1、`second` 属 u2，两条都要被列出 —— 补上归属条件
+     * 就把「另一个用户那次没人续跑」的窗口重新打开了，注释里写明了不要。 */
+    expect(resumed.map((r) => r.id)).toEqual([second.id, first.id]);
+    expect(resumed.every((r) => r.status === "GENERATING")).toBe(true);
+    expect(Object.keys(resumed[0]!).sort()).toEqual(["id", "status"]);
   });
 
   it("findByIdForUser 的 includeShots 走关系装载并按 order 升序", async () => {
