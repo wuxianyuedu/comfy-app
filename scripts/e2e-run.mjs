@@ -35,7 +35,14 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { resolveAppPort } from "./app-port.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
+import {
+  E2E_PREFLIGHT_ENV_KEY,
+  encodePreflight,
+  runPreflight,
+} from "../e2e/support/preflight-ports.mjs";
+import { resolveFakeComfyuiPort } from "../e2e/support/fake-comfyui-endpoint.mjs";
 import {
   freshnessTrack,
   gitUser,
@@ -78,6 +85,36 @@ export function resolvePlaywrightCli(cwd = ROOT) {
     throw new Error(`[e2e-run] Playwright CLI 入口不存在：${entry}`);
   }
   return entry;
+}
+
+/**
+ * 解析 `playwright` 包里的一个文件（相对包根）。
+ *
+ * 为什么不能直接 `require.resolve("playwright/…")`：本仓库**不直接依赖**
+ * `playwright` —— 它是 `@playwright/test` 的依赖，pnpm 的布局下没有顶层软链，
+ * 从仓库根解析必然 `MODULE_NOT_FOUND`。所以只能**从 `@playwright/test` 那里**
+ * 借一个 require 去解析（与 `resolvePlaywrightCli` 同一条思路：不写死 pnpm 的
+ * `.pnpm/<name>@<version>/` 路径 —— 那会随版本漂）。
+ *
+ * 存在它的理由是**判据侧也要读上游源码**：`tests/e2e-fake-comfyui-endpoint.test.ts`
+ * 要拿「webServer 作为 plugin 排在 globalSetup 之前」这条真实顺序来立断言，
+ * 而那条断言不能自己拼路径（拼法与版本耦合，换布局就静默找不到文件）。
+ *
+ * @param {string} rel 相对 `playwright` 包根的路径（如 `lib/runner/index.js`）
+ * @param {string} [cwd]
+ * @returns {string} 绝对路径
+ */
+export function resolvePlaywrightFile(rel, cwd = ROOT) {
+  const require = createRequire(path.join(cwd, "noop.js"));
+  const testPkg = require.resolve("@playwright/test/package.json");
+  /* 借 `@playwright/test` 的位置再解析一次 —— 它的依赖 `playwright` 就在那一层。 */
+  const viaTest = createRequire(testPkg);
+  const pwPkg = viaTest.resolve("playwright/package.json");
+  const target = path.resolve(path.dirname(pwPkg), rel);
+  if (!existsSync(target)) {
+    throw new Error(`[e2e-run] playwright 里没有这个文件：${target}`);
+  }
+  return target;
 }
 
 /**
@@ -128,9 +165,9 @@ export function parseSkip(argv) {
 
 /**
  * @param {string[]} argv
- * @returns {number}
+ * @returns {Promise<number>}
  */
-function main(argv) {
+async function main(argv) {
   const dryRun = argv.includes("--dry-run");
   /* `--skip "<理由>"` 是**另一条出路**，不是绕过：它写的是一条有人回答过的账
    * （理由要能被复核），判据照样放行。两者都不是「什么都不做」。
@@ -176,6 +213,23 @@ function main(argv) {
    * 把这一步留给 Playwright 自己按环境判，本文件不改它的语义。 */
   const env = { ...process.env };
   if (!env.CI) delete env.CI;
+
+  /* **就在这一刻**端口上有没有别人 —— 这是**唯一**能回答这个问题的时机
+   * （ISSUE #1766）：再往后 Playwright 会先把 webServer 起起来并等它可访问，
+   * 那时「有人应答」里就掺进了本轮自己起的服务，分不开了。结论随 env 带进
+   * `globalSetup`，让它在说话时能把「起之前就在」与「本轮自己起的」分开。
+   *
+   * 探测**不阻断**任何事：冲突与否要看「谁在应答」（形状判据在 `globalSetup`），
+   * 这里只回答「有没有人在」。 */
+  const preflight = await runPreflight({
+    appPort: resolveAppPort(ROOT),
+    fakePort: resolveFakeComfyuiPort(env),
+  });
+  env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight);
+  process.stdout.write(
+    `[e2e-run] 起 Playwright 前：应用端口 ${preflight.appOccupied ? "有人" : "空"} / ` +
+      `替身端口 ${preflight.fakeOccupied ? "有人" : "空"}\n`,
+  );
   process.stdout.write(`[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`);
   const res = spawnSync(process.execPath, [entry, ...run.args], {
     cwd: ROOT,
@@ -206,5 +260,5 @@ if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }
