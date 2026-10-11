@@ -36,7 +36,14 @@ def _parse_args(argv):
     本应用传什么就得吃什么，所以**不校验未知参数**：多认一个名字就多一处
     与真件的契约漂移，而漂移在这条链路上的表现是「用例红了但看不出为什么」。
     """
-    opts = {"workflow": None, "host": "127.0.0.1", "port": "8188"}
+    # 同 _record_history 的兜底：**不是 8188**（那个口留给本机真件，见
+    # e2e/support/fake-comfyui-endpoint.mjs 文件头的 ISSUE #1756 取向）。
+    # 正常路径下这两项由本应用按 COMFYUI_BASE 解析出来显式传进来。
+    opts = {
+        "workflow": None,
+        "host": os.environ.get("E2E_FAKE_COMFY_HOST", "127.0.0.1"),
+        "port": os.environ.get("E2E_FAKE_COMFY_PORT", "18188"),
+    }
     i = 0
     while i < len(argv):
         arg = argv[i]
@@ -144,8 +151,11 @@ def _run_success(prompt_id, node_ids):
 
 def _record_history(prompt_id, node_id):
     """把产物登记到假 ComfyUI 的 history 里（HTTP 打不通就跳过，理由同 `_submit`）。"""
+    # 兜底端口与 `fake-comfyui-endpoint.mjs` 的默认值同值（Python 侧引不了它）。
+    # 判据在 `tests/e2e-fake-comfyui-endpoint.test.ts`：它读这个文件、把默认值
+    # 与模块导出**对一遍**，避免两处各写一份后静默漂移。
     host = os.environ.get("E2E_FAKE_COMFY_HOST", "127.0.0.1")
-    port = os.environ.get("E2E_FAKE_COMFY_PORT", "8188")
+    port = os.environ.get("E2E_FAKE_COMFY_PORT", "18188")
     body = json.dumps(
         {
             "prompt_id": prompt_id,
