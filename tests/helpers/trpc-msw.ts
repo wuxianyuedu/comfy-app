@@ -14,7 +14,7 @@
  * @module tests/helpers/trpc-msw — tests/helpers/trpc-msw.ts — 前端集成测试的「传输层」基建
  */
 import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { AnyRouter } from "@trpc/server";
 

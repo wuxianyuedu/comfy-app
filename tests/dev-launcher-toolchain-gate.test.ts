@@ -1060,3 +1060,119 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
     );
   });
 });
+
+import {
+  checkDeclaredFloor,
+  collectDependencyFloors,
+  parseRange,
+  satisfies,
+} from "../scripts/node-engines.mjs";
+
+/**
+ * Node 下限这一格存在的理由（规范 §2.1.8）：`next` 自己的下限（`>=20.9.0`）比测试链低得多，
+ * 所以「Node 太旧」在这台仓库上的表现是**开发链路全绿、只有用例档炸**，
+ * 而报错是 `Cannot find module` 一类、指不出该换版本。旧 README 那句「Node ≥ 22」
+ * 比 jsdom 的 `^22.22.2` 还松 —— 松掉的正是最常见的那一档。
+ *
+ * 判据方向是**本仓声明 ⊆ 每个依赖声明**（不是反过来）：`next` 写的是无上界的
+ * `>=20.9.0`，倒过来判会永远不成立。方向记反的形态由下面「无上界写法也不合法」
+ * 那一格钉住 —— `>=24.15.0` 允许 25.x，而 vitest / jsdom / eslint 声明的都是
+ * `^24` 档、不接受 25.x，所以它照样是错的。
+ */
+describe("Node 下限：engines.node 必须被每个依赖自己声明的范围接受", () => {
+  const scanned = collectDependencyFloors(ROOT);
+  /** @type {Array<{pkg: string, range: string}>} */
+  const floors = scanned.ok ? scanned.floors : [];
+
+  it("扫描面非空，且点名三条测试链依赖（「零命中」不能长得像「谁都不挑 Node」）", () => {
+    expect(scanned.ok, "依赖下限没取到").toBe(true);
+    const names = floors.map((f) => f.pkg);
+    expect(names).toEqual(expect.arrayContaining(["vitest", "jsdom", "msw"]));
+    expect(names.length).toBeGreaterThan(10);
+  });
+
+  it("本仓声明的范围满足每一条依赖下限（真算，不是比字符串）", () => {
+    const r = checkDeclaredFloor({ root: ROOT, floors });
+    expect(r.ok, `被越过的依赖：${r.gaps?.map((g) => g.pkg).join(", ")}`).toBe(
+      true,
+    );
+  });
+
+  it("README 的环境要求与 engines.node 同源（防文档漂回「≥ 22」那种松写法）", () => {
+    const declared = checkDeclaredFloor({ root: ROOT, floors }).range;
+    expect(declared).toBeTruthy();
+    const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+    const line = readme.split("\n").find((l) => l.includes("**Node.js**"));
+    expect(line, "README 里那行 Node 要求不见了").toBeDefined();
+    expect(line).toContain(declared);
+  });
+
+  /* ── 反向证明：这格不承重的话，它就是装饰 ────────────────────────── */
+
+  it("把声明放宽到 next 的下限 ⇒ 必须点名被越过的测试链依赖", () => {
+    const r = checkDeclaredFloor({ root: ROOT, declared: ">=20.9.0", floors });
+    expect(r.ok).toBe(false);
+    expect(r.gaps?.map((g) => g.pkg)).toEqual(
+      expect.arrayContaining(["vitest", "jsdom", "msw"]),
+    );
+  });
+
+  it("无上界的 `>=24.15.0` 同样不合法（它放进了依赖不接受的 25.x）", () => {
+    const r = checkDeclaredFloor({ root: ROOT, declared: ">=24.15.0", floors });
+    expect(r.ok).toBe(false);
+    expect(r.gaps?.map((g) => g.pkg)).toEqual(
+      expect.arrayContaining(["vitest", "jsdom"]),
+    );
+  });
+
+  it("读不懂的形状判「没跑起来」，不判绿", () => {
+    expect(checkDeclaredFloor({ root: ROOT, declared: "20.x" }).kind).toBe(
+      "unparsable",
+    );
+    expect(parseRange("20.x")).toBeNull();
+    /* 空字符串与缺失也走同一格 —— 「没声明」不能读成「没有下限要求」。 */
+    expect(checkDeclaredFloor({ root: ROOT, declared: "" }).kind).toBe(
+      "missing",
+    );
+  });
+
+  it("形状解析覆盖真实出现的三种写法：操作符后带空格、一档内并排两个比较符、并集", () => {
+    /* `@tauri-apps/cli` 写 `>= 10`、`@sentry/nextjs` 写 `>=22.12.0 <23.0.0`：
+     * 这两条不是假数据，是 node_modules 里现装的形状。 */
+    expect(satisfies("24.20.0", ">= 10")).toBe(true);
+    expect(satisfies("22.11.0", ">=22.12.0 <23.0.0")).toBe(false);
+    expect(satisfies("22.12.0", ">=22.12.0 <23.0.0")).toBe(true);
+    expect(satisfies("23.0.0", ">=22.12.0 <23.0.0")).toBe(false);
+    expect(satisfies("25.0.0", "^22.22.2 || ^24.15.0 || >=26.0.0")).toBe(false);
+    expect(satisfies("22.22.1", "^22.22.2 || ^24.15.0 || >=26.0.0")).toBe(
+      false,
+    );
+    expect(satisfies("22.22.2", "^22.22.2 || ^24.15.0 || >=26.0.0")).toBe(true);
+  });
+
+  it("check:toolchain 在低版本 Node 下 WARN 并点名坏的是哪一档，但退出码仍 0", () => {
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      {
+        encoding: "utf8",
+        env: { ...process.env, COMFYAPP_NODE_VERSION: "v20.9.0" },
+      },
+    );
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain("不在声明范围内");
+    expect(r.stdout).toContain("坏的是测试档");
+    /* 建议必须给「最近的可达档」：对 Node 20 的人推 26 是没人执行的建议。 */
+    expect(r.stdout).toContain("建议升到 22.22.2");
+  });
+
+  it("当前 Node 合规时打 OK 行（这句是上面那格的对照组）", () => {
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      { encoding: "utf8" },
+    );
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain("在声明范围内");
+  });
+});

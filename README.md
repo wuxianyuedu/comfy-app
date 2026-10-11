@@ -115,7 +115,9 @@ Comfy-APP-T3/
 
 仅开发前端（Windows / Linux / macOS 均可）：
 
-- **Node.js** ≥ 22 与 **pnpm** 10（`corepack enable` 或直接安装 pnpm）
+- **Node.js** `^22.22.2 || ^24.15.0 || >=26.0.0` 与 **pnpm** 12（`corepack enable` 即可对齐；
+  下限与 `package.json` 的 `engines.node` 同源，由 `pnpm check:toolchain` 判、
+  `tests/dev-launcher-toolchain-gate.test.ts` 兜住「别低于任何一个依赖自己声明的下限」）
 - 其他都不用装：`pnpm dev` 是一条纯 Node 链路，**不依赖 PowerShell / Rust /
   WebView2**。Linux / macOS 上按下方「快速上手」跑起来即可（详见
   [规范 §9 跨平台模式](docs/standards/launch-and-build.md)）。
