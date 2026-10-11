@@ -48,8 +48,12 @@
  *
  * 退出码 0 = 通过，1 = 阻断。
  */
-const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -58,15 +62,8 @@ const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
 const SCAN_DIRS = ["src", "tests"];
 const TEST_FILE_RE = /\.test\.tsx?$/;
 
-function walk(dir, out = []) {
-  if (!fs.existsSync(dir)) return out;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === "node_modules") continue;
-    const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walk(abs, out);
-    else if (TEST_FILE_RE.test(e.name)) out.push(abs);
-  }
-  return out;
+function walk(dir) {
+  return walkForScan(dir, TEST_FILE_RE);
 }
 
 /**
@@ -306,7 +303,11 @@ function isInLoop(lines, siteIndex) {
 const SOFT_SITE_RE = /expect\s*\.\s*soft\s*\(/g;
 
 function scanFile(abs) {
-  const masked = maskNonCode(fs.readFileSync(abs, "utf8"));
+  const raw = readForScan(abs);
+  /* `null` = 这一轮没读到（文件在「列目录 → 读内容」之间消失）。口径与「只降级
+     ENOENT、不许静默」都在 `gate-scan-read.cjs`，这里不重述。 */
+  if (raw === null) return null;
+  const masked = maskNonCode(raw);
   const lines = masked.split("\n");
   const sites = [];
   for (const m of masked.matchAll(SOFT_SITE_RE)) {
@@ -327,17 +328,25 @@ function main() {
   const files = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)));
   const offenders = [];
   let total = 0;
+  let vanished = 0;
 
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    for (const site of scanFile(abs)) {
+    const sites = scanFile(abs);
+    if (sites === null) {
+      vanished += 1;
+      continue;
+    }
+    for (const site of sites) {
       total += 1;
       if (!site.inBatch) offenders.push({ rel, line: site.line });
     }
   }
+  /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」，而 `total` 会因此偏小。 */
+  const note = vanishedNote(vanished);
 
   if (offenders.length === 0) {
-    console.log(`[soft] OK —— ${total} 处 expect.soft 全在循环体里。`);
+    console.log(`[soft] OK —— ${total} 处 expect.soft 全在循环体里。` + note);
     return 0;
   }
 
@@ -357,9 +366,14 @@ function main() {
       "\n  · 顺序依赖 → 改回硬断言 `expect(...)`（它至少报得出真正的原因）；" +
       "\n  · 本来就是一张清单 → 写成 `for (const x of LIST) expect.soft(...)`。" +
       "\n列清单：`node scripts/check-soft-assertions.cjs --report`" +
-      "\n口径见 docs/standards/11-测试与可观测性.md §11.18。",
+      "\n口径见 docs/standards/11-测试与可观测性.md §11.18。" +
+      note,
   );
   return REPORT_ONLY ? 0 : 1;
 }
 
-process.exit(main());
+/* 只有作为脚本运行才执行并定退出码；被 `require` 时（判据自测要进程内调
+   `scanFile`）不许把宿主进程一起带走。 */
+if (require.main === module) process.exit(main());
+
+module.exports = { scanFile };

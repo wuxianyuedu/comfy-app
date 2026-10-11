@@ -19,6 +19,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { copyGateDeps } from "./helpers/gate-repo";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-soft-assertions.cjs");
 
@@ -27,6 +28,7 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "soft-assert-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });

@@ -72,6 +72,11 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -93,17 +98,18 @@ const TYPE_ONLY_FILE_RE = /\.test-d\.tsx?$/;
 const TYPE_ASSERTION_SITE_RE =
   /(?<![\w.$])(?:expectTypeOf|assertType)\s*[<(]/g;
 
-function walk(dir, out = []) {
-  if (!fs.existsSync(dir)) return out;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === "node_modules") continue;
-    const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walk(abs, out);
-    else if (TEST_FILE_RE.test(e.name) || TYPE_ONLY_FILE_RE.test(e.name)) {
-      out.push(abs);
-    }
-  }
-  return out;
+/**
+ * 枚举扫描面 = 上面两档的**并**，由两条 `source` 现拼（`walkForScan` 只收一个
+ * `fileRe`）—— 拼出来而不是重抄一遍字面量，是为了别出现「加了第三种档名却忘了
+ * 并进扫描面」：那种漏法是静默的，站点照样数得到、只是这一类文件永不进面。
+ * 分支仍由 `main` 里的 `TYPE_ONLY_FILE_RE.test(rel)` 判。
+ */
+const SCAN_FILE_RE = new RegExp(
+  `(?:${TEST_FILE_RE.source}|${TYPE_ONLY_FILE_RE.source})`,
+);
+
+function walk(dir) {
+  return walkForScan(dir, SCAN_FILE_RE);
 }
 
 /**
@@ -371,6 +377,19 @@ function includeEntryToRegExp(entry) {
   return new RegExp(`^${re}$`);
 }
 
+/**
+ * 读一份扫描面上的文件并挖掉非代码区间；文件在「列目录 → 读内容」之间消失时返回
+ * `null`（两种消失窗口、「只降级 ENOENT」与「不许静默」的口径都在
+ * `gate-scan-read.cjs`，这里不重述）。
+ *
+ * @param {string} abs
+ * @returns {string | null}
+ */
+function readMasked(abs) {
+  const raw = readForScan(abs);
+  return raw === null ? null : maskNonCode(raw);
+}
+
 function main() {
   let include;
   try {
@@ -402,10 +421,16 @@ function main() {
   const offenders = [];
   const sites = [];
   let totalSites = 0;
+  let vanished = 0;
 
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    const masked = maskNonCode(fs.readFileSync(abs, "utf8"));
+    const masked = readMasked(abs);
+    /* 消失的文件这一轮没被读过 —— 计数并进结论行（口径见 `gate-scan-read.cjs`）。 */
+    if (masked === null) {
+      vanished += 1;
+      continue;
+    }
     const found = [...masked.matchAll(TYPE_ASSERTION_SITE_RE)];
     if (found.length === 0) continue;
 
@@ -426,14 +451,16 @@ function main() {
 
   if (totalSites === 0) {
     console.log(
-      "[type-assertion] OK —— 0 处 expectTypeOf/assertType 站点（本判据是纯闸门：对象是「下一次有人加类型层断言」）。",
+      "[type-assertion] OK —— 0 处 expectTypeOf/assertType 站点（本判据是纯闸门：对象是「下一次有人加类型层断言」）。" +
+        vanishedNote(vanished),
     );
     return 0;
   }
 
   if (offenders.length === 0) {
     console.log(
-      `[type-assertion] OK —— ${totalSites} 处类型层断言，全部落在 tsconfig 的 include 面里（执行者 = \`tsc --noEmit\`）。`,
+      `[type-assertion] OK —— ${totalSites} 处类型层断言，全部落在 tsconfig 的 include 面里（执行者 = \`tsc --noEmit\`）。` +
+        vanishedNote(vanished),
     );
     return 0;
   }
@@ -452,9 +479,14 @@ function main() {
       "\n修法二选一：" +
       "\n  · 把该文件放回 include 面（通常是 `**/*.ts` 已经覆盖的 src/ 或 tests/）；" +
       "\n  · 确实是只给 tsc 看的类型用例 → 命名成 `.test-d.ts` 并确认仍落在 include 面里。" +
-      "\n口径见 docs/standards/11-测试与可观测性.md §11.20。",
+      "\n口径见 docs/standards/11-测试与可观测性.md §11.20。" +
+      vanishedNote(vanished),
   );
   return REPORT_ONLY ? 0 : 1;
 }
 
-process.exit(main());
+/* 只有作为脚本运行才执行并定退出码；被 `require` 时（判据自测要进程内调
+   `readMasked`）不许把宿主进程一起带走。 */
+if (require.main === module) process.exit(main());
+
+module.exports = { readMasked };

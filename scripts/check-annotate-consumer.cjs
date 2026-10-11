@@ -62,6 +62,11 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -208,15 +213,9 @@ function maskNonCode(src) {
   return out.join("");
 }
 
-function walk(dir, out = []) {
-  if (!fs.existsSync(dir)) return out;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === "node_modules") continue;
-    const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walk(abs, out);
-    else if (TEST_FILE_RE.test(e.name)) out.push(abs);
-  }
-  return out;
+/** 枚举扫描面（两种消失窗口与「只降级 ENOENT」的口径在 `gate-scan-read.cjs`）。 */
+function walk(dir) {
+  return walkForScan(dir, TEST_FILE_RE);
 }
 
 /**
@@ -255,26 +254,18 @@ function readLedger() {
 function main() {
   const files = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)));
   const sites = [];
+  let vanished = 0;
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    let text;
-    try {
-      text = fs.readFileSync(abs, "utf8");
-    } catch (error) {
-      /* 枚举与读取之间文件**消失**了要跳过。门禁读的是工作树，而 `tests/` 里有
-       * 自造自删探针的用例文件（`.setup-cleanup-probe-<pid>-<ts>.test.tsx`）——
-       * 一次提交撞上它的存活期，这里就会以一条 Node 栈崩在
-       * `ENOENT … .setup-cleanup-probe-….test.tsx` 上：报错指向一个谁都没碰过的路径，
-       * 而本判据的结论一个字都没输出，提交被拦下却读不出原因。
-       * 同一族的 `check-test-sleep` / `check-it-each` 已经这样处理过
-       * （`tests/test-sleep-gate.test.ts` / `tests/test-it-each-gate.test.ts` 里有那条），
-       * 本份是那族里漏掉的一个。
-       * ⚠️ 只认「已经不在了」这一种：读得到的失败（权限 / 编码 / 目录形状）照旧冒出去，
-       *    否则这条兜底会把「判据读不到输入」变成静默放行。 */
-      if (error && error.code === "ENOENT" && !fs.existsSync(abs)) continue;
-      throw error;
+    /* 消失容错在这里**曾经是本文件自己写的一份**（且是「静默 `continue`」——
+     * 那一条不计数，所以「判据这一轮没读过某份文件」这件事不进结论）。
+     * 现在与同族那几份合到 `gate-scan-read.cjs`：只降级 ENOENT、计数并打进结论行。 */
+    const raw = readForScan(abs);
+    if (raw === null) {
+      vanished += 1;
+      continue;
     }
-    const masked = maskNonCode(text);
+    const masked = maskNonCode(raw);
     for (const m of masked.matchAll(ANNOTATE_SITE_RE)) {
       sites.push({
         rel,
@@ -282,6 +273,7 @@ function main() {
       });
     }
   }
+  const note = vanishedNote(vanished);
 
   /* 台账先读、哪怕零站点：`readLedger()` 缺失即抛，于是「零站点通过」这个结论
      由「台账在、只是没内容」担保，而不是由「台账根本没有」担保
@@ -297,7 +289,8 @@ function main() {
   if (sites.length === 0) {
     console.log(
       "[annotate] OK —— 0 处 `ctx.annotate` 站点" +
-        `（本判据是纯闸门：对象是「下一次有人挂注释」；台账在场，${consumers.length} 条登记）。`,
+        `（本判据是纯闸门：对象是「下一次有人挂注释」；台账在场，${consumers.length} 条登记）。` +
+        note,
     );
     return 0;
   }
@@ -317,13 +310,15 @@ function main() {
         "所以「挂一把没人读的注释」比不写更坏：它让人以为这件事有人管。\n" +
         `修法二选一：\n  · 登记消费方：在 ${LEDGER} 的 \`consumers\` 里写明谁读、怎么读；\n` +
         "  · 或者不写这条注释 —— 当前没有消费方时它只是装饰。\n" +
-        "口径见 docs/standards/11-测试与可观测性.md §11.21。",
+        "口径见 docs/standards/11-测试与可观测性.md §11.21。" +
+        note,
     );
     return REPORT_ONLY ? 0 : 1;
   }
 
   console.log(
-    `[annotate] OK —— ${sites.length} 处注解站点，消费方 ${consumers.length} 条登记。`,
+    `[annotate] OK —— ${sites.length} 处注解站点，消费方 ${consumers.length} 条登记。` +
+      note,
   );
   return 0;
 }

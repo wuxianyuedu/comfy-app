@@ -35,6 +35,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { copyGateDeps } from "./helpers/gate-repo";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
 const SCRIPT = path.join(SCRIPTS_DIR, "check-test-sleep.cjs");
@@ -67,6 +68,7 @@ function gate(
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   for (const src of [SCRIPT, DEP]) {
     copyFileSync(src, path.join(root, "scripts", path.basename(src)));
+    copyGateDeps(path.join(root, "scripts", path.basename(src)));
   }
   writeFileSync(
     path.join(root, "scripts", ".test-sleep-baseline.json"),

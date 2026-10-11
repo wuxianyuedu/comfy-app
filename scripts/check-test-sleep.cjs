@@ -102,6 +102,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { maskNonCode } = require("./check-test-concurrency.cjs");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const BASELINE = path.join(__dirname, ".test-sleep-baseline.json");
@@ -184,40 +189,14 @@ const WINDOW_MAX = 300;
 const SLEEP_OK_RE = /\/\/\s*sleep-ok\s*[：:]\s*(\S.*)/;
 
 /**
- * 枚举扫描面。**目录一旦在建树途中消失，就把这一支整个跳过**。
- *
- * 为什么不是「逐个文件容错」就够（`scanFile` 那条）：
- * `tests/global-setup-cleanup.test.ts` 会往 `tests/` 下写一份
- * `.setup-cleanup-probe-<pid>-<ts>.test.tsx`、跑完再删。写与删是两次 syscall，
- * 而中间那一刻 `tests/` 里**多出一个条目** —— 并发的读者（本判据、`--update` 的
- * 另一次调用）正好在这一刻 `readdirSync` 时，`walk` 是安全的：它只是多列到一个
- * 名字，随后 `scanFile` 读不到、返回 `null` 记账（见那条的注释）。
- *
- * 但**目录级降级**仍要在这里补一层，理由是同一份探针在**另一个删除瞬间**：
- * 枚举本身是「递归进 `tests/` → 对每个条目做判断」的多次调用，条目在两次调用之间
- * 被删（探针从「是个文件」变成不存在）时 `readdirSync` 会以 `ENOENT` 抛出 ——
- * 那**不是**「列到名字、读时已没」，而是枚举当场崩掉，整个判据连同 D 组一起 `exit 1`。
- * 两份都是同一个竞态的两种窗口，只补后一个等于把门禁的一半赌在时序上。
- *
- * 只有 `ENOENT`（已经不在了）降级；权限 / 形状错误照旧冒出去 —— 否则这条兜底会把
- * 「判据读不到扫描面」变成静默放行（§13.5.12 那一族的反面）。
+ * 枚举扫描面。**两种消失窗口**（「列到名字、读时已没」与「枚举当场 `ENOENT`」）、
+ * 「只有 `ENOENT` 降级、权限/形状错误照冒」与「不许静默」的口径都在
+ * `gate-scan-read.cjs` —— 这一度是本文件自己写的一份，与
+ * `check-test-waitfor.cjs` / `check-test-it-each.cjs` / `check-annotate-consumer.cjs`
+ * 逐字同形，四处私有副本的含义（改一处漏三处）由 `tests/gate-scan-read.test.ts` 收口。
  */
-function walk(dir, out = []) {
-  let entries;
-  try {
-    if (!fs.existsSync(dir)) return out;
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch (error) {
-    if (error && error.code === "ENOENT") return out;
-    throw error;
-  }
-  for (const e of entries) {
-    if (e.name === "node_modules") continue;
-    const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walk(abs, out);
-    else if (TEST_FILE_RE.test(e.name)) out.push(abs);
-  }
-  return out;
+function walk(dir) {
+  return walkForScan(dir, TEST_FILE_RE);
 }
 
 /** 第几行（1 起）：数到某个字符偏移为止的换行数。 */
@@ -280,19 +259,10 @@ function nearbySleepOk(raw, siteIndex) {
  * @returns {{line: number, text: string, exempt: string | null}[]|null}
  */
 function scanFile(abs) {
-  let raw;
-  try {
-    raw = fs.readFileSync(abs, "utf8");
-  } catch (error) {
-    /* 消失不是判据要判的形态：一个已经不存在的文件里没有站点可言。
-     * 现场见 `check-test-it-each.cjs` 的同款注释 —— `tests/global-setup-cleanup.test.ts`
-     * 会在 `tests/` 下临时造探针再删，同一工作树里两个 vitest 在跑时，本扫描就会
-     * 「列到名字、读时已没」，整个 D 组带着 Node 栈崩掉。
-     * 但**不许静默**：消失数要计数并打印（见下面 main 的结论行），静默跳过等于让判据
-     * 在它其实没读过的目录上假装绿（§13.5.12 那一族）。 */
-    if (error && error.code === "ENOENT") return null;
-    throw error;
-  }
+  /* 消失时 `null` = 这一轮没读到，调用方计数（口径见 `gate-scan-read.cjs`，
+   * 与上面 `walk` 那条是同一种竞态的两个窗口）。 */
+  const raw = readForScan(abs);
+  if (raw === null) return null;
   const masked = maskNonCode(raw);
   const sites = [];
 
@@ -382,6 +352,16 @@ function main() {
   const grown = liveTotal > baseline.total;
 
   if (UPDATE) {
+    /* 读数不完整时**不许记账**：少读一份就少算几处，把这样的读数写进基线 = 那几处
+     * 从此不会被任何人报出。与 `check-dead-exports` / `check-comment-language` /
+     * `check-gate-repo-boilerplate` 同一条口径。 */
+    if (vanished > 0) {
+      console.error(
+        `[test-sleep] 拒绝 --update：本轮有 ${vanished} 份文件在扫描期间消失，读数不完整。\n` +
+          "  等并发用例跑完再执行（基线是账，不能记在没读过的面上）。",
+      );
+      return 1;
+    }
     if (grown) {
       console.error(
         `[test-sleep] 拒绝收紧：当前 ${liveTotal} 处 > 原基线 ${baseline.total} 处。` +
@@ -457,9 +437,7 @@ function main() {
       `声明豁免 ${exemptTotal} 处${tail}。` +
       /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
          目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
-      (vanished > 0
-        ? `\n  ⚠️ 另有 ${vanished} 份文件在扫描期间消失（并发用例的临时探针），本轮未读。`
-        : ""),
+      vanishedNote(vanished),
   );
   return 0;
 }

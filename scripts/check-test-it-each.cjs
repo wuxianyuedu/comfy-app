@@ -58,6 +58,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { maskNonCode } = require("./check-test-concurrency.cjs");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -88,24 +93,13 @@ const SITE_RE = new RegExp(
   "g",
 );
 
+/**
+ * 枚举扫描面。两种消失窗口与「只降级 ENOENT」的口径在 `gate-scan-read.cjs`
+ * （这里曾经是自己的 `try { readdirSync } catch { return out }`，那一份把**所有**
+ * 错误都吞掉 —— 读不到扫描面也算绿）。
+ */
 function walk(dir) {
-  const out = [];
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const e of entries) {
-    const p = path.join(dir, e.name);
-    if (e.isDirectory()) {
-      if (e.name === "node_modules") continue;
-      out.push(...walk(p));
-    } else if (TEST_FILE_RE.test(e.name)) {
-      out.push(p);
-    }
-  }
-  return out;
+  return walkForScan(dir, TEST_FILE_RE);
 }
 
 function lineOf(src, index) {
@@ -138,27 +132,12 @@ function importsVitestHosts(raw) {
  * @returns {{line:number,text:string}[]|null}
  */
 function scanFile(abs) {
-  let raw;
-  try {
-    raw = fs.readFileSync(abs, "utf8");
-  } catch (error) {
-    /**
-     * 消失不是判据要判的形态 —— 一个已经不存在的文件里没有站点可言。
-     *
-     * 现场：`tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造
-     * `.setup-cleanup-probe-<pid>-<ts>.test.tsx` 再删掉（它判的是「全局 setup 真的
-     * 把 RTL 逐用例卸载挂上了」）。同一份工作树里只要有两个 vitest 在跑（并行会话、
-     * 或本钩子自己的 C 组还没退干净），本判据就会**列到这个名字、读时已经没了**，
-     * 于是整个 D 组带着一个 Node 栈崩掉 —— 表现是「提交被拦下」，报错里既没有站点
-     * 也没有文件名可读，指向的不是任何人的改动。
-     *
-     * 但**不许静默**：消失数要计数并打印（见 `main` 的那行汇总）。静默跳过等于
-     * 让判据在一份它其实没读过的目录上假装绿 —— 那是 §13.5.12 那一族「判据自称在跑、
-     * 实际没有」的入口。
-     */
-    if (error && error.code === "ENOENT") return null;
-    throw error;
-  }
+  /* 消失 → `null` = 这一轮没读到，计数进结论行。现场（`tests/global-setup-cleanup.test.ts`
+   * 造的 `.setup-cleanup-probe-*.test.tsx`）、两种消失窗口、「只降级 ENOENT」与
+   * 「不许静默」（静默等于让判据在它其实没读过的目录上假装绿 —— §13.5.12 那一族
+   * 「判据自称在跑、实际没有」的入口）都在 `gate-scan-read.cjs` 那一份里。 */
+  const raw = readForScan(abs);
+  if (raw === null) return null;
   if (!importsVitestHosts(raw)) return [];
   const masked = maskNonCode(raw);
   const rawLines = raw.split("\n");
@@ -207,6 +186,16 @@ function main() {
   const total = [...sites.values()].reduce((n, v) => n + v.length, 0);
 
   if (SHOULD_UPDATE) {
+    /* 读数不完整时**不许记账**：少读一份就少算几处，把这样的读数写进基线 = 那几处
+     * 从此不会被任何人报出。与 `check-dead-exports` / `check-comment-language` /
+     * `check-gate-repo-boilerplate` 同一条口径。 */
+    if (vanished > 0) {
+      console.error(
+        `[test-it-each] 拒绝 --update：本轮有 ${vanished} 份文件在扫描期间消失，读数不完整。\n` +
+          "  等并发用例跑完再执行（基线是账，不能记在没读过的面上）。",
+      );
+      return 1;
+    }
     const base = readBaseline();
     if (total > base.total) {
       console.error(
@@ -228,9 +217,7 @@ function main() {
   if (REPORT_ONLY) {
     console.log(
       `[test-it-each] 盘点：${total} 处 / ${sites.size} 份文件。` +
-        (vanished > 0
-          ? `\n  ⚠️ 另有 ${vanished} 份在扫描期间消失（并发用例的临时探针），本轮未读。`
-          : ""),
+        vanishedNote(vanished),
     );
     for (const [rel, list] of [...sites.entries()].sort()) {
       console.log(
@@ -276,9 +263,7 @@ function main() {
     `[test-it-each] OK —— ${total} 处 ≤ 基线 ${base.total} 处。` +
       /* 消失数必须出现在结论里：它等于「这几份文件这一轮没被读过」。静默让判据
          在没读过的目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
-      (vanished > 0
-        ? `\n  ⚠️ 另有 ${vanished} 份文件在扫描期间消失（并发用例的临时探针），本轮未读。`
-        : ""),
+      vanishedNote(vanished),
   );
   if (total < base.total) {
     console.log(

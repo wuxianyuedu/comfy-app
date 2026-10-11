@@ -56,6 +56,11 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = process.cwd();
 const BASELINE = path.join(__dirname, ".comment-language-baseline.json");
@@ -206,22 +211,14 @@ function isJsdocStructuralLine(text) {
   return JSDOC_STRUCTURAL_RE.test(text) && jsdocStructuralOnly(text);
 }
 
-function walk(dir, out = []) {
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name) || entry.name.startsWith(".")) continue;
-      walk(path.join(dir, entry.name), out);
-    } else if (SCAN_EXT.test(entry.name)) {
-      out.push(path.join(dir, entry.name));
-    }
-  }
-  return out;
+function walk(dir) {
+  /* 点开头的**目录**不进去（`.next` / `.git` 之类），但点开头的**文件**照收 ——
+   * 并发探针（`tests/.setup-cleanup-probe-*.test.tsx`）正是后者，跳掉它等于在最该
+   * 看着的那一刻不看。消失容错的口径见 `gate-scan-read.cjs`。 */
+  return walkForScan(dir, SCAN_EXT, {
+    skipDirs: SKIP_DIRS,
+    skipHiddenDirs: true,
+  });
 }
 
 function toPosix(p) {
@@ -339,6 +336,7 @@ function collect(asciiOnly) {
   const counts = {};
   let scanned = 0;
   let total = 0;
+  let vanished = 0;
   for (const dir of SCAN_DIRS) {
     const abs = path.join(ROOT, dir);
     if (!fs.existsSync(abs)) continue;
@@ -346,15 +344,22 @@ function collect(asciiOnly) {
       const rel = toPosix(path.relative(ROOT, file));
       // 白名单文件整文件豁免:它们在名单里的原因就是「必须英文 + 纯 ASCII」。
       if (asciiOnly.has(rel)) continue;
+      const raw = readForScan(file);
+      /* 消失的那一份**不计进 `scanned`**：这条是棘轮，把「没读到」算成「读到且干净」
+       * 会让下一轮的基线比这一轮的覆盖面更宽 —— 那是判据在自己没去过的地方报绿。 */
+      if (raw === null) {
+        vanished += 1;
+        continue;
+      }
       scanned += 1;
-      const n = countEnglishCommentLines(fs.readFileSync(file, "utf8"));
+      const n = countEnglishCommentLines(raw);
       if (n > 0) {
         counts[rel] = n;
         total += n;
       }
     }
   }
-  return { counts, scanned, total };
+  return { counts, scanned, total, vanished };
 }
 
 function readBaseline() {
@@ -364,12 +369,16 @@ function readBaseline() {
 
 async function main() {
   const asciiOnly = await asciiOnlyModules();
-  const { counts, scanned, total } = collect(asciiOnly);
+  const { counts, scanned, total, vanished } = collect(asciiOnly);
+  /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」，而 `total` / `scanned`
+     都会因此偏小（口径见 `gate-scan-read.cjs`：只降级 ENOENT、不许静默）。 */
+  const note = vanishedNote(vanished);
 
   if (REPORT_ONLY) {
     const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     console.log(
-      `扫描 ${scanned} 个代码文件:疑似英文注释 ${total} 行,分布在 ${rows.length} 个文件`,
+      `扫描 ${scanned} 个代码文件:疑似英文注释 ${total} 行,分布在 ${rows.length} 个文件` +
+        note,
     );
     for (const [rel, n] of rows)
       console.log(`  ${String(n).padStart(5)}  ${rel}`);
@@ -380,6 +389,16 @@ async function main() {
   const hadBaseline = fs.existsSync(BASELINE);
 
   if (UPDATE) {
+    /* 读数不完整时**不许记账**：少读一份就少算几行，把这样的读数写进基线 = 那几行
+     * 从此不会被任何人报出。与 `check-dead-exports` / `check-gate-repo-boilerplate`
+     * 同一条口径。 */
+    if (vanished > 0) {
+      console.error(
+        `[comment-language] 拒绝 --update：本轮有 ${vanished} 份文件在扫描期间消失，` +
+          "读数不完整。\n  等并发用例跑完再执行（基线是账，不能记在没读过的面上）。",
+      );
+      process.exit(1);
+    }
     /* 同 `check-dead-exports` / `check-circular-deps` 那一格：note 里写着「只许降不许升」，
      * 而这一支此前无条件落盘 —— 新写几行英文注释后跑一次 --update 就把它们收进基线。
      * 判据升级（RULE_VERSION 变了）是另一件事：那一档允许重写，且必须先改常数。 */
@@ -457,7 +476,8 @@ async function main() {
     console.error(
       "\n修法:把注释改成中文（专有名词 / 命令 / 路径 / 错误原文保留英文）。" +
         "\n  确实必须写英文的构建期模块 → 登记进 docs/reference-facts.md 的" +
-        "\n  `comment.language.asciiOnly` 一行（规范 launch-and-build §9.6）。",
+        "\n  `comment.language.asciiOnly` 一行（规范 launch-and-build §9.6）。" +
+        note,
     );
     process.exit(1);
   }
@@ -474,7 +494,8 @@ async function main() {
   }
 
   console.log(
-    `✓ 无新增英文注释（§12.4.6;基线 ${baseline.total ?? 0} 行,当前 ${total} 行,扫描 ${scanned} 个文件）`,
+    `✓ 无新增英文注释（§12.4.6;基线 ${baseline.total ?? 0} 行,当前 ${total} 行,扫描 ${scanned} 个文件）` +
+      note,
   );
 }
 

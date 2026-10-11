@@ -93,8 +93,12 @@
  *
  * 退出码 0 = 通过，1 = 阻断。
  */
-const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -124,15 +128,9 @@ const EXPECT_POLL_RE = /expect\s*\.\s*poll\s*\(/g;
  */
 const ISOLATION_DECL_RE = /\/\/\s*并发档\s*[：:]\s*(\S.*)/;
 
-function walk(dir, out = []) {
-  if (!fs.existsSync(dir)) return out;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === "node_modules") continue;
-    const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walk(abs, out);
-    else if (TEST_FILE_RE.test(e.name)) out.push(abs);
-  }
-  return out;
+/** 枚举扫描面（消失容错与「只降级 ENOENT」的口径在 `gate-scan-read.cjs`）。 */
+function walk(dir) {
+  return walkForScan(dir, TEST_FILE_RE);
 }
 
 /**
@@ -320,12 +318,14 @@ function lineOf(src, index) {
 }
 
 /**
- * 扫一个文件，返回它命中的三类事实。
+ * 扫一个文件，返回它命中的三类事实；文件在「列目录 → 读内容」之间消失时返回 `null`
+ * （口径见 `gate-scan-read.cjs`：只降级 ENOENT、不许静默、消失数要进结论行）。
  * @param {string} abs
- * @returns {{concurrentSites: number[], pollSites: number[], isolationNotes: string[]}}
+ * @returns {{concurrentSites: number[], pollSites: number[], isolationNotes: string[]} | null}
  */
 function scanFile(abs) {
-  const raw = fs.readFileSync(abs, "utf8");
+  const raw = readForScan(abs);
+  if (raw === null) return null;
   const masked = maskNonCode(raw);
 
   const concurrentSites = [];
@@ -353,9 +353,16 @@ function main() {
   const concurrentFiles = [];
   let concurrentSites = 0;
 
+  let vanished = 0;
+
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    const { concurrentSites: sites, pollSites, isolationNotes } = scanFile(abs);
+    const hit = scanFile(abs);
+    if (hit === null) {
+      vanished += 1;
+      continue;
+    }
+    const { concurrentSites: sites, pollSites, isolationNotes } = hit;
     if (sites.length === 0) continue;
 
     concurrentSites += sites.length;
@@ -390,7 +397,9 @@ function main() {
   if (problems.length === 0) {
     console.log(
       `[concurrency] OK —— ${concurrentSites} 处并发站点 / ${concurrentFiles.length} 份文件，` +
-        "隔离声明齐全、无 `expect.poll` 冲突。",
+        "隔离声明齐全、无 `expect.poll` 冲突。" +
+        /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。 */
+        vanishedNote(vanished),
     );
     return 0;
   }
