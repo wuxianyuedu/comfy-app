@@ -38,7 +38,7 @@ export function ModelLibrary() {
   return (
     <DocumentFrame
       width="wide"
-      className="px-4 py-8 sm:px-8 sm:py-10"
+      className="px-4 py-6 sm:px-8 sm:py-7"
       backdrop={<AuroraBackground />}
     >
       {/* 页头的名字走 `pageHeaderTitle("models")` —— 与侧栏 / 页签同一个出处
@@ -47,8 +47,8 @@ export function ModelLibrary() {
           `<h1>纯文本</h1>`、看不见 prop 里的字面量（ISSUE #1673）。 */}
       <PageHeader
         className="mb-6"
-        title={pageHeaderTitle("models")}
-        description="本机 ComfyUI 能用哪些 —— 按扫描目录分类，每个目录即一种独立的模型类型。"
+        srTitle={pageHeaderTitle("models")}
+        help="本机 ComfyUI 能用哪些 —— 按扫描目录分类，每个目录即一种独立的模型类型。"
         actions={
           <>
             <Button
@@ -415,7 +415,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                       <h3 className="text-ink-faint text-xs font-medium tracking-wide uppercase">
                         可添加 · {c.availableRows.length}
                       </h3>
-                      <p className="text-ink-muted text-2xs">
+                      <p className="text-ink-muted text-xs">
                         点「启用」加入扫描列表
                       </p>
                     </div>

@@ -88,6 +88,7 @@
 --color-primary-strong
 --color-ring
 --color-ring-shadow
+--color-scrim
 --color-secondary
 --color-secondary-foreground
 --color-seed-dice-bg

@@ -100,6 +100,20 @@ const config = {
   outputFileTracingIncludes: {
     "/**": ["./node_modules/next/dist/compiled/next-server/*runtime.prod.js"],
   },
+  // ── dev 期回环两种拼法都要放行（Next 16 的 dev 资源跨源闸门）────────
+  // 撞车点：本仓把回环主机统一收成 `127.0.0.1`（硬规则 20 / §12.14，Node fetch
+  // 会把 `localhost` 先解析成 `::1`），而 `pnpm dev` 这条裸链路起的是
+  // `next dev --turbo -p <port>`（**不带 `-H`**）—— 此时 Next 认定的规范 dev 源是
+  // `localhost:<port>`，于是从 `http://127.0.0.1:<port>` 打开页面时，它的
+  // `/_next/hmr` WebSocket 被判成跨源并直接掐断（实测：该请求拿到的是「连接被
+  // 撕掉」而不是 101，Chrome 侧表现为 `ERR_INVALID_HTTP_RESPONSE`）。HMR 客户端
+  // 连不上就反复整页重载 —— 症状是「页面自己一直刷、侧栏点了没反应」，而不是
+  // 一条能读出的错误。
+  // 启动器那条链（`scripts/dev-launcher.mjs` → `next dev … -H 127.0.0.1`）不会
+  // 撞上：`-H 127.0.0.1` 时两种拼法实测都回 101。所以这里补的是**裸链路**那一格。
+  // 只放两个回环名，不放局域网地址：这颗键是 dev-only 的安全默认，收紧的方向不是
+  // 靠扩大豁免面去修另一个入口。
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   // tsconfig paths 在无 baseUrl（TS6/7 已移除）时 Next 不自动生成 alias，手动补齐
   turbopack: {
     resolveAlias: {

@@ -45,7 +45,7 @@ function OverlayClassDemo() {
       </div>
       <div className="flex flex-col gap-1.5">
         <span className="text-ink-muted font-mono text-[11px]">
-          dialogBackdropClass(&quot;bg-black/40&quot;) —— 全屏视图那一档
+          dialogBackdropClass(&quot;bg-black/40&quot;) —— 调用处覆盖底色（少用）
         </span>
         <pre className="rounded-lg border p-3 font-mono text-xs whitespace-pre-wrap">
           {dialogBackdropClass("bg-black/40")}
@@ -60,12 +60,13 @@ function OverlayClassDemo() {
   );
 }
 
-/** 默认档：`ui/dialog` / `ui/sheet` 用的那一份（`bg-black/10` +
-  `supports-backdrop-filter:backdrop-blur-xs`），由上面那条 `render` 给出。 */
+/** 默认档：`ui/dialog` / `ui/sheet` / `ui/fullscreen-dialog` 共用的那一份
+  （`bg-scrim` + `supports-backdrop-filter:backdrop-blur-xs`）—— 三处同一份，
+  由上面那条 `render` 给出。 */
 export const Default: Story = {};
 
-/** 调用处传 `className`：全屏视图把它换成更重的 `bg-black/40`
- *  —— 同一份遮罩、只有底色不同，这正是「收口一处」的意义。 */
+/** 调用处传 `className` 覆盖底色（同一份遮罩、只有底色不同）——
+ *  默认三处已统一走 `--color-scrim`，**只在确有更重/更轻的理由时才覆盖**。 */
 export const WithCustomClass: Story = {
   render: () => (
     <div className="flex w-184 flex-col gap-4">

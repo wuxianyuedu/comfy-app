@@ -8,8 +8,8 @@
 不再有 `build-launcher*.ps1` / `start-tauri.spec` / `start-tauri*.exe`。
 
 > **结构约定（2026-09-04 修订）**：Windows 双击入口一律 `*.ps1`，按用途归入子目录
-> （`start/` 启动与初始化、`build/` 打包类、`docs/` 文档工具、`registry/` 团队 Registry、
-> `studio/` 数据库工具等）；业务逻辑放在 `tools/scripts/*.ps1`，与 `build/` 下的入口一一对应（同名的两个
+> （`start/` 启动与初始化、`build/` 打包类、`docs/` 文档工具、`shadcn-registry/` 团队 Registry、
+> `database-studio/` 数据库工具等）；业务逻辑放在 `tools/scripts/*.ps1`，与 `build/` 下的入口一一对应（同名的两个
 > 文件必然一个是入口、一个是逻辑，见下方「入口 / 逻辑对照」）。入口只做三件事：定位项目根、
 > 调用逻辑脚本、透传退出码——这些公共能力收敛在 `scripts/entry-common.ps1`。所有 `.ps1`
 > 以 UTF-8 with BOM 保存，避免中文乱码。
@@ -36,7 +36,7 @@
 >
 > **各分类目录另有 README**（该目录「有哪些入口、各自什么时候用」）：
 > [start/](start/README.md) · [build/](build/README.md) · [docs/](docs/README.md) ·
-> [registry/](registry/README.md) · [studio/](studio/README.md) · [scripts/](scripts/README.md)
+> [shadcn-registry/](shadcn-registry/README.md) · [database-studio/](database-studio/README.md) · [scripts/](scripts/README.md)
 > 。本文件保留**全目录视图**与深度说明（打包 / 启动流程 / 排障），不重复各目录的清单。
 
 ## 新增入口前先读
@@ -67,9 +67,9 @@
 | `build/build-all.ps1` | build/ | 一键编排 | 构建 release 壳（= 唯一入口 `app.exe`） |
 | `build/rebuild-static.ps1` | build/ | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
 | `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成 `docs/generated/`（跨平台等价：`pnpm doc:gen`；逻辑在 `scripts/generate-docs.ps1` / `scripts/generate-docs.mjs`） |
-| `registry/start-registry.ps1` | registry/ | 团队 Registry | 启动本地 shadcn Registry HTTP 服务（`D:/dev/Comfy-APP-T3/registry`，供 `shadcn add @comfy-app-t3/*`） |
+| `shadcn-registry/start-shadcn-registry.ps1` | shadcn-registry/ | 团队 shadcn Registry | 启动本地 shadcn Registry HTTP 服务（`D:/dev/Comfy-APP-T3/registry`，供 `shadcn add @comfy-app-t3/*`） |
 | `README.md` | (根) | 文档 | 本文件 |
-| `studio/start-studio.ps1` | studio/ | 数据库 | 启动 Drizzle Studio（逻辑在 `studio/start-studio.logic.ps1`） |
+| `database-studio/start-database-studio.ps1` | database-studio/ | 数据库 | 启动 Drizzle Studio（逻辑在 `database-studio/start-database-studio.logic.ps1`） |
 | `scripts/` | scripts/ | 逻辑脚本 | `build/*.ps1` 入口对应的 PowerShell 实现：环境检查 / 打包 / 日志都在这里 |
 | `scripts/Log-Common.ps1` | scripts/ | 公共库 | 构建脚本的统一日志输出（`Log` / `Invoke-Logged` / `Open-Log`，落 `log/tools/*.log`） |
 | `scripts/Build-Guard.ps1` | scripts/ | 公共库 | 构建前置守卫：编译前检测 `target\{release,debug}\app.exe` 是否仍在运行（被占用的壳会让 cargo 覆盖产物时报 `os error 5`，且要等整轮编译走完才失败）。**陈旧壳**（exe 路径指不到本仓库）与双击构建下的占用一律自动 `taskkill /T /F` 回收后继续；只有「用户可能正开着应用」才中止。另含「目录删不掉时到底是谁占着」的通用出口（`Get-ProductDirHolder` / `Write-ProductDirLockHint`） |
@@ -86,8 +86,8 @@
 | `build/build-standalone.ps1` | `scripts/build-standalone.ps1` |
 | `build/build-tauri-release.ps1` | `scripts/build-tauri-release.ps1` |
 | `build/rebuild-static.ps1` | `scripts/rebuild-static.ps1` |
-| `registry/start-registry.ps1` | `scripts/start-registry.ps1` |
-| `studio/start-studio.ps1` | `studio/start-studio.logic.ps1`（本类无 `scripts/` 分层，后缀区分） |
+| `shadcn-registry/start-shadcn-registry.ps1` | `scripts/start-shadcn-registry.ps1` |
+| `database-studio/start-database-studio.ps1` | `database-studio/start-database-studio.logic.ps1`（本类无 `scripts/` 分层，后缀区分） |
 | `start/start-web.ps1` | `scripts/dev-launcher.ps1` |
 | `start/start-tauri.ps1` | 直接启动 `src-tauri\target\release\app.exe`（编排由壳自己承担，见 `src-tauri/src/shell_launch.rs`） |
 | `start/start-tauri-dev.ps1` | `scripts/dev-launcher.ps1 -Tauri` |
@@ -100,8 +100,8 @@
 | `start/start-desktop.ps1` | —（自检逻辑内联在入口里，不另起逻辑脚本） |
 
 > **启动类入口原先平铺在仓库根**（`start-web.ps1` / `run-local.ps1` …），2026-09-04
-> 归入 `start/`（ISSUE #29）：根目录只留工程配置，入口按用途与 `build/` / `registry/` /
-> `studio/` 并列。入口只做定位与收尾，逻辑一律在 `scripts/` 或 `tools/scripts/`。
+> 归入 `start/`（ISSUE #29）：根目录只留工程配置，入口按用途与 `build/` / `shadcn-registry/` /
+> `database-studio/` 并列。入口只做定位与收尾，逻辑一律在 `scripts/` 或 `tools/scripts/`。
 
 ## 按用途分类（dev 构建 vs standalone 构建）
 

@@ -1,6 +1,6 @@
-// ── Workshop MCP：stdio transport 入口 ────────────────────────
+// ── Workshop MCP：stdio transport 入口（tools/workshop-mcp-stdio.ts）──
 // 供外部 AI 客户端（Claude Desktop / Cline / 自定义 agent）以 stdio 连接。
-// 用法：tsx tools/mcp-stdio.ts（或经 npx/pnpm exec）。
+// 用法：tsx tools/workshop-mcp-stdio.ts（或经 npx/pnpm exec）。
 // 注意：所有日志必须走 stderr，stdout 仅用于 MCP 协议帧。
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { buildWorkshopMcpServer } from "@/server/mcp/workshop-mcp";
@@ -13,6 +13,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("[mcp-stdio] 启动失败:", err);
+  console.error("[workshop-mcp-stdio] 启动失败:", err);
   process.exit(1);
 });

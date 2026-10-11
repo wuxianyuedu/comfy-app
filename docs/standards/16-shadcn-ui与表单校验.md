@@ -383,10 +383,19 @@ node scripts/check-overlay-z.cjs --update   # 治理后收紧基线
 
 **内容层的遮罩不在此列**：浮层遮罩的 class 串统一由
 `src/components/ui/dialog-overlay.ts` 的 `dialogBackdropClass()` 产出，
-`ui/dialog` 的 `DialogContent` 与 `ui/sheet` 的 `SheetContent` 共用同一份，
+`ui/dialog` 的 `DialogContent` 与 `ui/sheet` 的 `SheetContent` **默认各铺一份**，
 它同时承载「顶部让出标题行」的硬规则（ISSUE #310：遮罩曾铺满视口，把页签与
-窗口按钮一起盖住）。**内容层不再自绘遮罩** —— base-ui 的 Backdrop 负责点遮罩
-关闭，自绘的那一份会与它叠成两层。
+窗口按钮一起盖住）。
+
+**模态弹窗默认带遮罩是一条规定，不是一个可选项**（ISSUE #1742）：base-ui 的
+`DialogPortal` 只自动注入一层 `InternalBackdrop`（`role="presentation"`、
+`pointer-events` 兜底 + 外部点击判定），它是**透明**的 —— 只负责「点弹窗外关掉」，
+**不负责好看**。此前 `DialogContent` 就停在这里：弹窗背后又亮又像能点，用户分不清
+哪块是活的（实测现场：数据库过期确认弹窗背后整块首页照常发光）。现在
+`DialogContent` 默认渲染 `DialogOverlay`，`showOverlay={false}` 是唯一的退出阀
+（只给「本就要贴宿主、不该压暗背后」的极少数内嵌场景）。**别在调用处再铺一份** ——
+那会与它叠成两层。遮罩底色是语义 token `--color-scrim`（浅 / 深两态各自取值），
+「压暗了多少」由 `tests/dialog-backdrop-contrast.test.ts` 从编译产物真量。
 
 **为什么 `lib/full-screen-layer.ts` 的 `overlayClass` 参数不变**：它是**定位**
 判据（顶部让出标题行），层级由调用方经 `zClass` 参数给 —— 两件事分开，才让
@@ -5523,6 +5532,42 @@ navigation-menu pagination radio-group scroll-area slider table
 `PageHeader` 的 `as` 因此留了 `"h1" | "h2" | "p"` 三档：标题是数据、或屏级 `h1`
 在别处时，用 `h1` 会与它所在屏的屏级标题撞成两个（一屏一 `h1` 是读屏跳转的前提）。
 
+#### 16.2.4.73.1 「一屏一名」的下半截：同一个名字说两遍也是重复（ISSUE #1693）
+
+上面收掉的是**两个不同的名字**（「队列」/「队列与运行」），没收掉**同一个名字出现
+两次**：页签写着「队列」、屏内 `h1` 也写着「队列」。后者读者什么都没多知道，标题区
+却实打实吃掉一整行（`.u-title-page` 是 1.5rem 档）+ 一行副说明 —— 用户的原话是
+「只留上面的小的就行，大的占空间，说明的直接显示也去掉，也占空间，可用弄个说明
+按钮，悬浮显示详细说明」。所以 `PageHeader` 多了两件：
+
+| 新增          | 语义                                                                                                     | 用在什么时候                                                                 |
+| ------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `srTitle`     | 省略可见 `title` 时**仍写进 DOM** 的屏名（`sr-only`）                                                     | 页签（或顶栏）已经在说屏名、而那一次出现是重复的屏                            |
+| `help`        | 把那句解释收成一枚悬浮「说明」按钮（走 `ui/hint`，不用原生 `title=`）                                      | 「读者偶尔才想知道」的解释；常驻显示白占一行、还挤压下方内容的那一类          |
+
+三条口径：
+
+1. **`title` 可选，但「一屏一个可跳转的标题」不变**。⭐ 这是最容易做错的一格：
+   把 `h1` 整个删掉确实腾出了空间，可读屏用户也失去了那一次跳转（`h1` 是屏幕之间
+   导航的主要锚点）。所以省略可见标题时**用 `srTitle` 把屏名留在 `sr-only` 里** ——
+   「别占空间」与「没有标题」是两件事。
+2. **`description` / `help` 二选一，同时传以 `description` 为准**（常驻优先）。
+   两者说的是同一句话，同时生效就是**把用户抱怨的「说两遍」换个位置再说一遍**。
+3. **没有可见标题时，说明钮并进右侧动作组**（不孤零零贴在最左边、与页签和动作组
+   各隔一大片空白）；有可见标题时它跟着标题走 —— 读者在「这一屏叫什么」的地方
+   顺路看见「还有一句解释」。
+
+**改动面**（ISSUE #1693 那一批）：队列 / 历史 / 模型（`studio/` 与 `model/` 两处）/
+资源库 / 控制台 六屏 —— 它们的屏名都在页签上、一行副说明都是「读者偶尔才想知道」
+那一类。首页那批**刻意没动**的两类：设置（标题与说明同处一行、本来就是紧凑形态）、
+「所有项目」/ 产出（`title` 是**数据**不是屏名，属于上面「页头即数据」那一档）。
+
+**判据**：`src/components/ui/page-header.test.tsx` —— 省略 `title` 时 `h1` 带
+`sr-only` 且不带 `u-title-page`（不占视觉空间、也不冒充可见标题）、不传 `srTitle`
+时确实没有 `h1`（不凭空造标题）、`help` 渲染出的是带走 `data-slot="tooltip-trigger"`
+的真按钮、`description` 在时不渲染悬浮钮。**形状那一半（P86）不受影响**：那一锚是
+`.u-title-page` + `mt-1 text-sm` **同现**，省略可见标题后两个锚都不在，恰好放过。
+
 #### 判据：`tests/page-name-single-source.test.ts`
 
 按**形态**取锚（不按名字找，§16.2.4.6 的教训），五条：
@@ -5958,7 +6003,7 @@ D:/dev/Comfy-APP-T3/registry/
 
 ### 启动本地服务（必须，shadcn CLI 不支持 `file://`）
 
-双击 `tools\registry\start-registry.ps1`（或手动）：
+双击 `tools\shadcn-registry\start-shadcn-registry.ps1`（或手动）：
 
 ```bash
 node D:/dev/Comfy-APP-T3/registry/serve.mjs {{registry.port}}
