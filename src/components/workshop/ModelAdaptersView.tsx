@@ -196,7 +196,10 @@ export function ModelAdaptersView() {
      页眉**不自绘关闭按钮** —— 「关」这件事在视图这一层由页签自己的关闭按钮承担，
      这里再画一枚就是两个入口做同一件事（弹窗时代才需要自绘，那时没有页签）。 */
   return (
-    <DocumentFrame width="wide" className="flex flex-col gap-6 py-6">
+    <DocumentFrame
+      width="wide"
+      className="flex flex-col gap-6 px-4 py-8 sm:px-8 sm:py-10"
+    >
       <header>
         <h3 className="text-ink-strong u-title">模型适配</h3>
         <p className="text-muted-foreground mt-1 text-xs">

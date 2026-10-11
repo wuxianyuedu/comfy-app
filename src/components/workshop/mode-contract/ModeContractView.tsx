@@ -23,7 +23,7 @@ export function ModeContractView() {
   const controller = useModeContractEditor();
 
   return (
-    <DocumentFrame width="wide" className="py-6">
+    <DocumentFrame width="wide" className="px-4 py-8 sm:px-8 sm:py-10">
       <ModeContractEditorView controller={controller} />
     </DocumentFrame>
   );
