@@ -92,3 +92,49 @@ export function clearLaunchLoadingStub(): void {
   }
   document.getElementById(LOADING_STUB_ID)?.remove();
 }
+
+/**
+ * 这个壳带不带调试能力（= 编译期有没有 `devtools` feature）。
+ *
+ * 判据在壳进程里（`devtools_available` 命令）：Tauri 的 `open_devtools()` 门在
+ * `#[cfg(any(debug_assertions, feature = "devtools"))]` 后面，而本仓库的壳一律是
+ * `cargo build --release` 编的（`debug_assertions` 恒为 false）——**有没有这个
+ * feature 才是唯一判据**，前端猜不出来，只能问。
+ *
+ * 用途：决定「打开开发者工具」入口要不要渲染。发布壳不带该 feature 时入口不出现，
+ * 而不是出现了点一下必然报错。非壳环境（浏览器 / dev server）返回 false。
+ *
+ * 结果**在一次会话内不变**（feature 是编译期的），所以调用方可以放心缓存。
+ */
+export async function devtoolsAvailable(): Promise<boolean> {
+  if (!isDesktopShell()) return false;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return (await invoke<boolean>("devtools_available")) === true;
+  } catch {
+    // 旧壳没有这个命令：按「不可用」处理，入口不显示（而不是显示一个坏按钮）。
+    return false;
+  }
+}
+
+/**
+ * 打开当前 webview 的开发者工具（DevTools）。
+ *
+ * 调壳命令 `open_devtools`（Rust 侧见 src-tauri/src/lib.rs 的同名函数）：
+ * `@tauri-apps/api` v2 **没有** `openDevtools()` 这一方法，所以走应用自有命令，
+ * 而不是 `getCurrentWebview().openDevtools()` 之类的（不存在的）内置出口。
+ *
+ * 返回 `boolean` 表示是否真的打开了，失败**静默降级**为 false：这是开发者手动
+ * 触发的调试动作，失败不该弹错误打断当前操作（调用方一般只在 debug 壳里暴露入口）。
+ * 非壳环境 / 未启用该 feature 的壳都返回 false。
+ */
+export async function openDevtools(): Promise<boolean> {
+  if (!isDesktopShell()) return false;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("open_devtools");
+    return true;
+  } catch {
+    return false;
+  }
+}

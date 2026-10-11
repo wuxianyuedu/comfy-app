@@ -829,6 +829,12 @@ throw，由 dev-launcher 把结论写进 `run/launch-status.json`（启动页显
    WARN 提醒重编（`cd src-tauri; cargo build --release --features custom-protocol`）。
    窗口配置与启动页是编译期内嵌的，只改源码不重编壳 = 跑旧逻辑（黑屏问题的
    直接来源）。
+   **可选 feature `devtools`**：要让桌面包能开 webview 开发者工具（顶栏「开发者工具」
+   / `⌘/Ctrl+Shift+I` / `F12`）时，命令补成
+   `--features custom-protocol,devtools`。日常发布流程**不带**它 —— 带了等于发布壳
+   自带调试能力，且前端菜单项会多出一个入口（判据是壳编译期有没有这个 feature，
+   见 `devtools_available` 命令）。之所以能靠 feature 而不是 `debug_assertions` 分
+   debug / release：这条路径**一律是 release 构建**（`custom-protocol` 那条），后者恒为 false。
 8. **数据库 schema 同步（Drizzle）**：启动时**后台**跑（`spawnSchemaSync` →
    `scripts/db-sync.mjs` → `db-schema-state.mjs` 的 `ensureSchemaCurrent`），
    **不阻塞启动**；指纹一致时毫秒级通过，不一致时自动同步，且**只自动应用

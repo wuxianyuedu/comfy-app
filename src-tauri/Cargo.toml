@@ -21,6 +21,17 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # 重编壳必须带：cargo build --release --features custom-protocol
 [features]
 custom-protocol = ["tauri/custom-protocol"]
+# 开发者工具（webview DevTools）：转发 tauri 的同名 feature，使
+# `WebviewWindow::open_devtools()` 在 **release 构建**里也存在。
+#
+# 为什么必须显式转发、不能只靠 debug_assertions：dev/桌面的壳一律是
+# `cargo build --release --features custom-protocol` 编的（见
+# docs/standards/launch-and-build.md §5/§7），`debug_assertions` 恒为 false，
+# 只写 `#[cfg(debug_assertions)]` 的话这套东西在**日常开发路径上永远不可用**。
+#
+# 调试时手动带上：`cargo build --release --features custom-protocol,devtools`
+# （不带就是普通发布壳，命令返回「未启用」，前端据此不显示入口）。
+devtools = ["tauri/devtools"]
 
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
