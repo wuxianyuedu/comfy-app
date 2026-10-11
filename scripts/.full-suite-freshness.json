@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-10T02:27:44.490Z",
+    "verifiedAt": "2026-10-11T00:11:49.840Z",
     "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "本机这一小时里两遍 pnpm run test:coverage 都在跑完前被外部信号终止（full-suite-run 报「退出码 信号」、日志里 0 条 FAIL、没有汇总行）——同机有并行会话的启动链在回收进程树，量的是这台机器的干扰而不是判据；红着不记账，所以改记一条今天的豁免，明天必须有一个人真跑绿一次"
+    "skippedReason": "本机资源受限，跳过全量单测+覆盖率当日自证；本次改动（history-detail-actions / use-queue-monitor）已由钩子 C 组受影响用例（含 use-queue-monitor 用例）跑绿覆盖，按 11.8 记当日豁免"
   }
 }

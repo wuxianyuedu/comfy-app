@@ -23,6 +23,38 @@ export async function openTaskFolder(
   return vanillaApi.task.openFolder.mutate({ id: taskId });
 }
 
+/**
+ * 在系统文件管理器里**定位**任务的产物目录（队列面板「输出目录」按钮的落点）。
+ *
+ * 两步复用既有出口：`task.openFolder` 负责「算目录 + 越界判定 + 目录在不在」，
+ * `setting.revealPath` 负责「把控制权交给文件管理器」（本机 `explorer /select`，
+ * 见 `~/lib/shell/reveal-path`，日志面板点路径走的是同一条）。
+ *
+ * **为什么不是 `comfyapp://`**：那条要求用户先装协议助手，未装时点了什么都不发生
+ * —— 而队列面板此前连导航都没发（`openTaskFolder` 的 `comfyappUrl` 拿到就丢，
+ * 只把 `opened` 读成成败），于是这个按钮在任何环境下都只报一句「已交给系统打开
+ * 输出目录」而资源管理器一动不动。`revealPath` 的闸门（存在 + 在检出目录内）
+ * 对产物目录天然成立：它由 `taskOutputDir()` 算自 `<cwd>/generated`。
+ */
+export async function revealTaskFolder(
+  taskId: string,
+): Promise<{ ok: boolean; detail: string }> {
+  const folder = await openTaskFolder(taskId);
+  if (!folder.opened || !folder.absolutePath) {
+    return {
+      ok: false,
+      detail:
+        folder.error === "directory missing"
+          ? "该任务尚未生成文件目录"
+          : (folder.error ?? "未能打开输出目录，可在任务详情里复制文件路径"),
+    };
+  }
+  const revealed = await vanillaApi.setting.revealPath.mutate({
+    path: folder.absolutePath,
+  });
+  return { ok: revealed.ok === true, detail: revealed.detail };
+}
+
 /** 拉取任务执行时捕获的工作流快照（下载 workflow.json 用）。 */
 export async function fetchTaskWorkflow(taskId: string): Promise<{
   workflow?: unknown;

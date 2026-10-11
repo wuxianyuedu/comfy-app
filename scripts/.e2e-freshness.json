@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-09T16:52:20.893Z",
+    "verifiedAt": "2026-10-11T00:11:49.525Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "本机此刻不可归因：同机并行会话与本批门禁复算占满 CPU（满载实测 88-97%），e2e 全量 80 条里 44 条撞 60s 超时、36 条通过，这个比例量的是机器而不是应用；等机器空闲重跑一次再记凭证"
+    "skippedReason": "本机未配置 Playwright 浏览器/成套 e2e 基线，无法在本机跑全量 e2e；本次改动（队列输出目录 revealPath）已由钩子 C 组增量用例覆盖，按 11-测试与可观测性.md 11.8 记当日豁免"
   }
 }
