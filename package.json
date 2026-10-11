@@ -75,7 +75,6 @@
     "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-updater": "^2.13.1",
     "@trpc/client": "^11.19.0",
-    "@trpc/react-query": "^11.19.0",
     "@trpc/server": "^11.19.0",
     "@trpc/tanstack-react-query": "^11.19.0",
     "@xyflow/react": "^12.12.0",
