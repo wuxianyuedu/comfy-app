@@ -929,16 +929,39 @@ test.describe("应用页签与全屏视图 @critical", () => {
      *   1. 默认宽度 ≥ 800px（老形态恒为 384px，直接红）；
      *   2. 加宽后**明显更宽**且贴近视口（老形态前后差值 0）；
      *   3. 加宽后不溢出视口（贴边但不出界）。
+     *
+     * ⚠️ 量宽度**必须等几何落定**（ISSUE #1769）：弹窗自身的宽度是补间的，
+     * 标签翻转只是提交、不是落定；详见用例体内那段说明。旧写法就是在这里
+     * 量早了，读数恒为补间起点、恰好等于加宽前的值，于是「三次同读数 1152」
+     * —— 那不是「按钮没生效」，是**测量窗口**错了。
+     * （顺带一笔：1152 不是「1280 的 0.9 档」，而是默认档 `w-6xl` = 72rem 的
+     * 实际值 —— 它与视口无关，所以「同读数」本身不构成任何一致性证据。）
      */
     test("@critical 日志弹窗默认够宽，且加宽按钮真的变宽", async ({ page }) => {
       await stubBackend(page);
       await stubLogs(page);
       await openPanel(page);
 
-      const popupWidth = () =>
-        page
-          .locator('[data-slot="dialog-content"]')
-          .evaluate((el) => Math.round(el.getBoundingClientRect().width));
+      /**
+       * 宽度必须量在**几何落定之后**（ISSUE #1769）。
+       *
+       * 弹窗基元（`ui/dialog` 的 Popup）带 base-ui 的 popup 过渡
+       * （`transition: all` + 调用处的 `duration-100`），于是**宽度本身是补间的**：
+       * 点下「加宽」那一帧标签就翻成「收缩」（那是 React 提交的结果），
+       * 而宽度要用约 100ms 从 1152 补到 1248。入场动画（`zoom-in-95`，keyframe）
+       * 同理——它作用在 transform 上，`getBoundingClientRect()` 会把缩放算进去。
+       *
+       * 旧写法在标签翻转后**立刻**量：实测（本机、`CI=1`、`--workers=1`、20 轮）
+       * 稳定量到 `1152 -> 1152`（= 补间的**起点**，恰好等于加宽前的读数），
+       * `after > before` 因此必红；`before` 同样是动画中的读数（实测 1128 / 1141
+       * 两种），末尾那句「收缩回到默认档」于是去轮询一个落定后不再出现的值。
+       * 两处的病根是同一个：**量在了状态落定之前**（规范 11 §11.13 / ISSUE #1267）。
+       *
+       * 所以三处读数一律走本文件已有的 `settleBox` —— 它等的正是**几何本身稳定**
+       * （相邻两次量到同一矩形），与动画时长解耦，不靠 `waitForTimeout(固定值)`。
+       */
+      const popup = page.locator('[data-slot="dialog-content"]');
+      const popupWidth = async () => Math.round((await settleBox(popup)).width);
       const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
 
       const before = await popupWidth();
@@ -957,9 +980,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
       expect(after).toBeLessThanOrEqual(viewport.width);
       expect(after).toBeGreaterThan(viewport.width * 0.9);
 
-      /* 收缩回到默认档，且宽度不残留。 */
+      /* 收缩回到默认档，且宽度不残留：同样量落定后的宽度，与开面板时那次比。 */
       await page.getByTitle("收缩").click();
-      await expect.poll(popupWidth).toBe(before);
+      await expect(page.getByTitle("加宽")).toBeVisible();
+      expect(await popupWidth()).toBe(before);
     });
 
     test("@critical 行头里类别计数在下拉左侧，下拉贴住右侧操作区", async ({
