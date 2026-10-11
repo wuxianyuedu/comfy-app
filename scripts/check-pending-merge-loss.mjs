@@ -50,13 +50,15 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { findEarlierVersion, isGenerated } from "./merged-side-loss-core.mjs";
+import { historyByFile, resolveBlobs } from "./merged-side-loss-git.mjs";
 
 /** 在仓库内跑一条 git 命令；失败回 `null`（取不到 ≠ 空值，据此保守放行）。 */
-function git(args) {
+function git(args, input) {
   try {
     return execFileSync("git", ["-c", "core.quotepath=false", ...args], {
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: input === undefined ? ["ignore", "pipe", "ignore"] : ["pipe", "pipe", "ignore"],
+      input,
       maxBuffer: 1 << 28,
     }).trim();
   } catch {
@@ -101,40 +103,60 @@ export function scanPendingMerge({ source = "" } = {}) {
   if (!head || !base) return { ok: false, reason: "取不到 merge-base（浅克隆？）" };
 
   /* HEAD 与索引之间改动的路径 —— 合并结果相对本侧动了哪些文件。
-   * 用 `--name-only -z` 一次取完（逐文件 resolve 索引版本在下面）。 */
+   * 用 `--name-only -z` 一次取完。 */
   const changed = (git(["diff", "--name-only", "-z", "HEAD"]) || "")
     .split("\0")
     .filter(Boolean);
+  const files = changed.filter((f) => !isGenerated(f));
+  if (files.length === 0) return { ok: true, lost: [] };
+
+  /* 取证批量做（两个执行者共用 `merged-side-loss-git.mjs`，理由与实测表都在那一份的
+   * 模块头）：候选历史对每个合并父各一次遍历，blob 一次批量解析。
+   * 这里不能「先逐文件判①③、只对留下的那些再取历史」—— 那正是把 spawn 数还回来的写法。
+   * 任一次没跑起来就整单放行并说明：这一档的边界口径本来就是保守放行（文件头「边界」一节），
+   * 但**不许**把「没取证」说成「没命中」。 */
+  const perHead = [];
+  for (const mh of heads) {
+    const hist = historyByFile(git, { ref: mh, files });
+    if (!hist) return { ok: false, reason: `批量取 ${mh} 的候选历史没跑起来（浅克隆？）` };
+    perHead.push(hist);
+  }
+
+  /* 候选序与旧实现逐字同：先第一个合并父那条线、再第二个，并排除 HEAD 自己那一版。 */
+  const candidates = new Map();
+  const specs = [];
+  for (const f of files) {
+    specs.push(`:${f}`, `HEAD:${f}`, `${base}:${f}`);
+    const older = [];
+    for (const hist of perHead) {
+      for (const s of hist.get(f)) if (s !== head) older.push(s);
+    }
+    candidates.set(f, older);
+    for (const s of older) specs.push(`${s}:${f}`);
+  }
+  const blob = resolveBlobs(git, specs);
+  if (!blob) return { ok: false, reason: "批量解析 blob 没跑起来（`cat-file --batch-check`）" };
 
   const lost = [];
-  for (const file of changed) {
-    if (isGenerated(file)) continue;
-
+  for (const f of files) {
     // ① 结果版（索引）≠ HEAD 版，否则是正常前移。
-    const result = git(["rev-parse", `:${file}`]);
-    const atHead = git(["rev-parse", `HEAD:${file}`]);
+    const result = blob.get(`:${f}`);
+    const atHead = blob.get(`HEAD:${f}`);
     if (!result || !atHead || result === atHead) continue;
 
     /* ③ HEAD 侧确有「还没被取代的改动」：HEAD 那一版与 merge-base 那一版不同。
      * 两边都动过、或只有 HEAD 动过的都在这里留下；「三方一致」的被排除。 */
-    const atBase = git(["rev-parse", `${base}:${file}`]);
+    const atBase = blob.get(`${base}:${f}`);
     if (atBase && atHead === atBase) continue;
 
     /* ② 结果版 == MERGE_HEAD 侧历史上出现过的某一版 —— 整份取了非 HEAD 侧。
-     * 候选历史对整个 MERGE_HEAD 取（每个合并父各一条线），不含「结果本身」那一版。 */
-    const historyShas = [];
-    for (const mh of heads) {
-      const list = git(["log", "--format=%H", "--no-merges", mh, "--", file]) || "";
-      for (const sha of list.split("\n")) {
-        if (sha && sha !== head) historyShas.push(sha);
-      }
-    }
+     * 判定核心取自共用内核；`blobAt` 查已取回的表，不再起进程。 */
     const hit = findEarlierVersion({
       result,
-      historyShas,
-      blobAt: (sha) => git(["rev-parse", `${sha}:${file}`]),
+      historyShas: candidates.get(f),
+      blobAt: (older) => blob.get(`${older}:${f}`) ?? null,
     });
-    if (hit) lost.push(file);
+    if (hit) lost.push(f);
   }
   return { ok: true, lost };
 }

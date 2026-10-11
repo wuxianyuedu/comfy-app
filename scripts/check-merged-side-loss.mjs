@@ -37,6 +37,10 @@
  *    `doc:render` 生成，「退回成旧版」是常态而非事故（实测同一份扫描里 109 份命中里
  *    有 23 份是产物）。留着它们会把真信号淹掉。
  *
+ * 取证怎么取（逐文件遍历 → 两次批量读）与为什么必须批量，记在 `merged-side-loss-git.mjs`
+ * 的模块头；那一份还写清了「候选历史改用一次 `--name-only` 遍历」与逐文件读法的**唯一**
+ * 差别：单路径遍历会在合并处剪枝、漏掉只存在于被并进来那条线上的版本（= 旧读法会漏报）。
+ *
  * ── 它判什么 ──────────────────────────────────────────────────────────
  *
  * 对基线到结果提交之间改动的每一个文件，判断结果版是否「等于基线的某个祖先版本」：
@@ -75,13 +79,15 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { findEarlierVersion, isGenerated } from "./merged-side-loss-core.mjs";
+import { historyByFile, resolveBlobs } from "./merged-side-loss-git.mjs";
 
 /** 一条 git 命令；失败回 `null`（取不到 ≠ 空值，调用方据此判 `2`）。 */
-function git(args) {
+function git(args, input) {
   try {
     return execFileSync("git", ["-c", "core.quotepath=false", ...args], {
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: input === undefined ? ["ignore", "pipe", "ignore"] : ["pipe", "pipe", "ignore"],
+      input,
       maxBuffer: 1 << 28,
     }).trim();
   } catch {
@@ -141,28 +147,46 @@ export function scan({ sha, baseline }) {
   const changed = (git(["diff", "--name-only", "-z", `${baseline}..${sha}`]) || "")
     .split("\0")
     .filter(Boolean);
+  /* 生成物先摘掉（口径 3），剩下的才是这一轮要取证的面。 */
+  const files = changed.filter((f) => !isGenerated(f));
+  if (files.length === 0) return { ok: true, lost: [] };
+
+  /* 取证只要两次遍历：候选历史一次、全部 blob 一次（逐文件 / 逐条历史各起一个 git
+   * 进程的话，成本是「变更文件数 ×（1 + 该文件历史条目数）」，实测约 2–3s/文件，
+   * 一次大 diff 能把这条判据拖到几分钟 —— 见 `merged-side-loss-git.mjs` 的实测表）。
+   * 任一次没跑起来就整体退 2：不许拿半份事实给出「没命中」这种绿。 */
+  const hist = historyByFile(git, { ref: baseline, files });
+  if (!hist) return { ok: false, reason: "批量取候选历史没跑起来" };
+
+  /* 候选集里不含基线那一版自己（与逐文件读法同口径：判的是「退回成**更早**的某一版」，
+   * 而「等于基线版」在上面已按正常前移放过）。 */
+  const candidates = new Map();
+  const specs = [];
+  for (const f of files) {
+    specs.push(`${sha}:${f}`, `${baseline}:${f}`);
+    const older = hist.get(f).filter((s) => s !== baseline);
+    candidates.set(f, older);
+    for (const h of older) specs.push(`${h}:${f}`);
+  }
+  const blob = resolveBlobs(git, specs);
+  if (!blob) return { ok: false, reason: "批量解析 blob 没跑起来（`cat-file --batch-check`）" };
 
   const lost = [];
-  for (const file of changed) {
-    if (isGenerated(file)) continue;
-    const result = git(["rev-parse", `${sha}:${file}`]);
-    const atBaseline = git(["rev-parse", `${baseline}:${file}`]);
+  for (const f of files) {
+    const result = blob.get(`${sha}:${f}`);
+    const atBaseline = blob.get(`${baseline}:${f}`);
     // 结果里没有这个文件（删除）、或与基线同版（正常前移）→ 不是「取了一侧」。
     if (!result || !atBaseline || result === atBaseline) continue;
 
     /* 基线的历史上，这个文件有没有过**逐字节相同**的版本 —— 有 = 退回了那一版。
-     * 判定核心取自共用内核（与 1-2 的提交前档同一份实现，见模块头）。 */
-    const historyShas = (
-      git(["log", "--format=%H", "--no-merges", baseline, "--", file]) || ""
-    )
-      .split("\n")
-      .filter((sha) => sha && sha !== baseline);
+     * 判定核心取自共用内核（与 1-2 的提交前档同一份实现，见模块头）；
+     * `blobAt` 现在是查已取回的表，不再起进程。 */
     const hit = findEarlierVersion({
       result,
-      historyShas,
-      blobAt: (sha) => git(["rev-parse", `${sha}:${file}`]),
+      historyShas: candidates.get(f),
+      blobAt: (older) => blob.get(`${older}:${f}`) ?? null,
     });
-    if (hit) lost.push(file);
+    if (hit) lost.push(f);
   }
   return { ok: true, lost };
 }
