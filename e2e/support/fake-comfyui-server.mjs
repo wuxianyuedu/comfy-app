@@ -28,7 +28,15 @@ import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { WebSocketServer } from "ws";
 
-const PORT = Number(process.env.E2E_FAKE_COMFY_PORT ?? 8188);
+import {
+  resolveFakeComfyuiHost,
+  resolveFakeComfyuiPort,
+} from "./fake-comfyui-endpoint.mjs";
+
+/* 端口 / 地址由端点模块给（**默认不是 8188**，见该文件头的 ISSUE #1756 取向）：
+ * 替身与真件分居两个端口，本机开着真 ComfyUI 也能跑 e2e。 */
+const HOST = resolveFakeComfyuiHost();
+const PORT = resolveFakeComfyuiPort();
 const CORS = process.env.E2E_FAKE_COMFY_CORS !== "0";
 
 /** 回环地址判定（对应 ComfyUI 的 `is_loopback`）。 */
@@ -47,7 +55,7 @@ function isLoopback(hostname) {
  *
  * 关键：比较的是 **netloc（含端口）**，不是主机名。宿主是
  * `127.0.0.1:3100`、ComfyUI 是 `127.0.0.1:8188`，**端口不同 → netloc 不同
- * → 403**。只在某一侧没有端口时才退化成比较主机名（ComfyUI 原文行为）。
+ * → 403**（替身自己的端口见 `fake-comfyui-endpoint.mjs`）。只在某一侧没有端口时才退化成比较主机名（ComfyUI 原文行为）。
  * 简化成「只比主机名」会两边都是 127.0.0.1 而永远放行，假服务就与真实
  * ComfyUI 不一致，测试随之失去意义。
  */
@@ -91,7 +99,9 @@ const history = new Map();
  *  字节内容只要是一个**合法 PNG 头**（`src/lib/media/*` 的探测按魔数走）。 */
 const PNG_BYTES = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  Buffer.from(`e2e-fake-png:${createHash("sha1").update("fake-comfyui").digest("hex")}`),
+  Buffer.from(
+    `e2e-fake-png:${createHash("sha1").update("fake-comfyui").digest("hex")}`,
+  ),
 ]);
 
 function readBody(req) {
@@ -103,13 +113,19 @@ function readBody(req) {
 }
 
 function sendJson(res, headers, status, payload) {
-  res.writeHead(status, { ...headers, "content-type": "application/json; charset=utf-8" });
+  res.writeHead(status, {
+    ...headers,
+    "content-type": "application/json; charset=utf-8",
+  });
   res.end(JSON.stringify(payload));
 }
 
 async function handle(req, res, headers, path) {
   if (path === "/") {
-    res.writeHead(200, { ...headers, "content-type": "text/html; charset=utf-8" });
+    res.writeHead(200, {
+      ...headers,
+      "content-type": "text/html; charset=utf-8",
+    });
     res.end(INDEX);
     return;
   }
@@ -142,10 +158,16 @@ async function handle(req, res, headers, path) {
   if (path === "/e2e/record-history" && req.method === "POST") {
     const body = await readBody(req);
     try {
-      const { prompt_id: promptId, node_id: nodeId, filename } = JSON.parse(body);
+      const {
+        prompt_id: promptId,
+        node_id: nodeId,
+        filename,
+      } = JSON.parse(body);
       history.set(promptId, {
         status: { status_str: "success", completed: true, messages: [] },
-        outputs: { [nodeId]: { images: [{ filename, subfolder: "", type: "output" }] } },
+        outputs: {
+          [nodeId]: { images: [{ filename, subfolder: "", type: "output" }] },
+        },
       });
       sendJson(res, headers, 200, { ok: true });
     } catch {
@@ -224,7 +246,12 @@ server.on("upgrade", (req, socket, head) => {
       try {
         const msg = JSON.parse(String(raw));
         if (msg?.type === "feature_flags") {
-          ws.send(JSON.stringify({ type: "status", data: { status: { exec_info: { queue_remaining: 0 } } } }));
+          ws.send(
+            JSON.stringify({
+              type: "status",
+              data: { status: { exec_info: { queue_remaining: 0 } } },
+            }),
+          );
         }
       } catch {
         /* 非 JSON：忽略 */
@@ -233,9 +260,9 @@ server.on("upgrade", (req, socket, head) => {
   });
 });
 
-server.listen(PORT, "127.0.0.1", () => {
+server.listen(PORT, HOST, () => {
   process.stdout.write(
-    `[fake-comfyui] listening on http://127.0.0.1:${PORT} cors=${CORS}\n`,
+    `[fake-comfyui] listening on http://${HOST}:${PORT} cors=${CORS}\n`,
   );
 });
 

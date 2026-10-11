@@ -7,6 +7,7 @@ import {
 } from "@playwright/test";
 
 import { LOG_ROW_SINGLE } from "../src/components/studio/logs/log-virtual";
+import { fakeComfyuiBaseUrl } from "./support/fake-comfyui-endpoint.mjs";
 import { expectHomeReady } from "./support/home-anchors";
 
 /**
@@ -1612,7 +1613,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 注册的那条根本没机会应答。后果不是「有点遮蔽」而是两边都静默失灵：实测先挂
    * 计次桩、后挂状态桩，`comfyOpen` 计数恒 0（看起来像动作没发出，其实是路由顺序
    * 吃的）。所以这个 describe 里的 ComfyUI 端点统一由下面这一个处理器分派。
-   * 假 ComfyUI 在 8188 上（playwright.config 的第二个 webServer）。
+   * 假 ComfyUI 在替身端口上（playwright.config 的第二个 webServer；端口不是
+   * 8188 —— 那个口留给本机真件，见 `fake-comfyui-endpoint.mjs`）。
    */
   async function stubComfyTrpc(
     page: Page,
@@ -1632,9 +1634,12 @@ test.describe("应用页签与全屏视图 @critical", () => {
         });
       const fulfillJson = (data: unknown) => fulfillRaw({ json: data });
       if (url.includes("comfyui.status")) {
+        /* base 取替身自己的地址（`fake-comfyui-endpoint.mjs` 是唯一落点）：
+         * 写死 8188 时，本机真件与替身的地址会在这条桩里混成同一个 —— 而
+         * 「打开查看」弹出的页签地址正是拿它判的（ISSUE #1756）。 */
         await fulfillRaw({
           up: true,
-          base: "http://127.0.0.1:8188",
+          base: fakeComfyuiBaseUrl(),
           starting: false,
           stopping: false,
         });
@@ -1703,9 +1708,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
     await openComfyFromSettings(page);
 
-    // 真的开出一个新浏览器页签，地址就是 ComfyUI（假服务在 8188）。
+    // 真的开出一个新浏览器页签，地址就是 ComfyUI（假服务在替身端口上）。
     const popup = await popupPromise;
-    expect(popup.url()).toContain("127.0.0.1:8188");
+    expect(popup.url()).toContain(new URL(fakeComfyuiBaseUrl()).host);
     await popup.close();
 
     // 反馈要看得见：静默打开新页签，用户不知道发生了什么。
@@ -1737,7 +1742,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await openComfyFromSettings(page);
 
     const popup = await popupPromise;
-    expect(popup.url()).toContain("127.0.0.1:8188");
+    expect(popup.url()).toContain(new URL(fakeComfyuiBaseUrl()).host);
     await popup.close();
 
     // 壳内那句说明不该出现在浏览器形态里。
