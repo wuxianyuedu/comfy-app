@@ -644,14 +644,13 @@ export function ensureSplashResource(root = ROOT) {
  * 预编译壳的拉起参数。
  * @param {string} shellExe 壳可执行文件路径
  * @param {number} port 应用端口
- * @param {{ root?: string, foreground?: string | null,
- *           shellEnv?: Record<string, string> | null }} options
- *   检出根、前台开关、以及要额外注入给壳的环境（自编排标记等）
+ * @param {{ root?: string, foreground?: string | null }} options
+ *   检出根与前台开关
  */
 export function spawnShell(
   shellExe,
   port,
-  { root = ROOT, foreground = null, shellEnv = null } = {},
+  { root = ROOT, foreground = null } = {},
 ) {
   const child = spawnInGroup({
     command: shellExe,
@@ -659,7 +658,6 @@ export function spawnShell(
     cwd: root,
     env: {
       ...process.env,
-      ...shellEnv,
       COMFYAPP_PROJECT_ROOT: root,
       COMFYAPP_DEV_URL: `http://127.0.0.1:${port}/workspace`,
       COMFYAPP_PORT: String(port),
@@ -957,6 +955,10 @@ export async function run(argv = process.argv.slice(2)) {
     null
   );
   let staleShell = null;
+  // 自编排标记：壳拉起本编排器时注入（`shell_launch.rs` 的 `spawn_orchestrator`）。
+  // 它回答「本次编排是谁拉起的」，只有壳自编排链路（§1.5）里的 prebuilt 会带。
+  const launchedByShell =
+    process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1" && args.mode === "prebuilt";
   if (args.mode === "prebuilt") {
     const shellExe =
       args.shellExe ??
@@ -976,16 +978,23 @@ export async function run(argv = process.argv.slice(2)) {
       appendRuntimeWarning(staleShell);
     }
     resetShellPidFile(ROOT);
-    ensureSplashResource(ROOT);
-    shell = spawnShell(shellExe, port, {
-      root: ROOT,
-      foreground: args.coldStart ? "1" : null,
-      /* 自编排标记（与壳侧 `shell_launch.rs` 注入的同一个键）：壳据此**跳过
-       * 重复的单实例 / 端口族判定** —— 起它的人已经把那个问题回答过了。 */
-      shellEnv: { COMFYAPP_SHELL_SELF_LAUNCH: "1" },
-    });
-    log(`预编译 Tauri 壳已启动（PID ${shell.pid}）：${shellExe}`, "OK");
-    log("Tauri 桌面壳已启动，正在启动本地服务…", "STEP");
+    if (launchedByShell) {
+      /* 双击壳的自编排链路（§1.5）里，拉起本编排器的那只壳**就是**本次启动唯一
+       * 的应用宿主：启动页与主窗都是 tauri.conf.json 的声明式窗口，每个壳进程
+       * 各建一份。这里若再 spawn 一只壳，同一次启动就有两个壳——用户会看到两个
+       * 一模一样的启动窗口（PR #1712 的回归），两只壳的回收链还互相纠缠（关掉
+       * 任意一只都会把编排器连同另一只一起收走）。所以自编排那次**只编排、
+       * 不起壳**：壳已经在跑，把本地服务起起来就好。 */
+      log("本次编排由桌面壳亲自拉起：壳已在运行，不再起第二个壳。", "INFO");
+    } else {
+      ensureSplashResource(ROOT);
+      shell = spawnShell(shellExe, port, {
+        root: ROOT,
+        foreground: args.coldStart ? "1" : null,
+      });
+      log(`预编译 Tauri 壳已启动（PID ${shell.pid}）：${shellExe}`, "OK");
+      log("Tauri 桌面壳已启动，正在启动本地服务…", "STEP");
+    }
     status("port-check", 0.05, "桌面壳已启动，正在检查端口占用…", {
       staleShell,
     });
@@ -996,19 +1005,16 @@ export async function run(argv = process.argv.slice(2)) {
   // 口上的本仓库应用服务只可能是残留；缺省解析链上则一律不碰（见 reconcilePort）。
   //
   // **同一个进程里已经查过的不查第二遍**（ISSUE #1687）：壳自编排链路
-  // （双击 {{shell.app.exe}} → 单实例判定 → 拉起本编排器 → 本编排器再起壳，§1.5）
-  // 里，壳与它拉起的编排器同属**一次启动**，中间没有任何能改变端口归属的事件
-  // （§1.7）：这一次启动里只可能有本检出这一个实例在跑。
-  // 再走一遍这条判据链（三个端口各一次 netstat 快照 + 一次批量 CIM 查命令行）
-  // 买不到新事实，重复的只有探取开销 —— 用户现场正是拿这段 0.46s 来问的。
+  // （双击 {{shell.app.exe}} → 单实例判定 → 拉起本编排器，§1.5）里，壳与它拉起的
+  // 编排器同属**一次启动**，中间没有任何能改变端口归属的事件（§1.7）：这一次
+  // 启动里只可能有本检出这一个实例在跑。再走一遍这条判据链（三个端口各一次
+  // netstat 快照 + 一次批量 CIM 查命令行）买不到新事实，重复的只有探取开销。
   // **这不是「查了不采纳」**：跳过的只是「本次启动开头那一次」，
   // 回收语义分毫未动 —— 残留要么在进程启动那一刻就占着端口（那时还没有谁宣过
   // 「本次启动只我一个」），要么在本次运行期间才出现（由常驻循环与退出回收负责，
   // §3.3）；别人的进程任何时候都不碰（§1.4）。
-  const portCheckedByShell =
-    process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1" && args.mode === "prebuilt";
   let portSummary = "";
-  if (portCheckedByShell) {
+  if (launchedByShell) {
     portSummary = `端口族 ${scanPorts(port).join("/")} 已由壳的单实例判据查过（跳过重复检查）`;
     log(portSummary, "INFO");
   } else {
@@ -1429,9 +1435,6 @@ export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
       /* 编排器已起过一份 schema 同步（本文件 950 行附近），通知 dev.mjs
        * 跳过它自己的那份 —— 否则一次启动两份 drizzle 并发写同一个库。 */
       [SKIP_SCHEMA_SYNC_ENV]: "1",
-      // 让壳知道自己是被「自编排」起的：它的单实例判据（端口族）已经跑在前
-      // 一步，本编排器不必再查一遍（见步骤 4）。
-      COMFYAPP_SHELL_SELF_LAUNCH: "1",
       ...extraEnv,
     },
     stdoutFile: outFile,
