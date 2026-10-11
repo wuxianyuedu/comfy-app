@@ -36,7 +36,19 @@ import {
   isRealComfyuiPayload,
   resolveFakeComfyuiPort,
 } from "../e2e/support/fake-comfyui-endpoint.mjs";
-import { probeAppServerReuse, probeFakeComfySlot } from "../e2e/global-setup";
+import { resolvePlaywrightFile } from "../scripts/e2e-run.mjs";
+import {
+  probeFakeComfySlot,
+  readAppServerPreflight,
+  readFakeSlotPreflight,
+} from "../e2e/global-setup";
+import {
+  E2E_PREFLIGHT_ENV_KEY,
+  decodePreflight,
+  encodePreflight,
+  probePortOccupied,
+  runPreflight,
+} from "../e2e/support/preflight-ports.mjs";
 import { COMFYUI_DEFAULT_PORT } from "../src/lib/endpoints";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -292,10 +304,13 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
     expect(classifyFakeSlot(realObserved).verdict).toBe("real");
   });
 
-  it("应用端口有人应答 ⇒ `probeAppServerReuse` 认出「会被复用」", async () => {
-    /* 复用时 Playwright **不应用** `webServer.env`（上游 `_startProcess()` 的
-     * early return），注入的替身地址到不了那个进程 —— 与「替身端口被真件占着」
-     * 是同一个故障的另一面，所以它也要有执行者。 */
+  it("pre-flight：端口空着 ⇒ 不占用（起之前没人）", async () => {
+    /* 只判「有没有人在」。`probePortOccupied` 走 TCP 而不是 HTTP：占了端口却不答
+     * HTTP 的进程（半死的、某些代理）照样是占用 —— 只判连不连得上更准也更便宜。 */
+    expect(await probePortOccupied(1, { timeoutMs: 500 })).toBe(false);
+  });
+
+  it("pre-flight：端口有人 ⇒ 占用（这一格必须在起 Playwright 之前探）", async () => {
     server = createServer((_req, res) => {
       res.writeHead(200, { "content-type": "text/html" });
       res.end("<html></html>");
@@ -305,15 +320,70 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
     );
     const addr = server.address();
     const port = typeof addr === "object" && addr ? addr.port : 0;
-    const observed = await probeAppServerReuse({ port });
-    expect(observed.reused).toBe(true);
-    expect(observed.status).toBe(200);
+    expect(await probePortOccupied(port)).toBe(true);
   });
 
-  it("应用端口空着 ⇒ 不判复用（探针不把「连不上」当故障）", async () => {
-    const observed = await probeAppServerReuse({ port: 1, timeoutMs: 500 });
-    expect(observed.reused).toBe(false);
-    expect(observed.status).toBe(0);
+  it("pre-flight 一次探两个端口，两栏各说各的", async () => {
+    server = createServer((_req, res) => {
+      res.writeHead(200).end("ok");
+    });
+    await new Promise<void>((resolve) =>
+      server?.listen(0, "127.0.0.1", resolve),
+    );
+    const addr = server.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+    const result = await runPreflight({
+      appPort: port,
+      fakePort: 1,
+      timeoutMs: 500,
+    });
+    expect(result).toEqual({ appOccupied: true, fakeOccupied: false });
+  });
+
+  it("pre-flight 结论经一行 JSON 往返，两栏不串位", () => {
+    const encoded = encodePreflight({ appOccupied: true, fakeOccupied: false });
+    expect(encoded).not.toContain("\n");
+    expect(decodePreflight(encoded)).toEqual({
+      appOccupied: true,
+      fakeOccupied: false,
+    });
+    // 反着来一次：只有两栏真的各归各位才可能同时对上。
+    expect(
+      decodePreflight(
+        encodePreflight({ appOccupied: false, fakeOccupied: true }),
+      ),
+    ).toEqual({ appOccupied: false, fakeOccupied: true });
+  });
+
+  it("读不出 pre-flight 结论 ⇒ null（是「不知道」，不是「没有」）", () => {
+    /* 这一格承重：手工 `pnpm exec playwright test` 时这份结论根本不存在。
+     * 若读不出就回落成 `{appOccupied:false}`，「不知道」会被读成「起之前没人」，
+     * 于是一条本该报出来的冲突（外部 dev server 被复用）静默通过。 */
+    for (const bad of [undefined, "", "not json", "{}", "[]", "null"]) {
+      expect(decodePreflight(bad), String(bad)).toBe(null);
+    }
+    // 只有一栏、类型不对的也一律不认（半份结论比没有更危险）。
+    expect(decodePreflight('{"appOccupied":true}')).toBe(null);
+    expect(decodePreflight('{"appOccupied":"yes","fakeOccupied":false}')).toBe(
+      null,
+    );
+    // 两栏都在且是布尔 ⇒ 认。
+    expect(decodePreflight('{"appOccupied":true,"fakeOccupied":false}')).toEqual(
+      { appOccupied: true, fakeOccupied: false },
+    );
+  });
+
+  it("`globalSetup` 侧的读法：拿不到结论一律 null（不阻断、也不误报复用）", () => {
+    expect(readAppServerPreflight({})).toBe(null);
+    expect(readFakeSlotPreflight({})).toBe(null);
+    const env = {
+      [E2E_PREFLIGHT_ENV_KEY]: encodePreflight({
+        appOccupied: true,
+        fakeOccupied: false,
+      }),
+    };
+    expect(readAppServerPreflight(env)).toEqual({ occupiedBefore: true });
+    expect(readFakeSlotPreflight(env)).toEqual({ occupiedBefore: false });
   });
 
   it("非 JSON 应答不抛：形状两边都不像 ⇒ unknown", async () => {
@@ -331,6 +401,109 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
     });
     expect(observed.status).toBe(200);
     expect(classifyFakeSlot(observed).verdict).toBe("unknown");
+  });
+});
+
+describe("探测时机：判「起之前有没有别人」就不能挂在 globalSetup 上（ISSUE #1766）", () => {
+  it("真实顺序是「起 webServer 并等它可访问」→「跑 globalSetup」", () => {
+    /* 这条是**根因**的机器形态，不是复述文档：上游 `runGlobalSetup()` 把任务按
+     * `createGlobalSetupTasks()` 的顺序跑，webServer 是其中的 **plugin setup**
+     * 且排在 `globalSetup` 之前。
+     *
+     * 判据拿的是真实源码（不是一份抄过来的顺序表）——上游改了这个顺序时，
+     * 「探测为什么不能挂在 globalSetup 上」这个前提就要重新量，这条会红。 */
+    const runner = readFileSync(resolvePlaywrightFile("lib/runner/index.js"), "utf8");
+    /* 取整个函数体：靠**配平花括号**而不是找第一个 `}` —— 后者会切在数组元素
+     * 的花括号上（`createRemoveOutputDirsTask()` 后面并没有 `}`），于是
+     * 「plugin 在 globalSetup 之前」这句话压根没被检查。 */
+    const tasksStart = runner.indexOf("function createGlobalSetupTasks(");
+    expect(tasksStart, "找不到 createGlobalSetupTasks").toBeGreaterThan(0);
+    const bodyStart = runner.indexOf("{", tasksStart);
+    let depth = 0;
+    let bodyEnd = bodyStart;
+    for (let i = bodyStart; i < runner.length; i += 1) {
+      if (runner[i] === "{") depth += 1;
+      else if (runner[i] === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          bodyEnd = i;
+          break;
+        }
+      }
+    }
+    const tasks = runner.slice(bodyStart, bodyEnd);
+    expect(tasks.length, "createGlobalSetupTasks 取空了").toBeGreaterThan(20);
+    const pluginAt = tasks.indexOf("createPluginSetupTasks");
+    const globalSetupAt = tasks.indexOf("createGlobalSetupTask");
+    expect(pluginAt, "任务清单里没有 plugin setup").toBeGreaterThan(0);
+    expect(globalSetupAt, "任务清单里没有 global setup").toBeGreaterThan(0);
+    /* plugin setup（webServer 挂在这里）必须排在 global setup **之前** ——
+     * 顺序反了的话「globalSetup 里探到自己的 server」就不成立，本修法的理由
+     * 也随之失效，那时该重开这一格而不是留着一条没有前提的注释。 */
+    expect(pluginAt).toBeLessThan(globalSetupAt);
+
+    /* 第二个承重面：plugin setup 内部**串行**跑（`for (const task of this._tasks)`
+     * + `await`），所以到最后一个 plugin 跑完时，**每一个** webServer 都可用。
+     * 若哪天改成并行「起完就算」，第二个 server 可能还没 bind —— 那时
+     * 「替身端口必在跑」这句话就不再是对所有 webServer 成立的。 */
+    const taskLoop = runner.slice(
+      runner.indexOf("const taskLoop = async () => {"),
+    );
+    /* 取到「循环体首次 await setup」为止 —— 写死字符数会随上游注释漂，
+     * 那会让这条断言变成「上游改了个注释就红」的假报警。 */
+    const firstSetupAwait = taskLoop.indexOf("await task.setup?.(");
+    expect(firstSetupAwait, "taskLoop 里没有 await task.setup").toBeGreaterThan(
+      0,
+    );
+    const loopHead = taskLoop.slice(0, firstSetupAwait);
+    expect(loopHead).toContain("for (const task of this._tasks)");
+    /* `await` 在循环体内 ⇒ 上一个 setup 跑完才轮到下一个（串行）。
+     * 若改成 `Promise.all(tasks.map(...))`，最后一个 webServer 可能在
+     * globalSetup 时还没 bind —— 那时「替身端口必在跑」就不再成立。 */
+    expect(loopHead).not.toContain("Promise.all");
+  });
+
+  it("webServer 作为 plugin 挂上，且 config 里两条都在 `reuseExistingServer` 本地档", () => {
+    /* 「本地跑必然探到自己起的」= 这条链：webServer → plugin setup →
+     * 排在 globalSetup 之前。所以 config 里**有 webServer**、且本地档
+     * `reuseExistingServer` 为真，正是本 ISSUE 的现场条件。 */
+    const runner = readFileSync(
+      resolvePlaywrightFile("lib/runner/index.js"),
+      "utf8",
+    );
+    expect(runner).toContain("webServerPluginsForConfig(config2)");
+    const config = readText("playwright.config.ts");
+    // 两条 webServer 各有一处 `reuseExistingServer: !process.env.CI`。
+    const flags = config.match(/reuseExistingServer: !process\.env\.CI/g) ?? [];
+    expect(flags.length).toBe(2);
+  });
+
+  it("判据不再活在 `globalSetup` 里：它只读 pre-flight，不自己探应用端口", () => {
+    /* 这一条拦的是**回潮**：把「应用端口有人 ⇒ 阻断」重新写回 `globalSetup`
+     * 就等于把 ISSUE #1766 的机关再装回去（那时它必然自击）。
+     * 判据是「那一跳读的是 pre-flight」+「文件里没有对应用端口的即时探测」。 */
+    const setup = readText("e2e/global-setup.ts");
+    expect(setup).toContain("readAppServerPreflight");
+    expect(setup).toContain("occupiedBefore");
+    // 应用端口那一跳不得再出现「即时探测 + reused 恒真」的形状。
+    expect(setup).not.toContain("probeAppServerReuse");
+    // 替身端口的复用话术也要挂在 pre-flight 上（否则对自己起的那个也这么说）。
+    expect(setup).toContain("readFakeSlotPreflight");
+  });
+
+  it("pre-flight 真的在 `spawn` Playwright **之前**跑（时机是全部意义）", async () => {
+    /* 判据判「接线在不在」：`scripts/e2e-run.mjs` 里 `runPreflight(...)` 必须出现在
+     * `spawnSync(...)` 之前 —— 反过来的话它探到的就是本轮自己起的服务，
+     * 与挂在 `globalSetup` 上没有区别。 */
+    const run = readText("scripts/e2e-run.mjs");
+    const preflightAt = run.indexOf("await runPreflight(");
+    const spawnAt = run.indexOf("spawnSync(process.execPath");
+    expect(preflightAt, "e2e-run 没有跑 pre-flight").toBeGreaterThan(0);
+    expect(spawnAt, "e2e-run 没有 spawn Playwright").toBeGreaterThan(0);
+    expect(preflightAt).toBeLessThan(spawnAt);
+    // 结论要随 env 带下去（不带的话 globalSetup 那侧的读法恒 null，
+    // 「复用」话术永远不出现 = 一次静默降级）。
+    expect(run).toContain("env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight)");
   });
 });
 
