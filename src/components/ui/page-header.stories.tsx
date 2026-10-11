@@ -13,9 +13,11 @@ import { PageHeader } from "~/components/ui/page-header";
  * 就是它的极端形态：侧栏「队列」→ 页签「队列」→ 页头「队列与运行」，
  * 同一件事一屏两个名字、标题区吃掉大片纵向空间。
  *
- * 所以本 story 要看的是**三档真实存在的取舍**：
+ * 所以本 story 要看的是**几档真实存在的取舍**：
  * · `Default` —— 副说明写「答案在别处拿不到的那句话」（时间口径 / 数据来源）；
  * · `WithoutDescription` —— 想不出这种话就**不传**，标题区立刻矮下来；
+ * · `TabNamed`（ISSUE #1693）—— 页签已经在说屏名时**整行都不出现**：屏名退到
+ *   `sr-only`（读屏仍能跳转），那句解释收进悬浮「说明」按钮；
  * · `WithActions` / `LongTitle` —— 右侧动作组不收缩、长标题先截断（规范 03
  *   §3.8.1 的兜底顺序）。
  *
@@ -48,6 +50,19 @@ export const WithoutDescription: Story = {
   args: {
     title: "资源库",
     description: undefined,
+  },
+};
+
+/** 页签已经在说屏名（主页那几个页签都是）—— 可见标题与副说明都不占位。
+ *
+ *  留在 DOM 里的 `sr-only` `h1` 是本档的**前提**，不是可选装饰：屏名只在页签上
+ *  时，读屏用户仍然需要一个可跳转的标题（规范 06）。 */
+export const TabNamed: Story = {
+  args: {
+    title: undefined,
+    srTitle: "队列",
+    description: undefined,
+    help: "每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。",
   },
 };
 
