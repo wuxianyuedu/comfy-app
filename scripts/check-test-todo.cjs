@@ -52,6 +52,11 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -196,15 +201,12 @@ function maskNonCode(src) {
   return out.join("");
 }
 
-function walk(dir, out = []) {
-  if (!fs.existsSync(dir)) return out;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === "node_modules") continue;
-    const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walk(abs, out);
-    else if (TEST_FILE_RE.test(e.name)) out.push(abs);
-  }
-  return out;
+/**
+ * 枚举与读取都走 `gate-scan-read.cjs`：现场、两种消失窗口、「只降级 ENOENT」与
+ * 「不许静默」的口径都在那一份里，这里不重述（同一件事曾经有四份私有实现）。
+ */
+function walk(dir) {
+  return walkForScan(dir, TEST_FILE_RE);
 }
 
 /**
@@ -238,23 +240,6 @@ function readLedger() {
   return json.consumers;
 }
 
-/**
- * 读一份文件；在「列目录 → 读内容」之间消失时返回 `null`。
- * 现场与口径同 `check-test-it-each.cjs` / `check-test-sleep.cjs` /
- * `check-test-waitfor.cjs`：`tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造
- * `.setup-cleanup-probe-*.test.tsx` 再删，两个 vitest 同跑时本扫描就会撞上空档，
- * 于是 D 组带着一个 Node 栈崩掉（报错里没有一个字指向改动）。
- * 但**不许静默**：消失数要计数并打印，静默跳过等于让判据在它其实没读过的目录上绿。
- */
-function readForScan(abs) {
-  try {
-    return fs.readFileSync(abs, "utf8");
-  } catch (error) {
-    if (error && error.code === "ENOENT") return null;
-    throw error;
-  }
-}
-
 function main() {
   const files = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)));
   const sites = [];
@@ -275,10 +260,7 @@ function main() {
     }
   }
   /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。 */
-  const vanishedNote =
-    vanished > 0
-      ? `\n  ⚠️ 另有 ${vanished} 份文件在扫描期间消失（并发用例的临时探针），本轮未读。`
-      : "";
+  const note = vanishedNote(vanished);
 
   /* 台账先读、哪怕零站点：`readLedger()` 缺失即抛，于是「零站点通过」这个结论
      由「台账在、只是没内容」担保，而不是由「台账根本没有」担保。 */
@@ -294,7 +276,7 @@ function main() {
     console.log(
       "[test-todo] OK —— 0 处 `test.todo` 站点" +
         `（本判据是纯闸门：对象是「下一次有人留一条还没做的用例」；台账在场，${consumers.length} 条登记）。` +
-        vanishedNote,
+        note,
     );
     return 0;
   }
@@ -321,7 +303,7 @@ function main() {
 
   console.log(
     `[test-todo] OK —— ${sites.length} 处 todo 站点，消费方 ${consumers.length} 条登记。` +
-      vanishedNote,
+      note,
   );
   return 0;
 }

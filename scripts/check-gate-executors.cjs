@@ -55,6 +55,14 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
+
+/** 扫描期间消失的 `tests/` 文件数（由 `executorSources` 累加，结论行打印）。 */
+let vanishedTests = 0;
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -212,19 +220,16 @@ const EXECUTOR_SOURCES = [
   "scripts/standalone-private-inputs.mjs",
 ];
 
-/** `tests/**` 下的 `.test.ts(x)` 全表（执行者来源之一）。 */
+/**
+ * `tests/**` 下的 `.test.ts(x)` 全表（执行者来源之一）。
+ *
+ * 枚举与读取都走 `gate-scan-read.cjs`：本判据把 `tests/` 当**扫描面**遍历，而并发用例
+ * 会往里写自删探针（`.setup-cleanup-probe-*.test.tsx`）。原来的写法是
+ * `fs.existsSync(dir)` + 裸 `readdirSync` + 裸 `readFileSync`，撞上那个空档会以一条
+ * Node 栈崩在这里 —— 而这条判据报的是「谁的执行者没了」，崩掉时一个字都不吐。
+ */
 function testFiles() {
-  const out = [];
-  if (!fs.existsSync(path.join(ROOT, "tests"))) return out;
-  const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (/\.test\.tsx?$/.test(entry.name)) out.push(full);
-    }
-  };
-  walk(path.join(ROOT, "tests"));
-  return out;
+  return walkForScan(path.join(ROOT, "tests"), /\.test\.tsx?$/);
 }
 
 /**
@@ -252,7 +257,13 @@ function executorSources() {
   /** 只收「真的起了子进程」的测试文件。 */
   const testSources = [];
   for (const full of testFiles()) {
-    const src = fs.readFileSync(full, "utf8");
+    const src = readForScan(full);
+    if (src === null) {
+      /* 这一轮没读到那一份文件 —— 计数进结论行，不许静默（静默会让「某条判据的执行者
+         只剩这一份文件」这种情况读成「没有执行者」，报出一条假红）。 */
+      vanishedTests += 1;
+      continue;
+    }
     if (/\b(execFileSync|execFile|spawnSync|spawn)\s*\(/.test(src)) {
       testSources.push({
         rel: path.relative(ROOT, full).replace(/\\/g, "/"),
@@ -434,5 +445,6 @@ console.log(
   `判据执行者台账：${names.length} 份判据脚本 —— ` +
     `判定型有执行者 ${report.judgeWithExecutor.length}、` +
     `按需召唤 ${report.judgeOrphaned.length}、` +
-    `报告型自称在跑 0 ✓`,
+    `报告型自称在跑 0 ✓` +
+    vanishedNote(vanishedTests),
 );

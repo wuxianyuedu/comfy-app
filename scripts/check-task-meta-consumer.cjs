@@ -53,6 +53,11 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -201,15 +206,9 @@ function maskNonCode(src) {
   return out.join("");
 }
 
-function walk(dir, out = []) {
-  if (!fs.existsSync(dir)) return out;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === "node_modules") continue;
-    const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walk(abs, out);
-    else if (TEST_FILE_RE.test(e.name)) out.push(abs);
-  }
-  return out;
+/** 枚举扫描面：消失的目录/文件由 `gate-scan-read.cjs` 降级，读取侧的计数在 `main`。 */
+function walk(dir) {
+  return walkForScan(dir, TEST_FILE_RE);
 }
 
 /**
@@ -241,19 +240,40 @@ function readLedger() {
   return json.consumers;
 }
 
+/**
+ * 扫一份文件，返回它命中 `task.meta` 的行号（1 起）；文件在「列目录 → 读内容」之间
+ * 消失时返回 `null`（两种消失窗口与「只降级 ENOENT、不许静默」的口径都在
+ * `gate-scan-read.cjs`，这里不重述）。
+ *
+ * @param {string} abs
+ * @returns {number[] | null}
+ */
+function scanFile(abs) {
+  const raw = readForScan(abs);
+  if (raw === null) return null;
+  const masked = maskNonCode(raw);
+  const hitLines = [];
+  for (const m of masked.matchAll(TASK_META_SITE_RE)) {
+    hitLines.push(masked.slice(0, m.index).split("\n").length);
+  }
+  return hitLines;
+}
+
 function main() {
   const files = SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)));
   const sites = [];
+  let vanished = 0;
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    const masked = maskNonCode(fs.readFileSync(abs, "utf8"));
-    for (const m of masked.matchAll(TASK_META_SITE_RE)) {
-      sites.push({
-        rel,
-        line: masked.slice(0, m.index).split("\n").length,
-      });
+    const hitLines = scanFile(abs);
+    if (hitLines === null) {
+      vanished += 1;
+      continue;
     }
+    for (const line of hitLines) sites.push({ rel, line });
   }
+  /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。 */
+  const note = vanishedNote(vanished);
 
   /* 台账先读、哪怕零站点：`readLedger()` 缺失即抛，于是「零站点通过」这个结论
      由「台账在、只是没内容」担保，而不是由「台账根本没有」担保
@@ -269,7 +289,8 @@ function main() {
   if (sites.length === 0) {
     console.log(
       "[task-meta] OK —— 0 处 `task.meta` 站点" +
-        `（本判据是纯闸门：对象是「下一次有人往报告里塞事实」；台账在场，${consumers.length} 条登记）。`,
+        `（本判据是纯闸门：对象是「下一次有人往报告里塞事实」；台账在场，${consumers.length} 条登记）。` +
+        note,
     );
     return 0;
   }
@@ -290,15 +311,21 @@ function main() {
         "一个字都不会被任何人看见，而表面上代码写得像「已经登记了」。\n" +
         `修法二选一：\n  · 登记消费方：在 ${LEDGER} 的 \`consumers\` 里写明谁读、怎么读；\n` +
         "  · 或者不写这条元数据 —— 当前没有消费方时它只是写着好看的字段。\n" +
-        "口径见 docs/standards/11-测试与可观测性.md §11.22。",
+        "口径见 docs/standards/11-测试与可观测性.md §11.22。" +
+        note,
     );
     return REPORT_ONLY ? 0 : 1;
   }
 
   console.log(
-    `[task-meta] OK —— ${sites.length} 处 \`task.meta\` 站点，消费方 ${consumers.length} 条登记。`,
+    `[task-meta] OK —— ${sites.length} 处 \`task.meta\` 站点，消费方 ${consumers.length} 条登记。` +
+      note,
   );
   return 0;
 }
 
-process.exit(main());
+/* 只有作为脚本运行才执行并定退出码；被 `require` 时（判据自测要进程内调
+   `scanFile`）不许把宿主进程一起带走。 */
+if (require.main === module) process.exit(main());
+
+module.exports = { scanFile };

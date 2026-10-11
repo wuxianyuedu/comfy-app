@@ -19,25 +19,35 @@
   普通提交零噪声）。
 - **没动扫描面、没动基线、没动任何棘轮数字**：三条判据在本仓当前树上一处站点都不报，
   改的只是「读不到时怎么办」。
-- **只收了这三条**。扫描面含 `tests` 的判据共 **15 份**，其中与本轮同形状（`walk()` 列目录 +
-  裸 `readFileSync(abs)`）的有 9 份：`check-annotate-consumer` / `check-dead-exports` /
-  `check-gate-repo-boilerplate` / `check-soft-assertions` / `check-task-meta-consumer` /
-  `check-test-concurrency` / `check-test-environment` / `check-test-todo` /
-  `check-type-assertion-executor`；另 3 份扫 `tests` 但不是这个读法
-  （`check-comment-language` / `check-gate-executors` / `check-tsc-diagnostic-executors`）。
-  本轮撞上的就是这三条 —— 它们按 `.test.tsx` 命中，而探针恰好叫这个名字。
-  **那份清单是会被收短的**：写下 9 之后，`4887f1f1`（#1665）收了 `check-annotate-consumer`、
-  另一笔收了 `check-test-todo`，当前实测剩 **7 份**。所以别引用这个数，现跑：
+- **只收了这三条**，其余留给下一刀 —— 但**这一段原先给的数是错的**，按下一刀的统一口径重测后改写如下。
+  原文写「扫描面含 `tests` 的判据共 15 份，其中同形状的 9 份…后来剩 7 份」：`9` 与 `7` 都站不住，
+  错在**判据不同一** —— 那一次量的是「有没有同一段读文件代码」，既漏算了「枚举 `tests` 但读法不同」的
+  `check-comment-language` / `check-gate-executors` / `check-tsc-diagnostic-executors`，
+  也没区分「有私有容错」与「容错是静默的、不计数」。统一口径 = **谁在枚举 `tests/`**：
+  人口 **15**；其中已有私有 `ENOENT → null` 容错 **5** 份（含本条收掉的 `check-test-todo`
+  与 `4887f1f1`/`#1665` 收的 `check-annotate-consumer`）、读那一步完全没有兜底 **7** 份、
+  枚举那一步 `catch` 掉所有错误的静默降级 **3** 份。
+  这条尺现在是**机器枚举**的，不再是人数名单：`tests/gate-scan-read.test.ts` 的探测器 A 每次跑都把
+  这 15 份现算一遍，并带一条地板（`>= 15` + 锚点 `check-test-sleep.cjs` 在场）证明探测器自己没漂。
+  **所以这个数将来会被改短或改长，别从这里引用** —— 现跑：
   ```bash
-  for f in scripts/check-*.cjs; do
-    grep -q '"tests"' "$f" || continue
-    n=$(grep -c 'readFileSync(abs' "$f"); e=$(grep -c ENOENT "$f")
-    [ "$n" -gt 0 ] && [ "$e" -eq 0 ] && echo "仍裸读: $f ($n 处)"
-  done
+  node -e '
+  const fs=require("node:fs"),path=require("node:path");
+  const src=(n)=>fs.readFileSync(path.join("scripts",n),"utf8");
+  const hits=(s)=>/SCAN_DIRS\s*=\s*\[[^\]]*"tests"/.test(s)||/walk\w*\(\s*path\.join\(\s*ROOT\s*,\s*"tests"\s*\)/.test(s);
+  console.log(fs.readdirSync("scripts").filter(n=>/^check-.*\.cjs$/.test(n)&&hits(src(n))).length);'
   ```
-  **把这 8 份一起收进共享读取器（`readForScan()`）是另一刀**：那是多份文件同一个形状的事，
-  顺手改会把「谁在有证据地拦」糊成一团；要么按现场逐条收（#1665 走的就是这条），要么一次收完
-  并给那份共享读取器配它自己的判据与用例。两边都得能答出「读不到的时候，谁在数」。
+  （实测这条现在给 **15**。同一份 `HEAD` 树上跑上一版那句 `grep -c 'readFileSync(abs'` 给的是 **7**
+  —— 差的 8 份里有 5 份是「已经有私有容错」（被那条尺正确排除），**3 份是漏的**：
+  `check-comment-language` / `check-gate-executors` / `check-tsc-diagnostic-executors`，
+  而它们当时被一句「扫 `tests` 但不是这个读法」放走了。**漏的这 3 份里有 2 份是静默吞掉所有错误**
+  （`catch { continue }` 且不计数），比裸读更糟 —— 这就是「按代码形状定口径」的代价：
+  尺子量的是长相，不是「读不到时会怎样」。）
+
+  **另一刀已经落地**（`0-gate-scan-read-shared.md`）：15 份全部收进共用件 `scripts/gate-scan-read.cjs`，
+  私有副本清零，回潮由 `tests/gate-scan-read.test.ts` 的两条形状拦。当年写下的取舍是
+  「要么按现场逐条收（`#1665` 走的就是这条），要么一次收完并给那份共享读取器配它自己的判据与用例」——
+  走的是后者。**两边都得能答出「读不到的时候，谁在数」这句没变，变的是答案现在只有一份。**
 
 ## 验证
 

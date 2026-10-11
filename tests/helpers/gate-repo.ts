@@ -73,6 +73,47 @@ export { afterAll, afterEach, beforeAll, beforeEach, describe } from "vitest";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 
+/**
+ * **按 `require("./x.cjs")` 递归补齐判据的同目录依赖**（临时仓库里已放好那份脚本之后调）。
+ *
+ * 判据之间是有依赖的（`maskNonCode` 那一份，以及扫描面共用的 `gate-scan-read.cjs`），
+ * 而临时仓库只放得下「被测那一份脚本」时，跑起来的读数是 `MODULE_NOT_FOUND` +
+ * 一叠 requireStack —— 它长得像「判据坏了」，实际是夹具少带了一个文件。
+ * 从前是每份用例自己写一行 `DEP`（`tests/test-sleep-gate.test.ts:42`），于是
+ * 「加一层共用依赖」= 十几份用例各自记得补一遍，漏的那份不会报「忘带依赖」，
+ * 只会报一条指向不存在的脚本名的红。
+ *
+ * 只认 `./name.cjs` 这种**同目录相对**形态（仓里判据之间的引用全是这一种）；
+ * 落点固定在被引脚本自己所在的目录。已存在的目标不覆盖（用例自己写的夹具优先）。
+ */
+export function copyGateDeps(destScriptAbs: string): void {
+  const destDir = path.dirname(destScriptAbs);
+  const DEP_RE = /require\(\s*"\.\/([\w.-]+\.cjs)"\s*\)/g;
+  const pending = [destScriptAbs];
+  const seen = new Set<string>();
+  while (pending.length > 0) {
+    const abs = pending.shift()!;
+    if (seen.has(abs)) continue;
+    seen.add(abs);
+    for (const m of readFileSync(abs, "utf8").matchAll(DEP_RE)) {
+      const name = m[1]!;
+      const source = path.join(REPO_ROOT, "scripts", name);
+      const dest = path.join(destDir, name);
+      if (!existsSync(source)) continue;
+      /* 已存在的目标**不覆盖**（用例自己写的夹具 / `DEP` 那份优先），但仍然要**走进去**
+       * 看它自己还有什么依赖 —— 只补「缺的文件」而不遍历已有文件，会在
+       * 「脚本 A + 手工带上的 B」这种布局里漏掉 B 的传递依赖（实测就撞上过一次：
+       * `check-test-sleep` 与 `check-test-concurrency` 都在场，而它们共用的
+       * `gate-scan-read` 谁都没带进去）。 */
+      if (!existsSync(dest)) {
+        copyFileSync(source, dest);
+        chmodSync(dest, 0o755);
+      }
+      pending.push(dest);
+    }
+  }
+}
+
 /** 跑一次判据脚本的结果 —— `code` 是子进程退出码，`output` 是 stdout+stderr 合并。 */
 export interface GateRunResult {
   code: number;
@@ -210,6 +251,7 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
   chmodSync(scriptDir, 0o777);
   copyFileSync(scriptSource, path.join(root, scriptRel));
   chmodSync(path.join(root, scriptRel), 0o755);
+  copyGateDeps(path.join(root, scriptRel));
   for (const d of dirs) mkdirSync(path.join(root, d), { recursive: true });
 
   const abs = (rel: string) => path.join(root, rel);

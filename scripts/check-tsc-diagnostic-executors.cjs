@@ -59,6 +59,11 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -195,22 +200,22 @@ function countDeclarationSites(src) {
 }
 
 /** @param {string} dir @param {string[]} out */
+/**
+ * 由 `SCAN_EXTS` **派生**的文件过滤器（不重抄一份后缀清单）：
+ * 枚举走 `gate-scan-read.cjs`，它收一个 `fileRe`。
+ */
+const SCAN_FILE_RE = new RegExp(
+  `\\.(?:${[...SCAN_EXTS].map((e) => e.replace(/^./, "")).join("|")})$`,
+);
+
+/** 扫描面上的消失文件数（结论行必须带）。 */
+let vanishedScan = 0;
+
 function collectFiles(dir, out) {
-  let items;
-  try {
-    items = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const item of items) {
-    const full = path.join(dir, item.name);
-    if (item.isDirectory()) {
-      if (item.name === "node_modules" || item.name.startsWith(".")) continue;
-      collectFiles(full, out);
-      continue;
-    }
-    if (SCAN_EXTS.has(path.extname(item.name))) out.push(full);
-  }
+  /* 原来是 `try { readdirSync } catch { return; }` + `try { readFileSync } catch { continue; }`
+   * —— 两处都把**所有**错误静默吞掉，「判据读不到扫描面」与「这个文件没站点」在
+   * 读数上长得一样。共用件只降级 `ENOENT`，并把没读到的份数留给结论行。 */
+  out.push(...walkForScan(dir, SCAN_FILE_RE, { skipHiddenDirs: true }));
 }
 
 /**
@@ -223,10 +228,9 @@ function scanDeclarationSites() {
   for (const d of SCAN_DIRS) collectFiles(path.join(ROOT, d), files);
   const counts = new Map();
   for (const full of files) {
-    let src;
-    try {
-      src = fs.readFileSync(full, "utf8");
-    } catch {
+    const src = readForScan(full);
+    if (src === null) {
+      vanishedScan += 1;
       continue;
     }
     const n = countDeclarationSites(src);
@@ -466,6 +470,16 @@ if (UPDATE) {
     process.exit(1);
   }
   const doc = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
+  /* 读数不完整时**不许记账**：少读一份就少算几处声明，`--update` 会把「这一轮没读到」
+   * 写成「这里本来就没有」。与 `check-dead-exports` / `check-comment-language` /
+   * `check-test-sleep` / `check-test-it-each` / `check-gate-repo-boilerplate` 同一条口径。 */
+  if (vanishedScan > 0) {
+    console.error(
+      `[tsc-diagnostic-executors] 拒绝 --update：本轮有 ${vanishedScan} 份文件在扫描期间消失，` +
+        "读数不完整。\n  等并发用例跑完再执行（基线是账，不能记在没读过的面上）。",
+    );
+    process.exit(1);
+  }
   for (const e of doc.entries) {
     const fresh = entries.find((x) => x.id === e.id);
     if (fresh) e.baseline = fresh.baseline;
@@ -496,5 +510,6 @@ if (problems.length > 0) {
 }
 
 process.stdout.write(
-  `类型层声明 ⇄ 执行者：${entries?.length ?? 0} 条声明的执行者都在场（零增量）\n`,
+  `类型层声明 ⇄ 执行者：${entries?.length ?? 0} 条声明的执行者都在场（零增量）\n` +
+    vanishedNote(vanishedScan),
 );

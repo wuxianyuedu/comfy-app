@@ -63,6 +63,12 @@ function gate(
     SCRIPT,
     path.join(root, "scripts", "check-gate-repo-boilerplate.cjs"),
   );
+  /* 判据共用的扫描读取器（`gate-` 前缀，不是 `check-`）：少带时本判据在临时仓库里
+   * 直接 MODULE_NOT_FOUND，用例读到的是「门禁坏了」而不是「夹具缺一块」。 */
+  copyFileSync(
+    path.join(SCRIPTS_DIR, "gate-scan-read.cjs"),
+    path.join(root, "scripts", "gate-scan-read.cjs"),
+  );
   if (baseline) {
     writeFileSync(
       path.join(root, "scripts", ".gate-repo-boilerplate-baseline.json"),
