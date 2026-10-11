@@ -1,9 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-11T03:41:39.721Z",
-    "who": "yuedu",
+    "verifiedAt": "2026-10-11T16:38:39.211Z",
+    "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run test:coverage",
-    "trackedBy": "full"
+    "trackedBy": "full",
+    "skippedReason": "本次只改 scripts/app-port.mjs 的仓库根口径与调用点（脚本/配置层），不加运行时依赖；受影响的 tests/app-port*.test.ts 已就地跑绿（26 条）。全量覆盖率档与本次改动面无交集，今天不整跑"
   }
 }

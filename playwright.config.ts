@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
-import { resolveAppPort } from "./scripts/app-port.mjs";
+import {
+  resolveAppPort,
+  resolveRepoRoot,
+} from "./scripts/app-port.mjs";
 import {
   fakeComfyuiEnv,
   fakeComfyuiStatsUrl,
@@ -16,7 +19,7 @@ import { fakeExecutorEnv } from "./e2e/support/fake-comfyui-executor-env.mjs";
  *   - *.spec.ts            E2E / 冒烟（e2e/）
  * - 仅 chromium（本地冒烟，不跑全矩阵）
  */
-const appPort = resolveAppPort(process.cwd());
+const appPort = resolveAppPort(resolveRepoRoot());
 const appOrigin = `http://localhost:${appPort}`;
 
 /**

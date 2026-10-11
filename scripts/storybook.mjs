@@ -18,14 +18,14 @@
 // Node，`.ps1` 只能是它的调用入口（AGENTS 硬规则 12）。
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
+import { resolveRepoRoot } from "./app-port.mjs";
 import {
   ensureStorybookAssets,
   writeStorybookAppOrigin,
 } from "./storybook-assets.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolveRepoRoot();
 const binName = process.platform === "win32" ? "storybook.cmd" : "storybook";
 const bin = path.join(root, "node_modules", ".bin", binName);
 

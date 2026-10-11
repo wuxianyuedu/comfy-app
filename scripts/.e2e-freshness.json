@@ -1,9 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-11T07:06:35.147Z",
+    "verifiedAt": "2026-10-11T16:37:53.795Z",
     "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm test:e2e",
-    "trackedBy": "e2e"
+    "trackedBy": "e2e",
+    "skippedReason": "本次只收口 resolveAppPort 的仓库根入参口径（脚本/配置层），端口解析值不变、e2e 行为面无变化；且该账在本提交前已是 stale（干净 master 上同红）"
   }
 }
