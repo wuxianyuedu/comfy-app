@@ -292,6 +292,67 @@ function scanProduct(pattern: RegExp): { file: string; value: string }[] {
   return hits;
 }
 
+/**
+ * 屏级副说明的**最低档**：`.u-title-page` 之后 4 行内的第一个 `<p>` 不许低于
+ * `text-sm`(14px)。三枚候选就是 Tailwind 里低于默认正文（`text-sm`）的那些具名档。
+ *
+ * 为什么按「偏低」判而不是按「等于 text-xs」判：这一档**只需挡住写小的**，
+ * 更大的档（`text-base` 及以上）不是这个判据要管的事 —— 它管的是「副说明被写成
+ * 了小字」，也就是用户在「模式契约 / 模型适配」两屏上抱怨的那件事。
+ */
+const BELOW_BODY_TIERS = /\btext-(xs|2xs|3xs)\b/;
+
+/**
+ * 扫「屏级标题之下那行副说明」被写成小字的落点（ISSUE #1751）。
+ *
+ * 形状是两件在**同一段行邻域**内同现，缺一不算：
+ *   ① 一枚 `.u-title-page` 的屏级标题（P83 已要求的那一档）；
+ *   ② 它之后 **4 行内**出现的**第一个** `<p>` 开标签，且那枚 `<p>` 的 class
+ *      里写着低于 `text-sm` 的档（`text-xs` / `text-2xs` / `text-3xs`）。
+ *
+ * ## 为什么这条与 P86 是互补而不是重复
+ *
+ * P86 锚的是「`.u-title-page` + 一行 `mt-1 text-sm` 副说明」**同现** ——
+ * 它要 `text-sm` 才起跳。于是**把档写低反而绕过了它**：两屏此前是
+ * `h3` + `.u-title` + `p.text-xs`，连 `.u-title-page` 都没有，P86 天然看不见。
+ * 这条换一头锚：只认「标题档 + 后面那个 `<p>`」，**不看那枚 `<p>` 的间距档**
+ * （`mt-1` / `mt-2` 都算），于是「档写低」这件事本身成了唯一的判据对象。
+ *
+ * ## 只认第一个 `<p>`
+ *
+ * 页头之后的第一枚 `<p>` 就是副说明那一行；再往后可能是正文段落（自有其档）。
+ * 认「4 行内第一个」而不是「4 行内任意一个」，是为了不让屏头之后的第三、四行
+ * 正文段落把这条判据叫响 —— 那正是 ISSUE 里点名的「宽判据会误伤一片」。
+ */
+function firstSubtitleViolation(text: string): number[] {
+  const hits: number[] = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    if (!/\bu-title-page\b/.test(lines[i] ?? "")) continue;
+    /* 标题行之后 4 行内找第一个 `<p>` 开标签 —— 找到就判、判完就停。 */
+    for (const line of lines.slice(i + 1, i + 5)) {
+      if (!/<p[\s>]/.test(line)) continue;
+      if (BELOW_BODY_TIERS.test(line)) hits.push(i + 1);
+      break;
+    }
+  }
+  return hits;
+}
+
+/** 判据与它的负控制共用这一个出口 —— 否则负控制测的是另一套逻辑，红了也证明不了判据。 */
+function scanTitleSubtitleBelowBody(): { file: string; line: number }[] {
+  const hits: { file: string; line: number }[] = [];
+  for (const abs of collectProductFiles(SRC_DIR)) {
+    const rel = path.relative(ROOT_DIR, abs).split(path.sep).join("/");
+    for (const line of firstSubtitleViolation(
+      stripComments(readFileSync(abs, "utf8")),
+    )) {
+      hits.push({ file: rel, line });
+    }
+  }
+  return hits;
+}
+
 /** 调用点的「字面圆角」形状：rounded- / rounded-b- / rounded-t- 都算。 */
 const RADIUS_LITERAL = /\brounded(?:-[a-z]+)?-\[(\d+(?:\.\d+)?)px\]/g;
 /** 调用点的「字面字号」形状（含 10.5px 这类小数档）。 */
@@ -361,6 +422,25 @@ const PANEL_MARKS = [
   /\bjustify-center\b/,
   /gap-2(?![\w.])/,
   /\btext-sm\b/,
+];
+
+/**
+ * 段级小标题那一行（标题 + 同行 hint）的标记 —— 出口是
+ * `~/components/ui/section-label` 的 `<SectionLabel>`。
+ *
+ * 三枚要**全命中**才认，而每一枚都常见，所以收窄靠的是「三枚同现」这件事本身：
+ * 实测（`stripComments` 后按文件全命中）恰好只有实现自己一处 —— 另外几处看着
+ * 像的都被挡在门外：
+ *   · `ComfyuiStoragePaths` 那行有同样的 wrapper 与 hint 档，但标题是
+ *     `font-medium`（不是 `font-semibold`）⇒ 它是另一档，**刻意不同形**；
+ *   · `AppearanceSection` 的 wrapper 是 `gap-2`（不是 `gap-x-2`）；
+ *   · `FinalComposer` / `WorkshopAside` 只有那枚 `text-ink text-sm font-semibold`
+ *     的 `<span>`，没有段级小标题的 wrapper。
+ */
+const SECTION_LABEL_MARKS = [
+  /mb-2 flex flex-wrap items-baseline gap-x-2/,
+  /text-ink text-sm font-semibold/,
+  /text-muted-foreground text-xs/,
 ];
 
 /** 一族的标记在给定文本里是否算「同一枚形状」。`scope: "line"` 逐行判，其余整段判。
@@ -468,6 +548,96 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toEqual([]);
   });
 
+  it("屏级标题之下那行副说明（`.u-title-page` 后 4 行内第一个 `<p>`）不许低于 text-sm", () => {
+    /* **归零等式**（ISSUE #1751）：P86 要 `text-sm` 才起跳，所以「把档写低」反而
+       绕过了它 —— 两屏此前正是 `h3` + `.u-title` + `p.text-xs`。这条补的就是
+       那一格：标题档在后 4 行内有第一个 `<p>`、而那枚 `<p>` 写着 `text-xs` /
+       `text-2xs` / `text-3xs` 就算违规，**不看间距档**（`mt-1` / `mt-2` 都算）。
+
+       三向自证在下面（正例必抓 / `text-sm` 不抓 / `titleSuffix` 那枚 `<span>`
+       不抓）—— 等式为 0 的判据若正则写漂会永远绿，量具必须先自证能抓。 */
+    const offenders = scanTitleSubtitleBelowBody();
+    expect(
+      offenders,
+      "这些屏的副说明被写成了小字 —— 屏级副说明走 `text-sm`(14px)，" +
+        "转 `ui/page-header` 的 `<PageHeader description=…>` 也归这一档：\n" +
+        offenders.map((o) => `  ${o.file}:${o.line}`).join("\n"),
+    ).toEqual([]);
+
+    /* 自己先验一次量具：真实代码面上过一遍，确认扫描器不是「因为解不出东西而全绿」。
+       屏级标题的现存量实测十几处（`page-header` 实现 + 各工具条页头），若解出 0 就说明
+       正则漂了。 */
+    let titleHits = 0;
+    for (const abs of collectProductFiles(SRC_DIR)) {
+      if (/\bu-title-page\b/.test(stripComments(readFileSync(abs, "utf8")))) {
+        titleHits++;
+      }
+    }
+    expect(
+      titleHits,
+      "在真实代码面上一个 `.u-title-page` 都没解出来（扫描器漂了，这条会静默全绿）",
+    ).toBeGreaterThan(3);
+  });
+
+  it("负控制：屏级副说明档这条判据真的能被抓（正例 / text-sm / titleSuffix 三向）", () => {
+    /* ① 正例必抓：收口前的真实形状（`h3` 档的标题 + `text-xs` 副说明的等价物，
+       这里换成页面级标题档喂进去）—— 判据的核心是「标题档 + 后面那枚小字 `<p>`」。 */
+    const positive = [
+      '<h1 className="font-title u-title-page min-w-0 truncate">模式契约</h1>',
+      '<p className="text-muted-foreground mt-1 text-xs">每种模式的统一输入 / 输出。</p>',
+    ].join("\n");
+    const scanText = firstSubtitleViolation;
+    expect(
+      scanText(positive),
+      "副说明写成 `text-xs` 没被抓住（这条判据空转）",
+    ).toEqual([1]);
+    for (const tier of ["text-2xs", "text-3xs"]) {
+      expect(
+        scanText(positive.replace("text-xs", tier)),
+        `副说明写成 \`${tier}\` 没被抓住`,
+      ).toEqual([1]);
+    }
+
+    /* ② 正档不抓：`text-sm` 是这档副说明该在的地方（`ui/page-header` 的实现、
+       `ProjectHomePage` / `SettingsShell` 的真实现都是它）。 */
+    expect(
+      scanText(
+        [
+          '<h1 className="font-title u-title-page min-w-0 truncate">设置</h1>',
+          '<p className="text-ink-muted min-w-0 flex-1 text-sm">全部设置在一页里。</p>',
+        ].join("\n"),
+      ),
+      "`text-sm` 的副说明被误抓（判据越界了）",
+    ).toEqual([]);
+
+    /* ③ `titleSuffix` 那枚 `<span>` 不抓：`ui/page-header` 的标题右边跟着一枚
+       `text-ink-fainter text-xs` 的补充件（项目名 / 视图名那类），它是**标题行的
+       成员**、不是副说明 —— 判据只认 `<p>`，这枚 `<span>` 恰好挡住「顺手把标题
+       行里第一个小字元素当副说明」这个误判。 */
+    expect(
+      scanText(
+        [
+          '<h1 className="font-title u-title-page min-w-0 truncate">成片</h1>',
+          '<span className="text-ink-fainter shrink-0 text-xs">{titleSuffix}</span>',
+        ].join("\n"),
+      ),
+      "标题行里那枚 `<span>` 补充件被当成副说明误抓（判据只该认 `<p>`）",
+    ).toEqual([]);
+
+    /* ④ 第一个 `<p>` 之后的段落不算：屏头之后第三、四行可能是正文段落（自有其档），
+       「只认 4 行内第一个 `<p>`」正是为了不把它们叫响。 */
+    expect(
+      scanText(
+        [
+          '<h1 className="font-title u-title-page">历史</h1>',
+          '<p className="text-ink-muted mt-1 text-sm">运行记录。</p>',
+          '<p className="text-muted-foreground text-2xs">共 12 条</p>',
+        ].join("\n"),
+      ),
+      "第一个 `<p>` 之后的段落被误抓（判据该收在第一个 `<p>` 上）",
+    ).toEqual([]);
+  });
+
   it("@theme 的 --text-* 档名必须是 t-shirt 尺寸（否则 cn() 把它当颜色吃掉）", () => {
     /* 实测：cn("text-ink-muted", "text-micro") 只剩 text-micro —— 不认识的
        `text-<名字>` 被归进颜色组，同行的语义文字色被静默合并掉（这条是钩子
@@ -556,6 +726,20 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       scope: "line",
       sample:
         'className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-sm"',
+    },
+    {
+      /* 段级小标题那一行：**这一族是「消手抄对」才开的**。「模式契约」与
+         「模型适配」两屏此前各抄一份同样的实现（连注释都写着「与另一屏同一形态」），
+         于是同一个角色在两屏是两个形状、改一处不会跟手 —— 抽成
+         `ui/section-label` 之后由这一族守「只许有一个出处」。 */
+      name: "段级小标题（标题 + 同行 hint）",
+      owner: "src/components/ui/section-label.tsx",
+      use: "~/components/ui/section-label 的 <SectionLabel>",
+      marks: SECTION_LABEL_MARKS,
+      sample:
+        '<div className="mb-2 flex flex-wrap items-baseline gap-x-2">' +
+        '<h4 className="text-ink text-sm font-semibold">{children}</h4>' +
+        '<span className="text-muted-foreground text-xs">{hint}</span>',
     },
   ];
 
@@ -691,6 +875,23 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       [
         'className="text-ink-fainter flex h-full flex-col items-center justify-center gap-3"',
         "面板内铺满居中的占位",
+      ],
+      /* 段级小标题那一族的两个反向样本 —— 都是「同屏相邻、看着像」的东西：
+         ① **屏级页头**（`ui/page-header`）走的是另一档（`.u-title-page` 24px +
+         `mt-1 text-sm` 副说明），不是段级那一行，不许被这组标记抓到；
+         ② **段头胶囊**（`DynamicWorkflowForm/SectionHeader`）是「圆点 + 大写标签
+         + 计数胶囊 + 虚线」那一族，连字号档都不同（`text-3xs` 大写标签）。
+         两者被抓到就说明这组标记太松、判据成了「拦下了一切」。 */
+      [
+        '<h1 className="font-title u-title-page min-w-0 truncate">{title}</h1>' +
+          '<p className="text-ink-muted mt-1 text-sm">{description}</p>',
+        "段级小标题（标题 + 同行 hint）",
+      ],
+      [
+        '<div className="border-border-strong mt-1 flex items-center gap-2 border-t pt-2.5">' +
+          '<span className="size-2 shrink-0 rounded-full" />' +
+          '<span className="text-ink-muted text-3xs font-semibold tracking-wider uppercase">',
+        "段级小标题（标题 + 同行 hint）",
       ],
     ];
     for (const [src, famName] of lookalikes) {

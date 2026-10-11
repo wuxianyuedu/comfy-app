@@ -415,7 +415,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                       <h3 className="text-ink-faint text-xs font-medium tracking-wide uppercase">
                         可添加 · {c.availableRows.length}
                       </h3>
-                      <p className="text-ink-muted text-2xs">
+                      <p className="text-ink-muted text-xs">
                         点「启用」加入扫描列表
                       </p>
                     </div>

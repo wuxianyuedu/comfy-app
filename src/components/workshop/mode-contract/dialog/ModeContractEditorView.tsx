@@ -43,6 +43,9 @@ import { FieldLabel } from "~/components/ui/field";
 import { Checkbox } from "~/components/ui/checkbox";
 import { SelectChip } from "~/components/ui/select-chip";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { PageHeader } from "~/components/ui/page-header";
+import { SectionLabel } from "~/components/ui/section-label";
+import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ContractInputCatalog } from "./ContractInputCatalog";
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
@@ -57,22 +60,6 @@ function LabelWithId({ label, id }: { label: string; id: string }) {
   );
 }
 
-/** 区块小标题：与「模型适配」同一形态（字重 + 留白承担层级，不堆字号）。 */
-function SectionLabel({
-  children,
-  hint,
-}: {
-  children: React.ReactNode;
-  hint?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
-      <h4 className="text-ink text-sm font-semibold">{children}</h4>
-      {hint && <span className="text-muted-foreground text-xs">{hint}</span>}
-    </div>
-  );
-}
-
 export function ModeContractEditorView({
   controller,
 }: {
@@ -83,17 +70,16 @@ export function ModeContractEditorView({
 
   return (
     <>
-      {/* 页眉只有标题与说明 —— 不自绘关闭按钮。那枚 ✕ 是弹窗时代的产物（`ui/dialog`
-          的内置关闭在这里被关掉、改由页眉自绘）；契约现在是视图页签，「关」由页签
-          自己的关闭按钮承担，这里再画一枚就是两个入口做同一件事。 */}
-      <header className="px-5 pt-4 pb-3">
-        <h3 className="text-ink-strong u-title">模式契约</h3>
-        <p className="text-muted-foreground mt-1 text-xs">
-          每种模式的统一输入 / 输出 ——
-          本地工作流按它配落点，远端模型按它建适配器。
-          契约是模式级的全局口径，与具体接口无关（接口字段映射在「模型适配」里配）。
-        </p>
-      </header>
+      {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）—— 标题档 14→24、
+          副说明档 12→14、层级 h3→h1 一次修齐。屏名从注册表取（`pageHeaderTitle`），
+          与侧栏 / 页签同一个出处。**不自绘关闭按钮**：那枚 ✕ 是弹窗时代的产物
+          （`ui/dialog` 的内置关闭在这里被关掉、改由页眉自绘）；契约现在是视图页签，
+          「关」由页签自己的关闭按钮承担，这里再画一枚就是两个入口做同一件事。 */}
+      <PageHeader
+        className="mb-3 px-5 pt-4"
+        title={pageHeaderTitle("mode-contract")}
+        description="每种模式的统一输入 / 输出 —— 本地工作流按它配落点，远端模型按它建适配器。契约是模式级的全局口径，与具体接口无关（接口字段映射在「模型适配」里配）。"
+      />
 
       {/* 正文：滚动与高度都交给外层 `DocumentFrame`。这里此前是
           `min-h-0 flex-1 overflow-auto` —— 那是弹窗时代「卡片有 max-h、内部自己滚」
