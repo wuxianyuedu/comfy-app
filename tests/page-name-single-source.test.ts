@@ -72,6 +72,12 @@ const PAGE_HEADER_CONSUMERS = [
   "src/components/studio/history/HistoryList.tsx",
   "src/components/studio/library/ResourceLibrary.tsx",
   "src/components/studio/queue/QueueMonitorView.tsx",
+  /* 「模型适配」「模式契约」两屏（ISSUE #1751）：此前它们自绘页头，
+   * 而且用的是 **`h3` + `.u-title`(14px) + `text-xs`(12px)** 三处都低一档 ——
+   * 连 `.u-title-page` 都没有，所以 P86 与 P83 都看不见它们。迁到
+   * `ui/page-header` 之后，屏名走 `pageHeaderTitle(...)`、档位由基元给。 */
+  "src/components/workshop/ModelAdaptersView.tsx",
+  "src/components/workshop/mode-contract/dialog/ModeContractEditorView.tsx",
 ] as const;
 
 function read(rel: string): string {

@@ -48,6 +48,9 @@ import { FormField } from "~/components/ui/form-field";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { SelectChip } from "~/components/ui/select-chip";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { PageHeader } from "~/components/ui/page-header";
+import { SectionLabel } from "~/components/ui/section-label";
+import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { cn } from "~/lib/utils";
 import { useModelAdapters } from "./hooks/use-model-adapters";
 
@@ -62,31 +65,6 @@ const MODE_GROUPS: Array<{
 
 function modeLabel(mode: string): string {
   return getWorkflowType(mode)?.label ?? mode;
-}
-
-/** 区块小标题：**字重 + 上留白**承担层级，不靠字号堆（DESIGN.md §Typography
- * 的「h2/h3 刻意不入判据」那一档就是这个角色 —— 本屏统一到一处）。
- *
- * 右侧 `hint` 是这一区的补充口径（「这一区在配什么」）。它此前是正文最上面
- * 另起一段 10px 说明，一屏里套三层小字；挪到标题右侧之后同一屏少一层缩进、
- * 也少一次「先说这是什么再说要配什么」的重复。 */
-function SectionLabel({
-  children,
-  hint,
-  className,
-}: {
-  children: React.ReactNode;
-  hint?: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn("mb-2 flex flex-wrap items-baseline gap-x-2", className)}
-    >
-      <h4 className="text-ink text-sm font-semibold">{children}</h4>
-      {hint && <span className="text-muted-foreground text-xs">{hint}</span>}
-    </div>
-  );
 }
 
 /** 键值对形式的字段标签：中文名 + 机器 id 上标。
@@ -200,13 +178,13 @@ export function ModelAdaptersView() {
       width="wide"
       className="flex flex-col gap-6 px-4 py-8 sm:px-8 sm:py-10"
     >
-      <header>
-        <h3 className="text-ink-strong u-title">模型适配</h3>
-        <p className="text-muted-foreground mt-1 text-xs">
-          为远端模型配置工坊各模式下的输入 / 输出：统一输入映射到该接口请求体的
-          字段名，产物按字段路径提取。
-        </p>
-      </header>
+      {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）—— 标题档 14→24、
+          副说明档 12→14、层级 h3→h1 一次修齐。屏名从注册表取（`pageHeaderTitle`），
+          与侧栏 / 页签同一个出处。 */}
+      <PageHeader
+        title={pageHeaderTitle("model-adapters")}
+        description="为远端模型配置工坊各模式下的输入 / 输出：统一输入映射到该接口请求体的字段名，产物按字段路径提取。"
+      />
 
       {/* 选择远端模型 */}
       <section>

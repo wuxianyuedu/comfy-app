@@ -104,7 +104,7 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
           <h3 className="text-ink-soft text-2xs px-1 font-semibold tracking-wider uppercase">
             调试
           </h3>
-          <p className="text-ink-muted text-2xs mb-3 px-1 leading-relaxed">
+          <p className="text-ink-muted mb-3 px-1 text-xs leading-relaxed">
             「渲染链路标签」在节点卡片上叠加显示对应本项目代码模块的路径，点击可查看源码；
             「日志面板」在画布右上角显示执行日志入口按钮，点击以弹窗形式查看实时执行日志。两者相互独立。
           </p>
