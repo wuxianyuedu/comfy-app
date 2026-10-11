@@ -72,6 +72,11 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = process.cwd();
 const SRC = path.join(ROOT, "src");
@@ -97,25 +102,25 @@ const TEST_CONSUMER_EXT = [".test.ts", ".test.tsx"];
 const SKIP_RE = /\.(test|spec)\.(ts|tsx)$|\.d\.ts$/;
 const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx)$/;
 
+/**
+ * 语料的文件形状：必须含 `.mjs` / `.cjs` —— `USAGE_ROOTS` 里 `scripts` 全是这两种后缀，而
+ * 纯 Node 宿主经 `await import()` 消费地基层导出（实例：`scripts/executor-host.mjs`
+ * 取 `src/lib/comfyui/host-runtime.ts` 的 `createHostRepo`）。只数 `.ts/.tsx` 会把
+ * 「有消费方」判成零消费——与本文件头那句「值导出在 src/scripts/e2e 里零引用」
+ * 相反（§12.17：注释与判据相反，下一个人照注释写只会多一条不生效的口径）。
+ */
+const CORPUS_FILE_RE = /\.(ts|tsx|mjs|cjs)$/;
+/** 本判据额外不进去的目录（`gate-scan-read.cjs` 默认只跳 `node_modules`）。 */
+const WALK_SKIP_DIRS = new Set(["node_modules", ".next", ".git"]);
+
+/**
+ * 枚举一棵语料树。**旧实现是「`readdirSync` 列名字 → 逐个 `fs.statSync`」**，那是这个
+ * 竞态的**第三种窗口**：条目在两次 syscall 之间被删时 `statSync` 抛 `ENOENT`，而那行
+ * 写在 `try` 之外 —— 共享枚举改走 `withFileTypes`，同一次 `readdir` 就带回类型，不多一次
+ * 会失败的 syscall（口径与两种窗口都在 `gate-scan-read.cjs`）。
+ */
 function walk(dir, out = []) {
-  let entries;
-  try {
-    entries = fs.readdirSync(dir);
-  } catch {
-    return out;
-  }
-  for (const name of entries) {
-    if (name === "node_modules" || name === ".next" || name === ".git")
-      continue;
-    const full = path.join(dir, name);
-    if (fs.statSync(full).isDirectory()) walk(full, out);
-    // 消费方语料必须含 `.mjs` / `.cjs`：USAGE_ROOTS 里 `scripts` 全是这两种后缀，而
-    // 纯 Node 宿主经 `await import()` 消费地基层导出（实例：`scripts/executor-host.mjs`
-    // 取 `src/lib/comfyui/host-runtime.ts` 的 `createHostRepo`）。只数 `.ts/.tsx` 会把
-    // 「有消费方」判成零消费——与本文件头那句「值导出在 src/scripts/e2e 里零引用」
-    // 相反（§12.17：注释与判据相反，下一个人照注释写只会多一条不生效的口径）。
-    else if (/\.(ts|tsx|mjs|cjs)$/.test(name)) out.push(full);
-  }
+  out.push(...walkForScan(dir, CORPUS_FILE_RE, { skipDirs: WALK_SKIP_DIRS }));
   return out;
 }
 
@@ -200,13 +205,21 @@ function specsImport(specs, wantedKeys) {
 
 // ── 预加载索引（判据不变，只是把「每判一次就重扫全仓」摊成一次成型）──────────
 
+/** 「列到名字、读时已没」的文件数 —— 这一轮没读过它们，结论行必须带这个数。 */
+let vanishedFiles = 0;
+
 /** 生产语料的词元 → 出现次数（切一遍 src/scripts/e2e），替代逐符号 regex-split 全仓。 */
 const PROD_FREQ = (() => {
   const freq = new Map();
   const files = [];
   for (const r of USAGE_ROOTS) walk(path.join(ROOT, r), files);
   for (const f of files) {
-    const toks = stripComments(fs.readFileSync(f, "utf8")).match(/\w+/g);
+    const raw = readForScan(f);
+    if (raw === null) {
+      vanishedFiles += 1;
+      continue;
+    }
+    const toks = stripComments(raw).match(/\w+/g);
     if (!toks) continue;
     for (const t of toks) freq.set(t, (freq.get(t) || 0) + 1);
   }
@@ -222,7 +235,12 @@ const TEST_FILES = (() => {
     const abs = path.resolve(file);
     if (seen.has(abs)) return;
     seen.add(abs);
-    const src = stripComments(fs.readFileSync(abs, "utf8"));
+    const raw = readForScan(abs);
+    if (raw === null) {
+      vanishedFiles += 1;
+      return;
+    }
+    const src = stripComments(raw);
     list.push({
       rel: toPosix(path.relative(ROOT, abs)),
       tokens: new Set(src.match(/\w+/g) || []),
@@ -290,7 +308,12 @@ function collect() {
   for (const file of files) {
     const rel = toPosix(path.relative(ROOT, file));
     if (SKIP_RE.test(rel)) continue;
-    const src = stripComments(fs.readFileSync(file, "utf8"));
+    const raw = readForScan(file);
+    if (raw === null) {
+      vanishedFiles += 1;
+      continue;
+    }
+    const src = stripComments(raw);
     const names = exportedValues(src);
     if (!names.length) continue;
     checkedFiles.push(rel);
@@ -327,10 +350,14 @@ function main() {
   }
 
   const { dead, checkedFiles } = collect();
+  /* 消失数必须进结论：这条是**棘轮**，少读一份就把 `dead` 报小 —— 看着像「存量下降」，
+     实际是这一轮没读。（口径在 `gate-scan-read.cjs`：只降级 ENOENT、不许静默。） */
+  const note = vanishedNote(vanishedFiles);
 
   if (REPORT_ONLY) {
     console.log(
-      `扫描 ${checkedFiles} 个地基模块(src/lib + src/trpc):零消费导出 ${dead.length} 个`,
+      `扫描 ${checkedFiles} 个地基模块(src/lib + src/trpc):零消费导出 ${dead.length} 个` +
+        note,
     );
     for (const d of dead) console.log(`  · ${d}`);
     return;
@@ -346,6 +373,16 @@ function main() {
   const removed = baseline.filter((d) => !dead.includes(d));
 
   if (UPDATE) {
+    /* 读数不完整时**不许记账**：`dead` 会因为「列到名字、读时已没」而偏小，
+     * 把这样一次读数写进基线 = 下一轮再也报不出那些符号（棘轮「只许降」的前提是
+     * 两次读数覆盖同一张面）。与 `check-gate-repo-boilerplate.cjs` 同一条口径。 */
+    if (vanishedFiles > 0) {
+      console.error(
+        `[dead-exports] 拒绝 --update：本轮有 ${vanishedFiles} 份文件在扫描期间消失，` +
+          "读数不完整。\n  等并发用例跑完再执行（基线是账，不能记在没读过的面上）。",
+      );
+      process.exit(1);
+    }
     /* 棘轮的「只许降不许升」必须由这一支自己守住。此前只有「不带 --update 的下一次跑」
      * 会报新增，于是在新增违规之后跑一次 `--update` 就等于把违规收进基线 ——
      * 基线 note 里那句「只许降不许升」当时是空的（判据写着、没人判它有没有生效，
@@ -383,7 +420,8 @@ function main() {
     for (const d of added) console.error(`    ${d}`);
     console.error(
       "\n修法:① 真的要用 → 接线到消费方;② 暂时保留 → 加 changelog 说明并 --update" +
-        "\n     (基线只许变短,登记等于承认留着一份没有消费方的抽象);③ 否则删掉。",
+        "\n     (基线只许变短,登记等于承认留着一份没有消费方的抽象);③ 否则删掉。" +
+        note,
     );
     failed = true;
   }
@@ -400,7 +438,8 @@ function main() {
 
   if (!failed) {
     console.log(
-      `✓ 无新增零消费导出(§12.16;基线 ${baseline.length} 个,当前 ${dead.length} 个,扫描 ${checkedFiles} 个模块)`,
+      `✓ 无新增零消费导出(§12.16;基线 ${baseline.length} 个,当前 ${dead.length} 个,扫描 ${checkedFiles} 个模块)` +
+        note,
     );
   }
   process.exit(failed ? 1 : 0);

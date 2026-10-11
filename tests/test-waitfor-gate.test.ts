@@ -24,6 +24,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { copyGateDeps } from "./helpers/gate-repo";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
 const SCRIPT = path.join(SCRIPTS_DIR, "check-test-waitfor.cjs");
@@ -47,6 +48,7 @@ function gate(
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   for (const src of [SCRIPT, DEP]) {
     copyFileSync(src, path.join(root, "scripts", path.basename(src)));
+    copyGateDeps(path.join(root, "scripts", path.basename(src)));
   }
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);

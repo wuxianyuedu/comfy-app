@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-11T00:11:49.525Z",
+    "verifiedAt": "2026-10-11T00:43:23.029Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "本机未配置 Playwright 浏览器/成套 e2e 基线，无法在本机跑全量 e2e；本次改动（队列输出目录 revealPath）已由钩子 C 组增量用例覆盖，按 11-测试与可观测性.md 11.8 记当日豁免"
+    "skippedReason": "master 上 13 条 @critical e2e 自 10-09 起红：本刀只动 scripts/ 门禁与 tests/ 夹具，git diff 里 src 与 e2e 与 origin/master 逐字节相同、webServer 是新起的（非 §4.3 陈旧实例），归属见 ISSUE #1727（含逐条现场：第 4 条已核为用例侧名字过期、第 1 条是 #1582 行高常量没跟着改、第 12/13 条同场有 TRPC Stream closed）"
   }
 }

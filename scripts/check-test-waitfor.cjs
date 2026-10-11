@@ -53,9 +53,13 @@
  *
  * 退出码 0 = 通过，1 = 阻断。
  */
-const fs = require("node:fs");
 const path = require("node:path");
 const { maskNonCode } = require("./check-test-concurrency.cjs");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -120,24 +124,13 @@ const FAKE_OFF_RE = /vi\.useRealTimers\s*\(/;
 /** 站点回调的搜索窗口上限。 */
 const WINDOW_MAX = 600;
 
+/**
+ * 枚举扫描面。两种消失窗口、「只降级 ENOENT」与「不许静默」都在 `gate-scan-read.cjs`
+ * （这里曾经是自己的 `try { readdirSync } catch { return out }` —— 那一份把**所有**
+ * 错误都吞掉，等于「读不到扫描面」也能绿；收进一处之后只有 `ENOENT` 降级）。
+ */
 function walk(dir) {
-  const out = [];
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const e of entries) {
-    const p = path.join(dir, e.name);
-    if (e.isDirectory()) {
-      if (e.name === "node_modules") continue;
-      out.push(...walk(p));
-    } else if (TEST_FILE_RE.test(e.name)) {
-      out.push(p);
-    }
-  }
-  return out;
+  return walkForScan(dir, TEST_FILE_RE);
 }
 
 function lineOf(src, index) {
@@ -169,15 +162,9 @@ function importsRtlWaitFor(raw) {
  * @returns {{line:number,text:string,legit:string|null,dom:boolean,fake:boolean}[]|null}
  */
 function scanFile(abs) {
-  let raw;
-  try {
-    raw = fs.readFileSync(abs, "utf8");
-  } catch (error) {
-    /* 消失不是判据要判的形态：一个已经不存在的文件里没有站点可言。现场与计数口径
-     * 见 `check-test-sleep.cjs` 的同款注释（同一份并发探针、同一个 D 组）。 */
-    if (error && error.code === "ENOENT") return null;
-    throw error;
-  }
+  /* 消失时 `null` = 这一轮没读到；口径与两种窗口在 `gate-scan-read.cjs`。 */
+  const raw = readForScan(abs);
+  if (raw === null) return null;
   const masked = maskNonCode(raw);
 
   if (!importsRtlWaitFor(raw)) return [];
@@ -281,18 +268,19 @@ function main() {
           (sites.length > 8 ? `\n      …另有 ${sites.length - 8} 处` : ""),
       );
     }
-    console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.14.3。");
+    console.error(
+      "\n口径见 docs/standards/11-测试与可观测性.md §11.14.3。" +
+        vanishedNote(vanished),
+    );
     return 1;
   }
 
   console.log(
     `[test-waitfor] OK —— 越界 0 处 / 正当 ${legitTotal} 处` +
+      `（等 DOM ${legit.dom} + 假定时器窗口 ${legit["fake-timer"]}）。` +
       /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
          目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
-      (vanished > 0
-        ? `\n  ⚠️ 另有 ${vanished} 份文件在扫描期间消失（并发用例的临时探针），本轮未读`
-        : "") +
-      `（等 DOM ${legit.dom} + 假定时器窗口 ${legit["fake-timer"]}）。`,
+      vanishedNote(vanished),
   );
   return 0;
 }

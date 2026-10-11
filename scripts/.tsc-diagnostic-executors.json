@@ -18,7 +18,7 @@
         "test": "scripts/check-type-assertion-executor.cjs（D 组「类型层断言的执行者（expectTypeOf）」）"
       },
       "baseline": {
-        "scripts/check-type-assertion-executor.cjs": 38
+        "scripts/check-type-assertion-executor.cjs": 41
       },
       "section": "11.20"
     },
@@ -109,7 +109,7 @@
         "test": "tests/gate-repo-boilerplate-gate.test.ts（C 组固定清单）"
       },
       "baseline": {
-        "scripts/check-gate-repo-boilerplate.cjs": 29
+        "scripts/check-gate-repo-boilerplate.cjs": 31
       },
       "section": "11.16.1"
     },
@@ -130,7 +130,7 @@
         "test": "tests/tsc-diagnostic-executors.test.ts（C 组固定清单）"
       },
       "baseline": {
-        "scripts/check-tsc-diagnostic-executors.cjs": 42
+        "scripts/check-tsc-diagnostic-executors.cjs": 44
       },
       "section": "13.5.14"
     },

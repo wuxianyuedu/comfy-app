@@ -62,6 +62,11 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  readForScan,
+  walkForScan,
+  vanishedNote,
+} = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const BASELINE = path.join(__dirname, ".gate-repo-boilerplate-baseline.json");
@@ -86,20 +91,18 @@ const SHARED_IMPORT_RE = /helpers\/gate-repo/;
 /** ② 的条件：`execFileSync(` 之后的一段窗口里出现 `join(workdir`。 */
 const SPAWN_FROM_WORKDIR_RE = /execFileSync\([\s\S]{0,200}?join\(\s*workdir\b/;
 
-function walk(dir, out = []) {
-  if (!fs.existsSync(dir)) return out;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === "node_modules") continue;
-    const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walk(abs, out);
-    else if (TEST_FILE_RE.test(e.name)) out.push(abs);
-  }
-  return out;
+/** 枚举扫描面（消失容错与「只降级 ENOENT」的口径在 `gate-scan-read.cjs`）。 */
+function walk(dir) {
+  return walkForScan(dir, TEST_FILE_RE);
 }
 
-/** 扫一个文件，返回它是否手搓了「临时仓库 + 从它拉脚本」这套样板。 */
+/**
+ * 扫一个文件，返回它是否手搓了「临时仓库 + 从它拉脚本」这套样板；
+ * 文件在「列目录 → 读内容」之间消失时返回 `null`（调用方必须计数，见 `main`）。
+ */
 function scanFile(abs) {
-  const raw = fs.readFileSync(abs, "utf8");
+  const raw = readForScan(abs);
+  if (raw === null) return null;
   if (SHARED_IMPORT_RE.test(raw)) return false;
   if (!raw.includes("tmpdir(")) return false;
   return SPAWN_FROM_WORKDIR_RE.test(raw);
@@ -119,17 +122,37 @@ function main() {
   const baseline = readBaseline();
 
   const live = new Map();
+  let vanished = 0;
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
     if (FIXTURE_SKIP.has(rel)) continue;
-    if (scanFile(abs)) live.set(rel, true);
+    const hit = scanFile(abs);
+    if (hit === null) {
+      vanished += 1;
+      continue;
+    }
+    if (hit) live.set(rel, true);
   }
+  /* 消失数必须进结论：这条是**棘轮**，少读一份就把 `liveTotal` 报小 ——
+     看着像「存量下降」，实际是这一轮没读。 */
+  const note = vanishedNote(vanished);
 
   const liveTotal = live.size;
   const shrunk = liveTotal < baseline.total;
   const grown = liveTotal > baseline.total;
 
   if (UPDATE) {
+    /* 棘轮类判据在这里比「报个数」的判据多一层要求：**有文件没读到就不许收紧基线**。
+     * 消失会让 `liveTotal` 偏小，而 `--update` 正是把「这一轮数出来的数」写成新基线 ——
+     * 拿一次不完整的读数收紧，等于把「下一轮再也报不出这些」写进账（§13.5 只许降的
+     * 语义前提是两次读数覆盖同一张面）。 */
+    if (vanished > 0) {
+      console.error(
+        `[gate-repo-boilerplate] 拒绝收紧：本轮有 ${vanished} 份文件在扫描期间消失，` +
+          "读数不完整。\n  等并发用例跑完再执行 `--update`（基线是账，不能记在没读过的面上）。",
+      );
+      return 1;
+    }
     /* 首次建基线（文件不存在）：允许 —— 那是**记账起点**，不是给新增放行。
      * 与 `check-ui-logic-separation.cjs` 的 `--update` 门同一口径。 */
     const firstBaseline = !fs.existsSync(BASELINE);
@@ -154,7 +177,8 @@ function main() {
 
   if (REPORT_ONLY) {
     console.log(
-      `[gate-repo-boilerplate] 盘点：手搓样板 ${liveTotal} 份（基线 ${baseline.total}）。`,
+      `[gate-repo-boilerplate] 盘点：手搓样板 ${liveTotal} 份（基线 ${baseline.total}）。` +
+        note,
     );
     for (const rel of [...live.keys()].sort()) console.log(`  · ${rel}`);
     return 0;
@@ -176,7 +200,9 @@ function main() {
     for (const rel of [...live.keys()].sort()) {
       if (!baseline.files[rel]) console.error(`  · ${rel} ← 新增`);
     }
-    console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.16.1。");
+    console.error(
+      "\n口径见 docs/standards/11-测试与可观测性.md §11.16.1。" + note,
+    );
     return 1;
   }
 
@@ -185,7 +211,8 @@ function main() {
       "`node scripts/check-gate-repo-boilerplate.cjs --update` 收紧基线"
     : "";
   console.log(
-    `[gate-repo-boilerplate] OK —— 手搓样板 ${liveTotal} 份（基线 ${baseline.total}，均为待迁存量）${tail}。`,
+    `[gate-repo-boilerplate] OK —— 手搓样板 ${liveTotal} 份（基线 ${baseline.total}，均为待迁存量）${tail}。` +
+      note,
   );
   return 0;
 }
