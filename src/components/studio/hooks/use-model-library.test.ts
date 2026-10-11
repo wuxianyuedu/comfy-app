@@ -7,7 +7,7 @@ import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
-import { http } from "msw";
+import { http } from "msw/http";
 import { TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";

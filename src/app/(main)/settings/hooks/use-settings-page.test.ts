@@ -11,7 +11,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import SuperJSON from "superjson";
 import {
   afterAll,
