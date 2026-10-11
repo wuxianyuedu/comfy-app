@@ -243,6 +243,36 @@ function extractAsciiOnlyModules() {
   );
 }
 
+/* ── 「声明依赖解析得到吗」的探针清单（ISSUE #1721）─────────────────────
+ * 口径与 §1.5 的 ASCII 白名单同一手法：**清单只定义一次**，写在
+ * `docs/reference-facts.md` 的 `deps.resolveProbes` 那一行里，这里反向解析它。
+ * 判据的 `RESOLVE_PROBES`（`scripts/launcher-core/worktree.mjs`）与它逐项同源，
+ * 由 `tests/deps-freshness-gate.test.ts` 核对 —— 两处各记一份必然分叉，
+ * 分叉之后「哪一份是真的」没有判据能回答。
+ */
+const RESOLVE_PROBES_FACT_DOCS = ["docs/reference-facts.md"];
+
+/** 解析 reference-facts 里 `deps.resolveProbes` 那一行登记的包名。 */
+function extractResolveProbes() {
+  for (const doc of RESOLVE_PROBES_FACT_DOCS) {
+    if (!exists(doc)) continue;
+    const line = readText(doc)
+      .split("\n")
+      .find((l) => l.includes("deps.resolveProbes"));
+    if (!line) continue;
+    // 取「探针」那一格（第 2 列），逐项提取反引号包裹的包名。括号里的说明
+    // （「跑门禁时无论如何都会解析到」这类）写在反引号之外，天然不被吃进来。
+    const cell = line.split("|")[2] ?? "";
+    const names = [...cell.matchAll(/`([^`]+?)`/g)].map((m) => m[1]);
+    // 与 §1.5 同一条口径：名单可以为空不是目标形态，但**读不到登记行**必须报错 ——
+    // 一个永远返回空数组的解析器会让「探针清单没人守」这件事静默通过。
+    if (names.length) return names;
+  }
+  throw new Error(
+    "docs/reference-facts.md 里读不到 deps.resolveProbes 的登记行（或它没有列出任何包名）",
+  );
+}
+
 // FACTS：机器可读事实定义（与 docs/reference-facts.md 的 key 一一对应）
 //   placeholder 类：文档用占位符替代裸值，doc:check 发现裸值即报错，
 //                    doc:render 把占位符替换成真实值。
@@ -346,6 +376,13 @@ const FACTS = [
     kind: "list",
     extract: extractAsciiOnlyModules,
   },
+  // 声明依赖的解析探针（ISSUE #1721）：与上一条同形 —— 名单本身就是权威定义，
+  // 判据的 RESOLVE_PROBES 与它逐项同源（回归测试核对）。
+  {
+    key: "deps.resolveProbes",
+    kind: "list",
+    extract: extractResolveProbes,
+  },
   // 路径类：核对文件存在
   { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
   { key: "path.lib.rs", kind: "path", source: "src-tauri/src/lib.rs" },
@@ -436,4 +473,5 @@ module.exports = {
   extractRegistryPort,
   extractMcpHttpPort,
   extractAsciiOnlyModules,
+  extractResolveProbes,
 };
