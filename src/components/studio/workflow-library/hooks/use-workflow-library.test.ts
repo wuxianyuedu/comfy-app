@@ -1,5 +1,5 @@
-// 工作流库逻辑层单测：hook 走真实 tRPC React 客户端（api.workflow.* /
-// api.workflowModel.list），由 MSW 转发到可控测试 router —— 因此断言的是
+// 工作流库逻辑层单测：hook 走真实 tRPC React 客户端（trpc.workflow.* /
+// trpc.workflowModel.list 的 options），由 MSW 转发到可控测试 router —— 因此断言的是
 // **真实管线下的 loading → data → 错误流转**，而不是 vi.mock 的永不 resolve 桩。
 //
 // 三个重点：
@@ -29,7 +29,7 @@ import {
   testTrpcEndpoint,
 } from "../../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
-import { api } from "~/trpc/react";
+import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
 import type { PendingRow, WorkflowRow } from "../workflow-library-config";
 import { LIST_STALL_MS, useWorkflowLibrary } from "./use-workflow-library";
@@ -138,7 +138,7 @@ function pending(overrides: Partial<PendingRow> = {}): Record<string, unknown> {
 /** hook 用到 api.*，必须挂在真实 tRPC Provider 下（同 use-model-library.test.ts）。 */
 function makeWrapper() {
   const qc = createTestQueryClient();
-  const client = api.createClient({
+  const client = createTrpcClient({
     links: [
       httpBatchStreamLink({
         transformer: SuperJSON,
@@ -151,7 +151,11 @@ function makeWrapper() {
       QueryClientProvider,
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
-      createElement(api.Provider, { client, queryClient: qc, children }),
+      createElement(TRPCProvider, {
+        trpcClient: client,
+        queryClient: qc,
+        children,
+      }),
     );
   };
 }

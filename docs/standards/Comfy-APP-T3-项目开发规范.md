@@ -123,7 +123,8 @@ lib（纯函数） ← 任意层
 - 副作用（事件监听、定时器）必须在 cleanup 中释放。
 - **UI 与逻辑分离（强制）**：视图层（`src/components/**`、`src/app/**`，Route Handler
   `src/app/api/**` 除外）**禁止新写** `fetch(`、`vanillaApi.*`、tRPC hook
-  （`api.x.y.useQuery/useMutation`）——逻辑进 `<feature>/hooks/`，网络进
+  （`trpc.x.y.queryOptions()` / `mutationOptions()`；旧 classic 的
+  `api.x.y.useQuery/useMutation` 同判）——逻辑进 `<feature>/hooks/`，网络进
   `src/lib/<domain>-client.ts`（**网络层一律放 `src/lib/`，守卫只豁免
   `components/**/hooks/`，不放 `components/<feature>/*-api.ts`**）。
   四层范式见文档集
@@ -345,7 +346,7 @@ CHANGELOG 写**对外差异**。完整细则见
 | 单测 | `pnpm test`（vitest） | 全绿；纯函数必须覆盖 |
 | 生产构建 | `pnpm build`（next build） | 涉及构建链改动时必跑 |
 
-- 单测聚焦纯函数与可单元化的业务逻辑（见 `docs/guides/TESTING.md`）；API 文档由 `pnpm docs`（typedoc）生成。
+- 单测聚焦纯函数与可单元化的业务逻辑（见 `docs/guides/TESTING.md`）；API 文档由 `pnpm run docs`（typedoc）生成。
 - 提交门槛最低要求：`typecheck` + 相关单测通过。
 - **格式化与行为改动必须分成两次提交**：一次提交里「过一遍 prettier 就变成另一种写法」的文件 ≥ 10 个即阻断（`scripts/check-reformat-only.cjs`），避免 `git blame` 被全文件重排冲掉。见文档集 13 §13.5.2。
 
@@ -369,7 +370,7 @@ CHANGELOG 写**对外差异**。完整细则见
 | 命名规范 | 项目 docs 或 output 归档 | 命名规则变更时 |
 | 测试说明 | `docs/guides/TESTING.md` | 测试体系变更时 |
 | 更新日志 | `changelog.d/`（碎片）→ `CHANGELOG.md`（并入） | 用户可感知的变更随 PR 落碎片文件（见 §5.4） |
-| API 文档 | `docs/api`（typedoc 生成，提交进 git） | 改了 `src/lib` / `src/server` / `src/trpc` 后 `pnpm docs` 重生成并同提交；由 `check-docs-api.cjs` 在 pre-commit 核（详见规范 13 §13.5.5.1） |
+| API 文档 | `docs/api`（typedoc 生成，提交进 git） | 改了 `src/lib` / `src/server` / `src/trpc` 后 `pnpm run docs` 重生成并同提交（`pnpm docs` 是 pnpm 内建命令、会抢走脚本）；由 `check-docs-api.cjs` 在 pre-commit 核（详见规范 13 §13.5.5.1） |
 
 - 代码行为变更必须同步相关文档；文档与代码同提交。
 - 长文档用目录 + 表格 + 示例，禁止大段无结构文字。

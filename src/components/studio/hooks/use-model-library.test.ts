@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// 工作室模型库逻辑层单测：hook 走真实 tRPC React 客户端（api.model.list /
-// api.model.sync），由 MSW 在网络层转发到可控测试 router，因此断言的是
+// 工作室模型库逻辑层单测：hook 走真实 tRPC React 客户端（trpc.model.list /
+// trpc.model.sync 的 options），由 MSW 在网络层转发到可控测试 router，因此断言的是
 // **真实管线下的 loading → data 流转**，而不是 vi.mock 的永不 resolve 桩。
 
 import { createElement, type ReactNode } from "react";
@@ -21,7 +21,7 @@ import {
   setupTrpcServer,
 } from "../../../../tests/helpers/trpc-msw";
 import { createTestQueryClient } from "../../../../tests/helpers/renderWithProviders";
-import { api } from "~/trpc/react";
+import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
 import { useModelLibrary } from "./use-model-library";
 import { ALL_TYPES } from "../model-library-config";
@@ -100,14 +100,14 @@ const THREE: Row = {
 };
 
 /**
- * hook 用到 api.model.*，必须挂在真实的 tRPC Provider 下。
+ * hook 用到 trpc.model.*，必须挂在真实的 tRPC Provider 下。
  * 用 createElement 而不是 JSX：本文件是 `.test.ts`（要求 .tsx 一律 PascalCase，
  * 而 hook 的测试伙伴文件按 必须 kebab-case），带 JSX 就得改名成 `Use*Test.tsx`，
  * 反而更怪。
  */
 function makeWrapper() {
   const qc = createTestQueryClient();
-  const client = api.createClient({
+  const client = createTrpcClient({
     links: [
       httpBatchStreamLink({
         transformer: SuperJSON,
@@ -120,7 +120,11 @@ function makeWrapper() {
       QueryClientProvider,
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children，tRPC 的 ProviderProps 要求它带在 props 上
-      createElement(api.Provider, { client, queryClient: qc, children }),
+      createElement(TRPCProvider, {
+        trpcClient: client,
+        queryClient: qc,
+        children,
+      }),
     );
   };
 }

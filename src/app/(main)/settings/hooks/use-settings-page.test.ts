@@ -1,4 +1,4 @@
-// 设置页逻辑层单测：hook 走真实 tRPC React 客户端（api.setting.* / api.llm.*），
+// 设置页逻辑层单测：hook 走真实 tRPC React 客户端（trpc.setting.* / trpc.llm.*），
 // 由 MSW 转发到可控测试 router。断言的是**编排行为**：
 //   1. 草稿从查询播种（且新的查询结果会重新播种）；
 //   2. Ollama 探测触发时机（仅本地 provider + baseUrl 变化时）；
@@ -30,7 +30,7 @@ import {
   testTrpcEndpoint,
 } from "../../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
-import { api } from "~/trpc/react";
+import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
 import { probeOllama, startOllama } from "~/lib/llm/ollama-client";
 
@@ -304,7 +304,7 @@ const server = setupTrpcServer(mockRouter);
 
 function makeWrapper(queryClient?: QueryClient) {
   const qc = queryClient ?? createTestQueryClient();
-  const client = api.createClient({
+  const client = createTrpcClient({
     links: [
       httpBatchStreamLink({
         transformer: SuperJSON,
@@ -317,7 +317,11 @@ function makeWrapper(queryClient?: QueryClient) {
       QueryClientProvider,
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
-      createElement(api.Provider, { client, queryClient: qc, children }),
+      createElement(TRPCProvider, {
+        trpcClient: client,
+        queryClient: qc,
+        children,
+      }),
     );
   };
 }

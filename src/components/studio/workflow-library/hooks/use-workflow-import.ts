@@ -22,11 +22,15 @@ import { runAsyncAction } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
 import { fixed } from "~/lib/number-format";
-import { type api } from "~/trpc/react";
+import { type RouterInputs, type RouterOutputs } from "~/trpc/react";
 import { isRawWorkflowJson } from "~/lib/workflow/workflow-format";
+import { type MutateAsyncLike } from "./use-workflow-actions";
 
 export interface UseWorkflowImportArgs {
-  createMut: ReturnType<typeof api.workflow.create.useMutation>;
+  createMut: MutateAsyncLike<
+    RouterInputs["workflow"]["create"],
+    RouterOutputs["workflow"]["create"]
+  >;
   load: () => Promise<void> | void;
 }
 

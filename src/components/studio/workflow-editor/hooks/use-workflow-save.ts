@@ -1,5 +1,5 @@
 /* ── 工作流编辑器的保存 mutation（第②层逻辑）─────────────────────────
- * WorkflowEditorInner 原先直接 \`api.workflow.update.useMutation()\` 再把
+ * WorkflowEditorInner 原先直接 \`useMutation(trpc.workflow.update.mutationOptions())\` 再把
  * mutation 对象透传给 useWorkflowPersistence。这意味着「哪个组件持有
  * mutation」和「谁用它」是绑死的，而视图层持有 tRPC hook 正是规范 17
  * 的 S3 条目。
@@ -12,7 +12,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { api, type RouterInputs, type RouterOutputs } from "~/trpc/react";
+import { useMutation } from "@tanstack/react-query";
+import { useTRPC, type RouterInputs, type RouterOutputs } from "~/trpc/react";
 
 export type WorkflowSaveInput = RouterInputs["workflow"]["update"];
 
@@ -38,7 +39,8 @@ export interface WorkflowSaver {
 }
 
 export function useWorkflowSaveMutation(): WorkflowSaver {
-  const mutation = api.workflow.update.useMutation();
+  const trpc = useTRPC();
+  const mutation = useMutation(trpc.workflow.update.mutationOptions());
   return useMemo(
     () => ({
       mutate: (

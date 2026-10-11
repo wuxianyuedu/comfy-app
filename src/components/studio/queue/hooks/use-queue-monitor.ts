@@ -21,6 +21,7 @@
 // 这条重复消费的成本会同步变化。
 
 import { useCallback, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   COMFY_QUEUE_POLL_MS,
@@ -31,7 +32,7 @@ import { useItemAction } from "~/components/ui/use-item-action";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { revealTaskFolder } from "~/lib/history-detail-actions";
 import { cancelTask } from "~/lib/task-cancel-client";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 
 import { useToast } from "../../ToastProvider";
 import type { QueueTaskLogTarget } from "../QueueTaskLogModal";
@@ -90,6 +91,7 @@ export interface QueueMonitorController {
 
 /** 队列与运行的全部逻辑。容器与视图只消费这一份 controller。 */
 export function useQueueMonitor(): QueueMonitorController {
+  const trpc = useTRPC();
   const toast = useToast();
   const queue = useComfyQueue();
   const copyText = useCopyResult();
@@ -97,15 +99,17 @@ export function useQueueMonitor(): QueueMonitorController {
    * 一次的轮询都会换掉对象身份，弹窗会被误重挂、SSE 反复重订。 */
   const [logRow, setLogRow] = useState<QueueTaskLogTarget | null>(null);
 
-  const listQ = api.task.list.useQuery(
-    { take: 200 },
-    {
-      /* 保持旧数据：轮询回来的瞬间不闪空列表（与历史面板同一口径）。 */
-      placeholderData: (prev) => prev,
-      /* 与状态栏那一格同一个节奏：两处都在回答「机器现在在干什么」，
-       * 快慢不该不一样。 */
-      refetchInterval: COMFY_QUEUE_POLL_MS,
-    },
+  const listQ = useQuery(
+    trpc.task.list.queryOptions(
+      { take: 200 },
+      {
+        /* 保持旧数据：轮询回来的瞬间不闪空列表（与历史面板同一口径）。 */
+        placeholderData: (prev) => prev,
+        /* 与状态栏那一格同一个节奏：两处都在回答「机器现在在干什么」，
+         * 快慢不该不一样。 */
+        refetchInterval: COMFY_QUEUE_POLL_MS,
+      },
+    ),
   );
 
   const buckets = useMemo(

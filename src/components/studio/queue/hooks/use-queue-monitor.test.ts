@@ -8,6 +8,7 @@
 //   · **复制去重投的成败要报出来** —— 复制失败是浏览器权限给的，不报就等于吞掉点击；
 //   · **离线的待执行数不报 0** —— `/api/comfy/queue` 读不到时库行是唯一口径，
 //     页头「待执行 0」配一屏排队列表是自相矛盾。
+import type * as TanStackQuery from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -64,20 +65,27 @@ const copyResult = vi.fn<(text: string) => Promise<boolean>>();
 let listTasks: QueueRow[] = [];
 let queueResult: ComfyQueueModule.ComfyQueueView = queueView();
 
+/* 新集成下 hub 交出的是「options 工厂」，本文件的题目是位次/耗时/剩余时间这些
+ * 算法，不是 TanStack —— 所以 `useTRPC` 只给一个能对上 queryKey 的工厂，
+ * 数据态由下面替掉的 `useQuery` 直接给。 */
 vi.mock("~/trpc/react", () => ({
-  api: {
-    task: {
-      list: {
-        useQuery: () => ({
-          data: { tasks: listTasks },
-          isPending: false,
-          isError: false,
-          refetch,
-        }),
-      },
-    },
-  },
+  useTRPC: () => ({
+    task: { list: { queryOptions: () => ({ queryKey: ["task", "list"] }) } },
+  }),
 }));
+
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof TanStackQuery>();
+  return {
+    ...actual,
+    useQuery: () => ({
+      data: { tasks: listTasks },
+      isPending: false,
+      isError: false,
+      refetch,
+    }),
+  };
+});
 
 /* 只替掉轮询本身：formatElapsed 与剩余时间的算法要用真实现，
  * 否则测的就不是「界面会不会说错数」。 */

@@ -2,14 +2,15 @@
 
 // ── 工作室模型库：逻辑层（规范 17 §17.2 第②层）──────────────────────────────
 // 承载模型列表（tRPC useQuery + 静默同步）与筛选状态。ModelLibrary 视图只消费
-// 本 hook 返回的 controller，不再出现 `api.model.*.useQuery`。
+// 本 hook 返回的 controller，不再出现 `trpc.model.*` 的 options 调用。
 //
 // 挂载时先 sync 再 refetch 的顺序不可换：后端 sync 会重新扫描 ComfyUI 目录，
 // 用户不必手动点「重新扫描」就能看到最新模型（原组件行为，保留语义）。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 
 import {
   ALL_TYPES,
@@ -39,13 +40,14 @@ export interface ModelLibraryController {
 }
 
 export function useModelLibrary(): ModelLibraryController {
+  const trpc = useTRPC();
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string>(ALL_TYPES);
   const [configOpen, setConfigOpen] = useState(false);
 
-  const listQ = api.model.list.useQuery();
-  const syncMut = api.model.sync.useMutation();
+  const listQ = useQuery(trpc.model.list.queryOptions());
+  const syncMut = useMutation(trpc.model.sync.mutationOptions());
 
   /* 卸载标记：refetch 是一条**脱离组件生命周期的游离 promise 链**——
    * 它的 .finally 会在「组件已卸载、测试的 jsdom 环境已拆除」之后才 resolve，
