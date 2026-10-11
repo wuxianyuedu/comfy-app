@@ -1,4 +1,7 @@
 // 应用端口解析的唯一事实源（Node 侧），dev.mjs / start.mjs / playwright.config.ts 共用。
+// 仓库根（`resolveAppPort` 的入参）也在这里收口（`resolveRepoRoot`）：同一事实
+// 只写一处，免得调用点各用 `ROOT` 常量 / `process.cwd()` 两种口径 —— 看着同值，
+// 换个人从别处 import 就分叉（ISSUE #1771）。
 //
 // 取值优先级（launch-and-build.md §1.1 / §1.6 多检出并行）：
 //   1. 显式覆盖：`dev.mjs` 的 `-p` / `start.mjs` 的 `PORT`（**只有它是命令行入口**）；
@@ -17,6 +20,7 @@
 // （详见 normalizeRootForPort 的注释：拼 cwd 会让平台/目录差异改变端口）。
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const FALLBACK_PORT = 3100;
 export const DERIVED_PORT_BASE = 3200;
@@ -116,6 +120,27 @@ export function readEnvPort(root) {
   const port = Number.parseInt(value, 10);
   if (Number.isInteger(port) && port >= 1 && port <= 65535) return port;
   return null;
+}
+
+/**
+ * 本模块所在检出的仓库根 —— **`resolveAppPort` 入参的唯一来源**。
+ *
+ * 为什么要有它：端口按「检出路径」推导，那么「检出路径取哪个」就是端口契约的
+ * 一半。此前四个调用点各自写 `path.resolve(path.dirname(fileURLToPath(...)), "..")`、
+ * 另两个（`playwright.config.ts` / `e2e/global-setup.ts`）写 `process.cwd()`
+ * —— 当下二者同值（谁都是仓库根），但它们是**两种口径**：`cwd` 随调用者的
+ * 工作目录走（从别处 import、或宿主 chdir 之后就不再是仓库根），而
+ * `import.meta.url` 锚在文件自己身上、恒定不变。端口推导对这两种输入会给出
+ * **不同端口**，且不报错 —— 正是「同一事实两处表达」的静默分叉。
+ *
+ * 取 `import.meta.url`（而不是 `process.cwd()`）的理由：它是唯一不依赖运行时
+ * 状态的锚点，`scripts/app-port.mjs` 自己就在仓库根的 `scripts/` 下，于是
+ * 「哪儿 import 都是同一个根」。这与 `normalizeRootForPort` 的取向一致
+ * ——绝对路径就是绝对路径，别再拼一次 cwd。
+ *
+ * @returns {string} 仓库根绝对路径 */
+export function resolveRepoRoot() {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 }
 
 /** 最终端口：`.env` 显式值优先，否则按检出路径推导，异常时兜底。

@@ -35,7 +35,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { resolveAppPort } from "./app-port.mjs";
+import { resolveAppPort, resolveRepoRoot } from "./app-port.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import {
   E2E_PREFLIGHT_ENV_KEY,
@@ -49,8 +49,7 @@ import {
   writeFreshness,
 } from "./freshness-ledger.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(HERE, "..");
+const ROOT = resolveRepoRoot();
 
 /** 本档的登记（账文件 / 键 / 名字 / 「怎么跑」那条命令）。 */
 export const TRACK = freshnessTrack("e2e");

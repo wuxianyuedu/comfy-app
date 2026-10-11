@@ -9,9 +9,11 @@
 // 与 `scripts/dev.mjs` 对称：同一套端口解析（scripts/app-port.mjs），
 // 保证「一处配置、两条链路一致」，多份检出并行时也各得其所。
 import { spawnSync } from "node:child_process";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { APP_PORT_ENV_KEY, resolveAppPortWithSource } from "./app-port.mjs";
+import {
+  APP_PORT_ENV_KEY,
+  resolveAppPortWithSource,
+  resolveRepoRoot,
+} from "./app-port.mjs";
 import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
@@ -20,7 +22,7 @@ import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs"
 import { runStamp } from "./launcher-core/log.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolveRepoRoot();
 
 // 显式 `-p` + PORT 双写：前者是 next 的权威参数，后者兜住其它读 PORT 的工具。
 // 端口来源一并打印（与 dev.mjs 同口径，ISSUE #821）：两侧对不上时，

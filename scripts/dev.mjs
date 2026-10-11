@@ -14,9 +14,11 @@
 // 3200..3999 区间）找服务 —— 两边不一致时表现为「服务起来了但连不上」。
 // `pnpm start` 已因同类问题修过（scripts/start.mjs），这里补齐 dev 一侧。
 import { spawnSync } from "node:child_process";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { APP_PORT_ENV_KEY, resolveAppPortWithSource } from "./app-port.mjs";
+import {
+  APP_PORT_ENV_KEY,
+  resolveAppPortWithSource,
+  resolveRepoRoot,
+} from "./app-port.mjs";
 import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
@@ -26,7 +28,7 @@ import {
 } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolveRepoRoot();
 
 /** 端口来源的可读标签（与 app-port.mjs 的 resolveAppPortWithSource 一一对应）。 */
 const PORT_SOURCE_LABEL = {

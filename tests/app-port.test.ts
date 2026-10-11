@@ -11,6 +11,7 @@ import {
   readEnvPort,
   resolveAppPort,
   resolveAppPortWithSource,
+  resolveRepoRoot,
 } from "../scripts/app-port.mjs";
 
 /**
@@ -198,5 +199,63 @@ describe("app-port 四语言共享校验向量", () => {
     );
     expect(win.length).toBeGreaterThanOrEqual(3);
     expect(new Set(win.map((v) => v.port)).size).toBe(1);
+  });
+});
+
+/**
+ * 仓库根取值的单一来源（ISSUE #1771）。
+ *
+ * 端口按「检出路径」推导，而「检出路径取哪个」是端口契约的另一半：同一份
+ * `resolveAppPort` 喂进两种口径的根（`import.meta.url` 锚定的仓库根 vs
+ * `process.cwd()`）在宿主 chdir 之后会给出**不同端口且不报错**。
+ * `resolveRepoRoot()` 是那个事实的唯一出口，调用点不得再自算。
+ */
+describe("仓库根收口（resolveRepoRoot）", () => {
+  it("锚在自己的文件位置，不是调用进程的 cwd", () => {
+    // 判据是「不随 cwd 走」：cwd 改到别处也必须给出同一个根 —— 那正是
+    // `process.cwd()` 口径做不到的一格（也是它迟早分叉的机制）。
+    const root = resolveRepoRoot();
+    const previous = process.cwd();
+    try {
+      process.chdir(os.tmpdir());
+      expect(resolveRepoRoot()).toBe(root);
+    } finally {
+      process.chdir(previous);
+    }
+    // 本文件在仓库根的 `tests/` 下，于是根必须是它的上一级。
+    expect(root).toBe(path.resolve(import.meta.dirname, ".."));
+  });
+
+  it("同一份根喂进 resolveAppPort：与显式传仓库根同值", () => {
+    expect(resolveAppPort(resolveRepoRoot())).toBe(
+      resolveAppPort(path.resolve(import.meta.dirname, "..")),
+    );
+  });
+
+  it('调用点不得再用 `process.cwd()` 当端口根（防回潮）', () => {
+    /* 这一条拦的是「同一事实两处表达」再长出来：两个 e2e 侧调用点此前写的
+     * `resolveAppPort(process.cwd())` 就属于这一类 —— 当下与仓库根同值，
+     * 换个人从别处 import、或宿主先 chdir 就分叉。判据按形状扫全库，
+     * 新增调用点自动落在判据内。 */
+    /* `install-git-hooks.mjs` 刻意不在此列：它是 `postinstall` 入口，
+     * 而 postinstall 可能在**部分树**（tarball 解包）里跑 —— 那时
+     * `app-port.mjs` 未必在场，所以它必须自带根定位、不得长模块依赖
+     * （判据：`tests/postinstall-cross-platform.test.ts` 的「真跑」两例）。
+     * 也就是说它是「同值但**必须**独立表达」，不是被本条收的那一类。 */
+    const callSites = [
+      "playwright.config.ts",
+      "e2e/global-setup.ts",
+      "scripts/e2e-run.mjs",
+      "scripts/dev.mjs",
+      "scripts/start.mjs",
+      "scripts/dev-launcher.mjs",
+      "scripts/storybook.mjs",
+    ];
+    for (const rel of callSites) {
+      const src = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+      expect(src, `${rel} 里 resolveAppPort 的根应来自 resolveRepoRoot()`).not.toMatch(
+        /resolveAppPort(?:WithSource)?\(\s*process\.cwd\(\)/,
+      );
+    }
   });
 });
