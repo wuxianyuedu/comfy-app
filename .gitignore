@@ -115,6 +115,13 @@ playwright-report/
 
 # agent 工具链本地产物（IDE 会话记忆 / temp / tmp，不入版本库）
 .workbuddy/
+# 代理 / 编辑器的工作区临时目录（`_tmp_<pid>_<hash>` 一族，实测在本检出里出现过）。
+# **生产者不在本仓**：它是外部工具在仓库根建的中间工作目录，用完自己清理 ——
+# 于是「扫描期间被删」是一个稳定存在的窗口（`scripts/gate-scan-read.cjs` 的文件头
+# 讲的就是它），而这里只负责让它别落进 `git status`（根目录看着像有未跟踪改动）。
+# 注意：忽略**不解决**那个窗口 —— 遍历照样会看到它、照样可能撞上删除，
+# 消费者侧的容错是另一件事，两者都要有。
+_tmp_*/
 # ZCode 本地会话产物（规划文件等，与 .workbuddy/ 同类，不入库）
 .zcode/
 # Qoder 项目本地工作区：默认忽略其内容（Better Harness 评审 canvas/findings/run 产物、
