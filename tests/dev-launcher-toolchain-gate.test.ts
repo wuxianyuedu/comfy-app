@@ -201,7 +201,7 @@ describe("whichCommand 只认「真的能跑」的候选", () => {
     "不可执行的候选给出原因：权限位不对 → no-exec-permission（exec 位是 POSIX 语义）",
     () => {
       const noPerm = path.join(tmp, "pnpm");
-    fs.writeFileSync(noPerm, "#!/bin/sh\necho 1\n");
+      fs.writeFileSync(noPerm, "#!/bin/sh\necho 1\n");
       fs.chmodSync(noPerm, 0o644);
       expect(usableCommand(noPerm).reason).toBe("no-exec-permission");
     },
@@ -308,19 +308,22 @@ describe("探测结果区分成因（probePnpm / probeCommand）", () => {
     expect(probe.detail).not.toBe("未知错误");
   });
 
-  needsPosixExec("命令能起但报错退出：reason=exit-nonzero 且带出实际输出", () => {
-    const script = path.join(tmp, "pnpm");
-    fs.writeFileSync(
-      script,
-      "#!/bin/sh\necho 'Failed to switch pnpm to pnpm@9.9.9 ENOENT' >&2\nexit 1\n",
-    );
-    fs.chmodSync(script, 0o755);
-    const probe = probeCommand(script);
-    expect(probe.ok).toBe(false);
-    expect(probe.reason).toBe("exit-nonzero");
-    // 真·corepack 缓存损坏**有输出**，与「stderr 全空」的形态必须能被分开。
-    expect(probe.detail).toContain("Failed to switch pnpm");
-  });
+  needsPosixExec(
+    "命令能起但报错退出：reason=exit-nonzero 且带出实际输出",
+    () => {
+      const script = path.join(tmp, "pnpm");
+      fs.writeFileSync(
+        script,
+        "#!/bin/sh\necho 'Failed to switch pnpm to pnpm@9.9.9 ENOENT' >&2\nexit 1\n",
+      );
+      fs.chmodSync(script, 0o755);
+      const probe = probeCommand(script);
+      expect(probe.ok).toBe(false);
+      expect(probe.reason).toBe("exit-nonzero");
+      // 真·corepack 缓存损坏**有输出**，与「stderr 全空」的形态必须能被分开。
+      expect(probe.detail).toContain("Failed to switch pnpm");
+    },
+  );
 
   needsPosixExec("能用时带出解析到的版本号", () => {
     const script = path.join(tmp, "pnpm");
@@ -610,12 +613,13 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
       const { status, out } = runSelfCheck(
         makeAlignableToolchain({ aligns: false }),
       );
-    expect(status).toBe(0); // 与启动器一致：版本不一致不阻断
-    expect(out).toContain("自动对齐未生效");
-    expect(out).toContain(
-      `corepack prepare pnpm@${packageManagerVersion(ROOT)} --activate`,
-    );
-  });
+      expect(status).toBe(0); // 与启动器一致：版本不一致不阻断
+      expect(out).toContain("自动对齐未生效");
+      expect(out).toContain(
+        `corepack prepare pnpm@${packageManagerVersion(ROOT)} --activate`,
+      );
+    },
+  );
 
   needsPosixExec(
     "node_modules 未装时点出下一道门禁，不让「[OK] pnpm 可用」被读成「可以启动了」",
@@ -623,15 +627,16 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
       const { status, out } = runSelfCheck(
         makeAlignableToolchain({ aligns: true }),
       );
-    expect(status).toBe(0);
-    // 本仓库测试环境两态都可能（CI 装了 / 干净检出没装），只钉「不存在假装没事」：
-    // 未装时必须出现 node_modules 的 WARN 与修复动作。
-    const marker = path.join(ROOT, "node_modules", ".modules.yaml");
-    if (!fs.existsSync(marker)) {
-      expect(out).toContain("node_modules");
-      expect(out).toContain("pnpm install");
-    }
-  });
+      expect(status).toBe(0);
+      // 本仓库测试环境两态都可能（CI 装了 / 干净检出没装），只钉「不存在假装没事」：
+      // 未装时必须出现 node_modules 的 WARN 与修复动作。
+      const marker = path.join(ROOT, "node_modules", ".modules.yaml");
+      if (!fs.existsSync(marker)) {
+        expect(out).toContain("node_modules");
+        expect(out).toContain("pnpm install");
+      }
+    },
+  );
 });
 
 /** 自检要把「探到的是哪个 pnpm」打印清楚（ISSUE #576 第四轮）。
@@ -858,7 +863,6 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
   });
 });
 
-
 /**
  * 一次启动里 `pnpm -v` 只探一次（ISSUE #1516）。
  *
@@ -930,8 +934,12 @@ describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
   needsPosixExec("换 PATH 就是另一个问题：不许互相顶掉结论", () => {
     const a = makeCountingPnpm("count-d", "echo 12.4.1");
     const b = makeCountingPnpm("count-e", "echo 9.9.9");
-    expect(probePnpm({ env: { PATH: a.dir }, platform: "linux" }).version).toBe("12.4.1");
-    expect(probePnpm({ env: { PATH: b.dir }, platform: "linux" }).version).toBe("9.9.9");
+    expect(probePnpm({ env: { PATH: a.dir }, platform: "linux" }).version).toBe(
+      "12.4.1",
+    );
+    expect(probePnpm({ env: { PATH: b.dir }, platform: "linux" }).version).toBe(
+      "9.9.9",
+    );
   });
 
   needsPosixExec("换 root 也是另一个问题（键里带 root）", () => {
@@ -963,7 +971,11 @@ describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
   });
 
   it("拿不到 corepack 时 prepare 只回说明，不抛错（缓存不改变这条契约）", () => {
-    const result = preparePnpm({ root: ROOT, env: { PATH: tmp }, platform: "linux" });
+    const result = preparePnpm({
+      root: ROOT,
+      env: { PATH: tmp },
+      platform: "linux",
+    });
     expect(result.ran).toBe(false);
     expect(typeof result.description).toBe("string");
   });
@@ -973,12 +985,13 @@ describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
  *
  * 现场：用户对着启动日志框出一段 0.46s —— 壳已启动 →「端口检查：<端口> 空闲；<端口+1> 空闲；<端口+2> 空闲」。它不是「3100 空了还非要查后面」（+1/+2 是 Next 静默
  * 顺延的探测位，属端口族整体判据），而是**同一次启动里同一个问题被问了两遍**：
- * 壳自编排是 `app.exe → 编排器 → app.exe` 两段，壳自己判定（单实例 + 端口族）
- * 之后，编排器接手又走了一遍。
+ * 壳自编排是 `app.exe → 编排器` 一段，壳自己判定（单实例 + 端口族）之后，
+ * 编排器接手又走了一遍。
  *
- * 本组用例钉死短路的两条边界（反向验证：删掉任一条件，对应用例必失败）：
- *   · 标记必须由「起壳的那一方」注入，且**键名与壳侧同源**；
- *   · 跳过只对「shell 起的 prebuilt 链路」成立 —— 手工 `pnpm dev` / 别的模式照常查。
+ * 本组用例钉死两条边界（反向验证：删掉任一条件，对应用例必失败）：
+ *   · 自编排链路里编排器**不再起第二个壳**、也不重复查端口族——判据都是
+ *     「本次编排由壳拉起」这一个标记（§1.5：拉起编排器的那只壳就是应用宿主）；
+ *   · 标记缺席（手工 `pnpm dev` / 直接 `--mode prebuilt`）照常起壳、照常查。
  */
 describe("启动期重复判定的短路（ISSUE #1687）", () => {
   const launcher = fs.readFileSync(
@@ -990,47 +1003,54 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
     "utf8",
   );
 
-  it("编排器起壳时注入自编排标记，且键名与壳侧同一处", () => {
-    // 注入点：spawnShell 的 shellEnv（第二段壳 = 被编排器起的那个）。
-    expect(launcher).toContain('shellEnv: { COMFYAPP_SHELL_SELF_LAUNCH: "1" }');
-    // 同一个键也被传给编排器自己起的 dev server：编排器据此对「壳刚在同一个
-    // 进程里跑完的那次端口族判定」放行。
-    expect(launcher).toContain('COMFYAPP_SHELL_SELF_LAUNCH: "1"');
-    // 壳侧判据读的是同一个键（漂开 = 短路永不生效，而两侧各自看都对）。
-    expect(rust).toContain('"COMFYAPP_SHELL_SELF_LAUNCH"');
-    // 壳起编排器时用的也是它（§1.5 的两段共用这一个标记）。
+  it("自编排链路里编排器不再起第二个壳", () => {
+    // 判据是壳注入的标记（键名与壳侧 `spawn_orchestrator` 同源），且只对
+    // prebuilt 成立。
+    expect(launcher).toContain("const launchedByShell =");
+    expect(launcher).toContain(
+      'process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1"',
+    );
+    expect(launcher).toContain('args.mode === "prebuilt"');
+    // 不起壳的分支必须真的跳过 spawnShell（分支体内不许有 spawn 调用）。
+    const skipStart = launcher.indexOf("if (launchedByShell) {");
+    const elseStart = launcher.indexOf("} else {", skipStart);
+    const skipBody = launcher.slice(skipStart, elseStart);
+    expect(skipBody, "自编排分支不许再 spawn 壳").not.toContain("spawnShell(");
+    expect(skipBody, "要说清为什么不起壳").toContain("不再起第二个壳");
+    // 标记不许再注入给任何壳 / dev server：不会再有「被编排器起的壳」。
+    expect(launcher).not.toContain('COMFYAPP_SHELL_SELF_LAUNCH: "1"');
+  });
+
+  it("壳起编排器时注入自编排标记，键名与编排器侧同一处", () => {
     expect(rust).toContain('.env("COMFYAPP_SHELL_SELF_LAUNCH", "1")');
   });
 
   it("跳过端口族检查受「壳起的 + prebuilt」双重约束", () => {
     const body = launcher.slice(
-      launcher.indexOf("const portCheckedByShell"),
+      launcher.indexOf("let portSummary"),
       launcher.indexOf('status("port-ready"'),
     );
     expect(body, "必须由标记判、不看形态猜测").toContain(
-      'process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1"',
-    );
-    expect(body, "prebuilt 之外（web / tauri）照常查").toContain(
-      'args.mode === "prebuilt"',
+      "if (launchedByShell)",
     );
     // 不跳过时必须仍走唯一的取消出口（判据只有一处）。
     expect(body).toContain("await reconcilePort(port, ROOT, {");
   });
 
-  it("壳侧的单实例短路只在「被编排器起的壳」上成立", () => {
-    const src = fs.readFileSync(
+  it("壳侧单实例判定不再有「被编排器起的壳」短路", () => {
+    const lib = fs.readFileSync(
       path.join(ROOT, "src-tauri", "src", "lib.rs"),
       "utf8",
     );
-    const body = src.slice(
-      src.indexOf("fn owns_checkout_per_single_instance"),
-      src.indexOf("fn owns_checkout_per_single_instance") + 1200,
+    const body = lib.slice(
+      lib.indexOf("fn another_instance_owns_this_checkout"),
+      lib.indexOf("fn another_instance_owns_this_checkout") + 1500,
     );
-    expect(body, "标记为真即短路").toContain("shell_launch::is_shell_child()");
-    expect(body, "标记缺席必须落到真正的单实例判定").toContain(
+    expect(body, "任何壳都照常判单实例").toContain(
       "single_instance::another_instance_running()",
     );
-    // 判据本体在 shell_launch 一处，lib.rs 不许自己 std::env::var 一遍。
-    expect(body).not.toContain("std::env::var");
+    expect(lib, "「被编排器起的壳」形态已随第二个壳一起移除").not.toContain(
+      "is_shell_child",
+    );
   });
 });
