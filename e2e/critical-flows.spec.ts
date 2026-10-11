@@ -6,6 +6,7 @@ import {
   type Route,
 } from "@playwright/test";
 
+import { LOG_ROW_SINGLE } from "../src/components/studio/logs/log-virtual";
 import { expectHomeReady } from "./support/home-anchors";
 
 /**
@@ -794,12 +795,17 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
       /* ② 内容一行不少：撑开滚动条的总高 = 2000 × 单行高度。外层的 style.height
        * 就是它——读 style 而不是读 offsetHeight，是因为「估算高度」才是这里要
-       * 钉住的契约（实际布局高度会被浏览器取整，量出来恒差几个像素）。 */
+       * 钉住的契约（实际布局高度会被浏览器取整，量出来恒差几个像素）。
+       *
+       * 单行高度**取模块常量本身**（`LOG_ROW_SINGLE`），不在这里抄一个数字：
+       * 抄一份就会与它漂开（`LOG_ROW_SINGLE` 从 27 改到 28 时，这里正是漏改的
+       * 那一处 —— 用例报「期望 54000、实际 56000」，读起来像虚拟化坏了，
+       * 其实只是算式过期）。契约仍是「总高 = 行数 × 单行高」，判据不变。 */
       const spacerHeight = await page
         .locator("[data-log-index]")
         .first()
         .evaluate((el) => el.parentElement!.parentElement!.style.height);
-      expect(spacerHeight).toBe(`${ROWS * 27}px`);
+      expect(spacerHeight).toBe(`${ROWS * LOG_ROW_SINGLE}px`);
 
       /* ③ 滚到底真的能到**本页最后一行**（虚拟化的经典翻车是「滚不到底」：
        * 窗口算错时会停在中途，用户怎么拉都看不到页尾）。
