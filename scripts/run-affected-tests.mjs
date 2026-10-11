@@ -258,16 +258,21 @@ export async function waitForLoadToSettle(options = {}) {
   const started = now();
   let load = loadPerCore(probe);
   let settled = load <= SAFE_LOAD_PER_CORE;
+  let hops = 0;
   while (!settled && now() - started < budgetMs) {
     process.stderr.write(
       `[affected-launch] 每核负载 ${load.toFixed(2)}（阈值 ${SAFE_LOAD_PER_CORE}）—— ` +
         "等它回落再复跑，不让「这一刻机器多满」变成结论\n",
     );
     await sleepFn(pollMs);
+    hops += 1;
     load = loadPerCore(probe);
     settled = load <= SAFE_LOAD_PER_CORE;
   }
-  return { load, waitedMs: now() - started, settled };
+  /* 一跳都没睡 ⇒ 等的时间按构造就是 0，不去量墙钟：`Date.now()` 在 Windows 上
+   * 粒度约 1ms，两次读数之间跨一格就会把「一点没等」读成「等了 1ms」—— 而调用方
+   * 拿这个数说的是「等没等」，不是「等了多久」（同文件上面那条判据的口径）。 */
+  return { load, waitedMs: hops === 0 ? 0 : now() - started, settled };
 }
 
 /**
