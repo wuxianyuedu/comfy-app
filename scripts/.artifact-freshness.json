@@ -1,8 +1,8 @@
 {
   "artifact": {
     "key": "artifact",
-    "verifiedAt": "2026-10-10T04:43:08.323Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-11T02:21:22.272Z",
+    "who": "yuedu",
     "how": "pnpm run build",
     "trackedBy": "artifact"
   }
