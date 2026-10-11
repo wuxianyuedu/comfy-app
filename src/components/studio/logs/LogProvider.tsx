@@ -6,6 +6,7 @@ import { useInterval } from "~/components/ui/use-interval";
 import { useHotkey } from "~/components/ui/use-hotkey";
 import { fetchFileLogSlice } from "~/lib/log/log-file-client";
 import { clampLogTime } from "~/lib/log/log-session-scope";
+import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 
 import {
   type LogLevel,
@@ -192,8 +193,21 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
             addEntry({ level, message, source: "tauri" });
           },
         );
-      } catch {
-        // 不在 Tauri 里运行 —— 忽略。
+      } catch (err) {
+        /* 不在 Tauri 里运行是**正常形态**（浏览器 / 纯 web），静默即可。
+           但「在壳里却监听失败」不是正常形态，最常见的原因是 CSP 的 connect-src
+           漏了 `ipc: http://ipc.localhost`（事件监听走 fetch 到 ipc:// 通道，
+           而 invoke 走 postMessage 不受影响）—— 于是表现为「命令能调通、壳日志
+           却始终进不了面板」，且控制台只有一条 CSP 报错，很容易被归咎成
+           「日志功能本来就这样」。因此这里把失败**落进面板**：排查时不必再去
+           翻控制台才知道监听压根没建立。 */
+        if (isDesktopShell()) {
+          addEntry({
+            level: "warn",
+            message: `未能订阅壳日志（log:emit）：${String(err)}`,
+            source: "system",
+          });
+        }
       }
     };
 
