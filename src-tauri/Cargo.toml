@@ -37,11 +37,18 @@ chrono = "0.4"
 # tray-icon：系统托盘（「打开主界面」入口 + 显式退出）。应用启动时可能只显示
 # 到任务栏而不抢前台（见 lib.rs 的 show_main_window_without_focus），需要一个
 # 常驻的唤起入口，用户才不会「找不到窗口」。
-tauri = { version = "2.11.6", features = ["tray-icon"] }
+#
+# **这三处版本必须与 npm 侧成对**（`tauri build` 的自检逐对判 major/minor，
+# 错配直接 `Error` 退出且没有跳过旗标）：`tauri` ↔ `@tauri-apps/api`、
+# `tauri-plugin-process` ↔ `@tauri-apps/plugin-process`、`tauri-plugin-updater`
+# ↔ `@tauri-apps/plugin-updater`。仓库日常的发布路径是
+# `cargo build --release --features custom-protocol`（prebuilt 壳，不跑这道自检），
+# 所以这份成对关系只在打安装包（`pnpm tauri build`）时才被检验。
+tauri = { version = "2.12", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-window-state = "2"
-tauri-plugin-updater = "2"
-tauri-plugin-process = "2"
+tauri-plugin-updater = "2.13"
+tauri-plugin-process = "2.4"
 # 子进程管理：standalone sidecar 的拉起与回收走官方插件（跨平台机制由它选择），
 # 见 lib.rs 的 SIDECAR / spawn_sidecar / kill_sidecar。
 tauri-plugin-shell = "2"
