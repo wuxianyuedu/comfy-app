@@ -2,17 +2,18 @@
 
 // ── 模型目录配置弹层：逻辑层（规范 17 §17.2 第②层）──────────────────────────
 // 承载目录列表拉取、启用/停用/删除配置与重新扫描。ModelConfigModal 视图只消费
-// 本 hook，不再出现 `api.model.*.useQuery/useMutation`。
+// 本 hook，不再出现 `trpc.model.*` 的 options 调用。
 //
 // 三个写操作（toggle / add / delete）都走同一个 runMutate 包装：
 // 失败统一落到 err，结束后统一 reload——原组件就是这个语义，收敛后不会再有
 // 「某个分支忘了刷新」的漏网之鱼。
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { runAsyncAction } from "~/lib/async-action";
 import { useBusyAction } from "~/components/ui/use-busy-action";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 
 import { type FolderConfigRow, splitFolders } from "../model-library-config";
 
@@ -41,6 +42,7 @@ export interface ModelFolderConfigController {
 }
 
 export function useModelFolderConfig(): ModelFolderConfigController {
+  const trpc = useTRPC();
   const [folders, setFolders] = useState<FolderConfigRow[]>([]);
   const [comfyReachable, setComfyReachable] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -50,10 +52,10 @@ export function useModelFolderConfig(): ModelFolderConfigController {
   const [err, setErr] = useState<string | null>(null);
   const [onlyEnabled, setOnlyEnabled] = useState(false);
 
-  const configQ = api.model.configList.useQuery();
-  const saveMut = api.model.configSave.useMutation();
-  const delMut = api.model.configDelete.useMutation();
-  const syncMut = api.model.sync.useMutation();
+  const configQ = useQuery(trpc.model.configList.queryOptions());
+  const saveMut = useMutation(trpc.model.configSave.mutationOptions());
+  const delMut = useMutation(trpc.model.configDelete.mutationOptions());
+  const syncMut = useMutation(trpc.model.sync.mutationOptions());
 
   /**
    * 拉取目录列表。**注意这里不清 err**：

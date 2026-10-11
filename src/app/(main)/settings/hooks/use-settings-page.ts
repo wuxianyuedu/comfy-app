@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { useFlashLatch } from "~/components/ui/use-flash-state";
 import { useExternalAction } from "~/components/ui/use-external-action";
@@ -19,7 +20,7 @@ import { useExternalAction } from "~/components/ui/use-external-action";
  * 而 `app-settings.ts` 顶层 import fs —— 走那条路会让设置页整页 500（ISSUE #282/#317）。 */
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { splitExtraModels } from "~/lib/llm/types";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 
 import { useSettingsComfy } from "./use-settings-page-comfy";
 import { useSettingsSave } from "./use-settings-page-save";
@@ -89,6 +90,7 @@ function writeSettingsCache(value: {
 
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
 export function useSettingsPage(): SettingsPageController {
+  const trpc = useTRPC();
   const [section, setSection] = useState<Section>("llmLocal");
   const { theme, setTheme } = useTheme();
   const [saving, setSaving] = useState(false);
@@ -103,8 +105,8 @@ export function useSettingsPage(): SettingsPageController {
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmDraft, setLlmDraft] = useState<LlmConfig | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<Settings | null>(null);
-  const settingsQ = api.setting.get.useQuery();
-  const llmQ = api.llm.configGet.useQuery();
+  const settingsQ = useQuery(trpc.setting.get.queryOptions());
+  const llmQ = useQuery(trpc.llm.configGet.queryOptions());
   /* 这两份查询的「最后一次成功结果」：读取失败时用它兜底播种草稿。
    *
    * 为什么必须兜底（ISSUE #360）：设置页此前把「一次刷新失败」当成「整页不可用」，
@@ -126,8 +128,8 @@ export function useSettingsPage(): SettingsPageController {
     llm?: QueryLlmConfig;
     settings?: Settings;
   }>(() => (typeof globalThis === "undefined" ? {} : readSettingsCache()));
-  const saveSetting = api.setting.save.useMutation();
-  const saveLlmCfg = api.llm.configSave.useMutation();
+  const saveSetting = useMutation(trpc.setting.save.mutationOptions());
+  const saveLlmCfg = useMutation(trpc.llm.configSave.mutationOptions());
   /* ComfyUI / Drizzle Studio 状态探测延后到首屏两份配置就绪后再发：
    * comfyStatus 在 ComfyUI 未运行时要对连续端口段做超时探测（秒级），
    * 同挂载触发会被 httpBatchLink 并进首屏同一批请求，而批量响应不分块
@@ -143,7 +145,9 @@ export function useSettingsPage(): SettingsPageController {
    * 改路径 / 启动参数后由 savePrefs、startComfy 手动 refetch（形态依赖路径）。 */
   /* ComfyUI 的状态查询 / 启动关闭打开动作 / 运行时日志整体沉在
    * `./use-settings-page-comfy`（与 ollama / db-studio 同族的 sub-hook）。 */
-  const openExternalM = api.setting.openExternal.useMutation();
+  const openExternalM = useMutation(
+    trpc.setting.openExternal.mutationOptions(),
+  );
 
   /* 设置页的整页提示条：亮起 3.5s 自动收起。定时器管理（连点清旧、
    * 卸载清掉）由 `useFlashLatch` 收口 —— 此前这里是手写的 `flashTimerRef`，

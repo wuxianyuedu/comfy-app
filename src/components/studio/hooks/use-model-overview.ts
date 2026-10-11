@@ -11,12 +11,15 @@
 // （规范 §12.18 说的是「有等价实现就 import」，这里是**更宽**的实现，不是等价的）。
 // 两者读的是同一条 tRPC 查询，TanStack Query 按 key 去重 —— 不会多一路请求。
 
-import { api } from "~/trpc/react";
+import { useQuery } from "@tanstack/react-query";
+
+import { useTRPC } from "~/trpc/react";
 
 import { deriveModelOverview } from "../model-overview-derive";
 
 export function useModelOverview() {
-  const query = api.model.configList.useQuery();
+  const trpc = useTRPC();
+  const query = useQuery(trpc.model.configList.queryOptions());
 
   return deriveModelOverview({
     folders: query.data?.folders,

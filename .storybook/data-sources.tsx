@@ -13,7 +13,7 @@ import { MessageCenterPanel } from "~/components/message-center/MessageCenterPan
 import { ToastProvider } from "~/components/studio/ToastProvider";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { trpcHttpLink } from "~/trpc/link";
-import { api } from "~/trpc/react";
+import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
 /**
  * 「Args → 数据源」注入层（ISSUE #1381 的第二批）。
@@ -404,7 +404,7 @@ export function StorybookTrpcProvider({
         mutations: { retry: false },
       },
     });
-    const client = api.createClient({
+    const client = createTrpcClient({
       links: trpcHttpLink({ source: "nextjs-react", origin, withLogger: true }),
     });
     return { queryClient, client };
@@ -412,9 +412,9 @@ export function StorybookTrpcProvider({
 
   return (
     <QueryClientProvider client={bundle.queryClient}>
-      <api.Provider client={bundle.client} queryClient={bundle.queryClient}>
+      <TRPCProvider trpcClient={bundle.client} queryClient={bundle.queryClient}>
         {children}
-      </api.Provider>
+      </TRPCProvider>
     </QueryClientProvider>
   );
 }

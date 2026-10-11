@@ -78,11 +78,16 @@ const COUNT_RULES = {
     count: (t) => (t.match(/\bvanillaApi\s*\./g) || []).length,
   },
   S3: {
-    label: "视图内 tRPC hook（应经 controller hook 暴露数据）",
+    label: "视图内 tRPC 取数（应经 controller hook 暴露数据）",
+    /* ⚠️ 这条判据**跟着调用形状走**：集成层从 classic（`createTRPCReact`）换到
+     * `@trpc/tanstack-react-query` 之后，视图里再也出现不了 `api.x.y.useQuery` ——
+     * 只认旧字样的话，闸会**静默失明**（新形状 `trpc.x.y.queryOptions(...)` 一条都不计）。
+     * 所以两种形状并列表述：classic 的 hook 字样 + 新集成的 options 工厂。
+     * 换集成时若忘了改这里，`check-ui-logic-separation` 会一路零违规，什么都拦不住。 */
     count: (t) =>
       (
         t.match(
-          /\bapi\s*\.[A-Za-z0-9_]+\s*\.[A-Za-z0-9_]+\s*\.(?:useQuery|useMutation|useInfiniteQuery|useSubscription)\b/g,
+          /\bapi\s*\.[A-Za-z0-9_]+\s*\.[A-Za-z0-9_]+\s*\.(?:useQuery|useMutation|useInfiniteQuery|useSubscription)\b|(?<![A-Za-z0-9_])(?:queryOptions|mutationOptions|infiniteQueryOptions|subscriptionOptions|queryFilter)\s*\(/g,
         ) || []
       ).length,
   },

@@ -7,7 +7,7 @@ import { renderWithProviders } from "../../../tests/helpers/renderWithProviders"
 import { pageHeaderTitle } from "./NavItems";
 import { ModelLibrary } from "./ModelLibrary";
 
-/* ModelLibrary 走 api.model.list / api.model.sync 两条真实 tRPC 管线。
+/* ModelLibrary 走 trpc.model.list / trpc.model.sync 两条真实 tRPC 管线。
  * 用「可变 behavior」驱动测试 router 在 MSW 网络层提供可控数据/错误，
  * 从而断言组件数据态流转（loading→data / loading→error），而不是
  * vi.mock("~/trpc/vanilla") 那种永不 resolve 的 pending 冒烟。 */

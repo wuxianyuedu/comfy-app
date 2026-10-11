@@ -30,7 +30,7 @@ import {
 } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import SuperJSON from "superjson";
-import { api } from "~/trpc/react";
+import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
 import { testTrpcEndpoint } from "./test-trpc";
 
@@ -59,7 +59,7 @@ export function renderWithProviders(
 ): RenderResult {
   const { queryClient, wrapper, ...renderOptions } = options;
   const qc = queryClient ?? createTestQueryClient();
-  const trpcClient = api.createClient({
+  const trpcClient = createTrpcClient({
     links: [
       httpBatchStreamLink({ transformer: SuperJSON, url: testTrpcEndpoint() }),
     ],
@@ -73,9 +73,9 @@ export function renderWithProviders(
     return (
       <Outer>
         <QueryClientProvider client={qc}>
-          <api.Provider client={trpcClient} queryClient={qc}>
+          <TRPCProvider trpcClient={trpcClient} queryClient={qc}>
             {children}
-          </api.Provider>
+          </TRPCProvider>
         </QueryClientProvider>
       </Outer>
     );

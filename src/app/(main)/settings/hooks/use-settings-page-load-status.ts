@@ -17,15 +17,17 @@
  * 全局错误钩子收不到——不主动补记的话，用户遇到失败时面板里什么也没有。
  * 同一错误文案只记一次（ref 去重；重试后仍是同一错误不刷屏）。
  */
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
 import { errorMessage, rawErrorDetail } from "~/lib/error-message";
 import { postAppRuntimeLog } from "~/lib/log/log-file-client";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 
 export function useSettingsLoadStatus() {
-  const settingsQ = api.setting.get.useQuery();
-  const llmQ = api.llm.configGet.useQuery();
+  const trpc = useTRPC();
+  const settingsQ = useQuery(trpc.setting.get.queryOptions());
+  const llmQ = useQuery(trpc.llm.configGet.queryOptions());
 
   /* ── 加载失败判定 ────────────────────────────────────────────
    * 「任一查询失败」与「两份配置都没拿到」是两件事。此前 `hasError` 只按

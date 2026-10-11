@@ -7,13 +7,17 @@
  *  3) mutation 成功→invalidate→列表自动新增（缓存失效）
  *
  * 说明：真组件集成测试（ModelLibrary.integration.test.tsx）直接用 renderWithProviders
- * 消费 `~/trpc/react` 的真实 api 路由；本文件用局部 createTRPCReact 实例通用地验证
+ * 消费 `~/trpc/react` 的真实 api 路由；本文件用局部 `createTRPCContext` 实例通用地验证
  * 「MSW + QueryClient + tRPC client」这套集成层本身可驱动数据态流转。
  */
 import { useState, type ReactElement } from "react";
-import { createTRPCReact } from "@trpc/react-query";
-import { httpBatchStreamLink } from "@trpc/client";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { createTRPCContext } from "@trpc/tanstack-react-query";
+import { createTRPCClient, httpBatchStreamLink } from "@trpc/client";
+import {
+  QueryClientProvider,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -43,8 +47,9 @@ const mockRouter = t.router({
         });
       }
       // sleep-ok: mock 内部延迟：tRPC mock 的 delayMs 是给用例制造「接口慢一拍」的现场（行为开关），不是等条件。
-      // prettier-ignore -- 保持与上方 `sleep-ok` 声明的紧邻（判据按相邻判作用半径）
-      if (behavior.delayMs) await new Promise((r) => setTimeout(r, behavior.delayMs));
+      if (behavior.delayMs) {
+        await new Promise((r) => setTimeout(r, behavior.delayMs));
+      }
       return { tags: behavior.tags };
     }),
     add: t.procedure
@@ -60,19 +65,23 @@ type MockRouter = typeof mockRouter;
 const server = setupTrpcServer(mockRouter);
 const BASE = testTrpcEndpoint();
 
-const localApi = createTRPCReact<MockRouter>();
-const localTrpcClient = localApi.createClient({
+const {
+  TRPCProvider: LocalProvider,
+  useTRPC: useLocalTRPC,
+  useTRPCClient: useLocalClient,
+} = createTRPCContext<MockRouter>();
+const localTrpcClient = createTRPCClient<MockRouter>({
   links: [httpBatchStreamLink({ transformer: SuperJSON, url: BASE })],
 });
 
-/* ---------- 组合 renderWithProviders 同款隔离 QueryClient + 局部 api ---------- */
+/* ---------- 组合 renderWithProviders 同款隔离 QueryClient + 局部 provider ---------- */
 function renderTagDemo(ui: ReactElement) {
   const qc = createTestQueryClient();
   return render(
     <QueryClientProvider client={qc}>
-      <localApi.Provider client={localTrpcClient} queryClient={qc}>
+      <LocalProvider trpcClient={localTrpcClient} queryClient={qc}>
         {ui}
-      </localApi.Provider>
+      </LocalProvider>
     </QueryClientProvider>,
   );
 }
@@ -85,19 +94,21 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
-/* ---------- 本地 harness：消费 localApi.tag.list / .add ---------- */
+/* ---------- 本地 harness：消费 trpc.tag.list / .add（新集成：options 工厂） ---------- */
 function TagDemo() {
-  const listQ = localApi.tag.list.useQuery(undefined, {
-    placeholderData: (p) => p,
-  });
-  const utils = localApi.useUtils();
+  const trpc = useLocalTRPC();
+  const queryClient = useQueryClient();
+  const client = useLocalClient();
+  const listQ = useQuery(
+    trpc.tag.list.queryOptions(undefined, { placeholderData: (p) => p }),
+  );
   const [err, setErr] = useState<string | null>(null);
 
   const add = async () => {
     setErr(null);
     try {
-      await utils.client.tag.add.mutate({ name: "fresh" });
-      await utils.tag.list.invalidate();
+      await client.tag.add.mutate({ name: "fresh" });
+      await queryClient.invalidateQueries(trpc.tag.list.queryFilter());
     } catch {
       setErr("add 失败");
     }

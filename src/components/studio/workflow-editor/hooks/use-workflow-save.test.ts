@@ -3,6 +3,7 @@
 //      —— 这样 useWorkflowPersistence 可以塞假实现跑测试；
 //   2. mutate / mutateAsync 确实转发到同一个底层 mutation。
 
+import type * as TanStackQuery from "@tanstack/react-query";
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,23 +12,31 @@ import { useWorkflowSaveMutation } from "./use-workflow-save";
 const mutate = vi.fn();
 const mutateAsync = vi.fn();
 
+/* 新集成（`@trpc/tanstack-react-query`）下 hub 交出来的是「options 工厂」而不是
+ * hook，所以这里替两样：`useTRPC()` 给一个把 options 原样递出的工厂，`useMutation`
+ * 由 TanStack 那一侧接住 —— 本文件的题目是「转发是否走同一个底层 mutation」，
+ * 不测 TanStack 本身，故在此截断。 */
 vi.mock("~/trpc/react", () => ({
-  api: {
-    workflow: {
-      update: {
-        useMutation: () => ({
-          mutate: (...args: unknown[]) => mutate(...args) as never,
-          mutateAsync: (...args: unknown[]) => mutateAsync(...args) as never,
-          isPending: false,
-          isIdle: true,
-          isSuccess: false,
-          isError: false,
-          reset: vi.fn(),
-        }),
-      },
-    },
-  },
+  useTRPC: () => ({
+    workflow: { update: { mutationOptions: (options?: unknown) => options } },
+  }),
 }));
+
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof TanStackQuery>();
+  return {
+    ...actual,
+    useMutation: () => ({
+      mutate: (...args: unknown[]) => mutate(...args) as never,
+      mutateAsync: (...args: unknown[]) => mutateAsync(...args) as never,
+      isPending: false,
+      isIdle: true,
+      isSuccess: false,
+      isError: false,
+      reset: vi.fn(),
+    }),
+  };
+});
 
 beforeEach(() => {
   mutate.mockReset();

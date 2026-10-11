@@ -6,6 +6,7 @@
 // 视图（ModelAdaptersView）只渲染 + 上抛，不直接出现 api.*。
 
 import React, { useCallback, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { errorMessage } from "~/lib/error-message";
 
 import {
@@ -16,7 +17,7 @@ import {
   type RemoteModeAdapter,
 } from "~/lib/workshop/model-mode-contract";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 
 export interface AdapterCandidate {
@@ -44,7 +45,8 @@ export interface ModelAdaptersController {
 }
 
 export function useModelAdapters(): ModelAdaptersController {
-  const configQ = api.llm.configGet.useQuery();
+  const trpc = useTRPC();
+  const configQ = useQuery(trpc.llm.configGet.queryOptions());
   const modeContracts = useModeContracts();
   const [selectedModel, setSelectedModel] = useState("");
   const [draft, setDraft] = useState<RemoteModeAdapter[]>([]);
@@ -78,9 +80,11 @@ export function useModelAdapters(): ModelAdaptersController {
     return out;
   }, [configQ.data]);
 
-  const adaptersQ = api.llm.workshopAdaptersGet.useQuery(
-    { name: selectedModel },
-    { enabled: selectedModel !== "" },
+  const adaptersQ = useQuery(
+    trpc.llm.workshopAdaptersGet.queryOptions(
+      { name: selectedModel },
+      { enabled: selectedModel !== "" },
+    ),
   );
 
   /* 适配器查询结果 → 本地草稿（渲染期播种，React 19 模式，见 §17.2）。
@@ -102,7 +106,9 @@ export function useModelAdapters(): ModelAdaptersController {
     setDraft(parseRemoteModeAdapters(fetched ?? []));
   }
 
-  const saveMutation = api.llm.workshopAdaptersSave.useMutation();
+  const saveMutation = useMutation(
+    trpc.llm.workshopAdaptersSave.mutationOptions(),
+  );
 
   const selectModel = useCallback((name: string) => {
     setSelectedModel(name);

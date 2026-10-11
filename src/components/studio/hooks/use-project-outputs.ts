@@ -2,11 +2,12 @@
 
 // ── 项目画布输出：逻辑层（规范 17 §17.2 第②层）──────────────────────────────
 // 承载「某项目的全部生成产出」的 tRPC useQuery 与返回形状收窄。ProjectOutputs
-// 视图只消费本 hook 的 controller，不再直接出现 `api.project.outputs.useQuery`。
+// 视图只消费本 hook 的 controller，不再直接出现 `trpc.project.outputs` 的 options 调用。
 
 import { useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 
 export interface ProjectOutputImage {
   id: string;
@@ -46,9 +47,12 @@ export interface ProjectOutputsController {
 export function useProjectOutputs(
   projectId: string | null,
 ): ProjectOutputsController {
-  const outputsQ = api.project.outputs.useQuery(
-    { projectId: projectId ?? "" },
-    { enabled: !!projectId },
+  const trpc = useTRPC();
+  const outputsQ = useQuery(
+    trpc.project.outputs.queryOptions(
+      { projectId: projectId ?? "" },
+      { enabled: !!projectId },
+    ),
   );
 
   // 服务端 createdAt 是 Date，视图层要字符串做时间轴展示，这里统一收窄。
