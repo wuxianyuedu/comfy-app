@@ -61,12 +61,12 @@ export function ResourceLibrary() {
   const needsProject = library.scope === "project" && c.projectId === null;
 
   return (
-    <DocumentFrame width="wide" className="px-4 py-8 sm:px-8 sm:py-10">
+    <DocumentFrame width="wide" className="px-4 py-6 sm:px-8 sm:py-7">
       {/* ── 页头：标题 + 说明 + 动作 ── */}
       <PageHeader
         className="mb-6"
-        title={pageHeaderTitle("library")}
-        description="参考图、音效、成片片段 —— 按分类管，可直接拖进画布或工坊。"
+        srTitle={pageHeaderTitle("library")}
+        help="参考图、音效、成片片段 —— 按分类管，可直接拖进画布或工坊。"
         actions={
           <>
             <uploadPicker.Input />

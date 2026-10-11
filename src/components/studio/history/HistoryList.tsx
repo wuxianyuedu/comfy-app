@@ -84,7 +84,7 @@ export function HistoryList({
   return (
     <DocumentFrame
       width="wide"
-      className="px-4 py-8 sm:px-8 sm:py-10"
+      className="px-4 py-6 sm:px-8 sm:py-7"
       backdrop={<AuroraBackground />}
     >
       {/* ── Header：标题与侧栏 / 页签同一个出处（`pageHeaderTitle`）。
@@ -94,8 +94,8 @@ export function HistoryList({
              的 `viewLabel` 判据就是这么把它抓出来的）。── */}
       <PageHeader
         className="mb-6"
-        title={pageHeaderTitle("history")}
-        description="所有生成任务与执行日志，按时间倒序排列。"
+        srTitle={pageHeaderTitle("history")}
+        help="所有生成任务与执行日志，按时间倒序排列。"
         actions={
           <>
             <SelectMenu

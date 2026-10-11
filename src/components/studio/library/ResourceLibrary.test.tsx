@@ -36,13 +36,17 @@ describe("ResourceLibrary", () => {
     window.localStorage.clear();
   });
 
-  it("页头渲染标题与说明（标题取自导航注册表，不是这一屏的裸字面量）", async () => {
+  it("页头不再重复一次可见标题；那句解释收进悬浮「说明」（屏名取自导航注册表）", async () => {
     mockFetch(BODY);
     render(<ResourceLibrary />);
-    expect(screen.getByRole("heading", { name: "资源库" })).toBeTruthy();
-    /* 说明写的是「这一屏能拿这些素材做什么」—— 不是把标题换个说法再说一遍
-     * （ISSUE #1423：同义的第二行等于把标题又写长一遍）。 */
-    expect(screen.getByText(/可直接拖进画布或工坊/)).toBeTruthy();
+    /* 屏名仍在 DOM 里（`sr-only`，读屏与 `h1` 判据都靠它），只是不占视觉空间 ——
+       页签写「资源库」、屏内再写一遍就是同一件事占两行（ISSUE #1693）。 */
+    const heading = screen.getByRole("heading", { name: "资源库" });
+    expect(heading.className).toContain("sr-only");
+    /* 那句「能拿这些素材做什么」不再常驻：它收成一颗悬浮按钮，
+       展开才显示（同一条 ISSUE：说明的直接显示也占空间）。 */
+    expect(screen.queryByText(/可直接拖进画布或工坊/)).toBeNull();
+    expect(screen.getByRole("button", { name: "说明" })).toBeTruthy();
   });
 
   it("拉到分类后渲染分类卡", async () => {

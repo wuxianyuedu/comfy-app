@@ -72,8 +72,8 @@ export function ConsoleView() {
       {/* ── 页头：与历史 / 队列 / 模型库同一形状，收在 `ui/page-header` ── */}
       <PageHeader
         className="mb-6"
-        title="控制台"
-        description="在项目根执行命令；命令与其子进程在切走视图或点「停止」时一并回收。"
+        srTitle="控制台"
+        help="在项目根执行命令；命令与其子进程在切走视图或点「停止」时一并回收。"
         actions={
           <Hint label="清空输出（保留跑过的命令）">
             <Button

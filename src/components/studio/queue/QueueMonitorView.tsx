@@ -65,16 +65,17 @@ export function QueueMonitorView({
   return (
     <DocumentFrame
       width="wide"
-      className="px-4 py-8 sm:px-8 sm:py-10"
+      className="px-4 py-6 sm:px-8 sm:py-7"
       backdrop={<AuroraBackground />}
     >
-      {/* 标题走 `NavItems` 注册表那一份（侧栏项 / 页签 / 顶栏用同一个出口）。
-          此前这里写的是「队列与运行」—— 与侧栏、页签的「队列」是同一件事的
-          两个名字，而标题区还因此多占一行（ISSUE #1423）。 */}
+      {/* 屏名由页签给出，页头不再重复一次可见标题（`srTitle` 只留给读屏）——
+          此前页签写「队列」、这里的大标题也写「队列」，同一件事占两行而读者
+          什么都没多知道（ISSUE #1693，接 ISSUE #1423 没走完的那一半）。
+          那句「多久读一次、位次怎么排」不是每次看屏都要读的，收成悬浮说明。 */}
       <PageHeader
         className="mb-6"
-        title={viewTabLabel("queue")}
-        description="每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。"
+        srTitle={viewTabLabel("queue")}
+        help="每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。"
         actions={
           <>
             <span className="text-ink-faint text-xs tabular-nums">
