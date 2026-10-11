@@ -224,7 +224,7 @@
   /* 便签（Note）身体色的混色基准：用户给的 note 颜色是内容语义色，
      基准必须跟主题走，否则浅色下便签仍是一块暗色。 */
   --color-note-tint-base: #ffffff; /* note 混色基准 (light default) */
-  --color-node-mix-base: #ffffff; /* 子图标题栏混色基准 (light default) */
+  --color-node-mix-base: var(--color-node); /* 子图标题栏混色基准：取本体，抄 hex 会与源头各自漂移 */
 
   /* Layout */
   --panel-right-width: 360px;
@@ -447,7 +447,7 @@
   ); /* 浮层 1px ring（深色下用中性白） */
   --shadow-card: 0 4px 20px rgb(0 0 0 / 0.55); /* 浮层卡片投影（深色档） */
   --color-note-tint-base: #22222c; /* note 混色基准 */
-  --color-node-mix-base: #2b2b36; /* 子图标题栏混色基准（与 `--color-node` 同值） */
+  --color-node-mix-base: var(--color-node); /* 子图标题栏混色基准：深色档由 --color-node 自己带 */
 }
 
 /* ── 内嵌的中文标题字面（`--font-title` 的首选）─────────────────────

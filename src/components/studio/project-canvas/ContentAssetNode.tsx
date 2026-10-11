@@ -21,7 +21,8 @@ import { Textarea } from "~/components/ui/textarea";
  *  - 右下 36×36 圆 FAB（类型色填充 + 白色图标）：图片/视频=上传、文本=编辑聚焦。
  *  - 端口 Handle 仍由 CanvasNode 渲染（picture 左侧 inputImage + 三类型右侧 output），
  *    本组件只负责「内容区 + FAB」，不碰 Handle，避免破坏连线 / 选择行为。
- * 类型配色（与 globals.css token 1:1）：图=#7C5CFC 紫 / 文=#FF5CA8 粉 / 视频=#FB923C 橙。
+ * 类型配色（**独立的内容色表**，不与品牌 token 取齐）：图=紫 / 文=粉 / 视频=橙。
+ * 那支紫历史上与旧品牌值同值，此后各自演化 —— 语义来源是「内容类型」，不是品牌。
  * 标题由 CanvasNode 既有 NodeChip 头承载（与画布其它节点一致，不浮出边框）。 */
 
 const ASSET_ACCENT: Record<"text" | "picture" | "movie", string> = {

@@ -64,7 +64,8 @@ export function CanvasContextMenu({
             <span
               className="text-3xs flex size-5 items-center justify-center rounded-md font-bold text-white"
               style={{
-                background: "linear-gradient(135deg, #7C5CFC 0%, #FF5CA8 100%)",
+                background:
+                  "linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%)",
               }}
             >
               W

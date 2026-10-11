@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-11T00:43:23.029Z",
+    "verifiedAt": "2026-10-11T04:50:07.166Z",
     "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "master 上 13 条 @critical e2e 自 10-09 起红：本刀只动 scripts/ 门禁与 tests/ 夹具，git diff 里 src 与 e2e 与 origin/master 逐字节相同、webServer 是新起的（非 §4.3 陈旧实例），归属见 ISSUE #1727（含逐条现场：第 4 条已核为用例侧名字过期、第 1 条是 #1582 行高常量没跟着改、第 12/13 条同场有 TRPC Stream closed）"
+    "skippedReason": "ISSUE #1727：本笔改的是 src/components 三处跟手（CanvasNode 选中环、CanvasContextMenu 的 W 徽标）+ globals.css 的 --color-node-mix-base + 一条门禁判据，确实吃 e2e 这一档，所以今天真跑了两遍。全量 = 18 failed / 58 passed（4.1m）。逐条隔离复跑：appearance-steps:37/:72、model-library:48、critical-flows:1691/:1724 这 5 条单独跑全绿（并发下的瞬时态，没拿它当修复依据也没改那两笔 UI）；仍红的 13 条就是 ISSUE #1727 那一批（含 model-library:26 页头名期望过期），修法在 PR #1730 里、尚未合并且与 master 冲突。本笔的断言面与那 13 条无交集：appearance-steps / model-library / critical-flows:1691 / :1724 的正文都不出现选中环、W 徽标、model-cover 或 --color-node-mix-base，而三处跟手的内联值已在 Chromium 实测解析成颜色（rgb(133,87,222) 与两层 color-mix）。这条豁免不替那 18 条作证"
   }
 }
