@@ -27,6 +27,7 @@
 //
 // 退出码：0 = pnpm 可用（版本不一致只是 WARN，与启动器一致：不阻断启动）；
 //        1 = 不可用（提示已打印，可直接照做）。
+import fs from "node:fs";
 import process from "node:process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +35,10 @@ import { fileURLToPath } from "node:url";
 import { orchestratePnpm, preparePnpm, probePnpm } from "./launcher-core/corepack.mjs";
 import { commandInvocation } from "./launcher-core/shell.mjs";
 import { checkNodeModules } from "./launcher-core/worktree.mjs";
+import {
+  collectDependencyFloors,
+  describeNodeAgainstFloor,
+} from "./node-engines.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -110,6 +115,42 @@ if (result.expected && !sameVersion(result.probe.version, result.expected)) {
   }
 } else if (result.expected) {
   say("[OK]  ", `版本与 package.json 的 packageManager 一致（pnpm@${result.expected}）。`);
+}
+
+/* Node 下限：与依赖自己声明的 `engines.node` 现算比对（判据在 `node-engines.mjs`，
+ * 这里只打印 —— 与上面 pnpm 那条同一口径，不在薄壳里重写第二份答案）。
+ *
+ * 为什么值得单列一行：`next` 的下限比测试链低得多（`>=20.9.0`），所以在低版本 Node 上
+ * 「开发链路全绿、只有用例档炸」是默认结局，而报错形状是 `Cannot find module` 一类、
+ * 指不出「该换 Node」。这一行把那句话正面说出来。
+ * 退出码不因此改成非零：本入口的定位是「回答能不能跑、给动作」，
+ * 拦截属启动器与钩子的事（与 pnpm 版本不一致只 WARN 同一立场）。 */
+const nodeVersion = process.env.COMFYAPP_NODE_VERSION ?? process.version;
+const declaredFloor =
+  JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))?.engines?.node ?? null;
+const floorVerdict = describeNodeAgainstFloor({
+  version: nodeVersion,
+  range: declaredFloor,
+  floors: collectDependencyFloors(root).floors ?? [],
+});
+if (!declaredFloor) {
+  say("[WARN]", "package.json 没有 engines.node —— Node 下限无人声明（见规范 §2.1.8）。");
+} else if (floorVerdict.kind === "unparsable") {
+  say("[WARN]", `Node 下限这条判据没跑起来：本机 ${nodeVersion} 或 engines.node 读不懂。`);
+} else if (floorVerdict.ok) {
+  say("[OK]  ", `Node ${floorVerdict.version} 在声明范围内（engines.node = ${declaredFloor}）。`);
+} else {
+  say("[WARN]", `Node ${floorVerdict.version} 不在声明范围内（engines.node = ${declaredFloor}）。`);
+  const next = floorVerdict.recommend ? ` 建议升到 ${floorVerdict.recommend}` : "";
+  say("[INFO]", `越界会踩到的档：${floorVerdict.violated.join(" / ") || "（依赖侧未点名）"}。${next}`);
+  process.stdout.write(
+    [
+      "         [判据] 低版本 Node 上 `next dev` / `next build` 照常，",
+      "                坏的是测试档（vitest / jsdom / msw 的下限都高于 next 自己的）。",
+      "         [动作] 按 engines.node 换版本（nvm use 读 .nvmrc；桌面 sidecar 同版本线）。",
+      "",
+    ].join("\n"),
+  );
 }
 
 // node_modules：启动器的**另一道**门禁，自检不把它藏起来。
