@@ -1,21 +1,32 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import type { Section } from "~/app/(main)/settings/hooks/use-settings-page";
+import {
+  SETTINGS_SECTIONS,
+  type Section,
+} from "~/app/(main)/settings/hooks/use-settings-page";
 import { SettingsShell } from "./SettingsShell";
 
 /**
- * `SettingsShell` 是设置页的共享外壳：标题行 + 左侧分区导航树 + 内容滚动区。
+ * `SettingsShell` 是设置页的共享外壳：标题行 + 左侧分区导航树 + **一根**内容滚动条。
  *
- * 这两个 story 存在的理由只有一个 —— **导航树的两层要看得出层级**（ISSUE #1694）：
- * 分组名是父行（弱一档、不可点），分区项是它的子行（缩进 + 引导线、可点）。
- * 横排那版把两者排成同一种词，光看代码分不出「模型」是组、「本地模型」是项；
- * 并排看这两屏（默认选中 + 切到别的分区）能立刻验证父 / 子行与 `aria-current`。
+ * 这几个 story 要验的是两件在源码里看不出来的事：
+ *
+ *   1. **导航树的两层看得出层级**（ISSUE #1694）—— 分组名是父行（弱一档、不可点），
+ *      分区项是它的子行（缩进 + 引导线、可点）。横排那版把两者排成同一种词，
+ *      光看代码分不出「模型」是组、「本地模型」是项。
+ *   2. **一页到底：滚动时高亮跟着走**（ISSUE #1722）—— 全部小节铺在同一根滚动条里，
+ *      点导航滚过去、手动滚动则高亮自己跟。`Long` 那份刻意把每节撑高，
+ *      不滚动就看不出差异。
  *
  * 外壳本身不持状态（`section` / `onSelect` 都由调用方给），所以这里用一个最小
- * 容器把它受控的部分接起来，内容区只放一句「当前分区」——真实分区视图会盖住
- * 导航树本身要看的那点高度。
+ * 容器把它受控的部分接起来。
  */
+/** 三态 story 不需要真实的选中回调 —— 显式空函数，别写内联空箭头（lint 拦下）。 */
+function noop() {
+  /* 有意为空：story 里导航没有可切的正文。 */
+}
+
 const meta: Meta<typeof SettingsShell> = {
   title: "Settings/SettingsShell",
   component: SettingsShell,
@@ -25,21 +36,60 @@ export default meta;
 
 type Story = StoryObj<typeof SettingsShell>;
 
-function Demo({ initial = "llmLocal" }: { initial?: Section }) {
+/** 每个分区给一段占位正文 —— 只为了让锚点有实体。 */
+function sections(pad: string) {
+  return Object.fromEntries(
+    SETTINGS_SECTIONS.map((item) => [
+      item.id,
+      <p key={item.id} className={`text-ink text-sm ${pad}`}>
+        这一节的正文（<code className="font-mono">{item.id}</code>）
+      </p>,
+    ]),
+  ) as Record<Section, React.ReactNode>;
+}
+
+function Demo({
+  initial = "llmLocal",
+  pad = "",
+}: {
+  initial?: Section;
+  pad?: string;
+}) {
   const [section, setSection] = useState<Section>(initial);
   return (
-    <SettingsShell section={section} onSelect={setSection}>
-      <p className="text-ink text-sm">
-        当前分区：<code className="font-mono">{section}</code>
-      </p>
-    </SettingsShell>
+    <SettingsShell
+      section={section}
+      onSelect={setSection}
+      sections={sections(pad)}
+    />
   );
 }
 
-/** 默认选中「本地模型」—— 高亮落在树的第一段第一条上。 */
+/** 默认选中「本地模型」—— 高亮落在树的第一段第一条上，各节都很短（一屏装得下）。 */
 export const Default: Story = { render: () => <Demo /> };
 
 /** 切到别的段：验证高亮会跟着走，且每段各自带一条缩进引导线。 */
 export const AnotherSection: Story = {
   render: () => <Demo initial="backup" />,
+};
+
+/**
+ * 长内容：每节撑到高于一屏 —— 滚动时点导航跳转、并观察高亮随滚动变化
+ *（这是 ISSUE #1722 的原始诉求：「滚动条可以从头滚动到尾，左侧选中项跟随滚动变化」）。
+ */
+export const Long: Story = {
+  render: () => <Demo pad="min-h-[70vh]" />,
+};
+
+/** 三态（加载 / 失败）：给 `fallback` 时导航仍在、右侧换成整块占位。 */
+export const LoadingFallback: Story = {
+  render: () => (
+    <SettingsShell
+      section="llmLocal"
+      onSelect={noop}
+      fallback={
+        <p className="text-ink-muted text-sm">正在读取设置…（三态占位）</p>
+      }
+    />
+  ),
 };
