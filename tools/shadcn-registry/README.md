@@ -1,8 +1,8 @@
-# tools/registry/ — 团队 shadcn Registry（双击用）
+# tools/shadcn-registry/ — 团队 shadcn Registry（双击用）
 
 | 入口 | 用途 | 逻辑 |
 |---|---|---|
-| `start-registry.ps1` | 启动本地 shadcn Registry HTTP 服务，供 `pnpm dlx shadcn add @comfy-app-t3/*` 使用 | `tools/scripts/start-registry.ps1` |
+| `start-shadcn-registry.ps1` | 启动本地 shadcn Registry HTTP 服务，供 `pnpm dlx shadcn add @comfy-app-t3/*` 使用 | `tools/scripts/start-shadcn-registry.ps1` |
 
 > ⚠️ **入口里的内容目录是硬编码的**：Registry 内容在
 > `D:/dev/Comfy-APP-T3/registry`（与本项目仓库分开），换机器 / 换用户时必须

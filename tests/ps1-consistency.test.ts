@@ -404,16 +404,18 @@ describe("入口清单（README 的「双击入口速查」⇄ tools/README.md �
     // 是「至少出现在其中一处」，所以这里必须把两处一起抹掉才构成违规。
     const index = fs.readFileSync(path.join(process.cwd(), TOOLS_INDEX), "utf8");
     const lines = index.split("\n");
-    const kept = lines.filter((l) => !l.includes("studio/start-studio.ps1"));
+    const kept = lines.filter((l) =>
+      !l.includes("database-studio/start-database-studio.ps1"),
+    );
     expect(kept.length).toBeLessThan(lines.length);
     const out = runGuard({ [TOOLS_INDEX]: kept.join("\n") });
     expect(out).toContain("CODE=1");
-    expect(out).toContain("tools/studio/start-studio.ps1");
+    expect(out).toContain("tools/database-studio/start-database-studio.ps1");
     expect(out).toContain("没有登记");
     // README 那张表里本来就没有它（「只收日常动作」是刻意的），所以违规只能由
     // 全目录视图那一侧报出来 —— 这条断言钉住「两份清单的分工」本身。
     const readme = fs.readFileSync(path.join(process.cwd(), README), "utf8");
-    expect(readme).not.toContain("tools/studio/start-studio.ps1");
+    expect(readme).not.toContain("tools/database-studio/start-database-studio.ps1");
   });
 
   it("README 的入口表整节被删 → 失败（承诺失去落点）", () => {
@@ -430,10 +432,10 @@ describe("入口清单（README 的「双击入口速查」⇄ tools/README.md �
 
   it("表里列了逻辑脚本（同名不同层的实现）→ 失败", () => {
     const readme = fs.readFileSync(path.join(process.cwd(), README), "utf8");
-    // `tools/studio/start-studio.logic.ps1` 是入口背后的实现，双开它不是任何人的用法。
+    // `tools/database-studio/start-database-studio.logic.ps1` 是入口背后的实现，双开它不是任何人的用法。
     const broken = readme.replace(
       "| 构建发行包（release 壳）                          | `tools/build/*.ps1`（见 `tools/README.md`）                                    |",
-      "| 构建发行包（release 壳）                          | `tools/studio/start-studio.logic.ps1`                                          |",
+      "| 构建发行包（release 壳）                          | `tools/database-studio/start-database-studio.logic.ps1`                        |",
     );
     expect(broken).not.toBe(readme);
     const out = runGuard({ [README]: broken });

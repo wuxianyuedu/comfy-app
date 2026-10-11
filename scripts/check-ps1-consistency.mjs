@@ -61,7 +61,7 @@ const README_WINDOWS_SECTION = "## 双击入口速查（Windows）";
 const README_CROSS_SECTION = "### 同一件事在 Linux / macOS / CI 上怎么写";
 /** 逻辑脚本目录：与入口同名不同层，**不是**双击入口（`tools/README.md` 的对照表）。 */
 const ENTRY_LOGICS_DIR = "tools/scripts/";
-/** 后缀 `.logic.ps1` 的也是逻辑层（`tools/studio/start-studio.logic.ps1`）。 */
+/** 后缀 `.logic.ps1` 的也是逻辑层（`tools/database-studio/start-database-studio.logic.ps1`）。 */
 const LOGIC_SUFFIX = ".logic.ps1";
 /**
  * 入口清单的**第二站**：`tools/README.md` 的「全目录视图」。
