@@ -15,6 +15,8 @@
  *   ⑥ 非 git 目录 → 退出码 2。
  *   ⑦ 基线取不到 → 退出码 2。
  *   ⑧ `--report` 恒 0（盘点档，不判失败）。
+ *   ⑨ 候选历史取「一次遍历」而不是逐文件遍历 —— 合并处被 TREESAME 剪掉的那条线
+ *      上的版本，旧读法**看不见**（会漏报真退回），这一条钉住它现在看得见。
  */
 import { execFileSync } from "node:child_process";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
@@ -28,11 +30,17 @@ const { test, expect } = defineGateRepo({
   script: "check-merged-side-loss.mjs",
   workdir: "merged-side-loss",
   /* 判据用 `import "./merged-side-loss-core.mjs"` 拉共用内核（与 1-2 的提交前档
-   * 同一份实现）—— 同级动态导入只能靠夹具的 `copy` 带进来。 */
+   * 同一份实现）—— 同级动态导入只能靠夹具的 `copy` 带进来。
+   * `merged-side-loss-git.mjs` 是这一族的 git 取证层（批量读法），同级 import，
+   * 同样必须列进来。 */
   copy: [
     {
       from: "scripts/merged-side-loss-core.mjs",
       to: "scripts/merged-side-loss-core.mjs",
+    },
+    {
+      from: "scripts/merged-side-loss-git.mjs",
+      to: "scripts/merged-side-loss-git.mjs",
     },
   ],
   setup: (repo: GateRepo) => {
@@ -164,5 +172,62 @@ describe("check-merged-side-loss —— 整份退回的事后复算", () => {
     const { code, output } = repo.run([bad, "--baseline", good, "--report"]);
     expect(code).toBe(0);
     expect(output).toContain("src/b.ts");
+  });
+
+  test("⑨ 退回成「只在被并进来的那条线上出现过」的版本 → 仍要认出来", ({
+    repo,
+  }) => {
+    /* 形状：侧线把 f 改成 v2 → 主线把 f 改成 v3 → 用 `merge -s ours` 并进来
+     * （合并结果这一版与第一父本**逐字相同**，f 就是 v3）→ 之后某次提交把 f
+     * 写回 v2。这是真退回，但**逐文件** `git log -- f` 看不见 v2：单路径遍历在
+     * 那个合并处按 TREESAME 剪枝，只跟第一父本，被并进来的那条线整条不访问。
+     * 所以下面先自证「盲区确实在」（旧读数得到 v2 的那条提交不在清单里），
+     * 再断言判据仍然报出它 —— 取证改成一次 `--name-only` 遍历之后。 */
+    repo.write("src/f.ts", "export const f = 1;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: v1");
+
+    repo.git("checkout", "-q", "-b", "side");
+    repo.write("src/f.ts", "export const f = 2;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "feat: 侧线把 f 改成 v2");
+    const sideCommit = out(repo.dir, "rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.write("src/f.ts", "export const f = 3;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "feat: 主线把 f 改成 v3");
+    repo.git(
+      "merge",
+      "-q",
+      "--no-ff",
+      "-s",
+      "ours",
+      "side",
+      "-m",
+      "merge: 这一版整单取自己",
+    );
+    const baseline = out(repo.dir, "rev-parse", "HEAD");
+
+    /* 盲区自证：逐文件那条读法里，v2 那次提交根本不在候选清单上。 */
+    const perFile = out(
+      repo.dir,
+      "log",
+      "--format=%H",
+      "--no-merges",
+      baseline,
+      "--",
+      "src/f.ts",
+    ).split("\n");
+    expect(perFile).not.toContain(sideCommit);
+
+    repo.write("src/f.ts", "export const f = 2;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "fix: f 写成 v2（取自被并进来那条线）");
+    const bad = out(repo.dir, "rev-parse", "HEAD");
+
+    const { code, output } = repo.run([bad, "--baseline", baseline]);
+    expect(code).toBe(1);
+    expect(output).toContain("src/f.ts");
   });
 });

@@ -31,16 +31,17 @@ import { vi } from "vitest";
  * 默认超时经常不够 —— 文件级放宽到 30s，只影响本文件。 */
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
+const SCRIPT = "check-pending-merge-loss.mjs";
+/** 这个脚本的**同级依赖**。清单只在这里出现一次：共享夹具与 ⑦ 那个「故意不带 git」的
+ *  裸目录都要把它们带上，抄成两份的后果是「加第三份依赖时只有其中一处跟着改」，
+ *  而表现是子进程 `MODULE_NOT_FOUND` —— 看着像判据坏了，不像漏拷。 */
+const SIBLINGS = ["merged-side-loss-core.mjs", "merged-side-loss-git.mjs"];
+
 const { test, expect } = defineGateRepo({
-  script: "check-pending-merge-loss.mjs",
-  /* 判据用 `import "./merged-side-loss-core.mjs"` 拉内核 —— 同级动态导入只能靠
-   * 夹具的 `copy` 带进来（漏了的表现是 MODULE_NOT_FOUND，看起来像判据坏了）。 */
-  copy: [
-    {
-      from: "scripts/merged-side-loss-core.mjs",
-      to: "scripts/merged-side-loss-core.mjs",
-    },
-  ],
+  script: SCRIPT,
+  /* 判据用 `import "./merged-side-loss-core.mjs"` 拉内核、用 `merged-side-loss-git.mjs`
+   * 取证 —— 同级导入只能靠夹具的 `copy` 带进来。 */
+  copy: SIBLINGS.map((f) => ({ from: `scripts/${f}`, to: `scripts/${f}` })),
   setup: (repo: GateRepo) => {
     repo.git("init", "-q", "-b", "main", ".");
     repo.git("config", "user.email", "gate@example.com");
@@ -194,19 +195,13 @@ describe("check-pending-merge-loss —— 提交前档（整份取非 HEAD 侧�
      * 自己造一个裸目录：判据取不到 git 事实时应放行，而不是抛错。 */
     const bare = mkdtempSync(join(tmpdir(), "pending-merge-loss-nogit-"));
     try {
-      copyFileSync(
-        join(process.cwd(), "scripts", "check-pending-merge-loss.mjs"),
-        join(bare, "check-pending-merge-loss.mjs"),
-      );
-      copyFileSync(
-        join(process.cwd(), "scripts", "merged-side-loss-core.mjs"),
-        join(bare, "merged-side-loss-core.mjs"),
-      );
-      const output = execFileSync(
-        process.execPath,
-        [join(bare, "check-pending-merge-loss.mjs")],
-        { cwd: bare, encoding: "utf8" },
-      );
+      for (const f of [SCRIPT, ...SIBLINGS]) {
+        copyFileSync(join(process.cwd(), "scripts", f), join(bare, f));
+      }
+      const output = execFileSync(process.execPath, [join(bare, SCRIPT)], {
+        cwd: bare,
+        encoding: "utf8",
+      });
       expect(output).toContain("不在 git 检出里");
     } finally {
       rmSync(bare, { recursive: true, force: true });
