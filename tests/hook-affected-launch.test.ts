@@ -35,10 +35,12 @@ import {
   isTimeoutShaped,
   loadPerCore,
   planLaunches,
+  remainingWaitMs,
   resolveMaxWorkers,
   resolveVitestEntry,
   runChunk,
   SAFE_ARGV_BUDGET,
+  unverifiedReport,
   waitForLoadToSettle as waitForLoadToSettleRaw,
 } from "../scripts/run-affected-tests.mjs";
 
@@ -377,7 +379,7 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
     expect(res).toMatchObject({ settled: true });
   });
 
-  it("等不到 ⇒ `settled: false`（**不放行**：调用方据此按真红上报）", async () => {
+  it("等不到 ⇒ `settled: false`（**只是优化没兑现**，不再是「按真红上报」）", async () => {
     let ticks = 0;
     const res = await waitForLoadToSettle({
       budgetMs: 3,
@@ -397,14 +399,27 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
       .split("\n")
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
       .join("\n");
-    // 默认档就是真等待 —— 注入只在用例里发生，生产路径必须接上。
-    expect(code).toMatch(/const settle = deps\.settle \?\? \(\(\) => waitForLoadToSettle\(\)\)/);
+    // 默认档就是真等待 —— 注入只在用例里发生，生产路径必须接上；
+    // 且预算由调用点给（多块共享一份 deadline，见下一条）。
+    expect(code).toMatch(/const settle =\s*\n?\s*deps\.settle \?\?/);
+    expect(code).toMatch(/waitForLoadToSettle\(\{ budgetMs: remainingWaitMs\(deps\.waitBudget\) \}\)/);
     expect(code).toMatch(/const settled = await settle\(\);/);
-    // 等不到那一支：必须先 `return`（非零），不许静默 `continue`。
-    const unsettled = /if \(!settled\.settled\) \{[\s\S]*?\n  \}/.exec(code)?.[0];
-    expect(unsettled, "等不到负载回落的那一支还在吗？").toBeTruthy();
-    expect(unsettled).toMatch(/return retry\.status \?\? 1;/);
-    expect(unsettled).not.toMatch(/continue;/);
+  });
+
+  /* 等待预算**不再逐块各给一份**（ISSUE #1747 的现场：8 块 × 5 分钟 ≈ 31 分钟）。
+   * 这条钉的是「收成一份」这件事本身 —— 它此前没有任何判据。 */
+  it("等待预算在块之间**共享一份**（不是 5 分钟 × 块数）", () => {
+    const deadline = Date.now() + 60_000;
+    const left = remainingWaitMs({ deadline });
+    expect(left).toBeGreaterThan(0);
+    expect(left).toBeLessThanOrEqual(60_000);
+    // 过期即 0（不许回退成整份预算 —— 那正是「每块重新拿一份」的形态）。
+    expect(
+      remainingWaitMs({ deadline: Date.now() - 1 }),
+      "过期后不许回退成整份 5 分钟",
+    ).toBe(0);
+    // 没有 deadline（单块调用 / 用例）时给整份：注入档不许被这条掏空。
+    expect(remainingWaitMs(undefined)).toBeGreaterThan(60_000);
   });
 });
 
@@ -450,6 +465,36 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   const unsettledHigh = () =>
     Promise.resolve({ settled: false, load: 9.5, waitedMs: 300_000 });
 
+  /**
+   * 跑一次 `runChunk` 并把它的 stderr **收在手里**。
+   *
+   * 为什么要有这个：`runChunk` 的每一档判决都会往 stderr 写话术，而这些用例绝大多数
+   * 只关心**退出码**。不抓的话每跑一次就在 vitest 的报告里糊一段「记为未校验…」，
+   * 与本文件无关的人读报告时会以为那是**真跑**出来的结论（实测踩到过：那几段被误读成
+   * C 组自己的输出）。
+   */
+  async function runCapturing(deps: {
+    entry: string;
+    workers?: number;
+    spawn?: (entry: string, args: string[]) => SpawnResult;
+    settle?: () => Promise<{ settled: boolean; load: number; waitedMs: number }>;
+    waitBudget?: { deadline: number };
+    onUnverified?: (files: string[]) => void;
+  }): Promise<{ code: number; text: string }> {
+    const chunks: string[] = [];
+    const realWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (s: string | Uint8Array) => {
+      chunks.push(String(s));
+      return true;
+    };
+    try {
+      const code = await runChunk(CHUNK, deps);
+      return { code, text: chunks.join("") };
+    } finally {
+      process.stderr.write = realWrite;
+    }
+  }
+
   it("超时 + 隔离复跑绿 ⇒ **通过**（这就是「无论负载如何都能提交」那一半）", async () => {
     const { spawn, calls } = fakeSpawn([TIMEOUT, GREEN]);
     const code = await runChunk(CHUNK, {
@@ -483,7 +528,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     expect(calls, "不带超时指纹时不该有第二次调用").toHaveLength(1);
   });
 
-  it("超时 + 隔离复跑**仍红**、负载已回落 ⇒ 阻断（真挂死 / 真回归）", async () => {
+  it("第二遍指纹消失（真断言 / 真挂死）⇒ 阻断 —— 「未校验」这一档不许把它洗掉", async () => {
     const { spawn, calls } = fakeSpawn([TIMEOUT, REAL_RED]);
     const code = await runChunk(CHUNK, {
       entry: "vitest.mjs",
@@ -494,14 +539,57 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     expect(calls).toHaveLength(2);
   });
 
-  it("超时 + 隔离复跑仍红、负载**没回落** ⇒ 仍然阻断（不是绿，只是归不到代码上）", async () => {
-    const { spawn } = fakeSpawn([TIMEOUT, TIMEOUT]);
-    const code = await runChunk(CHUNK, {
+  /* 这一格是本文件里最要紧的语义变更（ISSUE #1747）：**「拿不到测量」不等于
+   * 「测量结果是红的」**。第二遍**也**只是超时形态 ⇒ 失败的是调度、没有任何一条
+   * 断言报错 ⇒ 记为「未校验」：放行 + 点名，而不是把提交拦下。
+   * 旧口径（负载没回落就阻断）把「机器忙」变成了提交者无法修的失败。 */
+  it("两遍都只是超时形态 ⇒ **未校验、放行**（并逐条点名哪几份没被校验）", async () => {
+    const { spawn, calls } = fakeSpawn([TIMEOUT, TIMEOUT]);
+    const unverified: string[][] = [];
+    const { code, text } = await runCapturing({
       entry: "vitest.mjs",
       spawn,
       settle: unsettledHigh,
+      onUnverified: (files: string[]) => unverified.push([...files]),
     });
-    expect(code).toBe(1);
+    expect(code, "未校验不是红：提交继续").toBe(0);
+    expect(calls, "仍然只复跑一次，不因为放行而多测").toHaveLength(2);
+    expect(unverified, "放行必须带出「哪几份没被校验」").toEqual([CHUNK]);
+    expect(text, "话术要明说它不是绿").toMatch(/未校验/);
+    expect(text, "没有证据说它通过，就不许把它说成负载假红").not.toMatch(
+      /隔离复跑全绿/,
+    );
+  });
+
+  /* 这一档**放行**，所以它的唯一产物就是收尾那段报告 —— 报告没印出来（或印得含糊），
+   * 放行就退化成「静默通过」（同 §11.23：写了没有读者等于没写）。 */
+  it("未校验的收尾报告**逐条点名**那些文件，且不许把它说成通过", () => {
+    const text = unverifiedReport(["tests/a.test.ts", "tests/b.test.ts"]);
+    expect(text).toContain("2 份用例");
+    expect(text).toContain("tests/a.test.ts");
+    expect(text).toContain("tests/b.test.ts");
+    // 复验出口必须在（否则「未校验」有结论没动作）。
+    expect(text).toMatch(/--full/);
+    expect(text, "不许读成「已通过」").not.toMatch(/已通过|全部通过/);
+  });
+
+  it("未校验那一格与「负载有没有回落」解耦 —— 等待没兑现不改变结论", async () => {
+    const settled: { settled: boolean; load: number; waitedMs: number } = {
+      settled: true,
+      load: 0.2,
+      waitedMs: 0,
+    };
+    const codes: number[] = [];
+    for (const s of [settledLow, () => Promise.resolve(settled)]) {
+      const { spawn } = fakeSpawn([TIMEOUT, TIMEOUT]);
+      const { code } = await runCapturing({
+        entry: "vitest.mjs",
+        spawn,
+        settle: s,
+      });
+      codes.push(code);
+    }
+    expect(codes, "负载回落与否都不判红").toEqual([0, 0]);
   });
 
   it("第一遍就绿 ⇒ 只调一次，且不等、不复跑", async () => {
@@ -522,7 +610,11 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
 
   it("复跑**最多一次**：串行红之后不再起第三次", async () => {
     const { spawn, calls } = fakeSpawn([TIMEOUT, TIMEOUT, GREEN]);
-    await runChunk(CHUNK, { entry: "vitest.mjs", spawn, settle: settledLow });
+    await runCapturing({
+      entry: "vitest.mjs",
+      spawn,
+      settle: settledLow,
+    });
     expect(calls).toHaveLength(2);
   });
 });
