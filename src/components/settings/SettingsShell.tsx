@@ -179,8 +179,10 @@ export function SettingsShell({
                     ref={registerSection(id)}
                     aria-label={sectionLabel(id)}
                     /* `scroll-mt-*` 是滚过去的**落点补偿**：`scrollIntoView` 把节顶
-                   对到容器上沿，不给上边距就会贴着标题行。 */
-                    className="scroll-mt-6"
+                   对到容器上沿，不给上边距就会贴着标题行。
+                   节与节之间用 `mb-*` 拉开一档：上一节卡片末尾与下一节标题
+                   若贴着，读起来像同属一组。 */
+                    className="mb-8 scroll-mt-6 last:mb-0"
                   >
                     <SettingsSectionHeading section={id} />
                     {sections?.[id]}
