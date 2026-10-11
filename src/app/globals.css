@@ -54,6 +54,12 @@
   --color-surface-0: #ffffff;
   --color-surface-1: #f7f8fa;
   --color-surface-2: #f0f0f5;
+  /* 模态遮罩（scrim）—— `ui/dialog` / `ui/sheet` / `ui/fullscreen-dialog` 背后
+     那层带色压暗底，出口 `ui/dialog-overlay.ts` 的 `dialogBackdropClass()`。
+     它是**结构性表面**（覆盖整块内容区），所以随主题走 token、不写死 `bg-black/*`：
+     浅色主题需要更重的 α 才看得出「底下被压住」，深色主题本身已暗、同 α 会糊成一片。
+     两个 α 由 `tests/dialog-backdrop-contrast.test.ts` 从编译产物真量区间。 */
+  --color-scrim: rgb(15 15 23 / 0.55);
   --color-subtle: #f7f8fa;
   --color-border: #ececf1;
   --color-border-subtle: rgb(0 0 0 / 0.06);
@@ -356,6 +362,7 @@
   --color-surface-0: #0a0a0f;
   --color-surface-1: #16161c;
   --color-surface-2: #1a1a24;
+  --color-scrim: rgb(0 0 0 / 0.7); /* 模态遮罩（见 @theme 里那颗 token 的说明）*/
   --color-subtle: #141419;
   --color-border: #26262e;
   --color-border-subtle: rgb(255 255 255 / 0.06);

@@ -56,18 +56,38 @@ function DialogContent({
    *  还成了「点了没反应」的死区，用户看到的就是「两个 ✕ 且关不掉」。
    *  默认 `true` 只服务「不自绘 header、直接用基元卡片」这一种形态。 */
   showCloseButton = true,
+  /** 是否渲染共享遮罩（`DialogOverlay` → base-ui 的 `Backdrop`）。
+   *
+   *  **默认 `true` 是本仓库的统一口径**：模态弹窗背后必须有一层**带色**的压暗底，
+   *  否则「弹窗浮在一堆还能点、还一样亮的界面之上」——用户分不清哪块是活的、
+   *  也看不出这是个需要先处理掉的对话框（ISSUE #1742）。这一层同时承担
+   *  「点遮罩即关闭」与「遮住并挡住背后内容」两件事。
+   *
+   *  只有「本就要贴在宿主里、不该压暗背后」的极少数内嵌场景才传 `false`。 */
+  showOverlay = true,
+  /** 给共享遮罩的额外 class（如全屏视图那档更重的底）。 */
+  overlayClassName,
   ...props
 }: DialogPrimitive.Popup.Props & {
   /** 弹窗本体（Popup）自身的 class，便于调用处只改形态、不动外层定位。 */
   popupClassName?: string;
   showCloseButton?: boolean;
+  showOverlay?: boolean;
+  overlayClassName?: string;
 }) {
   return (
     <DialogPortal>
-      {/* 内容层不再自绘遮罩：遮罩由 base-ui 的 Backdrop 负责（打开时点遮罩
-          即关闭），样式与实际渲染串在 dialog-overlay.ts 里收口一次 ——
-          它同时要满足「让出标题行」的硬判据（ISSUE #310：遮罩曾整片盖住
-          页签与右上角窗口按钮）。 */}
+      {/* 遮罩（带色压暗底 + 挡住背后点击）由本组件**默认渲染**：base-ui 的
+          `Dialog.Backdrop` 是**独立的一层**，`DialogPortal` 只自动注入一层
+          **无色的** `InternalBackdrop`（`role="presentation"`、仅用于外部点击
+          判定与 `pointer-events` 兜底），肉眼看不见 —— 此前只有部分调用处
+          （`ui/fullscreen-dialog`）自己补了 `Backdrop`，于是**绝大多数弹窗背后
+          都是亮的、看起来还能点**（ISSUE #1742）。
+
+          样式与「让出标题行」的硬判据（ISSUE #310）都收口在
+          `~/components/ui/dialog-overlay` 的 `dialogBackdropClass()` 里，
+          `ui/sheet` 的 `SheetContent` 共用同一份。 */}
+      {showOverlay && <DialogOverlay className={overlayClassName} />}
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(

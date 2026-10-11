@@ -381,10 +381,19 @@ node scripts/check-overlay-z.cjs --update   # 治理后收紧基线
 
 **内容层的遮罩不在此列**：浮层遮罩的 class 串统一由
 `src/components/ui/dialog-overlay.ts` 的 `dialogBackdropClass()` 产出，
-`ui/dialog` 的 `DialogContent` 与 `ui/sheet` 的 `SheetContent` 共用同一份，
+`ui/dialog` 的 `DialogContent` 与 `ui/sheet` 的 `SheetContent` **默认各铺一份**，
 它同时承载「顶部让出标题行」的硬规则（ISSUE #310：遮罩曾铺满视口，把页签与
-窗口按钮一起盖住）。**内容层不再自绘遮罩** —— base-ui 的 Backdrop 负责点遮罩
-关闭，自绘的那一份会与它叠成两层。
+窗口按钮一起盖住）。
+
+**模态弹窗默认带遮罩是一条规定，不是一个可选项**（ISSUE #1742）：base-ui 的
+`DialogPortal` 只自动注入一层 `InternalBackdrop`（`role="presentation"`、
+`pointer-events` 兜底 + 外部点击判定），它是**透明**的 —— 只负责「点弹窗外关掉」，
+**不负责好看**。此前 `DialogContent` 就停在这里：弹窗背后又亮又像能点，用户分不清
+哪块是活的（实测现场：数据库过期确认弹窗背后整块首页照常发光）。现在
+`DialogContent` 默认渲染 `DialogOverlay`，`showOverlay={false}` 是唯一的退出阀
+（只给「本就要贴宿主、不该压暗背后」的极少数内嵌场景）。**别在调用处再铺一份** ——
+那会与它叠成两层。遮罩底色是语义 token `--color-scrim`（浅 / 深两态各自取值），
+「压暗了多少」由 `tests/dialog-backdrop-contrast.test.ts` 从编译产物真量。
 
 **为什么 `lib/full-screen-layer.ts` 的 `overlayClass` 参数不变**：它是**定位**
 判据（顶部让出标题行），层级由调用方经 `zClass` 参数给 —— 两件事分开，才让
