@@ -236,6 +236,9 @@ importers:
       '@trpc/server':
         specifier: ^11.19.0
         version: 11.19.0(@typescript/typescript6@6.0.2)
+      '@trpc/tanstack-react-query':
+        specifier: ^11.19.0
+        version: 11.19.0(@tanstack/react-query@5.104.0(react@19.3.0))(@trpc/client@11.19.0(@trpc/server@11.19.0(@typescript/typescript6@6.0.2))(@typescript/typescript6@6.0.2))(@trpc/server@11.19.0(@typescript/typescript6@6.0.2))(@typescript/typescript6@6.0.2)(react@19.3.0)
       '@xyflow/react':
         specifier: ^12.12.0
         version: 12.12.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -3474,6 +3477,16 @@ packages:
     resolution: {integrity: sha512-7C1goiDurz82yFKtZUbEzjXd0Rg/jyisaIZQhdvus+1l7E6mwcEYZXjZ1US/HF8kOyz1LERL8UN3bcboJtjcyQ==}
     hasBin: true
     peerDependencies:
+      typescript: '>=5.7.2'
+
+  '@trpc/tanstack-react-query@11.19.0':
+    resolution: {integrity: sha512-KYmZBRyqZqm9oY66a3tXxBlT9PLLG+YiH//4VRzrY7jCekeusYwzMkz9GAmyqnmAlc+n/9nbfzTmtIA0IordRw==}
+    hasBin: true
+    peerDependencies:
+      '@tanstack/react-query': ^5.80.3
+      '@trpc/client': 11.19.0
+      '@trpc/server': 11.19.0
+      react: '>=18.2.0'
       typescript: '>=5.7.2'
 
   '@ts-morph/common@0.27.0':
@@ -11334,6 +11347,14 @@ snapshots:
 
   '@trpc/server@11.19.0(@typescript/typescript6@6.0.2)':
     dependencies:
+      typescript: '@typescript/typescript6@6.0.2'
+
+  '@trpc/tanstack-react-query@11.19.0(@tanstack/react-query@5.104.0(react@19.3.0))(@trpc/client@11.19.0(@trpc/server@11.19.0(@typescript/typescript6@6.0.2))(@typescript/typescript6@6.0.2))(@trpc/server@11.19.0(@typescript/typescript6@6.0.2))(@typescript/typescript6@6.0.2)(react@19.3.0)':
+    dependencies:
+      '@tanstack/react-query': 5.104.0(react@19.3.0)
+      '@trpc/client': 11.19.0(@trpc/server@11.19.0(@typescript/typescript6@6.0.2))(@typescript/typescript6@6.0.2)
+      '@trpc/server': 11.19.0(@typescript/typescript6@6.0.2)
+      react: 19.3.0
       typescript: '@typescript/typescript6@6.0.2'
 
   '@ts-morph/common@0.27.0':

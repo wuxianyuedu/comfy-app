@@ -19,7 +19,7 @@ import { setupTrpcServer } from "../../../../tests/helpers/trpc-msw";
 import { createTestQueryClient } from "../../../../tests/helpers/renderWithProviders";
 import { z } from "zod";
 
-import { api } from "~/trpc/react";
+import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
 import { useModelFolderConfig } from "./use-model-folder-config";
 
@@ -122,7 +122,7 @@ const server = setupTrpcServer(mockRouter);
 
 function makeWrapper() {
   const qc = createTestQueryClient();
-  const client = api.createClient({
+  const client = createTrpcClient({
     links: [
       httpBatchStreamLink({
         transformer: SuperJSON,
@@ -135,7 +135,11 @@ function makeWrapper() {
       QueryClientProvider,
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children，tRPC 的 ProviderProps 要求它带在 props 上
-      createElement(api.Provider, { client, queryClient: qc, children }),
+      createElement(TRPCProvider, {
+        trpcClient: client,
+        queryClient: qc,
+        children,
+      }),
     );
   };
 }

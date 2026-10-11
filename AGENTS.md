@@ -97,7 +97,8 @@
 9. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
    锁定会 EPERM 连锁失败）。
 10. **视图层不得新增 IO**：`src/components/**`、`src/app/**`（除 `api/`）里不允许新写
-    `fetch(`、`vanillaApi.*`、`api.x.y.useQuery/useMutation`——逻辑要进
+    `fetch(`、`vanillaApi.*`、tRPC 的 options 调用（新集成：`trpc.x.y.queryOptions()` /
+    `mutationOptions()`；旧 classic 字样 `api.x.y.useQuery/useMutation` 同判）——逻辑要进
     `<feature>/hooks/`，网络层一律进 `src/lib/<domain>-client.ts`（守卫只豁免
     `hooks/` 目录，`components/<feature>/*-api.ts` 会被计为违规）。守卫脚本
     `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit）。
@@ -173,7 +174,7 @@
 `pnpm install --frozen-lockfile`（冷装约 8 分钟）再跑。不要把它当成「本机不支持校验」
 的结论，也不要把这个理由写进提交信息（硬规则 26 / §13.6.3）。前置判断：`pnpm check:toolchain`。
 
-**改了 `src/lib` / `src/server` / `src/trpc` 就会触发 `docs/api/**` 同步判据**（`pnpm docs` 的产物提交进 git，AGENTS 与主规范 §9 都承诺它「随构建链更新」，而实测此前构建链里没有任何一处跑 typedoc —— 产物停在最初两次提交上、留着指向已删模块的 `lib_comfyui_markdown.html`）：报「落后 / 缺失 / 多余」时 `pnpm docs` 重生成并把 `docs/api/**` 一并提交，**不要手改生成物**。
+**改了 `src/lib` / `src/server` / `src/trpc` 就会触发 `docs/api/**` 同步判据**（`pnpm run docs` 的产物提交进 git，AGENTS 与主规范 §9 都承诺它「随构建链更新」，而实测此前构建链里没有任何一处跑 typedoc —— 产物停在最初两次提交上、留着指向已删模块的 `lib_comfyui_markdown.html`）：报「落后 / 缺失 / 多余」时 `pnpm run docs` 重生成并把 `docs/api/**` 一并提交，**不要手改生成物**。⚠️ **别写 `pnpm docs`**：那是 pnpm 的**内建命令**（`pnpm docs <PACKAGE>` 打开某包的文档），会抢在脚本前面、typedoc 根本不跑（实测报 `the following required arguments were not provided: <PACKAGE>`）—— 带脚本名的动词要用 `pnpm run <脚本>`。
 
 **报错指向的文件你根本没碰过 → 先复算 master 基线再怀疑自己**：PR 在平台侧是 squash 合并、不跑本地钩子，而 #623 之后已无 CI 兜底，所以硬闸违规可以直接落进 `master` 成为所有人的基线（棘轮类有数字可记账，**硬闸类须为 0、没有「带病通行」的中间态** → 一旦落地就拦住从它分出的每一个提交）。**复算有执行者了**：`node scripts/base-check.mjs <拦住你的那条>`（整条命令 / 钩子标签 / 裸脚本名都认；`--fetch` 先拉、`--json` 给机器可读）——它把那条门禁在干净的上游提交上重跑一遍，给你 `baseline-red`（别线的红，就地修或登记）/ `yours`（你自己的）/ `current-green` / `inconclusive`（**没跑起来，不构成证据**：最典型是那条判据只存在你未提交的改动里）/ `load-flake`（**两侧都红且两侧输出都是超时形态** ⇒ 疑似负载假红，先隔离复跑，**不许**照 `baseline-red` 登记、**不许**抬 `testTimeout`）。五态的下一动作与**不许**为它放宽判据的口径见 §13.6.2；时间型判据在 CPU 高负载下的完整处置见 §13.6.4（**C 组已经把「隔离复跑」这一步接进钩子**：带超时指纹的失败会先等负载回落、再 `--no-file-parallelism` 复跑一次，绿即放过、红照拦，不抬预算 —— 见 §13.6.4.1）。
 

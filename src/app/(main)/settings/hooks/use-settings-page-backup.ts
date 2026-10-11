@@ -20,9 +20,10 @@
  * 数据事故。所以这个 hook 的产出里有一个 `pending` —— 视图拿它渲染
  * 「已登记，重启后生效」，而不是弹一句「恢复成功」把人骗去刷新页面。
  */
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { runAsyncAction } from "~/lib/async-action";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import type { ActionReport } from "~/lib/async-action";
 
 /** 一份可选备份（与服务端 `listBackupEntries` 的形状同源）。 */
@@ -59,11 +60,14 @@ export function useSettingsBackup({
   /** 整页提示条通道，来自主 hook 的 useFlashLatch。 */
   showFlash: ActionReport;
 }): UseSettingsBackup {
-  const listQ = api.setting.backupList.useQuery(undefined, {
-    enabled: statusQueriesEnabled,
-  });
-  const createM = api.setting.backupCreate.useMutation();
-  const restoreM = api.setting.backupRestore.useMutation();
+  const trpc = useTRPC();
+  const listQ = useQuery(
+    trpc.setting.backupList.queryOptions(undefined, {
+      enabled: statusQueriesEnabled,
+    }),
+  );
+  const createM = useMutation(trpc.setting.backupCreate.mutationOptions());
+  const restoreM = useMutation(trpc.setting.backupRestore.mutationOptions());
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
 

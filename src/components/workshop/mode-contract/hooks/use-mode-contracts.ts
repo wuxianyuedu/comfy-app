@@ -8,6 +8,7 @@
 // 是**同一份注册表**，各存一个 hook 会让「保存后另一处看不到」变成常态。
 
 import { useCallback } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { useBusyAction } from "~/components/ui/use-busy-action";
 
@@ -15,16 +16,19 @@ import {
   parseModeContracts,
   type ModeContract,
 } from "~/lib/workshop/model-mode-contract";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 
 export function useModeContracts() {
-  const query = api.llm.modeContractsGet.useQuery();
+  const trpc = useTRPC();
+  const query = useQuery(trpc.llm.modeContractsGet.queryOptions());
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const saveBusy = useBusyAction();
 
   const contracts: ModeContract[] = parseModeContracts(query.data?.contracts);
 
-  const saveMutation = api.llm.modeContractsSave.useMutation();
+  const saveMutation = useMutation(
+    trpc.llm.modeContractsSave.mutationOptions(),
+  );
 
   const save = useCallback(
     async (contracts: ModeContract[]) => {

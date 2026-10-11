@@ -4,10 +4,11 @@
 // 与源文件弹层开关。视图只消费这里返回的 controller，不持有任何业务规则。
 
 import { useCallback, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import {
   buildSourceData,
   isDetailLoadingFor,
@@ -112,6 +113,7 @@ export function resolveActiveMode(
 export function useWorkflowLibraryDetail(
   props: WorkflowLibraryDetailProps,
 ): WorkflowLibraryDetailController {
+  const trpc = useTRPC();
   const {
     workflow,
     allModelTags = [],
@@ -150,9 +152,11 @@ export function useWorkflowLibraryDetail(
 
   /* 未选中工作流时不发请求（enabled:false）。hooks 顺序必须稳定，因此这里不
    * 做 early return —— 空态交给视图渲染。 */
-  const detailQuery = api.workflow.detail.useQuery(
-    { id: workflow?.id ?? "" },
-    { enabled: !!workflow },
+  const detailQuery = useQuery(
+    trpc.workflow.detail.queryOptions(
+      { id: workflow?.id ?? "" },
+      { enabled: !!workflow },
+    ),
   );
 
   const template = detailQuery.data?.template;
@@ -162,9 +166,11 @@ export function useWorkflowLibraryDetail(
    * 无论怎么选提交的都是服务器不认的值。detailFull 走服务端富化（候选
    * 表解析 + 存量清洗），这里取它的 workflowIO 覆盖原始列；rawJson /
    * graph 等仍用轻量 template，patchSeedMode 也继续以原始列为底稿。 */
-  const enrichedQuery = api.workflow.detailFull.useQuery(
-    { id: workflow?.id ?? "" },
-    { enabled: !!workflow },
+  const enrichedQuery = useQuery(
+    trpc.workflow.detailFull.queryOptions(
+      { id: workflow?.id ?? "" },
+      { enabled: !!workflow },
+    ),
   );
 
   /* 就绪条件：当前选中工作流已排空过一次详情请求的数据（或错误）。

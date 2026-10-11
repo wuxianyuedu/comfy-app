@@ -15,13 +15,14 @@
  * 视图与测试都不感知——§12.18 复用优先。
  */
 import { useCallback, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { runAsyncAction } from "~/lib/async-action";
 import { useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { openComfyTab } from "~/lib/comfy/comfy-tab-client";
 import { shouldUseBrowserTab } from "~/lib/comfy/comfy-embed";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 
 import { useExternalAction } from "~/components/ui/use-external-action";
 import { useRuntimeLogSource } from "./use-runtime-log-source";
@@ -36,27 +37,32 @@ export function useSettingsComfy(input: {
   statusQueriesEnabled: boolean;
 }) {
   const { settingsDraft, showFlash, setSaving, statusQueriesEnabled } = input;
+  const trpc = useTRPC();
   /* 启动动作自带「先把当前草稿里的 ComfyUI 各项落库」——这份 mutation 与
    * 主 hook 的 `saveSetting` 是同一端点的两个独立实例（tRPC mutation 无共享
    * 状态），互不影响。 */
-  const saveSetting = api.setting.save.useMutation();
+  const saveSetting = useMutation(trpc.setting.save.mutationOptions());
   const [comfyStarting, setComfyStarting] = useState(false);
-  const comfyInstanceQ = api.setting.comfyInstance.useQuery();
+  const comfyInstanceQ = useQuery(trpc.setting.comfyInstance.queryOptions());
   /* 桌面实例的六个存储目录（只读展示）：同样不进 5s 轮询 —— 它只是配置路径与
    * yaml 的函数，秒级重取既没有新事实，又让这张卡片变成「一直在算」。 */
-  const comfyStorageQ = api.setting.comfyStorage.useQuery(undefined, {
-    enabled: statusQueriesEnabled,
-  });
-  const comfyStatusQ = api.setting.comfyStatus.useQuery(undefined, {
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: false,
-    enabled: statusQueriesEnabled,
-  });
-  const comfyStartM = api.setting.comfyStart.useMutation();
-  const comfyStopM = api.setting.comfyStop.useMutation();
+  const comfyStorageQ = useQuery(
+    trpc.setting.comfyStorage.queryOptions(undefined, {
+      enabled: statusQueriesEnabled,
+    }),
+  );
+  const comfyStatusQ = useQuery(
+    trpc.setting.comfyStatus.queryOptions(undefined, {
+      refetchInterval: 5_000,
+      refetchIntervalInBackground: false,
+      enabled: statusQueriesEnabled,
+    }),
+  );
+  const comfyStartM = useMutation(trpc.setting.comfyStart.mutationOptions());
+  const comfyStopM = useMutation(trpc.setting.comfyStop.mutationOptions());
   /* 「在浏览器打开」：服务端能力早就有了（openComfyUi → openUrlInBrowser 拉起
    * 系统默认浏览器），此前只缺一个能点到它的入口。与页签内嵌**并列**，不替代。 */
-  const comfyOpenM = api.setting.comfyOpen.useMutation();
+  const comfyOpenM = useMutation(trpc.setting.comfyOpen.mutationOptions());
   const [comfyStopping, setComfyStopping] = useState(false);
   const [comfyOpening, setComfyOpening] = useState(false);
 

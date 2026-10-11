@@ -12,7 +12,7 @@ import {
   testTrpcEndpoint,
 } from "../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../tests/helpers/trpc-msw";
-import { api } from "~/trpc/react";
+import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
 import { useLLMConfig } from "./use-llm-config";
 
@@ -48,7 +48,7 @@ const mockRouter = t.router({
 const server = setupTrpcServer(mockRouter);
 
 function makeWrapper(qc: QueryClient) {
-  const client = api.createClient({
+  const client = createTrpcClient({
     links: [
       httpBatchStreamLink({
         transformer: SuperJSON,
@@ -61,7 +61,11 @@ function makeWrapper(qc: QueryClient) {
       QueryClientProvider,
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
-      createElement(api.Provider, { client, queryClient: qc, children }),
+      createElement(TRPCProvider, {
+        trpcClient: client,
+        queryClient: qc,
+        children,
+      }),
     );
   };
 }

@@ -5,6 +5,7 @@
 // LLMContext.tsx（provider + 弹窗视图）不再直接出现 `api.llm.*`。
 
 import { useCallback, useMemo } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import {
   effectiveProviderType,
@@ -12,7 +13,7 @@ import {
   type LLMConfigView,
   type RemoteModelKind,
 } from "~/lib/llm/types";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 
 /** 判断远端模型是否为文本生成(对话)可用类型。
@@ -68,7 +69,8 @@ type ModelSplit = {
 const EMPTY_SPLIT: ModelSplit = { local: [], remote: [], remoteImage: [] };
 
 export function useLLMConfig(): LLMConfigController {
-  const configQ = api.llm.configGet.useQuery();
+  const trpc = useTRPC();
+  const configQ = useQuery(trpc.llm.configGet.queryOptions());
 
   const refresh = useCallback(() => {
     void configQ.refetch();
@@ -151,7 +153,8 @@ export interface LLMConfigSaveController {
 }
 
 export function useLLMConfigSave(): LLMConfigSaveController {
-  const saveCfg = api.llm.configSave.useMutation();
+  const trpc = useTRPC();
+  const saveCfg = useMutation(trpc.llm.configSave.mutationOptions());
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const saveBusy = useBusyAction();
 

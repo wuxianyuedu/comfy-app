@@ -5,12 +5,11 @@
 // HistoryList 视图只消费本 hook 返回的 controller，不再自己发请求。
 
 import { useCallback, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { getQueryKey } from "@trpc/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 /* 取消走集中出口（`task-cancel-client`）：这里此前自己挂了一份
- * `api.task.cancel.useMutation()`，于是「取消失败怎么提示」在历史面板与画布
+ * `useMutation(trpc.task.cancel.mutationOptions())`，于是「取消失败怎么提示」在历史面板与画布
  * 面板各说一套（§12.14 端点收口）。取消的服务端语义见 ADR §14 D2。 */
 import { cancelTask } from "~/lib/task-cancel-client";
 import {
@@ -43,7 +42,7 @@ import {
   type TaskItem,
 } from "../history-types";
 import { PAGE_SIZE, useSimulatedProgress } from "../history-utils";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 
 /** 空 IO 表：引用恒定（未查到工作流时沿用同一个对象，不每次渲染造新的）。 */
 const EMPTY_WORKFLOW_IO: WorkflowIOMap = {};
@@ -97,6 +96,7 @@ export interface HistoryListController {
  * `tests/app-event-pairing.test.ts` 现在拦得住这种只剩一端的通道。
  */
 export function useHistoryList(): HistoryListController {
+  const trpc = useTRPC();
   const toast = useToast();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterKey>("ALL");
@@ -108,10 +108,12 @@ export function useHistoryList(): HistoryListController {
    * 工作流库的下载与同步各写一份 —— 而「同一条能不能重复点」四处都没防。 */
   const retryAction = useItemAction();
 
-  const tasksQ = api.task.list.useQuery(undefined, {
-    /* 保持旧数据：refetch / 删除后回源不闪空列表 */
-    placeholderData: (prev) => prev,
-  });
+  const tasksQ = useQuery(
+    trpc.task.list.queryOptions(undefined, {
+      /* 保持旧数据：refetch / 删除后回源不闪空列表 */
+      placeholderData: (prev) => prev,
+    }),
+  );
   const tasks = useMemo<TaskItem[]>(
     () =>
       (tasksQ.data?.tasks ?? []).map((task) => ({
@@ -130,9 +132,11 @@ export function useHistoryList(): HistoryListController {
   const openDetail = useCallback((id: string) => setDetailId(id), []);
   const closeDetail = useCallback(() => setDetailId(null), []);
 
-  const detailQ = api.task.detail.useQuery(
-    { id: detailId ?? "" },
-    { enabled: !!detailId },
+  const detailQ = useQuery(
+    trpc.task.detail.queryOptions(
+      { id: detailId ?? "" },
+      { enabled: !!detailId },
+    ),
   );
   /* 详情直接派生自查询结果：detailId 切换时 isPending 自动为 true、data 为 null，
      open 清空逻辑不再需要本地镜像 state。 */
@@ -143,9 +147,11 @@ export function useHistoryList(): HistoryListController {
    * 用轻量的 `workflow.detail`（一次 DB 读，不做派生）拿 `workflowIO` 列；
    * 工作流已被删除时查询失败，这里保持空表，参数名如实显示 pin 名 —— 不编。 */
   const detailWorkflowId = detail ? taskWorkflowId(detail) : null;
-  const ioQ = api.workflow.detail.useQuery(
-    { id: detailWorkflowId ?? "" },
-    { enabled: !!detailWorkflowId },
+  const ioQ = useQuery(
+    trpc.workflow.detail.queryOptions(
+      { id: detailWorkflowId ?? "" },
+      { enabled: !!detailWorkflowId },
+    ),
   );
   const workflowIO = useMemo<WorkflowIOMap>(
     () =>
@@ -156,9 +162,11 @@ export function useHistoryList(): HistoryListController {
   );
   /* 模式契约注册表：详情弹窗按「任务模式 + 生效契约」枚举工坊对外口（与工坊
    * 封装页、工作流库画布卡片同一份口径）。只在打开详情时拉，列表态不空跑。 */
-  const contractsQ = api.llm.modeContractsGet.useQuery(undefined, {
-    enabled: !!detailId,
-  });
+  const contractsQ = useQuery(
+    trpc.llm.modeContractsGet.queryOptions(undefined, {
+      enabled: !!detailId,
+    }),
+  );
   const modeContracts = (contractsQ.data?.contracts ?? null) as
     readonly ModeContract[] | null;
 
@@ -185,7 +193,7 @@ export function useHistoryList(): HistoryListController {
     [],
   );
 
-  const deleteTask = api.task.delete.useMutation();
+  const deleteTask = useMutation(trpc.task.delete.mutationOptions());
 
   /* 反馈通道适配：本面板的「成功」走 `info`（一句陈述，不是庆祝），
    * 「失败」走 `error`。收口前「取消失败，请稍后重试」这类**引导性文案**
@@ -220,8 +228,9 @@ export function useHistoryList(): HistoryListController {
           await deleteTask.mutateAsync({ id });
           /* 乐观移除：直接改查询缓存，避免本地镜像 state */
           queryClient.setQueryData(
-            getQueryKey(api.task.list),
-            (old: { tasks: Array<{ id: string }> } | undefined) =>
+            trpc.task.list.queryKey(undefined),
+            /* 键自带 DataTag：`old` 的形状由查询结果推导，不再手写窄类型 */
+            (old) =>
               old
                 ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) }
                 : old,
@@ -231,7 +240,7 @@ export function useHistoryList(): HistoryListController {
         { report, failureText: "删除失败", successText: "已删除任务" },
       );
     },
-    [deleteTask, detailId, report, queryClient],
+    [deleteTask, detailId, report, queryClient, trpc],
   );
 
   /* 「重试」的实际动作是**复制参数到剪贴板**（后端从来没有重试接口，见下）。

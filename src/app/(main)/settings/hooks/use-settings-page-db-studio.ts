@@ -21,10 +21,11 @@
  * 但状态与动作各自独立、无交叉。返回形状与主 hook controller 逐字段一致，
  * 视图与测试都不感知——§12.18 复用优先，拆包只挪文件、不动契约。
  */
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { useExternalAction } from "~/components/ui/use-external-action";
 import { runAsyncAction } from "~/lib/async-action";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import type { ActionReport } from "~/lib/async-action";
 import {
   useRuntimeLogSource,
@@ -57,13 +58,16 @@ export function useSettingsDbStudio({
   /** 整页提示条通道，来自主 hook 的 useFlashLatch。 */
   showFlash: ActionReport;
 }): UseSettingsDbStudio {
-  const statusQ = api.setting.dbStudioStatus.useQuery(undefined, {
-    refetchInterval: 15_000,
-    enabled: statusQueriesEnabled,
-  });
-  const startM = api.setting.dbStudioStart.useMutation();
-  const stopM = api.setting.dbStudioStop.useMutation();
-  const openM = api.setting.dbStudioOpen.useMutation();
+  const trpc = useTRPC();
+  const statusQ = useQuery(
+    trpc.setting.dbStudioStatus.queryOptions(undefined, {
+      refetchInterval: 15_000,
+      enabled: statusQueriesEnabled,
+    }),
+  );
+  const startM = useMutation(trpc.setting.dbStudioStart.mutationOptions());
+  const stopM = useMutation(trpc.setting.dbStudioStop.mutationOptions());
+  const openM = useMutation(trpc.setting.dbStudioOpen.mutationOptions());
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
 

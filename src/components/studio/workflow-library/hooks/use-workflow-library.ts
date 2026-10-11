@@ -15,9 +15,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { errorMessage, errorText } from "~/lib/error-message";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { useItemAction } from "~/components/ui/use-item-action";
 
 import { useToast } from "../../ToastProvider";
@@ -135,20 +136,25 @@ export function useWorkflowLibrary(
   onUse?: (id: string, meta?: { name: string; taskType: string }) => void,
 ): WorkflowLibraryController {
   const toast = useToast();
-  const utils = api.useUtils();
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
 
-  const listQ = api.workflow.list.useQuery(undefined, {
-    refetchOnWindowFocus: false,
-    staleTime: 30_000,
-  });
-  const tagsQ = api.workflowModel.list.useQuery(undefined, {
-    refetchOnWindowFocus: false,
-    staleTime: 30_000,
-  });
-  const createMut = api.workflow.create.useMutation();
-  const updateMut = api.workflow.update.useMutation();
-  const deleteMut = api.workflow.delete.useMutation();
-  const resyncMut = api.workflow.resync.useMutation();
+  const listQ = useQuery(
+    trpc.workflow.list.queryOptions(undefined, {
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    }),
+  );
+  const tagsQ = useQuery(
+    trpc.workflowModel.list.queryOptions(undefined, {
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    }),
+  );
+  const createMut = useMutation(trpc.workflow.create.mutationOptions());
+  const updateMut = useMutation(trpc.workflow.update.mutationOptions());
+  const deleteMut = useMutation(trpc.workflow.delete.mutationOptions());
+  const resyncMut = useMutation(trpc.workflow.resync.mutationOptions());
 
   const [workflows, setWorkflows] = useState<WorkflowRow[]>([]);
   const [localPending, setLocalPending] = useState<PendingRow[]>([]);
@@ -313,7 +319,6 @@ export function useWorkflowLibrary(
     deleteMut,
     resyncMut,
     createMut,
-    utils,
   });
 
   const importState = useWorkflowImport({ createMut, load });
@@ -359,9 +364,13 @@ export function useWorkflowLibrary(
     const id = editingId;
     setEditingId(null);
     if (!id) return;
-    void utils.workflow.detail.invalidate({ id });
-    void utils.workflow.detailFull.invalidate({ id });
-  }, [editingId, utils]);
+    void queryClient.invalidateQueries(
+      trpc.workflow.detail.queryFilter({ id }),
+    );
+    void queryClient.invalidateQueries(
+      trpc.workflow.detailFull.queryFilter({ id }),
+    );
+  }, [editingId, trpc, queryClient]);
 
   return {
     workflows: filteredWorkflows,

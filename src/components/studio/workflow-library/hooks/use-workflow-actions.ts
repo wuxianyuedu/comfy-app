@@ -12,11 +12,20 @@
  *  按 §17.5.4 必须走「只有用户重试才清」的通道。
  */
 import { useCallback } from "react";
-import { type api } from "~/trpc/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useTRPC, type RouterInputs, type RouterOutputs } from "~/trpc/react";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { downloadJson as saveJsonFile } from "~/lib/browser-io";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowRow } from "../workflow-library-config";
+
+/** 注入的 mutation 实例只用到 `mutateAsync` 这一面（窄接口口径同
+ *  `use-settings-page-save` 的 `MutationLike`）：入参 / 出参类型取自 router
+ *  本身（`RouterInputs` / `RouterOutputs`），服务端改了 schema 这里会跟着红，
+ *  而不是在动作层里抄一份会漂的字段表。 */
+export type MutateAsyncLike<TInput, TOutput> = {
+  mutateAsync: (input: TInput) => Promise<TOutput>;
+};
 
 export interface UseWorkflowActionsArgs {
   setDeleting: (v: boolean) => void;
@@ -37,11 +46,22 @@ export interface UseWorkflowActionsArgs {
   ) => void;
   setWorkflows: (fn: (prev: WorkflowRow[]) => WorkflowRow[]) => void;
   load: () => Promise<void> | void;
-  updateMut: ReturnType<typeof api.workflow.update.useMutation>;
-  deleteMut: ReturnType<typeof api.workflow.delete.useMutation>;
-  resyncMut: ReturnType<typeof api.workflow.resync.useMutation>;
-  createMut: ReturnType<typeof api.workflow.create.useMutation>;
-  utils: ReturnType<typeof api.useUtils>;
+  updateMut: MutateAsyncLike<
+    RouterInputs["workflow"]["update"],
+    RouterOutputs["workflow"]["update"]
+  >;
+  deleteMut: MutateAsyncLike<
+    RouterInputs["workflow"]["delete"],
+    RouterOutputs["workflow"]["delete"]
+  >;
+  resyncMut: MutateAsyncLike<
+    RouterInputs["workflow"]["resync"],
+    RouterOutputs["workflow"]["resync"]
+  >;
+  createMut: MutateAsyncLike<
+    RouterInputs["workflow"]["create"],
+    RouterOutputs["workflow"]["create"]
+  >;
 }
 
 export function useWorkflowActions(args: UseWorkflowActionsArgs) {
@@ -58,8 +78,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     deleteMut,
     resyncMut,
     createMut,
-    utils,
   } = args;
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const toast = useToast();
 
   /* 反馈通道适配：**成功静默**（这一批动作大多刷新列表即可见，
@@ -157,13 +178,17 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       await runAsyncAction(
         async () => {
           await updateMut.mutateAsync({ id, paramMap });
-          await utils.workflow.detail.invalidate({ id });
-          await utils.workflow.detailFull.invalidate({ id });
+          await queryClient.invalidateQueries(
+            trpc.workflow.detail.queryFilter({ id }),
+          );
+          await queryClient.invalidateQueries(
+            trpc.workflow.detailFull.queryFilter({ id }),
+          );
         },
         { report, failureText: "更新参数映射失败" },
       );
     },
-    [updateMut, utils, report],
+    [updateMut, trpc, queryClient, report],
   );
 
   const patchWorkflowIO = useCallback(
@@ -173,13 +198,17 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           await updateMut.mutateAsync({ id, workflowIO });
           /* detailFull 才是预览表单的数据源（它带服务端富化的 defaultValue），
            * 只失效 detail 的话富化 IO 的缓存查询不会重拉 → 默认值不刷新。 */
-          await utils.workflow.detail.invalidate({ id });
-          await utils.workflow.detailFull.invalidate({ id });
+          await queryClient.invalidateQueries(
+            trpc.workflow.detail.queryFilter({ id }),
+          );
+          await queryClient.invalidateQueries(
+            trpc.workflow.detailFull.queryFilter({ id }),
+          );
         },
         { report, failureText: "更新参数配置失败" },
       );
     },
-    [updateMut, utils, report],
+    [updateMut, trpc, queryClient, report],
   );
 
   /** 下载当前工作流 JSON —— 下载的是**这条工作流自己的原件**
@@ -192,7 +221,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
          * 分支文案仍归调用处。抛错那一支仍走出口（`errorMessage` 兜底）。 */
         await runAsyncAction(
           async () => {
-            const d = await utils.workflow.detail.fetch({ id });
+            const d = await queryClient.fetchQuery(
+              trpc.workflow.detail.queryOptions({ id }),
+            );
             const tpl = d?.template;
             if (!tpl) {
               toast.error("获取工作流失败", "未知错误");
@@ -213,7 +244,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
          * `setBundleBusy(null)`，漏一处就留下一个永不解除的忙标记）。 */
       });
     },
-    [toast, runBundle, utils, report],
+    [toast, runBundle, trpc, queryClient, report],
   );
 
   /** 重新导入本地工作流的源文件并刷新。 */
