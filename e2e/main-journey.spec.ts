@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { isTerminalTaskStatus } from "../src/lib/task-state";
+
 /**
  * 主链路 E2E：**登录 → 建项目 → 出图**（ISSUE #1621 阶段二 2-2）。
  *
@@ -237,16 +239,24 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     const taskId = submitted?.taskId;
     expect(taskId, "generate.generate 必须回一个 taskId").toBeTruthy();
 
-    /* 轮询任务详情直到终态。**为什么断言终态而不是「界面显示生成中」**：
+    /* 轮询任务详情直到**终态**。**为什么断言终态而不是「界面显示生成中」**：
      * 后者在桩后端下也成立，而这条链路要证明的是**执行器真的把这一轮跑完了**
-     * ——终态由 `executor-finalize` 写，产物由它下载落盘。 */
+     * ——终态由 `executor-finalize` 写，产物由它下载落盘。
+     *
+     * ⚠️ 判据必须是「**已到终态**」，不是「不再是 RUNNING」：后者对 `QUEUED`
+     * 也成立 —— 提交后那一瞬任务正在排队，`expect.poll` 立刻命中、直接去断言
+     * `SUCCEEDED`，于是**红了但错的不是被测链路**（ISSUE #1727 第 2 条：executor
+     * 其实跑成功、产物也落了盘，报出来的却是 `QUEUED`）。终态判据取 `src` 的
+     * 唯一出处 `isTerminalTaskStatus()`，不在用例里再抄一份三个字面量。 */
     const terminal = await expect
       .poll(
         async () => {
           const detail = (await trpcQuery(page, "task.detail", { id: taskId })) as
             | { status?: string; error?: string | null; images?: unknown[] }
             | undefined;
-          return detail?.status ?? "MISSING";
+          /* 非终态一律回同一个哨兵：poll 据此**继续等**（`QUEUED` 也到不了
+             `"终态"`，所以不会被当成结论放行）。 */
+          return isTerminalTaskStatus(detail?.status) ? detail : null;
         },
         {
           timeout: 60_000,
@@ -254,7 +264,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
             "任务没有到终态：出图这一跳断了（下游替身没应答，或执行器收口失败）",
         },
       )
-      .not.toBe("RUNNING")
+      .not.toBeNull()
       .then(() =>
         trpcQuery(page, "task.detail", { id: taskId }),
       )
@@ -301,18 +311,24 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     const taskId = submitted?.taskId;
     expect(taskId).toBeTruthy();
 
+    /* 同成功用例：等的是**已到终态**，不是「不再是 RUNNING」（后者对 `QUEUED`
+     * 也成立，会在排队那一瞬就放行、把 `QUEUED` 当成结论）。 */
+    /* 同成功用例：等的是**已到终态**（非终态回 null、poll 继续等），不是
+     * 「不再是 RUNNING」——后者对 `QUEUED` 也成立，会在排队那一瞬放行。 */
     const terminal = (await expect
       .poll(
         async () => {
-          const detail = (await trpcQuery(page, "task.detail", { id: taskId })) as { status?: string } | undefined;
-          return detail?.status ?? "MISSING";
+          const detail = (await trpcQuery(page, "task.detail", { id: taskId })) as
+            | { status?: string }
+            | undefined;
+          return isTerminalTaskStatus(detail?.status) ? detail : null;
         },
         {
           timeout: 60_000,
           message: "失败用例没有到终态",
         },
       )
-      .not.toBe("RUNNING")
+      .not.toBeNull()
       .then(() => trpcQuery(page, "task.detail", { id: taskId }))) as {
       status?: string;
       error?: string | null;

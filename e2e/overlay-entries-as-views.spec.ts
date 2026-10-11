@@ -40,7 +40,12 @@ async function expectViewRendered(
   await expect(tab).toContainText(entryLabel);
   await expect(tab).toHaveAttribute("aria-selected", "true");
 
-  /* 光有页签不算数：内容区必须真接上视图。取该页**独有**且无条件渲染的文案。 */
+  /* 光有页签不算数：内容区必须真接上视图。取该页**独有**且无条件渲染的文案。
+   *
+   * 这两屏的区块小标题在重排（ISSUE #1423 / #1711）里改成了 `SectionLabel`
+   * 「短名 + 同义说明」两段：此前那一整句「选择远端模型（生图 / 视频）」现在拆成
+   * `<h4>远端模型</h4>` 与 `hint`。判据锚**短名**（它无条件渲染），别锚被拆掉的
+   * 长句 —— 锚长句会红在与「页签有没有接上视图」无关的文案调整上。 */
   for (const anchor of contentAnchors) {
     await expect(
       page.getByText(anchor).first(),
@@ -72,16 +77,14 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
     page,
   }) => {
     await page.goto("/workspace");
-    await expectViewRendered(page, "模型适配", ["选择远端模型（生图 / 视频）"]);
+    await expectViewRendered(page, "模型适配", ["远端模型"]);
   });
 
   test("侧栏点「模式契约」开出一页页签，内容真的渲染，且不在对话框里", async ({
     page,
   }) => {
     await page.goto("/workspace");
-    await expectViewRendered(page, "模式契约", [
-      "选择要配置的模式（与工作流库同一定义）",
-    ]);
+    await expectViewRendered(page, "模式契约", ["选择要配置的模式"]);
   });
 
   test("两个入口落在**同一对**页面：侧栏开过之后，重复开不增页签、也不叠弹窗", async ({
@@ -146,7 +149,7 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
     const labels = await strip.getByRole("tab").allTextContents();
     expect(labels.some((t) => t.includes("模式契约"))).toBe(true);
     await expect(
-      page.getByText("选择要配置的模式（与工作流库同一定义）").first(),
+      page.getByText("选择要配置的模式").first(),
       "从工作流库进来时，模式契约的内容区没接上视图",
     ).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);

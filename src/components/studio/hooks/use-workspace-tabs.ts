@@ -7,7 +7,7 @@
 // 页签规则的单测仍然只在 `workspace-tabs.ts` 那一层（这里只做装配，
 // 不重复实现规则）。
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   WS_TABS_KEY,
@@ -79,25 +79,35 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
     useState<WorkspaceTabsState>(initialWorkspaceTabs);
   const activateShellTab = useShellTabs((s) => s.activateTab);
 
-  /* 恢复上次离开时的页签。不能放进 useState 初始值 —— SSR 阶段读不到
-     sessionStorage，而 hydration 不会重跑 initializer，恢复就永远不生效。 */
-  const hydratedRef = useRef(false);
+  /* ── 恢复：把上次离开时的页签从 sessionStorage 播回来 ─────────────────────
+   *
+   * 不能放进 `useState` 初始值：SSR 阶段读不到 `sessionStorage`，而 hydration
+   * **不会重跑** initializer，恢复就永远不生效。所以恢复走挂载后的 effect。
+   *
+   * ⚠️ 「恢复跑过没有」这一个布尔量**拦不住**落盘 —— 两个 effect 跑在同一个
+   * commit 里，恢复只是 `setTabsState()`（下一轮渲染才生效），而落盘拿到的仍是
+   * 这一轮的初始态（只有首页一页），于是把存储里的页签冲掉。现场就是
+   * ISSUE #1501 / #1727：刷新后 active-id 还在、页签却没了，用户被踢回首页。
+   *
+   * 正确的判据是「**这一轮要落盘的 state 是不是已与存储对过账**」：`hydrated`
+   * 作为**状态**（不是 ref）承载这件事 —— 它在恢复落地的那一轮渲染里才为真，
+   * 于是落盘天然只发生在对账之后。 */
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     const restored = readTabsState();
-    // 无论恢复成不成功，从这一步起才允许落盘。
-    hydratedRef.current = true;
     if (restored) {
       // 跳过 hydration 窗口后恢复，避免对 SSR 渲染树造成级联 setState。
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTabsState(restored);
     }
+    setHydrated(true);
   }, []);
   useEffect(() => {
-    /* 恢复那一步之前**不落盘**：否则挂载这一轮会先把初始态（只有首页一页）写进
-       sessionStorage，把用户存好的列表冲掉，随后才读到空。 */
-    if (!hydratedRef.current) return;
+    /* 对账完成前一律不落盘（机制见上）：否则挂载这一轮会先把初始态（只有首页
+       一页）写进 sessionStorage，把用户存好的列表冲掉，随后才读到空。 */
+    if (!hydrated) return;
     writeTabsState(tabsState);
-  }, [tabsState]);
+  }, [tabsState, hydrated]);
 
   const navigateTo = useCallback((view: WorkspaceView) => {
     /* 绑的是 store 的同步读数，不是组件里那个 `activeProjectId` React 状态：

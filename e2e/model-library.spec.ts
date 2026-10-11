@@ -25,7 +25,12 @@ import { expect, test } from "@playwright/test";
 test.describe("模型库 @critical", () => {
   test("这一屏装配起来了，且筛选档位里「放大」在", async ({ page }) => {
     await page.goto("/models");
-    await expect(page.getByRole("heading", { name: "模型库" })).toBeVisible();
+    /* 页头名字**只有一处能改**：注册表 `NavItems.tsx` 里这一项
+     * `label: "模型"`（`viewLabel` 缺省），`pageHeaderTitle()` 出的就是它。
+     * 此前这里写「模型库」——那是路由 `metadata.title`（浏览器标签题）里的字，
+     * 不是 `h1` 里的字。判据锚在注册表口径上，由
+     * `tests/page-name-single-source.test.ts` 守着（ISSUE #1423）。 */
+    await expect(page.getByRole("heading", { name: "模型" })).toBeVisible();
 
     /* 「放大」此前只存在于类型标签表、筛选档位里没有它 —— 那一类模型看得见却筛不出来。
        档位由标签表派生之后它才出现在界面上。逐档点名，少一档即红。 */
