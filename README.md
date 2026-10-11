@@ -64,8 +64,8 @@ Comfy-APP-T3/
 │  │  ├─ build-all.ps1            # 一键发布构建（release 壳 = 唯一入口 app.exe）
 │  │  ├─ build-tauri-release.ps1  # 仅构建 release 版 Tauri 壳
 │  │  └─ rebuild-static.ps1       # 清理并重建 src-tauri/static
-│  ├─ registry/             # 团队 shadcn Registry（start-registry.ps1）
-│  ├─ studio/               # 数据库工具（start-studio.ps1）
+│  ├─ shadcn-registry/      # 团队 shadcn Registry（start-shadcn-registry.ps1）
+│  ├─ database-studio/      # 数据库工具 Drizzle Studio（start-database-studio.ps1）
 │  ├─ scripts/              # 上述入口对应的逻辑脚本（与入口同名不同层）
 │  └─ README.md             # 入口/逻辑对照与各脚本的详细说明
 ├─ public/                  # 静态资源（含 splash.html 启动加载页、favicon.ico）

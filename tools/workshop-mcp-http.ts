@@ -1,4 +1,4 @@
-// ── Workshop MCP：HTTP(Streamable) transport 入口 ─────────────
+// ── Workshop MCP：HTTP(Streamable) transport 入口（tools/workshop-mcp-http.ts）───
 // 独立 Node HTTP 服务，暴露 Streamable MCP 端点（默认 http://localhost:4300/mcp），
 // 供应用内 agent 或支持 HTTP MCP 的客户端连接。与 stdio 共用同一份工具定义。
 //
@@ -44,13 +44,13 @@ async function handlePost(req: http.IncomingMessage, res: http.ServerResponse): 
     await mcp.connect(transport);
     await transport.handleRequest(req, res);
   } catch (err) {
-    console.error("[mcp-http] 处理请求失败:", err);
+    console.error("[workshop-mcp-http] 处理请求失败:", err);
     if (!res.headersSent) res.writeHead(500).end("Internal Server Error");
   }
 }
 
 httpServer.listen(PORT, () => {
-  console.error(`[mcp-http] Workshop MCP HTTP 服务已启动: http://localhost:${PORT}${ENDPOINT}`);
+  console.error(`[workshop-mcp-http] Workshop MCP HTTP 服务已启动: http://localhost:${PORT}${ENDPOINT}`);
 });
 
 process.on("SIGTERM", () => {
