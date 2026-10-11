@@ -321,6 +321,47 @@ fn get_app_url(state: tauri::State<'_, AppState>) -> String {
   state.app_url()
 }
 
+/// 打开 webview 的开发者工具（DevTools）—— 排查渲染 / 脚本性能用。
+///
+/// **只在编译期带 `devtools` feature 的壳里有这个能力**
+/// （`cargo build --release --features custom-protocol,devtools`）：tauri 的
+/// `open_devtools()` 本身门在 `#[cfg(any(debug_assertions, feature = "devtools"))]`
+/// 后面，而本仓库的壳一律是 release 构建（`debug_assertions` 恒为 false），
+/// 所以「能不能开」完全由这个 feature 决定 —— 见 Cargo.toml 的同名条目。
+///
+/// 两个命令都要有：`generate_handler!` 是**编译期展开的静态清单**，少了任一份
+/// 都会让另一种构建直接编译不过。
+#[cfg(feature = "devtools")]
+#[tauri::command]
+fn open_devtools(app_handle: tauri::AppHandle) -> Result<(), String> {
+  let Some(win) = app_handle.get_webview_window("main") else {
+    return Err("找不到应用窗口 main".to_string());
+  };
+  win.open_devtools();
+  log::info!("[ComfyAPP] devtools opened (feature devtools)");
+  Ok(())
+}
+
+/// 未启用 `devtools` feature 时的存根：**始终存在、始终拒绝**。
+///
+/// 前端靠它区分「这个壳没有调试能力」与「调用失败」，据此隐藏入口而不是
+/// 让用户点一个必然报错的按钮。
+#[cfg(not(feature = "devtools"))]
+#[tauri::command]
+fn open_devtools(_app_handle: tauri::AppHandle) -> Result<(), String> {
+  Err("当前壳未启用 devtools（重编时加 --features devtools）".to_string())
+}
+
+/// 这个壳是否带调试能力（= 编译期有没有 `devtools` feature）。
+///
+/// 前端据此决定**要不要显示**开发者工具入口：发布壳不带这个 feature，
+/// 入口不该出现（而不是出现了点一下报错）。前端那边唯一读点见
+/// `src/lib/shell/desktop-shell-client.ts` 的 `devtoolsAvailable()`。
+#[tauri::command]
+fn devtools_available() -> bool {
+  cfg!(feature = "devtools")
+}
+
 /// 本壳自己的窗口此刻是否握着前台（= 用户在启动期还没有让出前台）。
 ///
 /// 启动页在启动期一直待在用户眼皮底下：只要他没动手切走，前台就还在本壳的某个
@@ -1888,7 +1929,9 @@ pub fn run() {
       win_minimize,
       open_comfyui_window,
       activate_main_window,
-      should_activate_on_launch
+      should_activate_on_launch,
+      open_devtools,
+      devtools_available
     ])
     // setup 闭包要求 `'static`：它要活到应用退出，因此引用的局部变量必须**捕获
     // 所有权**（`move`），否则 `expect_slow_first_paint` 这类按值传入的局部量会在

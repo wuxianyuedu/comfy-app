@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Moon, Search, Settings, Sun } from "lucide-react";
+import { Bug, ChevronDown, Moon, Search, Settings, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { MessageCenterButton } from "~/components/message-center/MessageCenterButton";
@@ -19,6 +19,7 @@ import { Separator } from "~/components/ui/separator";
 import { SidebarTrigger } from "~/components/ui/sidebar";
 
 import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
+import { useDevtoolsLauncher } from "./use-devtools-launcher";
 
 export interface TopBarProps {
   /** 当前视图 —— 显示成标题，让用户知道自己在哪。 */
@@ -60,6 +61,10 @@ export interface TopBarProps {
 export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   const label = NAV_ITEMS.find((item) => item.id === active)?.label ?? "工作区";
   const { resolvedTheme, setTheme } = useTheme();
+  /* 开发者工具入口：只在壳带 `devtools` feature 时出现（发布壳里不渲染）。
+     快捷键（⌘/Ctrl+Shift+I 与 F12）由 useDevtoolsLauncher 一并注册，
+     判据与按钮同源，详见该文件。 */
+  const devtools = useDevtoolsLauncher();
 
   /**
    * 一键翻深浅色。
@@ -149,6 +154,15 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
                 <Settings strokeWidth={1.8} />
                 设置
               </DropdownMenuItem>
+              {/* 开发者工具：排查渲染 / 脚本性能用。判据是**编译期**有没有
+                  devtools feature，所以发布壳里这一项整个不渲染，而不是渲染出来
+                  点一下报「未启用」。快捷键 ⌘/Ctrl+Shift+I 与 F12 同判据。 */}
+              {devtools.available ? (
+                <DropdownMenuItem onClick={devtools.open}>
+                  <Bug strokeWidth={1.8} />
+                  开发者工具
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
