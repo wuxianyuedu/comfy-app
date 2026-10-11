@@ -17,7 +17,7 @@
  *   ② **棘轮层**（`scripts/.theme-color-baseline.json`）：豁免后仍有存量的
  *      未 token 化写死色值，按「文件 → 处数」记账，**只许降不许升** ——
  *      新写的写死色值一律阻断，逐批治理时基线跟着收紧；
- *   ③ **反向三层**（都是硬闸，不进基线）：
+ *   ③ **反向四层**（都是硬闸，不进基线）：
  *      · **死豁免**：登记在表上却一处都不命中的条目 = 负债，会把该文件今后的
  *        写死色值静默放行，出现即阻断（口径按文件、不按条目，见下方注释）；
  *      · **幽灵 token**：字面 `var(--color-…)` 引用了从未定义的 token —— 不报错、只是
@@ -27,6 +27,10 @@
  *        而 Tailwind v4 按源码里的**字面名**决定保留哪颗 `@theme` 变量，拼出来的名字
  *        看不见 → 那颗 token 连产物都进不去（实测无人引用的声明在产物里出现 0 次）。
  *        实测存量 0，出现即阻断；
+ *      · **跨面相等主张**：注释或**本脚本自己的豁免理由**里写「与 `--color-primary` /
+ *        `--color-accent` 同值 / 1:1」给一颗裸色值背书 —— 这是第二份账，token 改了
+ *        句子不会红（品牌紫深化那批就是四处这样的主张同时过期而门禁全绿）。
+ *        改法只有两条：该行归品牌管就写 `var(...)`，是独立内容色就把句子删掉；
  *   ④ **报告层**（`--report`）：只出清单不判失败，供盘点/排批次用。
  *
  * ⚠️ 豁免必须**显式**：清单里逐条列出「文件 + 该文件里被豁免的顶层标识符 + 理由」，
@@ -37,9 +41,9 @@
  * 判定口径：
  *   检查  = 遍历 `src/**`，统计每个文件的写死色值，减去显式豁免；
  *   通过  = 未豁免计数 ≤ 基线（且新增文件/新增处数不得抬高基线），
- *           且「无死豁免」「无幽灵 token」「无拼接 token 名」三条硬闸都过；
+ *           且「无死豁免」「无幽灵 token」「无拼接 token 名」「无跨面相等主张」四条硬闸都过；
  *   失败  = 出现基线外的新增写死色值 / 死豁免 / 幽灵 token / 拼接 token 名
- *           （退出码 1），并列出行号。
+ *           / 跨面相等主张（退出码 1），并列出行号。
  *
  * 用法：
  *   node scripts/check-theme-colors.cjs            # 检查（棘轮：只许降不许升）
@@ -365,7 +369,8 @@ const EXEMPT_TABLES = [
     exports: [],
     reason:
       "三处端口圆点的内圈高光（rgba(255,255,255,0.08)，与 PORT_STYLE 的 glow 成对出现）" +
-      "与选中节点的高亮环（品牌紫 2px 实线 + 两层光晕，与 `--color-primary` 同值）—— 前者的判断同 CanvasNodePrimitives 的条目",
+      "与非选中态投影（rgba(0,0,0,0.25)）—— 前者的判断同 CanvasNodePrimitives 的条目。" +
+      "（选中节点的高亮环与两层光晕已改取 `var(--color-primary)`，不在本条射程内）",
   },
   {
     file: "src/components/ui/water-fill-progress.tsx",
@@ -379,7 +384,10 @@ const EXEMPT_TABLES = [
     file: "src/components/model/model-cover.ts",
     exports: [],
     reason:
-      "模型封面的类别渐变（模型类别 → 品牌双色档），与 canvas-types 的 NODE_META.color 同构的内容类型色；" +
+      "模型封面的装饰渐变表（六支互不相同的色对，按 id 哈希取一支，同一模型每次同色）。" +
+      "**刻意不跟品牌走**：查过这张表里没有「品牌封面」那个特权位——`#7C5CFC` 只出现在其中一支与" +
+      "空表兜底里，跟另外四支（蓝/绿/琥珀/青）是平级的装饰色；把它焊进 `--color-primary` 会让今后任何一次" +
+      "品牌调整只带走六分之一张表，用户看到的是「有几分变了、有几分没变」，比全不跟手更难解释。" +
       "色表原先长在 ModelCard.tsx 里，现收在这一个出口，卡片与详情弹窗共用同一支兜底色",
   },
   {
@@ -399,12 +407,6 @@ const EXEMPT_TABLES = [
     exports: ["ASSET_ACCENT"],
     reason:
       "内容载体节点（文本/图片/影片）的类型强调色，与 canvas-types 的 NODE_META.color 同值",
-  },
-  {
-    file: "src/components/studio/project-canvas/CanvasContextMenu.tsx",
-    exports: [],
-    reason:
-      "「测试自定义工作流」菜单项的 W 徽标渐变（品牌双色渐变，与 --color-primary / --color-accent 同值但需两色渐变）",
   },
   {
     file: "src/components/studio/project-canvas/WorkflowNode.tsx",
@@ -558,7 +560,33 @@ const COMPOSED_NAME_RES = [
   /["'`]--color-[a-z0-9-]*["'`]\s*\+/,
 ];
 
-/* ── 主流程 ──────────────────────────────────────────────── */
+/**
+ * ⑤ **跨面相等主张** —— 用「与 `--color-primary` / `--color-accent` 同值」这类句子
+ * 去正当化一颗裸色值（写在注释里，或写在**本脚本自己的豁免理由**里）。
+ *
+ * 为什么这条必须存在：token 改了，句子不会跟着红。实测事故 —— 品牌紫深化把
+ * `--color-primary` 从 `#7C5CFC` 改成 `#8557de`，而四处「与品牌 token 同值 / 1:1」
+ * 的说法（三条豁免登记理由 + 一处代码注释）**当场变成假话**，`pnpm theme:check` 那一路
+ * 全绿：它只数「有没有未登记的品牌裸值」，**不读理由里的主张**。
+ *
+ * 口径是**禁止这种写法**，不是「校验主张是否成立」：后者要在每次改 token 后重算一次，
+ * 长出来就是 §12.18 明写不要的那种「扫豁免理由的启发式」。正确的写法只有两条 ——
+ * 要么直接取 `var(--color-primary)`（那就不需要主张，跟着走是机制），
+ * 要么写明它是**独立的内容色**（类型色表、装饰表），那就不必再跟品牌比大小。
+ *
+ * 判据形状（收窄到品牌家族的名字，别当宽形态用）：
+ *   · 只认「与/跟 + `--color-primary*` / `--color-accent*` + 同值|相等|1:1|同一个值|逐字节同」；
+ *   · 只认 `与 globals.css token 1:1` 这一条真实发生过的变体；
+ *   · **不判**泛指 token 的散文（`与 --color-subtle 在浅色主题下是同一个值`、
+ *     `--color-muted … 与 --color-ink-muted 逐字节同值`）—— 那些是 token 之间的关系说明，
+ *     不承载「这行裸值归品牌管」的错误预期；宽形态实测会在 globals.css 的注释里命中一片，
+ *     与上面第 ③ 条留下的教训同形（别造误报机）。
+ */
+const EQUALITY_CLAIM_RES = [
+  /(?:与|跟)\s*[`'"]?--color-(?:primary|accent)[\w-]*[`'"]?[^。\n）)]{0,16}(?:同值|相等|1:1|同一个值|逐字节同)/,
+  /(?:与|跟)\s+globals\.css\s+token[^。\n）)]{0,12}(?:同值|相等|1:1)/,
+];
+
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -581,6 +609,7 @@ const violations = [];
 const exempted = [];
 const ghosts = [];
 const composed = [];
+const equalityClaims = [];
 
 /**
  * 全仓 CSS 里**真实声明过**的 `--color-*`（`@theme` 与 `.dark` 覆盖都算）。
@@ -651,6 +680,22 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
     if (COMPOSED_NAME_RES.some((re) => re.test(codeLines[i]))) {
       composed.push({ file: r, line: i + 1, text: lines[i].trim() });
     }
+    /* ⑤ 跨面相等主张：判据要读**注释**，所以这里用未去注释的原文行。 */
+    if (EQUALITY_CLAIM_RES.some((re) => re.test(lines[i]))) {
+      equalityClaims.push({ file: r, line: i + 1, text: lines[i].trim() });
+    }
+  }
+}
+
+/* ⑤ 的另一半：本脚本自己的豁免登记理由。这次四处过期主张里有三处就长在这里，
+ * 而 src/** 的遍历看不见它 —— 不扫自己这条判据就只覆盖了一半。 */
+for (const entry of [...EXEMPT_TABLES, ...EXEMPT_FIXED_DARK]) {
+  if (EQUALITY_CLAIM_RES.some((re) => re.test(entry.reason ?? ""))) {
+    equalityClaims.push({
+      file: "scripts/check-theme-colors.cjs（豁免理由）",
+      line: 0,
+      text: `${entry.file} —— ${entry.reason}`,
+    });
   }
 }
 
@@ -730,6 +775,17 @@ function printComposed() {
   }
 }
 
+/** 打印跨面相等主张（⑤）：注释与本脚本豁免理由里的「与品牌 token 同值」类句子。 */
+function printEqualityClaims() {
+  if (!equalityClaims.length) return;
+  console.log(
+    "[theme-colors] 用「与品牌 token 同值」这类主张给裸色值背书（改了 token 它不会红）：",
+  );
+  for (const c of equalityClaims) {
+    console.log(`  ✗ ${c.file}${c.line ? `:${c.line}` : ""} ｜${c.text}`);
+  }
+}
+
 /** 打印豁免清单（让人一眼看出「哪些是被有意放行的」）。 */
 function printExemptions() {
   if (!exemptByFile.size) return;
@@ -798,12 +854,28 @@ if (composed.length > 0 && !REPORT_ONLY) {
   process.exit(1);
 }
 
+/* ⑤ 跨面相等主张：也是一条独立的硬闸 —— 它判的是「说的话还成不成立」这一面，
+ * 与写死色值几处、豁免命中几条都无关，所以不进基线、--update 也不许带着它重写。 */
+if (equalityClaims.length > 0 && !REPORT_ONLY) {
+  printEqualityClaims();
+  console.error(
+    `[theme-colors] ${equalityClaims.length} 处用「与品牌 token 同值」给裸色值背书。` +
+      "这类句子是**第二份账**：token 一改它不会红（实测事故 —— 品牌紫从 #7C5CFC\n" +
+      "  深化成 #8557de 之后，四处这样的主张同时过期，而本门禁全程绿）。\n" +
+      "  改法二选一：① 该行确实归品牌管 → 直接写 var(--color-primary)/var(--color-accent)，\n" +
+      "     跟着走是机制，不需要主张；② 它是独立的内容色（类型色表、装饰表）→\n" +
+      "     把那句「与谁同值」删掉，改写成「语义来源是类型/装饰」，别再跟品牌比大小。",
+  );
+  process.exit(1);
+}
+
 /* ── 模式一：只出报告（盘点） ── */
 if (REPORT_ONLY) {
   printExemptions();
   printViolations();
   printGhosts();
   printComposed();
+  printEqualityClaims();
   console.log("[theme-colors] --report 模式：只出清单，不判失败 ✓");
   process.exit(0);
 }

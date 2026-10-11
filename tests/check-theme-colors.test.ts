@@ -416,3 +416,111 @@ describe("主题色豁免台账", () => {
     expect(Object.keys(baseline.files)).toEqual([]);
   });
 });
+
+/**
+ * 「跨面相等主张」硬闸（ISSUE #1717）。
+ *
+ * 治的是**说出去的话**：用「与 `--color-primary` / `--color-accent` 同值」这类句子给一颗
+ * 裸色值背书。token 一改，这种句子不会红 —— 实测事故就是品牌紫从 `#7C5CFC` 深化成
+ * `#8557de`，四处这样的主张（三条豁免登记理由 + 一处代码注释）同时变成假话，
+ * 而本门禁全程报「未豁免 0 处 ✓」：它只数裸值，**不读理由**。
+ *
+ * 判据是**禁止这种写法**，不是校验它成立 —— 后者每次改 token 都要重算，长出来就是
+ * §12.18 明写不要的「扫豁免理由的启发式」。所以两条反控制同样重要：
+ * 正确写法（`var(--color-primary)`）与非品牌家族的散文（`与 --color-subtle 是同一个值`）
+ * 都不许被误抓，否则这条会变成误报机。
+ */
+describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」）", () => {
+  it("注释里写「与 --color-primary 同值」→ 阻断并点名是哪一行", () => {
+    /* 夹具路径挑一份**真在豁免表上、且按整文件放行**的（model-cover：exports 为空 =
+     * 文件级作用域），这样那颗裸值本身不红，红的只可能是新闸 —— 否则「棘轮新增」与
+     * 「主张」两种红在这一条里分不开。 */
+    const { run } = scanner({
+      "src/components/model/model-cover.ts":
+        'export const S = { outline: "2px solid #7C5CFC" }; // 与 --color-primary 同值\n',
+      "src/app/globals.css": "@theme {\n  --color-primary: #8557de;\n}\n",
+    });
+    const { ok, output } = run();
+    expect(ok).toBe(false);
+    expect(output).toContain("背书");
+    expect(output).toContain("src/components/model/model-cover.ts:1");
+  });
+
+  it("豁免登记理由里写同样的话也算命中（判据扫 src，也扫它自己）", () => {
+    /* 这次的四处过期主张里有三处长在 `EXEMPT_TABLES` 的 reason 里，而遍历 src 看不见它 ——
+     * 这一条就是为「只覆盖了一半」那格补的：往副本脚本里注一条带主张的豁免，必须红。 */
+    const root = mkdtempSync(path.join(tmpdir(), "theme-claim-reason-"));
+    tempDirs.push(root);
+    mkdirSync(path.join(root, "scripts"), { recursive: true });
+    const script = readFileSync(SCRIPT, "utf8").replace(
+      "const EXEMPT_TABLES = [",
+      "const EXEMPT_TABLES = [\n" +
+        "  {\n" +
+        '    file: "src/components/studio/Reason.tsx",\n' +
+        "    exports: [],\n" +
+        '    reason: "W 徽标渐变（品牌双色，与 --color-primary 同值但需两色渐变）",\n' +
+        "  },\n",
+    );
+    const dest = path.join(root, "scripts", path.basename(SCRIPT));
+    writeFileSync(dest, script);
+    writeFileSync(
+      path.join(root, "scripts/.theme-color-baseline.json"),
+      JSON.stringify({ generatedAt: "2026-01-01", total: 0, files: {} }),
+    );
+    /* 夹具里那颗裸值正好被这条豁免吸收 ⇒ 不是死豁免，红的只可能是新闸。 */
+    const fixture = path.join(root, "src/components/studio/Reason.tsx");
+    mkdirSync(path.dirname(fixture), { recursive: true });
+    writeFileSync(
+      fixture,
+      'export const G = "linear-gradient(135deg, #7C5CFC 0%, #FF5CA8 100%)";\n',
+    );
+    const res = spawnSync(process.execPath, [dest], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    const output = `${res.stdout ?? ""}${res.stderr ?? ""}`;
+    expect(res.status).toBe(1);
+    expect(output).toContain("背书");
+    expect(output).toContain("豁免理由");
+  });
+
+  it("对照：同一份夹具只删那句主张，裸值走正常豁免便不再红", () => {
+    const { run } = scanner({
+      "src/components/model/model-cover.ts":
+        'export const S = { outline: "2px solid #7C5CFC" }; // 独立的内容类型色\n',
+      "src/app/globals.css": "@theme {\n  --color-primary: #8557de;\n}\n",
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("不误伤正确写法：直接取 var(--color-primary) 就不需要主张", () => {
+    const { run } = scanner({
+      "src/components/studio/Follow.tsx":
+        'export const S = { outline: "2px solid var(--color-primary)" };\n',
+      "src/app/globals.css":
+        "@theme {\n  --color-primary: #8557de;\n  --color-node: #2b2b36;\n}\n",
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("不判宽形态：非品牌家族的 token 散文不算（否则会在注释里命中一片）", () => {
+    const { run } = scanner({
+      "src/components/ui/Toggleish.tsx":
+        "export const A = 1;\n" +
+        "/* 这里的 `bg-surface-1` 与 `--color-subtle` 在浅色主题下是同一个值。 */\n" +
+        "/* `--color-muted` 与 `--color-ink-muted` 逐字节同值，已删。 */\n",
+      "src/app/globals.css": "@theme {\n  --color-primary: #8557de;\n}\n",
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("`#609` 这种行号/ISSUE 号不与主张混为一谈（判据认的是句子，不是井号）", () => {
+    const { run } = scanner({
+      "src/components/ui/IssueRef.tsx":
+        "export const A = 1;\n" +
+        "/* 见 #609：这颗紫与 `--color-node` 无关，只是历史遗留。 */\n",
+      "src/app/globals.css": "@theme {\n  --color-primary: #8557de;\n}\n",
+    });
+    expect(run().ok).toBe(true);
+  });
+});
