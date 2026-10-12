@@ -38,7 +38,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "~/lib/db";
 import type { AnySQLiteColumn, AnySQLiteTable } from "drizzle-orm/sqlite-core";
-import { NotFoundError } from "./errors";
+import { AppError, NotFoundError } from "./errors";
 import type { Task, TaskImage } from "~/server/db/schema";
 
 /** 带首张封面图的任务行（画廊/历史面板专用）。 */
@@ -82,9 +82,18 @@ export class DrizzleRepository<
     this.idColumn = idColumn;
   }
 
-  private get id() {
-    return (this.idColumn ??
-      (this.table as unknown as Record<string, AnySQLiteColumn>).id)!;
+  private get id(): AnySQLiteColumn {
+    const explicit = this.idColumn;
+    if (explicit) return explicit;
+    /* 表对象上的 `id` 列：子类不传 `idColumn` 时的约定。缺席属**装配错误**
+     *  （基类拿到了一张没有 id 的表），在这里显式失败 —— 原来的 `!` 会把
+     *  它变成下游某次 SQL 上的莫名报错。 */
+    const implicit = (this.table as unknown as Record<string, AnySQLiteColumn>)
+      .id;
+    if (!implicit) {
+      throw new AppError("仓储基类需要一张带 id 列的表（或显式传入 idColumn）");
+    }
+    return implicit;
   }
 
   async findById(id: string): Promise<T | null> {

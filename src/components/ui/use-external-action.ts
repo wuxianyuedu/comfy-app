@@ -125,11 +125,13 @@ export function useExternalAction({
     async (value, action) => {
       /* 空目标在**发起 IO 之前**拦（见 hook 注释第 1 条）。这里刻意不设 busy：
        * 界面上的忙碌态表达的是「外部动作正在发起」，而这一步什么都没发起。 */
-      if (isEmptyTarget(value)) {
+      /* `isEmptyTarget` 已把空目标挡在上面；这里把它换成显式的收窄判据，
+       * 让「传进去的确实非空」与「上面判过」是同一件事。 */
+      if (isEmptyTarget(value) || value === null || value === undefined) {
         report("err", emptyTargetText(target));
         return;
       }
-      await run(() => action(value!));
+      await run(() => action(value));
     },
     [report, run, target],
   );

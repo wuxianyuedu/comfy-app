@@ -337,7 +337,8 @@ const LEGACY_SIZE_ENTRY_ID = "size";
  *
  *  畸形数据（数字 / 数组 / 非对象模式表）同样丢弃——画布容不下脏数据。 */
 export function parseParamMapping(paramMap: unknown): ParamMapping {
-  const out: ParamMapping = { manualByMode: {}, labels: {} };
+  const manualByMode: Record<string, Record<string, string | null>> = {};
+  const out: ParamMapping = { manualByMode, labels: {} };
   if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap))
     return out;
   const sourceRaw = (paramMap as Record<string, unknown>).source;
@@ -361,7 +362,7 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
       /* 显式的 null = 作者把这条线断开了，属于合法状态。 */
       else if (target === null) byEntry[entryId] = null;
     }
-    if (Object.keys(byEntry).length > 0) out.manualByMode![mode] = byEntry;
+    if (Object.keys(byEntry).length > 0) manualByMode[mode] = byEntry;
   }
   return out;
 }
@@ -416,12 +417,9 @@ export function clearModeWiring(
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
 ): ParamMapping {
-  const out: ParamMapping = {
-    manualByMode: { ...(mapping?.manualByMode ?? {}) },
-    labels: { ...(mapping?.labels ?? {}) },
-  };
-  if (mode) delete out.manualByMode![mode];
-  return out;
+  const manualByMode = { ...(mapping?.manualByMode ?? {}) };
+  if (mode) delete manualByMode[mode];
+  return { manualByMode, labels: { ...(mapping?.labels ?? {}) } };
 }
 
 /** 映射落点（`resolved` 的值，= ioKey）→ 画布渲染侧那条端口的 **React Flow

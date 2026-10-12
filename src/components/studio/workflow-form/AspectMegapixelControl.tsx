@@ -37,7 +37,8 @@ import {
   ASPECT_RATIO_LABEL_PRESETS,
   CLARITY_SUBGROUP_OF_KIND,
   DEFAULT_ALIGN_MULTIPLE,
-  DIM_RATIO_PRESETS,
+  DEFAULT_ASPECT_RATIO_LABEL_PRESET,
+  DEFAULT_DIM_RATIO_PRESET,
   normalizeAlignMultiple,
   parseRatioFromLabel,
   resolutionTierOfLabel,
@@ -196,12 +197,15 @@ export function AspectMegapixelControl({
     if (exact) return exact;
     const ratio = parseRatioFromLabel(currentAspect);
     if (ratio === null) return null;
+    /* 候选可能为空（上游没给 COMBO 选项）—— 先取首项，缺席就当作没匹配。 */
+    const [firstOption] = aspectOptions;
+    if (!firstOption) return null;
     return aspectOptions.reduce(
       (best, option) =>
         Math.abs(option.ratio - ratio) < Math.abs(best.ratio - ratio)
           ? option
           : best,
-      aspectOptions[0]!,
+      firstOption,
     );
   }, [aspectOptions, currentAspect]);
 
@@ -210,7 +214,7 @@ export function AspectMegapixelControl({
     () =>
       activeAspect?.ratio ??
       parseRatioFromLabel(currentAspect) ??
-      DIM_RATIO_PRESETS[0]!.ratio,
+      DEFAULT_DIM_RATIO_PRESET.ratio,
     [activeAspect, currentAspect],
   );
 
@@ -222,7 +226,7 @@ export function AspectMegapixelControl({
     () =>
       activeAspect?.value ??
       currentAspect ??
-      ASPECT_RATIO_LABEL_PRESETS[0]!.value,
+      DEFAULT_ASPECT_RATIO_LABEL_PRESET.value,
     [activeAspect, currentAspect],
   );
 

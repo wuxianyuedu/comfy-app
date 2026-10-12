@@ -14,10 +14,13 @@
  *      例外**逐条显式**放行 —— 「类型色例外」（成组集中的端口类型色 / 节点类别色 /
  *      参数分组色常量表）与「固定暗色清单」（画布极小面积叠层）。豁免项从此
  *      不再进入报告；
- *   ② **棘轮层**（`scripts/.theme-color-baseline.json`）：豁免后仍有存量的
- *      未 token 化写死色值，按「文件 → 处数」记账，**只许降不许升** ——
- *      新写的写死色值一律阻断，逐批治理时基线跟着收紧；
- *   ③ **反向四层**（都是硬闸，不进基线）：
+ *   ② **判定层**（**硬闸**）：豁免后剩下的未 token 化写死色值须为 **0**
+ *      （命中即退 1，无基线、无 `--update`）。翻转前它是棘轮
+ *      （`scripts/.theme-color-baseline.json`，基线 `total: 0`）；存量清零后棘轮
+ *      只剩一条「手改那份 JSON 就能把新色值登记成已知存量」的通道 ——
+ *      而硬闸类**本来没有**这个中间态。真正的出口仍是豁免层（逐条写理由），
+ *      不是放宽基线；
+ *   ③ **反向四层**（同为硬闸）：
  *      · **死豁免**：登记在表上却一处都不命中的条目 = 负债，会把该文件今后的
  *        写死色值静默放行，出现即阻断（口径按文件、不按条目，见下方注释）；
  *      · **幽灵 token**：字面 `var(--color-…)` 引用了从未定义的 token —— 不报错、只是
@@ -40,17 +43,19 @@
  *
  * 判定口径：
  *   检查  = 遍历 `src/**`，统计每个文件的写死色值，减去显式豁免；
- *   通过  = 未豁免计数 ≤ 基线（且新增文件/新增处数不得抬高基线），
+ *   通过  = 未豁免计数为 0，
  *           且「无死豁免」「无幽灵 token」「无拼接 token 名」「无跨面相等主张」四条硬闸都过；
- *   失败  = 出现基线外的新增写死色值 / 死豁免 / 幽灵 token / 拼接 token 名
+ *   失败  = 出现未豁免的写死色值 / 死豁免 / 幽灵 token / 拼接 token 名
  *           / 跨面相等主张（退出码 1），并列出行号。
  *
  * 用法：
- *   node scripts/check-theme-colors.cjs            # 检查（棘轮：只许降不许升）
- *   node scripts/check-theme-colors.cjs --strict   # 基线下调也失败（CI 用，强制收紧）
+ *   node scripts/check-theme-colors.cjs            # 检查（硬闸：命中即退 1）
  *   node scripts/check-theme-colors.cjs --report   # 只出报告，不判失败（盘点用）
- *   node scripts/check-theme-colors.cjs --update   # 治理后重写基线（须伴随下降）
  */
+
+// 豁免声明层拆在同目录的 theme-color-exemptions.cjs(ISSUE #1811):
+// EXEMPT_TABLES 一张表就 232 行,与判定逻辑混在一份 901 行的文件里。
+const { EXEMPT_TABLES, EXEMPT_FIXED_DARK } = require("./theme-color-exemptions.cjs");
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -58,9 +63,6 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
-const UPDATE = ARGS.has("--update");
-const STRICT = ARGS.has("--strict");
-const BASELINE = path.join(__dirname, ".theme-color-baseline.json");
 
 /* ── 扫描范围 ────────────────────────────────────────────── */
 
@@ -176,258 +178,6 @@ function colorHitsInLine(line) {
   return hits;
 }
 
-/* ── 显式豁免清单 ────────────────────────────────────────── */
-/*
- * 每一条都对应规范 03 §3.6.1 里的一类例外，理由写在同一行注释里。
- * 新增时同步改 docs/standards/03-样式与-tailwind.md §3.6.1 与 PR 描述。
- */
-
-/**
- * ① 类型色例外（规范 §3.6.1「Type-color exemption」）：成组集中的
- *    端口类型色 / 节点类别色 / 参数分组色常量表 —— 色值本身就是语义 id
- *    （ComfyUI 端口类型），不是页面/面板/控件那类结构性表面。
- *
- * `exports` 是该文件里被豁免的顶层标识符；空数组表示**整文件**豁免
- * （仅用于「整个文件就是一个类型色常量表」的情形）。
- */
-const EXEMPT_TABLES = [
-  {
-    file: "src/lib/comfyui/types.ts",
-    exports: ["PORT_COLORS", "DEFAULT_PORT_COLOR"],
-    reason:
-      "ComfyUI 32 个端口类型色（对齐 litegraph 官方调色板），色值即类型语义",
-  },
-  {
-    file: "src/config/custom-nodes.ts",
-    exports: [],
-    reason:
-      "自定义节点类别色（CATEGORY_COLORS + colorFor 兜底色），整文件是类别色模块",
-  },
-  {
-    file: "src/lib/comfyui/node-registry.ts",
-    exports: [],
-    reason: "节点注册表的类别 `color` 字段：整表就是节点类别色常量",
-  },
-  {
-    file: "src/lib/project-canvas/canvas-types.ts",
-    exports: ["NODE_META"],
-    reason: "项目画布节点类别色（生图/生视频/剧本… 的 color 字段）",
-  },
-  {
-    file: "src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.tsx",
-    exports: [],
-    reason:
-      "端口类型粉彩渐变表（PORT_STYLE 六色）—— 内容自身的颜色；" +
-      "同文件里同一套类型色散落的档位（端口圆点的内外圈高光 rgba(255,255,255,…)" +
-      "与三条节点状态渐变）一并登记，避免它们既不是豁免、也不是待治理项",
-  },
-  {
-    file: "src/components/studio/workflow-form/WorkflowPortHandle.tsx",
-    exports: [],
-    reason:
-      "端口类型色 / 描边常量（PORT_STROKE、portColorFor、portChipStyle 的**文字色**）：色值即类型语义；chip 的**底色**已两态化（--color-chip-type-*-bg），不在豁免范围",
-  },
-  {
-    file: "src/components/studio/workflow-form/DynamicWorkflowForm/constants.ts",
-    exports: ["ACCENT", "SECTION_ACCENT", "PIN_ACCENT"],
-    reason:
-      "动态表单控件类型色（ACCENT：image/select/int/float… 分组色常量表），" +
-      "以及由它派生的段头两档（SECTION_ACCENT / PIN_ACCENT：此前在 " +
-      "GroupedControls 与 IoEndpointsSection 各写一份同值字面量）",
-  },
-  {
-    file: "src/components/studio/workflow-library/workflow-library-wire-graph.ts",
-    exports: ["AUTO_STROKE", "MANUAL_STROKE", "DRAG_STROKE", "SELECTED_STROKE"],
-    reason:
-      "工作流库画布的连线状态色常量（自动/手改/拖动预览/选中）：与编辑器画布同一套「线本身是什么状态」的语义，不是表面色",
-  },
-  {
-    file: "src/components/studio/workflow-library/workflow-param-mapping-ui.ts",
-    exports: ["PARAM_CLASS_COLOR", "PARAM_OUTPUT_STYLE"],
-    reason:
-      "契约参数口配色（prompt/negative/size… 分组色常量表），" +
-      "以及输出侧的伪分类 `PARAM_OUTPUT_STYLE`（与分组表同一张卡片视觉）",
-  },
-  {
-    file: "src/components/studio/project-canvas/EmptyCanvasHint.tsx",
-    exports: [],
-    reason: "空画布提示的节点类别配色示意（与 NODE_META 同源）",
-  },
-  {
-    file: "src/components/studio/project-canvas/WorkflowNodeArdot.tsx",
-    exports: ["PORT_TYPE_COLORS", "PORT_DOT_SHADOW"],
-    reason:
-      "设计稿参考件的端口类型色常表（仅 IMAGE/VIDEO/BOOLEAN 三档，与 PORT_COLORS 同源），色值即类型语义",
-  },
-  {
-    file: "src/components/studio/canvas/WorkflowNode.tsx",
-    exports: [],
-    reason:
-      "节点角色色（PORT_ROLES：正向/反向提示词、模型、采样器、输入图像）—— 色值即角色语义，与 PORT_COLORS 同源的类型色；" +
-      "画布 WorkflowEditorCanvas 的 minimap 也用它上色",
-  },
-  {
-    file: "src/components/studio/canvas/workflow-node-palette.ts",
-    exports: [],
-    reason:
-      "整文件是三类**两态**外观常量表，色值即语义、且都成组集中：" +
-      "① 卡片底色的混色基准（LIGHT_PALETTE_BASE / DARK_PALETTE_BASE，只作为 `mixHex()` 的数值输入，不是可见表面）；" +
-      "② `nodeMode` 的 bypass / disabled 两档模式色；" +
-      "③ 锚点圆柱的金属渐变（ANCHOR_CYLINDER 两态：本色值与 `--color-node` / `--color-port-surface` 同一判断，两态表比一串 token 更可读）",
-  },
-  {
-    file: "src/components/studio/workflow-utils.ts",
-    exports: [],
-    reason:
-      "画布 3D 节点 rgthree 的「漏光」着色（Warm/Cool/Shadow 三层渐变 + 未受光角落），" +
-      "与 `RgthreeBodies.tsx` 是同一套 3D 光照参数的两半：色值即光照语义，不是表面色",
-  },
-  {
-    file: "src/components/studio/canvas/RgthreeBodies.tsx",
-    exports: [],
-    reason:
-      "同理：RgthreeBodies 的注塑/线框配色是同一套 3D 光照参数的另一半，色值即光照语义而非表面色",
-  },
-  {
-    file: "src/lib/comfyui/workflow-detail.ts",
-    exports: [],
-    reason:
-      "自定义节点类别色的兜底色（manifest 的 rec.color 缺失时用 #3b3b3b），与 node-registry 同源",
-  },
-  {
-    file: "src/lib/comfyui/workflow-subgraph-parse.ts",
-    exports: [],
-    reason:
-      "同上：子图解析里同一处类别色兜底色（manifest 的 `rec.color` 缺失时用 #3b3b3b），与 node-registry 同源",
-  },
-  {
-    file: "src/components/studio/workflow-editor/WorkflowEditorNodes.tsx",
-    exports: [],
-    reason:
-      "① 节点分组框护栏色 GROUP_RAIL_COLOR（分组是画布内容自身的一种元素）；" +
-      "② `--color-note-tint-base` 的 **useCssColorToken 兜底值**——那是混色基准的种子值，不参与渲染",
-  },
-  {
-    file: "src/components/studio/canvas/SubgraphHeader.tsx",
-    exports: [],
-    reason:
-      "同理：`--color-node-mix-base` 的 useCssColorToken 兜底值只是混色种子值，不参与渲染",
-  },
-  {
-    file: "src/components/studio/workflow-form/WorkflowNodeParts.tsx",
-    exports: [],
-    reason:
-      "分组框护栏底色（#2A1F4A），与 WorkflowEditorNodes 的 GROUP_RAIL_COLOR / 项目画布同名样式同源",
-  },
-  {
-    file: "src/components/studio/HomePage.tsx",
-    exports: [],
-    reason:
-      "项目类别色（画布/生成/工作流/视频），与 canvas-types 的 NODE_META.color 同构；" +
-      "**底色**不再写死透明色 —— 由 `kindTint()` 的 color-mix 现取",
-  },
-  {
-    file: "src/components/studio/ProjectCanvas.tsx",
-    exports: [],
-    reason:
-      "MiniMap 的未知节点兜底色，与 canvas-types 的 NODE_META.color 同一张类别色表",
-  },
-  {
-    file: "src/components/studio/workflow-library/CustomNodesSettings/NodePreviewCard.tsx",
-    exports: [],
-    reason:
-      "节点预览卡的头部**实色色带**（类别色底 + 白字）与带上的两枚半透明小徽标：" +
-      "底色是 `colorFor(category)` 的类型色本身，叠在上面的白/黑蒙版是它的明暗档，不是可换主题的表面",
-  },
-  {
-    file: "src/components/studio/HomePage.tsx",
-    exports: ["KIND_CONFIG"],
-    reason:
-      "项目类别色（画布/生成/工作流/视频），与 canvas-types 的 NODE_META.color 同构；" +
-      "**底色**不再写死透明色 —— 由 `kindTint()` 的 color-mix 现取",
-  },
-  {
-    file: "src/components/studio/canvas/IOEditContext.tsx",
-    exports: [],
-    reason:
-      "画布 IO 编辑模式的端点强调色（勾选琥珀 / 未勾选灰），色值即模式语义",
-  },
-  {
-    file: "src/components/studio/canvas/WorkflowEdge.tsx",
-    exports: [],
-    reason:
-      "连线描边色：默认描边（167,139,250 紫）与**混色基准 / 兜底值**（#ffffff、rgb() 逐通道混色）—— 画的是线本身，不是表面",
-  },
-  {
-    file: "src/components/studio/canvas/WorkflowSubgraphNode.tsx",
-    exports: [],
-    reason:
-      "子图节点两处类型色：默认端口色三档（#ec4899 / #6b7280 / #7C5CFC）与选中描边（rgba(56,189,248,0.9)）",
-  },
-  {
-    file: "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx",
-    exports: [],
-    reason:
-      "三处端口圆点的内圈高光（rgba(255,255,255,0.08)，与 PORT_STYLE 的 glow 成对出现）" +
-      "与非选中态投影（rgba(0,0,0,0.25)）—— 前者的判断同 CanvasNodePrimitives 的条目。" +
-      "（选中节点的高亮环与两层光晕已改取 `var(--color-primary)`，不在本条射程内）",
-  },
-  {
-    file: "src/components/ui/water-fill-progress.tsx",
-    exports: [],
-    reason:
-      "内容视图内的**极小面积叠层**（水幕），固定暗色清单判据 1+2 都成立：" +
-      "它骑在预览图/视频之上、刻意保留 ~0.9 让底层内容隐约可见，" +
-      "换成浅色会与浅色内容糊在一起；条目同时登记进 globals.css 的固定暗色清单",
-  },
-  {
-    file: "src/components/model/model-cover.ts",
-    exports: [],
-    reason:
-      "模型封面的装饰渐变表（六支互不相同的色对，按 id 哈希取一支，同一模型每次同色）。" +
-      "**刻意不跟品牌走**：查过这张表里没有「品牌封面」那个特权位——`#7C5CFC` 只出现在其中一支与" +
-      "空表兜底里，跟另外四支（蓝/绿/琥珀/青）是平级的装饰色；把它焊进 `--color-primary` 会让今后任何一次" +
-      "品牌调整只带走六分之一张表，用户看到的是「有几分变了、有几分没变」，比全不跟手更难解释。" +
-      "色表原先长在 ModelCard.tsx 里，现收在这一个出口，卡片与详情弹窗共用同一支兜底色",
-  },
-  {
-    file: "src/components/studio/debug/DebugChainFooter.tsx",
-    exports: [],
-    reason: "调试链路条的类型色（琥珀描边 + 底色），色值即「调试态」语义",
-  },
-  {
-    file: "src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.tsx",
-    exports: [],
-    reason:
-      "端口分类圆点色（isOut ? 青 : 类别色）与 `custom-nodes.ts` 的 CATEGORY_COLORS 同源；" +
-      "同文件的状态徽标底色/文字色已改走语义 token",
-  },
-  {
-    file: "src/components/studio/project-canvas/ContentAssetNode.tsx",
-    exports: ["ASSET_ACCENT"],
-    reason:
-      "内容载体节点（文本/图片/影片）的类型强调色，与 canvas-types 的 NODE_META.color 同值",
-  },
-  {
-    file: "src/components/studio/project-canvas/WorkflowNode.tsx",
-    exports: [],
-    reason: "设计参考件的分组框护栏底色（#2A1F4A），与 WorkflowNodeParts 同源",
-  },
-  {
-    file: "src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.tsx",
-    exports: [],
-    reason:
-      "**本条目之下的余量**：端口圆点的内外圈高光（rgba(255,255,255,0.06 / 0.08)）与三条节点状态渐变" +
-      "（与 PORT_STYLE 六色同源的粉彩档）—— 该文件顶部的 PORT_STYLE 既已在豁免范围内，同一套类型色散落的档位一并登记",
-  },
-];
-
-/**
- * ② 固定暗色清单（规范 §3.6.1 判据 1+2）：内容视图内**极小面积叠层**，
- *    叠在画布/媒体之上、必须比承载对象更暗。整条清单的权威副本是
- *    `src/app/globals.css` 的「固定暗色清单」注释块。
- */
-const EXEMPT_FIXED_DARK = [];
 
 /** 全部豁免落点索引：rel → [entry…]。 */
 const EXEMPT_INDEX = new Map();
@@ -803,8 +553,7 @@ function printViolations() {
   for (const [f, list] of [...byFile].sort(
     (a, b) => b[1].length - a[1].length,
   )) {
-    const isNew = !baselineFiles || (baselineFiles[f] ?? 0) < list.length;
-    console.log(`  ${isNew ? "✗" : "·"} ${f}（${list.length} 处）`);
+    console.log(`  ✗ ${f}（${list.length} 处）`);
     for (const v of list.slice(0, 5)) {
       console.log(`      L${v.line}: ${v.hits}  ${v.text.slice(0, 90)}`);
     }
@@ -818,12 +567,6 @@ console.log(
   `[theme-colors] 扫描 ${SCAN_DIR}/**：未豁免写死色值 ${totalCounted} 处 / ${byFile.size} 文件；` +
     `显式豁免 ${totalExemptHits} 处 / ${exemptByFile.size} 文件`,
 );
-
-const prev =
-  !UPDATE && fs.existsSync(BASELINE)
-    ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
-    : null;
-const baselineFiles = prev?.files ?? null;
 
 /* 幽灵 token 是「引用还在、定义没了」——与写死色值多少处无关，所以单独一条
  * 硬闸、不进基线；--update 也不许带着它重写基线。 */
@@ -880,112 +623,30 @@ if (REPORT_ONLY) {
   process.exit(0);
 }
 
-/* ── 模式二：更新基线（棘轮只许下降） ── */
-if (UPDATE) {
-  /* 上面的 `prev` 在 `--update` 这条路上**恒为 null**（它的三元式带着 `!UPDATE`），
-   * 所以这一支要自己读一次基线。判的是「基线在不在」，不是「基线里的数是不是非零」：
-   * 旧写法 `if (before && …)` 在今天这种**已经清到 0 处**的基线上整个短路，
-   * 于是「新写一条色值 + 跑一次 --update」正好在最不该松的时候松着
-   * （同一族已修的先例见 `check-ui-logic-separation.cjs` 的 `diffAgainstBaseline`）。
-   * 首次建立基线（文件还不存在）仍放行，否则新检出无法起步。 */
-  const hadBaseline = fs.existsSync(BASELINE);
-  const prevForUpdate = hadBaseline
-    ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
-    : null;
-  const before =
-    (prevForUpdate?.files &&
-      Object.values(prevForUpdate.files).reduce((a, b) => a + b, 0)) ??
-    0;
-  if (hadBaseline && totalCounted > before) {
-    console.error(
-      `[theme-colors] 拒绝放宽基线：${before} → ${totalCounted}（棘轮只许下降）。\n` +
-        "  新增写死色值必须先 token 化，不要用 --update 掩盖。",
-    );
-    process.exit(1);
-  }
-  printExemptions();
-  fs.writeFileSync(
-    BASELINE,
-    JSON.stringify(
-      {
-        generatedAt: new Date().toISOString().slice(0, 10),
-        note:
-          "未豁免的写死色值处数（规范 03 §3.6.1 之外）。棘轮只许下降；" +
-          "新增豁免请改 scripts/check-theme-colors.cjs 的 EXEMPT_TABLES/EXEMPT_FIXED_DARK，不要用 --update 放水。",
-        total: totalCounted,
-        files: counted,
-      },
-      null,
-      2,
-    ) + "\n",
-  );
-  console.log(
-    `[theme-colors] 基线已更新：${before} → ${totalCounted}（scripts/.theme-color-baseline.json）`,
-  );
-  process.exit(0);
-}
-
-/* ── 模式三：检查（未豁免不得超过基线） ── */
+/* ── 模式二：检查（未豁免须为 0，其余四条硬闸已在上方短路） ── */
 printExemptions();
 
-if (!baselineFiles) {
-  console.error(
-    "[theme-colors] 基线文件缺失：先执行 node scripts/check-theme-colors.cjs --update",
-  );
-  process.exit(1);
-}
-
-const increased = [];
-const dropped = [];
-for (const [f, list] of byFile) {
-  const base = baselineFiles[f] ?? 0;
-  if (list.length > base)
-    increased.push({ file: f, from: base, to: list.length, list });
-}
-for (const [f, base] of Object.entries(baselineFiles)) {
-  const nowCount = counted[f] ?? 0;
-  if (nowCount < base) dropped.push({ file: f, from: base, to: nowCount });
-}
-let tightened = false;
-for (const [f, base] of Object.entries(baselineFiles)) {
-  if (!baselineFiles[f]) continue;
-  if (!(f in counted) && base > 0) tightened = true;
-}
-
-if (increased.length) {
-  console.log("[theme-colors] 基线外新增写死色值：");
-  for (const inc of increased) {
-    console.log(`  ✗ ${inc.file}：${inc.from} → ${inc.to}`);
-    for (const v of inc.list.slice(-Math.max(1, inc.to - inc.from))) {
-      console.log(`      L${v.line}: ${v.hits}  ${v.text.slice(0, 90)}`);
+if (totalCounted > 0) {
+  console.error("[theme-colors] 存在未豁免的写死色值：");
+  for (const [f, list] of byFile) {
+    console.error(`  ✗ ${f}：${list.length} 处`);
+    for (const v of list) {
+      console.error(`      L${v.line}: ${v.hits}  ${v.text.slice(0, 90)}`);
     }
   }
   console.error(
-    "\n[theme-colors] 失败：新增了未经豁免的写死色值。\n" +
+    "\n[theme-colors] 失败：出现了未经豁免的写死色值。\n" +
       "  判据（规范 03 §3.6.1）：能写成类名的必须是类名 —— 表面/文字语义的 #hex /\n" +
       "  rgba(...) 一律改语义 token。仅「类型色例外」（成组集中的端口类型色 / 节点\n" +
       "  类别色 / 参数分组色常量表）与「固定暗色清单」（画布极小面积叠层）可豁免；\n" +
       "  新增豁免须在 scripts/check-theme-colors.cjs 的 EXEMPT_TABLES / EXEMPT_FIXED_DARK\n" +
-      "  里逐条写明理由，并与 globals.css 清单、规范 §3.6.1 同步。",
+      "  里逐条写明理由，并与 globals.css 清单、规范 §3.6.1 同步。\n" +
+      "  本判据是硬闸（无基线、无 --update）：存量已清零，新增一处即阻断。",
   );
   process.exit(1);
 }
 
-if (dropped.length) {
-  const msg =
-    "[theme-colors] 未豁免计数已下降（治理有进展）：\n" +
-    dropped.map((d) => `  · ${d.file}：${d.from} → ${d.to}`).join("\n") +
-    "\n  建议执行 node scripts/check-theme-colors.cjs --update 收紧基线。";
-  if (STRICT) {
-    console.error(msg + "\n  --strict 模式：未收紧基线即失败。");
-    process.exit(1);
-  }
-  console.log(msg);
-}
-
 printViolations();
 console.log(
-  `[theme-colors] 通过 ✓（未豁免 ${totalCounted} 处 ≤ 基线 ${Object.values(
-    baselineFiles,
-  ).reduce((a, b) => a + b, 0)} 处；豁免 ${totalExemptHits} 处不参与判定）`,
+  `[theme-colors] 通过 ✓（未豁免 0 处；豁免 ${totalExemptHits} 处不参与判定）`,
 );

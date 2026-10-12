@@ -17,6 +17,7 @@
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -27,31 +28,26 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { copyGateDeps } from "./helpers/gate-repo";
 import { stripComments } from "./helpers/strip-comments";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-theme-colors.cjs");
 const tempDirs: string[] = [];
 
 /**
- * 造一个临时仓库：脚本按自身位置解析仓库根，故必须把脚本与（可选的）基线
- * 一起复制进去，否则扫的还是真实仓库 —— 那样用例会「总是通过」，等于没测。
+ * 造一个临时仓库：脚本按自身位置解析仓库根，故必须把脚本复制进去，
+ * 否则扫的还是真实仓库 —— 那样用例会「总是通过」，等于没测。
  */
-function scanner(
-  files: Record<string, string>,
-  baseline?: Record<string, number>,
-) {
+function scanner(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), "theme-colors-"));
   tempDirs.push(root);
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
-  writeFileSync(
-    path.join(root, "scripts/.theme-color-baseline.json"),
-    JSON.stringify({
-      generatedAt: "2026-01-01",
-      total: Object.values(baseline ?? {}).reduce((a, b) => a + b, 0),
-      files: baseline ?? {},
-    }),
-  );
+  const dest = path.join(root, "scripts", path.basename(SCRIPT));
+  copyFileSync(SCRIPT, dest);
+  /* 脚本被拆成「主文件 + 声明层模块」后，只拷主文件跑起来是 `MODULE_NOT_FOUND`
+   * —— 那条红长得像「判据坏了」，实际是夹具少带一个文件（§12.5.3 迁移五查）。
+   * `copyGateDeps` 沿 `require("./x.cjs")` 递归补齐同目录依赖。 */
+  copyGateDeps(dest);
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
@@ -128,22 +124,25 @@ describe("check-theme-colors", () => {
     expect(output).toContain("只出清单，不判失败");
   });
 
-  it("棘轮：超过基线的新增写死色值被拦", () => {
+  it("硬闸：新增写死色值即被拦（无基线可登记）", () => {
     const { run } = scanner({
       "src/components/studio/Thing.tsx":
         'export const a = "#111111";\nexport const b = "#222222";\n',
     });
     const { ok, output } = run();
     expect(ok).toBe(false);
-    expect(output).toContain("基线外新增写死色值");
+    expect(output).toContain("存在未豁免的写死色值");
   });
 
-  it("棘轮：与基线持平时通过", () => {
-    const { run } = scanner(
-      { "src/components/studio/Thing.tsx": 'export const a = "#111111";\n' },
-      { "src/components/studio/Thing.tsx": 1 },
+  it("硬闸：翻闸前遗留的基线文件不影响判定（只看未豁免是否为 0）", () => {
+    const { root, run } = scanner({
+      "src/components/studio/Thing.tsx": 'export const a = "#111111";\n',
+    });
+    writeFileSync(
+      path.join(root, "scripts/.theme-color-baseline.json"),
+      JSON.stringify({ total: 1, files: { "src/components/studio/Thing.tsx": 1 } }),
     );
-    expect(run().ok).toBe(true);
+    expect(run().ok).toBe(false);
   });
 
   /* 豁免登记之后还会「过期」：文件被 token 化了、或色值只剩在注释里（判据
@@ -372,13 +371,13 @@ describe("拼接 token 名（幽灵判据的补集）", () => {
 /**
  * 「存量必须逐条定性」的判据（ISSUE #672 / 规范 03 §3.6.1 末段）。
  *
- * 清完之后棘轮是 **0**，而**零基线本身防不住两件事**：
- *   ① 新写一处「表面/文字语义」的写死色值 —— 这条棘轮管得住（基线不容抬高）；
- *   ② 把一处**真漏改**顺手登记进 `EXEMPT_TABLES` —— 棘轮对此完全无感：
+ * 存量清完之后，**零计数本身防不住一件事**：
+ *   把一处**真漏改**顺手登记进 `EXEMPT_TABLES` —— 计数对此完全无感：
  *      豁免不计入基线，登记完就再也不会出现在报告里。
  *
  * 所以这里钉两件事：豁免**必须带理由**（空理由等于模糊放行），且
- * 专项结束时基线为 0（否则说明又回到了「既不是豁免、也不是待治理项」）。
+ * 专项结束后未豁免计数为 0（否则说明又回到了「既不是豁免、也不是待治理项」——
+ * 翻闸成硬闸之后，这件事由判据本身（不是这份基线文件）守着）。
  *
  * 回归来源：本批把余量 115 处逐条定性时，「多加一条豁免」是唯一能让数字
  * 变漂亮又不改代码的动作 —— 这正是规范里那句「模糊放行会让真正的漏改
@@ -386,10 +385,17 @@ describe("拼接 token 名（幽灵判据的补集）", () => {
  */
 describe("主题色豁免台账", () => {
   it("每一条豁免都有文件、理由，且不留下空的 exports 占位", () => {
-    const src = readFileSync(SCRIPT, "utf8");
-    const block = src.slice(
-      src.indexOf("const EXEMPT_TABLES"),
-      src.indexOf("/** 全部豁免落点索引"),
+    /* 台账随声明层一起搬到了 theme-color-exemptions.cjs（ISSUE #1811 拆表）：
+     * 主脚本只剩「读表 + 判定」，表体不再住在那里。 */
+    const exemptions = readFileSync(
+      path.resolve(__dirname, "../scripts/theme-color-exemptions.cjs"),
+      "utf8",
+    );
+    /* 取到 `module.exports` 为止 —— 那一份里 `EXEMPT_TABLES` 就是表体本身，
+     * 后面紧跟 `module.exports`（旧实现里跟在后面的是主脚本的豁免索引构建）。 */
+    const block = exemptions.slice(
+      exemptions.indexOf("const EXEMPT_TABLES"),
+      exemptions.indexOf("module.exports"),
     );
     const entries = block.match(/\{\s*\n\s*file:[\s\S]*?\n {2}\},/g) ?? [];
     expect(entries.length).toBeGreaterThan(0);
@@ -405,15 +411,12 @@ describe("主题色豁免台账", () => {
     }
   });
 
-  it("专项收口后基线为 0（没有「既不是豁免、也不是待治理项」的余量）", () => {
-    const baseline = JSON.parse(
-      readFileSync(
+  it("翻闸后不再有基线文件（未豁免须为 0，由判据本身守）", () => {
+    expect(
+      existsSync(
         path.resolve(__dirname, "../scripts/.theme-color-baseline.json"),
-        "utf8",
       ),
-    ) as { total: number; files: Record<string, number> };
-    expect(baseline.total).toBe(0);
-    expect(Object.keys(baseline.files)).toEqual([]);
+    ).toBe(false);
   });
 });
 
@@ -452,7 +455,17 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
     const root = mkdtempSync(path.join(tmpdir(), "theme-claim-reason-"));
     tempDirs.push(root);
     mkdirSync(path.join(root, "scripts"), { recursive: true });
-    const script = readFileSync(SCRIPT, "utf8").replace(
+    /* 注入点随声明层一起搬家：`EXEMPT_TABLES` 现在住在同目录的
+     * theme-color-exemptions.cjs 里，往主脚本里替换字符串会一处都不命中。 */
+    const dest = path.join(root, "scripts", path.basename(SCRIPT));
+    copyFileSync(SCRIPT, dest);
+    copyGateDeps(dest);
+    const exemptionsPath = path.join(
+      root,
+      "scripts",
+      "theme-color-exemptions.cjs",
+    );
+    const exemptions = readFileSync(exemptionsPath, "utf8").replace(
       "const EXEMPT_TABLES = [",
       "const EXEMPT_TABLES = [\n" +
         "  {\n" +
@@ -461,12 +474,7 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
         '    reason: "W 徽标渐变（品牌双色，与 --color-primary 同值但需两色渐变）",\n' +
         "  },\n",
     );
-    const dest = path.join(root, "scripts", path.basename(SCRIPT));
-    writeFileSync(dest, script);
-    writeFileSync(
-      path.join(root, "scripts/.theme-color-baseline.json"),
-      JSON.stringify({ generatedAt: "2026-01-01", total: 0, files: {} }),
-    );
+    writeFileSync(exemptionsPath, exemptions);
     /* 夹具里那颗裸值正好被这条豁免吸收 ⇒ 不是死豁免，红的只可能是新闸。 */
     const fixture = path.join(root, "src/components/studio/Reason.tsx");
     mkdirSync(path.dirname(fixture), { recursive: true });

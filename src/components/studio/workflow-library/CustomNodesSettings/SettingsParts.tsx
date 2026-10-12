@@ -5,7 +5,7 @@
  *（状态经 props 显式传入）。 */
 
 import type { RefObject } from "react";
-import { STATUS_STYLE } from "./constants";
+import { OK_STATUS_STYLE, STATUS_STYLE } from "./constants";
 import { StatusDot } from "~/components/ui/status-dot";
 import { StatusBadge } from "~/components/ui/status-badge";
 import type { ParseProgress, ParseReport, SettingsResp } from "./types";
@@ -297,7 +297,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
       </div>
       <div className="flex flex-col gap-2">
         {(report.packages ?? []).map((pkg) => {
-          const st = STATUS_STYLE[pkg.status] ?? STATUS_STYLE.ok;
+          const st = STATUS_STYLE[pkg.status] ?? OK_STATUS_STYLE;
           return (
             <div
               key={pkg.name}
@@ -309,7 +309,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                     <span className="text-ink font-medium">{pkg.name}</span>
                     <StatusBadge
                       status={pkg.status === "ok" ? "SUCCEEDED" : pkg.status}
-                      label={st!.label}
+                      label={st.label}
                       dot={false}
                       className="text-2xs px-2 py-0.5"
                     />

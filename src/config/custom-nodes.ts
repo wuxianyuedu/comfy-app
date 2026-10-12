@@ -18,8 +18,8 @@ import type {
   NodeTypeConfig,
   PortSpec,
   FieldDef,
-  FieldType,
 } from "~/lib/comfyui/node-config";
+import { isFieldType } from "~/lib/comfyui/field-types";
 import { errorText } from "~/lib/error-message";
 import { emitAppEvent } from "~/lib/app-events";
 
@@ -67,7 +67,9 @@ export function specToField(s: PortSpec): FieldDef {
   return {
     key: s.name,
     label: s.name,
-    type: s.widget! ?? "string",
+    /* `widget` 来自 manifest（外部 JSON）、类型是不受约束的 string；
+     * 经 `isFieldType` 收窄，认不出即按单行文本框。 */
+    type: isFieldType(s.widget) ? s.widget : "string",
     options: s.options,
     /* 与 String(s.default) 运行时一致（default 来自 manifest JSON，无 symbol），
      * 收窄以满足 no-base-to-string。 */
@@ -233,7 +235,7 @@ function buildInto(
     const inputs: PortSpec[] = (n.inputs ?? []).map((input) => ({
       name: input.name,
       type: input.type,
-      widget: (input.widget as FieldType) || undefined,
+      widget: isFieldType(input.widget) ? input.widget : undefined,
       options: input.options ?? undefined,
       default: input.default,
       required: !!input.required,

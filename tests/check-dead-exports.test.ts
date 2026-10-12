@@ -9,8 +9,9 @@
  * `process.cwd()` 定位扫描根 —— 复用同一调用方式才等价于真实门禁。
  */
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
+import { defineGateRepo, describe } from "./helpers/gate-repo";
 
 /* 脚本用 `process.cwd()` 定位扫描根 —— 临时工作区与 `run` / `write` 由
  * `tests/helpers/gate-repo.ts` 提供，脚本落点选 `root`（用 cwd，落哪都一样）。
@@ -22,11 +23,6 @@ const { test, expect } = defineGateRepo({
   dir: "root",
   dirs: ["src/lib", "src/trpc", "src/components", "scripts", "tests"],
 });
-
-/** 基线是首次 `--update` 写出的（门禁自身的常规用法）。 */
-function seedBaseline(repo: GateRepo): void {
-  repo.run(["--update"]);
-}
 
 describe("check-dead-exports.cjs（提交门槛）", () => {
   test("被消费的值导出放行", ({ repo }) => {
@@ -40,7 +36,7 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run();
     expect(code).toBe(0);
-    expect(output).toContain("无新增零消费导出");
+    expect(output).toContain("无零消费导出");
   });
 
   test("只被 scripts 下的 .mjs 消费也算消费（纯 Node 宿主经动态 import 取导出）", ({
@@ -56,7 +52,7 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run();
     expect(code).toBe(0);
-    expect(output).toContain("无新增零消费导出");
+    expect(output).toContain("无零消费导出");
   });
 
   test("零消费的值导出被阻断（且报告里带符号全名）", ({ repo }) => {
@@ -78,7 +74,7 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run();
     expect(code).toBe(0);
-    expect(output).toContain("无新增零消费导出");
+    expect(output).toContain("无零消费导出");
   });
 
   test("`export { a as b }` 只记别名", ({ repo }) => {
@@ -98,7 +94,7 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run();
     expect(code).toBe(0);
-    expect(output).toContain("无新增零消费导出");
+    expect(output).toContain("无零消费导出");
   });
 
   test("src/trpc 也在扫描范围内：零消费的客户端入口导出被阻断", ({ repo }) => {
@@ -121,7 +117,7 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run();
     expect(code).toBe(0);
-    expect(output).toContain("无新增零消费导出");
+    expect(output).toContain("无零消费导出");
   });
 
   test("test 文件里的导出不参与（用例之间雷同是正常的）", ({ repo }) => {
@@ -130,13 +126,10 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     expect(code).toBe(0);
   });
 
-  test("棘轮：已登记的存量放行，新增的仍阻断", ({ repo }) => {
-    repo.write(
-      "src/lib/known.ts",
-      "export function legacy(): number {\n  return 1;\n}\n",
-    );
-    seedBaseline(repo);
-    expect(repo.run().code).toBe(0);
+  /* 硬闸：没有基线、也没有 --update / --strict 通道 —— 零消费导出的存量已清零
+   * 后，棘轮那两层（基线文件 + 收紧）只剩开销，还留了一个「手改基线把新写的
+   * 零消费导出登记成已知存量」的口子。下面两条钉住「退出通道真的没了」。 */
+  test("硬闸：任何零消费导出即阻断（没有「已登记的存量」这一档）", ({ repo }) => {
     repo.write(
       "src/lib/fresh.ts",
       "export function newborn(): number {\n  return 2;\n}\n",
@@ -144,30 +137,15 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("src/lib/fresh.ts#newborn");
-    expect(output).not.toContain("src/lib/known.ts#legacy");
   });
 
-  test("--update 收紧基线：符号被消费后基线里的条目必须删掉（--strict 会拦）", ({
-    repo,
-  }) => {
+  test("硬闸：--update 不写任何基线文件，且仍按命中退 1", ({ repo }) => {
     repo.write(
       "src/lib/known.ts",
       "export function legacy(): number {\n  return 1;\n}\n",
     );
-    seedBaseline(repo);
-    repo.write(
-      "src/lib/known.ts",
-      "export function legacy(): number {\n  return 1;\n}\n",
-    );
-    repo.write(
-      "src/components/c.ts",
-      'import { legacy } from "@/lib/known";\nexport const x = legacy();\n',
-    );
-    const strict = repo.run(["--strict"]);
-    expect(strict.code).toBe(1);
-    expect(strict.output).toContain("--update");
-    expect(repo.run(["--update"]).code).toBe(0);
-    expect(repo.run(["--strict"]).code).toBe(0);
+    expect(repo.run(["--update"]).code).toBe(1);
+    expect(existsSync(join(repo.dir, "scripts", ".dead-exports-baseline.json"))).toBe(false);
   });
 
   test("--report 只盘点不判失败", ({ repo }) => {
@@ -193,7 +171,7 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run();
     expect(code).toBe(0);
-    expect(output).toContain("无新增零消费导出");
+    expect(output).toContain("无零消费导出");
   });
 
   test("集中目录同名测试（tests/<基名>.test.ts）同样算消费方", ({ repo }) => {
@@ -207,7 +185,7 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run();
     expect(code).toBe(0);
-    expect(output).toContain("无新增零消费导出");
+    expect(output).toContain("无零消费导出");
   });
 
   test("集中目录**异名**测试：按 import 关系认消费方，不按文件名", ({
@@ -223,7 +201,7 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run();
     expect(code).toBe(0);
-    expect(output).toContain("无新增零消费导出");
+    expect(output).toContain("无零消费导出");
   });
 
   test("没有任何测试文件 import 该模块时仍是零消费（判据不会退化成「有没有人写过这个名字」）", ({
@@ -263,12 +241,18 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
   });
 
   /* 后面两条不搭临时仓库：判的是**本仓库**当前的状态。 */
-  test("真实仓库：当前零漂移（棘轮处于收紧状态）", () => {
-    const result = execFileSync(process.execPath, [SCRIPT, "--strict"], {
+  test("真实仓库：当前零漂移（硬闸下无任何零消费导出）", () => {
+    const result = execFileSync(process.execPath, [SCRIPT], {
       cwd: process.cwd(),
       encoding: "utf8",
     });
-    expect(result).toContain("无新增零消费导出");
+    expect(result).toContain("无零消费导出");
+  });
+
+  test("真实仓库：基线文件已不存在 —— 判据是硬闸，不再有「已知存量」这一档", () => {
+    expect(
+      existsSync(join(process.cwd(), "scripts", ".dead-exports-baseline.json")),
+    ).toBe(false);
   });
 
   test("真实仓库：清单归零之后，判据靠 --verify 的自证而非「清单为空」", () => {

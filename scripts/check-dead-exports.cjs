@@ -16,11 +16,18 @@
  *   `type` / `interface` 一律不看：它们大多是「同文件内使用的 props 类型」，
  *   正是那份 566 个清单里 90% 的来源，纳入只会把判据变成噪音。
  *   值导出在 `src/**`、`scripts/**`、`e2e/**` 里除了自己的声明处之外零引用，
- *   且不被同域单测锁住 ⇒ 判定为零消费，必须登记进基线棘轮。
+ *   且不被同域单测锁住 ⇒ 判定为零消费，**硬闸：命中即阻断**。
  *
- * 为什么按**符号**记账（而不是按文件）：与重复块 / 函数长度 / 文件行数同口径，
- * 棘轮只许降不许升。登记项会**反向核对** —— 某个符号后来被接上线（或删掉），
- * 基线里那条必须跟着删，否则清单里会躺着一批已失效的条目（§18.4 的同款要求）。
+ * ## 为什么是硬闸而不是棘轮
+ *
+ * 本判据此前是**棘轮**：存量按符号记进 `scripts/.dead-exports-baseline.json`，
+ * `--update` 收紧、`--strict` 要求下降。但基线已于 §12.16 那轮复核后归零
+ * （`symbols: []`，34 → 0：接线 3 / 删除 31，逐条口径见 §12.15），而棘轮在
+ * 归零后只剩开销：`--update` 无事可做，基线文件却仍是一条「手改就能把新写的
+ * 零消费导出登记成已知存量」的通道 —— 那正是硬闸类**本来没有**的中间态。
+ *
+ * 判据口径与扫描面一字未改，只把「有存量、逐批治理」那一层皮收掉：
+ * **新写的零消费导出没有退出通道** —— 要么接上真实消费方，要么不要写。
  *
  * 为什么只扫「地基层」而不是全 `src/**`：`src/components/**` 的 `export` 大量
  * 供 shadcn 式「同域消费」与 barrel 转发，判据在那里必然误报；`src/lib` 与
@@ -63,9 +70,7 @@
  * 的 18 例（含非空死集的夹具 + 真实仓库 `--strict`/`--verify`）即等价性证明。
  *
  * 用法:
- *   node scripts/check-dead-exports.cjs           # 检查(棘轮)
- *   node scripts/check-dead-exports.cjs --strict  # 基线未收紧也失败(CI 用)
- *   node scripts/check-dead-exports.cjs --update  # 重写基线(须伴随下降)
+ *   node scripts/check-dead-exports.cjs           # 检查(硬闸:命中即退 1)
  *   node scripts/check-dead-exports.cjs --report  # 只出清单不判失败(盘点用)
  * 用法示例：node scripts/check-dead-exports.cjs --verify <文件>#<符号>
  *                                                 # 单条精确复核(清单归零后仍能自证)
@@ -74,17 +79,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const {
   readForScan,
+  skipUnlessStagedTouches,
   walkForScan,
   vanishedNote,
 } = require("./gate-scan-read.cjs");
 
 const ROOT = process.cwd();
 const SRC = path.join(ROOT, "src");
-const BASELINE = path.join(__dirname, ".dead-exports-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
-const UPDATE = ARGS.has("--update");
-const STRICT = ARGS.has("--strict");
 const REPORT_ONLY = ARGS.has("--report");
+const STAGED = ARGS.has("--staged");
 /** `--verify <rel>#<Symbol>`:单条精确复核。清单归零后「为空」不再能证明
  *  扫描器在工作(一个永远返回空的扫描器会让断言全绿,§12.16),所以留一条
  *  可对**指定符号**当场复核的通道 —— 注入式反向验证用它。 */
@@ -201,6 +205,16 @@ function specsImport(specs, wantedKeys) {
     }
   }
   return false;
+}
+
+/* `--staged`（钩子用）＝ 输入面跳过（§13.5.8.2）。**必须放在两个预加载索引
+ * （`PROD_FREQ` / `TEST_FILES`）之前** —— 那两个 IIFE 会把 `src` + `scripts` + `e2e`
+ * 整个语料读一遍（实测 ≈340ms），放在 `main()` 里就白跳过了。
+ * 输入面是声明层（`SCAN_ROOTS`）与消费方语料（`USAGE_ROOTS`）的并集：两边任一边
+ * 被碰都要真判，所以根清单由这两个既有配置现算，不另抄一份（§12.18）。
+ * `--verify`（单符号精确复核）与 `--report` / `--update` 都不跳过。 */
+if (STAGED && !REPORT_ONLY && !verifyArg) {
+  skipUnlessStagedTouches({ roots: [...USAGE_ROOTS], tag: "[dead-exports]" });
 }
 
 // ── 预加载索引（判据不变，只是把「每判一次就重扫全仓」摊成一次成型）──────────
@@ -350,8 +364,6 @@ function main() {
   }
 
   const { dead, checkedFiles } = collect();
-  /* 消失数必须进结论：这条是**棘轮**，少读一份就把 `dead` 报小 —— 看着像「存量下降」，
-     实际是这一轮没读。（口径在 `gate-scan-read.cjs`：只降级 ENOENT、不许静默。） */
   const note = vanishedNote(vanishedFiles);
 
   if (REPORT_ONLY) {
@@ -363,86 +375,25 @@ function main() {
     return;
   }
 
-  let baseline = [];
-  const hadBaseline = fs.existsSync(BASELINE);
-  if (hadBaseline) {
-    baseline = JSON.parse(fs.readFileSync(BASELINE, "utf8")).symbols || [];
-  }
-  const known = new Set(baseline);
-  const added = dead.filter((d) => !known.has(d));
-  const removed = baseline.filter((d) => !dead.includes(d));
-
-  if (UPDATE) {
-    /* 读数不完整时**不许记账**：`dead` 会因为「列到名字、读时已没」而偏小，
-     * 把这样一次读数写进基线 = 下一轮再也报不出那些符号（棘轮「只许降」的前提是
-     * 两次读数覆盖同一张面）。与 `check-gate-repo-boilerplate.cjs` 同一条口径。 */
-    if (vanishedFiles > 0) {
-      console.error(
-        `[dead-exports] 拒绝 --update：本轮有 ${vanishedFiles} 份文件在扫描期间消失，` +
-          "读数不完整。\n  等并发用例跑完再执行（基线是账，不能记在没读过的面上）。",
-      );
-      process.exit(1);
-    }
-    /* 棘轮的「只许降不许升」必须由这一支自己守住。此前只有「不带 --update 的下一次跑」
-     * 会报新增，于是在新增违规之后跑一次 `--update` 就等于把违规收进基线 ——
-     * 基线 note 里那句「只许降不许升」当时是空的（判据写着、没人判它有没有生效，
-     * 由 tests/ratchet-update-guards.test.ts 现在钉着）。 */
-    if (hadBaseline && added.length) {
-      console.error(
-        `[dead-exports] 拒绝 --update：新增 ${added.length} 个零消费导出` +
-          `（基线 ${baseline.length} → 当前 ${dead.length}）。\n` +
-          `  棘轮只许降不许升：先给这些值导出接上真实消费方（或直接删掉），再 --update。\n` +
-          `  新增的几处：\n${added.slice(0, 10).map((d) => `    · ${d}`).join("\n")}`,
-      );
-      process.exit(1);
-    }
-    fs.writeFileSync(
-      BASELINE,
-      `${JSON.stringify(
-        {
-          note: "地基层(src/lib + src/trpc)零消费值导出棘轮(规范 12.16);只许降不许升。--update 收紧。",
-          symbols: dead,
-        },
-        null,
-        2,
-      )}\n`,
-    );
-    console.log(`✓ 已写入基线:${dead.length} 个零消费导出`);
-    if (removed.length) console.log(`  比上次减少 ${removed.length} 个`);
-    return;
-  }
-
-  let failed = false;
-  if (added.length) {
+  /* 「消失数」必须进结论：少读一份就会把 `dead` 报小 —— 看着像「干净」，实际是这一轮
+     没读。（口径在 `gate-scan-read.cjs`：只降级 ENOENT、不许静默。） */
+  if (dead.length) {
     console.error(
-      `✗ 新增 ${added.length} 个零消费导出(地基层 src/lib + src/trpc 的值导出必须在生产路径被引用):`,
+      `✗ 发现 ${dead.length} 个零消费导出（地基层 src/lib + src/trpc 的值导出必须在生产路径被引用）：`,
     );
-    for (const d of added) console.error(`    ${d}`);
+    for (const d of dead) console.error(`    ${d}`);
     console.error(
-      "\n修法:① 真的要用 → 接线到消费方;② 暂时保留 → 加 changelog 说明并 --update" +
-        "\n     (基线只许变短,登记等于承认留着一份没有消费方的抽象);③ 否则删掉。" +
+      "\n修法：① 真的要用 → 接线到消费方；② 确认是死代码 → 删掉（§12.15 第二条：留着的理由" +
+        "\n     必须写得出「谁在什么时候用它」，「以后可能会用」不是理由）。" +
+        "\n     本判据是硬闸（无基线、无 --update）：零消费导出的存量已清零，新增即阻断。" +
         note,
     );
-    failed = true;
-  }
-  if (STRICT && removed.length) {
-    console.error(
-      `✗ 基线里 ${removed.length} 个符号已被消费/删除,请收紧基线:node scripts/check-dead-exports.cjs --update`,
-    );
-    failed = true;
-  } else if (removed.length) {
-    console.log(
-      `提示:${removed.length} 个零消费导出已消失,可执行 node scripts/check-dead-exports.cjs --update 收紧基线`,
-    );
+    process.exit(1);
   }
 
-  if (!failed) {
-    console.log(
-      `✓ 无新增零消费导出(§12.16;基线 ${baseline.length} 个,当前 ${dead.length} 个,扫描 ${checkedFiles} 个模块)` +
-        note,
-    );
-  }
-  process.exit(failed ? 1 : 0);
+  console.log(
+    `✓ 无零消费导出(§12.16;扫描 ${checkedFiles} 个模块)` + note,
+  );
 }
 
 main();

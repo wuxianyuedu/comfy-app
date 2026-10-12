@@ -9,6 +9,7 @@
 import "server-only";
 
 import { db } from "~/lib/db";
+import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { decryptLlmKey, encryptLlmKey } from "~/lib/llm/secrets";
 import type { RawExtraModel } from "~/lib/llm/types";
 import {
@@ -38,7 +39,7 @@ export class UserRepository {
     password: string;
   }): Promise<User> {
     const rows = await db.insert(user).values(input).returning();
-    return rows[0]!;
+    return firstRowRequired(rows, "用户插入");
   }
 
   async updateEmail(id: string, email: string): Promise<User> {
@@ -47,7 +48,7 @@ export class UserRepository {
       .set({ email })
       .where(eq(user.id, id))
       .returning();
-    return rows[0]!;
+    return firstRowOfExisting(rows, `用户不存在: ${id}`);
   }
 
   async updatePassword(id: string, password: string): Promise<User> {
@@ -56,7 +57,7 @@ export class UserRepository {
       .set({ password })
       .where(eq(user.id, id))
       .returning();
-    return rows[0]!;
+    return firstRowOfExisting(rows, `用户不存在: ${id}`);
   }
 }
 
@@ -144,7 +145,7 @@ export class LlmConfigRepository {
           maxTokens: input.maxTokens ?? 2048,
         })
         .returning();
-      return decryptRow(rows[0]!);
+      return decryptRow(firstRowRequired(rows, "LLM 配置写入"));
     }
     const patch: Partial<LlmConfig> = {};
     if (input.provider !== undefined) patch.provider = input.provider;
@@ -161,7 +162,9 @@ export class LlmConfigRepository {
       .set(patch)
       .where(eq(llmConfig.id, "singleton"))
       .returning();
-    return decryptRow(rows[0]!);
+    /* 单例行（id = "singleton"）理论上总在；缺席按「资源不存在」抛出，
+     * 不把 `undefined` 冒充成 `LlmConfig` 往下游传。 */
+    return decryptRow(firstRowOfExisting(rows, "LLM 配置不存在"));
   }
 }
 

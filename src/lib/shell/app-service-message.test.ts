@@ -194,7 +194,7 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
     expect(m.body).toContain(exitNotice.why);
   });
 
-  it("没有上一次结束记录：说明为什么读不到，并给通用出路（不编一个原因）", () => {
+  it("冷启动且读不到记录：说清「本次运行还没有服务结束过」，不编一个成因", () => {
     const m = describeAppServiceStart({
       at: T0,
       offlineAt: null,
@@ -202,9 +202,30 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
       notice: null,
     });
     expect(m.title).toBe("应用服务已启动");
-    expect(m.body).toContain("没读到上一次结束的原因");
+    expect(m.body).toContain("冷启动");
     expect(m.body).toContain("诊断包");
     expect(m.body).not.toContain(exitNotice.why);
+  });
+
+  it("读不到记录时**不把成因猜成「手工 pnpm dev」**（手验：双击 exe 也被这么说）", () => {
+    /* 「读不到记录」有三条互斥成因（从未写过 / 写侧只覆盖启动期 / 记录与当前
+     * runId 相同被判掉），从这一个事实里分辨不出是哪一条。把其中一条写死
+     * 等于对**所有人**断言一个自己并不知道的成因 —— 走启动编排的正式入口
+     * （双击 exe）读到的正是这句，而那次现场里服务根本没有退出过。 */
+    for (const offlineAt of [null, T0]) {
+      const m = describeAppServiceStart({
+        at: T0 + 3000,
+        offlineAt,
+        exitAt: null,
+        notice: null,
+      });
+      expect(m.body).not.toContain("pnpm dev");
+      expect(m.body).not.toContain("没有经过启动编排");
+      // 能确定的那一件（这次是冷启动还是恢复）必须说出来
+      expect(m.body).toContain(
+        offlineAt === null ? "冷启动" : "这次断开没有留下结束记录",
+      );
+    }
   });
 
   it("退出时刻读不出来时仍讲清原因（不因为缺一个字段就少讲一半）", () => {

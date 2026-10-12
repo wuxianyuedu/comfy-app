@@ -8,12 +8,51 @@
  * `node scripts/xxx.cjs` 调用，且内部以 `__dirname/..` 定位 `.next/static/chunks`
  * —— 复用同一调用方式才等价于真实门禁。临时工作区与 `run` / `write` 由
  * `tests/helpers/gate-repo.ts` 提供。
+ *
+ * ## 口径的两条「失效形态都是绿」的位置（本条被测的重点）
+ *
+ * ISSUE #1781 的第二轮实测推翻了第一版口径：Turbopack 的 chunk 名是**内容哈希**，
+ * 同环境连续两次构建（含 `rm -rf .next` 全冷）文件名与 sha256 **全部一致** ——
+ * 所以「同内容换名」在本仓从未被观测到，而逐文件按 basename 对账的唯一效果是
+ * **在基线过期时产出一串无法复核的行**（源码动过之后，旧名字既不在新产物里、
+ * 又没有留下可对照的内容）。
+ *
+ * 于是口径改成：**判定只看 gzip 与文件数两个总量**，逐文件账降级为**诊断**
+ * （按 `sha256` 对齐：指纹相同 = 同一份内容换了名，不计变化）。下面两条用例钉的
+ * 正是这两个位置各自的失效形态 —— 它们**都不会报红**，只会安静地变成一条
+ * 「看起来在守性能、实际在数文件名」的装饰：
+ *
+ * 1. 「同内容换名」被当成变化 ⇒ `--report` 的诊断里必须出现「同内容换名」、
+ *    且**不能**出现「新增内容」；
+ * 2. 「raw 涨、gzip 不涨」被判红 ⇒ 那是可压缩冗余、不是用户可感知的劣化。
  */
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
   script: "check-bundle-budget.cjs",
   dirs: [".next/static/chunks"],
+});
+
+/**
+ * 同一份判据、但工作区是**真 git 检出**（造提交历史用）。
+ *
+ * 为什么单开一个：`baselineRev` 那一档要问的是「基线之后源码动过几次」，
+ * 而哈希与计数只在真历史里存在 —— 主夹具（无 git）走的正是**它取不到**那一档，
+ * 两档都得有人钉住（取不到时说清取不到，取到时不许静默不说）。
+ */
+const { test: testWithGit } = defineGateRepo({
+  script: "check-bundle-budget.cjs",
+  dirs: [".next/static/chunks"],
+  workdir: "bundle-budget-git",
+  setup: (repo) => {
+    repo.git("init", "-q");
+    repo.git("config", "commit.gpgsign", "false");
+    repo.git("config", "user.email", "gate@example.com");
+    repo.git("config", "user.name", "gate");
+    repo.write("README.md", "seed\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-qm", "seed");
+  },
 });
 
 /** 在临时工作区里造一个 chunk（`.js`），返回它的相对路径。 */
@@ -120,5 +159,138 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     const { code, output } = repo.run(["--report"]);
     expect(code, output).toBe(0);
     expect(output).toContain("只出清单");
+  });
+
+  /* ── 下面四条钉的是「换口径之后，判据还在判它该判的东西」──────────────── */
+
+  test("逐文件账按内容指纹对齐：同内容换名不计变化（诊断里点名、不当新增）", ({
+    repo,
+  }) => {
+    /* 先把「要改名的那个」放进去、再落基线 —— 一次落定。
+     * 分两步会撞上拒涨机制（新增文件让文件数上升，`--update` 按设计拒绝），
+     * 那一刻红的是「拒涨」那一档、与本条要钉的口径无关。 */
+    seedChunks(repo);
+    const body = "/* ".concat("y".repeat(3000), " */\n");
+    chunk(repo, "aa-original.js", body);
+    expect(repo.run(["--update", "--allow-increase"]).code).toBe(0);
+
+    repo.remove(".next/static/chunks/aa-original.js");
+    chunk(repo, "zz-renamed.js", body);
+
+    /* 判定：总量一个字节没变 ⇒ 绿。这是口径的核心（名字不是身份）。 */
+    const checked = repo.run();
+    expect(checked.code, checked.output).toBe(0);
+    expect(checked.output).toContain("在预算内");
+
+    /* 诊断：必须认出这是「同内容换名」，而不是「新增 1 个」。 */
+    const report = repo.run(["--report"]);
+    expect(report.code, report.output).toBe(0);
+    expect(report.output).toContain("同内容换名");
+    expect(report.output).not.toContain("新增内容");
+  });
+
+  test("跨环境/跨时间的改名不吃账：基线里存的是指纹，不是文件名", ({ repo }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+
+    const baseline = JSON.parse(
+      repo.read("scripts/.bundle-budget-baseline.json"),
+    ) as { entries: Array<{ name: string; sha: string }> };
+    /* 基线必须**带指纹**（诊断才可能对齐）—— 这一条钉的是「别退回只存名字」。 */
+    expect(Array.isArray(baseline.entries)).toBe(true);
+    expect(baseline.entries.length).toBe(20);
+    expect(baseline.entries[0]!.sha).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("raw 不参与判定：把基线 raw 压到 1 字节仍放行（gzip 才是用户要下载的）", ({
+    repo,
+  }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+
+    /* 直接篡改基线里的 raw —— 若 raw 参与判定，此时必然报「raw 总量上升」。
+     * 这一档是**契约**不是巧合：raw 是磁盘/内存形态，gzip 才是下载量，
+     * 两者会分叉（可压缩冗余），拿 raw 判红只会制造误报。 */
+    const baseline = JSON.parse(
+      repo.read("scripts/.bundle-budget-baseline.json"),
+    ) as { metric: { raw: number } };
+    baseline.metric.raw = 1;
+    repo.write(
+      "scripts/.bundle-budget-baseline.json",
+      `${JSON.stringify(baseline, null, 2)}\n`,
+    );
+
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("在预算内");
+    expect(output).not.toContain("raw 总量上升");
+  });
+
+  test("增量小到不足 1 KB 时输出补字节数（不许把判红理由显示成 +0.0 KB）", ({
+    repo,
+  }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+
+    /* 往一个已有 chunk 末尾追加随机字节：gzip 增量是正数、但远小于 1 KB
+     * （随机内容不可压、增量≈raw 增量），KB 取整会把它打成 +0.0 ——
+     * 而那正是判红理由本身，不许显示成零。 */
+    chunk(
+      repo,
+      "0800.js",
+      `/* ${Array.from({ length: 400 }, (_, i) => (i * 7919) % 256).join(",")} */\n`,
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toMatch(/\+\d+ B/);
+    expect(output).not.toContain("+0.0 KB");
+  });
+
+  /* ── 「基线过期」必须被说出来（ISSUE #1781 的现场）───────────────────── */
+
+  test("基线取不到修订号时，判红输出明说取不到（不拿猜测顶替）", ({ repo }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+
+    /* 造一次真实上涨：往一个已有 chunk 追加不可压内容。 */
+    chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
+
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    /* 工作区不是 git 检出 ⇒ `headRev()` / `commitsSinceBaseline()` 都给 null。
+     * 这一档的失效形态是**静默**：什么都不说，读者只能猜「是不是抖动」——
+     * 而这次的现场正是「基线诚实、只是过期」，猜错方向就去压一个本不该压的改动。 */
+    expect(output).toContain("基线修订号：取不到");
+    expect(output).toContain("无法判断");
+  });
+});
+
+describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 / §12.13.3）", () => {
+  testWithGit("基线之后有提交时，判红输出点名「其后有 N 次提交」", ({ repo }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+
+    /* 基线落在 seed 那次提交上；再往前走一次提交，制造「基线之后源码动过」。 */
+    repo.write("touch.txt", "later\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-qm", "later");
+
+    chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    /* 归因必须在**判红那一刻**说，而不是留给读者去 `git log` 基线日期：
+     * 「涨了这点体积是不是那几次改动换来的」正是决定压回去 / 认账的那一步。 */
+    expect(output).toContain("其后本检出上有 1 次提交");
+    expect(output).toContain("基线之后的源码");
+  });
+
+  testWithGit("基线就是 HEAD 时，说清上涨来自未提交的改动", ({ repo }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+    chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("就是本检出的 HEAD");
+    expect(output).toContain("未提交的改动");
   });
 });

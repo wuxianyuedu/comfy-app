@@ -10,9 +10,12 @@
 // 这里只验取数时机与去重。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 
-import { useDevServerLiveness } from "./use-dev-server-liveness";
+import {
+  OFFLINE_CONFIRM_FAILURES,
+  useDevServerLiveness,
+} from "./use-dev-server-liveness";
 
 const EXIT_RECORD = {
   at: "2026-10-10T10:00:00.000Z",
@@ -157,5 +160,64 @@ describe("useDevServerLiveness：上一次结束的原因", () => {
     const { result } = renderHook(() => useDevServerLiveness());
     await expect.poll(() => result.current.probeOk).toBe(true);
     expect(result.current.lastExit).toBeNull();
+  });
+});
+
+describe("useDevServerLiveness：单拍抖动不算断开", () => {
+  /* 手验现场：应用刚起、Turbopack 在按需编译某条路由，探活那一拍超过 2.5s
+   * 超时。旧判据把「这一拍没应答」直接当成断开，于是界面在服务好好的情况
+   * 下翻成「应用服务已断开」，消息中心写下「断开 + 已恢复」两条，而那两秒里
+   * 服务一直在应答（截图里就是断开 15:00:28 / 恢复 15:00:31）。 */
+  it("失败一拍仍可达，连续失败到门槛才算断开，重新探通即归零", async () => {
+    let serverOk = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (urlOf(input).includes("/api/dev/server-id")) {
+          if (!serverOk) throw new Error("probe timeout");
+          return new Response(JSON.stringify({ bootId: "b1" }), {
+            status: 200,
+          });
+        }
+        return new Response(
+          JSON.stringify({ record: null, currentRunId: "run-new" }),
+          { status: 200 },
+        );
+      }),
+    );
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useDevServerLiveness());
+      /* act 包住推进：探测的 promise 链落在定时器推进之外，不包住的话
+       * setState 不会在这一步落定（断言读到的是首帧的 false）。 */
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_100);
+      });
+      expect(result.current.everOnline).toBe(true);
+      expect(result.current.probeOk).toBe(true);
+
+      serverOk = false;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_100);
+      });
+      expect(result.current.probeOk).toBe(false);
+      expect(result.current.consecutiveFailures).toBe(1);
+      expect(result.current.reachable).toBe(true);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_100);
+      });
+      expect(result.current.consecutiveFailures).toBe(OFFLINE_CONFIRM_FAILURES);
+      expect(result.current.reachable).toBe(false);
+
+      serverOk = true;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_100);
+      });
+      expect(result.current.reachable).toBe(true);
+      expect(result.current.consecutiveFailures).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

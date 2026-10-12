@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-11T16:38:39.211Z",
+    "verifiedAt": "2026-10-12T16:32:06.971Z",
     "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "本次只改 scripts/app-port.mjs 的仓库根口径与调用点（脚本/配置层），不加运行时依赖；受影响的 tests/app-port*.test.ts 已就地跑绿（26 条）。全量覆盖率档与本次改动面无交集，今天不整跑"
+    "skippedReason": "本次提交是合并 origin/master 解 docs 冲突；触发本档输入面的是被合入的 master 提交（16 次，他人的改动），不是本提交的贡献（本提交相对合并双方只动 3 份文档产物）。今天不跑全量覆盖率，改为隔离重跑受影响用例：WindowTitleBar / ShellTabs / full-screen-layer / check-title-bar-clearance / check-file-structure / check-changelog-fragments 共 130 passed。"
   }
 }

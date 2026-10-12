@@ -150,9 +150,10 @@ async function resolveTarget(
     const adapters =
       await remoteModelRepository.getWorkshopAdapters(wantedModel);
     const wantedMode = upperToken(req.mode);
+    const [onlyAdapter] = adapters;
     const adapter =
       adapters.find((a) => a.mode === wantedMode) ??
-      (adapters.length === 1 ? adapters[0]! : null);
+      (adapters.length === 1 ? (onlyAdapter ?? null) : null);
     return {
       target: {
         endpoint: adapter

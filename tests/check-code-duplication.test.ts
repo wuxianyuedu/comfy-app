@@ -13,6 +13,8 @@
  * 用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
  * 调用，且内部用 `process.cwd()` 定位扫描根；复用同一调用方式才等价于真实门禁。
  */
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
@@ -46,16 +48,8 @@ function writeTwin(
 }
 
 describe("check-code-duplication.cjs（跨文件重复门禁）", () => {
-  test("基线文件缺失时阻断（先要求建基线，避免规则静默失效）", ({ repo }) => {
+  test("干净工作区（无孪生）放行（硬闸不需要任何基线）", ({ repo }) => {
     writeModule(repo, "src/a.ts", 80, "a");
-    const { code, output } = repo.run();
-    expect(code).toBe(1);
-    expect(output).toContain("基线文件缺失");
-  });
-
-  test("干净工作区（无孪生）基线为空时放行", ({ repo }) => {
-    writeModule(repo, "src/a.ts", 80, "a");
-    repo.run(["--update"]);
     const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("[duplication] OK");
@@ -71,22 +65,18 @@ describe("check-code-duplication.cjs（跨文件重复门禁）", () => {
     expect(output).toContain("100.0%");
   });
 
-  test("基线外新增孪生对阻断", ({ repo }) => {
+  test("任何一对孪生都阻断（无「已登记的存量」这一档）", ({ repo }) => {
     writeModule(repo, "src/a.ts", 80, "x");
     writeTwin(repo, "src/b.ts", "src/a.ts");
-    repo.run(["--update"]); // 先建基线（含这一对）
-    writeModule(repo, "src/c.ts", 80, "p");
-    writeTwin(repo, "src/d.ts", "src/c.ts"); // 新增一对
     const { code, output } = repo.run();
     expect(code).toBe(1);
-    expect(output).toContain("基线外新增孪生对");
-    expect(output).toContain("src/c.ts");
+    expect(output).toContain("跨文件孪生");
+    expect(output).toContain("src/a.ts");
   });
 
   test("结构相似但逐行不同不报（阈值挡住误报）", ({ repo }) => {
     writeModule(repo, "src/a.ts", 80, "x");
     writeModule(repo, "src/b.ts", 80, "y"); // 行文本完全不同
-    repo.run(["--update"]);
     const { code, output } = repo.run(["--report"]);
     expect(code).toBe(0);
     expect(output).toContain("（无）");
@@ -119,14 +109,13 @@ describe("check-code-duplication.cjs（跨文件重复门禁）", () => {
     expect(output).toContain("100.0%");
   });
 
-  test("治理后未收紧基线：--strict 失败，非 strict 只提示", ({ repo }) => {
+  /* 硬闸：没有基线、也没有 --update / --strict 通道 —— 孪生对的存量已清零后，
+   * 棘轮那两层只剩开销，还留了一个「手改基线把新孪生对登记成已知存量」的口子。 */
+  test("硬闸：--update 不写任何基线文件", ({ repo }) => {
     writeModule(repo, "src/a.ts", 80, "x");
-    writeTwin(repo, "src/b.ts", "src/a.ts");
-    repo.run(["--update"]);
-    repo.remove("src/b.ts");
-    expect(repo.run(["--strict"]).code).toBe(1);
-    const relaxed = repo.run();
-    expect(relaxed.code).toBe(0);
-    expect(relaxed.output).toContain("已被消除");
+    expect(repo.run(["--update"]).code).toBe(0);
+    expect(
+      existsSync(join(repo.dir, "scripts", ".code-duplication-baseline.json")),
+    ).toBe(false);
   });
 });

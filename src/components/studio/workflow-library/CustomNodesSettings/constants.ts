@@ -70,8 +70,12 @@ export const ROW_STATE_PRESET: Record<
 
 /* 自定义节点状态 → 文案。配色不在这里 —— 由 `ui/status-badge` 按状态键
  * 统一给出（此前本文件另存一份 rgba/hex，与页面其余状态徽标各写一套）。 */
+/* `ok` 单独具名：它是「状态键对不上时」的兜底文案，调用点写
+ * `STATUS_STYLE[x] ?? OK_STATUS_STYLE` 即可，不必再补 `!`（表是索引签名）。 */
+export const OK_STATUS_STYLE: { label: string } = { label: "已加载" };
+
 export const STATUS_STYLE: Record<string, { label: string }> = {
-  ok: { label: "已加载" },
+  ok: OK_STATUS_STYLE,
   missing: { label: "目录不存在" },
   error: { label: "解析出错" },
   empty: { label: "无 NODE_CLASS_MAPPINGS" },

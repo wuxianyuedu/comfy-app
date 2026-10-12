@@ -332,9 +332,11 @@ async function completeInner(
   await fs.mkdir(dir, { recursive: true });
   const saved: { localPath: string; mediaType: string }[] = [];
 
+  /* 这批循环都靠 `entries()` 同时拿下标与元素：写 `images[i]` 就得多一次 `!`
+   * 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉，而 `i` 只用于
+   * 文件命名与日志序号。 */
   // Images
-  for (let i = 0; i < images.length; i++) {
-    const im = images[i]!;
+  for (const [i, im] of images.entries()) {
     const buf = await getView(im.filename, im.subfolder ?? "", im.type ?? "");
     const ext = path.extname(im.filename) || ".png";
     const fname = `img_${i}${ext}`;
@@ -343,8 +345,7 @@ async function completeInner(
     log(taskId, "info", `下载第 ${i + 1} 张图像`);
   }
   // 视频（mp4 / gif / webm）
-  for (let i = 0; i < videos.length; i++) {
-    const v = videos[i]!;
+  for (const [i, v] of videos.entries()) {
     const buf = await getView(v.filename, v.subfolder ?? "", v.type ?? "");
     const ext = path.extname(v.filename) || ".mp4";
     const fname = `vid_${i}${ext}`;
@@ -353,8 +354,7 @@ async function completeInner(
     log(taskId, "info", `下载第 ${i + 1} 个视频`);
   }
   // 音频（SaveAudio / AudioComposite）
-  for (let i = 0; i < audios.length; i++) {
-    const a = audios[i]!;
+  for (const [i, a] of audios.entries()) {
     const buf = await getView(a.filename, a.subfolder ?? "", a.type ?? "");
     const ext = path.extname(a.filename) || ".wav";
     const fname = `aud_${i}${ext}`;
@@ -363,8 +363,7 @@ async function completeInner(
     log(taskId, "info", `下载第 ${i + 1} 个音频`);
   }
   // 通用 3D / 未知文件产物（mesh、gltf、obj …）
-  for (let i = 0; i < others.length; i++) {
-    const o = others[i]!;
+  for (const [i, o] of others.entries()) {
     const buf = await getView(o.filename, o.subfolder ?? "", o.type ?? "");
     const ext = path.extname(o.filename) || ".bin";
     const fname = `file_${i}${ext}`;
@@ -373,9 +372,9 @@ async function completeInner(
     log(taskId, "info", `下载第 ${i + 1} 个文件`);
   }
   // 文本产物（ShowText）：存成 .txt，结果可读可查。
-  for (let i = 0; i < texts.length; i++) {
+  for (const [i, text] of texts.entries()) {
     const fname = `txt_${i}.txt`;
-    await fs.writeFile(path.join(dir, fname), texts[i]!, "utf-8");
+    await fs.writeFile(path.join(dir, fname), text, "utf-8");
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "text" });
     log(taskId, "info", `保存第 ${i + 1} 段文本`);
   }

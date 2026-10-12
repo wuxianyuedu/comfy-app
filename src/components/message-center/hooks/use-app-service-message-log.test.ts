@@ -163,14 +163,14 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
 });
 
 describe("useAppServiceMessageLog：原因读不到时", () => {
-  it("端点挂了：仍然发消息，并说明没读到原因（不编一个，也不整条吞掉）", async () => {
+  it("端点挂了：仍然发消息，并说明这一次是什么（不编一个成因，也不整条吞掉）", async () => {
     stubExitEndpoint({ fail: true });
     const { rerender } = mount({ state: "starting", processIsNew: false });
     rerender({ state: "online", processIsNew: true });
 
     await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.title).toBe("应用服务已启动");
-    expect(messages()[0]!.body).toContain("没读到上一次结束的原因");
+    expect(messages()[0]!.body).toContain("冷启动");
   });
 
   it("端点没记录（record: null）→ 按「没有原因可讲」发", async () => {
@@ -179,7 +179,7 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
     rerender({ state: "online", processIsNew: true });
 
     await expect.poll(() => messages().length).toBe(1);
-    expect(messages()[0]!.body).toContain("没读到上一次结束的原因");
+    expect(messages()[0]!.body).toContain("冷启动");
   });
 
   it("记录说的就是当前这份进程（runId 相同）→ 不拿它当「上一次结束」", async () => {
@@ -188,8 +188,25 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
     rerender({ state: "online", processIsNew: true });
 
     await expect.poll(() => messages().length).toBe(1);
-    expect(messages()[0]!.body).toContain("没读到上一次结束的原因");
     expect(messages()[0]!.body).not.toContain("自身退出");
+  });
+
+  /* 「读不到记录」这件事本身**不蕴含**任何成因：可能是纯手工 pnpm dev 起的服务，
+   * 也可能是编排起来的链路里这一次根本没人记（服务没退出过 / 写侧那一档没走到）。
+   * 文案断言其中一种，对另一种就是错的 —— 而现场恰恰是后一种（双击 exe）。 */
+  it("恢复时也读不到记录：不把成因说成「手工 pnpm dev」，只说这一次是恢复", async () => {
+    stubExitEndpoint({ record: null });
+    const { rerender } = mount({ state: "online", processIsNew: false });
+    rerender({ state: "offline", processIsNew: false });
+    rerender({ state: "online", processIsNew: false });
+
+    await expect.poll(() => messages().length).toBe(2);
+    /* store 最新一条在数组头部（这里断言的是「恢复」那条刚写进去）。 */
+    const recovered = messages()[0]!;
+    expect(recovered.title).toBe("应用服务已恢复");
+    expect(recovered.body).toContain("这次断开没有留下结束记录");
+    expect(recovered.body).not.toContain("pnpm dev");
+    expect(recovered.body).not.toContain("没有经过启动编排");
   });
 
   it("取回之前就卸载 → 不留下消息（一个已消失的 watcher 不该触发全局通知）", async () => {

@@ -8,12 +8,17 @@
  * 一路合法存在：它塞了约 15 个设置分区，任何改动都要先在这两千行里定位，
  * 而「能不能拆」这件事**没有任何机器信号**。R5 看见了文件，看不见函数。
  *
- * 本脚本补齐那个维度，分两层(与主题色扫描同构)：
- *   ① **提示层**(`--strict` 之外): 超 `HINT_LINES`(400) 的函数打印清单，
- *      只提醒不阻断 —— 存量 19 个函数在这一档，逐步拆。
- *   ② **阻断层**(strict，棘轮): 每个文件的「超阈值函数数」记进
- *      `scripts/.function-length-baseline.json`，**只许降不许升**：新增一个
- *      400 行以上的函数即阻断(不得静默长出第二个巨型函数)。
+ * 本脚本判 **`HINT_LINES`(400) 行以上的函数**，**硬闸**：命中即阻断。
+ * 清单始终打印（「排期拆分」时唯一要看的那张表），但**判据成立即退 1** ——
+ * 巨型函数的存量已清零，不得静默长出第二个。
+ *
+ * ## 为什么是硬闸而不是棘轮
+ *
+ * 本判据此前是**棘轮**：每个文件的「超阈值函数数」记进
+ * `scripts/.function-length-baseline.json`，`--update` 收紧、`--strict` 要求下降，
+ * 而**默认档只提示不阻断**。但存量已拆到 **0 个**（基线 `files: {}`），于是两层
+ * 都退化：棘轮无事可收紧、默认档恒绿。判据口径与扫描面一字未改，只把
+ * 「有存量、逐批治理」那一层皮收掉 —— **新增一个 400 行以上的函数即阻断**。
  *
  * 判定的是**函数体行数**(声明行到配对右括号)，不是文件行数：
  *  · 认 `function f(...) {`、`export async function f(...) {`、
@@ -23,23 +28,23 @@
  *  · 跳过小函数与测试文件(用例之间雷同是正常的)。
  *
  * 用法:
- *   node scripts/check-function-length.cjs           # 检查(棘轮)
- *   node scripts/check-function-length.cjs --strict  # 基线未收紧也失败(CI 用)
- *   node scripts/check-function-length.cjs --update  # 重写基线(须伴随下降)
+ *   node scripts/check-function-length.cjs           # 检查(硬闸:命中即退 1)
  *   node scripts/check-function-length.cjs --report  # 只出清单不判失败(盘点用)
+ *   --staged(钩子用)仅当暂存改动落在扫描面(`src/**`)内才扫，口径见 §13.5.8.2
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
-const BASELINE = path.join(__dirname, ".function-length-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
-const UPDATE = ARGS.has("--update");
-const STRICT = ARGS.has("--strict");
 const REPORT_ONLY = ARGS.has("--report");
+const STAGED = ARGS.has("--staged");
 
 /** 扫描范围：应用源码。 */
 const SCAN_DIR = "src";
+
+if (STAGED && !REPORT_ONLY) skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[function-length]" });
 const SOURCE_EXT = /\.(ts|tsx)$/;
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || /\.snap$/.test(rel) || rel.includes("/__tests__/");
@@ -49,17 +54,6 @@ const isTestFile = (rel) =>
  *  400 不是拍的：本项目 400 行以上的函数共 19 个，正好是「人工排期拆得完」的
  *  规模；降到 200 会让 40 个函数一起亮，清单变成噪音，没人会照它排期。 */
 const HINT_LINES = 400;
-
-/** **判据版本**：命中哪些形态算「一个函数」。
- *
- *  棘轮基线记的是「该判据下每个文件的超阈值函数数」，所以判据本身变了（例如
- *  把无名字的 IIFE / 回调体纳入统计）之后，旧基线与新计数**不是同一个量** ——
- *  直接比对会把「新看见的存量」误判成「新增的巨型函数」。
- *
- *  这个常量的作用是让那次变更**可审计**：改了判据必须同步改这里，`--update`
- *  才允许重记基线（否则一律按棘轮拒绝放宽）。版本号写进基线文件，评审时能看出
- *  「这次基线数字变了，是因为判据变了，而不是有人偷偷放宽」。 */
-const RULE_VERSION = 3;
 
 /** 括号字符流需要跳过的部分：字符串 / 模板 / 注释 / 正则里的括号不算配对。
  *  逐字符状态机(与 check-theme-colors 的 stripComments 同思路，这里保留原
@@ -362,15 +356,9 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
 
 longFunctions.sort((a, b) => b.lines - a.lines || a.rel.localeCompare(b.rel));
 
-/** 棘轮口径：**按文件的超阈值函数数**记账(与主题色棘轮的「文件→处数」同构)。
- *  用函数名做键会让「改名」被当成新增；用数量则只关心「这个文件里还有几个
- *  巨型函数」，拆掉一个就少一个。 */
-const counts = {};
-for (const f of longFunctions) counts[f.rel] = (counts[f.rel] ?? 0) + 1;
-
 const fmt = (f) => `  · ${f.lines} 行  ${f.rel}:${f.line}  ${f.name}`;
 
-/* ── 报告 / 棘轮 ────────────────────────────────────────── */
+/* ── 报告 / 判定 ────────────────────────────────────────── */
 
 if (REPORT_ONLY) {
   console.log(
@@ -381,115 +369,26 @@ if (REPORT_ONLY) {
   process.exit(0);
 }
 
-const prev = fs.existsSync(BASELINE) ? JSON.parse(fs.readFileSync(BASELINE, "utf8")) : null;
-const baseFiles = prev?.files ?? null;
-
-if (UPDATE) {
-  const before = baseFiles ? Object.values(baseFiles).reduce((a, b) => a + b, 0) : 0;
-  const after = longFunctions.length;
-  /* 判据变更时（RULE_VERSION 抬升）允许一次性重记：旧基线与新计数不是同一个量。
-   * 除此之外，数字只许下降 —— 否则 `--update` 就成了「放宽棘轮」的后门。 */
-  const ruleChanged = baseFiles && prev.ruleVersion !== RULE_VERSION;
-  if (baseFiles && after > before && !ruleChanged) {
-    console.error(
-      `[function-length] 拒绝放宽基线：${before} → ${after} 个巨型函数（棘轮只许下降）。\n` +
-        "  新增的先拆开，不要用 --update 掩盖。\n" +
-        `  若确属判据变更（现为 RULE_VERSION=${RULE_VERSION}），须先改脚本里的常数再 --update。`,
-    );
-    process.exit(1);
-  }
-  fs.writeFileSync(
-    BASELINE,
-    JSON.stringify(
-      {
-        generatedAt: new Date().toISOString().slice(0, 10),
-        ruleVersion: RULE_VERSION,
-        note:
-          `超过 ${HINT_LINES} 行的函数计数（规范 §12.13，判据版本 ${RULE_VERSION}）。` +
-          "棘轮只许下降：新增巨型函数须先拆分，再收紧基线。",
-        total: after,
-        files: counts,
-      },
-      null,
-      2,
-    ) + "\n",
-  );
-  console.log(
-    `[function-length] 基线已更新：${before} → ${after}（scripts/.function-length-baseline.json）` +
-      (ruleChanged ? `【判据版本 ${prev.ruleVersion ?? "?"} → ${RULE_VERSION}，一次性重记】` : ""),
-  );
-  process.exit(0);
-}
-
-if (!baseFiles) {
-  console.error(
-    "[function-length] 基线文件缺失：先执行 node scripts/check-function-length.cjs --update",
-  );
-  process.exit(1);
-}
-
-/* 基线若来自旧判据，先提示重记：旧数字与新计数不是同一个量，直接比对没有意义
- * （重记前不阻断，只把「该跑一次 --update」说清楚 —— 阻断会让判据变更本身
- *  在 CI 上无法合并）。 */
-if (prev.ruleVersion !== RULE_VERSION) {
-  console.error(
-    `[function-length] 基线的判据版本（${prev.ruleVersion ?? "未标记"}）与当前脚本（${RULE_VERSION}）不一致：\n` +
-      "  判据变了，旧基线数字不再是同一个量。请执行 node scripts/check-function-length.cjs --update\n" +
-      "  重记一次（判据变更允许一次性重记；重记后棘轮照旧只许下降）。",
-  );
-  process.exit(1);
-}
-
-const increased = [];
-const dropped = [];
-for (const [file, n] of Object.entries(counts)) {
-  const base = baseFiles[file] ?? 0;
-  if (n > base) increased.push({ file, from: base, to: n });
-}
-for (const [file, base] of Object.entries(baseFiles)) {
-  const now = counts[file] ?? 0;
-  if (now < base) dropped.push({ file, from: base, to: now });
-}
-
-console.log(
-  `[function-length] 超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个 ` +
-    `（基线 ${Object.values(baseFiles).reduce((a, b) => a + b, 0)} 个）`,
-);
-
-if (increased.length) {
-  console.error(
-    "[function-length] 基线外新增巨型函数（规范 §12.13）：\n" +
-      increased
-        .map((i) => `  ✗ ${i.file}：${i.from} → ${i.to} 个`)
-        .join("\n") +
-      "\n" +
-      longFunctions
-        .filter((f) => increased.some((i) => i.file === f.rel))
-        .map(fmt)
-        .join("\n") +
-      "\n  判据：函数体超过 " +
-      HINT_LINES +
-      " 行即应拆分（按职责切子函数 / 子组件 / 子 hook），\n" +
-      "  不是靠「在一个函数里加注释分段」。",
-  );
-  process.exit(1);
-}
-
-if (dropped.length) {
-  const msg =
-    `[function-length] ${dropped.length} 个文件的巨型函数已减少（治理有进展）：\n` +
-    dropped.map((d) => `  · ${d.file}：${d.from} → ${d.to}`).join("\n") +
-    "\n  建议执行 node scripts/check-function-length.cjs --update 收紧基线。";
-  if (STRICT) {
-    console.error(msg + "\n  --strict 模式：未收紧基线即失败。");
-    process.exit(1);
-  }
-  console.log(msg);
-}
-
 /* 清单始终打印：这是「排期拆分」时唯一要看的那张表。 */
 if (longFunctions.length) {
+  console.log(
+    `[function-length] 扫描 ${SCAN_DIR}/**：超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个：`,
+  );
   console.log("[function-length] 拆分候选（按行数降序）：\n" + longFunctions.map(fmt).join("\n"));
+} else {
+  console.log(`[function-length] 扫描 ${SCAN_DIR}/**：超过 ${HINT_LINES} 行的函数 0 个`);
+}
+
+if (longFunctions.length) {
+  console.error(
+    "[function-length] 巨型函数（规范 §12.13）：\n" +
+      "  判据：函数体超过 " +
+      HINT_LINES +
+      " 行即应拆分（按职责切子函数 / 子组件 / 子 hook），\n" +
+      "  不是靠「在一个函数里加注释分段」。\n" +
+      "  本判据是硬闸（无基线、无 --update）：巨型函数存量已清零，新增即阻断。",
+  );
+  process.exit(1);
 }
 
 console.log("[function-length] OK");

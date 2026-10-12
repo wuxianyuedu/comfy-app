@@ -74,7 +74,10 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
     { node: root as JsonRecord, d: 0 },
   ];
   while (stack.length) {
-    const { node, d } = stack.pop()!;
+    /* 判据与取值同一处：`stack.pop()` 在非空循环里必然有值。 */
+    const top = stack.pop();
+    if (!top) break;
+    const { node, d } = top;
     if (d > depth || seen.has(node)) continue;
     seen.add(node);
     const ne = node.node_errors;
