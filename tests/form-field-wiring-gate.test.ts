@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { copyGateDeps } from "./helpers/gate-repo";
 import { symlinkDir } from "./helpers/symlink-dir";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
@@ -38,6 +39,8 @@ function gate(
   const root = mkdtempSync(path.join(tmpdir(), "form-field-wiring-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  /* 判据 `require("./gate-scan-read.cjs")`（`--staged` 的共享短路器）—— 递归补齐同目录依赖。 */
+  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
   /* 判据 `require("typescript")` 走 TypeScript AST —— 临时仓库里没有解析链，
    * 把它指回本仓库那份（同 `check-non-null-assertions.cjs` 类判据的自测手法）。
    * 必须走 `tests/helpers/symlink-dir.ts`：Windows 上 `symlinkSync(…, "dir")`

@@ -30,6 +30,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const BASELINE = path.join(__dirname, ".function-length-baseline.json");
@@ -37,9 +38,12 @@ const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
 const REPORT_ONLY = ARGS.has("--report");
+const STAGED = ARGS.has("--staged");
 
 /** 扫描范围：应用源码。 */
 const SCAN_DIR = "src";
+
+if (STAGED && !REPORT_ONLY && !UPDATE) skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[function-length]" });
 const SOURCE_EXT = /\.(ts|tsx)$/;
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || /\.snap$/.test(rel) || rel.includes("/__tests__/");
