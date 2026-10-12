@@ -13,25 +13,42 @@
  *   · **C（产物层兜底）**：挂在 `pnpm build` 收尾 —— 构建已经发生，不额外买成本。
  * 形态的完整论证（含「为什么不进 pre-commit」）见 §13.5.4。
  *
+ * ── 判定依据：总量（gzip / 文件数），逐文件账只作诊断 ──────────────────
+ *
+ * **判定只看两个总量（gzip / 文件数）**，不比逐文件账 —— 三个结构量都量、都打，
+ * 但只有这两个参与判定：**gzip 才是「用户要下载多少」**，raw 是磁盘/内存形态，
+ * 存在「raw 涨、gzip 不涨」的形态（往文件末尾塞可压缩的重复内容），判红只会制造误报。
+ *
+ * 判定的理由是一条实测（ISSUE #1781 的第二轮）：
+ *
+ * Turbopack 的 chunk 名是**内容哈希**，源码不变则名不变 —— 同环境连续两次构建、
+ * 乃至 `rm -rf .next` 后的全冷构建，215 个 chunk 的文件名与 sha256 **全部一致**。
+ * 所以「同内容换名」在本仓**从未被观测到**：名字不是易抖的旁支信息，它就是内容本身。
+ *
+ * 于是逐文件对账的唯一效果是**在基线过期时产出一串无法复核的行**：源码动过之后，
+ * 旧名字既不在新产物里、又没有留下可对照的内容，读者拿到的「新增 N 个 / 变大 M 个」
+ * 既推不出「谁真的变大了」，也推不出「哪个是换名」。而**总量那一档仍然是对的**
+ * —— 它给的才是判据该说的话：「涨了 1074 字节」。
+ *
+ * 逐文件账**没有删**，但它降级为**诊断输出**（`--report` 与判红时的提示）：用
+ * `sha256` 把两侧对齐，能对上的是「同一份内容换名」（不算变化），对不上的才是
+ * 「新增内容」或「真变大」。判定不由它下。
+ *
  * ── 测量口径（ISSUE 第 2 问那四条，逐条有实测答案）────────────────────
  *
  * 1. **测哪个数**：`.next/static/chunks` 下所有 client chunk 的 **gzip 后字节数之和**，
- *    外加**文件数**。ISSUE 给的另一候选（`app-build-manifest.json` 的每路由 chunk 集合）
- *    在**当前 Next 版本上已经不存在** —— `.next/` 下根本没有这个文件，最接近的
+ *    外加 **raw 总量**与**文件数**。ISSUE 给的另一候选（`app-build-manifest.json` 的每路由
+ *    chunk 集合）在**当前 Next 版本上已经不存在** —— `.next/` 下根本没有这个文件，最接近的
  *    `build-manifest.json` 也已空心化（`pages` 只剩一条空 `/_app`）。所以「按路由量」
  *    当前没有数据源，口径没得选。
- *    两档读数都记：**文件数比总量更敏感** —— 新依赖会被 Turbopack 拆成上百个 chunk，
- *    这个信号比总量更早（实测 shiki 探针：gzip +49.6% 的同一次，文件数 +193）。
- * 2. **抖动怎么判**：**按 basename 对齐、不用 `BUILD_ID` 路径**。Turbopack 的 chunk 名是
- *    内容哈希，且实测三次构建（热 / 热 / 冷，删过 `.next/cache`）**gzip 总计一个字节都不差、
- *    同名字节差异 0**。唯一会变的是 `.next/static/<BUILD_ID>/` 下那 3 个 manifest（随机
- *    目录名），它们合计 gzip 0.5 KB、占比 0.02% —— 且**不在本判据的测量面内**
- *    （只量 `chunks/`），所以判据不会抖。
+ * 2. **抖动怎么判**：**不用判** —— 实测同环境三次构建（热 / 热 / 冷，含 `rm -rf .next`）
+ *    逐字节一致（含文件名）。基线是**实测初值**，不是估的；它不抖，所以不需要抖动缓冲。
  * 3. **放哪个基准**：与 `scripts/.file-size-baseline.json` 那批棘轮同构 —— 独立一份
- *    `scripts/.bundle-budget-baseline.json`，头部记 raw/gzip/文件数三个实测初值。
+ *    `scripts/.bundle-budget-baseline.json`，**只存 raw / gzip / 文件数三个结构量**
+ *    （逐文件内容指纹不进基线：那会让基线体积随 chunk 数线性膨胀，而判定并不读它）。
  * 4. **新依赖怎么算**：预算是**棘轮**（只许降不许升）。加一个大依赖会当场红，这是想要的
  *    （正是防劣化）；例外流程是**在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积**，
- *    由评审确认后 `--update` 抬高基线 —— 见 §13.5.4 的例外流程那一节。
+ *    由评审确认后 `--update --allow-increase` 抬高基线 —— 见 §13.5.4 的例外流程那一节。
  *
  * ── 与 `analyze-bundle.mjs` 的分工 ───────────────────────────────
  *
@@ -48,6 +65,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
+const crypto = require("node:crypto");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -60,7 +78,7 @@ const BASELINE = path.join(__dirname, ".bundle-budget-baseline.json");
  * 测量面：`next build` 产出的 client chunk 目录（Turbopack 默认链）。
  *
  * 只量 `chunks/`，**不量** `.next/static/<BUILD_ID>/` 那三个 manifest ——
- * 后者的路径里带随机 BUILD_ID，且它们是 0.5 KB 量级的固定三件，进预算只会引入抖动。
+ * 后者的路径里带随机 BUILD_ID，且它们是 0.5 KB 量级的固定三件，进预算只会引入噪声。
  */
 const CHUNKS_DIR = path.join(ROOT, ".next", "static", "chunks");
 
@@ -86,30 +104,32 @@ function walk(dir, out = []) {
 }
 
 /**
- * 量当前产物：文件数 / raw 字节 / gzip 字节，外加**按 basename 对齐**的逐文件账。
+ * 量当前产物：raw / gzip / 文件数三个结构量，外加**按内容指纹对齐**的逐文件账。
  *
- * 逐文件账（basename → 字节数）是抖动口径的落点（见文件头第 2 条）：chunk 名是内容
- * 哈希，所以「同内容 → 同名」；构建之间唯一会变的是文件名集合里那三个 manifest，
- * 而它们不在本测量面内。
+ * 逐文件账留作诊断（见文件头「判定依据」）：`sha256` 是身份、文件名只是它的显示形态。
+ * 同一份内容换了名 → 两侧指纹相同 → 不算变化；指纹对不上才是真的多了/大了。
  *
- * @returns {{files: number, raw: number, gzip: number, entries: Record<string, {raw:number,gzip:number}>}}
+ * @returns {{files: number, raw: number, gzip: number, entries: Array<{name:string,sha:string,raw:number,gzip:number}>}}
  */
 function measure() {
   const files = walk(CHUNKS_DIR).filter((f) => CHUNK_EXT.test(f));
-  /** @type {Record<string, {raw:number,gzip:number}>} */
-  const entries = {};
+  const entries = [];
   let raw = 0;
   let gzip = 0;
   for (const abs of files) {
     const buf = fs.readFileSync(abs);
-    /* basename 而不是相对路径：将来 chunks/ 若分区（子目录），同名的两份内容才是同一份
-     * 内容的延续 —— 这条与「按内容哈希对齐」是同一个意图。 */
-    const name = path.basename(abs);
     const gz = zlib.gzipSync(buf).length;
-    entries[name] = { raw: buf.length, gzip: gz };
+    entries.push({
+      name: path.basename(abs),
+      sha: crypto.createHash("sha256").update(buf).digest("hex"),
+      raw: buf.length,
+      gzip: gz,
+    });
     raw += buf.length;
     gzip += gz;
   }
+  /* 名字排序：输出稳定，方便人眼对比与测试断言。 */
+  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   return { files: files.length, raw, gzip, entries };
 }
 
@@ -123,7 +143,9 @@ function writeBaseline(m, note) {
     generatedAt: new Date().toISOString().slice(0, 10),
     note:
       note ??
-      "client chunk 体积预算（规范 §13.5.4，ISSUE #1781）。棘轮只许下降；" +
+      "client chunk 体积预算（规范 §13.5.4，ISSUE #1781）。判定看 gzip 与文件数两个总量" +
+        "（raw 一并量、一并打，但不判）；逐文件账是诊断输出，按 sha256 对齐，不进基线。" +
+        "棘轮只许下降，" +
         "抬高基线必须在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积（例外流程）。",
     metric: {
       scope: ".next/static/chunks（Turbopack 默认构建链，只数 .js）",
@@ -131,7 +153,9 @@ function writeBaseline(m, note) {
       gzip: m.gzip,
       files: m.files,
     },
-    entries: m.entries,
+    /* 逐文件内容指纹：**只服务诊断**（哪个 chunk 变大了 / 哪个只是换了名），判定不读它。
+     * 存指纹而不存名字：名字就是内容哈希，存名字等于把「同一份内容的两种显示形态」记成两笔账。 */
+    entries: m.entries.map((e) => ({ name: e.name, sha: e.sha, raw: e.raw, gzip: e.gzip })),
   };
   fs.writeFileSync(BASELINE, `${JSON.stringify(payload, null, 2)}\n`);
 }
@@ -141,23 +165,48 @@ function kb(n) {
   return `${(n / 1024).toFixed(1)} KB`;
 }
 
-/** 汇总一处差异（新增 / 变大 / 消失），供 --update 的拒涨与检查输出的公共部分用。 */
-function diffEntries(cur, base) {
+/**
+ * 增量（带符号）—— 小到 0.0 KB 时 `kb()` 会把 +493 字节打成「+0.0 KB」，
+ * 而「涨了 493 字节」正是判红理由本身，不许显示成零。所以增量一律补字节数。
+ */
+function delta(n) {
+  const sign = n > 0 ? "+" : n < 0 ? "-" : "±";
+  const abs = Math.abs(n);
+  return abs < 1024 ? `${sign}${abs} B` : `${sign}${(abs / 1024).toFixed(1)} KB`;
+}
+
+/**
+ * 诊断：把当前产物与基线**按内容指纹**对齐，分出三类（不参与判定）。
+ *
+ * - **同内容换名**：两侧指纹相同、名字不同 —— 本仓实测不发生，但口径上它「不算变化」；
+ * - **新增内容**：指纹在基线里找不到 —— 这是「多了东西」的唯一可靠形状；
+ * - **同名但变大**：名字恰好没变的那些，能直接给出「谁大了多少」。
+ *
+ * 基线里没有指纹（本轮之前生成的旧格式）时返回 `null`，由调用方把这一点**写在输出里**
+ * —— 静默换口径会让读者拿两种语义的账互相印证。
+ */
+function diagnose(cur, base) {
+  const baseEntries = base?.entries;
+  if (!Array.isArray(baseEntries) || baseEntries.length === 0) return null;
+
+  const baseBySha = new Map(baseEntries.map((e) => [e.sha, e]));
+  const baseByName = new Map(baseEntries.map((e) => [e.name, e]));
+
+  const renamed = [];
   const added = [];
   const grown = [];
-  const shrunk = [];
-  const removed = [];
-  for (const [name, v] of Object.entries(cur.entries)) {
-    const b = base.entries?.[name];
-    if (!b) added.push([name, v]);
-    else if (v.gzip > b.gzip) grown.push([name, b.gzip, v.gzip]);
+  for (const e of cur.entries) {
+    const sameContent = baseBySha.get(e.sha);
+    if (sameContent) {
+      /* 内容一模一样 —— 变的只是名字。 */
+      if (sameContent.name !== e.name) renamed.push([sameContent.name, e.name]);
+      continue;
+    }
+    const sameName = baseByName.get(e.name);
+    if (sameName) grown.push([e.name, sameName.gzip, e.gzip]);
+    else added.push(e);
   }
-  for (const [name, b] of Object.entries(base.entries ?? {})) {
-    const v = cur.entries[name];
-    if (!v) removed.push([name, b]);
-    else if (v.gzip < b.gzip) shrunk.push([name, b.gzip, v.gzip]);
-  }
-  return { added, grown, shrunk, removed };
+  return { renamed, added, grown };
 }
 
 function main() {
@@ -181,17 +230,39 @@ function main() {
   }
 
   const base = readBaseline();
-  const line = `[bundle-budget] 当前：文件数 ${now.files} · raw ${kb(now.raw)} · gzip ${kb(now.gzip)}`;
+  const fmt = (m) =>
+    `文件数 ${m.files} · raw ${kb(m.raw)} · gzip ${kb(m.gzip)}`;
+  const line = `[bundle-budget] 当前：${fmt(now)}`;
 
   if (REPORT_ONLY) {
     console.log(line);
-    if (base) {
-      console.log(
-        `  基线：文件数 ${base.metric.files} · raw ${kb(base.metric.raw)} · gzip ${kb(base.metric.gzip)}` +
-          `（生成于 ${base.generatedAt}）`,
-      );
-    } else {
-      console.log("  基线：不存在（先跑 --update 落一份实测初值）");
+    console.log(
+      base
+        ? `  基线：${fmt(base.metric)}（生成于 ${base.generatedAt}）`
+        : "  基线：不存在（先跑 --update 落一份实测初值）",
+    );
+    const d = base ? diagnose(now, base) : null;
+    if (d && (d.renamed.length || d.added.length || d.grown.length)) {
+      console.log("  与基线的差异（按内容指纹对齐，诊断用、不参与判定）：");
+      if (d.renamed.length) {
+        console.log(
+          `    · 同内容换名 ${d.renamed.length} 个（不计变化）：` +
+            d.renamed.slice(0, 3).map(([a, b]) => `${a} → ${b}`).join("、") +
+            (d.renamed.length > 3 ? " 等" : ""),
+        );
+      }
+      if (d.added.length) {
+        console.log(
+          `    · 新增内容 ${d.added.length} 个，最大的 3 个：` +
+            d.added.slice().sort((a, b) => b.gzip - a.gzip).slice(0, 3)
+              .map((e) => `${e.name}（${kb(e.gzip)}）`).join("、"),
+        );
+      }
+      if (d.grown.length) {
+        console.log(`    · 同名且变大 ${d.grown.length} 个`);
+      }
+    } else if (base && !d) {
+      console.log("  （基线是旧格式、没有逐文件指纹：判定不受影响，只影响这段诊断）");
     }
     console.log("[bundle-budget] --report 模式：只出清单，不判失败 ✓");
     return 0;
@@ -229,13 +300,16 @@ function main() {
     return 1;
   }
 
-  const { added, grown } = diffEntries(now, base);
+  /* 判定只看**总量**（gzip / 文件数），逐文件那一档**不判**（见文件头「判定依据」）。 */
   const problems = [];
   if (now.gzip > base.metric.gzip) {
     problems.push(
-      `gzip 总量上升：${kb(base.metric.gzip)} → ${kb(now.gzip)}（+${kb(now.gzip - base.metric.gzip)}）`,
+      `gzip 总量上升：${kb(base.metric.gzip)} → ${kb(now.gzip)}（${delta(now.gzip - base.metric.gzip)}）`,
     );
   }
+  /* raw 与 gzip 的关系：**gzip 才是「用户要下载多少」**，raw 是磁盘/内存形态。
+   * 只判 gzip —— 实测存在「raw 涨、gzip 不涨」的形态（往末尾塞可压缩的重复内容），
+   * 那一档不是用户可感知的劣化，判红只会制造误报。raw 仍然量、仍然打，作诊断信息。 */
   if (now.files > base.metric.files) {
     problems.push(
       `chunk 文件数上升：${base.metric.files} → ${now.files}（+${now.files - base.metric.files}）`,
@@ -244,27 +318,43 @@ function main() {
 
   console.log(line);
   console.log(
-    `  基线：文件数 ${base.metric.files} · raw ${kb(base.metric.raw)} · gzip ${kb(base.metric.gzip)}` +
-      `（生成于 ${base.generatedAt}）`,
+    `  基线：${fmt(base.metric)}（生成于 ${base.generatedAt}）`,
   );
 
   if (problems.length) {
     console.error("[bundle-budget] 违规（阻断）：\n  " + problems.join("\n  "));
-    if (added.length) {
-      console.error(`  新增 chunk ${added.length} 个，最大的 5 个：`);
-      for (const [name, v] of added
-        .sort((a, b) => b[1].gzip - a[1].gzip)
-        .slice(0, 5)) {
-        console.error(`    · ${name}（gzip ${kb(v.gzip)}）`);
+    const d = diagnose(now, base);
+    if (d) {
+      /* 诊断是**给人看的**、不参与判定：比的是内容指纹，名字换了不算变化。 */
+      const lines = [];
+      if (d.added.length) {
+        lines.push(`  新增内容 ${d.added.length} 个（指纹在基线里找不到），最大的 5 个：`);
+        for (const e of d.added.slice().sort((a, b) => b.gzip - a.gzip).slice(0, 5)) {
+          lines.push(`    · ${e.name}（gzip ${kb(e.gzip)}）`);
+        }
       }
-    }
-    if (grown.length) {
-      console.error(`  变大的 chunk ${grown.length} 个，增幅最大的 5 个：`);
-      for (const [name, b, v] of grown
-        .sort((a, b) => b[2] - b[1] - (a[2] - a[1]))
-        .slice(0, 5)) {
-        console.error(`    · ${name}（gzip ${kb(b)} → ${kb(v)}）`);
+      if (d.renamed.length) {
+        lines.push(
+          `  同内容换名 ${d.renamed.length} 个（不计变化）：` +
+            d.renamed.slice(0, 3).map(([a, b]) => `${a} → ${b}`).join("、") +
+            (d.renamed.length > 3 ? " 等" : ""),
+        );
       }
+      if (d.grown.length) {
+        lines.push(`  同名且变大 ${d.grown.length} 个，增幅最大的 5 个：`);
+        for (const [name, b, v] of d.grown
+          .slice()
+          .sort((a, b) => b[2] - b[1] - (a[2] - a[1]))
+          .slice(0, 5)) {
+          lines.push(`    · ${name}（gzip ${kb(b)} → ${kb(v)}）`);
+        }
+      }
+      if (lines.length) console.error(lines.join("\n"));
+    } else {
+      console.error(
+        "  （基线里没有逐文件指纹 —— 它是本轮之前生成的旧格式；判定不受影响，只影响这段诊断。\n" +
+          "   需要它就在确认过账之后跑一次 --update。）",
+      );
     }
     console.error(
       "  规范见 docs/standards/13-提交与-code-review.md §13.5.4；\n" +
