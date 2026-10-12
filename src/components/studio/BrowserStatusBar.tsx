@@ -291,6 +291,9 @@ export function BrowserStatusBar() {
   useAppServiceMessageLog({
     state: devServer.state,
     processIsNew: devServer.processIsNew,
+    /* 当前是哪一次启动：消息中心按它把历史消息分成「每一次启动」一组，
+     * 并标出哪一组是用户此刻身处的这一次。 */
+    currentRunId: devServer.currentRunId,
   });
   const schemaSync = useSchemaSyncStatus();
   const comfyQueue = useComfyQueue();
