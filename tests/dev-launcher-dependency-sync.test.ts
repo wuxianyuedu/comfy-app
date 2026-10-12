@@ -181,8 +181,10 @@ describe("syncDependencies：漂移才装，装完必须复核", () => {
   });
 
   it("源头里判据齐全：漂移触发补装 + verifyInstall 复核 + 非零出口", () => {
+    /* 实现随编排器拆分搬到 `launcher-core/downstream.mjs`（ISSUE #1811）：
+     * 主文件只剩同名薄包装，拿它断言等于什么都没测。 */
     const src = fs.readFileSync(
-      path.join(ROOT, "scripts", "dev-launcher.mjs"),
+      path.join(ROOT, "scripts", "launcher-core", "downstream.mjs"),
       "utf8",
     );
     expect(src).toContain("export async function syncDependencies");
