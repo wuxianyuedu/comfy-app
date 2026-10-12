@@ -13,7 +13,7 @@ Usage:
   powershell -File scripts\quality-gate.ps1 -Mode test
   powershell -File scripts\quality-gate.ps1 -Mode all
 
-Mode: typecheck | lint | format | test | dependencyAudit | depsFreshness | storybook | premerge | all   (default all)
+Mode: typecheck | lint | format | test | dependencyAudit | depsFreshness | storybook | bundleBudget | premerge | all   (default all)
 
 Note on `premerge`: it is registered with Run=$false, i.e. NOT part of `all`.
 The platform squashes on merge (the local hook never sees that merge) and there
@@ -37,7 +37,7 @@ Extend / maintain - how to add a new gate:
     entry and it is enforced again.
 #>
 param(
-  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "premerge", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "dependencyAudit", "depsFreshness", "storybook", "bundleBudget", "premerge", "all")]
   [string]$Mode = "all"
 )
 
@@ -121,6 +121,13 @@ $Blocks = @(
   # 远端引用陈旧只打 [未校验]、不阻断；刷新是人的动作 `git fetch`。
   @{ Name = "depsFreshness"; Label = "Dependency freshness (baseline vs origin/master + install sync)";
      Cmd = "node"; Args = @("scripts\check-deps-freshness.mjs"); Run = $true }
+  # client chunk 体积预算（ISSUE #1781，规范 §13.5.4）。与 quality-gate.mjs 的
+  # GATES.bundleBudget 同批同步。Run=$false：测量对象是 `next build` 的产物，判据在
+  # 一次构建之后才有结论，而构建是半分钟级 —— 把它塞进每一次「完整验证」是拿半分钟
+  # 换一个不会天天变的结论（成本判据同 §13.5.4）。同一脚本也挂在 `pnpm build` 收尾
+  # （形态 C 兜底），所以这条更准确地说是一份**按需入口**。
+  @{ Name = "bundleBudget"; Label = "Bundle size budget (client chunk gzip total + file count ratchet)";
+     Cmd = "node"; Args = @("scripts\check-bundle-budget.cjs"); Run = $false }
   # **合并前的固定动作**（规范 §13.6.2；ISSUE #1611 拍板）。与 quality-gate.mjs 的
   # GATES.premerge 同批同步。Run=$false：平台侧 squash 合并不跑本地钩子、#623 之后
   # 也无 CI 兜底，所以「我的分支绿 → master 绿」那一跳的三条判据（复算这一批 /
