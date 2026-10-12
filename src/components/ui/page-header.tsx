@@ -214,11 +214,11 @@ function HeaderHelp({ text }: { text: ReactNode }) {
       <Button
         type="button"
         variant="ghost"
-        size="icon-xs"
+        size="icon-sm"
         aria-label="说明"
-        className="text-ink-fainter hover:text-ink-bright size-5 shrink-0 rounded-full"
+        className="text-ink-fainter hover:text-ink-bright shrink-0 rounded-full"
       >
-        <CircleHelp aria-hidden />
+        <CircleHelp aria-hidden className="size-5" />
       </Button>
     </Hint>
   );

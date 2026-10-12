@@ -80,7 +80,7 @@ export function ModeContractEditorView({
           那是「外壳不给左右」时代的产物，外壳补上留白之后叠在这里是 32+20=52px 一圈。 */}
       <PageHeader
         className="mb-3"
-        srTitle={pageHeaderTitle("mode-contract")}
+        title={pageHeaderTitle("mode-contract")}
         help="每种模式的统一输入 / 输出 —— 本地工作流按它配落点，远端模型按它建适配器。契约是模式级的全局口径，与具体接口无关（接口字段映射在「模型适配」里配）。"
       />
 
