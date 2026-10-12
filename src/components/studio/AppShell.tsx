@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { LayoutGrid, Plus, Settings } from "lucide-react";
+import { LayoutGrid, Plus } from "lucide-react";
 
 import { useHotkey } from "~/components/ui/use-hotkey";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -9,7 +9,6 @@ import { cn } from "~/lib/utils";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarInset,
@@ -21,7 +20,7 @@ import {
 } from "~/components/ui/sidebar";
 
 import {
-  globalNavItems,
+  sidebarNavItems,
   isProjectTab,
   PROJECTS_ENTRY,
   type WorkspaceView,
@@ -113,8 +112,9 @@ export interface AppShellProps {
  * 应用外壳 —— 左侧栏（官方 `ui/sidebar`）+ 顶部工具条（`TopBar`）+ 主内容。
  *
  * 侧栏分两段：
- *   · 顶部 = 全局项（首页 / 模型 / 历史 / 队列 / 设置 / 流程 / 模型适配 / 模式契约 /
- *     控制台），常驻、不随当前视图增减；
+ *   · 顶部 = 全局项（首页 / 模型 / 历史 / 队列 / 流程 / 模型适配 / 模式契约 /
+ *     控制台），常驻、不随当前视图增减 —— **设置不在其中**（`sidebarNavItems`）：
+ *     它的入口是顶栏右上角的应用菜单，侧栏不再重复列一遍；
  *   · 底部 = 「项目」折叠分组（`Disclosure`，P10 唯一实现），展开列出已有项目 + 查看全部 / 新建。
  *
  * 主页 / 画布 / 工坊 / 资源库 / 产出 / 成片不再出现在这里 —— 它们是**视图页签**，入口是页签条
@@ -154,7 +154,9 @@ export function AppShell({
   const [commandOpen, setCommandOpen] = useState(false);
   useHotkey({ key: "k", mod: true }, () => setCommandOpen(true));
 
-  const navItems = globalNavItems();
+  /* 侧栏列表 —— 与 `globalNavItems()` 的差别只有一处：设置不在侧栏列
+     （它已经撤到顶栏右上角的菜单里，见 `sidebarNavItems` 的说明）。 */
+  const navItems = sidebarNavItems();
 
   /* 「用户此刻在这个项目里」—— 侧栏项目行要不要打高亮，判据是**视图位置**，
    * 不是存储里有没有活跃 id。
@@ -285,19 +287,9 @@ export function AppShell({
           </SidebarGroup>
         </SidebarContent>
 
-        {/* 底部避让全局固定状态栏（BrowserStatusBar 是 fixed bottom-0 h-6 = 24px、
-            横跨整窗）：侧栏由 SidebarProvider 的 min-h-svh 撑满整屏，底部「设置」
-            会被这 24px 盖住。留 pb-6 与主内容 / ScriptMarkdownEditor 同一口径。 */}
-        <SidebarFooter className="pb-6">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton tooltip="设置" onClick={onOpenSettings}>
-                <Settings strokeWidth={1.8} />
-                <span>设置</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
+        {/* 原先这里有一个侧栏底「设置」—— 与列表里那一项是同一个动作的两处入口，
+            而顶栏右上角的菜单本来就有一处的「设置」。三处收成一处后此处删除：
+            一个动作只留一个入口，也顺带不再需要为底部状态栏 24px 让位的 `pb-6`。 */}
 
         {/* 边缘热区：点击/拖拽也能开合，官方自带。 */}
         <SidebarRail />

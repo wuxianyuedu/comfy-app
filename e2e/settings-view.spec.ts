@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { openSettingsView } from "./support/settings-entry";
+
 /**
  * 设置是**一个视图**，不是盖在内容区上的一层浮层（@critical）。
  *
@@ -8,14 +10,18 @@ import { expect, test, type Page } from "@playwright/test";
  * 而那层浮层的本职就是**盖住页签条**。这类"形态"问题不会让任何功能断言变红，
  * 只有直接判页签才拦得住下一次回潮。
  *
- * 判据读的是用户看得见的事实：侧栏点「设置」→ 页签条上多出一页「设置」并且是当前页；
- * 页签条本身仍可点（能切回首页）；屏面上没有对话框角色（不是 modal）。
+ * 判据读的是用户看得见的事实：从顶栏应用菜单打开设置（ISSUE #1784 把侧栏那两处
+ * 入口撤掉了，入口只剩这一处，见 `support/settings-entry.ts`）→ 页签条上有一页
+ * 「设置」并且是当前页；页签条本身仍可点（能切回首页）；屏面上没有对话框角色。
+ *
+ * 设置是**瞬时页签**（`NavItem.transient`）：切走就关、不常驻 —— 所以这份里
+ * 「切回首页后设置那一页还在」的旧断言已经反过来，现在判的是「它退场了」。
  */
 const stripOf = (page: Page) =>
   page.getByRole("tablist", { name: "已打开的视图" });
 
 test.describe("设置作为一个视图 @critical", () => {
-  test("侧栏点「设置」开出一页页签，页签条仍可操作，且没有对话框", async ({
+  test("应用菜单点「设置」开出一页页签，页签条仍可操作，且没有对话框", async ({
     page,
   }) => {
     await page.goto("/workspace");
@@ -24,10 +30,7 @@ test.describe("设置作为一个视图 @critical", () => {
     /* 起步只有首页一页。 */
     await expect(strip.getByRole("tab")).toHaveCount(1);
 
-    await page
-      .getByRole("button", { name: "设置", exact: true })
-      .first()
-      .click();
+    await openSettingsView(page);
 
     /* 定位按**位序 + 文本**，不按 name: 页签里含关闭按钮，算出来的可访问名是
        「设置 关闭 设置」这种拼接结果，`name:"设置", exact:true` 会命中 0 个。 */
@@ -51,20 +54,22 @@ test.describe("设置作为一个视图 @critical", () => {
       page.getByRole("heading", { name: "设置" }).first(),
     ).toBeVisible();
 
-    /* 再点一次侧栏不产生第二页（与所有视图同一条契约：已存在即聚焦）。 */
-    await page
-      .getByRole("button", { name: "设置", exact: true })
-      .first()
-      .click();
+    /* 再开一次不产生第二页（与所有视图同一条契约：已存在即聚焦）。 */
+    await openSettingsView(page);
     await expect(strip.getByRole("tab")).toHaveCount(2);
 
     /* 页签条没被浮层盖住：还能点回首页。这条是这次改动的正面判据 ——
-       旧的 `SettingsOverlay` 是铺满内容区的 `FullScreenLayer`，页签在它下面。 */
+       旧的 `SettingsOverlay` 是铺满内容区的 `FullScreenLayer`，页签在它下面。
+
+       ISSUE #1784 起设置是**瞬时页签**：切回首页时它**跟着退场**（用户原话
+       「有些项其实不需要保持打开，那些打开的标签随着切换关闭就行」）—— 所以
+       这里从「切回首页后设置仍在、只是未选中」改成「切回首页后设置整页关掉」。 */
     const homeTab = strip.getByRole("tab").first();
     await expect(homeTab).toContainText("首页");
     await homeTab.click();
     await expect(homeTab).toHaveAttribute("aria-selected", "true");
-    await expect(settingsTab).toHaveAttribute("aria-selected", "false");
+    await expect(strip.getByRole("tab")).toHaveCount(1);
+    await expect(settingsTab).toHaveCount(0);
 
     /* 不是对话框：设置内容不该活在 role=dialog 里（那意味着还是浮层）。 */
     await expect(
@@ -79,10 +84,7 @@ test.describe("设置作为一个视图 @critical", () => {
     const strip = stripOf(page);
     await expect(strip).toBeVisible({ timeout: 30_000 });
 
-    await page
-      .getByRole("button", { name: "设置", exact: true })
-      .first()
-      .click();
+    await openSettingsView(page);
     await expect(strip.getByRole("tab")).toHaveCount(2);
 
     /* 关闭按钮的可访问名是「关闭 <页签名>」，这一颗可以 exact。 */

@@ -33,6 +33,9 @@ import {
  *     是全局注册表（模式契约 =
  *     每种模式有哪些统一输入 / 输出；适配器 = 每个远端模型 × 每个模式的字段映射），
  *     与当前项目无关，而弹窗形态没有页签、不能一边配着别的一边对照工作流库；
+ *     九件里**侧栏只列八件**（`sidebarNavItems`）—— 设置那一项撤出侧栏（顶栏右上角
+ *     的应用菜单本就是它的入口），并标成 `transient`（切走即关）。它的另两个属性
+ *     是「全局的」「能在页签条上开」—— 三件事各自独立，见 `NavItem` 的字段说明。
  *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片），
  *     不再进主页侧栏：它们是对「当前项目」的操作投影，脱离项目无意义；
  *   · 项目入口（`PROJECTS_ENTRY`）—— 侧栏最底部的「项目」分组（可展开列出已有项目）。
@@ -81,6 +84,30 @@ export interface NavItem {
    * 主页 / 画布 / 工坊 / 资源库 / 产出 / 成片是对「当前项目」的操作投影。
    */
   projectScoped?: boolean;
+  /**
+   * 「瞬时页签」：切走就关，不常驻页签条。
+   *
+   * 页签存在的意义是**让打开的界面保持打开**（切回来接着用，不重开会丢态）——
+   * 那是对画布 / 工坊这类「有编辑态、跑着长任务」的界面说的。而设置 / 模型适配 /
+   * 模式契约是一类**读过即走的配置屏**：进来改一项、看一眼、就走，没人指望切走半天
+   * 再切回来时草稿还在原地。它们留在页签条上只贡献两件事：占宽、以及「我是不是
+   * 又开了个窗口」的错觉。
+   *
+   * 判据是**语义**不是实现：`transient` 的视图在页签条上照常有自己的一页（就是
+   * 当前这一页），也能手动关；只是**切到别处时它自动退场**。见 `workspace-tabs.ts`
+   * 的 `withTransientPruned`（那条不变式是「最多只有当前页可以是 transient」）。
+   */
+  transient?: boolean;
+  /**
+   * 不在**侧栏**露面：入口在别处（当前只有「设置」这一项 —— 顶栏右上角的
+   * 应用菜单里已有它）。
+   *
+   * 与 `projectScoped` / `transient` 是三个不同的判断，别合并：`projectScoped`
+   * 管「归项目还是归全局」、`transient` 管「切走关不关」、本条只管「侧栏列不列」。
+   * 设置三样都沾一点却是三种答案里各挑一个 —— 全局的（不是项目的）、瞬时的
+   * （切走就关）、不在侧栏列表里（顶栏已有入口）。
+   */
+  sidebarHidden?: boolean;
   icon: React.ReactNode;
 }
 
@@ -144,6 +171,8 @@ export const NAV_ITEMS: NavItem[] = [
     id: "settings",
     label: "设置",
     enabled: true,
+    transient: true,
+    sidebarHidden: true,
     icon: <Settings size={22} strokeWidth={1.8} />,
   },
   {
@@ -166,6 +195,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: "model-adapters",
     label: "模型适配",
     enabled: true,
+    transient: true,
     icon: <Cable size={22} strokeWidth={1.8} />,
   },
   {
@@ -174,6 +204,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: "mode-contract",
     label: "模式契约",
     enabled: true,
+    transient: true,
     icon: <Puzzle size={22} strokeWidth={1.8} />,
   },
   {
@@ -244,6 +275,23 @@ export function globalNavItems(): NavItem[] {
   return NAV_ITEMS.filter(
     (item) => !item.projectScoped && item.id !== PROJECTS_ENTRY.id,
   );
+}
+
+/**
+ * 侧栏顶部实际渲染的那几项 —— `globalNavItems()` 去掉 `sidebarHidden`。
+ *
+ * 为什么要与 `globalNavItems()` 分开：那个出口有三个消费者（侧栏列表、页签条的
+ * 「+」菜单、命令面板搜索），而用户的诉求只针对**侧栏** —— 设置从侧栏撤掉、
+ * 入口归顶栏应用菜单，但它仍应能被「+」菜单和 ⌘K 搜到。收口在 `globalNavItems()`
+ * 上会连带把那两处一起删掉（设置就成了只有顶栏一个入口的孤岛）。
+ */
+export function sidebarNavItems(): NavItem[] {
+  return globalNavItems().filter((item) => !item.sidebarHidden);
+}
+
+/** 某视图是不是「瞬时页签」（切走即关，不常驻）—— 规则见 `NavItem.transient`。 */
+export function isTransientView(view: WorkspaceView): boolean {
+  return NAV_ITEMS.some((item) => item.id === view && item.transient === true);
 }
 
 /**
