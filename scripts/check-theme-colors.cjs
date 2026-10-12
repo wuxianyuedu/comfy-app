@@ -14,10 +14,13 @@
  *      例外**逐条显式**放行 —— 「类型色例外」（成组集中的端口类型色 / 节点类别色 /
  *      参数分组色常量表）与「固定暗色清单」（画布极小面积叠层）。豁免项从此
  *      不再进入报告；
- *   ② **棘轮层**（`scripts/.theme-color-baseline.json`）：豁免后仍有存量的
- *      未 token 化写死色值，按「文件 → 处数」记账，**只许降不许升** ——
- *      新写的写死色值一律阻断，逐批治理时基线跟着收紧；
- *   ③ **反向四层**（都是硬闸，不进基线）：
+ *   ② **判定层**（**硬闸**）：豁免后剩下的未 token 化写死色值须为 **0**
+ *      （命中即退 1，无基线、无 `--update`）。翻转前它是棘轮
+ *      （`scripts/.theme-color-baseline.json`，基线 `total: 0`）；存量清零后棘轮
+ *      只剩一条「手改那份 JSON 就能把新色值登记成已知存量」的通道 ——
+ *      而硬闸类**本来没有**这个中间态。真正的出口仍是豁免层（逐条写理由），
+ *      不是放宽基线；
+ *   ③ **反向四层**（同为硬闸）：
  *      · **死豁免**：登记在表上却一处都不命中的条目 = 负债，会把该文件今后的
  *        写死色值静默放行，出现即阻断（口径按文件、不按条目，见下方注释）；
  *      · **幽灵 token**：字面 `var(--color-…)` 引用了从未定义的 token —— 不报错、只是
@@ -40,16 +43,14 @@
  *
  * 判定口径：
  *   检查  = 遍历 `src/**`，统计每个文件的写死色值，减去显式豁免；
- *   通过  = 未豁免计数 ≤ 基线（且新增文件/新增处数不得抬高基线），
+ *   通过  = 未豁免计数为 0，
  *           且「无死豁免」「无幽灵 token」「无拼接 token 名」「无跨面相等主张」四条硬闸都过；
- *   失败  = 出现基线外的新增写死色值 / 死豁免 / 幽灵 token / 拼接 token 名
+ *   失败  = 出现未豁免的写死色值 / 死豁免 / 幽灵 token / 拼接 token 名
  *           / 跨面相等主张（退出码 1），并列出行号。
  *
  * 用法：
- *   node scripts/check-theme-colors.cjs            # 检查（棘轮：只许降不许升）
- *   node scripts/check-theme-colors.cjs --strict   # 基线下调也失败（CI 用，强制收紧）
+ *   node scripts/check-theme-colors.cjs            # 检查（硬闸：命中即退 1）
  *   node scripts/check-theme-colors.cjs --report   # 只出报告，不判失败（盘点用）
- *   node scripts/check-theme-colors.cjs --update   # 治理后重写基线（须伴随下降）
  */
 
 const fs = require("node:fs");
@@ -58,9 +59,6 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
-const UPDATE = ARGS.has("--update");
-const STRICT = ARGS.has("--strict");
-const BASELINE = path.join(__dirname, ".theme-color-baseline.json");
 
 /* ── 扫描范围 ────────────────────────────────────────────── */
 
@@ -803,8 +801,7 @@ function printViolations() {
   for (const [f, list] of [...byFile].sort(
     (a, b) => b[1].length - a[1].length,
   )) {
-    const isNew = !baselineFiles || (baselineFiles[f] ?? 0) < list.length;
-    console.log(`  ${isNew ? "✗" : "·"} ${f}（${list.length} 处）`);
+    console.log(`  ✗ ${f}（${list.length} 处）`);
     for (const v of list.slice(0, 5)) {
       console.log(`      L${v.line}: ${v.hits}  ${v.text.slice(0, 90)}`);
     }
@@ -818,12 +815,6 @@ console.log(
   `[theme-colors] 扫描 ${SCAN_DIR}/**：未豁免写死色值 ${totalCounted} 处 / ${byFile.size} 文件；` +
     `显式豁免 ${totalExemptHits} 处 / ${exemptByFile.size} 文件`,
 );
-
-const prev =
-  !UPDATE && fs.existsSync(BASELINE)
-    ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
-    : null;
-const baselineFiles = prev?.files ?? null;
 
 /* 幽灵 token 是「引用还在、定义没了」——与写死色值多少处无关，所以单独一条
  * 硬闸、不进基线；--update 也不许带着它重写基线。 */
@@ -880,112 +871,30 @@ if (REPORT_ONLY) {
   process.exit(0);
 }
 
-/* ── 模式二：更新基线（棘轮只许下降） ── */
-if (UPDATE) {
-  /* 上面的 `prev` 在 `--update` 这条路上**恒为 null**（它的三元式带着 `!UPDATE`），
-   * 所以这一支要自己读一次基线。判的是「基线在不在」，不是「基线里的数是不是非零」：
-   * 旧写法 `if (before && …)` 在今天这种**已经清到 0 处**的基线上整个短路，
-   * 于是「新写一条色值 + 跑一次 --update」正好在最不该松的时候松着
-   * （同一族已修的先例见 `check-ui-logic-separation.cjs` 的 `diffAgainstBaseline`）。
-   * 首次建立基线（文件还不存在）仍放行，否则新检出无法起步。 */
-  const hadBaseline = fs.existsSync(BASELINE);
-  const prevForUpdate = hadBaseline
-    ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
-    : null;
-  const before =
-    (prevForUpdate?.files &&
-      Object.values(prevForUpdate.files).reduce((a, b) => a + b, 0)) ??
-    0;
-  if (hadBaseline && totalCounted > before) {
-    console.error(
-      `[theme-colors] 拒绝放宽基线：${before} → ${totalCounted}（棘轮只许下降）。\n` +
-        "  新增写死色值必须先 token 化，不要用 --update 掩盖。",
-    );
-    process.exit(1);
-  }
-  printExemptions();
-  fs.writeFileSync(
-    BASELINE,
-    JSON.stringify(
-      {
-        generatedAt: new Date().toISOString().slice(0, 10),
-        note:
-          "未豁免的写死色值处数（规范 03 §3.6.1 之外）。棘轮只许下降；" +
-          "新增豁免请改 scripts/check-theme-colors.cjs 的 EXEMPT_TABLES/EXEMPT_FIXED_DARK，不要用 --update 放水。",
-        total: totalCounted,
-        files: counted,
-      },
-      null,
-      2,
-    ) + "\n",
-  );
-  console.log(
-    `[theme-colors] 基线已更新：${before} → ${totalCounted}（scripts/.theme-color-baseline.json）`,
-  );
-  process.exit(0);
-}
-
-/* ── 模式三：检查（未豁免不得超过基线） ── */
+/* ── 模式二：检查（未豁免须为 0，其余四条硬闸已在上方短路） ── */
 printExemptions();
 
-if (!baselineFiles) {
-  console.error(
-    "[theme-colors] 基线文件缺失：先执行 node scripts/check-theme-colors.cjs --update",
-  );
-  process.exit(1);
-}
-
-const increased = [];
-const dropped = [];
-for (const [f, list] of byFile) {
-  const base = baselineFiles[f] ?? 0;
-  if (list.length > base)
-    increased.push({ file: f, from: base, to: list.length, list });
-}
-for (const [f, base] of Object.entries(baselineFiles)) {
-  const nowCount = counted[f] ?? 0;
-  if (nowCount < base) dropped.push({ file: f, from: base, to: nowCount });
-}
-let tightened = false;
-for (const [f, base] of Object.entries(baselineFiles)) {
-  if (!baselineFiles[f]) continue;
-  if (!(f in counted) && base > 0) tightened = true;
-}
-
-if (increased.length) {
-  console.log("[theme-colors] 基线外新增写死色值：");
-  for (const inc of increased) {
-    console.log(`  ✗ ${inc.file}：${inc.from} → ${inc.to}`);
-    for (const v of inc.list.slice(-Math.max(1, inc.to - inc.from))) {
-      console.log(`      L${v.line}: ${v.hits}  ${v.text.slice(0, 90)}`);
+if (totalCounted > 0) {
+  console.error("[theme-colors] 存在未豁免的写死色值：");
+  for (const [f, list] of byFile) {
+    console.error(`  ✗ ${f}：${list.length} 处`);
+    for (const v of list) {
+      console.error(`      L${v.line}: ${v.hits}  ${v.text.slice(0, 90)}`);
     }
   }
   console.error(
-    "\n[theme-colors] 失败：新增了未经豁免的写死色值。\n" +
+    "\n[theme-colors] 失败：出现了未经豁免的写死色值。\n" +
       "  判据（规范 03 §3.6.1）：能写成类名的必须是类名 —— 表面/文字语义的 #hex /\n" +
       "  rgba(...) 一律改语义 token。仅「类型色例外」（成组集中的端口类型色 / 节点\n" +
       "  类别色 / 参数分组色常量表）与「固定暗色清单」（画布极小面积叠层）可豁免；\n" +
       "  新增豁免须在 scripts/check-theme-colors.cjs 的 EXEMPT_TABLES / EXEMPT_FIXED_DARK\n" +
-      "  里逐条写明理由，并与 globals.css 清单、规范 §3.6.1 同步。",
+      "  里逐条写明理由，并与 globals.css 清单、规范 §3.6.1 同步。\n" +
+      "  本判据是硬闸（无基线、无 --update）：存量已清零，新增一处即阻断。",
   );
   process.exit(1);
 }
 
-if (dropped.length) {
-  const msg =
-    "[theme-colors] 未豁免计数已下降（治理有进展）：\n" +
-    dropped.map((d) => `  · ${d.file}：${d.from} → ${d.to}`).join("\n") +
-    "\n  建议执行 node scripts/check-theme-colors.cjs --update 收紧基线。";
-  if (STRICT) {
-    console.error(msg + "\n  --strict 模式：未收紧基线即失败。");
-    process.exit(1);
-  }
-  console.log(msg);
-}
-
 printViolations();
 console.log(
-  `[theme-colors] 通过 ✓（未豁免 ${totalCounted} 处 ≤ 基线 ${Object.values(
-    baselineFiles,
-  ).reduce((a, b) => a + b, 0)} 处；豁免 ${totalExemptHits} 处不参与判定）`,
+  `[theme-colors] 通过 ✓（未豁免 0 处；豁免 ${totalExemptHits} 处不参与判定）`,
 );
