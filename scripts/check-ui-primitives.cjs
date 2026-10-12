@@ -329,6 +329,21 @@ const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
 const BASELINE = path.join(__dirname, ".ui-primitives-baseline.json");
 
+/* 文本引擎（剥注释 / JSX 平衡扫描 / 属性解析）单独立一份 —— 见那条文件头的
+ * 「分层」说明。判据（85 条 rule）全留在本脚本里，这里只借机器。 */
+const {
+  stripCommentsCached,
+  stripP71AllowBlocks,
+  countNestedMinMax,
+  countNonContainment,
+  scanJsxAttrs,
+  readJsxAttrsPastTag,
+  parseJsxProps,
+  countButtonTitle,
+  isBusySlotName,
+  isP81IconName,
+} = require("./ui-primitives-engine.cjs");
+
 /* ── 扫描范围 ────────────────────────────────────────────── */
 
 /** 棘轮作用域：视图层（组件 + 路由页面）——与 UI/逻辑分离棘轮的 RATCHET_DIRS 同口径。 */
@@ -993,184 +1008,20 @@ function isExemptFile(id, rel) {
   return (EXEMPT_FILES[id] ?? []).some((e) => e.re.test(rel));
 }
 
-/* ── 三条判据 ────────────────────────────────────────────── */
-
-/**
- * 去掉 `//` 行注释与 `/* … *\/` 块注释（保留换行，便于定位）。
- *
- * **为什么判据必须先过这一层**：注释里描述「本组件渲染一个 `<button>`」、
- * 「原来是 `<button>` 手写实现」是**说明**，不是视图实现。不剥注释时，把一处
- * 手写按钮改成 `<Button>` 并把理由写进注释，会让该文件的计数**停在原地**
- * —— 棘轮于是永远降不下去，而代码其实已经合规。
- * （同款教训见 `scripts/check-theme-colors.cjs` 的 `stripComments`：
- * 注释里的 `#346` ISSUE 引用被误判成 3 位色值。）
- *
- * 字符串/模板字面量**不**剥离：`"<button"` 出现在字面量里同样是「自己实现
- * 一份」的信号，保守计上更安全（NUL 哨兵那类反例见规范 §12.11）。
- */
-function stripComments(text) {
-  let out = "";
-  let i = 0;
-  const n = text.length;
-  let inBlock = false;
-  let inLine = false;
-  while (i < n) {
-    const ch = text[i];
-    const nx = text[i + 1];
-    if (inLine) {
-      if (ch === "\n") {
-        inLine = false;
-        out += ch;
-      } else out += " ";
-      i++;
-      continue;
-    }
-    if (inBlock) {
-      if (ch === "*" && nx === "/") {
-        inBlock = false;
-        out += "  ";
-        i += 2;
-        continue;
-      }
-      out += ch === "\n" ? "\n" : " ";
-      i++;
-      continue;
-    }
-    if (ch === "/" && nx === "/") {
-      inLine = true;
-      out += "  ";
-      i += 2;
-      continue;
-    }
-    if (ch === "/" && nx === "*") {
-      inBlock = true;
-      out += "  ";
-      i += 2;
-      continue;
-    }
-    out += ch;
-    i++;
-  }
-  return out;
-}
-
-/**
- * 剥掉 p71-allow:start … p71-allow:end 之间的整段（含两行标记）。
- * 供 P71 / P79 使用——§3.6.1 里 palette 字面量本身就是语义（如 ANSI SGR
- * 终端 8 色 / brand 渐变 / 媒体类型色板 / workshop 域专有装饰色），不该
- * 被 token 化。**必须在 `stripComments` 之前调用**，否则标记注释会被先
- * 抹掉、块内的 palette 字面量又会被计回来。
- *
- * 支持两种就地声明形态，覆盖 JS 与 JSX 两个上下文：
- *   · **`// p71-allow:start …`** —— 落在 JS 表达式位（`{cond && (` 之后、
- *     return 里的 JS 段等）；一行一条标记。
- *   · **JSX 注释包 `p71-allow:start …`** —— 落在 JSX 兄弟节点位（顶层 JSX
- *     元素之间），`//` 前缀会被 parse 成 JSX text 破解析、必须走 JSX 注释
- *     形式（形如：左大括-斜星-空格 p71-allow:start · 空格 斜星大括-右）。
- * 两形态在剥除阶段等价：只要匹配 `start` / `end` 关键字，前面是 `//` 或
- * `/*` 起始符都算命中。`p71-allow` 名字保留（P71 先立、P79 与之后可能
- * 的同族 palette 判据共用一份 allow，别另立 p79-allow 造成"一次标允许 ·
- * 二次标漏掉"的分裂）。
- */
-function stripP71AllowBlocks(text) {
-  const lines = text.split("\n");
-  const out = [];
-  let inBlock = false;
-  for (const line of lines) {
-    if (inBlock) {
-      if (/(?:\/\/|\/\*)\s*p71-allow:end\b/.test(line)) inBlock = false;
-      continue;
-    }
-    if (/(?:\/\/|\/\*)\s*p71-allow:start\b/.test(line)) {
-      inBlock = true;
-      continue;
-    }
-    out.push(line);
-  }
-  return out.join("\n");
-}
-
-/**
- * 数「夹取」的处数：`Math.max(` 里包着 `Math.min(`、或反过来。
- *
- * 实现是**配对扫描**而不是一个正则：正则要匹配「嵌套但深度不定」的括号，
- * 写成 `Math\.(max|min)\([^()]*Math\.(?!\1)…` 会在多层括号（
- * `Math.min(max, Math.max(min, Math.round(v)))`）上退化成漏报。
- *
- * 判据是「**两种不同**的 Math 函数嵌套」：`Math.max(1, 1 / Math.max(zoom, x))`
- * 是取值（同一个函数），不是夹取 —— 只数 max 里包 min、min 里包 max。
- *
- * 取「**最近的**一层」：从每个 `Math.max(` / `Math.min(` 的左括号开始，
- * 只看它**直接内层**（跳过嵌套括号）里有没有出现另一种 Math 调用；
- * 深层的由它自己的那一处负责数 —— 这样 `Math.round(Math.min(max,
- * Math.max(min, n)))` 只计 1 次（夹取），不重复计。
- */
-function countNestedMinMax(text) {
-  let n = 0;
-  const re = /\bMath\.(max|min)\s*\(/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const outer = m[1];
-    const inner = outer === "max" ? "min" : "max";
-    /* 从外层的左括号开始，扫到**它自己**的右括号为止；
-     * 中途遇到 `Math.<inner>(` 即命中（该处夹取由外层负责数）。 */
-    let depth = 1;
-    let i = re.lastIndex;
-    const innerRe = new RegExp(`\\bMath\\.${inner}\\s*\\(`, "g");
-    while (i < text.length && depth > 0) {
-      const ch = text[i];
-      if (ch === "(") depth++;
-      else if (ch === ")") depth--;
-      else if (ch === "M" && depth === 1) {
-        /* 只在**直接内层**（depth 仍为 1）判 —— 深一层的由那一处自己数。 */
-        innerRe.lastIndex = i;
-        const hit = innerRe.exec(text);
-        if (hit && hit.index === i) {
-          n++;
-          break;
-        }
-      }
-      i++;
-    }
-  }
-  return n;
-}
-
-/**
- * 数「把 `path.relative` 的结果当**展示文本**用」的处数。
- *
- * `path.relative` 有两种用途：展示（本条账）与**包含判据**
- *（`const rel = path.relative(root, p); if (rel.startsWith("..") || …)` ——
- * 判断「这个路径在不在 root 里」的标准写法）。只数前者：锚点取每次
- * `path.relative(` 之后的 200 字符窗口里**没有** `startsWith("..")` / `isAbsolute`。
- */
-function countNonContainment(text) {
-  const re = /\bpath\.relative\s*\(/g;
-  let n = 0;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const window = text.slice(m.index, m.index + 200);
-    if (/startsWith\s*\(\s*"\.\."/.test(window)) continue;
-    if (/isAbsolute/.test(window)) continue;
-    n++;
-  }
-  return n;
-}
-
 const RULES = {
   P1: {
     label: "视图内手写 <button>（应使用 ~/components/ui/button 的 <Button>）",
-    count: (t) => (stripComments(t).match(/<button\b/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/<button\b/g) || []).length,
   },
   P2: {
     label: "视图内自建 createPortal 浮层（应使用 ui/dialog / popover / sheet）",
-    count: (t) => (stripComments(t).match(/\bcreatePortal\s*\(/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/\bcreatePortal\s*\(/g) || []).length,
   },
   P3: {
     label:
       "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）",
     count: (t) =>
-      (stripComments(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
+      (stripCommentsCached(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
   },
   P9: {
     label:
@@ -1184,17 +1035,17 @@ const RULES = {
        （`fixed top-title-bar …`，同时被 `check-title-bar-clearance.cjs` 认），
        视图里出现它 = 这个文件在自绘浮层容器。`FullScreenLayer` 也是浮层，但它
        由基元组件承担（`ui/` 目录整体豁免），调用处不出现这次调用。 */
-    count: (t) => (stripComments(t).match(/\boverlayClass\s*\(/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/\boverlayClass\s*\(/g) || []).length,
   },
   P4: {
     label:
       "视图内自写 ::-webkit-scrollbar 外观（应复用 globals.css 的 .custom-scrollbar / .soft-scrollbar）",
-    count: (t) => (stripComments(t).match(/::-webkit-scrollbar/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/::-webkit-scrollbar/g) || []).length,
   },
   P5: {
     label: "视图内自写剪贴板写入（应使用 ~/lib/browser-io 的 copyText）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       return (
         (t2.match(/navigator\.clipboard/g) || []).length +
         (t2.match(/document\.execCommand\(/g) || []).length
@@ -1205,13 +1056,13 @@ const RULES = {
     label:
       "视图内自写 Blob 下载（应使用 ~/lib/browser-io 的 downloadText / downloadJson）",
     count: (t) =>
-      (stripComments(t).match(/URL\.createObjectURL\s*\(/g) || []).length,
+      (stripCommentsCached(t).match(/URL\.createObjectURL\s*\(/g) || []).length,
   },
   P8: {
     label:
       "视图内自写「值不存在显示 —」的判据（应使用 ~/lib/display-value 的 displayValue）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 数两种写法：① 字面量里直接写占位符；② 比较算子后面紧跟占位符。
        * 两条都要求占位符**字面出现**在代码里 —— 用了 `displayValue` 的地方
        * 自然不含它。 */
@@ -1225,7 +1076,7 @@ const RULES = {
     label:
       "视图 / 逻辑层里自写 setInterval 轮询（应使用 ~/components/ui/use-interval 的 useInterval）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       return (t2.match(/\bsetInterval\s*\(/g) || []).length;
     },
   },
@@ -1233,7 +1084,7 @@ const RULES = {
     label:
       "视图内自绘可滚动浮层选项列表（应使用 ~/components/ui/option-list-popover 的 OptionListPopover）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 「手搓 chip 浮层」= 本文件里既自建 `PopoverTrigger`、又自己画 `▾`
        * 展开标记。两个条件同时成立才计 —— 见文件头 P11 说明。 */
       if (!/\bPopoverTrigger\b/.test(t2)) return 0;
@@ -1244,7 +1095,7 @@ const RULES = {
     label:
       "视图内自绘折叠/展开开关（应使用 ~/components/ui/disclosure 的 Disclosure）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 两种形态：① 原生 `<details>`；② 自绘折叠开关 —— `role="button"` 配
        * `▸` / `▾` 展开标记。第二种要求**同一文件里两者同时出现**，否则会把
        * 「浮层触发器上的装饰箭头」（chip / 下拉 / 弹窗触发器都画一个 `▾`）
@@ -1262,7 +1113,7 @@ const RULES = {
     label:
       "视图 / 逻辑层里自写搜索关键字归一化（应使用 ~/lib/list-filter 的 normalizeNeedle / matchesNeedle）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：`<expr>.trim().toLowerCase()`。这才是「搜索框归一化」的形状 ——
        * 单看 `.toLowerCase()` 会把内容哈希、配置解析那些也数进来（它们不是
        * 搜索）。同一串里两个方法都出现才计。
@@ -1288,7 +1139,7 @@ const RULES = {
     label:
       "视图内自写展开集合的翻转样板（应使用 ~/components/ui/expansion-set 的 useExpansionSet）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：`{ ...src, [key]: !src[key] }` —— **同一个标识符**既被展开、
        * 又是翻转的取值源。这就是「自己在维护一份展开集合」的签名。
        *
@@ -1312,7 +1163,7 @@ const RULES = {
     label:
       "视图内自写面板加宽档与切换钮（应使用 ~/components/ui/wide-panel 的 useWidePanel / WidePanelToggle）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：`<flag> ? <X>.wide : <X>.base` —— 加宽档的三元写法。
        * 单看 `useState(false)` 会把所有弹窗开关算上（见文件头 P15）。 */
       return (
@@ -1325,7 +1176,7 @@ const RULES = {
     label:
       "视图内自绘进度条填充（应使用 ~/components/ui/progress-bar 的 ProgressBar；数值走 ~/lib/progress）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：`style={{ width: `${…}%` }}` —— 自己按百分比摆宽度。
        * 这是进度条填充的签名，且不会被圆角 / 背景色这类通用类误伤。 */
       return (t2.match(/style=\{\{\s*width:\s*`\$\{[^}]+\}%`/g) || []).length;
@@ -1335,7 +1186,7 @@ const RULES = {
     label:
       "视图内自写键值行（应使用 ~/components/ui/key-value-rows 的 KeyValueRows）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已经用了出口的文件**不可能**是「自己写一份」—— 它的标签 / 值节点
        * 是作为 `items` 传给 `KeyValueRows` 的，形态判据会把它们连起来误报
        * （`WorkshopEncapsulationPanel` 的键节点里有个 muted 色的口 id span）。
@@ -1363,7 +1214,7 @@ const RULES = {
     label:
       "视图内裸写 <img> / <video>（应使用 ~/components/ui/media-thumbnail 的 MediaThumbnail）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：视图里自己出现 `<img` / `<video` 标签。收口后 `MediaThumbnail`
        * 是「渲染一张可能失败的媒体图」的唯一出口，调用处不再出现这两个标签。
        *
@@ -1380,7 +1231,7 @@ const RULES = {
     label:
       "视图内自写媒体拖拽源（应使用 ~/components/ui/media-drag-source 的 useMediaDragSource）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：手写本项目跨组件拖拽的自定义 MIME。
        * 单看 `draggable` 会把组件内拖拽（React Flow 节点、表单行）算进来。 */
       return (
@@ -1392,7 +1243,7 @@ const RULES = {
     label:
       "视图 / 逻辑层里自写全局快捷键监听（应使用 ~/components/ui/use-hotkey 的 useHotkey）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：自己往 window / document 上挂 keydown。
        * ⚠️ 单看 `metaKey` / `ctrlKey` 会漏掉「只判 ctrlKey」那两处 ——
        * 而它们才是这条账里更差的那一种（macOS 上按 ⌘ 没反应）。 */
@@ -1403,7 +1254,7 @@ const RULES = {
     label:
       "视图内自写滚动跟随到底（应使用 ~/components/ui/use-scroll-follow 的 useScrollFollow）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：`el.scrollTop = el.scrollHeight` 这个**赋值**（两侧都在）。
        * 只数「写 scrollTop」会漏掉「用别的变量名接 contentHeight 再赋」的写法；
        * 而只数 `scrollHeight` 会把 `log-virtual` 的贴底算术（只读不写）与
@@ -1415,7 +1266,7 @@ const RULES = {
     label:
       "视图内自写外部目标导航（应使用 ~/lib/external-open + ~/components/ui/use-external-action）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：`window.location.href = <…>` —— 把控制权交给外部程序
        * （本项目唯一实例是 `comfyapp://` 打开目录）。
        * ⚠️ **不数**对内的路由跳转：那在 App Router 里走 `router.push`
@@ -1428,7 +1279,7 @@ const RULES = {
     label:
       "视图内自写「标签 + 控件」的表单行（应使用 ~/components/ui/form-field 的 FormField）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：**块级标签行** —— `<label className="block …">`（标签是独立
        * 一行、下方是控件）或 `<label htmlFor=… >`（显式关联，也是同一件事）。
        *
@@ -1454,7 +1305,7 @@ const RULES = {
     label:
       "视图里自写读文件（应使用 ~/lib/file-io 的 readFileAsText / readFileAsDataUrl）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：FileReader 的 `readAs*` 调用，或 `await <x>.text()`。
        * 单看 `FileReader` 会漏掉 `file.text()` 那一族（它们才是多数）；
        * `readAs*` 是 FileReader 的唯一签名，漏不掉「手搓 reader」那种。 */
@@ -1484,7 +1335,7 @@ const RULES = {
     label:
       "自写 localStorage 存取（应使用 ~/lib/browser-storage 的 readStorageItem / readStorageJson / writeStorageItem / writeStorageJson）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：`localStorage.getItem(` 这类**调用**。
        * 不数 `typeof localStorage` —— 那只是它的一个前置判据，
        * 而这条账里更差的一半正是「压根没判」（与 P13 / P18 同源）。 */
@@ -1513,7 +1364,7 @@ const RULES = {
     label:
       "自写「try/catch + 反馈通道(errorMessage)」样板（应使用 ~/lib/async-action 的 runAsyncAction）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       const blocks =
         t2.match(
           /try\s*\{[\s\S]{0,3000}?\}\s*catch\s*(?:\([^)]*\))?\s*\{[\s\S]{0,600}?\n\s*\}/g,
@@ -1544,7 +1395,7 @@ const RULES = {
     label:
       "视图里自己读媒体的自然尺寸（应使用 ~/lib/media/natural-size 的 readNaturalSize / naturalAspectRatio）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       return (
         (t2.match(/\bnatural(?:Width|Height)\b/g) || []).length +
         (t2.match(/\bvideo(?:Width|Height)\b/g) || []).length
@@ -1587,7 +1438,7 @@ const RULES = {
     label:
       "手拼查询串（应使用 ~/lib/query-string 的 buildQueryString / withQuery）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       const re = /(?:^|[\w./\-'"`(])[?&][A-Za-z][\w.-]*=(?:\$\{|["'`])/g;
       return (t2.match(re) || []).length;
     },
@@ -1597,7 +1448,7 @@ const RULES = {
     label:
       "视图里自写「Enter 提交」键位判据（应使用 ~/components/ui/use-enter-commit 的 enterCommit）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：`onKeyDown` 里判 `"Enter"`。这是「输入框回车提交」的签名。
        * ⚠️ **不看挂到 window / document 的全局快捷键**（那是 P20 的账，
        * 出口是 `use-hotkey`）；也够不着 `role="button"` 元素复刻浏览器默认
@@ -1622,7 +1473,7 @@ const RULES = {
     label:
       "视图内自写「隐藏 <input type=file> + 手工触发」（应使用 ~/components/ui/file-picker 的 useFilePicker）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 只数**隐藏**的 input：可见 input 是另一种形态（见文件头 P7 说明）。
        * 判据要同时看到 `type="file"` 与「它被藏起来了」—— 两种常见写法是
        * 同类元素上的 `className="hidden"`，以及同文件里再写一遍
@@ -1656,7 +1507,7 @@ const RULES = {
     label:
       "按条目渲染的列表共用一块「最近一次操作」的错误位（应使用 ~/components/ui/use-item-errors 的 useItemErrors）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* ① **错误位**：变量名带 `error` 语义的字符串 state，两种写法都要认
        *    —— 字面量初始值（`useState("")`）与可空初始值（`useState<string
        *    | null>(null)`）；两种在收口前的存量里都有。
@@ -1738,7 +1589,7 @@ const RULES = {
     label:
       "自写「这一轮已作废」的守卫样板（应使用 ~/lib/stale-run 的 beginStaleRun）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* `let cancelled = false;` 这类声明：名字带作废语义。 */
       const decls =
         t2.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=\s*false\s*;/g) || [];
@@ -1774,7 +1625,7 @@ const RULES = {
     label:
       "手拼服务端错误信封 / 自己判它的形状（应使用 ~/lib/api-error 的 apiErrorBody / readApiError）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 写侧：`NextResponse.json({ error: errorMessage(...) })` 这类手拼
        * 的**响应信封** —— 判据要求两件事同时成立：出现了「构造响应体」的
        * 动作（`NextResponse.json(` / `data: ${JSON.stringify(`），
@@ -1827,7 +1678,7 @@ const RULES = {
   P33: {
     label: "自写「时间戳 + 序号」的唯一 id（应使用 ~/lib/unique-id 的 nextId）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       let hits = 0;
       /* ① 模板串里的 `Date.now()`，且它**参与了 id 的拼装** —— 判据要求同
        *    一串里另有 id 语义线索：`id` / `Id` / `_id` / `n_` / `msg_` 这类
@@ -1875,7 +1726,7 @@ const RULES = {
     label:
       "自写「ComfyUI 报错 → 建议」的规则表（应使用 ~/lib/comfyui/error-advice 的 adviseOnError）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       const hasAdviceText = /建议[:：]/.test(t2);
       if (!hasAdviceText) return 0;
       const faultRe =
@@ -1903,7 +1754,7 @@ const RULES = {
     label:
       "视图 / 逻辑层里亲手拼画布节点（应使用 ~/lib/project-canvas/canvas-helpers 的 placeCanvasNode）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 判据取「同一片段里同时出现 `type: "canvasNode"` 与 `position:`」——
        * 窗口取 300 字符（与 P17 的 160 字符同款：太大会把相邻的两个对象
        * 连起来误报，太小会漏掉 `data` 比较长的节点）。
@@ -1943,7 +1794,7 @@ const RULES = {
     label:
       "视图里手写「树的缩进档 + 子行集合容器」（应使用 ~/components/ui/tree-rows 的 TreeChildren / TreeRow）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 引导线 + 缩进同处一个 class 串 —— 即「子行集合」的形态。 */
       const railRe =
         /["'`][^"'`\n]*\b(?:ml|pl)-(?:2|3|4|5|6|8)\b[^"'`\n]*\bborder-l-\d\b[^"'`\n]*["'`]/g;
@@ -1974,7 +1825,7 @@ const RULES = {
     label:
       "视图 / 逻辑层里自写「某一条在忙」的执行态（应使用 ~/components/ui/use-item-action 的 useItemAction）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件直接跳过 —— 它的忙位由 `useItemAction` 给。 */
       if (/useItemAction/.test(t2)) return 0;
       const slotRe =
@@ -2014,7 +1865,7 @@ const RULES = {
     label:
       "视图 / 逻辑层里手写元素几何的算术（应使用 ~/lib/dom-rect 的 offsetWithin / readLineHeight 等，量测接线走 use-element-box）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过。 */
       if (/use-element-box/.test(t2)) return 0;
       let hits = 0;
@@ -2062,7 +1913,7 @@ const RULES = {
     label:
       "视图 / 逻辑层里裸写「等一帧再做事」的调度（应使用 ~/lib/next-frame 的 onNextFrame / afterNextPaint）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过。 */
       if (/from\s+"~\/lib\/next-frame"/.test(t2)) return 0;
       let hits = 0;
@@ -2114,7 +1965,7 @@ const RULES = {
     label:
       "视图 / 逻辑层里裸调 copyText 而不接反馈出口（应使用 ~/components/ui/use-copy-feedback 的 useCopyFeedback）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过；出口自身的实现文件也跳过。 */
       if (/use-copy-feedback/.test(t2)) return 0;
       if (t2.includes("~/lib/browser-io")) {
@@ -2161,7 +2012,7 @@ const RULES = {
     label:
       "REST 路由里自写入参收窄 / 自己定义 isRecord（应使用 ~/server/lib/request-body 的 readJsonRecord / isRecord）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 出口自身的实现文件跳过。 */
       if (/server\/lib\/request-body/.test(t2)) return 0;
       let hits = 0;
@@ -2217,7 +2068,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自拼错误文案的「动作前缀」（应使用 ~/lib/error-message 的 errorText）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（与 P39/P40 同款：换用出口即自动合规）。 */
       if (/\berrorText\s*\(/.test(t2)) return 0;
       let hits = 0;
@@ -2267,7 +2118,7 @@ const RULES = {
     label:
       "视图 / 逻辑层里手写「复制失败」的固定提示句（应使用 ~/components/ui/use-copy-feedback 的 copyFailureText）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/\bcopyFailureText\s*\(/.test(t2)) return 0;
       return (t2.match(/剪贴板不可用/g) || []).length;
@@ -2294,7 +2145,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自写文本截断（应使用 ~/lib/text-clamp 的 clampText）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/\bclampText\s*\(/.test(t2)) return 0;
       return (
@@ -2323,7 +2174,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自写指数退避算术（应使用 ~/lib/retry-policy 的 backoffDelayMs）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       if (/\bbackoffDelayMs\s*\(/.test(t2)) return 0;
       return (t2.match(/\* *2 *\*\*|Math\.pow\( *2 *,/g) || []).length;
     },
@@ -2345,7 +2196,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里手拼日期串（应使用 ~/lib/time-format 的 formatDate 家族）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       if (/\bformat(?:Date|ShortDate|LocalStamp|CompactStamp)\s*\(/.test(t2))
         return 0;
       return (t2.match(/getFullYear\(\)\}-/g) || []).length;
@@ -2368,7 +2219,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自写「扩展名 ⇄ MIME」映射表（应使用 ~/lib/media/mime-ext）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (
         /\b(?:mimeForExt|extForMime|extOfPath|stemOfPath|contentTypeForPath)\s*\(/.test(
@@ -2412,7 +2263,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自写「unknown 当宽松对象视图」（应使用 ~/lib/is-record 的 isRecord / asRecord）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       if (/from "~\/lib\/is-record"/.test(t2)) return 0;
       /* 锚**转成视图**的形态：`typeof X === "object" && X !== null` 之后
        * 紧跟 `as Record<string, unknown>`。**不**数「收窄后取一个字段」
@@ -2443,7 +2294,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自写文件名安全化（应使用 ~/lib/safe-name 的 safeFileNameSegment / safeDisplayName）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       if (/\b(?:safeFileNameSegment|safeDisplayName)\s*\(/.test(t2)) return 0;
       return (t2.match(/replace\(\/\[\^[^\]]*\]\+?\/g, *"_"\)/g) || []).length;
     },
@@ -2467,7 +2318,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自写数字精度格式化（应使用 ~/lib/number-format）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/number-format"/.test(t2)) return 0;
       return (t2.match(/\.toFixed\(/g) || []).length;
@@ -2494,7 +2345,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自写去重合并 / 区域设置排序（应使用 ~/lib/ordered-set）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/ordered-set"/.test(t2)) return 0;
       return (
@@ -2538,7 +2389,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自拼或自切 data URL（应使用 ~/lib/media/data-url）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/media\/data-url"/.test(t2)) return 0;
       const writes = t2.match(/data:\$\{[^}]{0,40}\};base64,\$\{/g) || [];
@@ -2574,7 +2425,7 @@ const RULES = {
     label:
       "视图里手写 onKeyDown 的键判据（应使用 ~/components/ui/simple-key-handler 或 ~/lib/keyboard 的归一）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (
         /from "~\/lib\/keyboard"/.test(t2) ||
@@ -2620,7 +2471,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自写 SGR 转义序列（应使用 ~/lib/log/log-ansi 的 hasSgr / stripSgr / stripAnsi）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 形态：转义符字面量（`\\x1b` 或 `\\u001b`）后面在**同一个序列内**
        *  出现 `m` 收尾 —— 即「一条 SGR」。中间形态在本仓库有两种写法
        *  （正则里的 `\\[`、字符串里的 `[`），故不把「中间长什么样」写进判据；
@@ -2644,7 +2495,7 @@ const RULES = {
     label:
       "自写驼峰 ⇄ kebab 换算（应使用 ~/lib/case-token 的 toKebabCase / toCamelCase）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/case-token"/.test(t2)) return 0;
       return (t2.match(/replace\(\/\[A-Z\]\/g[^;\n]{0,60}\$\{/g) || []).length;
@@ -2675,7 +2526,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里手工把路径变成展示文本（应使用 ~/lib/path-display 的 toDisplayPath / lastSegments / normalizeSlashes）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       if (/from "~\/lib\/path-display"/.test(t2)) return 0;
       /* `path.relative` 有**两种用途**：展示（本条账）与**包含判据**
        *（`const rel = path.relative(root, p); if (rel.startsWith("..") || …)`
@@ -2720,7 +2571,7 @@ const RULES = {
     label:
       "自写「剔掉私有 prop 再透传」的剔除表（应使用 ~/lib/dom-props 的 OmitOwnProps / splitDomProps）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       if (/from "~\/lib\/dom-props"/.test(t2)) return 0;
       /* 形态：`Omit<` 的基类型是**底层元素 / 组件的属性集**，且第二个参数是
        * 字符串字面量键（`"a" | "b"` 或跨行的 `| "c"`）。 */
@@ -2772,7 +2623,7 @@ const RULES = {
     label:
       "自写「给异步结果加超时」的定时器样板（应使用 ~/lib/with-timeout 的 withTimeout / withTimeoutResult）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       if (/from "~\/lib\/with-timeout"/.test(t2)) return 0;
       /* 「必须清掉」是本条账的一半：有 `setTimeout` 却没有 `clearTimeout` 的文件
        * 是**另一种**形态（该等一个窗口就等完，没有别的路径能先赢 ——
@@ -2828,7 +2679,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里手写数值夹取（应使用 ~/lib/clamp 的 clamp / clampInt）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/clamp"/.test(t2)) return 0;
       return countNestedMinMax(t2);
@@ -2855,7 +2706,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里自写大写归一（应使用 ~/lib/upper-token 的 upperToken）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/upper-token"/.test(t2)) return 0;
       /* ② 先数（含 `.trim()` 的形态一并数进来）。
@@ -2893,7 +2744,7 @@ const RULES = {
     label:
       "视图 / 逻辑 / 服务端里裸写应用事件（应使用 ~/lib/app-events 的 emitAppEvent / subscribeAppEvent）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/app-events"/.test(t2)) return 0;
       const dispatched = (t2.match(/\bnew CustomEvent\s*\(/g) || []).length;
@@ -2929,7 +2780,7 @@ const RULES = {
     label:
       "视图里自写「事件值 → 值回调」的改写样板（应使用 ~/lib/form-props 的 textHandler / checkedHandler）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/form-props"/.test(t2)) return 0;
       const value = (
@@ -2971,7 +2822,7 @@ const RULES = {
     label:
       "自写分页 / 窗口切片的算术（应使用 ~/lib/page-window 的 tailPages / tailWindow / chunkRange）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/page-window"/.test(t2)) return 0;
       const offset = (
@@ -3013,7 +2864,7 @@ const RULES = {
     label:
       "把高频进度回调直接写进 state（应使用 ~/components/ui/use-throttled-progress 的 useThrottledProgress / useThrottledProgressMap / createThrottleGate）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/components\/ui\/use-throttled-progress"/.test(t2)) return 0;
       /* 只认「订阅回调里写 state」：`onProgress:` 之后同一段里出现 setter。 */
@@ -3049,7 +2900,7 @@ const RULES = {
     label:
       "把一次异步动作的忙碌位复位写在成功路径上（应使用 ~/components/ui/use-busy-action 的 useBusyAction）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/components\/ui\/use-busy-action"/.test(t2)) return 0;
       const decl =
@@ -3101,7 +2952,7 @@ const RULES = {
     label:
       "自建「同一时刻只跑一件」的重入闸门（应使用 ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/components\/ui\/use-reentrancy-lock"/.test(t2)) return 0;
       const decl = /(?:const|let)\s+(\w+)\s*=\s*(?:React\.)?useRef\s*\(/g;
@@ -3129,7 +2980,7 @@ const RULES = {
     label:
       "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       let hits = 0;
 
       /* a. Badge 绕开：`export function X(Badge|Chip|Tag)` 命名形态，且没
@@ -3227,7 +3078,7 @@ const RULES = {
     label:
       "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       if (
         /from ["']~\/components\/ui\/(?:input|textarea|number-field)["']/.test(
           t2,
@@ -3254,7 +3105,7 @@ const RULES = {
     label:
       "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       if (/from ["']~\/components\/ui\/(?:checkbox|radio-group)["']/.test(t2))
         return 0;
       return (
@@ -3274,7 +3125,7 @@ const RULES = {
     label:
       "视图层用 space-y-* / space-x-*（应使用 flex + gap-*，shadcn styling.md）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       return (t2.match(/space-[xy]-\d/g) || []).length;
     },
   },
@@ -3307,7 +3158,7 @@ const RULES = {
     label:
       "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
     count: (t) => {
-      const t2 = stripComments(stripP71AllowBlocks(t));
+      const t2 = stripCommentsCached(stripP71AllowBlocks(t));
       return (
         t2.match(
           /dark:(?:bg|text|border|ring|from|to|shadow|fill|stroke|outline|decoration|accent|caret|divide|placeholder|file|space)-\[?[a-z-]*?(?:emerald|green|rose|red|amber|sky|cyan|violet|blue|purple|fuchsia|indigo|teal|lime|orange|yellow)-[0-9]/g,
@@ -3333,7 +3184,7 @@ const RULES = {
     label:
       "视图层 <DialogContent>/<SheetContent> 缺可访问名（应加 <DialogTitle>/<SheetTitle> 或 aria-label/aria-labelledby，shadcn composition.md）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       let n = 0;
       for (const [open, close, nameRe] of [
         ["<DialogContent", "</DialogContent>", /<DialogTitle\b/],
@@ -3380,7 +3231,7 @@ const RULES = {
     label:
       '视图层自闭合 <div className="border-{t|b|l|r}">（应使用 ~/components/ui/separator 的 <Separator>，shadcn composition.md）',
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 自闭合 div + className 含 border-{t|b|l|r}。用 `[^>]*?/>` 而非
        * `[^/>]*?/>` 是因为 className 值可能带 `/`（如 `w-1/2`），但 `>`
        * 是硬边界、不能跨。 */
@@ -3422,7 +3273,7 @@ const RULES = {
     label:
       '视图层手搓空态卡 `<div className="border-dashed rounded-xl/2xl/3xl">`（应使用 ~/components/ui/empty-state 的 <EmptyState> 或 ~/components/ui/empty 的 <Empty>，shadcn composition.md）',
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       let n = 0;
       /* 扫每个 `<div>` 起始标签 · 三重条件命中才计一次。 */
       const openRe = /<div\b([^>]*)>/g;
@@ -3476,7 +3327,7 @@ const RULES = {
     label:
       "视图层裸写 <select>（应使用 ~/components/ui/native-select 的 NativeSelect 或 ~/components/ui/select-menu 的 SelectMenu）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* 只数 `<select` 标签起始形态（后接空白、`>`、`/` 之外的字符），
        * 不误伤 `selectedValue` / `select-none` 这类同前缀的标识符与类名。 */
       return (t2.match(/<select[\s/>]/g) || []).length;
@@ -3510,7 +3361,7 @@ const RULES = {
     label:
       "视图层裸写 <label>（表单行应走 ~/components/ui/form-field 的 FormField 或 ~/components/ui/field 的 FieldLabel；checkbox/radio 点击区走 ~/components/ui/{checkbox,radio-group} 的 children 语义）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       return (t2.match(/<label[\s/>]/g) || []).length;
     },
   },
@@ -3546,7 +3397,7 @@ const RULES = {
     label:
       "视图层手写 aria-pressed（2–7 项的选项组应走 ~/components/ui/toggle-group 的 ToggleGroup + ToggleGroupItem；shadcn forms.md）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       return (t2.match(/aria-pressed\s*=/g) || []).length;
     },
   },
@@ -3581,7 +3432,7 @@ const RULES = {
     label:
       "视图层无 dark: 前缀的浅色原色板（应走语义 token，shadcn styling.md 原则 4；例外块走 p71-allow 与 P71 共享）",
     count: (t) => {
-      const t2 = stripComments(stripP71AllowBlocks(t));
+      const t2 = stripCommentsCached(stripP71AllowBlocks(t));
       /* 与 P71 同款前缀集 + 色名表，但**不带 `dark:` 前缀**。用 `(?!dark:)`
        * 前瞻把带前缀的排掉、避免与 P71 双计。 */
       return (
@@ -3615,7 +3466,7 @@ const RULES = {
     label:
       "视图层 w-N 与 h-N 同值（应换 size-N，shadcn styling.md「Use size-* when width and height are equal」）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       let n = 0;
       /* 扫每个 `className="…"` / `className='…'` / `className={\`…\`}` 字符串，
        * 收集里面出现的 w-N 与 h-N 的数字集，看交集。同字符串里 w-8 与 h-8
@@ -3677,7 +3528,7 @@ const RULES = {
     label:
       '视图层 <Button> 直接子 icon 缺 data-icon="inline-start|end"（shadcn composition.md；buttonVariants 的 has-data-[icon=*] 选择器只吃直接子级）',
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       let n = 0;
       for (const m of t2.matchAll(/<Button\b[^>]*>([\s\S]*?)<\/Button>/g)) {
         const inner = m[1];
@@ -3776,7 +3627,7 @@ const RULES = {
     label:
       "屏级标题 <h1> 未走字阶档 u-title-page，或在 h1 上硬写字号（字号由档位给，不在调用点写）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       let n = 0;
       const re = /<h1(?=[\s/>])/g;
       let m;
@@ -3812,7 +3663,7 @@ const RULES = {
     label:
       "视图层手搓面包屑（`/` 分隔 span + 段数组 map；应使用 ~/components/ui/breadcrumb-path 的 BreadcrumbPath）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       /* ① 分隔符 span：`<span …>` 的内容只有 `/`（允许前后空白）。
        *    属性段放开到 `[^>]*`，但**要求不以 `/` 结尾**（避开自闭合
        *    `<span … />` 这种不承载文本的形态）。 */
@@ -3845,7 +3696,7 @@ const RULES = {
     label:
       "视图层手写 <table>（应使用 ~/components/ui/table 的 Table / TableHeader / TableRow / TableCell / TableHead）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       return (t2.match(/<table[\s/>]/g) || []).length;
     },
   },
@@ -3896,7 +3747,7 @@ const RULES = {
     label:
       "视图层手搓屏级页头（`.u-title-page` 标题 + `mt-1 text-sm` 副说明同现；应使用 ~/components/ui/page-header 的 PageHeader）",
     count: (t) => {
-      const t2 = stripComments(t);
+      const t2 = stripCommentsCached(t);
       const lines = t2.split("\n");
       let n = 0;
       for (let i = 0; i < lines.length; i++) {
@@ -3913,330 +3764,151 @@ const RULES = {
 };
 
 
-/* ── P82 判据：JSX 开标签扫描 + 属性解析 + 五档判定 ────────────────
- * 判据的三段拆开写，各管一件事（正则只定位起点，边界交给扫描器）：
- *   ① scanJsxAttrs()       —— 从属性段起点扫到收尾 `>`：`{}` 计深度、引号
- *      （含模板串）内不判结构、`\` 跳转义、`{…}` 里再进一层嵌套表达式；
- *   ② parseJsxProps()      —— 把属性段切成一段段属性，**按整名匹配**（于是
- *      `data-title=` / `mytitle=` / `aria-label="title=x"` 都不会被当成 title）；
- *   ③ classifyTitleValue() —— 对每个 title 取值分档，只有 static / dynamic 算违规。
- * 全部返回结构化结果，`--report` 可直接印出 unknown 清单人工抽查。 */
+/* ── 分层：判据按「它守的那件事有多稳」分两档 ──────────────────────────
+ *
+ * ISSUE #1747 的第二问：这样一个 85 条判据、4800 行的脚本能不能分层 ——
+ * 「最基础的基元（几乎不怎么改动的）放一层，频繁改动的放一层」。
+ *
+ * ## 先把「分层」这个词的三种含义分开
+ *
+ * 用户说的「分层」落在哪一层，决定了它**能不能省时间**：
+ *
+ *   · **按执行顺序分层**（先扫便宜的、贵的放后面）—— 省不了。判据是硬闸，
+ *     命中即阻断，**每一条都必须跑到**；跳过任何一条就是「判据宣称在跑、实际
+ *     没有执行者」（§13.5.12 那一族）。
+ *   · **按代码归属分层**（基础基元 / 业务视图）—— 也省不了，见下。
+ *   · **按「同一份输入被重复算了多少遍」分层** —— **这才是真正白付的那一层**：
+ *     84 条判据各自 `stripComments(text)`，同一份文本被剥 84 遍。
+ *     实测（1070 份源文件）：逐条现剥 **8.6s**，按文本缓存 **0.4s**。
+ *
+ * 所以这次落地的是**两件事**，两件都对着「分层」这个词的一种真实含义：
+ *
+ *   ① **预计算层**（`stripCommentsCached`，见上方那条）—— 把「剥注释」从
+ *      「每条判据各算一次」提成「每份文本算一次」。这是**唯一**能改掉
+ *      O(判据 × 文件) 的地方，实测 5.4s → 0.88s（6 倍）；
+ *   ② **判据分档**（本段）—— 把 85 条判据按「它守的那件事稳不稳」分成
+ *      `CORE`（基元层）与 `SURFACE`（业务面）两档，**档位只影响报告与
+ *      诊断的输出组织，不影响判据强度**。
+ *
+ * ## 判据分档为什么改不了耗时（这一点必须写在明处）
+ *
+ * 「基础基元几乎不改 ⇒ 那一层可以少跑」这个推论**不成立**：判据守的是
+ * *视图层有没有自己实现一份*，而**新写一份自实现可能落在任何一个文件里**
+ * —— 基础层稳定恰恰意味着「有人在业务面里重新长出一个轮子」是唯一还在
+ * 发生的形态。少跑基础档 = 对「有人再写一个 `<button>`」完全失明。
+ *
+ * 因此分档**只**做两件事，且两件都不放松判据：
+ *   · `--report` 与失败输出**按档分组**（85 条一眼看得出「响的是哪一层」）；
+ *   · 分档本身受机器约束 —— 每条 rule id 必须**恰好**落在一档里，
+ *     新增判据忘记登记时直接报错（不许有「没档位的判据」这一档存在）。
+ *
+ * ## 档位怎么分（轴 = 出口的稳定度，不是「代码在哪个目录」）
+ *
+ * · **CORE（基元层）** —— 答的是「**视图层有没有绕过那个已经建好的基元**」：
+ *   出口是 `ui/` 组件或 `lib/` 里已被反复固化的小工具，形态在半年尺度上
+ *   几乎不动（`<button>` 永远是 `<button>`、`animate-spin` 永远是那个类名）。
+ *   这一档的判据一旦清了就是 0，改动它的动因通常是「换了基元本身」。
+ * · **SURFACE（业务面）** —— 答的是「**某个领域里正在长的样板**」：出口常常
+ *   刚建不久（P84 面包屑、P85 表格、P86 页头就是近几批接上的零引用基元），
+ *   形态还会随业务调整。这一档是**新增判据的入口**：先在这里冻结、清完升硬闸。
+ *
+ * 两档都是硬闸、都要跑；差别只在「它是地基本身，还是地基之上刚长出来的一层」。
+ *
+ * ## 一条排版纪律（为什么形状不能写成数组字面量）
+ *
+ * 档位表**不能**写成「一个 id 占一行、行首两格引号」的形态：
+ * `tests/check-ui-primitives.test.ts` 的 `demoteToRatchet()` 靠
+ * `\n  "P1",` 这个**行形状**在源码里定位并摘掉 `HARD_GATE_RULES` 的登记项。
+ * 档位表若逐行写成同一形状，那个正则会先撞上这里、摘错行（实测：7 条棘轮
+ * 机制用例因此全红）。所以这里每档写成一行逗号分隔的字符串 —— 同一份数据、
+ * 另一种排版，让「按行形状找」的既有工具够不着。
+ */
+const RULE_TIER_IDS = {
+  /* 基元层：出口是已固化的基元 / 小工具，形态长期不动。
+   * 分组只为可读，顺序即 `--report` 里的输出顺序。 */
+  CORE: [
+    /* 「四种基本元素」：按钮 / 浮层 / 加载态 / 滚动条外观。 */
+    "P1", "P2", "P3", "P4", "P9",
+    /* 浏览器能力的地基：剪贴板 / 下载 / 文件选择 / 显示占位。 */
+    "P5", "P6", "P7", "P8",
+    /* 「一格开关 / 一段折叠 / 一个浮层列表」这类结构件。 */
+    "P10", "P11", "P15", "P16", "P17", "P18", "P19", "P23", "P36",
+    /* 挂钩与生命周期：轮询 / 快捷键 / 滚动 / 展开集合 / 忙碌位 / 重入闸门。 */
+    "P12", "P14", "P20", "P21", "P26", "P30", "P37", "P65", "P66",
+    /* `lib/` 里的固化小工具：归一化 / 展示 / 换算 / 夹取 / 去重。 */
+    "P13", "P22", "P24", "P25", "P27", "P28", "P29", "P31", "P33", "P38",
+    "P39", "P40", "P42", "P43", "P44", "P45", "P46", "P47", "P48", "P49",
+    "P50", "P51", "P52", "P53", "P54", "P55", "P56", "P57", "P58", "P59",
+    "P60", "P61", "P62", "P63", "P64",
+    /* `ui/` 层自身的「绕开已装基元」。 */
+    "P67",
+    /* 表单元素与样式 token：`<input>` / `<label>` / `aria-pressed` /
+     * `space-y-*` / `dark:palette` / `size-*` 都是 tailwind 与 shadcn 的
+     * 内建约定，不随业务漂；治理清零后升的硬闸。 */
+    "P68", "P69", "P70", "P71", "P72", "P73", "P77", "P78", "P79", "P80",
+    "P81", "P82", "P83",
+    /* 服务端与跨端的固化出口：入参收窄 / 错误信封 / 报错建议 / 画布节点。 */
+    "P41", "P32", "P34", "P35",
+  ],
+  /* 业务面：出口多为近几批才接上的零引用基元，形态随业务走。 */
+  SURFACE: [
+    /* P75 空态卡（`border-dashed` + 圆角 + 文案的整块形态）。 */
+    "P75",
+    /* P76 裸 `<select>` —— 出口 `SelectMenu` 自身仍在扩口（id / aria-* 转发）。 */
+    "P76",
+    /* P84 / P85 / P86 是 §16.2.4.72 与 §16.2.4.73 同批接上的
+     * `breadcrumb-path` / `table` / `page-header`，此前全库零引用。 */
+    "P84", "P85", "P86",
+  ],
+};
 
-/** 名字字符集：JSX 标签名与属性名的可接受字符（含 `-` `.` `$` `:`）。 */
-const JSX_NAME_CHAR = /[A-Za-z0-9_$:.-]/;
-
-/** 从 `i`（引号起点）跳到字符串结束后的下标；处理转义与模板串 `${…}` 插值。 */
-function skipJsxString(src, i) {
-  const q = src[i];
-  i++;
-  while (i < src.length) {
-    const ch = src[i];
-    if (ch === "\\") {
-      i += 2;
-      continue;
-    }
-    if (q === "`" && ch === "$" && src[i + 1] === "{") {
-      /* 模板串插值：吃下平衡的一对花括号（内部可能再含字符串）。 */
-      i += 2;
-      let depth = 1;
-      while (i < src.length && depth > 0) {
-        const c = src[i];
-        if (c === '"' || c === "'" || c === "`") {
-          i = skipJsxString(src, i);
-          continue;
-        }
-        if (c === "{") depth++;
-        else if (c === "}") depth--;
-        i++;
-      }
-      continue;
-    }
-    if (ch === q) return i + 1;
-    i++;
-  }
-  return i;
-}
-
-/** 从属性段起点 `from` 扫到收尾 `>`，返回 { attrs, end } 或 null（取不到收尾）。 */
-function scanJsxAttrs(src, from) {
-  let i = from;
-  let depth = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === '"' || c === "'" || c === "`") {
-      i = skipJsxString(src, i);
-      continue;
-    }
-    if (c === "{") {
-      depth++;
-      i++;
-      continue;
-    }
-    if (c === "}") {
-      depth = Math.max(0, depth - 1);
-      i++;
-      continue;
-    }
-    /* 只有 depth === 0 且不在字符串里时的 `>` 才算标签结束。 */
-    if (depth === 0 && c === ">")
-      return { attrs: src.slice(from, i), end: i + 1 };
-    i++;
+/** rule id → 档位名；未登记的 id 返回 `null`（调用方据此报错）。 */
+function tierOf(id) {
+  for (const [tier, ids] of Object.entries(RULE_TIER_IDS)) {
+    if (ids.includes(id)) return tier;
   }
   return null;
 }
 
-/** 属性段文本（`scanJsxAttrs` 的只取 attrs 版本）：取不到收尾 `>` 返回 `null`。
- *  P83（屏级标题 `<h1>`）等处只关心属性段内容、不关心收尾下标，用这个更直白。 */
-function readJsxAttrsPastTag(src, from) {
-  const scanned = scanJsxAttrs(src, from);
-  return scanned ? scanned.attrs : null;
-}
+/** 档位清单（顺序即输出顺序）：CORE 在前 —— 它是地基本身。 */
+const TIER_ORDER = Object.keys(RULE_TIER_IDS);
 
-/** 从 `i`（`{` 起点）吃下一整对平衡花括号，返回 `}` 之后的下标。
- *  与 scanJsxAttrs 的区别：本函数**只**吃一层 `{…}`、不把 `>` 当终点 ——
- *  属性值 `onClick={() => a > b}` 里那个 `>` 属于表达式内部，标签的收尾
- *  `>` 在其后。内部字符串照样跳（`title={"a}b"}` 里的 `}` 不参与配对）。 */
-function skipJsxBraceExpr(src, i) {
-  let depth = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === '"' || c === "'" || c === "`") {
-      i = skipJsxString(src, i);
-      continue;
-    }
-    if (c === "{") depth++;
-    else if (c === "}") {
-      depth--;
-      if (depth === 0) return i + 1;
-    }
-    i++;
-  }
-  return i;
-}
+/** 档位的人话名字（只用于 `--report` 的分组标题，不是判据）。 */
+const RULE_TIER_LABEL = {
+  CORE: "基元层 · 出口是已固化的基元/小工具，形态长期不动",
+  SURFACE: "业务面 · 出口多为近几批接上的零引用基元，形态随业务走",
+};
 
-/** 把属性段解析成属性对象列表：[{ name, kind }]，kind ∈ value|spread|bare。
- *  · spread —— `{...props}`（名字为 `...`），title 可能由此带进来；
- *  · value  —— `name=…`（值可能是引号串 / `{…}` 表达式 / 裸标记）；
- *  · bare   —— 只有名字（如 `disabled` / `accessibleName`）。
- *  按整名匹配，`-` `.` `$` `:` 都是名字字符，所以 `data-title` 不会命中 `title`。 */
-function parseJsxProps(attrs) {
-  const props = [];
-  let i = 0;
-  const n = attrs.length;
-  while (i < n) {
-    const c = attrs[i];
-    if (/\s|\//.test(c)) {
-      i++;
-      continue;
-    }
-    if (c === "{") {
-      const after = skipJsxBraceExpr(attrs, i);
-      const inner = attrs.slice(i, after);
-      /* 属性级的 `{…}` 只有 `{...props}` 是展开；其余（如 `{cond && <X/>}`）
-       * 不是属性，跳过即可。 */
-      if (/^\{\s*\.\.\./.test(inner))
-        props.push({ name: "...", kind: "spread" });
-      i = after;
-      continue;
-    }
-    if (!JSX_NAME_CHAR.test(c)) {
-      i++;
-      continue;
-    }
-    let j = i;
-    while (j < n && JSX_NAME_CHAR.test(attrs[j])) j++;
-    const name = attrs.slice(i, j);
-    let k = j;
-    while (k < n && /\s/.test(attrs[k])) k++;
-    if (attrs[k] !== "=") {
-      props.push({ name, kind: "bare" });
-      i = j;
-      continue;
-    }
-    k++;
-    while (k < n && /\s/.test(attrs[k])) k++;
-    const vc = attrs[k];
-    if (vc === '"' || vc === "'" || vc === "`") {
-      const after = skipJsxString(attrs + ">", k);
-      props.push({ name, kind: "value", raw: attrs.slice(k, after) });
-      i = after;
-    } else if (vc === "{") {
-      const after = skipJsxBraceExpr(attrs, k);
-      props.push({ name, kind: "value", raw: attrs.slice(k, after) });
-      i = after;
-    } else {
-      let m = k;
-      while (m < n && !/[\s{("'`]/.test(attrs[m])) m++;
-      props.push({ name, kind: "value", raw: attrs.slice(k, m) });
-      i = m;
-    }
-  }
-  return props;
-}
-
-/** 扫视图层每个 `<Button>` 开标签，按「有没有原生 `title=`」判 P82 违规。
+/**
+ * 分档自检：每条判据**恰好**落在一档里 —— 漏登记与重复登记都是真故障。
  *
- *  **注意 polarity**：P82 是「不许用原生 `title=`」（该走 `<Hint>`），不是
- *  「必须给 title」。所以计违规的是 `title=` 的**出现**，不是缺席。
+ * 为什么要在脚本自己里判（而不是靠人记得登记）：这一层是**给人看的组织方式**，
+ * 漏登记的形态恰恰是静默的 —— 新判据照常跑、照常阻断，只是它不出现在任何一档的
+ * 分组里，于是 `--report` 少列一条、失败输出把它漏掉。这与 §13.5.12
+ * 「判据在场 ≠ 判据在跑」是同一族：**这里判的是「判据在场 ≠ 判据被分类」**。
  *
- *  五档取名的方向沿用「这一处该怎么处置」：
- *    · clean   —— 没有 title 属性、也没有 spread          → 合规，不计
- *    · empty   —— `title=""` / `title={undefined|null}`    → 空值不产生原生
- *                 tooltip，等同于没写，不计违规（**旧判据把这一档也当违规，
- *                 是误报**）
- *    · static  —— `title="有内容"`                       → 真·原生 tooltip，违规
- *    · dynamic —— `title={expr}`                          → 运行时才知值，默认
- *                 当违规（`<Hint label={expr}>` 才是出口）
- *    · unknown —— 有 `{...props}` 展开且无显式 title       → 静态判不了 title
- *                 会不会被带进来，单列人工抽查、不计违规（**旧判据漏计**）
- *  返回值里 `violations = static + dynamic`，P82 只把它计入硬闸。 */
-function countButtonTitle(text) {
-  const t = stripComments(text);
-  const res = {
-    clean: 0,
-    empty: 0,
-    static: 0,
-    dynamic: 0,
-    unknown: 0,
-    violations: 0,
-    unknownHits: [],
-  };
-  const re = /<Button(?=[\s/>])/g;
-  let m;
-  while ((m = re.exec(t)) !== null) {
-    const scanned = scanJsxAttrs(t, re.lastIndex);
-    if (!scanned) continue;
-    const props = parseJsxProps(scanned.attrs);
-    const titles = props.filter((p) => p.name === "title");
-    if (titles.length) {
-      /* 同名重复时取最后一个（JSX 后者覆盖前者）。 */
-      const tier = classifyTitleValue(titles[titles.length - 1]);
-      res[tier]++;
-      if (tier === "static" || tier === "dynamic") res.violations++;
-    } else if (props.some((p) => p.kind === "spread")) {
-      res.unknown++;
-      res.unknownHits.push(m.index);
-    } else {
-      res.clean++;
+ * @returns {string[]} 问题清单（空数组 = 通过）
+ */
+function tierProblems() {
+  const problems = [];
+  const seen = new Map();
+  for (const [tier, ids] of Object.entries(RULE_TIER_IDS)) {
+    for (const id of ids) {
+      if (!RULES[id]) problems.push(`${tier} 登记了不存在的判据 ${id}`);
+      if (seen.has(id)) {
+        problems.push(`${id} 同时登记在 ${seen.get(id)} 与 ${tier}`);
+      }
+      seen.set(id, tier);
     }
   }
-  return res;
-}
-
-/** 单条 `title=` 取值分档：空串 / `{undefined}` / `{null}` / `{void 0}` → empty；
- *  引号串（含空模板串）按内容判；`{…}` 表达式有非空内容 → dynamic。 */
-function classifyTitleValue(prop) {
-  const raw = (prop.raw ?? "").trim();
-  if (!raw) return "empty";
-  if (raw.startsWith("{")) {
-    const expr = raw.slice(1).replace(/}$/, "").trim();
-    if (/^(undefined|null|void\s+0|)$/.test(expr)) return "empty";
-    return "dynamic";
+  for (const id of Object.keys(RULES)) {
+    if (!seen.has(id)) {
+      problems.push(`${id} 未登记档位（RULES 里有、RULE_TIER_IDS 里没有）`);
+    }
   }
-  const unquoted = raw.replace(/^["'`]/, "").replace(/["'`]$/, "");
-  return unquoted ? "static" : "empty";
+  return problems;
 }
 
-/** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
-function isBusySlotName(name) {
-  return /[Bb]usy/.test(name) || /^\w*[Rr]etry\w*Id$/.test(name);
-}
-
-/** P81 的「icon-like 标签名」判据：视图里作为 Button 直接子级的 icon 有
- *  三种来源 —— 项目自研 `<Icon name="…">`、原生 `<svg>`、lucide 组件；
- *  后者按 lucide 的两种命名习惯：
- *    · 别名约定（`import { ChevronLeft as ChevronLeftIcon }`）→ `*Icon` 后缀；
- *    · 直接名（`import { Plus }`）→ 需要一份白名单，避免前缀匹配把 `<Push>`
- *      之类误当 icon。
- *  白名单是「视图实测出现过的 25 项 + 常见 20 项」，够用即可；未来新用到
- *  未登记的 lucide 名会被少计、棘轮不会假红，走治理时按 `--report` 补齐。 */
-const P81_ICON_NAMES = new Set([
-  "Plus",
-  "Minus",
-  "X",
-  "Check",
-  "CheckCheck",
-  "Copy",
-  "Search",
-  "Trash",
-  "Trash2",
-  "RefreshCw",
-  "RefreshCcw",
-  "Settings",
-  "Play",
-  "Pause",
-  "Upload",
-  "Download",
-  "ExternalLink",
-  "Link",
-  "Unlink",
-  "Paperclip",
-  "Eye",
-  "EyeOff",
-  "Edit",
-  "Menu",
-  "MoreHorizontal",
-  "MoreVertical",
-  "File",
-  "FileText",
-  "Folder",
-  "FolderOpen",
-  "Star",
-  "Heart",
-  "Zap",
-  "Sparkles",
-  "Terminal",
-  "Wrench",
-  "Clock",
-  "Bell",
-  "Info",
-  "AlertCircle",
-  "AlertTriangle",
-  "Ban",
-  "Loader",
-  "Loader2",
-  "LoaderCircle",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  "ArrowDown",
-  "ChevronLeft",
-  "ChevronRight",
-  "ChevronUp",
-  "ChevronDown",
-  "CircleCheck",
-  "CircleAlert",
-  "CircleX",
-  "TriangleAlert",
-  "OctagonAlert",
-  "Film",
-  "Image",
-  "ImagePlus",
-  "Camera",
-  "Video",
-  "Music",
-  "Mic",
-  "MicOff",
-  "Volume2",
-  "VolumeX",
-  "Send",
-  "Share2",
-  "LayoutGrid",
-  "List",
-  "ClipboardCheck",
-  "Clipboard",
-  "Maximize2",
-  "Minimize2",
-  "Undo2",
-  "Redo2",
-  "Save",
-  "Power",
-]);
-function isP81IconName(name) {
-  if (name === "Icon" || name === "svg") return true;
-  if (name.length > 4 && name.endsWith("Icon")) return true;
-  return P81_ICON_NAMES.has(name);
-}
 
 /** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P38 属此类）。 */
 const HARD_GATE_RULES = new Set([
@@ -4586,6 +4258,18 @@ function writeBaseline(files) {
 }
 
 function main() {
+  /* 分档自检**放在最前面**：判据还没跑就先保证「85 条每条都有档位」——
+   * 等到失败输出里才发现某条没被分类，那时人已经在看红、不会去补分类。 */
+  const tierBad = tierProblems();
+  if (tierBad.length) {
+    console.error(
+      "[ui-primitives] 判据分档自检失败（每条 rule id 必须恰好落在一档里）：\n  " +
+        tierBad.join("\n  ") +
+        "\n  改法：在脚本的 RULE_TIERS 里给这条判据登记 CORE（基元层）或 SURFACE（业务面），" +
+        "\n  口径见文件头「分层」一节。",
+    );
+    process.exit(1);
+  }
   const now = collect();
   const prev = fs.existsSync(BASELINE)
     ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
@@ -4670,18 +4354,27 @@ function main() {
         if (r.unknown) unknownRows.push([rel, r.unknown]);
       }
     }
-    for (const [id, rule] of Object.entries(RULES)) {
-      const hits = Object.entries(now)
-        .filter(([, c]) => c[id])
-        .sort((a, b) => b[1][id] - a[1][id]);
-      const sum = hits.reduce((n, [, c]) => n + c[id], 0);
+    /* 按档分组输出：85 条平铺看不出「响的是地基层还是业务面」——
+     * 档位口径见文件头「分层」一节。 */
+    for (const tier of TIER_ORDER) {
+      const ids = Object.keys(RULES).filter((id) => tierOf(id) === tier);
       console.log(
-        `[ui-primitives] ${id} ${rule.label} —— ${sum} 处 / ${hits.length} 文件`,
+        `[ui-primitives] ── ${tier}（${RULE_TIER_LABEL[tier]}）· ${ids.length} 条 ──`,
       );
-      for (const [rel, c] of hits.slice(0, 15)) {
-        console.log(`  · ${rel}（${c[id]} 处）`);
+      for (const id of ids) {
+        const rule = RULES[id];
+        const hits = Object.entries(now)
+          .filter(([, c]) => c[id])
+          .sort((a, b) => b[1][id] - a[1][id]);
+        const sum = hits.reduce((n, [, c]) => n + c[id], 0);
+        console.log(
+          `[ui-primitives] ${id} ${rule.label} —— ${sum} 处 / ${hits.length} 文件`,
+        );
+        for (const [rel, c] of hits.slice(0, 15)) {
+          console.log(`  · ${rel}（${c[id]} 处）`);
+        }
+        if (hits.length > 15) console.log(`  … 另 ${hits.length - 15} 个文件`);
       }
-      if (hits.length > 15) console.log(`  … 另 ${hits.length - 15} 个文件`);
     }
     const ukSum = unknownRows.reduce((n, [, c]) => n + c, 0);
     console.log(
@@ -4749,6 +4442,22 @@ function main() {
     `[ui-primitives] 硬闸判据 ${HARD_GATE_RULES.size} 条（全部须为 0）：` +
       `${hardGateHits(now).length} 处命中`,
   );
+  /* 分档读数：85 条里哪一档在响 —— 全绿时不打（避免每次提交都多两行噪声），
+   * 有命中时它是「这次该往哪个方向看」的第一条线索。 */
+  if (hardGateHits(now).length) {
+    const hitIds = new Set(
+      Object.values(now)
+        .flatMap((counts) => Object.keys(counts))
+        .filter((id) => HARD_GATE_RULES.has(id)),
+    );
+    console.log(
+      `[ui-primitives] 命中分档：` +
+        TIER_ORDER.map((tier) => {
+          const ids = [...hitIds].filter((id) => tierOf(id) === tier);
+          return `${tier} ${ids.length ? ids.join("/") : "0"}`;
+        }).join(" · "),
+    );
+  }
 
   if (problems.length) {
     console.error("[ui-primitives] 违规（阻断）：\n  " + problems.join("\n  "));

@@ -44,17 +44,31 @@ function seedBaseline(repo: GateRepo): void {
  */
 function demoteToRatchet(repo: GateRepo, ...ids: string[]): void {
   const rel = "scripts/check-ui-primitives.cjs";
-  let src = repo.read(rel);
+  const src = repo.read(rel);
+  /* **在 `HARD_GATE_RULES` 这一段的范围内**改，而不是在整份源码上按行形状找。
+   *
+   * 原先的实现是全局按「换行 + 缩进 + 引号包住的 id + 逗号」这条**行形状**做
+   * 替换 —— 它的注释写着「只把 rule id 从 HARD_GATE_RULES 摘掉」，但正则本身
+   * 并不锚定那一段，只赌「源码里再没有别处出现同一行形状」。脚本里一加别的按
+   * id 登记的表（`RULE_TIER_IDS` 就是），这个赌就输：正则会先摘掉那张表里的
+   * 登记项、把判据的分档自检打成红（实测 7 条用例连坐）。**赌「没有第二处」的
+   * 判据会在第二处出现的那天静默改错地方**（§13.5.12 同族），所以补锚点。 */
+  const decl = DECL_RE.exec(src);
+  if (!decl) throw new Error("读不到 HARD_GATE_RULES 的声明 —— 改测试");
+  const declAt = src.indexOf(decl[0]);
+  const head = src.slice(0, declAt);
+  let body = decl[0];
+  const tail = src.slice(declAt + decl[0].length);
   for (const id of ids) {
-    const next = src.replace(new RegExp(`\\n[ \\t]*"${id}",[^\\n]*`), "");
-    if (next === src) {
+    const next = body.replace(new RegExp(`\\n[ \\t]*"${id}",[^\\n]*`), "");
+    if (next === body) {
       throw new Error(
         `${id} 不在 HARD_GATE_RULES 里 —— 本组用例的前提已变，改测试`,
       );
     }
-    src = next;
+    body = next;
   }
-  repo.write(rel, src);
+  repo.write(rel, head + body + tail);
 }
 
 /** 读脚本里 `HARD_GATE_RULES` 的声明段（下面那条用例用它算条数，不写字面量）。 */
@@ -5818,5 +5832,113 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     );
     const { code, output } = repo.run();
     expect(code, output).toBe(0);
+  });
+
+  /* ── 分层（ISSUE #1747）：预计算层 + 判据分档 ────────────────────────
+   * 两条机制都不是判据本身，但都会**静默**失效，所以各配正例：
+   *   · 预计算层失效的形态是「算得更慢」（不报错）—— 只能靠行为断言钉住；
+   *   · 分档自检失效的形态是「新判据没被分类」（照常阻断、只是不出现在分组里）。
+   */
+
+  test("预计算层：同一份文本只剥一次注释（同一份输入的重复计算被消掉）", ({
+    repo,
+  }) => {
+    /* 断言的是**行为**不是实现：拿两份内容逐字相同的文件，把 `stripComments`
+     * 换成会自增计数的探针，看它是按「文本」还是按「判据 × 文件」被调用。
+     *
+     * 为什么不能只断言「跑得动 / 退出码对不对」：缓存坏掉的表现是**仍然全绿**
+     * （剥注释是纯函数，多算几遍结果一样）—— 一条把缓存整个删掉的改动能全绿
+     * 通过，而它正是本层要守的东西。 */
+    /* 探针打在**文本引擎**里（`stripComments` 住在 `ui-primitives-engine.cjs`，
+     * ISSUE #1747 的分层把机器从判据里抽了出去）。
+     *
+     * 挂在 `process.on("exit")` 上而不是串在 `main()` 末尾：判据命中时会走
+     * `process.exit(1)`，串在末尾的打印永远到不了（第一版这么写，什么都没输出）。 */
+    const rel = "scripts/ui-primitives-engine.cjs";
+    const src = repo.read(rel);
+    /* 探针源码里的 `stripComments` 字面量**拆开写**：本文件自己也落在
+     * `tests/strip-comments-single-source.test.ts` 的扫描面里，原样写着的
+     * 被搜串会让本文件自匹配成「又抄了一份」（那条判据的第一个失效模式）。 */
+    const defName = "func" + "tion stripComments(text) {";
+    const probe = [
+      "const STRIP_CALLS = { n: 0 };",
+      "process.on('exit', () => console.error('[probe] stripCalls=' + STRIP_CALLS.n));",
+      defName,
+      "  STRIP_CALLS.n++;",
+      "  return __STRIP_IMPL__(text);",
+      "}",
+      "",
+    ].join("\n");
+    const next = src.replace(
+      defName,
+      probe + "function __STRIP_IMPL__(text) {",
+    );
+    expect(next, "stripComments 的声明没找到 —— 本用例的前提已变").not.toBe(src);
+    repo.write(rel, next);
+    /* 两份**内容相同**的文件 + 第三份不同内容的文件。 */
+    repo.write("src/components/studio/A.tsx", BUTTON_VIEW);
+    repo.write("src/components/studio/A2.tsx", BUTTON_VIEW);
+    repo.write("src/components/studio/B.tsx", SPIN_VIEW);
+    const { output } = repo.run();
+    const m = /stripCalls=(\d+)/.exec(output);
+    expect(m, output).toBeTruthy();
+    const calls = Number(m![1]);
+    /* 上界：**唯一**文本数 × 1（缓存命中 ⇒ 与「多少条判据问过它」无关）。
+     * 给一点余量：probe 自己与 `--report` 之外的分支各可能再问一次。
+     * 关键判据是「远小于 判据数 × 文本数」（85 × 2 = 170）。 */
+    expect(calls, output).toBeLessThan(30);
+  });
+
+  test("分档自检：新判据忘记登记档位时直接报错（不许有没档位的判据）", ({
+    repo,
+  }) => {
+    /* 造一条「有 RULES 条目、但没登记档位」的判据 —— 这正是新加判据时最容易
+     * 漏的一步。漏了不会红、只是它不出现在任何分组里，所以必须由自检拦。 */
+    const rel = "scripts/check-ui-primitives.cjs";
+    let src = repo.read(rel);
+    const next = src.replace(
+      "  P86: {",
+      [
+        "  P99: {",
+        '    label: "探针判据（没有登记档位）",',
+        "    count: () => 0,",
+        "  },",
+        "  P86: {",
+      ].join("\n"),
+    );
+    expect(next, "P86 的声明没找到 —— 本用例的前提已变").not.toBe(src);
+    src = next;
+    repo.write(rel, src);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("分档自检失败");
+    expect(output).toContain("P99");
+    expect(output).toContain("未登记档位");
+  });
+
+  test("分档自检：同一条判据登记两次时直接报错", ({ repo }) => {
+    /* 重复登记的形态：一条 id 出现在两档里 —— 取哪一档都说不清，必须报错。 */
+    const rel = "scripts/check-ui-primitives.cjs";
+    const src = repo.read(rel);
+    const next = src.replace(
+      '    "P75",',
+      '    "P75", "P80",',
+    );
+    expect(next, "P75 的登记项没找到 —— 本用例的前提已变").not.toBe(src);
+    repo.write(rel, next);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("分档自检失败");
+    expect(output).toContain("P80");
+    expect(output).toContain("同时登记在");
+  });
+
+  test("--report 按档分组输出（85 条一眼看得出响的是哪一层）", ({ repo }) => {
+    /* 分组是这一层唯一的**用户可见**产出；它坏了的表现是「清单还出得来、
+     * 只是又变成平铺」—— 退出码照样 0，所以只能断言输出形态。 */
+    const { code, output } = repo.run(["--report"]);
+    expect(code, output).toBe(0);
+    expect(output).toContain("── CORE（");
+    expect(output).toContain("── SURFACE（");
   });
 });
