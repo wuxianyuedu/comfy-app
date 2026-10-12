@@ -104,6 +104,12 @@ const { test, expect } = defineGateRepo({
       from: "scripts/launcher-core/worktree.mjs",
       to: "scripts/launcher-core/worktree.mjs",
     },
+    // 依赖面清单抽到 dependency-face.mjs 之后（与 check-allow-builds.cjs 共用同一份），
+    // 它也是本判据的输入之一 —— 漏拷的表现是脚本吐出非 JSON 的启动错误、契约用例全红。
+    {
+      from: "scripts/dependency-face.mjs",
+      to: "scripts/dependency-face.mjs",
+    },
   ],
   setup: (repo) => {
     repo.git("init", "-q", "-b", "master", ".");
