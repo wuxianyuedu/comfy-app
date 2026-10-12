@@ -125,6 +125,24 @@ const GATES = {
     args: ["../scripts/check-deps-freshness.mjs"],
   },
   /**
+   * **client chunk 体积预算**（ISSUE #1781，规范 §13.5.4）。
+   *
+   * **它不在 `all` 里**（`run: false`）：测量对象是 `next build` 的产物
+   * （`.next/static/chunks`），判据在一次构建之后才有结论，而构建是半分钟级
+   * （实测 26–33s，冷 / 热一样）—— 把它塞进每一次「完整验证」是拿半分钟换一个
+   * 不会天天变的结论（成本判据同 §13.5.4）。同一脚本也挂在 `pnpm build` 收尾
+   * （形态 C 兜底），所以这条更准确地说是一份**按需入口**：
+   * `pnpm check:bundle` / `pnpm check:all --mode bundleBudget`。
+   *
+   * 与上面两档不同，它**不吃产物不存在**这一格：没构建过时脚本打「跳过」并退 0
+   * （守的是构建结果，不是构建本身，同 `check-standalone-contents.cjs`）。
+   */
+  bundleBudget: {
+    label: "Bundle size budget (client chunk gzip total + file count ratchet)",
+    args: ["../scripts/check-bundle-budget.cjs"],
+    run: false,
+  },
+  /**
    * **合并前的固定动作**（规范 §13.6.2；ISSUE #1611 拍板）。
    *
    * **它不在 `all` 里**（`run: false`）：平台侧是 **squash 合并**、那一步**不跑本地
