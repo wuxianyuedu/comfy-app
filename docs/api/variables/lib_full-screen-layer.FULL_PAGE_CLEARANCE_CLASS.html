@@ -20,14 +20,20 @@
 等于 <code>100svh</code> —— 从视口顶起算，把最顶端那条 36px 的标题行（页签 + 最小化 /
 最大化 / <strong>关闭</strong>）整条盖住。用户的原话正是 <em>这个界面会挡住右上角的关闭按钮</em>，
 而它偏偏出现在「页面已经出错」的时候 —— 此刻关闭窗口往往是唯一还想做的事。</p>
-<p><code>min-h-0</code> 不是废话：<code>app/error.tsx</code> 挂在 <code>ShellTabs</code> 那个 <code>flex-1</code> 容器里
-（而它的高度已经减掉了标题行），默认的 <code>min-height: auto</code> 会让这个块撑到
-自身内容高度、把滚动条顶没；归零之后它才<strong>恰好</strong>是内容区高度，多的部分自己滚。
-浏览器 / dev 形态下 <code>top-title-bar</code> 是空档（该变量的赋值收在全局 CSS 的
-<code>[data-shell]</code> 里），于是它退化成 <code>min-h-0</code> + 100% 高，行为与从前一致。</p>
+<p>⚠️ 使用前提（ISSUE #1794 第二次修正）：本常量的「让位」假设标题行<strong>仍在
+DOM 里</strong>。而错误页 / 404 / global-error / loading / 登录页是<strong>路由段
+boundary</strong>，它们一显示就替换掉 <code>app/layout</code> 的整个 children —— <code>ShellTabs</code>
+连同标题行一起卸载，让出来的是一条空带，窗口按钮整排消失。那些页面的正解
+是<strong>自带</strong>精简标题行（<code>components/studio/WindowTitleBar</code> +
+<code>components/studio/ShellFullPage</code>），不是让位；本常量服务的是「标题行还在」
+的场景。</p>
+<p><code>min-h-0</code> 不是废话：挂在 <code>ShellTabs</code> 那个 <code>flex-1</code> 容器里的内容，默认的
+<code>min-height: auto</code> 会让这个块撑到自身内容高度、把滚动条顶没；归零之后它才
+<strong>恰好</strong>是内容区高度，多的部分自己滚。浏览器 / dev 形态下 <code>top-title-bar</code>
+由 <code>--spacing-title-bar</code>（<code>@theme</code> 全局定义）给出 36px 空档。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/full-screen-layer.ts:83</li></ul></aside></div>
+<li>Defined in src/lib/full-screen-layer.ts:90</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
