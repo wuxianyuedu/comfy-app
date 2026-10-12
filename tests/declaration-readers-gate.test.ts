@@ -75,7 +75,8 @@ function carriers(n = 8): Record<string, unknown>[] {
 type Fixture = {
   ledger?: unknown;
   hook?: string;
-  affected?: string;
+  /** 固定清单那份数据模块的内容（默认给一条 tests/fixed.test.ts）。 */
+  fixedList?: string;
   /** `package.json` 的内容；默认给一份带 `check:claims` 的（供 npm-script 那一格）。 */
   pkg?: string;
   files?: Record<string, string>;
@@ -85,7 +86,7 @@ const DEFAULT_HOOK =
   Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join(
     "",
   ) + '  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n';
-const DEFAULT_AFFECTED =
+const DEFAULT_FIXED_LIST =
   'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/fixed.test.ts",\n];\n';
 const DEFAULT_PKG = JSON.stringify({
   name: "fixture",
@@ -113,8 +114,8 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
     fx.hook ?? DEFAULT_HOOK,
   );
   writeFileSync(
-    path.join(root, "scripts", "affected-tests.mjs"),
-    fx.affected ?? DEFAULT_AFFECTED,
+    path.join(root, "scripts", "fixed-structural-tests.mjs"),
+    fx.fixedList ?? DEFAULT_FIXED_LIST,
   );
   writeFileSync(path.join(root, "package.json"), fx.pkg ?? DEFAULT_PKG);
   // 默认给一个存在着的读者 → 「读者存在」那一格不误报
@@ -204,7 +205,7 @@ describe("声明 ⇄ 读者门禁：该拦的形状（§11.23）", () => {
     const r = gate({
       ledger: { carriers: list },
       // 固定清单里换成另一份文件 → 登记的那份出局
-      affected:
+      fixedList:
         'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/other.test.ts",\n];\n',
     });
     expect(r.ok).toBe(false);
