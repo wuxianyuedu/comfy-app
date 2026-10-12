@@ -5,7 +5,7 @@
   "threshold": 900,
   "total": 5,
   "files": {
-    "scripts/check-ui-primitives.cjs": 4820,
+    "scripts/check-ui-primitives.cjs": 4529,
     "scripts/dev-launcher.mjs": 1576,
     "scripts/base-check.mjs": 1382,
     "scripts/check-file-structure.cjs": 1214,
