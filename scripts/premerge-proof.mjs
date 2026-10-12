@@ -42,6 +42,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { resolveMergeBaseRef } from "./base-check.mjs";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const PROVEN_FILE_NAME = "comfy-premerge-proof.json";
@@ -104,7 +106,8 @@ export function decidePremergePush({
     return {
       run: false,
       reasons: [
-        "取不到上次 fetch 看到的上游引用 —— 复算没有可比的那条线（先 `git fetch` 再推）",
+        "取不到上次 fetch 看到的上游引用 —— 复算没有可比的那条线（按「各 remote 的 `master` → 本地 " +
+          "`master`」依次找过，远端名不假定叫 origin；先 `git fetch` 再推）",
       ],
     };
   }
@@ -141,22 +144,39 @@ function shortSha(sha) {
 }
 
 /**
+ * 本检出的两颗 sha：HEAD 与「上次 fetch 看到的上游 `master`」。
+ *
+ * 上游那条**不写死 `refs/remotes/origin/master`**：本仓的远端实测叫 `cnb`（`git remote -v` 里
+ * 没有 `origin`），那句在这份检出里恒取不到 ⇒ `decidePremergePush` 走「取不到上游引用」那一支
+ * ⇒ 每一次 topic 分支的 push 都被判成「没法复算」而退 2 —— §13.6.2.1 刚立的执行者反过来
+ * 挡住了所有 push。远端名随克隆方式变（`base-check.mjs` 的注释早就记过这件事），所以复用它的
+ * `resolveMergeBaseRef()`，但**只收它第②档那种 `<remote>/master` 的形状**（下面 `includes("/")`
+ * 那句）：它的第③档「本地 `master`」对 `--base` 是对的（浅检出 / 单机仓库），对这一跳不对 ——
+ * 这一档要的是**会被 `git fetch` 移动**的引用，本地 `master` 不会动。同一处也**不走 `@{u}`**：
+ * 推送之后 `@{u}` 就是你自己的分支，拿它当上游等于「自己跟自己比」，看起来全绿而什么都没回答。
+ *
  * @param {string} gitDir
+ * @param {string} [cwd]
  * @returns {{headSha: string, upstreamSha: string | null}}
  */
-function readRevisions(gitDir) {
+export function readRevisions(gitDir, cwd = ROOT) {
   const run = (/** @type {string[]} */ args) => {
     const r = spawnSync("git", args, {
-      cwd: ROOT,
+      cwd,
       encoding: "utf8",
       env: { ...process.env, GIT_DIR: gitDir },
     });
     return r.status === 0 ? String(r.stdout ?? "").trim() : "";
   };
+  /* `resolveMergeBaseRef()` 的第③档是「本地 `master`」，那一档在**这里**语义不对：这一跳要的
+   * 语义是「这条引用会被 `git fetch` 移动」，而本地 `master` 不会 —— 远端前移、本地没动时拿它
+   * 当上游，等于给一份陈旧证明发免检条。所以只收 `<remote>/master` 那种带命名空间的形状。 */
+  const ref = resolveMergeBaseRef(cwd);
+  const upstreamRef = ref && ref.includes("/") ? ref : null;
   return {
     headSha: run(["rev-parse", "HEAD"]),
     upstreamSha:
-      run(["rev-parse", "--verify", "--quiet", "refs/remotes/origin/master"]) ||
+      (upstreamRef && run(["rev-parse", "--verify", "--quiet", upstreamRef])) ||
       null,
   };
 }
