@@ -97,7 +97,7 @@ export interface AppShellProps {
   onNewProject: () => void;
   /** 主内容。各视图只往这里塞东西，外壳细节（侧栏 / 顶栏 / 滚动容器）不归它们管。 */
   children: ReactNode; /**
-   * 视图页签（浏览器 / dev 形态下由外壳在内容列里渲染那条栏）。
+   * 视图页签（浏览器 / dev 形态下由外壳渲染在内容列最顶端的栏，位于 TopBar 之上）。
    * 不传时外壳行为与从前一致。
    */
   viewTabs?: ViewTab[];
@@ -304,16 +304,9 @@ export function AppShell({
       </Sidebar>
 
       <SidebarInset className="bg-canvas text-ink min-w-0 overflow-hidden">
-        <TopBar
-          active={active}
-          onOpenSettings={onOpenSettings}
-          onOpenSearch={() => setCommandOpen(true)}
-        />
-
-        {/* 浏览器 / dev 形态的视图页签栏。放在内容列（`SidebarInset`）之内而不是
-            `ShellTabs` 那一层：侧栏是 fixed 定位，整窗宽度那一层会被它压住（实测
-            关闭按钮报「subtree intercepts pointer events」）。桌面壳里这条栏由窗口
-            标题行承载，所以这里按同一个判据让位。 */}
+        {/* 浏览器 / dev 形态的视图页签栏：放到内容列最顶端（TopBar 上方），
+            而不是 TopBar 下方。桌面壳里这条栏由窗口标题行承载，这里按同一个判据让位。
+            保留在 `SidebarInset` 内部是为了让 fixed 侧栏自然让位，避免被侧栏压住关闭按钮。 */}
         {titleBarTabs ? null : (
           <ViewTabStrip
             tabs={viewTabs ?? []}
@@ -325,6 +318,13 @@ export function AppShell({
             onOpenView={onOpenView}
           />
         )}
+
+        <TopBar
+          active={active}
+          onOpenSettings={onOpenSettings}
+          onOpenSearch={() => setCommandOpen(true)}
+        />
+
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {children}
         </div>
