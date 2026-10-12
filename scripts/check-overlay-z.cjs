@@ -39,12 +39,14 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
+const STAGED = ARGS.has("--staged");
 const BASELINE = path.join(__dirname, ".overlay-z-baseline.json");
 
 /** 棘轮作用域：视图层（组件 + 路由页面）——与 UI 基元棘轮同口径。 */
@@ -214,6 +216,7 @@ function writeBaseline(files) {
 }
 
 function main() {
+  if (STAGED && !REPORT_ONLY && !UPDATE) skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[overlay-z]" });
   const now = collect();
   const prev = fs.existsSync(BASELINE)
     ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))

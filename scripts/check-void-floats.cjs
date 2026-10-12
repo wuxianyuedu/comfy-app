@@ -42,7 +42,6 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const ts = require("typescript");
 
 const ROOT = path.resolve(__dirname, "..");
 const BASELINE = path.join(__dirname, ".void-floats-baseline.json");
@@ -50,6 +49,18 @@ const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const REPORT_ONLY = ARGS.has("--report");
 const STRICT = ARGS.has("--strict");
+const STAGED = ARGS.has("--staged");
+
+/** 扫描根。**必须在 `--staged` 短路之前**，所以提到 `require("typescript")` 上面。 */
+const SCAN_DIR = "src/lib";
+
+/* `--staged`（钩子用）＝ 输入面跳过，口径见 §13.5.8.2。
+ * 短路点在 `require("typescript")` 之前 —— 那一步 ≈180ms，放后面就白跳过。 */
+if (STAGED && !REPORT_ONLY && !UPDATE) {
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[void-floats]" });
+}
+
+const ts = require("typescript");
 
 /**
  * 判据版本:`UnaryExpression(void) 包 CallExpression 作为整条语句` 是唯一形态。
@@ -58,7 +69,6 @@ const STRICT = ARGS.has("--strict");
  */
 const RULE_VERSION = 1;
 
-const SCAN_DIR = "src/lib";
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
 

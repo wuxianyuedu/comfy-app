@@ -15,6 +15,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { copyGateDeps } from "./helpers/gate-repo";
 import { afterEach, describe, expect, it } from "vitest";
 
 const SCRIPT = path.resolve(
@@ -30,7 +32,9 @@ function scanner(files: Record<string, string>) {
   // 脚本按自身位置解析仓库根（__dirname/..），故必须放进临时仓库的 scripts/，
   // 否则扫的还是真实仓库 —— 那样用例会「总是通过」，等于没测。
   mkdirSync(path.join(root, "scripts"), { recursive: true });
+  /* 判据 `require("./gate-scan-read.cjs")`（`--staged` 的共享短路器）—— 临时仓库只放得下被测那一份脚本时，缺依赖的表现是可读性极差的 requireStack，所以按 `require("./x.cjs")` 递归补齐（同 `tests/helpers/gate-repo.ts` 的文件头）。 */
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
