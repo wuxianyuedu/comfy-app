@@ -1,0 +1,9 @@
+{
+  "note": "入口包的『重依赖静态可达性』登记（规范 12.19 / 02 §2.9）。判据 scripts/check-barrel-heavy-deps.cjs。新增一条 = 承认「这个入口不该静态拿到它」。",
+  "entries": ["src/app/workspace/page.tsx"],
+  "heavyDeps": ["@xyflow/react", "shiki", "react18-json-view", "marked", "dompurify"],
+  "lazyMustBeDynamicFromEntry": [
+    "src/components/studio/ProjectCanvas.tsx",
+    "src/components/studio/FilmStudio.tsx"
+  ]
+}

@@ -11,9 +11,9 @@
 <li><a href="../modules/lib_project-canvas_canvas-store.html">lib/project-canvas/canvas-store</a></li>
 <li><a href="" aria-current="page">CanvasProject</a></li></ul>
 <h1>Interface CanvasProject</h1></div>
-<div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">CanvasProject</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#edges">edges</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Edge</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#id">id</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#name">name</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#nodes">nodes</a><span class="tsd-signature-symbol">:</span> <a href="../types/lib_project-canvas_canvas-types.CanvasNodeType.html" class="tsd-signature-type tsd-kind-type-alias">CanvasNodeType</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#updatedat">updatedAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
+<div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">CanvasProject</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#edges">edges</a><span class="tsd-signature-symbol">:</span> <a href="lib_project-canvas_canvas-persistence-types.PersistedEdge.html" class="tsd-signature-type tsd-kind-interface">PersistedEdge</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#id">id</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#name">name</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#nodes">nodes</a><span class="tsd-signature-symbol">:</span> <a href="lib_project-canvas_canvas-persistence-types.PersistedNode.html" class="tsd-signature-type tsd-kind-interface">PersistedNode</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#updatedat">updatedAt</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/project-canvas/canvas-store.ts:24</li></ul></aside>
+<li>Defined in src/lib/project-canvas/canvas-store.ts:26</li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -32,31 +32,29 @@
 <section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="edges"><span>edges</span><a href="#edges" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">edges</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Edge</span><span class="tsd-signature-symbol">[]</span></div><aside class="tsd-sources">
+<div class="tsd-signature"><span class="tsd-kind-property">edges</span><span class="tsd-signature-symbol">:</span> <a href="lib_project-canvas_canvas-persistence-types.PersistedEdge.html" class="tsd-signature-type tsd-kind-interface">PersistedEdge</a><span class="tsd-signature-symbol">[]</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/project-canvas/canvas-store.ts:30</li></ul></aside></section>
+<li>Defined in src/lib/project-canvas/canvas-store.ts:34</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="id"><span>id</span><a href="#id" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">id</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/project-canvas/canvas-store.ts:25</li></ul></aside></section>
+<li>Defined in src/lib/project-canvas/canvas-store.ts:27</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="name"><span>name</span><a href="#name" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">name</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/project-canvas/canvas-store.ts:26</li></ul></aside></section>
+<li>Defined in src/lib/project-canvas/canvas-store.ts:28</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="nodes"><span>nodes</span><a href="#nodes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">nodes</span><span class="tsd-signature-symbol">:</span> <a href="../types/lib_project-canvas_canvas-types.CanvasNodeType.html" class="tsd-signature-type tsd-kind-type-alias">CanvasNodeType</a><span class="tsd-signature-symbol">[]</span></div>
-<div class="tsd-comment tsd-typography"><p>收窄为 CanvasNodeType：workflowArdot 纯视觉节点也持久化（起）。</p>
-</div><aside class="tsd-sources">
+<div class="tsd-signature"><span class="tsd-kind-property">nodes</span><span class="tsd-signature-symbol">:</span> <a href="lib_project-canvas_canvas-persistence-types.PersistedNode.html" class="tsd-signature-type tsd-kind-interface">PersistedNode</a><span class="tsd-signature-symbol">[]</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/project-canvas/canvas-store.ts:29</li></ul></aside></section>
+<li>Defined in src/lib/project-canvas/canvas-store.ts:33</li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="updatedat"><span>updated<wbr/>At</span><a href="#updatedat" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">updatedAt</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/project-canvas/canvas-store.ts:27</li></ul></aside></section></section></details></div>
+<li>Defined in src/lib/project-canvas/canvas-store.ts:29</li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

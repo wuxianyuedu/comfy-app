@@ -2,16 +2,34 @@
 
 // 详情面板主体：画布预览 / 参数配置 / 源文件三个页签的内容。纯展示。
 
+import React from "react";
+
 import { Maximize2 } from "lucide-react";
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
-import { JsonViewer } from "~/components/ui/json-viewer";
 import { Button } from "~/components/ui/button";
 import type { DetailTab } from "../workflow-library-detail-config";
 import type { WorkflowRow } from "../workflow-library-config";
-import { WorkflowCanvasNodePreview } from "../WorkflowCanvasNodePreview";
+import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
 import { WorkshopEncapsulationPanel } from "./WorkshopEncapsulationPanel";
+
+/* ── 两个页签的重型内容各自懒加载（规范 §12.19 / 02 §2.9） ─────────────────
+ * 本面板在「工作流库」视图里常驻，而它下面挂着两件重物：
+ *   · 画布预览 → `@xyflow/react`（整个画布引擎）；
+ *   · 源文件页签 → `react18-json-view`。
+ * 两者都是**按页签条件渲染**的，此前却是静态 import —— 于是「打开工作流库、
+ * 只看一眼列表」也要把画布引擎和 JSON 树渲染器拖进静态图，再顺着
+ * `components/studio/index.ts` 一路到入口。实测链见
+ * `scripts/check-barrel-heavy-deps.cjs` 的报告。
+ *
+ * 换成 `React.lazy` 之后，模块只在**切到对应页签**时才下载。`key=workflow.id`
+ * 那两处重建语义不变（懒加载组件同样按 key 重挂）。 */
+const LazyWorkflowCanvasNodePreview = React.lazy(() =>
+  import("../WorkflowCanvasNodePreview").then((m) => ({
+    default: m.WorkflowCanvasNodePreview,
+  })),
+);
 
 interface DetailBodyProps {
   workflow: WorkflowRow;
@@ -101,7 +119,7 @@ export function DetailBody({
             <div className="flex min-h-0 w-full min-w-0 flex-1 justify-center overflow-x-auto overflow-y-hidden">
               {/* key=workflow.id：切换左侧工作流时重建预览，避免上一工作流的
                 运行结果/状态/表单残留（详情区复用的是同一 DOM 位置）。 */}
-              <WorkflowCanvasNodePreview
+              <LazyWorkflowCanvasNodePreview
                 key={workflow.id}
                 workflowId={workflow.id}
                 workflowName={workflow.name}
@@ -154,7 +172,7 @@ export function DetailBody({
           </div>
           <div className="bg-canvas-deep max-h-[70vh] overflow-auto rounded-xl">
             {sourceData?.source != null ? (
-              <JsonViewer
+              <LazyJsonViewer
                 data={sourceData.source}
                 title="工作流(RAW)格式"
                 initialCollapsedDepth={2}

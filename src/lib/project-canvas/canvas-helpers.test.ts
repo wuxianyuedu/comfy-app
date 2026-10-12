@@ -16,19 +16,20 @@ import {
 /** 构造最小画布节点：applyPropagationToNodes 只读 id / type / data，
  *  其余 React Flow 字段（position 等）与传播逻辑无关。 */
 function node(id: string, data: Partial<CanvasNodeData>): CanvasNodeType {
+  /* 断言收在工厂一处：`data` 是 `Partial`（夹具只给关心的字段），
+   * 而 `CanvasNodeType` 要的是完整的 `CanvasNodeData`。 */
   return {
     id,
     type: "canvasNode",
-    data,
+    data: data as CanvasNodeData,
     position: { x: 0, y: 0 },
-  } as CanvasNodeType;
+  };
 }
 
+/* 纯视觉节点：`data` 不参与传播逻辑读写（只需形状对得上）。 */
 const ardotNode: CanvasNodeType = {
-  id: "visual",
+  ...node("visual", {}),
   type: "workflowArdot",
-  data: {},
-  position: { x: 0, y: 0 },
 };
 
 /** 出边最小形状：传播逻辑只读 target / targetHandle。 */
@@ -191,7 +192,7 @@ describe("applyPropagationToNodes", () => {
   it("source 自身不被改写", () => {
     const src = node("s", { kind: "text", content: "一只猫" });
     const out = applyPropagationToNodes([src], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [edge("s")],
       importedFile: null,
     });
@@ -202,7 +203,7 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "text", content: "一只猫" });
     const target = node("t", { kind: "image", prompt: "" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [edge("t", "prompt")],
       importedFile: null,
     });
@@ -214,7 +215,7 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "text", content: "   " });
     const target = node("t", { kind: "image", prompt: "保留我" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [edge("t", "prompt")],
       importedFile: null,
     });
@@ -233,7 +234,7 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "image", resultPath: "/outputs/a.png" });
     const target = node("t", { kind: "image", mode: "T2I" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [edge("t", "inputImage")],
       importedFile: "imported.png",
     });
@@ -247,7 +248,7 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "image", resultPath: "/outputs/a.png" });
     const target = node("t", { kind: "image", mode: "txt2img" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [edge("t", "inputImage")],
       importedFile: "imported.png",
     });
@@ -258,7 +259,7 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "image", prompt: "上游提示词" });
     const target = node("t", { kind: "image", prompt: "" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [edge("t", "prompt")],
       importedFile: null,
     });
@@ -269,7 +270,7 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "picture", mediaPath: "ref.png" });
     const target = node("t", { kind: "picture", mediaPath: "" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [edge("t")],
       importedFile: null,
     });
@@ -281,7 +282,7 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "picture", mediaPath: "ref.png" });
     const target = node("t", { kind: "picture", mediaPath: "" });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [edge("t")],
       importedFile: "fresh.png",
     });
@@ -292,7 +293,7 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "text", content: "参考" });
     const target = node("t", { kind: "workflow", workflowInputs: {} });
     const out = applyPropagationToNodes([src, target], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [edge("t", "3.inputs.text")],
       importedFile: null,
     });
@@ -303,7 +304,7 @@ describe("applyPropagationToNodes", () => {
   it("seed / steps / cfg 按 handle 分派，空值不覆盖", () => {
     const src = node("s", { kind: "image", steps: 30, cfg: 7.5, seed: "42" });
     const withEmptySeed: CanvasNodeData = {
-      ...(src.data as CanvasNodeData),
+      ...src.data,
       seed: "",
     };
     const targets = [
@@ -325,7 +326,7 @@ describe("applyPropagationToNodes", () => {
   it("workflowArdot 纯视觉节点跳过（无 data 可写）", () => {
     const src = node("s", { kind: "image", prompt: "x" });
     const out = applyPropagationToNodes([src, ardotNode], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [edge("visual", "prompt")],
       importedFile: null,
     });
@@ -336,7 +337,7 @@ describe("applyPropagationToNodes", () => {
     const src = node("s", { kind: "text", content: "x" });
     const unrelated = node("u", { kind: "image" });
     const out = applyPropagationToNodes([src, unrelated], "s", {
-      srcData: src.data as CanvasNodeData,
+      srcData: src.data,
       outEdges: [],
       importedFile: null,
     });
@@ -349,7 +350,7 @@ describe("applyPropagationToNodes", () => {
       [src, node("t", { kind: "video", mode: "t2v" })],
       "s",
       {
-        srcData: src.data as CanvasNodeData,
+        srcData: src.data,
         outEdges: [edge("t", "inputImage")],
         importedFile: "imported.png",
       },
@@ -360,7 +361,7 @@ describe("applyPropagationToNodes", () => {
       [src, node("t", { kind: "video", mode: "T2V" })],
       "s",
       {
-        srcData: src.data as CanvasNodeData,
+        srcData: src.data,
         outEdges: [edge("t", "inputImage")],
         importedFile: "imported.png",
       },

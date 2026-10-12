@@ -11,11 +11,16 @@
 <li><a href="../modules/lib_project-canvas_canvas-types.html">lib/project-canvas/canvas-types</a></li>
 <li><a href="" aria-current="page">CanvasNodeType</a></li></ul>
 <h1>Type Alias CanvasNodeType</h1></div>
-<div class="tsd-signature"><span class="tsd-kind-type-alias">CanvasNodeType</span><span class="tsd-signature-symbol">:</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">Node</span><span class="tsd-signature-symbol">&lt;</span><a href="lib_project-canvas_canvas-types.CanvasNodeData.html" class="tsd-signature-type tsd-kind-type-alias">CanvasNodeData</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">&quot;canvasNode&quot;</span><span class="tsd-signature-symbol">&gt;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">Node</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">never</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">&quot;workflowArdot&quot;</span><span class="tsd-signature-symbol">&gt;</span></div>
+<div class="tsd-signature"><span class="tsd-kind-type-alias">CanvasNodeType</span><span class="tsd-signature-symbol">:</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">Node</span><span class="tsd-signature-symbol">&lt;</span><a href="lib_project-canvas_canvas-types.CanvasNodeData.html" class="tsd-signature-type tsd-kind-type-alias">CanvasNodeData</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">&quot;canvasNode&quot;</span><span class="tsd-signature-symbol">&gt;</span><br/>    <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">Node</span><span class="tsd-signature-symbol">&lt;</span><a href="lib_project-canvas_canvas-types.CanvasNodeData.html" class="tsd-signature-type tsd-kind-type-alias">CanvasNodeData</a><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">&quot;workflowArdot&quot;</span><span class="tsd-signature-symbol">&gt;</span></div>
 <div class="tsd-comment tsd-typography"><p>ReactFlow 节点联合：逻辑节点（canvasNode）与纯视觉节点（workflowArdot）。</p>
+<p>两支的 <code>data</code> 都是 <code>CanvasNodeData</code>：<code>workflowArdot</code> 是「纯视觉节点、没有业务
+数据」这一层<strong>语义</strong>，原先靠 <code>Record&lt;string, never&gt;</code> 表达 —— 代价是它与
+<code>canvasNode</code> 之间不构成可赋值类型，任何「按 <code>CanvasNodeType[]</code> 存的容器」都
+接不住它（持久化层就撞在这上面，见 <code>canvas-persistence-types.ts</code>）。语义改由
+<code>isCanvasNode</code> 守卫与 <code>type</code> 字段承载，类型层面让两支同形。</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in src/lib/project-canvas/canvas-types.ts:193</li></ul></aside></div>
+<li>Defined in src/lib/project-canvas/canvas-types.ts:199</li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
