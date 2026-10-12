@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { JsonViewer } from "~/components/ui/json-viewer";
+import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
 import {
   resolveSource,
   sourceNameArgType,
@@ -107,6 +108,28 @@ export const Empty: Story = {
   render: (args) => (
     <JsonViewer
       data={undefined}
+      title={args.title}
+      initialCollapsedDepth={args.initialCollapsedDepth}
+    />
+  ),
+};
+
+/**
+ * `LazyJsonViewer` —— 同一个组件的**按需**入口（`ui/lazy-json-viewer.tsx`）。
+ *
+ * 它和上面那几条讲的是同一件渲染，差在**什么时候加载模块**：`React.lazy` 之下
+ * 它会先渲染一帧 `fallback`（「展开中…」），模块到位后换成真组件。这条 story 的
+ * 价值恰恰在那**一帧**上 —— 它是日志面板展开一行时用户实际看到的第一眼，
+ * 而 `react18-json-view` 只在这一刻才被下载（规范 §12.19 / 02 §2.9）。
+ *
+ * 为什么不是「多一条冗余 story」：`ui/lazy-json-viewer.tsx` 是 `ui/` 下**独立
+ * 一个可预览文件**，组件覆盖率的分母按文件数计；而它确实有一个可看的形态
+ *（fallback 那一帧 + 加载完成后的切换），不是「没有 story 可讲」的那一类。
+ */
+export const LazyWrapped: Story = {
+  render: (args) => (
+    <LazyJsonViewer
+      data={resolveSource("json", args.sourceName)}
       title={args.title}
       initialCollapsedDepth={args.initialCollapsedDepth}
     />

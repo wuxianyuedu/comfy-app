@@ -89,7 +89,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(54 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(55 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -175,6 +175,12 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 模块循环依赖（规范 12.7）：环的症状是「import 顺序变了就 undefined is not a
   # function」，排查成本极高，因此把「无环」做成棘轮。
   run "模块循环依赖棘轮" node scripts/check-circular-deps.cjs
+  # 入口包的**重依赖静态可达性**（规范 §12.19 / 02 §2.9）：barrel 里转出一个吃
+  # `@xyflow/react` 的模块，而入口静态 import 那个 barrel —— 两件都正常，合起来就是
+  # 首屏多下载一整个画布引擎，且**没有任何既有判据会红**（实测入口静态可达 692 个模块、
+  # 44 处牵着 `@xyflow/react`）。这条把「入口的静态图上不该有重依赖」机器化，并打印
+  # 整条链（红得能直接改）。修法是把 barrel 那一跳换成深路径 + `dynamic()`。
+  run "入口重依赖静态可达性" node scripts/check-barrel-heavy-deps.cjs
   # prettier 格式棘轮（规范 13.5）：基线 + 只许下降；新增脏文件即阻断。
   run "prettier 格式棘轮" node scripts/check-format.cjs
   # 格式化提交与行为改动分离（规范 13.7）：一次提交里「过一遍 prettier 就变成另一种

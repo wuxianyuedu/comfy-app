@@ -56,7 +56,12 @@ const NAIVE_MARK = "\\/\\/" + "[^\\n]*/g";
 const GUARD_MARK = "(" + "^";
 
 /**
- * 台账：现存 18 份本地副本。分层列出，是为了让「谁来收哪一份」一眼可判。
+ * 台账：现存本地副本。分层列出，是为了让「谁来收哪一份」一眼可判。
+ *
+ * `scripts/check-barrel-heavy-deps.cjs`（ISSUE #1777）进这一组：它跑在
+ * pre-commit 的 D 组，与其余 `.cjs` 判据同款 —— **不能 import TS 那份 helper**
+ *（那是 `tests/helpers/strip-comments.ts`，纯 Node 的 `.cjs` 加载不到）。
+ * 它的语义与 helper 等价（只去整块注释与整行 `//`），本批就按这一组登记。
  */
 const LEDGER: string[] = [
   // —— 与 helper 等价（只去整行注释）：换成 import 是零回归的那一批 ——
@@ -73,6 +78,7 @@ const LEDGER: string[] = [
   // —— 带 HTML 注释开关的一型 ——
   "tests/shell-self-launch.test.ts",
   // —— 纯 Node 门禁层（不能直接 import TS 那份 helper）——
+  "scripts/check-barrel-heavy-deps.cjs",
   "scripts/check-circular-deps.cjs",
   "scripts/check-dead-exports.cjs",
   "scripts/check-overlay-z.cjs",

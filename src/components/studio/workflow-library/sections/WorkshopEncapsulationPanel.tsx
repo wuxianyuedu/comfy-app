@@ -36,12 +36,21 @@ import { sceneFromMode } from "~/lib/media/size-presets";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
 import { WorkflowRunLogButton } from "../WorkflowRunLogButton";
-import { WorkflowRunLogModal } from "../WorkflowRunLogModal";
 import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 import { displayValue } from "~/lib/display-value";
 import { EncapsulationTestForm } from "./EncapsulationTestForm";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+
+/* 运行日志弹窗按需拉（规范 §12.19）：它下面挂着 `ui/json-viewer`
+ * → `react18-json-view`，而本面板只在**真的点开日志**时才需要它。此前那条静态边
+ * 会一路传进工作流库 → `components/studio/index.ts` → 入口（实测链见
+ * `scripts/check-barrel-heavy-deps.cjs` 的报告）。 */
+const LazyWorkflowRunLogModal = React.lazy(() =>
+  import("../WorkflowRunLogModal").then((m) => ({
+    default: m.WorkflowRunLogModal,
+  })),
+);
 
 interface WorkshopEncapsulationPanelProps {
   workflowId: string;
@@ -342,7 +351,7 @@ export function WorkshopEncapsulationPanel({
           </p>
         </div>
       </div>
-      <WorkflowRunLogModal
+      <LazyWorkflowRunLogModal
         open={logOpen}
         workflowId={workflowId}
         source="encapsulation-test"

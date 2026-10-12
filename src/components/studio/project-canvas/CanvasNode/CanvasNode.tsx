@@ -44,7 +44,7 @@ export const CanvasNode = React.memo(function CanvasNode({
   data,
   selected,
 }: NodeProps<CanvasNodeType>) {
-  const d = data as CanvasNodeData;
+  const d = data;
   const { setNodes, getNode, setEdges, fitView, screenToFlowPosition } =
     useReactFlow();
   const meta = NODE_META[d.kind];

@@ -175,6 +175,13 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 它同时钉住两件解析值判不出来的事（`globals: false` 删掉解析值不变、
   // `environment` 不许抬到根级），所以与本次暂存改动无关也照跑，进固定清单。
   "tests/test-config-inheritance.test.ts",
+  // 入口的**重依赖静态可达性**（规范 §12.19 / 02 §2.9）：barrel 转出重依赖模块 +
+  // 入口静态 import 那个 barrel = 首屏多下载一整个画布引擎。这条守的是「下一次新增
+  // 一条静态边」—— 那种改动的形态极平常（在 barrel 里多转出一个模块、入口顺手多取
+  // 一个名字），而它读的是**跨目录的 import 图**：改 `components/studio/` 不会把这条
+  // 判据带进受影响集（判据住在 `scripts/`，`tests/` 里那份对应的自测也只在同批才跑）。
+  // 与本次暂存改动无关也照跑，进固定清单。
+  "tests/check-barrel-heavy-deps.test.ts",
   // router 层的错误信封：裸 `throw new Error` 会被 tRPC 归成 INTERNAL_SERVER_ERROR，
   // 「越权与不存在同形」就只剩一句没有判据的话（台账 E8）。这条同时验 eslint 配置里
   // 那条 selector **真的会响** —— 「配置写在」与「配置在跑」是两件事（§11.7 同源），

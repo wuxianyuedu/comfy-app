@@ -66,6 +66,7 @@
     "json-viewer.tsx > Default",
     "json-viewer.tsx > Empty",
     "json-viewer.tsx > FullyExpanded",
+    "json-viewer.tsx > LazyWrapped",
     "key-value-rows.tsx > AllLayouts",
     "key-value-rows.tsx > Inline",
     "key-value-rows.tsx > Rows",

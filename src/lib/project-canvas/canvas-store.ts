@@ -4,9 +4,11 @@
  */
 
 import { emitAppEvent } from "~/lib/app-events";
-import type { Edge } from "@xyflow/react";
 import { fireAndForget } from "~/lib/async-action";
-import type { CanvasNodeType } from "~/lib/project-canvas/canvas-types";
+import type {
+  PersistedEdge,
+  PersistedNode,
+} from "~/lib/project-canvas/canvas-persistence-types";
 import {
   clearSyncFailure,
   logSyncIssue,
@@ -25,9 +27,11 @@ export interface CanvasProject {
   id: string;
   name: string;
   updatedAt: number;
-  /** 收窄为 CanvasNodeType：workflowArdot 纯视觉节点也持久化（起）。 */
-  nodes: CanvasNodeType[];
-  edges: Edge[];
+  /* 形状取 `Persisted*` 而不是 `@xyflow/react` 的 `Node` / `Edge`（规范 §12.19）：
+   * 本模块只做 localStorage 读写，不该为了两个类型把画布引擎钉进静态图 ——
+   * 入口 `src/app/workspace/page.tsx` 静态 import 它（见 canvas-types 里的说明）。 */
+  nodes: PersistedNode[];
+  edges: PersistedEdge[];
 }
 
 const INDEX_KEY = "comfyapp.canvas.projects.v1";
