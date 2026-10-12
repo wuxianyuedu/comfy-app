@@ -4,6 +4,25 @@ import next from "eslint-config-next/core-web-vitals";
 import unusedImports from "eslint-plugin-unused-imports";
 import boundaries from "eslint-plugin-boundaries";
 
+/** 视图层做**精确订阅**的 store hook 名单（单一出处）。
+ *
+ *  用途见下面「视图层 store selector 形态」那段 lint。这份清单只收
+ *  **zustand store 的订阅 hook** —— 判断标准是「它的回调参数是 store state、
+ *  返回值的引用稳定性直接决定重渲染」。普通 React hook（`useState` / `useMemo` /
+ *  `useCallback`）**不在内**，理由见那段注释。
+ *
+ *  新增 store 时同步加一行，`tests/store-selector-shape.test.ts` 会核清单完整性。
+ */
+const STORE_SELECTOR_HOOKS = [
+  "useDebugStore",
+  "useLogCategoryStore",
+  "useLogPanel",
+  "useLogStore",
+  "useMessageCenterStore",
+  "useShellTabs",
+  "useUpdateCheckStore",
+];
+
 /* `eslint-plugin-jsx-a11y` 不是本仓的直接依赖（它在 `eslint-config-next` 的
  * `dependencies` 里），pnpm 的严格布局下顶层与 `import.meta.resolve` 都解析
  * 不到（符号链接的**真实路径**不在解析链上）。所以从 `next` 配置里已经装好的
@@ -428,6 +447,47 @@ export default tseslint.config(
    * 所以按**目录**关：`tests/helpers/**` 是测试基建，天然不含 React 组件
    * （真正的组件渲染基元在 `tests/helpers/renderWithProviders.tsx`，它导出的
    * 是普通函数而不是 hook）。范围写死到这一格，别的测试文件照旧受规则保护。 */
+  /* ── 视图层 store selector 形态：禁止现拼对象 / 现造新数组（ISSUE #1780）────
+   *
+   * zustand 的 selector 是「每次 store 写入后重新求值、用 Object.is 比较结果」的：
+   * selector 里写对象字面量（`useStore((s) => ({ a: s.a, b: s.b }))`）或 `.map` /
+   * `.filter` 这类造新数组的调用，**每次求值都是新引用** ⇒ 该字段没变也照样重渲染，
+   * 而且 `React.memo` 在子组件上一起失效。
+   *
+   * 正确的两条路（见规范 01 §1.2、07 §7.15.1）：① selector 只返回原始值或 store
+   * 里已固化的引用（`log-store` 的 `header` / `panel` 切片就是这么做的：把「组件读
+   * 哪些状态」在 store 文件里写一次）；② 派生确实要跨字段时，把派生下沉进 store。
+   * `useShallow` 是最后手段，不是第一步 —— 它只在「必须一次订阅多字段、且没法在
+   * store 侧固化」时才有收益，否则只是给每次渲染多挂一层逐项比较。
+   *
+   * 为什么写成 lint 而不是新的 `check-*.cjs`：B 组每次提交都跑、报错直接指到行号，
+   * 也不必再新增一份「会静默失效的清单」（与上面 router 错误信封那条同因）。
+   *
+   * ⚠️ selector 必须**按 store hook 名**限定，不能按 `/^use[A-Z]/` 泛匹配 ——
+   * `useState(() => ({ ... }))` / `useMemo(() => rows.slice(0, 8), [])` 是合法且
+   * 常见的写法，泛匹配会把它们全报出来（实测：本仓 `useMemo` 造对象的写法有数十处）。
+   * 名字清单是**单一出处** `STORE_SELECTOR_HOOKS`，由
+   * `tests/store-selector-shape.test.ts` 核「清单与仓库里真实的 zustand store 一致」，
+   * 漏登记新 store 会在那里被拦下（同 `RUNTIME_SCRIPTS` 那类清单的做法）。
+   */
+  {
+    files: LINT_FILES,
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: `CallExpression[callee.name=/^(${STORE_SELECTOR_HOOKS.join("|")})$/] > ArrowFunctionExpression[body.type="ObjectExpression"]`,
+          message:
+            "store selector 里现拼对象字面量 = 每次 store 写入都返回新引用（字段没变也重渲染）。改成只返回原始值/稳定引用，或把派生下沉进 store；useShallow 是最后手段（规范 01 §1.2 / 07 §7.15.1）。",
+        },
+        {
+          selector: `CallExpression[callee.name=/^(${STORE_SELECTOR_HOOKS.join("|")})$/] > ArrowFunctionExpression CallExpression[callee.property.name=/^(map|filter|slice|concat|sort|split)$/]`,
+          message:
+            "store selector 里用 .map/.filter/.slice 造新数组 = 每次求值都是新引用（字段没变也重渲染）。把它下沉进 store 或抽成 store 内的稳定切片（规范 01 §1.2）。",
+        },
+      ],
+    },
+  },
   {
     files: ["tests/helpers/**/*.{ts,tsx}"],
     rules: {
