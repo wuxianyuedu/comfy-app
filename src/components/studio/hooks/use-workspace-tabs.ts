@@ -14,6 +14,7 @@ import {
   HOME_VIEW,
   closeViewTab,
   findTab,
+  focusViewTab,
   initialWorkspaceTabs,
   openViewTab,
   parseWorkspaceTabs,
@@ -119,10 +120,9 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
 
   const selectTab = useCallback(
     (key: string) => {
-      setTabsState((prev) =>
-        // 找不到这一页时原样返回：把当前页指向不存在的页，界面上是一句解释不了的空白。
-        findTab(prev.tabs, key) ? { ...prev, activeKey: key } : prev,
-      );
+      // 切页的规则（含「切走的若是瞬时页则退场」）都在 `focusViewTab`，
+      // 这里不自己判：找不到这一页时它原样返回，不会把当前页指向空白。
+      setTabsState((prev) => focusViewTab(prev, key));
       /* 用户可能正停在 ComfyUI 那个 iframe 页签上：只改视图页签而不动壳的激活页，
          表现就是「点了没反应」。 */
       activateShellTab(MAIN_TAB_ID);

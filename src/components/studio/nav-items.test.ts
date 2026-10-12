@@ -6,9 +6,11 @@ import { describe, expect, it } from "vitest";
 import {
   globalNavItems,
   isProjectTab,
+  isTransientView,
   NAV_ITEMS,
   PROJECTS_ENTRY,
   projectTabs,
+  sidebarNavItems,
   type WorkspaceView,
 } from "./NavItems";
 
@@ -123,5 +125,40 @@ describe("模型适配 / 模式契约：已经是全局视图（此前是浮层�
     ]) {
       expect(source, `NavItems 里还留着 ${retired}`).not.toContain(retired);
     }
+  });
+});
+
+describe("瞬时页签与侧栏隐藏（ISSUE #1784）", () => {
+  /* 这两张清单是**产品判断**的落点，不是实现细节：改一个视图就换一种行为，
+     而界面上不会有任何东西提示"这一页的规则变了"。所以逐项钉死 ——
+     以后想把画布也改成瞬时、或想把设置放回侧栏，必须先来改这里并说明理由。 */
+  const TRANSIENT_IDS: WorkspaceView[] = [
+    "settings",
+    "model-adapters",
+    "mode-contract",
+  ];
+
+  it("恰好这三项是瞬时页签（切走即关），其余都不是", () => {
+    const actual = NAV_ITEMS.filter((item) => isTransientView(item.id)).map(
+      (item) => item.id,
+    );
+    expect(actual.sort()).toEqual([...TRANSIENT_IDS].sort());
+    for (const id of ["home", "canvas", "workshop", "models", "console"]) {
+      expect(isTransientView(id as WorkspaceView)).toBe(false);
+    }
+  });
+
+  it("只有「设置」不在侧栏列表里，但它仍在全局项清单里", () => {
+    const sidebarIds = sidebarNavItems().map((item) => item.id);
+    expect(sidebarIds).not.toContain("settings");
+    /* 侧栏与全局项只差这一项 —— 多差出第二项就说明有人顺手把别的也撤了。 */
+    expect(
+      globalNavItems()
+        .map((i) => i.id)
+        .filter((id) => id !== "settings"),
+    ).toEqual(sidebarIds);
+    /* 仍在全局项里：它是可打开的视图（顶栏菜单 / 「+」菜单 / 命令面板都要能到它），
+       撤的只是「侧栏列表里那一行」。 */
+    expect(globalNavItems().map((i) => i.id)).toContain("settings");
   });
 });

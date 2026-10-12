@@ -87,6 +87,47 @@ test.describe("视图页签条 @critical", () => {
     );
   });
 
+  test("切走的那一页仍然挂载（页签的意义就是让打开的界面保持打开）", async ({
+    page,
+  }) => {
+    /* 这条判的是 ISSUE #1784 的第一条：页签**不卸载**被切走的视图。
+       收口前 `renderCenter()` 用 `switch (viewMode)` 只渲染当前那一屏，切走即卸载
+       —— 表现是切回画布得到一张重开的空网、控制台里跑着的命令断连。 */
+    const strip = await openWorkspace(page);
+    await page
+      .getByRole("button", { name: "模型", exact: true })
+      .first()
+      .click();
+    await page
+      .getByRole("button", { name: "历史", exact: true })
+      .first()
+      .click();
+    await expect(strip.getByRole("tab")).toHaveCount(3);
+
+    /* 三个视图容器都在 DOM 里（`data-view` 是各页 wrapper 的锚），
+       当前那一页可见、另外两页带 `hidden`。 */
+    for (const view of ["home", "models", "history"]) {
+      await expect(
+        page.locator(`[data-view="${view}"]`),
+        `${view} 那一页被卸载了 —— 切回去会重新挂载`,
+      ).toHaveCount(1);
+    }
+    await expect(page.locator('[data-view="home"]')).toBeHidden();
+    await expect(page.locator('[data-view="models"]')).toBeHidden();
+    await expect(page.locator('[data-view="history"]')).toBeVisible();
+
+    /* 切回「模型」：它一直是同一个 DOM 节点（不是重新挂载的新节点）。
+       用元素句柄判同一性 —— 重新挂载会让旧 handle 变成 detached。 */
+    const models = page.locator('[data-view="models"]');
+    const before = await models.elementHandle();
+    await strip.getByRole("tab").nth(1).click();
+    await expect(models).toBeVisible();
+    expect(
+      await models.evaluate((el, prev) => el === prev, before),
+      "切回「模型」后拿到的是另一个元素 = 那一页重新挂载了，状态会丢",
+    ).toBe(true);
+  });
+
   /* 选中态要「看得出来」——这条是补的洞。
      此前这里只断言 `aria-selected`，于是「壳的标题行里选中页签用 `bg-canvas`
      （#0a0a0f）压在同色系的标题行上、比底还暗」这种问题**全绿通过**：无障碍语义
