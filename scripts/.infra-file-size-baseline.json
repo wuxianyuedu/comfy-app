@@ -6,10 +6,10 @@
   "total": 6,
   "files": {
     "scripts/check-ui-primitives.cjs": 4820,
-    "scripts/dev-launcher.mjs": 1576,
+    "scripts/dev-launcher.mjs": 1540,
     "scripts/base-check.mjs": 1382,
     "scripts/check-file-structure.cjs": 1214,
     "scripts/check-theme-colors.cjs": 992,
-    "scripts/affected-tests.mjs": 952
+    "scripts/affected-tests.mjs": 964
   }
 }

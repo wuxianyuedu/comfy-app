@@ -1,9 +1,10 @@
 {
   "artifact": {
     "key": "artifact",
-    "verifiedAt": "2026-10-11T08:35:44.531Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-12T08:44:07.387Z",
+    "who": "yuedu",
     "how": "pnpm run build",
-    "trackedBy": "artifact"
+    "trackedBy": "artifact",
+    "skippedReason": "本次只改启动链路可观测性（Rust 侧新增 nextjs_log_dir/latest_prefixed_log 并加日志段，tsc/eslint/cargo test 已跑绿），未动 build-desktop/standalone 产物逻辑；本地长构建受宿主信号限制，改由免检声明记账。"
   }
 }

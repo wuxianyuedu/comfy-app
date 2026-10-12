@@ -9,7 +9,9 @@
  *   - 真正由壳侧引起的中断被引向「查 dev server 编译错」这条死路（stderr 里只有
  *     pnpm 回显的启动命令行，怎么查都查不出东西）。
  *
- * 判据现在收在 **scripts/dev-launcher.mjs**（跨平台启动编排的唯一实现）：
+ * 判据现在收在 **scripts/launcher-core/downstream-exit.mjs**（跨平台启动编排的唯一
+ * 实现 `scripts/dev-launcher.mjs` 的判据子模块，入口文件只再导出，见 §12.6 R5 的
+ * 姊妹档对入口长度的约束）：
  *   `downstreamExitKind()` 的判决表 + `describeDownstreamExit()` 的文案；
  * 判据本身只认壳侧写下的**正标记**（launch abandoned / exiting with non-zero
  * code），不看退出码 —— 「壳也退出了」是四种成因的共同现象，由现象反推成因会把
@@ -19,59 +21,104 @@
  * 统一到 mjs 之后，判据与文案随之迁移，语义一条都没放宽。
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const LAUNCHER = join(process.cwd(), "scripts", "dev-launcher.mjs");
+const CRITERIA = join(
+  process.cwd(),
+  "scripts",
+  "launcher-core",
+  "downstream-exit.mjs",
+);
 const launcher = readFileSync(LAUNCHER, "utf8");
+/** 判据与文案的**唯一实现处**（入口文件只是再导出，不许有第二份要同步）。 */
+const criteria = readFileSync(CRITERIA, "utf8");
 const SHELL = join(process.cwd(), "src-tauri", "src", "lib.rs");
 
 /** 在临时目录里造一份壳 stderr，再用真实实现读标记（不 mock 文件系统）。 */
-function markersFor(stderrText: string): { abandoned: boolean; crashed: boolean } {
+function markersFor(stderrText: string): {
+  abandoned: boolean;
+  crashed: boolean;
+} {
   const dir = mkdtempSync(join(tmpdir(), "comfyapp-markers-"));
   try {
     mkdirSync(join(dir, "log", "current", "launcher"), { recursive: true });
-    writeFileSync(join(dir, "log", "current", "launcher", "dev-launcher-stderr.log"), stderrText);
+    writeFileSync(
+      join(dir, "log", "current", "launcher", "dev-launcher-stderr.log"),
+      stderrText,
+    );
     const script = `
-      import { readShellMarkers } from ${JSON.stringify(pathToFileURL(LAUNCHER).href)};
+      import { readShellMarkers } from ${JSON.stringify(pathToFileURL(CRITERIA).href)};
       process.stdout.write(JSON.stringify(readShellMarkers(${JSON.stringify(dir)})));
     `;
-    const out = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
-      encoding: "utf8",
-      cwd: process.cwd(),
-    });
-    return JSON.parse(out.stdout || "{}") as { abandoned: boolean; crashed: boolean };
+    const out = spawnSync(
+      process.execPath,
+      ["--input-type=module", "-e", script],
+      {
+        encoding: "utf8",
+        cwd: process.cwd(),
+      },
+    );
+    return JSON.parse(out.stdout || "{}") as {
+      abandoned: boolean;
+      crashed: boolean;
+    };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
 
 /** 直接调 `downstreamExitKind` 判决表（纯函数，无副作用）。 */
-function decide(input: { shellExited: boolean, abandoned: boolean, shellCrashed: boolean }): string {
+function decide(input: {
+  shellExited: boolean;
+  abandoned: boolean;
+  shellCrashed: boolean;
+}): string {
   const script = `
-    import { downstreamExitKind } from ${JSON.stringify(pathToFileURL(LAUNCHER).href)};
+    import { downstreamExitKind } from ${JSON.stringify(pathToFileURL(CRITERIA).href)};
     process.stdout.write(downstreamExitKind(${JSON.stringify(input)}));
   `;
-  const out = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
-    encoding: "utf8",
-    cwd: process.cwd(),
-  });
+  const out = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", script],
+    {
+      encoding: "utf8",
+      cwd: process.cwd(),
+    },
+  );
   return out.stdout.trim();
 }
 
-describe("编排器下游退出判据（dev-launcher.mjs）", () => {
+describe("编排器下游退出判据（launcher-core/downstream-exit.mjs）", () => {
   it("四种成因各有判定：壳未退 / 用户放弃 / 壳自身非零退出 / 壳被强行收走", () => {
-    expect(decide({ shellExited: false, abandoned: false, shellCrashed: false })).toBe("dev-server");
-    expect(decide({ shellExited: true, abandoned: true, shellCrashed: false })).toBe("abandoned");
-    expect(decide({ shellExited: true, abandoned: false, shellCrashed: true })).toBe("shell-self-exited");
-    expect(decide({ shellExited: true, abandoned: false, shellCrashed: false })).toBe("shell-terminated");
+    expect(
+      decide({ shellExited: false, abandoned: false, shellCrashed: false }),
+    ).toBe("dev-server");
+    expect(
+      decide({ shellExited: true, abandoned: true, shellCrashed: false }),
+    ).toBe("abandoned");
+    expect(
+      decide({ shellExited: true, abandoned: false, shellCrashed: true }),
+    ).toBe("shell-self-exited");
+    expect(
+      decide({ shellExited: true, abandoned: false, shellCrashed: false }),
+    ).toBe("shell-terminated");
   });
 
   it("「用户放弃本次启动」按正常收尾：不抛失败、以 0 退出", () => {
-    const describeFn = launcher.slice(launcher.indexOf("export function describeDownstreamExit"));
+    const describeFn = criteria.slice(
+      criteria.indexOf("export function describeDownstreamExit"),
+    );
     const abandonedBranch = describeFn.slice(
       describeFn.indexOf('if (kind === "abandoned")'),
       describeFn.indexOf('if (kind === "shell-self-exited")'),
@@ -81,17 +128,21 @@ describe("编排器下游退出判据（dev-launcher.mjs）", () => {
     expect(abandonedBranch).toContain("用户放弃本次启动");
     expect(abandonedBranch).not.toContain("失败");
     // 主流程里 abandoned 走 shutdown(0)
-    const conclude = launcher.slice(launcher.indexOf("async function concludeDownstreamExit"));
+    const conclude = launcher.slice(
+      launcher.indexOf("async function concludeDownstreamExit"),
+    );
     const abandonedPath = conclude.slice(
       conclude.indexOf('if (kind === "abandoned")'),
-      conclude.indexOf("log(detail, \"ERROR\")"),
+      conclude.indexOf('log(detail, "ERROR")'),
     );
     expect(abandonedPath).toContain("shutdown(0)");
     expect(abandonedPath).not.toContain("throw");
   });
 
   it("壳被外部终止时把用户引向壳日志，而不是让人去查 dev server 编译错", () => {
-    const description = launcher.slice(launcher.indexOf("export function describeDownstreamExit"));
+    const description = criteria.slice(
+      criteria.indexOf("export function describeDownstreamExit"),
+    );
     const branch = description.slice(
       description.indexOf('if (kind === "shell-terminated")'),
       description.indexOf("  return (\n    `Next.js dev server 提前退出"),
@@ -104,20 +155,26 @@ describe("编排器下游退出判据（dev-launcher.mjs）", () => {
   });
 
   it("壳仍在运行时提示指向 dev server 自身退出（保留原有可查路径）", () => {
-    const description = launcher.slice(
-      launcher.indexOf("export function describeDownstreamExit"),
-      launcher.indexOf("/** 打开浏览器"),
+    const description = criteria.slice(
+      criteria.indexOf("export function describeDownstreamExit"),
+      criteria.indexOf("/** 运行期（服务已就绪之后）退出"),
     );
-    const fallback = description.slice(description.indexOf("`Next.js dev server 提前退出"));
+    const fallback = description.slice(
+      description.indexOf("`Next.js dev server 提前退出"),
+    );
     expect(fallback).toContain("壳仍在运行");
     // 现场（stderr / stdout 尾部与完整文件路径）一个都不能丢 —— 它们由
     // 共用的 tail 块给出（describeDownstreamExit 顶部构造）。
-    expect(description.slice(0, description.indexOf("if (kind === "))).toContain("最近 stderr");
+    expect(
+      description.slice(0, description.indexOf("if (kind === ")),
+    ).toContain("最近 stderr");
     expect(fallback).toContain("tail");
   });
 
   it("shell-self-exited 点明「已被唤前台」这条设计内路径，并指回壳侧标记", () => {
-    const description = launcher.slice(launcher.indexOf("export function describeDownstreamExit"));
+    const description = criteria.slice(
+      criteria.indexOf("export function describeDownstreamExit"),
+    );
     const branch = description.slice(
       description.indexOf('if (kind === "shell-self-exited")'),
       description.indexOf('if (kind === "shell-terminated")'),
@@ -130,16 +187,28 @@ describe("编排器下游退出判据（dev-launcher.mjs）", () => {
   it("「用户放弃」的结论只认壳侧正标记，不得由「壳也退出了」推断", () => {
     // 判决表的联合输入：壳退了但没有标记 → 只能是 shell-terminated（真故障），
     // 绝不能因为「壳也退出了」就判成 abandoned。
-    expect(decide({ shellExited: true, abandoned: false, shellCrashed: false })).toBe("shell-terminated");
+    expect(
+      decide({ shellExited: true, abandoned: false, shellCrashed: false }),
+    ).toBe("shell-terminated");
     // 反过来：标记在就必须认（哪怕退出码是 0）
-    expect(decide({ shellExited: true, abandoned: true, shellCrashed: true })).toBe("abandoned");
+    expect(
+      decide({ shellExited: true, abandoned: true, shellCrashed: true }),
+    ).toBe("abandoned");
   });
 
   it("标记读取真跑：大小写不敏感，且缺文件时两个都是 false", () => {
-    expect(markersFor("... launch abandoned ...")).toMatchObject({ abandoned: true, crashed: false });
+    expect(markersFor("... launch abandoned ...")).toMatchObject({
+      abandoned: true,
+      crashed: false,
+    });
     expect(markersFor("Launch Abandoned")).toMatchObject({ abandoned: true });
-    expect(markersFor("app exiting with non-zero code 3")).toMatchObject({ crashed: true });
-    expect(markersFor("nothing here")).toMatchObject({ abandoned: false, crashed: false });
+    expect(markersFor("app exiting with non-zero code 3")).toMatchObject({
+      crashed: true,
+    });
+    expect(markersFor("nothing here")).toMatchObject({
+      abandoned: false,
+      crashed: false,
+    });
   });
 });
 
@@ -177,7 +246,9 @@ describe("失败出口给出的是**本次运行**的日志，不是按名字猜
   });
 
   it("「按文件名找最近一份」的实现已删除（它按字典序选，会挑到旧命名）", () => {
-    expect(launcher, "lastNextLog 是缺陷形态本身").not.toContain("function lastNextLog");
+    expect(launcher, "lastNextLog 是缺陷形态本身").not.toContain(
+      "function lastNextLog",
+    );
     expect(launcher).not.toContain("lastNextLog(");
   });
 });
@@ -196,12 +267,19 @@ describe("判据用到的壳标记在壳侧真实存在", () => {
   });
 
   it("单实例退出也留下可判据的一行（否则 stderr 里只有启动期 INFO）", () => {
-    expect(readFileSync(SHELL, "utf8")).toContain("another instance of this checkout is running");
+    expect(readFileSync(SHELL, "utf8")).toContain(
+      "another instance of this checkout is running",
+    );
   });
 
   it("判据只有一处：编排侧读壳留下的标记，没有第二份实现要同步", () => {
     // Python 启动器（历史上在这里各读一遍同一标记）已随 ISSUE #784 移除；
-    // 现在「谁结束了这次启动」这条判据只有 dev-launcher.mjs 一处。
-    expect(launcher).toContain("readShellMarkers");
+    // 现在「谁结束了这次启动」这条判据只有 downstream-exit.mjs 一处，入口文件
+    // 只 import 调用（不再再导出——没有调用方走那道门，少一层转发少一处漂移）。
+    expect(criteria).toContain("export function readShellMarkers(");
+    expect(criteria).toContain("export function downstreamExitKind(");
+    expect(launcher).toContain("readShellMarkers,");
+    expect(launcher).not.toContain("export function downstreamExitKind(");
+    expect(launcher).not.toContain("export function describeDownstreamExit(");
   });
 });

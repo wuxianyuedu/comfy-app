@@ -18,6 +18,11 @@
 //   - 探测**失败**（网络瞬时抖动 / 显示器关闭 / 后台节流）→ **不**判定重启，
 //     不更新重启时间（这是本次排除的误报）。
 //
+// 「断开」这一档同样要抗抖动：探活打的是应用服务自己的 HTTP，它在冷编译 /
+// 按需编译 / Turbopack 抢锁时都可能超过探活超时，单拍失败就被当成断开的话，
+// 界面会在服务好好的情况下翻成「应用服务已断开」并往消息中心写两条消息。
+// 连续失败到 {@link OFFLINE_CONFIRM_FAILURES} 拍才算断开（见该常量注释）。
+//
 // 持久化（sessionStorage）：
 //   - 保留上次 bootId 作为对比基准：dev server 真重启会触发整页刷新，刷新后
 //     React 内存里的基准丢失，靠 sessionStorage 恢复旧 bootId 才能识别出新
@@ -38,6 +43,23 @@ import {
 } from "~/lib/shell/app-service-exit";
 
 export const DEV_SERVER_PROBE_MS = 2000;
+
+/**
+ * 「连续失败几拍才认断开」的门槛。
+ *
+ * **为什么单拍失败不算断开**：`/api/dev/server-id` 是应用服务自己的 HTTP，而它在
+ * 冷编译、按需编译某条路由、或 Turbopack 抢锁时都可能超过探活的 2.5s 超时。
+ * 把它当成「断开」，界面会在**服务好好的**情况下翻成「应用服务已断开」，并往
+ * 消息中心写「已断开 + 已恢复」两条 —— 手验现场就是这一档：断开 15:00:28、
+ * 恢复 15:00:31（持续 2 秒），而那两秒里服务一直在应答。
+ *
+ * 取 2 而不是「立即」也不是「很多拍」：两拍 ≈ 4 秒，真实断开（进程没了）在
+ * 界面上晚 4 秒出现完全可以接受，而抖动一次就写两条消息不可以。
+ *
+ * **恢复侧不需要门槛**：抖动期间状态一直没翻成 offline，恢复边沿就不成立
+ * （判据见 `~/lib/shell/app-service-message`），因此这里只管「认不认断开」。
+ */
+export const OFFLINE_CONFIRM_FAILURES = 2;
 
 /** 检测到真正重启后，状态栏「刚重启」高亮的持续时长。 */
 export const RESTART_RECENT_MS = 10_000;
@@ -68,6 +90,16 @@ export interface DevServerLiveness {
   lastRestartAt: number | null;
   /** 最近一次探测成功（进程可达）。首帧（尚未探过）为 false。 */
   probeOk: boolean;
+  /**
+   * **抗抖动后的可达性**（喂给 `deriveDevServerStatus` 的那个事实）。
+   *
+   * 与 `probeOk` 的差别正是 {@link OFFLINE_CONFIRM_FAILURES}：单拍失败不把
+   * 「可达」翻成 false，连续失败到门槛才算。状态栏与消息中心都只看这个值——
+   * 它们要回答的是「服务现在能不能应答」，而不是「刚才那一拍有没有应答」。
+   */
+  reachable: boolean;
+  /** 连续失败拍数（未达门槛时说明它正在积累）；探通一次即归零。 */
+  consecutiveFailures: number;
   /** `lastExit` 对应记录的落盘时刻（毫秒）；无记录为 null。 */
   lastExitAt: number | null;
   /** 本会话是否曾成功探到过该进程：用于把「还没探通」与「曾经通、现在断」
@@ -129,6 +161,9 @@ export function useDevServerLiveness(): DevServerLiveness {
   /* 连通性：视图（状态栏）据此显示「应用服务运行中 / 已断开」。
    * 初值 false 表示「还没探过」，不代表故障——判据里由 everOnline 区分。 */
   const [probeOk, setProbeOk] = useState(false);
+  /* 连续失败拍数：单拍失败不足以判「断开」（见 OFFLINE_CONFIRM_FAILURES），
+   * 探通一次归零。 */
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0);
   const [everOnline, setEverOnline] = useState(false);
   /* 「这份进程对本次页面会话来说是新的」（见 `DevServerLiveness.processIsNew`）。
    * 初值 false：首帧还没探过，谈不上新旧。 */
@@ -163,6 +198,7 @@ export function useDevServerLiveness(): DevServerLiveness {
 
     /* 连通性先落：无论后续是否判定重启，视图都要知道此刻进程可不可达。 */
     setProbeOk(result.ok);
+    setConsecutiveFailures(result.ok ? 0 : (n) => n + 1);
     if (result.ok) setEverOnline(true);
 
     if (result.ok) {
@@ -243,6 +279,11 @@ export function useDevServerLiveness(): DevServerLiveness {
     lastExit,
     lastExitAt,
     probeOk,
+    /* 抗抖动后的可达性：还没到门槛的失败仍算可达（单拍抖动不是断开）。
+     * `consecutiveFailures` 达门槛那一刻这一项翻 false，状态栏与消息中心
+     * 随之各记一条（断开 / 恢复），而抖动期间它们什么都不记。 */
+    reachable: probeOk || consecutiveFailures < OFFLINE_CONFIRM_FAILURES,
+    consecutiveFailures,
     everOnline,
   };
 }
