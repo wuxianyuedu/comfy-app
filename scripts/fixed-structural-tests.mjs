@@ -478,4 +478,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 它的写入侧必须一起被钉住，否则「判据要求锚、脚本写的却是别的形状」这种分叉
   // 只有在下一次真并的时候才暴露（那时已经落盘了）。
   "tests/merge-changelog-anchor.test.ts",
+  // 「client chunk 体积预算」这条棘轮（ISSUE #1781 / 规范 §13.5.4）：它的判据住在
+  // `scripts/check-bundle-budget.cjs`、对象是 `pnpm build` 的产物，而**回潮的形态**
+  // 正是「往入口加一个大依赖」—— 那种改动住在各处的组件 / 布局文件里，判据自己住在
+  // `scripts/`，不会被改动的 import 图带进受影响集。同时它是自己的门禁自测 ——
+  // 该拦的（产物缺失跳过 / 测量面退化 / 基线缺失 / 掏空基线 / 文件数上升 / --update 拒涨）
+  // 与该放的（--report 恒 0）每一条都得有人钉住，而它们是「下一次有人想加依赖」时才走
+  // 得进的路径，所以必须进固定清单（与本次暂存改动无关也照跑）。
+  "tests/check-bundle-budget.test.ts",
 ];

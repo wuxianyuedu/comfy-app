@@ -524,6 +524,8 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 提交信息里的声明 ⇄ 事实（§11.23.5）              | **本地钩子连形态都看不到**（丢失发生在平台侧 squash）                        | `pnpm check:base:batch` 的 `CHAINED_STEPS`（合并前 / 事后盘点，人点一次） | `base-check/chained-steps.mjs` 的 `CHAINED_STEPS`             |
 | **合并前的固定动作**（`pnpm check:premerge`）    | 平台侧 squash 合并**不跑本地钩子**、本地看不到那次合并；单次分钟级（钩子内三次实测 116 / 84 / 83 秒、单独跑 336 秒，见 §13.6.2.1），挂进每次提交是拿它换一个不会天天变的结论（§13.6.2 / §11.23.5） | `.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑（§13.6.2.1）；人仍可手工敲一次，或在 PR 里 `@` 评审 NPC 唤起一轮 | `quality-gate.mjs` 的 `GATES.premerge`（`run: false`）+ `scripts/premerge-proof.mjs` |
 
+| **bundle 体积预算**（`pnpm check:bundle`）       | 测量对象是 `next build` 的产物（`.next/static/chunks`），判据在一次构建之后才有结论，而构建是半分钟级（实测 26–33s）—— 把它塞进每次提交是拿半分钟换一个不会天天变的结论（成本判据同本节，另见 §13.5.3）。**注意**：ISSUE #1781 原稿把 `next build` 记成「分钟级」，实测是半分钟级；这条**不影响**「不该进每次提交」的取向 | 按需召唤（`pnpm check:bundle`）+ 棘轮（`scripts/.bundle-budget-baseline.json`）；同一脚本也挂在 `pnpm build` 收尾（形态 C 兜底，见 §13.5.3 欠账条目 2） | `quality-gate.mjs` 的 `GATES.bundleBudget`（`run: false`，+ 本节下面「测量口径」那四条） |
+
 三档「每天首次自证」的口径不同、判据一份（`FRESHNESS_TRACKS` 的 `daily` / `dirty` /
 `graceMs`）：全量 e2e 按本地日历日；另两档按「当天动过输入面没有」。**理由**：前者人人
 跑得动、结论与改了哪几个文件无关；后两档十分钟量级、**没必要每天都跑**，真正要的是
@@ -551,6 +553,50 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 留下能复核的事实：跑一次（跑绿即记）/ `--skip "<理由>"` / `--dirty "<理由>"`（占位理由
 一律被拦，豁免不是绕过）。账文件还没入库时**只提醒、不阻断**（平台侧 squash 合并不跑
 本地钩子，硬规则 6）。三档的形状见 §11.8 的对照表。
+
+**bundle 体积预算：形态、测量口径与例外流程**（ISSUE #1781，从 #1777「性能优化」清单里分出来的真缺口）
+
+清单原稿写的是「在 CI 里加 bundle size budget」——**方向对，但本仓没有 CI**（`.cnb.yml`
+随 ISSUE #623 删除、`tests/no-platform-ci-config.test.ts` 守着它不许回来），所以这条判据的
+落点不是「阈值定多少」，而是「挂在哪、谁来跑」。三种形态里选定的是 **B + C 组合**：
+
+- **B（按需档）**：`pnpm check:bundle` —— 明确入口，给「发布前 / 大改动后 / 改依赖后」；
+- **C（产物层兜底）**：挂在 `pnpm build` 收尾 —— 构建已经发生，不额外买成本（它现在是全链
+  里最便宜的一步）。
+
+**不进 pre-commit（形态 A）的理由**是代价判据：`next build` 实测 26–33s（冷 / 热都一样），
+半分钟 × 每次提交仍然不值，且会把「`--no-verify` 绕过」的动机推高（最坏的失效形态）。
+这与 §13.5.3「下沉不等于无条件塞进提交」是同一逻辑的两面。
+
+**测量口径**（ISSUE 第 2 问那四条，逐条有实测答案）：
+
+1. **测哪个数**：`.next/static/chunks` 下所有 `.js` chunk 的 **gzip 后字节数之和**，外加
+   **文件数**（两档都记）。ISSUE 给的另一候选（`app-build-manifest.json` 的每路由 chunk 集合）
+   在**当前 Next 版本上已经不存在** —— `.next/` 下根本没有这个文件，最接近的
+   `build-manifest.json` 也已空心化，所以「按路由量」当前没有数据源、口径没得选。
+   **文件数比总量更敏感**：Turbopack 会把新依赖拆成上百个 chunk（实测 shiki 探针：
+   gzip +49.6% 的同一次，文件数 +193）。
+2. **抖动怎么判**：**按 basename 对齐、不用 `BUILD_ID` 路径**。Turbopack 的 chunk 名是
+   内容哈希，实测三次构建（热 / 热 / 冷，删过 `.next/cache`）**gzip 总计一个字节都不差、
+   同名字节差异 0**。唯一会变的是 `.next/static/<BUILD_ID>/` 下那 3 个 manifest（随机目录名、
+   合计 gzip 0.5 KB），它们**不在测量面内**（只量 `chunks/`）—— 所以判据不会抖。
+3. **放哪个基准**：与 `scripts/.file-size-baseline.json` 那批棘轮**同构**，独立一份
+   `scripts/.bundle-budget-baseline.json`（头部记 raw / gzip / 文件数三个**实测初值**，
+   不是估的）。
+4. **新依赖怎么算**：预算是**棘轮**（只许降不许升），加一个大依赖会当场红 —— 这是想要的
+   （正是防劣化）。**例外流程**见下一条。
+
+**例外流程**（ISSUE 第 4 问，必须写清否则第一次撞上就会被当成「挡住正常需求」而放宽掉）：
+
+- 判据红了先读它是**总量上升**还是**文件数上升**（两档读数都在输出里）；
+- 若确认这个体积值得，在 **PR 里贴 before/after 两档读数 + 说明为什么值这个体积**，
+  由评审确认后带 `--allow-increase` 重跑 `--update`（**不许**默默 `--update` 放水：
+  不带 `--allow-increase` 时 `--update` 会**拒绝抬高**，与 `check-overlay-z.cjs` 那批棘轮同口径）；
+- 否则先把它压回去（拆动态 import / 回到 PR #1778 那条「重依赖入口静态图」的修法）。
+
+**与 `pnpm analyze` 的分工**：那份起 `@next/bundle-analyzer`（**强制 `--webpack`**）生成
+HTML 报告给人看、退出码恒 0；本判据是**机器判定档**、量**默认 Turbopack 链**的产物 ——
+两条构建链的产物形状不同，**别拿一边的读数去比另一边**。
 
 这张表里**原本还有一行**「canonical 候选 → `@` 跑 `tw4-canonical-report.mjs`」，
 随 ISSUE #1451 摘掉：它们不再靠「人记得跑」，而是各带 `--check` 判定档与棘轮基线

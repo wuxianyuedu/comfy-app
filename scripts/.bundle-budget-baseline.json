@@ -1,0 +1,872 @@
+{
+  "generatedAt": "2026-10-12",
+  "note": "client chunk 体积预算（规范 §13.5.4，ISSUE #1781）。棘轮只许下降；抬高基线必须在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积（例外流程）。",
+  "metric": {
+    "scope": ".next/static/chunks（Turbopack 默认构建链，只数 .js）",
+    "raw": 9773025,
+    "gzip": 2279817,
+    "files": 215
+  },
+  "entries": {
+    "00_lyi4vrqksy.js": {
+      "raw": 250,
+      "gzip": 215
+    },
+    "00g9q1l52pb8o.js": {
+      "raw": 26345,
+      "gzip": 10320
+    },
+    "01kcf2nlrxysz.js": {
+      "raw": 4157,
+      "gzip": 2052
+    },
+    "02eoitkqp08vu.js": {
+      "raw": 43496,
+      "gzip": 15376
+    },
+    "02l386ii9dtwr.js": {
+      "raw": 11771,
+      "gzip": 2762
+    },
+    "02l7p_fxd60vs.js": {
+      "raw": 20749,
+      "gzip": 7221
+    },
+    "02mycsklaun6z.js": {
+      "raw": 83543,
+      "gzip": 27173
+    },
+    "03w3li8rg6pyf.js": {
+      "raw": 3811,
+      "gzip": 1132
+    },
+    "046-r7u6z0vgt.js": {
+      "raw": 12145,
+      "gzip": 2277
+    },
+    "05i9kigtrpzz9.js": {
+      "raw": 36283,
+      "gzip": 10914
+    },
+    "05ijza6-4l2i1.js": {
+      "raw": 22772,
+      "gzip": 4280
+    },
+    "066j58-yflkgu.js": {
+      "raw": 22823,
+      "gzip": 8725
+    },
+    "068s6y6t9jonu.js": {
+      "raw": 18326,
+      "gzip": 3195
+    },
+    "06huf4dedbwll.js": {
+      "raw": 15126,
+      "gzip": 5493
+    },
+    "073_r6kgkygwy.js": {
+      "raw": 43937,
+      "gzip": 16972
+    },
+    "088728o69wfp4.js": {
+      "raw": 57449,
+      "gzip": 13513
+    },
+    "08qbxfwepsu6k.js": {
+      "raw": 40080,
+      "gzip": 14843
+    },
+    "09ll99t8bzgge.js": {
+      "raw": 17258,
+      "gzip": 3027
+    },
+    "0as-jni176va7.js": {
+      "raw": 17259,
+      "gzip": 3042
+    },
+    "0b9p4sdf8psfi.js": {
+      "raw": 17574,
+      "gzip": 6595
+    },
+    "0biqceakbf35q.js": {
+      "raw": 13895,
+      "gzip": 3158
+    },
+    "0cz1d0mv5g_q7.js": {
+      "raw": 112594,
+      "gzip": 39627
+    },
+    "0d9vcjb5zc4_r.js": {
+      "raw": 3241,
+      "gzip": 881
+    },
+    "0dwopt6kgk40m.js": {
+      "raw": 22773,
+      "gzip": 4374
+    },
+    "0e31zaog_cez6.js": {
+      "raw": 6920,
+      "gzip": 2867
+    },
+    "0e6dnaks0hc63.js": {
+      "raw": 39048,
+      "gzip": 13862
+    },
+    "0ec69-jn3ckby.js": {
+      "raw": 50989,
+      "gzip": 8605
+    },
+    "0h9kw4hrp2nk_.js": {
+      "raw": 15222,
+      "gzip": 5421
+    },
+    "0i5q33hpkkee0.js": {
+      "raw": 786442,
+      "gzip": 53299
+    },
+    "0icnob_6a-u99.js": {
+      "raw": 18085,
+      "gzip": 2582
+    },
+    "0j2h07qv5s633.js": {
+      "raw": 28620,
+      "gzip": 10017
+    },
+    "0kkm3art-cog8.js": {
+      "raw": 20303,
+      "gzip": 3363
+    },
+    "0oy5rnw1_6d2b.js": {
+      "raw": 150,
+      "gzip": 146
+    },
+    "0p6vlt6bxtkoh.js": {
+      "raw": 77330,
+      "gzip": 25451
+    },
+    "0pmk7s3y0dtzb.js": {
+      "raw": 15037,
+      "gzip": 2967
+    },
+    "0q00ehk6ps1jg.js": {
+      "raw": 53883,
+      "gzip": 8518
+    },
+    "0qlucyjqdghn0.js": {
+      "raw": 1275,
+      "gzip": 453
+    },
+    "0qz9eem166zeh.js": {
+      "raw": 2305,
+      "gzip": 993
+    },
+    "0r324bimf5jbg.js": {
+      "raw": 177925,
+      "gzip": 16697
+    },
+    "0rpu4xzbyth7i.js": {
+      "raw": 22776,
+      "gzip": 4283
+    },
+    "0rzdcwaywk5-1.js": {
+      "raw": 9817,
+      "gzip": 1939
+    },
+    "0snwwiyf2gdcs.js": {
+      "raw": 31792,
+      "gzip": 10598
+    },
+    "0t2ptt67mquoz.js": {
+      "raw": 22021,
+      "gzip": 8003
+    },
+    "0t91itru745ag.js": {
+      "raw": 40294,
+      "gzip": 14164
+    },
+    "0u1es5gnm2uoc.js": {
+      "raw": 14173,
+      "gzip": 2965
+    },
+    "0w82sz8wlbd87.js": {
+      "raw": 99433,
+      "gzip": 14230
+    },
+    "0wdtdtwir2f85.js": {
+      "raw": 90937,
+      "gzip": 14260
+    },
+    "0x1nxadqakzjz.js": {
+      "raw": 110401,
+      "gzip": 31499
+    },
+    "0y4avpicp1rjw.js": {
+      "raw": 47835,
+      "gzip": 14672
+    },
+    "0yyrg7h46m0sz.js": {
+      "raw": 175669,
+      "gzip": 16598
+    },
+    "0z8vodibnyg9h.js": {
+      "raw": 6427,
+      "gzip": 1801
+    },
+    "0z99m5mud3bes.js": {
+      "raw": 1379,
+      "gzip": 541
+    },
+    "0zeu26s9c99wk.js": {
+      "raw": 20288,
+      "gzip": 4027
+    },
+    "0zyst4_lq0wps.js": {
+      "raw": 22773,
+      "gzip": 4274
+    },
+    "1-86mre-6zq_h.js": {
+      "raw": 30506,
+      "gzip": 9268
+    },
+    "1-dtv7veo91ib.js": {
+      "raw": 41612,
+      "gzip": 6183
+    },
+    "11ba8il0t0b-1.js": {
+      "raw": 42591,
+      "gzip": 15275
+    },
+    "11harrb__mdf7.js": {
+      "raw": 25439,
+      "gzip": 9407
+    },
+    "12atwsgt_tbn5.js": {
+      "raw": 19421,
+      "gzip": 7894
+    },
+    "12tpi4rkpt4nl.js": {
+      "raw": 18765,
+      "gzip": 3213
+    },
+    "1320qbdo3sr40.js": {
+      "raw": 15671,
+      "gzip": 4384
+    },
+    "13af44iz97na7.js": {
+      "raw": 72944,
+      "gzip": 15786
+    },
+    "1488hf6oh13xm.js": {
+      "raw": 32751,
+      "gzip": 5263
+    },
+    "14dxd5849cw3a.js": {
+      "raw": 20221,
+      "gzip": 4037
+    },
+    "15--avp_hc_fe.js": {
+      "raw": 8915,
+      "gzip": 2048
+    },
+    "16d-mc_wtq4ro.js": {
+      "raw": 27558,
+      "gzip": 6422
+    },
+    "17fp1u7yqbxe_.js": {
+      "raw": 50071,
+      "gzip": 9541
+    },
+    "189fj3g6p45gn.js": {
+      "raw": 10643,
+      "gzip": 2355
+    },
+    "1_jhy0cc6p0og.js": {
+      "raw": 6554,
+      "gzip": 1719
+    },
+    "1_u28s3-tjf1a.js": {
+      "raw": 24314,
+      "gzip": 9560
+    },
+    "1ar1cg4mm5mhy.js": {
+      "raw": 24403,
+      "gzip": 9558
+    },
+    "1c8-9jinuxena.js": {
+      "raw": 18574,
+      "gzip": 7018
+    },
+    "1cji-8vs1zk76.js": {
+      "raw": 8120,
+      "gzip": 1501
+    },
+    "1do6nsophg-v4.js": {
+      "raw": 8601,
+      "gzip": 1754
+    },
+    "1ferflm6xwe3h.js": {
+      "raw": 13795,
+      "gzip": 2374
+    },
+    "1im-q3ussa0x_.js": {
+      "raw": 19518,
+      "gzip": 8486
+    },
+    "1jovlml9z4wnf.js": {
+      "raw": 20217,
+      "gzip": 4044
+    },
+    "1k56-slzwhtuj.js": {
+      "raw": 59467,
+      "gzip": 5728
+    },
+    "1klhirwa-ap-z.js": {
+      "raw": 14411,
+      "gzip": 3118
+    },
+    "1l5qpc60khi35.js": {
+      "raw": 13813,
+      "gzip": 3155
+    },
+    "1ml94pahma299.js": {
+      "raw": 41899,
+      "gzip": 14891
+    },
+    "1nfatfxb411pt.js": {
+      "raw": 969,
+      "gzip": 535
+    },
+    "1o4hb2lnf9stn.js": {
+      "raw": 55627,
+      "gzip": 13277
+    },
+    "1oeeodk76lvbw.js": {
+      "raw": 34475,
+      "gzip": 12328
+    },
+    "1p-gw7g_tbqb6.js": {
+      "raw": 17255,
+      "gzip": 3024
+    },
+    "1q-xr3qp1d7rp.js": {
+      "raw": 21599,
+      "gzip": 2974
+    },
+    "1q-yjh0183g7s.js": {
+      "raw": 24426,
+      "gzip": 4059
+    },
+    "1qq2yu1fhi9we.js": {
+      "raw": 21888,
+      "gzip": 3995
+    },
+    "1qqmj-v3q8iuk.js": {
+      "raw": 27353,
+      "gzip": 4351
+    },
+    "1r-crlvv-7_f4.js": {
+      "raw": 35801,
+      "gzip": 6330
+    },
+    "1rb12nmbx6ix6.js": {
+      "raw": 18770,
+      "gzip": 3212
+    },
+    "1s8vh5b-gkh7y.js": {
+      "raw": 52032,
+      "gzip": 12487
+    },
+    "1sd1ku8kxk1n8.js": {
+      "raw": 14731,
+      "gzip": 3183
+    },
+    "1tnhnzo041jwz.js": {
+      "raw": 45728,
+      "gzip": 14530
+    },
+    "1to2p51383auj.js": {
+      "raw": 3269,
+      "gzip": 1297
+    },
+    "1wcosu0dt4zuo.js": {
+      "raw": 350194,
+      "gzip": 110149
+    },
+    "1wdi_kv3ulb2b.js": {
+      "raw": 2956,
+      "gzip": 864
+    },
+    "1wt0_0uhuvv0l.js": {
+      "raw": 20068,
+      "gzip": 7309
+    },
+    "1wzs5sspd_9ya.js": {
+      "raw": 76416,
+      "gzip": 15604
+    },
+    "1xp2i0wxnvj86.js": {
+      "raw": 3217,
+      "gzip": 857
+    },
+    "1y52cuirnhpl2.js": {
+      "raw": 11217,
+      "gzip": 4176
+    },
+    "1yica_cbg6t-v.js": {
+      "raw": 181212,
+      "gzip": 16127
+    },
+    "1ykegohf-nqrt.js": {
+      "raw": 97773,
+      "gzip": 14789
+    },
+    "1za6457_3urzp.js": {
+      "raw": 53881,
+      "gzip": 8520
+    },
+    "1zivyguc0rxos.js": {
+      "raw": 5754,
+      "gzip": 1436
+    },
+    "2-52tvwkp-u2-.js": {
+      "raw": 33304,
+      "gzip": 12154
+    },
+    "2-z6o1f-jg8m1.js": {
+      "raw": 9253,
+      "gzip": 2062
+    },
+    "205ov6lr2jvb7.js": {
+      "raw": 33023,
+      "gzip": 11911
+    },
+    "21-xmbq_78l7w.js": {
+      "raw": 18771,
+      "gzip": 3227
+    },
+    "22_6i841j8px3.js": {
+      "raw": 14292,
+      "gzip": 3135
+    },
+    "23d7xjugl8oht.js": {
+      "raw": 8753,
+      "gzip": 3621
+    },
+    "25bdyv5-vwrht.js": {
+      "raw": 3143,
+      "gzip": 876
+    },
+    "26jdbnp0dxlbz.js": {
+      "raw": 11320,
+      "gzip": 2604
+    },
+    "26jdf_jo_68u1.js": {
+      "raw": 6551,
+      "gzip": 1997
+    },
+    "26zmfuvolecx0.js": {
+      "raw": 151021,
+      "gzip": 48864
+    },
+    "27g5iey79pd8t.js": {
+      "raw": 6764,
+      "gzip": 1849
+    },
+    "27l9gprpncp8t.js": {
+      "raw": 18019,
+      "gzip": 6046
+    },
+    "293sx0585t8en.js": {
+      "raw": 21212,
+      "gzip": 4135
+    },
+    "29f7ibn6yn75g.js": {
+      "raw": 31383,
+      "gzip": 11524
+    },
+    "29y88bckse65_.js": {
+      "raw": 9567,
+      "gzip": 2191
+    },
+    "2_-wcrh_6pyh1.js": {
+      "raw": 70238,
+      "gzip": 9219
+    },
+    "2a56j-py1644w.js": {
+      "raw": 22772,
+      "gzip": 4280
+    },
+    "2aaejfzkxq0w7.js": {
+      "raw": 136246,
+      "gzip": 23437
+    },
+    "2ael8f7qx7s9a.js": {
+      "raw": 26038,
+      "gzip": 4356
+    },
+    "2bounow873gjj.js": {
+      "raw": 29980,
+      "gzip": 9900
+    },
+    "2byeencl1uada.js": {
+      "raw": 11541,
+      "gzip": 2646
+    },
+    "2cd-vvo81m_qi.js": {
+      "raw": 50987,
+      "gzip": 8591
+    },
+    "2d2t8y7val8sy.js": {
+      "raw": 10077,
+      "gzip": 2368
+    },
+    "2g7do-v97mtiq.js": {
+      "raw": 15382,
+      "gzip": 3567
+    },
+    "2gnqpcua0x8e4.js": {
+      "raw": 28139,
+      "gzip": 7579
+    },
+    "2hw4ah642789j.js": {
+      "raw": 241242,
+      "gzip": 76079
+    },
+    "2j4_wizw6ines.js": {
+      "raw": 174960,
+      "gzip": 16601
+    },
+    "2jbytmz-7qs9r.js": {
+      "raw": 33630,
+      "gzip": 5593
+    },
+    "2ju90vuxx0k5c.js": {
+      "raw": 54645,
+      "gzip": 19945
+    },
+    "2jxmten-m0p3t.js": {
+      "raw": 7298,
+      "gzip": 2978
+    },
+    "2k-i5k9qfa3va.js": {
+      "raw": 9150,
+      "gzip": 2458
+    },
+    "2k1w49wmoojlh.js": {
+      "raw": 234546,
+      "gzip": 73417
+    },
+    "2k7gdpnu6jzoq.js": {
+      "raw": 13842,
+      "gzip": 5712
+    },
+    "2kiymrg8whhql.js": {
+      "raw": 56197,
+      "gzip": 12504
+    },
+    "2lohsedj-55ef.js": {
+      "raw": 21202,
+      "gzip": 4103
+    },
+    "2m8_hhd8cn06z.js": {
+      "raw": 11042,
+      "gzip": 4559
+    },
+    "2o_9u4syq-q-2.js": {
+      "raw": 77120,
+      "gzip": 26435
+    },
+    "2pkju44pgyjjc.js": {
+      "raw": 51652,
+      "gzip": 7874
+    },
+    "2pkwc7g-si1x4.js": {
+      "raw": 13752,
+      "gzip": 3131
+    },
+    "2pwkj6xl6-ys7.js": {
+      "raw": 31395,
+      "gzip": 9345
+    },
+    "2q3jc0vcol8zg.js": {
+      "raw": 106536,
+      "gzip": 23239
+    },
+    "2rjwl8n46yuzi.js": {
+      "raw": 38862,
+      "gzip": 12661
+    },
+    "2sjqxs48tqu0e.js": {
+      "raw": 8923,
+      "gzip": 2059
+    },
+    "2t71c01ow8tsd.js": {
+      "raw": 22769,
+      "gzip": 4275
+    },
+    "2tp8d5cvazbkt.js": {
+      "raw": 391257,
+      "gzip": 90939
+    },
+    "2ts-iwx13nml9.js": {
+      "raw": 28706,
+      "gzip": 3815
+    },
+    "2u3zt649kawpc.js": {
+      "raw": 470,
+      "gzip": 303
+    },
+    "2w1eis4uo4y6p.js": {
+      "raw": 72285,
+      "gzip": 10592
+    },
+    "2wigyoy_1jfo1.js": {
+      "raw": 49190,
+      "gzip": 11945
+    },
+    "2x2dx8m-supkp.js": {
+      "raw": 190109,
+      "gzip": 18034
+    },
+    "2ybvl40w9d-po.js": {
+      "raw": 153242,
+      "gzip": 47244
+    },
+    "2yjo1gdm433rv.js": {
+      "raw": 8168,
+      "gzip": 2035
+    },
+    "2zyq0b2v-rqpd.js": {
+      "raw": 5276,
+      "gzip": 1472
+    },
+    "3-p_bbo7n4ua3.js": {
+      "raw": 9266,
+      "gzip": 1609
+    },
+    "30iu6b7baqwcl.js": {
+      "raw": 29774,
+      "gzip": 11474
+    },
+    "318qz5lylr-i7.js": {
+      "raw": 9431,
+      "gzip": 2073
+    },
+    "33a2zq3v6ikib.js": {
+      "raw": 7105,
+      "gzip": 1982
+    },
+    "33aqz8nd4f5f8.js": {
+      "raw": 26859,
+      "gzip": 4495
+    },
+    "33d2oug_5d13z.js": {
+      "raw": 33785,
+      "gzip": 10090
+    },
+    "33p0m4_xht21h.js": {
+      "raw": 46962,
+      "gzip": 15625
+    },
+    "33sxee1p08g1q.js": {
+      "raw": 113146,
+      "gzip": 28777
+    },
+    "34jog89xbq7v5.js": {
+      "raw": 37646,
+      "gzip": 9302
+    },
+    "35fvn0jya9428.js": {
+      "raw": 20599,
+      "gzip": 7187
+    },
+    "37vyqd9q37lol.js": {
+      "raw": 21877,
+      "gzip": 3982
+    },
+    "380wt1li3upp6.js": {
+      "raw": 14571,
+      "gzip": 3229
+    },
+    "39qjf-jgzarr3.js": {
+      "raw": 25436,
+      "gzip": 3772
+    },
+    "3_sm8d6a7e85m.js": {
+      "raw": 35558,
+      "gzip": 5884
+    },
+    "3ase0kvqs9h_r.js": {
+      "raw": 3765,
+      "gzip": 1491
+    },
+    "3bawp1q6ach6c.js": {
+      "raw": 20909,
+      "gzip": 3923
+    },
+    "3cfh5rjaqgqjb.js": {
+      "raw": 1348,
+      "gzip": 841
+    },
+    "3cgtv6tu4x4f0.js": {
+      "raw": 13951,
+      "gzip": 2645
+    },
+    "3d2_irxe3m0nj.js": {
+      "raw": 108796,
+      "gzip": 34351
+    },
+    "3ed-fjdf6x9dg.js": {
+      "raw": 21887,
+      "gzip": 3999
+    },
+    "3edwyx4jk0-g2.js": {
+      "raw": 18751,
+      "gzip": 3213
+    },
+    "3eg_hzsib___0.js": {
+      "raw": 22769,
+      "gzip": 4272
+    },
+    "3ele3b_5zwpm1.js": {
+      "raw": 6875,
+      "gzip": 1921
+    },
+    "3fzhn-0pzngyg.js": {
+      "raw": 22855,
+      "gzip": 8101
+    },
+    "3h-jir_fomzqy.js": {
+      "raw": 36036,
+      "gzip": 12769
+    },
+    "3hdd1jieuyl4j.js": {
+      "raw": 12869,
+      "gzip": 2076
+    },
+    "3ic20ndjxsepu.js": {
+      "raw": 167298,
+      "gzip": 45554
+    },
+    "3j3dn8fq-8svi.js": {
+      "raw": 50994,
+      "gzip": 8595
+    },
+    "3j9n_92sq4790.js": {
+      "raw": 622583,
+      "gzip": 230479
+    },
+    "3jyihp_kcrauk.js": {
+      "raw": 55377,
+      "gzip": 8267
+    },
+    "3lp-teofg9r7p.js": {
+      "raw": 310,
+      "gzip": 235
+    },
+    "3nq3wmbcgdzvm.js": {
+      "raw": 33923,
+      "gzip": 5619
+    },
+    "3ode4kr-oz708.js": {
+      "raw": 29049,
+      "gzip": 5255
+    },
+    "3odhsio63mahk.js": {
+      "raw": 11635,
+      "gzip": 2673
+    },
+    "3of0thm8ej10h.js": {
+      "raw": 41913,
+      "gzip": 13752
+    },
+    "3oged2kwmqn9i.js": {
+      "raw": 18765,
+      "gzip": 3233
+    },
+    "3pmyiupf8sgu0.js": {
+      "raw": 25566,
+      "gzip": 3650
+    },
+    "3r0120m__2tt3.js": {
+      "raw": 1253,
+      "gzip": 789
+    },
+    "3rhkguf86doo6.js": {
+      "raw": 10924,
+      "gzip": 4824
+    },
+    "3sx84ma6b5owl.js": {
+      "raw": 3626,
+      "gzip": 1476
+    },
+    "3tmn8lnl6dufr.js": {
+      "raw": 9233,
+      "gzip": 2192
+    },
+    "3tmx-2vunlkth.js": {
+      "raw": 31209,
+      "gzip": 8080
+    },
+    "3wa9_i5p4bdi2.js": {
+      "raw": 183926,
+      "gzip": 16689
+    },
+    "3xdwv60rkaw55.js": {
+      "raw": 50986,
+      "gzip": 8588
+    },
+    "3yyq1wlsvs-sa.js": {
+      "raw": 2177,
+      "gzip": 942
+    },
+    "3zuj0v-7d3bf2.js": {
+      "raw": 17322,
+      "gzip": 6437
+    },
+    "401qceuhohwjy.js": {
+      "raw": 3388,
+      "gzip": 916
+    },
+    "40rpqqc8pfz2h.js": {
+      "raw": 105031,
+      "gzip": 28235
+    },
+    "4164bo1n18qvz.js": {
+      "raw": 45588,
+      "gzip": 15189
+    },
+    "416iivsn3swsd.js": {
+      "raw": 9425,
+      "gzip": 2576
+    },
+    "41mkspkh_r08x.js": {
+      "raw": 7136,
+      "gzip": 1928
+    },
+    "41wratcsjnxe5.js": {
+      "raw": 6319,
+      "gzip": 2704
+    },
+    "43jap3acj1bwv.js": {
+      "raw": 17349,
+      "gzip": 6827
+    },
+    "43w2f_9m6pzy0.js": {
+      "raw": 14569,
+      "gzip": 3221
+    },
+    "44k602rv59jwo.js": {
+      "raw": 8998,
+      "gzip": 2867
+    },
+    "44oxq1phpw8si.js": {
+      "raw": 23560,
+      "gzip": 7510
+    },
+    "turbopack-20ptzs955u7-9.js": {
+      "raw": 10914,
+      "gzip": 4289
+    }
+  }
+}
