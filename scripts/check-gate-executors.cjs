@@ -205,7 +205,7 @@ function isGateScript(name, chain) {
   return GATE_NAME_PREFIXES.some((p) => name.startsWith(p));
 }
 
-/* ── 执行者来源（七处；口径见文件头） ─────────────────────────── */
+/* ── 执行者来源（以这份清单为准，别在注释里数条数 —— 数一次就会漂）────── */
 
 const EXECUTOR_SOURCES = [
   ".githooks/pre-commit",
@@ -214,6 +214,10 @@ const EXECUTOR_SOURCES = [
   // 上一条提交上），而 prepare-commit-msg 的 `$2`(source) 能把 `--amend` 排除在外。
   // 漏登记它 = 那份判据被判成「无执行者」、台账双向拦报成负债 —— 而被拦下的动作
   // 恰恰是「把它接回钩子」，方向正好反了。
+  // `pre-push` 同理，且它填的正是这一族最难补的那一格：平台侧 squash 合并本地看不见，
+  // 「合并前的固定动作」此前唯一的执行者是人的记性（规范 §13.6.2.1）。不登记它，
+  // 那次接线就会被读成「文档说有人跑、实际没人跑」—— 与本文件立案的现场同形。
+  ".githooks/pre-push",
   "scripts/quality-gate.mjs",
   "package.json",
   "scripts/build-desktop.mjs",
