@@ -119,7 +119,19 @@ function walk(dir) {
  * @returns {{line:number,label:string,tag:string}[]}
  */
 function scanSource(fileName, src) {
-  const sf = ts.createSourceFile(fileName, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  return scanTree(
+    ts.createSourceFile(fileName, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX),
+  );
+}
+
+/**
+ * 规则本体：**只吃已解析的 `SourceFile`**，不自己解析（口径见
+ * `check-click-keyboard.cjs` 的 `scanTree()` 与规范 §13.5.8.2「第四笔账」）。
+ *
+ * @param {import("typescript").SourceFile} sf
+ * @returns {{line:number,label:string,tag:string}[]}
+ */
+function scanTree(sf) {
   const sites = [];
   const visit = (node) => {
     if (
@@ -182,12 +194,19 @@ function scanFile(abs) {
   return scanSource(abs, fs.readFileSync(abs, "utf8"));
 }
 
-function collect() {
+/**
+ * @param {Map<string, import("typescript").SourceFile>} [parsed]
+ *   聚合档 `run-ast-gates.cjs` 注入的**共享解析结果**（键 = 绝对路径）。
+ *   传了就复用，不再各文件 `createSourceFile` —— 只共享解析产物，不共享遍历/判定。
+ *   不传 = 单条脚本的老路径，行为一字不变。
+ */
+function collect(parsed) {
   const sites = new Map();
   for (const abs of SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)))) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
     if (FIXTURE_SKIP.has(rel)) continue;
-    const hit = scanFile(abs);
+    const shared = parsed && parsed.get(abs);
+    const hit = shared ? scanTree(shared) : scanFile(abs);
     if (hit.length) sites.set(rel, hit);
   }
   return sites;
@@ -205,8 +224,8 @@ function readBaseline() {
   }
 }
 
-function main() {
-  const sites = collect();
+function main(parsed) {
+  const sites = collect(parsed);
   const total = [...sites.values()].reduce((n, v) => n + v.length, 0);
 
   if (SHOULD_UPDATE) {
@@ -289,6 +308,6 @@ function main() {
 }
 
 /* 自测（`tests/form-field-wiring-gate.test.ts`）钉的是**站点识别口径**。 */
-module.exports = { scanSource, scanFile, collect, FIXTURE_SKIP, TARGET };
+module.exports = { scanSource, scanTree, scanFile, collect, main, FIXTURE_SKIP, TARGET };
 
 if (require.main === module) process.exit(main());
