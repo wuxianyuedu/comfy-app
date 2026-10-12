@@ -89,7 +89,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(55 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(56 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -496,6 +496,20 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 判据只判「三处逐字相等 + 形态合法」，刻意不判「该不该升」（那是发布判断）。
   # 成本实测：读三个文件、零网络、零子进程，与 check-app-port-vectors 同档。
   run "产品版本号三处同步(D7)" node scripts/check-app-version.cjs
+  # 基础设施层的文件长度棘轮（§12.6 R5 的姊妹档）：R5 / 函数长度 / 非空断言 / 孪生对
+  # 四类债务判据的扫描根**都只有 `src`**（`check-file-structure.cjs` 的 R5 定义就写着
+  # 「src/ 下超 900 行」，另三份是 `SCAN_DIR = "src"`）。于是判据自己那一层
+  # （`scripts/**` 152 份 `.cjs/.mjs` + `tools/**` 26 份 `.ps1`，约 43k 行，与它管的
+  # `src` 非测试代码同量级）落在自己立的硬闸之外：`src` 侧超 900 行的基线今天为 0，
+  # 同一把尺子在判据层上是 6 个文件、最大一份 4,820 行。
+  # 为什么这条值得在提交时响：判据是**被执行的那部分代码** —— 它长到没人读得动的表现
+  # 不是报错，而是「这条判据从此恒绿」。同族先例：Rust 壳的函数长度也是「另立脚本 +
+  # 另立基线」（阈值 120 而不是 400，因为两侧自然长度不同），本条同理但不需要
+  # `baselineRev` 那套「按格式时代重数」—— 这一层双重不在 prettier 档里
+  # （`check-format.cjs` 的 `GLOBS` 只收 `{ts,tsx,js,jsx,mdx}`，`IGNORE_GLOBS` 又把
+  # `scripts/**` 与 `tools/**` 整目录列成白名单），不存在两种行数口径可漂。
+  # 成本实测：读 166 个文件、零网络、零子进程，与 check-app-version / check-a11y-rules 同档。
+  run "基础设施层文件长度棘轮(scripts+tools，§12.6 R5 姊妹档)" node scripts/check-infra-file-size.cjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────

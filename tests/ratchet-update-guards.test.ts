@@ -127,6 +127,21 @@ const RATCHETS: Ratchet[] = [
           `\n}\n`,
       ),
   },
+  /* 基础设施层的**文件**长度棘轮（§12.6 R5 的姊妹档）：R5 / 函数长度 / 非空断言 /
+   * 孪生对四类债务判据的扫描根都只有 `src`，判据自己那一层（`scripts/**` 的 .cjs/.mjs
+   * 与 `tools/**` 的 .ps1，约 43k 行）因此在自己的硬闸之外。它配得进这张表而不是
+   * PENDING —— 沙箱里造一条违规只碰它自己这一条规则：R5 那份之所以进 PENDING，
+   * 是因为同一脚本里 950 行的探针会连带命中 R1–R12 其它规则，第 ② 步配不出来。 */
+  {
+    script: "check-infra-file-size.cjs",
+    baseline: "scripts/.infra-file-size-baseline.json",
+    fixture: { dirs: ["scripts", "tools"] },
+    violate: (repo, n) =>
+      repo.write(
+        `scripts/big${n}.cjs`,
+        `// 拆分候选\n`.repeat(905) + `module.exports = ${n};\n`,
+      ),
+  },
   {
     script: "check-non-null-assertions.cjs",
     baseline: "scripts/.non-null-assertions-baseline.json",
