@@ -64,10 +64,41 @@ export function quotedRepoPaths(text: string): string[] {
   return [...out];
 }
 
-function gateScripts() {
-  return readdirSync(SCRIPTS_DIR)
+/**
+ * 一份门禁脚本**连同它同目录的相对依赖**（`require("./x.cjs")` 递归闭包）。
+ *
+ * 为什么扫描面不能只是 `check-*.cjs` 那一层：基础设施层按 R5 拆过一刀
+ * （ISSUE #1811 第四刀，PR #1823）—— `check-ui-primitives.cjs` 4529 → 804 行、
+ * `check-file-structure.cjs` 1214 → 813 行、`check-theme-colors.cjs` 992 → 652 行，
+ * 拆出去的正是**常量与清单表**（`ui-primitives-rules-*.cjs` /
+ * `file-structure-rules.cjs` / `theme-color-exemptions.cjs`），而
+ * 「路径字面量」这一面恰恰住在那些数据模块里。
+ *
+ * 拆完只扫主文件时实测：路径字面量从 111 条掉到 40 条 —— 掉的那 71 条**没有红**
+ * （少扫自然不报），于是这条判据的覆盖面静默缩掉六成半，而账面全绿。这正是本条
+ * 用例里那句「永远返回空的扫描器会让断言全绿」的同族，只是这次不是全空、是缩水。
+ */
+function gateScripts(): string[] {
+  const roots = readdirSync(SCRIPTS_DIR)
     .filter((f) => /^check-.*\.cjs$/.test(f))
     .map((f) => `scripts/${f}`);
+  const seen = new Set(roots);
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const rel = queue.shift()!;
+    const src = sourceOf(rel);
+    /* 只认同目录相对形态：仓里判据之间的引用全是这一种（口径同
+     * `tests/helpers/gate-repo.ts` 的 `copyGateDeps`）。 */
+    for (const m of src.matchAll(
+      /require\(\s*"\.\/([\w.-]+\.cjs)"\s*\)/g,
+    )) {
+      const dep = `scripts/${m[1]!}`;
+      if (seen.has(dep) || !existsSync(path.join(ROOT, dep))) continue;
+      seen.add(dep);
+      queue.push(dep);
+    }
+  }
+  return [...seen].sort();
 }
 
 /**
@@ -223,8 +254,14 @@ describe("门禁脚本里的路径字面量必须存在", () => {
     }
     /* 自证：扫描面没匹配到任何路径字面量时，上面的空清单断言是**空转**
      * （同 `check-dead-exports` 对「清单为空」的警惕，也同本仓库那条
-     * 「永远返回空的扫描器会让断言全绿」）。实测 26 个 check-*.cjs 里共
-     * 111 条路径字面量，门槛取 50 —— 掉下去意味着提取形态变了，不是「变干净了」。 */
+     * 「永远返回空的扫描器会让断言全绿」）。门槛取 50 —— 掉下去意味着提取形态
+     * 变了，不是「变干净了」。
+     *
+     * ⚠️ **这条门槛的读数会随扫描面变**，别把它当成「一张固定的账」：基础设施层
+     * 拆分（ISSUE #1811 第四刀）之后扫描面从 26 份涨到 66 份（连同 `require` 闭包
+     * 里的数据模块），同一次拆分也让只看 `check-*.cjs` 的旧扫描面从 111 条掉到 40 条
+     * —— **掉的那 71 条没有红**。那次缩水正说明这条门槛的职责是「发现扫描面塌了」，
+     * 而它抓不到「扫描面慢漏」；后者由 `gateScripts()` 的闭包展开来保证。 */
     expect(seen, "一条路径字面量都没扫到：判据形态或写法变了").toBeGreaterThan(
       50,
     );

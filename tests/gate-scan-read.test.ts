@@ -53,6 +53,8 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { copyGateDeps } from "./helpers/gate-repo";
+
 const requireCjs = createRequire(import.meta.url);
 
 const READER_PATH = fileURLToPath(
@@ -285,13 +287,19 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
     const root = tempDir("fs-walk-enoent-");
     mkdirSync(path.join(root, "scripts"));
     mkdirSync(path.join(root, "src"));
-    /* 判据自己与它 require 的共用件都要在位（临时仓库形态与门禁自测一致）。 */
-    for (const name of ["check-file-structure.cjs", "gate-scan-read.cjs"]) {
-      copyFileSync(
-        path.join(SCRIPTS_DIR, name),
-        path.join(root, "scripts", name),
-      );
-    }
+    /* 判据自己**与它 require 的每一份**都要在位 —— 用共享件按 `require("./x.cjs")`
+     * 递归补齐，不手抄清单：`check-file-structure.cjs` 按 R5 拆过一刀后多了
+     * `file-structure-rules.cjs`，手抄的那一版立刻把本用例变成
+     * 「Cannot find module」（报错还指不到夹具，看着像门禁坏了）。 */
+    const gateAbs = path.join(root, "scripts", "check-file-structure.cjs");
+    copyFileSync(path.join(SCRIPTS_DIR, "check-file-structure.cjs"), gateAbs);
+    /* 它自己那份共用读取器不在 `require("./…")` 闭包里（走的是条件注入），
+     * 所以显式带上。 */
+    copyFileSync(
+      path.join(SCRIPTS_DIR, "gate-scan-read.cjs"),
+      path.join(root, "scripts", "gate-scan-read.cjs"),
+    );
+    copyGateDeps(gateAbs);
     /* 刻意**不**建 `src/proxy.ts`：R11 会因此报一条真实违规 —— 它就是这一条要验的
      * 「判据的真实结论照常给出」，而不是「跑完了、输出里恰好有字」。
      * 那份违规与根目录上的临时目录毫无关系，正是立案时被 ENOENT 顶掉的那条结论。 */

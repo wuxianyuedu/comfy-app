@@ -21,6 +21,7 @@ import {
 } from "../scripts/launcher-core/log.mjs";
 import { runtimeLogFileName } from "../src/lib/log/runtime-log-file";
 import { LAUNCH_STAMP_ENV } from "../src/lib/log/runtime-log-file";
+import { launcherChainSource } from "./helpers/launcher-source";
 
 const ROOT = process.cwd();
 
@@ -50,20 +51,18 @@ describe("app-runtime 文件名跨语言一致（launcher ↔ dev server）", ()
      * 于是 launcher 每轮写下的提醒被读成「更早的日志」，并在保留策略里当**最旧
      * 的一份**先删掉、再由下一次写重建 —— 「删除 → 重建」交替，正在写的那一份
      * 被轮转逻辑当垃圾清掉（静默丢日志）。 */
-    const src = fs.readFileSync(
-      path.join(ROOT, "scripts", "dev-launcher.mjs"),
-      "utf8",
-    );
+    /* 断的是**编排链路**上有没有这个形状，不是「它住在哪一份文件里」——
+     * 编排器已按 R5 拆进 `launcher-core/**`（ISSUE #1811 第四刀），
+     * 只读主文件时这几条会对着空串断言（`not.toContain` 恒真）。 */
+    const src = launcherChainSource();
     expect(src).not.toContain('"app-runtime.log"');
     expect(src).toContain("appRuntimeLogFileName(");
   });
 
   it("环境变量名由 TS 侧定义、launcher 侧引用同一串（两侧不许各写一个字面量）", () => {
     expect(LAUNCH_STAMP_ENV).toBe("COMFYAPP_LAUNCH_STAMP");
-    const launcher = fs.readFileSync(
-      path.join(ROOT, "scripts", "dev-launcher.mjs"),
-      "utf8",
-    );
+    /* 同上：链路（主文件 + `launcher-core/**`）而不是单份主文件。 */
+    const launcher = launcherChainSource();
     /* launcher 是 `.mjs`（读不了 TS 常量），所以它那一侧**必须**写出字面量；
      * 这里锁的就是「两处是同一串」——写错的表现是 dev server 读不到戳，
      * 静默退回当前时刻、把两份文件拆开。 */
