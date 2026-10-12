@@ -36,15 +36,14 @@ describe("ResourceLibrary", () => {
     window.localStorage.clear();
   });
 
-  it("页头不再重复一次可见标题；那句解释收进悬浮「说明」（屏名取自导航注册表）", async () => {
+  it("页头显示可见标题且帮助问号挂在标题右侧；那句解释收进悬浮「说明」", async () => {
     mockFetch(BODY);
     render(<ResourceLibrary />);
-    /* 屏名仍在 DOM 里（`sr-only`，读屏与 `h1` 判据都靠它），只是不占视觉空间 ——
-       页签写「资源库」、屏内再写一遍就是同一件事占两行（ISSUE #1693）。 */
+    /* 屏名现在可见：帮助问号需要挂在标题右侧，因此标题必须显示。 */
     const heading = screen.getByRole("heading", { name: "资源库" });
-    expect(heading.className).toContain("sr-only");
-    /* 那句「能拿这些素材做什么」不再常驻：它收成一颗悬浮按钮，
-       展开才显示（同一条 ISSUE：说明的直接显示也占空间）。 */
+    expect(heading.className).toContain("u-title-page");
+    expect(heading.className).not.toContain("sr-only");
+    /* 那句「能拿这些素材做什么」仍收成一颗悬浮按钮，不常驻显示。 */
     expect(screen.queryByText(/可直接拖进画布或工坊/)).toBeNull();
     expect(screen.getByRole("button", { name: "说明" })).toBeTruthy();
   });
