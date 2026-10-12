@@ -13,9 +13,12 @@ import type { AppServiceExitNotice } from "./app-service-exit";
  * 信息重复；真正会卡住整个界面的失败是**应用服务没起来**——那种情况下页面
  * 会白屏 / 打不开，而旧状态栏恰好没有任何一格在说这件事。
  *
- * 判据（三态，都由「一次探测有没有拿到 bootId」派生，不依赖任何业务接口）：
- *   online   探测成功拿到进程标识 → 应用服务在线（顺带说明「有没有真正重启」）；
- *   offline  网络层失败且已有过一次成功 → 进程不可达（服务停了 / 窗口断开了）；
+ * 判据（三态，都由「能不能应答」这一个事实派生，不依赖任何业务接口）：
+ *   online   可达 → 应用服务在线（顺带说明「有没有真正重启」）；
+ *   offline  已经探通过、而此刻抗抖动后不可达 → 进程不在了（服务停了 /
+ *            窗口断开了）。**单拍失败不算**：冷编译 / 按需编译让某一拍超时是
+ *            常态，抖动门槛见 `use-dev-server-liveness` 的
+ *            `OFFLINE_CONFIRM_FAILURES`（取事实那一层滤，判据只管三态）；
  *   starting 尚未有过成功探测 → 首次探测还没回来，不冒充在线也不报故障。
  *
  * 纯函数、无 React、无 IO（规范 17 §17.2 第①层），可直接单测。
@@ -27,8 +30,16 @@ export type DevServerState = "starting" | "online" | "offline";
 export interface DevServerStatusInput {
   /** 本次会话是否曾成功探测到进程标识。 */
   everOnline: boolean;
-  /** 最近一次探测是否成功。 */
-  lastProbeOk: boolean;
+  /**
+   * 应用服务此刻**能不能应答**（抗抖动后的事实，见
+   * `use-dev-server-liveness` 的 `OFFLINE_CONFIRM_FAILURES`）。
+   *
+   * 刻意不叫「最近一次探测是否成功」：单拍事实是 `probeOk`，而状态栏与消息
+   * 中心要回答的是「服务现在能不能应答」——冷编译/按需编译让某一拍超时，并不
+   * 让这个问题的答案变成「不能」。判据只管「怎么把事实翻成三态」，过滤抖动
+   * 是取事实那一层的事，两边不互相知道。
+   */
+  reachable: boolean;
   /** 是否检测到**真正**重启（进程标识变化，见 use-dev-server-liveness）。 */
   restarted: boolean;
   /** 最近一次真正重启的时刻。 */
@@ -53,10 +64,10 @@ export interface DevServerStatus {
 export function deriveDevServerStatus(
   input: DevServerStatusInput,
 ): DevServerStatus {
-  const { everOnline, lastProbeOk, restarted, lastRestartAt } = input;
+  const { everOnline, reachable, restarted, lastRestartAt } = input;
   const exitNotice = input.lastExit ?? null;
 
-  if (!lastProbeOk && everOnline) {
+  if (!reachable && everOnline) {
     return {
       state: "offline",
       label: "应用服务已断开",
@@ -71,7 +82,7 @@ export function deriveDevServerStatus(
     };
   }
 
-  if (!lastProbeOk) {
+  if (!reachable) {
     return {
       state: "starting",
       label: "应用服务连接中",
