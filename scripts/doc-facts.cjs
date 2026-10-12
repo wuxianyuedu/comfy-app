@@ -134,13 +134,18 @@ function extractDerivedAppPort() {
  *  而不是 tauri.conf.json 里的某个名字：`productName` 是 `ComfyAPP`、
  *  `bundle.externalBin` 指的是 Node **sidecar**，两者都不是这个 exe 的名字。
  *  Python 启动器与它的 `LAUNCHER_NAME` 打包链已随 ISSUE #784 移除，壳的产物名
- *  现在只由 cargo / tauri 的目标名（crate 名 `app`）决定。 */
+ *  现在只由 cargo / tauri 的目标名（crate 名 `app`）决定。
+ *
+ *  **读的是实现所在的那一份**：`defaultShellExe` 随编排器拆分搬到
+ *  `launcher-core/shell-ops.mjs`（ISSUE #1811），主文件只剩同名薄包装 ——
+ *  锚在主文件上时那个正则一条都不命中，而报错会说「无法提取」，看着像
+ *  「壳的产物名没了」。 */
 function extractShellAppExe() {
-  const src = readText("scripts/dev-launcher.mjs");
+  const src = readText("scripts/launcher-core/shell-ops.mjs");
   const m = src.match(/"(src-tauri\/target\/release\/([^"/]+))\.exe"/);
   if (!m) {
     throw new Error(
-      "无法从 scripts/dev-launcher.mjs 的 defaultShellExe 提取壳文件名",
+      "无法从 scripts/launcher-core/shell-ops.mjs 的 defaultShellExe 提取壳文件名",
     );
   }
   return `${m[2]}.exe`;

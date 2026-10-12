@@ -81,7 +81,7 @@ const GATES = [
   {
     script: "check-non-null-assertions.cjs",
     tag: "[non-null]",
-    what: "src 非空断言棘轮",
+    what: "src 非空断言硬闸",
     roots: ["src"],
     parsedKey: "rel",
   },
@@ -322,10 +322,17 @@ function main() {
     `\n[ast-gates] ${failed.length}/${results.length} 条判据红：` +
       failed.map((r) => `${r.what}${r.tag}`).join(" · "),
   );
-  console.error(
-    "[ast-gates] 逐条复验（单条脚本，语义与聚合档一致）：\n" +
-      failed.map((r) => `  node scripts/${scriptOf(r.tag)}`).join("\n"),
-  );
+  /* 收尾段**逐行都带 `[ast-gates]` 前缀**：这一段是聚合档自己的输出，而 `gateLines()`
+   * （`tests/ast-gates-aggregate.test.ts` 的对拍）按前缀识别「哪些行属于聚合档」。
+   * 早期形态是「首行带前缀 + 续行缩进」，于是失败档会往对拍里混进 4 行没有前缀的续行 ——
+   * 那个差异只在**有判据红时**才出现，而当时的输入面（真仓库全量 `src/`）永远全绿，
+   * 所以这一格从没被走到过（ISSUE #1747「C 组第五笔账」把输入面换成探针后才暴露）。 */
+  for (const line of [
+    "[ast-gates] 逐条复验（单条脚本，语义与聚合档一致）：",
+    ...failed.map((r) => `[ast-gates]   node scripts/${scriptOf(r.tag)}`),
+  ]) {
+    console.error(line);
+  }
   return 1;
 }
 

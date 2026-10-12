@@ -14,6 +14,7 @@ import {
 } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { eq, and, like, inArray, desc, count, sql } from "drizzle-orm";
+import { firstRowRequired } from "./repository-row";
 
 /* 单条多值 INSERT 的行数上限：SQLite 的绑定变量有上限，一次塞几千行会直接报
  * 「参数过多」，因此批量 upsert 按这个大小切片。 */
@@ -185,7 +186,7 @@ export class UserModelConfigRepository extends DrizzleRepository<UserModelConfig
         set: { type: folder, types: "[]", label, enabled: true },
       })
       .returning();
-    return rows[0]!;
+    return firstRowRequired(rows, "用户模型条目写入");
   }
 
   async patchForUser(
@@ -209,7 +210,7 @@ export class UserModelConfigRepository extends DrizzleRepository<UserModelConfig
         set: patch,
       })
       .returning();
-    return rows[0]!;
+    return firstRowRequired(rows, "用户模型条目写入");
   }
 
   async deleteForUser(userId: string, folder: string): Promise<void> {

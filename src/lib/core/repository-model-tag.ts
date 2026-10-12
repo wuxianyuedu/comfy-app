@@ -12,6 +12,7 @@ import {
   type WorkflowModelTag,
 } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
+import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import {
   eq,
   and,
@@ -77,9 +78,10 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
       .limit(1);
     const row =
       existing[0] ??
-      (
-        await db.insert(workflowModelTag).values({ userId, name }).returning()
-      )[0]!;
+      firstRowRequired(
+        await db.insert(workflowModelTag).values({ userId, name }).returning(),
+        "模型标签插入",
+      );
     const [c] = await db
       .select({ v: count() })
       .from(workflowModelTagToWorkflowTemplate)
@@ -145,9 +147,10 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
       .select({ v: count() })
       .from(workflowModelTagToWorkflowTemplate)
       .where(eq(workflowModelTagToWorkflowTemplate.workflowModelTag, id));
+    const renamed = firstRowOfExisting(updated, `模型标签不存在: ${id}`);
     return {
-      id: updated[0]!.id,
-      name: updated[0]!.name,
+      id: renamed.id,
+      name: renamed.name,
       count: Number(c?.v ?? 0),
     };
   }

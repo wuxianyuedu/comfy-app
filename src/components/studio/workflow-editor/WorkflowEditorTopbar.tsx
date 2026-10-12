@@ -261,7 +261,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               <>
                 <span className="text-ink-fainter mx-1.5">·</span>
                 <span className="text-primary-strong">
-                  子工作流 #{subgraphStack[subgraphStack.length - 1]!.uid}
+                  子工作流 #{subgraphStack.at(-1)?.uid}
                 </span>
               </>
             )}

@@ -8,6 +8,7 @@ import { db } from "~/lib/db";
 import { project, type Project } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { eq, and, desc } from "drizzle-orm";
+import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 
 export class ProjectRepository extends DrizzleRepository<Project> {
   constructor() {
@@ -42,7 +43,7 @@ export class ProjectRepository extends DrizzleRepository<Project> {
           edges: data.edges ?? "[]",
         })
         .returning();
-      return rows[0]!;
+      return firstRowRequired(rows, "项目插入");
     }
     const rows = await db
       .update(project)
@@ -54,7 +55,7 @@ export class ProjectRepository extends DrizzleRepository<Project> {
       })
       .where(eq(project.id, data.id))
       .returning();
-    return rows[0]!;
+    return firstRowOfExisting(rows, `项目不存在: ${data.id}`);
   }
 
   async deleteForUser(userId: string, id: string): Promise<void> {

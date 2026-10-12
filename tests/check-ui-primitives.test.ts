@@ -43,7 +43,11 @@ function seedBaseline(repo: GateRepo): void {
  * 不给它造一个执行者，这条路就没有任何测试覆盖，下次真加新判据时它是坏的也没人知道。
  */
 function demoteToRatchet(repo: GateRepo, ...ids: string[]): void {
-  const rel = "scripts/check-ui-primitives.cjs";
+  /* `HARD_GATE_RULES` 随声明层搬到了 `ui-primitives-rules.cjs`（ISSUE #1811 拆
+   * R5 超限文件）：主脚本现在只剩机制，按 id 登记的表全在那一份里。
+   * `defineGateRepo` 的 `copyGateDeps` 会沿 require 递归把依赖拷进临时仓库，
+   * 所以这里直接改副本即可。 */
+  const rel = "scripts/ui-primitives-scope.cjs";
   const src = repo.read(rel);
   /* **在 `HARD_GATE_RULES` 这一段的范围内**改，而不是在整份源码上按行形状找。
    *
@@ -348,7 +352,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * 「表里占了编号、脚本里没有实现」那一族的实例）。
      * 判据 = 输出的条数与脚本里 `HARD_GATE_RULES` 的规模自洽。 */
     const declared = DECL_RE.exec(
-      repo.read("scripts/check-ui-primitives.cjs"),
+      repo.read("scripts/ui-primitives-scope.cjs"),
     )?.[1];
     expect(declared, "读不到 HARD_GATE_RULES 的声明").toBeTruthy();
     const size = (declared ?? "").match(/"P\d+"/g)?.length ?? 0;
@@ -5893,8 +5897,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     repo,
   }) => {
     /* 造一条「有 RULES 条目、但没登记档位」的判据 —— 这正是新加判据时最容易
-     * 漏的一步。漏了不会红、只是它不出现在任何分组里，所以必须由自检拦。 */
-    const rel = "scripts/check-ui-primitives.cjs";
+     * 漏的一步。漏了不会红、只是它不出现在任何分组里，所以必须由自检拦。
+     * `RULE_TIER_IDS` 在 `ui-primitives-scope.cjs`，而 `RULES` 已按 P 区间切进四份
+     * `ui-primitives-rules-p*.cjs`（ISSUE #1811）—— `P86` 住在 p67-p86 那一份。 */
+    const rel = "scripts/ui-primitives-rules-p67-p86.cjs";
     let src = repo.read(rel);
     const next = src.replace(
       "  P86: {",
@@ -5918,7 +5924,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("分档自检：同一条判据登记两次时直接报错", ({ repo }) => {
     /* 重复登记的形态：一条 id 出现在两档里 —— 取哪一档都说不清，必须报错。 */
-    const rel = "scripts/check-ui-primitives.cjs";
+    const rel = "scripts/ui-primitives-scope.cjs";
     const src = repo.read(rel);
     const next = src.replace(
       '    "P75",',

@@ -310,6 +310,14 @@ describe("上游 sha 的取法：远端名不假定叫 origin，上游也不许�
         "user.name=tester",
         "-c",
         "user.email=tester@example.invalid",
+        /* 宿主（开发机 / CI 容器）可能全局开着 `commit.gpgsign`，而临时仓库里
+         * 没有可用密钥 —— 那会让 `git commit` 退 128，报错还指不到夹具。
+         * 夹具**不许假定读者的 git 配置**（台账 R12-01，ISSUE #1817）：
+         * 身份与签名策略都在这里就地钉死，不读全局。 */
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "tag.gpgsign=false",
         ...args,
       ],
       { cwd, encoding: "utf8" },

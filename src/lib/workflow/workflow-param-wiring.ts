@@ -19,7 +19,6 @@
 import {
   parseParamMapping,
   serializeParamMapping,
-  type ParamMapping,
 } from "~/lib/workflow/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
@@ -61,16 +60,16 @@ export function applyWireEdit(
 ): Record<string, unknown> {
   const base = paramMap && typeof paramMap === "object" ? paramMap : {};
   const parsed = parseParamMapping(base);
-  const mapping: ParamMapping = {
-    manualByMode: { ...(parsed.manualByMode ?? {}) },
-  };
+  /* 先收成局部变量再改：`mapping.manualByMode` 是刚构造的字面量、
+   * 类型上却仍是可选字段，直接写它要多补两处 `!`。 */
+  const manualByMode = { ...(parsed.manualByMode ?? {}) };
   const mode = edit.mode ?? "";
-  mapping.manualByMode![mode] = {
-    ...(mapping.manualByMode![mode] ?? {}),
+  manualByMode[mode] = {
+    ...(manualByMode[mode] ?? {}),
     [edit.entryId]: edit.ioKey,
     /* 显式断开也落库（`null`）—— 不落的话刷新后就变成「还没连过」。 */
   };
-  return serializeParamMapping(mapping, base);
+  return serializeParamMapping({ manualByMode }, base);
 }
 
 /** 该对外参数在这个模式下是否被作者改过（含显式断开）。 */

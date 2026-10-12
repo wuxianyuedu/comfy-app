@@ -21,6 +21,8 @@ import { readStorageJson, writeStorageItem } from "~/lib/browser-storage";
 import {
   CLARITY_SUBGROUP_OF_KIND,
   DEFAULT_ALIGN_MULTIPLE,
+  DEFAULT_DIM_CLARITY_PRESET,
+  DEFAULT_DIM_RATIO_PRESET,
   DIM_CLARITY_PRESETS,
   DIM_RATIO_PRESETS,
   clarityKindOfLabel,
@@ -199,7 +201,7 @@ function DimensionSizeControl({
         Math.abs(best.ratio - currentRatio)
           ? preset
           : best,
-      DIM_RATIO_PRESETS[0]!,
+      DEFAULT_DIM_RATIO_PRESET,
     ).label;
   }, [w0, h0]);
   /* 清晰度预设跨两种类型挑选（"pixel" = 分辨率 1k/2k/4k；
@@ -231,13 +233,13 @@ function DimensionSizeControl({
     (rLabel: string, cLabel: string) => {
       const rp =
         DIM_RATIO_PRESETS.find((preset) => preset.label === rLabel) ??
-        DIM_RATIO_PRESETS[0];
+        DEFAULT_DIM_RATIO_PRESET;
       /* 含自由百万像素值（`"2.5M"`）：`clarityPresetFor` 认档位表之外的合法值，
        * 直接用`DIM_CLARITY_PRESETS.find` 会把用户填的 2.5 悄悄换成 1k。 */
       const cp = clarityPresetFor(cLabel);
       /* 分辨率档查场景表；百万像素档把用户选的倍数带进去吸附宽高。 */
       const { width, height } = dimsForRatio(
-        rp!.ratio,
+        rp.ratio,
         cp,
         alignMultiple,
         scene,
@@ -261,13 +263,13 @@ function DimensionSizeControl({
       setAlignMultiple(clamped);
       const rp =
         DIM_RATIO_PRESETS.find((preset) => preset.label === ratio) ??
-        DIM_RATIO_PRESETS[0];
+        DEFAULT_DIM_RATIO_PRESET;
       const cp =
         DIM_CLARITY_PRESETS.find((preset) => preset.label === clarity) ??
-        DIM_CLARITY_PRESETS[0];
+        DEFAULT_DIM_CLARITY_PRESET;
       const { width, height } = dimsForRatio(
-        rp!.ratio,
-        cp!,
+        rp.ratio,
+        cp,
         clamped,
         scene,
         table,

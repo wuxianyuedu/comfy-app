@@ -18,16 +18,20 @@ export function normalizeMarkdown(source: string): string {
   let fenceMarker = "";
   let index = 0;
   while (index < lines.length) {
-    const raw = lines[index]!;
+    /* `at()` 越界即 `undefined`：取元素与循环判据合成一处，
+     * 不必再靠 `!` 把索引签名加上的 `undefined` 抹掉。 */
+    const raw = lines.at(index);
+    if (raw === undefined) break;
     const fenceMatch = /^ {0,3}(`{3,}|~{3,})/.exec(raw);
     if (fenceMatch) {
-      const marker = Array.from(fenceMatch[1]!.trim())[0] ?? "";
+      const markerStr = fenceMatch.at(1) ?? "";
+      const marker = Array.from(markerStr.trim())[0] ?? "";
       if (!inFence) {
         inFence = true;
         fenceMarker = marker;
       } else if (
         marker === fenceMarker &&
-        raw.slice(fenceMatch[1]!.length).trim() === ""
+        raw.slice(markerStr.length).trim() === ""
       ) {
         inFence = false;
       }
@@ -47,10 +51,10 @@ export function normalizeMarkdown(source: string): string {
       continue;
     }
     let blankRun = 0;
-    while (
-      index < lines.length &&
-      lines[index]!.replace(/[ \t]+$/u, "") === ""
-    ) {
+    while (index < lines.length) {
+      const probe = lines.at(index);
+      if (probe === undefined) break;
+      if (probe.replace(/[ \t]+$/u, "") !== "") break;
       blankRun += 1;
       index += 1;
     }
@@ -67,8 +71,8 @@ export function buildOutline(value: string): OutlineItem[] {
     const match = /^(#{1,3})\s+(.+)$/.exec(line);
     if (match) {
       items.push({
-        level: match[1]!.length,
-        text: match[2]!.trim(),
+        level: (match.at(1) ?? "").length,
+        text: (match.at(2) ?? "").trim(),
         line: index,
       });
     }

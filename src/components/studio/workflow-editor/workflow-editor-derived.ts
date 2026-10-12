@@ -67,8 +67,8 @@ export function useWorkflowDerivedData(
       const rawIds = new Set(detail.rawView.nodes.map((node) => node.id));
       const overrides: Record<string, [number, number]> = {};
       const dp = detail.positions ?? {};
-      for (const k of Object.keys(dp)) {
-        if (rawIds.has(k)) overrides[k] = dp[k]!;
+      for (const [k, position] of Object.entries(dp)) {
+        if (position && rawIds.has(k)) overrides[k] = position;
       }
       return {
         ...detail,

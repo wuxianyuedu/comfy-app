@@ -39,7 +39,9 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const GATE_SCRIPT = "scripts/shell-gate.mjs";
-const LAUNCHER = "scripts/dev-launcher.mjs";
+/* `shellStaleWarning` 的实现随编排器拆分搬到 `launcher-core/preflight.mjs`
+ * （ISSUE #1811 拆 R5 超限文件）—— 这个常量只用来读它盯的 targets，直接指实现那份。 */
+const LAUNCHER = "scripts/launcher-core/preflight.mjs";
 const HOOK = ".githooks/pre-commit";
 
 function read(rel: string): string {
