@@ -157,7 +157,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R12 + R5 棘轮硬闸（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-ps1-consistency.mjs  # 跨平台动作对照表：.ps1⇄.mjs 两侧齐全、会静默失效的清单只定义一次、入口清单与磁盘/package.json 三向对齐（见 launch-and-build §9.5）
-✅ node scripts/check-react-updater-purity.cjs --staged # 输入面跳过（见下 13.5.8.2）
+✅ node scripts/run-ast-gates.cjs --staged  # **AST 判据聚合档**：6 条判据（updater 纯净性 / 非空断言 / void 悬空 / TS 重复属性 / FormField 接线 / 点击键等价物）共享**一次解析**，省 ≈1.9s（见下 13.5.8.2「第四笔账」）。共享的是解析产物，遍历与判定各归各条；人的动作仍跑单条脚本
 ✅ node scripts/check-title-bar-clearance.cjs --staged # 输入面跳过（见下 13.5.8.2）
 ✅ pnpm exec tsc --noEmit
 ✅ pnpm run lint
@@ -200,8 +200,6 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）；`--staged` 见下 13.5.8.2
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
 ✅ node scripts/check-docs-api.cjs --staged  # API 文档生成物 docs/api 与源一致（见下 13.5.5.1；--staged = 只碰了 typedoc 输入面才重生成）
-✅ node scripts/check-non-null-assertions.cjs --staged # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-void-floats.cjs --staged # src/lib `void someFn(...)` 悬空棘轮（见下 13.5.7）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
 ✅ node scripts/check-doc-references.cjs     # 文档引用与权威源一致（= `pnpm doc:check`；序号那条判据见下 13.5.10）
 ✅ node scripts/storybook-check.mjs --changed # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮 + 故事面（见 16 §16.2.3.4 / §16.2.3.8）
@@ -209,7 +207,6 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红（见下 13.5.12）
 ✅ node scripts/check-declaration-readers.cjs # 声明 ⇄ 读者索引：本仓库每一种「声明」（判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 / 类型断言执行者 / 软断言语义 / 新鲜度档…）都必须答出「谁在读它 + 执行者在哪」——读者丢了、执行者从门禁链里被摘掉、索引自己静默降级，都红（见 11 §11.23）
 ✅ node scripts/check-on-demand-duties.cjs   # 「不进钩子」的按需档 ⇄ 执行者索引：每一行的机器事实仍在（新鲜度档键 / 门禁 run:false / 按需召唤条目，全部现算）+ 每一个机器事实都被登记（新增一档忘了登记 ⇒ 那一档谁都不判）（见 13.5.4）
-✅ node scripts/check-ts-duplicate-keys.cjs --staged # 同一属性被指定两次（编辑器报 ts(2783)、命令行不报）；存量 0，硬闸（见下 13.5.12）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
 ✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
 ✅ node scripts/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
@@ -217,8 +214,6 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-test-waitfor.cjs      # 测试层 `waitFor` 的边界：只有「等 DOM」与「假定时器窗口内」两种形态该留 `waitFor`，其余等值的一律 `expect.poll`（见 11 §11.14.3）
 ✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮：`it/test/describe.each` 净数不许涨（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
 ✅ node scripts/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
-✅ node scripts/check-form-field-wiring.cjs --staged # `<FormField>` 的标签 ⇄ 控件接线：plain-children 形态下 `htmlFor` 指向不存在的 id（点标签不聚焦、控件没有可访问名），净数不许涨（见 16 §16.2.4.26.1）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-click-keyboard.cjs --staged # 非原生元素上的「鼠标专属」点击：`div`/`li`/`span` 挂了 `onClick` 却没有键等价物（鼠标点得开、键盘进不来），净数不许涨（见 06 §6.11 / 16 §16.2.4.29·§16.2.4.57）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
 ✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
 ✅ node scripts/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）
@@ -1126,6 +1121,74 @@ COMFY_PRECOMMIT_MAX_WORKERS=1 git commit …   # 机器被别的东西占着时
 **接线判据**（`tests/doc-check-hook-wiring.test.ts`）：14 步逐条钉「钩子里带
 `--staged`」+「脚本真的实现了它」+「短路在重活之前」。抹掉任意一条，
 **没有任何别的判据**会看见差异 —— 它只会让每次提交慢一点，慢不会让任何人报错。
+
+**第四笔账：6 份 AST 判据各自把 `src/` 全量解析一遍（ISSUE #1747 续）**。上面两笔账
+治的是「扫描面只是全库一个子集」⇒ 输入面跳过（`--staged`）。**这一笔性质不同**：改到
+`src/` 的提交里文件**真在面内**，`--staged` 对它完全无效；而 6 份判据判的是**同一批
+文件**（`src/**` 的 `.ts`/`.tsx`，实测 1082 份 / 7.3MB），每份各自
+`require("typescript")` + `walk` + `readFileSync` + `createSourceFile` 全量走一遍。
+省的是**计算重复**，不是代码重复。
+
+实测（8 核，热缓存，同一份检出）：
+
+| 口径 | 读数 |
+| --- | --- |
+| 6 个独立进程（改前） | `681+629+627+451+462+348` = **3198ms** |
+| 一次 `walk`+`read` | 35ms |
+| 一次 `createSourceFile` 全量（1082 份） | **≈550–800ms** ← 大头 |
+| 各判据自己的 AST 遍历（62 万节点） | **≈52ms / 遍**，6 遍 ≈318ms |
+| 聚合档（一次解析 + 6×遍历） | **≈1.3s** |
+
+**共享颗粒度：只共享解析产物（`SourceFile`），不共享遍历、更不共享判定。**
+
+- **共享**：`SourceFile` 是 `createSourceFile(fileName, text, target, kind)` 的**纯函数
+  产物** —— 同一份文本 + 同一个 `ScriptTarget`/`ScriptKind` ⇒ 逐位相同，共享它
+  **不引入跨判据的状态耦合**。
+- **不共享遍历 / 判定**：`visit` 是每条判据自己的规则语义。把它一起共享，六条规则就
+  混进一个遍历器 ——**改一条的豁免要重读另外五条**（与 §13.5.8.2 那句「缓存的是纯函数、
+  不是『某条规则的计数』」是同一条边界）。实测全遍历只 52ms/遍，**不值得动**。
+
+**落点是单进程聚合，不是磁盘缓存**：`SourceFile` 是不可序列化的大对象（1082 份 /
+62 万节点），落盘 + 反序列化比重新解析更贵。
+
+**形状：两条腿，判据强度一个字不放松。**
+
+1. **6 份判据仍是独立可跑的脚本**（`node scripts/check-*.cjs`）——黑盒契约、单独退出码、
+   单独 `--report` / `--update` / `--staged` **逐字节不变**（用改前脚本对拍过：默认 /
+   `--json` / `--with-tests` / `--report` / `--staged` 五档 stdout 相同、退出码相同）。
+   每份拆成「**规则本体**（吃已解析的 `SourceFile`）」+「判定」两半，规则本体供聚合档用。
+2. **新增聚合档 `scripts/run-ast-gates.cjs`**：一个进程里 `walk`+`read`+`parse` 一次，
+   注入给 6 条判据各自的 `main(parsed)`。钩子 D 组那 6 行换成这 1 行（D 组 56 → 51 步，
+   计数陈述同步）。
+
+**判定代码一行都不重写**（这是本档最容易做坏的一格）：聚合档用
+`captureProcessExit()` 接住各判据的 `process.exit`、`captureOutput()` 接住它的
+stdout/stderr，于是**它的判定代码原样执行、打印的每一个字也由它自己写**。重写一遍就是
+孪生实现（§12.12），而漂开的形态是静默的：聚合档说绿、单条脚本说红（或反过来），
+**没有任何判据会看见**。
+
+**三条不许松的口径**：
+
+1. **每条判据都必须真跑**：任一条红 ⇒ 聚合档 rc 1 且**继续跑完其余各条**（不被第一处
+   `process.exit` 打死 —— 那会让后面几条一条都不跑，而「少跑几条」没有任何判据会看见），
+   并逐条点名 + 给单条复验命令。
+2. **人的动作不走聚合档**：`--report` / `--update` / `--json` / `--with-tests` 一律仍跑
+   **单条脚本**（rc 2 拒绝）—— 收紧基线要按单条记账，混在一起会写错账。
+3. **`--staged` 短路仍按条判**：6 条的扫描面不同（`check-void-floats` 只认 `src/lib`、
+   其余认 `src`）。`loadGate()` 在 **argv 里没有 `--staged` 时** `require` 各判据 ——
+   否则判据模块层的 `skipUnlessStagedTouches()` 会在 `require` 当场 `process.exit(0)`，
+   把整个聚合档打死。短路判断提升到聚合档按条算；**全不命中则一次解析都不做**
+   （不先解析再跳过，与原 `--staged` 同一条口径）。
+
+**实测两端**（8 核、热缓存）：改到 `src/` 时 **6 条单跑合计 3198–3913ms（随机器负载浮动）
+→ 聚合档 ≈1.2–1.3s**（省 ≈1.9–2.7s）；暂存全不在面内时 **≈40ms**（一次解析都不做）；
+`src/app/**` 在面内、`src/lib` 不在时 **只跑 5 条 + 1 条打「未触及扫描面」**（逐条复核过）。
+
+**接线判据**（`tests/ast-gates-aggregate.test.ts`，8 条）：`--list` 清单与 GATES 表一致、
+**聚合档输出与 6 条单跑各自输出逐字节相同**、6 条逐条真跑（不是数个数）、有红时继续跑完
+其余各条、抛异常按红算、`--staged` 全不命中则零解析、人的动作被拒、**钩子里 6 条单条脚本
+不再各占一行**（否则等于跑两遍）。变异实测：从 GATES 表删一条 ⇒ 3 条用例红；
+把 `--staged` 短路写坏 ⇒ 1 条用例红。
 
 #### 13.5.9 依赖漏洞扫描棘轮（`node scripts/check-dependency-audit.mjs`，ISSUE #1331）
 
