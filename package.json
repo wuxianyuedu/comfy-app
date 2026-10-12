@@ -46,6 +46,7 @@
     "test:coverage": "vitest run --coverage",
     "mcp:stdio": "tsx tools/workshop-mcp-stdio.ts",
     "mcp:http": "tsx tools/workshop-mcp-http.ts",
+    "perf:log-store": "tsx tools/measure-log-store.ts",
     "storybook": "node scripts/storybook.mjs dev",
     "storybook:build": "node scripts/storybook.mjs build",
     "doc:check": "node scripts/check-doc-references.cjs",
