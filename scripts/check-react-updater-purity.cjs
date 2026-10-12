@@ -26,9 +26,22 @@
  *
  * 用法:
  *   node scripts/check-react-updater-purity.cjs    # 检查(违规即阻断)
+ *   --staged（钩子用）仅当暂存改动落在扫描面（`src/**`）内才扫,口径见 §13.5.8.2
  */
 const fs = require("node:fs");
 const path = require("node:path");
+
+/* 默认扫描根（可被位置参数覆盖）。**必须在 `--staged` 短路之前**声明。 */
+const SCAN_DIR = (process.argv[2] && !process.argv[2].startsWith("-")) ? process.argv[2] : "src";
+
+/* `--staged`（钩子用）＝ 输入面跳过（§13.5.8.2）。短路点在 `require("typescript")`
+ * 之前 —— 那一步 ≈180ms。位置参数显式指定了扫描根时不跳过（那是测试/盘点用法）。 */
+if (
+  process.argv.includes("--staged") &&
+  !process.argv.slice(2).some((a) => !a.startsWith("-"))
+) {
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[updater-purity]" });
+}
 
 // ── 解析器依赖 ──
 // 复用 TypeScript 编译器 API(与 pre-commit 第 2 步 pnpm exec tsc 同源,纯 JS、
@@ -47,7 +60,6 @@ try {
 const ROOT = path.resolve(__dirname, "..");
 // 只扫 UI/逻辑源代码;跳过测试(测试可人为构造反模式样例,不算生产违规)。
 // 支持可选 CLI 位置参数指定扫描根(测试用),默认扫 src/。
-const SCAN_DIR = (process.argv[2] && !process.argv[2].startsWith("-")) ? process.argv[2] : "src";
 
 /* ── 判定:调用是不是「React/zustand 状态 setter」 ── */
 // setTimeout/setInterval/setImmediate 是定时器,不是 state setter,必须排除

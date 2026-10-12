@@ -33,9 +33,11 @@
  *
  * 用法:node scripts/check-import-alias.cjs
  *      node scripts/check-import-alias.cjs --root <dir>   # 指定扫描根(自测用)
+ *      node scripts/check-import-alias.cjs --staged       # 仅当暂存改动落在扫描面内才扫(§13.5.8.2)
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 
 /** 扫描范围:应用源码与 e2e。`scripts/` 是 .mjs/.cjs 工具脚本区,不用 TS 别名。 */
 const SCAN_DIRS = ["src", "e2e"];
@@ -96,6 +98,11 @@ const args = process.argv.slice(2);
 let root = path.resolve(__dirname, "..");
 const rootIdx = args.indexOf("--root");
 if (rootIdx !== -1 && args[rootIdx + 1]) root = path.resolve(args[rootIdx + 1]);
+
+/* `--staged`：扫描面是 SCAN_DIRS（`src` + `e2e`）；`--root` 是自测用法，不跳过。 */
+if (args.includes("--staged") && rootIdx === -1) {
+  skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[alias]" });
+}
 
 for (const dir of SCAN_DIRS) {
   const abs = path.join(root, dir);
