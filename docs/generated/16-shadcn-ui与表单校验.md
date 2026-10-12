@@ -11,7 +11,23 @@
 shadcn 的本质是**把组件源码复制进仓库**，而非引入一个版本锁死的 npm 包。因此：
 
 - `src/components/ui/*` 就是项目自有代码，可以（也应该）被阅读和按需改造。
-- 由工具按需生成：`pnpm dlx shadcn@latest add <comp>` 或项目已装的 `shadcn add <comp>`（见 `package.json` 的 `shadcn` 依赖）。
+- 由工具按需生成：`pnpm dlx shadcn@latest add <comp>` 或项目已装的 `shadcn add <comp>`（见 `package.json` 的 `shadcn` 依赖 —— 它在 **`devDependencies`**）。
+
+#### 16.1.1 `shadcn` 在 `devDependencies`：CLI 与运行时代码的分界（ISSUE #1803）
+
+`shadcn` 是个 **CLI**：`src` 里零处 import 它，`components.json` 才是它的配置，它生成的
+组件源码直接进 `src/components/ui/**`（那才是运行时依赖的东西）。所以它归
+`devDependencies` —— 与 `drizzle-kit`、`typedoc`、`shadcn-registry` 那套同族。
+
+**收益是语义准确，不是体积**：本仓是桌面应用、打包时 `dependencies` 与
+`devDependencies` **不做区分**（`build-desktop.mjs` 整树解引用拷贝 `.next/standalone`），
+所以挪它不省一个字节分发体积。**别把它说成体积优化**。
+
+**为什么不为这条立机器判据**：「某个包是 CLI 还是运行时库」不是能可靠静态判定的性质 ——
+启发式（有没有 `bin`、有没有被 import）在两头上都会误报：`eslint`、`prettier` 有 `bin`
+却也可能被代码 import；`@types/*` 无 `bin` 却纯属开发期。一份会误报的清单，下场是被整条
+忽略（§12.13 同源口径），所以这条**只作口径、不加扫描器** —— 新增依赖时由评审按
+「`src` 里 import 不 import 它」当场判（§13.1 自查清单「新增依赖」那条）。
 - 生成到 `src/components/ui/`，**文件名 kebab-case**（强制规则见 §12.6/§12.8，旧 PascalCase 已归一化）。
 - 风格为 `base-nova`（`components.json`），底层是 **`@base-ui/react`**：生成的组件是 **base-ui 版**，不要混用 radix 版 shadcn。
 
