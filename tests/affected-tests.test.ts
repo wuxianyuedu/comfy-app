@@ -4,6 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  attributeAffected,
+  buildImportedBy,
   isSourcePath,
   isTestPath,
   resolveAffectedTests,
@@ -319,5 +321,168 @@ describe("affected-tests：与仓库现状的漂移守卫", () => {
     // 在这里会给出「受影响 0 个用例」，本条就是把它拽回真实形状。
     const bar = run(["src/components/studio/logs/LogFilterBar.tsx"]);
     expect(bar.tests).toContain("src/components/studio/logs/LogPanel.test.tsx");
+  });
+});
+
+describe("affected-tests：改动的**面**归因（拆小的那把尺）", () => {
+  /** 夹具同 `harness`，但额外给出图 —— 归因要的是同一份 `importedBy`。 */
+  function attrHarness(files: Record<string, string>) {
+    const keys = Object.keys(files);
+    const testFiles = keys.filter(isTestPath);
+    const sourceFiles = keys.filter(isSourcePath);
+    const readText = (rel: string) => files[rel] ?? null;
+    const graph = buildImportedBy(new Set([...sourceFiles, ...testFiles]), readText);
+    return {
+      graph,
+      testFiles,
+      sourceFiles,
+      attribute: (changed: string[]) =>
+        attributeAffected(changed, graph, testFiles, sourceFiles),
+      resolve: (changed: string[]) =>
+        resolveAffectedTests({
+          changedPaths: changed,
+          testFiles,
+          sourceFiles,
+          readText,
+          graph,
+        }),
+    };
+  }
+
+  it("逐文件归因的数与主链**同一个量纲** —— 同一份输入两边必须相等", () => {
+    // 这是本组最该钉住的一条：归因曾经是**照抄一份**判定（闭包 + 兄弟 + 路径引用），
+    // 结果三个文件都多报一两份（「按路径引用」那一档在主链里只对增量面里尚未被其他
+    // 原因选中的测试生效）。多报看着无害，实际是给了一条**对不上账**的建议。
+    // 只断「归因有数」拦不住这种漂移 —— 必须逐文件与主链对拍。
+    const files = {
+      "src/lib/hub.ts": "export const h = 1;\n",
+      "src/lib/hub.test.ts": "import { h } from '../../lib/hub';\n",
+      "src/components/ui/wide.tsx": "export const W = 1;\n",
+      "src/components/ui/wide.test.tsx": "import { W } from './wide';\n",
+      "src/components/studio/panel.tsx":
+        "import { W } from '../ui/wide';\nexport const P = W;\n",
+      "src/components/studio/panel.test.tsx":
+        "import { P } from './panel';\n",
+    };
+    const { attribute, resolve } = attrHarness(files);
+    const changed = ["src/lib/hub.ts", "src/components/ui/wide.tsx"];
+    const byFile = attribute(changed);
+    for (const entry of byFile) {
+      const alone = resolve([entry.file]);
+      const affected = alone.tests.filter(
+        (t) => !FIXED_STRUCTURAL_TESTS.includes(t),
+      ).length;
+      expect(entry.affected, `${entry.file} 的归因数与主链不一致`).toBe(affected);
+      expect(entry.total).toBe(alone.tests.length);
+    }
+  });
+
+  it("归因按单独影响面**从大到小**排，同份数时按路径字典序（顺序稳定）", () => {
+    const files = {
+      // hub 是枢纽（两个测试经它间接可达），leaf 只有自己那一个测试。
+      "src/lib/hub.ts": "export const h = 1;\n",
+      "src/lib/hub.test.ts": "import { h } from '../../lib/hub';\n",
+      "src/components/ui/mid.tsx": "import { h } from '../../lib/hub';\n",
+      "src/components/ui/mid.test.tsx": "import { M } from './mid';\n",
+      "src/lib/leaf.ts": "export const l = 1;\n",
+      "src/lib/leaf.test.ts": "import { l } from '../../lib/leaf';\n",
+    };
+    const { attribute } = attrHarness(files);
+    const sorted = attribute(["src/lib/leaf.ts", "src/lib/hub.ts"]);
+    expect(sorted.map((e) => e.file)).toEqual([
+      "src/lib/hub.ts",
+      "src/lib/leaf.ts",
+    ]);
+    // 顺序稳定：同样的改动、反过来喂，输出必须一致（否则不同机器给出不同建议）
+    expect(
+      attribute(["src/lib/hub.ts", "src/lib/leaf.ts"]).map((e) => e.file),
+    ).toEqual(["src/lib/hub.ts", "src/lib/leaf.ts"]);
+  });
+
+  it("归因的数**本身**是对的：拿手工数得出来的夹具硬钉，不靠与主链互证", () => {
+    // 上一条钉的是「两处不漂」，它对**两边同时错**是瞎的（实测：把「按路径引用」
+    // 那一档整体跳过，对拍照样全绿）。所以这一条拿一个能手算的图，把期望值写死。
+    //
+    // 图（箭头 = import）：
+    //   hub.ts        ← hub.test.ts        （兄弟测试 + 闭包 1 跳）
+    //   hub.ts        ← mid.tsx ← mid.test.tsx（闭包 2 跳）
+    //   hub.ts        ← 被 notes.test.ts **按路径字面量**引用（不是 import，闭包抓不到）
+    //   leaf.ts       ← leaf.test.ts
+    const files = {
+      "src/lib/hub.ts": "export const h = 1;\n",
+      "src/lib/hub.test.ts": "import { h } from '../../lib/hub';\n",
+      "src/lib/leaf.ts": "export const l = 1;\n",
+      "src/lib/leaf.test.ts": "import { l } from '../../lib/leaf';\n",
+      "src/components/ui/mid.tsx": "import { h } from '../../lib/hub';\n",
+      "src/components/ui/mid.test.tsx": "import { M } from './mid';\n",
+      "tests/notes.test.ts":
+        'const P = "src/lib/hub.ts";\nexport const n = P;\n',
+    };
+    const { attribute } = attrHarness(files);
+    // hub 单独影响：hub.test（自己）+ mid.test（闭包 2 跳）+ notes.test（按路径引用）
+    const hubRows = attribute(["src/lib/hub.ts"]);
+    expect(hubRows.map((e) => e.file)).toEqual(["src/lib/hub.ts"]);
+    expect(hubRows[0]?.affected).toBe(3);
+    const leafRows = attribute(["src/lib/leaf.ts"]);
+    expect(leafRows[0]?.affected).toBe(1);
+    // 多文件时两行都在，且 hub 在前
+    expect(attribute(["src/lib/hub.ts", "src/lib/leaf.ts"]).map((e) => e.file)).toEqual([
+      "src/lib/hub.ts",
+      "src/lib/leaf.ts",
+    ]);
+  });
+
+  it("空改动清单 → 空数组（不是抛异常，调用方靠它判「没有归因」）", () => {
+    const { attribute } = attrHarness({ "src/lib/leaf.ts": "export {};\n" });
+    expect(attribute([])).toEqual([]);
+    expect(attribute(["   "])).toEqual([]);
+  });
+
+  it("真仓库上归因与主链对拍（三个真实文件的读数）", () => {
+    // 夹具能测出「两处实现漂开」，但测不出「两边都算错」—— 所以再拿真检出跑一遍。
+    const tracked = spawnSync("git", ["ls-files"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 64 << 20,
+    })
+      .stdout.split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const testFiles = tracked.filter(isTestPath);
+    const sourceFiles = tracked.filter(isSourcePath);
+    const readText = (rel: string) => {
+      try {
+        return fs.readFileSync(path.join(ROOT, rel), "utf8");
+      } catch {
+        return null;
+      }
+    };
+    const graph = buildImportedBy(
+      new Set([...sourceFiles, ...testFiles]),
+      readText,
+    );
+    for (const file of ["src/lib/endpoints.ts", "src/components/ui/hint.tsx"]) {
+      const alone = resolveAffectedTests({
+        changedPaths: [file],
+        testFiles,
+        sourceFiles,
+        readText,
+        graph,
+      });
+      const expected = alone.tests.filter(
+        (t) => !FIXED_STRUCTURAL_TESTS.includes(t),
+      ).length;
+      const [entry] = attributeAffected(
+        [file],
+        graph,
+        testFiles,
+        sourceFiles,
+      );
+      expect(entry, `${file} 应当有归因行`).toBeTruthy();
+      expect(
+        entry?.affected,
+        `${file} 在真仓库上与主链不一致`,
+      ).toBe(expected);
+    }
   });
 });
