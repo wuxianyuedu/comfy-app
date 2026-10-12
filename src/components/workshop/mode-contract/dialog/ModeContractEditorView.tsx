@@ -73,16 +73,13 @@ export function ModeContractEditorView({
       {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）。这一屏的屏名已经由
           页签给出，所以按 ISSUE #1693 那一档收：不传可见 `title`（屏名退成 `sr-only`，
           读屏仍按标题跳转），那句契约口径不是每次进屏都要读的、挂成悬浮「说明」——
-          页眉因此不再占两行。屏名仍从注册表取（`pageHeaderTitle`），与侧栏 / 页签同一个
-          出处。**不自绘关闭按钮**：那枚 ✕ 是弹窗时代的产物；契约现在是视图页签，
+          由顶栏标题右侧那颗问号承载（`viewHelp()`），页眉因此不再占两行。屏名仍从注册表
+          取（`pageHeaderTitle`），与侧栏 / 页签同一个出处。
+          **不自绘关闭按钮**：那枚 ✕ 是弹窗时代的产物；契约现在是视图页签，
           「关」由页签自己的关闭按钮承担，这里再画一枚就是两个入口做同一件事。
           横向留白只在 `DocumentFrame`（`px-4 sm:px-8`）：页眉与正文此前各带一枚 `px-5`，
           那是「外壳不给左右」时代的产物，外壳补上留白之后叠在这里是 32+20=52px 一圈。 */}
-      <PageHeader
-        className="mb-3"
-        title={pageHeaderTitle("mode-contract")}
-        help="每种模式的统一输入 / 输出 —— 本地工作流按它配落点，远端模型按它建适配器。契约是模式级的全局口径，与具体接口无关（接口字段映射在「模型适配」里配）。"
-      />
+      <PageHeader className="mb-3" srTitle={pageHeaderTitle("mode-contract")} />
 
       {/* 正文：滚动与高度都交给外层 `DocumentFrame`。这里此前是
           `min-h-0 flex-1 overflow-auto` —— 那是弹窗时代「卡片有 max-h、内部自己滚」

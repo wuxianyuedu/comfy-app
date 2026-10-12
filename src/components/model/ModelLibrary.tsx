@@ -35,10 +35,13 @@ export function ModelLibrary() {
           `app/(main)/models/page.tsx` 里 —— 那是 P86 的唯一存量；而壳是
           server component、`pageHeaderTitle` 在 `"use client"` 的注册表模块上，
           **server 调不到它**（build 期 `Attempted to call pageHeaderTitle()
-          from the server`）。所以页头归这里：屏的实现侧，与别的屏同口径。 */}
+          from the server`）。所以页头归这里：屏的实现侧，与别的屏同口径。
+          这一页**不在 `AppShell` 里、没有顶栏**，所以那句说明仍走页头的
+          `help` prop（workspace 各视图的说明由 `TopBar` 标题右侧的问号承载，
+          见 `viewHelp()`）—— 页头同样不重复可见标题。 */}
       <PageHeader
         className="mb-6"
-        title={pageHeaderTitle("models")}
+        srTitle={pageHeaderTitle("models")}
         help="直接调用本机 ComfyUI 已安装的模型，文件名即契约，所见即所得。"
       />
       <div className="mb-5 flex flex-wrap items-center gap-2">
