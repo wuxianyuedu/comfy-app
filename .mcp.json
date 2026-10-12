@@ -9,7 +9,7 @@
     "zvec-grep": {
       "type": "stdio",
       "command": "zg",
-      "args": ["server", "--stdio", "--mcp-toolset", "full"],
+      "args": ["server", "--stdio"],
       "description": "本地优先混合检索：ripgrep(精确/正则) + BM25 + 向量(语义) 统一接口，按含义发现代码并带回链证据。"
     }
   }
