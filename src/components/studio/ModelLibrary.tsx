@@ -47,8 +47,7 @@ export function ModelLibrary() {
           `<h1>纯文本</h1>`、看不见 prop 里的字面量（ISSUE #1673）。 */}
       <PageHeader
         className="mb-6"
-        title={pageHeaderTitle("models")}
-        help="本机 ComfyUI 能用哪些 —— 按扫描目录分类，每个目录即一种独立的模型类型。"
+        srTitle={pageHeaderTitle("models")}
         actions={
           <>
             <Button

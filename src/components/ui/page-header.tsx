@@ -1,8 +1,6 @@
 import type { ReactNode } from "react";
-import { CircleHelp } from "lucide-react";
 
-import { Button } from "~/components/ui/button";
-import { Hint } from "~/components/ui/hint";
+import { HeaderHelp } from "~/components/ui/header-help";
 import { cn } from "~/lib/utils";
 
 /**
@@ -95,9 +93,14 @@ export interface PageHeaderProps {
    *
    * 用于「读者偶尔才想知道」的解释 —— 常驻显示会白占一行、还挤压下方内容
    * （ISSUE #1693 的原话是「说明的直接显示也去掉，也占空间，可用弄个说明按钮，
-   * 悬浮显示详细说明」）。走 `ui/hint` 的全库唯一出口，不用原生 `title=`。
+   * 悬浮显示详细说明」）。走 `ui/header-help` 的全库唯一出口，不用原生 `title=`。
    *
    * 传了 `description` 时以 `description` 为准（常驻优先），二者取一即可。
+   *
+   * ⚠️ 挂在 `AppShell` 里的屏（workspace 各视图）**不在这里传**：那句说明由
+   * `TopBar` 在视图标题右侧承载（`viewHelp()` 注册表，全库唯一出处）—— 屏内页头
+   * 再放一颗就是同一句解释在一屏里出现两遍。只有**没有顶栏**的落点（如 `/models`
+   * 独立路由页）才走这个 prop。
    */
   help?: ReactNode;
   /** 右侧动作组（按钮 / 筛选）。整组不收缩。 */
@@ -197,29 +200,5 @@ export function PageHeader({
         </div>
       ) : null}
     </header>
-  );
-}
-
-/**
- * 悬浮「说明」按钮 —— 把页头那句解释收起来，只在悬停 / 聚焦时展开。
- *
- * 图标按钮本身没有可见文字，所以它自带一个短名 `aria-label="说明"` —— 不把整句
- * 提示当可访问名（读屏念一长句不理想）。这一档**刻意不开** `Hint` 的
- * `accessibleName`：那个开关会把 `label` 写成子元素的 `aria-label`，正好把这里
- * 更精确的短名顶掉。
- */
-function HeaderHelp({ text }: { text: ReactNode }) {
-  return (
-    <Hint side="bottom" label={text}>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="说明"
-        className="text-ink-fainter hover:text-ink-bright shrink-0 rounded-full"
-      >
-        <CircleHelp aria-hidden className="size-5" />
-      </Button>
-    </Hint>
   );
 }
