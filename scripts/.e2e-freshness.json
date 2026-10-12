@@ -1,10 +1,9 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-12T17:10:09.390Z",
+    "verifiedAt": "2026-10-12T17:30:56.896Z",
     "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm test:e2e",
-    "trackedBy": "e2e",
-    "skippedReason": "全量 e2e 今天跑不了：18 条失败在干净 master 上就红（已 git checkout master 逐条复现，§13.6.2 的 baseline-red）。根因已定位，是两次已合并改动各自留下没同批更新的 e2e 判据：① f72a55ee（PR #1786，ISSUE #1784）把设置/模型适配/模式契约改成「瞬时页签：切走即关」并把侧栏那两个入口撤到顶栏，而 overlay-entries-as-views.spec.ts 仍断言旧的常驻页签 + 侧栏按钮（element not found）；② 同一次改动把 WorkspaceViewStack 的所有视图改成 next/dynamic，画布 CSS 不再随 /workspace 急加载，而 theme-token-consumers.spec.ts 有一条判据正是 navigation 后就取 document.styleSheets 里的 xyflow 规则（它自己报的是「这条用例的前提没了」）。本 PR 只改 tests/ 与两份白名单与文档，不碰任何 src/ 与 e2e 链路，修复单开一刀做。"
+    "trackedBy": "e2e"
   }
 }
