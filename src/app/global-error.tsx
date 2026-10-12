@@ -4,6 +4,18 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { FULL_PAGE_CLEARANCE_CLASS } from "~/lib/full-screen-layer";
+
+/* ── 「应用发生严重错误」——根布局崩掉时的兜底页 ─────────────────────────
+ *
+ * `global-error` 替换的是**整个**根布局（React 要求它自带 `<html>` / `<body>`），
+ * 所以它拿不到根布局里的任何 Provider；但这不代表它不受应用级 chrome 的约束：
+ * 一个 `<html>` 替换不掉**壳侧**那条标题行之外的东西，而它原样用
+ * `min-h-screen` 时同样会盖住标题行（本文件与 `app/error.tsx` 是同一个形态、
+ * 同一处回归）。
+ *
+ * 让位判据与邻近的整屏页面共用 `FULL_PAGE_CLEARANCE_CLASS`；换主题相关的一切
+ * （class `dark`）都写在 `<html>` 上，本层只负责内容与让位。 */
 
 export default function GlobalError({
   error,
@@ -19,7 +31,9 @@ export default function GlobalError({
   return (
     <html lang="zh-CN">
       <body>
-        <div className="bg-bg flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
+        <div
+          className={`bg-bg flex flex-col items-center justify-center gap-6 px-6 text-center ${FULL_PAGE_CLEARANCE_CLASS}`}
+        >
           <div className="bg-primary/10 text-primary grid size-16 place-items-center rounded-2xl">
             <Icon name="alert" size={28} />
           </div>

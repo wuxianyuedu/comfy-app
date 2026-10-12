@@ -32,6 +32,14 @@
  * 凡渲染标题行的文件(用到高度量 `h-title-bar`/`TITLE_BAR_HEIGHT_CLASS` 的地方)，
  * 必须同时带上 `TITLE_BAR_CHROME_CLASS`(`relative z-chrome`，刻度表最高档)。
  *
+ *
+ * 第四条规则(整屏页面铺满视口，ISSUE #1794)：第三条只管浮层，**路由页**不在它
+ * 射程里 —— 错误页 / 404 / 加载态写的是 `min-h-screen`（在壳里等于 `100svh`，
+ * 从视口顶起算），同样把标题行整条盖住：用户看到「页面出错了」的同时，
+ * 右上角的**关闭**按钮也点不到了。判据与浮层同源(让出标题行)，只是形态写成
+ * 语义标记：整屏必须在 `top-title-bar` 之外，落成内容区高度那一档
+ * (`min-h-0`，见 `~/lib/full-screen-layer` 的 `FULL_PAGE_CLEARANCE_CLASS`)。
+ *
  * 用法:node scripts/check-title-bar-clearance.cjs
  */
 const fs = require("node:fs");
@@ -62,6 +70,14 @@ const EXEMPT = new Map([
 const FIXED_INSET = /\bfixed\b[^"'`]*\binset-0\b/;
 /** 让位标记：出现在 class 串里即视为已让出标题行。 */
 const CLEARANCE = /\btop-title-bar\b/;
+/** 整屏页面的视口高度写法(第四条规则)：壳里等于 `100svh`，从视口顶起算。 */
+const SCREEN_HEIGHT = /\b(?:min-h-screen|h-screen|h-svh|min-h-svh)\b/;
+/** 整屏页面的让位写法：高度收到内容区那一档(`min-h-0` + 父级高度)。 */
+const CONTENT_HEIGHT = /\bmin-h-0\b/;
+/** 只扫路由挂载点：整屏页面都在 `src/app`，`src/components` 里的同名字面量另有归属。 */
+const PAGE_DIR = "src/app";
+/** 注释行(含块注释续行 ` * `)不算用法：文件里讲「从前写的是什么」是正常的。 */
+const COMMENT_LINE = /^\s*(?:\/\/|\/?\*)/;
 /** 标题行的渲染点：class 串里取高度量（`h-title-bar` 或它的常量）。 */
 const TITLE_BAR_RENDER = /\bTITLE_BAR_HEIGHT_CLASS\b|\bh-title-bar\b/;
 /** 标题行的层级标记：常量名或它拼出来的类名都算（见文件头第二条规则）。 */
@@ -132,6 +148,26 @@ for (const dir of SCAN_DIRS) {
           `（~/components/ui/use-overlay-boundary）；` +
           `漏了会让浮层摆进应用级标题行、被它整块盖掉`,
       );
+    }
+
+    /* 第四条规则（ISSUE #1794）：整屏页面必须让出标题行。
+     * 第三条只覆盖浮层，路由页（错误页 / 404 / 加载态 / 登录页）写的是视口高度，
+     * 而壳里那条 36px 的标题行就在视口顶部 —— 整屏铺开即盖住它，右上角的关闭
+     * 按钮随之点不动。判据：`src/app/**` 里用了视口高度字面量的元素，必须与
+     * 「内容区高度」同源（出现 `min-h-0`）—— 落点就是那条共享的
+     * `FULL_PAGE_CLEARANCE_CLASS`。 */
+    if (r.startsWith(`${PAGE_DIR}/`)) {
+      lines.forEach((line, i) => {
+        if (COMMENT_LINE.test(line)) return;
+        if (!SCREEN_HEIGHT.test(line)) return;
+        if (CONTENT_HEIGHT.test(line)) return;
+        problems.push(
+          `${r}:${i + 1} 整屏页面按视口高度铺开，会盖住右上角的窗口按钮（关闭/最大化）\n` +
+            `    → ${line.trim()}\n` +
+            `    改用 FULL_PAGE_CLEARANCE_CLASS（~/lib/full-screen-layer，让出标题行、高度收到内容区）；` +
+            `壳里 min-h-screen = 100svh，从视口顶起算，正好连标题行一起盖住`,
+        );
+      });
     }
 
     // 第二条规则：渲染标题行的文件必须给 chrome 档层级（整文件判据，容忍
