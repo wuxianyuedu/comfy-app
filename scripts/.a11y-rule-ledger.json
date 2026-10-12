@@ -17,7 +17,7 @@
       "rule": "jsx-a11y/prefer-tag-over-role",
       "decision": "off",
       "why": "这条规则判的是「用了 ARIA role 却没换成原生标签」，而它**给不出能用的替代** —— 实测 27 处逐条看完，全部是「ARIA 语义 vs 原生标签」的**有意取舍**，不是反模式：(1) Base UI 的复合控件 pattern —— `role=\"combobox\"` / `listbox` / `option`（`AttributeMultiSelect` / `option-list-popover`）、`role=\"radio\"`（设置页主题卡与档位行，整卡可点不能用 `<input type=radio>` 的默认外观）、`role=\"checkbox\"`（`multi-mode-select` 的选项行要内嵌「切默认」星，合成一个 `<button>` 在 HTML 里非法）；(2) shadcn 的 `role=\"list\"`（`item` / `ModelLibrary`）—— 那是**修 Safari 的列表语义**：`list-style: none` 会让 Safari 丢掉 list/listitem 角色，官方推荐的修法正是补回 `role=\"list\"`；(3) `role=\"status\"` 的 live region（`spinner` / `use-exit-reminder` / 运行反馈）—— 规则建议换成 `<output>`，但 `<output>` 的语义是「计算结果的输出」，一个不停自转的加载指示器不是它；(4) `role=\"presentation\"` / `role=\"img\"` 的装饰与占位（`breadcrumb` 的 svg、`media-thumbnail` 的失败占位）—— 规则建议的 `<img alt>` 需要 src，这里是纯装饰或纯文本占位。**但「不开」不等于「这一条没问题」**：规则确实**照出了一个真缺陷族** —— `role=\"radiogroup\"` 声明了却没有方向键契约（`AppearanceSection` 两处，本批已收口到 `RadioGroup` 基元，方向键 + roving tabindex 由基元给）。",
-      "keeper": "ARIA 复合控件的键盘契约由基元本身守（`ui/radio-group` 的 Base UI `RadioGroup` 给方向键 + roving tabindex，`ui/option-list-popover` / `ui/multi-mode-select` 给复合控件语义）；声明的形态判据是 `scripts/check-click-keyboard.cjs`（§6.11，非原生元素上的鼠标专属点击，棘轮基线 0）；收口后的契约由 `AppearanceSection.test.tsx` 钉住（改前会红）"
+      "keeper": "ARIA 复合控件的键盘契约由基元本身守（`ui/radio-group` 的 Base UI `RadioGroup` 给方向键 + roving tabindex，`ui/option-list-popover` / `ui/multi-mode-select` 给复合控件语义）；声明的形态判据是 `scripts/check-click-keyboard.cjs`（§6.11，非原生元素上的鼠标专属点击，**硬闸**：站点须为 0）；收口后的契约由 `AppearanceSection.test.tsx` 钉住（改前会红）"
     }
   ],
   "inlineExemptions": [
@@ -31,55 +31,55 @@
       "rule": "jsx-a11y/click-events-have-key-events",
       "file": "src/components/studio/TitleBarTabs.tsx",
       "why": "`role=\"tab\"` 的页签行已有 `{...simpleKeyHandler([\"Space\", \"Enter\"], …)}`（§16.2.4.57）—— 规则认不出属性展开。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，棘轮基线 0，`--report` 会打出豁免站点）"
+      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
     },
     {
       "rule": "jsx-a11y/click-events-have-key-events",
       "file": "src/components/studio/ViewTabStrip.tsx",
       "why": "同上：`role=\"tab\"` 行已走 `simpleKeyHandler`。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，棘轮基线 0，`--report` 会打出豁免站点）"
+      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
     },
     {
       "rule": "jsx-a11y/click-events-have-key-events",
       "file": "src/components/ui/multi-mode-select.tsx",
       "why": "选项行已是 `role=\"checkbox\"` + `tabIndex={0}` + `simpleKeyHandler`（本轮 PR #1574 收口）。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，棘轮基线 0，`--report` 会打出豁免站点）"
+      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
     },
     {
       "rule": "jsx-a11y/click-events-have-key-events",
       "file": "src/components/workshop/AttributeMultiSelect.tsx",
       "why": "选项行 `role=\"option\"` 已补 `tabIndex` + `simpleKeyHandler`（本轮 PR #1574 收口）。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，棘轮基线 0，`--report` 会打出豁免站点）"
+      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
     },
     {
       "rule": "jsx-a11y/click-events-have-key-events",
       "file": "src/components/ui/input-group.tsx",
       "why": "`InputGroupAddon` 的 `onClick` 是**点击代理**（把焦点转给同组 `<input>`），不是交互本体；`role=\"group\"` 的容器本身不该可聚焦。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，棘轮基线 0，`--report` 会打出豁免站点）"
+      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
     },
     {
       "rule": "jsx-a11y/click-events-have-key-events",
       "file": "src/components/studio/workflow-editor/WorkflowParamCard.tsx",
       "why": "画布参数卡：`onSelect` 只做**选中高亮**（真正可交互的是 React Flow 的边），卡片是鼠标便捷落点，卡上的动作按钮是 `<Button>`。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，棘轮基线 0，`--report` 会打出豁免站点）"
+      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
     },
     {
       "rule": "jsx-a11y/click-events-have-key-events",
       "file": "src/components/studio/debug/DebugChainFooter.tsx",
       "why": "`onPointerDown` / `onMouseDown` 是 `stopPropagation` **守卫**（浮层不让事件冒泡到画布），不是交互。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，棘轮基线 0，`--report` 会打出豁免站点）"
+      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
     },
     {
       "rule": "jsx-a11y/click-events-have-key-events",
       "file": "src/components/studio/history/HistoryDetailModal.tsx",
       "why": "同上：`onClick={stopPropagation}` 是守卫，浮层内容不关闭面板。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，棘轮基线 0，`--report` 会打出豁免站点）"
+      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
     },
     {
       "rule": "jsx-a11y/no-static-element-interactions",
       "file": "src/components/studio/project-canvas/ContentAssetNode.tsx",
       "why": "HTML5 拖放落点（`onDrop` / `onDragOver` / `onDragLeave`，规范 §6.3 的 DnD 档）：DnD 本身要求提供替代路径（右下角 FAB 选文件），不是给容器加个键。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，棘轮基线 0，`--report` 会打出豁免站点）"
+      "keeper": "scripts/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
     },
     {
       "rule": "jsx-a11y/media-has-caption",
