@@ -11,10 +11,10 @@
 //     用户对着空白等的是整轮目录扫描（多目录时以秒计）。
 //   · sync 完成后的 refetch **不置 loading**：那是一次静默替换，由
 //     `refreshing` 在筛选行给一颗轻指示，不打断阅读。
-//   · 因此这里不再有「refetch 的游离 promise 链 + aliveRef」那套记账：
-//     不 setState 就没有卸载后击穿环境的入口。
+//   · 因此这里既没有「refetch 的游离 promise 链 + aliveRef」那套记账（不
+//     setState 就没有卸载后击穿环境的入口），也没有本地 loading state。
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { useTRPC } from "~/trpc/react";
@@ -67,15 +67,38 @@ export function useModelLibrary(): ModelLibraryController {
     });
   }, [listQ]);
 
+  /* `useQuery` / `useMutation` 返回的**对象每次渲染都是新引用**，
+   * 把它们（或依赖它们的 `reload`）放进下面那个 effect 的依赖数组，
+   * 会让「effect 跑一次」变成「每渲染一次跑一次」——
+   * 而 effect 体内的 sync mutation 完成又会触发一次渲染，
+   * 于是自激成循环：实测静置时 `model.sync` 每 10~12ms 打一次（6 秒 505 次）、
+   * 当时打开的整个视图每秒被重渲染上千次。
+   *
+   * 修法是**把不稳的引用收进 ref**，effect 只依赖 `[]`：
+   * 它要的语义本来就是「挂载时同步一次」，不是「依赖变化时同步」。
+   * `reload` 每次渲染都是新函数（它依赖 `listQ`），收进 ref；
+   * `syncMut.mutate` 本身是 mutation 稳定引用，直接用即可。 */
+  const reloadRef = useRef(reload);
+
+  /* 把最新一份 `reload` 同步进 ref。写在 effect 里而不是渲染期直接赋值：
+   * 后者是并发渲染下不允许的副作用（被丢弃的那次渲染也会改 ref）。 */
+  useEffect(() => {
+    reloadRef.current = reload;
+  });
+
   useEffect(() => {
     // 挂载时静默同步一次，让库反映当前配置；它与 list 的首帧**并行**发车，
     // defer 出 effect body（React 19 规则：effect 内不直接 setState）。
     const t = setTimeout(
-      () => syncMut.mutate(undefined, { onSettled: () => reload() }),
+      () => syncMut.mutate(undefined, { onSettled: () => reloadRef.current() }),
       0,
     );
     return () => clearTimeout(t);
-  }, [syncMut, reload]);
+    /* 刻意只依赖 `[]`：本 effect 的语义就是「挂载时同步一次」。`syncMut` 是
+     * mutation 稳定引用、`reload` 已收进 ref；把它们列进来正是上面那条
+     * 自激循环的成因，不是「漏了依赖」。 */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* react-query 数据 → 本地行：`models` 是 `listQ.data` 的纯派生（P2：去掉
    * 「prev 引用对比 + 渲染期 setState」的记账 state），不再是独立可变状态。
