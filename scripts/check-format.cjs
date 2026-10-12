@@ -43,6 +43,38 @@
  *   node scripts/check-format.cjs --strict    # 基线未收紧也失败(CI 用)
  *   node scripts/check-format.cjs --update    # 重写基线(须伴随下降)
  *   node scripts/check-format.cjs --report    # 只出清单不判失败(盘点用)
+ *   node scripts/check-format.cjs --staged    # 仅当暂存改动落在扫描面内才扫(钩子用)
+ *
+ * ── `--staged`：全库扫描的「白付」与它的输入面 ────────────────────────────────
+ *
+ * 全库扫描实测 **17.6s**(热缓存,本机 8 核) —— 它是 D 组**单项最贵**的一步,占
+ * D 组(56 步、约 36s)的近一半。
+ *
+ * 而它的扫描面其实**远小于全库**,且这两件事都不是这里手写的取舍、是既有配置
+ * 算出来的(实测:`git ls-files` 跟踪 5940 份,落在扫描面内的只有 **1596** 份):
+ *   · `GLOBS` 只收 `.ts/.tsx/.js/.jsx/.mdx` —— 连 `.md` 都不在其内,所以
+ *     `docs/**` `changelog.d/**` `README.md` **本来就一份都不扫**;
+ *   · `IGNORE_GLOBS` 又把 `scripts/` `tests/` `tools/` `e2e/` `public/`
+ *     `docs/api/**` `docs/generated/**` `src-tauri/target/**` 与根级 `*.js` /
+ *     `*.config.*` 整类剔掉;
+ *   · 剩下的是 **`src/**`(1586 份)+ `.storybook/**`(10 份)**。
+ *
+ * 于是「只加了 changelog 碎片 / 只改文档 / 只动 `scripts/` / 只碰 `tests/`」
+ * 这一大类提交(本仓库的高频形态),在这一步上**白付 17.6s**:那些文件根本不在
+ * prettier 的靶子里,扫多少遍结论都一样。
+ * 这与 §13.5.8.2 那句「D 组的成本靠**每条判据自己别做无用功**降」是同一笔账,
+ * 手法与 `check-docs-api.cjs --staged` / `check-deps-freshness.mjs --staged`
+ * 逐字同源。
+ *
+ * 判据面由 **`IGNORE_GLOBS` 自己现算**(`GLOBS` 展成的候选文件逐个过
+ * `isIgnored`),**不另抄第二份「哪些目录算输入面」的清单** —— 抄一份就会与
+ * `IGNORE_GLOBS` 漂移(§12.12 / §12.18 的口径),而漂移的形态是静默的:白名单
+ * 多收一个目录,这里就永远不触发、那类文件的格式从此没人查。
+ *
+ * **跳过是结论,不是沉默放行**:未命中时打印一行「本次提交未触及扫描面,跳过」,
+ * 与真正扫过之后的 `[format] OK` 在输出上可分辨(§11.23 的「声明 ⇄ 读者」口径)。
+ * ⚠️ 边界:它**只**跳过 `check` 档。`--update` / `--report` 是人的动作,不受
+ * `--staged` 影响(照旧全库),否则收紧基线会按残缺清单记账。
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -82,6 +114,7 @@ const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
 const REPORT_ONLY = ARGS.has("--report");
+const STAGED = ARGS.has("--staged");
 
 /** 扫描范围与 package.json 的 format:check 逐字一致。 */
 const GLOBS = ["**/*.{ts,tsx,js,jsx,mdx}"];
@@ -169,9 +202,32 @@ function globToRegExp(glob) {
 }
 
 const IGNORE_RES = IGNORE_GLOBS.map(globToRegExp);
+const GLOB_RES = GLOBS.map(globToRegExp);
 
 function isIgnored(rel) {
   return IGNORE_RES.some((re) => re.test(rel));
+}
+
+/**
+ * 扫描面的**正形态**:先由 `GLOBS` 认出「prettier 会看的文件」,再剔掉
+ * `IGNORE_GLOBS`。两者是同一份白名单的两个方向,所以这里不重复任何目录名。
+ * @param {string} rel 仓库根相对 POSIX 路径
+ */
+function isScanned(rel) {
+  return GLOB_RES.some((re) => re.test(rel)) && !isIgnored(rel);
+}
+
+/** 暂存改动清单(仓库根相对 POSIX 路径)。git 拿不到时返回 null —— 由调用方 fail-closed。 */
+function stagedFiles() {
+  const res = spawnSync("git", ["diff", "--cached", "--name-only"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (res.status !== 0) return null;
+  return (res.stdout || "")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map(toPosix);
 }
 
 /**
@@ -272,6 +328,28 @@ function baselineUntracked() {
 }
 
 async function main() {
+  /* `--staged` 的短路点在**所有**工作之前：未命中扫描面时连 prettier 入口都不解析
+   * —— 那条解析在依赖缺失时会 exit 2，而「本次提交没碰扫描面」与「prettier 装没装」
+   * 无关，不该被后者带崩（否则把依赖问题伪装成这一步的形态）。
+   * 只作用于 check 档：`--update` / `--report` 照旧全库（见文件头）。 */
+  if (STAGED && !UPDATE && !REPORT_ONLY) {
+    const files = stagedFiles();
+    if (files === null) {
+      console.error(
+        "[format] --staged 模式读不到暂存清单（git diff --cached 失败）—— 按 fail-closed\n" +
+          "[format]   判定为「判据没跑成」，以 exit 2 结束（不冒充「未触及扫描面」）。",
+      );
+      process.exit(2);
+    }
+    const hits = files.filter(isScanned);
+    if (!hits.length) {
+      console.log(
+        `[format] ✓ 本次提交未触及扫描面（${files.length} 个暂存文件中 0 个在 prettier 靶子内），跳过。`,
+      );
+      process.exit(0);
+    }
+  }
+
   const entry = resolvePrettierEntry();
   if (!entry) {
     /* 「取不到 prettier」与「全库都格式化好了」是两种结论，必须走不同的门。
@@ -386,4 +464,10 @@ async function main() {
 if (require.main === module) main();
 
 /** 供测试直接引用:不跑 prettier 的纯判定。 */
-module.exports = { globToRegExp, isIgnored, IGNORE_GLOBS, GLOBS };
+module.exports = {
+  globToRegExp,
+  isIgnored,
+  isScanned,
+  IGNORE_GLOBS,
+  GLOBS,
+};

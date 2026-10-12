@@ -220,3 +220,50 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
     expect(mod.isIgnored("src/lib/next.config.js")).toBe(false);
   });
 });
+
+/**
+ * `--staged` 的输入面跳过（ISSUE #1747）。
+ *
+ * 这一步的扫描面由 `GLOBS` 与 `IGNORE_GLOBS` 现算（实测只剩 `src/**` 与
+ * `.storybook/**`），两个方向都要钉住：不在扫描面内 ⇒ 跳过（省下全库扫描），
+ * 在扫描面内 ⇒ **照旧真扫**（跳过不是「让判据松掉」的后门）。
+ *
+ * 为什么断言 `code === 0` 之外还要看输出：「跳过」与「扫过之后没有脏文件」是同
+ * 一个退出码，只看退出码的话，一条把 `--staged` 实现成「永远跳过」的改动能全绿
+ * 通过 —— 那正是门禁静默失效的形态（§11.23 的「声明 ⇄ 读者」）。
+ */
+describe("prettier 格式棘轮 --staged 输入面跳过（ISSUE #1747）", () => {
+  test("暂存文件全在扫描面外 → 跳过（不起 prettier）", ({ repo }) => {
+    seedBaseline(repo, []);
+    repo.write("src/lib/dirty.ts", DIRTY);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    // 改一个不在 prettier 靶子里的文件：`IGNORE_GLOBS` 收 `scripts/**`。
+    repo.write("scripts/probe.cjs", "module.exports = {a:1,   b:2}\n");
+    repo.git("add", "scripts/probe.cjs");
+    const r = repo.run(["--staged"]);
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("未触及扫描面");
+    expect(r.output).not.toContain("运行 prettier");
+  });
+
+  test("暂存文件落在扫描面内 → 真扫（脏文件照旧阻断）", ({ repo }) => {
+    seedBaseline(repo, []);
+    repo.write("src/lib/dirty.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/dirty.ts", DIRTY);
+    repo.git("add", "src/lib/dirty.ts");
+    const r = repo.run(["--staged"]);
+    expect(r.code).toBe(1);
+    expect(r.output).not.toContain("未触及扫描面");
+    expect(r.output).toContain("src/lib/dirty.ts");
+  });
+
+  test("无暂存改动 → 跳过（不为空提交白扫全库）", ({ repo }) => {
+    seedBaseline(repo, []);
+    const r = repo.run(["--staged"]);
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("未触及扫描面");
+  });
+});

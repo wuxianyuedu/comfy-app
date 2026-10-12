@@ -151,7 +151,9 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 同一份共享校验向量 tests/fixtures/app-port-vectors.json，任一侧漂移即在此拦下。
   run "端口推导跨语言一致性" node scripts/check-app-port-vectors.cjs
   # UI 基元复用棘轮（规范 16 §16.2.3）：存量冻结在基线，只许降不许升。
-  run "UI 基元复用棘轮" node scripts/check-ui-primitives.cjs
+  # `--staged` 同上（ISSUE #1747）：五条扫描根全在 `src/` 下，全库扫描实测 3.6s（热缓存，
+  # D 组单项最贵）。未触及扫描面的提交跳过并打印理由。
+  run "UI 基元复用棘轮" node scripts/check-ui-primitives.cjs --staged
   # 主题色扫描棘轮：「类型色例外」的豁免清单显式化，未豁免的写死色值走棘轮。
   run "主题色扫描棘轮" node scripts/check-theme-colors.cjs
   # ComfyUI 端口口径一致性（规范 §5）：分叉的表现不是「连不上」，而是静默连到另一个
@@ -182,7 +184,14 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 整条链（红得能直接改）。修法是把 barrel 那一跳换成深路径 + `dynamic()`。
   run "入口重依赖静态可达性" node scripts/check-barrel-heavy-deps.cjs
   # prettier 格式棘轮（规范 13.5）：基线 + 只许下降；新增脏文件即阻断。
-  run "prettier 格式棘轮" node scripts/check-format.cjs
+  # `--staged` 是**输入面跳过**（ISSUE #1747）：它的扫描面实测只有 `src/**` 与
+  # `.storybook/**`（1596 / 5940 份被跟踪文件 —— `GLOBS` 连 `.md` 都不收，`IGNORE_GLOBS`
+  # 又剔掉 `scripts/` `tests/` `tools/` `e2e/` `public/` `docs/{api,generated}` 与根级配置），
+  # 而全库扫描实测 2.9s（热缓存）—— 那是 D 组里最贵两步之一。只加 changelog 碎片 /
+  # 只改文档 / 只动 `scripts/` `tests/` 这一大类提交根本不在靶子里，扫多少遍结论都一样。
+  # 跳过时打印「未触及扫描面」，与扫过之后的 OK 可分辨（不伪造绿）。口径见 §13.5.8.2
+  # 与脚本文件头；判据面由 `IGNORE_GLOBS` 自己现算，没有第二份目录清单。
+  run "prettier 格式棘轮" node scripts/check-format.cjs --staged
   # 格式化提交与行为改动分离（规范 13.7）：一次提交里「过一遍 prettier 就变成另一种
   # 写法」的文件 ≥ 10 个就阻断，要求拆成两次提交。
   run "格式化提交与行为改动分离" node scripts/check-reformat-only.cjs
