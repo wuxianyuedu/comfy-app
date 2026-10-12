@@ -67,16 +67,26 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const ts = require("typescript");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
 const SHOULD_UPDATE = ARGS.has("--update");
+const STAGED = ARGS.has("--staged");
 
 const BASELINE = path.join(__dirname, ".click-keyboard-baseline.json");
 
+/** 扫描根。**必须在 `--staged` 短路之前**，所以提到 `require("typescript")` 上面。 */
 const SCAN_DIRS = ["src"];
+
+/* `--staged`（钩子用）＝ 输入面跳过，口径见 §13.5.8.2。
+ * 短路点在 `require("typescript")` 之前 —— 那一步 ≈180ms，放后面就白跳过。 */
+if (STAGED && !REPORT_ONLY && !SHOULD_UPDATE) {
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[click-keyboard]" });
+}
+
+const ts = require("typescript");
+
 const FILE_RE = /\.tsx$/;
 
 /** 判据自己的夹具**不进扫描面**（§11.14.2：量具不是存量）。 */

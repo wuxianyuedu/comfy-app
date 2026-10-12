@@ -157,7 +157,7 @@ describe("useModelLibrary", () => {
     );
   });
 
-  /* 回归：effect 的依赖数组曾经是 `[syncMut, loadModels]`，而这两个引用
+  /* 回归：effect 的依赖数组曾经是 `[syncMut, reload]`，而这两个引用
    * 每次渲染都变（`useQuery` / `useMutation` 的返回值不是稳定引用）⇒ 每次渲染
    * 都重跑一次 sync mutation ⇒ mutation 完成又触发渲染 ⇒ 自激循环。
    * 线上实测形态是**静置时 `model.sync` 每 10~12ms 打一次、6 秒 505 次**，

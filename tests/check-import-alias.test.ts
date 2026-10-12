@@ -20,6 +20,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { copyGateDeps } from "./helpers/gate-repo";
 import { afterEach, describe, expect, it } from "vitest";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-import-alias.cjs");
@@ -30,7 +32,9 @@ function scanner(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), "import-alias-"));
   tempDirs.push(root);
   mkdirSync(path.join(root, "scripts"), { recursive: true });
+  /* 判据 `require("./gate-scan-read.cjs")`（`--staged` 的共享短路器）—— 临时仓库只放得下被测那一份脚本时，缺依赖的表现是可读性极差的 requireStack，所以按 `require("./x.cjs")` 递归补齐（同 `tests/helpers/gate-repo.ts` 的文件头）。 */
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });

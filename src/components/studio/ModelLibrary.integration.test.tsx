@@ -83,8 +83,11 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
     setBehavior({ models: [ONE_MODEL] });
     renderWithProviders(<ModelLibrary />);
 
-    // loading 态：未回包前出现加载文案（sync 尚在飞、list 未回）
-    expect(screen.getByText("加载中…")).toBeInTheDocument();
+    // loading 态：未回包前是首屏骨架（与真实行同形，不是一行「加载中…」），
+    // 且它只等 list —— 后台 sync 的全目录扫描不再挡在首屏前面。
+    expect(
+      screen.getByRole("status", { name: "正在加载模型列表" }),
+    ).toBeInTheDocument();
 
     // data 态：MSW 返回后出现模型文件名行（等 DOM 用 waitFor，见 §11.14）
     await waitFor(
@@ -94,6 +97,11 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
         ).toBeInTheDocument(),
       { timeout: 3000 },
     );
+    // 骨架让位给真列表（不是叠在上面）。按 name 查：`Spinner` 的
+    // 「同步中」指示同样是 role="status"，同名不同义，不能光靠角色区分。
+    expect(
+      screen.queryByRole("status", { name: "正在加载模型列表" }),
+    ).toBeNull();
     // 页头标题：与侧栏 / 页签同一个出处（注册表里这一项叫「模型」，
     // 不再是此前那个裸字面量「模型库」—— ISSUE #1673）。
     expect(screen.getByText(pageHeaderTitle("models"))).toBeInTheDocument();

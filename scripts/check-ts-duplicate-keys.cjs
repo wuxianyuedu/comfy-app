@@ -23,6 +23,7 @@
  *   node scripts/check-ts-duplicate-keys.cjs --json       # 机器可读（盘点用）
  *   node scripts/check-ts-duplicate-keys.cjs --report     # 只出清单，不判失败（盘点用）
  *   node scripts/check-ts-duplicate-keys.cjs --with-tests # 连测试一起扫（不进钩子）
+ *   --staged（钩子用）仅当暂存改动落在扫描面（`src/**`）内才扫，口径见 §13.5.8.2
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -35,6 +36,14 @@ const asJson = argv.includes("--json");
 const reportOnly = argv.includes("--report");
 const withTests = argv.includes("--with-tests");
 const explicit = argv.filter((a) => !a.startsWith("--"));
+const staged = argv.includes("--staged");
+
+/* `--staged`（钩子用）＝ 输入面跳过（§13.5.8.2）。短路点在 `require("typescript")`
+ * 之前 —— 那一步 ≈180ms；人的动作（`--json` / `--report` / `--with-tests`）与显式
+ * 文件入参照旧全扫。 */
+if (staged && !asJson && !reportOnly && !withTests && explicit.length === 0) {
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: ["src"], tag: "[ts-duplicate-keys]" });
+}
 
 const ts = require("typescript");
 

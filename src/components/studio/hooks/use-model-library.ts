@@ -4,8 +4,15 @@
 // 承载模型列表（tRPC useQuery + 静默同步）与筛选状态。ModelLibrary 视图只消费
 // 本 hook 返回的 controller，不再出现 `trpc.model.*` 的 options 调用。
 //
-// 挂载时先 sync 再 refetch 的顺序不可换：后端 sync 会重新扫描 ComfyUI 目录，
-// 用户不必手动点「重新扫描」就能看到最新模型（原组件行为，保留语义）。
+// 首屏口径（ISSUE 反馈「一打开就是加载中、等好久」）：
+//   · `list` 与 `sync` **并行**发车 —— useQuery 挂载即拉 DB 存量，sync 在后台
+//     重扫 ComfyUI 目录；`loading` 只表示「列表首次还没有数据」，不再被
+//     sync 的全目录扫描挡住。此前是「sync 完成 → 才 refetch」的串行链，
+//     用户对着空白等的是整轮目录扫描（多目录时以秒计）。
+//   · sync 完成后的 refetch **不置 loading**：那是一次静默替换，由
+//     `refreshing` 在筛选行给一颗轻指示，不打断阅读。
+//   · 因此这里既没有「refetch 的游离 promise 链 + aliveRef」那套记账（不
+//     setState 就没有卸载后击穿环境的入口），也没有本地 loading state。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -21,7 +28,10 @@ import {
 
 export interface ModelLibraryController {
   models: ModelRow[];
+  /** 列表首次加载中（尚无数据）—— 驱动首屏骨架，不等后台同步。 */
   loading: boolean;
+  /** 后台同步 / 刷新进行中：不挡首屏，只在筛选行给轻指示。 */
+  refreshing: boolean;
   /** 搜索关键字。 */
   q: string;
   setQ: (q: string) => void;
@@ -41,7 +51,6 @@ export interface ModelLibraryController {
 
 export function useModelLibrary(): ModelLibraryController {
   const trpc = useTRPC();
-  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string>(ALL_TYPES);
   const [configOpen, setConfigOpen] = useState(false);
@@ -49,23 +58,17 @@ export function useModelLibrary(): ModelLibraryController {
   const listQ = useQuery(trpc.model.list.queryOptions());
   const syncMut = useMutation(trpc.model.sync.mutationOptions());
 
-  /* 卸载标记：refetch 是一条**脱离组件生命周期的游离 promise 链**——
-   * 它的 .finally 会在「组件已卸载、测试的 jsdom 环境已拆除」之后才 resolve，
-   * 此时 setLoading 会打到已销毁的环境上。实测形态是 vitest 的
-   * 表现为 Unhandled Rejection: ReferenceError: window is not defined
-   * （react-dom 的 resolveUpdatePriority 读 window），退出码非零、
-   * 而报错点名的文件**每次都不同**（谁回包慢就点谁）。
-   * cleanup() 只卸载组件、不会取消这条已发出的 promise，所以必须自己判存活。 */
-  const aliveRef = useRef(true);
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
+  /* 静默刷新：不置 `loading`（首屏骨架由 listQ.isLoading 驱动），
+   * refetch 失败由 query 自身的 error 态承载 —— 这里不补 setState，
+   * 也就没有「卸载后击穿环境」的入口（见文件头）。 */
+  const reload = useCallback(() => {
+    void listQ.refetch().catch(() => {
+      /* 同上：错误态走 react-query */
+    });
+  }, [listQ]);
 
   /* `useQuery` / `useMutation` 返回的**对象每次渲染都是新引用**，
-   * 把它们（或依赖它们的 `loadModels`）放进下面那个 effect 的依赖数组，
+   * 把它们（或依赖它们的 `reload`）放进下面那个 effect 的依赖数组，
    * 会让「effect 跑一次」变成「每渲染一次跑一次」——
    * 而 effect 体内的 sync mutation 完成又会触发一次渲染，
    * 于是自激成循环：实测静置时 `model.sync` 每 10~12ms 打一次（6 秒 505 次）、
@@ -73,43 +76,26 @@ export function useModelLibrary(): ModelLibraryController {
    *
    * 修法是**把不稳的引用收进 ref**，effect 只依赖 `[]`：
    * 它要的语义本来就是「挂载时同步一次」，不是「依赖变化时同步」。
-   * `loadModels` 每次渲染都是新函数（它依赖 `listQ`），收进 ref；
+   * `reload` 每次渲染都是新函数（它依赖 `listQ`），收进 ref；
    * `syncMut.mutate` 本身是 mutation 稳定引用，直接用即可。 */
-  const loadModelsRef = useRef<(() => void) | null>(null);
+  const reloadRef = useRef(reload);
 
-  const loadModels = useCallback(() => {
-    setLoading(true);
-    void listQ
-      .refetch()
-      .catch(() => {
-        /* refetch 错误由 query 自身的 error 态承载 */
-      })
-      .finally(() => {
-        /* 卸载后不再 setState：否则触发 React 的更新调度，进而读到已拆除的
-         * window（见上方 aliveRef 的注释）。 */
-        if (aliveRef.current) setLoading(false);
-      });
-  }, [listQ]);
-
-  /* 把最新一份 `loadModels` 同步进 ref。写在 effect 里而不是渲染期直接赋值：
+  /* 把最新一份 `reload` 同步进 ref。写在 effect 里而不是渲染期直接赋值：
    * 后者是并发渲染下不允许的副作用（被丢弃的那次渲染也会改 ref）。 */
   useEffect(() => {
-    loadModelsRef.current = loadModels;
+    reloadRef.current = reload;
   });
 
   useEffect(() => {
-    // 挂载时静默同步一次，让库反映当前配置；defer 出 effect body
-    //（React 19 规则：effect 内不直接 setState）。
+    // 挂载时静默同步一次，让库反映当前配置；它与 list 的首帧**并行**发车，
+    // defer 出 effect body（React 19 规则：effect 内不直接 setState）。
     const t = setTimeout(
-      () =>
-        syncMut.mutate(undefined, {
-          onSettled: () => loadModelsRef.current?.(),
-        }),
+      () => syncMut.mutate(undefined, { onSettled: () => reloadRef.current() }),
       0,
     );
     return () => clearTimeout(t);
     /* 刻意只依赖 `[]`：本 effect 的语义就是「挂载时同步一次」。`syncMut` 是
-     * mutation 稳定引用、`loadModels` 已收进 ref；把它们列进来正是上面那条
+     * mutation 稳定引用、`reload` 已收进 ref；把它们列进来正是上面那条
      * 自激循环的成因，不是「漏了依赖」。 */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -136,7 +122,8 @@ export function useModelLibrary(): ModelLibraryController {
 
   return {
     models,
-    loading,
+    loading: listQ.isLoading,
+    refreshing: syncMut.isPending || listQ.isFetching,
     q,
     setQ,
     filter,
@@ -145,6 +132,6 @@ export function useModelLibrary(): ModelLibraryController {
     typeChips,
     configOpen,
     setConfigOpen,
-    reload: loadModels,
+    reload,
   };
 }
