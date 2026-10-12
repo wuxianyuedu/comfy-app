@@ -1,0 +1,4 @@
+## Changed
+
+- **`.workbuddy/memory/` 的 6 份文件移出 git 索引（本地文件原样保留）**：`.gitignore` 与 `README.md` 的目录树一直声明 `.workbuddy/` 是「本地临时目录（不入库）」，`docs/standards/12-代码组织与文件结构.md` 还写明「禁止再使用 `.workbuddy/` 这类分散目录」；但 2026-08-25 的一次提交把 `MEMORY.md` 加 5 份按日期命名的会话笔记带了进来，而 ignore 规则对**已跟踪**文件不生效，于是每个克隆都会拿到这堆东西。更麻烦的是唯一能发现这类越界的结构门禁 `scripts/check-file-structure.cjs` 把 `.workbuddy/` 写进了 `SCAN_EXCLUDED`，即它点名跳过这个目录——声明、入库状态、门禁可见范围三者长期互相矛盾，而代理的路由面（`AGENTS.md`、`docs/README.md`）里没有任何入口指向它。
+- **处置依据是内容核对，不是目录年龄**：这 6 份笔记记的是**已被替换**的启动链——仓库根 `start-tauri.exe`（PyInstaller 单文件）、`scripts/dev-launcher.ps1 -Prebuilt`、Job Object，正是 AGENTS 硬规则 12 明令 `.ps1` 入口不许再长出的那批 Windows 专属编排（编排只收在 `scripts/dev-launcher.mjs` + `scripts/launcher-core/**`）；技术栈一栏还写着 Prisma，而本仓库是 Drizzle ORM + better-sqlite3。留在库里等于让读到它的代理拿一份错的「当前事实」，所以选择移出索引而不是给它登记入口。文件仍留在开发机本地，历史也在 `git log` 里可查。

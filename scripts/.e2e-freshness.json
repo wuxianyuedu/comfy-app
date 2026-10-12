@@ -1,10 +1,10 @@
 {
   "e2e": {
     "key": "e2e",
-    "verifiedAt": "2026-10-11T16:37:53.795Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-12T03:54:48.342Z",
+    "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "本次只收口 resolveAppPort 的仓库根入参口径（脚本/配置层），端口解析值不变、e2e 行为面无变化；且该账在本提交前已是 stale（干净 master 上同红）"
+    "skippedReason": "本次提交只改 AGENTS.md 与 project Skill 两处文档、并把 .workbuddy/memory 移出 git 索引，未触碰任何运行时代码与 e2e 链路"
   }
 }
