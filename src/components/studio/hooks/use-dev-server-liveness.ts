@@ -102,6 +102,18 @@ export interface DevServerLiveness {
   consecutiveFailures: number;
   /** `lastExit` 对应记录的落盘时刻（毫秒）；无记录为 null。 */
   lastExitAt: number | null;
+  /**
+   * 当前是哪一次**启动**（launcher 的 runId）；null = 拿不到（纯手工 `pnpm dev`、
+   * 端点还没答过、或这次启动没走 launcher）。
+   *
+   * 消息中心按它把历史消息分成「每一次启动」一组（多次启动混在一起时用户分不清
+   * 哪几条属于同一次，见 `~/lib/shell/message-run-groups`）。
+   *
+   * **只在探测成功时更新**：断开的那一刻要的正是「正在死的这次启动」的 id（用来
+   * 给「应用服务已断开」那条盖戳），那时服务已经不在了、端点问不到，必须留住上
+   * 一次成功读到的值。
+   */
+  currentRunId: string | null;
   /** 本会话是否曾成功探到过该进程：用于把「还没探通」与「曾经通、现在断」
    *  区分开——只有后者才是「应用服务已断开」。 */
   everOnline: boolean;
@@ -133,23 +145,32 @@ function writeSession(key: string, value: string): void {
   }
 }
 
-type ProbeResult = { ok: true; bootId: string } | { ok: false; bootId: null };
+type ProbeResult =
+  | { ok: true; bootId: string; runId: string | null }
+  | { ok: false; bootId: null; runId: null };
 
-/** 单次探测：读取 dev server 当前 bootId。任何 HTTP 响应（含应用层错误码）
- *  说明进程在；仅网络层失败（reject）视为不可达。 */
+/** 单次探测：读取 dev server 当前 bootId 与**本次启动**的 runId。任何 HTTP 响应
+ *  （含应用层错误码）说明进程在；仅网络层失败（reject）视为不可达。
+ *
+ *  `runId` 与 `bootId` 在同一次请求里回来是刻意的（见 `server-id` 路由的说明）：
+ *  分成两次请求会在「服务刚恢复」那一刻还拿着旧 runId，把恢复那条消息盖错启动组。 */
 async function probeBootId(): Promise<ProbeResult> {
   try {
     const res = await fetch("/api/dev/server-id", {
       cache: "no-store",
       signal: AbortSignal.timeout(2500),
     });
-    if (!res.ok) return { ok: false, bootId: null };
-    const data = (await res.json()) as { bootId?: unknown };
+    if (!res.ok) return { ok: false, bootId: null, runId: null };
+    const data = (await res.json()) as { bootId?: unknown; runId?: unknown };
+    const runId =
+      typeof data.runId === "string" && data.runId.length > 0
+        ? data.runId
+        : null;
     return typeof data.bootId === "string" && data.bootId.length > 0
-      ? { ok: true, bootId: data.bootId }
-      : { ok: false, bootId: null };
+      ? { ok: true, bootId: data.bootId, runId }
+      : { ok: false, bootId: null, runId: null };
   } catch {
-    return { ok: false, bootId: null };
+    return { ok: false, bootId: null, runId: null };
   }
 }
 
@@ -172,6 +193,9 @@ export function useDevServerLiveness(): DevServerLiveness {
    * 只在**换了一个新 bootId** 时取一次，因此同一次故障不会随每次轮询重复读取。 */
   const [lastExit, setLastExit] = useState<AppServiceExitNotice | null>(null);
   const [lastExitAt, setLastExitAt] = useState<number | null>(null);
+  /* 当前是哪一次启动（runId）。**失败不清空**：断开那一刻要给「正在死的这次启动」
+   * 盖戳，而那时端点已经问不到了（见 `DevServerLiveness.currentRunId`）。 */
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   /* 已就哪个 bootId 取过原因：轮询每 2s 一次，没有它就等于每拍都打一次这个端点。 */
   const exitFetchedForBootIdRef = useRef<string | null>(null);
 
@@ -200,6 +224,10 @@ export function useDevServerLiveness(): DevServerLiveness {
     setProbeOk(result.ok);
     setConsecutiveFailures(result.ok ? 0 : (n) => n + 1);
     if (result.ok) setEverOnline(true);
+    /* 启动标识只认成功那一拍：与 `setProbeOk` 同一批落，于是「服务刚恢复」的
+     * 下一个渲染里拿到的已经是**新一次启动**的 runId —— 恢复那条消息因此盖在
+     * 新组而不是旧组（若分成两次请求就会盖错）。 */
+    if (result.ok) setCurrentRunId(result.runId);
 
     if (result.ok) {
       const bootId = result.bootId;
@@ -285,5 +313,6 @@ export function useDevServerLiveness(): DevServerLiveness {
     reachable: probeOk || consecutiveFailures < OFFLINE_CONFIRM_FAILURES,
     consecutiveFailures,
     everOnline,
+    currentRunId,
   };
 }

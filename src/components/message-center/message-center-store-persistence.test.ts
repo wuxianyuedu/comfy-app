@@ -37,6 +37,7 @@ beforeEach(() => {
     open: false,
     messages: [],
     hydrated: false,
+    currentRunId: null,
   });
 });
 
@@ -151,5 +152,60 @@ describe("消息中心持久化：恢复", () => {
     );
     useMessageCenterStore.getState().hydrate();
     expect(useMessageCenterStore.getState().messages).toHaveLength(200);
+  });
+});
+
+describe("消息中心持久化：启动戳（runId）", () => {
+  /* 多次启动的记录此前混成一列平铺，面板按 runId 分组（判据见
+   * `~/lib/shell/message-run-groups`）。runId 必须**活过一次刷新**——面板记的
+   * 恰恰是故障，而应用服务重启会让页面重载，戳没了就等于每次刷新都退回「混在一起」。 */
+
+  it("push 盖上当前启动并随消息落盘（刷新后仍能分组）", () => {
+    useMessageCenterStore.getState().setCurrentRunId("a1b2c3");
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "offline", title: "应用服务已断开", body: "正文" });
+
+    const { messages } = useMessageCenterStore.getState();
+    expect(messages[0]!.runId).toBe("a1b2c3");
+    expect(stored()).toMatchObject([{ runId: "a1b2c3" }]);
+  });
+
+  it("显式传了 runId 就用那个（不拿 currentRunId 覆盖）", () => {
+    useMessageCenterStore.getState().setCurrentRunId("a1b2c3");
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "offline", title: "T", body: "b", runId: "old001" });
+    expect(useMessageCenterStore.getState().messages[0]!.runId).toBe("old001");
+  });
+
+  it("显式传 `runId: null` 留 null（明确不知道 ≠ 没提供，不许补成当前启动）", () => {
+    /* 这两者的区别就是上一条注释里说的那句：补成当前启动等于断言「它属于现在
+     * 这次启动」——而面板正是拿它分组的，断言错了就是把两次启动并成一次。 */
+    useMessageCenterStore.getState().setCurrentRunId("a1b2c3");
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "offline", title: "T", body: "b", runId: null });
+    expect(useMessageCenterStore.getState().messages[0]!.runId).toBeNull();
+  });
+
+  it("升级前写入的历史消息没有 runId → 读回按 null（不丢整条，也不猜它属于哪次）", () => {
+    window.localStorage.setItem(
+      MESSAGE_CENTER_STORAGE_KEY,
+      JSON.stringify([record({ id: "msg_legacy", title: "老消息" })]),
+    );
+    useMessageCenterStore.getState().hydrate();
+    const { messages } = useMessageCenterStore.getState();
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.runId).toBeNull();
+  });
+
+  it("currentRunId 是运行时事实，**不**落盘（刷新后由探活链路重新学到）", () => {
+    useMessageCenterStore.getState().setCurrentRunId("a1b2c3");
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "info", title: "A", body: "a" });
+    const raw = window.localStorage.getItem(MESSAGE_CENTER_STORAGE_KEY) ?? "";
+    expect(raw).not.toContain("currentRunId");
   });
 });
