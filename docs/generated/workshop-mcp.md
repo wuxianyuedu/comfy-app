@@ -35,9 +35,16 @@ pnpm db:push            # 或 pnpm exec drizzle-kit push --force
 # stdio：供外部 AI 客户端连接（如 Claude Desktop 的 mcpServers 配置）
 pnpm mcp:stdio
 
-# HTTP：独立服务，默认 http://localhost:4300/mcp（Streamable，无状态）
+# HTTP：独立服务，默认 http://127.0.0.1:4300/mcp（Streamable，无状态）
 pnpm mcp:http
 ```
+
+> **可达面只有本机回环**。这组工具会写库、删会话、发起出图/出视频（花的是本机额度），
+> 而入口本身没有鉴权 —— 所以「谁连得上」就是唯一的信任边界：监听地址固定取
+> `src/lib/endpoints.ts` 的 `LOOPBACK_HOST`，跨源默认**关闭**（本机原生 MCP 客户端不需要
+> CORS）。确有浏览器客户端时，用 `MCP_HTTP_ALLOWED_ORIGINS` 逐条登记具体 origin
+> （逗号分隔，不做通配），命中才回该 origin；形状由
+> `tests/mcp-http-entry-loopback.test.ts` 钉住（绑回环 + 不许通配），改回去就红。
 
 Claude Desktop 示例（`claude_desktop_config.json`）：
 ```json
