@@ -183,7 +183,7 @@ export function ModelAdaptersView() {
           跳转），那句字段映射口径挂成悬浮「说明」—— 页眉因此不占那一行。屏名仍从注册表
           取（`pageHeaderTitle`），与侧栏 / 页签同一个出处。 */}
       <PageHeader
-        srTitle={pageHeaderTitle("model-adapters")}
+        title={pageHeaderTitle("model-adapters")}
         help="为远端模型配置工坊各模式下的输入 / 输出：统一输入映射到该接口请求体的字段名，产物按字段路径提取。"
       />
 

@@ -4,7 +4,7 @@ import { ListChecks, ListOrdered, RefreshCcw, WifiOff } from "lucide-react";
 
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
-import { viewTabLabel } from "~/components/studio/ViewTabStrip";
+import { pageHeaderTitle } from "~/components/studio/NavItems";
 import {
   Alert,
   AlertAction,
@@ -74,7 +74,7 @@ export function QueueMonitorView({
           那句「多久读一次、位次怎么排」不是每次看屏都要读的，收成悬浮说明。 */}
       <PageHeader
         className="mb-6"
-        srTitle={viewTabLabel("queue")}
+        title={pageHeaderTitle("queue")}
         help="每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。"
         actions={
           <>

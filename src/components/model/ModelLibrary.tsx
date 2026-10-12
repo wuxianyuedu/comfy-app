@@ -38,7 +38,7 @@ export function ModelLibrary() {
           from the server`）。所以页头归这里：屏的实现侧，与别的屏同口径。 */}
       <PageHeader
         className="mb-6"
-        srTitle={pageHeaderTitle("models")}
+        title={pageHeaderTitle("models")}
         help="直接调用本机 ComfyUI 已安装的模型，文件名即契约，所见即所得。"
       />
       <div className="mb-5 flex flex-wrap items-center gap-2">
