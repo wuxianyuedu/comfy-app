@@ -6,9 +6,11 @@ import {
   closeViewTab,
   dropProjectTabs,
   findTab,
+  focusViewTab,
   homeTab,
   initialWorkspaceTabs,
   isTabClosable,
+  isTabTransient,
   makeTab,
   openViewTab,
   parseWorkspaceTabs,
@@ -31,6 +33,10 @@ const VIEWS: WorkspaceView[] = [
   "film",
   "workflows",
   "outputs",
+  "console",
+  "settings",
+  "model-adapters",
+  "mode-contract",
 ];
 
 function state(
@@ -150,6 +156,70 @@ describe("关闭语义", () => {
   it("关一个不存在的键是空操作", () => {
     const s = initialWorkspaceTabs();
     expect(closeViewTab(s, "nope:")).toBe(s);
+  });
+});
+
+describe("瞬时页签：切走即关（最多只有当前页可以是 transient）", () => {
+  it("设置 / 模型适配 / 模式契约 是瞬时页签，画布 / 工坊 / 模型不是", () => {
+    expect(isTabTransient(makeTab("settings", null)!)).toBe(true);
+    expect(isTabTransient(makeTab("model-adapters", null)!)).toBe(true);
+    expect(isTabTransient(makeTab("mode-contract", null)!)).toBe(true);
+    expect(isTabTransient(makeTab("canvas", "p1")!)).toBe(false);
+    expect(isTabTransient(makeTab("workshop", "p1")!)).toBe(false);
+    expect(isTabTransient(makeTab("models", null)!)).toBe(false);
+  });
+
+  it("从设置切到别页：设置那一页退场，不动别的常驻页", () => {
+    let s = openViewTab(initialWorkspaceTabs(), "queue", null);
+    s = openViewTab(s, "settings", null);
+    expect(s.tabs.map((tab) => tab.view)).toEqual([
+      "home",
+      "queue",
+      "settings",
+    ]);
+
+    s = openViewTab(s, "models", null);
+    expect(s.tabs.map((tab) => tab.view)).toEqual(["home", "queue", "models"]);
+    expect(s.activeKey).toBe(tabKey("models", null));
+  });
+
+  it("切回设置这类页签本身不产生第二页（聚焦）", () => {
+    let s = openViewTab(initialWorkspaceTabs(), "settings", null);
+    s = openViewTab(s, "models", null);
+    s = openViewTab(s, "settings", null);
+    expect(s.tabs.filter((tab) => tab.view === "settings")).toHaveLength(1);
+  });
+
+  it("focusViewTab：切走时退场的是被切走的瞬时页，不是要切去的那一页", () => {
+    let s = openViewTab(initialWorkspaceTabs(), "queue", null);
+    s = openViewTab(s, "settings", null);
+    s = focusViewTab(s, tabKey("queue", null));
+    expect(s.tabs.map((tab) => tab.view)).toEqual(["home", "queue"]);
+    expect(s.activeKey).toBe(tabKey("queue", null));
+  });
+
+  it("focusViewTab 指一个不存在的键：原样返回（不把当前页指成空白）", () => {
+    const s = openViewTab(initialWorkspaceTabs(), "queue", null);
+    expect(focusViewTab(s, "nope:")).toBe(s);
+  });
+
+  it("手动关掉设置那页后落到左邻，且不留下第二个瞬时页", () => {
+    let s = openViewTab(initialWorkspaceTabs(), "queue", null);
+    s = openViewTab(s, "settings", null);
+    s = closeViewTab(s, tabKey("settings", null));
+    expect(s.activeKey).toBe(tabKey("queue", null));
+    expect(s.tabs.map((tab) => tab.view)).toEqual(["home", "queue"]);
+  });
+
+  it("瞬时页签不落盘；当前页正是它时 activeKey 改指首页（否则整份被丢弃）", () => {
+    let s = openViewTab(initialWorkspaceTabs(), "queue", null);
+    s = openViewTab(s, "settings", null);
+    const raw = serializeWorkspaceTabs(s);
+    expect(raw).not.toContain("settings");
+
+    const restored = parseWorkspaceTabs(raw, VIEWS);
+    expect(restored?.tabs.map((tab) => tab.view)).toEqual(["home", "queue"]);
+    expect(restored?.activeKey).toBe(tabKey("home", null));
   });
 });
 

@@ -11,9 +11,14 @@
  *   · 已存在的页签再开一次是**聚焦**，不产生第二页；
  *   · 首页固定不可关，关掉当前页落到**左邻**（不是"最后打开的"，那条规则用户预测不了）；
  *   · 只剩首页时列表仍然成立（不塌成"没有页签"的另一种布局）。
+ *
+ * 第五条是后补的（ISSUE #1784）：**瞬时页签**（`NavItem.transient`，如设置 /
+ * 模型适配 / 模式契约）切换即关。不变式一句话 —— **最多只有当前页可以是 transient**；
+ * 任何激活动作（开新页 / 切页 / 关页）之后都跑一次 `withTransientPruned` 把它坐实，
+ * 于是「切走的那一页还在列表里」这件事在状态层就不可能出现，不依赖任何渲染时序。
  */
 import { clamp } from "~/lib/clamp";
-import { isProjectTab, type WorkspaceView } from "./NavItems";
+import { isProjectTab, isTransientView, type WorkspaceView } from "./NavItems";
 
 /** 首页视图 id —— 固定页签，不可关闭。 */
 export const HOME_VIEW: WorkspaceView = "home";
@@ -71,6 +76,33 @@ function withHomeFirst(tabs: ViewTab[]): ViewTab[] {
   return [homeTab(), ...rest];
 }
 
+/** 这个页签是不是「瞬时页签」（切走即关，见 `NavItem.transient`）。 */
+export function isTabTransient(tab: ViewTab): boolean {
+  return isTransientView(tab.view);
+}
+
+/**
+ * 落实「最多只有当前页可以是 transient」这条不变式：
+ * 把**非当前页**的瞬时页签剔掉（当前页那份留着 —— 用户正看着它）。
+ *
+ * 抽成函数是为了让四条入口（开/切/关/恢复）共用同一份判据，而不是各自
+ * 在自己的分支里重抄一遍「哪些视图该关」—— 那种写法只要漏一处，界面就会出现
+ * 一个永远关不掉的设置页，而且没有任何东西会红。
+ */
+function withTransientPruned(tabs: ViewTab[], activeKey: string): ViewTab[] {
+  return tabs.filter((tab) => !isTabTransient(tab) || tab.key === activeKey);
+}
+
+/**
+ * 激活一个页签后的完整状态：先剔瞬时页签，再确认 activeKey 确实指向一页
+ * （按理说不会，但防御性地不让 activeKey 指向不存在的页 —— 那是界面上解释不了的空白）。
+ */
+function activated(tabs: ViewTab[], activeKey: string): WorkspaceTabsState {
+  const pruned = withHomeFirst(withTransientPruned(tabs, activeKey));
+  const key = findTab(pruned, activeKey) ? activeKey : homeTab().key;
+  return { tabs: pruned, activeKey: key };
+}
+
 /**
  * 打开/聚焦一个页签。
  *
@@ -85,9 +117,26 @@ export function openViewTab(
   const tab = makeTab(view, projectId);
   if (!tab) return state;
   if (findTab(state.tabs, tab.key)) {
-    return { tabs: state.tabs, activeKey: tab.key };
+    // 聚焦已有页：也要走一次剔除 —— 从"设置"切到另一页时,
+    // 被切走的那一页正是靠这里退场的（它不会走"新建页"那条分支）。
+    return activated(state.tabs, tab.key);
   }
-  return { tabs: [...state.tabs, tab], activeKey: tab.key };
+  return activated([...state.tabs, tab], tab.key);
+}
+
+/**
+ * 切换当前页（页签条上点某一页）。
+ *
+ * 与 `openViewTab` 分开是因为**没有**要开的新页：这时唯一的副作用是
+ * 「离开的那一页若是瞬时页签就退场」。`find` 判据仍在（点一个不存在的 key
+ * 不许把 activeKey 指到空白）。
+ */
+export function focusViewTab(
+  state: WorkspaceTabsState,
+  key: string,
+): WorkspaceTabsState {
+  if (!findTab(state.tabs, key)) return state;
+  return activated(state.tabs, key);
 }
 
 /**
@@ -114,7 +163,9 @@ export function closeViewTab(
      夹取走 `~/lib/clamp` 这个唯一出口（§16.2.4.63），不在这里手写 Math.min/max。 */
   const fallbackIndex = clamp(index - 1, 0, tabs.length - 1);
   const fallback = tabs[fallbackIndex] ?? homeTab();
-  return { tabs, activeKey: fallback.key };
+  /* 关掉"设置"这类瞬时页后落到别的页，同样不留下第二个瞬时页 ——
+     `activated` 顺带保证落点页存在。 */
+  return activated(tabs, fallback.key);
 }
 
 /**
@@ -150,9 +201,17 @@ export function initialWorkspaceTabs(): WorkspaceTabsState {
 export const WS_TABS_KEY = "comfyapp:workspace-tabs-v2";
 
 export function serializeWorkspaceTabs(state: WorkspaceTabsState): string {
+  /* 瞬时页签**不落盘**：它是"读过即走"的配置屏，下次开机不该自己弹回来
+     —— 而落盘与恢复是两条独立的路，只要不写进去就不存在这个可能。
+     当前页恰是瞬时页时，把 activeKey 一并改指首页：否则存下来的 activeKey
+     指向一个不在列表里的页，`parseWorkspaceTabs` 会按"整份不可信"丢弃全部页签
+     （详见下面的解析口径）—— 用户就会在一次冷启动里丢掉所有常驻页，
+     只为当时正停在设置上。 */
+  const persisted = state.tabs.filter((tab) => !isTabTransient(tab));
+  const activeStillThere = persisted.some((tab) => tab.key === state.activeKey);
   return JSON.stringify({
-    activeKey: state.activeKey,
-    tabs: state.tabs.map((tab) => [tab.view, tab.projectId]),
+    activeKey: activeStillThere ? state.activeKey : tabKey(HOME_VIEW, null),
+    tabs: persisted.map((tab) => [tab.view, tab.projectId]),
   });
 }
 

@@ -14,6 +14,11 @@
  *   3. **参与**视图高亮：当前视图就是它时要有 active 态（旧版判的是「不参与高亮」，
  *      因为那时它们根本不是视图 —— 形态翻了，判据方向跟着翻）；
  *   4. 外壳不再持有这两个视图的渲染路径（渲染只在 `workspace/page.tsx` 一处）。
+ *
+ * 第五组（ISSUE #1784）判的是**反面**：设置**不该**在侧栏里。那一项在侧栏列表与
+ * 侧栏底部各有一处，两处都会走到 `onOpenSettings`，而顶栏应用菜单里本来就有第三处
+ * —— 一个动作三个入口。用例判两侧都不再渲染它，同时确认 `onOpenSettings` 仍由
+ * 外壳转给顶栏（撤的是入口，不是能力）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -115,5 +120,33 @@ describe("侧栏的模型适配 / 模式契约入口", () => {
     ]) {
       expect(source, `AppShell 里不该再出现 ${retired}`).not.toContain(retired);
     }
+  });
+});
+
+describe("设置不在侧栏（ISSUE #1784：入口收归顶栏应用菜单）", () => {
+  it("侧栏列表里没有「设置」这一项（它只在顶栏菜单里）", () => {
+    renderShell();
+    /* 侧栏那几项都是带文字的按钮；撤掉之后按名字查应该一个都查不到。
+       注意不能用 `onOpenSettings` 的回调次数代替 —— 那是顶栏菜单的路径，
+       与侧栏无关（下面那条正是要把它分开判）。 */
+    expect(screen.queryByRole("button", { name: "设置" })).toBeNull();
+  });
+
+  it("侧栏底部那枚「设置」也不在了（三处入口收成一处）", () => {
+    const source = readFileSync(
+      path.resolve(import.meta.dirname, "AppShell.tsx"),
+      "utf8",
+    );
+    /* 运行时判据抓不到「这里原本有个按钮、现在只是没渲染」——判源码文本更贴题：
+       `SidebarFooter` 一旦回来，八成也会把底部那颗按钮带回来。 */
+    expect(source).not.toContain("SidebarFooter");
+  });
+
+  it("撤的是入口不是能力：`onOpenSettings` 仍然传给顶栏", () => {
+    const source = readFileSync(
+      path.resolve(import.meta.dirname, "AppShell.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("onOpenSettings={onOpenSettings}");
   });
 });

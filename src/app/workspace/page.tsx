@@ -3,25 +3,14 @@
 import { subscribeAppEvent } from "~/lib/app-events";
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
-import {
-  VideoQueueModal,
-  HomePage,
-  AppShell,
-  AuroraBackground,
-} from "~/components/studio";
+import { VideoQueueModal, AppShell } from "~/components/studio";
 import {
   WORKSPACE_VIEWS,
   useWorkspaceTabs,
 } from "~/components/studio/hooks/use-workspace-tabs";
 import type { RecentProject, WorkspaceView } from "~/components/studio";
-import { WorkshopPipeline } from "~/components/workshop/WorkshopPipeline";
-import { ProjectGate } from "~/components/studio/ProjectGate";
-import {
-  globalNavItems,
-  isProjectTab,
-  projectTabs,
-} from "~/components/studio/NavItems";
+import { WorkspaceViewStack } from "~/components/studio/WorkspaceViewStack";
+import { globalNavItems, projectTabs } from "~/components/studio/NavItems";
 import { ShellTabs } from "~/components/studio/ShellTabs";
 import { timeAgo } from "~/lib/time-format";
 import {
@@ -31,102 +20,6 @@ import {
   setActive,
   reapAllEmptyDrafts,
 } from "~/lib/project-canvas/canvas-store";
-
-/* ── 懒加载视图组件，好让初始包体保持小 ── */
-/* 只有 HomePage / WorkspaceNav / ToastProvider / VideoQueueModal 是即时加载的。 */
-/* 设置（与历史 / 队列 / 控制台同族，都是「项目无关的全局视图」）：只在进入该
- * 视图时才拉 —— 它带着全部配置查询与 Ollama 探测，不该摊到别的视图首屏。 */
-const SettingsView = dynamic(
-  () =>
-    import("~/components/settings/SettingsView").then(
-      (mod) => mod.SettingsView,
-    ),
-  { ssr: false },
-);
-
-/* 模型适配 / 模式契约：与设置同一族（项目无关的全局配置视图）。它们此前是侧栏点开的
- * 弹窗、由 `AppShell` 自己 lazy 一份；改成视图页签后懒加载的归属收在这里 —— 别的视图
- * 都在这里，两处各留一份加载路径必然漂。 */
-const ModelAdaptersView = dynamic(
-  () =>
-    import("~/components/workshop/ModelAdaptersView").then(
-      (mod) => mod.ModelAdaptersView,
-    ),
-  { ssr: false },
-);
-const ModeContractView = dynamic(
-  () =>
-    import("~/components/workshop/mode-contract/ModeContractView").then(
-      (mod) => mod.ModeContractView,
-    ),
-  { ssr: false },
-);
-
-const WorksGallery = dynamic(
-  () => import("~/components/studio").then((mod) => mod.WorksGallery),
-  { ssr: false },
-);
-const ProjectOutputs = dynamic(
-  () => import("~/components/studio").then((mod) => mod.ProjectOutputs),
-  { ssr: false },
-);
-/* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */
-const ResourceLibrary = dynamic(
-  () =>
-    import("~/components/studio/library/ResourceLibrary").then(
-      (mod) => mod.ResourceLibrary,
-    ),
-  { ssr: false },
-);
-const ModelLibrary = dynamic(
-  () => import("~/components/studio").then((mod) => mod.ModelLibrary),
-  { ssr: false },
-);
-/* 项目主页：进入项目后的落点。懒加载 —— 它与画布 / 工坊一样只在进项目后需要，
- * 放在应用首页的初始包里没有收益。 */
-const ProjectHomePage = dynamic(
-  () =>
-    import("~/components/studio/project-home").then(
-      (mod) => mod.ProjectHomePage,
-    ),
-  { ssr: false },
-);
-const HistoryList = dynamic(
-  () => import("~/components/studio").then((mod) => mod.HistoryList),
-  { ssr: false },
-);
-/* 队列与运行：与历史同族（都在看「机器现在在干什么」），只在进入该视图时才拉。 */
-const QueueMonitor = dynamic(
-  () =>
-    import("~/components/studio/queue/QueueMonitor").then(
-      (mod) => mod.QueueMonitor,
-    ),
-  { ssr: false },
-);
-const WorkflowLibrary = dynamic(
-  () => import("~/components/studio").then((mod) => mod.WorkflowLibrary),
-  { ssr: false },
-);
-/* 控制台（ISSUE #1327）：与历史 / 队列同族（都是「项目无关的全局视图」），
- * 只在进入该视图时才拉。 */
-const ConsoleView = dynamic(
-  () =>
-    import("~/components/console/ConsoleView").then((mod) => mod.ConsoleView),
-  { ssr: false },
-);
-
-/* 客户端上懒加载更重的画布 / 影片编辑器（ReactFlow 等）。 */
-const FilmStudio = dynamic(
-  () => import("~/components/studio/FilmStudio").then((mod) => mod.FilmStudio),
-  { ssr: false },
-);
-const ProjectCanvas = dynamic(
-  () =>
-    import("~/components/studio/ProjectCanvas").then(
-      (mod) => mod.ProjectCanvas,
-    ),
-  { ssr: false },
-);
 
 /* ── 工作区页面 —— Updream 风全屏编辑器 ── */
 
@@ -347,91 +240,6 @@ export default function WorkspacePage() {
     [activeProjectId],
   );
 
-  // ── Home 模式为整页独立视图；其余模式共用左侧导航 + 中央内容 ──
-  // LogProvider/ToastProvider 全页只挂载一层：此前两个分支各自包一层，home ↔
-  // 其它模式切换会反复装卸 console 包装（makeLogger 双重嵌套），是日志观察者
-  // 自身报错的结构性诱因（LogProvider Console Error）。
-  const renderCenter = () => {
-    // 项目优先闸门：进入项目界面（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）前必须先有一个活跃项目。
-    if (isProjectTab(viewMode) && !activeProjectId) {
-      return (
-        <ProjectGate
-          onEnter={refreshActiveProject}
-          onExit={() => navigateTo("home")}
-        />
-      );
-    }
-    switch (viewMode) {
-      case "project":
-        return (
-          <ProjectHomePage
-            projectName={
-              recentProjects.find((p) => p.id === activeProjectId)?.name ??
-              "未命名项目"
-            }
-            onNavigate={handleNavSelect}
-          />
-        );
-
-      case "works":
-        return (
-          <WorksGallery
-            onOpenTask={handleOpenProject}
-            onOpenCanvasProject={handleOpenCanvasProject}
-          />
-        );
-
-      case "models":
-        return <ModelLibrary />;
-
-      case "history":
-        return <HistoryList onOpenTask={handleOpenProject} />;
-
-      case "queue":
-        return <QueueMonitor onOpenSettings={openSettings} />;
-
-      case "settings":
-        return <SettingsView fillHeight />;
-
-      case "model-adapters":
-        return <ModelAdaptersView />;
-
-      case "mode-contract":
-        return <ModeContractView />;
-
-      case "canvas":
-        return (
-          <ProjectCanvas
-            seedNew={canvasSeedNew}
-            onConsumeSeed={() => setCanvasSeedNew(false)}
-            pendingWorkflow={pendingCanvasWorkflow}
-            onConsumePending={() => setPendingCanvasWorkflow(null)}
-          />
-        );
-
-      case "film":
-        return <FilmStudio />;
-
-      case "workflows":
-        return <WorkflowLibrary onUse={handleUseWorkflow} />;
-
-      case "console":
-        return <ConsoleView />;
-
-      case "outputs":
-        return <ProjectOutputs />;
-
-      case "library":
-        return <ResourceLibrary />;
-
-      case "workshop":
-        return <WorkshopPipeline />;
-
-      default:
-        return null;
-    }
-  };
-
   return (
     <ShellTabs
       viewTabs={viewTabs}
@@ -464,22 +272,29 @@ export default function WorkspacePage() {
           openableViews={openableViews}
           onOpenView={navigateTo}
         >
-          {viewMode === "home" ? (
-            <HomePage
-              onNewProject={handleNewProject}
-              recentProjects={recentProjects}
-              onOpenProject={handleOpenProject}
-              onOpenCanvasProject={handleOpenCanvasProject}
-              onNavigate={handleHomeNavigate}
-              onShowAllProjects={handleShowAllProjects}
-            />
-          ) : (
-            <>
-              {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
-              <AuroraBackground />
-              {renderCenter()}
-            </>
-          )}
+          {/* 常驻视图栈：打开的每一页都**保持挂载**，用 CSS 显隐切换 ——
+              这就是页签的意义（切走不卸载、切回不重开）。实现在
+              `WorkspaceViewStack`（那里有懒加载声明与逐屏渲染分支）。 */}
+          <WorkspaceViewStack
+            tabs={viewTabs}
+            activeKey={activeViewKey}
+            activeProjectId={activeProjectId}
+            recentProjects={recentProjects}
+            onEnterProject={refreshActiveProject}
+            onExitProject={() => navigateTo("home")}
+            onNewProject={handleNewProject}
+            onOpenProject={handleOpenProject}
+            onOpenCanvasProject={handleOpenCanvasProject}
+            onNavigate={handleNavSelect}
+            onHomeNavigate={handleHomeNavigate}
+            onShowAllProjects={handleShowAllProjects}
+            onOpenSettings={openSettings}
+            onUseWorkflow={handleUseWorkflow}
+            canvasSeedNew={canvasSeedNew}
+            onConsumeCanvasSeed={() => setCanvasSeedNew(false)}
+            pendingCanvasWorkflow={pendingCanvasWorkflow}
+            onConsumePendingWorkflow={() => setPendingCanvasWorkflow(null)}
+          />
         </AppShell>
 
         {/* 视频队列弹窗：两个视图分支此前各挂一份同构实例，合并为一处。 */}
