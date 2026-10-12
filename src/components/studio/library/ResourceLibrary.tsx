@@ -65,7 +65,7 @@ export function ResourceLibrary() {
       {/* ── 页头：标题 + 说明 + 动作 ── */}
       <PageHeader
         className="mb-6"
-        srTitle={pageHeaderTitle("library")}
+        title={pageHeaderTitle("library")}
         help="参考图、音效、成片片段 —— 按分类管，可直接拖进画布或工坊。"
         actions={
           <>
