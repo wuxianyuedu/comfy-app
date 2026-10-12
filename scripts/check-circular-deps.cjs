@@ -32,6 +32,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 
 /* 扫描根取 cwd(与 check-file-structure.cjs 同口径:门禁在仓库根被调用),
  * 基线取__dirname 旁(与脚本同目录,便于在临时工作区里被一并复制/断言)。 */
@@ -41,6 +42,7 @@ const BASELINE = path.join(__dirname, ".circular-deps-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
+const STAGED = ARGS.has("--staged");
 const REPORT_ONLY = ARGS.has("--report");
 
 /** 扫描目录(与门禁口径一致:只看应用源码,文档与脚本不参与)。 */
@@ -193,6 +195,7 @@ function findCycles(graph) {
 }
 
 function main() {
+  if (STAGED && !REPORT_ONLY && !UPDATE) skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[circular-deps]" });
   const graph = buildGraph();
   const cycles = findCycles(graph);
   const current = cycles.map((c) => c.join("|"));

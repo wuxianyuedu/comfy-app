@@ -260,7 +260,9 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
       ),
     ).toEqual({
       label: "TS 重复属性判定",
-      cmd: "node scripts/check-ts-duplicate-keys.cjs",
+      // `--staged` = 输入面跳过（ISSUE #1747 续 / §13.5.8.2）。逐字相等的口径
+      // 保留（这一族的价值就是「flag 层面也不许漂」）。
+      cmd: "node scripts/check-ts-duplicate-keys.cjs --staged",
     });
   });
 

@@ -157,22 +157,22 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R12 + R5 棘轮硬闸（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-ps1-consistency.mjs  # 跨平台动作对照表：.ps1⇄.mjs 两侧齐全、会静默失效的清单只定义一次、入口清单与磁盘/package.json 三向对齐（见 launch-and-build §9.5）
-✅ node scripts/check-react-updater-purity.cjs
-✅ node scripts/check-title-bar-clearance.cjs
+✅ node scripts/check-react-updater-purity.cjs --staged # 输入面跳过（见下 13.5.8.2）
+✅ node scripts/check-title-bar-clearance.cjs --staged # 输入面跳过（见下 13.5.8.2）
 ✅ pnpm exec tsc --noEmit
 ✅ pnpm run lint
 ✅ node scripts/check-ui-logic-separation.cjs --strict # 视图层 IO 棘轮（只许降；治理后指标下降同样阻断，见 17）
 ✅ node scripts/check-changelog-fragments.cjs
 ✅ node scripts/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
-✅ node scripts/check-import-alias.cjs       # import 别名只有一种前缀 `~`（R13，见 §12.8.0）
+✅ node scripts/check-import-alias.cjs --staged # import 别名只有一种前缀 `~`（R13，见 §12.8.0）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
 ✅ node scripts/check-ui-primitives.cjs --staged # UI 基元复用棘轮（见 16 §16.2.3；`--staged` = 只碰了 `src/` 下的扫描根才扫，见下 13.5.8.2）
-✅ node scripts/check-overlay-z.cjs          # 浮层层级刻度棘轮（见 16 §16.2.5）
+✅ node scripts/check-overlay-z.cjs --staged # 浮层层级刻度棘轮（见 16 §16.2.5）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-theme-colors.cjs       # 主题色扫描棘轮（见 03 §3.6.1）
 ✅ node scripts/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
-✅ node scripts/check-inline-style.cjs       # 视图层不得动态注入 <style>（见 03 §3.5）
-✅ node scripts/check-code-duplication.cjs   # 跨文件重复块棘轮（见 12 §12.12）
-✅ node scripts/check-function-length.cjs    # 函数长度棘轮 TS/TSX（见 12 §12.13）
+✅ node scripts/check-inline-style.cjs --staged # 视图层不得动态注入 <style>（见 03 §3.5）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-code-duplication.cjs --staged # 跨文件重复块棘轮（见 12 §12.12）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-function-length.cjs --staged # 函数长度棘轮 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-rust-function-length.cjs # 函数长度棘轮 Rust 壳（见 12 §12.13.1）
 ✅ node scripts/check-infra-file-size.cjs # 基础设施层文件长度棘轮：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
@@ -193,15 +193,15 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
    # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
    # 直接拼进 `pnpm exec vitest run $files` 会在 Windows 上顶穿 cmd.exe 的 8191 字符
    # 命令行上限 —— 表现是「组 C 红、一条用例没跑、原因是一行 GBK 乱码」
-✅ node scripts/check-circular-deps.cjs      # 模块循环依赖棘轮（见 12 §12.7）
+✅ node scripts/check-circular-deps.cjs --staged # 模块循环依赖棘轮（见 12 §12.7）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
 ✅ node scripts/check-format.cjs --staged    # prettier 格式棘轮（见下 13.5.1；`--staged` = 只碰了扫描面（`src/**` / `.storybook/**`）才扫，见下 13.5.8.2）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
-✅ node scripts/check-dead-exports.cjs       # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）
+✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）；`--staged` 见下 13.5.8.2
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
 ✅ node scripts/check-docs-api.cjs --staged  # API 文档生成物 docs/api 与源一致（见下 13.5.5.1；--staged = 只碰了 typedoc 输入面才重生成）
-✅ node scripts/check-non-null-assertions.cjs # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）
-✅ node scripts/check-void-floats.cjs         # src/lib `void someFn(...)` 悬空棘轮（见下 13.5.7）
+✅ node scripts/check-non-null-assertions.cjs --staged # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-void-floats.cjs --staged # src/lib `void someFn(...)` 悬空棘轮（见下 13.5.7）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
 ✅ node scripts/check-doc-references.cjs     # 文档引用与权威源一致（= `pnpm doc:check`；序号那条判据见下 13.5.10）
 ✅ node scripts/storybook-check.mjs --changed # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮 + 故事面（见 16 §16.2.3.4 / §16.2.3.8）
@@ -209,7 +209,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红（见下 13.5.12）
 ✅ node scripts/check-declaration-readers.cjs # 声明 ⇄ 读者索引：本仓库每一种「声明」（判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 / 类型断言执行者 / 软断言语义 / 新鲜度档…）都必须答出「谁在读它 + 执行者在哪」——读者丢了、执行者从门禁链里被摘掉、索引自己静默降级，都红（见 11 §11.23）
 ✅ node scripts/check-on-demand-duties.cjs   # 「不进钩子」的按需档 ⇄ 执行者索引：每一行的机器事实仍在（新鲜度档键 / 门禁 run:false / 按需召唤条目，全部现算）+ 每一个机器事实都被登记（新增一档忘了登记 ⇒ 那一档谁都不判）（见 13.5.4）
-✅ node scripts/check-ts-duplicate-keys.cjs  # 同一属性被指定两次（编辑器报 ts(2783)、命令行不报）；存量 0，硬闸（见下 13.5.12）
+✅ node scripts/check-ts-duplicate-keys.cjs --staged # 同一属性被指定两次（编辑器报 ts(2783)、命令行不报）；存量 0，硬闸（见下 13.5.12）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
 ✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
 ✅ node scripts/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
@@ -217,8 +217,8 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-test-waitfor.cjs      # 测试层 `waitFor` 的边界：只有「等 DOM」与「假定时器窗口内」两种形态该留 `waitFor`，其余等值的一律 `expect.poll`（见 11 §11.14.3）
 ✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮：`it/test/describe.each` 净数不许涨（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
 ✅ node scripts/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
-✅ node scripts/check-form-field-wiring.cjs # `<FormField>` 的标签 ⇄ 控件接线：plain-children 形态下 `htmlFor` 指向不存在的 id（点标签不聚焦、控件没有可访问名），净数不许涨（见 16 §16.2.4.26.1）
-✅ node scripts/check-click-keyboard.cjs    # 非原生元素上的「鼠标专属」点击：`div`/`li`/`span` 挂了 `onClick` 却没有键等价物（鼠标点得开、键盘进不来），净数不许涨（见 06 §6.11 / 16 §16.2.4.29·§16.2.4.57）
+✅ node scripts/check-form-field-wiring.cjs --staged # `<FormField>` 的标签 ⇄ 控件接线：plain-children 形态下 `htmlFor` 指向不存在的 id（点标签不聚焦、控件没有可访问名），净数不许涨（见 16 §16.2.4.26.1）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-click-keyboard.cjs --staged # 非原生元素上的「鼠标专属」点击：`div`/`li`/`span` 挂了 `onClick` 却没有键等价物（鼠标点得开、键盘进不来），净数不许涨（见 06 §6.11 / 16 §16.2.4.29·§16.2.4.57）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
 ✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
 ✅ node scripts/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）
@@ -1040,6 +1040,55 @@ COMFY_PRECOMMIT_MAX_WORKERS=1 git commit …   # 机器被别的东西占着时
 **7.1–7.3s → 0.4s**（省 ≈6.8s）；「暂存里有 `src/` 文件」时 **7.2–8.1s ≈ 7.2–8.1s**
 （多一次 `git diff --cached` 的读，噪声级，无回归）。判据强度一个字不放松 ——
 触发面就是「有文件落在扫描面内」，而**只要有一个**就照旧扫全库。
+
+**第三笔账：第二梯队 14 步也各扫一个固定子集（ISSUE #1747 续）**。上面两步是「最贵的
+两步」，但它们不是唯一「扫全库的一个子集」的判据 —— 第二梯队 14 步的扫描面全是**固定
+前缀**，单项 0.27–1.85s，合计 **≈8.5s**（实测热缓存，8 核）：
+
+| 判据                                          | 扫描面                                              | 热跑（全库） |
+| --------------------------------------------- | --------------------------------------------------- | ------------ |
+| `check-a11y-rules.cjs`                        | 读 eslint 配置（不进这一轮）                        | 1.85s        |
+| `check-ts-duplicate-keys.cjs`                 | `src/**`                                            | 1.23s        |
+| `check-non-null-assertions.cjs`               | `src/**`                                            | 1.09s        |
+| `check-react-updater-purity.cjs`              | `src/**`                                            | 1.02s        |
+| `check-click-keyboard.cjs`                    | `src/**`（`.tsx`）                                  | 0.78s        |
+| `check-code-duplication.cjs`                  | `src/**`                                            | 0.72s        |
+| `check-form-field-wiring.cjs`                 | `src/**`（`.tsx`）                                  | 0.71s        |
+| `check-dead-exports.cjs`                      | `src/lib` + `src/trpc` + 语料 `src`/`scripts`/`e2e` | 0.36s        |
+| `check-void-floats.cjs`                       | `src/lib/**`                                        | 0.59s        |
+| `check-function-length.cjs`                   | `src/**`                                            | 0.35s        |
+| `check-overlay-z.cjs` / `check-title-bar-clearance.cjs` | `src/components` + `src/app`               | 0.27 / 0.09s |
+| `check-import-alias.cjs`                      | `src` + `e2e`                                       | 0.17s        |
+| `check-circular-deps.cjs`                     | `src/**`                                            | 0.15s        |
+| `check-inline-style.cjs`                      | `src/**`                                            | 0.09s        |
+
+它们的扫描面**都只是全库的一个子集**（`git ls-files` 跟踪 5952 份、`src/**` 的
+`.ts/.tsx` 只有 1078 份），而**只加 changelog 碎片 / 只改文档 / 只动 `scripts/` 或
+`tests/`** 这一大类提交根本不在靶子里 —— 实测占最近 60 次提交的 **57%（34/60）**。
+14 步各加一档 `--staged`（同一个 `skipUnlessStagedTouches()`，同一个口径），
+这一大类提交在它们上面省的 **≈8.0s** 是白拿的。
+
+**这一步实测过、也确实踩到的两个坑（都写进接线判据了）**：
+
+1. **短路点必须在重活之前**。第一版把 `skipUnlessStagedTouches()` 放进 `main()`，
+   实测「跳过」档仍要 **211–342ms** —— `require("typescript")` 的模块加载 ≈180ms、
+   `check-dead-exports.cjs` 的语料预加载 IIFE ≈340ms 都发生在 `main()` 之前。
+   把短路提到它们**前面**之后降到 **32–40ms**。退出码看不出这个差别（两边都是 0），
+   所以只能钉在接线判据上：短路行号必须小于该脚本里第一条真 `require("typescript")`。
+2. **扫描根常量会被 TDZ 卡住**。「把短路提到 `require("typescript")` 之前」意味着
+   它也要提到 `const SCAN_DIR = "src"` 之前 —— 第一版有一半脚本在跳过档直接
+   `ReferenceError: Cannot access 'SCAN_DIR' before initialization`。修法是把扫描根
+   常量一并上提（它们本来就是配置，没有依赖）。
+
+**实测两端**（同一份检出、8 核、热缓存）：这 14 步在「暂存里没有扫描面内文件」时
+**8.5s → 0.5s**（含进程启动，每步 ≈35ms）；「暂存里有 `src/` 文件」时逐条复核
+**14/14 照旧真扫**（其中 `check-overlay-z` / `check-title-bar-clearance` 只认
+`src/components` + `src/app` —— 只改 `src/lib` 的文件跳过它们是对的，用 `src/app/**`
+的探针复核过确实真扫）。判据强度一个字不放松，`--report` / `--update` 照旧全库。
+
+**接线判据**（`tests/doc-check-hook-wiring.test.ts`）：14 步逐条钉「钩子里带
+`--staged`」+「脚本真的实现了它」+「短路在重活之前」。抹掉任意一条，
+**没有任何别的判据**会看见差异 —— 它只会让每次提交慢一点，慢不会让任何人报错。
 
 #### 13.5.9 依赖漏洞扫描棘轮（`node scripts/check-dependency-audit.mjs`，ISSUE #1331）
 

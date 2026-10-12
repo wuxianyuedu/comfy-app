@@ -56,17 +56,27 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const ts = require("typescript");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
 const SHOULD_UPDATE = ARGS.has("--update");
+const STAGED = ARGS.has("--staged");
 
 const BASELINE = path.join(__dirname, ".form-field-wiring-baseline.json");
 
-/** 扫描范围：视图层与用例（stories 也是调用点，一起判）。 */
+/** 扫描范围：视图层与用例（stories 也是调用点，一起判）。
+ *  **必须在 `--staged` 短路之前**，所以提到 `require("typescript")` 上面。 */
 const SCAN_DIRS = ["src"];
+
+/* `--staged`（钩子用）＝ 输入面跳过，口径见 §13.5.8.2。
+ * 短路点在 `require("typescript")` 之前 —— 那一步 ≈180ms，放后面就白跳过。 */
+if (STAGED && !REPORT_ONLY && !SHOULD_UPDATE) {
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[form-field-wiring]" });
+}
+
+const ts = require("typescript");
+
 const FILE_RE = /\.tsx$/;
 
 /**

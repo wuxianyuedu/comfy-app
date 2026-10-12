@@ -74,6 +74,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const {
   readForScan,
+  skipUnlessStagedTouches,
   walkForScan,
   vanishedNote,
 } = require("./gate-scan-read.cjs");
@@ -85,6 +86,7 @@ const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
 const REPORT_ONLY = ARGS.has("--report");
+const STAGED = ARGS.has("--staged");
 /** `--verify <rel>#<Symbol>`:单条精确复核。清单归零后「为空」不再能证明
  *  扫描器在工作(一个永远返回空的扫描器会让断言全绿,§12.16),所以留一条
  *  可对**指定符号**当场复核的通道 —— 注入式反向验证用它。 */
@@ -201,6 +203,16 @@ function specsImport(specs, wantedKeys) {
     }
   }
   return false;
+}
+
+/* `--staged`（钩子用）＝ 输入面跳过（§13.5.8.2）。**必须放在两个预加载索引
+ * （`PROD_FREQ` / `TEST_FILES`）之前** —— 那两个 IIFE 会把 `src` + `scripts` + `e2e`
+ * 整个语料读一遍（实测 ≈340ms），放在 `main()` 里就白跳过了。
+ * 输入面是声明层（`SCAN_ROOTS`）与消费方语料（`USAGE_ROOTS`）的并集：两边任一边
+ * 被碰都要真判，所以根清单由这两个既有配置现算，不另抄一份（§12.18）。
+ * `--verify`（单符号精确复核）与 `--report` / `--update` 都不跳过。 */
+if (STAGED && !REPORT_ONLY && !UPDATE && !verifyArg) {
+  skipUnlessStagedTouches({ roots: [...USAGE_ROOTS], tag: "[dead-exports]" });
 }
 
 // ── 预加载索引（判据不变，只是把「每判一次就重扫全仓」摊成一次成型）──────────

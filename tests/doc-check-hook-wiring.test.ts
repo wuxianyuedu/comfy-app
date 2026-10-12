@@ -405,3 +405,95 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
     ).toBe(true);
   });
 });
+
+/**
+ * 第二梯队全库扫描的「输入面跳过」接进 D 组（ISSUE #1747 续）。
+ *
+ * 立案现场：D 组里除两步最贵的（`check-ui-primitives` / `check-format`）之外，
+ * 还有第二梯队 14 步各自「扫全库的一个子集」，单项 0.27–1.85s，合计 ≈8.5s
+ * （实测热缓存 8 核）。它们的扫描面全是**固定前缀**（`src/`、`src/lib`、
+ * `src/components`+`src/app`、`src-tauri/src` ……），于是「只加 changelog 碎片 /
+ * 只改文档 / 只动 `scripts/` `tests/`」这一大类提交（实测占最近 60 次提交的 57%）
+ * 在这些步上白付 —— 与 #1798 那两步同源，同一套口径（§13.5.8.2）。
+ *
+ * 为什么这条判据必须存在：抹掉一个 `--staged` 在本文件里与「让那一步回到无条件
+ * 全库扫描」等价，而**没有任何别的判据**会看见这个差异 —— 它只会让每次提交慢一点，
+ * 慢不会让任何人报错。同族先例是 #1798 那两条，本条把第二梯队 14 步一次钉住。
+ *
+ * 三条都只读几份文本，不起子进程。
+ */
+const SECOND_TIER: ReadonlyArray<readonly [string, string, string]> = [
+  // [标签, 脚本名, 期望命令里带 --staged 的形态]
+  ["React 函数式 updater 纯净性", "check-react-updater-purity.cjs", "node scripts/check-react-updater-purity.cjs --staged"],
+  ["标题行让位硬规则", "check-title-bar-clearance.cjs", "node scripts/check-title-bar-clearance.cjs --staged"],
+  ["import 别名统一(~ 前缀)", "check-import-alias.cjs", "node scripts/check-import-alias.cjs --staged"],
+  ["内联样式注入", "check-inline-style.cjs", "node scripts/check-inline-style.cjs --staged"],
+  ["跨文件重复块", "check-code-duplication.cjs", "node scripts/check-code-duplication.cjs --staged"],
+  ["函数长度棘轮", "check-function-length.cjs", "node scripts/check-function-length.cjs --staged"],
+  ["模块循环依赖棘轮", "check-circular-deps.cjs", "node scripts/check-circular-deps.cjs --staged"],
+  ["地基层零消费导出棘轮", "check-dead-exports.cjs", "node scripts/check-dead-exports.cjs --staged"],
+  ["浮层层级刻度棘轮", "check-overlay-z.cjs", "node scripts/check-overlay-z.cjs --staged"],
+  ["src 非空断言棘轮", "check-non-null-assertions.cjs", "node scripts/check-non-null-assertions.cjs --staged"],
+  ["src/lib void 悬空 Promise 棘轮", "check-void-floats.cjs", "node scripts/check-void-floats.cjs --staged"],
+  ["TS 重复属性判定", "check-ts-duplicate-keys.cjs", "node scripts/check-ts-duplicate-keys.cjs --staged"],
+  ["FormField 标签⇄控件接线（§16.2.4.26）", "check-form-field-wiring.cjs", "node scripts/check-form-field-wiring.cjs --staged"],
+  ["非原生元素点击的键等价物（§6.11）", "check-click-keyboard.cjs", "node scripts/check-click-keyboard.cjs --staged"],
+];
+
+describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 续）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = dGroupSteps(hook);
+
+  it.for(SECOND_TIER)("%s 在钩子里带 --staged 条件触发", ([label, , expected]) => {
+    const hit = steps.find((s) => s.label === label);
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有「${label}」—— 判据从门禁链里被摘掉了`,
+    ).toBeDefined();
+    expect(
+      hit?.cmd,
+      `「${label}」丢了 --staged —— 全库扫描会回到无条件执行：这一大类高频提交` +
+        "（只加 changelog 碎片 / 只改文档 / 只动 scripts 或 tests）在它上面白付",
+    ).toBe(expected);
+  });
+
+  it.for(SECOND_TIER)("%s 的脚本真的实现了 --staged", ([, script]) => {
+    // 钩子里的 flag 与脚本里的实现是两件事：只写 flag 而脚本不认它，会被解析成未知
+    // 参数（多数脚本忽略）⇒ 条件触发**静默失效**，退回无条件全库扫描。
+    const text = readFileSync(join(REPO_ROOT, "scripts", script), "utf8");
+    expect(
+      text.includes("skipUnlessStagedTouches("),
+      `${script} 没有实现 --staged —— 钩子里那个 flag 会变成静默失效的条件触发`,
+    ).toBe(true);
+  });
+
+  it("短路点在重活之前（不是在 main() 末尾）", () => {
+    // 这一条接的是本轮实测出来的坑：`--staged` 若落在 `main()` 里、或落在
+    // `require("typescript")` / 预加载 IIFE 之后，跳过那一支**照样付**那笔开销
+    // （TS 模块加载 ≈180ms、`check-dead-exports` 的语料预加载 ≈340ms），
+    // 「跳过」就成了形式上的绿、没有省下任何东西 —— 而退出码看不出差别。
+    //
+    // 判据形态：短路语句的行号必须**小于**该脚本里第一次出现
+    // `require("typescript")` 那一行（没有就 <= `require("node:fs")` 之后即可）。
+    for (const [, script] of SECOND_TIER) {
+      const text = readFileSync(join(REPO_ROOT, "scripts", script), "utf8");
+      const lines = text.split("\n");
+      const skipAt = lines.findIndex((l) => l.includes("skipUnlessStagedTouches("));
+      expect(skipAt, `${script} 找不到 --staged 短路语句`).toBeGreaterThanOrEqual(0);
+      // 只认**真的** require 行：注释里出现的同一段字面不算（本仓的风格是
+      // 在文件头解释「为什么这样加载」，那条注释必然含 `require("typescript")`）。
+      const tsAt = lines.findIndex(
+        (l) =>
+          !/^\s*(\/\/|\*|\/\*)/.test(l) &&
+          /require\(\s*"typescript"\s*\)/.test(l),
+      );
+      if (tsAt === -1) continue; // 该步不加载 typescript
+      expect(
+        skipAt,
+        `${script} 的 --staged 短路在第 ${skipAt + 1} 行、` +
+          `而 require("typescript") 在第 ${tsAt + 1} 行 —— 跳过档照样付 ≈180ms 的模块加载，` +
+          "「跳过」等于没省；短路必须提到它前面",
+      ).toBeLessThan(tsAt);
+    }
+  });
+});

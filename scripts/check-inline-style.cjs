@@ -30,9 +30,11 @@
  *     正例：只写 <div className="x" />，样式走 globals.css
  *
  * 用法：node scripts/check-inline-style.cjs
+ *   --staged（钩子用）仅当暂存改动落在扫描面（`src/**`）内才扫，口径见 §13.5.8.2
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 /** 扫描 `src/**`，含组件、页面与 lib（.ts 里也可能用 createElement 造 style）。 */
@@ -63,6 +65,12 @@ function walk(dir, out = []) {
 }
 
 const rel = (p) => path.relative(ROOT, p).split(path.sep).join("/");
+
+/* `--staged`：扫描面就是 `SCAN_DIR`（`src/**`），未触及即跳过（§13.5.8.2）。 */
+if (process.argv.includes("--staged")) {
+  skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[inline-style]" });
+}
+
 const problems = [];
 
 for (const abs of walk(path.join(ROOT, SCAN_DIR))) {

@@ -29,20 +29,32 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const ts = require("typescript");
 
 const ROOT = path.resolve(__dirname, "..");
 const BASELINE = path.join(__dirname, ".non-null-assertions-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const REPORT_ONLY = ARGS.has("--report");
+const STAGED = ARGS.has("--staged");
+
+/** 扫描根。**必须在 `--staged` 短路之前**（见下），所以提到这里。 */
+const SCAN_DIR = "src";
+
+/* `--staged`（钩子用）＝ **输入面跳过**：暂存里没有一个文件落在扫描面内时短路，
+ * 打印理由后 exit 0（见 §13.5.8.2、`scripts/gate-scan-read.cjs`）。
+ * 短路点放在 `require("typescript")` **之前** —— 那一步模块加载实测约 180ms，
+ * 放在后面的话「跳过」档也照样付这笔钱，省下的那一步就白省了。 */
+if (STAGED && !REPORT_ONLY && !UPDATE) {
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[non-null]" });
+}
+
+const ts = require("typescript");
 
 /** 判据版本:`ts.isNonNullExpression` 语义固定,不会漂;留号便于将来
  *  把 `x?.y!` / `<T>x!` 之类扩展形态纳入时区分。
  *  v1 → v2:扫描范围从 src/lib 扩到整个 src (基线数字量级变化,不再是同一个量)。 */
 const RULE_VERSION = 2;
 
-const SCAN_DIR = "src";
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
 
