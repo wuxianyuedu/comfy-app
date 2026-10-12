@@ -8,17 +8,20 @@
  * `COMFY_EXECUTOR=host` 时行会被写成 `claimedBy='host'`，而**只有宿主**会去领它
  * （inline 那一侧的回收器不跨片误杀，见 ISSUE #1204）。于是「谁拉起宿主」这件事
  * 一旦在某个启动入口上漏掉，现场就是「任务永远停在队列、无失败出口」——
- * 本文件的调用方此前有三份各自实现：
+ * 本文件的调用方是四个启动入口：
  *
- *   · `dev-launcher.mjs`（编排 6.5 步）—— 有；
+ *   · `dev-launcher.mjs`（编排 6.5 步）—— 薄包装；
  *   · `standalone-runtime.mjs`（桌包）—— 有（形态不同：env 复用外壳装配结果）；
- *   · `dev.mjs` / `start.mjs`（裸启动入口）—— **都没有**。
+ *   · `dev.mjs`（`pnpm dev` / `tauri dev`）—— 曾缺，后补；
+ *   · `start.mjs`（`pnpm start` / Playwright 的 CI 档 webServer）—— 曾缺，后补。
  *
- * 后两个是真实事故：`dev.mjs` 那一格已写进 `launch-and-build.md` §5 排障表，
- * 而 `start.mjs` 那一格**此前没有任何执行者** —— 它的调用方含 Playwright 的
- * CI 档（`playwright.config.ts` 的 webServer 在 `CI=1` 时跑 `pnpm start`），
- * 于是本机 `.env` 里写着 host 的开发者在 `CI=1 pnpm test:e2e` 下会看到两条
- * `@critical` 主链路用例各超时 60s 全红，报错话术却是「下游替身没应答」。
+ * 后两个是真实事故：`start.mjs` 那一格**此前没有任何执行者** —— 它的调用方含
+ * Playwright 的 CI 档（`playwright.config.ts` 的 webServer 在 `CI=1` 时跑
+ * `pnpm start`），于是本机 `.env` 里写着 host 的开发者在 `CI=1 pnpm test:e2e`
+ * 下会看到两条 `@critical` 主链路用例各超时 60s 全红，报错话术却是「下游替身
+ * 没应答」；`dev.mjs` 那一格则是被 §5 排障表记着的「已知未修」，同一个缺口在
+ * `pnpm dev` / `tauri dev` 上照旧成立。四个入口的接线与「排在起 Next 之前」
+ * 由 `tests/executor-host-spawn.test.ts` 逐一钉住。
  *
  * ## 为什么不是「把这段抄进 `start.mjs`」
  *
