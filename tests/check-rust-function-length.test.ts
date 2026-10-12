@@ -1,6 +1,6 @@
 /**
  * Rust 函数长度门禁自检：把 `scripts/check-rust-function-length.cjs` 当黑盒跑在
- * 临时工作区上，验证它真能认出「超长函数」并按棘轮记账。
+ * 临时工作区上，验证它真能认出「超长函数」并**阻断**（硬闸）。
  *
  * 规范：docs/standards/12-代码组织与文件结构.md §12.13
  *
@@ -8,6 +8,8 @@
  * Rust** —— 于是 `src-tauri/src/lib.rs` 的 `run()` 里塞了近 300 行的窗口 / 托盘 /
  * 协议 / sidecar 编排，而「能不能拆」在这条链路上没有任何机器信号（ISSUE #536 P4）。
  */
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
@@ -41,11 +43,11 @@ function rustFnBody(name: string, bodyLines: number): string {
 }
 
 describe("check-rust-function-length.cjs（Rust 函数长度门禁）", () => {
-  test("基线文件缺失时阻断（先要求建基线）", ({ repo }) => {
+  test("小函数放行（硬闸不需要任何基线）", ({ repo }) => {
     writeRustFn(repo, "src-tauri/src/a.rs", "short", 5);
     const { code, output } = repo.run();
-    expect(code).toBe(1);
-    expect(output).toContain("基线文件缺失");
+    expect(code).toBe(0);
+    expect(output).toContain("超过 120 行的函数 0 个");
   });
 
   test("超阈值函数进拆分候选清单（--report 列名字与行号）", ({ repo }) => {
@@ -62,19 +64,17 @@ describe("check-rust-function-length.cjs（Rust 函数长度门禁）", () => {
     expect(output).toContain("（无）");
   });
 
-  test("基线外新增超长函数阻断", ({ repo }) => {
+  test("任何超长函数都阻断（无「已登记的存量」这一档）", ({ repo }) => {
     writeRustFn(repo, "src-tauri/src/ok.rs", "fine", 20);
-    repo.run(["--update"]);
     writeRustFn(repo, "src-tauri/src/new.rs", "grew", 200);
     const { code, output } = repo.run();
     expect(code).toBe(1);
-    expect(output).toContain("基线外新增超长函数");
+    expect(output).toContain("超长 Rust 函数");
     expect(output).toContain("src-tauri/src/new.rs");
   });
 
-  test("同一文件里再长出第二个超长函数也算上升（按文件计数）", ({ repo }) => {
+  test("同一文件里第二个超长函数也阻断", ({ repo }) => {
     writeRustFn(repo, "src-tauri/src/one.rs", "first", 150);
-    repo.run(["--update"]);
     const src = repo.read("src-tauri/src/one.rs");
     repo.write("src-tauri/src/one.rs", src + rustFnBody("second", 150));
     const { code, output } = repo.run();
@@ -82,16 +82,16 @@ describe("check-rust-function-length.cjs（Rust 函数长度门禁）", () => {
     expect(output).toContain("src-tauri/src/one.rs");
   });
 
-  test("治理后（超长函数被拆掉）未收紧基线：--strict 失败，非 strict 只提示", ({
-    repo,
-  }) => {
+  /* 硬闸：没有基线、也没有 --update 通道 —— 超长函数的存量已清零后，棘轮那两层
+   * （基线文件 + 收紧）只剩开销。这条钉住「退出通道真的没了」。 */
+  test("硬闸：--update 不写任何基线文件", ({ repo }) => {
     writeRustFn(repo, "src-tauri/src/big.rs", "huge", 150);
     repo.run(["--update"]);
-    writeRustFn(repo, "src-tauri/src/big.rs", "huge", 30); // 拆小了
-    expect(repo.run(["--strict"]).code).toBe(1);
-    const relaxed = repo.run();
-    expect(relaxed.code).toBe(0);
-    expect(relaxed.output).toContain("超长函数已减少");
+    expect(
+      existsSync(
+        join(repo.dir, "scripts", ".rust-function-length-baseline.json"),
+      ),
+    ).toBe(false);
   });
 
   test("字符串 / 字符字面量 / 注释里的括号不参与配对（否则函数尾会找错）", ({
@@ -155,7 +155,6 @@ describe("check-rust-function-length.cjs（Rust 函数长度门禁）", () => {
 
   test("测试目录不扫（用例之间雷同、个别用例长是正常的）", ({ repo }) => {
     writeRustFn(repo, "src-tauri/src/tests/huge.rs", "hugeCase", 200);
-    repo.run(["--update"]);
     const { code } = repo.run();
     expect(code).toBe(0);
   });

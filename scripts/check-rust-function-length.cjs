@@ -7,12 +7,16 @@
  * (`check-function-length.cjs`) 只扫 `src/**` 的 TS/TSX —— **Rust 侧完全没有
  * 同类护栏**。于是 `src-tauri/src/lib.rs` 的 `run()` 里塞了近 300 行的
  * 窗口 / 托盘 / 协议 / sidecar 编排,而「能不能拆」在这条链路上**没有任何
- * 机器信号**。本脚本补齐 Rust 的同一维度,与 JS 侧同构:
- *   ① **提示层**(`--strict` 之外): 超 `HINT_LINES` 的函数打印清单,
- *      只提醒不阻断 —— 存量逐步拆。
- *   ② **阻断层**(strict,棘轮): 每个文件的「超阈值函数数」记进
- *      `scripts/.rust-function-length-baseline.json`,**只许降不许升**:
- *      新增一个超阈值的函数即阻断(不得静默长出第二个巨型编排函数)。
+ * 机器信号**。本脚本补齐 Rust 的同一维度,与 JS 侧同构:**硬闸** ——
+ * 超 `HINT_LINES`(120) 的函数即阻断。清单始终打印,但判据成立即退 1。
+ *
+ * ## 为什么是硬闸而不是棘轮
+ *
+ * 本判据此前是**棘轮**:每个文件的「超阈值函数数」记进
+ * `scripts/.rust-function-length-baseline.json`,`--update` 收紧、`--strict`
+ * 要求下降,而**默认档只提示不阻断**。但存量已拆到 **0 个**(基线 `files: {}`),
+ * 于是两层都退化。判据口径与扫描面一字未改,只把「有存量、逐批治理」那一层皮
+ * 收掉 —— **新增一个超 120 行的 Rust 函数即阻断**。
  *
  * 阈值为什么是 120(而不是 JS 侧的 400): 两侧代码的「自然长度」不同 ——
  * TS/TSX 有大量 JSX 与类型声明,单个组件函数几百行尚可读;Rust 侧是结构化
@@ -21,19 +25,14 @@
  * 判定的是**函数体行数**(声明行到配对右括号),不是文件行数(R5 管文件)。
  *
  * 用法:
- *   node scripts/check-rust-function-length.cjs           # 检查(棘轮)
- *   node scripts/check-rust-function-length.cjs --strict  # 基线未收紧也失败(CI 用)
- *   node scripts/check-rust-function-length.cjs --update  # 重写基线(须伴随下降)
+ *   node scripts/check-rust-function-length.cjs           # 检查(硬闸:命中即退 1)
  *   node scripts/check-rust-function-length.cjs --report  # 只出清单不判失败(盘点用)
  */
 const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const BASELINE = path.join(__dirname, ".rust-function-length-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
-const UPDATE = ARGS.has("--update");
-const STRICT = ARGS.has("--strict");
 const REPORT_ONLY = ARGS.has("--report");
 
 /** 扫描范围: Rusta 壳源码。 */
@@ -181,15 +180,9 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
 
 longFunctions.sort((a, b) => b.lines - a.lines || a.rel.localeCompare(b.rel));
 
-/** 棘轮口径: **按文件的超阈值函数数**记账(与 JS 侧 §12.13 同构)。
- *  用函数名做键会让「改名」被当成新增;用数量则只关心「这个文件里还有几个
- *  超长函数」,拆掉一个就少一个。 */
-const counts = {};
-for (const f of longFunctions) counts[f.rel] = (counts[f.rel] ?? 0) + 1;
-
 const fmt = (f) => `  · ${f.lines} 行  ${f.rel}:${f.line}  ${f.name}`;
 
-/* ── 报告 / 棘轮 ────────────────────────────────────────── */
+/* ── 报告 / 判定 ────────────────────────────────────────── */
 
 if (REPORT_ONLY) {
   console.log(
@@ -200,96 +193,25 @@ if (REPORT_ONLY) {
   process.exit(0);
 }
 
-const prev = fs.existsSync(BASELINE) ? JSON.parse(fs.readFileSync(BASELINE, "utf8")) : null;
-const baseFiles = prev?.files ?? null;
-
-if (UPDATE) {
-  const before = baseFiles ? Object.values(baseFiles).reduce((a, b) => a + b, 0) : 0;
-  const after = longFunctions.length;
-  if (baseFiles && after > before) {
-    console.error(
-      `[rust-function-length] 拒绝放宽基线：${before} → ${after} 个超长函数（棘轮只许下降）。\n` +
-        "  新增的先拆开，不要用 --update 掩盖。",
-    );
-    process.exit(1);
-  }
-  fs.writeFileSync(
-    BASELINE,
-    JSON.stringify(
-      {
-        generatedAt: new Date().toISOString().slice(0, 10),
-        note:
-          `超过 ${HINT_LINES} 行的 Rust 函数计数（规范 §12.13）。棘轮只许下降：` +
-          "新增超长函数须先拆分，再收紧基线。",
-        total: after,
-        files: counts,
-      },
-      null,
-      2,
-    ) + "\n",
-  );
-  console.log(
-    `[rust-function-length] 基线已更新：${before} → ${after}（scripts/.rust-function-length-baseline.json）`,
-  );
-  process.exit(0);
-}
-
-if (!baseFiles) {
-  console.error(
-    "[rust-function-length] 基线文件缺失：先执行 node scripts/check-rust-function-length.cjs --update",
-  );
-  process.exit(1);
-}
-
-const increased = [];
-const dropped = [];
-for (const [file, n] of Object.entries(counts)) {
-  const base = baseFiles[file] ?? 0;
-  if (n > base) increased.push({ file, from: base, to: n });
-}
-for (const [file, base] of Object.entries(baseFiles)) {
-  const now = counts[file] ?? 0;
-  if (now < base) dropped.push({ file, from: base, to: now });
-}
-
-console.log(
-  `[rust-function-length] 超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个 ` +
-    `（基线 ${Object.values(baseFiles).reduce((a, b) => a + b, 0)} 个）`,
-);
-
-if (increased.length) {
-  console.error(
-    "[rust-function-length] 基线外新增超长函数（规范 §12.13）：\n" +
-      increased.map((i) => `  ✗ ${i.file}：${i.from} → ${i.to} 个`).join("\n") +
-      "\n" +
-      longFunctions
-        .filter((f) => increased.some((i) => i.file === f.rel))
-        .map(fmt)
-        .join("\n") +
-      "\n  判据：函数体超过 " +
-      HINT_LINES +
-      " 行即应拆分（按职责切子函数），\n" +
-      "  不是靠「在一个函数里加注释分段」。",
-  );
-  process.exit(1);
-}
-
-if (dropped.length) {
-  const msg =
-    `[rust-function-length] ${dropped.length} 个文件的超长函数已减少（治理有进展）：\n` +
-    dropped.map((d) => `  · ${d.file}：${d.from} → ${d.to}`).join("\n") +
-    "\n  建议执行 node scripts/check-rust-function-length.cjs --update 收紧基线。";
-  if (STRICT) {
-    console.error(msg + "\n  --strict 模式：未收紧基线即失败。");
-    process.exit(1);
-  }
-  console.log(msg);
-}
-
 if (longFunctions.length) {
+  console.log(
+    `[rust-function-length] 扫描 ${SCAN_DIR}/**：超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个：`,
+  );
   console.log(
     "[rust-function-length] 拆分候选（按行数降序）：\n" + longFunctions.map(fmt).join("\n"),
   );
+  console.error(
+    "[rust-function-length] 超长 Rust 函数（规范 §12.13）：\n" +
+      "  判据：函数体超过 " +
+      HINT_LINES +
+      " 行即应拆分（按职责切子函数），\n" +
+      "  不是靠「在一个函数里加注释分段」。\n" +
+      "  本判据是硬闸（无基线、无 --update）：超长函数存量已清零，新增即阻断。",
+  );
+  process.exit(1);
 }
 
+console.log(
+  `[rust-function-length] 扫描 ${SCAN_DIR}/**：超过 ${HINT_LINES} 行的函数 0 个`,
+);
 console.log("[rust-function-length] OK");

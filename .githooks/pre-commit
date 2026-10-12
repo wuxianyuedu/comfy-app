@@ -162,21 +162,21 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 视图层不得动态注入 <style>(规范 03 §3.5 / 反模式 T5)。本仓库踩过两次、形态一样
   # （组件私有 CSS 字符串 + 渲染时注入），「自己修完自己写注释」挡不住下一个人。
   run "内联样式注入" node scripts/check-inline-style.cjs --staged
-  # 跨文件重复块(规范 12.12)：新增孪生对即阻断，存量修掉后收紧基线。
+  # 跨文件重复块(规范 12.12)：硬闸 —— 孪生对存量已清零，新增一对即阻断。
   run "跨文件重复块" node scripts/check-code-duplication.cjs --staged
   # 函数长度(规范 12.13)：文件行数由 R5 管,函数没人管 —— 于是 2186 行的单函数一路
   # 合法存在。无名字的块体(IIFE / 回调 / 闭包)与跨行签名同受约束(§12.13.2)。
-  run "函数长度棘轮" node scripts/check-function-length.cjs --staged
+  run "函数长度(硬闸，>400 行即阻断)" node scripts/check-function-length.cjs --staged
   # Rust 函数长度（规范 12.13）：阈值 120（Rust 是结构化编排，自然长度比 TSX 短）。
-  run "Rust 函数长度棘轮" node scripts/check-rust-function-length.cjs
+  run "Rust 函数长度(硬闸，>120 行即阻断)" node scripts/check-rust-function-length.cjs
   # 桌面壳门禁（规范 §11.10.4 / AGENTS 硬规则 5）：只在暂存改动命中 src-tauri 的四类壳输入
   # 时才做事 —— ① 有 .rs 改动就跑 `cargo test`（壳里 37 条 #[test] 此前唯一的执行者，
   # 全仓没有任何一步跑过它）；② 复用 dev-launcher 的 `shellStaleWarning` 把「改了壳必须
   # 重编」从启动时告警升成本次提交阻断。没碰壳时这一步立刻返回 0，不给普通前端提交加时间。
   run "桌面壳（改了 src-tauri 才跑）" node scripts/shell-gate.mjs
   # 模块循环依赖（规范 12.7）：环的症状是「import 顺序变了就 undefined is not a
-  # function」，排查成本极高，因此把「无环」做成棘轮。
-  run "模块循环依赖棘轮" node scripts/check-circular-deps.cjs --staged
+  # function」，排查成本极高，因此把「无环」做成**硬闸**（存量已清零）。
+  run "模块循环依赖(硬闸)" node scripts/check-circular-deps.cjs --staged
   # 入口包的**重依赖静态可达性**（规范 §12.19 / 02 §2.9）：barrel 里转出一个吃
   # `@xyflow/react` 的模块，而入口静态 import 那个 barrel —— 两件都正常，合起来就是
   # 首屏多下载一整个画布引擎，且**没有任何既有判据会红**（实测入口静态可达 692 个模块、
@@ -195,8 +195,8 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 格式化提交与行为改动分离（规范 13.7）：一次提交里「过一遍 prettier 就变成另一种
   # 写法」的文件 ≥ 10 个就阻断，要求拆成两次提交。
   run "格式化提交与行为改动分离" node scripts/check-reformat-only.cjs
-  # 地基层(src/lib + src/trpc)的零消费值导出（规范 §12.16）：机械判据化 AI 审计报告
-  run "地基层零消费导出棘轮" node scripts/check-dead-exports.cjs --staged
+  # 地基层(src/lib + src/trpc)的零消费值导出（规范 §12.16）：硬闸 —— 存量已清零。
+  run "地基层零消费导出(硬闸)" node scripts/check-dead-exports.cjs --staged
   # 生成态文档与源同步（规范 §13.5.5）：docs/generated/** 是提交进 git 的原文文档，
   # 改了编辑文档却不重渲染，生成物就静默过期，而读者看的正是生成物。这里用与
   # doc:render 同一份计算做「只比对不写入」，漂了就阻断并给出修法。

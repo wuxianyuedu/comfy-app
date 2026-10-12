@@ -1,7 +1,7 @@
 /**
  * 「每一个棘轮的 `--update` 都拒涨」这条**横切**判据（台账 E5）。
  *
- * 现场：本仓有 21 个「带 `--update` 且真把一份基线写回去」的判据脚本，各自在源码里写了一行
+ * 现场：本仓有若干「带 `--update` 且真把一份基线写回去」的判据脚本，各自在源码里写了一行
  * 「净数不许往上涨」的兜底。但**没有人判过那一行有没有生效** —— 把任意一个脚本的
  * 拒涨分支改成直接落盘（或删除它），全仓用例一个字都不会红，而那条棘轮就此变成
  * 「谁都能用一次 `--update` 悄悄放宽」的门面。这类「判据写了、但没被执行过」正是
@@ -94,39 +94,7 @@ const TW4_FIXTURE: Pick<GateRepoOptions, "dirs" | "copy" | "setup"> = {
   setup: linkNodeModules,
 };
 
-/** 函数体行数超过阈值（阈值的唯一来源是脚本自己，这里只保证「一定超」）。 */
-function longFunction(name: string, bodyLines: number): string {
-  return (
-    `export function ${name}() {\n` +
-    Array.from({ length: bodyLines }, (_, i) => `  const v${i} = ${i};`).join(
-      "\n",
-    ) +
-    `\n}\n`
-  );
-}
-
 const RATCHETS: Ratchet[] = [
-  {
-    script: "check-function-length.cjs",
-    baseline: "scripts/.function-length-baseline.json",
-    fixture: { dirs: ["src"] },
-    violate: (repo, n) =>
-      repo.write(`src/big${n}.ts`, longFunction(`big${n}`, 450)),
-  },
-  {
-    script: "check-rust-function-length.cjs",
-    baseline: "scripts/.rust-function-length-baseline.json",
-    fixture: { dirs: ["src-tauri/src"] },
-    violate: (repo, n) =>
-      repo.write(
-        `src-tauri/src/r${n}.rs`,
-        `fn big${n}() {\n` +
-          Array.from({ length: 140 }, (_, i) => `  let _${i} = ${i};`).join(
-            "\n",
-          ) +
-          `\n}\n`,
-      ),
-  },
   /* 基础设施层的**文件**长度棘轮（§12.6 R5 的姊妹档）：R5 / 函数长度 / 非空断言 /
    * 孪生对四类债务判据的扫描根都只有 `src`，判据自己那一层（`scripts/**` 的 .cjs/.mjs
    * 与 `tools/**` 的 .ps1，约 43k 行）因此在自己的硬闸之外。它配得进这张表而不是
@@ -179,35 +147,6 @@ const RATCHETS: Ratchet[] = [
       ),
   },
   {
-    script: "check-dead-exports.cjs",
-    baseline: ".dead-exports-baseline.json",
-    dir: "root",
-    fixture: {
-      dirs: ["src/lib", "src/trpc", "src/components", "scripts", "tests"],
-    },
-    violate: (repo, n) =>
-      repo.write(
-        `src/lib/orphan${n}.ts`,
-        `export function orphan${n}(): number {\n  return ${n};\n}\n`,
-      ),
-  },
-  {
-    script: "check-circular-deps.cjs",
-    baseline: ".circular-deps-baseline.json",
-    dir: "root",
-    fixture: { dirs: ["src", "scripts"] },
-    violate: (repo, n) => {
-      repo.write(
-        `src/loop${n}a.ts`,
-        `import { b${n} } from "./loop${n}b";\nexport const a${n} = b${n};\n`,
-      );
-      repo.write(
-        `src/loop${n}b.ts`,
-        `import { a${n} } from "./loop${n}a";\nexport const b${n} = a${n};\n`,
-      );
-    },
-  },
-  {
     script: "check-ui-logic-separation.cjs",
     baseline: "scripts/.ui-logic-baseline.json",
     fixture: { dirs: ["src/components"] },
@@ -234,24 +173,6 @@ const RATCHETS: Ratchet[] = [
         `src/lib/en${n}.ts`,
         `/** Combine the input parameters and fall back to defaults. */\nexport const en${n} = ${n};\n`,
       ),
-  },
-  {
-    /**
-     * 孪生判据的违规形状是「两份 ≥60 行、逐行重合 ≥75%」—— 单文件写不出违规，
-     * 所以每一档写**一对**，且每对的变量名带上档位序号：四份内容全同的文件会被
-     * 数成 C(4,2)=6 对，计数照样涨但涨幅不可预期，判「净数不许放宽」时就不是在判一件事了。
-     */
-    script: "check-code-duplication.cjs",
-    baseline: "scripts/.code-duplication-baseline.json",
-    fixture: { dirs: ["src"] },
-    violate: (repo, n) => {
-      const body = Array.from(
-        { length: 60 },
-        (_, i) => `export const dup${n}v${i} = ${i};`,
-      ).join("\n");
-      repo.write(`src/dup${n}a.ts`, `// 孪生对夹具第 ${n} 对\n${body}\n`);
-      repo.write(`src/dup${n}b.ts`, `// 孪生对夹具第 ${n} 对\n${body}\n`);
-    },
   },
   {
     script: "check-theme-colors.cjs",

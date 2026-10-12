@@ -171,9 +171,9 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-theme-colors.cjs       # 主题色扫描棘轮（见 03 §3.6.1）
 ✅ node scripts/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
 ✅ node scripts/check-inline-style.cjs --staged # 视图层不得动态注入 <style>（见 03 §3.5）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-code-duplication.cjs --staged # 跨文件重复块棘轮（见 12 §12.12）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-function-length.cjs --staged # 函数长度棘轮 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-rust-function-length.cjs # 函数长度棘轮 Rust 壳（见 12 §12.13.1）
+✅ node scripts/check-code-duplication.cjs --staged # 跨文件重复块硬闸（见 12 §12.12）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-function-length.cjs --staged # 函数长度硬闸 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-rust-function-length.cjs # 函数长度硬闸 Rust 壳（见 12 §12.13.1）
 ✅ node scripts/check-infra-file-size.cjs # 基础设施层文件长度棘轮：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
    # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳里 37 条 #[test] 唯一的执行者），并复用
@@ -193,11 +193,11 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
    # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
    # 直接拼进 `pnpm exec vitest run $files` 会在 Windows 上顶穿 cmd.exe 的 8191 字符
    # 命令行上限 —— 表现是「组 C 红、一条用例没跑、原因是一行 GBK 乱码」
-✅ node scripts/check-circular-deps.cjs --staged # 模块循环依赖棘轮（见 12 §12.7）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-circular-deps.cjs --staged # 模块循环依赖硬闸（见 12 §12.7）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
 ✅ node scripts/check-format.cjs --staged    # prettier 格式棘轮（见下 13.5.1；`--staged` = 只碰了扫描面（`src/**` / `.storybook/**`）才扫，见下 13.5.8.2）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
-✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出硬闸（见 12 §12.16）；`--staged` 见下 13.5.8.2
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
 ✅ node scripts/check-docs-api.cjs --staged  # API 文档生成物 docs/api 与源一致（见下 13.5.5.1；--staged = 只碰了 typedoc 输入面才重生成）
 ✅ node scripts/check-non-null-assertions.cjs --staged # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）；`--staged` 见下 13.5.8.2
