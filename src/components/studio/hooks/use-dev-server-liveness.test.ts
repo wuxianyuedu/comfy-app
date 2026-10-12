@@ -36,10 +36,12 @@ function urlOf(input: RequestInfo | URL): string {
 /** 造一条 fetch 实现：按 URL 分派，并记录每个端点被打了几次。 */
 function stubFetch({
   bootId = "dev-boot:new",
+  runId = "a1b2c3",
   currentRunId = "run-new",
   record = EXIT_RECORD,
 }: {
   bootId?: string;
+  runId?: string | null;
   currentRunId?: string | null;
   record?: unknown;
 } = {}) {
@@ -55,7 +57,7 @@ function stubFetch({
             : input.url;
       if (url.includes("/api/dev/server-id")) {
         calls.serverId += 1;
-        return new Response(JSON.stringify({ bootId }), { status: 200 });
+        return new Response(JSON.stringify({ bootId, runId }), { status: 200 });
       }
       if (url.includes("/api/dev/last-exit")) {
         calls.lastExit += 1;
@@ -160,6 +162,57 @@ describe("useDevServerLiveness：上一次结束的原因", () => {
     const { result } = renderHook(() => useDevServerLiveness());
     await expect.poll(() => result.current.probeOk).toBe(true);
     expect(result.current.lastExit).toBeNull();
+  });
+});
+
+describe("useDevServerLiveness：当前是哪一次启动（runId）", () => {
+  /* 消息中心按 runId 把历史消息分成「每一次启动」一组（手验反馈：多次启动的
+   * 记录混在了一起）。runId 与 bootId 在**同一次探测**里回来，理由是两条都只在
+   * 服务应答时才拿得到——拆成两次请求就会在「刚恢复」那一刻还拿着旧值。 */
+
+  it("探测成功即带上 runId（与 bootId 同批落，恢复边沿那刻拿到的已是新一次）", async () => {
+    stubFetch({ runId: "a1b2c3" });
+    const { result } = renderHook(() => useDevServerLiveness());
+
+    await expect.poll(() => result.current.currentRunId).toBe("a1b2c3");
+    /* 与连通性同一拍：不会出现「状态已 online、runId 还是 null」的中间态。 */
+    expect(result.current.probeOk).toBe(true);
+  });
+
+  it("服务不在时**留住**上一次的 runId（断开那条要盖「正在死的这次启动」的戳）", async () => {
+    let serverOk = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (urlOf(input).includes("/api/dev/server-id")) {
+          if (!serverOk) throw new Error("probe timeout");
+          return new Response(
+            JSON.stringify({ bootId: "b1", runId: "a1b2c3" }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({ record: null, currentRunId: "a1b2c3" }),
+          { status: 200 },
+        );
+      }),
+    );
+    const { result } = renderHook(() => useDevServerLiveness());
+    await expect.poll(() => result.current.currentRunId).toBe("a1b2c3");
+
+    serverOk = false;
+    await expect.poll(() => result.current.probeOk).toBe(false);
+    /* 清成 null 就等于「这次断开不知道属于哪一次启动」——消息会掉进
+     * 「未标记启动」那一组，而它明明属于正在死的那一次。 */
+    expect(result.current.currentRunId).toBe("a1b2c3");
+  });
+
+  it("端点没带 runId（纯手工 pnpm dev，没走 launcher）→ null，不编一个值", async () => {
+    stubFetch({ runId: null });
+    const { result } = renderHook(() => useDevServerLiveness());
+
+    await expect.poll(() => result.current.probeOk).toBe(true);
+    expect(result.current.currentRunId).toBeNull();
   });
 });
 

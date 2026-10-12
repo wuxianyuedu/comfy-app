@@ -4,6 +4,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 import { APP_SERVICE_EXIT_FILE } from "~/lib/shell/app-service-exit";
+import { getServerRunId } from "~/lib/shell/dev-server-id";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +47,7 @@ export async function GET() {
     record = null;
   }
   return NextResponse.json(
-    { record, currentRunId: process.env.COMFYAPP_RUN_ID ?? null },
+    { record, currentRunId: getServerRunId() },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
