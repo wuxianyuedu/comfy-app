@@ -263,11 +263,19 @@ export interface LogPanelSlice {
 }
 
 /**
- * 派生出「时间线 + 计数 + 过滤结果」这三件随时间线走的东西。
+ * 派生出「时间线 + 计数」这两件随时间线走的东西。
  *
  * 不碰视图状态（当前页 / 已读水位 / 来源 / 级别 / 搜索）——那些由
  * {@link applyView} 收口，保证 `header` 切片永远反映的是**写入之后**的状态，
  * 而不是写入前那一份。
+ *
+ * ⚠️ **`filteredLogs` 不在这里算**（ISSUE #1782 实测）：它吃的是**合并后的视图**
+ * （filter / origin / search 三者），而这三点只有调用方知道；本函数的调用点
+ * **无一例外**紧接着就走 `applyView(derived, view)`，于是这里算出来的那份
+ * 会被逐字覆盖。在时间线到达上限（`LOG_STORE_MAX = 5000`）时，多算的这一层
+ * 实测 **2.9ms**，而面板每 2s 一轮要付 6 次（六路轮询各一次写入）——
+ * 纯重复劳动。口径仍是「`filteredLogs` 只算一次」，只是那一处固定在
+ * {@link applyView}（它同时负责把它同步进 `header` 切片）。
  */
 /**
  * 时间线内存上限（刻意值）。超出即折叠最旧的、`droppedTotal` 累计，面板显示
@@ -288,24 +296,11 @@ function capTimeline(logs: LogEntry[]): {
   };
 }
 
-function derive(
-  logs: LogEntry[],
-  filter: LogFilter,
-  search: string,
-  origin: LogOriginFilter,
-  revision: number,
-) {
+function derive(logs: LogEntry[], search: string, revision: number) {
   return {
     logs,
     counts: computeCounts(logs, search),
     countsByOrigin: computeOriginCounts(logs, search),
-    filteredLogs: computeFiltered(
-      logs,
-      filter,
-      search,
-      origin,
-      disabledCategories(),
-    ),
     revision,
   };
 }
@@ -347,8 +342,14 @@ interface LogPanelView {
  * 回头替我们重算切片，若某条写入路径忘了带上它，面板上就是「来源已经切了、
  * 计数还停在切之前」。所有改视图状态的路径都从这里出去，这一条就不会漏。
  *
- * `filteredLogs` 按**合并后的视图**重算（几百毫秒才变一次的时间线上，这点开销
+ * `filteredLogs` 按**合并后的视图**算（几百毫秒才变一次的时间线上，这点开销
  * 换「少一个会漂移的中间量」是划算的）；`page` 由调用方先钳好再传进来。
+ *
+ * 它是 `filteredLogs` 的**唯一**计算点（ISSUE #1782）：`computeFiltered` 是
+ * O(时间线) 的一层，而面板每 2s 一轮要付 6 次（六路轮询各一次写入）——
+ * 时间线到达上限（5000 条）时实测单次 2.9ms，此前 `derive` 与这里各算一遍
+ * （两份入参逐字相同、后者逐字覆盖前者），白付一倍。派生的计数仍走 `derive`，
+ * 那里的口径与 `filteredLogs` 无关（见其说明）。
  */
 function applyView(derived: ReturnType<typeof derive>, view: LogPanelView) {
   const filteredLogs = computeFiltered(
@@ -430,13 +431,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       const capped = capTimeline(logs);
       return {
         ...applyView(
-          derive(
-            capped.logs,
-            state.filter,
-            state.search,
-            state.origin,
-            state.revision + 1,
-          ),
+          derive(capped.logs, state.search, state.revision + 1),
           viewOf(state),
         ),
         droppedTotal: state.droppedTotal + capped.dropped,
@@ -460,13 +455,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       const capped = capTimeline(logs);
       return {
         ...applyView(
-          derive(
-            capped.logs,
-            state.filter,
-            state.search,
-            state.origin,
-            state.revision + 1,
-          ),
+          derive(capped.logs, state.search, state.revision + 1),
           viewOf(state),
         ),
         droppedTotal: state.droppedTotal + capped.dropped,
@@ -484,9 +473,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         ...applyView(
           derive(
             logs,
-            state.filter,
             state.search,
-            state.origin,
             changed ? state.revision + 1 : state.revision,
           ),
           viewOf(state),
@@ -508,13 +495,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         ...(changed
           ? {
               ...applyView(
-                derive(
-                  [],
-                  state.filter,
-                  state.search,
-                  state.origin,
-                  state.revision + 1,
-                ),
+                derive([], state.search, state.revision + 1),
                 // 视图入参取自写入前的 state，切片里的 bootId 在这里显式补齐
                 { ...viewOf(state), bootId, page: 1 },
               ),
@@ -536,13 +517,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         /* 过滤条件变了，当前页多半越界：
         回到最新一页，避免用户停在空白页。 */ page: 1,
       };
-      const derived = derive(
-        state.logs,
-        next.filter,
-        next.search,
-        next.origin,
-        state.revision,
-      );
+      const derived = derive(state.logs, next.search, state.revision);
       return {
         ...applyView(derived, next),
         /* 过滤条件变了 = 用户看到的这一段也变了：水位换成切完之后的那一段，
@@ -559,13 +534,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   setOrigin: (o) =>
     set((state) => {
       const next = { ...viewOf(state), origin: o, page: 1 };
-      const derived = derive(
-        state.logs,
-        next.filter,
-        next.search,
-        next.origin,
-        state.revision,
-      );
+      const derived = derive(state.logs, next.search, state.revision);
       return {
         ...applyView(derived, next),
         /* 过滤条件变了 = 用户看到的这一段也变了：水位换成切完之后的那一段，
@@ -582,13 +551,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   setSearch: (s) =>
     set((state) => {
       const next = { ...viewOf(state), search: s, page: 1 };
-      const derived = derive(
-        state.logs,
-        next.filter,
-        next.search,
-        next.origin,
-        state.revision,
-      );
+      const derived = derive(state.logs, next.search, state.revision);
       return {
         ...applyView(derived, next),
         /* 过滤条件变了 = 用户看到的这一段也变了：水位换成切完之后的那一段，
@@ -699,10 +662,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     set((state) => {
       const view = { ...viewOf(state), page: 1 };
       return {
-        ...applyView(
-          derive([], view.filter, view.search, view.origin, state.revision + 1),
-          view,
-        ),
+        ...applyView(derive([], view.search, state.revision + 1), view),
         /* 清空后不再有「已读 / 未读」可言：水位里保留的那些 id 已经不在时间线上，
          * 下次新日志直接按「没取过水位」处理（水位为空即按「当前看到的全部」处理），贴底基线同时解绑，
          * 此后贴底直接追到最新。 */
@@ -733,7 +693,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
 /* ── 分类开关联动：设置页关掉某类日志后，面板实时隐藏对应行 ───────
  * 分类开关住在独立的 `useLogCategoryStore`（设置页与面板共享）。它在被改写时
  * 本 store 并不知道，因此这里订阅它：`enabled` 一变就按**合并后的视图**重算
- * `filteredLogs`（`derive` 已把 disabled 集合塞进 computeFiltered）。仅当
+ * `filteredLogs`（`applyView` 把它与 disabled 集合一起交给 computeFiltered）。仅当
  * `enabled` 引用变化才重算，避免其它字段改动（如未来新增的字段）触发无谓重排。
  * 无 DOM 环境（SSR / node 测试）下订阅同样安全：读不到 localStorage 就取默认开启，
  * 且订阅本身不触碰 DOM，只是一次状态重算。 */
@@ -741,10 +701,7 @@ useLogCategoryStore.subscribe((state, prev) => {
   if (state.enabled === prev.enabled) return;
   const s = useLogStore.getState();
   useLogStore.setState(
-    applyView(
-      derive(s.logs, s.filter, s.search, s.origin, s.revision),
-      viewOf(s),
-    ),
+    applyView(derive(s.logs, s.search, s.revision), viewOf(s)),
   );
 });
 
