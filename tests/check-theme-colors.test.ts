@@ -28,6 +28,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { copyGateDeps } from "./helpers/gate-repo";
 import { stripComments } from "./helpers/strip-comments";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-theme-colors.cjs");
@@ -41,7 +42,12 @@ function scanner(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), "theme-colors-"));
   tempDirs.push(root);
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  const dest = path.join(root, "scripts", path.basename(SCRIPT));
+  copyFileSync(SCRIPT, dest);
+  /* 脚本被拆成「主文件 + 声明层模块」后，只拷主文件跑起来是 `MODULE_NOT_FOUND`
+   * —— 那条红长得像「判据坏了」，实际是夹具少带一个文件（§12.5.3 迁移五查）。
+   * `copyGateDeps` 沿 `require("./x.cjs")` 递归补齐同目录依赖。 */
+  copyGateDeps(dest);
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
@@ -379,10 +385,17 @@ describe("拼接 token 名（幽灵判据的补集）", () => {
  */
 describe("主题色豁免台账", () => {
   it("每一条豁免都有文件、理由，且不留下空的 exports 占位", () => {
-    const src = readFileSync(SCRIPT, "utf8");
-    const block = src.slice(
-      src.indexOf("const EXEMPT_TABLES"),
-      src.indexOf("/** 全部豁免落点索引"),
+    /* 台账随声明层一起搬到了 theme-color-exemptions.cjs（ISSUE #1811 拆表）：
+     * 主脚本只剩「读表 + 判定」，表体不再住在那里。 */
+    const exemptions = readFileSync(
+      path.resolve(__dirname, "../scripts/theme-color-exemptions.cjs"),
+      "utf8",
+    );
+    /* 取到 `module.exports` 为止 —— 那一份里 `EXEMPT_TABLES` 就是表体本身，
+     * 后面紧跟 `module.exports`（旧实现里跟在后面的是主脚本的豁免索引构建）。 */
+    const block = exemptions.slice(
+      exemptions.indexOf("const EXEMPT_TABLES"),
+      exemptions.indexOf("module.exports"),
     );
     const entries = block.match(/\{\s*\n\s*file:[\s\S]*?\n {2}\},/g) ?? [];
     expect(entries.length).toBeGreaterThan(0);
@@ -442,7 +455,17 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
     const root = mkdtempSync(path.join(tmpdir(), "theme-claim-reason-"));
     tempDirs.push(root);
     mkdirSync(path.join(root, "scripts"), { recursive: true });
-    const script = readFileSync(SCRIPT, "utf8").replace(
+    /* 注入点随声明层一起搬家：`EXEMPT_TABLES` 现在住在同目录的
+     * theme-color-exemptions.cjs 里，往主脚本里替换字符串会一处都不命中。 */
+    const dest = path.join(root, "scripts", path.basename(SCRIPT));
+    copyFileSync(SCRIPT, dest);
+    copyGateDeps(dest);
+    const exemptionsPath = path.join(
+      root,
+      "scripts",
+      "theme-color-exemptions.cjs",
+    );
+    const exemptions = readFileSync(exemptionsPath, "utf8").replace(
       "const EXEMPT_TABLES = [",
       "const EXEMPT_TABLES = [\n" +
         "  {\n" +
@@ -451,8 +474,7 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
         '    reason: "W 徽标渐变（品牌双色，与 --color-primary 同值但需两色渐变）",\n' +
         "  },\n",
     );
-    const dest = path.join(root, "scripts", path.basename(SCRIPT));
-    writeFileSync(dest, script);
+    writeFileSync(exemptionsPath, exemptions);
     /* 夹具里那颗裸值正好被这条豁免吸收 ⇒ 不是死豁免，红的只可能是新闸。 */
     const fixture = path.join(root, "src/components/studio/Reason.tsx");
     mkdirSync(path.dirname(fixture), { recursive: true });

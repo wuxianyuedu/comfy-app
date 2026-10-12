@@ -435,10 +435,21 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
  * `executor-host.mjs`——桌面包用户改 `.env` 试 host 模式时，脚本得随包带出去。
  */
 describe("Phase 2-C：executor-host 接入 launcher", () => {
-  const launcherSrc = fs.readFileSync(
-    path.join(process.cwd(), "scripts", "dev-launcher.mjs"),
-    "utf8",
-  );
+  /* 编排器已按职责拆进 `launcher-core/`（ISSUE #1811 / R5 超限文件），下面几条
+   * 断的是**接线形态**而不是「住在哪个文件」—— 所以把主文件与拆出的几份拼成
+   * 一份再断。只读主文件时，搬走的实现会让 `indexOf` 落空、`slice` 拿到空串，
+   * 断言就**静默变成空转**（`not.toMatch` 恒真）。 */
+  const launcherSrc = [
+    "dev-launcher.mjs",
+    "launcher-core/preflight.mjs",
+    "launcher-core/port-reap.mjs",
+    "launcher-core/shell-ops.mjs",
+    "launcher-core/downstream.mjs",
+  ]
+    .map((rel) =>
+      fs.readFileSync(path.join(process.cwd(), "scripts", rel), "utf8"),
+    )
+    .join("\n");
   const whitelistSrc = fs.readFileSync(
     path.join(process.cwd(), "scripts", "standalone-private-inputs.mjs"),
     "utf8",
@@ -466,7 +477,12 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
   });
 
   it("launcher 的 spawnExecutorHost 是薄包装：把 child push 进 spawned（reapAll 才能覆盖）", () => {
-    const start = launcherSrc.indexOf("export function spawnExecutorHost(");
+    /* 实现搬到 `launcher-core/downstream.mjs` 后，主文件那一段是**一转发的薄包装**
+     * （体里既没有 `maybeSpawnExecutorHost(` 也不该有 push —— 那两件事都在实现里）。
+     * 这里从实现那一段取体：本用例守的是「拉起宿主的动作真的把 child 记进
+     * spawned」，与转发层无关。 */
+    const start = launcherSrc.indexOf("export function spawnExecutorHost(ctx)");
+    expect(start, "downstream.mjs 里没找到实现").toBeGreaterThan(-1);
     const body = launcherSrc.slice(start, launcherSrc.indexOf("\n}", start));
     expect(body).toContain("maybeSpawnExecutorHost(");
     expect(body).toContain("spawned.push(result.child)");
