@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// @ts-nocheck -- 提交门槛脚本：非原生可交互元素上的「鼠标专属」点击棘轮（供 .githooks/pre-commit 的 D 组调用）
+// @ts-nocheck -- 提交门槛脚本：非原生可交互元素上的「鼠标专属」点击拦截（供 .githooks/pre-commit 的 D 组调用）
 /**
- * 「鼠标点得开、键盘点不开」——非原生可交互元素上的 `onClick` 棘轮
- * （规范 06 §6.1 / §6.10、16 §16.2.4.29、16 §16.2.4.57）。
+ * 「鼠标点得开、键盘点不开」——非原生可交互元素上的 `onClick` 拦截（**硬闸**）
+ * （规范 06 §6.1 / §6.11、16 §16.2.4.29、16 §16.2.4.57）。
  *
  * ── 立案现场：装了 39 条 a11y 规则，只启用 6 条 ────────────────────────
  *
@@ -32,8 +32,12 @@
  *
  * ── 它判什么、不判什么 ────────────────────────────────────────────────
  *
- * 判**棘轮**：真站点数不许超过 `scripts/.click-keyboard-baseline.json`
- * （`--update` 收紧，且**拒绝把数字往上涨**）。
+ * 判**硬闸**：真站点数须为 **0**（命中即退 1，无基线、无 `--update`）。
+ * 翻转前它是棘轮（`scripts/.click-keyboard-baseline.json`，基线 `total: 0`，
+ * 只许降）—— 存量清零后棘轮只剩一件事：`--update` 是一条「手改那份 JSON 就能
+ * 把新站点登记成已知存量」的通道，而硬闸类**本来没有**这个中间态
+ *（与 `check-code-duplication.cjs` 那批同口径）。**结构性站点仍有出口**：
+ * 登记进 `EXEMPT_SITES` 逐条写明理由 —— **不是** `--update`。
  *
  * **不判**（明写在案，别当成漏报）：
  *   · 原生可交互标签（`button` / `a` / `summary` / `option` / `label` /
@@ -61,7 +65,6 @@
  * 用法：
  *   node scripts/check-click-keyboard.cjs            # 检查（进 pre-commit D 组）
  *   node scripts/check-click-keyboard.cjs --report   # 只出清单不判失败（盘点用）
- *   node scripts/check-click-keyboard.cjs --update   # 收口后收紧基线（拒绝上涨）
  *
  * 退出码 0 = 通过，1 = 阻断。
  */
@@ -71,17 +74,14 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
-const SHOULD_UPDATE = ARGS.has("--update");
 const STAGED = ARGS.has("--staged");
-
-const BASELINE = path.join(__dirname, ".click-keyboard-baseline.json");
 
 /** 扫描根。**必须在 `--staged` 短路之前**，所以提到 `require("typescript")` 上面。 */
 const SCAN_DIRS = ["src"];
 
 /* `--staged`（钩子用）＝ 输入面跳过，口径见 §13.5.8.2。
  * 短路点在 `require("typescript")` 之前 —— 那一步 ≈180ms，放后面就白跳过。 */
-if (STAGED && !REPORT_ONLY && !SHOULD_UPDATE) {
+if (STAGED && !REPORT_ONLY) {
   require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[click-keyboard]" });
 }
 
@@ -178,13 +178,29 @@ function isGuardOnly(init) {
  * @returns {{line:number, tag:string, kind:string}[]}
  */
 function scanSource(fileName, src) {
-  const sf = ts.createSourceFile(
-    fileName,
-    src,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
+  return scanTree(
+    ts.createSourceFile(
+      fileName,
+      src,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    ),
   );
+}
+
+/**
+ * 规则本体：**只吃已解析的 `SourceFile`**，不自己解析。
+ *
+ * 这是「共享颗粒度」的落点（§13.5.8.2「第四笔账」）：解析（`createSourceFile`，实测
+ * 全量 ≈550ms）由 `gate-ast-read.cjs` / `run-ast-gates.cjs` 做一次，规则在这一层
+ * **只遍历、只判定**。把两者分开，才能让「同一份文本被 N 个判据各解析一遍」变成
+ * 「解析一次、规则各遍历一遍」——而各规则的语义一个字不动。
+ *
+ * @param {import("typescript").SourceFile} sf
+ * @returns {{line:number, tag:string, kind:string}[]}
+ */
+function scanTree(sf) {
   const sites = [];
   const visit = (node) => {
     let opening = null;
@@ -240,13 +256,20 @@ function scanFile(abs) {
   return scanSource(abs, fs.readFileSync(abs, "utf8"));
 }
 
-function collect() {
+/**
+ * @param {Map<string, import("typescript").SourceFile>} [parsed]
+ *   聚合档 `run-ast-gates.cjs` 注入的**共享解析结果**（键 = 绝对路径）。
+ *   传了就复用，不再各文件 `createSourceFile` —— 这是「共享颗粒度」的边界：
+ *   **只共享解析产物，不共享遍历/判定**。不传 = 单条脚本的老路径，行为一字不变。
+ */
+function collect(parsed) {
   const sites = new Map();
   for (const abs of SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)))) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
     if (FIXTURE_SKIP.has(rel)) continue;
     if (EXEMPT_SITES[rel]) continue;
-    const hit = scanFile(abs);
+    const shared = parsed && parsed.get(abs);
+    const hit = shared ? scanTree(shared) : scanFile(abs);
     if (hit.length) sites.set(rel, hit);
   }
   return sites;
@@ -257,56 +280,21 @@ function collect() {
  * 不该有键」，不是「这一档不存在」。把它们打出来，人才看得见自己免了什么，
  * 也才有人会去复核那些理由还成不成立。
  */
-function collectExempt() {
+function collectExempt(parsed) {
   const out = new Map();
   for (const [rel, reason] of Object.entries(EXEMPT_SITES)) {
     const abs = path.join(ROOT, rel);
     if (!fs.existsSync(abs)) continue;
-    const hit = scanFile(abs);
+    const shared = parsed && parsed.get(abs);
+    const hit = shared ? scanTree(shared) : scanFile(abs);
     if (hit.length) out.set(rel, { reason, sites: hit });
   }
   return out;
 }
 
-function readBaseline() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-    return {
-      total: typeof raw.total === "number" ? raw.total : 0,
-      files: raw.files && typeof raw.files === "object" ? raw.files : {},
-    };
-  } catch {
-    return { total: 0, files: {} };
-  }
-}
-
-function main() {
-  const sites = collect();
+function main(parsed) {
+  const sites = collect(parsed);
   const total = [...sites.values()].reduce((n, v) => n + v.length, 0);
-
-  if (SHOULD_UPDATE) {
-    const base = readBaseline();
-    if (total > base.total) {
-      console.error(
-        `[ERROR] --update 拒绝把基线往上涨（${base.total} → ${total}）。\n` +
-          "  收紧基线的前提是**先收口**：给下面这些元素补键等价物（`simpleKeyHandler`），" +
-          "\n  或证明它是结构性站点、登记进 EXEMPT_SITES 并写明理由。",
-      );
-      for (const [rel, list] of [...sites.entries()].sort()) {
-        console.error(`  · ${rel}: ${list.length} 处`);
-      }
-      return 1;
-    }
-    const files = {};
-    for (const [rel, list] of [...sites.entries()].sort())
-      files[rel] = list.length;
-    fs.writeFileSync(
-      BASELINE,
-      `${JSON.stringify({ total, files }, null, 2)}\n`,
-    );
-    console.log(`[click-keyboard] 基线已收紧到 ${total} 处（${BASELINE}）。`);
-    return 0;
-  }
 
   if (REPORT_ONLY) {
     console.log(`[click-keyboard] 盘点：${total} 处 / ${sites.size} 份文件。`);
@@ -316,13 +304,13 @@ function main() {
           list.map((s) => `      ${s.line}: <${s.tag}>`).join("\n"),
       );
     }
-    const exempt = collectExempt();
+    const exempt = collectExempt(parsed);
     const exemptTotal = [...exempt.values()].reduce(
       (n, v) => n + v.sites.length,
       0,
     );
     console.log(
-      `\n[click-keyboard] 已登记豁免：${exemptTotal} 处 / ${exempt.size} 份文件（不进基线，逐条写明理由）：`,
+      `\n[click-keyboard] 已登记豁免：${exemptTotal} 处 / ${exempt.size} 份文件（不进计数，逐条写明理由）：`,
     );
     for (const [rel, { reason, sites: list }] of [...exempt.entries()].sort()) {
       console.log(
@@ -334,11 +322,10 @@ function main() {
     return 0;
   }
 
-  const base = readBaseline();
-  if (total > base.total) {
+  if (total > 0) {
     console.error(
-      `[ERROR] 「鼠标点得开、键盘点不开」的站点涨了：${total} 处 > 基线 ${base.total} 处。\n` +
-        "\n  §6.1 / §6.10：非原生可交互元素挂了 `onClick` 却没有键等价物 ——" +
+      `[ERROR] 「鼠标点得开、键盘点不开」的站点还有 ${total} 处（规范 §6.1 / §6.11）。\n` +
+        "\n  非原生可交互元素挂了 `onClick` 却没有键等价物 ——" +
         "\n  鼠标用户点得开，键盘用户进不来。两种改法：" +
         "\n" +
         "\n  // ✅ 整行就是一个动作 → 用原生可交互元素（键语义免费）" +
@@ -352,15 +339,14 @@ function main() {
         "\n  `onKeyDown` / `{...spread}`、拖放容器（`onDrop` / `onDragOver`）、" +
         "\n  `stopPropagation` 守卫，以及 `EXEMPT_SITES` 里登记的结构性站点。" +
         "\n" +
-        "\n  （收口后跑 `node scripts/check-click-keyboard.cjs --update` 收紧基线。）" +
+        "\n  本判据是硬闸（无基线、无 --update）：存量已清零，新增一处即阻断 ——" +
+        "\n  结构性站点登记进 `EXEMPT_SITES` 并写明理由，不是放宽基线。" +
         "\n" +
-        "\n  下方是本轮站点，指针**新增**的那些：",
+        "\n  下方是本轮站点：",
     );
     for (const [rel, list] of [...sites.entries()].sort()) {
-      const was = base.files[rel] ?? 0;
-      const mark = list.length > was ? " ← 涨了" : "";
       console.error(
-        `  · ${rel}: ${list.length} 处（基线 ${was}）${mark}\n` +
+        `  · ${rel}: ${list.length} 处\n` +
           list
             .slice(0, 8)
             .map((s) => `      ${s.line}: <${s.tag}>`)
@@ -371,18 +357,15 @@ function main() {
     return 1;
   }
 
-  console.log(`[click-keyboard] OK —— ${total} 处 ≤ 基线 ${base.total} 处。`);
-  if (total < base.total) {
-    console.log(
-      `  比基线还少了 ${base.total - total} 处：跑 \`--update\` 把基线收紧。`,
-    );
-  }
+  console.log("[click-keyboard] OK —— 无非原生可交互元素上的鼠标专属点击站点");
   return 0;
 }
 
 /* 自测（`tests/click-keyboard-gate.test.ts`）钉的是**站点识别口径**。 */
 module.exports = {
   scanSource,
+  scanTree,
+  main,
   scanFile,
   collect,
   collectExempt,

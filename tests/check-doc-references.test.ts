@@ -746,8 +746,8 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
         abs,
         replaceOnce(
           readFileSync(abs, "utf8"),
-          "✅ node scripts/check-void-floats.cjs",
-          "✅ node scripts/zz-pretend-judge.cjs\n✅ node scripts/check-void-floats.cjs",
+          "✅ node scripts/check-comment-language.cjs",
+          "✅ node scripts/zz-pretend-judge.cjs\n✅ node scripts/check-comment-language.cjs",
         ),
       );
     });

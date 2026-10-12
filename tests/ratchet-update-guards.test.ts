@@ -175,16 +175,6 @@ const RATCHETS: Ratchet[] = [
       ),
   },
   {
-    script: "check-theme-colors.cjs",
-    baseline: "scripts/.theme-color-baseline.json",
-    fixture: { dirs: ["src"] },
-    violate: (repo, n) =>
-      repo.write(
-        `src/Palette${n}.ts`,
-        `/** 第 ${n} 处写死色值（没走 token）。 */\nexport const COLOR${n} = "#ff880${n % 10}";\n`,
-      ),
-  },
-  {
     /**
      * 「按需跑」的两份棘轮（不进 pre-commit，所以**更**需要行为判据：钩子里那几档
      * 至少天天响，这一族今天没有任何东西在钉它的 `--update`）。
@@ -221,11 +211,9 @@ const RATCHETS: Ratchet[] = [
  */
 const COVERED_LOCALLY: Record<string, string> = {
   ".format-baseline.json": "tests/check-format.test.ts",
-  ".click-keyboard-baseline.json": "tests/click-keyboard-gate.test.ts",
   ".form-field-wiring-baseline.json": "tests/form-field-wiring-gate.test.ts",
   ".gate-repo-boilerplate-baseline.json":
     "tests/gate-repo-boilerplate-gate.test.ts",
-  ".test-it-each-baseline.json": "tests/test-it-each-gate.test.ts",
   ".test-sleep-baseline.json": "tests/test-sleep-gate.test.ts",
   /* 它的判定对象是 registry 漏洞清单，沙箱造不出「一条新 advisory」，
    * 而它自带 `--fixture` 口，本地用例正是对着固定 registry 形状跑 CLI 退出的。 */
@@ -417,8 +405,8 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
         try {
           /* ⑤ 这一档单独跑，是因为「治理做到 0」正是棘轮最该硬的时候，而它有一种
            * 共同的失效写法：`if (before && after > before)` —— 基线总数为 0 时整个条件
-           * 短路，拒涨检查**根本不执行**（`check-theme-colors` 与 `check-ui-primitives`
-           * 今天的基线都是 0 处；口径与非 --update 路径共用的先例见
+           * 短路，拒涨检查**根本不执行**（`check-ui-primitives` 今天的基线是 0 处；
+           * 口径与非 --update 路径共用的先例见
            * `check-ui-logic-separation.cjs` 的 `diffAgainstBaseline` 注释）。
            * 干净沙箱 → 先建立一份「0」基线 → 再造一条违规 → --update 必须拒。 */
           const seed = repo.run(["--update"]);

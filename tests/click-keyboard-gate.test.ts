@@ -12,9 +12,10 @@
  *   ④ **其他展开不算覆盖**（`{...props}` / `{...hoverEvents}`）→ 仍算站点
  *   ⑤ 拖放容器（`onDrop` / `onDragOver` 同元素）→ 放行
  *   ⑥ `onClick` 体里只有 `stopPropagation` / `preventDefault` → 放行（守卫）
- *   ⑦ 棘轮：不超过基线就放行
- *   ⑧ `--update` 拒绝把基线往上涨
+ *   ⑦ 一处都没有就放行（硬闸只看站点数是否为 0）
+ *   ⑧ 翻闸后无基线可读：`--update` 不写任何 JSON
  */
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
@@ -31,18 +32,6 @@ function write(repo: GateRepo, body: string): void {
   repo.write(join("src", "a.tsx"), body);
 }
 
-/** 预置棘轮基线（不传则不写基线文件 = 起点 0 处）。 */
-function setBaseline(
-  repo: GateRepo,
-  total: number,
-  files: Record<string, number> = {},
-): void {
-  repo.write(
-    join("scripts", ".click-keyboard-baseline.json"),
-    JSON.stringify({ total, files }),
-  );
-}
-
 describe("点击键盘门禁：该拦的形状（§6.11）", () => {
   test("① 非原生元素 + `onClick` + 无键 → 阻断，并点名站点与章节", ({
     repo,
@@ -56,7 +45,7 @@ describe("点击键盘门禁：该拦的形状（§6.11）", () => {
     );
     const r = repo.run();
     expect(r.code).toBe(1);
-    expect(r.output).toContain("涨了：1 处");
+    expect(r.output).toContain("站点还有 1 处");
     expect(r.output).toContain("src/a.tsx");
     expect(r.output).toContain("§6.11");
   });
@@ -114,7 +103,7 @@ describe("点击键盘门禁：该放的形状（§6.11）", () => {
     );
     const r = repo.run();
     expect(r.code).toBe(0);
-    expect(r.output).toContain("OK —— 0 处");
+    expect(r.output).toContain("OK");
   });
 
   test("②′ 首字母大写的组件（`<Button>`）放行 —— 键语义在它的实现里", ({
@@ -203,37 +192,42 @@ describe("点击键盘门禁：该放的形状（§6.11）", () => {
   });
 });
 
-describe("点击键盘门禁：棘轮（§6.11）", () => {
+describe("点击键盘门禁：翻闸后不再有收紧档（§6.11）", () => {
   const SITE = `export function A() {\n  return <div onClick={() => go()}>x</div>;\n}\n`;
 
-  test("⑦ 站点数不超过基线 → 放行", ({ repo }) => {
-    write(repo, SITE);
-    setBaseline(repo, 1, { "src/a.tsx": 1 });
-    expect(repo.run().code).toBe(0);
-  });
-
-  test("⑦′ 比基线少（已收口）→ 放行并提醒收紧", ({ repo }) => {
-    write(repo, SITE);
-    setBaseline(repo, 5);
+  test("⑦ 一处站点都没有 → 放行", ({ repo }) => {
+    write(
+      repo,
+      `export function A() {
+  return <button onClick={() => go()}>点我</button>;
+}
+`,
+    );
     const r = repo.run();
     expect(r.code).toBe(0);
-    expect(r.output).toContain("--update");
+    expect(r.output).toContain("OK");
   });
 
-  test("⑧ `--update` 拒绝把基线往上涨", ({ repo }) => {
+  test("⑦′ 翻闸前遗留的基线文件不影响判定（硬闸只看站点数是否为 0）", ({
+    repo,
+  }) => {
     write(repo, SITE);
-    setBaseline(repo, 0);
+    repo.write(
+      join("scripts", ".click-keyboard-baseline.json"),
+      JSON.stringify({ total: 5, files: { "src/a.tsx": 5 } }),
+    );
+    /* 有站点就退 1 —— 旧基线里写着「这 1 处是已知存量」也不再放行。 */
+    expect(repo.run().code).toBe(1);
+  });
+
+  test("⑧ 无基线文件可写：带 `--update` 也不落盘任何 JSON", ({ repo }) => {
+    write(repo, SITE);
     const r = repo.run(["--update"]);
     expect(r.code).toBe(1);
-    expect(r.output).toContain("拒绝把基线往上涨");
-  });
-
-  test("⑧′ `--update` 在净数不涨时直接收紧", ({ repo }) => {
-    write(repo, SITE);
-    setBaseline(repo, 3);
-    const r = repo.run(["--update"]);
-    expect(r.code).toBe(0);
-    expect(r.output).toContain("基线已收紧到 1 处");
+    expect(r.output).toContain("站点还有 1 处");
+    expect(
+      existsSync(join(repo.dir, "scripts", ".click-keyboard-baseline.json")),
+    ).toBe(false);
   });
 
   test("⑨ `--report` 只出清单不判失败，且把豁免站点一并打出来", ({ repo }) => {

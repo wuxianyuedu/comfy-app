@@ -1,6 +1,0 @@
-{
-  "generatedAt": "2026-09-18",
-  "note": "未豁免的写死色值处数（规范 03 §3.6.1 之外）。棘轮只许下降；新增豁免请改 scripts/check-theme-colors.cjs 的 EXEMPT_TABLES/EXEMPT_FIXED_DARK，不要用 --update 放水。",
-  "total": 0,
-  "files": {}
-}
