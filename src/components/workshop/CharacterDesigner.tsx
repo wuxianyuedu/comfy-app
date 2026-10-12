@@ -74,9 +74,10 @@ function joinAttr(items: string[]): string {
 
 /** 取某属性维度的配置（服装/外貌/性格/气质/风格） */
 function attrSet(id: string): AttributeOptionSet {
-  return (
-    CHARACTER_ATTRIBUTES.find((a) => a.id === id) ?? CHARACTER_ATTRIBUTES[0]!
-  );
+  /* 「找不到就用首项」：首项与表的非空性是同一件事，
+   * 抽取一次即可（`CHARACTER_ATTRIBUTES` 是常量，必有首项）。 */
+  const fallback = CHARACTER_ATTRIBUTES[0];
+  return CHARACTER_ATTRIBUTES.find((a) => a.id === id) ?? fallback;
 }
 
 export function CharacterDesigner({

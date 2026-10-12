@@ -12,6 +12,7 @@ import {
 } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { eq, and, desc, type SQL } from "drizzle-orm";
+import { firstRowRequired } from "./repository-row";
 
 /** 列表页需要的列：除 `positions`（列表页不读、且是大 JSON blob）外的全部。 */
 const LIST_ROW_COLUMNS = {
@@ -144,7 +145,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
         defaultMode: input.defaultMode ?? undefined,
       })
       .returning();
-    return rows[0]!;
+    return firstRowRequired(rows, "工作流模板插入");
   }
 
   async relinkSourcePath(

@@ -7,11 +7,14 @@ import { textHandler } from "~/lib/form-props";
 import { SelectMenu } from "~/components/ui/select-menu";
 import {
   numericBounds,
+  DEFAULT_DIM_RATIO_PRESET,
   DIM_RATIO_PRESETS,
   type EnrichedWidget,
 } from "../workflow-io";
 import { Field } from "./StyleSwitcher";
 import {
+  DEFAULT_VIDEO_DURATION_PRESET,
+  DEFAULT_VIDEO_QUALITY_PRESET,
   VIDEO_DURATION_PRESETS,
   VIDEO_QUALITY_PRESETS,
   roleLabel,
@@ -46,7 +49,7 @@ function VideoField({
     const val =
       typeof current === "string" && opts.includes(current)
         ? current
-        : opts[0]!;
+        : (opts.at(0) ?? "");
     return (
       <Field label={label}>
         <SelectMenu
@@ -63,10 +66,12 @@ function VideoField({
   if (preset) {
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;
-      const cur = Number(current ?? entry.defaultValue ?? presets[0]!.value);
+      const cur = Number(
+        current ?? entry.defaultValue ?? DEFAULT_VIDEO_DURATION_PRESET.value,
+      );
       const val =
         presets.find((preset) => preset.value === cur)?.label ??
-        presets[0]!.label;
+        DEFAULT_VIDEO_DURATION_PRESET.label;
       return (
         <Field label={label}>
           <SelectMenu
@@ -83,10 +88,12 @@ function VideoField({
     }
     if (role === "quality") {
       const presets = VIDEO_QUALITY_PRESETS;
-      const cur = Number(current ?? entry.defaultValue ?? presets[0]!.value);
+      const cur = Number(
+        current ?? entry.defaultValue ?? DEFAULT_VIDEO_QUALITY_PRESET.value,
+      );
       const val =
         presets.find((preset) => preset.value === cur)?.label ??
-        presets[0]!.label;
+        DEFAULT_VIDEO_QUALITY_PRESET.label;
       return (
         <Field label={label}>
           <SelectMenu
@@ -104,10 +111,12 @@ function VideoField({
     if (role === "aspect") {
       // 数值比例 → 写浮点比值的形式预设
       const presets = DIM_RATIO_PRESETS;
-      const cur = Number(current ?? entry.defaultValue ?? presets[0]!.ratio);
+      const cur = Number(
+        current ?? entry.defaultValue ?? DEFAULT_DIM_RATIO_PRESET.ratio,
+      );
       const val =
         presets.find((preset) => Math.abs(preset.ratio - cur) < 0.05)?.label ??
-        presets[0]!.label;
+        DEFAULT_DIM_RATIO_PRESET.label;
       return (
         <Field label={label}>
           <SelectMenu

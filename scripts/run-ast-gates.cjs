@@ -81,7 +81,7 @@ const GATES = [
   {
     script: "check-non-null-assertions.cjs",
     tag: "[non-null]",
-    what: "src 非空断言棘轮",
+    what: "src 非空断言硬闸",
     roots: ["src"],
     parsedKey: "rel",
   },

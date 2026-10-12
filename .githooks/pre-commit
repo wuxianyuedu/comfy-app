@@ -231,8 +231,10 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 刻度之外的裸数字档按文件记棘轮、只许降不许升。z-index 写错的表现是「时灵时不灵」
   # ——jsdom 不做层叠与命中测试，单测全绿也照样复现，所以判据只能落在源码形态上。
   run "浮层层级刻度棘轮" node scripts/check-overlay-z.cjs --staged
-  # src 非空断言 `!` 计数棘轮：判据走 TypeScript AST (ts.isNonNullExpression),不用
-  # 正则,避免误伤 `!==` / `!x` / 注释里的 `!`。扫描范围是整个 src。
+  # src 非空断言 `!` 硬闸（存量已清零）：判据走 TypeScript AST (ts.isNonNullExpression),
+  # 不用正则,避免误伤 `!==` / `!x` / 注释里的 `!`。扫描范围是整个 src。
+  # 合法例外只有一条道：脚本里的 LEGIT_SITES 逐条登记「下标结构上必然存在」
+  # （正则捕获组 / drizzle 判据构造），没有「放宽基线」这个出口。
   # src/lib `void someFn(...)` 悬空棘轮：只认「整条语句就是 `void 一个函数调用`」这一
   # 形态;`void someFn().catch(...)` 链尾显式接管 rejection 的跳过。修法:改用
   # `fireAndForget(someFn(), onError)`,或 `--update` 时说明「被调方内部已 catch」。

@@ -404,12 +404,12 @@ export function useWorkflowDetailLoader({
     if (current.length === 0) return;
     const next = current.slice(0, -1);
     updateStack(next);
-    if (next.length === 0) {
+    const parent = next.at(-1);
+    if (!parent) {
       setTimeout(() => {
         void fetchDetail();
       }, 0);
     } else {
-      const parent = next[next.length - 1]!;
       /* 回到上一层同样带上它自己的宿主链：上一层若是子图内部视图，坐标也存成
        *  `宿主:内部`，不带前缀会退回原始坐标。 */
       setTimeout(() => {

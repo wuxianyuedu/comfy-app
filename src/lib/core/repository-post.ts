@@ -7,6 +7,7 @@ import "server-only";
 import { db } from "~/lib/db";
 import { post, type Post } from "~/server/db/schema";
 import { desc } from "drizzle-orm";
+import { firstRowRequired } from "./repository-row";
 
 export class PostRepository {
   async getLatest(): Promise<Post | null> {
@@ -20,7 +21,7 @@ export class PostRepository {
 
   async create(input: { name: string; createdById: string }): Promise<Post> {
     const rows = await db.insert(post).values(input).returning();
-    return rows[0]!;
+    return firstRowRequired(rows, "动态记录插入");
   }
 }
 

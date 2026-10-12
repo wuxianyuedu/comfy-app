@@ -165,7 +165,8 @@ const OUTPUT_TYPES: Record<string, string[]> = {
 export function inferOutputType(classType: string, slot: number): string {
   const types = OUTPUT_TYPES[classType];
 
-  if (types && slot >= 0 && slot < types.length) return types[slot]!;
+  const slotType = types?.at(slot);
+  if (slotType !== undefined && slot >= 0) return slotType;
 
   /* 静态表没列出的自定义节点的启发式兜底
 

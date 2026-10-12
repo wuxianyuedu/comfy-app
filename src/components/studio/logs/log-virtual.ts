@@ -159,8 +159,7 @@ export function layoutRows(
     size: LOG_ROW_SINGLE,
   }));
   let start = 0;
-  for (let i = 0; i < entries.length; i += 1) {
-    const entry = entries[i]!;
+  for (const [i, entry] of entries.entries()) {
     const id = entry.id;
     let size: number;
     if (id && expandedIds?.has(id)) {
@@ -223,7 +222,7 @@ export function firstVisibleRow(
   let high = rows.length - 1;
   while (low < high) {
     const mid = (low + high + 1) >> 1;
-    if (rows[mid]!.start <= offset) low = mid;
+    if ((rows.at(mid)?.start ?? Number.POSITIVE_INFINITY) <= offset) low = mid;
     else high = mid - 1;
   }
   return low;

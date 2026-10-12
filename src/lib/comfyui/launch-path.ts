@@ -200,14 +200,17 @@ export function resolveComfyLaunchPlan(
     const present = pyDirs
       .map((pyDir) => ({ pyDir, py: findInterpreterIn(pyDir, exists) }))
       .filter((c): c is { pyDir: string; py: string } => c.py !== null);
-    if (present.length === 0) continue;
+    /* 取首项与「这个源码根下有没有解释器」是同一个判据：写 `length === 0`
+     * 再在下面用 `present[0]!` 会把它判两遍。 */
+    const [firstPresent] = present;
+    if (!firstPresent) continue;
     // 两段选择：优先挑「装了 torch」的解释器——依赖装在哪个环境随安装方式
     // 漂移（老桌面在 standalone-env，vendor / 新版桌面在 ComfyUI/.venv，便携在
     // python_embeded，Linux 在 .venv），固定优先级会选中空壳解释器（No module
     // named 'torch' 秒退）。候选里谁都缺 torch 时退回原优先级，失败走启动日志的
     // 真实报错。
     const withDeps = present.find((c) => envHasTorch(c.pyDir, exists));
-    const chosen = withDeps ?? present[0]!;
+    const chosen = withDeps ?? firstPresent;
     const mainPy = path.join(src, "main.py");
     return {
       cmd: chosen.py,

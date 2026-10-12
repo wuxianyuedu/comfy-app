@@ -10,18 +10,31 @@ export function shortRatioLabel(label: string): string {
 /* ── 视频组预设 ──
  * length 在 ComfyUI 视频工作流里是帧数；标签按约 16fps
  * 近似出时长，好让用户按秒思考，而不是帧数。 */
-export const VIDEO_DURATION_PRESETS: { label: string; value: number }[] = [
+/* 两张表都标成**非空数组**（`[T, ...T[]]`）：首项即默认档，
+ * `presets[0]` 直接是 `T`（`noUncheckedIndexedAccess` 下普通 `T[]` 的
+ * `[0]` 是 `T | undefined`），调用点的「回退首档」不必再补 `!`。 */
+export const VIDEO_DURATION_PRESETS: [
+  { label: string; value: number },
+  ...{ label: string; value: number }[],
+] = [
   { label: "3 秒", value: 48 },
   { label: "5 秒", value: 80 },
   { label: "8 秒", value: 128 },
   { label: "10 秒", value: 160 },
 ];
-export const VIDEO_QUALITY_PRESETS: { label: string; value: number }[] = [
+export const VIDEO_QUALITY_PRESETS: [
+  { label: string; value: number },
+  ...{ label: string; value: number }[],
+] = [
   { label: "流畅 480P", value: 480 },
   { label: "标清 720P", value: 720 },
   { label: "高清 1080P", value: 1080 },
   { label: "超清 2K", value: 2048 },
 ];
+
+/** 两张视频预设表的首档 —— 「回退首档」这个事实的唯一出处。 */
+export const DEFAULT_VIDEO_DURATION_PRESET = VIDEO_DURATION_PRESETS[0];
+export const DEFAULT_VIDEO_QUALITY_PRESET = VIDEO_QUALITY_PRESETS[0];
 
 /** 把视频的时长 / 画质 / 比例取值映射成友好的浮层标签。 */
 export function videoDurationLabel(value: number): string {

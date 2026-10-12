@@ -98,7 +98,7 @@ describe("findExecutionMeta", () => {
     const createdAt = meta?.createdAt;
     expect(createdAt).toBeInstanceOf(Date);
     // 用 instanceof 把类型 narrow 到 Date，避免 `!` 与 `as` 两种形态
-    // （前者被 src 非空断言棘轮数、后者被 non-nullable-type-assertion-style 拦）。
+    // （前者被 src 非空断言硬闸数、后者被 non-nullable-type-assertion-style 拦）。
     if (createdAt instanceof Date) {
       expect(createdAt.toISOString()).toBe("2026-01-02T03:04:05.000Z");
     }

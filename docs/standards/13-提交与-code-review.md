@@ -730,35 +730,41 @@ ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前
 在**另一个路径**的 worktree 里重生成，与仓库内结果逐字节相同（产物不含绝对路径、
 不含生成时间戳）—— 所以「重生成到临时目录再比对」才成立。
 
-#### 13.5.6 src 非空断言 `!` 棘轮（`node scripts/check-non-null-assertions.cjs`）
+#### 13.5.6 src 非空断言 `!` 硬闸（`node scripts/check-non-null-assertions.cjs`）
 
-本轮类型安全审查 src/lib 报告 Low 段收尾，v2 起扫描范围从 src/lib 扩到整个 src。
-**为什么不直接开 eslint `@typescript-eslint/no-non-null-assertion`**：lib 侧
-102 处 `!` 分两族——13 处「filter/map 不 narrow 病灶」（本轮 6 个 PR 已消化）
-与 ~89 处 `arr[i]!` / `match[N]!`（`noUncheckedIndexedAccess` 打开后的**合法
-惯用法**，把 `lines[i]` 从 `string | undefined` 收回到 `string`，配合外层长度
-判据）。直接开规则一次会报 100+ 处，评审看下来全是"这里其实合理"的噪声；不
-开规则又挡不住下一轮病灶长出。
+**须为 0**。判据走 TypeScript AST 的 `ts.isNonNullExpression`（不用正则——
+正则会把 `!==` / `!x` / 注释里的 `!` 全误伤），扫描 src 下的 .ts/.tsx
+非测试文件（测试里 `expect(x!.field)` 是常见形态，`.d.ts` 是类型声明，
+一并豁免）。
 
-**为什么扫描范围要扩到整个 src**：lib 侧立了基线、components / app / server
-不管，等于给病灶留了一条**漂移通道**——写视图侧的 `!` 门不会响。v1 的 102 只
-算 lib；v2 首跑覆盖到 `src/components` 里 `use-settings-page.ts` 之类热区，
-一次落到 **225 处 / 85 文件** 的新基线。判据与语义完全一致，只是「量的定义」
-变了，`RULE_VERSION` 从 1 升到 2；`--update` 会拒绝旧基线（版本对不上即拒），
-必须显式承认「范围扩了、量重记」才能重建。
+**为什么不是 eslint `@typescript-eslint/no-non-null-assertion`**：lib 侧 102 处
+`!` 分两族——13 处「filter/map 不 narrow 病灶」与 ~89 处 `arr[i]!` /
+`match[N]!`（`noUncheckedIndexedAccess` 打开后的惯用法）。直接开规则一次报
+100+ 处，评审看下来全是"这里其实合理"的噪声；不开规则又挡不住下一轮病灶
+长出。**扫描范围是整个 src**：只挡 lib 等于给病灶留一条**漂移通道**——写视图
+侧的 `!` 门不会响（v1 的 102 只算 lib，v2 首跑落到 225 处 / 85 文件）。
 
-合理机制是**基线棘轮**（与 §12.12 代码重复、§12.13 函数长度同构）：判据走
-TypeScript AST 的 `ts.isNonNullExpression`（不用正则——正则会把 `!==` / `!x`
-/ 注释里的 `!` 全误伤），扫描 src 下的 .ts/.tsx 非测试文件（测试里
-`expect(x!.field)` 是常见形态，`.d.ts` 是类型声明，一并豁免）；基线
-`scripts/.non-null-assertions-baseline.json` 记**每文件**当前计数，**只挡**
-**新增**、允许逐步下降。修完一批就 `--update` 收紧基线。
+**为什么先棘轮、后翻硬闸**（ISSUE #1811）：160 处存量一次清不干净，所以先以
+基线棘轮（与 §12.12 / §12.13 同构）逐批治理；**归零之后翻成硬闸**——棘轮在
+0 上只剩坏处：`--update`（收紧）与 `--strict`（要求下降）两个动作都无事可做，
+留下的却是一条「手改那份 JSON 就能把新违规登记成已知存量」的通道，而硬闸类
+**本来没有**这个中间态（§13.6.2 的两类对照）。
+
+**合法例外走 `LEGIT_SITES`，逐条登记理由**——这是这条判据**唯一**的例外车道
+（与 `check-click-keyboard` 的 `EXEMPT_SITES` 同构）。登记的靶子是
+`RegExpExecArray` 的捕获组（`m[2]!`、`match[1]!`）与 drizzle 的判据构造
+（`or(...)!`）：它们的下标/返回值**在结构上必然存在**，`!` 不是省略判据，而是
+唯一准确的表达（写 `?? ""` 会把「匹配到了但组是空」也吞掉）。键是
+**「文件 + 变量名 + 组下标」而不是行号**——行号会随无关改动漂移，漂了就等于
+没登记。
+
+新登记一条的门槛：必须能指着代码说出「这个下标/返回值在**结构上**必然存在」
+（正则组的定义、被调方的返回契约），而不是「跑起来没出过问题」。
 
 `RULE_VERSION` 常量：目前只认 `NonNullExpression` 一种形态；将来若把
 `<T>x!` / `x?.y!` 之类扩展形态纳入，或**再一次调整扫描范围**，必须同步改这
-个常数——旧基线与新计数**不是同一个量**，`--update` 会拒绝放宽（除非版本已
-改），防止「顺手把基线调大」的后门。判据排在 `.githooks/pre-commit` 的 D 组
-步（浮层刻度是 27）。
+个常数。v1 → v2 = 扫描范围从 lib 扩到 src；v2 → v3 = 存量清零后翻硬闸。
+判据排在 `.githooks/pre-commit` 的 D 组步（浮层刻度是 27）。
 
 #### 13.5.7 src/lib `void someFn(...)` 悬空棘轮（`node scripts/check-void-floats.cjs`）
 

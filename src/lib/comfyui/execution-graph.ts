@@ -168,8 +168,9 @@ export function prepareGraphForExecution(
 
     // 类型信息缺失（老工作流没存 type）时：只有一条入线就直接穿过去。
     const linked = candidates.filter((nm) => isLinkRef(node.inputs[nm], graph));
-    if (linked.length === 1) {
-      const value = node.inputs[linked[0]!];
+    const [onlyLinked] = linked;
+    if (onlyLinked !== undefined && linked.length === 1) {
+      const value = node.inputs[onlyLinked];
       if (isLinkRef(value, graph)) {
         return walk(String(value[0]), Number(value[1]), depth + 1);
       }

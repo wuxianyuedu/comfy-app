@@ -672,11 +672,13 @@ export function dedupeRepeats(
   const out: LogEntry[] = [];
   let i = 0;
   while (i < entries.length) {
-    const first = entries[i]!;
+    /* `at()` 越界即 `undefined`：索引取值与循环判据合成一处，不必再补 `!`。 */
+    const first = entries.at(i);
+    if (first === undefined) break;
     let run = 1;
     while (
       i + run < entries.length &&
-      foldKey(entries[i + run]!) === foldKey(first)
+      foldKey(entries.at(i + run) ?? first) === foldKey(first)
     ) {
       run += 1;
     }
@@ -685,7 +687,10 @@ export function dedupeRepeats(
       i += 1;
       continue;
     }
-    for (let k = 0; k < limit; k += 1) out.push(entries[i + k]!);
+    for (let k = 0; k < limit; k += 1) {
+      const repeated = entries.at(i + k);
+      if (repeated !== undefined) out.push(repeated);
+    }
     out.push({
       ...first,
       id: `${first.id}-repeat`,
