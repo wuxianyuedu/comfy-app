@@ -200,6 +200,17 @@
       "section": "13.6.2"
     },
     {
+      "id": "base-check-recompute-verdict",
+      "name": "「被门禁拦下先复算 master 基线」的**判决层**（runState 的 did-not-run 一档）",
+      "declaredAt": "docs/standards/13-提交与-code-review.md §13.6.2 的处置口径 + scripts/base-check/verdict.mjs",
+      "reader": "tests/base-check.test.ts",
+      "executor": {
+        "kind": "fixed-test",
+        "file": "tests/base-check.test.ts"
+      },
+      "section": "13.6.2"
+    },
+    {
       "id": "on-demand-duties",
       "name": "「不进钩子」的按需档 ⇄ 执行者",
       "declaredAt": "scripts/.on-demand-duties.json（事实从 FRESHNESS_TRACKS / quality-gate 的 run:false / 按需召唤台账现算）",

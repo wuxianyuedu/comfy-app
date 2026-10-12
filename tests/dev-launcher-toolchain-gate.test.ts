@@ -382,21 +382,39 @@ describe("修复提示与自愈判据", () => {
 });
 
 describe("编排器与启动页的接线契约", () => {
-  const launcher = fs.readFileSync(
-    path.join(ROOT, "scripts", "dev-launcher.mjs"),
-    "utf8",
-  );
+  /* 编排器已按职责拆进 `launcher-core/`（ISSUE #1811 拆 R5 超限文件），下面几条
+   * 断言钉的是**编排链路里的形态**（用没用自己的探测写法、接没接线），与「它住
+   * 在哪个文件」无关 —— 所以这里把主文件与拆出的几份拼成一份「链路源码」再断言。
+   * 逐份读而不是只读主文件：只读主文件时，搬走的实现会让 `indexOf` 落空、
+   * `slice(0, -1)` 拿到空串，断言会**静默变成空转**（`not.toContain` 恒真）。 */
+  const launcher = [
+    "dev-launcher.mjs",
+    "launcher-core/preflight.mjs",
+    "launcher-core/port-reap.mjs",
+    "launcher-core/shell-ops.mjs",
+    "launcher-core/downstream.mjs",
+  ]
+    .map((rel) =>
+      fs.readFileSync(path.join(ROOT, "scripts", rel), "utf8"),
+    )
+    .join("\n");
   const splash = fs.readFileSync(
     path.join(ROOT, "src-tauri", "splash-assets", "splash.html"),
     "utf8",
   );
 
   it("门禁的探测与文案来自 corepack.mjs，不再自己 spawnSync 一遍", () => {
-    const gate = launcher.slice(
-      launcher.indexOf("export function runToolchainGate"),
-      launcher.indexOf("export function reconcilePnpmVersion"),
+    /* 实现对在 `launcher-core/preflight.mjs`：主文件只剩同名薄包装（它的函数体
+     * 只有一行转发，拿它断言等于什么都没测）。 */
+    const preflight = fs.readFileSync(
+      path.join(ROOT, "scripts", "launcher-core", "preflight.mjs"),
+      "utf8",
     );
-    expect(gate).toContain("orchestratePnpm(");
+    const gate = preflight.slice(
+      preflight.indexOf("export function runToolchainGate"),
+      preflight.indexOf("export function reconcilePnpmVersion"),
+    );
+    expect(gate, "没取到实现体，断言会空转").toContain("orchestratePnpm(");
     expect(gate, "旧写法：自己拼 pnpm -v 探测").not.toContain('["-v"]');
   });
 
