@@ -55,14 +55,23 @@ import {
   PORT_OWNERSHIP,
   classifyProbe,
   describeProbeState,
-  fileHasMarker,
   inspectPort,
   portOwnershipVerdict,
   readDiagnosticsTail,
-  readTail,
   usesExplicitPort,
   writeLaunchStatus,
 } from "./launcher-core/orchestrator.mjs";
+// 「收尾定性」这一族（downstreamExitKind / readShellMarkers /
+// describeDownstreamExit / runtimeExitRecord）判的是同一件事的四个侧面，收在
+// launcher-core/downstream-exit.mjs（入口文件长度的约束，§12.6 R5 的姊妹档）。
+// 主流程在这里 import 调用；**不再从本文件再导出**——调用方直接 import 那个
+// 模块，少一层转发就少一处要同步的面（没有任何仓内调用方走本文件这道门）。
+import {
+  describeDownstreamExit,
+  downstreamExitKind,
+  readShellMarkers,
+  runtimeExitRecord,
+} from "./launcher-core/downstream-exit.mjs";
 import {
   listeningPidsOnPort,
   pidBelongsToRoot,
@@ -151,13 +160,6 @@ const HEARTBEAT_INTERVAL_MS = 5_000;
 
 /** 等服务就绪的上限（与 .ps1 的 180 次 × 1s 同口径）。 */
 const READY_TIMEOUT_MS = 180_000;
-
-/** 壳侧写下的收尾正标记（判据只认它们，见 orchestrator.fileHasMarker）。
- *
- *  「用户放弃本次启动」= 关闭启动页；壳会写 `launch abandoned` 并以 0 退出。
- *  这不是失败：用户刚刚亲手按的 ✕，再报一次红色「启动失败」是误报。 */
-const ABANDONED_MARKER = "launch abandoned";
-const NONZERO_EXIT_MARKER = "exiting with non-zero code";
 
 // ── 日志：log/current/<分区>/（路径固定，退出时整目录归档到 runs/）──
 // 顺序很重要：先 recoverStaleCurrent 收走上一次崩掉的残留，再 startRun 写新
@@ -720,73 +722,7 @@ export async function killShellFromPidFile(root = ROOT) {
   return true;
 }
 
-// ── 收尾定性 ────────────────────────────────────────────────────────────────
-
-/** dev server 先退出时的成因分类（判据 = 壳侧写下的**正标记** + 壳是否已退）。
- *
- *  为什么不拿退出码定性：「壳也退出了」是共同现象，用户放弃 / 壳崩溃 / 被任务
- *  管理器结束都会命中它；由现象反推成因会把真故障说成设计内行为（历史事故）。
- *  @param {{ shellExited: boolean, abandoned: boolean, shellCrashed: boolean }} input
- *  @returns {"dev-server" | "abandoned" | "shell-self-exited" | "shell-terminated"} */
-export function downstreamExitKind({ shellExited, abandoned, shellCrashed }) {
-  if (!shellExited) return "dev-server";
-  if (abandoned) return "abandoned";
-  if (shellCrashed) return "shell-self-exited";
-  return "shell-terminated";
-}
-
-/** 取壳侧 stderr 的两个正标记（大小写不敏感）。 */
-/** @param {string} [root] @returns {{ abandoned: boolean, crashed: boolean, file: string }} */
-export function readShellMarkers(root = ROOT) {
-  const file = path.join(
-    currentDirOf("launcher", root),
-    "dev-launcher-stderr.log",
-  );
-  return {
-    abandoned: fileHasMarker(file, ABANDONED_MARKER),
-    crashed: fileHasMarker(file, NONZERO_EXIT_MARKER),
-    file,
-  };
-}
-
-/** 把 dev server 提前退出翻译成可行动的报错（抛出的消息即用户可见的失败出口）。 */
-/**
- * @param {string} kind
- * @param {{ devCode: number | null, shellCode: number | null, shellPid?: number | undefined,
- *           stderrFile: string, stdoutFile: string }} ctx
- * @returns {string}
- */
-export function describeDownstreamExit(kind, ctx) {
-  const errTail = readTail(ctx.stderrFile, 20) || "(无输出)";
-  const outTail = readTail(ctx.stdoutFile, 20) || "(无输出)";
-  const tail = `最近 stderr：\n${errTail}\n最近 stdout：\n${outTail}\n（完整输出见 ${ctx.stdoutFile} 与 ${ctx.stderrFile}）`;
-  if (kind === "abandoned") {
-    return "检测到启动页被关闭（壳日志含 launch abandoned 标记）：用户放弃本次启动，按正常收尾处理";
-  }
-  if (kind === "shell-self-exited") {
-    return (
-      `本地服务随桌面壳一起退出（壳自身以非零码结束，exit=${ctx.shellCode ?? "?"}）。` +
-      "壳侧判据：log/launcher/dev-launcher-stderr.log 里的 `exiting with non-zero code`；" +
-      "若附近还有 `another instance of this checkout is running`，说明这次启动只是把已在运行的窗口唤到前台" +
-      "——本次双击没有启动新进程，属于设计内行为。\n" +
-      tail
-    );
-  }
-  if (kind === "shell-terminated") {
-    return (
-      `本地服务随桌面壳一起退出（exit=${ctx.shellCode ?? "?"}），且 log/launcher/dev-launcher-stderr.log 里` +
-      "**没有**壳写下的任何收尾标记——说明壳是被强行收走的（另一次启动把它顶掉 / 任务管理器结束了任务 / 壳崩溃）。" +
-      "这次双击等于**从未启动**：请只双击一次启动入口并等启动页自己切到主界面。" +
-      "另请对照 log/shell/shell.log 与 dev-launcher-stderr.log。\n" +
-      tail
-    );
-  }
-  return (
-    `Next.js dev server 提前退出（exit=${ctx.devCode ?? "?"}）。` +
-    "壳仍在运行，属 dev server 自身退出（编译失败 / 端口被占 / pnpm 异常）。\n" +
-    tail
-  );
-}
+// ── 打开浏览器 / 收尾 ─────────────────────────────────────────────────────────
 
 /** 打开浏览器：三平台各有入口，失败只提示不阻断（§9.2 第 3 条）。 */
 /** @param {string} url */
@@ -1307,22 +1243,50 @@ export async function run(argv = process.argv.slice(2)) {
     openBrowser(`http://localhost:${port}`);
   }
 
-  // 11) 常驻：任一子进程退出即收尾（与 .ps1 的「等任一退出」同语义）
-  const exitCode = await new Promise((resolve) => {
-    for (const child of [dev, shell]) {
-      child?.once("exit", (code) => resolve(code ?? 0));
-    }
-    process.once("SIGINT", () => resolve(0));
-    process.once("SIGTERM", () => resolve(0));
+  // 11) 常驻：任一子进程退出即收尾（与 .ps1 的「等任一退出」同语义）。
+  //
+  // **要记住是谁退出的**：写侧只在「dev 先走」时才有一件事可做（见下），而
+  // 「等任一退出」这个语义本身不回答是谁。
+  const ended = await new Promise((resolve) => {
+    dev?.once("exit", (code) => resolve({ who: "dev", code: code ?? 0 }));
+    shell?.once("exit", (code) => resolve({ who: "shell", code: code ?? 0 }));
+    process.once("SIGINT", () => resolve({ who: "signal", code: 0 }));
+    process.once("SIGTERM", () => resolve({ who: "signal", code: 0 }));
   });
   clearInterval(heartbeat);
+  /* 运行期退出的落盘（ISSUE #1692 的第二半）。判据与措辞在
+   * {@link runtimeExitRecord}（可单测），这里只负责把它写下去。 */
+  const record = runtimeExitRecord({
+    who: ended.who,
+    devCode: dev.exitCode,
+    devSignal: dev.signalCode,
+    port: currentPort,
+    runId: RUN_ID,
+  });
+  if (record) {
+    writeAppServiceExit(ROOT, record);
+    log(
+      "dev server 已退出：结束原因已记进 run/app-service-exit.json（界面恢复后会读它）",
+      "WARN",
+    );
+    log(
+      describeDownstreamExit("dev-server", {
+        devCode: dev.exitCode,
+        shellCode: shell?.exitCode ?? null,
+        shellPid: shell?.pid,
+        stderrFile: nextErr,
+        stdoutFile: nextOut,
+      }),
+      "ERROR",
+    );
+  }
   if (args.mode === "prebuilt") {
     log("桌面壳或 dev server 已退出，正在回收整棵进程树…", "STEP");
   } else {
     log("检到子进程退出，正在回收整棵进程树…", "STEP");
   }
-  await shutdown(exitCode);
-  return exitCode;
+  await shutdown(ended.code);
+  return ended.code;
 }
 
 // ── 依赖与 lockfile 对齐（启动前的补装）─────────────────────────────────────

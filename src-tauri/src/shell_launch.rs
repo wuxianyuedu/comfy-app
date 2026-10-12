@@ -402,6 +402,59 @@ pub fn shell_log_path(project_root: &str) -> std::path::PathBuf {
   shell_log_dir(project_root).join("shell.log")
 }
 
+/// Next dev server 原始输出目录（`log/current/nextjs/`）。
+///
+/// 编排器把 dev server 的 stdout/stderr 直接重定向成
+/// `nextjs-stdout-<ts>.log` / `nextjs-stderr-<ts>.log`（`spawnInGroup` 给的是
+/// 文件描述符，**没有 pipe、没有 tee**），因此它既不进编排器 stdout，也就不进
+/// `shell-launch.log` 的 `[orchestrator] …` 那一路——启动页只看编排日志时，
+/// 「服务自己说了什么」永远是空白（`▲ Next.js` 横幅、编译/路由日志、首次编译
+/// 的报错全在那两份文件里）。
+pub fn nextjs_log_dir(project_root: &str) -> std::path::PathBuf {
+  current_dir(project_root).join("nextjs")
+}
+
+/// 目录里**按修改时间最新**的那一份带 `prefix` 前缀的文件名。
+///
+/// **判据是 mtime，不是文件名序**：`nextjs-stdout-<ts>` 的戳由 `runStamp()`
+/// 产出，而历史命名（下划线戳）与现行命名（连字符戳）混在一个目录里时，
+/// 按字典序取「最新」会落到**上一次运行**的那一份 —— 用户照着面板里的路径去看，
+/// 看到的是别的失败现场（ISSUE #576，同一个坑）。限定在 `log/current/nextjs/`
+/// 之内也是必要的：`current/` 每次运行结束就被整目录归档清空（规范 §4），因此
+/// 这里目录内的文件都属于本次运行，不存在「上一份混进来」的情形。
+///
+/// 取不到（目录不存在 / 没有匹配项）返回 `None`——面板据此不显示这一段，
+/// 而不是显示一条「读不到」。
+pub fn latest_prefixed_log(dir: &std::path::Path, prefix: &str) -> Option<std::path::PathBuf> {
+  let mut best: Option<(std::time::SystemTime, std::path::PathBuf)> = None;
+  for entry in std::fs::read_dir(dir).ok()? {
+    let Ok(entry) = entry else { continue };
+    let name = entry.file_name();
+    let Some(name) = name.to_str() else { continue };
+    if !name.starts_with(prefix) || !name.ends_with(".log") {
+      continue;
+    }
+    let Ok(meta) = entry.metadata() else { continue };
+    if !meta.is_file() {
+      continue;
+    }
+    let Ok(modified) = meta.modified() else { continue };
+    // 同 mtime 时按文件名兜底定序，保证同刻写入的两份不会随目录枚举顺序摇摆。
+    let path = entry.path();
+    let better = match &best {
+      None => true,
+      Some((best_at, best_path)) => {
+        modified > *best_at
+          || (modified == *best_at && path.file_name() > best_path.file_name())
+      }
+    };
+    if better {
+      best = Some((modified, path));
+    }
+  }
+  best.map(|(_, path)| path)
+}
+
 /// 编排器自己行首的时间戳 + 级别前缀（`[YYYY-MM-DD HH:MM:SS.mmm] [LEVEL ]`）。
 ///
 /// dev-launcher.mjs 的 `createLogSink` 已经给每条日志写了「本地时间 + 级别」，
@@ -1262,6 +1315,17 @@ fn is_probable_node_process(exe_file: &[u16]) -> bool {
 mod tests {
   use super::*;
 
+  /// 把文件的修改时间钉到给定时刻（判据要区分「按 mtime 最新」与「按名字序最新」，
+  /// 而写入顺序本身定不出这个差别）。写不进就 panic —— 静默跳过会让用例变成永真。
+  fn set_mtime(path: &std::path::Path, at: std::time::SystemTime) {
+    let file = std::fs::OpenOptions::new()
+      .write(true)
+      .open(path)
+      .expect("打开测试文件");
+    file.set_times(std::fs::FileTimes::new().set_modified(at))
+      .expect("设置 mtime");
+  }
+
   /// 启动链路路径必须与 Node 侧（`src/lib/shell/launch-diagnostics.ts` 的
   /// `launchPaths`）逐项一致：两侧读的是同一批文件，漂开的表现是「壳写了
   /// 一份、面板读的是另一份」，而两侧看各自都是对的。
@@ -1284,6 +1348,51 @@ mod tests {
       root.join("log").join("current").join("shell").join("shell.log")
     );
     assert_eq!(status_file_path("/proj"), root.join("run").join("launch-status.json"));
+    assert_eq!(
+      nextjs_log_dir("/proj"),
+      root.join("log").join("current").join("nextjs")
+    );
+  }
+
+  /// 「最新一份」必须按 mtime 判，不能按文件名序 —— ISSUE #576 那个坑的回归：
+  /// 戳的历史形态（下划线）与现行形态（连字符）字典序与时间序相反，按名字取
+  /// 「最新」会拿到上一次运行的日志，用户照着面板给的路径去看，看到的是别的现场。
+  #[test]
+  fn latest_prefixed_log_prefers_mtime_over_name_order() {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-latest-log-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    // 字典序更靠后的那份其实是**更早**写下的（`_`(0x5F) > `T`/`-`）。
+    let older = dir.join("nextjs-stdout-2026-09-30_193612.log");
+    let newer = dir.join("nextjs-stdout-2026-10-12-14-58-35.log");
+    std::fs::write(&older, "上一次运行").unwrap();
+    std::fs::write(&newer, "本次运行").unwrap();
+    let old_at = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    let new_at = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_800_000_000);
+    set_mtime(&older, old_at);
+    set_mtime(&newer, new_at);
+    // 前缀不匹配的邻居不能被选中（stdout 的选择不能串到 stderr 那份上）。
+    std::fs::write(dir.join("nextjs-stderr-2026-10-12-14-58-35.log"), "err").unwrap();
+    set_mtime(&dir.join("nextjs-stderr-2026-10-12-14-58-35.log"), new_at);
+
+    assert_eq!(
+      latest_prefixed_log(&dir, "nextjs-stdout-"),
+      Some(newer.clone()),
+      "按 mtime 应选中本次运行那份，而不是字典序更大的上一次运行那份"
+    );
+    assert_eq!(
+      latest_prefixed_log(&dir, "nextjs-stderr-"),
+      Some(dir.join("nextjs-stderr-2026-10-12-14-58-35.log"))
+    );
+    assert_eq!(latest_prefixed_log(&dir, "no-such-prefix-"), None);
+
+    std::fs::remove_dir_all(&dir).ok();
   }
 
   /// 会话锚点的路径与 `scripts/dev-launcher-session.mjs` 同源：壳要清理的
