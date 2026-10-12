@@ -64,6 +64,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const zlib = require("node:zlib");
 const crypto = require("node:crypto");
 
@@ -93,6 +94,47 @@ const CHUNK_EXT = /\.js$/;
  * 是另一回事：它意味着我们量错了目录（或构建形态变了），此时给绿灯就是一条恒绿的判据。
  */
 const MIN_CHUNKS = 20;
+
+/**
+ * 取当前 HEAD 的修订号，写进基线供「这次读数取自哪一版源码」用。
+ *
+ * 与 `check-file-structure.cjs` 的 `baselineRev` 同口径（规范 §12.13.3）：
+ * 它记的是**基线那一刻的源码修订号**，于是判红时能回答一个此前只能猜的问题
+ * ——「涨的这点体积，是不是基线之后那几次改动换来的」。
+ *
+ * git 不可用 / 不在检出里时返回 `null`：那不构成判据，只是少一句归因。
+ */
+function headRev() {
+  const res = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
+  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  return res.stdout.trim() || null;
+}
+
+/**
+ * 基线之后有多少次提交动过源码 —— 「基线过期」这个事实的**证据**。
+ *
+ * 为什么需要它（ISSUE #1781 的现场）：基线是 `086e16a0` 那一刻的**诚实读数**，
+ * 但它之后合了 6 个 commit、其中 `50c1845f` 改了 17 个组件文件，体积真涨了
+ * 1074 字节。在那之前，判据只能说「涨了 493 字节 gzip」—— 读者拿到这句话的第一
+ * 反应是「是不是抖动 / 是不是量错了」，而不是「这是那几次改动换来的」。归因不是
+ * 锦上添花：**它决定下一步是压回去还是认账**（§13.5.4 的例外流程第一步）。
+ *
+ * 取不到修订号（旧基线 / git 不可用 / 修订号已不可达）时返回 `null`——
+ * 与 `check-file-structure.cjs` 的 `BASELINE_REV_USABLE` 同口径（§12.13.3.1）：
+ * 报告里说清「取不到」，而不是拿一个猜的数顶上去。
+ *
+ * @param {string|null|undefined} rev
+ * @returns {number|null}
+ */
+function commitsSinceBaseline(rev) {
+  if (!rev) return null;
+  const res = spawnSync("git", ["rev-list", "--count", `${rev}..HEAD`], {
+    encoding: "utf8",
+  });
+  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  const n = Number(res.stdout.trim());
+  return Number.isFinite(n) ? n : null;
+}
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -147,6 +189,9 @@ function writeBaseline(m, note) {
         "（raw 一并量、一并打，但不判）；逐文件账是诊断输出，按 sha256 对齐，不进基线。" +
         "棘轮只许下降，" +
         "抬高基线必须在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积（例外流程）。",
+    /* 读数是**哪一版源码**的产物（同 `check-file-structure.cjs` 的 `baselineRev`，
+     * 规范 §12.13.3）：判红时用它把「基线过期」从猜测变成事实 —— 见 `commitsSinceBaseline`。 */
+    baselineRev: headRev(),
     metric: {
       scope: ".next/static/chunks（Turbopack 默认构建链，只数 .js）",
       raw: m.raw,
@@ -323,6 +368,28 @@ function main() {
 
   if (problems.length) {
     console.error("[bundle-budget] 违规（阻断）：\n  " + problems.join("\n  "));
+    /* 归因先说：判红那一刻读者最该知道的是「这个读数取自哪一版源码」。
+     * 缺了它，「涨了 493 字节」的第一反应必然落在「是不是抖动 / 是不是量错了」上，
+     * 而不是「这是不是基线之后那几次改动换来的」—— 而后者才是下一步该回答的问题。
+     * 取不到修订号时**说清取不到**，不拿猜测顶替（同 §12.13.3.1）。 */
+    const since = commitsSinceBaseline(base.baselineRev);
+    if (since === null) {
+      console.error(
+        "  基线修订号：取不到（旧格式基线 / 不在 git 检出里 / 修订号已不可达）——\n" +
+          "    无法判断这批读数与基线之间源码动过几次，先看下面逐文件诊断，或重跑一次 --update。",
+      );
+    } else if (since > 0) {
+      console.error(
+        `  基线修订号：${String(base.baselineRev).slice(0, 8)}（其后本检出上有 ${since} 次提交）——\n` +
+          "    这批读数取自**基线之后的源码**，涨幅可能正是那几次改动换来的：" +
+          "先分清「它是不是想要的」再决定压回去还是认账（§13.5.4 例外流程）。",
+      );
+    } else {
+      console.error(
+        `  基线修订号：${String(base.baselineRev).slice(0, 8)}（就是本检出的 HEAD）——\n` +
+          "    基线取自同一版源码，那么这次上涨来自**未提交的改动**。",
+      );
+    }
     const d = diagnose(now, base);
     if (d) {
       /* 诊断是**给人看的**、不参与判定：比的是内容指纹，名字换了不算变化。 */

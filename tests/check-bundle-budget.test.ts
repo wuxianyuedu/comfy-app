@@ -33,6 +33,28 @@ const { test, expect } = defineGateRepo({
   dirs: [".next/static/chunks"],
 });
 
+/**
+ * 同一份判据、但工作区是**真 git 检出**（造提交历史用）。
+ *
+ * 为什么单开一个：`baselineRev` 那一档要问的是「基线之后源码动过几次」，
+ * 而哈希与计数只在真历史里存在 —— 主夹具（无 git）走的正是**它取不到**那一档，
+ * 两档都得有人钉住（取不到时说清取不到，取到时不许静默不说）。
+ */
+const { test: testWithGit } = defineGateRepo({
+  script: "check-bundle-budget.cjs",
+  dirs: [".next/static/chunks"],
+  workdir: "bundle-budget-git",
+  setup: (repo) => {
+    repo.git("init", "-q");
+    repo.git("config", "commit.gpgsign", "false");
+    repo.git("config", "user.email", "gate@example.com");
+    repo.git("config", "user.name", "gate");
+    repo.write("README.md", "seed\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-qm", "seed");
+  },
+});
+
 /** 在临时工作区里造一个 chunk（`.js`），返回它的相对路径。 */
 function chunk(
   repo: { write: (r: string, c: string) => void },
@@ -222,5 +244,53 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     expect(code, output).toBe(1);
     expect(output).toMatch(/\+\d+ B/);
     expect(output).not.toContain("+0.0 KB");
+  });
+
+  /* ── 「基线过期」必须被说出来（ISSUE #1781 的现场）───────────────────── */
+
+  test("基线取不到修订号时，判红输出明说取不到（不拿猜测顶替）", ({ repo }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+
+    /* 造一次真实上涨：往一个已有 chunk 追加不可压内容。 */
+    chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
+
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    /* 工作区不是 git 检出 ⇒ `headRev()` / `commitsSinceBaseline()` 都给 null。
+     * 这一档的失效形态是**静默**：什么都不说，读者只能猜「是不是抖动」——
+     * 而这次的现场正是「基线诚实、只是过期」，猜错方向就去压一个本不该压的改动。 */
+    expect(output).toContain("基线修订号：取不到");
+    expect(output).toContain("无法判断");
+  });
+});
+
+describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 / §12.13.3）", () => {
+  testWithGit("基线之后有提交时，判红输出点名「其后有 N 次提交」", ({ repo }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+
+    /* 基线落在 seed 那次提交上；再往前走一次提交，制造「基线之后源码动过」。 */
+    repo.write("touch.txt", "later\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-qm", "later");
+
+    chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    /* 归因必须在**判红那一刻**说，而不是留给读者去 `git log` 基线日期：
+     * 「涨了这点体积是不是那几次改动换来的」正是决定压回去 / 认账的那一步。 */
+    expect(output).toContain("其后本检出上有 1 次提交");
+    expect(output).toContain("基线之后的源码");
+  });
+
+  testWithGit("基线就是 HEAD 时，说清上涨来自未提交的改动", ({ repo }) => {
+    seedChunks(repo);
+    expect(repo.run(["--update"]).code).toBe(0);
+    chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("就是本检出的 HEAD");
+    expect(output).toContain("未提交的改动");
   });
 });
