@@ -11,7 +11,14 @@
  * 会让增量层**放弃收窄、只跑固定清单**，这条用例守的正是那次改动本身，留在按路径
  * 引用的那份里就等于「本该拦住它的那一次一条都不跑」。
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -22,6 +29,7 @@ import {
   mergeCandidates,
   parseRefLines,
   readProof,
+  readRevisions,
   writeProof,
 } from "../scripts/premerge-proof.mjs";
 
@@ -279,5 +287,127 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
       /base-check|check-commit-claims|check-merged-side-loss/,
     );
     expect(hook).toContain("premerge-proof.mjs");
+  });
+});
+
+/**
+ * 上游 sha 到底怎么取 —— 立案现场是**本检出的一次真实 push**：钩子报
+ * 「取不到上次 fetch 看到的上游引用（退 2）」，而 `git fetch` 刚跑过、`cnb/master` 就在场上。
+ * 根因是旧实现把引用名写死成 `refs/remotes/origin/master`，而这份检出的远端叫 `cnb`
+ * （`git remote -v` 里压根没有 `origin`）⇒ `upstreamSha` 恒 `null` ⇒ **每一次 topic 分支的
+ * push 都被判成「没法复算」而拦下**：§13.6.2.1 刚立的执行者反过来挡住了所有 push。
+ *
+ * 另一面同样要钉住：远端名可以变，**「上游 = 要并进去的那条 master」不可以变**。
+ * `@{u}` 在推送后就是你自己的分支，拿它当上游等于「自己跟自己比」——那份复算会报「都没变、
+ * 直接过」，而它一个字节都没回答「并进 master 会不会红」。
+ */
+describe("上游 sha 的取法：远端名不假定叫 origin，上游也不许是自己的分支", () => {
+  const git = (args: string[], cwd: string) => {
+    const r = spawnSync(
+      "git",
+      [
+        "-c",
+        "user.name=tester",
+        "-c",
+        "user.email=tester@example.invalid",
+        ...args,
+      ],
+      { cwd, encoding: "utf8" },
+    );
+    if (r.status !== 0) {
+      throw new Error(`git ${args.join(" ")} 退 ${r.status}：${r.stderr}`);
+    }
+    return String(r.stdout).trim();
+  };
+
+  /**
+   * 最小检出：`<tmp>/bare.git` 当远端（名字由调用方给）、`<tmp>/work` 是工作树，
+   * 已把一条 `master` 推上去 ⇒ 本地有 `refs/remotes/<remoteName>/master`，**没有 `origin`**。
+   *
+   * @param {string} remoteName
+   */
+  function makeCheckout(remoteName: string) {
+    const dir = mkdtempSync(path.join(tmpdir(), "comfy-premerge-upstream-"));
+    const bare = path.join(dir, "bare.git");
+    const work = path.join(dir, "work");
+    mkdirSync(bare);
+    mkdirSync(work);
+    git(["init", "--bare", "--quiet", "--initial-branch=master", bare], dir);
+    git(["init", "--quiet", "--initial-branch=master", work], dir);
+    writeFileSync(path.join(work, "a.txt"), "1\n", "utf8");
+    git(["add", "a.txt"], work);
+    git(["commit", "--quiet", "-m", "base"], work);
+    const baseSha = git(["rev-parse", "HEAD"], work);
+    git(["remote", "add", remoteName, bare], work);
+    git(["push", "--quiet", remoteName, "master"], work);
+    return { dir, work, gitDir: path.join(work, ".git"), baseSha };
+  }
+
+  it("远端叫 cnb 时取到 cnb/master 的 sha（旧实现在这里恒 null ⇒ 每次 push 被退 2）", () => {
+    const f = makeCheckout("cnb");
+    try {
+      // 前置：这份 fixture 里确实没有 origin —— 少了这一句，本条测不到「名字写死」那个前提
+      const noOrigin = spawnSync(
+        "git",
+        ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/master"],
+        { cwd: f.work },
+      );
+      expect(noOrigin.status).not.toBe(0);
+      expect(readRevisions(f.gitDir, f.work)).toEqual({
+        headSha: f.baseSha,
+        upstreamSha: f.baseSha,
+      });
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("`@{u}` 指向自己的分支时，上游仍是 master —— 不许自己跟自己比", () => {
+    const f = makeCheckout("cnb");
+    try {
+      git(["checkout", "--quiet", "-b", "feat/x"], f.work);
+      writeFileSync(path.join(f.work, "b.txt"), "2\n", "utf8");
+      git(["add", "b.txt"], f.work);
+      git(["commit", "--quiet", "-m", "on topic"], f.work);
+      git(["push", "--quiet", "--set-upstream", "cnb", "feat/x"], f.work);
+      // 前提成立：@{u} 已经是自己的分支，不是 master
+      expect(git(["rev-parse", "--abbrev-ref", "@{u}"], f.work)).toBe(
+        "cnb/feat/x",
+      );
+      const topicSha = git(["rev-parse", "HEAD"], f.work);
+      const rev = readRevisions(f.gitDir, f.work);
+      expect(rev.headSha).toBe(topicSha);
+      expect(rev.upstreamSha).toBe(f.baseSha);
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("只有本地 master、没有 remote 跟踪引用 ⇒ 取不到，判据读成「没法复算」而不是「没必要跑」", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "comfy-premerge-noremote-"));
+    const work = path.join(dir, "work");
+    mkdirSync(work);
+    git(["init", "--quiet", "--initial-branch=master", work], dir);
+    writeFileSync(path.join(work, "a.txt"), "1\n", "utf8");
+    git(["add", "a.txt"], work);
+    git(["commit", "--quiet", "-m", "base"], work);
+    try {
+      // 前提：本地 master 在场 —— 这一测的就是「base-check 那档本地兜底被这里刻意关掉」
+      expect(
+        git(["rev-parse", "--verify", "--quiet", "master"], work),
+      ).toBeTruthy();
+      const rev = readRevisions(path.join(work, ".git"), work);
+      expect(rev.upstreamSha).toBeNull();
+      const verdict = decidePremergePush({
+        candidates: mergeCandidates(parseRefLines(refLine())),
+        headSha: rev.headSha,
+        upstreamSha: rev.upstreamSha,
+        proof: null,
+      });
+      expect(verdict.run).toBe(false);
+      expect(verdict.reasons[0]).toMatch(/^取不到/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
