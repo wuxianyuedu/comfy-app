@@ -187,6 +187,12 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 那条 selector **真的会响** —— 「配置写在」与「配置在跑」是两件事（§11.7 同源），
   // 而它守的是「下一次新增一处就红」，与本次改动无关，所以进固定清单。
   "tests/router-error-envelope.test.ts",
+  // 视图层 store selector 的形态（ISSUE #1780）：selector 里现拼对象 / 现造新数组
+  // ⇒ 每次 store 写入都返回新引用，字段没变也重渲染、`React.memo` 一起失效。它与
+  // 上面那条同构：**既**真扫 `src/**` 断言存量为零（现在就是零），**也**验 eslint
+  // 配置里那两条 selector 真的会响。它守的是「下一次新增一处就红」—— 那种改动住在
+  // 各处视图文件里，而判据自己住在 `tests/`，不会被改动的 import 图带进来，所以进固定清单。
+  "tests/store-selector-shape.test.ts",
   // 网络入口的**可达面**：`tools/workshop-mcp-http.ts` 暴露的是会写库、会花本机额度的
   // 工具，而它没有鉴权 —— 「谁连得上」就是唯一信任边界。`listen()` 省掉 host 会绑 `::`
   // （所有网卡），发出通配 CORS 会让用户浏览器里的任意站点也能驱动；两种表现都不会让
