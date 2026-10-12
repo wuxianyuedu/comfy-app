@@ -8,7 +8,7 @@
 
 import { formatClock, formatDate } from "~/lib/time-format";
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { zClass } from "~/lib/shell/overlay-z";
 import {
   Bell,
@@ -18,18 +18,26 @@ import {
   RefreshCw,
   RotateCcw,
   Trash2,
+  WifiOff,
   X,
 } from "lucide-react";
 
-import { useMessageCenterStore } from "./message-center-store";
+import {
+  useMessageCenterStore,
+  type MessageKind,
+} from "./message-center-store";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useHotkey } from "~/components/ui/use-hotkey";
 
+/* 键收成 `MessageKind`（不是 `string`）：新增一档 kind 时编译器会在这里报缺项，
+ * 于是「加了一档分档、忘了配图标与色调」不会拖到运行期才显形（此前这里是
+ * `Record<string, …>` + 运行时 `?? KIND_META.info!` 兜底，配色表漏一档就静默
+ * 退化成 info 那一档）。 */
 const KIND_META: Record<
-  string,
+  MessageKind,
   { icon: typeof Bell; tint: string; ring: string }
 > = {
   update: {
@@ -41,6 +49,13 @@ const KIND_META: Record<
     icon: RotateCcw,
     tint: "text-warning-strong bg-warning/15",
     ring: "border-warning/25",
+  },
+  /* 应用服务断开：与「运行中 / 已重启」那几档不同色——它不是一次恢复动作，
+   * 是「现在这件事就是坏的」，红色与底部状态栏那一格同调。 */
+  offline: {
+    icon: WifiOff,
+    tint: "text-destructive-strong bg-destructive/15",
+    ring: "border-destructive/25",
   },
   info: {
     icon: Bell,
@@ -63,6 +78,15 @@ export function MessageCenterPanel() {
   const markRead = useMessageCenterStore((s) => s.markRead);
   const remove = useMessageCenterStore((s) => s.remove);
   const clear = useMessageCenterStore((s) => s.clear);
+  const hydrate = useMessageCenterStore((s) => s.hydrate);
+
+  /* 从持久化恢复历史消息。**放在这个组件里是因为它是唯一无条件常驻的挂载点**
+   * （根布局挂一次，且下面的 `if (!open) return null` 在所有 hook 之后——
+   * 面板关着时 effect 照样跑）。放模块加载期会与 SSR 撞出水合不匹配，见
+   * message-center-store 的说明。 */
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
 
   const unread = useMemo(
     () => messages.reduce((n, m) => n + (m.read ? 0 : 1), 0),
@@ -152,7 +176,7 @@ export function MessageCenterPanel() {
         ) : (
           <ul className="mx-auto flex w-full max-w-3xl flex-col gap-2.5 px-4 py-5">
             {messages.map((m) => {
-              const meta = KIND_META[m.kind] ?? KIND_META.info!;
+              const meta = KIND_META[m.kind];
               const Icon = meta.icon;
               return (
                 <li

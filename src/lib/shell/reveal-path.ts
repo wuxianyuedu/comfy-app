@@ -105,30 +105,42 @@ export function resolveExistingPath(
   return null;
 }
 
-/** 各平台「在文件管理器里定位」的命令与参数（判据只在这里出现一次）。 */
-function revealCommand(target: string): { cmd: string; args: string[] } {
+/** 各平台「在文件管理器里定位」的命令与参数（判据只在这里出现一次）。
+ *  `isDir` 决定「直接打开进入（目录）」还是「选中（文件）」——
+ *  对目录若也用 `/select`，窗口会停在父层并选中该目录，用户看到的是
+ *  上一层而非 `target` 里面的内容（实测即「打开了但没进到我点的文件夹」）。 */
+function revealCommand(
+  target: string,
+  isDir: boolean,
+): { cmd: string; args: string[] } {
   const platform = process.platform;
   if (platform === "win32") {
-    /* `explorer /select,"<路径>"`：文件则选中它、目录则展开它所在的一层。
+    if (isDir) {
+      /* 目录：`explorer "<目录>"` 直接打开进入，让用户看到里面的产物。 */
+      return {
+        cmd: process.env.ComSpec ?? "cmd.exe",
+        args: ["/c", "start", "", "explorer", target],
+      };
+    }
+    /* 文件：`explorer /select,"<路径>"` 在它所在文件夹里选中它。
      * **必须是单个参数** `/select,"<路径>"` 形态 —— explorer 对 argv 的切分是
      * 自成一体的（它把 `/select,` 与路径当成一个整体解析），拆成两个参数时
-     * 含空格的路径会被截断，表现为「打开了资源管理器但没选中任何东西」。
-     * `/select` 对目录同样有效（选中该目录本身），所以文件与目录同一条路径。 */
+     * 含空格的路径会被截断，表现为「打开了资源管理器但没选中任何东西」。 */
     return {
       cmd: process.env.ComSpec ?? "cmd.exe",
       args: ["/c", "start", "", "explorer", `/select,"${target}"`],
     };
   }
   if (platform === "darwin") {
-    /* `open -R` 在 Finder 里选中；对目录同样成立。 */
-    return { cmd: "open", args: ["-R", target] };
+    /* 目录：`open "<目录>"` 直接进入；文件：`open -R` 在 Finder 里选中。 */
+    return isDir
+      ? { cmd: "open", args: [target] }
+      : { cmd: "open", args: ["-R", target] };
   }
-  /* Linux：没有统一的「选中」协议（各文件管理器自定义），退化为打开所在目录。
-   * 文件时打开它的**父目录**而不是文件本身 —— 点一个日志文件的意图是「到它那儿
+  /* Linux：没有统一的「选中」协议（各文件管理器自定义）。目录直接打开；
+   * 文件打开它的**父目录**而不是文件本身 —— 点一个日志文件的意图是「到它那儿
    * 去」，用编辑器打开它不是。 */
-  const dir = statSync(target, { throwIfNoEntry: false })?.isDirectory()
-    ? target
-    : path.dirname(target);
+  const dir = isDir ? target : path.dirname(target);
   return { cmd: "xdg-open", args: [dir] };
 }
 
@@ -156,7 +168,12 @@ export async function revealPathInFileManager(
       revealed: candidate.trim(),
     };
   }
-  const { cmd, args } = revealCommand(target);
+  /* 区分目录（直接打开进入）与文件（在父层选中）：`revealPath` 的探针只答
+   * 「存不存在」，不答「是不是目录」，所以这里用一次 stat 补判据。stat 失败
+   * （理论上 probe 已答存在，不该发生）按文件处理 —— 退回原来的「选中」语义。 */
+  const isDir =
+    statSync(target, { throwIfNoEntry: false })?.isDirectory() ?? false;
+  const { cmd, args } = revealCommand(target, isDir);
   try {
     await new Promise<void>((resolve, reject) => {
       /* 不走 shell：Node 按数组直接构造命令行，含空格的路径原样送达，不经 cmd

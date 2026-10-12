@@ -11,6 +11,10 @@
  *
  * mock 边界：`child_process` 换成可编程的假句柄，**绝不真起 explorer / open**。
  */
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Cb = (...args: unknown[]) => void;
@@ -172,6 +176,21 @@ describe("命令与参数形态", () => {
     expect(result.ok).toBe(false);
     expect(result.detail).toContain(target);
     expect(result.revealed).toBe(target);
+  });
+
+  it("目录应直接打开进入，而非停在父层选中（Windows 实测「开了但没进到文件夹」）", async () => {
+    if (process.platform !== "win32") return; // 只在会走到该分支的平台钉死
+    const tmp = mkdtempSync(join(tmpdir(), "reveal-"));
+    try {
+      const result = await revealPathInFileManager(tmp, () => true);
+      expect(result.ok).toBe(true);
+      const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+      /* 目录不加 `/select`：否则窗口停在父层、只选中该文件夹，看不到里面产物。 */
+      expect(args.at(-1)).toBe(tmp);
+      expect(args.at(-1)).not.toContain("/select");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });
 
