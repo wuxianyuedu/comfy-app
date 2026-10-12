@@ -542,16 +542,17 @@ export default defineConfig({
          * 规则与判据分别已在 `workspace-tabs.ts` 与壳的 derive 层有主，
          * 给接线设门槛等于替别人记账。 */
         "src/components/studio/ViewTabStrip.tsx",
-        /* 体检清单 ⑨ 第二刀 · 四个零执行者的 router（台账 E3 从 7/16 抬到 11/16）：
-         * `film` / `train` / `model` / `llm`。这一批照出的不是「闸门弱」而是
-         * **「闸门 procedure 自己就是死的」**：`train.cancel` 的第三参在数据层
-         * 迁移期是 `select?: unknown` + `select as never`，调用点写成旧工具链的布尔投影
-         * `{ id: true, status: true }` 时编译器一声不响、运行时生成空投影 → SQL 语法错，
-         * 于是「取消训练」自那次迁移起每次 500 —— 路由没有执行者，所以没有任何一条红。
-         * 四条全按实测满档登记（52 条用例把归属、数值/协议/枚举闸与「拒绝发生在副作用
-         * 之前」逐分支钉住），掉一支当场变红。 */
+        /* 体检清单 ⑨ 的零执行者 router（台账 E3 从 7/16 抬到 11/16）：`film` /
+         * `model` / `llm` —— 原来那一批里的 `train` 已随功能废弃、文件不在仓库里了，
+         * 这条清单里的路径必须都能落到真实文件（`tests/coverage-targets-exist.test.ts`
+         * 判），留着指已删模块的条目等于一扇没人判的门。
+         * 这一批照出的不是「闸门弱」而是**「闸门 procedure 自己就是死的」**：
+         * 第三参在数据层迁移期是 `select?: unknown` + `select as never`，调用点写成旧
+         * 工具链的布尔投影 `{ id: true, status: true }` 时编译器一声不响、运行时生成
+         * 空投影 → SQL 语法错，于是「取消」这类动作自那次迁移起每次 500 —— 路由没有
+         * 执行者，所以没有任何一条红。三条全按实测满档登记（用例把归属、数值/协议/
+         * 枚举闸与「拒绝发生在副作用之前」逐分支钉住），掉一支当场变红。 */
         "src/server/api/routers/film.ts",
-        "src/server/api/routers/train.ts",
         "src/server/api/routers/model.ts",
         "src/server/api/routers/llm.ts",
         /* 工坊「镜头胶片带」这一刀的两个新文件（**两处同批**登记）。
@@ -679,12 +680,6 @@ export default defineConfig({
           functions: 70,
           statements: 70,
           branches: 60,
-        },
-        "src/lib/comfyui/executor-scheduler.ts": {
-          lines: 70,
-          functions: 70,
-          statements: 70,
-          branches: 50,
         },
         /* ── `src/lib` 的子域门槛（ISSUE #572 第 5 项 / 规范 §18.6）──────────
          *
@@ -1857,12 +1852,6 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 90,
-        },
-        "src/server/api/routers/train.ts": {
-          lines: 100,
-          functions: 100,
-          statements: 100,
-          branches: 100,
         },
         "src/server/api/routers/model.ts": {
           lines: 100,
