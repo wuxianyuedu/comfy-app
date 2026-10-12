@@ -89,7 +89,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(56 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(51 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -120,7 +120,17 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 都在」与「会失效的清单只许定义一次」都机器化：新增 .mjs 忘了登记、或在 .ps1 里又
   # 抄一份 KNOWN_FAILED_FILES，都在这里被拦下。
   run "跨平台动作对照(.ps1⇄.mjs)" node scripts/check-ps1-consistency.mjs
-  run "React 函数式 updater 纯净性" node scripts/check-react-updater-purity.cjs --staged
+  # ── AST 判据聚合档（规范 §13.5.8.2「第四笔账」，ISSUE #1747 续）──────────
+  # 下面这 6 条判据判的是**同一批文件**（src/** 的 .ts/.tsx，实测 1082 份），此前各自
+  # require("typescript") + walk + createSourceFile 全量走一遍。实测 6 个独立进程
+  # 3198ms，聚合档（一次解析 + 6×遍历）≈1.3s —— 省的是**计算重复**，不是代码重复。
+  # 共享颗粒度是**解析产物**（SourceFile），不是遍历、更不是判定：6 条判据的 main(parsed)
+  # 各自照旧跑，聚合档只用 captureProcessExit / captureOutput 接住它们的退出码与输出，
+  # 判定代码一行不重写（重写就是孪生实现，漂开的形态是静默的）。
+  # 人的动作（--report / --update / --json / --with-tests）仍走**单条脚本** —— 聚合档
+  # 只跑钩子档；`--staged` 按条透传，全跳则一次解析都不做。
+  # 逐条复验（失败输出里会给出）：node scripts/check-react-updater-purity.cjs 等 6 条。
+  run "AST 判据聚合（6 条共享一次解析）" node scripts/run-ast-gates.cjs --staged
   # 标题行(页签栏)让位：页签搬到窗口标题行后，任何 `fixed inset-0` 的顶层浮层都会
   # 把页签和右上角窗口按钮一起盖住；首轮修复只改了全屏视图、弹窗类漏改。
   run "标题行让位硬规则" node scripts/check-title-bar-clearance.cjs --staged
@@ -217,11 +227,9 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   run "浮层层级刻度棘轮" node scripts/check-overlay-z.cjs --staged
   # src 非空断言 `!` 计数棘轮：判据走 TypeScript AST (ts.isNonNullExpression),不用
   # 正则,避免误伤 `!==` / `!x` / 注释里的 `!`。扫描范围是整个 src。
-  run "src 非空断言棘轮" node scripts/check-non-null-assertions.cjs --staged
   # src/lib `void someFn(...)` 悬空棘轮：只认「整条语句就是 `void 一个函数调用`」这一
   # 形态;`void someFn().catch(...)` 链尾显式接管 rejection 的跳过。修法:改用
   # `fireAndForget(someFn(), onError)`,或 `--update` 时说明「被调方内部已 catch」。
-  run "src/lib void 悬空 Promise 棘轮" node scripts/check-void-floats.cjs --staged
   # ui/ 定制标记 ⟺ 台账（规范 16 §16.8）：`ui/` 是工具生成目录,但本仓库在若干基元上
   # 做过有意改动(button 的语义变体与 ButtonLink、dialog 的 backdrop 与 popupClassName…),
   # 此前没有任何地方记着哪个不能覆盖 —— 实测 `shadcn add command` 会顺手覆盖
@@ -382,7 +390,6 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 同一属性被指定两次（编辑器报 ts(2783)、项目钉的 typescript6 命令行不报）：
   # 命令行全绿、编辑器标红，判据只能落在源码形态上。此前是报告型（0 处 process.exit），
   # 零判定档；收成判定档的前提是实测量产为 0（ISSUE #1451 要求 2）。
-  run "TS 重复属性判定" node scripts/check-ts-duplicate-keys.cjs --staged
   # 「已知基线失败登记过期」判据（规范 §11.12 第 3、4 条 / ISSUE #1282）：
   # KNOWN_FAILED_FILES 的注释从第一天起就写着「修好立刻删」，而没有任何东西在判
   # 它有没有过期 —— 现场就是那张表自己（tests/theme-dark-token-cascade.test.ts
@@ -452,7 +459,6 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 3 处「标签行只作小标题」的合法形态（只读展示行 / 按钮组）记在基线里，
   # `FormField` 自己也兜住（只在 `children` 是函数时才给 `htmlFor`）。
   # 走 TypeScript AST（JSX 结构用正则判不准），与 check-non-null-assertions 同档。
-  run "FormField 标签⇄控件接线（§16.2.4.26）" node scripts/check-form-field-wiring.cjs --staged
 
   # 非原生元素上的「鼠标专属点击」（§6.11 键等价物）：走 TypeScript AST，
   # 判**棘轮**（`scripts/.click-keyboard-baseline.json`，基线当前 0 处、`--update`
@@ -460,7 +466,6 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 不是键盘覆盖，只认 `simpleKeyHandler(...)` 这一个出口（§16.2.4.57）；
   # 结构性站点在 `EXEMPT_SITES` 里逐条写理由，`--report` 会把它们打出来
   # （豁免是「认下这一档」，不是「这一档不存在」）。
-  run "非原生元素点击的键等价物（§6.11）" node scripts/check-click-keyboard.cjs --staged
 
   # 依赖新鲜度（§13.5.13）：只在**你动了依赖面**时判（`--staged`）——
   # 「远端改了库、你还在旧的上面干活」这一档此前没有任何执行者，本轮补上。

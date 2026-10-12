@@ -178,13 +178,29 @@ function isGuardOnly(init) {
  * @returns {{line:number, tag:string, kind:string}[]}
  */
 function scanSource(fileName, src) {
-  const sf = ts.createSourceFile(
-    fileName,
-    src,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
+  return scanTree(
+    ts.createSourceFile(
+      fileName,
+      src,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    ),
   );
+}
+
+/**
+ * 规则本体：**只吃已解析的 `SourceFile`**，不自己解析。
+ *
+ * 这是「共享颗粒度」的落点（§13.5.8.2「第四笔账」）：解析（`createSourceFile`，实测
+ * 全量 ≈550ms）由 `gate-ast-read.cjs` / `run-ast-gates.cjs` 做一次，规则在这一层
+ * **只遍历、只判定**。把两者分开，才能让「同一份文本被 N 个判据各解析一遍」变成
+ * 「解析一次、规则各遍历一遍」——而各规则的语义一个字不动。
+ *
+ * @param {import("typescript").SourceFile} sf
+ * @returns {{line:number, tag:string, kind:string}[]}
+ */
+function scanTree(sf) {
   const sites = [];
   const visit = (node) => {
     let opening = null;
@@ -240,13 +256,20 @@ function scanFile(abs) {
   return scanSource(abs, fs.readFileSync(abs, "utf8"));
 }
 
-function collect() {
+/**
+ * @param {Map<string, import("typescript").SourceFile>} [parsed]
+ *   聚合档 `run-ast-gates.cjs` 注入的**共享解析结果**（键 = 绝对路径）。
+ *   传了就复用，不再各文件 `createSourceFile` —— 这是「共享颗粒度」的边界：
+ *   **只共享解析产物，不共享遍历/判定**。不传 = 单条脚本的老路径，行为一字不变。
+ */
+function collect(parsed) {
   const sites = new Map();
   for (const abs of SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)))) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
     if (FIXTURE_SKIP.has(rel)) continue;
     if (EXEMPT_SITES[rel]) continue;
-    const hit = scanFile(abs);
+    const shared = parsed && parsed.get(abs);
+    const hit = shared ? scanTree(shared) : scanFile(abs);
     if (hit.length) sites.set(rel, hit);
   }
   return sites;
@@ -257,12 +280,13 @@ function collect() {
  * 不该有键」，不是「这一档不存在」。把它们打出来，人才看得见自己免了什么，
  * 也才有人会去复核那些理由还成不成立。
  */
-function collectExempt() {
+function collectExempt(parsed) {
   const out = new Map();
   for (const [rel, reason] of Object.entries(EXEMPT_SITES)) {
     const abs = path.join(ROOT, rel);
     if (!fs.existsSync(abs)) continue;
-    const hit = scanFile(abs);
+    const shared = parsed && parsed.get(abs);
+    const hit = shared ? scanTree(shared) : scanFile(abs);
     if (hit.length) out.set(rel, { reason, sites: hit });
   }
   return out;
@@ -280,8 +304,8 @@ function readBaseline() {
   }
 }
 
-function main() {
-  const sites = collect();
+function main(parsed) {
+  const sites = collect(parsed);
   const total = [...sites.values()].reduce((n, v) => n + v.length, 0);
 
   if (SHOULD_UPDATE) {
@@ -316,7 +340,7 @@ function main() {
           list.map((s) => `      ${s.line}: <${s.tag}>`).join("\n"),
       );
     }
-    const exempt = collectExempt();
+    const exempt = collectExempt(parsed);
     const exemptTotal = [...exempt.values()].reduce(
       (n, v) => n + v.sites.length,
       0,
@@ -383,6 +407,8 @@ function main() {
 /* 自测（`tests/click-keyboard-gate.test.ts`）钉的是**站点识别口径**。 */
 module.exports = {
   scanSource,
+  scanTree,
+  main,
   scanFile,
   collect,
   collectExempt,
