@@ -4,17 +4,23 @@
  * 唯一职责：轮询构建标识（网络收敛在 ~/lib/shell/code-update-since-load），把
  * 三类事实分别交给对应出口：
  *   ① 源码 mtime 变（buildId 变、bootId 不变）→ reportCodeUpdatedSinceLoad（陈旧实例线索）；
- *   ② 进程真的重启（bootId 变）→ onDevServerRestart（重启通知），并一并记 ①；
+ *   ② 进程真的重启（bootId 变）→ reportCodeUpdatedSinceLoad，并**仅当启动器自愈**
+ *      （带 restartReason）时另发一条 onDevServerRestart；
  *   ③ 首次探测就带 restartReason → 这个进程是启动器自愈重启起来的（重启发生在
  *      页面加载之前），补一条留底通知，让用户进应用后知道刚发生了什么。
+ *
+ * 「服务重启过」这件事的**常驻记录**不在这里，而在消息中心
+ * （`use-app-service-message-log`）：它记的是「断开 → 恢复」这一对带时刻与原因
+ * 的事件，探测 2 秒一拍，比这里 30 秒更及时；这里只保留「启动器自愈原因」这一件
+ * 本模块独占的事实——两处分工见 ② 处的注释。
  *
  * 为什么要持续轮询而不是只听 HMR 事件：本项目跑在 Tauri 壳里（生产形态是
  * 编译期内嵌的独立产物），HMR 客户端不一定在场；而「源码在别处被改、当前
  * 窗口仍然长开」恰恰是这个应用最常见的用法。轮询构建标识对这两种形态一视
  * 同仁，且失败即静默（取不到标识就当无法判定，绝不打扰）。
  *
- * 重启通知跨刷新去重：同一个 bootId（同一次重启）只提示一次，避免用户每按一次
- * Ctrl+R 就又被弹一遍。去重记在 localStorage（按 bootId），与消息中心「留底」
+ * 自愈重启的通知跨刷新去重：同一个 bootId（同一次重启）只提示一次，避免用户每按
+ * 一次 Ctrl+R 就又被弹一遍。去重记在 localStorage（按 bootId），与消息中心「留底」
  * 语义一致——留一次即可，不需要每次加载都重申。
  */
 
@@ -90,11 +96,21 @@ export function useCodeUpdateWatch({
       return;
     }
 
-    /* ② 进程真的重启（bootId 变）：单独提示，并与「仅源码 mtime 变」区分；
-     *    重启也意味着运行图整体换了，一并记为「跑过代码更新」。 */
+    /* ② 进程真的重启（bootId 变）：并入「跑过代码更新」，**并且只在启动器自愈
+     *    那一档**再单独提示一次。
+     *
+     *    为什么不在这里无条件提示「应用服务已重启」：页面长开时任何一次重启都
+     *    必然先被探活看到「断开 → 恢复」，而那条记录由消息中心统一写（见
+     *    `~/components/message-center/hooks/use-app-service-message-log`），
+     *    带得上断开时间、恢复时间与上一次结束的原因。两边都发就是同一次重启
+     *    两条消息，且这条没有时间也没有原因。
+     *
+     *    仍然要发的是**启动器自愈**那一种：`restartReason`（如路由表与源码不
+     *    一致）只有构建标识这条链路拿得到，而它在探测边沿之外——重启时探活可能
+     *    根本没失败过（进程换得比一拍还快）。 */
     if (isBootIdChange(lastBootIdRef.current, bootId)) {
       lastBootIdRef.current = bootId;
-      if (bootId) notifyRestart(bootId, restartReason);
+      if (bootId && restartReason) notifyRestart(bootId, restartReason);
       reportCodeUpdatedSinceLoad();
       return;
     }

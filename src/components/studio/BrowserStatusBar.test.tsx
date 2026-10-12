@@ -36,6 +36,19 @@ const devServerMock = vi.hoisted(() => vi.fn());
 vi.mock("./hooks/use-dev-server-status", () => ({
   useDevServerStatus: devServerMock,
 }));
+// 「断开 / 启动」记进消息中心那条接线也换桩：它会真的去打
+// `/api/dev/last-exit`，而这份用例关心的是状态栏那一格的渲染（那个 hook 有
+// 自己的用例，见 message-center/hooks/use-app-service-message-log.test.ts）。
+vi.mock(
+  "~/components/message-center/hooks/use-app-service-message-log",
+  () => ({
+    /* 桩函数带一句说明而不是空函数体（`no-empty-function`）：空桩看不出「这里是
+     * 有意不做」，将来若有人忘了换桩，那条静默的网络调用更难查。 */
+    useAppServiceMessageLog: () => {
+      /* 消息记录不在这份用例的断言面里（它有独立用例） */
+    },
+  }),
+);
 vi.mock("next/navigation", () => ({ usePathname: () => "/workspace" }));
 
 function noop() {
@@ -76,6 +89,9 @@ function devServer(
     lastRestartAt: null,
     exitNotice: null,
     lastExitAt: null,
+    /* 状态栏自己不画它，但消息中心「已启动 / 已恢复」那条记录靠它判边沿；
+     * 夹具不给真值的话，接线会安静地退化成「永不记录」。 */
+    processIsNew: true,
     ...over,
   };
 }

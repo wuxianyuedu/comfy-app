@@ -49,6 +49,17 @@ export interface DevServerLiveness {
   /** true = 本会话刚检测到一次**真正**重启（bootId 变化），短暂高亮。 */
   restarting: boolean;
   /**
+   * **这一份进程对本次页面会话来说是新的**（冷启动或真重启）。
+   *
+   * 与 `restarting` 的差别是「10 秒高亮」与「本次会话的既成事实」：那个会自己
+   * 复位，这个不会。它存在的理由是有一条判据只有它能给 ——「进程换了一个」不能
+   * 看探活失败（显示器关闭 / 后台节流 / 瞬时断网都会失败，那几条已明确不判定
+   * 重启），而整页刷新**不算**进程换新（同一份进程还在服务，刷新只是页面重来）。
+   * 消息中心「应用服务已启动 / 已恢复」那条记录就建在它上面
+   * （见 `~/lib/shell/app-service-message`）。
+   */
+  processIsNew: boolean;
+  /**
    * 「上一次应用服务为什么结束」——进程死亡那一刻由启动编排落盘、这里在服务
    * **恢复应答之后**读回（ISSUE #1692）。null = 没有原因可讲 / 还没读到。
    */
@@ -119,6 +130,9 @@ export function useDevServerLiveness(): DevServerLiveness {
    * 初值 false 表示「还没探过」，不代表故障——判据里由 everOnline 区分。 */
   const [probeOk, setProbeOk] = useState(false);
   const [everOnline, setEverOnline] = useState(false);
+  /* 「这份进程对本次页面会话来说是新的」（见 `DevServerLiveness.processIsNew`）。
+   * 初值 false：首帧还没探过，谈不上新旧。 */
+  const [processIsNew, setProcessIsNew] = useState(false);
   /* 上一次结束的原因（服务恢复应答之后才读得到，见 ~/lib/shell/app-service-exit）。
    * 只在**换了一个新 bootId** 时取一次，因此同一次故障不会随每次轮询重复读取。 */
   const [lastExit, setLastExit] = useState<AppServiceExitNotice | null>(null);
@@ -163,10 +177,17 @@ export function useDevServerLiveness(): DevServerLiveness {
         writeSession(LAST_RESTART_KEY, String(now));
         /* 短暂置「刚重启」高亮，随后自动复位。 */
         setRestarting(true);
+        setProcessIsNew(true);
         if (recentTimerRef.current) clearTimeout(recentTimerRef.current);
         recentTimerRef.current = setTimeout(() => {
           if (!stoppedRef.current) setRestarting(false);
         }, RESTART_RECENT_MS);
+      } else if (prevBootId === null) {
+        /* 首探且**没有任何基准**（sessionStorage 里也没有）：这是一次冷启动，
+         * 不是「刷新后接着看同一份进程」。区别对消息中心很要紧——前者要记一条
+         * 「应用服务已启动」，后者（刷新前基准 == 本次 bootId）一条都不该记，
+         * 否则用户每按一次 Ctrl+R 就多一条。 */
+        setProcessIsNew(true);
       }
 
       lastBootIdRef.current = bootId;
@@ -217,6 +238,7 @@ export function useDevServerLiveness(): DevServerLiveness {
 
   return {
     restarting,
+    processIsNew,
     lastRestartAt,
     lastExit,
     lastExitAt,

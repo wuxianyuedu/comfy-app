@@ -14,31 +14,30 @@
  *
  * ## 为什么让 story 声明**生产方**，而不是声明消息文案
  *
- * 消息中心里出现的文案**不是被设计出来的**，是被三处业务代码 `push()` 出来的：
+ * 消息中心里出现的文案**不是被设计出来的**，是被几处业务代码 `push()` 出来的：
  *
  * | 生产方 | 什么时候 push | 文案在哪儿 |
  * | ------ | ------------- | ---------- |
  * | `UpdateCheckProvider` | 依赖检查发现本地更新 | `onDirty` 里的字面量 |
- * | `CodeUpdateWatcher` | dev server 重启 | **导出函数** `describeDevServerRestart()` |
+ * | `CodeUpdateWatcher` | 启动器**自愈**重启（带 `restartReason`） | **导出函数** `describeDevServerRestart()` |
  * | `CodeUpdateWatcher` | 陈旧实例（`registerStaleStoreDeliver` 回调） | 同上文件里的回调体 |
+ * | `useAppServiceMessageLog` | **应用服务断开 / 启动 / 恢复** | `~/lib/shell/app-service-message` 的两个描述函数 |
  *
  * 所以 story 声明的不是「我要一条标题叫 X 的消息」，而是「**哪一处生产方在生产**」。
- * 文案由生产方那侧的导出函数**现算**（`describeDevServerRestart()`），本模块只
+ * 文案由生产方那侧的导出函数**现算**（`describeDevServerRestart()` /
+ * `describeAppServiceDisconnect()` / `describeAppServiceStart()`），本模块只
  * 负责把它交给真 action `push()`。改了生产方的文案，story 跟着变 —— 手抄一份
  * 文案清单就是第二份会漂的事实源。
  *
  * ## 一处与真机不符的地方，写在这免得被误读
  *
- * store 的 `MessageKind` 是 `"update" | "restart" | "info"` 三档，而**当前生产
- * 代码只 push 过 `"update"`**（三处调用点全在 `CodeUpdateWatcher` /
- * `UpdateCheckProvider`，`MESSAGE_KIND = "update"`）。另外两档是**渲染侧**的
- * 分档（`KIND_META` 给它们各自的图标与色调），眼下没有生产方。
- *
- * 本模块**照实**这么摆：`mixed` 那一档仍然列出三种 kind —— 因为 `KIND_META`
- * 三档的图标 / 色调 / 描边是**组件自己的**对外面（改配色表时不摆出来就看不出
- * 漂没漂），而 story 摆的就是组件在受控输入下的形态（这与值源那条「任何 JSON
- * 都是 `JsonViewer` 的真输入」同源：对渲染器而言，三档 kind 都是合法输入）。
- * 但**不编造生产方**：没有生产方的两档不假装「哪里会 push 它」，注释照实写。
+ * store 的 `MessageKind` 是 `update / restart / offline / info` 四档，而四档**都**
+ * 有真实生产方（`offline` 与 `restart` 两档由 `useAppServiceMessageLog` 产出，
+ * 见上表）。`KIND_META` 给每档各自的图标与色调，而**分档表与生产方是两份会各自
+ * 长出来的东西**：新加一档 kind 时若忘了配图标，渲染侧会退化成 `info` 那一档，
+ * 于是「颜色变了」会被误读成「状态变了」。`MessageCenterPanel` 里的
+ * `KIND_META` 因此收成 `Record<MessageKind, …>`（少一档在 tsc 就红），本文件
+ * 的 `ProducedMessage.kind` 同理引用 `MessageKind` 而不是手抄一份联合。
  *
  * ## 三条口径（与前三层同源）
  *
@@ -58,7 +57,14 @@
 import type { Decorator } from "@storybook/nextjs";
 
 import { describeDevServerRestart } from "~/components/code-update/CodeUpdateWatcher";
-import { useMessageCenterStore } from "~/components/message-center/message-center-store";
+import {
+  useMessageCenterStore,
+  type MessageKind,
+} from "~/components/message-center/message-center-store";
+import {
+  describeAppServiceDisconnect,
+  describeAppServiceStart,
+} from "~/lib/shell/app-service-message";
 
 /**
  * 一个消息场景：给「哪一处生产方在生产」，让 store 自己建出那批消息。
@@ -84,13 +90,17 @@ export interface MessageScene {
 }
 
 /**
- * 一条消息的**生产方**：`kind` 是渲染分档（`KIND_META` 只有这三档），
+ * 一条消息的**生产方**：`kind` 是渲染分档（`KIND_META` 的取值集合），
  * `make()` 现算文案。
+ *
+ * `kind` 引用 store 的 `MessageKind` 而不是手抄一份联合：新增一档时两处
+ * 一起变，抄一份就是第二份会漂的事实（漏抄的那档在这个文件里直接 tsc 报错，
+ * 而在别处是运行期退化成 `info`）。
  *
  * `make()` 而不是字面量：文案住在生产方那一侧，改了它故事跟着变。
  */
 export interface ProducedMessage {
-  readonly kind: "update" | "restart" | "info";
+  readonly kind: MessageKind;
   readonly make: () => { title: string; body: string };
 }
 
@@ -128,6 +138,34 @@ function restartNotice(): { title: string; body: string } {
   return describeDevServerRestart("restart");
 }
 
+/* 「应用服务断开 / 启动」那一处的文案 —— 取自生产方那两个描述函数。
+ *
+ * 时刻是**算出来的**而不是手抄的：这两条消息的主体就是时间与时长，抄一份
+ * `14:23:05` 只会让故事与真机长得像却不是那一件事。起点取一个固定基准，
+ * 于是「断开 → 恢复」这一对在画布上是自洽的（恢复时刻晚于断开时刻）。 */
+const SERVICE_DOWN_AT = Date.parse("2026-10-12T14:23:05");
+const SERVICE_UP_AT = SERVICE_DOWN_AT + 125_000;
+
+/** 断开那一条（`kind: "offline"` —— 断开与「已重启」在配色上是两件事）。 */
+function serviceDisconnectNotice(): { title: string; body: string } {
+  return describeAppServiceDisconnect(SERVICE_DOWN_AT);
+}
+
+/** 恢复那一条：带断开时刻、持续时长，以及上一次结束的原因与建议。 */
+function serviceRecoveredNotice(): { title: string; body: string } {
+  return describeAppServiceStart({
+    at: SERVICE_UP_AT,
+    offlineAt: SERVICE_DOWN_AT,
+    exitAt: SERVICE_DOWN_AT,
+    notice: {
+      why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
+      action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
+      detail:
+        "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+    },
+  });
+}
+
 /**
  * 场景注册表 —— **唯一**一份「名字 → 真生产方」的映射。
  *
@@ -142,12 +180,29 @@ export const MESSAGE_SCENES = {
    * 的一维（配色表漂了在单条 story 里看不出来，同 `flow-canvas.tsx` 的 `mixedKinds`）。
    */
   mixed: {
-    about: "三种 kind 各一条（更新 / 重启 / 提示）—— KIND_META 三档同屏",
+    about: "四种 kind 各一条（更新 / 重启 / 断开 / 提示）—— KIND_META 同屏",
     open: true,
     produced: [
       { kind: "update", make: updateNotice },
       { kind: "restart", make: restartNotice },
+      { kind: "offline", make: serviceDisconnectNotice },
       { kind: "info", make: staleStoreNotice },
+    ],
+  },
+  /**
+   * 「应用服务断开 → 恢复」这一对 —— 消息中心存在的核心理由（用户原话：断开的
+   * 时间和原因要能查）。
+   *
+   * 两条并排是有意义的：第一条给断开时刻与「原因会在恢复那条里给」的去向，
+   * 第二条给持续时长、上一份进程为什么结束、以及该做什么。分开摆会丢掉
+   * 「这两条讲的是同一件事的两个时刻」这一层。
+   */
+  serviceLifecycle: {
+    about: "应用服务断开 → 恢复（时刻 + 持续时长 + 上一次结束的原因与建议）",
+    open: true,
+    produced: [
+      { kind: "offline", make: serviceDisconnectNotice },
+      { kind: "restart", make: serviceRecoveredNotice },
     ],
   },
   /** 一条未读：底部铃铛的角标为 `1`，面板头部显示「1 条 · 1 条未读」。 */

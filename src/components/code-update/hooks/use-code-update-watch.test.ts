@@ -102,7 +102,7 @@ describe("useCodeUpdateWatch", () => {
     expect(hasCodeUpdatedSinceLoad()).toBe(false);
   });
 
-  it("bootId 变化（进程真的重启）→ 回调 onDevServerRestart 一次", async () => {
+  it("bootId 变化但没有自愈原因 → 不回调（这条由消息中心的「断开→恢复」记）", async () => {
     vi.useFakeTimers();
     const onRestart = vi.fn();
     probeMock
@@ -115,9 +115,28 @@ describe("useCodeUpdateWatch", () => {
 
     await vi.advanceTimersByTimeAsync(BUILD_ID_POLL_MS);
     await settle();
-    expect(onRestart).toHaveBeenCalledTimes(1);
-    // 重启也记为「跑过代码更新」。
+    /* 同一次重启不再出第二条「已重启」消息：探活（2s 一拍）那边已经记了一条
+     * 带时刻与原因的「断开 → 恢复」（见 use-app-service-message-log）。 */
+    expect(onRestart).not.toHaveBeenCalled();
+    // 重启仍然记为「跑过代码更新」。
     expect(hasCodeUpdatedSinceLoad()).toBe(true);
+  });
+
+  it("bootId 变化且带自愈原因 → 仍然回调一次（原因只有这条链路拿得到）", async () => {
+    vi.useFakeTimers();
+    const onRestart = vi.fn();
+    probeMock
+      .mockReturnValueOnce(probe("b1", "boot-A"))
+      .mockReturnValueOnce(probe("b2", "boot-B", "stale-route-table"));
+
+    renderHook(() => useCodeUpdateWatch({ onDevServerRestart: onRestart }));
+    await settle();
+    expect(onRestart).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(BUILD_ID_POLL_MS);
+    await settle();
+    expect(onRestart).toHaveBeenCalledTimes(1);
+    expect(onRestart).toHaveBeenCalledWith("stale-route-table");
   });
 
   it("首探即带 restartReason（启动器自愈重启）→ 回调一次并带上原因", async () => {
