@@ -24,15 +24,19 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { launcherChainSource } from "./helpers/launcher-source";
+
 const ROOT = process.cwd();
 const EXIT_MJS = readFileSync(
   join(ROOT, "scripts", "app-service-exit.mjs"),
   "utf8",
 );
-const LAUNCHER_MJS = readFileSync(
-  join(ROOT, "scripts", "dev-launcher.mjs"),
-  "utf8",
-);
+/* 断的是**编排链路**（主文件 + 它顶层静态 import 的 `launcher-core/**`）而不是
+ * 单份主文件：`concludeDownstreamExit` 随 R5 拆分搬进了
+ * `launcher-core/downstream.mjs`，只读主文件时 `slice` 拿到空串、
+ * `not.toContain` 则**静默恒真**（拆分的实现位置不是契约，契约是「收尾那一段
+ * 里写不写记录」）。 */
+const LAUNCHER_MJS = launcherChainSource();
 // 「收尾定性」这一族的判据不在入口文件里（§12.6 R5 的姊妹档盯着入口长度），
 // 而在 launcher-core/downstream-exit.mjs。写入侧的成因取值要看**那个**函数体。
 const DOWNSTREAM_EXIT_MJS = readFileSync(
@@ -135,15 +139,17 @@ describe("应用服务退出记录：跨侧同源", () => {
 
   it("启动编排在回收之前写下记录（写太晚 = 现场已经收走）", () => {
     // 判据 = 写入调用出现在收尾定性函数体内，且该函数以 shutdown 收尾。
-    const conclude = LAUNCHER_MJS.slice(
-      LAUNCHER_MJS.indexOf("async function concludeDownstreamExit"),
-      LAUNCHER_MJS.indexOf("async function concludeDownstreamExit") + 4000,
-    );
+    const at = LAUNCHER_MJS.indexOf("async function concludeDownstreamExit");
+    expect(at, "编排链路上找不到 concludeDownstreamExit（拆分后别断了接线）").toBeGreaterThan(-1);
+    const conclude = LAUNCHER_MJS.slice(at, at + 4000);
     expect(conclude).toContain("writeAppServiceExit(");
-    // 顺序：写记录在 `await shutdown(` 之前。
-    expect(conclude.indexOf("writeAppServiceExit(")).toBeLessThan(
-      conclude.indexOf("await shutdown("),
-    );
+    /* 顺序：写记录必须排在**回收动作**之前。
+     * 回收动作的记法随拆分变过一次（`shutdown(` → `ctx.shutdown(`）——
+     * 认「`shutdown(` 这个调用名」而不是某一种前缀，否则下一次改签名又假红，
+     * 而这条契约（先写后收）与调用方怎么称呼它无关。 */
+    const shutdownAt = conclude.indexOf("shutdown(");
+    expect(shutdownAt, "收尾那一段里找不到 shutdown 调用").toBeGreaterThan(-1);
+    expect(conclude.indexOf("writeAppServiceExit(")).toBeLessThan(shutdownAt);
   });
 
   it("启动编排绝不「启动时清掉」这份记录（清掉就等于恢复后读不到）", () => {

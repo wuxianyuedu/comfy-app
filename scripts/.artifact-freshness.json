@@ -1,10 +1,10 @@
 {
   "artifact": {
     "key": "artifact",
-    "verifiedAt": "2026-10-12T08:44:07.387Z",
-    "who": "yuedu",
+    "verifiedAt": "2026-10-12T17:10:04.095Z",
+    "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run build",
     "trackedBy": "artifact",
-    "skippedReason": "本次只改启动链路可观测性（Rust 侧新增 nextjs_log_dir/latest_prefixed_log 并加日志段，tsc/eslint/cargo test 已跑绿），未动 build-desktop/standalone 产物逻辑；本地长构建受宿主信号限制，改由免检声明记账。"
+    "skippedReason": "产物级护栏今天跑不了：pnpm run build 收尾的 check-bundle-budget 在干净 master 上就红（gzip 2226.9 → 2227.3 KB，+402 B；基线 f2a96dd4 之后有 16 次提交的累计漂移，§13.6.2 的 baseline-red，不是本次改动带来的）。本 PR 对 standalone-private-inputs.mjs 的改动只是往 RUNTIME_SCRIPTS 白名单里补 5 条 launcher-core/*.mjs 的名字，不改任何被打包的代码，因此不会影响 chunk 体积。该红的定性已在 PR 里登记，等待单开一刀修（含按 §13.5.4 的 --allow-increase 例外流程）。"
   }
 }

@@ -11,7 +11,7 @@
  *
  * 那只能覆盖「已经写了用例的那几家」，而这条判据要的是**集合本身**：
  * 新增一个带 `--update` 与基线文件的判据脚本，如果没被归类，就必须在这里红一次
- * （`完整性：每一个 --update 出口都要被三张表之一点名` 那条用例）。
+ * （`完整性：每一个 --update 出口都要被四张表之一点名` 那条用例）。
  * 抄 20 遍「搭临时仓库跑一次」的样板还会踩 §12.12 的孪生 —— 所以走
  * `tests/helpers/gate-repo.ts` 的命令式出口 `createGateRepo()`，表里每行只写
  * 「这条判据的违规长什么样」。
@@ -95,6 +95,35 @@ const TW4_FIXTURE: Pick<GateRepoOptions, "dirs" | "copy" | "setup"> = {
 };
 
 const RATCHETS: Ratchet[] = [
+  /* R5（`check-file-structure.cjs --strict` 的那一半）：`src` 侧超 900 行的文件棘轮。
+   *
+   * 它此前登记在 PENDING 里，理由是「沙箱里放一份 950 行的文件会连带命中同脚本的
+   * R1–R12 其它规则，第 ② 步（基线 = 现状时必须是绿的）先配不出来」。本轮把那个
+   * 前提拆开看：连带命中是**真的**（最小沙箱缺 `src/proxy.ts` 时 R11 当场红），
+   * 但它是**可配的输入**而不是这条判据的固有属性 —— 把 R1–R12 都喂成绿（本仓
+   * `src/proxy.ts` 就是为此存在的那份约定文件），第 ② 步就成立。
+   *
+   * 所以这一条不做 PENDING，改成把前提写进夹具：`src/proxy.ts` 是 R11 要的存在性
+   * 证据，少了它跑起来的读数是「R11 缺文件」——看起来像 R5 不工作，实际是夹具
+   * 没把输入封住（§12.16 同款：判据的输入边界没封住时它给的是环境噪声）。 */
+  {
+    script: "check-file-structure.cjs",
+    baseline: "scripts/.file-size-baseline.json",
+    /* R5 那一半只在 `--strict` 档判定（不带它时超限文件只打一行「仅提醒」）。
+     * 用默认档走第 ②/③ 步会得到「加第二条违规仍然绿」—— 那判的是「我没把判定档
+     * 打开」，不是棘轮（§11.2.1 第一条：夹具没走进判据）。 */
+    judgeArgs: ["--strict"],
+    fixture: {
+      dirs: ["src"],
+      /* R11 要 `src/proxy.ts` 在场；R1–R12 其余规则在空 `src/` 上都是绿的。 */
+      files: { "src/proxy.ts": "export function proxy() {}\n" },
+    },
+    violate: (repo, n) =>
+      repo.write(
+        `src/big${n}.ts`,
+        `// 拆分候选\n`.repeat(905) + `export const big${n} = ${n};\n`,
+      ),
+  },
   /* 基础设施层的**文件**长度棘轮（§12.6 R5 的姊妹档）：R5 / 函数长度 / 非空断言 /
    * 孪生对四类债务判据的扫描根都只有 `src`，判据自己那一层（`scripts/**` 的 .cjs/.mjs
    * 与 `tools/**` 的 .ps1，约 43k 行）因此在自己的硬闸之外。它配得进这张表而不是
@@ -221,12 +250,40 @@ const COVERED_LOCALLY: Record<string, string> = {
   ".bundle-budget-baseline.json": "tests/check-bundle-budget.test.ts",
 };
 
-/** 待配：判据写了拒涨那一支，但今天没有任何行为用例钉过（**只许减，不许增**）。 */
-const PENDING: Record<string, string> = {
-  ".file-size-baseline.json":
-    "沙箱里放一份 950 行的文件会连带命中同脚本的 R1–R12 其它规则，四步里的第 ② 步（基线=现状时必须是绿的）先配不出来",
+/**
+ * 待配：判据写了拒涨那一支，但今天没有任何行为用例钉过。
+ *
+ * **现在为空，而且判据是「必须为空」**（见下面那条用例）—— 这张表只该在
+ * 「某条棘轮刚落地、行为用例还没跟上」的那一小段时间里非空。留着它的意义是
+ * 让那段空窗**被指名**（而不是让一条没被钉过的拒涨分支混在 21 格里看不见），
+ * 不是给「懒得配用例」一个永久的出口。
+ *
+ * 曾经的两格怎么清的：
+ *   · `.file-size-baseline.json` —— 卡点写着「沙箱里放一份 950 行文件会连带命中
+ *     R1–R12 其它规则、第 ② 步配不出来」。拆开看：连带命中是真的（缺
+ *     `src/proxy.ts` 时 R11 当场红），但那份文件是**可配的输入**，
+ *     把 R1–R12 都喂绿第 ② 步就成立 —— 于是它进了 `RATCHETS`，夹具里带
+ *     `src/proxy.ts`。
+ *   · `.ui-primitives-baseline.json` —— 卡点写着「拒涨按 rule id 比较，要先把
+ *     rule 集合钉住」。本轮实测：`HARD_GATE_RULES` 已覆盖全部 85 条，
+ *     `ratchetOnly()` 的返回恒为空 —— **棘轮那条车道上一个成员都没有**，
+ *     于是「拒涨」在这一家无对象可判（`--update` 写回去的永远是一份空账）。
+ *     它不该按「还没配用例」记账，而该按「判据已整条升硬闸、棘轮车道空置」
+ *     记账 —— 见下面 `RETIRED_RATCHETS`。
+ */
+const PENDING: Record<string, string> = {};
+
+/**
+ * 已退出棘轮车道、**只剩硬闸**的判据（基线文件仍在、`--update` 仍是个出口，
+ * 但它写回去的永远是一份空账）。
+ *
+ * 与 `NOT_A_RATCHET` 的差别：那里是「加条目本就是正常用法」，这里是
+ * 「棘轮形态本身被淘汰了」—— 两条路都不该走五步拒涨判据，理由却完全不同，
+ * 所以分两张表。**这一张只许增不许减**（把它退回 PENDING 等于假装还有存量）。
+ */
+const RETIRED_RATCHETS: Record<string, string> = {
   ".ui-primitives-baseline.json":
-    "它的拒涨按 rule id 比较，而「旧基线里没有这个 rule id」既被当成正当的判据引入、又是今天 0 处基线上新增违规的形状 —— 要先把 rule 集合本身钉住才能配拒涨判据",
+    "85 条判据全部在 HARD_GATE_RULES 里（`ratchetOnly()` 恒返回空），棘轮车道已无成员；`--update` 写回去的永远是空账，拒涨无对象可判",
 };
 
 /** 不是计数棘轮的 `--update` 出口：加条目是它的正常用法，拒涨反而错。理由必须写在册子上。 */
@@ -421,7 +478,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
     );
   }
 
-  describe("完整性：每一个 --update 出口都要被三张表之一点名", () => {
+  describe("完整性：每一个 --update 出口都要被四张表之一点名", () => {
     const found = discoveredBaselines();
 
     it("现算出的基线清单非空（脚本改动让正则失效时，本条要红而不是静默绿）", () => {
@@ -436,29 +493,34 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
             !rowByBaseline(b) &&
             !COVERED_LOCALLY[b] &&
             !PENDING[b] &&
+            !RETIRED_RATCHETS[b] &&
             !NOT_A_RATCHET[b],
         );
       expect(
         unclassified,
         `这些判据脚本带 --update 且就地落盘基线，却没被任何一张表点名 —— ` +
-          `要么补进 RATCHETS（配一条拒涨用例），要么在 PENDING / NOT_A_RATCHET 里写下理由：\n` +
+          `要么补进 RATCHETS（配一条拒涨用例），要么在 PENDING / RETIRED_RATCHETS / ` +
+          `NOT_A_RATCHET 里写下理由：\n` +
           unclassified.join("\n"),
       ).toEqual([]);
     });
 
-    it("PENDING 只许减不许增（新棘轮不许靠登记待办把自己变成「已知欠账」）", () => {
-      const ceiling = 2;
+    it("PENDING 必须为空（新棘轮不许靠登记待办把自己变成「已知欠账」）", () => {
+      /* 上限从 2 收到 0：它那两格本轮都配上了（一格进 RATCHETS、一格进
+       * RETIRED_RATCHETS），再留一个「最多两格」的额度就等于给下一条棘轮
+       * 预支一张免配票 —— 而这张票的代价恰恰是那条拒涨分支**没人钉过**。 */
       expect(
-        Object.keys(PENDING).length,
-        `待配清单只剩 ${ceiling} 格的上限，多出来的那一格必须直接配用例`,
-      ).toBeLessThanOrEqual(ceiling);
+        Object.keys(PENDING),
+        "待配清单必须为空：新增的棘轮在同一批里就把拒涨判据配好",
+      ).toEqual([]);
     });
 
-    it("三张表里点名的基线文件必须还在（删了脚本却忘了删登记 = 下一格假绿灯）", () => {
+    it("四张表里点名的基线文件必须还在（删了脚本却忘了删登记 = 下一格假绿灯）", () => {
       const listed = [
         ...RATCHETS.map((r) => r.baseline.split("/").pop() ?? r.baseline),
         ...Object.keys(COVERED_LOCALLY),
         ...Object.keys(PENDING),
+        ...Object.keys(RETIRED_RATCHETS),
         ...Object.keys(NOT_A_RATCHET),
       ];
       const dir = join(import.meta.dirname, "..", "scripts");
@@ -481,6 +543,12 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           `NOT_A_RATCHET 里的 ${name} 不在现算清单里`,
         ).toBe(true);
       }
+      for (const name of Object.keys(RETIRED_RATCHETS)) {
+        expect(
+          known.has(name),
+          `RETIRED_RATCHETS 里的 ${name} 不在现算清单里`,
+        ).toBe(true);
+      }
       for (const name of Object.keys(COVERED_LOCALLY)) {
         expect(known.has(name), `册上的 ${name} 不在现算清单里`).toBe(true);
       }
@@ -488,7 +556,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
 
     it("表里每一行的脚本与基线，现算清单都要能认出来（防止判据单方面退网）", () => {
       /**
-       * 上面那条判「found ⊆ 三张表」，这一条判反向「表 ⊆ found」。
+       * 上面那条判「found ⊆ 四张表」，这一条判反向「表 ⊆ found」。
        *
        * 只做正向会有一个静默失效面：把某家的落盘写法改成第三种形状（比如经由一个
        * 变量拼路径），现算清单就少一行 —— 正向那条不会红（少的那一行不在 found 里，
@@ -502,6 +570,45 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           `现算清单认不出 ${r.script} 会把 ${name} 写回去 —— ` +
             "要么落盘形状变了（判据退网），要么这一行该删（基线不再由它落盘）",
         ).toBe(true);
+      }
+    });
+
+    it("RETIRED_RATCHETS 的理由必须可核：棘轮车道真的没有成员了", () => {
+      /**
+       * `RETIRED_RATCHETS` 的每一条都是一句**关于判据现状的断言**（「棘轮车道已无成员」），
+       * 而不是一个「暂时先这么记着」的便签。既然它是断言，就得有东西核它 —— 否则
+       * 下一批新判据按棘轮形态落地（先冻结存量、再清零，那正是这条判据鼓励的顺序）
+       * 时，这个条目会继续在册、而那家**真有一条棘轮**却没有五步用例。
+       *
+       * 核的方式是问判据自己而不是抄一份规则清单：`check-ui-primitives.cjs` 的
+       * `ratchetOnly()` 现在从真仓库里算不出任何成员。用一个空 `src/` 沙箱问它，
+       * 比在用例里重列一遍 `HARD_GATE_RULES` 稳（后者会随每次升闸漂）。
+       */
+      for (const name of Object.keys(RETIRED_RATCHETS)) {
+        const row = found.find((f) => f.baseline === name);
+        expect(row, `${name} 不在现算清单里`).toBeDefined();
+        /* 问判据自己：**在干净沙箱里 `--update`**，读它落盘的那份基线。
+         * 「棘轮车道已无成员」的机器形态就是「它写回去的 `rules` 是空对象」——
+         * 棘轮那一支只登记非硬闸规则（见 `ratchetOnly()`）。 */
+        const handle = createGateRepo({ script: row!.script, dirs: ["src"] });
+        try {
+          const seed = handle.repo.run(["--update"]);
+          expect(seed.code, seed.output).toBe(0);
+          /* 表里的 `baseline` 带目录前缀（用于 `discoveredBaselines` 对齐），
+           * 而沙箱里脚本落点是 `scripts/`（`dir` 默认档），读回时要去掉前缀。 */
+          const baselineRel =
+            row!.baseline.split("/").pop() ?? row!.baseline;
+          const written = JSON.parse(
+            handle.repo.read(join("scripts", baselineRel)),
+          ) as { rules?: Record<string, unknown> };
+          expect(
+            Object.keys(written.rules ?? {}),
+            `${row!.script} 的棘轮车道又有成员了（--update 写回了非空 rules）——` +
+              `这一条该从 RETIRED_RATCHETS 移回 RATCHETS 并配五步用例`,
+          ).toEqual([]);
+        } finally {
+          handle.dispose();
+        }
       }
     });
 

@@ -33,6 +33,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import { launcherChainSource } from "./helpers/launcher-source";
+
 const LAUNCHER = join(process.cwd(), "scripts", "dev-launcher.mjs");
 const CRITERIA = join(
   process.cwd(),
@@ -40,7 +42,11 @@ const CRITERIA = join(
   "launcher-core",
   "downstream-exit.mjs",
 );
-const launcher = readFileSync(LAUNCHER, "utf8");
+/* 断的是**编排链路**（入口 + 它顶层静态 import 的 `launcher-core/**`）而不是
+ * 单份入口文件：`concludeDownstreamExit` 随 R5 拆分搬进了
+ * `launcher-core/downstream.mjs`，只读入口时 `indexOf` 落空 ⇒ `slice` 拿到空串 ⇒
+ * `not.toContain("throw")` 一类断言**静默恒真**。 */
+const launcher = launcherChainSource();
 /** 判据与文案的**唯一实现处**（入口文件只是再导出，不许有第二份要同步）。 */
 const criteria = readFileSync(CRITERIA, "utf8");
 const SHELL = join(process.cwd(), "src-tauri", "src", "lib.rs");
@@ -128,9 +134,12 @@ describe("编排器下游退出判据（launcher-core/downstream-exit.mjs）", (
     expect(abandonedBranch).toContain("用户放弃本次启动");
     expect(abandonedBranch).not.toContain("失败");
     // 主流程里 abandoned 走 shutdown(0)
-    const conclude = launcher.slice(
-      launcher.indexOf("async function concludeDownstreamExit"),
-    );
+    const at = launcher.indexOf("async function concludeDownstreamExit");
+    expect(
+      at,
+      "编排链路上找不到 concludeDownstreamExit（拆分后别断了接线）",
+    ).toBeGreaterThan(-1);
+    const conclude = launcher.slice(at);
     const abandonedPath = conclude.slice(
       conclude.indexOf('if (kind === "abandoned")'),
       conclude.indexOf('log(detail, "ERROR")'),
@@ -226,10 +235,17 @@ describe("失败出口给出的是**本次运行**的日志，不是按名字猜
    * 契约：本次的路径本来就是已知量，必须**传进去**，不许再按名字猜一次。
    */
   it("concludeDownstreamExit 接收并转发本次的 stdout/stderr 路径", () => {
-    const conclude = launcher.slice(
-      launcher.indexOf("async function concludeDownstreamExit"),
-      launcher.indexOf("/** 心跳定时器的引用遮蔽"),
-    );
+    /* 收尾函数体：从它的定义处切到**下一处顶层导出**为止。切末点不写死成某个
+     * 注释（那会随文案改动漂），而是「下一个 `export ` / `/**` 块的开头」——
+     * 函数在链路里是最后一段时给到文件尾也成立。 */
+    const start = launcher.indexOf("async function concludeDownstreamExit");
+    expect(
+      start,
+      "编排链路上找不到 concludeDownstreamExit（拆分后别断了接线）",
+    ).toBeGreaterThan(-1);
+    const rest = launcher.slice(start + 1);
+    const nextTop = rest.search(/\nexport /);
+    const conclude = nextTop === -1 ? rest : rest.slice(0, nextTop);
     expect(conclude).toContain("stdoutFile");
     expect(conclude).toContain("stderrFile");
     // 转发给 describeDownstreamExit（否则等于收下又不用）
@@ -237,10 +253,14 @@ describe("失败出口给出的是**本次运行**的日志，不是按名字猜
   });
 
   it("调用点传的是本次起的 nextOut / nextErr（不是重找的路径）", () => {
-    const call = launcher.slice(
-      launcher.indexOf("return await concludeDownstreamExit({"),
-      launcher.indexOf("if (!ready)"),
+    const callAt = launcher.indexOf(
+      "return await concludeDownstreamExit(downstreamCtx, {",
     );
+    expect(
+      callAt,
+      "编排链路上找不到 concludeDownstreamExit 的调用点（拆分后别断了接线）",
+    ).toBeGreaterThan(-1);
+    const call = launcher.slice(callAt, launcher.indexOf("if (!ready)", callAt));
     expect(call).toContain("stdoutFile: nextOut");
     expect(call).toContain("stderrFile: nextErr");
   });
@@ -278,8 +298,22 @@ describe("判据用到的壳标记在壳侧真实存在", () => {
     // 只 import 调用（不再再导出——没有调用方走那道门，少一层转发少一处漂移）。
     expect(criteria).toContain("export function readShellMarkers(");
     expect(criteria).toContain("export function downstreamExitKind(");
-    expect(launcher).toContain("readShellMarkers,");
-    expect(launcher).not.toContain("export function downstreamExitKind(");
-    expect(launcher).not.toContain("export function describeDownstreamExit(");
+    /* 这两条**必须读入口那一份**，不能读链路：链路里当然含判决层的定义
+     *（那正是唯一实现），而本用例要判的是「入口不许**再导出**一遍」——
+     * 读链路会把「实现住在判决层」误判成「入口里有第二份导出」。 */
+    const entry = readFileSync(LAUNCHER, "utf8");
+    /* 入口此刻真的 import 了这几样（把「接线还在」与「不许再导出」分成两条断，
+     * 而不是靠一条 `toContain("readShellMarkers,")` 同时承担两件事 ——
+     * 那个名字现在是判决层内部的实现细节，入口只经 `concludeDownstreamExit`
+     * 间接用到它）。 */
+    expect(entry).toContain("concludeDownstreamExit,");
+    expect(entry).toContain('from "./launcher-core/downstream-exit.mjs"');
+    expect(entry).not.toContain("export function downstreamExitKind(");
+    expect(entry).not.toContain("export function describeDownstreamExit(");
+    /* 而且判决层的那份导出在链路里**只出现一次**（第二份实现 = 孪生）。 */
+    expect(
+      launcher.split("export function downstreamExitKind(").length - 1,
+      "判决表在编排链路上只能有一份实现",
+    ).toBe(1);
   });
 });

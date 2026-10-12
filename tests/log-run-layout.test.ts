@@ -30,6 +30,7 @@ import {
   startRun,
   zipDirectory,
 } from "../scripts/launcher-core/run.mjs";
+import { launcherChainSource } from "./helpers/launcher-source";
 
 /** run.json 的形态（判据只读这几个字段）。 */
 type RunMeta = {
@@ -516,14 +517,14 @@ describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", ()
 
 describe("旧归档机制已移除（只留一处归档实现）", () => {
   it("dev-launcher 收尾只有 archiveCurrent，没有第二份年月归档", () => {
-    const src = fs.readFileSync(
-      path.join(ROOT, "scripts", "dev-launcher.mjs"),
-      "utf8",
-    );
+    /* 断的是**编排链路**（主文件 + `launcher-core/**`）而不是单份主文件：
+     * 收尾那一段随 R5 拆分搬进了 `launcher-core/misc-ops.mjs`，只读主文件时
+     * `toContain` 会对着空串报红、`not.toContain` 则**静默恒真**。 */
+    const src = launcherChainSource();
     // 旧实现把 dev-launcher.log append 进 log/archive/<yyyy-MM>/，与新布局的
     // 「整目录复制」是两条互不相干的归档通道 —— 留着它 = 同一件事两个口径。
     expect(src).not.toContain("archiveRunLog");
-    expect(src).toContain("archiveCurrent(ROOT");
+    expect(src).toContain("archiveCurrent(");
   });
 
   it("log.mjs 里不再有年月归档出口与 archive 分区", async () => {

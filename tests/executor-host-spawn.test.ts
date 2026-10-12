@@ -38,6 +38,7 @@ import {
   maybeSpawnExecutorHost,
   planExecutorHostSpawn,
 } from "../scripts/launcher-core/executor-host-spawn.mjs";
+import { launcherChainSource } from "./helpers/launcher-source";
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -241,15 +242,20 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
   });
 
   it("scripts/dev-launcher.mjs 的 spawnExecutorHost 只是薄包装，判据在共用件", () => {
-    const source = readScript("scripts/dev-launcher.mjs");
+    /* 断的是**编排链路**（主文件 + `launcher-core/**`）而不是单份主文件：
+     * R5 拆分后「入口那一层转发、实现住 `downstream.mjs`」才是形态，
+     * 只读主文件时 `maybeSpawnExecutorHost` 在这两处分散着、断言看不出全貌。 */
+    const source = launcherChainSource();
     expect(source).toContain("maybeSpawnExecutorHost");
-    /* 它自己那一段**不许**再拼一次 spawnInGroup：两份实现并存就是本判据要防的
-     * 形态（改成「两边一起改」靠的是纪律，不是机制）。 */
-    const fnAt = source.indexOf("export function spawnExecutorHost(");
-    expect(fnAt).toBeGreaterThan(-1);
-    const body = source.slice(fnAt, fnAt + 600);
+    /* **入口那一层**不许再拼一次 spawnInGroup：两份实现并存就是本判据要防的
+     * 形态（改成「两边一起改」靠的是纪律，不是机制）。实现那一份里出现
+     * `spawnInGroup` 是正当的（它就是共用件），所以只断入口这一段。 */
+    const entry = readScript("scripts/dev-launcher.mjs");
+    const fnAt = entry.indexOf("export function spawnExecutorHost(");
+    expect(fnAt, "入口里找不到 spawnExecutorHost（拆分后别断了接线）").toBeGreaterThan(-1);
+    const body = entry.slice(fnAt, fnAt + 600);
     expect(body).not.toContain("spawnInGroup");
-    expect(body).toContain("maybeSpawnExecutorHost");
+    expect(body).toContain("downstreamSpawnExecutorHost(");
   });
 
   it("scripts/standalone-runtime.mjs 保留自己那一档（形态不同，登记为已知差异）", () => {
