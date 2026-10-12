@@ -41,9 +41,11 @@
  * (`min-h-0`，见 `~/lib/full-screen-layer` 的 `FULL_PAGE_CLEARANCE_CLASS`)。
  *
  * 用法:node scripts/check-title-bar-clearance.cjs
+ *   --staged(钩子用)仅当暂存改动落在扫描面(src/components + src/app)内才扫,口径见 §13.5.8.2
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const SCAN_DIRS = ["src/components", "src/app"];
@@ -102,6 +104,12 @@ function walk(dir, out = []) {
 }
 
 const rel = (p) => p.split(path.sep).join("/");
+
+/* --staged：扫描面就是 SCAN_DIRS，未触及即跳过（见 §13.5.8.2）。 */
+if (process.argv.includes("--staged")) {
+  skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[title-bar]" });
+}
+
 const problems = [];
 const notes = [];
 

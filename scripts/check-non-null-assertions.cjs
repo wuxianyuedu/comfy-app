@@ -29,20 +29,32 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const ts = require("typescript");
 
 const ROOT = path.resolve(__dirname, "..");
 const BASELINE = path.join(__dirname, ".non-null-assertions-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const REPORT_ONLY = ARGS.has("--report");
+const STAGED = ARGS.has("--staged");
+
+/** 扫描根。**必须在 `--staged` 短路之前**（见下），所以提到这里。 */
+const SCAN_DIR = "src";
+
+/* `--staged`（钩子用）＝ **输入面跳过**：暂存里没有一个文件落在扫描面内时短路，
+ * 打印理由后 exit 0（见 §13.5.8.2、`scripts/gate-scan-read.cjs`）。
+ * 短路点放在 `require("typescript")` **之前** —— 那一步模块加载实测约 180ms，
+ * 放在后面的话「跳过」档也照样付这笔钱，省下的那一步就白省了。 */
+if (STAGED && !REPORT_ONLY && !UPDATE) {
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[non-null]" });
+}
+
+const ts = require("typescript");
 
 /** 判据版本:`ts.isNonNullExpression` 语义固定,不会漂;留号便于将来
  *  把 `x?.y!` / `<T>x!` 之类扩展形态纳入时区分。
  *  v1 → v2:扫描范围从 src/lib 扩到整个 src (基线数字量级变化,不再是同一个量)。 */
 const RULE_VERSION = 2;
 
-const SCAN_DIR = "src";
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
 
@@ -65,17 +77,17 @@ function collectFiles(dir, out = []) {
   return out;
 }
 
-/** 用 TS AST 数一个文件里 `NonNullExpression` 节点的出现次数。 */
-function countFor(rel) {
-  const abs = path.join(ROOT, rel);
-  const src = fs.readFileSync(abs, "utf8");
-  const sf = ts.createSourceFile(
-    rel,
-    src,
-    ts.ScriptTarget.Latest,
-    /* setParentNodes */ true,
-    rel.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+/**
+ * 规则本体:数一份**已解析**源码里 `NonNullExpression` 节点的出现次数。
+ *
+ * **只吃已解析的 `SourceFile`**，不自己解析 —— 这是「共享颗粒度」的落点
+ * （§13.5.8.2「第四笔账」）:解析全量 ≈550ms,由 `gate-ast-read.cjs` /
+ * `run-ast-gates.cjs` 做一次,规则只遍历、只判定。
+ *
+ * @param {import("typescript").SourceFile} sf
+ * @returns {number}
+ */
+function countTree(sf) {
   let count = 0;
   const visit = (node) => {
     if (ts.isNonNullExpression(node)) count += 1;
@@ -83,6 +95,31 @@ function countFor(rel) {
   };
   visit(sf);
   return count;
+}
+
+/**
+ * 单条脚本自己的入口:解析一份文件再数。
+ *
+ * @param {string} rel 仓库根相对路径
+ * @param {Map<string, import("typescript").SourceFile>} [parsed]
+ *   聚合档 `run-ast-gates.cjs` 注入的**共享解析结果**（键 = 该 `rel`）。
+ *   传了就复用，不再逐文件 `createSourceFile` —— 只共享解析产物，不共享遍历/判定。
+ *   不传 = 老路径，行为一字不变。
+ */
+function countFor(rel, parsed) {
+  const shared = parsed && parsed.get(rel);
+  if (shared) return countTree(shared);
+  const abs = path.join(ROOT, rel);
+  const src = fs.readFileSync(abs, "utf8");
+  return countTree(
+    ts.createSourceFile(
+      rel,
+      src,
+      ts.ScriptTarget.Latest,
+      /* setParentNodes */ true,
+      rel.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    ),
+  );
 }
 
 /** 读基线;返回 { files: { 相对路径 → 计数 }, total }。缺文件视为首次运行。 */
@@ -108,12 +145,12 @@ function writeBaseline(files, total) {
   fs.writeFileSync(BASELINE, JSON.stringify(payload, null, 2) + "\n");
 }
 
-function main() {
+function main(parsed) {
   const files = collectFiles(SCAN_DIR).sort();
   const current = {};
   let total = 0;
   for (const rel of files) {
-    const n = countFor(rel);
+    const n = countFor(rel, parsed);
     if (n > 0) {
       current[rel] = n;
       total += n;
@@ -201,4 +238,7 @@ function main() {
   console.log("[non-null] OK");
 }
 
-main();
+/* 规则本体导出给聚合档 `run-ast-gates.cjs`（单条脚本行为不变）。 */
+module.exports = { countTree, countFor, collectFiles, main, RULE_VERSION, BASELINE, SCAN_DIR, isTestFile };
+
+if (require.main === module) main();

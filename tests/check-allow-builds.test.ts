@@ -7,13 +7,16 @@
  * 第一次复现是在下一个人跑非交互 `pnpm install --frozen-lockfile` 的那一刻。
  * 「改动点与故障点不同人、且中间隔一次安装」正是判据该钉住的形态。
  *
- * 因此这一族的用例分两层：
+ * 因此这一族的用例分三层：
  *   ① 判决面 —— 登记 `true` / 显式 `false` 都放行，漏登记才红；顺带钉住几个
  *      **容易写坏**的边界（空串脚本不算站点、作用域包按 `@scope/name` 认名字、
  *      同名多版本共享一条登记）；
  *   ② 输入面 —— 名单块没了、`pnpm-workspace.yaml` 没了、`node_modules/.pnpm` 没了，
  *      三种「读不到输入」都必须红。这一组比 ① 更要紧：把缺输入写成静默 `exit(0)`，
- *      判据会在一份依赖都没读的情况下报绿，而那正是 §13.5.12 立起来要防的那一族。
+ *      判据会在一份依赖都没读的情况下报绿，而那正是 §13.5.12 立起来要防的那一族；
+ *   ③ 条件触发面 —— 钩子里那一步带 `--staged`，三个方向都要钉（面外跳过 / 命中
+ *      照旧真扫 / 无暂存跳过）。只看退出码不够：「跳过」与「扫过没问题」同码，
+ *      把 `--staged` 实现成「永远跳过」的改动会全绿通过（ISSUE #1747 那一族）。
  *
  * 「名单里多余条目」反向**不判**，本文件用第 ⑩ 条把它钉住：现状 11 个条目里 8 个
  * 是这种正当形态（`better-sqlite3` 显式拒绝的理由写在 yaml 里、`@prisma/*` 给可选
@@ -36,17 +39,31 @@ const CHECKLIST_DOC = join(
   "standards",
   "13-提交与-code-review.md",
 );
-const GATE_CMD = "node scripts/check-allow-builds.cjs";
-const GATE_LABEL = "依赖构建脚本与 allowBuilds 对账";
+const GATE_CMD = "node scripts/check-allow-builds.cjs --staged";
+const GATE_LABEL = "依赖构建脚本与 allowBuilds 对账（只判动了依赖面的提交）";
 
 const { test, expect } = defineGateRepo({
   script: "check-allow-builds.cjs",
   workdir: "allow-builds-gate",
-  // 判据复用门禁扫描面的共用读取（消失/竞态那一层），临时工作区里得一起带上，
-  // 否则表现是脚本 exit 2、读起来像门禁自己坏了。
+  // 判据复用门禁扫描面的共用读取（消失/竞态 + `--staged` 短路器那一层），以及依赖面清单
+  // 的那一处出处，两份都得带进临时工作区 —— 漏任何一份的表现都是脚本 exit 2、
+  // 读起来像被测门禁自己坏了。
   copy: [
     { from: "scripts/gate-scan-read.cjs", to: "scripts/gate-scan-read.cjs" },
+    {
+      from: "scripts/dependency-face.mjs",
+      to: "scripts/dependency-face.mjs",
+    },
   ],
+  // `--staged` 那三档的被测输入是**暂存区本身**，所以临时工作区必须是真 git 仓库；
+  // 配身份与 `commit.gpgsign=false` 收在这一层（宿主全局开了签名时裸 commit 会失败，
+  // 报错指不到夹具）。
+  setup: (repo) => {
+    repo.git("init", "-q");
+    repo.git("config", "user.email", "t@local");
+    repo.git("config", "user.name", "t");
+    repo.git("config", "commit.gpgsign", "false");
+  },
 });
 
 /** 造一份最小 `pnpm-workspace.yaml`，`entries` 是 allowBuilds 块的整行内容。 */
@@ -197,6 +214,70 @@ test("反向不判：名单里有无脚本的条目都不算违规", ({ repo }) 
   repo.write(one.path, one.body);
   const { code, output } = repo.run();
   expect(code, output).toBe(0);
+});
+
+/**
+ * `--staged` 的输入面跳过（ISSUE #1747 同族）。
+ *
+ * 三个方向都要钉：不在依赖面内 ⇒ 跳过（省下那一次全树扫描）；命中依赖面 ⇒ **照旧真扫**
+ * （跳过不是「让判据松掉」的后门）；无暂存 ⇒ 跳过（不为空提交白扫全库）。
+ *
+ * 为什么断言 `code` 之外还要看输出：「跳过」与「扫过之后没有问题」是同一个退出码，
+ * 只看码的话，一条把 `--staged` 实现成「永远跳过」的改动能全绿通过 —— 那正是门禁静默
+ * 失效的形态（§11.23 的「声明 ⇄ 读者」）。
+ */
+test("暂存全在依赖面外 → 跳过，不冒充扫过的结论", ({ repo }) => {
+  repo.write("pnpm-workspace.yaml", workspace([]));
+  const one = installed("esbuild@0.28.2", "esbuild", {
+    postinstall: "node install.js",
+  });
+  repo.write(one.path, one.body);
+  // 违规确实摆在那里，但这次提交没动那三个文件 —— 新带构建脚本的包不可能从别处进来。
+  repo.write("docs/plan.md", "# 计划\n");
+  repo.git("add", "docs/plan.md");
+  const { code, output } = repo.run(["--staged"]);
+  expect(code, output).toBe(0);
+  expect(output).toContain("未触及依赖面");
+});
+
+test("暂存命中依赖面 → 真扫，未登记的包照旧阻断", ({ repo }) => {
+  repo.write("pnpm-workspace.yaml", workspace([]));
+  const one = installed("esbuild@0.28.2", "esbuild", {
+    postinstall: "node install.js",
+  });
+  repo.write(one.path, one.body);
+  repo.write(
+    "package.json",
+    JSON.stringify({ name: "probe", version: "1.0.0" }),
+  );
+  repo.git("add", "package.json");
+  const { code, output } = repo.run(["--staged"]);
+  expect(code, output).toBe(1);
+  expect(output).not.toContain("未触及依赖面");
+  expect(output).toContain("esbuild@1.0.0");
+});
+
+test("无暂存改动 → 跳过（不为空提交白扫全库）", ({ repo }) => {
+  repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+  const one = installed("esbuild@0.28.2", "esbuild", {
+    postinstall: "node install.js",
+  });
+  repo.write(one.path, one.body);
+  const { code, output } = repo.run(["--staged"]);
+  expect(code, output).toBe(0);
+  expect(output).toContain("未触及依赖面");
+});
+
+test("动了 pnpm-workspace.yaml（名单自己）也算命中依赖面", ({ repo }) => {
+  repo.write("pnpm-workspace.yaml", workspace([]));
+  const one = installed("unrs-resolver@1.0.0", "unrs-resolver", {
+    postinstall: "node scripts/patch.js",
+  });
+  repo.write(one.path, one.body);
+  repo.git("add", "pnpm-workspace.yaml");
+  const { code, output } = repo.run(["--staged"]);
+  expect(code, output).toBe(1);
+  expect(output).toContain("unrs-resolver@1.0.0");
 });
 
 /** D 组步骤：两空格缩进的 `run "<标签>" <命令>`，行首锚定只认真调用。 */

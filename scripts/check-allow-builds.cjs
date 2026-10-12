@@ -68,8 +68,30 @@
  * 那比崩掉更坏（同 `gate-scan-read.cjs` 头部那句口径）。所以这里判红，
  * 并把出口直接写成那一条命令。
  *
- * 用法：node scripts/check-allow-builds.cjs
- * 退出码：0 = 名单覆盖齐全；1 = 有带构建脚本的依赖未登记，或扫描面读不到。
+ * ── 为什么是条件触发（`--staged`），而不是每次提交都扫 ──────────
+ *
+ * 一次全树扫描 4.5s，而**能让「带构建脚本的依赖」发生变化的输入只有三个文件** ——
+ * `package.json`（直接依赖）、`pnpm-lock.yaml`（解析结果，传递依赖的新版本可能新带
+ * 一个 postinstall）、`pnpm-workspace.yaml`（名单自己）。只改文档 / 只加碎片 /
+ * 只动 `src/` 的那一类提交，扫多少遍结论都一样。
+ *
+ * 这与本仓既定的口径同源（ISSUE #1747：D 组里全库扫描的两步按输入面跳过；
+ * §13.5.12 那条「无条件挂上昂贵的判据 ⇒ 所有人开始 `--no-verify` ⇒ 判据归零」）。
+ * 跳过时**打印理由**（与「扫过之后没问题」在输出上可分，不伪造绿），读不到暂存清单
+ * 走 `exit 2` 而不是冒充「未触及」—— 两件事都由共用短路器
+ * `gate-scan-read.cjs` 的 `skipUnlessStagedTouches()` 一处实现，本脚本不另写一份。
+ *
+ * **为什么「只在依赖面判」不是把判据松掉**：带构建脚本的包只能从那三个文件进来，
+ * 所以触发条件与违规的可能来源**是同一批文件**；而存量实测为 0（1377 个安装条目里
+ * 只有 3 个带构建脚本、全部已登记），没有历史欠账被留在跳过档里。日后若依赖面
+ * 之外冒出了新站点，把这三个文件之外的输入加进 `DEPENDENCY_FILES` 即可 —— 那份清单
+ * 收在 `dependency-face.mjs` 一处，本脚本 import 它而不是抄第二份（§12.12）。
+ *
+ * 用法：
+ *   node scripts/check-allow-builds.cjs            # 全量判（手动 / 合并前那一跳）
+ *   node scripts/check-allow-builds.cjs --staged   # 只在本次提交动了依赖面时判
+ * 退出码：0 = 名单覆盖齐全（或未触及依赖面而跳过）；1 = 有带构建脚本的依赖未登记，
+ * 或扫描面读不到；2 = `--staged` 下读不到暂存清单（判据没跑成，不冒充跳过）。
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -77,8 +99,16 @@ const {
   dirExists,
   readForScan,
   readdirForScan,
+  skipUnlessStagedTouches,
   vanishedNote,
 } = require("./gate-scan-read.cjs");
+/* 「动了哪些文件算动了依赖面」只有那一处定义：`dependency-face.mjs` 的导出。
+   为什么不在这里抄第二份三文件清单 —— 抄的那份不会跟着长，将来清单加第四项时本判据
+   静默漏判（§12.12 说的「漂开的形态是静默的」）。为什么也不直接 import
+   `check-deps-freshness.mjs`：那份判据的模块图带着 `lockfile/lock-diff.mjs`、
+   `launcher-core/worktree.mjs` 一串下游，为一个常量拖进整条链，代价落在门禁自测的
+   临时工作区上（少拷一个就是 `ERR_MODULE_NOT_FOUND`，读起来像被测判据坏了）。 */
+const { DEPENDENCY_FILES } = require("./dependency-face.mjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const WORKSPACE_FILE = path.join(ROOT, "pnpm-workspace.yaml");
@@ -138,17 +168,27 @@ function collectInstalledPackages() {
 
   for (const storeDir of storeDirs) {
     if (!storeDir.isDirectory()) continue;
-    const inner = readdirForScan(path.join(PNPM_DIR, storeDir.name, "node_modules"));
+    const inner = readdirForScan(
+      path.join(PNPM_DIR, storeDir.name, "node_modules"),
+    );
     if (inner === null) {
       vanished += 1;
       continue;
     }
     for (const item of inner) {
       if (item.isSymbolicLink()) continue;
-      const full = path.join(PNPM_DIR, storeDir.name, "node_modules", item.name);
+      const full = path.join(
+        PNPM_DIR,
+        storeDir.name,
+        "node_modules",
+        item.name,
+      );
       if (!item.isDirectory()) continue;
       if (!item.name.startsWith("@")) {
-        entries.push({ name: item.name, absPath: path.join(full, "package.json") });
+        entries.push({
+          name: item.name,
+          absPath: path.join(full, "package.json"),
+        });
         continue;
       }
       // 作用域包：`@scope` 这层是目录，包名是 `@scope/<名字>`。
@@ -203,6 +243,18 @@ function scriptBearingPackage(raw) {
 }
 
 /* ── 判定 ────────────────────────────────────────────────────────── */
+
+/* `--staged`：没动依赖面就跳过（省下那一次全树扫描），并打印理由让「跳过」与
+   「扫过之后没问题」可分辨。共用短路器自己处理「读不到暂存清单 ⇒ exit 2」，
+   不会把「判据没跑成」冒充成「未触及」。 */
+if (process.argv.includes("--staged")) {
+  skipUnlessStagedTouches({
+    roots: DEPENDENCY_FILES,
+    tag: "[allow-builds]",
+    root: ROOT,
+    what: "依赖面",
+  });
+}
 
 const problems = [];
 let scanned = 0;

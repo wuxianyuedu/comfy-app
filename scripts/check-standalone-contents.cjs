@@ -124,6 +124,9 @@ const ALLOWED_SCRIPTS = new Set([
   "launcher-core/orchestrator.mjs",
   "launcher-core/corepack.mjs",
   "launcher-core/splash-assets.mjs",
+  // 「收尾定性」这一族（ISSUE #1692 / 规范 §4.5.3）：四种成因的判决表与文案、
+  // 以及运行期退出的写点判据。与 RUNTIME_SCRIPTS 同源，缺一份即红。
+  "launcher-core/downstream-exit.mjs",
   // 桌包 standalone 的运行入口与它的环境装配（ISSUE #1216）：壳把 `node server.js`
   // 换成 `node scripts/standalone-runtime.mjs`，缺这份 = 载荷只能退回直接起 server，
   // 首启建表与运行期 env 装配（分发产物按硬规则 17 不含 .env）一起失效。

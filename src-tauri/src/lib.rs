@@ -829,6 +829,32 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
       sections.push(format!("─ 壳日志（log/shell/shell.log）─\n{}", tail));
     }
   }
+  // 服务自身的输出（Next dev server 原始 stdout/stderr）。**编排器日志答不了
+  // 「服务说了什么」**：dev server 的输出被 `spawnInGroup` 直接重定向成文件
+  // 描述符，没有 pipe、没有 tee，因此它既不进编排器 stdout、也就不在
+  // `[orchestrator] …` 那一路里。`▲ Next.js` 横幅、编译与路由日志、首次编译的
+  // 报错全在这两份文件里 —— 「启动卡在哪」的第一现场常常正是它们。
+  //
+  // 取**本次运行**的最新一份（按 mtime，不是文件名序，见 latest_prefixed_log）：
+  // current/ 每次运行结束整目录归档清空，因此该目录内的都属于本次运行。
+  let nextjs_dir = shell_launch::nextjs_log_dir(&root);
+  for (label, prefix) in [
+    ("服务输出（Next.js stdout）", "nextjs-stdout-"),
+    ("服务错误输出（Next.js stderr）", "nextjs-stderr-"),
+  ] {
+    let Some(path) = shell_launch::latest_prefixed_log(&nextjs_dir, prefix) else {
+      continue;
+    };
+    if let Some(tail) = tail_log_file(&path, 12 * 1024, 120) {
+      if !tail.trim().is_empty() {
+        let name = path
+          .file_name()
+          .map(|s| s.to_string_lossy().into_owned())
+          .unwrap_or_else(|| prefix.to_string());
+        sections.push(format!("─ {}（log/current/nextjs/{}）─\n{}", label, name, tail));
+      }
+    }
+  }
   // 壳侧的编排链路日志（`log/launcher/shell-launch.log`）：**这是启动期最先
   // 有内容的一份**——它由壳自己落，不依赖编排器起来（编排器写的三份日志在
   // 「壳已接手、编排器还没写」的窗口期全是空的，正是手验反馈里「暂时读不到

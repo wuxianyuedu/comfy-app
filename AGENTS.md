@@ -107,7 +107,10 @@
    拿 `node_modules/.pnpm` 里**已装出来的事实**与名单对账——每个带
    `preinstall` / `install` / `postinstall` 的包都必须有一条显式条目，`true`（批准）与
    `false`（显式拒绝）都算回答过，漏答才红；反向（名单里当前没有构建脚本的条目）**刻意不判**，
-   那半数是故意留的位，判它等于误报一片。口径、为什么不读 lockfile、以及「缺 `node_modules`
+   那半数是故意留的位，判它等于误报一片。钩子里那一步带 `--staged`：**只在本次提交动了
+   依赖面**（`package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml`）时才扫全树，
+   未命中会打印「未触及依赖面」而不是冒充结论；不带 flag 的那一档是全量判定（手动 /
+   合并前用）。口径、为什么不读 lockfile、以及「缺 `node_modules`
    判红而不是跳过」见 §13.5.15。
 9. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
    锁定会 EPERM 连锁失败）。

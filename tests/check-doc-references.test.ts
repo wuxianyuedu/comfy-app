@@ -729,7 +729,7 @@ describe("§13.1 那份清单与 pre-commit 的 D 组逐字一致（ISSUE #1404�
         abs,
         replaceOnce(
           readFileSync(abs, "utf8"),
-          "✅ node scripts/check-title-bar-clearance.cjs\n",
+          "✅ node scripts/check-title-bar-clearance.cjs --staged # 输入面跳过（见下 13.5.8.2）\n",
           "",
         ),
       );

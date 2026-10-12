@@ -24,4 +24,18 @@
   情况下报绿，那是 §13.5.12 那一族里最坏的一种；话术按硬规则 26 直接给出
   `pnpm install --frozen-lockfile` 那一条出口。
   **成本实测**：4.5s，零网络、零子进程，与 `check-non-null-assertions.cjs` /
-  `check-comment-language.cjs` 同档（同为全树扫描那一类），不是离群值。
+  `check-comment-language.cjs` 同档（同为全树扫描那一类），不是离群值 —— 但正因为它是
+  全树扫描，钩子里那一步带 `--staged`：**只在本次提交动了依赖面时才扫**（未命中打印
+  「未触及依赖面」，与真扫过的 OK 可分；读不到暂存清单走 `exit 2` 而不是冒充跳过）。
+  这与 ISSUE #1747 给 D 组两步全库扫描定的口径同源，也是 §13.5.12 那句「无条件挂上昂贵
+  的判据 ⇒ 所有人开始 `--no-verify` ⇒ 判据归零」的直接推论。
+
+- **依赖面清单抽成 `scripts/dependency-face.mjs`**（`check-deps-freshness.mjs` 改为 import 它）：
+  两个消费者问的是同一个问题（「这次提交动没动依赖声明与安装规则」），所以共用一份；
+  但没有直接 `import` 那份判据本体 —— 它的模块图带着 `lockfile/lock-diff.mjs`、
+  `launcher-core/worktree.mjs` 一串下游，为一个三项常量拖进整条链，代价表现在门禁自测的
+  临时工作区上（少拷一个就是 `ERR_MODULE_NOT_FOUND`，读起来像被测判据坏了）。
+  就地抄第二份则是另一头的错：清单将来加第四项时本判据静默漏判（§12.12）。
+  ⚠️ 它与 `check-docs-api.cjs` 的 `INPUT_RES` **刻意不共用**（那一份问的是 typedoc
+  产物的输入面，含 `src/lib|server|trpc/**`），沿用的正是 `matchedDependencyFiles()`
+  文件头里那条既有口径。

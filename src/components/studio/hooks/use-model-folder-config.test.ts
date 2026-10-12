@@ -47,6 +47,8 @@ interface Behavior {
 
 let behavior: Behavior = { folders: [], comfyReachable: true };
 const saveInputs: Array<{ folder: string; enabled: boolean }> = [];
+/** 记录 configList 被调用的次数 —— 断言「挂载时加载一次」不随重渲染复发。 */
+let configListCalls = 0;
 const deleteInputs: Array<{ folder: string }> = [];
 
 function folder(name: string, enabled = false): Folder {
@@ -64,6 +66,7 @@ const t = createTestTRPC();
 const mockRouter = t.router({
   model: t.router({
     configList: t.procedure.query(() => {
+      configListCalls += 1;
       if (behavior.listError) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -150,6 +153,7 @@ afterEach(() => {
   behavior = { folders: [], comfyReachable: true };
   saveInputs.length = 0;
   deleteInputs.length = 0;
+  configListCalls = 0;
   server.resetHandlers();
 });
 afterAll(() => server.close());
@@ -174,6 +178,30 @@ describe("useModelFolderConfig", () => {
       "loras",
     ]);
     expect(result.current.comfyReachable).toBe(false);
+  });
+
+  /* 回归：挂载 effect 的依赖曾经是 `[load]`，而 `load` 依赖 `configQ`、
+   * 后者是 `useQuery` 的返回值（**每次渲染都是新引用**）⇒ 每次渲染都重跑
+   * ⇒ 反复 refetch ⇒ 数据到达又触发渲染 ⇒ 自激。实测弹层打开后静置时
+   * `model.configList` 每 25ms 打一次（5 秒 194 次，ISSUE #1803）。 */
+  it("重渲染不复发首屏加载：configList 只在挂载时取一次", async () => {
+    behavior = { folders: [folder("checkpoints", true)] };
+    const { rerender } = renderHook(() => useModelFolderConfig(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => configListCalls).toBeGreaterThan(0);
+    /* 挂载期的调用次数（可能是 1，也可能因 StrictMode 双挂载是 2）——
+     * 断言的是**重渲染之后不再增长**，不是某个具体基数。 */
+    const afterMount = configListCalls;
+
+    for (let i = 0; i < 5; i++) {
+      rerender();
+      // 逐轮推进微任务队列，模拟真实重渲染节奏
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+    expect(configListCalls).toBe(afterMount);
   });
 
   it("toggle：写入后端并在结束后刷新（写操作统一走 runMutate）", async () => {

@@ -84,6 +84,7 @@ import {
   lockfileDrift,
   unresolvableDeclaredDeps,
 } from "./launcher-core/worktree.mjs";
+import { DEPENDENCY_FILES } from "./dependency-face.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -99,18 +100,11 @@ const ROOT = path.resolve(HERE, "..");
 export const REMOTE_REF_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * 依赖面的三个输入文件 —— 「动了它就得回答『基线是不是旧的』」的那一份清单。
- *
- * 三个各自不可替代：`package.json` 是版本声明、`pnpm-lock.yaml` 是解析结果、
- * `pnpm-workspace.yaml` 是安装规则（`allowBuilds` / `overrides` 变了，同一份 lockfile
- * 装出来的东西都可能不同）。别按「有没有改 lockfile」一刀切 —— 远端只改
- * `allowBuilds` 那一档正是最容易被漏掉的。
+ * 依赖面的三个输入文件收在 `dependency-face.mjs` 一处（本文件从它 import）。
+ * 为什么抽出去：`check-allow-builds.cjs` 判「动了依赖面才扫全树」要的是**同一份清单**，
+ * 从本文件 import 会把 `lockfile/lock-diff.mjs`、`launcher-core/worktree.mjs` 这条下游链
+ * 一起拖进它的门禁自测沙箱；就地抄第二份的话，将来清单加第四项时那一侧静默漏判。
  */
-export const DEPENDENCY_FILES = [
-  "package.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-];
 
 /**
  * 暂存改动是否命中依赖面（`--staged` 的触发面）。

@@ -8,7 +8,7 @@
 // 失败统一落到 err，结束后统一 reload——原组件就是这个语义，收敛后不会再有
 // 「某个分支忘了刷新」的漏网之鱼。
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { runAsyncAction } from "~/lib/async-action";
@@ -75,11 +75,20 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     }
   }, [configQ]);
 
+  /* 首次加载只跑一次。依赖 `load` 会失效 —— 它依赖 `configQ`，而 `useQuery`
+   * 返回的对象**每次渲染都是新引用** ⇒ 「effect 跑一次」变成「每渲染一次跑一次」
+   * ⇒ 反复 refetch ⇒ 数据到达又触发渲染 ⇒ 自激。实测弹层打开后静置时
+   * `model.configList` 每 25ms 打一次（5 秒 194 次，ISSUE #1803）。
+   * `load` 收进 ref 取最新一份；effect 只依赖 `[]`。 */
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  });
   useEffect(() => {
     // 把首次加载延出 effect 体（React 19 规则）。
-    const t = setTimeout(() => void load(), 0);
+    const t = setTimeout(() => void loadRef.current(), 0);
     return () => clearTimeout(t);
-  }, [load]);
+  }, []);
 
   // react-query config data -> local folders state（渲染期调整，React 19 模式）
   const [prevCfgData, setPrevCfgData] = useState(configQ.data);

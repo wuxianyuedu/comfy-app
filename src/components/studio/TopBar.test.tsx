@@ -72,6 +72,18 @@ describe("TopBar", () => {
     expect(screen.getByText("首页")).toBeTruthy();
   });
 
+  /* 视图说明问号：挂在顶栏标题右侧（不再放屏内页头 —— 那里会与页签重复一遍屏名，
+     ISSUE #1693）。判据两条：有登记的视图（历史）渲染那颗按钮；没有登记的
+     （首页）整个不渲染 —— 「没有说明的不显示」。 */
+  it("有说明的视图在标题旁渲染「说明」问号；没有说明的视图不渲染", () => {
+    const withHelp = renderTopBar("history");
+    expect(screen.getByRole("button", { name: "说明" })).toBeTruthy();
+    withHelp.unmount();
+
+    renderTopBar("home");
+    expect(screen.queryByRole("button", { name: "说明" })).toBeNull();
+  });
+
   /* ISSUE #1384：应用菜单那一颗此前把 `<Hint>` 套在 `DropdownMenuTrigger` 的
      `render` 里，menu 的触发 props（`aria-haspopup` / pointerdown）全被 `Hint`
      吞掉 —— 按钮点不开。这里判 `aria-haspopup`：它是**渲染结果的属性**，不依赖

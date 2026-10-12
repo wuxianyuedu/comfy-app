@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-10-12",
+  "note": "页面级运行时读数的预算基线（规范 §11.8 与 §13.5.4，ISSUE #1781 的右半边）。读数口径 = 同一路径反复导航 N 轮，**弃前 N_discard 轮**后取 min；基线与阈值倍数都来自实测（见 docs/standards/11-测试与可观测性.md §11.8）。它搭「全量 e2e」那一档跑，不是一条独立的门禁。",
+  "metric": {
+    "scope": "首页 /workspace 首屏（本地 next 服务 + 本地 chromium）",
+    "stat": "min（弃前 4 轮）",
+    "rounds": 12,
+    "discard": 4,
+    "loadEventEnd": 320,
+    "firstContentfulPaint": 250,
+    "factor": 2,
+    "measuredSpread": {
+      "loadEventEnd": "±10.1%（4 次独立运行，弃前 4 轮取 min）",
+      "firstContentfulPaint": "±5.2%（同批）"
+    }
+  }
+}

@@ -94,8 +94,7 @@ export function HistoryList({
              的 `viewLabel` 判据就是这么把它抓出来的）。── */}
       <PageHeader
         className="mb-6"
-        title={pageHeaderTitle("history")}
-        help="所有生成任务与执行日志，按时间倒序排列。"
+        srTitle={pageHeaderTitle("history")}
         actions={
           <>
             <SelectMenu
