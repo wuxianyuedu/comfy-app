@@ -167,10 +167,68 @@ function wideReasonFor(rel) {
 }
 
 /**
+ * 建反向 import 图：**候选路径 → 谁 import 了它**（含 barrel 转出口与别名）。
+ *
+ * 单独抽出来是为了让「按改动文件归因」能在**同一份图**上多跑几次 BFS ——
+ * 逐文件各建一遍图会把约 220ms 的解析成本乘上改动文件数（与 §13.5.8.2「同一份
+ * 输入被算了多少遍」是同一件事）。
+ *
+ * @param {Iterable<string>} nodes 参与建图的文件（源码 + 测试）
+ * @param {(rel: string) => string | null} readText
+ * @returns {{importedBy: Map<string, Set<string>>, texts: Map<string, string>}}
+ */
+export function buildImportedBy(nodes, readText) {
+  /** @type {Map<string, Set<string>>} */
+  const importedBy = new Map();
+  /** @type {Map<string, string>} */
+  const texts = new Map();
+  for (const from of nodes) {
+    const text = readText(from);
+    if (text === null || text === undefined) continue;
+    texts.set(from, text);
+    for (const cand of specifiersOf(text, from)) {
+      let bucket = importedBy.get(cand);
+      if (!bucket) importedBy.set(cand, (bucket = new Set()));
+      bucket.add(from);
+    }
+  }
+  return { importedBy, texts };
+}
+
+/**
+ * 反向 import 闭包：从 `roots` 出发，沿「谁 import 我」走到测试为止。
+ *
+ * @param {Iterable<string>} roots
+ * @param {Map<string, Set<string>>} importedBy
+ * @returns {Map<string, number>} 文件 → 跳数（roots 自身为 0）
+ */
+function reachFrom(roots, importedBy) {
+  /** @type {Map<string, number>} */
+  const hops = new Map();
+  const queue = [];
+  for (const rel of roots) {
+    if (hops.has(rel)) continue;
+    hops.set(rel, 0);
+    queue.push(rel);
+  }
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (cur === undefined) continue;
+    const hop = (hops.get(cur) ?? 0) + 1;
+    for (const consumer of importedBy.get(cur) ?? []) {
+      if (hops.has(consumer)) continue;
+      hops.set(consumer, hop);
+      queue.push(consumer);
+    }
+  }
+  return hops;
+}
+
+/**
  * 核心解析：改动清单 + 测试清单 +（注入的）读文件函数 → 该跑哪些测试。
  * 不碰 git、不碰真实磁盘，便于用例喂夹具。
  *
- * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[]}} input
+ * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, texts: Map<string, string>}}} input
  * @returns {Resolution}
  */
 export function resolveAffectedTests({
@@ -179,6 +237,7 @@ export function resolveAffectedTests({
   sourceFiles,
   readText,
   knownFailed = [],
+  graph,
 }) {
   /** @type {Record<string, string>} */
   const reasons = {};
@@ -255,39 +314,14 @@ export function resolveAffectedTests({
    * 文件已经不在索引清单里，但它的消费方仍然静态写着那个说明符 —— 那些测试正是
    * 这次改动会打破的东西，按存在性过滤就会把它们连同改动一起漏掉。
    * 成本：读 1.2k 个源码文件 + 6.4k 条说明符，实测 <1s。 */
-  const nodes = new Set([...sourceFiles, ...testFiles]);
-  /** @type {Map<string, Set<string>>} */
-  const importedBy = new Map();
-  /** @type {Map<string, string>} */
-  const texts = new Map();
-  for (const from of nodes) {
-    const text = readText(from);
-    if (text === null || text === undefined) continue;
-    texts.set(from, text);
-    for (const cand of specifiersOf(text, from)) {
-      let bucket = importedBy.get(cand);
-      if (!bucket) importedBy.set(cand, (bucket = new Set()));
-      bucket.add(from);
-    }
-  }
+  /* 图可以注入（`attributeAffected` 逐文件复用同一份），也可以就地建（钩子的常态）。
+   * 注入这一条不是优化手段而是**口径**手段：归因的数必须与主解析走同一条判定链，
+   * 否则两处会各自漂 —— 实测过一版「照抄一份判定」的归因，三个文件的数就都差了
+   * 一两份（「按路径引用」那一档在增量面里只对尚未选中的测试生效）。 */
+  const { importedBy, texts } =
+    graph ?? buildImportedBy(new Set([...sourceFiles, ...testFiles]), readText);
 
-  /** @type {Map<string, number>} */
-  const hops = new Map();
-  const queue = [];
-  for (const rel of list) {
-    hops.set(rel, 0);
-    queue.push(rel);
-  }
-  while (queue.length > 0) {
-    const cur = queue.shift();
-    if (cur === undefined) continue;
-    const hop = (hops.get(cur) ?? 0) + 1;
-    for (const consumer of importedBy.get(cur) ?? []) {
-      if (hops.has(consumer)) continue;
-      hops.set(consumer, hop);
-      queue.push(consumer);
-    }
-  }
+  const hops = reachFrom(list, importedBy);
   for (const [file, hop] of hops) {
     if (hop > 0 && isTestPath(file)) add(file, `反向 import ${hop} 跳`);
   }
@@ -314,6 +348,68 @@ export function resolveAffectedTests({
   const out = withFixed("subset", picked);
   if (skipped.length > 0) out.reasons.__skipped = skipped.join(" ");
   return out;
+}
+
+/**
+ * **按改动文件归因**：这次的受影响面里，每一份测试是被**哪个**改动文件拉进来的。
+ *
+ * 存在的理由是一条没有任何执行者的建议：「把大改动拆小」（规范 §13.5.8.1 末尾）。
+ * 那句话说了两年，却从来没人知道**该从哪一刀切** —— 改动面不是一个数，它是一组
+ * 贡献极不均衡的数：实测 5 个文件拉出 304 份（几乎全量），其中改 `src/lib/endpoints.ts`
+ * 一个就贡献了大半，而另外四个加起来不到一半。不知道这件事，拆小就是盲拆。
+ *
+ * 算法：**逐文件走同一条判定链**（`resolveAffectedTests`），每次只留一个改动文件，
+ * 得出「单独改它一个会跑多少份」。`importedBy` 图通过参数注入、只建一次 ——
+ * 逐文件各建一遍会把解析成本乘上改动文件数（实测 220ms/次）。
+ *
+ * ⚠️ **不另写一份判定**。这条建议的全部价值在于它的数**与真正要跑的清单对得上**，
+ * 而两处实现的漂移是静默的：本轮实测过一版「照抄一份」的归因，`--attribute` 报
+ * 180 / 67 / 3，主链报 173 / 65 / 2 —— 差在「按路径引用」那一档（主链只对增量面里
+ * 尚未被其他原因选中的测试做字面量匹配）。多报几份看着无害，实际等于给了一条
+ * **对不上账**的建议，正是本仓库反复在收的那一族。
+ *
+ * ⚠️ 贡献**不可加**（同一份测试常被多个改动文件共同拉到，交集非空），所以这里的
+ * 数是「**单独改它一个**会跑多少份」，不是「从总数里减掉多少」——后者要精确算必须
+ * 枚举子集（2^n）。要说清这一点的原因同 §13.5.8.2 那句「不伪造绿」：给一个看起来
+ * 精确、实际含义不同的数，比不给更坏。
+ *
+ * @param {string[]} changedPaths 本次改动的文件
+ * @param {{importedBy: Map<string, Set<string>>, texts: Map<string, string>}} graph
+ *   `buildImportedBy()` 的产物（复用同一份图，避免逐文件重建）
+ * @param {string[]} testFiles 参与统计的测试全集（须与建图时的口径一致）
+ * @param {string[]} sourceFiles 参与建图的源码全集（须与建图时的口径一致）
+ * @returns {{file: string, affected: number, total: number}[]} 按单独影响面**从大到小**排序；
+ *   `affected` 是受影响份数（不含固定清单），`total` 是合计（含固定清单）
+ */
+export function attributeAffected(changedPaths, graph, testFiles, sourceFiles) {
+  const out = [];
+  for (const raw of changedPaths) {
+    const rel = String(raw).trim().replace(/\\/g, "/");
+    if (!rel) continue;
+    /* **逐文件走同一条判定链**（`resolveAffectedTests`），而不是另写一份「这个文件
+     * 拉到哪些测试」的复制品 —— 复制品与主链的漂移是静默的，而这条建议的全部价值
+     * 就在于它的数**与真正要跑的清单对得上**。图注入进去，所以这么循环不重建图。
+     *
+     * `knownFailed` 显式传空：这里问的是「改这一个文件**理论上的**面有多大」，
+     * 而不是「这次的增量面」—— 基线红属于别线的账，混进归因会让同一份改动在不同
+     * 时期给出不同的建议，而拆小的判据不该随时间漂。 */
+    const res = resolveAffectedTests({
+      changedPaths: [rel],
+      testFiles,
+      sourceFiles,
+      readText: () => null,
+      knownFailed: [],
+      graph,
+    });
+    const affected = res.tests.filter(
+      (t) => !FIXED_STRUCTURAL_TESTS.includes(t),
+    ).length;
+    out.push({ file: rel, affected, total: res.tests.length });
+  }
+  // 稳定排序：同份数时按路径字典序，避免同样的改动在不同机器上给出不同顺序。
+  return out.sort((a, b) =>
+    b.affected !== a.affected ? b.affected - a.affected : a.file < b.file ? -1 : 1,
+  );
 }
 
 /* ── 以下是与 git / 真实磁盘打交道的部分（用例不覆盖这一段，纯转调）─────── */
@@ -430,6 +526,37 @@ function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--fixed-only")) {
     process.stdout.write(FIXED_STRUCTURAL_TESTS.join(" ") + "\n");
+    return 0;
+  }
+  /* `--attribute`：只回答「这次的受影响面里，每一份是被哪个改动文件拉进来的」，
+   * 打在 stdout（JSON），供 C 组的收尾建议用（`run-affected-tests.mjs` 那一步）。
+   * 它是**诊断档**，不参与筛选、不改清单、不影响退出码 —— 拿不到图时打空数组而不是
+   * 报错：这条建议没有到「值得拦住提交」的分量（口径见属性函数头顶那节）。 */
+  if (argv.includes("--attribute")) {
+    const ci = argv.indexOf("--changed");
+    const changed =
+      ci >= 0
+        ? argv.slice(ci + 1).filter((a) => !a.startsWith("--"))
+        : (stagedPaths() ?? []);
+    const inputs = collectInputs();
+    if (inputs === null || changed.length === 0) {
+      process.stdout.write("[]\n");
+      return 0;
+    }
+    const graph = buildImportedBy(
+      new Set([...inputs.sourceFiles, ...inputs.testFiles]),
+      readText,
+    );
+    process.stdout.write(
+      JSON.stringify(
+        attributeAffected(
+          changed,
+          graph,
+          inputs.testFiles,
+          inputs.sourceFiles,
+        ),
+      ) + "\n",
+    );
     return 0;
   }
   const ci = argv.indexOf("--changed");
