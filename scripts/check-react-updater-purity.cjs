@@ -75,8 +75,56 @@ const isStateSetter = (callee) => {
   return false;
 };
 
-/* ── 采集:找 updater 块内的副作用裸调用语句 ── */
-function collect() {
+/**
+ * 规则本体:找一份已解析源码里「函数式 updater 块内的副作用裸调用语句」。
+ *
+ * **只吃已解析的 `SourceFile`**，不自己解析 —— 这是「共享颗粒度」的落点
+ * （§13.5.8.2「第四笔账」）:解析全量 ≈550ms,由 `gate-ast-read.cjs` /
+ * `run-ast-gates.cjs` 做一次,规则只遍历、只判定。
+ *
+ * @param {import("typescript").SourceFile} sf
+ * @param {string} rel 展示用的相对路径（进判据文案）
+ * @returns {string[]}
+ */
+function scanTree(sf, rel) {
+  const problems = [];
+  const visit = (node) => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      if (isStateSetter(callee)) {
+        const arg = node.arguments[0];
+        if (arg && (ts.isArrowFunction(arg) || ts.isFunctionExpression(arg))
+          && ts.isBlock(arg.body)) {
+          // 函数式 updater + 块体:逐条语句找「裸调用」副作用
+          for (const stmt of arg.body.statements) {
+            if (ts.isExpressionStatement(stmt)
+              && ts.isCallExpression(stmt.expression)) {
+              const { line } = sf.getLineAndCharacterOfPosition(
+                stmt.getStart(sf));
+              problems.push(
+                `${rel}:${line + 1} :: 在 ${callee.getText(sf)} 的函数式 updater 内调用 ` +
+                `${stmt.expression.getText(sf).split("\n")[0].slice(0, 60)}`,
+              );
+            }
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return problems;
+}
+
+/**
+ * 采集:把扫描根下各文件跑一遍规则。
+ *
+ * @param {Map<string, import("typescript").SourceFile>} [parsed]
+ *   聚合档 `run-ast-gates.cjs` 注入的**共享解析结果**（键 = 仓库根相对路径）。
+ *   传了就复用，不再逐文件 `createSourceFile` —— 只共享解析产物，不共享遍历/判定。
+ *   不传 = 老路径（自己解析），行为一字不变。
+ */
+function collect(parsed) {
   const problems = [];
   // 扫描根既支持相对仓库根(默认 src/),也支持绝对路径(测试把 fixtures 放 tmp)。
   const absBase = path.isAbsolute(SCAN_DIR) ? SCAN_DIR : path.join(ROOT, SCAN_DIR);
@@ -84,35 +132,16 @@ function collect() {
     : SCAN_DIR.replace(/^\/+/, "").replace(/\//g, "/");
   const files = walk(absBase, relBase);
   for (const rel of files) {
+    const shared = parsed && parsed.get(rel);
+    if (shared) {
+      problems.push(...scanTree(shared, rel));
+      continue;
+    }
     const absFile = path.isAbsolute(rel) ? rel : path.join(ROOT, rel);
     const src = fs.readFileSync(absFile, "utf8");
     const sf = ts.createSourceFile(rel, src, ts.ScriptTarget.Latest, true,
       rel.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-    const visit = (node) => {
-      if (ts.isCallExpression(node)) {
-        const callee = node.expression;
-        if (isStateSetter(callee)) {
-          const arg = node.arguments[0];
-          if (arg && (ts.isArrowFunction(arg) || ts.isFunctionExpression(arg))
-            && ts.isBlock(arg.body)) {
-            // 函数式 updater + 块体:逐条语句找「裸调用」副作用
-            for (const stmt of arg.body.statements) {
-              if (ts.isExpressionStatement(stmt)
-                && ts.isCallExpression(stmt.expression)) {
-                const { line } = sf.getLineAndCharacterOfPosition(
-                  stmt.getStart(sf));
-                problems.push(
-                  `${rel}:${line + 1} :: 在 ${callee.getText(sf)} 的函数式 updater 内调用 ` +
-                  `${stmt.expression.getText(sf).split("\n")[0].slice(0, 60)}`,
-                );
-              }
-            }
-          }
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(sf);
+    problems.push(...scanTree(sf, rel));
   }
   return problems;
 }
@@ -132,13 +161,20 @@ function walk(absDir, relDir, out = []) {
 }
 
 /* ── 主流程 ── */
-const problems = collect();
-if (problems.length) {
-  console.error(
-    "[updater-purity] 违规:React 函数式 setState updater 内存在副作用裸调用(updater 必须纯函数,渲染期求值会触发 update-during-render 告警,见 ISSUE #141)\n  " +
-      problems.join("\n  ") +
-      "\n修复:把副作用移出 updater,先用闭包/ref 算出 next 值,在 setState 之外再执行副作用",
-  );
-  process.exit(1);
+function main(parsed) {
+  const problems = collect(parsed);
+  if (problems.length) {
+    console.error(
+      "[updater-purity] 违规:React 函数式 setState updater 内存在副作用裸调用(updater 必须纯函数,渲染期求值会触发 update-during-render 告警,见 ISSUE #141)\n  " +
+        problems.join("\n  ") +
+        "\n修复:把副作用移出 updater,先用闭包/ref 算出 next 值,在 setState 之外再执行副作用",
+    );
+    process.exit(1);
+  }
+  console.log("[updater-purity] OK");
 }
-console.log("[updater-purity] OK");
+
+/* 规则本体导出给聚合档 `run-ast-gates.cjs`（单条脚本行为不变）。 */
+module.exports = { scanTree, collect, main, SCAN_DIR };
+
+if (require.main === module) main();

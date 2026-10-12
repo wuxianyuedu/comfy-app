@@ -424,7 +424,6 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
  */
 const SECOND_TIER: ReadonlyArray<readonly [string, string, string]> = [
   // [标签, 脚本名, 期望命令里带 --staged 的形态]
-  ["React 函数式 updater 纯净性", "check-react-updater-purity.cjs", "node scripts/check-react-updater-purity.cjs --staged"],
   ["标题行让位硬规则", "check-title-bar-clearance.cjs", "node scripts/check-title-bar-clearance.cjs --staged"],
   ["import 别名统一(~ 前缀)", "check-import-alias.cjs", "node scripts/check-import-alias.cjs --staged"],
   ["内联样式注入", "check-inline-style.cjs", "node scripts/check-inline-style.cjs --staged"],
@@ -433,11 +432,28 @@ const SECOND_TIER: ReadonlyArray<readonly [string, string, string]> = [
   ["模块循环依赖棘轮", "check-circular-deps.cjs", "node scripts/check-circular-deps.cjs --staged"],
   ["地基层零消费导出棘轮", "check-dead-exports.cjs", "node scripts/check-dead-exports.cjs --staged"],
   ["浮层层级刻度棘轮", "check-overlay-z.cjs", "node scripts/check-overlay-z.cjs --staged"],
-  ["src 非空断言棘轮", "check-non-null-assertions.cjs", "node scripts/check-non-null-assertions.cjs --staged"],
-  ["src/lib void 悬空 Promise 棘轮", "check-void-floats.cjs", "node scripts/check-void-floats.cjs --staged"],
-  ["TS 重复属性判定", "check-ts-duplicate-keys.cjs", "node scripts/check-ts-duplicate-keys.cjs --staged"],
-  ["FormField 标签⇄控件接线（§16.2.4.26）", "check-form-field-wiring.cjs", "node scripts/check-form-field-wiring.cjs --staged"],
-  ["非原生元素点击的键等价物（§6.11）", "check-click-keyboard.cjs", "node scripts/check-click-keyboard.cjs --staged"],
+];
+
+/**
+ * **被聚合档接管的 6 条 AST 判据**（ISSUE #1747 续，「第四笔账」）。
+ *
+ * 它们此前各自在钩子里占一行、各自把 `src/` 全量解析一遍。现在钩子里只有
+ * `node scripts/run-ast-gates.cjs --staged` 一行，这 6 条由聚合档一次解析后逐条跑。
+ *
+ * 这里要钉两件事，因为**两件的失效形态都是静默的**：
+ *   1. 这 6 条**必须仍然实现 `--staged` 且短路在 `require("typescript")` 之前** ——
+ *      聚合档的 `loadGate()` 就是在这次口径下 require 它们的（聚合档把 `--staged`
+ *      判断提升到按条算，但脚本自身的短路点位置仍是它「自己单跑」时的省时前提）；
+ *   2. 钩子里**不许**再让它们各占一行（各占一行 = 与聚合档跑两遍，白付一次解析）。
+ *      第 2 条同时在 `tests/ast-gates-aggregate.test.ts` 里从聚合档侧钉了一遍。
+ */
+const AGGREGATED_AST_GATES: readonly string[] = [
+  "check-react-updater-purity.cjs",
+  "check-non-null-assertions.cjs",
+  "check-void-floats.cjs",
+  "check-ts-duplicate-keys.cjs",
+  "check-form-field-wiring.cjs",
+  "check-click-keyboard.cjs",
 ];
 
 describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 续）", () => {
@@ -496,4 +512,59 @@ describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 �
       ).toBeLessThan(tsAt);
     }
   });
+
+});
+
+describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔账）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = dGroupSteps(hook);
+
+  it("聚合档那一行在钩子里带 --staged 条件触发", () => {
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/run-ast-gates.cjs"),
+    );
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有 AST 判据聚合档 —— 6 条判据一个执行者都没有了`,
+    ).toBeDefined();
+    expect(hit?.cmd).toBe("node scripts/run-ast-gates.cjs --staged");
+  });
+
+  it.for(AGGREGATED_AST_GATES)(
+    "%s 不再单独占钩子一行（否则与聚合档跑两遍）",
+    (script) => {
+      const dup = steps.filter((s) => s.cmd.includes(`scripts/${script}`));
+      expect(
+        dup.map((s) => s.label),
+        `${script} 又单独占了一行钩子 —— 它会与聚合档各跑一遍，白付一次解析`,
+      ).toEqual([]);
+    },
+  );
+
+  it.for(AGGREGATED_AST_GATES)(
+    "%s 自己仍实现 --staged，且短路在 require(\"typescript\") 之前",
+    (script) => {
+      const lines = readFileSync(
+        join(REPO_ROOT, "scripts", script),
+        "utf8",
+      ).split("\n");
+      const skipAt = lines.findIndex((l) =>
+        l.includes("skipUnlessStagedTouches("),
+      );
+      expect(
+        skipAt,
+        `${script} 的 --staged 短路没了 —— 聚合档把这条单跑时它不再省时`,
+      ).toBeGreaterThanOrEqual(0);
+      const tsAt = lines.findIndex(
+        (l) =>
+          !/^\s*(\/\/|\*|\/\*)/.test(l) &&
+          /require\(\s*"typescript"\s*\)/.test(l),
+      );
+      if (tsAt === -1) return; // 该步不加载 typescript
+      expect(
+        skipAt,
+        `${script} 的短路在第 ${skipAt + 1} 行、require("typescript") 在第 ${tsAt + 1} 行`,
+      ).toBeLessThan(tsAt);
+    },
+  );
 });
