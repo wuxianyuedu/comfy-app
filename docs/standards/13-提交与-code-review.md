@@ -193,6 +193,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
    # 直接拼进 `pnpm exec vitest run $files` 会在 Windows 上顶穿 cmd.exe 的 8191 字符
    # 命令行上限 —— 表现是「组 C 红、一条用例没跑、原因是一行 GBK 乱码」
 ✅ node scripts/check-circular-deps.cjs      # 模块循环依赖棘轮（见 12 §12.7）
+✅ node scripts/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
 ✅ node scripts/check-format.cjs             # prettier 格式棘轮（见下 13.5.1）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
 ✅ node scripts/check-dead-exports.cjs       # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）

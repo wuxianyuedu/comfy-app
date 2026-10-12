@@ -20,7 +20,7 @@ import { formatEntryForClipboard, type LogEntry } from "./log-store";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { Hint } from "~/components/ui/hint";
-import { JsonViewer } from "~/components/ui/json-viewer";
+import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
 import {
   copyFailureText,
   useCopyFeedback,
@@ -478,7 +478,7 @@ export const LogRow = memo(function LogRow({
             className="min-h-0"
             style={{ height: LOG_ROW_EXPANDED - LOG_ROW_SINGLE }}
           >
-            <JsonViewer
+            <LazyJsonViewer
               data={cliJson.value}
               title={`comfy-cli ${cliJson.tag}`}
               initialCollapsedDepth={2}

@@ -13,12 +13,12 @@ import { useFilePicker } from "~/components/ui/file-picker";
 import { readFileAsText } from "~/lib/file-io";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Icon } from "~/components/ui/icon";
-import { markdownToHtml } from "~/lib/markdown";
 import type { WorkshopPipelineController } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { SCROLLBAR_VISIBLE_CLASSES } from "~/components/workshop/ScriptMarkdownEditor.parts";
 import { StageHint } from "~/components/workshop/StageHint";
 import { DraftIntegrityHint } from "~/components/workshop/DraftIntegrityHint";
 import { STAGE_DEFS } from "~/components/workshop/stage-config";
+import { useMarkdownHtml } from "~/components/workshop/hooks/use-markdown-html";
 
 // ── 各 stage 组件按需懒加载（named-export → default 包装）──
 const LazyCharacterDesigner = React.lazy(() =>
@@ -142,6 +142,10 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     },
   });
 
+  /* 剧本预览的 HTML 按需渲染：`marked` + `dompurify` 只在这一屏真的显示剧本时
+   * 才下载（规范 §12.19 —— 静态 import 会把两者拖进入口的静态图）。 */
+  const scriptPreviewHtml = useMarkdownHtml(scriptMarkdown);
+
   return (
     <div className="min-w-0">
       <div className="mb-4 flex items-center justify-between">
@@ -203,7 +207,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               <div
                 className={`${SCROLLBAR_VISIBLE_CLASSES} bg-bg text-ink-subtle max-h-120 rounded-xl p-4 text-sm leading-7`}
                 dangerouslySetInnerHTML={{
-                  __html: markdownToHtml(scriptMarkdown),
+                  __html: scriptPreviewHtml,
                 }}
               />
             </section>

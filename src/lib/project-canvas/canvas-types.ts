@@ -189,10 +189,15 @@ export function asCanvasNodeData(data: unknown): StrictCanvasNodeData {
   return data as StrictCanvasNodeData;
 }
 
-/** ReactFlow 节点联合：逻辑节点（canvasNode）与纯视觉节点（workflowArdot）。 */
+/** ReactFlow 节点联合：逻辑节点（canvasNode）与纯视觉节点（workflowArdot）。
+ *
+ * 两支的 `data` 都是 `CanvasNodeData`：`workflowArdot` 是「纯视觉节点、没有业务
+ * 数据」这一层**语义**，原先靠 `Record<string, never>` 表达 —— 代价是它与
+ * `canvasNode` 之间不构成可赋值类型，任何「按 `CanvasNodeType[]` 存的容器」都
+ * 接不住它（持久化层就撞在这上面，见 `canvas-persistence-types.ts`）。语义改由
+ * `isCanvasNode` 守卫与 `type` 字段承载，类型层面让两支同形。 */
 export type CanvasNodeType =
-  | Node<CanvasNodeData, "canvasNode">
-  | Node<Record<string, never>, "workflowArdot">;
+  Node<CanvasNodeData, "canvasNode"> | Node<CanvasNodeData, "workflowArdot">;
 
 /** 类型守卫：是否是带 CanvasNodeData 的逻辑节点（排除 workflowArdot 纯视觉节点）。 */
 export function isCanvasNode(
