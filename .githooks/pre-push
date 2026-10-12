@@ -12,8 +12,23 @@
 # 与 `scripts/install-git-hooks.mjs` 里的 `git lfs install --local --manual`
 # 是一对：那条命令注册 `filter.lfs.*`（clean/smudge）但**刻意不带钩子**，
 # 钩子由本文件在版本控制里提供 —— 这样新克隆只需要 `pnpm install` 就两样齐了。
+#
+# 第二件事：把「合并前的固定动作」挂到 push 上（规范 §13.6.2.1）。平台侧是 squash
+# 合并、那一步不跑本地钩子，而 #623 之后已无 CI 兜底 —— push 是本地最后一个紧贴
+# 「这条分支要被合」的事件。代价、过期判定与「证明为什么不入库」全部写在
+# `scripts/premerge-proof.mjs` 的头部，这里只负责调用（钩子不抄判据，§12.12）。
+#
+# stdin（待推送的 ref 行）**只能读一次**，而两件事都要它 —— 先整份收到临时文件，
+# 再各喂各的。少了这一步，LFS 或复算必有一个拿到空输入，且都不报错。
+refs_in="${TMPDIR:-/tmp}/comfy-pre-push-refs.$$"
+cat >"$refs_in" || exit 1
+trap 'rm -f "$refs_in"' EXIT INT TERM
+
 command -v git-lfs >/dev/null 2>&1 || {
     printf >&2 '\n仓库里有走 git-lfs 的大文件，但本机找不到 git-lfs 命令。\n先装 git-lfs（或执行 git lfs install），否则推送出去的是打不开的指针。\n\n'
     exit 2
 }
-git lfs pre-push "$@"
+git lfs pre-push "$@" <"$refs_in" || exit $?
+
+# ── 合并前的固定动作（退 1 = 复算红了，退 2 = 没法复算，两者都不放行本次 push）──
+node scripts/premerge-proof.mjs <"$refs_in" || exit $?

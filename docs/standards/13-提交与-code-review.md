@@ -518,7 +518,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 依赖漏洞扫描（`check-dependency-audit.mjs`）     | 网络请求（离线 / registry 抖动不该变成提交失败）                             | `pnpm check:all` 的默认档（`quality-gate.mjs` 的 `dependencyAudit`）      | `quality-gate.mjs` 的 `dependencyAudit`                       |
 | `tw4-canonical-report` / `tw4-spacing-canonical` | 起 Tailwind 引擎（~6s），判的是 CSS 等价改写而非正确性                       | 按需召唤 + `--check` 棘轮                                                 | `.gate-executor-ledger.json` 的 `onDemand`                    |
 | 提交信息里的声明 ⇄ 事实（§11.23.5）              | **本地钩子连形态都看不到**（丢失发生在平台侧 squash）                        | `pnpm check:base:batch` 的 `CHAINED_STEPS`（合并前 / 事后盘点，人点一次） | `base-check/chained-steps.mjs` 的 `CHAINED_STEPS`             |
-| **合并前的固定动作**（`pnpm check:premerge`）    | 平台侧 squash 合并**不跑本地钩子**、本地看不到那次合并（§13.6.2 / §11.23.5） | 人合并前敲一次（或在 PR 里 `@` 评审 NPC 唤起一轮）                        | `quality-gate.mjs` 的 `GATES.premerge`（`run: false`）        |
+| **合并前的固定动作**（`pnpm check:premerge`）    | 平台侧 squash 合并**不跑本地钩子**、本地看不到那次合并；单次分钟级（钩子内三次实测 116 / 84 / 83 秒、单独跑 336 秒，见 §13.6.2.1），挂进每次提交是拿它换一个不会天天变的结论（§13.6.2 / §11.23.5） | `.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑（§13.6.2.1）；人仍可手工敲一次，或在 PR 里 `@` 评审 NPC 唤起一轮 | `quality-gate.mjs` 的 `GATES.premerge`（`run: false`）+ `scripts/premerge-proof.mjs` |
 
 三档「每天首次自证」的口径不同、判据一份（`FRESHNESS_TRACKS` 的 `daily` / `dirty` /
 `graceMs`）：全量 e2e 按本地日历日；另两档按「当天动过输入面没有」。**理由**：前者人人
@@ -1839,6 +1839,41 @@ into …` 字样，所以 `check-merge-parents`（§13.6.1）在 squash 之后�
   pnpm check:premerge --skip-claims   # PR 里还没写合并信息时
   pnpm check:premerge --only=base     # 只跑一段（排查用）
   ```
+
+  **执行者不再是「人的记性」：这一跳现在挂在 push 上**（`.githooks/pre-push` →
+  `scripts/premerge-proof.mjs`）。本地看不到平台侧那次 squash 合并，而 push 是本地最后一个
+  紧贴「这条分支要被合」的事件，所以触发点选它。代价实测过四次（同一台机器、同样的
+  53–54 条判据红 0）：钩子内三次 **116 / 84 / 83 秒**（第一次 dry-run、后两次真 push，
+  每次都完整走过「为什么要跑 → 复算 → 记证明」那条链），单独跑那次 **336 秒**。下界一直在往下走，说明这是
+  缓存与机器负载的函数，不是常数 —— 所以**这一串数只写在这一个位置**：AGENTS.md 硬规则 6 与
+  钩子打印那句都只说「分钟级」并指回这里。理由与本节立案的那族同源：同一个会漂的量抄到
+  三处，就会有三处各自过期的机会（本轮刚在硬规则 5 那条上修过一次「壳里 37 条 `#[test]`」，
+  实测已经是 52）。
+  —— 每次 push 都跑它，按本仓库的节奏（一天几十次提交）换来的是每人十几分钟墙钟，
+  而那不会让人更严谨，只会让人 `git push --no-verify`。所以它只在**两个输入之一变了**时跑：
+
+  ```bash
+  # 过期判定（两颗引用 + 一条本机记录）：
+  #   本检出的 HEAD  · 上次 fetch 看到的 refs/remotes/origin/master
+  git rev-parse HEAD                                # 证明里记的那颗不一样 ⇒ 跑
+  git rev-parse --verify --quiet refs/remotes/origin/master   # 前移了 ⇒ 跑
+  ```
+
+  证明写在 **`.git/comfy-premerge-proof.json`**，不入库。理由是它记的是「**这台检出**在某个
+  上游引用位置上复算过某一颗 HEAD」：放进版本库就会让同仓的并行检出互相作证（A 跑过、B
+  直接免检），而假证正是这一族最坏的形态。它也**没有**登记成第四档新鲜度账 ——
+  `FRESHNESS_TRACKS` 那三档的语义是「仓库级、今天有人自证过」，与本条的「这台检出对这两颗
+  引用复算过」不是同一件事；登记了就会被 pre-commit 判成「每天必须跑一次五分钟」，那是另一
+  种仪式。
+
+  三条口径要说清，否则这条线会变成新的说谎源：① 上游引用来自**上次 fetch**，判据不做网络
+  请求，所以话术里不许出现「已最新」（与 §13.5.13 同一条口径）；② 取不到上游引用时
+  **退 2 拦住 push**，不许读成「没必要跑」—— 那会让没 fetch 过的检出静默免检；③ 复算红了就
+  拦，且**只有全绿才写证明**（「跑过」与「跑绿过」是两件事，与 §11.8 的新鲜度账同形）。
+  钩子那侧只负责调用与 stdin 的分配（pre-push 的 stdin 只能读一次，LFS 与复算都要它），
+  判据与编排一律不重抄（§12.12）。这条接线由 `tests/premerge-push-trigger.test.ts` 守着，
+  并登记在 `scripts/affected-tests.mjs` 的固定清单里 —— 改 `.githooks/**` 会让增量层放弃收窄，
+  守接线的那条如果只跟着改动走，恰好会在「有人把这一行注掉」那一次一条都不跑。
 
   **它不发明第二套编排**（§12.18 / §12.12）：`base` 段**直接 import** 既有实现的
   `baseCheckMany` + `resolveMergeBatch`（连「面从钩子里现算」这条都不再抄一份），
