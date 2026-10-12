@@ -37,13 +37,17 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 2. **必须走 launcher 入口**：`node scripts/dev-launcher.mjs`，或双击
    `tools/start/start-web.ps1` / `start-tauri.ps1`。
 
-> ⚠️ **`pnpm dev` 不会拉起 host。** 它是裸 Next 链路（只解析端口 + 起 dev
-> server），没有编排步骤——这种起法下任务行会被标成 host 归属，但没有任何进程
-> 来领。ISSUE #1204 之后这类行**不再被回收器判失败**，而是留在队列里等一个会领它
-> 的宿主：现象从「30s 后报『请重新执行』」变成「一直不动、排队数一直涨」，行上只有
-> 一句「⏳ 等待…」。**别把它当成卡死去重启应用**，判据是 launcher 控制台有没有
-> 「executor-host 已启动」、`log/current/services/executor-host.log` 有没有 `mode=runtime`。
-> 这是灰度期最容易踩的坑。
+> ℹ️ **`pnpm dev` 现在也会拉起 host**（`scripts/dev.mjs` 自 2026-10 起接线）。
+> 此前它是缺的那一格：裸 Next 链路只解析端口 + 起 dev server，任务行被标成 host
+> 归属却没有任何进程来领；ISSUE #1204 之后这类行**不再被回收器判失败**，而是留在
+> 队列里等一个会领它的宿主——现象从「30s 后报『请重新执行』」变成「一直不动、
+> 排队数一直涨」，行上只有一句「⏳ 等待…」。现在四个启动入口
+> （`dev-launcher.mjs` / `standalone-runtime.mjs` / `start.mjs` / `dev.mjs`）都接了
+> 同一步（`scripts/launcher-core/executor-host-spawn.mjs`），判据见
+> `tests/executor-host-spawn.test.ts`。
+>
+> 排查时仍只需看两处：入口有没有打「executor-host 已启动（PID …）」、
+> `log/current/services/executor-host.log` 有没有 `mode=runtime`。
 
 3. 确认起来了（两处证据）：
    - launcher 控制台：`executor-host 已启动（PID …，COMFY_EXECUTOR=host 灰度中…）`；
