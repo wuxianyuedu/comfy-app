@@ -5,13 +5,13 @@
  * 下面的被测字符串里就有真的 `it.each(...)`，判它等于判自己的量具
  * （§11.14.2 的通用口径，同 `tests/test-sleep-gate.test.ts` 的取舍）。
  *
- * 逐条钉判定口径：
+ * 逐条钉判定口径（本判据是**硬闸**：无基线、无 `--update`）：
  *   ① `it.each` / `describe.each` 都是站点（按名字收窄会漏）→ 该拦
- *   ② 棘轮：不超过基线就放行
+ *   ② 一处都没有 → 放行
  *   ③ 本地同名 helper（不是 vitest 导入的）→ 整文件不看
  *   ④ 夹具字符串 / 注释里的 `.each(` → 不算站点
  *   ⑤ 判据自己的夹具文件 → 跳过
- *   ⑥ `--update` 拒绝把基线往上涨
+ *   ⑥ 翻闸后无基线文件可读：`--update` 走的是「未知参数」旧路，不写任何 JSON
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -47,7 +47,8 @@ const VITEST = 'import { describe, expect, it } from "vitest";\n';
  * 在临时仓库里跑真脚本。
  * @param files 相对路径 → 文件内容
  * @param args 命令行参数（如 `--report`）
- * @param baseline 预置的棘轮基线（不传则无基线文件 = 起点 0 处）
+ * @param baseline 翻闸前遗留的基线文件内容（硬闸已不认它 —— 留着只为钉住
+ *   「噪声基线不影响判定」：判定只看站点数是否为 0）
  */
 function gate(
   files: Record<string, string>,
@@ -97,7 +98,7 @@ describe("it.each 门禁：该拦的形状（§11.15）", () => {
 `,
     });
     expect(r.ok).toBe(false);
-    expect(r.output).toContain("存量涨了：1 处");
+    expect(r.output).toContain("还有 1 处 `it.each`");
     expect(r.output).toContain("src/a.test.ts");
     expect(r.output).toContain("§11.15");
   });
@@ -110,7 +111,7 @@ describe("it.each 门禁：该拦的形状（§11.15）", () => {
 `,
     });
     expect(r.ok).toBe(false);
-    expect(r.output).toContain("存量涨了：1 处");
+    expect(r.output).toContain("还有 1 处 `it.each`");
   });
 
   it("①″ `test.each` 同样是站点", () => {
@@ -120,31 +121,25 @@ test.each([[1]])("%s", (n) => expect(n).toBe(1));
 `,
     });
     expect(r.ok).toBe(false);
-    expect(r.output).toContain("存量涨了：1 处");
+    expect(r.output).toContain("还有 1 处 `it.each`");
   });
 });
 
 describe("it.each 门禁：该放的形状（§11.15）", () => {
-  it("② 棘轮：不超过基线就放行", () => {
-    const r = gate(
-      {
-        "src/a.test.ts": `${VITEST}it.each([[1]])("%s", (n) => expect(n).toBe(1));
-`,
-      },
-      [],
-      { total: 1, files: { "src/a.test.ts": 1 } },
-    );
+  it("② 一处 `it.each` 都没有 → 放行", () => {
+    const r = gate({ "src/a.test.ts": `${VITEST}it("x", () => {});\n` });
     expect(r.ok).toBe(true);
     expect(r.output).toContain("OK");
   });
 
-  it("②′ 收口后比基线少 → 放行并提示收紧", () => {
-    const r = gate({ "src/a.test.ts": `${VITEST}it("x", () => {});\n` }, [], {
-      total: 2,
-      files: { "src/a.test.ts": 2 },
-    });
+  it("②′ 翻闸前遗留的基线文件不影响判定（硬闸只看站点数是否为 0）", () => {
+    const r = gate(
+      { "src/a.test.ts": `${VITEST}it("x", () => {});\n` },
+      [],
+      { total: 2, files: { "src/a.test.ts": 2 } },
+    );
     expect(r.ok).toBe(true);
-    expect(r.output).toContain("跑 `--update` 把基线收紧");
+    expect(r.output).toContain("OK");
   });
 
   it("③ 本地同名 helper（不是 vitest 导入的）→ 整文件不看", () => {
@@ -182,29 +177,22 @@ it("夹具字符串不算站点", () => {
   });
 });
 
-describe("it.each 门禁：基线收紧档（§11.15）", () => {
-  it("⑥ `--update` 拒绝把基线往上涨", () => {
+describe("it.each 门禁：翻闸后不再有收紧档（§11.15）", () => {
+  it("⑥ 无基线文件可写：带 `--update` 也不落盘任何 JSON", () => {
     const r = gate(
       {
         "src/a.test.ts": `${VITEST}it.each([[1]])("%s", (n) => expect(n).toBe(1));
-it.each([[2]])("%s", (n) => expect(n).toBe(2));
 `,
       },
       ["--update"],
-      { total: 1, files: { "src/a.test.ts": 1 } },
     );
+    /* 硬闸只认「站点数是否为 0」：`--update` 已不是本判据的出口，
+     *  于是它退的是「有站点」那条 1，且**不写任何基线**（那条后门已封）。 */
     expect(r.ok).toBe(false);
-    expect(r.output).toContain("--update 拒绝把基线往上涨");
-  });
-
-  it("⑥′ `--update` 把基线收紧到实测值", () => {
-    const r = gate(
-      { "src/a.test.ts": `${VITEST}it("x", () => {});\n` },
-      ["--update"],
-      { total: 3, files: { "src/a.test.ts": 3 } },
-    );
-    expect(r.ok).toBe(true);
-    expect(r.output).toContain("基线已收紧到 0 处");
+    expect(r.output).toContain("还有 1 处 `it.each`");
+    expect(
+      existsSync(path.join(r.root, "scripts", ".test-it-each-baseline.json")),
+    ).toBe(false);
   });
 });
 
