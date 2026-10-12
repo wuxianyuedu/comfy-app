@@ -1,10 +1,9 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-12T17:17:03.147Z",
+    "verifiedAt": "2026-10-12T17:43:50.908Z",
     "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run test:coverage",
-    "trackedBy": "full",
-    "skippedReason": "全量单测今天跑过了、只差覆盖率门槛那 6 条：本条改动把 15 条失败用例降到 0（8883 passed / 700 files），而 6 条 coverage 门槛在干净 master 上逐字同红 —— src/lib/markdown 的 lines 93.02% / functions 91.66% / statements 92%、src/lib/core 的 statements 95.82% / branches 89.64%、src/config/custom-nodes.ts 的 branches 96.72%，两侧读数完全一致，说明本次改动对覆盖率零影响（§13.6.2 的 baseline-red）。定性：门槛数字是别人那批改动把分母做大了，与本次 tests/-only 的改动无交集；修复单开一刀做（含按 §12 的『门槛按实测值设』口径重设或补用例）。"
+    "trackedBy": "full"
   }
 }

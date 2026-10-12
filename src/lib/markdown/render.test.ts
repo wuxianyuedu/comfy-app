@@ -11,6 +11,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { loadMarkdownRenderer } from "./index";
 import { markdownToHtml, renderMarkdown } from "./render";
 
 /* 这一组是**按语法点逐条写的**，迁移自自研渲染器的同名用例（ISSUE #1329）。
@@ -220,5 +221,43 @@ describe("renderMarkdown", () => {
   it("与 markdownToHtml 同一条实现（别名，不是第二份）", () => {
     const sample = "# T\n\n- a";
     expect(renderMarkdown(sample)).toBe(markdownToHtml(sample));
+  });
+});
+
+/* ── 按需取渲染器（ISSUE #1777 / 规范 §12.19）──────────────────────────────
+ *
+ * `loadMarkdownRenderer()` 是这一域**唯一的按需出口**：它把 `marked` + `dompurify`
+ * 那条边变成 `import()`，首屏不再为「可能有一段 markdown 要显示」付出代价
+ * （工坊中间列曾把它拖进入口的静态图）。
+ *
+ * 判据落三件事，缺一条这层就白加：
+ *   ① 它真返回两个渲染函数（与静态出口同名、同行为）；
+ *   ② 返回的函数**真的能渲染**（不是把 undefined 转出去）；
+ *   ③ 它与静态出口**同源** —— 两条路径的产物逐字相同。只判「函数在场」
+ *      会在有人把 `import("./render")` 改成另一份实现时全绿。
+ */
+describe("loadMarkdownRenderer —— 按需取渲染器", () => {
+  it("返回 markdownToHtml / renderMarkdown 两个出口", async () => {
+    const mod = await loadMarkdownRenderer();
+    expect(typeof mod.markdownToHtml).toBe("function");
+    expect(typeof mod.renderMarkdown).toBe("function");
+  });
+
+  it("拿到的函数真能渲染（不是把 undefined 转出去）", async () => {
+    const { markdownToHtml } = await loadMarkdownRenderer();
+    expect(markdownToHtml("**粗**")).toContain("<strong>");
+    expect(markdownToHtml("")).toBe("");
+  });
+
+  it("与静态出口同源：两条路径的产物逐字相同", async () => {
+    const [lazy, statically] = await Promise.all([
+      loadMarkdownRenderer(),
+      import("./render"),
+    ]);
+    const sample = ["# 标题", "", "正文 **粗** 与 `代码`", "", "- 一项"].join(
+      "\n",
+    );
+    expect(lazy.markdownToHtml(sample)).toBe(statically.markdownToHtml(sample));
+    expect(lazy.renderMarkdown(sample)).toBe(statically.renderMarkdown(sample));
   });
 });

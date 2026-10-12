@@ -11,12 +11,23 @@ import { expect, test, type Page } from "@playwright/test";
  * 顺带判一件事：文档型容器内**恰好一层**纵向滚动条。多一层就是双层滚动
  * （整屏滚 + 内层滚），是这次要修的病形之一。
  */
+/**
+ * 当前**可见**那一屏里的文档容器。
+ *
+ * 为什么要按 `[data-view]:not(.hidden)` 限定：`f72a55ee`（PR #1786）把视图栈改成
+ * **按页签逐屏渲染并保持挂载**（切走不卸载），于是所有开过的屏都留在 DOM 里，不活跃的
+ * 那些带 `hidden`（见 `WorkspaceViewStack.tsx` 的 wrapper）。此前那种
+ * `.first()` 会命中**首页**那一份 —— 它在「模型库」这一档里正好是隐藏的，断言于是报
+ * 「hidden」，而它看起来在判的事（宽度档）根本没被读到。
+ *
+ * 判据用「不隐藏」而不是「第 N 个」：位序随开过的页签数漂，而「可见的那一屏」是
+ * 这一档真正要问的东西（用户看到的是它）。
+ */
+const activeView = (page: Page) =>
+  page.locator('[data-view]:not(.hidden)').first();
+
 const column = (page: Page) =>
-  page
-    .locator(
-      '[data-view-container="document"] [class*="overflow-y-auto"] > div',
-    )
-    .first();
+  activeView(page).locator('[class*="overflow-y-auto"] > div').first();
 
 async function maxWidthOf(page: Page): Promise<string> {
   const el = column(page);
@@ -27,7 +38,10 @@ async function maxWidthOf(page: Page): Promise<string> {
 test.describe("统一容器的宽度账 @critical", () => {
   test("首页落在 narrow = 960px，且容器内只有一层滚动", async ({ page }) => {
     await page.goto("/workspace");
-    const frame = page.locator('[data-view-container="document"]');
+    /* 首页是起步唯一那一屏，所以这里 `data-view-container` 的计数就是 1（视图栈还不
+       可能挂上别的屏）—— 保留这条是为了「起步只有一屏」这个前提本身被钉住。 */
+    await expect(activeView(page)).toHaveAttribute("data-view", "home");
+    const frame = activeView(page).locator('[data-view-container="document"]');
     await expect(frame).toHaveCount(1);
     expect(await maxWidthOf(page)).toBe("960px");
 
@@ -35,7 +49,7 @@ test.describe("统一容器的宽度账 @critical", () => {
        `max-h` 的小滚动区（列表、日志框）不该把这条宿主判据打红；而视图自己再套一层
        整屏滚动，才是这里要拦的东西。 */
     await expect(
-      page.locator(
+      activeView(page).locator(
         '[data-view-container="document"] > [class*="overflow-y-auto"]',
       ),
     ).toHaveCount(1);
@@ -47,6 +61,7 @@ test.describe("统一容器的宽度账 @critical", () => {
       .getByRole("button", { name: "模型", exact: true })
       .first()
       .click();
+    await expect(activeView(page)).toHaveAttribute("data-view", "models");
     expect(await maxWidthOf(page)).toBe("1200px");
   });
 
