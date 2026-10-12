@@ -47,6 +47,8 @@ interface Behavior {
 let behavior: Behavior = { models: [] };
 /** 记录 list 收到的入参，用于断言筛选真的传到了后端 */
 const listInputs: Array<{ type?: string; q?: string } | undefined> = [];
+/** 记录 sync 被调用的次数 —— 断言「挂载时同步一次」不会随重渲染复发。 */
+let syncCalls = 0;
 
 const t = createTestTRPC();
 const mockRouter = t.router({
@@ -62,6 +64,7 @@ const mockRouter = t.router({
       return { models: behavior.models };
     }),
     sync: t.procedure.mutation(() => {
+      syncCalls += 1;
       if (behavior.syncError) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -134,6 +137,7 @@ afterEach(() => {
   cleanup();
   behavior = { models: [] };
   listInputs.length = 0;
+  syncCalls = 0;
   server.resetHandlers();
 });
 afterAll(() => server.close());
@@ -151,6 +155,31 @@ describe("useModelLibrary", () => {
     expect(result.current.models[0]?.fileName).toBe(
       "dreamshaper-xl.safetensors",
     );
+  });
+
+  /* 回归：effect 的依赖数组曾经是 `[syncMut, loadModels]`，而这两个引用
+   * 每次渲染都变（`useQuery` / `useMutation` 的返回值不是稳定引用）⇒ 每次渲染
+   * 都重跑一次 sync mutation ⇒ mutation 完成又触发渲染 ⇒ 自激循环。
+   * 线上实测形态是**静置时 `model.sync` 每 10~12ms 打一次、6 秒 505 次**，
+   * 且当时打开的整个视图每秒被重渲染上千次（ISSUE #1803）。 */
+  it("重渲染不复发静默同步：sync 只在挂载时调一次", async () => {
+    behavior = { models: [ONE] };
+    const { result, rerender } = renderHook(() => useModelLibrary(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.loading).toBe(false);
+    expect(syncCalls).toBe(1);
+
+    /* 反复重渲染（模拟父级因轮询 / 状态更新重渲染）：若依赖数组再回到不稳的
+     * 引用上，这里会随之线性增长。 */
+    for (let i = 0; i < 5; i++) {
+      rerender();
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+    expect(syncCalls).toBe(1);
+    expect(result.current.models).toHaveLength(1);
   });
 
   it("筛选与搜索：filtered / typeChips 随状态派生（本地筛选，不打新请求）", async () => {

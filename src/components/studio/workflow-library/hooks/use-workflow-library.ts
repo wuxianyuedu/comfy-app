@@ -193,10 +193,21 @@ export function useWorkflowLibrary(
     tagsQ.refetch().catch(() => undefined);
   }, [tagsQ]);
 
+  /* 首次拉取只跑一次。依赖 `load` / `loadModelTags` 会失效 —— 它们都依赖
+   * `useQuery` 返回的对象，而那个对象**每次渲染都是新引用** ⇒「effect 跑一次」
+   * 变成「每渲染一次跑一次」⇒ 反复 refetch ⇒ 数据到达又触发渲染 ⇒ 自激。
+   * 实测工作流库静置时 `workflow.list` 每秒约 21 次（ISSUE #1803）。
+   * 两个 loader 收进 ref 取最新一份；effect 只依赖 `[]`。 */
+  const loadRef = useRef(load);
+  const loadModelTagsRef = useRef(loadModelTags);
   useEffect(() => {
-    load();
-    loadModelTags();
-  }, [load, loadModelTags]);
+    loadRef.current = load;
+    loadModelTagsRef.current = loadModelTags;
+  });
+  useEffect(() => {
+    loadRef.current();
+    loadModelTagsRef.current();
+  }, []);
 
   /* ── 首次拉取的「卡住」判定 ───────────────────────────────────────────
    * 场景（用户反馈）：断开应用（关掉桌面窗口 / 重开桌面壳）后
