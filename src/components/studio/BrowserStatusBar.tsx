@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { FileText, Lock } from "lucide-react";
 import { useLogPanel } from "./logs/LogProvider";
 import { MessageCenterButton } from "~/components/message-center/MessageCenterButton";
+import { useAppServiceMessageLog } from "~/components/message-center/hooks/use-app-service-message-log";
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
 import {
@@ -278,6 +279,19 @@ export function BrowserStatusBar() {
   const fps = useFps();
   const { cudaVram, smiVram, ram, degradedNote, stale } = useComfyReadiness();
   const devServer = useDevServerStatus();
+  /* 「应用服务断开 / 启动」记进消息中心（时间 + 原因）。
+   *
+   * 接在**这里**而不是新起一个容器，是因为 `useDevServerStatus()` 是
+   * `useDevServerLiveness()` 的唯一消费方——探活循环全应用只有这一条
+   * （2 秒一拍打 `/api/dev/server-id`）。消息中心要的是同一份事实的**边沿**，
+   * 让它自己再轮一遍等于把探活频率翻倍。
+   *
+   * 位置在早退分支之前：非主应用页签（内嵌 ComfyUI 等）状态下状态栏整体隐藏，
+   * 但记录必须继续——否则「看的是内嵌页面时服务断了一次」就彻底没人记。 */
+  useAppServiceMessageLog({
+    state: devServer.state,
+    processIsNew: devServer.processIsNew,
+  });
   const schemaSync = useSchemaSyncStatus();
   const comfyQueue = useComfyQueue();
   // 非主应用页签（内嵌 ComfyUI 等 iframe 页签）时整体隐藏：状态栏是固定悬浮层，
