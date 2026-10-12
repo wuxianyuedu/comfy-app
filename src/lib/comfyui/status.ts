@@ -383,8 +383,11 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   const lookups = await Promise.all(
     candidates.map((c) => findPidForMainPyDetailed(c.cmd)),
   );
-  for (let i = 0; i < candidates.length; i++) {
-    const lookup = lookups[i]!;
+  /* 两个同长数组按位置配对：`Promise.all` 保序，所以下标一一对应。
+   * 用 `entries()` 取候选、`lookups.at(i)` 取结果，省掉两处 `!`。 */
+  for (const [i, candidate] of candidates.entries()) {
+    const lookup = lookups.at(i);
+    if (!lookup) continue;
     if (lookup.failed) lookupFailed = true;
     if (lookup.pid) {
       return {
@@ -395,10 +398,10 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
           configuredPort,
           configuredPortUp,
         ),
-        via: candidates[i]!.via,
+        via: candidate.via,
         unverified: false,
         didQueryProcTable: true,
-        source: snapshotSourceFor(candidates[i]!.via),
+        source: snapshotSourceFor(candidate.via),
       };
     }
   }

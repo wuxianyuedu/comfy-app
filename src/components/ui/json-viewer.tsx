@@ -89,9 +89,9 @@ function collectHits(root: JsonValue, query: string): Path[] {
       return;
     }
     // object
-    for (const k of Object.keys(node)) {
+    for (const [k, value] of Object.entries(node)) {
       if (k.toLowerCase().includes(q)) hits.push([...path, k]);
-      visit(node[k]!, [...path, k]);
+      visit(value, [...path, k]);
     }
   };
 

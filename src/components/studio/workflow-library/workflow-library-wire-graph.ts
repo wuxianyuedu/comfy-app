@@ -38,6 +38,17 @@ export const LIB_NODE_OUTPUTS = "lib:outputs";
  *  也没有端口，抬高它不会影响任何端点几何 —— 三列节点的声明高度继续照实给。 */
 export const LIB_NODE_BACKDROP = "lib:backdrop";
 
+/** 本仓自建的四个固定节点 id。 */
+export type LibNodeId =
+  | typeof LIB_NODE_PARAMS
+  | typeof LIB_NODE_HOST
+  | typeof LIB_NODE_OUTPUTS
+  | typeof LIB_NODE_BACKDROP;
+
+/** 三列 + 背景板的坐标表。**四个键都有值**（不是索引签名）——
+ *  读取端因此不必再对 `at[id]` 补 `!`。 */
+export type LibNodeLayout = Record<LibNodeId, { x: number; y: number }>;
+
 /** 边的业务身份：它连的是**哪个对外参数 / 哪个输出口**。
  *
  *  卡片上的圆点与线是同一份事实的两端，点选一条线要能反查出「点的是哪个口」
@@ -156,9 +167,7 @@ export interface LibraryNodeSizing {
  *
  *  这是**首帧**的位置：面板靠 `fitView` 把内容收进视口，位置只需单调可读。
  *  用户拖过的位置由 React Flow 自己持有（不受控画布）。 */
-export function layoutLibraryNodes(
-  sizing: LibraryNodeSizing,
-): Record<string, { x: number; y: number }> {
+export function layoutLibraryNodes(sizing: LibraryNodeSizing): LibNodeLayout {
   const { paramsWidth, hostWidth, columnGap, originX, originY } = sizing;
   return {
     [LIB_NODE_PARAMS]: { x: originX, y: originY },

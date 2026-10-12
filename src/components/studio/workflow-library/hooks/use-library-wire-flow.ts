@@ -43,6 +43,7 @@ import {
   layoutLibraryNodes,
   SELECTED_STROKE,
   type LibraryNodeContent,
+  type LibNodeId,
 } from "../workflow-library-wire-graph";
 import type {
   LibraryOutputCards,
@@ -340,10 +341,10 @@ export function buildLibraryNodes(
    * 照旧（jsdom / 布局前也算得出落点），内容一变就重新量。
    * 背景板相反：它的尺寸**就是**声明值（没有内容可量、也没有端点），继续用
    * `width` / `height`（视口变化时由画布 `setNodes` 改它的声明尺寸）。 */
-  const contentNode = (id: string, type: string, width: number): Node => ({
+  const contentNode = (id: LibNodeId, type: string, width: number): Node => ({
     id,
     type,
-    position: at[id]!,
+    position: at[id],
     initialWidth: width,
     initialHeight: sizing.envelopeHeight,
     /* 三列卡片是固定布局列：不可选中 / 不可删，否则点选会挂蓝框、按 Delete
@@ -360,7 +361,7 @@ export function buildLibraryNodes(
       id: LIB_NODE_BACKDROP,
       /* 背景板不可交互、不参与连线：它只是画布上的一块底。 */
       type: LIB_NODE_TYPES.libBackdrop,
-      position: at[LIB_NODE_BACKDROP]!,
+      position: at[LIB_NODE_BACKDROP],
       width: backdropSize?.width ?? extent.width,
       height: backdropSize?.height ?? extent.height,
       selectable: false,

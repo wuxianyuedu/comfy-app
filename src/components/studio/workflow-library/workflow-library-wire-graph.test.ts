@@ -349,10 +349,12 @@ describe("三列布局", () => {
       envelopeHeight: 720,
       fillHeight: 720,
     });
-    expect(at[LIB_NODE_PARAMS]!.x).toBeLessThan(at[LIB_NODE_HOST]!.x);
-    expect(at[LIB_NODE_HOST]!.x).toBeLessThan(at[LIB_NODE_OUTPUTS]!.x);
-    expect(at[LIB_NODE_HOST]!.x - at[LIB_NODE_PARAMS]!.x).toBe(220 + 96);
-    expect(at[LIB_NODE_OUTPUTS]!.x - at[LIB_NODE_HOST]!.x).toBe(380 + 96);
+    /* `layoutLibraryNodes` 的返回类型是 `LibNodeLayout`（四个固定键，不是
+     * 索引签名），`at[...]` 直接是坐标 —— 这里不再需要 `!`。 */
+    expect(at[LIB_NODE_PARAMS].x).toBeLessThan(at[LIB_NODE_HOST].x);
+    expect(at[LIB_NODE_HOST].x).toBeLessThan(at[LIB_NODE_OUTPUTS].x);
+    expect(at[LIB_NODE_HOST].x - at[LIB_NODE_PARAMS].x).toBe(220 + 96);
+    expect(at[LIB_NODE_OUTPUTS].x - at[LIB_NODE_HOST].x).toBe(380 + 96);
   });
 
   it("背景板与三列同起于左上角（位置不影响包围盒）", () => {

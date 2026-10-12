@@ -137,7 +137,9 @@ export function formatShotDuration(seconds: number): string {
 
 /* ── 时间轴样例数据（视觉设计参考）── */
 
-export const MOCK_SHOTS: ShotListItem[] = [
+/* 标成**非空数组**：`MOCK_SHOTS[0]` 用作「没选中任何镜头」时的兜底项
+ *（`FilmStudio` 的 `selectedShot`），类型上直接是元素而非 `| undefined`。 */
+export const MOCK_SHOTS: [ShotListItem, ...ShotListItem[]] = [
   {
     id: "shot-1",
     name: "开场 · 城市全景",

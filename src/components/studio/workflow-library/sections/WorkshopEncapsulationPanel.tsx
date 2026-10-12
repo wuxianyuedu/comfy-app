@@ -208,7 +208,7 @@ export function WorkshopEncapsulationPanel({
          * 只看默认模式测不出另一条能不能用）。只改当前模式，不改默认模式。 */}
         {modes && modes.length > 1 && onModeChange && (
           <SelectMenu
-            value={mode ?? modes[0]!}
+            value={mode ?? modes.at(0) ?? ""}
             onChange={onModeChange}
             options={[...modes]}
             labels={Object.fromEntries(

@@ -8,6 +8,7 @@ import { db } from "~/lib/db";
 import { skill, type Skill } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { eq, and, like, or, asc, desc, count } from "drizzle-orm";
+import { firstRowRequired } from "./repository-row";
 
 export interface SkillSeed {
   name: string;
@@ -133,7 +134,7 @@ export class SkillRepository extends DrizzleRepository<Skill> {
         isActive: true,
       })
       .returning();
-    return rows[0]!;
+    return firstRowRequired(rows, "技能插入");
   }
 }
 

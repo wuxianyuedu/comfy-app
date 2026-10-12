@@ -65,12 +65,13 @@ function useDropZone(
       counterRef.current = 0;
       setActive(false);
       const files = Array.from(event.dataTransfer.files ?? []);
-      if (files.length === 0) return;
+      const [first] = files;
+      if (!first) return;
       if (files.length > 1) {
         onError(`一次只能拖入一个文件（收到了 ${files.length} 个）`);
         return;
       }
-      void onFile(files[0]!);
+      void onFile(first);
     },
     [onError, onFile],
   );

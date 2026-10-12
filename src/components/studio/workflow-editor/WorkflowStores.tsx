@@ -297,8 +297,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         }
         without.splice(targetIdx, 0, { entryKey: fromKey, entry: fromEntry });
         const renumbered: Record<string, WorkflowIOParam> = { ...prev };
-        for (let i = 0; i < without.length; i++) {
-          const { entryKey, entry } = without[i]!;
+        for (const [i, { entryKey, entry }] of without.entries()) {
           renumbered[entryKey] = { ...entry, displayOrder: i + 1 };
         }
         /* 发往服务端（调用形状与之前一致）。 */
@@ -436,9 +435,10 @@ export function createRgthreeGroupsStore(
     workflowId: params.workflowId,
 
     getBypass: (groupId) => {
-      if (Object.prototype.hasOwnProperty.call(get().overrides, groupId)) {
-        return get().overrides[groupId]!;
-      }
+      const override = get().overrides[groupId];
+      /* 用 `in` 判据 + 值本身收窄：`hasOwnProperty` 只回答「有没有这个键」，
+       * 类型上仍要做一次索引取值。 */
+      if (override !== undefined) return override;
       const g = get().detail?.groups?.find(
         (x: WorkflowGroup) => x.id === groupId,
       );

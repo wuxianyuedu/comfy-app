@@ -55,8 +55,12 @@ export function FilmStudio() {
   /* 当前要评审的镜头（非空即打开评审弹窗）。评审走 AI 文本质检，不合格可抽卡 / 改提示词重生成。 */
   const [reviewShot, setReviewShot] = useState<ShotListItem | null>(null);
 
+  /* 三档兜底：选中的 → 列表首项 → 样例首项（列表可能被删空，
+   * `MOCK_SHOTS` 是常量、必有首项）。 */
   const selectedShot =
-    shots.find((shot) => shot.id === selectedShotId) ?? shots[0];
+    shots.find((shot) => shot.id === selectedShotId) ??
+    shots.at(0) ??
+    MOCK_SHOTS[0];
   /* 项目来源且该项目确有镜头 → 左栏显示真实镜头（缩略图/时长/状态）；否则维持样例时间轴。 */
   const isProjectSource =
     c.shotSource === "project" && c.projectShots.length > 0;
@@ -162,7 +166,7 @@ export function FilmStudio() {
         {/* ═══ 右：属性面板（280px） ═══ */}
         <FilmStudioPropertyPanel
           c={c}
-          selectedShot={selectedShot!}
+          selectedShot={selectedShot}
           selectedShotId={selectedShotId}
           onPatchShot={patchShot}
         />
