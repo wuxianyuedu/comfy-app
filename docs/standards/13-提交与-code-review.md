@@ -231,6 +231,10 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-deps-freshness.mjs --staged # 依赖新鲜度（ISSUE #1569）：远端改过库的
    # 版本而本地还停在旧的那套上 —— 只在**本次暂存动了依赖面**时判（否则退 0 零输出），
    # 判据自身不做网络请求，远端引用陈旧只打 [未校验]、不阻断（见下 13.5.13）
+✅ node scripts/check-allow-builds.cjs # 依赖构建脚本 ⇄ allowBuilds 对账（AGENTS 硬规则 8）：
+   # 每个已安装且带 preinstall/install/postinstall 的包都必须在 `pnpm-workspace.yaml` 的
+   # `allowBuilds` 里有一条显式条目 —— `true`（批准）与 `false`（显式拒绝）都算回答过，
+   # 漏答才红。反向（名单里有无脚本的条目）刻意不判。读不到扫描面判红、不静默放行（见下 13.5.15）
 ✅ node scripts/check-tsc-diagnostic-executors.cjs # 类型层声明 ⇄ 执行者（见下 13.5.14）：19 条 tsc 错
    # 落进 master 的共同根因是「声明（JSDoc / 类型注解）落后于实现」，而 tsc 那条判据缺的是
    # 「什么时候被敲」。本步不跑第二遍 tsc（合并前那一跳归 §13.6.2 的 check:base:batch），
@@ -1483,6 +1487,71 @@ node scripts/check-tsc-diagnostic-executors.cjs --update   # 把基线收紧到�
 该拦的（涨了 / 落点扫不到声明 / 关键词没了 / 姊妹索引缺 id / 两处 reader 不一致 /
 字段不全 / 缺 baseline / id 重复 / 台账读不出 / 空表 / 对侧读不到 / `--update` 涨）与该放的
 （降了只提示 / 声明行识别不吃夹具字符串 / 真仓判绿）每一档各一条执行者。
+
+#### 13.5.15 依赖构建脚本 ⇄ `allowBuilds` 对账（`node scripts/check-allow-builds.cjs`）
+
+**立案现场**：AGENTS 硬规则 8 写着「新增含 postinstall 构建脚本的依赖：同步更新
+`pnpm-workspace.yaml` 的 `allowBuilds`，否则非交互模式 `pnpm install` 会 exit 1」，
+而这条规则此前**一个执行者都没有**。`allowBuilds` 在仓库里只被当**输入**读两次 ——
+`check-deps-freshness.mjs` 拿它判「远端只改了 `allowBuilds` 这一档」的新鲜度、
+`check-type-assertion-executor.cjs` 在文件头解释为什么不引 `jsonc-parser`（理由正是
+「多一条依赖就要给 `allowBuilds` 记账」）—— 没有任何一处判过
+「某个带构建脚本的依赖到底在不在名单里」。
+
+**为什么这条值得在提交时响**：它要防的故障形状是**改动点与故障点不同人，中间还隔一次安装**。
+
+- 漏登记的人当场看不出来 —— 他自己的 `node_modules` 早就装好了，增量 install
+  甚至直接 short-circuit；
+- 第一次复现是在**下一个人**（或另一台检出、另一个容器、另一台 NPC 工作区）跑
+  `pnpm install --frozen-lockfile` 的那一刻，`ERR_PNPM_IGNORED_BUILDS` 以 exit 1 中断；
+- 表现是「这个仓库装不上依赖」，而按 §13.6.3 的口径这句话会被误读成
+  「本机跑不了门禁」—— 一条登记疏漏升级成一次全场排查。
+
+同族先例：`check-app-version.cjs` 守的也是「同一个事实抄在多份清单里、漏改一处时
+当场看不出来」。那一处判「三处相等」，这一处判「名单覆盖齐全」。
+
+**判什么**（三点都不是新增语义，而是照 pnpm 自己的判定口径抄：它按**包名**批准，
+对名单里没有的构建脚本直接失败而不是警告）：
+
+1. `pnpm-workspace.yaml` 在，且其中有 `allowBuilds:` 块 —— 块没了就是名单整档消失，
+   正是本判据要拦的根状态；
+2. `node_modules/.pnpm` 在 —— **缺依赖判红而不是跳过**：把「读不到扫描面」写成
+   静默 `exit(0)`，判据会在一份依赖都没读的情况下报绿，那是 §13.5.12 那一族里最坏的
+   一种。话术里直接给出那一条命令（`pnpm install --frozen-lockfile`），并按 §13.6.3
+   写明「缺失只表示还没装，不表示本机装不了」；
+3. 每一个**已安装且带 `preinstall` / `install` / `postinstall` 的包**，都必须在
+   `allowBuilds` 里有一条显式条目 —— `true`（批准执行）与 `false`（显式拒绝）**都算
+   回答过**，漏答才是问题。
+
+**刻意不判的**（都写进判据的文件头）：
+
+- **名单里多余的反向条目**（登记了、但当前没有构建脚本的包）。这一档在现状里是**多数**，
+  且其中一半是故意的：`better-sqlite3` 显式 `false` 的理由写在 `pnpm-workspace.yaml` 里
+  （v13 改成随包附带 `prebuilds/`，仍带 `gypfile` 会触发一次必然失败又毫无产物的
+  `node-gyp rebuild`），`@prisma/*` 是给可选 peer 覆盖留的位。反向判红会把这两种
+  正当形态一起打成违规 —— 那是「误报一片」，不是收紧判据（§11.18.4）。
+- **该不该批准**（`true` 还是 `false`）：发布/构建判断，与「同步更新名单」不是同一件事
+  （§12.18：不再为此写一个启发式扫描器）。
+- **版本粒度**：pnpm 按名字批准，同名多版本共享一条条目是既定语义。
+
+**为什么读 `node_modules` 而不是 lockfile 或 registry**：`pnpm-lock.yaml` 不带 `scripts`
+字段（它记解析结果与完整性，不记生命周期），从它推「有没有 postinstall」要引第二份数据源；
+问 registry 要网络，与本仓判定型入口的「零网络」口径相反（同 §13.5.13 那句
+「判据自身不做网络请求」）。而 `node_modules/.pnpm/<条目>/node_modules/<包>/package.json`
+是**已经装出来的事实**，与 pnpm 判定构建脚本时读的是同一份输入，不存在
+「判据与工具看不同来源」那道缝。扫描复用 `gate-scan-read.cjs` 那层容错读取
+（条目在扫描期间消失要计数并进结论行，不能崩、也不能静默跳过）。
+
+**成本**：一次全量已安装 `package.json` 的读取，零网络、零子进程，与
+`check-non-null-assertions.cjs` / `check-comment-language.cjs` 同档（同为全树扫描那一类）。
+步数与具体秒数**不写在这里**（§13.5.10 与 ISSUE #1407 的口径：数字会静默过期，
+唯一出处是钩子里那句 `D(N 个判据脚本)`，由 `tests/doc-check-hook-wiring.test.ts` 核）。
+
+规则自测：`tests/check-allow-builds.test.ts` 分两层 —— 判决面（登记 `true` 放行 /
+显式 `false` 放行 / 漏登记判红且点名 / 作用域包按 `@scope/name` 认名字 / 空串脚本不算站点 /
+同名多版本按去重后的名字计 / 反向条目不误报）与输入面（`allowBuilds` 块缺失 /
+`pnpm-workspace.yaml` 缺失 / `node_modules/.pnpm` 缺失三档都必须红，且话术指路那一条命令）。
+接线那两条与 §13.5.12 那一族同形：解析 D 组步骤、只认真调用，另钉一份 §13.1 清单在场。
 
 ### 13.6 分支与合并策略
 

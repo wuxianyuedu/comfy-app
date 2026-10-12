@@ -66,11 +66,18 @@
 
 1. **包管理只用 pnpm**（`pnpm exec …`）。禁止 npx / npm run——npm 11.19 在本机
    解析 typescript 别名链会崩溃（`Class extends value undefined`）。
+   **这条有判据**：`scripts/check-doc-references.cjs`（= `pnpm doc:check`）把「台账文档与
+   `AGENTS.md` 里出现 npm 形态的可执行命令」判成硬错误——这类写法一律改为 pnpm；
+   覆盖面是**文档里的命令口径**，不含源码调用（那一路刻意不判——源码里没有对应的
+   可执行形态可由 lint 看）。
 2. **工具链钉死项不可随意改**（改动前必须读规范 §6 并在提交说明里给出理由）：
    - `pnpm-workspace.yaml`：`minimumReleaseAge: 0`、`allowBuilds` 名单（条数以该文件为准；
      它会随新增依赖变动，别在文档里写死数字）、`verifyDepsBeforeRun: false`
    - `next.config.js`：`experimental.useTypeScriptCli: false`
-3. **进程清理必须杀整棵树，平台判据只收两处**：Node/TS 侧一律经 `src/lib/process/kill-process-tree.ts` 的 `killProcessTree()`；非 TS 宿主走命令行入口 `scripts/reap-process.mjs`；Rust 壳侧起子进程只能用官方 `tauri-plugin-shell` 的 `CommandChild`（退出整树回收同样转交 `reap-process.mjs`）。禁止各处自写 `taskkill` / `process.kill` / `Process.Kill()` / 单杀 leader / `std::process::Command` + `taskkill`（后者在 POSIX 上等于什么都不做）。**POSIX 自建进程组是前提**：`spawn({ detached: true })`。跨平台机制、防自杀判据、孤儿事故根因见 launch-and-build §3.1–§3.3。
+   - **钉死项本身有回归判据**：`tests/turbopack-tracing-excludes.test.ts` 判
+     `useTypeScriptCli: false` 与**实际解析到的 TypeScript 必须配对**（Next 16 里该键的位置、
+     以及关掉它之后解析到 TS7 会让 `next build` 直接退出），改钉死项会当场红。
+3. **进程清理必须杀整棵树，平台判据只收两处**：Node/TS 侧一律经 `src/lib/process/kill-process-tree.ts` 的 `killProcessTree()`；非 TS 宿主走命令行入口 `scripts/reap-process.mjs`；Rust 壳侧起子进程只能用官方 `tauri-plugin-shell` 的 `CommandChild`（退出整树回收同样转交 `reap-process.mjs`）。禁止各处自写 `taskkill` / `process.kill` / `Process.Kill()` / 单杀 leader / `std::process::Command` + `taskkill`（后者在 POSIX 上等于什么都不做）。**POSIX 自建进程组是前提**：`spawn({ detached: true })`。跨平台机制、防自杀判据、孤儿事故根因见 launch-and-build §3.1–§3.3。**这条有回归判据**：`tests/cross-platform-launcher.test.ts` 真起进程树再回收、并断言 `scripts/reap-process.mjs` 真的把目标收掉（Windows 侧的 `taskkill` 参数形态由 `src/lib/process/kill-process-tree.windows.test.ts` 判）。
 4. **失败路径必须有日志 + 用户可见出口**；日志按规范 §4 的布局落 `log/`，
    不得引入新的固定名日志文件（残留进程句柄会锁死它，用按次命名 + 轮转）。
 5. **改了 `tauri.conf.json` / `src-tauri/src/**` / `splash-assets/**` 必须
@@ -96,6 +103,12 @@
    `core.hooksPath=.githooks`）；未生效时手动 `git config core.hooksPath .githooks`。
 8. **新增含 postinstall 构建脚本的依赖**：同步更新 `pnpm-workspace.yaml`
    的 `allowBuilds`，否则非交互模式 `pnpm install` 会 exit 1。
+   **这条现在有判据**：`scripts/check-allow-builds.cjs`（挂在 `.githooks/pre-commit` 的 D 组）
+   拿 `node_modules/.pnpm` 里**已装出来的事实**与名单对账——每个带
+   `preinstall` / `install` / `postinstall` 的包都必须有一条显式条目，`true`（批准）与
+   `false`（显式拒绝）都算回答过，漏答才红；反向（名单里当前没有构建脚本的条目）**刻意不判**，
+   那半数是故意留的位，判它等于误报一片。口径、为什么不读 lockfile、以及「缺 `node_modules`
+   判红而不是跳过」见 §13.5.15。
 9. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
    锁定会 EPERM 连锁失败）。
 10. **视图层不得新增 IO**：`src/components/**`、`src/app/**`（除 `api/`）里不允许新写
@@ -125,7 +138,7 @@
     并在提交/实施说明里注明遵循了哪些条目。把「先看文档再改代码」当默认动作，
     不凭项目外部经验或旧记忆猜测本仓库约定。
 
-16. **构建期模块图上的模块：模块级副作用先判就绪、源码保持纯 ASCII**（ISSUE #489 / §5）：任何「加载即读库」的副作用都必须先过 `src/lib/db-schema-ready.ts` 的 `isSchemaReady()`——历史实例是 `src/lib/comfyui/reaper.ts` 经 `enqueue.ts` 的裸 `import "./reaper"` 挂在启动路径上（P3 §5 ADR §14 D3 起该模块加载零副作用、由宿主显式起，但**规则本身不变**：新增「加载即读库」的副作用仍然必须先判就绪）——跳过是安全的（回收幂等、下轮重跑），「表在、查询失败」这类真故障不许被吞；会被 `next-code-frame` 渲染到的模块保持纯 ASCII（中文按字节的 code frame 高亮会触发 Rust `end byte index N is not a char boundary` panic、把整个 `next build` 打死，且偏移敏感、报错完全指不出业务原因）。**排查手法与实践细节**见 §5 排障手册对应两行；业务模块与文档不受此限，中文照常。
+16. **构建期模块图上的模块：模块级副作用先判就绪、源码保持纯 ASCII**（ISSUE #489 / §5）：任何「加载即读库」的副作用都必须先过 `src/lib/db-schema-ready.ts` 的 `isSchemaReady()`——历史实例是 `src/lib/comfyui/reaper.ts` 经 `enqueue.ts` 的裸 `import "./reaper"` 挂在启动路径上（P3 §5 ADR §14 D3 起该模块加载零副作用、由宿主显式起，但**规则本身不变**：新增「加载即读库」的副作用仍然必须先判就绪）——跳过是安全的（回收幂等、下轮重跑），「表在、查询失败」这类真故障不许被吞；会被 `next-code-frame` 渲染到的模块保持纯 ASCII（中文按字节的 code frame 高亮会触发 Rust `end byte index N is not a char boundary` panic、把整个 `next build` 打死，且偏移敏感、报错完全指不出业务原因）。**排查手法与实践细节**见 §5 排障手册对应两行；业务模块与文档不受此限，中文照常。**这条有回归判据**：`tests/reaper-side-effect.test.ts` 判「模块加载零副作用 / 启动点先过表就绪守卫」（顶层裸 `startReaper()`、绕过 `isSchemaReady()` 的裸调 sweeper 都会红），纯 ASCII 那一半由 `tests/lib-node-only-declarations.test.ts` 与 `tests/build-fresh-checkout.test.ts` 守着。
 
 17. **分发产物不得携带开发机私有输入，敏感值不得明文落日志**（ISSUE #489 / §7.3、07 §7.18.2.1）：`next build` 会**无条件**把仓库根 `.env` 与 `db.sqlite` 复制进 `.next/standalone`，进而被 `build-desktop` 内嵌进桌面包——**密钥明文分发**。**别在配置层修这件事**：`outputFileTracingExcludes` 在这条链上不做减法，而 `.env` 那份根本不是 tracing 带进来的（机制、A/B 实测、以及那句已被订正的「Turbopack 不读这份键」只有一份出处：§7.2 第三件事之二与 §7.3——别拿任何一处复述当决策依据，换构建器也不是出路）。防线在产物层，两件同批：`scripts/standalone-private-inputs.mjs`（减法，**递归按形状**且**不穿符号链接**——穿链接删等于损坏指向开发机 pnpm store 的依赖）+ `scripts/check-standalone-contents.cjs`（真数产物，口径同样不穿链接；从 #1217 起接进 `pnpm build` 收尾，顺序是 减法 → 数产物 → 冒烟）。**两层顶层都是默认拒绝**（`STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL`，`src` 不在任何一层、只有 `RUNTIME_SRC` 逐文件放行；开发期文件与 `scripts/` 走同一通道，前者黑名单、后者白名单 `RUNTIME_SCRIPTS`）：新增一项必须**同改两处**并写清「谁在运行期读它」。日志侧：ERROR 镜像（`app-runtime.log`）走另一条独立通道、**不受 pino `redact` 保护**，镜像里不许整包 `JSON.stringify` payload（判据与实测见 07 §7.18.2.1）；写日志类用例给**自己的临时目录**，别让 `pnpm test` 往仓库 `log/` 写字。
 
@@ -142,7 +155,7 @@
 
 23. **注释语言：一律中文**（ISSUE #678，机器强制）：业务代码、测试、脚本（`.ts` / `.tsx` / `.mjs` / `.cjs` / `.ps1` / Rust）里的注释统一写中文。**唯一例外**：会被 `next-code-frame` 渲染到的构建期模块（硬规则 16 那批）保持纯 ASCII + 英文注释，并在文件头一条说明原因。白名单登记在 `docs/reference-facts.md` 的 `comment.language.asciiOnly` 一行，由 `pnpm doc:check` 核对；判据、例外语义与自查入口见 §12.4.6 与 §9.6。
 
-24. **复用优先：写之前先查、缺能力补地基，不造第二轮子**（§12.18）：动手写一段新逻辑前，先花一次 grep 的代价回答「这能力是不是已经有了、或本该有」——有等价 / 更通用的实现就 import（缺的差异用参数或薄封装补，**不在调用点重抄**）；没有、但属跨模块通用能力（格式化 / 单位换算 / 端口与地址 / 错误信封 / 进程与路径 / 重试与超时…）就补进对应地基（`src/lib/<domain>` 或 `core`）写一次 + 配单测，调用点 import；确认是这一处独有的业务才就地写。补地基的门槛是**真通用**（≥2 个现有调用点、或明确马上有第 2 个）；只有 1 个又看不出第二个的，先就地写、别急着抽象（§12.15 第三条）。地基里不放任何一侧的传输层代码（§18.4 / §12.12）。**分工**：本条管**落笔时的取向**；事后回潮由 §12.12（字面孪生 ≥75%）/ §12.14（端点收口）/ §12.16（零消费导出）机器兜底——**别再为其新写「抓该不该通用」的启发式扫描器**（会误报一片、本身就成了「会静默失效的清单」，那是用造轮子的方式反造轮子）。
+24. **复用优先：写之前先查、缺能力补地基，不造第二轮子**（§12.18）：动手写一段新逻辑前，先花一次 grep 的代价回答「这能力是不是已经有了、或本该有」——有等价 / 更通用的实现就 import（缺的差异用参数或薄封装补，**不在调用点重抄**）；没有、但属跨模块通用能力（格式化 / 单位换算 / 端口与地址 / 错误信封 / 进程与路径 / 重试与超时…）就补进对应地基（`src/lib/<domain>` 或 `core`）写一次 + 配单测，调用点 import；确认是这一处独有的业务才就地写。补地基的门槛是**真通用**（≥2 个现有调用点、或明确马上有第 2 个）；只有 1 个又看不出第二个的，先就地写、别急着抽象（§12.15 第三条）。地基里不放任何一侧的传输层代码（§18.4 / §12.12）。**分工**：本条管**落笔时的取向**；事后回潮由 §12.12（字面孪生 ≥75%）/ §12.14（端点收口）/ §12.16（零消费导出）机器兜底——**别再为其新写「抓该不该通用」的启发式扫描器**（会误报一片、本身就成了「会静默失效的清单」，那是用造轮子的方式反造轮子）。**那两个事后兜底的执行者点名在这里**（本条此前只引章节号、不引脚本，读起来像「没有机器兜底」）：§12.12 的字面孪生由 `scripts/check-code-duplication.cjs` 判（棘轮 `scripts/.code-duplication-baseline.json`），§12.16 的零消费导出由 `scripts/check-dead-exports.cjs` 判（`scripts/.dead-exports-baseline.json`），两条都挂在 `.githooks/pre-commit` 的 D 组。
 
 25. **开工前先跑一次依赖新鲜度**（ISSUE #1569 / §13.5.13）：远端 `master` 上别人升过依赖
     而本地还停在旧的那一套上时，你会在**旧依赖树**上改代码、跑门禁，结论看起来一切正常 ——

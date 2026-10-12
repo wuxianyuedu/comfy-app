@@ -89,7 +89,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(56 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(57 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与实际
@@ -460,6 +460,20 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 那时「我的基线是不是旧的」必须回答，否则会在旧依赖上解冲突、或把基于旧基线的
   # lockfile 推上去。判据自身**不做网络请求**（远端引用陈旧只打 [未校验]、不阻断）。
   run "依赖新鲜度（只判动了依赖面的提交，§13.5.13）" node scripts/check-deps-freshness.mjs --staged
+  # 依赖构建脚本 ⇄ `allowBuilds` 对账（§13.5.15 / AGENTS 硬规则 8）。这条此前**一个执行者
+  # 都没有**，而它要防的故障形状是「改动点与故障点不同人、中间还隔一次安装」：
+  # 漏登记的人当场看不出来（他自己的 `node_modules` 早装好了，增量 install 甚至
+  # short-circuit），第一次复现是下一个人（或另一台检出、另一个容器）跑非交互
+  # `pnpm install --frozen-lockfile` 那一刻的 `ERR_PNPM_IGNORED_BUILDS` —— 表现是
+  # 「这个仓库装不上依赖」，按硬规则 26 的口径还会被误读成「本机跑不了门禁」。
+  # 判据口径照 pnpm 自己那条抄：它按**包名**批准、对名单里没有的构建脚本直接失败而非警告。
+  # 所以这里只判「带 preinstall/install/postinstall 的已安装包必须有显式条目」，
+  # `true`（批准）与 `false`（显式拒绝）都算回答过；反向（名单里有无脚本的条目）
+  # **刻意不判** —— 现状 11 条里 8 条是那种正当形态，判它等于误报一片。
+  # 缺 `node_modules/.pnpm` 判红而不是跳过：读不到输入时报绿是 §13.5.12 那一族里最坏的一种。
+  # 成本实测：读 1377 份已安装 `package.json`、零网络、零子进程，约 4.5s，
+  # 与 check-non-null-assertions / check-comment-language 同档（同为全树扫描那一类）。
+  run "依赖构建脚本与 allowBuilds 对账" node scripts/check-allow-builds.cjs
   # jsx-a11y 的规则开关 ⇄ 判据（规范 06 §6.12）。这个插件装着 39 条规则，而
   # `eslint-config-next` 只启用 6 条、全是 warn —— **「半开」这件事此前没有
   # 任何东西在数**：`grep -c jsx-a11y eslint.config.js` 是 0（配置在 next 里）、
