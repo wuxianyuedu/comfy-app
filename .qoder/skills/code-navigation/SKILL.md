@@ -8,7 +8,7 @@ description: 用 codegraph / zvec-grep 两个 MCP 做代码检索与影响面分
 本仓库配置了两个**本地、只读**的 MCP server（声明见 `.mcp.json`）：
 
 - `codegraph`：语义代码图谱，按定义 / 引用 / 影响面查询（`codegraph serve --mcp`）。
-- `zvec-grep`：正则 / 文本跨文件检索（`zg server --stdio --mcp-toolset full`）。
+- `zvec-grep`：正则 / 文本跨文件检索（`zg server --stdio`，即默认的 `agent` 工具面 = 只给已建索引的检索）。
 
 本 Skill 是这两个 MCP 的**工作流归属**：说明何时用、输入输出、以及校验/审批边界。
 
@@ -19,7 +19,10 @@ description: 用 codegraph / zvec-grep 两个 MCP 做代码检索与影响面分
 2. 门禁给不出结论、需要「跨文件的语义化检索」时，再用 MCP：
    - 找定义 / 引用 / 评估改动影响面 → `codegraph`；
    - 按正则 / 文本 / 关键字跨文件搜 → `zvec-grep`。
-3. 二者都是**导航加速**，不作为提交前的独立校验源，也不替代机器判据。
+3. **用之前先判就绪**：`codegraph status` 与 `zg status` 任一条报未初始化，这次检索就**只能当加速不可用**处理——
+   未建索引时语义查询**返回空而不报错**，所以**「查不到」不等于「仓库里没有」**。要下「没有现成实现」的结论
+   （AGENTS 硬规则 24 的复用优先），必须再用 Grep / Read 复核一遍，并说明用了哪一遍。
+4. 二者都是**导航加速**，不作为提交前的独立校验源，也不替代机器判据。
 
 ## 输入 / 输出
 
@@ -49,6 +52,10 @@ description: 用 codegraph / zvec-grep 两个 MCP 做代码检索与影响面分
 
 - **只读**：这两个 MCP 只做检索，不写文件、不执行变更。任何「据此改代码」仍走正常
   分支 + PR + pre-commit（AGENTS 硬规则 6、7）。
+- **工具面按声明收口**：`zvec-grep` 的 MCP 面跑默认的 `agent` 档（只给已建索引的检索），
+  与上面那条「只读」是同一件事。受管 rg / index / status 不在 MCP 面上——需要时用 CLI
+  一次性动作（`zg query --rg` / `zg index` / `zg status`），因为建索引会牵 embedding
+  provider 与凭据，那一步该由人敲，不做成常开面。
 - 不把 MCP 输出当作门禁通过的依据；提交门禁判据不变。
 - 本文件是这条政策的**唯一出处**：AGENTS.md 只保留「门禁判据只在 `scripts/check-*.cjs` 与
   `.githooks/pre-commit`」那条红线并指向本文件，不再重抄用法。
