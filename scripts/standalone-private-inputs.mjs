@@ -187,6 +187,11 @@ export const RUNTIME_SCRIPTS = [
   "launcher-core/orchestrator.mjs",
   "launcher-core/corepack.mjs",
   "launcher-core/splash-assets.mjs",
+  // 「收尾定性」这一族（ISSUE #1692 / 规范 §4.5.3）：四种成因的判决表与文案、
+  // 以及运行期退出的写点判据。`dev-launcher.mjs` 顶层静态 import 它 —— 缺这份
+  // 同样是整个编排器 ENOENT，而它的表现最难查：只在**服务已经出过事**的那一刻
+  // 才被走到（`concludeDownstreamExit` 与常驻段的收尾），正常启动一切照旧。
+  "launcher-core/downstream-exit.mjs",
   // 桌包 standalone 形态的运行入口与它的环境装配（ISSUE #1216）：壳把
   // `node server.js` 换成 `node scripts/standalone-runtime.mjs`，缺这份就是
   // standalone 桌包回到「起不来且没人知道为什么」。

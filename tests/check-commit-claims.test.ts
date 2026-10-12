@@ -322,7 +322,10 @@ describe("extractClaims 的句式口径", () => {
     /* 真样本 `23bc80da`：`§3.6.1 的 p71-allow 例外块照原文保留` 说的是那个
      * lint 例外块被抄过去了，与「§3.6.1 这一节还在」毫无关系。 */
     expect(
-      extractClaims("（只剩内容区消费，§3.6.1 的 p71-allow 例外块照原文保留）", NO_TREE),
+      extractClaims(
+        "（只剩内容区消费，§3.6.1 的 p71-allow 例外块照原文保留）",
+        NO_TREE,
+      ),
     ).toHaveLength(0);
   });
 
@@ -374,6 +377,11 @@ describe("真历史（本仓库）", () => {
     }
   }
 
+  /* 超时显式给足：这一条跑的是**真 git 历史**——`sectionInTree` 对每一节都要
+   * `ls-tree` + 逐份 `git show`（21 份规范文档），本机实测整条 49s，而 vitest
+   * 默认 30s。判据本身只读那一版树（`git show <commit>:<path>`），不看工作区，
+   * 所以它慢下来的原因只有「git 子进程多」，不会是死循环；但 30s 会把一条
+   * **断言全对**的用例判成超时（表现是「历史回归红了」，与真反事实混在一起）。 */
   vitestTest.skipIf(!hasCommit("ad81a912"))(
     "ad81a912 那句「§13.5.13 / §13.6.3 两节照旧保留」被判成反事实",
     () => {
@@ -383,6 +391,7 @@ describe("真历史（本仓库）", () => {
         out = execFileSync(process.execPath, [SCRIPT, "--commit", "ad81a912"], {
           cwd: REPO_ROOT,
           encoding: "utf8",
+          timeout: 120_000,
         });
       } catch (err) {
         const e = err as { status?: number; stdout?: string; stderr?: string };
@@ -393,5 +402,6 @@ describe("真历史（本仓库）", () => {
       expect(out).toContain("§13.5.13");
       expect(out).toContain("§13.6.3");
     },
+    120_000,
   );
 });
