@@ -16,8 +16,14 @@
  * 因此本文件钉两件事：
  *   ① 共用件的判决（哪些值会起、认不出的值怎么办、入口缺件时不退回 inline、
  *      起进程时 env 有没有显式回写归一化值）；
- *   ② **三个启动入口都接线了**，且 `start.mjs` 那一次调用排在起 Next 之前。
- *      第 ② 条读源码而不是起进程：那次缺陷的全部内容就是「入口少了这一步」。
+ *   ② **四个启动入口都接线了**，且 `dev.mjs` / `start.mjs` 那两次调用排在起
+ *      Next 之前。第 ② 条读源码而不是起进程：那次缺陷的全部内容就是「入口少了
+ *      这一步」，只有源码级断言语义对得上（起进程的判据必须真配一个 host 才能
+ *      观察到差别，而那取决于当前 `.env`）。
+ *
+ * `dev.mjs` 这一格是随 ISSUE #1767 的后续一并收的：`pnpm dev` / `tauri dev`
+ * （`beforeDevCommand = node scripts/dev.mjs`）都不经编排器的 6.5 步，于是它成了
+ * 「三个裸入口里最后一个缺口」——被文档记着的那个「已知未修」。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -61,6 +67,29 @@ afterEach(() => {
 
 function readScript(rel: string): string {
   return fs.readFileSync(path.join(REPO_ROOT, rel), "utf-8");
+}
+
+/**
+ * 找出 `name(` **在顶层真的会被执行**的那一处调用，返回它的下标（找不到返回 -1）。
+ *
+ * 为什么不直接 `indexOf("maybeSpawnExecutorHost({")`：那样只能证明**字符串在文件里**，
+ * 证不出这一步会跑 —— 把它改成 `if (false) …`、搬进某个永不进入的分支、或整段注释掉，
+ * 三种「这一步事实上没接线」的形态都能骗过纯字面匹配。本判据要守的恰恰是「接线与否」，
+ * 所以按 TSDoc 意义上的**脚本本体**（`#!` 之后、顶层，注释先剥掉）来判：
+ *
+ *   · 注释里的字样不算（`/* … *\/` 与行注释都剥）；
+ *   · 前面紧跟 `if (false) ` / `void ` 之类改写被视作「不在顶层执行」——这里只认
+ *     「行首（可有空白）就是 name(`」，够用且不引入解析器；
+ *   · 反向验证：改成 `if (false) …` 后本函数返回 -1，调用方那条 expect 当场红。
+ */
+function topLevelCallAt(source: string, name: string): number {
+  // 先剥块注释与行注释，避免注释里的示例写法被当成真实调用。
+  const stripped = source
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+    .replace(/\/\/[^\n]*/g, "");
+  const re = new RegExp(`^[ \t]*${name}\\(`, "m");
+  const hit = re.exec(stripped);
+  return hit ? hit.index + hit[0].indexOf(name) : -1;
 }
 
 describe("planExecutorHostSpawn：哪些值会起宿主", () => {
@@ -185,10 +214,24 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
   });
 });
 
-describe("三个启动入口都接线（回归到「没人起宿主」的那道闸）", () => {
+describe("四个启动入口都接线（回归到「没人起宿主」的那道闸）", () => {
+  it("scripts/dev.mjs 调用了共用件，且排在起 Next 之前（`pnpm dev` / `tauri dev` 的入口）", () => {
+    const source = readScript("scripts/dev.mjs");
+    const callAt = topLevelCallAt(source, "maybeSpawnExecutorHost");
+    /* 锚在**起 Next 的那一次 spawnSync** 上（与 start.mjs 同口径）：`nextArgs`
+     * 的参数里也有 "next"/"dev" 字面量，用它当锚会把手上的位置判反。 */
+    const nextAt = source.indexOf("spawnSync(invocation.command, invocation.args");
+    expect(callAt).toBeGreaterThan(-1);
+    expect(nextAt).toBeGreaterThan(-1);
+    expect(callAt).toBeLessThan(nextAt);
+    /* 本脚本被两个入口复用：`pnpm dev` 与 `tauri.conf.json` 的 beforeDevCommand。
+     * 后者是「壳在跑、开发者在敲代码」的常驻形态，任务行卡队列的现场最长。 */
+    expect(source).toContain("executor-host-spawn.mjs");
+  });
+
   it("scripts/start.mjs 调用了共用件，且排在起 Next 之前", () => {
     const source = readScript("scripts/start.mjs");
-    const callAt = source.indexOf("maybeSpawnExecutorHost({");
+    const callAt = topLevelCallAt(source, "maybeSpawnExecutorHost");
     /* 锚在**起 Next 的那一次 spawnSync** 上：`pnpmInvocation([...])` 的参数里
      * 也有 "next"/"start" 两个字面量，用它当锚会把手上的位置判反。 */
     const nextAt = source.indexOf("spawnSync(invocation.command, invocation.args");

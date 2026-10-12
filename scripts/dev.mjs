@@ -26,6 +26,8 @@ import {
   echoCommandLine,
   formatCommandLine,
 } from "./launcher-core/command-echo.mjs";
+import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs";
+import { runStamp } from "./launcher-core/log.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 const root = resolveRepoRoot();
@@ -122,6 +124,26 @@ if (process.env[SKIP_SCHEMA_SYNC_ENV] === "1") {
     );
   }
 }
+
+/* 执行器宿主（P3 §5：`COMFY_EXECUTOR=host` 时**必须**有人起它）。
+ *
+ * host 模式下行会被写成 `claimedBy='host'`，而只有宿主会去领它——inline 那一侧
+ * 的回收器刻意不跨片误杀（ISSUE #1204）。于是「本入口不起宿主」的现场是
+ * **任务永远停在队列、没有任何失败出口**（行上只有一句「⏳ 等待…」）。
+ *
+ * 本入口此前是三个裸启动入口里最后一个缺口：`start.mjs` 已接线（ISSUE #1767），
+ * 而 `pnpm dev` / `tauri dev`（`beforeDevCommand` 就是本脚本）走的是这里，它们
+ * 都不经 `dev-launcher.mjs` 的编排 6.5 步。三处共用
+ * `maybeSpawnExecutorHost()` 一份实现（§12.18 / §12.12：不许三处各写一遍）。
+ *
+ * 位置在起 Next **之前**：宿主自己按节拍去领行，谁先起来都能收敛，但排在前面能让
+ * 「宿主的 boot / inject-ok」先落进 services 日志——排查时那两行与 Next 的启动行
+ * 在时间上可比。 */
+maybeSpawnExecutorHost({
+  root,
+  runTimestamp: runStamp(),
+  logLine: (message) => process.stdout.write(`[dev.mjs] ${message}\n`),
+});
 
 const nextArgs = ["exec", "next", "dev", "--turbo", "-p", String(port)];
 // 显式指定监听地址时透传：Windows 上不固定 127.0.0.1 会被解析到 ::1（IPv6），
