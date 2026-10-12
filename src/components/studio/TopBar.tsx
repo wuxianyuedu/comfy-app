@@ -13,6 +13,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { HeaderHelp } from "~/components/ui/header-help";
 import { Hint } from "~/components/ui/hint";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Separator } from "~/components/ui/separator";
@@ -20,6 +21,7 @@ import { SidebarTrigger } from "~/components/ui/sidebar";
 
 import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
 import { useDevtoolsLauncher } from "./use-devtools-launcher";
+import { viewHelp } from "./ViewHelp";
 
 export interface TopBarProps {
   /** 当前视图 —— 显示成标题，让用户知道自己在哪。 */
@@ -60,6 +62,8 @@ export interface TopBarProps {
  */
 export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   const label = NAV_ITEMS.find((item) => item.id === active)?.label ?? "工作区";
+  /* 这一屏的说明文案（没有登记的视图没有说明，问号整个不渲染）。 */
+  const help = viewHelp(active);
   const { resolvedTheme, setTheme } = useTheme();
   /* 开发者工具入口：只在壳带 `devtools` feature 时出现（发布壳里不渲染）。
      快捷键（⌘/Ctrl+Shift+I 与 F12）由 useDevtoolsLauncher 一并注册，
@@ -89,6 +93,10 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
       >
         {label}
       </span>
+      {/* 视图说明问号：挂在标题右侧（读者在「这一屏叫什么」的地方顺路看见「还有
+          一句解释」）。没有登记的视图不渲染 —— 「没有说明的不显示」。屏内页头不再
+          放第二颗：那句话的单一出处是 `viewHelp()`。 */}
+      {help !== undefined ? <HeaderHelp text={help} /> : null}
 
       <div className="ml-auto flex items-center gap-1">
         <Hint label="全局搜索（⌘K）">
