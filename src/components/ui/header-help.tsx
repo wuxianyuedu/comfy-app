@@ -17,6 +17,10 @@ import { Hint } from "~/components/ui/hint";
  * `accessibleName`：那个开关会把 `label` 写成子元素的 `aria-label`，正好把这里
  * 更精确的短名顶掉。
  *
+ * 尺寸口径：问号与**正文字号同大**（`size-3.5` = 14px，与顶栏视图标题的
+ * `text-sm` 一致）—— 它跟在标题旁边，比标题大会抢视线、比正文小又看不清；
+ * 按钮收 `icon-xs`（24px 方钮）只为留住舒适的点击区。
+ *
  * 没有说明可放的宿主**不要渲染它**（「没有说明的不显示」）—— 由调用方判
  * `text === undefined`，不在这里造默认文案。
  */
@@ -26,11 +30,11 @@ export function HeaderHelp({ text }: { text: ReactNode }) {
       <Button
         type="button"
         variant="ghost"
-        size="icon-sm"
+        size="icon-xs"
         aria-label="说明"
         className="text-ink-fainter hover:text-ink-bright shrink-0 rounded-full"
       >
-        <CircleHelp aria-hidden className="size-5" />
+        <CircleHelp aria-hidden className="size-3.5" />
       </Button>
     </Hint>
   );
