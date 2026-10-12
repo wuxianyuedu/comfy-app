@@ -34,12 +34,11 @@
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
 - **依赖版本可能落后于远端**（别人升过库、你还在旧的上面干活）→ 先跑
   `pnpm check:deps-freshness`，再读 `docs/guides/sync-after-pull.md`；判据口径见 §13.5.13。
-- 跨文件检索 / 代码图谱查询 → 项目已配置两个 MCP server（`codegraph`、`zvec-grep`，声明见
-  `.mcp.json`）作为**导航加速**：前者按语义图谱找定义/引用/影响面，后者按正则/文本做跨文件
-  检索。**门禁判据只在 `scripts/check-*.cjs` 与 `.githooks/pre-commit`**——MCP 不替代机器
-  判据，也不作为提交前的独立校验源；选择顺序：先看有没有对应 `pnpm exec` 脚本 / 门禁能给出
-  结论 → 得不出再做检索。具体输入 / 输出 / 失败语义以各 server 的 `--help` 与
-  `.mcp.json` 声明为准。
+- 跨文件检索 / 代码图谱查询（`codegraph`、`zvec-grep` 两个本地只读 MCP，声明见 `.mcp.json`）→
+  用法、安装与索引前提、输入输出与失败语义**只有一份出处**：project Skill
+  [`.qoder/skills/code-navigation/SKILL.md`](.qoder/skills/code-navigation/SKILL.md)，本文件不重抄。
+  这里只保留那条红线：**门禁判据只在 `scripts/check-*.cjs` 与 `.githooks/pre-commit`**——MCP
+  不替代机器判据，也不作为提交前的独立校验源。
 
 > 判断标准：改动被「强制先读规范文档的改动范围」表或本清单覆盖但未先读就动手 = 违规，
 > 提交会被拒或要求回滚。
@@ -80,7 +79,8 @@
    跑旧二进制（历史黑屏事故来源）。**这条现在有判据**：`.githooks/pre-commit` 的
    `scripts/shell-gate.mjs` 在暂存改动命中壳输入时，复用 `dev-launcher.mjs` 的
    `shellStaleWarning()` 把「没重编就提交」拦下，并在改了 `src-tauri/src/*.rs` 时跑
-   `cargo test`（壳里 37 条 `#[test]` 唯一的执行者）；触发面与 mtime 边界见规范 §11.10.4。
+   `cargo test`（壳内全部 `#[test]` 唯一的执行者——条数随源码变动，别在这里写死，以
+   `cargo test` 自己的输出为准）；触发面与 mtime 边界见规范 §11.10.4。
 6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 开头的组 0「master 分支提交守卫」`scripts/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个**服务端形态作为判据本身保留**，但随 ISSUE #623 与 `.cnb.yml` 一同失去调用方（§13.5）——**目前不再有 CI 兜底**。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。
 7. **提交必须通过 `.githooks/pre-commit`**（分支守卫 + 结构检查 + tsc + eslint +
    UI/逻辑分离棘轮 + 结构守护与受影响用例 + CHANGELOG 碎片 + 两份生成物同步
