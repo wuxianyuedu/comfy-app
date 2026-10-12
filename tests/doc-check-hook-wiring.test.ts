@@ -320,3 +320,88 @@ describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
     ).toContain("由 `.githooks/pre-commit` 的 D 组调用");
   });
 });
+
+/**
+ * 两步全库扫描的「输入面跳过」接进 D 组（ISSUE #1747）。
+ *
+ * 立案现场：pre-commit 的 D 组实测 56 步、热跑约 18.9s，而其中**两步就占 34%**
+ * （`check-ui-primitives.cjs` 3.6s、`check-format.cjs` 2.9s）—— 两者都是全库扫描，
+ * 而扫描面实际只是全库的一个子集（前者五条根全在 `src/` 下；后者由 `GLOB_RES` 剔掉
+ * `IGNORE_GLOBS` 之后只剩 `src/**` 与 `.storybook/**`）。于是「只加 changelog 碎片 /
+ * 只改文档 / 只动 `scripts/` 或 `tests/`」这一大类高频提交在这两步上白付 6.5s。
+ *
+ * 同族里 **`--staged` 就是这一步能存在的前提**（与上面 docs-api 那条同一口径）：
+ * 抹掉 flag 在本文件里与「让全库扫描回到无条件执行」等价，而**没有任何别的判据**
+ * 会看见这个差异 —— 它只会让每次提交慢一点，慢不会让任何人报错。
+ *
+ * 这两条与 docs-api 那条一样，只读几份文本、不起子进程。
+ */
+const FORMAT_GATE = join(REPO_ROOT, "scripts", "check-format.cjs");
+const UI_PRIMITIVES = join(REPO_ROOT, "scripts", "check-ui-primitives.cjs");
+
+describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = dGroupSteps(hook);
+
+  it("prettier 格式棘轮在钩子里带 --staged 条件触发", () => {
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/check-format.cjs"),
+    );
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有 prettier 格式棘轮，或它丢了 --staged —— ` +
+        "后者会让全库扫描回到无条件执行（每次提交白付 2.9s 热缓存 / 17.6s 冷缓存）",
+    ).toEqual({
+      label: "prettier 格式棘轮",
+      cmd: "node scripts/check-format.cjs --staged",
+    });
+  });
+
+  it("UI 基元复用棘轮在钩子里带 --staged 条件触发", () => {
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/check-ui-primitives.cjs"),
+    );
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有 UI 基元复用棘轮，或它丢了 --staged —— ` +
+        "后者会让全库扫描回到无条件执行（每次提交白付 3.6s，D 组单项最贵）",
+    ).toEqual({
+      label: "UI 基元复用棘轮",
+      cmd: "node scripts/check-ui-primitives.cjs --staged",
+    });
+  });
+
+  it("两个脚本都实现了 --staged 这一档（不是只在钩子里写了个 flag）", () => {
+    // 钩子里的 flag 与脚本里的实现是两件事：只写 flag 而脚本不认它，会被解析成
+    // 未知参数（多数脚本忽略）⇒ 条件触发**静默失效**，退回无条件全库扫描。
+    const cases = [
+      ["check-format.cjs", FORMAT_GATE],
+      ["check-ui-primitives.cjs", UI_PRIMITIVES],
+    ] as const;
+    for (const [name, file] of cases) {
+      const script = readFileSync(file, "utf8");
+      expect(
+        script.includes('ARGS.has("--staged")'),
+        `${name} 没有 --staged 这一档 —— 钩子里那个 flag 会变成静默失效的条件触发`,
+      ).toBe(true);
+    }
+  });
+
+  it("判据面由扫描配置现算，没有第二份手抄的目录清单", () => {
+    // 这是本步能「不漂移」的前提：判据面必须从既有配置（`IGNORE_GLOBS` / `SCAN_DIRS`）
+    // 现算，抄一份就会漂 —— 抄的那份多收一个目录，那类文件的违规从此没人查，
+    // 且形态是静默的（§12.12 / §12.18）。
+    const fmt = readFileSync(FORMAT_GATE, "utf8");
+    expect(
+      fmt.includes("GLOB_RES.some") && fmt.includes("IGNORE_RES.some"),
+      "check-format.cjs 的扫描面判定没有由 GLOBS / IGNORE_GLOBS 现算 —— " +
+        "手抄一份目录清单就会与 IGNORE_GLOBS 漂移",
+    ).toBe(true);
+    const ui = readFileSync(UI_PRIMITIVES, "utf8");
+    expect(
+      ui.includes("skipUnlessStagedTouches({ roots: SCAN_DIRS"),
+      "check-ui-primitives.cjs 的扫描面判定没有把 SCAN_DIRS 交给共享件 —— " +
+        "手抄一份目录清单就会与 SCAN_DIRS 漂移",
+    ).toBe(true);
+  });
+});

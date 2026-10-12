@@ -318,10 +318,10 @@
  *   node scripts/check-ui-primitives.cjs --report   # 只出清单，不判失败（排批次用）
  *   node scripts/check-ui-primitives.cjs --update   # 只给**新引入的棘轮判据**登记起点
  *                                                  # （硬闸未清零时直接拒绝，不写基线）
- */
+ *   --staged（钩子用）仅当暂存改动落在扫描面内才扫，口径见 §13.5.8.2 */
 const fs = require("node:fs");
 const path = require("node:path");
-
+const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
@@ -3912,7 +3912,6 @@ const RULES = {
   },
 };
 
-
 /* ── P82 判据：JSX 开标签扫描 + 属性解析 + 五档判定 ────────────────
  * 判据的三段拆开写，各管一件事（正则只定位起点，边界交给扫描器）：
  *   ① scanJsxAttrs()       —— 从属性段起点扫到收尾 `>`：`{}` 计深度、引号
@@ -4586,6 +4585,7 @@ function writeBaseline(files) {
 }
 
 function main() {
+  if (ARGS.has("--staged") && !REPORT_ONLY && !UPDATE) skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[ui-primitives]" });
   const now = collect();
   const prev = fs.existsSync(BASELINE)
     ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))
