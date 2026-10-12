@@ -53,7 +53,7 @@
 
 | key             | placeholder         | meaning（可读语义）                   | source（权威定义文件）                                                             | extract                                                                                                                                                 |
 | --------------- | ------------------- | ------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shell.app.exe` | `{{shell.app.exe}}` | 编译出的 Tauri 壳 exe（**唯一入口**） | `scripts/dev-launcher.mjs` 的 `defaultShellExe()` 候选路径（「壳在哪」的唯一判据） | 读候选路径里的文件名（Windows 产物 `app.exe`）。**不要**取 `productName`（是 `ComfyAPP`）或 `externalBin`（是 Node sidecar）：两者都不是这个 exe 的名字 |
+| `shell.app.exe` | `{{shell.app.exe}}` | 编译出的 Tauri 壳 exe（**唯一入口**） | `scripts/launcher-core/shell-ops.mjs` 的 `defaultShellExe()` 候选路径（「壳在哪」的唯一判据；主文件只是同名薄包装） | 读候选路径里的文件名（Windows 产物 `app.exe`）。**不要**取 `productName`（是 `ComfyAPP`）或 `externalBin`（是 Node sidecar）：两者都不是这个 exe 的名字 |
 | `shell.splash`  | `{{shell.splash}}`  | 启动页文件名                          | `src-tauri/tauri.conf.json` 的 `windows[0].url`                                    | 读 `windows[0].url` 值（`splash.html`）                                                                                                                 |
 
 ### 1.4 独立单值端口（非 dev 端口族）

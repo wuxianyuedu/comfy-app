@@ -1,0 +1,30 @@
+#!/usr/bin/env node
+// @ts-nocheck -- UI 基元判据的**声明合并层**（规则表 RULES 与扫描面/豁免的重导出）
+/**
+ * `check-ui-primitives.cjs` 的声明层门面（ISSUE #1811 拆 R5 超限文件）。
+ *
+ * 两层数据在这里合到一起，主脚本只 `require` 这一份：
+ *   · **规则表** `RULES` —— 85 条判据的 `count` 实现，按 P 编号区间切成四份
+ *     （`ui-primitives-rules-p1-p37.cjs` 等）后用 `{...a, ...b}` 合并；
+ *   · **扫描面与豁免层** —— 在 `ui-primitives-scope.cjs`，这里原样转出。
+ *
+ * 合并顺序即对象键顺序，与拆分前逐字一致（`Object.keys(RULES)` 的顺序被
+ * `--report` 的输出顺序与分档自检依赖着）。
+ *
+ * 为什么不把 `RULES` 整张表留在这里：2754 行超过 R5 的 900 行阈值，
+ * 而阈值是尺子、不是建议 —— 拆出来的新文件同样受它约束。
+ */
+const RULE_PARTS = [
+  require("./ui-primitives-rules-p1-p37.cjs"),
+  require("./ui-primitives-rules-p38-p58.cjs"),
+  require("./ui-primitives-rules-p59-p66.cjs"),
+  require("./ui-primitives-rules-p67-p86.cjs"),
+];
+
+/** 85 条判据的定义。键序 = 四份分片的拼接顺序。 */
+const RULES = Object.assign({}, ...RULE_PARTS);
+
+module.exports = {
+  ...require("./ui-primitives-scope.cjs"),
+  RULES,
+};
