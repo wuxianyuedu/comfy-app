@@ -160,22 +160,22 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R12 + R5 棘轮硬闸（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-ps1-consistency.mjs  # 跨平台动作对照表：.ps1⇄.mjs 两侧齐全、会静默失效的清单只定义一次、入口清单与磁盘/package.json 三向对齐（见 launch-and-build §9.5）
-✅ node scripts/check-react-updater-purity.cjs
-✅ node scripts/check-title-bar-clearance.cjs
+✅ node scripts/check-react-updater-purity.cjs --staged # 输入面跳过（见下 13.5.8.2）
+✅ node scripts/check-title-bar-clearance.cjs --staged # 输入面跳过（见下 13.5.8.2）
 ✅ pnpm exec tsc --noEmit
 ✅ pnpm run lint
 ✅ node scripts/check-ui-logic-separation.cjs --strict # 视图层 IO 棘轮（只许降；治理后指标下降同样阻断，见 17）
 ✅ node scripts/check-changelog-fragments.cjs
 ✅ node scripts/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
-✅ node scripts/check-import-alias.cjs       # import 别名只有一种前缀 `~`（R13，见 §12.8.0）
+✅ node scripts/check-import-alias.cjs --staged # import 别名只有一种前缀 `~`（R13，见 §12.8.0）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
-✅ node scripts/check-ui-primitives.cjs      # UI 基元复用棘轮（见 16 §16.2.3）
-✅ node scripts/check-overlay-z.cjs          # 浮层层级刻度棘轮（见 16 §16.2.5）
+✅ node scripts/check-ui-primitives.cjs --staged # UI 基元复用棘轮（见 16 §16.2.3；`--staged` = 只碰了 `src/` 下的扫描根才扫，见下 13.5.8.2）
+✅ node scripts/check-overlay-z.cjs --staged # 浮层层级刻度棘轮（见 16 §16.2.5）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-theme-colors.cjs       # 主题色扫描棘轮（见 03 §3.6.1）
 ✅ node scripts/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
-✅ node scripts/check-inline-style.cjs       # 视图层不得动态注入 <style>（见 03 §3.5）
-✅ node scripts/check-code-duplication.cjs   # 跨文件重复块棘轮（见 12 §12.12）
-✅ node scripts/check-function-length.cjs    # 函数长度棘轮 TS/TSX（见 12 §12.13）
+✅ node scripts/check-inline-style.cjs --staged # 视图层不得动态注入 <style>（见 03 §3.5）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-code-duplication.cjs --staged # 跨文件重复块棘轮（见 12 §12.12）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-function-length.cjs --staged # 函数长度棘轮 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-rust-function-length.cjs # 函数长度棘轮 Rust 壳（见 12 §12.13.1）
 ✅ node scripts/check-infra-file-size.cjs # 基础设施层文件长度棘轮：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
@@ -196,15 +196,15 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
    # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
    # 直接拼进 `pnpm exec vitest run $files` 会在 Windows 上顶穿 cmd.exe 的 8191 字符
    # 命令行上限 —— 表现是「组 C 红、一条用例没跑、原因是一行 GBK 乱码」
-✅ node scripts/check-circular-deps.cjs      # 模块循环依赖棘轮（见 12 §12.7）
+✅ node scripts/check-circular-deps.cjs --staged # 模块循环依赖棘轮（见 12 §12.7）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
-✅ node scripts/check-format.cjs             # prettier 格式棘轮（见下 13.5.1）
+✅ node scripts/check-format.cjs --staged    # prettier 格式棘轮（见下 13.5.1；`--staged` = 只碰了扫描面（`src/**` / `.storybook/**`）才扫，见下 13.5.8.2）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
-✅ node scripts/check-dead-exports.cjs       # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）
+✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）；`--staged` 见下 13.5.8.2
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
 ✅ node scripts/check-docs-api.cjs --staged  # API 文档生成物 docs/api 与源一致（见下 13.5.5.1；--staged = 只碰了 typedoc 输入面才重生成）
-✅ node scripts/check-non-null-assertions.cjs # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）
-✅ node scripts/check-void-floats.cjs         # src/lib `void someFn(...)` 悬空棘轮（见下 13.5.7）
+✅ node scripts/check-non-null-assertions.cjs --staged # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-void-floats.cjs --staged # src/lib `void someFn(...)` 悬空棘轮（见下 13.5.7）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
 ✅ node scripts/check-doc-references.cjs     # 文档引用与权威源一致（= `pnpm doc:check`；序号那条判据见下 13.5.10）
 ✅ node scripts/storybook-check.mjs --changed # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮 + 故事面（见 16 §16.2.3.4 / §16.2.3.8）
@@ -212,7 +212,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红（见下 13.5.12）
 ✅ node scripts/check-declaration-readers.cjs # 声明 ⇄ 读者索引：本仓库每一种「声明」（判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 / 类型断言执行者 / 软断言语义 / 新鲜度档…）都必须答出「谁在读它 + 执行者在哪」——读者丢了、执行者从门禁链里被摘掉、索引自己静默降级，都红（见 11 §11.23）
 ✅ node scripts/check-on-demand-duties.cjs   # 「不进钩子」的按需档 ⇄ 执行者索引：每一行的机器事实仍在（新鲜度档键 / 门禁 run:false / 按需召唤条目，全部现算）+ 每一个机器事实都被登记（新增一档忘了登记 ⇒ 那一档谁都不判）（见 13.5.4）
-✅ node scripts/check-ts-duplicate-keys.cjs  # 同一属性被指定两次（编辑器报 ts(2783)、命令行不报）；存量 0，硬闸（见下 13.5.12）
+✅ node scripts/check-ts-duplicate-keys.cjs --staged # 同一属性被指定两次（编辑器报 ts(2783)、命令行不报）；存量 0，硬闸（见下 13.5.12）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
 ✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
 ✅ node scripts/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
@@ -220,8 +220,8 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-test-waitfor.cjs      # 测试层 `waitFor` 的边界：只有「等 DOM」与「假定时器窗口内」两种形态该留 `waitFor`，其余等值的一律 `expect.poll`（见 11 §11.14.3）
 ✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮：`it/test/describe.each` 净数不许涨（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
 ✅ node scripts/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
-✅ node scripts/check-form-field-wiring.cjs # `<FormField>` 的标签 ⇄ 控件接线：plain-children 形态下 `htmlFor` 指向不存在的 id（点标签不聚焦、控件没有可访问名），净数不许涨（见 16 §16.2.4.26.1）
-✅ node scripts/check-click-keyboard.cjs    # 非原生元素上的「鼠标专属」点击：`div`/`li`/`span` 挂了 `onClick` 却没有键等价物（鼠标点得开、键盘进不来），净数不许涨（见 06 §6.11 / 16 §16.2.4.29·§16.2.4.57）
+✅ node scripts/check-form-field-wiring.cjs --staged # `<FormField>` 的标签 ⇄ 控件接线：plain-children 形态下 `htmlFor` 指向不存在的 id（点标签不聚焦、控件没有可访问名），净数不许涨（见 16 §16.2.4.26.1）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-click-keyboard.cjs --staged # 非原生元素上的「鼠标专属」点击：`div`/`li`/`span` 挂了 `onClick` 却没有键等价物（鼠标点得开、键盘进不来），净数不许涨（见 06 §6.11 / 16 §16.2.4.29·§16.2.4.57）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
 ✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
 ✅ node scripts/check-task-meta-consumer.cjs # `ctx.task.meta` 的消费方在场：它是唯一能从 CLI 那侧读到的通道，但门禁链没带 `--reporter=json` —— 有站点就必须登记「谁读、怎么读」（见 11 §11.22）
@@ -491,6 +491,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 产物级护栏            | `pnpm run build`（跑绿即记；两步都在它里面）—— 同上                                                      | 13.5.3 欠账条目 2                              |
 | E2E 关键流程          | `@` 跑 `pnpm exec playwright test --grep @critical`，或 `pnpm test:e2e --grep @critical`（先 `db:push`） | 欠账条目 3/4                                   |
 | 全量 E2E（§11.8）     | `pnpm test:e2e`（跑绿即记一笔新鲜度账，见下面那条）                                                      | 不进钩子，但有**每天首次的自证**               |
+| 页面级运行时读数（§11.8.1） | 搭上面那一档：`e2e/runtime-budget.spec.ts` 随 `pnpm test:e2e` 一起跑                                                     | **不新增档** —— 与全量 e2e 同一笔开销（起 webServer + 浏览器），因此被同一条「每档都有主」守着；不进钩子的理由同 §11.8.1 |
 | 其余按需档的去向      | 逐条答「不进钩子，那谁在什么时候跑它」——答不出就不许留在这张表里                                         | 见下面「**「不进钩子」不等于「没人管」**」那条 |
 
 **「不进钩子」不等于「没人管」：每一条按需档都要答出执行者**（ISSUE #1282 续）。这张表
@@ -524,6 +525,8 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 | 提交信息里的声明 ⇄ 事实（§11.23.5）              | **本地钩子连形态都看不到**（丢失发生在平台侧 squash）                        | `pnpm check:base:batch` 的 `CHAINED_STEPS`（合并前 / 事后盘点，人点一次） | `base-check/chained-steps.mjs` 的 `CHAINED_STEPS`             |
 | **合并前的固定动作**（`pnpm check:premerge`）    | 平台侧 squash 合并**不跑本地钩子**、本地看不到那次合并；单次分钟级（钩子内三次实测 116 / 84 / 83 秒、单独跑 336 秒，见 §13.6.2.1），挂进每次提交是拿它换一个不会天天变的结论（§13.6.2 / §11.23.5） | `.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑（§13.6.2.1）；人仍可手工敲一次，或在 PR 里 `@` 评审 NPC 唤起一轮 | `quality-gate.mjs` 的 `GATES.premerge`（`run: false`）+ `scripts/premerge-proof.mjs` |
 
+| **bundle 体积预算**（`pnpm check:bundle`）       | 测量对象是 `next build` 的产物（`.next/static/chunks`），判据在一次构建之后才有结论，而构建是半分钟级（实测 26–33s）—— 把它塞进每次提交是拿半分钟换一个不会天天变的结论（成本判据同本节，另见 §13.5.3）。**注意**：ISSUE #1781 原稿把 `next build` 记成「分钟级」，实测是半分钟级；这条**不影响**「不该进每次提交」的取向 | 按需召唤（`pnpm check:bundle`）+ 棘轮（`scripts/.bundle-budget-baseline.json`）；同一脚本也挂在 `pnpm build` 收尾（形态 C 兜底，见 §13.5.3 欠账条目 2） | `quality-gate.mjs` 的 `GATES.bundleBudget`（`run: false`，+ 本节下面「测量口径」那四条） |
+
 三档「每天首次自证」的口径不同、判据一份（`FRESHNESS_TRACKS` 的 `daily` / `dirty` /
 `graceMs`）：全量 e2e 按本地日历日；另两档按「当天动过输入面没有」。**理由**：前者人人
 跑得动、结论与改了哪几个文件无关；后两档十分钟量级、**没必要每天都跑**，真正要的是
@@ -551,6 +554,86 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 留下能复核的事实：跑一次（跑绿即记）/ `--skip "<理由>"` / `--dirty "<理由>"`（占位理由
 一律被拦，豁免不是绕过）。账文件还没入库时**只提醒、不阻断**（平台侧 squash 合并不跑
 本地钩子，硬规则 6）。三档的形状见 §11.8 的对照表。
+
+**bundle 体积预算：形态、测量口径与例外流程**（ISSUE #1781，从 #1777「性能优化」清单里分出来的真缺口）
+
+清单原稿写的是「在 CI 里加 bundle size budget」——**方向对，但本仓没有 CI**（`.cnb.yml`
+随 ISSUE #623 删除、`tests/no-platform-ci-config.test.ts` 守着它不许回来），所以这条判据的
+落点不是「阈值定多少」，而是「挂在哪、谁来跑」。三种形态里选定的是 **B + C 组合**：
+
+- **B（按需档）**：`pnpm check:bundle` —— 明确入口，给「发布前 / 大改动后 / 改依赖后」；
+- **C（产物层兜底）**：挂在 `pnpm build` 收尾 —— 构建已经发生，不额外买成本（它现在是全链
+  里最便宜的一步）。
+
+**不进 pre-commit（形态 A）的理由**是代价判据：`next build` 实测 26–33s（冷 / 热都一样），
+半分钟 × 每次提交仍然不值，且会把「`--no-verify` 绕过」的动机推高（最坏的失效形态）。
+这与 §13.5.3「下沉不等于无条件塞进提交」是同一逻辑的两面。
+
+**测量口径**（ISSUE 第 2 问那四条，逐条有实测答案）：
+
+1. **测哪个数**：`.next/static/chunks` 下所有 `.js` chunk 的 **gzip 后字节数之和**，外加
+   **文件数**（两档都记）。ISSUE 给的另一候选（`app-build-manifest.json` 的每路由 chunk 集合）
+   在**当前 Next 版本上已经不存在** —— `.next/` 下根本没有这个文件，最接近的
+   `build-manifest.json` 也已空心化，所以「按路由量」当前没有数据源、口径没得选。
+   **文件数比总量更敏感**：Turbopack 会把新依赖拆成上百个 chunk（实测 shiki 探针：
+   gzip +49.6% 的同一次，文件数 +193）。
+2. **抖动怎么判**：**不用判 —— 它不抖**。Turbopack 的 chunk 名**就是内容哈希**，实测同环境
+   连续两次构建、乃至 `rm -rf .next` 后的**全冷构建**，215 个 chunk 的**文件名与 sha256
+   全部一致**（新增 0 / 消失 0）。唯一会变的是 `.next/static/<BUILD_ID>/` 下那 3 个 manifest
+   （随机目录名、合计 gzip 0.5 KB），它们**不在测量面内**（只量 `chunks/`）。
+
+   **第一版口径在这里是错的**（ISSUE #1781 的第二轮实测订正）：它按 **basename** 逐文件对账，
+   并声称「唯一的抖动是 BUILD_ID」。实测把这条推翻了两次 —— ① `chunks/` **里也有**名字随
+   构建变化的内容（不是 manifest 那三个）；② 更根本的是，**名字不是易抖的旁支信息，它就是
+   内容本身**，所以逐文件按名字对账在基线过期时产出的是一串**无法复核的行**：源码动过之后，
+   旧名字既不在新产物里、又没有留下可对照的内容，读者拿到的「新增 N 个 / 变大 M 个」
+   既推不出「谁真的变大了」、也推不出「哪个只是换了名」。
+3. **放哪个基准**：与 `scripts/.file-size-baseline.json` 那批棘轮**同构**，独立一份
+   `scripts/.bundle-budget-baseline.json`（头部记 raw / gzip / 文件数三个**实测初值**，
+   不是估的）。**基线里另存一份逐文件内容指纹（`name` + `sha256`）——它只服务诊断、
+   不参与判定**：判定只看 `gzip` 与 `文件数` 两个总量。这条分工是上面第 2 条的直接后果：
+   既然名字就是内容哈希，「按内容对齐」才是唯一能区分「换了名」与「真的变了」的口径，
+   而它只有在基线**存了指纹**时才可能成立。
+
+   **`raw` 量、打、但不判**：`gzip` 才是「用户要下载多少」，raw 是磁盘/内存形态。两者会
+   分叉（往 chunk 末尾塞可压缩冗余：raw 明显涨、gzip 几乎不动），拿 raw 判红只会制造误报。
+4. **新依赖怎么算**：预算是**棘轮**（只许降不许升），加一个大依赖会当场红 —— 这是想要的
+   （正是防劣化）。**例外流程**见下一条。
+
+**逐文件账降级为诊断**（口径订正的落点）：判定只看两个总量，逐文件账**没有删** ——
+它以 `sha256` 对齐后进 `--report` 与判红时的输出，分三类：**同内容换名**（指纹相同、
+名字不同 ⇒ **不计变化**）、**新增内容**（指纹在基线里找不到）、**同名且变大**（名字恰好
+没变、能直接点名到文件）。基线若是旧格式（没指纹），诊断这一段会**明确打出它为什么缺**
+（而不是静默换口径 —— 那会让读者拿两种语义的账互相印证）。
+
+**例外流程**（ISSUE 第 4 问，必须写清否则第一次撞上就会被当成「挡住正常需求」而放宽掉）：
+
+- 判据红了先读它是**总量上升**还是**文件数上升**（两档读数都在输出里）；
+- 再读诊断那几行：**先分清「涨了」与「换了名」**。诊断按内容指纹对齐，「同内容换名」
+  那一类**不计变化**；它对不上号的才是真涨。**基线的 `generatedAt` 也要看** ——
+  一份几天前的基线在源码动过之后报红，先想「这涨是不是就是那几次改动换来的」，
+  而不是当抖动放过去（实测过这一幕：涨的 1074 字节正好来自那几天合的组件改动）；
+- 若确认这个体积值得，在 **PR 里贴 before/after 两档读数 + 说明为什么值这个体积**，
+  由评审确认后带 `--allow-increase` 重跑 `--update`（**不许**默默 `--update` 放水：
+  不带 `--allow-increase` 时 `--update` 会**拒绝抬高**，与 `check-overlay-z.cjs` 那批棘轮同口径）；
+- 否则先把它压回去（拆动态 import / 回到 PR #1778 那条「重依赖入口静态图」的修法）。
+
+**与 `pnpm analyze` 的分工**：那份起 `@next/bundle-analyzer`（**强制 `--webpack`**）生成
+HTML 报告给人看、退出码恒 0；本判据是**机器判定档**、量**默认 Turbopack 链**的产物 ——
+两条构建链的产物形状不同，**别拿一边的读数去比另一边**。
+
+**bundle 体积预算的右半边：页面级运行时读数**（ISSUE #1781 的另一半 / §11.8.1）
+
+体积预算判的是**首屏要下载多少**，运行时断言判的是**下载完之后跑得多快** —— 两者无
+替换关系（实测：客户端同步循环让 `loadEventEnd` 稳态 `min` 从 318 抬到 349ms，而 bundle
+一个字节没变）。它的落点**不是新开一档**，而是搭「全量 e2e」那班车
+（`e2e/runtime-budget.spec.ts`）：运行时断言要起 webServer + 浏览器，与全量 e2e 是同一笔
+开销，另开一条同形状的账正是 §12.12 / §12.18 要拦的。于是它天然被「每档都有主」那条判据
+守着，**不新增档、不新增账、不新增 `pnpm` 入口**。
+
+**不进 pre-commit** 这条比上面那条 bundle 预算更硬：它比 `next build` 还贵，且冷启动抖幅
+会直接变成提交时的随机红（实测形态见 §11.8.1 的斜坡那一栏）。取数口径、阈值来源与边界
+（它只抓主线程侧、抓不到 SSR）全在 §11.8.1，本节不重述。
 
 这张表里**原本还有一行**「canonical 候选 → `@` 跑 `tw4-canonical-report.mjs`」，
 随 ISSUE #1451 摘掉：它们不再靠「人记得跑」，而是各带 `--check` 判定档与棘轮基线
@@ -709,8 +792,11 @@ await」等一并揪出来，一次报几百处、评审看下来全是"这里�
 
 `.githooks/pre-commit` 的 C 组从「写死几个结构守护用例」升级成**固定清单 + 本次
 改动牵扯到的用例**，仍然只起一次 vite（§13.5 的口径：需要 vite 的测试并入同一行
-`vitest run`，别新起一次冷启）。固定清单的**唯一出处**是脚本里的
-`FIXED_STRUCTURAL_TESTS`，钩子不再抄一份 —— 抄的那份在用例改名后会变成
+`vitest run`，别新起一次冷启）。固定清单的**唯一出处**是
+`scripts/fixed-structural-tests.mjs` 里的 `FIXED_STRUCTURAL_TESTS`（它原先嵌在
+`scripts/affected-tests.mjs` 里，拆出来是因为「登记一条守卫要写四五行理由」会把判据代码
+本身写长到撞 §12.6 的长度棘轮 —— 数据与编排分档，两边才都写得清楚），钩子不再抄一份 ——
+抄的那份在用例改名后会变成
 「一条都不跑、钩子却全绿」。固定清单守的是**全库级不变量**（不会因为
 「本次没改到」而变得安全）：
 
@@ -958,6 +1044,91 @@ COMFY_PRECOMMIT_MAX_WORKERS=1 git commit …   # 机器被别的东西占着时
 ⇒ 真要做也只该按 #1608 给 `check-a11y-rules.cjs` 加 `--ledger <path>` 的**同一招**（临时路径入参），而不是先造一套并发编排。**但结论仍是「不做」** —— 并发的收益本来就不在这堵墙上兑现。
 
 **给下一个人的话**：`隔离跑 / 本地体检`可以并发（4 是实测最优档，8 更慢更占内存），但**不要**为了「让 D 看起来快」去动钩子里的串行 —— 那样只会把同一批核重新分配一次。真要再降 D，先问「这条判据有没有在白付」，而不是「它能不并发跑」。
+
+**上面那句「每条判据自己别做无用功」的第二笔账（ISSUE #1747）**：D 组里最贵的两步
+都是**全库扫描**（实测热缓存，8 核，56 步合计 ≈18.9s）：
+
+| 判据                                    | 热跑（全库） | 扫描面（实测）                                    | 加 `--staged` 后（不在面内） |
+| --------------------------------------- | ------------ | ------------------------------------------------- | ---------------------------- |
+| `check-ui-primitives.cjs`（D 组最贵）   | **3.6s**     | 五条扫描根全在 `src/` 下（`SCAN_DIRS`）           | **~30ms**（只读 git）        |
+| `check-format.cjs`                      | **2.9s**     | `src/**` 1586 份 + `.storybook/**` 10 份（=1596） | **~30ms**                    |
+| （该步冷缓存）                          | 17.6s        | 同上                                              | 同上                         |
+
+两步合计**占 D 组的 34%**。而它们的扫描面都**只是全库的一个子集**：`check-format.cjs`
+的 `GLOBS` 连 `.md` 都不收、`IGNORE_GLOBS` 又剔掉 `scripts/` `tests/` `tools/` `e2e/`
+`public/` `docs/{api,generated}` `src-tauri/target/**` 与根级 `*.js` / `*.config.*`
+（`git ls-files` 跟踪 5940 份，落在面内的只有 1596 份）。于是「只加 changelog 碎片 /
+只改文档 / 只动 `scripts/` 或 `tests/`」这一大类高频提交，在这两步上**白付 6.5s**。
+
+**改法与三条口径**（与 `check-docs-api.cjs --staged` / `check-deps-freshness.mjs --staged`
+同源）：
+
+1. **判据面由既有配置现算，不抄第二份目录清单**。`check-format.cjs` 过
+   `GLOB_RES` + `IGNORE_RES`（就是 `GLOBS` / `IGNORE_GLOBS` 的两条正则）、
+   `check-ui-primitives.cjs` 把 `SCAN_DIRS` 交给共享件。抄一份就会漂，而漂移的形态是
+   静默的：抄的那份多收一个目录，那类文件的违规从此没人查（§12.12 / §12.18）。
+   「读暂存清单 + 判前缀 + 跳过话术 + fail-closed」这套四件套收进
+   **`scripts/gate-scan-read.cjs` 的 `skipUnlessStagedTouches()`**（与 `walk()` 当年
+   收进同一处同一个理由）—— 实测全仓有 9 处各自手写 `git diff --cached --name-only`，
+   这一层是它们的共同地基。
+2. **跳过是结论，不是沉默放行**。两步都打印「本次提交未触及扫描面，跳过」，与扫过
+   之后的输出在形态上可分辨（§11.23 的「声明 ⇄ 读者」）。
+3. **只跳过 check 档**。`--report` / `--update` 是人的动作，照旧全库 —— 否则收紧基线
+   会按残缺清单记账。
+
+**实测两端**（同一份检出、同一台 8 核机）：两步合计在「暂存里没有扫描面内文件」时
+**7.1–7.3s → 0.4s**（省 ≈6.8s）；「暂存里有 `src/` 文件」时 **7.2–8.1s ≈ 7.2–8.1s**
+（多一次 `git diff --cached` 的读，噪声级，无回归）。判据强度一个字不放松 ——
+触发面就是「有文件落在扫描面内」，而**只要有一个**就照旧扫全库。
+
+**第三笔账：第二梯队 14 步也各扫一个固定子集（ISSUE #1747 续）**。上面两步是「最贵的
+两步」，但它们不是唯一「扫全库的一个子集」的判据 —— 第二梯队 14 步的扫描面全是**固定
+前缀**，单项 0.27–1.85s，合计 **≈8.5s**（实测热缓存，8 核）：
+
+| 判据                                          | 扫描面                                              | 热跑（全库） |
+| --------------------------------------------- | --------------------------------------------------- | ------------ |
+| `check-a11y-rules.cjs`                        | 读 eslint 配置（不进这一轮）                        | 1.85s        |
+| `check-ts-duplicate-keys.cjs`                 | `src/**`                                            | 1.23s        |
+| `check-non-null-assertions.cjs`               | `src/**`                                            | 1.09s        |
+| `check-react-updater-purity.cjs`              | `src/**`                                            | 1.02s        |
+| `check-click-keyboard.cjs`                    | `src/**`（`.tsx`）                                  | 0.78s        |
+| `check-code-duplication.cjs`                  | `src/**`                                            | 0.72s        |
+| `check-form-field-wiring.cjs`                 | `src/**`（`.tsx`）                                  | 0.71s        |
+| `check-dead-exports.cjs`                      | `src/lib` + `src/trpc` + 语料 `src`/`scripts`/`e2e` | 0.36s        |
+| `check-void-floats.cjs`                       | `src/lib/**`                                        | 0.59s        |
+| `check-function-length.cjs`                   | `src/**`                                            | 0.35s        |
+| `check-overlay-z.cjs` / `check-title-bar-clearance.cjs` | `src/components` + `src/app`               | 0.27 / 0.09s |
+| `check-import-alias.cjs`                      | `src` + `e2e`                                       | 0.17s        |
+| `check-circular-deps.cjs`                     | `src/**`                                            | 0.15s        |
+| `check-inline-style.cjs`                      | `src/**`                                            | 0.09s        |
+
+它们的扫描面**都只是全库的一个子集**（`git ls-files` 跟踪 5952 份、`src/**` 的
+`.ts/.tsx` 只有 1078 份），而**只加 changelog 碎片 / 只改文档 / 只动 `scripts/` 或
+`tests/`** 这一大类提交根本不在靶子里 —— 实测占最近 60 次提交的 **57%（34/60）**。
+14 步各加一档 `--staged`（同一个 `skipUnlessStagedTouches()`，同一个口径），
+这一大类提交在它们上面省的 **≈8.0s** 是白拿的。
+
+**这一步实测过、也确实踩到的两个坑（都写进接线判据了）**：
+
+1. **短路点必须在重活之前**。第一版把 `skipUnlessStagedTouches()` 放进 `main()`，
+   实测「跳过」档仍要 **211–342ms** —— `require("typescript")` 的模块加载 ≈180ms、
+   `check-dead-exports.cjs` 的语料预加载 IIFE ≈340ms 都发生在 `main()` 之前。
+   把短路提到它们**前面**之后降到 **32–40ms**。退出码看不出这个差别（两边都是 0），
+   所以只能钉在接线判据上：短路行号必须小于该脚本里第一条真 `require("typescript")`。
+2. **扫描根常量会被 TDZ 卡住**。「把短路提到 `require("typescript")` 之前」意味着
+   它也要提到 `const SCAN_DIR = "src"` 之前 —— 第一版有一半脚本在跳过档直接
+   `ReferenceError: Cannot access 'SCAN_DIR' before initialization`。修法是把扫描根
+   常量一并上提（它们本来就是配置，没有依赖）。
+
+**实测两端**（同一份检出、8 核、热缓存）：这 14 步在「暂存里没有扫描面内文件」时
+**8.5s → 0.5s**（含进程启动，每步 ≈35ms）；「暂存里有 `src/` 文件」时逐条复核
+**14/14 照旧真扫**（其中 `check-overlay-z` / `check-title-bar-clearance` 只认
+`src/components` + `src/app` —— 只改 `src/lib` 的文件跳过它们是对的，用 `src/app/**`
+的探针复核过确实真扫）。判据强度一个字不放松，`--report` / `--update` 照旧全库。
+
+**接线判据**（`tests/doc-check-hook-wiring.test.ts`）：14 步逐条钉「钩子里带
+`--staged`」+「脚本真的实现了它」+「短路在重活之前」。抹掉任意一条，
+**没有任何别的判据**会看见差异 —— 它只会让每次提交慢一点，慢不会让任何人报错。
 
 #### 13.5.9 依赖漏洞扫描棘轮（`node scripts/check-dependency-audit.mjs`，ISSUE #1331）
 
@@ -1870,10 +2041,19 @@ into …` 字样，所以 `check-merge-parents`（§13.6.1）在 squash 之后�
   引用复算过」不是同一件事；登记了就会被 pre-commit 判成「每天必须跑一次五分钟」，那是另一
   种仪式。
 
-  三条口径要说清，否则这条线会变成新的说谎源：① 上游引用来自**上次 fetch**，判据不做网络
+  四条口径要说清，否则这条线会变成新的说谎源：① 上游引用来自**上次 fetch**，判据不做网络
   请求，所以话术里不许出现「已最新」（与 §13.5.13 同一条口径）；② 取不到上游引用时
-  **退 2 拦住 push**，不许读成「没必要跑」—— 那会让没 fetch 过的检出静默免检；③ 复算红了就
-  拦，且**只有全绿才写证明**（「跑过」与「跑绿过」是两件事，与 §11.8 的新鲜度账同形）。
+  **退 2 拦住 push**，不许读成「没必要跑」—— 那会让没 fetch 过的检出静默免检；③ 红按
+  **归属**决定拦不拦，不按「有没有红」决定：`yours` / `load-flake` / `inconclusive` 一律拦，
+  逐条全是 `baseline-red`（master 上本来就红）时放行、但把每一条念出来并随证明记下 ——
+  「不挡路」不等于「不说」。立案现场：这条线接上不到十分钟就撞上一条红，上游刚加的
+  「基础设施层文件长度棘轮」在**干净的 origin/master 上就已经命中**（那条文件 957 行、
+  基线登记 952），若照「有红就拦」，等于把别人的库存红变成每个人每次 push 的墙钟，
+  而这一族最终的结局只有一个：学会用 `--no-verify`。归属由 `base-check --base --json` 的
+  逐条 `verdict` 给出（只在 base 段报红的稀有路径上多问一次，绿路径仍只跑一次）；
+  别的段（提交信息里的声明 / 合并丢一侧）红了不查归属，按构造就是本分支的事；④ 证明只在
+  **没有引入新的红**时写（全绿一条干净的，`baseline-red` 那条带名单），红着不记 ——
+  「跑过」与「跑绿过」是两件事（与 §11.8 同形）。
   钩子那侧只负责调用与 stdin 的分配（pre-push 的 stdin 只能读一次，LFS 与复算都要它），
   判据与编排一律不重抄（§12.12）。这条接线由 `tests/premerge-push-trigger.test.ts` 守着，
   并登记在 `scripts/affected-tests.mjs` 的固定清单里 —— 改 `.githooks/**` 会让增量层放弃收窄，

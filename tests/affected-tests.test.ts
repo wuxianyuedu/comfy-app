@@ -4,13 +4,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  FIXED_STRUCTURAL_TESTS,
   isSourcePath,
   isTestPath,
   resolveAffectedTests,
   specCandidates,
   wideFallbackNote,
 } from "../scripts/affected-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
 import { KNOWN_FAILED_FILES } from "../scripts/quality-gate-shared.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");

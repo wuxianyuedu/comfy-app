@@ -180,12 +180,10 @@ export function ModelAdaptersView() {
     >
       {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）。屏名已经由页签给出，
           按 ISSUE #1693 那一档收：不传可见 `title`（屏名退成 `sr-only`，读屏仍按标题
-          跳转），那句字段映射口径挂成悬浮「说明」—— 页眉因此不占那一行。屏名仍从注册表
+          跳转），那句字段映射口径挂成悬浮「说明」—— 由顶栏标题右侧那颗问号承载
+          （`viewHelp()`），页眉因此不占那一行。屏名仍从注册表
           取（`pageHeaderTitle`），与侧栏 / 页签同一个出处。 */}
-      <PageHeader
-        srTitle={pageHeaderTitle("model-adapters")}
-        help="为远端模型配置工坊各模式下的输入 / 输出：统一输入映射到该接口请求体的字段名，产物按字段路径提取。"
-      />
+      <PageHeader srTitle={pageHeaderTitle("model-adapters")} />
 
       {/* 选择远端模型 */}
       <section>

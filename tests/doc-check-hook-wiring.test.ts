@@ -320,3 +320,180 @@ describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
     ).toContain("由 `.githooks/pre-commit` 的 D 组调用");
   });
 });
+
+/**
+ * 两步全库扫描的「输入面跳过」接进 D 组（ISSUE #1747）。
+ *
+ * 立案现场：pre-commit 的 D 组实测 56 步、热跑约 18.9s，而其中**两步就占 34%**
+ * （`check-ui-primitives.cjs` 3.6s、`check-format.cjs` 2.9s）—— 两者都是全库扫描，
+ * 而扫描面实际只是全库的一个子集（前者五条根全在 `src/` 下；后者由 `GLOB_RES` 剔掉
+ * `IGNORE_GLOBS` 之后只剩 `src/**` 与 `.storybook/**`）。于是「只加 changelog 碎片 /
+ * 只改文档 / 只动 `scripts/` 或 `tests/`」这一大类高频提交在这两步上白付 6.5s。
+ *
+ * 同族里 **`--staged` 就是这一步能存在的前提**（与上面 docs-api 那条同一口径）：
+ * 抹掉 flag 在本文件里与「让全库扫描回到无条件执行」等价，而**没有任何别的判据**
+ * 会看见这个差异 —— 它只会让每次提交慢一点，慢不会让任何人报错。
+ *
+ * 这两条与 docs-api 那条一样，只读几份文本、不起子进程。
+ */
+const FORMAT_GATE = join(REPO_ROOT, "scripts", "check-format.cjs");
+const UI_PRIMITIVES = join(REPO_ROOT, "scripts", "check-ui-primitives.cjs");
+
+describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = dGroupSteps(hook);
+
+  it("prettier 格式棘轮在钩子里带 --staged 条件触发", () => {
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/check-format.cjs"),
+    );
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有 prettier 格式棘轮，或它丢了 --staged —— ` +
+        "后者会让全库扫描回到无条件执行（每次提交白付 2.9s 热缓存 / 17.6s 冷缓存）",
+    ).toEqual({
+      label: "prettier 格式棘轮",
+      cmd: "node scripts/check-format.cjs --staged",
+    });
+  });
+
+  it("UI 基元复用棘轮在钩子里带 --staged 条件触发", () => {
+    const hit = steps.find((s) =>
+      s.cmd.includes("scripts/check-ui-primitives.cjs"),
+    );
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有 UI 基元复用棘轮，或它丢了 --staged —— ` +
+        "后者会让全库扫描回到无条件执行（每次提交白付 3.6s，D 组单项最贵）",
+    ).toEqual({
+      label: "UI 基元复用棘轮",
+      cmd: "node scripts/check-ui-primitives.cjs --staged",
+    });
+  });
+
+  it("两个脚本都实现了 --staged 这一档（不是只在钩子里写了个 flag）", () => {
+    // 钩子里的 flag 与脚本里的实现是两件事：只写 flag 而脚本不认它，会被解析成
+    // 未知参数（多数脚本忽略）⇒ 条件触发**静默失效**，退回无条件全库扫描。
+    const cases = [
+      ["check-format.cjs", FORMAT_GATE],
+      ["check-ui-primitives.cjs", UI_PRIMITIVES],
+    ] as const;
+    for (const [name, file] of cases) {
+      const script = readFileSync(file, "utf8");
+      expect(
+        script.includes('ARGS.has("--staged")'),
+        `${name} 没有 --staged 这一档 —— 钩子里那个 flag 会变成静默失效的条件触发`,
+      ).toBe(true);
+    }
+  });
+
+  it("判据面由扫描配置现算，没有第二份手抄的目录清单", () => {
+    // 这是本步能「不漂移」的前提：判据面必须从既有配置（`IGNORE_GLOBS` / `SCAN_DIRS`）
+    // 现算，抄一份就会漂 —— 抄的那份多收一个目录，那类文件的违规从此没人查，
+    // 且形态是静默的（§12.12 / §12.18）。
+    const fmt = readFileSync(FORMAT_GATE, "utf8");
+    expect(
+      fmt.includes("GLOB_RES.some") && fmt.includes("IGNORE_RES.some"),
+      "check-format.cjs 的扫描面判定没有由 GLOBS / IGNORE_GLOBS 现算 —— " +
+        "手抄一份目录清单就会与 IGNORE_GLOBS 漂移",
+    ).toBe(true);
+    const ui = readFileSync(UI_PRIMITIVES, "utf8");
+    expect(
+      ui.includes("skipUnlessStagedTouches({ roots: SCAN_DIRS"),
+      "check-ui-primitives.cjs 的扫描面判定没有把 SCAN_DIRS 交给共享件 —— " +
+        "手抄一份目录清单就会与 SCAN_DIRS 漂移",
+    ).toBe(true);
+  });
+});
+
+/**
+ * 第二梯队全库扫描的「输入面跳过」接进 D 组（ISSUE #1747 续）。
+ *
+ * 立案现场：D 组里除两步最贵的（`check-ui-primitives` / `check-format`）之外，
+ * 还有第二梯队 14 步各自「扫全库的一个子集」，单项 0.27–1.85s，合计 ≈8.5s
+ * （实测热缓存 8 核）。它们的扫描面全是**固定前缀**（`src/`、`src/lib`、
+ * `src/components`+`src/app`、`src-tauri/src` ……），于是「只加 changelog 碎片 /
+ * 只改文档 / 只动 `scripts/` `tests/`」这一大类提交（实测占最近 60 次提交的 57%）
+ * 在这些步上白付 —— 与 #1798 那两步同源，同一套口径（§13.5.8.2）。
+ *
+ * 为什么这条判据必须存在：抹掉一个 `--staged` 在本文件里与「让那一步回到无条件
+ * 全库扫描」等价，而**没有任何别的判据**会看见这个差异 —— 它只会让每次提交慢一点，
+ * 慢不会让任何人报错。同族先例是 #1798 那两条，本条把第二梯队 14 步一次钉住。
+ *
+ * 三条都只读几份文本，不起子进程。
+ */
+const SECOND_TIER: ReadonlyArray<readonly [string, string, string]> = [
+  // [标签, 脚本名, 期望命令里带 --staged 的形态]
+  ["React 函数式 updater 纯净性", "check-react-updater-purity.cjs", "node scripts/check-react-updater-purity.cjs --staged"],
+  ["标题行让位硬规则", "check-title-bar-clearance.cjs", "node scripts/check-title-bar-clearance.cjs --staged"],
+  ["import 别名统一(~ 前缀)", "check-import-alias.cjs", "node scripts/check-import-alias.cjs --staged"],
+  ["内联样式注入", "check-inline-style.cjs", "node scripts/check-inline-style.cjs --staged"],
+  ["跨文件重复块", "check-code-duplication.cjs", "node scripts/check-code-duplication.cjs --staged"],
+  ["函数长度棘轮", "check-function-length.cjs", "node scripts/check-function-length.cjs --staged"],
+  ["模块循环依赖棘轮", "check-circular-deps.cjs", "node scripts/check-circular-deps.cjs --staged"],
+  ["地基层零消费导出棘轮", "check-dead-exports.cjs", "node scripts/check-dead-exports.cjs --staged"],
+  ["浮层层级刻度棘轮", "check-overlay-z.cjs", "node scripts/check-overlay-z.cjs --staged"],
+  ["src 非空断言棘轮", "check-non-null-assertions.cjs", "node scripts/check-non-null-assertions.cjs --staged"],
+  ["src/lib void 悬空 Promise 棘轮", "check-void-floats.cjs", "node scripts/check-void-floats.cjs --staged"],
+  ["TS 重复属性判定", "check-ts-duplicate-keys.cjs", "node scripts/check-ts-duplicate-keys.cjs --staged"],
+  ["FormField 标签⇄控件接线（§16.2.4.26）", "check-form-field-wiring.cjs", "node scripts/check-form-field-wiring.cjs --staged"],
+  ["非原生元素点击的键等价物（§6.11）", "check-click-keyboard.cjs", "node scripts/check-click-keyboard.cjs --staged"],
+];
+
+describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 续）", () => {
+  const hook = readFileSync(HOOK, "utf8");
+  const steps = dGroupSteps(hook);
+
+  it.for(SECOND_TIER)("%s 在钩子里带 --staged 条件触发", ([label, , expected]) => {
+    const hit = steps.find((s) => s.label === label);
+    expect(
+      hit,
+      `D 组 ${steps.length} 步里没有「${label}」—— 判据从门禁链里被摘掉了`,
+    ).toBeDefined();
+    expect(
+      hit?.cmd,
+      `「${label}」丢了 --staged —— 全库扫描会回到无条件执行：这一大类高频提交` +
+        "（只加 changelog 碎片 / 只改文档 / 只动 scripts 或 tests）在它上面白付",
+    ).toBe(expected);
+  });
+
+  it.for(SECOND_TIER)("%s 的脚本真的实现了 --staged", ([, script]) => {
+    // 钩子里的 flag 与脚本里的实现是两件事：只写 flag 而脚本不认它，会被解析成未知
+    // 参数（多数脚本忽略）⇒ 条件触发**静默失效**，退回无条件全库扫描。
+    const text = readFileSync(join(REPO_ROOT, "scripts", script), "utf8");
+    expect(
+      text.includes("skipUnlessStagedTouches("),
+      `${script} 没有实现 --staged —— 钩子里那个 flag 会变成静默失效的条件触发`,
+    ).toBe(true);
+  });
+
+  it("短路点在重活之前（不是在 main() 末尾）", () => {
+    // 这一条接的是本轮实测出来的坑：`--staged` 若落在 `main()` 里、或落在
+    // `require("typescript")` / 预加载 IIFE 之后，跳过那一支**照样付**那笔开销
+    // （TS 模块加载 ≈180ms、`check-dead-exports` 的语料预加载 ≈340ms），
+    // 「跳过」就成了形式上的绿、没有省下任何东西 —— 而退出码看不出差别。
+    //
+    // 判据形态：短路语句的行号必须**小于**该脚本里第一次出现
+    // `require("typescript")` 那一行（没有就 <= `require("node:fs")` 之后即可）。
+    for (const [, script] of SECOND_TIER) {
+      const text = readFileSync(join(REPO_ROOT, "scripts", script), "utf8");
+      const lines = text.split("\n");
+      const skipAt = lines.findIndex((l) => l.includes("skipUnlessStagedTouches("));
+      expect(skipAt, `${script} 找不到 --staged 短路语句`).toBeGreaterThanOrEqual(0);
+      // 只认**真的** require 行：注释里出现的同一段字面不算（本仓的风格是
+      // 在文件头解释「为什么这样加载」，那条注释必然含 `require("typescript")`）。
+      const tsAt = lines.findIndex(
+        (l) =>
+          !/^\s*(\/\/|\*|\/\*)/.test(l) &&
+          /require\(\s*"typescript"\s*\)/.test(l),
+      );
+      if (tsAt === -1) continue; // 该步不加载 typescript
+      expect(
+        skipAt,
+        `${script} 的 --staged 短路在第 ${skipAt + 1} 行、` +
+          `而 require("typescript") 在第 ${tsAt + 1} 行 —— 跳过档照样付 ≈180ms 的模块加载，` +
+          "「跳过」等于没省；短路必须提到它前面",
+      ).toBeLessThan(tsAt);
+    }
+  });
+});

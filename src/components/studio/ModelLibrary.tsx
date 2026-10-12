@@ -13,6 +13,7 @@ import { FieldLabel } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
+import { Skeleton } from "~/components/ui/skeleton";
 import { pageHeaderTitle } from "./NavItems";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
@@ -48,7 +49,6 @@ export function ModelLibrary() {
       <PageHeader
         className="mb-6"
         srTitle={pageHeaderTitle("models")}
-        help="本机 ComfyUI 能用哪些 —— 按扫描目录分类，每个目录即一种独立的模型类型。"
         actions={
           <>
             <Button
@@ -69,27 +69,48 @@ export function ModelLibrary() {
         }
       />
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        <FilterChip
-          active={c.filter === ALL_TYPES}
-          onClick={() => c.setFilter(ALL_TYPES)}
-          label={`全部 (${c.models.length})`}
-        />
-        {c.typeChips.map(([t, count]) => {
-          const meta = folderMeta(t);
-          return (
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {c.loading ? (
+          /* 首屏骨架的档位占位：与真实 chip 同高同圆角，避免「全部 (0)」
+           * 先闪一秒再变成真 chips（数量从 0 跳上去比不显示更吵）。
+           * 占位一律走 `ui/skeleton` 基元（P3：不许在视图里手写 animate-pulse）。 */
+          <>
+            <Skeleton className="h-7 w-16 rounded-full" />
+            <Skeleton className="h-7 w-20 rounded-full" />
+            <Skeleton className="h-7 w-14 rounded-full" />
+          </>
+        ) : (
+          <>
             <FilterChip
-              key={t}
-              active={c.filter === t}
-              onClick={() => c.setFilter(t)}
-              label={`${meta.label} (${count})`}
+              active={c.filter === ALL_TYPES}
+              onClick={() => c.setFilter(ALL_TYPES)}
+              label={`全部 (${c.models.length})`}
             />
-          );
-        })}
+            {c.typeChips.map(([t, count]) => {
+              const meta = folderMeta(t);
+              return (
+                <FilterChip
+                  key={t}
+                  active={c.filter === t}
+                  onClick={() => c.setFilter(t)}
+                  label={`${meta.label} (${count})`}
+                />
+              );
+            })}
+          </>
+        )}
+        {/* 后台同步指示：sync 在首屏之后重扫目录，这里只报「在同步」，
+            不挡内容（首屏数据已经是上一轮的存量）。 */}
+        {!c.loading && c.refreshing && (
+          <span className="text-ink-faint ml-auto flex items-center gap-1.5 text-xs">
+            <Spinner className="size-3.5" />
+            同步中…
+          </span>
+        )}
       </div>
 
       {c.loading ? (
-        <p className="text-ink-muted text-sm">加载中…</p>
+        <ModelListSkeleton />
       ) : c.filtered.length === 0 ? (
         <EmptyState
           title="模型库还没有内容"
@@ -128,6 +149,43 @@ export function ModelLibrary() {
 }
 
 const MODEL_ROW_H = 37; // px，单行（truncate 不换行）：py-2 + text-sm 行高 + 1px 分隔
+
+/**
+ * 首屏骨架 —— 与真实行同形的占位（类型药丸 + 文件名 + 大小）。
+ *
+ * 为什么不是一行「加载中…」：那行小字之外是大片空白，读者既不知道
+ * 要等多久、也不知道等出来长什么样（反馈原话「一打开就是这个丑的加载
+ * 界面」）。骨架给出**最终形态的预览**，且 list 回包即替换 —— 现在
+ * 首屏只等 DB 存量（ms 级），后台的目录同步不再挡在它前面。
+ *
+ * `role="status"`：读屏播报「正在加载模型列表」；条块本身无文字，
+ * 不会被念成一串噪音。
+ */
+function ModelListSkeleton({ rows = 8 }: { rows?: number }) {
+  return (
+    <div
+      role="status"
+      aria-label="正在加载模型列表"
+      className="border-border-subtle bg-card max-h-[70vh] overflow-auto rounded-xl border"
+    >
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          key={i}
+          className={`flex items-center gap-3 px-3 py-2 ${
+            i === rows - 1 ? "" : "border-border-subtle border-b"
+          }`}
+        >
+          <Skeleton className="h-5 w-14 shrink-0" />
+          <Skeleton
+            className="h-4 flex-1"
+            style={{ maxWidth: `${64 - i * 5}%` }}
+          />
+          <Skeleton className="h-3 w-12 shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * 模型文件列表 —— 定高虚拟滚动（规范 §2.6）。行数上探三位数时只渲染视口内的

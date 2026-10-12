@@ -46,7 +46,9 @@ describe("ResourceLibrary", () => {
     /* 那句「能拿这些素材做什么」不再常驻：它收成一颗悬浮按钮，
        展开才显示（同一条 ISSUE：说明的直接显示也占空间）。 */
     expect(screen.queryByText(/可直接拖进画布或工坊/)).toBeNull();
-    expect(screen.getByRole("button", { name: "说明" })).toBeTruthy();
+    /* 悬浮「说明」现在由顶栏承载（`viewHelp()` 注册表 → `TopBar`），
+       屏内页头里不再出现第二颗问号。 */
+    expect(screen.queryByRole("button", { name: "说明" })).toBeNull();
   });
 
   it("拉到分类后渲染分类卡", async () => {

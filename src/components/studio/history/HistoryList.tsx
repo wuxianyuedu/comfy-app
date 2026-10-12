@@ -95,7 +95,6 @@ export function HistoryList({
       <PageHeader
         className="mb-6"
         srTitle={pageHeaderTitle("history")}
-        help="所有生成任务与执行日志，按时间倒序排列。"
         actions={
           <>
             <SelectMenu

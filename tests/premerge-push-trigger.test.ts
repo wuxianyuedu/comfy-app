@@ -17,11 +17,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  decideBaseAttribution,
   decidePremergePush,
   mergeCandidates,
   parseRefLines,
   readProof,
-  shouldRecordProof,
   writeProof,
 } from "../scripts/premerge-proof.mjs";
 
@@ -153,14 +153,69 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
   });
 });
 
-describe("证明的读写（本机、不入库；红着不许记）", () => {
-  it("只有全绿才写 —— 1 / 2 / null 都不算「复算过」", () => {
-    expect(shouldRecordProof(0)).toBe(true);
-    expect(shouldRecordProof(1)).toBe(false);
-    expect(shouldRecordProof(2)).toBe(false);
-    expect(shouldRecordProof(null)).toBe(false);
+describe("归属决定：别线的红不挡路，其余一律挡（§13.6.2 / §11.12）", () => {
+  it("全是 `baseline-red` ⇒ 放行，并把名单带出去（不挡路 ≠ 不说）", () => {
+    const d = decideBaseAttribution({
+      summary: "baseline-red",
+      rows: [
+        {
+          label: "基础设施层文件长度棘轮",
+          currentCode: 1,
+          verdict: "baseline-red",
+        },
+        { label: "别的判据", currentCode: 0, verdict: "current-green" },
+      ],
+    });
+    expect(d.allowed).toBe(true);
+    expect(d.baselineOnly).toEqual(["基础设施层文件长度棘轮"]);
+    expect(d.blocking).toEqual([]);
   });
 
+  it("`yours` 混在里面 ⇒ 拦（这条线不许把自线的红算进别线的账）", () => {
+    const d = decideBaseAttribution({
+      rows: [
+        { label: "A", currentCode: 1, verdict: "baseline-red" },
+        { label: "B", currentCode: 1, verdict: "yours" },
+      ],
+    });
+    expect(d.allowed).toBe(false);
+    expect(d.blocking).toEqual(["B"]);
+  });
+
+  it("`load-flake` 与 `inconclusive` 都拦：拿不到测量 ≠ 测量是绿的", () => {
+    for (const verdict of ["load-flake", "inconclusive"]) {
+      const d = decideBaseAttribution({
+        rows: [{ label: "X", currentCode: 1, verdict }],
+      });
+      expect(d.allowed).toBe(false);
+      expect(d.blocking[0]).toContain("X");
+    }
+  });
+
+  it("归属里出现没登记的状态值 ⇒ 保守拦，不猜它是别线", () => {
+    const d = decideBaseAttribution({
+      rows: [{ label: "X", currentCode: 1, verdict: "who-knows" }],
+    });
+    expect(d.allowed).toBe(false);
+  });
+
+  it("归属读不出 / 段报红而逐条里没有红项 ⇒ 都按「不构成证据」拦下", () => {
+    expect(decideBaseAttribution(null).allowed).toBe(false);
+    expect(decideBaseAttribution({ rows: [] }).allowed).toBe(false);
+    expect(decideBaseAttribution({ rows: [] }).reason).toContain(
+      "两份读数不一致",
+    );
+  });
+
+  it("红项没有 label 时不写出 undefined", () => {
+    const d = decideBaseAttribution({
+      rows: [{ currentCode: 1, verdict: "yours" }],
+    });
+    expect(d.blocking[0]).toContain("(未命名判据)");
+  });
+});
+
+describe("证明的读写（本机、不入库；红着不许记）", () => {
   it("写入后能原样读回，并带上时间与命令", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "comfy-premerge-proof-"));
     try {

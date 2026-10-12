@@ -3,13 +3,12 @@
   "ruleVersion": 1,
   "note": "基础设施层（scripts/** 的 .cjs/.mjs 与 tools/** 的 .ps1）超 900 行的文件。棘轮只许下降：新增超限文件须先拆分，再收紧基线。与 src 侧的 R5 同阈值、同计数口径，但另立一档 —— 这一层不在 prettier 格式档里，不存在 R5 那套「按格式时代重数」的需要。",
   "threshold": 900,
-  "total": 6,
+  "total": 5,
   "files": {
-    "scripts/check-ui-primitives.cjs": 4820,
+    "scripts/check-ui-primitives.cjs": 4529,
     "scripts/dev-launcher.mjs": 1540,
     "scripts/base-check.mjs": 1382,
     "scripts/check-file-structure.cjs": 1214,
-    "scripts/check-theme-colors.cjs": 992,
-    "scripts/affected-tests.mjs": 964
+    "scripts/check-theme-colors.cjs": 992
   }
 }

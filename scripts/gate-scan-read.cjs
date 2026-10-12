@@ -41,6 +41,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
 /** 默认不进去的目录：依赖与产物。要更多豁免由调用方传 `skipDirs`。 */
 const DEFAULT_SKIP_DIRS = new Set(["node_modules"]);
@@ -181,12 +182,102 @@ function vanishedNote(count) {
   return `\n  ⚠️ 另有 ${count} 个条目在扫描期间消失（工作区并发变更），本轮未读。`;
 }
 
+/**
+ * 暂存改动清单（仓库根相对 POSIX 路径）。
+ *
+ * **为什么收在这里**：`--staged` 那一族的门禁（「只碰了它的输入面才做全量工作」）
+ * 实测有 9 处各自手写同一段 `git diff --cached --name-only` + 按行切 + 反斜杠归一
+ * （`check-docs-api.cjs` / `check-format.cjs` / `check-ui-primitives.cjs` /
+ * `check-deps-freshness.mjs` / `freshness-gate.mjs` / `shell-gate.mjs` /
+ * `storybook-check.mjs` / `known-failed-selftest-gate.mjs` / `affected-tests.mjs`）——
+ * 与 `walk()` 当年被收进这里同一个理由（§12.12 的孪生对、§12.18 的「写之前先查」）。
+ *
+ * **拿不到返回 `null`，不返回空数组**：空数组的含义是「确实没有暂存改动」，
+ * 而「git 跑不起来 / 不在仓库里」是**判据没跑成**。两者在调用点必须走不同的门 ——
+ * 把后者读成前者，就是让「条件触发」静默退化成「永远不触发」（§13.5.12 那一族）。
+ *
+ * @param {string} [root] 仓库根，默认 `process.cwd()`
+ * @returns {string[]|null} 相对仓库根、正斜杠的路径；git 失败时 `null`
+ */
+function readStagedPaths(root = process.cwd()) {
+  const res = spawnSync("git", ["diff", "--cached", "--name-only"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  if (res.status !== 0) return null;
+  return (res.stdout || "")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((f) => f.split("\\").join("/"));
+}
+
+/**
+ * 给定路径是否落在任一目录根下（`dir === rel` 或 `rel` 以 `dir + "/"` 开头）。
+ *
+ * **根清单由调用方传既有配置**（`SCAN_DIRS` / `INPUT_RES` 那一类），这里不另存一份 ——
+ * 抄一份清单就会与它漂移，而漂移的形态是静默的：抄的那份多收一个目录，
+ * 那类文件的违规从此没人查（§12.12 / §12.18）。
+ *
+ * @param {string} rel 仓库根相对 POSIX 路径
+ * @param {string[]} roots 目录根清单（同样是相对仓库根的 POSIX 路径）
+ * @returns {boolean}
+ */
+function isUnderAny(rel, roots) {
+  return roots.some((dir) => rel === dir || rel.startsWith(dir + "/"));
+}
+
+/**
+ * 条件触发的**短路器**：`--staged` 那一族门禁的「未命中输入面即跳过」只有这一份实现。
+ *
+ * 为什么收在共享件里（而不是每份判据各写一遍）：这套流程有四件事必须**一起**做对，
+ * 各写一遍的形态是「四件事里漏一件」——而每一件的漏法都是静默的：
+ *   ① 读暂存清单，**读不到（`null`）是判据没跑成，不许读成「没有改动」** ⇒ 退出码 2；
+ *   ② 用**调用方给的根清单**判命中（不在这里另存一份，否则与配置漂移）；
+ *   ③ 跳过时**打印理由**（与「扫过之后没问题」在输出上可分，§11.23）；
+ *   ④ 命中时**什么都不做**，把控制权交回调用方去扫全库。
+ *
+ * 调用方负责的两件事：不要在 `--report` / `--update` 档调它（那是人的动作、照旧全库），
+ * 以及调用之后自己判退出 —— 这里只处理「跳过」那一支（`process.exit(0)`），
+ * 命中时正常返回。
+ *
+ * @param {object} options
+ * @param {string[]} options.roots 目录根清单（相对仓库根的 POSIX 路径）
+ * @param {string} options.tag 输出前缀，如 `"[ui-primitives]"`
+ * @param {string} [options.root] 仓库根，默认 `process.cwd()`
+ * @param {string} [options.what] 「扫描面」的名字，用于跳过话术
+ * @returns {boolean} 是否被跳过（`true` 表示进程已退出，调用方不必再做事）
+ */
+function skipUnlessStagedTouches({
+  roots,
+  tag,
+  root = process.cwd(),
+  what = "扫描面",
+}) {
+  const files = readStagedPaths(root);
+  if (files === null) {
+    console.error(
+      `${tag} --staged 模式读不到暂存清单（git diff --cached 失败）——\n` +
+        `${tag}   按 fail-closed 判定为「判据没跑成」，以 exit 2 结束` +
+        `（不冒充「未触及${what}」）。`,
+    );
+    process.exit(2);
+  }
+  if (files.some((f) => isUnderAny(f, roots))) return false;
+  console.log(
+    `${tag} ✓ 本次提交未触及${what}（${files.length} 个暂存文件中 0 个落在 ${roots.length} 条根内），跳过。`,
+  );
+  process.exit(0);
+}
+
 module.exports = {
   DEFAULT_SKIP_DIRS,
   dirExists,
+  isUnderAny,
   readBytesForScan,
   readForScan,
+  readStagedPaths,
   readdirForScan,
+  skipUnlessStagedTouches,
   walkForScan,
   vanishedNote,
 };

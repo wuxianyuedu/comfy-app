@@ -4,7 +4,7 @@ import { ListChecks, ListOrdered, RefreshCcw, WifiOff } from "lucide-react";
 
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
-import { viewTabLabel } from "~/components/studio/ViewTabStrip";
+import { pageHeaderTitle } from "~/components/studio/NavItems";
 import {
   Alert,
   AlertAction,
@@ -71,11 +71,11 @@ export function QueueMonitorView({
       {/* 屏名由页签给出，页头不再重复一次可见标题（`srTitle` 只留给读屏）——
           此前页签写「队列」、这里的大标题也写「队列」，同一件事占两行而读者
           什么都没多知道（ISSUE #1693，接 ISSUE #1423 没走完的那一半）。
-          那句「多久读一次、位次怎么排」不是每次看屏都要读的，收成悬浮说明。 */}
+          那句「多久读一次、位次怎么排」不是每次看屏都要读的，收成悬浮说明 ——
+          由顶栏标题右侧那颗问号承载（`viewHelp()`），页头里不再放第二颗。 */}
       <PageHeader
         className="mb-6"
-        srTitle={viewTabLabel("queue")}
-        help="每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。"
+        srTitle={pageHeaderTitle("queue")}
         actions={
           <>
             <span className="text-ink-faint text-xs tabular-nums">

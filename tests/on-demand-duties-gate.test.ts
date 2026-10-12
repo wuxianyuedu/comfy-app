@@ -115,6 +115,16 @@ function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
         fact: { kind: "gate-not-in-all", gate: "premerge" },
         executor: "pnpm check:premerge",
       },
+      {
+        /* 同上：跟着真 `quality-gate.mjs` 的 `bundleBudget`（`run: false`）走。
+         * ISSUE #1781 —— 测量对象是 `next build` 的产物、构建本身半分钟级，
+         * 所以它是**按需入口**而不是 `all` 的一档。 */
+        id: "bundle-budget",
+        name: "bundle 体积预算",
+        notInHook: "测量对象是 next build 的产物，构建半分钟级",
+        fact: { kind: "gate-not-in-all", gate: "bundleBudget" },
+        executor: "pnpm check:bundle（也挂在 pnpm build 收尾）",
+      },
       ...(overrides.extra ?? []),
     ],
   };
