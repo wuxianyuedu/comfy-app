@@ -166,7 +166,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
 ✅ node scripts/check-import-alias.cjs       # import 别名只有一种前缀 `~`（R13，见 §12.8.0）
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
-✅ node scripts/check-ui-primitives.cjs      # UI 基元复用棘轮（见 16 §16.2.3）
+✅ node scripts/check-ui-primitives.cjs --staged # UI 基元复用棘轮（见 16 §16.2.3；`--staged` = 只碰了 `src/` 下的扫描根才扫，见下 13.5.8.2）
 ✅ node scripts/check-overlay-z.cjs          # 浮层层级刻度棘轮（见 16 §16.2.5）
 ✅ node scripts/check-theme-colors.cjs       # 主题色扫描棘轮（见 03 §3.6.1）
 ✅ node scripts/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
@@ -195,7 +195,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
    # 命令行上限 —— 表现是「组 C 红、一条用例没跑、原因是一行 GBK 乱码」
 ✅ node scripts/check-circular-deps.cjs      # 模块循环依赖棘轮（见 12 §12.7）
 ✅ node scripts/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
-✅ node scripts/check-format.cjs             # prettier 格式棘轮（见下 13.5.1）
+✅ node scripts/check-format.cjs --staged    # prettier 格式棘轮（见下 13.5.1；`--staged` = 只碰了扫描面（`src/**` / `.storybook/**`）才扫，见下 13.5.8.2）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
 ✅ node scripts/check-dead-exports.cjs       # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
@@ -958,6 +958,42 @@ COMFY_PRECOMMIT_MAX_WORKERS=1 git commit …   # 机器被别的东西占着时
 ⇒ 真要做也只该按 #1608 给 `check-a11y-rules.cjs` 加 `--ledger <path>` 的**同一招**（临时路径入参），而不是先造一套并发编排。**但结论仍是「不做」** —— 并发的收益本来就不在这堵墙上兑现。
 
 **给下一个人的话**：`隔离跑 / 本地体检`可以并发（4 是实测最优档，8 更慢更占内存），但**不要**为了「让 D 看起来快」去动钩子里的串行 —— 那样只会把同一批核重新分配一次。真要再降 D，先问「这条判据有没有在白付」，而不是「它能不并发跑」。
+
+**上面那句「每条判据自己别做无用功」的第二笔账（ISSUE #1747）**：D 组里最贵的两步
+都是**全库扫描**（实测热缓存，8 核，56 步合计 ≈18.9s）：
+
+| 判据                                    | 热跑（全库） | 扫描面（实测）                                    | 加 `--staged` 后（不在面内） |
+| --------------------------------------- | ------------ | ------------------------------------------------- | ---------------------------- |
+| `check-ui-primitives.cjs`（D 组最贵）   | **3.6s**     | 五条扫描根全在 `src/` 下（`SCAN_DIRS`）           | **~30ms**（只读 git）        |
+| `check-format.cjs`                      | **2.9s**     | `src/**` 1586 份 + `.storybook/**` 10 份（=1596） | **~30ms**                    |
+| （该步冷缓存）                          | 17.6s        | 同上                                              | 同上                         |
+
+两步合计**占 D 组的 34%**。而它们的扫描面都**只是全库的一个子集**：`check-format.cjs`
+的 `GLOBS` 连 `.md` 都不收、`IGNORE_GLOBS` 又剔掉 `scripts/` `tests/` `tools/` `e2e/`
+`public/` `docs/{api,generated}` `src-tauri/target/**` 与根级 `*.js` / `*.config.*`
+（`git ls-files` 跟踪 5940 份，落在面内的只有 1596 份）。于是「只加 changelog 碎片 /
+只改文档 / 只动 `scripts/` 或 `tests/`」这一大类高频提交，在这两步上**白付 6.5s**。
+
+**改法与三条口径**（与 `check-docs-api.cjs --staged` / `check-deps-freshness.mjs --staged`
+同源）：
+
+1. **判据面由既有配置现算，不抄第二份目录清单**。`check-format.cjs` 过
+   `GLOB_RES` + `IGNORE_RES`（就是 `GLOBS` / `IGNORE_GLOBS` 的两条正则）、
+   `check-ui-primitives.cjs` 把 `SCAN_DIRS` 交给共享件。抄一份就会漂，而漂移的形态是
+   静默的：抄的那份多收一个目录，那类文件的违规从此没人查（§12.12 / §12.18）。
+   「读暂存清单 + 判前缀 + 跳过话术 + fail-closed」这套四件套收进
+   **`scripts/gate-scan-read.cjs` 的 `skipUnlessStagedTouches()`**（与 `walk()` 当年
+   收进同一处同一个理由）—— 实测全仓有 9 处各自手写 `git diff --cached --name-only`，
+   这一层是它们的共同地基。
+2. **跳过是结论，不是沉默放行**。两步都打印「本次提交未触及扫描面，跳过」，与扫过
+   之后的输出在形态上可分辨（§11.23 的「声明 ⇄ 读者」）。
+3. **只跳过 check 档**。`--report` / `--update` 是人的动作，照旧全库 —— 否则收紧基线
+   会按残缺清单记账。
+
+**实测两端**（同一份检出、同一台 8 核机）：两步合计在「暂存里没有扫描面内文件」时
+**7.1–7.3s → 0.4s**（省 ≈6.8s）；「暂存里有 `src/` 文件」时 **7.2–8.1s ≈ 7.2–8.1s**
+（多一次 `git diff --cached` 的读，噪声级，无回归）。判据强度一个字不放松 ——
+触发面就是「有文件落在扫描面内」，而**只要有一个**就照旧扫全库。
 
 #### 13.5.9 依赖漏洞扫描棘轮（`node scripts/check-dependency-audit.mjs`，ISSUE #1331）
 
