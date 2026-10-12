@@ -44,7 +44,6 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
-const CHECK_SCRIPT = path.join(HERE, "premerge-check.mjs");
 const PROVEN_FILE_NAME = "comfy-premerge-proof.json";
 const ZERO_SHA = /^0+$/;
 
@@ -180,21 +179,12 @@ export function readProof(gitDir) {
 }
 
 /**
- * 「跑过」与「跑绿过」是两件事：只有全绿才写证明 —— 红着记一条「我复算过」会把两者混成
- * 一件（与新鲜度账同一口径，§11.8）。抽成纯函数是为了让这一条边界本身有人执行。
- *
- * @param {number | null | undefined} status
- * @returns {boolean}
- */
-export function shouldRecordProof(status) {
-  return status === 0;
-}
-
-/**
- * 只有**全绿**才写证明（由 `shouldRecordProof` 把关）。
+ * 「跑过」与「跑绿过」是两件事：写证明的三个入口都只在**没有引入新的红**时到达 ——
+ * 全绿写一条干净的，`baseline-red` 那种写一条带 `baselineRed` 名单的（见
+ * `decideBaseAttribution`），红了直接返回不写。
  *
  * @param {string} gitDir
- * @param {{headSha: string, upstreamSha: string, who: string}} record
+ * @param {{headSha: string, upstreamSha: string, who: string, baselineRed?: string[]}} record
  */
 export function writeProof(gitDir, record) {
   const body = {
@@ -214,6 +204,109 @@ export function writeProof(gitDir, record) {
         `本次复算的结论仍然有效，下次 push 会再跑一遍。\n`,
     );
   }
+}
+
+/**
+ * 「别线的红」不挡路，其余一律挡。
+ *
+ * 立案现场：这条接线刚接上就撞上一条红 —— 上游刚加的「基础设施层文件长度棘轮」在
+ * **干净的 origin/master 上就已经命中**（那条文件 957 行、基线登记 952），而本分支只是
+ * 叠在上面。`base-check` 归成 `baseline-red`，钩子却照 1 拦下 push —— 那是把别人的库存红
+ * 变成每个人每次 push 的墙钟，而这一族最终的结局只有一个：学会用 `--no-verify`。
+ * §13.6.2 自己的口径也是「不挡路的（棘轮类 / 测试基线红）登记并写清归属」。
+ *
+ * 所以放行只放行在**证据说它是别线的红**那一格：`yours`（自己的）、`load-flake`（拿不准，
+ * 不许照别线的动作走）、`inconclusive`（没跑起来 ⇒ 不构成证据）三种都拦。
+ */
+const BLOCKING_BASE_STATES = new Set(["yours", "load-flake", "inconclusive"]);
+
+/**
+ * 把 `base-check --base --json` 的逐条归属折成「拦 / 放 + 名单」。
+ *
+ * @param {{rows?: Array<{label?: string, currentCode?: number, verdict?: string}>, summary?: string} | null} attribution
+ * @returns {{allowed: boolean, blocking: string[], baselineOnly: string[], reason: string | null}}
+ */
+export function decideBaseAttribution(attribution) {
+  if (!attribution || !Array.isArray(attribution.rows)) {
+    return {
+      allowed: false,
+      blocking: [],
+      baselineOnly: [],
+      reason: "取不到逐条归属（`base-check --base --json` 没给出可读结果）",
+    };
+  }
+  const reds = attribution.rows.filter((r) => (r.currentCode ?? 0) !== 0);
+  if (reds.length === 0) {
+    return {
+      allowed: false,
+      blocking: [],
+      baselineOnly: [],
+      reason:
+        "base 段报了红，但逐条里没有红项 —— 两份读数不一致，按没跑起来处理",
+    };
+  }
+  const blocking = [];
+  const baselineOnly = [];
+  for (const r of reds) {
+    const label = String(r.label ?? "(未命名判据)");
+    if (BLOCKING_BASE_STATES.has(String(r.verdict))) blocking.push(label);
+    else if (String(r.verdict) === "baseline-red") baselineOnly.push(label);
+    else blocking.push(`${label}（归属读数：${String(r.verdict ?? "未知")}）`);
+  }
+  return {
+    allowed: blocking.length === 0,
+    blocking,
+    baselineOnly,
+    reason: null,
+  };
+}
+
+/**
+ * `premerge-check --json` 的读数（逐段码）。
+ *
+ * @typedef {object} PremergeReport
+ * @property {number} [code]
+ * @property {Array<{key?: string, label?: string, code?: number}>} [segments]
+ */
+
+/**
+ * `base-check --base --json` 的读数（逐条归属）。
+ *
+ * @typedef {object} BaseCheckReport
+ * @property {string} [summary]
+ * @property {Array<{label?: string, currentCode?: number, verdict?: string}>} [rows]
+ */
+
+/**
+ * 读一个子进程 stdout 里的 JSON（读不出返回 null，由调用方按「不构成证据」处理）。
+ * 返回 `unknown`：两个调用点各自用 typedef 收窄，不在这里替它们猜形状。
+ *
+ * @param {string | undefined} text
+ * @returns {unknown}
+ */
+function parseJson(text) {
+  try {
+    return JSON.parse(String(text ?? "").trim());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {string} script
+ * @param {string[]} args
+ * @returns {{status: number, stdout: string}}
+ */
+function runQuiet(script, args) {
+  const r = spawnSync(process.execPath, [path.join(HERE, script), ...args], {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  return {
+    status: typeof r.status === "number" ? r.status : 2,
+    stdout: r.stdout ?? "",
+  };
 }
 
 /**
@@ -269,28 +362,83 @@ export function runFromStdin(stdinText) {
     `[pre-push] 跑合并前固定动作（check:premerge 三段；分钟级，代价与出处见规范 §13.6.2.1）\n` +
       `[pre-push]   为什么要跑：${verdict.reasons.join("；")}\n`,
   );
-  const r = spawnSync(process.execPath, [CHECK_SCRIPT], {
-    cwd: ROOT,
-    stdio: "inherit",
-  });
-  if (shouldRecordProof(r.status)) {
-    const who =
-      spawnSync("git", ["config", "user.name"], {
-        cwd: ROOT,
-        encoding: "utf8",
-      }).stdout?.trim() || "(未登记)";
+  /* `--json` 拿逐段码：只有 base 段红时才再问一次归属（那是一批全仓判据的量级，放在稀有
+   * 路径上付；绿的那条路径仍然只跑一次）。 */
+  const run = runQuiet("premerge-check.mjs", ["--json"]);
+  const report = /** @type {PremergeReport | null} */ (parseJson(run.stdout));
+  const segments = Array.isArray(report?.segments) ? report.segments : null;
+  const who =
+    spawnSync("git", ["config", "user.name"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    }).stdout?.trim() || "(未登记)";
+
+  if (run.status === 0) {
     writeProof(gitDir, { headSha, upstreamSha: upstreamSha ?? "", who });
     process.stdout.write(
       `[pre-push] ✓ 合并前复算全绿，已记入 ${PROVEN_FILE_NAME}（本机、不入库）\n`,
     );
     return 0;
   }
-  process.stderr.write(
-    `[pre-push] ✗ 合并前复算没有通过（退 ${r.status ?? 2}）。` +
-      `被拦下的这条分支现在合进 master 会把红一起带过去 —— 先按上面的输出修，` +
-      `别用 \`git push --no-verify\` 换一条干净历史（硬规则 7 的同一口径）。\n`,
+  if (run.status === 2 || !segments) {
+    process.stderr.write(
+      `[pre-push] ✗ 合并前复算没跑成（退 ${run.status}）或读数不可归因 —— ` +
+        `拿不到测量不等于测量是绿的，本次 push 不放行。细节看 \`pnpm check:premerge\`。\n`,
+    );
+    return 2;
+  }
+
+  const reds = segments.filter((s) => (s?.code ?? 0) !== 0);
+  /** @type {string[]} */
+  let blocking = reds.map(
+    (s) =>
+      `${String(s?.label ?? s?.key ?? "?")}（退 ${String(s?.code ?? "?")}）`,
   );
-  return typeof r.status === "number" ? r.status : 2;
+  /** @type {string[]} */
+  let baselineOnly = [];
+
+  if (reds.every((s) => s?.key === "base")) {
+    /* 只有 base 段红 ⇒ 去要逐条归属。别的段红（提交信息里的声明 / 合并丢一侧）按构造
+     * 就是本分支的事，不查也拦。 */
+    const attr = runQuiet("base-check.mjs", ["--base", "--json"]);
+    const decided = decideBaseAttribution(
+      /** @type {BaseCheckReport | null} */ (parseJson(attr.stdout)),
+    );
+    if (decided.allowed) {
+      baselineOnly = decided.baselineOnly;
+      blocking = [];
+    } else if (decided.blocking.length > 0) {
+      blocking = decided.blocking;
+    } else {
+      blocking = [decided.reason ?? "归属读不出"];
+    }
+  }
+
+  if (blocking.length > 0) {
+    process.stderr.write(
+      `[pre-push] ✗ 合并前复算红了，本次 push 不放行：\n` +
+        blocking.map((l) => `      · ${l}\n`).join("") +
+        `  这条分支现在合进 master 会把红一起带过去 —— 先修（\`yours\`），或按 §13.6.2 ` +
+        `复算归属；别用 \`git push --no-verify\` 换一条干净历史（硬规则 7 同一口径）。\n`,
+    );
+    return 1;
+  }
+
+  /* 走到这里 = base 段有红、逐条却全是 `baseline-red`（master 上本来就红）。放行，
+   * 但把它记进证明并逐条念出来 —— 「不挡路」不等于「不说」。 */
+  writeProof(gitDir, {
+    headSha,
+    upstreamSha: upstreamSha ?? "",
+    who,
+    baselineRed: baselineOnly,
+  });
+  process.stderr.write(
+    `[pre-push] ⚠ 本分支没有引入新的红，但 master 上已有 ${baselineOnly.length} 条：\n` +
+      baselineOnly.map((l) => `      · ${l}\n`).join("") +
+      `  那是别线的账（就地收掉，或按 §11.12 登记 KNOWN_FAILED_FILES），不该由这条 push ` +
+      `承担，所以放行；已随证明记下，下一次复算还会念。\n`,
+  );
+  return 0;
 }
 
 if (

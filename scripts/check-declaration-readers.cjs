@@ -50,7 +50,9 @@ const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
 const LEDGER = path.join(__dirname, ".declaration-readers.json");
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
-const AFFECTED = path.join(ROOT, "scripts", "affected-tests.mjs");
+// 固定清单自 2026-10 起独立成一份数据模块（登记理由不再把判据代码写长，见那份头部），
+// 所以这张表要去那里读 —— 指错文件 = 解析不出 = 判据自己静默失效（§11.23.3）。
+const FIXED_LIST = path.join(ROOT, "scripts", "fixed-structural-tests.mjs");
 const PACKAGE_JSON = path.join(ROOT, "package.json");
 
 /**
@@ -109,7 +111,7 @@ function hookStepLabels() {
 }
 
 /**
- * `scripts/affected-tests.mjs` 的 `FIXED_STRUCTURAL_TESTS` 全表。
+ * `scripts/fixed-structural-tests.mjs` 的 `FIXED_STRUCTURAL_TESTS` 全表。
  *
  * **不按 `\[…\]` 非贪婪取**：那张表里全是**带散文的注释**，注释里就会出现
  * `[` / `]`（实测：第一个 `]` 落在注释中间，于是非贪婪取出的片段截断在那里，
@@ -119,7 +121,7 @@ function hookStepLabels() {
  * @returns {Set<string> | null}
  */
 function fixedStructuralTests() {
-  const src = fs.readFileSync(AFFECTED, "utf8");
+  const src = fs.readFileSync(FIXED_LIST, "utf8");
   const at = src.search(/FIXED_STRUCTURAL_TESTS\s*=\s*\[/);
   if (at < 0) return null;
   const open = src.indexOf("[", at);
@@ -182,7 +184,7 @@ if (carriers) {
   const scripts = npmScripts();
   if (fixed === null) {
     problems.push(
-      "解析不出 `FIXED_STRUCTURAL_TESTS`（scripts/affected-tests.mjs）—— " +
+      "解析不出 `FIXED_STRUCTURAL_TESTS`（scripts/fixed-structural-tests.mjs）—— " +
         "判据不许静默降级（§11.23.3）",
     );
   }
