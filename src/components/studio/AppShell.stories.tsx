@@ -21,8 +21,8 @@ import { tabKey, type ViewTab } from "~/components/studio/workspace-tabs";
  *
  *  · **侧栏两段的分界**：顶部全局项常驻，底部「项目」是折叠分组 —— 项目多了之后
  *    分组会不会把侧栏吃掉；
- *  · **页签条挂在内容列里**：`viewTabs` 由外壳在内容列渲染，`inTitleBar` 那一档
- *    是换背景层级，不是换位置（关一份页签不能连带切页签）；
+ *  · **页签条挂在内容列最顶端**：浏览器 / dev 形态下 `viewTabs` 由外壳在
+ *    `SidebarInset` 顶部渲染（TopBar 之上）；桌面壳里由标题行承载。
  *  · **一整屏只有一条 `<main>`**：外壳的 `SidebarInset` 是它，视图容器不再套。
  */
 const meta = {
@@ -112,7 +112,7 @@ export const ManyProjects: Story = {
   ),
 };
 
-/** 带视图页签：内容列顶部那条栏与外框的层级关系（`viewTabs` 由外壳渲染）。 */
+/** 带视图页签：内容列最顶端那条栏与外框的层级关系（`viewTabs` 由外壳渲染）。 */
 export const WithViewTabs: Story = {
   render: () => <ShellHarness extraProjects={["城市夜景"]} withTabs />,
 };
