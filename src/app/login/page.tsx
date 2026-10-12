@@ -12,6 +12,7 @@ import { Button } from "~/components/ui/button";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { FormField } from "~/components/ui/form-field";
 import { AuroraGlow } from "~/components/ui/aurora-background";
+import { FULL_PAGE_CLEARANCE_CLASS } from "~/lib/full-screen-layer";
 import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
 
 type Mode = "signin" | "register";
@@ -20,6 +21,9 @@ function BoltIcon() {
   return <Zap size={22} />;
 }
 
+/* 登录页是**路由占位页**（地址栏直达 / 外部链接的落点），与错误页 / 404 一样
+   会整屏铺开；在桌面壳里必须让出窗口标题行，否则右上角的关闭按钮被盖住
+   （ISSUE #1794）。让位形态与 `app/error.tsx` 共用 `FULL_PAGE_CLEARANCE_CLASS`。 */
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("signin");
@@ -94,7 +98,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="bg-bg relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+    <div
+      className={`bg-bg relative flex items-center justify-center px-4 py-10 ${FULL_PAGE_CLEARANCE_CLASS}`}
+    >
       {/* Aurora glows：复用 AuroraGlow 原语（同一个光晕在四处各抄一份，
  色值还各不相同 —— 见规范 03 §3.6.2）。浅色下 opacity 大幅调低、
  不用`mix-blend-screen`（screen 在白底上什么也不显示）。 */}

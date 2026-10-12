@@ -202,6 +202,52 @@ export function TooltipContent() {
     expect(run().ok).toBe(true);
   });
 
+  it("拦下按视口高度铺开的整屏页面（错误页盖住关闭按钮那件事，ISSUE #1794）", () => {
+    const { run } = scanner({
+      "src/app/error.tsx": `export default function Error() {
+  return <div className="bg-bg flex min-h-screen flex-col">出错了</div>;
+}
+`,
+    });
+    const res = run();
+    expect(res.ok).toBe(false);
+    expect(res.output).toContain("src/app/error.tsx:2");
+    expect(res.output).toContain("FULL_PAGE_CLEARANCE_CLASS");
+  });
+
+  it("放过让出标题行的整屏页面（高度收到内容区）", () => {
+    const { run } = scanner({
+      "src/app/not-found.tsx": `import { FULL_PAGE_CLEARANCE_CLASS } from "~/lib/full-screen-layer";
+
+export default function NotFound() {
+  return <div className={\`bg-bg flex flex-col \${FULL_PAGE_CLEARANCE_CLASS}\`} />;
+}
+`,
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("不误伤注释里讲旧写法的整屏页面", () => {
+    const { run } = scanner({
+      "src/app/error.tsx": `// 从前这里写 min-h-screen，会盖住标题行 —— 现已改用内容区高度。
+export default function Error() {
+  return <div className="h-full min-h-0" />;
+}
+`,
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("不误伤组件层的 min-h-screen（第四条规则只扫 src/app）", () => {
+    const { run } = scanner({
+      "src/components/studio/Foo.tsx": `export function Foo() {
+  return <div className="bg-bg flex min-h-screen flex-col" />;
+}
+`,
+    });
+    expect(run().ok).toBe(true);
+  });
+
   it("不误伤 Positioner.Props 这类类型引用（只有 JSX 开标签才算浮层）", () => {
     const { run } = scanner({
       "src/components/ui/navigation-menu.tsx": `import { NavigationMenu as NavigationMenuPrimitive } from "@base-ui/react/navigation-menu";

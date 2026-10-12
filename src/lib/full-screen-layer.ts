@@ -63,6 +63,27 @@ export const TITLE_BAR_HEIGHT_REM = "2.25rem";
 export const FULL_SCREEN_LAYER_CLASS = `fixed ${TITLE_BAR_TOP_CLASS} right-0 bottom-0 left-0`;
 
 /**
+ * 独立视觉页面（错误页 / 404 / 登录页）的「整屏」允许量：让出标题行、其余吃满。
+ *
+ * 与 `FULL_SCREEN_LAYER_CLASS` 的区别在**是否脱离文档流**：全屏视图是浮层
+ * （`fixed`），铺在内容区之上；而错误页 / 404 是**路由页**，自己就是那一屏
+ * 的内容，用 `fixed` 会让它失去与文档同流的滚动语义。
+ *
+ * 又一处「铺满视口」的现场（ISSUE #1794）：错误页此前写 `min-h-screen`，在壳里
+ * 等于 `100svh` —— 从视口顶起算，把最顶端那条 36px 的标题行（页签 + 最小化 /
+ * 最大化 / **关闭**）整条盖住。用户的原话正是 *这个界面会挡住右上角的关闭按钮*，
+ * 而它偏偏出现在「页面已经出错」的时候 —— 此刻关闭窗口往往是唯一还想做的事。
+ *
+ * `min-h-0` 不是废话：`app/error.tsx` 挂在 `ShellTabs` 那个 `flex-1` 容器里
+ * （而它的高度已经减掉了标题行），默认的 `min-height: auto` 会让这个块撑到
+ * 自身内容高度、把滚动条顶没；归零之后它才**恰好**是内容区高度，多的部分自己滚。
+ * 浏览器 / dev 形态下 `top-title-bar` 是空档（该变量的赋值收在全局 CSS 的
+ * `[data-shell]` 里），于是它退化成 `min-h-0` + 100% 高，行为与从前一致。
+ */
+export const FULL_PAGE_CLEARANCE_CLASS =
+  "min-h-0 h-full overflow-y-auto " + TITLE_BAR_TOP_CLASS;
+
+/**
  * 底部状态栏（`BrowserStatusBar`）的让位 class：`bottom-6` = 状态栏的 24px（`h-6`）。
  *
  * 与标题行同理，状态栏也是「固定悬浮在窗口边上」的应用级 chrome（`fixed

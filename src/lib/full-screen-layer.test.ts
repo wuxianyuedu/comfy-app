@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   anchoredOverlayBoundary,
   titleBarHeightPx,
+  FULL_PAGE_CLEARANCE_CLASS,
   FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS,
   FULL_SCREEN_LAYER_CLASS,
   STATUS_BAR_CLEARANCE_CLASS,
@@ -194,5 +195,25 @@ describe("锚定浮层的碰撞边界（气泡被标题行吃掉半个身子那�
     expect(`${titleBarHeightPx()}`).toBe(
       `${Number.parseFloat(TITLE_BAR_HEIGHT_REM) * REM_PX}`,
     );
+  });
+});
+
+describe("整屏页面（错误页 / 404 / 登录页）的让位（ISSUE #1794）", () => {
+  it("让出标题行：顶部取 top-title-bar", () => {
+    // 用户原话：*这个界面会挡住右上角的关闭按钮* —— 出错时关闭窗口往往是
+    // 唯一还想做的事，所以这条与全屏视图的让位同等硬。
+    expect(FULL_PAGE_CLEARANCE_CLASS).toContain(TITLE_BAR_TOP_CLASS);
+  });
+
+  it("高度收到内容区那一档：min-h-0，不是视口高度", () => {
+    // 挂在 `ShellTabs` 的 flex-1 容器里时，默认 `min-height: auto` 会让这个块
+    // 撑到自身内容高度、把滚动条顶没；`min-h-0` 归零后它才恰好是内容区高度。
+    expect(FULL_PAGE_CLEARANCE_CLASS).toContain("min-h-0");
+    expect(FULL_PAGE_CLEARANCE_CLASS).not.toMatch(/\bh-screen\b/);
+    expect(FULL_PAGE_CLEARANCE_CLASS).not.toMatch(/\bmin-h-screen\b/);
+  });
+
+  it("页面自己滚：内容一高不被裁在视口外", () => {
+    expect(FULL_PAGE_CLEARANCE_CLASS).toContain("overflow-y-auto");
   });
 });
