@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// @ts-nocheck -- 提交门槛脚本:非空断言 `!` 计数棘轮(供 .githooks/pre-commit 与 CI 调用)
+// @ts-nocheck -- 提交门槛脚本:非空断言 `!` 硬闸(供 .githooks/pre-commit 与聚合档调用)
 /**
- * src 生产代码非空断言 `!` 计数棘轮 —— 类型安全审查 src/lib 报告 Low 段的**扩展**。
+ * src 生产代码非空断言 `!` **硬闸**（须为 0）—— 类型安全审查 src/lib 报告 Low 段的**扩展**。
  *
  * 背景:lib 侧的 filter/map 不 narrow 病灶 13 处已在本轮 6 个 PR 消化完
  * (PR-1 secrets / PR-2 filter+withPort / PR-5 trainer 归一化 / PR-8
@@ -12,9 +12,13 @@
  * 棘轮的防护就漏一半。合理路径是把扫描范围**扩到整个 src**。
  *
  * 直接开 `@typescript-eslint/no-non-null-assertion` 一次会报几百处、评审全是
- * 噪声。合理机制仍是**基线棘轮**:把每文件的当前数量记成基线,只挡**新增**、
- * 允许逐步下降。与 `check-function-length.cjs`(§12.13)与
- * `check-code-duplication.cjs`(§12.12)同构。
+ * 噪声。所以本仓走了**两步**：先以基线棘轮把存量清干净（160 处分布 69 个文件，
+ * 见 ISSUE #1811），存量归零之后**翻成硬闸** —— 棘轮在 0 上只剩坏处：
+ * `--update` / `--strict` 两个动作都无事可做，留下的却是一条「手改那份 JSON
+ * 就能把新违规登记成已知存量」的通道（硬闸类本来没有的中间态，规范 §13.6.2）。
+ *
+ * **合法例外走另一条已经存在的车道**：`LEGIT_SITES` 逐条登记「这个下标/返回值
+ * 在结构上必然存在」（正则捕获组、drizzle 判据构造），不是「跑起来没出过问题」。
  *
  * 判据走 TypeScript AST (`ts.isNonNullExpression`),不用正则——正则会把
  * `!==` / `!x` / 注释里的裸 `!` 误伤,而 AST 只认 `<expr>!` 这一形状。
@@ -23,17 +27,14 @@
  * 常见形态、`.d.ts` 是类型声明,一并豁免)。
  *
  * 用法:
- *   node scripts/check-non-null-assertions.cjs           # 检查(棘轮)
- *   node scripts/check-non-null-assertions.cjs --update  # 重写基线(须伴随下降)
+ *   node scripts/check-non-null-assertions.cjs           # 检查(硬闸:命中即退 1)
  *   node scripts/check-non-null-assertions.cjs --report  # 只出清单不判失败
  */
 const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const BASELINE = path.join(__dirname, ".non-null-assertions-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
-const UPDATE = ARGS.has("--update");
 const REPORT_ONLY = ARGS.has("--report");
 const STAGED = ARGS.has("--staged");
 
@@ -44,7 +45,7 @@ const SCAN_DIR = "src";
  * 打印理由后 exit 0（见 §13.5.8.2、`scripts/gate-scan-read.cjs`）。
  * 短路点放在 `require("typescript")` **之前** —— 那一步模块加载实测约 180ms，
  * 放在后面的话「跳过」档也照样付这笔钱，省下的那一步就白省了。 */
-if (STAGED && !REPORT_ONLY && !UPDATE) {
+if (STAGED && !REPORT_ONLY) {
   require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[non-null]" });
 }
 
@@ -52,11 +53,77 @@ const ts = require("typescript");
 
 /** 判据版本:`ts.isNonNullExpression` 语义固定,不会漂;留号便于将来
  *  把 `x?.y!` / `<T>x!` 之类扩展形态纳入时区分。
- *  v1 → v2:扫描范围从 src/lib 扩到整个 src (基线数字量级变化,不再是同一个量)。 */
-const RULE_VERSION = 2;
+ *  v1 → v2:扫描范围从 src/lib 扩到整个 src。
+ *  v2 → v3:存量清零后翻硬闸,基线文件与 `--update` 一并删除。 */
+const RULE_VERSION = 3;
 
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
+
+/* ── 已登记的合法形态（正则捕获组 / drizzle 判据构造）────────────────────
+ *
+ * 为什么需要它:`arr[N]!` 一族里**有两种**东西。一种是「本来该用判据或兜底」
+ * 的病灶(本轮清了 148 处,160 → 12);另一种是 `RegExpExecArray` 的捕获组
+ * —— `exec()` 成功返回的数组**结构上必有**这些下标,`!` 在这里不是省略判据,
+ * 而是**唯一准确的表达**(写 `?? ""` 会把「匹配到了但组是空」也一起吞掉)。
+ *
+ * 规范 §13.5.6 自己也写着「`arr[i]!` / `match[N]!` 是 `noUncheckedIndexedAccess`
+ * 打开后的**合法惯用法**」。所以这一族不走「改造代码」,走**逐站点登记**:
+ * 键是「文件 + 变量名 + 组下标」,值写明它为什么必然存在。**不用行号做键**
+ * —— 行号会随无关改动漂移,漂了就等于没登记。
+ *
+ * `repository-skill.ts` 那条是同一族里的另一成员:drizzle 的 `or(...)` 在
+ * 传入了判据时必有返回,而它的类型是 `SQL | undefined`。
+ *
+ * 新登记一条的门槛:必须能指着代码说出「这个下标/返回值在**结构上**必然存在」
+ * (正则组的定义、被调方的返回契约),而不是「跑起来没出过问题」。 */
+const LEGIT_SITES = new Map([
+  /* PROGRESS::(scan|hash)|(.*) —— 第 2 组就是 `|` 之后的整段。 */
+  ["src/app/api/custom-nodes/route.ts|m|2", "exec 第 2 组"],
+  /* /\|?msg=([^|]*)/ —— 第 1 组必有（可以为空串）。 */
+  ["src/app/api/custom-nodes/route.ts|msgM|1", "exec 第 1 组"],
+  /* /\|?(discovered|done|total)=(\d+)/g —— 第 1/2 组都在模式里。 */
+  ["src/app/api/custom-nodes/route.ts|kv|1", "exec 第 1 组"],
+  ["src/app/api/custom-nodes/route.ts|kv|2", "exec 第 2 组"],
+  /* /^#{1,3}\s+(.+?)\s*$/ —— 第 1 组是标题文本。 */
+  ["src/components/studio/workflow-utils.ts|match|1", "exec 第 1 组"],
+  /* /frame-ancestors([^;]*)/i —— 第 1 组是指令值。 */
+  ["src/lib/comfy/comfy-embed.ts|directive|1", "exec 第 1 组"],
+  /* /\s*\(([^)]+)\)\s*$/ —— 第 1 组是括号里的库名。 */
+  ["src/lib/comfyui/node-titles.ts|parenMatch|1", "exec 第 1 组"],
+  /* /^\s*([\w.-]+)\s*=\s*(.*?)\s*$/ —— 第 2 组是值（可以为空串）。 */
+  ["src/lib/envfile.ts|match|2", "exec 第 2 组"],
+  /* /```(?:json)?\s*([\s\S]*?)```/i —— 第 1 组是围栏内容。 */
+  ["src/lib/llm/parse.ts|fence|1", "exec 第 1 组"],
+  /* 地点 / 时间词表 —— 第 1 组就是命中的词。 */
+  ["src/lib/workshop/script-parser.ts|locMatch|1", "exec 第 1 组"],
+  ["src/lib/workshop/script-parser.ts|timeMatch|1", "exec 第 1 组"],
+  /* drizzle `or(...)`：传了判据必有返回（类型上是 `SQL | undefined`）。 */
+  ["src/lib/core/repository-skill.ts|call:or|", "drizzle or() 传入判据时必有返回"],
+]);
+
+/**
+ * 这条 `!` 是不是已登记的合法形态（见 {@link LEGIT_SITES}）?
+ *
+ * 判据只看**形状**，不看行号：`<ident>!` / `<ident>[<idx>]!` / `or(...)!`。
+ *
+ * @param {string} rel 仓库根相对路径
+ * @param {import("typescript").NonNullExpression} node
+ * @returns {boolean}
+ */
+function isLegitSite(rel, node) {
+  const expr = node.expression;
+  if (ts.isCallExpression(expr) && ts.isIdentifier(expr.expression)) {
+    return LEGIT_SITES.has(`${rel}|call:${expr.expression.text}|`);
+  }
+  if (!ts.isElementAccessExpression(expr)) return false;
+  const target = expr.expression;
+  if (!ts.isIdentifier(target)) return false;
+  const index = expr.argumentExpression
+    ? expr.argumentExpression.getText()
+    : "";
+  return LEGIT_SITES.has(`${rel}|${target.text}|${index}`);
+}
 
 /** 递归收集 .ts/.tsx 文件(跳过测试与 .d.ts)。 */
 function collectFiles(dir, out = []) {
@@ -87,10 +154,10 @@ function collectFiles(dir, out = []) {
  * @param {import("typescript").SourceFile} sf
  * @returns {number}
  */
-function countTree(sf) {
+function countTree(sf, rel = "") {
   let count = 0;
   const visit = (node) => {
-    if (ts.isNonNullExpression(node)) count += 1;
+    if (ts.isNonNullExpression(node) && !isLegitSite(rel, node)) count += 1;
     ts.forEachChild(node, visit);
   };
   visit(sf);
@@ -108,7 +175,7 @@ function countTree(sf) {
  */
 function countFor(rel, parsed) {
   const shared = parsed && parsed.get(rel);
-  if (shared) return countTree(shared);
+  if (shared) return countTree(shared, rel);
   const abs = path.join(ROOT, rel);
   const src = fs.readFileSync(abs, "utf8");
   return countTree(
@@ -119,30 +186,8 @@ function countFor(rel, parsed) {
       /* setParentNodes */ true,
       rel.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
     ),
+    rel,
   );
-}
-
-/** 读基线;返回 { files: { 相对路径 → 计数 }, total }。缺文件视为首次运行。 */
-function readBaseline() {
-  if (!fs.existsSync(BASELINE)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-  } catch (e) {
-    console.error(`[non-null] 基线文件损坏：${e.message}`);
-    process.exit(1);
-  }
-}
-
-/** 写基线文件(带 generatedAt / ruleVersion / note)。 */
-function writeBaseline(files, total) {
-  const payload = {
-    generatedAt: new Date().toISOString().slice(0, 10),
-    ruleVersion: RULE_VERSION,
-    note: "src 生产代码里 `!` 非空断言的数量(棘轮,只许降不许升)。判据:TypeScript AST 的 NonNullExpression。规则版本变了必须同步改脚本常数。",
-    total,
-    files,
-  };
-  fs.writeFileSync(BASELINE, JSON.stringify(payload, null, 2) + "\n");
 }
 
 function main(parsed) {
@@ -169,76 +214,26 @@ function main(parsed) {
     return;
   }
 
-  const baseline = readBaseline();
-
-  if (UPDATE) {
-    if (
-      baseline &&
-      baseline.ruleVersion === RULE_VERSION &&
-      total > baseline.total
-    ) {
-      console.error(
-        `[non-null] 拒绝 --update:当前 ${total} > 基线 ${baseline.total}。棘轮只许降不许升,\n` +
-          `  新增的先按判据改写(type predicate / ?? 兜底 / 显式 narrow),再 --update。\n` +
-          `  若确属判据变更(现为 RULE_VERSION=${RULE_VERSION}),须先改脚本里的常数再 --update。`,
-      );
-      process.exit(1);
-    }
-    writeBaseline(current, total);
-    console.log(
-      `[non-null] 基线已重写:总 ${total} 处 / ${Object.keys(current).length} 文件`,
-    );
-    return;
-  }
-
-  if (!baseline) {
-    console.log(
-      `[non-null] 基线未建立:当前 ${total} 处 \`!\`。\n` +
-        `  先跑 node scripts/check-non-null-assertions.cjs --update 建立基线,再进棘轮模式。`,
-    );
-    return;
-  }
-
-  if (baseline.ruleVersion !== RULE_VERSION) {
+  if (Object.keys(current).length > 0) {
     console.error(
-      `[non-null] 基线判据版本不一致(基线 v${baseline.ruleVersion} → 脚本 v${RULE_VERSION}):\n` +
-        `  判据变了,旧基线数字不再是同一个量。请执行 node scripts/check-non-null-assertions.cjs --update\n` +
-        `  (前提:新的 \`!\` 数已按当前判据人工审过)。`,
-    );
-    process.exit(1);
-  }
-
-  const problems = [];
-  for (const [rel, n] of Object.entries(current)) {
-    const base = baseline.files[rel] ?? 0;
-    if (n > base) {
-      problems.push(
-        `  · ${rel}: 基线 ${base} → 当前 ${n}(新增 ${n - base} 处 \`!\`)`,
-      );
-    }
-  }
-  if (problems.length > 0) {
-    console.error(
-      "[non-null] src 里新增非空断言(§18 lib 规范 + 类型安全审查 src/lib 报告 Low 段的扩展):\n" +
-        problems.join("\n") +
-        "\n  修法:改用 type predicate(如 (x): x is T => 判据)/ ?? 兜底 / 显式空值守卫,\n" +
+      "[non-null] src 里出现非空断言 `!`(§18 lib 规范 + 类型安全审查 src/lib 报告 Low 段的扩展):\n" +
+        Object.entries(current)
+          .sort((a, b) => b[1] - a[1])
+          .map(([rel, n]) => `  · ${rel}: ${n} 处`)
+          .join("\n") +
+        "\n  修法:改用 type predicate(如 (x): x is T => 判据)/ ?? 兜底 / 显式空值守卫 / `for...of`,\n" +
         "  让**判据与用法**同一处落地,而不是把「同一件事用两次」写进类型系统。\n" +
-        "  若确属合理用法(罕见),先 `node scripts/check-non-null-assertions.cjs --update` 之外,须给评审说明。",
+        "  若确属「下标/返回值在结构上必然存在」的合法用法(如正则捕获组),\n" +
+        "  在脚本的 `LEGIT_SITES` 里逐条登记理由 —— 那是这条判据唯一的例外车道。",
     );
     process.exit(1);
   }
 
-  const reduced =
-    total < baseline.total
-      ? ` (较基线 ${baseline.total} 降 ${baseline.total - total},可 --update 收紧)`
-      : "";
-  console.log(
-    `[non-null] src \`!\` 总数 ${total}(基线 ${baseline.total})${reduced}`,
-  );
+  console.log("[non-null] src 生产代码 0 处 `!`");
   console.log("[non-null] OK");
 }
 
 /* 规则本体导出给聚合档 `run-ast-gates.cjs`（单条脚本行为不变）。 */
-module.exports = { countTree, countFor, collectFiles, main, RULE_VERSION, BASELINE, SCAN_DIR, isTestFile };
+module.exports = { countTree, countFor, collectFiles, main, RULE_VERSION, SCAN_DIR, isTestFile, LEGIT_SITES };
 
 if (require.main === module) main();

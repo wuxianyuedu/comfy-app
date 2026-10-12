@@ -171,12 +171,12 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
 ✅ node scripts/check-ui-primitives.cjs --staged # UI 基元复用棘轮（见 16 §16.2.3；`--staged` = 只碰了 `src/` 下的扫描根才扫，见下 13.5.8.2）
 ✅ node scripts/check-overlay-z.cjs --staged # 浮层层级刻度棘轮（见 16 §16.2.5）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-theme-colors.cjs       # 主题色扫描棘轮（见 03 §3.6.1）
+✅ node scripts/check-theme-colors.cjs       # 主题色扫描**硬闸**：豁免（类型色例外 / 固定暗色清单）之外不得有未 token 化的写死色值（见 03 §3.6.1）
 ✅ node scripts/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
 ✅ node scripts/check-inline-style.cjs --staged # 视图层不得动态注入 <style>（见 03 §3.5）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-code-duplication.cjs --staged # 跨文件重复块棘轮（见 12 §12.12）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-function-length.cjs --staged # 函数长度棘轮 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-rust-function-length.cjs # 函数长度棘轮 Rust 壳（见 12 §12.13.1）
+✅ node scripts/check-code-duplication.cjs --staged # 跨文件重复块硬闸（见 12 §12.12）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-function-length.cjs --staged # 函数长度硬闸 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-rust-function-length.cjs # 函数长度硬闸 Rust 壳（见 12 §12.13.1）
 ✅ node scripts/check-infra-file-size.cjs # 基础设施层文件长度棘轮：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
    # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳里 37 条 #[test] 唯一的执行者），并复用
@@ -196,11 +196,11 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
    # FIXED_STRUCTURAL_TESTS，见下 13.5.8）。**启动这一步单独有脚本**：清单是位置参数，
    # 直接拼进 `pnpm exec vitest run $files` 会在 Windows 上顶穿 cmd.exe 的 8191 字符
    # 命令行上限 —— 表现是「组 C 红、一条用例没跑、原因是一行 GBK 乱码」
-✅ node scripts/check-circular-deps.cjs --staged # 模块循环依赖棘轮（见 12 §12.7）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-circular-deps.cjs --staged # 模块循环依赖硬闸（见 12 §12.7）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
 ✅ node scripts/check-format.cjs --staged    # prettier 格式棘轮（见下 13.5.1；`--staged` = 只碰了扫描面（`src/**` / `.storybook/**`）才扫，见下 13.5.8.2）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
-✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出棘轮（见 12 §12.16）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出硬闸（见 12 §12.16）；`--staged` 见下 13.5.8.2
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
 ✅ node scripts/check-docs-api.cjs --staged  # API 文档生成物 docs/api 与源一致（见下 13.5.5.1；--staged = 只碰了 typedoc 输入面才重生成）
 ✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
@@ -215,7 +215,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
 ✅ node scripts/check-test-sleep.cjs        # 测试层裸 sleep 的净数棘轮：`await new Promise(r => setTimeout(r, N))` 不许涨（正当形态逐站点声明 `sleep-ok`；见 11 §11.14）
 ✅ node scripts/check-test-waitfor.cjs      # 测试层 `waitFor` 的边界：只有「等 DOM」与「假定时器窗口内」两种形态该留 `waitFor`，其余等值的一律 `expect.poll`（见 11 §11.14.3）
-✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each` 的存量棘轮：`it/test/describe.each` 净数不许涨（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
+✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each`（**硬闸**：站点须为 0）；`it/test/describe.each` 一视同仁（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
 ✅ node scripts/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
 ✅ node scripts/check-type-assertion-executor.cjs # 类型层断言（expectTypeOf/assertType）的执行者在场：站点必须在 tsconfig 的 include 面里 —— 它在 vitest 里没有牙，唯一执行者是 tsc（见 11 §11.20）
 ✅ node scripts/check-annotate-consumer.cjs # `ctx.annotate` 的消费方在场：有站点就必须登记「谁读、怎么读」—— 它写下的注释只有失败时可见、JSON 报告里没有（见 11 §11.21）
@@ -740,35 +740,41 @@ ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前
 在**另一个路径**的 worktree 里重生成，与仓库内结果逐字节相同（产物不含绝对路径、
 不含生成时间戳）—— 所以「重生成到临时目录再比对」才成立。
 
-#### 13.5.6 src 非空断言 `!` 棘轮（`node scripts/check-non-null-assertions.cjs`）
+#### 13.5.6 src 非空断言 `!` 硬闸（`node scripts/check-non-null-assertions.cjs`）
 
-本轮类型安全审查 src/lib 报告 Low 段收尾，v2 起扫描范围从 src/lib 扩到整个 src。
-**为什么不直接开 eslint `@typescript-eslint/no-non-null-assertion`**：lib 侧
-102 处 `!` 分两族——13 处「filter/map 不 narrow 病灶」（本轮 6 个 PR 已消化）
-与 ~89 处 `arr[i]!` / `match[N]!`（`noUncheckedIndexedAccess` 打开后的**合法
-惯用法**，把 `lines[i]` 从 `string | undefined` 收回到 `string`，配合外层长度
-判据）。直接开规则一次会报 100+ 处，评审看下来全是"这里其实合理"的噪声；不
-开规则又挡不住下一轮病灶长出。
+**须为 0**。判据走 TypeScript AST 的 `ts.isNonNullExpression`（不用正则——
+正则会把 `!==` / `!x` / 注释里的 `!` 全误伤），扫描 src 下的 .ts/.tsx
+非测试文件（测试里 `expect(x!.field)` 是常见形态，`.d.ts` 是类型声明，
+一并豁免）。
 
-**为什么扫描范围要扩到整个 src**：lib 侧立了基线、components / app / server
-不管，等于给病灶留了一条**漂移通道**——写视图侧的 `!` 门不会响。v1 的 102 只
-算 lib；v2 首跑覆盖到 `src/components` 里 `use-settings-page.ts` 之类热区，
-一次落到 **225 处 / 85 文件** 的新基线。判据与语义完全一致，只是「量的定义」
-变了，`RULE_VERSION` 从 1 升到 2；`--update` 会拒绝旧基线（版本对不上即拒），
-必须显式承认「范围扩了、量重记」才能重建。
+**为什么不是 eslint `@typescript-eslint/no-non-null-assertion`**：lib 侧 102 处
+`!` 分两族——13 处「filter/map 不 narrow 病灶」与 ~89 处 `arr[i]!` /
+`match[N]!`（`noUncheckedIndexedAccess` 打开后的惯用法）。直接开规则一次报
+100+ 处，评审看下来全是"这里其实合理"的噪声；不开规则又挡不住下一轮病灶
+长出。**扫描范围是整个 src**：只挡 lib 等于给病灶留一条**漂移通道**——写视图
+侧的 `!` 门不会响（v1 的 102 只算 lib，v2 首跑落到 225 处 / 85 文件）。
 
-合理机制是**基线棘轮**（与 §12.12 代码重复、§12.13 函数长度同构）：判据走
-TypeScript AST 的 `ts.isNonNullExpression`（不用正则——正则会把 `!==` / `!x`
-/ 注释里的 `!` 全误伤），扫描 src 下的 .ts/.tsx 非测试文件（测试里
-`expect(x!.field)` 是常见形态，`.d.ts` 是类型声明，一并豁免）；基线
-`scripts/.non-null-assertions-baseline.json` 记**每文件**当前计数，**只挡**
-**新增**、允许逐步下降。修完一批就 `--update` 收紧基线。
+**为什么先棘轮、后翻硬闸**（ISSUE #1811）：160 处存量一次清不干净，所以先以
+基线棘轮（与 §12.12 / §12.13 同构）逐批治理；**归零之后翻成硬闸**——棘轮在
+0 上只剩坏处：`--update`（收紧）与 `--strict`（要求下降）两个动作都无事可做，
+留下的却是一条「手改那份 JSON 就能把新违规登记成已知存量」的通道，而硬闸类
+**本来没有**这个中间态（§13.6.2 的两类对照）。
+
+**合法例外走 `LEGIT_SITES`，逐条登记理由**——这是这条判据**唯一**的例外车道
+（与 `check-click-keyboard` 的 `EXEMPT_SITES` 同构）。登记的靶子是
+`RegExpExecArray` 的捕获组（`m[2]!`、`match[1]!`）与 drizzle 的判据构造
+（`or(...)!`）：它们的下标/返回值**在结构上必然存在**，`!` 不是省略判据，而是
+唯一准确的表达（写 `?? ""` 会把「匹配到了但组是空」也吞掉）。键是
+**「文件 + 变量名 + 组下标」而不是行号**——行号会随无关改动漂移，漂了就等于
+没登记。
+
+新登记一条的门槛：必须能指着代码说出「这个下标/返回值在**结构上**必然存在」
+（正则组的定义、被调方的返回契约），而不是「跑起来没出过问题」。
 
 `RULE_VERSION` 常量：目前只认 `NonNullExpression` 一种形态；将来若把
 `<T>x!` / `x?.y!` 之类扩展形态纳入，或**再一次调整扫描范围**，必须同步改这
-个常数——旧基线与新计数**不是同一个量**，`--update` 会拒绝放宽（除非版本已
-改），防止「顺手把基线调大」的后门。判据排在 `.githooks/pre-commit` 的 D 组
-步（浮层刻度是 27）。
+个常数。v1 → v2 = 扫描范围从 lib 扩到 src；v2 → v3 = 存量清零后翻硬闸。
+判据排在 `.githooks/pre-commit` 的 D 组步（浮层刻度是 27）。
 
 #### 13.5.7 src/lib `void someFn(...)` 悬空棘轮（`node scripts/check-void-floats.cjs`）
 
@@ -1030,6 +1036,53 @@ COMFY_PRECOMMIT_MAX_WORKERS=1 git commit …   # 机器被别的东西占着时
 （台账 E5 那条横切判据）。要动它就得动判据强度 —— 那是 §11.25 六步里过不去的一步，
 所以维持现状。**共享机上唯一的杠杆仍是上面那个环境变量**（降并发，别抬预算）。
 
+**C 组的墙钟不由任何单份决定 —— 它是「总 CPU 时间 ÷ worker 数 + 调度空洞」（ISSUE #1747「C 组第五笔账」）**
+
+上面那张表回答了「为什么慢、慢多少」，但**没有回答「降单份有没有用」**。本轮把这个问题
+量到了底，结论是反直觉的：**降任何单份的时长都不会改变 C 组墙钟，除非那份同时降低了
+总 CPU 时间**。实测（8 核、热缓存、固定清单 77 份 / 867 例）：
+
+| 口径                                          | 读数                                                          |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| 总 CPU 时间（`--maxWorkers=1`，近似纯计算量） | **66.8s**                                                     |
+| 4 worker 的**理论下界**（66.8 ÷ 4）           | **16.7s**                                                     |
+| 钩子档实测墙钟（`--maxWorkers=4`）            | **21.5–23.4s** ⇒ **调度空洞 ≈6.5s（约 30%）**                 |
+| 未改前的 `ratchet-update-guards`（单份）      | 21.8s，**0.0s 开始、21.8s 结束 —— 独占一个 worker 到底**     |
+
+**两个实测反例**（都做过、都留账，别重复走）：
+
+1. **降单份的绝对值，墙钟不动**：`tests/ast-gates-aggregate.test.ts` 把「全量 `src/`
+   逐字节对拍」换成「临时仓库 + 违规探针」之后，这一份 **6.6s → 2.6s（省 4s CPU）**，
+   而 C 组墙钟 **23.4s → 23.2s**（噪声级）。原因就是上面那行下界公式 —— 省掉的是
+   某一份的时长，不是总 CPU 时间里那份**空闲 worker**。
+2. **拆文件只换分配，不换总量**：把 `ratchet-update-guards`（21.8s）按「tw4 那一家
+   ≈16.6s vs 其余 13 家 ≈5.2s」拆成两份文件、甚至把 tw4 两格再拆成两份，
+   **单跑确实各降**（两格同文件 13.2s → 两文件并行 8.0s），而 C 组墙钟
+   **拆前 22.4s ≈ 拆后 22.5s**（三组读数各自取中位数）。
+   拆开的收益被「剩下的用例少了一个 worker 可排」精确抵消 —— 与 §13.5.8.2 那句
+   「并发只是把同一批核重新分配一次」是同一件事的另一个面。
+   **所以那一轮拆分没有落地**（3 个新文件换 0 收益 = 纯复杂度）。
+
+⇒ **C 组剩下的杠杆只有两条**，且都已经被量过：
+
+- **降总 CPU 时间**（66.8s 这个分母）：§13.5.8.1 已逐条证明 tw4 那 12.9s 是
+  **不可摊平的真工作**，这一格「降不动」；
+- **抹平调度空洞**（6.5s）：它来自**长尾** —— 最长的几份（`ratchet-update-guards`
+  21.8s、`ast-gates-aggregate` 6.6s、`a11y-axe-stories` 5.9s）在末尾占不满 4 个
+  worker。**提高并发解不了**（实测 `--maxWorkers` 4/5/6 → 23.8/23.3/24.3s，
+  与 §13.5.8.2 的结论一致：核就那么多，多开只是重新分配）。
+
+**共享机上唯一还能兑现的仍是那个环境变量**（`COMFY_PRECOMMIT_MAX_WORKERS`，
+降并发让「每一条自己」跑得完），以及——**把大改动拆小**：C 组的时长由改动面决定，
+一次改一个基元（142 份 / 1705 例 / 实测 44.2s）和只加一个 changelog 碎片
+（77 份 / 867 例 / 实测 23.4s）不是一回事（§13.5.8 末尾那句同源）。
+
+**「tw4 那两格降频」与「55 份小用例合并」这两个方向后来也各量了一次，两条都被实测否决**
+（ISSUE #1747 的第六笔账，见下 §13.5.8.2 末尾）：tw4 的 `canonical` 那一格 7.5s 是
+**每进程 1.6–1.8s 的引擎冷启**（与问了多少条无关），降频等于废掉 §11.25 的六步行为证明；
+55 份小用例合计只值 **≈1.5s**，且它们本来就被长尾（`ratchet-update-guards` 16.8s）
+留下的**空闲 worker** 吃掉，**合并到 8 份实测墙钟零变化**。
+
 ##### 13.5.8.2 D 组**不并发** —— 结论与账（ISSUE #1610 / #1619）
 
 **结论：不做。** D 组（其余静态判据）组内**保持串行**，这条是有意取舍、量过之后定的，不是没想过的直觉。
@@ -1210,6 +1263,79 @@ stdout/stderr，于是**它的判定代码原样执行、打印的每一个字�
 其余各条、抛异常按红算、`--staged` 全不命中则零解析、人的动作被拒、**钩子里 6 条单条脚本
 不再各占一行**（否则等于跑两遍）。变异实测：从 GATES 表删一条 ⇒ 3 条用例红；
 把 `--staged` 短路写坏 ⇒ 1 条用例红。
+
+**第六笔账：两个「看起来能省」的方向都被实测否决 —— tw4 那两格不能降频，48（现 55）
+份 <300ms 小用例不能靠合并省墙钟（ISSUE #1747 续）**。这两个方向是上一轮结尾「我有两个
+方向可选、按规矩该您拍板」的那两条，本轮把它们量到了底，**两条都不落地**，账留在这里。
+
+**（一）tw4 报告的拒涨两格：必须每次提交都真跑 —— 它降不了频，只能降成本（降不动）**
+
+先分清**两格的成本根本不对称**（同一个 `RATCHETS` 表里，三格读数差 30 倍）：
+
+| 格 | 四次 spawn 的读数（8 核，热缓存） | 为什么 |
+| --- | --- | --- |
+| `tw4-canonical-report.mjs` 第一格（六步里的 ①–④） | `1928 + 1865 + 1940 + 1817` = **7553ms** | 违规样本 `!bg-subtle` 真问引擎 ⇒ **首次 `canonicalizeCandidates` 付 1.6–1.8s** |
+| `tw4-canonical-report.mjs` 第二格（基线清到 0） | （上表两次） | 同上 |
+| `tw4-spacing-canonical.mjs` 两格 | `56 + 52 + 50 + 45` = **206ms**（第二格 `220+180`） | 沙箱里**没有任何 px 任意值候选** ⇒ `TOKEN`/`PX_VALUE` 正则当场早退，**一行都没问过引擎** |
+
+**那个 1.6–1.8s 是本轮的实测根因，且与「问了多少条」无关**：`import "tailwindcss"` 只
+**8ms**、`__unstable__loadDesignSystem()` 只 **15–26ms**（引擎**不**随 import 或建 ds 预热）；
+第一次 `ds.canonicalizeCandidates([…])` 或 `ds.candidatesToCss([…])` **1.6–1.8s**（全量类名表
+在这一步才建），**之后同实例 0ms**。空沙箱（`src/` 里只有一个 token）单次 `--check` 仍 **1.9s**
+—— 那 1.9s 与问了多少条、有没有违规**都无关**（干净沙箱实测 `1992/1799/1934ms`）。
+
+所以两格的每一次运行**都**必须起一个**新进程**（每格 `createGateRepo()` 搭新沙箱）、
+**都**要问引擎、**都**付那 1.8s —— 引擎状态跨不了进程，也跨不了沙箱。**「共用一次启动」
+在一格内部无对象可共**（同一格自己就起 4 次进程）。这一格「降不动」与 §13.5.8.1 那句
+「tw4 那 12.9s 是不可摊平的真工作」是同一件事的第二次取证。
+
+**为什么降频（搬出固定清单 / 只跑一次）不成立**：这六步守的是**全库级不变量里最贵的那条**
+—— 「21 个带 `--update` 的棘轮**都**真拒涨」（§11.25 / 台账 E5）。六步里 ①–④ 是**行为证明**
+（夹具不是空转 / 退出码含义 / 真在计数 / 拦下且不落盘），⑤ 是「基线清到 0 时也不许放宽」
+（`if (before && …)` 的短路失效），⑥ 是「拒涨那句话给出可执行的下一步」。**五步缺一不可、
+且每一步都只在「下一次有人改这个脚本」时才拦得住** —— 降频 = 把「回潮就响」变成「下次
+想起来了才响」，而那正是 §13.5.12 立案的那一族（`check-comment-language.cjs` 自称在跑、
+一个执行者都没有）。**搬去 `COVERED_LOCALLY` 只是把成本挪到另一份固定清单成员上**
+（`tests/tw4-canonical-ratchet.test.ts` 故意只做静态事实），总墙钟不减。⇒ **维持现状。**
+
+**（二）55 份 <300ms 的小用例：合并省不出墙钟 —— 它们被长尾的**空闲 worker**吃掉了**
+
+先纠正一个读数：**不是 48 份，是 55 份**（清单会长，别在文档里写死，以判据现算为准）。
+固定清单 77 份 / 854 例的分布（`--maxWorkers=1` 逐份 time 实测）：
+
+| 分档 | 份数 | 例数 | 逐份时长之和 |
+| --- | --- | --- | --- |
+| **<300ms** | **55** | 543 | **4.8s** |
+| ≥300ms | 22 | 311 | 40.6s（其中 `ratchet-update-guards` **单份 16.8s**） |
+
+**合并在「隔离跑」里确实很快**（受控探针，40 份合成 8 份）：`1.6s → 0.52s`，**3 倍**。
+vitest 自己也算得出来那笔账：「`40 workers spawned · ~90ms startup each (spawn + environment,
+per file)`」并建议 `isolate: false`。**但它在真 C 组里一分不省**，因为 C 组有长尾：
+
+| 受控探针（同一份 vitest，4 worker） | 墙钟 |
+| --- | --- |
+| 40 份独立 + 一个 16s 长尾 | **16.5s** |
+| 8 份合并（同样 40 例）+ 同一长尾 | **16.5s** |
+| 20 份独立 + 长尾 | 16.9 / 16.4s |
+| 4 份合并 + 长尾 | 16.4 / 16.4s |
+| 20 份独立 + 长尾 + `isolate: false` | 16.4 / 16.4s |
+
+**真仓库上同向复核**（固定清单 77 份，`--maxWorkers=4`）：全量 **22.0 / 22.1s**，
+**只留 22 份大用例 20.3 / 20.7s** —— 那 55 份小用例**合计只值 ≈1.5s（≈7%）**，
+而合并后能兑现的**还不到这 1.5s**（合并省的是「文件调度」，而那批本来就排在长尾的
+**空闲 worker** 上：`ratchet-update-guards` 一个人占满一个 worker 16.8s，其余 3 个 worker
+把 55 份小用例全部吃完还有余）。⇒ **合并 = 3 个新文件换 ≈0 收益 = 纯复杂度**，
+与 §13.5.8.1「拆文件只换分配、不换总量」是同一件事的另一个面。
+
+**附带说一句 `isolate: false`**：探针里它也一分没省（16.4s = 16.4s），**且它是判据强度问题
+而不是性能问题** —— 复用 worker 会让**文件之间的模块状态与副作用互相可见**，本仓库大量
+门禁用例读真仓库文本、起子进程、写临时目录，跨文件共享 state 的失效形态是静默的
+（某一份的副作用让另一份「碰巧绿」）。**不在这里开这个口子。**
+
+**结论**：真正能让「每次提交更快」的仍只有 §13.5.8.1 末尾那两条 —— **把大改动拆小**
+（改一个基元 142 份 / 1705 例 / 44.2s vs 只加一个 changelog 碎片 77 份 / 867 例 / 23.4s），
+以及机器被占满时的 `COMFY_PRECOMMIT_MAX_WORKERS`（降并发）。**这一格的墙钟由长尾决定，
+不由那 55 份决定。**
 
 #### 13.5.9 依赖漏洞扫描棘轮（`node scripts/check-dependency-audit.mjs`，ISSUE #1331）
 

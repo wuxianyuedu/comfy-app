@@ -247,8 +247,8 @@ export function ScriptMarkdownEditor({
     setShowPreview(false);
     const lines = value.split("\n");
     let position = 0;
-    for (let i = 0; i < line && i < lines.length; i++) {
-      position += lines[i]!.length + 1;
+    for (const text of lines.slice(0, line)) {
+      position += text.length + 1;
     }
     emitChange(value); // ensure focus sync
     setTimeout(() => {

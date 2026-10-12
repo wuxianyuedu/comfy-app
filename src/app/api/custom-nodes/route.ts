@@ -351,7 +351,10 @@ function runDiscoverStreaming(
     let resolved = false;
 
     const tryRun = () => {
-      if (i >= pyCandidates.length) {
+      /* `.at()` 越界即 `undefined`：取候选与「有没有候选」判据合成一处，
+       * 不必先比 `i < length` 再靠 `!` 把 `undefined` 从类型里抹掉。 */
+      const py = pyCandidates.at(i);
+      if (!py) {
         if (!resolved) {
           resolved = true;
           send({
@@ -364,7 +367,6 @@ function runDiscoverStreaming(
         }
         return;
       }
-      const py = pyCandidates[i]!;
       const cp = spawn(
         /*turbopackIgnore: true*/ py,
         ["-u", "scripts/parse_custom_nodes.py", "--discover-parent", parent],
@@ -536,7 +538,10 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
       let closed = false;
 
       const tryRun = () => {
-        if (i >= pyCandidates.length) {
+        /* 同 `runDiscoverStreaming`：`.at()` 越界即 `undefined`，
+         * 取候选与「有没有候选」判据合成一处。 */
+        const py = pyCandidates.at(i);
+        if (!py) {
           send({
             type: "log",
             level: "error",
@@ -552,7 +557,6 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
           controller.close();
           return;
         }
-        const py = pyCandidates[i]!;
         const cp = spawn(/*turbopackIgnore: true*/ py, args, {
           cwd: process.cwd(),
           env: process.env,
@@ -698,7 +702,10 @@ async function buildGetResponse(): Promise<Response> {
   const settings = { paths, localWorkflowPaths };
   if (allCached) {
     const discoveredByParent: Record<string, unknown[]> = {};
-    for (const p of paths) discoveredByParent[p] = discoverCache.get(p)!.result;
+    /* `allCached` 已逐个查过缓存，这里的 `?? []` 只是让类型与判据同一处
+     * 落地（真出现空说明 `allCached` 那次判定与本次读取之间缓存被清了）。 */
+    for (const p of paths)
+      discoveredByParent[p] = discoverCache.get(p)?.result ?? [];
     return NextResponse.json({
       settings,
       summary,
@@ -717,16 +724,18 @@ async function buildGetResponse(): Promise<Response> {
       try {
         send({ type: "discover_start", parents: paths, total: paths.length });
         const discoveredByParent: Record<string, unknown[]> = {};
-        for (let idx = 0; idx < paths.length; idx++) {
-          const parent = paths[idx];
+        /* 遍历本身就是「取元素 + 收窄类型」：写 `paths[idx]` 就得多一次
+         * `!` 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉。 */
+        let idx = 0;
+        for (const parent of paths) {
+          idx += 1;
           send({
             type: "progress",
             parent,
             phase: "queue",
-            msg: `📂 [${idx + 1}/${paths.length}] ${parent}`,
+            msg: `📂 [${idx}/${paths.length}] ${parent}`,
           });
-          const pkgs = await runDiscoverStreaming(parent!, send);
-          discoveredByParent[parent!] = pkgs;
+          discoveredByParent[parent] = await runDiscoverStreaming(parent, send);
         }
         // 把伴随的 LOCAL_WORKFLOWS_PATH 列表沿同一条流送下去，
         // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。

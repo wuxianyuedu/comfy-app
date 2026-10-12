@@ -250,7 +250,8 @@ const FOLDER_META: Record<string, { label: string; color: string }> = {
   },
 };
 
-const FALLBACK_PALETTE = [
+/* 非空数组：模运算取下标时用 `.at()`，缺席有兜底项（见 `folderMeta`）。 */
+const FALLBACK_PALETTE: [string, ...string[]] = [
   "text-violet-700 dark:text-violet-300 bg-violet-500/15",
   "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15",
   "text-sky-700 dark:text-sky-300 bg-sky-500/15",
@@ -277,7 +278,9 @@ export function folderMeta(folder: string): { label: string; color: string } {
   if (curated) return curated;
   return {
     label: prettyFolder(folder),
-    color: FALLBACK_PALETTE[hashString(folder) % FALLBACK_PALETTE.length]!,
+    color:
+      FALLBACK_PALETTE.at(hashString(folder) % FALLBACK_PALETTE.length) ??
+      FALLBACK_PALETTE[0],
   };
 }
 

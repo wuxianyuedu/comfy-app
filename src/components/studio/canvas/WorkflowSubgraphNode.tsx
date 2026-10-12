@@ -138,6 +138,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
     };
   }, [data.inputs, data.outputs]);
 
+  /* 首个输出口名 —— 空数组即没有（`outputRef` 传 null）。 */
+  const firstOutputName = cleanedOutputs.at(0)?.out.name;
+
   return (
     <div
       className={`relative flex flex-col rounded-lg border shadow-[0_6px_22px_var(--color-shadow-strong)] ${
@@ -194,11 +197,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         onToggle={() => setUserCollapsed((value) => !value)}
         onEnter={data.onEnter}
         io={io}
-        outputRef={
-          cleanedOutputs.length > 0
-            ? { name: cleanedOutputs[0]!.out.name }
-            : null
-        }
+        outputRef={firstOutputName ? { name: firstOutputName } : null}
       />
 
       {/* 折叠态句柄锚点：连线型边界输入在左一根圆柱、声明了输出就在右一根，

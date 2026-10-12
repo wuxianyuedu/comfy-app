@@ -93,7 +93,11 @@ function uiWidget(record: Record<string, unknown>): string | null {
   if (typeof type !== "string" || !(type in UI_PRIMARY_TYPES)) return null;
   const values = record.widgets_values;
   if (!Array.isArray(values)) return null;
-  return asFileName(values[UI_PRIMARY_TYPES[type]!]);
+  /* `type` 上面已按 `in` 收过，但 TS 不把索引访问一起收窄 ——
+   * `?.` 既拿值也表达「表里没有就按 null 处理」。 */
+  const slot = UI_PRIMARY_TYPES[type];
+  if (slot === undefined) return null;
+  return asFileName(values[slot]);
 }
 
 /** 只收「像个模型文件名」的非空字符串：路径会带目录，展示时反而看不出是哪个模型。 */

@@ -36,8 +36,9 @@ export const OUTPUT_BINDING_NAMESPACE = "output";
 export function defaultOutputSource(
   outputs: readonly { ioKey: string; displayOrder?: number }[],
 ): string | null {
-  if (outputs.length === 0) return null;
-  let best = outputs[0]!;
+  const [firstOutput] = outputs;
+  if (!firstOutput) return null;
+  let best = firstOutput;
   for (const item of outputs) {
     if (item.displayOrder === undefined) continue;
     if (
