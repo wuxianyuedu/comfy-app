@@ -9,6 +9,7 @@ import {
 import { LOG_ROW_SINGLE } from "../src/components/studio/logs/log-virtual";
 import { fakeComfyuiBaseUrl } from "./support/fake-comfyui-endpoint.mjs";
 import { expectHomeReady } from "./support/home-anchors";
+import { openSettingsView } from "./support/settings-entry";
 
 /**
  * 关键链路 E2E（ISSUE #317）：把「登录 → 工作区 → 工作流库执行 → 工作台概览」
@@ -455,15 +456,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await page.goto("/workspace");
     await expectStatusBarNotCovered(page);
 
-    // 打开设置（overlay 形态，不卸载 workspace 组件树）。
-    await page
-      .getByRole("button", { name: "设置", exact: true })
-      .first()
-      .click();
-    // 设置 overlay 是 dynamic import + 首屏 loading，给它更宽的等待窗口。
-    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible({
-      timeout: 20_000,
-    });
+    // 打开设置（一页视图，不卸载 workspace 组件树）—— 入口收在顶栏应用菜单。
+    await openSettingsView(page);
 
     /* 关键断言：设置层铺满视口之后，状态栏与视图自己的出路都还点得到。
      *
@@ -1698,13 +1692,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
    */
   async function openComfyFromSettings(page: Page, thenOpenView = true) {
     await page.goto("/workspace");
-    await page
-      .getByRole("button", { name: "设置", exact: true })
-      .first()
-      .click();
-    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible({
-      timeout: 20_000,
-    });
+    await openSettingsView(page);
     await page.getByRole("button", { name: "创作后端", exact: true }).click();
     if (!thenOpenView) {
       return;
