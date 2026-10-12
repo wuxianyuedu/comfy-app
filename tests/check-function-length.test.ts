@@ -1,6 +1,6 @@
 /**
  * 函数长度门禁自检：把 `scripts/check-function-length.cjs` 当黑盒跑在临时
- * 工作区上，验证它真能认出「超长函数」并按棘轮记账。
+ * 工作区上，验证它真能认出「超长函数」并**阻断**（硬闸）。
  *
  * 规范：docs/standards/12-代码组织与文件结构.md §12.13
  *
@@ -13,6 +13,8 @@
  * 的事（`lifecycle.ts` 的 `ensureComfyUiReady` 里挂了一个 288 行 IIFE 与三个
  * 40 行事件回调）。见下方「匿名块体」一组用例。
  */
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
@@ -42,11 +44,11 @@ function writeFunction(
 }
 
 describe("check-function-length.cjs（函数长度门禁）", () => {
-  test("基线文件缺失时阻断（先要求建基线）", ({ repo }) => {
+  test("小函数放行（硬闸不需要任何基线）", ({ repo }) => {
     writeFunction(repo, "src/a.ts", "short", 5);
     const { code, output } = repo.run();
-    expect(code).toBe(1);
-    expect(output).toContain("基线文件缺失");
+    expect(code).toBe(0);
+    expect(output).toContain("超过 400 行的函数 0 个");
   });
 
   test("超阈值函数进拆分候选清单（--report 列名字与行号）", ({ repo }) => {
@@ -63,19 +65,17 @@ describe("check-function-length.cjs（函数长度门禁）", () => {
     expect(output).toContain("（无）");
   });
 
-  test("基线外新增巨型函数阻断", ({ repo }) => {
+  test("任何巨型函数都阻断（无「已登记的存量」这一档）", ({ repo }) => {
     writeFunction(repo, "src/ok.ts", "fine", 20);
-    repo.run(["--update"]);
     writeFunction(repo, "src/new.ts", "grew", 500);
     const { code, output } = repo.run();
     expect(code).toBe(1);
-    expect(output).toContain("基线外新增巨型函数");
+    expect(output).toContain("巨型函数");
     expect(output).toContain("src/new.ts");
   });
 
-  test("同一文件里再长出第二个巨型函数也算上升（按文件计数）", ({ repo }) => {
+  test("同一文件里第二个巨型函数也阻断", ({ repo }) => {
     writeFunction(repo, "src/one.ts", "first", 450);
-    repo.run(["--update"]);
     const src = repo.read("src/one.ts");
     repo.write("src/one.ts", src + writeFunctionBody("second", 450));
     const { code, output } = repo.run();
@@ -83,21 +83,19 @@ describe("check-function-length.cjs（函数长度门禁）", () => {
     expect(output).toContain("src/one.ts");
   });
 
-  test("治理后（巨型函数被拆掉）未收紧基线：--strict 失败，非 strict 只提示", ({
-    repo,
-  }) => {
+  /* 硬闸：没有基线、也没有 --update 通道 —— 巨型函数的存量已清零后，棘轮那两层
+   * （基线文件 + 收紧）只剩开销，还留了一个「手改基线把新巨型函数登记成已知存量」
+   * 的口子。这条钉住「退出通道真的没了」。 */
+  test("硬闸：--update 不写任何基线文件", ({ repo }) => {
     writeFunction(repo, "src/big.ts", "huge", 450);
     repo.run(["--update"]);
-    writeFunction(repo, "src/big.ts", "huge", 30); // 拆小了
-    expect(repo.run(["--strict"]).code).toBe(1);
-    const relaxed = repo.run();
-    expect(relaxed.code).toBe(0);
-    expect(relaxed.output).toContain("巨型函数已减少");
+    expect(
+      existsSync(join(repo.dir, "scripts", ".function-length-baseline.json")),
+    ).toBe(false);
   });
 
   test("测试文件不扫（用例之间雷同、个别用例长是正常的）", ({ repo }) => {
     writeFunction(repo, "src/big.test.ts", "hugeCase", 500);
-    repo.run(["--update"]);
     const { code } = repo.run();
     expect(code).toBe(0);
   });
@@ -207,9 +205,8 @@ describe("匿名块体（IIFE / 回调 / 闭包）同受约束（ISSUE #570 第 
     expect(output).toContain("(匿名块体)");
   });
 
-  test("新增巨型匿名块体在棘轮上算上升（基线外即阻断）", ({ repo }) => {
+  test("巨型匿名块体同样阻断（塞进 IIFE 不能绕过门禁）", ({ repo }) => {
     writeFunction(repo, "src/ok.ts", "fine", 20);
-    repo.run(["--update"]);
     writeAnonymous(repo, "src/grew.ts", "  queue(() => {", 450);
     const { code, output } = repo.run();
     expect(code).toBe(1);
@@ -242,48 +239,6 @@ describe("匿名块体（IIFE / 回调 / 闭包）同受约束（ISSUE #570 第 
     // 只应报具名的 f 一条，没人被注释/字符串里那两处误导成匿名块体
     expect(output).toContain("  f");
     expect(output).not.toContain("(匿名块体)");
-  });
-});
-
-describe("判据版本（基线不许被静默放宽）", () => {
-  /** 直接改写临时工作区的基线文件：模拟「基线来自旧判据」。 */
-  function rewriteBaseline(
-    repo: GateRepo,
-    patch: Record<string, unknown>,
-  ): void {
-    const rel = "scripts/.function-length-baseline.json";
-    const data = JSON.parse(repo.read(rel)) as Record<string, unknown>;
-    repo.write(rel, JSON.stringify({ ...data, ...patch }, null, 2));
-  }
-
-  test("基线判据版本与脚本不一致 → 阻断并给出 --update 指引", ({ repo }) => {
-    writeFunction(repo, "src/a.ts", "fine", 20);
-    repo.run(["--update"]);
-    rewriteBaseline(repo, { ruleVersion: 0 });
-    const { code, output } = repo.run();
-    expect(code).toBe(1);
-    expect(output).toContain("判据版本");
-    expect(output).toContain("--update");
-  });
-
-  test("判据版本一致时，放宽基线仍被拒（棘轮照旧只许下降）", ({ repo }) => {
-    writeFunction(repo, "src/a.ts", "fine", 20);
-    repo.run(["--update"]);
-    writeFunction(repo, "src/big.ts", "huge", 450);
-    // 版本一致 → 拒绝
-    expect(repo.run(["--update"]).code).toBe(1);
-  });
-
-  test("判据版本变更时允许一次性重记（旧基线与新计数不是同一个量）", ({
-    repo,
-  }) => {
-    writeFunction(repo, "src/a.ts", "fine", 20);
-    repo.run(["--update"]);
-    rewriteBaseline(repo, { ruleVersion: 0 });
-    writeFunction(repo, "src/big.ts", "huge", 450);
-    const { code, output } = repo.run(["--update"]);
-    expect(code).toBe(0);
-    expect(output).toContain("一次性重记");
   });
 });
 
