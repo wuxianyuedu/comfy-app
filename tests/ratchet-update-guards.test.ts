@@ -313,6 +313,13 @@ const COVERED_LOCALLY: Record<string, string> = {
    * 「不许静默降级」），不会凭空写出一份 —— 与表里那些「从零写出基线」的形状不同，
    * 套不进那五步。本地用例实测过「上涨 → 退 2 且台账原样不动」，这里点名的是那条用例。 */
   ".tsc-diagnostic-executors.json": "tests/tsc-diagnostic-executors.test.ts",
+  /* client chunk 体积预算（ISSUE #1781）：它的输入是 `next build` 的产物目录，且
+   * 带「产物不存在就跳过、文件数低于下限就判红」两道边界 —— 套不进表里那条
+   * 「干净沙箱 → `--update` 必须写出基线」的第 ⑤ 步（干净沙箱里没有 `.next`，
+   * 本脚本按设计打「跳过」退 0、**不写基线**）。它的拒涨与「掏空基线应变红」
+   * 由本地用例 `tests/check-bundle-budget.test.ts` 覆盖（造够下限的 chunk 后
+   * 先 --update 落一份基线的等价形态）。 */
+  ".bundle-budget-baseline.json": "tests/check-bundle-budget.test.ts",
 };
 
 /** 待配：判据写了拒涨那一支，但今天没有任何行为用例钉过（**只许减，不许增**）。 */
