@@ -336,12 +336,37 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
    * 而且内层那个 `var()` 自己还带着 `color-mix()`。三段各有各的失效方式，
    * 只验两头等于没验中间。
    *
-   * 样式表由画布组件模块级 import，所以这里必须走 `/workspace`（`/login` 上没有这三条规则）。
+   * 样式表由画布组件模块级 import，所以这里必须走 `/workspace` 并**把画布那一屏开出来**
+   * （`/login` 上没有这三条规则）。
+   *
+   * ⚠️ `f72a55ee`（PR #1786）把 `WorkspaceViewStack` 的所有视图改成 `next/dynamic`：
+   * 画布的 CSS 不再随 `/workspace` 急加载，而是要等那一屏真的被渲染。此前这一条只
+   * `goto("/workspace")` 就取 `document.styleSheets` —— 那句话在 `dynamic()` 化之前
+   * 成立，之后拿到 0 条，报的是它自带的反空转话术「前提没了」（不是构建坏了：规则确实
+   * 在 `.next/static/chunks/*.css` 里，只是进 DOM 的时机变了）。
    */
   test("二次代入：经 --xy-background-pattern-color-props 取到的仍是同一个色", async ({
     page,
   }) => {
     await page.goto("/workspace", { waitUntil: "domcontentloaded" });
+    /* 开画布那一屏 —— 这既是「CSS 进 DOM」的前提，也让它成为一个**真的**用户路径：
+       真实用户看到网格线，正是因为他打开了画布。
+       画布是**项目内页签**（`projectScoped`，见 `NavItems`）：没有活跃项目时
+       `openViewTab` 的 `makeTab` 直接返回 null（点了不吭声），而「＋」菜单里那两项
+       也**不列出来**。所以顺序必须是「先建项目、再开画布」——这也是用户实际走的办法。 */
+    const strip = page.getByRole("tablist", { name: "已打开的视图" });
+    await expect(strip).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: "新建画布项目" }).first().click();
+    /* 落地是**项目主页**（`handleNewProject` 刻意不直接进画布：新项目还没有内容，
+       直接进画布是一张空网）。等它挂上，再经「＋」开画布。 */
+    await expect(page.locator('[data-view="project"]')).toBeVisible({
+      timeout: 30_000,
+    });
+    await strip.getByRole("button", { name: "新页签", exact: true }).click();
+    await page.getByRole("menuitem", { name: "画布", exact: true }).click();
+    await expect(page.locator('[data-view="canvas"]')).toBeVisible({
+      timeout: 30_000,
+    });
 
     /* 反空转：真规则不在场就别往下断言 —— 否则「取到了默认灰」会被读成「token 生效」。 */
     const ruleCount = await page.evaluate(() => {
