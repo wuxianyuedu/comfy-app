@@ -29,7 +29,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolveAppPort } from "./app-port.mjs";
+import { resolveAppPort, resolveRepoRoot } from "./app-port.mjs";
 import { writeAppServiceExit } from "./app-service-exit.mjs";
 import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
@@ -105,7 +105,7 @@ import {
   writeSession,
 } from "./dev-launcher-session.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = resolveRepoRoot();
 
 // 下面这些是「编排用的纯函数」的实现去处（launcher-core/*）：这里**再导出**，
 // 既让测试与其它调用方有一个稳定的门面（编排器就是这套能力的入口），也避免

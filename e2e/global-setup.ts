@@ -43,7 +43,10 @@
  * **不失败在「真件在跑」上**：8188 上有真 ComfyUI 是**正常状态**，不是故障
  * ——本 ISSUE 的取向就是不要求任何人停它（见上）。这里只判替身自己那个口。
  */
-import { resolveAppPort } from "../scripts/app-port.mjs";
+import {
+  resolveAppPort,
+  resolveRepoRoot,
+} from "../scripts/app-port.mjs";
 import {
   E2E_PREFLIGHT_ENV_KEY,
   decodePreflight,
@@ -153,7 +156,7 @@ export default async function globalSetup(): Promise<void> {
   const appPreflight = readAppServerPreflight();
   if (appPreflight?.occupiedBefore && !process.env.CI) {
     throw new Error(
-      describeAppReuseConflict({ port: resolveAppPort(process.cwd()) }),
+      describeAppReuseConflict({ port: resolveAppPort(resolveRepoRoot()) }),
     );
   }
 
