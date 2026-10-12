@@ -1,0 +1,88 @@
+// 2026-10-12 Comfy-APP-T3 架构风险网络（risk-quality-reviewer + graphviz）
+// 读法：三个 cluster = 三条独立的架构边界。方框 [risk] 是发现，虚线边 = 未取证/假设。
+// 置信度标在边标签上；node 类型：actor / entry / capability / store / gate / artifact / risk。
+// 再生成：dot -Tsvg 2026-10-12-architecture-risk-map.dot -o risk-map.svg
+// 审查基线：master @ b4705c3d
+digraph riskmap {
+  rankdir=TB;
+  node [fontname="Segoe UI", fontsize=11, style="rounded,filled", fillcolor="#f7f7f7"];
+  edge [fontname="Segoe UI", fontsize=10];
+
+  /* ── 边界一：网络可达面（本机的信任边界） ───────────────────────── */
+  subgraph cluster_net {
+    label="信任边界：本机回环 vs 局域网/任意网页";
+    style=dashed; color="#c0392b"; fontsize=12;
+
+    dev        [label="开发者\n(pnpm mcp:http)", shape=ellipse, fillcolor="#eaf3fb"];
+    lanpeer    [label="同网段任意主机", shape=ellipse, fillcolor="#fdecea"];
+    webpage    [label="用户浏览器里打开的\n任意站点（通配 CORS 可达）", shape=ellipse, fillcolor="#fdecea"];
+
+    mcpentry   [label="entry: Workshop MCP HTTP\nlisten(PORT) 未固定 host\n实测绑 '::'（所有接口）", fillcolor="#fff3cd"];
+    tools      [label="capability: 17 个 workshop 工具\nsetScript / setCharacters /\nsetStoryboard / deleteSession", fillcolor="#e8f5e9"];
+    spend      [label="capability: generateImage /\nsubmitVideo / composeFinal\n（算力 + 第三方额度）", fillcolor="#e8f5e9"];
+    db         [label="store: db.sqlite\n（工坊草稿/角色卡/分镜）", shape=cylinder, fillcolor="#efebe9"];
+    bindinggap [label="[risk R1-01] P0\n可达面超出回环\n+ 无鉴权", shape=box, style="filled", fillcolor="#f8d7da"];
+    testgap    [label="[risk R1-02] P1\ntools/** 无测试\n且不在任何债务门禁作用域", shape=box, fillcolor="#f8d7da"];
+
+    dev       -> mcpentry  [label="启动 (中置信)"];
+    lanpeer   -> mcpentry  [label="直接 POST /mcp（高置信：绑所有接口）", color="#c0392b"];
+    webpage   -> mcpentry  [label="浏览器跨源 POST（高置信：ACAO:* + OPTIONS 放行）", color="#c0392b"];
+    mcpentry  -> tools     [label="tools/call，无鉴权（高）"];
+    mcpentry  -> spend     [label="tools/call，无鉴权（高）"];
+    tools     -> db        [label="写 / 删（高）", style=bold];
+    spend     -> db        [label="落库任务记录"];
+    spend     -> lanpeer   [label="花费用户额度", style=dotted, color="#c0392b", constraint=false];
+    bindinggap -> mcpentry [label="后果不可逆", style=dashed, color="#c0392b", constraint=false];
+    testgap   -> mcpentry  [label="为何没被发现", style=dashed, color="#6c757d", constraint=false];
+  }
+
+  /* ── 边界二：质量判据的执行者 ─────────────────────────────────── */
+  subgraph cluster_exec {
+    label="判据执行者：只有开发者本机的一次 git commit";
+    style=dashed; color="#1e5b9c"; fontsize=12;
+
+    hook    [label="gate: .githooks/pre-commit\n521 行 / 约 50 条 run\n+ tsc / eslint / 受影响用例", fillcolor="#e7f1fb"];
+    gates68 [label="gate: 68 份判据脚本\n实跑：65 判定型有执行者 ✓", fillcolor="#e7f1fb"];
+    merge   [label="合并点：CNB squash 合并\n不跑本地钩子 / 无 CI", fillcolor="#f8d7da"];
+    masterb [label="artifact: master 基线\n（硬闸违规可直接落此）", shape=folder];
+    compens [label="gate: 补偿型元判据 3,993 行\nbase-check 1381 / commit-claims 715 /\nknown-failed-stale 410 / premerge 406 …", fillcolor="#fff3cd"];
+    r2      [label="[risk R2-01] P0\n隔离执行者缺席 →\n负载假红 / 不可归因 / 手改清单", shape=box, fillcolor="#f8d7da"];
+
+    hook    -> gates68  [label="唯一调用方（高）"];
+    merge   -> masterb  [label="合并产物，未过任何判据（高）", color="#c0392b", style=bold];
+    masterb -> compens  [label="事后复算 / 记账", style=dashed];
+    compens -> masterb  [label="本身也只在本地跑（高）", style=dashed, color="#1e5b9c"];
+    r2      -> merge    [label="根因", style=dashed, color="#c0392b", constraint=false];
+  }
+
+  /* ── 边界三：判据作用域 vs 出厂载荷 ───────────────────────────── */
+  subgraph cluster_scope {
+    label="判据作用域与出厂链路";
+    style=dashed; color="#5a3d8a"; fontsize=12;
+
+    src       [label="src/** 184,855 行\n7 项结构棘轮 = 0 ✓", fillcolor="#e8f5e9"];
+    infrastat [label="scripts/** 43,142 行 + tools 39 份 .ps1\n最大 4,819 行（判据自身）", fillcolor="#fff3cd"];
+    r3        [label="[risk R3-01] P1\nR5/函数长度/孪生/非空断言\n作用域只有 src", shape=box, fillcolor="#f8d7da"];
+    r4        [label="[risk R4-01] P1\ncoverage include ⇄ thresholds\n两处手改（曾静默失效）", shape=box, fillcolor="#f8d7da"];
+    r5        [label="[risk R5-01] P1\n数 static 的判据跑在装配之前", shape=box, fillcolor="#f8d7da"];
+
+    standalone [label="artifact: .next/standalone", shape=folder];
+    staticdir  [label="artifact: src-tauri/static\n（真正内嵌进 exe 的那层）", shape=folder, fillcolor="#fff3cd"];
+    exe        [label="artifact: app.exe / 安装包", shape=folder];
+    privatein  [label="store: .env / db.sqlite / data/ / log/\n（开发机私有输入）", shape=cylinder, fillcolor="#efebe9"];
+    strip      [label="gate: standalone-private-inputs（剥）\n+ check-standalone-contents（数）", fillcolor="#e7f1fb"];
+
+    gates68 -> src       [label="棘轮判据覆盖（高）", style=bold];
+    gates68 -> infrastat [label="几乎不覆盖（高）", style=dashed, color="#5a3d8a"];
+    r3      -> infrastat [label="盲区", style=dashed, color="#c0392b", constraint=false];
+    privatein -> strip   [label="默认拒绝白名单（高）"];
+    strip   -> standalone [label="build 收尾：剥 + 数（高）"];
+    standalone -> staticdir [label="build-desktop 整树解引用拷贝 + 剪枝（高）"];
+    staticdir -> exe        [label="编译期内嵌（高）", style=bold];
+    strip -> staticdir [label="本轮装配无人再数第二眼（中-高）", color="#c0392b"];
+    r5 -> staticdir [label="出厂那一次的缺口", style=dashed, color="#c0392b", constraint=false];
+  }
+
+  /* 跨边界：可达面与执行者的共同根 —— 判据作用域之外的事没人记账 */
+  testgap -> r3 [label="同一个作用域缺口", style=dashed, color="#6c757d"];
+}

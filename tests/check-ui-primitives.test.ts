@@ -5942,3 +5942,63 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("── SURFACE（");
   });
 });
+
+/**
+ * `--staged` 的输入面跳过（ISSUE #1747）。
+ *
+ * 扫描面由 `SCAN_DIRS` 现算（五条根全在 `src/` 下）。两个方向都要钉住：
+ * 不在扫描根下 ⇒ 跳过；落在扫描根下 ⇒ **照旧真扫**（跳过不是让判据松掉的后门）。
+ *
+ * 为什么不能只看退出码：「跳过」与「扫过之后 0 处违规」同为 0，一条把 `--staged`
+ * 实现成「永远跳过」的改动能全绿通过 —— 正是门禁静默失效的形态（§11.23）。
+ * 所以断言里要看见「未触及扫描面」/ 违规被点名，而不是只断言退出码。
+ */
+describe("UI 基元复用棘轮 --staged 输入面跳过（ISSUE #1747）", () => {
+  /* 这一组要真 git（`--staged` 读的是暂存区），所以单独搭一个带 `git init` 的工作区。 */
+  const { test: gitTest, expect: gitExpect } = defineGateRepo({
+    script: "check-ui-primitives.cjs",
+    dirs: ["src/components/studio", "src/app", "src/lib"],
+    workdir: "ui-primitives-staged",
+    setup: (repo) => {
+      repo.git("init", "-q");
+      repo.git("config", "user.email", "t@local");
+      repo.git("config", "user.name", "t");
+      repo.git("config", "commit.gpgsign", "false");
+    },
+  });
+
+  gitTest("暂存文件全在扫描根下 → 真扫（违规照旧阻断）", ({ repo }) => {
+    const { code } = repo.run(["--update"]);
+    gitExpect(code).toBe(0);
+    repo.write(
+      "src/components/studio/Probe.tsx",
+      "export function V() {\n  return <button type=\"button\">x</button>;\n}\n",
+    );
+    repo.git("add", "src/components/studio/Probe.tsx");
+    const r = repo.run(["--staged"]);
+    gitExpect(r.output).not.toContain("未触及扫描面");
+    gitExpect(r.code).toBe(1);
+  });
+
+  gitTest("暂存文件全在扫描根之外 → 跳过", ({ repo }) => {
+    const { code } = repo.run(["--update"]);
+    gitExpect(code).toBe(0);
+    repo.git("add", "-A");
+    repo.git("commit", "-m", "baseline");
+    repo.write("scripts/probe.cjs", "module.exports = 1\n");
+    repo.git("add", "scripts/probe.cjs");
+    const r = repo.run(["--staged"]);
+    gitExpect(r.code).toBe(0);
+    gitExpect(r.output).toContain("未触及扫描面");
+  });
+
+  gitTest("无暂存改动 → 跳过", ({ repo }) => {
+    const { code } = repo.run(["--update"]);
+    gitExpect(code).toBe(0);
+    repo.git("add", "-A");
+    repo.git("commit", "-m", "baseline");
+    const r = repo.run(["--staged"]);
+    gitExpect(r.code).toBe(0);
+    gitExpect(r.output).toContain("未触及扫描面");
+  });
+});

@@ -80,6 +80,16 @@
         "gate": "premerge"
       },
       "executor": "人合并前敲一次 `pnpm check:premerge`（或在 PR 里 @ 评审 NPC 唤起一轮，§13.5.4 按需召唤那一层；不敲就不跑）"
+    },
+    {
+      "id": "bundle-budget",
+      "name": "bundle 体积预算（client chunk gzip 总量 + 文件数棘轮）",
+      "notInHook": "测量对象是 next build 的产物（.next/static/chunks），判据在一次构建之后才有结论，而构建是半分钟级（实测 26–33s）—— 塞进每一次「完整验证」是拿半分钟换一个不会天天变的结论（成本判据同 §13.5.4）",
+      "fact": {
+        "kind": "gate-not-in-all",
+        "gate": "bundleBudget"
+      },
+      "executor": "按需召唤（`pnpm check:bundle` / `pnpm check:all --mode bundleBudget`）+ 棘轮（scripts/.bundle-budget-baseline.json 的判定档）；同一脚本也挂在 `pnpm build` 收尾（形态 C 兜底）"
     }
   ]
 }
