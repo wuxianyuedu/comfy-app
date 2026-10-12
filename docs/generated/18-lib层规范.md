@@ -582,8 +582,8 @@ Error: `headers` was called outside a request scope.
 
 **样板价值**：本域是「**新增子域的完整动作**」的一次可抄实例 ——
 `DOMAINS` 登记 + `vitest.config.ts` 实测门槛 + 消费点迁移 + 旧域死豁免清理
-（`check-inline-style.cjs` 里指向旧路径的豁免、`.non-null-assertions-baseline.json`
-里那条 24 项的记录）**同一批**做完。任何一个漏掉都会变成「判据挂在没人管的地方」。
+（`check-inline-style.cjs` 里指向旧路径的豁免、某条棘轮基线里那份 24 项的文件记录）
+**同一批**做完。任何一个漏掉都会变成「判据挂在没人管的地方」。
 
 ## 18.12 速查
 
@@ -610,7 +610,7 @@ Error: `headers` was called outside a request scope.
   `DOMAINS` 登记（R14，未登记即阻断）；② 在 `vitest.config.ts` 的 `thresholds` 里按**实测值**
   设门槛（18.6）。只做②会让门槛挂在一个「判据不认识」的目录上、只做①会让新域零门槛。
   **迁走模块时第三件事**：清掉指向旧路径的**死豁免与基线条目**（`check-inline-style.cjs`
-  的 `EXEMPT`、`.non-null-assertions-baseline.json` 等）—— 一个指向不存在路径的豁免不是
+  的 `EXEMPT`、各判据的基线 JSON 等）—— 一个指向不存在路径的豁免不是
   豁免，是「下一个人往这个路径写东西时被静默放行」。完整实例见 §18.15。
 - 模块该放哪个域：根目录只收**顶层单例**（唯一持有者 + 任何域消费，登记在 `DOMAIN_EXEMPT`），
   其余一律进子域；叶子域**平铺**，不许再套 `admin/` `other/` `shared/` 这类杂物层（18.14）。

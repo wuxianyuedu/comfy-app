@@ -23,8 +23,12 @@ export interface SizeRatioPreset {
   ratio: number;
 }
 
-/** 比例预设（8 档）。宽高两侧都列出，避免用户手算倒数比例。 */
-export const SIZE_RATIO_PRESETS: SizeRatioPreset[] = [
+/** 比例预设（8 档）。宽高两侧都列出，避免用户手算倒数比例。
+ *
+ *  类型是**非空数组**（`[T, ...T[]]`）：首项即默认档，各处「`find` 没命中就
+ *  回退首档」的写法靠它直接拿到 `T`，不必再补 `as T` / `!`
+ *  （`noUncheckedIndexedAccess` 下普通 `T[]` 的 `[0]` 恒为 `T | undefined`）。 */
+export const SIZE_RATIO_PRESETS: [SizeRatioPreset, ...SizeRatioPreset[]] = [
   { label: "1:1 正方", ratio: 1 },
   { label: "4:3", ratio: 4 / 3 },
   { label: "3:2", ratio: 3 / 2 },
@@ -192,7 +196,7 @@ export function nearestRatioPreset(ratio: number): SizeRatioPreset {
       Math.abs(preset.ratio - target) < Math.abs(best.ratio - target)
         ? preset
         : best,
-    SIZE_RATIO_PRESETS[0]!,
+    SIZE_RATIO_PRESETS[0],
   );
 }
 
@@ -271,9 +275,12 @@ export function megapixelsForSize(
 
 /** 宽高 → 能把两侧都整除的最大候选倍数；都除不尽时退到最小档 8。 */
 export function alignMultipleOf(size: SizeDims): AlignMultiple {
+  /* 从大到小试：`at()` 越界即 `undefined`，与循环下界是同一个判据。 */
   for (let i = ALIGN_MULTIPLE_OPTIONS.length - 1; i >= 0; i -= 1) {
-    const m = ALIGN_MULTIPLE_OPTIONS[i]!;
-    if (size.width % m === 0 && size.height % m === 0) return m;
+    const m = ALIGN_MULTIPLE_OPTIONS.at(i);
+    if (m !== undefined && size.width % m === 0 && size.height % m === 0) {
+      return m;
+    }
   }
   return ALIGN_MULTIPLE_OPTIONS[0];
 }
@@ -356,18 +363,26 @@ export interface SizeClarityPreset {
   megapixels?: number;
 }
 
-export const SIZE_CLARITY_PRESETS: SizeClarityPreset[] = [
-  ...RESOLUTION_TIERS.map((tier) => ({
-    kind: "resolution" as const,
-    label: tier,
-    tier,
-  })),
-  ...MEGAPIXEL_TIERS.map((tier) => ({
-    kind: "megapixel" as const,
-    label: `${tier}M`,
-    megapixels: tier,
-  })),
-];
+/** 清晰度档位目录。类型是非空数组，同 {@link SIZE_RATIO_PRESETS}
+ *  ——首项即默认档，调用点不必再补 `!`。 */
+export const SIZE_CLARITY_PRESETS: [SizeClarityPreset, ...SizeClarityPreset[]] =
+  [
+    {
+      kind: "resolution",
+      label: RESOLUTION_TIERS[0],
+      tier: RESOLUTION_TIERS[0],
+    },
+    ...RESOLUTION_TIERS.slice(1).map((tier) => ({
+      kind: "resolution" as const,
+      label: tier,
+      tier,
+    })),
+    ...MEGAPIXEL_TIERS.map((tier) => ({
+      kind: "megapixel" as const,
+      label: `${tier}M`,
+      megapixels: tier,
+    })),
+  ];
 
 /** 两个子类在界面上的显示名（分组标题用同一份，避免两处漂移）。 */
 export const CLARITY_SUBGROUP_LABELS: Record<ClarityKind, string> = {
@@ -416,7 +431,7 @@ export function clarityPresetOfLabel(label: string): SizeClarityPreset {
   if (known) return known;
   const free = parseMegapixelLabel(label);
   return free === null
-    ? SIZE_CLARITY_PRESETS[0]!
+    ? SIZE_CLARITY_PRESETS[0]
     : { kind: "megapixel", label, megapixels: free };
 }
 
@@ -621,7 +636,7 @@ export function clarityLabelOfDims(
 ): string {
   if (!(width > 0) || !(height > 0)) return DEFAULT_SIZE_SPEC.clarity;
   const ratio = width / height;
-  let best = SIZE_CLARITY_PRESETS[0]!;
+  let best = SIZE_CLARITY_PRESETS[0];
   let bestDist = Number.POSITIVE_INFINITY;
   for (const preset of SIZE_CLARITY_PRESETS) {
     const dims = preset.tier

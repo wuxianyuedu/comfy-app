@@ -216,6 +216,10 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           <div className="grid grid-cols-2 gap-2 px-1 pt-1">
             {tasks.map((task) => {
               const pill = STATUS_PILL[task.status];
+              /* `task.cover` 收成局部变量：闭包（onClick）里 TS 不再保留
+               * 外层 `task.cover && …` 的收窄，在原地补 `!` 等于把「上面判过」
+               * 这件事写成注释。 */
+              const cover = task.cover;
               return (
                 <div
                   key={task.id}
@@ -252,7 +256,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   <p className="text-ink-soft text-2xs truncate px-2 py-1.5">
                     {titleOf(task)}
                   </p>
-                  {onUse && task.cover && (
+                  {onUse && cover && (
                     <Hint label="加入画布" accessibleName>
                       <Button
                         variant="ghost"
@@ -260,7 +264,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         onClick={() =>
                           onUse({
                             id: task.id,
-                            cover: task.cover!,
+                            cover,
                             mediaType: task.mediaType,
                           })
                         }
@@ -283,6 +287,8 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           <div className="flex flex-col gap-0.5">
             {tasks.map((task) => {
               const pill = STATUS_PILL[task.status];
+              /* 同上方那份列表：闭包里不保留外层收窄，先收成局部变量。 */
+              const cover = task.cover;
               return (
                 <div
                   key={task.id}
@@ -338,7 +344,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   </div>
 
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">
-                    {onUse && task.cover && (
+                    {onUse && cover && (
                       <Hint label="加入画布" accessibleName>
                         <Button
                           variant="ghost"
@@ -346,7 +352,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                           onClick={() =>
                             onUse({
                               id: task.id,
-                              cover: task.cover!,
+                              cover,
                               mediaType: task.mediaType,
                             })
                           }

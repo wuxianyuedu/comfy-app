@@ -5,7 +5,7 @@ import { ProgressBar } from "~/components/ui/progress-bar";
 import { clampPct } from "~/lib/progress";
 
 import type { TaskItem } from "./history-types";
-import { STATUS_STYLE, timeAgo } from "./history-utils";
+import { QUEUED_STATUS_STYLE, STATUS_STYLE, timeAgo } from "./history-utils";
 
 interface HistoryTaskCardProps {
   task: TaskItem;
@@ -29,7 +29,7 @@ export function HistoryTaskCard({
   onRetry,
   onRemove,
 }: HistoryTaskCardProps) {
-  const st = (STATUS_STYLE[task.status] ?? STATUS_STYLE.QUEUED)!;
+  const st = STATUS_STYLE[task.status] ?? QUEUED_STATUS_STYLE;
   return (
     <div
       key={task.id}

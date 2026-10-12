@@ -188,13 +188,14 @@ export function useStoryboardPlanner(props: Props) {
       /* 「逐幕拆镜」这一整段套进忙碌位出口：复位绑在 finally 上，
        * 于是中途抛错（模型报错 / 解析失败）不会把「拆镜中」永远留在界面上。 */
       await ai.run(async () => {
-        for (let i = 0; i < scenes.length; i++) {
-          const scene = scenes[i];
+        /* 用 `entries()` 同时拿下标与元素：写 `scenes[i]` 就得多一次 `!`
+         * 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉。 */
+        for (const [i, scene] of scenes.entries()) {
           setAiProgress(
-            `正在拆镜 ${i + 1}/${scenes.length} · ${scene!.heading}`,
+            `正在拆镜 ${i + 1}/${scenes.length} · ${scene.heading}`,
           );
           const full = await streamChat({
-            messages: buildStoryboardMessages(scene!, charNames),
+            messages: buildStoryboardMessages(scene, charNames),
             /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
           });
           const raws = parseStoryboard(full);
@@ -209,8 +210,8 @@ export function useStoryboardPlanner(props: Props) {
             const shot: Shot = {
               id: workshopUid("shot"),
               index: n,
-              sceneId: scene!.id,
-              sceneHeading: scene!.heading,
+              sceneId: scene.id,
+              sceneHeading: scene.heading,
               shotType: raw.shotType,
               description: raw.description,
               characterIds: charIds,

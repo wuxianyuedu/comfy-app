@@ -143,16 +143,6 @@ const RATCHETS: Ratchet[] = [
       ),
   },
   {
-    script: "check-non-null-assertions.cjs",
-    baseline: "scripts/.non-null-assertions-baseline.json",
-    fixture: { dirs: ["src"], env: AST_ENV },
-    violate: (repo, n) =>
-      repo.write(
-        `src/nn${n}.ts`,
-        `export function nn${n}(x?: string): string {\n  return x!;\n}\n`,
-      ),
-  },
-  {
     script: "check-void-floats.cjs",
     baseline: "scripts/.void-floats-baseline.json",
     fixture: { dirs: ["src/lib"], env: AST_ENV },

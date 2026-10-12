@@ -115,8 +115,8 @@ export interface ParamEntry {
  *  放在本模块（而不是一个更上层的模块）是因为 `buildParamEntries` 派生宿主节点
  *  id 时也要用它，反向依赖会成环。 */
 export function nodeIdOfIoKey(ioKey: string): string {
-  const parts = ioKey.split("::");
-  return parts.length >= 2 ? parts[0]! : ioKey;
+  const [head, ...rest] = ioKey.split("::");
+  return rest.length >= 1 && head !== undefined ? head : ioKey;
 }
 
 /** 分类默认名（作者未改名时用来填充「对外参数名」列）。

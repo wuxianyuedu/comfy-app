@@ -98,8 +98,8 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
   });
 
   it("有判据红时**继续跑完其余各条**，并逐条点名 + 给复验命令（不被第一处失败打死）", () => {
-    /* 复用「单条红线」这一档：`check-non-null-assertions` 有一份基线，往真仓库的
-     * `src/` 里塞一个越界探针会让它红 —— 但改真仓库不是用例该做的事。
+    /* 复用「单条红线」这一档：往真仓库的 `src/` 里塞一个越界探针会让
+     * `check-non-null-assertions`（存量已清零的硬闸）红 —— 但改真仓库不是用例该做的事。
      * 所以这条**只读源码**钉结构：判定区必须先跑完再汇总（不是 for 里 break），
      * 且汇总里要有「逐条复验」这一节。行为侧由下一条（`--staged`）与钩子接线覆盖。 */
     const src = readFileSync(AGG, "utf8");
@@ -158,6 +158,10 @@ function runInScratchGit(rel: string[]) {
   git("init");
   git("config", "user.email", "t@t.t");
   git("config", "user.name", "t");
+  /* 宿主可能全局开着 `commit.gpgsign` 而没有可用密钥 —— 夹具不许假定读者的
+   * git 配置（台账 R12-01 / ISSUE #1817），就地关掉签名。 */
+  git("config", "commit.gpgsign", "false");
+  git("config", "tag.gpgsign", "false");
   for (const r of rel) {
     const abs = join(dir, r);
     mkdirSync(join(abs, ".."), { recursive: true });

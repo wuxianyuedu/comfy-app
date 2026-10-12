@@ -328,8 +328,13 @@ export interface AttributeOptionSet {
   groups: OptionGroup[];
 }
 
+/* 标成**非空数组**：调用方（`CharacterDesigner.attrSet`）把首项当作
+ * 「id 对不上时」的兜底维度，类型上直接是元素而非 `| undefined`。 */
 /** 组件下拉维度配置：顺序即展示顺序 */
-export const CHARACTER_ATTRIBUTES: AttributeOptionSet[] = [
+export const CHARACTER_ATTRIBUTES: [
+  AttributeOptionSet,
+  ...AttributeOptionSet[],
+] = [
   { id: "costume", label: "服装", groups: COSTUME_OPTIONS },
   { id: "appearance", label: "外貌特征", groups: APPEARANCE_OPTIONS },
   { id: "personality", label: "性格", groups: PERSONALITY_OPTIONS },

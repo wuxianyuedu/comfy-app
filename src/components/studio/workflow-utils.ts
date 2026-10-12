@@ -6,6 +6,7 @@ import { trimFixed } from "~/lib/number-format";
 import { asRecord } from "~/lib/is-record";
 import { TITLE_MAX, clampText } from "~/lib/text-clamp";
 import { edgeType, portColor, edgeTypeByInputName } from "~/lib/comfyui/types";
+import { linkTargetId } from "~/lib/comfyui/workflow";
 import type { Node, Edge } from "@xyflow/react";
 import type {
   ComfyGraphNode,
@@ -402,16 +403,13 @@ export function computeKahnLayout(
     const inputs = asRecord(asRecord(raw)?.inputs);
     if (!inputs) continue;
     for (const value of Object.values(inputs)) {
-      if (
-        Array.isArray(value) &&
-        value.length >= 1 &&
-        typeof value[0] === "string" &&
-        outAdj[value[0]] &&
-        incoming[id]
-      ) {
-        incoming[id].add(value[0]);
-        outAdj[value[0]]!.add(id);
-      }
+      const srcId = linkTargetId(value);
+      if (!srcId) continue;
+      const ownIncoming = incoming[id];
+      const srcOut = outAdj[srcId];
+      if (!ownIncoming || !srcOut) continue;
+      ownIncoming.add(srcId);
+      srcOut.add(id);
     }
   }
   const remaining = new Map(
@@ -424,10 +422,12 @@ export function computeKahnLayout(
       queue.push(id);
     }
   }
-  while (queue.length) {
-    const id = queue.shift()!;
-    for (const nxt of outAdj[id]!) {
-      level[nxt] = Math.max(level[nxt] ?? 0, (level[id] ?? 0) + 1);
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (id === undefined) break;
+    const ownLevel = level[id] ?? 0;
+    for (const nxt of outAdj[id] ?? []) {
+      level[nxt] = Math.max(level[nxt] ?? 0, ownLevel + 1);
       remaining.set(nxt, (remaining.get(nxt) ?? 0) - 1);
       if ((remaining.get(nxt) ?? 0) === 0) queue.push(nxt);
     }
@@ -508,11 +508,15 @@ export function buildEdges(
        * 这类边回落到每个节点都挂的通用 "out" handle。 */
       let outName: string | null = null;
       if (staticNames.length > 0 || rawOuts.length > 0) {
-        if (slotNames && srcSlot < slotNames.length)
-          outName = slotNames[srcSlot]!;
-        else if (srcSlot < staticNames.length) outName = staticNames[srcSlot]!;
-        else if (srcSlot < rawOuts.length)
-          outName = rawOuts[srcSlot]!.name ?? null;
+        /* `.at()` 越界即 `undefined`，不必先写 `srcSlot < arr.length` 再靠 `!`
+         * 把 `undefined` 从类型里抹掉 —— 判据与取值合成一处。 */
+        if (slotNames && srcSlot < slotNames.length) {
+          outName = slotNames.at(srcSlot) ?? null;
+        } else if (srcSlot < staticNames.length) {
+          outName = staticNames.at(srcSlot) ?? null;
+        } else if (srcSlot < rawOuts.length) {
+          outName = rawOuts.at(srcSlot)?.name ?? null;
+        }
       }
       edges.push({
         id: `e-${srcId}-${nodeId}-${inputName}-${i++}`,
@@ -659,10 +663,9 @@ export function buildConnectedOutputs(
       let name: string | null = null;
       if (slotNames && slot < slotNames.length) {
         name = slotNames[slot] ?? null;
-      } else if (slot < staticOuts.length) {
-        name = staticOuts[slot]!;
-      } else if (slot < rawOuts.length) {
-        name = rawOuts[slot]!.name;
+      } else {
+        /* `at()` 越界即 `undefined`，与上面的 `slot < length` 是同一判据。 */
+        name = staticOuts.at(slot) ?? rawOuts.at(slot)?.name ?? null;
       }
       if (!name) continue;
       map[srcId] ??= new Set();

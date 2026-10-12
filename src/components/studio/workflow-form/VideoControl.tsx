@@ -4,6 +4,7 @@
  * 预设浮层之间切换；所选范式按工作流持久化。 */
 import { useState } from "react";
 import {
+  DEFAULT_DIM_RATIO_PRESET,
   DIM_RATIO_PRESETS,
   type EnrichedWidget,
   type VideoGroup,
@@ -20,6 +21,8 @@ import {
   type GroupStyle,
 } from "./StyleSwitcher";
 import {
+  DEFAULT_VIDEO_DURATION_PRESET,
+  DEFAULT_VIDEO_QUALITY_PRESET,
   VIDEO_DURATION_PRESETS,
   VIDEO_QUALITY_PRESETS,
   videoDurationLabel,
@@ -100,7 +103,9 @@ function VideoControl({
     const cur = values[entry.ioKey];
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;
-      const value = Number(cur ?? entry.defaultValue ?? presets[0]!.value);
+      const value = Number(
+        cur ?? entry.defaultValue ?? DEFAULT_VIDEO_DURATION_PRESET.value,
+      );
       return {
         label: "时长",
         value: videoDurationLabel(value),
@@ -116,7 +121,9 @@ function VideoControl({
     }
     if (role === "quality") {
       const presets = VIDEO_QUALITY_PRESETS;
-      const value = Number(cur ?? entry.defaultValue ?? presets[0]!.value);
+      const value = Number(
+        cur ?? entry.defaultValue ?? DEFAULT_VIDEO_QUALITY_PRESET.value,
+      );
       return {
         label: "画质",
         value: videoQualityLabel(value),
@@ -139,7 +146,9 @@ function VideoControl({
     ) {
       const opts = entry.options;
       const val =
-        typeof cur === "string" && opts.includes(cur) ? cur : opts[0]!;
+        typeof cur === "string" && opts.includes(cur)
+          ? cur
+          : (opts.at(0) ?? "");
       return {
         label: "比例",
         value: val,
@@ -148,7 +157,9 @@ function VideoControl({
       };
     }
     const presets = DIM_RATIO_PRESETS;
-    const value = Number(cur ?? entry.defaultValue ?? presets[0]!.ratio);
+    const value = Number(
+      cur ?? entry.defaultValue ?? DEFAULT_DIM_RATIO_PRESET.ratio,
+    );
     return {
       label: "比例",
       value: videoAspectLabel(value),

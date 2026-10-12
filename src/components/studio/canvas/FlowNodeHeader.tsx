@@ -116,7 +116,7 @@ export function FlowNodeHeader({
             {
               nodeId: data.nodeId,
               hostNodeId: data.hostNodeId,
-              name: outputs[0]![0],
+              name: outputs.at(0)?.[0] ?? "",
               kind: "output",
               direction: "output",
             } satisfies IoRef

@@ -9,6 +9,7 @@ import { filmProject, filmShot, type FilmProject } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { tailWindow } from "~/lib/page-window";
 import { eq, and, desc, asc, inArray, isNotNull, count } from "drizzle-orm";
+import { firstRowRequired } from "./repository-row";
 
 /** 单个成片任务的日志行数上限：`logs` 是 JSON 列，每打一条日志都要把整个
  *  数组读出来、再整列写回去 —— 无上限时这条路的成本随日志条数线性变贵
@@ -109,7 +110,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
         status: "PARSING",
       })
       .returning();
-    return rows[0]!;
+    return firstRowRequired(rows, "切片项目插入");
   }
 
   async appendLog(

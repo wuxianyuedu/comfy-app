@@ -109,6 +109,10 @@ const { test, expect } = defineGateRepo({
     repo.git("init", "-q", "-b", "master", ".");
     repo.git("config", "user.email", "gate@example.com");
     repo.git("config", "user.name", "gate");
+    /* 宿主可能全局开着 `commit.gpgsign` 而没有可用密钥 —— 夹具不许假定读者的
+     * git 配置（台账 R12-01 / ISSUE #1817），就地关掉签名。 */
+    repo.git("config", "commit.gpgsign", "false");
+    repo.git("config", "tag.gpgsign", "false");
     // ① 分叉点提交：本地分支从**旧的依赖**这里分出来（= 用户当初 clone 到的样子）。
     repo.write("package.json", PKG_STALE);
     repo.write("pnpm-lock.yaml", LOCK_STALE);

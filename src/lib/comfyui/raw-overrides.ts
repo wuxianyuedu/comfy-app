@@ -105,8 +105,8 @@ function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
   const defsByUid = subgraphDefs(raw);
   let currentNodes: unknown = raw.nodes;
   let node: RawUiNode | null = null;
-  for (let i = 0; i < segments.length; i++) {
-    node = findInNodes(currentNodes, segments[i]!);
+  for (const [i, segment] of segments.entries()) {
+    node = findInNodes(currentNodes, segment);
     if (!node) return null;
     if (i === segments.length - 1) return node;
     /* 还有下一段 ⇒ 本节点必须是子图 wrapper：用它的 `type`（子图 UUID）定位

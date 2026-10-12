@@ -29,15 +29,20 @@ export interface StatusStyle {
  *  §4.11.1 + P71：`--color-destructive` / `--color-success` / `--color-primary`
  *  / `--color-info` 等 token 内部已含浅/深两态，不再写 `dark:` 手写档；这也让
  *  状态色与其他域（log 徽标 / status-badge / alert）同源，改主题一处生效全站。 */
+/* 排队态单独具名：它是「状态键对不上时」的兜底样式，调用点因此可以写
+ * `STATUS_STYLE[x] ?? QUEUED_STATUS_STYLE` 而不必再补 `!`（表是索引签名，
+ * 连 `STATUS_STYLE.QUEUED` 本身也是 `StatusStyle | undefined`）。 */
+export const QUEUED_STATUS_STYLE: StatusStyle = {
+  label: "排队中",
+  pillCls: "bg-info/15 text-info-strong border border-info/30 border-dashed",
+  accentCls: "border-l-info",
+  cardBorderCls: "border-info/30 border-dashed",
+  isActive: true,
+  showProgress: false,
+};
+
 export const STATUS_STYLE: Record<string, StatusStyle> = {
-  QUEUED: {
-    label: "排队中",
-    pillCls: "bg-info/15 text-info-strong border border-info/30 border-dashed",
-    accentCls: "border-l-info",
-    cardBorderCls: "border-info/30 border-dashed",
-    isActive: true,
-    showProgress: false,
-  },
+  QUEUED: QUEUED_STATUS_STYLE,
   RUNNING: {
     label: "生成中",
     pillCls: "bg-primary/20 text-primary-strong",

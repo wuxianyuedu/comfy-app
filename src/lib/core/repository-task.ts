@@ -10,6 +10,7 @@ import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
 import { eq, and, inArray, desc, asc, sql, count } from "drizzle-orm";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
+import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 
 /** 列表卡的行形状：`task.list` 的映射只需要十来个字段，而 `workflowSnapshot`
  *  （整份工作流 JSON）与 `logs`（全量日志）单行就能到数 MB —— take=60 的列表页
@@ -114,7 +115,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
         status: "QUEUED",
       })
       .returning();
-    return rows[0]!;
+    return firstRowRequired(rows, "任务插入");
   }
 
   async listByUser(
@@ -216,7 +217,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
       .set(data)
       .where(eq(task.id, id))
       .returning();
-    return rows[0]!;
+    return firstRowOfExisting(rows, `任务不存在: ${id}`);
   }
 
   async findByIdWithImages(id: string) {
