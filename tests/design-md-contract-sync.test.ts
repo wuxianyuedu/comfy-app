@@ -444,6 +444,27 @@ const SECTION_LABEL_MARKS = [
   /text-muted-foreground text-xs/,
 ];
 
+/**
+ * 节点底部那枚「▶ 用此工作流生成」（全宽渐变 + 跟品牌走的投影）。
+ *
+ * 收它的原因与前面几族不同：这不是「两个屏各抄一份」，而是**同一枚按钮在三处
+ * 各写一套参数** —— 高度一枚写成 43px 的字面量、两枚写 `h-10.75`（同为 43px，但只有后者
+ * 跟着 `--spacing` 走）；投影一枚进 class、一枚进 `style`（进 `style` 的那枚不吃
+ * `color-mix` 的类内转义，改档要改两处）；hover 一档 95 一档 90；variant 一枚 `ghost`
+ * 两枚 `primary-solid`。这些差异每一个都「看着无所谓」，合起来就是四处漂移。
+ *
+ * **只描同一行里的那份基础形状**（`scope: "line"`）：`corner` 那一档分叉刻意不进标记 ——
+ * 它是「卡片裁切不裁切」的宿主差异，唯一出处里带两个形态是设计的一部分，把它写进标记
+ * 等于要求判据去抓一个本来就该分叉的东西。
+ */
+const GENERATE_BUTTON_MARKS = [
+  /from-primary to-accent/,
+  /\bh-10\.75\b/,
+  /bg-linear-to-r/,
+  /text-sm font-bold/,
+  /shadow-\[0_4px_12px_color-mix/,
+];
+
 /** 一族的标记在给定文本里是否算「同一枚形状」。`scope: "line"` 逐行判，其余整段判。
  *  判据与它的负控制共用这一个出口 —— 否则负控制测的是另一套逻辑，红了也证明不了判据。 */
 function familyHits(
@@ -899,6 +920,17 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
         '<h4 className="text-ink text-sm font-semibold">{children}</h4>' +
         '<span className="text-muted-foreground text-xs">{hint}</span>',
     },
+    {
+      /* 节点底部那枚生成按钮：画布功能版、画布视觉稿、库内卡片预览与「实际使用」
+         面板此前各写一份（四组漂移的理由见上面那枚标记的注释）。 */
+      name: "生成按钮（全宽渐变 + 跟品牌走的投影）",
+      owner: "src/components/studio/workflow-form/WorkflowNodeParts.tsx",
+      use: "WorkflowNodeParts 的 WorkflowNodeActionButton",
+      marks: GENERATE_BUTTON_MARKS,
+      scope: "line",
+      sample:
+        'className="from-primary to-accent nodrag nopan flex h-10.75 w-full items-center justify-center gap-2 bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)] hover:opacity-95"',
+    },
   ];
 
   it(`被抽走的 ${FAMILIES.length} 族形状只许有一个出处`, () => {
@@ -1019,6 +1051,13 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       [
         'className="grid size-9 place-items-center rounded-[11px] text-[15px] font-bold"',
         "节点右侧胶囊",
+      ],
+      /* 生成按钮的反向样本：一枚「同样是全宽渐变 CTA」但**不是这一枚**的形状 ——
+         高度走 `h-11`（不跟 `--spacing` 的 43px 那档）、投影没跟品牌走。它被抓到
+         就说明标记写得太松（那会把别的渐变按钮一律要求收进唯一出处）。 */
+      [
+        'className="from-primary to-accent flex h-11 w-full items-center justify-center gap-2 bg-linear-to-r text-sm font-bold text-white hover:opacity-90"',
+        "生成按钮（全宽渐变 + 跟品牌走的投影）",
       ],
       [
         '<div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">' +
