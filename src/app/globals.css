@@ -310,23 +310,14 @@
   --font-mono:
     "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas,
     monospace;
-  /* 标题字阶（唯一档位来源；规范 03 §3.2「魔法值提取到主题」）。
-     `.u-title-page` 早就注明是「页面级标题统一规范」，但全库只有 1 处在用，
-     其余屏级标题在 11 个 h1 上各写一套（18 / 20 / 24 / 34px）——同一个角色在
-     不同屏上大小不一。数值提到这里：改档一处全站跟手，`--text-*` 命名空间
-     顺带生成 text-section / text-page 工具类。 */
-  /* 四档都乘 `--font-scale`：基准留在本文件一处，设置页只改那一个数 ——
-     若在 JS 里重算成绝对值，基准就有两个家，改一处漏一处。
-     倍率默认 1（不设置时与从前逐像素相同）。 */
-  --text-section: calc(
-    0.875rem * var(--font-scale, 1)
-  ); /* 卡片 / 区块标题（.u-title） */
-  --text-page: calc(
-    1.5rem * var(--font-scale, 1)
-  ); /* 屏级标题（.u-title-page —— 每屏唯一的 h1） */
-  --text-stage: calc(
-    1.0625rem * var(--font-scale, 1)
-  ); /* 段级标题（.u-title-stage，工坊六段当前段的标题） */
+  /* 标题字阶三颗（`--text-section` / `--text-page` / `--text-stage`）**刻意不在本块里** ——
+     它们住在下面的 `:root`。理由不是排版偏好：`@theme` 的 `--text-*` 命名空间会**顺带生成
+     工具类**（实测产物里有 `.text-page { font-size: var(--text-page) }` 等三条，零消费者），
+     而这三颗乘 `--font-scale`、只该经 `.u-title-*` 使用；一旦成了 JSX 类名就同时踩两个坑 ——
+     `cn()` 把不认识的 `text-<名字>` 归进**颜色**组吃掉同行状态色，且调用点写的是「一个会随
+     设置页变的字号」。放回 `:root` 之后 Tailwind 不再为它们造 utility，坑从根上消失。
+     判据：`tests/theme-token-single-source.test.ts` 钉「这三颗不得出现在 `@theme` 块内」，
+     P83 也同步不再把 `text-page` 当合规出口（屏级标题只认 `.u-title-page`）。 */
 
   /* 微标签 / 元信息三档（11 / 10 / 9）—— 它们早就是事实标准，只是从没被完整命名：
      实测 11px 350 处、10px 214 处散在 136 个业务文件里（副说明、chip、徽标、
@@ -358,6 +349,31 @@
   --font-title:
     "Sarasa Gothic SC", var(--font-geist-sans), "PingFang SC",
     "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+}
+
+/* 标题字阶三颗 —— 唯一档位来源（规范 03 §3.2「魔法值提取到主题」），
+   但**刻意住在 `:root` 而不是 `@theme`**：`@theme` 会按 `--text-*` 命名空间生成工具类，
+   而这三颗只该经 `.u-title*` 使用（完整理由与判据见上面 `@theme` 里那条指针注释）。
+   `.u-title` / `.u-title-stage` / `.u-title-page` 在下面 `@layer components` 里读它们。
+
+   为什么从前要提到这里：`.u-title-page` 早就注明是「页面级标题统一规范」，可它引入至今
+   只有 1 处消费者；屏级标题实际写在 11 个 `h1` 上，尺寸有 18 / 20 / 24 / 34px 四五种 ——
+   同一个角色在不同屏大小不一，「改一下标题字号」就退化成逐文件点名。
+
+   三颗都乘 `--font-scale`：基准留在本文件一处，设置页只改那一个数 —— 若在 JS 里重算成
+   绝对值，基准就有两个家，改一处漏一处。倍率默认 1（不设置时与从前逐像素相同）。
+   ⚠️ 它们**没有 `.dark` 覆盖**，所以放在裸 `:root` 不撞 03 §3.6.3 那条「浅色档不得用裸
+   `:root`」—— 那条治的是「同名属性两处声明、谁在后面谁生效」；这里只有一处声明。 */
+:root {
+  --text-section: calc(
+    0.875rem * var(--font-scale, 1)
+  ); /* 卡片 / 区块标题（.u-title） */
+  --text-page: calc(
+    1.5rem * var(--font-scale, 1)
+  ); /* 屏级标题（.u-title-page —— 每屏唯一的 h1） */
+  --text-stage: calc(
+    1.0625rem * var(--font-scale, 1)
+  ); /* 段级标题（.u-title-stage，工坊六段当前段的标题） */
 }
 
 /* Dark mode overrides — utilities reference these CSS vars, so they respond to .dark */
