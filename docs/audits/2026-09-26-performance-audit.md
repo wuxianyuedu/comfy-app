@@ -54,6 +54,7 @@
 | F11  | P1   | `src/lib/page-window.ts` + 三处日志窗口                          | 尾部窗口改增量追加（`tailWindowAppend`：满时原地 `shift`+`push`，不再整份复制 + 切片）                 | #1873 |
 | S14a | P1   | `src/lib/comfyui/status.ts:423-457`                              | 在途查询随 `reset` 作废 + 身份比对才回写；在途去重只在非 `force` 档生效                                | #1873 |
 | S13  | P1   | `src/app/(main)/settings/hooks/use-settings-page-comfy.ts`       | `comfyStatus` 改「事件驱动为主、30s 兜底」：新增 `/api/comfy/state` 长轮询推送（五个变化源：启动 / 就绪 / 关闭 / 退出 / 配置写入） | #1874 |
+| F12  | P1   | `src/components/studio/logs/log-analysis.ts`                     | 时间线去重索引跨轮复用（`TimelineIndex` + `mergeTimelineIndexed` / `trimTimelineIndex`）：每轮重建两张全表 Map → 只在形状变化时建；截断改摘键 | #1887 |
 
 ## B. 判定修正与例外（📝）
 
@@ -68,6 +69,7 @@
 | L12b Rust 侧日志逐条 open/write/close      | **有意保留**   | `append_line` 每条开/关文件与 Node 侧同源——**不持有句柄**：残留进程握住日志文件会锁死下次启动的重定向（历史事故）；BufWriter 常驻句柄会重新引入该风险，壳侧日志频率低，成本可接受                               |
 | L13 `Build-Guard.ps1` 500ms + 三轮 CIM     | **有意保留**   | 500ms 是 `taskkill /T /F` 异步生效后的必要复查间隔；三轮 CIM 各对应一个判定点（初始 / 回收后复查 / AutoClose 后复查），正常路径仅首轮 1 次 CIM 即返回 0                                                         |
 | F11 复核（#1873）                          | **成立并已修** | 复核 M9 / F2b 那条链时翻出的：**判重与行组件**当时都修了，而 `setLogs` 的窗口写法本身（每行「整份复制 + 整份切片」两遍 O(上限)）没被一起看。窗口 2000、连打 6 万行实测 113ms → 4ms（28×），堆峰值 ~9MB → ~0.5MB |
+| F12 复核（#1869）                          | **成立并已修** | 沿 F11 / M9 那条链往下翻到的「另一半」：**M9 修的是判重扫满窗口（O(n²) 那一半），F11 修的是窗口写法（复制那一半）**，而 `mergeTimeline` 每轮为判「这一两行是不是新的」建的两张全表 Map 没被一起看——5000 条上限下实测占整次合并的 **97%**（2.27ms / 2.34ms，排序只占 0.11ms）。store 路径单轮 5.127ms → 3.046ms（1.68×）。**刻意没动**：`computeCounts` / `computeFiltered` 等派生计算（那是 ISSUE #1782 已收口的面，不属本条），以及时间线无上限这条既有设计 |
 
 ## C. 待整改（⬜）
 
