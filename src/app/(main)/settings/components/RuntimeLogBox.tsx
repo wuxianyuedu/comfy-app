@@ -283,7 +283,7 @@ function LogHint({ log }: { log: RuntimeLogController }) {
   }
   if (parts.length === 0) return null;
   return (
-    <p className="text-ink-fainter px-3 pb-2 text-[10.5px] leading-relaxed">
+    <p className="text-ink-fainter text-2xs px-3 pb-2 leading-relaxed">
       {parts.join("")}
     </p>
   );

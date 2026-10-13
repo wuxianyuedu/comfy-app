@@ -29,7 +29,13 @@
  *   2. **实测幂等 + 跨路径一致**：同源两次重生成逐字节相同；在另一个路径的 worktree 里
  *      重生成与仓库内结果逐字节相同（产物不含绝对路径 / 生成时间戳）。这是「比对」这个
  *      做法成立的前提 —— 判据会自己先验证一遍（见 `verifyDeterminism`）。
- *   3. **触发面 = typedoc 的输入面**：`src/lib/**` / `src/server/**` / `src/trpc/**`
+ *   3. **重生成这一步按产物判，不按 typedoc 的退出码判**（`scripts/typedoc-run.mjs`，
+ *      `pnpm run docs` 与 `pnpm docs:check` 共用同一份）：typedoc 写出失败时照样
+ *      退 0、日志照样收在 `[info] html generated at …` 上，而落到本判据里的形状是
+ *      「重生成的临时目录是空的」→ 把仓库里的产物**全报成多余**（源已不再产出），
+ *      照那条提示去修就是把 `docs/api` 删掉。现在「退出 0 但没写」= 失败并重试，
+ *      全失败就在这里停下，不拿空目录去做比对。
+ *   4. **触发面 = typedoc 的输入面**：`src/lib/**` / `src/server/**` / `src/trpc/**`
  *      （`typedoc.json` 的 `entryPoints` 三条 glob）+ `typedoc.json` 本身 + 依赖声明
  *      （`package.json` / `pnpm-lock.yaml`，typedoc 与 TS 版本会改变产物形态）。
  *      这**不是启发式收窄**，是「产物只由这些输入决定」的直接映射：输入没变，产物
@@ -110,32 +116,20 @@ function walk(dir) {
 
 /**
  * 跑一次 typedoc 输出到指定目录。
+ *
+ * 实现在 `scripts/typedoc-run.mjs`（与 `pnpm run docs` 同一份）：那里验的是产物
+ * （`index.html` 的 mtime 是不是这一轮写的）、失败会重试、全失败才给 `ok:false`。
+ * 本判据不再自己 `spawn` typedoc —— 自己起一份就等于把「退出码不可信」这个坑
+ * 再挖一遍（见过「退出 0 + 日志写 html generated + 产物一个没更新」）。
+ *
  * @param {string} outDir 绝对路径
- * @returns {{ok: boolean, log: string}} 是否成功 + 末段日志（失败时给修法线索）
+ * @returns {Promise<{ok: boolean, reason: string, log: string}>}
  */
-function runTypedoc(outDir) {
-  // 走本地 bin 而不是 `pnpm exec`：`pnpm` 在某些环境要经 corepack 解析，
-  // 而这里只需要一个已安装的 typedoc，多一层进程只增加失败面（诊断见规范 §2.1）。
-  const bin = path.join(
-    ROOT,
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "typedoc.cmd" : "typedoc"
-  );
-  if (!fs.existsSync(bin)) {
-    return {
-      ok: false,
-      log: `找不到本地 typedoc（${path.relative(ROOT, bin)}）—— 先 pnpm install。`,
-    };
-  }
-  const res = spawnSync(bin, ["--out", outDir], {
-    cwd: ROOT,
-    encoding: "utf8",
-    shell: process.platform === "win32",
-    env: { ...process.env, FORCE_COLOR: "0" },
-  });
-  const log = `${res.stdout || ""}${res.stderr || ""}`.trim();
-  return { ok: res.status === 0, log: log.split(/\r?\n/).slice(-6).join("\n") };
+async function runTypedoc(outDir) {
+  // CJS 里取 ESM 只能动态 import：跨平台逻辑一律 ESM（规范 §9.5），而本文件是被
+  // `require` 的 .cjs（钩子与 `tests/check-docs-api.test.ts` 都按 CJS 引它）。
+  const { runTypedoc: run } = await import("./typedoc-run.mjs");
+  return run({ root: ROOT, outDir });
 }
 
 /**
@@ -159,10 +153,15 @@ function compare(generatedDir, currentDir = OUT_ABS) {
     // 比内容不比行尾：CRLF 检出不该让这条判据报两千处假红（行尾由 .gitattributes
     // 的 eol=lf 与 §13.7 负责，与本判据问的「内容是否一致」不是同一件事）。
     // 与 render-doc-placeholders --check 同口径（先归一换行再比）。
-    if (normalizeEol(readText(abs)) !== normalizeEol(readText(cur))) drifted.push(rel);
+    if (normalizeEol(readText(abs)) !== normalizeEol(readText(cur)))
+      drifted.push(rel);
   }
   for (const rel of got.keys()) if (!want.has(rel)) extra.push(rel);
-  return { drifted: drifted.sort(), missing: missing.sort(), extra: extra.sort() };
+  return {
+    drifted: drifted.sort(),
+    missing: missing.sort(),
+    extra: extra.sort(),
+  };
 }
 
 /** 读文本并归一换行为 LF（比对口径，见 `compare`）。 */
@@ -183,7 +182,7 @@ function brief(list, limit = 12) {
   return head.join("\n");
 }
 
-function main() {
+async function main() {
   const staged = process.argv.includes("--staged");
   if (staged) {
     const hits = matchedInputs(stagedFiles());
@@ -194,22 +193,32 @@ function main() {
     console.log(
       `${TAG} 命中输入面 ${hits.length} 个文件（${hits
         .slice(0, 3)
-        .join(", ")}${hits.length > 3 ? ", …" : ""}），重生成比对中…`
+        .join(", ")}${hits.length > 3 ? ", …" : ""}），重生成比对中…`,
     );
   }
 
   if (!fs.existsSync(OUT_ABS)) {
     console.error(`${TAG} ✗ ${OUT_REL}/ 不存在 —— 生成物本应提交进 git。`);
-    console.error(`${TAG} 修法：pnpm docs 后把结果一并提交。`);
+    console.error(`${TAG} 修法：pnpm run docs 后把结果一并提交。`);
     process.exit(1);
   }
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "docs-api-check-"));
   try {
-    const res = runTypedoc(tmp);
+    const res = await runTypedoc(tmp);
     if (!res.ok) {
-      console.error(`${TAG} ✗ typedoc 重生成失败（产物无法核对）：`);
-      console.error(res.log);
+      console.error(
+        `${TAG} ✗ typedoc 重生成失败（产物无法核对）：${res.reason}`,
+      );
+      console.error(
+        `${TAG} 注：typedoc 的退出码不可信 —— 「退出 0 + 日志写 html generated +` +
+          ` 产物一个没更新」是见过的现场，所以这里按产物判、失败自动重试。`,
+      );
+      if (res.log) console.error(res.log);
+      console.error(
+        `${TAG} 修法：先 node scripts/generate-api-docs.mjs 单独跑一遍看原因` +
+          `（占用类失败等一等就过；别拿这次的空产物去删 ${OUT_REL}/）。`,
+      );
       process.exit(1);
     }
 
@@ -217,7 +226,7 @@ function main() {
     const total = drifted.length + missing.length + extra.length;
     if (!total) {
       console.log(
-        `${TAG} ✓ ${OUT_REL} 与当前源一致（${walk(OUT_ABS).size} 个文件）。`
+        `${TAG} ✓ ${OUT_REL} 与当前源一致（${walk(OUT_ABS).size} 个文件）。`,
       );
       return;
     }
@@ -236,7 +245,7 @@ function main() {
       console.error(brief(extra));
     }
     console.error(
-      `${TAG} 修法：pnpm docs 后把 docs/api/** 的重生成结果一并提交（不要手改生成物）。`
+      `${TAG} 修法：pnpm run docs 后把 docs/api/** 的重生成结果一并提交（不要手改生成物）。`,
     );
     process.exit(1);
   } finally {
@@ -244,6 +253,11 @@ function main() {
   }
 }
 
-if (require.main === module) main();
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(`${TAG} ✗ 判据自身异常：`, err);
+    process.exit(1);
+  });
+}
 
 module.exports = { INPUT_RES, matchedInputs, walk, compare, OUT_REL };

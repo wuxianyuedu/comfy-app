@@ -99,7 +99,7 @@ export function SubgraphWidgetStackedString({
           <StringTextarea value={stringText} mono hasSize={hasSize} />
         ) : (
           <div
-            className="border-border-strong bg-canvas-deep text-ink-fainter flex-1 rounded border px-2 py-1.5 text-[10.5px] leading-snug"
+            className="border-border-strong bg-canvas-deep text-ink-fainter text-2xs flex-1 rounded border px-2 py-1.5 leading-snug"
             style={{ minHeight: 28 }}
           >
             （空）

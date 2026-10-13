@@ -80,6 +80,12 @@ const RATCHETS: Ratchet[] = [
         `async function vf${n}(): Promise<void> {}\nvoid vf${n}();\n`,
       ),
   },
+  /* 这里**没有** tw4 那两份（`tw4-canonical-report.mjs` / `tw4-spacing-canonical.mjs`）：
+   * 它们在 ISSUE #1811 的 tw4 项里翻了硬闸 —— 基线删掉、`--update` 删掉，`--check`
+   * 命中即退 1，于是「拒涨」在这两家**无对象可判**（没有基线可写回去，
+   * 这一张表的现算清单 `discoveredBaselines()` 也就认不出它们了）。
+   * 它们的硬闸形态由 `tests/tw4-canonical-ratchet.test.ts` 守形状、由
+   * `tests/tw4-hardgate-behaviour.test.ts` 守行为。 */
 ];
 
 /**
@@ -166,8 +172,13 @@ const HARD_GATE_FLIPS: Record<string, string> = {
   /* R5（`src` 侧超 900 行）这一半：基线删了、`--strict` / `--update` 删了，超限即阻断 ——
    * 于是它在本表的棘轮车道上「无对象可判」，改由硬闸形态的否定式钉住。 */
   "check-file-structure.cjs": "tests/check-file-structure.test.ts",
-  /* tw4 那两份（起 Tailwind 引擎、按需跑）：基线删了、`--update` 删了，命中即退 1。
-   * 它们共用一个自测文件。 */
+  /* tw4 这一项（ISSUE #1811 的 tw4 半边）：与上面五条同一形状，只是它守的是
+   * 「CSS 等价改写」而不是违规计数 —— 清零后棘轮无对象可判，留着基线只等于多一条
+   * 「手改 JSON 把新候选登记成已知存量」的通道。两刀改到同一张表，合并后**两条都在**：
+   * R5 与 tw4 各自是一条翻闸记录，删掉任意一条都会让那一刀退网。
+   * 自测点名 `tw4-canonical-ratchet`（形状）：行为那一半在同名的
+   * `tests/tw4-hardgate-behaviour.test.ts`，不进这张表 —— 这张表的值是「删了它会红
+   * 的那一份」，而形状那份同时守着台账登记与判定档在位。 */
   "tw4-canonical-report.mjs": "tests/tw4-canonical-ratchet.test.ts",
   "tw4-spacing-canonical.mjs": "tests/tw4-canonical-ratchet.test.ts",
 };
@@ -482,8 +493,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           expect(seed.code, seed.output).toBe(0);
           /* 表里的 `baseline` 带目录前缀（用于 `discoveredBaselines` 对齐），
            * 而沙箱里脚本落点是 `scripts/`（`dir` 默认档），读回时要去掉前缀。 */
-          const baselineRel =
-            row!.baseline.split("/").pop() ?? row!.baseline;
+          const baselineRel = row!.baseline.split("/").pop() ?? row!.baseline;
           const written = JSON.parse(
             handle.repo.read(join("scripts", baselineRel)),
           ) as { rules?: Record<string, unknown> };
@@ -513,9 +523,9 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
         const src = readFileSync(join(dir, script), "utf8");
         /* 认「写一份 .json」这件事本身，而不是认某个变量名 —— 换拼法也躲不过。
          * 只认写入调用里出现的 `.json` 字面量（读回来比对不算）。 */
-        const writesJson = [...src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(([^;]{0,400})/g)].some(
-          (m) => /"\.[^"]+\.json"|\.json"/.test(m[1] ?? ""),
-        );
+        const writesJson = [
+          ...src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(([^;]{0,400})/g),
+        ].some((m) => /"\.[^"]+\.json"|\.json"/.test(m[1] ?? ""));
         expect(
           writesJson,
           `${script} 里又出现了「把一份 .json 写回去」的调用 —— ` +

@@ -569,6 +569,24 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       expect(existsSync(join(workdir, ".file-size-baseline.json"))).toBe(false);
     });
 
+    it("`--update` 被传进来时，R1–R12 照判（那是另一条车道，不跟着失效）", () => {
+      /* 「翻闸」只该关掉 R5 的放宽通道，不该连**结构硬规则本身**一起放过：
+       * 传 `--update` 走的是 R5 那条早已删掉的分支，但 R1–R12 的判定与参数无关。
+       * 这一格防的是「有人把某条规则也挂进 ARGS 判断、顺手把主判定短路了」——
+       * 那种形态下前一条断头用例照样绿（它只看 R5 的超限文件），红的是这一格。
+       * 探针取 R9（根目录 .ps1 双击入口）而不是 R1：实测该脚本对根目录的 .ps1
+       * 报的就是 R9，写 R1 会得到一条「断言的是另一条规则」的假绿。 */
+      writeFileSync(
+        join(workdir, "start-web.ps1"),
+        Buffer.concat([BOM, Buffer.from('Write-Host "启动"\n')]),
+      );
+      const { code, output } = runWith(["--update"]);
+      expect(code).toBe(1);
+      expect(output).toContain("R9");
+      expect(output).toContain("start-web.ps1");
+      expect(existsSync(join(workdir, ".file-size-baseline.json"))).toBe(false);
+    });
+
     it("基线文件在场也**不影响**判定（硬闸不认它，只看行数）", () => {
       /* 翻闸时最容易漏的一件事：把判定换成硬闸，却留着「先读基线」那一段 ——
        * 于是旧的基线文件（别人检出里还留着一份）会让判据的读数随文件内容变。

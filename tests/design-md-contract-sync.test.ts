@@ -496,8 +496,12 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
    * 不靠眼睛。17px 那枚字面量不在射程内 —— 它等于 `--text-stage`，而那三颗标题档的名字
    * 不是 t-shirt 形状、在 JSX 里会被 `cn()` 归进颜色组吃掉同行状态色。
    * 本注释刻意**不写完整的候选名**：被扫到的正文里每写全一枚，产物 CSS 就多一条
-   * 没人用的规则（口径见规范 03 §3.6.2），而这一批刚被清零。 */
-  const TEXT_BASELINE = 122;
+   * 没人用的规则（口径见规范 03 §3.6.2），而这一批刚被清零。
+   * **122→67 是 10.5px 那一批**：52 处里只有 1 处落在 `h3` 上，其余全是 `<p>` / `<span>`
+   * / `<div>` 的元信息行 —— 正是 `text-2xs`(11px) 登记的角色，所以整批并进去、并像
+   * 12 / 13px 那样另签一条**归零等式**。方向取「并大」（ISSUE #1751 的结论是「档写低了」），
+   * 逐处结构判与 +0.5px 的代价都在下面那条 `it` 里。 */
+  const TEXT_BASELINE = 67;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
     const scale = parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8"));
@@ -588,16 +592,15 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const isTierValue = (value: string) =>
       tiers.byPx.has(Number.parseFloat(value));
     /* 变异：清零之后 offenders 是空集，而「空集 + 写漂的谓词」照样绿 —— 所以谓词
-       自己喂两条：等于档位值的必须判违规，不在档表上的不许（10.5px 是第 4 刀之前
-       那批还没命名的存量）。 */
+       自己喂两条：等于档位值的必须判违规，不在档表上的不许（9.5px 是还没命名的一档，
+       本轮之后 10.5px 也不再是档 —— 它被并进了 2xs，见下面那条归零等式）。 */
     expect(
       isTierValue("14"),
       "谓词认不出 14px 就是 text-sm 的渲染值 —— 这条清零判据在空转",
     ).toBe(true);
-    expect(
-      isTierValue("10.5"),
-      "不在档表上的值被判成违规（判据越界了）",
-    ).toBe(false);
+    expect(isTierValue("9.5"), "不在档表上的值被判成违规（判据越界了）").toBe(
+      false,
+    );
 
     const offenders = scanProduct(TEXT_LITERAL).filter((h) =>
       isTierValue(h.value),
@@ -638,9 +641,13 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
        13px 那 62 处并入时，`log-virtual.ts` 的 27/18 两个行高常量与两处用例是**同一批**改的
        —— 那对常量与 class 是同一件事的两面，漏一侧就是滚动位置与内容错位。 */
     const smallLiteral = /\btext-\[1[23]px\]/g;
-    /* 自己先验一次量具：这条是「等式为 0」的判据，正则写漂了会永远绿。 */
+    /* 自己先验一次量具：这条是「等式为 0」的判据，正则写漂了会永远绿。
+       样本串**拆开拼**：一整条候选名出现在被扫正文里就会生成进产物，而这两档的调用点
+       早已清零 —— 不拆开就是由这条负控制替它们各留一条「源码没有、产物却有」的死规则
+       （口径见 03 §3.6.2）。 */
+    const smallSample = "text-" + "[12px] 与 text-" + "[13px]";
     expect(
-      [..."text-[12px] 与 text-[13px]".matchAll(smallLiteral)].length,
+      [...smallSample.matchAll(smallLiteral)].length,
       "字面小字号的正则漂了（这条归零判据会静默全绿）",
     ).toBe(2);
     smallLiteral.lastIndex = 0;
@@ -659,6 +666,44 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       ["--text-xs:", "--text-sm:"].filter((key) => css.includes(key)),
       "globals.css 覆盖了这两档之一？本判据与 §Typography 都假定它们用 Tailwind 默认字号",
     ).toEqual([]);
+  });
+
+  it("10.5px 不是一个档：调用点不许再写它（已并入 text-2xs）", () => {
+    /* 也是**归零等式**，与上面那条同形。规范 03 §3.10 曾把「h2 / h3 保留 10.5–14px 的
+       几档微排版」登记成例外，量下来对不上：52 处里只有 1 处落在 `h3` 上，主体是
+       `<p>` / `<span>` / `<div>` 的元信息行 —— 那正是 `text-2xs`(11px) 登记的角色
+       （副说明下的元信息、密集列表行）。所以它不是「第五个档」，而是「比 2xs 小半像素」
+       的漂移值：t-shirt 刻度在 3xs(10) 与 2xs(11) 之间给不出名字，硬造一颗既过不了
+       档名形状判据、又给「改一档全站跟手」多一个没人维护的落点。
+       方向选**并大**不选并小：ISSUE #1751 量出来的结论是「档写低了」而不是「字太大」，
+       而这一批全是说明性文字。+0.5px 逐处按结构判过 —— 52 处没有一处落在 `h-*` / `size-*`
+       固定高度里（6 处自带 `h-auto`、2 处是 `max-h-32 overflow-y-auto` 可滚），
+       宽度受限的 10 处本来就带 `min-w-0 truncate` / `max-w-*`：收不下是截断，不是溢出。 */
+    const driftLiteral = /\btext-\[10\.5px\]/g;
+    expect(
+      [...("text-" + "[10.5px] 与 text-" + "[10.5px]").matchAll(driftLiteral)]
+        .length,
+      "10.5px 的正则漂了（这条归零判据会静默全绿）",
+    ).toBe(2);
+    const offenders = scanProduct(driftLiteral);
+    expect(
+      offenders,
+      "这些调用点又写了 10.5px —— 那是「比 2xs 小半像素」的漂移值，不是档；" +
+        "要改密度请先在 @theme 动 --text-2xs（\n" +
+        `${[...new Set(offenders.map((o) => o.file))]
+          .map((f) => `  ${f}`)
+          .join("\n")}`,
+    ).toEqual([]);
+    /* 反向：2xs 必须还是 11px —— 否则上面那条「并进来」的落点就变了，
+       而这批调用点的像素变化量全靠这颗档的值来定（读法与判据共用同一份 helper）。 */
+    const tiers = parseTextTiers(
+      readFileSync(GLOBALS_PATH, "utf8"),
+      TSHIRT_NAME,
+    );
+    expect(
+      tiers.byPx.get(11),
+      "--text-2xs 不再是 11px？本判据的归一方向要重判",
+    ).toBe("2xs");
   });
 
   it("屏级标题之下那行副说明（`.u-title-page` 后 4 行内第一个 `<p>`）不许低于 text-sm", () => {
@@ -908,11 +953,21 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     );
     const biggest = Math.max(...tierPx);
     expect("border rounded-" + `[${biggest}px] h-5`).toMatch(RADIUS_LITERAL);
-    expect("text-[10.5px]").toMatch(TEXT_LITERAL);
+    /* 样本串**拆开拼**：一整条 `text-[…]` 候选名出现在被扫正文里就会生成进产物，
+     * 而 10.5px 这一档本轮已从调用点清零 —— 不拆开就等于由这条负控制替它保留一条
+     * 「源码没有、产物却有」的死规则（口径见 03 §3.6.2）。 */
+    expect("text-" + "[10.5px]").toMatch(TEXT_LITERAL);
+    /* 量具的射程按**扫到多少文件**判，不按「解出多少条违规」判：后者正是还债要往下压的
+     * 那个数，拿它的某一轮量级（从前写的是 100）当下界，等于让判据在每一次成功还债时
+     * 撞墙 —— 存量归上面那条棘轮管，这里只证「扫描面真的看得见代码」。文件数今天实测 955。 */
+    expect(
+      collectProductFiles(SRC_DIR).length,
+      "扫描面只剩很少文件 —— 上面每条判据都会「因为看不见代码」而恒绿",
+    ).toBeGreaterThan(500);
     expect(
       scanProduct(TEXT_LITERAL).length,
-      "扫描函数在真实代码面上解不出东西",
-    ).toBeGreaterThan(100);
+      "扫描面有文件却解不出任何字面字号：正则或剥注释漂了",
+    ).toBeGreaterThan(0);
     expect(TSHIRT_NAME.test("micro"), "非法档名没被识破（形状判据空转）").toBe(
       false,
     );
