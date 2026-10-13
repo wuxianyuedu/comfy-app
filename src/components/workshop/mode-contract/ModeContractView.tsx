@@ -23,6 +23,11 @@
 //
 // 底色跟 `DocumentFrame` 那一档（`bg-canvas text-ink`）：换外壳是布局决定，
 // 不顺手改这一屏的颜色。
+//
+// 容器内距随之**下移到屏内**（ISSUE #1871）：`WorkspaceFrame` 不吃内距，这一屏的
+// 上下留白全在 `ModeContractEditorView` 自己的两层里（横向 `px-4 sm:px-8`、
+// 页眉上沿 `pt-4 sm:pt-5`）—— 这个文件从此不再持有任何间距，换壳前挂在这里的
+// 那份 `DocumentFrame` 内距没有可搬的落点、也没有存在的必要。
 
 import { WorkspaceFrame } from "~/components/studio/ViewContainer";
 

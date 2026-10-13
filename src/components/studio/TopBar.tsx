@@ -22,6 +22,7 @@ import { SidebarTrigger } from "~/components/ui/sidebar";
 import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
 import { useDevtoolsLauncher } from "./use-devtools-launcher";
 import { viewHelp } from "./ViewHelp";
+import { ViewActionsHost } from "./ViewActions";
 
 export interface TopBarProps {
   /** 当前视图 —— 显示成标题，让用户知道自己在哪。 */
@@ -98,7 +99,11 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
           放第二颗：那句话的单一出处是 `viewHelp()`。 */}
       {help !== undefined ? <HeaderHelp text={help} /> : null}
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex min-w-0 items-center gap-1">
+        {/* 本屏动作的落点（`ViewActions`）。放在全局控件之前：本屏的动作与
+            「这一屏叫什么」挨着读，全局搜索 / 主题 / 消息 / 菜单始终在最右端，
+            位置不随视图变。空槽不占宽度（`min-w-0` + 无子节点）。 */}
+        <ViewActionsHost />
         <Hint label="全局搜索（⌘K）">
           <Button
             variant="ghost"
