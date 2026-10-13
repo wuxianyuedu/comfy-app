@@ -648,10 +648,11 @@ HTML 报告给人看、退出码恒 0；本判据是**机器判定档**、量**�
 （它只抓主线程侧、抓不到 SSR）全在 §11.8.1，本节不重述。
 
 这张表里**原本还有一行**「canonical 候选 → `@` 跑 `tw4-canonical-report.mjs`」，
-随 ISSUE #1451 摘掉：它们不再靠「人记得跑」，而是各带 `--check` 判定档与棘轮基线
-（`scripts/.tw4-canonical-baseline.json` / `scripts/.tw4-spacing-baseline.json`，两份
-都 `total: 0` 起步），并登记在 `scripts/.gate-executor-ledger.json` 的按需召唤台账里 ——
-**「按需」从此是有判据的**（详见 §13.5.12），不再是一句谁都能忘的人为提醒。
+随 ISSUE #1451 摘掉：它们不再靠「人记得跑」，而是各带 `--check` 判定档，并登记在
+`scripts/.gate-executor-ledger.json` 的按需召唤台账里 —— **「按需」从此是有判据的**
+（详见 §13.5.12），不再是一句谁都能忘的人为提醒。判定档的形态在 ISSUE #1811 的 tw4 项
+里又收了一步：从「基线 `total: 0` 的棘轮」翻成**硬闸**（删基线、删 `--update`，
+`--check` 命中即退 1）。
 
 这张表里**原本还有一行**「R5 行数棘轮 → `@` 跑 `check-file-structure.cjs --strict`」，随
 ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前提「挂着 11 个存量」不再成立）之后，
@@ -1750,14 +1751,19 @@ C 组的固定清单里、每次提交都执行 —— 那是真的执行者，�
 形态用例之后，那两个 canonical 棘轮一度被判成「有执行者」，于是台账双向判定把
 两条正当的按需召唤登记报成负债。
 
-**当前台账（两条，都是 canonical 棘轮）**：`tw4-canonical-report.mjs` 与
+**当前台账（两条，都是 canonical 组合）**：`tw4-canonical-report.mjs` 与
 `tw4-spacing-canonical.mjs` 都起 Tailwind 引擎、单次约 6s，判的是「CSS 等价改写」
 而非正确性（成本判据同 §13.5.4 给 `doc:check` 翻档那条）。它们不进钩子，但**「按需」
-不再是人为提醒**：各自带一个棘轮判定档 `--check`（基线
-`scripts/.tw4-canonical-baseline.json` / `scripts/.tw4-spacing-baseline.json`，
-两份都 **`total: 0`** 起步 = 只许新增就红），红了就 `--write` 落盘 + `--update` 收紧。
-**别为了让 `--check` 变绿去放宽基线** —— 棘轮是给「回潮就响」用的，`tests/tw4-canonical-ratchet.test.ts`
-把这条钉住（基线形状 + 判定档在位 + 台账登记，三向各一组）。
+不再是人为提醒**：各自带一个**硬闸判定档** `--check`（源文件候选数 / 待改写处数须为
+**0**，命中即退 1），红了就 `--write` 落盘。两份基线
+（`scripts/.tw4-canonical-baseline.json` / `scripts/.tw4-spacing-baseline.json`）
+已随 ISSUE #1811 的 tw4 项**删掉** —— 存量清零后棘轮只留下「手改那份 JSON 就能把新候选
+登记成已知存量」这一条通道，而那是硬闸类本来没有的中间态（§13.6.2）。形态由
+`tests/tw4-canonical-ratchet.test.ts` 钉住（判定档在位 + 放宽通道没被加回来 +
+扫描走共享内核 + 台账登记，四向各一组），行为另由
+`tests/tw4-hardgate-behaviour.test.ts` 钉住（真候选即退 1、注释里的示例不算候选、
+`--update` 已不存在）——**形状守不住行为**：一个把判定档写成永远退 0 的版本同样
+满足「有 `--check`、有 `process.exit(1)` 字样」。
 
 **姊妹维度：声明 ⇄ 读者（`scripts/check-declaration-readers.cjs`，规范 §11.23）。**
 本节判的是**脚本**有没有执行者（`process.exit` 那条线）；它不覆盖另一种同样常见的

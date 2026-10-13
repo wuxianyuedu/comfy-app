@@ -85,20 +85,36 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
  * 「加一层共用依赖」= 十几份用例各自记得补一遍，漏的那份不会报「忘带依赖」，
  * 只会报一条指向不存在的脚本名的红。
  *
- * 只认 `./name.cjs` 这种**同目录相对**形态（仓里判据之间的引用全是这一种）；
+ * **两种引用形态都认**（都必须是**同目录相对**：仓里判据之间的引用全是这一种）：
+ *   · CJS：`require("./name.cjs")`；
+ *   · ESM：`import … from "./name.mjs"` / `export … from "./name.mjs"`（含裸副作用
+ *     `import "./name.mjs"`）。
+ * 第二种是 tw4 那两份工具（`.mjs`）抽共享内核（`tw4-scan-core.mjs`）时才补的：
+ * 只认 `require` 时它们跑起来就是 `ERR_MODULE_NOT_FOUND` + 一叠加载栈，
+ * 长得像「判据坏了」，实际是夹具少带了一个文件（与第一段说的问题同一族）。
+ *
  * 落点固定在被引脚本自己所在的目录。已存在的目标不覆盖（用例自己写的夹具优先）。
  */
 export function copyGateDeps(destScriptAbs: string): void {
   const destDir = path.dirname(destScriptAbs);
-  const DEP_RE = /require\(\s*"\.\/([\w.-]+\.cjs)"\s*\)/g;
+  /** CJS 的 `require("./x.cjs")`（也认 `createRequire(…)("./x.cjs")` 那一形）与
+   *  ESM 的 `import/export … from "./x.mjs"`。 */
+  const DEP_RES = [
+    /require\w*\(\s*"\.\/([\w.-]+\.cjs)"\s*\)/g,
+    /(?:^|\n)\s*(?:import|export)\s[^;\n]*?from\s+"\.\/([\w.-]+\.mjs)"/g,
+    /(?:^|\n)\s*import\s+"\.\/([\w.-]+\.mjs)"/g,
+  ];
   const pending = [destScriptAbs];
   const seen = new Set<string>();
   while (pending.length > 0) {
     const abs = pending.shift()!;
     if (seen.has(abs)) continue;
     seen.add(abs);
-    for (const m of readFileSync(abs, "utf8").matchAll(DEP_RE)) {
-      const name = m[1]!;
+    const src = readFileSync(abs, "utf8");
+    const names = DEP_RES.flatMap((re) =>
+      [...src.matchAll(re)].map((m) => m[1]!),
+    );
+    for (const name of names) {
       const source = path.join(REPO_ROOT, "scripts", name);
       const dest = path.join(destDir, name);
       if (!existsSync(source)) continue;

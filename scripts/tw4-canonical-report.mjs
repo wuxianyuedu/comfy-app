@@ -19,16 +19,22 @@
  * 用法：
  *   node scripts/tw4-canonical-report.mjs          # 汇总（按建议排序）
  *   node scripts/tw4-canonical-report.mjs --json   # 机器可读
- *   node scripts/tw4-canonical-report.mjs --check  # 棘轮判定：源文件候选数不许超过基线
- *   node scripts/tw4-canonical-report.mjs --update # 治理后重写基线（须伴随下降）
+ *   node scripts/tw4-canonical-report.mjs --check  # 硬闸判定：源文件候选数须为 0
  *   node scripts/tw4-canonical-report.mjs --write  # 落盘改写（跳过 .snap）
  *
- * 棘轮（ISSUE #1451 要求 2）：本工具起 Tailwind 引擎、单次约 6s，**不进 pre-commit**
- * （判的是「CSS 等价改写」而非正确性），但 03 章那句「新增一批视图文件后按需跑一次」
- * 此前**没有任何东西在守** —— 实测 storybook 那批一次性带进 96 处 `w-[30rem]`，
- * 直到手工跑才浮出来。出路 = 保留按需跑，但把「按需」变成**有判据的**：源文件
- * （测试文件不计，它们的候选是人判断的负样本）的候选总数冻结在
- * `scripts/.tw4-canonical-baseline.json`，`--check` 时只许降不许升。
+ * 判定档（ISSUE #1451 要求 2 / ISSUE #1811）：本工具起 Tailwind 引擎、单次约 6s，
+ * **不进 pre-commit**（判的是「CSS 等价改写」而非正确性），但 03 章那句「新增一批
+ * 视图文件后按需跑一次」此前**没有任何东西在守** —— 实测 storybook 那批一次性带进
+ * 96 处 `w-[30rem]`，直到手工跑才浮出来。出路 = 保留按需跑，但把「按需」变成
+ * **有判据的**：源文件（测试文件不计，它们的候选是人判断的负样本）的候选数须为
+ * **0**，`--check` 命中即退 1。
+ *
+ * **为什么是硬闸而不是棘轮**：本判据此前带一份基线（`scripts/.tw4-canonical-baseline.json`），
+ * `--check` 只判「不超过基线」、`--update` 收紧。存量清零后（ISSUE #1811 的 tw4 项：
+ * 一条工具侧的注释误报由 `tw4-scan-core.mjs` 的注释剥离修掉，一条真改写落在
+ * `AppShell.tsx`）棘轮的两个动作都无事可做，留下的却是一条「手改那份 JSON 就能把新
+ * 候选登记成已知存量」的通道 —— 那正是硬闸类本来没有的中间态（§13.6.2 的两类对照）。
+ * 判据口径与扫描面一字未动，只把「有存量、逐批治理」那一层皮收掉。
  * 执行者与「为什么不进钩子」登记在 `scripts/.gate-executor-ledger.json`。
  *
  * 快照只统计不写入：类名一改，`prettier-plugin-tailwindcss` 的排序位置会跟着变，
@@ -40,6 +46,8 @@ import { fileURLToPath } from "node:url";
 
 import { __unstable__loadDesignSystem } from "tailwindcss";
 
+import { rewriteLiterals, stringLiterals } from "./tw4-scan-core.mjs";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = path.join(ROOT, "src");
 
@@ -48,14 +56,15 @@ const asJson = argv.includes("--json");
 const shouldWrite = argv.includes("--write");
 const withTests = argv.includes("--with-tests");
 const shouldCheck = argv.includes("--check");
-const shouldUpdate = argv.includes("--update");
 const explicit = argv.filter((a) => !a.startsWith("--"));
-const BASELINE = path.join(ROOT, "scripts", ".tw4-canonical-baseline.json");
 
 /** 一批送进 canonicalize 的规模（首次调用要建全量 class list，约 10 秒，之后很快）。 */
 const BATCH = 800;
-/** 字符串字面量（普通串与模板串；模板串里的 `${…}` 作为普通片段保留）。 */
-const STRING_LITERAL = /(["'`])((?:\\[\s\S]|(?!\1)[^\\])*?)\1/g;
+/* JS/TS 的字符串字面量一律走 `tw4-scan-core.mjs` 的 `stringLiterals()` —— 它先在
+ * **注释之外**扫描（注释里用反引号引的示例与 className 同形，不剥会让 `--check`
+ * 报出不存在的候选、`--write` 去改注释）。下面这条正则只剩一个用途：`.css` / `.snap`
+ * 不是 JS，没有注释语法可剥，直接按字面量粗取。 */
+const LITERAL_IN_NON_JS = /(["'`])((?:\\[\s\S]|(?!\1)[^\\])*?)\1/g;
 /** 粗筛：像类名的 token 才值得问引擎（省掉把散文喂进去）。
  *
  *  注意别把字符类写窄：早先写成「尾部只允许 `! / [ ] ( ) . , % # -`」时，
@@ -118,8 +127,13 @@ for (const file of files) {
   const isSnapshot = file.endsWith(".snap");
   const isOrphan = isSnapshot && !fs.existsSync(file.replace(/\.snap$/, ""));
   if (isOrphan) orphanSnapshots.add(file);
-  for (const match of read(file).matchAll(STRING_LITERAL)) {
-    for (const token of match[2].split(/\s+/)) {
+  /* 注释剥离只对 JS/TS 源文件成立：`.css` / `.snap` 里的 `//` 不是注释语法，
+   * 剥它等于把真的内容吞掉（快照里更可能逐字记着一段输出）。 */
+  const literals = /\.tsx?$/.test(file)
+    ? stringLiterals(read(file))
+    : [...read(file).matchAll(LITERAL_IN_NON_JS)].map((m) => ({ content: m[2] }));
+  for (const match of literals) {
+    for (const token of match.content.split(/\s+/)) {
       if (!token || !MAYBE_CLASS.test(token)) continue;
       const hits = occurrences.get(token) ?? [];
       hits.push({
@@ -181,19 +195,21 @@ if (shouldWrite) {
   /** 只动字符串字面量内、且整 token 相等的出现处。 */
   const rewriteFile = (file) => {
     const before = read(file);
-    const after = before.replace(STRING_LITERAL, (full, quote, content) => {
+    /* 走共享内核：注释里的示例不会被改写（`--write` 只动真会被应用的类名）。 */
+    const { text: after, changed } = rewriteLiterals(before, (content) => {
       const pieces = content.split(/(\s+)/);
-      let changed = false;
+      let hit = false;
       for (let i = 0; i < pieces.length; i += 2) {
         const to = canonical.get(pieces[i]);
         if (!to) continue;
         pieces[i] = to;
-        changed = true;
+        hit = true;
       }
-      return changed ? quote + pieces.join("") + quote : full;
+      return hit ? pieces.join("") : null;
     });
-    if (after !== before) fs.writeFileSync(file, after);
-    return after !== before;
+    if (changed === 0) return false;
+    fs.writeFileSync(file, after);
+    return true;
   };
   let changed = 0;
   const targets = new Set(
@@ -277,16 +293,17 @@ if (asJson) {
   }
 }
 
-/* ── 棘轮（--check / --update）：源文件候选总数只许降不许升 ─────────────
+/* ── 判定档（--check）：源文件候选数须为 0 ───────────────────────────────
  *
- * 记账口径 = **按源文件**（测试文件里的候选不进基线：`--write` 默认不碰它们，
- * 它们多数是断言样本，改了会把判据改坏，得人逐处判 —— 把它们计进基线等于
- * 让「人判断」变成「机器冻结」，方向反了）。
- * 之所以按候选**处数**记账而不是按 raw 种类：一处 raw 换文件、换数量都该被看见，
- * 而「零候选起步」的语义正是「任何新增都红」。
- * 排除孤儿快照与测试文件的命中，与原报告口径一致。 */
+ * 计数口径 = **按源文件**（测试文件里的候选不计：`--write` 默认不碰它们，它们多数
+ * 是断言样本，改了会把判据改坏，得人逐处判 —— 把它们计进判定等于让「人判断」变成
+ * 「机器冻结」，方向反了）。孤儿快照同样排除，与原报告口径一致。
+ *
+ * 硬闸形态（ISSUE #1811）：不再有基线、不再有 `--update`，命中即退 1。清零后的
+ * 自证靠**默认档**（不带 flag 的那次报告）—— 见文件头那条：`--check` 的「0 处」
+ * 必须能被默认档的清单复现，否则「一个永远扫不到东西的判据」也会全绿。 */
 
-/* 本轮的账算一次就好：`--check` 与 `--update` 判的是同一份，各算一遍就会分叉。 */
+/** 源文件侧的候选：`{文件 → 处数}`。默认档那次的报告与判定用的是同一份。 */
 const current = {};
 for (const s of suggestions) {
   for (const f of s.sourceFiles) {
@@ -296,72 +313,20 @@ for (const s of suggestions) {
 }
 const currentTotal = Object.values(current).reduce((a, b) => a + b, 0);
 
-/** 上一份基线；`null` = 还没有账可记（只有首次记账允许任何存量）。 */
-/** @type {{total: number, files: Record<string, number>} | null} */
-const baseline = fs.existsSync(BASELINE) ? JSON.parse(read(BASELINE)) : null;
-
-/** 比基线高的那些文件（逐文件维度与总数维度互补：换文件躲不过前者，加总量躲不过后者）。 */
-function overFiles(base) {
-  const over = [];
-  for (const [rel, n] of Object.entries(current)) {
-    const allowed = base.files[rel] ?? 0;
-    if (n > allowed) over.push(`${rel}：${n} 处（基线 ${allowed}）`);
-  }
-  return over;
-}
-
-if (shouldUpdate) {
-  /* **只许降**：基线在场却算出更高的数 → 拒绝写入、基线一个字节都不动。
-   * 上面文件头那句「须伴随下降」此前只是散文，这一支才让它成立。
-   * 例外只有「还没有基线文件」（首次记账）；判据用 `baseline` 在不在，
-   * 不用 `baseline.total` —— 后者治理到 0 之后就是 0，`if (0 && …)` 会把整条
-   * 拒涨短路（台账 E5 记下的共同失效写法）。 */
-  if (baseline) {
-    const over = overFiles(baseline);
-    if (over.length > 0 || currentTotal > baseline.total) {
-      console.error(
-        `canonical 候选棘轮：--update 拒绝写入，源文件候选 ${baseline.total} → ${currentTotal} 是上涨。\n` +
-          `  棘轮只许降不许升 —— 把上涨记进基线等于「跑一次 --update 就收下这批新写法」，` +
-          `这条按需跑的判据就此没有存量口径。`,
-      );
-      for (const line of over) console.error(`  ✗ ${line}`);
-      console.error(
-        `\n修法：先 node scripts/tw4-canonical-report.mjs --write 把这些候选改写成规范写法，` +
-          `再 --update 收紧。别为了让它变绿去放宽基线。`,
-      );
-      process.exit(1);
-    }
-  }
-  fs.writeFileSync(
-    BASELINE,
-    `${JSON.stringify({ total: currentTotal, files: current }, null, 2)}\n`,
-  );
-  console.log(
-    `棘轮基线已重写：${path.relative(ROOT, BASELINE)}（total ${currentTotal}）`,
-  );
-  process.exit(0);
-}
-
 if (shouldCheck) {
-  const base = baseline ?? { total: 0, files: {} };
-  const over = overFiles(base);
-  if (over.length > 0 || currentTotal > base.total) {
-    console.log(
-      `canonical 候选棘轮：源文件候选 ${currentTotal} 处 > 基线 ${base.total} 处\n`,
+  if (currentTotal > 0) {
+    console.error(
+      `canonical 候选 硬闸：源文件里有 ${currentTotal} 处可改成规范写法（须为 0）\n`,
     );
-    for (const line of over) console.log(`  ✗ ${line}`);
-    console.log(
-      `\n修法：node scripts/tw4-canonical-report.mjs --write 落盘改写（测试文件另判），` +
-        `再 node scripts/tw4-canonical-report.mjs --update 收紧基线。` +
-        `别为了让 --check 变绿去放宽基线 —— 棘轮是给「回潮就响」用的。`,
+    for (const [rel, n] of Object.entries(current).sort((a, b) => b[1] - a[1])) {
+      console.error(`  ✗ ${rel}：${n} 处`);
+    }
+    console.error(
+      `\n修法：node scripts/tw4-canonical-report.mjs --write 落盘改写` +
+        `（测试文件里的候选另判 —— 正样本要同步、负样本改了会把判据改坏，加 --with-tests 前自己先看清）。`,
     );
     process.exit(1);
   }
-  console.log(
-    `canonical 候选棘轮：源文件候选 ${currentTotal} 处 ≤ 基线 ${base.total} 处 ✓` +
-      (currentTotal < base.total
-        ? `（比基线少 ${base.total - currentTotal} 处，可跑 --update 收紧）`
-        : ""),
-  );
+  console.log("canonical 候选 硬闸：源文件 0 处 ✓");
   process.exit(0);
 }

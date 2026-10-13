@@ -295,7 +295,7 @@ export function WorkflowNode({
                  *  顺序一致 = [label | typeChip]（label 在左、type 在右）。
                  *  `justify-end` 把整组贴紧 Card 右沿；端点 PortHandle 圆心锁
                  *  labelRow 中线（pt-1.5=6 + h-5/2=10=16px），与 typeChip 上下对齐。 */}
-                <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
+                <div className="flex h-5 items-center justify-end gap-1.5 px-3.5 pt-1.5">
                   <span
                     className="text-ink-bright min-w-0 truncate text-[14px] font-semibold"
                     style={{ fontFamily: "var(--font-sans)" }}
@@ -318,7 +318,7 @@ export function WorkflowNode({
         variant="primary-solid"
         disabled={d.status === "running"}
         onClick={onGenerate}
-        className="nodrag nopan from-primary to-accent rounded-b-node flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
+        className="nodrag nopan from-primary to-accent rounded-b-node flex h-10.75 w-full items-center justify-center gap-2 bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}

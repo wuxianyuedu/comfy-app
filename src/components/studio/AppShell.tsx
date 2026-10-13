@@ -237,7 +237,7 @@ export function AppShell({
                          与文字都让位，只留分组图标（否则这一行宽过图标轨、
                          `overflow-hidden` 把它裁掉一半）。 */
                       "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center",
-                      "group-data-[collapsible=icon]:[&_[data-slot=disclosure-marker]]:hidden",
+                      "group-data-[collapsible=icon]:**:data-[slot=disclosure-marker]:hidden",
                     )}
                     panelClassName="mt-1"
                   >

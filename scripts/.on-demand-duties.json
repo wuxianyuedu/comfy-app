@@ -49,7 +49,7 @@
         "kind": "on-demand-ledger",
         "script": "tw4-canonical-report.mjs"
       },
-      "executor": "按需召唤 + 棘轮（scripts/.tw4-canonical-baseline.json 的 --check）"
+      "executor": "按需召唤 + 硬闸（node scripts/tw4-canonical-report.mjs --check，源文件候选数须为 0、命中即退 1；ISSUE #1811 的 tw4 项已把这条的棘轮基线删掉）"
     },
     {
       "id": "tw4-spacing-canonical",
@@ -59,7 +59,7 @@
         "kind": "on-demand-ledger",
         "script": "tw4-spacing-canonical.mjs"
       },
-      "executor": "按需召唤 + 棘轮（scripts/.tw4-spacing-baseline.json 的 --check）"
+      "executor": "按需召唤 + 硬闸（node scripts/tw4-spacing-canonical.mjs --check，待改写处数须为 0、命中即退 1；同上已删基线）"
     },
     {
       "id": "commit-claims-vs-facts",
