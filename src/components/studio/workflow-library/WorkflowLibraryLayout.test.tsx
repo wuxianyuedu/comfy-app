@@ -319,3 +319,62 @@ describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
     expect(header).not.toContain("u-title-page");
   });
 });
+
+/* 局部内容加载不许用「整列 / 整屏」加载界面（用户实测口径：工作流库打开时
+ * 有一张「加载工作流编辑器…」的全屏加载，而这只是部分区域在加载）。
+ *
+ * 两处成因，都是**渲染面 > 加载面**：
+ *   ① 画布编辑器是个模态，却常驻渲染 —— `dynamic()` 的分块是「一渲染就下载」，
+ *      于是打开工作流库这一步就把 7k 行编辑器拉下来，它的过渡屏
+ *      （`absolute inset-0`，吃满内容列）顺势盖住列表与详情；
+ *   ② 详情面板的「编辑对外参数 / 实际使用」共用一份常驻实例，此前**无论当前在
+ *      哪个页签都渲染**（靠 `hidden` 藏起来）—— 默认落在工坊封装时，那棵子树
+ *      连同画布引擎 `@xyflow/react` 照样执行。`hidden` 只藏不卸载。
+ *
+ * 判据因此钉在源码上：编辑器的挂载点在 `editingId` 之后，常驻实例的挂载点在
+ * `canvasMounted` 之后。 */
+describe("局部加载不许用整列加载界面", () => {
+  const ROOT = path.resolve(__dirname);
+  const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+
+  it("画布编辑器只在真的打开时才挂载（分块不再随工作流库一起下）", () => {
+    const library = read("WorkflowLibrary.tsx");
+    /* 按需形态：挂载点被 `c.editingId && (` 收住（`<WorkflowCanvasEditor` 紧跟在
+     *  这个条件表达式之后）。 */
+    expect(library).toMatch(/\{c\.editingId && \(\s*<WorkflowCanvasEditor/);
+    /* 常驻形态的回归：`<WorkflowCanvasEditor …>` 不出现在**任何**条件之外
+     *  —— 逐个匹配点都必须在 `editingId &&` 里。取反的写法是把条件那一段剥掉
+     *  再看还剩不剩裸的 `<WorkflowCanvasEditor`。 */
+    expect(
+      library.replace(
+        /\{c\.editingId && \(\s*<WorkflowCanvasEditor/g,
+        "<GATED",
+      ),
+    ).not.toMatch(/<WorkflowCanvasEditor\s+workflowId=/);
+    /* 编辑器自身仍带 `open` 契约（组件 API 不变）。 */
+    expect(library).toMatch(/<WorkflowCanvasEditor[\s\S]{0,180}\bopen\b/);
+  });
+
+  it("详情面板的画布常驻实例首次访问画布页签之前不渲染", () => {
+    const view = read("WorkflowLibraryDetailView.tsx");
+    /* 常驻实例套在 `canvasMounted &&` 里，而不是只有 `hidden`。 */
+    expect(view).toMatch(/\{canvasMounted && \(/);
+    expect(view).toMatch(
+      /hidden=\{activeTab !== "canvas" && activeTab !== "use"\}/,
+    );
+  });
+
+  it("`canvasMounted` 由 controller 给，且落在「首次切到画布页签」那一刻", () => {
+    const hook = read("hooks/use-workflow-library-detail.ts");
+    /* 契约：controller 上有这个字段。 */
+    expect(hook).toMatch(/canvasMounted: boolean;/);
+    /* 判据：当前工作流访问过画布页签才为真。 */
+    expect(hook).toMatch(
+      /canvasMounted: !!workflow && canvasVisitedFor === workflow\.id/,
+    );
+    /* 记录点只在切页签那一条路径上（不是 effect 里 setState）。 */
+    expect(hook).toMatch(
+      /if \(isCanvasTab\(tab\) && workflow\) setCanvasVisitedFor\(workflow\.id\)/,
+    );
+  });
+});
