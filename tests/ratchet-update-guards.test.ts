@@ -70,35 +70,11 @@ interface Ratchet {
 const AST_ENV = { NODE_PATH: join(process.cwd(), "node_modules") };
 
 const RATCHETS: Ratchet[] = [
-  /* R5（`check-file-structure.cjs --strict` 的那一半）：`src` 侧超 900 行的文件棘轮。
-   *
-   * 它此前登记在 PENDING 里，理由是「沙箱里放一份 950 行的文件会连带命中同脚本的
-   * R1–R12 其它规则，第 ② 步（基线 = 现状时必须是绿的）先配不出来」。本轮把那个
-   * 前提拆开看：连带命中是**真的**（最小沙箱缺 `src/proxy.ts` 时 R11 当场红），
-   * 但它是**可配的输入**而不是这条判据的固有属性 —— 把 R1–R12 都喂成绿（本仓
-   * `src/proxy.ts` 就是为此存在的那份约定文件），第 ② 步就成立。
-   *
-   * 所以这一条不做 PENDING，改成把前提写进夹具：`src/proxy.ts` 是 R11 要的存在性
-   * 证据，少了它跑起来的读数是「R11 缺文件」——看起来像 R5 不工作，实际是夹具
-   * 没把输入封住（§12.16 同款：判据的输入边界没封住时它给的是环境噪声）。 */
-  {
-    script: "check-file-structure.cjs",
-    baseline: "scripts/.file-size-baseline.json",
-    /* R5 那一半只在 `--strict` 档判定（不带它时超限文件只打一行「仅提醒」）。
-     * 用默认档走第 ②/③ 步会得到「加第二条违规仍然绿」—— 那判的是「我没把判定档
-     * 打开」，不是棘轮（§11.2.1 第一条：夹具没走进判据）。 */
-    judgeArgs: ["--strict"],
-    fixture: {
-      dirs: ["src"],
-      /* R11 要 `src/proxy.ts` 在场；R1–R12 其余规则在空 `src/` 上都是绿的。 */
-      files: { "src/proxy.ts": "export function proxy() {}\n" },
-    },
-    violate: (repo, n) =>
-      repo.write(
-        `src/big${n}.ts`,
-        `// 拆分候选\n`.repeat(905) + `export const big${n} = ${n};\n`,
-      ),
-  },
+  /* 这里**没有** R5（`check-file-structure.cjs` 的「`src` 侧超 900 行」那一半）：
+   * 它在 ISSUE #1811 里翻了硬闸 —— 基线删掉、`--strict` / `--update` 删掉，
+   * 超限即阻断，于是「拒涨」在它身上**无对象可判**（没有基线可写回去，本表的现算
+   * 清单 `discoveredBaselines()` 也就认不出它）。它的硬闸形态由
+   * `tests/check-file-structure.test.ts` 的「R5：超 900 行的文件即阻断」一组守着。 */
   {
     script: "check-void-floats.cjs",
     baseline: "scripts/.void-floats-baseline.json",
@@ -201,7 +177,9 @@ const COVERED_LOCALLY: Record<string, string> = {
  *     R1–R12 其它规则、第 ② 步配不出来」。拆开看：连带命中是真的（缺
  *     `src/proxy.ts` 时 R11 当场红），但那份文件是**可配的输入**，
  *     把 R1–R12 都喂绿第 ② 步就成立 —— 于是它进了 `RATCHETS`，夹具里带
- *     `src/proxy.ts`。
+ *     `src/proxy.ts`。**它随后又出了表**：ISSUE #1811 的 R5 项把 R5 翻成硬闸
+ *     （基线删掉、`--strict` / `--update` 删掉），拒涨在这一家无对象可判 ——
+ *     见 `RATCHETS` 里那条「这里没有 R5」的注释。
  *   · `.ui-primitives-baseline.json` —— 卡点写着「拒涨按 rule id 比较，要先把
  *     rule 集合钉住」。本轮实测：`HARD_GATE_RULES` 已覆盖全部 85 条，
  *     `ratchetOnly()` 的返回恒为空 —— **棘轮那条车道上一个成员都没有**，

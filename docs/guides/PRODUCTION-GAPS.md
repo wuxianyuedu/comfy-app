@@ -1246,11 +1246,10 @@
       口径与五步表写进规范 §11.25，这条判据进 C 组固定清单（它读的是脚本行为，import 图追不到；
       且新增时才有意义）。实测成本 32 格约 60s，其中 `tw4-canonical-report` 每次跑要重新起
       design system（4.8–5.6s/次），所以那一行按实测登记 120s 预算（口径同 §11.13）。
-      余下两格（**PENDING，只许减**，`tests/ratchet-update-guards.test.ts` 里有同名清单与理由）：
-      `.file-size-baseline.json`（一份 950 行的文件会连带命中同脚本的 R1–R12 其它规则，
-      第 ② 步「基线=现状必须绿」先配不出来）、`.ui-primitives-baseline.json`（它的拒涨按 rule id 比较，
-      而「旧基线里没有这个 rule id」既是正当的判据引入、又是 0 基线上新增违规的形状 ——
-      要先把 rule 集合本身钉住才能配拒涨判据）。
+      余下两格当时记在 **PENDING**（`.file-size-baseline.json` 与
+      `.ui-primitives-baseline.json`），本轮都已处置：前者进了 `RATCHETS`（把 R1–R12 的
+      输入喂绿），**随后在 ISSUE #1811 的 R5 项里随 R5 一起翻硬闸、退出本表**；后者进
+      `RETIRED_RATCHETS`（`HARD_GATE_RULES` 已覆盖全部 85 条，棘轮车道无成员）。
       `.gate-executor-ledger.json` 登记为**非计数棘轮**：给它加条目是正常用法，硬要拒涨
       等于把登记流程堵死 —— 这类「`--update` 不拒涨是对的」以后也必须写明理由。
 - [~] **E6 无 bundle 体积门禁 / 变异测试 / a11y 自动化**。**a11y 自动化那一格已接上执行者**：

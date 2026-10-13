@@ -326,8 +326,11 @@ function checkGateStepCounts() {
  * 立案时实测：钩子 D 组 27 步，清单里只有 21 步对得上（`check-ps1-consistency.mjs`、
  * `check-import-alias.cjs`、`check-ui-customizations.cjs`、`check-doc-references.cjs`、
  * `storybook-check.mjs` 五步进了钩子没进清单）。更要紧的是 **flag 层面的漂移**：
- * 清单写 `node scripts/check-file-structure.cjs`（不带 `--strict`），而钩子跑的是带它的那一档 ——
- * 照清单手跑的人会得出「R5 不拦」的结论，而同一节还写着「上面那份清单就是全文」。
+ * 那时清单写 `node scripts/check-file-structure.cjs`（不带 `--strict`），而钩子跑的是
+ * 带它的那一档 —— 照清单手跑的人会得出「R5 不拦」的结论，而同一节还写着「上面那份
+ * 清单就是全文」。那个具体的 `--strict` 差异随 ISSUE #1811 收掉 R5 棘轮而不存在了，
+ * 但**比对整条命令而不是脚本名**这条口径要一直留着：下一个 flag 层面的漂移会以
+ * 别的形态出现（同一份「哪些一步带什么参数」的账）。
  *
  * 所以比对的是**整条命令**（含 flag），不是脚本名：只比名字就正好漏掉上面那一格。
  * 组 0 / A / B / C 那四条命令没有 `  run "<标签>" <命令>` 形态（走 `run_group` 或直接调用），

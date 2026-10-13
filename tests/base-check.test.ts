@@ -769,7 +769,7 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
   });
 
   test("显式点名时按单条解析（钩子标签 / 脚本名 / 整条命令都认）", () => {
-    const byLabel = resolveMergeBatch(["文件结构硬规则(R1-R12，R5 棘轮硬闸)"]);
+    const byLabel = resolveMergeBatch(["文件结构硬规则(R1-R12，R5 硬闸)"]);
     expect(byLabel.ok).toBe(true);
     if (byLabel.ok) {
       expect(byLabel.commands).toHaveLength(1);

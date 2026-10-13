@@ -16,9 +16,9 @@
  *     文件被删 / 改回旧名 / 挪离 src 根都阻断
  *   - R12 src/ 源码禁止内嵌控制字符（NUL 等，规范 §12.11）：带 NUL 的文件会被
  *     git / diff / grep / 编辑器判成二进制，改动从此无法 Review
- *   - R5 超 900 行的文件进拆分候选（只提醒不阻断）：扫描范围是**整个 `src/`**、
- *     不分层不分文件类型；只扫 `src/components/`（历史口径）会让最大的那个文件
- *     与逻辑层的大文件都不设防（ISSUE #536）
+ *   - R5 超 900 行的文件即阻断（**硬闸**，ISSUE #536 立口径 / #575 加棘轮 /
+ *     #1811 翻硬闸）：扫描范围是**整个 `src/`**、不分层不分文件类型；只扫
+ *     `src/components/`（历史口径）会让最大的那个文件与逻辑文件都不设防
  *
  * 为什么用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
  * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
@@ -50,7 +50,7 @@ function run(): { code: number; output: string } {
   return runWith([]);
 }
 
-/** 带参数的调用：R5 的棘轮只在 `--strict` 下判定（规范 §18.5）。 */
+/** 带参数的调用（R5 的翻闸断头用例要传 `--update` 正面证明它不存在，规范 §12.6）。 */
 function runWith(args: string[]): { code: number; output: string } {
   try {
     const output = execFileSync(
@@ -480,14 +480,22 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
   });
 
-  // ── R5：超大文件的拆分候选（提示级，ISSUE #536）──
+  // ── R5：超 900 行的文件即阻断（硬闸，ISSUE #536 立口径 / #575 加棘轮 / #1811 翻硬闸）──
   // 历史口径只扫 `src/components/` 且只认 .tsx，于是**全仓库最大的那个文件**
-  //（`settings/SettingsPageView.tsx` 2499 行）与逻辑层的大文件
+  //（`settings/SettingsPageView.tsx` 2499 行）与逻辑文件
   //（`lib/comfyui/lifecycle.ts` 1041 行）都不在任何护栏里。这里把范围钉死：
-  // 整个 `src/`、不分层不分文件类型。只提醒不阻断。
-  //（ISSUE #535 曾只把 `src/app` 补进目录维度；本块是那次评估的收敛版，
-  //  目录维度与文件类型维度一起放开。）
-  describe("R5：拆分候选覆盖整个 src/（ISSUE #536）", () => {
+  // 整个 `src/`、不分层不分文件类型。
+  //
+  // 「只提醒」（ISSUE #536 那版）挡不住新增长文件 —— 提醒是输出里的一行字，没有人
+  // 会因为一行提示去拆文件。于是 ISSUE #575 加了棘轮（存量进基线、只许降不许升），
+  // 存量清零后 ISSUE #1811 把棘轮也收掉：基线为 0 时 `--update` 无余地、`--strict`
+  // 恒绿，留下的只剩「手改那份 JSON 就能把新超限文件登记成已知存量」这条通道 ——
+  // 那正是硬闸类本来没有的中间态（§13.6.2）。**连带收掉 `baselineRev` 那套
+  // 「按格式时代同口径重数」的机制**（ISSUE #637）：它存在只为让基线那一刻的行数与
+  // 今天的行数可比，没有基线就没有两个格式时代要拉平。
+  //
+  // 下面这一组是翻闸后的形态：一份超限文件即退 1，`--update` 这个出口不存在。
+  describe("R5：超 900 行的文件即阻断（ISSUE #536 / #575 / #1811）", () => {
     /** 造一个恰好 `lines` 行的源文件。 */
     const writeLines = (rel: string, lines: number) => {
       const abs = join(workdir, rel);
@@ -498,290 +506,96 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       );
     };
 
-    it("src/app 下的超长视图进入提醒（只提示不阻断）", () => {
+    it("src/app 下的超长视图即阻断（不再只是提醒）", () => {
       writeLines("src/app/(main)/settings/SettingsPageView.tsx", 901);
       const { code, output } = run();
-      expect(code).toBe(0); // 提醒不得升级为阻断
-      expect(output).toContain("拆分候选");
+      expect(code).toBe(1);
+      expect(output).toContain("R5 超限文件");
       expect(output).toContain("src/app/(main)/settings/SettingsPageView.tsx");
+      /* 报的是行数与阈值 —— 一个只打「建议拆分」的版本对作者没有可行动作。 */
+      expect(output).toContain("901 行");
+      expect(output).toContain("900");
     });
 
-    it("src/lib 下的超长逻辑模块同样进入提醒（不再只管 .tsx）", () => {
+    it("src/lib 下的超长逻辑模块同判（不再只管 .tsx）", () => {
       writeLines("src/lib/comfyui/lifecycle.ts", 901);
       const { code, output } = run();
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(output).toContain("src/lib/comfyui/lifecycle.ts");
     });
 
-    it("src/components 下的超长文件照旧提醒（不因扩范围而丢）", () => {
+    it("src/components 下的超长文件照旧阻断（不因扩范围而丢）", () => {
       writeLines("src/components/studio/logs/LogPanel.tsx", 901);
       const { code, output } = run();
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(output).toContain("src/components/studio/logs/LogPanel.tsx");
     });
 
-    it("刚好 900 行不算超阈值（不多报噪音）", () => {
+    it("刚好 900 行不算超阈值（判据是「超过」而不是「达到」）", () => {
       writeLines("src/app/(main)/settings/SettingsPageView.tsx", 900);
-      const { code, output } = run();
+      const { code } = run();
       expect(code).toBe(0);
-      expect(output).not.toContain("拆分候选");
     });
 
-    it("测试文件不进拆分候选（用例体量不是可维护性信号）", () => {
+    it("测试文件不进扫描面（用例体量不是可维护性信号）", () => {
       writeLines(
         "src/app/(main)/settings/hooks/use-settings-page.test.ts",
         901,
       );
       const { code, output } = run();
       expect(code).toBe(0);
-      expect(output).not.toContain("拆分候选");
-    });
-  });
-
-  // ── R5 棘轮（ISSUE #575 第 8 项 / 规范 §18.5）──
-  // 「只提醒」挡不住新增长文件：提醒是输出里的一行字，没有人会因为一行提示
-  // 去拆文件 —— 本项目 900 行以上的文件长期停在 10 个、只增不减。这里把
-  // 「存量交给排期、增量交给棘轮」这条口径机器化。
-  describe("R5 棘轮：超 900 行文件只许降不许升（--strict）", () => {
-    const writeLines = (rel: string, lines: number) => {
-      const abs = join(workdir, rel);
-      mkdirSync(dirname(abs), { recursive: true });
-      writeFileSync(
-        abs,
-        Array.from({ length: lines }, () => "// x").join("\n"),
-      );
-    };
-    /* 写基线（键为仓库相对路径，值为行数）。
-     * 路径与脚本同级 —— 本测试把脚本**拷到工作区根**（`__dirname` = 工作区根），
-     * 真实仓库里它住在 `scripts/`，两者的相对关系（基线在脚本旁边）一致。 */
-    const BASELINE = () => join(workdir, ".file-size-baseline.json");
-    const writeBaseline = (files: Record<string, number>) => {
-      writeFileSync(
-        BASELINE(),
-        JSON.stringify(
-          { threshold: 900, total: Object.keys(files).length, files },
-          null,
-          2,
-        ),
-      );
-    };
-
-    it("基线缺失时 --strict 阻断并给出可行动作", () => {
-      writeLines("src/lib/media/huge.ts", 1000);
-      const { code, output } = runWith(["--strict"]);
-      expect(code).toBe(1);
-      expect(output).toContain("R5 基线文件缺失");
-      expect(output).toContain("--update");
+      expect(output).not.toContain("R5 超限文件");
     });
 
-    it("基线内的超限文件放行（存量交给排期）", () => {
-      writeLines("src/lib/media/huge.ts", 1000);
-      writeBaseline({ "src/lib/media/huge.ts": 1000 });
-      const { code, output } = runWith(["--strict"]);
+    it("`.d.ts` 不进扫描面（类型声明不是实现）", () => {
+      writeLines("src/lib/media/huge.d.ts", 901);
+      const { code, output } = run();
       expect(code).toBe(0);
-      expect(output).toContain("[structure] OK");
+      expect(output).not.toContain("R5 超限文件");
     });
 
-    it("新增超限文件被阻断（这才是棘轮的意义）", () => {
-      writeLines("src/lib/media/huge.ts", 1000);
-      writeBaseline({ "src/lib/media/huge.ts": 1000 });
-      writeLines("src/lib/media/another-huge.ts", 950);
-      const { code, output } = runWith(["--strict"]);
-      expect(code).toBe(1);
-      expect(output).toContain("R5 新增超限文件");
-      expect(output).toContain("src/lib/media/another-huge.ts");
-    });
-
-    it("存量文件继续变大同样阻断（不是「进过基线就永久免疫」）", () => {
-      writeLines("src/lib/media/huge.ts", 1000);
-      writeBaseline({ "src/lib/media/huge.ts": 1000 });
-      writeLines("src/lib/media/huge.ts", 1200);
-      const { code, output } = runWith(["--strict"]);
-      expect(code).toBe(1);
-      expect(output).toContain("R5 超限文件继续变大");
-    });
-
-    it("降回阈值内后提示收紧基线（不阻断，避免打断提交）", () => {
-      writeLines("src/lib/media/shrunk.ts", 800);
-      writeBaseline({ "src/lib/media/shrunk.ts": 1000 });
-      const { code, output } = runWith(["--strict"]);
-      expect(code).toBe(0);
-      expect(output).toContain("R5 基线可收紧");
-    });
-
-    it("非 strict（pre-commit 口径）不因新增超限文件阻断", () => {
-      writeLines("src/lib/media/huge.ts", 1000);
-      writeBaseline({});
-      const { code } = run();
-      expect(code).toBe(0);
-    });
-
-    it("--update 按当前扫描重写基线（治理后收紧）", () => {
-      writeLines("src/lib/media/huge.ts", 1000);
-      writeBaseline({ "src/lib/stale.ts": 1234 });
-      const { code, output } = runWith(["--update"]);
-      expect(code).toBe(0);
-      expect(output).toContain("R5 基线已更新");
-      const written = JSON.parse(readFileSync(BASELINE(), "utf8")) as {
-        files: Record<string, number>;
-      };
-      expect(written.files).toEqual({ "src/lib/media/huge.ts": 1000 });
-    });
-
-    /* ── 行数按 baselineRev 同口径重数（ISSUE #637）──
-     * 现场：`LogPanel.tsx` 的基线 1102 记于全库 prettier 治理**之前**；治理后同一
-     * 文件（一个字没改）已是 1236 行。此后任何人**一行都不碰它**，CI 也报
-     * 「R5 超限文件继续变大（1102 → 1236）」—— 棘轮把「格式口径变化」读成了
-     * 「这次改动让文件变大」，而作者无从下手。
+    /* ── 翻闸后的两条否定式：没有任何登记通道 ──
      *
-     * 修法：基线自带记它那一刻的 `baselineRev`，比对前按**今天的计数口径**重数
-     * 基线版本的内容 —— 判据变成「这个文件在**同口径**下比基线那一刻多没多」。
-     * 下面用真 git 仓库造出「基线版本」与「当前」两态。 */
-    describe("R5 行数口径随 baselineRev 重数（ISSUE #637）", () => {
-      const git = (...args: string[]) => {
-        execFileSync("git", args, { cwd: workdir, stdio: "ignore" });
-      };
-      const writeBaselineAtRev = (
-        files: Record<string, number>,
-        rev: string,
-      ) => {
-        writeFileSync(
-          BASELINE(),
-          JSON.stringify(
-            {
-              threshold: 900,
-              ruleVersion: 3,
-              baselineRev: rev,
-              total: Object.keys(files).length,
-              files,
-            },
-            null,
-            2,
-          ),
-        );
-      };
-      const head = () =>
-        execFileSync("git", ["rev-parse", "HEAD"], {
-          cwd: workdir,
-          encoding: "utf8",
-        }).trim();
-      /** 造一个「基线那一刻」的提交，返回它的修订号。 */
-      const commitAs = (rel: string, lines: number, message: string) => {
-        writeLines(rel, lines);
-        git("add", "-A");
-        git("commit", "-qm", message);
-        return head();
-      };
+     * 这两格是「硬闸」与「棘轮」的全部差别所在。它们**没有正面判据会盯**（判据
+     * 本体不再写任何 JSON、也不再有基线），所以必须在这里正面钉住 —— 否则下一个
+     * 人把 `--update` 与基线加回来，不会有任何一格变红。 */
+    it("`--update` 这个出口**已经不存在**：既不落盘 JSON、也不放宽判定（断头用例）", () => {
+      writeLines("src/lib/media/huge.ts", 1000);
+      const { code } = runWith(["--update"]);
+      /* `--update` 不再是已知旗标（脚本里连 ARGS 都不读了）。传它照判 —— 阻断。 */
+      expect(code).toBe(1);
+      /* 工作区里不许出现任何由本脚本写出的 JSON（旧形态的落点是
+       * `.file-size-baseline.json`，在脚本同级）。 */
+      expect(existsSync(join(workdir, ".file-size-baseline.json"))).toBe(false);
+    });
 
-      /* 脚本要 `git show <rev>:<file>` 取基线版本内容，故逐条自建仓库；
-       * `workdir` 由 beforeEach 给出。 */
-      beforeEach(() => {
-        git("init", "-q");
-        git("config", "user.email", "t@example.com");
-        git("config", "user.name", "t");
-        git("config", "commit.gpgsign", "false");
-      });
+    it("基线文件在场也**不影响**判定（硬闸不认它，只看行数）", () => {
+      /* 翻闸时最容易漏的一件事：把判定换成硬闸，却留着「先读基线」那一段 ——
+       * 于是旧的基线文件（别人检出里还留着一份）会让判据的读数随文件内容变。
+       * 这里正面钉住：放一份写满豁免的基线，判据照样阻断。 */
+      writeLines("src/lib/media/huge.ts", 1000);
+      writeFileSync(
+        join(workdir, ".file-size-baseline.json"),
+        JSON.stringify({
+          threshold: 900,
+          total: 1,
+          files: { "src/lib/media/huge.ts": 9999 },
+        }),
+      );
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R5 超限文件");
+    });
 
-      it("基线数字记少了、内容未变 → 按同口径重数后放行（不误报）", () => {
-        /* 基线那一刻文件是 1000 行，但基线里记成 900（旧口径 / 手工记漏）。
-         * 旧判据会拿 1000 > 900 直接判「这次改动让它变大」—— 而当前 1000 行与
-         * 基线版本逐行相同，压根没人动过它。 */
-        const rev = commitAs("src/lib/media/huge.ts", 1000, "baseline");
-        writeBaselineAtRev({ "src/lib/media/huge.ts": 900 }, rev);
-
-        const { code, output } = runWith(["--strict"]);
-        expect(code).toBe(0);
-        expect(output).toContain("[structure] OK");
-      });
-
-      it("内容未变 → 放行；再真加 20 行 → 阻断（同口径比较不放过真实膨胀）", () => {
-        const rev = commitAs("src/lib/media/huge.ts", 1000, "baseline");
-        writeBaselineAtRev({ "src/lib/media/huge.ts": 900 }, rev);
-        /* ① 一个字没改：同口径重数得 1000，与当前 1000 持平 → 放行。 */
-        expect(runWith(["--strict"]).code).toBe(0);
-        /* ② 真加了 20 行：1000 → 1020，同口径下 1020 > 1000 → 阻断。 */
-        writeLines("src/lib/media/huge.ts", 1020);
-        const { code, output } = runWith(["--strict"]);
-        expect(code).toBe(1);
-        expect(output).toContain("R5 超限文件继续变大");
-      });
-
-      it("基线版本里没有该文件（本次新增）→ 退回记录值，不静默漏放", () => {
-        const rev = commitAs("src/lib/other.ts", 10, "empty baseline");
-        writeLines("src/lib/media/huge.ts", 1000);
-        writeBaselineAtRev({ "src/lib/media/huge.ts": 900 }, rev);
-
-        const { code, output } = runWith(["--strict"]);
-        expect(code).toBe(1);
-        expect(output).toContain("R5 超限文件继续变大");
-      });
-
-      it("基线缺 baselineRev（旧基线）→ 退回记录值，行为与历史一致", () => {
-        writeLines("src/lib/media/huge.ts", 1000);
-        writeBaseline({ "src/lib/media/huge.ts": 1000 });
-        const { code, output } = runWith(["--strict"]);
-        expect(code).toBe(0);
-        expect(output).toContain("[structure] OK");
-      });
-
-      it("--update 记下 baselineRev（供日后同口径重数）", () => {
-        writeLines("src/lib/media/huge.ts", 1000);
-        git("add", "-A");
-        git("commit", "-qm", "seed");
-        const rev = head();
-        expect(runWith(["--update"]).code).toBe(0);
-        const written = JSON.parse(readFileSync(BASELINE(), "utf8")) as {
-          baselineRev?: string;
-        };
-        expect(written.baselineRev).toBe(rev);
-      });
-
-      /* ── 基线修订号不可达（ISSUE #653）──
-       * 现场：基线的 `baselineRev` 记的是**分支提交**，合并后失去 ref 指向；下一次
-       * `git gc` 把它清掉，`git show <rev>:<file>` 从此一律失败 —— 同口径重数静默
-       * 退化成「拿记录值直接比」，而记录值记在另一个格式时代的源码上。表现是**一个字
-       * 都没改的文件天天判红**，报错却写「R5 超限文件继续变大」。
-       *
-       * 判据修成两支：修订号可用 → 同口径重数（上面的用例）；不可达 → 直接报
-       * 「基线修订号取不到」，可行动作是重记基线，而不是拆文件。 */
-      it("基线修订号不可达 → 报「取不到」并指向重记基线，不误报成文件变大", () => {
-        writeLines("src/lib/media/huge.ts", 1000);
-        git("add", "-A");
-        git("commit", "-qm", "seed");
-        /* 记录值比当前小（基线的那个格式时代数得少），修订号却取不到。 */
-        writeBaselineAtRev({ "src/lib/media/huge.ts": 900 }, "0".repeat(40));
-
-        const { code, output } = runWith(["--strict"]);
-        expect(code).toBe(1);
-        expect(output).toContain("R5 基线修订号");
-        expect(output).toContain("取不到");
-        expect(output).toContain("--update 重记基线");
-        /* 关键：不再把它说成「这个文件变大了」——那是另一支判据。 */
-        expect(output).not.toContain("R5 超限文件继续变大");
-      });
-
-      it("基线修订号不可达且内容真变大 → 同样只指向重记基线（不放行也不误报）", () => {
-        writeLines("src/lib/media/huge.ts", 1000);
-        git("add", "-A");
-        git("commit", "-qm", "seed");
-        writeBaselineAtRev({ "src/lib/media/huge.ts": 990 }, "f".repeat(40));
-        writeLines("src/lib/media/huge.ts", 1200);
-
-        const { code, output } = runWith(["--strict"]);
-        expect(code).toBe(1);
-        expect(output).toContain("R5 基线修订号");
-        expect(output).toContain("取不到");
-      });
-
-      it("基线修订号可达 → 走同口径重数那一支（不落进「取不到」）", () => {
-        const rev = commitAs("src/lib/media/huge.ts", 1000, "baseline");
-        writeBaselineAtRev({ "src/lib/media/huge.ts": 900 }, rev);
-        writeLines("src/lib/media/huge.ts", 1020);
-        const { code, output } = runWith(["--strict"]);
-        expect(code).toBe(1);
-        expect(output).toContain("R5 超限文件继续变大");
-        expect(output).not.toContain("取不到");
-      });
+    it("超限文件按行数降序报（先看最大那一份）", () => {
+      writeLines("src/lib/media/small-overflow.ts", 901);
+      writeLines("src/lib/media/big-overflow.ts", 1500);
+      const { code, output } = run();
+      expect(code).toBe(1);
+      const idxBig = output.indexOf("src/lib/media/big-overflow.ts");
+      const idxSmall = output.indexOf("src/lib/media/small-overflow.ts");
+      expect(idxBig).toBeGreaterThan(-1);
+      expect(idxBig).toBeLessThan(idxSmall);
     });
   });
 });
