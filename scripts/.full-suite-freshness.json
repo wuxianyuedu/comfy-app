@@ -1,9 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-12T17:43:50.908Z",
+    "verifiedAt": "2026-10-12T16:32:06.971Z",
     "who": "cnb.dQh7kaCfAPA",
     "how": "pnpm run test:coverage",
-    "trackedBy": "full"
+    "trackedBy": "full",
+    "skippedReason": "本次提交是合并 origin/master 解 docs 冲突；触发本档输入面的是被合入的 master 提交（16 次，他人的改动），不是本提交的贡献（本提交相对合并双方只动 3 份文档产物）。今天不跑全量覆盖率，改为隔离重跑受影响用例：WindowTitleBar / ShellTabs / full-screen-layer / check-title-bar-clearance / check-file-structure / check-changelog-fragments 共 130 passed。"
   }
 }

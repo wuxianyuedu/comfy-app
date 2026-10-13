@@ -22,8 +22,7 @@
  *  - 双击标题栏空白处 = 最大化/还原，与系统标题栏一致。
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { Copy, Square, X, Minus } from "lucide-react";
+import { X } from "lucide-react";
 import type { ShellTab } from "~/lib/shell/shell-tabs-store";
 import { MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
 import { ViewTabStrip } from "./ViewTabStrip";
@@ -31,26 +30,16 @@ import { type ViewTab } from "./workspace-tabs";
 import { type OpenableView } from "./ViewTabStrip";
 import { type WorkspaceView } from "./NavItems";
 import {
-  isDragRegionTarget,
-  resolveMaximizeButtonKind,
-  WINDOW_BUTTON_LABELS,
-  type WindowButtonKind,
-} from "~/lib/shell/title-bar-derive";
-import {
   TITLE_BAR_CHROME_CLASS,
   TITLE_BAR_HEIGHT_CLASS,
 } from "~/lib/full-screen-layer";
-import {
-  closeWindow,
-  isWindowMaximized,
-  minimizeWindow,
-  onWindowResized,
-  startWindowDrag,
-  toggleMaximizeWindow,
-} from "~/lib/shell/window-controls-client";
 import { useStartupForeground } from "./hooks/use-startup-foreground";
+import {
+  useTitleBarDrag,
+  useWindowMaximized,
+  WindowControls,
+} from "./WindowControls";
 import { Button } from "~/components/ui/button";
-import { Hint } from "~/components/ui/hint";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
 interface TitleBarTabsProps {
@@ -125,45 +114,9 @@ function TitleBarTab({
   );
 }
 
-/** 窗口控制按钮（最小化 / 最大化-还原 / 关闭）。 */
-function WindowButton({
-  kind,
-  onClick,
-  danger,
-}: {
-  kind: WindowButtonKind;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  const label = WINDOW_BUTTON_LABELS[kind];
-  const icon =
-    kind === "minimize" ? (
-      <Minus size={14} />
-    ) : kind === "maximize" ? (
-      <Square size={12} />
-    ) : kind === "restore" ? (
-      <Copy size={12} />
-    ) : (
-      <X size={15} />
-    );
-  return (
-    <Hint label={label}>
-      <Button
-        variant="ghost"
-        aria-label={label}
-        data-no-drag
-        onClick={onClick}
-        className={`text-ink-soft h-full w-11 rounded-none ${
-          danger
-            ? "hover:bg-destructive hover:text-primary-foreground"
-            : "hover:bg-subtle hover:text-ink-bright"
-        }`}
-      >
-        {icon}
-      </Button>
-    </Hint>
-  );
-}
+/** 窗口控制按钮（最小化 / 最大化-还原 / 关闭）在 `./WindowControls` ——
+ *  与整屏路由页自带的精简标题行（`WindowTitleBar`）共用同一份实现，
+ *  「最大化 / 还原」图标跟着状态走这种细节不会在两处漂移（§12.12）。 */
 
 export function TitleBarTabs({
   tabs,
@@ -184,71 +137,25 @@ export function TitleBarTabs({
   const shellTabs = hasViewTabs
     ? tabs.filter((tab) => tab.id !== MAIN_TAB_ID)
     : tabs;
-  const [maximized, setMaximized] = useState(false);
+  /* 最大化状态与拖拽判据走 `./WindowControls` 的共享实现（与整屏路由页自带的
+     精简标题行 `WindowTitleBar` 同一份 —— 两处各写一遍就是孪生）。 */
+  const [maximized, setMaximized] = useWindowMaximized();
+  const drag = useTitleBarDrag(setMaximized);
 
   // 启动完成后的前台归属：用户没让出前台就给前台，让出了才只在任务栏显示
   // （判据在壳里，见 §1.3）；本 hook 只管「用户再次唤起已运行的实例」那条通道。
   useStartupForeground();
 
-  // 初始与「窗口尺寸变化」时同步最大化状态（尺寸变化覆盖最大化/还原/拖拽边缘）。
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    let alive = true;
-    void (async () => {
-      const current = await isWindowMaximized();
-      if (alive) setMaximized(current);
-      unlisten = await onWindowResized((next) => {
-        if (alive) setMaximized(next);
-      });
-    })();
-    return () => {
-      alive = false;
-      unlisten?.();
-    };
-  }, []);
-
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      // 只响应主键；点在页签/按钮上时不拖动。
-      if (e.button !== 0) return;
-      if (
-        !isDragRegionTarget(
-          e.target as unknown as { closest?: (s: string) => unknown },
-        )
-      )
-        return;
-      void startWindowDrag();
-    },
-    [],
-  );
-
-  const handleDoubleClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (
-        !isDragRegionTarget(
-          e.target as unknown as { closest?: (s: string) => unknown },
-        )
-      )
-        return;
-      void toggleMaximizeWindow().then((next) => {
-        if (next !== null) setMaximized(next);
-      });
-    },
-    [],
-  );
-
-  const maximizeKind = resolveMaximizeButtonKind(maximized);
-
   return (
     <div
       /* `data-slot="title-bar"` 是「应用顶部这条 chrome 在不在」的机器可读标记：
-       * `TitleBarTabs` 是它唯一渲染点，e2e 按它断言锚定浮层的让位对象确实在
-       *（气泡被标题行吃掉半个身子那件事，见 `~/lib/full-screen-layer`
-       * 的「锚定浮层」一节）。 */
+       * `TitleBarTabs` 与精简标题行 `WindowTitleBar` 共用它，e2e 按它断言锚定
+       * 浮层的让位对象确实在（气泡被标题行吃掉半个身子那件事，见
+       * `~/lib/full-screen-layer` 的「锚定浮层」一节）。 */
       data-slot="title-bar"
       className={`flex ${TITLE_BAR_HEIGHT_CLASS} ${TITLE_BAR_CHROME_CLASS} border-border-subtle bg-panel shrink-0 items-stretch border-b select-none`}
-      onPointerDown={handlePointerDown}
-      onDoubleClick={handleDoubleClick}
+      onPointerDown={drag.onPointerDown}
+      onDoubleClick={drag.onDoubleClick}
     >
       {/* 页签区：与标题行同一横条。视图页签在前（它们代表主应用那一格），
           iframe 页签在后；两组共用同一份 ViewTabStrip / TitleBarTab 形态。 */}
@@ -287,19 +194,8 @@ export function TitleBarTabs({
       {/* 拖拽空白区：撑满剩余宽度 */}
       <div className="min-w-2 flex-1" aria-hidden />
 
-      {/* 窗口按钮：接管原生标题栏的三个动作 */}
-      <div className="flex shrink-0 items-stretch">
-        <WindowButton kind="minimize" onClick={() => void minimizeWindow()} />
-        <WindowButton
-          kind={maximizeKind}
-          onClick={() =>
-            void toggleMaximizeWindow().then((next) => {
-              if (next !== null) setMaximized(next);
-            })
-          }
-        />
-        <WindowButton kind="close" danger onClick={() => void closeWindow()} />
-      </div>
+      {/* 窗口按钮：接管原生标题栏的三个动作（共享实现见 ./WindowControls） */}
+      <WindowControls maximized={maximized} onMaximizedChange={setMaximized} />
     </div>
   );
 }
