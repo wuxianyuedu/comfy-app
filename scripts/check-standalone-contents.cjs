@@ -135,6 +135,13 @@ const ALLOWED_SCRIPTS = new Set([
   "launcher-core/shell-ops.mjs",
   "launcher-core/misc-ops.mjs",
   "launcher-core/port-reap.mjs",
+  // 主流程按阶段拆出来的四份（ISSUE #1811 第五刀）：预检桥段、桌面壳阶段、
+  // 起服务桥段、就绪等待。`dev-launcher.mjs` 顶层静态 import 它们 —— 缺任一份
+  // 就是 `ERR_MODULE_NOT_FOUND`（ESM 加载期解析整张图），表现与上面那批一样。
+  "launcher-core/startup-gates.mjs",
+  "launcher-core/shell-stage.mjs",
+  "launcher-core/dev-boot.mjs",
+  "launcher-core/ready-wait.mjs",
   // 桌包 standalone 的运行入口与它的环境装配（ISSUE #1216）：壳把 `node server.js`
   // 换成 `node scripts/standalone-runtime.mjs`，缺这份 = 载荷只能退回直接起 server，
   // 首启建表与运行期 env 装配（分发产物按硬规则 17 不含 .env）一起失效。

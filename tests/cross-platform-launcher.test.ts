@@ -41,6 +41,7 @@ import {
   writeSession,
 } from "../scripts/dev-launcher-session.mjs";
 import { killProcessTree } from "../src/lib/process/kill-process-tree";
+import { launcherChainSource } from "./helpers/launcher-source";
 
 /** 数出「进程组」里还剩几个活着的标记进程（用唯一标记匹配命令行）。 */
 function countMarkedProcesses(marker: string): number {
@@ -439,17 +440,10 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
    * 断的是**接线形态**而不是「住在哪个文件」—— 所以把主文件与拆出的几份拼成
    * 一份再断。只读主文件时，搬走的实现会让 `indexOf` 落空、`slice` 拿到空串，
    * 断言就**静默变成空转**（`not.toMatch` 恒真）。 */
-  const launcherSrc = [
-    "dev-launcher.mjs",
-    "launcher-core/preflight.mjs",
-    "launcher-core/port-reap.mjs",
-    "launcher-core/shell-ops.mjs",
-    "launcher-core/downstream.mjs",
-  ]
-    .map((rel) =>
-      fs.readFileSync(path.join(process.cwd(), "scripts", rel), "utf8"),
-    )
-    .join("\n");
+  /* 走**现算的编排链路闭包**（`launcherChainSource()` 从入口按顶层静态 import
+   * 递归收），不再手抄一份文件清单：抄了就会随下一刀拆文件再漏一处，而漏的表现
+   * 正是这条判据要防的形态 —— `indexOf` 落空、`not.toMatch` 对着空串恒真。 */
+  const launcherSrc = launcherChainSource();
   const whitelistSrc = fs.readFileSync(
     path.join(process.cwd(), "scripts", "standalone-private-inputs.mjs"),
     "utf8",
@@ -493,8 +487,11 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
     // `launcher-core/executor-mode.mjs`（进程 env → .env 回读 → 归一化），launcher
     // 只用它的返回值；门控形状不变：只认 `host`，未知值 warn 后走 inline 分支。
     expect(launcherSrc).toContain('from "./launcher-core/executor-mode.mjs"');
+    /* 判据仍是「解出 mode/unknown 两个值」：实现搬进 `dev-boot.mjs` 后判据由
+     * 编排器注入（`ctx.resolveExecutorMode`），所以 RHS 允许 `ctx.` 前缀 ——
+     * 断的是这个形状，不是「它写在哪个文件 / 怎么拿到那个函数」。 */
     expect(launcherSrc).toMatch(
-      /const \{ mode: executorMode, unknown: unknownExecutor \} =\s*resolveExecutorMode\(\)/,
+      /const \{ mode: executorMode, unknown: unknownExecutor \} =\s*\n?\s*ctx\.resolveExecutorMode\(\)/,
     );
     expect(launcherSrc).toMatch(/executorMode === ["']host["']/);
     expect(launcherSrc).toMatch(/spawnExecutorHost\(\)/);
