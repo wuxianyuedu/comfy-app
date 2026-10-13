@@ -204,7 +204,7 @@ export function WirePortRows({
                 style={{ top: "50%", transform: "translateY(-50%)" }}
               />
               <span
-                className="text-ink-bright text-[14px] font-medium"
+                className="text-ink-bright text-sm font-medium"
                 style={{ fontFamily: "var(--font-sans)" }}
               >
                 {label}
@@ -287,7 +287,7 @@ export function WirePortRows({
  chip 在右（pr-14 贴 Card 右内缘）——chip 永远在 subrow 右端。*/}
               <div className="relative flex h-4 shrink-0 items-center justify-between gap-2.5 pr-3.5 pl-3.5">
                 <span
-                  className="text-ink-bright text-[14px] font-medium"
+                  className="text-ink-bright text-sm font-medium"
                   style={{ fontFamily: "var(--font-sans)" }}
                 >
                   {label}
@@ -385,7 +385,7 @@ export function WirePortRows({
                 />
                 <div className="flex-1" />
                 <span
-                  className="text-ink-bright text-[14px] font-medium"
+                  className="text-ink-bright text-sm font-medium"
                   style={{ fontFamily: "var(--font-sans)" }}
                 >
                   {label}

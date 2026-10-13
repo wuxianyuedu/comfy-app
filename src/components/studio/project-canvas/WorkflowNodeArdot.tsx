@@ -222,7 +222,7 @@ export function WorkflowNodeArdot() {
           <div className="flex items-center gap-2.5">
             <span
               aria-label="类型 工作流"
-              className="text-primary rounded-node flex size-7 items-center justify-center text-[14px] font-bold"
+              className="text-primary rounded-node flex size-7 items-center justify-center text-sm font-bold"
               style={{
                 background: "var(--color-node-accent)",
                 fontFamily: "var(--font-sans)",
@@ -231,7 +231,7 @@ export function WorkflowNodeArdot() {
               W
             </span>
             <span
-              className="text-ink-bright text-[14px] font-bold"
+              className="text-ink-bright text-sm font-bold"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               自定义工作流

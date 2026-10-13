@@ -31,6 +31,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import { parseRadiusScale, renderedRadiusValues } from "./helpers/radius-scale";
+import { parseTextTiers } from "./helpers/text-tiers";
 import { stripComments } from "./helpers/strip-comments";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
 
@@ -455,8 +456,10 @@ function familyHits(
 }
 
 /** 光晕（halo）里的裸色。`0_0_` 前缀本身就是判据：光晕在几何上没有偏移也没有扩散，
- *  投影一定有 —— 所以这条不会误伤仓里那 6 处 `shadow-[0_18px_40px_rgba(0,0,0,…)]`
- *  一类的投影（实测：按 `0_0_` 判 0 处，按「任意 shadow 带 rgba」判 6 处）。 */
+ *  投影一定有 —— 所以这条**不收投影**。投影值位里的裸色由另一侧收：
+ *  `scripts/check-theme-colors.cjs` 认「源码里写了字面色值」，含写进候选名值位的那些
+ *  （口径与它的 `\b` 教训见规范 03 §3.6.2；这里不写全候选名，理由见该节那条「被扫正文
+ *  写全一条候选名 = 产物里多一条死规则」）。 */
 const HALO_RAW = /shadow-\[0_0_[0-9.]+px_rgba\(/;
 /** 任何 shadow 候选名里写 hex（实测全库 0 处，所以也按归零判）。 */
 const SHADOW_HEX = /shadow-\[[^\]]*#[0-9a-fA-F]{3,8}\b/;
@@ -484,7 +487,17 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
    *  契约认的「应用默认正文」档）。这一批**带着行高一起变**（19.5 → 16px），
    *  所以 `log-virtual.ts` 的行高常量与它的两处用例是同批改的，不是两件事。 */
   const RADIUS_BASELINE = 7;
-  const TEXT_BASELINE = 140;
+  /**
+   * **140→122 是同一条「一个尺寸一个名字」口径的第三半**：圆角那条「字面 px 等于某档
+   * 当前渲染值就红」此前只判圆角，字号侧只归零了 12 / 13px —— 于是 17 处 14px 的字面量
+   * （逐字等于 `text-sm` 的渲染值）与 1 处 18px 的字面量（等于 `text-lg`）长期合法。
+   * 这一批**带着行高一起变**（字面量吃继承的 1.5 ⇒ 21px / 27px，档位自带 16px / 28px），
+   * 与 13px 那批同理：改动点所在行是否由文字定高，按结构判（同族最高兄弟元素 ≥ 新行盒），
+   * 不靠眼睛。17px 那枚字面量不在射程内 —— 它等于 `--text-stage`，而那三颗标题档的名字
+   * 不是 t-shirt 形状、在 JSX 里会被 `cn()` 归进颜色组吃掉同行状态色。
+   * 本注释刻意**不写完整的候选名**：被扫到的正文里每写全一枚，产物 CSS 就多一条
+   * 没人用的规则（口径见规范 03 §3.6.2），而这一批刚被清零。 */
+  const TEXT_BASELINE = 122;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
     const scale = parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8"));
@@ -497,6 +510,106 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       "这些调用点写的字面 px 正好等于某档的当前渲染值，应改用类名" +
         `（rounded-sm…4xl / rounded-node）：\n${offenders
           .map((o) => `  ${o.file}  rounded-[${o.value}px]`)
+          .join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("字面字号与字面圆角同一条对称判据：等于具名档渲染值就红", () => {
+    /* 圆角那边早就有这条（上一条 `it`），字号此前只归零了 12px / 13px —— 于是
+     * 「同一个尺寸两个名字」在 14px 上照样成立：`text-sm` 是契约认的默认正文档，
+     * 而调用点还写着同值的字面量。两边共用同一份读法（`tests/helpers/text-tiers.ts`），
+     * 值不写死在这里：Tailwind 默认表来自依赖、项目档来自 globals.css。 */
+    const tiers = parseTextTiers(
+      readFileSync(GLOBALS_PATH, "utf8"),
+      TSHIRT_NAME,
+    );
+    /* 先验量具：这条是「等式为 0」的判据，档表解空了会永远绿（比红更糟）。
+     * 五颗都是本仓真实在用、且**必须**能被类名表达的档。 */
+    for (const [px, name] of [
+      [10, "3xs"],
+      [11, "2xs"],
+      [12, "xs"],
+      [14, "sm"],
+      [16, "base"],
+    ] as const) {
+      expect(
+        tiers.byPx.get(px),
+        `档表读空了或取错值：${px}px 应是 ${name}`,
+      ).toBe(name);
+    }
+    /* 反向：三颗标题档（`section` / `page` / `stage`）**不在**射程内，两层理由：
+     * 它们乘 `--font-scale`，**没有单一渲染值**（14px 的 `section` 在 125% 档下是
+     * 17.5px —— 拿 scale=1 的读数去要求调用点改类名是错的）；而且它们的名字不是
+     * t-shirt 形状，进 JSX 会撞 `cn()` 那个颜色组坑（`globals.css` 注释自己写着别用）。
+     * 17px 那枚字面量今天就是这样一档 —— 别当漏网清掉。 */
+    expect(
+      tiers.byPx.has(17),
+      "乘 --font-scale 的标题档进了射程：它的渲染值随设置页变，等式判据不成立",
+    ).toBe(false);
+    expect(
+      tiers.names.filter(
+        (n) => n === "section" || n === "page" || n === "stage",
+      ),
+      "同上：这三颗一颗都不该在档表里",
+    ).toEqual([]);
+    /* 那两条筛法各自验一次：`TEXT_DECL_RE` 只认常量形状（`calc()` 那种直接被跳过），
+     * 而「非 t-shirt 的自造档名不进射程」这条在今天**筛不掉任何东西** —— 拿一份合成
+     * 文本正面验它，否则它只是注释里的承诺，没有执行者。
+     * 合成文本**每颗声明各起一行**：那条正则锚的是行首，全写在一行会得到一份空表，
+     * 于是三条断言都「因为没解出来」而通过 —— 假绿（这一版就是这么红的）。 */
+    const synthetic = parseTextTiers(
+      [
+        "@theme {",
+        "  --text-hero: 34px;",
+        "  --text-4xs: 9px;",
+        "  --text-tight: calc(1rem * var(--font-scale, 1));",
+        "}",
+      ].join("\n"),
+      TSHIRT_NAME,
+    );
+    expect(
+      synthetic.names.includes("hero"),
+      "非 t-shirt 的自造档名进了射程 —— 判据会逼调用点写一个被 `cn()` 当颜色处理的类名",
+    ).toBe(false);
+    expect(synthetic.names.includes("4xs"), "合法 t-shirt 名被筛掉了").toBe(
+      true,
+    );
+    expect(
+      synthetic.names.includes("tight"),
+      "乘 --font-scale 的 calc 档被解进了射程",
+    ).toBe(false);
+    expect(
+      [..."probe-text-[14px] 与 probe-text-[18px]".matchAll(TEXT_LITERAL)]
+        .length,
+      "字面字号的正则漂了（这条判据会静默全绿）。样本串带 `probe-` 前缀是刻意的：" +
+        "写全一枚候选名，产物 CSS 里就多一条没人用的规则，见 03 §3.6.2",
+    ).toBe(2);
+
+    const isTierValue = (value: string) =>
+      tiers.byPx.has(Number.parseFloat(value));
+    /* 变异：清零之后 offenders 是空集，而「空集 + 写漂的谓词」照样绿 —— 所以谓词
+       自己喂两条：等于档位值的必须判违规，不在档表上的不许（10.5px 是第 4 刀之前
+       那批还没命名的存量）。 */
+    expect(
+      isTierValue("14"),
+      "谓词认不出 14px 就是 text-sm 的渲染值 —— 这条清零判据在空转",
+    ).toBe(true);
+    expect(
+      isTierValue("10.5"),
+      "不在档表上的值被判成违规（判据越界了）",
+    ).toBe(false);
+
+    const offenders = scanProduct(TEXT_LITERAL).filter((h) =>
+      isTierValue(h.value),
+    );
+    expect(
+      offenders,
+      "这些调用点写的字面 px 正好等于某档的当前渲染值，应改用具名档" +
+        `（text-3xs/2xs/xs/sm/base/lg…）：\n${offenders
+          .map(
+            (o) =>
+              `  ${o.file}  text-[${o.value}px] → text-${tiers.byPx.get(Number.parseFloat(o.value))}`,
+          )
           .join("\n")}`,
     ).toEqual([]);
   });

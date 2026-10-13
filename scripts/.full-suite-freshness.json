@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-13T01:07:27.254Z",
+    "verifiedAt": "2026-10-13T03:43:42.262Z",
     "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "今天真跑过一次全量（8777 passed / 3 failed）—— 那 3 条与本次改动无关：2 条要本机 python venv（环境缺件）、1 条是 e2e 新鲜度账当天未自证（已补记豁免）。因环境缺件这一档今天跑不绿，故按「今天故意不跑」记一条。本次改动不动 src/（覆盖率门槛按 src 子域判），受影响用例（tests/typedoc-run.test.ts + tests/check-docs-api.test.ts，21 条）已就地跑绿，tsc / eslint / prettier 全绿。"
+    "skippedReason": "合并 origin/master 后取两侧较新的那条自证（本档的账是单值，没有「两侧都留」的形态）：master 侧 03:43Z 那轮记的是全量档在 full-suite-run 的 runPnpmSync 缺省 timeoutMs=600_000 处被砍（测量未发生，非判据红），归因与出口写在 ISSUE #1834；本侧 01:07Z 那条「今天真跑过一次全量 8777 passed / 3 failed，3 条与本次改动无关」的事实已被 #1834 覆盖，故不另留。"
   }
 }

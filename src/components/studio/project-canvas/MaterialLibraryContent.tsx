@@ -100,7 +100,7 @@ export function MaterialLibraryContent({
                 className="text-ink-fainter"
               />
             </div>
-            <p className="text-ink-soft text-[14px] font-medium">
+            <p className="text-ink-soft text-sm font-medium">
               {searching ? "没有匹配的素材" : "暂无内容"}
             </p>
             {!searching && (
