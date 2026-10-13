@@ -371,7 +371,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 | `--font-mono` | SF Mono → ui-monospace → SFMono-Regular → Menlo → Cascadia Mono → Consolas | 原先各处内联 `fontFamily`，已收口到此 |
 | `--font-title` | **Sarasa Gothic SC** → geist → PingFang → YaHei → system-ui | 见 Known Gaps：首选项未随包分发 |
 
-### 字阶只有三档具名，数值住在 `@theme`（规范 03 §3.10，机器强制 P83）
+### 字阶只有三档具名，数值住在 `:root`（规范 03 §3.10，机器强制 P83）
 
 | 档 | token | 值 | 类名 | 用在哪 |
 | --- | --- | --- | --- | --- |
@@ -395,7 +395,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 三条刻意的不做，每条都是实测出来的原因：
 
-- **档名必须是 t-shirt 尺寸（`2xs` / `3xs`），不能叫 `meta` / `micro`**。`cn()`（`node_modules/cn`，clsx + tailwind-merge 的替代件）把**不认识的 `text-<名字>` 一律归到颜色组**：实测 `cn("text-ink-muted", "text-micro")` 只剩 `text-micro` —— 同行的状态色被静默吃掉，徽标会失去配色语义；而 `cn("text-ink-muted", "text-2xs")` 两条都留。⚠️ **仓库里已有的 `text-section` / `text-page` 是同一个坑的潜伏形态**（实测 `cn("text-ink-muted","text-section")` 同样吃颜色），它们目前只在 CSS 里经 `.u-title-*` 使用、没进 JSX，所以还没炸 —— **别在 JSX 里用这几个类名**，标题一律走 `.u-title-*`。（这里从前还列着 `--text-hero` 那一档的同名类，它随首页欢迎区一起退役了 —— 见上面「字阶只有三档具名」。）
+- **档名必须是 t-shirt 尺寸（`2xs` / `3xs` / `4xs`），不能叫 `meta` / `micro`**。`cn()`（`node_modules/cn`，clsx + tailwind-merge 的替代件）把**不认识的 `text-<名字>` 一律归到颜色组**：实测 `cn("text-ink-muted", "text-micro")` 只剩 `text-micro` —— 同行的状态色被静默吃掉，徽标会失去配色语义；而 `cn("text-ink-muted", "text-2xs")` 两条都留。⚠️ **从前 `text-section` / `text-page` 是同一个坑的潜伏形态**（实测 `cn("text-ink-muted","text-section")` 同样吃颜色），而 P83 还把 `text-page` 列为合规出口之二 —— 等于判据自己给这个坑开了扇门。**现在坑从根上没了**：那三颗 token 已从 `@theme` 移到 `:root`，Tailwind 不再为它们生成 utility（编译对账：产物里那三条从 3 → 0），挂 `text-page` 的 h1 只会拿到继承字号，所以 P83 也只剩 `.u-title-page` 一条出口。标题一律走 `.u-title-*`；判据两侧各钉一条（定义侧 T6「不得回 @theme」、调用侧「产品代码里不许出现这三个类名」）。（这里从前还列着 `--text-hero` 那一档的同名类，它随首页欢迎区一起退役了 —— 见上面「字阶只有三档具名」。）
 - **不乘 `--font-scale`**：设置页「标题字阶」那一档的作用域只有上面三档标题。微标签跟着标题缩放，会让密集列表在 125% 档下挤成一团 —— 与「正文不随字阶变」同一条口径，`e2e/appearance-steps.spec.ts` 按后者判。
 - **不配 `--text-*-line-height`**：Tailwind v4 里一旦配对，生成的类会连带锁行高。实测对照：`text-xs` emit `font-size` **加** `line-height: var(--tw-leading, var(--text-xs--line-height))`（= 16px），而 `text-[12px]` 只出 font-size、行高继承 `html` 的 1.5（12px 下是 18px）—— **同一个 12px 因此有过两种行高**（289 处 `text-xs` 在 16px、103 处字面量在 18px）。这一档已签字**归一到 `text-xs`**（12px / 16px），103 处字面量换完，并加一条「调用点不许再写 `text-[12px]`」的**归零判据**（不是棘轮）；要更松的行高就显式写 `leading-*`，别再造字号字面量。`text-2xs` / `text-3xs` / `text-4xs` 仍只出 font-size，与替换前的 11px / 10px / 9px 字面量逐像素相同（这三颗**没有**配对行高，实测行盒 16.5 / 15 / 13.5 全部来自继承的 1.5 —— 由 `tests/design-md-contract-sync.test.ts` 那条「档位的配对行高由这张表给」钉着）。
   **改前 / 改后的真浏览器抽样**（`/workspace` 的六个可点面，195 个 12px 实例）：改前那 18 个 `text-[12px]` 实例**全都自带 `leading-tight`**，计算行高 15px；改后同一批仍是 15px ⇒ 这一批**逐像素没动**（`leading-*` 走 `--tw-leading`，照样压过 `text-xs` 的默认档）。裁切数改前改后都是 12（既有状态，与本次无关）。**覆盖边界要说清**：剩下约 85 处分布在要数据才渲染的面（项目画布节点、结果卡、若干浮层），本轮量具进不去 —— 它们的预期是行盒 18→16px（收拢不引入裁切），这一句是**推理，不是读数**。

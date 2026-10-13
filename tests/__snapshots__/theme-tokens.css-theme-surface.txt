@@ -141,9 +141,7 @@
 --spacing-title-bar
 --text-2xs
 --text-3xs
---text-page
---text-section
---text-stage
+--text-4xs
 --z-index-base
 --z-index-canvas-max
 --z-index-canvas-ui
