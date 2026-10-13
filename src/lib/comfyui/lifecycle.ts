@@ -65,6 +65,11 @@ import { formatLocalStamp } from "~/lib/time-format";
 import { COMFY_STOP_PROBE } from "../retry-policy";
 import { noteComfyExit } from "./liveness-signal";
 import {
+  noteComfyLaunchSettled,
+  noteComfyStartRequested,
+  noteComfyStopRequested,
+} from "./lifecycle-notice";
+import {
   decideEnsureLaunch,
   decideStop,
   decideStopOutcome,
@@ -287,6 +292,10 @@ export async function stopComfyUiProcess(): Promise<{
   // 进程树刚被改动过：快照必须失效，否则状态行会继续沿用关闭前的结论。
   resetComfyRuntimeSnapshot();
   resetComfyUiStatus();
+  /* 告诉「运行态变化」那条通道：用户点了关闭。挂在 reset 之后 —— 顺序反了会
+   * 让设置页收到通知后**立刻**重问，而它读到的仍是关闭前那份缓存（一次白问，
+   * 而且答案还是旧的）。 */
+  noteComfyStopRequested(outcome.ok);
   if (outcome.ok) {
     appendRuntimeLog("[stop] ComfyUI 已关闭");
     markComfyNotRunningProven();
@@ -719,6 +728,9 @@ export async function ensureComfyUiReady(
   if (opts.manual) {
     resetComfyRuntimeSnapshot();
     resetComfyUiStatus();
+    /* 用户明确要求拉起：运行态**从这一刻起**就在变，通知挂在 reset 之后才对
+     * （与关闭那条同一条顺序约束：先失效、再通知，收到通知的人重问时吃不到旧缓存）。 */
+    noteComfyStartRequested();
   }
 
   const host: LaunchHost = {
@@ -855,6 +867,10 @@ export async function ensureComfyUiReady(
       st.autoStartFailed = true;
       st.autoStartFailureDetail = r.detail;
     }
+    /* 单飞锁**还没放开**时通知（写在 finally 之前）：收到通知的人会立刻重问
+     * 状态，而 `starting` 取的是那里的瞬时值 —— 锁放开之后再通知，那一问可能
+     * 刚好落在「锁没了、还没探到就绪」的空窗上（ISSUE #442 那条来回跳）。 */
+    noteComfyLaunchSettled(r.ok);
     return r;
   } finally {
     st.starting = undefined;
