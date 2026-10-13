@@ -200,7 +200,7 @@ describe("注释语言棘轮在钩子里（ISSUE #1451）", () => {
       `D 组 ${steps.length} 步里没有注释语言棘轮 —— §12.4.6 写着它在钩子里报红，` +
         "而拆掉这一步之后它一个执行者都没有（平台流水线已随 ISSUE #623 删除）",
     ).toEqual({
-      label: "注释语言棘轮",
+      label: "注释语言硬闸",
       cmd: "node scripts/check-comment-language.cjs",
     });
   });
@@ -352,7 +352,7 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
       `D 组 ${steps.length} 步里没有 prettier 格式棘轮，或它丢了 --staged —— ` +
         "后者会让全库扫描回到无条件执行（每次提交白付 2.9s 热缓存 / 17.6s 冷缓存）",
     ).toEqual({
-      label: "prettier 格式棘轮",
+      label: "prettier 格式硬闸",
       cmd: "node scripts/check-format.cjs --staged",
     });
   });
@@ -431,7 +431,7 @@ const SECOND_TIER: ReadonlyArray<readonly [string, string, string]> = [
   ["函数长度(硬闸，>400 行即阻断)", "check-function-length.cjs", "node scripts/check-function-length.cjs --staged"],
   ["模块循环依赖(硬闸)", "check-circular-deps.cjs", "node scripts/check-circular-deps.cjs --staged"],
   ["地基层零消费导出(硬闸)", "check-dead-exports.cjs", "node scripts/check-dead-exports.cjs --staged"],
-  ["浮层层级刻度棘轮", "check-overlay-z.cjs", "node scripts/check-overlay-z.cjs --staged"],
+  ["浮层层级刻度硬闸", "check-overlay-z.cjs", "node scripts/check-overlay-z.cjs --staged"],
 ];
 
 /**

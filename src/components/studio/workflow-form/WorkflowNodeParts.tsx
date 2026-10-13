@@ -57,13 +57,13 @@ export function WorkflowNodeHeader({
       <div className="flex min-w-0 items-center gap-2">
         <span
           aria-label="类型 工作流"
-          className="text-primary rounded-node flex size-7 shrink-0 items-center justify-center text-[14px] font-bold"
+          className="text-primary rounded-node flex size-7 shrink-0 items-center justify-center text-sm font-bold"
           style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
         >
           W
         </span>
         <span
-          className="text-ink-bright truncate text-[14px] font-bold"
+          className="text-ink-bright truncate text-sm font-bold"
           style={{ fontFamily: "var(--font-sans)" }}
           title={titleTitle ?? title}
         >
@@ -148,7 +148,7 @@ export function WorkflowNodeActionButton({
         variant="ghost"
         disabled={disabled}
         onClick={onClick}
-        className="nodrag nopan from-primary to-accent rounded-b-node h-10.75 w-full justify-center gap-2 rounded-t-none bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] hover:opacity-95"
+        className="nodrag nopan from-primary to-accent rounded-b-node h-10.75 w-full justify-center gap-2 rounded-t-none bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)] hover:opacity-95"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
@@ -185,7 +185,7 @@ export function WorkflowNodeOutputsRow({
         : null}
       <div className="flex h-5 items-center justify-end gap-1.5 px-3.5 pt-1.5">
         <span
-          className="text-ink-bright min-w-0 truncate text-[14px] font-semibold"
+          className="text-ink-bright min-w-0 truncate text-sm font-semibold"
           style={{ fontFamily: "var(--font-sans)" }}
           title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
         >
