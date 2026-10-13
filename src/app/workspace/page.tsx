@@ -9,6 +9,7 @@ import {
   useWorkspaceTabs,
 } from "~/components/studio/hooks/use-workspace-tabs";
 import { useSidebarProjects } from "~/components/studio/hooks/use-sidebar-projects";
+import { useOpenServerProject } from "~/components/studio/project-canvas/hooks/use-open-server-project";
 import type { RecentProject, WorkspaceView } from "~/components/studio";
 import { WorkspaceViewStack } from "~/components/studio/WorkspaceViewStack";
 import { globalNavItems, projectTabs } from "~/components/studio/NavItems";
@@ -237,6 +238,11 @@ export default function WorkspacePage() {
    * 「服务端有一行、索引里没有」的项目在侧栏**一条都不列**（ISSUE #1874）。 */
   const sidebarProjects = useSidebarProjects();
 
+  /* 侧栏里点开某个项目那一跳 —— 「服务端有、本机还没有副本」的行要先拉回本机，
+   * 否则落点是闸门（ISSUE #1874，见 `useOpenServerProject`）。「所有项目」那一屏
+   * 走的是同一个回调，两处同一支。 */
+  const handleOpenServerProject = useOpenServerProject(navigateTo);
+
   const openableViews = useMemo(
     () => [
       ...globalNavItems().map((item) => ({ view: item.id, label: item.label })),
@@ -268,7 +274,7 @@ export default function WorkspacePage() {
           onOpenSettings={openSettings}
           projects={sidebarProjects}
           activeProjectId={activeProjectId}
-          onOpenProject={handleOpenCanvasProject}
+          onOpenProject={handleOpenServerProject}
           onShowAllProjects={handleShowAllProjects}
           onNewProject={handleNewProject}
           viewTabs={viewTabs}
