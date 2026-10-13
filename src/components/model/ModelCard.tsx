@@ -53,7 +53,7 @@ export function ModelCard({
       onClick={() => onOpen(model)}
       aria-label={`查看 ${model.name} 详情`}
     >
-      <Card className="group border-border bg-surface gap-0 py-0 transition-shadow group-hover:shadow-[0_8px_30px_rgba(20,20,40,0.10)]">
+      <Card className="group border-border bg-surface gap-0 py-0 transition-shadow group-hover:shadow-[0_8px_30px_var(--color-shadow-strong)]">
         <div className="relative aspect-4/3 w-full overflow-hidden">
           {model.coverUrl ? (
             <MediaThumbnail
