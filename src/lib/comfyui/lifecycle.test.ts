@@ -302,6 +302,60 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     } as never);
   });
 
+  /* 启动失败后状态行必须自己落回「未运行」。
+   *
+   * 现场（用户侧）：日志里已经写了「保活拉起后进程未出现」，设置页的状态行却
+   * 停在「ComfyUI 正在启动…」、「启动中…」按钮跟着锁死 —— 明明没有启动在跑。
+   * 根因是「启动窗口」给自己续命：续期判据原先用的是**本轮结论**的 `starting`，
+   * 而窗口正是这个结论的来源之一，于是 5s 轮询每一轮都把 12s 窗口推后一轮，
+   * 窗口永不过期（ISSUE #442 那两把标记里的另一面）。 */
+  it("启动流程已收尾后，启动窗口按真实时间过期，不被轮询续期", async () => {
+    // 先造一次「拉起过、随后失败收尾」的启动：保活路径 + 进程永远探不到 +
+    // 250ms 超时收尾（与上面「启动进行中」用例同一手法，不会真起进程）。
+    const { getExitPolicy } =
+      await import("../app-settings/app-settings.server");
+    const { spawnManaged } = await import("~/lib/process/process-launch");
+    vi.mocked(getExitPolicy).mockReturnValue({
+      exitKillComfyui: false,
+    } as never);
+    vi.mocked(spawnManaged).mockReturnValue({
+      child: { pid: 98765 },
+      error: undefined,
+    } as never);
+    vi.mocked(findPidForMainPy).mockResolvedValue(null);
+    const failed = await ensureComfyUiReady({ manual: true, timeoutMs: 250 });
+    expect(failed.ok).toBe(false);
+
+    /* 之后按设置页的 5s 轮询推进时钟。基准取真实时间（启动流程已经在真实时间
+     * 里收尾），只 fake `Date`、不碰定时器，把三轮轮询挪到 +4s / +9s / +14s：
+     * 最后一轮已经越出 12s 窗口。 */
+    const base = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(base + 4_000);
+      expect((await getComfyUiStatus({ force: true })).starting).toBe(true);
+
+      // 第二轮正是旧实现给自己续命的那一轮：它把窗口推到 +9s 之后的 12s。
+      vi.setSystemTime(base + 9_000);
+      await getComfyUiStatus({ force: true });
+
+      vi.setSystemTime(base + 14_000);
+      const settled = await getComfyUiStatus({ force: true });
+      expect(settled.up).toBe(false);
+      /* 关键断言：窗口已按真实时间过期 ⇒ 结论落回「未运行」。旧实现在这里
+       * 返回 true，且此后每一轮都返回 true（状态行永久卡在「启动中」）。 */
+      expect(settled.starting).toBe(false);
+      expect(settled.probing).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      vi.mocked(getExitPolicy).mockReturnValue({
+        exitKillComfyui: true,
+      } as never);
+      clearComfyAutoStartFailure();
+      resetComfyUiStatus();
+    }
+  });
+
   /* ISSUE #344：ComfyUI 早就启动了，设置页却一直显示「启动中」。
    * 两条判据缺陷叠加：① `resolveComfyBase` 在配置了路径、进程表又查不到
    * `main.py`（Comfy Desktop 的实例由 standalone-env 启动）时抛错，
