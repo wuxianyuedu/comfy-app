@@ -194,7 +194,8 @@ describe("e2e 的并发档：现场编译 ⟺ 已构建（ISSUE #1834）", () =>
   it("现场编译（未给 PNPM_START / 非 CI）⇒ 收敛到 COLD_COMPILE_WORKERS", async () => {
     const { resolveE2eWorkers } = await import("../playwright.config");
     // 不是本仓默认的 8（`vitest.config.ts` 那一档），也不是「不设」—— 是那个显式的档。
-    expect(resolveE2eWorkers({} as unknown as NodeJS.ProcessEnv)).toBe(4);
+    // 2 是 #1834 的 win32 实测档：4 仍有 3 条 goto 卡 60s，单 worker 独跑同屏 14.8s。
+    expect(resolveE2eWorkers({} as unknown as NodeJS.ProcessEnv)).toBe(2);
   });
 
   it("已构建（CI 或 PNPM_START）⇒ 不覆盖 Playwright 的默认并行", async () => {
