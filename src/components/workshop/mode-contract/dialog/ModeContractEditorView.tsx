@@ -84,10 +84,14 @@ export function ModeContractEditorView({
           **不自绘关闭按钮**：那枚 ✕ 是弹窗时代的产物；契约现在是视图页签，
           「关」由页签自己的关闭按钮承担，这里再画一枚就是两个入口做同一件事。
           横向留白只在这一层（`px-4 sm:px-8`）：页眉与两栏此前各带一枚 `px-5`，
-          那是「外壳不给左右」时代的产物，外壳补上留白之后叠在这里是 32+20=52px 一圈。 */}
+          那是「外壳不给左右」时代的产物，外壳补上留白之后叠在这里是 32+20=52px 一圈。
+          **上内距收一档**（ISSUE #1871）：这一屏换 `WorkspaceFrame` 之后，容器上内距
+          不再由外壳给、全在这一层 —— 而这枚页眉的可见内容只有 `sr-only` 屏名（没标题、
+          没动作），`pt-8 sm:pt-10` 会在页眉之上白留一整条空气。收成 `pt-4 sm:pt-5`，
+          与其余文档型视图同一档。 */}
       <div className="px-4 sm:px-8">
         <PageHeader
-          className="pt-8 pb-3 sm:pt-10"
+          className="pt-4 pb-3 sm:pt-5"
           srTitle={pageHeaderTitle("mode-contract")}
         />
       </div>

@@ -18,6 +18,7 @@ import { pageHeaderTitle } from "./NavItems";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
 import { DocumentFrame } from "./ViewContainer";
+import { ViewActions } from "./ViewActions";
 import { useModelFolderConfig } from "./hooks/use-model-folder-config";
 import { useModelLibrary } from "./hooks/use-model-library";
 import {
@@ -43,35 +44,34 @@ export function ModelLibrary() {
   return (
     <DocumentFrame
       width="wide"
-      className="px-4 py-6 sm:px-8 sm:py-7"
+      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       backdrop={<AuroraBackground />}
     >
       {/* 页头的名字走 `pageHeaderTitle("models")` —— 与侧栏 / 页签同一个出处
           （注册表 `NavItems.tsx`）。此前这里是裸字面量「模型库」，而注册表里
           那一项叫「模型」：两名并存，且 `page-name-single-source` 的第 4 条锚的是
           `<h1>纯文本</h1>`、看不见 prop 里的字面量（ISSUE #1673）。 */}
-      <PageHeader
-        className="mb-6"
-        srTitle={pageHeaderTitle("models")}
-        actions={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => c.setConfigOpen(true)}
-              className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-2"
-            >
-              <Icon data-icon="inline-start" name="settings" size={16} />
-              模型目录配置
-            </Button>
-            <input
-              value={c.q}
-              onChange={textHandler(c.setQ)}
-              placeholder="搜索模型名称…"
-              className="border-border bg-subtle text-ink-bright w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40 sm:w-64"
-            />
-          </>
-        }
-      />
+      <PageHeader srTitle={pageHeaderTitle("models")} />
+
+      {/* 目录配置 / 搜索挂到顶栏（`ViewActions`）：留在屏内就是「左边一整行空气 +
+          右边两颗控件」那一行（ISSUE #1871）。搜索框在顶栏里收窄了宽度档
+          （`sm:w-64` → `w-56`），免得把全局控件挤到换行。 */}
+      <ViewActions>
+        <Button
+          variant="outline"
+          onClick={() => c.setConfigOpen(true)}
+          className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-2"
+        >
+          <Icon data-icon="inline-start" name="settings" size={16} />
+          模型目录配置
+        </Button>
+        <input
+          value={c.q}
+          onChange={textHandler(c.setQ)}
+          placeholder="搜索模型名称…"
+          className="border-border bg-subtle text-ink-bright w-40 min-w-0 shrink rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40 sm:w-56"
+        />
+      </ViewActions>
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
         {c.loading ? (

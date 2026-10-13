@@ -176,7 +176,7 @@ export function ModelAdaptersView() {
   return (
     <DocumentFrame
       width="wide"
-      className="flex flex-col gap-6 px-4 py-8 sm:px-8 sm:py-10"
+      className="flex flex-col gap-6 px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
     >
       {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）。屏名已经由页签给出，
           按 ISSUE #1693 那一档收：不传可见 `title`（屏名退成 `sr-only`，读屏仍按标题

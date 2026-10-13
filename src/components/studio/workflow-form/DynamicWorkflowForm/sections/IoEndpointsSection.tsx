@@ -47,7 +47,7 @@ export function IoEndpointsSection({
                 <span className="bg-info size-1.5 rounded-full" />
                 {label}
                 {/* chip 打印 pin 真实类型（含 IMAGEUPLOAD 等自定义类型）。 */}
-                <span className="font-mono text-[9px] opacity-70">
+                <span className="font-mono text-4xs opacity-70">
                   {typeDisplay(wireInput.type)}
                 </span>
               </span>
@@ -76,7 +76,7 @@ export function IoEndpointsSection({
                 <span className="bg-success size-1.5 rounded-full" />
                 {/* conflict-aware：同上，撞名时回退到原始 name。 */}
                 {ioLabel(output, [...inputs, ...outputs])}
-                <span className="font-mono text-[9px] opacity-70">
+                <span className="font-mono text-4xs opacity-70">
                   {typeDisplay(output.type)}
                 </span>
               </span>

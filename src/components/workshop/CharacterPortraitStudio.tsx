@@ -383,11 +383,11 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     />
                   </Button>
                 </Hint>
-                <span className="pointer-events-none absolute top-1 left-1 rounded bg-black/60 px-1 text-[9px] text-white">
+                <span className="pointer-events-none absolute top-1 left-1 rounded bg-black/60 px-1 text-4xs text-white">
                   {PORTRAIT_SOURCE_LABELS[candidate.source]}
                 </span>
                 {selected && (
-                  <span className="bg-primary pointer-events-none absolute right-1 bottom-1 rounded px-1 text-[9px] text-white">
+                  <span className="bg-primary pointer-events-none absolute right-1 bottom-1 rounded px-1 text-4xs text-white">
                     定妆照
                   </span>
                 )}

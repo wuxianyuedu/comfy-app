@@ -25,6 +25,7 @@
  * 直接 throw），也没有 `.server.ts` 要拆的纯逻辑姐妹模块：判决已经在
  * `./liveness` 里了。登记进 `tests/lib-node-only-declarations.test.ts`。
  */
+import { noteComfyStateChange } from "./state-watch";
 import type { ComfyExitReport } from "./lifecycle-exit";
 
 /** 一次「进程退出」事件。 */
@@ -90,6 +91,16 @@ export function noteComfyExit(report: ComfyExitReport): ComfyLivenessSignal {
   };
   st.seq = signal.seq;
   st.last = signal;
+  /* 同一次退出并进「运行态变化」那条通道（设置页的 `/api/comfy/state`）：
+   * 事件只有一个事实源，界面则要按「此刻该显示什么」重问 —— 两条通道的消费者
+   * 不同（存活复核 vs 设置页状态行），各自判断，不在这里替谁下结论。
+   * `userStopped` 的两种情形都在里面：用户主动关闭也是运行态变化，只是不必
+   * 惊动「崩溃复核」那一条。 */
+  noteComfyStateChange(
+    "exit",
+    signal.userStopped ? "ComfyUI 已退出（用户主动关闭）" : "ComfyUI 进程退出",
+    signal.at,
+  );
   for (const subscription of st.listeners ?? []) {
     try {
       subscription.onChange(signal);
