@@ -100,10 +100,16 @@ describe("启动链：换文件必须排在起服务之前", () => {
   });
 
   it("编排器里它排在 spawnSchemaSync 与 spawnDevServer 之前", () => {
+    /* 用**调用点**而不是「某个名字第一次出现的行」：R5 拆分之后入口文件把
+     * `spawnDevServer` 也做成了一层再导出的薄包装（它写在主流程**之前**），
+     * 拿「第一次出现」会指到那个包装上，断言就成了「换文件排在包装定义之前」——
+     * 那是文件排版，不是契约。契约是「换文件排在**真的起服务**之前」。 */
     const src = read("scripts/dev-launcher.mjs");
-    const restore = lineOf(src, "applyPendingRestoreAtBoot(");
-    expect(restore).toBeLessThan(lineOf(src, "spawnSchemaSync("));
-    expect(restore).toBeLessThan(lineOf(src, "spawnDevServer("));
+    const restore = lineOf(src, "const restore = applyPendingRestoreAtBoot(");
+    expect(restore).toBeLessThan(lineOf(src, "const schema = spawnSchemaSync("));
+    expect(restore).toBeLessThan(
+      lineOf(src, "let dev = spawnDevServer(port, args.host, nextOut, nextErr)"),
+    );
   });
 
   it("三个入口排在任何会开库的东西之前：不得出现在 spawnSchemaSync 之后", () => {

@@ -234,12 +234,16 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
     }
   });
 
-  it("指纹清单与 base-check.mjs 逐条同源（漂移 = 同一件事两个判别式）", () => {
+  it("指纹清单与 base-check 那一份逐条同源（漂移 = 同一件事两个判别式）", () => {
     /* 两份清单是同一件事（「这个红首先是一个负载读数」）在两个执行者上的落地：
      * `base-check` 用它归第五态，启动器用它决定复不复跑。只抄一份正则集合、
-     * 而不是从 `base-check.mjs` import —— `base-check` 是 ESM 且带 CLI 入口，
-     * 钩子这一层不该为了一个正则常量去背它的整条依赖链；同源的代价是这一条断言。 */
-    const baseCheck = readFileSync("scripts/base-check.mjs", "utf8");
+     * 而不是从 `base-check` import —— 它是 ESM 且带 CLI 入口，钩子这一层不该为了
+     * 一个正则常量去背它的整条依赖链；同源的代价是这一条断言。
+     *
+     * 读的落点是 `base-check/verdict.mjs` 而不是 `base-check.mjs`：判决那一层
+     * 随 R5 拆分搬过去了（`base-check.mjs` 1382 → 648 行），只读主文件时
+     * 提取块落空 ⇒ `theirs` 是空数组 ⇒ 这条断言对着空数组比、**静默变成空转**。 */
+    const baseCheck = readFileSync("scripts/base-check/verdict.mjs", "utf8");
     const pick = (text: string): string[] => {
       const block = /const TIMEOUT_SIGNATURES = \[([\s\S]*?)\n\];/.exec(text);
       return (block?.[1] ?? "")

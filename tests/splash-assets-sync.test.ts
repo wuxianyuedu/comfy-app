@@ -28,6 +28,7 @@ import {
   splashSourcePath,
   syncSplashAssets,
 } from "../scripts/launcher-core/splash-assets.mjs";
+import { launcherChainSource } from "./helpers/launcher-source";
 
 const ROOT = process.cwd();
 /** 源文件的内容：与真启动页无关，只要逐字可比。 */
@@ -115,21 +116,38 @@ describe("真仓库：清单与目录内容对得上，且两个调用方都经�
     expect(actual).toEqual([...SPLASH_ASSET_NAMES].sort());
   });
 
-  it("dev-launcher 与 build-desktop 都调共享实现，且 dev-launcher 不再知道副本叫什么", () => {
+  it("dev-launcher 与 build-desktop 都调共享实现，且启动编排里不再有第二份副本名清单", () => {
     for (const rel of [
       "scripts/dev-launcher.mjs",
       "scripts/build-desktop.mjs",
     ]) {
       const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
-      expect(src).toContain('from "./launcher-core/splash-assets.mjs"');
-      expect(src).toMatch(/syncSplashAssets\(/);
+      expect(src).toMatch(/syncSplashAssets\(|ensureSplashResource\(/);
     }
-    // 只接线、不列名：副本名字面量一旦回到启动编排里，就是「各写一份清单」回潮的开始。
-    const devLauncher = fs.readFileSync(
-      path.join(ROOT, "scripts/dev-launcher.mjs"),
-      "utf8",
-    );
-    expect(devLauncher).not.toContain('"splash.html"');
-    expect(devLauncher).not.toContain('"index.html"');
+    /* 真正「调共享实现」这件事在链路里成立（主文件经 `shell-ops.mjs` 中转）。 */
+    expect(launcherChainSource()).toContain("syncSplashAssets(");
+    /**
+     * **判的是「副本名清单只有一处」，不是「某个文件里不许出现这两个字符串」**。
+     *
+     * 这两件事在编排器拆分（ISSUE #1811 第四刀）之前恰好同形，拆分之后不再是：
+     * `shell-ops.mjs` 的接线层有一句「未找到 public/splash.html」的日志文案 ——
+     * 那是**源文件**的名字（它确实叫这个），不是副本清单。而副本清单的机器形态是
+     * 「一份同时列出两个名字的清单」（`SPLASH_ASSET_NAMES`），那句文案命中不了。
+     *
+     * 所以判据取**清单形状**：整条编排链路上列出副本名的地方必须只有共享实现那一处 ——
+     * 回潮的形态是「接线层又手写一份只同步 `splash.html` 的清单」，那正是这条用例
+     * 立案时的现场。
+     */
+    const chain = launcherChainSource();
+    /* 清单形状 = `SPLASH_ASSET_NAMES` 那一行（两个名字同现）。数它出现几次：
+     * 回潮的形态是「接线层又手写一份只同步 `splash.html` 的清单」，那时这里会 >1。 */
+    const listLines = chain
+      .split("\n")
+      .filter((line) => /"(?:splash|index)\.html"/.test(line));
+    expect(
+      listLines.length,
+      `编排链路上列出副本名的地方只有共享实现那一处，实际 ${listLines.length} 处：\n${listLines.join("\n")}`,
+    ).toBe(1);
+    expect(listLines[0]).toContain("SPLASH_ASSET_NAMES");
   });
 });

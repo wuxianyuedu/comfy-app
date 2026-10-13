@@ -297,6 +297,101 @@ describe("清单里的形状边角（灌入侧的三条回落）", () => {
     expect(fields[1]?.placeholder).toBeUndefined();
   });
 
+  it("widget 是**认得出的**值 → 两处都原样保留（收窄的正向那一支）", async () => {
+    /* 反向的那一支（认不出 → 回落）在下面那条用例里。这一条补的是**正向**：
+     * 收窄这件事有两边，只测「认不出」等于把 `isFieldType` 的三元写死成 `false`
+     * 也没人红 —— 而那正好是「所有控件都退化成单行文本框」的形态，
+     * 界面上看着「能用」，实际每个下拉框 / 开关 / 滑块都变成了输入框。
+     * 实测此前这里两支都只有 `false` 那一支被测过（`COMBO` / `slider` / `""`
+     * 三个 fixture 恰好都不是合法 `FieldType`）—— 这就是覆盖率报 96.72% 的来处。 */
+    fetchReturns(200, {
+      nodes: {
+        "P.Known": {
+          classType: "P.Known",
+          displayName: "认得出的控件",
+          inputs: [
+            { name: "a", type: "STRING", widget: "string", default: "x" },
+            { name: "b", type: "INT", widget: "number", default: 3 },
+            { name: "c", type: "COMBO", widget: "select", options: ["l", "s"] },
+            { name: "d", type: "BOOLEAN", widget: "toggle", default: true },
+            { name: "e", type: "IMAGE", widget: "image" },
+            { name: "f", type: "LATENT", widget: "latent" },
+            { name: "g", type: "STRING", widget: "text", default: "长文本" },
+          ],
+          outputs: [{ name: "OUT", type: "IMAGE" }],
+        },
+      },
+    });
+    const count = await refreshCustomNodes();
+    expect(count).toBe(1);
+    const known = CUSTOM_NODE_TYPES["P.Known"];
+    expect(known).toBeDefined();
+    /* 两个落点都保留原值：`inputsSpec`（纯连接那一侧）与 `defaultFields`（编辑器）。 */
+    const specWidgets = (known?.inputsSpec ?? []).map((p) => p.widget);
+    const fieldTypes = (known?.defaultFields ?? []).map((f) => f.type);
+    const expected = [
+      "string",
+      "number",
+      "select",
+      "toggle",
+      "image",
+      "latent",
+      "text",
+    ];
+    expect(specWidgets).toEqual(expected);
+    expect(fieldTypes).toEqual(expected);
+    /* `hidden` 的判据是「有没有控件」：七个都有 ⇒ 都不是纯连接手柄。 */
+    expect((known?.defaultFields ?? []).map((f) => f.hidden)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    /* select 的选项要透传（认得出类型、但丢了 options 就是空下拉框）。 */
+    expect(known?.defaultFields[2]?.options).toEqual(["l", "s"]);
+  });
+
+  it("widget 是 manifest 塞进来的**不认识的值** → 按单行文本框 / 纯端口回落", async () => {
+    /* 这一格守的是 `isFieldType(...)` 的**收窄**：`widget` 在 manifest 里是
+     * 不受约束的 `string`（外部 JSON），解析器版本一漂就可能塞进一个前端不认识的
+     * 名字（`"slider"` / `"JSON"` / 空串），甚至塞进非字符串（解析器 bug）。
+     * 两处回落的落点不同、理由也不同：
+     *   · `specToField` 那处 —— 认不出就按 `"string"` 渲染成单行文本框，
+     *     **不能**把原值直接当 `FieldType` 用（渲染层会拿到一个它没有分支的类型）；
+     *   · `buildInto` 那处 —— 认不出就当**没有控件**（`undefined`），
+     *     于是端口按纯连接手柄画，而不是一个编不出编辑器的字段。
+     * 不判这一档的话，`isFieldType` 的三元两边只走到 `true` 那一边，
+     * 「收窄」这件事等于没被测过。 */
+    fetchReturns(200, {
+      nodes: {
+        "P.Unknown": {
+          classType: "P.Unknown",
+          displayName: "认不出的控件",
+          inputs: [
+            { name: "weird", type: "STRING", widget: "slider", default: 5 },
+            { name: "empty", type: "STRING", widget: "", default: 1 },
+            { name: "notastring", type: "STRING", widget: 42 },
+          ],
+          outputs: [{ name: "OUT", type: "IMAGE" }],
+        },
+      },
+    });
+    const count = await refreshCustomNodes();
+    expect(count).toBe(1);
+    const fields = CUSTOM_NODE_TYPES["P.Unknown"]?.defaultFields ?? [];
+    expect(fields).toHaveLength(3);
+    /* 三个都回落到 `"string"` —— 一个都没漏成原值。 */
+    expect(fields.map((f) => f.type)).toEqual(["string", "string", "string"]);
+    /* 纯连接那一侧的回落：`inputsSpec` 里的 `widget` 认不出 ⇒ `undefined`
+     * （而 `defaultFields` 那处是 `"string"`）—— 两处落点不同是刻意的。 */
+    expect(
+      (CUSTOM_NODE_TYPES["P.Unknown"]?.inputsSpec ?? []).map((p) => p.widget),
+    ).toEqual([undefined, undefined, undefined]);
+  });
+
   it("清单里一个 nodes 字段都没有（只有 packages）→ 灌入成功但 0 个类型", async () => {
     /* 这是 `buildInto(manifest.nodes ?? {})` 那一档：解析器换了顶层形状时，
      * 注册表会「成功灌入 0 个」。它和上面的空 nodes 同相（都是 loaded:true），
