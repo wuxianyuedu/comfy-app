@@ -466,6 +466,63 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 > 提交慢到没人愿意用，而那正是当初把它放去 CI 的原因。**去处不是把配置贴回去**，
 > 而是 13.5.4 的「按需召唤」：在 PR / Issue 里 `@` 对应 NPC 唤起一轮，不 `@` 就不跑。
 
+##### 13.5.3.1 按需档的**墙钟预算**：`600_000` 是别的调用方的默认，不是这几档的量级（ISSUE #1834）
+
+按需档（全量单测 + 覆盖率 / 产物级护栏）都经 `launcher-core/shell.mjs` 的
+`runPnpmSync()` 起子进程，而它的 **`timeoutMs` 缺省是 600_000**。那个数是
+「单条 `pnpm exec …` 门禁」的合理默认，**不是**这两档的：全量档在 win32 检出上
+无争抢实测就是 ~10 分钟（`Test Files 3 failed | 695 passed`），只要有任何并发
+（叠一次运行、机器被别人占着）就正好撞在 600s 上 —— 子进程被砍、`res.status` 为
+null，而 harness 打的是「退出码 **信号** / 不记账」。
+
+**病不在那个数，在两种收场长得一样**。`status === null`（测量没发生）与
+`status === 1`（测量结果是红的）在**退出码上逐字同形**，而调用方普遍写着
+`res.status ?? 1` —— 于是「这次没测成」被读成「这批用例红了」，下一个人去查用例、
+查到的是空气。同 §13.6.2 那条「**拿不到测量 ≠ 测量结果是红的**」。
+
+现在的口径：
+
+- **预算显式给**：`full-suite-run.mjs` 的 `FULL_SUITE_TIMEOUT_MS`、
+  `artifact-run.mjs` 的 `ARTIFACT_TIMEOUT_MS`，都取 30 分钟（挡的是**真挂死**，
+  不是「机器慢」；实测 10 分钟量级留出并发余量）。
+- **两种收场分开报**：判据只有一份实现 —— `launcher-core/shell.mjs` 的
+  `classifyOutcome()`（`error` 在、或 `status === null` ⇒ `aborted`）与
+  `abortedAdvice()`。被砍时**不记账**、话术明写「要修的不是用例」，并且**不**引导
+  人去隔离重跑单份文件（那回答的是另一个问题）。
+- **退出码仍是非零**：`aborted` 会阻断本次提交（拿不到测量不等于可以放过），
+  但它与「判据红」在**话术与账面上**分得开。
+
+回归：`tests/daily-tracks.test.ts` 的「墙钟预算：**测量没发生**与「判据红」必须分得开」。
+
+##### 13.5.3.2 本地 e2e 的两档负载：**降并发，不抬预算**（ISSUE #1834）
+
+`pnpm test:e2e` 在本地默认跑的是 `pnpm dev`（Turbopack），而 dev server 是
+**按需编译**的：某条路由要在第一个 worker 导航到它的那一刻编译出来。实测
+（win32 检出、8 worker）43 failed / 35 passed，其中 **33 条正好卡在
+`Test timeout of 60000ms exceeded (1.0m)`**，且散在互不相干的屏上
+（`appearance-steps` / `critical-flows` / `nav-auto-collapse` …）—— **同形态跨屏**
+说明红的是服务响应，不是某一条断言。
+
+两件事不是一个旋钮：抬 `timeout` 是**拿预算换绿**（会把真挂死的检出时间一起放大，
+§11.13），降并发是**改负载**。所以这一档只做后者，判据在
+`playwright.config.ts` 的 `resolveE2eWorkers()` 一处（**纯函数**，两向钉住）：
+
+| 形态                             | webServer             | 并发                   |
+| -------------------------------- | --------------------- | ---------------------- |
+| 本地默认（未给 `PNPM_START`）    | `pnpm dev`（现场编译） | 收敛到 4（`workers`）  |
+| `PNPM_START=1` / `CI=1`（已构建） | `pnpm start`          | 不覆盖 Playwright 默认 |
+
+**本地那条默认刻意不减配**：`pnpm start` 要求先 `pnpm build`，那会把「按需跑一次
+e2e」变成「先花十分钟构建」。要那一档的人用 `PNPM_START=1` 显式说 —— 而那时账面
+的 `how` 会写成 `PNPM_START=1 pnpm test:e2e`（`writeFreshness` 的 `how` 那一栏就是
+为「这次是怎么证的」存在的；两档的负载形态不同，账面上必须分得开）。
+
+`e2e-run.mjs` 会在起 Playwright 前把这一档**打出来**（`resolveServerMode()`）：
+否则「8.7 分钟 / 43 failed」这个读数读不出是哪种负载，下一个人只能重新量一遍。
+
+回归：`tests/e2e-runtime-budget.test.ts` 的「e2e 的并发档」那组（含一条红线：
+`timeout` 一个字节都不许动）。
+
 #### 13.5.4 「按需召唤」的那一层（ISSUE #656）
 
 13.5.3 那张表登记的是「**没有自动执行者**」的判据。没有执行者不等于没有出路 ——
