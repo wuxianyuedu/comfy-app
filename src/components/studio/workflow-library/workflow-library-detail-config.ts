@@ -5,20 +5,30 @@ import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { WorkflowRow } from "./workflow-library-config";
 
-/** 详情面板的四个页签 —— 数组顺序即渲染顺序。
+/** 详情面板的四个页签 —— 数组顺序即渲染顺序，**第一项也是默认页签**。
  *
  *  「编辑对外参数 / 实际使用」原先是「画布节点」页签内部的子页签，二者内容
  *  基本独立（前者是参数落点编辑画布，后者是填表运行），拆成顶层页签少一层
  *  嵌套。两者共用同一个常驻实例（见 `WorkflowLibraryDetailView`）：切页签
- *  只切视图模式，表单值与运行态不丢。 */
+ *  只切视图模式，表单值与运行态不丢。
+ *
+ *  **默认页签取最轻的那个（工坊封装）**：打开一条工作流时先落在这里 —— 它是
+ *  一张纯文字的口 / 落点清单，不牵画布引擎（`@xyflow/react`）、也不牵 JSON 树
+ *  渲染器。默认落重型页签（画布预览）的代价是**每打开一条工作流就把画布引擎
+ *  拉起来**，而多数时候用户只是想看一眼「工坊会怎么驱动它」。
+ *  「编辑对外参数 / 实际使用」那一份常驻实例另见视图层的**首次访问才挂载**
+ *  （`WorkflowLibraryDetailView`）：切这两页时只下载一次，之后常驻不重建。 */
 export const DETAIL_TABS = [
+  { key: "params", label: "工坊封装" },
   { key: "canvas", label: "编辑对外参数" },
   { key: "use", label: "实际使用" },
-  { key: "params", label: "工坊封装" },
   { key: "source", label: "源文件" },
 ] as const;
 
 export type DetailTab = (typeof DETAIL_TABS)[number]["key"];
+
+/** 打开一条工作流时的默认页签 —— 取表里的第一项（最轻的那个，见上）。 */
+export const DEFAULT_DETAIL_TAB: DetailTab = DETAIL_TABS[0].key;
 
 export interface WorkflowLibraryDetailProps {
   workflow: WorkflowRow | null;

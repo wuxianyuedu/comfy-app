@@ -11,6 +11,7 @@ import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { useTRPC } from "~/trpc/react";
 import {
   buildSourceData,
+  DEFAULT_DETAIL_TAB,
   isDetailLoadingFor,
   normalizeWorkflowIO,
   type DetailTab,
@@ -57,6 +58,12 @@ export interface WorkflowLibraryDetailController {
   workflow: WorkflowRow | null;
   activeTab: DetailTab;
   setActiveTab: (tab: DetailTab) => void;
+  /** 画布预览那一份常驻实例是否该挂载（首次访问画布页签之后才为真）。
+   *
+   *  视图据此决定要不要渲染「编辑对外参数 / 实际使用」共用的那棵子树 ——
+   *  默认页签（工坊封装）上不渲染，画布引擎因此不进这一屏。一旦访问过就
+   *  保持挂载（切回其它页签也不卸载），表单值与运行态才不会丢。 */
+  canvasMounted: boolean;
   /** **两个页签共用的当前模式**（画布节点卡片列与工坊封装都按它渲染）。
    *
    *  初值取工作流的默认模式（`resolveWorkflowMode`：defaultMode → modes[0] →
@@ -131,7 +138,31 @@ export function useWorkflowLibraryDetail(
   } = props;
 
   const [sourceOpen, setSourceOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<DetailTab>("canvas");
+  /* 默认页签 = `DETAIL_TABS` 的第一项（工坊封装）——「哪个最轻」这条知识只在
+   *  那张表里写一次，这里不另抄一个页签键，否则重排页签时默认值会偷偷留在旧档
+   *  （见 `DETAIL_TABS` 的说明：默认落重型页签会让打开工作流就拉起画布引擎）。 */
+  const [activeTab, setActiveTab] = useState<DetailTab>(DEFAULT_DETAIL_TAB);
+  /* 「画布预览那一份常驻实例该不该挂载」的判据 —— 值为**已经访问过画布页签的
+   *  工作流 id**（`null` = 还没在任何工作流上访问过）。
+   *
+   *  为什么需要一个「记着」的位：编辑对外参数 / 实际使用两页共用同一个常驻实例
+   *  （切页签不重建，表单值不丢），但这份实例**不该在默认页签（工坊封装）上就
+   *  挂载** —— 它下面挂着整个画布引擎 `@xyflow/react`，打开一条只想看封装口径的
+   *  工作流就等于把它整包拉起来。所以「首次真的切到画布页签」才挂载，之后常驻。
+   *
+   *  维护点在 `setActiveTab`（唯一的切换入口）而不是 effect：状态变化只由用户
+   *  点页签触发，一条事件路径一个写点，也就不存在「effect 里 setState」那一类
+   *  循环风险。`selectTab` 是把两件事（切页签 + 记下画布已被访问）合成一个动作
+   *  的出口，视图仍然只调 `setActiveTab`。 */
+  const [canvasVisitedFor, setCanvasVisitedFor] = useState<string | null>(null);
+  const isCanvasTab = (tab: DetailTab) => tab === "canvas" || tab === "use";
+  const handleTabChange = useCallback(
+    (tab: DetailTab) => {
+      setActiveTab(tab);
+      if (isCanvasTab(tab) && workflow) setCanvasVisitedFor(workflow.id);
+    },
+    [workflow],
+  );
   /* 当前模式：初值 = 该工作流的默认模式；换工作流时重置（见 controller 的说明）。
    *  `null` = 用户主动切到了「自动（工作流默认）」——与「还没初始化」靠 workflow.id
    *  区分，故用一个「记住初值来自哪条工作流」的 ref 而不是 effect 里 setState。 */
@@ -324,7 +355,10 @@ export function useWorkflowLibraryDetail(
     workflow,
     metaEditor,
     activeTab,
-    setActiveTab,
+    setActiveTab: handleTabChange,
+    /* 画布预览那一份常驻实例该不该挂载：当前工作流被访问过画布页签就挂载
+     *  （切回工坊封装也不卸载 —— 卸载会丢表单值 / 运行态，见上面的说明）。 */
+    canvasMounted: !!workflow && canvasVisitedFor === workflow.id,
     activeMode,
     setActiveMode,
     sourceOpen,
