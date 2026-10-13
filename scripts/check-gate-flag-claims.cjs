@@ -67,6 +67,28 @@
  *    这不是「让判据猜语义」，它是**把已知的正当形态显式列出来**（与各判据的
  *    `EXEMPT_SITES` 同构），且下面每一条豁免都有实例可指。
  *
+ * ④ **翻闸台账点名的脚本必须有执行者**（`HARD_GATE_FLIPS` 的键 ⇄ 门禁链 / 按需台账）：
+ *    `HARD_GATE_FLIPS` 的值是自测文件，而**自测不是执行者** —— 它证明「这条判据的形态
+ *    是对的」，不证明「有人会跑它」。18 条翻闸里有两条（`tw4-*`）起 Tailwind 引擎、
+ *    单次约 6s，因此**不进钩子**（登记在 `scripts/.gate-executor-ledger.json` 的按需
+ *    召唤台账里，这正是它们该有的形态）。
+ *
+ *    缺这一格的后果是**「已翻硬闸」这句话只兑现了一半**：翻闸的语义是「命中即退 1」，
+ *    而**退 1 要有人跑**才发生。把一条判据从棘轮翻成硬闸、却不给它任何落点，
+ *    得到的是「账面写着硬闸、实际连棘轮都不如」—— 棘轮至少有钩子里的那一步。
+ *    （`check-ui-primitives.cjs` 的棘轮车道空置是另一件事：它**仍在钩子里跑**，
+ *    只是写回去的账是空的。）
+ *
+ *    判据面是「两条正当落点**至少占一条**」：门禁链（`.githooks/pre-commit` /
+ *    `quality-gate.mjs` / `quality-gate.ps1` 的步骤行）**或**按需召唤台账
+ *    （`scripts/.gate-executor-ledger.json`）。两条都没有 ⇒ 红。
+ *
+ *    ⚠️ **为什么不复用 `check-gate-executors.cjs` 的口径直接判「无执行者」**：
+ *    那一条已经在跑（实测它在 `--report` 里点名了 `tw4-*` 两条），而它判的是
+ *    「**登记了没有**」；这一格判的是「**翻闸台账里那一句『命中即退 1』有没有兑现**」
+ *    —— 两者的对象不同（一个是「每份判定型脚本」，一个是「翻了闸的那批」），
+ *    而后者恰恰是 #1811 这条线上唯一还没被机器盯过的断言。
+ *
  * ── 刻意不判（明写在案，别当成漏报）────────────────────────────────
  *
  *   · **沿革叙述里的旧旗标**（`docs/**` 与 `changelog.d/**` 里「曾经带 `--update`、
@@ -113,6 +135,99 @@ const COMMAND_LISTS = [
   ".githooks/pre-commit",
   "docs/standards/13-提交与-code-review.md",
 ];
+
+/**
+ * 翻闸脚本的**两条正当落点**（④ 用）——「有人会跑它」这件事只有这两种机器形态：
+ *
+ *   · **门禁链**：`.githooks/pre-commit` 的步骤行、`quality-gate.mjs` 的 gate 表项、
+ *     `quality-gate.ps1` 的 `$Blocks` 表项 —— 口径与 `check-gate-executors.cjs` 的
+ *     `gateChainScripts()` **刻意同源**（那里只读「门禁步骤位置」、不读全文，理由见它
+ *     的注释：读全文会把散文里的占位符举例与被 import 的执行器一起收进来）。
+ *   · **按需召唤台账**：`scripts/.gate-executor-ledger.json` 的 `onDemand` 键
+ *     —— `check-gate-executors.cjs` 已判过「登记了就说明它确实无执行者」，所以
+ *     这里只认它的在场，不重复判它的理由写得对不对。
+ *
+ * **不抄第二份清单**：门禁链那三处是现读的（与那份脚本同一份事实），台账是现读的
+ * JSON —— 新增一条翻闸时不需要回来改本文件。
+ */
+const GATE_CHAIN_FILES = [
+  ".githooks/pre-commit",
+  "scripts/quality-gate.mjs",
+  "scripts/quality-gate.ps1",
+];
+
+/**
+ * **聚合档**也是落点（`check-gate-executors.cjs` 的 `isGateScript` 认这一层）：
+ * `run-ast-gates.cjs` 在自己的 `GATES` 表里逐条点名脚本，钩子只调它一行 ——
+ * 于是「谁跑这条判据」的答案在**那张表**里，而不在钩子的步骤行上。
+ *
+ * 这不是特例补丁，而是与 `run-ast-gates.cjs` 自己的契约一致：它文件头写着
+ * 「新增一条要同改三处：这里、`.githooks/pre-commit` 的那一行、以及
+ * `tests/ast-gates-aggregate.test.ts` 的清单断言」。所以这一层必须跟着认，
+ * 否则 ④ 会把「经聚合档真在跑」的两条判成无落点（实测：`check-non-null-assertions`
+ * 与 `check-click-keyboard` 正是这样被误报的 —— 误报的判据活不过一次评审，§11.18.4）。
+ */
+const GATE_AGGREGATORS = ["scripts/run-ast-gates.cjs"];
+
+const GATE_EXECUTOR_LEDGER = path.join(
+  "scripts",
+  ".gate-executor-ledger.json",
+);
+
+/**
+ * 门禁链里被按名字调起的脚本 basename 集合 —— 与 `check-gate-executors.cjs` 的
+ * `gateChainScripts()` 同口径（只读**步骤位置**，不读全文）。
+ */
+function gateChainScripts() {
+  const out = new Set();
+  for (const rel of [...GATE_CHAIN_FILES, ...GATE_AGGREGATORS]) {
+    const abs = path.join(ROOT, rel);
+    if (!fs.existsSync(abs)) continue;
+    const src = fs.readFileSync(abs, "utf8");
+    /* 形态一：`scripts/<x>`（钩子的 `run "…" node scripts/<x>`、`quality-gate` 的
+     * `args: ["../scripts/<x>"]`、`$Blocks` 的 `Args`）—— 与 `check-gate-executors`
+     * 的 `gateChainScripts()` 逐字同口径。 */
+    for (const m of src.matchAll(
+      /scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g,
+    )) {
+      out.add(m[1]);
+    }
+    /* 形态二：聚合档表项里的裸 `script: "<x>"`（`run-ast-gates.cjs` 的 `GATES`）
+     * —— 这里**没有** `scripts/` 前缀，因为聚合档按 basename import 它们。
+     * 不收这一形态的后果实测过：经聚合档真在跑的两条被误报成「无落点」。 */
+    for (const m of src.matchAll(
+      /\bscript:\s*["'`]([A-Za-z0-9_.-]+\.(?:cjs|mjs))["'`]/g,
+    )) {
+      out.add(m[1]);
+    }
+  }
+  return out;
+}
+
+/** 按需召唤台账里登记的脚本名集合（读不出 ⇒ 空集，由 ④ 报「两条落点都没有」）。 */
+function onDemandScripts() {
+  const abs = path.join(ROOT, GATE_EXECUTOR_LEDGER);
+  if (!fs.existsSync(abs)) return new Set();
+  try {
+    const parsed = JSON.parse(fs.readFileSync(abs, "utf8"));
+    return new Set(Object.keys(parsed.onDemand ?? {}));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * 格 ④：翻闸台账里点名的脚本，**两条正当落点至少占一条**。
+ *
+ * 缺这一格的形态很具体：「已翻硬闸」这句话宣称「命中即退 1」，而退 1 要有人跑才发生
+ * —— 把一条判据从棘轮翻成硬闸却不给它落点，得到的是「账面写着硬闸、实际连棘轮都不如」。
+ * 返回缺落点的那批脚本名。
+ */
+function flipsWithoutExecutor(flips) {
+  const chain = gateChainScripts();
+  const onDemand = onDemandScripts();
+  return flips.filter((name) => !chain.has(name) && !onDemand.has(name));
+}
 
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -468,9 +583,21 @@ function main() {
     });
   }
 
+  /* ④ 翻闸台账点名的脚本必须有执行者（翻闸说的是「命中即退 1」，而退 1 要有人跑）。 */
+  for (const script of flipsWithoutExecutor(flips)) {
+    violations.push({
+      kind: "翻闸台账点名了它，而它一条落点都没有",
+      where: `${RATCHET_TEST} → ${SCRIPT_DIR}/${script}`,
+      detail:
+        `${script} 已翻硬闸，但门禁链（${[...GATE_CHAIN_FILES, ...GATE_AGGREGATORS].join(" / ")}）与` +
+        `按需召唤台账（${GATE_EXECUTOR_LEDGER}）都没有它 —— ` +
+        "「命中即退 1」这条承诺要有人跑才兑现；两条落点选一条接上再登记进 HARD_GATE_FLIPS",
+    });
+  }
+
   const scope =
     `${scriptFiles().length} 份脚本 / ${ratchetTableScripts().length} 个归类表条目 / ` +
-    `${flips.length} 条翻闸台账`;
+    `${flips.length} 条翻闸台账（落点缺失 ${flipsWithoutExecutor(flips).length}）`;
 
   if (REPORT_ONLY) {
     console.log(
@@ -512,5 +639,10 @@ module.exports = {
   ratchetTableScripts,
   flipsScripts,
   staleFlipCommands,
+  flipsWithoutExecutor,
+  gateChainScripts,
+  onDemandScripts,
   COMMAND_LISTS,
+  GATE_CHAIN_FILES,
+  GATE_AGGREGATORS,
 };
