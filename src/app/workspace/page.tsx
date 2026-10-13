@@ -8,6 +8,7 @@ import {
   WORKSPACE_VIEWS,
   useWorkspaceTabs,
 } from "~/components/studio/hooks/use-workspace-tabs";
+import { useSidebarProjects } from "~/components/studio/hooks/use-sidebar-projects";
 import type { RecentProject, WorkspaceView } from "~/components/studio";
 import { WorkspaceViewStack } from "~/components/studio/WorkspaceViewStack";
 import { globalNavItems, projectTabs } from "~/components/studio/NavItems";
@@ -230,6 +231,12 @@ export default function WorkspacePage() {
     [recentProjects],
   );
 
+  /* 侧栏「项目」分组列出的项目 —— 与「所有项目」那一屏同一支取数（并集，
+   * 见 `useSidebarProjects`）。此前这里直接用 `recentProjects`，而它读的是
+   * 本地索引：画布页没打开过就没有 `hydrateFromServer` 那次对账，于是
+   * 「服务端有一行、索引里没有」的项目在侧栏**一条都不列**（ISSUE #1874）。 */
+  const sidebarProjects = useSidebarProjects();
+
   const openableViews = useMemo(
     () => [
       ...globalNavItems().map((item) => ({ view: item.id, label: item.label })),
@@ -259,7 +266,7 @@ export default function WorkspacePage() {
           active={viewMode}
           onSelect={handleNavSelect}
           onOpenSettings={openSettings}
-          projects={recentProjects.map((p) => ({ id: p.id, name: p.name }))}
+          projects={sidebarProjects}
           activeProjectId={activeProjectId}
           onOpenProject={handleOpenCanvasProject}
           onShowAllProjects={handleShowAllProjects}
