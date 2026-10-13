@@ -50,6 +50,14 @@
 
 ## 现状数字（审查当日实测）
 
+> ⚠️ **这张表是审查当日（`master` @ `b4705c3d`）的快照，不是现值** —— 尤其最后两行：
+> 它们列的棘轮存量**已随 ISSUE #1811 的收尾整体清零并翻成硬闸**（那 8 份基线文件
+> 今天一份都不在，`--update` / `--strict` 也从对应脚本里删了）。要看现值请跑
+> `node scripts/check-gate-executors.cjs` 与 `tests/ratchet-update-guards.test.ts`
+> 现算的那两张表（`HARD_GATE_FLIPS` / 四张归类表），**不要引用本表的数字**。
+> 这条注记是 2026-10-13 复审时补的：本文件不在 `doc:check` 的 `SCOPED_DOC_DIRS`
+> 里，所以它自己的引用漂移没有任何判据会红（见本节末「台账自身的门禁影响」）。
+
 | 维度                          | 数值                                                                                             | 出处                                                      |
 | ----------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
 | 产品代码（`src` 非测试）      | 184,855 行                                                                                       | `find src … -not -name '*.test.*'`                        |
@@ -57,8 +65,8 @@
 | 测试                          | 58,100 行 / 705 份用例（另有 19 份 Playwright 规格）                                             | `find tests src e2e`                                      |
 | 文档（`.md`）                 | 57,969 行 / 82 份                                                                                | `find docs -name '*.md'`                                  |
 | 判据脚本                      | 68 份：判定型有执行者 65、按需召唤 2、报告型自称在跑 0                                           | `node scripts/check-gate-executors.cjs`（本次实跑，退 0） |
-| `src` 侧棘轮存量              | 文件长度 0 / 函数长度 0 / Rust 函数长度 0 / 孪生对 0 / UI-逻辑分离 0 / 循环依赖 0 / 零消费导出 0 | `scripts/.<name>-baseline.json`                           |
-| 仍带存量的棘轮                | 非空断言 167 处                                                                                  | `scripts/.non-null-assertions-baseline.json`              |
+| `src` 侧棘轮存量（**当日快照**） | 文件长度 0 / 函数长度 0 / Rust 函数长度 0 / 孪生对 0 / UI-逻辑分离 0 / 循环依赖 0 / 零消费导出 0 | 当日各 `scripts/.<name>-baseline.json`（**均已删**）      |
+| 仍带存量的棘轮（**当日快照**）   | 非空断言 167 处                                                                                  | 当日 `scripts/.non-null-assertions-baseline.json`（**已删**） |
 
 **读法**：产品代码的结构性债务已被清零，因此「优化」的着力点不在业务代码内部，而在**判据覆盖不到的三处边界**（网络入口、合并点、判据自身）与**手改清单的同步面**。
 
@@ -328,6 +336,14 @@ stash 里等账绿 —— 这是 §11.8 那本账在起作用，不是绕过去�
 | 5   | 同上                                                                                   | 由 `scripts/check-code-duplication.cjs` 在 pre-commit 与 CI 强制              | 孪生对棘轮                               |
 | 6   | 同上（§12.13 末句）                                                                    | 在 pre-commit 与 CI 强制。                                                    | `check-function-length.cjs` 函数长度棘轮 |
 | 7   | 同上                                                                                   | 在 pre-commit 与 CI 强制，基线 `scripts/.dead-exports-baseline.json`          | 零消费导出棘轮                           |
+
+> 第 3 / 5 / 6 / 7 行记的是**审查当日**的编号与「棘轮」字样，今天都变了
+> （ISSUE #1811 收尾）：`check-theme-colors` → 硬闸、`check-code-duplication` → 硬闸、
+> `check-function-length` → 硬闸、`check-dead-exports` → 硬闸（**基线已删，
+> 第 7 行点名的 `scripts/.dead-exports-baseline.json` 已不存在**）。
+> 本表要记的是「这几处文档**声称有执行者**」这件事本身（那才是 R9-01 的靶子），
+> 与判据是棘轮还是硬闸无关 —— 但按上面的规矩，说法与事实不符就得当场写明，
+> 否则下一个人 grep 那份基线会 grep 到空。
 | 8   | `docs/standards/18-lib层规范.md`                                                       | `tests/lib-node-only-declarations.test.ts`，接入 pre-commit 与 CI             | Node-only 声明判据                       |
 | 9   | `docs/standards/Comfy-APP-T3-项目开发规范.md`                                          | 全库推进计划与棘轮护栏（已接入 pre-commit 与 CI）                             | 17 章那批棘轮                            |
 | 10  | `docs/standards/launch-and-build.md`（§5 排障表「配置了 ComfyUI 端口却像没配」那一行） | `check-comfyui-port-contract.cjs`                                             | 端口契约判据                             |
@@ -522,7 +538,7 @@ build + 数产物跑绿」，而产物是本地文件树 + 本地 `node_modules`
 | 提交钩子的实测耗时                  | 影响 R2-01 的分档方案                                                                                                                                                                                    | 从 `LOGD` 的分步日志聚合一次                                                                                                                   |
 | 本地单用户下 better-auth 的实际作用 | 存在 `login/page.tsx` + `authedProcedure` + 4 张认证表，桌面场景下的信任模型值得单独写清                                                                                                                 | 读 `src/server/api/trpc.ts:180-220` 的兜底开关语义并确认默认档位                                                                               |
 | 两编译器诊断差集                    | R6-01                                                                                                                                                                                                    | 一次全量双跑对比                                                                                                                               |
-| 本报告自身的门禁影响                | 入库时已跑：`doc:check`、`check-file-structure --strict`、`check-format`、pre-commit 全四组（每笔提交各一遍）。**不吃**这一档的：`docs/generated/**`（`docs/audits/*` 不在渲染源清单里）、e2e 与产物两档 | 无待办。真待办是另一格：`docs/audits/**` 不在 `doc:check` 的核对面里，所以这份台账自己的引用漂移没有判据会红（本笔的第二条提交就是在补这件事） |
+| 本报告自身的门禁影响                | 入库时已跑：`doc:check`、`check-file-structure --strict`、`check-format`、pre-commit 全四组（每笔提交各一遍）。**不吃**这一档的：`docs/generated/**`（`docs/audits/*` 不在渲染源清单里）、e2e 与产物两档 | 无待办。真待办是另一格：`docs/audits/**` 不在 `doc:check` 的核对面里，所以这份台账自己的引用漂移没有判据会红（本笔的第二条提交就是在补这件事）。**2026-10-13 复审确认这一格是真的**：ISSUE #1811 收尾翻闸后，本文件里那张「现状数字」表的最后两行与「判据覆盖 ⇄ 证据」表的第 3 / 5 / 6 / 7 行**已整体过期**（8 份基线文件一份都不在、4 条判据早已升硬闸），而没有任何判据会红 —— 两处已就地改写并加注记 |
 
 ## 建议的动手顺序
 
