@@ -544,8 +544,8 @@ async function computeComfyUiStatus(): Promise<ComfyUiStatus> {
  *      不是探针抖动）→ 记一笔，接下来 COMFY_NOT_RUNNING_HOLD_MS 内不因更弱的
  *      证据改口；
  *    · 结论是「运行中」→ 一切都已确认活着，两把标记都清掉；
- *    · 「进程在、端口未绑定」（正在启动）→ 启动窗口继续生效，但不动「未运行」
- *      标记。 */
+ *    · 「进程在、端口未绑定」→ 这就是「真的还在启动」：窗口跟着续期（好让紧随
+ *      其后的探针抖动不打回「未运行」），「未运行」标记不动。 */
 function deriveAndLatch(facts: {
   starting: boolean;
   stopping: boolean;
@@ -567,8 +567,18 @@ function deriveAndLatch(facts: {
   else if (status.probing) {
     /* 「检测中…」= 事实不可信：既不能坐实「未运行」，也不该让上一笔「探明没在跑」
      * 提前过期（那正是相邻两轮结论相反的来源）。 */
-  } else if (status.starting) st.startingAt = Date.now();
-  else if (snap.didQueryProcTable && !snap.unverified)
+  } else if (snap.running || facts.starting) {
+    /* 续期只认「真的还在启动」这两条证据：**快照探到活着的进程**（端口还没
+     * 绑定 = 正在启动），或**拉起流程在进行**（`facts.starting` = 启动单飞锁）。
+     *
+     * **不认本轮结论里的 `starting`**：那个布尔的来源之一正是「启动窗口本身」
+     * （见 deriveComfyUiStatus 第 4 步），拿它续期等于让窗口给自己续命 ——
+     * 5s 轮询每次都把 12s 窗口推后一轮，于是启动失败（保活拉起后进程未出现 /
+     * 进程秒退）之后，日志里已经写了失败，状态行却永久停在「ComfyUI 正在
+     * 启动…」，连「启动 ComfyUI」按钮都跟着一起锁死。窗口是给「拉起动作 →
+     * 就绪」那段空窗的缓冲，它的寿命只由真实时间与这两条证据决定。 */
+    st.startingAt = Date.now();
+  } else if (snap.didQueryProcTable && !snap.unverified)
     markComfyNotRunningProven();
   return status;
 }
