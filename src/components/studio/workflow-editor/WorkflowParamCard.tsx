@@ -267,7 +267,7 @@ export function WorkflowParamCard({
               {port.display ?? port.name}
             </span>
             <span
-              className="shrink-0 rounded px-1 font-mono text-[9px] leading-3.5"
+              className="shrink-0 rounded px-1 font-mono text-4xs leading-3.5"
               style={{
                 color: style.color,
                 background: `${style.color}1f`,

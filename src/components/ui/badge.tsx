@@ -46,13 +46,13 @@ const badgeVariants = cva(
        *    text-xs 全生效，这里不重复给）；
        *  · `sm` = 密集行内元信息档（与已治理的 task-type-chip / source-tag
        *    同档），h-auto + rounded-md + px-1.5 + py-0.5 + text-3xs；
-       *  · `xs` = 极窄列表行内小徽标档（原 list-badge 的 text-[9px] + px-1 +
+       *  · `xs` = 极窄列表行内小徽标档（原 list-badge 的 text-4xs + px-1 +
        *    py-px + rounded），leading-tight 让行高不撑破列表行基线。
        */
       size: {
         default: undefined,
         sm: "h-auto rounded-md px-1.5 py-0.5 text-3xs",
-        xs: "h-auto gap-0 rounded px-1 py-px text-[9px] leading-tight",
+        xs: "h-auto gap-0 rounded px-1 py-px text-4xs leading-tight",
         /* 胶囊形的小两档 —— 从调用点量出来的既有形状（此前 12 处各自手抄
            `rounded-full px-1.5 py-0.5 text-3xs` 这类串，px 有 1.5 / 2 / 2.5 三种、
            字号有 2xs / 3xs 两种，同一个角色三种写法）。base 已经是胶囊

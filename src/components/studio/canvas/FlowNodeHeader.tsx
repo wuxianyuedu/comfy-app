@@ -128,7 +128,7 @@ export function FlowNodeHeader({
       <NodeIdChip nodeId={data.nodeId} variant="node" />
       {role && (
         <span
-          className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium"
+          className="shrink-0 rounded px-1.5 py-0.5 text-4xs font-medium"
           style={{
             background: colorToRgba(role.color, 0.25),
             color: role.color,
