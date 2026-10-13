@@ -164,13 +164,13 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-title-bar-clearance.cjs --staged # 输入面跳过（见下 13.5.8.2）
 ✅ pnpm exec tsc --noEmit
 ✅ pnpm run lint
-✅ node scripts/check-ui-logic-separation.cjs --strict # 视图层 IO 棘轮（只许降；治理后指标下降同样阻断，见 17）
+✅ node scripts/check-ui-logic-separation.cjs   # 视图层 IO 硬闸（命中即阻断，见 17）
 ✅ node scripts/check-changelog-fragments.cjs
 ✅ node scripts/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
 ✅ node scripts/check-import-alias.cjs --staged # import 别名只有一种前缀 `~`（R13，见 §12.8.0）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
 ✅ node scripts/check-ui-primitives.cjs --staged # UI 基元复用棘轮（见 16 §16.2.3；`--staged` = 只碰了 `src/` 下的扫描根才扫，见下 13.5.8.2）
-✅ node scripts/check-overlay-z.cjs --staged # 浮层层级刻度棘轮（见 16 §16.2.5）；`--staged` 见下 13.5.8.2
+✅ node scripts/check-overlay-z.cjs --staged # 浮层层级刻度硬闸（见 16 §16.2.5）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-theme-colors.cjs       # 主题色扫描**硬闸**：豁免（类型色例外 / 固定暗色清单）之外不得有未 token 化的写死色值（见 03 §3.6.1）
 ✅ node scripts/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
 ✅ node scripts/check-inline-style.cjs --staged # 视图层不得动态注入 <style>（见 03 §3.5）；`--staged` 见下 13.5.8.2
@@ -200,7 +200,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
    # 那是「把大改动拆小」那条建议的执行者；**纯提示、不改变退出码**（见下 13.5.8.2 第七笔账）
 ✅ node scripts/check-circular-deps.cjs --staged # 模块循环依赖硬闸（见 12 §12.7）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-barrel-heavy-deps.cjs   # 入口静态图上不许有重依赖（见 12 §12.19 / 02 §2.9）
-✅ node scripts/check-format.cjs --staged    # prettier 格式棘轮（见下 13.5.1；`--staged` = 只碰了扫描面（`src/**` / `.storybook/**`）才扫，见下 13.5.8.2）
+✅ node scripts/check-format.cjs --staged    # prettier 格式硬闸（见下 13.5.1；`--staged` = 只碰了扫描面（`src/**` / `.storybook/**`）才扫，见下 13.5.8.2）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
 ✅ node scripts/check-dead-exports.cjs --staged # src/lib + src/trpc 零消费导出硬闸（见 12 §12.16）；`--staged` 见下 13.5.8.2
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
@@ -208,14 +208,14 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 ✅ node scripts/check-ui-customizations.cjs  # ui/ 定制标记与台账（见 16 §16.8）
 ✅ node scripts/check-doc-references.cjs     # 文档引用与权威源一致（= `pnpm doc:check`；序号那条判据见下 13.5.10）
 ✅ node scripts/storybook-check.mjs --changed # 故事枚举来源（cva 返回值 / 漏档）+ 组件覆盖率棘轮 + 故事面（见 16 §16.2.3.4 / §16.2.3.8）
-✅ node scripts/check-comment-language.cjs   # 注释语言棘轮：注释一律中文，只有「纯 ASCII 模块」例外（见 12 §12.4.6；§12.4.6 早写着它在钩子里报红，而它一直不在，ISSUE #1451 补齐）
+✅ node scripts/check-comment-language.cjs   # 注释语言硬闸：注释一律中文，只有「纯 ASCII 模块」例外（见 12 §12.4.6；§12.4.6 早写着它在钩子里报红，而它一直不在，ISSUE #1451 补齐）
 ✅ node scripts/check-gate-executors.cjs     # 判据 ⇄ 执行者双向判据：判定型脚本无执行者即红（除非登记按需召唤台账）、报告型自称供 pre-commit 调用即红（见下 13.5.12）
 ✅ node scripts/check-declaration-readers.cjs # 声明 ⇄ 读者索引：本仓库每一种「声明」（判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 / 类型断言执行者 / 软断言语义 / 新鲜度档…）都必须答出「谁在读它 + 执行者在哪」——读者丢了、执行者从门禁链里被摘掉、索引自己静默降级，都红（见 11 §11.23）
 ✅ node scripts/check-on-demand-duties.cjs   # 「不进钩子」的按需档 ⇄ 执行者索引：每一行的机器事实仍在（新鲜度档键 / 门禁 run:false / 按需召唤条目，全部现算）+ 每一个机器事实都被登记（新增一档忘了登记 ⇒ 那一档谁都不判）（见 13.5.4）
 ✅ node scripts/check-test-environment.cjs   # 用例的环境档：环境早退（绿但一条断言没跑）+ 目录档与文件头矛盾 + 冗余文件头（见 11 §11.17）
 ✅ node scripts/check-soft-assertions.cjs    # 软断言（expect.soft）只许用在循环体里（一张清单逐项判）；落在循环外会把真正的原因吞掉（见 11 §11.18）
 ✅ node scripts/check-test-concurrency.cjs  # 并发档位（it.concurrent）用在哪：不许与 expect.poll 同文件、且必须有隔离声明（见 11 §11.19）
-✅ node scripts/check-test-sleep.cjs        # 测试层裸 sleep 的净数棘轮：`await new Promise(r => setTimeout(r, N))` 不许涨（正当形态逐站点声明 `sleep-ok`；见 11 §11.14）
+✅ node scripts/check-test-sleep.cjs        # 测试层裸 sleep 硬闸：`await new Promise(r => setTimeout(r, N))` 一处即阻断（正当形态逐站点声明 `sleep-ok`；见 11 §11.14）
 ✅ node scripts/check-test-waitfor.cjs      # 测试层 `waitFor` 的边界：只有「等 DOM」与「假定时器窗口内」两种形态该留 `waitFor`，其余等值的一律 `expect.poll`（见 11 §11.14.3）
 ✅ node scripts/check-test-it-each.cjs     # 参数化用例 `it.for` ⇄ `it.each`（**硬闸**：站点须为 0）；`it/test/describe.each` 一视同仁（本地同名 helper 不看、夹具字符串不算；见 11 §11.15.1）
 ✅ node scripts/check-gate-repo-boilerplate.cjs # 门禁自测**别再手搓临时仓库样板**：`tmpdir()` + 从 `workdir` 拉判据脚本 + 没 import 共享件 —— 三条同时成立即红。用 `tests/helpers/gate-repo.ts` 的 `defineGateRepo`（见 11 §11.16.1）
@@ -290,7 +290,7 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
   `.cnb.yml`（30 步）曾经跑起来过，现已按额度约束删除。两份配置都不在仓库里，
   **不要再从它们复制门禁清单**。
 
-#### 13.5.1 prettier 格式棘轮（ISSUE #575 第 9 项）
+#### 13.5.1 prettier 格式判据（ISSUE #575 第 9 项 / #1811 收尾翻硬闸）
 
 `format:check` 是**唯一长期没有纳入门禁**的既有质量命令。原因很实在：全库
 **576 个文件**未过 prettier，一次性 `--write` 会产生与本次改动无关的全文件 diff
@@ -298,15 +298,17 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
 但「等基线整改完再接入」的代价是**每个新文件都可以带着任意格式进来**，存量只增
 不减，那一天永远不会到。
 
-判据因此改为**基线 + 只许下降**（`scripts/check-format.cjs`，与重复块 / 函数长度 /
-文件行数 / 环依赖同口径）：
+判据因此**先**改为「基线 + 只许下降」（`scripts/check-format.cjs`，与重复块 /
+函数长度 / 文件行数 / 环依赖同口径）；存量清零之后（ISSUE #1811 收尾）**再翻成硬闸**：
 
-| 情形                                  | 结果                                                           |
-| ------------------------------------- | -------------------------------------------------------------- |
-| 新增未过 prettier 的文件              | **阻断**                                                       |
-| 存量文件从干净变脏                    | **阻断**（它落在基线外）                                       |
-| 治理有进展（未过文件变少）            | 提示执行 `--update` 收紧；门禁带 `--strict` 时**未收紧即失败** |
-| `--update` 试图把新增的脏文件写进基线 | **拒绝**（棘轮只许收紧）                                       |
+| 情形                       | 结果                                                     |
+| -------------------------- | -------------------------------------------------------- |
+| 未过 prettier 的文件（无论新增还是原本干净后被弄脏） | **阻断**（硬闸：命中即退 1） |
+| `--update` / `--strict`    | **不存在**（翻闸时删掉，只留 `--report` 作清零后的自证） |
+
+**为什么清零后必须翻闸**：棘轮的两个动作这时候都无事可做（`--update` 无余地、
+`--strict` 恒绿），留下的却是一条「手改那份 JSON 就能把新违规登记成已知存量」的通道
+—— 硬闸类本来没有那个中间态（§13.6.2 的两类对照）。
 
 刻意的设计：
 
@@ -322,25 +324,24 @@ A=tsc、B=eslint、C=一次 vitest、D=其余静态检查）：
   沙箱，共用一份缓存时读数不可信，且跟着用户走的缓存无法按检出隔离。
   同族两处已核过、形态本来就是安全的：`check-reformat-only.cjs`
   （`status !== 0` 一律当失败并退回逐文件兜底）与 `run-tests.mjs`（透传退出码）。
-- **按文件记账，不记全局计数。** 计数只约束总量 —— 修好 3 个、弄坏 4 个，总数变大
-  才失败，弄坏的那 3 个无人知晓。文件级记账下「把干净的文件弄脏」当场失败，而
-  「这个文件此前是干净的」本身就是一个可断言的事实。
+- **判据落在「文件」这一层，不记全局计数。** 计数只约束总量 —— 修好 3 个、弄坏 4 个，
+  总数变大才失败，弄坏的那 3 个无人知晓。文件级判定下「把干净的文件弄脏」当场失败，
+  而「这个文件此前是干净的」本身就是一个可断言的事实（棘轮时代这条记账方式是
+  §13.5.1 的原设计，翻硬闸后仍然成立：判据点名的就是文件）。
 - **白名单是形态（glob），不是文件列表。** 第一类是**高频 churn 路径** ——
   `scripts/**`、`tests/**`、`e2e/**`、根级配置（每次排障都要改一遍），把它们纳入
-  棘轮会让每一次排障提交都顺带产生格式 diff。第二类是**非源码产物** ——
+  判定会让每一次排障提交都顺带产生格式 diff。第二类是**非源码产物** ——
   `src-tauri/target/**`（`cargo build` 输出，由嵌套的 `src-tauri/.gitignore`
   忽略）：prettier 只按仓库根读 `.gitignore`，看不到嵌套忽略文件，构建过一次的
   检出会拿 `target/**/out/__global-api-script.js` 阻断每一次提交。用 glob 表达
   「这类文件暂不纳入」不会漂移，且新增这类文件时**自动**落在白名单里。
-  豁免不进棘轮计数。
 
-**存量文件怎么治理**：单独立项、单独一个 PR，对一批文件跑
-`pnpm exec prettier --write <文件>`，提交后 `node scripts/check-format.cjs --update`
-收紧基线。**禁止**在功能提交里顺手做（见 13.5.2）。
+**存量文件怎么治理**（棘轮时代的 SOP，留作历史）：单独立项、单独一个 PR，对一批文件跑
+`pnpm exec prettier --write <文件>`，再收紧基线。**禁止**在功能提交里顺手做（见 13.5.2）。
 
 #### 13.5.2 格式化提交与行为改动分离（同批）
 
-格式棘轮只判「文件干不干净」，管不住「顺手全库 `format:write`」—— 后者会把一次
+格式判据只判「文件干不干净」，管不住「顺手全库 `format:write`」—— 后者会把一次
 真实改动埋在几百个文件的重排里，`git blame` 当场失效、评审看不出改了什么。
 `scripts/check-reformat-only.cjs` 判**这次提交的形态**：
 
@@ -630,7 +631,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
   而不是当抖动放过去（实测过这一幕：涨的 1074 字节正好来自那几天合的组件改动）；
 - 若确认这个体积值得，在 **PR 里贴 before/after 两档读数 + 说明为什么值这个体积**，
   由评审确认后带 `--allow-increase` 重跑 `--update`（**不许**默默 `--update` 放水：
-  不带 `--allow-increase` 时 `--update` 会**拒绝抬高**，与 `check-overlay-z.cjs` 那批棘轮同口径）；
+  不带 `--allow-increase` 时 `--update` 会**拒绝抬高**，与 `check-void-floats.cjs` 那批仍在棘轮车道的判据同口径）；
 - 否则先把它压回去（拆动态 import / 回到 PR #1778 那条「重依赖入口静态图」的修法）。
 
 **与 `pnpm analyze` 的分工**：那份起 `@next/bundle-analyzer`（**强制 `--webpack`**）生成
@@ -1447,7 +1448,7 @@ override → 手工写注释解释为什么」，而**「这次忘了查」没�
 **判据形状三条，都是刻意的**（细则在脚本头，改判据前先读它）：
 
 1. **按 `(包名, advisory id)` 记账，不按计数。** 计数口径下「修好 1 个、引入 2 个」
-   要总量变大才失败，而引入的那 2 个无人知晓 —— 与 13.5.1 对格式棘轮讲的是同一个道理。
+   要总量变大才失败，而引入的那 2 个无人知晓 —— 与 13.5.1 对「按文件判定」讲的是同一个道理。
    用 advisory id 做键还有个副作用是想要的：同一条漏洞换了引入路径**不算新增**。
 2. **双向拦**（与 §12.12 那条台账型判据同口径）：基线外出现新条目 → 红；基线里的条目
    **已经不再命中** → 也红。只写「不许新增」的话，收敛掉一份却把条目留在台账里，
