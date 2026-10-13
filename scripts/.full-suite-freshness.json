@@ -1,10 +1,10 @@
 {
   "full": {
     "key": "full",
-    "verifiedAt": "2026-10-12T16:32:06.971Z",
-    "who": "cnb.dQh7kaCfAPA",
+    "verifiedAt": "2026-10-13T03:43:42.262Z",
+    "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "本次提交是合并 origin/master 解 docs 冲突；触发本档输入面的是被合入的 master 提交（16 次，他人的改动），不是本提交的贡献（本提交相对合并双方只动 3 份文档产物）。今天不跑全量覆盖率，改为隔离重跑受影响用例：WindowTitleBar / ShellTabs / full-screen-layer / check-title-bar-clearance / check-file-structure / check-changelog-fragments 共 130 passed。"
+    "skippedReason": "ISSUE #1834：全量档跑完一轮本机实测 ~10 分钟，而 full-suite-run 的子进程走 runPnpmSync 缺省 timeoutMs=600_000，任何并发都在 600s 处被砍成「退出码 信号 / 不记账」（测量未发生，非判据红）；markdown 那格已由 bba52ce2 补真用例清掉、与本笔无关，归因与出口写在 #1834"
   }
 }
