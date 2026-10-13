@@ -185,7 +185,14 @@ describe("fakeExecutorEnv：两个平台同一条形状", () => {
   });
 
   it("在本机真跑一次：确实能解析出一个解释器与真实的替身目录", () => {
-    const result = fakeExecutorEnv();
+    /* env 里**只摘掉宿主的 PYTHONPATH**：`PYTHONPATH` 按前缀语义拼进结果
+     * （上面那条纯断言守着它），于是「精确等于替身目录」只在宿主 shell 干净时
+     * 成立 —— CodeBuddy 宿主的 agent shell 就把它设成了自己的 `vendor\shim`，
+     * 本机不摘的话这一条必红，而红在「宿主机被压满」这件事上、不在判据上。
+     * PATH 必须留着：解释器是**真从 PATH 上解析**的（这正是「真跑一次」的意思）。 */
+    const env = { ...process.env };
+    delete env.PYTHONPATH;
+    const result = fakeExecutorEnv({ env });
     /* 开发机 / CI 上应当都有 Python（本仓库的 e2e 前提就是它）。
      * 真没有时这一条会红，那是**该红**的：主链路用例同样会红。 */
     expect(result.reason).toBeNull();

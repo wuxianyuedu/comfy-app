@@ -134,11 +134,15 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
     ),
   ) as {
     metric: {
-      loadEventEnd: number;
-      firstContentfulPaint: number;
+      loadEventEnd?: number;
+      firstContentfulPaint?: number;
       factor: number;
       rounds: number;
       discard: number;
+      byPlatform?: Record<
+        string,
+        { loadEventEnd: number; firstContentfulPaint: number }
+      >;
     };
   };
   const spec = readFileSync(
@@ -146,20 +150,36 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
     "utf8",
   );
 
-  it("基线里的三个数字与 spec 里写的逐字一致", () => {
-    for (const [label, re] of [
-      ["loadEventEnd", /loadEventEnd:\s*(\d+)/],
-      ["firstContentfulPaint", /firstContentfulPaint:\s*(\d+)/],
-      ["factor", /factor:\s*(\d+)/],
-    ] as const) {
-      const inSpec = Number(re.exec(spec)?.[1]);
-      const inBaseline = baseline.metric[label];
-      expect(
-        inSpec,
-        `spec 里的 ${label}=${inSpec} 与基线文件的 ${inBaseline} 不一致 —— ` +
-          `改了一处没改另一处（两边都不会报错，读到的预算就与实测基线脱钩了）`,
-      ).toBe(inBaseline);
+  it("两个平台的基线与 spec 里写的逐字一致", () => {
+    /* 按平台各自一份（2026-10-13，ISSUE #1834 收尾的 win32 读数）：两平台的
+     * 稳态读数差 2.2×，共用一个数会让另一种宿主恒红或不设防。逐字同源这条
+     * 判据因此要覆盖**两个平台**——只核一个等于放任另一个漂。 */
+    const byPlatform = baseline.metric.byPlatform;
+    expect(byPlatform, "基线里要有 byPlatform（按平台各自校准）").toBeDefined();
+    for (const platform of ["posix", "win32"] as const) {
+      const inBaseline = byPlatform?.[platform];
+      expect(inBaseline, `基线里缺 ${platform} 档`).toBeDefined();
+      for (const [label, re] of [
+        ["loadEventEnd", new RegExp(`${platform}: \\{ loadEventEnd: (\\d+)`)],
+        [
+          "firstContentfulPaint",
+          new RegExp(`loadEventEnd: ${inBaseline?.loadEventEnd}, firstContentfulPaint: (\\d+)`),
+        ],
+      ] as const) {
+        const inSpec = Number(re.exec(spec)?.[1]);
+        expect(
+          inSpec,
+          `spec 里 ${platform} 的 ${label}=${inSpec} 与基线文件的 ${inBaseline?.[label]} 不一致 —— ` +
+            `改了一处没改另一处（两边都不会报错，读到的预算就与实测基线脱钩了）`,
+        ).toBe(inBaseline?.[label]);
+      }
     }
+  });
+
+  it("倍数两平台同一个数（spec 里只写一份）", () => {
+    /* 倍数不按平台分档：相对灵敏度不该因宿主打折（各自的基线已经吃掉了机器差）。 */
+    const inSpec = Number(/factor: (\d+)/.exec(spec)?.[1]);
+    expect(inSpec).toBe(baseline.metric.factor);
   });
 
   it("基线里的轮数与取数口径的常量一致（口径改了要同批改基线）", () => {
@@ -167,9 +187,13 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
     expect(baseline.metric.discard).toBe(DISCARD_ROUNDS);
   });
 
-  it("基线的两个读数与倍数都是正数（JSON 里被写成 0 会让判据恒绿）", () => {
-    expect(baseline.metric.loadEventEnd).toBeGreaterThan(0);
-    expect(baseline.metric.firstContentfulPaint).toBeGreaterThan(0);
+  it("两个平台的读数与倍数都是正数（JSON 里被写成 0 会让判据恒绿）", () => {
+    for (const platform of ["posix", "win32"] as const) {
+      const m = baseline.metric.byPlatform?.[platform];
+      expect(m, `基线里缺 ${platform} 档`).toBeDefined();
+      expect(m?.loadEventEnd).toBeGreaterThan(0);
+      expect(m?.firstContentfulPaint).toBeGreaterThan(0);
+    }
     expect(baseline.metric.factor).toBeGreaterThanOrEqual(1);
   });
 });
