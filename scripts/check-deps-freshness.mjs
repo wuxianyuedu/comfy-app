@@ -16,8 +16,8 @@
  *
  * | 层                | 比较对象                                                  | 漂移的含义                         |
  * | ----------------- | --------------------------------------------------------- | ---------------------------------- |
- * | ① 远端引用新鲜度  | `refs/remotes/origin/master` 自己的 reflog 时间            | ② 可信不可信（**不是**「你落后了」）|
- * | ② 基线依赖 ⇄ 远端 | 分叉点（`merge-base`）的三份依赖文件 vs `origin/master` 的  | 你分叉之后远端改过依赖，基线是旧的 |
+ * | ① 远端引用新鲜度  | 那条远端引用**自己的 reflog** 时间（引用名现算，见下）      | ② 可信不可信（**不是**「你落后了」）|
+ * | ② 基线依赖 ⇄ 远端 | 分叉点（`merge-base`）的三份依赖文件 vs 那条引用的         | 你分叉之后远端改过依赖，基线是旧的 |
  * | ③ 依赖安装 ⇄ 本地 | 仓库 lockfile vs `node_modules/.pnpm/lock.yaml`           | 装了，但装的不是当前检出声明的那套 |
  *
  * ③ 由两块拼成，因为它们**对不上时是两种病**（ISSUE #1721）：文本层（上面那格）判
@@ -128,8 +128,43 @@ function stagedFiles(root) {
   return r.out.split(/\r?\n/).filter(Boolean);
 }
 
-/** 默认比对的远端引用（用 `origin/master` 而不是「跟踪分支」：本地分支名各异）。 */
+/** 默认比对的远端引用（**只是兜底**：真实取法见 `resolveRemoteMasterRev()`）。 */
 export const DEFAULT_REMOTE_REV = "origin/master";
+
+/**
+ * 要比对的那条远端引用 —— **不假定远端叫 `origin`**（审查台账 R12-01）。
+ *
+ * 本仓的远端实测叫 `cnb`，而此前这一格写死 `origin/master`：在本检出上恒「没有可用的远端
+ * 引用」⇒ AGENTS 硬规则 25 的执行者在这份检出里**恒不判**（它降级得很诚实，报 `[未校验]`
+ * 也不阻断，但承诺的能力为空）。同一族的正确答案在 `scripts/base-check.mjs` 里早就有
+ * （「remote 名随克隆方式变」），但那一份回答的是「要并进哪条 master」；这里问的是
+ * 「上次 fetch 看到的是哪条」，所以按引用本身现算而不是拿它的函数：
+ *
+ *   · 列 `refs/remotes/**`，取以 `/<branch>` 结尾的那些；
+ *   · `origin/master` 在场时仍优先它（既有语义与夹具都按它写）；否则按名字取第一条；
+ *   · 一个都没有 ⇒ `null`，调用方照旧走「未校验」。
+ *
+ * 用 `for-each-ref` 而不是 `git remote`：夹具与浅检出里可能**只有引用没有 remote 配置**
+ * （现有用例就是这么造的：`update-ref refs/remotes/origin/master`），按 remote 列会把它判成没远端。
+ *
+ * @param {string} root
+ * @param {string} [branch]
+ * @returns {string | null} 形如 `cnb/master`；`null` = 没有任何可用的远端跟踪引用
+ */
+export function resolveRemoteMasterRev(root, branch = "master") {
+  const res = git(
+    ["for-each-ref", "--format=%(refname:lstrip=2)", "refs/remotes/"],
+    root,
+  );
+  if (!res.ok) return null;
+  const names = res.out
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter((s) => s.endsWith(`/${branch}`));
+  if (names.length === 0) return null;
+  const preferred = names.find((s) => s === `origin/${branch}`);
+  return preferred ?? [...names].sort()[0];
+}
 
 /** 跑一次 git，返回 `{ ok, out }`（`ok=false` = 命令不可用或非零退出）。 */
 function git(args, cwd) {
@@ -180,13 +215,21 @@ export function resolveGitDir(root) {
  * 当「引用新鲜」。
  * @returns {number | null} epoch 毫秒；null = 不可知
  */
-export function remoteRefTimestamp(root, branch = "master") {
+export function remoteRefTimestamp(root, rev = DEFAULT_REMOTE_REV) {
+  /* 引用名里 remote 与 branch 的分界在**最后一个** `/`：`cnb/master` → remote=`cnb`、
+   * branch=`master`；`origin/release/1.2` → remote=`origin`、branch=`release/1.2`
+   * （reflog 的落点就是 `logs/refs/remotes/<remote>/<branch>`，分支名带斜杠时是目录嵌套）。
+   * 旧实现按「去掉 `origin/` 前缀」算 branch，于是 `cnb/master` 会被拼成
+   * `logs/refs/remotes/origin/cnb/master` —— 永远取不到，正是 R12-01 那一格。 */
+  const at = rev.lastIndexOf("/");
+  const remote = at > 0 ? rev.slice(0, at) : "origin";
+  const branch = at > 0 ? rev.slice(at + 1) : rev;
   const log = path.join(
     resolveGitDir(root),
     "logs",
     "refs",
     "remotes",
-    "origin",
+    remote,
     branch,
   );
   try {
@@ -207,6 +250,22 @@ export function remoteRefTimestamp(root, branch = "master") {
 export function readAtRev(rev, rel, cwd = ROOT) {
   const r = git(["show", `${rev}:${rel}`], cwd);
   return r.ok ? r.out : null;
+}
+
+/**
+ * 远端那条引用是否**已经在本地历史里**（`merge-base --is-ancestor <rev> HEAD`）。
+ *
+ * 一个结论只写一份（硬规则 24）：`forkPoint()` 用它决定「② 没有可比的对象」，
+ * `runFreshnessCheck()` 用同一句决定「这是**判过了、没有待同步对象**，不是没看」。
+ * 台账 R12-01 的验收点名的正是后一种形态 —— 此前 `forkPoint()` 里已经有这条判断，
+ * 只是它把结论压进了 `null`，调用方分不出来，于是第二次写同一条 git 命令。
+ *
+ * @param {string} root
+ * @param {string} rev
+ * @returns {boolean} `true` = rev 是 HEAD 的祖先（或与 HEAD 同一个提交）
+ */
+export function isRemoteAncestorOfHead(root, rev) {
+  return git(["merge-base", "--is-ancestor", rev, "HEAD"], root).ok;
 }
 
 /**
@@ -243,8 +302,7 @@ export function readAtRev(rev, rel, cwd = ROOT) {
  */
 export function forkPoint(root, remoteRev = DEFAULT_REMOTE_REV) {
   // 远端已在 HEAD 的历史里（典型：刚把它 merge 进来）⇒ ② 没有可比的对象。
-  const contained = git(["merge-base", "--is-ancestor", remoteRev, "HEAD"], root);
-  if (contained.ok) return null;
+  if (isRemoteAncestorOfHead(root, remoteRev)) return null;
   // **合并已解完、提交还没落地**（`MERGE_HEAD` 在场）：HEAD 仍是合并前那个提交，
   // 上面那条 `--is-ancestor` 因此看不到「远端已经进来了」，而 `merge-base` 回的仍是
   // 合并前的分叉点 —— 于是解冲突的人会拿到一条**永远解不开**的红（出口让他把远端合并
@@ -440,10 +498,13 @@ function renderInstallDrift(drift) {
  * （同 `shell-gate.mjs` 的 `runGate`）。
  * @param {string} root
  * @param {{ offline?: boolean, now?: number, rev?: string }} [opts]
- * @returns {{ code: number, remoteChecked: boolean, remoteAgeMs: number | null, remoteDrifts: object[], installDrift: object | null, lines: string[] }}
+ * @returns {{ code: number, remoteChecked: boolean, remoteAgeMs: number | null, remoteDrifts: object[], installDrift: object | null, lines: string[], remoteRev?: string, remoteAlreadyContained?: boolean }}
  */
 export function runFreshnessCheck(root, opts = {}) {
-  const rev = opts.rev ?? DEFAULT_REMOTE_REV;
+  /* 不写死 `origin/master`（R12-01）：远端名是每台克隆机的属性，按引用现算。
+   * 显式传 `rev` 的调用方（钩子 / 用例）优先。 */
+  const resolvedRev = resolveRemoteMasterRev(root);
+  const rev = opts.rev ?? resolvedRev ?? DEFAULT_REMOTE_REV;
   const now = opts.now ?? Date.now();
   const lines = [];
 
@@ -467,6 +528,8 @@ export function runFreshnessCheck(root, opts = {}) {
   let remoteChecked = false;
   let remoteAgeMs = null;
   let remoteDrifts = [];
+  /** 远端那条引用**已经在本地历史里**（不领先）⇒ ② 判过且无待同步对象，与「没看」分开的两态之一。 */
+  let remoteAlreadyContained = false;
   /* 合并已解完、尚未落地（`MERGE_HEAD` 在场）：这一态**不是**「没查到」，
    * 是「没什么要查」—— 被合并进来的那个 rev 即将成为 HEAD 的第二个父提交，
    * ② 的那条比对在它落地后自然走 `--is-ancestor` 分支。见 `forkPoint` 的说明。 */
@@ -476,13 +539,19 @@ export function runFreshnessCheck(root, opts = {}) {
     !merging &&
     git(["rev-parse", "--verify", "--quiet", rev], root).ok
   ) {
-    const stamp = remoteRefTimestamp(root, rev.replace(/^origin\//, ""));
+    const stamp = remoteRefTimestamp(root, rev);
     remoteAgeMs = stamp === null ? null : Math.max(0, now - stamp);
     remoteChecked = remoteAgeMs !== null;
     const base = forkPoint(root, rev);
+    /* `forkPoint()` 回 `null` 混着两种状态：真的算不出分叉点，与「这条远端引用已经在
+     * 本地历史里」。后者是**判过了、没有待同步对象**，不是没看 —— 台账 R12-01 的验收
+     * 点名的就是这个形态（远端不领先时不许回落成「未校验」，否则「没看」与「看了且没有」
+     * 在输出上同形，而那正是本判据存在的理由）。 */
+    const contained = !merging && isRemoteAncestorOfHead(root, rev);
     // 分叉点拿不到 ⇒ ② 这一层**不判**（不是「无差异」）。`remoteChecked` 保持
     // 由 reflog 决定：两者的含义不同，一个是「② 可信不」，一个是「② 能不能做」。
     if (base) remoteDrifts = detectRemoteDrift(root, base, rev);
+    else if (contained) remoteAlreadyContained = true;
     else remoteChecked = false;
   }
 
@@ -502,8 +571,15 @@ export function runFreshnessCheck(root, opts = {}) {
       "         合并落地之后 ② 走 `--is-ancestor` 那条路径（见 scripts/check-deps-freshness.mjs 的 forkPoint）。",
     );
   } else if (!remoteChecked) {
+    /* 「找的是哪条引用」要说实话：一个都没找到时 `rev` 只是兜底常量，
+     * 报它的名字会让人以为判据比过一条并不存在的 `origin/master`。 */
+    const revLabel =
+      opts.rev || resolvedRev
+        ? `本次找的是 \`${rev}\`（由 \`refs/remotes/**\` 里以 \`/master\` 结尾的引用现算）。`
+        : "本次在 `refs/remotes/**` 里没找到任何以 `/master` 结尾的引用。";
     lines.push(
       "[未校验] 没有可用的远端引用 / 拿不到分叉点 / 它没有取证时间（没 fetch 过 / 浅克隆 / 无远端）。",
+      `         ${revLabel} 远端名不假定叫 origin。`,
       "         本次**没有**核对远端是否改过依赖 —— 这一行不许被读成「远端就是最新」。",
       "         要核对就先执行 git fetch（判据自身不做网络请求）。",
     );
@@ -513,9 +589,14 @@ export function runFreshnessCheck(root, opts = {}) {
     const graceDays = REMOTE_REF_GRACE_MS / (24 * 60 * 60 * 1000);
     lines.push(
       age > REMOTE_REF_GRACE_MS
-        ? `[未校验] 远端引用已 ${hours} 小时没更新（超过 ${graceDays} 天宽限）——下面的比对可能看不见远端的新提交。先 git fetch 再跑一次更可靠。`
-        : `[已核对] 远端引用距今 ${hours} 小时。`,
+        ? `[未校验] \`${rev}\` 这条引用已 ${hours} 小时没更新（超过 ${graceDays} 天宽限）——下面的比对可能看不见远端的新提交。先 git fetch 再跑一次更可靠。`
+        : `[已核对] 比对的是 \`${rev}\`，它的 reflog 距今 ${hours} 小时。`,
     );
+    if (remoteAlreadyContained) {
+      lines.push(
+        `         \`${rev}\` 已在本地历史里（不领先于 HEAD）⇒ ② 判过：没有待同步的远端依赖改动。`,
+      );
+    }
   }
 
   if (remoteDrifts.length) {
@@ -529,7 +610,7 @@ export function runFreshnessCheck(root, opts = {}) {
     }
     lines.push(
       "",
-      "出口：git pull（或把 origin/master 合并进来）→ `pnpm deps:guard` && pnpm install → 重跑一次本判据。",
+      `出口：git pull（或把 ${rev} 合并进来）→ \`pnpm deps:guard\` && pnpm install → 重跑一次本判据。`,
       "完整背景与「什么时候要删 node_modules 重装」见 docs/guides/sync-after-pull.md。",
     );
   }
@@ -556,6 +637,8 @@ export function runFreshnessCheck(root, opts = {}) {
     remoteDrifts,
     installDrift,
     lines,
+    remoteRev: rev,
+    remoteAlreadyContained,
   };
 }
 
