@@ -30,21 +30,73 @@
 # --no-verify 绕过会进历史，慎用。
 set -u
 
+# ── 计时：每一次提交的墙钟留在本机（规范 §13.5.8.3）──────────────────────
+# 记账收在 `scripts/precommit-timing.mjs`（落 `.git/`、不入库），这里只负责**测**。
+# 口径三条：
+#   · **只记账、不阻断**：记账自己失败（没 git、盘满、文件被锁）只是少一行账，
+#     绝不影响提交的退出码 —— 一条记账线路变成提交的必经之路，迟早有人为它 --no-verify。
+#   · **毫秒时钟要跨平台**：GNU date（Linux / git-bash）的 `%N` 给纳秒，BSD/macOS 的
+#     date **不认 `%N`**（原样吐出那两个字）。探测一次，退化到「秒 × 1000」。
+#   · 组/步的读数落 `$LOGD` 下的小文件（各子 shell 各写各的，不争同一处）。
+# `now_ms` 与 D 组用的 `timed_step` 收在 `.githooks/timing.sh`：D 组跑在 `sh -c` 起的
+# **新 shell** 里，外层函数它看不到，而两份时钟必然漂成两个刻度。路径经环境变量传进去
+# （`sh -c` 继承环境），两处因此 source 同一份。
+# `$0` 在 git 调钩子时是本钩子的绝对路径（git 用完整路径 exec 它），所以 `dirname $0`
+# 就是 `.githooks/` —— 不用假定当前目录（钩子的 cwd 才是仓库根，两者不能混）。
+# `COMFY_TIMING_SH` 与 `LOGD` 都要 `export`：D 组跑在 `sh -c` 起的**新 shell** 里，
+# 未导出的 shell 变量它看不到 —— 读不到 `$LOGD` 时的形态是「逐步读数落到一个空路径」，
+# 静默地丢掉整组逐步骤的账（第一版就是这么错的）。
+COMFY_TIMING_SH="$(dirname "$0")/timing.sh"
+. "$COMFY_TIMING_SH"
+export COMFY_TIMING_SH
+
 # ── 0. 分支守卫：最先、同步跑（分支不对时后面全白跑）────────────────────
 echo "[pre-commit] 0  master 分支提交守卫"
 node scripts/check-branch-guard.cjs || exit 1
 
 # 各组输出写到各自日志，跑完再按组归属打印（并行 stdout 交错的补救）。
 LOGD="$(mktemp -d "${TMPDIR:-/tmp}/comfy-precommit.XXXXXX")" || exit 1
-trap 'rm -rf "$LOGD"' EXIT INT TERM
+export LOGD
+
+# 总计时起点。记在 `$LOGD` 外面只有一处用途：**记账**（见 record_timing）。
+_T0_MS="$(now_ms)"
+
+# 记账：把本次的墙钟交给 `scripts/precommit-timing.mjs`（它只写 `.git/`、不入库）。
+# 放在 trap 里而不是收尾那一行 —— **被拦下的那次提交恰恰是最该被记的**
+# （「为什么这次要我重跑」的答案就在时长里），而拦下走的是 `exit 1`，收尾那一行到不了。
+# 幂等：收尾已经记过就置空，避免两条记录。
+record_timing() {
+  [ -n "${_RECORDED:-}" ] && return 0
+  _RECORDED=1
+  _end="$(now_ms)"
+  _total=$(( _end - _T0_MS ))
+  set -- --total-ms "$_total" --exit "${rc:-0}" --staged "${_STAGED_N:-0}"
+  for id in A B C D; do
+    [ -f "$LOGD/$id.ms" ] && set -- "$@" --group "$id=$(cat "$LOGD/$id.ms")"
+  done
+  if [ -f "$LOGD/steps.ms" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] && set -- "$@" --step "$line"
+    done <"$LOGD/steps.ms"
+  fi
+  node scripts/precommit-timing.mjs record "$@" || true
+}
+
+trap 'rc=$?; record_timing; rm -rf "$LOGD"' EXIT INT TERM
+
+# 本次暂存了多少个文件 —— 「耗时随改动面涨」这条要对上账，只有时长没有面就是半条账。
+_STAGED_N="$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d " ")"
 
 # run_group <id> <说明> <命令…>：后台跑一个组，rc 落文件，末尾统一判定。
 run_group() {
   id="$1"; desc="$2"; shift 2
   (
+    _g0="$(now_ms)"
     echo "── 组 $id：$desc"
     "$@"
-    echo "$?" >"$LOGD/$id.rc"
+    _grc=$?
+    echo "$(( $(now_ms) - _g0 ))" >"$LOGD/$id.ms"
+    echo "$_grc" >"$LOGD/$id.rc"
   ) >"$LOGD/$id.log" 2>&1 &
   eval "${id}_pid=\$!"
 }
@@ -103,7 +155,16 @@ run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
 # 每条命令的规范出处见 scripts/ 对应脚本头部；顺序即执行序，新增判据追加到这里。
 run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   set -e
-  run() { echo "── check: $1"; shift; "$@"; }
+  # 每一步的墙钟落 `$LOGD/steps.ms`（一行 `<标签>=<ms>`，标签原样）—— 「哪一步最贵」
+  # 的答案只有逐步骤才有；组级只回答「哪一组最贵」。时钟与追加规则收在
+  # `.githooks/timing.sh`：本组是 `sh -c` 起的**新 shell**，外层的函数一个都看不到，
+  # 只能 source 同一份（两份时钟必然漂成两个刻度，而账本会把它们并排摆出来）。
+  . "$COMFY_TIMING_SH"
+  run() {
+    _label="$1"; shift
+    echo "── check: $_label"
+    timed_step "$_label" "$LOGD/steps.ms" "$@"
+  }
   # R5（超 900 行文件）已是**硬闸**：不带任何 flag，超限即阻断。沿革 = 「只提醒」→
   # ISSUE #1404 加 --strict 棘轮 → ISSUE #1811 基线归零后收成硬闸（`--strict` /
   # `--update` 连同基线一并删除，规范 §12.13.3）。

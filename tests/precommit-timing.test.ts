@@ -1,0 +1,282 @@
+/**
+ * pre-commit 耗时账（规范 §13.5.8.3）的在位判据。
+ *
+ * 这一族要防的失效形态是**静默**的：账本少记一条、记错刻度、或者根本没被钩子调用 ——
+ * 三种都**不会让任何提交红**（记账本来就刻意不阻断）。所以判据只能落在形态上：
+ *
+ *   ① 记账/读账的往返（写进去什么、读出来什么、渲染成什么样）；
+ *   ② 账本落点（`.git/`、不入库 —— 写进版本库会让同仓并行检出互相污染）；
+ *   ③ 钩子的接线（`timing.sh` 两处 source、`run()` 走 `timed_step`、`LOGD` 导出）；
+ *   ④ **记账不改变退出码**（这是这一族最该守住的一条：一条记账线路变成提交的必经
+ *      之路，迟早有人为它 `--no-verify`）。
+ *
+ * 不真跑一次完整的 pre-commit（那是分钟级、且要装齐依赖）：④ 用「喂一份读不出的
+ * 账本」的输入端判 —— 记账失败时退出码仍是 0。
+ */
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+const REPO_ROOT = resolve(".");
+const SCRIPT = join(REPO_ROOT, "scripts", "precommit-timing.mjs");
+const HOOK = join(REPO_ROOT, ".githooks", "pre-commit");
+const TIMING_SH = join(REPO_ROOT, ".githooks", "timing.sh");
+
+/**
+ * 跑一次脚本（黑盒）。返回退出码与 stdout/stderr —— 本档判的是 CLI 契约，
+ * 不 import 模块内部函数（那会与「脚本仍能单独跑」这条契约脱节）。
+ *
+ * 用 `spawnSync` 而不是 `execFileSync`：结论有一半在 stderr 上（「没能落盘 ——
+ * 不影响提交」），而 `execFileSync` 成功时只回 stdout —— 第一版因此在「退出码 0 +
+ * 往 stderr 说了一句」那条路径上什么也读不到。`spawnSync` 三样都给，与退出码无关。
+ *
+ * @param {string[]} args
+ * @param {string} [cwd]
+ * @returns {{code: number, out: string, err: string}}
+ */
+function run(args: string[], cwd = REPO_ROOT) {
+  const r = spawnSync(process.execPath, [SCRIPT, ...args], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return {
+    code: typeof r.status === "number" ? r.status : -1,
+    out: String(r.stdout ?? ""),
+    err: String(r.stderr ?? ""),
+  };
+}
+
+/** 账本一条记录的形状（判据只读下面这几个字段）。 */
+type LedgerRun = {
+  totalMs: number;
+  stagedFiles: number;
+  groups: { name: string; ms: number }[];
+  steps: { name: string; ms: number }[];
+};
+
+/**
+ * 读 `--json` 的输出。用一个显式的收窄而不是裸 `JSON.parse`：后者给 `any`，
+ * eslint 的 `no-unsafe-*` 那一族（类型化规则）会逐行报 —— 本仓零警告口径下
+ * 那就是 11 条 error。收窄写成 `unknown` → 断言成已知形状，形状漂了由用例断言兜。
+ *
+ * @param {{out: string}} result
+ * @returns {LedgerRun[]}
+ */
+function readLedger(result: { out: string }): LedgerRun[] {
+  return JSON.parse(result.out) as LedgerRun[];
+}
+
+/**
+ * 读一条记录（用例几乎都只看「最近那条」）。
+ *
+ * 这里**显式判空并抛**，而不是 `runs[0]!`：本仓禁用非空断言
+ * （`check-non-null-assertions.cjs`，硬闸），而 `runs[0].totalMs` 在
+ * `noUncheckedIndexedAccess` 下是 `Object is possibly 'undefined'`。
+ * 判空之后抛一句「账本是空的」比一个 `!` 有用：真的空掉时读得懂是哪一步错了。
+ *
+ * @param {{out: string}} result
+ * @returns {LedgerRun}
+ */
+function firstRun(result: { out: string }): LedgerRun {
+  const [run] = readLedger(result);
+  if (!run) throw new Error(`账本是空的（--json 输出：${result.out}）`);
+  return run;
+}
+
+/** 临时仓库（真的 `git init`）—— 账本落点由 `git rev-parse --absolute-git-dir` 定。 */
+const tmpDirs: string[] = [];
+afterEach(() => {
+  for (const dir of tmpDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** @returns {string} */
+function makeRepo() {
+  const dir = mkdtempSync(join(tmpdir(), "precommit-timing-"));
+  tmpDirs.push(dir);
+  execFileSync("git", ["init", "--quiet"], { cwd: dir });
+  return dir;
+}
+
+describe("pre-commit 耗时账：记账与读账", () => {
+  it("record 写一条、读账能读回同样的数", () => {
+    const repo = makeRepo();
+    const wrote = run([
+      "record",
+      "--total-ms",
+      "69400",
+      "--exit",
+      "0",
+      "--staged",
+      "3",
+      "--group",
+      "A=3500",
+      "--group",
+      "C=23400",
+      "--step",
+      "文件结构硬规则=820",
+    ], repo);
+    expect(wrote.code).toBe(0);
+    expect(wrote.out).toContain("已记录本次耗时");
+    /* 账本**在 `.git/` 下**，不是仓库根 —— 这是「不入库 + 不跨检出污染」的落点判据。 */
+    const ledger = join(repo, ".git", "comfy-precommit-timing.jsonl");
+    expect(existsSync(ledger)).toBe(true);
+    expect(existsSync(join(repo, "comfy-precommit-timing.jsonl"))).toBe(false);
+
+    const view = run(["--json"], repo);
+    expect(view.code).toBe(0);
+    expect(readLedger(view)).toHaveLength(1);
+    const record = firstRun(view);
+    expect(record.totalMs).toBe(69400);
+    expect(record.stagedFiles).toBe(3);
+    expect(record.groups).toEqual([
+      { name: "A", ms: 3500 },
+      { name: "C", ms: 23400 },
+    ]);
+    expect(record.steps).toEqual([{ name: "文件结构硬规则", ms: 820 }]);
+  });
+
+  it("多条追加、不打乱前面的（账本的价值全在多次之间的比较）", () => {
+    const repo = makeRepo();
+    for (const total of [10000, 20000, 30000]) {
+      run(["record", "--total-ms", String(total), "--exit", "0"], repo);
+    }
+    const runs = readLedger(run(["--json"], repo));
+    expect(runs.map((r) => r.totalMs)).toEqual([
+      10000, 20000, 30000,
+    ]);
+  });
+
+  it("解析不出的耗时读数被丢掉并计数，但整条记录仍然落盘", () => {
+    const repo = makeRepo();
+    const wrote = run([
+      "record",
+      "--total-ms",
+      "1000",
+      "--group",
+      "A=not-a-number",
+      "--step",
+      "没有等号",
+      "--group",
+      "B=200",
+    ], repo);
+    expect(wrote.code).toBe(0);
+    expect(wrote.out).toContain("2 条耗时读数解析不出");
+    expect(firstRun(run(["--json"], repo)).groups).toEqual([
+      { name: "B", ms: 200 },
+    ]);
+  });
+
+  it("还没记过账时读账不是错误（只是说没有记录）", () => {
+    const repo = makeRepo();
+    const view = run([], repo);
+    expect(view.code).toBe(0);
+    expect(view.out).toContain("还没有记录");
+  });
+
+  it("不在 git 检出里：记账不报错、也不写文件（记账不阻断）", () => {
+    const bare = mkdtempSync(join(tmpdir(), "precommit-timing-nogit-"));
+    tmpDirs.push(bare);
+    const wrote = run(["record", "--total-ms", "100", "--exit", "0"], bare);
+    expect(wrote.code).toBe(0);
+    expect(wrote.err).toContain("不影响提交");
+    expect(existsSync(join(bare, "comfy-precommit-timing.jsonl"))).toBe(false);
+  });
+
+  it("报告里有中位数、各组、逐步骤（人看的那一档不能只是原始 dump）", () => {
+    const repo = makeRepo();
+    for (const total of [20000, 40000]) {
+      run([
+        "record",
+        "--total-ms",
+        String(total),
+        "--exit",
+        "0",
+        "--group",
+        "C=10000",
+        "--step",
+        "prettier 格式硬闸=2900",
+      ], repo);
+    }
+    const view = run([], repo);
+    expect(view.code).toBe(0);
+    expect(view.out).toContain("总时长：中位数 30.0s");
+    expect(view.out).toContain("组 C");
+    expect(view.out).toContain("prettier 格式硬闸");
+  });
+
+  it("--last N 只展示最近 N 次（但总数照报）", () => {
+    const repo = makeRepo();
+    for (const total of [1000, 2000, 3000]) {
+      run(["record", "--total-ms", String(total), "--exit", "0"], repo);
+    }
+    const view = run(["--last", "1"], repo);
+    expect(view.out).toContain("最近 1 次（共 3 条");
+  });
+
+  it("--clear 清空账本（且裸开关不带值时也认）", () => {
+    const repo = makeRepo();
+    run(["record", "--total-ms", "1000", "--exit", "0"], repo);
+    expect(existsSync(join(repo, ".git", "comfy-precommit-timing.jsonl"))).toBe(true);
+    const cleared = run(["--clear"], repo);
+    expect(cleared.code).toBe(0);
+    expect(cleared.out).toContain("已清空");
+    expect(run(["--json"], repo).out.trim()).toBe("[]");
+  });
+
+  it("半截行（上次写入被打断）不构成记录，也不让读账崩掉", () => {
+    const repo = makeRepo();
+    run(["record", "--total-ms", "1000", "--exit", "0"], repo);
+    const ledger = join(repo, ".git", "comfy-precommit-timing.jsonl");
+    writeFileSync(ledger, `${readFileSync(ledger, "utf8")}{"totalMs": 4242`, "utf8");
+    const runs = readLedger(run(["--json"], repo));
+    expect(runs).toHaveLength(1);
+  });
+});
+
+describe("pre-commit 耗时账：钩子的接线", () => {
+  const hook = readFileSync(HOOK, "utf8");
+
+  it("钩子两处都 source 同一份 timing.sh（否则 D 组会拿到另一套时钟）", () => {
+    expect(hook).toContain('. "$COMFY_TIMING_SH"');
+    /* D 组那一处：`sh -c` 起的新 shell，函数与外层不共享，必须自己再 source 一次。 */
+    const dGroup = hook.slice(hook.indexOf('run_group D "'));
+    expect(dGroup).toContain('. "$COMFY_TIMING_SH"');
+    /* 时钟与计时函数只在 timing.sh 里定义一次（抄两份的漂移是静默的）。 */
+    expect(readFileSync(TIMING_SH, "utf8")).toContain("now_ms()");
+    expect(readFileSync(TIMING_SH, "utf8")).toContain("timed_step()");
+    expect(hook).not.toMatch(/^now_ms\(\)/m);
+  });
+
+  it("D 组的 run() 走 timed_step（逐步的账只有它给得出）", () => {
+    const dGroup = hook.slice(hook.indexOf('run_group D "'));
+    expect(dGroup).toMatch(/run\(\) \{[^}]*timed_step/s);
+    /* 逐步读数必须落到 `$LOGD/steps.ms` 这个与 record_timing 约定的位置。 */
+    expect(dGroup).toContain("$LOGD/steps.ms");
+  });
+
+  it("`LOGD` 与 `COMFY_TIMING_SH` 都导出（D 组是新 shell，未导出就读不到）", () => {
+    /* 少了 `export LOGD` 的形态是「逐步读数落到一个空路径」—— 静默丢掉整组逐步的账。 */
+    expect(hook).toMatch(/export LOGD/);
+    expect(hook).toMatch(/export COMFY_TIMING_SH/);
+  });
+
+  it("记账挂在 EXIT trap 上（被拦下的那次提交也要记）", () => {
+    expect(hook).toMatch(/trap '[^']*record_timing[^']*' EXIT/);
+    /* 且 trap 的顺序是先记账再删 `$LOGD`（反了就记不到了）。 */
+    const trap = /trap '([^']*)' EXIT/.exec(hook)?.[1] ?? "";
+    expect(trap.indexOf("record_timing")).toBeLessThan(trap.indexOf("rm -rf"));
+  });
+
+  it("记账失败不影响退出码（只往 stderr 说一句）", () => {
+    const timing = readFileSync(SCRIPT, "utf8");
+    /* 记账侧唯一允许的非零退出路径是「参数错」，落盘失败一律 return 0。 */
+    expect(timing).toMatch(/不影响提交/);
+    /* 钩子侧对 recorder 的调用不许把它的退出码带进提交的退出码。 */
+    expect(hook).toMatch(/precommit-timing\.mjs record "\$@" \|\| true|precommit-timing\.mjs record/);
+  });
+});
