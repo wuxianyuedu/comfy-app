@@ -20,6 +20,9 @@
  *      这一条是 #1722 的「跟随滚动变化」里**可判**的那一半 ——
  *      DOM 档里不存在 `IntersectionObserver`（hook 按不存在时退化），
  *      由 `use-section-scroll-spy.test.ts` 用假观察器单独覆盖。
+ *   6. **屏名不重复出现**（ISSUE #1872）：不传 `title` 时（页签 / 顶栏已在说屏名）
+ *      可见标题整行不在、屏名以 `sr-only` 留在 DOM；传 `title` 时才有可见 `h1`。
+ *      那句「全部设置在一页里…」的副说明已删 —— 它是读一次就够的冗余。
  *
  * 不锁样式类：选中态判的是 `aria-current`（读屏与 CSS 同源的那一个属性），
  * 颜色改了不该让用例红。
@@ -57,6 +60,18 @@ function renderShell(section: Section = "llmLocal", onSelect = vi.fn()) {
     />,
   );
   return onSelect;
+}
+
+/** 给定 `title` 时渲染 —— 复核「可见标题只在屏名没有别的出处时出现」。 */
+function renderShellWithTitle(title: string | undefined) {
+  render(
+    <SettingsShell
+      section="llmLocal"
+      onSelect={vi.fn()}
+      sections={sectionsStub()}
+      {...(title === undefined ? {} : { title })}
+    />,
+  );
 }
 
 /** 分区导航（一个 `<nav>`，里面每个分组一段）。 */
@@ -160,6 +175,31 @@ describe("SettingsShell", () => {
     /* `this` 是被滚的那一节 —— 用 mock.instances 认它比读参数更直接。 */
     expect(scrollIntoView.mock.instances[0]).toBe(target);
     expect(onSelect).toHaveBeenCalledWith("logs");
+  });
+
+  it("页签已在说屏名时不重复可见标题：屏名收进 sr-only（ISSUE #1872）", () => {
+    renderShellWithTitle(undefined);
+    /* 可见的那一行 `h1`（`.u-title-page`）不在 —— 页签 + 顶栏已经在写「设置」。 */
+    expect(document.querySelector("h1.u-title-page")).toBeNull();
+    /* 但这一屏仍有且只有一个可跳转的名字（读屏按标题跳转的前提，规范 06）。 */
+    const headings = screen.getAllByRole("heading", { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveClass("sr-only");
+    expect(headings[0]).toHaveTextContent("设置");
+    /* 那句副说明（「全部设置在一页里…」）连同这一行一起没了 —— 不重复读一遍
+       「左边是目录、右边是一页」，那件事由导航树与唯一一根滚动条自己说。 */
+    expect(screen.queryByText(/全部设置在一页里/)).toBeNull();
+  });
+
+  it("屏名没有别的出处时给可见标题（独立路由 /settings）", () => {
+    renderShellWithTitle("设置");
+    const h1 = document.querySelector("h1.u-title-page");
+    expect(h1).not.toBeNull();
+    expect(h1).toHaveTextContent("设置");
+    /* 可见标题在位时不再叠一个 `sr-only` 的 `h1` —— 一屏一个，别两个。 */
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    /* 说明照旧不渲染（与是否有可见标题无关，ISSUE #1872）。 */
+    expect(screen.queryByText(/全部设置在一页里/)).toBeNull();
   });
 
   it("给 fallback 时不渲染分区列表（三态占位只出现一次）", () => {

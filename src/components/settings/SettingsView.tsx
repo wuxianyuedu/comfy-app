@@ -46,10 +46,14 @@ export interface SettingsViewProps {
 export function SettingsView({ fillHeight }: SettingsViewProps) {
   const c = useSettingsPage();
 
+  /* 屏名只在「这一屏才出现」时给可见标题（ISSUE #1872）：工作区页签（`fillHeight`）
+   * 的页签条与顶栏已经在写「设置」，屏内再写一遍是同一个名字的第三次出现 —— 那时
+   * 不传 `title`，屏名以 `sr-only` 留在 DOM；独立路由 `/settings` 没有顶栏也不显示
+   * 页签，屏名只在这一屏出现，仍给可见标题。 */
   const frame = {
     section: c.section,
     onSelect: c.setSection,
-    ...(fillHeight ? { className: "h-full" } : {}),
+    ...(fillHeight ? { className: "h-full" } : { title: "设置" }),
   };
 
   /* 打开即先渲染「外壳 + 分区导航」，内容区走三态；不再用整屏 loading 挡导航。 */
@@ -98,7 +102,7 @@ export function SettingsView({ fillHeight }: SettingsViewProps) {
   return (
     <SettingsPageView
       c={{ ...c, drafts: c.drafts }}
-      {...(fillHeight ? { className: "h-full" } : {})}
+      {...(fillHeight ? { className: "h-full" } : { title: "设置" })}
     />
   );
 }
