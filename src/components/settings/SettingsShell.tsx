@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 设置页共享外壳（③视图层）—— 标题行 + 分区导航树 + 内容滚动容器。
+ * 设置页共享外壳（③视图层）—— （可选）标题行 + 分区导航树 + 内容滚动容器。
  *
  * 「就绪视图」`SettingsPageView` 与「加载 / 错误占位壳」都复用它：设置页打开时
  * 外壳（含分区导航）随首帧立即渲染，用户马上看到界面框架，而不是整屏 spinner
@@ -13,7 +13,7 @@
  * 页签自带关闭按钮、侧栏也永远在；那枚箭头要么是第二条退出路径、要么在独立路由
  * `/settings` 上把用户带回上一页（同一个动作在两个入口下含义不同）。用户看到的
  * 只是一枚占了标题行左端的箭头 —— 标题因此被推离左边缘，而它没有任何独有的作用。
- * 现在标题独占那一行，退出交给页签自己的关闭按钮与侧栏。
+ * 现在标题（在它出现时）独占那一行，退出交给页签自己的关闭按钮与侧栏。
  *
  * 因此本模块**不再**需要 `onClose`：两个挂载点此前都不传它（那条分支进不去），
  * 按 §12.16 一并删掉，`SettingsView` / `SettingsPageView` 也不用再透传。
@@ -25,7 +25,7 @@
  *（ISSUE #1722）。现在**所有分区都在同一根滚动条里**，导航退回到它本来的角色：
  *   · 点一项 → 平滑滚到那一节（`scrollToSection`）；
  *   · 手动滚动 → 高亮跟着走（`useSectionScrollSpy` 的 `IntersectionObserver`）。
- * 标题行右侧那句摘要同样跟着滚动变（它就是「我现在在哪」的答案）。
+ * 「我现在在哪」由**每个分区自己的标题行**回答（它就是滚到那一节时读到的那一行）。
  *
  * 滚动容器在**外壳**这一层（`overflow-y-auto`），分区节是它的子项 ——
  * 「从头部滚到尾」因此是一条连续的滚动条，不再是每节各自一小条。
@@ -40,6 +40,21 @@
  *     本文件不再手写 `ml-* / border-l-*`；
  *   · 内容区仍是 `--container-medium` 里的那一列，导航固定宽、不长出滚动竞争。
  * 左侧这一列**只放导航**，纵向溢出交给它自己的 `.custom-scrollbar`。
+ *
+ * ## 页签已经在说屏名时，**不再重复一次可见标题**（ISSUE #1872）
+ *
+ * 此前这个外壳无条件渲染一行 `h1「设置」` + 一句副说明（「全部设置在一页里，
+ * 按左侧目录跳转或直接滚动」）。工作区里进设置时，页签条与顶栏**都在写「设置」**，
+ * 屏内再写一遍是同一个名字的第三次出现；那句副说明也只是把「左边是目录、右边
+ * 是一页」又说了一遍 —— 左侧那棵树与唯一一根滚动条自己就在说明这件事
+ *（规范 03 §3.10「屏名已经由常驻页签（或顶栏）给出时不再重复一次可见标题」）。
+ *
+ * 于是屏名与那句说明各有去处，`title` 是**可选**的：
+ *   · **工作区页签**（`fillHeight`）：页签 + 顶栏已在视野里 → 不传 `title`，
+ *     屏名以 `sr-only` 留在 DOM（读屏按标题跳转的前提，规范 06）；那句说明
+ *     由顶栏标题右侧那颗问号承载（`viewHelp()` 注册表，全库唯一出处）。
+ *   · **独立路由 `/settings`**：它不在 `AppShell` 里、没有顶栏也不显示页签 →
+ *     屏名只在这一屏才出现，仍给可见标题；说明仍收掉（它读一次就够）。
  */
 
 import { useCallback, useMemo, useRef, type ReactNode } from "react";
@@ -72,6 +87,12 @@ type SettingsShellProps = {
   section: Section;
   /** 分区变化（点击导航或滚动跟随都走它）。 */
   onSelect: (section: Section) => void;
+  /**
+   * 屏级可见标题 —— 走 `.u-title-page`。**页签（或顶栏）已经在说屏名时不传**
+   * （ISSUE #1872）：那一次出现是重复的，不传时屏名以 `sr-only` 留在 DOM，
+   * 这一行也不再占位（口径与 `ui/page-header` 的 `title` / `srTitle` 同一份）。
+   */
+  title?: string;
   /** 根容器高度 class（overlay 模式传 h-full 覆盖）。 */
   className?: string;
   /**
@@ -111,6 +132,7 @@ export function SettingsShell({
   section,
   onSelect,
   className = "h-[calc(100vh-var(--toolbar-height,48px))]",
+  title,
   banner,
   fallback,
   sections,
@@ -143,15 +165,17 @@ export function SettingsShell({
           设置页是「标题 + 全宽内容」的文档型壳，不并入更宽的编辑器容器，
           但同一个数不该有两个家。 */}
       <div className="max-w-medium mx-auto flex min-h-0 w-full flex-1 flex-col px-6 pt-6">
-        <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="font-title u-title-page">设置</h1>
-          {/* 分区说明与标题同一行、弱一档：它是导航问题的答案（「我现在在哪」）。
-              一页到底之后这句话由**每个分区自己的标题行**承接（它就是滚动到那一节
-              时读到的那一行），这里只留一句不走动的页面级说明。 */}
-          <p className="text-ink-muted min-w-0 flex-1 text-sm">
-            全部设置在一页里，按左侧目录跳转或直接滚动
-          </p>
-        </header>
+        {/* 屏名：页签（或顶栏）已经在说时**不出现这一行**（`title` 不传），只把
+            名字留在 `sr-only` —— 读屏仍能按标题跳转，视觉上不重复第二次
+            （规范 03 §3.10 / 06）。`h1` 始终在位，一屏一个；那一行不占位，
+            下方导航与内容因此上移。 */}
+        {title === undefined ? (
+          <h1 className="sr-only">设置</h1>
+        ) : (
+          <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="font-title u-title-page">{title}</h1>
+          </header>
+        )}
 
         {/* 导航在左、内容在右：树需要的是**纵向**空间（父行 + 缩进子行），
             而横排那条带子只能靠分隔符暗示分组 —— 层级读不出来。 */}

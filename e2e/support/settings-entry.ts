@@ -23,8 +23,13 @@ export async function openSettingsView(page: Page): Promise<void> {
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
   await menu.getByRole("menuitem", { name: "设置" }).click();
-  /* 设置是 dynamic import + 首屏 loading，给它更宽的等待窗口（与收口前一致）。 */
-  await expect(page.getByRole("heading", { name: "设置" }).first()).toBeVisible({
-    timeout: 20_000,
-  });
+  /* 设置是 dynamic import + 首屏 loading，给它更宽的等待窗口（与收口前一致）。
+     等的是**分区导航**而不是标题：工作区这份挂载点的屏名是 `sr-only`（页签与顶栏
+     已经在写「设置」，屏内不再重复，ISSUE #1872），`toBeVisible` 量不了那枚被裁到
+     1px 的 `h1`；而导航只存在于设置视图内部，它出现即「内容区真的接上了视图」。 */
+  await expect(
+    page
+      .getByRole("navigation", { name: "设置分区" })
+      .getByRole("button", { name: "外观", exact: true }),
+  ).toBeVisible({ timeout: 20_000 });
 }
