@@ -727,6 +727,82 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     ).toBe("2xs");
   });
 
+  it("浮层上限只许走那两档常量；行内图标的 align-[-Npx] 只许留在文本流那一处", () => {
+    /* 两条都是**归零等式 + 具名出处白名单**（形状与光晕那条同：按 owner 放行）。
+       浮层侧：85vh 是量出来的事实档（6 处：居中模态、图片看全、弹层面板），
+       `78vh` / `90vh` 各 1 处是同一角色上的漂移值 —— 差那 5–7 个百分点没有任何一处
+       文档说过为什么；`70vh`（3 处）是**另一个角色**：页面里自滚动的卡片区，上限要留
+       出周围内容的呼吸。两档收进 `ui/overlay-max-height.ts`，调用点一律 import。
+       为什么不做成 `@theme` 的 `--max-height-*`：实测 `cn("max-h-[85vh]", "max-h-overlay")`
+       **两条都留** —— tailwind-merge 认不出自定义名字属于哪一族，于是「谁覆写谁」变成
+       看 Tailwind 的输出顺序，正是 `dialog-width.ts` 文件头记着的那类静默失效；存 class
+       串则同族冲突照常生效（实测两条 arbitrary 只留后一条）。
+       图标侧：11 处 `inline align-[-Npx]` 里有 10 处坐在 `Button` / `flex` 容器里，而
+       `vertical-align` 对 flex item 不起作用 —— 真 Chromium 实测：带与不带，图标的行内
+       偏移都是 4.5px；同一份声明放进 inline 文本流才有效（12px 图标 5px→6px）。
+       那 10 处是抄来的零效果声明，删；只剩文本流那一枚，理由写在那一处的注释里。 */
+    /* 两条正则都必须带**捕获组 1**（数值本身）：`scanProduct` 只收 `m[1]` 有值的命中，
+     * 没有捕获组它会一条都不记 —— 于是白名单与调用点一起「扫不到」，判据对着空集绿着。
+     * 上面那两条「owner 在册必须扫得到」的断言就是抓这个的。 */
+    const vhCap = /\bmax-h-\[(\d+(?:\.\d+)?)vh\]/g;
+    const iconAlign = /\balign-\[-(\d+(?:\.\d+)?)px\]/g;
+    /* 量具自验：等式为 0 的判据若正则写漂会永远绿。样本串**拆开拼** —— 写全一枚候选名，
+       产物里就多一条没人用的规则（`tests/**` 也在源扫描面内，口径见契约 §Colors）。 */
+    expect(
+      [...("max-h-" + "[85vh] 与 max-h-" + "[70vh]").matchAll(vhCap)].length,
+      "浮层上限的正则漂了（这条归零判据会静默全绿）",
+    ).toBe(2);
+    expect(
+      [...("align-" + "[-2px] 与 align-" + "[-1px]").matchAll(iconAlign)]
+        .length,
+      "行内图标对齐的正则漂了（这条归零判据会静默全绿）",
+    ).toBe(2);
+
+    const VH_OWNERS = new Set([
+      /* 两档常量的定义处，以及一处**逐处判定过**的例外：贴边 JSON 面板的 60vh 只有它一个
+       * 消费者，为它立一档就是「为以后可能用得上」留在库里（同 `--text-hero` 退役的理由）。
+       * 另有 `ConsoleView` 左栏的 `max-h-[45%]` 不进这条 —— 百分比相对父容器而非视口，
+       * 量的不是同一件事，正则也刻意不收它。 */
+      "src/components/ui/overlay-max-height.ts",
+      "src/components/studio/WorkflowNodeJsonPopover.tsx",
+    ]);
+    const vhHits = scanProduct(vhCap);
+    /* 白名单不许是「对着空集立的法」：两处 owner 必须真被扫到 —— 否则这条判据是在看不见
+     * 代码的状态下绿着，而下一轮有人把常量搬走，白名单就只剩豁免权、没有实物。 */
+    for (const owner of VH_OWNERS) {
+      expect(
+        vhHits.some((h) => h.file === owner),
+        `${owner} 在册却扫不到任何浮层上限 —— 白名单该跟着删`,
+      ).toBe(true);
+    }
+    const vhOffenders = vhHits.filter((h) => !VH_OWNERS.has(h.file));
+    expect(
+      vhOffenders,
+      "这些调用点又写了浮层上限的字面量 —— 用 ui/overlay-max-height 的 " +
+        "OVERLAY_MAX_HEIGHT / EMBEDDED_SCROLL_MAX_HEIGHT：\n" +
+        `${vhOffenders.map((o) => `  ${o.file}  max-h-[${o.value}vh]`).join("\n")}`,
+    ).toEqual([]);
+
+    const ALIGN_OWNERS = new Set([
+      "src/components/studio/project-canvas/EmptyCanvasHint.tsx",
+    ]);
+    const alignHits = scanProduct(iconAlign);
+    expect(
+      alignHits.filter(
+        (h) =>
+          h.file === "src/components/studio/project-canvas/EmptyCanvasHint.tsx",
+      ).length,
+      "唯一保留的那一枚文本流图标对齐扫不到 —— 这条判据在对空集立法",
+    ).toBeGreaterThan(0);
+    const alignOffenders = alignHits.filter((h) => !ALIGN_OWNERS.has(h.file));
+    expect(
+      alignOffenders,
+      "这些调用点又抄了一枚 `align-[-Npx]` —— 先确认父级是不是 flex：是的话它零效果；" +
+        "真要基线微调就写进 EmptyCanvasHint 那一处的形态并补理由：\n" +
+        `${alignOffenders.map((o) => `  ${o.file}  align-[-${o.value}px]`).join("\n")}`,
+    ).toEqual([]);
+  });
+
   it("屏级标题之下那行副说明（`.u-title-page` 后 4 行内第一个 `<p>`）不许低于 text-sm", () => {
     /* **归零等式**（ISSUE #1751）：P86 要 `text-sm` 才起跳，所以「把档写低」反而
        绕过了它 —— 两屏此前正是 `h3` + `.u-title` + `p.text-xs`。这条补的就是

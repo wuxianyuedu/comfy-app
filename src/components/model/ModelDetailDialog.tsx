@@ -9,6 +9,7 @@ import {
 } from "~/components/ui/dialog";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { displayValue } from "~/lib/display-value";
 import { formatDate } from "~/lib/time-format";
 
@@ -53,7 +54,7 @@ export function ModelDetailDialog({
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
         aria-label={`${model.name} 详情`}
-        className="max-h-[85vh] overflow-y-auto sm:max-w-lg"
+        className={`${OVERLAY_MAX_HEIGHT} overflow-y-auto sm:max-w-lg`}
       >
         <DialogHeader>
           <DialogTitle className="u-title truncate">{model.name}</DialogTitle>

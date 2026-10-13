@@ -195,11 +195,7 @@ export function CharacterDesigner({
       <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-primary flex items-center text-xs font-medium">
-            <Icon
-              name="sparkles"
-              size={13}
-              className="mr-1 inline align-[-2px]"
-            />
+            <Icon name="sparkles" size={13} className="mr-1" />
             用一句话生成角色
           </p>
         </div>
@@ -324,7 +320,7 @@ export function CharacterDesigner({
                           data-icon="inline-start"
                           name="sparkles"
                           size={12}
-                          className="mr-1 inline align-[-2px]"
+                          className="mr-1"
                         />
                         AI 润色
                       </>

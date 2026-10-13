@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import {
   RESOLUTION_TIERS,
   SIZE_RATIO_PRESETS,
@@ -74,7 +75,7 @@ export function SizePresetTableModal({
       <DialogContent
         aria-label={`${title}配置`}
         className="max-w-3xl"
-        popupClassName="flex max-h-[85vh] w-full max-w-3xl flex-col gap-0 overflow-hidden rounded-xl p-0"
+        popupClassName={`flex ${OVERLAY_MAX_HEIGHT} w-full max-w-3xl flex-col gap-0 overflow-hidden rounded-xl p-0`}
       >
         <DialogHeader className="border-border-strong flex-row items-center gap-3 border-b px-4 py-3">
           <DialogTitle className="text-ink-bright text-sm font-semibold">

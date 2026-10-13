@@ -85,7 +85,7 @@ export function ResultCard({
                 data-icon="inline-start"
                 name="pen"
                 size={11}
-                className="mr-1 inline align-[-1px]"
+                className="mr-1"
               />
               编辑
             </Button>
@@ -102,7 +102,7 @@ export function ResultCard({
                 data-icon="inline-start"
                 name="download"
                 size={11}
-                className="mr-1 inline align-[-1px]"
+                className="mr-1"
               />
               下载
             </Button>

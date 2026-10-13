@@ -106,7 +106,7 @@ export function LLMSettingsButton() {
           data-icon="inline-start"
           name="settings"
           size={14}
-          className="mr-1.5 inline align-[-2px]"
+          className="mr-1.5"
         />
         LLM 设置
       </Button>

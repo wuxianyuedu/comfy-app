@@ -27,6 +27,10 @@ import {
   fmtSize,
 } from "./model-library-config";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import {
+  EMBEDDED_SCROLL_MAX_HEIGHT,
+  OVERLAY_MAX_HEIGHT,
+} from "~/components/ui/overlay-max-height";
 
 /**
  * 工作室模型库 —— 视图层（规范 17 §17.2 第③层）。
@@ -166,7 +170,7 @@ function ModelListSkeleton({ rows = 8 }: { rows?: number }) {
     <div
       role="status"
       aria-label="正在加载模型列表"
-      className="border-border-subtle bg-card max-h-[70vh] overflow-auto rounded-xl border"
+      className={`border-border-subtle bg-card ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl border`}
     >
       {Array.from({ length: rows }, (_, i) => (
         <div
@@ -210,7 +214,7 @@ function ModelList({ items }: { items: ModelRow[] }) {
       ref={setScrollEl}
       role="list"
       aria-label="模型文件列表"
-      className="border-border-subtle bg-card max-h-[70vh] overflow-auto rounded-xl border"
+      className={`border-border-subtle bg-card ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl border`}
     >
       {measured ? (
         <div
@@ -350,7 +354,9 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
       >
-        <div className="border-border bg-panel relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/50">
+        <div
+          className={`border-border bg-panel relative flex ${OVERLAY_MAX_HEIGHT} w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/50`}
+        >
           {/* header */}
           <div className="border-border-subtle flex items-start justify-between border-b px-5 py-4">
             <div>
