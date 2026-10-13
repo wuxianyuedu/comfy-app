@@ -11,7 +11,7 @@
  *
  * 那只能覆盖「已经写了用例的那几家」，而这条判据要的是**集合本身**：
  * 新增一个带 `--update` 与基线文件的判据脚本，如果没被归类，就必须在这里红一次
- * （`完整性：每一个 --update 出口都要被四张表之一点名` 那条用例）。
+ * （`完整性：每一个 --update 出口都要被五张归类表之一点名` 那条用例）。
  * 抄 20 遍「搭临时仓库跑一次」的样板还会踩 §12.12 的孪生 —— 所以走
  * `tests/helpers/gate-repo.ts` 的命令式出口 `createGateRepo()`，表里每行只写
  * 「这条判据的违规长什么样」。
@@ -156,14 +156,33 @@ const RETIRED_RATCHETS: Record<string, string> = {
  * 为什么这张表必须存在（而不是「翻了就完事」）：翻闸的正确性有一半是**否定式**
  * 的 —— 「这条判据不再有任何放宽通道」。而否定式没有任何**正面**判据会盯：
  * `discoveredBaselines()` 现算的是「带 `--update` 且写回基线」的脚本，翻闸之后
- * 它们自然出网、四张表也都不再点名它们 —— 于是「有人把基线加回去 + 把 `--update`
+ * 它们自然出网、五张归类表也都不再点名它们 —— 于是「有人把基线加回去 + 把 `--update`
  * 也加回去」在**这一个文件里**不会有任何反应（它只会重新出现在 found 里，
- * 而那时四张表里恰好也没有它 → 完整性那一格才会红。这一格是把那条路的**前半段**
+ * 而那时五张归类表里恰好也没有它 → 完整性那一格才会红。这一格是把那条路的**前半段**
  * 也钉住：脚本里既不该有那份基线，也不该有 `--update` 的写入通道）。
  *
  * 值 = 那条判据的 **自测文件**（照 `COVERED_LOCALLY` 的口径点名，删了它会红）。
  */
 const HARD_GATE_FLIPS: Record<string, string> = {
+  /* ── 第一至五刀翻的那一批（ISSUE #1811 前半段）────────────────────────────
+   * 这十条**此前不在这张表里** —— 表是第六刀才建的，而它当时只登记了「从它自己
+   * 那一刀起」的翻闸，前四刀翻的那些一直只靠各自的自测守形态。
+   * 缺口的后果正是这张表存在的理由：把 `--update` 与基线通道加回
+   * `check-dead-exports.cjs`，正面判据一格都不会红（它已从 `discoveredBaselines()`
+   * 出网、五张归类表也都不点名它）。收尾时按 git 里「已删的基线文件」反查补齐：
+   * 每一个「基线已删 + 脚本里已无 `.json` 落盘通道」的判据都该在册。
+   * 它们的自测都已断言硬闸形态（基线不存在、`--update` 不落盘 JSON），所以补进来
+   * 不会产生假红 —— 补的是**否定式的机器痕迹**。 */
+  "check-circular-deps.cjs": "tests/check-circular-deps.test.ts",
+  "check-code-duplication.cjs": "tests/check-code-duplication.test.ts",
+  "check-dead-exports.cjs": "tests/check-dead-exports.test.ts",
+  "check-function-length.cjs": "tests/check-function-length.test.ts",
+  "check-rust-function-length.cjs": "tests/check-rust-function-length.test.ts",
+  "check-non-null-assertions.cjs": "tests/check-non-null-assertions.test.ts",
+  "check-click-keyboard.cjs": "tests/click-keyboard-gate.test.ts",
+  "check-theme-colors.cjs": "tests/check-theme-colors.test.ts",
+  "check-test-it-each.cjs": "tests/test-it-each-gate.test.ts",
+  "check-infra-file-size.cjs": "tests/check-infra-file-size.test.ts",
   "check-overlay-z.cjs": "tests/check-overlay-z.test.ts",
   "check-comment-language.cjs": "tests/comment-language.test.ts",
   "check-test-sleep.cjs": "tests/test-sleep-gate.test.ts",
@@ -375,7 +394,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
     );
   }
 
-  describe("完整性：每一个 --update 出口都要被四张表之一点名", () => {
+  describe("完整性：每一个 --update 出口都要被五张归类表之一点名", () => {
     const found = discoveredBaselines();
 
     it("现算出的基线清单非空（脚本改动让正则失效时，本条要红而不是静默绿）", () => {
@@ -412,7 +431,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
       ).toEqual([]);
     });
 
-    it("四张表里点名的基线文件必须还在（删了脚本却忘了删登记 = 下一格假绿灯）", () => {
+    it("五张归类表里点名的基线文件必须还在（删了脚本却忘了删登记 = 下一格假绿灯）", () => {
       const listed = [
         ...RATCHETS.map((r) => r.baseline.split("/").pop() ?? r.baseline),
         ...Object.keys(COVERED_LOCALLY),
@@ -453,7 +472,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
 
     it("表里每一行的脚本与基线，现算清单都要能认出来（防止判据单方面退网）", () => {
       /**
-       * 上面那条判「found ⊆ 四张表」，这一条判反向「表 ⊆ found」。
+       * 上面那条判「found ⊆ 五张归类表」，这一条判反向「表 ⊆ found」。
        *
        * 只做正向会有一个静默失效面：把某家的落盘写法改成第三种形状（比如经由一个
        * 变量拼路径），现算清单就少一行 —— 正向那条不会红（少的那一行不在 found 里，
@@ -512,7 +531,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
       /**
        * 翻硬闸的正确性有一半是否定式的（「不再有任何放宽通道」），而否定式没有
        * 正面判据会盯 —— 翻闸之后这些脚本自然从 `discoveredBaselines()` 出网、
-       * 四张表也都不再点名它们。两格：**那份基线文件必须不在**、
+       * 五张归类表也都不再点名它们。两格：**那份基线文件必须不在**、
        * **脚本里不许再出现把 `.json` 写回去的调用**。
        *
        * 第二格是「有人把 `--update` 加回来」的唯一机器痕迹：加回来必然带一处
@@ -522,10 +541,15 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
       for (const [script, spec] of Object.entries(HARD_GATE_FLIPS)) {
         const src = readFileSync(join(dir, script), "utf8");
         /* 认「写一份 .json」这件事本身，而不是认某个变量名 —— 换拼法也躲不过。
-         * 只认写入调用里出现的 `.json` 字面量（读回来比对不算）。 */
+         * 只认写入调用里出现的 `.json` 字面量（读回来比对不算）。
+         *
+         * 引号**三种都要认**：这条判据此前只认双引号（`"\.[^"]+\.json"`），
+         * 于是一处写成单引号（`writeFileSync(path.join(ROOT,'scripts','.x.json'),'{}')`）
+         * 的「把基线加回来」实测**照绿** —— 否定式的洞恰恰在它最容易被人重写的形式上。
+         * 现在同时认 `'` / `"` / 反引号，且不要求字符串以引号开头（路径可以拼在中间）。 */
         const writesJson = [
           ...src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(([^;]{0,400})/g),
-        ].some((m) => /"\.[^"]+\.json"|\.json"/.test(m[1] ?? ""));
+        ].some((m) => /["'`][^"'`]*\.json["'`]/.test(m[1] ?? ""));
         expect(
           writesJson,
           `${script} 里又出现了「把一份 .json 写回去」的调用 —— ` +
