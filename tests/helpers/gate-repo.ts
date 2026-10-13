@@ -69,6 +69,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test as base, expect } from "vitest";
 
+import { gitSandboxEnv } from "./git-sandbox-env";
+
 export { afterAll, afterEach, beforeAll, beforeEach, describe } from "vitest";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
@@ -278,7 +280,13 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
     read: (rel) => readFileSync(abs(rel), "utf8"),
     exists: (rel) => existsSync(abs(rel)),
     git: (...args) => {
-      execFileSync("git", args, { cwd: root, stdio: "ignore" });
+      /* 显式传 `gitSandboxEnv()`：共享夹具要自带隔离，不假定调用它之前有人做过
+       * 全局清理（`tests/setup.ts` 那一档覆盖用例，这里覆盖夹具的直接使用者）。 */
+      execFileSync("git", args, {
+        cwd: root,
+        stdio: "ignore",
+        env: gitSandboxEnv(),
+      });
     },
     commit: (message) => {
       /* `-c` 就地给身份与禁签名：宿主可能全局开了 `commit.gpgsign`，
@@ -297,13 +305,15 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
           "-qm",
           message,
         ],
-        { cwd: root, stdio: "ignore" },
+        { cwd: root, stdio: "ignore", env: gitSandboxEnv() },
       );
     },
     run: (args = [], overrides) => {
+      /* 基座环境先过 `gitSandboxEnv()`：被测判据自己也常调 git
+       * （`readStagedPaths` / `git ls-files` 那一类），钩子里跑时同样不能
+       * 让它看见调用方的 `GIT_DIR`。 */
       const callEnv: NodeJS.ProcessEnv = {
-        ...process.env,
-        ...env,
+        ...gitSandboxEnv(env),
         ...overrides?.env,
       };
       for (const [k, v] of Object.entries(overrides?.env ?? {})) {
