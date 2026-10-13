@@ -51,14 +51,16 @@ import {
   type WorkflowSourceFilter,
   type WorkflowModesState,
 } from "./workflow-node-types";
-import { Button } from "~/components/ui/button";
 import { WorkflowSourceFilterChip } from "./WorkflowSourceFilterChip";
 import { WorkflowModelFilterChip } from "./WorkflowModelFilterChip";
 import { WorkflowPickChip } from "./WorkflowPickChip";
 import { WorkflowModePickChip } from "./WorkflowModePickChip";
 import { nodeSeqOf } from "./node-seq";
 import { TypeChip } from "~/components/studio/TypeChip";
-import { WorkflowNodePill } from "~/components/studio/workflow-form/WorkflowNodeParts";
+import {
+  WorkflowNodeActionButton,
+  WorkflowNodePill,
+} from "~/components/studio/workflow-form/WorkflowNodeParts";
 
 /* 共享类型下沉到叶子模块（断环，规范 12.7/18）；按原样 re-export 保住既有导入路径。 */
 export type {
@@ -313,16 +315,12 @@ export function WorkflowNode({
         </div>
       )}
 
-      {/* 生成按钮：全宽渐变，底部圆角贴合 Card（Card 无 overflow-hidden，故按钮自带 rounded-b） */}
-      <Button
-        variant="primary-solid"
+      {/* 生成按钮：形状唯一出处在 WorkflowNodeParts（本卡片不裁切，故走 `own` 自带下沿圆角） */}
+      <WorkflowNodeActionButton
         disabled={d.status === "running"}
         onClick={onGenerate}
-        className="nodrag nopan from-primary to-accent rounded-b-node flex h-10.75 w-full items-center justify-center gap-2 bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)] transition-opacity hover:opacity-95 disabled:opacity-40"
-        style={{ fontFamily: "var(--font-sans)" }}
-      >
-        {d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}
-      </Button>
+        label={d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}
+      />
     </>
   );
 }

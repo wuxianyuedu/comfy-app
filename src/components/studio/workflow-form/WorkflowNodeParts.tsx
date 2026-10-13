@@ -130,30 +130,57 @@ export function WorkflowStaticChip({
   );
 }
 
-/** 底部渐变按钮（rounded-b-node 贴合 Card 圆角，与画布 ActionBtn 同款）。 */
+/**
+ * 底部那枚「▶ 用此工作流生成」（Ardot ActionBtn 340×43：全宽渐变
+ * `--color-primary`→`--color-accent` + 跟品牌走的投影）。
+ *
+ * **它是这个形状的唯一出处**：画布的功能版、画布的视觉稿、工作流库的卡片预览与
+ * 「实际使用」面板此前各写一份（高度一枚写成 43px 的字面量、两枚 `h-10.75`；投影一枚进 class
+ * 一枚进 `style`、hover 一档 95 一档 90、variant 一枚 ghost 两枚 primary-solid），
+ * 逐行重合度已在 §12.12 的孪生判据射程内。调用点只允许组合，不允许复刻 ——
+ * 契约 §Components 那条「被抽走的形状只许有一个出处」按标记集合钉着这件事。
+ *
+ * `hint` 传与不传**不只是有没有气泡**：`wrap` 的那层 `inline-flex` 锚点会让内部的
+ * `w-full` 按钮按内容宽定尺寸。所以没文案时给裸按钮、有文案时才套锚点，两态宽度一致。
+ */
 export function WorkflowNodeActionButton({
   label,
   disabled = false,
   onClick,
   hint,
+  corner = "own",
 }: {
   label: React.ReactNode;
   disabled?: boolean;
   onClick?: () => void;
   hint?: string;
+  /** `own` = 卡片不裁切，按钮自带下沿圆角；`clipped` = 卡片 `overflow-hidden`，四角交还给卡片。 */
+  corner?: "own" | "clipped";
 }) {
-  return (
+  const button = (
+    <Button
+      variant="primary-solid"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "from-primary to-accent nodrag nopan flex h-10.75 w-full items-center justify-center gap-2 bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)] hover:opacity-95",
+        /* 圆角是这一枚唯一按宿主分叉的形状：坐在卡片下沿时自己收角，并把顶角收成直角
+         * （否则基元的 `rounded-lg` 会在按钮上沿留出两个缺口）；卡片已经 `overflow-hidden`
+         * 时四角全部交还给卡片。分叉只放在这一段 —— 上面那行是判据按「标记集合全命中」
+         * 认的那枚形状，往里塞形态就是往唯一出处里塞第二份来源。 */
+        corner === "own" ? "rounded-b-node rounded-t-none" : "rounded-none",
+      )}
+      style={{ fontFamily: "var(--font-sans)" }}
+    >
+      {label}
+    </Button>
+  );
+  return hint ? (
     <Hint label={hint} wrap>
-      <Button
-        variant="ghost"
-        disabled={disabled}
-        onClick={onClick}
-        className="nodrag nopan from-primary to-accent rounded-b-node h-10.75 w-full justify-center gap-2 rounded-t-none bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)] hover:opacity-95"
-        style={{ fontFamily: "var(--font-sans)" }}
-      >
-        {label}
-      </Button>
+      {button}
     </Hint>
+  ) : (
+    button
   );
 }
 
