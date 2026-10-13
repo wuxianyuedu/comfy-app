@@ -66,7 +66,7 @@ export function FilmStudioTimeline({
             className="bg-success/15 ring-success/25 flex h-6 flex-1 items-center rounded px-2.5 ring-1 ring-inset"
             style={{ width: "280px" }}
           >
-            <span className="text-info-strong truncate text-[9px]">
+            <span className="text-info-strong truncate text-4xs">
               「城市在晨光中苏醒，镜头缓缓推进…」
             </span>
           </div>
@@ -92,7 +92,7 @@ export function FilmStudioTimeline({
             >
               <path d="M9 18V5l12-2v13M9 18a3 3 0 01-3-3H3a3 3 0 006 3z" />
             </svg>
-            <span className="text-primary-strong truncate text-[9px]">
+            <span className="text-primary-strong truncate text-4xs">
               {bgmName ?? "背景音乐 · 氛围感配乐"}
             </span>
           </div>

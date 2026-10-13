@@ -95,7 +95,7 @@ export function SubgraphHeader({
         </Button>
       </Hint>
       <span
-        className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-[9px] font-bold"
+        className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-4xs font-bold"
         style={{
           background: accent,
           color: "var(--color-canvas)",
