@@ -113,7 +113,15 @@
    合并前用）。口径、为什么不读 lockfile、以及「缺 `node_modules`
    判红而不是跳过」见 §13.5.15。
 9. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
-   锁定会 EPERM 连锁失败）。
+   锁定会 EPERM 连锁失败）。**这条现在有现场执行者**：判据是
+   `scripts/launcher-core/port-reap.mjs` 的 `runningAppInstances(root)`，按**归属**回答
+   「本检出的应用服务在不在跑」（会话锚点心跳 + 端口上进程的命令行命中本检出的
+   `dev.mjs` / `start.mjs`），两个消费点：编排器补装前（`launcher-core/downstream.mjs`
+   的 `syncDependencies`，顺序要紧 —— 主流程里端口检查排在补装之后）与人不经过编排器
+   直接装的那条路（`pnpm deps:guard`，Windows 双击 `tools/start/sync-lint.ps1` 在
+   `pnpm install` 前调它，判到即停）。刻意**不**按「端口有没有人监听」判 —— 隔壁检出
+   占着同一端口不会锁本检出的 `node_modules`。口径与回归测试见 §3.2 与
+   `tests/dev-launcher-dependency-sync.test.ts`。
 10. **视图层不得新增 IO**：`src/components/**`、`src/app/**`（除 `api/`）里不允许新写
     `fetch(`、`vanillaApi.*`、tRPC 的 options 调用（新集成：`trpc.x.y.queryOptions()` /
     `mutationOptions()`；旧 classic 字样 `api.x.y.useQuery/useMutation` 同判）——逻辑要进
