@@ -390,6 +390,8 @@ function renderInstallDrift(drift) {
   if (drift.state === "no-install") {
     return [
       "node_modules 里没有安装记录（缺 .pnpm/lock.yaml）—— 依赖还没装。",
+      /* 这一档刻意**不**提 `pnpm deps:guard`：「没有安装记录」与「本检出的应用服务在跑」
+       * 不会同时成立（跑着的服务必然踩在一份装好的树上），在这里加一步是噪声。 */
       "出口：在项目根执行 pnpm install。",
     ];
   }
@@ -399,7 +401,7 @@ function renderInstallDrift(drift) {
       "它们可能只以**别的版本**存在（被某个包当传递依赖拖进来、落在包自己的私有层），",
       "而顶层既没有提升出来的那一份、也没有任何可解析路径 —— 表现是 tsc / eslint 报",
       "`Cannot find module`（TS2307），而两份 lockfile 其实是对得上的。",
-      "出口：在项目根执行 pnpm install。（dev server 正在跑时先关掉 —— 原生模块被进程锁住会让安装 EPERM 失败）",
+      "出口：在项目根执行 pnpm install（动手前先 `pnpm deps:guard` —— 本检出的应用服务在跑时它会拦下：原生模块被进程锁住会让安装 EPERM 连锁失败，AGENTS 硬规则 9）。",
     ];
   }
   if (drift.state === "no-lockfile") {
@@ -417,7 +419,7 @@ function renderInstallDrift(drift) {
     );
   }
   lines.push(
-    "出口：在项目根执行 pnpm install。（dev server 正在跑时先关掉 —— 原生模块被进程锁住会让安装 EPERM 失败）",
+    "出口：在项目根执行 pnpm install（动手前先 `pnpm deps:guard` —— 本检出的应用服务在跑时它会拦下：原生模块被进程锁住会让安装 EPERM 连锁失败，AGENTS 硬规则 9）。",
   );
   const body = drift.diff ? renderLockDiff(drift.diff) : [];
   if (body.length) {
@@ -527,7 +529,7 @@ export function runFreshnessCheck(root, opts = {}) {
     }
     lines.push(
       "",
-      "出口：git pull（或把 origin/master 合并进来）→ 在项目根执行 pnpm install → 重跑一次本判据。",
+      "出口：git pull（或把 origin/master 合并进来）→ `pnpm deps:guard` && pnpm install → 重跑一次本判据。",
       "完整背景与「什么时候要删 node_modules 重装」见 docs/guides/sync-after-pull.md。",
     );
   }

@@ -32,7 +32,10 @@
 git pull
 
 # 2) 在项目根目录重新安装依赖（会读取最新的 pnpm-workspace.yaml 与 lockfile）
-pnpm install
+#    动手前先问一句「本检出的应用服务在不在跑」——在跑时原生模块被进程锁住，
+#    install 会以 EPERM 连锁失败并拖垮后续每一条 pnpm 命令（AGENTS 硬规则 9）。
+#    这一问已经有执行者，不用靠人记：pnpm deps:guard 判到即停。
+pnpm deps:guard && pnpm install
 
 # 3) 验证
 pnpm exec tsc --noEmit   # 或直接 pnpm dev 跑起来看是否正常
@@ -160,7 +163,7 @@ node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --ro
 它们可能只以**别的版本**存在（被某个包当传递依赖拖进来、落在包自己的私有层），
 而顶层既没有提升出来的那一份、也没有任何可解析路径 —— 表现是 tsc / eslint 报
 `Cannot find module`（TS2307），而两份 lockfile 其实是对得上的。
-出口：在项目根执行 pnpm install。（dev server 正在跑时先关掉 —— 原生模块被进程锁住会让安装 EPERM 失败）
+出口：在项目根执行 pnpm install（动手前先 `pnpm deps:guard` —— 本检出的应用服务在跑时它会拦下：原生模块被进程锁住会让安装 EPERM 连锁失败，AGENTS 硬规则 9）。
 ```
 
 判据的入口与触发时机：`pnpm check:deps-freshness`（**开工前 / 评审前**，AI 与人都该先跑
@@ -184,10 +187,10 @@ node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --ro
 | 你的情况 | 要做的事 |
 |---|---|
 | 只是普通拉取（没改依赖/配置） | 无需操作，直接启动 |
-| 拉取后 `pnpm-workspace.yaml` / `pnpm-lock.yaml` 有变更 | `pnpm install` |
-| `tsc` / `eslint` 报 `Cannot find module '某包'`，而两份 lockfile 看起来一致 | `pnpm install`（见 §3.1：新加的依赖没提升出来，旧版本被别的包扣在自己私有层里） |
+| 拉取后 `pnpm-workspace.yaml` / `pnpm-lock.yaml` 有变更 | `pnpm deps:guard` 通过后 `pnpm install` |
+| `tsc` / `eslint` 报 `Cannot find module '某包'`，而两份 lockfile 看起来一致 | `pnpm deps:guard` 通过后 `pnpm install`（见 §3.1：新加的依赖没提升出来，旧版本被别的包扣在自己私有层里） |
 | install 报 `ERR_PNPM_IGNORED_BUILDS` / 年龄门槛错误 | 删除 `node_modules` 后重新 `pnpm install` |
 | pnpm 版本与仓库要求（12.4.1）不一致 | `corepack enable` + `corepack prepare pnpm@12.4.1 --activate` |
 | 双击脚本用户，拉取后启动报依赖错误 | 删 `node_modules`，重双击 `run-local.ps1` |
-| dev server 正在运行 | 先关掉再装依赖（原生模块会被进程锁住，装到一半会 EPERM 失败） |
+| dev server 正在运行 | 不用自己判断、也不用手工关窗口：`pnpm deps:guard` 按归属认出本检出的应用在跑并拦下（判到即停，附 PID）。关掉那个窗口再装即可；判据本体见规范 §3.2 |
 | 不想关窗口，只想让界面用上刚拉到的新代码 | 重载一次页面（`Ctrl+R`）即可；「应用一直开着导致界面比代码旧」的成因与处置见 [`../guide-stale-code.md`](../guide-stale-code.md) |
