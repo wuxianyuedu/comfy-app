@@ -49,10 +49,13 @@ test.describe("设置作为一个视图 @critical", () => {
         `设置视图的分区导航里缺「${section}」`,
       ).toBeVisible();
     }
-    /* 内容区三态之一必须在场：外壳的标题「设置」—— 不给空白页留机会。 */
+    /* 内容区三态之一必须在场：外壳的标题「设置」—— 不给空白页留机会。
+       工作区这份挂载点**不渲染可见标题**（页签与顶栏已经在写「设置」，屏内不再
+       重复，ISSUE #1872），屏名以 `sr-only` 留在 DOM —— 用 `toHaveCount` 判
+       「这枚 `h1` 在场」，不拿 `toBeVisible` 去量一枚被裁到 1px 的元素。 */
     await expect(
-      page.getByRole("heading", { name: "设置" }).first(),
-    ).toBeVisible();
+      page.getByRole("heading", { level: 1, name: "设置", exact: true }),
+    ).toHaveCount(1);
 
     /* 再开一次不产生第二页（与所有视图同一条契约：已存在即聚焦）。 */
     await openSettingsView(page);

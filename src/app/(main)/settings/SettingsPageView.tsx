@@ -39,10 +39,13 @@ import type { ReadySettingsPageController } from "./hooks/use-settings-page";
 export function SettingsPageView({
   c,
   className = "h-[calc(100vh-var(--toolbar-height,48px))]",
+  title,
 }: {
   c: ReadySettingsPageController;
   /** 自定义根容器 class（overlay 模式传 h-full 等覆盖高度）。 */
   className?: string;
+  /** 屏级可见标题；页签（或顶栏）已在说屏名时不传（ISSUE #1872，见外壳文档）。 */
+  title?: string;
 }) {
   /* 远程模型的弹窗交互状态集中在第②层 hook：视图只消费字段、只渲染 JSX。 */
   const remoteModelDialogs = useRemoteModelDialogs(c);
@@ -76,6 +79,7 @@ export function SettingsPageView({
       section={c.section}
       onSelect={c.setSection}
       className={className}
+      {...(title === undefined ? {} : { title })}
       banner={
         <>
           {c.flash && (
