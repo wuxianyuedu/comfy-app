@@ -515,8 +515,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
    * 这一批**带着行高一起变**（字面量吃继承的 1.5 ⇒ 21px / 27px，档位自带 20px / 28px
    * ⇒ 实际 −1px / +1px；配对值由下面那条行高判据守着，别凭印象改这里），
    * 与 13px 那批同理：改动点所在行是否由文字定高，按结构判（同族最高兄弟元素 ≥ 新行盒），
-   * 不靠眼睛。17px 那枚字面量不在射程内 —— 它等于 `--text-stage`，而那三颗标题档的名字
-   * 不是 t-shirt 形状、在 JSX 里会被 `cn()` 归进颜色组吃掉同行状态色。
+   * 不靠眼睛。17px 那枚字面量不在射程内 —— 它等于 `--text-stage`，而标题那三颗
+   * **根本不是档位**：它们住在 `:root`（不在 `@theme`，因此不生成 utility）、乘
+   * `--font-scale` 所以没有单一渲染值，只经 `.u-title*` 使用（从前这里写的是
+   * 「改名成 t-shirt 形状就会自动纳入射程」—— 那句不成立：读法只解常量声明，
+   * `calc()` 形状它看不见；射程的真正边界是「有没有单一渲染值」，不是档名形状）。
    * 本注释刻意**不写完整的候选名**：被扫到的正文里每写全一枚，产物 CSS 就多一条
    * 没人用的规则（口径见规范 03 §3.6.2），而这一批刚被清零。
    * **122→67 是 10.5px 那一批**：52 处里只有 1 处落在 `h3` 上，其余全是 `<p>` / `<span>`
@@ -778,6 +781,30 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       doc.includes("`text-sm` 出 20px"),
       "DESIGN.md 里 text-sm 的配对行高要按真机读数写成 20px",
     ).toBe(true);
+  });
+
+  it("标题那三颗 token 不是工具类：产品代码里不许出现同名 class", () => {
+    /* 定义侧由 `tests/theme-token-single-source.test.ts` 的 T6 钉（不得住在 `@theme`）；
+     * 这一条钉调用侧。从前「别在 JSX 里用 text-section / text-page」只写在注释里，
+     * 而 P83 还把 `text-page` 列为合规出口之二 —— 等于判据自己给那个坑开了扇门：
+     * `cn()` 把不认识的 `text-<名字>` 归进颜色组，挂了它的元素会**静默丢掉同行状态色**。
+     * token 移到 `:root` 之后 Tailwind 不再为它们生成 utility（编译对账：产物里那三条
+     * 从 3 条变 0 条），所以这条归零判据现在只是防「有人把 token 搬回 @theme 之后
+     * 又照着旧写法调用点挂类名」。 */
+    const titleClass = /\btext-(?:section|page|stage)\b/g;
+    expect(
+      [...("text-" + "page 与 text-" + "section").matchAll(titleClass)].length,
+      "标题类名的正则漂了（这条归零判据会静默全绿）",
+    ).toBe(2);
+    const offenders = scanProduct(titleClass);
+    expect(
+      offenders,
+      "这些调用点挂了标题档的同名 class —— 屏级标题走 `.u-title-page`、段级走 " +
+        "`.u-title-stage`、卡片标题走 `.u-title`（它们不是 utility，是 components 层的类）：\n" +
+        `${[...new Set(offenders.map((o) => o.file))]
+          .map((f) => `  ${f}`)
+          .join("\n")}`,
+    ).toEqual([]);
   });
 
   it("浮层上限只许走那两档常量；行内图标的 align-[-Npx] 只许留在文本流那一处", () => {

@@ -51,7 +51,7 @@
  * 成本是读几份文本 + 一次 git 调用（零网络），照 §13.5.4 该进固定清单。
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -251,7 +251,12 @@ describe("docs/audits/** 的台账引用不许漂到已删的棘轮基线上", (
 
   /** 建产物目录形态不许进判据面：这不是「路径存在性」判据。 */
   it("构建产物路径不在判据面内（`src-tauri/static` 不存在也不管）", () => {
-    expect(existsSync(path.join(ROOT, "src-tauri", "static"))).toBe(false);
+    /* 这里从前第一行写的是 `expect(existsSync("src-tauri/static")).toBe(false)` ——
+     * 与这一格自己的标题和注释正好相反：它**就是**一条路径存在性判据，而且是台机器上
+     * 必红的那种（`src-tauri/static` 是桌面构建产物，`.gitignore:101` 收着它；任何跑过
+     * `pnpm build` 的检出都会让这条拦住提交）。要证「不存在也不管」，靠的是下面那条
+     * 「判据对着一份写着这个路径的文档不报红」—— 与目录在不在无关，所以这里不需要、
+     * 也不该有存在性断言。 */
     const bad = findRetiredBaselineClaims(
       [
         {
