@@ -106,42 +106,27 @@ describe("doc:check 接进 pre-commit（ISSUE #1371 翻档的在位判据）", (
   });
 });
 
-/**
- * R5 基线里还剩几个超限文件 —— 读成数字而不是 `JSON.parse` 裸值，
- * 否则类型化 eslint 规则会在这一行报 `no-unsafe-*`（判据自己的红会拦下所有人的提交）。
- * @param {string} raw
- * @returns {{total: number, oversized: number}} 读不到时给 -1（用例据此报「基线形状不对」）
- */
-function readR5Ledger(raw: string) {
-  const parsed: unknown = JSON.parse(raw);
-  if (typeof parsed !== "object" || parsed === null)
-    return { total: -1, oversized: -1 };
-  const rec = parsed as { total?: unknown; files?: unknown };
-  return {
-    total: typeof rec.total === "number" ? rec.total : -1,
-    oversized:
-      typeof rec.files === "object" && rec.files !== null
-        ? Object.keys(rec.files).length
-        : -1,
-  };
-}
-
-describe("R5 棘轮的 --strict 硬闸在钩子里（ISSUE #1404）", () => {
+describe("R5 的硬闸在钩子里（ISSUE #1404 立档 / ISSUE #1811 收成硬闸）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = dGroupSteps(hook);
 
-  it("结构那一步真的带 --strict 执行（抹掉 flag 与把整行注掉都要红）", () => {
+  it("结构那一步真的在跑，且不带任何 flag（R5 已是硬闸，没有 --strict 可加）", () => {
     const hit = steps.find((s) =>
       s.cmd.includes("scripts/check-file-structure.cjs"),
     );
     expect(
       hit,
-      `结构那一步不在了，或标签 / flag 与预期不符（D 组共 ${steps.length} 步，` +
-        "预期命令逐字带 --strict —— 这一档才是 R5 棘轮的阻断档）",
+      `结构那一步不在了，或标签 / flag 与预期不符（D 组共 ${steps.length} 步）`,
     ).toEqual({
-      label: "文件结构硬规则(R1-R12，R5 棘轮硬闸)",
-      cmd: "node scripts/check-file-structure.cjs --strict",
+      label: "文件结构硬规则(R1-R12，R5 硬闸)",
+      cmd: "node scripts/check-file-structure.cjs",
     });
+    /* 反面：不许再给它加回 `--strict`。R5 翻硬闸时那个旗标被删掉了 ——
+     * 加回来的人想必是想恢复「不传它就不判」的通道（那就是本次要消灭的东西）。 */
+    expect(
+      hit?.cmd.includes("--strict"),
+      "`--strict` 已随 R5 棘轮在 ISSUE #1811 删除，不该再出现在钩子里",
+    ).toBe(false);
   });
 
   it("这一步的标签与注释不许回到「R5 只提醒」那句旧签字", () => {
@@ -150,21 +135,14 @@ describe("R5 棘轮的 --strict 硬闸在钩子里（ISSUE #1404）", () => {
     expect(hook).not.toContain("--strict 判定不在这里执行");
   });
 
-  it("升硬闸的前提还在：R5 基线的存量为 0（不为 0 就是把超限文件塞回了 master）", () => {
-    const { total, oversized } = readR5Ledger(
-      readFileSync(R5_BASELINE, "utf8"),
-    );
-    expect(
-      oversized,
-      "R5 基线里还有超限文件 —— 带着 --strict 的这一步会把每一个提交都拦下，" +
-        "先把它拆掉再谈别的（不是去把 flag 从钩子里抹掉）",
-    ).toBe(0);
-    expect(total, "基线的 total 与 files 数不一致（棘轮的账记歪了）").toBe(
-      oversized,
-    );
+  it("R5 的基线文件已经没有（翻硬闸时删掉，不会「先留着以防万一」）", () => {
+    /* 翻闸之后「基线还在」有两种坏法：① 脚本里那段读基线的代码被留着（判据读数随
+     * 别人的检出内容变）；② 有人靠它把新超限文件登记成存量。两者都以「文件在场」
+     * 为起点，所以这一格正面钉住它不在。 */
+    expect(existsSync(R5_BASELINE)).toBe(false);
   });
 
-  it("脚本侧不许把 --strict 的执行者再写成「CI」（那份流水线已随 ISSUE #623 删除）", () => {
+  it("脚本侧不许把执行者再写成「CI」（那份流水线已随 ISSUE #623 删除）", () => {
     const script = readFileSync(STRUCTURE, "utf8");
     expect(script).not.toContain("`--strict`(CI)");
     expect(script).not.toContain("900 行以上的文件在本仓库只增不减");
