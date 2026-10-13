@@ -5,6 +5,6 @@
     "who": "yuedu",
     "how": "pnpm test:e2e",
     "trackedBy": "e2e",
-    "skippedReason": "ISSUE #1834：本机 win32 实测 43 failed / 35 passed，66 处 60s goto 超时、33 条卡在 1.0m，散在互不相干的屏上（dev 冷编译 + 8 worker 的响应形态），不是本笔改动带的红；不抬 Playwright timeout、不降 worker 换绿，归因与出口写在 #1834"
+    "skippedReason": "合并 origin/master 后取两侧较新的那条自证（本档的账是单值，没有「两侧都留」的形态）：master 侧 03:43Z 那轮 win32 实测 43 failed / 35 passed、66 处 60s goto 超时、33 条卡在 1.0m，散在互不相干的屏上，归因与出口写在 ISSUE #1834（不抬 Playwright timeout、不降 worker 换绿）；本侧 01:04Z 那条是「本次改动只落文档生成链、不吃 e2e 面」的内容式声明，口径更弱，被 #1834 对全档的归因覆盖，故不另留。"
   }
 }
