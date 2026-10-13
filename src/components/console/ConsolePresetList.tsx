@@ -65,7 +65,7 @@ export function ConsolePresetList({
             <h3 className="text-ink text-xs font-semibold">{group.label}</h3>
             {/* 分组说明是**两句以里的常驻文案**（`leading-snug` 折行显示），
                 不截断、也不挂悬停 —— 它已经在屏上读全了。 */}
-            <p className="text-ink-fainter text-[10.5px] leading-snug">
+            <p className="text-ink-fainter text-2xs leading-snug">
               {group.hint}
             </p>
           </div>

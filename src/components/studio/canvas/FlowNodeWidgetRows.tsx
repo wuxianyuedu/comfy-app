@@ -206,7 +206,7 @@ export function FlowNodeWidgetRows({
                  * 版式对齐 ComfyUI：标签与取值之间**不画分隔线**，值紧接标签
                  * 左对齐（此前是一条 1px 竖线 + 右对齐的值列）。 */}
                 <span
-                  className="min-w-0 truncate text-left text-[10.5px] tabular-nums"
+                  className="text-2xs min-w-0 truncate text-left tabular-nums"
                   style={{
                     flex: "1 1 0",
                     color: valueCellColor(v, isConn),
@@ -227,7 +227,7 @@ export function FlowNodeWidgetRows({
                   <StringTextarea value={stringText} hasSize={hasSize} />
                 ) : (
                   <div
-                    className="border-border-strong bg-canvas-deep text-ink-fainter rounded border px-2 py-1.5 text-[10.5px] leading-snug"
+                    className="border-border-strong bg-canvas-deep text-ink-fainter text-2xs rounded border px-2 py-1.5 leading-snug"
                     style={{ minHeight: 28 }}
                     title={stringText}
                   >

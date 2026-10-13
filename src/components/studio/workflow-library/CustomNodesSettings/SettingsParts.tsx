@@ -53,7 +53,7 @@ export function PortRow({
         {type}
       </span>
       <span
-        className={`text-ink-soft min-w-0 truncate text-[10.5px] font-semibold ${
+        className={`text-ink-soft text-2xs min-w-0 truncate font-semibold ${
           isOut ? "text-right" : ""
         }`}
         title={name}

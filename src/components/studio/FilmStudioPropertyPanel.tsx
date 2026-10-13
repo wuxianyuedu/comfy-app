@@ -198,7 +198,7 @@ export function FilmStudioPropertyPanel({
                 fullWidth
               />
               {!c.videoWorkflowId && (
-                <span className="text-ink-fainter mt-1 block text-[10.5px]">
+                <span className="text-ink-fainter text-2xs mt-1 block">
                   没有内置视频工作流可回落 ——
                   请先在工作室「工作流库」导入并配好对外参数。
                 </span>

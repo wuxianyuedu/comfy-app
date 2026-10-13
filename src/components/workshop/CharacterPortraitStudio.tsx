@@ -286,7 +286,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     {session.log.map((entry) => (
                       <li
                         key={`${entry.ts}-${entry.text}`}
-                        className={`text-[10.5px] leading-relaxed ${
+                        className={`text-2xs leading-relaxed ${
                           entry.level === "error"
                             ? "text-destructive"
                             : entry.level === "success"
@@ -316,11 +316,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     历史日志（含此前会话，保存在 log/workshop/）
                   </p>
                   {history === null ? (
-                    <p className="text-muted-foreground text-[10.5px]">
-                      加载中…
-                    </p>
+                    <p className="text-muted-foreground text-2xs">加载中…</p>
                   ) : history.length === 0 ? (
-                    <p className="text-muted-foreground text-[10.5px]">
+                    <p className="text-muted-foreground text-2xs">
                       还没有落盘的历史日志。
                     </p>
                   ) : (
@@ -328,7 +326,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                       {history.map((entry, i) => (
                         <li
                           key={`${entry.ts}-${i}`}
-                          className={`text-[10.5px] leading-relaxed ${
+                          className={`text-2xs leading-relaxed ${
                             entry.kind === "error"
                               ? "text-destructive"
                               : entry.kind === "success"
