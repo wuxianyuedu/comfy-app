@@ -34,6 +34,31 @@ function tailwindThemeCss(): string {
 
 const TEXT_DECL_RE = /^\s*--text-([a-z0-9]+)\s*:\s*([0-9.]+)(rem|px)\s*;/gm;
 
+/**
+ * 档位的**配对行高**：Tailwind v4 里 `--text-<名>--line-height` 一旦存在，
+ * 生成的 `text-<名>` 就连带锁 `line-height`（这正是 §3.10.1 那批「同一个字号两种行高」
+ * 的来路）。默认表写的是 `calc(1.25 / 0.875)` 这种「行高 ÷ 字号」的比值形状，
+ * 浏览器按比值乘字号算出行盒 —— 所以这里也按比值存，别在调用方凭印象写死像素。
+ *
+ * **认不出形状就抛错，不当「没有配对」**：静默漏掉一条配对，会让
+ * 「按行高推理」的判据拿到一份缺东西的表，那比红更糟。
+ */
+const LINE_HEIGHT_RE =
+  /^\s*--text-([a-z0-9]+)--line-height\s*:\s*([^;]+);\s*$/gm;
+
+/** 解一条行高声明成比值（乘字号得像素）。支持 `calc(a / b)` 与裸数值两种形状。 */
+function parseLineRatio(raw: string, where: string): number {
+  const calc = /^calc\(\s*([0-9.]+)\s*\/\s*([0-9.]+)\s*\)$/.exec(raw.trim());
+  if (calc?.[1] && calc[2]) {
+    return Number.parseFloat(calc[1]) / Number.parseFloat(calc[2]);
+  }
+  const bare = /^([0-9.]+)$/.exec(raw.trim());
+  if (bare?.[1]) return Number.parseFloat(bare[1]);
+  throw new Error(
+    `认不出的 --text-${where}--line-height 形状：${raw}（新增写法要同步这里的解法，不许静默跳过）`,
+  );
+}
+
 /** 一条 `--text-*` 声明渲染成多少 px（rem 按 16 换算，与 Tailwind 的口径一致）。 */
 function toPx(value: string, unit: string): number {
   const n = Number.parseFloat(value);
@@ -45,6 +70,11 @@ export interface TextTiers {
   byPx: Map<number, string>;
   /** 当前在用的全部档名（已按 t-shirt 形状筛过）。 */
   names: string[];
+  /**
+   * 档名 → **配对行高比值**（`text-<名>` 会连带锁 `line-height`）。
+   * 不在表里 = 这一档没有配对，行高走继承（项目自加的 `2xs` / `3xs` 就是刻意如此）。
+   */
+  lineRatios: Map<string, number>;
 }
 
 /**
@@ -76,6 +106,14 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
     }
   }
 
+  const lineRatios = new Map<string, number>();
+  for (const { text } of sources) {
+    for (const m of text.matchAll(LINE_HEIGHT_RE)) {
+      if (!m[1] || !m[2]) continue;
+      lineRatios.set(m[1], parseLineRatio(m[2], m[1]));
+    }
+  }
+
   const byPx = new Map<number, string>();
   const names: string[] = [];
   for (const [name, px] of [...collected].sort((a, b) => a[1] - b[1])) {
@@ -88,7 +126,29 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
         "「调用点不许把档位值重抄成字面 px」那条判据会因此空转（永远绿）。",
     );
   }
-  return { byPx, names };
+  /* 配对表同理要自证非空：默认表里至少该有 xs / sm / base / lg 四颗配对，
+   * 一条都没解出来就是形状变了（比如换成裸数值以外的新写法），必须响。 */
+  if (lineRatios.size < 4) {
+    throw new Error(
+      `只解出 ${lineRatios.size} 条 --text-*-line-height 配对（默认表里至少该有四颗）` +
+        " —— 行高判据会因此看不见这一档，比红更糟。",
+    );
+  }
+  return { byPx, names, lineRatios };
+}
+
+/**
+ * 某一档在真浏览器里渲染出的行盒高度（px，四舍五入到 0.01 与读数对齐）。
+ * 没有配对的档返回 `null` —— 那一档的行高由继承决定，不由这张表担保。
+ */
+export function renderedLineHeightPx(
+  tiers: TextTiers,
+  name: string,
+): number | null {
+  const ratio = tiers.lineRatios.get(name);
+  const size = [...tiers.byPx].find(([, n]) => n === name)?.[0];
+  if (ratio === undefined || size === undefined) return null;
+  return Math.round(size * ratio * 100) / 100;
 }
 
 /** 项目自加的档名：t-shirt 形状、或覆盖的是一个默认名（那 `cn` 本来就认识）才算可用。 */
