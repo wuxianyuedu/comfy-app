@@ -36,7 +36,7 @@
     "test:coverage:dry": "node scripts/full-suite-run.mjs --dry-run",
     "build:tracked": "node scripts/artifact-run.mjs",
     "build:tracked:dry": "node scripts/artifact-run.mjs --dry-run",
-    "docs": "typedoc",
+    "docs": "node scripts/generate-api-docs.mjs",
     "typecheck": "tsc --noEmit",
     "check:all": "node scripts/quality-gate.mjs",
     "check:deps-freshness": "node scripts/check-deps-freshness.mjs",

@@ -5,6 +5,6 @@
     "who": "yuedu",
     "how": "pnpm run test:coverage",
     "trackedBy": "full",
-    "skippedReason": "ISSUE #1834：全量档跑完一轮本机实测 ~10 分钟，而 full-suite-run 的子进程走 runPnpmSync 缺省 timeoutMs=600_000，任何并发都在 600s 处被砍成「退出码 信号 / 不记账」（测量未发生，非判据红）；markdown 那格已由 bba52ce2 补真用例清掉、与本笔无关，归因与出口写在 #1834"
+    "skippedReason": "合并 origin/master 后取两侧较新的那条自证（本档的账是单值，没有「两侧都留」的形态）：master 侧 03:43Z 那轮记的是全量档在 full-suite-run 的 runPnpmSync 缺省 timeoutMs=600_000 处被砍（测量未发生，非判据红），归因与出口写在 ISSUE #1834；本侧 01:07Z 那条「今天真跑过一次全量 8777 passed / 3 failed，3 条与本次改动无关」的事实已被 #1834 覆盖，故不另留。"
   }
 }

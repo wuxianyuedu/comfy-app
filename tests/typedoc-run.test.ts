@@ -1,0 +1,213 @@
+/**
+ * `scripts/typedoc-run.mjs` 的判据 —— typedoc「跑 + 验 + 重试」的唯一实现。
+ *
+ * 要钉的是那条**无声**的失败：退出码 0 + 日志收尾 `[info] html generated at …` +
+ * 一条 `[warning] Found 0 errors and N warnings`，而 `docs/api/**` 一个文件都没更新。
+ * 现场里目录还堆着上一轮的产物，所以「文件数 > 0」会被蒙过去 —— 判据必须落在
+ * 「探针文件是不是这一轮写的」上；而「退 0 就算成功」那种写法连这一条都问不到。
+ *
+ * 三条要钉的东西，各自都能「看起来还在、实际不判」：
+ *   1. **验的是产物、不是退出码**：退出 0 但探针 mtime 早于本次开始 = 失败；
+ *   2. **失败了要重试**：typedoc 冷跑实测 31s，用例不可能真跑它 —— 用 `spawnImpl`
+ *      注入缝把「起了但没写」这个现场直接喂进来，验它真的会重试到用完次数；
+ *   3. **重试能救回来**：第二次才写出来的场景要判**成功**，且报第 2 次 ——
+ *      重试若把「失败过一次」记成失败，就等于白重试。
+ *
+ * 用一次性目录做夹具，不碰仓库里的 `docs/api`。
+ */
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+import {
+  PROBE_REL,
+  judgeRun,
+  resolveTypedocBin,
+  runTypedoc,
+  snapshotOutput,
+} from "../scripts/typedoc-run.mjs";
+
+const temps: string[] = [];
+
+function tempDir(prefix: string): string {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix));
+  temps.push(dir);
+  return dir;
+}
+
+afterEach(() => {
+  while (temps.length) rmSync(temps.pop()!, { recursive: true, force: true });
+});
+
+/** 造一份「刚刚写过」的产物：探针文件存在且 mtime 是现在。 */
+function writeProbe(outDir: string) {
+  writeFileSync(path.join(outDir, PROBE_REL), "<html>ok</html>\n");
+}
+
+/**
+ * 造一份「上一轮留下的」产物：探针存在但 mtime 在一分钟前。
+ * 真实现场里 `docs/api` 就是这副样子 —— 目录里堆着上一轮的产物，所以
+ * 「文件数 > 0」这条判据会被它蒙过去，只有 mtime 能问出「这一轮写没写」。
+ */
+function writeStaleProbe(outDir: string) {
+  writeProbe(outDir);
+  const past = new Date(Date.now() - 60_000);
+  utimesSync(path.join(outDir, PROBE_REL), past, past);
+}
+
+/**
+ * 重试提示在用例里是噪声：吞掉它。写成 `() => undefined` 而不是空函数体 ——
+ * 后者会被 `@typescript-eslint/no-empty-function` 判成「忘了实现」。
+ */
+const quiet = () => undefined;
+
+/** 注入缝里的「typedoc 起了、正常收尾」：退出 0，但什么都不写。 */
+const silentRun = () => ({
+  status: 0,
+  signal: null,
+  error: null,
+  log: "[info] html generated",
+});
+
+describe("judgeRun：结论来自产物，不来自退出码", () => {
+  it("退出 0 但探针没被这一轮重写 = 失败（就是那个「说生成了、产物没动」的现场）", () => {
+    const dir = tempDir("typedoc-run-stale-");
+    writeStaleProbe(dir);
+    const startedAt = Date.now();
+    const verdict = judgeRun(silentRun(), {
+      after: snapshotOutput(dir),
+      startedAt,
+    });
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toContain("nothing was written");
+  });
+
+  it("探针是这一轮写的 = 成功（重试后真的写出来的那一次要走通）", () => {
+    const dir = tempDir("typedoc-run-fresh-");
+    const startedAt = Date.now();
+    writeProbe(dir);
+    expect(
+      judgeRun(silentRun(), { after: snapshotOutput(dir), startedAt }).ok,
+    ).toBe(true);
+  });
+
+  it("起不来 / 非零退出：这两种失败有声音，别让它们挤掉上面那条", () => {
+    const after = { exists: true, files: 1, probeMtimeMs: Date.now() };
+    expect(
+      judgeRun(
+        { status: null, error: new Error("EINVAL") },
+        { after, startedAt: 0 },
+      ).ok,
+    ).toBe(false);
+    expect(
+      judgeRun({ status: 1, error: null }, { after, startedAt: 0 }).ok,
+    ).toBe(false);
+  });
+
+  it("目录不存在 / 空目录 / 缺探针文件：三种「没写出来」都要判失败", () => {
+    const dir = tempDir("typedoc-run-empty-");
+    const startedAt = Date.now();
+    for (const after of [
+      { exists: false, files: 0, probeMtimeMs: null },
+      { exists: true, files: 0, probeMtimeMs: null },
+      snapshotOutput(dir), // 目录存在但没有 index.html
+    ]) {
+      expect(
+        judgeRun(silentRun(), { after, startedAt }).ok,
+        JSON.stringify(after),
+      ).toBe(false);
+    }
+  });
+});
+
+describe("snapshotOutput", () => {
+  it("目录不存在时三件事都是空（不抛）", () => {
+    expect(
+      snapshotOutput(path.join(tempDir("typedoc-run-missing-"), "nope")),
+    ).toEqual({
+      exists: false,
+      files: 0,
+      probeMtimeMs: null,
+    });
+  });
+});
+
+describe("runTypedoc：静默失败会重试，救回来算成功", () => {
+  it("每次都「退 0 但没写」→ 重试到用完次数，结论是失败", async () => {
+    const outDir = tempDir("typedoc-run-retry-");
+    writeStaleProbe(outDir); // 上一轮的产物还在：文件数 > 0，只有 mtime 问得出问题
+    let calls = 0;
+    const res = await runTypedoc({
+      outDir,
+      attempts: 3,
+      backoff: [0, 0],
+      spawnImpl: async () => {
+        calls += 1;
+        return silentRun();
+      },
+      onProgress: quiet,
+    });
+    expect(calls).toBe(3);
+    expect(res.ok).toBe(false);
+    expect(res.attempt).toBe(3);
+    expect(res.reason).toContain("nothing was written");
+    // 产物一个没少、也一个没更新 —— 正是「看起来没坏」的那一面
+    expect(res.files).toBe(1);
+  });
+
+  it("第二次才写出来 → 判成功，且报的是第 2 次（不是「失败过」）", async () => {
+    const outDir = tempDir("typedoc-run-recover-");
+    let calls = 0;
+    const res = await runTypedoc({
+      outDir,
+      attempts: 3,
+      backoff: [0, 0],
+      spawnImpl: async (_bin: string, dir: string) => {
+        calls += 1;
+        if (calls >= 2) writeProbe(dir);
+        return silentRun();
+      },
+      onProgress: quiet,
+    });
+    expect(calls).toBe(2);
+    expect(res.ok).toBe(true);
+    expect(res.attempt).toBe(2);
+    expect(res.files).toBe(1);
+  });
+
+  it("--attempts 1 时不重试（想看原始失败形态时不必等）", async () => {
+    const outDir = tempDir("typedoc-run-once-");
+    let calls = 0;
+    const res = await runTypedoc({
+      outDir,
+      attempts: 1,
+      backoff: [0, 0],
+      spawnImpl: async () => {
+        calls += 1;
+        return silentRun();
+      },
+      onProgress: quiet,
+    });
+    expect(calls).toBe(1);
+    expect(res.ok).toBe(false);
+  });
+
+  it("typedoc 没装：直接给结论，一次都不跑", async () => {
+    const res = await runTypedoc({
+      outDir: tempDir("typedoc-run-nobin-"),
+      root: tempDir("typedoc-run-fakeroot-"),
+      onProgress: quiet,
+    });
+    expect(res.ok).toBe(false);
+    expect(res.attempt).toBe(0);
+    expect(res.reason).toContain("pnpm install");
+  });
+});
+
+describe("resolveTypedocBin", () => {
+  it("仓库里有本地 typedoc；没有 node_modules 的根给 null", () => {
+    expect(resolveTypedocBin()).toBeTruthy();
+    expect(resolveTypedocBin(tempDir("typedoc-run-bare-"))).toBeNull();
+  });
+});
