@@ -2,12 +2,13 @@
  * check-deps-freshness.mjs 的契约测试（规范 §13.5.6 同族：判据自己也要有判据）。
  *
  * 它判的是**「远端改过依赖而本地没同步」能不能被看见**这件事本身，所以用例必须在
- * 真 git 仓库上跑 —— 「远端」不是一个可 mock 的模块，它就是
- * `refs/remotes/origin/master` 这条引用加一条它自己的 reflog。夹具用共享的
+ * 真 git 仓库上跑 —— 「远端」不是一个可 mock 的模块，它就是一条
+ * `refs/remotes/<remote>/master` 引用加它自己的 reflog（远端名按引用现算，
+ * 不假定叫 `origin` —— 本仓的远端实测叫 `cnb`，见 R12-01）。夹具用共享的
  * `defineGateRepo`（§11.16.1），`setup` 里把它 `git init` 好、造一次提交、
  * 再把那条远端引用指过去。
  *
- * 覆盖的八条分界（都是「一眼看着该红、其实绿」或反过来的那种）：
+ * 覆盖的分界（都是「一眼看着该红、其实绿」或反过来的那种）：
  *   1. 远端改了 `package.json` 的版本声明 → 红，且话术里有可执行出口；
  *   2. 远端改了 lockfile 的**解析结果** → 红，且明细指到具体包与版本；
  *   3. 远端只动 lockfile 的注释 / 顺序 → **不报**（实质 diff，不是字符串比）；
@@ -22,7 +23,11 @@
  *      「解析不到」而**不是**「安装记录与声明对不上」（后者会把人送去核对一份本来就对的
  *      文件）。反向对照两条：依赖压根没装（`no-install`）与依赖树完好时不误报。
  *
- * 外加一条**基准**用例：分叉之后自己在分支上加依赖，不算「远端改过依赖」——
+ * 外加两条**远端引用本身**的分界（R12-01）：远端命名为 `cnb` 时 ② 照判且话术点名比对的是
+ * 哪条引用；以及引用**不领先于 HEAD** 时报「判过（已核对）」而不是回落成 `[未校验]`
+ * ——「没看」与「看了且没有」必须分得开，这条判据存在的理由就在于此。
+ *
+ * 再加一条**基准**用例：分叉之后自己在分支上加依赖，不算「远端改过依赖」——
  * 那正是 ② 取分叉点而不取 `origin/master` 的理由（拿后者会反向误报）。
  */
 import { defineGateRepo, describe } from "./helpers/gate-repo";
@@ -203,6 +208,50 @@ describe("check-deps-freshness 契约", () => {
     expect(output).toContain("本地依赖与当前检出的声明不一致");
   });
 
+  /**
+   * 台账 R12-01（ISSUE #1817 记的那格）：夹具默认把远端叫 `origin`，而本仓的远端叫 `cnb`
+   * —— 旧实现写死 `origin/master`，在那份检出上恒取不到引用，于是**硬规则 25 的执行者恒不判**
+   * （降级话术是诚实的，但承诺的能力为空）。这两条用例把「按引用现算」与「不领先≠没看」钉住。
+   */
+  test("远端命名为 cnb（不是 origin）时 ② 照判，且话术点名比对的是哪条引用", ({
+    repo,
+  }) => {
+    // 把夹具那条远端引用整体改名：`cnb/master` 指向升级后的提交，origin 那两条（引用 + reflog）删掉。
+    repo.git(
+      "update-ref",
+      "--create-reflog",
+      "refs/remotes/cnb/master",
+      "refs/remotes/origin/master",
+    );
+    repo.git("update-ref", "-d", "refs/remotes/origin/master");
+    const { code, output } = repo.run();
+    expect(code).toBe(1);
+    // 「报出实际比对了哪条引用」是这条验收的核心：只说「有漂移」而不说是哪条，
+    // 下一个人仍然要靠猜远端叫什么。
+    expect(output).toContain("`cnb/master`");
+    // 断的是「漂移这句话带着**它比对的那条引用名**」（实际措辞：`你分叉之后，远端（cnb/master）改过依赖`）
+    expect(output).toContain("远端（cnb/master）改过依赖");
+    expect(output).not.toContain("[未校验]");
+  });
+
+  test("远端引用不领先于 HEAD ⇒ 判过（已核对），不许回落成 [未校验]", ({
+    repo,
+  }) => {
+    // 夹具默认是「远端前进、本地停在分叉点」；这里把远端引用退回到分叉点本身，
+    // 于是它是 HEAD 的祖先（相等）—— ② 的正确答案是「没有待同步对象」，不是「没看」。
+    repo.git(
+      "update-ref",
+      "--create-reflog",
+      "refs/remotes/origin/master",
+      "fork-point",
+    );
+    const { output } = repo.run();
+    expect(output).toContain("[已核对]");
+    expect(output).toContain("已在本地历史里");
+    // 这两句的区分就是本条的全部：「没看」与「看了且没有」不许同形。
+    expect(output).not.toContain("[未校验]");
+  });
+
   test("远端引用在但没有取证时间 → [未校验]，且比对仍照跑", ({ repo }) => {
     repo.remove(".git/logs/refs/remotes/origin/master");
     const { output } = repo.run();
@@ -304,9 +353,10 @@ describe("check-deps-freshness 契约", () => {
     expect(probesFact, "FACTS 里缺 deps.resolveProbes 登记项").toBeDefined();
     const declared = probesFact?.extract();
     expect(Array.isArray(declared)).toBe(true);
-    const worktree = (await import(
-      "../scripts/launcher-core/worktree.mjs"
-    )) as unknown as { RESOLVE_PROBES: string[] };
+    const worktree =
+      (await import("../scripts/launcher-core/worktree.mjs")) as unknown as {
+        RESOLVE_PROBES: string[];
+      };
     expect(worktree.RESOLVE_PROBES).toEqual(declared);
     // 清单非空也是判据的一部分：空的探针清单会让解析层**永远判绿**，
     // 而那正是它要拦的那件事。
@@ -383,7 +433,9 @@ describe("check-deps-freshness 契约", () => {
     expect(output).not.toContain("未校验");
   });
 
-  test("MERGE_HEAD 不在场时这一态不生效（自己改依赖照旧要判 ②）", ({ repo }) => {
+  test("MERGE_HEAD 不在场时这一态不生效（自己改依赖照旧要判 ②）", ({
+    repo,
+  }) => {
     // 反向对照：同一个「远端停在分叉点」的现场，只是没有在合并 —— `remoteDrifts`
     // 为空是因为**远端真没动依赖**，不是因为把 ② 关掉了。这里让远端前进过依赖，
     // 预期仍然报出来。
