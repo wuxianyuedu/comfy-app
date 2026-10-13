@@ -429,6 +429,11 @@ function snapshotSourceFor(via: string): ComfyRuntimeSnapshot["source"] {
  * 语义：`running` 表示「有 ComfyUI 进程活着」，不表示「HTTP 已经能应答」。
  * 「能不能用」仍由 `probeComfyUi()` 判定，两者在设置页合起来显示
  * 「运行中 / 启动中（进程在、接口未就绪）/ 未运行」。
+ *
+ * `force` = 「我不要任何二手答案」：TTL 缓存与在途去重**两条**都跳过。现有两处
+ * 调用者都是这个动机：`lifecycle` 判到「进程在、端口未绑定」（唯一会自动翻页的
+ * 结论）时当场复核，以及台账里那条「动作后必须重新取事实」的路径 —— 两者都在
+ * 「几秒前、甚至动作之前发出的那份结论可以直接相反」的时机上。
  */
 export async function getComfyRuntimeSnapshot(
   opts: { force?: boolean } = {},
@@ -437,7 +442,10 @@ export async function getComfyRuntimeSnapshot(
   if (!opts.force && st.cached && !isStale(st.cached.snap, st.cached.at, now)) {
     return st.cached.snap;
   }
-  if (st.inflight) return st.inflight;
+  /* 在途去重只在**非强制**那一档生效：`st.inflight` 回答的是「上一个问的人问的那件事」，
+   * 而它可能是动作之前发出的 —— 用户点了启动、查状态、再点一次刷新，
+   * 拿到的仍是启动前那一问（`force` 的口径见函数文档）。 */
+  if (!opts.force && st.inflight) return st.inflight;
   const task = snapshotOnce()
     .catch((err: unknown) => {
       logger.warn(`[comfyui] ${errorText(err, "运行态快照失败")}`);
@@ -445,15 +453,28 @@ export async function getComfyRuntimeSnapshot(
       return { ...emptySnapshot(), unverified: true };
     })
     .then((snap) => {
-      st.cached = { at: Date.now(), snap };
-      st.inflight = undefined;
+      /* 迟到的旧结论不许覆盖或清掉更新的那次在途（见 `resetComfyRuntimeSnapshot`）。
+       * 一份慢查询完全可能与一次 reset + 重查交错：后者先回来、写好了新缓存，
+       * 前者随后落地 —— 若不比对身份，它既会把旧事实写回缓存，也会把
+       * `st.inflight` 清成 undefined，让「启动后立刻查两次」的第二次又白跑一趟 IO。 */
+      if (st.inflight === task) {
+        st.cached = { at: Date.now(), snap };
+        st.inflight = undefined;
+      }
       return snap;
     });
   st.inflight = task;
   return task;
 }
 
-/** 丢掉快照缓存：用户刚做过启动/关闭动作，下一问必须重新取事实。 */
+/** 丢掉快照缓存：用户刚做过启动/关闭动作，下一问必须重新取事实。
+ *
+ *  同时**作废在途查询**（`st.inflight = undefined`）：只清缓存的写法挡不住
+ *  「进程表查询正好是动作之前发出的、随后才落地」那条路径 —— 它的 `then` 与
+ *  这里的置空交错后仍然认为自己是当前那次，于是把动作前的旧结论写回缓存，调用方
+ *  （启动 / 关闭动作后的那次 `refetch`）拿到的仍是「未运行」/「仍在运行」。
+ *  置空后那份旧结果只返回给当初的调用者，不再影响缓存；下一次查询必然重新取事实。 */
 export function resetComfyRuntimeSnapshot(): void {
   st.cached = undefined;
+  st.inflight = undefined;
 }

@@ -51,19 +51,22 @@
 | L12  | P2   | `scripts/launcher-core/log.mjs:72`                               | 编排器日志改 16KB/500ms/exit 缓冲落盘（exit 钩子保证归档完整）                                         | #1125 |
 | L9   | P1   | `scripts/dev-launcher.mjs:1024-1089`                             | 就绪等待轮询退避（1s→2s→3s）+ 状态文件每 5 轮写一次；总超时仍为墙钟 deadline                           | #1109 |
 | L8b  | P1   | `scripts/launcher-core/procs.mjs` + `dev-launcher.mjs`           | 端口占用裁定改批量取命令行（一条 CIM / 一条 ps），`cmdlineOf` 契约不变                                 | #1129 |
+| F11  | P1   | `src/lib/page-window.ts` + 三处日志窗口                          | 尾部窗口改增量追加（`tailWindowAppend`：满时原地 `shift`+`push`，不再整份复制 + 切片）                 | #1873 |
+| S14a | P1   | `src/lib/comfyui/status.ts:423-457`                              | 在途查询随 `reset` 作废 + 身份比对才回写；在途去重只在非 `force` 档生效                                | #1873 |
 
 ## B. 判定修正与例外（📝）
 
-| 条目                                       | 判定         | 依据                                                                                                                                                                                                |
-| ------------------------------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| HistoryList（原 F4 之一）                  | **误报**     | `use-history-list.ts` 已有 `PAGE_SIZE` + `visibleGroups` + `loadMore` 分页增量加载                                                                                                                  |
-| F8 `WorkflowModePickChip` 订阅 `transform` | **无需改动** | 订阅已下沉到只在弹层打开时挂载的 `PopoverAutoClose`，且该组件 `return null`                                                                                                                         |
-| S3 修法                                    | **方案更正** | 「缓存扫描结果」被测试打回：清单里的 `mtimeMs` 是调用方判断磁盘变化的判据（`workflow.ts` 建 `diskMtimeByPath`），缓存会让「只改内容、未改目录 mtime」读到过期值；改异步 fs 才同时保住新鲜度与不阻塞 |
-| F6 raw-cli 弹窗 `key={index}`              | **降级暂缓** | 追加场景下 index + 稳定 entry 引用 + `memo` 已够用；根治需给服务端缓冲（`runner-state.appendRawCli` 存裸 `string[]`）加稳定行号，属数据结构改动，收益/成本不划算                                    |
-| S9 `project.listByUser` 拉 `nodes`/`edges` | **有意保留** | `canvas-store.hydrateFromServer` 依赖列表里的画布 JSON 与本地对账（跨设备/换端口恢复）；裁列需重新设计「延迟拉取 + 离线合并」语义，属功能改动而非性能修，项目数量级小                               |
-| L10 `shellStaleWarning` 全量 stat          | **不值得**   | 每次启动仅调用一次、目标树（Rust 源码 + splash 资源）文件数有限，全量 stat 毫秒级；免 stat 的目录级 mtime 会漏掉「编辑已有文件」这一最常见场景、把旧壳误判为新，判据退化                            |
-| L12b Rust 侧日志逐条 open/write/close      | **有意保留** | `append_line` 每条开/关文件与 Node 侧同源——**不持有句柄**：残留进程握住日志文件会锁死下次启动的重定向（历史事故）；BufWriter 常驻句柄会重新引入该风险，壳侧日志频率低，成本可接受                   |
-| L13 `Build-Guard.ps1` 500ms + 三轮 CIM     | **有意保留** | 500ms 是 `taskkill /T /F` 异步生效后的必要复查间隔；三轮 CIM 各对应一个判定点（初始 / 回收后复查 / AutoClose 后复查），正常路径仅首轮 1 次 CIM 即返回 0                                             |
+| 条目                                       | 判定           | 依据                                                                                                                                                                                                            |
+| ------------------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HistoryList（原 F4 之一）                  | **误报**       | `use-history-list.ts` 已有 `PAGE_SIZE` + `visibleGroups` + `loadMore` 分页增量加载                                                                                                                              |
+| F8 `WorkflowModePickChip` 订阅 `transform` | **无需改动**   | 订阅已下沉到只在弹层打开时挂载的 `PopoverAutoClose`，且该组件 `return null`                                                                                                                                     |
+| S3 修法                                    | **方案更正**   | 「缓存扫描结果」被测试打回：清单里的 `mtimeMs` 是调用方判断磁盘变化的判据（`workflow.ts` 建 `diskMtimeByPath`），缓存会让「只改内容、未改目录 mtime」读到过期值；改异步 fs 才同时保住新鲜度与不阻塞             |
+| F6 raw-cli 弹窗 `key={index}`              | **降级暂缓**   | 追加场景下 index + 稳定 entry 引用 + `memo` 已够用；根治需给服务端缓冲（`runner-state.appendRawCli` 存裸 `string[]`）加稳定行号，属数据结构改动，收益/成本不划算                                                |
+| S9 `project.listByUser` 拉 `nodes`/`edges` | **有意保留**   | `canvas-store.hydrateFromServer` 依赖列表里的画布 JSON 与本地对账（跨设备/换端口恢复）；裁列需重新设计「延迟拉取 + 离线合并」语义，属功能改动而非性能修，项目数量级小                                           |
+| L10 `shellStaleWarning` 全量 stat          | **不值得**     | 每次启动仅调用一次、目标树（Rust 源码 + splash 资源）文件数有限，全量 stat 毫秒级；免 stat 的目录级 mtime 会漏掉「编辑已有文件」这一最常见场景、把旧壳误判为新，判据退化                                        |
+| L12b Rust 侧日志逐条 open/write/close      | **有意保留**   | `append_line` 每条开/关文件与 Node 侧同源——**不持有句柄**：残留进程握住日志文件会锁死下次启动的重定向（历史事故）；BufWriter 常驻句柄会重新引入该风险，壳侧日志频率低，成本可接受                               |
+| L13 `Build-Guard.ps1` 500ms + 三轮 CIM     | **有意保留**   | 500ms 是 `taskkill /T /F` 异步生效后的必要复查间隔；三轮 CIM 各对应一个判定点（初始 / 回收后复查 / AutoClose 后复查），正常路径仅首轮 1 次 CIM 即返回 0                                                         |
+| F11 复核（#1873）                          | **成立并已修** | 复核 M9 / F2b 那条链时翻出的：**判重与行组件**当时都修了，而 `setLogs` 的窗口写法本身（每行「整份复制 + 整份切片」两遍 O(上限)）没被一起看。窗口 2000、连打 6 万行实测 113ms → 4ms（28×），堆峰值 ~9MB → ~0.5MB |
 
 ## C. 待整改（⬜）
 
@@ -89,8 +92,10 @@ _（全部闭环，见 A 表。）_
 ### C.5 P2（卫生项，随上一批顺手修）
 
 - ⬜ **M12** `src/app/api/logs/current/route.ts`（`readdirSync`/多次 `statSync`）、`api/logs/sessions/route.ts`（同步读+解析 4MiB 尾窗）—— 高频轮询路由的同步 IO。**备注**：该路由已是游标增量 + 1MB 尾窗口；异步化 `fs.promises` 需通读会话边界逻辑（log-session-scope）后谨慎做，单独一轮处理。
-- ⬜ **S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询。**暂缓**：该间隔有 ISSUE #339 的收紧依据，且注释称「服务端有进程级快照兜底」—— 需先核实 `status.ts` 的快照链路（与 S14 的「缓存无失效出口」联动评估），避免误改有意行为。
-- ⬜ **S14** `src/lib/comfyui/status.ts:423-444`、`src/server/workshop/comfyui.ts:36-49` —— 进程内缓存永不过期且无失效钩子（正确性风险为主）。
+- ⬜ **S13** `src/app/(main)/settings/hooks/use-settings-page.ts:183-187` —— `comfyStatus` 5s 轮询。**暂缓**：该间隔有 ISSUE #339 的收紧依据，且注释称「服务端有进程级快照兜底」—— 需先核实 `status.ts` 的快照链路（与 S14 的「缓存无失效出口」联动评估），避免误改有意行为。**复核进展（#1873）**：快照链路已核实——TTL `1.5s` / 未绑定端口 `0s`（`COMFY_UNBOUND_PORT_TTL_MS`），且动作后会 `reset`，所以这 5s 不是「兜住一个永不过期的缓存」而是纯轮询节奏，**间隔本身不动**；核实中翻出的那条「启动了却读到旧结论」的窗口已单独闭环（S14a，见 A 表）。
+- ⬜ **S14（剩 `src/server/workshop/comfyui.ts:36-49`）** —— 进程内缓存永不过期且无失效钩子（正确性风险为主）。
+  —— `status.ts` 那一半已闭环（**S14a**，见 A 表）：缓存本就有 TTL + `reset` 出口，缺的是「在途查询不随 `reset` 一起作废」，已随 #1873 修。
+  —— `workshop/comfyui.ts` 的 `settingsCache` / `resolvedBase` 是**进程内 memo、无失效出口**（改设置文件后要重启才生效）。它属功能语义（何时该失效）而非纯性能，单列一轮。
 - _（L9 已闭环，见 A 表。）_
 - _（L10 已判定为不值得（见 B 表）；L11 已闭环，见 A 表。）_
 - _（L12b / L13 已判定为有意保留（见 B 表）。）_
